@@ -1,0 +1,34 @@
+import Vsa.Sim.DecodeTable.Batch08Part01
+import Vsa.Sim.DecodeTable.Batch08Part02
+import Vsa.Sim.DecodeTable.Batch08Part03
+import Vsa.Sim.DecodeTable.Batch08Part04
+import Vsa.Sim.DecodeTable.Batch08Part05
+import Vsa.Sim.DecodeTable.Batch08Part06
+import Vsa.Sim.DecodeTable.Batch08Part07
+import Vsa.Sim.DecodeTable.Batch08Part08
+import Vsa.Sim.DecodeTable.Batch08Part09
+import Vsa.Sim.DecodeTable.Batch08Part10
+import Vsa.Sim.DecodeTable.Batch08Part11
+import Vsa.Sim.DecodeTable.Batch08Part12
+import Vsa.Sim.DecodeTable.Batch08Part13
+import Vsa.Sim.DecodeTable.Batch08Part14
+import Vsa.Sim.DecodeTable.Batch08Part15
+import Vsa.Sim.DecodeTable.Batch08Part16
+import Vsa.Sim.DecodeTable.Batch08Part17
+import Vsa.Sim.DecodeTable.Batch08Part18
+import Vsa.Sim.DecodeTable.Batch08Part19
+import Vsa.Sim.DecodeTable.Batch08Part20
+import Vsa.Sim.DecodeTable.Batch08Part21
+import Vsa.Sim.DecodeTable.Batch08Part22
+import Vsa.Sim.DecodeTable.Batch08Part23
+import Vsa.Sim.DecodeTable.Batch08Part24
+import Vsa.Sim.DecodeTable.Batch08Part25
+import Vsa.Sim.DecodeTable.Batch08Part26
+import Vsa.Sim.DecodeTable.Batch08Part27
+import Vsa.Sim.DecodeTable.Batch08Part28
+import Vsa.Sim.DecodeTable.Batch08Part29
+import Vsa.Sim.DecodeTable.Batch08Part30
+import Vsa.Sim.DecodeTable.Batch08Part31
+import Vsa.Sim.DecodeTable.Batch08Part32
+
+/-! Generated umbrella for decode batch 08/16. -/
