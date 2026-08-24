@@ -1,4 +1,10 @@
 import Vsa.Sim.SnprintfSites
+import Vsa.Sim.DecodeTable.Batch15Part23
+import Vsa.Sim.DecodeTable.Batch11Part23
+import Vsa.Sim.DecodeTable.Batch09Part12
+import Vsa.Sim.DecodeTable.Batch07Part02
+import Vsa.Sim.DecodeTable.Batch01Part29
+import Vsa.Sim.DecodeTable.Batch01Part23
 
 /-!
 # M3 Layer-3 — `SnprintfSites2` : the sign-block + indirect-dispatch step battery

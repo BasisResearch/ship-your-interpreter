@@ -1,6 +1,19 @@
 import Vsa.Sim.StepObs
 import Vsa.Sim.StrcpySites
 import Vsa.Sim.Code.SvfprintfSlice
+import Vsa.Sim.DecodeTable.Batch16Part31
+import Vsa.Sim.DecodeTable.Batch16Part12
+import Vsa.Sim.DecodeTable.Batch16Part03
+import Vsa.Sim.DecodeTable.Batch14Part10
+import Vsa.Sim.DecodeTable.Batch14Part08
+import Vsa.Sim.DecodeTable.Batch08Part07
+import Vsa.Sim.DecodeTable.Batch07Part09
+import Vsa.Sim.DecodeTable.Batch03Part29
+import Vsa.Sim.DecodeTable.Batch03Part27
+import Vsa.Sim.DecodeTable.Batch02Part30
+import Vsa.Sim.DecodeTable.Batch02Part15
+import Vsa.Sim.DecodeTable.Batch01Part12
+import Vsa.Sim.DecodeTable.Batch01Part15
 
 /-!
 # Layer 3 — per-site observational step lemmas for the `%lld` decimal loop of `_svfprintf_r`

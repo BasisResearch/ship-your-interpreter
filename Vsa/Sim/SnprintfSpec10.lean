@@ -1,4 +1,10 @@
 import Vsa.Sim.SnprintfSpec9
+import Vsa.Sim.DecodeTable.Batch16Part01
+import Vsa.Sim.DecodeTable.Batch08Part29
+import Vsa.Sim.DecodeTable.Batch06Part31
+import Vsa.Sim.DecodeTable.Batch06Part28
+import Vsa.Sim.DecodeTable.Batch05Part16
+import Vsa.Sim.DecodeTable.Batch01Part21
 
 /-!
 # M3 Layer-3 — `SnprintfSpec10` : the `__ssprint_r` entry save-block + empty-flush

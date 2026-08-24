@@ -1,5 +1,12 @@
 import Vsa.Sim.SnprintfSpec7
 import Vsa.Sim.Code.__ssprint_r
+import Vsa.Sim.DecodeTable.Batch07Part23
+import Vsa.Sim.DecodeTable.Batch07Part17
+import Vsa.Sim.DecodeTable.Batch06Part30
+import Vsa.Sim.DecodeTable.Batch01Part15
+import Vsa.Sim.DecodeTable.Batch01Part14
+import Vsa.Sim.DecodeTable.Batch01Part04
+import Vsa.Sim.DecodeTable.Batch01Part01
 
 /-!
 # M3 Layer-3 — `SnprintfSpec9` : the `__ssprint_r` return epilogue (`_ss`)

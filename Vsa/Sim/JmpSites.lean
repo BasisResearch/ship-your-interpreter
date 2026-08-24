@@ -2,6 +2,34 @@ import Vsa.Sim.ValueSites
 import Vsa.Sim.DivSites
 import Vsa.Sim.Code.Setjmp
 import Vsa.Sim.Code.Longjmp
+import Vsa.Sim.DecodeTable.Batch08Part25
+import Vsa.Sim.DecodeTable.Batch08Part17
+import Vsa.Sim.DecodeTable.Batch08Part14
+import Vsa.Sim.DecodeTable.Batch08Part12
+import Vsa.Sim.DecodeTable.Batch08Part09
+import Vsa.Sim.DecodeTable.Batch08Part08
+import Vsa.Sim.DecodeTable.Batch08Part07
+import Vsa.Sim.DecodeTable.Batch08Part05
+import Vsa.Sim.DecodeTable.Batch07Part32
+import Vsa.Sim.DecodeTable.Batch07Part26
+import Vsa.Sim.DecodeTable.Batch07Part19
+import Vsa.Sim.DecodeTable.Batch07Part16
+import Vsa.Sim.DecodeTable.Batch07Part15
+import Vsa.Sim.DecodeTable.Batch07Part14
+import Vsa.Sim.DecodeTable.Batch07Part13
+import Vsa.Sim.DecodeTable.Batch07Part09
+import Vsa.Sim.DecodeTable.Batch06Part31
+import Vsa.Sim.DecodeTable.Batch06Part21
+import Vsa.Sim.DecodeTable.Batch06Part04
+import Vsa.Sim.DecodeTable.Batch05Part24
+import Vsa.Sim.DecodeTable.Batch05Part15
+import Vsa.Sim.DecodeTable.Batch03Part28
+import Vsa.Sim.DecodeTable.Batch02Part23
+import Vsa.Sim.DecodeTable.Batch04Part03
+import Vsa.Sim.DecodeTable.Batch03Part20
+import Vsa.Sim.DecodeTable.Batch01Part18
+import Vsa.Sim.DecodeTable.Batch01Part04
+import Vsa.Sim.DecodeTable.Batch01Part01
 
 /-!
 # Layer 3 — per-site observational step lemmas for `setjmp` / `longjmp`

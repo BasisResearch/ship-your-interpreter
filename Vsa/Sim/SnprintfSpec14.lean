@@ -1,4 +1,11 @@
 import Vsa.Sim.SnprintfSpec13
+import Vsa.Sim.DecodeTable.Batch16Part11
+import Vsa.Sim.DecodeTable.Batch08Part03
+import Vsa.Sim.DecodeTable.Batch06Part25
+import Vsa.Sim.DecodeTable.Batch06Part14
+import Vsa.Sim.DecodeTable.Batch05Part30
+import Vsa.Sim.DecodeTable.Batch02Part31
+import Vsa.Sim.DecodeTable.Batch02Part12
 
 /-!
 # M3 Layer-3 — `SnprintfSpec14` : `%`-format jump-table **slot-address arithmetic** + full dispatch (`_da`)

@@ -2,6 +2,12 @@ import Vsa.Sim.DivLoops
 import Vsa.Sim.Code.«__umoddi3»
 import Vsa.Sim.Code.«__divdi3»
 import Vsa.Sim.Code.«__moddi3»
+import Vsa.Sim.DecodeTable.Batch15Part32
+import Vsa.Sim.DecodeTable.Batch15Part28
+import Vsa.Sim.DecodeTable.Batch08Part12
+import Vsa.Sim.DecodeTable.Batch01Part10
+import Vsa.Sim.DecodeTable.Batch01Part19
+import Vsa.Sim.DecodeTable.Batch01Part04
 
 /-!
 # Layer 3 — site step lemmas OUTSIDE the shared `__hidden___udivdi3` core

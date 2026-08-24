@@ -2,6 +2,7 @@ import Vsa.Sim.StepAlu
 import Vsa.Sim.ExecuteLoad
 import Vsa.Sim.RegAccess
 import Vsa.Sim.DecodeTable
+import Vsa.Sim.DecodeTable.Batch03Part18
 
 /-!
 # M2 LOAD-class demo instantiation — `ld x11, 8(x2)` (census word `0x00813583`)

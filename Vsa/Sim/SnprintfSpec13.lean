@@ -1,4 +1,7 @@
 import Vsa.Sim.SnprintfSpec12
+import Vsa.Sim.DecodeTable.Batch05Part30
+import Vsa.Sim.DecodeTable.Batch01Part32
+import Vsa.Sim.DecodeTable.Batch01Part29
 
 /-!
 # M3 Layer-3 — `SnprintfSpec13` : reusable INDIRECT-TRANSFER dispatch helper (`_pd`)

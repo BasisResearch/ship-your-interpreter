@@ -2,6 +2,14 @@ import Vsa.Sim.SnprintfSpec14
 import Vsa.Sim.SnprintfSpec8
 import Vsa.Sim.ValueSites
 import Vsa.Sim.StrcpySites
+import Vsa.Sim.DecodeTable.Batch09Part09
+import Vsa.Sim.DecodeTable.Batch06Part19
+import Vsa.Sim.DecodeTable.Batch06Part08
+import Vsa.Sim.DecodeTable.Batch06Part02
+import Vsa.Sim.DecodeTable.Batch04Part30
+import Vsa.Sim.DecodeTable.Batch03Part24
+import Vsa.Sim.DecodeTable.Batch02Part17
+import Vsa.Sim.DecodeTable.Batch01Part28
 
 /-!
 # M3 Layer-3 — `SnprintfSpec15` : the `'d'` integer-conversion **`ll`-branch** entry

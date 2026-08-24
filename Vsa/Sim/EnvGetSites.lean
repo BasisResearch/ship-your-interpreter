@@ -1,6 +1,8 @@
 import Vsa.Sim.ValueSites
 import Vsa.Sim.Code.Env_get
 import Vsa.Sim.Code.Env_set
+import Vsa.Sim.DecodeTable.Batch16Part01
+import Vsa.Sim.DecodeTable.Batch09Part17
 
 /-!
 # Layer 3 — per-site observational step lemmas for `env_get` and `env_set`

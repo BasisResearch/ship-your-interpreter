@@ -1,6 +1,18 @@
 import Vsa.Sim.SnprintfSpec15
 import Vsa.Sim.Code.SvfprintfSlice2
 import Vsa.Sim.StrcpySites
+import Vsa.Sim.DecodeTable.Batch16Part11
+import Vsa.Sim.DecodeTable.Batch15Part19
+import Vsa.Sim.DecodeTable.Batch11Part05
+import Vsa.Sim.DecodeTable.Batch08Part18
+import Vsa.Sim.DecodeTable.Batch08Part03
+import Vsa.Sim.DecodeTable.Batch06Part25
+import Vsa.Sim.DecodeTable.Batch06Part18
+import Vsa.Sim.DecodeTable.Batch06Part14
+import Vsa.Sim.DecodeTable.Batch05Part30
+import Vsa.Sim.DecodeTable.Batch02Part31
+import Vsa.Sim.DecodeTable.Batch02Part14
+import Vsa.Sim.DecodeTable.Batch02Part12
 
 /-!
 # M3 Layer-3 — `SnprintfSpec16` : the `%lld` `'l'`/`"ll"` length-modifier **handler

@@ -1,4 +1,12 @@
 import Vsa.Sim.ValueEqualSites
+import Vsa.Sim.DecodeTable.Batch16Part17
+import Vsa.Sim.DecodeTable.Batch12Part21
+import Vsa.Sim.DecodeTable.Batch05Part10
+import Vsa.Sim.DecodeTable.Batch03Part17
+import Vsa.Sim.DecodeTable.Batch02Part21
+import Vsa.Sim.DecodeTable.Batch03Part21
+import Vsa.Sim.DecodeTable.Batch03Part20
+import Vsa.Sim.DecodeTable.Batch02Part23
 
 /-!
 # Layer 3 — per-site observational step lemmas for the `str`-`str` handler of `value_equal`

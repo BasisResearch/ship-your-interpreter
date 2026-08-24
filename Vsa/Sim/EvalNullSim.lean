@@ -1,4 +1,6 @@
 import Vsa.Sim.EvalIntSim4
+import Vsa.Sim.DecodeTable.Batch16Part01
+import Vsa.Sim.DecodeTable.Batch14Part09
 
 /-!
 # Layer 4 — M4: the `EvalE.null` simulation Triple (`evalNullSim`)

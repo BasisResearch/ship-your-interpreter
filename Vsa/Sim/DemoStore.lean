@@ -2,6 +2,7 @@ import Vsa.Sim.StepStore
 import Vsa.Sim.ExecuteStore
 import Vsa.Sim.RegAccess
 import Vsa.Sim.DecodeTable
+import Vsa.Sim.DecodeTable.Batch04Part02
 
 /-!
 # M2 STORE-class demo instantiation — `sd x11, 8(x2)` (census word `0x00b13423`)
