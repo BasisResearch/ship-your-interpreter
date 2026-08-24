@@ -1,0 +1,10 @@
+# lake/Lean build output
+.lake/
+
+# Python
+__pycache__/
+*.pyc
+
+# local tooling state
+.claude/
+.DS_Store

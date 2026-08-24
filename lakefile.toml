@@ -1,0 +1,13 @@
+name = "Vsa"
+defaultTargets = ["Vsa"]
+
+[[lean_lib]]
+name = "Vsa"
+
+[[lean_exe]]
+name = "vsa_run"
+root = "VsaRun"
+
+[[require]]
+name = "lean-riscv"
+path = "riscv-lean/lean_emulator"
