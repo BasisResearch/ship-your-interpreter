@@ -1,0 +1,192 @@
+import Vsa.Sim.BlockMemDemo
+import Vsa.Sim.WriteLogNF
+
+/-!
+# `WriteLogDemo` — the canonical `block_mem_sound → writeLog → pins + frame` shape
+
+`BlockMemDemo.ssputs_prologue_block` derives the `__ssputs_r` prologue
+(`0x8001438c–0x800143a4`) by ONE `block_mem_sound`, concluding with the
+block's memory image as a nested store chain
+
+    σ'.mem = writeMap8 (writeMap8 (writeMap8 σ.mem  A₄₀ (sdData_val v9))
+                                                    A₄₈ (sdData_val v8))
+                                                    A₅₆ (sdData_val v1)
+
+for the three stack spills `sd s1,40(sp)` / `sd s0,48(sp)` / `sd ra,56(sp)`
+(all off the *computed* `sp' = v2 − 64`).
+
+A downstream composition never wants that raw store chain — it wants the
+`SlotHolds` / `Pin8` of each spilled register and a `FrameOn` telling it the
+rest of memory is untouched.  This module is the worked example of the go-to
+derivation:
+
+1. the nested `writeMap8` chain **is** `writeLog σ.mem log` for the concrete
+   `log = [(A₄₀,8,v9),(A₄₈,8,v8),(A₅₆,8,v1)]` — definitionally (`rfl`), so a
+   segment can always present its memory post in write-log normal form;
+2. `pin8_of_writeLog` / `slotHolds_of_writeLog` (`WriteLogNF.lean`) read each
+   spilled value back out of the fold — the side condition is `OutLRange`
+   over the *later* entries, closed by `simp only [OutLRange]; omega`;
+3. `frameOn_writeLog` produces the `FrameOn` over the frame window
+   `[sp', sp'+64)` in one shot — the side condition is `LogInW`, closed by
+   `simp only [LogInW, InsideW]; omega`.
+
+The result — `ssputs_prologue_consumables` — is the shape a caller composes:
+`sp` set, the `ra`/`s0`/`s1` spills as `SlotHolds`, and the frame as data.
+Every new store-segment should end this way.
+-/
+
+open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
+open Sail.ConcurrencyInterfaceV1.PreSail
+open Vsa.Machine (MState Config Step Steps)
+
+set_option maxHeartbeats 8000000
+set_option maxRecDepth 1000000
+
+namespace Vsa.Sim
+
+/-- **The canonical shape** — the `__ssputs_r` prologue's `SlotHolds` spills +
+`FrameOn` frame, derived from `ssputs_prologue_block` through the write-log
+normal form.
+
+The block's three stack stores are presented as the concrete write log
+
+    log = [(sp'+40, 8, v9), (sp'+48, 8, v8), (sp'+56, 8, v1)]   (sp' = v2−64)
+
+and this theorem reads back, in one recipe each:
+
+* the frame `FrameOn [⟨sp', sp'+64⟩] σ.mem σ'.mem` (`frameOn_writeLog`);
+* `SlotHolds sp' 0x028 v9`, `SlotHolds sp' 0x030 v8`, `SlotHolds sp' 0x038 v1`
+  (`slotHolds_of_writeLog`, each disjoint from the later entries).
+
+The block's register/PC/HTIF conclusions are forwarded unchanged.  The
+hypotheses are exactly `ssputs_prologue_block`'s. -/
+theorem ssputs_prologue_consumables (σ : MState) (i u : Nat)
+    (vm v1 v2 v8 v9 v11 v12 : BitVec 64) (b0 b1 b2 b3 : BitVec 8)
+    (hG : GoodState σ)
+    (hpc : σ.regs.get? Register.PC = some (0x8001438c#64))
+    (hmi : σ.regs.get? Register.minstret = some vm)
+    (hx1 : σ.regs.get? Register.x1 = some v1)
+    (hx2 : σ.regs.get? Register.x2 = some v2)
+    (hx8 : σ.regs.get? Register.x8 = some v8)
+    (hx9 : σ.regs.get? Register.x9 = some v9)
+    (hx11 : σ.regs.get? Register.x11 = some v11)
+    (hx12 : σ.regs.get? Register.x12 = some v12)
+    (hmem : Vsa.Sim.Code.__ssputs_rLoaded σ.mem)
+    (h40lo : 0x80000000 ≤
+      (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x028#12)).toNat)
+    (h40hi : (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x028#12)).toNat + 8
+      ≤ 0x100000000)
+    (h40win : tohostAddr + 16 ≤
+      (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x028#12)).toNat)
+    (h40al : (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x028#12)).toNat % 8
+      = 0)
+    (h48lo : 0x80000000 ≤
+      (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x030#12)).toNat)
+    (h48hi : (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x030#12)).toNat + 8
+      ≤ 0x100000000)
+    (h48win : tohostAddr + 16 ≤
+      (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x030#12)).toNat)
+    (h48al : (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x030#12)).toNat % 8
+      = 0)
+    (h56lo : 0x80000000 ≤
+      (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x038#12)).toNat)
+    (h56hi : (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x038#12)).toNat + 8
+      ≤ 0x100000000)
+    (h56win : tohostAddr + 16 ≤
+      (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x038#12)).toNat)
+    (h56al : (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x038#12)).toNat % 8
+      = 0)
+    (hclo : 0x80000000 ≤ (v11 + sign_extend (m := 64) (0x00c#12)).toNat)
+    (hchi : (v11 + sign_extend (m := 64) (0x00c#12)).toNat + 4 ≤ 0x100000000)
+    (hcht : (v11 + sign_extend (m := 64) (0x00c#12)).toNat + 4 ≤ tohostAddr
+      ∨ tohostAddr + 8 ≤ (v11 + sign_extend (m := 64) (0x00c#12)).toNat)
+    (hcal : (v11 + sign_extend (m := 64) (0x00c#12)).toNat % 4 = 0)
+    (hc0 : (writeMap8 σ.mem
+        (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x028#12)).toNat
+        (sdData_val v9))[(v11 + sign_extend (m := 64) (0x00c#12)).toNat]? = some b0)
+    (hc1 : (writeMap8 σ.mem
+        (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x028#12)).toNat
+        (sdData_val v9))[(v11 + sign_extend (m := 64) (0x00c#12)).toNat + 1]? = some b1)
+    (hc2 : (writeMap8 σ.mem
+        (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x028#12)).toNat
+        (sdData_val v9))[(v11 + sign_extend (m := 64) (0x00c#12)).toNat + 2]? = some b2)
+    (hc3 : (writeMap8 σ.mem
+        (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x028#12)).toNat
+        (sdData_val v9))[(v11 + sign_extend (m := 64) (0x00c#12)).toNat + 3]? = some b3)
+    (hi : i < 2)
+    -- the frame window base (sp' = v2 − 64) as a plain Nat, so the window side
+    -- conditions are linear arithmetic
+    (spN : Nat)
+    (hspN : (v2 + sign_extend (m := 64) (0xfc0#12)).toNat = spN)
+    -- the three spill effective addresses named (`ptr_addoff`-derived facts the
+    -- caller already has for its own layout reasoning)
+    (hA40 : (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x028#12)).toNat
+      = spN + 40)
+    (hA48 : (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x030#12)).toNat
+      = spN + 48)
+    (hA56 : (v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x038#12)).toNat
+      = spN + 56) :
+    ∃ (σ' : MState) (i' : Nat),
+      Steps ⟨σ, i, u⟩ ⟨σ', i', u + 7⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.regs.get? Register.PC = some (0x800143a8#64) ∧
+      σ'.regs.get? Register.x2 = some (v2 + sign_extend (m := 64) (0xfc0#12)) ∧
+      -- the three spilled callee-saves, read back out of the fold as `SlotHolds`
+      SlotHolds (v2 + sign_extend (m := 64) (0xfc0#12)) 0x028 v9 σ'.mem ∧
+      SlotHolds (v2 + sign_extend (m := 64) (0xfc0#12)) 0x030 v8 σ'.mem ∧
+      SlotHolds (v2 + sign_extend (m := 64) (0xfc0#12)) 0x038 v1 σ'.mem ∧
+      -- the frame: everything outside the 64-byte stack frame is untouched
+      FrameOn [⟨spN, spN + 64⟩] σ.mem σ'.mem := by
+  -- run the block (BlockMemDemo)
+  obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hx2', _hx9', _hx8', _hx15',
+      _hmi', _hx10'⟩ :=
+    ssputs_prologue_block σ i u vm v1 v2 v8 v9 v11 v12 b0 b1 b2 b3 hG hpc hmi hx1 hx2
+      hx8 hx9 hx11 hx12 hmem
+      h40lo h40hi h40win h40al h48lo h48hi h48win h48al h56lo h56hi h56win h56al
+      hclo hchi hcht hcal hc0 hc1 hc2 hc3 hi
+  -- STEP 1: the nested `writeMap8` chain IS `writeLog σ.mem log` — definitionally.
+  -- `log` in program order: spill s1 @ +40, s0 @ +48, ra @ +56.
+  have hlog : σ'.mem = writeLog σ.mem
+      [((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x028#12)).toNat, 8, v9),
+       ((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x030#12)).toNat, 8, v8),
+       ((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x038#12)).toNat, 8, v1)] :=
+    hmem'
+  refine ⟨σ', i', hsteps, hi', hG', hpc', hx2', ?_, ?_, ?_, ?_⟩
+  · -- STEP 2a: SlotHolds of s1 @ +40 (the FIRST entry; later entries = @48,@56).
+    rw [hlog]
+    have : σ'.mem = writeLog σ.mem
+        ([] ++ ((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x028#12)).toNat,
+              8, v9) ::
+          [((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x030#12)).toNat, 8, v8),
+           ((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x038#12)).toNat, 8, v1)]) :=
+      hlog
+    exact slotHolds_of_writeLog σ.mem [] _ (v2 + sign_extend (m := 64) (0xfc0#12)) 0x028 v9 _
+      hA40 (by rw [hA48, hA56, hA40]; simp only [OutLRange]; omega)
+  · -- STEP 2b: SlotHolds of s0 @ +48 (SECOND entry; later entry = @56).
+    rw [hlog,
+      show ((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x028#12)).toNat, 8, v9)
+        :: ((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x030#12)).toNat, 8, v8)
+        :: [((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x038#12)).toNat, 8, v1)]
+        = [((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x028#12)).toNat, 8, v9)]
+          ++ ((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x030#12)).toNat, 8, v8)
+          :: [((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x038#12)).toNat, 8, v1)]
+        from rfl]
+    exact slotHolds_of_writeLog σ.mem _ _ (v2 + sign_extend (m := 64) (0xfc0#12)) 0x030 v8 _
+      hA48 (by rw [hA56, hA48]; simp only [OutLRange]; omega)
+  · -- STEP 2c: SlotHolds of ra @ +56 (THIRD/last entry; no later entries).
+    rw [hlog,
+      show ((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x028#12)).toNat, 8, v9)
+        :: ((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x030#12)).toNat, 8, v8)
+        :: [((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x038#12)).toNat, 8, v1)]
+        = [((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x028#12)).toNat, 8, v9),
+           ((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x030#12)).toNat, 8, v8)]
+          ++ ((v2 + sign_extend (m := 64) (0xfc0#12) + sign_extend (m := 64) (0x038#12)).toNat, 8, v1)
+          :: []
+        from rfl]
+    exact slotHolds_of_writeLog σ.mem _ _ (v2 + sign_extend (m := 64) (0xfc0#12)) 0x038 v1 _
+      hA56 (by simp only [OutLRange])
+  · -- STEP 3: the frame — every entry lands in the single window `[sp', sp'+64)`.
+    rw [hlog]
+    exact frameOn_writeLog [⟨spN, spN + 64⟩] σ.mem _
+      (by rw [hA40, hA48, hA56]; simp only [LogInW, InsideW]; omega)
+
+end Vsa.Sim

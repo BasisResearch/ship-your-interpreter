@@ -265,6 +265,7 @@ import Vsa.Sim.SnprintfSpec52
 import Vsa.Sim.SnprintfSpec53
 import Vsa.Sim.SnprintfSpec54
 import Vsa.Sim.SnprintfSpec55
+import Vsa.Sim.SnprintfRecords
 import Vsa.Sim.Code.ImageStatics
 import Vsa.Sim.ImageDischarge
 import Vsa.Sim.Code.FnFmt
