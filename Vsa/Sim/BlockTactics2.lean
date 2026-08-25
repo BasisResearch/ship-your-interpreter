@@ -85,4 +85,46 @@ elab "block_frame_wr" "[" ids:num,* "]" : tactic => do
       | exact abiPreserved_ne (by assumption) (by decide)
       | assumption))
 
+/-! ## C3 — load/store side-condition bundle discharge (`ld_ok` / `st_ok`)
+
+The block Pres (`NegBlockProto.LdOK8`/`LdOK4`/`StOK8`) each bundle the RAM-bound /
+HTIF-window / alignment sub-facts (and, for loads, the byte pins). Call sites used
+to spell out the anonymous constructor with a per-field `by rw [haddr…]; omega`.
+These tactics assemble the bundle from ONE address-normaliser `haddr : ea.toNat =
+k` (the RAM/window/alignment facts then follow by `omega` off the ambient `sp`/
+`tohost` bounds) plus the caller's byte pins.
+
+`tohostAddr` is a `def`; `omega` can't see through it, so each tactic first
+rewrites it to its literal value (`rfl`) before the `omega`. -/
+
+/-- Discharge an `StOK8 ea` from `haddr : ea.toNat = k`: RAM bounds + above-HTIF
+window + 8-alignment, all by `omega` off the ambient `sp`/tohost bounds. -/
+macro "st_ok" haddr:term : tactic =>
+  `(tactic|
+    refine ⟨?_, ?_, ?_, ?_⟩ <;>
+      first
+        | (rw [show tohostAddr = (0x8001ad00 : Nat) from rfl, $haddr:term]; omega)
+        | (rw [$haddr:term]; omega))
+
+/-- Discharge an `LdOK8 m ea bs` from `haddr : ea.toNat = k` and the eight byte
+pins `[p0,…,p7]` (each `m[k+i]? = some bᵢ`). The RAM/window/alignment tuple goes
+by `omega`; each pin rewrites `ea.toNat` by `haddr` and closes by the supplied
+proof. -/
+macro "ld_ok8" haddr:term:max " [" ps:term,* "]" : tactic =>
+  `(tactic|
+    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
+      first
+        | (rw [show tohostAddr = (0x8001ad00 : Nat) from rfl, $haddr:term]; omega)
+        | (rw [$haddr:term]; omega)
+        | (rw [$haddr:term]; first $[| exact $ps]*))
+
+/-- `LdOK4` variant of `ld_ok8` — four byte pins. -/
+macro "ld_ok4" haddr:term:max " [" ps:term,* "]" : tactic =>
+  `(tactic|
+    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_⟩ <;>
+      first
+        | (rw [show tohostAddr = (0x8001ad00 : Nat) from rfl, $haddr:term]; omega)
+        | (rw [$haddr:term]; omega)
+        | (rw [$haddr:term]; first $[| exact $ps]*))
+
 end Vsa.Sim
