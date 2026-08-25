@@ -1,6 +1,7 @@
 import Vsa.Sim.SnprintfSites3
 import Vsa.Sim.SnprintfSpec3
 import Vsa.Sim.SnprintfSpec4
+import Vsa.Sim.KeepRegs
 
 /-!
 # M3 Layer-3 — `SnprintfSpec5` : the loop-entry segment, composed (`_sn5`)
@@ -39,6 +40,22 @@ set_option maxRecDepth 1000000
 namespace Vsa.Sim
 
 /-! ## Small bridges -/
+
+/-- The write-set of `NotWrittenL` (SnprintfSpec2) as a list, for `KeepRegs`
+transport across the `__umoddi3`/`__udivdi3` call frames and the digit loop. -/
+abbrev nwLList_sn5 : List Register :=
+  [Register.x10, Register.x11, Register.x12, Register.x13, Register.x1, Register.x5,
+   Register.x8, Register.x22, Register.x23, Register.x25, Register.x26, Register.x15,
+   Register.PC, Register.nextPC, Register.minstret, Register.minstret_increment,
+   Register.mcycle, Register.mtime, Register.mip]
+
+/-- `NotWrittenL` from a write-set-list avoidance (`keep_of_frame` adapter). -/
+theorem notWrittenL_of_avoid_sn5 {R : Register}
+    (h : ∀ r ∈ nwLList_sn5, (r == R) = false) : NotWrittenL R :=
+  ⟨h _ (by decide), h _ (by decide), h _ (by decide), h _ (by decide), h _ (by decide),
+   h _ (by decide), h _ (by decide), h _ (by decide), h _ (by decide), h _ (by decide),
+   h _ (by decide), h _ (by decide), h _ (by decide), h _ (by decide), h _ (by decide),
+   h _ (by decide), h _ (by decide), h _ (by decide), h _ (by decide)⟩
 
 /-- Effective-address `toNat` for a small nonnegative 12-bit offset off `vsp`. -/
 theorem addoff_toNat_sn5 (v : BitVec 64) (off : BitVec 12) (n : Nat) (hle : n ≤ 348)
@@ -299,7 +316,17 @@ theorem loopEntry_spec (w vsp vt1 v20 : BitVec 64) (c : Config)
         SlotHolds vsp 0x028 vt1 c'.σ.mem ∧             -- t1  = flags
         SlotHolds vsp 0x020 vt3 c'.σ.mem ∧             -- t3  (spare)
         SlotHolds vsp 0x030 vs7 c'.σ.mem ∧             -- s7  (spare)
-        SlotHolds vsp 0x078 vs0 c'.σ.mem := by         -- s0  (spare)
+        SlotHolds vsp 0x078 vs0 c'.σ.mem ∧             -- s0  (spare)
+        -- post-widening: the spare slots hold the *named* entry values of
+        -- t3/s7/s0 (`sd t3,32(sp)` / `sd s7,48(sp)` / `sd s0,120(sp)`), and the
+        -- five mid-registers survive the entry block + first mod-emit pass
+        (∀ vv : BitVec 64, c.σ.regs.get? Register.x28 = some vv →
+          SlotHolds vsp 0x020 vv c'.σ.mem) ∧
+        (∀ vv : BitVec 64, c.σ.regs.get? Register.x23 = some vv →
+          SlotHolds vsp 0x030 vv c'.σ.mem) ∧
+        (∀ vv : BitVec 64, c.σ.regs.get? Register.x8 = some vv →
+          SlotHolds vsp 0x078 vv c'.σ.mem) ∧
+        KeepRegs midRegs5 c.σ c'.σ := by
   have htohv : tohostAddr = 0x8001ad00 := rfl
   obtain ⟨vmi0, hmi0⟩ := hG.minstret
   obtain ⟨v8₀, hx8₀⟩ := hx8e
@@ -1302,10 +1329,56 @@ theorem loopEntry_spec (w vsp vt1 v20 : BitVec 64) (c : Config)
     obs_alu_other hobs23 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_22
   have hx20_24 : σ24.regs.get? Register.x20 = some vs4j :=
     obs_btaken_other hobs24 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_23
+  -- === post-widening: the five mid-registers survive all 24 steps ===
+  have hkeep24 : KeepRegs midRegs5 c.σ σ24 := by
+    have h0 := keep_rfl midRegs5 c.σ
+    have h1 := keep_alu hobs1 (by decide) h0
+    have h2 := keep_btaken hobs2 (by decide) h1
+    have h3 := keep_alu hobs3 (by decide) h2
+    have h4 := keep_store hobs4 (by decide) h3
+    have h5 := keep_store hobs5 (by decide) h4
+    have h6 := keep_store hobs6 (by decide) h5
+    have h7 := keep_alu hobs7 (by decide) h6
+    have h8 := keep_alu hobs8 (by decide) h7
+    have h9 := keep_store hobs9 (by decide) h8
+    have h10 := keep_store hobs10 (by decide) h9
+    have h11 := keep_alu hobs11 (by decide) h10
+    have h12 := keep_alu hobs12 (by decide) h11
+    have h13 := keep_store hobs13 (by decide) h12
+    have h14 := keep_alu hobs14 (by decide) h13
+    have h15 := keep_jr hobs15 (by decide) h14
+    have h16 := keep_alu hobs16 (by decide) h15
+    have h17 := keep_alu hobs17 (by decide) h16
+    have h18 := keep_jal hobs18 (by decide) h17
+    have h19 : KeepRegs midRegs5 c.σ c19.σ :=
+      keep_of_frame (W := nwLList_sn5)
+        (fun R hn => hframe19 R (notWrittenL_of_avoid_sn5 hn)) (by decide) h18
+    have h20 := keep_alu hobs20 (by decide) h19
+    have h21 := keep_store hobs21 (by decide) h20
+    have h22 := keep_alu hobs22 (by decide) h21
+    have h23 := keep_alu hobs23 (by decide) h22
+    exact keep_btaken hobs24 (by decide) h23
+  -- === post-widening: the spare slots with their *named* entry values ===
+  have hs32named : ∀ vv : BitVec 64, c.σ.regs.get? Register.x28 = some vv →
+      SlotHolds vsp 0x020 vv σ24.mem := by
+    intro vv hvv
+    rw [show vv = v28₀ from Option.some.inj (hvv.symm.trans hx28₀)]
+    exact hslot32_24
+  have hs48named : ∀ vv : BitVec 64, c.σ.regs.get? Register.x23 = some vv →
+      SlotHolds vsp 0x030 vv σ24.mem := by
+    intro vv hvv
+    rw [show vv = v23₀ from Option.some.inj (hvv.symm.trans hx23₀)]
+    exact hslot48_24
+  have hs120named : ∀ vv : BitVec 64, c.σ.regs.get? Register.x8 = some vv →
+      SlotHolds vsp 0x078 vv σ24.mem := by
+    intro vv hvv
+    rw [show vv = v8₀ from Option.some.inj (hvv.symm.trans hx8₀)]
+    exact hslot120_24
   -- === assemble LSt g (entryTop vsp) m 0 at σ24 ===
   refine ⟨⟨σ24, i24, c19.steps+1+1+1+1+1⟩, ?_, ?_, htopok, hEF24,
     hx2_24, ⟨vs4j, hx20_24⟩, hslot56_24, v20, v28₀, v23₀, v8₀,
-    hslot112_24, hslot56_24, hslot40_24, hslot32_24, hslot48_24, hslot120_24⟩
+    hslot112_24, hslot56_24, hslot40_24, hslot32_24, hslot48_24, hslot120_24,
+    hs32named, hs48named, hs120named, hkeep24⟩
   · -- Steps chain
     exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
       ((Steps.single hstep4).trans ((Steps.single hstep5).trans ((Steps.single hstep6).trans
@@ -1366,6 +1439,7 @@ theorem entryToDigits_spec (w vsp vt1 v20 : BitVec 64) (c : Config)
     (halign : vsp.toNat % 8 = 0)
     (htick : c.tick < 2) :
     ∃ c' : Config, Steps c c' ∧ ∃ p, w.toNat / 10 ^ p ≤ 9 ∧ p + 1 ≤ 20 ∧
+      (p = 0 ∨ 9 < w.toNat / 10 ^ (p - 1)) ∧
       c'.σ.regs.get? Register.PC = some (0x80008358#64) ∧
       c'.σ.regs.get? Register.x23 = some (BitVec.ofNat 64 (p + 1)) ∧
       BufInv (entryTop vsp) w.toNat (p + 1) c'.σ.mem ∧
@@ -1385,18 +1459,27 @@ theorem entryToDigits_spec (w vsp vt1 v20 : BitVec 64) (c : Config)
         SlotHolds vsp 0x028 vt1 c'.σ.mem ∧
         SlotHolds vsp 0x020 vt3 c'.σ.mem ∧
         SlotHolds vsp 0x030 vs7 c'.σ.mem ∧
-        SlotHolds vsp 0x078 vs0 c'.σ.mem := by
+        SlotHolds vsp 0x078 vs0 c'.σ.mem ∧
+        -- post-widening: named spare-slot contents + mid-register preservation
+        (∀ vv : BitVec 64, c.σ.regs.get? Register.x28 = some vv →
+          SlotHolds vsp 0x020 vv c'.σ.mem) ∧
+        (∀ vv : BitVec 64, c.σ.regs.get? Register.x23 = some vv →
+          SlotHolds vsp 0x030 vv c'.σ.mem) ∧
+        (∀ vv : BitVec 64, c.σ.regs.get? Register.x8 = some vv →
+          SlotHolds vsp 0x078 vv c'.σ.mem) ∧
+        KeepRegs midRegs5 c.σ c'.σ := by
   have hnw : vsp.toNat + 348 < 2 ^ 64 := by omega
   have htop_toNat : (entryTop vsp).toNat = vsp.toNat + 348 :=
     addoff_toNat_sn5 vsp (0x15c#12) 348 (by omega) (by decide) hnw
   obtain ⟨c1, hs1, hLSt, htopok, hEF1,
     hx2_1, hx20_1e, hslot56v20, vwid, vt3, vs7, vs0,
-    hslot112, hslot56, hslot40, hslot32, hslot48, hslot120⟩ :=
+    hslot112, hslot56, hslot40, hslot32, hslot48, hslot120,
+    hs32named1, hs48named1, hs120named1, hkeep1⟩ :=
     loopEntry_spec w vsp vt1 v20 c hG hload huload hcuload hpc hx14 hx2 hx6 hflag
       hx8e hx20 hx23e hx28e hx12e hx13e hm9 htlo hhi halign htick
-  obtain ⟨c2, hs2, p, hexit, hpb, hpc', hx23', hbuf', hG', htick', hmi', hDF, hx26', hload', hframeL⟩ :=
+  obtain ⟨c2, hs2, p, hexit, hpb, hmin, hpc', hx23', hbuf', hG', htick', hmi', hDF, hx26', hload', hframeL⟩ :=
     decimalLoop_spec (fun R => c1.σ.regs.get? R) (entryTop vsp) w.toNat w.isLt htopok
-      c1.σ.mem c1 ⟨⟨0, hLSt, by omega⟩, digitFrame_rfl (entryTop vsp) c1.σ.mem⟩
+      c1.σ.mem c1 ⟨⟨0, hLSt, by omega, Or.inl rfl⟩, digitFrame_rfl (entryTop vsp) c1.σ.mem⟩
   have hEF : EntryFrame vsp c.σ.mem c2.σ.mem := by
     intro a ha
     rw [hDF a (by omega)]
@@ -1427,7 +1510,11 @@ theorem entryToDigits_spec (w vsp vt1 v20 : BitVec 64) (c : Config)
     addoff_toNat_sn5 vsp (0x028#12) 40 (by omega) (by decide) hnw
   have ha112 : (vsp + sign_extend (m := 64) (0x070#12)).toNat = vsp.toNat + 112 :=
     addoff_toNat_sn5 vsp (0x070#12) 112 (by omega) (by decide) hnw
-  refine ⟨c2, hs1.trans hs2, p, hexit, hpb, hpc', hx23', hbuf', hG', htick', hmi', hEF,
+  -- post-widening: mid-registers survive the digit loop (`NotWrittenL` frame)
+  have hkeep2 : KeepRegs midRegs5 c.σ c2.σ :=
+    keep_of_frame (W := nwLList_sn5)
+      (fun R hn => hframeL R (notWrittenL_of_avoid_sn5 hn)) (by decide) hkeep1
+  refine ⟨c2, hs1.trans hs2, p, hexit, hpb, hmin, hpc', hx23', hbuf', hG', htick', hmi', hEF,
     hload', hx2_2, hx20_2, hx26',
     hslotDF 0x038 v20 (by rw [htop_toNat]; omega) ha56 hslot56v20,
     vwid, vt3, vs7, vs0,
@@ -1436,6 +1523,10 @@ theorem entryToDigits_spec (w vsp vt1 v20 : BitVec 64) (c : Config)
     hslotDF 0x028 vt1 (by rw [htop_toNat]; omega) ha40 hslot40,
     hslotDF 0x020 vt3 (by rw [htop_toNat]; omega) ha32 hslot32,
     hslotDF 0x030 vs7 (by rw [htop_toNat]; omega) ha48 hslot48,
-    hslotDF 0x078 vs0 (by rw [htop_toNat]; omega) ha120 hslot120⟩
+    hslotDF 0x078 vs0 (by rw [htop_toNat]; omega) ha120 hslot120,
+    fun vv hvv => hslotDF 0x020 vv (by rw [htop_toNat]; omega) ha32 (hs32named1 vv hvv),
+    fun vv hvv => hslotDF 0x030 vv (by rw [htop_toNat]; omega) ha48 (hs48named1 vv hvv),
+    fun vv hvv => hslotDF 0x078 vv (by rw [htop_toNat]; omega) ha120 (hs120named1 vv hvv),
+    hkeep2⟩
 
 end Vsa.Sim

@@ -1,0 +1,56 @@
+{
+  "theorem": "tr_ssputs_prologue_gen",
+  "doc": "Generated `__ssputs_r` prologue (frame 64: addi sp,sp,-64; sd s1,40(sp); lw s1,12(a1); sd s0,48(sp); sd ra,56(sp)), 0x8001438c → 0x800143a0, ending with SlotFrame `SlotHolds` facts for all three spills.",
+  "namespace": "Vsa.Sim",
+  "imports": ["Vsa.Sim.SsputsSites", "Vsa.Sim.SlotFrame", "Vsa.Sim.RegPins",
+              "Vsa.Sim.PtrArith", "Vsa.Sim.SnprintfSpec19"],
+  "loaded_pred": "Vsa.Sim.Code.__ssputs_rLoaded",
+  "loaded_store_via": "ssputs_writeMap8_ss _ _ _ (by omega) $prev",
+  "frame_size": 64,
+  "sp_reg": "x2",
+  "entry": "0x8001438c",
+  "sp_dec": {"addr": "0x8001438c", "site": "site_1438c_sp"},
+  "saves": [
+    {"addr": "0x80014390", "site": "site_14390_sp", "reg": "x9", "off": 40},
+    {"addr": "0x80014398", "site": "site_14398_sp", "reg": "x8", "off": 48},
+    {"addr": "0x8001439c", "site": "site_1439c_sp", "reg": "x1", "off": 56}
+  ],
+  "extra_pins": [{"reg": "x11", "val": "p"}],
+  "extra_params": ["(p : BitVec 64) (b0 b1 b2 b3 : BitVec 8)"],
+  "extra_param_names": ["p", "b0", "b1", "b2", "b3"],
+  "pre_extra": [
+    {"name": "p_lo", "type": "0x80000000 ≤ p.toNat"},
+    {"name": "p_hi", "type": "p.toNat + 16 ≤ 0x100000000"},
+    {"name": "p_win", "type": "tohostAddr + 16 ≤ p.toNat"},
+    {"name": "p_align", "type": "p.toNat % 4 = 0"},
+    {"name": "p_stack_disj", "type": "p.toNat + 16 ≤ vsp.toNat - 64 ∨ vsp.toNat ≤ p.toNat"},
+    {"name": "pb0", "type": "m0[(p + sign_extend (m := 64) (0x00c#12)).toNat]? = some b0"},
+    {"name": "pb1", "type": "m0[(p + sign_extend (m := 64) (0x00c#12)).toNat + 1]? = some b1"},
+    {"name": "pb2", "type": "m0[(p + sign_extend (m := 64) (0x00c#12)).toNat + 2]? = some b2"},
+    {"name": "pb3", "type": "m0[(p + sign_extend (m := 64) (0x00c#12)).toNat + 3]? = some b3"}
+  ],
+  "extra_prelude": [
+    "have hpoff : (p + sign_extend (m := 64) (0x00c#12)).toNat = p.toNat + 12 :=",
+    "  ptr_addoff p (0x00c#12) 12 (by decide) (by omega)"
+  ],
+  "extra_steps": [
+    {"addr": "0x80014394", "site": "site_14394_sp", "class": "alu",
+     "rd": "x9",
+     "rd_val": "(sign_extend (m := 64) ((((b3.append b2).append b1).append b0) : BitVec (8 * 4)))",
+     "pre_lines": [
+       "have hbt$k_0 : $sigma.mem[(p + sign_extend (m := 64) (0x00c#12)).toNat]? = some b0 := by",
+       "  rw [$memeq, getElem_writeMap8_disjoint _ _ _ _ (by rw [hpoff]; omega)]",
+       "  exact hpb0",
+       "have hbt$k_1 : $sigma.mem[(p + sign_extend (m := 64) (0x00c#12)).toNat + 1]? = some b1 := by",
+       "  rw [$memeq, getElem_writeMap8_disjoint _ _ _ _ (by rw [hpoff]; omega)]",
+       "  exact hpb1",
+       "have hbt$k_2 : $sigma.mem[(p + sign_extend (m := 64) (0x00c#12)).toNat + 2]? = some b2 := by",
+       "  rw [$memeq, getElem_writeMap8_disjoint _ _ _ _ (by rw [hpoff]; omega)]",
+       "  exact hpb2",
+       "have hbt$k_3 : $sigma.mem[(p + sign_extend (m := 64) (0x00c#12)).toNat + 3]? = some b3 := by",
+       "  rw [$memeq, getElem_writeMap8_disjoint _ _ _ _ (by rw [hpoff]; omega)]",
+       "  exact hpb3"
+     ],
+     "call": "$vmi p b0 b1 b2 b3 $hG $hpc $hmi $pin:x11 $hmem rfl (by rw [hpoff]; omega) (by rw [hpoff]; omega) (Or.inr (by rw [hpoff]; omega)) (by rw [hpoff]; omega) hbt$k_0 hbt$k_1 hbt$k_2 hbt$k_3 $hi"}
+  ]
+}

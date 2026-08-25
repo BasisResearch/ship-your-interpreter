@@ -110,7 +110,16 @@ theorem exitToPrint_spec
       c'.σ.regs.get? Register.x23 = some vs7v ∧
       c'.σ.regs.get? Register.x8 = some vs0v ∧
       c'.σ.regs.get? Register.x2 = some vsp ∧
-      c'.tick < 2 ∧ (∃ u, c'.σ.regs.get? Register.minstret = some u) := by
+      c'.tick < 2 ∧ (∃ u, c'.σ.regs.get? Register.minstret = some u) ∧
+      -- post-widening: parse slot sp+0x20 re-zeroed (`sd zero,32(sp)`), the
+      -- mid-registers + the untouched digit cursor x26 preserved, the pointwise
+      -- memory frame outside the two written windows, and the code pins
+      SlotHolds vsp 0x020 (0#64) c'.σ.mem ∧
+      KeepRegs (Register.x26 :: midRegs5) c.σ c'.σ ∧
+      (∀ a : Nat, ¬(vsp.toNat + 32 ≤ a ∧ a < vsp.toNat + 64) →
+        ¬(vsp.toNat + 104 ≤ a ∧ a < vsp.toNat + 112) →
+        c'.σ.mem[a]? = c.σ.mem[a]?) ∧
+      SvfprintfSliceLoaded c'.σ.mem ∧ FlushPinsLoaded c'.σ.mem := by
   have htohv : tohostAddr = 0x8001ad00 := rfl
   have hnw : vsp.toNat + 348 < 2 ^ 64 := by omega
   obtain ⟨vmi0, hmi0⟩ := hG.minstret
@@ -956,8 +965,66 @@ theorem exitToPrint_spec
         (Sail.BitVec.extractLsb ((sign_extend (m := 64) ((Sail.BitVec.extractLsb vtop 31 0) - (Sail.BitVec.extractLsb vcur 31 0)))
           + sign_extend (m := 64) (0x001#12)) 31 0)) :=
     obs_jr_other hobs24 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16n_23
+  -- post-widening: slot sp+0x20 := 0 (σ15's `sd zero,32(sp)`), transported to σ24
+  have hs32z_24 : SlotHolds vsp 0x020 (0#64) σ24.mem := by
+    have h15 : SlotHolds vsp 0x020 (0#64) σ15.mem := by
+      rw [hmem15, hNP14]
+      exact slotHolds_self vsp 0x020 _ (0#64) σ14.mem rfl
+    have h21 : SlotHolds vsp 0x020 (0#64) σ21.mem := by
+      rw [hmem21, hmem20, hmem19, hmem18, hmem17, hmem16]; exact h15
+    have h22 : SlotHolds vsp 0x020 (0#64) σ22.mem := by
+      rw [hmem22, hNP21b]
+      exact slotHolds_writeMap8 vsp 0x020 (0#64) σ21.mem _ _ (by rw [hoff32, hoff56]; omega) h21
+    have h23 : SlotHolds vsp 0x020 (0#64) σ23.mem := by
+      rw [hmem23, hNP22b]
+      exact slotHolds_writeMap8 vsp 0x020 (0#64) σ22.mem _ _ (by rw [hoff32, hoff48]; omega) h22
+    rw [hmem24]; exact h23
+  -- post-widening: mid-register (+ x26) preservation across all 24 steps
+  have hkeep24 : KeepRegs (Register.x26 :: midRegs5) c.σ σ24 := by
+    have h0 := keep_rfl (Register.x26 :: midRegs5) c.σ
+    have h1 := keep_alu hobs1 (by decide) h0
+    have h2 := keep_store hobs2 (by decide) h1
+    have h3 := keep_alu hobs3 (by decide) h2
+    have h4 := keep_alu hobs4 (by decide) h3
+    have h5 := keep_alu hobs5 (by decide) h4
+    have h6 := keep_store hobs6 (by decide) h5
+    have h7 := keep_alu hobs7 (by decide) h6
+    have h8 := keep_alu hobs8 (by decide) h7
+    have h9 := keep_alu hobs9 (by decide) h8
+    have h10 := keep_alu hobs10 (by decide) h9
+    have h11 := keep_bnottaken hobs11 (by decide) h10
+    have h12 := keep_alu hobs12 (by decide) h11
+    have h13 := keep_alu hobs13 (by decide) h12
+    have h14 := keep_alu hobs14 (by decide) h13
+    have h15 := keep_store hobs15 (by decide) h14
+    have h16 := keep_jr hobs16 (by decide) h15
+    have h17 := keep_bnottaken hobs17 (by decide) h16
+    have h18 := keep_alu hobs18 (by decide) h17
+    have h19 := keep_jr hobs19 (by decide) h18
+    have h20 := keep_bnottaken hobs20 (by decide) h19
+    have h21 := keep_jr hobs21 (by decide) h20
+    have h22 := keep_store hobs22 (by decide) h21
+    have h23 := keep_store hobs23 (by decide) h22
+    exact keep_jr hobs24 (by decide) h23
+  -- post-widening: the pointwise frame outside [sp+32,sp+64) ∪ [sp+104,sp+112)
+  have hmframe : ∀ a : Nat, ¬(vsp.toNat + 32 ≤ a ∧ a < vsp.toNat + 64) →
+      ¬(vsp.toNat + 104 ≤ a ∧ a < vsp.toNat + 112) →
+      σ24.mem[a]? = c.σ.mem[a]? := by
+    intro a hA hB
+    rw [hmem24, hmem23, hNP22b, getElem?_writeMap8_out _ _ _ _ (by rw [hoff48]; omega),
+      hmem22, hNP21b, getElem?_writeMap8_out _ _ _ _ (by rw [hoff56]; omega),
+      hmem21, hmem20, hmem19, hmem18, hmem17, hmem16,
+      hmem15, hNP14, getElem?_writeMap8_out _ _ _ _ (by rw [hoff32]; omega),
+      hmem14, hmem13, hmem12, hmem11, hmem10, hmem9, hmem8, hmem7,
+      hmem6, hNP5, getElem?_writeMap8_out _ _ _ _ (by rw [hoff40]; omega),
+      hmem5, hmem4, hmem3,
+      hmem2, hNP1, getElem?_writeMap8_out _ _ _ _ (by rw [hoff104]; omega),
+      hmem1]
+  have hload24 : SvfprintfSliceLoaded σ24.mem := hmem24 ▸ hload23
+  have hfp24 : FlushPinsLoaded σ24.mem := hmem24 ▸ hfp23
   refine ⟨⟨σ24, i24, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1⟩, ?_, hG24, hpc24, hx22_24, hx16n_24, hx30_24, hx31_24,
-    hx20w_24, hx6w_24, hx28w_24, hx23w_24, hx8w_24, hx2_24, hi24, hG24.minstret⟩
+    hx20w_24, hx6w_24, hx28w_24, hx23w_24, hx8w_24, hx2_24, hi24, hG24.minstret,
+    hs32z_24, hkeep24, hmframe, hload24, hfp24⟩
   exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans ((Steps.single hstep4).trans ((Steps.single hstep5).trans ((Steps.single hstep6).trans ((Steps.single hstep7).trans ((Steps.single hstep8).trans ((Steps.single hstep9).trans ((Steps.single hstep10).trans ((Steps.single hstep11).trans ((Steps.single hstep12).trans ((Steps.single hstep13).trans ((Steps.single hstep14).trans ((Steps.single hstep15).trans ((Steps.single hstep16).trans ((Steps.single hstep17).trans ((Steps.single hstep18).trans ((Steps.single hstep19).trans ((Steps.single hstep20).trans ((Steps.single hstep21).trans ((Steps.single hstep22).trans ((Steps.single hstep23).trans ((Steps.single hstep24))))))))))))))))))))))))
 
 end Vsa.Sim

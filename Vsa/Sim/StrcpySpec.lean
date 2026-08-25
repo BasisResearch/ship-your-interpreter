@@ -145,12 +145,12 @@ structure CpyInv (dst src : BitVec 64) (len : Nat) (bs : Nat → BitVec 8) (i : 
   outside : ∀ a, (a < dst.toNat ∨ dst.toNat + len < a) → mem[a]? = m0[a]?
   src_intact : ∀ k, i ≤ k → k ≤ len → mem[(src.toNat + k)]? = m0[(src.toNat + k)]?
 
-/-- **Store preserves the copied-prefix invariant.** Storing byte `bs i` at
-`dst + i` (`i ≤ len`) re-establishes `CpyInv … (i+1)` for `mem.insert (dst+i) (bs i)`.
-Key disequalities are omega-shaped from `CpyRegions`. -/
-theorem cpyinv_store (dst src : BitVec 64) (len : Nat) (bs : Nat → BitVec 8) (i : Nat)
+/-- **Store preserves the copied-prefix invariant** (disjointness-only form,
+shared with the `memmove` byte loop in `SnprintfSpec18`). Storing byte `bs i` at
+`dst + i` (`i ≤ len`) re-establishes `CpyInv … (i+1)` for `mem.insert (dst+i) (bs i)`. -/
+theorem cpyinv_store' (dst src : BitVec 64) (len : Nat) (bs : Nat → BitVec 8) (i : Nat)
     (m0 mem : Std.ExtHashMap Nat (BitVec 8))
-    (hreg : CpyRegions dst src len) (hi : i ≤ len)
+    (hdisj : dst.toNat + len + 1 ≤ src.toNat ∨ src.toNat + len + 1 ≤ dst.toNat) (hi : i ≤ len)
     (hinv : CpyInv dst src len bs i m0 mem) :
     CpyInv dst src len bs (i + 1) m0 (mem.insert (dst.toNat + i) (bs i)) := by
   refine ⟨?_, ?_, ?_⟩
@@ -172,9 +172,17 @@ theorem cpyinv_store (dst src : BitVec 64) (len : Nat) (bs : Nat → BitVec 8) (
     rw [Std.ExtHashMap.getElem?_insert]
     have hne : ((dst.toNat + i) == (src.toNat + k)) = false := by
       simp only [beq_eq_false_iff_ne, ne_eq]
-      rcases hreg.disjoint with hd | hd <;> omega
+      rcases hdisj with hd | hd <;> omega
     rw [if_neg (by simp only [hne, Bool.false_eq_true, not_false_eq_true])]
     exact hinv.src_intact k (by omega) hkn
+
+/-- `cpyinv_store` with the disjointness taken from `CpyRegions`. -/
+theorem cpyinv_store (dst src : BitVec 64) (len : Nat) (bs : Nat → BitVec 8) (i : Nat)
+    (m0 mem : Std.ExtHashMap Nat (BitVec 8))
+    (hreg : CpyRegions dst src len) (hi : i ≤ len)
+    (hinv : CpyInv dst src len bs i m0 mem) :
+    CpyInv dst src len bs (i + 1) m0 (mem.insert (dst.toNat + i) (bs i)) :=
+  cpyinv_store' dst src len bs i m0 mem hreg.disjoint hi hinv
 
 /-! ## Blanket ghost-frame predicate (`NotWrittenCpy`) + generic per-class helpers
 

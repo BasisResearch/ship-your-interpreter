@@ -1,0 +1,6 @@
+# svfprintf flush-return path: FlushPinsLoaded sites (return beqz + epilogue tail)
+80008688	a8050863	branch_taken	BEQ	10	0	0x1290
+80007a00	23813483	ld	9	2	0x238
+80007a04	21013b03	ld	22	2	0x210
+80007a08	25010113	alu_addi	2	2	0x250
+80007a0c	00008067	jr	1

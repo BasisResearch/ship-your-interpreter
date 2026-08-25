@@ -1,0 +1,72 @@
+{
+  "theorem": "tr_memmove_callglue_gen",
+  "doc": "Generated call-glue: `jal ra,memmove` at 0x800143c0 composed with `memmove_fwd_spec` (SnprintfSpec18); pins x10/x12/x8 + the jal link carried across the callee via `pins_of_frame`. Post is abstract, discharged by the `hclose` hypothesis.",
+  "namespace": "Vsa.Sim",
+  "imports": ["Vsa.Sim.SsputsSites", "Vsa.Sim.SnprintfSpec18",
+              "Vsa.Sim.SnprintfSpec19", "Vsa.Sim.RegPins"],
+  "decls": [
+    "/-- Generated (gen_segment.py --mode call): state at the `jal ra,memmove`. -/\nstructure MemmoveCallGluePreGen (d s w8 : BitVec 64) (n : Nat)\n    (m0 : Std.ExtHashMap Nat (BitVec 8)) (bs : Nat → BitVec 8) (c : Config) : Prop where\n  good : GoodState c.σ\n  loaded : Vsa.Sim.Code.__ssputs_rLoaded c.σ.mem\n  mvloaded : Vsa.Sim.Code.MemmoveLoaded m0\n  pc : c.σ.regs.get? Register.PC = some ((0x800143c0#64) : BitVec 64)\n  a0 : c.σ.regs.get? Register.x10 = some d\n  a1 : c.σ.regs.get? Register.x11 = some s\n  a2 : c.σ.regs.get? Register.x12 = some (BitVec.ofNat 64 n)\n  s0 : c.σ.regs.get? Register.x8 = some w8\n  minstret : ∃ v, c.σ.regs.get? Register.minstret = some v\n  tick : c.tick < 2\n  regions : MvRegions d s n\n  hbs : MvBytes m0 s n bs\n  memeq : c.σ.mem = m0"
+  ],
+  "params": [
+    "(d s w8 : BitVec 64) (n : Nat)",
+    "(m0 : Std.ExtHashMap Nat (BitVec 8)) (bs : Nat → BitVec 8)"
+  ],
+  "pre": "MemmoveCallGluePreGen d s w8 n m0 bs",
+  "post_abstract": true,
+  "loaded_pred": "Vsa.Sim.Code.__ssputs_rLoaded",
+  "pre_bind": {
+    "obtain": "⟨hgood, hloadp, hmvload, hpcp, ha0, ha1, ha2, hw8, ⟨vmi0, hmi0⟩, htick0, hregions, hbs0, hmemeq0⟩",
+    "good": "hgood", "pc": "hpcp", "minstret_var": "vmi0", "minstret": "hmi0",
+    "tick": "htick0", "loaded": "hloadp",
+    "mem0": "m0", "memeq": "hmemeq0"
+  },
+  "pins": [
+    {"reg": "x10", "val": "d", "hyp": "ha0"},
+    {"reg": "x11", "val": "s", "hyp": "ha1"},
+    {"reg": "x12", "val": "BitVec.ofNat 64 n", "hyp": "ha2"},
+    {"reg": "x8", "val": "w8", "hyp": "hw8"}
+  ],
+  "prelude": [
+    "have htoh : tohostAddr = 0x8001ad00 := rfl",
+    "have hssm0 : Vsa.Sim.Code.__ssputs_rLoaded m0 := hmemeq0 ▸ hloadp"
+  ],
+  "steps": [
+    {"addr": "0x800143c0", "site": "site_143c0_sp", "class": "jal",
+     "rd": "x1", "imm": "0x1f2604#21", "target": "0x800069c4",
+     "call": "$vmi $hG $hpc $hmi $hmem rfl $hi"},
+
+    {"class": "call", "callee": "memmove_fwd_spec",
+     "args": "(fun R => $sigma.regs.get? R) (0x800143c4#64) d s n m0 bs (by decide)",
+     "pre_fields": [
+       "$hG",
+       "(by rw [$memeq]; exact hmvload)",
+       "$hpc",
+       "$pin:x10", "$pin:x11", "$pin:x12",
+       "hrd1",
+       "⟨$vmi, $hmi⟩",
+       "$hi",
+       "hregions",
+       "hbs0",
+       "$memeq",
+       "fun R _ => rfl"
+     ],
+     "post_obtain": "⟨hGc, hpcc, hx10c, hx1c, hcopied, hmemfr, htickc, hregfr⟩",
+     "post_good": "hGc", "post_pc": "hpcc",
+     "pc_val": "((0x800143c4#64) : BitVec 64)",
+     "post_tick": "htickc",
+     "pins_drop": ["x11"],
+     "pins_add": [],
+     "write_set": ["x11", "x13", "x14", "x15", "PC", "nextPC", "minstret",
+                   "minstret_increment", "mcycle", "mtime", "mip"],
+     "frame_hyp": "hregfr",
+     "loaded_lines": [
+       "have hdw : tohostAddr + 16 ≤ d.toNat := hregions.dst_win",
+       "have hload$k : Vsa.Sim.Code.__ssputs_rLoaded c$k.σ.mem :=",
+       "  ssputs_frame_ss m0 c$k.σ.mem (fun a ha => hmemfr a (Or.inl (by omega))) hssm0"
+     ]}
+  ],
+  "hclose_extra": [
+    {"type": "∀ k, k < n → σ'.mem[(d.toNat + k)]? = some (bs k)", "arg": "hcopied"},
+    {"type": "∀ a, (a < d.toNat ∨ d.toNat + n ≤ a) → σ'.mem[a]? = m0[a]?", "arg": "hmemfr"}
+  ]
+}

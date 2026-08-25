@@ -1,0 +1,18 @@
+{
+  "theorem": "tr_ssputs_epilogue_gen",
+  "doc": "Generated `__ssputs_r` epilogue (frame 64: ld ra,56(sp); ld s0,48(sp); ld s1,40(sp); addi sp,sp,64; ret), 0x800143e0 → PC = r, reloading the SlotFrame spills.",
+  "namespace": "Vsa.Sim",
+  "imports": ["Vsa.Sim.SsputsSites", "Vsa.Sim.SlotFrame", "Vsa.Sim.RegPins",
+              "Vsa.Sim.PtrArith"],
+  "loaded_pred": "Vsa.Sim.Code.__ssputs_rLoaded",
+  "frame_size": 64,
+  "sp_reg": "x2",
+  "entry": "0x800143e0",
+  "reloads": [
+    {"addr": "0x800143e0", "site": "site_143e0_sp", "reg": "x1", "off": 56, "var": "r"},
+    {"addr": "0x800143e4", "site": "site_143e4_sp", "reg": "x8", "off": 48, "var": "v8"},
+    {"addr": "0x800143e8", "site": "site_143e8_sp", "reg": "x9", "off": 40, "var": "v9"}
+  ],
+  "sp_inc": {"addr": "0x800143ec", "site": "site_143ec_sp", "imm": "0x040"},
+  "ret": {"addr": "0x800143f0", "site": "site_143f0_sp"}
+}

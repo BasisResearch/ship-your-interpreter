@@ -113,6 +113,34 @@ theorem len_eq_p1 (vsp : BitVec 64) (p : Nat)
     BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega),
     Nat.mod_eq_of_lt (by omega)]
 
+/-- **`a6 = len+1` arithmetic:** the 32-bit `addiw a6,s6,1` over `len = p+1`
+(`p+1 ≤ 20`), sign-extended, is exactly `p+2`. -/
+theorem len1_eq_p2 (p : Nat) (hp : p + 1 ≤ 20) :
+    (sign_extend (m := 64) (Sail.BitVec.extractLsb
+      ((BitVec.ofNat 64 (p + 1)) + sign_extend (m := 64) (0x001#12)) 31 0))
+      = BitVec.ofNat 64 (p + 2) := by
+  have hsum : (BitVec.ofNat 64 (p + 1)) + sign_extend (m := 64) (0x001#12)
+      = BitVec.ofNat 64 (p + 2) := by
+    apply BitVec.eq_of_toNat_eq
+    simp only [BitVec.toNat_add, BitVec.toNat_ofNat,
+      show ((sign_extend (m := 64) (0x001#12) : BitVec 64)).toNat = 1 from by decide]
+    omega
+  rw [hsum, extractLsb32_of_lt _
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (show p + 2 < 2 ^ 64 by omega)]; omega)]
+  rw [show (BitVec.ofNat 64 (p + 2)).toNat = p + 2 from by
+    rw [BitVec.toNat_ofNat]; exact Nat.mod_eq_of_lt (by omega)]
+  apply BitVec.eq_of_toNat_eq
+  show ((BitVec.ofNat 32 (p + 2)).signExtend 64).toNat = (BitVec.ofNat 64 (p + 2)).toNat
+  rw [BitVec.toNat_signExtend]
+  have hmsb : (BitVec.ofNat 32 (p + 2)).msb = false := by
+    rw [BitVec.msb_eq_getLsbD_last]
+    simp only [BitVec.getLsbD_ofNat]
+    rw [Nat.testBit_lt_two_pow (by omega)]
+    rfl
+  rw [hmsb, if_neg (by simp), Nat.add_zero, BitVec.toNat_setWidth, BitVec.toNat_ofNat,
+    BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega),
+    Nat.mod_eq_of_lt (by omega)]
+
 /-- **Composed sign-block → PRINT-entry `Triple` for the negative case.**
 
 From `0x800080e4` (value negative, magnitude `> 9`) to `0x8000782c` (the PRINT
@@ -176,13 +204,37 @@ theorem entryToPrint_neg_spec
       c'.σ.regs.get? Register.x2 = some vsp ∧
       -- the magnitude bridge (INT64_MIN-safe): the loop formatted `|v|`
       ((0#64) - v).toNat = (- v.toInt).toNat ∧
-      c'.tick < 2 ∧ (∃ u, c'.σ.regs.get? Register.minstret = some u) := by
+      c'.tick < 2 ∧ (∃ u, c'.σ.regs.get? Register.minstret = some u) ∧
+      -- post-widening: the full PRINT-entry register/memory state
+      SvfprintfSliceLoaded c'.σ.mem ∧
+      Vsa.Sim.Code.FlushPinsLoaded c'.σ.mem ∧
+      c'.σ.regs.get? Register.x20 = some v20 ∧
+      c'.σ.regs.get? Register.x23 = some v23 ∧
+      c'.σ.regs.get? Register.x8 = some v8 ∧
+      c'.σ.regs.get? Register.x28 = some v28 ∧
+      (∃ vflg, c'.σ.regs.get? Register.x6 = some vflg ∧
+        (vflg = vt1 ∨ vflg = vt1 &&& sign_extend (m := 64) (0xf7f#12))) ∧
+      SlotHolds vsp 0x020 (0#64) c'.σ.mem ∧
+      KeepRegs midRegs5 c.σ c'.σ ∧
+      (∃ p, ((0#64) - v).toNat / 10 ^ p ≤ 9 ∧ p + 1 ≤ 20 ∧
+        (p = 0 ∨ 9 < ((0#64) - v).toNat / 10 ^ (p - 1)) ∧
+        c'.σ.regs.get? Register.x22 = some (BitVec.ofNat 64 (p + 1)) ∧
+        c'.σ.regs.get? Register.x16 = some (BitVec.ofNat 64 (p + 2)) ∧
+        c'.σ.regs.get? Register.x26
+          = some (BitVec.ofNat 64 ((entryTop vsp).toNat - 1 - p)) ∧
+        BufInv (entryTop vsp) ((0#64) - v).toNat (p + 1) c'.σ.mem) ∧
+      (∀ a : Nat, a ≠ (vsp + sign_extend (m := 64) (0x0a7#12)).toNat →
+        (a < vsp.toNat + 32 ∨ (vsp.toNat + 128 ≤ a ∧ a < vsp.toNat + 328) ∨
+          vsp.toNat + 348 ≤ a) →
+        c'.σ.mem[a]? = c.σ.mem[a]?) ∧
+      c'.σ.mem[(vsp + sign_extend (m := 64) (0x0a7#12)).toNat]? = some signByte := by
   -- === 1. sign block → split → loop entry → decimal loop → exit at 0x80008358 ===
   -- (with all spill/cursor/register/Loaded facts surfaced; slot 56 = the *named*
   -- parsed field width `v20` via `hs56v20`, digit-count bound `hpb : p+1 ≤ 20`)
-  obtain ⟨c3, hs13, p, hexit, hpb, hpc3, hx23_3, hbuf3, hG3, htick3, hmi3, hbridge, hsign3,
+  obtain ⟨c3, hs13, p, hexit, hpb, hmin, hpc3, hx23_3, hbuf3, hG3, htick3, hmi3, hbridge, hsign3,
     hload3, hfp3, hx2_3, ⟨vs4j, hx20_3⟩, hx26_3, hs56v20,
-    vwid, vflg, vt3, vs7, vs0, hs112_3, hs56_3, hs40_3, hs32_3, hs48_3, hs120_3⟩ :=
+    vwid, vflg, vt3, vs7, vs0, hs112_3, hs56_3, hs40_3, hs32_3, hs48_3, hs120_3,
+    hs32v28_3, hs48v23_3, hs120v8_3, hvflgor3, hkeep6, hframe6⟩ :=
     signToDigits_neg_spec v vsp vt1 v8 v20 v23 v28 v12 c
       hG hload hfp huload hcuload hpc hx13 hx2 hx6 hx8 hx20 hx23 hx28 hx12
       hflag hneg hmag htlo hhi halign htick
@@ -211,14 +263,50 @@ theorem entryToPrint_neg_spec
     rw [hlen, hp1_toInt]
     exact decide_eq_false (by omega)
   -- === 2. restore block + hops : 0x80008358 → 0x8000782c ===
+  -- (the spare slots carry the *named* entry x28/x23/x8 values, so the reloads
+  -- surface them: `vt3v := v28`, `vs7v := v23`, `vs0v := v8`)
   obtain ⟨c', hs37, hG', hpc', hx22', hx16', hx30', hx31', hx20', hx6', hx28',
-          hx23', hx8', hx2', htick', hmi'⟩ :=
-    exitToPrint_spec vsp (entryTop vsp) v20 vflg vt3 vs7 vs0
+          hx23', hx8', hx2', htick', hmi', hs32z', hkeep7, hmframe7, hload', hfp'⟩ :=
+    exitToPrint_spec vsp (entryTop vsp) v20 vflg v28 v23 v8
       (BitVec.ofNat 64 ((entryTop vsp).toNat - 1 - p)) vs4j (BitVec.ofNat 64 (p + 1)) signByte c3
       hG3 hload3 hfp3 hpc3 hx2_3 hx26_3 hx20_3 hx23_3
-      hs112_3 hs56v20 hs40_3 hs32_3 hs48_3 hs120_3
+      hs112_3 hs56v20 hs40_3 hs32v28_3 hs48v23_3 hs120v8_3
       hsign3 hsbne hwlt_3 htlo hhi halign htick3
-  exact ⟨c', hs13.trans hs37, hG', hpc', hx30', hx31', hx2', hbridge, htick', hmi'⟩
+  -- address bridges
+  have hnw : vsp.toNat + 348 < 2 ^ 64 := by omega
+  have htop_toNat : (entryTop vsp).toNat = vsp.toNat + 348 :=
+    addoff_toNat_sn5 vsp (0x15c#12) 348 (by omega) (by decide) hnw
+  have h167 : (vsp + sign_extend (m := 64) (0x0a7#12)).toNat = vsp.toNat + 167 :=
+    addoff_toNat_sn5 vsp (0x0a7#12) 167 (by omega) (by decide) hnw
+  -- x22 = len = p+1 and x16 = len+1 = p+2 (rewriting the subw/addiw forms)
+  rw [hlen] at hx22' hx16'
+  rw [len1_eq_p2 p hpb] at hx16'
+  -- x26 = the digit-buffer base (untouched by the restore block)
+  have hx26' : c'.σ.regs.get? Register.x26
+      = some (BitVec.ofNat 64 ((entryTop vsp).toNat - 1 - p)) :=
+    hkeep7 Register.x26 (by decide) _ hx26_3
+  -- the digit buffer survives the restore block's spill-window writes
+  have hbuf' : BufInv (entryTop vsp) ((0#64) - v).toNat (p + 1) c'.σ.mem := by
+    intro j hj
+    rw [hmframe7 _ (by rw [htop_toNat]; omega) (by rw [htop_toNat]; omega)]
+    exact hbuf3 j hj
+  -- the sign byte survives too
+  have hsign' : c'.σ.mem[(vsp + sign_extend (m := 64) (0x0a7#12)).toNat]? = some signByte := by
+    rw [hmframe7 _ (by rw [h167]; omega) (by rw [h167]; omega)]
+    exact hsign3
+  -- whole-segment pointwise frame + mid-register preservation
+  have hframeAll : ∀ a : Nat, a ≠ (vsp + sign_extend (m := 64) (0x0a7#12)).toNat →
+      (a < vsp.toNat + 32 ∨ (vsp.toNat + 128 ≤ a ∧ a < vsp.toNat + 328) ∨
+        vsp.toNat + 348 ≤ a) →
+      c'.σ.mem[a]? = c.σ.mem[a]? := by
+    intro a hne hdom
+    rw [hmframe7 a (by omega) (by omega)]
+    exact hframe6 a hne hdom
+  have hkeepAll : KeepRegs midRegs5 c.σ c'.σ :=
+    keep_trans hkeep6 (keep_sub (by decide) hkeep7)
+  exact ⟨c', hs13.trans hs37, hG', hpc', hx30', hx31', hx2', hbridge, htick', hmi',
+    hload', hfp', hx20', hx23', hx8', hx28', ⟨vflg, hx6', hvflgor3⟩, hs32z', hkeepAll,
+    ⟨p, hexit, hpb, hmin, hx22', hx16', hx26', hbuf'⟩, hframeAll, hsign'⟩
 
 /-- The parser's default-width sentinel is signed `-1`, hence below every
 positive decimal digit count. -/
@@ -261,9 +349,11 @@ theorem entryToPrint_neg_default_width_spec
       c'.σ.regs.get? Register.x2 = some vsp ∧
       ((0#64) - v).toNat = (- v.toInt).toNat ∧
       c'.tick < 2 ∧ (∃ u, c'.σ.regs.get? Register.minstret = some u) := by
-  exact entryToPrint_neg_spec v vsp vt1 v8 ((0#64) - (0x1#64)) v23 v28 v12 c
-    hG hload huload hcuload hfp hpc hx13 hx2 hx6 hx8 hx20 hx23 hx28 hx12
-    hflag hneg hmag htlo hhi halign htick
-    (fun p _ _ => default_width_lt_digits p)
+  obtain ⟨c', hsteps, hG', hpc', hx30', hx31', hx2', hbridge, htick', hmi', _⟩ :=
+    entryToPrint_neg_spec v vsp vt1 v8 ((0#64) - (0x1#64)) v23 v28 v12 c
+      hG hload huload hcuload hfp hpc hx13 hx2 hx6 hx8 hx20 hx23 hx28 hx12
+      hflag hneg hmag htlo hhi halign htick
+      (fun p _ _ => default_width_lt_digits p)
+  exact ⟨c', hsteps, hG', hpc', hx30', hx31', hx2', hbridge, htick', hmi'⟩
 
 end Vsa.Sim

@@ -1,6 +1,7 @@
 import Vsa.Sim.SnprintfSites2
 import Vsa.Sim.SnprintfSpec2
 import Vsa.Sim.Code.FlushPins
+import Vsa.Sim.KeepRegs
 
 /-!
 # M3 Layer-3 — `SnprintfSpec4` : the sign block, composed
@@ -282,7 +283,11 @@ theorem signBlock_neg_spec
       c'.σ.regs.get? Register.x28 = some v28 ∧ c'.σ.regs.get? Register.x12 = some v12 ∧
       SvfprintfSliceLoaded c'.σ.mem ∧ Vsa.Sim.Code.__umoddi3Loaded c'.σ.mem ∧
       Vsa.Sim.Code.__hidden___udivdi3Loaded c'.σ.mem ∧
-      Vsa.Sim.Code.FlushPinsLoaded c'.σ.mem := by
+      Vsa.Sim.Code.FlushPinsLoaded c'.σ.mem ∧
+      -- post-widening: mid-register preservation + the single-byte memory frame
+      KeepRegs midRegs5 c.σ c'.σ ∧
+      (∀ a : Nat, a ≠ (vsp + sign_extend (m := 64) (0x0a7#12)).toNat →
+        c'.σ.mem[a]? = c.σ.mem[a]?) := by
   obtain ⟨vmi, hvmi⟩ := hmi
   -- Step e4: mv a4,a3  ⇒ x14 := v + 0
   obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
@@ -471,8 +476,23 @@ theorem signBlock_neg_spec
       refine Vsa.Sim.Code.flushPins_of_agree (fun a ha => ?_) hfp3
       rw [Std.ExtHashMap.getElem?_insert, if_neg (by simp only [beq_iff_eq]; omega)]
     exact hmem5 ▸ hfp4
+  -- post-widening: the five mid-registers survive the whole block
+  have hkeep5 : KeepRegs midRegs5 c.σ σ5 := by
+    have h0 := keep_rfl midRegs5 c.σ
+    have h1 := keep_alu hobs1 (by decide) h0
+    have h2 := keep_bnottaken hobs2 (by decide) h1
+    have h3 := keep_alu hobs3 (by decide) h2
+    have h4 := keep_store hobs4 (by decide) h3
+    exact keep_alu hobs5 (by decide) h4
+  -- post-widening: everything except the sign byte reads as at entry
+  have hmframe : ∀ a : Nat, a ≠ (vsp + sign_extend (m := 64) (0x0a7#12)).toNat →
+      σ5.mem[a]? = c.σ.mem[a]? := by
+    intro a ha
+    rw [hmem5, hmem4q, Std.ExtHashMap.getElem?_insert,
+      if_neg (by simp only [beq_iff_eq]; omega), hmem3, hmem2, hmem1]
   refine ⟨⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩, ?_, hG5, hpc5, hx14_5, hsign5, hi5, ⟨vmi5, hvmi5⟩,
-    hx13_5, hx2_5, hx6_5, hx8_5, hx20_5, hx23_5, hx28_5, hx12_5, hmem5', huload5, hcuload5, hfp5⟩
+    hx13_5, hx2_5, hx6_5, hx8_5, hx20_5, hx23_5, hx28_5, hx12_5, hmem5', huload5, hcuload5, hfp5,
+    hkeep5, hmframe⟩
   exact (Steps.single hstep1).trans ((Steps.single hstep2).trans
     ((Steps.single hstep3).trans ((Steps.single hstep4).trans (Steps.single hstep5))))
 

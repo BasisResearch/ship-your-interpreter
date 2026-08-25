@@ -1,0 +1,18 @@
+8000782c	0f013603	ld	12	2	0f0	# ld a2,240(sp)
+80007834	00060513	alu_addi	10	12	000	# mv a0,a2
+80007838	48028e63	branch_taken	BEQ	5	0	049c	# beqz t0,80007cd4 <_svfprintf_r+0x680>
+800078c0	54071063	branch_nottaken	BNE	14	0	0540	# bnez a4,80007e00 <_svfprintf_r+0x7ac>
+800078c4	0e812783	lw	15	2	0e8	# lw a5,232(sp)
+800078c8	01660633	alu_add	12	12	22	# add a2,a2,s6
+800078cc	0ec13823	sd	12	2	0f0	# sd a2,240(sp)
+800078d0	0017879b	addiw	15	15	001	# addiw a5,a5,1
+800078d4	01abb023	sd	26	23	000	# sd s10,0(s7)
+800078d8	016bb423	sd	22	23	008	# sd s6,8(s7)
+800078dc	00700713	alu_addi	14	0	007	# li a4,7
+800078e0	0ef12423	sw	15	2	0e8	# sw a5,232(sp)
+800078e4	30f74863	branch_nottaken	BLT	14	15	0310	# blt a4,a5,80007bf4 <_svfprintf_r+0x5a0>
+800078e8	010b8b93	alu_addi	23	23	010	# addi s7,s7,16
+800078f0	00030663	branch_taken	BEQ	6	0	000c	# beqz t1,800078fc <_svfprintf_r+0x2a8>
+800078fc	000e0793	alu_addi	15	28	000	# mv a5,t3
+80007900	010e5463	branch_nottaken	BGE	28	16	0008	# bge t3,a6,80007908 <_svfprintf_r+0x2b4>
+80007904	00080793	alu_addi	15	16	000	# mv a5,a6

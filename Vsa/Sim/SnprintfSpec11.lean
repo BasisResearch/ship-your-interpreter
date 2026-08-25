@@ -100,6 +100,13 @@ theorem flushPins_writeMap4_pe (mem : Std.ExtHashMap Nat (BitVec 8)) (a : Nat)
   flushPins_insert_fl _ _ _ (by omega) (flushPins_insert_fl _ _ _ (by omega)
     (flushPins_insert_fl _ _ _ (by omega) (flushPins_insert_fl _ _ _ (by omega) h)))
 
+/-- The registers the PRINT/iov segment never writes (post-widening transport
+list): the five mid-registers plus the parse-state registers the second-iovec
+segment (`SnprintfSpec17`) consumes. -/
+abbrev keepIov_pe : List Register :=
+  [Register.x3, Register.x9, Register.x18, Register.x19, Register.x21, Register.x6,
+   Register.x8, Register.x16, Register.x20, Register.x22, Register.x26, Register.x28]
+
 /-- **PRINT-macro entry → first (sign-byte) iovec entry.**
 
 From `0x8000782c` (the PRINT-macro entry that `entryToPrint_neg_spec` reaches) to
@@ -174,7 +181,12 @@ theorem printEntryToSignIov_spec
           (swData (sign_extend (m := 64)
             (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64)
               + sign_extend (m := 64) (0x001#12)) 31 0))) ∧
-      c'.tick < 2 ∧ (∃ u, c'.σ.regs.get? Register.minstret = some u) := by
+      c'.tick < 2 ∧ (∃ u, c'.σ.regs.get? Register.minstret = some u) ∧
+      -- post-widening: t0 zeroed by the `andi t0,t1,132` (flags guard), the
+      -- bumped cursor still in a2, and the unwritten-register transport
+      c'.σ.regs.get? Register.x5 = some (0#64) ∧
+      c'.σ.regs.get? Register.x12 = some (vcur + sign_extend (m := 64) (0x001#12)) ∧
+      KeepRegs keepIov_pe c.σ c'.σ := by
   obtain ⟨vmi0, hmi0⟩ := hG.minstret
   have hnw : vsp.toNat + 348 < 2 ^ 64 := by omega
   -- effective-address rewrites for the two FILE fields
@@ -1173,8 +1185,65 @@ theorem printEntryToSignIov_spec
           (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64)
             + sign_extend (m := 64) (0x001#12)) 31 0))) := by
     rw [hmem22eq, hmem21, hmem20, hmem19eq, hmem18', hmem17', hmem16', hmem15', hmemeq14]
+  -- post-widening: t0 = 0 survives from σ2 (never rewritten)
+  have hx5_22 : σ22.regs.get? Register.x5 = some (0#64) := by
+    have k3 := keep_alu hobs3 (by decide) (keep_rfl [Register.x5] σ2)
+    have k4 := keep_btaken hobs4 (by decide) k3
+    have k5 := keep_alu hobs5 (by decide) k4
+    have k6 := keep_bnottaken hobs6 (by decide) k5
+    have k7 := keep_alu hobs7 (by decide) k6
+    have k8 := keep_btaken hobs8 (by decide) k7
+    have k9 := keep_alu hobs9 (by decide) k8
+    have k10 := keep_alu hobs10 (by decide) k9
+    have k11 := keep_alu hobs11 (by decide) k10
+    have k12 := keep_alu hobs12 (by decide) k11
+    have k13 := keep_alu hobs13 (by decide) k12
+    have k14 := keep_alu hobs14 (by decide) k13
+    have k15 := keep_store hobs15 (by decide) k14
+    have k16 := keep_store hobs16 (by decide) k15
+    have k17 := keep_store hobs17 (by decide) k16
+    have k18 := keep_store hobs18 (by decide) k17
+    have k19 := keep_alu hobs19 (by decide) k18
+    have k20 := keep_alu hobs20 (by decide) k19
+    have k21 := keep_bnottaken hobs21 (by decide) k20
+    have k22 := keep_btaken hobs22 (by decide) k21
+    exact k22 Register.x5 (by decide) _ hx5_2
+  -- post-widening: the bumped cursor a2 survives from σ16
+  have hx12_22 : σ22.regs.get? Register.x12
+      = some (vcur + sign_extend (m := 64) (0x001#12)) := by
+    have k17 := keep_store hobs17 (by decide) (keep_rfl [Register.x12] σ16)
+    have k18 := keep_store hobs18 (by decide) k17
+    have k19 := keep_alu hobs19 (by decide) k18
+    have k20 := keep_alu hobs20 (by decide) k19
+    have k21 := keep_bnottaken hobs21 (by decide) k20
+    have k22 := keep_btaken hobs22 (by decide) k21
+    exact k22 Register.x12 (by decide) _ hx12_16
+  -- post-widening: the unwritten-register transport (whole 22-step segment)
+  have hkeep22 : KeepRegs keepIov_pe c.σ σ22 := by
+    have k1 := keep_alu hobs1 (by decide) (keep_rfl keepIov_pe c.σ)
+    have k2 := keep_alu hobs2 (by decide) k1
+    have k3 := keep_alu hobs3 (by decide) k2
+    have k4 := keep_btaken hobs4 (by decide) k3
+    have k5 := keep_alu hobs5 (by decide) k4
+    have k6 := keep_bnottaken hobs6 (by decide) k5
+    have k7 := keep_alu hobs7 (by decide) k6
+    have k8 := keep_btaken hobs8 (by decide) k7
+    have k9 := keep_alu hobs9 (by decide) k8
+    have k10 := keep_alu hobs10 (by decide) k9
+    have k11 := keep_alu hobs11 (by decide) k10
+    have k12 := keep_alu hobs12 (by decide) k11
+    have k13 := keep_alu hobs13 (by decide) k12
+    have k14 := keep_alu hobs14 (by decide) k13
+    have k15 := keep_store hobs15 (by decide) k14
+    have k16 := keep_store hobs16 (by decide) k15
+    have k17 := keep_store hobs17 (by decide) k16
+    have k18 := keep_store hobs18 (by decide) k17
+    have k19 := keep_alu hobs19 (by decide) k18
+    have k20 := keep_alu hobs20 (by decide) k19
+    have k21 := keep_bnottaken hobs21 (by decide) k20
+    exact keep_btaken hobs22 (by decide) k21
   refine ⟨⟨σ22, i22, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩,
-    ?_, hG22', hpc22, hx23_22, hx2_22, hmemfinal, ?_, hG22'.minstret⟩
+    ?_, hG22', hpc22, hx23_22, hx2_22, hmemfinal, ?_, hG22'.minstret, hx5_22, hx12_22, hkeep22⟩
   · exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
       ((Steps.single hstep4).trans ((Steps.single hstep5).trans ((Steps.single hstep6).trans
       ((Steps.single hstep7).trans ((Steps.single hstep8).trans ((Steps.single hstep9).trans

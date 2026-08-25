@@ -241,7 +241,14 @@ theorem dispatchD_ll_to_printEntry_spec
       (∀ v8 v23 v12, PrintEntryFrame c.σ v8 v23 v12 →
         PrintEntryFrame c'.σ v8 v23 v12) ∧
       (SnprintfRuntimeLoaded c.σ.mem → SnprintfRuntimeLoaded c'.σ.mem) ∧
-      c'.tick < 2 := by
+      c'.tick < 2 ∧
+      -- post-widening: the spilled fmt cursor (`sd s9,0(sp)`), mid-register
+      -- preservation, and the pointwise frame outside the two spill windows
+      SlotHolds vsp 0x000 v9 c'.σ.mem ∧
+      KeepRegs midRegs5 c.σ c'.σ ∧
+      (∀ a : Nat, ¬(vsp.toNat ≤ a ∧ a < vsp.toNat + 8) →
+        ¬(vsp.toNat + 24 ≤ a ∧ a < vsp.toNat + 32) →
+        c'.σ.mem[a]? = c.σ.mem[a]?) := by
   obtain ⟨vmi0, hmi0⟩ := hG.minstret
   have htlo' : 0x8001ad50 ≤ vsp.toNat := by simp only [tohostAddr] at htlo; omega
   -- offset helper: sp+24 as a Nat
@@ -839,9 +846,39 @@ theorem dispatchD_ll_to_printEntry_spec
   have hrt9 : SnprintfRuntimeLoaded c.σ.mem → SnprintfRuntimeLoaded σ9.mem := fun h => by
     rw [hmem9, hNP9]
     exact snprintfRuntimeLoaded_writeMap8 _ _ _ (by rw [hoff24]; omega) (hrt8 h)
+  -- post-widening: the fmt-cursor slot (born at σ2, survives the σ9 store)
+  have hNP1s : (afterNextPC (afterPrelude σ1) (0x8000800c#64)).mem = σ1.mem := rfl
+  have hfmtS9 : SlotHolds vsp 0x000 v9 σ9.mem := by
+    have h2 : SlotHolds vsp 0x000 v9 σ2.mem := by
+      rw [hmem2, hNP1s]
+      exact slotHolds_self vsp 0x000 _ v9 σ1.mem rfl
+    have h8 : SlotHolds vsp 0x000 v9 σ8.mem := by
+      rw [hmem8, hmem7, hmem6, hmem5, hmem4, hmem3]; exact h2
+    rw [hmem9, hNP9]
+    exact slotHolds_writeMap8 vsp 0x000 v9 σ8.mem _ _ (by rw [hoff0, hoff24]; omega) h8
+  -- post-widening: mid-register preservation across the 9 steps
+  have hkeep9 : KeepRegs midRegs5 c.σ σ9 := by
+    have h0 := keep_rfl midRegs5 c.σ
+    have h1 := keep_alu hobs1 (by decide) h0
+    have h2 := keep_store hobs2 (by decide) h1
+    have h3 := keep_alu hobs3 (by decide) h2
+    have h4 := keep_alu hobs4 (by decide) h3
+    have h5 := keep_alu hobs5 (by decide) h4
+    have h6 := keep_btaken hobs6 (by decide) h5
+    have h7 := keep_alu hobs7 (by decide) h6
+    have h8 := keep_alu hobs8 (by decide) h7
+    exact keep_store hobs9 (by decide) h8
+  -- post-widening: the pointwise frame outside [sp,sp+8) ∪ [sp+24,sp+32)
+  have hmframe9 : ∀ a : Nat, ¬(vsp.toNat ≤ a ∧ a < vsp.toNat + 8) →
+      ¬(vsp.toNat + 24 ≤ a ∧ a < vsp.toNat + 32) →
+      σ9.mem[a]? = c.σ.mem[a]? := by
+    intro a hA hB
+    rw [hmem9, hNP9, getElem?_writeMap8_out _ _ _ _ (by rw [hoff24]; omega),
+      hmem8, hmem7, hmem6, hmem5, hmem4, hmem3,
+      hmem2, hNP1s, getElem?_writeMap8_out _ _ _ _ (by rw [hoff0]; omega), hmem1]
   -- assemble the 9-step chain
   refine ⟨⟨σ9, i9, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩, ?_, hG9, hpc9, hx2_9, hx6_9,
-    hx20_9, hx28_9, hx13_9, hload9, hframe9, hrt9, hi9⟩
+    hx20_9, hx28_9, hx13_9, hload9, hframe9, hrt9, hi9, hfmtS9, hkeep9, hmframe9⟩
   exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
     ((Steps.single hstep4).trans ((Steps.single hstep5).trans ((Steps.single hstep6).trans
     ((Steps.single hstep7).trans ((Steps.single hstep8).trans (Steps.single hstep9))))))))
@@ -911,7 +948,7 @@ theorem dispatchD_ll_to_print_neg_default_width_spec
         (- (llArg a0 a1 a2 a3 a4b a5b a6 a7).toInt).toNat ∧
       c'.tick < 2 ∧ (∃ u, c'.σ.regs.get? Register.minstret = some u) := by
   obtain ⟨c1, hs1, hG1, hpc1, hx2_1, hx6_1, hx20_1, hx28_1, hx13_1, hload1,
-      hframe1, hrt1, htick1⟩ :=
+      hframe1, hrt1, htick1, _hfmtS, _hkeep, _hmframe⟩ :=
     dispatchD_ll_to_printEntry_spec vsp vptr v9 v27 ((0#64) - (0x1#64))
       p0 p1 p2 p3 p4 p5 p6 p7 a0 a1 a2 a3 a4b a5b a6 a7 c
       hG hload hpc hx2 hx6 hx25 hx27 hx20 htlo hhi halign

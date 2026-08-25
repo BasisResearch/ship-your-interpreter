@@ -1,0 +1,54 @@
+{
+ "rename": {
+  "lldFmtChunk0": "fnFmtChunk0",
+  "LldFmtLoaded": "FnFmtLoaded",
+  "lldFmt_bytes": "fnFmt_bytes"
+ },
+ "replace": [
+  {
+   "old_str": "/-!\n# Code byte pins for the static `\"%lld\"` format string (`FnFmtLoaded`)\n\nThe WHILE interpreter's `stringify` (int arm, `0x800030c0`) calls\n`snprintf(buf, 64, \"%lld\", v)` with the format pointer `a2 = 0x800192c0` —\na `.rodata` string in `c/while-riscv-htif.elf`:\n\n    800192c0  25 6c 6c 64 00 00 00 00      \"%lld\\0\" (+ 3 padding zeros)\n\n8 bytes pinned (the padding included so the whole `[vfmt, vfmt+8)` window the\nsvfprintf layout hypotheses quantify over is image-determined).\n-/",
+   "new_str": "/-!\n# Code byte pins for the static `\"<fn %s>\"` format string (`FnFmtLoaded`)\n\nThe WHILE interpreter's `stringify` (closure arm, `interp.c`) calls\n`snprintf(buf, sizeof buf, \"<fn %s>\", name)` — the format is a `.rodata`\nstring in `c/while-riscv-htif.elf`:\n\n    800192c8  3c 66 6e 20 25 73 3e 00      \"<fn %s>\\0\"\n\n8 bytes pinned (the NUL included so the whole `[vfmt, vfmt+8)` window is\nimage-determined) for the closure-printing arm (M4 `Call`/closure stringify)\n— the same consumer pattern as `LldFmtLoaded` (this module's twin source).\n-/",
+   "count": 1
+  },
+  {
+   "old_str": "mem[(0x800192c0 : Nat)]? = some (0x25 : BitVec 8)",
+   "new_str": "mem[(0x800192c8 : Nat)]? = some (0x3c : BitVec 8)",
+   "count": 2
+  },
+  {
+   "old_str": "mem[(0x800192c1 : Nat)]? = some (0x6c : BitVec 8)",
+   "new_str": "mem[(0x800192c9 : Nat)]? = some (0x66 : BitVec 8)",
+   "count": 2
+  },
+  {
+   "old_str": "mem[(0x800192c2 : Nat)]? = some (0x6c : BitVec 8)",
+   "new_str": "mem[(0x800192ca : Nat)]? = some (0x6e : BitVec 8)",
+   "count": 2
+  },
+  {
+   "old_str": "mem[(0x800192c3 : Nat)]? = some (0x64 : BitVec 8)",
+   "new_str": "mem[(0x800192cb : Nat)]? = some (0x20 : BitVec 8)",
+   "count": 2
+  },
+  {
+   "old_str": "mem[(0x800192c4 : Nat)]? = some (0x00 : BitVec 8)",
+   "new_str": "mem[(0x800192cc : Nat)]? = some (0x25 : BitVec 8)",
+   "count": 2
+  },
+  {
+   "old_str": "mem[(0x800192c5 : Nat)]? = some (0x00 : BitVec 8)",
+   "new_str": "mem[(0x800192cd : Nat)]? = some (0x73 : BitVec 8)",
+   "count": 2
+  },
+  {
+   "old_str": "mem[(0x800192c6 : Nat)]? = some (0x00 : BitVec 8)",
+   "new_str": "mem[(0x800192ce : Nat)]? = some (0x3e : BitVec 8)",
+   "count": 2
+  },
+  {
+   "old_str": "mem[(0x800192c7 : Nat)]? = some (0x00 : BitVec 8)",
+   "new_str": "mem[(0x800192cf : Nat)]? = some (0x00 : BitVec 8)",
+   "count": 2
+  }
+ ]
+}

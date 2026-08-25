@@ -1,0 +1,8 @@
+# __ascii_mbtowc executed path (snez at 0x80012280 is hand-written in SnprintfSpec22)
+80012268	02058063	branch_nottaken	BEQ	11	0	0x0020
+8001226c	04060263	branch_nottaken	BEQ	12	0	0x0044
+80012270	04068863	branch_nottaken	BEQ	13	0	0x0050
+80012274	00064783	lbu	15	12	0x000
+80012278	00f5a023	sw	15	11	0x000
+8001227c	00064503	lbu	10	12	0x000
+80012284	00008067	jr	1

@@ -48,6 +48,12 @@ theorem flagmask_sn6 (a : BitVec 64)
 
 /-! ## `splitToEntry_spec` — `0x800080f8` → `0x80008100`, both `bltz` arms -/
 
+/-- The registers `splitToEntry_spec` preserves (post-widening): the five
+mid-registers plus the untracked entry registers the caller needs *named*. -/
+abbrev keepSplit_sn6 : List Register :=
+  [Register.x3, Register.x9, Register.x18, Register.x19, Register.x21,
+   Register.x8, Register.x12, Register.x13, Register.x23, Register.x28]
+
 theorem splitToEntry_spec (w vsp vt1 v20 : BitVec 64) (c : Config)
     (hG : GoodState c.σ)
     (hload : SvfprintfSliceLoaded c.σ.mem)
@@ -76,7 +82,11 @@ theorem splitToEntry_spec (w vsp vt1 v20 : BitVec 64) (c : Config)
       (∃ v, c'.σ.regs.get? Register.x28 = some v) ∧
       (∃ v, c'.σ.regs.get? Register.x12 = some v) ∧
       (∃ v, c'.σ.regs.get? Register.x13 = some v) ∧
-      c'.tick < 2 ∧ (∃ u, c'.σ.regs.get? Register.minstret = some u) := by
+      c'.tick < 2 ∧ (∃ u, c'.σ.regs.get? Register.minstret = some u) ∧
+      -- post-widening: the exit flag word is one of the two arms' values, and
+      -- the ten `keepSplit_sn6` registers are preserved
+      (vt1' = vt1 ∨ vt1' = vt1 &&& sign_extend (m := 64) (0xf7f#12)) ∧
+      KeepRegs keepSplit_sn6 c.σ c'.σ := by
   obtain ⟨vmi, hvmi⟩ := hmi
   obtain ⟨v8₀, hx8₀⟩ := hx8e
   obtain ⟨v23₀, hx23₀⟩ := hx23e
@@ -114,7 +124,8 @@ theorem splitToEntry_spec (w vsp vt1 v20 : BitVec 64) (c : Config)
     obtain ⟨vmi1, hvmi1⟩ := obs_btaken_minstret hobs1
     exact ⟨⟨σ1, i1, c.steps + 1⟩, vt1, Steps.single hstep1, hG1, hmem1, hpc1,
       hx14_1, hx2_1, hx6_1, hflag, ⟨v8₀, hx8_1⟩, hx20_1,
-      ⟨v23₀, hx23_1⟩, ⟨v28₀, hx28_1⟩, ⟨v12₀, hx12_1⟩, ⟨v13₀, hx13_1⟩, hi1, ⟨vmi1, hvmi1⟩⟩
+      ⟨v23₀, hx23_1⟩, ⟨v28₀, hx28_1⟩, ⟨v12₀, hx12_1⟩, ⟨v13₀, hx13_1⟩, hi1, ⟨vmi1, hvmi1⟩,
+      Or.inl rfl, keep_btaken hobs1 (by decide) (keep_rfl keepSplit_sn6 c.σ)⟩
   · -- s4 ≥ 0: fall through to the andi at 80fc, then 8100
     obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
       site_800080f8_nottaken_sn5 c.σ c.tick c.steps (0x800080f8#64) vmi v20
@@ -175,7 +186,10 @@ theorem splitToEntry_spec (w vsp vt1 v20 : BitVec 64) (c : Config)
     refine ⟨⟨σ2, i2, c.steps + 1 + 1⟩, vt1 &&& sign_extend (m := 64) (0xf7f#12),
       (Steps.single hstep1).trans (Steps.single hstep2), hG2, by rw [hmem2, hmem1], hpc2,
       hx14_2, hx2_2, hx6_2, flagmask_sn6 vt1 hflag, ⟨v8₀, hx8_2⟩, hx20_2,
-      ⟨v23₀, hx23_2⟩, ⟨v28₀, hx28_2⟩, ⟨v12₀, hx12_2⟩, ⟨v13₀, hx13_2⟩, hi2, ⟨vmi2, hvmi2⟩⟩
+      ⟨v23₀, hx23_2⟩, ⟨v28₀, hx28_2⟩, ⟨v12₀, hx12_2⟩, ⟨v13₀, hx13_2⟩, hi2, ⟨vmi2, hvmi2⟩,
+      Or.inr rfl,
+      keep_alu hobs2 (by decide)
+        (keep_bnottaken hobs1 (by decide) (keep_rfl keepSplit_sn6 c.σ))⟩
 
 /-! ## The composed negative arm: sign block entry → complete digit buffer -/
 
@@ -202,6 +216,7 @@ theorem signToDigits_neg_spec (v vsp vt1 v8 v20 v23 v28 v12 : BitVec 64) (c : Co
     (halign : vsp.toNat % 8 = 0)
     (htick : c.tick < 2) :
     ∃ c' : Config, Steps c c' ∧ ∃ p, ((0#64) - v).toNat / 10 ^ p ≤ 9 ∧ p + 1 ≤ 20 ∧
+      (p = 0 ∨ 9 < ((0#64) - v).toNat / 10 ^ (p - 1)) ∧
       c'.σ.regs.get? Register.PC = some (0x80008358#64) ∧
       c'.σ.regs.get? Register.x23 = some (BitVec.ofNat 64 (p + 1)) ∧
       BufInv (entryTop vsp) ((0#64) - v).toNat (p + 1) c'.σ.mem ∧
@@ -226,21 +241,34 @@ theorem signToDigits_neg_spec (v vsp vt1 v8 v20 v23 v28 v12 : BitVec 64) (c : Co
         SlotHolds vsp 0x028 vflg c'.σ.mem ∧
         SlotHolds vsp 0x020 vt3 c'.σ.mem ∧
         SlotHolds vsp 0x030 vs7 c'.σ.mem ∧
-        SlotHolds vsp 0x078 vs0 c'.σ.mem := by
+        SlotHolds vsp 0x078 vs0 c'.σ.mem ∧
+        -- post-widening: *named* spare-slot contents (t3/s7/s0 = the entry
+        -- x28/x23/x8), the flags-slot provenance, mid-register preservation,
+        -- and the pointwise memory frame outside the written windows
+        SlotHolds vsp 0x020 v28 c'.σ.mem ∧
+        SlotHolds vsp 0x030 v23 c'.σ.mem ∧
+        SlotHolds vsp 0x078 v8 c'.σ.mem ∧
+        (vflg = vt1 ∨ vflg = vt1 &&& sign_extend (m := 64) (0xf7f#12)) ∧
+        KeepRegs midRegs5 c.σ c'.σ ∧
+        (∀ a : Nat, a ≠ (vsp + sign_extend (m := 64) (0x0a7#12)).toNat →
+          (a < vsp.toNat + 32 ∨ (vsp.toNat + 128 ≤ a ∧ a < vsp.toNat + 328) ∨
+            vsp.toNat + 348 ≤ a) →
+          c'.σ.mem[a]? = c.σ.mem[a]?) := by
   have htohv : tohostAddr = 0x8001ad00 := rfl
   have hnw : vsp.toNat + 348 < 2 ^ 64 := by omega
   have h167 : (vsp + sign_extend (m := 64) (0x0a7#12)).toNat = vsp.toNat + 167 :=
     addoff_toNat_sn5 vsp (0x0a7#12) 167 (by omega) (by decide) hnw
   -- 1. the sign block: emit '-', negate
   obtain ⟨c1, hs1, hG1, hpc1, hx14_1, hsign1, htick1, hmi1,
-    hx13_1, hx2_1, hx6_1, hx8_1, hx20_1, hx23_1, hx28_1, hx12_1, hload1, huload1, hcuload1, hfp1⟩ :=
+    hx13_1, hx2_1, hx6_1, hx8_1, hx20_1, hx23_1, hx28_1, hx12_1, hload1, huload1, hcuload1, hfp1,
+    hkeepSB, hsbframe⟩ :=
     signBlock_neg_spec v vsp vt1 v8 v20 v23 v28 v12 c hG hload hfp huload hcuload
       hpc hx13 hx2 hx6 hx8 hx20 hx23 hx28 hx12 hneg
       hG.minstret htick
       (by rw [h167]; omega) (by rw [h167]; omega) (by rw [h167]; omega)
   -- 2. the flag-guard hop to the split point
   obtain ⟨c2, vt1', hs2, hG2, hmem2, hpc2, hx14_2, hx2_2, hx6_2, hflag2,
-    hx8e2, hx20_2c, hx23e2, hx28e2, hx12e2, hx13e2, htick2, hmi2⟩ :=
+    hx8e2, hx20_2c, hx23e2, hx28e2, hx12e2, hx13e2, htick2, hmi2, hvt1'or, hkeepSplit⟩ :=
     splitToEntry_spec ((0#64) - v) vsp vt1 v20 c1 hG1 hload1 hpc1 hx14_1 hx2_1 hx6_1 hx20_1
       hflag ⟨v8, hx8_1⟩ ⟨v23, hx23_1⟩ ⟨v28, hx28_1⟩ ⟨v12, hx12_1⟩ ⟨v, hx13_1⟩ hmi1 htick1
   have hload2 : SvfprintfSliceLoaded c2.σ.mem := hmem2 ▸ hload1
@@ -248,9 +276,10 @@ theorem signToDigits_neg_spec (v vsp vt1 v8 v20 v23 v28 v12 : BitVec 64) (c : Co
   have hcuload2 : __hidden___udivdi3Loaded c2.σ.mem := hmem2 ▸ hcuload1
   have hfp2 : Vsa.Sim.Code.FlushPinsLoaded c2.σ.mem := hmem2 ▸ hfp1
   -- 3. loop entry + the whole decimal loop, with its memory frame + surfaced facts
-  obtain ⟨c3, hs3, p, hexit, hpb, hpc3, hx23_3, hbuf3, hG3, htick3, hmi3, hEF3,
+  obtain ⟨c3, hs3, p, hexit, hpb, hmin, hpc3, hx23_3, hbuf3, hG3, htick3, hmi3, hEF3,
     hload3, hx2_3, hx20_3, hx26_3, hslot56v20, vwid, vt3, vs7, vs0,
-    hslot112, hslot56, hslot40, hslot32, hslot48, hslot120⟩ :=
+    hslot112, hslot56, hslot40, hslot32, hslot48, hslot120,
+    hs32named, hs48named, hs120named, hkeepED⟩ :=
     entryToDigits_spec ((0#64) - v) vsp vt1' v20 c2 hG2 hload2 huload2 hcuload2
       hpc2 hx14_2 hx2_2 hx6_2 hflag2 hx8e2 hx20_2c hx23e2 hx28e2 hx12e2 hx13e2
       hmag htlo hhi halign htick2
@@ -269,8 +298,27 @@ theorem signToDigits_neg_spec (v vsp vt1 v8 v20 v23 v28 v12 : BitVec 64) (c : Co
   have hfp3 : Vsa.Sim.Code.FlushPinsLoaded c3.σ.mem := by
     refine Vsa.Sim.Code.flushPins_of_agree (fun a ha => ?_) hfp2
     exact hEF3 a (Or.inl (by omega))
-  exact ⟨c3, hs1.trans (hs2.trans hs3), p, hexit, hpb, hpc3, hx23_3, hbuf3, hG3, htick3, hmi3,
+  -- post-widening: the named spare-slot contents (entry x28/x23/x8 values)
+  have hslot32v28 : SlotHolds vsp 0x020 v28 c3.σ.mem :=
+    hs32named v28 (hkeepSplit Register.x28 (by decide) v28 hx28_1)
+  have hslot48v23 : SlotHolds vsp 0x030 v23 c3.σ.mem :=
+    hs48named v23 (hkeepSplit Register.x23 (by decide) v23 hx23_1)
+  have hslot120v8 : SlotHolds vsp 0x078 v8 c3.σ.mem :=
+    hs120named v8 (hkeepSplit Register.x8 (by decide) v8 hx8_1)
+  -- post-widening: mid-register preservation, whole block
+  have hkeepAll : KeepRegs midRegs5 c.σ c3.σ :=
+    keep_trans (keep_trans hkeepSB (keep_sub (by decide) hkeepSplit)) hkeepED
+  -- post-widening: the pointwise frame (sign byte + spill/digit windows excluded)
+  have hframeAll : ∀ a : Nat, a ≠ (vsp + sign_extend (m := 64) (0x0a7#12)).toNat →
+      (a < vsp.toNat + 32 ∨ (vsp.toNat + 128 ≤ a ∧ a < vsp.toNat + 328) ∨
+        vsp.toNat + 348 ≤ a) →
+      c3.σ.mem[a]? = c.σ.mem[a]? := by
+    intro a hne hdom
+    rw [hEF3 a hdom, hmem2]
+    exact hsbframe a hne
+  exact ⟨c3, hs1.trans (hs2.trans hs3), p, hexit, hpb, hmin, hpc3, hx23_3, hbuf3, hG3, htick3, hmi3,
     hbridge, hsign3, hload3, hfp3, hx2_3, hx20_3, hx26_3, hslot56v20,
-    vwid, vt1', vt3, vs7, vs0, hslot112, hslot56, hslot40, hslot32, hslot48, hslot120⟩
+    vwid, vt1', vt3, vs7, vs0, hslot112, hslot56, hslot40, hslot32, hslot48, hslot120,
+    hslot32v28, hslot48v23, hslot120v8, hvt1'or, hkeepAll, hframeAll⟩
 
 end Vsa.Sim

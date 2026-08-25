@@ -147,7 +147,8 @@ theorem handler_l_spec
       c'.σ.mem = c.σ.mem ∧
       (∀ v8 v23 v12, PrintEntryFrame c.σ v8 v23 v12 →
         PrintEntryFrame c'.σ v8 v23 v12) ∧
-      c'.tick < 2 := by
+      c'.tick < 2 ∧
+      KeepRegs midRegs5 c.σ c'.σ := by
   obtain ⟨vmi0, hmi0⟩ := hG.minstret
   have hoff0 : (vcur + sign_extend (m := 64) (0x000#12)).toNat = vcur.toNat := by
     rw [BitVec.toNat_add, show (sign_extend (m := 64) (0x000#12)).toNat = 0 from by decide,
@@ -303,7 +304,9 @@ theorem handler_l_spec
       PrintEntryFrame σ3 v8 v23 v12 := fun v8 v23 v12 h =>
     printEntryFrame_branch hobs3 (hframe2 v8 v23 v12 h)
   refine ⟨⟨σ3, i3, c.steps + 1 + 1 + 1⟩, ?_, hG3, hpc3, hx2_3, hx6_3, hx20_3, hx25_3, hx22_3, hx26_3,
-    hx27_3, hload3, hmemc, hframe3, hi3⟩
+    hx27_3, hload3, hmemc, hframe3, hi3,
+    keep_btaken hobs3 (by decide)
+      (keep_alu hobs2 (by decide) (keep_alu hobs1 (by decide) (keep_rfl midRegs5 c.σ)))⟩
   exact (Steps.single hstep1).trans ((Steps.single hstep2).trans (Steps.single hstep3))
 
 /-! ## `handler_ll_spec` — the `"ll"` handler `0x80009060 → 0x80007798`
@@ -349,7 +352,8 @@ theorem handler_ll_spec
       c'.σ.mem = c.σ.mem ∧
       (∀ v8 v23 v12, PrintEntryFrame c.σ v8 v23 v12 →
         PrintEntryFrame c'.σ v8 v23 v12) ∧
-      c'.tick < 2 := by
+      c'.tick < 2 ∧
+      KeepRegs midRegs5 c.σ c'.σ := by
   obtain ⟨vmi0, hmi0⟩ := hG.minstret
   have hoff1 : (vcur + sign_extend (m := 64) (0x001#12)).toNat = vcur.toNat + 1 := by
     rw [BitVec.toNat_add, show (sign_extend (m := 64) (0x001#12)).toNat = 1 from by decide]
@@ -539,7 +543,9 @@ theorem handler_ll_spec
       PrintEntryFrame σ4 v8 v23 v12 := fun v8 v23 v12 h =>
     printEntryFrame_jx0 hobs4 (hframe3 v8 v23 v12 h)
   refine ⟨⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩, ?_, hG4, hpc4, hx2_4, hx6_4, hx20_4, hx24_4, hx25_4,
-    hx22_4, hx26_4, hx27_4, hload4, hmemc, hframe4, hi4⟩
+    hx22_4, hx26_4, hx27_4, hload4, hmemc, hframe4, hi4,
+    keep_jr hobs4 (by decide) (keep_alu hobs3 (by decide) (keep_alu hobs2 (by decide)
+      (keep_alu hobs1 (by decide) (keep_rfl midRegs5 c.σ))))⟩
   exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
     (Steps.single hstep4)))
 
@@ -581,7 +587,8 @@ theorem parseDispatchArith_d_spec
       c'.σ.mem = c.σ.mem ∧
       (∀ v8 v23 v12, PrintEntryFrame c.σ v8 v23 v12 →
         PrintEntryFrame c'.σ v8 v23 v12) ∧
-      c'.tick < 2 := by
+      c'.tick < 2 ∧
+      KeepRegs midRegs5 c.σ c'.σ := by
   obtain ⟨vmi0, hmi0⟩ := hG.minstret
   -- === 7798: addi s9,s9,1  ⇒  x25 := vs9 + 1  (dead) ===
   obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.svfprintfSlice_at_80007798 hload
@@ -960,7 +967,10 @@ theorem parseDispatchArith_d_spec
     printEntryFrame_alu hobs7 (by decide) (by decide) (by decide) (hframe6 v8 v23 v12 h)
   -- assemble
   refine ⟨⟨σ7, i7, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩, ?_, hG7, hpc7, hx2_7, hx15_7, hx22_7,
-    hx6_7, hx20_7, hx25_7, hx27_7, hmemc, hframe7, hi7⟩
+    hx6_7, hx20_7, hx25_7, hx27_7, hmemc, hframe7, hi7,
+    keep_alu hobs7 (by decide) (keep_alu hobs6 (by decide) (keep_alu hobs5 (by decide)
+      (keep_bnottaken hobs4 (by decide) (keep_alu hobs3 (by decide) (keep_alu hobs2 (by decide)
+        (keep_alu hobs1 (by decide) (keep_rfl midRegs5 c.σ)))))))⟩
   exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
     ((Steps.single hstep4).trans ((Steps.single hstep5).trans ((Steps.single hstep6).trans
     (Steps.single hstep7))))))
@@ -1013,14 +1023,15 @@ theorem handlerGap_spec
       c'.σ.mem = c.σ.mem ∧
       (∀ v8 v23 v12, PrintEntryFrame c.σ v8 v23 v12 →
         PrintEntryFrame c'.σ v8 v23 v12) ∧
-      c'.tick < 2 := by
+      c'.tick < 2 ∧
+      KeepRegs midRegs5 c.σ c'.σ := by
   -- `cursor+1` does not wrap (format string in RAM below 2^32)
   have hoff1 : (vcur + sign_extend (m := 64) (0x001#12)).toNat = vcur.toNat + 1 := by
     rw [BitVec.toNat_add, show (sign_extend (m := 64) (0x001#12)).toNat = 1 from by decide,
       Nat.mod_eq_of_lt (by omega)]
   -- STEP 1: 'l' handler 0x80008534 → 0x80009060 ("ll")
   obtain ⟨c1, hs1, hG1, hpc1, hx2_1, hx6_1, hx20_1, hx25_1, hx22_1, hx26_1, hx27_1, _, hmem1,
-      hframe1, htick1⟩ :=
+      hframe1, htick1, hkeep1⟩ :=
     handler_l_spec vsp vcur v6 v20 (BitVec.ofNat 64 parseTableBase) (BitVec.ofNat 64 90) v27 c
       hG hload2 hpc hx2 hx6 hx20 hx22 hx26 hx27 hx25 hbyteL
       hcurlo (by omega) (hcurhtif.imp (by omega) (by omega)) htick
@@ -1029,7 +1040,7 @@ theorem handlerGap_spec
   have hload2_1 : SvfprintfSlice2Loaded c1.σ.mem := by rw [hmem1]; exact hload2
   -- STEP 2: "ll" handler 0x80009060 → 0x80007798 (sets ll-flag, char := 'd')
   obtain ⟨c2, hs2, hG2, hpc2, hx2_2, hx6_2, hx20_2, hx24_2, hx25_2, hx22_2, hx26_2, hx27_2, _,
-      hmem2, hframe2, htick2⟩ :=
+      hmem2, hframe2, htick2, hkeep2⟩ :=
     handler_ll_spec vsp vcur v6 v20 (BitVec.ofNat 64 parseTableBase) (BitVec.ofNat 64 90) v27 c1
       hG1 hload2_1 hpc1 hx2_1 hx6_1 hx20_1 hx22_1 hx26_1 hx27_1 hx25_1 hbyteD_1
       (by omega) (by rw [hoff1]; omega) (by rw [hoff1]; omega)
@@ -1039,12 +1050,12 @@ theorem handlerGap_spec
   have hload_2 : SvfprintfSliceLoaded c2.σ.mem := by rw [hmemcomp]; exact hload
   -- STEP 3: 2nd-pass dispatch arithmetic 0x80007798 → 0x800077b4 (char 'd')
   obtain ⟨c3, hs3, hG3, hpc3, hx2_3, hx15_3, hx22_3, hx6_3, hx20_3, hx25_3, hx27_3, hmem3,
-      hframe3, htick3⟩ :=
+      hframe3, htick3, hkeep3⟩ :=
     parseDispatchArith_d_spec vsp (vcur + sign_extend (m := 64) (0x001#12))
       (v6 ||| sign_extend (m := 64) (0x020#12)) v20 v27 c2 hG2 hload_2
       hpc2 hx2_2 hx24_2 hx26_2 hx22_2 hx25_2 hx6_2 hx20_2 hx27_2 htick2
   refine ⟨c3, hs1.trans (hs2.trans hs3), hG3, hpc3, hx2_3, hx15_3, hx22_3, hx6_3, hx20_3,
-    hx25_3, hx27_3, ?_, ?_, htick3⟩
+    hx25_3, hx27_3, ?_, ?_, htick3, keep_trans (keep_trans hkeep1 hkeep2) hkeep3⟩
   · rw [hmem3, hmemcomp]
   · intro v8 v23 v12 h
     exact hframe3 v8 v23 v12 (hframe2 v8 v23 v12 (hframe1 v8 v23 v12 h))
@@ -1092,20 +1103,21 @@ theorem parseToDigitEntry_spec
       c'.σ.mem = c.σ.mem ∧
       (∀ v8 v23 v12, PrintEntryFrame c.σ v8 v23 v12 →
         PrintEntryFrame c'.σ v8 v23 v12) ∧
-      c'.tick < 2 := by
+      c'.tick < 2 ∧
+      KeepRegs midRegs5 c.σ c'.σ := by
   obtain ⟨c1, hs1, hG1, hpc1, hx2_1, hx15_1, hx22_1, hx6_1, hx20_1, hx25_1, hx27_1, hmem1,
-      hframe1, htick1⟩ :=
+      hframe1, htick1, hkeep1⟩ :=
     handlerGap_spec vsp vcur v6 v20 v27 c hG hload hload2 hpc hx2 hx6 hx20 hx27 hx25 hx26 hx22
       hbyteL hbyteD hcurlo hcurhi hcurhtif htick
   have hload_1 : SvfprintfSliceLoaded c1.σ.mem := by rw [hmem1]; exact hload
   have hslot_1 : ParseSlotPinned 0x64 (0x80008008#64) c1.σ.mem := by rw [hmem1]; exact hslot
   obtain ⟨c2, hs2, hG2, hpc2, hx2_2, hx6_2, hx20_2, hx25_2, hx27_2, hmem2,
-      hframe2, htick2⟩ :=
+      hframe2, htick2, hkeep2⟩ :=
     parseDispatch_d_spec vsp (v6 ||| sign_extend (m := 64) (0x020#12)) v20
       ((vcur + sign_extend (m := 64) (0x001#12)) + sign_extend (m := 64) (0x001#12)) v27 c1
       hG1 hload_1 hslot_1 hpc1 hx15_1 hx22_1 hx2_1 hx6_1 hx20_1 hx25_1 hx27_1 htick1
   refine ⟨c2, hs1.trans hs2, hG2, hpc2, hx2_2, hx6_2, hx20_2, hx25_2, hx27_2,
-    by rw [hmem2, hmem1], ?_, htick2⟩
+    by rw [hmem2, hmem1], ?_, htick2, keep_trans hkeep1 hkeep2⟩
   intro v8 v23 v12 h
   rcases hframe1 v8 v23 v12 h with ⟨hx8_1, hx23_1, hx12_1⟩
   exact hframe2 v8 v23 v12 ⟨hx8_1, hx23_1, hx12_1⟩
@@ -1192,10 +1204,19 @@ theorem parseToPrintEntry_spec
       Vsa.Sim.Code.__umoddi3Loaded c'.σ.mem ∧
       __hidden___udivdi3Loaded c'.σ.mem ∧
       FlushPinsLoaded c'.σ.mem ∧
-      c'.tick < 2 := by
+      c'.tick < 2 ∧
+      -- post-widening: the fmt cursor (pointing at the NUL, `vfmt+4`) spilled
+      -- at sp+0, mid-register preservation, and the pointwise memory frame
+      SlotHolds vsp 0x000
+        ((vcur + sign_extend (m := 64) (0x001#12)) + sign_extend (m := 64) (0x001#12))
+        c'.σ.mem ∧
+      KeepRegs midRegs5 c.σ c'.σ ∧
+      (∀ a : Nat, ¬(vsp.toNat ≤ a ∧ a < vsp.toNat + 8) →
+        ¬(vsp.toNat + 24 ≤ a ∧ a < vsp.toNat + 32) →
+        c'.σ.mem[a]? = c.σ.mem[a]?) := by
   -- STEP A: gap + 2nd dispatch → 0x80008008, memory unchanged
   obtain ⟨c8, hs8, hG8, hpc8, hx2_8, hx6_8_raw, hx20_8, hx25_8, hx27_8, hmem8,
-      hframe8, htick8⟩ :=
+      hframe8, htick8, hkeepA⟩ :=
     parseToDigitEntry_spec vsp vcur (0#64) v20 v27 c hG hload hload2 hslot hpc hx2 hx6 hx20 hx27
       hx25 hx26 hx22
       hbyteL hbyteD hcurlo hcurhi hcurhtif htick
@@ -1206,7 +1227,7 @@ theorem parseToPrintEntry_spec
     simpa only [hflag] using hx6_8_raw
   -- STEP B: 'd'-handler ll-branch fetch 0x80008008 → 0x800080e4 (SnprintfSpec15)
   obtain ⟨c', hs', hG', hpc', hx2', hx6', hx20', hx28', hx13', hload',
-      hframe', hrt', htick'⟩ :=
+      hframe', hrt', htick', hfmtS', hkeepB, hmframeB⟩ :=
     dispatchD_ll_to_printEntry_spec vsp vptr
       ((vcur + sign_extend (m := 64) (0x001#12)) + sign_extend (m := 64) (0x001#12)) v27 v20
       p0 p1 p2 p3 p4 p5 p6 p7
@@ -1223,8 +1244,13 @@ theorem parseToPrintEntry_spec
     exact ⟨huload, hcuload, hfp⟩)
   obtain ⟨hx8_8, hx23_8, hx12_8⟩ := hframe8 v8 v23 v12 ⟨hx8, hx23, hx12⟩
   obtain ⟨hx8', hx23', hx12'⟩ := hframe' v8 v23 v12 ⟨hx8_8, hx23_8, hx12_8⟩
+  have hmframeAll : ∀ a : Nat, ¬(vsp.toNat ≤ a ∧ a < vsp.toNat + 8) →
+      ¬(vsp.toNat + 24 ≤ a ∧ a < vsp.toNat + 32) →
+      c'.σ.mem[a]? = c.σ.mem[a]? := by
+    intro a hA hB
+    rw [hmframeB a hA hB, hmem8]
   exact ⟨c', hs8.trans hs', hG', hpc', hx2', hx6', hx20', hx28', hx8', hx23', hx12', hx13', hload',
-    huload', hcuload', hfp', htick'⟩
+    huload', hcuload', hfp', htick', hfmtS', keep_trans hkeepA hkeepB, hmframeAll⟩
 
 /-- Compact entry facts for the parsed negative `%lld` default-width path. -/
 structure ParseNegDefaultWidthPre
@@ -1301,7 +1327,7 @@ theorem parseToPrint_neg_default_width_spec
   obtain ⟨huload, hcuload, hfp⟩ := h.runtime
   obtain ⟨hx8, hx23, hx12⟩ := h.frame
   obtain ⟨c1, hs1, hG1, hpc1, hx2_1, hx6_1, hx20_1, hx28_1, hx8_1, hx23_1,
-      hx12_1, hx13_1, hload1, huload1, hcuload1, hfp1, htick1⟩ :=
+      hx12_1, hx13_1, hload1, huload1, hcuload1, hfp1, htick1, _hfmtS, _hkeep, _hmframe⟩ :=
     parseToPrintEntry_spec vsp vcur vptr ((0#64) - (0x1#64)) v27 v8 v23 v12
       p0 p1 p2 p3 p4 p5 p6 p7 a0 a1 a2 a3 a4b a5b a6 a7 c
       h.good h.slice h.slice2 huload hcuload hfp h.slot h.pc h.sp h.flags h.width h.source

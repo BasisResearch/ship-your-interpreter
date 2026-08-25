@@ -1,0 +1,12 @@
+# Acceptance test for scripts/gen_sites.py: four newlib-memmove sites whose
+# hand-proven counterparts live in Vsa/Sim/SnprintfSpec18.lean
+# (site_6a10 / site_6a08 / site_6a1c_nottaken / site_6a20).
+# Regenerate + check:
+#   python3 scripts/gen_sites.py scripts/selftest_sites.tsv \
+#     --code-loaded Vsa.Sim.Code.MemmoveLoaded --suffix _gen \
+#     -o /tmp/selftest_sites.lean
+#   lake env lean /tmp/selftest_sites.lean
+80006a10	00178793	alu_addi	15	15	001
+80006a08	00d786b3	alu_add	13	15	13
+80006a1c	fed798e3	branch_nottaken	BNE	15	13	1ff0
+80006a20	00008067	jr	1

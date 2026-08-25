@@ -1,0 +1,38 @@
+{
+  "doc": "Generated twin of SnprintfSpec18's loop layer (AtHeadMv/LoopIMv/LoopMuMv/loopmu_head_mv/loop_body_mv/loop_to_done_mv) for the memmove byte-copy loop 0x80006a0c → 0x80006a20, reusing Spec18's StMv/StMv1c/StMvDone states and iterMv/tr_bne_back_mv/tr_bne_done_mv lemmas via import.",
+  "namespace": "Vsa.Sim",
+  "imports": ["Vsa.Sim.SnprintfSpec18", "Vsa.Sim.RegPins"],
+  "params": [
+    "(g : (R : Register) → Option (RegisterType R)) (r dst src : BitVec 64)",
+    "(n : Nat) (m0 : Std.ExtHashMap Nat (BitVec 8)) (bs : Nat → BitVec 8)"
+  ],
+  "args": "g r dst src n m0 bs",
+  "names": {
+    "at_head": "AtHeadMv_gen",
+    "loop_inv": "LoopIMv_gen",
+    "loop_mu": "LoopMuMv_gen",
+    "loopmu_head": "loopmu_head_mv_gen",
+    "loop_body": "loop_body_mv_gen",
+    "loop_to_done": "loop_to_done_mv_gen"
+  },
+  "head": "StMv g $i r dst src n m0 bs",
+  "done": "StMvDone g r dst src n m0 bs",
+  "body_lemma": "iterMv g $i r dst src n m0 bs",
+  "back_lemma": "tr_bne_back_mv g $i r dst src n m0 bs $hlt",
+  "done_lemma": "tr_bne_done_mv g $i r dst src n m0 bs $heq",
+  "bound": "n",
+  "mu_reg": "x15",
+  "mu_field": "a5",
+  "done_mu_field": "a5",
+  "mu_expr": "2^64 - (dst.toNat + $i)",
+  "mu_done_expr": "2^64 - (dst.toNat + n)",
+  "mu_head_proof": [
+    "rw [ptr_toNat dst i (by have := hSt.regions.dst_nowrap; have := hSt.ilt; omega)]"
+  ],
+  "mu_done_proof": [
+    "rw [ptr_toNat dst n (by omega)]"
+  ],
+  "body_prelude": [
+    "have hnw := hSt.regions.dst_nowrap"
+  ]
+}

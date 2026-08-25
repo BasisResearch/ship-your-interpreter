@@ -1410,8 +1410,9 @@ theorem digitFrame_insert (top : BitVec 64) (m0 mem : Std.ExtHashMap Nat (BitVec
 theorem decimalLoop_spec (g : (R : Register) → Option (RegisterType R))
     (top : BitVec 64) (m : Nat) (hm : m < 2^64) (htop : TopOk top)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (fun c => (∃ p, LSt g top m p c ∧ p + 1 ≤ 20) ∧ DigitFrame top m0 c.σ.mem)
-      (fun c => ∃ p, m / 10^p ≤ 9 ∧ p + 1 ≤ 20 ∧
+    Triple (fun c => (∃ p, LSt g top m p c ∧ p + 1 ≤ 20 ∧ (p = 0 ∨ 9 < m / 10 ^ (p - 1)))
+        ∧ DigitFrame top m0 c.σ.mem)
+      (fun c => ∃ p, m / 10^p ≤ 9 ∧ p + 1 ≤ 20 ∧ (p = 0 ∨ 9 < m / 10 ^ (p - 1)) ∧
         c.σ.regs.get? Register.PC = some (0x80008358#64) ∧
         c.σ.regs.get? Register.x23 = some (BitVec.ofNat 64 (p+1)) ∧
         BufInv top m (p+1) c.σ.mem ∧ GoodState c.σ ∧ c.tick < 2 ∧
@@ -1424,15 +1425,16 @@ theorem decimalLoop_spec (g : (R : Register) → Option (RegisterType R))
   -- has ≤ 20 decimal digits); it is preserved because each iteration runs only
   -- when the guard `9 < m/10^p` holds, whence `p_bound_sn3` gives `p + 2 ≤ 20`.
   have body : ∀ n, Triple
-      (fun c => ((∃ p, LSt g top m p c ∧ p + 1 ≤ 20) ∧ DigitFrame top m0 c.σ.mem) ∧ DLB g top m c ∧ DLMu g top m c = n)
-      (fun c => ((∃ p, LSt g top m p c ∧ p + 1 ≤ 20) ∧ DigitFrame top m0 c.σ.mem) ∧ DLMu g top m c < n) := by
+      (fun c => ((∃ p, LSt g top m p c ∧ p + 1 ≤ 20 ∧ (p = 0 ∨ 9 < m / 10 ^ (p - 1))) ∧ DigitFrame top m0 c.σ.mem) ∧ DLB g top m c ∧ DLMu g top m c = n)
+      (fun c => ((∃ p, LSt g top m p c ∧ p + 1 ≤ 20 ∧ (p = 0 ∨ 9 < m / 10 ^ (p - 1))) ∧ DigitFrame top m0 c.σ.mem) ∧ DLMu g top m c < n) := by
     intro n c ⟨⟨hI, hFr⟩, ⟨p, hLSt, hgt⟩, hmu⟩
     obtain ⟨c', hs', hLSt', hmem'⟩ := loop_iter g top m p hm htop hgt c hLSt
     have hp20 : p + 2 ≤ 20 := p_bound_sn3 m p hm hgt
     have hFr' : DigitFrame top m0 c'.σ.mem := by
       rw [hmem']
       exact digitFrame_insert top m0 c.σ.mem _ _ (by obtain ⟨ht1, ht2⟩ := htop; omega) hFr
-    refine ⟨c', hs', ⟨⟨p+1, hLSt', by omega⟩, hFr'⟩, ?_⟩
+    refine ⟨c', hs', ⟨⟨p+1, hLSt', by omega,
+      Or.inr (by simp only [Nat.add_sub_cancel]; exact hgt)⟩, hFr'⟩, ?_⟩
     -- DLMu c = m/10^p (via LSt-pins-p), DLMu c' = m/10^(p+1) < m/10^p
     have hex : ∃ q, LSt g top m q c := ⟨p, hLSt⟩
     have hex' : ∃ q, LSt g top m q c' := ⟨p+1, hLSt'⟩
@@ -1446,11 +1448,11 @@ theorem decimalLoop_spec (g : (R : Register) → Option (RegisterType R))
     -- m/10^(p+1) < m/10^p since m/10^p > 9
     have : m / 10^(p+1) = (m / 10^p) / 10 := by rw [Nat.pow_succ, Nat.div_div_eq_div_mul]
     rw [this]; exact Nat.div_lt_self (by omega) (by decide)
-  have hloop := Triple.loop (I := fun c => (∃ p, LSt g top m p c ∧ p + 1 ≤ 20) ∧ DigitFrame top m0 c.σ.mem)
+  have hloop := Triple.loop (I := fun c => (∃ p, LSt g top m p c ∧ p + 1 ≤ 20 ∧ (p = 0 ∨ 9 < m / 10 ^ (p - 1))) ∧ DigitFrame top m0 c.σ.mem)
     (B := DLB g top m) (DLMu g top m) body
   refine hloop.seq ?_
   intro c ⟨⟨hI, hFr⟩, hnB⟩
-  obtain ⟨p, hLSt, hpb⟩ := hI
+  obtain ⟨p, hLSt, hpb, hmin⟩ := hI
   -- ¬DLB ⇒ ¬(9 < m/10^p) ⇒ m/10^p ≤ 9
   have hexit : m / 10^p ≤ 9 := by
     rcases Nat.lt_or_ge 9 (m / 10^p) with h | h
@@ -1458,7 +1460,7 @@ theorem decimalLoop_spec (g : (R : Register) → Option (RegisterType R))
     · exact h
   obtain ⟨c', hs', hG', hpc', hs7', hbuf', htick', hmi', hmemeq', hs10', hframe'⟩ :=
     loop_exit g top m p hm htop hexit c hLSt
-  refine ⟨c', hs', p, hexit, hpb, hpc', hs7', hbuf', hG', htick', hmi', by rw [hmemeq']; exact hFr,
+  refine ⟨c', hs', p, hexit, hpb, hmin, hpc', hs7', hbuf', hG', htick', hmi', by rw [hmemeq']; exact hFr,
     hs10', by rw [hmemeq']; exact hLSt.loaded, ?_⟩
   intro R hR
   rw [hframe' R hR]

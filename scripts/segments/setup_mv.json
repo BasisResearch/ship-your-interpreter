@@ -1,0 +1,92 @@
+{
+  "theorem": "tr_setup_mv_gen",
+  "doc": "Generated twin of `tr_setup_mv` (SnprintfSpec18): the memmove setup tail `0x800069f0 → 0x80006a0c` (7 straight-line/fall-through steps), `StMvF0 → AtHeadMv`, reusing Spec18's site lemmas.",
+  "namespace": "Vsa.Sim",
+  "imports": ["Vsa.Sim.SnprintfSpec18", "Vsa.Sim.RegPins"],
+  "params": [
+    "(g : (R : Register) → Option (RegisterType R)) (r dst src : BitVec 64)",
+    "(n : Nat) (m0 : Std.ExtHashMap Nat (BitVec 8)) (bs : Nat → BitVec 8)"
+  ],
+  "pre": "StMvF0 g r dst src n m0 bs",
+  "post": "AtHeadMv g r dst src n m0 bs",
+  "loaded_pred": "Vsa.Sim.Code.MemmoveLoaded",
+  "pre_bind": {
+    "obtain": "⟨hgood, hloaded, hpc, ha0, ha1, ha2, hra, ⟨vmi, hmi⟩, htick, hreg, hbs, hmemeq, hframe⟩",
+    "good": "hgood", "pc": "hpc", "minstret_var": "vmi", "minstret": "hmi",
+    "tick": "htick", "loaded": "hloaded",
+    "mem0": "m0", "memeq": "hmemeq"
+  },
+  "pins": [
+    {"reg": "x10", "val": "dst", "hyp": "ha0"},
+    {"reg": "x11", "val": "src", "hyp": "ha1"},
+    {"reg": "x12", "val": "BitVec.ofNat 64 n", "hyp": "ha2"},
+    {"reg": "x1", "val": "r", "hyp": "hra"}
+  ],
+  "frame": {
+    "pred": "NotWrittenMv", "rhs": "g R", "init": "hframe",
+    "tmpl": {
+      "alu": "frame_alu_mv $hobs R hR.$rd hR",
+      "bnottaken": "frame_bnottaken_mv $hobs R hR",
+      "btaken": "frame_btaken_mv $hobs R hR",
+      "sd": "frame_store_mv $hobs R hR",
+      "sw": "frame_store_mv $hobs R hR",
+      "sb": "frame_store_mv $hobs R hR",
+      "jr": "frame_jr_mv $hobs R hR"
+    }
+  },
+  "prelude": [
+    "have hn1 := hreg.n1",
+    "have hn31 := hreg.n31",
+    "have hntn : (BitVec.ofNat 64 n : BitVec 64).toNat = n := by",
+    "  rw [BitVec.toNat_ofNat]; exact Nat.mod_eq_of_lt (by omega)"
+  ],
+  "steps": [
+    {"addr": "0x800069f0", "site": "site_69f0", "class": "alu",
+     "rd": "x15", "rd_val": "(0x1f#64)", "rw": "li31_val",
+     "call": "$vmi $hG $hpc $hmi $hmem rfl $hi"},
+
+    {"addr": "0x800069f4", "site": "site_69f4_nottaken", "class": "bnottaken",
+     "pre_lines": [
+       "have hguard$k : zopz0zI_u (0x1f#64) (BitVec.ofNat 64 n) = false :=",
+       "  bltu_false_of_ge (0x1f#64) (BitVec.ofNat 64 n)",
+       "    (by rw [hntn, show (0x1f#64 : BitVec 64).toNat = 31 from by decide]; omega)"
+     ],
+     "call": "$vmi (BitVec.ofNat 64 n) $hG $hpc $hmi $pin:x15 $pin:x12 $hmem rfl hguard$k $hi"},
+
+    {"addr": "0x800069f8", "site": "site_69f8", "class": "alu",
+     "rd": "x15", "rd_val": "dst", "rw": "sext0_add dst",
+     "call": "$vmi dst $hG $hpc $hmi $pin:x10 $hmem rfl $hi"},
+
+    {"addr": "0x800069fc", "site": "site_69fc", "class": "alu",
+     "rd": "x13", "rd_val": "(BitVec.ofNat 64 (n-1))",
+     "rw": "dec1_fwd n hn1 (by omega)",
+     "call": "$vmi (BitVec.ofNat 64 n) (BitVec.ofNat 64 (n-1)) $hG $hpc $hmi $pin:x12 (dec1_fwd n hn1 (by omega)) $hmem rfl $hi"},
+
+    {"addr": "0x80006a00", "site": "site_6a00_nottaken", "class": "bnottaken",
+     "pre_lines": [
+       "have hguard$k : ((BitVec.ofNat 64 n : BitVec 64) == (0#64)) = false :=",
+       "  beq_false_of_toNat_ne _ _",
+       "    (by rw [hntn, show (0#64 : BitVec 64).toNat = 0 from by decide]; omega)"
+     ],
+     "call": "$vmi (BitVec.ofNat 64 n) $hG $hpc $hmi $pin:x12 $hmem rfl hguard$k $hi"},
+
+    {"addr": "0x80006a04", "site": "site_6a04", "class": "alu",
+     "rd": "x13", "rd_val": "(BitVec.ofNat 64 n)",
+     "rw": "dec1_back n hn1 (by omega)",
+     "call": "$vmi (BitVec.ofNat 64 (n-1)) (BitVec.ofNat 64 n) $hG $hpc $hmi $pin:x13 (dec1_back n hn1 (by omega)) $hmem rfl $hi"},
+
+    {"addr": "0x80006a08", "site": "site_6a08", "class": "alu",
+     "rd": "x13", "rd_val": "(dst + BitVec.ofNat 64 n)",
+     "call": "$vmi dst (BitVec.ofNat 64 n) $hG $hpc $hmi $pin:x15 $pin:x13 $hmem rfl $hi"}
+  ],
+  "post_proof": [
+    "-- AtHeadMv: loop head at iteration 0",
+    "refine ⟨⟨σ7, i7, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩, hsteps7, 0, hn1, ?_⟩",
+    "refine ⟨hG7, hload7, hpc7, $pin:x10, ?_, $pin:x13, ?_, $pin:x1,",
+    "  ⟨vmi7, hmi7⟩, hi7, hreg, hbs, hn1, ?_, hframe7⟩",
+    "· rw [add_ofNat_zero src]; exact $pin:x11",
+    "· rw [add_ofNat_zero dst]; exact $pin:x15",
+    "· rw [$memeq]",
+    "  exact ⟨fun k hk => absurd hk (Nat.not_lt_zero k), fun a _ => rfl, fun k _ _ => rfl⟩"
+  ]
+}

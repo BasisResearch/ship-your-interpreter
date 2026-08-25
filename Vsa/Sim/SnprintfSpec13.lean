@@ -254,7 +254,9 @@ theorem parseDispatchHop_spec
       c'.σ.mem = c.σ.mem ∧
       (∀ v8 v23 v12, DispatchPrintFrame c.σ v8 v23 v12 →
         DispatchPrintFrame c'.σ v8 v23 v12) ∧
-      c'.tick < 2 := by
+      c'.tick < 2 ∧
+      -- post-widening: mid-register preservation across the 3-instruction hop
+      KeepRegs midRegs5 c.σ c'.σ := by
   obtain ⟨vmi0, hmi0⟩ := hG.minstret
   -- the pinned slot bytes at the known slot address
   obtain ⟨t0, t1, t2, t3, hs0, hs1, hs2, hs3, htgteq⟩ := slotPinnedAt_read hslot
@@ -404,8 +406,11 @@ theorem parseDispatchHop_spec
       DispatchPrintFrame σ3 v8 v23 v12 := fun v8 v23 v12 h =>
     dispatchPrintFrame_jr hobs3 (hframe2 v8 v23 v12 h)
   -- assemble
+  have hkeep3 : KeepRegs midRegs5 c.σ σ3 :=
+    keep_jr hobs3 (by decide)
+      (keep_alu hobs2 (by decide) (keep_alu hobs1 (by decide) (keep_rfl midRegs5 c.σ)))
   refine ⟨⟨σ3, i3, c.steps + 1 + 1 + 1⟩, ?_, hG3, hpc3, hx2_3, hx6_3, hx20_3, hx25_3, hx27_3,
-    hmemc, hframe3, hi3⟩
+    hmemc, hframe3, hi3, hkeep3⟩
   exact (Steps.single hstep1).trans ((Steps.single hstep2).trans (Steps.single hstep3))
 
 /-! ## `%lld`-path application
@@ -445,7 +450,7 @@ theorem parseDispatch_l_spec
     (by simp only [tohostAddr]; decide) (by decide) (by decide)
     htick
   obtain ⟨c', hsteps, hG', hpc', hx2', hx6', hx20', hx25', hx27', _hmem',
-      _hframe', htick'⟩ := h
+      _hframe', htick', _hkeep⟩ := h
   refine ⟨c', hsteps, hG', ?_, hx2', hx6', hx20', hx25', hx27', htick'⟩
   rw [hpc']
   first
@@ -479,15 +484,17 @@ theorem parseDispatch_d_spec
       c'.σ.mem = c.σ.mem ∧
       (∀ v8 v23 v12, DispatchPrintFrame c.σ v8 v23 v12 →
         DispatchPrintFrame c'.σ v8 v23 v12) ∧
-      c'.tick < 2 := by
+      c'.tick < 2 ∧
+      -- post-widening: mid-register preservation
+      KeepRegs midRegs5 c.σ c'.σ := by
   have h := parseDispatchHop_spec parseTableBase (0x64 - 32) (0x80008008#64) vsp v6 v20 v25 v27 c
     hG hload hslot hpc hx15 hx22 hx2 hx6 hx20 hx25 hx27
     (by decide) (by decide) (by decide)
     (by simp only [tohostAddr]; decide) (by decide) (by decide)
     htick
   obtain ⟨c', hsteps, hG', hpc', hx2', hx6', hx20', hx25', hx27', hmem',
-      hframe', htick'⟩ := h
-  refine ⟨c', hsteps, hG', ?_, hx2', hx6', hx20', hx25', hx27', hmem', hframe', htick'⟩
+      hframe', htick', hkeep'⟩ := h
+  refine ⟨c', hsteps, hG', ?_, hx2', hx6', hx20', hx25', hx27', hmem', hframe', htick', hkeep'⟩
   rw [hpc']
   first
   | rfl
