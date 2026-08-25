@@ -200,4 +200,92 @@ theorem neg_loadstore_block_tac (σ : MState) (i u : Nat)
         decide] at hpc'
   exact ⟨σ', i', hsteps, hi', hG', hpc', hGH.2.2.1, hGH.1⟩
 
+/-- Full-output collapse of the neg load/store run (σ4→σ10 of `blockC_neg`, the
+6 steps `0x800039ac → 0x800039c4`): one `bblock_sound_bt`, with **every**
+downstream fact the domain tail consumes projected out — the three load results
+(`x11`/`x14`/`x10`), the carried callee-saved (`x8` via the block frame,
+`x9`/`x13`/`x2` via the pin list), and the memory in `writeLog` form (ready for
+`writeLog_agreeP_disjoint`). This is the primitive the `blockC_neg` migration
+consumes in place of the ~200-line per-step `obs_*_other` carry battery. -/
+theorem neg_loadstore_full (σ : MState) (i u : Nat)
+    (vm v2 v13 v9 v8 : BitVec 64)
+    (pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3 : BitVec 8)
+    (hG : GoodState σ)
+    (hpc : σ.regs.get? Register.PC = some (0x800039ac#64))
+    (hmi : σ.regs.get? Register.minstret = some vm)
+    (hx2 : σ.regs.get? Register.x2 = some v2)
+    (hx13 : σ.regs.get? Register.x13 = some v13)
+    (hx9 : σ.regs.get? Register.x9 = some v9)
+    (hx8 : σ.regs.get? Register.x8 = some v8)
+    (hmem : Eval_exprLoaded σ.mem)
+    (hplo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x098#12)).toNat)
+    (hphi : (v2 + sign_extend (m := 64) (0x098#12)).toNat + 8 ≤ 0x100000000)
+    (hpwin : (v2 + sign_extend (m := 64) (0x098#12)).toNat + 8 ≤ tohostAddr
+      ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x098#12)).toNat)
+    (hpal : (v2 + sign_extend (m := 64) (0x098#12)).toNat % 8 = 0)
+    (hp : LPins8 σ.mem (v2 + sign_extend (m := 64) (0x098#12)).toNat [pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7])
+    (hdlo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x0a0#12)).toNat)
+    (hdhi : (v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 8 ≤ 0x100000000)
+    (hdwin : (v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 8 ≤ tohostAddr
+      ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x0a0#12)).toNat)
+    (hdal : (v2 + sign_extend (m := 64) (0x0a0#12)).toNat % 8 = 0)
+    (hd : LPins8 σ.mem (v2 + sign_extend (m := 64) (0x0a0#12)).toNat [q0,q1,q2,q3,q4,q5,q6,q7])
+    (hklo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x090#12)).toNat)
+    (hkhi : (v2 + sign_extend (m := 64) (0x090#12)).toNat + 4 ≤ 0x100000000)
+    (hkwin : (v2 + sign_extend (m := 64) (0x090#12)).toNat + 4 ≤ tohostAddr
+      ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x090#12)).toNat)
+    (hkal : (v2 + sign_extend (m := 64) (0x090#12)).toNat % 4 = 0)
+    (hk : LPins4 σ.mem (v2 + sign_extend (m := 64) (0x090#12)).toNat [kb0,kb1,kb2,kb3])
+    (hs1lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x0f0#12)).toNat)
+    (hs1hi : (v2 + sign_extend (m := 64) (0x0f0#12)).toNat + 8 ≤ 0x100000000)
+    (hs1win : tohostAddr + 16 ≤ (v2 + sign_extend (m := 64) (0x0f0#12)).toNat)
+    (hs1al : (v2 + sign_extend (m := 64) (0x0f0#12)).toNat % 8 = 0)
+    (hs2lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x0f8#12)).toNat)
+    (hs2hi : (v2 + sign_extend (m := 64) (0x0f8#12)).toNat + 8 ≤ 0x100000000)
+    (hs2win : tohostAddr + 16 ≤ (v2 + sign_extend (m := 64) (0x0f8#12)).toNat)
+    (hs2al : (v2 + sign_extend (m := 64) (0x0f8#12)).toNat % 8 = 0)
+    (hs3lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x100#12)).toNat)
+    (hs3hi : (v2 + sign_extend (m := 64) (0x100#12)).toNat + 8 ≤ 0x100000000)
+    (hs3win : tohostAddr + 16 ≤ (v2 + sign_extend (m := 64) (0x100#12)).toNat)
+    (hs3al : (v2 + sign_extend (m := 64) (0x100#12)).toNat % 8 = 0)
+    (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Steps ⟨σ, i, u⟩ ⟨σ', i', u + 6⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.sailOutput = σ.sailOutput ∧
+      σ'.regs.get? Register.PC = some (0x800039c4#64) ∧
+      σ'.regs.get? Register.x11 = some (bytesVal .ld [pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7]) ∧
+      σ'.regs.get? Register.x14 = some (bytesVal .ld [q0,q1,q2,q3,q4,q5,q6,q7]) ∧
+      σ'.regs.get? Register.x10 = some (bytesVal .lw [kb0,kb1,kb2,kb3]) ∧
+      σ'.regs.get? Register.x13 = some v13 ∧
+      σ'.regs.get? Register.x9 = some v9 ∧
+      σ'.regs.get? Register.x2 = some v2 ∧
+      σ'.regs.get? Register.x8 = some v8 ∧
+      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
+      σ'.mem = writeLog σ.mem (wlogM negLoadStoreBlk.body [(2, v2), (13, v13), (9, v9)]
+        [[pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7], [q0,q1,q2,q3,q4,q5,q6,q7], [kb0,kb1,kb2,kb3]]) := by
+  obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hGH, hframe⟩ :=
+    bblock_sound_bt negLoadStoreBlk σ i u (0x800039ac#64) vm
+      [(2, v2), (13, v13), (9, v9)]
+      [[pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7], [q0,q1,q2,q3,q4,q5,q6,q7], [kb0,kb1,kb2,kb3]]
+      hG hpc hmi ⟨hx2, hx13, hx9, trivial⟩ (show KeysOK [2, 13, 9] by decide)
+      (by
+        block_facts hmem with "Vsa.Sim.Code.eval_expr_at_"
+        · exact ⟨⟨hplo, hphi, hpwin, hpal⟩, hp⟩
+        · exact ⟨⟨hdlo, hdhi, hdwin, hdal⟩, hd⟩
+        · exact ⟨⟨hklo, hkhi, hkwin, hkal⟩, hk⟩
+        · exact ⟨hs1lo, hs1hi, hs1win, hs1al⟩
+        · exact ⟨hs2lo, hs2hi, hs2win, hs2al⟩
+        · exact ⟨hs3lo, hs3hi, hs3win, hs3al⟩)
+      (show BBlockOK (0x800039ac#64) [2, 13, 9] negLoadStoreBlk by decide)
+      hi
+  rw [show endPCB (0x800039ac#64) negLoadStoreBlk [(2, v2), (13, v13), (9, v9)]
+        [[pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7], [q0,q1,q2,q3,q4,q5,q6,q7], [kb0,kb1,kb2,kb3]]
+      = (0x800039c4#64 : BitVec 64) from by
+        show endPCM (0x800039ac#64) negLoadStoreBlk.body = (0x800039c4#64 : BitVec 64)
+        decide] at hpc'
+  refine ⟨σ', i', hsteps, hi', hG', hout', hpc',
+    hGH.2.2.1, hGH.2.1, hGH.1, hGH.2.2.2.2.1, hGH.2.2.2.2.2.1, hGH.2.2.2.1, ?_, hmi', hmem'⟩
+  -- x8 survives via the block frame (x8 ∉ noiseRegs, x8 ∉ gprReg '' wrRegsM)
+  rw [hframe Register.x8 (by decide) (by decide)]; exact hx8
+
 end Vsa.Sim
