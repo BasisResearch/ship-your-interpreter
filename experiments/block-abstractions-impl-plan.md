@@ -154,6 +154,6 @@ agents will re-derive the old, longer path.
 ## Stage status
 
 - [ ] C1 frame discharge · [ ] C2 block_reg · [ ] C3 ld_ok/st_ok · [ ] C refactor
-- [ ] B1 decodeM · [ ] B2 soundness · [ ] B3 mkLine · [ ] B refactor
+- [x] B1 decodeM · [x] B2 soundness (light: per-word `rfl` defeq examples) · [x] B3 mkLine · [x] B refactor (neg blocks on `mkLine`; prototype lemmas `neg_loadstore_block`/`_tac` retired)
 - [ ] A0 wrap · [ ] A1 compose · [ ] A2 frame rule · [ ] A refactor
 - [ ] D1 #gen_block · [ ] D2 regenerate
