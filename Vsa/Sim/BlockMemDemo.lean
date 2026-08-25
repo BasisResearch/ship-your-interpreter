@@ -1,4 +1,5 @@
 import Vsa.Sim.BlockMem
+import Vsa.Sim.BlockTactics
 import Vsa.Sim.Code.__ssputs_r
 import Vsa.Sim.DecodeTable.Batch16Part01
 import Vsa.Sim.DecodeTable.Batch06Part31
@@ -129,30 +130,20 @@ theorem ssputs_prologue_block (σ : MState) (i u : Nat)
       σ'.regs.get? Register.x15 = some (v12 + sign_extend (m := 64) (0x000#12)) ∧
       (∃ w, σ'.regs.get? Register.minstret = some w) ∧
       σ'.regs.get? Register.x10 = σ.regs.get? Register.x10 := by
-  obtain ⟨hp1_0, hp1_1, hp1_2, hp1_3⟩ := Vsa.Sim.Code.__ssputs_r_at_8001438c hmem
-  obtain ⟨hp2_0, hp2_1, hp2_2, hp2_3⟩ := Vsa.Sim.Code.__ssputs_r_at_80014390 hmem
-  obtain ⟨hp3_0, hp3_1, hp3_2, hp3_3⟩ := Vsa.Sim.Code.__ssputs_r_at_80014394 hmem
-  obtain ⟨hp4_0, hp4_1, hp4_2, hp4_3⟩ := Vsa.Sim.Code.__ssputs_r_at_80014398 hmem
-  obtain ⟨hp5_0, hp5_1, hp5_2, hp5_3⟩ := Vsa.Sim.Code.__ssputs_r_at_8001439c hmem
-  obtain ⟨hp6_0, hp6_1, hp6_2, hp6_3⟩ := Vsa.Sim.Code.__ssputs_r_at_800143a0 hmem
-  obtain ⟨hp7_0, hp7_1, hp7_2, hp7_3⟩ := Vsa.Sim.Code.__ssputs_r_at_800143a4 hmem
   obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hGH, hframe⟩ :=
     block_mem_sound ssputsProlog σ i u (0x8001438c#64) vm
       [(2, v2), (9, v9), (8, v8), (1, v1), (11, v11), (12, v12)]
       [[b0, b1, b2, b3]]
       hG hpc hmi ⟨hx2, hx9, hx8, hx1, hx11, hx12, trivial⟩
       (show KeysOK [2, 9, 8, 1, 11, 12] by decide)
-      ⟨⟨hp1_0, hp1_1, hp1_2, hp1_3⟩, Vsa.Sim.DecodeTable.decode_fc010113, trivial,
-       ⟨hp2_0, hp2_1, hp2_2, hp2_3⟩, Vsa.Sim.DecodeTable.decode_02913423,
-         ⟨h40lo, h40hi, h40win, h40al⟩,
-       ⟨hp3_0, hp3_1, hp3_2, hp3_3⟩, Vsa.Sim.DecodeTable.decode_00c5a483,
-         ⟨⟨hclo, hchi, hcht, hcal⟩, hc0, hc1, hc2, hc3⟩,
-       ⟨hp4_0, hp4_1, hp4_2, hp4_3⟩, Vsa.Sim.DecodeTable.decode_02813823,
-         ⟨h48lo, h48hi, h48win, h48al⟩,
-       ⟨hp5_0, hp5_1, hp5_2, hp5_3⟩, Vsa.Sim.DecodeTable.decode_02113c23,
-         ⟨h56lo, h56hi, h56win, h56al⟩,
-       ⟨hp6_0, hp6_1, hp6_2, hp6_3⟩, Vsa.Sim.DecodeTable.decode_00058413, trivial,
-       ⟨hp7_0, hp7_1, hp7_2, hp7_3⟩, Vsa.Sim.DecodeTable.decode_00060793, trivial, trivial⟩
+      (by
+        -- the 28 code-byte pins + 7 decode lemmas are auto-discharged by name;
+        -- only the three stack-store windows + the `lw` bounds/pins remain.
+        block_facts hmem with "Vsa.Sim.Code.__ssputs_r_at_"
+        · exact ⟨h40lo, h40hi, h40win, h40al⟩
+        · exact ⟨⟨hclo, hchi, hcht, hcal⟩, hc0, hc1, hc2, hc3⟩
+        · exact ⟨h48lo, h48hi, h48win, h48al⟩
+        · exact ⟨h56lo, h56hi, h56win, h56al⟩)
       (show BlockOKM (0x8001438c#64) [2, 9, 8, 1, 11, 12] ssputsProlog by decide) hi
   rw [show endPCM (0x8001438c#64) ssputsProlog = (0x800143a8#64 : BitVec 64) from by decide]
     at hpc'

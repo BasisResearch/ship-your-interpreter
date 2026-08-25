@@ -71,13 +71,19 @@ private partial def bfSolve (h : Term) (prefixStr : String) (g : MVarId) :
   | some ``BytePinsT => closeLeaf h g ty pinName 0 true; return []
   | some ``DecodeFactT => closeLeaf h g ty decodeName 1 false; return []
   | some ``True => g.assign (mkConst ``True.intro); return []
-  | some ``BBlockFacts | some ``ProgFactsM | some ``TermPins | some ``TermFactsO =>
+  | some ``ChainFacts | some ``BBlockFacts | some ``ProgFactsM
+  | some ``TermPins | some ``TermFactsO =>
       -- reduce one container layer, keep walking
       let g' ← g.change (← g.withContext (whnf ty))
       bfSolve h prefixStr g'
   | _ =>
-      -- data-dependent leaf (`MemFacts`, branch guard) — leave for the caller
-      return [g]
+      -- `MemFacts` for an ALU op, and a fall-through terminator's stuck
+      -- `match … .term`, are defeq `True`: close them. Genuine data-dependent
+      -- leaves (`MemFacts` for a load/store, branch guards) are left in order.
+      if ← g.withContext (isDefEq ty (mkConst ``True)) then
+        g.assign (mkConst ``True.intro); return []
+      else
+        return [g]
 
 elab "block_facts " h:term " with " pfx:str : tactic => do
   let leftovers ← bfSolve h pfx.getString (← getMainGoal)

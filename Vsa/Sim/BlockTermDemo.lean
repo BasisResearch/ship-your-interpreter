@@ -1,4 +1,5 @@
 import Vsa.Sim.BlockTerm
+import Vsa.Sim.BlockTactics
 import Vsa.Sim.SnprintfSpec18
 
 /-!
@@ -103,37 +104,22 @@ theorem mv_dispatch_setup_block (σ : MState) (i u : Nat)
         σ'.regs.get? R = σ.regs.get? R) := by
   have hntn : (BitVec.ofNat 64 n : BitVec 64).toNat = n :=
     BitVec.toNat_ofNat _ _ ▸ Nat.mod_eq_of_lt (by omega)
-  obtain ⟨hc4_0, hc4_1, hc4_2, hc4_3⟩ := Vsa.Sim.Code.memmove_at_800069c4 hmem
-  obtain ⟨hf0_0, hf0_1, hf0_2, hf0_3⟩ := Vsa.Sim.Code.memmove_at_800069f0 hmem
-  obtain ⟨hf4_0, hf4_1, hf4_2, hf4_3⟩ := Vsa.Sim.Code.memmove_at_800069f4 hmem
-  obtain ⟨hf8_0, hf8_1, hf8_2, hf8_3⟩ := Vsa.Sim.Code.memmove_at_800069f8 hmem
-  obtain ⟨hfc_0, hfc_1, hfc_2, hfc_3⟩ := Vsa.Sim.Code.memmove_at_800069fc hmem
-  obtain ⟨h00_0, h00_1, h00_2, h00_3⟩ := Vsa.Sim.Code.memmove_at_80006a00 hmem
-  obtain ⟨h04_0, h04_1, h04_2, h04_3⟩ := Vsa.Sim.Code.memmove_at_80006a04 hmem
-  obtain ⟨h08_0, h08_1, h08_2, h08_3⟩ := Vsa.Sim.Code.memmove_at_80006a08 hmem
   obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hGH, hframe⟩ :=
     bblocks_sound_bt mvDispatchSetup σ i u (0x800069c4#64) vm
       [(10, dst), (11, src), (12, BitVec.ofNat 64 n), (1, r)] []
       hG hpc hmi ⟨hx10, hx11, hx12, hx1, trivial⟩
       (show KeysOK [10, 11, 12, 1] by decide)
-      ⟨⟨trivial, ⟨⟨hc4_0, hc4_1, hc4_2, hc4_3⟩, Vsa.Sim.DecodeTable.decode_02a5f663⟩,
-          bgeu_of_le src dst (by omega)⟩,
-       ⟨⟨⟨hf0_0, hf0_1, hf0_2, hf0_3⟩, Vsa.Sim.DecodeTable.decode_01f00793, trivial, trivial⟩,
-        ⟨⟨hf4_0, hf4_1, hf4_2, hf4_3⟩, Vsa.Sim.DecodeTable.decode_02c7e863⟩,
-        show zopz0zI_u ((0#64) + sign_extend (m := 64) (0x01f#12)) (BitVec.ofNat 64 n)
-            = false by
+      (by
+        -- across the 4 blocks: all code-byte pins + decode lemmas auto-discharged;
+        -- only the three branch guards (bgeu taken / bltu, beq not-taken) remain.
+        block_facts hmem with "Vsa.Sim.Code.memmove_at_"
+        · exact bgeu_of_le src dst (by omega)
+        · show zopz0zI_u ((0#64) + sign_extend (m := 64) (0x01f#12)) (BitVec.ofNat 64 n) = false
           rw [li31_val]
           exact bltu_false_of_ge _ _
-            (by rw [hntn, show (0x1f#64 : BitVec 64).toNat = 31 from by decide]; omega)⟩,
-       ⟨⟨⟨hf8_0, hf8_1, hf8_2, hf8_3⟩, Vsa.Sim.DecodeTable.decode_00050793, trivial,
-          ⟨hfc_0, hfc_1, hfc_2, hfc_3⟩, Vsa.Sim.DecodeTable.decode_fff60693, trivial, trivial⟩,
-        ⟨⟨h00_0, h00_1, h00_2, h00_3⟩, Vsa.Sim.DecodeTable.decode_0e060063⟩,
-        beq_false_of_toNat_ne (BitVec.ofNat 64 n) (0#64)
-          (by rw [hntn, show (0#64 : BitVec 64).toNat = 0 from by decide]; omega)⟩,
-       ⟨⟨⟨h04_0, h04_1, h04_2, h04_3⟩, Vsa.Sim.DecodeTable.decode_00168693, trivial,
-          ⟨h08_0, h08_1, h08_2, h08_3⟩, Vsa.Sim.DecodeTable.decode_00d786b3, trivial, trivial⟩,
-        trivial, trivial⟩,
-       trivial⟩
+            (by rw [hntn, show (0x1f#64 : BitVec 64).toNat = 31 from by decide]; omega)
+        · exact beq_false_of_toNat_ne (BitVec.ofNat 64 n) (0#64)
+            (by rw [hntn, show (0#64 : BitVec 64).toNat = 0 from by decide]; omega))
       (show ChainOK (0x800069c4#64) [10, 11, 12, 1] mvDispatchSetup by decide) hi
   rw [chainEndPC_eq_bt mvDispatchSetup (0x800069c4#64) _ _ (by decide),
     show chainEndPCc (0x800069c4#64) mvDispatchSetup = (0x80006a0c#64 : BitVec 64)
