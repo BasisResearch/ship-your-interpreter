@@ -315,6 +315,16 @@ the `seval` role is filled kernel-cheaply by the reflection block lemmas.
    ride the seams with `Triple.conj_const`. The call seam is `value_int_spec`
    (already a `Triple`), composed by the same `seq`. Prefer this over hand-threading
    per-site `StepObs`+frame bridges for any new multi-block segment.
+   **Stage A2/A-refactor landed (2026-08-25):** the block Posts carry a *genuine
+   entry→exit register frame* (each Pre/Post takes an `entryRegs` ghost + an
+   `out0` sailOutput ghost; the frame conjunct is `c.σ.regs.get? R = entryRegs R`
+   under the block's noise/wrRegs guards — assertion-carried framing, NOT a
+   generic `Triple.frame`, which would be unsound). `neg_prologue_loadstore_triple`
+   /`neg_blocks_triple` `.trans`-compose these to a real σ0-entry frame under the
+   union of the blocks' wrRegs guards. `blockC_neg` (M4 neg pilot) now **consumes
+   `neg_blocks_triple`** for its whole σ0→σ15 spine: one application replaces the
+   three per-block `obtain`s + inter-block seams, and `hframeG` collapses to one
+   `hframeSpine …` (each block's wrRegs guard discharged by `block_frame_wr`).
 
 ### Iteration-latency rules (measured: 2–4 min → 1–6 s per check)
 One segment theorem per module (≤600 lines); `lake env lean` per file while

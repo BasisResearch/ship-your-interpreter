@@ -80,8 +80,9 @@ be unsound). -/
 def negProloguePre (vm v8 v2 v9 v1 : BitVec 64)
     (ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 : BitVec 8)
     (entryRegs : (R : Register) → Option (RegisterType R))
+    (out0 : Array String)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  GoodState c.σ ∧ c.σ.mem = m0 ∧
+  GoodState c.σ ∧ c.σ.mem = m0 ∧ c.σ.sailOutput = out0 ∧
   c.σ.regs.get? Register.PC = some (0x800035ec#64) ∧
   c.σ.regs.get? Register.minstret = some vm ∧
   c.σ.regs.get? Register.x8 = some v8 ∧
@@ -100,12 +101,13 @@ def negProloguePre (vm v8 v2 v9 v1 : BitVec 64)
 /-- Postcondition of the neg prologue block: exit pins/tick/memory-survival +
 the **genuine entry→exit register frame** (carried inside, per the Layer-1
 design): every register neither noise nor written by the block matches the entry
-map `entryRegs`. -/
+map `entryRegs`.  `out0` carries the entry `sailOutput` unchanged. -/
 def negProloguePost (vm v8 v2 v9 v1 : BitVec 64)
     (ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 : BitVec 8)
     (entryRegs : (R : Register) → Option (RegisterType R))
+    (out0 : Array String)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  GoodState c.σ ∧ c.σ.mem = m0 ∧
+  GoodState c.σ ∧ c.σ.mem = m0 ∧ c.σ.sailOutput = out0 ∧
   c.σ.regs.get? Register.PC = some (0x800039ac#64) ∧
   c.σ.regs.get? Register.x14 = some (bytesVal .lw [ob0,ob1,ob2,ob3]) ∧
   c.σ.regs.get? Register.x15 = some (12#64) ∧
@@ -123,19 +125,21 @@ def negProloguePost (vm v8 v2 v9 v1 : BitVec 64)
 theorem negPrologue_triple (vm v8 v2 v9 v1 : BitVec 64)
     (ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 : BitVec 8)
     (entryRegs : (R : Register) → Option (RegisterType R))
+    (out0 : Array String)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (negProloguePre vm v8 v2 v9 v1 ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 entryRegs m0)
-      (negProloguePost vm v8 v2 v9 v1 ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 entryRegs m0) := by
+    Triple (negProloguePre vm v8 v2 v9 v1 ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 entryRegs out0 m0)
+      (negProloguePost vm v8 v2 v9 v1 ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 entryRegs out0 m0) := by
   intro c hpre
-  obtain ⟨hG, hm0, hpc, hmi, hx8, hx2, hx9, hx1, hmem, hob12, hLdO, hLdK, htick, hentry⟩ := hpre
+  obtain ⟨hG, hm0, hout0, hpc, hmi, hx8, hx2, hx9, hx1, hmem, hob12, hLdO, hLdK, htick, hentry⟩ := hpre
   obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hx14', hx15', hx13',
       hx9', hx2', hx8', hx1', hmiw', hframe'⟩ :=
     neg_prologue_block c.σ c.tick c.steps vm v8 v2 v9 v1
       ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7
       hG hpc hmi hx8 hx2 hx9 hx1 hmem hob12 hLdO hLdK htick
-  refine ⟨⟨σ', i', c.steps + 4⟩, hsteps, hG', ?_, hpc', hx14', hx15', hx13',
+  refine ⟨⟨σ', i', c.steps + 4⟩, hsteps, hG', ?_, ?_, hpc', hx14', hx15', hx13',
     hx9', hx2', hx8', hx1', hmiw', hi', ?_⟩
   · rw [hmem', hm0]
+  · rw [hout', hout0]
   · intro R hn hw; exact (hframe' R hn hw).trans (hentry R hn hw)
 
 /-! ## Block 2 — the neg LOAD/STORE run (`neg_loadstore_full`, σ4→σ10)
@@ -150,8 +154,10 @@ block frame side-conditions (cf. `negProloguePre`). -/
 def negLoadStorePre (v2 v13 v9 v8 : BitVec 64)
     (pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3 : BitVec 8)
     (entryRegs : (R : Register) → Option (RegisterType R))
+    (out0 : Array String)
     (c : Config) : Prop :=
   GoodState c.σ ∧
+  c.σ.sailOutput = out0 ∧
   c.σ.regs.get? Register.PC = some (0x800039ac#64) ∧
   (∃ vm, c.σ.regs.get? Register.minstret = some vm) ∧
   c.σ.regs.get? Register.x2 = some v2 ∧
@@ -172,13 +178,15 @@ def negLoadStorePre (v2 v13 v9 v8 : BitVec 64)
 
 /-- Postcondition of the neg load/store block: exit pins/tick + the memory in
 `writeLog` form + the **genuine entry→exit register frame** (carried inside):
-every register neither noise nor written by the block matches `entryRegs`. -/
+every register neither noise nor written by the block matches `entryRegs`.
+`out0` carries the entry `sailOutput` unchanged. -/
 def negLoadStorePost (v2 v13 v9 v8 : BitVec 64)
     (pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3 : BitVec 8)
     (entryRegs : (R : Register) → Option (RegisterType R))
+    (out0 : Array String)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
   GoodState c.σ ∧
-  c.σ.sailOutput = c.σ.sailOutput ∧
+  c.σ.sailOutput = out0 ∧
   c.σ.regs.get? Register.PC = some (0x800039c4#64) ∧
   c.σ.regs.get? Register.x11 = some (bytesVal .ld [pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7]) ∧
   c.σ.regs.get? Register.x14 = some (bytesVal .ld [q0,q1,q2,q3,q4,q5,q6,q7]) ∧
@@ -198,14 +206,15 @@ def negLoadStorePost (v2 v13 v9 v8 : BitVec 64)
 theorem negLoadStore_triple (v2 v13 v9 v8 : BitVec 64)
     (pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3 : BitVec 8)
     (entryRegs : (R : Register) → Option (RegisterType R))
+    (out0 : Array String)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) :
     Triple (fun c => negLoadStorePre v2 v13 v9 v8
-              pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3 entryRegs c ∧
+              pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3 entryRegs out0 c ∧
               c.σ.mem = m0)
       (negLoadStorePost v2 v13 v9 v8
-        pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3 entryRegs m0) := by
+        pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3 entryRegs out0 m0) := by
   intro c hpre
-  obtain ⟨⟨hG, hpc, ⟨vm, hmi⟩, hx2, hx13, hx9, hx8, hmem,
+  obtain ⟨⟨hG, hout0, hpc, ⟨vm, hmi⟩, hx2, hx13, hx9, hx8, hmem,
       hLdP, hLdD, hLdK, hSt1, hSt2, hSt3, htick, hentry⟩, hm0⟩ := hpre
   obtain ⟨σ', i', hsteps, hi', hG', hout', hpc', hx11', hx14', hx10',
       hx13', hx9', hx2', hx8', hmiw', hmem', hframe'⟩ :=
@@ -214,7 +223,7 @@ theorem negLoadStore_triple (v2 v13 v9 v8 : BitVec 64)
       hG hpc hmi hx2 hx13 hx9 hx8 hmem hLdP hLdD hLdK hSt1 hSt2 hSt3 htick
   refine ⟨⟨σ', i', c.steps + 6⟩, hsteps, hG', ?_, hpc', hx11', hx14', hx10',
     hx13', hx9', hx2', hx8', hmiw', hi', ?_, ?_⟩
-  · rfl
+  · rw [hout', hout0]
   · rw [hmem', hm0]
   · intro R hn hw; exact (hframe' R hn hw).trans (hentry R hn hw)
 
@@ -228,8 +237,10 @@ ghost; the Pre asserts `c.σ.regs.get? R = entryRegs R` under the tail chain's
 frame side-conditions (`wrChain negTailChain`). -/
 def negTailPre (vm v8 v9 v2 p11 : BitVec 64) (lb0 lb1 lb2 lb3 : BitVec 8)
     (entryRegs : (R : Register) → Option (RegisterType R))
+    (out0 : Array String)
     (c : Config) : Prop :=
   GoodState c.σ ∧
+  c.σ.sailOutput = out0 ∧
   c.σ.regs.get? Register.PC = some (0x800039c4#64) ∧
   c.σ.regs.get? Register.minstret = some vm ∧
   c.σ.regs.get? Register.x8 = some v8 ∧
@@ -246,11 +257,13 @@ def negTailPre (vm v8 v9 v2 p11 : BitVec 64) (lb0 lb1 lb2 lb3 : BitVec 8)
 
 /-- Postcondition of the neg tail block: exit pins/tick/memory-survival + the
 **genuine entry→exit register frame** (carried inside): every register neither
-noise nor written by the tail chain matches `entryRegs`. -/
+noise nor written by the tail chain matches `entryRegs`.  `out0` carries the
+entry `sailOutput` unchanged. -/
 def negTailPost (vm v8 v9 v2 p11 : BitVec 64) (lb0 lb1 lb2 lb3 : BitVec 8)
     (entryRegs : (R : Register) → Option (RegisterType R))
+    (out0 : Array String)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  GoodState c.σ ∧ c.σ.mem = m0 ∧
+  GoodState c.σ ∧ c.σ.mem = m0 ∧ c.σ.sailOutput = out0 ∧
   c.σ.regs.get? Register.PC = some (0x800039d8#64) ∧
   c.σ.regs.get? Register.x10 = some v9 ∧
   c.σ.regs.get? Register.x11 = some ((0#64) - p11) ∧
@@ -264,18 +277,20 @@ def negTailPost (vm v8 v9 v2 p11 : BitVec 64) (lb0 lb1 lb2 lb3 : BitVec 8)
 
 theorem negTail_triple (vm v8 v9 v2 p11 : BitVec 64) (lb0 lb1 lb2 lb3 : BitVec 8)
     (entryRegs : (R : Register) → Option (RegisterType R))
+    (out0 : Array String)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (fun c => negTailPre vm v8 v9 v2 p11 lb0 lb1 lb2 lb3 entryRegs c ∧ c.σ.mem = m0)
-      (negTailPost vm v8 v9 v2 p11 lb0 lb1 lb2 lb3 entryRegs m0) := by
+    Triple (fun c => negTailPre vm v8 v9 v2 p11 lb0 lb1 lb2 lb3 entryRegs out0 c ∧ c.σ.mem = m0)
+      (negTailPost vm v8 v9 v2 p11 lb0 lb1 lb2 lb3 entryRegs out0 m0) := by
   intro c hpre
-  obtain ⟨⟨hG, hpc, hmi, hx8, hx10, hx9, hx11, hx2, hmem, hLdL, htick, hentry⟩, hm0⟩ := hpre
+  obtain ⟨⟨hG, hout0, hpc, hmi, hx8, hx10, hx9, hx11, hx2, hmem, hLdL, htick, hentry⟩, hm0⟩ := hpre
   obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hx10', hx11', hx9', hx2',
       hmiw', hframe'⟩ :=
     neg_tail_block c.σ c.tick c.steps vm v8 v9 v2 p11 lb0 lb1 lb2 lb3
       hG hpc hmi hx8 hx10 hx9 hx11 hx2 hmem hLdL htick
-  refine ⟨⟨σ', i', c.steps + 5⟩, hsteps, hG', ?_, hpc', hx10', hx11', hx9', hx2',
+  refine ⟨⟨σ', i', c.steps + 5⟩, hsteps, hG', ?_, ?_, hpc', hx10', hx11', hx9', hx2',
     hmiw', hi', ?_⟩
   · rw [hmem', hm0]
+  · rw [hout', hout0]
   · intro R hn hw; exact (hframe' R hn hw).trans (hentry R hn hw)
 
 /-! ## Compose demo — `seq` + `conseq` chain two block triples
@@ -303,8 +318,9 @@ def negProLdStPre (vm v8 v2 v9 v1 : BitVec 64)
     (ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 : BitVec 8)
     (pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 : BitVec 8)
     (entryRegs : (R : Register) → Option (RegisterType R))
+    (out0 : Array String)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  negProloguePre vm v8 v2 v9 v1 ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 entryRegs m0 c ∧
+  negProloguePre vm v8 v2 v9 v1 ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 entryRegs out0 m0 c ∧
   Eval_exprLoaded m0 ∧
   LdOK8 m0 (v2 + sign_extend (m := 64) (0x098#12)) [pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7] ∧
   LdOK8 m0 (v2 + sign_extend (m := 64) (0x0a0#12)) [q0,q1,q2,q3,q4,q5,q6,q7] ∧
@@ -321,9 +337,10 @@ discharges both (from R being noise-or-callee-saved) to land the entry value. -/
 def negProLdStPost (v2 v13 v9 v8 : BitVec 64)
     (pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3 : BitVec 8)
     (entryRegs : (R : Register) → Option (RegisterType R))
+    (out0 : Array String)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
   GoodState c.σ ∧
-  c.σ.sailOutput = c.σ.sailOutput ∧
+  c.σ.sailOutput = out0 ∧
   c.σ.regs.get? Register.PC = some (0x800039c4#64) ∧
   c.σ.regs.get? Register.x11 = some (bytesVal .ld [pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7]) ∧
   c.σ.regs.get? Register.x14 = some (bytesVal .ld [q0,q1,q2,q3,q4,q5,q6,q7]) ∧
@@ -357,36 +374,38 @@ theorem neg_prologue_loadstore_triple (vm v8 v2 v9 v1 : BitVec 64)
     (ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 : BitVec 8)
     (pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 : BitVec 8)
     (entryRegs : (R : Register) → Option (RegisterType R))
+    (out0 : Array String)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) :
     Triple
       (negProLdStPre vm v8 v2 v9 v1 ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7
-        pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 entryRegs m0)
+        pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 entryRegs out0 m0)
       (negProLdStPost v2 (bytesVal .ld [kb0,kb1,kb2,kb3,d4,d5,d6,d7]) v9 v8
-        pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3 entryRegs m0) := by
+        pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3 entryRegs out0 m0) := by
   intro c hc
   obtain ⟨hproPre, hmemL, hLdP, hLdD, hLdK, hSt1, hSt2, hSt3⟩ := hc
   -- run the prologue (σ0→σ4)
   obtain ⟨c4, hs4, hpost4⟩ :=
-    negPrologue_triple vm v8 v2 v9 v1 ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 entryRegs m0
+    negPrologue_triple vm v8 v2 v9 v1 ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 entryRegs out0 m0
       c hproPre
   -- project prologue Post (never split `GoodState`)
   have hG4 := hpost4.1
   have hm04 := hpost4.2.1
-  have hpc4 := hpost4.2.2.1
-  have hx13_4 := hpost4.2.2.2.2.2.1
-  have hx9_4 := hpost4.2.2.2.2.2.2.1
-  have hx2_4 := hpost4.2.2.2.2.2.2.2.1
-  have hx8_4 := hpost4.2.2.2.2.2.2.2.2.1
-  have hmiw4 := hpost4.2.2.2.2.2.2.2.2.2.2.1
-  have htick4 := hpost4.2.2.2.2.2.2.2.2.2.2.2.1
-  have hframePro := hpost4.2.2.2.2.2.2.2.2.2.2.2.2
+  have hout04 := hpost4.2.2.1
+  have hpc4 := hpost4.2.2.2.1
+  have hx13_4 := hpost4.2.2.2.2.2.2.1
+  have hx9_4 := hpost4.2.2.2.2.2.2.2.1
+  have hx2_4 := hpost4.2.2.2.2.2.2.2.2.1
+  have hx8_4 := hpost4.2.2.2.2.2.2.2.2.2.1
+  have hmiw4 := hpost4.2.2.2.2.2.2.2.2.2.2.2.1
+  have htick4 := hpost4.2.2.2.2.2.2.2.2.2.2.2.2.1
+  have hframePro := hpost4.2.2.2.2.2.2.2.2.2.2.2.2.2
   -- run the loadstore (σ4→σ10); its entry ghost is σ4's own map, so its Pre frame
   -- is `rfl`.  code-survival: `mem = m0` rewrites the `m0`-facts into `c4.σ.mem`.
   obtain ⟨c10, hs10, hpost10⟩ :=
     negLoadStore_triple v2 (bytesVal .ld [kb0,kb1,kb2,kb3,d4,d5,d6,d7]) v9 v8
       pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3
-      c4.σ.regs.get? m0 c4
-      ⟨⟨hG4, hpc4, hmiw4, hx2_4, hx13_4, hx9_4, hx8_4,
+      c4.σ.regs.get? out0 m0 c4
+      ⟨⟨hG4, hout04, hpc4, hmiw4, hx2_4, hx13_4, hx9_4, hx8_4,
           (by rw [hm04]; exact hmemL),
           (by rw [hm04]; exact hLdP), (by rw [hm04]; exact hLdD), (by rw [hm04]; exact hLdK),
           hSt1, hSt2, hSt3, htick4, (fun R _ _ => rfl)⟩, hm04⟩
@@ -443,9 +462,10 @@ def negBlocksPre (vm v8 v2 v9 v1 : BitVec 64)
     (pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 : BitVec 8)
     (lb0 lb1 lb2 lb3 : BitVec 8)
     (entryRegs : (R : Register) → Option (RegisterType R))
+    (out0 : Array String)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
   negProLdStPre vm v8 v2 v9 v1 ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7
-    pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 entryRegs m0 c ∧
+    pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 entryRegs out0 m0 c ∧
   bytesVal .lw [kb0,kb1,kb2,kb3] = (2#64 : BitVec 64) ∧
   LdOK4 m0 (v8 + sign_extend (m := 64) (0x004#12)) [lb0,lb1,lb2,lb3] ∧
   -- the e→line window `[v8+4, v8+8)` is disjoint from every error-store window
@@ -483,8 +503,9 @@ noise-or-callee-saved, via `abiNoise_noiseRegs`/`block_frame_wr`) to reach the
 entry value. -/
 def negBlocksPost (vm v8 v9 v2 p11 : BitVec 64) (lb0 lb1 lb2 lb3 : BitVec 8)
     (entryRegs : (R : Register) → Option (RegisterType R))
+    (out0 : Array String)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  GoodState c.σ ∧ c.σ.mem = m0 ∧
+  GoodState c.σ ∧ c.σ.mem = m0 ∧ c.σ.sailOutput = out0 ∧
   c.σ.regs.get? Register.PC = some (0x800039d8#64) ∧
   c.σ.regs.get? Register.x10 = some v9 ∧
   c.σ.regs.get? Register.x11 = some ((0#64) - p11) ∧
@@ -509,12 +530,13 @@ theorem neg_blocks_triple (vm v8 v2 v9 v1 : BitVec 64)
     (pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 : BitVec 8)
     (lb0 lb1 lb2 lb3 : BitVec 8)
     (entryRegs : (R : Register) → Option (RegisterType R))
+    (out0 : Array String)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) :
     Triple
       (negBlocksPre vm v8 v2 v9 v1 ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7
-        pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 lb0 lb1 lb2 lb3 entryRegs m0)
+        pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 lb0 lb1 lb2 lb3 entryRegs out0 m0)
       (negBlocksPost vm v8 v9 v2 (bytesVal .ld [pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7])
-        lb0 lb1 lb2 lb3 entryRegs
+        lb0 lb1 lb2 lb3 entryRegs out0
         (writeLog m0 (wlogM negLoadStoreBlk.body
           [(2, v2), (13, bytesVal .ld [kb0,kb1,kb2,kb3,d4,d5,d6,d7]), (9, v9)]
           [[pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7], [q0,q1,q2,q3,q4,q5,q6,q7], [kb0,kb1,kb2,kb3]]))) := by
@@ -523,7 +545,7 @@ theorem neg_blocks_triple (vm v8 v2 v9 v1 : BitVec 64)
   -- run the first two blocks (σ0→σ10) via the demo triple
   obtain ⟨c10, hs10, hpost10⟩ :=
     neg_prologue_loadstore_triple vm v8 v2 v9 v1 ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7
-      pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 entryRegs m0 c hproldst
+      pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 entryRegs out0 m0 c hproldst
   -- abbreviations (plain `let`s; no Mathlib `set`)
   let K13 : BitVec 64 := bytesVal .ld [kb0,kb1,kb2,kb3,d4,d5,d6,d7]
   let payV : BitVec 64 := bytesVal .ld [pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7]
@@ -532,6 +554,7 @@ theorem neg_blocks_triple (vm v8 v2 v9 v1 : BitVec 64)
       [[pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7], [q0,q1,q2,q3,q4,q5,q6,q7], [kb0,kb1,kb2,kb3]])
   -- project the loadstore Post (never split `GoodState`)
   have hG10 := hpost10.1
+  have hout10 := hpost10.2.1
   have hpc10 := hpost10.2.2.1
   have hx11_10 := hpost10.2.2.2.1
   have hx10_10 := hpost10.2.2.2.2.2.1
@@ -587,21 +610,22 @@ theorem neg_blocks_triple (vm v8 v2 v9 v1 : BitVec 64)
   -- entry ghost is σ10's own map, so its Pre frame is `rfl`; its Post frame then
   -- reads `σ15.R = σ10.R` (tail guard).
   obtain ⟨c15, hs15, hpost15⟩ :=
-    negTail_triple wmi v8 v9 v2 payV lb0 lb1 lb2 lb3 c10.σ.regs.get? m3 c10
-      ⟨⟨hG10, hpc10, hwmi, hx8_10, hx10_2, hx9_10, hx11_10, hx2_10, hcode10, hLdL, htick10,
+    negTail_triple wmi v8 v9 v2 payV lb0 lb1 lb2 lb3 c10.σ.regs.get? out0 m3 c10
+      ⟨⟨hG10, hout10, hpc10, hwmi, hx8_10, hx10_2, hx9_10, hx11_10, hx2_10, hcode10, hLdL, htick10,
           (fun R _ _ => rfl)⟩, hmem10⟩
   -- project the tail Post
   have hG15 := hpost15.1
   have hm015 := hpost15.2.1
-  have hpc15 := hpost15.2.2.1
-  have hx10_15 := hpost15.2.2.2.1
-  have hx11_15 := hpost15.2.2.2.2.1
-  have hx9_15 := hpost15.2.2.2.2.2.1
-  have hx2_15 := hpost15.2.2.2.2.2.2.1
-  have hmi15 := hpost15.2.2.2.2.2.2.2.1
-  have htick15 := hpost15.2.2.2.2.2.2.2.2.1
-  have hframeTail := hpost15.2.2.2.2.2.2.2.2.2
-  refine ⟨c15, hs10.trans hs15, hG15, hm015, hpc15, hx10_15, hx11_15, hx9_15, hx2_15,
+  have hout15 := hpost15.2.2.1
+  have hpc15 := hpost15.2.2.2.1
+  have hx10_15 := hpost15.2.2.2.2.1
+  have hx11_15 := hpost15.2.2.2.2.2.1
+  have hx9_15 := hpost15.2.2.2.2.2.2.1
+  have hx2_15 := hpost15.2.2.2.2.2.2.2.1
+  have hmi15 := hpost15.2.2.2.2.2.2.2.2.1
+  have htick15 := hpost15.2.2.2.2.2.2.2.2.2.1
+  have hframeTail := hpost15.2.2.2.2.2.2.2.2.2.2
+  refine ⟨c15, hs10.trans hs15, hG15, hm015, hout15, hpc15, hx10_15, hx11_15, hx9_15, hx2_15,
     hmi15, htick15, ?_⟩
   -- composed σ0-entry frame: `σ15.R = σ10.R` (tail) `.trans` `σ10.R = entryRegs R`
   -- (prologue+loadstore).  All three per-block guards are separate hypotheses.

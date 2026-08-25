@@ -3,6 +3,7 @@ import Vsa.Sim.NegTailSites
 import Vsa.Sim.NegBlockProto
 import Vsa.Sim.BlockTactics2
 import Vsa.Sim.BlockAdapter
+import Vsa.Sim.BlockLogic
 import Vsa.Sim.ValueSpec
 import Vsa.Sim.DivSites2
 
@@ -284,90 +285,111 @@ theorem blockC_neg
   have haddr256 : ((sp - 1088#64) + sign_extend (m := 64) (0x100#12)).toNat = sp.toNat - 832 :=
     spill_addr sp (0x100#12) 832 (by decide) (by omega) hsp1088
   ------------------------------------------------------------------------
-  -- 0x800035ec → 0x800039ac: the prologue (σ0→σ4, 4 steps: op-token load,
-  -- li a5,12, kind-dword load, taken beq a4,a5) via ONE neg_prologue_block —
-  -- was ~90 lines of per-step obs_*_other carries.
-  ------------------------------------------------------------------------
-  obtain ⟨σ4, i4, hstepPro, hi4, hG4, hmem4e, hout4, hpc4, _ha14_4, _ha15_4, hx13_4,
-      hs1_4, hsp_4, hx8_4, _hx1_4, ⟨vmi4, hmi4⟩, hframePro⟩ :=
-    neg_prologue_block c.σ c.tick c.steps vmi aExpr (sp-1088#64) sret (0x800035ec#64)
-      ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7
-      hG hpc hmi hx8 hsp hs1 hra hcode hopVal
-      ⟨⟨(by rw [hop8]; omega), (by rw [hop8]; omega),
-        (by rw [hop8, htoh]; right; omega), (by rw [hop8]; omega)⟩,
-       (by rw [hop8]; exact hoc0), (by rw [hop8]; exact hoc1),
-       (by rw [hop8]; exact hoc2), (by rw [hop8]; exact hoc3)⟩
-      ⟨⟨(by rw [haddr144]; omega), (by rw [haddr144]; omega),
-        (by rw [haddr144, htoh]; right; omega), (by rw [haddr144]; omega)⟩,
-       (by rw [haddr144]; exact hkb0), (by rw [haddr144]; exact hkb1),
-       (by rw [haddr144]; exact hkb2), (by rw [haddr144]; exact hkb3),
-       (by rw [haddr144]; exact hd4), (by rw [haddr144]; exact hd5),
-       (by rw [haddr144]; exact hd6), (by rw [haddr144]; exact hd7)⟩
-      htick
-  have hcode4 : Eval_exprLoaded σ4.mem := by rw [hmem4e]; exact hcode
-  -- normalize the payload / dead-word byte addresses to the site-load offsets
-  have e936 : sp.toNat - 944 + 8 = sp.toNat - 936 := by omega
-  have e928 : sp.toNat - 944 + 16 = sp.toNat - 928 := by omega
-  rw [e936] at hpb0 hpb1 hpb2 hpb3 hpb4 hpb5 hpb6 hpb7
-  rw [e928] at hq0 hq1 hq2 hq3 hq4 hq5 hq6 hq7
-  ------------------------------------------------------------------------
-  ------------------------------------------------------------------------
-  -- 0x800039ac → 0x800039c4: the neg load/store run (σ4→σ10, 6 steps) via ONE
-  -- `neg_loadstore_full` block application — was ~190 lines of per-step
-  -- `obs_*_other` carries. The three load results, the carried callee-saved,
-  -- and the memory (in `writeLog` form, bridged to the `m3` tower below via the
-  -- Phase-1 `writeLog`↦`writeMap8` defeq) all come out computed.
+  -- 0x800035ec → 0x800039d8: the ENTIRE neg spine (σ0→σ15, prologue + load/store
+  -- + tail, 15 steps) via ONE `neg_blocks_triple` (Stage A2). The three block
+  -- lemmas, the two inter-block seams (kind-dword/payload bridges, code/e→line
+  -- survival across the three error stores), and the composed σ0-entry frame all
+  -- come out of the one composed `Triple`. Was ~135 lines of per-block obtains +
+  -- inter-block bridging.
   ------------------------------------------------------------------------
   let V14 : BitVec 64 := sign_extend (m := 64)
     ((((((((q7.append q6).append q5).append q4).append q3).append q2).append q1).append q0) : BitVec (8*8))
   let K13 : BitVec 64 := sign_extend (m := 64)
     ((((((((d7.append d6).append d5).append d4).append kb3).append kb2).append kb1).append kb0) : BitVec (8*8))
-  obtain ⟨σ10, i10, hstepBlk, hi10, hG10, hout10', hpc10, hx11_10', _hx14_10, hx10_10',
-      hx13_10, hs1_10, hsp_10, hx8_10, ⟨vmi10, hmi10⟩, hmemBlk, hframeBlk⟩ :=
-    neg_loadstore_full σ4 i4 (c.steps+1+1+1+1) vmi4 (sp-1088#64) K13 sret aExpr
-      pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3
-      hG4 hpc4 hmi4 hsp_4 hx13_4 hs1_4 hx8_4 hcode4
-      ⟨⟨(by rw [haddr152]; omega), (by rw [haddr152]; omega),
-        (by rw [haddr152, htoh]; right; omega), (by rw [haddr152]; omega)⟩,
-       (by rw [haddr152, hmem4e]; exact hpb0), (by rw [haddr152, hmem4e]; exact hpb1),
-       (by rw [haddr152, hmem4e]; exact hpb2), (by rw [haddr152, hmem4e]; exact hpb3),
-       (by rw [haddr152, hmem4e]; exact hpb4), (by rw [haddr152, hmem4e]; exact hpb5),
-       (by rw [haddr152, hmem4e]; exact hpb6), (by rw [haddr152, hmem4e]; exact hpb7)⟩
-      ⟨⟨(by rw [haddr160]; omega), (by rw [haddr160]; omega),
-        (by rw [haddr160, htoh]; right; omega), (by rw [haddr160]; omega)⟩,
-       (by rw [haddr160, hmem4e]; exact hq0), (by rw [haddr160, hmem4e]; exact hq1),
-       (by rw [haddr160, hmem4e]; exact hq2), (by rw [haddr160, hmem4e]; exact hq3),
-       (by rw [haddr160, hmem4e]; exact hq4), (by rw [haddr160, hmem4e]; exact hq5),
-       (by rw [haddr160, hmem4e]; exact hq6), (by rw [haddr160, hmem4e]; exact hq7)⟩
-      ⟨⟨(by rw [haddr144]; omega), (by rw [haddr144]; omega),
-        (by rw [haddr144, htoh]; right; omega), (by rw [haddr144]; omega)⟩,
-       (by rw [haddr144, hmem4e]; exact hkb0), (by rw [haddr144, hmem4e]; exact hkb1),
-       (by rw [haddr144, hmem4e]; exact hkb2), (by rw [haddr144, hmem4e]; exact hkb3)⟩
-      ⟨(by rw [haddr240]; omega), (by rw [haddr240]; omega), (by rw [haddr240, htoh]; omega), (by rw [haddr240]; omega)⟩
-      ⟨(by rw [haddr248]; omega), (by rw [haddr248]; omega), (by rw [haddr248, htoh]; omega), (by rw [haddr248]; omega)⟩
-      ⟨(by rw [haddr256]; omega), (by rw [haddr256]; omega), (by rw [haddr256, htoh]; omega), (by rw [haddr256]; omega)⟩
-      hi4
-  -- bridge block outputs → the domain names the tail consumes
-  have hout10 : σ10.sailOutput = c.σ.sailOutput := hout10'.trans hout4
-  have hx11_10 : σ10.regs.get? Register.x11 = some payV := hx11_10'
-  have hx10_10 : σ10.regs.get? Register.x10 = some (2#64) := by
-    rw [show (bytesVal MKind.lw [kb0,kb1,kb2,kb3]) = (2#64 : BitVec 64) from hkindVal] at hx10_10'
-    exact hx10_10'
-  -- the three error-arg staging stores as the `m1`/`m2`/`m3` tower the tail
-  -- consumes (defeq to `neg_loadstore_full`'s `writeLog` memory after the
-  -- `haddr*` address normalisations).
+  -- the three error-arg staging stores as the `m1`/`m2`/`m3` tower the downstream
+  -- (value_int / epilogue survival) consumes.
   let m1 : Mem := writeMap8 c.σ.mem (sp.toNat - 848) (sdData_val K13)
   let m2 : Mem := writeMap8 m1 (sp.toNat - 840) (sdData_val payV)
   let m3 : Mem := writeMap8 m2 (sp.toNat - 832) (sdData_val V14)
-  have hmem10' : σ10.mem = m3 := by
-    rw [hmemBlk, hmem4e]
-    show writeMap8 (writeMap8 (writeMap8 c.σ.mem
-        ((sp - 1088#64) + sign_extend (m := 64) (0x0f0#12)).toNat (sdData_val K13))
-        ((sp - 1088#64) + sign_extend (m := 64) (0x0f8#12)).toNat (sdData_val payV))
-        ((sp - 1088#64) + sign_extend (m := 64) (0x100#12)).toNat (sdData_val V14) = m3
+  -- `payV`/`K13`/`V14` are defeq to `bytesVal .ld` of the loaded byte lists, so
+  -- the `neg_blocks_triple` outputs land on the domain `payV`/`K13`/`V14` names.
+  -- normalize the payload / dead-word byte addresses to the site-load offsets
+  have e936 : sp.toNat - 944 + 8 = sp.toNat - 936 := by omega
+  have e928 : sp.toNat - 944 + 16 = sp.toNat - 928 := by omega
+  rw [e936] at hpb0 hpb1 hpb2 hpb3 hpb4 hpb5 hpb6 hpb7
+  rw [e928] at hq0 hq1 hq2 hq3 hq4 hq5 hq6 hq7
+  -- the `wlogM` of the spine reduces to the three error stores at sp-848/840/832
+  -- (defeq to the `m3` tower after the address normalisations).
+  let W : Mem := writeLog c.σ.mem (wlogM negLoadStoreBlk.body
+    [(2, sp-1088#64), (13, K13), (9, sret)]
+    [[pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7], [q0,q1,q2,q3,q4,q5,q6,q7], [kb0,kb1,kb2,kb3]])
+  have hWm3 : W = m3 := by
+    show writeLog c.σ.mem [((( sp-1088#64) + sign_extend (m := 64) (0x0f0#12)).toNat, 8, K13),
+        (((sp-1088#64) + sign_extend (m := 64) (0x0f8#12)).toNat, 8, bytesVal MKind.ld [pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7]),
+        (((sp-1088#64) + sign_extend (m := 64) (0x100#12)).toNat, 8, bytesVal MKind.ld [q0,q1,q2,q3,q4,q5,q6,q7])] = m3
     rw [haddr240, haddr248, haddr256]
-  have hcode10 : Eval_exprLoaded σ10.mem := by
-    rw [hmem10']
+    show writeMap8 (writeMap8 (writeMap8 c.σ.mem (sp.toNat-848) (sdData_val K13))
+        (sp.toNat-840) (sdData_val payV)) (sp.toNat-832) (sdData_val V14) = m3
+    rfl
+  -- run the whole spine
+  obtain ⟨cS, hstepSpine, hG15, hmem15_W, hout15_W, hpc15, hx10_15, hx11_15b, hs1_15, hsp_15,
+      ⟨vmi15, hmi15⟩, hi15, hframeSpine⟩ :=
+    neg_blocks_triple vmi aExpr (sp-1088#64) sret (0x800035ec#64)
+      ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7
+      pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7
+      lb0 lb1 lb2 lb3 c.σ.regs.get? c.σ.sailOutput c.σ.mem c
+      ⟨⟨⟨hG, rfl, rfl, hpc, hmi, hx8, hsp, hs1, hra, hcode, hopVal,
+          ⟨⟨(by rw [hop8]; omega), (by rw [hop8]; omega),
+            (by rw [hop8, htoh]; right; omega), (by rw [hop8]; omega)⟩,
+           (by rw [hop8]; exact hoc0), (by rw [hop8]; exact hoc1),
+           (by rw [hop8]; exact hoc2), (by rw [hop8]; exact hoc3)⟩,
+          ⟨⟨(by rw [haddr144]; omega), (by rw [haddr144]; omega),
+            (by rw [haddr144, htoh]; right; omega), (by rw [haddr144]; omega)⟩,
+           (by rw [haddr144]; exact hkb0), (by rw [haddr144]; exact hkb1),
+           (by rw [haddr144]; exact hkb2), (by rw [haddr144]; exact hkb3),
+           (by rw [haddr144]; exact hd4), (by rw [haddr144]; exact hd5),
+           (by rw [haddr144]; exact hd6), (by rw [haddr144]; exact hd7)⟩,
+          htick, (fun R _ _ => rfl)⟩,
+         hcode,
+         ⟨⟨(by rw [haddr152]; omega), (by rw [haddr152]; omega),
+           (by rw [haddr152, htoh]; right; omega), (by rw [haddr152]; omega)⟩,
+          (by rw [haddr152]; exact hpb0), (by rw [haddr152]; exact hpb1),
+          (by rw [haddr152]; exact hpb2), (by rw [haddr152]; exact hpb3),
+          (by rw [haddr152]; exact hpb4), (by rw [haddr152]; exact hpb5),
+          (by rw [haddr152]; exact hpb6), (by rw [haddr152]; exact hpb7)⟩,
+         ⟨⟨(by rw [haddr160]; omega), (by rw [haddr160]; omega),
+           (by rw [haddr160, htoh]; right; omega), (by rw [haddr160]; omega)⟩,
+          (by rw [haddr160]; exact hq0), (by rw [haddr160]; exact hq1),
+          (by rw [haddr160]; exact hq2), (by rw [haddr160]; exact hq3),
+          (by rw [haddr160]; exact hq4), (by rw [haddr160]; exact hq5),
+          (by rw [haddr160]; exact hq6), (by rw [haddr160]; exact hq7)⟩,
+         ⟨⟨(by rw [haddr144]; omega), (by rw [haddr144]; omega),
+           (by rw [haddr144, htoh]; right; omega), (by rw [haddr144]; omega)⟩,
+          (by rw [haddr144]; exact hkb0), (by rw [haddr144]; exact hkb1),
+          (by rw [haddr144]; exact hkb2), (by rw [haddr144]; exact hkb3)⟩,
+         ⟨(by rw [haddr240]; omega), (by rw [haddr240]; omega), (by rw [haddr240, htoh]; omega), (by rw [haddr240]; omega)⟩,
+         ⟨(by rw [haddr248]; omega), (by rw [haddr248]; omega), (by rw [haddr248, htoh]; omega), (by rw [haddr248]; omega)⟩,
+         ⟨(by rw [haddr256]; omega), (by rw [haddr256]; omega), (by rw [haddr256, htoh]; omega), (by rw [haddr256]; omega)⟩⟩,
+       hkindVal,
+       ⟨⟨(by rw [hline4]; omega), (by rw [hline4]; omega),
+         (by rw [hline4, htoh]; right; omega), (by rw [hline4]; omega)⟩,
+        (by rw [hline4]; exact hlb0), (by rw [hline4]; exact hlb1),
+        (by rw [hline4]; exact hlb2), (by rw [hline4]; exact hlb3)⟩,
+       -- e→line window `[aExpr+4, aExpr+8)` disjoint from the three store windows
+       (by intro k hk1 hk2
+           rw [haddr240, haddr248, haddr256]
+           refine ⟨?_, ?_, ?_⟩ <;>
+             (rw [hline4] at hk1 hk2; rcases hexprSL with h | h <;> omega)),
+       -- eval_expr code region `[0x80003164,0x80003fe0)` disjoint likewise
+       (by intro k ⟨hk1, hk2⟩
+           rw [haddr240, haddr248, haddr256]
+           refine ⟨?_, ?_, ?_⟩ <;> (rcases hcodeStk with h | h <;> omega))⟩
+  -- name the spine-exit config's components (the `neg_blocks_triple` exit config
+  -- `cS`; its step count is `cS.steps`, threaded into the `jal` site below).
+  let σ15 : MState := cS.σ
+  let i15 : Nat := cS.tick
+  -- bridge spine outputs → the domain names the downstream consumes
+  have hmem15_3 : σ15.mem = m3 := by rw [hmem15_W]; exact hWm3
+  have hx11_15 : σ15.regs.get? Register.x11 = some ((0#64) - payV) := hx11_15b
+  have hout15 : σ15.sailOutput = c.σ.sailOutput := hout15_W
+  have hVint_c : Value_intLoaded c.σ.mem := by
+    refine loaded_value_int_agreeP mcall c.σ.mem (fun a ha => ?_) hVint
+    rcases hmemFrame a (by rcases hviStk with h | h <;> omega) (by rcases hviArena with h | h <;> omega)
+      with hin | heq
+    · exact absurd hin (by rcases hviStk with h | h <;> omega)
+    · exact heq.symm
+  have hcode15 : Eval_exprLoaded σ15.mem := by
+    rw [hmem15_3]
     refine loaded_eval_expr_agreeP c.σ.mem m3 (fun a ha => ?_) hcode
     show c.σ.mem[a]? = (writeMap8 m2 (sp.toNat-832) (sdData_val V14))[a]?
     rw [getElem_writeMap8_disjoint m2 (sp.toNat-832) a (sdData_val V14) (by rcases hcodeStk with h | h <;> omega)]
@@ -375,58 +397,18 @@ theorem blockC_neg
     rw [getElem_writeMap8_disjoint m1 (sp.toNat-840) a (sdData_val payV) (by rcases hcodeStk with h | h <;> omega)]
     show c.σ.mem[a]? = (writeMap8 c.σ.mem (sp.toNat-848) (sdData_val K13))[a]?
     rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat-848) a (sdData_val K13) (by rcases hcodeStk with h | h <;> omega)]
-  -- `value_int`'s code survives from the pre-call memory to the post-call memory
-  -- (its region `[0x8000280c,0x8000281c)` is disjoint from the sub-frame/arena/subsret).
-  have hVint_c : Value_intLoaded c.σ.mem := by
-    refine loaded_value_int_agreeP mcall c.σ.mem (fun a ha => ?_) hVint
-    rcases hmemFrame a (by rcases hviStk with h | h <;> omega) (by rcases hviArena with h | h <;> omega)
-      with hin | heq
-    · exact absurd hin (by rcases hviStk with h | h <;> omega)
-    · exact heq.symm
-  have hVint10 : Value_intLoaded σ10.mem := by
-    rw [hmem10']
+  have hVint15 : Value_intLoaded σ15.mem := by
+    rw [hmem15_3]
     exact loaded_int_writeMap8 m2 (sp.toNat - 832) (sdData_val V14) (by rcases hviStk with h | h <;> omega)
       (loaded_int_writeMap8 m1 (sp.toNat - 840) (sdData_val payV) (by rcases hviStk with h | h <;> omega)
         (loaded_int_writeMap8 c.σ.mem (sp.toNat - 848) (sdData_val K13) (by rcases hviStk with h | h <;> omega) hVint_c))
-  -- the e->line bytes at `aExpr+4` (AST memory) survive the three error stores
-  have hm3_disj : ∀ k, aExpr.toNat + 4 ≤ k → k < aExpr.toNat + 8 → m3[k]? = c.σ.mem[k]? := by
-    intro k hk1 hk2
-    show (writeMap8 m2 (sp.toNat-832) (sdData_val V14))[k]? = c.σ.mem[k]?
-    rw [getElem_writeMap8_disjoint m2 (sp.toNat-832) k (sdData_val V14) (by rcases hexprSL with h | h <;> omega)]
-    show (writeMap8 m1 (sp.toNat-840) (sdData_val payV))[k]? = c.σ.mem[k]?
-    rw [getElem_writeMap8_disjoint m1 (sp.toNat-840) k (sdData_val payV) (by rcases hexprSL with h | h <;> omega)]
-    show (writeMap8 c.σ.mem (sp.toNat-848) (sdData_val K13))[k]? = c.σ.mem[k]?
-    rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat-848) k (sdData_val K13) (by rcases hexprSL with h | h <;> omega)]
-  have hlbm3_0 : m3[aExpr.toNat + 4]? = some lb0 := (hm3_disj _ (by omega) (by omega)).trans hlb0
-  have hlbm3_1 : m3[aExpr.toNat + 4 + 1]? = some lb1 := (hm3_disj _ (by omega) (by omega)).trans hlb1
-  have hlbm3_2 : m3[aExpr.toNat + 4 + 2]? = some lb2 := (hm3_disj _ (by omega) (by omega)).trans hlb2
-  have hlbm3_3 : m3[aExpr.toNat + 4 + 3]? = some lb3 := (hm3_disj _ (by omega) (by omega)).trans hlb3
-  ------------------------------------------------------------------------
-  -- 0x800039c4 → 0x800039d8: the neg tail (σ10→σ15, 5 steps: li a2,2; lw s0,4(s0);
-  -- bne a0,a2 not-taken; neg a1,a1; mv a0,s1) via ONE `neg_tail_block` (a 2-block
-  -- chain split by the `bne`; the `.sub` model kind handles the `neg`). The
-  -- `jal value_int`@σ16 stays the call seam below. Was ~105 lines of carries.
-  ------------------------------------------------------------------------
-  obtain ⟨σ15, i15, hstepTail, hi15, hG15, hmem15_blk, hout15_blk, hpc15, hx10_15, hx11_15,
-      hs1_15, hsp_15, ⟨vmi15, hmi15⟩, hframeTail⟩ :=
-    neg_tail_block σ10 i10 (c.steps+1+1+1+1+1+1+1+1+1+1) vmi10 aExpr sret (sp-1088#64) payV
-      lb0 lb1 lb2 lb3 hG10 hpc10 hmi10 hx8_10 hx10_10 hs1_10 hx11_10 hsp_10 hcode10
-      ⟨⟨(by rw [hline4]; omega), (by rw [hline4]; omega),
-        (by rw [hline4, htoh]; right; omega), (by rw [hline4]; omega)⟩,
-       (by rw [hline4, hmem10']; exact hlbm3_0), (by rw [hline4, hmem10']; exact hlbm3_1),
-       (by rw [hline4, hmem10']; exact hlbm3_2), (by rw [hline4, hmem10']; exact hlbm3_3)⟩
-      hi10
-  have hout15 : σ15.sailOutput = c.σ.sailOutput := hout15_blk.trans hout10
-  have hmem15_3 : σ15.mem = m3 := by rw [hmem15_blk]; exact hmem10'
-  have hcode15 : Eval_exprLoaded σ15.mem := by rw [hmem15_3]; exact hmem10' ▸ hcode10
-  have hVint15 : Value_intLoaded σ15.mem := by rw [hmem15_3]; exact hmem10' ▸ hVint10
   ------------------------------------------------------------------------
   -- 0x800039d8: jal value_int → PC := 0x8000280c, x1 := 0x800039dc
   ------------------------------------------------------------------------
   obtain ⟨σ16, i16, hs16', hi16, hG16, hmem16, hobs16⟩ :=
-    site_800039d8_ee σ15 i15 (c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1) (0x800039d8#64) vmi15
+    site_800039d8_ee σ15 i15 cS.steps (0x800039d8#64) vmi15
       hG15 hpc15 hmi15 hcode15 rfl hi15
-  have hstep16 : Step ⟨σ15, i15, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1⟩ ⟨σ16, i16, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1⟩ := hs16'
+  have hstep16 : Step ⟨σ15, i15, cS.steps⟩ ⟨σ16, i16, cS.steps + 1⟩ := hs16'
   have hmem16_3 : σ16.mem = m3 := by rw [hmem16]; exact hmem15_3
   have hpc16 : σ16.regs.get? Register.PC = some (0x8000280c#64) := by
     have := obs_jal_pc hobs16
@@ -441,20 +423,20 @@ theorem blockC_neg
   have hsp_16 : σ16.regs.get? Register.x2 = some (sp-1088#64) := obs_jal_other hobs16 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_15
   obtain ⟨vmi16, hmi16⟩ := obs_jal_minstret hobs16
   have hout16 : σ16.sailOutput = c.σ.sailOutput := by rw [hobs16.out, sailOutput_sigmaPost_jal]; exact hout15
-  have hVint16 : Value_intLoaded σ16.mem := by rw [hmem16_3]; exact hmem10' ▸ hVint10
-  have hcode16 : Eval_exprLoaded σ16.mem := by rw [hmem16_3]; exact hmem10' ▸ hcode10
+  have hVint16 : Value_intLoaded σ16.mem := by rw [hmem16_3, ← hmem15_3]; exact hVint15
+  have hcode16 : Eval_exprLoaded σ16.mem := by rw [hmem16_3, ← hmem15_3]; exact hcode15
   ------------------------------------------------------------------------
   -- the value_int callee (via value_int_spec), buf = sret, pay = 0 - payV
   ------------------------------------------------------------------------
   have hIntRegion : IntRegion sret := ⟨hsretAl, hsretLo, hsretHi, hsretWin, hsretVi⟩
   have hcallpre : int_pre (fun R => σ16.regs.get? R) sret ((0#64) - payV) (0x800039dc#64) σ16.mem c.σ.sailOutput
-      ⟨σ16, i16, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1⟩ := by
+      ⟨σ16, i16, cS.steps+1⟩ := by
     refine ⟨hG16, hVint16, rfl, hpc16, hx10_16, hx11_16, hlink16, ⟨vmi16, hmi16⟩, hi16, hIntRegion,
       (by decide), hout16, fun R _ => rfl⟩
   obtain ⟨cvi, hsvi, hGvi, hpcvi, hx10vi, hravi, ⟨vmivi, hmivi⟩, htickvi, hvalvi, houtvi,
       hmemframevi, hframevi⟩ :=
     value_int_spec (fun R => σ16.regs.get? R) sret ((0#64) - payV) (0x800039dc#64) N φc' σ16.mem c.σ.sailOutput
-      ⟨σ16, i16, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1⟩ hcallpre
+      ⟨σ16, i16, cS.steps+1⟩ hcallpre
   -- the produced value is `.int (wrap64 (-n))`
   have hpayV_toInt : payV.toInt = n := by
     have hpe : payV = BitVec.ofNat 64 p := by rw [← hpayVnat]; exact (ofNat_toNat_self64 payV).symm
@@ -535,31 +517,27 @@ theorem blockC_neg
       rcases hXR : (X == R) with _ | _
       · rfl
       · rw [beq_iff_eq] at hXR; rw [hXR] at hX; rw [hX] at hab; exact absurd hab (by decide)
-    -- σ0→σ4 collapsed: the prologue block frame in one application (was f1..f4).
-    -- Both frame side-conditions via the Stage-C `BlockTactics2` helpers.
-    have f_pro : σ4.regs.get? R = c.σ.regs.get? R :=
-      hframePro R (abiNoise_noiseRegs hR') (by block_frame_wr [14, 15, 13])
-    -- σ4→σ10 collapsed: the block frame in one application (was f5..f10)
-    have f5 : σ10.regs.get? R = σ4.regs.get? R :=
-      hframeBlk R (abiNoise_noiseRegs hR') (by block_frame_wr [11, 14, 10])
-    -- σ10→σ15 collapsed: the tail block frame in one application (was f11..f15).
-    -- The callee-saved `x8` disjunct is closed by `he8` via `block_frame_wr`'s
-    -- `assumption` fallback.
-    have f_tail : σ15.regs.get? R = σ10.regs.get? R :=
-      hframeTail R (abiNoise_noiseRegs hR') (by block_frame_wr [12, 8, 11, 10])
+    -- σ0→σ15 collapsed: the WHOLE spine frame in ONE application (Stage A2).
+    -- The composed `neg_blocks_triple` frame relates σ15 to the σ0 entry map
+    -- `c.σ.regs.get?` under the union of the three blocks' wrRegs guards, each
+    -- discharged by `block_frame_wr` (the callee-saved `x8` disjunct in the tail
+    -- guard closed by `he8` via the `assumption` fallback).  Was f_pro/f5/f_tail.
+    have f_spine : σ15.regs.get? R = c.σ.regs.get? R :=
+      hframeSpine R (abiNoise_noiseRegs hR') (by block_frame_wr [14, 15, 13])
+        (by block_frame_wr [11, 14, 10]) (by block_frame_wr [12, 8, 11, 10])
     have f16 : σ16.regs.get? R = σ15.regs.get? R :=
       (hobs16.1 R hmc' hmt' hmip').trans (get?_sigmaPost_jal _ _ _ _ _ _ R hmi' hpc' (abi_ne' (X := Register.x1) (by decide)) hnpc' hmii')
     have fvi : cvi.σ.regs.get? R = σ16.regs.get? R :=
       hframevi R ⟨abi_ne' (by decide), abi_ne' (by decide), hpc', hnpc', hmi', hmii', hmc', hmt', hmip'⟩
     have f17 : σ17.regs.get? R = cvi.σ.regs.get? R :=
       (hobs17.1 R hmc' hmt' hmip').trans (get?_sigmaPost_jump_x0 _ _ _ _ R hmi' hpc' hnpc' hmii')
-    rw [f17, fvi, f16, f_tail, f5, f_pro]
+    rw [f17, fvi, f16, f_spine]
     exact (hframe R hR').trans (hbridge R hR' he8 he9 he18 he2)
   ------------------------------------------------------------------------
   -- assemble the epilogue-entry package `PreEpilogueV` at the extended maps
   ------------------------------------------------------------------------
   refine ⟨⟨σ17, i17, cvi.steps + 1⟩, ?_, σ17.mem, φf', φc', hpf', hpc', ?_⟩
-  · exact hstepPro.trans (hstepBlk.trans (hstepTail.trans ((Steps.single hstep16).trans (hsvi.trans ((Steps.single hstep17))))))
+  · exact hstepSpine.trans ((Steps.single hstep16).trans (hsvi.trans ((Steps.single hstep17))))
   · refine ⟨hG17, hi17, hpc_fin, hs1_fin, hsp_fin, ⟨vmifin, hmifin⟩,
       hout_fin.trans hout0eq, houtStr, rfl, (by rw [hmem17e]; exact hcode_vi),
       (by rw [hmem17e]; exact hvalfinal), hstore_fin, hframeG,
