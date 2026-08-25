@@ -1,6 +1,7 @@
 import Vsa.Sim.EvalNegSim
 import Vsa.Sim.NegTailSites
 import Vsa.Sim.NegBlockProto
+import Vsa.Sim.BlockTactics2
 import Vsa.Sim.BlockAdapter
 import Vsa.Sim.ValueSpec
 import Vsa.Sim.DivSites2
@@ -534,40 +535,18 @@ theorem blockC_neg
       rcases hXR : (X == R) with _ | _
       · rfl
       · rw [beq_iff_eq] at hXR; rw [hXR] at hX; rw [hX] at hab; exact absurd hab (by decide)
-    -- σ0→σ4 collapsed: the prologue block frame in one application (was f1..f4)
+    -- σ0→σ4 collapsed: the prologue block frame in one application (was f1..f4).
+    -- Both frame side-conditions via the Stage-C `BlockTactics2` helpers.
     have f_pro : σ4.regs.get? R = c.σ.regs.get? R :=
-      hframePro R
-        (by intro rr hrr
-            simp only [noiseRegs, List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hrr
-            rcases hrr with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> assumption)
-        (by intro n hn
-            have hn' : n ∈ ([14, 15, 13] : List Nat) := hn
-            simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hn'
-            rcases hn' with rfl | rfl | rfl <;> exact abi_ne' (by decide))
+      hframePro R (abiNoise_noiseRegs hR') (by block_frame_wr [14, 15, 13])
     -- σ4→σ10 collapsed: the block frame in one application (was f5..f10)
     have f5 : σ10.regs.get? R = σ4.regs.get? R :=
-      hframeBlk R
-        (by intro rr hrr
-            simp only [noiseRegs, List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hrr
-            rcases hrr with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> assumption)
-        (by intro n hn
-            have hn' : n ∈ ([11, 14, 10] : List Nat) := hn
-            simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hn'
-            rcases hn' with rfl | rfl | rfl <;> exact abi_ne' (by decide))
-    -- σ10→σ15 collapsed: the tail block frame in one application (was f11..f15)
+      hframeBlk R (abiNoise_noiseRegs hR') (by block_frame_wr [11, 14, 10])
+    -- σ10→σ15 collapsed: the tail block frame in one application (was f11..f15).
+    -- The callee-saved `x8` disjunct is closed by `he8` via `block_frame_wr`'s
+    -- `assumption` fallback.
     have f_tail : σ15.regs.get? R = σ10.regs.get? R :=
-      hframeTail R
-        (by intro rr hrr
-            simp only [noiseRegs, List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hrr
-            rcases hrr with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> assumption)
-        (by intro n hn
-            have hn' : n ∈ ([12, 8, 11, 10] : List Nat) := hn
-            simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hn'
-            rcases hn' with rfl | rfl | rfl | rfl
-            · exact abi_ne' (by decide)
-            · exact he8
-            · exact abi_ne' (by decide)
-            · exact abi_ne' (by decide))
+      hframeTail R (abiNoise_noiseRegs hR') (by block_frame_wr [12, 8, 11, 10])
     have f16 : σ16.regs.get? R = σ15.regs.get? R :=
       (hobs16.1 R hmc' hmt' hmip').trans (get?_sigmaPost_jal _ _ _ _ _ _ R hmi' hpc' (abi_ne' (X := Register.x1) (by decide)) hnpc' hmii')
     have fvi : cvi.σ.regs.get? R = σ16.regs.get? R :=
