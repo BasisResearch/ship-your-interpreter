@@ -210,6 +210,7 @@ import Vsa.Sim.SegState
 import Vsa.Sim.BlockPilot
 import Vsa.Sim.BlockMem
 import Vsa.Sim.BlockDecode
+import Vsa.Sim.BlockGen
 import Vsa.Sim.BlockMemDemo
 import Vsa.Sim.BlockAdapter
 import Vsa.Sim.SnprintfSpec19
