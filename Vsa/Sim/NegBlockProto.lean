@@ -262,7 +262,10 @@ theorem neg_loadstore_full (σ : MState) (i u : Nat)
       σ'.regs.get? Register.x8 = some v8 ∧
       (∃ w, σ'.regs.get? Register.minstret = some w) ∧
       σ'.mem = writeLog σ.mem (wlogM negLoadStoreBlk.body [(2, v2), (13, v13), (9, v9)]
-        [[pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7], [q0,q1,q2,q3,q4,q5,q6,q7], [kb0,kb1,kb2,kb3]]) := by
+        [[pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7], [q0,q1,q2,q3,q4,q5,q6,q7], [kb0,kb1,kb2,kb3]]) ∧
+      (∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
+        (∀ n ∈ wrRegsM negLoadStoreBlk.body, (gprReg n == R) = false) →
+        σ'.regs.get? R = σ.regs.get? R) := by
   obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hGH, hframe⟩ :=
     bblock_sound_bt negLoadStoreBlk σ i u (0x800039ac#64) vm
       [(2, v2), (13, v13), (9, v9)]
@@ -284,7 +287,7 @@ theorem neg_loadstore_full (σ : MState) (i u : Nat)
         show endPCM (0x800039ac#64) negLoadStoreBlk.body = (0x800039c4#64 : BitVec 64)
         decide] at hpc'
   refine ⟨σ', i', hsteps, hi', hG', hout', hpc',
-    hGH.2.2.1, hGH.2.1, hGH.1, hGH.2.2.2.2.1, hGH.2.2.2.2.2.1, hGH.2.2.2.1, ?_, hmi', hmem'⟩
+    hGH.2.2.1, hGH.2.1, hGH.1, hGH.2.2.2.2.1, hGH.2.2.2.2.2.1, hGH.2.2.2.1, ?_, hmi', hmem', hframe⟩
   -- x8 survives via the block frame (x8 ∉ noiseRegs, x8 ∉ gprReg '' wrRegsM)
   rw [hframe Register.x8 (by decide) (by decide)]; exact hx8
 
