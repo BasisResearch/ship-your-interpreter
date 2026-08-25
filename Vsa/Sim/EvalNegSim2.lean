@@ -292,13 +292,13 @@ theorem blockC_neg
     neg_prologue_block c.σ c.tick c.steps vmi aExpr (sp-1088#64) sret (0x800035ec#64)
       ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7
       hG hpc hmi hx8 hsp hs1 hra hcode hopVal
-      (by rw [hop8]; omega) (by rw [hop8]; omega)
-      (by rw [hop8, htoh]; right; omega) (by rw [hop8]; omega)
-      ⟨(by rw [hop8]; exact hoc0), (by rw [hop8]; exact hoc1),
+      ⟨⟨(by rw [hop8]; omega), (by rw [hop8]; omega),
+        (by rw [hop8, htoh]; right; omega), (by rw [hop8]; omega)⟩,
+       (by rw [hop8]; exact hoc0), (by rw [hop8]; exact hoc1),
        (by rw [hop8]; exact hoc2), (by rw [hop8]; exact hoc3)⟩
-      (by rw [haddr144]; omega) (by rw [haddr144]; omega)
-      (by rw [haddr144, htoh]; right; omega) (by rw [haddr144]; omega)
-      ⟨(by rw [haddr144]; exact hkb0), (by rw [haddr144]; exact hkb1),
+      ⟨⟨(by rw [haddr144]; omega), (by rw [haddr144]; omega),
+        (by rw [haddr144, htoh]; right; omega), (by rw [haddr144]; omega)⟩,
+       (by rw [haddr144]; exact hkb0), (by rw [haddr144]; exact hkb1),
        (by rw [haddr144]; exact hkb2), (by rw [haddr144]; exact hkb3),
        (by rw [haddr144]; exact hd4), (by rw [haddr144]; exact hd5),
        (by rw [haddr144]; exact hd6), (by rw [haddr144]; exact hd7)⟩
@@ -326,25 +326,25 @@ theorem blockC_neg
     neg_loadstore_full σ4 i4 (c.steps+1+1+1+1) vmi4 (sp-1088#64) K13 sret aExpr
       pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3
       hG4 hpc4 hmi4 hsp_4 hx13_4 hs1_4 hx8_4 hcode4
-      (by rw [haddr152]; omega) (by rw [haddr152]; omega)
-      (by rw [haddr152, htoh]; right; omega) (by rw [haddr152]; omega)
-      ⟨(by rw [haddr152, hmem4e]; exact hpb0), (by rw [haddr152, hmem4e]; exact hpb1),
+      ⟨⟨(by rw [haddr152]; omega), (by rw [haddr152]; omega),
+        (by rw [haddr152, htoh]; right; omega), (by rw [haddr152]; omega)⟩,
+       (by rw [haddr152, hmem4e]; exact hpb0), (by rw [haddr152, hmem4e]; exact hpb1),
        (by rw [haddr152, hmem4e]; exact hpb2), (by rw [haddr152, hmem4e]; exact hpb3),
        (by rw [haddr152, hmem4e]; exact hpb4), (by rw [haddr152, hmem4e]; exact hpb5),
        (by rw [haddr152, hmem4e]; exact hpb6), (by rw [haddr152, hmem4e]; exact hpb7)⟩
-      (by rw [haddr160]; omega) (by rw [haddr160]; omega)
-      (by rw [haddr160, htoh]; right; omega) (by rw [haddr160]; omega)
-      ⟨(by rw [haddr160, hmem4e]; exact hq0), (by rw [haddr160, hmem4e]; exact hq1),
+      ⟨⟨(by rw [haddr160]; omega), (by rw [haddr160]; omega),
+        (by rw [haddr160, htoh]; right; omega), (by rw [haddr160]; omega)⟩,
+       (by rw [haddr160, hmem4e]; exact hq0), (by rw [haddr160, hmem4e]; exact hq1),
        (by rw [haddr160, hmem4e]; exact hq2), (by rw [haddr160, hmem4e]; exact hq3),
        (by rw [haddr160, hmem4e]; exact hq4), (by rw [haddr160, hmem4e]; exact hq5),
        (by rw [haddr160, hmem4e]; exact hq6), (by rw [haddr160, hmem4e]; exact hq7)⟩
-      (by rw [haddr144]; omega) (by rw [haddr144]; omega)
-      (by rw [haddr144, htoh]; right; omega) (by rw [haddr144]; omega)
-      ⟨(by rw [haddr144, hmem4e]; exact hkb0), (by rw [haddr144, hmem4e]; exact hkb1),
+      ⟨⟨(by rw [haddr144]; omega), (by rw [haddr144]; omega),
+        (by rw [haddr144, htoh]; right; omega), (by rw [haddr144]; omega)⟩,
+       (by rw [haddr144, hmem4e]; exact hkb0), (by rw [haddr144, hmem4e]; exact hkb1),
        (by rw [haddr144, hmem4e]; exact hkb2), (by rw [haddr144, hmem4e]; exact hkb3)⟩
-      (by rw [haddr240]; omega) (by rw [haddr240]; omega) (by rw [haddr240, htoh]; omega) (by rw [haddr240]; omega)
-      (by rw [haddr248]; omega) (by rw [haddr248]; omega) (by rw [haddr248, htoh]; omega) (by rw [haddr248]; omega)
-      (by rw [haddr256]; omega) (by rw [haddr256]; omega) (by rw [haddr256, htoh]; omega) (by rw [haddr256]; omega)
+      ⟨(by rw [haddr240]; omega), (by rw [haddr240]; omega), (by rw [haddr240, htoh]; omega), (by rw [haddr240]; omega)⟩
+      ⟨(by rw [haddr248]; omega), (by rw [haddr248]; omega), (by rw [haddr248, htoh]; omega), (by rw [haddr248]; omega)⟩
+      ⟨(by rw [haddr256]; omega), (by rw [haddr256]; omega), (by rw [haddr256, htoh]; omega), (by rw [haddr256]; omega)⟩
       hi4
   -- bridge block outputs → the domain names the tail consumes
   have hout10 : σ10.sailOutput = c.σ.sailOutput := hout10'.trans hout4
