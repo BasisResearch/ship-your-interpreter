@@ -1,5 +1,10 @@
 # M4 design — the Layer-4 simulation induction (`term_sim`)
 
+> Block-reflection tooling for collapsing the per-arm `StepObs` batteries — the
+> reusable abstraction stack, the migration cookbook, and the next-abstraction
+> roadmap (program logic / reflected disassembly / discharge tactics) — lives in
+> [block-reflection-plan.md](block-reflection-plan.md).
+
 Written at the close of the M3 function-spec campaign (2026-08-23), while
 the full pattern context is at hand. This is the kickoff brief for the M4
 work: PLAN-InterpSim.md Layer 4, the mutual induction over the eight
