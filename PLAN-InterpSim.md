@@ -259,6 +259,15 @@ allocator with your sign-off).
 
 ## Appendix (2026-08-25): tooling and abstractions built during M3 — use for M4–M6
 
+> Block-reflection layer (collapses per-arm `StepObs` batteries onto one kernel
+> `decide`): reuse stack + cookbook in `experiments/block-reflection-plan.md`;
+> the staged plan to build the next abstractions (Triple-based block program
+> logic, reflected disassembly, discharge tactics, meta-generation) and refactor
+> onto them is `experiments/block-abstractions-impl-plan.md`. **When a stage of
+> that plan lands, update this Appendix's pipeline + the Layer 1 rules + the
+> Tooling list in the same commit** (the plan's "Keep the master PLAN updated"
+> section is the contract).
+
 Everything below is landed, CI-gated (`scripts/check_all.sh`: build + no-sorry/axiom
 grep + `#print axioms` ⊆ {propext, Classical.choice, Quot.sound}), and validated by
 re-deriving already-proven artifacts. Ledgers: `experiments/pctrace.md` (per-session),

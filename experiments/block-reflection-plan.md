@@ -181,3 +181,8 @@ The through-line: reflection already made each block cheap; the next gains come
 from making the *composition* cheap. A program logic is how you buy that without
 paying elaboration time — the plumbing moves from per-proof tactic work into
 once-proved rules.
+
+The staged plan to build A/B/C/D and refactor the existing proofs onto them —
+including the finding that the program logic (A) already exists as `Vsa/Triple.lean`
+(`seq`/`conseq` are free; only `frame` is new) — is
+[block-abstractions-impl-plan.md](block-abstractions-impl-plan.md).
