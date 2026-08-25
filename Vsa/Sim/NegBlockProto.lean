@@ -123,7 +123,8 @@ theorem neg_loadstore_full (σ : MState) (i u : Nat)
         show endPCM (0x800039ac#64) negLoadStoreBlk.body = (0x800039c4#64 : BitVec 64)
         decide] at hpc'
   refine ⟨σ', i', hsteps, hi', hG', hout', hpc',
-    hGH.2.2.1, hGH.2.1, hGH.1, hGH.2.2.2.2.1, hGH.2.2.2.2.2.1, hGH.2.2.2.1, ?_, hmi', hmem', hframe⟩
+    block_reg hGH 11, block_reg hGH 14, block_reg hGH 10, block_reg hGH 13,
+    block_reg hGH 9, block_reg hGH 2, ?_, hmi', hmem', hframe⟩
   -- x8 survives via the block frame (x8 ∉ noiseRegs, x8 ∉ gprReg '' wrRegsM)
   rw [hframe Register.x8 (by decide) (by decide)]; exact hx8
 
@@ -183,7 +184,8 @@ theorem neg_prologue_block (σ : MState) (i u : Nat)
       (show BBlockOK (0x800035ec#64) [8, 2, 9, 1] negPrologueBlk by decide)
       hi
   exact ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc',
-    hGH.2.2.1, hGH.2.1, hGH.1, hGH.2.2.2.2.2.1, hGH.2.2.2.2.1, hGH.2.2.2.1, hGH.2.2.2.2.2.2.1,
+    block_reg hGH 14, block_reg hGH 15, block_reg hGH 13, block_reg hGH 9,
+    block_reg hGH 2, block_reg hGH 8, block_reg hGH 1,
     hmi', hframe⟩
 
 def negTailBlkA : BBlock :=
@@ -243,8 +245,8 @@ theorem neg_tail_block (σ : MState) (i u : Nat)
       hi
   rw [show memChain negTailChain σ.mem [(8, v8), (10, 2#64), (9, v9), (11, p11), (2, v2)]
         [[lb0,lb1,lb2,lb3]] = σ.mem from by rfl] at hmem'
-  refine ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', ?_, hGH.2.1, hGH.2.2.2.2.1,
-    hGH.2.2.2.2.2.1, hmi', hframe⟩
+  refine ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', ?_, block_reg hGH 11,
+    block_reg hGH 9, block_reg hGH 2, hmi', hframe⟩
   have h := hGH.1
   change σ'.regs.get? Register.x10 = some (v9 + sign_extend (m := 64) (0x000#12)) at h
   rwa [show (v9 + sign_extend (m := 64) (0x000#12)) = v9 from by

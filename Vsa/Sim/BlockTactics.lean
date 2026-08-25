@@ -89,4 +89,17 @@ elab "block_facts " h:term " with " pfx:str : tactic => do
   let leftovers ← bfSolve h pfx.getString (← getMainGoal)
   setGoals leftovers
 
+/-! ## Stage C2 — register projection (`block_reg`)
+
+`block_reg h n` projects the `n`-th GPR out of a block-output
+`h : GHolds σ' (runGM …)` (or any `GHolds σ' L` whose association list is
+concrete). It expands to `gholds_lookup (n := n) _ h rfl`, where the trailing
+`rfl` computes `lookupG n (runGM …) = some v` and fixes `v` to the block's
+computed result; the result type `gprGet σ' n = some v` is *definitionally*
+`σ'.regs.get? (gprReg n) = some v`, i.e. `σ'.regs.get? Register.x⟨n⟩ = some v`, so
+it drops straight into the positional-projection slots (`hGH.2.2.1`, …) that the
+block lemmas used to hand-thread. The index `n` is given explicitly — it cannot
+be recovered by unifying against the `gprGet`-defeq goal. -/
+macro "block_reg" h:term:max n:term:max : term => `(gholds_lookup (n := $n) _ $h rfl)
+
 end Vsa.Sim
