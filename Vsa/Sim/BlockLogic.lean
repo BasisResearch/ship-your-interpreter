@@ -1,5 +1,6 @@
 import Vsa.Sim.NegBlockProto
 import Vsa.Sim.EvalNegSim
+import Vsa.Sim.BlockAdapter
 import Vsa.Triple
 
 /-!
@@ -329,3 +330,152 @@ theorem neg_prologue_loadstore_triple (vm v8 v2 v9 v1 : BitVec 64)
   · rw [hm0]; exact hLdP
   · rw [hm0]; exact hLdD
   · rw [hm0]; exact hLdK
+
+/-! ## Full 3-block spine — `neg_blocks_triple` (σ0→σ15, PC 0x800035ec→0x800039d8)
+
+The core **A1** result: the whole straight-line neg spine `0x800035ec → 0x800039d8`
+as ONE composed `Triple`, chaining `negPrologue_triple`, `negLoadStore_triple`,
+`negTail_triple` via `Triple.seq`+`Triple.conseq` at the two seams.
+
+The prologue→loadstore seam is the `neg_prologue_loadstore_triple` demo above.
+The new **loadstore→tail seam** absorbs:
+* the kind-int bridge `x10 = bytesVal .lw [kb…] = 2#64` (side-condition `hkind2`);
+* the payload bridge `x11 = bytesVal .ld [pb…]` → the tail ghost `p11`;
+* the carried callee-saved `x9`/`x2`/`x8`;
+* **code-survival across the three error stores**: the loadstore Post fixes
+  `mem = writeLog m0 (wlogM …)`, three 8-byte stores at `v2+0xf0/0xf8/0x100`; the
+  tail wants `Eval_exprLoaded mem` and the e→line `LdOK4 mem (v8+4) [lb…]`, both
+  recovered from the `m0`-versions via `writeLog_getElem_disjoint` on the three
+  store windows (carried as the disjointness side-conditions below).
+
+The tail `minstret` witness is obtained from the loadstore Post's `∃ w`. -/
+
+/-- The composed σ0-entry precondition: the prologue+loadstore precondition
+(`negProLdStPre`), plus the **tail seam side-conditions about the entry memory
+`m0`** and the store windows — the kind-int fact, the e→line `LdOK4` on `m0`, and
+the disjointness of the three error-store windows (`v2+0xf0/0xf8/0x100`, width 8)
+from the `eval_expr` code region `[0x80003164,0x80003fe0)` and from the e→line
+window `[v8+4,v8+8)`. All name only constants (`m0`, the register ghosts), so they
+ride across the prologue+loadstore run soundly via `conj_const`. -/
+def negBlocksPre (vm v8 v2 v9 v1 : BitVec 64)
+    (ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 : BitVec 8)
+    (pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 : BitVec 8)
+    (lb0 lb1 lb2 lb3 : BitVec 8)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
+  negProLdStPre vm v8 v2 v9 v1 ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7
+    pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 m0 c ∧
+  bytesVal .lw [kb0,kb1,kb2,kb3] = (2#64 : BitVec 64) ∧
+  LdOK4 m0 (v8 + sign_extend (m := 64) (0x004#12)) [lb0,lb1,lb2,lb3] ∧
+  -- the e→line window `[v8+4, v8+8)` is disjoint from every error-store window
+  (∀ k, (v8 + sign_extend (m := 64) (0x004#12)).toNat ≤ k →
+        k < (v8 + sign_extend (m := 64) (0x004#12)).toNat + 4 →
+    (k < (v2 + sign_extend (m := 64) (0x0f0#12)).toNat ∨ (v2 + sign_extend (m := 64) (0x0f0#12)).toNat + 8 ≤ k) ∧
+    (k < (v2 + sign_extend (m := 64) (0x0f8#12)).toNat ∨ (v2 + sign_extend (m := 64) (0x0f8#12)).toNat + 8 ≤ k) ∧
+    (k < (v2 + sign_extend (m := 64) (0x100#12)).toNat ∨ (v2 + sign_extend (m := 64) (0x100#12)).toNat + 8 ≤ k)) ∧
+  -- the `eval_expr` code region `[0x80003164,0x80003fe0)` is disjoint likewise
+  (∀ k, (0x80003164 ≤ k ∧ k < 0x80003fe0) →
+    (k < (v2 + sign_extend (m := 64) (0x0f0#12)).toNat ∨ (v2 + sign_extend (m := 64) (0x0f0#12)).toNat + 8 ≤ k) ∧
+    (k < (v2 + sign_extend (m := 64) (0x0f8#12)).toNat ∨ (v2 + sign_extend (m := 64) (0x0f8#12)).toNat + 8 ≤ k) ∧
+    (k < (v2 + sign_extend (m := 64) (0x100#12)).toNat ∨ (v2 + sign_extend (m := 64) (0x100#12)).toNat + 8 ≤ k))
+
+/-- The `wlogM` of the loadstore block reduces to the three concrete 8-byte
+error-store entries at `v2+0xf0/0xf8/0x100`. Pure defeq (`rfl`); the addresses
+stay symbolic but the list structure and widths compute. -/
+theorem wlogM_negLoadStore (v2 v13 v9 : BitVec 64)
+    (pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3 : BitVec 8) :
+    wlogM negLoadStoreBlk.body [(2, v2), (13, v13), (9, v9)]
+      [[pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7], [q0,q1,q2,q3,q4,q5,q6,q7], [kb0,kb1,kb2,kb3]]
+    = [((v2 + sign_extend (m := 64) (0x0f0#12)).toNat, 8, v13),
+       ((v2 + sign_extend (m := 64) (0x0f8#12)).toNat, 8,
+         bytesVal .ld [pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7]),
+       ((v2 + sign_extend (m := 64) (0x100#12)).toNat, 8,
+         bytesVal .ld [q0,q1,q2,q3,q4,q5,q6,q7])] := by
+  rfl
+
+/-- **The full 3-block neg spine as ONE composed `Triple`.** From the σ0 entry
+(`negBlocksPre`) the machine runs `0x800035ec → 0x800039d8` (σ0→σ15), landing the
+tail block's post — `x10 = v9`, `x11 = -payload`, the callee-saved frame, and the
+final memory (in `writeLog` form). Composed as `negPrologue_triple ⋙
+negLoadStore_triple ⋙ negTail_triple` via `Triple.seq`/`conseq`. -/
+theorem neg_blocks_triple (vm v8 v2 v9 v1 : BitVec 64)
+    (ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 : BitVec 8)
+    (pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 : BitVec 8)
+    (lb0 lb1 lb2 lb3 : BitVec 8)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) :
+    Triple
+      (negBlocksPre vm v8 v2 v9 v1 ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7
+        pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 lb0 lb1 lb2 lb3 m0)
+      (negTailPost vm v8 v9 v2 (bytesVal .ld [pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7])
+        lb0 lb1 lb2 lb3
+        (writeLog m0 (wlogM negLoadStoreBlk.body
+          [(2, v2), (13, bytesVal .ld [kb0,kb1,kb2,kb3,d4,d5,d6,d7]), (9, v9)]
+          [[pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7], [q0,q1,q2,q3,q4,q5,q6,q7], [kb0,kb1,kb2,kb3]]))) := by
+  intro c hpre
+  obtain ⟨hproldst, hkind2, hLdL0, hdisjLine, hdisjCode⟩ := hpre
+  -- run the first two blocks (σ0→σ10) via the demo triple
+  obtain ⟨c10, hs10, hpost10⟩ :=
+    neg_prologue_loadstore_triple vm v8 v2 v9 v1 ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7
+      pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 q0 q1 q2 q3 q4 q5 q6 q7 m0 c hproldst
+  -- abbreviations (plain `let`s; no Mathlib `set`)
+  let K13 : BitVec 64 := bytesVal .ld [kb0,kb1,kb2,kb3,d4,d5,d6,d7]
+  let payV : BitVec 64 := bytesVal .ld [pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7]
+  let m3 : Std.ExtHashMap Nat (BitVec 8) :=
+    writeLog m0 (wlogM negLoadStoreBlk.body [(2, v2), (13, K13), (9, v9)]
+      [[pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7], [q0,q1,q2,q3,q4,q5,q6,q7], [kb0,kb1,kb2,kb3]])
+  -- project the loadstore Post (never split `GoodState`)
+  have hG10 := hpost10.1
+  have hpc10 := hpost10.2.2.1
+  have hx11_10 := hpost10.2.2.2.1
+  have hx10_10 := hpost10.2.2.2.2.2.1
+  have hx9_10 := hpost10.2.2.2.2.2.2.2.1
+  have hx2_10 := hpost10.2.2.2.2.2.2.2.2.1
+  have hx8_10 := hpost10.2.2.2.2.2.2.2.2.2.1
+  have hmi10 := hpost10.2.2.2.2.2.2.2.2.2.2.1
+  have htick10 := hpost10.2.2.2.2.2.2.2.2.2.2.2.1
+  have hmem10 := hpost10.2.2.2.2.2.2.2.2.2.2.2.2.1
+  -- the writeLog is three 8-byte error stores at v2+0xf0/0xf8/0x100
+  have hlog := wlogM_negLoadStore v2 K13 v9 pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7
+    q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3
+  have hwidths : ∀ e ∈ wlogM negLoadStoreBlk.body [(2, v2), (13, K13), (9, v9)]
+      [[pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7], [q0,q1,q2,q3,q4,q5,q6,q7], [kb0,kb1,kb2,kb3]],
+      e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8 := by
+    rw [hlog]; intro e he
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+    rcases he with h | h | h <;> (rw [h]; right; right; rfl)
+  -- Eval_exprLoaded survives the three stores (code region disjoint from windows)
+  have hcode10 : Eval_exprLoaded c10.σ.mem := by
+    rw [hmem10]
+    refine loaded_eval_expr_agreeP m0 m3 (fun a ha => ?_) hproldst.2.1
+    exact (writeLog_getElem_disjoint a _ m0 hwidths (by
+      rw [hlog]; intro e he
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+      obtain ⟨h0, h1, h2⟩ := hdisjCode a ha
+      rcases he with h | h | h <;> (rw [h]; first | exact h0 | exact h1 | exact h2))).symm
+  -- the e→line LdOK4 survives the three stores
+  have hLdL : LdOK4 c10.σ.mem (v8 + sign_extend (m := 64) (0x004#12)) [lb0,lb1,lb2,lb3] := by
+    obtain ⟨hb, hp0, hp1, hp2, hp3⟩ := hLdL0
+    have hsurv : ∀ j, (v8 + sign_extend (m := 64) (0x004#12)).toNat ≤ j →
+        j < (v8 + sign_extend (m := 64) (0x004#12)).toNat + 4 → c10.σ.mem[j]? = m0[j]? := by
+      intro j hj1 hj2
+      rw [hmem10]
+      exact writeLog_getElem_disjoint j _ m0 hwidths (by
+        rw [hlog]; intro e he
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+        obtain ⟨h0, h1, h2⟩ := hdisjLine j hj1 hj2
+        rcases he with h | h | h <;> (rw [h]; first | exact h0 | exact h1 | exact h2))
+    refine ⟨hb, ?_, ?_, ?_, ?_⟩
+    · rw [hsurv _ (by omega) (by omega)]; exact hp0
+    · rw [hsurv _ (by omega) (by omega)]; exact hp1
+    · rw [hsurv _ (by omega) (by omega)]; exact hp2
+    · rw [hsurv _ (by omega) (by omega)]; exact hp3
+  -- the tail minstret witness
+  obtain ⟨wmi, hwmi⟩ := hmi10
+  -- x10 = 2#64 via the kind-int bridge
+  have hx10_2 : c10.σ.regs.get? Register.x10 = some (2#64) := by
+    rw [hkind2] at hx10_10; exact hx10_10
+  -- apply the tail triple at the σ10 config with the survived seam facts
+  obtain ⟨c15, hs15, hpost15⟩ :=
+    negTail_triple wmi v8 v9 v2 payV lb0 lb1 lb2 lb3 m3 c10
+      ⟨⟨hG10, hpc10, hwmi, hx8_10, hx10_2, hx9_10, hx11_10, hx2_10, hcode10, hLdL, htick10⟩,
+        hmem10⟩
+  exact ⟨c15, hs10.trans hs15, hpost15⟩

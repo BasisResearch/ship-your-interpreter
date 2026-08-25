@@ -155,5 +155,5 @@ agents will re-derive the old, longer path.
 
 - [ ] C1 frame discharge · [ ] C2 block_reg · [ ] C3 ld_ok/st_ok · [ ] C refactor
 - [x] B1 decodeM · [x] B2 soundness (light: per-word `rfl` defeq examples) · [x] B3 mkLine · [x] B refactor (neg blocks on `mkLine`; prototype lemmas `neg_loadstore_block`/`_tac` retired)
-- [ ] A0 wrap · [ ] A1 compose · [ ] A2 frame rule · [ ] A refactor
+- [x] A0 wrap (`negPrologue_triple`/`negLoadStore_triple`/`negTail_triple` in `Vsa/Sim/BlockLogic.lean`) · [x] A1 compose (`neg_blocks_triple` = full σ0→σ15 3-block spine as ONE `Triple.seq`/`conseq` chain; two seams — prologue→loadstore + the new loadstore→tail, absorbing the kind-int/payload bridges and `Eval_exprLoaded`/`LdOK4` survival across the three error stores via `writeLog_getElem_disjoint`) · [ ] A2 frame rule · [ ] A refactor
 - [ ] D1 #gen_block · [ ] D2 regenerate

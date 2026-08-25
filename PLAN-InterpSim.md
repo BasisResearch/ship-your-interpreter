@@ -303,6 +303,18 @@ the `seval` role is filled kernel-cheaply by the reflection block lemmas.
    - Loaded preservation: `CodeRangeInsert` recipe; statics: `ImageStaticsLoaded`
      + `ImageDischarge` (ALL static-data hypotheses discharge from one predicate —
      use it in every new capstone instead of fresh image hypotheses).
+6. Block spine as a composed `Triple` (Layer 1, Stage A): once each straight-line
+   block is a `<blk>_triple : Triple <blkPre> <blkPost>` (tick`< 2` and the
+   register frame ride *inside* the assertions; see `Vsa/Sim/BlockLogic.lean`
+   `negPrologue_triple`/`negLoadStore_triple`/`negTail_triple`), the whole spine
+   composes as ONE `Triple.seq`/`Triple.conseq` chain — the exemplar is
+   `neg_blocks_triple` (σ0→σ15, 3 blocks, 2 seams). Each seam `conseq` marshals
+   the register bridges (`bytesVal`↔ghost, kind-int, payload) and threads memory
+   survival (`Eval_exprLoaded`/`LdOK`) across the intervening stores via
+   `writeLog_getElem_disjoint` (`BlockAdapter`); block-local `m0`-side-conditions
+   ride the seams with `Triple.conj_const`. The call seam is `value_int_spec`
+   (already a `Triple`), composed by the same `seq`. Prefer this over hand-threading
+   per-site `StepObs`+frame bridges for any new multi-block segment.
 
 ### Iteration-latency rules (measured: 2–4 min → 1–6 s per check)
 One segment theorem per module (≤600 lines); `lake env lean` per file while
