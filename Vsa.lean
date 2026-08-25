@@ -116,6 +116,7 @@ import Vsa.Sim.EvalVarSim
 import Vsa.Sim.InductionScaffold
 import Vsa.Sim.EvalRecCommon
 import Vsa.Sim.EvalNegSim
+import Vsa.Sim.NegTailSites
 import Vsa.Sim.ReprSurvival
 import Vsa.Sim.ReprCopy
 import Vsa.Sim.StrcpySpecW
