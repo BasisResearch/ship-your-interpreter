@@ -291,4 +291,73 @@ theorem neg_loadstore_full (σ : MState) (i u : Nat)
   -- x8 survives via the block frame (x8 ∉ noiseRegs, x8 ∉ gprReg '' wrRegsM)
   rw [hframe Register.x8 (by decide) (by decide)]; exact hx8
 
+def negPrologueBlk : BBlock :=
+  { body :=
+      [⟨0x800035ec#64, 0x00842703#32, 0x03#8, 0x27#8, 0x84#8, 0x00#8, .lw, 14, 8, 0, 0x008#12⟩,
+       ⟨0x800035f0#64, 0x00c00793#32, 0x93#8, 0x07#8, 0xc0#8, 0x00#8, .addi, 15, 0, 0, 0x00c#12⟩,
+       ⟨0x800035f4#64, 0x09013683#32, 0x83#8, 0x36#8, 0x01#8, 0x09#8, .ld, 13, 2, 0, 0x090#12⟩],
+    term := some ⟨0x800035f8#64, 0x3af70a63#32, 0x63#8, 0x0a#8, 0xf7#8, 0x3a#8,
+      .br bop.BEQ true, 14, 15, 0x03b4#13, 0#21, 0#12⟩ }
+
+/-- Full-output collapse of the neg PROLOGUE (σ0→σ4 of `blockC_neg`, the 4 steps
+`0x800035ec → 0x800039ac`: op-token load, `li a5,12`, kind-dword load, and the
+taken `beq a4,a5`). One `bblock_sound_bt`. -/
+theorem neg_prologue_block (σ : MState) (i u : Nat)
+    (vm v8 v2 v9 v1 : BitVec 64)
+    (ob0 ob1 ob2 ob3 kb0 kb1 kb2 kb3 d4 d5 d6 d7 : BitVec 8)
+    (hG : GoodState σ)
+    (hpc : σ.regs.get? Register.PC = some (0x800035ec#64))
+    (hmi : σ.regs.get? Register.minstret = some vm)
+    (hx8 : σ.regs.get? Register.x8 = some v8)
+    (hx2 : σ.regs.get? Register.x2 = some v2)
+    (hx9 : σ.regs.get? Register.x9 = some v9)
+    (hx1 : σ.regs.get? Register.x1 = some v1)
+    (hmem : Eval_exprLoaded σ.mem)
+    (hob12 : bytesVal .lw [ob0,ob1,ob2,ob3] = (12#64 : BitVec 64))
+    (holo : 0x80000000 ≤ (v8 + sign_extend (m := 64) (0x008#12)).toNat)
+    (hohi : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ 0x100000000)
+    (howin : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ tohostAddr
+      ∨ tohostAddr + 8 ≤ (v8 + sign_extend (m := 64) (0x008#12)).toNat)
+    (hoal : (v8 + sign_extend (m := 64) (0x008#12)).toNat % 4 = 0)
+    (ho : LPins4 σ.mem (v8 + sign_extend (m := 64) (0x008#12)).toNat [ob0,ob1,ob2,ob3])
+    (hklo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x090#12)).toNat)
+    (hkhi : (v2 + sign_extend (m := 64) (0x090#12)).toNat + 8 ≤ 0x100000000)
+    (hkwin : (v2 + sign_extend (m := 64) (0x090#12)).toNat + 8 ≤ tohostAddr
+      ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x090#12)).toNat)
+    (hkal : (v2 + sign_extend (m := 64) (0x090#12)).toNat % 8 = 0)
+    (hk : LPins8 σ.mem (v2 + sign_extend (m := 64) (0x090#12)).toNat [kb0,kb1,kb2,kb3,d4,d5,d6,d7])
+    (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Steps ⟨σ, i, u⟩ ⟨σ', i', u + 4⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ.mem ∧ σ'.sailOutput = σ.sailOutput ∧
+      σ'.regs.get? Register.PC = some (0x800039ac#64) ∧
+      σ'.regs.get? Register.x14 = some (bytesVal .lw [ob0,ob1,ob2,ob3]) ∧
+      σ'.regs.get? Register.x15 = some (12#64) ∧
+      σ'.regs.get? Register.x13 = some (bytesVal .ld [kb0,kb1,kb2,kb3,d4,d5,d6,d7]) ∧
+      σ'.regs.get? Register.x9 = some v9 ∧
+      σ'.regs.get? Register.x2 = some v2 ∧
+      σ'.regs.get? Register.x8 = some v8 ∧
+      σ'.regs.get? Register.x1 = some v1 ∧
+      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
+      (∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
+        (∀ n ∈ wrRegsM negPrologueBlk.body, (gprReg n == R) = false) →
+        σ'.regs.get? R = σ.regs.get? R) := by
+  obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hGH, hframe⟩ :=
+    bblock_sound_bt negPrologueBlk σ i u (0x800035ec#64) vm
+      [(8, v8), (2, v2), (9, v9), (1, v1)]
+      [[ob0,ob1,ob2,ob3], [kb0,kb1,kb2,kb3,d4,d5,d6,d7]]
+      hG hpc hmi ⟨hx8, hx2, hx9, hx1, trivial⟩ (show KeysOK [8, 2, 9, 1] by decide)
+      (by
+        block_facts hmem with "Vsa.Sim.Code.eval_expr_at_"
+        · exact ⟨⟨holo, hohi, howin, hoal⟩, ho⟩
+        · exact ⟨⟨hklo, hkhi, hkwin, hkal⟩, hk⟩
+        · show guardB bop.BEQ (bytesVal MKind.lw [ob0,ob1,ob2,ob3])
+              ((0#64:BitVec 64) + sign_extend (m := 64) (0x00c#12)) = true
+          rw [hob12]; decide)
+      (show BBlockOK (0x800035ec#64) [8, 2, 9, 1] negPrologueBlk by decide)
+      hi
+  exact ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc',
+    hGH.2.2.1, hGH.2.1, hGH.1, hGH.2.2.2.2.2.1, hGH.2.2.2.2.1, hGH.2.2.2.1, hGH.2.2.2.2.2.2.1,
+    hmi', hframe⟩
+
 end Vsa.Sim
