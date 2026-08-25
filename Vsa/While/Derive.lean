@@ -209,7 +209,9 @@ private partial def dEvalE (st d env e : Lean.Expr) :
       let (p1, st1, v) ← dEvalE st d env e1
       match (← whnf v).getAppFnArgs with
       | (``Vsa.While.Value.int, #[n]) =>
-        let nn ← norm (mkApp (mkConst ``Int.neg) n)
+        -- the rule wraps: the tracked value is `wrap64 (-n)`, normalized
+        let nn ← norm (mkApp (mkConst ``Vsa.While.wrap64)
+          (mkApp (mkConst ``Int.neg) n))
         let prf := mkAppN (mkConst ``Vsa.While.EvalE.neg)
           #[st, d, env, e1, st1, n, p1]
         return (prf, st1, mkApp (mkConst ``Vsa.While.Value.int) nn)

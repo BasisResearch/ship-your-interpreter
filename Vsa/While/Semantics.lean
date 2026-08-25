@@ -10,9 +10,16 @@ addressed by `Nat`, each with a parent pointer, plus a heap of closures.
 
 Abstractions relative to the binary (deliberate — the big-step semantics is
 the *ideal* language; the refinement theorem is what ties it back):
-* integers are unbounded `Int` (the binary wraps at 64 bits),
 * runtime errors have no derivations (the binary prints a message to the
   console and exits nonzero; derivations only exist for successful runs).
+
+Integers are `Int`, but every arithmetic *result* is wrapped to the 64-bit
+two's-complement range by `wrap64` (2026-08-25 user-approved amendment): the
+compiled interpreter computes on C `long long`, so `+`/`-`/`*`/unary `-`
+wrap natively on RV64 and `/`/`%` go through libgcc's soft division, which
+wraps too (`INT64_MIN / -1 = INT64_MIN`, remainder `0`). The M4 pilot found
+the unwrapped `EvalE.neg` unsatisfiable against the machine at `n = -2^63`
+(`experiments/pctrace.md`); `wrap64_neg_min` below is that exact instance.
 
 The call-depth cap, on the other hand, is mirrored *exactly*: a depth counter
 `d` (the number of active nested closure calls) is threaded through every
@@ -192,18 +199,72 @@ def Value.display (s : Store) : Value → String
 def printArgs (s : Store) (args : List Value) : String :=
   String.intercalate " " (args.map (Value.display s))
 
+/-! ## 64-bit wrapping arithmetic
+
+The interpreter computes on C `long long` (RV64): `+`/`-`/`*` and unary `-`
+are native two's-complement instructions, and `/`/`%` are libgcc's soft
+division, which wraps the one overflowing case (`INT64_MIN / -1 = INT64_MIN`,
+remainder `0`). Every arithmetic *result* below is therefore wrapped by
+`wrap64`. Comparisons and equality need no wrapping: they compare stored
+values, and stored values are in range by construction — arithmetic results
+are wrapped here, and int literals arrive from the machine-resident AST
+through `readI64` (`Vsa/MemRepr.lean`), i.e. as `(BitVec.ofNat 64 _).toInt`,
+which is in `[-2^63, 2^63)` like any `BitVec.toInt`. -/
+
+/-- Wrap an integer to the 64-bit two's-complement range `[-2^63, 2^63)`:
+the canonical round trip through the machine representation (`BitVec 64`). -/
+def wrap64 (z : Int) : Int := (BitVec.ofInt 64 z).toInt
+
+/-- `wrap64` is the identity on in-range integers. -/
+theorem wrap64_eq_self {z : Int} (h : -2^63 ≤ z ∧ z < 2^63) : wrap64 z = z :=
+  BitVec.toInt_ofInt_eq_self (by decide) h.1 h.2
+
+/-- `wrap64` always lands in the 64-bit range. -/
+theorem wrap64_range (z : Int) : -2^63 ≤ wrap64 z ∧ wrap64 z < 2^63 :=
+  ⟨BitVec.le_toInt _, BitVec.toInt_lt⟩
+
+/-- Wrapping is idempotent. -/
+theorem wrap64_idem (z : Int) : wrap64 (wrap64 z) = wrap64 z := by
+  unfold wrap64; rw [BitVec.ofInt_toInt]
+
+/-- `wrap64` fixes anything read out of a 64-bit machine word — the
+Sim-side workhorse (machine values are `BitVec 64`, read as `toInt`). -/
+theorem wrap64_toInt (v : BitVec 64) : wrap64 v.toInt = v.toInt := by
+  unfold wrap64; rw [BitVec.ofInt_toInt]
+
+/-- Pushing a wrapped integer back into the machine representation is
+invisible — the other Sim-side workhorse. -/
+theorem ofInt_wrap64 (z : Int) : BitVec.ofInt 64 (wrap64 z) = BitVec.ofInt 64 z :=
+  BitVec.ofInt_toInt
+
+/-- **The M4 pilot's overflow gap, closed.** The pilot found `EvalE.neg`
+with unbounded `Int` unsatisfiable against the machine at `n = -2^63`
+(`neg a1,a1` wraps: `-INT64_MIN = INT64_MIN`; see `experiments/pctrace.md`
+and `memory/m4-recursive-cases.md`). With wrapping this is exactly what the
+rule now derives. -/
+theorem wrap64_neg_min : wrap64 (-(-2^63 : Int)) = -2^63 := by decide
+
+/-- libgcc's soft-division overflow case falls out of `wrap64` around the
+true (toward-zero) quotient: `INT64_MIN / -1` wraps to `INT64_MIN`. -/
+theorem wrap64_tdiv_min : wrap64 ((-2^63 : Int).tdiv (-1)) = -2^63 := by decide
+
+/-- …and the corresponding remainder is `0`. -/
+theorem wrap64_tmod_min : wrap64 ((-2^63 : Int).tmod (-1)) = 0 := by decide
+
 /-- Semantics of the arithmetic/comparison operators (`eval_binary`).
-`none` means runtime error. Division truncates toward zero like C. -/
+`none` means runtime error. Division truncates toward zero like C
+(`Int.tdiv`/`Int.tmod`), and every arithmetic result wraps at 64 bits
+(`wrap64`), exactly as the compiled `long long` arithmetic does. -/
 def binOpSem (s : Store) : BinOp → Value → Value → Option Value
   | .add, l, r =>
     match l, r with
     | .str _, _ | _, .str _ => some (.str (l.display s ++ r.display s))
-    | .int a, .int b => some (.int (a + b))
+    | .int a, .int b => some (.int (wrap64 (a + b)))
     | _, _ => none
-  | .sub, .int a, .int b => some (.int (a - b))
-  | .mul, .int a, .int b => some (.int (a * b))
-  | .div, .int a, .int b => if b == 0 then none else some (.int (a.tdiv b))
-  | .mod, .int a, .int b => if b == 0 then none else some (.int (a.tmod b))
+  | .sub, .int a, .int b => some (.int (wrap64 (a - b)))
+  | .mul, .int a, .int b => some (.int (wrap64 (a * b)))
+  | .div, .int a, .int b => if b == 0 then none else some (.int (wrap64 (a.tdiv b)))
+  | .mod, .int a, .int b => if b == 0 then none else some (.int (wrap64 (a.tmod b)))
   | .eq, l, r => some (.bool (l.equal r))
   | .ne, l, r => some (.bool (!(l.equal r)))
   | .lt, .str a, .str b => some (.bool (a < b))
@@ -272,7 +333,7 @@ inductive EvalE : St → Nat → Addr → Expr → St → Value → Prop where
     EvalE st d env (.logical .and l r) st'' (.bool rv.truthy)
   | neg (st : St) (d : Nat) (env : Addr) (e : Expr) (st' : St) (n : Int) :
     EvalE st d env e st' (.int n) →
-    EvalE st d env (.unary .neg e) st' (.int (-n))
+    EvalE st d env (.unary .neg e) st' (.int (wrap64 (-n)))
   | not (st : St) (d : Nat) (env : Addr) (e : Expr) (st' : St) (v : Value) :
     EvalE st d env e st' v →
     EvalE st d env (.unary .not e) st' (.bool (!v.truthy))

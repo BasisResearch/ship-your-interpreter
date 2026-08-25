@@ -215,7 +215,7 @@ inductive EvalECost : St → Nat → Addr → Expr → St → Value → Nat → 
   | neg (st : St) (d : Nat) (env : Addr) (e : Expr) (st' : St) (n : Int)
       (m : Nat) :
     EvalECost st d env e st' (.int n) m →
-    EvalECost st d env (.unary .neg e) st' (.int (-n)) m
+    EvalECost st d env (.unary .neg e) st' (.int (wrap64 (-n))) m
   | not (st : St) (d : Nat) (env : Addr) (e : Expr) (st' : St) (v : Value)
       (m : Nat) :
     EvalECost st d env e st' v m →
@@ -517,7 +517,7 @@ private theorem c_ant : ∀ st d env l r st' st'' lv rv
   exact ⟨_, .andTrue _ _ _ _ _ _ _ _ _ _ _ hnl ht hnr⟩
 private theorem c_neg : ∀ st d env e st' n (he : EvalE st d env e st' (.int n)),
     M1 st d env e st' (.int n) he →
-    M1 st d env (.unary .neg e) st' (.int (-n)) (.neg st d env e st' n he)
+    M1 st d env (.unary .neg e) st' (.int (wrap64 (-n))) (.neg st d env e st' n he)
     := by
   intro st d env e st' n he ih
   obtain ⟨m, hm⟩ := ih

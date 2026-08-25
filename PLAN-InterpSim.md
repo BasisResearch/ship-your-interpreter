@@ -320,3 +320,18 @@ transport simps over huge terms. Mitigation direction: published Pre/Post
 records (the `PreSr` pattern) + a `FrameOn (windows : List Window)` predicate
 replacing bespoke pointwise-frame conjunctions + the BlockMem write-log as
 the canonical post-memory normal form.
+
+### 2026-08-25: semantics amendment — WHILE arithmetic wraps at 64 bits (user-approved)
+The M4 recursive-case pilot found `EvalE.neg` on unbounded `Int` unsatisfiable
+vs the machine at `n = −2^63` (the compiled interpreter's `long long` arithmetic
+wraps; libgcc soft div gives `INT64_MIN/−1 = INT64_MIN`, `rem 0`; div-by-zero is
+a `runtime_error`). Resolution (`Vsa/While/Semantics.lean`): every arithmetic
+result is passed through `def wrap64 (z : Int) : Int := (BitVec.ofInt 64 z).toInt`
+— the canonical machine round-trip — so the spec describes the shipped artifact.
+Workhorse lemmas `wrap64_eq_self`/`_range`/`_idem`/`_toInt`/`ofInt_wrap64`;
+regression witnesses `wrap64_neg_min`, `wrap64_tdiv_min`, `wrap64_tmod_min` (the
+libgcc special cases, C99 `.tdiv`/`.tmod` truncation). Literals are unwrapped
+(they arrive in-range from the machine-resident AST per `MemRepr`). Comparisons/
+equality unchanged (operands are stored, hence in-range). Downstream `Cost`/
+`Derive` adjusted (in-range test cases → `wrap64_eq_self`); full tree + 43/43
+axiom audit green.
