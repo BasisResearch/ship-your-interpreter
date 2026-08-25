@@ -1,5 +1,6 @@
 import Vsa.Sim.SnprintfSpec17
 import Vsa.Sim.SnprintfSpec25
+import Vsa.Sim.FrameOn
 
 /-!
 # M3 Layer-3 — `SnprintfSpec26` : PRINT/iov call setup ≫ flush ≫ svfprintf return
@@ -318,6 +319,10 @@ theorem iov2ToSvfprintfRet_spec
     rw [hmemc1, getElem?_writeMap8_out _ _ _ _ (by omega),
       getElem?_writeMap4_out _ _ _ _ (by omega), getElem?_writeMap8_out _ _ _ _ (by omega),
       getElem?_writeMap8_out _ _ _ _ (by omega), getElem?_writeMap8_out _ _ _ _ (by omega)]
+  -- …as `FrameOn` data: ONE frame object, every transport below is one application
+  have hF1 : FrameOn [⟨vsp.toNat + 16, vsp.toNat + 24⟩, ⟨vsp.toNat + 232, vsp.toNat + 236⟩,
+      ⟨vsp.toNat + 240, vsp.toNat + 248⟩, ⟨vsp.toNat + 368, vsp.toNat + 384⟩]
+      c.σ.mem c1.σ.mem := frameOn_of_pointwise4 hagree
   -- ============ PreSr's fresh pins (from Spec17's writes) ============
   have hsw2 : swData (sign_extend (m := 64)
       (Sail.BitVec.extractLsb ((sign_extend (m := 64) (1#32 : BitVec 32) : BitVec 64)
@@ -345,94 +350,98 @@ theorem iov2ToSvfprintfRet_spec
   have htot1 : SlotHolds vsp 0x010 vtotF c1.σ.mem := by
     rw [hvtotF, hmemc1]
     exact slotHolds_self vsp 0x010 (vsp.toNat + 16) _ _ hA16
-  -- ============ transported caller slots / pins / bytes ============
-  have hslotUp : ∀ (off : Nat) (v : BitVec 64) (A : Nat),
-      (vsp + sign_extend (m := 64) (BitVec.ofNat 12 off)).toNat = A →
-      (A + 8 ≤ vsp.toNat + 16 ∨ (vsp.toNat + 24 ≤ A ∧ A + 8 ≤ vsp.toNat + 232) ∨
-        vsp.toNat + 384 ≤ A) →
-      SlotHolds vsp off v c.σ.mem → SlotHolds vsp off v c1.σ.mem := by
-    intro off v A hA hcond h
-    exact slotHolds_of_agree_rt vsp off v A _ _ hA
-      (fun a ha1 ha2 => hagree a (by omega) (by omega) (by omega) (by omega)) h
-  have hfmt1 := hslotUp 0x000 vfmt (vsp.toNat + 0)
-    (ptr_addoff vsp _ 0 (by decide) (by omega)) (by omega) hfmtS
-  have h008c1 := hslotUp 0x008 p (vsp.toNat + 8)
-    (ptr_addoff vsp _ 8 (by decide) (by omega)) (by omega) hstrS
-  have h020c1 := hslotUp 0x020 (0#64) (vsp.toNat + 32)
-    (ptr_addoff vsp _ 32 (by decide) (by omega)) (by omega) hs020S
-  have hviovc1 := hslotUp 0x0e0 viovB (vsp.toNat + 224)
-    (ptr_addoff vsp _ 224 (by decide) (by omega)) (by omega) hviovS
-  have h1e8c1 := hslotUp 0x1e8 vS11 (vsp.toNat + 488)
-    (ptr_addoff vsp _ 488 (by decide) (by omega)) (by omega) hsv1e8
-  have h1f0c1 := hslotUp 0x1f0 vS10 (vsp.toNat + 496)
-    (ptr_addoff vsp _ 496 (by decide) (by omega)) (by omega) hsv1f0
-  have h1f8c1 := hslotUp 0x1f8 vS9 (vsp.toNat + 504)
-    (ptr_addoff vsp _ 504 (by decide) (by omega)) (by omega) hsv1f8
-  have h200c1 := hslotUp 0x200 vS8 (vsp.toNat + 512)
-    (ptr_addoff vsp _ 512 (by decide) (by omega)) (by omega) hsv200
-  have h208c1 := hslotUp 0x208 vS7 (vsp.toNat + 520)
-    (ptr_addoff vsp _ 520 (by decide) (by omega)) (by omega) hsv208
-  have h210c1 := hslotUp 0x210 vS6o (vsp.toNat + 528)
-    (ptr_addoff vsp _ 528 (by decide) (by omega)) (by omega) hsv210
-  have h218c1 := hslotUp 0x218 vS5 (vsp.toNat + 536)
-    (ptr_addoff vsp _ 536 (by decide) (by omega)) (by omega) hsv218
-  have h220c1 := hslotUp 0x220 vS4 (vsp.toNat + 544)
-    (ptr_addoff vsp _ 544 (by decide) (by omega)) (by omega) hsv220
-  have h228c1 := hslotUp 0x228 vS3 (vsp.toNat + 552)
-    (ptr_addoff vsp _ 552 (by decide) (by omega)) (by omega) hsv228
-  have h230c1 := hslotUp 0x230 vS2 (vsp.toNat + 560)
-    (ptr_addoff vsp _ 560 (by decide) (by omega)) (by omega) hsv230
-  have h238c1 := hslotUp 0x238 vS1o (vsp.toNat + 568)
-    (ptr_addoff vsp _ 568 (by decide) (by omega)) (by omega) hsv238
-  have h240c1 := hslotUp 0x240 vS0o (vsp.toNat + 576)
-    (ptr_addoff vsp _ 576 (by decide) (by omega)) (by omega) hsv240
-  have h248c1 := hslotUp 0x248 vra0 (vsp.toNat + 584)
-    (ptr_addoff vsp _ 584 (by decide) (by omega)) (by omega) hsv248
+  -- ============ transported caller slots / pins / bytes (one `hF1` application each) ============
+  have hfmt1 := slotHolds_of_frameOn vsp 0x000 vfmt (vsp.toNat + 0)
+    (ptr_addoff vsp _ 0 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hfmtS
+  have h008c1 := slotHolds_of_frameOn vsp 0x008 p (vsp.toNat + 8)
+    (ptr_addoff vsp _ 8 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hstrS
+  have h020c1 := slotHolds_of_frameOn vsp 0x020 (0#64) (vsp.toNat + 32)
+    (ptr_addoff vsp _ 32 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hs020S
+  have hviovc1 := slotHolds_of_frameOn vsp 0x0e0 viovB (vsp.toNat + 224)
+    (ptr_addoff vsp _ 224 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hviovS
+  have h1e8c1 := slotHolds_of_frameOn vsp 0x1e8 vS11 (vsp.toNat + 488)
+    (ptr_addoff vsp _ 488 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hsv1e8
+  have h1f0c1 := slotHolds_of_frameOn vsp 0x1f0 vS10 (vsp.toNat + 496)
+    (ptr_addoff vsp _ 496 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hsv1f0
+  have h1f8c1 := slotHolds_of_frameOn vsp 0x1f8 vS9 (vsp.toNat + 504)
+    (ptr_addoff vsp _ 504 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hsv1f8
+  have h200c1 := slotHolds_of_frameOn vsp 0x200 vS8 (vsp.toNat + 512)
+    (ptr_addoff vsp _ 512 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hsv200
+  have h208c1 := slotHolds_of_frameOn vsp 0x208 vS7 (vsp.toNat + 520)
+    (ptr_addoff vsp _ 520 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hsv208
+  have h210c1 := slotHolds_of_frameOn vsp 0x210 vS6o (vsp.toNat + 528)
+    (ptr_addoff vsp _ 528 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hsv210
+  have h218c1 := slotHolds_of_frameOn vsp 0x218 vS5 (vsp.toNat + 536)
+    (ptr_addoff vsp _ 536 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hsv218
+  have h220c1 := slotHolds_of_frameOn vsp 0x220 vS4 (vsp.toNat + 544)
+    (ptr_addoff vsp _ 544 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hsv220
+  have h228c1 := slotHolds_of_frameOn vsp 0x228 vS3 (vsp.toNat + 552)
+    (ptr_addoff vsp _ 552 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hsv228
+  have h230c1 := slotHolds_of_frameOn vsp 0x230 vS2 (vsp.toNat + 560)
+    (ptr_addoff vsp _ 560 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hsv230
+  have h238c1 := slotHolds_of_frameOn vsp 0x238 vS1o (vsp.toNat + 568)
+    (ptr_addoff vsp _ 568 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hsv238
+  have h240c1 := slotHolds_of_frameOn vsp 0x240 vS0o (vsp.toNat + 576)
+    (ptr_addoff vsp _ 576 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hsv240
+  have h248c1 := slotHolds_of_frameOn vsp 0x248 vra0 (vsp.toNat + 584)
+    (ptr_addoff vsp _ 584 (by decide) (by omega)) hF1
+    (by simp only [OutWRange, and_true]; omega) hsv248
   have hfnslot1 : SlotHolds (0x8001b798#64) 0x0e8 (0x80012268#64) c1.σ.mem :=
-    slotHolds_of_agree_rt _ _ _ 0x8001b880 _ _ (by decide)
-      (fun a ha1 ha2 => hagree a (by omega) (by omega) (by omega) (by omega)) hfnslot
+    slotHolds_of_frameOn _ _ _ 0x8001b880 (by decide) hF1
+      (by simp only [OutWRange, and_true]; omega) hfnslot
   have hmb1 : c1.σ.mem[(0x8001b8f8 : Nat)]? = some (0x01#8) :=
-    (hagree _ (by omega) (by omega) (by omega) (by omega)).trans hmbB
+    byte_of_frameOn hF1 (by simp only [OutW, and_true]; omega) hmbB
   have hnul1 : c1.σ.mem[vfmt.toNat]? = some (0x00#8) :=
-    (hagree _ (by omega) (by omega) (by omega) (by omega)).trans hnulB
+    byte_of_frameOn hF1 (by simp only [OutW, and_true]; omega) hnulB
   have hfl0c1 : c1.σ.mem[p.toNat + 16]? = some fl0 :=
-    (hagree _ (by omega) (by omega) (by omega) (by omega)).trans hfl0B
+    byte_of_frameOn hF1 (by simp only [OutW, and_true]; omega) hfl0B
   have hfl1c1 : c1.σ.mem[p.toNat + 17]? = some fl1 :=
-    (hagree _ (by omega) (by omega) (by omega) (by omega)).trans hfl1B
+    byte_of_frameOn hF1 (by simp only [OutW, and_true]; omega) hfl1B
   have hiov0b1 : Pin8 c1.σ.mem viovB.toNat (vsp + sign_extend (m := 64) (0x0a7#12)) :=
-    Pin8_frame (fun k hk1 hk2 => hagree k (by omega) (by omega) (by omega) (by omega)) hiov0b
+    pin8_of_frameOn hF1 (by simp only [OutWRange, and_true]; omega) hiov0b
   have hiov0l1 : Pin8 c1.σ.mem (viovB.toNat + 8) (BitVec.ofNat 64 n1) :=
-    Pin8_frame (fun k hk1 hk2 => hagree k (by omega) (by omega) (by omega) (by omega)) hiov0l
+    pin8_of_frameOn hF1 (by simp only [OutWRange, and_true]; omega) hiov0l
   have hsinkcur1 : Pin8 c1.σ.mem p.toNat d :=
-    Pin8_frame (fun k hk1 hk2 => hagree k (by omega) (by omega) (by omega) (by omega)) hsinkcur
+    pin8_of_frameOn hF1 (by simp only [OutWRange, and_true]; omega) hsinkcur
   have hsinkcap1 : Pin4 c1.σ.mem (p.toNat + 12) cap32 :=
-    Pin4_frame (fun k hk1 hk2 => hagree k (by omega) (by omega) (by omega) (by omega)) hsinkcap
+    pin4_of_frameOn hF1 (by simp only [OutWRange, and_true]; omega) hsinkcap
   have hbs1c1 : MvBytes c1.σ.mem (vsp + sign_extend (m := 64) (0x0a7#12)) n1 bs1 :=
-    fun k hk => (hagree _ (by omega) (by omega) (by omega) (by omega)).trans (hsignB k hk)
+    mvBytes_of_frameOn hF1 (by simp only [OutWRange, and_true]; omega) hsignB
   have hbs2c1 : MvBytes c1.σ.mem vbase n2 bs2 :=
-    fun k hk => (hagree _ (by omega) (by omega) (by omega) (by omega)).trans (hdigB k hk)
-  -- code pins at the call
+    mvBytes_of_frameOn hF1 (by simp only [OutWRange, and_true]; omega) hdigB
+  -- code pins at the call (all code below the stack, so outside every window)
+  have hlow : ∀ a : Nat, a < 0x8001c000 → c1.σ.mem[a]? = c.σ.mem[a]? :=
+    fun a ha => frameOn_read hF1 a (by simp only [OutW, and_true]; omega)
   have hsspL1 : __ssprint_rLoaded c1.σ.mem :=
-    ssprint_frame_sr _ _
-      (fun a ha => hagree a (by omega) (by omega) (by omega) (by omega)) hsspL
+    ssprint_frame_sr _ _ (fun a ha => hlow a (by omega)) hsspL
   have hsspuL1 : Vsa.Sim.Code.__ssputs_rLoaded c1.σ.mem :=
-    ssputs_frame_ss _ _
-      (fun a ha => hagree a (by omega) (by omega) (by omega) (by omega)) hsspuL
+    ssputs_frame_ss _ _ (fun a ha => hlow a (by omega)) hsspuL
   have hmvL1 : MemmoveLoaded c1.σ.mem :=
-    memmove_frame_sr _ _
-      (fun a ha => hagree a (by omega) (by omega) (by omega) (by omega)) hmvL
+    memmove_frame_sr _ _ (fun a ha => hlow a (by omega)) hmvL
   have hsliceL1 : SvfprintfSliceLoaded c1.σ.mem :=
-    svfSlice_of_agree_rt
-      (fun a h1 h2 => hagree a (by omega) (by omega) (by omega) (by omega)) hload
+    svfSlice_of_agree_rt (fun a h1 h2 => hlow a (by omega)) hload
   have hfpL1 : FlushPinsLoaded c1.σ.mem :=
-    flushPins_of_agree_rt
-      (fun a h1 h2 => hagree a (by omega) (by omega) (by omega) (by omega)) hfp
+    flushPins_of_agree_rt (fun a h1 h2 => hlow a (by omega)) hfp
   have hlocL1 : __locale_mb_cur_maxLoaded c1.σ.mem :=
-    locale_of_agree_rt
-      (fun a h1 h2 => hagree a (by omega) (by omega) (by omega) (by omega)) hlocC
+    locale_of_agree_rt (fun a h1 h2 => hlow a (by omega)) hlocC
   have hambL1 : __ascii_mbtowcLoaded c1.σ.mem :=
-    amb_of_agree_rt
-      (fun a h1 h2 => hagree a (by omega) (by omega) (by omega) (by omega)) hambC
+    amb_of_agree_rt (fun a h1 h2 => hlow a (by omega)) hambC
   -- ============ PreSr at the call ============
   have hRegions : SrRegions (vsp + sign_extend (m := 64) (0x0e0#12)) viovB p d
       (vsp + sign_extend (m := 64) (0x0a7#12)) vbase vsp n1 n2 := by
@@ -481,6 +490,8 @@ theorem iov2ToSvfprintfRet_spec
       hq224 hsplo hsphi hspal (Or.inl hdge) (Or.inl hpge) hdstk hpstk hpd18
       hfd hfpp hfstk hflo hfhi hfhtif hp18hi hra0align
   -- ============ final assembly ============
+  -- Spec25's seven-window frame as data
+  have hF2 := frameOn_of_pointwise7 hframeF
   have htotPin1 : Pin8 c1.σ.mem (vsp.toNat + 16) vtotF := by
     rw [hvtotF, hmemc1]
     exact Pin8_writeMap8 _ _ _
@@ -496,11 +507,19 @@ theorem iov2ToSvfprintfRet_spec
       from by omega]
     exact hcntPf
   · -- the running total at sp+16 (also returned in a0)
-    exact Pin8_frame (fun k hk1 hk2 => hframeF k (by omega) (by omega) (by omega)
-      (by omega) (by omega) (by omega) (by omega)) htotPin1
-  · -- the pointwise frame back to the memory at 0x800078ac
-    intro a hW1 hW2 hW3 hW4 hW5 hW6 hW7 hW8 hW9
-    exact (hframeF a hW1 hW2 hW3 (by omega) (by omega) hW6 hW7).trans
-      (hagree a hW8 hW4 hW5 hW9)
+    exact pin8_of_frameOn hF2 (by simp only [OutWRange, and_true]; omega) htotPin1
+  · -- the pointwise frame back to the memory at 0x800078ac:
+    -- chain the two data frames (windows union), weaken into the stated nine
+    -- windows, restate pointwise
+    exact pointwise_of_frameOn9 (frameOn_mono
+      (ws' := [⟨d.toNat, d.toNat + n1 + n2⟩, ⟨p.toNat, p.toNat + 8⟩,
+        ⟨p.toNat + 12, p.toNat + 16⟩, ⟨vsp.toNat + 232, vsp.toNat + 236⟩,
+        ⟨vsp.toNat + 240, vsp.toNat + 248⟩, ⟨vsp.toNat - 88, vsp.toNat⟩,
+        ⟨vsp.toNat + 180, vsp.toNat + 184⟩, ⟨vsp.toNat + 16, vsp.toNat + 24⟩,
+        ⟨vsp.toNat + 368, vsp.toNat + 384⟩])
+      (by simp only [List.cons_append, List.nil_append, AllCovered, InsideW,
+            and_true, or_false]
+          omega)
+      (frameOn_trans hF1 hF2))
 
 end Vsa.Sim
