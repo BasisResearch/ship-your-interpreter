@@ -153,6 +153,7 @@ THEOREMS=(
   Vsa.Sim.armTail_rec                           # EvalRecCommon (jal eval_expr ≫ IH ⇒ SubEvalReturn)
   Vsa.Sim.blockB_unary                          # EvalNegSim (EX_UNARY arm head + recursive call, IH-composed)
   Vsa.Sim.blockC_neg                            # EvalNegSim2 (neg post-call tail; Stage C hframeG refactor)
+  Vsa.Sim.evalNegSim                            # EvalNegSim3 (EvalE.neg recursive case, EvalIH motive shape; conditional)
   # Stage A0/A1 — neg block spine as composed Triples (BlockLogic)
   Vsa.Sim.negPrologue_triple                    # A0 (σ0→σ4 prologue as a Triple)
   Vsa.Sim.negLoadStore_triple                   # A0 (σ4→σ10 load/store as a Triple)
