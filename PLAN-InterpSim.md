@@ -254,3 +254,69 @@ inductive relations. The two places where the plan trades scope rather
 than proving more: diagnostics text in `stuck_sim` (not tracked, by
 design), and the allocator (verify newlib's paths, or relink with a bump
 allocator with your sign-off).
+
+---
+
+## Appendix (2026-08-25): tooling and abstractions built during M3 — use for M4–M6
+
+Everything below is landed, CI-gated (`scripts/check_all.sh`: build + no-sorry/axiom
+grep + `#print axioms` ⊆ {propext, Classical.choice, Quot.sound}), and validated by
+re-deriving already-proven artifacts. Ledgers: `experiments/pctrace.md` (per-session),
+`scripts/README*.md` (per-tool). The Tooling section's deliverables exist:
+disassembly ingestion = `scripts/disasm_to_sites.py`; CI gates = `check_all.sh`;
+the `seval` role is filled kernel-cheaply by the reflection block lemmas.
+
+### The pipeline for any new code segment (use in this order)
+1. `scripts/disasm_to_sites.py LO HI [--path taken/nottaken-file]` → site TSV
+   (classifies from instruction words; `#UNSUPPORTED` marks generator gaps).
+2. `scripts/gen_sites.py TSV --code-loaded <XLoaded> --suffix _x` → compiled
+   per-site StepObs battery. Byte-pin Code files via `experiments/gen_code_lemmas.py`.
+   Hand-site templates for gaps (jalr/sltu/lhu/andi/auipc/slli/srli/jr-imm):
+   `SnprintfSitesRet5.lean`, `SnprintfSitesPro4.lean`.
+3. Straight-line runs: PREFER `Vsa/Sim/BlockMem.lean` `block_mem_sound` (reflection:
+   one application per block, computed write log, ~4× less proof work, O(instrs)
+   scaling; ALU+ld/lw/lbu+sd/sw/sb; branch-terminator plan in its header). Otherwise
+   `scripts/gen_segment.py` (straight/prologue/epilogue/call/loop modes; `"boundary":
+   "segst"` emits zero-hole segments; `"guard": "decide"` for concrete-data branches)
+   or the `scripts/pro_emitter/` drivers (real exemplars: gen_spec27..55).
+4. Variants of proven segments: `scripts/twin_spec.py` (checked deltas; 100%
+   reproduction of Spec46-from-Spec7; deltas in `scripts/deltas/`).
+5. Composition lemmas (import and use, never re-derive):
+   - registers: `RegPins` (`pins_*` per step, `(by rfl)`; `pins_of_frame` across
+     callees), `KeepRegs` (value-free preservation, `decide`-closable) — one line
+     per step instead of per step×register;
+   - spills/windows: `SlotFrame` (`slot_save/survives_*/reload_bytes/reassemble`),
+     width-generic `PinW` (widths 1/2/4/8, `Iff.rfl` bridges to Pin8/Pin4/SlotHolds);
+   - pointers: `PtrArith` (sext constants, `ptr_sub`/`ptr_addoff`, `sp_decK_restore`;
+     NEVER `simp[toNat_add,toNat_ofNat]` + `2^64−K` rw + `omega` — kernel crash);
+   - simp sets (bounded, no search): `bvptr` (EA normalization), `mfr` (memory
+     frames), both `simp (disch := omega) only [...]`;
+   - Loaded preservation: `CodeRangeInsert` recipe; statics: `ImageStaticsLoaded`
+     + `ImageDischarge` (ALL static-data hypotheses discharge from one predicate —
+     use it in every new capstone instead of fresh image hypotheses).
+
+### Iteration-latency rules (measured: 2–4 min → 1–6 s per check)
+One segment theorem per module (≤600 lines); `lake env lean` per file while
+iterating; `lake build <mod>` for closure after cross-file edits (stale-olean
+trap — trust `lake build` over editor LSP diagnostics); Python generation over
+tactics/macros (plain terms = floor elaboration cost, zero search).
+
+### For M4 (the mutual induction)
+`scripts/gen_m4_case.py` + `scripts/m4_cases.tsv` emit ~78% of a leaf case;
+`EvalSimCommon` holds the shared machinery. Recursive-case prerequisites:
+the `EvalExit`-shaped `armTail_v` analogue and the IH-application glue
+(pilot in flight → `EvalRecCommon`); after extraction, remaining cases are
+table rows. `Code/FnFmt.lean` pins the closure-stringify format for that arm.
+
+### For M6
+`ImageStaticsLoaded` is the statics half of `Loaded`/`Layout` instantiation;
+capstone layout hypotheses are the geometry half — bundle both into the
+concrete `Layout L` records at assembly time.
+
+### Known statement-size cost (open work)
+Capstone statements carry 40–70 hypotheses and large conjunction posts; the
+measured slow glue checks (72 s Spec25, 71 s Spec49) are dominated by
+transport simps over huge terms. Mitigation direction: published Pre/Post
+records (the `PreSr` pattern) + a `FrameOn (windows : List Window)` predicate
+replacing bespoke pointwise-frame conjunctions + the BlockMem write-log as
+the canonical post-memory normal form.
