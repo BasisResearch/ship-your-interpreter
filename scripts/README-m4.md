@@ -135,3 +135,36 @@ still emitted).
 Note: the emitted skeletons contain `sorry` holes by design and MUST NOT be
 landed in `Vsa/` (repo rule: no `sorry` in landed files). The emitter and this
 table are the deliverable; the skeleton is the starting point per case.
+
+## Recursive cases: pilot findings + new TSV columns (2026-08-25)
+
+The `EX_UNARY` pilot (`Vsa/Sim/EvalRecCommon.lean` + `Vsa/Sim/EvalNegSim.lean`)
+landed the `armTail_v` analogue for `EvalExit`-shaped callees:
+`armTail_rec` (`jal eval_expr` ≫ induction hypothesis ⇒ `SubEvalReturn`) and
+the proven arm head `blockB_unary` (payload `ld` + sub-buffer `addi` +
+recursive `jal`, IH-composed). Recursive rows in `m4_cases.tsv` need these
+NEW columns beyond the leaf schema:
+
+| column | meaning (unary example) |
+|---|---|
+| `sub_jal_pc`/`sub_jal_word`/`sub_jal_imm` | the recursive `jal eval_expr` site (`0x800035e8`/`0xb7dff0ef`/`0x1ffb7c`); one triple PER sub-call for binary/logical/call |
+| `subsret_off` | sub-Value buffer offset from the lowered sp (`144` → `sp-944`; call arm uses `96`) |
+| `payload_off` | operand-pointer offset in the Expr node (`16`; binary also has `24` for rhs) |
+| `post_pcs` | the post-call site list (`0x800035ec–f8`, `0x800039ac–dc` for neg) |
+| `ih_shape` | which relations' IHs enter (`EvalE` once; call = `EvalE`+`EvalArgs`+`Call`) |
+| `headroom` | stack headroom factor (leaf `2176`; +1088 per nested sub-eval level) |
+| `extra_geometry` | arena/stack + arena/code disjointness, `sp%16`, `SL.hi` bounds (the `blockB_unary` extras bundle) |
+
+Residuals before a recursive case can slot into the mutual recursor
+(details in memory/m4-recursive-cases.md):
+1. `blockA_k`/`ArmEntryK` widening: thread `x11` (interp*), `x8 = aExpr`,
+   `x13` (env), `sp%16`, code/table/arena-vs-stack facts into `ArmEntryK`
+   (currently supplied as the `blockB_unary` extras conjunct).
+2. Motive upgrade: `motive_EvalE` must be restated at `EvalExitD`
+   (presence + stack-region store-survival) and the five leaf cases
+   re-landed against it (mechanical: their deltas are writeMap chains).
+3. The per-arm entry family (leaf `EvalXEntry` structures unified into one
+   dependent entry) so sub-expressions of every kind get usable IHs.
+4. Spec-level overflow gap: `EvalE.neg`/`binary` produce unbounded `Int`s the
+   64-bit machine wraps — the triple is FALSE at `n = -2^63`; the ideal
+   semantics needs wrapping or overflow-underivability first.

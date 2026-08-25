@@ -791,3 +791,82 @@ check_all THEOREMS extended (41, all audits clean, 928 jobs): + printToSsprintNN
 svfprintf_flushReturn1_spec, svfEntryToSsprintCallNN_spec,
 svfprintf_lld_nn_spec, svfprintf_buffer_eq_intToString_nn,
 snprintf_lld_nn_spec, snprintf_lld_total_spec.
+
+## M4 recursive-case pilot: the `EX_UNARY` arm of `eval_expr` (2026-08-25)
+
+Static decode (cross-checked against the `.rodata` jump-table bytes:
+`riscv64-elf-objdump -s -j .rodata` @ `0x80019f58`; slot `k` = base + 4k,
+sext(LE bytes) + base = arm PC). Full slot map:
+
+```
+k0 int    b094feff → 0x80003408    k6  binary  9095feff → 0x800034e8
+k1 str    bc94feff → 0x80003414    k7  logical 0496feff → 0x8000355c
+k2 bool   c894feff → 0x80003420    k8  UNARY   8896feff → 0x800035e0
+k3 null   d494feff → 0x8000342c    k9  call    5892feff → 0x800031b0
+k4 var    dc94feff → 0x80003434    k10 fn      (next slot @ 0x80019f80)
+k5 assign 2495feff → 0x8000347c
+```
+
+`EX_UNARY` (tag 8) arm — the SIMPLEST recursive arm (one `jal eval_expr`,
+then a leaf `value_*` tail; chosen as the M4 recursive pilot):
+
+```
+800035e0: 01063603  ld   a2,16(a2)       # a2 := e->as.unary.operand
+800035e4: 09010513  addi a0,sp,144       # a0 := sub-Value buf = (sp-1088)+144 = sp-944
+800035e8: b7dff0ef  jal  80003164        # RECURSIVE eval_expr; ra := 0x800035ec
+                                          # (imm21 = 0x1ffb7c = -0x484)
+-- post-call: op dispatch --
+800035ec: 00842703  lw   a4,8(s0)        # op tok (s0 = Expr*, survives call: callee-saved)
+800035f0: 00c00793  li   a5,12           # T_MINUS = 12
+800035f4: 09013683  ld   a3,144(sp)      # v[0..8)  (kind dword; bytes 4-7 UNCONSTRAINED)
+800035f8: 3af70a63  beq  a4,a5,800039ac  # neg vs not split
+-- not tail (op != T_MINUS): copy v to sp+64, jal value_truthy(0x8000282c),
+--   seqz a1,a0; mv a0,s1; jal value_bool(0x800027f8); j 0x800033ec
+-- neg tail @ 0x800039ac: --
+800039ac: 09813583  ld   a1,152(sp)      # v payload (n, two's complement)
+800039b0: 0a013703  ld   a4,160(sp)      # v[16..24) (UNCONSTRAINED bytes — dead value)
+800039b4: 09012503  lw   a0,144(sp)      # v.kind
+800039b8: 0ed13823  sd   a3,240(sp)      # spill v copy (runtime_error arg staging)
+800039bc: 0eb13c23  sd   a1,248(sp)
+800039c0: 10e13023  sd   a4,256(sp)
+800039c4: 00200613  li   a2,2            # VAL_INT = 2
+800039c8: 00442403  lw   s0,4(s0)        # s0 := e->line (CLOBBERS s0; restored by epilogue)
+800039cc: 18c51663  bne  a0,a2,80003b58  # kind != int → runtime_error path
+800039d0: 40b005b3  neg  a1,a1           # a1 := -n  (64-bit wrap!)
+800039d4: 00048513  mv   a0,s1           # a0 := outer sret
+800039d8: e35fe0ef  jal  8000280c        # value_int(sret, -n)
+800039dc: a11ff06f  j    800033ec        # shared epilogue → blockD_v
+```
+
+ABI at the recursive call (confirms InterpEntry's reading): `a0` = fresh
+sub-sret in the CALLER's frame (sp-944), `a1` = interp* (untouched since
+entry), `a2` = operand node, `a3` = env (untouched; not in EvalEntry — only
+var/env arms read it), `ra` = 0x800035ec. Sub-call runs at sp-1088 with its
+OWN 1088-byte frame below → recursive cases need `SL.lo + 3264 ≤ sp`
+(one extra frame per recursion level; depth-indexed headroom for the full
+induction).
+
+FINDINGS driving the EvalRecCommon design:
+1. `ld a3,144(sp)` / `ld a4,160(sp)` read sub-Value bytes 4-7/16-23 that
+   `ValueRepr` deliberately leaves unconstrained ("C never reads them" — it
+   DOES read them here, as dead values). The machine `ld` still needs the
+   bytes PRESENT → `EvalExit` must be widened with presence monotonicity
+   (`MemExtends`) — `EvalExitD` in EvalRecCommon.lean.
+2. The caller's post-call writes (its own sret via `value_int`) need an
+   exit-side StoreRepr-survival clause for `st'.store` at the extended maps
+   (the entry-side clause is for `st.store` at the entry maps) — the
+   `[SL.lo, SL.hi)` stack-region survives clause in `EvalExitD`.
+3. OVERFLOW GAP (spec-level, real): the sub-value `.int n` satisfies
+   `readI64` hence `n ∈ [-2^63, 2^63)`; the spec produces `.int (-n)` with
+   UNBOUNDED Int, but the machine `neg` wraps: at `n = -2^63` the machine
+   yields `-2^63` while the spec says `2^63` — `ValueRepr` of the result is
+   then unsatisfiable and the `EvalE.neg` triple is FALSE. Same for
+   binary arithmetic overflow. The ideal semantics must either wrap or make
+   overflow underivable (like div-by-zero) before term_sim can close.
+
+Verified this session (axioms clean, in check_all): `armTail_rec`
+(EvalRecCommon.lean — `jal eval_expr` ≫ IH ⇒ `SubEvalReturn`) and
+`blockB_unary` (EvalNegSim.lean — arm head `ld`/`addi`/`jal` + IH composed,
+`ArmEntryK`+extras → `SubEvalReturn`). Post-call tail (`blockC_neg`) and the
+`blockA_k` widening are the recorded residuals
+(memory/m4-recursive-cases.md).
