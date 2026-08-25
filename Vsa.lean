@@ -114,6 +114,8 @@ import Vsa.Sim.EvalStrSim
 import Vsa.Sim.EvalBoolSim
 import Vsa.Sim.EvalVarSim
 import Vsa.Sim.InductionScaffold
+import Vsa.Sim.EvalRecCommon
+import Vsa.Sim.EvalNegSim
 import Vsa.Sim.ReprSurvival
 import Vsa.Sim.ReprCopy
 import Vsa.Sim.StrcpySpecW
@@ -266,3 +268,6 @@ import Vsa.Sim.SnprintfSpec55
 import Vsa.Sim.Code.ImageStatics
 import Vsa.Sim.ImageDischarge
 import Vsa.Sim.Code.FnFmt
+import Vsa.Sim.FrameOn
+import Vsa.Sim.WriteLogNF
+import Vsa.Sim.SnprintfPost
