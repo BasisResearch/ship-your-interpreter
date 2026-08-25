@@ -347,4 +347,69 @@ theorem neg_prologue_block (σ : MState) (i u : Nat)
     hGH.2.2.1, hGH.2.1, hGH.1, hGH.2.2.2.2.2.1, hGH.2.2.2.2.1, hGH.2.2.2.1, hGH.2.2.2.2.2.2.1,
     hmi', hframe⟩
 
+def negTailBlkA : BBlock :=
+  { body :=
+      [⟨0x800039c4#64, 0x00200613#32, 0x13#8, 0x06#8, 0x20#8, 0x00#8, .addi, 12, 0, 0, 0x002#12⟩,
+       ⟨0x800039c8#64, 0x00442403#32, 0x03#8, 0x24#8, 0x44#8, 0x00#8, .lw, 8, 8, 0, 0x004#12⟩],
+    term := some ⟨0x800039cc#64, 0x18c51663#32, 0x63#8, 0x16#8, 0xc5#8, 0x18#8,
+      .br bop.BNE false, 10, 12, 0x018c#13, 0#21, 0#12⟩ }
+
+def negTailBlkB : BBlock :=
+  { body :=
+      [⟨0x800039d0#64, 0x40b005b3#32, 0xb3#8, 0x05#8, 0xb0#8, 0x40#8, .sub, 11, 0, 11, 0#12⟩,
+       ⟨0x800039d4#64, 0x00048513#32, 0x13#8, 0x85#8, 0x04#8, 0x00#8, .addi, 10, 9, 0, 0x000#12⟩],
+    term := none }
+
+def negTailChain : List BBlock := [negTailBlkA, negTailBlkB]
+
+/-- Full-output collapse of the neg TAIL (σ10→σ15, 5 steps `0x800039c4 →
+0x800039d8`: li a2,2; lw s0,4(s0); bne a0,a2 not-taken; neg a1,a1; mv a0,s1)
+via ONE `bblocks_sound_bt`. The `bne` splits it into two blocks; the `neg`
+needs the `.sub` block-model kind. `jal value_int`@σ16 stays the call seam. -/
+theorem neg_tail_block (σ : MState) (i u : Nat)
+    (vm v8 v9 v2 p11 : BitVec 64) (lb0 lb1 lb2 lb3 : BitVec 8)
+    (hG : GoodState σ)
+    (hpc : σ.regs.get? Register.PC = some (0x800039c4#64))
+    (hmi : σ.regs.get? Register.minstret = some vm)
+    (hx8 : σ.regs.get? Register.x8 = some v8)
+    (hx10 : σ.regs.get? Register.x10 = some (2#64))
+    (hx9 : σ.regs.get? Register.x9 = some v9)
+    (hx11 : σ.regs.get? Register.x11 = some p11)
+    (hx2 : σ.regs.get? Register.x2 = some v2)
+    (hmem : Eval_exprLoaded σ.mem)
+    (hLdL : LdOK4 σ.mem (v8 + sign_extend (m := 64) (0x004#12)) [lb0,lb1,lb2,lb3])
+    (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Steps ⟨σ, i, u⟩ ⟨σ', i', u + 5⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ.mem ∧ σ'.sailOutput = σ.sailOutput ∧
+      σ'.regs.get? Register.PC = some (0x800039d8#64) ∧
+      σ'.regs.get? Register.x10 = some v9 ∧
+      σ'.regs.get? Register.x11 = some ((0#64) - p11) ∧
+      σ'.regs.get? Register.x9 = some v9 ∧
+      σ'.regs.get? Register.x2 = some v2 ∧
+      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
+      (∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
+        (∀ n ∈ wrChain negTailChain, (gprReg n == R) = false) →
+        σ'.regs.get? R = σ.regs.get? R) := by
+  obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hGH, hframe⟩ :=
+    bblocks_sound_bt negTailChain σ i u (0x800039c4#64) vm
+      [(8, v8), (10, 2#64), (9, v9), (11, p11), (2, v2)] [[lb0,lb1,lb2,lb3]]
+      hG hpc hmi ⟨hx8, hx10, hx9, hx11, hx2, trivial⟩ (show KeysOK [8, 10, 9, 11, 2] by decide)
+      (by
+        block_facts hmem with "Vsa.Sim.Code.eval_expr_at_"
+        · exact hLdL
+        · show guardB bop.BNE (2#64) ((0#64) + sign_extend (m := 64) (0x002#12)) = false
+          decide)
+      (show ChainOK (0x800039c4#64) [8, 10, 9, 11, 2] negTailChain by decide)
+      hi
+  rw [show memChain negTailChain σ.mem [(8, v8), (10, 2#64), (9, v9), (11, p11), (2, v2)]
+        [[lb0,lb1,lb2,lb3]] = σ.mem from by rfl] at hmem'
+  refine ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', ?_, hGH.2.1, hGH.2.2.2.2.1,
+    hGH.2.2.2.2.2.1, hmi', hframe⟩
+  have h := hGH.1
+  change σ'.regs.get? Register.x10 = some (v9 + sign_extend (m := 64) (0x000#12)) at h
+  rwa [show (v9 + sign_extend (m := 64) (0x000#12)) = v9 from by
+    rw [show (sign_extend (m := 64) (0x000#12) : BitVec 64) = 0#64 from by apply BitVec.eq_of_toNat_eq; decide,
+      BitVec.add_zero]] at h
+
 end Vsa.Sim

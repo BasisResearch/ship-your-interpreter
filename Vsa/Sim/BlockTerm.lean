@@ -561,6 +561,7 @@ theorem domRun_keys_bt : ∀ (is : List MInstr) (L : GRegs)
     cases akind with
     | addi => exact dom_cons_erase h
     | add => exact dom_cons_erase h
+    | sub => exact dom_cons_erase h
     | lw => exact dom_cons_erase h
     | ld => exact dom_cons_erase h
     | lbu => exact dom_cons_erase h
@@ -588,6 +589,9 @@ theorem keysOK_runGM_bt : ∀ (is : List MInstr) (pc0 : BitVec 64) (dom : List N
       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
     | add =>
       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .add ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | sub =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .sub ard ars1 ars2)
       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
     | lw =>
       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .lw ard ars1 ars2)
@@ -629,6 +633,7 @@ theorem writeLog_wlog_low_bt (mc : Std.ExtHashMap Nat (BitVec 8)) :
     cases akind with
     | addi => exact ih m _ _ hfr j hj
     | add => exact ih m _ _ hfr j hj
+    | sub => exact ih m _ _ hfr j hj
     | lw => exact ih m _ _ hfr j hj
     | ld => exact ih m _ _ hfr j hj
     | lbu => exact ih m _ _ hfr j hj

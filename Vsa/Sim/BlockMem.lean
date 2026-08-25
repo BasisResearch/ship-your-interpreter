@@ -386,6 +386,7 @@ enumerated so all structure stays concrete/decidable. -/
 inductive MKind where
   | addi : MKind
   | add  : MKind
+  | sub  : MKind
   | lw   : MKind
   | ld   : MKind
   | lbu  : MKind
@@ -416,6 +417,7 @@ def astOfM (a : MInstr) : instruction :=
   match a.kind with
   | .addi => instruction.ITYPE (a.imm, gprIdx a.rs1, gprIdx a.rd, iop.ADDI)
   | .add  => instruction.RTYPE (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, rop.ADD)
+  | .sub  => instruction.RTYPE (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, rop.SUB)
   | .lw   => instruction.LOAD (a.imm, gprIdx a.rs1, gprIdx a.rd, false, 4)
   | .ld   => instruction.LOAD (a.imm, gprIdx a.rs1, gprIdx a.rd, false, 8)
   | .lbu  => instruction.LOAD (a.imm, gprIdx a.rs1, gprIdx a.rd, true, 1)
@@ -454,6 +456,7 @@ def wvalM (a : MInstr) (L : GRegs) (bs : List (BitVec 8)) : BitVec 64 :=
   match a.kind with
   | .addi => srcVal a.rs1 L + sign_extend (m := 64) a.imm
   | .add  => srcVal a.rs1 L + srcVal a.rs2 L
+  | .sub  => srcVal a.rs1 L - srcVal a.rs2 L
   | k => bytesVal k bs
 
 /-- Pin-list effect of one instruction (stores write no register). -/
@@ -542,7 +545,7 @@ mention symbolic values. -/
 def MemFacts (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (bs : List (BitVec 8))
     (a : MInstr) : Prop :=
   match a.kind with
-  | .addi | .add => True
+  | .addi | .add | .sub => True
   | .lw =>
     (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 4 ≤ 0x100000000 ∧
      ((eaddrM a L).toNat + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat) ∧
@@ -583,6 +586,7 @@ def KindOK (dom : List Nat) (k : MKind) (rd rs1 rs2 : Nat) : Prop :=
   match k with
   | .addi => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
   | .add  => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom ∧ SrcOK rs2 dom
+  | .sub  => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom ∧ SrcOK rs2 dom
   | .lw | .ld | .lbu => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
   | .sw | .sd | .sb  => SrcOK rs1 dom ∧ SrcOK rs2 dom
 
@@ -591,6 +595,7 @@ instance instDecKindOK (dom : List Nat) (k : MKind) (rd rs1 rs2 : Nat) :
   match k with
   | .addi => inferInstanceAs (Decidable (_ ∧ _))
   | .add  => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+  | .sub  => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
   | .lw   => inferInstanceAs (Decidable (_ ∧ _))
   | .ld   => inferInstanceAs (Decidable (_ ∧ _))
   | .lbu  => inferInstanceAs (Decidable (_ ∧ _))
@@ -789,6 +794,57 @@ theorem block_mem_run (is : List MInstr) :
         ih σ1 i1 (u + 1) (BitVec.addInt apc 4) vm1
           (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .add, ard, ars1, ars2, aimm⟩ L (lds.headD []))
           (stepLdsM .add lds) mc σ.mem (ard :: dom)
+          hG1 hpc1 hmi1 hmem1 hlow hL1 hkeys1 hdom1 hfr hwfr hi1
+      refine ⟨σf, i', ?_, hi', hGf, hmemf, houtf.trans hout1, hpcf, hmif, hGHf, ?_⟩
+      · have hsteps' : Steps ⟨σ, i, u⟩ ⟨σf, i', u + 1 + r.length⟩ := Steps.head hs1 hsteps
+        have e : u + 1 + r.length = u + (r.length + 1) := by omega
+        rw [e] at hsteps'
+        exact hsteps'
+      · intro R hn hrds
+        exact (hframef R hn (fun a' ha' => hrds a' (List.mem_cons_of_mem _ ha'))).trans
+          (frame_step_alu hobs1 R hn (hrds _ (List.mem_cons_self ..)))
+    | sub =>
+      obtain ⟨⟨hrd1, hrd31⟩, hs1ok, hs2ok⟩ :=
+        (hkok : KindOK dom .sub ard ars1 ars2)
+      have hrd31' : ard ≤ 31 := hrd31
+      have hrdf := gpr_rd_ok ard (Nat.lt_succ_of_le hrd31') hrd1
+      have hsp1 : srcPin σ ars1 (srcVal ars1 L) :=
+        srcPin_srcVal σ L ars1 (hs1ok.2.imp (fun h => h) (hdom ars1)) hL
+      have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
+      have hsp2 : srcPin σ ars2 (srcVal ars2 L) :=
+        srcPin_srcVal σ L ars2 (hs2ok.2.imp (fun h => h) (hdom ars2)) hL
+      have hrx2 := rX_src σ apc ars2 hs2ok.1 (srcVal ars2 L) hsp2
+      have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
+        (srcVal ars1 L - srcVal ars2 L) ard hrd1 hrd31
+      have hexec := execute_rtype_sub_char (gprIdx ars2) (gprIdx ars1) (gprIdx ard)
+        (srcVal ars1 L) (srcVal ars2 L)
+        (afterNextPC (afterPrelude σ) apc)
+        (sigma3_alu σ apc (gprReg ard) (gprRT ard (srcVal ars1 L - srcVal ars2 L)))
+        hrx1 hrx2 hwx
+      obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+        stepObs_alu σ i u apc vm aword
+          (instruction.RTYPE (gprIdx ars2, gprIdx ars1, gprIdx ard, rop.SUB))
+          (gprReg ard) (gprRT ard (srcVal ars1 L - srcVal ars2 L))
+          ab0 ab1 ab2 ab3 hG hpc hmi hword hnotrvc hdec' hexec
+          hrdf.1 hrdf.2.1 hrdf.2.2.1 hrdf.2.2.2.1 hrdf.2.2.2.2
+          hb0 hb1 hb2 hb3 hlo hhi halign hi
+      have hpc1 := obs_alu_pc hobs1
+      obtain ⟨vm1, hmi1⟩ := obs_alu_minstret hobs1
+      have hout1 : σ1.sailOutput = σ.sailOutput := hobs1.2
+      have hL1 : GHolds σ1
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sub, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
+        ⟨obs_gpr_rd ard hrd1 hrd31 (srcVal ars1 L - srcVal ars2 L) hobs1,
+         gholds_eraseG hobs1 hrd1 hrd31 L hkeys hL⟩
+      have hkeys1 : KeysOK (keysG
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sub, ard, ars1, ars2, aimm⟩ L (lds.headD []))) :=
+        keysOK_cons_erase hrd1 hrd31 L hkeys
+      have hdom1 : ∀ n ∈ (ard :: dom), n ∈ keysG
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sub, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
+        dom_cons_erase hdom
+      obtain ⟨σf, i', hsteps, hi', hGf, hmemf, houtf, hpcf, hmif, hGHf, hframef⟩ :=
+        ih σ1 i1 (u + 1) (BitVec.addInt apc 4) vm1
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sub, ard, ars1, ars2, aimm⟩ L (lds.headD []))
+          (stepLdsM .sub lds) mc σ.mem (ard :: dom)
           hG1 hpc1 hmi1 hmem1 hlow hL1 hkeys1 hdom1 hfr hwfr hi1
       refine ⟨σf, i', ?_, hi', hGf, hmemf, houtf.trans hout1, hpcf, hmif, hGHf, ?_⟩
       · have hsteps' : Steps ⟨σ, i, u⟩ ⟨σf, i', u + 1 + r.length⟩ := Steps.head hs1 hsteps
