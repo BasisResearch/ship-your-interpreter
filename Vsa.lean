@@ -156,6 +156,7 @@ import Vsa.Sim.ReprSurvival
 import Vsa.Sim.AstTransport
 import Vsa.Sim.ExecIfSites
 import Vsa.Sim.ExecIf
+import Vsa.Sim.ExecDispatch
 import Vsa.Sim.ReprCopy
 import Vsa.Sim.StrcpySpecW
 import Vsa.Sim.StrcpySpecW2
