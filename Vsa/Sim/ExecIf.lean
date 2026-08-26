@@ -137,7 +137,7 @@ theorem execIfNoneSim
       sp r aInterp aStmt aEnv aRet execArmIf m0 out0 :=
     execBlockA g N A SL φf φc st d env (.ifStmt c t none) 3 execArmIf
       sp r aInterp aStmt aEnv aRet m0 out0
-      (by omega) (by omega) hkind hslot (by decide) htableStk
+      (by omega) (by omega) hkind hslot (by decide) ⟨htableStk⟩
   obtain ⟨cA, hstepsA, hArmExists⟩ := hBlockA cfg ⟨he, hout0⟩
   -- ===== glue: arm body + jal eval_expr + value_truthy + falsy branches → SubExecReturn =====
   obtain ⟨cG, hstepsG, hGlueOut⟩ := hGlue hIH cA hArmExists

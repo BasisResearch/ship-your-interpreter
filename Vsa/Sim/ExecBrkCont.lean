@@ -2,6 +2,7 @@ import Vsa.Sim.ExecSimCommon
 import Vsa.Sim.Exec_stmtSites
 import Vsa.Sim.EvalSimCommon
 import Vsa.Sim.EvalIntSim2
+import Vsa.Sim.GeomFacts
 
 /-!
 # Layer 4 — M4 statement family: `execBlockA`/`execBlockD` + `ExecS.brk`/`ExecS.cont`
@@ -547,10 +548,17 @@ theorem execBlockA
     (hkind : read32 m0 aStmt.toNat = some k)
     (hslot : StmtSlotPinned k armPC m0)
     (harmAl : armPC.toNat % 4 = 0)
-    (htableStk : stmtJumpTableBase + 4 * k + 4 ≤ SL.lo ∨ sp.toNat ≤ stmtJumpTableBase + 4 * k) :
+    -- GeomFacts retrofit (rule 6): the jump-table slot's stack-disjointness
+    -- residual is supplied as ONE projected record `StackDisjoint …` (the D-atom
+    -- alone — the table is a below-HTIF rodata object, so not a full `ObjGeom`).
+    -- The M6 caller hands this record; `htableStk` below is an O(1) `.disj`
+    -- projection off it, stated over `Nat` endpoints so there is NO pair whnf.
+    (htableGeom : StackDisjoint (stmtJumpTableBase + 4 * k) 4 SL sp.toNat) :
     ExecBlockAGoal g N A SL φf φc st d env s
       sp r aInterp aStmt aEnv aRet armPC m0 out0 := by
   intro c hpre'
+  have htableStk : stmtJumpTableBase + 4 * k + 4 ≤ SL.lo ∨ sp.toNat ≤ stmtJumpTableBase + 4 * k :=
+    htableGeom.disj
   obtain ⟨he, hout0⟩ := hpre'
   have hG := he.good; have htick := he.tick; have hpc := he.pc
   have ha0 := he.a0; have ha1 := he.a1; have ha2 := he.a2; have ha3 := he.a3
@@ -1209,7 +1217,7 @@ theorem execBrkSim
   have hBlockA : ExecBlockAGoal g N A SL φf φc st d env .brk
       sp r aInterp aStmt aEnv aRet execArmBrk m0 out0 :=
     execBlockA g N A SL φf φc st d env .brk 7 execArmBrk sp r aInterp aStmt aEnv aRet m0 out0
-      (by omega) (by omega) hkind hslot (by decide) htableStk
+      (by omega) (by omega) hkind hslot (by decide) ⟨htableStk⟩
   obtain ⟨cA, hstepsA, ment, v8, v9, v18, v19, hArm⟩ := hBlockA c hpre
   obtain ⟨hGA, htickA, hpcA, hx8A, hx9A, hx19A, hx18A, hspA, hraA, ⟨vmiA, hmiA⟩,
     houtA, houtStrA, hmemA, hcodeA, hstoreA, hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
@@ -1293,7 +1301,7 @@ theorem execContSim
   have hBlockA : ExecBlockAGoal g N A SL φf φc st d env .cont
       sp r aInterp aStmt aEnv aRet execArmCont m0 out0 :=
     execBlockA g N A SL φf φc st d env .cont 8 execArmCont sp r aInterp aStmt aEnv aRet m0 out0
-      (by omega) (by omega) hkind hslot (by decide) htableStk
+      (by omega) (by omega) hkind hslot (by decide) ⟨htableStk⟩
   obtain ⟨cA, hstepsA, ment, v8, v9, v18, v19, hArm⟩ := hBlockA c hpre
   obtain ⟨hGA, htickA, hpcA, hx8A, hx9A, hx19A, hx18A, hspA, hraA, ⟨vmiA, hmiA⟩,
     houtA, houtStrA, hmemA, hcodeA, hstoreA, hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,

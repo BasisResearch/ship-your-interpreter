@@ -186,6 +186,7 @@ import Vsa.Sim.Code.Env_new
 import Vsa.Sim.EnvNewSites
 import Vsa.Sim.EnvNewSpec
 import Vsa.Sim.Regions
+import Vsa.Sim.GeomFacts
 import Vsa.Sim.Code.Env_define
 import Vsa.Sim.EnvDefSites
 import Vsa.Sim.EnvDefSpec

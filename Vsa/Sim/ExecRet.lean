@@ -173,7 +173,7 @@ theorem execRetSim
       sp r aInterp aStmt aEnv aRet execArmRet m0 out0 :=
     execBlockA g N A SL φf φc st d env (.ret (some e)) 6 execArmRet
       sp r aInterp aStmt aEnv aRet m0 out0
-      (by omega) (by omega) hkind hslot (by decide) htableStk
+      (by omega) (by omega) hkind hslot (by decide) ⟨htableStk⟩
   obtain ⟨cA, hstepsA, hArmExists⟩ := hBlockA c ⟨he, hout0⟩
   -- ===== glue: arm setup + jal eval_expr + sub-call (the IH) → SubExecReturnR =====
   obtain ⟨cG, hstepsG, hGlueOut⟩ := hGlue hIH cA hArmExists
