@@ -1,0 +1,23 @@
+# exec_stmt varDecl arm (kind 1, 0x800040d8) varInit (init-present) path.
+# ld init ptr; beqz (not-taken = init present); mv/mv/addi setup; jal eval_expr;
+# ld name ptr; reload 24-byte value (3 ld); mv a0,s3; addi a2,sp,0x10; 3 sd copy;
+# jal env_define; li a0,0; j epilogue.
+# jal/j immediates are the DECODER's unscrambled imm21 values.
+800040d8	01043603	ld	12	8	010
+800040dc	22060063	branch_nottaken	BEQ	12	0	220
+800040e0	00048593	alu_addi	11	9	000
+800040e4	00098693	alu_addi	13	19	000
+800040e8	06810513	alu_addi	10	2	068
+800040ec	878ff0ef	jal	1	1ff078
+800040f0	00843583	ld	11	8	008
+800040f4	06813683	ld	13	2	068
+800040f8	07013703	ld	14	2	070
+800040fc	07813783	ld	15	2	078
+80004100	00098513	alu_addi	10	19	000
+80004104	01010613	alu_addi	12	2	010
+80004108	00d13823	sd	13	2	010
+8000410c	00e13c23	sd	14	2	018
+80004110	02f13023	sd	15	2	020
+80004114	949fe0ef	jal	1	1fe948
+80004118	00000513	alu_addi	10	0	000
+8000411c	f81ff06f	j	1fff80

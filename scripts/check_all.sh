@@ -188,6 +188,7 @@ THEOREMS=(
   Vsa.Sim.execExprGlue                           # ExecRecCommon (ExecS.expr arm setup ld a2,8(s0)/addi a0,sp,16/mv a3,s3/mv a1,s1 ≫ armTail_rec_es → SubExecReturn: DISCHARGES execExprSimC hGlue from concrete named residuals)
   Vsa.Sim.execExprSimC                           # ExecRecCommon (ExecS.expr → ExecExit .normal with hGlue discharged via execExprGlue; conditional only on execBlockA geometry + concrete sub-expr/code/headroom residuals, no opaque Triple premise)
   Vsa.Sim.execRetSim                             # ExecRet (ExecS.ret value-present: execBlockA ≫ jal eval_expr≫EvalIH (SubExecReturnR glue) ≫ 24-byte *retslot:=v copy (valueRepr_copy_of_writeWindow) ≫ inline li a0,3 epilogue → ExecExit (.ret v) with the retval disjunct; conditional on slot-pin/table-disjoint + retslot geometry + the recursion-glue residual hGlue; retNull is a follow-up)
+  Vsa.Sim.execVarDeclSim                         # ExecVarDecl (ExecS.varInit: execBlockA ≫ varInit body glue (init-load, jal eval_expr≫EvalIH, value reload/copy, jal env_define — the Store.define callee) ≫ li a0,0/j/execBlockD → ExecExit ⟨st'.store.define env x v, st'.out⟩ .normal; tail mirrors execExprSim; conditional on slot-pin/table-disjoint + the body-glue residual hGlue (bundling the EvalIH and the env_define callee, which has no landed top-level Triple — M3 verified env_define's prologue only); varNull is a follow-up)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean
