@@ -152,6 +152,12 @@ THEOREMS=(
   # M4 AST-transport (AstTransport) — ExprRepr/StmtRepr survive memory agreement over the AST footprint
   Vsa.Sim.exprRepr_agreeP                       # AstTransport (ExprRepr m a e → AgreeP over ExprFp → ExprRepr m' a e)
   Vsa.Sim.stmtRepr_agreeP                       # AstTransport (StmtRepr analog; recurses through ExprFp / StmtArrayFp)
+  # M4 leaf EvalE cases re-landed at EvalExitD (mEvalE motive shape; EvalLeafD)
+  Vsa.Sim.evalIntSimD                           # EvalLeafD (EvalE.int leaf at EvalExitD)
+  Vsa.Sim.evalNullSimD                          # EvalLeafD (EvalE.null leaf at EvalExitD)
+  Vsa.Sim.evalBoolSimD                          # EvalLeafD (EvalE.bool leaf at EvalExitD)
+  Vsa.Sim.evalStrSimD                           # EvalLeafD (EvalE.str leaf at EvalExitD)
+  Vsa.Sim.evalVarSimD                           # EvalLeafD (EvalE.var leaf at EvalExitD)
   # M4 recursive-case glue (EvalRecCommon / EvalNegSim)
   Vsa.Sim.armTail_rec                           # EvalRecCommon (jal eval_expr ≫ IH ⇒ SubEvalReturn)
   Vsa.Sim.blockB_unary                          # EvalNegSim (EX_UNARY arm head + recursive call, IH-composed)

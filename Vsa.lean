@@ -116,6 +116,7 @@ import Vsa.Sim.EvalBoolSim
 import Vsa.Sim.EvalVarSim
 import Vsa.Sim.InductionScaffold
 import Vsa.Sim.EvalRecCommon
+import Vsa.Sim.EvalLeafD
 import Vsa.Sim.EvalNegSim
 import Vsa.Sim.NegTailSites
 import Vsa.Sim.EvalNegSim2
