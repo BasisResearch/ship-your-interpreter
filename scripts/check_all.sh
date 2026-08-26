@@ -159,6 +159,8 @@ THEOREMS=(
   Vsa.Sim.blockB_binary                         # EvalBinSim (EX_BINARY two-operand head; two recursive calls, IH-composed)
   Vsa.Sim.blockC_add                            # EvalBinSim2 (add-int dispatch tail + add path → PreEpilogueVD)
   Vsa.Sim.evalAddSim                            # EvalBinSim2 (EvalE.binary .add int pilot, EvalIH motive shape; conditional)
+  Vsa.Sim.blockC_sub                            # EvalBinSim3 (sub-int dispatch tail + sub path → PreEpilogueVD)
+  Vsa.Sim.evalSubSim                            # EvalBinSim3 (EvalE.binary .sub int, EvalIH motive shape; conditional)
   # Stage A0/A1 — neg block spine as composed Triples (BlockLogic)
   Vsa.Sim.negPrologue_triple                    # A0 (σ0→σ4 prologue as a Triple)
   Vsa.Sim.negLoadStore_triple                   # A0 (σ4→σ10 load/store as a Triple)
