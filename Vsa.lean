@@ -169,6 +169,7 @@ import Vsa.Sim.EvalCallNative
 import Vsa.Sim.EvalArgs
 import Vsa.Sim.EvalCall
 import Vsa.Sim.EvalFn
+import Vsa.Sim.TermSimAssembly
 import Vsa.Sim.ReprCopy
 import Vsa.Sim.StrcpySpecW
 import Vsa.Sim.StrcpySpecW2
