@@ -127,6 +127,8 @@ import Vsa.Sim.AddTailSites
 import Vsa.Sim.EvalBinSim2
 import Vsa.Sim.SubTailSites
 import Vsa.Sim.EvalBinSim3
+import Vsa.Sim.CmpTailSites
+import Vsa.Sim.CmpBridges
 import Vsa.Sim.BlockLogic
 import Vsa.Sim.ReprSurvival
 import Vsa.Sim.ReprCopy
