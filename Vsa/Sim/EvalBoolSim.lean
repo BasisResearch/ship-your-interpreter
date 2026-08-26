@@ -1,4 +1,5 @@
 import Vsa.Sim.EvalNullSim
+import Vsa.Sim.EvalRecCommon
 import Vsa.Sim.DecodeTable.Batch16Part04
 import Vsa.Sim.DecodeTable.Batch14Part10
 import Vsa.Sim.DecodeTable.Batch03Part22
@@ -189,6 +190,7 @@ theorem value_bool_spec_full (g : (R : Register) → Option (RegisterType R)) (b
         ValueRepr c.σ.mem N φc buf.toNat (.bool (vb != 0#64)) ∧
         c.σ.sailOutput = out0 ∧
         (∀ k : Nat, ¬ (buf.toNat ≤ k ∧ k < buf.toNat + 24) → m0[k]? = c.σ.mem[k]?) ∧
+        MemExtends m0 c.σ.mem ∧
         (∀ R : Register, NotWrittenV R → c.σ.regs.get? R = g R)) := by
   intro c hpre
   obtain ⟨hG, hloaded, hmem, hpc, ha0, ha1, hra, ⟨vmi, hmi⟩, htick, hreg, hrettgt, hout, hframe⟩ := hpre
@@ -283,7 +285,7 @@ theorem value_bool_spec_full (g : (R : Register) → Option (RegisterType R)) (b
   refine ⟨⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩, hsteps, hG5, obs_jr_pc hobs5,
     obs_jr_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_4,
     obs_jr_other hobs5 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_4,
-    obs_jr_minstret hobs5, hi5, ?_, hout5.trans hout, ?_,
+    obs_jr_minstret hobs5, hi5, ?_, hout5.trans hout, ?_, ?_,
     fun R hR => (frame_jr_v hobs5 R hR).trans
       ((frame_store_v hobs4 R hR).trans ((frame_store_v hobs3 R hR).trans
         ((frame_alu_v hobs2 R hR).trans ((frame_alu_snez hobs1 R hR).trans (hframe R hR)))))⟩
@@ -298,6 +300,12 @@ theorem value_bool_spec_full (g : (R : Register) → Option (RegisterType R)) (b
     intro k hk
     rw [hmem5eq, getElem_writeMap4_disjoint _ _ _ _ (by omega),
         getElem_writeMap4_disjoint _ _ _ _ (by omega), hmem]
+  · -- MemExtends m0 σ5.mem: the two writeMap4 writes only ADD presence.
+    rw [hmem5eq, ← hmem]
+    exact ((MemExtends.refl c.σ.mem).trans
+      (memExtends_writeMap4 c.σ.mem (buf.toNat + 8) (swData snezV))).trans
+      (memExtends_writeMap4 (writeMap4 c.σ.mem (buf.toNat + 8) (swData snezV)) buf.toNat
+        (swData ((0#64) + sign_extend (m := 64) (0x001#12))))
 
 /-! ## The `.bool` payload value bridge
 
@@ -449,7 +457,7 @@ theorem blockC_bool
   have hviCode2 : Value_boolLoaded σ2.mem := by rw [hmem2e]; exact hviCode
   have hout2 : σ2.sailOutput = out0 := by rw [hobs2.out, sailOutput_sigmaPost_jal]; exact hout1
   -- ============ jal callee: value_bool_spec_full at vb := payV ============
-  obtain ⟨c3, hs3, hG3, hpc3, ha0_3, hlink3, hmi3, htick3, hval3, hout3, hmemframe3, hframe3⟩ :=
+  obtain ⟨c3, hs3, hG3, hpc3, ha0_3, hlink3, hmi3, htick3, hval3, hout3, hmemframe3, _hMemExt3, hframe3⟩ :=
     value_bool_spec_full (fun R => σ2.regs.get? R) sret payV (0x80003428#64) N φc ment out0
       ⟨σ2, i2, c.steps + 1 + 1⟩
       ⟨hG2, hviCode2, hmem2e, hpc2, ha0_2, hx11_2, hlink2, ⟨vmi2, hmi2⟩, hi2, hBoolReg, hrettgt, hout2,

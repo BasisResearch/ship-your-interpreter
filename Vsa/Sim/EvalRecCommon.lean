@@ -104,6 +104,20 @@ theorem memExtends_writeMap8 (mem : Mem) (a8 : Nat) (d : BitVec (8 * 8)) :
     · exact ⟨_, by rw [h]; exact getElem_writeMap8_7 mem a8 d⟩
   · exact ⟨b, by rw [getElem_writeMap8_disjoint mem a8 k d (by omega)]; exact hk⟩
 
+/-- A `writeMap4` (a 4-byte insert) preserves presence. -/
+theorem memExtends_writeMap4 (mem : Mem) (a4 : Nat) (d : BitVec (8 * 4)) :
+    MemExtends mem (writeMap4 mem a4 d) := by
+  intro k b hk
+  by_cases hin : a4 ≤ k ∧ k < a4 + 4
+  · obtain ⟨hlo, hhi⟩ := hin
+    rcases (show k = a4 ∨ k = a4 + 1 ∨ k = a4 + 2 ∨ k = a4 + 3 from by omega)
+      with h | h | h | h
+    · exact ⟨_, by rw [show k = a4 + 0 from by omega]; exact getElem_writeMap4_0 mem a4 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap4_1 mem a4 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap4_2 mem a4 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap4_3 mem a4 d⟩
+  · exact ⟨b, by rw [getElem_writeMap4_disjoint mem a4 k d (by omega)]; exact hk⟩
+
 theorem MemExtends.trans {m0 m1 m2 : Mem}
     (h1 : MemExtends m0 m1) (h2 : MemExtends m1 m2) : MemExtends m0 m2 := by
   intro a b h

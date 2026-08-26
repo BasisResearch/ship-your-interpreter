@@ -313,23 +313,24 @@ theorem frame_jr_t {σ' σ : MState} {pc vm tgt : BitVec 64}
 
 def truthy_pre (g : (R : Register) → Option (RegisterType R)) (buf r : BitVec 64)
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (v : Value)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String) (c : Config) : Prop :=
   GoodState c.σ ∧ Value_truthyLoaded c.σ.mem ∧ c.σ.mem = m0 ∧
   c.σ.regs.get? Register.PC = some (0x8000282c#64 : BitVec 64) ∧
   c.σ.regs.get? Register.x10 = some buf ∧ c.σ.regs.get? Register.x1 = some r ∧
   (∃ w, c.σ.regs.get? Register.minstret = some w) ∧ c.tick < 2 ∧
   ValueRepr m0 N φc buf.toNat v ∧ TruthyRegion buf ∧
   (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 ∧
+  c.σ.sailOutput = out0 ∧
   (∀ R : Register, NotWrittenT R → c.σ.regs.get? R = g R)
 
 def truthy_post (g : (R : Register) → Option (RegisterType R)) (r : BitVec 64) (v : Value)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String) (c : Config) : Prop :=
   GoodState c.σ ∧
   c.σ.regs.get? Register.PC = some (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1) ∧
   c.σ.regs.get? Register.x10 = some (cond (Value.truthy v) (1#64) (0#64)) ∧
   c.σ.regs.get? Register.x1 = some r ∧
   (∃ w, c.σ.regs.get? Register.minstret = some w) ∧ c.tick < 2 ∧
-  c.σ.mem = m0 ∧
+  c.σ.mem = m0 ∧ c.σ.sailOutput = out0 ∧
   (∀ R : Register, NotWrittenT R → c.σ.regs.get? R = g R)
 
 /-! ## Kind-value bridge
@@ -359,12 +360,13 @@ Runs the first two instructions from entry, delivering the machine at
 argument/return registers preserved. Memory is unchanged (`= m0`). -/
 theorem truthy_prefix (g : (R : Register) → Option (RegisterType R)) (buf r : BitVec 64)
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (v : Value)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String) (c : Config)
     (hG : GoodState c.σ) (hloaded : Value_truthyLoaded c.σ.mem) (hmem : c.σ.mem = m0)
     (hpc : c.σ.regs.get? Register.PC = some (0x8000282c#64 : BitVec 64))
     (ha0 : c.σ.regs.get? Register.x10 = some buf) (hra : c.σ.regs.get? Register.x1 = some r)
     (vmi : BitVec 64) (hmi : c.σ.regs.get? Register.minstret = some vmi)
     (htick : c.tick < 2) (hrepr : ValueRepr m0 N φc buf.toNat v) (hreg : TruthyRegion buf)
+    (hout : c.σ.sailOutput = out0)
     (hframe : ∀ R : Register, NotWrittenT R → c.σ.regs.get? R = g R) :
     ∃ (σ2 : MState) (i2 : Nat),
       Steps c ⟨σ2, i2, c.steps + 1 + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧ σ2.mem = m0 ∧
@@ -372,7 +374,7 @@ theorem truthy_prefix (g : (R : Register) → Option (RegisterType R)) (buf r : 
       σ2.regs.get? Register.x15 = some (BitVec.ofNat 64 (kindTag v)) ∧
       σ2.regs.get? Register.x14 = some (1#64) ∧
       σ2.regs.get? Register.x10 = some buf ∧ σ2.regs.get? Register.x1 = some r ∧
-      (∃ w, σ2.regs.get? Register.minstret = some w) ∧
+      (∃ w, σ2.regs.get? Register.minstret = some w) ∧ σ2.sailOutput = out0 ∧
       (∀ R : Register, NotWrittenT R → σ2.regs.get? R = g R) := by
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hkind : read32 m0 buf.toNat = some (kindTag v) := kind_read32 m0 N φc buf.toNat v hrepr
@@ -389,6 +391,7 @@ theorem truthy_prefix (g : (R : Register) → Option (RegisterType R)) (buf r : 
       (by rw [truthy_kind_addr, hmem]; exact hbb2) (by rw [truthy_kind_addr, hmem]; exact hbb3)
       htick
   have hmem1eq : σ1.mem = m0 := by rw [hmem1, hmem]
+  have hout1 : σ1.sailOutput = out0 := by rw [hobs1.out, sailOutput_sigmaPost_alu]; exact hout
   have hpc1 : σ1.regs.get? Register.PC = some (0x80002830#64 : BitVec 64) := by
     have := obs_alu_pc hobs1
     rwa [show BitVec.addInt (0x8000282c#64) 4 = (0x80002830#64 : BitVec 64) from by decide] at this
@@ -407,6 +410,7 @@ theorem truthy_prefix (g : (R : Register) → Option (RegisterType R)) (buf r : 
     site_80002830 σ1 i1 (c.steps + 1) (0x80002830#64) vmi1 hG1 hpc1 hmi1
       (by rw [hmem1eq]; exact hmem ▸ hloaded) rfl hi1
   have hmem2eq : σ2.mem = m0 := by rw [hmem2, hmem1eq]
+  have hout2 : σ2.sailOutput = out0 := by rw [hobs2.out, sailOutput_sigmaPost_alu]; exact hout1
   have hpc2 : σ2.regs.get? Register.PC = some (0x80002834#64 : BitVec 64) := by
     have := obs_alu_pc hobs2
     rwa [show BitVec.addInt (0x80002830#64) 4 = (0x80002834#64 : BitVec 64) from by decide] at this
@@ -421,7 +425,7 @@ theorem truthy_prefix (g : (R : Register) → Option (RegisterType R)) (buf r : 
   have hframe2 : ∀ R : Register, NotWrittenT R → σ2.regs.get? R = g R := fun R hR =>
     (frame_alu_t hobs2 R hR hR.2.1).trans (hframe1 R hR)
   exact ⟨σ2, i2, (Steps.single hs1).trans (Steps.single hs2), hi2, hG2, hmem2eq, hpc2,
-    ha5_2, ha14_2, ha0_2, hra_2, ⟨vmi2, hmi2⟩, hframe2⟩
+    ha5_2, ha14_2, ha0_2, hra_2, ⟨vmi2, hmi2⟩, hout2, hframe2⟩
 
 /-! ## Default path (`snez a0,a5`)
 
@@ -430,7 +434,7 @@ For `v` with kind `k ∈ {0, 3, 4, 5}` both `beq`s fall through; the machine run
 0x80002844(ret)`. `a5 = ofNat 64 k`, so the result is `cond (k ≠ 0) 1 0`. Given
 the post-prefix state `σ2`, this runs to `truthy_post`. -/
 theorem truthy_default_path (g : (R : Register) → Option (RegisterType R)) (buf r : BitVec 64)
-    (v : Value) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config)
+    (v : Value) (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String) (c : Config)
     (σ2 : MState) (i2 : Nat)
     (hloaded0 : Value_truthyLoaded m0) (hrettgt : (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0)
     (hsteps2 : Steps c ⟨σ2, i2, c.steps + 1 + 1⟩) (hi2 : i2 < 2) (hG2 : GoodState σ2)
@@ -439,11 +443,12 @@ theorem truthy_default_path (g : (R : Register) → Option (RegisterType R)) (bu
     (ha14_2 : σ2.regs.get? Register.x14 = some (1#64))
     (ha0_2 : σ2.regs.get? Register.x10 = some buf) (hra_2 : σ2.regs.get? Register.x1 = some r)
     (vmi2 : BitVec 64) (hmi2 : σ2.regs.get? Register.minstret = some vmi2)
+    (hout2 : σ2.sailOutput = out0)
     (hframe2 : ∀ R : Register, NotWrittenT R → σ2.regs.get? R = g R)
     (hk1 : (kindTag v) ≠ 1) (hk2 : (kindTag v) ≠ 2)
     (hres : cond (BitVec.ofNat 64 (kindTag v) != 0#64) (1#64) (0#64)
       = cond (Value.truthy v) (1#64) (0#64)) :
-    ∃ c' : Config, Steps c c' ∧ truthy_post g r v m0 c' := by
+    ∃ c' : Config, Steps c c' ∧ truthy_post g r v m0 out0 c' := by
   have hktlt : kindTag v < 128 := by cases v <;> simp [kindTag]
   have hne1 : ((BitVec.ofNat 64 (kindTag v)) == (1#64 : BitVec 64)) = false := by
     simp only [beq_eq_false_iff_ne, ne_eq]
@@ -460,6 +465,7 @@ theorem truthy_default_path (g : (R : Register) → Option (RegisterType R)) (bu
     site_80002834_nottaken σ2 i2 (c.steps + 1 + 1) (0x80002834#64) vmi2
       (BitVec.ofNat 64 (kindTag v)) (1#64) hG2 hpc2 hmi2 ha15_2 ha14_2 (hmem2 ▸ hloaded0) rfl hne1 hi2
   have hmem3eq : σ3.mem = m0 := by rw [hmem3, hmem2]
+  have hout3 : σ3.sailOutput = out0 := by rw [hobs3.out, sailOutput_sigmaPost_branch_nottaken]; exact hout2
   have hpc3 : σ3.regs.get? Register.PC = some (0x80002838#64 : BitVec 64) := by
     have := obs_branch_nottaken_pc hobs3
     rwa [show BitVec.addInt (0x80002834#64) 4 = (0x80002838#64 : BitVec 64) from by decide] at this
@@ -473,6 +479,7 @@ theorem truthy_default_path (g : (R : Register) → Option (RegisterType R)) (bu
   obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
     site_80002838 σ3 i3 (c.steps + 1 + 1 + 1) (0x80002838#64) vmi3 hG3 hpc3 hmi3 (hmem3eq ▸ hloaded0) rfl hi3
   have hmem4eq : σ4.mem = m0 := by rw [hmem4, hmem3eq]
+  have hout4 : σ4.sailOutput = out0 := by rw [hobs4.out, sailOutput_sigmaPost_alu]; exact hout3
   have hpc4 : σ4.regs.get? Register.PC = some (0x8000283c#64 : BitVec 64) := by
     have := obs_alu_pc hobs4
     rwa [show BitVec.addInt (0x80002838#64) 4 = (0x8000283c#64 : BitVec 64) from by decide] at this
@@ -491,6 +498,7 @@ theorem truthy_default_path (g : (R : Register) → Option (RegisterType R)) (bu
     site_8000283c_nottaken σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x8000283c#64) vmi4
       (BitVec.ofNat 64 (kindTag v)) (2#64) hG4 hpc4 hmi4 ha15_4 ha14_4 (hmem4eq ▸ hloaded0) rfl hne2 hi4
   have hmem5eq : σ5.mem = m0 := by rw [hmem5, hmem4eq]
+  have hout5 : σ5.sailOutput = out0 := by rw [hobs5.out, sailOutput_sigmaPost_branch_nottaken]; exact hout4
   have hpc5 : σ5.regs.get? Register.PC = some (0x80002840#64 : BitVec 64) := by
     have := obs_branch_nottaken_pc hobs5
     rwa [show BitVec.addInt (0x8000283c#64) 4 = (0x80002840#64 : BitVec 64) from by decide] at this
@@ -504,6 +512,7 @@ theorem truthy_default_path (g : (R : Register) → Option (RegisterType R)) (bu
     site_80002840 σ5 i5 (c.steps + 1 + 1 + 1 + 1 + 1) (0x80002840#64) vmi5
       (BitVec.ofNat 64 (kindTag v)) hG5 hpc5 hmi5 ha15_5 (hmem5eq ▸ hloaded0) rfl hi5
   have hmem6eq : σ6.mem = m0 := by rw [hmem6, hmem5eq]
+  have hout6 : σ6.sailOutput = out0 := by rw [hobs6.out, sailOutput_sigmaPost_alu]; exact hout5
   have hpc6 : σ6.regs.get? Register.PC = some (0x80002844#64 : BitVec 64) := by
     have := obs_alu_pc hobs6
     rwa [show BitVec.addInt (0x80002840#64) 4 = (0x80002844#64 : BitVec 64) from by decide] at this
@@ -525,6 +534,7 @@ theorem truthy_default_path (g : (R : Register) → Option (RegisterType R)) (bu
     obs_jr_other hobs7 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_6,
     obs_jr_other hobs7 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_6,
     obs_jr_minstret hobs7, hi7, by rw [hmem7, hmem6eq],
+    by rw [hobs7.out, sailOutput_sigmaPost_jump_x0]; exact hout6,
     fun R hR => (frame_jr_t hobs7 R hR).trans (hframe6 R hR)⟩
 
 /-! ## `value_truthy_spec`
@@ -534,14 +544,14 @@ ladder (decided by `kindTag v`), the per-kind payload read, and the `ret`; the
 returned `a0` matches `cond (Value.truthy v) 1 0` by the byte/`snez` bridges. -/
 theorem value_truthy_spec (g : (R : Register) → Option (RegisterType R)) (buf r : BitVec 64)
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (v : Value)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (truthy_pre g buf r N φc v m0) (truthy_post g r v m0) := by
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String) :
+    Triple (truthy_pre g buf r N φc v m0 out0) (truthy_post g r v m0 out0) := by
   intro c hpre
-  obtain ⟨hG, hloaded, hmem, hpc, ha0, hra, ⟨vmi, hmi⟩, htick, hrepr, hreg, hrettgt, hframe⟩ := hpre
+  obtain ⟨hG, hloaded, hmem, hpc, ha0, hra, ⟨vmi, hmi⟩, htick, hrepr, hreg, hrettgt, hout, hframe⟩ := hpre
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hloaded0 : Value_truthyLoaded m0 := hmem ▸ hloaded
-  obtain ⟨σ2, i2, hsteps2, hi2, hG2, hmem2, hpc2, ha15_2, ha14_2, ha0_2, hra_2, ⟨vmi2, hmi2⟩, hframe2⟩ :=
-    truthy_prefix g buf r N φc v m0 c hG hloaded hmem hpc ha0 hra vmi hmi htick hrepr hreg hframe
+  obtain ⟨σ2, i2, hsteps2, hi2, hG2, hmem2, hpc2, ha15_2, ha14_2, ha0_2, hra_2, ⟨vmi2, hmi2⟩, hout2, hframe2⟩ :=
+    truthy_prefix g buf r N φc v m0 out0 c hG hloaded hmem hpc ha0 hra vmi hmi htick hrepr hreg hout hframe
   have hpay_addr : (buf + sign_extend (m := 64) (0x008#12)).toNat = buf.toNat + 8 :=
     truthy_pay_addr buf hreg
   cases v with
@@ -561,6 +571,7 @@ theorem value_truthy_spec (g : (R : Register) → Option (RegisterType R)) (buf 
               = 0x80002854#64 from by apply BitVec.eq_of_toNat_eq; decide]; decide)
         hveq hi2
     have hmem3eq : σ3.mem = m0 := by rw [hmem3, hmem2]
+    have hout3 : σ3.sailOutput = out0 := by rw [hobs3.out, sailOutput_sigmaPost_branch_taken]; exact hout2
     have hpc3 : σ3.regs.get? Register.PC = some (0x80002854#64 : BitVec 64) := by
       have := obs_branch_taken_pc hobs3
       rwa [show ((0x80002834#64 : BitVec 64) + sign_extend (m := 64) (0x0020#13))
@@ -580,6 +591,7 @@ theorem value_truthy_spec (g : (R : Register) → Option (RegisterType R)) (buf 
         (by rw [hpay_addr, hmem3eq]; exact hp0) (by rw [hpay_addr, hmem3eq]; exact hp1)
         (by rw [hpay_addr, hmem3eq]; exact hp2) (by rw [hpay_addr, hmem3eq]; exact hp3) hi3
     have hmem4eq : σ4.mem = m0 := by rw [hmem4, hmem3eq]
+    have hout4 : σ4.sailOutput = out0 := by rw [hobs4.out, sailOutput_sigmaPost_alu]; exact hout3
     have hpc4 : σ4.regs.get? Register.PC = some (0x80002858#64 : BitVec 64) := by
       have := obs_alu_pc hobs4
       rwa [show BitVec.addInt (0x80002854#64) 4 = (0x80002858#64 : BitVec 64) from by decide] at this
@@ -602,6 +614,7 @@ theorem value_truthy_spec (g : (R : Register) → Option (RegisterType R)) (buf 
       obs_jr_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_4,
       obs_jr_other hobs5 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_4,
       obs_jr_minstret hobs5, hi5, by rw [hmem5, hmem4eq],
+      by rw [hobs5.out, sailOutput_sigmaPost_jump_x0]; exact hout4,
       fun R hR => (frame_jr_t hobs5 R hR).trans (hframe4 R hR)⟩
   | int n =>
     -- kind = 2: beq nt → 0x80002838(li a4,2) → beq taken → 0x80002848(ld a0,8(a0)); snez; ret
@@ -619,6 +632,7 @@ theorem value_truthy_spec (g : (R : Register) → Option (RegisterType R)) (buf 
         (BitVec.ofNat 64 (kindTag (Value.int n))) (1#64) hG2 hpc2 hmi2 ha15_2 ha14_2
         (hmem2 ▸ hloaded0) rfl hne1 hi2
     have hmem3eq : σ3.mem = m0 := by rw [hmem3, hmem2]
+    have hout3 : σ3.sailOutput = out0 := by rw [hobs3.out, sailOutput_sigmaPost_branch_nottaken]; exact hout2
     have hpc3 : σ3.regs.get? Register.PC = some (0x80002838#64 : BitVec 64) := by
       have := obs_branch_nottaken_pc hobs3
       rwa [show BitVec.addInt (0x80002834#64) 4 = (0x80002838#64 : BitVec 64) from by decide] at this
@@ -632,6 +646,7 @@ theorem value_truthy_spec (g : (R : Register) → Option (RegisterType R)) (buf 
     obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
       site_80002838 σ3 i3 (c.steps + 1 + 1 + 1) (0x80002838#64) vmi3 hG3 hpc3 hmi3 (hmem3eq ▸ hloaded0) rfl hi3
     have hmem4eq : σ4.mem = m0 := by rw [hmem4, hmem3eq]
+    have hout4 : σ4.sailOutput = out0 := by rw [hobs4.out, sailOutput_sigmaPost_alu]; exact hout3
     have hpc4 : σ4.regs.get? Register.PC = some (0x8000283c#64 : BitVec 64) := by
       have := obs_alu_pc hobs4
       rwa [show BitVec.addInt (0x80002838#64) 4 = (0x8000283c#64 : BitVec 64) from by decide] at this
@@ -656,6 +671,7 @@ theorem value_truthy_spec (g : (R : Register) → Option (RegisterType R)) (buf 
               = 0x80002848#64 from by apply BitVec.eq_of_toNat_eq; decide]; decide)
         hveq hi4
     have hmem5eq : σ5.mem = m0 := by rw [hmem5, hmem4eq]
+    have hout5 : σ5.sailOutput = out0 := by rw [hobs5.out, sailOutput_sigmaPost_branch_taken]; exact hout4
     have hpc5 : σ5.regs.get? Register.PC = some (0x80002848#64 : BitVec 64) := by
       have := obs_branch_taken_pc hobs5
       rwa [show ((0x8000283c#64 : BitVec 64) + sign_extend (m := 64) (0x000c#13))
@@ -677,6 +693,7 @@ theorem value_truthy_spec (g : (R : Register) → Option (RegisterType R)) (buf 
         (by rw [hpay_addr, hmem5eq]; exact hq4) (by rw [hpay_addr, hmem5eq]; exact hq5)
         (by rw [hpay_addr, hmem5eq]; exact hq6) (by rw [hpay_addr, hmem5eq]; exact hq7) hi5
     have hmem6eq : σ6.mem = m0 := by rw [hmem6, hmem5eq]
+    have hout6 : σ6.sailOutput = out0 := by rw [hobs6.out, sailOutput_sigmaPost_alu]; exact hout5
     have hpc6 : σ6.regs.get? Register.PC = some (0x8000284c#64 : BitVec 64) := by
       have := obs_alu_pc hobs6
       rwa [show BitVec.addInt (0x80002848#64) 4 = (0x8000284c#64 : BitVec 64) from by decide] at this
@@ -699,6 +716,7 @@ theorem value_truthy_spec (g : (R : Register) → Option (RegisterType R)) (buf 
       site_8000284c σ6 i6 (c.steps + 1 + 1 + 1 + 1 + 1 + 1) (0x8000284c#64) vmi6
         (BitVec.ofNat 64 p) hG6 hpc6 hmi6 ha0_6 (hmem6eq ▸ hloaded0) rfl hi6
     have hmem7eq : σ7.mem = m0 := by rw [hmem7, hmem6eq]
+    have hout7 : σ7.sailOutput = out0 := by rw [hobs7.out, sailOutput_sigmaPost_alu]; exact hout6
     have hpc7 : σ7.regs.get? Register.PC = some (0x80002850#64 : BitVec 64) := by
       have := obs_alu_pc hobs7
       rwa [show BitVec.addInt (0x8000284c#64) 4 = (0x80002850#64 : BitVec 64) from by decide] at this
@@ -722,25 +740,26 @@ theorem value_truthy_spec (g : (R : Register) → Option (RegisterType R)) (buf 
       obs_jr_other hobs8 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_7,
       obs_jr_other hobs8 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_7,
       obs_jr_minstret hobs8, hi8, by rw [hmem8, hmem7eq],
+      by rw [hobs8.out, sailOutput_sigmaPost_jump_x0]; exact hout7,
       fun R hR => (frame_jr_t hobs8 R hR).trans (hframe7 R hR)⟩
   | null =>
-    exact truthy_default_path g buf r Value.null m0 c σ2 i2 hloaded0 hrettgt hsteps2 hi2 hG2 hmem2
-      hpc2 ha15_2 ha14_2 ha0_2 hra_2 vmi2 hmi2 hframe2 (by decide) (by decide)
+    exact truthy_default_path g buf r Value.null m0 out0 c σ2 i2 hloaded0 hrettgt hsteps2 hi2 hG2 hmem2
+      hpc2 ha15_2 ha14_2 ha0_2 hra_2 vmi2 hmi2 hout2 hframe2 (by decide) (by decide)
       (by simp only [kindTag, Value.truthy]; decide)
   | str s =>
     obtain ⟨htagr, _⟩ := hrepr
-    exact truthy_default_path g buf r (Value.str s) m0 c σ2 i2 hloaded0 hrettgt hsteps2 hi2 hG2 hmem2
-      hpc2 ha15_2 ha14_2 ha0_2 hra_2 vmi2 hmi2 hframe2 (by simp [kindTag]) (by simp [kindTag])
+    exact truthy_default_path g buf r (Value.str s) m0 out0 c σ2 i2 hloaded0 hrettgt hsteps2 hi2 hG2 hmem2
+      hpc2 ha15_2 ha14_2 ha0_2 hra_2 vmi2 hmi2 hout2 hframe2 (by simp [kindTag]) (by simp [kindTag])
       (by simp only [kindTag, Value.truthy]; decide)
   | closure ca =>
     obtain ⟨htagr, _⟩ := hrepr
-    exact truthy_default_path g buf r (Value.closure ca) m0 c σ2 i2 hloaded0 hrettgt hsteps2 hi2 hG2 hmem2
-      hpc2 ha15_2 ha14_2 ha0_2 hra_2 vmi2 hmi2 hframe2 (by simp [kindTag]) (by simp [kindTag])
+    exact truthy_default_path g buf r (Value.closure ca) m0 out0 c σ2 i2 hloaded0 hrettgt hsteps2 hi2 hG2 hmem2
+      hpc2 ha15_2 ha14_2 ha0_2 hra_2 vmi2 hmi2 hout2 hframe2 (by simp [kindTag]) (by simp [kindTag])
       (by simp only [kindTag, Value.truthy]; decide)
   | native f =>
     obtain ⟨htagr, _⟩ := hrepr
-    exact truthy_default_path g buf r (Value.native f) m0 c σ2 i2 hloaded0 hrettgt hsteps2 hi2 hG2 hmem2
-      hpc2 ha15_2 ha14_2 ha0_2 hra_2 vmi2 hmi2 hframe2 (by simp [kindTag]) (by simp [kindTag])
+    exact truthy_default_path g buf r (Value.native f) m0 out0 c σ2 i2 hloaded0 hrettgt hsteps2 hi2 hG2 hmem2
+      hpc2 ha15_2 ha14_2 ha0_2 hra_2 vmi2 hmi2 hout2 hframe2 (by simp [kindTag]) (by simp [kindTag])
       (by simp only [kindTag, Value.truthy]; decide)
 
 end Vsa.Sim
