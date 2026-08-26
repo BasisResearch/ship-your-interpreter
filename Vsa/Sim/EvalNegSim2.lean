@@ -168,7 +168,7 @@ theorem blockC_neg
       (fun c => ∃ (mpre : Mem) (φfe φce : Addr → Nat),
         PhiExtends φf φfe st'.store.frames.size ∧
         PhiExtends φc φce st'.store.closures.size ∧
-        PreEpilogueV g N A SL φfe φce st' (.int (wrap64 (-n))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+        PreEpilogueVD g N A SL φfe φce st' (.int (wrap64 (-n))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hpre
   obtain ⟨mcall, hSub, hgx8, hexpr, hStackPop, hexprAl, hexprLo, hexprHi, hexprWin,
     hexprSL, hexprA, hexprSub,
@@ -408,7 +408,7 @@ theorem blockC_neg
     refine ⟨hG16, hVint16, rfl, hpc16, hx10_16, hx11_16, hlink16, ⟨vmi16, hmi16⟩, hi16, hIntRegion,
       (by decide), hout16, fun R _ => rfl⟩
   obtain ⟨cvi, hsvi, hGvi, hpcvi, hx10vi, hravi, ⟨vmivi, hmivi⟩, htickvi, hvalvi, houtvi,
-      hmemframevi, hframevi⟩ :=
+      hmemframevi, hpresvi, hframevi⟩ :=
     value_int_spec (fun R => σ16.regs.get? R) sret ((0#64) - payV) (0x800039dc#64) N φc' σ16.mem c.σ.sailOutput
       ⟨σ16, i16, cS.steps+1⟩ hcallpre
   -- the produced value is `.int (wrap64 (-n))`
@@ -467,8 +467,11 @@ theorem blockC_neg
   have hslotS2_f : read64 σ17.mem (sp.toNat - 32) = some v18.toNat := by
     rw [← read64_agreeP hslotAgree (fun j hj => ⟨by omega, by omega⟩)]; exact hslotS2
   -- StoreRepr survives: all writes (3 error stores + sret) land inside [SL.lo, SL.hi)
-  have hstore_fin : StoreRepr σ17.mem N A φf' φc' st'.store := by
-    apply hstoreSurv'
+  -- `c.σ.mem` (the post-call memory) agrees with the epilogue-entry `σ17.mem`
+  -- outside the whole-stack region `[SL.lo, SL.hi)`: the neg tail's own writes (the
+  -- 3 error stores at `sp-{848,840,832}` and `value_int`'s `sret` write) ALL land
+  -- inside `[SL.lo, SL.hi)` (`sp - 848 ≥ SL.lo` from `SL.lo+1088 ≤ sp`, `sret ∈ SL`).
+  have hSL17 : ∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = σ17.mem[k]? := by
     intro k hk
     rw [hmem17e, ← hmemframevi k (by rcases hsretInSL with ⟨hl, hr⟩; omega), hmem16_3]
     show c.σ.mem[k]? = (writeMap8 m2 (sp.toNat-832) (sdData_val V14))[k]?
@@ -477,6 +480,31 @@ theorem blockC_neg
     rw [getElem_writeMap8_disjoint m1 (sp.toNat-840) k (sdData_val payV) (by omega)]
     show c.σ.mem[k]? = (writeMap8 c.σ.mem (sp.toNat-848) (sdData_val K13))[k]?
     rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat-848) k (sdData_val K13) (by omega)]
+  have hstore_fin : StoreRepr σ17.mem N A φf' φc' st'.store :=
+    hstoreSurv' σ17.mem (fun k hk => hSL17 k hk)
+  -- the `EvalExitD` upgrade clause (b): `[SL.lo,SL.hi)`-survival of `st'.store` at
+  -- the exit memory `σ17.mem` — any `m'` agreeing with `σ17.mem` outside `SL` also
+  -- agrees with `c.σ.mem` there (via `hSL17`), so `hstoreSurv'` applies.
+  have hSurvSL_fin : ∀ m' : Mem,
+      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → σ17.mem[k]? = m'[k]?) →
+      StoreRepr m' N A φf' φc' st'.store :=
+    fun m' hm' => hstoreSurv' m' (fun k hk => (hSL17 k hk).trans (hm' k hk))
+  -- the `EvalExitD` upgrade clause (a): `MemExtends m0 σ17.mem`. `mcall` is fully
+  -- populated (`hStackPop`), so `MemExtends m0 mcall` is trivial; every subsequent
+  -- write only ADDS: `MemExtends mcall c.σ.mem` (`hMemExt`), the 3 error stores
+  -- (`memExtends_writeMap8`), and `value_int`'s `sret` write (`hpresvi`).
+  have hMemExt_m0_c : MemExtends m0 c.σ.mem := by
+    intro a b _; obtain ⟨bm, hbm⟩ := hStackPop a; exact hMemExt a bm hbm
+  have hMemExt_c_16 : MemExtends c.σ.mem σ16.mem := by
+    rw [hmem16_3]
+    exact ((MemExtends.refl c.σ.mem).trans
+      (memExtends_writeMap8 c.σ.mem (sp.toNat - 848) (sdData_val K13))).trans
+      ((memExtends_writeMap8 m1 (sp.toNat - 840) (sdData_val payV)).trans
+        (memExtends_writeMap8 m2 (sp.toNat - 832) (sdData_val V14)))
+  have hMemExt_16_17 : MemExtends σ16.mem σ17.mem := by
+    intro a b hb; rw [hmem17e]; exact hpresvi a b hb
+  have hMemExt_fin : MemExtends m0 σ17.mem :=
+    (hMemExt_m0_c.trans hMemExt_c_16).trans hMemExt_16_17
   -- the callee-saved (noise) frame: threads gpre through the whole tail, then the
   -- prologue bridge gpre → g (the entry ghost the epilogue restores to).
   have hframeG : ∀ R : Register, AbiPreservedNoise R →
@@ -510,7 +538,8 @@ theorem blockC_neg
   ------------------------------------------------------------------------
   -- assemble the epilogue-entry package `PreEpilogueV` at the extended maps
   ------------------------------------------------------------------------
-  refine ⟨⟨σ17, i17, cvi.steps + 1⟩, ?_, σ17.mem, φf', φc', hpf', hpc', ?_⟩
+  refine ⟨⟨σ17, i17, cvi.steps + 1⟩, ?_, σ17.mem, φf', φc', hpf', hpc',
+    ⟨?_, hMemExt_fin, hSurvSL_fin⟩⟩
   · exact hstepSpine.trans ((Steps.single hstep16).trans (hsvi.trans ((Steps.single hstep17))))
   · refine ⟨hG17, hi17, hpc_fin, hs1_fin, hsp_fin, ⟨vmifin, hmifin⟩,
       hout_fin.trans hout0eq, houtStr, rfl, (by rw [hmem17e]; exact hcode_vi),

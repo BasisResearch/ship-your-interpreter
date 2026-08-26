@@ -44,9 +44,9 @@ theorem blockC_ee
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (n : Int)
-    (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem) :
+    (sp r sret aExpr aEnv : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem) :
     Triple
-      (fun c => ∃ ment, ArmEntry g N A SL φf φc st n sp r sret aExpr v8 v9 v18 out0 m0 ment c)
+      (fun c => ∃ ment, ArmEntry g N A SL φf φc st n sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c)
       (fun c => ∃ mpre, PreEpilogue g N A SL φf φc st n sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hpre
   obtain ⟨ment, hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hvicode, hexpr,
@@ -54,7 +54,7 @@ theorem blockC_ee
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl⟩ := hpre
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl, _hx11, _hx8, _hx18⟩ := hpre
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hpayaddr : (aExpr + sign_extend (m := 64) (0x008#12)).toNat = aExpr.toNat + 8 :=
     expr_pay_addr aExpr hexprHi
@@ -117,7 +117,7 @@ theorem blockC_ee
       ⟨σ2, i2, c.steps + 1 + 1⟩ := by
     refine ⟨hG2, hvicode2, hmem2e, hpc2, ha0_2, hx11_2, hlink2, ⟨vmi2, hmi2⟩, hi2, hIntRegion,
       (by decide), hout2, fun R _ => rfl⟩
-  obtain ⟨c3, hs3, hG3, hpc3, ha0_3, hlink3, hmi3, htick3, hval3, hout3, hmemframe3, hframe3⟩ :=
+  obtain ⟨c3, hs3, hG3, hpc3, ha0_3, hlink3, hmi3, htick3, hval3, hout3, hmemframe3, _hpres3, hframe3⟩ :=
     value_int_spec (fun R => σ2.regs.get? R) sret payV (0x80003410#64) N φc ment out0
       ⟨σ2, i2, c.steps + 1 + 1⟩ hcallpre
   -- payV.toNat = p, so `.int (ofNat payV.toNat).toInt = .int n`
@@ -230,8 +230,13 @@ theorem blockD_ee
     (sp r sret : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem) :
     Triple
       (fun c => ∃ mpre, PreEpilogue g N A SL φf φc st n sp r sret v8 v9 v18 out0 m0 mpre c)
-      (EvalExit g N A SL φf φc st (.int n) sp r sret m0) :=
-  blockD_v g N A SL φf φc st (.int n) sp r sret v8 v9 v18 out0 m0
+      (EvalExit g N A SL φf φc st (.int n) sp r sret m0) := by
+  intro c hpre
+  obtain ⟨mpre, hPre⟩ := hpre
+  obtain ⟨c', hs, hExit, _⟩ :=
+    blockD_v g N A SL φf φc st (.int n) sp r sret v8 v9 v18 out0 m0 (fun _ => True)
+      c ⟨mpre, hPre, trivial⟩
+  exact ⟨c', hs, hExit⟩
 
 /-- **The M4 gate**: the `EvalE.int` simulation Triple. Composes `blockA_ee`
 (prologue + dispatch → arm entry), `blockC_ee` (arm + `value_int` call → epilogue
@@ -244,7 +249,7 @@ theorem evalIntSim : EvalIntSimGoal := by
     blockA_ee g N A SL φf φc st d a n sp r sret aEnv aExpr m0 c.σ.sailOutput c ⟨hc, rfl⟩
   -- run block C
   obtain ⟨c2, hs2, mpre, hPre⟩ :=
-    blockC_ee g N A SL φf φc st n sp r sret aExpr v8 v9 v18 c.σ.sailOutput m0 c1 ⟨ment, hArm⟩
+    blockC_ee g N A SL φf φc st n sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0 c1 ⟨ment, hArm⟩
   -- run block D
   obtain ⟨c3, hs3, hExit⟩ :=
     blockD_ee g N A SL φf φc st n sp r sret v8 v9 v18 c.σ.sailOutput m0 c2 ⟨mpre, hPre⟩

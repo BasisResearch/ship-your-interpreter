@@ -344,13 +344,13 @@ theorem blockC_bool
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (b : Bool)
-    (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem)
+    (sp r sret aExpr aEnv : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem)
     -- the sret buffer is disjoint from `value_bool`'s code `[0x800027f8, 0x8000280c)`
     (hsret_vbool : sret.toNat + 24 ≤ 0x800027f8 ∨ 0x8000280c ≤ sret.toNat) :
     Triple
       (fun c => ∃ ment,
         ArmEntryK g N A SL φf φc st (0x80003420#64) Value_boolLoaded (.bool b)
-          sp r sret aExpr v8 v9 v18 out0 m0 ment c)
+          sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c)
       (fun c => ∃ mpre, PreEpilogueV g N A SL φf φc st (.bool b) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hc
   obtain ⟨ment, hG, htick, hpc, ha0, hs1, ha2, hsp, hra, hmiEx, hout, hmem, hcode, hviCode,
@@ -358,7 +358,7 @@ theorem blockC_bool
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl⟩ := hc
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl, _hx11, _hx8, _hx18⟩ := hc
   obtain ⟨vmi, hmi⟩ := hmiEx
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- payload address no-wrap for `lw a1,8(a2)`
@@ -689,11 +689,12 @@ theorem evalBoolSim : EvalBoolSimGoal := by
       hc.spill_defined⟩, rfl⟩
   -- === block C: arm (lw a1,8(a2); jal value_bool; j) → PreEpilogueV (.bool b) ===
   obtain ⟨c2, hs2, mpre, hPre⟩ :=
-    blockC_bool g N A SL φf φc st b sp r sret aExpr v8 v9 v18 c.σ.sailOutput m0
+    blockC_bool g N A SL φf φc st b sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0
       hc.sret_vboolcode_disjoint c1 ⟨ment, hArm⟩
   -- === block D: epilogue → EvalExit (.bool b) ===
-  obtain ⟨c3, hs3, hExit⟩ :=
-    blockD_v g N A SL φf φc st (.bool b) sp r sret v8 v9 v18 c.σ.sailOutput m0 c2 ⟨mpre, hPre⟩
+  obtain ⟨c3, hs3, hExit, _⟩ :=
+    blockD_v g N A SL φf φc st (.bool b) sp r sret v8 v9 v18 c.σ.sailOutput m0 (fun _ => True)
+      c2 ⟨mpre, hPre, trivial⟩
   exact ⟨c3, (hs1.trans hs2).trans hs3, hExit⟩
 
 end Vsa.Sim

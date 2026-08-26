@@ -185,7 +185,7 @@ def ArmEntryK
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (armPC : BitVec 64) (calleeLoaded : Mem → Prop) (e : Expr)
-    (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
+    (sp r sret aExpr aEnv : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
     (m0 ment : Mem) (c : Config) : Prop :=
   GoodState c.σ ∧ c.tick < 2 ∧
   c.σ.regs.get? Register.PC = some armPC ∧
@@ -227,7 +227,14 @@ def ArmEntryK
   1088 ≤ sp.toNat ∧ sp.toNat ≤ 0x100000000 ∧ 0x80000000 ≤ sp.toNat ∧
   tohostAddr + 16 + 1088 ≤ sp.toNat ∧ sp.toNat % 8 = 0 ∧
   0x80000000 ≤ SL.lo ∧ tohostAddr + 16 ≤ SL.lo ∧ SL.lo + 1088 ≤ sp.toNat ∧
-  r.toNat % 4 = 0
+  r.toNat % 4 = 0 ∧
+  -- ===== recursive-case call-point register facts (the `blockA_k`/`ArmEntryK`
+  -- widening: the `mv s0,a2`/`mv s2,a1` prologue moves + the untouched `a1`).
+  -- Leaf cases ignore these; recursive arms build the call-point ghost frame
+  -- `gpre := c.σ.regs.get?` and read `x11 = interp*` from them. =====
+  c.σ.regs.get? Register.x11 = some aEnv ∧   -- a1 = interp* (untouched by dispatch)
+  c.σ.regs.get? Register.x8 = some aExpr ∧   -- s0 = Expr node (mv s0,a2 @0x80003180)
+  c.σ.regs.get? Register.x18 = some aEnv     -- s2 = interp* (mv s2,a1 @0x80003184)
 
 /-! ## `PreEpilogueV` — the machine state at the shared epilogue `0x800033ec`
 
@@ -297,14 +304,20 @@ theorem blockD_v
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (v : Value)
-    (sp r sret : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem) :
+    (sp r sret : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem)
+    -- an arbitrary memory predicate carried across the (memory-pure) epilogue: the
+    -- seven epilogue instructions never write memory, so any `Q` holding at the
+    -- epilogue-entry memory `mpre` also holds at the exit memory. Leaf cases take
+    -- `Q := fun _ => True`; the recursive case threads the `EvalExitD` upgrade
+    -- clauses (`MemExtends` + `[SL.lo,SL.hi)`-survival) as `Q`.
+    (Q : Mem → Prop) :
     Triple
-      (fun c => ∃ mpre, PreEpilogueV g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpre c)
-      (EvalExit g N A SL φf φc st v sp r sret m0) := by
+      (fun c => ∃ mpre, PreEpilogueV g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpre c ∧ Q mpre)
+      (fun c => EvalExit g N A SL φf φc st v sp r sret m0 c ∧ Q c.σ.mem) := by
   intro c hpre
-  obtain ⟨mpre, hG, htick, hpc, hs1, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmem, hcode, hval, hstore, hframe,
+  obtain ⟨mpre, ⟨hG, htick, hpc, hs1, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmem, hcode, hval, hstore, hframe,
     hslotRa, hslotS0, hslotS1, hslotS2, hgx8, hgx9, hgx18, hgx2, hmemframe,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hraAl⟩ := hpre
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hraAl⟩, hQ⟩ := hpre
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- restore addresses
   have haRa : ((sp - 1088#64) + sign_extend (m := 64) (0x438#12)).toNat = sp.toNat - 8 := epi_off438 sp hsp1088
@@ -477,10 +490,11 @@ theorem blockD_v
       (ho.1 R hmc' hmt' hmip').trans (get?_sigmaPost_jump_x0 _ _ _ _ R hmi' hpc' hnpc' hmii')
     exact (jr hobs7).trans ((a hobs6 he2).trans ((a hobs5 he9).trans ((a hobs4 h10).trans
       ((a hobs3 he18).trans ((a hobs2 he8).trans (a hobs1 he1))))))
-  -- assemble EvalExit
-  refine ⟨⟨σ7, i7, c.steps+1+1+1+1+1+1+1⟩, ?_, hG7, hi7, hpc7, ha0_7, hra_7, hsp_7, ⟨_, hmi7⟩,
+  -- assemble EvalExit (paired with the carried memory predicate `Q c.σ.mem`,
+  -- transported from `Q mpre` through the memory-pure epilogue via `hmem7e`).
+  refine ⟨⟨σ7, i7, c.steps+1+1+1+1+1+1+1⟩, ?_, ⟨hG7, hi7, hpc7, ha0_7, hra_7, hsp_7, ⟨_, hmi7⟩,
     ⟨φc, PhiExtends.refl _ _, ?_⟩, ⟨φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, ?_⟩,
-    ?_, ?_, ?_⟩
+    ?_, ?_, ?_⟩, by rw [show σ7.mem = mpre from hmem7e]; exact hQ⟩
   · exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
       ((Steps.single hstep4).trans ((Steps.single hstep5).trans ((Steps.single hstep6).trans
       (Steps.single hstep7))))))

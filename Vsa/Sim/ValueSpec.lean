@@ -533,6 +533,10 @@ def int_post (g : (R : Register) → Option (RegisterType R)) (buf pay r : BitVe
   -- memory outside the 24-byte buffer `[buf, buf+24)` is unchanged from `m0`
   -- (`value_int` writes only the tag `[buf,buf+4)` and payload `[buf+8,buf+16)`).
   (∀ k : Nat, ¬ (buf.toNat ≤ k ∧ k < buf.toNat + 24) → m0[k]? = c.σ.mem[k]?) ∧
+  -- presence monotonicity: `value_int` only INSERTS (`writeMap4`/`writeMap8`), so
+  -- every address populated in the entry `m0` stays populated (`MemExtends m0 c.mem`
+  -- unfolded — needed by recursive callers reading back the whole result buffer).
+  (∀ a : Nat, ∀ b : BitVec 8, m0[a]? = some b → ∃ b' : BitVec 8, c.σ.mem[a]? = some b') ∧
   (∀ R : Register, NotWrittenV R → c.σ.regs.get? R = g R)
 
 /-- **`value_int` total-correctness spec.** From `int_pre` the machine runs to
@@ -621,7 +625,7 @@ theorem value_int_spec (g : (R : Register) → Option (RegisterType R)) (buf pay
   refine ⟨⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩, hsteps, hG4, obs_jr_pc hobs4,
     obs_jr_other hobs4 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_3,
     obs_jr_other hobs4 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_3,
-    obs_jr_minstret hobs4, hi4, ?_, hout4.trans hout, ?_,
+    obs_jr_minstret hobs4, hi4, ?_, hout4.trans hout, ?_, ?_,
     fun R hR => (frame_jr_v hobs4 R hR).trans
       ((frame_store_v hobs3 R hR).trans ((frame_store_v hobs2 R hR).trans
         ((frame_alu_v hobs1 R hR).trans (hframe R hR))))⟩
@@ -642,6 +646,35 @@ theorem value_int_spec (g : (R : Register) → Option (RegisterType R)) (buf pay
     intro k hk
     rw [hmem4eq0, getElem_writeMap4_disjoint _ _ _ _ (by omega),
         getElem_writeMap8_disjoint _ _ _ _ (by omega), hmem]
+  · -- presence: `value_int` only inserts (writeMap4/8), so `m0 = c.σ.mem`-present
+    -- addresses stay present in `σ4.mem`. Case on the two written windows; outside
+    -- them the disjoint rewrite passes through to `c.σ.mem[a]? = m0[a]? = some b`.
+    intro a b hb
+    rw [hmem4eq0]
+    by_cases htag : buf.toNat ≤ a ∧ a < buf.toNat + 4
+    · obtain ⟨hlo, hhi⟩ := htag
+      rcases (show a = buf.toNat ∨ a = buf.toNat + 1 ∨ a = buf.toNat + 2 ∨ a = buf.toNat + 3 from by omega) with h | h | h | h
+      · exact ⟨_, by rw [show a = buf.toNat + 0 from by omega]; exact getElem_writeMap4_0 _ _ _⟩
+      · exact ⟨_, by rw [h]; exact getElem_writeMap4_1 _ _ _⟩
+      · exact ⟨_, by rw [h]; exact getElem_writeMap4_2 _ _ _⟩
+      · exact ⟨_, by rw [h]; exact getElem_writeMap4_3 _ _ _⟩
+    · rw [getElem_writeMap4_disjoint _ _ _ _ (by omega)]
+      by_cases hpay : buf.toNat + 8 ≤ a ∧ a < buf.toNat + 8 + 8
+      · obtain ⟨hlo, hhi⟩ := hpay
+        rcases (show a = buf.toNat + 8 ∨ a = buf.toNat + 8 + 1 ∨ a = buf.toNat + 8 + 2 ∨
+            a = buf.toNat + 8 + 3 ∨ a = buf.toNat + 8 + 4 ∨ a = buf.toNat + 8 + 5 ∨
+            a = buf.toNat + 8 + 6 ∨ a = buf.toNat + 8 + 7 from by omega)
+          with h | h | h | h | h | h | h | h
+        · exact ⟨_, by rw [show a = buf.toNat + 8 + 0 from by omega]; exact getElem_writeMap8_0 _ _ _⟩
+        · exact ⟨_, by rw [h]; exact getElem_writeMap8_1 _ _ _⟩
+        · exact ⟨_, by rw [h]; exact getElem_writeMap8_2 _ _ _⟩
+        · exact ⟨_, by rw [h]; exact getElem_writeMap8_3 _ _ _⟩
+        · exact ⟨_, by rw [h]; exact getElem_writeMap8_4 _ _ _⟩
+        · exact ⟨_, by rw [h]; exact getElem_writeMap8_5 _ _ _⟩
+        · exact ⟨_, by rw [h]; exact getElem_writeMap8_6 _ _ _⟩
+        · exact ⟨_, by rw [h]; exact getElem_writeMap8_7 _ _ _⟩
+      · rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]
+        exact ⟨b, by rw [hmem]; exact hb⟩
 
 /-! ## `value_bool_spec`
 

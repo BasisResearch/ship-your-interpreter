@@ -84,6 +84,26 @@ def MemExtends (m0 m : Mem) : Prop :=
 
 theorem MemExtends.refl (m : Mem) : MemExtends m m := fun _ b h => ⟨b, h⟩
 
+/-- A `writeMap8` (an 8-byte insert) preserves presence: nothing is deleted, and
+the 8 written bytes are present. -/
+theorem memExtends_writeMap8 (mem : Mem) (a8 : Nat) (d : BitVec (8 * 8)) :
+    MemExtends mem (writeMap8 mem a8 d) := by
+  intro k b hk
+  by_cases hin : a8 ≤ k ∧ k < a8 + 8
+  · obtain ⟨hlo, hhi⟩ := hin
+    rcases (show k = a8 ∨ k = a8 + 1 ∨ k = a8 + 2 ∨ k = a8 + 3 ∨ k = a8 + 4 ∨
+        k = a8 + 5 ∨ k = a8 + 6 ∨ k = a8 + 7 from by omega)
+      with h | h | h | h | h | h | h | h
+    · exact ⟨_, by rw [show k = a8 + 0 from by omega]; exact getElem_writeMap8_0 mem a8 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap8_1 mem a8 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap8_2 mem a8 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap8_3 mem a8 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap8_4 mem a8 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap8_5 mem a8 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap8_6 mem a8 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap8_7 mem a8 d⟩
+  · exact ⟨b, by rw [getElem_writeMap8_disjoint mem a8 k d (by omega)]; exact hk⟩
+
 theorem MemExtends.trans {m0 m1 m2 : Mem}
     (h1 : MemExtends m0 m1) (h2 : MemExtends m1 m2) : MemExtends m0 m2 := by
   intro a b h
@@ -428,5 +448,52 @@ theorem armTail_rec
     hExit.out, hframe2, hExit.result,
     ⟨φf', φc', hpf', hpc', hsurvSL c2.σ.mem (fun _ _ => rfl), hsurvSL⟩,
     hcode2, hslotRa2, hslotS02, hslotS12, hslotS22, hmemFrame2, hpres⟩
+
+/-! ## `PreEpilogueVD` — the epilogue-entry state widened for the recursive exit
+
+`PreEpilogueV` plus the two `EvalExitD` upgrade clauses ABOUT the epilogue-entry
+memory `mpre`: (1) presence monotonicity `MemExtends m0 mpre`, and (2) the
+`[SL.lo,SL.hi)`-survival of the (extended-map) `st.store`. The epilogue is
+memory-pure, so both transport verbatim to the exit config; `blockD_v_rec` closes
+`PreEpilogueVD → EvalExitD`. A recursive arm's block C produces this (it has both
+facts internally — the pre-call memory is fully populated and all of its own
+writes land in `[SL.lo,SL.hi)`), whereas the leaf block C's only produce the plain
+`PreEpilogueV` for `blockD_v`. -/
+def PreEpilogueVD
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (v : Value)
+    (sp r sret : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
+    (m0 mpre : Mem) (c : Config) : Prop :=
+  PreEpilogueV g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpre c ∧
+  MemExtends m0 mpre ∧
+  (∀ m' : Mem,
+    (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → mpre[k]? = m'[k]?) →
+    StoreRepr m' N A φf φc st.store)
+
+/-! ## `blockD_v_rec` — the shared epilogue producing `EvalExitD`
+
+`PreEpilogueVD … v → EvalExitD … v`. Reuses `blockD_v` with the carried predicate
+`Q m := MemExtends m0 m ∧ [SL.lo,SL.hi)-survival at m` (memory-pure epilogue ⇒
+`Q mpre → Q (exit mem)`), then repackages `EvalExit ∧ Q c.σ.mem` into the
+`EvalExitD` triple (`MemExtends m0 c.σ.mem` + the identity-`φ` survival witness). -/
+theorem blockD_v_rec
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (v : Value)
+    (sp r sret : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem) :
+    Triple
+      (fun c => ∃ mpre, PreEpilogueVD g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpre c)
+      (EvalExitD g N A SL φf φc st v sp r sret m0) := by
+  intro c hpre
+  obtain ⟨mpre, hPre, hMemExt, hSurv⟩ := hpre
+  obtain ⟨c', hs, hExit, hMemExt', hSurv'⟩ :=
+    blockD_v g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0
+      (fun m => MemExtends m0 m ∧
+        (∀ m' : Mem, (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → m[k]? = m'[k]?) →
+          StoreRepr m' N A φf φc st.store))
+      c ⟨mpre, hPre, hMemExt, hSurv⟩
+  exact ⟨c', hs, hExit,
+    hMemExt', φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, hSurv'⟩
 
 end Vsa.Sim

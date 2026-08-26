@@ -14,17 +14,22 @@ blockA_k (prologue + dispatch → ArmEntryK @0x800035e0)
   ≫ blockD_v     (shared epilogue → EvalExit .int(wrap64 -n))
 ```
 
-`blockA_k` produces `ArmEntryK`, but `blockB_unary` and `blockC_neg` need facts
-BEYOND the leaf `EvalEntry` structure carries (the "ArmEntryK widening residual",
-memory `m4-recursive-cases.md` #1): the live `a1 = interp*`, the call-point ghost
-frame `gpre`, the operand node's `ExprRepr` + geometry, the extra 1088-byte
-recursive stack headroom, the entry-ghost bridge, and the arena/code/table
-disjointness facts. These are collected in the `NegExtras` bundle below and taken
-as an explicit hypothesis, exactly as `evalVarSim` is conditional on
-`env_get_found`. `blockD_v` produces `EvalExit`; the recursive motive needs
-`EvalExitD` (`= EvalExit + MemExtends m0 mem + [SL.lo,SL.hi)`-survival, residual
-#2); the two upgrade clauses are taken as `hMemExt`/`hSurvSL` witnesses at the
-produced exit configuration.
+The widened `blockA_k`/`ArmEntryK` (`EvalSimCommon.lean`) now expose the recursive
+call-point register facts (`x11 = interp*`, `x8 = aExpr`, `x18 = interp*`) at the
+arm-entry config, so the arm-register residual (`hArmRegs`) and the entry-ghost
+bridge are DISCHARGED HERE by taking the call-point ghost `gpre := c1.σ.regs.get?`
+(making the frame `rfl`) and reading the three registers off the widened
+`ArmEntryK`. The `EvalExitD` upgrade (`hUpg`) is DISCHARGED via `blockC_neg`'s
+widened `PreEpilogueVD` output (which now carries `MemExtends m0 mpre` +
+`[SL.lo,SL.hi)`-survival) fed through `blockD_v_rec` (`EvalRecCommon.lean`).
+
+`evalNegSim` is thus unconditional except for:
+* `NegExtras` — the operand-node `ExprRepr`+geometry, the extra 1088-byte
+  recursive stack headroom, the arena/code/table disjunctions and the `EX_UNARY`
+  slot pin (residual #1, the recursive-case program-structure facts a full
+  `EvalEntry` widening / M6 Layout would supply);
+* `hMcallPop` — the pre-call memory is fully populated (residual #3, an M6 Layout
+  fact: `blockC_neg`'s dead-byte `ld`s of the sub-`Value` padding need presence).
 
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`.
 -/
@@ -55,11 +60,10 @@ residual (memory `m4-recursive-cases.md` #1) plus `blockC_neg`'s entry-ghost
 bridge; a future `blockA_k` widening + full stack-layout derivation discharges
 them. -/
 structure NegExtras
-    (g gpre : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (st : Vsa.While.St) (esub : Expr)
-    (sp r sret aExpr aEnv aIn aOperand : BitVec 64) (v8 v9 v18 : BitVec 64)
-    (m0 : Mem) (c : Config) : Prop where
+    (sp sret aExpr aOperand : BitVec 64)
+    (m0 : Mem) : Prop where
   -- ===== EX_UNARY jump-table slot pin (static image fact) =====
   slot8 : KindSlotPinned 8 (0x800035e0#64) m0
   -- the whole `.unary .neg esub` node (AST subtree) survives any memory change
@@ -69,8 +73,7 @@ structure NegExtras
   expr_survives : ∀ m' : Mem,
     (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → m0[a]? = m'[a]?) →
     ExprRepr m' aExpr.toNat (.unary .neg esub)
-  -- ===== blockB_unary extras (the ArmEntryK widening residual) =====
-  gpre_x8 : gpre Register.x8 = some aExpr
+  -- ===== operand-node geometry (the ArmEntryK/EvalEntry widening residual) =====
   pay : read64 m0 (aExpr.toNat + 16) = some aOperand.toNat
   operand_repr : ExprRepr m0 aOperand.toNat esub
   expr24 : aExpr.toNat + 24 ≤ 0x100000000
@@ -93,23 +96,13 @@ structure NegExtras
   table_stk : (0x80019f7c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58
   arena_stk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
   arena_code : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
-  -- ===== blockC_neg extras (op-token geometry, entry-ghost bridge) =====
+  -- ===== blockC_neg extras (op-token geometry) =====
   expr_align4 : aExpr.toNat % 4 = 0
   expr_win8 : tohostAddr + 8 ≤ aExpr.toNat
   expr_A : aExpr.toNat + 16 ≤ A.lo ∨ A.hi ≤ aExpr.toNat
   expr_sub : aExpr.toNat + 16 ≤ sp.toNat - 944 ∨ sp.toNat - 944 + 24 ≤ aExpr.toNat
   vi_arena : A.hi ≤ 0x8000280c ∨ 0x8000281c ≤ A.lo
   sret_inSL : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi
-  -- the ENTRY ghost `g` holds the spilled callee-saved values (restored by the
-  -- epilogue) and agrees with `gpre` off s0/s1/s2/sp (the prologue bridge).
-  g_x8 : g Register.x8 = some v8
-  g_x9 : g Register.x9 = some v9
-  g_x18 : g Register.x18 = some v18
-  g_x2 : g Register.x2 = some sp
-  bridge : ∀ R : Register, AbiPreservedNoise R →
-    (Register.x8 == R) = false → (Register.x9 == R) = false →
-    (Register.x18 == R) = false → (Register.x2 == R) = false →
-    gpre R = g R
 
 /-! ## `EvalNegSimGoal` — the `EvalE.neg` projection of the simulation
 
@@ -117,54 +110,34 @@ In the `EvalIH` motive shape (`EvalEntry → EvalExitD`, mirroring
 `Scaffold.motive_EvalE` with `EvalExit` upgraded), taking the sub-derivation's
 induction hypothesis `EvalIH st d env esub st' (.int n)`.
 
-Conditional on:
-* `NegExtras` — the recursive-case machine facts beyond `EvalEntry` (residual #1);
-* `hMemExt`/`hSurvSL` — the `EvalExitD` presence/survival upgrade of the produced
-  `EvalExit`, evaluated at the exit config (residual #2). These are stated as
-  quantified upgrade obligations so the produced exit config feeds them. -/
+Conditional ONLY on:
+* `NegExtras` — the operand-node `ExprRepr`+geometry, the extra 1088-byte
+  recursive stack headroom, the arena/code/table disjunctions and the `EX_UNARY`
+  slot pin (residual #1, program-structure facts an `EvalEntry` widening supplies);
+* `hMcallPop` — the pre-call memory is fully populated (residual #3, M6 Layout).
+
+The arm-register facts (`x11 = interp*`, the call-point ghost bridge) and the
+`EvalExitD` upgrade are now DISCHARGED internally from the widened
+`ArmEntryK`/`blockC_neg`/`blockD_v_rec` machinery. -/
 def EvalNegSimGoal : Prop :=
-  ∀ (g gpre : (R : Register) → Option (RegisterType R))
+  ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' : Vsa.While.St) (d : Nat) (env : Addr) (esub : Expr) (n : Int)
-    (sp r sret aEnv aExpr aIn aOperand : BitVec 64) (v8 v9 v18 : BitVec 64)
+    (sp r sret aEnv aExpr aOperand : BitVec 64)
     (m0 : Mem),
     EvalIH st d env esub st' (.int n) →
     EvalE st d env (.unary .neg esub) st' (.int (wrap64 (-n))) →
     Triple
       (fun c =>
         EvalEntry g N A SL φf φc st d env (.unary .neg esub) sp r sret aEnv aExpr m0 c ∧
-        NegExtras g gpre N A SL φf φc st esub sp r sret aExpr aEnv aIn aOperand v8 v9 v18 m0 c ∧
-        -- residual #1 (the `blockA_k`/`ArmEntryK` widening): at the arm-entry config
-        -- `c1` (dispatch landing, `0x800035e0`), the live `a1 = interp*` and the
-        -- call-point ghost frame `gpre` (which the current `ArmEntryK` does not
-        -- expose). A widened `blockA_k` that threads `x11`/`x8`/`x18` through the
-        -- prologue+dispatch discharges this.
-        (∀ (c1 : Config) (ment : Mem),
-          ArmEntryK g N A SL φf φc st (0x800035e0#64) UnaryArmCallee (.unary .neg esub)
-            sp r sret aExpr v8 v9 v18 c.σ.sailOutput m0 ment c1 →
-          c1.σ.regs.get? Register.x11 = some aIn ∧
-          (∀ R : Register, AbiPreservedNoise R → c1.σ.regs.get? R = gpre R) ∧
-          (∃ w, gpre Register.x18 = some w)) ∧
-        -- Layout residual (M6): the pre-recursive-call memory (any memory agreeing
-        -- with `m0` outside the scribbled stack window `[SL.lo, sp)`) is fully
-        -- populated. `blockC_neg`'s dead-byte `ld`s of the sub-`Value` padding
-        -- `[subsret+4,+8) ∪ [subsret+16,+24)` need this presence; it is discharged
-        -- by the M6 stack-layout (`m0` populated everywhere, spills are inserts).
+        NegExtras N A SL st esub sp sret aExpr aOperand m0 ∧
+        -- Layout residual (M6, `hMcallPop`): the pre-recursive-call memory (any
+        -- memory agreeing with `m0` outside the scribbled stack window `[SL.lo, sp)`)
+        -- is fully populated. `blockC_neg`'s dead-byte `ld`s of the sub-`Value`
+        -- padding `[subsret+4,+8) ∪ [subsret+16,+24)` need this presence.
         (∀ mcall : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-          ∀ a : Nat, ∃ b, mcall[a]? = some b) ∧
-        -- residual #2: the two `EvalExitD` upgrade witnesses, at the eventual exit
-        -- config, are supplied as an obligation parameterized over any config whose
-        -- memory dominates the entry's (produced by the tail's `writeMap8` inserts).
-        (∀ c' : Config,
-          EvalExit g N A SL φf φc st' (.int (wrap64 (-n))) sp r sret m0 c' →
-          MemExtends m0 c'.σ.mem ∧
-          ∃ φf' φc' : Addr → Nat,
-            PhiExtends φf φf' st'.store.frames.size ∧
-            PhiExtends φc φc' st'.store.closures.size ∧
-            ∀ m' : Mem,
-              (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c'.σ.mem[k]? = m'[k]?) →
-              StoreRepr m' N A φf' φc' st'.store))
+          ∀ a : Nat, ∃ b, mcall[a]? = some b))
       (EvalExitD g N A SL φf φc st' (.int (wrap64 (-n))) sp r sret m0)
 
 /-- `read32 m aExpr = some 8` from `ExprRepr m aExpr (.unary op esub)`. -/
@@ -204,19 +177,23 @@ theorem evalExit_of_phiExtends
 
 /-- **`evalNegSim`**: the `EvalE.neg` (EX_UNARY, negation) recursive case of the
 simulation, in the `EvalIH` motive shape. Composes `blockA_k` (prologue+dispatch
-→ `ArmEntryK`), `blockB_unary` (arm head + recursive call ⋈ IH → `SubEvalReturn`),
-`blockC_neg` (post-call neg tail → `PreEpilogueV .int(wrap64 -n)`), and `blockD_v`
-(shared epilogue → `EvalExit`), then upgrades to `EvalExitD` via the supplied
-residual witness. Conditional on `NegExtras` (residual #1) and the exit-upgrade
-obligation (residual #2). -/
+→ widened `ArmEntryK`), `blockB_unary` (arm head + recursive call ⋈ IH →
+`SubEvalReturn`), `blockC_neg` (post-call neg tail → `PreEpilogueVD .int(wrap64 -n)`),
+and `blockD_v_rec` (shared epilogue → `EvalExitD`).
+
+The arm-register facts and the entry-ghost bridge are discharged by taking the
+call-point ghost `gpre := c1.σ.regs.get?` (frame is `rfl`) and reading `x11`/`x8`/
+`x18` off the widened `ArmEntryK`; the `EvalExitD` upgrade is discharged by
+`blockC_neg`'s `PreEpilogueVD` + `blockD_v_rec`. Conditional ONLY on `NegExtras`
+(residual #1) and `hMcallPop` (residual #3). -/
 theorem evalNegSim : EvalNegSimGoal := by
-  intro g gpre N A SL φf φc st st' d env esub n sp r sret aEnv aExpr aIn aOperand
-    v8 v9 v18 m0 hIH _hEvalE
-  intro c ⟨hc, hx, hArmRegs, hMcallPop, hUpg⟩
+  intro g N A SL φf φc st st' d env esub n sp r sret aEnv aExpr aOperand
+    m0 hIH _hEvalE
+  intro c ⟨hc, hx, hMcallPop⟩
   have htoh : tohostAddr = 0x8001ad00 := rfl
-  -- === block A: prologue + dispatch → ArmEntryK @0x800035e0 (via blockA_k) ===
+  -- === block A: prologue + dispatch → widened ArmEntryK @0x800035e0 ===
   have hkm0 : read32 m0 aExpr.toNat = some 8 := exprRepr_unary_kind (hc.mem ▸ hc.expr)
-  obtain ⟨c1, hs1, ment, w8, w9, w18, hArm⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=
     blockA_k g N A SL φf φc st (.unary .neg esub) 8 (0x800035e0#64) UnaryArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
@@ -238,20 +215,33 @@ theorem evalNegSim : EvalNegSimGoal := by
         hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
         hc.spill_defined⟩, rfl⟩
-  -- blockA's spilled ghost values `w8/w9/w18` coincide with the `NegExtras`
-  -- values `v8/v9/v18` (both are `g x{8,9,18}`).
-  have hArmg8 : g Register.x8 = some w8 := hArm.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1
-  have hArmg9 : g Register.x9 = some w9 := hArm.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1
-  have hArmg18 : g Register.x18 = some w18 := hArm.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1
-  have hw8 : v8 = w8 := by have := hx.g_x8.symm.trans hArmg8; exact Option.some.inj this
-  have hw9 : v9 = w9 := by have := hx.g_x9.symm.trans hArmg9; exact Option.some.inj this
-  have hw18 : v18 = w18 := by have := hx.g_x18.symm.trans hArmg18; exact Option.some.inj this
-  subst hw8 hw9 hw18
-  -- the arm-entry register facts (residual #1, discharged by `hArmRegs`)
-  obtain ⟨hx11c1, hgpreframe, hgpre18⟩ := hArmRegs c1 ment hArm
+  -- destructure a COPY of the widened `ArmEntryK` (keeping `hArm` intact for
+  -- `blockB_unary`): the last three fields `hAEx11`/`hAEx8`/`hAEx18` are the NEW
+  -- call-point register facts; `hArmg8/9/18/2` the entry ghost; `hArmMemM0` the
+  -- stack-window memframe; `hArmFrame` the entry-ghost frame.
+  have hArmCopy := hArm
+  obtain ⟨_hAG, _hAtick, _hApc, _hAa0, _hAs1, _hAa2, _hAsp, _hAra, _hAmi, _hAout,
+    _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxAl, _hAxLo, _hAxHi, _hAxWin,
+    _hAslotRa, _hAslotS0, _hAslotS1, _hAslotS2, hArmMemM0,
+    hArmg8, hArmg9, hArmg18, hArmg2, _hAstore, _hAstoreSurv, hArmFrame,
+    _hAsretAl, _hAsretLo, _hAsretHi, _hAsretWin, _hAsretVi, _hAsretStk, _hAsretEc,
+    _hAsp1088, _hAsphi, _hAsplo, _hAspwin, _hAsp8, _hASLlo, _hASLwin, _hASLloSp, _hAraAl,
+    hAEx11, hAEx8, hAEx18⟩ := hArmCopy
+  -- the call-point ghost `gpre := fun R => c1.σ.regs.get? R` — the frame is then
+  -- definitional (`rfl`), and `x11`/`x8`/`x18` come off the widened `ArmEntryK`.
+  have hx11c1 : c1.σ.regs.get? Register.x11 = some aEnv := hAEx11
+  have hgpreframe : ∀ R : Register, AbiPreservedNoise R →
+      c1.σ.regs.get? R = (fun R => c1.σ.regs.get? R) R := fun R _ => rfl
+  have hgpre_x8 : (fun R => c1.σ.regs.get? R) Register.x8 = some aExpr := hAEx8
+  have hgpre18 : ∃ w, (fun R => c1.σ.regs.get? R) Register.x18 = some w := ⟨aEnv, hAEx18⟩
+  -- entry-ghost bridge `∀R AbiPresNoise off-excl → gpre R = g R` = `ArmEntryK` frame.
+  have hbridge : ∀ R : Register, AbiPreservedNoise R →
+      (Register.x8 == R) = false → (Register.x9 == R) = false →
+      (Register.x18 == R) = false → (Register.x2 == R) = false →
+      (fun R => c1.σ.regs.get? R) R = g R :=
+    fun R hR he8 he9 he18 he2 => hArmFrame R hR he8 he9 he18 he2
   -- `ment ↔ m0` outside the stack window (from `ArmEntryK`'s memframe)
-  have hMentM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]? :=
-    hArm.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1
+  have hMentM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]? := hArmMemM0
   -- transport `pay`/`operand_repr` from `m0` to `ment` (AST disjoint from stack)
   have hExprMent : ExprRepr ment aExpr.toNat (.unary .neg esub) :=
     hx.expr_survives ment (fun a ha => (hMentM0 a ha).symm)
@@ -278,9 +268,9 @@ theorem evalNegSim : EvalNegSimGoal := by
   have hOperandReprMent : ExprRepr ment aOperand.toNat esub := hsubReprMent
   -- === block B: arm head + recursive call ⋈ IH → SubEvalReturn @0x800035ec ===
   obtain ⟨c2, hs2, hSub⟩ :=
-    blockB_unary g gpre N A SL φf φc st st' d env .neg esub (.int n)
-      sp r sret aExpr aIn aOperand v8 v9 v18 c.σ.sailOutput m0 hIH
-      c1 ⟨ment, hArm, hx11c1, hgpreframe, ⟨aExpr, hx.gpre_x8⟩, hgpre18,
+    blockB_unary g (fun R => c1.σ.regs.get? R) N A SL φf φc st st' d env .neg esub (.int n)
+      sp r sret aExpr aEnv aOperand v8 v9 v18 c.σ.sailOutput m0 hIH
+      c1 ⟨ment, hArm, hx11c1, hgpreframe, ⟨aExpr, hgpre_x8⟩, hgpre18,
         hpayMent', hOperandReprMent, hx.expr24,
         hx.op_align, hx.op_lo, hx.op_hi, hx.op_win, hx.op_stk,
         hx.sp_headroom, hx.sp_SLhi, hx.sp16, hx.SLhi_ram,
@@ -308,9 +298,9 @@ theorem evalNegSim : EvalNegSimGoal := by
   have hExprMcall : ExprRepr mcall aExpr.toNat (.unary .neg esub) :=
     hx.expr_survives mcall (fun a ha => (hAgM0 a ha).symm)
   -- === block C: post-call neg tail → PreEpilogueV .int(wrap64 -n) @0x800033ec ===
-  obtain ⟨c3, hs3, mpreC, φfe, φce, hpfe, hpce, hPre⟩ :=
-    blockC_neg gpre g N A SL φf φc st' n sp r sret aExpr v8 v9 v18 c2.σ.sailOutput esub m0
-      c2 ⟨mcall, hSubR, hx.gpre_x8, hExprMcall, hStackPop,
+  obtain ⟨c3, hs3, mpreC, φfe, φce, hpfe, hpce, hPreD⟩ :=
+    blockC_neg (fun R => c1.σ.regs.get? R) g N A SL φf φc st' n sp r sret aExpr v8 v9 v18 c2.σ.sailOutput esub m0
+      c2 ⟨mcall, hSubR, hgpre_x8, hExprMcall, hStackPop,
         hx.expr_align4, hc.expr_ram.1, hc.expr_ram.2, hx.expr_win8,
         hc.expr_stack_disjoint, hx.expr_A, hx.expr_sub,
         houtStr, hc.sret_align, hc.sret_ram.1, hc.sret_ram.2, hc.sret_win,
@@ -320,17 +310,16 @@ theorem evalNegSim : EvalNegSimGoal := by
         hx.sret_inSL, hMcallM0,
         (by have := hx.sp_SLhi; have := hx.SLhi_ram; omega), (by have := hx.sp16; omega),
         hx.SLhi_ram, hx.sp_SLhi,
-        hx.g_x8, hx.g_x9, hx.g_x18, hx.g_x2, hx.bridge⟩
-  · -- === block D: shared epilogue → EvalExit .int(wrap64 -n) ===
-    obtain ⟨c4, hs4, hExitE⟩ :=
-      blockD_v g N A SL φfe φce st' (.int (wrap64 (-n))) sp r sret v8 v9 v18 c2.σ.sailOutput m0
-        c3 ⟨mpreC, hPre⟩
-    -- transport the exit back to the entry maps φf/φc (the goal's maps)
+        hArmg8, hArmg9, hArmg18, hArmg2, hbridge⟩
+  · -- === block D: shared epilogue → EvalExitD .int(wrap64 -n) (via blockD_v_rec) ===
+    obtain ⟨c4, hs4, hExitDe⟩ :=
+      blockD_v_rec g N A SL φfe φce st' (.int (wrap64 (-n))) sp r sret v8 v9 v18 c2.σ.sailOutput m0
+        c3 ⟨mpreC, hPreD⟩
+    -- transport the widened exit back to the entry maps φf/φc (the goal's maps)
+    obtain ⟨hExitE, hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
     have hExit : EvalExit g N A SL φf φc st' (.int (wrap64 (-n))) sp r sret m0 c4 :=
       evalExit_of_phiExtends hpfe hpce hExitE
-    -- === upgrade EvalExit → EvalExitD via the supplied residual witness ===
-    refine ⟨c4, ((hs1.trans hs2).trans hs3).trans hs4, hExit, ?_⟩
-    obtain ⟨hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hUpg c4 hExit
-    exact ⟨hMemExt, φf', φc', hpf', hpc', hSurv⟩
+    exact ⟨c4, ((hs1.trans hs2).trans hs3).trans hs4, hExit, hMemExt,
+      φf', φc', hpfe.trans hpf', hpce.trans hpc', hSurv⟩
 
 end Vsa.Sim

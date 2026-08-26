@@ -329,7 +329,7 @@ theorem blockC_str
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (s : String)
-    (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem)
+    (sp r sret aExpr aEnv : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem)
     -- the sret buffer is disjoint from `value_str`'s code `[0x8000281c,0x8000282c)`
     -- (ArmEntryK carries only the `value_int` code range, so supplied here).
     (hsret_vstr : sret.toNat + 24 ≤ 0x8000281c ∨ 0x8000282c ≤ sret.toNat)
@@ -345,7 +345,7 @@ theorem blockC_str
     Triple
       (fun c => ∃ ment,
         ArmEntryK g N A SL φf φc st (0x80003414#64) Value_strLoaded (.str s)
-          sp r sret aExpr v8 v9 v18 out0 m0 ment c)
+          sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c)
       (fun c => ∃ mpre, PreEpilogueV g N A SL φf φc st (.str s) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hc
   obtain ⟨ment, hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
@@ -353,7 +353,7 @@ theorem blockC_str
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl⟩ := hc
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl, _hx11, _hx8, _hx18⟩ := hc
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hpayaddr : (aExpr + sign_extend (m := 64) (0x008#12)).toNat = aExpr.toNat + 8 :=
     expr_pay_addr aExpr hexprHi
@@ -679,13 +679,14 @@ theorem evalStrSim : EvalStrSimGoal := by
       hc.spill_defined⟩, rfl⟩
   -- === block C: arm (ld a1,8(a2); jal value_str; j) → PreEpilogueV .str s ===
   obtain ⟨c2, hs2, mpre, hPre⟩ :=
-    blockC_str g N A SL φf φc st s sp r sret aExpr v8 v9 v18 c.σ.sailOutput m0
+    blockC_str g N A SL φf φc st s sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0
       hc.sret_vstrcode_disjoint hc.expr_stack_disjoint
       (fun p' hp' => hc.str_sret_disjoint p' (hc.mem.symm ▸ hp'))
       c1 ⟨ment, hArm⟩
   -- === block D: epilogue → EvalExit .str s ===
-  obtain ⟨c3, hs3, hExit⟩ :=
-    blockD_v g N A SL φf φc st (.str s) sp r sret v8 v9 v18 c.σ.sailOutput m0 c2 ⟨mpre, hPre⟩
+  obtain ⟨c3, hs3, hExit, _⟩ :=
+    blockD_v g N A SL φf φc st (.str s) sp r sret v8 v9 v18 c.σ.sailOutput m0 (fun _ => True)
+      c2 ⟨mpre, hPre, trivial⟩
   exact ⟨c3, (hs1.trans hs2).trans hs3, hExit⟩
 
 end Vsa.Sim

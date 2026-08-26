@@ -1549,7 +1549,7 @@ structure EvalVarEntry
   env_get_found : Triple
     (fun c' => ∃ ment v8 v9 v18,
       ArmEntryK g N A SL φf φc st (0x80003434#64) Env_getLoaded (.var x)
-        sp r sret aExpr v8 v9 v18 c.σ.sailOutput m0 ment c')
+        sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0 ment c')
     (fun c' => ∃ mpc v8 v9 v18,
       VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 c.σ.sailOutput m0 mpc c')
 

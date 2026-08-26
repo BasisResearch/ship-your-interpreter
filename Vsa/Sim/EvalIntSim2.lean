@@ -179,7 +179,7 @@ through the 19 prologue steps via `ReadsLikePost.out` + `sailOutput_sigmaPost_*`
 def ArmEntry (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (n : Int)
-    (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
+    (sp r sret aExpr aEnv : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
     (m0 ment : Mem) (c : Config) : Prop :=
   -- `ArmEntry … n` is the `.int` instance of the case-INDEPENDENT arm-entry
   -- predicate `ArmEntryK` (`EvalSimCommon.lean`), specialized at the int arm's
@@ -188,7 +188,7 @@ def ArmEntry (g : (R : Register) → Option (RegisterType R))
   -- store/frame/memFrame facts, geometric region facts) is shared verbatim across
   -- the sibling `null`/`bool`/`str`/`var` leaf cases.
   ArmEntryK g N A SL φf φc st (0x80003408#64) Value_intLoaded (.int n)
-    sp r sret aExpr v8 v9 v18 out0 m0 ment c
+    sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c
 
 /-! ### Kind-bytes extraction: `ExprRepr … (.int n)` forces the four kind bytes 0. -/
 theorem int_kind_bytes {m : Mem} {a : Nat} {n : Int} (h : ExprRepr m a (.int n)) :
@@ -306,7 +306,7 @@ theorem blockA_k
           (∃ v, c.σ.regs.get? Register.x18 = some v)))
         ∧ c.σ.sailOutput = out0)
       (fun c => ∃ ment v8 v9 v18,
-        ArmEntryK g N A SL φf φc st armPC calleeLoaded e sp r sret aExpr v8 v9 v18 out0 m0 ment c) := by
+        ArmEntryK g N A SL φf φc st armPC calleeLoaded e sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c) := by
   intro c hpre'
   obtain ⟨hpre, hout0⟩ := hpre'
   obtain ⟨hG, htick, hpc, ha0, ha1, ha2, hra, hraAl, hspReg, hstackOK, ⟨vmi, hmi⟩,
@@ -907,6 +907,51 @@ theorem blockA_k
       σ19.regs.get? R = g R := by
     intro R hR he8 he9 he18 he2
     rw [hframe19 R hR he8 he9 he18 he2]; exact hframe R hR
+  -- ===== call-point register facts: x11=aEnv (a1 untouched after `mv s2,a1`),
+  -- x8=aExpr (`mv s0,a2` @σ8), x18=aEnv (`mv s2,a1` @σ9), threaded to σ19. =====
+  have hsext0e : ∀ w : BitVec 64, (w + sign_extend (m := 64) (0x000#12) : BitVec 64) = w := by
+    intro w; rw [sext_zero, BitVec.add_zero]
+  -- x8 := aExpr at σ8 (`mv s0,a2`), then unchanged σ9..σ19
+  have hx8_8 : σ8.regs.get? Register.x8 = some aExpr := by
+    have := obs_alu_rd hobs8 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [hsext0e] at this
+  have hx8_9 : σ9.regs.get? Register.x8 = some aExpr := obs_alu_other hobs9 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_8
+  have hx8_10 : σ10.regs.get? Register.x8 = some aExpr := obs_branch_nottaken_other hobs10 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_9
+  have hx8_11 : σ11.regs.get? Register.x8 = some aExpr := obs_alu_other hobs11 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_10
+  have hx8_12 : σ12.regs.get? Register.x8 = some aExpr := obs_alu_other hobs12 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_11
+  have hx8_13 : σ13.regs.get? Register.x8 = some aExpr := obs_alu_other hobs13 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_12
+  have hx8_14 : σ14.regs.get? Register.x8 = some aExpr := obs_alu_other hobs14 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_13
+  have hx8_15 : σ15.regs.get? Register.x8 = some aExpr := obs_alu_other hobs15 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_14
+  have hx8_16 : σ16.regs.get? Register.x8 = some aExpr := obs_alu_other hobs16 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_15
+  have hx8_17 : σ17.regs.get? Register.x8 = some aExpr := obs_alu_other hobs17 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_16
+  have hx8_18 : σ18.regs.get? Register.x8 = some aExpr := obs_alu_other hobs18 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_17
+  have hx8_19 : σ19.regs.get? Register.x8 = some aExpr := obs_jr_other hobs19 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_18
+  -- x18 := aEnv at σ9 (`mv s2,a1`), then unchanged σ10..σ19
+  have hx18_9 : σ9.regs.get? Register.x18 = some aEnv := by
+    have := obs_alu_rd hobs9 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [hsext0e] at this
+  have hx18_10 : σ10.regs.get? Register.x18 = some aEnv := obs_branch_nottaken_other hobs10 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_9
+  have hx18_11 : σ11.regs.get? Register.x18 = some aEnv := obs_alu_other hobs11 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_10
+  have hx18_12 : σ12.regs.get? Register.x18 = some aEnv := obs_alu_other hobs12 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_11
+  have hx18_13 : σ13.regs.get? Register.x18 = some aEnv := obs_alu_other hobs13 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_12
+  have hx18_14 : σ14.regs.get? Register.x18 = some aEnv := obs_alu_other hobs14 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_13
+  have hx18_15 : σ15.regs.get? Register.x18 = some aEnv := obs_alu_other hobs15 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_14
+  have hx18_16 : σ16.regs.get? Register.x18 = some aEnv := obs_alu_other hobs16 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_15
+  have hx18_17 : σ17.regs.get? Register.x18 = some aEnv := obs_alu_other hobs17 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_16
+  have hx18_18 : σ18.regs.get? Register.x18 = some aEnv := obs_alu_other hobs18 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_17
+  have hx18_19 : σ19.regs.get? Register.x18 = some aEnv := obs_jr_other hobs19 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_18
+  -- x11 = aEnv: `a1` last threaded to σ8 (`ha1_8`); no later step writes x11, thread to σ19
+  have ha1_9 : σ9.regs.get? Register.x11 = some aEnv := obs_alu_other hobs9 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_8
+  have ha1_10 : σ10.regs.get? Register.x11 = some aEnv := obs_branch_nottaken_other hobs10 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_9
+  have ha1_11 : σ11.regs.get? Register.x11 = some aEnv := obs_alu_other hobs11 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_10
+  have ha1_12 : σ12.regs.get? Register.x11 = some aEnv := obs_alu_other hobs12 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_11
+  have ha1_13 : σ13.regs.get? Register.x11 = some aEnv := obs_alu_other hobs13 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_12
+  have ha1_14 : σ14.regs.get? Register.x11 = some aEnv := obs_alu_other hobs14 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_13
+  have ha1_15 : σ15.regs.get? Register.x11 = some aEnv := obs_alu_other hobs15 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_14
+  have ha1_16 : σ16.regs.get? Register.x11 = some aEnv := obs_alu_other hobs16 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_15
+  have ha1_17 : σ17.regs.get? Register.x11 = some aEnv := obs_alu_other hobs17 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_16
+  have ha1_18 : σ18.regs.get? Register.x11 = some aEnv := obs_alu_other hobs18 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_17
+  have ha1_19 : σ19.regs.get? Register.x11 = some aEnv := obs_jr_other hobs19 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_18
   -- assemble the full 19-step run + ArmEntryK
   refine ⟨⟨σ19, i19, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1⟩, ?_, σ6.mem, v8, v9, v18, hG19, hi19, hpc19, ha0_19, hx9_19, ha2_19, hsp_19, hra_19,
     ⟨_, hmi19⟩, hout19, hmem19e, hmem19e ▸ hload6, hmem19e ▸ hvi6, hmem19e ▸ hexpr6,
@@ -916,7 +961,7 @@ theorem blockA_k
     hmem19e ▸ hmemframe6,
     hgx8, hgx9, hgx18, hgx2, hmem19e ▸ hstore6, hmem19e ▸ hstoreSurv6, hframeArm,
     hsretAl, hsretRam.1, hsretRam.2, hsretWin, hsretVi, hsretStk, hsretEvalCode,
-    hsp1088, ?_, ?_, ?_, ?_, hstkRam.1, hstkWin, ?_, hraAl⟩
+    hsp1088, ?_, ?_, ?_, ?_, hstkRam.1, hstkWin, ?_, hraAl, ha1_19, hx8_19, hx18_19⟩
   · exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
       ((Steps.single hstep4).trans ((Steps.single hstep5).trans ((Steps.single hstep6).trans
       ((Steps.single hstep7).trans ((Steps.single hstep8).trans ((Steps.single hstep9).trans
@@ -950,7 +995,7 @@ theorem blockA_ee
       (fun c => EvalEntry g N A SL φf φc st d a (.int n) sp r sret aEnv aExpr m0 c
         ∧ c.σ.sailOutput = out0)
       (fun c => ∃ ment v8 v9 v18,
-        ArmEntry g N A SL φf φc st n sp r sret aExpr v8 v9 v18 out0 m0 ment c) := by
+        ArmEntry g N A SL φf φc st n sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c) := by
   intro c hpre'
   obtain ⟨he, hout0⟩ := hpre'
   -- the int kind tag + payload reads (in `m0`), for `hkind`/`hexprSurv`

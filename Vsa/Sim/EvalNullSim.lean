@@ -199,7 +199,7 @@ theorem blockC_null
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St)
-    (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem)
+    (sp r sret aExpr aEnv : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem)
     -- the sret buffer is disjoint from `value_null`'s code `[0x800027ec,0x800027f8)`
     -- (ArmEntryK carries only the `value_int` code range, so this is supplied here
     -- and threaded from `EvalNullEntry`).
@@ -207,7 +207,7 @@ theorem blockC_null
     Triple
       (fun c => ∃ ment,
         ArmEntryK g N A SL φf φc st (0x8000342c#64) Value_nullLoaded .null
-          sp r sret aExpr v8 v9 v18 out0 m0 ment c)
+          sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c)
       (fun c => ∃ mpre, PreEpilogueV g N A SL φf φc st .null sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hc
   obtain ⟨ment, hG, htick, hpc, ha0, hs1, ha2, hsp, hra, hmiEx, hout, hmem, hcode, hviCode,
@@ -215,7 +215,7 @@ theorem blockC_null
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl⟩ := hc
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl, _hx11, _hx8, _hx18⟩ := hc
   -- region facts for `value_null`'s buffer writes and its `ret`
   have hNullRegion : NullRegion sret := ⟨hsretAl, hsretLo, hsretHi, hsretWin, hsret_vnull⟩
   have hrettgt : (BitVec.update ((0x80003430#64 : BitVec 64) + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
@@ -384,11 +384,12 @@ theorem evalNullSim : EvalNullSimGoal := by
       hc.spill_defined⟩, rfl⟩
   -- === block C: arm (jal value_null; j) → PreEpilogueV .null ===
   obtain ⟨c2, hs2, mpre, hPre⟩ :=
-    blockC_null g N A SL φf φc st sp r sret aExpr v8 v9 v18 c.σ.sailOutput m0
+    blockC_null g N A SL φf φc st sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0
       hc.sret_vnullcode_disjoint c1 ⟨ment, hArm⟩
   -- === block D: epilogue → EvalExit .null ===
-  obtain ⟨c3, hs3, hExit⟩ :=
-    blockD_v g N A SL φf φc st .null sp r sret v8 v9 v18 c.σ.sailOutput m0 c2 ⟨mpre, hPre⟩
+  obtain ⟨c3, hs3, hExit, _⟩ :=
+    blockD_v g N A SL φf φc st .null sp r sret v8 v9 v18 c.σ.sailOutput m0 (fun _ => True)
+      c2 ⟨mpre, hPre, trivial⟩
   exact ⟨c3, (hs1.trans hs2).trans hs3, hExit⟩
 
 end Vsa.Sim

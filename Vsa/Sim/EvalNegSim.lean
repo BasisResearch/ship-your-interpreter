@@ -211,7 +211,7 @@ theorem blockB_unary
     Triple
       (fun c => ∃ ment,
         ArmEntryK gouter N A SL φf φc st (0x800035e0#64) UnaryArmCallee (.unary op esub)
-          sp r sret aExpr v8 v9 v18 out0 m0 ment c ∧
+          sp r sret aExpr aIn v8 v9 v18 out0 m0 ment c ∧
         -- ===== recursive-case extras (the ArmEntryK widening residual) =====
         c.σ.regs.get? Register.x11 = some aIn ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
@@ -245,7 +245,8 @@ theorem blockB_unary
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl⟩ := hArm
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl,
+    _hAEx11, _hAEx8, _hAEx18⟩ := hArm
   have htoh : tohostAddr = 0x8001ad00 := rfl
   obtain ⟨hviInt, hviSlot⟩ : Value_intLoaded ment ∧ IntSlotPinned ment := hviCode
   -- address arithmetic
