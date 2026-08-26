@@ -150,6 +150,7 @@ import Vsa.Sim.ExecVarDecl
 import Vsa.Sim.ExecSeqLoop
 import Vsa.Sim.ExecBlockSites
 import Vsa.Sim.ExecBlock
+import Vsa.Sim.ExecBlock2
 import Vsa.Sim.BlockLogic
 import Vsa.Sim.ReprSurvival
 import Vsa.Sim.ReprCopy
