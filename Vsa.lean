@@ -136,6 +136,7 @@ import Vsa.Sim.EvalOrSim
 import Vsa.Sim.LogicalSites2
 import Vsa.Sim.EvalLogical2
 import Vsa.Sim.EvalLogical3
+import Vsa.Sim.EvalLogical4
 import Vsa.Sim.BlockLogic
 import Vsa.Sim.ReprSurvival
 import Vsa.Sim.ReprCopy
