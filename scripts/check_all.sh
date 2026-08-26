@@ -250,6 +250,7 @@ THEOREMS=(
   Vsa.Sim.FrameCalc.valueRepr_copy                 # FrameCalc (L2: canonical marshalling/frame calculus — logs compose by append; ValueRepr copy through one write window)
   Vsa.Sim.heapPublicFrame_refl                     # ReallocSpec (L5: corrected realloc op interface — grow/null results over one allocator invariant + private footprint)
   Vsa.Sim.HeapOps.privFoot_disjoint                # HeapOps (L5: malloc+realloc packaged on one allocator ledger; privFoot disjoint from every live extent)
+  Vsa.Sim.demoChain_row                            # DeriveCase (L3: #derive_case emits a chain def + name_seg run theorem in plain terms; a Wave-D row = one application + one kernel decide)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean
