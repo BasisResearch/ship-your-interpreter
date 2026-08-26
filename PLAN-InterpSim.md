@@ -366,3 +366,42 @@ libgcc special cases, C99 `.tdiv`/`.tmod` truncation). Literals are unwrapped
 equality unchanged (operands are stored, hence in-range). Downstream `Cost`/
 `Derive` adjusted (in-range test cases → `wrap64_eq_self`); full tree + 43/43
 axiom audit green.
+
+---
+
+## Appendix (2026-08-26): M4 progress — EvalE cases + statement family opened
+
+Session progress on Layer 4 (`term_sim`), all commits on `main`, each `check_all: OK`
+(build + no sorry/axiom + `#print axioms` ⊆ {propext, Classical.choice, Quot.sound}).
+Every case is a `Triple` in the `EvalIH`/`ExecEntry` motive shape, conditional on named
+program-structure geometry + M6-Layout residuals (the sanctioned `env_get_found`/`evalVarSim`
+staging) — the endgame (M6 `Layout` + a uniform residual-discharge + abstraction strengthening)
+closes them. See `memory/m4-recursive-cases.md` + `memory/m4-statement-family.md` for the full
+per-case decode, the reusable multipliers, and the recurring residual list.
+
+### EvalE (expression) cases — LANDED
+- Leaves (pre-session): int, null, bool, str, var.
+- Recursive-case machinery: `blockA_k`/`ArmEntryK` widened (`aEnv` + x11/x8/x18), `blockD_v_rec`
+  (`PreEpilogueVD → EvalExitD`), `blockB_binary` (two-operand head), `blockB_logical`
+  (short-circuit head), `armTail_rec` (single `jal eval_expr` ⋈ IH glue).
+- Unary: `neg`, `not`.
+- Binary (int): `add`, `sub`, `lt` + the full operator jump-table dispatch decode
+  (CSWTCH.18 @0x80019f84). Mechanical follow-ups: `le`/`gt` (cmp foundation `CmpBridges`/
+  `CmpTailSites` staged), `eq`/`ne` (value_equal), `mul`/`div`/`mod` (libgcc soft-arith).
+  **FLAG: `.ge` (token 23) → machine runtime_error, but spec `binOpSem .ge` succeeds —
+  possible spec/machine divergence unless the front-end desugars `>=`. Needs a semantics decision.**
+- Logical: `and`/`or` all four constructors (short-circuit + two-eval, shared `blockC_logTail`).
+
+### Statement family (ExecS/ExecSeq) — OPENED + core cases
+- `exec_stmt` fully decoded (entry 0x80003fe0, 9 arm PCs, status ABI: a0 = status code).
+- Foundation: `ExecEntry`/`ExecExit`, `Exec_stmt` byte-pins (202 fetch lemmas), `execSeqNil`.
+- Multipliers: `execBlockA` (prologue+dispatch, UNCONDITIONAL — statement analog of `blockA_k`),
+  `execBlockD` (epilogue, UNCONDITIONAL), `armTail_rec_es` (sp-176 statement-frame recursion glue).
+- Cases: `brk`, `cont` (register-only), `expr` (recursive, `execExprSimC`), `ret` (retval copy).
+
+### Remaining for term_sim
+EvalE: `call` (crux — closures/depth, bridges to ExecSeq), + the mechanical binary ops.
+Statements: `retNull`, `varDecl` (env_define), `block`/`ExecSeq` (consNormal/consAbrupt + the
+do-while loop, `Triple.loop`), `ifStmt`, `whileStmt`, `forStmt` (loops), + `EvalArgs`/`ForLoop`/
+`ForCond`/`ExecStep`/`ExecInit`. Then the Layer-4 mutual-recursor assembly (`InductionScaffold`
+`SegEntry`/`SegExit` skeletons → real `ExecEntry`/`ExecExit`), then M5/M6.
