@@ -277,6 +277,7 @@ import Vsa.Sim.ReallocSpec
 import Vsa.Sim.HeapOps
 import Vsa.Sim.EnvDefineClose
 import Vsa.Sim.ErrorSiteRows
+import Vsa.Sim.ErrorSiteRows2
 import Vsa.Sim.DeriveCase
 import Vsa.Sim.LoopStep
 import Vsa.Sim.ErrorSites
