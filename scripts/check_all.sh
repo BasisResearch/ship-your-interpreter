@@ -180,8 +180,9 @@ THEOREMS=(
   # M4 statement family — ExecEntry/ExecExit foundation + first ExecSeq case
   Vsa.Sim.execSeqNil                             # ExecSimCommon (ExecSeq.nil: empty sequence → normal, store/output unchanged; zero-step identity Triple)
   Vsa.Sim.execBlockD                             # ExecBrkCont (shared exec_stmt epilogue: restore + addi sp,176 + ret → ExecExit; proven unconditionally)
-  Vsa.Sim.execBrkSim                             # ExecBrkCont (ExecS.brk: prologue/dispatch [residual execBlockA] ≫ li a0,1 ≫ execBlockD → ExecExit .brk)
-  Vsa.Sim.execContSim                            # ExecBrkCont (ExecS.cont: prologue/dispatch [residual execBlockA] ≫ cont epilogue-copy → ExecExit .cont)
+  Vsa.Sim.execBlockA                             # ExecBrkCont (exec_stmt prologue+jump-table dispatch → ExecArmEntryK; port of blockA_k; UNCONDITIONAL, per-kind multiplier)
+  Vsa.Sim.execBrkSim                             # ExecBrkCont (ExecS.brk: execBlockA ≫ li a0,1 ≫ execBlockD → ExecExit .brk; only slot-pin/table-disjoint geometry premises)
+  Vsa.Sim.execContSim                            # ExecBrkCont (ExecS.cont: execBlockA ≫ cont epilogue-copy → ExecExit .cont; only slot-pin/table-disjoint geometry premises)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean

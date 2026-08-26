@@ -244,6 +244,15 @@ structure ExecEntry
   stmt : StmtRepr c.σ.mem aStmt.toNat s
   /-- The whole spec store is represented. -/
   store : StoreRepr c.σ.mem N A φf φc st.store
+  /-- **`StoreRepr` survives any memory change confined to the stack window
+  `[SL.lo, sp)`.** The represented frames/closures and their strings live in the
+  arena/AST regions, disjoint from the C-stack scribble; so the prologue spills
+  (all inside `[SL.lo, sp)`) leave the store re-representable. (Mirror of
+  `EvalEntry.store_survives`, minus the sret buffer — the brk/cont/dispatch path
+  writes only the stack window.) -/
+  store_survives : ∀ m' : Mem,
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → c.σ.mem[k]? = m'[k]?) →
+    StoreRepr m' N A φf φc st.store
   /-- Console output correspondence. -/
   out : OutRepr c.σ st
   /-- The blanket ghost frame. -/
@@ -254,6 +263,15 @@ structure ExecEntry
   /-- The stack region is in RAM and above the HTIF window. -/
   stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
   stack_win : tohostAddr + 16 ≤ SL.lo
+  /-- **The `Stmt` node is disjoint from the stack region.** The dispatch reads
+  `read32 aStmt` (the kind, `lw`/`lwu a5,0(s0)`); its bytes survive the prologue
+  spills because the AST lives outside `[SL.lo, sp)`. -/
+  stmt_stack_disjoint : aStmt.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aStmt.toNat
+  /-- **The `Stmt` node is an 8-aligned 16-byte slot in RAM above HTIF.** The
+  dispatch's `lw a5,0(s0)`/`lwu a5,0(s0)` (kind, 4-aligned) need these. -/
+  stmt_align : aStmt.toNat % 8 = 0
+  stmt_ram : 0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000
+  stmt_win : tohostAddr + 16 ≤ aStmt.toNat
   /-- The four callee-saved registers spilled by the prologue (`s0`(x8),
   `s1`(x9), `s2`(x18), `s3`(x19)) are defined at entry. -/
   spill_defined : (∃ v, c.σ.regs.get? Register.x8 = some v) ∧
