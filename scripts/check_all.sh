@@ -184,6 +184,7 @@ THEOREMS=(
   Vsa.Sim.execBrkSim                             # ExecBrkCont (ExecS.brk: execBlockA ≫ li a0,1 ≫ execBlockD → ExecExit .brk; only slot-pin/table-disjoint geometry premises)
   Vsa.Sim.execContSim                            # ExecBrkCont (ExecS.cont: execBlockA ≫ cont epilogue-copy → ExecExit .cont; only slot-pin/table-disjoint geometry premises)
   Vsa.Sim.execExprSim                            # ExecExprRet (ExecS.expr: execBlockA ≫ jal eval_expr≫EvalIH (SubExecReturn glue) ≫ li a0,0/j/execBlockD → ExecExit .normal; conditional on slot-pin/table-disjoint + the recursion-glue residual hGlue)
+  Vsa.Sim.armTail_rec_es                         # ExecRecCommon (statement-frame recursion multiplier: jal eval_expr from exec_stmt (176-byte frame) ≫ EvalIH → SubExecReturn; sp-176 port of armTail_rec, sub-sret at sp'+16; unblocks ret + all recursive stmt cases)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean

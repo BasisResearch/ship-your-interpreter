@@ -116,7 +116,7 @@ def SubExecReturn
     (c : Config) : Prop :=
   GoodState c.σ ∧ c.tick < 2 ∧
   c.σ.regs.get? Register.PC = some retPC ∧
-  c.σ.regs.get? Register.x1 = some r ∧
+  c.σ.regs.get? Register.x1 = some retPC ∧
   c.σ.regs.get? Register.x2 = some (sp - 176#64) ∧
   c.σ.regs.get? Register.x18 = some aRet ∧             -- s2 = retslot (for the ret copy)
   (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
@@ -228,7 +228,7 @@ theorem execExprSim
     rwa [show ((0#64 : BitVec 64) + sign_extend (m := 64) (0x000#12)) = StatusCode .normal from by
       apply BitVec.eq_of_toNat_eq; decide] at this
   have hsp_1 : σ1.regs.get? Register.x2 = some (sp - 176#64) := obs_alu_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hspG
-  have hra_1 : σ1.regs.get? Register.x1 = some r := obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hraG
+  have hra_1 : σ1.regs.get? Register.x1 = some (0x80004184#64) := obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hraG
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hcode1 : Exec_stmtLoaded σ1.mem := by rw [hmem1e]; exact hcodeG
   -- the `li a0` is an ALU write to x10 only; carry the SubExecReturn frame through it
@@ -256,7 +256,7 @@ theorem execExprSim
       apply BitVec.eq_of_toNat_eq; decide] at this
   have ha0_2 : σ2.regs.get? Register.x10 = some (StatusCode .normal) := obs_jr_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_1
   have hsp_2 : σ2.regs.get? Register.x2 = some (sp - 176#64) := obs_jr_other hobs2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_1
-  have hra_2 : σ2.regs.get? Register.x1 = some r := obs_jr_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_1
+  have hra_2 : σ2.regs.get? Register.x1 = some (0x80004184#64) := obs_jr_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_1
   obtain ⟨vmi2, hmi2⟩ := obs_jr_minstret hobs2
   have hcode2 : Exec_stmtLoaded σ2.mem := by rw [hmem2e]; exact hcodeG
   have hframe2 : ∀ R : Register, AbiPreservedNoise R → (Register.x10 == R) = false →
