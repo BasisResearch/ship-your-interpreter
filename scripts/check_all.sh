@@ -177,6 +177,8 @@ THEOREMS=(
   Vsa.Sim.negLoadStore_triple                   # A0 (σ4→σ10 load/store as a Triple)
   Vsa.Sim.negTail_triple                        # A0 (σ10→σ15 tail as a Triple)
   Vsa.Sim.neg_blocks_triple                     # A1 (FULL 3-block spine σ0→σ15 as ONE composed Triple)
+  # M4 statement family — ExecEntry/ExecExit foundation + first ExecSeq case
+  Vsa.Sim.execSeqNil                             # ExecSimCommon (ExecSeq.nil: empty sequence → normal, store/output unchanged; zero-step identity Triple)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean
