@@ -251,6 +251,7 @@ THEOREMS=(
   Vsa.Sim.heapPublicFrame_refl                     # ReallocSpec (L5: corrected realloc op interface — grow/null results over one allocator invariant + private footprint)
   Vsa.Sim.HeapOps.privFoot_disjoint                # HeapOps (L5: malloc+realloc packaged on one allocator ledger; privFoot disjoint from every live extent)
   Vsa.Sim.demoChain_row                            # DeriveCase (L3: #derive_case emits a chain def + name_seg run theorem in plain terms; a Wave-D row = one application + one kernel decide)
+  Vsa.Sim.errHalts_of_site                         # ErrorSites (L6: per-error-site combinator — Triple SitePre (RuntimeErrorAt …) ⇒ Halts c out 70 via errorTailHalts_exit; one composition per error row, SC/HT supplied once at L7/L8)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean
