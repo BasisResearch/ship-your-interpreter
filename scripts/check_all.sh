@@ -179,6 +179,9 @@ THEOREMS=(
   Vsa.Sim.neg_blocks_triple                     # A1 (FULL 3-block spine σ0→σ15 as ONE composed Triple)
   # M4 statement family — ExecEntry/ExecExit foundation + first ExecSeq case
   Vsa.Sim.execSeqNil                             # ExecSimCommon (ExecSeq.nil: empty sequence → normal, store/output unchanged; zero-step identity Triple)
+  Vsa.Sim.execBlockD                             # ExecBrkCont (shared exec_stmt epilogue: restore + addi sp,176 + ret → ExecExit; proven unconditionally)
+  Vsa.Sim.execBrkSim                             # ExecBrkCont (ExecS.brk: prologue/dispatch [residual execBlockA] ≫ li a0,1 ≫ execBlockD → ExecExit .brk)
+  Vsa.Sim.execContSim                            # ExecBrkCont (ExecS.cont: prologue/dispatch [residual execBlockA] ≫ cont epilogue-copy → ExecExit .cont)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean

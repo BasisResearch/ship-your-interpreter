@@ -140,6 +140,8 @@ import Vsa.Sim.EvalLogical4
 import Vsa.Sim.Code.Exec_stmt
 import Vsa.Sim.ExecEntry
 import Vsa.Sim.ExecSimCommon
+import Vsa.Sim.Exec_stmtSites
+import Vsa.Sim.ExecBrkCont
 import Vsa.Sim.BlockLogic
 import Vsa.Sim.ReprSurvival
 import Vsa.Sim.ReprCopy
