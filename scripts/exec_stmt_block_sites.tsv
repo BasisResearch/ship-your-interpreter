@@ -1,0 +1,27 @@
+# exec_stmt block do-while loop body (kind 2, 0x8000418c arm), the do-while at
+# 0x800041a4. slli a4,a6,0x3 (0x800041a8) is HAND-written (see ExecBlockSites tail).
+# jal/j immediates are the DECODER's unscrambled imm21; branch immediates are imm13.
+# setup (0x800041a4 .. 0x800041c0):
+800041a4	00843783	ld	15	8	008
+800041ac	00090693	alu_addi	13	18	000
+800041b0	00e787b3	alu_add	15	15	14
+800041b4	0007b583	ld	11	15	000
+800041b8	00098613	alu_addi	12	19	000
+800041bc	00048513	alu_addi	10	9	000
+800041c0	01013423	sd	16	2	008
+# recursive call (0x800041c4): jal exec_stmt (target 0x80003fe0, imm21 0x1ffe1c):
+800041c4	e1dff0ef	jal	1	1ffe1c
+# status check (0x800041c8): bnez a0 → 0x8000409c (abrupt) / fallthrough (continue):
+800041c8	ec051ae3	branch_taken	BNE	10	0	1ed4
+800041c8	ec051ae3	branch_nottaken	BNE	10	0	1ed4
+# loop control (0x800041cc .. 0x800041d8):
+800041cc	00813803	ld	16	2	008
+800041d0	01042703	lw	14	8	010
+800041d4	00180813	alu_addi	16	16	001
+800041d8	0008079b	addiw	15	16	000
+# blt back-edge (0x800041dc): blt a5,a4 → 0x800041a4 (loop) / fallthrough (done):
+800041dc	fce7c4e3	branch_taken	BLT	15	14	1fc8
+800041dc	fce7c4e3	branch_nottaken	BLT	15	14	1fc8
+# normal exit (0x800041e0 .. 0x800041e4): li a0,0 ; j 0x8000409c (imm21 0x1ffeb8):
+800041e0	00000513	alu_addi	10	0	000
+800041e4	eb9ff06f	j	1ffeb8

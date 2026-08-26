@@ -1,4 +1,6 @@
 import Vsa.Sim.ExecRecCommon
+import Vsa.Sim.ExecSeqLoop
+import Vsa.Sim.ExecBlockSites
 
 /-!
 # Layer 4 — M4 statement family: the `block` case (`ExecS.block`)

@@ -148,6 +148,7 @@ import Vsa.Sim.ExecRet
 import Vsa.Sim.Exec_stmtSites3
 import Vsa.Sim.ExecVarDecl
 import Vsa.Sim.ExecSeqLoop
+import Vsa.Sim.ExecBlockSites
 import Vsa.Sim.ExecBlock
 import Vsa.Sim.BlockLogic
 import Vsa.Sim.ReprSurvival
