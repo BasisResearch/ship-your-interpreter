@@ -338,3 +338,4 @@ import Vsa.Sim.ErrorSim
 import Vsa.Sim.ErrorTail
 import Vsa.Sim.ExitPath
 import Vsa.Sim.ExitPathSeg
+import Vsa.Sim.ErrorSimFull
