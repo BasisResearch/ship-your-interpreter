@@ -132,6 +132,8 @@ import Vsa.Sim.EvalBinSim3
 import Vsa.Sim.CmpTailSites
 import Vsa.Sim.CmpBridges
 import Vsa.Sim.EvalBinSim4
+import Vsa.Sim.rows.EvalLeRow
+import Vsa.Sim.rows.EvalGtRow
 import Vsa.Sim.LogicalSites
 import Vsa.Sim.EvalAndSim
 import Vsa.Sim.EvalOrSim
@@ -281,6 +283,7 @@ import Vsa.Sim.ErrorSiteRows
 import Vsa.Sim.ErrorSiteRows2
 import Vsa.Sim.DeriveCase
 import Vsa.Sim.LoopStep
+import Vsa.Sim.LoopScaffoldClose
 import Vsa.Sim.ErrorSites
 import Vsa.While.Trichotomy
 import Vsa.Sim.DivergeSim
