@@ -166,6 +166,8 @@ import Vsa.Sim.ExecFor
 import Vsa.Sim.ExecForStart
 import Vsa.Sim.CallEntry
 import Vsa.Sim.EvalCallNative
+import Vsa.Sim.NativeAssertSites
+import Vsa.Sim.EvalCallNative2
 import Vsa.Sim.EvalCallPrint
 import Vsa.Sim.EvalArgs
 import Vsa.Sim.EvalCall
