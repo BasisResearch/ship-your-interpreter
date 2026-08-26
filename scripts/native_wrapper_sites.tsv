@@ -1,0 +1,22 @@
+# Generated for the native dispatch/jalr wrapper (assert/print/println shared).
+# fv-kind dispatch 0x80003254..0x8000327c + native arm 0x800039e0..0x800039fc.
+# The jalr @0x800039f4 is hand-written (stepObs_jalr) — NOT in this list.
+# feed to scripts/gen_sites.py against Vsa.Sim.Code.Eval_exprLoaded.
+80003254	06013703	ld	14	2	060	# ld a4,96(sp)   fv word0
+80003258	06813683	ld	13	2	068	# ld a3,104(sp)  fv word1
+8000325c	07013803	ld	16	2	070	# ld a6,112(sp)  fv word2 = fn ptr
+80003260	00442583	lw	11	8	004	# lw a1,4(s0)    e->line
+80003264	06e13c23	sd	14	2	078	# sd a4,120(sp)
+80003268	06012703	lw	14	2	060	# lw a4,96(sp)   fv->kind
+8000326c	08d13023	sd	13	2	080	# sd a3,128(sp)
+80003270	09013423	sd	16	2	088	# sd a6,136(sp)
+80003274	00500613	alu_addi	12	0	005	# li a2,5
+80003278	00058b93	alu_addi	23	11	000	# mv s7,a1
+8000327c	76c70263	branch_taken	BEQ	14	12	0764	# beq a4,a2,0x800039e0 (kind==5 TAKEN)
+800039e0	00058713	alu_addi	14	11	000	# mv a4,a1   argc
+800039e4	00078613	alu_addi	12	15	000	# mv a2,a5   argsBase
+800039e8	00090593	alu_addi	11	18	000	# mv a1,s2   interp
+800039ec	0f010693	alu_addi	13	2	0f0	# addi a3,sp,240  scratch
+800039f0	00048513	alu_addi	10	9	000	# mv a0,s1   CALL sret
+800039f8	3f813b83	ld	23	2	3f8	# ld s7,1016(sp)
+800039fc	9f1ff06f	j	1ff9f0	# j 0x800033ec  callJoinPC

@@ -168,6 +168,8 @@ import Vsa.Sim.CallEntry
 import Vsa.Sim.EvalCallNative
 import Vsa.Sim.NativeAssertSites
 import Vsa.Sim.EvalCallNative2
+import Vsa.Sim.NativeWrapperSites
+import Vsa.Sim.EvalCallNative3
 import Vsa.Sim.EvalCallPrint
 import Vsa.Sim.EvalArgs
 import Vsa.Sim.EvalCall
