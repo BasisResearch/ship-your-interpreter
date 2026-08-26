@@ -187,6 +187,7 @@ THEOREMS=(
   Vsa.Sim.armTail_rec_es                         # ExecRecCommon (statement-frame recursion multiplier: jal eval_expr from exec_stmt (176-byte frame) ≫ EvalIH → SubExecReturn; sp-176 port of armTail_rec, sub-sret at sp'+16; unblocks ret + all recursive stmt cases)
   Vsa.Sim.execExprGlue                           # ExecRecCommon (ExecS.expr arm setup ld a2,8(s0)/addi a0,sp,16/mv a3,s3/mv a1,s1 ≫ armTail_rec_es → SubExecReturn: DISCHARGES execExprSimC hGlue from concrete named residuals)
   Vsa.Sim.execExprSimC                           # ExecRecCommon (ExecS.expr → ExecExit .normal with hGlue discharged via execExprGlue; conditional only on execBlockA geometry + concrete sub-expr/code/headroom residuals, no opaque Triple premise)
+  Vsa.Sim.execRetSim                             # ExecRet (ExecS.ret value-present: execBlockA ≫ jal eval_expr≫EvalIH (SubExecReturnR glue) ≫ 24-byte *retslot:=v copy (valueRepr_copy_of_writeWindow) ≫ inline li a0,3 epilogue → ExecExit (.ret v) with the retval disjunct; conditional on slot-pin/table-disjoint + retslot geometry + the recursion-glue residual hGlue; retNull is a follow-up)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean
