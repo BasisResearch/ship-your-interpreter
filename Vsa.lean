@@ -277,6 +277,8 @@ import Vsa.Sim.ReallocSpec
 import Vsa.Sim.HeapOps
 import Vsa.Sim.DeriveCase
 import Vsa.Sim.ErrorSites
+import Vsa.While.Trichotomy
+import Vsa.Sim.DivergeSim
 import Vsa.Sim.SnprintfSpec19
 import Vsa.Sim.SsprintSites
 import Vsa.Sim.SnprintfSpec20
