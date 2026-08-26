@@ -47,14 +47,19 @@ def decodeM (w : BitVec 32) : Option (MKind × Nat × Nat × Nat × BitVec 12) :
   let immI   : BitVec 12 := w.extractLsb' 20 12
   let immS   : BitVec 12 := (w.extractLsb' 25 7).append (w.extractLsb' 7 5)
   if opcode = 0x13 then
-    -- OP-IMM: addi (funct3 = 0); rs2 unused
-    (if funct3 = 0 then some (.addi, rd, rs1, 0, immI) else none)
+    -- OP-IMM: addi (0) / slti (2) / slli (1) / srli (5); rs2 unused
+    (if funct3 = 0 then some (.addi, rd, rs1, 0, immI)
+     else if funct3 = 2 then some (.slti, rd, rs1, 0, immI)
+     else if funct3 = 1 then some (.slli, rd, rs1, 0, immI)
+     else if funct3 = 5 then some (.srli, rd, rs1, 0, immI)
+     else none)
   else if opcode = 0x33 then
-    -- OP: add / sub (funct3 = 0, funct7 selects)
+    -- OP: add / sub (funct3 = 0, funct7 selects); slt (funct3 = 2)
     (if funct3 = 0 then
       (if funct7 = 0x00 then some (.add, rd, rs1, rs2, 0#12)
        else if funct7 = 0x20 then some (.sub, rd, rs1, rs2, 0#12)
        else none)
+     else if funct3 = 2 then some (.slt, rd, rs1, rs2, 0#12)
      else none)
   else if opcode = 0x03 then
     -- LOAD: lw (2) / ld (3) / lbu (4); rs2 unused
@@ -68,6 +73,17 @@ def decodeM (w : BitVec 32) : Option (MKind × Nat × Nat × Nat × BitVec 12) :
      else if funct3 = 3 then some (.sd, 0, rs1, rs2, immS)
      else if funct3 = 0 then some (.sb, 0, rs1, rs2, immS)
      else none)
+  else if opcode = 0x1b then
+    -- OP-IMM-32: addiw (funct3 = 0); rs2 unused
+    (if funct3 = 0 then some (.addiw, rd, rs1, 0, immI) else none)
+  else if opcode = 0x3b then
+    -- OP-32: subw (funct3 = 0, funct7 = 0x20)
+    (if funct3 = 0 then
+      (if funct7 = 0x20 then some (.subw, rd, rs1, rs2, 0#12) else none)
+     else none)
+  else if opcode = 0x17 then
+    -- AUIPC: imm field unused (imm20 lives in the word; see `imm20Of`)
+    some (.auipc, rd, 0, 0, 0#12)
   else none
 
 /-- Assemble a full `MInstr` from `pc` and `word`.  Nested-`if` on `decodeM w`
@@ -127,5 +143,22 @@ example : mkLine 0x800039d0#64 0x40b005b3#32
     = ⟨0x800039d0#64, 0x40b005b3#32, 0xb3#8, 0x05#8, 0xb0#8, 0x40#8, .sub, 11, 0, 11, 0#12⟩ := by rfl
 example : mkLine 0x800039d4#64 0x00048513#32
     = ⟨0x800039d4#64, 0x00048513#32, 0x13#8, 0x85#8, 0x04#8, 0x00#8, .addi, 10, 9, 0, 0x000#12⟩ := by rfl
+
+-- comparison-arm kinds (the `EvalCmpRows` slice): real words from the
+-- shared comparison arm 0x80003628.. and its dispatch tail.
+example : mkLine 0x80003638#64 0xfec6079b#32
+    = ⟨0x80003638#64, 0xfec6079b#32, 0x9b#8, 0x07#8, 0xc6#8, 0xfe#8, .addiw, 15, 12, 0, 0xfec#12⟩ := by rfl
+example : mkLine 0x8000364c#64 0x02079713#32
+    = ⟨0x8000364c#64, 0x02079713#32, 0x13#8, 0x97#8, 0x07#8, 0x02#8, .slli, 14, 15, 0, 0x020#12⟩ := by rfl
+example : mkLine 0x80003650#64 0x01d75793#32
+    = ⟨0x80003650#64, 0x01d75793#32, 0x93#8, 0x57#8, 0xd7#8, 0x01#8, .srli, 15, 14, 0, 0x01d#12⟩ := by rfl
+example : mkLine 0x80003640#64 0x00016697#32
+    = ⟨0x80003640#64, 0x00016697#32, 0x97#8, 0x66#8, 0x01#8, 0x00#8, .auipc, 13, 0, 0, 0#12⟩ := by rfl
+example : mkLine 0x80003698#64 0x0138a733#32
+    = ⟨0x80003698#64, 0x0138a733#32, 0x33#8, 0xa7#8, 0x38#8, 0x01#8, .slt, 14, 17, 19, 0#12⟩ := by rfl
+example : mkLine 0x800036a0#64 0x40f705bb#32
+    = ⟨0x800036a0#64, 0x40f705bb#32, 0xbb#8, 0x05#8, 0xf7#8, 0x40#8, .subw, 11, 14, 15, 0#12⟩ := by rfl
+example : mkLine 0x80003af8#64 0x0015a593#32
+    = ⟨0x80003af8#64, 0x0015a593#32, 0x93#8, 0xa5#8, 0x15#8, 0x00#8, .slti, 11, 11, 0, 0x001#12⟩ := by rfl
 
 end Vsa.Sim

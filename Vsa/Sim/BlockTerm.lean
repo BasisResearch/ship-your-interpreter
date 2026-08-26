@@ -565,6 +565,13 @@ theorem domRun_keys_bt : ∀ (is : List MInstr) (L : GRegs)
     | lw => exact dom_cons_erase h
     | ld => exact dom_cons_erase h
     | lbu => exact dom_cons_erase h
+    | addiw => exact dom_cons_erase h
+    | slli => exact dom_cons_erase h
+    | srli => exact dom_cons_erase h
+    | slti => exact dom_cons_erase h
+    | slt => exact dom_cons_erase h
+    | subw => exact dom_cons_erase h
+    | auipc => exact dom_cons_erase h
     | sw => exact h
     | sd => exact h
     | sb => exact h
@@ -602,6 +609,27 @@ theorem keysOK_runGM_bt : ∀ (is : List MInstr) (pc0 : BitVec 64) (dom : List N
     | lbu =>
       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .lbu ard ars1 ars2)
       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | addiw =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .addiw ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | slli =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .slli ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | srli =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .srli ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | slti =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .slti ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | slt =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .slt ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | subw =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .subw ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | auipc =>
+      obtain ⟨hrd1, hrd31⟩ := (hkok : KindOK dom .auipc ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
     | sw => exact ih _ _ _ _ hwfr hkeys
     | sd => exact ih _ _ _ _ hwfr hkeys
     | sb => exact ih _ _ _ _ hwfr hkeys
@@ -637,6 +665,13 @@ theorem writeLog_wlog_low_bt (mc : Std.ExtHashMap Nat (BitVec 8)) :
     | lw => exact ih m _ _ hfr j hj
     | ld => exact ih m _ _ hfr j hj
     | lbu => exact ih m _ _ hfr j hj
+    | addiw => exact ih m _ _ hfr j hj
+    | slli => exact ih m _ _ hfr j hj
+    | srli => exact ih m _ _ hfr j hj
+    | slti => exact ih m _ _ hfr j hj
+    | slt => exact ih m _ _ hfr j hj
+    | subw => exact ih m _ _ hfr j hj
+    | auipc => exact ih m _ _ hfr j hj
     | sw =>
       have hwin : tohostAddr + 16 ≤
           (eaddrM ⟨apc, aword, ab0, ab1, ab2, ab3, .sw, ard, ars1, ars2, aimm⟩ L).toNat :=
