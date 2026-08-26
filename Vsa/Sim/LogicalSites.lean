@@ -11,6 +11,11 @@ import Vsa.Sim.DecodeTable.Batch07Part23
 import Vsa.Sim.DecodeTable.Batch08Part01
 import Vsa.Sim.DecodeTable.Batch08Part02
 import Vsa.Sim.DecodeTable.Batch08Part03
+import Vsa.Sim.DecodeTable.Batch08Part12
+import Vsa.Sim.DecodeTable.Batch02Part20
+import Vsa.Sim.DecodeTable.Batch13Part28
+import Vsa.Sim.DecodeTable.Batch15Part08
+import Vsa.Sim.DecodeTable.Batch15Part11
 import Vsa.Sim.DecodeTable.Batch08Part24
 import Vsa.Sim.DecodeTable.Batch08Part27
 import Vsa.Sim.DecodeTable.Batch08Part32
@@ -814,6 +819,516 @@ theorem site_800036e0_lg (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret :
     hG hpc hminstret hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) (by decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
     (Vsa.Sim.DecodeTable.decode_d0dff06f (afterPrelude σ)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+    htgt hi
+
+/-! ## OR-arm sites (op == 25 → 0x80003978) -/
+
+/-- Branch target of the taken beq at 0x80003578 (OR split). -/
+theorem site_80003578_taken_lg_tgt :
+    (0x80003578#64 + sign_extend (m := 64) (0x0400#13)) = (0x80003978#64 : BitVec 64) := by
+  apply BitVec.eq_of_toNat_eq; decide
+
+/-- 0x80003578: `beq x14,x15 → 0x80003978` (TAKEN, op == 25 → OR arm). -/
+theorem site_80003578_taken_lg (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v14 v15 : BitVec 64)
+    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
+    (hminstret : σ.regs.get? Register.minstret = some vminstret)
+    (hx14 : σ.regs.get? Register.x14 = some v14)
+    (hx15 : σ.regs.get? Register.x15 = some v15)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hpcv : pc = (0x80003578#64 : BitVec 64))
+    (hv : (v14 == v15) = true) (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ.mem ∧
+      ReadsLikePost σ' (sigmaPost_branch_taken σ pc vminstret (0x0400#13)) := by
+  subst hpcv
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.eval_expr_at_80003578 hmem
+  exact stepObs_branch_taken σ i u (0x80003578#64) vminstret (0x0400#13)
+    (regidx.Regidx 0x0e#5) (regidx.Regidx 0x0f#5) bop.BEQ (0x40f70063#32)
+    (0x63#8) (0x00#8) (0xf7#8) (0x40#8)
+    hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+    (Vsa.Sim.DecodeTable.decode_40f70063 (afterPrelude σ)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+    (execute_btype_beq_taken (0x0400#13) (regidx.Regidx 0x0e#5) (regidx.Regidx 0x0f#5)
+      v14 v15 (0x80003578#64) initMisa (afterNextPC (afterPrelude σ) (0x80003578#64))
+      (rX_bits_x14 _ v14
+        (by rw [get?_afterNextPC σ (0x80003578#64) _ (by decide) (by decide)]; exact hx14))
+      (rX_bits_x15 _ v15
+        (by rw [get?_afterNextPC σ (0x80003578#64) _ (by decide) (by decide)]; exact hx15))
+      (by rw [get?_afterNextPC σ (0x80003578#64) _ (by decide) (by decide)]; exact hpc)
+      (by rw [get?_afterNextPC σ (0x80003578#64) _ (by decide) (by decide)]; exact hG.misa)
+      (by rw [site_80003578_taken_lg_tgt]; decide) hv)
+    hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
+
+/-- 0x80003978: `ld x14,0x80(x2)`. -/
+theorem site_80003978_lg (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v2 : BitVec 64)
+    (b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8)
+    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
+    (hminstret : σ.regs.get? Register.minstret = some vminstret)
+    (hx2 : σ.regs.get? Register.x2 = some v2)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hpcv : pc = (0x80003978#64 : BitVec 64))
+    (hlo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x080#12)).toNat)
+    (hhiram : (v2 + sign_extend (m := 64) (0x080#12)).toNat + 8 ≤ 0x100000000)
+    (hhtif : (v2 + sign_extend (m := 64) (0x080#12)).toNat + 8 ≤ tohostAddr
+      ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x080#12)).toNat)
+    (halign : (v2 + sign_extend (m := 64) (0x080#12)).toNat % 8 = 0)
+    (h0 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat]? = some b0)
+    (h1 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 1]? = some b1)
+    (h2 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 2]? = some b2)
+    (h3 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 3]? = some b3)
+    (h4 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 4]? = some b4)
+    (h5 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 5]? = some b5)
+    (h6 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 6]? = some b6)
+    (h7 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 7]? = some b7)
+    (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ.mem ∧
+      ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x14
+        (sign_extend (m := 64)
+          ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8)))) := by
+  subst hpcv
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.eval_expr_at_80003978 hmem
+  exact stepObs_alu σ i u (0x80003978#64) vminstret (0x08013703#32)
+    (instruction.LOAD (0x080#12, regidx.Regidx 0x02#5, regidx.Regidx 0x0e#5, false, 8))
+    Register.x14 (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8)))
+    (0x03#8) (0x37#8) (0x01#8) (0x08#8)
+    hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+    (Vsa.Sim.DecodeTable.decode_08013703 (afterPrelude σ)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+    (exec_ld σ (0x80003978#64) (0x080#12) (regidx.Regidx 0x02#5) (regidx.Regidx 0x0e#5)
+      (sigma3_alu σ (0x80003978#64) Register.x14 (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
+      v2 b0 b1 b2 b3 b4 b5 b6 b7 hG
+      (rX_bits_x2 _ v2
+        (by rw [get?_afterNextPC σ (0x80003978#64) _ (by decide) (by decide)]; exact hx2))
+      (wX_bits_x14 _ (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
+      hlo hhiram hhtif halign h0 h1 h2 h3 h4 h5 h6 h7)
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+    hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
+
+/-- 0x8000397c: `ld x15,0x88(x2)`. -/
+theorem site_8000397c_lg (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v2 : BitVec 64)
+    (b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8)
+    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
+    (hminstret : σ.regs.get? Register.minstret = some vminstret)
+    (hx2 : σ.regs.get? Register.x2 = some v2)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hpcv : pc = (0x8000397c#64 : BitVec 64))
+    (hlo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x088#12)).toNat)
+    (hhiram : (v2 + sign_extend (m := 64) (0x088#12)).toNat + 8 ≤ 0x100000000)
+    (hhtif : (v2 + sign_extend (m := 64) (0x088#12)).toNat + 8 ≤ tohostAddr
+      ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x088#12)).toNat)
+    (halign : (v2 + sign_extend (m := 64) (0x088#12)).toNat % 8 = 0)
+    (h0 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat]? = some b0)
+    (h1 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 1]? = some b1)
+    (h2 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 2]? = some b2)
+    (h3 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 3]? = some b3)
+    (h4 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 4]? = some b4)
+    (h5 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 5]? = some b5)
+    (h6 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 6]? = some b6)
+    (h7 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 7]? = some b7)
+    (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ.mem ∧
+      ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x15
+        (sign_extend (m := 64)
+          ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8)))) := by
+  subst hpcv
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.eval_expr_at_8000397c hmem
+  exact stepObs_alu σ i u (0x8000397c#64) vminstret (0x08813783#32)
+    (instruction.LOAD (0x088#12, regidx.Regidx 0x02#5, regidx.Regidx 0x0f#5, false, 8))
+    Register.x15 (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8)))
+    (0x83#8) (0x37#8) (0x81#8) (0x08#8)
+    hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+    (Vsa.Sim.DecodeTable.decode_08813783 (afterPrelude σ)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+    (exec_ld σ (0x8000397c#64) (0x088#12) (regidx.Regidx 0x02#5) (regidx.Regidx 0x0f#5)
+      (sigma3_alu σ (0x8000397c#64) Register.x15 (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
+      v2 b0 b1 b2 b3 b4 b5 b6 b7 hG
+      (rX_bits_x2 _ v2
+        (by rw [get?_afterNextPC σ (0x8000397c#64) _ (by decide) (by decide)]; exact hx2))
+      (wX_bits_x15 _ (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
+      hlo hhiram hhtif halign h0 h1 h2 h3 h4 h5 h6 h7)
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+    hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
+
+/-- 0x80003980: `addi x10,x2,0x40`. -/
+theorem site_80003980_lg (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v2 : BitVec 64)
+    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
+    (hminstret : σ.regs.get? Register.minstret = some vminstret)
+    (hx2 : σ.regs.get? Register.x2 = some v2)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hpcv : pc = (0x80003980#64 : BitVec 64)) (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ.mem ∧
+      ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x10
+        (v2 + sign_extend (m := 64) (0x040#12))) := by
+  subst hpcv
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.eval_expr_at_80003980 hmem
+  exact stepObs_alu σ i u (0x80003980#64) vminstret (0x04010513#32)
+    (instruction.ITYPE (0x040#12, regidx.Regidx 0x02#5, regidx.Regidx 0x0a#5, iop.ADDI))
+    Register.x10 (v2 + sign_extend (m := 64) (0x040#12))
+    (0x13#8) (0x05#8) (0x01#8) (0x04#8)
+    hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+    (Vsa.Sim.DecodeTable.decode_04010513 (afterPrelude σ)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+    (execute_itype_addi_char (0x040#12) (regidx.Regidx 0x02#5) (regidx.Regidx 0x0a#5) v2
+      (afterNextPC (afterPrelude σ) (0x80003980#64))
+      (sigma3_alu σ (0x80003980#64) Register.x10 (v2 + sign_extend (m := 64) (0x040#12)))
+      (rX_bits_x2 _ v2
+        (by rw [get?_afterNextPC σ (0x80003980#64) _ (by decide) (by decide)]; exact hx2))
+      (wX_bits_x10 _ (v2 + sign_extend (m := 64) (0x040#12))))
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+    hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
+
+/-- 0x80003984: `sd x12,0x40(x2)`. -/
+theorem site_80003984_lg (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v2 v12 : BitVec 64)
+    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
+    (hminstret : σ.regs.get? Register.minstret = some vminstret)
+    (hx2 : σ.regs.get? Register.x2 = some v2)
+    (hx12 : σ.regs.get? Register.x12 = some v12)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hpcv : pc = (0x80003984#64 : BitVec 64))
+    (halo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x040#12)).toNat)
+    (hahiram : (v2 + sign_extend (m := 64) (0x040#12)).toNat + 8 ≤ 0x100000000)
+    (hahiwin : tohostAddr + 16 ≤ (v2 + sign_extend (m := 64) (0x040#12)).toNat)
+    (haalign : (v2 + sign_extend (m := 64) (0x040#12)).toNat % 8 = 0) (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = writeMap8 (afterNextPC (afterPrelude σ) (0x80003984#64)).mem
+        (v2 + sign_extend (m := 64) (0x040#12)).toNat (sdData_val v12) ∧
+      ReadsLikePost σ' (sigmaPost_store σ pc vminstret
+        (writeMap8 (afterNextPC (afterPrelude σ) (0x80003984#64)).mem (v2 + sign_extend (m := 64) (0x040#12)).toNat (sdData_val v12))) := by
+  subst hpcv
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.eval_expr_at_80003984 hmem
+  exact stepObs_store σ i u (0x80003984#64) vminstret (0x04c13023#32)
+    (instruction.STORE (0x040#12, regidx.Regidx 0x0c#5, regidx.Regidx 0x02#5, 8))
+    (writeMap8 (afterNextPC (afterPrelude σ) (0x80003984#64)).mem (v2 + sign_extend (m := 64) (0x040#12)).toNat (sdData_val v12))
+    (0x23#8) (0x30#8) (0xc1#8) (0x04#8)
+    hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+    (Vsa.Sim.DecodeTable.decode_04c13023 (afterPrelude σ)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+    (exec_sd_val σ (0x80003984#64) (0x040#12) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x02#5)
+      v2 v12 hG
+      (rX_bits_x2 _ v2
+        (by rw [get?_afterNextPC σ (0x80003984#64) _ (by decide) (by decide)]; exact hx2))
+      (rX_bits_x12 _ v12
+        (by rw [get?_afterNextPC σ (0x80003984#64) _ (by decide) (by decide)]; exact hx12))
+      halo hahiram hahiwin haalign)
+    hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
+
+/-- 0x80003988: `sd x14,0x48(x2)`. -/
+theorem site_80003988_lg (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v2 v14 : BitVec 64)
+    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
+    (hminstret : σ.regs.get? Register.minstret = some vminstret)
+    (hx2 : σ.regs.get? Register.x2 = some v2)
+    (hx14 : σ.regs.get? Register.x14 = some v14)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hpcv : pc = (0x80003988#64 : BitVec 64))
+    (halo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x048#12)).toNat)
+    (hahiram : (v2 + sign_extend (m := 64) (0x048#12)).toNat + 8 ≤ 0x100000000)
+    (hahiwin : tohostAddr + 16 ≤ (v2 + sign_extend (m := 64) (0x048#12)).toNat)
+    (haalign : (v2 + sign_extend (m := 64) (0x048#12)).toNat % 8 = 0) (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = writeMap8 (afterNextPC (afterPrelude σ) (0x80003988#64)).mem
+        (v2 + sign_extend (m := 64) (0x048#12)).toNat (sdData_val v14) ∧
+      ReadsLikePost σ' (sigmaPost_store σ pc vminstret
+        (writeMap8 (afterNextPC (afterPrelude σ) (0x80003988#64)).mem (v2 + sign_extend (m := 64) (0x048#12)).toNat (sdData_val v14))) := by
+  subst hpcv
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.eval_expr_at_80003988 hmem
+  exact stepObs_store σ i u (0x80003988#64) vminstret (0x04e13423#32)
+    (instruction.STORE (0x048#12, regidx.Regidx 0x0e#5, regidx.Regidx 0x02#5, 8))
+    (writeMap8 (afterNextPC (afterPrelude σ) (0x80003988#64)).mem (v2 + sign_extend (m := 64) (0x048#12)).toNat (sdData_val v14))
+    (0x23#8) (0x34#8) (0xe1#8) (0x04#8)
+    hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+    (Vsa.Sim.DecodeTable.decode_04e13423 (afterPrelude σ)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+    (exec_sd_val σ (0x80003988#64) (0x048#12) (regidx.Regidx 0x0e#5) (regidx.Regidx 0x02#5)
+      v2 v14 hG
+      (rX_bits_x2 _ v2
+        (by rw [get?_afterNextPC σ (0x80003988#64) _ (by decide) (by decide)]; exact hx2))
+      (rX_bits_x14 _ v14
+        (by rw [get?_afterNextPC σ (0x80003988#64) _ (by decide) (by decide)]; exact hx14))
+      halo hahiram hahiwin haalign)
+    hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
+
+/-- 0x8000398c: `sd x15,0x50(x2)`. -/
+theorem site_8000398c_lg (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v2 v15 : BitVec 64)
+    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
+    (hminstret : σ.regs.get? Register.minstret = some vminstret)
+    (hx2 : σ.regs.get? Register.x2 = some v2)
+    (hx15 : σ.regs.get? Register.x15 = some v15)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hpcv : pc = (0x8000398c#64 : BitVec 64))
+    (halo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x050#12)).toNat)
+    (hahiram : (v2 + sign_extend (m := 64) (0x050#12)).toNat + 8 ≤ 0x100000000)
+    (hahiwin : tohostAddr + 16 ≤ (v2 + sign_extend (m := 64) (0x050#12)).toNat)
+    (haalign : (v2 + sign_extend (m := 64) (0x050#12)).toNat % 8 = 0) (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = writeMap8 (afterNextPC (afterPrelude σ) (0x8000398c#64)).mem
+        (v2 + sign_extend (m := 64) (0x050#12)).toNat (sdData_val v15) ∧
+      ReadsLikePost σ' (sigmaPost_store σ pc vminstret
+        (writeMap8 (afterNextPC (afterPrelude σ) (0x8000398c#64)).mem (v2 + sign_extend (m := 64) (0x050#12)).toNat (sdData_val v15))) := by
+  subst hpcv
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.eval_expr_at_8000398c hmem
+  exact stepObs_store σ i u (0x8000398c#64) vminstret (0x04f13823#32)
+    (instruction.STORE (0x050#12, regidx.Regidx 0x0f#5, regidx.Regidx 0x02#5, 8))
+    (writeMap8 (afterNextPC (afterPrelude σ) (0x8000398c#64)).mem (v2 + sign_extend (m := 64) (0x050#12)).toNat (sdData_val v15))
+    (0x23#8) (0x38#8) (0xf1#8) (0x04#8)
+    hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+    (Vsa.Sim.DecodeTable.decode_04f13823 (afterPrelude σ)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+    (exec_sd_val σ (0x8000398c#64) (0x050#12) (regidx.Regidx 0x0f#5) (regidx.Regidx 0x02#5)
+      v2 v15 hG
+      (rX_bits_x2 _ v2
+        (by rw [get?_afterNextPC σ (0x8000398c#64) _ (by decide) (by decide)]; exact hx2))
+      (rX_bits_x15 _ v15
+        (by rw [get?_afterNextPC σ (0x8000398c#64) _ (by decide) (by decide)]; exact hx15))
+      halo hahiram hahiwin haalign)
+    hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
+
+/-- 0x80003990: `jal x1,0x8000282c` (link `x1 := 0x80003994`). -/
+theorem site_80003990_lg (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
+    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
+    (hminstret : σ.regs.get? Register.minstret = some vminstret)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hpcv : pc = (0x80003990#64 : BitVec 64)) (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ.mem ∧
+      ReadsLikePost σ' (sigmaPost_jal σ pc vminstret (0x1fee9c#21) Register.x1 (BitVec.addInt pc 4)) := by
+  subst hpcv
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.eval_expr_at_80003990 hmem
+  refine stepObs_jal σ i u (0x80003990#64) vminstret (0xe9dfe0ef#32) (0x1fee9c#21)
+    (regidx.Regidx 0x01#5) Register.x1 (BitVec.addInt (0x80003990#64) 4)
+    (0xef#8) (0xe0#8) (0xdf#8) (0xe9#8)
+    hG hpc hminstret hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
+    (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
+    (Vsa.Sim.DecodeTable.decode_e9dfe0ef (afterPrelude σ)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+    (by decide)
+    (by decide) (by decide) (by decide) (by decide) (by decide) ?_ hi
+  exact wX_bits_x1 _ (BitVec.addInt (0x80003990#64) 4)
+
+/-- 0x80003994: `ld x13,0x0(x2)`. -/
+theorem site_80003994_lg (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v2 : BitVec 64)
+    (b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8)
+    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
+    (hminstret : σ.regs.get? Register.minstret = some vminstret)
+    (hx2 : σ.regs.get? Register.x2 = some v2)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hpcv : pc = (0x80003994#64 : BitVec 64))
+    (hlo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x000#12)).toNat)
+    (hhiram : (v2 + sign_extend (m := 64) (0x000#12)).toNat + 8 ≤ 0x100000000)
+    (hhtif : (v2 + sign_extend (m := 64) (0x000#12)).toNat + 8 ≤ tohostAddr
+      ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x000#12)).toNat)
+    (halign : (v2 + sign_extend (m := 64) (0x000#12)).toNat % 8 = 0)
+    (h0 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat]? = some b0)
+    (h1 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 1]? = some b1)
+    (h2 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 2]? = some b2)
+    (h3 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 3]? = some b3)
+    (h4 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 4]? = some b4)
+    (h5 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 5]? = some b5)
+    (h6 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 6]? = some b6)
+    (h7 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 7]? = some b7)
+    (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ.mem ∧
+      ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x13
+        (sign_extend (m := 64)
+          ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8)))) := by
+  subst hpcv
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.eval_expr_at_80003994 hmem
+  exact stepObs_alu σ i u (0x80003994#64) vminstret (0x00013683#32)
+    (instruction.LOAD (0x000#12, regidx.Regidx 0x02#5, regidx.Regidx 0x0d#5, false, 8))
+    Register.x13 (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8)))
+    (0x83#8) (0x36#8) (0x01#8) (0x00#8)
+    hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+    (Vsa.Sim.DecodeTable.decode_00013683 (afterPrelude σ)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+    (exec_ld σ (0x80003994#64) (0x000#12) (regidx.Regidx 0x02#5) (regidx.Regidx 0x0d#5)
+      (sigma3_alu σ (0x80003994#64) Register.x13 (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
+      v2 b0 b1 b2 b3 b4 b5 b6 b7 hG
+      (rX_bits_x2 _ v2
+        (by rw [get?_afterNextPC σ (0x80003994#64) _ (by decide) (by decide)]; exact hx2))
+      (wX_bits_x13 _ (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
+      hlo hhiram hhtif halign h0 h1 h2 h3 h4 h5 h6 h7)
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+    hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
+
+/-- 0x80003998: `beq x10,x0` (NOT taken → 0x8000399c; OR-true: a0 != 0). -/
+theorem site_80003998_nottaken_lg (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v10 : BitVec 64)
+    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
+    (hminstret : σ.regs.get? Register.minstret = some vminstret)
+    (hx10 : σ.regs.get? Register.x10 = some v10)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hpcv : pc = (0x80003998#64 : BitVec 64))
+    (hv : (v10 == (0#64)) = false) (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ.mem ∧
+      ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vminstret) := by
+  subst hpcv
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.eval_expr_at_80003998 hmem
+  exact stepObs_branch_nottaken σ i u (0x80003998#64) vminstret (0x0068#13)
+    (regidx.Regidx 0x0a#5) (regidx.Regidx 0x00#5) bop.BEQ (0x06050463#32)
+    (0x63#8) (0x04#8) (0x05#8) (0x06#8)
+    hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+    (Vsa.Sim.DecodeTable.decode_06050463 (afterPrelude σ)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+    (execute_btype_beq_nottaken (0x0068#13) (regidx.Regidx 0x0a#5) (regidx.Regidx 0x00#5)
+      v10 (0#64) (afterNextPC (afterPrelude σ) (0x80003998#64))
+      (rX_bits_x10 _ v10
+        (by rw [get?_afterNextPC σ (0x80003998#64) _ (by decide) (by decide)]; exact hx10))
+      (rX_bits_zero _)
+      hv)
+    hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
+
+/-- 0x8000399c: `addi x11,x0,0x1` (li a1,1). -/
+theorem site_8000399c_lg (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
+    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
+    (hminstret : σ.regs.get? Register.minstret = some vminstret)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hpcv : pc = (0x8000399c#64 : BitVec 64)) (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ.mem ∧
+      ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x11
+        ((0#64) + sign_extend (m := 64) (0x001#12))) := by
+  subst hpcv
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.eval_expr_at_8000399c hmem
+  exact stepObs_alu σ i u (0x8000399c#64) vminstret (0x00100593#32)
+    (instruction.ITYPE (0x001#12, regidx.Regidx 0x00#5, regidx.Regidx 0x0b#5, iop.ADDI))
+    Register.x11 ((0#64) + sign_extend (m := 64) (0x001#12))
+    (0x93#8) (0x05#8) (0x10#8) (0x00#8)
+    hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+    (Vsa.Sim.DecodeTable.decode_00100593 (afterPrelude σ)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+    (execute_itype_addi_char (0x001#12) (regidx.Regidx 0x00#5) (regidx.Regidx 0x0b#5) (0#64)
+      (afterNextPC (afterPrelude σ) (0x8000399c#64))
+      (sigma3_alu σ (0x8000399c#64) Register.x11 ((0#64) + sign_extend (m := 64) (0x001#12)))
+      (rX_bits_zero _)
+      (wX_bits_x11 _ ((0#64) + sign_extend (m := 64) (0x001#12))))
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+    hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
+
+/-- 0x800039a0: `addi x10,x9,0x0` (mv a0,s1). -/
+theorem site_800039a0_lg (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v9 : BitVec 64)
+    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
+    (hminstret : σ.regs.get? Register.minstret = some vminstret)
+    (hx9 : σ.regs.get? Register.x9 = some v9)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hpcv : pc = (0x800039a0#64 : BitVec 64)) (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ.mem ∧
+      ReadsLikePost σ' (sigmaPost_alu σ pc vminstret Register.x10
+        (v9 + sign_extend (m := 64) (0x000#12))) := by
+  subst hpcv
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.eval_expr_at_800039a0 hmem
+  exact stepObs_alu σ i u (0x800039a0#64) vminstret (0x00048513#32)
+    (instruction.ITYPE (0x000#12, regidx.Regidx 0x09#5, regidx.Regidx 0x0a#5, iop.ADDI))
+    Register.x10 (v9 + sign_extend (m := 64) (0x000#12))
+    (0x13#8) (0x85#8) (0x04#8) (0x00#8)
+    hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+    (Vsa.Sim.DecodeTable.decode_00048513 (afterPrelude σ)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+    (execute_itype_addi_char (0x000#12) (regidx.Regidx 0x09#5) (regidx.Regidx 0x0a#5) v9
+      (afterNextPC (afterPrelude σ) (0x800039a0#64))
+      (sigma3_alu σ (0x800039a0#64) Register.x10 (v9 + sign_extend (m := 64) (0x000#12)))
+      (rX_bits_x9 _ v9
+        (by rw [get?_afterNextPC σ (0x800039a0#64) _ (by decide) (by decide)]; exact hx9))
+      (wX_bits_x10 _ (v9 + sign_extend (m := 64) (0x000#12))))
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+    hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
+
+/-- 0x800039a4: `jal x1,0x800027f8` (link `x1 := 0x800039a8`). -/
+theorem site_800039a4_lg (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
+    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
+    (hminstret : σ.regs.get? Register.minstret = some vminstret)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hpcv : pc = (0x800039a4#64 : BitVec 64)) (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ.mem ∧
+      ReadsLikePost σ' (sigmaPost_jal σ pc vminstret (0x1fee54#21) Register.x1 (BitVec.addInt pc 4)) := by
+  subst hpcv
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.eval_expr_at_800039a4 hmem
+  refine stepObs_jal σ i u (0x800039a4#64) vminstret (0xe55fe0ef#32) (0x1fee54#21)
+    (regidx.Regidx 0x01#5) Register.x1 (BitVec.addInt (0x800039a4#64) 4)
+    (0xef#8) (0xe0#8) (0x5f#8) (0xe5#8)
+    hG hpc hminstret hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
+    (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
+    (Vsa.Sim.DecodeTable.decode_e55fe0ef (afterPrelude σ)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+    (by decide)
+    (by decide) (by decide) (by decide) (by decide) (by decide) ?_ hi
+  exact wX_bits_x1 _ (BitVec.addInt (0x800039a4#64) 4)
+
+/-- 0x800039a8: `j 0x800033ec`. -/
+theorem site_800039a8_lg (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
+    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
+    (hminstret : σ.regs.get? Register.minstret = some vminstret)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hpcv : pc = (0x800039a8#64 : BitVec 64))
+    (htgt : (pc + sign_extend (m := 64) (0x1ffa44#21)).toNat % 4 = 0) (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ.mem ∧
+      ReadsLikePost σ' (sigmaPost_jump_x0 σ pc vminstret (pc + sign_extend (m := 64) (0x1ffa44#21))) := by
+  subst hpcv
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code.eval_expr_at_800039a8 hmem
+  exact stepObs_j σ i u (0x800039a8#64) vminstret (0xa45ff06f#32) (0x1ffa44#21)
+    (0x6f#8) (0xf0#8) (0x5f#8) (0xa4#8)
+    hG hpc hminstret hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) (by decide)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+    (Vsa.Sim.DecodeTable.decode_a45ff06f (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))

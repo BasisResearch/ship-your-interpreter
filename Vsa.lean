@@ -132,6 +132,7 @@ import Vsa.Sim.CmpBridges
 import Vsa.Sim.EvalBinSim4
 import Vsa.Sim.LogicalSites
 import Vsa.Sim.EvalAndSim
+import Vsa.Sim.EvalOrSim
 import Vsa.Sim.BlockLogic
 import Vsa.Sim.ReprSurvival
 import Vsa.Sim.ReprCopy
