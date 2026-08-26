@@ -359,3 +359,4 @@ import Vsa.Sim.TermEntry
 import Vsa.Sim.StuckSimClose
 import Vsa.Sim.InterpSimBundle
 import Vsa.Sim.InterpSimFinal
+import Vsa.Sim.LayoutInstance
