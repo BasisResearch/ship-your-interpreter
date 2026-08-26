@@ -334,3 +334,4 @@ import Vsa.Sim.Code.FnFmt
 import Vsa.Sim.FrameOn
 import Vsa.Sim.WriteLogNF
 import Vsa.Sim.SnprintfPost
+import Vsa.Sim.ErrorSim
