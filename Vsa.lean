@@ -275,6 +275,7 @@ import Vsa.Sim.SegEvalSound
 import Vsa.Sim.FrameCalc
 import Vsa.Sim.ReallocSpec
 import Vsa.Sim.HeapOps
+import Vsa.Sim.EnvDefineClose
 import Vsa.Sim.DeriveCase
 import Vsa.Sim.LoopStep
 import Vsa.Sim.ErrorSites
