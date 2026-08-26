@@ -169,3 +169,32 @@ DivergeSim/stuckSim structure all assembled (conditional on residuals).
   exit-path `InterpContSeg`/`MainErrorSeg`/`Crt0ExitSeg` decode; the M6 Layout constants.
 
 Rule: one new file per coder; specific `git add` (never `-A`); gate `lake build` on `ps | grep '[l]ake build'` clear.
+
+---
+
+## PINNED FINISH LINE (from L7/L8 capstone `a10ffc7`, interpSim_conditional assembled, 173/173 axiom-clean)
+
+`interpSim_conditional L hterm hstuck : InterpSim L` is ASSEMBLED. What remains = discharge this named bundle.
+Divide it here; claim before starting.
+
+### M4 term bundle (termSimClosed / execSeq_sim_of_cases — 50 premises)
+- MAPPED to landed case lemmas: all leaf/unary/logical/add-sub-lt EvalE, EvalArgs nil/cons, ExecS
+  expr/block/if×3/while/forStart/ret/retNull/brk/cont/varInit/varNull(=execVarDeclNullSim, MAPPED — capstone's
+  "execVarNullSim OPEN" was a NAME miss), ExecSeq nil/cons, callAssertOk/Print/Println.
+- **OPEN — coder-B lane (env_define/realloc, L5 EnvDefineClose in progress):** `hCallClosure` (crux, d<maxCallDepth),
+  `hAssign` (native-store).
+- **OPEN — coder-A (me):** the `EvalExit→EvalExitD` SHAPE-GAP re-landing of the 5 leaf EvalE cases (EvalRecCommon
+  residual); `hEntryHalts` (M6 program-entry bridge: interp_run prologue→stmt-loop→clean-exit + Loaded↔SegEntry);
+  the loop-scaffold minor premises (ForCond/ExecStep/ExecInit SegEntry→SegExit).
+- MECHANICAL-pending (grab-and-mark): le/gt/eq/ne/mul/div/mod binary ops.
+
+### M5 stuck bundle (stuckSimClosed)
+- `htri : Trichotomy` residual (Trichotomy.lean) — coder-A.
+- `hdivFam : DivFamily` = Corr + DivStep + entry Corr (divergenceSim interface) — coder-A.
+- `herrFam : ErrFamily` = 42 per-error-site rows (13 landed: ErrorSiteRows/ErrorSiteRows2; ~29 remain) — coder-A;
+  the real per-row artefact is materializing each site's segment Triple `T` (decode→#derive_case→marshal→RuntimeErrorAt).
+
+### Final close order (capstone's recipe)
+(1) loop-scaffold + hAssign/hCallClosure; (2) re-land leaf EvalE at EvalExitD; (3) hEntryHalts entry bridge;
+(4) Trichotomy residual + DivStep/Corr + remaining error rows → instantiate interpSimClosed_of_families → axiom audit.
+CLAIM: coder-A takes (2)+(3)+M5 bundle; coder-B takes env_define crux + M4 mechanical ops + loop-scaffold.
