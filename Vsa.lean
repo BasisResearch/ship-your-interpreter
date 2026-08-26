@@ -121,6 +121,8 @@ import Vsa.Sim.EvalNegSim2
 import Vsa.Sim.EvalNegSim3
 import Vsa.Sim.NotTailSites
 import Vsa.Sim.EvalNotSim
+import Vsa.Sim.BinHeadSites
+import Vsa.Sim.EvalBinSim
 import Vsa.Sim.BlockLogic
 import Vsa.Sim.ReprSurvival
 import Vsa.Sim.ReprCopy
