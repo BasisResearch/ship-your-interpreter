@@ -168,6 +168,8 @@ THEOREMS=(
   Vsa.Sim.evalAndSim                             # EvalAndSim (EvalE.andFalse short-circuit recursive case, EvalIH motive shape; conditional)
   Vsa.Sim.blockC_orTrue                          # EvalOrSim (EX_LOGICAL OR short-circuit tail: beq-taken op-dispatch + value_truthy + beqz-nottaken + value_bool → PreEpilogueVD .bool true)
   Vsa.Sim.evalOrTrueSim                          # EvalOrSim (EvalE.orTrue short-circuit recursive case, EvalIH motive shape; conditional)
+  Vsa.Sim.blockC_andTrue                         # EvalLogical3 (EX_LOGICAL AND two-eval tail: op-dispatch + value_truthy(vl) + beqz-nottaken + RIGHT eval + blockC_logTail → PreEpilogueVD .bool vr.truthy)
+  Vsa.Sim.evalAndTrueSim                         # EvalLogical3 (EvalE.andTrue two-eval recursive case, EvalIH motive shape, two IH premises; conditional)
   # Stage A0/A1 — neg block spine as composed Triples (BlockLogic)
   Vsa.Sim.negPrologue_triple                    # A0 (σ0→σ4 prologue as a Triple)
   Vsa.Sim.negLoadStore_triple                   # A0 (σ4→σ10 load/store as a Triple)
