@@ -276,6 +276,7 @@ import Vsa.Sim.FrameCalc
 import Vsa.Sim.ReallocSpec
 import Vsa.Sim.HeapOps
 import Vsa.Sim.DeriveCase
+import Vsa.Sim.LoopStep
 import Vsa.Sim.ErrorSites
 import Vsa.While.Trichotomy
 import Vsa.Sim.DivergeSim
