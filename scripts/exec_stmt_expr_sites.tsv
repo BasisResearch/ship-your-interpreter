@@ -1,0 +1,9 @@
+# exec_stmt expr arm (kind 0, 0x80004170) body: ld/addi/mv/mv, jal eval_expr, li a0,0, j epilogue.
+# jal/j immediates are the DECODER's unscrambled imm21 values (not raw bit fields).
+80004170	00843603	ld	12	8	008
+80004174	01010513	alu_addi	10	2	010
+80004178	00098693	alu_addi	13	19	000
+8000417c	00048593	alu_addi	11	9	000
+80004180	fe5fe0ef	jal	1	1fefe4
+80004184	00000513	alu_addi	10	0	000
+80004188	f15ff06f	j	1fff14
