@@ -243,7 +243,13 @@ THEOREMS=(
   Vsa.Sim.exitPrologSeg                             # ExitPathSeg (M5: exitPrologSeg_of packaged as the ExitPrologSeg out segment residual of errorTailChain_of_segments, conditional on ExitPrologGeom)
   Vsa.Sim.errorSim_of_sites                         # ErrorSimFull (M5 FULL error-sim assembly — the six-relation widening of errorSim_execSeq. Applies @ExecSeqErr.rec with all six error motives = constant ErrHalts c := ∃out, Halts c out 70 (the recursor node + every sub-IH ignored, error-side analog of the term_sim_of_cases motives), taking all 42 error-constructor minor premises as explicit per-error-site residuals (EvalErr 15 + EvalArgsErr 2 + CallErr 7 + ExecErr 12 + ForLoopErr 4 + ExecSeqErr 2). Recursive error nodes (ExecSeqErr.tail/CallErr.body/EvalErr-ExecErr-ForLoopErr propagation) additionally receive the sub-node ErrHalts c as a recursor-supplied IH. Type-checks iff the six constant motives compose through every constructor of the mutual family. Concludes: an arbitrary ExecSeqErr node → ErrHalts c)
   Vsa.Sim.errorSimFull                              # ErrorSimFull (M5: full error simulation, program level — errorSim_of_sites specialized to BigStepErr p = ExecSeqErr initSt 0 0 p, yielding exists out, Halts c out 70. CONDITIONAL only on the 42 per-error-site residuals)
-  Vsa.Sim.stuck_of_bigStepErrFull                   # ErrorSimFull (M5 to stuck_sim: composes errorSimFull with stuck_of_halts_70 to discharge stuck_sim Diverges-or-nonzero-halt error disjunct, for the FULL six-relation error judgment. CONDITIONAL on the 42 per-error-site residuals)
+  Vsa.Sim.stuck_of_bigStepErrFull                  # ErrorSimFull (M5 to stuck_sim: composes errorSimFull with stuck_of_halts_70 to discharge stuck_sim Diverges-or-nonzero-halt error disjunct, for the FULL six-relation error judgment. CONDITIONAL on the 42 per-error-site residuals)
+  # exponentiation abstraction stack, Wave A/B (experiments/exponentiation-plan.md)
+  Vsa.Sim.geomFacts_of_layout                      # GeomFacts (L0: Layout → one GeomFacts record; every case projects its geometry residual O(1) — the M6 interface)
+  Vsa.Sim.segEval_sound                            # SegEvalSound (L1: reflected block-chain → Machine.Steps in SegEvalState normal form — canonical writeLog, computed regs/PC, one ChainOK decide per row)
+  Vsa.Sim.FrameCalc.valueRepr_copy                 # FrameCalc (L2: canonical marshalling/frame calculus — logs compose by append; ValueRepr copy through one write window)
+  Vsa.Sim.heapPublicFrame_refl                     # ReallocSpec (L5: corrected realloc op interface — grow/null results over one allocator invariant + private footprint)
+  Vsa.Sim.HeapOps.privFoot_disjoint                # HeapOps (L5: malloc+realloc packaged on one allocator ledger; privFoot disjoint from every live extent)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean

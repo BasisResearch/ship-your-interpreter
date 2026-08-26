@@ -270,6 +270,11 @@ import Vsa.Sim.BlockDecode
 import Vsa.Sim.BlockGen
 import Vsa.Sim.BlockMemDemo
 import Vsa.Sim.BlockAdapter
+import Vsa.Sim.SegEval
+import Vsa.Sim.SegEvalSound
+import Vsa.Sim.FrameCalc
+import Vsa.Sim.ReallocSpec
+import Vsa.Sim.HeapOps
 import Vsa.Sim.SnprintfSpec19
 import Vsa.Sim.SsprintSites
 import Vsa.Sim.SnprintfSpec20
