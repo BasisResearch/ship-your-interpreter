@@ -149,6 +149,9 @@ THEOREMS=(
   Vsa.Sim.svfprintf_buffer_eq_intToString_nn    # SnprintfSpec54 (nonneg byte list = intToString.toUTF8)
   Vsa.Sim.snprintf_lld_nn_spec                  # SnprintfSpec54 (WRAPPER, NONNEG: buffer = intToString.toUTF8 ++ [0])
   Vsa.Sim.snprintf_lld_total_spec               # SnprintfSpec55 (THE TOTAL CAPSTONE: ALL v : BitVec 64)
+  # M4 AST-transport (AstTransport) — ExprRepr/StmtRepr survive memory agreement over the AST footprint
+  Vsa.Sim.exprRepr_agreeP                       # AstTransport (ExprRepr m a e → AgreeP over ExprFp → ExprRepr m' a e)
+  Vsa.Sim.stmtRepr_agreeP                       # AstTransport (StmtRepr analog; recurses through ExprFp / StmtArrayFp)
   # M4 recursive-case glue (EvalRecCommon / EvalNegSim)
   Vsa.Sim.armTail_rec                           # EvalRecCommon (jal eval_expr ≫ IH ⇒ SubEvalReturn)
   Vsa.Sim.blockB_unary                          # EvalNegSim (EX_UNARY arm head + recursive call, IH-composed)

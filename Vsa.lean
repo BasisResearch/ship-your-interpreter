@@ -153,6 +153,7 @@ import Vsa.Sim.ExecBlock
 import Vsa.Sim.ExecBlock2
 import Vsa.Sim.BlockLogic
 import Vsa.Sim.ReprSurvival
+import Vsa.Sim.AstTransport
 import Vsa.Sim.ReprCopy
 import Vsa.Sim.StrcpySpecW
 import Vsa.Sim.StrcpySpecW2
