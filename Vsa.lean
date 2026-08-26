@@ -353,3 +353,7 @@ import Vsa.Sim.ErrorTail
 import Vsa.Sim.ExitPath
 import Vsa.Sim.ExitPathSeg
 import Vsa.Sim.ErrorSimFull
+import Vsa.Sim.TermSimClose
+import Vsa.Sim.StuckSimClose
+import Vsa.Sim.InterpSimBundle
+import Vsa.Sim.InterpSimFinal

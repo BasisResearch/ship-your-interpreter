@@ -280,6 +280,15 @@ THEOREMS=(
   Vsa.Sim.loopDemo                                 # LoopStep (L4 demo: fabricated `j .` self-loop, one kernel decide for the structural VC, abstract pins/decode)
   Vsa.Sim.stuckSim                                  # DivergeSim (M5 THE ASSEMBLED stuck_sim: stuck_of_trichotomy ∘ (error arm ⊕ divergence arm) — from Trichotomy + the two packaged forward-sim implications + ¬∃out BigStep p → the stuck_sim disjunction. Mirrors Vsa.Refine.InterpSim.stuck_sim's per-program body exactly)
   Vsa.Sim.errHalts_of_site                         # ErrorSites (L6: per-error-site combinator — Triple SitePre (RuntimeErrorAt …) ⇒ Halts c out 70 via errorTailHalts_exit; one composition per error row, SC/HT supplied once at L7/L8)
+  # L7/L8 close skeleton — term/stuck_sim → refinement (conditional)
+  Vsa.Sim.TermSimClose.execSeq_sim_of_cases         # TermSimClose (L7: ExecSeq-rooted twin of term_sim_of_cases — same 9 motives + 50 premises via @ExecSeq.rec, exposes mExecSeq)
+  Vsa.Sim.TermSimClose.termSimClosed                # TermSimClose (L7: InterpSim.term_sim from the 50-premise M4 bundle + the program-entry bridge hEntryHalts)
+  Vsa.Sim.StuckSimClose.stuckSimClosed              # StuckSimClose (L8: InterpSim.stuck_sim per (p,c) from Trichotomy + divergence Corr/DivStep/entry + the 42 error-site residuals)
+  Vsa.Sim.InterpSimBundle.errFamily_of_sites        # InterpSimBundle (M5 error family: ErrFamily L from the 42 per-error-site residuals, c-generalized)
+  Vsa.Sim.InterpSimFinal.interpSim_conditional      # InterpSimFinal (ENDGAME CAPSTONE, field form: InterpSim L = ⟨hterm, hstuck⟩)
+  Vsa.Sim.InterpSimFinal.stuckField_of_families     # InterpSimFinal (stuck_sim field from Trichotomy + DivFamily + ErrFamily)
+  Vsa.Sim.InterpSimFinal.interpSimClosed_of_families # InterpSimFinal (ENDGAME CAPSTONE, families form: InterpSim L from term arm + M5 families)
+  Vsa.Sim.InterpSimFinal.refinement_conditional     # InterpSimFinal (conditional refinement: full behavioral correspondence from the capstone)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean
