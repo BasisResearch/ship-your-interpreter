@@ -4,6 +4,7 @@ import Vsa.Machine
 import Vsa.MemRepr
 import Vsa.While.Ast
 import Vsa.While.Semantics
+import Vsa.While.ErrorSem
 import Vsa.While.Derive
 import Vsa.While.Validation
 import Vsa.While.Cost
