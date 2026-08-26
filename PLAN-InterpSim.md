@@ -405,3 +405,34 @@ Statements: `retNull`, `varDecl` (env_define), `block`/`ExecSeq` (consNormal/con
 do-while loop, `Triple.loop`), `ifStmt`, `whileStmt`, `forStmt` (loops), + `EvalArgs`/`ForLoop`/
 `ForCond`/`ExecStep`/`ExecInit`. Then the Layer-4 mutual-recursor assembly (`InductionScaffold`
 `SegEntry`/`SegExit` skeletons → real `ExecEntry`/`ExecExit`), then M5/M6.
+
+---
+
+## Appendix (2026-08-26, later): M4 near-complete case coverage + statement/call families
+
+Continued M4 progress (all on `main`, each `check_all: OK`, axioms ⊆ {propext, Classical.choice, Quot.sound}).
+Details in `memory/m4-recursive-cases.md`, `m4-statement-family.md`, `m4-call-subsystem.md`.
+
+### Coverage status — every relation's constructors now have landed conditional Triples
+- **EvalE**: leaves (int/null/bool/str/var), unary (neg/not), binary (add/sub/lt; le/gt/eq/ne/mul/div/mod are
+  mechanical follow-ups on the proven dispatch), logical (all 4), **call**, **fn**. (`.ge` machine/spec divergence flagged.)
+- **EvalArgs**: nil, cons (`evalArgsLoop`).
+- **Call**: assertOk (native, conditional on the machine-run); print/println decoded (template ready); **closure = the
+  remaining crux** (arity+depth-guard+env_new+env_define-fold+body-ExecSeq at d+1), blocked on the uncomposed
+  `env_define` contract (M3 did only its prologue; needs strlen+malloc+memcpy+realloc — no realloc spec).
+- **ExecS**: ALL constructors (expr/varInit/varNull/block/if×3/while×4/forStart/ret/retNull/brk/cont).
+- **ExecSeq**: nil, cons (`execSeqLoop`). **ForLoop** ×4 (`execForLoopBody`). ExecInit/ForCond/ExecStep folded into loop steps.
+
+### Reusable machinery built this session (the multipliers)
+EvalE: `blockA_k` (widened, +aEnv), `blockB_binary`/`blockB_logical`, `blockD_v_rec`→`EvalExitD`, `armTail_rec`.
+Statements: `execBlockA`/`execBlockD`, `execPrologue`/`execDispatch` + `ExecDispatchReady`/`ExecDispatchIH`
+(the re-dispatch infra for if/while/for), `armTail_rec_es`/`armExec_rec`, `execSeqLoop`, `execExit_extend`.
+Cross-cutting: `exprRepr_agreeP`/`stmtRepr_agreeP` (AST-transport), `stmtRepr_kind`.
+
+### Remaining to close `term_sim`
+1. The **Layer-4 mutual-recursor assembly** (`InductionScaffold` `@EvalE.rec` + real motives → `term_sim`), which
+   supplies each case's IHs. Blocked on residual unification: cases carry heterogeneous named residuals.
+2. **Discharge the residuals**: the per-iteration step contracts (`ExecWhileStep`/`ExecForStep`/block-`hstep`/
+   `EvalArgsStep`/the native machine runs — concrete machine work), the M6-Layout geometry, the composed
+   `env_define`/`realloc` contract (the biggest gap, gates `Call.closure`/`varDecl`/`assign`).
+3. Then M5 (`stuck_sim`) and M6 (`Layout` + final theorem + axiom audit).
