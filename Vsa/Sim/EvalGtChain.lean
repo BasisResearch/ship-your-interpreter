@@ -79,7 +79,7 @@ def gtLds2 (k0 k1 k2 k3 k4 k5 k6 k7 : BitVec 8) : List (List (BitVec 8)) :=
 
 /-- The opening 16-instruction run of `blockC_gt`, `0x8000351c → 0x80003628`,
 via TWO shallow `bblock_sound_bt` applications (block 1 + `bltu`, block 2 + `jr`). -/
-theorem evalGtChain_run (σ : MState) (i u : Nat) (vm v2 v8 : BitVec 64)
+theorem evalGtChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 64)
     (b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 d4 d5 d6 d7 : BitVec 8)
     (k0 k1 k2 k3 k4 k5 k6 k7 : BitVec 8)
     (hG : GoodState σ)
@@ -87,7 +87,12 @@ theorem evalGtChain_run (σ : MState) (i u : Nat) (vm v2 v8 : BitVec 64)
     (hmi : σ.regs.get? Register.minstret = some vm)
     (hx2 : σ.regs.get? Register.x2 = some v2)
     (hx8 : σ.regs.get? Register.x8 = some v8)
+    (hx9 : σ.regs.get? Register.x9 = some sret)
+    (hx19 : σ.regs.get? Register.x19 = some Wl)
     (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    -- the right-operand kind loads (block1 `lw x10`, block2b `ld x16`) hold 2 (int)
+    (hc : bytesVal MKind.lw [c0, c1, c2, c3] = (2#64 : BitVec 64))
+    (hk : bytesVal MKind.ld [k0, k1, k2, k3, k4, k5, k6, k7] = (2#64 : BitVec 64))
     -- block1 load1 @ v8 + 0x008 (4-byte, op token = 22 = [0x16,0,0,0])
     (a_lo : 0x80000000 ≤ (v8 + sign_extend (m := 64) (0x008#12)).toNat)
     (a_hi : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ 0x100000000)
@@ -151,7 +156,15 @@ theorem evalGtChain_run (σ : MState) (i u : Nat) (vm v2 v8 : BitVec 64)
     (hi : i < 2) :
     ∃ (σ' : MState) (i' : Nat),
       Steps ⟨σ, i, u⟩ ⟨σ', i', u + 16⟩ ∧ i' < 2 ∧ GoodState σ' ∧
-      σ'.regs.get? Register.PC = some (0x80003628#64) := by
+      σ'.regs.get? Register.PC = some (0x80003628#64) ∧
+      σ'.regs.get? Register.x10 = some (2#64) ∧
+      σ'.regs.get? Register.x12 = some (22#64) ∧
+      σ'.regs.get? Register.x16 = some (2#64) ∧
+      σ'.regs.get? Register.x17
+        = some (bytesVal MKind.ld [d0, d1, d2, d3, d4, d5, d6, d7]) ∧
+      σ'.regs.get? Register.x2 = some v2 ∧
+      σ'.regs.get? Register.x9 = some sret ∧
+      σ'.regs.get? Register.x19 = some Wl := by
   obtain ⟨sp0, sp1, sp2, sp3⟩ := hSlot
   -- ── Block 1 (evalGtBlk1) + bltu@0x3534 NOT taken → 0x80003538 ──────────────
   obtain ⟨σ1, i1, hsteps1, hi1, hG1, hmem1, hout1, hpc1, hmi1, hGH1, hframe1⟩ :=
@@ -197,6 +210,21 @@ theorem evalGtChain_run (σ : MState) (i u : Nat) (vm v2 v8 : BitVec 64)
       = some (sign_extend (m := 64) (Sail.BitVec.extractLsb
           (bytesVal MKind.lw [0x16#8, 0x00#8, 0x00#8, 0x00#8]
             + sign_extend (m := 64) (0xff5#12)) 31 0)))
+  -- block-1 through-registers: op token `x12 = 22`, kind `x10 = 2` (via `hc`),
+  -- payload `x17 = bytesVal .ld [d…]`, and the pass-through `x9 = sret` / `x19 = Wl`.
+  have hx12v : (bytesVal MKind.lw [0x16#8, 0x00#8, 0x00#8, 0x00#8] : BitVec 64) = 22#64 := by decide
+  have hx12_1 : σ1.regs.get? Register.x12 = some (22#64) :=
+    hx12v ▸ (block_reg hGH1 12 : σ1.regs.get? Register.x12
+      = some (bytesVal MKind.lw [0x16#8, 0x00#8, 0x00#8, 0x00#8]))
+  have hx10_1 : σ1.regs.get? Register.x10 = some (2#64) :=
+    hc ▸ (block_reg hGH1 10 : σ1.regs.get? Register.x10
+      = some (bytesVal MKind.lw [c0, c1, c2, c3]))
+  have hx17_1 : σ1.regs.get? Register.x17
+      = some (bytesVal MKind.ld [d0, d1, d2, d3, d4, d5, d6, d7]) := block_reg hGH1 17
+  have hx9_1 : σ1.regs.get? Register.x9 = some sret :=
+    (hframe1 Register.x9 (by decide) (by decide)).trans hx9
+  have hx19_1 : σ1.regs.get? Register.x19 = some Wl :=
+    (hframe1 Register.x19 (by decide) (by decide)).trans hx19
   obtain ⟨vm1, hmi1'⟩ := hmi1
   -- ── Block 2a (ALU) → x15=0x80019fb0, x14=0x80019f84 (fall-through to 0x354c) ──
   obtain ⟨σ2, i2, hsteps2, hi2, hG2, hmem2, hout2, hpc2, hmi2, hGH2, hframe2⟩ :=
@@ -234,6 +262,18 @@ theorem evalGtChain_run (σ : MState) (i u : Nat) (vm v2 v8 : BitVec 64)
               + sign_extend (m := 64) (0xa44#12))))
   have hx2_2 : σ2.regs.get? Register.x2 = some v2 :=
     (hframe2 Register.x2 (by decide) (by decide)).trans hx2_1
+  -- carry the block-1 through-registers past B2a (ALU touches only x14/x15).
+  have hx12_2 : σ2.regs.get? Register.x12 = some (22#64) :=
+    (hframe2 Register.x12 (by decide) (by decide)).trans hx12_1
+  have hx10_2 : σ2.regs.get? Register.x10 = some (2#64) :=
+    (hframe2 Register.x10 (by decide) (by decide)).trans hx10_1
+  have hx17_2 : σ2.regs.get? Register.x17
+      = some (bytesVal MKind.ld [d0, d1, d2, d3, d4, d5, d6, d7]) :=
+    (hframe2 Register.x17 (by decide) (by decide)).trans hx17_1
+  have hx9_2 : σ2.regs.get? Register.x9 = some sret :=
+    (hframe2 Register.x9 (by decide) (by decide)).trans hx9_1
+  have hx19_2 : σ2.regs.get? Register.x19 = some Wl :=
+    (hframe2 Register.x19 (by decide) (by decide)).trans hx19_1
   -- slot pins + kind pins rephrased over σ2.mem (= σ.mem).
   have hSlot2 : σ2.mem[(0x80019fb0#64 : BitVec 64).toNat]? = some (0xa4#8) ∧
       σ2.mem[(0x80019fb0#64 : BitVec 64).toNat + 1]? = some (0x96#8) ∧
@@ -285,8 +325,25 @@ theorem evalGtChain_run (σ : MState) (i u : Nat) (vm v2 v8 : BitVec 64)
           show BitVec.update ((bytesVal MKind.lw [0xa4#8, 0x96#8, 0xfe#8, 0xff#8]
               + 0x80019f84#64) + sign_extend (m := 64) (0x000#12)) 0 0#1 = (0x80003628#64 : BitVec 64)
           decide] at hpc3
+  -- carry the through-registers past B2b (touches x15/x16); x16 = kind reload = 2.
+  have hx16_3 : σ3.regs.get? Register.x16 = some (2#64) :=
+    hk ▸ (block_reg hGH3 16 : σ3.regs.get? Register.x16
+      = some (bytesVal MKind.ld [k0, k1, k2, k3, k4, k5, k6, k7]))
+  have hx12_3 : σ3.regs.get? Register.x12 = some (22#64) :=
+    (hframe3 Register.x12 (by decide) (by decide)).trans hx12_2
+  have hx10_3 : σ3.regs.get? Register.x10 = some (2#64) :=
+    (hframe3 Register.x10 (by decide) (by decide)).trans hx10_2
+  have hx17_3 : σ3.regs.get? Register.x17
+      = some (bytesVal MKind.ld [d0, d1, d2, d3, d4, d5, d6, d7]) :=
+    (hframe3 Register.x17 (by decide) (by decide)).trans hx17_2
+  have hx2_3 : σ3.regs.get? Register.x2 = some v2 :=
+    (hframe3 Register.x2 (by decide) (by decide)).trans hx2_2
+  have hx9_3 : σ3.regs.get? Register.x9 = some sret :=
+    (hframe3 Register.x9 (by decide) (by decide)).trans hx9_2
+  have hx19_3 : σ3.regs.get? Register.x19 = some Wl :=
+    (hframe3 Register.x19 (by decide) (by decide)).trans hx19_2
   -- Compose the three runs (7 + 5 + 4 = 16 steps).
-  refine ⟨σ3, i3, ?_, hi3, hG3, hpc3⟩
+  refine ⟨σ3, i3, ?_, hi3, hG3, hpc3, hx10_3, hx12_3, hx16_3, hx17_3, hx2_3, hx9_3, hx19_3⟩
   have hlen : u + blenB gtChainB1 + blenB gtChainB2a + blenB gtChainB2b = u + 16 := by
     rw [show blenB gtChainB1 = 7 from by decide, show blenB gtChainB2a = 5 from by decide,
       show blenB gtChainB2b = 4 from by decide]
