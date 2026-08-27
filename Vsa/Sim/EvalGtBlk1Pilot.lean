@@ -21,8 +21,7 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState Config Step Steps)
 
-set_option maxHeartbeats 8000000
-set_option maxRecDepth 1000000
+-- No heartbeat/recDepth overrides: block_mem_sound reflection elaborates within ALL defaults.
 
 namespace Vsa.Sim
 
