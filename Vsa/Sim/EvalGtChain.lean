@@ -293,4 +293,101 @@ theorem evalGtChain_run (σ : MState) (i u : Nat) (vm v2 v8 : BitVec 64)
   rw [← hlen]
   exact (hsteps1.trans hsteps2).trans hsteps3
 
+/-! ## The branch ladder `0x80003628 → 0x8000364c` (kind-dispatch, first two blocks)
+
+`evalGtChain_run` lands at the shared comparison arm `0x80003628` with the right
+operand's kind in `x10 = 2` (int) and the op token in `x12 = 22` (.gt).  The kind
+ladder then routes int-vs-int through a taken `bnez` and a not-taken `beq`:
+
+* **LB1** `addi x15,x10,-3` (`x15 = 2 - 3 = -1`), `bnez x15 → 0x3638` TAKEN.
+* **LB2** `addiw x15,x12,-20` (`x15 = 22 - 20 = 2`), `li x14,3`, `auipc/addi x13`
+  (dead), `beq x15,x14 → 0x3648+…` NOT taken (`2 ≠ 3`), fall to `0x364c`.
+
+Same compounding discipline: one `bblock_sound_bt` per block, guards discharged by
+peeling the 1-4-instr wrapper to the clean form then `decide`. -/
+
+def gtLadB1 : BBlock :=
+  { body := [mkLine 0x80003628#64 0xffd50793#32],   -- addi x15,x10,-3
+    term := some ⟨0x8000362c#64, 0x00079663#32, 0x63#8, 0x96#8, 0x07#8, 0x00#8,
+      .br bop.BNE true, 15, 0, 0x000c#13, 0#21, 0#12⟩ }
+
+def gtLadB2 : BBlock :=
+  { body := [mkLine 0x80003638#64 0xfec6079b#32,   -- addiw x15,x12,-20
+             mkLine 0x8000363c#64 0x00300713#32,   -- addi  x14,x0,3
+             mkLine 0x80003640#64 0x00016697#32,   -- auipc x13,0x16 (dead)
+             mkLine 0x80003644#64 0xd4068693#32],  -- addi  x13,x13,-704 (dead)
+    term := some ⟨0x80003648#64, 0x00e78e63#32, 0x63#8, 0x8e#8, 0xe7#8, 0x00#8,
+      .br bop.BEQ false, 15, 14, 0x001c#13, 0#21, 0#12⟩ }
+
+/-- The int-vs-int kind-ladder prefix `0x80003628 → 0x8000364c` (7 steps), from the
+comparison-arm entry with `x10 = 2` (kind int) and `x12 = 22` (op .gt). -/
+theorem evalGtLadderAB (σ : MState) (i u : Nat) (vm : BitVec 64)
+    (hG : GoodState σ)
+    (hpc : σ.regs.get? Register.PC = some (0x80003628#64))
+    (hmi : σ.regs.get? Register.minstret = some vm)
+    (hx10 : σ.regs.get? Register.x10 = some (2#64))
+    (hx12 : σ.regs.get? Register.x12 = some (22#64))
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Steps ⟨σ, i, u⟩ ⟨σ', i', u + 7⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.regs.get? Register.PC = some (0x8000364c#64) ∧
+      σ'.regs.get? Register.x12 = some (22#64) ∧
+      σ'.regs.get? Register.x15 = some (2#64) ∧
+      σ'.regs.get? Register.x14 = some (3#64) := by
+  -- ── LB1: addi + bnez TAKEN → 0x80003638 ───────────────────────────────────
+  obtain ⟨σ1, i1, hsteps1, hi1, hG1, hmem1, hout1, hpc1, hmi1, hGH1, hframe1⟩ :=
+    bblock_sound_bt gtLadB1 σ i u (0x80003628#64) vm
+      [(10, (2#64 : BitVec 64))] []
+      hG hpc hmi ⟨hx10, trivial⟩
+      (show KeysOK [10] by decide)
+      (by
+        block_facts hmem with "Vsa.Sim.Code.eval_expr_at_"
+        -- bnez (x10 - 3 = -1) ≠ 0 = true
+        · show guardB bop.BNE ((2#64 : BitVec 64) + sign_extend (m := 64) (0xffd#12)) (0#64) = true
+          decide)
+      (show BBlockOK (0x80003628#64) [10] gtLadB1 by decide) hi
+  rw [show endPCB (0x80003628#64) gtLadB1 [(10, (2#64 : BitVec 64))] []
+        = (0x80003638#64 : BitVec 64) from by decide] at hpc1
+  have hmem1e : σ1.mem = σ.mem := hmem1
+  have hx12_1 : σ1.regs.get? Register.x12 = some (22#64) :=
+    (hframe1 Register.x12 (by decide) (by decide)).trans hx12
+  obtain ⟨vm1, hmi1'⟩ := hmi1
+  -- ── LB2: addiw/li/auipc/addi + beq NOT taken → 0x8000364c ──────────────────
+  obtain ⟨σ2, i2, hsteps2, hi2, hG2, hmem2, hout2, hpc2, hmi2, hGH2, hframe2⟩ :=
+    bblock_sound_bt gtLadB2 σ1 i1 (u + blenB gtLadB1) (0x80003638#64) vm1
+      [(12, (22#64 : BitVec 64))] []
+      hG1 hpc1 hmi1' ⟨hx12_1, trivial⟩
+      (show KeysOK [12] by decide)
+      (by
+        block_facts (hmem1e ▸ hmem : Vsa.Sim.Code.Eval_exprLoaded σ1.mem)
+          with "Vsa.Sim.Code.eval_expr_at_"
+        -- beq (x15 = 22-20 = 2) (x14 = 3) = false
+        · show guardB bop.BEQ
+            (sign_extend (m := 64) (Sail.BitVec.extractLsb
+              ((22#64 : BitVec 64) + sign_extend (m := 64) (0xfec#12)) 31 0))
+            ((0#64 : BitVec 64) + sign_extend (m := 64) (0x003#12)) = false
+          decide)
+      (show BBlockOK (0x80003638#64) [12] gtLadB2 by decide) hi1
+  rw [show endPCB (0x80003638#64) gtLadB2 [(12, (22#64 : BitVec 64))] []
+        = (0x8000364c#64 : BitVec 64) from by decide] at hpc2
+  -- outputs
+  have hx12_2 : σ2.regs.get? Register.x12 = some (22#64) :=
+    (hframe2 Register.x12 (by decide) (by decide)).trans hx12_1
+  have hx15v : (sign_extend (m := 64) (Sail.BitVec.extractLsb
+      ((22#64 : BitVec 64) + sign_extend (m := 64) (0xfec#12)) 31 0) : BitVec 64) = 2#64 := by decide
+  have hx15_2 : σ2.regs.get? Register.x15 = some (2#64) :=
+    hx15v ▸ (block_reg hGH2 15 : σ2.regs.get? Register.x15
+      = some (sign_extend (m := 64) (Sail.BitVec.extractLsb
+          ((22#64 : BitVec 64) + sign_extend (m := 64) (0xfec#12)) 31 0)))
+  have hx14v : (((0#64 : BitVec 64) + sign_extend (m := 64) (0x003#12)) : BitVec 64) = 3#64 := by decide
+  have hx14_2 : σ2.regs.get? Register.x14 = some (3#64) :=
+    hx14v ▸ (block_reg hGH2 14 : σ2.regs.get? Register.x14
+      = some ((0#64 : BitVec 64) + sign_extend (m := 64) (0x003#12)))
+  refine ⟨σ2, i2, ?_, hi2, hG2, hpc2, hx12_2, hx15_2, hx14_2⟩
+  have hlen : u + blenB gtLadB1 + blenB gtLadB2 = u + 7 := by
+    rw [show blenB gtLadB1 = 2 from by decide, show blenB gtLadB2 = 5 from by decide]
+  rw [← hlen]
+  exact hsteps1.trans hsteps2
+
 end Vsa.Sim
