@@ -390,4 +390,235 @@ theorem evalGtLadderAB (σ : MState) (i u : Nat) (vm : BitVec 64)
   rw [← hlen]
   exact hsteps1.trans hsteps2
 
+/-! ## The store block `0x8000364c → 0x8000367c` (LB3: CSWTCH slot compute + dead
+loads + two scratch stores + `bne` NOT-taken).
+
+`evalGtLadderAB` lands at `0x364c` with `x15 = 2` (the reloaded kind).  LB3 is the
+second jump-table dispatch computing the CSWTCH.25 slot pointer, three dead loads,
+and two scratch stores to `sp-848`/`sp-832`, then `bne x16,x11` NOT taken (2≠2 false).
+
+Split into LB3a (pure ALU, computes `x15 = 0x80019ff0`, `x14 = 0x80019fe0`;
+fall-through) and LB3b (three `ld`, `li`, two `sd`, `bne`).  The first `ld` reads the
+block-computed slot `0x80019ff0`, which is LB3b's INPUT `x15` (input-relative =
+shallow).  The memory outcome is exposed existentially as a `writeMap8²` image, so
+the assembler bridges downstream (disjoint) loads with `getElem_writeMap8_disjoint`. -/
+
+/-- LB3a: `slli/srli/auipc/addi/add` (0x364c→0x3660, fall-through). -/
+def gtLadB3a : BBlock :=
+  { body :=
+      [mkLine 0x8000364c#64 0x02079713#32,   -- slli x14,x15,0x20
+       mkLine 0x80003650#64 0x01d75793#32,   -- srli x15,x14,0x1d
+       mkLine 0x80003654#64 0x00017717#32,   -- auipc x14,0x17
+       mkLine 0x80003658#64 0x98c70713#32,   -- addi  x14,x14,-1652
+       mkLine 0x8000365c#64 0x00f707b3#32],  -- add   x15,x14,x15
+    term := none }
+
+/-- LB3b: `ld/ld/ld/addi/sd/sd` (0x3660→0x3674) + `bne x16,x11 → 0x36a0` NOT taken
+(fall to 0x367c).  The first `ld` is at the block-input slot `x15 = 0x80019ff0`. -/
+def gtLadB3b : BBlock :=
+  { body :=
+      [mkLine 0x80003660#64 0x0007b683#32,   -- ld   x13,0(x15)
+       mkLine 0x80003664#64 0x07813703#32,   -- ld   x14,0x78(x2)
+       mkLine 0x80003668#64 0x08813783#32,   -- ld   x15,0x88(x2)
+       mkLine 0x8000366c#64 0x00200593#32,   -- addi x11,x0,2
+       mkLine 0x80003670#64 0x0ee13823#32,   -- sd   x14,0xf0(x2)
+       mkLine 0x80003674#64 0x10f13023#32],  -- sd   x15,0x100(x2)
+    term := some ⟨0x80003678#64, 0x02b812e3#32, 0xe3#8, 0x12#8, 0xb8#8, 0x02#8,
+      .br bop.BNE false, 16, 11, 0x0824#13, 0#21, 0#12⟩ }
+
+/-- LB3b's load bytes: the slot dead-load (`[s0..s7]`), then the two `v2`-relative
+dead loads (`[a0..a7]` @ v2+0x78, `[b0..b7]` @ v2+0x88). -/
+def gtLds3 (s0 s1 s2 s3 s4 s5 s6 s7 a0 a1 a2 a3 a4 a5 a6 a7
+    b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8) : List (List (BitVec 8)) :=
+  [[s0, s1, s2, s3, s4, s5, s6, s7], [a0, a1, a2, a3, a4, a5, a6, a7],
+   [b0, b1, b2, b3, b4, b5, b6, b7]]
+
+/-- LB3 `0x8000364c → 0x8000367c` (12 steps): the CSWTCH-slot dispatch, three dead
+loads, two scratch stores, then `bne` NOT taken.  Registers `x10/x12/x16/x17/x9/x19`
+pass through untouched; `x2 = v2` is the frame base.  The memory outcome is the two
+scratch stores over `σ.mem`, exposed as a `writeMap8²` image. -/
+theorem evalGtLadderC (σ : MState) (i u : Nat) (vm v2 : BitVec 64)
+    (s0 s1 s2 s3 s4 s5 s6 s7 a0 a1 a2 a3 a4 a5 a6 a7
+     b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8)
+    (hG : GoodState σ)
+    (hpc : σ.regs.get? Register.PC = some (0x8000364c#64))
+    (hmi : σ.regs.get? Register.minstret = some vm)
+    (hx15 : σ.regs.get? Register.x15 = some (2#64))
+    (hx2 : σ.regs.get? Register.x2 = some v2)
+    (hx16 : σ.regs.get? Register.x16 = some (2#64))
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    -- slot dead-load @ 0x80019ff0 (8-byte)
+    (s_p0 : σ.mem[(0x80019ff0#64 : BitVec 64).toNat]? = some s0)
+    (s_p1 : σ.mem[(0x80019ff0#64 : BitVec 64).toNat + 1]? = some s1)
+    (s_p2 : σ.mem[(0x80019ff0#64 : BitVec 64).toNat + 2]? = some s2)
+    (s_p3 : σ.mem[(0x80019ff0#64 : BitVec 64).toNat + 3]? = some s3)
+    (s_p4 : σ.mem[(0x80019ff0#64 : BitVec 64).toNat + 4]? = some s4)
+    (s_p5 : σ.mem[(0x80019ff0#64 : BitVec 64).toNat + 5]? = some s5)
+    (s_p6 : σ.mem[(0x80019ff0#64 : BitVec 64).toNat + 6]? = some s6)
+    (s_p7 : σ.mem[(0x80019ff0#64 : BitVec 64).toNat + 7]? = some s7)
+    -- dead-load @ v2 + 0x078 (8-byte)
+    (a_lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x078#12)).toNat)
+    (a_hi : (v2 + sign_extend (m := 64) (0x078#12)).toNat + 8 ≤ 0x100000000)
+    (a_ht : (v2 + sign_extend (m := 64) (0x078#12)).toNat + 8 ≤ tohostAddr
+      ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x078#12)).toNat)
+    (a_al : (v2 + sign_extend (m := 64) (0x078#12)).toNat % 8 = 0)
+    (a_p0 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat]? = some a0)
+    (a_p1 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 1]? = some a1)
+    (a_p2 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 2]? = some a2)
+    (a_p3 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 3]? = some a3)
+    (a_p4 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 4]? = some a4)
+    (a_p5 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 5]? = some a5)
+    (a_p6 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 6]? = some a6)
+    (a_p7 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 7]? = some a7)
+    -- dead-load @ v2 + 0x088 (8-byte)
+    (b_lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x088#12)).toNat)
+    (b_hi : (v2 + sign_extend (m := 64) (0x088#12)).toNat + 8 ≤ 0x100000000)
+    (b_ht : (v2 + sign_extend (m := 64) (0x088#12)).toNat + 8 ≤ tohostAddr
+      ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x088#12)).toNat)
+    (b_al : (v2 + sign_extend (m := 64) (0x088#12)).toNat % 8 = 0)
+    (b_p0 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat]? = some b0)
+    (b_p1 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 1]? = some b1)
+    (b_p2 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 2]? = some b2)
+    (b_p3 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 3]? = some b3)
+    (b_p4 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 4]? = some b4)
+    (b_p5 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 5]? = some b5)
+    (b_p6 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 6]? = some b6)
+    (b_p7 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 7]? = some b7)
+    -- store @ v2 + 0x0f0 (8-byte) safety
+    (t0lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x0f0#12)).toNat)
+    (t0hi : (v2 + sign_extend (m := 64) (0x0f0#12)).toNat + 8 ≤ 0x100000000)
+    (t0win : tohostAddr + 16 ≤ (v2 + sign_extend (m := 64) (0x0f0#12)).toNat)
+    (t0al : (v2 + sign_extend (m := 64) (0x0f0#12)).toNat % 8 = 0)
+    -- store @ v2 + 0x100 (8-byte) safety
+    (t1lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x100#12)).toNat)
+    (t1hi : (v2 + sign_extend (m := 64) (0x100#12)).toNat + 8 ≤ 0x100000000)
+    (t1win : tohostAddr + 16 ≤ (v2 + sign_extend (m := 64) (0x100#12)).toNat)
+    (t1al : (v2 + sign_extend (m := 64) (0x100#12)).toNat % 8 = 0)
+    (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat) (D1 D2 : BitVec (8 * 8)),
+      Steps ⟨σ, i, u⟩ ⟨σ', i', u + 12⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = writeMap8 (writeMap8 σ.mem (v2 + sign_extend (m := 64) (0x0f0#12)).toNat D1)
+        (v2 + sign_extend (m := 64) (0x100#12)).toNat D2 ∧
+      σ'.regs.get? Register.PC = some (0x8000367c#64) ∧
+      σ'.regs.get? Register.x2 = some v2 := by
+  -- ── LB3a (ALU) → x14 = 0x80019fe0, x15 = 0x80019ff0 (fall-through to 0x3660) ──
+  obtain ⟨σ1, i1, hsteps1, hi1, hG1, hmem1, hout1, hpc1, hmi1, hGH1, hframe1⟩ :=
+    bblock_sound_bt gtLadB3a σ i u (0x8000364c#64) vm
+      [(15, (2#64 : BitVec 64))] []
+      hG hpc hmi ⟨hx15, trivial⟩
+      (show KeysOK [15] by decide)
+      (by block_facts hmem with "Vsa.Sim.Code.eval_expr_at_")
+      (show BBlockOK (0x8000364c#64) [15] gtLadB3a by decide) hi
+  have hmem1e : σ1.mem = σ.mem := hmem1
+  rw [show endPCB (0x8000364c#64) gtLadB3a [(15, (2#64 : BitVec 64))] []
+        = (0x80003660#64 : BitVec 64) from by
+          show endPCM (0x8000364c#64) gtLadB3a.body = (0x80003660#64 : BitVec 64)
+          decide] at hpc1
+  obtain ⟨vm1, hmi1'⟩ := hmi1
+  have hx2_1 : σ1.regs.get? Register.x2 = some v2 :=
+    (hframe1 Register.x2 (by decide) (by decide)).trans hx2
+  have hx16_1 : σ1.regs.get? Register.x16 = some (2#64) :=
+    (hframe1 Register.x16 (by decide) (by decide)).trans hx16
+  -- x14 = 0x80019fe0, x15 = 0x80019ff0: peel wrapper (block_reg) then decide the arith.
+  have hx14v : ((((0x80003654#64 : BitVec 64) + sign_extend (m := 64) ((0x00017#20) +++ 0x000#12))
+      + sign_extend (m := 64) (0x98c#12))) = 0x80019fe0#64 := by decide
+  have hx14_1 : σ1.regs.get? Register.x14 = some (0x80019fe0#64) :=
+    hx14v ▸ (block_reg hGH1 14 : σ1.regs.get? Register.x14
+      = some (((0x80003654#64 : BitVec 64) + sign_extend (m := 64) ((0x00017#20) +++ 0x000#12))
+          + sign_extend (m := 64) (0x98c#12)))
+  have hx15v : ((((0x80003654#64 : BitVec 64) + sign_extend (m := 64) ((0x00017#20) +++ 0x000#12))
+        + sign_extend (m := 64) (0x98c#12))
+      + shift_bits_right (shift_bits_left (2#64 : BitVec 64)
+          (Sail.BitVec.extractLsb (0x20#6) 5 0)) (Sail.BitVec.extractLsb (0x1d#6) 5 0))
+      = 0x80019ff0#64 := by decide
+  have hx15_1 : σ1.regs.get? Register.x15 = some (0x80019ff0#64) :=
+    hx15v ▸ (block_reg hGH1 15 : σ1.regs.get? Register.x15
+      = some ((((0x80003654#64 : BitVec 64) + sign_extend (m := 64) ((0x00017#20) +++ 0x000#12))
+            + sign_extend (m := 64) (0x98c#12))
+          + shift_bits_right (shift_bits_left (2#64 : BitVec 64)
+              (Sail.BitVec.extractLsb (0x20#6) 5 0)) (Sail.BitVec.extractLsb (0x1d#6) 5 0)))
+  -- slot pins + v2-relative dead-load pins over σ1.mem (= σ.mem).
+  have hSlot1 : σ1.mem[(0x80019ff0#64 : BitVec 64).toNat]? = some s0 ∧
+      σ1.mem[(0x80019ff0#64 : BitVec 64).toNat + 1]? = some s1 ∧
+      σ1.mem[(0x80019ff0#64 : BitVec 64).toNat + 2]? = some s2 ∧
+      σ1.mem[(0x80019ff0#64 : BitVec 64).toNat + 3]? = some s3 ∧
+      σ1.mem[(0x80019ff0#64 : BitVec 64).toNat + 4]? = some s4 ∧
+      σ1.mem[(0x80019ff0#64 : BitVec 64).toNat + 5]? = some s5 ∧
+      σ1.mem[(0x80019ff0#64 : BitVec 64).toNat + 6]? = some s6 ∧
+      σ1.mem[(0x80019ff0#64 : BitVec 64).toNat + 7]? = some s7 := by
+    rw [hmem1e]; exact ⟨s_p0, s_p1, s_p2, s_p3, s_p4, s_p5, s_p6, s_p7⟩
+  have hLdA1 : σ1.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat]? = some a0 ∧
+      σ1.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 1]? = some a1 ∧
+      σ1.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 2]? = some a2 ∧
+      σ1.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 3]? = some a3 ∧
+      σ1.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 4]? = some a4 ∧
+      σ1.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 5]? = some a5 ∧
+      σ1.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 6]? = some a6 ∧
+      σ1.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 7]? = some a7 := by
+    rw [hmem1e]; exact ⟨a_p0, a_p1, a_p2, a_p3, a_p4, a_p5, a_p6, a_p7⟩
+  have hLdB1 : σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat]? = some b0 ∧
+      σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 1]? = some b1 ∧
+      σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 2]? = some b2 ∧
+      σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 3]? = some b3 ∧
+      σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 4]? = some b4 ∧
+      σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 5]? = some b5 ∧
+      σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 6]? = some b6 ∧
+      σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 7]? = some b7 := by
+    rw [hmem1e]; exact ⟨b_p0, b_p1, b_p2, b_p3, b_p4, b_p5, b_p6, b_p7⟩
+  have sLo : 0x80000000 ≤ (0x80019ff0#64 : BitVec 64).toNat := by decide
+  have sHi : (0x80019ff0#64 : BitVec 64).toNat + 8 ≤ 0x100000000 := by decide
+  have sHt : (0x80019ff0#64 : BitVec 64).toNat + 8 ≤ tohostAddr
+      ∨ tohostAddr + 8 ≤ (0x80019ff0#64 : BitVec 64).toNat := by decide
+  have sAl : (0x80019ff0#64 : BitVec 64).toNat % 8 = 0 := by decide
+  -- ── LB3b (loads/li/stores + bne NOT taken) → 0x367c ──────────────────────────
+  obtain ⟨σ2, i2, hsteps2, hi2, hG2, hmem2, hout2, hpc2, hmi2, hGH2, hframe2⟩ :=
+    bblock_sound_bt gtLadB3b σ1 i1 (u + blenB gtLadB3a) (0x80003660#64) vm1
+      [(15, (0x80019ff0#64 : BitVec 64)), (2, v2), (16, (2#64 : BitVec 64))]
+      (gtLds3 s0 s1 s2 s3 s4 s5 s6 s7 a0 a1 a2 a3 a4 a5 a6 a7 b0 b1 b2 b3 b4 b5 b6 b7)
+      hG1 hpc1 hmi1' ⟨hx15_1, hx2_1, hx16_1, trivial⟩
+      (show KeysOK [15, 2, 16] by decide)
+      (by
+        block_facts (hmem1e ▸ hmem : Vsa.Sim.Code.Eval_exprLoaded σ1.mem)
+          with "Vsa.Sim.Code.eval_expr_at_"
+        -- ld x13 @ slot 0x80019ff0 (input-relative, shallow):
+        · exact ⟨⟨sLo, sHi, sHt, sAl⟩,
+            hSlot1.1, hSlot1.2.1, hSlot1.2.2.1, hSlot1.2.2.2.1,
+            hSlot1.2.2.2.2.1, hSlot1.2.2.2.2.2.1, hSlot1.2.2.2.2.2.2.1, hSlot1.2.2.2.2.2.2.2⟩
+        -- ld x14 @ v2+0x78:
+        · exact ⟨⟨a_lo, a_hi, a_ht, a_al⟩,
+            hLdA1.1, hLdA1.2.1, hLdA1.2.2.1, hLdA1.2.2.2.1,
+            hLdA1.2.2.2.2.1, hLdA1.2.2.2.2.2.1, hLdA1.2.2.2.2.2.2.1, hLdA1.2.2.2.2.2.2.2⟩
+        -- ld x15 @ v2+0x88:
+        · exact ⟨⟨b_lo, b_hi, b_ht, b_al⟩,
+            hLdB1.1, hLdB1.2.1, hLdB1.2.2.1, hLdB1.2.2.2.1,
+            hLdB1.2.2.2.2.1, hLdB1.2.2.2.2.2.1, hLdB1.2.2.2.2.2.2.1, hLdB1.2.2.2.2.2.2.2⟩
+        -- sd x14 @ v2+0xf0:
+        · exact ⟨t0lo, t0hi, t0win, t0al⟩
+        -- sd x15 @ v2+0x100:
+        · exact ⟨t1lo, t1hi, t1win, t1al⟩
+        -- bne (x16 = 2) (x11 = 2) = false:
+        · show guardB bop.BNE (2#64)
+            ((0#64 : BitVec 64) + sign_extend (m := 64) (0x002#12)) = false
+          decide)
+      (show BBlockOK (0x80003660#64) [15, 2, 16] gtLadB3b by decide) hi1
+  rw [show endPCB (0x80003660#64) gtLadB3b
+        [(15, (0x80019ff0#64 : BitVec 64)), (2, v2), (16, (2#64 : BitVec 64))]
+        (gtLds3 s0 s1 s2 s3 s4 s5 s6 s7 a0 a1 a2 a3 a4 a5 a6 a7 b0 b1 b2 b3 b4 b5 b6 b7)
+        = (0x8000367c#64 : BitVec 64) from by
+          show BitVec.addInt (0x80003678#64) 4 = (0x8000367c#64 : BitVec 64)
+          decide] at hpc2
+  have hx2_2 : σ2.regs.get? Register.x2 = some v2 :=
+    (hframe2 Register.x2 (by decide) (by decide)).trans hx2_1
+  -- σ2.mem = writeLog σ.mem (wlogM …) — DEFEQ to the two-store `writeMap8²` image,
+  -- so `exact` unifies the existential `D1`/`D2` against the reduction.
+  have hmemW : σ2.mem = writeLog σ.mem (wlogM gtLadB3b.body
+      [(15, (0x80019ff0#64 : BitVec 64)), (2, v2), (16, (2#64 : BitVec 64))]
+      (gtLds3 s0 s1 s2 s3 s4 s5 s6 s7 a0 a1 a2 a3 a4 a5 a6 a7 b0 b1 b2 b3 b4 b5 b6 b7)) :=
+    hmem1e ▸ hmem2
+  have hSteps : Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + 12⟩ := by
+    have hlen : u + blenB gtLadB3a + blenB gtLadB3b = u + 12 := by
+      rw [show blenB gtLadB3a = 5 from by decide, show blenB gtLadB3b = 7 from by decide]
+    rw [← hlen]; exact hsteps1.trans hsteps2
+  exact ⟨σ2, i2, _, _, hSteps, hi2, hG2, hmemW, hpc2, hx2_2⟩
+
 end Vsa.Sim
