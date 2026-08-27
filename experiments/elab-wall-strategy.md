@@ -102,6 +102,29 @@ Three waves, cheapest-first, each measured against the 226s baseline:
   one file, migrate the cohort to `#derive_case` rows so the `omega`/`rewriteSeq` bodies vanish
   entirely, not just the arithmetic tax.
 
+## The omega-shape taxonomy (build one lemma per shape → kills all instances, all 7 files)
+
+Inventory of `rows/EvalGtRow.lean` (the cohort is near-identical, so shapes are shared):
+
+| shape | callsite pattern | count | helper | status |
+|-------|------------------|------:|--------|--------|
+| spill load/store safety (high addr) | `(by rw [haddrK]; omega)` ×3 + htif | ~45 | `spill_load_safe4/8` (SpillSafe.lean) | **DONE (green)** |
+| spill `spill_addr` K≤1088 arg | `spill_addr … (by decide)(by omega)` | 10 | `(by decide)` | trivial |
+| expr-relative load (`aExpr+n`) | `(by rw [hop8/hline4]; omega)` | ~8 | `expr_load_safe` (hexprLo/hexprHi bounds) | TODO |
+| low-addr slot/cs site | `(by rw [hslotAddr/hcsAddr…]; left; omega)` | ~6 | `slot_load_safe` (Or.inl variant) | TODO |
+| code-region disjointness | `(by rcases hcodeStk with h\|h <;> omega)` | ~5 | `code_disjoint` | TODO |
+| value-region disjointness | `(by rcases hviStk with h\|h <;> omega)` | ~5 | `vi_disjoint` | TODO |
+| frame-agreement window | `read*_agreeP … (fun j hj => ⟨by omega, by omega⟩)` | ~8 | `frame_window` | TODO |
+| loop-counter arithmetic | `show _ = c.steps + N; omega` | ~4 | inline `by decide`/lemma | TODO |
+
+Each helper is proven ONCE (omega compiled into its olean); migrating a cohort file replaces the
+callsite tactic with a by-name application. Because the 7 `Eval*` files share these shapes, the 7
+helpers × migration kills the full ~900-omega, ~13-min aggregate tax. Execution: build the 6
+remaining helpers (spine, serial), then FAN OUT the migration — the `Eval*` files are near-leaves
+(nothing imports them) and disjoint, so dispatch worktree-isolated subagents (Wave-D protocol,
+≤2–3 concurrent `lean`, coordinator merges serially) one per file, each given the helper API + this
+table + "replace omega-bearing tactic blocks by-name, build green, axiom-clean, re-profile."
+
 ## What we ruled out (measurement corrected the guesses)
 
 - **NOT the code image.** `Eval_expr.lean` (12.4k lines of `mem[a]?=some b` conjunctions) is 12s,
