@@ -743,4 +743,152 @@ theorem evalGtLadderD (σ : MState) (i u : Nat) (vm v2 : BitVec 64)
        [c0, c1, c2, c3, c4, c5, c6, c7]]) := hmem1
   exact ⟨σ1, i1, _, _, _, hsteps1, hi1, hG1, hmemW, hpc1, hx2_1⟩
 
+/-! ## LB5 + LB6 `0x80003698 → 0x80003ae4` (comparison tail + `beq` ladder).
+
+The memory is fixed from here (no stores), so these are pure ALU/branch blocks.
+
+* **LB5** = `evalGtBlkCmp` body (`slt/slt/subw/li`; `x11 = cmpScalar Wl Wr`,
+  `x15 = 21`) + `beq x12,x15` NOT taken (22≠21) → 0x36ac.
+* **LB6** = `li x15,22` + `beq x12,x15` TAKEN (22=22) → 0x80003ae4.
+
+`x11 = cmpScalar Wl Wr` (the signed comparison scalar) and `x9 = sret` survive the
+`beq` ladder into the `sgtz` fixup. -/
+
+def gtLadB5 : BBlock :=
+  { body := evalGtBlkCmp,
+    term := some ⟨0x800036a8#64, 0x44f60863#32, 0x63#8, 0x08#8, 0xf6#8, 0x44#8,
+      .br bop.BEQ false, 12, 15, 0x0450#13, 0#21, 0#12⟩ }
+
+def gtLadB6 : BBlock :=
+  { body := [mkLine 0x800036ac#64 0x01600793#32],   -- li x15,0x16
+    term := some ⟨0x800036b0#64, 0x42f60a63#32, 0x63#8, 0x0a#8, 0xf6#8, 0x42#8,
+      .br bop.BEQ true, 12, 15, 0x0434#13, 0#21, 0#12⟩ }
+
+/-- LB5+LB6 `0x80003698 → 0x80003ae4` (7 steps).  `x9 = sret` passes through;
+`x11 = cmpScalar Wl Wr` is computed and survives the `beq` ladder. -/
+theorem evalGtLadderEF (σ : MState) (i u : Nat) (vm Wr Wl sret : BitVec 64)
+    (hG : GoodState σ)
+    (hpc : σ.regs.get? Register.PC = some (0x80003698#64))
+    (hmi : σ.regs.get? Register.minstret = some vm)
+    (hx17 : σ.regs.get? Register.x17 = some Wr)
+    (hx19 : σ.regs.get? Register.x19 = some Wl)
+    (hx12 : σ.regs.get? Register.x12 = some (22#64))
+    (hx9 : σ.regs.get? Register.x9 = some sret)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Steps ⟨σ, i, u⟩ ⟨σ', i', u + 7⟩ ∧ i' < 2 ∧ GoodState σ' ∧ σ'.mem = σ.mem ∧
+      σ'.regs.get? Register.PC = some (0x80003ae4#64) ∧
+      σ'.regs.get? Register.x11 = some (cmpScalar Wl Wr) ∧
+      σ'.regs.get? Register.x9 = some sret := by
+  -- ── LB5: slt/slt/subw/li + beq NOT taken → 0x36ac ─────────────────────────
+  obtain ⟨σ1, i1, hsteps1, hi1, hG1, hmem1, hout1, hpc1, hmi1, hGH1, hframe1⟩ :=
+    bblock_sound_bt gtLadB5 σ i u (0x80003698#64) vm
+      [(17, Wr), (19, Wl), (12, (22#64 : BitVec 64))] []
+      hG hpc hmi ⟨hx17, hx19, hx12, trivial⟩
+      (show KeysOK [17, 19, 12] by decide)
+      (by
+        block_facts hmem with "Vsa.Sim.Code.eval_expr_at_"
+        -- beq (x12 = 22) (x15 = 21) = false:
+        · show guardB bop.BEQ (22#64)
+            ((0#64 : BitVec 64) + sign_extend (m := 64) (0x015#12)) = false
+          decide)
+      (show BBlockOK (0x80003698#64) [17, 19, 12] gtLadB5 by decide) hi
+  have hmem1e : σ1.mem = σ.mem := hmem1
+  rw [show endPCB (0x80003698#64) gtLadB5
+        [(17, Wr), (19, Wl), (12, (22#64 : BitVec 64))] []
+        = (0x800036ac#64 : BitVec 64) from by
+          show BitVec.addInt (0x800036a8#64) 4 = (0x800036ac#64 : BitVec 64)
+          decide] at hpc1
+  obtain ⟨vm1, hmi1'⟩ := hmi1
+  have hx11_1 : σ1.regs.get? Register.x11 = some (cmpScalar Wl Wr) := block_reg hGH1 11
+  have hx12_1 : σ1.regs.get? Register.x12 = some (22#64) :=
+    (hframe1 Register.x12 (by decide) (by decide)).trans hx12
+  have hx9_1 : σ1.regs.get? Register.x9 = some sret :=
+    (hframe1 Register.x9 (by decide) (by decide)).trans hx9
+  -- ── LB6: li x15,22 + beq TAKEN → 0x80003ae4 ───────────────────────────────
+  obtain ⟨σ2, i2, hsteps2, hi2, hG2, hmem2, hout2, hpc2, hmi2, hGH2, hframe2⟩ :=
+    bblock_sound_bt gtLadB6 σ1 i1 (u + blenB gtLadB5) (0x800036ac#64) vm1
+      [(12, (22#64 : BitVec 64))] []
+      hG1 hpc1 hmi1' ⟨hx12_1, trivial⟩
+      (show KeysOK [12] by decide)
+      (by
+        block_facts (hmem1e ▸ hmem : Vsa.Sim.Code.Eval_exprLoaded σ1.mem)
+          with "Vsa.Sim.Code.eval_expr_at_"
+        -- beq (x12 = 22) (x15 = 22) = true:
+        · show guardB bop.BEQ (22#64)
+            ((0#64 : BitVec 64) + sign_extend (m := 64) (0x016#12)) = true
+          decide)
+      (show BBlockOK (0x800036ac#64) [12] gtLadB6 by decide) hi1
+  have hmem2e : σ2.mem = σ.mem := by rw [hmem2]; exact hmem1e
+  rw [show endPCB (0x800036ac#64) gtLadB6 [(12, (22#64 : BitVec 64))] []
+        = (0x80003ae4#64 : BitVec 64) from by
+          show (0x800036b0#64 : BitVec 64) + sign_extend (m := 64) (0x0434#13)
+            = (0x80003ae4#64 : BitVec 64)
+          decide] at hpc2
+  have hx11_2 : σ2.regs.get? Register.x11 = some (cmpScalar Wl Wr) :=
+    (hframe2 Register.x11 (by decide) (by decide)).trans hx11_1
+  have hx9_2 : σ2.regs.get? Register.x9 = some sret :=
+    (hframe2 Register.x9 (by decide) (by decide)).trans hx9_1
+  refine ⟨σ2, i2, ?_, hi2, hG2, hmem2e, hpc2, hx11_2, hx9_2⟩
+  have hlen : u + blenB gtLadB5 + blenB gtLadB6 = u + 7 := by
+    rw [show blenB gtLadB5 = 5 from by decide, show blenB gtLadB6 = 2 from by decide]
+  rw [← hlen]
+  exact hsteps1.trans hsteps2
+
+/-! ## LB7 `0x80003ae4 → 0x80003aec` (`sgtz`/`mv` — the `gt` fixup + arg setup).
+
+The last straight-line block before the `jal value_bool` seam (the `jal` is NOT a
+block terminator — only `jr` is — so the seam is hand-threaded by the assembler).
+
+* `sgtz x11,x11` (`slt x11,x0,x11`) → `x11 = zext(bool(0 < cmp))` (the `gt` fixup).
+* `mv x10,x9` (`addi x10,x9,0`) → `x10 = sret` (the `value_bool` self-pointer arg). -/
+
+def gtLadB7 : BBlock :=
+  { body :=
+      [mkLine 0x80003ae4#64 0x00b025b3#32,   -- sgtz x11,x11 (slt x11,x0,x11)
+       mkLine 0x80003ae8#64 0x00048513#32],  -- mv   x10,x9  (addi x10,x9,0)
+    term := none }
+
+/-- LB7 `0x80003ae4 → 0x80003aec` (2 steps).  `x9 = sret` passes through; `x11`
+becomes the `gt` fixup and `x10 = sret`. -/
+theorem evalGtLadderG (σ : MState) (i u : Nat) (vm cmpV sret : BitVec 64)
+    (hG : GoodState σ)
+    (hpc : σ.regs.get? Register.PC = some (0x80003ae4#64))
+    (hmi : σ.regs.get? Register.minstret = some vm)
+    (hx11 : σ.regs.get? Register.x11 = some cmpV)
+    (hx9 : σ.regs.get? Register.x9 = some sret)
+    (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
+    (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Steps ⟨σ, i, u⟩ ⟨σ', i', u + 2⟩ ∧ i' < 2 ∧ GoodState σ' ∧ σ'.mem = σ.mem ∧
+      σ'.regs.get? Register.PC = some (0x80003aec#64) ∧
+      σ'.regs.get? Register.x11
+        = some (zero_extend (m := 64) (bool_to_bit (zopz0zI_s (0#64) cmpV))) ∧
+      σ'.regs.get? Register.x10 = some sret ∧
+      σ'.regs.get? Register.x9 = some sret := by
+  obtain ⟨σ1, i1, hsteps1, hi1, hG1, hmem1, hout1, hpc1, hmi1, hGH1, hframe1⟩ :=
+    bblock_sound_bt gtLadB7 σ i u (0x80003ae4#64) vm
+      [(11, cmpV), (9, sret)] []
+      hG hpc hmi ⟨hx11, hx9, trivial⟩
+      (show KeysOK [11, 9] by decide)
+      (by block_facts hmem with "Vsa.Sim.Code.eval_expr_at_")
+      (show BBlockOK (0x80003ae4#64) [11, 9] gtLadB7 by decide) hi
+  have hmem1e : σ1.mem = σ.mem := hmem1
+  rw [show endPCB (0x80003ae4#64) gtLadB7 [(11, cmpV), (9, sret)] []
+        = (0x80003aec#64 : BitVec 64) from by
+          show endPCM (0x80003ae4#64) gtLadB7.body = (0x80003aec#64 : BitVec 64)
+          decide] at hpc1
+  have hx11_1 : σ1.regs.get? Register.x11
+      = some (zero_extend (m := 64) (bool_to_bit (zopz0zI_s (0#64) cmpV))) := block_reg hGH1 11
+  have hx10v : (sret + sign_extend (m := 64) (0x000#12)) = sret := by
+    have : (sign_extend (m := 64) (0x000#12) : BitVec 64) = 0#64 := by decide
+    rw [this, BitVec.add_zero]
+  have hx10_1 : σ1.regs.get? Register.x10 = some sret :=
+    hx10v ▸ (block_reg hGH1 10 : σ1.regs.get? Register.x10
+      = some (sret + sign_extend (m := 64) (0x000#12)))
+  have hx9_1 : σ1.regs.get? Register.x9 = some sret :=
+    (hframe1 Register.x9 (by decide) (by decide)).trans hx9
+  exact ⟨σ1, i1, hsteps1, hi1, hG1, hmem1e, hpc1, hx11_1, hx10_1, hx9_1⟩
+
 end Vsa.Sim
