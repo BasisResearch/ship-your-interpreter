@@ -5,3 +5,6 @@ Vsa/Sim/StrcmpSites.lean	3	0	2026-08-27T11:24:53
 Vsa/Sim/rows/EvalGtRow.lean	226	0	2026-08-27T11:28:40
 Vsa/Sim/BlockMem.lean	3	0	2026-08-27T11:28:44
 Vsa/Sim/rows/EvalGtRow.lean	68	0	2026-08-27T16:06:13
+Vsa/Sim/rows/EvalLeRow.lean	213	0	2026-08-27T18:35:35
+Vsa/Sim/rows/EvalLeRow.lean	38	0	2026-08-27T18:47:23
+Vsa/Sim/rows/EvalLtRow.lean	38	0	2026-08-27T19:14:19
