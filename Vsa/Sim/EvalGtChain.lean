@@ -167,6 +167,7 @@ theorem evalGtChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 64)
       σ'.regs.get? Register.x2 = some v2 ∧
       σ'.regs.get? Register.x9 = some sret ∧
       σ'.regs.get? Register.x19 = some Wl ∧
+      σ'.mem = σ.mem ∧
       (∀ R : Register, AbiPreservedNoise R → (Register.x8 == R) = false →
         σ'.regs.get? R = σ.regs.get? R) := by
   obtain ⟨sp0, sp1, sp2, sp3⟩ := hSlot
@@ -353,8 +354,10 @@ theorem evalGtChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 64)
     exact ((hframe3 R (abiNoise_noiseRegs hR) (by block_frame_wr [15, 16, 15])).trans
         (hframe2 R (abiNoise_noiseRegs hR) (by block_frame_wr [14, 15, 14, 14, 15]))).trans
       (hframe1 R (abiNoise_noiseRegs hR) (by block_frame_wr [12, 14, 8, 15, 10, 17]))
+  have hmem3e : σ3.mem = σ.mem := by rw [hmem3]; exact hmem2e
   -- Compose the three runs (7 + 5 + 4 = 16 steps).
-  refine ⟨σ3, i3, ?_, hi3, hG3, hpc3, hx10_3, hx12_3, hx16_3, hx17_3, hx2_3, hx9_3, hx19_3, hframeC⟩
+  refine ⟨σ3, i3, ?_, hi3, hG3, hpc3, hx10_3, hx12_3, hx16_3, hx17_3, hx2_3, hx9_3, hx19_3,
+    hmem3e, hframeC⟩
   have hlen : u + blenB gtChainB1 + blenB gtChainB2a + blenB gtChainB2b = u + 16 := by
     rw [show blenB gtChainB1 = 7 from by decide, show blenB gtChainB2a = 5 from by decide,
       show blenB gtChainB2b = 4 from by decide]
@@ -414,6 +417,7 @@ theorem evalGtLadderAB (σ : MState) (i u : Nat) (vm v2 sret Wr Wl : BitVec 64)
       σ'.regs.get? Register.x9 = some sret ∧
       σ'.regs.get? Register.x17 = some Wr ∧
       σ'.regs.get? Register.x19 = some Wl ∧
+      σ'.mem = σ.mem ∧
       (∀ R : Register, AbiPreservedNoise R → (Register.x8 == R) = false →
         σ'.regs.get? R = σ.regs.get? R) := by
   -- ── LB1: addi + bnez TAKEN → 0x80003638 ───────────────────────────────────
@@ -495,8 +499,9 @@ theorem evalGtLadderAB (σ : MState) (i u : Nat) (vm v2 sret Wr Wl : BitVec 64)
   have hx14_2 : σ2.regs.get? Register.x14 = some (3#64) :=
     hx14v ▸ (block_reg hGH2 14 : σ2.regs.get? Register.x14
       = some ((0#64 : BitVec 64) + sign_extend (m := 64) (0x003#12)))
+  have hmem2e : σ2.mem = σ.mem := by rw [hmem2]; exact hmem1e
   refine ⟨σ2, i2, ?_, hi2, hG2, hpc2, hx12_2, hx15_2, hx14_2,
-    hx2_2, hx10_2, hx16_2, hx9_2, hx17_2, hx19_2, hframeC⟩
+    hx2_2, hx10_2, hx16_2, hx9_2, hx17_2, hx19_2, hmem2e, hframeC⟩
   have hlen : u + blenB gtLadB1 + blenB gtLadB2 = u + 7 := by
     rw [show blenB gtLadB1 = 2 from by decide, show blenB gtLadB2 = 5 from by decide]
   rw [← hlen]
