@@ -168,6 +168,7 @@ theorem evalGtChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 64)
       σ'.regs.get? Register.x9 = some sret ∧
       σ'.regs.get? Register.x19 = some Wl ∧
       σ'.mem = σ.mem ∧
+      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
       (∀ R : Register, AbiPreservedNoise R → (Register.x8 == R) = false →
         σ'.regs.get? R = σ.regs.get? R) := by
   obtain ⟨sp0, sp1, sp2, sp3⟩ := hSlot
@@ -357,7 +358,7 @@ theorem evalGtChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 64)
   have hmem3e : σ3.mem = σ.mem := by rw [hmem3]; exact hmem2e
   -- Compose the three runs (7 + 5 + 4 = 16 steps).
   refine ⟨σ3, i3, ?_, hi3, hG3, hpc3, hx10_3, hx12_3, hx16_3, hx17_3, hx2_3, hx9_3, hx19_3,
-    hmem3e, hframeC⟩
+    hmem3e, hmi3, hframeC⟩
   have hlen : u + blenB gtChainB1 + blenB gtChainB2a + blenB gtChainB2b = u + 16 := by
     rw [show blenB gtChainB1 = 7 from by decide, show blenB gtChainB2a = 5 from by decide,
       show blenB gtChainB2b = 4 from by decide]
@@ -418,6 +419,7 @@ theorem evalGtLadderAB (σ : MState) (i u : Nat) (vm v2 sret Wr Wl : BitVec 64)
       σ'.regs.get? Register.x17 = some Wr ∧
       σ'.regs.get? Register.x19 = some Wl ∧
       σ'.mem = σ.mem ∧
+      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
       (∀ R : Register, AbiPreservedNoise R → (Register.x8 == R) = false →
         σ'.regs.get? R = σ.regs.get? R) := by
   -- ── LB1: addi + bnez TAKEN → 0x80003638 ───────────────────────────────────
@@ -501,7 +503,7 @@ theorem evalGtLadderAB (σ : MState) (i u : Nat) (vm v2 sret Wr Wl : BitVec 64)
       = some ((0#64 : BitVec 64) + sign_extend (m := 64) (0x003#12)))
   have hmem2e : σ2.mem = σ.mem := by rw [hmem2]; exact hmem1e
   refine ⟨σ2, i2, ?_, hi2, hG2, hpc2, hx12_2, hx15_2, hx14_2,
-    hx2_2, hx10_2, hx16_2, hx9_2, hx17_2, hx19_2, hmem2e, hframeC⟩
+    hx2_2, hx10_2, hx16_2, hx9_2, hx17_2, hx19_2, hmem2e, hmi2, hframeC⟩
   have hlen : u + blenB gtLadB1 + blenB gtLadB2 = u + 7 := by
     rw [show blenB gtLadB1 = 2 from by decide, show blenB gtLadB2 = 5 from by decide]
   rw [← hlen]
@@ -629,6 +631,7 @@ theorem evalGtLadderC (σ : MState) (i u : Nat) (vm v2 sret Wr Wl : BitVec 64)
       σ'.regs.get? Register.x9 = some sret ∧
       σ'.regs.get? Register.x17 = some Wr ∧
       σ'.regs.get? Register.x19 = some Wl ∧
+      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
       (∀ R : Register, AbiPreservedNoise R → (Register.x8 == R) = false →
         σ'.regs.get? R = σ.regs.get? R) := by
   -- ── LB3a (ALU) → x14 = 0x80019fe0, x15 = 0x80019ff0 (fall-through to 0x3660) ──
@@ -778,7 +781,7 @@ theorem evalGtLadderC (σ : MState) (i u : Nat) (vm v2 sret Wr Wl : BitVec 64)
       rw [show blenB gtLadB3a = 5 from by decide, show blenB gtLadB3b = 7 from by decide]
     rw [← hlen]; exact hsteps1.trans hsteps2
   exact ⟨σ2, i2, _, _, hSteps, hi2, hG2, hmemW, hpc2, hx2_2,
-    hx10_2, hx12_2, hx16_2, hx9_2, hx17_2, hx19_2, hframeC⟩
+    hx10_2, hx12_2, hx16_2, hx9_2, hx17_2, hx19_2, hmi2, hframeC⟩
 
 /-! ## LB4 `0x8000367c → 0x80003698` (`evalGtBlkLdSt` body + `bne x10,x16` NOT taken).
 
@@ -877,6 +880,7 @@ theorem evalGtLadderD (σ : MState) (i u : Nat) (vm v2 sret Wr Wl : BitVec 64)
       σ'.regs.get? Register.x12 = some (22#64) ∧
       σ'.regs.get? Register.x17 = some Wr ∧
       σ'.regs.get? Register.x19 = some Wl ∧
+      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
       (∀ R : Register, AbiPreservedNoise R → (Register.x8 == R) = false →
         σ'.regs.get? R = σ.regs.get? R) := by
   obtain ⟨σ1, i1, hsteps1, hi1, hG1, hmem1, hout1, hpc1, hmi1, hGH1, hframe1⟩ :=
@@ -924,7 +928,7 @@ theorem evalGtLadderD (σ : MState) (i u : Nat) (vm v2 sret Wr Wl : BitVec 64)
       [[a0, a1, a2, a3, a4, a5, a6, a7], [b0, b1, b2, b3, b4, b5, b6, b7],
        [c0, c1, c2, c3, c4, c5, c6, c7]]) := hmem1
   exact ⟨σ1, i1, _, _, _, hsteps1, hi1, hG1, hmemW, hpc1, hx2_1,
-    hx9_1, hx12_1, hx17_1, hx19_1, hframeC⟩
+    hx9_1, hx12_1, hx17_1, hx19_1, hmi1, hframeC⟩
 
 /-! ## LB5 + LB6 `0x80003698 → 0x80003ae4` (comparison tail + `beq` ladder).
 
@@ -967,6 +971,7 @@ theorem evalGtLadderEF (σ : MState) (i u : Nat) (vm Wr Wl sret v2 : BitVec 64)
       σ'.regs.get? Register.x9 = some sret ∧
       σ'.regs.get? Register.x2 = some v2 ∧
       σ'.regs.get? Register.x19 = some Wl ∧
+      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
       (∀ R : Register, AbiPreservedNoise R → (Register.x8 == R) = false →
         σ'.regs.get? R = σ.regs.get? R) := by
   -- ── LB5: slt/slt/subw/li + beq NOT taken → 0x36ac ─────────────────────────
@@ -1032,7 +1037,7 @@ theorem evalGtLadderEF (σ : MState) (i u : Nat) (vm Wr Wl sret v2 : BitVec 64)
     have hab := hR.1
     exact (hframe2 R (abiNoise_noiseRegs hR) (by block_frame_wr [15])).trans
       (hframe1 R (abiNoise_noiseRegs hR) (by block_frame_wr [14, 15, 11, 15]))
-  refine ⟨σ2, i2, ?_, hi2, hG2, hmem2e, hpc2, hx11_2, hx9_2, hx2_2, hx19_2, hframeC⟩
+  refine ⟨σ2, i2, ?_, hi2, hG2, hmem2e, hpc2, hx11_2, hx9_2, hx2_2, hx19_2, hmi2, hframeC⟩
   have hlen : u + blenB gtLadB5 + blenB gtLadB6 = u + 7 := by
     rw [show blenB gtLadB5 = 5 from by decide, show blenB gtLadB6 = 2 from by decide]
   rw [← hlen]
@@ -1073,6 +1078,7 @@ theorem evalGtLadderG (σ : MState) (i u : Nat) (vm cmpV sret v2 Wl : BitVec 64)
       σ'.regs.get? Register.x9 = some sret ∧
       σ'.regs.get? Register.x2 = some v2 ∧
       σ'.regs.get? Register.x19 = some Wl ∧
+      (∃ w, σ'.regs.get? Register.minstret = some w) ∧
       (∀ R : Register, AbiPreservedNoise R → (Register.x8 == R) = false →
         σ'.regs.get? R = σ.regs.get? R) := by
   obtain ⟨σ1, i1, hsteps1, hi1, hG1, hmem1, hout1, hpc1, hmi1, hGH1, hframe1⟩ :=
@@ -1106,6 +1112,6 @@ theorem evalGtLadderG (σ : MState) (i u : Nat) (vm cmpV sret v2 Wl : BitVec 64)
     intro R hR _he8
     have hab := hR.1
     exact hframe1 R (abiNoise_noiseRegs hR) (by block_frame_wr [11, 10])
-  exact ⟨σ1, i1, hsteps1, hi1, hG1, hmem1e, hpc1, hx11_1, hx10_1, hx9_1, hx2_1, hx19_1, hframeC⟩
+  exact ⟨σ1, i1, hsteps1, hi1, hG1, hmem1e, hpc1, hx11_1, hx10_1, hx9_1, hx2_1, hx19_1, hmi1, hframeC⟩
 
 end Vsa.Sim
