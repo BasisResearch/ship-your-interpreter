@@ -273,6 +273,7 @@ import Vsa.Sim.BlockDecode
 import Vsa.Sim.BlockGen
 import Vsa.Sim.BlockMemDemo
 import Vsa.Sim.EvalGtBlk1Pilot
+import Vsa.Sim.EvalGtBlocks
 import Vsa.Sim.BlockAdapter
 import Vsa.Sim.SegEval
 import Vsa.Sim.SegEvalSound
