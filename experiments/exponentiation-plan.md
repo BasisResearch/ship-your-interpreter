@@ -165,6 +165,11 @@ DivergeSim/stuckSim structure all assembled (conditional on residuals).
   and **L7/L8 the final close** (`TermSimClose`/`StuckSimClose`/`LayoutInstance`/`InterpSimFinal`) when rows are done.
 - **Presumed coder-B lane:** the M4 case-row fan-out (`#derive_case` over the ~50 term_sim cases), L4/L5 completion
   (loop-step application, env_define/realloc close), the abstraction stack.
+- **CLAIMED by Codex (2026-08-26):** the disjoint same-PC identity foundation
+  for `ExecInit.none`, `ForCond.none`, and `ExecStep.none`, in a new
+  `Vsa/Sim/LoopScaffoldClose.lean` file. This does not discharge the current
+  recursor premises: `mExecInit`, `mForCond`, and `mExecStep` quantify
+  independent entry/exit PCs, so even their no-op constructors are too strong.
 - **UNCLAIMED / grab-and-mark:** M4 Wave-D rows; the per-iteration step contract discharges via LoopStep; the
   exit-path `InterpContSeg`/`MainErrorSeg`/`Crt0ExitSeg` decode; the M6 Layout constants.
 
