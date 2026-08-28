@@ -222,6 +222,24 @@ auto step-count/frame/endPC threading (`chainRun`) + token-parameterized dispatc
 all 4 remaining rows + retrofits lt/le/gt/ge/add/sub/mul. This is the recursion worth building; hand-cloning
 div/mod/eq/ne is the fallback if the combinator investment is judged too large.
 
+**KEY REFRAME (2026-08-28): (B) `chainRun` ALREADY EXISTS — it is `#derive_case` + `segToTriple`.** The
+grounding pass found that `#derive_case` already emits the whole auto-threaded seg (computed regs / end PC /
+write log / fuel + frame preservation) from a `(pc,word)` block table, ChainFacts as a hypothesis, closed by
+ONE `ChainOK` decide; `segToTriple` marshals that into the row `Triple` (one `decide` + a small `hpost`).
+The DONE eval rows just predate its adoption. So the "combinator" is not new code — it is APPLYING the
+existing tooling to the binary-op ladders. **DEMONSTRATED (commit 0de8550, `Vsa/Sim/CmpArmSeg.lean`):** the
+ge operator-fixup tail (0x36a4→0x36c8: the three operator `beq`s + `not`/`srli`/`mv`) rebuilt this way —
+`#derive_case cmpFixupTail` + `chain_facts` (discharges the whole bundle incl. the 3 branch guards by `rfl`
+once the token `x12=23` is pinned) + `segToTriple` (`cmpFixupTailRow`). **MEASURED: 44 lines of proof
+content vs 159 hand lines for the identical fragment (3.6×), and the step-count bookkeeping — the `u29`
+off-by-5 that had to be hand-fixed in the ge row — is auto-computed, GONE.** Green + axiom-clean, gated
+(check_all 198/198). Extrapolated to the full ge ladder: 1724 hand lines → ~130 (one ~50-entry block table
++ facts + hpost). NEXT scale-up: emit the full operand-load+kind-dispatch ladder as a `#derive_case` seg
+(adds stack STORES — handled by the write log — and the kind-dispatch `jr` jump-table — a `jr` terminator,
+in `#derive_case`'s stated reach), then build **div** on it (the libgcc `__divdi3` seam via `callSeg`) as the
+first NEW leaf assembled on the combinator, not hand-cloned. div then templates mod; eq/ne swap the seam to
+`value_equal`.
+
 ## Next (M5 error family)
 Downstream (semantic, not mechanical): map each `errorSimFull` minor premise to its site and instantiate
 its row with the matching `errSite_<pc>` (the `SitePre`/`hsite` routing). Supply the shared `SC`/`HT` once
