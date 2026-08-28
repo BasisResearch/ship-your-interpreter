@@ -138,6 +138,7 @@ import Vsa.Sim.rows.EvalGtRow
 import Vsa.Sim.rows.EvalAddRow
 import Vsa.Sim.rows.EvalSubRow
 import Vsa.Sim.rows.EvalMulRow
+import Vsa.Sim.rows.EvalGeRow
 import Vsa.Sim.LogicalSites
 import Vsa.Sim.EvalAndSim
 import Vsa.Sim.EvalOrSim

@@ -178,6 +178,8 @@ THEOREMS=(
   Vsa.Sim.evalGtSim                             # rows/EvalGtRow (EvalE.binary .gt int, EvalIH motive shape; conditional)
   Vsa.Sim.blockC_mul                            # rows/EvalMulRow (mul-int dispatch tail + __muldi3 libgcc-call seam → TwoSubReturn; Shape-D callee splice via muldi3_spec, sailOutput-tracked)
   Vsa.Sim.evalMulSim                            # rows/EvalMulRow (EvalE.binary .mul int, EvalIH motive shape; conditional)
+  Vsa.Sim.blockC_ge                             # rows/EvalGeRow (ge-int dispatch: three-beq fall-through + not;srli sign-bit → PreEpilogueVD .bool(a≥b); token 23, reuses lt ladder blocks + evalGeLadderD)
+  Vsa.Sim.evalGeSim                             # rows/EvalGeRow (EvalE.binary .ge int, EvalIH motive shape; conditional)
   Vsa.Sim.blockB_logical                        # EvalAndSim (EX_LOGICAL arm head: env-spill + LEFT recursive call, IH-composed → SubEvalReturn)
   Vsa.Sim.blockC_andFalse                        # EvalAndSim (EX_LOGICAL short-circuit tail: op-dispatch + value_truthy + beqz-taken + value_bool → PreEpilogueVD .bool false)
   Vsa.Sim.evalAndSim                             # EvalAndSim (EvalE.andFalse short-circuit recursive case, EvalIH motive shape; conditional)
