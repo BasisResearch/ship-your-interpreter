@@ -270,6 +270,8 @@ THEOREMS=(
   Vsa.Sim.heapPublicFrame_refl                     # ReallocSpec (L5: corrected realloc op interface — grow/null results over one allocator invariant + private footprint)
   Vsa.Sim.HeapOps.privFoot_disjoint                # HeapOps (L5: malloc+realloc packaged on one allocator ledger; privFoot disjoint from every live extent)
   Vsa.Sim.demoChain_row                            # DeriveCase (L3: #derive_case emits a chain def + name_seg run theorem in plain terms; a Wave-D row = one application + one kernel decide)
+  Vsa.Sim.cmpFixupTail_facts                       # CmpArmSeg (EXPONENTIATION proof-of-method: the ge operator-fixup tail 0x36a4→0x36c8 (3 branches + not/srli/mv) auto-threaded via #derive_case; chain_facts discharges the whole ChainFacts bundle incl. the 3 branch guards from ONE loaded-image hyp)
+  Vsa.Sim.cmpFixupTailRow                          # CmpArmSeg (the payoff: same fixup tail as a Triple via segToTriple in ~44 lines of proof content vs ~159 hand lines — the step-count/frame bookkeeping is auto-computed, gone. Template for div/mod/eq/ne + the full-ladder migration)
   # ── M5 (stuck_sim) divergence half + trichotomy (Trichotomy / DivergeSim) ──
   Vsa.While.approx_of_stepClosed                    # Trichotomy (M5 divergence CONSTRUCTION, UNCONDITIONAL: from a step-closed spine predicate R (each R-node takes one SeqStep = normal head ExecS into another R-node), every member node is Approx n for ALL n — the fuel recursion Nat.rec on n, Approx.zero base, Approx.step peel; the honest core of BigStepDiverges)
   Vsa.While.bigStepDiverges_of_stepClosed           # Trichotomy (M5: BigStepDiverges p from a step-closed spine containing the root (initSt,0,0,p); approx_of_stepClosed at the root, UNCONDITIONAL)
