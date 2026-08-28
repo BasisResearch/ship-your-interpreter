@@ -186,20 +186,25 @@ heterogeneous and mostly need bespoke work. Pilot findings:
   ALU-frame `cases` alternatives in BlockTerm + the one in LoopStep). Full build 1064 jobs green, check_all
   192/192 axiom-clean. So `ge` is now a genuine lt/le/gt clone (token 23, arm shares 0x80003628, dispatch
   takes the beq @0x80003648, fixup falls through to `not;srli`) — no longer blocked.
-- **mul/div/mod** — a NEW shape ("arithmetic-with-libgcc-call"): arm S1/S2 clone `sub`, but the tail ends
-  in `jal __muldi3`/`__divdi3` (Shape D seam). Callee specs exist (`muldi3_spec` Muldi3Spec.lean:917;
-  DivSpec). A pilot built a full green mul row in a clone (blockC_mul+evalMulSim across 5 files, reusing
-  muldi3_spec, + a base change to Muldi3Spec adding sailOutput tracking) — but it was UNVERIFIED in the
-  main tree and its clone was deleted in cleanup before capture (lesson: large agent deliverables must
-  return file text or stage persistently, and must NOT be cleaned up pre-join). Mul is buildable this way,
-  ~a full-row effort each; div/mod then fan out from mul.
+- **mul — LANDED (2026-08-28, commit 7a96b72).** The "arithmetic-with-libgcc-call" shape is now a proved
+  leaf in the build path: `evalMulSim`/`blockC_mul` (`Vsa/Sim/rows/EvalMulRow.lean` + `EvalMulChain.lean` +
+  `MulTailSites.lean`), the `EvalE.binary .mul` int case as `blockB_binary ≫ blockC_mul ≫ blockD_v_rec` in
+  the EvalIH motive shape — sibling of gt/add/sub/lt/le. `blockC_mul` threads the `jal __muldi3` Shape-D
+  callee seam via `muldi3_spec`; the `Muldi3Spec` base was extended with `sailOutput` tracking (`o` field)
+  so the callee run marshals through, all downstream consumers rebuild green. This is the WIP the earlier
+  pilot LOST before capture — recovered from the working tree, gated, committed. Gate: build 1067 jobs,
+  check_all **194/194** axiom-clean. **mul is now the concrete template for div/mod** (same seam, swap
+  `__muldi3`→`__divdi3`/`__moddi3` + the DivSpec callee contract).
+- **div/mod** — fan out from mul: same Shape-D libgcc seam, clone `EvalMulRow` swapping the callee contract.
+  Callee specs exist (DivSpec). Each ~a clone-effort now that the mul template is banked.
 - **eq/ne** — need the eval-arm seam composing `value_equal_spec_full` (ValueEqualSpec4, COMPLETE +
   axiom-clean — value_equal is NOT the blocker). Same seam-shape as mul but through value_equal.
 
 So the eval-case frontier is 3 sub-shapes, each ~a full-row effort, NOT a paste-table fan-out. The
-error-site multiplier worked because those leaves were uniform; these aren't. Recommended order: (1) add
-XORI to the block decoder (small base PR) → unlocks ge as a clone; (2) build mul deliberately (reviewing
-the Muldi3Spec base change) → template for div/mod; (3) eq/ne via the value_equal seam.
+error-site multiplier worked because those leaves were uniform; these aren't. Recommended order: (1) XORI
+in the block decoder — DONE; (2) mul deliberately → template for div/mod — DONE (commit 7a96b72); (3) ge
+as an lt/le/gt clone (now unblocked); (4) div/mod as EvalMulRow clones (swap callee contract); (5) eq/ne
+via the value_equal seam. Remaining binary-op leaves: ge, div, mod, eq, ne.
 
 ## Next (M5 error family)
 Downstream (semantic, not mechanical): map each `errorSimFull` minor premise to its site and instantiate
