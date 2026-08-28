@@ -180,12 +180,23 @@ per-site jal→`RuntimeErrorAt` Triples now exists — every error row's assumed
 ## Binary-op eval-case fan-out — CALIBRATION VERDICT (2026-08-28): NOT a clean fan-out
 Unlike the 19 isomorphic error sites, the open binary-op eval cases (eq/ne/mul/div/mod/ge) are
 heterogeneous and mostly need bespoke work. Pilot findings:
-- **ge** — the XORI base-infra blocker is now CLEARED (2026-08-28): `MKind.xori` added to the block-reflection
-  decoder (BlockMem `MKind`/`astOfM`/`wvalM`/`MemFacts`/`KindOK`/`Decidable` + the soundness `cases` branch
-  reusing the pre-existing `execute_itype_xori_char`; BlockDecode `decodeM` opcode 0x13/funct3=4; the three
-  ALU-frame `cases` alternatives in BlockTerm + the one in LoopStep). Full build 1064 jobs green, check_all
-  192/192 axiom-clean. So `ge` is now a genuine lt/le/gt clone (token 23, arm shares 0x80003628, dispatch
-  takes the beq @0x80003648, fixup falls through to `not;srli`) — no longer blocked.
+- **ge — LANDED (2026-08-28, commit 526f575).** `evalGeSim`/`blockC_ge` (`Vsa/Sim/EvalGeChain.lean` +
+  `rows/EvalGeRow.lean`), `EvalE.binary .ge` int case, sibling of lt/le/gt. ge = `!(a<b)`: token 23 falls
+  through all three operator `beq`s (0x36a8/0x36b0/0x36b8) into `not x11,x11` (0xfff5c593, the `xori` the
+  block-reflection decoder gained in d7d6ec5) then the shared `srli` sign-bit @0x800036c0; value bridge =
+  complemented-spaceship top bit = `decide (a≥b)`. Gate: build 1069 jobs, check_all **196/196** axiom-clean.
+  **HONEST MEASUREMENT (answers "can reuse exponentiate this?"): NO, not clone-by-reuse.** ge came out
+  **1724 lines** (chain 870 + row 854) ≈ lt's 1846 — reusing shared block *defs* (gtLadB5/ltLadB6/ltLadG)
+  saved little because the *ladder threading theorems* (evalGeLadderAB/C/D/EF) and the row marshalling are
+  still re-derived per-operator. The two bugs that a stalled builder-agent left and I fixed by hand are
+  exactly the mechanical tax a combinator would erase: (1) a MISSING token-threaded operand-load block
+  (`evalGeLadderD` — lt's `evalLtLadderD` pins `some (20#64)`, so every operator must re-clone it), and
+  (2) a hand step-count base off by 5 (`u29 = u16+24` not `+29`, since ge's ladder is 48 steps to
+  `value_bool` vs lt's 53). **So the real exponentiation is NOT cloning — it is (A) token-GENERIC ladder
+  theorems (parameterize the operand-load/dispatch ladders by the op token → shared across add/sub/mul/
+  div/mod/lt/le/gt/ge/eq/ne, not re-cloned), and (B) a `chainRun`/`segToTriple` auto-threader that computes
+  the Steps chain + register frame + endPC + step-count from a block list (kills the hand `+29`/frame-walk
+  bulk). (A) is the small surgical win; (B) is the full collapse to ~token+fixup+bridge ≈ 100-150 lines.**
 - **mul — LANDED (2026-08-28, commit 7a96b72).** The "arithmetic-with-libgcc-call" shape is now a proved
   leaf in the build path: `evalMulSim`/`blockC_mul` (`Vsa/Sim/rows/EvalMulRow.lean` + `EvalMulChain.lean` +
   `MulTailSites.lean`), the `EvalE.binary .mul` int case as `blockB_binary ≫ blockC_mul ≫ blockD_v_rec` in
@@ -202,9 +213,14 @@ heterogeneous and mostly need bespoke work. Pilot findings:
 
 So the eval-case frontier is 3 sub-shapes, each ~a full-row effort, NOT a paste-table fan-out. The
 error-site multiplier worked because those leaves were uniform; these aren't. Recommended order: (1) XORI
-in the block decoder — DONE; (2) mul deliberately → template for div/mod — DONE (commit 7a96b72); (3) ge
-as an lt/le/gt clone (now unblocked); (4) div/mod as EvalMulRow clones (swap callee contract); (5) eq/ne
-via the value_equal seam. Remaining binary-op leaves: ge, div, mod, eq, ne.
+in the block decoder — DONE; (2) mul → template for div/mod — DONE (7a96b72); (3) ge — DONE (526f575, but
+measured NOT to shrink via clone-reuse, see above). Remaining binary-op leaves: **div, mod, eq, ne**.
+**DECISION POINT before cloning the last 4 by hand (~1700 lines each): build the token-generic ladders (A)
++ `chainRun` auto-threader (B) FIRST.** The v2 layer already has `chain_facts` (mechanical byte-pin/decode
+facts) and `segToTriple` (seg→Triple marshalling); what is MISSING and would actually collapse a row is the
+auto step-count/frame/endPC threading (`chainRun`) + token-parameterized dispatch ladders. Amortizes over
+all 4 remaining rows + retrofits lt/le/gt/ge/add/sub/mul. This is the recursion worth building; hand-cloning
+div/mod/eq/ne is the fallback if the combinator investment is judged too large.
 
 ## Next (M5 error family)
 Downstream (semantic, not mechanical): map each `errorSimFull` minor premise to its site and instantiate
