@@ -47,11 +47,12 @@ def decodeM (w : BitVec 32) : Option (MKind × Nat × Nat × Nat × BitVec 12) :
   let immI   : BitVec 12 := w.extractLsb' 20 12
   let immS   : BitVec 12 := (w.extractLsb' 25 7).append (w.extractLsb' 7 5)
   if opcode = 0x13 then
-    -- OP-IMM: addi (0) / slti (2) / slli (1) / srli (5); rs2 unused
+    -- OP-IMM: addi (0) / slti (2) / slli (1) / srli (5) / xori (4); rs2 unused
     (if funct3 = 0 then some (.addi, rd, rs1, 0, immI)
      else if funct3 = 2 then some (.slti, rd, rs1, 0, immI)
      else if funct3 = 1 then some (.slli, rd, rs1, 0, immI)
      else if funct3 = 5 then some (.srli, rd, rs1, 0, immI)
+     else if funct3 = 4 then some (.xori, rd, rs1, 0, immI)
      else none)
   else if opcode = 0x33 then
     -- OP: add / sub (funct3 = 0, funct7 selects); slt (funct3 = 2)

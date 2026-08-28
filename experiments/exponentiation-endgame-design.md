@@ -177,7 +177,31 @@ full build **1064 jobs** green, `check_all` OK, **192/192** axiom-clean. The com
 per-site jal→`RuntimeErrorAt` Triples now exists — every error row's assumed `T` is now a supplied term
 (cf. `ErrorSiteApplied.row_hNegType_applied`).
 
-## Next
+## Binary-op eval-case fan-out — CALIBRATION VERDICT (2026-08-28): NOT a clean fan-out
+Unlike the 19 isomorphic error sites, the open binary-op eval cases (eq/ne/mul/div/mod/ge) are
+heterogeneous and mostly need bespoke work. Pilot findings:
+- **ge** — the XORI base-infra blocker is now CLEARED (2026-08-28): `MKind.xori` added to the block-reflection
+  decoder (BlockMem `MKind`/`astOfM`/`wvalM`/`MemFacts`/`KindOK`/`Decidable` + the soundness `cases` branch
+  reusing the pre-existing `execute_itype_xori_char`; BlockDecode `decodeM` opcode 0x13/funct3=4; the three
+  ALU-frame `cases` alternatives in BlockTerm + the one in LoopStep). Full build 1064 jobs green, check_all
+  192/192 axiom-clean. So `ge` is now a genuine lt/le/gt clone (token 23, arm shares 0x80003628, dispatch
+  takes the beq @0x80003648, fixup falls through to `not;srli`) — no longer blocked.
+- **mul/div/mod** — a NEW shape ("arithmetic-with-libgcc-call"): arm S1/S2 clone `sub`, but the tail ends
+  in `jal __muldi3`/`__divdi3` (Shape D seam). Callee specs exist (`muldi3_spec` Muldi3Spec.lean:917;
+  DivSpec). A pilot built a full green mul row in a clone (blockC_mul+evalMulSim across 5 files, reusing
+  muldi3_spec, + a base change to Muldi3Spec adding sailOutput tracking) — but it was UNVERIFIED in the
+  main tree and its clone was deleted in cleanup before capture (lesson: large agent deliverables must
+  return file text or stage persistently, and must NOT be cleaned up pre-join). Mul is buildable this way,
+  ~a full-row effort each; div/mod then fan out from mul.
+- **eq/ne** — need the eval-arm seam composing `value_equal_spec_full` (ValueEqualSpec4, COMPLETE +
+  axiom-clean — value_equal is NOT the blocker). Same seam-shape as mul but through value_equal.
+
+So the eval-case frontier is 3 sub-shapes, each ~a full-row effort, NOT a paste-table fan-out. The
+error-site multiplier worked because those leaves were uniform; these aren't. Recommended order: (1) add
+XORI to the block decoder (small base PR) → unlocks ge as a clone; (2) build mul deliberately (reviewing
+the Muldi3Spec base change) → template for div/mod; (3) eq/ne via the value_equal seam.
+
+## Next (M5 error family)
 Downstream (semantic, not mechanical): map each `errorSimFull` minor premise to its site and instantiate
 its row with the matching `errSite_<pc>` (the `SitePre`/`hsite` routing). Supply the shared `SC`/`HT` once
 at L7/L8. Then the M5 error family is unconditional modulo those two shared facts. The same COW-clone
