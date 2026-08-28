@@ -300,6 +300,7 @@ import Vsa.Sim.DeriveLoop
 import Vsa.Sim.DeriveCallSeg
 import Vsa.Sim.CmpArmSeg
 import Vsa.Sim.CmpDispatchSeg
+import Vsa.Sim.DivDispatchSeg
 import Vsa.Sim.ErrorSiteApplied
 import Vsa.Sim.rows.ErrSitesBatch0
 import Vsa.Sim.rows.ErrSitesBatch1
