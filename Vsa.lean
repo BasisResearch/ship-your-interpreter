@@ -134,6 +134,7 @@ import Vsa.Sim.CmpBridges
 import Vsa.Sim.EvalBinSim4
 import Vsa.Sim.rows.EvalLeRow
 import Vsa.Sim.rows.EvalGtRow
+import Vsa.Sim.rows.EvalAddRow
 import Vsa.Sim.LogicalSites
 import Vsa.Sim.EvalAndSim
 import Vsa.Sim.EvalOrSim
