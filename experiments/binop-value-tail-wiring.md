@@ -74,3 +74,40 @@ with `pre`/`stage`/`suf` the three concrete bridges above. `binOpSem_div_int`
 supplies the spec-side value `.int (wrap64 (a.tdiv b))`.
 ```
 ```
+
+## Item-1 SegPre composition — EXACT residual characterised (2026-08-28)
+
+`SegFrameFacts.lean` (frame_ld/frame_sd/frame_ea + FrameBundle, all axiom-clean,
+committed 2ee463c) is the reusable frame-window tool. Composing it into
+`divDispatch_facts` (→ `SegPre divDispatch` → `divDispatchRow` live Triple) — the
+residual `chain_facts h with "Vsa.Sim.Code.eval_expr_at_"` leaves on
+`ChainFacts σ.mem σ.mem (divDispL v2 sret Wr Wl) lds divDispatch`:
+
+- **10 `MemFacts`** (5 ld + 5 sd), each over a DEEPENING `stepMemM` chain: goal N's
+  memory = `stepMemM (… (stepMemM σ.mem instr1) … ) instrN`. Loads are identity in
+  stepMemM; stores are `applyW = writeMap8`. So D1's two loads (@v2+0x78,+0x88) are
+  over σ.mem; D2's three loads (@+0x90,+0x98,+0xa0) are under D1's 2 stores
+  (@+0xf0,+0x100) — DISJOINT (0x90+7 < 0xf0), peel via `writeLog_getElem_disjoint`
+  (BlockAdapter.lean:51, widths∈{1,4,8} + per-store `k<a ∨ a+w≤k` by omega) or
+  `getElem?_writeMap8_out`. Bounds via `frame_ea`(=v2+off)+omega from FrameBundle.
+  eaddrM addresses (v2.toNat+): loads 0x78/0x88/0x90/0x98/0xa0, stores
+  0xf0/0x100 (D1) + 0xf0/0xf8/0x100 (D2).
+- **3 guards** (`all_goals try decide` does NOT close them — they thread stepGM over
+  the symbolic L): 2 kind `bne` (x16=2 vs li x13=2; x10=2 vs x16=2 — concrete once
+  stepGM reduced) + 1 divisor `beq` (x17=Wr vs x0 — needs `hWr : Wr ≠ 0`, the genuine
+  semantic obligation).
+
+**Recommended form (the exponentiating move): a `seg_frame_facts` TACTIC** that runs
+after `chain_facts`, walks each residual `MemFacts`, `simp only [stepMemM]` to
+collapse loads/peel stores (with `getElem?_writeMap8_out` + omega side-conditions),
+then closes via `memFacts_ld_frame`/`memFacts_sd_frame` (bounds omega, pins from a
+`pop`/read hypothesis), and reduces the guards via `simp [stepGM]; decide` (kind) /
+the supplied `hWr` (divisor). Write once → discharges every arm's SegPre (shared
+1088 frame) and any sp-relative window elsewhere. A hand `divDispatch_facts` (explicit
+byte args, per-goal peel) is the fallback prototype to abstract the tactic FROM.
+
+Then: `divDispatch_facts` → `SegPre divDispatch` (choose lds = the read words) →
+`divDispatchRow` gives `Triple (frame-bundle entry) DivDispatchPost` = item 1 DONE →
+compose `divValueTail` (items 2+3, landed) + `blockB_binary`/`blockD_v_rec` (shared)
+= `evalDivSim`. Lift the shared skeleton → `binOpArmSim` combinator → mod/eq/ne as
+~10-line instantiations (Level-2 exponentiation).
