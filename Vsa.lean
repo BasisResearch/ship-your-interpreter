@@ -303,6 +303,9 @@ import Vsa.Sim.CmpDispatchSeg
 import Vsa.Sim.DivDispatchSeg
 import Vsa.Sim.ModDispatchSeg
 import Vsa.Sim.EqNeDispatchSeg
+import Vsa.Sim.BoxSuffixSeams
+import Vsa.Sim.BinOpValueTails
+import Vsa.Sim.EvalDivChain
 import Vsa.Sim.ErrorSiteApplied
 import Vsa.Sim.rows.ErrSitesBatch0
 import Vsa.Sim.rows.ErrSitesBatch1
