@@ -1,0 +1,18 @@
+# EQ/NE-arm value tails of EX_BINARY, seams 0x8000371c..0x80003730 and 0x8000376c..0x80003780.
+# Same shape as the mod tail: jal value_equal / mv a1,a0 / mv a0,s1 / jal value_bool / ld s3,1048(sp) / j 0x800033ec.
+# The `seqz a1,a0 @ 0x80003770` (SLTIU x11,x10,1) is NOT a gen_sites class — hand-written in EqNeTailSites.lean.
+#
+# EQ arm tail (0x8000371c..0x80003730):
+8000371c	940ff0ef	jal	1	1ff140
+80003720	00050593	alu_addi	11	10	000
+80003724	00048513	alu_addi	10	9	000
+80003728	8d0ff0ef	jal	1	1ff0d0
+8000372c	41813983	ld	19	2	418
+80003730	cbdff06f	j	1ffcbc
+#
+# NE arm tail (0x8000376c..0x80003780):
+8000376c	8f0ff0ef	jal	1	1ff0f0
+80003774	00048513	alu_addi	10	9	000
+80003778	880ff0ef	jal	1	1ff080
+8000377c	41813983	ld	19	2	418
+80003780	c6dff06f	j	1ffc6c

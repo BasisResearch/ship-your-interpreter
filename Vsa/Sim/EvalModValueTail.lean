@@ -26,6 +26,7 @@ open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState Config Step Steps)
 open Vsa.Logic
+open Vsa.MemRepr
 open Vsa.Sim.Code (__hidden___udivdi3Loaded)
 
 set_option maxHeartbeats 4000000

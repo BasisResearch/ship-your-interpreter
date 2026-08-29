@@ -163,6 +163,29 @@ elab "chain_frame_out " "[" hs:term,* "]" : tactic => withMainContext do
     acc ← `(($acc).trans $step)
   closeMainGoal `chain_frame_out (← Term.elabTermEnsuringType acc (← getMainTarget))
 
+/-- Build the folded `StepFrameOut` term (no goal, `W` left as a synthesized
+metavariable fixed by the constructor applications). Shared by `chain_out`. -/
+private def chainFrameOutFoldTerm (hyps : Array Term) : TacticM Term := do
+  let mut acc ← chainFrameOutStepTerm hyps[0]!
+  for h in hyps[1:] do
+    let step ← chainFrameOutStepTerm h
+    acc ← `(($acc).trans $step)
+  return acc
+
+/-- `chain_out [ho₀, …, hoₙ]` closes a **whole-run `sailOutput`-invariance** goal
+`σₙ.sailOutput = σ₀.sailOutput` in ONE fold: it builds the same left-nested
+`StepFrameOut.of_CLASS … |>.trans …` term as `chain_frame_out`, then projects
+`.out`.  The unioned write-set `W` is inferred (never spelled), so a caller threads
+output through an arbitrary-length straight-line run without naming any register —
+the exponentiating replacement for a per-step `hout` ladder. -/
+elab "chain_out " "[" hs:term,* "]" : tactic => withMainContext do
+  let hyps := hs.getElems
+  if hyps.isEmpty then
+    throwError "chain_out: empty hypothesis list; the run has no steps (use `rfl`)"
+  let acc ← chainFrameOutFoldTerm hyps
+  let outTm ← `(($acc).out)
+  closeMainGoal `chain_out (← Term.elabTermEnsuringType outTm (← getMainTarget))
+
 /-! ## Demo — an 8-step arm run collapsed in one call
 
 The exact shape `EvalMulRow.blockC_mul` threads over its MUL arm (before the
@@ -225,9 +248,29 @@ theorem chainFrameOut_get_demo (σ σ1 σ2 σ3 σ4 σ5 σ6 σ7 σ8 : MState)
     chain_frame_out [h1, h2, h3, h4, h5, h6, h7, h8]
   exact ⟨cfo.out, cfo.get Register.x9 (by decide) hσ⟩
 
+/-- `chain_out` derives the whole-run output invariance without naming `W`. -/
+theorem chainOut_demo (σ σ1 σ2 σ3 σ4 σ5 σ6 σ7 σ8 : MState)
+    (pc1 pc2 pc3 pc4 pc5 pc6 pc7 pc8 vm1 vm2 vm3 vm4 vm5 vm6 vm7 vm8 : BitVec 64)
+    (rd1 rd2 rd3 rd5 rd6 rd8 rdj4 rdj7 : Register)
+    (v1 : RegisterType rd1) (v2 : RegisterType rd2) (v3 : RegisterType rd3)
+    (v5 : RegisterType rd5) (v6 : RegisterType rd6) (v8v : RegisterType rd8)
+    (imm4 : BitVec 21) (link4 : RegisterType rdj4)
+    (imm7 : BitVec 21) (link7 : RegisterType rdj7)
+    (h1 : ReadsLikePost σ1 (sigmaPost_alu σ pc1 vm1 rd1 v1))
+    (h2 : ReadsLikePost σ2 (sigmaPost_alu σ1 pc2 vm2 rd2 v2))
+    (h3 : ReadsLikePost σ3 (sigmaPost_alu σ2 pc3 vm3 rd3 v3))
+    (h4 : ReadsLikePost σ4 (sigmaPost_jal σ3 pc4 vm4 imm4 rdj4 link4))
+    (h5 : ReadsLikePost σ5 (sigmaPost_alu σ4 pc5 vm5 rd5 v5))
+    (h6 : ReadsLikePost σ6 (sigmaPost_alu σ5 pc6 vm6 rd6 v6))
+    (h7 : ReadsLikePost σ7 (sigmaPost_jal σ6 pc7 vm7 imm7 rdj7 link7))
+    (h8 : ReadsLikePost σ8 (sigmaPost_alu σ7 pc8 vm8 rd8 v8v)) :
+    σ8.sailOutput = σ.sailOutput := by
+  chain_out [h1, h2, h3, h4, h5, h6, h7, h8]
+
 end Demo
 
 #print axioms chainFrameOut_demo
 #print axioms chainFrameOut_get_demo
+#print axioms chainOut_demo
 
 end Vsa.Sim

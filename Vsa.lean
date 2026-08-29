@@ -139,8 +139,11 @@ import Vsa.Sim.rows.EvalAddRow
 import Vsa.Sim.rows.EvalSubRow
 import Vsa.Sim.rows.IntPostEpilogue
 import Vsa.Sim.BinopTailGen
+import Vsa.Sim.BoolBoxEpilogue
 import Vsa.Sim.rows.EvalMulRow
 import Vsa.Sim.rows.EvalDivRow
+import Vsa.Sim.rows.EvalModRow
+import Vsa.Sim.rows.EvalEqNeRow
 import Vsa.Sim.rows.EvalGeRow
 import Vsa.Sim.LogicalSites
 import Vsa.Sim.EvalAndSim
@@ -323,6 +326,7 @@ import Vsa.Sim.EvalEqNeArm
 import Vsa.Sim.DivTailSites
 import Vsa.Sim.EvalDivValueTail
 import Vsa.Sim.ModTailSites
+import Vsa.Sim.EqNeTailSites
 import Vsa.Sim.EvalModValueTail
 import Vsa.Sim.ErrorSiteApplied
 import Vsa.Sim.rows.ErrSitesBatch0
