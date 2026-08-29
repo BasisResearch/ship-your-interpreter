@@ -74,14 +74,15 @@ the two `bne`s), `x2=v2` (frame base of the loads/stores), `x9=sret` (the
 `x19=Wl` (dividend `a`, the `mv a0` source).  The divisor-nonzero `beqz` guard
 (`x17 = Wr ≠ 0`) is left to the caller by `chain_facts`. -/
 def divDispL (v2 sret Wr Wl : BitVec 64) : GRegs :=
-  [(16, 2#64), (10, 2#64), (2, v2), (9, sret), (17, Wr), (19, Wl)]
+  [(16, 2#64), (10, 2#64), (2, v2), (9, sret), (17, Wr), (19, Wl), (12, 14#64)]
 
 /-- The `div` dispatch outcome: parked at `0x8000381c` (ready for `jal __divdi3`),
 memory updated by the five stack stores, and the `__divdi3` call arguments staged
 — `x10 = Wl` (dividend `a`), `x11 = Wr` (divisor `b`) — with `x9=sret`/`x2=v2`
 surviving for the `value_int` seam and frame. -/
 def DivDispatchPost (v2 sret Wr Wl : BitVec 64) (lds : List (List (BitVec 8)))
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String)
+    (gpre : (R : Register) → Option (RegisterType R)) (c : Config) : Prop :=
   GoodState c.σ ∧
   c.σ.mem = writeLog m0 (evalBlocks divDispatch
     (SegEvalState.init (divDispL v2 sret Wr Wl) lds)).log ∧
@@ -89,7 +90,16 @@ def DivDispatchPost (v2 sret Wr Wl : BitVec 64) (lds : List (List (BitVec 8)))
   gprGet c.σ 10 = some Wl ∧
   gprGet c.σ 11 = some Wr ∧
   gprGet c.σ 9 = some sret ∧
-  gprGet c.σ 2 = some v2
+  gprGet c.σ 2 = some v2 ∧
+  (∃ w, gprGet c.σ 12 = some w) ∧
+  (∃ w, gprGet c.σ 13 = some w) ∧
+  c.tick < 2 ∧
+  c.σ.sailOutput = out0 ∧
+  -- callee-saved register frame: any ABI-preserved (callee-saved) register the
+  -- dispatch does not write, other than `x8` (excluded to compose with the entry
+  -- linkage's `x8`-excluded frame), reads exactly its entry value `gpre R`.
+  (∀ R : Register, AbiPreservedNoise R → (Register.x8 == R) = false →
+    c.σ.regs.get? R = gpre R)
 
 /-- **The new div leaf.**  The whole `div` arm dispatch `0x800037dc → 0x8000381c`
 as a `Triple`, assembled by `#derive_case` + `segToTriple` — no hand cloning.
@@ -97,22 +107,27 @@ as a `Triple`, assembled by `#derive_case` + `segToTriple` — no hand cloning.
 memory off the outcome.  The `__divdi3` (`callSeg` → `divdi3_spec`) and
 `value_int` seams compose on top to conclude `.int (wrap64 (a.tdiv b))`. -/
 theorem divDispatchRow (v2 sret Wr Wl : BitVec 64) (lds : List (List (BitVec 8)))
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (SegPre divDispatch (divDispL v2 sret Wr Wl) lds 0x800037dc#64 m0)
-      (DivDispatchPost v2 sret Wr Wl lds m0) := by
-  apply segToTriple divDispatch (divDispL v2 sret Wr Wl) lds 0x800037dc#64 m0
-    (DivDispatchPost v2 sret Wr Wl lds m0)
-    (by show ChainOK 0x800037dc#64 [16, 10, 2, 9, 17, 19] divDispatch; decide)
-  intro σ' i' u' hG' _hi' hmem' hpc' _hmi' hregs
-  refine ⟨hG', hmem', ?_, ?_, ?_, ?_, ?_⟩
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String)
+    (gpre : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => SegPre divDispatch (divDispL v2 sret Wr Wl) lds 0x800037dc#64 m0 c ∧
+        c.σ.sailOutput = out0 ∧ (∀ R : Register, c.σ.regs.get? R = gpre R))
+      (DivDispatchPost v2 sret Wr Wl lds m0 out0 gpre) := by
+  intro c hpre
+  obtain ⟨⟨hG, hmem, hpc, ⟨vm, hmi⟩, hL, hkeys, hfacts, htick⟩, hsailc, hgprec⟩ := hpre
+  obtain ⟨σ', i', hs, hi', hG', hmem', hout, hpc', hmi', hregs, hframe⟩ :=
+    segEval_sound divDispatch c.σ c.tick c.steps 0x800037dc#64 vm
+      (divDispL v2 sret Wr Wl) lds hG hpc hmi hL hkeys hfacts
+      (by show ChainOK 0x800037dc#64 [16, 10, 2, 9, 17, 19, 12] divDispatch; decide) htick
+  rw [hmem] at hmem'
+  refine ⟨⟨σ', i', c.steps + evalBlocksFuel divDispatch⟩, hs, ?_⟩
+  refine ⟨hG', hmem', ?_, ?_, ?_, ?_, ?_, ?_, ?_, hi', ?_, ?_⟩
   · rw [hpc']
+    show some (evalBlocksPC 0x800037dc#64 (SegEvalState.init (divDispL v2 sret Wr Wl) lds) divDispatch)
+      = some 0x8000381c#64
     show some (chainEndPC 0x800037dc#64 (divDispL v2 sret Wr Wl) lds divDispatch)
       = some 0x8000381c#64
     rw [chainEndPC_eq_bt divDispatch 0x800037dc#64 (divDispL v2 sret Wr Wl) lds (by decide)]
     rfl
-  -- the `__divdi3` call arguments, read off `GHolds σ' out.regs` (div's arm has no
-  -- `slt`/`subw`, so the register fold reduces): `x10 = Wl` (dividend), `x11 = Wr`
-  -- (`mv` = `addi rd,rs,0`, so the fold yields `_ + sign_extend 0#12`; bridge `+0`).
   · have e : (Wl + sign_extend (m := 64) (0#12) : BitVec 64) = Wl := by
       rw [show (sign_extend (m := 64) (0#12) : BitVec 64) = 0#64 from by decide, BitVec.add_zero]
     rw [← e]; exact gholds_lookup _ hregs (by rfl)
@@ -121,6 +136,13 @@ theorem divDispatchRow (v2 sret Wr Wl : BitVec 64) (lds : List (List (BitVec 8))
     rw [← e]; exact gholds_lookup _ hregs (by rfl)
   · exact gholds_lookup (v := sret) _ hregs (by rfl)
   · exact gholds_lookup (v := v2) _ hregs (by rfl)
+  · exact ⟨_, gholds_lookup _ hregs (by rfl)⟩
+  · exact ⟨_, gholds_lookup _ hregs (by rfl)⟩
+  · rw [hout]; exact hsailc
+  · intro R hR _he8
+    have habi := hR.1
+    rw [hframe R (abiNoise_noiseRegs hR) (by block_frame_wr [14, 15, 13, 14, 13, 15, 11, 10])]
+    exact hgprec R
 
 #print axioms divDispatchRow
 
@@ -149,12 +171,13 @@ Given the caller prefix landing the staged `divDispatchRow` args at the
 boxing the quotient (`Triple (divdi3_post n d r m0) Q`), `callSeg` produces the
 whole div call site `Triple P Q` — the exact Shape-D composition the goal asks
 for, with `divdi3_spec` (not a hand re-derivation) as the threaded callee. -/
-theorem divCallSeam {P Q : Config → Prop} (n d r : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (pre : Triple P (divdi3_pre n d r m0))
-    (suf : Triple (divdi3_post n d r m0) Q) :
+theorem divCallSeam {P Q : Config → Prop}
+    (g : (R : Register) → Option (RegisterType R)) (n d r : BitVec 64)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
+    (pre : Triple P (divdi3_pre g n d r m0 o))
+    (suf : Triple (divdi3_post g n d r m0 o) Q) :
     Triple P Q :=
-  callSeg pre (divdi3_spec n d r m0) suf
+  callSeg pre (divdi3_spec g n d r m0 o) suf
 
 #print axioms binOpSem_div_int
 #print axioms divCallSeam

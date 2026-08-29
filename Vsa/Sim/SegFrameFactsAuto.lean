@@ -636,16 +636,18 @@ theorem divDispatch_facts (σ : MState) (v2 sret Wr Wl : BitVec 64) (hWr : Wr �
 the whole `div` arm dispatch runs to `DivDispatchPost` — `divDispatch_facts` supplies
 the `ChainFacts` that `divDispatchRow` carries.  The `div` analogue of
 `eqDispatchRow_frame`, closing the item-1 `SegPre` composition for the cross-block arm. -/
-theorem divDispatchRow_frame (v2 sret Wr Wl : BitVec 64) (hWr : Wr ≠ 0)
+theorem divDispatchRow_frame (v2 sret Wr Wl : BitVec 64) (out0 : Array String)
+    (gpre : (R : Register) → Option (RegisterType R)) (hWr : Wr ≠ 0)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (SegFramePre (divDispL v2 sret Wr Wl) v2 0x800037dc#64 m0)
-      (fun c => ∃ lds, DivDispatchPost v2 sret Wr Wl lds m0 c) := by
+    Triple (fun c => SegFramePre (divDispL v2 sret Wr Wl) v2 0x800037dc#64 m0 c ∧
+        c.σ.sailOutput = out0 ∧ (∀ R : Register, c.σ.regs.get? R = gpre R))
+      (fun c => ∃ lds, DivDispatchPost v2 sret Wr Wl lds m0 out0 gpre c) := by
   intro c hpre
-  obtain ⟨hG, hmem, hpc, hmi, hL, hkeys, fb, hload, htick⟩ := hpre
+  obtain ⟨⟨hG, hmem, hpc, hmi, hL, hkeys, fb, hload, htick⟩, hsail, hgpre⟩ := hpre
   obtain ⟨lds, hfacts⟩ :=
     divDispatch_facts c.σ v2 sret Wr Wl hWr (hmem ▸ fb) (hmem ▸ hload)
-  obtain ⟨c', hstep, hpost⟩ := divDispatchRow v2 sret Wr Wl lds m0 c
-    ⟨hG, hmem, hpc, hmi, hL, hkeys, hfacts, htick⟩
+  obtain ⟨c', hstep, hpost⟩ := divDispatchRow v2 sret Wr Wl lds m0 out0 gpre c
+    ⟨⟨hG, hmem, hpc, hmi, hL, hkeys, hfacts, htick⟩, hsail, hgpre⟩
   exact ⟨c', hstep, lds, hpost⟩
 
 #print axioms divDispatchRow_frame

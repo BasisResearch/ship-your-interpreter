@@ -1,0 +1,54 @@
+== elab_profile: 5 file(s), serial, per-decl threshold 100ms ==
+---- Vsa/Sim/Code/Eval_expr.lean ----
+wall=12s status=0
+import took 3.59s
+import took 3.59s
+---- Vsa/Sim/Code/SvfprintfSlice.lean ----
+wall=4s status=0
+import took 463ms
+import took 463ms
+---- Vsa/Sim/StrcmpSites.lean ----
+wall=3s status=0
+import took 1.06s
+import took 1.06s
+---- Vsa/Sim/rows/EvalGtRow.lean ----
+wall=226s status=0
+type checking took 378ms
+type checking took 122ms
+type checking took 110ms
+type checking took 108ms
+type checking took 107ms
+type checking took 106ms
+type checking took 101ms
+type checking took 101ms
+instantiate metavars took 10.3s
+tactic execution of Lean.Parser.Tactic.rewriteSeq took 268ms
+tactic execution of Lean.Parser.Tactic.rewriteSeq took 210ms
+tactic execution of Lean.Parser.Tactic.rewriteSeq took 204ms
+tactic execution of Lean.Parser.Tactic.rewriteSeq took 196ms
+tactic execution of Lean.Parser.Tactic.rewriteSeq took 182ms
+tactic execution of Lean.Parser.Tactic.rewriteSeq took 127ms
+import took 2.22s
+parsing took 143ms
+tactic execution of Lean.Parser.Tactic.omega took 465ms
+tactic execution of Lean.Parser.Tactic.omega took 232ms
+tactic execution of Lean.Parser.Tactic.omega took 233ms
+tactic execution of Lean.Parser.Tactic.omega took 299ms
+tactic execution of Lean.Parser.Tactic.omega took 301ms
+tactic execution of Lean.Parser.Tactic.omega took 593ms
+tactic execution of Lean.Parser.Tactic.omega took 587ms
+tactic execution of Lean.Parser.Tactic.omega took 449ms
+tactic execution of Lean.Parser.Tactic.omega took 579ms
+tactic execution of Lean.Parser.Tactic.omega took 586ms
+tactic execution of Lean.Parser.Tactic.omega took 588ms
+tactic execution of Lean.Parser.Tactic.omega took 593ms
+tactic execution of Lean.Parser.Tactic.omega took 582ms
+---- Vsa/Sim/BlockMem.lean ----
+wall=3s status=0
+instantiate metavars took 314ms
+import took 590ms
+elaboration took 110ms
+import took 590ms
+elaboration took 110ms
+instantiate metavars took 314ms
+== done. baseline table: experiments/elab-timings.tsv ==

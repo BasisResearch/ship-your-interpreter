@@ -1,7 +1,11 @@
 import Vsa.Sim.EvalBinSim3
+import Vsa.Sim.ChainFrameOut
+import Vsa.Sim.StackSlotGeom
 import Vsa.Sim.EvalMulChain
 import Vsa.Sim.MulTailSites
 import Vsa.Sim.Muldi3Spec
+import Vsa.Sim.rows.IntPostEpilogue
+import Vsa.Sim.BinopTailGen
 
 /-!
 # `EvalMulRow` — Wave-D M4 row: `evalMulSim` (the `EvalE.binary .mul` int case)
@@ -110,7 +114,18 @@ theorem blockC_mul
   obtain ⟨φfm, φcm, hpfm, hpcm, ⟨φcr, hpcr, hvalR⟩, ⟨φcl, hvalL⟩,
     φf', φc', hpf', hpc', hstore', hstoreSurv'⟩ := hstoreBundle
   have htoh : tohostAddr = 0x8001ad00 := rfl
-  have hsp1088 : 1088 ≤ sp.toNat := by omega
+  -- Phase-0: all scalar sp/SL arithmetic derived ONCE in a small-context lemma
+  -- (`spArith`), not re-`omega`'d in the row's 60-hyp body (each such omega costs
+  -- ~0.5–0.9s from context size — elab-wall memo).  `hSB`/`hEB` bundles built up
+  -- front so `spArith` can consume them.
+  have hSB : StackBounds sp SL := ⟨hSLloSp, hSLlo, hSLwin, hsp8, hsphiRam⟩
+  have hEB : ExprBounds aExpr := ⟨hexprAl, hexprLo, hexprHi, hexprWin⟩
+  have hAr : SpArith sp SL := spArith hSB
+  have hsp1088 : 1088 ≤ sp.toNat := hAr.sp1088
+  have hspLoc : 0x80000000 ≤ sp.toNat := hAr.spLo
+  have hspHtifLoc : tohostAddr + 16 + 1088 ≤ sp.toNat := hAr.spHtif
+  have hSLlo40 : SL.lo ≤ sp.toNat - 40 := hAr.SLlo40
+  have hSLlo32 : SL.lo ≤ sp.toNat - 32 := hAr.SLlo32
   have hspsub : (sp - 1088#64).toNat = sp.toNat - 1088 := by
     rw [BitVec.toNat_sub]
     have h1088 : (1088#64 : BitVec 64).toNat = 1088 := by decide
@@ -151,8 +166,7 @@ theorem blockC_mul
   have hvalL' : ValueRepr c.σ.mem N φcl (sp.toNat - 968) (.int a) := hvalL
   obtain ⟨hkindL, pL, hpayL64, hpLa⟩ := valueRepr_int_pay64 hvalL'
   have hpayL64' : read64 c.σ.mem (sp.toNat - 960) = some pL := by
-    have e : sp.toNat - 968 + 8 = sp.toNat - 960 := by omega
-    rw [e] at hpayL64; exact hpayL64
+    rw [hAr.e968] at hpayL64; exact hpayL64
   have hWlNat : Wl.toNat = pL := by
     have := hWlBuf.symm.trans hpayL64'; exact Option.some.inj this
   have hWl_toInt : Wl.toInt = a := by
@@ -165,31 +179,67 @@ theorem blockC_mul
       = (2#64 : BitVec 64) := by
     rw [sext_word_small _ 2 (by decide) (by rw [word_toNat_recon]; exact hrkbrec)]
   have haddr144 : ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)).toNat = sp.toNat - 944 :=
-    spill_addr sp (0x090#12) 944 (by decide) (by omega) hsp1088
+    spill_addr sp (0x090#12) 944 (by decide) (by decide) hsp1088
   have haddr152 : ((sp - 1088#64) + sign_extend (m := 64) (0x098#12)).toNat = sp.toNat - 936 :=
-    spill_addr sp (0x098#12) 936 (by decide) (by omega) hsp1088
+    spill_addr sp (0x098#12) 936 (by decide) (by decide) hsp1088
   have haddr120 : ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)).toNat = sp.toNat - 968 :=
-    spill_addr sp (0x078#12) 968 (by decide) (by omega) hsp1088
+    spill_addr sp (0x078#12) 968 (by decide) (by decide) hsp1088
   have haddr128 : ((sp - 1088#64) + sign_extend (m := 64) (0x080#12)).toNat = sp.toNat - 960 :=
-    spill_addr sp (0x080#12) 960 (by decide) (by omega) hsp1088
+    spill_addr sp (0x080#12) 960 (by decide) (by decide) hsp1088
   have haddr136 : ((sp - 1088#64) + sign_extend (m := 64) (0x088#12)).toNat = sp.toNat - 952 :=
-    spill_addr sp (0x088#12) 952 (by decide) (by omega) hsp1088
+    spill_addr sp (0x088#12) 952 (by decide) (by decide) hsp1088
   have haddr160 : ((sp - 1088#64) + sign_extend (m := 64) (0x0a0#12)).toNat = sp.toNat - 928 :=
-    spill_addr sp (0x0a0#12) 928 (by decide) (by omega) hsp1088
+    spill_addr sp (0x0a0#12) 928 (by decide) (by decide) hsp1088
   have haddr0 : ((sp - 1088#64) + sign_extend (m := 64) (0x000#12)).toNat = sp.toNat - 1088 := by
     have : (sign_extend (m := 64) (0x000#12) : BitVec 64) = 0#64 := by apply BitVec.eq_of_toNat_eq; decide
     rw [this, BitVec.add_zero]; exact hspsub
   have haddr240 : ((sp - 1088#64) + sign_extend (m := 64) (0x0f0#12)).toNat = sp.toNat - 848 :=
-    spill_addr sp (0x0f0#12) 848 (by decide) (by omega) hsp1088
+    spill_addr sp (0x0f0#12) 848 (by decide) (by decide) hsp1088
   have haddr248 : ((sp - 1088#64) + sign_extend (m := 64) (0x0f8#12)).toNat = sp.toNat - 840 :=
-    spill_addr sp (0x0f8#12) 840 (by decide) (by omega) hsp1088
+    spill_addr sp (0x0f8#12) 840 (by decide) (by decide) hsp1088
   have haddr256 : ((sp - 1088#64) + sign_extend (m := 64) (0x100#12)).toNat = sp.toNat - 832 :=
-    spill_addr sp (0x100#12) 832 (by decide) (by omega) hsp1088
+    spill_addr sp (0x100#12) 832 (by decide) (by decide) hsp1088
   have haddr1048 : ((sp - 1088#64) + sign_extend (m := 64) (0x418#12)).toNat = sp.toNat - 40 :=
-    spill_addr sp (0x418#12) 40 (by decide) (by omega) hsp1088
-  have hobv : ob0.toNat = 13 ∧ ob1.toNat = 0 ∧ ob2.toNat = 0 ∧ ob3.toNat = 0 := by
-    have h0 := ob0.isLt; have h1 := ob1.isLt; have h2 := ob2.isLt; have h3 := ob3.isLt
-    refine ⟨?_, ?_, ?_, ?_⟩ <;> omega
+    spill_addr sp (0x418#12) 40 (by decide) (by decide) hsp1088
+  -- ── Phase-0 geometry precompute: from the front-built bounds bundles derive
+  -- each distinct slot's geometry facts (lo/hi/ht/win/al) in ONE `omega` (over the
+  -- tiny bundle context) instead of re-omega'ing at every load/store site. ──────
+  -- expr-relative operand fetches (4-byte reads at aExpr+8 / aExpr+4)
+  have gExpr8 := exprGeom4 hEB 8 (by decide) (by decide)
+  have gExpr4 := exprGeom4 hEB 4 (by decide) (by decide)
+  -- sp-relative spill slots (K = 1088 - off); width 8 covers every 4-byte read too.
+  have g1088 := slotGeom8 hSB 1088 (by decide) (by decide) (by decide)
+  have g968  := slotGeom8 hSB 968  (by decide) (by decide) (by decide)
+  have g960  := slotGeom8 hSB 960  (by decide) (by decide) (by decide)
+  have g952  := slotGeom8 hSB 952  (by decide) (by decide) (by decide)
+  have g944  := slotGeom8 hSB 944  (by decide) (by decide) (by decide)
+  have g936  := slotGeom8 hSB 936  (by decide) (by decide) (by decide)
+  have g928  := slotGeom8 hSB 928  (by decide) (by decide) (by decide)
+  have g848  := slotGeom8 hSB 848  (by decide) (by decide) (by decide)
+  have g840  := slotGeom8 hSB 840  (by decide) (by decide) (by decide)
+  have g832  := slotGeom8 hSB 832  (by decide) (by decide) (by decide)
+  have g40   := slotGeom8 hSB 40   (by decide) (by decide) (by decide)
+  -- Phase-0: precompute the three store slots' disjointness from each static
+  -- region (code / value_int / __muldi3) as ONE bundle each (three added hyps,
+  -- not nine `have`s — context-bloat law), from the single `hXStk` per region.
+  -- Every store site then projects `.d848/.d840/.d832` instead of re-`omega`ing.
+  have hcodeD : StoreRegionDis sp SL 0x80003164 0x80003fe0 := storeRegionDis hSB _ _ hcodeStk
+  have hviD   : StoreRegionDis sp SL 0x8000280c 0x8000281c := storeRegionDis hSB _ _ hviStk
+  have hmdD   : StoreRegionDis sp SL 0x80004640 0x80004664 := storeRegionDis hSB _ _ hmuldiStk
+  -- store slots ⊂ windows + s3-slot inter-slot disjointness — packed in ONE
+  -- `SlotWindows` hypothesis (context-bloat law: minimise added `have`s), feeding
+  -- `slotDisj_of_notInSL/notInStack/topWin` at every per-`k` mem-frame site,
+  -- killing 20 in-body omegas for the price of ONE added hypothesis.
+  have hSW : SlotWindows sp SL := slotWindows hSB hspSLhi
+  -- the arm's five `hnXX` v2-relative address normalisations (`sp-K = v2+off`),
+  -- derived once in a small-context lemma (`armNorms`), not omega'd in the body.
+  have hNorm := armNorms hsp1088 hspsub
+  -- arm right-payload byte-shift equalities + epilogue restore-slot window
+  -- memberships, each derived once (small-context) instead of per-byte in the body.
+  have hRpb := rpbShift (by omega : (944 : Nat) ≤ sp.toNat)
+  have hTopW := topSlotWin (by omega : (32 : Nat) ≤ sp.toNat)
+  have hobv : ob0.toNat = 13 ∧ ob1.toNat = 0 ∧ ob2.toNat = 0 ∧ ob3.toNat = 0 :=
+    word32_split (by decide) hobrec
   have hob0' : c.σ.mem[aExpr.toNat + 8]? = some (0x0d#8) := by
     have hb : ob0 = 0x0d#8 := by apply BitVec.eq_of_toNat_eq; rw [hobv.1]; rfl
     rw [← hb]; exact hob0
@@ -216,31 +266,31 @@ theorem blockC_mul
       lb0 lb1 lb2 lb3 rkb0 rkb1 rkb2 rkb3 rpb0 rpb1 rpb2 rpb3 rpb4 rpb5 rpb6 rpb7
       kb0 kb1 kb2 kb3 kb4 kb5 kb6 kb7
       hG hpc hmi hsp hx8c hs1 hX19 hcode hRkindVal hkVal
-      (by rw [hop8]; omega) (by rw [hop8]; omega)
-      (by rw [hop8, htoh]; right; omega) (by rw [hop8]; omega)
+      (by rw [hop8]; first | exact gExpr8.1 | exact gExpr8.2.1 | exact gExpr8.2.2.1 | exact gExpr8.2.2.2) (by rw [hop8]; first | exact gExpr8.1 | exact gExpr8.2.1 | exact gExpr8.2.2.1 | exact gExpr8.2.2.2)
+      (by rw [hop8]; first | exact gExpr8.1 | exact gExpr8.2.1 | exact gExpr8.2.2.1 | exact gExpr8.2.2.2) (by rw [hop8]; first | exact gExpr8.1 | exact gExpr8.2.1 | exact gExpr8.2.2.1 | exact gExpr8.2.2.2)
       (by rw [hop8]; exact hob0') (by rw [hop8]; exact hob1')
       (by rw [hop8]; exact hob2') (by rw [hop8]; exact hob3')
-      (by rw [hline4]; omega) (by rw [hline4]; omega)
-      (by rw [hline4, htoh]; right; omega) (by rw [hline4]; omega)
+      (by rw [hline4]; first | exact gExpr4.1 | exact gExpr4.2.1 | exact gExpr4.2.2.1 | exact gExpr4.2.2.2) (by rw [hline4]; first | exact gExpr4.1 | exact gExpr4.2.1 | exact gExpr4.2.2.1 | exact gExpr4.2.2.2)
+      (by rw [hline4]; first | exact gExpr4.1 | exact gExpr4.2.1 | exact gExpr4.2.2.1 | exact gExpr4.2.2.2) (by rw [hline4]; first | exact gExpr4.1 | exact gExpr4.2.1 | exact gExpr4.2.2.1 | exact gExpr4.2.2.2)
       (by rw [hline4]; exact hlb0) (by rw [hline4]; exact hlb1)
       (by rw [hline4]; exact hlb2) (by rw [hline4]; exact hlb3)
-      (by rw [haddr144]; omega) (by rw [haddr144]; omega)
-      (by rw [haddr144, htoh]; right; omega) (by rw [haddr144]; omega)
+      (by rw [haddr144]; first | exact g944.lo | exact g944.hi4 | exact g944.hi8 | exact g944.ht4 | exact g944.ht8 | exact g944.win | exact g944.al4 | exact g944.al8) (by rw [haddr144]; first | exact g944.lo | exact g944.hi4 | exact g944.hi8 | exact g944.ht4 | exact g944.ht8 | exact g944.win | exact g944.al4 | exact g944.al8)
+      (by rw [haddr144]; first | exact g944.lo | exact g944.hi4 | exact g944.hi8 | exact g944.ht4 | exact g944.ht8 | exact g944.win | exact g944.al4 | exact g944.al8) (by rw [haddr144]; first | exact g944.lo | exact g944.hi4 | exact g944.hi8 | exact g944.ht4 | exact g944.ht8 | exact g944.win | exact g944.al4 | exact g944.al8)
       (by rw [haddr144]; exact hrkb0) (by rw [haddr144]; exact hrkb1)
       (by rw [haddr144]; exact hrkb2) (by rw [haddr144]; exact hrkb3)
-      (by rw [haddr152]; omega) (by rw [haddr152]; omega)
-      (by rw [haddr152, htoh]; right; omega) (by rw [haddr152]; omega)
-      (by rw [haddr152, show sp.toNat - 936 = sp.toNat - 944 + 8 from by omega]; exact hrpb0)
-      (by rw [haddr152, show sp.toNat - 936 + 1 = sp.toNat - 944 + 8 + 1 from by omega]; exact hrpb1)
-      (by rw [haddr152, show sp.toNat - 936 + 2 = sp.toNat - 944 + 8 + 2 from by omega]; exact hrpb2)
-      (by rw [haddr152, show sp.toNat - 936 + 3 = sp.toNat - 944 + 8 + 3 from by omega]; exact hrpb3)
-      (by rw [haddr152, show sp.toNat - 936 + 4 = sp.toNat - 944 + 8 + 4 from by omega]; exact hrpb4)
-      (by rw [haddr152, show sp.toNat - 936 + 5 = sp.toNat - 944 + 8 + 5 from by omega]; exact hrpb5)
-      (by rw [haddr152, show sp.toNat - 936 + 6 = sp.toNat - 944 + 8 + 6 from by omega]; exact hrpb6)
-      (by rw [haddr152, show sp.toNat - 936 + 7 = sp.toNat - 944 + 8 + 7 from by omega]; exact hrpb7)
+      (by rw [haddr152]; first | exact g936.lo | exact g936.hi4 | exact g936.hi8 | exact g936.ht4 | exact g936.ht8 | exact g936.win | exact g936.al4 | exact g936.al8) (by rw [haddr152]; first | exact g936.lo | exact g936.hi4 | exact g936.hi8 | exact g936.ht4 | exact g936.ht8 | exact g936.win | exact g936.al4 | exact g936.al8)
+      (by rw [haddr152]; first | exact g936.lo | exact g936.hi4 | exact g936.hi8 | exact g936.ht4 | exact g936.ht8 | exact g936.win | exact g936.al4 | exact g936.al8) (by rw [haddr152]; first | exact g936.lo | exact g936.hi4 | exact g936.hi8 | exact g936.ht4 | exact g936.ht8 | exact g936.win | exact g936.al4 | exact g936.al8)
+      (by rw [haddr152, hRpb.1]; exact hrpb0)
+      (by rw [haddr152, hRpb.2.1]; exact hrpb1)
+      (by rw [haddr152, hRpb.2.2.1]; exact hrpb2)
+      (by rw [haddr152, hRpb.2.2.2.1]; exact hrpb3)
+      (by rw [haddr152, hRpb.2.2.2.2.1]; exact hrpb4)
+      (by rw [haddr152, hRpb.2.2.2.2.2.1]; exact hrpb5)
+      (by rw [haddr152, hRpb.2.2.2.2.2.2.1]; exact hrpb6)
+      (by rw [haddr152, hRpb.2.2.2.2.2.2.2]; exact hrpb7)
       hSlot
-      (by rw [haddr0]; omega) (by rw [haddr0]; omega)
-      (by rw [haddr0, htoh]; right; omega) (by rw [haddr0]; omega)
+      (by rw [haddr0]; first | exact g1088.lo | exact g1088.hi4 | exact g1088.hi8 | exact g1088.ht4 | exact g1088.ht8 | exact g1088.win | exact g1088.al4 | exact g1088.al8) (by rw [haddr0]; first | exact g1088.lo | exact g1088.hi4 | exact g1088.hi8 | exact g1088.ht4 | exact g1088.ht8 | exact g1088.win | exact g1088.al4 | exact g1088.al8)
+      (by rw [haddr0]; first | exact g1088.lo | exact g1088.hi4 | exact g1088.hi8 | exact g1088.ht4 | exact g1088.ht8 | exact g1088.win | exact g1088.al4 | exact g1088.al8) (by rw [haddr0]; first | exact g1088.lo | exact g1088.hi4 | exact g1088.hi8 | exact g1088.ht4 | exact g1088.ht8 | exact g1088.win | exact g1088.al4 | exact g1088.al8)
       (by rw [haddr0]; exact hkb0) (by rw [haddr0]; exact hkb1)
       (by rw [haddr0]; exact hkb2) (by rw [haddr0]; exact hkb3)
       (by rw [haddr0]; exact hkb4) (by rw [haddr0]; exact hkb5)
@@ -296,48 +346,48 @@ theorem blockC_mul
       fc0 fc1 fc2 fc3 fc4 fc5 fc6 fc7 fd0 fd1 fd2 fd3 fd4 fd5 fd6 fd7
       fe0 fe1 fe2 fe3 fe4 fe5 fe6 fe7
       hGC0 hpcC0 hmiC0 hx2C0 hx9C0 hx10C0 hx12C0 hx16C0 hx17C0 hx19C0 hcodeC0
-      (by rw [haddr144, hspsub]; omega) (by rw [haddr152, hspsub]; omega)
-      (by rw [haddr160, hspsub]; omega) (by rw [haddr240, hspsub]; omega)
-      (by rw [haddr256, hspsub]; omega)
-      (by rw [haddr240]; rcases hcodeStk with h | h <;> omega)
-      (by rw [haddr248]; rcases hcodeStk with h | h <;> omega)
-      (by rw [haddr256]; rcases hcodeStk with h | h <;> omega)
-      (by rw [haddr120]; omega) (by rw [haddr120]; omega)
-      (by rw [haddr120, htoh]; right; omega) (by rw [haddr120]; omega)
+      (by rw [haddr144]; exact hNorm.1) (by rw [haddr152]; exact hNorm.2.1)
+      (by rw [haddr160]; exact hNorm.2.2.1) (by rw [haddr240]; exact hNorm.2.2.2.1)
+      (by rw [haddr256]; exact hNorm.2.2.2.2)
+      (by rw [haddr240]; exact hcodeD.d848)
+      (by rw [haddr248]; exact hcodeD.d840)
+      (by rw [haddr256]; exact hcodeD.d832)
+      (by rw [haddr120]; first | exact g968.lo | exact g968.hi4 | exact g968.hi8 | exact g968.ht4 | exact g968.ht8 | exact g968.win | exact g968.al4 | exact g968.al8) (by rw [haddr120]; first | exact g968.lo | exact g968.hi4 | exact g968.hi8 | exact g968.ht4 | exact g968.ht8 | exact g968.win | exact g968.al4 | exact g968.al8)
+      (by rw [haddr120]; first | exact g968.lo | exact g968.hi4 | exact g968.hi8 | exact g968.ht4 | exact g968.ht8 | exact g968.win | exact g968.al4 | exact g968.al8) (by rw [haddr120]; first | exact g968.lo | exact g968.hi4 | exact g968.hi8 | exact g968.ht4 | exact g968.ht8 | exact g968.win | exact g968.al4 | exact g968.al8)
       (by rw [haddr120, hmemC0eq]; exact hfa0) (by rw [haddr120, hmemC0eq]; exact hfa1)
       (by rw [haddr120, hmemC0eq]; exact hfa2) (by rw [haddr120, hmemC0eq]; exact hfa3)
       (by rw [haddr120, hmemC0eq]; exact hfa4) (by rw [haddr120, hmemC0eq]; exact hfa5)
       (by rw [haddr120, hmemC0eq]; exact hfa6) (by rw [haddr120, hmemC0eq]; exact hfa7)
-      (by rw [haddr136]; omega) (by rw [haddr136]; omega)
-      (by rw [haddr136, htoh]; right; omega) (by rw [haddr136]; omega)
+      (by rw [haddr136]; first | exact g952.lo | exact g952.hi4 | exact g952.hi8 | exact g952.ht4 | exact g952.ht8 | exact g952.win | exact g952.al4 | exact g952.al8) (by rw [haddr136]; first | exact g952.lo | exact g952.hi4 | exact g952.hi8 | exact g952.ht4 | exact g952.ht8 | exact g952.win | exact g952.al4 | exact g952.al8)
+      (by rw [haddr136]; first | exact g952.lo | exact g952.hi4 | exact g952.hi8 | exact g952.ht4 | exact g952.ht8 | exact g952.win | exact g952.al4 | exact g952.al8) (by rw [haddr136]; first | exact g952.lo | exact g952.hi4 | exact g952.hi8 | exact g952.ht4 | exact g952.ht8 | exact g952.win | exact g952.al4 | exact g952.al8)
       (by rw [haddr136, hmemC0eq]; exact hfb0) (by rw [haddr136, hmemC0eq]; exact hfb1)
       (by rw [haddr136, hmemC0eq]; exact hfb2) (by rw [haddr136, hmemC0eq]; exact hfb3)
       (by rw [haddr136, hmemC0eq]; exact hfb4) (by rw [haddr136, hmemC0eq]; exact hfb5)
       (by rw [haddr136, hmemC0eq]; exact hfb6) (by rw [haddr136, hmemC0eq]; exact hfb7)
-      (by rw [haddr144]; omega) (by rw [haddr144]; omega)
-      (by rw [haddr144, htoh]; right; omega) (by rw [haddr144]; omega)
+      (by rw [haddr144]; first | exact g944.lo | exact g944.hi4 | exact g944.hi8 | exact g944.ht4 | exact g944.ht8 | exact g944.win | exact g944.al4 | exact g944.al8) (by rw [haddr144]; first | exact g944.lo | exact g944.hi4 | exact g944.hi8 | exact g944.ht4 | exact g944.ht8 | exact g944.win | exact g944.al4 | exact g944.al8)
+      (by rw [haddr144]; first | exact g944.lo | exact g944.hi4 | exact g944.hi8 | exact g944.ht4 | exact g944.ht8 | exact g944.win | exact g944.al4 | exact g944.al8) (by rw [haddr144]; first | exact g944.lo | exact g944.hi4 | exact g944.hi8 | exact g944.ht4 | exact g944.ht8 | exact g944.win | exact g944.al4 | exact g944.al8)
       (by rw [haddr144, hmemC0eq]; exact hfc0) (by rw [haddr144, hmemC0eq]; exact hfc1)
       (by rw [haddr144, hmemC0eq]; exact hfc2) (by rw [haddr144, hmemC0eq]; exact hfc3)
       (by rw [haddr144, hmemC0eq]; exact hfc4) (by rw [haddr144, hmemC0eq]; exact hfc5)
       (by rw [haddr144, hmemC0eq]; exact hfc6) (by rw [haddr144, hmemC0eq]; exact hfc7)
-      (by rw [haddr152]; omega) (by rw [haddr152]; omega)
-      (by rw [haddr152, htoh]; right; omega) (by rw [haddr152]; omega)
+      (by rw [haddr152]; first | exact g936.lo | exact g936.hi4 | exact g936.hi8 | exact g936.ht4 | exact g936.ht8 | exact g936.win | exact g936.al4 | exact g936.al8) (by rw [haddr152]; first | exact g936.lo | exact g936.hi4 | exact g936.hi8 | exact g936.ht4 | exact g936.ht8 | exact g936.win | exact g936.al4 | exact g936.al8)
+      (by rw [haddr152]; first | exact g936.lo | exact g936.hi4 | exact g936.hi8 | exact g936.ht4 | exact g936.ht8 | exact g936.win | exact g936.al4 | exact g936.al8) (by rw [haddr152]; first | exact g936.lo | exact g936.hi4 | exact g936.hi8 | exact g936.ht4 | exact g936.ht8 | exact g936.win | exact g936.al4 | exact g936.al8)
       (by rw [haddr152, hmemC0eq]; exact hfd0) (by rw [haddr152, hmemC0eq]; exact hfd1)
       (by rw [haddr152, hmemC0eq]; exact hfd2) (by rw [haddr152, hmemC0eq]; exact hfd3)
       (by rw [haddr152, hmemC0eq]; exact hfd4) (by rw [haddr152, hmemC0eq]; exact hfd5)
       (by rw [haddr152, hmemC0eq]; exact hfd6) (by rw [haddr152, hmemC0eq]; exact hfd7)
-      (by rw [haddr160]; omega) (by rw [haddr160]; omega)
-      (by rw [haddr160, htoh]; right; omega) (by rw [haddr160]; omega)
+      (by rw [haddr160]; first | exact g928.lo | exact g928.hi4 | exact g928.hi8 | exact g928.ht4 | exact g928.ht8 | exact g928.win | exact g928.al4 | exact g928.al8) (by rw [haddr160]; first | exact g928.lo | exact g928.hi4 | exact g928.hi8 | exact g928.ht4 | exact g928.ht8 | exact g928.win | exact g928.al4 | exact g928.al8)
+      (by rw [haddr160]; first | exact g928.lo | exact g928.hi4 | exact g928.hi8 | exact g928.ht4 | exact g928.ht8 | exact g928.win | exact g928.al4 | exact g928.al8) (by rw [haddr160]; first | exact g928.lo | exact g928.hi4 | exact g928.hi8 | exact g928.ht4 | exact g928.ht8 | exact g928.win | exact g928.al4 | exact g928.al8)
       (by rw [haddr160, hmemC0eq]; exact hfe0) (by rw [haddr160, hmemC0eq]; exact hfe1)
       (by rw [haddr160, hmemC0eq]; exact hfe2) (by rw [haddr160, hmemC0eq]; exact hfe3)
       (by rw [haddr160, hmemC0eq]; exact hfe4) (by rw [haddr160, hmemC0eq]; exact hfe5)
       (by rw [haddr160, hmemC0eq]; exact hfe6) (by rw [haddr160, hmemC0eq]; exact hfe7)
-      (by rw [haddr240]; omega) (by rw [haddr240]; omega)
-      (by rw [haddr240, htoh]; omega) (by rw [haddr240]; omega)
-      (by rw [haddr248]; omega) (by rw [haddr248]; omega)
-      (by rw [haddr248, htoh]; omega) (by rw [haddr248]; omega)
-      (by rw [haddr256]; omega) (by rw [haddr256]; omega)
-      (by rw [haddr256, htoh]; omega) (by rw [haddr256]; omega)
+      (by rw [haddr240]; first | exact g848.lo | exact g848.hi4 | exact g848.hi8 | exact g848.ht4 | exact g848.ht8 | exact g848.win | exact g848.al4 | exact g848.al8) (by rw [haddr240]; first | exact g848.lo | exact g848.hi4 | exact g848.hi8 | exact g848.ht4 | exact g848.ht8 | exact g848.win | exact g848.al4 | exact g848.al8)
+      (by rw [haddr240]; first | exact g848.lo | exact g848.hi4 | exact g848.hi8 | exact g848.ht4 | exact g848.ht8 | exact g848.win | exact g848.al4 | exact g848.al8) (by rw [haddr240]; first | exact g848.lo | exact g848.hi4 | exact g848.hi8 | exact g848.ht4 | exact g848.ht8 | exact g848.win | exact g848.al4 | exact g848.al8)
+      (by rw [haddr248]; first | exact g840.lo | exact g840.hi4 | exact g840.hi8 | exact g840.ht4 | exact g840.ht8 | exact g840.win | exact g840.al4 | exact g840.al8) (by rw [haddr248]; first | exact g840.lo | exact g840.hi4 | exact g840.hi8 | exact g840.ht4 | exact g840.ht8 | exact g840.win | exact g840.al4 | exact g840.al8)
+      (by rw [haddr248]; first | exact g840.lo | exact g840.hi4 | exact g840.hi8 | exact g840.ht4 | exact g840.ht8 | exact g840.win | exact g840.al4 | exact g840.al8) (by rw [haddr248]; first | exact g840.lo | exact g840.hi4 | exact g840.hi8 | exact g840.ht4 | exact g840.ht8 | exact g840.win | exact g840.al4 | exact g840.al8)
+      (by rw [haddr256]; first | exact g832.lo | exact g832.hi4 | exact g832.hi8 | exact g832.ht4 | exact g832.ht8 | exact g832.win | exact g832.al4 | exact g832.al8) (by rw [haddr256]; first | exact g832.lo | exact g832.hi4 | exact g832.hi8 | exact g832.ht4 | exact g832.ht8 | exact g832.win | exact g832.al4 | exact g832.al8)
+      (by rw [haddr256]; first | exact g832.lo | exact g832.hi4 | exact g832.hi8 | exact g832.ht4 | exact g832.ht8 | exact g832.win | exact g832.al4 | exact g832.al8) (by rw [haddr256]; first | exact g832.lo | exact g832.hi4 | exact g832.hi8 | exact g832.ht4 | exact g832.ht8 | exact g832.win | exact g832.al4 | exact g832.al8)
       hiC0
   obtain ⟨vmiτ13, hmiτ13⟩ := hmiArmex
   have hmemB2 : τ13.mem = writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 c.σ.mem
@@ -353,37 +403,37 @@ theorem blockC_mul
   have hcodem1 : Vsa.Sim.Code.Eval_exprLoaded m1 :=
     loaded_eval_expr_agreeP c.σ.mem m1
       (fun k hk => (getElem_writeMap8_disjoint c.σ.mem (sp.toNat - 848) k D1
-        (by rcases hcodeStk with h | h <;> omega)).symm) hcode
+        (slotDisj_of_inRegion hcodeD.d848 hk)).symm) hcode
   have hcodem2 : Vsa.Sim.Code.Eval_exprLoaded m2 :=
     loaded_eval_expr_agreeP m1 m2
       (fun k hk => (getElem_writeMap8_disjoint m1 (sp.toNat - 832) k D2
-        (by rcases hcodeStk with h | h <;> omega)).symm) hcodem1
+        (slotDisj_of_inRegion hcodeD.d832 hk)).symm) hcodem1
   have hcodem3 : Vsa.Sim.Code.Eval_exprLoaded m3 :=
     loaded_eval_expr_agreeP m2 m3
       (fun k hk => (getElem_writeMap8_disjoint m2 (sp.toNat - 848) k D3
-        (by rcases hcodeStk with h | h <;> omega)).symm) hcodem2
+        (slotDisj_of_inRegion hcodeD.d848 hk)).symm) hcodem2
   have hcodem4 : Vsa.Sim.Code.Eval_exprLoaded m4 :=
     loaded_eval_expr_agreeP m3 m4
       (fun k hk => (getElem_writeMap8_disjoint m3 (sp.toNat - 840) k D4
-        (by rcases hcodeStk with h | h <;> omega)).symm) hcodem3
+        (slotDisj_of_inRegion hcodeD.d840 hk)).symm) hcodem3
   have hcodem5 : Vsa.Sim.Code.Eval_exprLoaded m5 :=
     loaded_eval_expr_agreeP m4 m5
       (fun k hk => (getElem_writeMap8_disjoint m4 (sp.toNat - 832) k D5
-        (by rcases hcodeStk with h | h <;> omega)).symm) hcodem4
+        (slotDisj_of_inRegion hcodeD.d832 hk)).symm) hcodem4
   have hcodeτ13 : Vsa.Sim.Code.Eval_exprLoaded τ13.mem := by rw [hmemτ13e]; exact hcodem5
   -- `Value_intLoaded m5` and `__muldi3Loaded m5` (survive the 5 stack stores)
   have hVint5 : Value_intLoaded m5 := by
-    have h1 : Value_intLoaded m1 := loaded_int_writeMap8 c.σ.mem (sp.toNat - 848) D1 (by rcases hviStk with h | h <;> omega) hVint
-    have h2 : Value_intLoaded m2 := loaded_int_writeMap8 m1 (sp.toNat - 832) D2 (by rcases hviStk with h | h <;> omega) h1
-    have h3 : Value_intLoaded m3 := loaded_int_writeMap8 m2 (sp.toNat - 848) D3 (by rcases hviStk with h | h <;> omega) h2
-    have h4 : Value_intLoaded m4 := loaded_int_writeMap8 m3 (sp.toNat - 840) D4 (by rcases hviStk with h | h <;> omega) h3
-    exact loaded_int_writeMap8 m4 (sp.toNat - 832) D5 (by rcases hviStk with h | h <;> omega) h4
+    have h1 : Value_intLoaded m1 := loaded_int_writeMap8 c.σ.mem (sp.toNat - 848) D1 hviD.d848 hVint
+    have h2 : Value_intLoaded m2 := loaded_int_writeMap8 m1 (sp.toNat - 832) D2 hviD.d832 h1
+    have h3 : Value_intLoaded m3 := loaded_int_writeMap8 m2 (sp.toNat - 848) D3 hviD.d848 h2
+    have h4 : Value_intLoaded m4 := loaded_int_writeMap8 m3 (sp.toNat - 840) D4 hviD.d840 h3
+    exact loaded_int_writeMap8 m4 (sp.toNat - 832) D5 hviD.d832 h4
   have hMuldi35 : Vsa.Sim.Code.__muldi3Loaded m5 := by
-    have h1 : Vsa.Sim.Code.__muldi3Loaded m1 := loaded_muldi3_writeMap8 c.σ.mem (sp.toNat - 848) D1 (by rcases hmuldiStk with h | h <;> omega) hMuldi3
-    have h2 : Vsa.Sim.Code.__muldi3Loaded m2 := loaded_muldi3_writeMap8 m1 (sp.toNat - 832) D2 (by rcases hmuldiStk with h | h <;> omega) h1
-    have h3 : Vsa.Sim.Code.__muldi3Loaded m3 := loaded_muldi3_writeMap8 m2 (sp.toNat - 848) D3 (by rcases hmuldiStk with h | h <;> omega) h2
-    have h4 : Vsa.Sim.Code.__muldi3Loaded m4 := loaded_muldi3_writeMap8 m3 (sp.toNat - 840) D4 (by rcases hmuldiStk with h | h <;> omega) h3
-    exact loaded_muldi3_writeMap8 m4 (sp.toNat - 832) D5 (by rcases hmuldiStk with h | h <;> omega) h4
+    have h1 : Vsa.Sim.Code.__muldi3Loaded m1 := loaded_muldi3_writeMap8 c.σ.mem (sp.toNat - 848) D1 hmdD.d848 hMuldi3
+    have h2 : Vsa.Sim.Code.__muldi3Loaded m2 := loaded_muldi3_writeMap8 m1 (sp.toNat - 832) D2 hmdD.d832 h1
+    have h3 : Vsa.Sim.Code.__muldi3Loaded m3 := loaded_muldi3_writeMap8 m2 (sp.toNat - 848) D3 hmdD.d848 h2
+    have h4 : Vsa.Sim.Code.__muldi3Loaded m4 := loaded_muldi3_writeMap8 m3 (sp.toNat - 840) D4 hmdD.d840 h3
+    exact loaded_muldi3_writeMap8 m4 (sp.toNat - 832) D5 hmdD.d832 h4
   have houtτ13 : τ13.sailOutput = out0 := houtArm.trans (houtC0.trans hout0eq)
   let u16 : Nat := c.steps + 16
   have hLadderSteps : Steps ⟨c.σ, c.tick, c.steps⟩ ⟨τ13, j13, u16 + 13⟩ :=
@@ -566,164 +616,105 @@ theorem blockC_mul
   -- value_int callee (via value_int_spec): buf = sret, pay = Wr * Wl
   --------------------------------------------------------------------------------
   have hIntRegion : IntRegion sret := ⟨hsretAl, hsretLo, hsretHi, hsretWin, hsretVi⟩
-  have hcallpre : int_pre (fun R => τ19.regs.get? R) sret (Wr * Wl) (0x80003880#64) τ19.mem out0
-      ⟨τ19, j19, cmd.steps + 1 + 1 + 1⟩ := by
-    refine ⟨hGτ19, hVintτ19, rfl, hpcτ19, hx10τ19, hx11τ19, hlinkτ19, ⟨vmiτ19, hmiτ19⟩, hj19, hIntRegion,
-      (by decide), houtτ19, fun R _ => rfl⟩
-  obtain ⟨cvi, hsvi, hGvi, hpcvi, hx10vi, hravi, ⟨vmivi, hmivi⟩, htickvi, hvalvi, houtvi,
-      hmemframevi, hpresvi, hframevi⟩ :=
-    value_int_spec (fun R => τ19.regs.get? R) sret (Wr * Wl) (0x80003880#64) N φc' τ19.mem out0
-      ⟨τ19, j19, cmd.steps + 1 + 1 + 1⟩ hcallpre
   have hval_bridge : (BitVec.ofNat 64 (Wr * Wl).toNat).toInt = wrap64 (a * b) :=
     mul_wrap_bridge Wl Wr a b hWl_toInt hWr_toInt
-  have hvalfinal : ValueRepr cvi.σ.mem N φc' sret.toNat (.int (wrap64 (a * b))) := by
-    rw [← hval_bridge]; exact hvalvi
-  have hpcvi' : cvi.σ.regs.get? Register.PC = some (0x80003880#64) := by
-    rw [hpcvi, show (BitVec.update ((0x80003880#64:BitVec 64) + sign_extend (m := 64) (0x000#12)) 0 0#1)
-      = 0x80003880#64 from by apply BitVec.eq_of_toNat_eq; decide]
+  -- ── Phase-4a: the whole `value_int ; ld s3 ; j` tail + `PreEpilogueVD` packaging
+  --    is now the GENERATED `intBoxEpilogue` (`Vsa/Sim/BinopTailGen.lean`).  The `.mul`
+  --    front supplies `τ19` (the `jal value_int` entry) and its transport facts. ──
   have hcodeτ19 : Eval_exprLoaded τ19.mem := by rw [hmemτ19e]; exact hcodem5
-  have hcode_vi : Eval_exprLoaded cvi.σ.mem :=
-    loaded_eval_expr_agreeP τ19.mem cvi.σ.mem
-      (fun k hk => hmemframevi k (by rcases hsretEvalCode with h | h <;> omega)) hcodeτ19
-  have hs1_vi : cvi.σ.regs.get? Register.x9 = some sret := by
-    rw [hframevi Register.x9 (by decide)]; exact hs1τ19
-  have hsp_vi : cvi.σ.regs.get? Register.x2 = some (sp - 1088#64) := by
-    rw [hframevi Register.x2 (by decide)]; exact hspτ19
-  have hx19_vi : cvi.σ.regs.get? Register.x19 = some Wl := by
-    rw [hframevi Register.x19 (by decide)]; exact hx19τ19
-  --------------------------------------------------------------------------------
-  -- `s3` restore slot `[sp-40, sp-32)`: holds entry `v19` (survives everything).
-  --------------------------------------------------------------------------------
+  -- s3 restore slot at τ19.mem = m5
   have hs3m5 : read64 m5 (sp.toNat - 40) = some w19.toNat := by
     show read64 (writeMap8 m4 (sp.toNat - 832) D5) (sp.toNat - 40) = _
-    rw [read64_writeMap8_disj m4 (sp.toNat - 40) (sp.toNat - 832) D5 (by omega)]
+    rw [read64_writeMap8_disj m4 (sp.toNat - 40) (sp.toNat - 832) D5 hSW.s3d832]
     show read64 (writeMap8 m3 (sp.toNat - 840) D4) (sp.toNat - 40) = _
-    rw [read64_writeMap8_disj m3 (sp.toNat - 40) (sp.toNat - 840) D4 (by omega)]
+    rw [read64_writeMap8_disj m3 (sp.toNat - 40) (sp.toNat - 840) D4 hSW.s3d840]
     show read64 (writeMap8 m2 (sp.toNat - 848) D3) (sp.toNat - 40) = _
-    rw [read64_writeMap8_disj m2 (sp.toNat - 40) (sp.toNat - 848) D3 (by omega)]
+    rw [read64_writeMap8_disj m2 (sp.toNat - 40) (sp.toNat - 848) D3 hSW.s3d848]
     show read64 (writeMap8 m1 (sp.toNat - 832) D2) (sp.toNat - 40) = _
-    rw [read64_writeMap8_disj m1 (sp.toNat - 40) (sp.toNat - 832) D2 (by omega)]
+    rw [read64_writeMap8_disj m1 (sp.toNat - 40) (sp.toNat - 832) D2 hSW.s3d832]
     show read64 (writeMap8 c.σ.mem (sp.toNat - 848) D1) (sp.toNat - 40) = _
-    rw [read64_writeMap8_disj c.σ.mem (sp.toNat - 40) (sp.toNat - 848) D1 (by omega)]
+    rw [read64_writeMap8_disj c.σ.mem (sp.toNat - 40) (sp.toNat - 848) D1 hSW.s3d848]
     exact hs3slot
-  have hs3vi : read64 cvi.σ.mem (sp.toNat - 40) = some w19.toNat := by
-    rw [← read64_agreeP (P := fun k => sp.toNat - 40 ≤ k ∧ k < sp.toNat - 32)
-      (a := sp.toNat - 40) (m := τ19.mem) (m' := cvi.σ.mem)
-      (fun k hk => hmemframevi k (by rcases hsretStk with h | h <;> omega))
-      (fun j hj => ⟨by omega, by omega⟩)]
-    rw [hmemτ19e]; exact hs3m5
-  obtain ⟨s3b0, s3b1, s3b2, s3b3, s3b4, s3b5, s3b6, s3b7, hs3b0, hs3b1, hs3b2, hs3b3, hs3b4, hs3b5, hs3b6, hs3b7, hs3rec⟩ :=
-    read64_bytes cvi.σ.mem (sp.toNat - 40) w19.toNat hs3vi
-  --------------------------------------------------------------------------------
-  -- 0x80003880: ld s3,1048(sp) → x19 := w19 (restore entry s3)
-  --------------------------------------------------------------------------------
-  obtain ⟨τ20, j20, ht20, hj20, hGτ20, hmemτ20, hoτ20⟩ :=
-    site_80003880_ee cvi.σ cvi.tick cvi.steps (0x80003880#64) vmivi (sp - 1088#64)
-      s3b0 s3b1 s3b2 s3b3 s3b4 s3b5 s3b6 s3b7 hGvi hpcvi' hmivi hsp_vi hcode_vi rfl
-      (by rw [haddr1048]; omega) (by rw [haddr1048]; omega)
-      (by rw [haddr1048, htoh]; right; omega) (by rw [haddr1048]; omega)
-      (by rw [haddr1048]; exact hs3b0) (by rw [haddr1048]; exact hs3b1)
-      (by rw [haddr1048]; exact hs3b2) (by rw [haddr1048]; exact hs3b3)
-      (by rw [haddr1048]; exact hs3b4) (by rw [haddr1048]; exact hs3b5)
-      (by rw [haddr1048]; exact hs3b6) (by rw [haddr1048]; exact hs3b7) htickvi
-  have hstepτ20 : Step cvi ⟨τ20, j20, cvi.steps + 1⟩ := by cases cvi; exact ht20
-  have hmemτ20e : τ20.mem = cvi.σ.mem := hmemτ20
-  have hpcτ20 : τ20.regs.get? Register.PC = some (0x80003884#64) := by
-    have := obs_alu_pc hoτ20
-    rwa [show BitVec.addInt (0x80003880#64) 4 = (0x80003884#64 : BitVec 64) from by decide] at this
-  have hx19τ20 : τ20.regs.get? Register.x19 = some w19 := by
-    have := obs_alu_rd hoτ20 (by decide) (by decide) (by decide) (by decide) (by decide)
-    rwa [show (sign_extend (m := 64) ((((((((s3b7.append s3b6).append s3b5).append s3b4).append s3b3).append s3b2).append s3b1).append s3b0) : BitVec (8*8))) = w19 from by
-      apply BitVec.eq_of_toNat_eq; rw [sext_full, word8_toNat_recon, hs3rec]] at this
-  have hs1τ20 : τ20.regs.get? Register.x9 = some sret := obs_alu_other hoτ20 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1_vi
-  have hspτ20 : τ20.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other hoτ20 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_vi
-  obtain ⟨vmiτ20, hmiτ20⟩ := obs_alu_minstret hoτ20
-  have houtτ20 : τ20.sailOutput = out0 := by rw [hoτ20.out, sailOutput_sigmaPost_alu]; exact houtvi
-  have hcodeτ20 : Eval_exprLoaded τ20.mem := by rw [hmemτ20e]; exact hcode_vi
-  --------------------------------------------------------------------------------
-  -- 0x80003884: j 0x800033ec → shared epilogue entry
-  --------------------------------------------------------------------------------
-  obtain ⟨τ21, j21, ht21, hj21, hGτ21, hmemτ21, hoτ21⟩ :=
-    site_80003884_ee τ20 j20 (cvi.steps + 1) (0x80003884#64) vmiτ20 hGτ20 hpcτ20 hmiτ20 hcodeτ20 rfl (by decide) hj20
-  have hstepτ21 : Step ⟨τ20, j20, cvi.steps + 1⟩ ⟨τ21, j21, cvi.steps + 1 + 1⟩ := ht21
-  have hmemτ21e : τ21.mem = cvi.σ.mem := by rw [hmemτ21]; exact hmemτ20e
-  have hpc_fin : τ21.regs.get? Register.PC = some (0x800033ec#64) := by
-    have := obs_jr_pc hoτ21
-    rwa [show ((0x80003884#64:BitVec 64) + sign_extend (m := 64) (0x1ffb68#21)) = 0x800033ec#64 from by
-      apply BitVec.eq_of_toNat_eq; decide] at this
-  have hs1_fin : τ21.regs.get? Register.x9 = some sret := obs_jr_other hoτ21 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1τ20
-  have hsp_fin : τ21.regs.get? Register.x2 = some (sp - 1088#64) := obs_jr_other hoτ21 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hspτ20
-  have hx19_fin : τ21.regs.get? Register.x19 = some w19 := obs_jr_other hoτ21 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx19τ20
-  obtain ⟨vmifin, hmifin⟩ := obs_jr_minstret hoτ21
-  have hout_fin : τ21.sailOutput = out0 := by rw [hoτ21.out, sailOutput_sigmaPost_jump_x0]; exact houtτ20
-  have hcode_fin : Eval_exprLoaded τ21.mem := by rw [hmemτ21e]; exact hcode_vi
-  --------------------------------------------------------------------------------
-  -- ASSEMBLE `PreEpilogueVD` at 0x800033ec.
-  --------------------------------------------------------------------------------
+  have hs3τ19 : read64 τ19.mem (sp.toNat - 40) = some w19.toNat := by rw [hmemτ19e]; exact hs3m5
+  -- top spill slots at τ19.mem
+  have hAgTop_m5 : AgreeP (fun k => sp.toNat - 32 ≤ k ∧ k < sp.toNat) c.σ.mem m5 := by
+    intro k hk
+    show c.σ.mem[k]? = (writeMap8 m4 (sp.toNat - 832) D5)[k]?
+    rw [getElem_writeMap8_disjoint m4 (sp.toNat - 832) k D5 (slotDisj_of_topWin hSW.top832 hk)]
+    show c.σ.mem[k]? = (writeMap8 m3 (sp.toNat - 840) D4)[k]?
+    rw [getElem_writeMap8_disjoint m3 (sp.toNat - 840) k D4 (slotDisj_of_topWin hSW.top840 hk)]
+    show c.σ.mem[k]? = (writeMap8 m2 (sp.toNat - 848) D3)[k]?
+    rw [getElem_writeMap8_disjoint m2 (sp.toNat - 848) k D3 (slotDisj_of_topWin hSW.top848 hk)]
+    show c.σ.mem[k]? = (writeMap8 m1 (sp.toNat - 832) D2)[k]?
+    rw [getElem_writeMap8_disjoint m1 (sp.toNat - 832) k D2 (slotDisj_of_topWin hSW.top832 hk)]
+    show c.σ.mem[k]? = (writeMap8 c.σ.mem (sp.toNat - 848) D1)[k]?
+    rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat - 848) k D1 (slotDisj_of_topWin hSW.top848 hk)]
+  have hslotRaτ19 : read64 τ19.mem (sp.toNat - 8) = some r.toNat := by
+    rw [hmemτ19e, ← read64_agreeP hAgTop_m5 hTopW.1]; exact hslotRa
+  have hslotS0τ19 : read64 τ19.mem (sp.toNat - 16) = some v8.toNat := by
+    rw [hmemτ19e, ← read64_agreeP hAgTop_m5 hTopW.2.1]; exact hslotS0
+  have hslotS1τ19 : read64 τ19.mem (sp.toNat - 24) = some v9.toNat := by
+    rw [hmemτ19e, ← read64_agreeP hAgTop_m5 hTopW.2.2.1]; exact hslotS1
+  have hslotS2τ19 : read64 τ19.mem (sp.toNat - 32) = some v18.toNat := by
+    rw [hmemτ19e, ← read64_agreeP hAgTop_m5 hTopW.2.2.2]; exact hslotS2
+  -- store survival outside SL, phrased at τ19.mem = m5
   have hAgSL_m5 : ∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m5[k]? := by
     intro k hk
     show c.σ.mem[k]? = (writeMap8 m4 (sp.toNat - 832) D5)[k]?
-    rw [getElem_writeMap8_disjoint m4 (sp.toNat - 832) k D5 (by omega)]
+    rw [getElem_writeMap8_disjoint m4 (sp.toNat - 832) k D5 (slotDisj_of_notInSL hSW.inSL832 hk)]
     show c.σ.mem[k]? = (writeMap8 m3 (sp.toNat - 840) D4)[k]?
-    rw [getElem_writeMap8_disjoint m3 (sp.toNat - 840) k D4 (by omega)]
+    rw [getElem_writeMap8_disjoint m3 (sp.toNat - 840) k D4 (slotDisj_of_notInSL hSW.inSL840 hk)]
     show c.σ.mem[k]? = (writeMap8 m2 (sp.toNat - 848) D3)[k]?
-    rw [getElem_writeMap8_disjoint m2 (sp.toNat - 848) k D3 (by omega)]
+    rw [getElem_writeMap8_disjoint m2 (sp.toNat - 848) k D3 (slotDisj_of_notInSL hSW.inSL848 hk)]
     show c.σ.mem[k]? = (writeMap8 m1 (sp.toNat - 832) D2)[k]?
-    rw [getElem_writeMap8_disjoint m1 (sp.toNat - 832) k D2 (by omega)]
+    rw [getElem_writeMap8_disjoint m1 (sp.toNat - 832) k D2 (slotDisj_of_notInSL hSW.inSL832 hk)]
     show c.σ.mem[k]? = (writeMap8 c.σ.mem (sp.toNat - 848) D1)[k]?
-    rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat - 848) k D1 (by omega)]
-  have hSLfin : ∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = τ21.mem[k]? := by
-    intro k hk
-    rw [hmemτ21e, ← hmemframevi k (by rcases hsretInSL with ⟨hl, hr⟩; omega), hmemτ19e]
-    exact hAgSL_m5 k hk
-  have hstore_fin : StoreRepr τ21.mem N A φf' φc' st''.store :=
-    hstoreSurv' τ21.mem (fun k hk => hSLfin k hk)
-  have hSurvSL_fin : ∀ m' : Mem,
-      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → τ21.mem[k]? = m'[k]?) →
+    rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat - 848) k D1 (slotDisj_of_notInSL hSW.inSL848 hk)]
+  have hSurvSLτ19 : ∀ m' : Mem,
+      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → τ19.mem[k]? = m'[k]?) →
       StoreRepr m' N A φf' φc' st''.store :=
-    fun m' hm' => hstoreSurv' m' (fun k hk => (hSLfin k hk).trans (hm' k hk))
+    fun m' hm' => hstoreSurv' m' (fun k hk => ((hAgSL_m5 k hk).trans (by rw [← hmemτ19e])).trans (hm' k hk))
+  -- MemExtends m0 → τ19.mem
   have hMemExt_c_5 : MemExtends c.σ.mem m5 :=
     ((memExtends_writeMap8 c.σ.mem (sp.toNat - 848) D1).trans
       (memExtends_writeMap8 m1 (sp.toNat - 832) D2)).trans
       (((memExtends_writeMap8 m2 (sp.toNat - 848) D3).trans
         (memExtends_writeMap8 m3 (sp.toNat - 840) D4)).trans
         (memExtends_writeMap8 m4 (sp.toNat - 832) D5))
-  have hMemExt_5_21 : MemExtends m5 τ21.mem := by
-    intro k bb hbb
-    rw [hmemτ21e]
-    exact hpresvi k bb (by rw [hmemτ19e]; exact hbb)
-  have hMemExt_fin : MemExtends m0 τ21.mem :=
-    (hMemExt.trans hMemExt_c_5).trans hMemExt_5_21
-  have hAgTop_m5 : AgreeP (fun k => sp.toNat - 32 ≤ k ∧ k < sp.toNat) c.σ.mem m5 := by
-    intro k hk
-    show c.σ.mem[k]? = (writeMap8 m4 (sp.toNat - 832) D5)[k]?
-    rw [getElem_writeMap8_disjoint m4 (sp.toNat - 832) k D5 (by omega)]
-    show c.σ.mem[k]? = (writeMap8 m3 (sp.toNat - 840) D4)[k]?
-    rw [getElem_writeMap8_disjoint m3 (sp.toNat - 840) k D4 (by omega)]
-    show c.σ.mem[k]? = (writeMap8 m2 (sp.toNat - 848) D3)[k]?
-    rw [getElem_writeMap8_disjoint m2 (sp.toNat - 848) k D3 (by omega)]
-    show c.σ.mem[k]? = (writeMap8 m1 (sp.toNat - 832) D2)[k]?
-    rw [getElem_writeMap8_disjoint m1 (sp.toNat - 832) k D2 (by omega)]
-    show c.σ.mem[k]? = (writeMap8 c.σ.mem (sp.toNat - 848) D1)[k]?
-    rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat - 848) k D1 (by omega)]
-  have hAgTop : AgreeP (fun k => sp.toNat - 32 ≤ k ∧ k < sp.toNat) c.σ.mem τ21.mem := by
-    intro k hk
-    rw [hmemτ21e, ← hmemframevi k (by rcases hsretStk with h | h <;> omega), hmemτ19e]
-    exact hAgTop_m5 k hk
-  have hslotRa_f : read64 τ21.mem (sp.toNat - 8) = some r.toNat := by
-    rw [← read64_agreeP hAgTop (fun j hj => ⟨by omega, by omega⟩)]; exact hslotRa
-  have hslotS0_f : read64 τ21.mem (sp.toNat - 16) = some v8.toNat := by
-    rw [← read64_agreeP hAgTop (fun j hj => ⟨by omega, by omega⟩)]; exact hslotS0
-  have hslotS1_f : read64 τ21.mem (sp.toNat - 24) = some v9.toNat := by
-    rw [← read64_agreeP hAgTop (fun j hj => ⟨by omega, by omega⟩)]; exact hslotS1
-  have hslotS2_f : read64 τ21.mem (sp.toNat - 32) = some v18.toNat := by
-    rw [← read64_agreeP hAgTop (fun j hj => ⟨by omega, by omega⟩)]; exact hslotS2
-  -- callee-saved (noise) frame: thread gpre through the whole tail, then bridge to g.
-  have hframeG : ∀ R : Register, AbiPreservedNoise R →
+  have hMemExtτ19 : MemExtends m0 τ19.mem := by
+    rw [hmemτ19e]; exact hMemExt.trans hMemExt_c_5
+  -- memory frame vs m0 at τ19.mem = m5
+  have hmemframeτ19 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
+      (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ τ19.mem[a]? = m0[a]? := by
+    intro a ha hA
+    refine Or.inr ?_
+    rw [hmemτ19e]
+    have hm5c : m5[a]? = c.σ.mem[a]? := by
+      show (writeMap8 m4 (sp.toNat - 832) D5)[a]? = c.σ.mem[a]?
+      rw [getElem_writeMap8_disjoint m4 (sp.toNat - 832) a D5 (slotDisj_of_notInStack hSW.inStk832 ha)]
+      show (writeMap8 m3 (sp.toNat - 840) D4)[a]? = c.σ.mem[a]?
+      rw [getElem_writeMap8_disjoint m3 (sp.toNat - 840) a D4 (slotDisj_of_notInStack hSW.inStk840 ha)]
+      show (writeMap8 m2 (sp.toNat - 848) D3)[a]? = c.σ.mem[a]?
+      rw [getElem_writeMap8_disjoint m2 (sp.toNat - 848) a D3 (slotDisj_of_notInStack hSW.inStk848 ha)]
+      show (writeMap8 m1 (sp.toNat - 832) D2)[a]? = c.σ.mem[a]?
+      rw [getElem_writeMap8_disjoint m1 (sp.toNat - 832) a D2 (slotDisj_of_notInStack hSW.inStk832 ha)]
+      show (writeMap8 c.σ.mem (sp.toNat - 848) D1)[a]? = c.σ.mem[a]?
+      rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat - 848) a D1 (slotDisj_of_notInStack hSW.inStk848 ha)]
+    rw [hm5c]; exact hmemframe a ha hA
+  -- frame collapse τ19.regs → g for R ≠ x19 (through the muldi3 tail, to c.σ = gpre, then → g)
+  have sfoSeg3 :
+      StepFrameOut ((Register.x11 :: noiseRegs) ++ (Register.x10 :: noiseRegs)
+        ++ (Register.x1 :: noiseRegs)) τ13 τ16 := by
+    chain_frame_out [hoτ14, hoτ15, hoτ16]
+  have sfoSeg2 :
+      StepFrameOut ((Register.x11 :: noiseRegs) ++ (Register.x10 :: noiseRegs)
+        ++ (Register.x1 :: noiseRegs)) cmd.σ τ19 := by
+    chain_frame_out [hoτ17, hoτ18, hoτ19]
+  have hframeGτ19 : ∀ R : Register, AbiPreservedNoise R →
       (Register.x8 == R) = false → (Register.x9 == R) = false →
       (Register.x18 == R) = false → (Register.x2 == R) = false →
-      τ21.regs.get? R = g R := by
-    intro R hR he8 he9 he18 he2
+      (Register.x19 == R) = false → τ19.regs.get? R = g R := by
+    intro R hR he8 he9 he18 he2 h19ne
     obtain ⟨hab, hpc', hnpc', hmi', hmii', hmc', hmt', hmip'⟩ := hR
     have hR' : AbiPreservedNoise R := ⟨hab, hpc', hnpc', hmi', hmii', hmc', hmt', hmip'⟩
     have ne : ∀ {X : Register}, AbiPreserved X = false → (X == R) = false := by
@@ -731,73 +722,45 @@ theorem blockC_mul
       rcases hXR : (X == R) with _ | _
       · rfl
       · rw [beq_iff_eq] at hXR; rw [hXR] at hX; rw [hX] at hab; exact absurd hab (by decide)
-    by_cases hx19R : Register.x19 = R
-    · subst hx19R
-      have : τ21.regs.get? Register.x19 = some v19 := by rw [hx19_fin]; rw [hw19]
-      rw [this]; exact hgx19.symm
-    · have h19ne : (Register.x19 == R) = false := by
-        rcases hXR : (Register.x19 == R) with _ | _
-        · rfl
-        · rw [beq_iff_eq] at hXR; exact absurd hXR hx19R
-      -- collapse the whole tail frame: τ21 ← ... ← c.σ (= gpre) then gpre → g.
-      have fchain : τ21.regs.get? R = c.σ.regs.get? R := by
-        have f_21 : τ21.regs.get? R = τ20.regs.get? R :=
-          (hoτ21.1 R hmc' hmt' hmip').trans (get?_sigmaPost_jump_x0 _ _ _ _ R hmi' hpc' hnpc' hmii')
-        have f_20 : τ20.regs.get? R = cvi.σ.regs.get? R :=
-          (hoτ20.1 R hmc' hmt' hmip').trans (get?_sigmaPost_alu _ _ _ _ _ R hmi' hpc' h19ne hnpc' hmii')
-        have fvi : cvi.σ.regs.get? R = τ19.regs.get? R :=
-          hframevi R ⟨ne (by decide), ne (by decide), hpc', hnpc', hmi', hmii', hmc', hmt', hmip'⟩
-        have f_19 : τ19.regs.get? R = τ18.regs.get? R :=
-          (hoτ19.1 R hmc' hmt' hmip').trans (get?_sigmaPost_jal _ _ _ _ _ _ R hmi' hpc' (ne (X := Register.x1) (by decide)) hnpc' hmii')
-        have f_18 : τ18.regs.get? R = τ17.regs.get? R :=
-          (hoτ18.1 R hmc' hmt' hmip').trans (get?_sigmaPost_alu _ _ _ _ _ R hmi' hpc' (ne (X := Register.x10) (by decide)) hnpc' hmii')
-        have f_17 : τ17.regs.get? R = cmd.σ.regs.get? R :=
-          (hoτ17.1 R hmc' hmt' hmip').trans (get?_sigmaPost_alu _ _ _ _ _ R hmi' hpc' (ne (X := Register.x11) (by decide)) hnpc' hmii')
-        have fmd : cmd.σ.regs.get? R = τ16.regs.get? R :=
-          hframemd R ⟨ne (by decide), ne (by decide), ne (by decide), ne (by decide), hpc', hnpc', hmi', hmii', hmc', hmt', hmip'⟩
-        have f_16 : τ16.regs.get? R = τ15.regs.get? R :=
-          (hoτ16.1 R hmc' hmt' hmip').trans (get?_sigmaPost_jal _ _ _ _ _ _ R hmi' hpc' (ne (X := Register.x1) (by decide)) hnpc' hmii')
-        have f_15 : τ15.regs.get? R = τ14.regs.get? R :=
-          (hoτ15.1 R hmc' hmt' hmip').trans (get?_sigmaPost_alu _ _ _ _ _ R hmi' hpc' (ne (X := Register.x10) (by decide)) hnpc' hmii')
-        have f_14 : τ14.regs.get? R = τ13.regs.get? R :=
-          (hoτ14.1 R hmc' hmt' hmip').trans (get?_sigmaPost_alu _ _ _ _ _ R hmi' hpc' (ne (X := Register.x11) (by decide)) hnpc' hmii')
-        rw [f_21, f_20, fvi, f_19, f_18, f_17, fmd, f_16, f_15, f_14]
-        exact hLadderFrame R hR' he8
-      rw [fchain]
-      exact (hframe R hR' h19ne).trans (hbridge R hR' he8 he9 he18 he2)
-  have hmemframe_fin : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
-      (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ τ21.mem[a]? = m0[a]? := by
-    intro a ha hA
-    by_cases hsr : sret.toNat ≤ a ∧ a < sret.toNat + 24
-    · exact Or.inl hsr
-    · refine Or.inr ?_
-      rw [hmemτ21e, ← hmemframevi a hsr, hmemτ19e]
-      have hm5c : m5[a]? = c.σ.mem[a]? := by
-        show (writeMap8 m4 (sp.toNat - 832) D5)[a]? = c.σ.mem[a]?
-        rw [getElem_writeMap8_disjoint m4 (sp.toNat - 832) a D5 (by omega)]
-        show (writeMap8 m3 (sp.toNat - 840) D4)[a]? = c.σ.mem[a]?
-        rw [getElem_writeMap8_disjoint m3 (sp.toNat - 840) a D4 (by omega)]
-        show (writeMap8 m2 (sp.toNat - 848) D3)[a]? = c.σ.mem[a]?
-        rw [getElem_writeMap8_disjoint m2 (sp.toNat - 848) a D3 (by omega)]
-        show (writeMap8 m1 (sp.toNat - 832) D2)[a]? = c.σ.mem[a]?
-        rw [getElem_writeMap8_disjoint m1 (sp.toNat - 832) a D2 (by omega)]
-        show (writeMap8 c.σ.mem (sp.toNat - 848) D1)[a]? = c.σ.mem[a]?
-        rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat - 848) a D1 (by omega)]
-      rw [hm5c]; exact hmemframe a ha hA
-  -- the full Steps chain c → τ21
-  have hchain : Steps c ⟨τ21, j21, cvi.steps + 1 + 1⟩ :=
-    hLadderSteps.trans <|
+    have hNoise : ∀ r ∈ noiseRegs, (r == R) = false :=
+      noiseAvoid hmi' hpc' hnpc' hmii' hmc' hmt' hmip'
+    have hne1 : (Register.x1 == R) = false := ne (X := Register.x1) (by decide)
+    have hne10 : (Register.x10 == R) = false := ne (X := Register.x10) (by decide)
+    have hne11 : (Register.x11 == R) = false := ne (X := Register.x11) (by decide)
+    have f_19_17 : τ19.regs.get? R = cmd.σ.regs.get? R :=
+      sfoSeg2.frame R (appendAvoid (appendAvoid (consAvoid hne11 hNoise) (consAvoid hne10 hNoise))
+        (consAvoid hne1 hNoise))
+    have f_16_14 : τ16.regs.get? R = τ13.regs.get? R :=
+      sfoSeg3.frame R (appendAvoid (appendAvoid (consAvoid hne11 hNoise) (consAvoid hne10 hNoise))
+        (consAvoid hne1 hNoise))
+    have fmd : cmd.σ.regs.get? R = τ16.regs.get? R :=
+      hframemd R ⟨ne (by decide), ne (by decide), ne (by decide), ne (by decide), hpc', hnpc', hmi', hmii', hmc', hmt', hmip'⟩
+    rw [f_19_17, fmd, f_16_14, hLadderFrame R hR' he8]
+    exact (hframe R hR' h19ne).trans (hbridge R hR' he8 he9 he18 he2)
+  -- === invoke the GENERATED shared tail ===
+  obtain ⟨mpre, φfm2, φcm2, φfe, φce, cfin, hStepsFin, hp1, hp2, hp3, hp4, hPreD⟩ :=
+    intBoxEpilogue g N A SL φf φc φfm φcm φf' φc' st' st''
+      sp r sret v8 v9 v18 v19 w19 (Wr * Wl) (wrap64 (a * b)) out0 m0
+      ⟨τ19, j19, cmd.steps + 1 + 1 + 1⟩ (0x80003880#64) (0x80003880#64) (0x80003884#64) (0x1ffb68#21)
+      (fun σ i u pc vminstret v2 b0 b1 b2 b3 b4 b5 b6 b7 => site_80003880_ee σ i u pc vminstret v2 b0 b1 b2 b3 b4 b5 b6 b7)
+      (fun σ i u pc vminstret => site_80003884_ee σ i u pc vminstret)
+      rfl (by apply BitVec.eq_of_toNat_eq; decide) (by decide)
+      (by apply BitVec.eq_of_toNat_eq; decide) (by decide)
+      haddr1048
+      hGτ19 hVintτ19 hpcτ19 hx10τ19 hx11τ19 hlinkτ19 hs1τ19 hspτ19 ⟨vmiτ19, hmiτ19⟩ hj19 houtτ19
+      hcodeτ19 hIntRegion (by decide) hval_bridge
+      hpfm hpcm hpf' hpc' houtStr
+      hSurvSLτ19 hs3τ19 hslotRaτ19 hslotS0τ19 hslotS1τ19 hslotS2τ19
+      hgv8 hgv9 hgv18 hgv2 hgx19 hw19 hframeGτ19 hMemExtτ19 hmemframeτ19
+      hsretEvalCode hsretStk hsretInSL hSLlo40 hSLlo32
+      hsp1088 hsphiRam hspLoc hspHtifLoc hsp8 hraAl
+      g40.lo g40.hi8 g40.ht8 g40.al8
+  have hchain : Steps c cfin :=
+    (hLadderSteps.trans <|
       (Steps.single hstepτ14).trans <| (Steps.single hstepτ15).trans <|
       (Steps.single hstepτ16).trans <| hsmd.trans <| (Steps.single hstepτ17).trans <|
-      (Steps.single hstepτ18).trans <| (Steps.single hstepτ19).trans <|
-      hsvi.trans <| (Steps.single hstepτ20).trans (Steps.single hstepτ21)
-  refine ⟨⟨τ21, j21, cvi.steps + 1 + 1⟩, hchain, τ21.mem, φfm, φcm, φf', φc', hpfm, hpcm, hpf', hpc',
-    ⟨?_, hMemExt_fin, hSurvSL_fin⟩⟩
-  refine ⟨hGτ21, hj21, hpc_fin, hs1_fin, hsp_fin, ⟨vmifin, hmifin⟩,
-    hout_fin, houtStr, rfl, hcode_fin, (by rw [hmemτ21e]; exact hvalfinal),
-    hstore_fin, hframeG,
-    hslotRa_f, hslotS0_f, hslotS1_f, hslotS2_f, hgv8, hgv9, hgv18, hgv2, hmemframe_fin,
-    (by omega), hsphiRam, (by omega), (by omega), hsp8, hraAl⟩
+      (Steps.single hstepτ18).trans (Steps.single hstepτ19)).trans hStepsFin
+  exact ⟨cfin, hchain, mpre, φfm2, φcm2, φfe, φce, hp1, hp2, hp3, hp4, hPreD⟩
 
 /-! ## `binOpSem_mul_int` — the spec-side mul bridge -/
 

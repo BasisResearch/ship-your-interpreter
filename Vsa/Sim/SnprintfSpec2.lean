@@ -187,14 +187,15 @@ theorem umoddi3_frame_spec (g : (R : Register) → Option (RegisterType R))
   have hframe2 : ∀ R, NotWrittenL R → σ2.regs.get? R = σ1.regs.get? R := fun R hR =>
     frameL_jal hobs2 R (by obtain ⟨_, _, _, _, hx1, _⟩ := hR; exact hx1) hR
   -- core entry: ghost = σ2 reads (entry frame rfl); udivdi3_post returns frame over NotWritten
-  have hcorepre : udivdi3_pre (fun R => σ2.regs.get? R) n d (0x800046fc#64) m0 ⟨σ2, i2, c.steps + 1 + 1⟩ := by
+  have hcorepre : udivdi3_pre (fun R => σ2.regs.get? R) n d (0x800046fc#64) m0 σ2.sailOutput ⟨σ2, i2, c.steps + 1 + 1⟩ := by
     refine ⟨⟨v12, v13, ?_⟩, hdpos, by decide⟩
     exact {
       good := hG2, loaded := by rw [hmemq2]; exact hmem ▸ hcload, mem := hmemq2,
+      sailOut := rfl,
       pc := hpc2, a0 := hx10_2, a1 := hx11_2, a2 := hx12_2, a3 := hx13_2,
       ra := hx1_2, minstret := hmi2, tick := hi2, hframe := fun R _ => rfl }
-  obtain ⟨c3, hs3, hG3, hmem3, hpc3, _hq3, hrem3, _hra3, htick3, hframe3, _hx12_3, _hx13_3⟩ :=
-    udivdi3_spec (fun R => σ2.regs.get? R) n d (0x800046fc#64) m0 ⟨σ2, i2, c.steps + 1 + 1⟩ hcorepre
+  obtain ⟨c3, hs3, hG3, hmem3, _hout3, hpc3, _hq3, hrem3, _hra3, htick3, hframe3, _hx12_3, _hx13_3⟩ :=
+    udivdi3_spec (fun R => σ2.regs.get? R) n d (0x800046fc#64) m0 σ2.sailOutput ⟨σ2, i2, c.steps + 1 + 1⟩ hcorepre
   have hx5_3 : c3.σ.regs.get? Register.x5 = some r := by
     rw [hframe3 Register.x5 (by decide)]; exact hx5_2
   have huload3 : Vsa.Sim.Code.__umoddi3Loaded c3.σ.mem := hmem3 ▸ hmem ▸ huload

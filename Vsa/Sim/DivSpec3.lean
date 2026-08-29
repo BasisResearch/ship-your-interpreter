@@ -235,18 +235,56 @@ theorem core_call_tail
       (∃ v, c3.σ.regs.get? Register.minstret = some v) := by
   obtain ⟨v12, h12⟩ := hx12
   obtain ⟨v13, h13⟩ := hx13
-  have hcorepre : udivdi3_pre (fun R => cent.σ.regs.get? R) A B q m0 cent := by
+  have hcorepre : udivdi3_pre (fun R => cent.σ.regs.get? R) A B q m0 cent.σ.sailOutput cent := by
     refine ⟨⟨v12, v13, ?_⟩, hBpos, halign⟩
     exact {
-      good := hG, loaded := hcl, mem := hmem, pc := hpc,
+      good := hG, loaded := hcl, mem := hmem, sailOut := rfl, pc := hpc,
       a0 := hx10, a1 := hx11, a2 := h12, a3 := h13, ra := hx1, minstret := hmi,
       tick := htick, hframe := fun R _ => rfl }
-  obtain ⟨c3, hs3, hG3, hmem3, hpc3, hq3, hrem3, _hra3, htick3, hframe3, _hx12_3, _hx13_3⟩ :=
-    udivdi3_spec (fun R => cent.σ.regs.get? R) A B q m0 cent hcorepre
+  obtain ⟨c3, hs3, hG3, hmem3, _hout3, hpc3, hq3, hrem3, _hra3, htick3, hframe3, _hx12_3, _hx13_3⟩ :=
+    udivdi3_spec (fun R => cent.σ.regs.get? R) A B q m0 cent.σ.sailOutput cent hcorepre
   have hx5_3 : c3.σ.regs.get? Register.x5 = some r := by
     rw [hframe3 Register.x5 (by decide)]; exact hx5
   obtain ⟨vmi3, hmi3⟩ := hG3.minstret
   exact ⟨c3, hs3, hG3, hmem3, hpc3, hq3, hrem3, hx5_3, htick3, ⟨vmi3, hmi3⟩⟩
+
+/-- **Framed core-call tail.** Same run as `core_call_tail` but additionally
+exposes the callee-saved frame (`∀ R, NotWritten R → c3.σ.regs = cent.σ.regs`),
+the `sailOutput = o` invariance, and `x1 = q`. Built directly on `udivdi3_spec`'s
+strong post; leaves the plain `core_call_tail` (and hence `moddi3`) untouched. -/
+theorem core_call_tail_f
+    (A B r q : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (cent : Config)
+    (hG : GoodState cent.σ)
+    (hcl : __hidden___udivdi3Loaded cent.σ.mem) (hmem : cent.σ.mem = m0)
+    (hout : cent.σ.sailOutput = o)
+    (hpc : cent.σ.regs.get? Register.PC = some (0x800046ac#64))
+    (hx10 : cent.σ.regs.get? Register.x10 = some A)
+    (hx11 : cent.σ.regs.get? Register.x11 = some B)
+    (hx1 : cent.σ.regs.get? Register.x1 = some q)
+    (hx12 : ∃ v, cent.σ.regs.get? Register.x12 = some v)
+    (hx13 : ∃ v, cent.σ.regs.get? Register.x13 = some v)
+    (hmi : ∃ v, cent.σ.regs.get? Register.minstret = some v)
+    (htick : cent.tick < 2) (hBpos : 0 < B.toNat) (halign : q.toNat % 4 = 0) :
+    ∃ c3 : Config, Steps cent c3 ∧ GoodState c3.σ ∧ c3.σ.mem = m0 ∧
+      c3.σ.sailOutput = o ∧
+      c3.σ.regs.get? Register.PC = some q ∧
+      c3.σ.regs.get? Register.x10 = some (A / B) ∧
+      c3.σ.regs.get? Register.x11 = some (A % B) ∧
+      c3.σ.regs.get? Register.x1 = some q ∧ c3.tick < 2 ∧
+      (∀ R : Register, NotWritten R → c3.σ.regs.get? R = cent.σ.regs.get? R) ∧
+      (∃ v, c3.σ.regs.get? Register.minstret = some v) := by
+  obtain ⟨v12, h12⟩ := hx12
+  obtain ⟨v13, h13⟩ := hx13
+  have hcorepre : udivdi3_pre (fun R => cent.σ.regs.get? R) A B q m0 o cent := by
+    refine ⟨⟨v12, v13, ?_⟩, hBpos, halign⟩
+    exact {
+      good := hG, loaded := hcl, mem := hmem, sailOut := hout, pc := hpc,
+      a0 := hx10, a1 := hx11, a2 := h12, a3 := h13, ra := hx1, minstret := hmi,
+      tick := htick, hframe := fun R _ => rfl }
+  obtain ⟨c3, hs3, hG3, hmem3, hout3, hpc3, hq3, hrem3, hra3, htick3, hframe3, _hx12_3, _hx13_3⟩ :=
+    udivdi3_spec (fun R => cent.σ.regs.get? R) A B q m0 o cent hcorepre
+  obtain ⟨vmi3, hmi3⟩ := hG3.minstret
+  exact ⟨c3, hs3, hG3, hmem3, hout3, hpc3, hq3, hrem3, hra3, htick3, hframe3, ⟨vmi3, hmi3⟩⟩
 
 /-! ## Result-combination lemmas (unsigned remainder ⇒ signed `tmod`) -/
 
@@ -399,20 +437,49 @@ theorem res_div_mixed (n d A B : BitVec 64)
 private theorem addi0 (v : BitVec 64) : v + sign_extend (m := 64) (0x000#12) = v := by
   rw [sext_zero]; exact BitVec.add_zero v
 
+/-- Blanket ghost-frame predicate for the `__moddi3`/`__divdi3` **wrapper**: like
+the core's `NotWritten` but ALSO excluding `x1`/`ra` (clobbered by the internal
+`jal`) and `x5`/`t0` (clobbered by `mv t0,ra`). Both are caller-saved so a caller
+never relies on them; the callee-saved GPRs (`x2`/`s0-s11`) all satisfy
+`NotWrittenD`, so the wrapper's callee-saved restore is recovered from the
+strong post's frame. -/
+abbrev NotWrittenD (R : Register) : Prop :=
+  NotWritten R ∧ (Register.x1 == R) = false ∧ (Register.x5 == R) = false
+
+theorem NotWrittenD.nw {R : Register} (h : NotWrittenD R) : NotWritten R := h.1
+
+/-- Generic `jal` frame step (write-set `rd, PC, minstret, nextPC,
+minstret_increment`): a variable-`R` read-back through a `jal` observation.
+The caller supplies `(rd == R) = false` and `NotWritten R`. -/
+theorem frame_jal {σ' σ : MState} {pc vm : BitVec 64} {imm : BitVec 21}
+    {rd_reg : Register} {link : RegisterType rd_reg}
+    (hobs : ReadsLikePost σ' (sigmaPost_jal σ pc vm imm rd_reg link)) (R : Register)
+    (hrd : (rd_reg == R) = false) (hR : NotWritten R) :
+    σ'.regs.get? R = σ.regs.get? R := by
+  obtain ⟨_, _, _, _, hpc, hnpc, hmi, hmii, hmc, hmt, hmip⟩ := hR
+  rw [hobs.1 R hmc hmt hmip]
+  exact get?_sigmaPost_jal σ pc vm imm rd_reg link R hmi hpc hrd hnpc hmii
+
 /-- `moddi3_pre`: at `0x80004728` with `x10 = n`, `x11 = d`, `x1 = r`, `mem = m0`,
 `d ≠ 0` (`d.toInt ≠ 0`), `r` 4-aligned, wrapper (`__moddi3Loaded`) + core loaded. -/
-def moddi3_pre (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
+def moddi3_pre (g : (R : Register) → Option (RegisterType R)) (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
   GoodState c.σ ∧ Vsa.Sim.Code.__moddi3Loaded c.σ.mem ∧ __hidden___udivdi3Loaded c.σ.mem ∧
-  c.σ.mem = m0 ∧ c.σ.regs.get? Register.PC = some (0x80004728#64) ∧
+  c.σ.mem = m0 ∧ c.σ.sailOutput = o ∧ c.σ.regs.get? Register.PC = some (0x80004728#64) ∧
   c.σ.regs.get? Register.x10 = some n ∧ c.σ.regs.get? Register.x11 = some d ∧
   c.σ.regs.get? Register.x1 = some r ∧ (∃ v, c.σ.regs.get? Register.minstret = some v) ∧
   (∃ v, c.σ.regs.get? Register.x12 = some v) ∧ (∃ v, c.σ.regs.get? Register.x13 = some v) ∧
-  c.tick < 2 ∧ d.toInt ≠ 0 ∧ r.toNat % 4 = 0
+  c.tick < 2 ∧ d.toInt ≠ 0 ∧ r.toNat % 4 = 0 ∧
+  (∀ R : Register, NotWrittenD R → c.σ.regs.get? R = g R)
 
 /-- `moddi3_post`: PC back at `r`, `x10.toInt = n.toInt.tmod d.toInt`, `GoodState`,
-memory unchanged (`x1`/`ra` is clobbered by the internal `jal`). -/
-def moddi3_post (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  GoodState c.σ ∧ c.σ.mem = m0 ∧ c.σ.regs.get? Register.PC = some r ∧
+`mem = m0`, `sailOutput = o`, `tick < 2`, and the blanket ghost frame over
+`NotWrittenD` — the strong post matching `divdi3_post` (`x1`/`ra` and `x5`/`t0`
+are genuinely clobbered by the wrapper's internal `jal`/`mv t0,ra`, so they are
+excluded from the frame set `NotWrittenD`). -/
+def moddi3_post (g : (R : Register) → Option (RegisterType R)) (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
+  GoodState c.σ ∧ c.σ.mem = m0 ∧ c.σ.sailOutput = o ∧ c.σ.regs.get? Register.PC = some r ∧
+  c.tick < 2 ∧
+  (∀ R : Register, NotWrittenD R → c.σ.regs.get? R = g R) ∧
   ∃ res, c.σ.regs.get? Register.x10 = some res ∧ res.toInt = n.toInt.tmod d.toInt
 
 /-! ### Shared "compute the tmod result and return" tail
@@ -420,13 +487,17 @@ def moddi3_post (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Co
 From a state `cA` at the core entry `0x800046ac` with core operands `A = x10`,
 `B = x11`, `x1 = q` (a core-return address, one of `0x4738`/`0x4750`), `x5 = r`
 (the saved `t0`), the wrapper (`__moddi3Loaded`) still loaded, run: core (via
-`core_call_tail`), then the fixup at `q` (either `mv a0,a1` at `0x4738`, or
+`core_call_tail_f`), then the fixup at `q` (either `mv a0,a1` at `0x4738`, or
 `neg a0,a1` at `0x4750`), then `jr t0` back to `r`. `negate = true` for the
-`0x4750` path (dividend negative). Delivers `moddi3_post`. -/
+`0x4750` path (dividend negative). Delivers the strong `moddi3_post`, threading
+the entry ghost frame `hframe0` (`cA → g`) and `sailOutput = o` through the core
+and the two fixup steps. -/
 theorem moddi3_tail
-    (n d A B r q : BitVec 64) (negate : Bool) (m0 : Std.ExtHashMap Nat (BitVec 8)) (cA : Config)
+    (g : (R : Register) → Option (RegisterType R))
+    (n d A B r q : BitVec 64) (negate : Bool) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (cA : Config)
     (hG : GoodState cA.σ) (hwl : Vsa.Sim.Code.__moddi3Loaded cA.σ.mem)
     (hcl : __hidden___udivdi3Loaded cA.σ.mem) (hmem : cA.σ.mem = m0)
+    (hout : cA.σ.sailOutput = o)
     (hpc : cA.σ.regs.get? Register.PC = some (0x800046ac#64))
     (hx10 : cA.σ.regs.get? Register.x10 = some A)
     (hx11 : cA.σ.regs.get? Register.x11 = some B)
@@ -439,17 +510,20 @@ theorem moddi3_tail
     (hqval : q = (if negate then 0x80004750#64 else 0x80004738#64))
     (hA : A.toNat = n.toInt.natAbs) (hB : B.toNat = d.toInt.natAbs)
     (hd0 : d.toInt ≠ 0)
-    (hsign : if negate then n.toInt < 0 else 0 ≤ n.toInt) :
-    ∃ c' : Config, Steps cA c' ∧ moddi3_post n d r m0 c' := by
+    (hsign : if negate then n.toInt < 0 else 0 ≤ n.toInt)
+    (hframe0 : ∀ R : Register, NotWrittenD R → cA.σ.regs.get? R = g R) :
+    ∃ c' : Config, Steps cA c' ∧ moddi3_post g n d r m0 o c' := by
   -- q is 4-aligned (both 0x4738 and 0x4750 are)
   have hqalign : q.toNat % 4 = 0 := by subst hqval; cases negate <;> (simp only [Bool.false_eq_true, if_false, if_true]; decide)
-  obtain ⟨c3, hs3, hG3, hmem3, hpc3, hq3, hrem3, hx5_3, htick3, hmi3⟩ :=
-    core_call_tail A B r q m0 cA hG hcl hmem hpc hx10 hx11 hx1 hx5 hx12 hx13 hmi htick hBpos hqalign
+  obtain ⟨c3, hs3, hG3, hmem3, hout3, hpc3, hq3, hrem3, hra3, htick3, hframe3, hmi3⟩ :=
+    core_call_tail_f A B r q m0 o cA hG hcl hmem hout hpc hx10 hx11 hx1 hx12 hx13 hmi htick hBpos hqalign
   have hwl3 : Vsa.Sim.Code.__moddi3Loaded c3.σ.mem := hmem3 ▸ hmem ▸ hwl
+  -- x5 = r survives the core (t0 ∈ NotWritten)
+  have hx5_3 : c3.σ.regs.get? Register.x5 = some r := by rw [hframe3 Register.x5 (by decide)]; exact hx5
   obtain ⟨vmi3, hmi3v⟩ := hmi3
   cases negate with
   | false =>
-    -- q = 0x4738: mv a0,a1  (a0 := B%A? no — a0 := a1 = A%B = rem); result = rem
+    -- q = 0x4738: mv a0,a1  (a0 := a1 = A%B = rem); result = rem
     subst hqval
     simp only [Bool.false_eq_true, if_false] at *
     -- Step 4738: mv a0,a1 ⇒ x10 := x11 = A % B
@@ -468,16 +542,22 @@ theorem moddi3_tail
     obtain ⟨vmi4, hmi4⟩ := obs_alu_minstret hobs4
     have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmem3
     have hwl4 : Vsa.Sim.Code.__moddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
+    have hout4 : σ4.sailOutput = o := by rw [hobs4.out, sailOutput_sigmaPost_alu]; exact hout3
     -- Step 473c: jr t0 ⇒ PC := r
     have htgt : (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
       rw [ret_tgt r halign]; exact halign
     obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
       site3_8000473c σ4 i4 (c3.steps + 1) (0x8000473c#64) vmi4 r hG4 hpc4 hmi4 hx5_4 hwl4 rfl htgt hi4
     have hstep5 : Step ⟨σ4, i4, c3.steps + 1⟩ ⟨σ5, i5, c3.steps + 1 + 1⟩ := hs5
-    refine ⟨⟨σ5, i5, c3.steps + 1 + 1⟩, ?_, hG5, ?_, ?_, A % B, ?_, ?_⟩
+    refine ⟨⟨σ5, i5, c3.steps + 1 + 1⟩, ?_, hG5, ?_, ?_, ?_, hi5, ?_, A % B, ?_, ?_⟩
     · exact hs3.trans ((Steps.single hstep4).trans ((Steps.single hstep5).trans (.refl _)))
     · rw [hmem5]; exact hmemq4
+    · rw [hobs5.out, hout4]
     · rw [obs_jr_pc hobs5, ret_tgt r halign]
+    · -- frame: NotWrittenD R preserved through jr, mv (rd=x10), core, entry→g
+      intro R hR
+      rw [frame_jr hobs5 R hR.nw, frame_alu hobs4 R hR.nw.x10 hR.nw, hframe3 R hR.nw]
+      exact hframe0 R hR
     · exact obs_jr_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_4
     · exact res_pos n d A B hA hB hsign hd0
   | true =>
@@ -499,15 +579,20 @@ theorem moddi3_tail
     obtain ⟨vmi4, hmi4⟩ := obs_alu_minstret hobs4
     have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmem3
     have hwl4 : Vsa.Sim.Code.__moddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
+    have hout4 : σ4.sailOutput = o := by rw [hobs4.out, sailOutput_sigmaPost_alu]; exact hout3
     have htgt : (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
       rw [ret_tgt r halign]; exact halign
     obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
       site3_80004754 σ4 i4 (c3.steps + 1) (0x80004754#64) vmi4 r hG4 hpc4 hmi4 hx5_4 hwl4 rfl htgt hi4
     have hstep5 : Step ⟨σ4, i4, c3.steps + 1⟩ ⟨σ5, i5, c3.steps + 1 + 1⟩ := hs5
-    refine ⟨⟨σ5, i5, c3.steps + 1 + 1⟩, ?_, hG5, ?_, ?_, (0#64) - (A % B), ?_, ?_⟩
+    refine ⟨⟨σ5, i5, c3.steps + 1 + 1⟩, ?_, hG5, ?_, ?_, ?_, hi5, ?_, (0#64) - (A % B), ?_, ?_⟩
     · exact hs3.trans ((Steps.single hstep4).trans ((Steps.single hstep5).trans (.refl _)))
     · rw [hmem5]; exact hmemq4
+    · rw [hobs5.out, hout4]
     · rw [obs_jr_pc hobs5, ret_tgt r halign]
+    · intro R hR
+      rw [frame_jr hobs5 R hR.nw, frame_alu hobs4 R hR.nw.x10 hR.nw, hframe3 R hR.nw]
+      exact hframe0 R hR
     · exact obs_jr_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_4
     · exact res_neg n d A B hA hB hsign hd0
 
@@ -517,11 +602,11 @@ unsigned core on `|n|`, `|d|`, negates the remainder iff the dividend `n` is
 negative, and returns via `t0`. Result: `x10.toInt = n.toInt.tmod d.toInt`
 (sign of the dividend, magnitude `|n| % |d|`); no `INT64_MIN` overflow guard is
 needed because `Int.tmod` never overflows. -/
-theorem moddi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (moddi3_pre n d r m0) (moddi3_post n d r m0) := by
+theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) :
+    Triple (moddi3_pre g n d r m0 o) (moddi3_post g n d r m0 o) := by
   intro c hc
-  obtain ⟨hG, hwl, hcl, hmem, hpc, hn, hd, hr, ⟨vmi, hmi⟩,
-    ⟨v12, h12⟩, ⟨v13, h13⟩, htick, hd0, halign⟩ := hc
+  obtain ⟨hG, hwl, hcl, hmem, hout, hpc, hn, hd, hr, ⟨vmi, hmi⟩,
+    ⟨v12, h12⟩, ⟨v13, h13⟩, htick, hd0, halign, hframeE⟩ := hc
   -- Step 4728: mv t0,ra ⇒ x5 := r
   obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
     site3_80004728 c.σ c.tick c.steps (0x80004728#64) vmi r hG hpc hmi hr (hmem ▸ hwl) rfl htick
@@ -652,10 +737,20 @@ theorem moddi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
       have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
       have hwl5 : Vsa.Sim.Code.__moddi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hwl
       have hcl5 : __hidden___udivdi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hcl
+      have hout5 : σ5.sailOutput = o := by
+        rw [hobs5.out, sailOutput_sigmaPost_jal, hobs4.out, sailOutput_sigmaPost_branch_taken,
+          hobs3.out, sailOutput_sigmaPost_alu, hobs2.out, sailOutput_sigmaPost_branch_taken,
+          hobs1.out, sailOutput_sigmaPost_alu]; exact hout
+      have hframe5 : ∀ R : Register, NotWrittenD R → σ5.regs.get? R = g R := by
+        intro R hR
+        rw [frame_jal hobs5 R hR.2.1 hR.nw, frame_btaken hobs4 R hR.nw,
+          frame_alu hobs3 R hR.nw.x11 hR.nw, frame_btaken hobs2 R hR.nw,
+          frame_alu hobs1 R hR.2.2 hR.nw]
+        exact hframeE R hR
       obtain ⟨cf, hsf, hpostf⟩ :=
-        moddi3_tail n d n ((0#64) - d) r (0x80004738#64) false m0 ⟨σ5, i5, _⟩
-          hG5 hwl5 hcl5 hmemq5 hpc5 hx10_5 hx11_5 hx1_5 hx5_5 ⟨v12, hx12_5⟩ ⟨v13, hx13_5⟩ hmi5 hi5 hBpos halign rfl
-          (mag_notop n hntop) hBmag hd0 (by rw [toInt_of_notop n hntop]; exact Int.natCast_nonneg _ : 0 ≤ n.toInt)
+        moddi3_tail g n d n ((0#64) - d) r (0x80004738#64) false m0 o ⟨σ5, i5, _⟩
+          hG5 hwl5 hcl5 hmemq5 hout5 hpc5 hx10_5 hx11_5 hx1_5 hx5_5 ⟨v12, hx12_5⟩ ⟨v13, hx13_5⟩ hmi5 hi5 hBpos halign rfl
+          (mag_notop n hntop) hBmag hd0 (by rw [toInt_of_notop n hntop]; exact Int.natCast_nonneg _ : 0 ≤ n.toInt) hframe5
       refine ⟨cf, ?_, hpostf⟩
       exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
         ((Steps.single hstep4).trans ((Steps.single hstep5).trans hsf))))
@@ -736,10 +831,20 @@ theorem moddi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
       have hwl6 : Vsa.Sim.Code.__moddi3Loaded σ6.mem := hmemq6 ▸ hmem ▸ hwl
       have hcl6 : __hidden___udivdi3Loaded σ6.mem := hmemq6 ▸ hmem ▸ hcl
       have hAmag : ((0#64) - n).toNat = n.toInt.natAbs := mag_neg_top n hntop
+      have hout6 : σ6.sailOutput = o := by
+        rw [hobs6.out, sailOutput_sigmaPost_jal, hobs5.out, sailOutput_sigmaPost_alu,
+          hobs4.out, sailOutput_sigmaPost_branch_nottaken, hobs3.out, sailOutput_sigmaPost_alu,
+          hobs2.out, sailOutput_sigmaPost_branch_taken, hobs1.out, sailOutput_sigmaPost_alu]; exact hout
+      have hframe6 : ∀ R : Register, NotWrittenD R → σ6.regs.get? R = g R := by
+        intro R hR
+        rw [frame_jal hobs6 R hR.2.1 hR.nw, frame_alu hobs5 R hR.nw.x10 hR.nw,
+          frame_bnottaken hobs4 R hR.nw, frame_alu hobs3 R hR.nw.x11 hR.nw,
+          frame_btaken hobs2 R hR.nw, frame_alu hobs1 R hR.2.2 hR.nw]
+        exact hframeE R hR
       obtain ⟨cf, hsf, hpostf⟩ :=
-        moddi3_tail n d ((0#64) - n) ((0#64) - d) r (0x80004750#64) true m0 ⟨σ6, i6, _⟩
-          hG6 hwl6 hcl6 hmemq6 hpc6 hx10_6 hx11_6 hx1_6 hx5_6 ⟨v12, hx12_6⟩ ⟨v13, hx13_6⟩ hmi6 hi6 hBpos halign rfl
-          hAmag hBmag hd0 hnneg
+        moddi3_tail g n d ((0#64) - n) ((0#64) - d) r (0x80004750#64) true m0 o ⟨σ6, i6, _⟩
+          hG6 hwl6 hcl6 hmemq6 hout6 hpc6 hx10_6 hx11_6 hx1_6 hx5_6 ⟨v12, hx12_6⟩ ⟨v13, hx13_6⟩ hmi6 hi6 hBpos halign rfl
+          hAmag hBmag hd0 hnneg hframe6
       refine ⟨cf, ?_, hpostf⟩
       exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
         ((Steps.single hstep4).trans ((Steps.single hstep5).trans ((Steps.single hstep6).trans hsf)))))
@@ -850,10 +955,20 @@ theorem moddi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
       have hwl5 : Vsa.Sim.Code.__moddi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hwl
       have hcl5 : __hidden___udivdi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hcl
       have hAmag : ((0#64) - n).toNat = n.toInt.natAbs := mag_neg_top n hntop
+      have hout5 : σ5.sailOutput = o := by
+        rw [hobs5.out, sailOutput_sigmaPost_jal, hobs4.out, sailOutput_sigmaPost_alu,
+          hobs3.out, sailOutput_sigmaPost_branch_taken, hobs2.out, sailOutput_sigmaPost_branch_nottaken,
+          hobs1.out, sailOutput_sigmaPost_alu]; exact hout
+      have hframe5 : ∀ R : Register, NotWrittenD R → σ5.regs.get? R = g R := by
+        intro R hR
+        rw [frame_jal hobs5 R hR.2.1 hR.nw, frame_alu hobs4 R hR.nw.x10 hR.nw,
+          frame_btaken hobs3 R hR.nw, frame_bnottaken hobs2 R hR.nw,
+          frame_alu hobs1 R hR.2.2 hR.nw]
+        exact hframeE R hR
       obtain ⟨cf, hsf, hpostf⟩ :=
-        moddi3_tail n d ((0#64) - n) d r (0x80004750#64) true m0 ⟨σ5, i5, _⟩
-          hG5 hwl5 hcl5 hmemq5 hpc5 hx10_5 hx11_5 hx1_5 hx5_5 ⟨v12, hx12_5⟩ ⟨v13, hx13_5⟩ hmi5 hi5 hBpos halign rfl
-          hAmag hBmag hd0 hnneg
+        moddi3_tail g n d ((0#64) - n) d r (0x80004750#64) true m0 o ⟨σ5, i5, _⟩
+          hG5 hwl5 hcl5 hmemq5 hout5 hpc5 hx10_5 hx11_5 hx1_5 hx5_5 ⟨v12, hx12_5⟩ ⟨v13, hx13_5⟩ hmi5 hi5 hBpos halign rfl
+          hAmag hBmag hd0 hnneg hframe5
       refine ⟨cf, ?_, hpostf⟩
       exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
         ((Steps.single hstep4).trans ((Steps.single hstep5).trans hsf))))
@@ -908,10 +1023,18 @@ theorem moddi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
       have hwl4 : Vsa.Sim.Code.__moddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
       have hcl4 : __hidden___udivdi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hcl
       have hnge' : 0 ≤ n.toInt := by rw [toInt_of_notop n hntop]; exact Int.natCast_nonneg _
+      have hout4 : σ4.sailOutput = o := by
+        rw [hobs4.out, sailOutput_sigmaPost_jal, hobs3.out, sailOutput_sigmaPost_branch_nottaken,
+          hobs2.out, sailOutput_sigmaPost_branch_nottaken, hobs1.out, sailOutput_sigmaPost_alu]; exact hout
+      have hframe4 : ∀ R : Register, NotWrittenD R → σ4.regs.get? R = g R := by
+        intro R hR
+        rw [frame_jal hobs4 R hR.2.1 hR.nw, frame_bnottaken hobs3 R hR.nw,
+          frame_bnottaken hobs2 R hR.nw, frame_alu hobs1 R hR.2.2 hR.nw]
+        exact hframeE R hR
       obtain ⟨cf, hsf, hpostf⟩ :=
-        moddi3_tail n d n d r (0x80004738#64) false m0 ⟨σ4, i4, _⟩
-          hG4 hwl4 hcl4 hmemq4 hpc4 hx10_4 hx11_4 hx1_4 hx5_4 ⟨v12, hx12_4⟩ ⟨v13, hx13_4⟩ hmi4 hi4 hBpos halign rfl
-          (mag_notop n hntop) hBmag hd0 hnge'
+        moddi3_tail g n d n d r (0x80004738#64) false m0 o ⟨σ4, i4, _⟩
+          hG4 hwl4 hcl4 hmemq4 hout4 hpc4 hx10_4 hx11_4 hx1_4 hx5_4 ⟨v12, hx12_4⟩ ⟨v13, hx13_4⟩ hmi4 hi4 hBpos halign rfl
+          (mag_notop n hntop) hBmag hd0 hnge' hframe4
       refine ⟨cf, ?_, hpostf⟩
       exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
         ((Steps.single hstep4).trans hsf)))
@@ -920,28 +1043,41 @@ theorem moddi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
 
 /-- `divdi3_pre`: at `0x800046a4` with `x10 = n`, `x11 = d`, `x1 = r`, `mem = m0`,
 `d ≠ 0`, `¬(n = INT64_MIN ∧ d = -1)` (excludes the sole `tdiv` overflow, which the
-`__divdi3` entry does not guard), `r` 4-aligned, wrapper + core loaded. -/
-def divdi3_pre (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
+`__divdi3` entry does not guard), `r` 4-aligned, wrapper + core loaded, `sailOutput
+= o`, and the entry ghost-frame `hframe` (every `NotWrittenD` register reads as the
+entry snapshot `g`). Carries `g`/`o` exactly as `muldi3_pre`. -/
+def divdi3_pre (g : (R : Register) → Option (RegisterType R)) (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
   GoodState c.σ ∧ Vsa.Sim.Code.__divdi3Loaded c.σ.mem ∧ Vsa.Sim.Code.__umoddi3Loaded c.σ.mem ∧
   __hidden___udivdi3Loaded c.σ.mem ∧
-  c.σ.mem = m0 ∧ c.σ.regs.get? Register.PC = some (0x800046a4#64) ∧
+  c.σ.mem = m0 ∧ c.σ.sailOutput = o ∧ c.σ.regs.get? Register.PC = some (0x800046a4#64) ∧
   c.σ.regs.get? Register.x10 = some n ∧ c.σ.regs.get? Register.x11 = some d ∧
   c.σ.regs.get? Register.x1 = some r ∧ (∃ v, c.σ.regs.get? Register.minstret = some v) ∧
   (∃ v, c.σ.regs.get? Register.x12 = some v) ∧ (∃ v, c.σ.regs.get? Register.x13 = some v) ∧
-  c.tick < 2 ∧ d.toInt ≠ 0 ∧ ¬(n.toInt = -2^63 ∧ d.toInt = -1) ∧ r.toNat % 4 = 0
+  c.tick < 2 ∧ d.toInt ≠ 0 ∧ ¬(n.toInt = -2^63 ∧ d.toInt = -1) ∧ r.toNat % 4 = 0 ∧
+  (∀ R : Register, NotWrittenD R → c.σ.regs.get? R = g R)
 
-/-- `divdi3_post`: PC back at `r`, `x10.toInt = n.toInt.tdiv d.toInt`. -/
-def divdi3_post (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  GoodState c.σ ∧ c.σ.mem = m0 ∧ c.σ.regs.get? Register.PC = some r ∧
+/-- `divdi3_post`: PC back at `r`, `x10.toInt = n.toInt.tdiv d.toInt`, `GoodState`,
+`mem = m0`, `sailOutput = o`, `tick < 2`, and the blanket ghost frame over
+`NotWrittenD` — the strong post matching `muldi3_post` (note `x1`/`ra` and
+`x5`/`t0` are genuinely clobbered by the wrapper's internal `jal`/`mv t0,ra`, so
+they are excluded from the frame set `NotWrittenD` rather than pinned to `r`). -/
+def divdi3_post (g : (R : Register) → Option (RegisterType R)) (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
+  GoodState c.σ ∧ c.σ.mem = m0 ∧ c.σ.sailOutput = o ∧ c.σ.regs.get? Register.PC = some r ∧
+  c.tick < 2 ∧
+  (∀ R : Register, NotWrittenD R → c.σ.regs.get? R = g R) ∧
   ∃ res, c.σ.regs.get? Register.x10 = some res ∧ res.toInt = n.toInt.tdiv d.toInt
 
 /-- Mixed-sign tail (`0x4720 neg a0,a0 ; 0x4724 jr t0`): from the core entry
 `0x46ac` with `x1 = 0x4720`, `x5 = r`, run core then negate the quotient and
-return via `t0`. Delivers `divdi3_post` with `res = 0 - (A / B)`. -/
+return via `t0`. Delivers the strong `divdi3_post` with `res = 0 - (A / B)`,
+threading the entry ghost frame `hframe0` (`cA → g`) and `sailOutput` through the
+core and the two fixup steps. -/
 theorem divdi3_mixed_tail
-    (n d A B r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (cA : Config)
+    (g : (R : Register) → Option (RegisterType R))
+    (n d A B r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (cA : Config)
     (hG : GoodState cA.σ) (hwl : Vsa.Sim.Code.__umoddi3Loaded cA.σ.mem)
     (hcl : __hidden___udivdi3Loaded cA.σ.mem) (hmem : cA.σ.mem = m0)
+    (hout : cA.σ.sailOutput = o)
     (hpc : cA.σ.regs.get? Register.PC = some (0x800046ac#64))
     (hx10 : cA.σ.regs.get? Register.x10 = some A)
     (hx11 : cA.σ.regs.get? Register.x11 = some B)
@@ -952,10 +1088,11 @@ theorem divdi3_mixed_tail
     (hmi : ∃ v, cA.σ.regs.get? Register.minstret = some v)
     (htick : cA.tick < 2) (hBpos : 0 < B.toNat) (halign : r.toNat % 4 = 0)
     (hA : A.toNat = n.toInt.natAbs) (hB : B.toNat = d.toInt.natAbs)
-    (hd0 : d.toInt ≠ 0) (hdiff : ¬(0 ≤ n.toInt ↔ 0 ≤ d.toInt)) :
-    ∃ c' : Config, Steps cA c' ∧ divdi3_post n d r m0 c' := by
-  obtain ⟨c3, hs3, hG3, hmem3, hpc3, hq3, hrem3, hx5_3, htick3, hmi3⟩ :=
-    core_call_tail A B r (0x80004720#64) m0 cA hG hcl hmem hpc hx10 hx11 hx1 hx5 hx12 hx13 hmi htick hBpos (by decide)
+    (hd0 : d.toInt ≠ 0) (hdiff : ¬(0 ≤ n.toInt ↔ 0 ≤ d.toInt))
+    (hframe0 : ∀ R : Register, NotWrittenD R → cA.σ.regs.get? R = g R) :
+    ∃ c' : Config, Steps cA c' ∧ divdi3_post g n d r m0 o c' := by
+  obtain ⟨c3, hs3, hG3, hmem3, hout3, hpc3, hq3, hrem3, _hra3, htick3, hframe3, hmi3⟩ :=
+    core_call_tail_f A B r (0x80004720#64) m0 o cA hG hcl hmem hout hpc hx10 hx11 hx1 hx12 hx13 hmi htick hBpos (by decide)
   have hwl3 : Vsa.Sim.Code.__umoddi3Loaded c3.σ.mem := hmem3 ▸ hmem ▸ hwl
   obtain ⟨vmi3, hmi3v⟩ := hmi3
   -- Step 4720: neg a0,a0 ⇒ x10 := 0 - (A/B)
@@ -968,30 +1105,42 @@ theorem divdi3_mixed_tail
       apply BitVec.eq_of_toNat_eq; decide] at this
   have hx10_4 : σ4.regs.get? Register.x10 = some ((0#64) - (A / B)) :=
     obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
-  have hx5_4 : σ4.regs.get? Register.x5 = some r :=
-    obs_alu_other hobs4 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_3
   obtain ⟨vmi4, hmi4⟩ := obs_alu_minstret hobs4
   have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmem3
   have hwl4 : Vsa.Sim.Code.__umoddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
+  -- x5 (= t0 = r) still live for the `jr t0`: preserved through `neg a0` (rd = x10)
+  have hx5_4 : σ4.regs.get? Register.x5 = some r := by
+    have := hframe3 Register.x5 (by decide)
+    rw [frame_alu hobs4 Register.x5 (by decide) (by decide), this]; exact hx5
   have htgt : (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
     rw [ret_tgt r halign]; exact halign
   obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
     site3_80004724 σ4 i4 (c3.steps + 1) (0x80004724#64) vmi4 r hG4 hpc4 hmi4 hx5_4 hwl4 rfl htgt hi4
   have hstep5 : Step ⟨σ4, i4, c3.steps + 1⟩ ⟨σ5, i5, c3.steps + 1 + 1⟩ := hs5
-  refine ⟨⟨σ5, i5, c3.steps + 1 + 1⟩, ?_, hG5, ?_, ?_, (0#64) - (A / B), ?_, ?_⟩
+  refine ⟨⟨σ5, i5, c3.steps + 1 + 1⟩, ?_, hG5, ?_, ?_, ?_, hi5, ?_, (0#64) - (A / B), ?_, ?_⟩
   · exact hs3.trans ((Steps.single hstep4).trans ((Steps.single hstep5).trans (.refl _)))
   · rw [hmem5]; exact hmemq4
+  · -- sailOutput = o through neg + jr
+    rw [hobs5.out, hobs4.out, sailOutput_sigmaPost_alu, hout3]
   · rw [obs_jr_pc hobs5, ret_tgt r halign]
+  · -- frame: NotWrittenD R preserved through jr, neg (rd=x10), core, entry→g
+    intro R hR
+    rw [frame_jr hobs5 R hR.nw, frame_alu hobs4 R (by
+        have := hR.nw.x10; exact this) hR.nw, hframe3 R hR.nw]
+    exact hframe0 R hR
   · exact obs_jr_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_4
   · exact res_div_mixed n d A B hA hB hdiff hd0
 
 /-- Same-sign tail: from core entry `0x46ac` with `x1 = r` (the caller's own
 return address), the core returns straight to `r` with `x10 = A / B`. Delivers
-`divdi3_post` with `res = A / B` (no fixup). -/
+the strong `divdi3_post` with `res = A / B` (no fixup), threading the entry ghost
+frame `hframe0` and `sailOutput` through the core. -/
 theorem divdi3_same_tail
-    (n d A B r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (cA : Config)
+    (g : (R : Register) → Option (RegisterType R))
+    (n d A B r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (cA : Config)
     (hG : GoodState cA.σ)
     (hcl : __hidden___udivdi3Loaded cA.σ.mem) (hmem : cA.σ.mem = m0)
+    (hout : cA.σ.sailOutput = o)
     (hpc : cA.σ.regs.get? Register.PC = some (0x800046ac#64))
     (hx10 : cA.σ.regs.get? Register.x10 = some A)
     (hx11 : cA.σ.regs.get? Register.x11 = some B)
@@ -1002,19 +1151,16 @@ theorem divdi3_same_tail
     (htick : cA.tick < 2) (hBpos : 0 < B.toNat) (halign : r.toNat % 4 = 0)
     (hA : A.toNat = n.toInt.natAbs) (hB : B.toNat = d.toInt.natAbs)
     (hd0 : d.toInt ≠ 0) (hsame : 0 ≤ n.toInt ↔ 0 ≤ d.toInt)
-    (hnov : (A / B).toNat < 2^63) :
-    ∃ c' : Config, Steps cA c' ∧ divdi3_post n d r m0 c' := by
-  obtain ⟨v12, h12⟩ := hx12
-  obtain ⟨v13, h13⟩ := hx13
-  have hcorepre : udivdi3_pre (fun R => cA.σ.regs.get? R) A B r m0 cA := by
-    refine ⟨⟨v12, v13, ?_⟩, hBpos, halign⟩
-    exact {
-      good := hG, loaded := hcl, mem := hmem, pc := hpc,
-      a0 := hx10, a1 := hx11, a2 := h12, a3 := h13, ra := hx1, minstret := hmi,
-      tick := htick, hframe := fun R _ => rfl }
-  obtain ⟨c3, hs3, hG3, hmem3, hpc3, hq3, _hrem3, _hra3, _htick3, _hframe3, _hx12_3, _hx13_3⟩ :=
-    udivdi3_spec (fun R => cA.σ.regs.get? R) A B r m0 cA hcorepre
-  exact ⟨c3, hs3, hG3, hmem3, hpc3, A / B, hq3, res_div_same n d A B hA hB hsame hd0 hnov⟩
+    (hnov : (A / B).toNat < 2^63)
+    (hframe0 : ∀ R : Register, NotWrittenD R → cA.σ.regs.get? R = g R) :
+    ∃ c' : Config, Steps cA c' ∧ divdi3_post g n d r m0 o c' := by
+  obtain ⟨c3, hs3, hG3, hmem3, hout3, hpc3, hq3, _hrem3, _hra3, htick3, hframe3, _hmi3⟩ :=
+    core_call_tail_f A B r r m0 o cA hG hcl hmem hout hpc hx10 hx11 hx1 hx12 hx13 hmi htick hBpos halign
+  refine ⟨c3, hs3, hG3, hmem3, hout3, hpc3, htick3, ?_, A / B, hq3,
+    res_div_same n d A B hA hB hsame hd0 hnov⟩
+  -- frame: core frame (rel cA) composed with entry frame hframe0
+  intro R hR
+  rw [hframe3 R hR.nw]; exact hframe0 R hR
 
 /-- **`divdi3_spec`** — total-correctness triple for libgcc `__divdi3` (signed
 64-bit quotient). Negates each negative operand, calls the unsigned core on `|n|`,
@@ -1022,11 +1168,11 @@ theorem divdi3_same_tail
 the caller's return slot directly. Result: `x10.toInt = n.toInt.tdiv d.toInt`,
 excluding the `INT64_MIN / -1` overflow input (unrepresentable `+2^63`, and not
 guarded by the `__divdi3` entry). -/
-theorem divdi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (divdi3_pre n d r m0) (divdi3_post n d r m0) := by
+theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) :
+    Triple (divdi3_pre g n d r m0 o) (divdi3_post g n d r m0 o) := by
   intro c hc
-  obtain ⟨hG, hdl, hul, hcl, hmem, hpc, hn, hd, hr, ⟨vmi, hmi⟩,
-    ⟨v12, h12⟩, ⟨v13, h13⟩, htick, hd0, hexcl, halign⟩ := hc
+  obtain ⟨hG, hdl, hul, hcl, hmem, hout, hpc, hn, hd, hr, ⟨vmi, hmi⟩,
+    ⟨v12, h12⟩, ⟨v13, h13⟩, htick, hd0, hexcl, halign, hframeE⟩ := hc
   -- magnitude/positivity facts for d
   have hdcases := bltz_cases' d
   -- Branch on sign of n at 0x46a4 (`bltz a0`)
@@ -1158,10 +1304,21 @@ theorem divdi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
       have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
       have hul5 : Vsa.Sim.Code.__umoddi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hul
       have hcl5 : __hidden___udivdi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hcl
+      -- sailOutput o and entry-frame g threaded to σ5 (btaken ; neg ; btaken ; mv ; jal)
+      have hout5 : σ5.sailOutput = o := by
+        rw [hobs5.out, sailOutput_sigmaPost_jal, hobs4.out, sailOutput_sigmaPost_alu,
+          hobs3.out, sailOutput_sigmaPost_branch_taken, hobs2.out, sailOutput_sigmaPost_alu,
+          hobs1.out, sailOutput_sigmaPost_branch_taken]; exact hout
+      have hframe5 : ∀ R : Register, NotWrittenD R → σ5.regs.get? R = g R := by
+        intro R hR
+        rw [frame_jal hobs5 R hR.2.1 hR.nw, frame_alu hobs4 R hR.2.2 hR.nw,
+          frame_btaken hobs3 R hR.nw, frame_alu hobs2 R hR.nw.x10 hR.nw,
+          frame_btaken hobs1 R hR.nw]
+        exact hframeE R hR
       obtain ⟨cf, hsf, hpostf⟩ :=
-        divdi3_mixed_tail n d ((0#64) - n) d r m0 ⟨σ5, i5, _⟩
-          hG5 hul5 hcl5 hmemq5 hpc5 hx10_5 hx11_5 hx1_5 hx5_5 ⟨v12, hx12_5⟩ ⟨v13, hx13_5⟩ hmi5 hi5 hBpos halign
-          hAmag hBmag hd0 hdiff
+        divdi3_mixed_tail g n d ((0#64) - n) d r m0 o ⟨σ5, i5, _⟩
+          hG5 hul5 hcl5 hmemq5 hout5 hpc5 hx10_5 hx11_5 hx1_5 hx5_5 ⟨v12, hx12_5⟩ ⟨v13, hx13_5⟩ hmi5 hi5 hBpos halign
+          hAmag hBmag hd0 hdiff hframe5
       refine ⟨cf, ?_, hpostf⟩
       exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
         ((Steps.single hstep4).trans ((Steps.single hstep5).trans hsf))))
@@ -1246,10 +1403,21 @@ theorem divdi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
       obtain ⟨vmi5, hmi5v⟩ := obs_jr_minstret hobs5
       have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
       have hcl5 : __hidden___udivdi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hcl
+      -- sailOutput o and entry-frame g threaded to σ5 (btaken ; neg ; bnottaken ; neg ; jr)
+      have hout5 : σ5.sailOutput = o := by
+        rw [hobs5.out, sailOutput_sigmaPost_jump_x0, hobs4.out, sailOutput_sigmaPost_alu,
+          hobs3.out, sailOutput_sigmaPost_branch_nottaken, hobs2.out, sailOutput_sigmaPost_alu,
+          hobs1.out, sailOutput_sigmaPost_branch_taken]; exact hout
+      have hframe5 : ∀ R : Register, NotWrittenD R → σ5.regs.get? R = g R := by
+        intro R hR
+        rw [frame_jr hobs5 R hR.nw, frame_alu hobs4 R hR.nw.x11 hR.nw,
+          frame_bnottaken hobs3 R hR.nw, frame_alu hobs2 R hR.nw.x10 hR.nw,
+          frame_btaken hobs1 R hR.nw]
+        exact hframeE R hR
       obtain ⟨cf, hsf, hpostf⟩ :=
-        divdi3_same_tail n d ((0#64) - n) ((0#64) - d) r m0 ⟨σ5, i5, _⟩
-          hG5 hcl5 hmemq5 hpc5 hx10_5 hx11_5 hx1_5 ⟨v12, hx12_5⟩ ⟨v13, hx13_5⟩ ⟨vmi5, hmi5v⟩ hi5 hBpos halign
-          hAmag hBmag hd0 hsame hnov
+        divdi3_same_tail g n d ((0#64) - n) ((0#64) - d) r m0 o ⟨σ5, i5, _⟩
+          hG5 hcl5 hmemq5 hout5 hpc5 hx10_5 hx11_5 hx1_5 ⟨v12, hx12_5⟩ ⟨v13, hx13_5⟩ ⟨vmi5, hmi5v⟩ hi5 hBpos halign
+          hAmag hBmag hd0 hsame hnov hframe5
       refine ⟨cf, ?_, hpostf⟩
       exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
         ((Steps.single hstep4).trans ((Steps.single hstep5).trans hsf))))
@@ -1379,10 +1547,21 @@ theorem divdi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
       have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
       have hul5 : Vsa.Sim.Code.__umoddi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hul
       have hcl5 : __hidden___udivdi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hcl
+      -- sailOutput o and entry-frame g threaded to σ5 (bnottaken ; btaken ; neg ; mv ; jal)
+      have hout5 : σ5.sailOutput = o := by
+        rw [hobs5.out, sailOutput_sigmaPost_jal, hobs4.out, sailOutput_sigmaPost_alu,
+          hobs3.out, sailOutput_sigmaPost_alu, hobs2.out, sailOutput_sigmaPost_branch_taken,
+          hobs1.out, sailOutput_sigmaPost_branch_nottaken]; exact hout
+      have hframe5 : ∀ R : Register, NotWrittenD R → σ5.regs.get? R = g R := by
+        intro R hR
+        rw [frame_jal hobs5 R hR.2.1 hR.nw, frame_alu hobs4 R hR.2.2 hR.nw,
+          frame_alu hobs3 R hR.nw.x11 hR.nw, frame_btaken hobs2 R hR.nw,
+          frame_bnottaken hobs1 R hR.nw]
+        exact hframeE R hR
       obtain ⟨cf, hsf, hpostf⟩ :=
-        divdi3_mixed_tail n d n ((0#64) - d) r m0 ⟨σ5, i5, _⟩
-          hG5 hul5 hcl5 hmemq5 hpc5 hx10_5 hx11_5 hx1_5 hx5_5 ⟨v12, hx12_5⟩ ⟨v13, hx13_5⟩ hmi5 hi5 hBpos halign
-          hAmag hBmag hd0 hdiff
+        divdi3_mixed_tail g n d n ((0#64) - d) r m0 o ⟨σ5, i5, _⟩
+          hG5 hul5 hcl5 hmemq5 hout5 hpc5 hx10_5 hx11_5 hx1_5 hx5_5 ⟨v12, hx12_5⟩ ⟨v13, hx13_5⟩ hmi5 hi5 hBpos halign
+          hAmag hBmag hd0 hdiff hframe5
       refine ⟨cf, ?_, hpostf⟩
       exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
         ((Steps.single hstep4).trans ((Steps.single hstep5).trans hsf))))
@@ -1414,10 +1593,18 @@ theorem divdi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
       obtain ⟨vmi2, hmi2v⟩ := obs_bnottaken_minstret hobs2
       have hmemq2 : σ2.mem = m0 := by rw [hmem2]; exact hmemq1
       have hcl2 : __hidden___udivdi3Loaded σ2.mem := hmemq2 ▸ hmem ▸ hcl
+      -- sailOutput o and entry-frame g threaded to σ2 = cent (bnottaken ; bnottaken)
+      have hout2 : σ2.sailOutput = o := by
+        rw [hobs2.out, sailOutput_sigmaPost_branch_nottaken,
+          hobs1.out, sailOutput_sigmaPost_branch_nottaken]; exact hout
+      have hframe2 : ∀ R : Register, NotWrittenD R → σ2.regs.get? R = g R := by
+        intro R hR
+        rw [frame_bnottaken hobs2 R hR.nw, frame_bnottaken hobs1 R hR.nw]
+        exact hframeE R hR
       obtain ⟨cf, hsf, hpostf⟩ :=
-        divdi3_same_tail n d n d r m0 ⟨σ2, i2, _⟩
-          hG2 hcl2 hmemq2 hpc2 hx10_2 hx11_2 hx1_2 ⟨v12, hx12_2⟩ ⟨v13, hx13_2⟩ ⟨vmi2, hmi2v⟩ hi2 hBpos halign
-          hAmag hBmag hd0 hsame hnov
+        divdi3_same_tail g n d n d r m0 o ⟨σ2, i2, _⟩
+          hG2 hcl2 hmemq2 hout2 hpc2 hx10_2 hx11_2 hx1_2 ⟨v12, hx12_2⟩ ⟨v13, hx13_2⟩ ⟨vmi2, hmi2v⟩ hi2 hBpos halign
+          hAmag hBmag hd0 hsame hnov hframe2
       refine ⟨cf, ?_, hpostf⟩
       exact (Steps.single hstep1).trans ((Steps.single hstep2).trans hsf)
 

@@ -149,15 +149,16 @@ theorem umoddi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
   have hmemq2 : σ2.mem = m0 := by rw [hmem2]; exact hmemq1
   -- core entry config: instantiate the ghost with the entry state's own reads,
   -- so the entry `hframe` is `rfl` and `udivdi3_post` returns preservation of x5.
-  have hcorepre : udivdi3_pre (fun R => σ2.regs.get? R) n d (0x800046fc#64) m0 ⟨σ2, i2, c.steps + 1 + 1⟩ := by
+  have hcorepre : udivdi3_pre (fun R => σ2.regs.get? R) n d (0x800046fc#64) m0 σ2.sailOutput ⟨σ2, i2, c.steps + 1 + 1⟩ := by
     refine ⟨⟨v12, v13, ?_⟩, hdpos, by decide⟩
     exact {
       good := hG2, loaded := by rw [hmemq2]; exact hmem ▸ hcload, mem := hmemq2,
+      sailOut := rfl,
       pc := hpc2, a0 := hx10_2, a1 := hx11_2, a2 := hx12_2, a3 := hx13_2,
       ra := hx1_2, minstret := hmi2, tick := hi2,
       hframe := fun R _ => rfl }
-  obtain ⟨c3, hs3, hG3, hmem3, hpc3, _hq3, hrem3, _hra3, htick3, hframe3, _hx12_3, _hx13_3⟩ :=
-    udivdi3_spec (fun R => σ2.regs.get? R) n d (0x800046fc#64) m0 ⟨σ2, i2, c.steps + 1 + 1⟩ hcorepre
+  obtain ⟨c3, hs3, hG3, hmem3, _hout3, hpc3, _hq3, hrem3, _hra3, htick3, hframe3, _hx12_3, _hx13_3⟩ :=
+    udivdi3_spec (fun R => σ2.regs.get? R) n d (0x800046fc#64) m0 σ2.sailOutput ⟨σ2, i2, c.steps + 1 + 1⟩ hcorepre
   -- x5 preserved across core: NotWritten x5 ⇒ get? x5 = σ2.regs.get? x5 = r
   have hx5_3 : c3.σ.regs.get? Register.x5 = some r := by
     rw [hframe3 Register.x5 (by decide)]; exact hx5_2

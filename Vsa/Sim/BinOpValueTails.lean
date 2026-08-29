@@ -57,31 +57,31 @@ stage(mv+jal value_int) ≫ value_int ≫ epilogue`, with `divdi3_spec` and
 (`= Wl.tdiv Wr`, i.e. `wrap64 (a.tdiv b)` via `binOpSem_div_int`); the residual is
 exactly the three concrete bridges `pre`/`stage`/`suf`. -/
 theorem divValueTail {P Q : Config → Prop}
-    (g : (R : Register) → Option (RegisterType R))
+    (g gd : (R : Register) → Option (RegisterType R))
     (Wl Wr rC sret pay rB : BitVec 64)
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat)
-    (mA mB : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String)
-    (pre : Triple P (divdi3_pre Wl Wr rC mA))
-    (stage : Triple (divdi3_post Wl Wr rC mA) (int_pre g sret pay rB mB out0))
+    (mA mB : Std.ExtHashMap Nat (BitVec 8)) (out0 outD : Array String)
+    (pre : Triple P (divdi3_pre gd Wl Wr rC mA outD))
+    (stage : Triple (divdi3_post gd Wl Wr rC mA outD) (int_pre g sret pay rB mB out0))
     (suf : Triple (int_post g sret pay rB N φc mB out0) Q) :
     Triple P Q :=
   valueIntCallSeam g sret pay rB N φc mB out0
-    (divCallSeam Wl Wr rC mA pre stage) suf
+    (divCallSeam gd Wl Wr rC mA outD pre stage) suf
 
 /-- **The full `mod` value tail.**  Sibling of `divValueTail`, threading
 `moddi3_spec` (`Wl.tmod Wr`, `wrap64 (a.tmod b)` via `binOpSem_mod_int`) then
 `value_int_spec`. -/
 theorem modValueTail {P Q : Config → Prop}
-    (g : (R : Register) → Option (RegisterType R))
+    (g gd : (R : Register) → Option (RegisterType R))
     (Wl Wr rC sret pay rB : BitVec 64)
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat)
-    (mA mB : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String)
-    (pre : Triple P (moddi3_pre Wl Wr rC mA))
-    (stage : Triple (moddi3_post Wl Wr rC mA) (int_pre g sret pay rB mB out0))
+    (mA mB : Std.ExtHashMap Nat (BitVec 8)) (out0 outD : Array String)
+    (pre : Triple P (moddi3_pre gd Wl Wr rC mA outD))
+    (stage : Triple (moddi3_post gd Wl Wr rC mA outD) (int_pre g sret pay rB mB out0))
     (suf : Triple (int_post g sret pay rB N φc mB out0) Q) :
     Triple P Q :=
   valueIntCallSeam g sret pay rB N φc mB out0
-    (modCallSeam Wl Wr rC mA pre stage) suf
+    (modCallSeam gd Wl Wr rC mA outD pre stage) suf
 
 #print axioms divValueTail
 #print axioms modValueTail

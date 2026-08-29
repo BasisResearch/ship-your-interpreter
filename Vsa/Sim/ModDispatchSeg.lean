@@ -153,12 +153,13 @@ Given the caller prefix landing the staged `modDispatchRow` args at the
 boxing the remainder (`Triple (moddi3_post n d r m0) Q`), `callSeg` produces the
 whole mod call site `Triple P Q` — the exact Shape-D composition the goal asks
 for, with `moddi3_spec` (not a hand re-derivation) as the threaded callee. -/
-theorem modCallSeam {P Q : Config → Prop} (n d r : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (pre : Triple P (moddi3_pre n d r m0))
-    (suf : Triple (moddi3_post n d r m0) Q) :
+theorem modCallSeam {P Q : Config → Prop}
+    (g : (R : Register) → Option (RegisterType R)) (n d r : BitVec 64)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
+    (pre : Triple P (moddi3_pre g n d r m0 o))
+    (suf : Triple (moddi3_post g n d r m0 o) Q) :
     Triple P Q :=
-  callSeg pre (moddi3_spec n d r m0) suf
+  callSeg pre (moddi3_spec g n d r m0 o) suf
 
 #print axioms binOpSem_mod_int
 #print axioms modCallSeam

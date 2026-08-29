@@ -344,14 +344,14 @@ theorem umoddi3_loopframe_spec (g : (R : Register) → Option (RegisterType R))
   have h27_2 : σ2.regs.get? Register.x27 = some v27 :=
     obs_jal_other hobs2 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h27_1
   -- core: udivdi3 from 46ac, r = 46fc
-  have hcorepre : udivdi3_pre (fun R => σ2.regs.get? R) n d (0x800046fc#64) m0 ⟨σ2, i2, c.steps + 1 + 1⟩ := by
+  have hcorepre : udivdi3_pre (fun R => σ2.regs.get? R) n d (0x800046fc#64) m0 σ2.sailOutput ⟨σ2, i2, c.steps + 1 + 1⟩ := by
     refine ⟨⟨v12, v13, ?_⟩, hdpos, by decide⟩
     exact {
       good := hG2, loaded := by rw [show (⟨σ2,i2,c.steps+1+1⟩ : Config).σ.mem = σ2.mem from rfl]; exact hcload2,
-      mem := hmem2q, pc := hpc2, a0 := hn2, a1 := hd2, a2 := h12_2, a3 := h13_2,
+      mem := hmem2q, sailOut := rfl, pc := hpc2, a0 := hn2, a1 := hd2, a2 := h12_2, a3 := h13_2,
       ra := hx1_2, minstret := ⟨vmi2, hmi2⟩, tick := hi2, hframe := fun R _ => rfl }
-  obtain ⟨c3, hs3, hG3, hmem3, hpc3, _hq3, hrem3, _hra3, htick3, hframe3, hx12_3e, hx13_3e⟩ :=
-    udivdi3_spec (fun R => σ2.regs.get? R) n d (0x800046fc#64) m0 ⟨σ2, i2, c.steps + 1 + 1⟩ hcorepre
+  obtain ⟨c3, hs3, hG3, hmem3, _hout3, hpc3, _hq3, hrem3, _hra3, htick3, hframe3, hx12_3e, hx13_3e⟩ :=
+    udivdi3_spec (fun R => σ2.regs.get? R) n d (0x800046fc#64) m0 σ2.sailOutput ⟨σ2, i2, c.steps + 1 + 1⟩ hcorepre
   have hmem3q : c3.σ.mem = m0 := hmem3
   have huload3 : Vsa.Sim.Code.__umoddi3Loaded c3.σ.mem := by rw [hmem3q, ← hmem]; exact huload
   obtain ⟨vmi3, hmi3⟩ := hG3.minstret
@@ -577,14 +577,14 @@ theorem loop_iter (g : (R : Register) → Option (RegisterType R))
   -- 10#64 = (m/10^p) argument: state x11 = 10; treat d := 10#64
   have hdpos : 0 < (10#64 : BitVec 64).toNat := by decide
   have hcorepre : udivdi3_pre (fun R => σ3.regs.get? R) (BitVec.ofNat 64 (m/10^p)) (10#64)
-      (0x80008308#64) c.σ.mem ⟨σ3, i3, c.steps+1+1+1⟩ := by
+      (0x80008308#64) c.σ.mem σ3.sailOutput ⟨σ3, i3, c.steps+1+1+1⟩ := by
     refine ⟨⟨v12_0, v13_0, ?_⟩, hdpos, by decide⟩
     exact {
       good := hG3, loaded := by rw [show (⟨σ3,i3,c.steps+1+1+1⟩ : Config).σ.mem = σ3.mem from rfl]; exact hcuload3,
-      mem := hmem3q, pc := hpc3, a0 := hx10_3, a1 := hx11_3, a2 := h12_3, a3 := h13_3,
+      mem := hmem3q, sailOut := rfl, pc := hpc3, a0 := hx10_3, a1 := hx11_3, a2 := h12_3, a3 := h13_3,
       ra := hx1_3, minstret := ⟨vmi3, hmi3⟩, tick := hi3, hframe := fun R _ => rfl }
-  obtain ⟨c4, hs4, hG4, hmem4, hpc4, hq4, _hrem4, hra4, htick4, hframe4, hx12_4e, hx13_4e⟩ :=
-    udivdi3_spec (fun R => σ3.regs.get? R) (BitVec.ofNat 64 (m/10^p)) (10#64) (0x80008308#64) c.σ.mem
+  obtain ⟨c4, hs4, hG4, hmem4, _hout4, hpc4, hq4, _hrem4, hra4, htick4, hframe4, hx12_4e, hx13_4e⟩ :=
+    udivdi3_spec (fun R => σ3.regs.get? R) (BitVec.ofNat 64 (m/10^p)) (10#64) (0x80008308#64) c.σ.mem σ3.sailOutput
       ⟨σ3, i3, c.steps+1+1+1⟩ hcorepre
   -- x10 = (m/10^p) / 10 = m/10^(p+1)
   have hq4' : c4.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 (m/10^(p+1))) := by
@@ -1224,14 +1224,14 @@ theorem loop_exit (g : (R : Register) → Option (RegisterType R))
   have hmem3q : σ3.mem = c.σ.mem := by rw [hmem3, hmem2, hmem1]
   -- core
   have hcorepre : udivdi3_pre (fun R => σ3.regs.get? R) (BitVec.ofNat 64 (m/10^p)) (10#64)
-      (0x80008308#64) c.σ.mem ⟨σ3, i3, c.steps+1+1+1⟩ := by
+      (0x80008308#64) c.σ.mem σ3.sailOutput ⟨σ3, i3, c.steps+1+1+1⟩ := by
     refine ⟨⟨v12_0, v13_0, ?_⟩, by decide, by decide⟩
     exact {
       good := hG3, loaded := by rw [show (⟨σ3,i3,c.steps+1+1+1⟩ : Config).σ.mem = σ3.mem from rfl]; exact hmem3q ▸ hSt.culoaded,
-      mem := hmem3q, pc := hpc3, a0 := hx10_3, a1 := hx11_3, a2 := h12_3, a3 := h13_3,
+      mem := hmem3q, sailOut := rfl, pc := hpc3, a0 := hx10_3, a1 := hx11_3, a2 := h12_3, a3 := h13_3,
       ra := hx1_3, minstret := ⟨vmi3, hmi3⟩, tick := hi3, hframe := fun R _ => rfl }
-  obtain ⟨c4, hs4, hG4, hmem4, hpc4, hq4, _hrem4, _hra4, htick4, hframe4, _hx12_4, _hx13_4⟩ :=
-    udivdi3_spec (fun R => σ3.regs.get? R) (BitVec.ofNat 64 (m/10^p)) (10#64) (0x80008308#64) c.σ.mem
+  obtain ⟨c4, hs4, hG4, hmem4, _hout4, hpc4, hq4, _hrem4, _hra4, htick4, hframe4, _hx12_4, _hx13_4⟩ :=
+    udivdi3_spec (fun R => σ3.regs.get? R) (BitVec.ofNat 64 (m/10^p)) (10#64) (0x80008308#64) c.σ.mem σ3.sailOutput
       ⟨σ3, i3, c.steps+1+1+1⟩ hcorepre
   have hmem4q : c4.σ.mem = c.σ.mem := hmem4
   have hload4 : SvfprintfSliceLoaded c4.σ.mem := hmem4q ▸ hSt.loaded
