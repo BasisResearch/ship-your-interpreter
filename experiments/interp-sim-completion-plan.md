@@ -39,15 +39,13 @@ Gate: `#print axioms evalEqSim evalNeSim` clean; add to check_all.
 
 ## 2. Last binary ops: ge, mul
 
-- `ge`: lt/le/gt clone; xori decode landed (`d7d6ec5`) unblocked it. Note the
-  flagged `.ge` spec/machine divergence in PLAN-InterpSim (token 23 arm):
-  resolve the semantics decision BEFORE proving (desugar `>=` vs error-arm).
-- `mul`: resume `experiments/mul-wip/` (captured at `55f90ed`). The two missing
-  decode lemmas (`decode_42d81c63`, `decode_3d051a63`) are now generator
-  entries (fast template). Remaining: bind `hmi2`, thread the sailOutput `o`
-  field per the A-blocker pattern (already done for div/mod — clone).
-After this every `EvalE` constructor has a landed Triple: `htri` leaf
-inventory complete.
+- `ge`: DONE — the divergence flag was stale (token 23 is the comparison arm's
+  compiled fall-through; `experiments/ge-semantics-investigation.md`), and
+  `evalGeSim`/`blockC_ge` already landed (526f575, in check_all).
+- `mul`: ALSO DONE — landed in `7a96b72` (`evalMulSim` + `blockC_mul`,
+  green + axiom-clean); the `experiments/mul-wip/` capture is superseded.
+Step 2 is therefore COMPLETE: with div/mod already landed, every `EvalE`
+constructor has a landed Triple modulo the step-1 eq/ne reseat.
 
 ## 3. M5 error family routing (cheapest bundle, closes `herrFam`)
 

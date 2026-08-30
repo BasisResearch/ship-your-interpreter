@@ -388,8 +388,9 @@ per-case decode, the reusable multipliers, and the recurring residual list.
 - Binary (int): `add`, `sub`, `lt` + the full operator jump-table dispatch decode
   (CSWTCH.18 @0x80019f84). Mechanical follow-ups: `le`/`gt` (cmp foundation `CmpBridges`/
   `CmpTailSites` staged), `eq`/`ne` (value_equal), `mul`/`div`/`mod` (libgcc soft-arith).
-  **FLAG: `.ge` (token 23) → machine runtime_error, but spec `binOpSem .ge` succeeds —
-  possible spec/machine divergence unless the front-end desugars `>=`. Needs a semantics decision.**
+  (The earlier `.ge` divergence flag was mistaken — token 23 is the comparison arm's compiled
+  fall-through, not the error default; `evalGeSim`/`blockC_ge` landed in 526f575. Evidence:
+  `experiments/ge-semantics-investigation.md`.)
 - Logical: `and`/`or` all four constructors (short-circuit + two-eval, shared `blockC_logTail`).
 
 ### Statement family (ExecS/ExecSeq) — OPENED + core cases
@@ -415,7 +416,7 @@ Details in `memory/m4-recursive-cases.md`, `m4-statement-family.md`, `m4-call-su
 
 ### Coverage status — every relation's constructors now have landed conditional Triples
 - **EvalE**: leaves (int/null/bool/str/var), unary (neg/not), binary (add/sub/lt; le/gt/eq/ne/mul/div/mod are
-  mechanical follow-ups on the proven dispatch), logical (all 4), **call**, **fn**. (`.ge` machine/spec divergence flagged.)
+  mechanical follow-ups on the proven dispatch), logical (all 4), **call**, **fn**. (`.ge` flag resolved: stale, no divergence — see experiments/ge-semantics-investigation.md.)
 - **EvalArgs**: nil, cons (`evalArgsLoop`).
 - **Call**: assertOk (native, conditional on the machine-run); print/println decoded (template ready); **closure = the
   remaining crux** (arity+depth-guard+env_new+env_define-fold+body-ExecSeq at d+1), blocked on the uncomposed
