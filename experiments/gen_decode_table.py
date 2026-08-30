@@ -44,7 +44,7 @@ NB = 16
 PARTS_PER_BATCH = 32
 per = (len(words) + NB - 1) // NB
 hdr_common_import = '' if LEGACY else 'import Vsa.Sim.DecodeTable.DecodeCommon\n'
-hdr = '''import Vsa.Elf
+hdr = '''import LeanRiscv
 import Vsa.Sim.InitValues
 ''' + hdr_common_import + '''
 /-! Decode table batch {nn}/16, part {pp}/{parts}

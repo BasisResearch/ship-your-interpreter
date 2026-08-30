@@ -1,4 +1,4 @@
-import Vsa.Elf
+import LeanRiscv
 
 /-!
 # Post-`setupElf` values of the GoodState control registers

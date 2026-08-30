@@ -1,4 +1,5 @@
 import Vsa.Elf
+import Vsa.ElfRun
 
 /-!
 # Fuel monotonicity of the machine runner

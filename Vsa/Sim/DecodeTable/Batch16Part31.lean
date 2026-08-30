@@ -1,4 +1,4 @@
-import Vsa.Elf
+import LeanRiscv
 import Vsa.Sim.InitValues
 import Vsa.Sim.DecodeTable.DecodeCommon
 
