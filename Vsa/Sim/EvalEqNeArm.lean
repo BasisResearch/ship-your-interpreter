@@ -185,10 +185,11 @@ theorem evalEqChain_dispatch (σ : MState) (i u : Nat) (vm sp v8 sret Wl : BitVe
     eqDispatchPost_of_chainEnd σ' i' (u + 16) sp hG'
       (by rw [hmem']; exact hmem) (by rw [hmem']; exact fb)
       hpc' hmi' hx2' hi'
-  obtain ⟨hG'', hmem'', hpc'', hx10'', hx11'', hx2'', htick'', hout'', hframeD⟩ := hpost
+  obtain ⟨hG'', hmem'', hpc'', hx10'', hx11'', hx2'', htick'', hout'', hframeD, hpinsD⟩ := hpost
   rw [hmem'] at hmem''
+  rw [hmem'] at hpinsD
   refine ⟨c', lds, hsteps.trans hstep, ?_⟩
-  refine ⟨hG'', hmem'', hpc'', hx10'', hx11'', hx2'', htick'', ?_, ?_⟩
+  refine ⟨hG'', hmem'', hpc'', hx10'', hx11'', hx2'', htick'', ?_, ?_, hpinsD⟩
   · rw [hout'', hout']
   · intro R hR he8
     rw [hframeD R hR he8]
@@ -291,10 +292,11 @@ theorem evalNeChain_dispatch (σ : MState) (i u : Nat) (vm sp v8 sret Wl : BitVe
     neDispatchPost_of_chainEnd σ' i' (u + 16) sp hG'
       (by rw [hmem']; exact hmem) (by rw [hmem']; exact fb)
       hpc' hmi' hx2' hi'
-  obtain ⟨hG'', hmem'', hpc'', hx10'', hx11'', hx2'', htick'', hout'', hframeD⟩ := hpost
+  obtain ⟨hG'', hmem'', hpc'', hx10'', hx11'', hx2'', htick'', hout'', hframeD, hpinsD⟩ := hpost
   rw [hmem'] at hmem''
+  rw [hmem'] at hpinsD
   refine ⟨c', lds, hsteps.trans hstep, ?_⟩
-  refine ⟨hG'', hmem'', hpc'', hx10'', hx11'', hx2'', htick'', ?_, ?_⟩
+  refine ⟨hG'', hmem'', hpc'', hx10'', hx11'', hx2'', htick'', ?_, ?_, hpinsD⟩
   · rw [hout'', hout']
   · intro R hR he8
     rw [hframeD R hR he8]

@@ -221,8 +221,9 @@ theorem eqDispatchRowS (sp : BitVec 64) (lds : List (List (BitVec 8)))
       (eqDispL sp) lds hG hpc hmi hL hkeys hfacts
       (by show ChainOK 0x800036e4#64 [2] eqDispatch; decide) htick
   rw [hmem] at hmem'
+  have hpins : EqNeSrcPins sp lds m0 := eqDispatch_srcPins m0 sp lds (hmem ▸ hfacts)
   refine ⟨⟨σ', i', c.steps + evalBlocksFuel eqDispatch⟩, hs, ?_⟩
-  refine ⟨hG', hmem', ?_, ?_, ?_, ?_, hi', ?_, ?_⟩
+  refine ⟨hG', hmem', ?_, ?_, ?_, ?_, hi', ?_, ?_, hpins⟩
   · rw [hpc']
     show some (evalBlocksPC 0x800036e4#64 (SegEvalState.init (eqDispL sp) lds) eqDispatch)
       = some 0x8000371c#64
@@ -258,8 +259,9 @@ theorem neDispatchRowS (sp : BitVec 64) (lds : List (List (BitVec 8)))
       (eqDispL sp) lds hG hpc hmi hL hkeys hfacts
       (by show ChainOK 0x80003734#64 [2] neDispatch; decide) htick
   rw [hmem] at hmem'
+  have hpins : EqNeSrcPins sp lds m0 := neDispatch_srcPins m0 sp lds (hmem ▸ hfacts)
   refine ⟨⟨σ', i', c.steps + evalBlocksFuel neDispatch⟩, hs, ?_⟩
-  refine ⟨hG', hmem', ?_, ?_, ?_, ?_, hi', ?_, ?_⟩
+  refine ⟨hG', hmem', ?_, ?_, ?_, ?_, hi', ?_, ?_, hpins⟩
   · rw [hpc']
     show some (evalBlocksPC 0x80003734#64 (SegEvalState.init (eqDispL sp) lds) neDispatch)
       = some 0x8000376c#64

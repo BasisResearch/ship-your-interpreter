@@ -42,14 +42,6 @@ theorem notWritten_of_vestr {R : Register} (h : NotWrittenVEStr R) : NotWritten 
   obtain ⟨_, _, _, _, _, hx10, hx11, hx12, hx13, _, _, hpc, hnpc, hmi, hmii, hmc, hmt, hmip⟩ := h
   exact ⟨hx10, hx11, hx12, hx13, hpc, hnpc, hmi, hmii, hmc, hmt, hmip⟩
 
-/-- `lds.headD [] = lds.getD 0 []`. -/
-theorem eqDisp_headD_getD0 (lds : List (List (BitVec 8))) :
-    lds.headD [] = lds.getD 0 [] := by cases lds <;> rfl
-
-/-- `lds.tail.getD n [] = lds.getD (n+1) []`. -/
-theorem eqDisp_tail_getD (lds : List (List (BitVec 8))) (n : Nat) :
-    lds.tail.getD n [] = lds.getD (n+1) [] := by cases lds <;> rfl
-
 /-! ## Generic frame helpers (copied from `EvalDivRow`, not in this file's import DAG)
 
 `evalBlocks_log_shift` and `evalBlocks_frame_offsets` are stated over an arbitrary
@@ -350,18 +342,20 @@ ARE `lds6`'s elements), and apply the six-list readback.  Now the readback lands
 `writeLog m0 (evalBlocks eqDispatch (init (eqDispL base) lds)).log` — exactly the
 `EqDispatchPostS`/`NeDispatchPostS` memory. -/
 
-/-- `bufa` repr on the post-dispatch memory for the *existential* dispatch `lds`. -/
+/-- `bufa` repr on the post-dispatch memory for the *existential* dispatch `lds`.
+Driven directly by the `EqNeSrcPins` bundle now carried on `EqDispatchPostS` (route
+(a)) — no `ChainFacts` needed. -/
 theorem eqDispatch_bufa_repr_lds (base : BitVec 64) (m0 : Mem)
     (lds : List (List (BitVec 8))) (hsp : base.toNat + 4096 ≤ 2 ^ 64)
     {N : NativeAddrs} {φc : Addr → Nat} {vl : Value}
-    (hfacts : ChainFacts m0 m0 (eqDispL base) lds eqDispatch)
+    (hpins : EqNeSrcPins base lds m0)
     (hpaydisj : ∀ (p : Nat) (s : String), read64 m0 ((base + 0x78#64).toNat + 8) = some p →
       ∀ k, k ≤ s.length → (p + k < base.toNat + 32 ∨ base.toNat + 88 ≤ p + k))
     (hvl : ValueRepr m0 N φc (base + 0x78#64).toNat vl) :
     ValueRepr
       (writeLog m0 (evalBlocks eqDispatch (SegEvalState.init (eqDispL base) lds)).log)
       N φc (base + 0x40#64).toNat vl := by
-  obtain ⟨h0, h1, h2, _, _, _⟩ := eqDispatch_lpins m0 base lds hfacts
+  obtain ⟨h0, h1, h2, _, _, _⟩ := hpins
   have hr := eqDispatch_bufa_repr base m0 (lds.getD 0 []) (lds.getD 1 []) (lds.getD 2 [])
     (lds.getD 3 []) (lds.getD 4 []) (lds.getD 5 []) hsp h0 h1 h2 hpaydisj hvl
   rw [eqDispatch_log_trunc]; exact hr
@@ -370,14 +364,14 @@ theorem eqDispatch_bufa_repr_lds (base : BitVec 64) (m0 : Mem)
 theorem eqDispatch_bufb_repr_lds (base : BitVec 64) (m0 : Mem)
     (lds : List (List (BitVec 8))) (hsp : base.toNat + 4096 ≤ 2 ^ 64)
     {N : NativeAddrs} {φc : Addr → Nat} {vr : Value}
-    (hfacts : ChainFacts m0 m0 (eqDispL base) lds eqDispatch)
+    (hpins : EqNeSrcPins base lds m0)
     (hpaydisj : ∀ (p : Nat) (s : String), read64 m0 ((base + 0x90#64).toNat + 8) = some p →
       ∀ k, k ≤ s.length → (p + k < base.toNat + 32 ∨ base.toNat + 88 ≤ p + k))
     (hvr : ValueRepr m0 N φc (base + 0x90#64).toNat vr) :
     ValueRepr
       (writeLog m0 (evalBlocks eqDispatch (SegEvalState.init (eqDispL base) lds)).log)
       N φc (base + 0x20#64).toNat vr := by
-  obtain ⟨_, _, _, h3, h4, h5⟩ := eqDispatch_lpins m0 base lds hfacts
+  obtain ⟨_, _, _, h3, h4, h5⟩ := hpins
   have hr := eqDispatch_bufb_repr base m0 (lds.getD 0 []) (lds.getD 1 []) (lds.getD 2 [])
     (lds.getD 3 []) (lds.getD 4 []) (lds.getD 5 []) hsp h3 h4 h5 hpaydisj hvr
   rw [eqDispatch_log_trunc]; exact hr
@@ -386,14 +380,14 @@ theorem eqDispatch_bufb_repr_lds (base : BitVec 64) (m0 : Mem)
 theorem neDispatch_bufa_repr_lds (base : BitVec 64) (m0 : Mem)
     (lds : List (List (BitVec 8))) (hsp : base.toNat + 4096 ≤ 2 ^ 64)
     {N : NativeAddrs} {φc : Addr → Nat} {vl : Value}
-    (hfacts : ChainFacts m0 m0 (eqDispL base) lds neDispatch)
+    (hpins : EqNeSrcPins base lds m0)
     (hpaydisj : ∀ (p : Nat) (s : String), read64 m0 ((base + 0x78#64).toNat + 8) = some p →
       ∀ k, k ≤ s.length → (p + k < base.toNat + 32 ∨ base.toNat + 88 ≤ p + k))
     (hvl : ValueRepr m0 N φc (base + 0x78#64).toNat vl) :
     ValueRepr
       (writeLog m0 (evalBlocks neDispatch (SegEvalState.init (eqDispL base) lds)).log)
       N φc (base + 0x40#64).toNat vl := by
-  obtain ⟨h0, h1, h2, _, _, _⟩ := neDispatch_lpins m0 base lds hfacts
+  obtain ⟨h0, h1, h2, _, _, _⟩ := hpins
   have hr := neDispatch_bufa_repr base m0 (lds.getD 0 []) (lds.getD 1 []) (lds.getD 2 [])
     (lds.getD 3 []) (lds.getD 4 []) (lds.getD 5 []) hsp h0 h1 h2 hpaydisj hvl
   rw [neDispatch_log_trunc]; exact hr
@@ -402,14 +396,14 @@ theorem neDispatch_bufa_repr_lds (base : BitVec 64) (m0 : Mem)
 theorem neDispatch_bufb_repr_lds (base : BitVec 64) (m0 : Mem)
     (lds : List (List (BitVec 8))) (hsp : base.toNat + 4096 ≤ 2 ^ 64)
     {N : NativeAddrs} {φc : Addr → Nat} {vr : Value}
-    (hfacts : ChainFacts m0 m0 (eqDispL base) lds neDispatch)
+    (hpins : EqNeSrcPins base lds m0)
     (hpaydisj : ∀ (p : Nat) (s : String), read64 m0 ((base + 0x90#64).toNat + 8) = some p →
       ∀ k, k ≤ s.length → (p + k < base.toNat + 32 ∨ base.toNat + 88 ≤ p + k))
     (hvr : ValueRepr m0 N φc (base + 0x90#64).toNat vr) :
     ValueRepr
       (writeLog m0 (evalBlocks neDispatch (SegEvalState.init (eqDispL base) lds)).log)
       N φc (base + 0x20#64).toNat vr := by
-  obtain ⟨_, _, _, h3, h4, h5⟩ := neDispatch_lpins m0 base lds hfacts
+  obtain ⟨_, _, _, h3, h4, h5⟩ := hpins
   have hr := neDispatch_bufb_repr base m0 (lds.getD 0 []) (lds.getD 1 []) (lds.getD 2 [])
     (lds.getD 3 []) (lds.getD 4 []) (lds.getD 5 []) hsp h3 h4 h5 hpaydisj hvr
   rw [neDispatch_log_trunc]; exact hr
