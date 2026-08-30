@@ -1,5 +1,6 @@
 import Vsa.Sim.EnvDefSpec3
 import Vsa.Sim.EnvNewSpec
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 3 — `env_define` PATH 1 machine-threading infrastructure (update-in-place)
@@ -436,17 +437,17 @@ theorem prologueCarry_store {σ σ' : MState} {pc vm : BitVec 64} {m' : Mem}
     PrologueCarry σ' sp env name pv r v18 v20 v21 v8 v9 v22 := by
   rcases h with ⟨h2, h10, h11, h12, h1, h18, h20, h21, h8, h9, h22⟩
   exact ⟨
-    obs_store_other hobs Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h2,
-    obs_store_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h10,
-    obs_store_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h11,
-    obs_store_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h12,
-    obs_store_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h1,
-    obs_store_other hobs Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h18,
-    obs_store_other hobs Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h20,
-    obs_store_other hobs Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h21,
-    obs_store_other hobs Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h8,
-    obs_store_other hobs Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h9,
-    obs_store_other hobs Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h22⟩
+    obs_store_other' hobs Register.x2 (by decide) h2,
+    obs_store_other' hobs Register.x10 (by decide) h10,
+    obs_store_other' hobs Register.x11 (by decide) h11,
+    obs_store_other' hobs Register.x12 (by decide) h12,
+    obs_store_other' hobs Register.x1 (by decide) h1,
+    obs_store_other' hobs Register.x18 (by decide) h18,
+    obs_store_other' hobs Register.x20 (by decide) h20,
+    obs_store_other' hobs Register.x21 (by decide) h21,
+    obs_store_other' hobs Register.x8 (by decide) h8,
+    obs_store_other' hobs Register.x9 (by decide) h9,
+    obs_store_other' hobs Register.x22 (by decide) h22⟩
 
 theorem prologueCarry_lw19 {σ σ' : MState} {pc vm value : BitVec 64}
     {sp env name pv r v18 v20 v21 v8 v9 v22 : BitVec 64}
@@ -455,17 +456,17 @@ theorem prologueCarry_lw19 {σ σ' : MState} {pc vm value : BitVec 64}
     PrologueCarry σ' sp env name pv r v18 v20 v21 v8 v9 v22 := by
   rcases h with ⟨h2, h10, h11, h12, h1, h18, h20, h21, h8, h9, h22⟩
   exact ⟨
-    obs_alu_other hobs Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h2,
-    obs_alu_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h10,
-    obs_alu_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h11,
-    obs_alu_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h12,
-    obs_alu_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h1,
-    obs_alu_other hobs Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h18,
-    obs_alu_other hobs Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h20,
-    obs_alu_other hobs Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h21,
-    obs_alu_other hobs Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h8,
-    obs_alu_other hobs Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h9,
-    obs_alu_other hobs Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h22⟩
+    obs_alu_other' hobs Register.x2 (by decide) h2,
+    obs_alu_other' hobs Register.x10 (by decide) h10,
+    obs_alu_other' hobs Register.x11 (by decide) h11,
+    obs_alu_other' hobs Register.x12 (by decide) h12,
+    obs_alu_other' hobs Register.x1 (by decide) h1,
+    obs_alu_other' hobs Register.x18 (by decide) h18,
+    obs_alu_other' hobs Register.x20 (by decide) h20,
+    obs_alu_other' hobs Register.x21 (by decide) h21,
+    obs_alu_other' hobs Register.x8 (by decide) h8,
+    obs_alu_other' hobs Register.x9 (by decide) h9,
+    obs_alu_other' hobs Register.x22 (by decide) h22⟩
 
 /-! ### Note on the prologue proof
 
@@ -660,7 +661,7 @@ theorem env_define_prologue_head
     have := obs_store_pc hobs4
     rwa [show BitVec.addInt (0x80002a68#64 : BitVec 64) 4 = (0x80002a6c#64 : BitVec 64) from by decide] at this
   have hcarry4 := prologueCarry_store hobs4 hcarry3
-  have hcnt4 := obs_store_other hobs4 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcnt3
+  have hcnt4 := obs_store_other' hobs4 Register.x19 (by decide) hcnt3
   obtain ⟨vmi4, hmi4⟩ := obs_store_minstret hobs4
   have hloaded4 : Env_defineLoaded σ4.mem := by rw [hmem4, mem_afterNextPC]; exact loaded_envdef_writeMap8 _ _ _ (by rw [hspn32, hspn_toNat]; have := hRG.frame_code_disjoint; omega) hloaded3
   have hstrload4 : StrcmpLoaded σ4.mem := by rw [hmem4, mem_afterNextPC]; exact loaded_strcmp_writeMap8 _ _ _ (by rw [hspn32, hspn_toNat]; have := hRG.frame_strcmp_disjoint; omega) hstrload3
@@ -674,7 +675,7 @@ theorem env_define_prologue_head
     have := obs_store_pc hobs5
     rwa [show BitVec.addInt (0x80002a6c#64 : BitVec 64) 4 = (0x80002a70#64 : BitVec 64) from by decide] at this
   have hcarry5 := prologueCarry_store hobs5 hcarry4
-  have hcnt5 := obs_store_other hobs5 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcnt4
+  have hcnt5 := obs_store_other' hobs5 Register.x19 (by decide) hcnt4
   obtain ⟨vmi5, hmi5⟩ := obs_store_minstret hobs5
   have hloaded5 : Env_defineLoaded σ5.mem := by rw [hmem5, mem_afterNextPC]; exact loaded_envdef_writeMap8 _ _ _ (by rw [hspn16, hspn_toNat]; have := hRG.frame_code_disjoint; omega) hloaded4
   have hstrload5 : StrcmpLoaded σ5.mem := by rw [hmem5, mem_afterNextPC]; exact loaded_strcmp_writeMap8 _ _ _ (by rw [hspn16, hspn_toNat]; have := hRG.frame_strcmp_disjoint; omega) hstrload4
@@ -688,7 +689,7 @@ theorem env_define_prologue_head
     have := obs_store_pc hobs6
     rwa [show BitVec.addInt (0x80002a70#64 : BitVec 64) 4 = (0x80002a74#64 : BitVec 64) from by decide] at this
   have hcarry6 := prologueCarry_store hobs6 hcarry5
-  have hcnt6 := obs_store_other hobs6 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcnt5
+  have hcnt6 := obs_store_other' hobs6 Register.x19 (by decide) hcnt5
   obtain ⟨vmi6, hmi6⟩ := obs_store_minstret hobs6
   have hloaded6 : Env_defineLoaded σ6.mem := by rw [hmem6, mem_afterNextPC]; exact loaded_envdef_writeMap8 _ _ _ (by rw [hspn8, hspn_toNat]; have := hRG.frame_code_disjoint; omega) hloaded5
   have hstrload6 : StrcmpLoaded σ6.mem := by rw [hmem6, mem_afterNextPC]; exact loaded_strcmp_writeMap8 _ _ _ (by rw [hspn8, hspn_toNat]; have := hRG.frame_strcmp_disjoint; omega) hstrload5
@@ -702,7 +703,7 @@ theorem env_define_prologue_head
     have := obs_store_pc hobs7
     rwa [show BitVec.addInt (0x80002a74#64 : BitVec 64) 4 = (0x80002a78#64 : BitVec 64) from by decide] at this
   have hcarry7 := prologueCarry_store hobs7 hcarry6
-  have hcnt7 := obs_store_other hobs7 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcnt6
+  have hcnt7 := obs_store_other' hobs7 Register.x19 (by decide) hcnt6
   obtain ⟨vmi7, hmi7⟩ := obs_store_minstret hobs7
   have hloaded7 : Env_defineLoaded σ7.mem := by rw [hmem7, mem_afterNextPC]; exact loaded_envdef_writeMap8 _ _ _ (by rw [hspn56, hspn_toNat]; have := hRG.frame_code_disjoint; omega) hloaded6
   have hstrload7 : StrcmpLoaded σ7.mem := by rw [hmem7, mem_afterNextPC]; exact loaded_strcmp_writeMap8 _ _ _ (by rw [hspn56, hspn_toNat]; have := hRG.frame_strcmp_disjoint; omega) hstrload6
@@ -716,7 +717,7 @@ theorem env_define_prologue_head
     have := obs_store_pc hobs8
     rwa [show BitVec.addInt (0x80002a78#64 : BitVec 64) 4 = (0x80002a7c#64 : BitVec 64) from by decide] at this
   have hcarry8 := prologueCarry_store hobs8 hcarry7
-  have hcnt8 := obs_store_other hobs8 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcnt7
+  have hcnt8 := obs_store_other' hobs8 Register.x19 (by decide) hcnt7
   obtain ⟨vmi8, hmi8⟩ := obs_store_minstret hobs8
   have hloaded8 : Env_defineLoaded σ8.mem := by rw [hmem8, mem_afterNextPC]; exact loaded_envdef_writeMap8 _ _ _ (by rw [hspn48, hspn_toNat]; have := hRG.frame_code_disjoint; omega) hloaded7
   have hstrload8 : StrcmpLoaded σ8.mem := by rw [hmem8, mem_afterNextPC]; exact loaded_strcmp_writeMap8 _ _ _ (by rw [hspn48, hspn_toNat]; have := hRG.frame_strcmp_disjoint; omega) hstrload7
@@ -730,7 +731,7 @@ theorem env_define_prologue_head
     have := obs_store_pc hobs9
     rwa [show BitVec.addInt (0x80002a7c#64 : BitVec 64) 4 = (0x80002a80#64 : BitVec 64) from by decide] at this
   have hcarry9 := prologueCarry_store hobs9 hcarry8
-  have hcnt9 := obs_store_other hobs9 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcnt8
+  have hcnt9 := obs_store_other' hobs9 Register.x19 (by decide) hcnt8
   obtain ⟨vmi9, hmi9⟩ := obs_store_minstret hobs9
   have hloaded9 : Env_defineLoaded σ9.mem := by rw [hmem9, mem_afterNextPC]; exact loaded_envdef_writeMap8 _ _ _ (by rw [hspn40, hspn_toNat]; have := hRG.frame_code_disjoint; omega) hloaded8
   have hstrload9 : StrcmpLoaded σ9.mem := by rw [hmem9, mem_afterNextPC]; exact loaded_strcmp_writeMap8 _ _ _ (by rw [hspn40, hspn_toNat]; have := hRG.frame_strcmp_disjoint; omega) hstrload8
@@ -744,7 +745,7 @@ theorem env_define_prologue_head
     have := obs_store_pc hobs10
     rwa [show BitVec.addInt (0x80002a80#64 : BitVec 64) 4 = (0x80002a84#64 : BitVec 64) from by decide] at this
   have hcarry10 := prologueCarry_store hobs10 hcarry9
-  have hcnt10 := obs_store_other hobs10 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcnt9
+  have hcnt10 := obs_store_other' hobs10 Register.x19 (by decide) hcnt9
   obtain ⟨vmi10, hmi10⟩ := obs_store_minstret hobs10
   have hloaded10 : Env_defineLoaded σ10.mem := by rw [hmem10, mem_afterNextPC]; exact loaded_envdef_writeMap8 _ _ _ (by rw [hspn0, hspn_toNat]; have := hRG.frame_code_disjoint; omega) hloaded9
   have hstrload10 : StrcmpLoaded σ10.mem := by rw [hmem10, mem_afterNextPC]; exact loaded_strcmp_writeMap8 _ _ _ (by rw [hspn0, hspn_toNat]; have := hRG.frame_strcmp_disjoint; omega) hstrload9
@@ -757,10 +758,10 @@ theorem env_define_prologue_head
     have := obs_alu_pc hobs11
     rwa [show BitVec.addInt (0x80002a84#64 : BitVec 64) 4 = (0x80002a88#64 : BitVec 64) from by decide] at this
   have hx20_11 : σ11.regs.get? Register.x20 = some env := by have := obs_alu_rd hobs11 (by decide) (by decide) (by decide) (by decide) (by decide); simpa using this
-  have hx2_11 := obs_alu_other hobs11 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcarry10.1
-  have hx11_11 := obs_alu_other hobs11 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcarry10.2.2.1
-  have hx12_11 := obs_alu_other hobs11 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcarry10.2.2.2.1
-  have hcnt11 := obs_alu_other hobs11 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcnt10
+  have hx2_11 := obs_alu_other' hobs11 Register.x2 (by decide) hcarry10.1
+  have hx11_11 := obs_alu_other' hobs11 Register.x11 (by decide) hcarry10.2.2.1
+  have hx12_11 := obs_alu_other' hobs11 Register.x12 (by decide) hcarry10.2.2.2.1
+  have hcnt11 := obs_alu_other' hobs11 Register.x19 (by decide) hcnt10
   obtain ⟨vmi11, hmi11⟩ := obs_alu_minstret hobs11
   have hloaded11 : Env_defineLoaded σ11.mem := hmem11 ▸ hloaded10
   have hstrload11 : StrcmpLoaded σ11.mem := hmem11 ▸ hstrload10
@@ -772,10 +773,10 @@ theorem env_define_prologue_head
     have := obs_alu_pc hobs12
     rwa [show BitVec.addInt (0x80002a88#64 : BitVec 64) 4 = (0x80002a8c#64 : BitVec 64) from by decide] at this
   have hx18_12 : σ12.regs.get? Register.x18 = some name := by have := obs_alu_rd hobs12 (by decide) (by decide) (by decide) (by decide) (by decide); simpa using this
-  have hx20_12 := obs_alu_other hobs12 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_11
-  have hx2_12 := obs_alu_other hobs12 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_11
-  have hx12_12 := obs_alu_other hobs12 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_11
-  have hcnt12 := obs_alu_other hobs12 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcnt11
+  have hx20_12 := obs_alu_other' hobs12 Register.x20 (by decide) hx20_11
+  have hx2_12 := obs_alu_other' hobs12 Register.x2 (by decide) hx2_11
+  have hx12_12 := obs_alu_other' hobs12 Register.x12 (by decide) hx12_11
+  have hcnt12 := obs_alu_other' hobs12 Register.x19 (by decide) hcnt11
   obtain ⟨vmi12, hmi12⟩ := obs_alu_minstret hobs12
   have hloaded12 : Env_defineLoaded σ12.mem := hmem12 ▸ hloaded11
   have hstrload12 : StrcmpLoaded σ12.mem := hmem12 ▸ hstrload11
@@ -787,10 +788,10 @@ theorem env_define_prologue_head
     have := obs_alu_pc hobs13
     rwa [show BitVec.addInt (0x80002a8c#64 : BitVec 64) 4 = (0x80002a90#64 : BitVec 64) from by decide] at this
   have hx21_13 : σ13.regs.get? Register.x21 = some pv := by have := obs_alu_rd hobs13 (by decide) (by decide) (by decide) (by decide) (by decide); simpa using this
-  have hx20_13 := obs_alu_other hobs13 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_12
-  have hx18_13 := obs_alu_other hobs13 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_12
-  have hx2_13 := obs_alu_other hobs13 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_12
-  have hcnt13 := obs_alu_other hobs13 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcnt12
+  have hx20_13 := obs_alu_other' hobs13 Register.x20 (by decide) hx20_12
+  have hx18_13 := obs_alu_other' hobs13 Register.x18 (by decide) hx18_12
+  have hx2_13 := obs_alu_other' hobs13 Register.x2 (by decide) hx2_12
+  have hcnt13 := obs_alu_other' hobs13 Register.x19 (by decide) hcnt12
   obtain ⟨vmi13, hmi13⟩ := obs_alu_minstret hobs13
   have hloaded13 : Env_defineLoaded σ13.mem := hmem13 ▸ hloaded12
   have hstrload13 : StrcmpLoaded σ13.mem := hmem13 ▸ hstrload12

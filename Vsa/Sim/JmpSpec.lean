@@ -4,6 +4,7 @@ import Vsa.Sim.ValueSpec
 import Vsa.Sim.ValueTruthySpec
 import Vsa.Sim.Muldi3Spec
 import Vsa.Triple
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 3 — total-correctness specs for the error-transfer core: `setjmp`, `longjmp`,
@@ -313,21 +314,21 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have hpc1 : σ1.regs.get? Register.PC = some (0x80007000#64 : BitVec 64) := by
     have := obs_store_pc_val hobs1
     rwa [show BitVec.addInt (0x80006ffc#64 : BitVec 64) 4 = (0x80007000#64 : BitVec 64) from by decide] at this
-  have h_x10_1 := obs_store_other_val hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
-  have h_x1_1 := obs_store_other_val hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra
-  have h_x8_1 := obs_store_other_val hobs1 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs0
-  have h_x9_1 := obs_store_other_val hobs1 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1
-  have h_x18_1 := obs_store_other_val hobs1 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs2
-  have h_x19_1 := obs_store_other_val hobs1 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs3
-  have h_x20_1 := obs_store_other_val hobs1 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs4
-  have h_x21_1 := obs_store_other_val hobs1 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs5
-  have h_x22_1 := obs_store_other_val hobs1 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs6
-  have h_x23_1 := obs_store_other_val hobs1 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs7
-  have h_x24_1 := obs_store_other_val hobs1 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8
-  have h_x25_1 := obs_store_other_val hobs1 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs9
-  have h_x26_1 := obs_store_other_val hobs1 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs10
-  have h_x27_1 := obs_store_other_val hobs1 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs11
-  have h_x2_1 := obs_store_other_val hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp
+  have h_x10_1 := obs_store_other_val' hobs1 Register.x10 (by decide) ha0
+  have h_x1_1 := obs_store_other_val' hobs1 Register.x1 (by decide) hra
+  have h_x8_1 := obs_store_other_val' hobs1 Register.x8 (by decide) hs0
+  have h_x9_1 := obs_store_other_val' hobs1 Register.x9 (by decide) hs1
+  have h_x18_1 := obs_store_other_val' hobs1 Register.x18 (by decide) hs2
+  have h_x19_1 := obs_store_other_val' hobs1 Register.x19 (by decide) hs3
+  have h_x20_1 := obs_store_other_val' hobs1 Register.x20 (by decide) hs4
+  have h_x21_1 := obs_store_other_val' hobs1 Register.x21 (by decide) hs5
+  have h_x22_1 := obs_store_other_val' hobs1 Register.x22 (by decide) hs6
+  have h_x23_1 := obs_store_other_val' hobs1 Register.x23 (by decide) hs7
+  have h_x24_1 := obs_store_other_val' hobs1 Register.x24 (by decide) hs8
+  have h_x25_1 := obs_store_other_val' hobs1 Register.x25 (by decide) hs9
+  have h_x26_1 := obs_store_other_val' hobs1 Register.x26 (by decide) hs10
+  have h_x27_1 := obs_store_other_val' hobs1 Register.x27 (by decide) hs11
+  have h_x2_1 := obs_store_other_val' hobs1 Register.x2 (by decide) hsp
   obtain ⟨vmi1, hmi1⟩ := obs_store_minstret_val hobs1
   have hmc1' : σ1.mem = writeMap8 (m0) (jb.toNat + 0) (sdData_val ra0) := by
     rw [hmc1, mem_afterNextPC, hmem, hj0]
@@ -342,20 +343,20 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have hpc2 : σ2.regs.get? Register.PC = some (0x80007004#64 : BitVec 64) := by
     have := obs_store_pc_val hobs2
     rwa [show BitVec.addInt (0x80007000#64 : BitVec 64) 4 = (0x80007004#64 : BitVec 64) from by decide] at this
-  have h_x10_2 := obs_store_other_val hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_1
-  have h_x1_2 := obs_store_other_val hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_1
-  have h_x9_2 := obs_store_other_val hobs2 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x9_1
-  have h_x18_2 := obs_store_other_val hobs2 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x18_1
-  have h_x19_2 := obs_store_other_val hobs2 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x19_1
-  have h_x20_2 := obs_store_other_val hobs2 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x20_1
-  have h_x21_2 := obs_store_other_val hobs2 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x21_1
-  have h_x22_2 := obs_store_other_val hobs2 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x22_1
-  have h_x23_2 := obs_store_other_val hobs2 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x23_1
-  have h_x24_2 := obs_store_other_val hobs2 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x24_1
-  have h_x25_2 := obs_store_other_val hobs2 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x25_1
-  have h_x26_2 := obs_store_other_val hobs2 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x26_1
-  have h_x27_2 := obs_store_other_val hobs2 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x27_1
-  have h_x2_2 := obs_store_other_val hobs2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x2_1
+  have h_x10_2 := obs_store_other_val' hobs2 Register.x10 (by decide) h_x10_1
+  have h_x1_2 := obs_store_other_val' hobs2 Register.x1 (by decide) h_x1_1
+  have h_x9_2 := obs_store_other_val' hobs2 Register.x9 (by decide) h_x9_1
+  have h_x18_2 := obs_store_other_val' hobs2 Register.x18 (by decide) h_x18_1
+  have h_x19_2 := obs_store_other_val' hobs2 Register.x19 (by decide) h_x19_1
+  have h_x20_2 := obs_store_other_val' hobs2 Register.x20 (by decide) h_x20_1
+  have h_x21_2 := obs_store_other_val' hobs2 Register.x21 (by decide) h_x21_1
+  have h_x22_2 := obs_store_other_val' hobs2 Register.x22 (by decide) h_x22_1
+  have h_x23_2 := obs_store_other_val' hobs2 Register.x23 (by decide) h_x23_1
+  have h_x24_2 := obs_store_other_val' hobs2 Register.x24 (by decide) h_x24_1
+  have h_x25_2 := obs_store_other_val' hobs2 Register.x25 (by decide) h_x25_1
+  have h_x26_2 := obs_store_other_val' hobs2 Register.x26 (by decide) h_x26_1
+  have h_x27_2 := obs_store_other_val' hobs2 Register.x27 (by decide) h_x27_1
+  have h_x2_2 := obs_store_other_val' hobs2 Register.x2 (by decide) h_x2_1
   obtain ⟨vmi2, hmi2⟩ := obs_store_minstret_val hobs2
   have hmc2' : σ2.mem = writeMap8 (writeMap8 (m0) (jb.toNat + 0) (sdData_val ra0)) (jb.toNat + 8) (sdData_val s0v) := by
     rw [hmc2, mem_afterNextPC, hmc1', hj8]
@@ -370,19 +371,19 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have hpc3 : σ3.regs.get? Register.PC = some (0x80007008#64 : BitVec 64) := by
     have := obs_store_pc_val hobs3
     rwa [show BitVec.addInt (0x80007004#64 : BitVec 64) 4 = (0x80007008#64 : BitVec 64) from by decide] at this
-  have h_x10_3 := obs_store_other_val hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_2
-  have h_x1_3 := obs_store_other_val hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_2
-  have h_x18_3 := obs_store_other_val hobs3 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x18_2
-  have h_x19_3 := obs_store_other_val hobs3 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x19_2
-  have h_x20_3 := obs_store_other_val hobs3 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x20_2
-  have h_x21_3 := obs_store_other_val hobs3 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x21_2
-  have h_x22_3 := obs_store_other_val hobs3 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x22_2
-  have h_x23_3 := obs_store_other_val hobs3 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x23_2
-  have h_x24_3 := obs_store_other_val hobs3 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x24_2
-  have h_x25_3 := obs_store_other_val hobs3 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x25_2
-  have h_x26_3 := obs_store_other_val hobs3 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x26_2
-  have h_x27_3 := obs_store_other_val hobs3 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x27_2
-  have h_x2_3 := obs_store_other_val hobs3 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x2_2
+  have h_x10_3 := obs_store_other_val' hobs3 Register.x10 (by decide) h_x10_2
+  have h_x1_3 := obs_store_other_val' hobs3 Register.x1 (by decide) h_x1_2
+  have h_x18_3 := obs_store_other_val' hobs3 Register.x18 (by decide) h_x18_2
+  have h_x19_3 := obs_store_other_val' hobs3 Register.x19 (by decide) h_x19_2
+  have h_x20_3 := obs_store_other_val' hobs3 Register.x20 (by decide) h_x20_2
+  have h_x21_3 := obs_store_other_val' hobs3 Register.x21 (by decide) h_x21_2
+  have h_x22_3 := obs_store_other_val' hobs3 Register.x22 (by decide) h_x22_2
+  have h_x23_3 := obs_store_other_val' hobs3 Register.x23 (by decide) h_x23_2
+  have h_x24_3 := obs_store_other_val' hobs3 Register.x24 (by decide) h_x24_2
+  have h_x25_3 := obs_store_other_val' hobs3 Register.x25 (by decide) h_x25_2
+  have h_x26_3 := obs_store_other_val' hobs3 Register.x26 (by decide) h_x26_2
+  have h_x27_3 := obs_store_other_val' hobs3 Register.x27 (by decide) h_x27_2
+  have h_x2_3 := obs_store_other_val' hobs3 Register.x2 (by decide) h_x2_2
   obtain ⟨vmi3, hmi3⟩ := obs_store_minstret_val hobs3
   have hmc3' : σ3.mem = writeMap8 (writeMap8 (writeMap8 (m0) (jb.toNat + 0) (sdData_val ra0)) (jb.toNat + 8) (sdData_val s0v)) (jb.toNat + 16) (sdData_val s1v) := by
     rw [hmc3, mem_afterNextPC, hmc2', hj16]
@@ -397,18 +398,18 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have hpc4 : σ4.regs.get? Register.PC = some (0x8000700c#64 : BitVec 64) := by
     have := obs_store_pc_val hobs4
     rwa [show BitVec.addInt (0x80007008#64 : BitVec 64) 4 = (0x8000700c#64 : BitVec 64) from by decide] at this
-  have h_x10_4 := obs_store_other_val hobs4 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_3
-  have h_x1_4 := obs_store_other_val hobs4 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_3
-  have h_x19_4 := obs_store_other_val hobs4 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x19_3
-  have h_x20_4 := obs_store_other_val hobs4 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x20_3
-  have h_x21_4 := obs_store_other_val hobs4 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x21_3
-  have h_x22_4 := obs_store_other_val hobs4 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x22_3
-  have h_x23_4 := obs_store_other_val hobs4 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x23_3
-  have h_x24_4 := obs_store_other_val hobs4 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x24_3
-  have h_x25_4 := obs_store_other_val hobs4 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x25_3
-  have h_x26_4 := obs_store_other_val hobs4 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x26_3
-  have h_x27_4 := obs_store_other_val hobs4 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x27_3
-  have h_x2_4 := obs_store_other_val hobs4 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x2_3
+  have h_x10_4 := obs_store_other_val' hobs4 Register.x10 (by decide) h_x10_3
+  have h_x1_4 := obs_store_other_val' hobs4 Register.x1 (by decide) h_x1_3
+  have h_x19_4 := obs_store_other_val' hobs4 Register.x19 (by decide) h_x19_3
+  have h_x20_4 := obs_store_other_val' hobs4 Register.x20 (by decide) h_x20_3
+  have h_x21_4 := obs_store_other_val' hobs4 Register.x21 (by decide) h_x21_3
+  have h_x22_4 := obs_store_other_val' hobs4 Register.x22 (by decide) h_x22_3
+  have h_x23_4 := obs_store_other_val' hobs4 Register.x23 (by decide) h_x23_3
+  have h_x24_4 := obs_store_other_val' hobs4 Register.x24 (by decide) h_x24_3
+  have h_x25_4 := obs_store_other_val' hobs4 Register.x25 (by decide) h_x25_3
+  have h_x26_4 := obs_store_other_val' hobs4 Register.x26 (by decide) h_x26_3
+  have h_x27_4 := obs_store_other_val' hobs4 Register.x27 (by decide) h_x27_3
+  have h_x2_4 := obs_store_other_val' hobs4 Register.x2 (by decide) h_x2_3
   obtain ⟨vmi4, hmi4⟩ := obs_store_minstret_val hobs4
   have hmc4' : σ4.mem = writeMap8 (writeMap8 (writeMap8 (writeMap8 (m0) (jb.toNat + 0) (sdData_val ra0)) (jb.toNat + 8) (sdData_val s0v)) (jb.toNat + 16) (sdData_val s1v)) (jb.toNat + 24) (sdData_val s2v) := by
     rw [hmc4, mem_afterNextPC, hmc3', hj24]
@@ -423,17 +424,17 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have hpc5 : σ5.regs.get? Register.PC = some (0x80007010#64 : BitVec 64) := by
     have := obs_store_pc_val hobs5
     rwa [show BitVec.addInt (0x8000700c#64 : BitVec 64) 4 = (0x80007010#64 : BitVec 64) from by decide] at this
-  have h_x10_5 := obs_store_other_val hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_4
-  have h_x1_5 := obs_store_other_val hobs5 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_4
-  have h_x20_5 := obs_store_other_val hobs5 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x20_4
-  have h_x21_5 := obs_store_other_val hobs5 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x21_4
-  have h_x22_5 := obs_store_other_val hobs5 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x22_4
-  have h_x23_5 := obs_store_other_val hobs5 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x23_4
-  have h_x24_5 := obs_store_other_val hobs5 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x24_4
-  have h_x25_5 := obs_store_other_val hobs5 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x25_4
-  have h_x26_5 := obs_store_other_val hobs5 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x26_4
-  have h_x27_5 := obs_store_other_val hobs5 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x27_4
-  have h_x2_5 := obs_store_other_val hobs5 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x2_4
+  have h_x10_5 := obs_store_other_val' hobs5 Register.x10 (by decide) h_x10_4
+  have h_x1_5 := obs_store_other_val' hobs5 Register.x1 (by decide) h_x1_4
+  have h_x20_5 := obs_store_other_val' hobs5 Register.x20 (by decide) h_x20_4
+  have h_x21_5 := obs_store_other_val' hobs5 Register.x21 (by decide) h_x21_4
+  have h_x22_5 := obs_store_other_val' hobs5 Register.x22 (by decide) h_x22_4
+  have h_x23_5 := obs_store_other_val' hobs5 Register.x23 (by decide) h_x23_4
+  have h_x24_5 := obs_store_other_val' hobs5 Register.x24 (by decide) h_x24_4
+  have h_x25_5 := obs_store_other_val' hobs5 Register.x25 (by decide) h_x25_4
+  have h_x26_5 := obs_store_other_val' hobs5 Register.x26 (by decide) h_x26_4
+  have h_x27_5 := obs_store_other_val' hobs5 Register.x27 (by decide) h_x27_4
+  have h_x2_5 := obs_store_other_val' hobs5 Register.x2 (by decide) h_x2_4
   obtain ⟨vmi5, hmi5⟩ := obs_store_minstret_val hobs5
   have hmc5' : σ5.mem = writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (m0) (jb.toNat + 0) (sdData_val ra0)) (jb.toNat + 8) (sdData_val s0v)) (jb.toNat + 16) (sdData_val s1v)) (jb.toNat + 24) (sdData_val s2v)) (jb.toNat + 32) (sdData_val s3v) := by
     rw [hmc5, mem_afterNextPC, hmc4', hj32]
@@ -448,16 +449,16 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have hpc6 : σ6.regs.get? Register.PC = some (0x80007014#64 : BitVec 64) := by
     have := obs_store_pc_val hobs6
     rwa [show BitVec.addInt (0x80007010#64 : BitVec 64) 4 = (0x80007014#64 : BitVec 64) from by decide] at this
-  have h_x10_6 := obs_store_other_val hobs6 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_5
-  have h_x1_6 := obs_store_other_val hobs6 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_5
-  have h_x21_6 := obs_store_other_val hobs6 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x21_5
-  have h_x22_6 := obs_store_other_val hobs6 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x22_5
-  have h_x23_6 := obs_store_other_val hobs6 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x23_5
-  have h_x24_6 := obs_store_other_val hobs6 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x24_5
-  have h_x25_6 := obs_store_other_val hobs6 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x25_5
-  have h_x26_6 := obs_store_other_val hobs6 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x26_5
-  have h_x27_6 := obs_store_other_val hobs6 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x27_5
-  have h_x2_6 := obs_store_other_val hobs6 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x2_5
+  have h_x10_6 := obs_store_other_val' hobs6 Register.x10 (by decide) h_x10_5
+  have h_x1_6 := obs_store_other_val' hobs6 Register.x1 (by decide) h_x1_5
+  have h_x21_6 := obs_store_other_val' hobs6 Register.x21 (by decide) h_x21_5
+  have h_x22_6 := obs_store_other_val' hobs6 Register.x22 (by decide) h_x22_5
+  have h_x23_6 := obs_store_other_val' hobs6 Register.x23 (by decide) h_x23_5
+  have h_x24_6 := obs_store_other_val' hobs6 Register.x24 (by decide) h_x24_5
+  have h_x25_6 := obs_store_other_val' hobs6 Register.x25 (by decide) h_x25_5
+  have h_x26_6 := obs_store_other_val' hobs6 Register.x26 (by decide) h_x26_5
+  have h_x27_6 := obs_store_other_val' hobs6 Register.x27 (by decide) h_x27_5
+  have h_x2_6 := obs_store_other_val' hobs6 Register.x2 (by decide) h_x2_5
   obtain ⟨vmi6, hmi6⟩ := obs_store_minstret_val hobs6
   have hmc6' : σ6.mem = writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (m0) (jb.toNat + 0) (sdData_val ra0)) (jb.toNat + 8) (sdData_val s0v)) (jb.toNat + 16) (sdData_val s1v)) (jb.toNat + 24) (sdData_val s2v)) (jb.toNat + 32) (sdData_val s3v)) (jb.toNat + 40) (sdData_val s4v) := by
     rw [hmc6, mem_afterNextPC, hmc5', hj40]
@@ -472,15 +473,15 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have hpc7 : σ7.regs.get? Register.PC = some (0x80007018#64 : BitVec 64) := by
     have := obs_store_pc_val hobs7
     rwa [show BitVec.addInt (0x80007014#64 : BitVec 64) 4 = (0x80007018#64 : BitVec 64) from by decide] at this
-  have h_x10_7 := obs_store_other_val hobs7 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_6
-  have h_x1_7 := obs_store_other_val hobs7 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_6
-  have h_x22_7 := obs_store_other_val hobs7 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x22_6
-  have h_x23_7 := obs_store_other_val hobs7 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x23_6
-  have h_x24_7 := obs_store_other_val hobs7 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x24_6
-  have h_x25_7 := obs_store_other_val hobs7 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x25_6
-  have h_x26_7 := obs_store_other_val hobs7 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x26_6
-  have h_x27_7 := obs_store_other_val hobs7 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x27_6
-  have h_x2_7 := obs_store_other_val hobs7 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x2_6
+  have h_x10_7 := obs_store_other_val' hobs7 Register.x10 (by decide) h_x10_6
+  have h_x1_7 := obs_store_other_val' hobs7 Register.x1 (by decide) h_x1_6
+  have h_x22_7 := obs_store_other_val' hobs7 Register.x22 (by decide) h_x22_6
+  have h_x23_7 := obs_store_other_val' hobs7 Register.x23 (by decide) h_x23_6
+  have h_x24_7 := obs_store_other_val' hobs7 Register.x24 (by decide) h_x24_6
+  have h_x25_7 := obs_store_other_val' hobs7 Register.x25 (by decide) h_x25_6
+  have h_x26_7 := obs_store_other_val' hobs7 Register.x26 (by decide) h_x26_6
+  have h_x27_7 := obs_store_other_val' hobs7 Register.x27 (by decide) h_x27_6
+  have h_x2_7 := obs_store_other_val' hobs7 Register.x2 (by decide) h_x2_6
   obtain ⟨vmi7, hmi7⟩ := obs_store_minstret_val hobs7
   have hmc7' : σ7.mem = writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (m0) (jb.toNat + 0) (sdData_val ra0)) (jb.toNat + 8) (sdData_val s0v)) (jb.toNat + 16) (sdData_val s1v)) (jb.toNat + 24) (sdData_val s2v)) (jb.toNat + 32) (sdData_val s3v)) (jb.toNat + 40) (sdData_val s4v)) (jb.toNat + 48) (sdData_val s5v) := by
     rw [hmc7, mem_afterNextPC, hmc6', hj48]
@@ -495,14 +496,14 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have hpc8 : σ8.regs.get? Register.PC = some (0x8000701c#64 : BitVec 64) := by
     have := obs_store_pc_val hobs8
     rwa [show BitVec.addInt (0x80007018#64 : BitVec 64) 4 = (0x8000701c#64 : BitVec 64) from by decide] at this
-  have h_x10_8 := obs_store_other_val hobs8 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_7
-  have h_x1_8 := obs_store_other_val hobs8 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_7
-  have h_x23_8 := obs_store_other_val hobs8 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x23_7
-  have h_x24_8 := obs_store_other_val hobs8 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x24_7
-  have h_x25_8 := obs_store_other_val hobs8 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x25_7
-  have h_x26_8 := obs_store_other_val hobs8 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x26_7
-  have h_x27_8 := obs_store_other_val hobs8 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x27_7
-  have h_x2_8 := obs_store_other_val hobs8 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x2_7
+  have h_x10_8 := obs_store_other_val' hobs8 Register.x10 (by decide) h_x10_7
+  have h_x1_8 := obs_store_other_val' hobs8 Register.x1 (by decide) h_x1_7
+  have h_x23_8 := obs_store_other_val' hobs8 Register.x23 (by decide) h_x23_7
+  have h_x24_8 := obs_store_other_val' hobs8 Register.x24 (by decide) h_x24_7
+  have h_x25_8 := obs_store_other_val' hobs8 Register.x25 (by decide) h_x25_7
+  have h_x26_8 := obs_store_other_val' hobs8 Register.x26 (by decide) h_x26_7
+  have h_x27_8 := obs_store_other_val' hobs8 Register.x27 (by decide) h_x27_7
+  have h_x2_8 := obs_store_other_val' hobs8 Register.x2 (by decide) h_x2_7
   obtain ⟨vmi8, hmi8⟩ := obs_store_minstret_val hobs8
   have hmc8' : σ8.mem = writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (m0) (jb.toNat + 0) (sdData_val ra0)) (jb.toNat + 8) (sdData_val s0v)) (jb.toNat + 16) (sdData_val s1v)) (jb.toNat + 24) (sdData_val s2v)) (jb.toNat + 32) (sdData_val s3v)) (jb.toNat + 40) (sdData_val s4v)) (jb.toNat + 48) (sdData_val s5v)) (jb.toNat + 56) (sdData_val s6v) := by
     rw [hmc8, mem_afterNextPC, hmc7', hj56]
@@ -517,13 +518,13 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have hpc9 : σ9.regs.get? Register.PC = some (0x80007020#64 : BitVec 64) := by
     have := obs_store_pc_val hobs9
     rwa [show BitVec.addInt (0x8000701c#64 : BitVec 64) 4 = (0x80007020#64 : BitVec 64) from by decide] at this
-  have h_x10_9 := obs_store_other_val hobs9 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_8
-  have h_x1_9 := obs_store_other_val hobs9 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_8
-  have h_x24_9 := obs_store_other_val hobs9 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x24_8
-  have h_x25_9 := obs_store_other_val hobs9 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x25_8
-  have h_x26_9 := obs_store_other_val hobs9 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x26_8
-  have h_x27_9 := obs_store_other_val hobs9 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x27_8
-  have h_x2_9 := obs_store_other_val hobs9 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x2_8
+  have h_x10_9 := obs_store_other_val' hobs9 Register.x10 (by decide) h_x10_8
+  have h_x1_9 := obs_store_other_val' hobs9 Register.x1 (by decide) h_x1_8
+  have h_x24_9 := obs_store_other_val' hobs9 Register.x24 (by decide) h_x24_8
+  have h_x25_9 := obs_store_other_val' hobs9 Register.x25 (by decide) h_x25_8
+  have h_x26_9 := obs_store_other_val' hobs9 Register.x26 (by decide) h_x26_8
+  have h_x27_9 := obs_store_other_val' hobs9 Register.x27 (by decide) h_x27_8
+  have h_x2_9 := obs_store_other_val' hobs9 Register.x2 (by decide) h_x2_8
   obtain ⟨vmi9, hmi9⟩ := obs_store_minstret_val hobs9
   have hmc9' : σ9.mem = writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (m0) (jb.toNat + 0) (sdData_val ra0)) (jb.toNat + 8) (sdData_val s0v)) (jb.toNat + 16) (sdData_val s1v)) (jb.toNat + 24) (sdData_val s2v)) (jb.toNat + 32) (sdData_val s3v)) (jb.toNat + 40) (sdData_val s4v)) (jb.toNat + 48) (sdData_val s5v)) (jb.toNat + 56) (sdData_val s6v)) (jb.toNat + 64) (sdData_val s7v) := by
     rw [hmc9, mem_afterNextPC, hmc8', hj64]
@@ -538,12 +539,12 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have hpc10 : σ10.regs.get? Register.PC = some (0x80007024#64 : BitVec 64) := by
     have := obs_store_pc_val hobs10
     rwa [show BitVec.addInt (0x80007020#64 : BitVec 64) 4 = (0x80007024#64 : BitVec 64) from by decide] at this
-  have h_x10_10 := obs_store_other_val hobs10 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_9
-  have h_x1_10 := obs_store_other_val hobs10 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_9
-  have h_x25_10 := obs_store_other_val hobs10 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x25_9
-  have h_x26_10 := obs_store_other_val hobs10 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x26_9
-  have h_x27_10 := obs_store_other_val hobs10 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x27_9
-  have h_x2_10 := obs_store_other_val hobs10 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x2_9
+  have h_x10_10 := obs_store_other_val' hobs10 Register.x10 (by decide) h_x10_9
+  have h_x1_10 := obs_store_other_val' hobs10 Register.x1 (by decide) h_x1_9
+  have h_x25_10 := obs_store_other_val' hobs10 Register.x25 (by decide) h_x25_9
+  have h_x26_10 := obs_store_other_val' hobs10 Register.x26 (by decide) h_x26_9
+  have h_x27_10 := obs_store_other_val' hobs10 Register.x27 (by decide) h_x27_9
+  have h_x2_10 := obs_store_other_val' hobs10 Register.x2 (by decide) h_x2_9
   obtain ⟨vmi10, hmi10⟩ := obs_store_minstret_val hobs10
   have hmc10' : σ10.mem = writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (m0) (jb.toNat + 0) (sdData_val ra0)) (jb.toNat + 8) (sdData_val s0v)) (jb.toNat + 16) (sdData_val s1v)) (jb.toNat + 24) (sdData_val s2v)) (jb.toNat + 32) (sdData_val s3v)) (jb.toNat + 40) (sdData_val s4v)) (jb.toNat + 48) (sdData_val s5v)) (jb.toNat + 56) (sdData_val s6v)) (jb.toNat + 64) (sdData_val s7v)) (jb.toNat + 72) (sdData_val s8v) := by
     rw [hmc10, mem_afterNextPC, hmc9', hj72]
@@ -558,11 +559,11 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have hpc11 : σ11.regs.get? Register.PC = some (0x80007028#64 : BitVec 64) := by
     have := obs_store_pc_val hobs11
     rwa [show BitVec.addInt (0x80007024#64 : BitVec 64) 4 = (0x80007028#64 : BitVec 64) from by decide] at this
-  have h_x10_11 := obs_store_other_val hobs11 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_10
-  have h_x1_11 := obs_store_other_val hobs11 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_10
-  have h_x26_11 := obs_store_other_val hobs11 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x26_10
-  have h_x27_11 := obs_store_other_val hobs11 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x27_10
-  have h_x2_11 := obs_store_other_val hobs11 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x2_10
+  have h_x10_11 := obs_store_other_val' hobs11 Register.x10 (by decide) h_x10_10
+  have h_x1_11 := obs_store_other_val' hobs11 Register.x1 (by decide) h_x1_10
+  have h_x26_11 := obs_store_other_val' hobs11 Register.x26 (by decide) h_x26_10
+  have h_x27_11 := obs_store_other_val' hobs11 Register.x27 (by decide) h_x27_10
+  have h_x2_11 := obs_store_other_val' hobs11 Register.x2 (by decide) h_x2_10
   obtain ⟨vmi11, hmi11⟩ := obs_store_minstret_val hobs11
   have hmc11' : σ11.mem = writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (m0) (jb.toNat + 0) (sdData_val ra0)) (jb.toNat + 8) (sdData_val s0v)) (jb.toNat + 16) (sdData_val s1v)) (jb.toNat + 24) (sdData_val s2v)) (jb.toNat + 32) (sdData_val s3v)) (jb.toNat + 40) (sdData_val s4v)) (jb.toNat + 48) (sdData_val s5v)) (jb.toNat + 56) (sdData_val s6v)) (jb.toNat + 64) (sdData_val s7v)) (jb.toNat + 72) (sdData_val s8v)) (jb.toNat + 80) (sdData_val s9v) := by
     rw [hmc11, mem_afterNextPC, hmc10', hj80]
@@ -577,10 +578,10 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have hpc12 : σ12.regs.get? Register.PC = some (0x8000702c#64 : BitVec 64) := by
     have := obs_store_pc_val hobs12
     rwa [show BitVec.addInt (0x80007028#64 : BitVec 64) 4 = (0x8000702c#64 : BitVec 64) from by decide] at this
-  have h_x10_12 := obs_store_other_val hobs12 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_11
-  have h_x1_12 := obs_store_other_val hobs12 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_11
-  have h_x27_12 := obs_store_other_val hobs12 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x27_11
-  have h_x2_12 := obs_store_other_val hobs12 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x2_11
+  have h_x10_12 := obs_store_other_val' hobs12 Register.x10 (by decide) h_x10_11
+  have h_x1_12 := obs_store_other_val' hobs12 Register.x1 (by decide) h_x1_11
+  have h_x27_12 := obs_store_other_val' hobs12 Register.x27 (by decide) h_x27_11
+  have h_x2_12 := obs_store_other_val' hobs12 Register.x2 (by decide) h_x2_11
   obtain ⟨vmi12, hmi12⟩ := obs_store_minstret_val hobs12
   have hmc12' : σ12.mem = writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (m0) (jb.toNat + 0) (sdData_val ra0)) (jb.toNat + 8) (sdData_val s0v)) (jb.toNat + 16) (sdData_val s1v)) (jb.toNat + 24) (sdData_val s2v)) (jb.toNat + 32) (sdData_val s3v)) (jb.toNat + 40) (sdData_val s4v)) (jb.toNat + 48) (sdData_val s5v)) (jb.toNat + 56) (sdData_val s6v)) (jb.toNat + 64) (sdData_val s7v)) (jb.toNat + 72) (sdData_val s8v)) (jb.toNat + 80) (sdData_val s9v)) (jb.toNat + 88) (sdData_val s10v) := by
     rw [hmc12, mem_afterNextPC, hmc11', hj88]
@@ -595,9 +596,9 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have hpc13 : σ13.regs.get? Register.PC = some (0x80007030#64 : BitVec 64) := by
     have := obs_store_pc_val hobs13
     rwa [show BitVec.addInt (0x8000702c#64 : BitVec 64) 4 = (0x80007030#64 : BitVec 64) from by decide] at this
-  have h_x10_13 := obs_store_other_val hobs13 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_12
-  have h_x1_13 := obs_store_other_val hobs13 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_12
-  have h_x2_13 := obs_store_other_val hobs13 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x2_12
+  have h_x10_13 := obs_store_other_val' hobs13 Register.x10 (by decide) h_x10_12
+  have h_x1_13 := obs_store_other_val' hobs13 Register.x1 (by decide) h_x1_12
+  have h_x2_13 := obs_store_other_val' hobs13 Register.x2 (by decide) h_x2_12
   obtain ⟨vmi13, hmi13⟩ := obs_store_minstret_val hobs13
   have hmc13' : σ13.mem = writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (m0) (jb.toNat + 0) (sdData_val ra0)) (jb.toNat + 8) (sdData_val s0v)) (jb.toNat + 16) (sdData_val s1v)) (jb.toNat + 24) (sdData_val s2v)) (jb.toNat + 32) (sdData_val s3v)) (jb.toNat + 40) (sdData_val s4v)) (jb.toNat + 48) (sdData_val s5v)) (jb.toNat + 56) (sdData_val s6v)) (jb.toNat + 64) (sdData_val s7v)) (jb.toNat + 72) (sdData_val s8v)) (jb.toNat + 80) (sdData_val s9v)) (jb.toNat + 88) (sdData_val s10v)) (jb.toNat + 96) (sdData_val s11v) := by
     rw [hmc13, mem_afterNextPC, hmc12', hj96]
@@ -612,8 +613,8 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have hpc14 : σ14.regs.get? Register.PC = some (0x80007034#64 : BitVec 64) := by
     have := obs_store_pc_val hobs14
     rwa [show BitVec.addInt (0x80007030#64 : BitVec 64) 4 = (0x80007034#64 : BitVec 64) from by decide] at this
-  have h_x10_14 := obs_store_other_val hobs14 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_13
-  have h_x1_14 := obs_store_other_val hobs14 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_13
+  have h_x10_14 := obs_store_other_val' hobs14 Register.x10 (by decide) h_x10_13
+  have h_x1_14 := obs_store_other_val' hobs14 Register.x1 (by decide) h_x1_13
   obtain ⟨vmi14, hmi14⟩ := obs_store_minstret_val hobs14
   have hmc14' : σ14.mem = writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (m0) (jb.toNat + 0) (sdData_val ra0)) (jb.toNat + 8) (sdData_val s0v)) (jb.toNat + 16) (sdData_val s1v)) (jb.toNat + 24) (sdData_val s2v)) (jb.toNat + 32) (sdData_val s3v)) (jb.toNat + 40) (sdData_val s4v)) (jb.toNat + 48) (sdData_val s5v)) (jb.toNat + 56) (sdData_val s6v)) (jb.toNat + 64) (sdData_val s7v)) (jb.toNat + 72) (sdData_val s8v)) (jb.toNat + 80) (sdData_val s9v)) (jb.toNat + 88) (sdData_val s10v)) (jb.toNat + 96) (sdData_val s11v)) (jb.toNat + 104) (sdData_val spv) := by
     rw [hmc14, mem_afterNextPC, hmc13', hj104]
@@ -629,7 +630,7 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have ha0_15 : σ15.regs.get? Register.x10 = some (0#64 : BitVec 64) := by
     have := obs_alu_rd hobs15 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [show ((0#64) + sign_extend (m := 64) (0x000#12) : BitVec 64) = 0#64 from by apply BitVec.eq_of_toNat_eq; decide] at this
-  have hra_15 := obs_alu_other hobs15 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_14
+  have hra_15 := obs_alu_other' hobs15 Register.x1 (by decide) h_x1_14
   obtain ⟨vmi15, hmi15⟩ := obs_alu_minstret hobs15
   have hmc15' : σ15.mem = σ14.mem := hmc15
   have hload15 : SetjmpLoaded σ15.mem := hmc15' ▸ hload14
@@ -640,7 +641,7 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
   have hpc16 : σ16.regs.get? Register.PC = some ra0 := by
     have := obs_jr_pc hobs16
     rwa [ret_tgt ra0 hraA] at this
-  have ha0_16 := obs_jr_other hobs16 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_15
+  have ha0_16 := obs_jr_other' hobs16 Register.x10 (by decide) ha0_15
   obtain ⟨vmi16, hmi16⟩ := obs_jr_minstret hobs16
   have hmc16' : σ16.mem = σ14.mem := by rw [hmc16, hmc15']
   refine ⟨⟨σ16, i16, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩, ?_, ?_⟩
@@ -842,8 +843,8 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
   have hset_1 : σ1.regs.get? Register.x1 = some ra0 := by
     have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hval_1] at this
-  have h_x10_1 := obs_alu_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
-  have h_x11_1 := obs_alu_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1
+  have h_x10_1 := obs_alu_other' hobs1 Register.x10 (by decide) ha0
+  have h_x11_1 := obs_alu_other' hobs1 Register.x11 (by decide) ha1
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hmc1' : σ1.mem = m0 := by rw [hmc1, hmem]
   have hload1 : LongjmpLoaded σ1.mem := hmc1' ▸ (hmem ▸ hloaded)
@@ -871,9 +872,9 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
   have hset_2 : σ2.regs.get? Register.x8 = some s0v := by
     have := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hval_2] at this
-  have h_x1_2 := obs_alu_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hset_1
-  have h_x10_2 := obs_alu_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_1
-  have h_x11_2 := obs_alu_other hobs2 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x11_1
+  have h_x1_2 := obs_alu_other' hobs2 Register.x1 (by decide) hset_1
+  have h_x10_2 := obs_alu_other' hobs2 Register.x10 (by decide) h_x10_1
+  have h_x11_2 := obs_alu_other' hobs2 Register.x11 (by decide) h_x11_1
   obtain ⟨vmi2, hmi2⟩ := obs_alu_minstret hobs2
   have hmc2' : σ2.mem = m0 := by rw [hmc2, hmc1']
   have hload2 : LongjmpLoaded σ2.mem := hmc2' ▸ (hmem ▸ hloaded)
@@ -901,10 +902,10 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
   have hset_3 : σ3.regs.get? Register.x9 = some s1v := by
     have := obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hval_3] at this
-  have h_x1_3 := obs_alu_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_2
-  have h_x10_3 := obs_alu_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_2
-  have h_x11_3 := obs_alu_other hobs3 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x11_2
-  have h_x8_3 := obs_alu_other hobs3 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hset_2
+  have h_x1_3 := obs_alu_other' hobs3 Register.x1 (by decide) h_x1_2
+  have h_x10_3 := obs_alu_other' hobs3 Register.x10 (by decide) h_x10_2
+  have h_x11_3 := obs_alu_other' hobs3 Register.x11 (by decide) h_x11_2
+  have h_x8_3 := obs_alu_other' hobs3 Register.x8 (by decide) hset_2
   obtain ⟨vmi3, hmi3⟩ := obs_alu_minstret hobs3
   have hmc3' : σ3.mem = m0 := by rw [hmc3, hmc2']
   have hload3 : LongjmpLoaded σ3.mem := hmc3' ▸ (hmem ▸ hloaded)
@@ -932,11 +933,11 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
   have hset_4 : σ4.regs.get? Register.x18 = some s2v := by
     have := obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hval_4] at this
-  have h_x1_4 := obs_alu_other hobs4 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_3
-  have h_x10_4 := obs_alu_other hobs4 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_3
-  have h_x11_4 := obs_alu_other hobs4 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x11_3
-  have h_x8_4 := obs_alu_other hobs4 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x8_3
-  have h_x9_4 := obs_alu_other hobs4 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hset_3
+  have h_x1_4 := obs_alu_other' hobs4 Register.x1 (by decide) h_x1_3
+  have h_x10_4 := obs_alu_other' hobs4 Register.x10 (by decide) h_x10_3
+  have h_x11_4 := obs_alu_other' hobs4 Register.x11 (by decide) h_x11_3
+  have h_x8_4 := obs_alu_other' hobs4 Register.x8 (by decide) h_x8_3
+  have h_x9_4 := obs_alu_other' hobs4 Register.x9 (by decide) hset_3
   obtain ⟨vmi4, hmi4⟩ := obs_alu_minstret hobs4
   have hmc4' : σ4.mem = m0 := by rw [hmc4, hmc3']
   have hload4 : LongjmpLoaded σ4.mem := hmc4' ▸ (hmem ▸ hloaded)
@@ -964,12 +965,12 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
   have hset_5 : σ5.regs.get? Register.x19 = some s3v := by
     have := obs_alu_rd hobs5 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hval_5] at this
-  have h_x1_5 := obs_alu_other hobs5 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_4
-  have h_x10_5 := obs_alu_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_4
-  have h_x11_5 := obs_alu_other hobs5 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x11_4
-  have h_x18_5 := obs_alu_other hobs5 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hset_4
-  have h_x8_5 := obs_alu_other hobs5 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x8_4
-  have h_x9_5 := obs_alu_other hobs5 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x9_4
+  have h_x1_5 := obs_alu_other' hobs5 Register.x1 (by decide) h_x1_4
+  have h_x10_5 := obs_alu_other' hobs5 Register.x10 (by decide) h_x10_4
+  have h_x11_5 := obs_alu_other' hobs5 Register.x11 (by decide) h_x11_4
+  have h_x18_5 := obs_alu_other' hobs5 Register.x18 (by decide) hset_4
+  have h_x8_5 := obs_alu_other' hobs5 Register.x8 (by decide) h_x8_4
+  have h_x9_5 := obs_alu_other' hobs5 Register.x9 (by decide) h_x9_4
   obtain ⟨vmi5, hmi5⟩ := obs_alu_minstret hobs5
   have hmc5' : σ5.mem = m0 := by rw [hmc5, hmc4']
   have hload5 : LongjmpLoaded σ5.mem := hmc5' ▸ (hmem ▸ hloaded)
@@ -997,13 +998,13 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
   have hset_6 : σ6.regs.get? Register.x20 = some s4v := by
     have := obs_alu_rd hobs6 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hval_6] at this
-  have h_x1_6 := obs_alu_other hobs6 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_5
-  have h_x10_6 := obs_alu_other hobs6 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_5
-  have h_x11_6 := obs_alu_other hobs6 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x11_5
-  have h_x18_6 := obs_alu_other hobs6 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x18_5
-  have h_x19_6 := obs_alu_other hobs6 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hset_5
-  have h_x8_6 := obs_alu_other hobs6 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x8_5
-  have h_x9_6 := obs_alu_other hobs6 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x9_5
+  have h_x1_6 := obs_alu_other' hobs6 Register.x1 (by decide) h_x1_5
+  have h_x10_6 := obs_alu_other' hobs6 Register.x10 (by decide) h_x10_5
+  have h_x11_6 := obs_alu_other' hobs6 Register.x11 (by decide) h_x11_5
+  have h_x18_6 := obs_alu_other' hobs6 Register.x18 (by decide) h_x18_5
+  have h_x19_6 := obs_alu_other' hobs6 Register.x19 (by decide) hset_5
+  have h_x8_6 := obs_alu_other' hobs6 Register.x8 (by decide) h_x8_5
+  have h_x9_6 := obs_alu_other' hobs6 Register.x9 (by decide) h_x9_5
   obtain ⟨vmi6, hmi6⟩ := obs_alu_minstret hobs6
   have hmc6' : σ6.mem = m0 := by rw [hmc6, hmc5']
   have hload6 : LongjmpLoaded σ6.mem := hmc6' ▸ (hmem ▸ hloaded)
@@ -1031,14 +1032,14 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
   have hset_7 : σ7.regs.get? Register.x21 = some s5v := by
     have := obs_alu_rd hobs7 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hval_7] at this
-  have h_x1_7 := obs_alu_other hobs7 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_6
-  have h_x10_7 := obs_alu_other hobs7 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_6
-  have h_x11_7 := obs_alu_other hobs7 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x11_6
-  have h_x18_7 := obs_alu_other hobs7 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x18_6
-  have h_x19_7 := obs_alu_other hobs7 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x19_6
-  have h_x20_7 := obs_alu_other hobs7 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hset_6
-  have h_x8_7 := obs_alu_other hobs7 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x8_6
-  have h_x9_7 := obs_alu_other hobs7 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x9_6
+  have h_x1_7 := obs_alu_other' hobs7 Register.x1 (by decide) h_x1_6
+  have h_x10_7 := obs_alu_other' hobs7 Register.x10 (by decide) h_x10_6
+  have h_x11_7 := obs_alu_other' hobs7 Register.x11 (by decide) h_x11_6
+  have h_x18_7 := obs_alu_other' hobs7 Register.x18 (by decide) h_x18_6
+  have h_x19_7 := obs_alu_other' hobs7 Register.x19 (by decide) h_x19_6
+  have h_x20_7 := obs_alu_other' hobs7 Register.x20 (by decide) hset_6
+  have h_x8_7 := obs_alu_other' hobs7 Register.x8 (by decide) h_x8_6
+  have h_x9_7 := obs_alu_other' hobs7 Register.x9 (by decide) h_x9_6
   obtain ⟨vmi7, hmi7⟩ := obs_alu_minstret hobs7
   have hmc7' : σ7.mem = m0 := by rw [hmc7, hmc6']
   have hload7 : LongjmpLoaded σ7.mem := hmc7' ▸ (hmem ▸ hloaded)
@@ -1066,15 +1067,15 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
   have hset_8 : σ8.regs.get? Register.x22 = some s6v := by
     have := obs_alu_rd hobs8 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hval_8] at this
-  have h_x1_8 := obs_alu_other hobs8 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_7
-  have h_x10_8 := obs_alu_other hobs8 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_7
-  have h_x11_8 := obs_alu_other hobs8 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x11_7
-  have h_x18_8 := obs_alu_other hobs8 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x18_7
-  have h_x19_8 := obs_alu_other hobs8 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x19_7
-  have h_x20_8 := obs_alu_other hobs8 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x20_7
-  have h_x21_8 := obs_alu_other hobs8 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hset_7
-  have h_x8_8 := obs_alu_other hobs8 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x8_7
-  have h_x9_8 := obs_alu_other hobs8 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x9_7
+  have h_x1_8 := obs_alu_other' hobs8 Register.x1 (by decide) h_x1_7
+  have h_x10_8 := obs_alu_other' hobs8 Register.x10 (by decide) h_x10_7
+  have h_x11_8 := obs_alu_other' hobs8 Register.x11 (by decide) h_x11_7
+  have h_x18_8 := obs_alu_other' hobs8 Register.x18 (by decide) h_x18_7
+  have h_x19_8 := obs_alu_other' hobs8 Register.x19 (by decide) h_x19_7
+  have h_x20_8 := obs_alu_other' hobs8 Register.x20 (by decide) h_x20_7
+  have h_x21_8 := obs_alu_other' hobs8 Register.x21 (by decide) hset_7
+  have h_x8_8 := obs_alu_other' hobs8 Register.x8 (by decide) h_x8_7
+  have h_x9_8 := obs_alu_other' hobs8 Register.x9 (by decide) h_x9_7
   obtain ⟨vmi8, hmi8⟩ := obs_alu_minstret hobs8
   have hmc8' : σ8.mem = m0 := by rw [hmc8, hmc7']
   have hload8 : LongjmpLoaded σ8.mem := hmc8' ▸ (hmem ▸ hloaded)
@@ -1102,16 +1103,16 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
   have hset_9 : σ9.regs.get? Register.x23 = some s7v := by
     have := obs_alu_rd hobs9 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hval_9] at this
-  have h_x1_9 := obs_alu_other hobs9 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_8
-  have h_x10_9 := obs_alu_other hobs9 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_8
-  have h_x11_9 := obs_alu_other hobs9 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x11_8
-  have h_x18_9 := obs_alu_other hobs9 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x18_8
-  have h_x19_9 := obs_alu_other hobs9 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x19_8
-  have h_x20_9 := obs_alu_other hobs9 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x20_8
-  have h_x21_9 := obs_alu_other hobs9 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x21_8
-  have h_x22_9 := obs_alu_other hobs9 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hset_8
-  have h_x8_9 := obs_alu_other hobs9 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x8_8
-  have h_x9_9 := obs_alu_other hobs9 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x9_8
+  have h_x1_9 := obs_alu_other' hobs9 Register.x1 (by decide) h_x1_8
+  have h_x10_9 := obs_alu_other' hobs9 Register.x10 (by decide) h_x10_8
+  have h_x11_9 := obs_alu_other' hobs9 Register.x11 (by decide) h_x11_8
+  have h_x18_9 := obs_alu_other' hobs9 Register.x18 (by decide) h_x18_8
+  have h_x19_9 := obs_alu_other' hobs9 Register.x19 (by decide) h_x19_8
+  have h_x20_9 := obs_alu_other' hobs9 Register.x20 (by decide) h_x20_8
+  have h_x21_9 := obs_alu_other' hobs9 Register.x21 (by decide) h_x21_8
+  have h_x22_9 := obs_alu_other' hobs9 Register.x22 (by decide) hset_8
+  have h_x8_9 := obs_alu_other' hobs9 Register.x8 (by decide) h_x8_8
+  have h_x9_9 := obs_alu_other' hobs9 Register.x9 (by decide) h_x9_8
   obtain ⟨vmi9, hmi9⟩ := obs_alu_minstret hobs9
   have hmc9' : σ9.mem = m0 := by rw [hmc9, hmc8']
   have hload9 : LongjmpLoaded σ9.mem := hmc9' ▸ (hmem ▸ hloaded)
@@ -1139,17 +1140,17 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
   have hset_10 : σ10.regs.get? Register.x24 = some s8v := by
     have := obs_alu_rd hobs10 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hval_10] at this
-  have h_x1_10 := obs_alu_other hobs10 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_9
-  have h_x10_10 := obs_alu_other hobs10 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_9
-  have h_x11_10 := obs_alu_other hobs10 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x11_9
-  have h_x18_10 := obs_alu_other hobs10 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x18_9
-  have h_x19_10 := obs_alu_other hobs10 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x19_9
-  have h_x20_10 := obs_alu_other hobs10 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x20_9
-  have h_x21_10 := obs_alu_other hobs10 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x21_9
-  have h_x22_10 := obs_alu_other hobs10 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x22_9
-  have h_x23_10 := obs_alu_other hobs10 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hset_9
-  have h_x8_10 := obs_alu_other hobs10 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x8_9
-  have h_x9_10 := obs_alu_other hobs10 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x9_9
+  have h_x1_10 := obs_alu_other' hobs10 Register.x1 (by decide) h_x1_9
+  have h_x10_10 := obs_alu_other' hobs10 Register.x10 (by decide) h_x10_9
+  have h_x11_10 := obs_alu_other' hobs10 Register.x11 (by decide) h_x11_9
+  have h_x18_10 := obs_alu_other' hobs10 Register.x18 (by decide) h_x18_9
+  have h_x19_10 := obs_alu_other' hobs10 Register.x19 (by decide) h_x19_9
+  have h_x20_10 := obs_alu_other' hobs10 Register.x20 (by decide) h_x20_9
+  have h_x21_10 := obs_alu_other' hobs10 Register.x21 (by decide) h_x21_9
+  have h_x22_10 := obs_alu_other' hobs10 Register.x22 (by decide) h_x22_9
+  have h_x23_10 := obs_alu_other' hobs10 Register.x23 (by decide) hset_9
+  have h_x8_10 := obs_alu_other' hobs10 Register.x8 (by decide) h_x8_9
+  have h_x9_10 := obs_alu_other' hobs10 Register.x9 (by decide) h_x9_9
   obtain ⟨vmi10, hmi10⟩ := obs_alu_minstret hobs10
   have hmc10' : σ10.mem = m0 := by rw [hmc10, hmc9']
   have hload10 : LongjmpLoaded σ10.mem := hmc10' ▸ (hmem ▸ hloaded)
@@ -1177,18 +1178,18 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
   have hset_11 : σ11.regs.get? Register.x25 = some s9v := by
     have := obs_alu_rd hobs11 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hval_11] at this
-  have h_x1_11 := obs_alu_other hobs11 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_10
-  have h_x10_11 := obs_alu_other hobs11 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_10
-  have h_x11_11 := obs_alu_other hobs11 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x11_10
-  have h_x18_11 := obs_alu_other hobs11 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x18_10
-  have h_x19_11 := obs_alu_other hobs11 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x19_10
-  have h_x20_11 := obs_alu_other hobs11 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x20_10
-  have h_x21_11 := obs_alu_other hobs11 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x21_10
-  have h_x22_11 := obs_alu_other hobs11 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x22_10
-  have h_x23_11 := obs_alu_other hobs11 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x23_10
-  have h_x24_11 := obs_alu_other hobs11 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hset_10
-  have h_x8_11 := obs_alu_other hobs11 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x8_10
-  have h_x9_11 := obs_alu_other hobs11 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x9_10
+  have h_x1_11 := obs_alu_other' hobs11 Register.x1 (by decide) h_x1_10
+  have h_x10_11 := obs_alu_other' hobs11 Register.x10 (by decide) h_x10_10
+  have h_x11_11 := obs_alu_other' hobs11 Register.x11 (by decide) h_x11_10
+  have h_x18_11 := obs_alu_other' hobs11 Register.x18 (by decide) h_x18_10
+  have h_x19_11 := obs_alu_other' hobs11 Register.x19 (by decide) h_x19_10
+  have h_x20_11 := obs_alu_other' hobs11 Register.x20 (by decide) h_x20_10
+  have h_x21_11 := obs_alu_other' hobs11 Register.x21 (by decide) h_x21_10
+  have h_x22_11 := obs_alu_other' hobs11 Register.x22 (by decide) h_x22_10
+  have h_x23_11 := obs_alu_other' hobs11 Register.x23 (by decide) h_x23_10
+  have h_x24_11 := obs_alu_other' hobs11 Register.x24 (by decide) hset_10
+  have h_x8_11 := obs_alu_other' hobs11 Register.x8 (by decide) h_x8_10
+  have h_x9_11 := obs_alu_other' hobs11 Register.x9 (by decide) h_x9_10
   obtain ⟨vmi11, hmi11⟩ := obs_alu_minstret hobs11
   have hmc11' : σ11.mem = m0 := by rw [hmc11, hmc10']
   have hload11 : LongjmpLoaded σ11.mem := hmc11' ▸ (hmem ▸ hloaded)
@@ -1216,19 +1217,19 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
   have hset_12 : σ12.regs.get? Register.x26 = some s10v := by
     have := obs_alu_rd hobs12 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hval_12] at this
-  have h_x1_12 := obs_alu_other hobs12 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_11
-  have h_x10_12 := obs_alu_other hobs12 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_11
-  have h_x11_12 := obs_alu_other hobs12 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x11_11
-  have h_x18_12 := obs_alu_other hobs12 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x18_11
-  have h_x19_12 := obs_alu_other hobs12 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x19_11
-  have h_x20_12 := obs_alu_other hobs12 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x20_11
-  have h_x21_12 := obs_alu_other hobs12 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x21_11
-  have h_x22_12 := obs_alu_other hobs12 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x22_11
-  have h_x23_12 := obs_alu_other hobs12 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x23_11
-  have h_x24_12 := obs_alu_other hobs12 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x24_11
-  have h_x25_12 := obs_alu_other hobs12 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hset_11
-  have h_x8_12 := obs_alu_other hobs12 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x8_11
-  have h_x9_12 := obs_alu_other hobs12 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x9_11
+  have h_x1_12 := obs_alu_other' hobs12 Register.x1 (by decide) h_x1_11
+  have h_x10_12 := obs_alu_other' hobs12 Register.x10 (by decide) h_x10_11
+  have h_x11_12 := obs_alu_other' hobs12 Register.x11 (by decide) h_x11_11
+  have h_x18_12 := obs_alu_other' hobs12 Register.x18 (by decide) h_x18_11
+  have h_x19_12 := obs_alu_other' hobs12 Register.x19 (by decide) h_x19_11
+  have h_x20_12 := obs_alu_other' hobs12 Register.x20 (by decide) h_x20_11
+  have h_x21_12 := obs_alu_other' hobs12 Register.x21 (by decide) h_x21_11
+  have h_x22_12 := obs_alu_other' hobs12 Register.x22 (by decide) h_x22_11
+  have h_x23_12 := obs_alu_other' hobs12 Register.x23 (by decide) h_x23_11
+  have h_x24_12 := obs_alu_other' hobs12 Register.x24 (by decide) h_x24_11
+  have h_x25_12 := obs_alu_other' hobs12 Register.x25 (by decide) hset_11
+  have h_x8_12 := obs_alu_other' hobs12 Register.x8 (by decide) h_x8_11
+  have h_x9_12 := obs_alu_other' hobs12 Register.x9 (by decide) h_x9_11
   obtain ⟨vmi12, hmi12⟩ := obs_alu_minstret hobs12
   have hmc12' : σ12.mem = m0 := by rw [hmc12, hmc11']
   have hload12 : LongjmpLoaded σ12.mem := hmc12' ▸ (hmem ▸ hloaded)
@@ -1256,20 +1257,20 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
   have hset_13 : σ13.regs.get? Register.x27 = some s11v := by
     have := obs_alu_rd hobs13 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hval_13] at this
-  have h_x1_13 := obs_alu_other hobs13 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_12
-  have h_x10_13 := obs_alu_other hobs13 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x10_12
-  have h_x11_13 := obs_alu_other hobs13 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x11_12
-  have h_x18_13 := obs_alu_other hobs13 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x18_12
-  have h_x19_13 := obs_alu_other hobs13 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x19_12
-  have h_x20_13 := obs_alu_other hobs13 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x20_12
-  have h_x21_13 := obs_alu_other hobs13 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x21_12
-  have h_x22_13 := obs_alu_other hobs13 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x22_12
-  have h_x23_13 := obs_alu_other hobs13 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x23_12
-  have h_x24_13 := obs_alu_other hobs13 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x24_12
-  have h_x25_13 := obs_alu_other hobs13 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x25_12
-  have h_x26_13 := obs_alu_other hobs13 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hset_12
-  have h_x8_13 := obs_alu_other hobs13 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x8_12
-  have h_x9_13 := obs_alu_other hobs13 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x9_12
+  have h_x1_13 := obs_alu_other' hobs13 Register.x1 (by decide) h_x1_12
+  have h_x10_13 := obs_alu_other' hobs13 Register.x10 (by decide) h_x10_12
+  have h_x11_13 := obs_alu_other' hobs13 Register.x11 (by decide) h_x11_12
+  have h_x18_13 := obs_alu_other' hobs13 Register.x18 (by decide) h_x18_12
+  have h_x19_13 := obs_alu_other' hobs13 Register.x19 (by decide) h_x19_12
+  have h_x20_13 := obs_alu_other' hobs13 Register.x20 (by decide) h_x20_12
+  have h_x21_13 := obs_alu_other' hobs13 Register.x21 (by decide) h_x21_12
+  have h_x22_13 := obs_alu_other' hobs13 Register.x22 (by decide) h_x22_12
+  have h_x23_13 := obs_alu_other' hobs13 Register.x23 (by decide) h_x23_12
+  have h_x24_13 := obs_alu_other' hobs13 Register.x24 (by decide) h_x24_12
+  have h_x25_13 := obs_alu_other' hobs13 Register.x25 (by decide) h_x25_12
+  have h_x26_13 := obs_alu_other' hobs13 Register.x26 (by decide) hset_12
+  have h_x8_13 := obs_alu_other' hobs13 Register.x8 (by decide) h_x8_12
+  have h_x9_13 := obs_alu_other' hobs13 Register.x9 (by decide) h_x9_12
   obtain ⟨vmi13, hmi13⟩ := obs_alu_minstret hobs13
   have hmc13' : σ13.mem = m0 := by rw [hmc13, hmc12']
   have hload13 : LongjmpLoaded σ13.mem := hmc13' ▸ (hmem ▸ hloaded)
@@ -1297,20 +1298,20 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
   have hset_14 : σ14.regs.get? Register.x2 = some spv := by
     have := obs_alu_rd hobs14 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hval_14] at this
-  have h_x1_14 := obs_alu_other hobs14 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_13
-  have h_x11_14 := obs_alu_other hobs14 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x11_13
-  have h_x18_14 := obs_alu_other hobs14 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x18_13
-  have h_x19_14 := obs_alu_other hobs14 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x19_13
-  have h_x20_14 := obs_alu_other hobs14 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x20_13
-  have h_x21_14 := obs_alu_other hobs14 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x21_13
-  have h_x22_14 := obs_alu_other hobs14 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x22_13
-  have h_x23_14 := obs_alu_other hobs14 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x23_13
-  have h_x24_14 := obs_alu_other hobs14 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x24_13
-  have h_x25_14 := obs_alu_other hobs14 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x25_13
-  have h_x26_14 := obs_alu_other hobs14 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x26_13
-  have h_x27_14 := obs_alu_other hobs14 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hset_13
-  have h_x8_14 := obs_alu_other hobs14 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x8_13
-  have h_x9_14 := obs_alu_other hobs14 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x9_13
+  have h_x1_14 := obs_alu_other' hobs14 Register.x1 (by decide) h_x1_13
+  have h_x11_14 := obs_alu_other' hobs14 Register.x11 (by decide) h_x11_13
+  have h_x18_14 := obs_alu_other' hobs14 Register.x18 (by decide) h_x18_13
+  have h_x19_14 := obs_alu_other' hobs14 Register.x19 (by decide) h_x19_13
+  have h_x20_14 := obs_alu_other' hobs14 Register.x20 (by decide) h_x20_13
+  have h_x21_14 := obs_alu_other' hobs14 Register.x21 (by decide) h_x21_13
+  have h_x22_14 := obs_alu_other' hobs14 Register.x22 (by decide) h_x22_13
+  have h_x23_14 := obs_alu_other' hobs14 Register.x23 (by decide) h_x23_13
+  have h_x24_14 := obs_alu_other' hobs14 Register.x24 (by decide) h_x24_13
+  have h_x25_14 := obs_alu_other' hobs14 Register.x25 (by decide) h_x25_13
+  have h_x26_14 := obs_alu_other' hobs14 Register.x26 (by decide) h_x26_13
+  have h_x27_14 := obs_alu_other' hobs14 Register.x27 (by decide) hset_13
+  have h_x8_14 := obs_alu_other' hobs14 Register.x8 (by decide) h_x8_13
+  have h_x9_14 := obs_alu_other' hobs14 Register.x9 (by decide) h_x9_13
   obtain ⟨vmi14, hmi14⟩ := obs_alu_minstret hobs14
   have hmc14' : σ14.mem = m0 := by rw [hmc14, hmc13']
   have hload14 : LongjmpLoaded σ14.mem := hmc14' ▸ (hmem ▸ hloaded)
@@ -1322,21 +1323,21 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
     rwa [show BitVec.addInt (0x80007074#64 : BitVec 64) 4 = (0x80007078#64 : BitVec 64) from by decide] at this
   have ha0_15 : σ15.regs.get? Register.x10 = some (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v (sign_extend (m := 64) (0x001#12))))) :=
     obs_alu_rd hobs15 (by decide) (by decide) (by decide) (by decide) (by decide)
-  have ha1_15 := obs_alu_other hobs15 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x11_14
-  have h_x1_15 := obs_alu_other hobs15 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_14
-  have h_x8_15 := obs_alu_other hobs15 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x8_14
-  have h_x9_15 := obs_alu_other hobs15 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x9_14
-  have h_x18_15 := obs_alu_other hobs15 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x18_14
-  have h_x19_15 := obs_alu_other hobs15 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x19_14
-  have h_x20_15 := obs_alu_other hobs15 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x20_14
-  have h_x21_15 := obs_alu_other hobs15 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x21_14
-  have h_x22_15 := obs_alu_other hobs15 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x22_14
-  have h_x23_15 := obs_alu_other hobs15 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x23_14
-  have h_x24_15 := obs_alu_other hobs15 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x24_14
-  have h_x25_15 := obs_alu_other hobs15 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x25_14
-  have h_x26_15 := obs_alu_other hobs15 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x26_14
-  have h_x27_15 := obs_alu_other hobs15 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x27_14
-  have h_x2_15 := obs_alu_other hobs15 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hset_14
+  have ha1_15 := obs_alu_other' hobs15 Register.x11 (by decide) h_x11_14
+  have h_x1_15 := obs_alu_other' hobs15 Register.x1 (by decide) h_x1_14
+  have h_x8_15 := obs_alu_other' hobs15 Register.x8 (by decide) h_x8_14
+  have h_x9_15 := obs_alu_other' hobs15 Register.x9 (by decide) h_x9_14
+  have h_x18_15 := obs_alu_other' hobs15 Register.x18 (by decide) h_x18_14
+  have h_x19_15 := obs_alu_other' hobs15 Register.x19 (by decide) h_x19_14
+  have h_x20_15 := obs_alu_other' hobs15 Register.x20 (by decide) h_x20_14
+  have h_x21_15 := obs_alu_other' hobs15 Register.x21 (by decide) h_x21_14
+  have h_x22_15 := obs_alu_other' hobs15 Register.x22 (by decide) h_x22_14
+  have h_x23_15 := obs_alu_other' hobs15 Register.x23 (by decide) h_x23_14
+  have h_x24_15 := obs_alu_other' hobs15 Register.x24 (by decide) h_x24_14
+  have h_x25_15 := obs_alu_other' hobs15 Register.x25 (by decide) h_x25_14
+  have h_x26_15 := obs_alu_other' hobs15 Register.x26 (by decide) h_x26_14
+  have h_x27_15 := obs_alu_other' hobs15 Register.x27 (by decide) h_x27_14
+  have h_x2_15 := obs_alu_other' hobs15 Register.x2 (by decide) hset_14
   obtain ⟨vmi15, hmi15⟩ := obs_alu_minstret hobs15
   have hmc15' : σ15.mem = m0 := by rw [hmc15, hmc14']
   have hload15 : LongjmpLoaded σ15.mem := hmc15' ▸ (hmem ▸ hloaded)
@@ -1348,20 +1349,20 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
     rwa [show BitVec.addInt (0x80007078#64 : BitVec 64) 4 = (0x8000707c#64 : BitVec 64) from by decide] at this
   have ha0_16 : σ16.regs.get? Register.x10 = some (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v (sign_extend (m := 64) (0x001#12)))) + v) :=
     obs_alu_rd hobs16 (by decide) (by decide) (by decide) (by decide) (by decide)
-  have h_x1_16 := obs_alu_other hobs16 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_15
-  have h_x8_16 := obs_alu_other hobs16 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x8_15
-  have h_x9_16 := obs_alu_other hobs16 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x9_15
-  have h_x18_16 := obs_alu_other hobs16 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x18_15
-  have h_x19_16 := obs_alu_other hobs16 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x19_15
-  have h_x20_16 := obs_alu_other hobs16 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x20_15
-  have h_x21_16 := obs_alu_other hobs16 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x21_15
-  have h_x22_16 := obs_alu_other hobs16 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x22_15
-  have h_x23_16 := obs_alu_other hobs16 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x23_15
-  have h_x24_16 := obs_alu_other hobs16 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x24_15
-  have h_x25_16 := obs_alu_other hobs16 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x25_15
-  have h_x26_16 := obs_alu_other hobs16 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x26_15
-  have h_x27_16 := obs_alu_other hobs16 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x27_15
-  have h_x2_16 := obs_alu_other hobs16 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x2_15
+  have h_x1_16 := obs_alu_other' hobs16 Register.x1 (by decide) h_x1_15
+  have h_x8_16 := obs_alu_other' hobs16 Register.x8 (by decide) h_x8_15
+  have h_x9_16 := obs_alu_other' hobs16 Register.x9 (by decide) h_x9_15
+  have h_x18_16 := obs_alu_other' hobs16 Register.x18 (by decide) h_x18_15
+  have h_x19_16 := obs_alu_other' hobs16 Register.x19 (by decide) h_x19_15
+  have h_x20_16 := obs_alu_other' hobs16 Register.x20 (by decide) h_x20_15
+  have h_x21_16 := obs_alu_other' hobs16 Register.x21 (by decide) h_x21_15
+  have h_x22_16 := obs_alu_other' hobs16 Register.x22 (by decide) h_x22_15
+  have h_x23_16 := obs_alu_other' hobs16 Register.x23 (by decide) h_x23_15
+  have h_x24_16 := obs_alu_other' hobs16 Register.x24 (by decide) h_x24_15
+  have h_x25_16 := obs_alu_other' hobs16 Register.x25 (by decide) h_x25_15
+  have h_x26_16 := obs_alu_other' hobs16 Register.x26 (by decide) h_x26_15
+  have h_x27_16 := obs_alu_other' hobs16 Register.x27 (by decide) h_x27_15
+  have h_x2_16 := obs_alu_other' hobs16 Register.x2 (by decide) h_x2_15
   obtain ⟨vmi16, hmi16⟩ := obs_alu_minstret hobs16
   have hmc16' : σ16.mem = m0 := by rw [hmc16, hmc15']
   have hload16 : LongjmpLoaded σ16.mem := hmc16' ▸ (hmem ▸ hloaded)
@@ -1373,21 +1374,21 @@ theorem longjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb v : Bi
   have hpc17 : σ17.regs.get? Register.PC = some ra0 := by
     have := obs_jr_pc hobs17
     rwa [ret_tgt ra0 hraA] at this
-  have ha0_17 := obs_jr_other hobs17 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_16
-  have h_x1_17 := obs_jr_other hobs17 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x1_16
-  have h_x8_17 := obs_jr_other hobs17 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x8_16
-  have h_x9_17 := obs_jr_other hobs17 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x9_16
-  have h_x18_17 := obs_jr_other hobs17 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x18_16
-  have h_x19_17 := obs_jr_other hobs17 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x19_16
-  have h_x20_17 := obs_jr_other hobs17 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x20_16
-  have h_x21_17 := obs_jr_other hobs17 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x21_16
-  have h_x22_17 := obs_jr_other hobs17 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x22_16
-  have h_x23_17 := obs_jr_other hobs17 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x23_16
-  have h_x24_17 := obs_jr_other hobs17 Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x24_16
-  have h_x25_17 := obs_jr_other hobs17 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x25_16
-  have h_x26_17 := obs_jr_other hobs17 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x26_16
-  have h_x27_17 := obs_jr_other hobs17 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x27_16
-  have h_x2_17 := obs_jr_other hobs17 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h_x2_16
+  have ha0_17 := obs_jr_other' hobs17 Register.x10 (by decide) ha0_16
+  have h_x1_17 := obs_jr_other' hobs17 Register.x1 (by decide) h_x1_16
+  have h_x8_17 := obs_jr_other' hobs17 Register.x8 (by decide) h_x8_16
+  have h_x9_17 := obs_jr_other' hobs17 Register.x9 (by decide) h_x9_16
+  have h_x18_17 := obs_jr_other' hobs17 Register.x18 (by decide) h_x18_16
+  have h_x19_17 := obs_jr_other' hobs17 Register.x19 (by decide) h_x19_16
+  have h_x20_17 := obs_jr_other' hobs17 Register.x20 (by decide) h_x20_16
+  have h_x21_17 := obs_jr_other' hobs17 Register.x21 (by decide) h_x21_16
+  have h_x22_17 := obs_jr_other' hobs17 Register.x22 (by decide) h_x22_16
+  have h_x23_17 := obs_jr_other' hobs17 Register.x23 (by decide) h_x23_16
+  have h_x24_17 := obs_jr_other' hobs17 Register.x24 (by decide) h_x24_16
+  have h_x25_17 := obs_jr_other' hobs17 Register.x25 (by decide) h_x25_16
+  have h_x26_17 := obs_jr_other' hobs17 Register.x26 (by decide) h_x26_16
+  have h_x27_17 := obs_jr_other' hobs17 Register.x27 (by decide) h_x27_16
+  have h_x2_17 := obs_jr_other' hobs17 Register.x2 (by decide) h_x2_16
   obtain ⟨vmi17, hmi17⟩ := obs_jr_minstret hobs17
   have hmc17' : σ17.mem = m0 := by rw [hmc17, hmc16']
   refine ⟨⟨σ17, i17, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩, ?_, ?_⟩

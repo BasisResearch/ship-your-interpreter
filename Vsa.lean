@@ -107,6 +107,8 @@ import Vsa.Sim.EvalIntPilot
 import Vsa.Sim.EvalExprSites
 import Vsa.Sim.EvalIntSim
 import Vsa.Sim.EvalSimCommon
+import Vsa.Sim.SpillSafe
+import Vsa.Sim.OmegaHelpers
 import Vsa.Sim.EvalIntSim2
 import Vsa.Sim.EvalIntSim3
 import Vsa.Sim.EvalIntSim4

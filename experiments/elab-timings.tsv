@@ -8,3 +8,11 @@ Vsa/Sim/rows/EvalGtRow.lean	68	0	2026-08-27T16:06:13
 Vsa/Sim/rows/EvalLeRow.lean	213	0	2026-08-27T18:35:35
 Vsa/Sim/rows/EvalLeRow.lean	38	0	2026-08-27T18:47:23
 Vsa/Sim/rows/EvalLtRow.lean	38	0	2026-08-27T19:14:19
+Vsa/Sim/SnprintfSpec17.lean	47	0	2026-08-29T21:31:14
+Vsa/Sim/SnprintfSpec49.lean	62	0	2026-08-29T21:32:17
+Vsa/Sim/JmpSpec.lean	20	0	2026-08-29T21:32:38
+Vsa/Sim/ExecBrkCont.lean	22	0	2026-08-29T21:33:01
+Vsa/Sim/SnprintfSpec5.lean	29	0	2026-08-29T21:33:31
+Vsa/Sim/StrlenSpec.lean	4	0	2026-08-29T21:33:36
+Vsa/Sim/DivSpec3.lean	3	0	2026-08-29T21:33:40
+Vsa/Sim/StrcmpSpecW2.lean	3	0	2026-08-29T21:33:44

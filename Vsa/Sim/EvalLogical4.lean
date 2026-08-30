@@ -4,6 +4,7 @@ import Vsa.Sim.EvalOrSim
 import Vsa.Sim.EvalAndSim
 import Vsa.Sim.EvalBinSim
 import Vsa.Sim.EvalOrChain
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 4 — M4 recursive case: the logical `.or`-FALSE two-eval constructor
@@ -356,11 +357,11 @@ theorem blockC_orFalse
     have := obs_jal_rd hobs11 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [show BitVec.addInt (0x80003990#64 : BitVec 64) 4 = (0x80003994#64:BitVec 64) from by decide] at this
   have hx10_11 : σ11.regs.get? Register.x10 = some ((sp - 1088#64) + sign_extend (m := 64) (0x040#12)) :=
-    obs_jal_other hobs11 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_10'
-  have hs1_11 : σ11.regs.get? Register.x9 = some sret := obs_jal_other hobs11 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1_10
-  have hsp_11 : σ11.regs.get? Register.x2 = some (sp - 1088#64) := obs_jal_other hobs11 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_10
-  have hx8_11 : σ11.regs.get? Register.x8 = some aExpr := obs_jal_other hobs11 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_10
-  have hx18_11 : σ11.regs.get? Register.x18 = some aEnv := obs_jal_other hobs11 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_10
+    obs_jal_other' hobs11 Register.x10 (by decide) hx10_10'
+  have hs1_11 : σ11.regs.get? Register.x9 = some sret := obs_jal_other' hobs11 Register.x9 (by decide) hs1_10
+  have hsp_11 : σ11.regs.get? Register.x2 = some (sp - 1088#64) := obs_jal_other' hobs11 Register.x2 (by decide) hsp_10
+  have hx8_11 : σ11.regs.get? Register.x8 = some aExpr := obs_jal_other' hobs11 Register.x8 (by decide) hx8_10
+  have hx18_11 : σ11.regs.get? Register.x18 = some aEnv := obs_jal_other' hobs11 Register.x18 (by decide) hx18_10
   obtain ⟨vmi11, hmi11⟩ := obs_jal_minstret hobs11
   have hout11 : σ11.sailOutput = out0 := by rw [hobs11.out, sailOutput_sigmaPost_jal]; exact hout10
   -- Value_truthyLoaded / Value_boolLoaded at c.σ.mem
@@ -445,11 +446,11 @@ theorem blockC_orFalse
   have hpc12 : σ12.regs.get? Register.PC = some (0x80003998#64) := by
     have := obs_alu_pc hobs12
     rwa [show BitVec.addInt (0x80003994#64) 4 = (0x80003998#64 : BitVec 64) from by decide] at this
-  have ha0_12 : σ12.regs.get? Register.x10 = some (0#64) := obs_alu_other hobs12 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0T1
-  have hs1_12 : σ12.regs.get? Register.x9 = some sret := obs_alu_other hobs12 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1_T
-  have hsp_12 : σ12.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other hobs12 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_T
-  have hx8_12 : σ12.regs.get? Register.x8 = some aExpr := obs_alu_other hobs12 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_T
-  have hx18_12 : σ12.regs.get? Register.x18 = some aEnv := obs_alu_other hobs12 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_T
+  have ha0_12 : σ12.regs.get? Register.x10 = some (0#64) := obs_alu_other' hobs12 Register.x10 (by decide) ha0T1
+  have hs1_12 : σ12.regs.get? Register.x9 = some sret := obs_alu_other' hobs12 Register.x9 (by decide) hs1_T
+  have hsp_12 : σ12.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other' hobs12 Register.x2 (by decide) hsp_T
+  have hx8_12 : σ12.regs.get? Register.x8 = some aExpr := obs_alu_other' hobs12 Register.x8 (by decide) hx8_T
+  have hx18_12 : σ12.regs.get? Register.x18 = some aEnv := obs_alu_other' hobs12 Register.x18 (by decide) hx18_T
   obtain ⟨vmi12, hmi12⟩ := obs_alu_minstret hobs12
   have hout12 : σ12.sailOutput = out0 := by rw [hobs12.out, sailOutput_sigmaPost_alu]; exact houtT
   have hcode_12 : Eval_exprLoaded σ12.mem := by rw [hmem12e]; exact hcode_m3
@@ -464,10 +465,10 @@ theorem blockC_orFalse
   have hpc13 : σ13.regs.get? Register.PC = some (0x80003a00#64) := by
     have := obs_branch_taken_pc hobs13
     rwa [site_80003998_taken_lg_tgt] at this
-  have hs1_13 : σ13.regs.get? Register.x9 = some sret := obs_branch_taken_other hobs13 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1_12
-  have hsp_13 : σ13.regs.get? Register.x2 = some (sp - 1088#64) := obs_branch_taken_other hobs13 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_12
-  have hx8_13 : σ13.regs.get? Register.x8 = some aExpr := obs_branch_taken_other hobs13 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_12
-  have hx18_13 : σ13.regs.get? Register.x18 = some aEnv := obs_branch_taken_other hobs13 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_12
+  have hs1_13 : σ13.regs.get? Register.x9 = some sret := obs_branch_taken_other' hobs13 Register.x9 (by decide) hs1_12
+  have hsp_13 : σ13.regs.get? Register.x2 = some (sp - 1088#64) := obs_branch_taken_other' hobs13 Register.x2 (by decide) hsp_12
+  have hx8_13 : σ13.regs.get? Register.x8 = some aExpr := obs_branch_taken_other' hobs13 Register.x8 (by decide) hx8_12
+  have hx18_13 : σ13.regs.get? Register.x18 = some aEnv := obs_branch_taken_other' hobs13 Register.x18 (by decide) hx18_12
   obtain ⟨vmi13, hmi13⟩ := obs_branch_taken_minstret hobs13
   have hout13 : σ13.sailOutput = out0 := by rw [hobs13.out, sailOutput_sigmaPost_branch_taken]; exact hout12
   have hcode_13 : Eval_exprLoaded σ13.mem := by rw [hmem13e]; exact hcode_m3

@@ -2,6 +2,7 @@ import Vsa.Sim.ExecBrkCont
 import Vsa.Sim.ExecExprRet
 import Vsa.Sim.ExecIfSites
 import Vsa.Sim.EvalRecCommon
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 4 — M4 `ifStmt` bounded case: `ExecS.ifNone`
@@ -159,8 +160,8 @@ theorem execIfNoneSim
     have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [show ((0#64 : BitVec 64) + sign_extend (m := 64) (0x000#12)) = StatusCode .normal from by
       apply BitVec.eq_of_toNat_eq; decide] at this
-  have hsp_1 : σ1.regs.get? Register.x2 = some (sp - 176#64) := obs_alu_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hspG
-  have hra_1 : σ1.regs.get? Register.x1 = some (0x800042d4#64) := obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hraG
+  have hsp_1 : σ1.regs.get? Register.x2 = some (sp - 176#64) := obs_alu_other' hobs1 Register.x2 (by decide) hspG
+  have hra_1 : σ1.regs.get? Register.x1 = some (0x800042d4#64) := obs_alu_other' hobs1 Register.x1 (by decide) hraG
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hcode1 : Exec_stmtLoaded σ1.mem := by rw [hmem1e]; exact hcodeG
   have abi_ne' : ∀ {X R : Register}, AbiPreserved X = false → AbiPreserved R = true →
@@ -185,9 +186,9 @@ theorem execIfNoneSim
     have := obs_jr_pc hobs2
     rwa [show (0x800042d8#64 + sign_extend (m := 64) (0x1ffdc4#21)) = (0x8000409c#64 : BitVec 64) from by
       apply BitVec.eq_of_toNat_eq; decide] at this
-  have ha0_2 : σ2.regs.get? Register.x10 = some (StatusCode .normal) := obs_jr_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_1
-  have hsp_2 : σ2.regs.get? Register.x2 = some (sp - 176#64) := obs_jr_other hobs2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_1
-  have hra_2 : σ2.regs.get? Register.x1 = some (0x800042d4#64) := obs_jr_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_1
+  have ha0_2 : σ2.regs.get? Register.x10 = some (StatusCode .normal) := obs_jr_other' hobs2 Register.x10 (by decide) ha0_1
+  have hsp_2 : σ2.regs.get? Register.x2 = some (sp - 176#64) := obs_jr_other' hobs2 Register.x2 (by decide) hsp_1
+  have hra_2 : σ2.regs.get? Register.x1 = some (0x800042d4#64) := obs_jr_other' hobs2 Register.x1 (by decide) hra_1
   obtain ⟨vmi2, hmi2⟩ := obs_jr_minstret hobs2
   have hcode2 : Exec_stmtLoaded σ2.mem := by rw [hmem2e]; exact hcodeG
   have hframe2 : ∀ R : Register, AbiPreservedNoise R → (Register.x10 == R) = false →

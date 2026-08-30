@@ -1,5 +1,6 @@
 import Vsa.Sim.BlockPilot
 import Vsa.Sim.ValueSites
+import Vsa.Sim.ObsAvoid
 
 /-!
 # `BlockMem` — proof-by-reflection block lemma for straight-line ALU + LOAD + STORE runs
@@ -284,37 +285,37 @@ theorem obs_gpr_store {σ' σ : MState} {pc vm : BitVec 64}
     ∀ (n : Nat), 1 ≤ n → n ≤ 31 →
     ∀ (w : BitVec 64), gprGet σ n = some w → gprGet σ' n = some w
   | 0, h, _, _, _ => absurd h (by omega)
-  | 1, _, _, w, h => obs_store_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 2, _, _, w, h => obs_store_other hobs Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 3, _, _, w, h => obs_store_other hobs Register.x3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 4, _, _, w, h => obs_store_other hobs Register.x4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 5, _, _, w, h => obs_store_other hobs Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 6, _, _, w, h => obs_store_other hobs Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 7, _, _, w, h => obs_store_other hobs Register.x7 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 8, _, _, w, h => obs_store_other hobs Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 9, _, _, w, h => obs_store_other hobs Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 10, _, _, w, h => obs_store_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 11, _, _, w, h => obs_store_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 12, _, _, w, h => obs_store_other hobs Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 13, _, _, w, h => obs_store_other hobs Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 14, _, _, w, h => obs_store_other hobs Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 15, _, _, w, h => obs_store_other hobs Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 16, _, _, w, h => obs_store_other hobs Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 17, _, _, w, h => obs_store_other hobs Register.x17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 18, _, _, w, h => obs_store_other hobs Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 19, _, _, w, h => obs_store_other hobs Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 20, _, _, w, h => obs_store_other hobs Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 21, _, _, w, h => obs_store_other hobs Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 22, _, _, w, h => obs_store_other hobs Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 23, _, _, w, h => obs_store_other hobs Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 24, _, _, w, h => obs_store_other hobs Register.x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 25, _, _, w, h => obs_store_other hobs Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 26, _, _, w, h => obs_store_other hobs Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 27, _, _, w, h => obs_store_other hobs Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 28, _, _, w, h => obs_store_other hobs Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 29, _, _, w, h => obs_store_other hobs Register.x29 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 30, _, _, w, h => obs_store_other hobs Register.x30 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
-  | 31, _, _, w, h => obs_store_other hobs Register.x31 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h
+  | 1, _, _, w, h => obs_store_other' hobs Register.x1 (by decide) h
+  | 2, _, _, w, h => obs_store_other' hobs Register.x2 (by decide) h
+  | 3, _, _, w, h => obs_store_other' hobs Register.x3 (by decide) h
+  | 4, _, _, w, h => obs_store_other' hobs Register.x4 (by decide) h
+  | 5, _, _, w, h => obs_store_other' hobs Register.x5 (by decide) h
+  | 6, _, _, w, h => obs_store_other' hobs Register.x6 (by decide) h
+  | 7, _, _, w, h => obs_store_other' hobs Register.x7 (by decide) h
+  | 8, _, _, w, h => obs_store_other' hobs Register.x8 (by decide) h
+  | 9, _, _, w, h => obs_store_other' hobs Register.x9 (by decide) h
+  | 10, _, _, w, h => obs_store_other' hobs Register.x10 (by decide) h
+  | 11, _, _, w, h => obs_store_other' hobs Register.x11 (by decide) h
+  | 12, _, _, w, h => obs_store_other' hobs Register.x12 (by decide) h
+  | 13, _, _, w, h => obs_store_other' hobs Register.x13 (by decide) h
+  | 14, _, _, w, h => obs_store_other' hobs Register.x14 (by decide) h
+  | 15, _, _, w, h => obs_store_other' hobs Register.x15 (by decide) h
+  | 16, _, _, w, h => obs_store_other' hobs Register.x16 (by decide) h
+  | 17, _, _, w, h => obs_store_other' hobs Register.x17 (by decide) h
+  | 18, _, _, w, h => obs_store_other' hobs Register.x18 (by decide) h
+  | 19, _, _, w, h => obs_store_other' hobs Register.x19 (by decide) h
+  | 20, _, _, w, h => obs_store_other' hobs Register.x20 (by decide) h
+  | 21, _, _, w, h => obs_store_other' hobs Register.x21 (by decide) h
+  | 22, _, _, w, h => obs_store_other' hobs Register.x22 (by decide) h
+  | 23, _, _, w, h => obs_store_other' hobs Register.x23 (by decide) h
+  | 24, _, _, w, h => obs_store_other' hobs Register.x24 (by decide) h
+  | 25, _, _, w, h => obs_store_other' hobs Register.x25 (by decide) h
+  | 26, _, _, w, h => obs_store_other' hobs Register.x26 (by decide) h
+  | 27, _, _, w, h => obs_store_other' hobs Register.x27 (by decide) h
+  | 28, _, _, w, h => obs_store_other' hobs Register.x28 (by decide) h
+  | 29, _, _, w, h => obs_store_other' hobs Register.x29 (by decide) h
+  | 30, _, _, w, h => obs_store_other' hobs Register.x30 (by decide) h
+  | 31, _, _, w, h => obs_store_other' hobs Register.x31 (by decide) h
   | _+32, _, h, _, _ => absurd h (by omega)
 
 /-- All pins survive a STORE step (list form of `obs_gpr_store`). -/

@@ -3,6 +3,7 @@ import Vsa.Sim.SnprintfSpec43
 import Vsa.Sim.SnprintfSitesPrint
 import Vsa.Sim.SnprintfSitesPrint2
 import Vsa.Sim.SnprintfSitesFast2
+import Vsa.Sim.ObsAvoid
 
 /-!
 # M3 Layer-3 — `SnprintfSpec49` : the 1-iovec PRINT segment (nonneg arm)
@@ -155,23 +156,23 @@ theorem printToSsprintNN_spec
     obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
   rw [ve_sext_reassemble vcur] at hx12_1
   have hx2_1 : σ1.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_0
+    obs_alu_other' hobs1 Register.x2 (by decide) hx2_0
   have hx6_1 : σ1.regs.get? Register.x6 = some vt1 :=
-    obs_alu_other hobs1 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_0
+    obs_alu_other' hobs1 Register.x6 (by decide) hx6_0
   have hx8_1 : σ1.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs1 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_0
+    obs_alu_other' hobs1 Register.x8 (by decide) hx8_0
   have hx16_1 : σ1.regs.get? Register.x16 = some vlen :=
-    obs_alu_other hobs1 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_0
+    obs_alu_other' hobs1 Register.x16 (by decide) hx16_0
   have hx20_1 : σ1.regs.get? Register.x20 = some v20 :=
-    obs_alu_other hobs1 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_0
+    obs_alu_other' hobs1 Register.x20 (by decide) hx20_0
   have hx22_1 : σ1.regs.get? Register.x22 = some vs6 :=
-    obs_alu_other hobs1 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_0
+    obs_alu_other' hobs1 Register.x22 (by decide) hx22_0
   have hx23_1 : σ1.regs.get? Register.x23 = some viov :=
-    obs_alu_other hobs1 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_0
+    obs_alu_other' hobs1 Register.x23 (by decide) hx23_0
   have hx26_1 : σ1.regs.get? Register.x26 = some vbase :=
-    obs_alu_other hobs1 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_0
+    obs_alu_other' hobs1 Register.x26 (by decide) hx26_0
   have hx28_1 : σ1.regs.get? Register.x28 = some vt3 :=
-    obs_alu_other hobs1 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_0
+    obs_alu_other' hobs1 Register.x28 (by decide) hx28_0
   have hmE1 : σ1.mem = c.σ.mem := hmem1
   have hload1 : SvfprintfSliceLoaded σ1.mem := hmem1 ▸ hload0
   have hfp1 : FlushPinsLoaded σ1.mem := hmem1 ▸ hfp0
@@ -191,25 +192,25 @@ theorem printToSsprintNN_spec
     obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
   rw [hflag84] at hx5_2
   have hx2_2 : σ2.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_1
+    obs_alu_other' hobs2 Register.x2 (by decide) hx2_1
   have hx6_2 : σ2.regs.get? Register.x6 = some vt1 :=
-    obs_alu_other hobs2 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_1
+    obs_alu_other' hobs2 Register.x6 (by decide) hx6_1
   have hx8_2 : σ2.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs2 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_1
+    obs_alu_other' hobs2 Register.x8 (by decide) hx8_1
   have hx16_2 : σ2.regs.get? Register.x16 = some vlen :=
-    obs_alu_other hobs2 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_1
+    obs_alu_other' hobs2 Register.x16 (by decide) hx16_1
   have hx20_2 : σ2.regs.get? Register.x20 = some v20 :=
-    obs_alu_other hobs2 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_1
+    obs_alu_other' hobs2 Register.x20 (by decide) hx20_1
   have hx22_2 : σ2.regs.get? Register.x22 = some vs6 :=
-    obs_alu_other hobs2 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_1
+    obs_alu_other' hobs2 Register.x22 (by decide) hx22_1
   have hx23_2 : σ2.regs.get? Register.x23 = some viov :=
-    obs_alu_other hobs2 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_1
+    obs_alu_other' hobs2 Register.x23 (by decide) hx23_1
   have hx26_2 : σ2.regs.get? Register.x26 = some vbase :=
-    obs_alu_other hobs2 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_1
+    obs_alu_other' hobs2 Register.x26 (by decide) hx26_1
   have hx28_2 : σ2.regs.get? Register.x28 = some vt3 :=
-    obs_alu_other hobs2 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_1
+    obs_alu_other' hobs2 Register.x28 (by decide) hx28_1
   have hx12_2 : σ2.regs.get? Register.x12 = some vcur :=
-    obs_alu_other hobs2 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_1
+    obs_alu_other' hobs2 Register.x12 (by decide) hx12_1
   have hmE2 : σ2.mem = c.σ.mem := hmem2.trans hmE1
   have hload2 : SvfprintfSliceLoaded σ2.mem := hmem2 ▸ hload1
   have hfp2 : FlushPinsLoaded σ2.mem := hmem2 ▸ hfp1
@@ -228,27 +229,27 @@ theorem printToSsprintNN_spec
   have hx10_3 : σ3.regs.get? Register.x10 = some (vcur + sign_extend (m := 64) (0x000#12)) :=
     obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
   have hx2_3 : σ3.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs3 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_2
+    obs_alu_other' hobs3 Register.x2 (by decide) hx2_2
   have hx6_3 : σ3.regs.get? Register.x6 = some vt1 :=
-    obs_alu_other hobs3 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_2
+    obs_alu_other' hobs3 Register.x6 (by decide) hx6_2
   have hx8_3 : σ3.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs3 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_2
+    obs_alu_other' hobs3 Register.x8 (by decide) hx8_2
   have hx16_3 : σ3.regs.get? Register.x16 = some vlen :=
-    obs_alu_other hobs3 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_2
+    obs_alu_other' hobs3 Register.x16 (by decide) hx16_2
   have hx20_3 : σ3.regs.get? Register.x20 = some v20 :=
-    obs_alu_other hobs3 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_2
+    obs_alu_other' hobs3 Register.x20 (by decide) hx20_2
   have hx22_3 : σ3.regs.get? Register.x22 = some vs6 :=
-    obs_alu_other hobs3 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_2
+    obs_alu_other' hobs3 Register.x22 (by decide) hx22_2
   have hx23_3 : σ3.regs.get? Register.x23 = some viov :=
-    obs_alu_other hobs3 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_2
+    obs_alu_other' hobs3 Register.x23 (by decide) hx23_2
   have hx26_3 : σ3.regs.get? Register.x26 = some vbase :=
-    obs_alu_other hobs3 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_2
+    obs_alu_other' hobs3 Register.x26 (by decide) hx26_2
   have hx28_3 : σ3.regs.get? Register.x28 = some vt3 :=
-    obs_alu_other hobs3 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_2
+    obs_alu_other' hobs3 Register.x28 (by decide) hx28_2
   have hx12_3 : σ3.regs.get? Register.x12 = some vcur :=
-    obs_alu_other hobs3 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_2
+    obs_alu_other' hobs3 Register.x12 (by decide) hx12_2
   have hx5_3 : σ3.regs.get? Register.x5 = some (0#64) :=
-    obs_alu_other hobs3 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_2
+    obs_alu_other' hobs3 Register.x5 (by decide) hx5_2
   have hmE3 : σ3.mem = c.σ.mem := hmem3.trans hmE2
   have hload3 : SvfprintfSliceLoaded σ3.mem := hmem3 ▸ hload2
   have hfp3 : FlushPinsLoaded σ3.mem := hmem3 ▸ hfp2
@@ -264,27 +265,27 @@ theorem printToSsprintNN_spec
     rwa [site_80007838_taken_pv_tgt] at this
   obtain ⟨vmi4, hmi4⟩ := obs_btaken_minstret hobs4
   have hx2_4 : σ4.regs.get? Register.x2 = some vsp :=
-    obs_btaken_other hobs4 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_3
+    obs_btaken_other' hobs4 Register.x2 (by decide) hx2_3
   have hx6_4 : σ4.regs.get? Register.x6 = some vt1 :=
-    obs_btaken_other hobs4 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_3
+    obs_btaken_other' hobs4 Register.x6 (by decide) hx6_3
   have hx8_4 : σ4.regs.get? Register.x8 = some v8 :=
-    obs_btaken_other hobs4 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_3
+    obs_btaken_other' hobs4 Register.x8 (by decide) hx8_3
   have hx16_4 : σ4.regs.get? Register.x16 = some vlen :=
-    obs_btaken_other hobs4 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_3
+    obs_btaken_other' hobs4 Register.x16 (by decide) hx16_3
   have hx20_4 : σ4.regs.get? Register.x20 = some v20 :=
-    obs_btaken_other hobs4 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_3
+    obs_btaken_other' hobs4 Register.x20 (by decide) hx20_3
   have hx22_4 : σ4.regs.get? Register.x22 = some vs6 :=
-    obs_btaken_other hobs4 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_3
+    obs_btaken_other' hobs4 Register.x22 (by decide) hx22_3
   have hx23_4 : σ4.regs.get? Register.x23 = some viov :=
-    obs_btaken_other hobs4 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_3
+    obs_btaken_other' hobs4 Register.x23 (by decide) hx23_3
   have hx26_4 : σ4.regs.get? Register.x26 = some vbase :=
-    obs_btaken_other hobs4 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_3
+    obs_btaken_other' hobs4 Register.x26 (by decide) hx26_3
   have hx28_4 : σ4.regs.get? Register.x28 = some vt3 :=
-    obs_btaken_other hobs4 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_3
+    obs_btaken_other' hobs4 Register.x28 (by decide) hx28_3
   have hx12_4 : σ4.regs.get? Register.x12 = some vcur :=
-    obs_btaken_other hobs4 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_3
+    obs_btaken_other' hobs4 Register.x12 (by decide) hx12_3
   have hx5_4 : σ4.regs.get? Register.x5 = some (0#64) :=
-    obs_btaken_other hobs4 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_3
+    obs_btaken_other' hobs4 Register.x5 (by decide) hx5_3
   have hmE4 : σ4.mem = c.σ.mem := hmem4.trans hmE3
   have hload4 : SvfprintfSliceLoaded σ4.mem := hmem4 ▸ hload3
   have hfp4 : FlushPinsLoaded σ4.mem := hmem4 ▸ hfp3
@@ -303,27 +304,27 @@ theorem printToSsprintNN_spec
   have hx14_5 : σ5.regs.get? Register.x14 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb vt3 31 0) - (Sail.BitVec.extractLsb vlen 31 0))) :=
     obs_alu_rd hobs5 (by decide) (by decide) (by decide) (by decide) (by decide)
   have hx2_5 : σ5.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs5 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_4
+    obs_alu_other' hobs5 Register.x2 (by decide) hx2_4
   have hx6_5 : σ5.regs.get? Register.x6 = some vt1 :=
-    obs_alu_other hobs5 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_4
+    obs_alu_other' hobs5 Register.x6 (by decide) hx6_4
   have hx8_5 : σ5.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs5 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_4
+    obs_alu_other' hobs5 Register.x8 (by decide) hx8_4
   have hx16_5 : σ5.regs.get? Register.x16 = some vlen :=
-    obs_alu_other hobs5 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_4
+    obs_alu_other' hobs5 Register.x16 (by decide) hx16_4
   have hx20_5 : σ5.regs.get? Register.x20 = some v20 :=
-    obs_alu_other hobs5 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_4
+    obs_alu_other' hobs5 Register.x20 (by decide) hx20_4
   have hx22_5 : σ5.regs.get? Register.x22 = some vs6 :=
-    obs_alu_other hobs5 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_4
+    obs_alu_other' hobs5 Register.x22 (by decide) hx22_4
   have hx23_5 : σ5.regs.get? Register.x23 = some viov :=
-    obs_alu_other hobs5 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_4
+    obs_alu_other' hobs5 Register.x23 (by decide) hx23_4
   have hx26_5 : σ5.regs.get? Register.x26 = some vbase :=
-    obs_alu_other hobs5 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_4
+    obs_alu_other' hobs5 Register.x26 (by decide) hx26_4
   have hx28_5 : σ5.regs.get? Register.x28 = some vt3 :=
-    obs_alu_other hobs5 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_4
+    obs_alu_other' hobs5 Register.x28 (by decide) hx28_4
   have hx12_5 : σ5.regs.get? Register.x12 = some vcur :=
-    obs_alu_other hobs5 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_4
+    obs_alu_other' hobs5 Register.x12 (by decide) hx12_4
   have hx5_5 : σ5.regs.get? Register.x5 = some (0#64) :=
-    obs_alu_other hobs5 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_4
+    obs_alu_other' hobs5 Register.x5 (by decide) hx5_4
   have hmE5 : σ5.mem = c.σ.mem := hmem5.trans hmE4
   have hload5 : SvfprintfSliceLoaded σ5.mem := hmem5 ▸ hload4
   have hfp5 : FlushPinsLoaded σ5.mem := hmem5 ▸ hfp4
@@ -340,29 +341,29 @@ theorem printToSsprintNN_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi6, hmi6⟩ := obs_bnottaken_minstret hobs6
   have hx2_6 : σ6.regs.get? Register.x2 = some vsp :=
-    obs_bnottaken_other hobs6 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_5
+    obs_bnottaken_other' hobs6 Register.x2 (by decide) hx2_5
   have hx6_6 : σ6.regs.get? Register.x6 = some vt1 :=
-    obs_bnottaken_other hobs6 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_5
+    obs_bnottaken_other' hobs6 Register.x6 (by decide) hx6_5
   have hx8_6 : σ6.regs.get? Register.x8 = some v8 :=
-    obs_bnottaken_other hobs6 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_5
+    obs_bnottaken_other' hobs6 Register.x8 (by decide) hx8_5
   have hx16_6 : σ6.regs.get? Register.x16 = some vlen :=
-    obs_bnottaken_other hobs6 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_5
+    obs_bnottaken_other' hobs6 Register.x16 (by decide) hx16_5
   have hx20_6 : σ6.regs.get? Register.x20 = some v20 :=
-    obs_bnottaken_other hobs6 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_5
+    obs_bnottaken_other' hobs6 Register.x20 (by decide) hx20_5
   have hx22_6 : σ6.regs.get? Register.x22 = some vs6 :=
-    obs_bnottaken_other hobs6 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_5
+    obs_bnottaken_other' hobs6 Register.x22 (by decide) hx22_5
   have hx23_6 : σ6.regs.get? Register.x23 = some viov :=
-    obs_bnottaken_other hobs6 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_5
+    obs_bnottaken_other' hobs6 Register.x23 (by decide) hx23_5
   have hx26_6 : σ6.regs.get? Register.x26 = some vbase :=
-    obs_bnottaken_other hobs6 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_5
+    obs_bnottaken_other' hobs6 Register.x26 (by decide) hx26_5
   have hx28_6 : σ6.regs.get? Register.x28 = some vt3 :=
-    obs_bnottaken_other hobs6 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_5
+    obs_bnottaken_other' hobs6 Register.x28 (by decide) hx28_5
   have hx12_6 : σ6.regs.get? Register.x12 = some vcur :=
-    obs_bnottaken_other hobs6 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_5
+    obs_bnottaken_other' hobs6 Register.x12 (by decide) hx12_5
   have hx5_6 : σ6.regs.get? Register.x5 = some (0#64) :=
-    obs_bnottaken_other hobs6 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_5
+    obs_bnottaken_other' hobs6 Register.x5 (by decide) hx5_5
   have hx14_6 : σ6.regs.get? Register.x14 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb vt3 31 0) - (Sail.BitVec.extractLsb vlen 31 0))) :=
-    obs_bnottaken_other hobs6 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_5
+    obs_bnottaken_other' hobs6 Register.x14 (by decide) hx14_5
   have hmE6 : σ6.mem = c.σ.mem := hmem6.trans hmE5
   have hload6 : SvfprintfSliceLoaded σ6.mem := hmem6 ▸ hload5
   have hfp6 : FlushPinsLoaded σ6.mem := hmem6 ▸ hfp5
@@ -384,27 +385,27 @@ theorem printToSsprintNN_spec
     obs_alu_rd hobs7 (by decide) (by decide) (by decide) (by decide) (by decide)
   rw [show (zero_extend (m := 64) (0x00#8) : BitVec 64) = (0#64) from by decide] at hx14_7
   have hx2_7 : σ7.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs7 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_6
+    obs_alu_other' hobs7 Register.x2 (by decide) hx2_6
   have hx6_7 : σ7.regs.get? Register.x6 = some vt1 :=
-    obs_alu_other hobs7 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_6
+    obs_alu_other' hobs7 Register.x6 (by decide) hx6_6
   have hx8_7 : σ7.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs7 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_6
+    obs_alu_other' hobs7 Register.x8 (by decide) hx8_6
   have hx16_7 : σ7.regs.get? Register.x16 = some vlen :=
-    obs_alu_other hobs7 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_6
+    obs_alu_other' hobs7 Register.x16 (by decide) hx16_6
   have hx20_7 : σ7.regs.get? Register.x20 = some v20 :=
-    obs_alu_other hobs7 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_6
+    obs_alu_other' hobs7 Register.x20 (by decide) hx20_6
   have hx22_7 : σ7.regs.get? Register.x22 = some vs6 :=
-    obs_alu_other hobs7 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_6
+    obs_alu_other' hobs7 Register.x22 (by decide) hx22_6
   have hx23_7 : σ7.regs.get? Register.x23 = some viov :=
-    obs_alu_other hobs7 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_6
+    obs_alu_other' hobs7 Register.x23 (by decide) hx23_6
   have hx26_7 : σ7.regs.get? Register.x26 = some vbase :=
-    obs_alu_other hobs7 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_6
+    obs_alu_other' hobs7 Register.x26 (by decide) hx26_6
   have hx28_7 : σ7.regs.get? Register.x28 = some vt3 :=
-    obs_alu_other hobs7 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_6
+    obs_alu_other' hobs7 Register.x28 (by decide) hx28_6
   have hx12_7 : σ7.regs.get? Register.x12 = some vcur :=
-    obs_alu_other hobs7 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_6
+    obs_alu_other' hobs7 Register.x12 (by decide) hx12_6
   have hx5_7 : σ7.regs.get? Register.x5 = some (0#64) :=
-    obs_alu_other hobs7 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_6
+    obs_alu_other' hobs7 Register.x5 (by decide) hx5_6
   have hmE7 : σ7.mem = c.σ.mem := hmem7.trans hmE6
   have hload7 : SvfprintfSliceLoaded σ7.mem := hmem7 ▸ hload6
   have hfp7 : FlushPinsLoaded σ7.mem := hmem7 ▸ hfp6
@@ -421,29 +422,29 @@ theorem printToSsprintNN_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi8, hmi8⟩ := obs_bnottaken_minstret hobs8
   have hx2_8 : σ8.regs.get? Register.x2 = some vsp :=
-    obs_bnottaken_other hobs8 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_7
+    obs_bnottaken_other' hobs8 Register.x2 (by decide) hx2_7
   have hx6_8 : σ8.regs.get? Register.x6 = some vt1 :=
-    obs_bnottaken_other hobs8 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_7
+    obs_bnottaken_other' hobs8 Register.x6 (by decide) hx6_7
   have hx8_8 : σ8.regs.get? Register.x8 = some v8 :=
-    obs_bnottaken_other hobs8 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_7
+    obs_bnottaken_other' hobs8 Register.x8 (by decide) hx8_7
   have hx16_8 : σ8.regs.get? Register.x16 = some vlen :=
-    obs_bnottaken_other hobs8 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_7
+    obs_bnottaken_other' hobs8 Register.x16 (by decide) hx16_7
   have hx20_8 : σ8.regs.get? Register.x20 = some v20 :=
-    obs_bnottaken_other hobs8 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_7
+    obs_bnottaken_other' hobs8 Register.x20 (by decide) hx20_7
   have hx22_8 : σ8.regs.get? Register.x22 = some vs6 :=
-    obs_bnottaken_other hobs8 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_7
+    obs_bnottaken_other' hobs8 Register.x22 (by decide) hx22_7
   have hx23_8 : σ8.regs.get? Register.x23 = some viov :=
-    obs_bnottaken_other hobs8 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_7
+    obs_bnottaken_other' hobs8 Register.x23 (by decide) hx23_7
   have hx26_8 : σ8.regs.get? Register.x26 = some vbase :=
-    obs_bnottaken_other hobs8 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_7
+    obs_bnottaken_other' hobs8 Register.x26 (by decide) hx26_7
   have hx28_8 : σ8.regs.get? Register.x28 = some vt3 :=
-    obs_bnottaken_other hobs8 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_7
+    obs_bnottaken_other' hobs8 Register.x28 (by decide) hx28_7
   have hx12_8 : σ8.regs.get? Register.x12 = some vcur :=
-    obs_bnottaken_other hobs8 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_7
+    obs_bnottaken_other' hobs8 Register.x12 (by decide) hx12_7
   have hx5_8 : σ8.regs.get? Register.x5 = some (0#64) :=
-    obs_bnottaken_other hobs8 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_7
+    obs_bnottaken_other' hobs8 Register.x5 (by decide) hx5_7
   have hx14_8 : σ8.regs.get? Register.x14 = some (0#64) :=
-    obs_bnottaken_other hobs8 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_7
+    obs_bnottaken_other' hobs8 Register.x14 (by decide) hx14_7
   have hmE8 : σ8.mem = c.σ.mem := hmem8.trans hmE7
   have hload8 : SvfprintfSliceLoaded σ8.mem := hmem8 ▸ hload7
   have hfp8 : FlushPinsLoaded σ8.mem := hmem8 ▸ hfp7
@@ -462,27 +463,27 @@ theorem printToSsprintNN_spec
   have hx20_9 : σ9.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
     obs_alu_rd hobs9 (by decide) (by decide) (by decide) (by decide) (by decide)
   have hx2_9 : σ9.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs9 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_8
+    obs_alu_other' hobs9 Register.x2 (by decide) hx2_8
   have hx6_9 : σ9.regs.get? Register.x6 = some vt1 :=
-    obs_alu_other hobs9 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_8
+    obs_alu_other' hobs9 Register.x6 (by decide) hx6_8
   have hx8_9 : σ9.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs9 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_8
+    obs_alu_other' hobs9 Register.x8 (by decide) hx8_8
   have hx16_9 : σ9.regs.get? Register.x16 = some vlen :=
-    obs_alu_other hobs9 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_8
+    obs_alu_other' hobs9 Register.x16 (by decide) hx16_8
   have hx22_9 : σ9.regs.get? Register.x22 = some vs6 :=
-    obs_alu_other hobs9 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_8
+    obs_alu_other' hobs9 Register.x22 (by decide) hx22_8
   have hx23_9 : σ9.regs.get? Register.x23 = some viov :=
-    obs_alu_other hobs9 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_8
+    obs_alu_other' hobs9 Register.x23 (by decide) hx23_8
   have hx26_9 : σ9.regs.get? Register.x26 = some vbase :=
-    obs_alu_other hobs9 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_8
+    obs_alu_other' hobs9 Register.x26 (by decide) hx26_8
   have hx28_9 : σ9.regs.get? Register.x28 = some vt3 :=
-    obs_alu_other hobs9 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_8
+    obs_alu_other' hobs9 Register.x28 (by decide) hx28_8
   have hx12_9 : σ9.regs.get? Register.x12 = some vcur :=
-    obs_alu_other hobs9 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_8
+    obs_alu_other' hobs9 Register.x12 (by decide) hx12_8
   have hx5_9 : σ9.regs.get? Register.x5 = some (0#64) :=
-    obs_alu_other hobs9 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_8
+    obs_alu_other' hobs9 Register.x5 (by decide) hx5_8
   have hx14_9 : σ9.regs.get? Register.x14 = some (0#64) :=
-    obs_alu_other hobs9 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_8
+    obs_alu_other' hobs9 Register.x14 (by decide) hx14_8
   have hmE9 : σ9.mem = c.σ.mem := hmem9.trans hmE8
   have hload9 : SvfprintfSliceLoaded σ9.mem := hmem9 ▸ hload8
   have hfp9 : FlushPinsLoaded σ9.mem := hmem9 ▸ hfp8
@@ -498,29 +499,29 @@ theorem printToSsprintNN_spec
     rwa [site_80007ce8_taken_fs2_tgt] at this
   obtain ⟨vmi10, hmi10⟩ := obs_btaken_minstret hobs10
   have hx2_10 : σ10.regs.get? Register.x2 = some vsp :=
-    obs_btaken_other hobs10 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_9
+    obs_btaken_other' hobs10 Register.x2 (by decide) hx2_9
   have hx6_10 : σ10.regs.get? Register.x6 = some vt1 :=
-    obs_btaken_other hobs10 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_9
+    obs_btaken_other' hobs10 Register.x6 (by decide) hx6_9
   have hx8_10 : σ10.regs.get? Register.x8 = some v8 :=
-    obs_btaken_other hobs10 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_9
+    obs_btaken_other' hobs10 Register.x8 (by decide) hx8_9
   have hx16_10 : σ10.regs.get? Register.x16 = some vlen :=
-    obs_btaken_other hobs10 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_9
+    obs_btaken_other' hobs10 Register.x16 (by decide) hx16_9
   have hx20_10 : σ10.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_btaken_other hobs10 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_9
+    obs_btaken_other' hobs10 Register.x20 (by decide) hx20_9
   have hx22_10 : σ10.regs.get? Register.x22 = some vs6 :=
-    obs_btaken_other hobs10 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_9
+    obs_btaken_other' hobs10 Register.x22 (by decide) hx22_9
   have hx23_10 : σ10.regs.get? Register.x23 = some viov :=
-    obs_btaken_other hobs10 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_9
+    obs_btaken_other' hobs10 Register.x23 (by decide) hx23_9
   have hx26_10 : σ10.regs.get? Register.x26 = some vbase :=
-    obs_btaken_other hobs10 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_9
+    obs_btaken_other' hobs10 Register.x26 (by decide) hx26_9
   have hx28_10 : σ10.regs.get? Register.x28 = some vt3 :=
-    obs_btaken_other hobs10 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_9
+    obs_btaken_other' hobs10 Register.x28 (by decide) hx28_9
   have hx12_10 : σ10.regs.get? Register.x12 = some vcur :=
-    obs_btaken_other hobs10 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_9
+    obs_btaken_other' hobs10 Register.x12 (by decide) hx12_9
   have hx5_10 : σ10.regs.get? Register.x5 = some (0#64) :=
-    obs_btaken_other hobs10 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_9
+    obs_btaken_other' hobs10 Register.x5 (by decide) hx5_9
   have hx14_10 : σ10.regs.get? Register.x14 = some (0#64) :=
-    obs_btaken_other hobs10 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_9
+    obs_btaken_other' hobs10 Register.x14 (by decide) hx14_9
   have hmE10 : σ10.mem = c.σ.mem := hmem10.trans hmE9
   have hload10 : SvfprintfSliceLoaded σ10.mem := hmem10 ▸ hload9
   have hfp10 : FlushPinsLoaded σ10.mem := hmem10 ▸ hfp9
@@ -540,27 +541,27 @@ theorem printToSsprintNN_spec
     obs_alu_rd hobs11 (by decide) (by decide) (by decide) (by decide) (by decide)
   rw [hflag256] at hx14_11
   have hx2_11 : σ11.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs11 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_10
+    obs_alu_other' hobs11 Register.x2 (by decide) hx2_10
   have hx6_11 : σ11.regs.get? Register.x6 = some vt1 :=
-    obs_alu_other hobs11 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_10
+    obs_alu_other' hobs11 Register.x6 (by decide) hx6_10
   have hx8_11 : σ11.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs11 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_10
+    obs_alu_other' hobs11 Register.x8 (by decide) hx8_10
   have hx16_11 : σ11.regs.get? Register.x16 = some vlen :=
-    obs_alu_other hobs11 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_10
+    obs_alu_other' hobs11 Register.x16 (by decide) hx16_10
   have hx20_11 : σ11.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_alu_other hobs11 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_10
+    obs_alu_other' hobs11 Register.x20 (by decide) hx20_10
   have hx22_11 : σ11.regs.get? Register.x22 = some vs6 :=
-    obs_alu_other hobs11 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_10
+    obs_alu_other' hobs11 Register.x22 (by decide) hx22_10
   have hx23_11 : σ11.regs.get? Register.x23 = some viov :=
-    obs_alu_other hobs11 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_10
+    obs_alu_other' hobs11 Register.x23 (by decide) hx23_10
   have hx26_11 : σ11.regs.get? Register.x26 = some vbase :=
-    obs_alu_other hobs11 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_10
+    obs_alu_other' hobs11 Register.x26 (by decide) hx26_10
   have hx28_11 : σ11.regs.get? Register.x28 = some vt3 :=
-    obs_alu_other hobs11 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_10
+    obs_alu_other' hobs11 Register.x28 (by decide) hx28_10
   have hx12_11 : σ11.regs.get? Register.x12 = some vcur :=
-    obs_alu_other hobs11 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_10
+    obs_alu_other' hobs11 Register.x12 (by decide) hx12_10
   have hx5_11 : σ11.regs.get? Register.x5 = some (0#64) :=
-    obs_alu_other hobs11 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_10
+    obs_alu_other' hobs11 Register.x5 (by decide) hx5_10
   have hmE11 : σ11.mem = c.σ.mem := hmem11.trans hmE10
   have hload11 : SvfprintfSliceLoaded σ11.mem := hmem11 ▸ hload10
   have hfp11 : FlushPinsLoaded σ11.mem := hmem11 ▸ hfp10
@@ -577,29 +578,29 @@ theorem printToSsprintNN_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi12, hmi12⟩ := obs_bnottaken_minstret hobs12
   have hx2_12 : σ12.regs.get? Register.x2 = some vsp :=
-    obs_bnottaken_other hobs12 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_11
+    obs_bnottaken_other' hobs12 Register.x2 (by decide) hx2_11
   have hx6_12 : σ12.regs.get? Register.x6 = some vt1 :=
-    obs_bnottaken_other hobs12 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_11
+    obs_bnottaken_other' hobs12 Register.x6 (by decide) hx6_11
   have hx8_12 : σ12.regs.get? Register.x8 = some v8 :=
-    obs_bnottaken_other hobs12 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_11
+    obs_bnottaken_other' hobs12 Register.x8 (by decide) hx8_11
   have hx16_12 : σ12.regs.get? Register.x16 = some vlen :=
-    obs_bnottaken_other hobs12 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_11
+    obs_bnottaken_other' hobs12 Register.x16 (by decide) hx16_11
   have hx20_12 : σ12.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_bnottaken_other hobs12 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_11
+    obs_bnottaken_other' hobs12 Register.x20 (by decide) hx20_11
   have hx22_12 : σ12.regs.get? Register.x22 = some vs6 :=
-    obs_bnottaken_other hobs12 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_11
+    obs_bnottaken_other' hobs12 Register.x22 (by decide) hx22_11
   have hx23_12 : σ12.regs.get? Register.x23 = some viov :=
-    obs_bnottaken_other hobs12 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_11
+    obs_bnottaken_other' hobs12 Register.x23 (by decide) hx23_11
   have hx26_12 : σ12.regs.get? Register.x26 = some vbase :=
-    obs_bnottaken_other hobs12 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_11
+    obs_bnottaken_other' hobs12 Register.x26 (by decide) hx26_11
   have hx28_12 : σ12.regs.get? Register.x28 = some vt3 :=
-    obs_bnottaken_other hobs12 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_11
+    obs_bnottaken_other' hobs12 Register.x28 (by decide) hx28_11
   have hx12_12 : σ12.regs.get? Register.x12 = some vcur :=
-    obs_bnottaken_other hobs12 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_11
+    obs_bnottaken_other' hobs12 Register.x12 (by decide) hx12_11
   have hx5_12 : σ12.regs.get? Register.x5 = some (0#64) :=
-    obs_bnottaken_other hobs12 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_11
+    obs_bnottaken_other' hobs12 Register.x5 (by decide) hx5_11
   have hx14_12 : σ12.regs.get? Register.x14 = some (0#64) :=
-    obs_bnottaken_other hobs12 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_11
+    obs_bnottaken_other' hobs12 Register.x14 (by decide) hx14_11
   have hmE12 : σ12.mem = c.σ.mem := hmem12.trans hmE11
   have hload12 : SvfprintfSliceLoaded σ12.mem := hmem12 ▸ hload11
   have hfp12 : FlushPinsLoaded σ12.mem := hmem12 ▸ hfp11
@@ -639,29 +640,29 @@ theorem printToSsprintNN_spec
     obs_alu_rd hobs13 (by decide) (by decide) (by decide) (by decide) (by decide)
   rw [hlwval] at hx15_13
   have hx2_13 : σ13.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs13 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_12
+    obs_alu_other' hobs13 Register.x2 (by decide) hx2_12
   have hx6_13 : σ13.regs.get? Register.x6 = some vt1 :=
-    obs_alu_other hobs13 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_12
+    obs_alu_other' hobs13 Register.x6 (by decide) hx6_12
   have hx8_13 : σ13.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs13 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_12
+    obs_alu_other' hobs13 Register.x8 (by decide) hx8_12
   have hx16_13 : σ13.regs.get? Register.x16 = some vlen :=
-    obs_alu_other hobs13 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_12
+    obs_alu_other' hobs13 Register.x16 (by decide) hx16_12
   have hx20_13 : σ13.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_alu_other hobs13 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_12
+    obs_alu_other' hobs13 Register.x20 (by decide) hx20_12
   have hx22_13 : σ13.regs.get? Register.x22 = some vs6 :=
-    obs_alu_other hobs13 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_12
+    obs_alu_other' hobs13 Register.x22 (by decide) hx22_12
   have hx23_13 : σ13.regs.get? Register.x23 = some viov :=
-    obs_alu_other hobs13 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_12
+    obs_alu_other' hobs13 Register.x23 (by decide) hx23_12
   have hx26_13 : σ13.regs.get? Register.x26 = some vbase :=
-    obs_alu_other hobs13 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_12
+    obs_alu_other' hobs13 Register.x26 (by decide) hx26_12
   have hx28_13 : σ13.regs.get? Register.x28 = some vt3 :=
-    obs_alu_other hobs13 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_12
+    obs_alu_other' hobs13 Register.x28 (by decide) hx28_12
   have hx12_13 : σ13.regs.get? Register.x12 = some vcur :=
-    obs_alu_other hobs13 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_12
+    obs_alu_other' hobs13 Register.x12 (by decide) hx12_12
   have hx5_13 : σ13.regs.get? Register.x5 = some (0#64) :=
-    obs_alu_other hobs13 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_12
+    obs_alu_other' hobs13 Register.x5 (by decide) hx5_12
   have hx14_13 : σ13.regs.get? Register.x14 = some (0#64) :=
-    obs_alu_other hobs13 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_12
+    obs_alu_other' hobs13 Register.x14 (by decide) hx14_12
   have hmE13 : σ13.mem = c.σ.mem := hmem13.trans hmE12
   have hload13 : SvfprintfSliceLoaded σ13.mem := hmem13 ▸ hload12
   have hfp13 : FlushPinsLoaded σ13.mem := hmem13 ▸ hfp12
@@ -680,29 +681,29 @@ theorem printToSsprintNN_spec
   have hx12_14 : σ14.regs.get? Register.x12 = some (vcur + vs6) :=
     obs_alu_rd hobs14 (by decide) (by decide) (by decide) (by decide) (by decide)
   have hx2_14 : σ14.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs14 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_13
+    obs_alu_other' hobs14 Register.x2 (by decide) hx2_13
   have hx6_14 : σ14.regs.get? Register.x6 = some vt1 :=
-    obs_alu_other hobs14 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_13
+    obs_alu_other' hobs14 Register.x6 (by decide) hx6_13
   have hx8_14 : σ14.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs14 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_13
+    obs_alu_other' hobs14 Register.x8 (by decide) hx8_13
   have hx16_14 : σ14.regs.get? Register.x16 = some vlen :=
-    obs_alu_other hobs14 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_13
+    obs_alu_other' hobs14 Register.x16 (by decide) hx16_13
   have hx20_14 : σ14.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_alu_other hobs14 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_13
+    obs_alu_other' hobs14 Register.x20 (by decide) hx20_13
   have hx22_14 : σ14.regs.get? Register.x22 = some vs6 :=
-    obs_alu_other hobs14 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_13
+    obs_alu_other' hobs14 Register.x22 (by decide) hx22_13
   have hx23_14 : σ14.regs.get? Register.x23 = some viov :=
-    obs_alu_other hobs14 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_13
+    obs_alu_other' hobs14 Register.x23 (by decide) hx23_13
   have hx26_14 : σ14.regs.get? Register.x26 = some vbase :=
-    obs_alu_other hobs14 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_13
+    obs_alu_other' hobs14 Register.x26 (by decide) hx26_13
   have hx28_14 : σ14.regs.get? Register.x28 = some vt3 :=
-    obs_alu_other hobs14 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_13
+    obs_alu_other' hobs14 Register.x28 (by decide) hx28_13
   have hx5_14 : σ14.regs.get? Register.x5 = some (0#64) :=
-    obs_alu_other hobs14 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_13
+    obs_alu_other' hobs14 Register.x5 (by decide) hx5_13
   have hx14_14 : σ14.regs.get? Register.x14 = some (0#64) :=
-    obs_alu_other hobs14 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_13
+    obs_alu_other' hobs14 Register.x14 (by decide) hx14_13
   have hx15_14 : σ14.regs.get? Register.x15 = some (sign_extend (m := 64) vcnt : BitVec 64) :=
-    obs_alu_other hobs14 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_13
+    obs_alu_other' hobs14 Register.x15 (by decide) hx15_13
   have hmE14 : σ14.mem = c.σ.mem := hmem14.trans hmE13
   have hload14 : SvfprintfSliceLoaded σ14.mem := hmem14 ▸ hload13
   have hfp14 : FlushPinsLoaded σ14.mem := hmem14 ▸ hfp13
@@ -719,31 +720,31 @@ theorem printToSsprintNN_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi15, hmi15⟩ := obs_store_minstret_sn4 hobs15
   have hx2_15 : σ15.regs.get? Register.x2 = some vsp :=
-    obs_store_other_sn4 Register.x2 hobs15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_14
+    obs_store_other_sn4' Register.x2 hobs15 (by decide) hx2_14
   have hx6_15 : σ15.regs.get? Register.x6 = some vt1 :=
-    obs_store_other_sn4 Register.x6 hobs15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_14
+    obs_store_other_sn4' Register.x6 hobs15 (by decide) hx6_14
   have hx8_15 : σ15.regs.get? Register.x8 = some v8 :=
-    obs_store_other_sn4 Register.x8 hobs15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_14
+    obs_store_other_sn4' Register.x8 hobs15 (by decide) hx8_14
   have hx16_15 : σ15.regs.get? Register.x16 = some vlen :=
-    obs_store_other_sn4 Register.x16 hobs15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_14
+    obs_store_other_sn4' Register.x16 hobs15 (by decide) hx16_14
   have hx20_15 : σ15.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_store_other_sn4 Register.x20 hobs15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_14
+    obs_store_other_sn4' Register.x20 hobs15 (by decide) hx20_14
   have hx22_15 : σ15.regs.get? Register.x22 = some vs6 :=
-    obs_store_other_sn4 Register.x22 hobs15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_14
+    obs_store_other_sn4' Register.x22 hobs15 (by decide) hx22_14
   have hx23_15 : σ15.regs.get? Register.x23 = some viov :=
-    obs_store_other_sn4 Register.x23 hobs15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_14
+    obs_store_other_sn4' Register.x23 hobs15 (by decide) hx23_14
   have hx26_15 : σ15.regs.get? Register.x26 = some vbase :=
-    obs_store_other_sn4 Register.x26 hobs15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_14
+    obs_store_other_sn4' Register.x26 hobs15 (by decide) hx26_14
   have hx28_15 : σ15.regs.get? Register.x28 = some vt3 :=
-    obs_store_other_sn4 Register.x28 hobs15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_14
+    obs_store_other_sn4' Register.x28 hobs15 (by decide) hx28_14
   have hx12_15 : σ15.regs.get? Register.x12 = some (vcur + vs6) :=
-    obs_store_other_sn4 Register.x12 hobs15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_14
+    obs_store_other_sn4' Register.x12 hobs15 (by decide) hx12_14
   have hx5_15 : σ15.regs.get? Register.x5 = some (0#64) :=
-    obs_store_other_sn4 Register.x5 hobs15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_14
+    obs_store_other_sn4' Register.x5 hobs15 (by decide) hx5_14
   have hx14_15 : σ15.regs.get? Register.x14 = some (0#64) :=
-    obs_store_other_sn4 Register.x14 hobs15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_14
+    obs_store_other_sn4' Register.x14 hobs15 (by decide) hx14_14
   have hx15_15 : σ15.regs.get? Register.x15 = some (sign_extend (m := 64) vcnt : BitVec 64) :=
-    obs_store_other_sn4 Register.x15 hobs15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_14
+    obs_store_other_sn4' Register.x15 hobs15 (by decide) hx15_14
   have hNP14b : (afterNextPC (afterPrelude σ14) (0x800078cc#64)).mem = σ14.mem := rfl
   have hmE15 : σ15.mem = writeMap8 (c.σ.mem) ((vsp + sign_extend (m := 64) (0x0f0#12)).toNat) (sdData_val (vcur + vs6)) := by
     rw [hmem15, hNP14b, hmE14]
@@ -767,29 +768,29 @@ theorem printToSsprintNN_spec
   have hx15_16 : σ16.regs.get? Register.x15 = some (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0)) :=
     obs_alu_rd hobs16 (by decide) (by decide) (by decide) (by decide) (by decide)
   have hx2_16 : σ16.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs16 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_15
+    obs_alu_other' hobs16 Register.x2 (by decide) hx2_15
   have hx6_16 : σ16.regs.get? Register.x6 = some vt1 :=
-    obs_alu_other hobs16 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_15
+    obs_alu_other' hobs16 Register.x6 (by decide) hx6_15
   have hx8_16 : σ16.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs16 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_15
+    obs_alu_other' hobs16 Register.x8 (by decide) hx8_15
   have hx16_16 : σ16.regs.get? Register.x16 = some vlen :=
-    obs_alu_other hobs16 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_15
+    obs_alu_other' hobs16 Register.x16 (by decide) hx16_15
   have hx20_16 : σ16.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_alu_other hobs16 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_15
+    obs_alu_other' hobs16 Register.x20 (by decide) hx20_15
   have hx22_16 : σ16.regs.get? Register.x22 = some vs6 :=
-    obs_alu_other hobs16 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_15
+    obs_alu_other' hobs16 Register.x22 (by decide) hx22_15
   have hx23_16 : σ16.regs.get? Register.x23 = some viov :=
-    obs_alu_other hobs16 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_15
+    obs_alu_other' hobs16 Register.x23 (by decide) hx23_15
   have hx26_16 : σ16.regs.get? Register.x26 = some vbase :=
-    obs_alu_other hobs16 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_15
+    obs_alu_other' hobs16 Register.x26 (by decide) hx26_15
   have hx28_16 : σ16.regs.get? Register.x28 = some vt3 :=
-    obs_alu_other hobs16 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_15
+    obs_alu_other' hobs16 Register.x28 (by decide) hx28_15
   have hx12_16 : σ16.regs.get? Register.x12 = some (vcur + vs6) :=
-    obs_alu_other hobs16 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_15
+    obs_alu_other' hobs16 Register.x12 (by decide) hx12_15
   have hx5_16 : σ16.regs.get? Register.x5 = some (0#64) :=
-    obs_alu_other hobs16 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_15
+    obs_alu_other' hobs16 Register.x5 (by decide) hx5_15
   have hx14_16 : σ16.regs.get? Register.x14 = some (0#64) :=
-    obs_alu_other hobs16 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_15
+    obs_alu_other' hobs16 Register.x14 (by decide) hx14_15
   have hmE16 : σ16.mem = writeMap8 (c.σ.mem) ((vsp + sign_extend (m := 64) (0x0f0#12)).toNat) (sdData_val (vcur + vs6)) := hmem16.trans hmE15
   have hload16 : SvfprintfSliceLoaded σ16.mem := hmem16 ▸ hload15
   have hfp16 : FlushPinsLoaded σ16.mem := hmem16 ▸ hfp15
@@ -806,31 +807,31 @@ theorem printToSsprintNN_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi17, hmi17⟩ := obs_store_minstret_sn4 hobs17
   have hx2_17 : σ17.regs.get? Register.x2 = some vsp :=
-    obs_store_other_sn4 Register.x2 hobs17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_16
+    obs_store_other_sn4' Register.x2 hobs17 (by decide) hx2_16
   have hx6_17 : σ17.regs.get? Register.x6 = some vt1 :=
-    obs_store_other_sn4 Register.x6 hobs17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_16
+    obs_store_other_sn4' Register.x6 hobs17 (by decide) hx6_16
   have hx8_17 : σ17.regs.get? Register.x8 = some v8 :=
-    obs_store_other_sn4 Register.x8 hobs17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_16
+    obs_store_other_sn4' Register.x8 hobs17 (by decide) hx8_16
   have hx16_17 : σ17.regs.get? Register.x16 = some vlen :=
-    obs_store_other_sn4 Register.x16 hobs17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_16
+    obs_store_other_sn4' Register.x16 hobs17 (by decide) hx16_16
   have hx20_17 : σ17.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_store_other_sn4 Register.x20 hobs17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_16
+    obs_store_other_sn4' Register.x20 hobs17 (by decide) hx20_16
   have hx22_17 : σ17.regs.get? Register.x22 = some vs6 :=
-    obs_store_other_sn4 Register.x22 hobs17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_16
+    obs_store_other_sn4' Register.x22 hobs17 (by decide) hx22_16
   have hx23_17 : σ17.regs.get? Register.x23 = some viov :=
-    obs_store_other_sn4 Register.x23 hobs17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_16
+    obs_store_other_sn4' Register.x23 hobs17 (by decide) hx23_16
   have hx26_17 : σ17.regs.get? Register.x26 = some vbase :=
-    obs_store_other_sn4 Register.x26 hobs17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_16
+    obs_store_other_sn4' Register.x26 hobs17 (by decide) hx26_16
   have hx28_17 : σ17.regs.get? Register.x28 = some vt3 :=
-    obs_store_other_sn4 Register.x28 hobs17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_16
+    obs_store_other_sn4' Register.x28 hobs17 (by decide) hx28_16
   have hx12_17 : σ17.regs.get? Register.x12 = some (vcur + vs6) :=
-    obs_store_other_sn4 Register.x12 hobs17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_16
+    obs_store_other_sn4' Register.x12 hobs17 (by decide) hx12_16
   have hx5_17 : σ17.regs.get? Register.x5 = some (0#64) :=
-    obs_store_other_sn4 Register.x5 hobs17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_16
+    obs_store_other_sn4' Register.x5 hobs17 (by decide) hx5_16
   have hx14_17 : σ17.regs.get? Register.x14 = some (0#64) :=
-    obs_store_other_sn4 Register.x14 hobs17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_16
+    obs_store_other_sn4' Register.x14 hobs17 (by decide) hx14_16
   have hx15_17 : σ17.regs.get? Register.x15 = some (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0)) :=
-    obs_store_other_sn4 Register.x15 hobs17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_16
+    obs_store_other_sn4' Register.x15 hobs17 (by decide) hx15_16
   have hNP16b : (afterNextPC (afterPrelude σ16) (0x800078d4#64)).mem = σ16.mem := rfl
   have hmE17 : σ17.mem = writeMap8 (writeMap8 (c.σ.mem) ((vsp + sign_extend (m := 64) (0x0f0#12)).toNat) (sdData_val (vcur + vs6))) ((viov + sign_extend (m := 64) (0x000#12)).toNat) (sdData_val vbase) := by
     rw [hmem17, hNP16b, hmE16]
@@ -852,31 +853,31 @@ theorem printToSsprintNN_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi18, hmi18⟩ := obs_store_minstret_sn4 hobs18
   have hx2_18 : σ18.regs.get? Register.x2 = some vsp :=
-    obs_store_other_sn4 Register.x2 hobs18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_17
+    obs_store_other_sn4' Register.x2 hobs18 (by decide) hx2_17
   have hx6_18 : σ18.regs.get? Register.x6 = some vt1 :=
-    obs_store_other_sn4 Register.x6 hobs18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_17
+    obs_store_other_sn4' Register.x6 hobs18 (by decide) hx6_17
   have hx8_18 : σ18.regs.get? Register.x8 = some v8 :=
-    obs_store_other_sn4 Register.x8 hobs18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_17
+    obs_store_other_sn4' Register.x8 hobs18 (by decide) hx8_17
   have hx16_18 : σ18.regs.get? Register.x16 = some vlen :=
-    obs_store_other_sn4 Register.x16 hobs18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_17
+    obs_store_other_sn4' Register.x16 hobs18 (by decide) hx16_17
   have hx20_18 : σ18.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_store_other_sn4 Register.x20 hobs18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_17
+    obs_store_other_sn4' Register.x20 hobs18 (by decide) hx20_17
   have hx22_18 : σ18.regs.get? Register.x22 = some vs6 :=
-    obs_store_other_sn4 Register.x22 hobs18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_17
+    obs_store_other_sn4' Register.x22 hobs18 (by decide) hx22_17
   have hx23_18 : σ18.regs.get? Register.x23 = some viov :=
-    obs_store_other_sn4 Register.x23 hobs18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_17
+    obs_store_other_sn4' Register.x23 hobs18 (by decide) hx23_17
   have hx26_18 : σ18.regs.get? Register.x26 = some vbase :=
-    obs_store_other_sn4 Register.x26 hobs18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_17
+    obs_store_other_sn4' Register.x26 hobs18 (by decide) hx26_17
   have hx28_18 : σ18.regs.get? Register.x28 = some vt3 :=
-    obs_store_other_sn4 Register.x28 hobs18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_17
+    obs_store_other_sn4' Register.x28 hobs18 (by decide) hx28_17
   have hx12_18 : σ18.regs.get? Register.x12 = some (vcur + vs6) :=
-    obs_store_other_sn4 Register.x12 hobs18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_17
+    obs_store_other_sn4' Register.x12 hobs18 (by decide) hx12_17
   have hx5_18 : σ18.regs.get? Register.x5 = some (0#64) :=
-    obs_store_other_sn4 Register.x5 hobs18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_17
+    obs_store_other_sn4' Register.x5 hobs18 (by decide) hx5_17
   have hx14_18 : σ18.regs.get? Register.x14 = some (0#64) :=
-    obs_store_other_sn4 Register.x14 hobs18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_17
+    obs_store_other_sn4' Register.x14 hobs18 (by decide) hx14_17
   have hx15_18 : σ18.regs.get? Register.x15 = some (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0)) :=
-    obs_store_other_sn4 Register.x15 hobs18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_17
+    obs_store_other_sn4' Register.x15 hobs18 (by decide) hx15_17
   have hNP17b : (afterNextPC (afterPrelude σ17) (0x800078d8#64)).mem = σ17.mem := rfl
   have hmE18 : σ18.mem = writeMap8 (writeMap8 (writeMap8 (c.σ.mem) ((vsp + sign_extend (m := 64) (0x0f0#12)).toNat) (sdData_val (vcur + vs6))) ((viov + sign_extend (m := 64) (0x000#12)).toNat) (sdData_val vbase)) ((viov + sign_extend (m := 64) (0x008#12)).toNat) (sdData_val vs6) := by
     rw [hmem18, hNP17b, hmE17]
@@ -901,29 +902,29 @@ theorem printToSsprintNN_spec
     obs_alu_rd hobs19 (by decide) (by decide) (by decide) (by decide) (by decide)
   rw [show ((0#64) + sign_extend (m := 64) (0x007#12) : BitVec 64) = (0x7#64) from by decide] at hx14_19
   have hx2_19 : σ19.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs19 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_18
+    obs_alu_other' hobs19 Register.x2 (by decide) hx2_18
   have hx6_19 : σ19.regs.get? Register.x6 = some vt1 :=
-    obs_alu_other hobs19 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_18
+    obs_alu_other' hobs19 Register.x6 (by decide) hx6_18
   have hx8_19 : σ19.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs19 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_18
+    obs_alu_other' hobs19 Register.x8 (by decide) hx8_18
   have hx16_19 : σ19.regs.get? Register.x16 = some vlen :=
-    obs_alu_other hobs19 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_18
+    obs_alu_other' hobs19 Register.x16 (by decide) hx16_18
   have hx20_19 : σ19.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_alu_other hobs19 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_18
+    obs_alu_other' hobs19 Register.x20 (by decide) hx20_18
   have hx22_19 : σ19.regs.get? Register.x22 = some vs6 :=
-    obs_alu_other hobs19 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_18
+    obs_alu_other' hobs19 Register.x22 (by decide) hx22_18
   have hx23_19 : σ19.regs.get? Register.x23 = some viov :=
-    obs_alu_other hobs19 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_18
+    obs_alu_other' hobs19 Register.x23 (by decide) hx23_18
   have hx26_19 : σ19.regs.get? Register.x26 = some vbase :=
-    obs_alu_other hobs19 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_18
+    obs_alu_other' hobs19 Register.x26 (by decide) hx26_18
   have hx28_19 : σ19.regs.get? Register.x28 = some vt3 :=
-    obs_alu_other hobs19 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_18
+    obs_alu_other' hobs19 Register.x28 (by decide) hx28_18
   have hx12_19 : σ19.regs.get? Register.x12 = some (vcur + vs6) :=
-    obs_alu_other hobs19 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_18
+    obs_alu_other' hobs19 Register.x12 (by decide) hx12_18
   have hx5_19 : σ19.regs.get? Register.x5 = some (0#64) :=
-    obs_alu_other hobs19 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_18
+    obs_alu_other' hobs19 Register.x5 (by decide) hx5_18
   have hx15_19 : σ19.regs.get? Register.x15 = some (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0)) :=
-    obs_alu_other hobs19 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_18
+    obs_alu_other' hobs19 Register.x15 (by decide) hx15_18
   have hmE19 : σ19.mem = writeMap8 (writeMap8 (writeMap8 (c.σ.mem) ((vsp + sign_extend (m := 64) (0x0f0#12)).toNat) (sdData_val (vcur + vs6))) ((viov + sign_extend (m := 64) (0x000#12)).toNat) (sdData_val vbase)) ((viov + sign_extend (m := 64) (0x008#12)).toNat) (sdData_val vs6) := hmem19.trans hmE18
   have hload19 : SvfprintfSliceLoaded σ19.mem := hmem19 ▸ hload18
   have hfp19 : FlushPinsLoaded σ19.mem := hmem19 ▸ hfp18
@@ -940,31 +941,31 @@ theorem printToSsprintNN_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi20, hmi20⟩ := obs_store_minstret_sn4 hobs20
   have hx2_20 : σ20.regs.get? Register.x2 = some vsp :=
-    obs_store_other_sn4 Register.x2 hobs20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_19
+    obs_store_other_sn4' Register.x2 hobs20 (by decide) hx2_19
   have hx6_20 : σ20.regs.get? Register.x6 = some vt1 :=
-    obs_store_other_sn4 Register.x6 hobs20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_19
+    obs_store_other_sn4' Register.x6 hobs20 (by decide) hx6_19
   have hx8_20 : σ20.regs.get? Register.x8 = some v8 :=
-    obs_store_other_sn4 Register.x8 hobs20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_19
+    obs_store_other_sn4' Register.x8 hobs20 (by decide) hx8_19
   have hx16_20 : σ20.regs.get? Register.x16 = some vlen :=
-    obs_store_other_sn4 Register.x16 hobs20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_19
+    obs_store_other_sn4' Register.x16 hobs20 (by decide) hx16_19
   have hx20_20 : σ20.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_store_other_sn4 Register.x20 hobs20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_19
+    obs_store_other_sn4' Register.x20 hobs20 (by decide) hx20_19
   have hx22_20 : σ20.regs.get? Register.x22 = some vs6 :=
-    obs_store_other_sn4 Register.x22 hobs20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_19
+    obs_store_other_sn4' Register.x22 hobs20 (by decide) hx22_19
   have hx23_20 : σ20.regs.get? Register.x23 = some viov :=
-    obs_store_other_sn4 Register.x23 hobs20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_19
+    obs_store_other_sn4' Register.x23 hobs20 (by decide) hx23_19
   have hx26_20 : σ20.regs.get? Register.x26 = some vbase :=
-    obs_store_other_sn4 Register.x26 hobs20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_19
+    obs_store_other_sn4' Register.x26 hobs20 (by decide) hx26_19
   have hx28_20 : σ20.regs.get? Register.x28 = some vt3 :=
-    obs_store_other_sn4 Register.x28 hobs20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_19
+    obs_store_other_sn4' Register.x28 hobs20 (by decide) hx28_19
   have hx12_20 : σ20.regs.get? Register.x12 = some (vcur + vs6) :=
-    obs_store_other_sn4 Register.x12 hobs20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_19
+    obs_store_other_sn4' Register.x12 hobs20 (by decide) hx12_19
   have hx5_20 : σ20.regs.get? Register.x5 = some (0#64) :=
-    obs_store_other_sn4 Register.x5 hobs20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_19
+    obs_store_other_sn4' Register.x5 hobs20 (by decide) hx5_19
   have hx14_20 : σ20.regs.get? Register.x14 = some (0x7#64) :=
-    obs_store_other_sn4 Register.x14 hobs20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_19
+    obs_store_other_sn4' Register.x14 hobs20 (by decide) hx14_19
   have hx15_20 : σ20.regs.get? Register.x15 = some (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0)) :=
-    obs_store_other_sn4 Register.x15 hobs20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_19
+    obs_store_other_sn4' Register.x15 hobs20 (by decide) hx15_19
   have hNP19b : (afterNextPC (afterPrelude σ19) (0x800078e0#64)).mem = σ19.mem := rfl
   have hmE20 : σ20.mem = writeMap4 (writeMap8 (writeMap8 (writeMap8 (c.σ.mem) ((vsp + sign_extend (m := 64) (0x0f0#12)).toNat) (sdData_val (vcur + vs6))) ((viov + sign_extend (m := 64) (0x000#12)).toNat) (sdData_val vbase)) ((viov + sign_extend (m := 64) (0x008#12)).toNat) (sdData_val vs6)) ((vsp + sign_extend (m := 64) (0x0e8#12)).toNat) (swData (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0))) := by
     rw [hmem20, hNP19b, hmE19]
@@ -988,31 +989,31 @@ theorem printToSsprintNN_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi21, hmi21⟩ := obs_bnottaken_minstret hobs21
   have hx2_21 : σ21.regs.get? Register.x2 = some vsp :=
-    obs_bnottaken_other hobs21 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_20
+    obs_bnottaken_other' hobs21 Register.x2 (by decide) hx2_20
   have hx6_21 : σ21.regs.get? Register.x6 = some vt1 :=
-    obs_bnottaken_other hobs21 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_20
+    obs_bnottaken_other' hobs21 Register.x6 (by decide) hx6_20
   have hx8_21 : σ21.regs.get? Register.x8 = some v8 :=
-    obs_bnottaken_other hobs21 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_20
+    obs_bnottaken_other' hobs21 Register.x8 (by decide) hx8_20
   have hx16_21 : σ21.regs.get? Register.x16 = some vlen :=
-    obs_bnottaken_other hobs21 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_20
+    obs_bnottaken_other' hobs21 Register.x16 (by decide) hx16_20
   have hx20_21 : σ21.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_bnottaken_other hobs21 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_20
+    obs_bnottaken_other' hobs21 Register.x20 (by decide) hx20_20
   have hx22_21 : σ21.regs.get? Register.x22 = some vs6 :=
-    obs_bnottaken_other hobs21 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_20
+    obs_bnottaken_other' hobs21 Register.x22 (by decide) hx22_20
   have hx23_21 : σ21.regs.get? Register.x23 = some viov :=
-    obs_bnottaken_other hobs21 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_20
+    obs_bnottaken_other' hobs21 Register.x23 (by decide) hx23_20
   have hx26_21 : σ21.regs.get? Register.x26 = some vbase :=
-    obs_bnottaken_other hobs21 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_20
+    obs_bnottaken_other' hobs21 Register.x26 (by decide) hx26_20
   have hx28_21 : σ21.regs.get? Register.x28 = some vt3 :=
-    obs_bnottaken_other hobs21 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_20
+    obs_bnottaken_other' hobs21 Register.x28 (by decide) hx28_20
   have hx12_21 : σ21.regs.get? Register.x12 = some (vcur + vs6) :=
-    obs_bnottaken_other hobs21 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_20
+    obs_bnottaken_other' hobs21 Register.x12 (by decide) hx12_20
   have hx5_21 : σ21.regs.get? Register.x5 = some (0#64) :=
-    obs_bnottaken_other hobs21 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_20
+    obs_bnottaken_other' hobs21 Register.x5 (by decide) hx5_20
   have hx14_21 : σ21.regs.get? Register.x14 = some (0x7#64) :=
-    obs_bnottaken_other hobs21 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_20
+    obs_bnottaken_other' hobs21 Register.x14 (by decide) hx14_20
   have hx15_21 : σ21.regs.get? Register.x15 = some (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0)) :=
-    obs_bnottaken_other hobs21 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_20
+    obs_bnottaken_other' hobs21 Register.x15 (by decide) hx15_20
   have hmE21 : σ21.mem = writeMap4 (writeMap8 (writeMap8 (writeMap8 (c.σ.mem) ((vsp + sign_extend (m := 64) (0x0f0#12)).toNat) (sdData_val (vcur + vs6))) ((viov + sign_extend (m := 64) (0x000#12)).toNat) (sdData_val vbase)) ((viov + sign_extend (m := 64) (0x008#12)).toNat) (sdData_val vs6)) ((vsp + sign_extend (m := 64) (0x0e8#12)).toNat) (swData (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0))) := hmem21.trans hmE20
   have hload21 : SvfprintfSliceLoaded σ21.mem := hmem21 ▸ hload20
   have hfp21 : FlushPinsLoaded σ21.mem := hmem21 ▸ hfp20
@@ -1031,29 +1032,29 @@ theorem printToSsprintNN_spec
   have hx23_22 : σ22.regs.get? Register.x23 = some (viov + sign_extend (m := 64) (0x010#12)) :=
     obs_alu_rd hobs22 (by decide) (by decide) (by decide) (by decide) (by decide)
   have hx2_22 : σ22.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs22 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_21
+    obs_alu_other' hobs22 Register.x2 (by decide) hx2_21
   have hx6_22 : σ22.regs.get? Register.x6 = some vt1 :=
-    obs_alu_other hobs22 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_21
+    obs_alu_other' hobs22 Register.x6 (by decide) hx6_21
   have hx8_22 : σ22.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs22 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_21
+    obs_alu_other' hobs22 Register.x8 (by decide) hx8_21
   have hx16_22 : σ22.regs.get? Register.x16 = some vlen :=
-    obs_alu_other hobs22 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_21
+    obs_alu_other' hobs22 Register.x16 (by decide) hx16_21
   have hx20_22 : σ22.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_alu_other hobs22 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_21
+    obs_alu_other' hobs22 Register.x20 (by decide) hx20_21
   have hx22_22 : σ22.regs.get? Register.x22 = some vs6 :=
-    obs_alu_other hobs22 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_21
+    obs_alu_other' hobs22 Register.x22 (by decide) hx22_21
   have hx26_22 : σ22.regs.get? Register.x26 = some vbase :=
-    obs_alu_other hobs22 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_21
+    obs_alu_other' hobs22 Register.x26 (by decide) hx26_21
   have hx28_22 : σ22.regs.get? Register.x28 = some vt3 :=
-    obs_alu_other hobs22 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_21
+    obs_alu_other' hobs22 Register.x28 (by decide) hx28_21
   have hx12_22 : σ22.regs.get? Register.x12 = some (vcur + vs6) :=
-    obs_alu_other hobs22 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_21
+    obs_alu_other' hobs22 Register.x12 (by decide) hx12_21
   have hx5_22 : σ22.regs.get? Register.x5 = some (0#64) :=
-    obs_alu_other hobs22 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_21
+    obs_alu_other' hobs22 Register.x5 (by decide) hx5_21
   have hx14_22 : σ22.regs.get? Register.x14 = some (0x7#64) :=
-    obs_alu_other hobs22 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_21
+    obs_alu_other' hobs22 Register.x14 (by decide) hx14_21
   have hx15_22 : σ22.regs.get? Register.x15 = some (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0)) :=
-    obs_alu_other hobs22 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_21
+    obs_alu_other' hobs22 Register.x15 (by decide) hx15_21
   have hmE22 : σ22.mem = writeMap4 (writeMap8 (writeMap8 (writeMap8 (c.σ.mem) ((vsp + sign_extend (m := 64) (0x0f0#12)).toNat) (sdData_val (vcur + vs6))) ((viov + sign_extend (m := 64) (0x000#12)).toNat) (sdData_val vbase)) ((viov + sign_extend (m := 64) (0x008#12)).toNat) (sdData_val vs6)) ((vsp + sign_extend (m := 64) (0x0e8#12)).toNat) (swData (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0))) := hmem22.trans hmE21
   have hload22 : SvfprintfSliceLoaded σ22.mem := hmem22 ▸ hload21
   have hfp22 : FlushPinsLoaded σ22.mem := hmem22 ▸ hfp21
@@ -1073,29 +1074,29 @@ theorem printToSsprintNN_spec
     obs_alu_rd hobs23 (by decide) (by decide) (by decide) (by decide) (by decide)
   rw [hflag4z] at hx6_23
   have hx2_23 : σ23.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs23 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_22
+    obs_alu_other' hobs23 Register.x2 (by decide) hx2_22
   have hx8_23 : σ23.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs23 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_22
+    obs_alu_other' hobs23 Register.x8 (by decide) hx8_22
   have hx16_23 : σ23.regs.get? Register.x16 = some vlen :=
-    obs_alu_other hobs23 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_22
+    obs_alu_other' hobs23 Register.x16 (by decide) hx16_22
   have hx20_23 : σ23.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_alu_other hobs23 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_22
+    obs_alu_other' hobs23 Register.x20 (by decide) hx20_22
   have hx22_23 : σ23.regs.get? Register.x22 = some vs6 :=
-    obs_alu_other hobs23 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_22
+    obs_alu_other' hobs23 Register.x22 (by decide) hx22_22
   have hx23_23 : σ23.regs.get? Register.x23 = some (viov + sign_extend (m := 64) (0x010#12)) :=
-    obs_alu_other hobs23 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_22
+    obs_alu_other' hobs23 Register.x23 (by decide) hx23_22
   have hx26_23 : σ23.regs.get? Register.x26 = some vbase :=
-    obs_alu_other hobs23 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_22
+    obs_alu_other' hobs23 Register.x26 (by decide) hx26_22
   have hx28_23 : σ23.regs.get? Register.x28 = some vt3 :=
-    obs_alu_other hobs23 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_22
+    obs_alu_other' hobs23 Register.x28 (by decide) hx28_22
   have hx12_23 : σ23.regs.get? Register.x12 = some (vcur + vs6) :=
-    obs_alu_other hobs23 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_22
+    obs_alu_other' hobs23 Register.x12 (by decide) hx12_22
   have hx5_23 : σ23.regs.get? Register.x5 = some (0#64) :=
-    obs_alu_other hobs23 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_22
+    obs_alu_other' hobs23 Register.x5 (by decide) hx5_22
   have hx14_23 : σ23.regs.get? Register.x14 = some (0x7#64) :=
-    obs_alu_other hobs23 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_22
+    obs_alu_other' hobs23 Register.x14 (by decide) hx14_22
   have hx15_23 : σ23.regs.get? Register.x15 = some (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0)) :=
-    obs_alu_other hobs23 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_22
+    obs_alu_other' hobs23 Register.x15 (by decide) hx15_22
   have hmE23 : σ23.mem = writeMap4 (writeMap8 (writeMap8 (writeMap8 (c.σ.mem) ((vsp + sign_extend (m := 64) (0x0f0#12)).toNat) (sdData_val (vcur + vs6))) ((viov + sign_extend (m := 64) (0x000#12)).toNat) (sdData_val vbase)) ((viov + sign_extend (m := 64) (0x008#12)).toNat) (sdData_val vs6)) ((vsp + sign_extend (m := 64) (0x0e8#12)).toNat) (swData (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0))) := hmem23.trans hmE22
   have hload23 : SvfprintfSliceLoaded σ23.mem := hmem23 ▸ hload22
   have hfp23 : FlushPinsLoaded σ23.mem := hmem23 ▸ hfp22
@@ -1111,31 +1112,31 @@ theorem printToSsprintNN_spec
     rwa [site_800078f0_taken_pv_tgt] at this
   obtain ⟨vmi24, hmi24⟩ := obs_btaken_minstret hobs24
   have hx2_24 : σ24.regs.get? Register.x2 = some vsp :=
-    obs_btaken_other hobs24 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_23
+    obs_btaken_other' hobs24 Register.x2 (by decide) hx2_23
   have hx6_24 : σ24.regs.get? Register.x6 = some (0#64) :=
-    obs_btaken_other hobs24 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_23
+    obs_btaken_other' hobs24 Register.x6 (by decide) hx6_23
   have hx8_24 : σ24.regs.get? Register.x8 = some v8 :=
-    obs_btaken_other hobs24 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_23
+    obs_btaken_other' hobs24 Register.x8 (by decide) hx8_23
   have hx16_24 : σ24.regs.get? Register.x16 = some vlen :=
-    obs_btaken_other hobs24 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_23
+    obs_btaken_other' hobs24 Register.x16 (by decide) hx16_23
   have hx20_24 : σ24.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_btaken_other hobs24 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_23
+    obs_btaken_other' hobs24 Register.x20 (by decide) hx20_23
   have hx22_24 : σ24.regs.get? Register.x22 = some vs6 :=
-    obs_btaken_other hobs24 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_23
+    obs_btaken_other' hobs24 Register.x22 (by decide) hx22_23
   have hx23_24 : σ24.regs.get? Register.x23 = some (viov + sign_extend (m := 64) (0x010#12)) :=
-    obs_btaken_other hobs24 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_23
+    obs_btaken_other' hobs24 Register.x23 (by decide) hx23_23
   have hx26_24 : σ24.regs.get? Register.x26 = some vbase :=
-    obs_btaken_other hobs24 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_23
+    obs_btaken_other' hobs24 Register.x26 (by decide) hx26_23
   have hx28_24 : σ24.regs.get? Register.x28 = some vt3 :=
-    obs_btaken_other hobs24 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_23
+    obs_btaken_other' hobs24 Register.x28 (by decide) hx28_23
   have hx12_24 : σ24.regs.get? Register.x12 = some (vcur + vs6) :=
-    obs_btaken_other hobs24 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_23
+    obs_btaken_other' hobs24 Register.x12 (by decide) hx12_23
   have hx5_24 : σ24.regs.get? Register.x5 = some (0#64) :=
-    obs_btaken_other hobs24 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_23
+    obs_btaken_other' hobs24 Register.x5 (by decide) hx5_23
   have hx14_24 : σ24.regs.get? Register.x14 = some (0x7#64) :=
-    obs_btaken_other hobs24 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_23
+    obs_btaken_other' hobs24 Register.x14 (by decide) hx14_23
   have hx15_24 : σ24.regs.get? Register.x15 = some (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0)) :=
-    obs_btaken_other hobs24 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_23
+    obs_btaken_other' hobs24 Register.x15 (by decide) hx15_23
   have hmE24 : σ24.mem = writeMap4 (writeMap8 (writeMap8 (writeMap8 (c.σ.mem) ((vsp + sign_extend (m := 64) (0x0f0#12)).toNat) (sdData_val (vcur + vs6))) ((viov + sign_extend (m := 64) (0x000#12)).toNat) (sdData_val vbase)) ((viov + sign_extend (m := 64) (0x008#12)).toNat) (sdData_val vs6)) ((vsp + sign_extend (m := 64) (0x0e8#12)).toNat) (swData (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0))) := hmem24.trans hmE23
   have hload24 : SvfprintfSliceLoaded σ24.mem := hmem24 ▸ hload23
   have hfp24 : FlushPinsLoaded σ24.mem := hmem24 ▸ hfp23
@@ -1154,29 +1155,29 @@ theorem printToSsprintNN_spec
   have hx15_25 : σ25.regs.get? Register.x15 = some (vt3 + sign_extend (m := 64) (0x000#12)) :=
     obs_alu_rd hobs25 (by decide) (by decide) (by decide) (by decide) (by decide)
   have hx2_25 : σ25.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs25 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_24
+    obs_alu_other' hobs25 Register.x2 (by decide) hx2_24
   have hx6_25 : σ25.regs.get? Register.x6 = some (0#64) :=
-    obs_alu_other hobs25 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_24
+    obs_alu_other' hobs25 Register.x6 (by decide) hx6_24
   have hx8_25 : σ25.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs25 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_24
+    obs_alu_other' hobs25 Register.x8 (by decide) hx8_24
   have hx16_25 : σ25.regs.get? Register.x16 = some vlen :=
-    obs_alu_other hobs25 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_24
+    obs_alu_other' hobs25 Register.x16 (by decide) hx16_24
   have hx20_25 : σ25.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_alu_other hobs25 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_24
+    obs_alu_other' hobs25 Register.x20 (by decide) hx20_24
   have hx22_25 : σ25.regs.get? Register.x22 = some vs6 :=
-    obs_alu_other hobs25 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_24
+    obs_alu_other' hobs25 Register.x22 (by decide) hx22_24
   have hx23_25 : σ25.regs.get? Register.x23 = some (viov + sign_extend (m := 64) (0x010#12)) :=
-    obs_alu_other hobs25 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_24
+    obs_alu_other' hobs25 Register.x23 (by decide) hx23_24
   have hx26_25 : σ25.regs.get? Register.x26 = some vbase :=
-    obs_alu_other hobs25 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_24
+    obs_alu_other' hobs25 Register.x26 (by decide) hx26_24
   have hx28_25 : σ25.regs.get? Register.x28 = some vt3 :=
-    obs_alu_other hobs25 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_24
+    obs_alu_other' hobs25 Register.x28 (by decide) hx28_24
   have hx12_25 : σ25.regs.get? Register.x12 = some (vcur + vs6) :=
-    obs_alu_other hobs25 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_24
+    obs_alu_other' hobs25 Register.x12 (by decide) hx12_24
   have hx5_25 : σ25.regs.get? Register.x5 = some (0#64) :=
-    obs_alu_other hobs25 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_24
+    obs_alu_other' hobs25 Register.x5 (by decide) hx5_24
   have hx14_25 : σ25.regs.get? Register.x14 = some (0x7#64) :=
-    obs_alu_other hobs25 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_24
+    obs_alu_other' hobs25 Register.x14 (by decide) hx14_24
   have hmE25 : σ25.mem = writeMap4 (writeMap8 (writeMap8 (writeMap8 (c.σ.mem) ((vsp + sign_extend (m := 64) (0x0f0#12)).toNat) (sdData_val (vcur + vs6))) ((viov + sign_extend (m := 64) (0x000#12)).toNat) (sdData_val vbase)) ((viov + sign_extend (m := 64) (0x008#12)).toNat) (sdData_val vs6)) ((vsp + sign_extend (m := 64) (0x0e8#12)).toNat) (swData (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0))) := hmem25.trans hmE24
   have hload25 : SvfprintfSliceLoaded σ25.mem := hmem25 ▸ hload24
   have hfp25 : FlushPinsLoaded σ25.mem := hmem25 ▸ hfp24
@@ -1193,31 +1194,31 @@ theorem printToSsprintNN_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi26, hmi26⟩ := obs_bnottaken_minstret hobs26
   have hx2_26 : σ26.regs.get? Register.x2 = some vsp :=
-    obs_bnottaken_other hobs26 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_25
+    obs_bnottaken_other' hobs26 Register.x2 (by decide) hx2_25
   have hx6_26 : σ26.regs.get? Register.x6 = some (0#64) :=
-    obs_bnottaken_other hobs26 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_25
+    obs_bnottaken_other' hobs26 Register.x6 (by decide) hx6_25
   have hx8_26 : σ26.regs.get? Register.x8 = some v8 :=
-    obs_bnottaken_other hobs26 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_25
+    obs_bnottaken_other' hobs26 Register.x8 (by decide) hx8_25
   have hx16_26 : σ26.regs.get? Register.x16 = some vlen :=
-    obs_bnottaken_other hobs26 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_25
+    obs_bnottaken_other' hobs26 Register.x16 (by decide) hx16_25
   have hx20_26 : σ26.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_bnottaken_other hobs26 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_25
+    obs_bnottaken_other' hobs26 Register.x20 (by decide) hx20_25
   have hx22_26 : σ26.regs.get? Register.x22 = some vs6 :=
-    obs_bnottaken_other hobs26 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_25
+    obs_bnottaken_other' hobs26 Register.x22 (by decide) hx22_25
   have hx23_26 : σ26.regs.get? Register.x23 = some (viov + sign_extend (m := 64) (0x010#12)) :=
-    obs_bnottaken_other hobs26 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_25
+    obs_bnottaken_other' hobs26 Register.x23 (by decide) hx23_25
   have hx26_26 : σ26.regs.get? Register.x26 = some vbase :=
-    obs_bnottaken_other hobs26 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_25
+    obs_bnottaken_other' hobs26 Register.x26 (by decide) hx26_25
   have hx28_26 : σ26.regs.get? Register.x28 = some vt3 :=
-    obs_bnottaken_other hobs26 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_25
+    obs_bnottaken_other' hobs26 Register.x28 (by decide) hx28_25
   have hx12_26 : σ26.regs.get? Register.x12 = some (vcur + vs6) :=
-    obs_bnottaken_other hobs26 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_25
+    obs_bnottaken_other' hobs26 Register.x12 (by decide) hx12_25
   have hx5_26 : σ26.regs.get? Register.x5 = some (0#64) :=
-    obs_bnottaken_other hobs26 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_25
+    obs_bnottaken_other' hobs26 Register.x5 (by decide) hx5_25
   have hx14_26 : σ26.regs.get? Register.x14 = some (0x7#64) :=
-    obs_bnottaken_other hobs26 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_25
+    obs_bnottaken_other' hobs26 Register.x14 (by decide) hx14_25
   have hx15_26 : σ26.regs.get? Register.x15 = some (vt3 + sign_extend (m := 64) (0x000#12)) :=
-    obs_bnottaken_other hobs26 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_25
+    obs_bnottaken_other' hobs26 Register.x15 (by decide) hx15_25
   have hmE26 : σ26.mem = writeMap4 (writeMap8 (writeMap8 (writeMap8 (c.σ.mem) ((vsp + sign_extend (m := 64) (0x0f0#12)).toNat) (sdData_val (vcur + vs6))) ((viov + sign_extend (m := 64) (0x000#12)).toNat) (sdData_val vbase)) ((viov + sign_extend (m := 64) (0x008#12)).toNat) (sdData_val vs6)) ((vsp + sign_extend (m := 64) (0x0e8#12)).toNat) (swData (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0))) := hmem26.trans hmE25
   have hload26 : SvfprintfSliceLoaded σ26.mem := hmem26 ▸ hload25
   have hfp26 : FlushPinsLoaded σ26.mem := hmem26 ▸ hfp25
@@ -1239,29 +1240,29 @@ theorem printToSsprintNN_spec
     rw [show (sign_extend (m := 64) (0x000#12) : BitVec 64) = (0#64) from by decide]
     exact BitVec.add_zero vlen] at hx15_27
   have hx2_27 : σ27.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs27 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_26
+    obs_alu_other' hobs27 Register.x2 (by decide) hx2_26
   have hx6_27 : σ27.regs.get? Register.x6 = some (0#64) :=
-    obs_alu_other hobs27 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_26
+    obs_alu_other' hobs27 Register.x6 (by decide) hx6_26
   have hx8_27 : σ27.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs27 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_26
+    obs_alu_other' hobs27 Register.x8 (by decide) hx8_26
   have hx16_27 : σ27.regs.get? Register.x16 = some vlen :=
-    obs_alu_other hobs27 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_26
+    obs_alu_other' hobs27 Register.x16 (by decide) hx16_26
   have hx20_27 : σ27.regs.get? Register.x20 = some (sign_extend (m := 64) ((Sail.BitVec.extractLsb v20 31 0) - (Sail.BitVec.extractLsb vs6 31 0))) :=
-    obs_alu_other hobs27 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_26
+    obs_alu_other' hobs27 Register.x20 (by decide) hx20_26
   have hx22_27 : σ27.regs.get? Register.x22 = some vs6 :=
-    obs_alu_other hobs27 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22_26
+    obs_alu_other' hobs27 Register.x22 (by decide) hx22_26
   have hx23_27 : σ27.regs.get? Register.x23 = some (viov + sign_extend (m := 64) (0x010#12)) :=
-    obs_alu_other hobs27 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_26
+    obs_alu_other' hobs27 Register.x23 (by decide) hx23_26
   have hx26_27 : σ27.regs.get? Register.x26 = some vbase :=
-    obs_alu_other hobs27 Register.x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx26_26
+    obs_alu_other' hobs27 Register.x26 (by decide) hx26_26
   have hx28_27 : σ27.regs.get? Register.x28 = some vt3 :=
-    obs_alu_other hobs27 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_26
+    obs_alu_other' hobs27 Register.x28 (by decide) hx28_26
   have hx12_27 : σ27.regs.get? Register.x12 = some (vcur + vs6) :=
-    obs_alu_other hobs27 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_26
+    obs_alu_other' hobs27 Register.x12 (by decide) hx12_26
   have hx5_27 : σ27.regs.get? Register.x5 = some (0#64) :=
-    obs_alu_other hobs27 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_26
+    obs_alu_other' hobs27 Register.x5 (by decide) hx5_26
   have hx14_27 : σ27.regs.get? Register.x14 = some (0x7#64) :=
-    obs_alu_other hobs27 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_26
+    obs_alu_other' hobs27 Register.x14 (by decide) hx14_26
   have hmE27 : σ27.mem = writeMap4 (writeMap8 (writeMap8 (writeMap8 (c.σ.mem) ((vsp + sign_extend (m := 64) (0x0f0#12)).toNat) (sdData_val (vcur + vs6))) ((viov + sign_extend (m := 64) (0x000#12)).toNat) (sdData_val vbase)) ((viov + sign_extend (m := 64) (0x008#12)).toNat) (sdData_val vs6)) ((vsp + sign_extend (m := 64) (0x0e8#12)).toNat) (swData (sign_extend (m := 64) (Sail.BitVec.extractLsb ((sign_extend (m := 64) vcnt : BitVec 64) + sign_extend (m := 64) (0x001#12)) 31 0))) := hmem27.trans hmE26
   have hload27 : SvfprintfSliceLoaded σ27.mem := hmem27 ▸ hload26
   have hfp27 : FlushPinsLoaded σ27.mem := hmem27 ▸ hfp26

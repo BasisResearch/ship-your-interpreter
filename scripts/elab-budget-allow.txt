@@ -1,0 +1,6 @@
+# Modules exempt from the check_all stage-a2 elab-budget gate (one per line).
+# Each entry needs a justification + the wave that will remove it.
+# (Seeded after the 2026-08-29 obs-bundle + decode-template integration build;
+# see experiments/module-build-times-baseline.tsv for the pre-campaign ranking.)
+Vsa.Sim.SnprintfSpec20   # 411s under load; obs cut barely helped — needs its own diagnosis (next wave)
+Vsa.Sim.EvalCallNative2  # 194s under load; obs cut took 293->194 — block-reflection migration pending

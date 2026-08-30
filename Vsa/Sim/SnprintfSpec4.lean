@@ -2,6 +2,7 @@ import Vsa.Sim.SnprintfSites2
 import Vsa.Sim.SnprintfSpec2
 import Vsa.Sim.Code.FlushPins
 import Vsa.Sim.KeepRegs
+import Vsa.Sim.ObsAvoid
 
 /-!
 # M3 Layer-3 — `SnprintfSpec4` : the sign block, composed
@@ -300,21 +301,21 @@ theorem signBlock_neg_spec
   have hx14_1 : σ1.regs.get? Register.x14 = some (v + sign_extend (m := 64) (0x000#12)) :=
     obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
   have hx13_1 : σ1.regs.get? Register.x13 = some v :=
-    obs_alu_other hobs1 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13
+    obs_alu_other' hobs1 Register.x13 (by decide) hx13
   have hx2_1 : σ1.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2
+    obs_alu_other' hobs1 Register.x2 (by decide) hx2
   have hx6_1 : σ1.regs.get? Register.x6 = some vt1 :=
-    obs_alu_other hobs1 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6
+    obs_alu_other' hobs1 Register.x6 (by decide) hx6
   have hx8_1 : σ1.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs1 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8
+    obs_alu_other' hobs1 Register.x8 (by decide) hx8
   have hx20_1 : σ1.regs.get? Register.x20 = some v20 :=
-    obs_alu_other hobs1 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20
+    obs_alu_other' hobs1 Register.x20 (by decide) hx20
   have hx23_1 : σ1.regs.get? Register.x23 = some v23 :=
-    obs_alu_other hobs1 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23
+    obs_alu_other' hobs1 Register.x23 (by decide) hx23
   have hx28_1 : σ1.regs.get? Register.x28 = some v28 :=
-    obs_alu_other hobs1 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28
+    obs_alu_other' hobs1 Register.x28 (by decide) hx28
   have hx12_1 : σ1.regs.get? Register.x12 = some v12 :=
-    obs_alu_other hobs1 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12
+    obs_alu_other' hobs1 Register.x12 (by decide) hx12
   obtain ⟨vmi1, hvmi1⟩ := obs_alu_minstret hobs1
   have hmem1' : SvfprintfSliceLoaded σ1.mem := hmem1 ▸ hmem
   have huload1 : Vsa.Sim.Code.__umoddi3Loaded σ1.mem := hmem1 ▸ huload
@@ -360,23 +361,23 @@ theorem signBlock_neg_spec
   have hx15_3 : σ3.regs.get? Register.x15 = some ((0#64) + sign_extend (m := 64) (0x02d#12)) :=
     obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
   have hx14_3 : σ3.regs.get? Register.x14 = some (v + sign_extend (m := 64) (0x000#12)) :=
-    obs_alu_other hobs3 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_2
+    obs_alu_other' hobs3 Register.x14 (by decide) hx14_2
   have hx2_3 : σ3.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs3 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_2
+    obs_alu_other' hobs3 Register.x2 (by decide) hx2_2
   have hx13_3 : σ3.regs.get? Register.x13 = some v :=
-    obs_alu_other hobs3 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_2
+    obs_alu_other' hobs3 Register.x13 (by decide) hx13_2
   have hx6_3 : σ3.regs.get? Register.x6 = some vt1 :=
-    obs_alu_other hobs3 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_2
+    obs_alu_other' hobs3 Register.x6 (by decide) hx6_2
   have hx8_3 : σ3.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs3 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_2
+    obs_alu_other' hobs3 Register.x8 (by decide) hx8_2
   have hx20_3 : σ3.regs.get? Register.x20 = some v20 :=
-    obs_alu_other hobs3 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_2
+    obs_alu_other' hobs3 Register.x20 (by decide) hx20_2
   have hx23_3 : σ3.regs.get? Register.x23 = some v23 :=
-    obs_alu_other hobs3 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_2
+    obs_alu_other' hobs3 Register.x23 (by decide) hx23_2
   have hx28_3 : σ3.regs.get? Register.x28 = some v28 :=
-    obs_alu_other hobs3 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_2
+    obs_alu_other' hobs3 Register.x28 (by decide) hx28_2
   have hx12_3 : σ3.regs.get? Register.x12 = some v12 :=
-    obs_alu_other hobs3 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_2
+    obs_alu_other' hobs3 Register.x12 (by decide) hx12_2
   obtain ⟨vmi3, hvmi3⟩ := obs_alu_minstret hobs3
   have hmem3' : SvfprintfSliceLoaded σ3.mem := hmem3 ▸ hmem2'
   have huload3 : Vsa.Sim.Code.__umoddi3Loaded σ3.mem := hmem3 ▸ huload2
@@ -391,23 +392,23 @@ theorem signBlock_neg_spec
     rwa [show BitVec.addInt (0x800080f0#64 : BitVec 64) 4 = (0x800080f4#64 : BitVec 64) from by
       apply BitVec.eq_of_toNat_eq; decide] at this
   have hx14_4 : σ4.regs.get? Register.x14 = some (v + sign_extend (m := 64) (0x000#12)) :=
-    obs_store_other_sn4 Register.x14 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_3
+    obs_store_other_sn4' Register.x14 hobs4 (by decide) hx14_3
   have hx13_4 : σ4.regs.get? Register.x13 = some v :=
-    obs_store_other_sn4 Register.x13 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_3
+    obs_store_other_sn4' Register.x13 hobs4 (by decide) hx13_3
   have hx2_4 : σ4.regs.get? Register.x2 = some vsp :=
-    obs_store_other_sn4 Register.x2 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_3
+    obs_store_other_sn4' Register.x2 hobs4 (by decide) hx2_3
   have hx6_4 : σ4.regs.get? Register.x6 = some vt1 :=
-    obs_store_other_sn4 Register.x6 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_3
+    obs_store_other_sn4' Register.x6 hobs4 (by decide) hx6_3
   have hx8_4 : σ4.regs.get? Register.x8 = some v8 :=
-    obs_store_other_sn4 Register.x8 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_3
+    obs_store_other_sn4' Register.x8 hobs4 (by decide) hx8_3
   have hx20_4 : σ4.regs.get? Register.x20 = some v20 :=
-    obs_store_other_sn4 Register.x20 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_3
+    obs_store_other_sn4' Register.x20 hobs4 (by decide) hx20_3
   have hx23_4 : σ4.regs.get? Register.x23 = some v23 :=
-    obs_store_other_sn4 Register.x23 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_3
+    obs_store_other_sn4' Register.x23 hobs4 (by decide) hx23_3
   have hx28_4 : σ4.regs.get? Register.x28 = some v28 :=
-    obs_store_other_sn4 Register.x28 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_3
+    obs_store_other_sn4' Register.x28 hobs4 (by decide) hx28_3
   have hx12_4 : σ4.regs.get? Register.x12 = some v12 :=
-    obs_store_other_sn4 Register.x12 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_3
+    obs_store_other_sn4' Register.x12 hobs4 (by decide) hx12_3
   obtain ⟨vmi4, hvmi4⟩ := obs_store_minstret_sn4 hobs4
   -- the stored sign byte: σ4.mem = (afterNextPC …).mem.insert (sp+167) (stData 1 '-')
   have hmemNP4 : (afterNextPC (afterPrelude σ3) (0x800080f0#64)).mem = σ3.mem := rfl
@@ -444,21 +445,21 @@ theorem signBlock_neg_spec
     rwa [show (v + sign_extend (m := 64) (0x000#12)) = v from by
       rw [sext_zero]; exact BitVec.add_zero v] at this
   have hx13_5 : σ5.regs.get? Register.x13 = some v :=
-    obs_alu_other hobs5 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_4
+    obs_alu_other' hobs5 Register.x13 (by decide) hx13_4
   have hx2_5 : σ5.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs5 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_4
+    obs_alu_other' hobs5 Register.x2 (by decide) hx2_4
   have hx6_5 : σ5.regs.get? Register.x6 = some vt1 :=
-    obs_alu_other hobs5 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_4
+    obs_alu_other' hobs5 Register.x6 (by decide) hx6_4
   have hx8_5 : σ5.regs.get? Register.x8 = some v8 :=
-    obs_alu_other hobs5 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_4
+    obs_alu_other' hobs5 Register.x8 (by decide) hx8_4
   have hx20_5 : σ5.regs.get? Register.x20 = some v20 :=
-    obs_alu_other hobs5 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_4
+    obs_alu_other' hobs5 Register.x20 (by decide) hx20_4
   have hx23_5 : σ5.regs.get? Register.x23 = some v23 :=
-    obs_alu_other hobs5 Register.x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx23_4
+    obs_alu_other' hobs5 Register.x23 (by decide) hx23_4
   have hx28_5 : σ5.regs.get? Register.x28 = some v28 :=
-    obs_alu_other hobs5 Register.x28 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx28_4
+    obs_alu_other' hobs5 Register.x28 (by decide) hx28_4
   have hx12_5 : σ5.regs.get? Register.x12 = some v12 :=
-    obs_alu_other hobs5 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_4
+    obs_alu_other' hobs5 Register.x12 (by decide) hx12_4
   obtain ⟨vmi5, hvmi5⟩ := obs_alu_minstret hobs5
   have hmem5' : SvfprintfSliceLoaded σ5.mem := hmem5 ▸ hmem4loaded
   have huload5 : Vsa.Sim.Code.__umoddi3Loaded σ5.mem := hmem5 ▸ huload4

@@ -1,5 +1,6 @@
 import Vsa.Sim.DivSpec2
 import Vsa.Sim.DivSites3
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 3 — total-correctness specs for the signed division wrappers `__moddi3` / `__divdi3`
@@ -538,7 +539,7 @@ theorem moddi3_tail
       have := obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
       rwa [addi0 (A % B)] at this
     have hx5_4 : σ4.regs.get? Register.x5 = some r :=
-      obs_alu_other hobs4 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_3
+      obs_alu_other' hobs4 Register.x5 (by decide) hx5_3
     obtain ⟨vmi4, hmi4⟩ := obs_alu_minstret hobs4
     have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmem3
     have hwl4 : Vsa.Sim.Code.__moddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
@@ -558,7 +559,7 @@ theorem moddi3_tail
       intro R hR
       rw [frame_jr hobs5 R hR.nw, frame_alu hobs4 R hR.nw.x10 hR.nw, hframe3 R hR.nw]
       exact hframe0 R hR
-    · exact obs_jr_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_4
+    · exact obs_jr_other' hobs5 Register.x10 (by decide) hx10_4
     · exact res_pos n d A B hA hB hsign hd0
   | true =>
     -- q = 0x4750: neg a0,a1  (a0 := 0 - a1 = 0 - (A%B)); result = -(rem)
@@ -575,7 +576,7 @@ theorem moddi3_tail
     have hx10_4 : σ4.regs.get? Register.x10 = some ((0#64) - (A % B)) :=
       obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
     have hx5_4 : σ4.regs.get? Register.x5 = some r :=
-      obs_alu_other hobs4 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_3
+      obs_alu_other' hobs4 Register.x5 (by decide) hx5_3
     obtain ⟨vmi4, hmi4⟩ := obs_alu_minstret hobs4
     have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmem3
     have hwl4 : Vsa.Sim.Code.__moddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
@@ -593,7 +594,7 @@ theorem moddi3_tail
     · intro R hR
       rw [frame_jr hobs5 R hR.nw, frame_alu hobs4 R hR.nw.x10 hR.nw, hframe3 R hR.nw]
       exact hframe0 R hR
-    · exact obs_jr_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_4
+    · exact obs_jr_other' hobs5 Register.x10 (by decide) hx10_4
     · exact res_neg n d A B hA hB hsign hd0
 
 /-- **`moddi3_spec`** — total-correctness triple for libgcc `__moddi3` (signed
@@ -616,15 +617,15 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
     have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [addi0 r] at this
   have hx10_1 : σ1.regs.get? Register.x10 = some n :=
-    obs_alu_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hn
+    obs_alu_other' hobs1 Register.x10 (by decide) hn
   have hx11_1 : σ1.regs.get? Register.x11 = some d :=
-    obs_alu_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hd
+    obs_alu_other' hobs1 Register.x11 (by decide) hd
   have hx1_1 : σ1.regs.get? Register.x1 = some r :=
-    obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hr
+    obs_alu_other' hobs1 Register.x1 (by decide) hr
   have hx12_1 : σ1.regs.get? Register.x12 = some v12 :=
-    obs_alu_other hobs1 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h12
+    obs_alu_other' hobs1 Register.x12 (by decide) h12
   have hx13_1 : σ1.regs.get? Register.x13 = some v13 :=
-    obs_alu_other hobs1 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h13
+    obs_alu_other' hobs1 Register.x13 (by decide) h13
   obtain ⟨vmi1, hmi1v⟩ := obs_alu_minstret hobs1
   have hmemq1 : σ1.mem = m0 := by rw [hmem1]; exact hmem
   have hwl1 : Vsa.Sim.Code.__moddi3Loaded σ1.mem := hmemq1 ▸ hmem ▸ hwl
@@ -642,17 +643,17 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
       rw [obs_btaken_pc hobs2, show (0x8000472c#64 : BitVec 64) + sign_extend (m := 64) (0x0014#13)
         = (0x80004740#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
     have hx10_2 : σ2.regs.get? Register.x10 = some n :=
-      obs_btaken_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_1
+      obs_btaken_other' hobs2 Register.x10 (by decide) hx10_1
     have hx11_2 : σ2.regs.get? Register.x11 = some d :=
-      obs_btaken_other hobs2 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_1
+      obs_btaken_other' hobs2 Register.x11 (by decide) hx11_1
     have hx1_2 : σ2.regs.get? Register.x1 = some r :=
-      obs_btaken_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_1
+      obs_btaken_other' hobs2 Register.x1 (by decide) hx1_1
     have hx5_2 : σ2.regs.get? Register.x5 = some r :=
-      obs_btaken_other hobs2 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_1
+      obs_btaken_other' hobs2 Register.x5 (by decide) hx5_1
     have hx12_2 : σ2.regs.get? Register.x12 = some v12 :=
-      obs_btaken_other hobs2 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_1
+      obs_btaken_other' hobs2 Register.x12 (by decide) hx12_1
     have hx13_2 : σ2.regs.get? Register.x13 = some v13 :=
-      obs_btaken_other hobs2 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_1
+      obs_btaken_other' hobs2 Register.x13 (by decide) hx13_1
     obtain ⟨vmi2, hmi2v⟩ := obs_btaken_minstret hobs2
     have hmemq2 : σ2.mem = m0 := by rw [hmem2]; exact hmemq1
     have hwl2 : Vsa.Sim.Code.__moddi3Loaded σ2.mem := hmemq2 ▸ hmem ▸ hwl
@@ -668,15 +669,15 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
     have hx11_3 : σ3.regs.get? Register.x11 = some ((0#64) - d) :=
       obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
     have hx10_3 : σ3.regs.get? Register.x10 = some n :=
-      obs_alu_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_2
+      obs_alu_other' hobs3 Register.x10 (by decide) hx10_2
     have hx1_3 : σ3.regs.get? Register.x1 = some r :=
-      obs_alu_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_2
+      obs_alu_other' hobs3 Register.x1 (by decide) hx1_2
     have hx5_3 : σ3.regs.get? Register.x5 = some r :=
-      obs_alu_other hobs3 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_2
+      obs_alu_other' hobs3 Register.x5 (by decide) hx5_2
     have hx12_3 : σ3.regs.get? Register.x12 = some v12 :=
-      obs_alu_other hobs3 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_2
+      obs_alu_other' hobs3 Register.x12 (by decide) hx12_2
     have hx13_3 : σ3.regs.get? Register.x13 = some v13 :=
-      obs_alu_other hobs3 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_2
+      obs_alu_other' hobs3 Register.x13 (by decide) hx13_2
     obtain ⟨vmi3, hmi3v⟩ := obs_alu_minstret hobs3
     have hmemq3 : σ3.mem = m0 := by rw [hmem3]; exact hmemq2
     have hwl3 : Vsa.Sim.Code.__moddi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hwl
@@ -696,17 +697,17 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         rw [obs_btaken_pc hobs4, show (0x80004744#64 : BitVec 64) + sign_extend (m := 64) (0x1ff0#13)
           = (0x80004734#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
       have hx10_4 : σ4.regs.get? Register.x10 = some n :=
-        obs_btaken_other hobs4 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_3
+        obs_btaken_other' hobs4 Register.x10 (by decide) hx10_3
       have hx11_4 : σ4.regs.get? Register.x11 = some ((0#64) - d) :=
-        obs_btaken_other hobs4 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_3
+        obs_btaken_other' hobs4 Register.x11 (by decide) hx11_3
       have hx1_4 : σ4.regs.get? Register.x1 = some r :=
-        obs_btaken_other hobs4 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_3
+        obs_btaken_other' hobs4 Register.x1 (by decide) hx1_3
       have hx5_4 : σ4.regs.get? Register.x5 = some r :=
-        obs_btaken_other hobs4 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_3
+        obs_btaken_other' hobs4 Register.x5 (by decide) hx5_3
       have hx12_4 : σ4.regs.get? Register.x12 = some v12 :=
-        obs_btaken_other hobs4 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_3
+        obs_btaken_other' hobs4 Register.x12 (by decide) hx12_3
       have hx13_4 : σ4.regs.get? Register.x13 = some v13 :=
-        obs_btaken_other hobs4 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_3
+        obs_btaken_other' hobs4 Register.x13 (by decide) hx13_3
       obtain ⟨vmi4, hmi4v⟩ := obs_btaken_minstret hobs4
       have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmemq3
       have hwl4 : Vsa.Sim.Code.__moddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
@@ -724,15 +725,15 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         rwa [show BitVec.addInt (0x80004734#64 : BitVec 64) 4 = (0x80004738#64 : BitVec 64) from by
           apply BitVec.eq_of_toNat_eq; decide] at this
       have hx10_5 : σ5.regs.get? Register.x10 = some n :=
-        obs_jal_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_4
+        obs_jal_other' hobs5 Register.x10 (by decide) hx10_4
       have hx11_5 : σ5.regs.get? Register.x11 = some ((0#64) - d) :=
-        obs_jal_other hobs5 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_4
+        obs_jal_other' hobs5 Register.x11 (by decide) hx11_4
       have hx5_5 : σ5.regs.get? Register.x5 = some r :=
-        obs_jal_other hobs5 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_4
+        obs_jal_other' hobs5 Register.x5 (by decide) hx5_4
       have hx12_5 : σ5.regs.get? Register.x12 = some v12 :=
-        obs_jal_other hobs5 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_4
+        obs_jal_other' hobs5 Register.x12 (by decide) hx12_4
       have hx13_5 : σ5.regs.get? Register.x13 = some v13 :=
-        obs_jal_other hobs5 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_4
+        obs_jal_other' hobs5 Register.x13 (by decide) hx13_4
       have hmi5 : ∃ v, σ5.regs.get? Register.minstret = some v := obs_jal_minstret hobs5
       have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
       have hwl5 : Vsa.Sim.Code.__moddi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hwl
@@ -765,17 +766,17 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         rwa [show BitVec.addInt (0x80004744#64 : BitVec 64) 4 = (0x80004748#64 : BitVec 64) from by
           apply BitVec.eq_of_toNat_eq; decide] at this
       have hx10_4 : σ4.regs.get? Register.x10 = some n :=
-        obs_bnottaken_other hobs4 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_3
+        obs_bnottaken_other' hobs4 Register.x10 (by decide) hx10_3
       have hx11_4 : σ4.regs.get? Register.x11 = some ((0#64) - d) :=
-        obs_bnottaken_other hobs4 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_3
+        obs_bnottaken_other' hobs4 Register.x11 (by decide) hx11_3
       have hx1_4 : σ4.regs.get? Register.x1 = some r :=
-        obs_bnottaken_other hobs4 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_3
+        obs_bnottaken_other' hobs4 Register.x1 (by decide) hx1_3
       have hx5_4 : σ4.regs.get? Register.x5 = some r :=
-        obs_bnottaken_other hobs4 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_3
+        obs_bnottaken_other' hobs4 Register.x5 (by decide) hx5_3
       have hx12_4 : σ4.regs.get? Register.x12 = some v12 :=
-        obs_bnottaken_other hobs4 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_3
+        obs_bnottaken_other' hobs4 Register.x12 (by decide) hx12_3
       have hx13_4 : σ4.regs.get? Register.x13 = some v13 :=
-        obs_bnottaken_other hobs4 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_3
+        obs_bnottaken_other' hobs4 Register.x13 (by decide) hx13_3
       obtain ⟨vmi4, hmi4v⟩ := obs_bnottaken_minstret hobs4
       have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmemq3
       have hwl4 : Vsa.Sim.Code.__moddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
@@ -791,15 +792,15 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
       have hx10_5 : σ5.regs.get? Register.x10 = some ((0#64) - n) :=
         obs_alu_rd hobs5 (by decide) (by decide) (by decide) (by decide) (by decide)
       have hx11_5 : σ5.regs.get? Register.x11 = some ((0#64) - d) :=
-        obs_alu_other hobs5 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_4
+        obs_alu_other' hobs5 Register.x11 (by decide) hx11_4
       have hx1_5 : σ5.regs.get? Register.x1 = some r :=
-        obs_alu_other hobs5 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_4
+        obs_alu_other' hobs5 Register.x1 (by decide) hx1_4
       have hx5_5 : σ5.regs.get? Register.x5 = some r :=
-        obs_alu_other hobs5 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_4
+        obs_alu_other' hobs5 Register.x5 (by decide) hx5_4
       have hx12_5 : σ5.regs.get? Register.x12 = some v12 :=
-        obs_alu_other hobs5 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_4
+        obs_alu_other' hobs5 Register.x12 (by decide) hx12_4
       have hx13_5 : σ5.regs.get? Register.x13 = some v13 :=
-        obs_alu_other hobs5 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_4
+        obs_alu_other' hobs5 Register.x13 (by decide) hx13_4
       obtain ⟨vmi5, hmi5v⟩ := obs_alu_minstret hobs5
       have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
       have hwl5 : Vsa.Sim.Code.__moddi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hwl
@@ -817,15 +818,15 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         rwa [show BitVec.addInt (0x8000474c#64 : BitVec 64) 4 = (0x80004750#64 : BitVec 64) from by
           apply BitVec.eq_of_toNat_eq; decide] at this
       have hx10_6 : σ6.regs.get? Register.x10 = some ((0#64) - n) :=
-        obs_jal_other hobs6 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_5
+        obs_jal_other' hobs6 Register.x10 (by decide) hx10_5
       have hx11_6 : σ6.regs.get? Register.x11 = some ((0#64) - d) :=
-        obs_jal_other hobs6 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_5
+        obs_jal_other' hobs6 Register.x11 (by decide) hx11_5
       have hx5_6 : σ6.regs.get? Register.x5 = some r :=
-        obs_jal_other hobs6 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_5
+        obs_jal_other' hobs6 Register.x5 (by decide) hx5_5
       have hx12_6 : σ6.regs.get? Register.x12 = some v12 :=
-        obs_jal_other hobs6 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_5
+        obs_jal_other' hobs6 Register.x12 (by decide) hx12_5
       have hx13_6 : σ6.regs.get? Register.x13 = some v13 :=
-        obs_jal_other hobs6 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_5
+        obs_jal_other' hobs6 Register.x13 (by decide) hx13_5
       have hmi6 : ∃ v, σ6.regs.get? Register.minstret = some v := obs_jal_minstret hobs6
       have hmemq6 : σ6.mem = m0 := by rw [hmem6]; exact hmemq5
       have hwl6 : Vsa.Sim.Code.__moddi3Loaded σ6.mem := hmemq6 ▸ hmem ▸ hwl
@@ -864,17 +865,17 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
       rwa [show BitVec.addInt (0x8000472c#64 : BitVec 64) 4 = (0x80004730#64 : BitVec 64) from by
         apply BitVec.eq_of_toNat_eq; decide] at this
     have hx10_2 : σ2.regs.get? Register.x10 = some n :=
-      obs_bnottaken_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_1
+      obs_bnottaken_other' hobs2 Register.x10 (by decide) hx10_1
     have hx11_2 : σ2.regs.get? Register.x11 = some d :=
-      obs_bnottaken_other hobs2 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_1
+      obs_bnottaken_other' hobs2 Register.x11 (by decide) hx11_1
     have hx1_2 : σ2.regs.get? Register.x1 = some r :=
-      obs_bnottaken_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_1
+      obs_bnottaken_other' hobs2 Register.x1 (by decide) hx1_1
     have hx5_2 : σ2.regs.get? Register.x5 = some r :=
-      obs_bnottaken_other hobs2 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_1
+      obs_bnottaken_other' hobs2 Register.x5 (by decide) hx5_1
     have hx12_2 : σ2.regs.get? Register.x12 = some v12 :=
-      obs_bnottaken_other hobs2 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_1
+      obs_bnottaken_other' hobs2 Register.x12 (by decide) hx12_1
     have hx13_2 : σ2.regs.get? Register.x13 = some v13 :=
-      obs_bnottaken_other hobs2 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_1
+      obs_bnottaken_other' hobs2 Register.x13 (by decide) hx13_1
     obtain ⟨vmi2, hmi2v⟩ := obs_bnottaken_minstret hobs2
     have hmemq2 : σ2.mem = m0 := by rw [hmem2]; exact hmemq1
     have hwl2 : Vsa.Sim.Code.__moddi3Loaded σ2.mem := hmemq2 ▸ hmem ▸ hwl
@@ -890,17 +891,17 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         rw [obs_btaken_pc hobs3, show (0x80004730#64 : BitVec 64) + sign_extend (m := 64) (0x0018#13)
           = (0x80004748#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
       have hx10_3 : σ3.regs.get? Register.x10 = some n :=
-        obs_btaken_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_2
+        obs_btaken_other' hobs3 Register.x10 (by decide) hx10_2
       have hx11_3 : σ3.regs.get? Register.x11 = some d :=
-        obs_btaken_other hobs3 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_2
+        obs_btaken_other' hobs3 Register.x11 (by decide) hx11_2
       have hx1_3 : σ3.regs.get? Register.x1 = some r :=
-        obs_btaken_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_2
+        obs_btaken_other' hobs3 Register.x1 (by decide) hx1_2
       have hx5_3 : σ3.regs.get? Register.x5 = some r :=
-        obs_btaken_other hobs3 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_2
+        obs_btaken_other' hobs3 Register.x5 (by decide) hx5_2
       have hx12_3 : σ3.regs.get? Register.x12 = some v12 :=
-        obs_btaken_other hobs3 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_2
+        obs_btaken_other' hobs3 Register.x12 (by decide) hx12_2
       have hx13_3 : σ3.regs.get? Register.x13 = some v13 :=
-        obs_btaken_other hobs3 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_2
+        obs_btaken_other' hobs3 Register.x13 (by decide) hx13_2
       obtain ⟨vmi3, hmi3v⟩ := obs_btaken_minstret hobs3
       have hmemq3 : σ3.mem = m0 := by rw [hmem3]; exact hmemq2
       have hwl3 : Vsa.Sim.Code.__moddi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hwl
@@ -916,15 +917,15 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
       have hx10_4 : σ4.regs.get? Register.x10 = some ((0#64) - n) :=
         obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
       have hx11_4 : σ4.regs.get? Register.x11 = some d :=
-        obs_alu_other hobs4 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_3
+        obs_alu_other' hobs4 Register.x11 (by decide) hx11_3
       have hx1_4 : σ4.regs.get? Register.x1 = some r :=
-        obs_alu_other hobs4 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_3
+        obs_alu_other' hobs4 Register.x1 (by decide) hx1_3
       have hx5_4 : σ4.regs.get? Register.x5 = some r :=
-        obs_alu_other hobs4 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_3
+        obs_alu_other' hobs4 Register.x5 (by decide) hx5_3
       have hx12_4 : σ4.regs.get? Register.x12 = some v12 :=
-        obs_alu_other hobs4 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_3
+        obs_alu_other' hobs4 Register.x12 (by decide) hx12_3
       have hx13_4 : σ4.regs.get? Register.x13 = some v13 :=
-        obs_alu_other hobs4 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_3
+        obs_alu_other' hobs4 Register.x13 (by decide) hx13_3
       obtain ⟨vmi4, hmi4v⟩ := obs_alu_minstret hobs4
       have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmemq3
       have hwl4 : Vsa.Sim.Code.__moddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
@@ -941,15 +942,15 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         rwa [show BitVec.addInt (0x8000474c#64 : BitVec 64) 4 = (0x80004750#64 : BitVec 64) from by
           apply BitVec.eq_of_toNat_eq; decide] at this
       have hx10_5 : σ5.regs.get? Register.x10 = some ((0#64) - n) :=
-        obs_jal_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_4
+        obs_jal_other' hobs5 Register.x10 (by decide) hx10_4
       have hx11_5 : σ5.regs.get? Register.x11 = some d :=
-        obs_jal_other hobs5 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_4
+        obs_jal_other' hobs5 Register.x11 (by decide) hx11_4
       have hx5_5 : σ5.regs.get? Register.x5 = some r :=
-        obs_jal_other hobs5 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_4
+        obs_jal_other' hobs5 Register.x5 (by decide) hx5_4
       have hx12_5 : σ5.regs.get? Register.x12 = some v12 :=
-        obs_jal_other hobs5 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_4
+        obs_jal_other' hobs5 Register.x12 (by decide) hx12_4
       have hx13_5 : σ5.regs.get? Register.x13 = some v13 :=
-        obs_jal_other hobs5 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_4
+        obs_jal_other' hobs5 Register.x13 (by decide) hx13_4
       have hmi5 : ∃ v, σ5.regs.get? Register.minstret = some v := obs_jal_minstret hobs5
       have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
       have hwl5 : Vsa.Sim.Code.__moddi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hwl
@@ -982,17 +983,17 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         rwa [show BitVec.addInt (0x80004730#64 : BitVec 64) 4 = (0x80004734#64 : BitVec 64) from by
           apply BitVec.eq_of_toNat_eq; decide] at this
       have hx10_3 : σ3.regs.get? Register.x10 = some n :=
-        obs_bnottaken_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_2
+        obs_bnottaken_other' hobs3 Register.x10 (by decide) hx10_2
       have hx11_3 : σ3.regs.get? Register.x11 = some d :=
-        obs_bnottaken_other hobs3 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_2
+        obs_bnottaken_other' hobs3 Register.x11 (by decide) hx11_2
       have hx1_3 : σ3.regs.get? Register.x1 = some r :=
-        obs_bnottaken_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_2
+        obs_bnottaken_other' hobs3 Register.x1 (by decide) hx1_2
       have hx5_3 : σ3.regs.get? Register.x5 = some r :=
-        obs_bnottaken_other hobs3 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_2
+        obs_bnottaken_other' hobs3 Register.x5 (by decide) hx5_2
       have hx12_3 : σ3.regs.get? Register.x12 = some v12 :=
-        obs_bnottaken_other hobs3 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_2
+        obs_bnottaken_other' hobs3 Register.x12 (by decide) hx12_2
       have hx13_3 : σ3.regs.get? Register.x13 = some v13 :=
-        obs_bnottaken_other hobs3 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_2
+        obs_bnottaken_other' hobs3 Register.x13 (by decide) hx13_2
       obtain ⟨vmi3, hmi3v⟩ := obs_bnottaken_minstret hobs3
       have hmemq3 : σ3.mem = m0 := by rw [hmem3]; exact hmemq2
       have hwl3 : Vsa.Sim.Code.__moddi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hwl
@@ -1009,15 +1010,15 @@ theorem moddi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         rwa [show BitVec.addInt (0x80004734#64 : BitVec 64) 4 = (0x80004738#64 : BitVec 64) from by
           apply BitVec.eq_of_toNat_eq; decide] at this
       have hx10_4 : σ4.regs.get? Register.x10 = some n :=
-        obs_jal_other hobs4 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_3
+        obs_jal_other' hobs4 Register.x10 (by decide) hx10_3
       have hx11_4 : σ4.regs.get? Register.x11 = some d :=
-        obs_jal_other hobs4 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_3
+        obs_jal_other' hobs4 Register.x11 (by decide) hx11_3
       have hx5_4 : σ4.regs.get? Register.x5 = some r :=
-        obs_jal_other hobs4 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_3
+        obs_jal_other' hobs4 Register.x5 (by decide) hx5_3
       have hx12_4 : σ4.regs.get? Register.x12 = some v12 :=
-        obs_jal_other hobs4 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_3
+        obs_jal_other' hobs4 Register.x12 (by decide) hx12_3
       have hx13_4 : σ4.regs.get? Register.x13 = some v13 :=
-        obs_jal_other hobs4 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_3
+        obs_jal_other' hobs4 Register.x13 (by decide) hx13_3
       have hmi4 : ∃ v, σ4.regs.get? Register.minstret = some v := obs_jal_minstret hobs4
       have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmemq3
       have hwl4 : Vsa.Sim.Code.__moddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hwl
@@ -1128,7 +1129,7 @@ theorem divdi3_mixed_tail
     rw [frame_jr hobs5 R hR.nw, frame_alu hobs4 R (by
         have := hR.nw.x10; exact this) hR.nw, hframe3 R hR.nw]
     exact hframe0 R hR
-  · exact obs_jr_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_4
+  · exact obs_jr_other' hobs5 Register.x10 (by decide) hx10_4
   · exact res_div_mixed n d A B hA hB hdiff hd0
 
 /-- Same-sign tail: from core entry `0x46ac` with `x1 = r` (the caller's own
@@ -1188,15 +1189,15 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
       rw [obs_btaken_pc hobs1, show (0x800046a4#64 : BitVec 64) + sign_extend (m := 64) (0x0060#13)
         = (0x80004704#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
     have hx10_1 : σ1.regs.get? Register.x10 = some n :=
-      obs_btaken_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hn
+      obs_btaken_other' hobs1 Register.x10 (by decide) hn
     have hx11_1 : σ1.regs.get? Register.x11 = some d :=
-      obs_btaken_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hd
+      obs_btaken_other' hobs1 Register.x11 (by decide) hd
     have hx1_1 : σ1.regs.get? Register.x1 = some r :=
-      obs_btaken_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hr
+      obs_btaken_other' hobs1 Register.x1 (by decide) hr
     have hx12_1 : σ1.regs.get? Register.x12 = some v12 :=
-      obs_btaken_other hobs1 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h12
+      obs_btaken_other' hobs1 Register.x12 (by decide) h12
     have hx13_1 : σ1.regs.get? Register.x13 = some v13 :=
-      obs_btaken_other hobs1 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h13
+      obs_btaken_other' hobs1 Register.x13 (by decide) h13
     obtain ⟨vmi1, hmi1v⟩ := obs_btaken_minstret hobs1
     have hmemq1 : σ1.mem = m0 := by rw [hmem1]; exact hmem
     have hul1 : Vsa.Sim.Code.__umoddi3Loaded σ1.mem := hmemq1 ▸ hmem ▸ hul
@@ -1212,13 +1213,13 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
     have hx10_2 : σ2.regs.get? Register.x10 = some ((0#64) - n) :=
       obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
     have hx11_2 : σ2.regs.get? Register.x11 = some d :=
-      obs_alu_other hobs2 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_1
+      obs_alu_other' hobs2 Register.x11 (by decide) hx11_1
     have hx1_2 : σ2.regs.get? Register.x1 = some r :=
-      obs_alu_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_1
+      obs_alu_other' hobs2 Register.x1 (by decide) hx1_1
     have hx12_2 : σ2.regs.get? Register.x12 = some v12 :=
-      obs_alu_other hobs2 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_1
+      obs_alu_other' hobs2 Register.x12 (by decide) hx12_1
     have hx13_2 : σ2.regs.get? Register.x13 = some v13 :=
-      obs_alu_other hobs2 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_1
+      obs_alu_other' hobs2 Register.x13 (by decide) hx13_1
     obtain ⟨vmi2, hmi2v⟩ := obs_alu_minstret hobs2
     have hmemq2 : σ2.mem = m0 := by rw [hmem2]; exact hmemq1
     have hul2 : Vsa.Sim.Code.__umoddi3Loaded σ2.mem := hmemq2 ▸ hmem ▸ hul
@@ -1242,15 +1243,15 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         rw [obs_btaken_pc hobs3, show (0x80004708#64 : BitVec 64) + sign_extend (m := 64) (0x0010#13)
           = (0x80004718#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
       have hx10_3 : σ3.regs.get? Register.x10 = some ((0#64) - n) :=
-        obs_btaken_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_2
+        obs_btaken_other' hobs3 Register.x10 (by decide) hx10_2
       have hx11_3 : σ3.regs.get? Register.x11 = some d :=
-        obs_btaken_other hobs3 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_2
+        obs_btaken_other' hobs3 Register.x11 (by decide) hx11_2
       have hx1_3 : σ3.regs.get? Register.x1 = some r :=
-        obs_btaken_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_2
+        obs_btaken_other' hobs3 Register.x1 (by decide) hx1_2
       have hx12_3 : σ3.regs.get? Register.x12 = some v12 :=
-        obs_btaken_other hobs3 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_2
+        obs_btaken_other' hobs3 Register.x12 (by decide) hx12_2
       have hx13_3 : σ3.regs.get? Register.x13 = some v13 :=
-        obs_btaken_other hobs3 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_2
+        obs_btaken_other' hobs3 Register.x13 (by decide) hx13_2
       obtain ⟨vmi3, hmi3v⟩ := obs_btaken_minstret hobs3
       have hmemq3 : σ3.mem = m0 := by rw [hmem3]; exact hmemq2
       have hul3 : Vsa.Sim.Code.__umoddi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hul
@@ -1267,13 +1268,13 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         have := obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
         rwa [addi0 r] at this
       have hx10_4 : σ4.regs.get? Register.x10 = some ((0#64) - n) :=
-        obs_alu_other hobs4 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_3
+        obs_alu_other' hobs4 Register.x10 (by decide) hx10_3
       have hx11_4 : σ4.regs.get? Register.x11 = some d :=
-        obs_alu_other hobs4 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_3
+        obs_alu_other' hobs4 Register.x11 (by decide) hx11_3
       have hx12_4 : σ4.regs.get? Register.x12 = some v12 :=
-        obs_alu_other hobs4 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_3
+        obs_alu_other' hobs4 Register.x12 (by decide) hx12_3
       have hx13_4 : σ4.regs.get? Register.x13 = some v13 :=
-        obs_alu_other hobs4 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_3
+        obs_alu_other' hobs4 Register.x13 (by decide) hx13_3
       obtain ⟨vmi4, hmi4v⟩ := obs_alu_minstret hobs4
       have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmemq3
       have hul4 : Vsa.Sim.Code.__umoddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hul
@@ -1291,15 +1292,15 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         rwa [show BitVec.addInt (0x8000471c#64 : BitVec 64) 4 = (0x80004720#64 : BitVec 64) from by
           apply BitVec.eq_of_toNat_eq; decide] at this
       have hx10_5 : σ5.regs.get? Register.x10 = some ((0#64) - n) :=
-        obs_jal_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_4
+        obs_jal_other' hobs5 Register.x10 (by decide) hx10_4
       have hx11_5 : σ5.regs.get? Register.x11 = some d :=
-        obs_jal_other hobs5 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_4
+        obs_jal_other' hobs5 Register.x11 (by decide) hx11_4
       have hx5_5 : σ5.regs.get? Register.x5 = some r :=
-        obs_jal_other hobs5 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_4
+        obs_jal_other' hobs5 Register.x5 (by decide) hx5_4
       have hx12_5 : σ5.regs.get? Register.x12 = some v12 :=
-        obs_jal_other hobs5 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_4
+        obs_jal_other' hobs5 Register.x12 (by decide) hx12_4
       have hx13_5 : σ5.regs.get? Register.x13 = some v13 :=
-        obs_jal_other hobs5 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_4
+        obs_jal_other' hobs5 Register.x13 (by decide) hx13_4
       have hmi5 : ∃ v, σ5.regs.get? Register.minstret = some v := obs_jal_minstret hobs5
       have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
       have hul5 : Vsa.Sim.Code.__umoddi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hul
@@ -1347,15 +1348,15 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         rwa [show BitVec.addInt (0x80004708#64 : BitVec 64) 4 = (0x8000470c#64 : BitVec 64) from by
           apply BitVec.eq_of_toNat_eq; decide] at this
       have hx10_3 : σ3.regs.get? Register.x10 = some ((0#64) - n) :=
-        obs_bnottaken_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_2
+        obs_bnottaken_other' hobs3 Register.x10 (by decide) hx10_2
       have hx11_3 : σ3.regs.get? Register.x11 = some d :=
-        obs_bnottaken_other hobs3 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_2
+        obs_bnottaken_other' hobs3 Register.x11 (by decide) hx11_2
       have hx1_3 : σ3.regs.get? Register.x1 = some r :=
-        obs_bnottaken_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_2
+        obs_bnottaken_other' hobs3 Register.x1 (by decide) hx1_2
       have hx12_3 : σ3.regs.get? Register.x12 = some v12 :=
-        obs_bnottaken_other hobs3 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_2
+        obs_bnottaken_other' hobs3 Register.x12 (by decide) hx12_2
       have hx13_3 : σ3.regs.get? Register.x13 = some v13 :=
-        obs_bnottaken_other hobs3 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_2
+        obs_bnottaken_other' hobs3 Register.x13 (by decide) hx13_2
       obtain ⟨vmi3, hmi3v⟩ := obs_bnottaken_minstret hobs3
       have hmemq3 : σ3.mem = m0 := by rw [hmem3]; exact hmemq2
       have hul3 : Vsa.Sim.Code.__umoddi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hul
@@ -1371,13 +1372,13 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
       have hx11_4 : σ4.regs.get? Register.x11 = some ((0#64) - d) :=
         obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
       have hx10_4 : σ4.regs.get? Register.x10 = some ((0#64) - n) :=
-        obs_alu_other hobs4 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_3
+        obs_alu_other' hobs4 Register.x10 (by decide) hx10_3
       have hx1_4 : σ4.regs.get? Register.x1 = some r :=
-        obs_alu_other hobs4 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_3
+        obs_alu_other' hobs4 Register.x1 (by decide) hx1_3
       have hx12_4 : σ4.regs.get? Register.x12 = some v12 :=
-        obs_alu_other hobs4 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_3
+        obs_alu_other' hobs4 Register.x12 (by decide) hx12_3
       have hx13_4 : σ4.regs.get? Register.x13 = some v13 :=
-        obs_alu_other hobs4 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_3
+        obs_alu_other' hobs4 Register.x13 (by decide) hx13_3
       obtain ⟨vmi4, hmi4v⟩ := obs_alu_minstret hobs4
       have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmemq3
       have hul4 : Vsa.Sim.Code.__umoddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hul
@@ -1391,15 +1392,15 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         rwa [show ((0x80004710#64 : BitVec 64) + sign_extend (m := 64) (0x1fff9c#21))
             = (0x800046ac#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide] at this
       have hx10_5 : σ5.regs.get? Register.x10 = some ((0#64) - n) :=
-        obs_jr_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_4
+        obs_jr_other' hobs5 Register.x10 (by decide) hx10_4
       have hx11_5 : σ5.regs.get? Register.x11 = some ((0#64) - d) :=
-        obs_jr_other hobs5 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_4
+        obs_jr_other' hobs5 Register.x11 (by decide) hx11_4
       have hx1_5 : σ5.regs.get? Register.x1 = some r :=
-        obs_jr_other hobs5 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_4
+        obs_jr_other' hobs5 Register.x1 (by decide) hx1_4
       have hx12_5 : σ5.regs.get? Register.x12 = some v12 :=
-        obs_jr_other hobs5 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_4
+        obs_jr_other' hobs5 Register.x12 (by decide) hx12_4
       have hx13_5 : σ5.regs.get? Register.x13 = some v13 :=
-        obs_jr_other hobs5 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_4
+        obs_jr_other' hobs5 Register.x13 (by decide) hx13_4
       obtain ⟨vmi5, hmi5v⟩ := obs_jr_minstret hobs5
       have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
       have hcl5 : __hidden___udivdi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hcl
@@ -1433,15 +1434,15 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
       rwa [show BitVec.addInt (0x800046a4#64 : BitVec 64) 4 = (0x800046a8#64 : BitVec 64) from by
         apply BitVec.eq_of_toNat_eq; decide] at this
     have hx10_1 : σ1.regs.get? Register.x10 = some n :=
-      obs_bnottaken_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hn
+      obs_bnottaken_other' hobs1 Register.x10 (by decide) hn
     have hx11_1 : σ1.regs.get? Register.x11 = some d :=
-      obs_bnottaken_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hd
+      obs_bnottaken_other' hobs1 Register.x11 (by decide) hd
     have hx1_1 : σ1.regs.get? Register.x1 = some r :=
-      obs_bnottaken_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hr
+      obs_bnottaken_other' hobs1 Register.x1 (by decide) hr
     have hx12_1 : σ1.regs.get? Register.x12 = some v12 :=
-      obs_bnottaken_other hobs1 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h12
+      obs_bnottaken_other' hobs1 Register.x12 (by decide) h12
     have hx13_1 : σ1.regs.get? Register.x13 = some v13 :=
-      obs_bnottaken_other hobs1 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h13
+      obs_bnottaken_other' hobs1 Register.x13 (by decide) h13
     obtain ⟨vmi1, hmi1v⟩ := obs_bnottaken_minstret hobs1
     have hmemq1 : σ1.mem = m0 := by rw [hmem1]; exact hmem
     have hdl1 : Vsa.Sim.Code.__divdi3Loaded σ1.mem := hmemq1 ▸ hmem ▸ hdl
@@ -1463,15 +1464,15 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         rw [obs_btaken_pc hobs2, show (0x800046a8#64 : BitVec 64) + sign_extend (m := 64) (0x006c#13)
           = (0x80004714#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
       have hx10_2 : σ2.regs.get? Register.x10 = some n :=
-        obs_btaken_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_1
+        obs_btaken_other' hobs2 Register.x10 (by decide) hx10_1
       have hx11_2 : σ2.regs.get? Register.x11 = some d :=
-        obs_btaken_other hobs2 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_1
+        obs_btaken_other' hobs2 Register.x11 (by decide) hx11_1
       have hx1_2 : σ2.regs.get? Register.x1 = some r :=
-        obs_btaken_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_1
+        obs_btaken_other' hobs2 Register.x1 (by decide) hx1_1
       have hx12_2 : σ2.regs.get? Register.x12 = some v12 :=
-        obs_btaken_other hobs2 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_1
+        obs_btaken_other' hobs2 Register.x12 (by decide) hx12_1
       have hx13_2 : σ2.regs.get? Register.x13 = some v13 :=
-        obs_btaken_other hobs2 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_1
+        obs_btaken_other' hobs2 Register.x13 (by decide) hx13_1
       obtain ⟨vmi2, hmi2v⟩ := obs_btaken_minstret hobs2
       have hmemq2 : σ2.mem = m0 := by rw [hmem2]; exact hmemq1
       have hul2 : Vsa.Sim.Code.__umoddi3Loaded σ2.mem := hmemq2 ▸ hmem ▸ hul
@@ -1487,13 +1488,13 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
       have hx11_3 : σ3.regs.get? Register.x11 = some ((0#64) - d) :=
         obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
       have hx10_3 : σ3.regs.get? Register.x10 = some n :=
-        obs_alu_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_2
+        obs_alu_other' hobs3 Register.x10 (by decide) hx10_2
       have hx1_3 : σ3.regs.get? Register.x1 = some r :=
-        obs_alu_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_2
+        obs_alu_other' hobs3 Register.x1 (by decide) hx1_2
       have hx12_3 : σ3.regs.get? Register.x12 = some v12 :=
-        obs_alu_other hobs3 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_2
+        obs_alu_other' hobs3 Register.x12 (by decide) hx12_2
       have hx13_3 : σ3.regs.get? Register.x13 = some v13 :=
-        obs_alu_other hobs3 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_2
+        obs_alu_other' hobs3 Register.x13 (by decide) hx13_2
       obtain ⟨vmi3, hmi3v⟩ := obs_alu_minstret hobs3
       have hmemq3 : σ3.mem = m0 := by rw [hmem3]; exact hmemq2
       have hul3 : Vsa.Sim.Code.__umoddi3Loaded σ3.mem := hmemq3 ▸ hmem ▸ hul
@@ -1510,13 +1511,13 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         have := obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
         rwa [addi0 r] at this
       have hx10_4 : σ4.regs.get? Register.x10 = some n :=
-        obs_alu_other hobs4 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_3
+        obs_alu_other' hobs4 Register.x10 (by decide) hx10_3
       have hx11_4 : σ4.regs.get? Register.x11 = some ((0#64) - d) :=
-        obs_alu_other hobs4 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_3
+        obs_alu_other' hobs4 Register.x11 (by decide) hx11_3
       have hx12_4 : σ4.regs.get? Register.x12 = some v12 :=
-        obs_alu_other hobs4 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_3
+        obs_alu_other' hobs4 Register.x12 (by decide) hx12_3
       have hx13_4 : σ4.regs.get? Register.x13 = some v13 :=
-        obs_alu_other hobs4 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_3
+        obs_alu_other' hobs4 Register.x13 (by decide) hx13_3
       obtain ⟨vmi4, hmi4v⟩ := obs_alu_minstret hobs4
       have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmemq3
       have hul4 : Vsa.Sim.Code.__umoddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ hul
@@ -1534,15 +1535,15 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         rwa [show BitVec.addInt (0x8000471c#64 : BitVec 64) 4 = (0x80004720#64 : BitVec 64) from by
           apply BitVec.eq_of_toNat_eq; decide] at this
       have hx10_5 : σ5.regs.get? Register.x10 = some n :=
-        obs_jal_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_4
+        obs_jal_other' hobs5 Register.x10 (by decide) hx10_4
       have hx11_5 : σ5.regs.get? Register.x11 = some ((0#64) - d) :=
-        obs_jal_other hobs5 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_4
+        obs_jal_other' hobs5 Register.x11 (by decide) hx11_4
       have hx5_5 : σ5.regs.get? Register.x5 = some r :=
-        obs_jal_other hobs5 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_4
+        obs_jal_other' hobs5 Register.x5 (by decide) hx5_4
       have hx12_5 : σ5.regs.get? Register.x12 = some v12 :=
-        obs_jal_other hobs5 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_4
+        obs_jal_other' hobs5 Register.x12 (by decide) hx12_4
       have hx13_5 : σ5.regs.get? Register.x13 = some v13 :=
-        obs_jal_other hobs5 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_4
+        obs_jal_other' hobs5 Register.x13 (by decide) hx13_4
       have hmi5 : ∃ v, σ5.regs.get? Register.minstret = some v := obs_jal_minstret hobs5
       have hmemq5 : σ5.mem = m0 := by rw [hmem5]; exact hmemq4
       have hul5 : Vsa.Sim.Code.__umoddi3Loaded σ5.mem := hmemq5 ▸ hmem ▸ hul
@@ -1581,15 +1582,15 @@ theorem divdi3_spec (g : (R : Register) → Option (RegisterType R)) (n d r : Bi
         rwa [show BitVec.addInt (0x800046a8#64 : BitVec 64) 4 = (0x800046ac#64 : BitVec 64) from by
           apply BitVec.eq_of_toNat_eq; decide] at this
       have hx10_2 : σ2.regs.get? Register.x10 = some n :=
-        obs_bnottaken_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_1
+        obs_bnottaken_other' hobs2 Register.x10 (by decide) hx10_1
       have hx11_2 : σ2.regs.get? Register.x11 = some d :=
-        obs_bnottaken_other hobs2 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_1
+        obs_bnottaken_other' hobs2 Register.x11 (by decide) hx11_1
       have hx1_2 : σ2.regs.get? Register.x1 = some r :=
-        obs_bnottaken_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_1
+        obs_bnottaken_other' hobs2 Register.x1 (by decide) hx1_1
       have hx12_2 : σ2.regs.get? Register.x12 = some v12 :=
-        obs_bnottaken_other hobs2 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_1
+        obs_bnottaken_other' hobs2 Register.x12 (by decide) hx12_1
       have hx13_2 : σ2.regs.get? Register.x13 = some v13 :=
-        obs_bnottaken_other hobs2 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_1
+        obs_bnottaken_other' hobs2 Register.x13 (by decide) hx13_1
       obtain ⟨vmi2, hmi2v⟩ := obs_bnottaken_minstret hobs2
       have hmemq2 : σ2.mem = m0 := by rw [hmem2]; exact hmemq1
       have hcl2 : __hidden___udivdi3Loaded σ2.mem := hmemq2 ▸ hmem ▸ hcl

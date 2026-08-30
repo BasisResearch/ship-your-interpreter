@@ -1,4 +1,5 @@
 import Vsa.Sim.ValueEqualSpec3
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 3 — the `str`-`str` handler epilogue and the unified `value_equal` spec
@@ -149,8 +150,8 @@ theorem ve_str_epilogue
   have hra_1 : σ1.regs.get? Register.x1 = some r := by
     have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
     rw [this, ve_sext_reassemble r]
-  have hx10_1 := obs_alu_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10
-  have hsp_1 := obs_alu_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp
+  have hx10_1 := obs_alu_other' hobs1 Register.x10 (by decide) hx10
+  have hsp_1 := obs_alu_other' hobs1 Register.x2 (by decide) hsp
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hframe1 : ∀ R : Register, NotWrittenVEStr R → σ1.regs.get? R = g R := fun R hR =>
     (frame_alu_vestr hobs1 R hR hR.1).trans (hframe R hR)
@@ -164,8 +165,8 @@ theorem ve_str_epilogue
   have ha0_2 : σ2.regs.get? Register.x10 = some (cond (Value.equal va vb) (1#64) (0#64)) := by
     have := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
     rw [this, seqz_val, hbridge]
-  have hra_2 := obs_alu_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_1
-  have hsp_2 := obs_alu_other hobs2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_1
+  have hra_2 := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
+  have hsp_2 := obs_alu_other' hobs2 Register.x2 (by decide) hsp_1
   obtain ⟨vmi2, hmi2⟩ := obs_alu_minstret hobs2
   have hframe2 : ∀ R : Register, NotWrittenVEStr R → σ2.regs.get? R = g R := fun R hR =>
     (frame_alu_vestr hobs2 R hR hR.2.2.2.2.2.1).trans (hframe1 R hR)
@@ -180,8 +181,8 @@ theorem ve_str_epilogue
   have hsp_3 : σ3.regs.get? Register.x2 = some sp := by
     have := obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
     rw [this, ve_sp_restore sp]
-  have ha0_3 := obs_alu_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_2
-  have hra_3 := obs_alu_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_2
+  have ha0_3 := obs_alu_other' hobs3 Register.x10 (by decide) ha0_2
+  have hra_3 := obs_alu_other' hobs3 Register.x1 (by decide) hra_2
   obtain ⟨vmi3, hmi3⟩ := obs_alu_minstret hobs3
   have hframe3 : ∀ R : Register, NotWrittenVEStr R → σ3.regs.get? R = g R := fun R hR =>
     (frame_alu_vestr hobs3 R hR hR.2.1).trans (hframe2 R hR)
@@ -201,9 +202,9 @@ theorem ve_str_epilogue
   -- assemble the four steps
   have hpc4 : σ4.regs.get? Register.PC = some (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1) :=
     obs_jr_pc hobs4
-  have ha0_4 := obs_jr_other hobs4 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_3
-  have hra_4 := obs_jr_other hobs4 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_3
-  have hsp_4 := obs_jr_other hobs4 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_3
+  have ha0_4 := obs_jr_other' hobs4 Register.x10 (by decide) ha0_3
+  have hra_4 := obs_jr_other' hobs4 Register.x1 (by decide) hra_3
+  have hsp_4 := obs_jr_other' hobs4 Register.x2 (by decide) hsp_3
   obtain ⟨vmi4, hmi4⟩ := obs_jr_minstret hobs4
   have hframe4 : ∀ R : Register, NotWrittenVEStr R → σ4.regs.get? R = g R := fun R hR =>
     (frame_jr_vestr hobs4 R hR).trans (hframe3 R hR)

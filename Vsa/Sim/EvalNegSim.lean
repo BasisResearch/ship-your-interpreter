@@ -2,6 +2,7 @@ import Vsa.Sim.EvalRecCommon
 import Vsa.Sim.DecodeTable.Batch05Part16
 import Vsa.Sim.DecodeTable.Batch09Part03
 import Vsa.Sim.DecodeTable.Batch14Part06
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 4 — M4 pilot RECURSIVE case: the `EX_UNARY` arm head (`blockB_unary`)
@@ -277,10 +278,10 @@ theorem blockB_unary
   have hx12_1 : σ1.regs.get? Register.x12 = some aOperand := by
     have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hpsext] at this
-  have ha0_1 : σ1.regs.get? Register.x10 = some sret := obs_alu_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
-  have hs1_1 : σ1.regs.get? Register.x9 = some sret := obs_alu_other hobs1 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1
-  have hx11_1 : σ1.regs.get? Register.x11 = some aIn := obs_alu_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11
-  have hsp_1 : σ1.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp
+  have ha0_1 : σ1.regs.get? Register.x10 = some sret := obs_alu_other' hobs1 Register.x10 (by decide) ha0
+  have hs1_1 : σ1.regs.get? Register.x9 = some sret := obs_alu_other' hobs1 Register.x9 (by decide) hs1
+  have hx11_1 : σ1.regs.get? Register.x11 = some aIn := obs_alu_other' hobs1 Register.x11 (by decide) hx11
+  have hsp_1 : σ1.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other' hobs1 Register.x2 (by decide) hsp
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hout1 : σ1.sailOutput = out0 := by
     rw [hobs1.out, sailOutput_sigmaPost_alu]; exact hout
@@ -297,10 +298,10 @@ theorem blockB_unary
   have hx10_2 : σ2.regs.get? Register.x10
       = some ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) :=
     obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
-  have hs1_2 : σ2.regs.get? Register.x9 = some sret := obs_alu_other hobs2 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1_1
-  have hx11_2 : σ2.regs.get? Register.x11 = some aIn := obs_alu_other hobs2 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_1
-  have hx12_2 : σ2.regs.get? Register.x12 = some aOperand := obs_alu_other hobs2 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_1
-  have hsp_2 : σ2.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other hobs2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_1
+  have hs1_2 : σ2.regs.get? Register.x9 = some sret := obs_alu_other' hobs2 Register.x9 (by decide) hs1_1
+  have hx11_2 : σ2.regs.get? Register.x11 = some aIn := obs_alu_other' hobs2 Register.x11 (by decide) hx11_1
+  have hx12_2 : σ2.regs.get? Register.x12 = some aOperand := obs_alu_other' hobs2 Register.x12 (by decide) hx12_1
+  have hsp_2 : σ2.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other' hobs2 Register.x2 (by decide) hsp_1
   obtain ⟨vmi2, hmi2⟩ := obs_alu_minstret hobs2
   have hout2 : σ2.sailOutput = out0 := by
     rw [hobs2.out, sailOutput_sigmaPost_alu]; exact hout1

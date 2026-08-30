@@ -2,6 +2,7 @@ import Vsa.Sim.SnprintfSpec12
 import Vsa.Sim.DecodeTable.Batch05Part30
 import Vsa.Sim.DecodeTable.Batch01Part32
 import Vsa.Sim.DecodeTable.Batch01Part29
+import Vsa.Sim.ObsAvoid
 
 /-!
 # M3 Layer-3 — `SnprintfSpec13` : reusable INDIRECT-TRANSFER dispatch helper (`_pd`)
@@ -306,17 +307,17 @@ theorem parseDispatchHop_spec
     obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hx22_1 : σ1.regs.get? Register.x22 = some (BitVec.ofNat 64 base) :=
-    obs_alu_other hobs1 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22
+    obs_alu_other' hobs1 Register.x22 (by decide) hx22
   have hx2_1 : σ1.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2
+    obs_alu_other' hobs1 Register.x2 (by decide) hx2
   have hx6_1 : σ1.regs.get? Register.x6 = some v6 :=
-    obs_alu_other hobs1 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6
+    obs_alu_other' hobs1 Register.x6 (by decide) hx6
   have hx20_1 : σ1.regs.get? Register.x20 = some v20 :=
-    obs_alu_other hobs1 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20
+    obs_alu_other' hobs1 Register.x20 (by decide) hx20
   have hx25_1 : σ1.regs.get? Register.x25 = some v25 :=
-    obs_alu_other hobs1 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx25
+    obs_alu_other' hobs1 Register.x25 (by decide) hx25
   have hx27_1 : σ1.regs.get? Register.x27 = some v27 :=
-    obs_alu_other hobs1 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx27
+    obs_alu_other' hobs1 Register.x27 (by decide) hx27
   have hload1 : SvfprintfSliceLoaded σ1.mem := hmem1 ▸ hload
   have hframe1 : ∀ v8 v23 v12, DispatchPrintFrame c.σ v8 v23 v12 →
       DispatchPrintFrame σ1 v8 v23 v12 := fun _ _ _ h =>
@@ -352,15 +353,15 @@ theorem parseDispatchHop_spec
   have hx15_2 : σ2.regs.get? Register.x15 = some target := by rw [hx15_2raw, hvoffbase]
   obtain ⟨vmi2, hmi2⟩ := obs_alu_minstret hobs2
   have hx2_2 : σ2.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_1
+    obs_alu_other' hobs2 Register.x2 (by decide) hx2_1
   have hx6_2 : σ2.regs.get? Register.x6 = some v6 :=
-    obs_alu_other hobs2 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_1
+    obs_alu_other' hobs2 Register.x6 (by decide) hx6_1
   have hx20_2 : σ2.regs.get? Register.x20 = some v20 :=
-    obs_alu_other hobs2 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_1
+    obs_alu_other' hobs2 Register.x20 (by decide) hx20_1
   have hx25_2 : σ2.regs.get? Register.x25 = some v25 :=
-    obs_alu_other hobs2 Register.x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx25_1
+    obs_alu_other' hobs2 Register.x25 (by decide) hx25_1
   have hx27_2 : σ2.regs.get? Register.x27 = some v27 :=
-    obs_alu_other hobs2 Register.x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx27_1
+    obs_alu_other' hobs2 Register.x27 (by decide) hx27_1
   have hload2 : SvfprintfSliceLoaded σ2.mem := hmem2 ▸ hload1
   have hframe2 : ∀ v8 v23 v12, DispatchPrintFrame c.σ v8 v23 v12 →
       DispatchPrintFrame σ2 v8 v23 v12 := fun v8 v23 v12 h =>

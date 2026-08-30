@@ -127,3 +127,11 @@ def runWhileElf (fuel : Nat) : Except String RunResult :=
   whileElf?.bind fun elf => runElf elf fuel
 
 end Vsa
+
+-- build-speed baseline marker (2026-08-29): edits to this file rebuild the world (573 importers).
+-- See experiments/build-speed-exponentiation-plan.md Axis 2.
+
+/-- Baseline cone marker (2026-08-29): an olean-changing edit here rebuilds the
+573-importer cone. Used once to measure the per-module build-time baseline;
+see `experiments/build-speed-exponentiation-plan.md` Axis 2/3. -/
+theorem elf_cone_marker : True := trivial

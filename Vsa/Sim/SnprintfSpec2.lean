@@ -1,6 +1,7 @@
 import Vsa.Sim.SnprintfSites
 import Vsa.Sim.SnprintfSpec
 import Vsa.Sim.DivSpec2
+import Vsa.Sim.ObsAvoid
 
 /-!
 # M3 Layer-3 — `decimalLoop_spec` : the digit-emission loop of `snprintf("%lld", v)`
@@ -146,13 +147,13 @@ theorem umoddi3_frame_spec (g : (R : Register) → Option (RegisterType R))
     have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [addi0L r] at this
   have hx10_1 : σ1.regs.get? Register.x10 = some n :=
-    obs_alu_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hn
+    obs_alu_other' hobs1 Register.x10 (by decide) hn
   have hx11_1 : σ1.regs.get? Register.x11 = some d :=
-    obs_alu_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hd
+    obs_alu_other' hobs1 Register.x11 (by decide) hd
   have hx12_1 : σ1.regs.get? Register.x12 = some v12 :=
-    obs_alu_other hobs1 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h12
+    obs_alu_other' hobs1 Register.x12 (by decide) h12
   have hx13_1 : σ1.regs.get? Register.x13 = some v13 :=
-    obs_alu_other hobs1 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h13
+    obs_alu_other' hobs1 Register.x13 (by decide) h13
   obtain ⟨vmi1, hmi1v⟩ := obs_alu_minstret hobs1
   have hmemq1 : σ1.mem = m0 := by rw [hmem1]; exact hmem
   have hframe1 : ∀ R, NotWrittenL R → σ1.regs.get? R = c.σ.regs.get? R := fun R hR =>
@@ -173,15 +174,15 @@ theorem umoddi3_frame_spec (g : (R : Register) → Option (RegisterType R))
     rwa [show BitVec.addInt (0x800046f8#64 : BitVec 64) 4 = (0x800046fc#64 : BitVec 64) from by
       apply BitVec.eq_of_toNat_eq; decide] at this
   have hx10_2 : σ2.regs.get? Register.x10 = some n :=
-    obs_jal_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_1
+    obs_jal_other' hobs2 Register.x10 (by decide) hx10_1
   have hx11_2 : σ2.regs.get? Register.x11 = some d :=
-    obs_jal_other hobs2 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_1
+    obs_jal_other' hobs2 Register.x11 (by decide) hx11_1
   have hx12_2 : σ2.regs.get? Register.x12 = some v12 :=
-    obs_jal_other hobs2 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_1
+    obs_jal_other' hobs2 Register.x12 (by decide) hx12_1
   have hx13_2 : σ2.regs.get? Register.x13 = some v13 :=
-    obs_jal_other hobs2 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_1
+    obs_jal_other' hobs2 Register.x13 (by decide) hx13_1
   have hx5_2 : σ2.regs.get? Register.x5 = some r :=
-    obs_jal_other hobs2 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_1
+    obs_jal_other' hobs2 Register.x5 (by decide) hx5_1
   have hmi2 : ∃ v, σ2.regs.get? Register.minstret = some v := obs_jal_minstret hobs2
   have hmemq2 : σ2.mem = m0 := by rw [hmem2]; exact hmemq1
   have hframe2 : ∀ R, NotWrittenL R → σ2.regs.get? R = σ1.regs.get? R := fun R hR =>
@@ -215,7 +216,7 @@ theorem umoddi3_frame_spec (g : (R : Register) → Option (RegisterType R))
     have := obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [addi0L (n % d)] at this
   have hx5_4 : σ4.regs.get? Register.x5 = some r :=
-    obs_alu_other hobs4 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_3
+    obs_alu_other' hobs4 Register.x5 (by decide) hx5_3
   obtain ⟨vmi4, hmi4⟩ := obs_alu_minstret hobs4
   have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmem3
   have huload4 : Vsa.Sim.Code.__umoddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ huload
@@ -236,7 +237,7 @@ theorem umoddi3_frame_spec (g : (R : Register) → Option (RegisterType R))
       (hs3.trans ((Steps.single hstep4).trans ((Steps.single hstep5).trans (.refl _)))))
   · rw [hmem5]; exact hmemq4
   · rw [obs_jr_pc hobs5, ret_tgt r halign]
-  · exact obs_jr_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_4
+  · exact obs_jr_other' hobs5 Register.x10 (by decide) hx10_4
   · -- assemble the frame: σ5 = σ4 = c3 = σ2 = σ1 = c.σ = g on NotWrittenL R
     intro R hR
     rw [hframe5 R hR, hframe4 R hR, hframe3L R hR, hframe2 R hR, hframe1 R hR]

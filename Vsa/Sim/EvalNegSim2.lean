@@ -6,6 +6,7 @@ import Vsa.Sim.BlockAdapter
 import Vsa.Sim.BlockLogic
 import Vsa.Sim.ValueSpec
 import Vsa.Sim.DivSites2
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 4 — M4 pilot RECURSIVE case: the `neg` post-call tail (`blockC_neg`)
@@ -391,10 +392,10 @@ theorem blockC_neg
   have hlink16 : σ16.regs.get? Register.x1 = some (0x800039dc#64) := by
     have := obs_jal_rd hobs16 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [show BitVec.addInt (0x800039d8#64 : BitVec 64) 4 = (0x800039dc#64:BitVec 64) from by decide] at this
-  have hx10_16 : σ16.regs.get? Register.x10 = some sret := obs_jal_other hobs16 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_15
-  have hx11_16 : σ16.regs.get? Register.x11 = some ((0#64) - payV) := obs_jal_other hobs16 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_15
-  have hs1_16 : σ16.regs.get? Register.x9 = some sret := obs_jal_other hobs16 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1_15
-  have hsp_16 : σ16.regs.get? Register.x2 = some (sp-1088#64) := obs_jal_other hobs16 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_15
+  have hx10_16 : σ16.regs.get? Register.x10 = some sret := obs_jal_other' hobs16 Register.x10 (by decide) hx10_15
+  have hx11_16 : σ16.regs.get? Register.x11 = some ((0#64) - payV) := obs_jal_other' hobs16 Register.x11 (by decide) hx11_15
+  have hs1_16 : σ16.regs.get? Register.x9 = some sret := obs_jal_other' hobs16 Register.x9 (by decide) hs1_15
+  have hsp_16 : σ16.regs.get? Register.x2 = some (sp-1088#64) := obs_jal_other' hobs16 Register.x2 (by decide) hsp_15
   obtain ⟨vmi16, hmi16⟩ := obs_jal_minstret hobs16
   have hout16 : σ16.sailOutput = c.σ.sailOutput := by rw [hobs16.out, sailOutput_sigmaPost_jal]; exact hout15
   have hVint16 : Value_intLoaded σ16.mem := by rw [hmem16_3, ← hmem15_3]; exact hVint15
@@ -443,8 +444,8 @@ theorem blockC_neg
     have := obs_jr_pc hobs17
     rwa [show ((0x800039dc#64:BitVec 64) + sign_extend (m := 64) (0x1ffa10#21)) = 0x800033ec#64 from by
       apply BitVec.eq_of_toNat_eq; decide] at this
-  have hs1_fin : σ17.regs.get? Register.x9 = some sret := obs_jr_other hobs17 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1_vi
-  have hsp_fin : σ17.regs.get? Register.x2 = some (sp-1088#64) := obs_jr_other hobs17 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_vi
+  have hs1_fin : σ17.regs.get? Register.x9 = some sret := obs_jr_other' hobs17 Register.x9 (by decide) hs1_vi
+  have hsp_fin : σ17.regs.get? Register.x2 = some (sp-1088#64) := obs_jr_other' hobs17 Register.x2 (by decide) hsp_vi
   obtain ⟨vmifin, hmifin⟩ := obs_jr_minstret hobs17
   have hout_fin : σ17.sailOutput = c.σ.sailOutput := by rw [hobs17.out, sailOutput_sigmaPost_jump_x0]; exact houtvi
   -- spill slots survive (top 32 bytes of frame: disjoint from the 3 error stores

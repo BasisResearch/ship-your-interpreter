@@ -2,6 +2,7 @@ import Vsa.Sim.StrcpySites
 import Vsa.Sim.MemcpySpec
 import Vsa.Sim.StrlenSpec
 import Vsa.Triple
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 3 — `strcpy` byte-head-path total-correctness spec (`strcpy_bytehead_spec`)
@@ -380,10 +381,10 @@ theorem iterCpy (g : (R : Register) → Option (RegisterType R)) (i : Nat) (r ds
       hgood hpc hmi ha1 hloaded rfl hslo hshi hshtif hbyte htick
   have hpc1 : σ1.regs.get? Register.PC = some (0x80006e84#64 : BitVec 64) := by
     have := obs_alu_pc hobs1; rwa [show BitVec.addInt (0x80006e80#64) 4 = (0x80006e84#64 : BitVec 64) from by decide] at this
-  have ha0_1 := obs_alu_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
-  have ha1_1 := obs_alu_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1
-  have ha5_1 := obs_alu_other hobs1 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha5
-  have hra_1 := obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra
+  have ha0_1 := obs_alu_other' hobs1 Register.x10 (by decide) ha0
+  have ha1_1 := obs_alu_other' hobs1 Register.x11 (by decide) ha1
+  have ha5_1 := obs_alu_other' hobs1 Register.x15 (by decide) ha5
+  have hra_1 := obs_alu_other' hobs1 Register.x1 (by decide) hra
   have ha4_1 := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
   obtain ⟨vmi1, hmi1'⟩ := obs_alu_minstret hobs1
   -- === e84: addi a5,a5,1 ===
@@ -392,10 +393,10 @@ theorem iterCpy (g : (R : Register) → Option (RegisterType R)) (i : Nat) (r ds
       hG1 hpc1 hmi1' ha5_1 (by rw [hmem1]; exact hloaded) rfl hi1
   have hpc2 : σ2.regs.get? Register.PC = some (0x80006e88#64 : BitVec 64) := by
     have := obs_alu_pc hobs2; rwa [show BitVec.addInt (0x80006e84#64) 4 = (0x80006e88#64 : BitVec 64) from by decide] at this
-  have ha0_2 := obs_alu_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_1
-  have ha1_2 := obs_alu_other hobs2 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_1
-  have ha4_2 := obs_alu_other hobs2 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha4_1
-  have hra_2 := obs_alu_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_1
+  have ha0_2 := obs_alu_other' hobs2 Register.x10 (by decide) ha0_1
+  have ha1_2 := obs_alu_other' hobs2 Register.x11 (by decide) ha1_1
+  have ha4_2 := obs_alu_other' hobs2 Register.x14 (by decide) ha4_1
+  have hra_2 := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
   have ha5_2 : σ2.regs.get? Register.x15 = some (dst + BitVec.ofNat 64 (i + 1)) := by
     have := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [ptr_succ dst i] at this
@@ -406,10 +407,10 @@ theorem iterCpy (g : (R : Register) → Option (RegisterType R)) (i : Nat) (r ds
       hG2 hpc2 hmi2' ha1_2 (by rw [hmem2, hmem1]; exact hloaded) rfl hi2
   have hpc3 : σ3.regs.get? Register.PC = some (0x80006e8c#64 : BitVec 64) := by
     have := obs_alu_pc hobs3; rwa [show BitVec.addInt (0x80006e88#64) 4 = (0x80006e8c#64 : BitVec 64) from by decide] at this
-  have ha0_3 := obs_alu_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_2
-  have ha4_3 := obs_alu_other hobs3 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha4_2
-  have ha5_3 := obs_alu_other hobs3 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha5_2
-  have hra_3 := obs_alu_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_2
+  have ha0_3 := obs_alu_other' hobs3 Register.x10 (by decide) ha0_2
+  have ha4_3 := obs_alu_other' hobs3 Register.x14 (by decide) ha4_2
+  have ha5_3 := obs_alu_other' hobs3 Register.x15 (by decide) ha5_2
+  have hra_3 := obs_alu_other' hobs3 Register.x1 (by decide) hra_2
   have ha1_3 : σ3.regs.get? Register.x11 = some (src + BitVec.ofNat 64 (i + 1)) := by
     have := obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [ptr_succ src i] at this
@@ -431,11 +432,11 @@ theorem iterCpy (g : (R : Register) → Option (RegisterType R)) (i : Nat) (r ds
   have hpc4 : σ4.regs.get? Register.PC = some (0x80006e90#64 : BitVec 64) := by
     have := obs_store_pc hobs4
     rwa [show BitVec.addInt (0x80006e8c#64) 4 = (0x80006e90#64 : BitVec 64) from by decide] at this
-  have ha0_4 := obs_store_other hobs4 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_3
-  have ha1_4 := obs_store_other hobs4 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_3
-  have ha4_4 := obs_store_other hobs4 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha4_3
-  have ha5_4 := obs_store_other hobs4 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha5_3
-  have hra_4 := obs_store_other hobs4 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_3
+  have ha0_4 := obs_store_other' hobs4 Register.x10 (by decide) ha0_3
+  have ha1_4 := obs_store_other' hobs4 Register.x11 (by decide) ha1_3
+  have ha4_4 := obs_store_other' hobs4 Register.x14 (by decide) ha4_3
+  have ha5_4 := obs_store_other' hobs4 Register.x15 (by decide) ha5_3
+  have hra_4 := obs_store_other' hobs4 Register.x1 (by decide) hra_3
   refine ⟨hG4,
     by rw [hstore_mem]
        exact strcpy_loaded_insert c.σ.mem (dst.toNat + i) (bs i)
@@ -494,10 +495,10 @@ theorem tr_bnez_back (g : (R : Register) → Option (RegisterType R)) (i : Nat) 
     apply BitVec.eq_of_toNat_eq; decide
   refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
     hG', by rw [hmem']; exact hloaded, ?_,
-    obs_btaken_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0,
-    obs_btaken_other hobs Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1,
-    obs_btaken_other hobs Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha5,
-    obs_btaken_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra,
+    obs_btaken_other' hobs Register.x10 (by decide) ha0,
+    obs_btaken_other' hobs Register.x11 (by decide) ha1,
+    obs_btaken_other' hobs Register.x15 (by decide) ha5,
+    obs_btaken_other' hobs Register.x1 (by decide) hra,
     obs_btaken_minstret hobs, hi', hreg, hstrb, by omega, by rw [hmem']; exact hcinv,
     fun R hR => (frame_btaken_cpy hobs R hR).trans (hframe R hR)⟩
   rw [obs_btaken_pc hobs, hpceq]
@@ -538,8 +539,8 @@ theorem tr_bnez_done (g : (R : Register) → Option (RegisterType R)) (i : Nat) 
     rwa [show BitVec.addInt (0x80006e90#64) 4 = (0x80006e94#64 : BitVec 64) from by decide] at this
   refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep,
     hG', by rw [hmem']; exact hloaded, hpc',
-    obs_bnottaken_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0,
-    obs_bnottaken_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra,
+    obs_bnottaken_other' hobs Register.x10 (by decide) ha0,
+    obs_bnottaken_other' hobs Register.x1 (by decide) hra,
     obs_bnottaken_minstret hobs, hi', hreg, ?_,
     fun R hR => (frame_bnottaken_cpy hobs R hR).trans (hframe R hR)⟩
   · rw [hmem']; rw [heq] at hcinv; exact hcinv
@@ -647,8 +648,8 @@ theorem tr_ret_cpy (g : (R : Register) → Option (RegisterType R)) (r dst src :
     site_80006e94 c.σ c.tick c.steps (0x80006e94#64) vmi r hgood hpc hmi hra hloaded rfl htgt htick
   have hpc' : σ'.regs.get? Register.PC = some r := by
     rw [obs_jr_pc hobs, ret_tgt r halign]
-  have ha0' := obs_jr_other hobs Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
-  have hra' := obs_jr_other hobs Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra
+  have ha0' := obs_jr_other' hobs Register.x10 (by decide) ha0
+  have hra' := obs_jr_other' hobs Register.x1 (by decide) hra
   refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep, hG', hpc', ha0', hra', ?_, ?_, hi',
     fun R hR => (frame_jr_cpy hobs R hR).trans (hframe R hR)⟩
   · intro k hk; rw [hmem']; exact hcinv.copied k (by omega)
@@ -686,9 +687,9 @@ theorem preamble_cpy (g : (R : Register) → Option (RegisterType R)) (r dst src
     site_80006e7c c.σ c.tick c.steps (0x80006e7c#64) vmi dst hgood hpc hmi ha0 hloaded rfl htick
   have hpc1 : σ1.regs.get? Register.PC = some (0x80006e80#64 : BitVec 64) := by
     have := obs_alu_pc hobs1; rwa [show BitVec.addInt (0x80006e7c#64) 4 = (0x80006e80#64 : BitVec 64) from by decide] at this
-  have ha0_1 := obs_alu_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
-  have ha1_1 := obs_alu_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1
-  have hra_1 := obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra
+  have ha0_1 := obs_alu_other' hobs1 Register.x10 (by decide) ha0
+  have ha1_1 := obs_alu_other' hobs1 Register.x11 (by decide) ha1
+  have hra_1 := obs_alu_other' hobs1 Register.x1 (by decide) hra
   have ha5_1 : σ1.regs.get? Register.x15 = some dst := by
     have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [add_sext0 dst] at this
@@ -778,9 +779,9 @@ theorem entry_dispatch_cpy (g : (R : Register) → Option (RegisterType R)) (r d
     site_80006dc4 c.σ c.tick c.steps (0x80006dc4#64) vmi dst src hgood hpc hmi ha0 ha1 hloaded rfl htick
   have hpc1 : σ1.regs.get? Register.PC = some (0x80006dc8#64 : BitVec 64) := by
     have := obs_alu_pc hobs1; rwa [show BitVec.addInt (0x80006dc4#64) 4 = (0x80006dc8#64 : BitVec 64) from by decide] at this
-  have ha0_1 := obs_alu_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
-  have ha1_1 := obs_alu_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1
-  have hra_1 := obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra
+  have ha0_1 := obs_alu_other' hobs1 Register.x10 (by decide) ha0
+  have ha1_1 := obs_alu_other' hobs1 Register.x11 (by decide) ha1
+  have hra_1 := obs_alu_other' hobs1 Register.x1 (by decide) hra
   have ha5_1 := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
   obtain ⟨vmi1, hmi1'⟩ := obs_alu_minstret hobs1
   -- 0xdc8: andi a5,a5,7
@@ -789,9 +790,9 @@ theorem entry_dispatch_cpy (g : (R : Register) → Option (RegisterType R)) (r d
       hG1 hpc1 hmi1' ha5_1 (by rw [hmem1]; exact hloaded) rfl hi1
   have hpc2 : σ2.regs.get? Register.PC = some (0x80006dcc#64 : BitVec 64) := by
     have := obs_alu_pc hobs2; rwa [show BitVec.addInt (0x80006dc8#64) 4 = (0x80006dcc#64 : BitVec 64) from by decide] at this
-  have ha0_2 := obs_alu_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_1
-  have ha1_2 := obs_alu_other hobs2 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_1
-  have hra_2 := obs_alu_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_1
+  have ha0_2 := obs_alu_other' hobs2 Register.x10 (by decide) ha0_1
+  have ha1_2 := obs_alu_other' hobs2 Register.x11 (by decide) ha1_1
+  have hra_2 := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
   have ha5_2 := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
   obtain ⟨vmi2, hmi2'⟩ := obs_alu_minstret hobs2
   -- 0xdcc: bnez a5 taken (misaligned)
@@ -811,9 +812,9 @@ theorem entry_dispatch_cpy (g : (R : Register) → Option (RegisterType R)) (r d
   refine ⟨⟨σ3, i3, c.steps + 1 + 1 + 1⟩,
     ((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3), ?_⟩
   refine ⟨hG3, by rw [hmem3eq]; exact hloaded, hpc3,
-    obs_btaken_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_2,
-    obs_btaken_other hobs3 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_2,
-    obs_btaken_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_2,
+    obs_btaken_other' hobs3 Register.x10 (by decide) ha0_2,
+    obs_btaken_other' hobs3 Register.x11 (by decide) ha1_2,
+    obs_btaken_other' hobs3 Register.x1 (by decide) hra_2,
     obs_btaken_minstret hobs3, hi3, hreg, hstrb, by rw [hmem3eq]; exact hmemeq, ?_⟩
   -- frame: thread g through or (x15), andi (x15), bnez
   intro R hR

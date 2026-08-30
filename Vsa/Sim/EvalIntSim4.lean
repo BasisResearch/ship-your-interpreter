@@ -1,4 +1,5 @@
 import Vsa.Sim.EvalIntSim3
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 4 — M4 gate: blocks C, D, and the `EvalIntSimGoal` assembly
@@ -81,9 +82,9 @@ theorem blockC_ee
     have := obs_alu_pc hobs1; rwa [show BitVec.addInt (0x80003408#64) 4 = (0x8000340c#64:BitVec 64) from by decide] at this
   have hx11_1 : σ1.regs.get? Register.x11 = some payV :=
     obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
-  have ha0_1 : σ1.regs.get? Register.x10 = some sret := obs_alu_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
-  have hs1_1 : σ1.regs.get? Register.x9 = some sret := obs_alu_other hobs1 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1
-  have hsp_1 : σ1.regs.get? Register.x2 = some (sp-1088#64) := obs_alu_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp
+  have ha0_1 : σ1.regs.get? Register.x10 = some sret := obs_alu_other' hobs1 Register.x10 (by decide) ha0
+  have hs1_1 : σ1.regs.get? Register.x9 = some sret := obs_alu_other' hobs1 Register.x9 (by decide) hs1
+  have hsp_1 : σ1.regs.get? Register.x2 = some (sp-1088#64) := obs_alu_other' hobs1 Register.x2 (by decide) hsp
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   -- thread other regs through step 1 for the callee frame reconstruction
   have hvicode1 : Value_intLoaded σ1.mem := by rw [hmem1e]; exact hvicode
@@ -101,10 +102,10 @@ theorem blockC_ee
   have hlink2 : σ2.regs.get? Register.x1 = some (0x80003410#64) := by
     have := obs_jal_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [show BitVec.addInt (0x8000340c#64 : BitVec 64) 4 = (0x80003410#64:BitVec 64) from by decide] at this
-  have ha0_2 : σ2.regs.get? Register.x10 = some sret := obs_jal_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_1
-  have hx11_2 : σ2.regs.get? Register.x11 = some payV := obs_jal_other hobs2 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_1
-  have hs1_2 : σ2.regs.get? Register.x9 = some sret := obs_jal_other hobs2 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1_1
-  have hsp_2 : σ2.regs.get? Register.x2 = some (sp-1088#64) := obs_jal_other hobs2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_1
+  have ha0_2 : σ2.regs.get? Register.x10 = some sret := obs_jal_other' hobs2 Register.x10 (by decide) ha0_1
+  have hx11_2 : σ2.regs.get? Register.x11 = some payV := obs_jal_other' hobs2 Register.x11 (by decide) hx11_1
+  have hs1_2 : σ2.regs.get? Register.x9 = some sret := obs_jal_other' hobs2 Register.x9 (by decide) hs1_1
+  have hsp_2 : σ2.regs.get? Register.x2 = some (sp-1088#64) := obs_jal_other' hobs2 Register.x2 (by decide) hsp_1
   obtain ⟨vmi2, hmi2⟩ := obs_jal_minstret hobs2
   have hvicode2 : Value_intLoaded σ2.mem := by rw [hmem2e]; exact hvicode
   -- output threading through steps 1,2
@@ -169,8 +170,8 @@ theorem blockC_ee
   have hpc4 : c4.regs.get? Register.PC = some (0x800033ec#64) := by
     have := obs_jr_pc hobs4
     rwa [show ((0x80003410#64 : BitVec 64) + sign_extend (m := 64) (0x1fffdc#21)) = 0x800033ec#64 from by apply BitVec.eq_of_toNat_eq; decide] at this
-  have hs1_4 : c4.regs.get? Register.x9 = some sret := obs_jr_other hobs4 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1_3
-  have hsp_4 : c4.regs.get? Register.x2 = some (sp-1088#64) := obs_jr_other hobs4 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_3
+  have hs1_4 : c4.regs.get? Register.x9 = some sret := obs_jr_other' hobs4 Register.x9 (by decide) hs1_3
+  have hsp_4 : c4.regs.get? Register.x2 = some (sp-1088#64) := obs_jr_other' hobs4 Register.x2 (by decide) hsp_3
   obtain ⟨vmi4, hmi4⟩ := obs_jr_minstret hobs4
   have hout4 : c4.sailOutput = out0 := by rw [hobs4.out, sailOutput_sigmaPost_jump_x0]; exact hout3
   -- transfer the per-block facts to c4.mem (= c3.mem)

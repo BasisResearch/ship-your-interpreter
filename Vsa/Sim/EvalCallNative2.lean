@@ -5,6 +5,7 @@ import Vsa.Sim.ValueSpec
 import Vsa.Sim.ReprCopy
 import Vsa.Sim.EvalNotSim
 import Vsa.Sim.EvalNullSim
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 4 — M4: discharging the `native_assert` INTERNAL run (`Call.assertOk`)
@@ -312,15 +313,15 @@ theorem nativeAssertInternal
       have : (sign_extend (m := 64) (0xfb0#12) : BitVec 64).toNat = 0xffffffffffffffb0 := by decide
       rw [this]; have h80 : (80#64 : BitVec 64).toNat = 80 := by decide
       rw [h80]; have := fsp.isLt; omega] at this
-  have hx1_1 : σ1.regs.get? Register.x1 = some retAddr := obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra
-  have hx8_1 : σ1.regs.get? Register.x8 = some s0v := obs_alu_other hobs1 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs0r
-  have hx9_1 : σ1.regs.get? Register.x9 = some s1v := obs_alu_other hobs1 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1r
-  have hx18_1 : σ1.regs.get? Register.x18 = some s2v := obs_alu_other hobs1 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs2r
-  have hx10_1 : σ1.regs.get? Register.x10 = some sret := obs_alu_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
-  have hx11_1 : σ1.regs.get? Register.x11 = some interp := obs_alu_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1
-  have hx12_1 : σ1.regs.get? Register.x12 = some argc := obs_alu_other hobs1 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha2
-  have hx13_1 : σ1.regs.get? Register.x13 = some argsBase := obs_alu_other hobs1 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha3
-  have hx14_1 : σ1.regs.get? Register.x14 = some scratch := obs_alu_other hobs1 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha4
+  have hx1_1 : σ1.regs.get? Register.x1 = some retAddr := obs_alu_other' hobs1 Register.x1 (by decide) hra
+  have hx8_1 : σ1.regs.get? Register.x8 = some s0v := obs_alu_other' hobs1 Register.x8 (by decide) hs0r
+  have hx9_1 : σ1.regs.get? Register.x9 = some s1v := obs_alu_other' hobs1 Register.x9 (by decide) hs1r
+  have hx18_1 : σ1.regs.get? Register.x18 = some s2v := obs_alu_other' hobs1 Register.x18 (by decide) hs2r
+  have hx10_1 : σ1.regs.get? Register.x10 = some sret := obs_alu_other' hobs1 Register.x10 (by decide) ha0
+  have hx11_1 : σ1.regs.get? Register.x11 = some interp := obs_alu_other' hobs1 Register.x11 (by decide) ha1
+  have hx12_1 : σ1.regs.get? Register.x12 = some argc := obs_alu_other' hobs1 Register.x12 (by decide) ha2
+  have hx13_1 : σ1.regs.get? Register.x13 = some argsBase := obs_alu_other' hobs1 Register.x13 (by decide) ha3
+  have hx14_1 : σ1.regs.get? Register.x14 = some scratch := obs_alu_other' hobs1 Register.x14 (by decide) ha4
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hout1 : σ1.sailOutput = out0 := by rw [hobs1.out, sailOutput_sigmaPost_alu]; exact hout
   have hNA1 : Native_assertLoaded σ1.mem := by rw [hmem1e]; exact hNA
@@ -346,15 +347,15 @@ theorem nativeAssertInternal
   have hpc2 : σ2.regs.get? Register.PC = some (0x80002dfc#64) := by
     have := obs_store_pc_val hobs2
     rwa [show BitVec.addInt (0x80002df8#64) 4 = (0x80002dfc#64 : BitVec 64) from by decide] at this
-  have hsp2 := obs_store_other_val hobs2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp1
-  have hx1_2 := obs_store_other_val hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_1
-  have hx8_2 := obs_store_other_val hobs2 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_1
-  have hx18_2 := obs_store_other_val hobs2 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_1
-  have hx10_2 := obs_store_other_val hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_1
-  have hx11_2 := obs_store_other_val hobs2 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_1
-  have hx12_2 := obs_store_other_val hobs2 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_1
-  have hx13_2 := obs_store_other_val hobs2 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_1
-  have hx14_2 := obs_store_other_val hobs2 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_1
+  have hsp2 := obs_store_other_val' hobs2 Register.x2 (by decide) hsp1
+  have hx1_2 := obs_store_other_val' hobs2 Register.x1 (by decide) hx1_1
+  have hx8_2 := obs_store_other_val' hobs2 Register.x8 (by decide) hx8_1
+  have hx18_2 := obs_store_other_val' hobs2 Register.x18 (by decide) hx18_1
+  have hx10_2 := obs_store_other_val' hobs2 Register.x10 (by decide) hx10_1
+  have hx11_2 := obs_store_other_val' hobs2 Register.x11 (by decide) hx11_1
+  have hx12_2 := obs_store_other_val' hobs2 Register.x12 (by decide) hx12_1
+  have hx13_2 := obs_store_other_val' hobs2 Register.x13 (by decide) hx13_1
+  have hx14_2 := obs_store_other_val' hobs2 Register.x14 (by decide) hx14_1
   obtain ⟨vmi2, hmi2⟩ := obs_store_minstret_val hobs2
   have hout2 : σ2.sailOutput = out0 := by rw [hobs2.out, sailOutput_sigmaPost_store]; exact hout1
   have hNA2 : Native_assertLoaded σ2.mem := by
@@ -371,14 +372,14 @@ theorem nativeAssertInternal
   have hpc3 : σ3.regs.get? Register.PC = some (0x80002e00#64) := by
     have := obs_store_pc_val hobs3
     rwa [show BitVec.addInt (0x80002dfc#64) 4 = (0x80002e00#64 : BitVec 64) from by decide] at this
-  have hsp3 := obs_store_other_val hobs3 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp2
-  have hx1_3 := obs_store_other_val hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_2
-  have hx8_3 := obs_store_other_val hobs3 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_2
-  have hx10_3 := obs_store_other_val hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_2
-  have hx11_3 := obs_store_other_val hobs3 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_2
-  have hx12_3 := obs_store_other_val hobs3 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_2
-  have hx13_3 := obs_store_other_val hobs3 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_2
-  have hx14_3 := obs_store_other_val hobs3 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_2
+  have hsp3 := obs_store_other_val' hobs3 Register.x2 (by decide) hsp2
+  have hx1_3 := obs_store_other_val' hobs3 Register.x1 (by decide) hx1_2
+  have hx8_3 := obs_store_other_val' hobs3 Register.x8 (by decide) hx8_2
+  have hx10_3 := obs_store_other_val' hobs3 Register.x10 (by decide) hx10_2
+  have hx11_3 := obs_store_other_val' hobs3 Register.x11 (by decide) hx11_2
+  have hx12_3 := obs_store_other_val' hobs3 Register.x12 (by decide) hx12_2
+  have hx13_3 := obs_store_other_val' hobs3 Register.x13 (by decide) hx13_2
+  have hx14_3 := obs_store_other_val' hobs3 Register.x14 (by decide) hx14_2
   obtain ⟨vmi3, hmi3⟩ := obs_store_minstret_val hobs3
   have hout3 : σ3.sailOutput = out0 := by rw [hobs3.out, sailOutput_sigmaPost_store]; exact hout2
   have hNA3 : Native_assertLoaded σ3.mem := by
@@ -395,13 +396,13 @@ theorem nativeAssertInternal
   have hpc4 : σ4.regs.get? Register.PC = some (0x80002e04#64) := by
     have := obs_store_pc_val hobs4
     rwa [show BitVec.addInt (0x80002e00#64) 4 = (0x80002e04#64 : BitVec 64) from by decide] at this
-  have hsp4 := obs_store_other_val hobs4 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp3
-  have hx8_4 := obs_store_other_val hobs4 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_3
-  have hx10_4 := obs_store_other_val hobs4 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_3
-  have hx11_4 := obs_store_other_val hobs4 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_3
-  have hx12_4 := obs_store_other_val hobs4 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_3
-  have hx13_4 := obs_store_other_val hobs4 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_3
-  have hx14_4 := obs_store_other_val hobs4 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_3
+  have hsp4 := obs_store_other_val' hobs4 Register.x2 (by decide) hsp3
+  have hx8_4 := obs_store_other_val' hobs4 Register.x8 (by decide) hx8_3
+  have hx10_4 := obs_store_other_val' hobs4 Register.x10 (by decide) hx10_3
+  have hx11_4 := obs_store_other_val' hobs4 Register.x11 (by decide) hx11_3
+  have hx12_4 := obs_store_other_val' hobs4 Register.x12 (by decide) hx12_3
+  have hx13_4 := obs_store_other_val' hobs4 Register.x13 (by decide) hx13_3
+  have hx14_4 := obs_store_other_val' hobs4 Register.x14 (by decide) hx14_3
   obtain ⟨vmi4, hmi4⟩ := obs_store_minstret_val hobs4
   have hout4 : σ4.sailOutput = out0 := by rw [hobs4.out, sailOutput_sigmaPost_store]; exact hout3
   have hNA4 : Native_assertLoaded σ4.mem := by
@@ -418,12 +419,12 @@ theorem nativeAssertInternal
   have hpc5 : σ5.regs.get? Register.PC = some (0x80002e08#64) := by
     have := obs_store_pc_val hobs5
     rwa [show BitVec.addInt (0x80002e04#64) 4 = (0x80002e08#64 : BitVec 64) from by decide] at this
-  have hsp5 := obs_store_other_val hobs5 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp4
-  have hx10_5 := obs_store_other_val hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_4
-  have hx11_5 := obs_store_other_val hobs5 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_4
-  have hx12_5 := obs_store_other_val hobs5 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_4
-  have hx13_5 := obs_store_other_val hobs5 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_4
-  have hx14_5 := obs_store_other_val hobs5 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_4
+  have hsp5 := obs_store_other_val' hobs5 Register.x2 (by decide) hsp4
+  have hx10_5 := obs_store_other_val' hobs5 Register.x10 (by decide) hx10_4
+  have hx11_5 := obs_store_other_val' hobs5 Register.x11 (by decide) hx11_4
+  have hx12_5 := obs_store_other_val' hobs5 Register.x12 (by decide) hx12_4
+  have hx13_5 := obs_store_other_val' hobs5 Register.x13 (by decide) hx13_4
+  have hx14_5 := obs_store_other_val' hobs5 Register.x14 (by decide) hx14_4
   obtain ⟨vmi5, hmi5⟩ := obs_store_minstret_val hobs5
   have hout5 : σ5.sailOutput = out0 := by rw [hobs5.out, sailOutput_sigmaPost_store]; exact hout4
   have hNA5 : Native_assertLoaded σ5.mem := by
@@ -442,11 +443,11 @@ theorem nativeAssertInternal
     rwa [show BitVec.addInt (0x80002e08#64) 4 = (0x80002e0c#64 : BitVec 64) from by decide] at this
   have hx16_6 : σ6.regs.get? Register.x16 = some (sign_extend (m := 64) (Sail.BitVec.extractLsb (argc + sign_extend (m := 64) (0xfff#12)) 31 0)) :=
     obs_alu_rd hobs6 (by decide) (by decide) (by decide) (by decide) (by decide)
-  have hsp6 := obs_alu_other hobs6 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp5
-  have hx10_6 := obs_alu_other hobs6 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_5
-  have hx11_6 := obs_alu_other hobs6 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_5
-  have hx13_6 := obs_alu_other hobs6 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_5
-  have hx14_6 := obs_alu_other hobs6 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_5
+  have hsp6 := obs_alu_other' hobs6 Register.x2 (by decide) hsp5
+  have hx10_6 := obs_alu_other' hobs6 Register.x10 (by decide) hx10_5
+  have hx11_6 := obs_alu_other' hobs6 Register.x11 (by decide) hx11_5
+  have hx13_6 := obs_alu_other' hobs6 Register.x13 (by decide) hx13_5
+  have hx14_6 := obs_alu_other' hobs6 Register.x14 (by decide) hx14_5
   obtain ⟨vmi6, hmi6⟩ := obs_alu_minstret hobs6
   have hout6 : σ6.sailOutput = out0 := by rw [hobs6.out, sailOutput_sigmaPost_alu]; exact hout5
   have hNA6 : Native_assertLoaded σ6.mem := by rw [hmem6e]; exact hmem5e ▸ hNA5
@@ -461,12 +462,12 @@ theorem nativeAssertInternal
   have hx15_7 : σ7.regs.get? Register.x15 = some (1#64) := by
     have := obs_alu_rd hobs7 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [show ((0#64 : BitVec 64) + sign_extend (m := 64) (0x001#12)) = 1#64 from by apply BitVec.eq_of_toNat_eq; decide] at this
-  have hx16_7 := obs_alu_other hobs7 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_6
-  have hsp7 := obs_alu_other hobs7 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp6
-  have hx10_7 := obs_alu_other hobs7 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_6
-  have hx11_7 := obs_alu_other hobs7 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_6
-  have hx13_7 := obs_alu_other hobs7 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_6
-  have hx14_7 := obs_alu_other hobs7 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_6
+  have hx16_7 := obs_alu_other' hobs7 Register.x16 (by decide) hx16_6
+  have hsp7 := obs_alu_other' hobs7 Register.x2 (by decide) hsp6
+  have hx10_7 := obs_alu_other' hobs7 Register.x10 (by decide) hx10_6
+  have hx11_7 := obs_alu_other' hobs7 Register.x11 (by decide) hx11_6
+  have hx13_7 := obs_alu_other' hobs7 Register.x13 (by decide) hx13_6
+  have hx14_7 := obs_alu_other' hobs7 Register.x14 (by decide) hx14_6
   obtain ⟨vmi7, hmi7⟩ := obs_alu_minstret hobs7
   have hout7 : σ7.sailOutput = out0 := by rw [hobs7.out, sailOutput_sigmaPost_alu]; exact hout6
   have hNA7 : Native_assertLoaded σ7.mem := by rw [hmem7e]; exact hmem6e ▸ hNA6
@@ -479,12 +480,12 @@ theorem nativeAssertInternal
   have hpc8 : σ8.regs.get? Register.PC = some (0x80002e14#64) := by
     have := obs_alu_pc hobs8
     rwa [show BitVec.addInt (0x80002e10#64) 4 = (0x80002e14#64 : BitVec 64) from by decide] at this
-  have hsp8 := obs_alu_other hobs8 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp7
-  have hx15_8 := obs_alu_other hobs8 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_7
-  have hx16_8 := obs_alu_other hobs8 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_7
-  have hx10_8 := obs_alu_other hobs8 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_7
-  have hx13_8 := obs_alu_other hobs8 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_7
-  have hx14_8 := obs_alu_other hobs8 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_7
+  have hsp8 := obs_alu_other' hobs8 Register.x2 (by decide) hsp7
+  have hx15_8 := obs_alu_other' hobs8 Register.x15 (by decide) hx15_7
+  have hx16_8 := obs_alu_other' hobs8 Register.x16 (by decide) hx16_7
+  have hx10_8 := obs_alu_other' hobs8 Register.x10 (by decide) hx10_7
+  have hx13_8 := obs_alu_other' hobs8 Register.x13 (by decide) hx13_7
+  have hx14_8 := obs_alu_other' hobs8 Register.x14 (by decide) hx14_7
   obtain ⟨vmi8, hmi8⟩ := obs_alu_minstret hobs8
   have hout8 : σ8.sailOutput = out0 := by rw [hobs8.out, sailOutput_sigmaPost_alu]; exact hout7
   have hNA8 : Native_assertLoaded σ8.mem := by rw [hmem8e]; exact hmem7e ▸ hNA7
@@ -497,11 +498,11 @@ theorem nativeAssertInternal
   have hpc9 : σ9.regs.get? Register.PC = some (0x80002e18#64) := by
     have := obs_alu_pc hobs9
     rwa [show BitVec.addInt (0x80002e14#64) 4 = (0x80002e18#64 : BitVec 64) from by decide] at this
-  have hsp9 := obs_alu_other hobs9 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp8
-  have hx15_9 := obs_alu_other hobs9 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_8
-  have hx16_9 := obs_alu_other hobs9 Register.x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx16_8
-  have hx10_9 := obs_alu_other hobs9 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_8
-  have hx13_9 := obs_alu_other hobs9 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_8
+  have hsp9 := obs_alu_other' hobs9 Register.x2 (by decide) hsp8
+  have hx15_9 := obs_alu_other' hobs9 Register.x15 (by decide) hx15_8
+  have hx16_9 := obs_alu_other' hobs9 Register.x16 (by decide) hx16_8
+  have hx10_9 := obs_alu_other' hobs9 Register.x10 (by decide) hx10_8
+  have hx13_9 := obs_alu_other' hobs9 Register.x13 (by decide) hx13_8
   obtain ⟨vmi9, hmi9⟩ := obs_alu_minstret hobs9
   have hout9 : σ9.sailOutput = out0 := by rw [hobs9.out, sailOutput_sigmaPost_alu]; exact hout8
   have hNA9 : Native_assertLoaded σ9.mem := by rw [hmem9e]; exact hmem8e ▸ hNA8
@@ -518,9 +519,9 @@ theorem nativeAssertInternal
   have hpc10 : σ10.regs.get? Register.PC = some (0x80002e1c#64) := by
     have := obs_branch_nottaken_pc hobs10
     rwa [show BitVec.addInt (0x80002e18#64) 4 = (0x80002e1c#64 : BitVec 64) from by decide] at this
-  have hsp10 := obs_branch_nottaken_other hobs10 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp9
-  have hx10_10 := obs_branch_nottaken_other hobs10 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_9
-  have hx13_10 := obs_branch_nottaken_other hobs10 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_9
+  have hsp10 := obs_branch_nottaken_other' hobs10 Register.x2 (by decide) hsp9
+  have hx10_10 := obs_branch_nottaken_other' hobs10 Register.x10 (by decide) hx10_9
+  have hx13_10 := obs_branch_nottaken_other' hobs10 Register.x13 (by decide) hx13_9
   obtain ⟨vmi10, hmi10⟩ := obs_branch_nottaken_minstret hobs10
   have hout10 : σ10.sailOutput = out0 := by rw [hobs10.out, sailOutput_sigmaPost_branch_nottaken]; exact hout9
   have hNA10 : Native_assertLoaded σ10.mem := by rw [hmem10e]; exact hmem9e ▸ hNA9
@@ -584,9 +585,9 @@ theorem nativeAssertInternal
     have := obs_alu_pc hobs11
     rwa [show BitVec.addInt (0x80002e1c#64) 4 = (0x80002e20#64 : BitVec 64) from by decide] at this
   have hx11_11 : σ11.regs.get? Register.x11 = some LV0 := obs_alu_rd hobs11 (by decide) (by decide) (by decide) (by decide) (by decide)
-  have hsp11 := obs_alu_other hobs11 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp10
-  have hx10_11 := obs_alu_other hobs11 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_10
-  have hx13_11 := obs_alu_other hobs11 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_10
+  have hsp11 := obs_alu_other' hobs11 Register.x2 (by decide) hsp10
+  have hx10_11 := obs_alu_other' hobs11 Register.x10 (by decide) hx10_10
+  have hx13_11 := obs_alu_other' hobs11 Register.x13 (by decide) hx13_10
   obtain ⟨vmi11, hmi11⟩ := obs_alu_minstret hobs11
   have hout11 : σ11.sailOutput = out0 := by rw [hobs11.out, sailOutput_sigmaPost_alu]; exact hout10
   have hNA11 : Native_assertLoaded σ11.mem := by rw [hmem11e]; exact hmem10e ▸ hNA10
@@ -606,10 +607,10 @@ theorem nativeAssertInternal
     have := obs_alu_pc hobs12
     rwa [show BitVec.addInt (0x80002e20#64) 4 = (0x80002e24#64 : BitVec 64) from by decide] at this
   have hx14_12 : σ12.regs.get? Register.x14 = some LV1 := obs_alu_rd hobs12 (by decide) (by decide) (by decide) (by decide) (by decide)
-  have hsp12 := obs_alu_other hobs12 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp11
-  have hx10_12 := obs_alu_other hobs12 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_11
-  have hx11_12 := obs_alu_other hobs12 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_11
-  have hx13_12 := obs_alu_other hobs12 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_11
+  have hsp12 := obs_alu_other' hobs12 Register.x2 (by decide) hsp11
+  have hx10_12 := obs_alu_other' hobs12 Register.x10 (by decide) hx10_11
+  have hx11_12 := obs_alu_other' hobs12 Register.x11 (by decide) hx11_11
+  have hx13_12 := obs_alu_other' hobs12 Register.x13 (by decide) hx13_11
   obtain ⟨vmi12, hmi12⟩ := obs_alu_minstret hobs12
   have hout12 : σ12.sailOutput = out0 := by rw [hobs12.out, sailOutput_sigmaPost_alu]; exact hout11
   have hNA12 : Native_assertLoaded σ12.mem := by rw [hmem12e]; exact hmem11e ▸ hNA11
@@ -629,10 +630,10 @@ theorem nativeAssertInternal
     have := obs_alu_pc hobs13
     rwa [show BitVec.addInt (0x80002e24#64) 4 = (0x80002e28#64 : BitVec 64) from by decide] at this
   have hx15_13 : σ13.regs.get? Register.x15 = some LV2 := obs_alu_rd hobs13 (by decide) (by decide) (by decide) (by decide) (by decide)
-  have hsp13 := obs_alu_other hobs13 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp12
-  have hx10_13 := obs_alu_other hobs13 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_12
-  have hx11_13 := obs_alu_other hobs13 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_12
-  have hx14_13 := obs_alu_other hobs13 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_12
+  have hsp13 := obs_alu_other' hobs13 Register.x2 (by decide) hsp12
+  have hx10_13 := obs_alu_other' hobs13 Register.x10 (by decide) hx10_12
+  have hx11_13 := obs_alu_other' hobs13 Register.x11 (by decide) hx11_12
+  have hx14_13 := obs_alu_other' hobs13 Register.x14 (by decide) hx14_12
   obtain ⟨vmi13, hmi13⟩ := obs_alu_minstret hobs13
   have hout13 : σ13.sailOutput = out0 := by rw [hobs13.out, sailOutput_sigmaPost_alu]; exact hout12
   have hNA13 : Native_assertLoaded σ13.mem := by rw [hmem13e]; exact hmem12e ▸ hNA12
@@ -652,10 +653,10 @@ theorem nativeAssertInternal
     have := obs_alu_rd hobs14 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [show (sret + sign_extend (m := 64) (0x000#12) : BitVec 64) = sret from by
       rw [show (sign_extend (m := 64) (0x000#12) : BitVec 64) = 0#64 from by apply BitVec.eq_of_toNat_eq; decide, BitVec.add_zero]] at this
-  have hsp14 := obs_alu_other hobs14 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp13
-  have hx11_14 := obs_alu_other hobs14 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_13
-  have hx14_14 := obs_alu_other hobs14 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_13
-  have hx15_14 := obs_alu_other hobs14 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_13
+  have hsp14 := obs_alu_other' hobs14 Register.x2 (by decide) hsp13
+  have hx11_14 := obs_alu_other' hobs14 Register.x11 (by decide) hx11_13
+  have hx14_14 := obs_alu_other' hobs14 Register.x14 (by decide) hx14_13
+  have hx15_14 := obs_alu_other' hobs14 Register.x15 (by decide) hx15_13
   obtain ⟨vmi14, hmi14⟩ := obs_alu_minstret hobs14
   have hout14 : σ14.sailOutput = out0 := by rw [hobs14.out, sailOutput_sigmaPost_alu]; exact hout13
   have hNA14 : Native_assertLoaded σ14.mem := by rw [hmem14e]; exact hmem13e ▸ hNA13
@@ -670,11 +671,11 @@ theorem nativeAssertInternal
     rwa [show BitVec.addInt (0x80002e2c#64) 4 = (0x80002e30#64 : BitVec 64) from by decide] at this
   have hx10_15 : σ15.regs.get? Register.x10 = some ((fsp - 80#64) + sign_extend (m := 64) (0x010#12)) :=
     obs_alu_rd hobs15 (by decide) (by decide) (by decide) (by decide) (by decide)
-  have hsp15 := obs_alu_other hobs15 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp14
-  have hx8_15 := obs_alu_other hobs15 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_14
-  have hx11_15 := obs_alu_other hobs15 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_14
-  have hx14_15 := obs_alu_other hobs15 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_14
-  have hx15_15 := obs_alu_other hobs15 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_14
+  have hsp15 := obs_alu_other' hobs15 Register.x2 (by decide) hsp14
+  have hx8_15 := obs_alu_other' hobs15 Register.x8 (by decide) hx8_14
+  have hx11_15 := obs_alu_other' hobs15 Register.x11 (by decide) hx11_14
+  have hx14_15 := obs_alu_other' hobs15 Register.x14 (by decide) hx14_14
+  have hx15_15 := obs_alu_other' hobs15 Register.x15 (by decide) hx15_14
   obtain ⟨vmi15, hmi15⟩ := obs_alu_minstret hobs15
   have hout15 : σ15.sailOutput = out0 := by rw [hobs15.out, sailOutput_sigmaPost_alu]; exact hout14
   have hNA15 : Native_assertLoaded σ15.mem := by rw [hmem15e]; exact hmem14e ▸ hNA14
@@ -685,16 +686,16 @@ theorem nativeAssertInternal
   let mb4 : Mem := writeMap8 mb3 (fsp.toNat - 80 + 24) (sdData_val LV1)
   let mb5 : Mem := writeMap8 mb4 (fsp.toNat - 80 + 32) (sdData_val LV2)
   -- x12 = argc survived e08…e2c (those ALUs write x16/x15/x9/x18/x11/x14/x8/x10 only)
-  have hx12_6 := obs_alu_other hobs6 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_5
-  have hx12_7 := obs_alu_other hobs7 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_6
-  have hx12_8 := obs_alu_other hobs8 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_7
-  have hx12_9 := obs_alu_other hobs9 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_8
-  have hx12_10 := obs_branch_nottaken_other hobs10 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_9
-  have hx12_11 := obs_alu_other hobs11 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_10
-  have hx12_12 := obs_alu_other hobs12 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_11
-  have hx12_13 := obs_alu_other hobs13 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_12
-  have hx12_14 := obs_alu_other hobs14 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_13
-  have hx12_15 := obs_alu_other hobs15 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_14
+  have hx12_6 := obs_alu_other' hobs6 Register.x12 (by decide) hx12_5
+  have hx12_7 := obs_alu_other' hobs7 Register.x12 (by decide) hx12_6
+  have hx12_8 := obs_alu_other' hobs8 Register.x12 (by decide) hx12_7
+  have hx12_9 := obs_alu_other' hobs9 Register.x12 (by decide) hx12_8
+  have hx12_10 := obs_branch_nottaken_other' hobs10 Register.x12 (by decide) hx12_9
+  have hx12_11 := obs_alu_other' hobs11 Register.x12 (by decide) hx12_10
+  have hx12_12 := obs_alu_other' hobs12 Register.x12 (by decide) hx12_11
+  have hx12_13 := obs_alu_other' hobs13 Register.x12 (by decide) hx12_12
+  have hx12_14 := obs_alu_other' hobs14 Register.x12 (by decide) hx12_13
+  have hx12_15 := obs_alu_other' hobs15 Register.x12 (by decide) hx12_14
   -- 0x80002e30: sd a2,8(sp) → mb1 (spill argc)
   obtain ⟨σ16, i16, hs16', hi16, hG16, hmem16, hobs16⟩ :=
     site_80002e30_na σ15 i15 (c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) (0x80002e30#64) vmi15 (fsp - 80#64) argc
@@ -707,21 +708,21 @@ theorem nativeAssertInternal
   have hpc16 : σ16.regs.get? Register.PC = some (0x80002e34#64) := by
     have := obs_store_pc_val hobs16
     rwa [show BitVec.addInt (0x80002e30#64) 4 = (0x80002e34#64 : BitVec 64) from by decide] at this
-  have hsp16 := obs_store_other_val hobs16 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp15
-  have hx8_16 := obs_store_other_val hobs16 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_15
-  have hx10_16 := obs_store_other_val hobs16 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_15
-  have hx11_16 := obs_store_other_val hobs16 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_15
-  have hx14_16 := obs_store_other_val hobs16 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_15
-  have hx15_16 := obs_store_other_val hobs16 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_15
+  have hsp16 := obs_store_other_val' hobs16 Register.x2 (by decide) hsp15
+  have hx8_16 := obs_store_other_val' hobs16 Register.x8 (by decide) hx8_15
+  have hx10_16 := obs_store_other_val' hobs16 Register.x10 (by decide) hx10_15
+  have hx11_16 := obs_store_other_val' hobs16 Register.x11 (by decide) hx11_15
+  have hx14_16 := obs_store_other_val' hobs16 Register.x14 (by decide) hx14_15
+  have hx15_16 := obs_store_other_val' hobs16 Register.x15 (by decide) hx15_15
   obtain ⟨vmi16, hmi16⟩ := obs_store_minstret_val hobs16
   have hout16 : σ16.sailOutput = out0 := by rw [hobs16.out, sailOutput_sigmaPost_store]; exact hout15
   have hNA16 : Native_assertLoaded σ16.mem := by
     rw [hmem16e]; exact loaded_na_writeMap8 ms4 _ _ (hcodeNA 8 (by omega)) (hmem15e ▸ hNA15)
   -- x13 = argsBase survived e24…e30
-  have hx13_13 := obs_alu_other hobs13 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_12
-  have hx13_14 := obs_alu_other hobs14 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_13
-  have hx13_15 := obs_alu_other hobs15 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_14
-  have hx13_16 := obs_store_other_val hobs16 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_15
+  have hx13_13 := obs_alu_other' hobs13 Register.x13 (by decide) hx13_12
+  have hx13_14 := obs_alu_other' hobs14 Register.x13 (by decide) hx13_13
+  have hx13_15 := obs_alu_other' hobs15 Register.x13 (by decide) hx13_14
+  have hx13_16 := obs_store_other_val' hobs16 Register.x13 (by decide) hx13_15
   -- 0x80002e34: sd a3,0(sp) → mb2 (spill args base)
   obtain ⟨σ17, i17, hs17', hi17, hG17, hmem17, hobs17⟩ :=
     site_80002e34_na σ16 i16 (c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) (0x80002e34#64) vmi16 (fsp - 80#64) argsBase
@@ -734,12 +735,12 @@ theorem nativeAssertInternal
   have hpc17 : σ17.regs.get? Register.PC = some (0x80002e38#64) := by
     have := obs_store_pc_val hobs17
     rwa [show BitVec.addInt (0x80002e34#64) 4 = (0x80002e38#64 : BitVec 64) from by decide] at this
-  have hsp17 := obs_store_other_val hobs17 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp16
-  have hx8_17 := obs_store_other_val hobs17 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_16
-  have hx10_17 := obs_store_other_val hobs17 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_16
-  have hx11_17 := obs_store_other_val hobs17 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_16
-  have hx14_17 := obs_store_other_val hobs17 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_16
-  have hx15_17 := obs_store_other_val hobs17 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_16
+  have hsp17 := obs_store_other_val' hobs17 Register.x2 (by decide) hsp16
+  have hx8_17 := obs_store_other_val' hobs17 Register.x8 (by decide) hx8_16
+  have hx10_17 := obs_store_other_val' hobs17 Register.x10 (by decide) hx10_16
+  have hx11_17 := obs_store_other_val' hobs17 Register.x11 (by decide) hx11_16
+  have hx14_17 := obs_store_other_val' hobs17 Register.x14 (by decide) hx14_16
+  have hx15_17 := obs_store_other_val' hobs17 Register.x15 (by decide) hx15_16
   obtain ⟨vmi17, hmi17⟩ := obs_store_minstret_val hobs17
   have hout17 : σ17.sailOutput = out0 := by rw [hobs17.out, sailOutput_sigmaPost_store]; exact hout16
   have hNA17 : Native_assertLoaded σ17.mem := by
@@ -756,10 +757,10 @@ theorem nativeAssertInternal
   have hpc18 : σ18.regs.get? Register.PC = some (0x80002e3c#64) := by
     have := obs_store_pc_val hobs18
     rwa [show BitVec.addInt (0x80002e38#64) 4 = (0x80002e3c#64 : BitVec 64) from by decide] at this
-  have hsp18 := obs_store_other_val hobs18 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp17
-  have hx8_18 := obs_store_other_val hobs18 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_17
-  have hx14_18 := obs_store_other_val hobs18 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_17
-  have hx15_18 := obs_store_other_val hobs18 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_17
+  have hsp18 := obs_store_other_val' hobs18 Register.x2 (by decide) hsp17
+  have hx8_18 := obs_store_other_val' hobs18 Register.x8 (by decide) hx8_17
+  have hx14_18 := obs_store_other_val' hobs18 Register.x14 (by decide) hx14_17
+  have hx15_18 := obs_store_other_val' hobs18 Register.x15 (by decide) hx15_17
   obtain ⟨vmi18, hmi18⟩ := obs_store_minstret_val hobs18
   have hout18 : σ18.sailOutput = out0 := by rw [hobs18.out, sailOutput_sigmaPost_store]; exact hout17
   have hNA18 : Native_assertLoaded σ18.mem := by
@@ -776,9 +777,9 @@ theorem nativeAssertInternal
   have hpc19 : σ19.regs.get? Register.PC = some (0x80002e40#64) := by
     have := obs_store_pc_val hobs19
     rwa [show BitVec.addInt (0x80002e3c#64) 4 = (0x80002e40#64 : BitVec 64) from by decide] at this
-  have hsp19 := obs_store_other_val hobs19 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp18
-  have hx8_19 := obs_store_other_val hobs19 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_18
-  have hx15_19 := obs_store_other_val hobs19 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_18
+  have hsp19 := obs_store_other_val' hobs19 Register.x2 (by decide) hsp18
+  have hx8_19 := obs_store_other_val' hobs19 Register.x8 (by decide) hx8_18
+  have hx15_19 := obs_store_other_val' hobs19 Register.x15 (by decide) hx15_18
   obtain ⟨vmi19, hmi19⟩ := obs_store_minstret_val hobs19
   have hout19 : σ19.sailOutput = out0 := by rw [hobs19.out, sailOutput_sigmaPost_store]; exact hout18
   have hNA19 : Native_assertLoaded σ19.mem := by
@@ -795,17 +796,17 @@ theorem nativeAssertInternal
   have hpc20 : σ20.regs.get? Register.PC = some (0x80002e44#64) := by
     have := obs_store_pc_val hobs20
     rwa [show BitVec.addInt (0x80002e40#64) 4 = (0x80002e44#64 : BitVec 64) from by decide] at this
-  have hsp20 := obs_store_other_val hobs20 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp19
-  have hx8_20 := obs_store_other_val hobs20 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_19
+  have hsp20 := obs_store_other_val' hobs20 Register.x2 (by decide) hsp19
+  have hx8_20 := obs_store_other_val' hobs20 Register.x8 (by decide) hx8_19
   obtain ⟨vmi20, hmi20⟩ := obs_store_minstret_val hobs20
   have hout20 : σ20.sailOutput = out0 := by rw [hobs20.out, sailOutput_sigmaPost_store]; exact hout19
   have hNA20 : Native_assertLoaded σ20.mem := by
     rw [hmem20e]; exact loaded_na_writeMap8 mb4 _ _ (hcodeNA 32 (by omega)) (hmem19e ▸ hNA19)
   -- a0 (buffer) at σ20 = fsp-64
   have hbufNat : ((fsp - 80#64) + sign_extend (m := 64) (0x010#12)).toNat = fsp.toNat - 80 + 16 := haddr16
-  have hx10_18 := obs_store_other_val hobs18 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_17
-  have hx10_19 := obs_store_other_val hobs19 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_18
-  have hx10_20 := obs_store_other_val hobs20 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_19
+  have hx10_18 := obs_store_other_val' hobs18 Register.x10 (by decide) hx10_17
+  have hx10_19 := obs_store_other_val' hobs19 Register.x10 (by decide) hx10_18
+  have hx10_20 := obs_store_other_val' hobs20 Register.x10 (by decide) hx10_19
   have hbuftag : ((fsp - 80#64) + sign_extend (m := 64) (0x010#12)) = (fsp - 64#64 : BitVec 64) := by
     apply BitVec.eq_of_toNat_eq
     rw [haddr16, BitVec.toNat_sub]
@@ -942,9 +943,9 @@ theorem nativeAssertInternal
     have := obs_jal_rd hobs21 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [show BitVec.addInt (0x80002e44#64 : BitVec 64) 4 = (0x80002e48#64:BitVec 64) from by decide] at this
   have hx10_21 : σ21.regs.get? Register.x10 = some (fsp - 64#64) := by
-    rw [obs_jal_other hobs21 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_20, hbuftag]
-  have hx8_21 : σ21.regs.get? Register.x8 = some sret := obs_jal_other hobs21 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_20
-  have hsp21 : σ21.regs.get? Register.x2 = some (fsp - 80#64) := obs_jal_other hobs21 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp20
+    rw [obs_jal_other' hobs21 Register.x10 (by decide) hx10_20, hbuftag]
+  have hx8_21 : σ21.regs.get? Register.x8 = some sret := obs_jal_other' hobs21 Register.x8 (by decide) hx8_20
+  have hsp21 : σ21.regs.get? Register.x2 = some (fsp - 80#64) := obs_jal_other' hobs21 Register.x2 (by decide) hsp20
   obtain ⟨vmi21, hmi21⟩ := obs_jal_minstret hobs21
   have hout21 : σ21.sailOutput = out0 := by rw [hobs21.out, sailOutput_sigmaPost_jal]; exact hout20
   -- TruthyRegion for the buffer (fsp-64)
@@ -1043,9 +1044,9 @@ theorem nativeAssertInternal
   have hpc22 : σ22.regs.get? Register.PC = some (0x80002e4c#64) := by
     have := obs_alu_pc hobs22
     rwa [show BitVec.addInt (0x80002e48#64) 4 = (0x80002e4c#64 : BitVec 64) from by decide] at this
-  have ha0_22 : σ22.regs.get? Register.x10 = some (1#64) := obs_alu_other hobs22 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0T'
-  have hs0_22 : σ22.regs.get? Register.x8 = some sret := obs_alu_other hobs22 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs0_T
-  have hsp_22 : σ22.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other hobs22 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_T
+  have ha0_22 : σ22.regs.get? Register.x10 = some (1#64) := obs_alu_other' hobs22 Register.x10 (by decide) ha0T'
+  have hs0_22 : σ22.regs.get? Register.x8 = some sret := obs_alu_other' hobs22 Register.x8 (by decide) hs0_T
+  have hsp_22 : σ22.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other' hobs22 Register.x2 (by decide) hsp_T
   obtain ⟨vmi22, hmi22⟩ := obs_alu_minstret hobs22
   have hout22 : σ22.sailOutput = out0 := by rw [hobs22.out, sailOutput_sigmaPost_alu]; exact houtT
   have hNA22 : Native_assertLoaded σ22.mem := by rw [hmem22e]; exact hmemT' ▸ hNA_T
@@ -1065,9 +1066,9 @@ theorem nativeAssertInternal
   have hpc23 : σ23.regs.get? Register.PC = some (0x80002e50#64) := by
     have := obs_alu_pc hobs23
     rwa [show BitVec.addInt (0x80002e4c#64) 4 = (0x80002e50#64 : BitVec 64) from by decide] at this
-  have ha0_23 : σ23.regs.get? Register.x10 = some (1#64) := obs_alu_other hobs23 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_22
-  have hs0_23 : σ23.regs.get? Register.x8 = some sret := obs_alu_other hobs23 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs0_22
-  have hsp_23 : σ23.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other hobs23 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_22
+  have ha0_23 : σ23.regs.get? Register.x10 = some (1#64) := obs_alu_other' hobs23 Register.x10 (by decide) ha0_22
+  have hs0_23 : σ23.regs.get? Register.x8 = some sret := obs_alu_other' hobs23 Register.x8 (by decide) hs0_22
+  have hsp_23 : σ23.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other' hobs23 Register.x2 (by decide) hsp_22
   obtain ⟨vmi23, hmi23⟩ := obs_alu_minstret hobs23
   have hout23 : σ23.sailOutput = out0 := by rw [hobs23.out, sailOutput_sigmaPost_alu]; exact hout22
   have hNA23 : Native_assertLoaded σ23.mem := by rw [hmem23e]; exact hmem22e ▸ hNA22
@@ -1081,8 +1082,8 @@ theorem nativeAssertInternal
   have hpc24 : σ24.regs.get? Register.PC = some (0x80002e54#64) := by
     have := obs_branch_nottaken_pc hobs24
     rwa [show BitVec.addInt (0x80002e50#64) 4 = (0x80002e54#64 : BitVec 64) from by decide] at this
-  have hs0_24 : σ24.regs.get? Register.x8 = some sret := obs_branch_nottaken_other hobs24 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs0_23
-  have hsp_24 : σ24.regs.get? Register.x2 = some (fsp - 80#64) := obs_branch_nottaken_other hobs24 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_23
+  have hs0_24 : σ24.regs.get? Register.x8 = some sret := obs_branch_nottaken_other' hobs24 Register.x8 (by decide) hs0_23
+  have hsp_24 : σ24.regs.get? Register.x2 = some (fsp - 80#64) := obs_branch_nottaken_other' hobs24 Register.x2 (by decide) hsp_23
   obtain ⟨vmi24, hmi24⟩ := obs_branch_nottaken_minstret hobs24
   have hout24 : σ24.sailOutput = out0 := by rw [hobs24.out, sailOutput_sigmaPost_branch_nottaken]; exact hout23
   have hNA24 : Native_assertLoaded σ24.mem := by rw [hmem24e]; exact hmem23e ▸ hNA23
@@ -1100,8 +1101,8 @@ theorem nativeAssertInternal
     have := obs_alu_rd hobs25 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [show (sret + sign_extend (m := 64) (0x000#12) : BitVec 64) = sret from by
       rw [show (sign_extend (m := 64) (0x000#12) : BitVec 64) = 0#64 from by apply BitVec.eq_of_toNat_eq; decide, BitVec.add_zero]] at this
-  have hs0_25 : σ25.regs.get? Register.x8 = some sret := obs_alu_other hobs25 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs0_24
-  have hsp_25 : σ25.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other hobs25 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_24
+  have hs0_25 : σ25.regs.get? Register.x8 = some sret := obs_alu_other' hobs25 Register.x8 (by decide) hs0_24
+  have hsp_25 : σ25.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other' hobs25 Register.x2 (by decide) hsp_24
   obtain ⟨vmi25, hmi25⟩ := obs_alu_minstret hobs25
   have hout25 : σ25.sailOutput = out0 := by rw [hobs25.out, sailOutput_sigmaPost_alu]; exact hout24
   have hNA25 : Native_assertLoaded σ25.mem := by rw [hmem25e]; exact hmem24e ▸ hNA24
@@ -1120,9 +1121,9 @@ theorem nativeAssertInternal
   have hlink26 : σ26.regs.get? Register.x1 = some (0x80002e5c#64) := by
     have := obs_jal_rd hobs26 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [show BitVec.addInt (0x80002e58#64 : BitVec 64) 4 = (0x80002e5c#64:BitVec 64) from by decide] at this
-  have ha0_26 : σ26.regs.get? Register.x10 = some sret := obs_jal_other hobs26 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_25
-  have hs0_26 : σ26.regs.get? Register.x8 = some sret := obs_jal_other hobs26 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs0_25
-  have hsp_26 : σ26.regs.get? Register.x2 = some (fsp - 80#64) := obs_jal_other hobs26 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_25
+  have ha0_26 : σ26.regs.get? Register.x10 = some sret := obs_jal_other' hobs26 Register.x10 (by decide) ha0_25
+  have hs0_26 : σ26.regs.get? Register.x8 = some sret := obs_jal_other' hobs26 Register.x8 (by decide) hs0_25
+  have hsp_26 : σ26.regs.get? Register.x2 = some (fsp - 80#64) := obs_jal_other' hobs26 Register.x2 (by decide) hsp_25
   obtain ⟨vmi26, hmi26⟩ := obs_jal_minstret hobs26
   have hout26 : σ26.sailOutput = out0 := by rw [hobs26.out, sailOutput_sigmaPost_jal]; exact hout25
   have hNullReg : NullRegion sret :=
@@ -1282,8 +1283,8 @@ theorem nativeAssertInternal
   have hx1_27 : σ27.regs.get? Register.x1 = some retAddr := by
     have := obs_alu_rd hobs27 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hreload_eq rb0 rb1 rb2 rb3 rb4 rb5 rb6 rb7 retAddr hrbrec] at this
-  have hs0_27 : σ27.regs.get? Register.x8 = some sret := obs_alu_other hobs27 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs0_N
-  have hsp_27 : σ27.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other hobs27 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_N
+  have hs0_27 : σ27.regs.get? Register.x8 = some sret := obs_alu_other' hobs27 Register.x8 (by decide) hs0_N
+  have hsp_27 : σ27.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other' hobs27 Register.x2 (by decide) hsp_N
   obtain ⟨vmi27, hmi27⟩ := obs_alu_minstret hobs27
   have hout27 : σ27.sailOutput = out0 := by rw [hobs27.out, sailOutput_sigmaPost_alu]; exact houtN
   have hNA27 : Native_assertLoaded σ27.mem := by rw [hmem27e]; exact hNA_N
@@ -1295,8 +1296,8 @@ theorem nativeAssertInternal
   have hpc28 : σ28.regs.get? Register.PC = some (0x80002e64#64) := by
     have := obs_alu_pc hobs28
     rwa [show BitVec.addInt (0x80002e60#64) 4 = (0x80002e64#64 : BitVec 64) from by decide] at this
-  have hx1_28 : σ28.regs.get? Register.x1 = some retAddr := obs_alu_other hobs28 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_27
-  have hsp_28 : σ28.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other hobs28 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_27
+  have hx1_28 : σ28.regs.get? Register.x1 = some retAddr := obs_alu_other' hobs28 Register.x1 (by decide) hx1_27
+  have hsp_28 : σ28.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other' hobs28 Register.x2 (by decide) hsp_27
   obtain ⟨vmi28, hmi28⟩ := obs_alu_minstret hobs28
   have hout28 : σ28.sailOutput = out0 := by rw [hobs28.out, sailOutput_sigmaPost_alu]; exact hout27
   have hNA28 : Native_assertLoaded σ28.mem := by rw [hmem28e]; exact hmem27e ▸ hNA27
@@ -1313,8 +1314,8 @@ theorem nativeAssertInternal
   have hpc29 : σ29.regs.get? Register.PC = some (0x80002e68#64) := by
     have := obs_alu_pc hobs29
     rwa [show BitVec.addInt (0x80002e64#64) 4 = (0x80002e68#64 : BitVec 64) from by decide] at this
-  have hx1_29 : σ29.regs.get? Register.x1 = some retAddr := obs_alu_other hobs29 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_28
-  have hsp_29 : σ29.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other hobs29 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_28
+  have hx1_29 : σ29.regs.get? Register.x1 = some retAddr := obs_alu_other' hobs29 Register.x1 (by decide) hx1_28
+  have hsp_29 : σ29.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other' hobs29 Register.x2 (by decide) hsp_28
   obtain ⟨vmi29, hmi29⟩ := obs_alu_minstret hobs29
   have hout29 : σ29.sailOutput = out0 := by rw [hobs29.out, sailOutput_sigmaPost_alu]; exact hout28
   have hNA29 : Native_assertLoaded σ29.mem := by rw [hmem29e]; exact hmem28e ▸ hNA28
@@ -1331,8 +1332,8 @@ theorem nativeAssertInternal
   have hpc30 : σ30.regs.get? Register.PC = some (0x80002e6c#64) := by
     have := obs_alu_pc hobs30
     rwa [show BitVec.addInt (0x80002e68#64) 4 = (0x80002e6c#64 : BitVec 64) from by decide] at this
-  have hx1_30 : σ30.regs.get? Register.x1 = some retAddr := obs_alu_other hobs30 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_29
-  have hsp_30 : σ30.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other hobs30 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_29
+  have hx1_30 : σ30.regs.get? Register.x1 = some retAddr := obs_alu_other' hobs30 Register.x1 (by decide) hx1_29
+  have hsp_30 : σ30.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other' hobs30 Register.x2 (by decide) hsp_29
   obtain ⟨vmi30, hmi30⟩ := obs_alu_minstret hobs30
   have hout30 : σ30.sailOutput = out0 := by rw [hobs30.out, sailOutput_sigmaPost_alu]; exact hout29
   have hNA30 : Native_assertLoaded σ30.mem := by rw [hmem30e]; exact hmem29e ▸ hNA29
@@ -1349,8 +1350,8 @@ theorem nativeAssertInternal
   have hpc31 : σ31.regs.get? Register.PC = some (0x80002e70#64) := by
     have := obs_alu_pc hobs31
     rwa [show BitVec.addInt (0x80002e6c#64) 4 = (0x80002e70#64 : BitVec 64) from by decide] at this
-  have hx1_31 : σ31.regs.get? Register.x1 = some retAddr := obs_alu_other hobs31 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_30
-  have hsp_31 : σ31.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other hobs31 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_30
+  have hx1_31 : σ31.regs.get? Register.x1 = some retAddr := obs_alu_other' hobs31 Register.x1 (by decide) hx1_30
+  have hsp_31 : σ31.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other' hobs31 Register.x2 (by decide) hsp_30
   obtain ⟨vmi31, hmi31⟩ := obs_alu_minstret hobs31
   have hout31 : σ31.sailOutput = out0 := by rw [hobs31.out, sailOutput_sigmaPost_alu]; exact hout30
   have hNA31 : Native_assertLoaded σ31.mem := by rw [hmem31e]; exact hmem30e ▸ hNA30
@@ -1369,7 +1370,7 @@ theorem nativeAssertInternal
       apply BitVec.eq_of_toNat_eq
       rw [BitVec.toNat_add, hspNat, show (sign_extend (m := 64) (0x050#12) : BitVec 64).toNat = 80 from by decide]
       have := hRG.fsp_hi; have := fsp.isLt; omega] at this
-  have hx1_32 : σ32.regs.get? Register.x1 = some retAddr := obs_alu_other hobs32 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_31
+  have hx1_32 : σ32.regs.get? Register.x1 = some retAddr := obs_alu_other' hobs32 Register.x1 (by decide) hx1_31
   obtain ⟨vmi32, hmi32⟩ := obs_alu_minstret hobs32
   have hout32 : σ32.sailOutput = out0 := by rw [hobs32.out, sailOutput_sigmaPost_alu]; exact hout31
   have hNA32 : Native_assertLoaded σ32.mem := by rw [hmem32e]; exact hmem31e ▸ hNA31
@@ -1382,7 +1383,7 @@ theorem nativeAssertInternal
   have hpc_fin : σ33.regs.get? Register.PC = some (BitVec.update (retAddr + sign_extend (m := 64) (0x000#12)) 0 0#1) := by
     have := obs_jr_pc hobs33
     exact this
-  have hsp_fin : σ33.regs.get? Register.x2 = some fsp := obs_jr_other hobs33 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_32
+  have hsp_fin : σ33.regs.get? Register.x2 = some fsp := obs_jr_other' hobs33 Register.x2 (by decide) hsp_32
   obtain ⟨vmi33, hmi33⟩ := obs_jr_minstret hobs33
   have hout_fin : σ33.sailOutput = out0 := by rw [hobs33.out, sailOutput_sigmaPost_jump_x0]; exact hout32
   ------------------------------------------------------------------------

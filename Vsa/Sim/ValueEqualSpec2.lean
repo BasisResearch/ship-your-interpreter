@@ -1,5 +1,6 @@
 import Vsa.Sim.ValueEqualSpec
 import Vsa.Sim.ValueEqualSites2
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 3 — total-correctness spec for `value_equal`, part 2 (payload variants + merge)
@@ -92,7 +93,7 @@ theorem ve_sub_seqz_ret (g : (R : Register) → Option (RegisterType R)) (r : Bi
     have := obs_alu_pc hobs1; rwa [hsubpc] at this
   have ha0_1 : σ1.regs.get? Register.x10 = some (payA - payB) :=
     obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
-  have hra_1 := obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra
+  have hra_1 := obs_alu_other' hobs1 Register.x1 (by decide) hra
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hframe1 : ∀ R : Register, NotWrittenVE R → σ1.regs.get? R = g R := fun R hR =>
     (frame_alu_ve hobs1 R hR hR.1).trans (hframe R hR)
@@ -105,7 +106,7 @@ theorem ve_sub_seqz_ret (g : (R : Register) → Option (RegisterType R)) (r : Bi
   have ha0_2 : σ2.regs.get? Register.x10 = some (cond ((payA - payB) == 0#64) (1#64) (0#64)) := by
     have := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
     rw [this, seqz_val]
-  have hra_2 := obs_alu_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_1
+  have hra_2 := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
   obtain ⟨vmi2, hmi2⟩ := obs_alu_minstret hobs2
   have hframe2 : ∀ R : Register, NotWrittenVE R → σ2.regs.get? R = g R := fun R hR =>
     (frame_alu_ve hobs2 R hR hR.1).trans (hframe1 R hR)
@@ -118,10 +119,10 @@ theorem ve_sub_seqz_ret (g : (R : Register) → Option (RegisterType R)) (r : Bi
     (by chain_out [hobs1, hobs2, hobs3] : σ3.sailOutput = σ.sailOutput).trans hout
   refine ⟨σ3, i3, ((hsteps0.trans (Steps.single hs1)).trans (Steps.single hs2)).trans (Steps.single hs3),
     hi3, hG3, obs_jr_pc hobs3, ?_,
-    obs_jr_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_2,
+    obs_jr_other' hobs3 Register.x1 (by decide) hra_2,
     obs_jr_minstret hobs3, by rw [hmem3, hmem2eq], hout3,
     fun R hR => (frame_jr_ve hobs3 R hR).trans (hframe2 R hR)⟩
-  exact obs_jr_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_2
+  exact obs_jr_other' hobs3 Register.x10 (by decide) ha0_2
 
 /-! ## Region / payload-address helpers for the 8-byte loads
 
@@ -222,8 +223,8 @@ theorem ve_int_handler (g : (R : Register) → Option (RegisterType R)) (bufa bu
   have ha0_1 : σ1.regs.get? Register.x10 = some (BitVec.ofNat 64 q1) := by
     have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
     rw [this, ld_sext_ofNat a0 a1 a2 a3 a4 a5 a6 a7 q1 harec]
-  have ha1_1 := obs_alu_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1
-  have hra_1 := obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra
+  have ha1_1 := obs_alu_other' hobs1 Register.x11 (by decide) ha1
+  have hra_1 := obs_alu_other' hobs1 Register.x1 (by decide) hra
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hframe1 : ∀ R : Register, NotWrittenVE R → σ1.regs.get? R = g R := fun R hR =>
     (frame_alu_ve hobs1 R hR hR.1).trans (hframe R hR)
@@ -242,8 +243,8 @@ theorem ve_int_handler (g : (R : Register) → Option (RegisterType R)) (bufa bu
   have ha5_2 : σ2.regs.get? Register.x15 = some (BitVec.ofNat 64 q2) := by
     have := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
     rw [this, ld_sext_ofNat d0 d1 d2 d3 d4 d5 d6 d7 q2 hdrec]
-  have ha0_2 := obs_alu_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_1
-  have hra_2 := obs_alu_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_1
+  have ha0_2 := obs_alu_other' hobs2 Register.x10 (by decide) ha0_1
+  have hra_2 := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
   obtain ⟨vmi2, hmi2⟩ := obs_alu_minstret hobs2
   have hframe2 : ∀ R : Register, NotWrittenVE R → σ2.regs.get? R = g R := fun R hR =>
     (frame_alu_ve hobs2 R hR hR.2.2.1).trans (hframe1 R hR)
@@ -328,8 +329,8 @@ theorem ve_bool_handler (g : (R : Register) → Option (RegisterType R)) (bufa b
     have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
     rw [this, sext_word_small _ (cond b1 1 0) hlt1 (by rw [word_toNat_recon]; omega)]
     cases b1 <;> rfl
-  have ha1_1 := obs_alu_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1
-  have hra_1 := obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra
+  have ha1_1 := obs_alu_other' hobs1 Register.x11 (by decide) ha1
+  have hra_1 := obs_alu_other' hobs1 Register.x1 (by decide) hra
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hframe1 : ∀ R : Register, NotWrittenVE R → σ1.regs.get? R = g R := fun R hR =>
     (frame_alu_ve hobs1 R hR hR.1).trans (hframe R hR)
@@ -347,8 +348,8 @@ theorem ve_bool_handler (g : (R : Register) → Option (RegisterType R)) (bufa b
     have := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
     rw [this, sext_word_small _ (cond b2 1 0) hlt2 (by rw [word_toNat_recon]; omega)]
     cases b2 <;> rfl
-  have ha0_2 := obs_alu_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_1
-  have hra_2 := obs_alu_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_1
+  have ha0_2 := obs_alu_other' hobs2 Register.x10 (by decide) ha0_1
+  have hra_2 := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
   obtain ⟨vmi2, hmi2⟩ := obs_alu_minstret hobs2
   have hframe2 : ∀ R : Register, NotWrittenVE R → σ2.regs.get? R = g R := fun R hR =>
     (frame_alu_ve hobs2 R hR hR.2.2.1).trans (hframe1 R hR)
@@ -419,8 +420,8 @@ theorem ve_native_handler (g : (R : Register) → Option (RegisterType R)) (bufa
   have ha0_1 : σ1.regs.get? Register.x10 = some (BitVec.ofNat 64 q1) := by
     have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
     rw [this, ld_sext_ofNat a0 a1 a2 a3 a4 a5 a6 a7 q1 harec]
-  have ha1_1 := obs_alu_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1
-  have hra_1 := obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra
+  have ha1_1 := obs_alu_other' hobs1 Register.x11 (by decide) ha1
+  have hra_1 := obs_alu_other' hobs1 Register.x1 (by decide) hra
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hframe1 : ∀ R : Register, NotWrittenVE R → σ1.regs.get? R = g R := fun R hR =>
     (frame_alu_ve hobs1 R hR hR.1).trans (hframe R hR)
@@ -439,8 +440,8 @@ theorem ve_native_handler (g : (R : Register) → Option (RegisterType R)) (bufa
   have ha5_2 : σ2.regs.get? Register.x15 = some (BitVec.ofNat 64 q2) := by
     have := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
     rw [this, ld_sext_ofNat d0 d1 d2 d3 d4 d5 d6 d7 q2 hdrec]
-  have ha0_2 := obs_alu_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_1
-  have hra_2 := obs_alu_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_1
+  have ha0_2 := obs_alu_other' hobs2 Register.x10 (by decide) ha0_1
+  have hra_2 := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
   obtain ⟨vmi2, hmi2⟩ := obs_alu_minstret hobs2
   have hframe2 : ∀ R : Register, NotWrittenVE R → σ2.regs.get? R = g R := fun R hR =>
     (frame_alu_ve hobs2 R hR hR.2.2.1).trans (hframe1 R hR)

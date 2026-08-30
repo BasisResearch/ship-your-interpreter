@@ -1,4 +1,5 @@
 import Vsa.Sim.EnvGetSpec7
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 3 — `env_get` do-while FIRST body (from `0x80002c60`) and the truly
@@ -129,8 +130,8 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
   have hx11_3 : σ3.regs.get? Register.x11 = some name := by
     have := obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [sext_zero, BitVec.add_zero] at this
-  have hx10_3 := obs_alu_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_2
-  have hra3 := obs_alu_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra2
+  have hx10_3 := obs_alu_other' hobs3 Register.x10 (by decide) hx10_2
+  have hra3 := obs_alu_other' hobs3 Register.x1 (by decide) hra2
   obtain ⟨vmi3, hmi3⟩ := obs_alu_minstret hobs3
   have hmem3' : σ3.mem = m0 := by rw [hmem3]; exact hmem2'
   have hghost3 : ∀ R : Register, AbiPreserved R = true → σ3.regs.get? R = g R := by
@@ -222,11 +223,11 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
     have hpc6 : σ6.regs.get? Register.PC = some (0x80002c70#64 : BitVec 64) := by
       have := obs_bnottaken_pc hobs6
       rwa [show BitVec.addInt (0x80002c6c#64 : BitVec 64) 4 = (0x80002c70#64 : BitVec 64) from by decide] at this
-    have he6 := obs_bnottaken_other hobs6 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) he5
-    have hidx6 := obs_bnottaken_other hobs6 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hidx5
-    have ho6 := obs_bnottaken_other hobs6 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ho5
-    have hsp6 := obs_bnottaken_other hobs6 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp5
-    have hra6 := obs_bnottaken_other hobs6 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra5
+    have he6 := obs_bnottaken_other' hobs6 Register.x20 (by decide) he5
+    have hidx6 := obs_bnottaken_other' hobs6 Register.x8 (by decide) hidx5
+    have ho6 := obs_bnottaken_other' hobs6 Register.x21 (by decide) ho5
+    have hsp6 := obs_bnottaken_other' hobs6 Register.x2 (by decide) hsp5
+    have hra6 := obs_bnottaken_other' hobs6 Register.x1 (by decide) hra5
     have hmem6' : σ6.mem = m0 := by rw [hmem6]; exact hmem5'
     refine ⟨⟨σ6, i6, c5.steps + 1⟩, hsteps_pre.trans (Steps.single hstep6),
       Or.inr ⟨hG6, hmem6', hpc6, he6, hidx6, ho6, hsp6, hra6, obs_bnottaken_minstret hobs6, hi6, hilt, hnameEq, hfm⟩⟩
@@ -285,13 +286,13 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
       rw [show (sign_extend (m := 64) (0x001#12) : BitVec 64) = 1#64 from by
         apply BitVec.eq_of_toNat_eq; decide] at this
       rwa [ofNat_succ_bv i (by omega)] at this
-    have he7 := obs_alu_other hobs7 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) he6
-    have ho7 := obs_alu_other hobs7 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ho6
-    have hcn7 := obs_alu_other hobs7 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcn6
-    have hn7 := obs_alu_other hobs7 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hn6
-    have hcur7 := obs_alu_other hobs7 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcur6
-    have hra7 := obs_alu_other hobs7 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra6
-    have hsp7 := obs_alu_other hobs7 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp6
+    have he7 := obs_alu_other' hobs7 Register.x20 (by decide) he6
+    have ho7 := obs_alu_other' hobs7 Register.x21 (by decide) ho6
+    have hcn7 := obs_alu_other' hobs7 Register.x18 (by decide) hcn6
+    have hn7 := obs_alu_other' hobs7 Register.x19 (by decide) hn6
+    have hcur7 := obs_alu_other' hobs7 Register.x9 (by decide) hcur6
+    have hra7 := obs_alu_other' hobs7 Register.x1 (by decide) hra6
+    have hsp7 := obs_alu_other' hobs7 Register.x2 (by decide) hsp6
     obtain ⟨vmi7, hmi7⟩ := obs_alu_minstret hobs7
     have hmem7' : σ7.mem = m0 := by rw [hmem7]; exact hmem6'
     -- ============ c58: addi s1,s1,8 → names += 8 → c5c@i+1 ============
@@ -312,13 +313,13 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
       rw [show (sign_extend (m := 64) (0x008#12) : BitVec 64) = 8#64 from by
         apply BitVec.eq_of_toNat_eq; decide] at this
       rwa [cursor_succ_bv pn i h8i1] at this
-    have he8 := obs_alu_other hobs8 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) he7
-    have ho8 := obs_alu_other hobs8 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ho7
-    have hcn8 := obs_alu_other hobs8 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hcn7
-    have hn8 := obs_alu_other hobs8 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hn7
-    have hidx8 := obs_alu_other hobs8 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hidx7
-    have hra8 := obs_alu_other hobs8 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra7
-    have hsp8 := obs_alu_other hobs8 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp7
+    have he8 := obs_alu_other' hobs8 Register.x20 (by decide) he7
+    have ho8 := obs_alu_other' hobs8 Register.x21 (by decide) ho7
+    have hcn8 := obs_alu_other' hobs8 Register.x18 (by decide) hcn7
+    have hn8 := obs_alu_other' hobs8 Register.x19 (by decide) hn7
+    have hidx8 := obs_alu_other' hobs8 Register.x8 (by decide) hidx7
+    have hra8 := obs_alu_other' hobs8 Register.x1 (by decide) hra7
+    have hsp8 := obs_alu_other' hobs8 Register.x2 (by decide) hsp7
     obtain ⟨vmi8, hmi8⟩ := obs_alu_minstret hobs8
     have hmem8' : σ8.mem = m0 := by rw [hmem8]; exact hmem7'
     have hSt' : ScanSt (fun R => σ8.regs.get? R) scanTestPC env name out count pn (0x80002c6c#64) sp (i+1)

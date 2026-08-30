@@ -1,6 +1,7 @@
 import Vsa.Sim.EvalIntSim4
 import Vsa.Sim.DecodeTable.Batch16Part01
 import Vsa.Sim.DecodeTable.Batch14Part09
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 4 — M4: the `EvalE.null` simulation Triple (`evalNullSim`)
@@ -139,8 +140,8 @@ theorem value_null_spec_full (g : (R : Register) → Option (RegisterType R)) (b
   have hpc1 : σ1.regs.get? Register.PC = some (0x800027f0#64 : BitVec 64) := by
     have := obs_store_pc_val hobs1
     rwa [show BitVec.addInt (0x800027ec#64) 4 = (0x800027f0#64 : BitVec 64) from by decide] at this
-  have ha0_1 := obs_store_other_val hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
-  have hra_1 := obs_store_other_val hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra
+  have ha0_1 := obs_store_other_val' hobs1 Register.x10 (by decide) ha0
+  have hra_1 := obs_store_other_val' hobs1 Register.x1 (by decide) hra
   obtain ⟨vmi1, hmi1⟩ := obs_store_minstret_val hobs1
   have hloaded1 : Value_nullLoaded σ1.mem := by
     rw [hmem1']
@@ -156,8 +157,8 @@ theorem value_null_spec_full (g : (R : Register) → Option (RegisterType R)) (b
   have hpc2 : σ2.regs.get? Register.PC = some (0x800027f4#64 : BitVec 64) := by
     have := obs_store_pc_val hobs2
     rwa [show BitVec.addInt (0x800027f0#64) 4 = (0x800027f4#64 : BitVec 64) from by decide] at this
-  have ha0_2 := obs_store_other_val hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_1
-  have hra_2 := obs_store_other_val hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_1
+  have ha0_2 := obs_store_other_val' hobs2 Register.x10 (by decide) ha0_1
+  have hra_2 := obs_store_other_val' hobs2 Register.x1 (by decide) hra_1
   obtain ⟨vmi2, hmi2⟩ := obs_store_minstret_val hobs2
   have hloaded2 : Value_nullLoaded σ2.mem := by
     rw [hmem2']
@@ -175,8 +176,8 @@ theorem value_null_spec_full (g : (R : Register) → Option (RegisterType R)) (b
   have hmem3eq : σ3.mem = writeMap8 (writeMap4 c.σ.mem buf.toNat (swData (0#64))) (buf.toNat + 8) (sdData_val (0#64)) := by
     rw [hmem3, hmem2']
   refine ⟨⟨σ3, i3, c.steps + 1 + 1 + 1⟩, hsteps, hG3, obs_jr_pc hobs3,
-    obs_jr_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_2,
-    obs_jr_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_2,
+    obs_jr_other' hobs3 Register.x10 (by decide) ha0_2,
+    obs_jr_other' hobs3 Register.x1 (by decide) hra_2,
     obs_jr_minstret hobs3, hi3, ?_, hout3.trans hout, ?_,
     fun R hR => (frame_jr_v hobs3 R hR).trans
       ((frame_store_v hobs2 R hR).trans ((frame_store_v hobs1 R hR).trans (hframe R hR)))⟩

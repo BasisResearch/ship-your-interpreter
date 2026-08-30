@@ -2,6 +2,7 @@ import Vsa.Sim.EvalRecCommon
 import Vsa.Sim.EvalNegSim2
 import Vsa.Sim.EvalNegSim3
 import Vsa.Sim.BinHeadSites
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 4 — M4 RECURSIVE case: the two-operand head `blockB_binary`
@@ -332,12 +333,12 @@ theorem blockB_binary
   have hx12_1 : σ1.regs.get? Register.x12 = some aLOp := by
     have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hlpsext] at this
-  have ha0_1 : σ1.regs.get? Register.x10 = some sret := obs_alu_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
-  have hs1_1 : σ1.regs.get? Register.x9 = some sret := obs_alu_other hobs1 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1
-  have hx11_1 : σ1.regs.get? Register.x11 = some aEnv := obs_alu_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11
-  have hx13_1 : σ1.regs.get? Register.x13 = some aEnvReg := obs_alu_other hobs1 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13
-  have hx19_1 : σ1.regs.get? Register.x19 = some v19 := obs_alu_other hobs1 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx19
-  have hsp_1 : σ1.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp
+  have ha0_1 : σ1.regs.get? Register.x10 = some sret := obs_alu_other' hobs1 Register.x10 (by decide) ha0
+  have hs1_1 : σ1.regs.get? Register.x9 = some sret := obs_alu_other' hobs1 Register.x9 (by decide) hs1
+  have hx11_1 : σ1.regs.get? Register.x11 = some aEnv := obs_alu_other' hobs1 Register.x11 (by decide) hx11
+  have hx13_1 : σ1.regs.get? Register.x13 = some aEnvReg := obs_alu_other' hobs1 Register.x13 (by decide) hx13
+  have hx19_1 : σ1.regs.get? Register.x19 = some v19 := obs_alu_other' hobs1 Register.x19 (by decide) hx19
+  have hsp_1 : σ1.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other' hobs1 Register.x2 (by decide) hsp
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hout1 : σ1.sailOutput = out0 := by rw [hobs1.out, sailOutput_sigmaPost_alu]; exact hout
   have hcode1 : Eval_exprLoaded σ1.mem := by rw [hmem1e]; exact hcode
@@ -354,12 +355,12 @@ theorem blockB_binary
     spill_addr sp (0x078#12) 968 (by decide) (by omega) hsp1088'
   have ha0_2 : σ2.regs.get? Register.x10 = some ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)) :=
     obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
-  have hs1_2 : σ2.regs.get? Register.x9 = some sret := obs_alu_other hobs2 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1_1
-  have hx11_2 : σ2.regs.get? Register.x11 = some aEnv := obs_alu_other hobs2 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_1
-  have hx12_2 : σ2.regs.get? Register.x12 = some aLOp := obs_alu_other hobs2 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_1
-  have hx13_2 : σ2.regs.get? Register.x13 = some aEnvReg := obs_alu_other hobs2 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_1
-  have hx19_2 : σ2.regs.get? Register.x19 = some v19 := obs_alu_other hobs2 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx19_1
-  have hsp_2 : σ2.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other hobs2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_1
+  have hs1_2 : σ2.regs.get? Register.x9 = some sret := obs_alu_other' hobs2 Register.x9 (by decide) hs1_1
+  have hx11_2 : σ2.regs.get? Register.x11 = some aEnv := obs_alu_other' hobs2 Register.x11 (by decide) hx11_1
+  have hx12_2 : σ2.regs.get? Register.x12 = some aLOp := obs_alu_other' hobs2 Register.x12 (by decide) hx12_1
+  have hx13_2 : σ2.regs.get? Register.x13 = some aEnvReg := obs_alu_other' hobs2 Register.x13 (by decide) hx13_1
+  have hx19_2 : σ2.regs.get? Register.x19 = some v19 := obs_alu_other' hobs2 Register.x19 (by decide) hx19_1
+  have hsp_2 : σ2.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other' hobs2 Register.x2 (by decide) hsp_1
   obtain ⟨vmi2, hmi2⟩ := obs_alu_minstret hobs2
   have hout2 : σ2.sailOutput = out0 := by rw [hobs2.out, sailOutput_sigmaPost_alu]; exact hout1
   have hcode2 : Eval_exprLoaded σ2.mem := by rw [hmem2e]; exact hcode
@@ -382,12 +383,12 @@ theorem blockB_binary
   have hpc3 : σ3.regs.get? Register.PC = some (0x800034f4#64) := by
     have := obs_store_pc_val hobs3
     rwa [show BitVec.addInt (0x800034f0#64) 4 = (0x800034f4#64 : BitVec 64) from by decide] at this
-  have ha0_3 := obs_store_other_val hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_2
-  have hs1_3 := obs_store_other_val hobs3 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1_2
-  have hx11_3 := obs_store_other_val hobs3 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_2
-  have hx12_3 := obs_store_other_val hobs3 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_2
-  have hx13_3 := obs_store_other_val hobs3 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_2
-  have hsp_3 := obs_store_other_val hobs3 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_2
+  have ha0_3 := obs_store_other_val' hobs3 Register.x10 (by decide) ha0_2
+  have hs1_3 := obs_store_other_val' hobs3 Register.x9 (by decide) hs1_2
+  have hx11_3 := obs_store_other_val' hobs3 Register.x11 (by decide) hx11_2
+  have hx12_3 := obs_store_other_val' hobs3 Register.x12 (by decide) hx12_2
+  have hx13_3 := obs_store_other_val' hobs3 Register.x13 (by decide) hx13_2
+  have hsp_3 := obs_store_other_val' hobs3 Register.x2 (by decide) hsp_2
   obtain ⟨vmi3, hmi3⟩ := obs_store_minstret_val hobs3
   have hout3 : σ3.sailOutput = out0 := by rw [hobs3.out, sailOutput_sigmaPost_store]; exact hout2
   have hcode3 : Eval_exprLoaded σ3.mem := by
@@ -408,11 +409,11 @@ theorem blockB_binary
   have hpc4 : σ4.regs.get? Register.PC = some (0x800034f8#64) := by
     have := obs_store_pc_val hobs4
     rwa [show BitVec.addInt (0x800034f4#64) 4 = (0x800034f8#64 : BitVec 64) from by decide] at this
-  have ha0_4 := obs_store_other_val hobs4 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_3
-  have hs1_4 := obs_store_other_val hobs4 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1_3
-  have hx11_4 := obs_store_other_val hobs4 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_3
-  have hx12_4 := obs_store_other_val hobs4 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_3
-  have hsp_4 := obs_store_other_val hobs4 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_3
+  have ha0_4 := obs_store_other_val' hobs4 Register.x10 (by decide) ha0_3
+  have hs1_4 := obs_store_other_val' hobs4 Register.x9 (by decide) hs1_3
+  have hx11_4 := obs_store_other_val' hobs4 Register.x11 (by decide) hx11_3
+  have hx12_4 := obs_store_other_val' hobs4 Register.x12 (by decide) hx12_3
+  have hsp_4 := obs_store_other_val' hobs4 Register.x2 (by decide) hsp_3
   obtain ⟨vmi4, hmi4⟩ := obs_store_minstret_val hobs4
   have hout4 : σ4.sailOutput = out0 := by rw [hobs4.out, sailOutput_sigmaPost_store]; exact hout3
   have hcodema : Eval_exprLoaded ma := by rw [← hmem3e]; exact hcode3

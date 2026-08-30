@@ -3,6 +3,7 @@ import Vsa.Sim.ValueEqualSites3
 import Vsa.Sim.StrcmpSpecW4
 import Vsa.Sim.ValueSpec
 import Vsa.Sim.EnvDefSpec2
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 3 — total-correctness spec for the `str`-`str` handler of `value_equal`
@@ -450,9 +451,9 @@ theorem ve_str_reaches_result
   have ha1_1 : σ1.regs.get? Register.x11 = some (BitVec.ofNat 64 pb') := by
     have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
     rw [this, ld_sext_ofNat d0 d1 d2 d3 d4 d5 d6 d7 pb' hdrec]
-  have ha0_1 := obs_alu_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
-  have hra_1 := obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra
-  have hsp_1 := obs_alu_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp
+  have ha0_1 := obs_alu_other' hobs1 Register.x10 (by decide) ha0
+  have hra_1 := obs_alu_other' hobs1 Register.x1 (by decide) hra
+  have hsp_1 := obs_alu_other' hobs1 Register.x2 (by decide) hsp
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hframestr : ∀ R : Register, NotWrittenVEStr R → σ.regs.get? R = g R :=
     fun R hR => hframe R (notWrittenVE_of_str hR)
@@ -473,9 +474,9 @@ theorem ve_str_reaches_result
   have ha0_2 : σ2.regs.get? Register.x10 = some (BitVec.ofNat 64 pa') := by
     have := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
     rw [this, ld_sext_ofNat a0 a1 a2 a3 a4 a5 a6 a7 pa' harec]
-  have ha1_2 := obs_alu_other hobs2 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_1
-  have hra_2 := obs_alu_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_1
-  have hsp_2 := obs_alu_other hobs2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_1
+  have ha1_2 := obs_alu_other' hobs2 Register.x11 (by decide) ha1_1
+  have hra_2 := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
+  have hsp_2 := obs_alu_other' hobs2 Register.x2 (by decide) hsp_1
   obtain ⟨vmi2, hmi2⟩ := obs_alu_minstret hobs2
   have hframe2 : ∀ R : Register, NotWrittenVEStr R → σ2.regs.get? R = g R := fun R hR =>
     (frame_alu_vestr hobs2 R hR hR.2.2.2.2.2.1).trans (hframe1 R hR)
@@ -489,9 +490,9 @@ theorem ve_str_reaches_result
   have hsp_3 : σ3.regs.get? Register.x2 = some (sp - 16#64) := by
     have := obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [ve_sp_sub16 sp] at this
-  have ha0_3 := obs_alu_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_2
-  have ha1_3 := obs_alu_other hobs3 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_2
-  have hra_3 := obs_alu_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_2
+  have ha0_3 := obs_alu_other' hobs3 Register.x10 (by decide) ha0_2
+  have ha1_3 := obs_alu_other' hobs3 Register.x11 (by decide) ha1_2
+  have hra_3 := obs_alu_other' hobs3 Register.x1 (by decide) hra_2
   obtain ⟨vmi3, hmi3⟩ := obs_alu_minstret hobs3
   have hframe3 : ∀ R : Register, NotWrittenVEStr R → σ3.regs.get? R = g R := fun R hR =>
     (frame_alu_vestr hobs3 R hR hR.2.1).trans (hframe2 R hR)
@@ -510,10 +511,10 @@ theorem ve_str_reaches_result
   have hpc4 : σ4.regs.get? Register.PC = some (0x800028d4#64 : BitVec 64) := by
     have := obs_store_pc hobs4
     rwa [show BitVec.addInt (0x800028d0#64) 4 = (0x800028d4#64 : BitVec 64) from by decide] at this
-  have hsp_4 := obs_store_other hobs4 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_3
-  have ha0_4 := obs_store_other hobs4 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_3
-  have ha1_4 := obs_store_other hobs4 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha1_3
-  have hra_4 := obs_store_other hobs4 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_3
+  have hsp_4 := obs_store_other' hobs4 Register.x2 (by decide) hsp_3
+  have ha0_4 := obs_store_other' hobs4 Register.x10 (by decide) ha0_3
+  have ha1_4 := obs_store_other' hobs4 Register.x11 (by decide) ha1_3
+  have hra_4 := obs_store_other' hobs4 Register.x1 (by decide) hra_3
   obtain ⟨vmi4, hmi4⟩ := obs_store_minstret hobs4
   -- σ4.mem = writeMap8 m0 (spn+8) r  (=: m1, the spilled memory)
   have hmem4' : σ4.mem = writeMap8 m0 ((sp - 16#64).toNat + 8) (sdData_val r) := by

@@ -1,5 +1,6 @@
 import Vsa.Sim.DivLoops
 import Vsa.Sim.DivSites2
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 3 — total-correctness specs for the signed/remainder division wrappers
@@ -113,13 +114,13 @@ theorem umoddi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
     have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [addi0 r] at this
   have hx10_1 : σ1.regs.get? Register.x10 = some n :=
-    obs_alu_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hn
+    obs_alu_other' hobs1 Register.x10 (by decide) hn
   have hx11_1 : σ1.regs.get? Register.x11 = some d :=
-    obs_alu_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hd
+    obs_alu_other' hobs1 Register.x11 (by decide) hd
   have hx12_1 : σ1.regs.get? Register.x12 = some v12 :=
-    obs_alu_other hobs1 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h12
+    obs_alu_other' hobs1 Register.x12 (by decide) h12
   have hx13_1 : σ1.regs.get? Register.x13 = some v13 :=
-    obs_alu_other hobs1 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) h13
+    obs_alu_other' hobs1 Register.x13 (by decide) h13
   obtain ⟨vmi1, hmi1v⟩ := obs_alu_minstret hobs1
   have hmemq1 : σ1.mem = m0 := by rw [hmem1]; exact hmem
   -- Step f8: jal core ⇒ x1 := fc, PC := 46ac
@@ -136,15 +137,15 @@ theorem umoddi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
     rwa [show BitVec.addInt (0x800046f8#64 : BitVec 64) 4 = (0x800046fc#64 : BitVec 64) from by
       apply BitVec.eq_of_toNat_eq; decide] at this
   have hx10_2 : σ2.regs.get? Register.x10 = some n :=
-    obs_jal_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_1
+    obs_jal_other' hobs2 Register.x10 (by decide) hx10_1
   have hx11_2 : σ2.regs.get? Register.x11 = some d :=
-    obs_jal_other hobs2 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_1
+    obs_jal_other' hobs2 Register.x11 (by decide) hx11_1
   have hx12_2 : σ2.regs.get? Register.x12 = some v12 :=
-    obs_jal_other hobs2 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_1
+    obs_jal_other' hobs2 Register.x12 (by decide) hx12_1
   have hx13_2 : σ2.regs.get? Register.x13 = some v13 :=
-    obs_jal_other hobs2 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_1
+    obs_jal_other' hobs2 Register.x13 (by decide) hx13_1
   have hx5_2 : σ2.regs.get? Register.x5 = some r :=
-    obs_jal_other hobs2 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_1
+    obs_jal_other' hobs2 Register.x5 (by decide) hx5_1
   have hmi2 : ∃ v, σ2.regs.get? Register.minstret = some v := obs_jal_minstret hobs2
   have hmemq2 : σ2.mem = m0 := by rw [hmem2]; exact hmemq1
   -- core entry config: instantiate the ghost with the entry state's own reads,
@@ -177,7 +178,7 @@ theorem umoddi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
     have := obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [addi0 (n % d)] at this
   have hx5_4 : σ4.regs.get? Register.x5 = some r :=
-    obs_alu_other hobs4 Register.x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx5_3
+    obs_alu_other' hobs4 Register.x5 (by decide) hx5_3
   obtain ⟨vmi4, hmi4⟩ := obs_alu_minstret hobs4
   have hmemq4 : σ4.mem = m0 := by rw [hmem4]; exact hmem3
   have huload4 : Vsa.Sim.Code.__umoddi3Loaded σ4.mem := hmemq4 ▸ hmem ▸ huload
@@ -196,6 +197,6 @@ theorem umoddi3_spec (n d r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
   · -- PC = r
     rw [obs_jr_pc hobs5, ret_tgt r halign]
   · -- x10 = n % d (preserved through jr)
-    exact obs_jr_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_4
+    exact obs_jr_other' hobs5 Register.x10 (by decide) hx10_4
 
 end Vsa.Sim

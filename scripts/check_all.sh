@@ -39,7 +39,50 @@ fail() { echo "check_all: FAIL: $*" >&2; exit 1; }
 # ---------------------------------------------------------------- (a) build
 if [ "$SKIP_BUILD" -eq 0 ]; then
   echo "== stage a: lake build"
-  lake build || fail "stage a: lake build failed"
+  BUILD_LOG=$(mktemp)
+  lake build 2>&1 | tee "$BUILD_LOG" || fail "stage a: lake build failed"
+  grep -q "Build completed successfully" "$BUILD_LOG" \
+    || fail "stage a: lake build did not complete successfully"
+
+  # -------- stage a2: per-module elab-budget gate (fast-reflection rule 7) --
+  # Parses the per-job durations lake printed for whatever REBUILT in this run
+  # (an edited module always rebuilds in the same run, so regressions are
+  # caught at the commit that introduces them). Ceilings are wall-clock under
+  # parallel load (~2.5-3x isolated `lake env lean`).
+  #   HARD_S : fail the gate  (isolated ~60s+ — a new 30-min-cone file in the making)
+  #   WARN_S : print a warning
+  # Known-heavy modules pending their rewrite wave live in the allowlist file
+  # scripts/elab-budget-allow.txt (one module name per line, comments with #).
+  echo "== stage a2: per-module elab-budget gate"
+  HARD_S="${HARD_S:-180}" WARN_S="${WARN_S:-90}" python3 - "$BUILD_LOG" <<'PYEOF' || fail "stage a2: module(s) over elab budget (raise only with a justification in scripts/elab-budget-allow.txt)"
+import os, re, sys, pathlib
+
+log = pathlib.Path(sys.argv[1]).read_text(errors="replace")
+hard = float(os.environ["HARD_S"]); warn = float(os.environ["WARN_S"])
+allow = set()
+ap = pathlib.Path("scripts/elab-budget-allow.txt")
+if ap.exists():
+    for line in ap.read_text().splitlines():
+        line = line.split("#")[0].strip()
+        if line: allow.add(line)
+
+viol, warned = [], []
+for m in re.finditer(r"Built (\S+) \((\d+(?:\.\d+)?)(m?s)\)", log):
+    mod, val, unit = m.group(1), float(m.group(2)), m.group(3)
+    secs = val / 1000 if unit == "ms" else val
+    if mod in allow: continue
+    if secs >= hard: viol.append((secs, mod))
+    elif secs >= warn: warned.append((secs, mod))
+
+for s, mod in sorted(warned, reverse=True):
+    print(f"  WARN  {s:7.1f}s  {mod}")
+for s, mod in sorted(viol, reverse=True):
+    print(f"  OVER  {s:7.1f}s  {mod}  (hard ceiling {hard:.0f}s)")
+print(f"  gate: {len(viol)} over / {len(warned)} warned "
+      f"(ceilings: hard {hard:.0f}s, warn {warn:.0f}s, parallel-load wall)")
+sys.exit(1 if viol else 0)
+PYEOF
+  rm -f "$BUILD_LOG"
 else
   echo "== stage a: lake build SKIPPED (--skip-build)"
 fi

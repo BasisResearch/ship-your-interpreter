@@ -5,6 +5,7 @@ import Vsa.Sim.DecodeTable.Batch06Part31
 import Vsa.Sim.DecodeTable.Batch06Part28
 import Vsa.Sim.DecodeTable.Batch05Part16
 import Vsa.Sim.DecodeTable.Batch01Part21
+import Vsa.Sim.ObsAvoid
 
 /-!
 # M3 Layer-3 — `SnprintfSpec10` : the `__ssprint_r` entry save-block + empty-flush
@@ -187,13 +188,13 @@ theorem ssprintHeadEmpty_spec
     rwa [ve_sext_reassemble (0#64)] at this
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hx1_1 : σ1.regs.get? Register.x1 = some vra :=
-    obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1
+    obs_alu_other' hobs1 Register.x1 (by decide) hx1
   have hx2_1 : σ1.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2
+    obs_alu_other' hobs1 Register.x2 (by decide) hx2
   have hx9_1 : σ1.regs.get? Register.x9 = some vsink :=
-    obs_alu_other hobs1 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx9
+    obs_alu_other' hobs1 Register.x9 (by decide) hx9
   have hx12_1 : σ1.regs.get? Register.x12 = some vsink :=
-    obs_alu_other hobs1 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12
+    obs_alu_other' hobs1 Register.x12 (by decide) hx12
   have hload1 : __ssprint_rLoaded σ1.mem := hmem1 ▸ hload
   -- === 8000e90c: addi sp,sp,-64  ⇒  x2 := vsp - 64 ===
   obtain ⟨hc0, hc1, hc2, hc3⟩ := Vsa.Sim.Code.__ssprint_r_at_8000e90c hload1
@@ -230,13 +231,13 @@ theorem ssprintHeadEmpty_spec
     obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
   obtain ⟨vmi2, hmi2⟩ := obs_alu_minstret hobs2
   have hx1_2 : σ2.regs.get? Register.x1 = some vra :=
-    obs_alu_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_1
+    obs_alu_other' hobs2 Register.x1 (by decide) hx1_1
   have hx9_2 : σ2.regs.get? Register.x9 = some vsink :=
-    obs_alu_other hobs2 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx9_1
+    obs_alu_other' hobs2 Register.x9 (by decide) hx9_1
   have hx12_2 : σ2.regs.get? Register.x12 = some vsink :=
-    obs_alu_other hobs2 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_1
+    obs_alu_other' hobs2 Register.x12 (by decide) hx12_1
   have hx14_2 : σ2.regs.get? Register.x14 = some (0#64) :=
-    obs_alu_other hobs2 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_1
+    obs_alu_other' hobs2 Register.x14 (by decide) hx14_1
   have hload2 : __ssprint_rLoaded σ2.mem := hmem2 ▸ hload1
   -- === 8000e910: sd s1,40(sp)  (spill caller s1 = vsink at nsp+40) ===
   -- abbreviate the new stack pointer (no Mathlib `set`)
@@ -273,15 +274,15 @@ theorem ssprintHeadEmpty_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi3, hmi3⟩ := obs_store_minstret_sn4 hobs3
   have hx1_3 : σ3.regs.get? Register.x1 = some vra :=
-    obs_store_other_sn4 Register.x1 hobs3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_2
+    obs_store_other_sn4' Register.x1 hobs3 (by decide) hx1_2
   have hx2_3 : σ3.regs.get? Register.x2 = some nsp :=
-    obs_store_other_sn4 Register.x2 hobs3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_2
+    obs_store_other_sn4' Register.x2 hobs3 (by decide) hx2_2
   have hx9_3 : σ3.regs.get? Register.x9 = some vsink :=
-    obs_store_other_sn4 Register.x9 hobs3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx9_2
+    obs_store_other_sn4' Register.x9 hobs3 (by decide) hx9_2
   have hx12_3 : σ3.regs.get? Register.x12 = some vsink :=
-    obs_store_other_sn4 Register.x12 hobs3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_2
+    obs_store_other_sn4' Register.x12 hobs3 (by decide) hx12_2
   have hx14_3 : σ3.regs.get? Register.x14 = some (0#64) :=
-    obs_store_other_sn4 Register.x14 hobs3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_2
+    obs_store_other_sn4' Register.x14 hobs3 (by decide) hx14_2
   have hNP2 : (afterNextPC (afterPrelude σ2) (0x8000e910#64)).mem = σ2.mem := rfl
   have hload3 : __ssprint_rLoaded σ3.mem := by
     rw [hmem3, hNP2]
@@ -322,15 +323,15 @@ theorem ssprintHeadEmpty_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi4, hmi4⟩ := obs_store_minstret_sn4 hobs4
   have hx1_4 : σ4.regs.get? Register.x1 = some vra :=
-    obs_store_other_sn4 Register.x1 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_3
+    obs_store_other_sn4' Register.x1 hobs4 (by decide) hx1_3
   have hx2_4 : σ4.regs.get? Register.x2 = some nsp :=
-    obs_store_other_sn4 Register.x2 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_3
+    obs_store_other_sn4' Register.x2 hobs4 (by decide) hx2_3
   have hx9_4 : σ4.regs.get? Register.x9 = some vsink :=
-    obs_store_other_sn4 Register.x9 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx9_3
+    obs_store_other_sn4' Register.x9 hobs4 (by decide) hx9_3
   have hx12_4 : σ4.regs.get? Register.x12 = some vsink :=
-    obs_store_other_sn4 Register.x12 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_3
+    obs_store_other_sn4' Register.x12 hobs4 (by decide) hx12_3
   have hx14_4 : σ4.regs.get? Register.x14 = some (0#64) :=
-    obs_store_other_sn4 Register.x14 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_3
+    obs_store_other_sn4' Register.x14 hobs4 (by decide) hx14_3
   have hNP3 : (afterNextPC (afterPrelude σ3) (0x8000e914#64)).mem = σ3.mem := rfl
   have hload4 : __ssprint_rLoaded σ4.mem := by
     rw [hmem4, hNP3]
@@ -377,11 +378,11 @@ theorem ssprintHeadEmpty_spec
     rwa [hmv0] at this
   obtain ⟨vmi5, hmi5⟩ := obs_alu_minstret hobs5
   have hx1_5 : σ5.regs.get? Register.x1 = some vra :=
-    obs_alu_other hobs5 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_4
+    obs_alu_other' hobs5 Register.x1 (by decide) hx1_4
   have hx2_5 : σ5.regs.get? Register.x2 = some nsp :=
-    obs_alu_other hobs5 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_4
+    obs_alu_other' hobs5 Register.x2 (by decide) hx2_4
   have hx14_5 : σ5.regs.get? Register.x14 = some (0#64) :=
-    obs_alu_other hobs5 Register.x14 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx14_4
+    obs_alu_other' hobs5 Register.x14 (by decide) hx14_4
   have hload5 : __ssprint_rLoaded σ5.mem := hmem5 ▸ hload4
   have hslotRA5 : SlotHolds nsp 0x038 vra σ5.mem := hmem5 ▸ hslotRA
   have hslotS15 : SlotHolds nsp 0x028 vsink σ5.mem := hmem5 ▸ hslotS1'
@@ -417,11 +418,11 @@ theorem ssprintHeadEmpty_spec
       = (0x8000e9b0#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi6, hmi6⟩ := obs_branch_taken_minstret hobs6
   have hx1_6 : σ6.regs.get? Register.x1 = some vra :=
-    obs_branch_taken_other hobs6 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx1_5
+    obs_branch_taken_other' hobs6 Register.x1 (by decide) hx1_5
   have hx2_6 : σ6.regs.get? Register.x2 = some nsp :=
-    obs_branch_taken_other hobs6 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_5
+    obs_branch_taken_other' hobs6 Register.x2 (by decide) hx2_5
   have hx9_6 : σ6.regs.get? Register.x9 = some vsink :=
-    obs_branch_taken_other hobs6 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx9_5
+    obs_branch_taken_other' hobs6 Register.x9 (by decide) hx9_5
   have hload6 : __ssprint_rLoaded σ6.mem := hmem6 ▸ hload5
   have hslotRA6 : SlotHolds nsp 0x038 vra σ6.mem := hmem6 ▸ hslotRA5
   have hslotS16 : SlotHolds nsp 0x028 vsink σ6.mem := hmem6 ▸ hslotS15

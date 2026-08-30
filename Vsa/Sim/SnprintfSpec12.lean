@@ -9,6 +9,7 @@ import Vsa.Sim.DecodeTable.Batch01Part31
 import Vsa.Sim.DecodeTable.Batch01Part09
 import Vsa.Sim.DecodeTable.Batch01Part02
 import Vsa.Sim.DecodeTable.Batch01Part01
+import Vsa.Sim.ObsAvoid
 
 /-!
 # M3 Layer-3 — `SnprintfSpec12` : `%`-format parse-init (width/flags reset) (`_pi`)
@@ -160,9 +161,9 @@ theorem parseInit_spec
     obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hx2_1 : σ1.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2
+    obs_alu_other' hobs1 Register.x2 (by decide) hx2
   have hx22_1 : σ1.regs.get? Register.x22 = some vfmt :=
-    obs_alu_other hobs1 Register.x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx22
+    obs_alu_other' hobs1 Register.x22 (by decide) hx22
   have hload1 : SvfprintfSliceLoaded σ1.mem := hmem1 ▸ hload
   have hfmt1_1 : σ1.mem[(vfmt + sign_extend (m := 64) (0x001#12)).toNat]? = some bfmt1 := hmem1 ▸ hfmt1
   -- === 7770: lbu x24,1(x22)  ⇒  x24 := zext bfmt1 ===
@@ -192,9 +193,9 @@ theorem parseInit_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi2, hmi2⟩ := obs_alu_minstret hobs2
   have hx2_2 : σ2.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_1
+    obs_alu_other' hobs2 Register.x2 (by decide) hx2_1
   have hx15_2 : σ2.regs.get? Register.x15 = some (vfmt + sign_extend (m := 64) (0x001#12)) :=
-    obs_alu_other hobs2 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_1
+    obs_alu_other' hobs2 Register.x15 (by decide) hx15_1
   have hload2 : SvfprintfSliceLoaded σ2.mem := hmem2 ▸ hload1
   -- === 7774: sb x0,167(sp)  ⇒  mem[sp+167] := 0 ===
   obtain ⟨hd0, hd1, hd2, hd3⟩ := Vsa.Sim.Code.svfprintfSlice_at_80007774 hload2
@@ -222,9 +223,9 @@ theorem parseInit_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi3, hmi3⟩ := obs_store_minstret_sn4 hobs3
   have hx2_3 : σ3.regs.get? Register.x2 = some vsp :=
-    obs_store_other_sn4 Register.x2 hobs3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_2
+    obs_store_other_sn4' Register.x2 hobs3 (by decide) hx2_2
   have hx15_3 : σ3.regs.get? Register.x15 = some (vfmt + sign_extend (m := 64) (0x001#12)) :=
-    obs_store_other_sn4 Register.x15 hobs3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_2
+    obs_store_other_sn4' Register.x15 hobs3 (by decide) hx15_2
   have hmem3' : σ3.mem = σ2.mem.insert (vsp + sign_extend (m := 64) (0x0a7#12)).toNat (stData 1 (0#64)) := by
     rw [hmem3]
   have hload3 : SvfprintfSliceLoaded σ3.mem := by
@@ -259,7 +260,7 @@ theorem parseInit_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi4, hmi4⟩ := obs_store_minstret_sn4 hobs4
   have hx2_4 : σ4.regs.get? Register.x2 = some vsp :=
-    obs_store_other_sn4 Register.x2 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_3
+    obs_store_other_sn4' Register.x2 hobs4 (by decide) hx2_3
   have hmem4' : σ4.mem = writeMap8 σ3.mem (vsp + sign_extend (m := 64) (0x000#12)).toNat
       (sdData_val (vfmt + sign_extend (m := 64) (0x001#12))) := by
     rw [hmem4]
@@ -294,7 +295,7 @@ theorem parseInit_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi5, hmi5⟩ := obs_alu_minstret hobs5
   have hx2_5 : σ5.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs5 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_4
+    obs_alu_other' hobs5 Register.x2 (by decide) hx2_4
   have hload5 : SvfprintfSliceLoaded σ5.mem := hmem5 ▸ hload4
   -- === 7780: addi x6,x0,0  ⇒  x6 := 0  (FLAGS word reset) ===
   obtain ⟨hg0, hg1, hg2, hg3⟩ := Vsa.Sim.Code.svfprintfSlice_at_80007780 hload5
@@ -325,9 +326,9 @@ theorem parseInit_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi6, hmi6⟩ := obs_alu_minstret hobs6
   have hx2_6 : σ6.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs6 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_5
+    obs_alu_other' hobs6 Register.x2 (by decide) hx2_5
   have hx20_6 : σ6.regs.get? Register.x20 = some ((0#64) - (0x1#64)) :=
-    obs_alu_other hobs6 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_5
+    obs_alu_other' hobs6 Register.x20 (by decide) hx20_5
   have hload6 : SvfprintfSliceLoaded σ6.mem := hmem6 ▸ hload5
   -- === 7784: addi x26,x0,90  ⇒  x26 := 90 ===
   obtain ⟨hh0, hh1, hh2, hh3⟩ := Vsa.Sim.Code.svfprintfSlice_at_80007784 hload6
@@ -354,11 +355,11 @@ theorem parseInit_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi7, hmi7⟩ := obs_alu_minstret hobs7
   have hx2_7 : σ7.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs7 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_6
+    obs_alu_other' hobs7 Register.x2 (by decide) hx2_6
   have hx20_7 : σ7.regs.get? Register.x20 = some ((0#64) - (0x1#64)) :=
-    obs_alu_other hobs7 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_6
+    obs_alu_other' hobs7 Register.x20 (by decide) hx20_6
   have hx6_7 : σ7.regs.get? Register.x6 = some (0#64) :=
-    obs_alu_other hobs7 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_6
+    obs_alu_other' hobs7 Register.x6 (by decide) hx6_6
   have hload7 : SvfprintfSliceLoaded σ7.mem := hmem7 ▸ hload6
   -- === 7788: auipc x22,0x13000  ⇒  x22 := pc + 0x13000 = 0x8001a788 ===
   obtain ⟨hj0, hj1, hj2, hj3⟩ := Vsa.Sim.Code.svfprintfSlice_at_80007788 hload7
@@ -391,11 +392,11 @@ theorem parseInit_spec
     obs_alu_rd hobs8 (by decide) (by decide) (by decide) (by decide) (by decide)
   obtain ⟨vmi8, hmi8⟩ := obs_alu_minstret hobs8
   have hx2_8 : σ8.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs8 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_7
+    obs_alu_other' hobs8 Register.x2 (by decide) hx2_7
   have hx20_8 : σ8.regs.get? Register.x20 = some ((0#64) - (0x1#64)) :=
-    obs_alu_other hobs8 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_7
+    obs_alu_other' hobs8 Register.x20 (by decide) hx20_7
   have hx6_8 : σ8.regs.get? Register.x6 = some (0#64) :=
-    obs_alu_other hobs8 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_7
+    obs_alu_other' hobs8 Register.x6 (by decide) hx6_7
   have hload8 : SvfprintfSliceLoaded σ8.mem := hmem8 ▸ hload7
   -- === 778c: addi x22,x22,-1676  ⇒  x22 := jump-table base 0x8001a0fc ===
   obtain ⟨hk0, hk1, hk2, hk3⟩ := Vsa.Sim.Code.svfprintfSlice_at_8000778c hload8
@@ -431,11 +432,11 @@ theorem parseInit_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi9, hmi9⟩ := obs_alu_minstret hobs9
   have hx2_9 : σ9.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs9 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_8
+    obs_alu_other' hobs9 Register.x2 (by decide) hx2_8
   have hx20_9 : σ9.regs.get? Register.x20 = some ((0#64) - (0x1#64)) :=
-    obs_alu_other hobs9 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_8
+    obs_alu_other' hobs9 Register.x20 (by decide) hx20_8
   have hx6_9 : σ9.regs.get? Register.x6 = some (0#64) :=
-    obs_alu_other hobs9 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_8
+    obs_alu_other' hobs9 Register.x6 (by decide) hx6_8
   have hload9 : SvfprintfSliceLoaded σ9.mem := hmem9 ▸ hload8
   -- === 7790: addi x27,x0,0  ⇒  x27 := 0 ===
   obtain ⟨hl0, hl1, hl2, hl3⟩ := Vsa.Sim.Code.svfprintfSlice_at_80007790 hload9
@@ -463,20 +464,20 @@ theorem parseInit_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi10, hmi10⟩ := obs_alu_minstret hobs10
   have hx2_10 : σ10.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs10 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_9
+    obs_alu_other' hobs10 Register.x2 (by decide) hx2_9
   have hx15_10 : σ10.regs.get? Register.x15 = some (vfmt + sign_extend (m := 64) (0x001#12)) := by
     -- x15 has not been touched since step 2 (only stores/other-rd writes between)
-    have e2 := obs_store_other_sn4 Register.x15 hobs4 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx15_3
-    have e5 := obs_alu_other hobs5 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) e2
-    have e6 := obs_alu_other hobs6 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) e5
-    have e7 := obs_alu_other hobs7 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) e6
-    have e8 := obs_alu_other hobs8 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) e7
-    have e9 := obs_alu_other hobs9 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) e8
-    exact obs_alu_other hobs10 Register.x15 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) e9
+    have e2 := obs_store_other_sn4' Register.x15 hobs4 (by decide) hx15_3
+    have e5 := obs_alu_other' hobs5 Register.x15 (by decide) e2
+    have e6 := obs_alu_other' hobs6 Register.x15 (by decide) e5
+    have e7 := obs_alu_other' hobs7 Register.x15 (by decide) e6
+    have e8 := obs_alu_other' hobs8 Register.x15 (by decide) e7
+    have e9 := obs_alu_other' hobs9 Register.x15 (by decide) e8
+    exact obs_alu_other' hobs10 Register.x15 (by decide) e9
   have hx20_10 : σ10.regs.get? Register.x20 = some ((0#64) - (0x1#64)) :=
-    obs_alu_other hobs10 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_9
+    obs_alu_other' hobs10 Register.x20 (by decide) hx20_9
   have hx6_10 : σ10.regs.get? Register.x6 = some (0#64) :=
-    obs_alu_other hobs10 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_9
+    obs_alu_other' hobs10 Register.x6 (by decide) hx6_9
   have hload10 : SvfprintfSliceLoaded σ10.mem := hmem10 ▸ hload9
   -- === 7794: addi x25,x15,0  ⇒  x25 := fmt+1  (final step; falls through to 7798) ===
   obtain ⟨hn0, hn1, hn2, hn3⟩ := Vsa.Sim.Code.svfprintfSlice_at_80007794 hload10
@@ -510,11 +511,11 @@ theorem parseInit_spec
       apply BitVec.eq_of_toNat_eq; decide] at this
   obtain ⟨vmi11, hmi11⟩ := obs_alu_minstret hobs11
   have hx2_11 : σ11.regs.get? Register.x2 = some vsp :=
-    obs_alu_other hobs11 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx2_10
+    obs_alu_other' hobs11 Register.x2 (by decide) hx2_10
   have hx20_11 : σ11.regs.get? Register.x20 = some ((0#64) - (0x1#64)) :=
-    obs_alu_other hobs11 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx20_10
+    obs_alu_other' hobs11 Register.x20 (by decide) hx20_10
   have hx6_11 : σ11.regs.get? Register.x6 = some (0#64) :=
-    obs_alu_other hobs11 Register.x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx6_10
+    obs_alu_other' hobs11 Register.x6 (by decide) hx6_10
   -- === assemble the Steps chain ===
   refine ⟨⟨σ11, i11, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩, ?_, hG11, hpc11, hx2_11,
     hx20_11, hx6_11, hi11, ⟨vmi11, hmi11⟩⟩

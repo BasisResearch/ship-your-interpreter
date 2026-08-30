@@ -1,4 +1,5 @@
 import Vsa.Sim.ExecExprRet
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 4 — M4 statement RECURSION multiplier: `armTail_rec_es`
@@ -465,12 +466,12 @@ theorem execExprGlue
   have hx12_1 : σ1.regs.get? Register.x12 = some aOperand := by
     have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [hpsext] at this
-  have hsp_1 : σ1.regs.get? Register.x2 = some (sp - 176#64) := obs_alu_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp
-  have hx19_1 : σ1.regs.get? Register.x19 = some aEnv := obs_alu_other hobs1 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx19
-  have hx9_1 : σ1.regs.get? Register.x9 = some aInterp := obs_alu_other hobs1 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx9
-  have hx8_1 : σ1.regs.get? Register.x8 = some aStmt := obs_alu_other hobs1 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8
-  have hx18_1 : σ1.regs.get? Register.x18 = some aRet := obs_alu_other hobs1 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18
-  have hra_1 : σ1.regs.get? Register.x1 = some r := obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra
+  have hsp_1 : σ1.regs.get? Register.x2 = some (sp - 176#64) := obs_alu_other' hobs1 Register.x2 (by decide) hsp
+  have hx19_1 : σ1.regs.get? Register.x19 = some aEnv := obs_alu_other' hobs1 Register.x19 (by decide) hx19
+  have hx9_1 : σ1.regs.get? Register.x9 = some aInterp := obs_alu_other' hobs1 Register.x9 (by decide) hx9
+  have hx8_1 : σ1.regs.get? Register.x8 = some aStmt := obs_alu_other' hobs1 Register.x8 (by decide) hx8
+  have hx18_1 : σ1.regs.get? Register.x18 = some aRet := obs_alu_other' hobs1 Register.x18 (by decide) hx18
+  have hra_1 : σ1.regs.get? Register.x1 = some r := obs_alu_other' hobs1 Register.x1 (by decide) hra
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hout1 : σ1.sailOutput = out0 := by rw [hobs1.out, sailOutput_sigmaPost_alu]; exact hout
   have hcode1 : Exec_stmtLoaded σ1.mem := by rw [hmem1e]; exact hcodeS
@@ -485,13 +486,13 @@ theorem execExprGlue
     rwa [show BitVec.addInt (0x80004174#64) 4 = (0x80004178#64 : BitVec 64) from by decide] at this
   have hx10_2 : σ2.regs.get? Register.x10 = some ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) :=
     obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
-  have hsp_2 : σ2.regs.get? Register.x2 = some (sp - 176#64) := obs_alu_other hobs2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_1
-  have hx19_2 : σ2.regs.get? Register.x19 = some aEnv := obs_alu_other hobs2 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx19_1
-  have hx9_2 : σ2.regs.get? Register.x9 = some aInterp := obs_alu_other hobs2 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx9_1
-  have hx8_2 : σ2.regs.get? Register.x8 = some aStmt := obs_alu_other hobs2 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_1
-  have hx18_2 : σ2.regs.get? Register.x18 = some aRet := obs_alu_other hobs2 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_1
-  have hx12_2 : σ2.regs.get? Register.x12 = some aOperand := obs_alu_other hobs2 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_1
-  have hra_2 : σ2.regs.get? Register.x1 = some r := obs_alu_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_1
+  have hsp_2 : σ2.regs.get? Register.x2 = some (sp - 176#64) := obs_alu_other' hobs2 Register.x2 (by decide) hsp_1
+  have hx19_2 : σ2.regs.get? Register.x19 = some aEnv := obs_alu_other' hobs2 Register.x19 (by decide) hx19_1
+  have hx9_2 : σ2.regs.get? Register.x9 = some aInterp := obs_alu_other' hobs2 Register.x9 (by decide) hx9_1
+  have hx8_2 : σ2.regs.get? Register.x8 = some aStmt := obs_alu_other' hobs2 Register.x8 (by decide) hx8_1
+  have hx18_2 : σ2.regs.get? Register.x18 = some aRet := obs_alu_other' hobs2 Register.x18 (by decide) hx18_1
+  have hx12_2 : σ2.regs.get? Register.x12 = some aOperand := obs_alu_other' hobs2 Register.x12 (by decide) hx12_1
+  have hra_2 : σ2.regs.get? Register.x1 = some r := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
   obtain ⟨vmi2, hmi2⟩ := obs_alu_minstret hobs2
   have hout2 : σ2.sailOutput = out0 := by rw [hobs2.out, sailOutput_sigmaPost_alu]; exact hout1
   have hcode2 : Exec_stmtLoaded σ2.mem := by rw [hmem2e]; exact hcodeS
@@ -504,13 +505,13 @@ theorem execExprGlue
   have hpc3 : σ3.regs.get? Register.PC = some (0x8000417c#64) := by
     have := obs_alu_pc hobs3
     rwa [show BitVec.addInt (0x80004178#64) 4 = (0x8000417c#64 : BitVec 64) from by decide] at this
-  have hsp_3 : σ3.regs.get? Register.x2 = some (sp - 176#64) := obs_alu_other hobs3 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_2
-  have hx9_3 : σ3.regs.get? Register.x9 = some aInterp := obs_alu_other hobs3 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx9_2
-  have hx8_3 : σ3.regs.get? Register.x8 = some aStmt := obs_alu_other hobs3 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_2
-  have hx18_3 : σ3.regs.get? Register.x18 = some aRet := obs_alu_other hobs3 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_2
-  have hx12_3 : σ3.regs.get? Register.x12 = some aOperand := obs_alu_other hobs3 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_2
-  have hx10_3 : σ3.regs.get? Register.x10 = some ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) := obs_alu_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_2
-  have hra_3 : σ3.regs.get? Register.x1 = some r := obs_alu_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_2
+  have hsp_3 : σ3.regs.get? Register.x2 = some (sp - 176#64) := obs_alu_other' hobs3 Register.x2 (by decide) hsp_2
+  have hx9_3 : σ3.regs.get? Register.x9 = some aInterp := obs_alu_other' hobs3 Register.x9 (by decide) hx9_2
+  have hx8_3 : σ3.regs.get? Register.x8 = some aStmt := obs_alu_other' hobs3 Register.x8 (by decide) hx8_2
+  have hx18_3 : σ3.regs.get? Register.x18 = some aRet := obs_alu_other' hobs3 Register.x18 (by decide) hx18_2
+  have hx12_3 : σ3.regs.get? Register.x12 = some aOperand := obs_alu_other' hobs3 Register.x12 (by decide) hx12_2
+  have hx10_3 : σ3.regs.get? Register.x10 = some ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) := obs_alu_other' hobs3 Register.x10 (by decide) hx10_2
+  have hra_3 : σ3.regs.get? Register.x1 = some r := obs_alu_other' hobs3 Register.x1 (by decide) hra_2
   obtain ⟨vmi3, hmi3⟩ := obs_alu_minstret hobs3
   have hout3 : σ3.sailOutput = out0 := by rw [hobs3.out, sailOutput_sigmaPost_alu]; exact hout2
   have hcode3 : Exec_stmtLoaded σ3.mem := by rw [hmem3e]; exact hcodeS
@@ -527,12 +528,12 @@ theorem execExprGlue
     have := obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [show (aInterp + sign_extend (m := 64) (0x000#12)) = aInterp from by
       apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_add]; simp only [show (sign_extend (m := 64) (0x000#12) : BitVec 64).toNat = 0 from by decide]; have := aInterp.isLt; omega] at this
-  have hsp_4 : σ4.regs.get? Register.x2 = some (sp - 176#64) := obs_alu_other hobs4 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_3
-  have hx8_4 : σ4.regs.get? Register.x8 = some aStmt := obs_alu_other hobs4 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_3
-  have hx18_4 : σ4.regs.get? Register.x18 = some aRet := obs_alu_other hobs4 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_3
-  have hx12_4 : σ4.regs.get? Register.x12 = some aOperand := obs_alu_other hobs4 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12_3
-  have hx10_4 : σ4.regs.get? Register.x10 = some ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) := obs_alu_other hobs4 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx10_3
-  have hx9_4 : σ4.regs.get? Register.x9 = some aInterp := obs_alu_other hobs4 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx9_3
+  have hsp_4 : σ4.regs.get? Register.x2 = some (sp - 176#64) := obs_alu_other' hobs4 Register.x2 (by decide) hsp_3
+  have hx8_4 : σ4.regs.get? Register.x8 = some aStmt := obs_alu_other' hobs4 Register.x8 (by decide) hx8_3
+  have hx18_4 : σ4.regs.get? Register.x18 = some aRet := obs_alu_other' hobs4 Register.x18 (by decide) hx18_3
+  have hx12_4 : σ4.regs.get? Register.x12 = some aOperand := obs_alu_other' hobs4 Register.x12 (by decide) hx12_3
+  have hx10_4 : σ4.regs.get? Register.x10 = some ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) := obs_alu_other' hobs4 Register.x10 (by decide) hx10_3
+  have hx9_4 : σ4.regs.get? Register.x9 = some aInterp := obs_alu_other' hobs4 Register.x9 (by decide) hx9_3
   obtain ⟨vmi4, hmi4⟩ := obs_alu_minstret hobs4
   have hout4 : σ4.sailOutput = out0 := by rw [hobs4.out, sailOutput_sigmaPost_alu]; exact hout3
   have hcode4 : Exec_stmtLoaded σ4.mem := by rw [hmem4e]; exact hcodeS

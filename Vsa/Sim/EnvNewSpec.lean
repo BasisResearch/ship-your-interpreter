@@ -5,6 +5,7 @@ import Vsa.Sim.MemcpySpec
 import Vsa.Alloc
 import Vsa.RuntimeRepr
 import Vsa.Triple
+import Vsa.Sim.ObsAvoid
 
 /-!
 # Layer 3 — total-correctness spec for `env_new` (the first malloc-consumer)
@@ -582,9 +583,9 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
   have hsp1 : σ1.regs.get? Register.x2 = some (sp - 16#64) := by
     have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [sp_sub16 sp] at this
-  have ha0_1 := obs_alu_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
-  have hra_1 := obs_alu_other hobs1 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra
-  have hs8e_1 := obs_alu_other hobs1 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8e
+  have ha0_1 := obs_alu_other' hobs1 Register.x10 (by decide) ha0
+  have hra_1 := obs_alu_other' hobs1 Register.x1 (by decide) hra
+  have hs8e_1 := obs_alu_other' hobs1 Register.x8 (by decide) hs8e
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hloaded1 : Env_newLoaded σ1.mem := hmem1 ▸ hloaded
   -- sp_new facts (spn := sp - 16)
@@ -604,10 +605,10 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
   have hpc2 : σ2.regs.get? Register.PC = some (0x80002a04#64 : BitVec 64) := by
     have := obs_store_pc hobs2
     rwa [show BitVec.addInt (0x80002a00#64 : BitVec 64) 4 = (0x80002a04#64 : BitVec 64) from by decide] at this
-  have hsp2 := obs_store_other hobs2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp1
-  have ha0_2 := obs_store_other hobs2 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_1
-  have hra_2 := obs_store_other hobs2 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_1
-  have hs8e_2 := obs_store_other hobs2 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8e_1
+  have hsp2 := obs_store_other' hobs2 Register.x2 (by decide) hsp1
+  have ha0_2 := obs_store_other' hobs2 Register.x10 (by decide) ha0_1
+  have hra_2 := obs_store_other' hobs2 Register.x1 (by decide) hra_1
+  have hs8e_2 := obs_store_other' hobs2 Register.x8 (by decide) hs8e_1
   obtain ⟨vmi2, hmi2⟩ := obs_store_minstret hobs2
   -- σ2.mem = writeMap8 c.σ.mem spn (s0e); reduce afterNextPC mem to σ1.mem = c.σ.mem
   have hmem2' : σ2.mem = writeMap8 c.σ.mem (sp - 16#64).toNat (sdData_val s0e) := by
@@ -623,9 +624,9 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
   have hpc3 : σ3.regs.get? Register.PC = some (0x80002a08#64 : BitVec 64) := by
     have := obs_alu_pc hobs3
     rwa [show BitVec.addInt (0x80002a04#64 : BitVec 64) 4 = (0x80002a08#64 : BitVec 64) from by decide] at this
-  have hsp3 := obs_alu_other hobs3 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp2
-  have ha0_3 := obs_alu_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_2
-  have hra_3 := obs_alu_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_2
+  have hsp3 := obs_alu_other' hobs3 Register.x2 (by decide) hsp2
+  have ha0_3 := obs_alu_other' hobs3 Register.x10 (by decide) ha0_2
+  have hra_3 := obs_alu_other' hobs3 Register.x1 (by decide) hra_2
   have hs8_3 : σ3.regs.get? Register.x8 = some par := by
     have := obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [addi0_env par] at this
@@ -639,9 +640,9 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
   have hpc4 : σ4.regs.get? Register.PC = some (0x80002a0c#64 : BitVec 64) := by
     have := obs_alu_pc hobs4
     rwa [show BitVec.addInt (0x80002a08#64 : BitVec 64) 4 = (0x80002a0c#64 : BitVec 64) from by decide] at this
-  have hsp4 := obs_alu_other hobs4 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp3
-  have hra_4 := obs_alu_other hobs4 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_3
-  have hs8_4 := obs_alu_other hobs4 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8_3
+  have hsp4 := obs_alu_other' hobs4 Register.x2 (by decide) hsp3
+  have hra_4 := obs_alu_other' hobs4 Register.x1 (by decide) hra_3
+  have hs8_4 := obs_alu_other' hobs4 Register.x8 (by decide) hs8_3
   have ha0_4 : σ4.regs.get? Register.x10 = some (32#64) := by
     have := obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [show ((0#64) + sign_extend (m := 64) (0x020#12) : BitVec 64) = 32#64 from by
@@ -661,9 +662,9 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
   have hpc5 : σ5.regs.get? Register.PC = some (0x80002a10#64 : BitVec 64) := by
     have := obs_store_pc hobs5
     rwa [show BitVec.addInt (0x80002a0c#64 : BitVec 64) 4 = (0x80002a10#64 : BitVec 64) from by decide] at this
-  have hsp5 := obs_store_other hobs5 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp4
-  have ha0_5 := obs_store_other hobs5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_4
-  have hs8_5 := obs_store_other hobs5 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8_4
+  have hsp5 := obs_store_other' hobs5 Register.x2 (by decide) hsp4
+  have ha0_5 := obs_store_other' hobs5 Register.x10 (by decide) ha0_4
+  have hs8_5 := obs_store_other' hobs5 Register.x8 (by decide) hs8_4
   obtain ⟨vmi5, hmi5⟩ := obs_store_minstret hobs5
   -- σ5.mem = writeMap8 (writeMap8 m0 spn s0e) (spn+8) r
   have hmem5' : σ5.mem = writeMap8 σ2.mem ((sp - 16#64).toNat + 8) (sdData_val r) := by
@@ -778,10 +779,10 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
   have hpc8 : σ8.regs.get? Register.PC = some (0x80002a18#64 : BitVec 64) := by
     have := obs_bnottaken_pc hobs8
     rwa [show BitVec.addInt (0x80002a14#64 : BitVec 64) 4 = (0x80002a18#64 : BitVec 64) from by decide] at this
-  have ha0_8 := obs_bnottaken_other hobs8 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_7
-  have hsp8 := obs_bnottaken_other hobs8 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp7
-  have hgp8 := obs_bnottaken_other hobs8 Register.x3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hgp7
-  have hs8_8 := obs_bnottaken_other hobs8 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8_7
+  have ha0_8 := obs_bnottaken_other' hobs8 Register.x10 (by decide) ha0_7
+  have hsp8 := obs_bnottaken_other' hobs8 Register.x2 (by decide) hsp7
+  have hgp8 := obs_bnottaken_other' hobs8 Register.x3 (by decide) hgp7
+  have hs8_8 := obs_bnottaken_other' hobs8 Register.x8 (by decide) hs8_7
   obtain ⟨vmi8, hmi8⟩ := obs_bnottaken_minstret hobs8
   have hmem8' : σ8.mem = c7.σ.mem := hmem8
   have hloaded8 : Env_newLoaded σ8.mem := hmem8' ▸ hloaded7
@@ -837,10 +838,10 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
   have hra_9 : σ9.regs.get? Register.x1 = some r := by
     have := obs_alu_rd hobs9 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [sext_reassemble r _ _ _ _ _ _ _ _ rfl rfl rfl rfl rfl rfl rfl rfl] at this
-  have hsp9 := obs_alu_other hobs9 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp8
-  have ha0_9 := obs_alu_other hobs9 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_8
-  have hgp9 := obs_alu_other hobs9 Register.x3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hgp8
-  have hs8_9 := obs_alu_other hobs9 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8_8
+  have hsp9 := obs_alu_other' hobs9 Register.x2 (by decide) hsp8
+  have ha0_9 := obs_alu_other' hobs9 Register.x10 (by decide) ha0_8
+  have hgp9 := obs_alu_other' hobs9 Register.x3 (by decide) hgp8
+  have hs8_9 := obs_alu_other' hobs9 Register.x8 (by decide) hs8_8
   obtain ⟨vmi9, hmi9⟩ := obs_alu_minstret hobs9
   have hmem9' : σ9.mem = σ8.mem := hmem9
   have hloaded9 : Env_newLoaded σ9.mem := hmem9' ▸ hloaded8
@@ -867,10 +868,10 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
   have hpc10 : σ10.regs.get? Register.PC = some (0x80002a20#64 : BitVec 64) := by
     have := obs_store_pc hobs10
     rwa [show BitVec.addInt (0x80002a1c#64 : BitVec 64) 4 = (0x80002a20#64 : BitVec 64) from by decide] at this
-  have hsp10 := obs_store_other hobs10 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp9
-  have ha0_10 := obs_store_other hobs10 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_9p
-  have hra_10 := obs_store_other hobs10 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_9
-  have hgp10 := obs_store_other hobs10 Register.x3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hgp9
+  have hsp10 := obs_store_other' hobs10 Register.x2 (by decide) hsp9
+  have ha0_10 := obs_store_other' hobs10 Register.x10 (by decide) ha0_9p
+  have hra_10 := obs_store_other' hobs10 Register.x1 (by decide) hra_9
+  have hgp10 := obs_store_other' hobs10 Register.x3 (by decide) hgp9
   obtain ⟨vmi10, hmi10⟩ := obs_store_minstret hobs10
   have hmem10' : σ10.mem = writeMap8 σ9.mem (p + 24) (sdData_val par) := by
     rw [hmem10, mem_afterNextPC, hp24]
@@ -923,10 +924,10 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
   have hpc11 : σ11.regs.get? Register.PC = some (0x80002a24#64 : BitVec 64) := by
     have := obs_alu_pc hobs11
     rwa [show BitVec.addInt (0x80002a20#64 : BitVec 64) 4 = (0x80002a24#64 : BitVec 64) from by decide] at this
-  have hsp11 := obs_alu_other hobs11 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp10
-  have ha0_11 := obs_alu_other hobs11 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_10
-  have hra_11 := obs_alu_other hobs11 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_10
-  have hgp11 := obs_alu_other hobs11 Register.x3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hgp10
+  have hsp11 := obs_alu_other' hobs11 Register.x2 (by decide) hsp10
+  have ha0_11 := obs_alu_other' hobs11 Register.x10 (by decide) ha0_10
+  have hra_11 := obs_alu_other' hobs11 Register.x1 (by decide) hra_10
+  have hgp11 := obs_alu_other' hobs11 Register.x3 (by decide) hgp10
   obtain ⟨vmi11, hmi11⟩ := obs_alu_minstret hobs11
   have hmem11' : σ11.mem = σ10.mem := hmem11
   have hloaded11 : Env_newLoaded σ11.mem := hmem11' ▸ hloaded10
@@ -939,10 +940,10 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
   have hpc12 : σ12.regs.get? Register.PC = some (0x80002a28#64 : BitVec 64) := by
     have := obs_store_pc hobs12
     rwa [show BitVec.addInt (0x80002a24#64 : BitVec 64) 4 = (0x80002a28#64 : BitVec 64) from by decide] at this
-  have hsp12 := obs_store_other hobs12 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp11
-  have ha0_12 := obs_store_other hobs12 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_11
-  have hra_12 := obs_store_other hobs12 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_11
-  have hgp12 := obs_store_other hobs12 Register.x3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hgp11
+  have hsp12 := obs_store_other' hobs12 Register.x2 (by decide) hsp11
+  have ha0_12 := obs_store_other' hobs12 Register.x10 (by decide) ha0_11
+  have hra_12 := obs_store_other' hobs12 Register.x1 (by decide) hra_11
+  have hgp12 := obs_store_other' hobs12 Register.x3 (by decide) hgp11
   obtain ⟨vmi12, hmi12⟩ := obs_store_minstret hobs12
   have hmem12' : σ12.mem = writeMap8 σ11.mem p (sdData_val (0#64)) := by
     rw [hmem12, mem_afterNextPC, hp0a]
@@ -959,10 +960,10 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
   have hpc13 : σ13.regs.get? Register.PC = some (0x80002a2c#64 : BitVec 64) := by
     have := obs_store_pc hobs13
     rwa [show BitVec.addInt (0x80002a28#64 : BitVec 64) 4 = (0x80002a2c#64 : BitVec 64) from by decide] at this
-  have hsp13 := obs_store_other hobs13 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp12
-  have ha0_13 := obs_store_other hobs13 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_12
-  have hra_13 := obs_store_other hobs13 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_12
-  have hgp13 := obs_store_other hobs13 Register.x3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hgp12
+  have hsp13 := obs_store_other' hobs13 Register.x2 (by decide) hsp12
+  have ha0_13 := obs_store_other' hobs13 Register.x10 (by decide) ha0_12
+  have hra_13 := obs_store_other' hobs13 Register.x1 (by decide) hra_12
+  have hgp13 := obs_store_other' hobs13 Register.x3 (by decide) hgp12
   obtain ⟨vmi13, hmi13⟩ := obs_store_minstret hobs13
   have hmem13' : σ13.mem = writeMap8 σ12.mem (p + 8) (sdData_val (0#64)) := by
     rw [hmem13, mem_afterNextPC, hp8]
@@ -979,10 +980,10 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
   have hpc14 : σ14.regs.get? Register.PC = some (0x80002a30#64 : BitVec 64) := by
     have := obs_store_pc hobs14
     rwa [show BitVec.addInt (0x80002a2c#64 : BitVec 64) 4 = (0x80002a30#64 : BitVec 64) from by decide] at this
-  have hsp14 := obs_store_other hobs14 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp13
-  have ha0_14 := obs_store_other hobs14 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_13
-  have hra_14 := obs_store_other hobs14 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_13
-  have hgp14 := obs_store_other hobs14 Register.x3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hgp13
+  have hsp14 := obs_store_other' hobs14 Register.x2 (by decide) hsp13
+  have ha0_14 := obs_store_other' hobs14 Register.x10 (by decide) ha0_13
+  have hra_14 := obs_store_other' hobs14 Register.x1 (by decide) hra_13
+  have hgp14 := obs_store_other' hobs14 Register.x3 (by decide) hgp13
   obtain ⟨vmi14, hmi14⟩ := obs_store_minstret hobs14
   have hmem14' : σ14.mem = writeMap8 σ13.mem (p + 16) (sdData_val (0#64)) := by
     rw [hmem14, mem_afterNextPC, hp16']
@@ -1002,9 +1003,9 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
   have hsp15 : σ15.regs.get? Register.x2 = some sp := by
     have := obs_alu_rd hobs15 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [sp_restore sp] at this
-  have ha0_15 := obs_alu_other hobs15 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_14
-  have hra_15 := obs_alu_other hobs15 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_14
-  have hgp15 := obs_alu_other hobs15 Register.x3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hgp14
+  have ha0_15 := obs_alu_other' hobs15 Register.x10 (by decide) ha0_14
+  have hra_15 := obs_alu_other' hobs15 Register.x1 (by decide) hra_14
+  have hgp15 := obs_alu_other' hobs15 Register.x3 (by decide) hgp14
   obtain ⟨vmi15, hmi15⟩ := obs_alu_minstret hobs15
   have hmem15' : σ15.mem = σ14.mem := hmem15
   have hloaded15 : Env_newLoaded σ15.mem := hmem15' ▸ hloaded14
@@ -1019,10 +1020,10 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
   have hpc16 : σ16.regs.get? Register.PC = some r := by
     rw [obs_jr_pc hobs16, ret_tgt r hralign]
   -- lift the returned registers through the final `ret` (jr preserves GPRs)
-  have hsp16 := obs_jr_other hobs16 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp15
-  have hgp16 := obs_jr_other hobs16 Register.x3 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hgp15
-  have hra16 := obs_jr_other hobs16 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_15
-  have ha0_16 := obs_jr_other hobs16 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_15
+  have hsp16 := obs_jr_other' hobs16 Register.x2 (by decide) hsp15
+  have hgp16 := obs_jr_other' hobs16 Register.x3 (by decide) hgp15
+  have hra16 := obs_jr_other' hobs16 Register.x1 (by decide) hra_15
+  have ha0_16 := obs_jr_other' hobs16 Register.x10 (by decide) ha0_15
   -- assemble the whole run
   have hsteps : Steps c ⟨σ16, i16, c7.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩ := by
     refine (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
@@ -1066,11 +1067,11 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
     have hs8_11 : σ11.regs.get? Register.x8 = some s0e := by
       have := obs_alu_rd hobs11 (by decide) (by decide) (by decide) (by decide) (by decide)
       rwa [sext_reassemble s0e _ _ _ _ _ _ _ _ rfl rfl rfl rfl rfl rfl rfl rfl] at this
-    have hs8_12 := obs_store_other hobs12 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8_11
-    have hs8_13 := obs_store_other hobs13 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8_12
-    have hs8_14 := obs_store_other hobs14 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8_13
-    have hs8_15 := obs_alu_other hobs15 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8_14
-    exact obs_jr_other hobs16 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8_15
+    have hs8_12 := obs_store_other' hobs12 Register.x8 (by decide) hs8_11
+    have hs8_13 := obs_store_other' hobs13 Register.x8 (by decide) hs8_12
+    have hs8_14 := obs_store_other' hobs14 Register.x8 (by decide) hs8_13
+    have hs8_15 := obs_alu_other' hobs15 Register.x8 (by decide) hs8_14
+    exact obs_jr_other' hobs16 Register.x8 (by decide) hs8_15
   · -- FrameRepr for the fresh empty frame ⟨parentSpec, []⟩ at p
     refine ⟨?_, ⟨0, ?_, Nat.le_refl 0⟩, ⟨0, 0, ?_, ?_, ?_⟩, ?_⟩
     · -- count: read32 p = 0 = ([] : List _).length
@@ -1156,11 +1157,11 @@ theorem env_new_spec (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom 
       have hs8_11 : σ11.regs.get? Register.x8 = some s0e := by
         have := obs_alu_rd hobs11 (by decide) (by decide) (by decide) (by decide) (by decide)
         rwa [sext_reassemble s0e _ _ _ _ _ _ _ _ rfl rfl rfl rfl rfl rfl rfl rfl] at this
-      have hs8_12 := obs_store_other hobs12 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8_11
-      have hs8_13 := obs_store_other hobs13 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8_12
-      have hs8_14 := obs_store_other hobs14 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8_13
-      have hs8_15 := obs_alu_other hobs15 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8_14
-      have hs8_16 := obs_jr_other hobs16 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs8_15
+      have hs8_12 := obs_store_other' hobs12 Register.x8 (by decide) hs8_11
+      have hs8_13 := obs_store_other' hobs13 Register.x8 (by decide) hs8_12
+      have hs8_14 := obs_store_other' hobs14 Register.x8 (by decide) hs8_13
+      have hs8_15 := obs_alu_other' hobs15 Register.x8 (by decide) hs8_14
+      have hs8_16 := obs_jr_other' hobs16 Register.x8 (by decide) hs8_15
       rw [hs8_16]; exact hs8e.symm
     -- other ABI-preserved R: NotWrittenEnv R holds; thread prefix→σ6 (frame),
     -- malloc σ6→c7 (habi7), suffix c7→σ16 (frame).
