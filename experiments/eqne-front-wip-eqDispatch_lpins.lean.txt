@@ -1,0 +1,52 @@
+import Vsa.Sim.rows.EvalEqNeRow
+import Vsa.Sim.EqNeReprReadback
+import Vsa.Sim.EqNeDispatchStrong
+
+/-!
+# `EvalEqNeFront` — the eq/ne front closure (task 3)
+
+Extract the six source `LPins8` (blocker B's readback inputs) out of the
+`ChainFacts` for the eq/ne dispatch block.
+-/
+
+open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
+open Register
+open Vsa.Machine (MState Config Step Steps)
+open Vsa.Logic
+open Vsa.RuntimeRepr Vsa.MemRepr Vsa.While
+open Vsa.Sim.Code
+
+set_option maxHeartbeats 4000000
+
+namespace Vsa.Sim
+
+/-- Extract the six load `LPins8` out of the eqDispatch `ChainFacts`.  The dispatch
+block issues six `ld`s from `x2+0x78/0x80/0x88/0x90/0x98/0xa0`; each load's
+`MemFacts` component of `ProgFactsM` carries `LPins8 m0 (eaddr) (lds[k])` at the
+constant entry memory `m0` (loads don't write). -/
+theorem eqDispatch_lpins (m0 : Std.ExtHashMap Nat (BitVec 8)) (sp : BitVec 64)
+    (lds : List (List (BitVec 8)))
+    (hfacts : ChainFacts m0 m0 (eqDispL sp) lds eqDispatch) :
+    LPins8 m0 (sp + 0x78#64).toNat (lds.getD 0 []) ∧
+    LPins8 m0 (sp + 0x80#64).toNat (lds.getD 1 []) ∧
+    LPins8 m0 (sp + 0x88#64).toNat (lds.getD 2 []) ∧
+    LPins8 m0 (sp + 0x90#64).toNat (lds.getD 3 []) ∧
+    LPins8 m0 (sp + 0x98#64).toNat (lds.getD 4 []) ∧
+    LPins8 m0 (sp + 0xa0#64).toNat (lds.getD 5 []) := by
+  obtain ⟨⟨hprog, -, -⟩, -⟩ := hfacts
+  -- peel six loads; each MemFacts.2 = LPins8 at the ld's eaddr
+  obtain ⟨-, -, hmf0, hprog⟩ := hprog
+  obtain ⟨-, -, hmf1, hprog⟩ := hprog
+  obtain ⟨-, -, hmf2, hprog⟩ := hprog
+  obtain ⟨-, -, hmf3, hprog⟩ := hprog
+  obtain ⟨-, -, hmf4, hprog⟩ := hprog
+  obtain ⟨-, -, hmf5, hprog⟩ := hprog
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · exact hmf0.2
+  · exact hmf1.2
+  · exact hmf2.2
+  · exact hmf3.2
+  · exact hmf4.2
+  · exact hmf5.2
+
+end Vsa.Sim

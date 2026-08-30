@@ -436,3 +436,15 @@ Cross-cutting: `exprRepr_agreeP`/`stmtRepr_agreeP` (AST-transport), `stmtRepr_ki
    `EvalArgsStep`/the native machine runs — concrete machine work), the M6-Layout geometry, the composed
    `env_define`/`realloc` contract (the biggest gap, gates `Call.closure`/`varDecl`/`assign`).
 3. Then M5 (`stuck_sim`) and M6 (`Layout` + final theorem + axiom audit).
+
+---
+
+## Appendix (2026-08-30): the completion plan
+
+The stack is assembled (`interpSimClosed_of_families L hterm htri hdivFam herrFam : InterpSim L`);
+completion = discharging the four residual bundles, every leaf an instance of the four machine-code
+shapes with the v2 combinator layer complete. The ordered, anchored completion plan (eq/ne wiring →
+ge/mul → M5 error routing → Shape-C loop fan-out → env_define/realloc composition → residual
+unification + recursor assembly → Approx/M6) is `experiments/interp-sim-completion-plan.md`.
+Build-speed campaign results (75→26 min world rebuild, elab-budget gate) are in
+`experiments/build-speed-exponentiation-plan.md`'s results appendix.

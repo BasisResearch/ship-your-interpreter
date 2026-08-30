@@ -326,6 +326,7 @@ import Vsa.Sim.BinopChainInstances
 import Vsa.Sim.ModDispatchStrong
 import Vsa.Sim.EvalModArm
 import Vsa.Sim.EqNeDispatchStrong
+import Vsa.Sim.EqNeReprReadback
 import Vsa.Sim.EvalEqNeArm
 import Vsa.Sim.DivTailSites
 import Vsa.Sim.EvalDivValueTail
