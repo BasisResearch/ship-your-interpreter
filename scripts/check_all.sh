@@ -157,6 +157,11 @@ THEOREMS=(
   # env_get HIT tail + found composition (EnvGetSpec6)
   Vsa.Sim.env_get_hit_tail
   Vsa.Sim.env_get_found_spec
+  # env_get PROLOGUE + full unconditional immediate-frame FOUND case (EnvGetSpec7/8/9)
+  Vsa.Sim.env_get_prologue                        # EnvGetSpec7 (0x80002c10 → scan body entry)
+  "Vsa.Sim.env_get_found_uncond'"                 # EnvGetSpec8 (prologue ≫ scan ≫ repack ≫ hit-tail, modulo hScanReady)
+  Vsa.Sim.foundSt_scanReady                       # EnvGetSpec9 (hScanReady discharged: FrameRepr/ScanNames transport over spills)
+  "Vsa.Sim.env_get_found_uncond''"                # EnvGetSpec9 (FULL immediate-frame FOUND case; only FoundSt + FrameStackDisj honest facts)
   # snprintf %lld pipeline capstones
   Vsa.Sim.decimalLoop_spec                      # SnprintfSpec3
   Vsa.Sim.entryToDigits_spec                    # SnprintfSpec5
@@ -233,6 +238,12 @@ THEOREMS=(
   Vsa.Sim.blockC_ne                             # rows/EvalEqNeRow (thin instantiation of blockC_eqne with the ne site lemmas site_80003770/74/78/7c/80_ee + box constants (ldPC 0x8000377c, jImm 0x1ffc6c), bwOf=seqz, result .bool(!(vl.equal vr)))
   Vsa.Sim.evalEqSim                             # rows/EvalEqNeRow (EvalE.binary .eq, value-generic operands, EvalIH motive shape; blockB_binary≫blockC≫blockD_v_rec; conditional on the blockC bridge residual — operand-copy read-back from the reflected #derive_case dispatch + value_equal sailOutput invariance)
   Vsa.Sim.evalNeSim                             # rows/EvalEqNeRow (EvalE.binary .ne, value-generic; ne clone of evalEqSim, result .bool(!(vl.equal vr)))
+  Vsa.Sim.eqnePreBridge                         # rows/EvalEqNeFront (front: jal value_equal @jalPC → ve_pre @0x8000285c; model divPreBridge; parameterised by jalPC/link so ONE bridge serves eq+ne)
+  Vsa.Sim.veReturnBridge                        # rows/EvalEqNeFront (front: ve_str_post → VeReturn; reconciles x9=sret, eval-frame collapse, MemExtends)
+  Vsa.Sim.blockC_eqne_front                     # rows/EvalEqNeFront (front: EqFrontData ⇒ eqnePreBridge ≫ value_equal_spec_full ≫ veReturnBridge → VeReturn; model blockC_div)
+  Vsa.Sim.eqBlockC_bridge                       # rows/EvalEqNeFront (front: EqResid ⇒ blockC_eqne_front ≫ blockC_eq/blockC_ne → hblockC PreEpilogueVD; φ chain threaded)
+  Vsa.Sim.evalEqSimD                            # rows/EvalEqNeFront (div-parity reseat of EvalE.binary .eq: hblockC residual replaced by an EqResid precondition, front closed to blockC_eq)
+  Vsa.Sim.evalNeSimD                            # rows/EvalEqNeFront (div-parity reseat of EvalE.binary .ne; ne clone, result .bool(!(vl.equal vr)))
   Vsa.Sim.blockC_ge                            # rows/EvalGeRow (ge-int dispatch: three-beq fall-through + not;srli sign-bit → PreEpilogueVD .bool(a≥b); token 23, reuses lt ladder blocks + evalGeLadderD)
   Vsa.Sim.evalGeSim                             # rows/EvalGeRow (EvalE.binary .ge int, EvalIH motive shape; conditional)
   Vsa.Sim.blockB_logical                        # EvalAndSim (EX_LOGICAL arm head: env-spill + LEFT recursive call, IH-composed → SubEvalReturn)
@@ -403,6 +414,11 @@ THEOREMS=(
   Vsa.Sim.LoopScaffoldClose.execStepNone_samePC    # LoopScaffoldClose (honest no-op row at a shared PC; the current arbitrary-p/q recursor motive remains a shape defect)
   Vsa.Sim.realloc_grow2_arena                       # EnvDefineClose (L5 brick 1: the grow-path ledger merge — two sequential successful realloc grows over ONE HeapArena ledger compose; Grow2Exts is again a HeapArena from the two results' disjointness clauses + set-like-ledger erase algebra. AInv re-establishment stays the grow block's obligation)
   Vsa.Sim.heapPublicFrame_trans                    # EnvDefineClose (L5 brick 1: two sequential public-memory frames compose over concatenated except-extents — the two-call four-extent footprint)
+  Vsa.Sim.envDefMallocSplice                        # EnvDefCompose (Shape-D: env_define's malloc call splice prefix ≫ MallocContract.spec ≫ suffix over the plan's MallocSpec = MallocContract hypothesis; residual = the 2 concrete machine bridges pre/suf)
+  Vsa.Sim.envDefReallocNamesSplice                  # EnvDefCompose (Shape-D: env_define's grow-path realloc(names) splice prefix ≫ ReallocOps.grow ≫ suffix; ReallocOps a hypothesis; residual = pre/suf machine bridges)
+  Vsa.Sim.envDefAppendContract                      # EnvDefCompose (Shape-D COMPOSED: whole append path strlen ≫ malloc ≫ memcpy ≫ store as one callSeg-chain over strlen_spec + MallocContract.spec + memcpy_spec, all real; residual = the 4 straight-line machine bridges strlenPre/mallocPre/memcpyPre/store)
+  Vsa.Sim.envDefGrowContract                        # EnvDefCompose (Shape-D COMPOSED: whole grow path cap' ≫ realloc(names) ≫ realloc(vals) ≫ append-head as one callSeg-chain over ReallocOps.grow twice; residual = the 3 machine bridges capCompute/namesToVals/appendHead + the grow2 arena/frame algebra in EnvDefineClose)
+  Vsa.Sim.envDefContract                            # EnvDefCompose (Shape-D TOP-LEVEL: env_define = dispatch ≫ (update ⊕ append ⊕ grow) join; append/grow segments built from the *Contract theorems over the real allocator contracts; residual = dispatch (prologue proved + scan loop) + per-path bridges)
   Vsa.Sim.erow_demo_seg                            # ErrorSiteRows (M5 Wave-D pilot: a real #derive_case (L3) run theorem for the pure stack-spill body 0x800034d0→0x800034e0 preceding the jal runtime_error @0x800034e4 — an eval_expr error-site path — in SegEvalState normal form; pins recipe step 2 on a genuine error-site body)
   Vsa.Sim.errRow                                   # ErrorSiteRows (M5 Wave-D pilot: the error-row template — a site's marshalled segment Triple SitePre (RuntimeErrorAt g inp m0) + shared SC/HT + reachability hsite ⇒ ErrHalts c, the exact errorSimFull minor-premise shape; thin wrapper over the committed L6 errHalts_exists_of_site)
   Vsa.Sim.row_hNotCallable                         # ErrorSiteRows (M5 Wave-D pilot row: discharges the errorSimFull hNotCallable minor premise (CallErr.notCallable) via errRow — one application per site; conditional on SC/HT + the site's segment Triple T + reachability hsite)
@@ -460,7 +476,7 @@ expected = int(os.environ["AX_EXPECTED"])
 out = os.environ["AX_OUT"]
 bad, seen = [], 0
 for line in out.splitlines():
-    m = re.search(r"'([^']+)' depends on axioms: \[([^\]]*)\]", line)
+    m = re.search(r"'(.*)' depends on axioms: \[([^\]]*)\]", line)
     if m:
         seen += 1
         axs = {a.strip() for a in m.group(2).split(",") if a.strip()}
@@ -468,7 +484,7 @@ for line in out.splitlines():
         if extra:
             bad.append(f"{m.group(1)}: disallowed axioms {sorted(extra)}")
         continue
-    m = re.search(r"'([^']+)' does not depend on any axioms", line)
+    m = re.search(r"'(.*)' does not depend on any axioms", line)
     if m:
         seen += 1
         continue

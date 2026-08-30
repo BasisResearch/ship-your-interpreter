@@ -249,6 +249,7 @@ import Vsa.Sim.EnvGetSpec5
 import Vsa.Sim.EnvGetSpec6
 import Vsa.Sim.EnvGetSpec7
 import Vsa.Sim.EnvGetSpec8
+import Vsa.Sim.EnvGetSpec9
 import Vsa.Sim.SnprintfSites
 import Vsa.Sim.SnprintfSites2
 import Vsa.Sim.SnprintfSites3
@@ -319,6 +320,7 @@ import Vsa.Sim.ModDispatchSeg
 import Vsa.Sim.EqNeDispatchSeg
 import Vsa.Sim.BoxSuffixSeams
 import Vsa.Sim.BinOpValueTails
+import Vsa.Sim.EnvDefCompose
 import Vsa.Sim.EvalDivChain
 import Vsa.Sim.SegFrameFacts
 import Vsa.Sim.SegFrameFactsAuto
