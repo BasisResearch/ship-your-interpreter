@@ -50,6 +50,180 @@ theorem eqDisp_headD_getD0 (lds : List (List (BitVec 8))) :
 theorem eqDisp_tail_getD (lds : List (List (BitVec 8))) (n : Nat) :
     lds.tail.getD n [] = lds.getD (n+1) [] := by cases lds <;> rfl
 
+/-! ## Generic frame helpers (copied from `EvalDivRow`, not in this file's import DAG)
+
+`evalBlocks_log_shift` and `evalBlocks_frame_offsets` are stated over an arbitrary
+block list `bs`, so they specialize to `eqDispatch`/`neDispatch` the same way
+`EvalDivRow`'s `divDispatch_mem_frame` uses them for `divDispatch`.  They live in
+`EvalDivRow` (not imported here), so we reprove the two generics locally. -/
+
+/-- The reflected chain log only depends on `s`'s log through a prefix. -/
+theorem evalBlocks_log_shift :
+    ∀ (bs : List BBlock) (s : SegEvalState),
+      (evalBlocks bs s).log
+        = s.log ++ (evalBlocks bs { s with log := [] }).log := by
+  intro bs
+  induction bs with
+  | nil => intro s; simp only [evalBlocks, List.append_nil]
+  | cons b rest ih =>
+    intro s
+    rw [evalBlocks_cons, evalBlocks_cons, ih (evalBlock s b),
+        ih (evalBlock { s with log := [] } b)]
+    have hstate : { (evalBlock { s with log := [] } b) with log := [] }
+        = { (evalBlock s b) with log := [] } := rfl
+    rw [hstate]
+    have hlog : (evalBlock s b).log = s.log ++ wlogM b.body s.regs s.loads := rfl
+    have hlog0 : (evalBlock { s with log := [] } b).log = wlogM b.body s.regs s.loads := by
+      simp only [evalBlock, List.nil_append]
+    rw [hlog, hlog0, List.append_assoc]
+
+/-- Store-window containment for a whole `evalBlocks` chain of frame blocks. -/
+theorem evalBlocks_frame_offsets :
+    ∀ (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
+      (base : BitVec 64) (m : Std.ExtHashMap Nat (BitVec 8)) (fb : FrameBundle m base),
+      srcVal 2 L = base →
+      (∀ b ∈ bs, ∀ a ∈ b.body, a.rd ≠ 2) →
+      (∀ b ∈ bs, ∀ a ∈ b.body, (a.kind = .sw ∨ a.kind = .sd ∨ a.kind = .sb) →
+        a.rs1 = 2 ∧ (sign_extend (m := 64) a.imm : BitVec 64).toNat + 8 ≤ 0x108) →
+      ∀ e ∈ (evalBlocks bs (SegEvalState.init L lds)).log,
+        base.toNat ≤ e.1 ∧ e.1 + e.2.1 ≤ base.toNat + 0x108 := by
+  intro bs
+  induction bs with
+  | nil =>
+    intro L lds base m fb _ _ _ e he
+    simp only [evalBlocks, SegEvalState.init, List.not_mem_nil] at he
+  | cons b rest ih =>
+    intro L lds base m fb h2 hrd hst e he
+    rw [evalBlocks_cons] at he
+    have hlog_split := evalBlocks_log_shift rest (evalBlock (SegEvalState.init L lds) b)
+    rw [hlog_split, List.mem_append] at he
+    rcases he with hb | hrest
+    · have hbb : e ∈ wlogM b.body L lds := by
+        simpa only [evalBlock, SegEvalState.init, List.nil_append] using hb
+      obtain ⟨a, ha, hk, haddr⟩ :=
+        wlogM_store_offsets b.body L lds base m fb h2
+          (fun x hx => hrd b (List.mem_cons_self ..) x hx)
+          (fun x hx hkx => ⟨(hst b (List.mem_cons_self ..) x hx hkx).1,
+            by have := (hst b (List.mem_cons_self ..) x hx hkx).2; omega⟩) e hbb
+      obtain ⟨hrs1, hoff⟩ := hst b (List.mem_cons_self ..) a ha hk
+      have hw : e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8 :=
+        wlogM_width b.body L lds e hbb
+      refine ⟨by rw [haddr]; omega, ?_⟩
+      rw [haddr]; rcases hw with h | h | h <;> omega
+    · have hbase' : srcVal 2 (evalBlock (SegEvalState.init L lds) b).regs = base := by
+        show srcVal 2 (runGM b.body (SegEvalState.init L lds).regs (SegEvalState.init L lds).loads) = base
+        rw [srcVal_runGM_ne 2 b.body (fun x hx => hrd b (List.mem_cons_self ..) x hx)]
+        exact h2
+      exact ih (evalBlock (SegEvalState.init L lds) b).regs
+        (evalBlock (SegEvalState.init L lds) b).loads base m fb hbase'
+        (fun x hx => hrd x (List.mem_cons_of_mem _ hx))
+        (fun x hx => hst x (List.mem_cons_of_mem _ hx)) e hrest
+
+/-- **The `eq`-dispatch memory frame.**  Every `eqDispatch` store is `x2`-relative at
+offset ≤ 0x108, so outside `[base, base+0x108)` the post-dispatch memory agrees with
+the input `m`.  `base = eqDispL`'s `x2` = the frame base (`sp-1088` at the arm). -/
+theorem eqDispatch_mem_frame (base : BitVec 64) (lds : List (List (BitVec 8)))
+    (m : Std.ExtHashMap Nat (BitVec 8)) (fb : FrameBundle m base) :
+    ∀ k : Nat, ¬ (base.toNat ≤ k ∧ k < base.toNat + 0x108) →
+      (writeLog m (evalBlocks eqDispatch (SegEvalState.init (eqDispL base) lds)).log)[k]?
+        = m[k]? := by
+  intro k hk
+  refine writeLog_getElem_disjoint k _ m
+    (fun e he => evalBlocks_init_log_width eqDispatch (eqDispL base) lds e he)
+    (fun e he => ?_)
+  obtain ⟨hlo, hhi⟩ :=
+    evalBlocks_frame_offsets eqDispatch (eqDispL base) lds base m fb
+      (by rfl) (by decide) (by decide) e he
+  by_cases hc : base.toNat ≤ k
+  · exact Or.inr (by omega)
+  · exact Or.inl (by omega)
+
+/-- **The `ne`-dispatch memory frame** (byte-identical block). -/
+theorem neDispatch_mem_frame (base : BitVec 64) (lds : List (List (BitVec 8)))
+    (m : Std.ExtHashMap Nat (BitVec 8)) (fb : FrameBundle m base) :
+    ∀ k : Nat, ¬ (base.toNat ≤ k ∧ k < base.toNat + 0x108) →
+      (writeLog m (evalBlocks neDispatch (SegEvalState.init (eqDispL base) lds)).log)[k]?
+        = m[k]? := by
+  intro k hk
+  refine writeLog_getElem_disjoint k _ m
+    (fun e he => evalBlocks_init_log_width neDispatch (eqDispL base) lds e he)
+    (fun e he => ?_)
+  obtain ⟨hlo, hhi⟩ :=
+    evalBlocks_frame_offsets neDispatch (eqDispL base) lds base m fb
+      (by rfl) (by decide) (by decide) e he
+  by_cases hc : base.toNat ≤ k
+  · exact Or.inr (by omega)
+  · exact Or.inl (by omega)
+
+/-! ## Truncation: the `eqDispatch`/`neDispatch` log depends only on the first 6 loads
+
+`eqDispatch` (`neDispatch`) issues exactly six `ld`s, each consuming one positional
+load (`stepLdsM`/`headD`); the `addi`/`sd` tail consumes none.  So the reflected log
+reads only `lds.getD 0 [] … lds.getD 5 []`.  Replacing `lds` by its six-element
+`getD` normal form leaves the log unchanged — by `rfl` after case-splitting `lds`
+into ≥6 cons cells (the readback/tower lemmas below require the `[b0..b5]` shape).
+
+This is stated as the concrete `eqDispatch`/`neDispatch` instance: a *general*
+"`evalBlocks bs`'s log depends only on the first `loadCount bs` loads" lemma is not
+`rfl` for arbitrary `bs` (it needs a `loadCount` recursion + a non-`rfl` induction on
+the block bodies), whereas the concrete block reduces definitionally — the
+exponentiating move for THIS chain is the six-case `rfl`. -/
+
+/-- The six-element `getD` normal form of `lds`. -/
+def lds6 (lds : List (List (BitVec 8))) : List (List (BitVec 8)) :=
+  [lds.getD 0 [], lds.getD 1 [], lds.getD 2 [],
+   lds.getD 3 [], lds.getD 4 [], lds.getD 5 []]
+
+/-- `eqDispatch`'s reflected log is invariant under truncating `lds` to `lds6`. -/
+theorem eqDispatch_log_trunc (base : BitVec 64) (lds : List (List (BitVec 8))) :
+    (evalBlocks eqDispatch (SegEvalState.init (eqDispL base) lds)).log
+      = (evalBlocks eqDispatch (SegEvalState.init (eqDispL base) (lds6 lds))).log := by
+  unfold lds6
+  cases lds with
+  | nil => rfl
+  | cons a0 r0 => cases r0 with
+    | nil => rfl
+    | cons a1 r1 => cases r1 with
+      | nil => rfl
+      | cons a2 r2 => cases r2 with
+        | nil => rfl
+        | cons a3 r3 => cases r3 with
+          | nil => rfl
+          | cons a4 r4 => cases r4 with
+            | nil => rfl
+            | cons a5 r5 => rfl
+
+/-- `neDispatch`'s reflected log is invariant under truncating `lds` to `lds6`. -/
+theorem neDispatch_log_trunc (base : BitVec 64) (lds : List (List (BitVec 8))) :
+    (evalBlocks neDispatch (SegEvalState.init (eqDispL base) lds)).log
+      = (evalBlocks neDispatch (SegEvalState.init (eqDispL base) (lds6 lds))).log := by
+  unfold lds6
+  cases lds with
+  | nil => rfl
+  | cons a0 r0 => cases r0 with
+    | nil => rfl
+    | cons a1 r1 => cases r1 with
+      | nil => rfl
+      | cons a2 r2 => cases r2 with
+        | nil => rfl
+        | cons a3 r3 => cases r3 with
+          | nil => rfl
+          | cons a4 r4 => cases r4 with
+            | nil => rfl
+            | cons a5 r5 => rfl
+
+/-- `JumpTable` transfers to any memory agreeing on the table region
+`[0x80019ef8, 0x80019f10)` (24 byte pins). -/
+theorem jumpTable_of_agree (m1 m2 : Mem)
+    (hagree : ∀ a, 0x80019ef8 ≤ a → a < 0x80019f10 → m2[a]? = m1[a]?)
+    (h : JumpTable m1) : JumpTable m2 := by
+  unfold JumpTable at h ⊢
+  obtain ⟨p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15,
+    p16, p17, p18, p19, p20, p21, p22, p23⟩ := h
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
+    ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
+    (rw [hagree _ (by omega) (by omega)]; assumption)
+
 /-- Extract the six load `LPins8` out of the eqDispatch `ChainFacts`.  The dispatch
 block issues six `ld`s from `x2+0x78/0x80/0x88/0x90/0x98/0xa0`; each load's
 `MemFacts` component of `ProgFactsM` carries `LPins8 m0 (eaddr) (lds[k])` at the
