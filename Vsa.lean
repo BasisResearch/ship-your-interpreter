@@ -323,6 +323,7 @@ import Vsa.Sim.EqNeDispatchSeg
 import Vsa.Sim.BoxSuffixSeams
 import Vsa.Sim.BinOpValueTails
 import Vsa.Sim.EnvDefCompose
+import Vsa.Sim.EnvDefBridges
 import Vsa.Sim.EvalDivChain
 import Vsa.Sim.SegFrameFacts
 import Vsa.Sim.SegFrameFactsAuto

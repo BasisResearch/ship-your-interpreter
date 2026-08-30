@@ -159,3 +159,86 @@ env_define_post, and the three segment hypotheses).
   (Shape-A), budget ≤120s each — the same recipe the binary-op ladders use.
   None needs new callee contracts or new call composition. The COW-clone
   fan-out workflow applies (each bridge independent).
+
+## Bridge-discharge ledger (2026-08-30, `Vsa/Sim/EnvDefBridges.lean`)
+
+Machine-bridge discharge session. `EnvDefBridges.lean` builds green + axiom-clean
+(`[propext, Classical.choice, Quot.sound]`), wired into `Vsa.lean` after
+`EnvDefCompose`. Elab ~1.1s.
+
+**CLOSED: 1 / 9 bridges (+ reusable infrastructure).**
+
+- `bridgeStrlenPre` — **DISCHARGED** as `bridgeStrlenPre_closed`. Entry predicate
+  `AppendStrlenEntry namePtr nameStr m0` (a rich `P` supplying the `strlen`
+  argument facts: `StrlenLoaded`, `StrRegions`, `namePtr%8=0`, `CString`, plus the
+  `0x80002b1c` machine state) runs the `mv a0,s2 ; jal strlen` prefix and lands
+  `strlen_pre namePtr 0x80002b24 nameStr m0` at the strlen entry `0x80006cf0`. The
+  return address `rStrlen = 0x80002b24` (the `jal` link, 4-aligned). Matches the
+  `envDefAppendContract` premise verbatim (`P := AppendStrlenEntry`,
+  `rStrlen := 0x80002b24`).
+
+### Shared sub-shape factored (the exponentiating deliverable)
+
+- **`mv rd,rs ; jal callee` prefix idiom.** Every append/grow call prefix is this
+  2-instruction shape (arg-marshalling move into `a0`, then the linking `jal` to
+  the callee entry). Factored the per-site step lemmas (`site_80002b1c_ed` the
+  `mv`, `site_80002b20_ed` the `jal`) and the composed two-step run
+  `strlenPrefix_run` (chains both `Step`s via `Steps.trans`, delivers PC=callee
+  entry, `x10 = marshalled arg`, `x1 = link`, `mem` unchanged, `minstret` defined).
+  The `jal`-marshalling readback helpers (`obs_jal_pc_env`/`obs_jal_rd_env`/
+  `obs_jal_other_env`/`obs_jal_minstret_env`, `frame_jal_env`) are REUSED VERBATIM
+  from `EnvNewSpec` — env_new's single-malloc splice IS this idiom. Any other
+  `mv;jal` prefix (malloc, memcpy, realloc(names)) instantiates the same two site
+  lemmas at its own words + one `strlenPrefix_run`-shaped composition.
+- Byte substrate is fully present: `Code/Env_define.env_define_at_*` pins the whole
+  `0x80002b1c..0x80002c0c` append/grow region, and every append/grow word already
+  has a `DecodeTable.decode_<word>` lemma (verified: mv/jal/addi/slliw/slli/sw/
+  realloc-jal all present). No per-site StepObs battery exists for these PCs
+  (`EnvDefSites` covers only `[0x80002a5c,0x80002b10]`), so each site lemma is
+  hand-built from pin + decode + `stepObs_*`, mirroring `EnvNewSites`.
+
+### Resisted, with exact reasons (NO workarounds taken)
+
+- `bridgeMallocPre` — **BLOCKED by underspecified source.** Its stated source is
+  literally `strlen_post rStrlen nameStr m0` = `GoodState ∧ PC=r ∧ x10=len ∧ x1=r ∧
+  mem=m0`. The target (malloc entry predicate) additionally requires `x2=spM` +
+  `StackOK`, `x3=gpv`, the ABI-preserved-registers tie `(∀R, AbiPreserved R → …=gm R)`,
+  and `M.AInv`. `strlen_post` carries NONE of `sp`/`gp`/`AInv`/ABI (strlen's contract
+  discards all caller-saved context on return). So the bridge is not provable from
+  its stated source; it would require `strlen_spec`/`strlen_post` to be a
+  frame-preserving version (a statement change, out of scope). Same root cause blocks
+  the parts of the chain whose source is a bare callee-post.
+- `bridgeMemcpyPre` — **BLOCKED, analogous.** Target `PreDispatch` requires
+  `MemcpyLoaded`, `Regions dst src n`, `0<n`, and `MemInv dst src n bs 0 m0`
+  (the copy source bytes) — semantic copy facts NOT present in the malloc-post
+  source predicate. Needs carried context the stated source lacks.
+- `bridgeStore` — feasible in principle (straight-line stores, no `jal`), but its
+  target `Q` is abstract AND the honest content is the `Store.define` append-frame
+  `FrameRepr` reconstruction over `memcpy_bytepath_post`; large, not attempted in
+  budget.
+- `bridgeCapCompute` — **FEASIBLE, not completed in budget.** Free source `P` (like
+  strlen), so a rich `GrowEntry` could supply the facts. Prefix is
+  `slliw a5,a5,1 ; slli a1,a5,3 ; sw a5,4(s4) ; mv a0,s6 ; jal realloc` — 5 sites,
+  THREE new instruction classes (SHIFTIWOP/SHIFTIOP/width-4 STORE) whose execute
+  helpers exist (`execute_shiftiwop_slliw_char`, `execute_shiftiop_slli_char`,
+  `exec_sw`), PLUS the `sw` writes `env->cap` so it threads store-memory and needs
+  `AInv`-survives-cap-store carried as a boundary hypothesis (`AInv` is abstract, so
+  no generic store-frame lemma). ~150 lines; the `mv;jal` tail reuses this session's
+  `strlenPrefix_run` shape.
+- `bridgeNamesToVals`, `bridgeAppendHead` — rich sources (`ReallocPost ∧
+  ReallocGrowResult` carry sp/gp/ABI/AInv + the arena-frame algebra already proved
+  in `EnvDefineClose`), so NOT blocked by underspecification, but each is ~8-10
+  straight-line load/store sites consuming `realloc_grow2_arena`/
+  `heapPublicFrame_trans`; large, not attempted.
+- `hUpdate` (`env_define_update_spec`) — self-contained (no allocator), all
+  ingredients in EnvDefSpec3, but is the ~30-site straight-line + scan `Triple.loop`
+  assembly; large, not attempted.
+- Dispatch scan loop — Shape-C `Triple.loop`; not attempted.
+
+### Net for next session
+
+The `mv;jal` prefix idiom + its two reusable site lemmas are landed and green, so the
+remaining FREE-source prefix bridges (`bridgeCapCompute`) drop in by cloning
+`strlenPrefix_run` at new words. The two `*Pre` append bridges beyond strlen are
+BLOCKED at the stated signature (callee-post sources too narrow) — closing them needs
+frame-preserving `strlen`/`memcpy` post-conditions, a statement change flagged here.

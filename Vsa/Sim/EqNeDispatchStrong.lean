@@ -28,8 +28,151 @@ namespace Vsa.Sim
 set_option maxHeartbeats 4000000
 set_option maxRecDepth 100000
 
+/-! ## The six source-load pins (route (a): expose the dispatch `ld` byte pins)
+
+`eqDispatch`/`neDispatch` issue six `ld`s from `x2+0x78/0x80/0x88/0x90/0x98/0xa0`.
+Each load's `MemFacts` component of the block's `ProgFactsM` carries an `LPins8 m0
+(eaddr) (lds[k])` at the ENTRY memory `m0` (loads don't write).  The strong posts
+below carry this bundle so the reflected-dispatch operand repr readback (blocker B,
+`EqNeReprReadback`, wired in `EvalEqNeFront`) can be driven WITHOUT re-deriving the
+`ChainFacts`. -/
+
+/-- The six source-load `LPins8`s (over the entry memory `m0`), in exactly the
+`lds.getD k []` shape the reflected readback consumes. -/
+def EqNeSrcPins (sp : BitVec 64) (lds : List (List (BitVec 8)))
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) : Prop :=
+  LPins8 m0 (sp + 0x78#64).toNat (lds.getD 0 []) ∧
+  LPins8 m0 (sp + 0x80#64).toNat (lds.getD 1 []) ∧
+  LPins8 m0 (sp + 0x88#64).toNat (lds.getD 2 []) ∧
+  LPins8 m0 (sp + 0x90#64).toNat (lds.getD 3 []) ∧
+  LPins8 m0 (sp + 0x98#64).toNat (lds.getD 4 []) ∧
+  LPins8 m0 (sp + 0xa0#64).toNat (lds.getD 5 [])
+
+/-- `lds.headD [] = lds.getD 0 []`. -/
+theorem eqDisp_headD_getD0 (lds : List (List (BitVec 8))) :
+    lds.headD [] = lds.getD 0 [] := by cases lds <;> rfl
+
+/-- `lds.tail.getD n [] = lds.getD (n+1) []`. -/
+theorem eqDisp_tail_getD (lds : List (List (BitVec 8))) (n : Nat) :
+    lds.tail.getD n [] = lds.getD (n+1) [] := by cases lds <;> rfl
+
+/-- Extract the six source-load `LPins8` out of the `eqDispatch` `ChainFacts` over
+`m0` (loads don't write, so the chain's start/end memory are both `m0`).  The
+dispatch block issues six `ld`s from `x2+0x78/0x80/0x88/0x90/0x98/0xa0`; each load's
+`MemFacts` component of `ProgFactsM` carries `LPins8 m0 (eaddr) (lds[k])`. -/
+theorem eqDispatch_srcPins (m0 : Std.ExtHashMap Nat (BitVec 8)) (sp : BitVec 64)
+    (lds : List (List (BitVec 8)))
+    (hfacts : ChainFacts m0 m0 (eqDispL sp) lds eqDispatch) :
+    EqNeSrcPins sp lds m0 := by
+  obtain ⟨⟨hprog, -, -⟩, -⟩ := hfacts
+  obtain ⟨-, -, hmf0, hprog⟩ := hprog
+  obtain ⟨-, -, hmf1, hprog⟩ := hprog
+  obtain ⟨-, -, hmf2, hprog⟩ := hprog
+  obtain ⟨-, -, hmf3, hprog⟩ := hprog
+  obtain ⟨-, -, hmf4, hprog⟩ := hprog
+  obtain ⟨-, -, hmf5, hprog⟩ := hprog
+  have e78 : (sp + sign_extend (m := 64) (0x078#12) : BitVec 64) = sp + 0x78#64 := by
+    rw [show (sign_extend (m := 64) (0x078#12) : BitVec 64) = 0x78#64 from by decide]
+  have e80 : (sp + sign_extend (m := 64) (0x080#12) : BitVec 64) = sp + 0x80#64 := by
+    rw [show (sign_extend (m := 64) (0x080#12) : BitVec 64) = 0x80#64 from by decide]
+  have e88 : (sp + sign_extend (m := 64) (0x088#12) : BitVec 64) = sp + 0x88#64 := by
+    rw [show (sign_extend (m := 64) (0x088#12) : BitVec 64) = 0x88#64 from by decide]
+  have e90 : (sp + sign_extend (m := 64) (0x090#12) : BitVec 64) = sp + 0x90#64 := by
+    rw [show (sign_extend (m := 64) (0x090#12) : BitVec 64) = 0x90#64 from by decide]
+  have e98 : (sp + sign_extend (m := 64) (0x098#12) : BitVec 64) = sp + 0x98#64 := by
+    rw [show (sign_extend (m := 64) (0x098#12) : BitVec 64) = 0x98#64 from by decide]
+  have ea0 : (sp + sign_extend (m := 64) (0x0a0#12) : BitVec 64) = sp + 0xa0#64 := by
+    rw [show (sign_extend (m := 64) (0x0a0#12) : BitVec 64) = 0xa0#64 from by decide]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · have h := hmf0.2
+    change LPins8 m0 (sp + sign_extend (m := 64) (0x078#12) : BitVec 64).toNat
+      (lds.headD []) at h
+    rw [e78, eqDisp_headD_getD0] at h; exact h
+  · have h := hmf1.2
+    change LPins8 m0 (sp + sign_extend (m := 64) (0x080#12) : BitVec 64).toNat
+      (lds.tail.headD []) at h
+    rw [e80, eqDisp_headD_getD0, eqDisp_tail_getD] at h; exact h
+  · have h := hmf2.2
+    change LPins8 m0 (sp + sign_extend (m := 64) (0x088#12) : BitVec 64).toNat
+      (lds.tail.tail.headD []) at h
+    rw [e88, eqDisp_headD_getD0, eqDisp_tail_getD, eqDisp_tail_getD] at h; exact h
+  · have h := hmf3.2
+    change LPins8 m0 (sp + sign_extend (m := 64) (0x090#12) : BitVec 64).toNat
+      (lds.tail.tail.tail.headD []) at h
+    rw [e90, eqDisp_headD_getD0, eqDisp_tail_getD, eqDisp_tail_getD, eqDisp_tail_getD] at h
+    exact h
+  · have h := hmf4.2
+    change LPins8 m0 (sp + sign_extend (m := 64) (0x098#12) : BitVec 64).toNat
+      (lds.tail.tail.tail.tail.headD []) at h
+    rw [e98, eqDisp_headD_getD0, eqDisp_tail_getD, eqDisp_tail_getD, eqDisp_tail_getD,
+      eqDisp_tail_getD] at h
+    exact h
+  · have h := hmf5.2
+    change LPins8 m0 (sp + sign_extend (m := 64) (0x0a0#12) : BitVec 64).toNat
+      (lds.tail.tail.tail.tail.tail.headD []) at h
+    rw [ea0, eqDisp_headD_getD0, eqDisp_tail_getD, eqDisp_tail_getD, eqDisp_tail_getD,
+      eqDisp_tail_getD, eqDisp_tail_getD] at h
+    exact h
+
+/-- Extract the six source-load `LPins8` out of the `neDispatch` `ChainFacts`
+(byte-identical load prefix). -/
+theorem neDispatch_srcPins (m0 : Std.ExtHashMap Nat (BitVec 8)) (sp : BitVec 64)
+    (lds : List (List (BitVec 8)))
+    (hfacts : ChainFacts m0 m0 (eqDispL sp) lds neDispatch) :
+    EqNeSrcPins sp lds m0 := by
+  obtain ⟨⟨hprog, -, -⟩, -⟩ := hfacts
+  obtain ⟨-, -, hmf0, hprog⟩ := hprog
+  obtain ⟨-, -, hmf1, hprog⟩ := hprog
+  obtain ⟨-, -, hmf2, hprog⟩ := hprog
+  obtain ⟨-, -, hmf3, hprog⟩ := hprog
+  obtain ⟨-, -, hmf4, hprog⟩ := hprog
+  obtain ⟨-, -, hmf5, hprog⟩ := hprog
+  have e78 : (sp + sign_extend (m := 64) (0x078#12) : BitVec 64) = sp + 0x78#64 := by
+    rw [show (sign_extend (m := 64) (0x078#12) : BitVec 64) = 0x78#64 from by decide]
+  have e80 : (sp + sign_extend (m := 64) (0x080#12) : BitVec 64) = sp + 0x80#64 := by
+    rw [show (sign_extend (m := 64) (0x080#12) : BitVec 64) = 0x80#64 from by decide]
+  have e88 : (sp + sign_extend (m := 64) (0x088#12) : BitVec 64) = sp + 0x88#64 := by
+    rw [show (sign_extend (m := 64) (0x088#12) : BitVec 64) = 0x88#64 from by decide]
+  have e90 : (sp + sign_extend (m := 64) (0x090#12) : BitVec 64) = sp + 0x90#64 := by
+    rw [show (sign_extend (m := 64) (0x090#12) : BitVec 64) = 0x90#64 from by decide]
+  have e98 : (sp + sign_extend (m := 64) (0x098#12) : BitVec 64) = sp + 0x98#64 := by
+    rw [show (sign_extend (m := 64) (0x098#12) : BitVec 64) = 0x98#64 from by decide]
+  have ea0 : (sp + sign_extend (m := 64) (0x0a0#12) : BitVec 64) = sp + 0xa0#64 := by
+    rw [show (sign_extend (m := 64) (0x0a0#12) : BitVec 64) = 0xa0#64 from by decide]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · have h := hmf0.2
+    change LPins8 m0 (sp + sign_extend (m := 64) (0x078#12) : BitVec 64).toNat
+      (lds.headD []) at h
+    rw [e78, eqDisp_headD_getD0] at h; exact h
+  · have h := hmf1.2
+    change LPins8 m0 (sp + sign_extend (m := 64) (0x080#12) : BitVec 64).toNat
+      (lds.tail.headD []) at h
+    rw [e80, eqDisp_headD_getD0, eqDisp_tail_getD] at h; exact h
+  · have h := hmf2.2
+    change LPins8 m0 (sp + sign_extend (m := 64) (0x088#12) : BitVec 64).toNat
+      (lds.tail.tail.headD []) at h
+    rw [e88, eqDisp_headD_getD0, eqDisp_tail_getD, eqDisp_tail_getD] at h; exact h
+  · have h := hmf3.2
+    change LPins8 m0 (sp + sign_extend (m := 64) (0x090#12) : BitVec 64).toNat
+      (lds.tail.tail.tail.headD []) at h
+    rw [e90, eqDisp_headD_getD0, eqDisp_tail_getD, eqDisp_tail_getD, eqDisp_tail_getD] at h
+    exact h
+  · have h := hmf4.2
+    change LPins8 m0 (sp + sign_extend (m := 64) (0x098#12) : BitVec 64).toNat
+      (lds.tail.tail.tail.tail.headD []) at h
+    rw [e98, eqDisp_headD_getD0, eqDisp_tail_getD, eqDisp_tail_getD, eqDisp_tail_getD,
+      eqDisp_tail_getD] at h
+    exact h
+  · have h := hmf5.2
+    change LPins8 m0 (sp + sign_extend (m := 64) (0x0a0#12) : BitVec 64).toNat
+      (lds.tail.tail.tail.tail.tail.headD []) at h
+    rw [ea0, eqDisp_headD_getD0, eqDisp_tail_getD, eqDisp_tail_getD, eqDisp_tail_getD,
+      eqDisp_tail_getD, eqDisp_tail_getD] at h
+    exact h
+
 /-- The `eq` STRONG dispatch outcome: parked at `0x8000371c`, `x10=bufa`/`x11=bufb`
-staged, `x2=sp`, plus `tick<2`, `sailOutput=out0`, callee-saved frame. -/
+staged, `x2=sp`, plus `tick<2`, `sailOutput=out0`, callee-saved frame, PLUS the six
+source-load `LPins8` (route (a)) over the ENTRY memory `m0`. -/
 def EqDispatchPostS (sp : BitVec 64) (lds : List (List (BitVec 8)))
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String)
     (gpre : (R : Register) → Option (RegisterType R)) (c : Config) : Prop :=
@@ -43,9 +186,11 @@ def EqDispatchPostS (sp : BitVec 64) (lds : List (List (BitVec 8)))
   c.tick < 2 ∧
   c.σ.sailOutput = out0 ∧
   (∀ R : Register, AbiPreservedNoise R → (Register.x8 == R) = false →
-    c.σ.regs.get? R = gpre R)
+    c.σ.regs.get? R = gpre R) ∧
+  EqNeSrcPins sp lds m0
 
-/-- The `ne` STRONG dispatch outcome: parked at `0x8000376c`, otherwise identical. -/
+/-- The `ne` STRONG dispatch outcome: parked at `0x8000376c`, otherwise identical
+(PLUS the six source-load `LPins8` over `m0`). -/
 def NeDispatchPostS (sp : BitVec 64) (lds : List (List (BitVec 8)))
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String)
     (gpre : (R : Register) → Option (RegisterType R)) (c : Config) : Prop :=
@@ -59,7 +204,8 @@ def NeDispatchPostS (sp : BitVec 64) (lds : List (List (BitVec 8)))
   c.tick < 2 ∧
   c.σ.sailOutput = out0 ∧
   (∀ R : Register, AbiPreservedNoise R → (Register.x8 == R) = false →
-    c.σ.regs.get? R = gpre R)
+    c.σ.regs.get? R = gpre R) ∧
+  EqNeSrcPins sp lds m0
 
 /-- **The strong `eq` leaf.**  `0x800036e4 → 0x8000371c` to the strong post. -/
 theorem eqDispatchRowS (sp : BitVec 64) (lds : List (List (BitVec 8)))
