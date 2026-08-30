@@ -285,7 +285,9 @@ theorem scan_iter (g : (R : Register) → Option (RegisterType R))
     intro R hR
     have hnws : NotWrittenStrcmp R := notWrittenStrcmp_of_abiPreserved R hR
     have hx1 : (Register.x1 == R) = false := by
-      cases R <;> simp_all [AbiPreserved]
+      rcases hb : (Register.x1 == R) with _ | _
+      · rfl
+      · rw [beq_iff_eq] at hb; rw [← hb] at hR; exact absurd hR (by decide)
     rw [(sframe_jal_eg4 hobs4 R hx1 hnws)]; exact hghost3 R hR
   -- ============ strcmp callee: strcmp_full_spec (pa = ofNat q, pb = name) ============
   -- q < 2^64 so (ofNat q).toNat = q, bridging ScanNames' region facts to strcmp_full_pre.

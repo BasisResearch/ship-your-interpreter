@@ -1,6 +1,7 @@
 import Vsa.Sim.EvalCallNative
 import Vsa.Sim.NativeAssertSites
 import Vsa.Sim.ValueTruthySpec
+import Vsa.Sim.OmegaHelpers2
 import Vsa.Sim.ValueSpec
 import Vsa.Sim.ReprCopy
 import Vsa.Sim.EvalNotSim
@@ -339,9 +340,9 @@ theorem nativeAssertInternal
   obtain ⟨σ2, i2, hs2', hi2, hG2, hmem2, hobs2⟩ :=
     site_80002df8_na σ1 i1 (c.steps + 1) (0x80002df8#64) vmi1 (fsp - 80#64) s1v
       hG1 hpc1 hmi1 hsp1 hx9_1 hNA1 rfl
-      (by rw [haddr56]; omega) (by rw [haddr56]; have := hRG.fsp_hi; omega)
-      (by rw [haddr56, htoh]; have := hRG.fsp_win; rw [htoh] at this; omega)
-      (by rw [haddr56]; have := hRG.fsp_align; omega) hi1
+      (naStore_safe4 fsp.toNat _ 56 haddr56 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).1 (naStore_safe4 fsp.toNat _ 56 haddr56 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.1
+      (naStore_safe4 fsp.toNat _ 56 haddr56 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.1
+      (naStore_safe4 fsp.toNat _ 56 haddr56 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.2 hi1
   have hstep2 : Step ⟨σ1, i1, c.steps + 1⟩ ⟨σ2, i2, c.steps + 1 + 1⟩ := hs2'
   have hmem2e : σ2.mem = ms1 := by rw [hmem2, mem_afterNextPC, haddr56, hmem1e]
   have hpc2 : σ2.regs.get? Register.PC = some (0x80002dfc#64) := by
@@ -364,9 +365,9 @@ theorem nativeAssertInternal
   obtain ⟨σ3, i3, hs3', hi3, hG3, hmem3, hobs3⟩ :=
     site_80002dfc_na σ2 i2 (c.steps + 1 + 1) (0x80002dfc#64) vmi2 (fsp - 80#64) s2v
       hG2 hpc2 hmi2 hsp2 hx18_2 hNA2 rfl
-      (by rw [haddr48]; omega) (by rw [haddr48]; have := hRG.fsp_hi; omega)
-      (by rw [haddr48, htoh]; have := hRG.fsp_win; rw [htoh] at this; omega)
-      (by rw [haddr48]; have := hRG.fsp_align; omega) hi2
+      (naStore_safe4 fsp.toNat _ 48 haddr48 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).1 (naStore_safe4 fsp.toNat _ 48 haddr48 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.1
+      (naStore_safe4 fsp.toNat _ 48 haddr48 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.1
+      (naStore_safe4 fsp.toNat _ 48 haddr48 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.2 hi2
   have hstep3 : Step ⟨σ2, i2, c.steps + 1 + 1⟩ ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ := hs3'
   have hmem3e : σ3.mem = ms2 := by rw [hmem3, mem_afterNextPC, haddr48, hmem2e]
   have hpc3 : σ3.regs.get? Register.PC = some (0x80002e00#64) := by
@@ -388,9 +389,9 @@ theorem nativeAssertInternal
   obtain ⟨σ4, i4, hs4', hi4, hG4, hmem4, hobs4⟩ :=
     site_80002e00_na σ3 i3 (c.steps + 1 + 1 + 1) (0x80002e00#64) vmi3 (fsp - 80#64) retAddr
       hG3 hpc3 hmi3 hsp3 hx1_3 hNA3 rfl
-      (by rw [haddr72]; omega) (by rw [haddr72]; have := hRG.fsp_hi; omega)
-      (by rw [haddr72, htoh]; have := hRG.fsp_win; rw [htoh] at this; omega)
-      (by rw [haddr72]; have := hRG.fsp_align; omega) hi3
+      (naStore_safe4 fsp.toNat _ 72 haddr72 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).1 (naStore_safe4 fsp.toNat _ 72 haddr72 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.1
+      (naStore_safe4 fsp.toNat _ 72 haddr72 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.1
+      (naStore_safe4 fsp.toNat _ 72 haddr72 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.2 hi3
   have hstep4 : Step ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ := hs4'
   have hmem4e : σ4.mem = ms3 := by rw [hmem4, mem_afterNextPC, haddr72, hmem3e]
   have hpc4 : σ4.regs.get? Register.PC = some (0x80002e04#64) := by
@@ -411,9 +412,9 @@ theorem nativeAssertInternal
   obtain ⟨σ5, i5, hs5', hi5, hG5, hmem5, hobs5⟩ :=
     site_80002e04_na σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x80002e04#64) vmi4 (fsp - 80#64) s0v
       hG4 hpc4 hmi4 hsp4 hx8_4 hNA4 rfl
-      (by rw [haddr64]; omega) (by rw [haddr64]; have := hRG.fsp_hi; omega)
-      (by rw [haddr64, htoh]; have := hRG.fsp_win; rw [htoh] at this; omega)
-      (by rw [haddr64]; have := hRG.fsp_align; omega) hi4
+      (naStore_safe4 fsp.toNat _ 64 haddr64 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).1 (naStore_safe4 fsp.toNat _ 64 haddr64 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.1
+      (naStore_safe4 fsp.toNat _ 64 haddr64 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.1
+      (naStore_safe4 fsp.toNat _ 64 haddr64 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.2 hi4
   have hstep5 : Step ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩ := hs5'
   have hmem5e : σ5.mem = ms4 := by rw [hmem5, mem_afterNextPC, haddr64, hmem4e]
   have hpc5 : σ5.regs.get? Register.PC = some (0x80002e08#64) := by
@@ -700,9 +701,9 @@ theorem nativeAssertInternal
   obtain ⟨σ16, i16, hs16', hi16, hG16, hmem16, hobs16⟩ :=
     site_80002e30_na σ15 i15 (c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) (0x80002e30#64) vmi15 (fsp - 80#64) argc
       hG15 hpc15 hmi15 hsp15 hx12_15 hNA15 rfl
-      (by rw [haddr8]; omega) (by rw [haddr8]; have := hRG.fsp_hi; omega)
-      (by rw [haddr8, htoh]; have := hRG.fsp_win; rw [htoh] at this; omega)
-      (by rw [haddr8]; have := hRG.fsp_align; omega) hi15
+      (naStore_safe4 fsp.toNat _ 8 haddr8 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).1 (naStore_safe4 fsp.toNat _ 8 haddr8 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.1
+      (naStore_safe4 fsp.toNat _ 8 haddr8 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.1
+      (naStore_safe4 fsp.toNat _ 8 haddr8 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.2 hi15
   have hstep16 : Step ⟨σ15, i15, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩ ⟨σ16, i16, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩ := hs16'
   have hmem16e : σ16.mem = mb1 := by rw [hmem16, mem_afterNextPC, haddr8, hmem15e]
   have hpc16 : σ16.regs.get? Register.PC = some (0x80002e34#64) := by
@@ -727,9 +728,9 @@ theorem nativeAssertInternal
   obtain ⟨σ17, i17, hs17', hi17, hG17, hmem17, hobs17⟩ :=
     site_80002e34_na σ16 i16 (c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) (0x80002e34#64) vmi16 (fsp - 80#64) argsBase
       hG16 hpc16 hmi16 hsp16 hx13_16 hNA16 rfl
-      (by rw [haddr0]; omega) (by rw [haddr0]; have := hRG.fsp_hi; omega)
-      (by rw [haddr0, htoh]; have := hRG.fsp_win; rw [htoh] at this; omega)
-      (by rw [haddr0]; have := hRG.fsp_align; omega) hi16
+      (naStore_safe4 fsp.toNat _ 0 haddr0 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).1 (naStore_safe4 fsp.toNat _ 0 haddr0 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.1
+      (naStore_safe4 fsp.toNat _ 0 haddr0 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.1
+      (naStore_safe4 fsp.toNat _ 0 haddr0 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.2 hi16
   have hstep17 : Step ⟨σ16, i16, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩ ⟨σ17, i17, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩ := hs17'
   have hmem17e : σ17.mem = mb2 := by rw [hmem17, mem_afterNextPC, haddr0, hmem16e]
   have hpc17 : σ17.regs.get? Register.PC = some (0x80002e38#64) := by
@@ -749,9 +750,9 @@ theorem nativeAssertInternal
   obtain ⟨σ18, i18, hs18', hi18, hG18, hmem18, hobs18⟩ :=
     site_80002e38_na σ17 i17 (c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) (0x80002e38#64) vmi17 (fsp - 80#64) LV0
       hG17 hpc17 hmi17 hsp17 hx11_17 hNA17 rfl
-      (by rw [haddr16]; omega) (by rw [haddr16]; have := hRG.fsp_hi; omega)
-      (by rw [haddr16, htoh]; have := hRG.fsp_win; rw [htoh] at this; omega)
-      (by rw [haddr16]; have := hRG.fsp_align; omega) hi17
+      (naStore_safe4 fsp.toNat _ 16 haddr16 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).1 (naStore_safe4 fsp.toNat _ 16 haddr16 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.1
+      (naStore_safe4 fsp.toNat _ 16 haddr16 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.1
+      (naStore_safe4 fsp.toNat _ 16 haddr16 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.2 hi17
   have hstep18 : Step ⟨σ17, i17, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩ ⟨σ18, i18, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩ := hs18'
   have hmem18e : σ18.mem = mb3 := by rw [hmem18, mem_afterNextPC, haddr16, hmem17e]
   have hpc18 : σ18.regs.get? Register.PC = some (0x80002e3c#64) := by
@@ -769,9 +770,9 @@ theorem nativeAssertInternal
   obtain ⟨σ19, i19, hs19', hi19, hG19, hmem19, hobs19⟩ :=
     site_80002e3c_na σ18 i18 (c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) (0x80002e3c#64) vmi18 (fsp - 80#64) LV1
       hG18 hpc18 hmi18 hsp18 hx14_18 hNA18 rfl
-      (by rw [haddr24]; omega) (by rw [haddr24]; have := hRG.fsp_hi; omega)
-      (by rw [haddr24, htoh]; have := hRG.fsp_win; rw [htoh] at this; omega)
-      (by rw [haddr24]; have := hRG.fsp_align; omega) hi18
+      (naStore_safe4 fsp.toNat _ 24 haddr24 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).1 (naStore_safe4 fsp.toNat _ 24 haddr24 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.1
+      (naStore_safe4 fsp.toNat _ 24 haddr24 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.1
+      (naStore_safe4 fsp.toNat _ 24 haddr24 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.2 hi18
   have hstep19 : Step ⟨σ18, i18, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩ ⟨σ19, i19, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩ := hs19'
   have hmem19e : σ19.mem = mb4 := by rw [hmem19, mem_afterNextPC, haddr24, hmem18e]
   have hpc19 : σ19.regs.get? Register.PC = some (0x80002e40#64) := by
@@ -788,9 +789,9 @@ theorem nativeAssertInternal
   obtain ⟨σ20, i20, hs20', hi20, hG20, hmem20, hobs20⟩ :=
     site_80002e40_na σ19 i19 (c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) (0x80002e40#64) vmi19 (fsp - 80#64) LV2
       hG19 hpc19 hmi19 hsp19 hx15_19 hNA19 rfl
-      (by rw [haddr32]; omega) (by rw [haddr32]; have := hRG.fsp_hi; omega)
-      (by rw [haddr32, htoh]; have := hRG.fsp_win; rw [htoh] at this; omega)
-      (by rw [haddr32]; have := hRG.fsp_align; omega) hi19
+      (naStore_safe4 fsp.toNat _ 32 haddr32 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).1 (naStore_safe4 fsp.toNat _ 32 haddr32 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.1
+      (naStore_safe4 fsp.toNat _ 32 haddr32 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.1
+      (naStore_safe4 fsp.toNat _ 32 haddr32 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.2 hi19
   have hstep20 : Step ⟨σ19, i19, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩ ⟨σ20, i20, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩ := hs20'
   have hmem20e : σ20.mem = mb5 := by rw [hmem20, mem_afterNextPC, haddr32, hmem19e]
   have hpc20 : σ20.regs.get? Register.PC = some (0x80002e44#64) := by
@@ -827,32 +828,32 @@ theorem nativeAssertInternal
   -- m0 versions of the argsBase byte facts (= ms4 facts, args window frame-disjoint)
   have habm0 : ∀ j : Nat, (hj : j < 24) → m0[argsBase.toNat + j]? = ms4[argsBase.toNat + j]? :=
     fun j hj => (hms4_args (argsBase.toNat + j) (by omega)).symm
-  have hm00 := (habm0 0 (by omega)).trans hab0
-  have hm01 := (habm0 1 (by omega)).trans hab1; have hm02 := (habm0 2 (by omega)).trans hab2
-  have hm03 := (habm0 3 (by omega)).trans hab3; have hm04 := (habm0 4 (by omega)).trans hab4
-  have hm05 := (habm0 5 (by omega)).trans hab5; have hm06 := (habm0 6 (by omega)).trans hab6
-  have hm07 := (habm0 7 (by omega)).trans hab7; have hm08 := (habm0 8 (by omega)).trans hab8
-  have hm09 := (habm0 9 (by omega)).trans hab9; have hm010 := (habm0 10 (by omega)).trans hab10
-  have hm011 := (habm0 11 (by omega)).trans hab11; have hm012 := (habm0 12 (by omega)).trans hab12
-  have hm013 := (habm0 13 (by omega)).trans hab13; have hm014 := (habm0 14 (by omega)).trans hab14
-  have hm015 := (habm0 15 (by omega)).trans hab15; have hm016 := (habm0 16 (by omega)).trans hab16
-  have hm017 := (habm0 17 (by omega)).trans hab17; have hm018 := (habm0 18 (by omega)).trans hab18
-  have hm019 := (habm0 19 (by omega)).trans hab19; have hm020 := (habm0 20 (by omega)).trans hab20
-  have hm021 := (habm0 21 (by omega)).trans hab21; have hm022 := (habm0 22 (by omega)).trans hab22
+  have hm00 := (habm0 0 (by decide)).trans hab0
+  have hm01 := (habm0 1 (by decide)).trans hab1; have hm02 := (habm0 2 (by decide)).trans hab2
+  have hm03 := (habm0 3 (by decide)).trans hab3; have hm04 := (habm0 4 (by decide)).trans hab4
+  have hm05 := (habm0 5 (by decide)).trans hab5; have hm06 := (habm0 6 (by decide)).trans hab6
+  have hm07 := (habm0 7 (by decide)).trans hab7; have hm08 := (habm0 8 (by decide)).trans hab8
+  have hm09 := (habm0 9 (by decide)).trans hab9; have hm010 := (habm0 10 (by decide)).trans hab10
+  have hm011 := (habm0 11 (by decide)).trans hab11; have hm012 := (habm0 12 (by decide)).trans hab12
+  have hm013 := (habm0 13 (by decide)).trans hab13; have hm014 := (habm0 14 (by decide)).trans hab14
+  have hm015 := (habm0 15 (by decide)).trans hab15; have hm016 := (habm0 16 (by decide)).trans hab16
+  have hm017 := (habm0 17 (by decide)).trans hab17; have hm018 := (habm0 18 (by decide)).trans hab18
+  have hm019 := (habm0 19 (by decide)).trans hab19; have hm020 := (habm0 20 (by decide)).trans hab20
+  have hm021 := (habm0 21 (by decide)).trans hab21; have hm022 := (habm0 22 (by decide)).trans hab22
   have hm023 := (habm0 23 (by omega)).trans hab23
   -- window LV0 (bytes 0..7 at fsp-64): reads through the two later buffer stores.
   have hWL0 : ∀ o : Nat, o < 8 →
       mb5[fsp.toNat - 80 + 16 + o]? = (writeMap8 mb2 (fsp.toNat-80+16) (sdData_val LV0))[fsp.toNat - 80 + 16 + o]? := by
     intro o ho
     show (writeMap8 mb4 (fsp.toNat-80+32) (sdData_val LV2))[_]? = _
-    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (by omega)]
+    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (slotStore_disjoint fsp.toNat 16 o 32 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb3 (fsp.toNat-80+24) (sdData_val LV1))[_]? = _
-    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) _ (sdData_val LV1) (by omega)]
+    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) _ (sdData_val LV1) (slotStore_disjoint fsp.toNat 16 o 24 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
   have hWL1 : ∀ o : Nat, o < 8 →
       mb5[fsp.toNat - 80 + 24 + o]? = (writeMap8 mb3 (fsp.toNat-80+24) (sdData_val LV1))[fsp.toNat - 80 + 24 + o]? := by
     intro o ho
     show (writeMap8 mb4 (fsp.toNat-80+32) (sdData_val LV2))[_]? = _
-    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (by omega)]
+    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (slotStore_disjoint fsp.toNat 24 o 32 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
   -- the 24 buffer bytes match argsBase's 24 bytes (mb5[fsp-64+j] = argsBase[j] byte).
   have hbufcopy : ∀ j, j < 24 → mb5[(fsp.toNat - 64) + j]? = m0[argsBase.toNat + j]? := by
     intro j hj
@@ -871,46 +872,46 @@ theorem nativeAssertInternal
     · rw [hrw 5, hWL0 5 (by omega), getElem_writeMap8_5, eL05]; exact hm05.symm
     · rw [hrw 6, hWL0 6 (by omega), getElem_writeMap8_6, eL06]; exact hm06.symm
     · rw [hrw 7, hWL0 7 (by omega), getElem_writeMap8_7, eL07]; exact hm07.symm
-    · rw [show fsp.toNat-64+8 = fsp.toNat-80+24+0 from by omega, hWL1 0 (by omega),
+    · rw [reidxNat fsp.toNat 64 8 80 24 80 hfsp80 (by decide) (by decide) (by decide), hWL1 0 (by omega),
         show fsp.toNat-80+24+0 = fsp.toNat-80+24 from by omega, getElem_writeMap8_0, eL10,
         show argsBase.toNat+8 = argsBase.toNat+8 from rfl]; exact hm08.symm
-    · rw [show fsp.toNat-64+9 = fsp.toNat-80+24+1 from by omega, hWL1 1 (by omega), getElem_writeMap8_1, eL11]; exact hm09.symm
-    · rw [show fsp.toNat-64+10 = fsp.toNat-80+24+2 from by omega, hWL1 2 (by omega), getElem_writeMap8_2, eL12]; exact hm010.symm
-    · rw [show fsp.toNat-64+11 = fsp.toNat-80+24+3 from by omega, hWL1 3 (by omega), getElem_writeMap8_3, eL13]; exact hm011.symm
-    · rw [show fsp.toNat-64+12 = fsp.toNat-80+24+4 from by omega, hWL1 4 (by omega), getElem_writeMap8_4, eL14]; exact hm012.symm
-    · rw [show fsp.toNat-64+13 = fsp.toNat-80+24+5 from by omega, hWL1 5 (by omega), getElem_writeMap8_5, eL15]; exact hm013.symm
-    · rw [show fsp.toNat-64+14 = fsp.toNat-80+24+6 from by omega, hWL1 6 (by omega), getElem_writeMap8_6, eL16]; exact hm014.symm
-    · rw [show fsp.toNat-64+15 = fsp.toNat-80+24+7 from by omega, hWL1 7 (by omega), getElem_writeMap8_7, eL17]; exact hm015.symm
-    · rw [show fsp.toNat-64+16 = fsp.toNat-80+32 from by omega, getElem_writeMap8_0, eL20]; exact hm016.symm
-    · rw [show fsp.toNat-64+17 = fsp.toNat-80+32+1 from by omega, getElem_writeMap8_1, eL21]; exact hm017.symm
-    · rw [show fsp.toNat-64+18 = fsp.toNat-80+32+2 from by omega, getElem_writeMap8_2, eL22]; exact hm018.symm
-    · rw [show fsp.toNat-64+19 = fsp.toNat-80+32+3 from by omega, getElem_writeMap8_3, eL23]; exact hm019.symm
-    · rw [show fsp.toNat-64+20 = fsp.toNat-80+32+4 from by omega, getElem_writeMap8_4, eL24]; exact hm020.symm
-    · rw [show fsp.toNat-64+21 = fsp.toNat-80+32+5 from by omega, getElem_writeMap8_5, eL25]; exact hm021.symm
-    · rw [show fsp.toNat-64+22 = fsp.toNat-80+32+6 from by omega, getElem_writeMap8_6, eL26]; exact hm022.symm
-    · rw [show fsp.toNat-64+23 = fsp.toNat-80+32+7 from by omega, getElem_writeMap8_7, eL27]; exact hm023.symm
+    · rw [reidxNat fsp.toNat 64 9 80 25 80 hfsp80 (by decide) (by decide) (by decide), hWL1 1 (by omega), getElem_writeMap8_1, eL11]; exact hm09.symm
+    · rw [reidxNat fsp.toNat 64 10 80 26 80 hfsp80 (by decide) (by decide) (by decide), hWL1 2 (by omega), getElem_writeMap8_2, eL12]; exact hm010.symm
+    · rw [reidxNat fsp.toNat 64 11 80 27 80 hfsp80 (by decide) (by decide) (by decide), hWL1 3 (by omega), getElem_writeMap8_3, eL13]; exact hm011.symm
+    · rw [reidxNat fsp.toNat 64 12 80 28 80 hfsp80 (by decide) (by decide) (by decide), hWL1 4 (by omega), getElem_writeMap8_4, eL14]; exact hm012.symm
+    · rw [reidxNat fsp.toNat 64 13 80 29 80 hfsp80 (by decide) (by decide) (by decide), hWL1 5 (by omega), getElem_writeMap8_5, eL15]; exact hm013.symm
+    · rw [reidxNat fsp.toNat 64 14 80 30 80 hfsp80 (by decide) (by decide) (by decide), hWL1 6 (by omega), getElem_writeMap8_6, eL16]; exact hm014.symm
+    · rw [reidxNat fsp.toNat 64 15 80 31 80 hfsp80 (by decide) (by decide) (by decide), hWL1 7 (by omega), getElem_writeMap8_7, eL17]; exact hm015.symm
+    · rw [reidxNat fsp.toNat 64 16 80 32 80 hfsp80 (by decide) (by decide) (by decide), getElem_writeMap8_0, eL20]; exact hm016.symm
+    · rw [reidxNat fsp.toNat 64 17 80 33 80 hfsp80 (by decide) (by decide) (by decide), getElem_writeMap8_1, eL21]; exact hm017.symm
+    · rw [reidxNat fsp.toNat 64 18 80 34 80 hfsp80 (by decide) (by decide) (by decide), getElem_writeMap8_2, eL22]; exact hm018.symm
+    · rw [reidxNat fsp.toNat 64 19 80 35 80 hfsp80 (by decide) (by decide) (by decide), getElem_writeMap8_3, eL23]; exact hm019.symm
+    · rw [reidxNat fsp.toNat 64 20 80 36 80 hfsp80 (by decide) (by decide) (by decide), getElem_writeMap8_4, eL24]; exact hm020.symm
+    · rw [reidxNat fsp.toNat 64 21 80 37 80 hfsp80 (by decide) (by decide) (by decide), getElem_writeMap8_5, eL25]; exact hm021.symm
+    · rw [reidxNat fsp.toNat 64 22 80 38 80 hfsp80 (by decide) (by decide) (by decide), getElem_writeMap8_6, eL26]; exact hm022.symm
+    · rw [reidxNat fsp.toNat 64 23 80 39 80 hfsp80 (by decide) (by decide) (by decide), getElem_writeMap8_7, eL27]; exact hm023.symm
   -- mb5 equals m0 outside the whole frame+buffer window [fsp-80, fsp+40)
   -- (every one of the 9 writes lands inside that window).
   have hbufout : ∀ a, (a < fsp.toNat - 80 ∨ fsp.toNat + 40 ≤ a) → mb5[a]? = m0[a]? := by
     intro a ha
     show (writeMap8 mb4 (fsp.toNat-80+32) (sdData_val LV2))[a]? = m0[a]?
-    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) a (sdData_val LV2) (by omega)]
+    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) a (sdData_val LV2) (winStore_disjoint fsp.toNat a 32 ha hfsp80 (by decide))]
     show (writeMap8 mb3 (fsp.toNat-80+24) (sdData_val LV1))[a]? = m0[a]?
-    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) a (sdData_val LV1) (by omega)]
+    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) a (sdData_val LV1) (winStore_disjoint fsp.toNat a 24 ha hfsp80 (by decide))]
     show (writeMap8 mb2 (fsp.toNat-80+16) (sdData_val LV0))[a]? = m0[a]?
-    rw [getElem_writeMap8_disjoint mb2 (fsp.toNat-80+16) a (sdData_val LV0) (by omega)]
+    rw [getElem_writeMap8_disjoint mb2 (fsp.toNat-80+16) a (sdData_val LV0) (winStore_disjoint fsp.toNat a 16 ha hfsp80 (by decide))]
     show (writeMap8 mb1 (fsp.toNat-80+0) (sdData_val argsBase))[a]? = m0[a]?
-    rw [getElem_writeMap8_disjoint mb1 (fsp.toNat-80+0) a (sdData_val argsBase) (by omega)]
+    rw [getElem_writeMap8_disjoint mb1 (fsp.toNat-80+0) a (sdData_val argsBase) (winStore_disjoint fsp.toNat a 0 ha hfsp80 (by decide))]
     show (writeMap8 ms4 (fsp.toNat-80+8) (sdData_val argc))[a]? = m0[a]?
-    rw [getElem_writeMap8_disjoint ms4 (fsp.toNat-80+8) a (sdData_val argc) (by omega)]
+    rw [getElem_writeMap8_disjoint ms4 (fsp.toNat-80+8) a (sdData_val argc) (winStore_disjoint fsp.toNat a 8 ha hfsp80 (by decide))]
     show (writeMap8 ms3 (fsp.toNat-80+64) (sdData_val s0v))[a]? = m0[a]?
-    rw [getElem_writeMap8_disjoint ms3 (fsp.toNat-80+64) a (sdData_val s0v) (by omega)]
+    rw [getElem_writeMap8_disjoint ms3 (fsp.toNat-80+64) a (sdData_val s0v) (winStore_disjoint fsp.toNat a 64 ha hfsp80 (by decide))]
     show (writeMap8 ms2 (fsp.toNat-80+72) (sdData_val retAddr))[a]? = m0[a]?
-    rw [getElem_writeMap8_disjoint ms2 (fsp.toNat-80+72) a (sdData_val retAddr) (by omega)]
+    rw [getElem_writeMap8_disjoint ms2 (fsp.toNat-80+72) a (sdData_val retAddr) (winStore_disjoint fsp.toNat a 72 ha hfsp80 (by decide))]
     show (writeMap8 ms1 (fsp.toNat-80+48) (sdData_val s2v))[a]? = m0[a]?
-    rw [getElem_writeMap8_disjoint ms1 (fsp.toNat-80+48) a (sdData_val s2v) (by omega)]
+    rw [getElem_writeMap8_disjoint ms1 (fsp.toNat-80+48) a (sdData_val s2v) (winStore_disjoint fsp.toNat a 48 ha hfsp80 (by decide))]
     show (writeMap8 c.σ.mem (fsp.toNat-80+56) (sdData_val s1v))[a]? = m0[a]?
-    rw [getElem_writeMap8_disjoint c.σ.mem (fsp.toNat-80+56) a (sdData_val s1v) (by omega), hmem]
+    rw [getElem_writeMap8_disjoint c.σ.mem (fsp.toNat-80+56) a (sdData_val s1v) (winStore_disjoint fsp.toNat a 56 ha hfsp80 (by decide)), hmem]
   -- payload AgreeP: the arena string (disjoint from the frame+buffer window) is preserved
   have hbufpay : ∀ (p : Nat) (s : String), read64 m0 (argsBase.toNat + 8) = some p →
       AgreeP (fun a => ∃ k, k ≤ s.length ∧ a = p + k) m0 mb5 := by
@@ -984,21 +985,21 @@ theorem nativeAssertInternal
   have hmb5_lo : ∀ o : Nat, o < 8 → mb5[fsp.toNat - 80 + 0 + o]? = (writeMap8 mb1 (fsp.toNat-80+0) (sdData_val argsBase))[fsp.toNat - 80 + 0 + o]? := by
     intro o ho
     show (writeMap8 mb4 (fsp.toNat-80+32) (sdData_val LV2))[_]? = _
-    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (by omega)]
+    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (slotStore_disjoint fsp.toNat 0 o 32 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb3 (fsp.toNat-80+24) (sdData_val LV1))[_]? = _
-    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) _ (sdData_val LV1) (by omega)]
+    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) _ (sdData_val LV1) (slotStore_disjoint fsp.toNat 0 o 24 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb2 (fsp.toNat-80+16) (sdData_val LV0))[_]? = _
-    rw [getElem_writeMap8_disjoint mb2 (fsp.toNat-80+16) _ (sdData_val LV0) (by omega)]
+    rw [getElem_writeMap8_disjoint mb2 (fsp.toNat-80+16) _ (sdData_val LV0) (slotStore_disjoint fsp.toNat 0 o 16 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
   have hmb5_hi : ∀ o : Nat, o < 8 → mb5[fsp.toNat - 80 + 8 + o]? = (writeMap8 ms4 (fsp.toNat-80+8) (sdData_val argc))[fsp.toNat - 80 + 8 + o]? := by
     intro o ho
     show (writeMap8 mb4 (fsp.toNat-80+32) (sdData_val LV2))[_]? = _
-    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (by omega)]
+    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (slotStore_disjoint fsp.toNat 8 o 32 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb3 (fsp.toNat-80+24) (sdData_val LV1))[_]? = _
-    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) _ (sdData_val LV1) (by omega)]
+    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) _ (sdData_val LV1) (slotStore_disjoint fsp.toNat 8 o 24 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb2 (fsp.toNat-80+16) (sdData_val LV0))[_]? = _
-    rw [getElem_writeMap8_disjoint mb2 (fsp.toNat-80+16) _ (sdData_val LV0) (by omega)]
+    rw [getElem_writeMap8_disjoint mb2 (fsp.toNat-80+16) _ (sdData_val LV0) (slotStore_disjoint fsp.toNat 8 o 16 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb1 (fsp.toNat-80+0) (sdData_val argsBase))[_]? = _
-    rw [getElem_writeMap8_disjoint mb1 (fsp.toNat-80+0) _ (sdData_val argsBase) (by omega)]
+    rw [getElem_writeMap8_disjoint mb1 (fsp.toNat-80+0) _ (sdData_val argsBase) (slotStore_disjoint fsp.toNat 8 o 0 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
   have hpres_lo : ∀ o : Nat, o < 8 → ∃ b, mb5[fsp.toNat - 80 + 0 + o]? = some b := by
     intro o ho
     rcases (show o=0∨o=1∨o=2∨o=3∨o=4∨o=5∨o=6∨o=7 from by omega) with rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl
@@ -1033,8 +1034,8 @@ theorem nativeAssertInternal
   obtain ⟨σ22, i22, hs22', hi22, hG22, hmem22, hobs22⟩ :=
     site_80002e48_na cT.σ cT.tick cT.steps (0x80002e48#64) vmiT (fsp - 80#64)
       rl0 rl1 rl2 rl3 rl4 rl5 rl6 rl7 hGT hpcT' hmiT hsp_T (hmemT' ▸ hNA_T) rfl
-      (by rw [haddr0]; omega) (by rw [haddr0]; have := hRG.fsp_hi; omega)
-      (by rw [haddr0, htoh]; right; omega) (by rw [haddr0]; have := hRG.fsp_align; omega)
+      (naStore_safe4 fsp.toNat _ 0 haddr0 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).1 (naStore_safe4 fsp.toNat _ 0 haddr0 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.1
+      (by rw [haddr0, htoh]; right; omega) (naStore_safe4 fsp.toNat _ 0 haddr0 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.2
       (by rw [haddr0, hmemT']; exact hrl0) (by rw [haddr0, hmemT']; exact hrl1)
       (by rw [haddr0, hmemT']; exact hrl2) (by rw [haddr0, hmemT']; exact hrl3)
       (by rw [haddr0, hmemT']; exact hrl4) (by rw [haddr0, hmemT']; exact hrl5)
@@ -1055,8 +1056,8 @@ theorem nativeAssertInternal
   obtain ⟨σ23, i23, hs23', hi23, hG23, hmem23, hobs23⟩ :=
     site_80002e4c_na σ22 i22 (cT.steps + 1) (0x80002e4c#64) vmi22 (fsp - 80#64)
       rh0 rh1 rh2 rh3 rh4 rh5 rh6 rh7 hG22 hpc22 hmi22 hsp_22 hNA22 rfl
-      (by rw [haddr8]; omega) (by rw [haddr8]; have := hRG.fsp_hi; omega)
-      (by rw [haddr8, htoh]; right; omega) (by rw [haddr8]; have := hRG.fsp_align; omega)
+      (naStore_safe4 fsp.toNat _ 8 haddr8 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).1 (naStore_safe4 fsp.toNat _ 8 haddr8 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.1
+      (by rw [haddr8, htoh]; right; omega) (naStore_safe4 fsp.toNat _ 8 haddr8 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.2
       (by rw [haddr8, hmem22e]; exact hrh0) (by rw [haddr8, hmem22e]; exact hrh1)
       (by rw [haddr8, hmem22e]; exact hrh2) (by rw [haddr8, hmem22e]; exact hrh3)
       (by rw [haddr8, hmem22e]; exact hrh4) (by rw [haddr8, hmem22e]; exact hrh5)
@@ -1166,63 +1167,63 @@ theorem nativeAssertInternal
   have hraM : read64 mb5 (fsp.toNat - 80 + 72) = some retAddr.toNat := by
     apply hread_spill 72 retAddr ms2; intro o ho
     show (writeMap8 mb4 (fsp.toNat-80+32) (sdData_val LV2))[_]? = _
-    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (by omega)]
+    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (slotStore_disjoint fsp.toNat 72 o 32 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb3 (fsp.toNat-80+24) (sdData_val LV1))[_]? = _
-    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) _ (sdData_val LV1) (by omega)]
+    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) _ (sdData_val LV1) (slotStore_disjoint fsp.toNat 72 o 24 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb2 (fsp.toNat-80+16) (sdData_val LV0))[_]? = _
-    rw [getElem_writeMap8_disjoint mb2 (fsp.toNat-80+16) _ (sdData_val LV0) (by omega)]
+    rw [getElem_writeMap8_disjoint mb2 (fsp.toNat-80+16) _ (sdData_val LV0) (slotStore_disjoint fsp.toNat 72 o 16 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb1 (fsp.toNat-80+0) (sdData_val argsBase))[_]? = _
-    rw [getElem_writeMap8_disjoint mb1 (fsp.toNat-80+0) _ (sdData_val argsBase) (by omega)]
+    rw [getElem_writeMap8_disjoint mb1 (fsp.toNat-80+0) _ (sdData_val argsBase) (slotStore_disjoint fsp.toNat 72 o 0 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 ms4 (fsp.toNat-80+8) (sdData_val argc))[_]? = _
-    rw [getElem_writeMap8_disjoint ms4 (fsp.toNat-80+8) _ (sdData_val argc) (by omega)]
+    rw [getElem_writeMap8_disjoint ms4 (fsp.toNat-80+8) _ (sdData_val argc) (slotStore_disjoint fsp.toNat 72 o 8 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 ms3 (fsp.toNat-80+64) (sdData_val s0v))[_]? = _
-    rw [getElem_writeMap8_disjoint ms3 (fsp.toNat-80+64) _ (sdData_val s0v) (by omega)]
+    rw [getElem_writeMap8_disjoint ms3 (fsp.toNat-80+64) _ (sdData_val s0v) (slotStore_disjoint fsp.toNat 72 o 64 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
   have hs0M : read64 mb5 (fsp.toNat - 80 + 64) = some s0v.toNat := by
     apply hread_spill 64 s0v ms3; intro o ho
     show (writeMap8 mb4 (fsp.toNat-80+32) (sdData_val LV2))[_]? = _
-    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (by omega)]
+    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (slotStore_disjoint fsp.toNat 64 o 32 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb3 (fsp.toNat-80+24) (sdData_val LV1))[_]? = _
-    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) _ (sdData_val LV1) (by omega)]
+    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) _ (sdData_val LV1) (slotStore_disjoint fsp.toNat 64 o 24 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb2 (fsp.toNat-80+16) (sdData_val LV0))[_]? = _
-    rw [getElem_writeMap8_disjoint mb2 (fsp.toNat-80+16) _ (sdData_val LV0) (by omega)]
+    rw [getElem_writeMap8_disjoint mb2 (fsp.toNat-80+16) _ (sdData_val LV0) (slotStore_disjoint fsp.toNat 64 o 16 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb1 (fsp.toNat-80+0) (sdData_val argsBase))[_]? = _
-    rw [getElem_writeMap8_disjoint mb1 (fsp.toNat-80+0) _ (sdData_val argsBase) (by omega)]
+    rw [getElem_writeMap8_disjoint mb1 (fsp.toNat-80+0) _ (sdData_val argsBase) (slotStore_disjoint fsp.toNat 64 o 0 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 ms4 (fsp.toNat-80+8) (sdData_val argc))[_]? = _
-    rw [getElem_writeMap8_disjoint ms4 (fsp.toNat-80+8) _ (sdData_val argc) (by omega)]
+    rw [getElem_writeMap8_disjoint ms4 (fsp.toNat-80+8) _ (sdData_val argc) (slotStore_disjoint fsp.toNat 64 o 8 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
   have hs1M : read64 mb5 (fsp.toNat - 80 + 56) = some s1v.toNat := by
     apply hread_spill 56 s1v c.σ.mem; intro o ho
     show (writeMap8 mb4 (fsp.toNat-80+32) (sdData_val LV2))[_]? = _
-    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (by omega)]
+    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (slotStore_disjoint fsp.toNat 56 o 32 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb3 (fsp.toNat-80+24) (sdData_val LV1))[_]? = _
-    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) _ (sdData_val LV1) (by omega)]
+    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) _ (sdData_val LV1) (slotStore_disjoint fsp.toNat 56 o 24 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb2 (fsp.toNat-80+16) (sdData_val LV0))[_]? = _
-    rw [getElem_writeMap8_disjoint mb2 (fsp.toNat-80+16) _ (sdData_val LV0) (by omega)]
+    rw [getElem_writeMap8_disjoint mb2 (fsp.toNat-80+16) _ (sdData_val LV0) (slotStore_disjoint fsp.toNat 56 o 16 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb1 (fsp.toNat-80+0) (sdData_val argsBase))[_]? = _
-    rw [getElem_writeMap8_disjoint mb1 (fsp.toNat-80+0) _ (sdData_val argsBase) (by omega)]
+    rw [getElem_writeMap8_disjoint mb1 (fsp.toNat-80+0) _ (sdData_val argsBase) (slotStore_disjoint fsp.toNat 56 o 0 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 ms4 (fsp.toNat-80+8) (sdData_val argc))[_]? = _
-    rw [getElem_writeMap8_disjoint ms4 (fsp.toNat-80+8) _ (sdData_val argc) (by omega)]
+    rw [getElem_writeMap8_disjoint ms4 (fsp.toNat-80+8) _ (sdData_val argc) (slotStore_disjoint fsp.toNat 56 o 8 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 ms3 (fsp.toNat-80+64) (sdData_val s0v))[_]? = _
-    rw [getElem_writeMap8_disjoint ms3 (fsp.toNat-80+64) _ (sdData_val s0v) (by omega)]
+    rw [getElem_writeMap8_disjoint ms3 (fsp.toNat-80+64) _ (sdData_val s0v) (slotStore_disjoint fsp.toNat 56 o 64 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 ms2 (fsp.toNat-80+72) (sdData_val retAddr))[_]? = _
-    rw [getElem_writeMap8_disjoint ms2 (fsp.toNat-80+72) _ (sdData_val retAddr) (by omega)]
+    rw [getElem_writeMap8_disjoint ms2 (fsp.toNat-80+72) _ (sdData_val retAddr) (slotStore_disjoint fsp.toNat 56 o 72 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 ms1 (fsp.toNat-80+48) (sdData_val s2v))[_]? = _
-    rw [getElem_writeMap8_disjoint ms1 (fsp.toNat-80+48) _ (sdData_val s2v) (by omega)]
+    rw [getElem_writeMap8_disjoint ms1 (fsp.toNat-80+48) _ (sdData_val s2v) (slotStore_disjoint fsp.toNat 56 o 48 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
   have hs2M : read64 mb5 (fsp.toNat - 80 + 48) = some s2v.toNat := by
     apply hread_spill 48 s2v ms1; intro o ho
     show (writeMap8 mb4 (fsp.toNat-80+32) (sdData_val LV2))[_]? = _
-    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (by omega)]
+    rw [getElem_writeMap8_disjoint mb4 (fsp.toNat-80+32) _ (sdData_val LV2) (slotStore_disjoint fsp.toNat 48 o 32 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb3 (fsp.toNat-80+24) (sdData_val LV1))[_]? = _
-    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) _ (sdData_val LV1) (by omega)]
+    rw [getElem_writeMap8_disjoint mb3 (fsp.toNat-80+24) _ (sdData_val LV1) (slotStore_disjoint fsp.toNat 48 o 24 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb2 (fsp.toNat-80+16) (sdData_val LV0))[_]? = _
-    rw [getElem_writeMap8_disjoint mb2 (fsp.toNat-80+16) _ (sdData_val LV0) (by omega)]
+    rw [getElem_writeMap8_disjoint mb2 (fsp.toNat-80+16) _ (sdData_val LV0) (slotStore_disjoint fsp.toNat 48 o 16 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 mb1 (fsp.toNat-80+0) (sdData_val argsBase))[_]? = _
-    rw [getElem_writeMap8_disjoint mb1 (fsp.toNat-80+0) _ (sdData_val argsBase) (by omega)]
+    rw [getElem_writeMap8_disjoint mb1 (fsp.toNat-80+0) _ (sdData_val argsBase) (slotStore_disjoint fsp.toNat 48 o 0 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 ms4 (fsp.toNat-80+8) (sdData_val argc))[_]? = _
-    rw [getElem_writeMap8_disjoint ms4 (fsp.toNat-80+8) _ (sdData_val argc) (by omega)]
+    rw [getElem_writeMap8_disjoint ms4 (fsp.toNat-80+8) _ (sdData_val argc) (slotStore_disjoint fsp.toNat 48 o 8 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 ms3 (fsp.toNat-80+64) (sdData_val s0v))[_]? = _
-    rw [getElem_writeMap8_disjoint ms3 (fsp.toNat-80+64) _ (sdData_val s0v) (by omega)]
+    rw [getElem_writeMap8_disjoint ms3 (fsp.toNat-80+64) _ (sdData_val s0v) (slotStore_disjoint fsp.toNat 48 o 64 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
     show (writeMap8 ms2 (fsp.toNat-80+72) (sdData_val retAddr))[_]? = _
-    rw [getElem_writeMap8_disjoint ms2 (fsp.toNat-80+72) _ (sdData_val retAddr) (by omega)]
+    rw [getElem_writeMap8_disjoint ms2 (fsp.toNat-80+72) _ (sdData_val retAddr) (slotStore_disjoint fsp.toNat 48 o 72 ho (by decide) (by decide) (by decide) (by decide) (by decide) hfsp80)]
   -- cN.σ.mem = mb5 outside [sret, sret+24) (value_null carve-out); the four spills
   -- live in [fsp-80, fsp), disjoint via sret_frame.
   have hcN_spill : ∀ k : Nat, (fsp.toNat - 80 ≤ k ∧ k < fsp.toNat) → cN.σ.mem[k]? = mb5[k]? := by
