@@ -133,3 +133,99 @@ lemmas (`eqDispatch_bufa_repr`/`bufb_repr`) is NOT yet in-lined into `blockC_eqn
 lemma so `eqDispatch_mem_tower`'s `lds=[b0..b5]` shape holds) is the one remaining lift to make the
 front UNconditional on the dispatch-run, and is the natural next step. The reusable readback lemmas
 themselves (`valueRepr_of_reflected_copy`, `eqDispatch_bufa/bufb_repr`, blocker B) are already green.
+
+---
+
+## Execution log (2026-08-30, session 2) — dispatch-run lift: items 1 & 2 LANDED; item 3 blocker identified
+
+Goal: make the eq/ne front UNconditional on the dispatch-run (eliminate `EqResid.hFront`
+bundling of `Steps c2 cD` + `EqFrontData`), reaching true div-parity where `DivResid` is
+stated purely about the POST-`TwoSubReturn` config `c'` and `blockC_div` runs the dispatch
+INTERNALLY.
+
+### Landed (all green via `lake env lean`, ~3.1s, olean regenerated; axiom-clean ⊆ {propext, Classical.choice, Quot.sound})
+
+1. **`eqDispatch_mem_frame` / `neDispatch_mem_frame`** (item 1) — the eq/ne analogue of
+   `divDispatch_mem_frame`.  Outside `[base, base+0x108)` the post-dispatch memory
+   `writeLog m0 (evalBlocks eqDispatch (init (eqDispL base) lds)).log` agrees with `m0`.
+   Every `eqDispatch` store is `x2`-relative at offset ≤ 0x108 (decide), so via the generic
+   `evalBlocks_frame_offsets` + `writeLog_getElem_disjoint` + `evalBlocks_init_log_width`.
+   The two generics `evalBlocks_log_shift`/`evalBlocks_frame_offsets` live in `EvalDivRow`
+   (NOT in this file's import DAG), so reproved locally verbatim.
+
+2. **`eqDispatch_log_trunc` / `neDispatch_log_trunc`** (item 2, the truncation) — the
+   reflected log depends only on `lds`'s first 6 loads: `lds → lds6 lds` (the six-element
+   `getD` normal form) leaves the log unchanged, **by `rfl` after a six-case `cons` split of
+   `lds`**.  LANDED SPECIFIC (eqDispatch + neDispatch), not general: a general
+   "log depends on `lds.take (loadCount bs)`" lemma is NOT `rfl` for arbitrary `bs` (needs a
+   `loadCount` recursion + non-`rfl` induction on block bodies), whereas the concrete block
+   reduces definitionally — the six-case `rfl` IS the exponentiating move for this chain.
+   Measured 0.5s standalone.
+
+3. **`eqDispatch_bufa_repr_lds` / `bufb_repr_lds` / `ne…`** (item 2 wired) — the readback
+   at the *existential* dispatch `lds`.  `eqDispatch_bufa_repr` (`EqNeReprReadback`) requires
+   the six-element `[b0..b5]` shape; these wrappers rewrite the tower via
+   `eqDispatch_log_trunc` and feed the six `LPins8` from `eqDispatch_lpins` (whose `getD k`
+   outputs ARE `lds6`'s elements) — so the readback now lands on the actual
+   `EqDispatchPostS`/`NeDispatchPostS` memory for the dispatch's opaque `lds`.
+
+check_all THEOREMS extended with the 8 new capstones (mem_frame ×2, log_trunc ×2,
+repr_lds ×4).
+
+### Item 3 (the full internal reseat) — NOT landed; exact blocker
+
+The front is STILL closed only to the current `EqResid` (which bundles `Steps c2 cD` +
+`EqFrontData`, i.e. the dispatch-run + post-dispatch reprs `hReprA`/`hReprB` on `mA` given).
+To make `blockC_eqne_front` run the dispatch internally (div-parity, `EqResid` a `DivResid`-
+shaped structure on `c2`), I established the exact composition:
+
+  `TwoSubReturn c2` → run `evalEqChain_dispatch` (0x8000351c → EqDispatchPostS, `lds` opaque)
+  → `eqDispatch_mem_frame` (transport 5 loaded predicates m0→mA: `valueEqualLoaded_of_agree`,
+    `jumpTable_of_agree`, `strcmpLoaded_of_agree`, `maskPinned_of_agree`, `loaded_bool_agreeP`,
+    `loaded_eval_expr_agreeP` — ALL already exist, `ValueEqualSpec3`/`EvalNotSim`/`EvalSimCommon`)
+  → `eqDispatch_{bufa,bufb}_repr_lds` (operand reprs on mA) → `eqnePreBridge`
+    ≫ `value_equal_spec_full` ≫ `veReturnBridge` (all landed).
+
+**BLOCKER (hard, scope): the readback needs the six `LPins8 m0 (base+0x78..) (lds.getD k)`,
+which come ONLY from the dispatch `ChainFacts` — and `EqDispatchPostS` (the post that
+`evalEqChain_dispatch` produces) DISCARDS the `ChainFacts`/`lds` pins.**  `EqDispatchPostS`
+carries only `mem = writeLog m0 (evalBlocks eqDispatch (init (eqDispL sp) lds)).log`; the
+semantic fact "`lds.getD 0` = the m0 bytes at `base+0x78`" (i.e. `LPins8 m0 (base+0x78)
+(lds.getD 0)`) is guaranteed by the machine `ld` semantics but is NOT recoverable from that
+post.  `eqDispatch_lpins` extracts the `LPins8`s from `ChainFacts`, but nothing between
+`evalEqChain_dispatch` and `blockC_eqne_front` carries a `ChainFacts`.
+
+Two feasible routes, BOTH out of the sanctioned scope ("existing statements unchanged
+except within `rows/EvalEqNeFront.lean`"):
+  (a) strengthen `EqDispatchPostS`/`NeDispatchPostS` (in `EqNeDispatchStrong.lean`) — and
+      `evalEqChain_dispatch`/`evalNeChain_dispatch` (in `EvalEqNeArm.lean`) — to ALSO expose
+      the six `LPins8 m0 (base+off) (lds.getD k)` (or the whole `ChainFacts`).  Then
+      `blockC_eqne_front` feeds them straight into `eqDispatch_{bufa,bufb}_repr_lds`.  This
+      is the RIGHT fix (~1 extra conjunct on the strong post + rethread through the two arm
+      bridges); the readback wiring on this side is DONE.
+  (b) re-derive the entry linkage 0x8000351c→0x800036e4 INLINE via `evalBinopChain_run`
+      (mem unchanged, `σ'.mem = σ.mem`), then call `eqDispatch_facts` at the arm-entry σ'
+      MYSELF (keeping its `ChainFacts`/`lds`) and run `eqDispatchRowS` on that `lds`.  All
+      pieces exist and are front-reachable, but this duplicates `evalEqChain_dispatch`'s
+      ~150-line geometry/pin discharge (op-token/kind bytes, slot pins, operand-word bytes
+      from the two source reprs) verbatim — a large single-file addition (host `EvalDivRow`
+      runs an 8M heartbeat budget for the analogous body; this file is capped at 120s).
+
+Additionally, item 3 needs the `EqNeBoxPre` bundle (consumed by `blockC_eq`/`blockC_ne` in
+`eqBlockC_bridge`) stated on the post-dispatch `mA`, so `EqResid` (on c2) must supply it
+frame-conditionally (`∀ mA agreeing outside [base,base+0x108) → EqNeBoxPre … mA`) and
+`blockC_eqne_front` instantiate it via the same mem_frame — the box slots at
+`sp-40..sp-8` are ABOVE the dispatch window (`sp-1088+0x108 = sp-824`), so they survive; the
+`Value_boolLoaded`/`Eval_exprLoaded`/store-survival clauses transport via the same agreeP
+lemmas.  This is mechanical once route (a)/(b) supplies the `LPins8`s.
+
+### Verdict
+- Front unconditional on the dispatch-run NOW? **No** — still gated on `EqResid.hFront`.
+- Remaining residual classes vs `DivResid`: `EqResid` currently carries STRICTLY MORE than
+  `DivResid` (it bundles the dispatch-run `Steps c2 cD` + post-dispatch reprs, which `DivResid`
+  does not).  Everything needed to reach parity is landed EXCEPT the `LPins8`-exposure from
+  the dispatch post (blocker above).  Reachable div-parity residual (once unblocked): loaded
+  images (`Value_equalLoaded`/`JumpTable`/`StrcmpLoaded`/`MaskPinned`/`Value_boolLoaded`) +
+  operand reprs + geometry + str-witness + φ box — same shape class as `DivResid`.
+- Truncation: landed SPECIFIC (eqDispatch + neDispatch), not general — rationale above.
+- Elab: whole `rows/EvalEqNeFront.lean` = ~3.1s (well under 120s); truncation standalone 0.5s.

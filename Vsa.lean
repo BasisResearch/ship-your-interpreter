@@ -306,6 +306,8 @@ import Vsa.Sim.DeriveCase
 import Vsa.Sim.LoopStep
 import Vsa.Sim.LoopScaffoldClose
 import Vsa.Sim.rows.LoopSteps
+import Vsa.Sim.ReprStackSurvival
+import Vsa.Sim.SeqBodyOracle
 import Vsa.Sim.ErrorSites
 import Vsa.Sim.ErrorSiteJal
 import Vsa.Sim.ChainFactsTac
