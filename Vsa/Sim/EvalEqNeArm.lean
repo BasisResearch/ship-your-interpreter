@@ -91,7 +91,9 @@ each bridge short. -/
 /-- The generic entry-linkage battery, applied to land the arm entry pins at `armPC`
 for an `eq`/`ne`-shaped op.  A thin wrapper over `evalBinopChain_run` naming only the
 `sp`(=v2) frame base the eq/ne glue needs. -/
-theorem evalEqChain_dispatch (σ : MState) (i u : Nat) (vm sp v8 sret Wl : BitVec 64)
+theorem evalEqChain_dispatch (σ : MState) (i u : Nat)
+    (vm sp v8 sret Wl kindR kindL : BitVec 64)
+    (t0 t1 t2 t3 : BitVec 8)
     (b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 d4 d5 d6 d7 : BitVec 8)
     (k0 k1 k2 k3 k4 k5 k6 k7 : BitVec 8)
     (s0 s1 s2 s3 : BitVec 8)
@@ -103,17 +105,18 @@ theorem evalEqChain_dispatch (σ : MState) (i u : Nat) (vm sp v8 sret Wl : BitVe
     (hx9 : σ.regs.get? Register.x9 = some sret)
     (hx19 : σ.regs.get? Register.x19 = some Wl)
     (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
-    (hc : bytesVal MKind.lw [c0, c1, c2, c3] = (2#64 : BitVec 64))
-    (hk : bytesVal MKind.ld [k0, k1, k2, k3, k4, k5, k6, k7] = (2#64 : BitVec 64))
+    (ht : bytesVal MKind.lw [t0, t1, t2, t3] = (19#64 : BitVec 64))
+    (hc : bytesVal MKind.lw [c0, c1, c2, c3] = kindR)
+    (hk : bytesVal MKind.ld [k0, k1, k2, k3, k4, k5, k6, k7] = kindL)
     (a_lo : 0x80000000 ≤ (v8 + sign_extend (m := 64) (0x008#12)).toNat)
     (a_hi : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ 0x100000000)
     (a_ht : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v8 + sign_extend (m := 64) (0x008#12)).toNat)
     (a_al : (v8 + sign_extend (m := 64) (0x008#12)).toNat % 4 = 0)
-    (a_p0 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat]? = some (0x13#8))
-    (a_p1 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 1]? = some (0x00#8))
-    (a_p2 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 2]? = some (0x00#8))
-    (a_p3 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 3]? = some (0x00#8))
+    (a_p0 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat]? = some t0)
+    (a_p1 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 1]? = some t1)
+    (a_p2 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 2]? = some t2)
+    (a_p3 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 3]? = some t3)
     (b_lo : 0x80000000 ≤ (v8 + sign_extend (m := 64) (0x004#12)).toNat)
     (b_hi : (v8 + sign_extend (m := 64) (0x004#12)).toNat + 4 ≤ 0x100000000)
     (b_ht : (v8 + sign_extend (m := 64) (0x004#12)).toNat + 4 ≤ tohostAddr
@@ -168,11 +171,11 @@ theorem evalEqChain_dispatch (σ : MState) (i u : Nat) (vm sp v8 sret Wl : BitVe
   subst hs0 hs1 hs2 hs3
   obtain ⟨σ', i', hsteps, hi', hG', hpc', hx10', hx12', hx16', hx17', hx2', hx9', hx19',
       hmem', hout', hmi', hframe'⟩ :=
-    evalBinopChain_run σ i u vm sp v8 sret Wl
+    evalBinopChain_run σ i u vm sp v8 sret Wl kindR kindL
       19#64 8#64 0x80019fa4#64 0x800036e4#64
-      0x13#8 0x00#8 0x00#8 0x00#8 0x60#8 0x97#8 0xfe#8 0xff#8
+      t0 t1 t2 t3 0x60#8 0x97#8 0xfe#8 0xff#8
       b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 d4 d5 d6 d7 k0 k1 k2 k3 k4 k5 k6 k7
-      (by decide) (by decide) (by decide) (by decide) (by decide)
+      ht (by rw [ht]; decide) (by decide) (by decide) (by rw [ht]; decide)
       (by decide) (by decide) (by decide) (by decide) (by decide)
       hG hpc hmi hx2 hx8 hx9 hx19 hmem hc hk
       a_lo a_hi a_ht a_al a_p0 a_p1 a_p2 a_p3
@@ -198,7 +201,9 @@ theorem evalEqChain_dispatch (σ : MState) (i u : Nat) (vm sp v8 sret Wl : BitVe
 #print axioms evalEqChain_dispatch
 
 /-- **The full-span `.ne` item-1 bridge: `0x8000351c → 0x8000376c`.** -/
-theorem evalNeChain_dispatch (σ : MState) (i u : Nat) (vm sp v8 sret Wl : BitVec 64)
+theorem evalNeChain_dispatch (σ : MState) (i u : Nat)
+    (vm sp v8 sret Wl kindR kindL : BitVec 64)
+    (t0 t1 t2 t3 : BitVec 8)
     (b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 d4 d5 d6 d7 : BitVec 8)
     (k0 k1 k2 k3 k4 k5 k6 k7 : BitVec 8)
     (s0 s1 s2 s3 : BitVec 8)
@@ -210,17 +215,18 @@ theorem evalNeChain_dispatch (σ : MState) (i u : Nat) (vm sp v8 sret Wl : BitVe
     (hx9 : σ.regs.get? Register.x9 = some sret)
     (hx19 : σ.regs.get? Register.x19 = some Wl)
     (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
-    (hc : bytesVal MKind.lw [c0, c1, c2, c3] = (2#64 : BitVec 64))
-    (hk : bytesVal MKind.ld [k0, k1, k2, k3, k4, k5, k6, k7] = (2#64 : BitVec 64))
+    (ht : bytesVal MKind.lw [t0, t1, t2, t3] = (17#64 : BitVec 64))
+    (hc : bytesVal MKind.lw [c0, c1, c2, c3] = kindR)
+    (hk : bytesVal MKind.ld [k0, k1, k2, k3, k4, k5, k6, k7] = kindL)
     (a_lo : 0x80000000 ≤ (v8 + sign_extend (m := 64) (0x008#12)).toNat)
     (a_hi : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ 0x100000000)
     (a_ht : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v8 + sign_extend (m := 64) (0x008#12)).toNat)
     (a_al : (v8 + sign_extend (m := 64) (0x008#12)).toNat % 4 = 0)
-    (a_p0 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat]? = some (0x11#8))
-    (a_p1 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 1]? = some (0x00#8))
-    (a_p2 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 2]? = some (0x00#8))
-    (a_p3 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 3]? = some (0x00#8))
+    (a_p0 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat]? = some t0)
+    (a_p1 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 1]? = some t1)
+    (a_p2 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 2]? = some t2)
+    (a_p3 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 3]? = some t3)
     (b_lo : 0x80000000 ≤ (v8 + sign_extend (m := 64) (0x004#12)).toNat)
     (b_hi : (v8 + sign_extend (m := 64) (0x004#12)).toNat + 4 ≤ 0x100000000)
     (b_ht : (v8 + sign_extend (m := 64) (0x004#12)).toNat + 4 ≤ tohostAddr
@@ -275,11 +281,11 @@ theorem evalNeChain_dispatch (σ : MState) (i u : Nat) (vm sp v8 sret Wl : BitVe
   subst hs0 hs1 hs2 hs3
   obtain ⟨σ', i', hsteps, hi', hG', hpc', hx10', hx12', hx16', hx17', hx2', hx9', hx19',
       hmem', hout', hmi', hframe'⟩ :=
-    evalBinopChain_run σ i u vm sp v8 sret Wl
+    evalBinopChain_run σ i u vm sp v8 sret Wl kindR kindL
       17#64 6#64 0x80019f9c#64 0x80003734#64
-      0x11#8 0x00#8 0x00#8 0x00#8 0xb0#8 0x97#8 0xfe#8 0xff#8
+      t0 t1 t2 t3 0xb0#8 0x97#8 0xfe#8 0xff#8
       b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 d4 d5 d6 d7 k0 k1 k2 k3 k4 k5 k6 k7
-      (by decide) (by decide) (by decide) (by decide) (by decide)
+      ht (by rw [ht]; decide) (by decide) (by decide) (by rw [ht]; decide)
       (by decide) (by decide) (by decide) (by decide) (by decide)
       hG hpc hmi hx2 hx8 hx9 hx19 hmem hc hk
       a_lo a_hi a_ht a_al a_p0 a_p1 a_p2 a_p3

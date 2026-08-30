@@ -140,7 +140,7 @@ theorem evalDivChain_run_gen (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVe
       (∃ w, σ'.regs.get? Register.minstret = some w) ∧
       (∀ R : Register, AbiPreservedNoise R → (Register.x8 == R) = false →
         σ'.regs.get? R = σ.regs.get? R) :=
-  evalBinopChain_run σ i u vm v2 v8 sret Wl
+  evalBinopChain_run σ i u vm v2 v8 sret Wl 2#64 2#64
     14#64 3#64 0x80019f90#64 0x800037dc#64
     0x0e#8 0x00#8 0x00#8 0x00#8 0x58#8 0x98#8 0xfe#8 0xff#8
     b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 d4 d5 d6 d7 k0 k1 k2 k3 k4 k5 k6 k7

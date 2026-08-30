@@ -142,7 +142,7 @@ theorem evalModChain_dispatch (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitV
   subst hs0 hs1 hs2 hs3
   obtain ⟨σ', i', hsteps, hi', hG', hpc', hx10', hx12', hx16', hx17', hx2', hx9', hx19',
       hmem', hout', hmi', hframe'⟩ :=
-    evalBinopChain_run σ i u vm v2 v8 sret Wl
+    evalBinopChain_run σ i u vm v2 v8 sret Wl 2#64 2#64
       15#64 4#64 0x80019f94#64 0x80003784#64
       0x0f#8 0x00#8 0x00#8 0x00#8 0x00#8 0x98#8 0xfe#8 0xff#8
       b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 d4 d5 d6 d7 k0 k1 k2 k3 k4 k5 k6 k7

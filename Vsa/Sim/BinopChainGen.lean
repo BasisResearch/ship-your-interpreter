@@ -72,9 +72,12 @@ set_option maxRecDepth 100000
 generalisation of `evalDivChain_run` reusing the arm-independent prefix blocks
 `gtChainB1`/`gtChainB2a`/`gtChainB2b` VERBATIM (16 steps), parameterised by the four
 data points (`tokBytes`, `idx`, `slotAddr`, `slotBytes`, `armPC`) via the four
-per-op `decide` hypotheses.  Lands the arm-entry pins (`x16=2, x10=2, x2=v2,
-x9=sret, x17=Wr, x19=Wl`, plus `x12=token`) at `armPC`. -/
-theorem evalBinopChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 64)
+per-op `decide` hypotheses.  Lands the arm-entry pins (`x16=kindL`,
+`x10=kindR`, `x2=v2`, `x9=sret`, `x17=Wr`, `x19=Wl`, plus `x12=token`) at
+`armPC`. Integer-only callers instantiate both kinds with `2`; value-generic
+eq/ne callers retain the represented operands' actual tags. -/
+theorem evalBinopChain_run (σ : MState) (i u : Nat)
+    (vm v2 v8 sret Wl kindR kindL : BitVec 64)
     (token idx slotAddr armPC : BitVec 64)
     (t0 t1 t2 t3 : BitVec 8) (s0 s1 s2 s3 : BitVec 8)
     (b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 d4 d5 d6 d7 : BitVec 8)
@@ -109,8 +112,8 @@ theorem evalBinopChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 
     (hx9 : σ.regs.get? Register.x9 = some sret)
     (hx19 : σ.regs.get? Register.x19 = some Wl)
     (hmem : Vsa.Sim.Code.Eval_exprLoaded σ.mem)
-    (hc : bytesVal MKind.lw [c0, c1, c2, c3] = (2#64 : BitVec 64))
-    (hk : bytesVal MKind.ld [k0, k1, k2, k3, k4, k5, k6, k7] = (2#64 : BitVec 64))
+    (hc : bytesVal MKind.lw [c0, c1, c2, c3] = kindR)
+    (hk : bytesVal MKind.ld [k0, k1, k2, k3, k4, k5, k6, k7] = kindL)
     (a_lo : 0x80000000 ≤ (v8 + sign_extend (m := 64) (0x008#12)).toNat)
     (a_hi : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ 0x100000000)
     (a_ht : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ tohostAddr
@@ -169,9 +172,9 @@ theorem evalBinopChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 
     ∃ (σ' : MState) (i' : Nat),
       Steps ⟨σ, i, u⟩ ⟨σ', i', u + 16⟩ ∧ i' < 2 ∧ GoodState σ' ∧
       σ'.regs.get? Register.PC = some armPC ∧
-      σ'.regs.get? Register.x10 = some (2#64) ∧
+      σ'.regs.get? Register.x10 = some kindR ∧
       σ'.regs.get? Register.x12 = some token ∧
-      σ'.regs.get? Register.x16 = some (2#64) ∧
+      σ'.regs.get? Register.x16 = some kindL ∧
       σ'.regs.get? Register.x17
         = some (bytesVal MKind.ld [d0, d1, d2, d3, d4, d5, d6, d7]) ∧
       σ'.regs.get? Register.x2 = some v2 ∧
@@ -212,7 +215,7 @@ theorem evalBinopChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 
   have hx12_1 : σ1.regs.get? Register.x12 = some token :=
     hTokVal ▸ (block_reg hGH1 12 : σ1.regs.get? Register.x12
       = some (bytesVal MKind.lw [t0, t1, t2, t3]))
-  have hx10_1 : σ1.regs.get? Register.x10 = some (2#64) :=
+  have hx10_1 : σ1.regs.get? Register.x10 = some kindR :=
     hc ▸ (block_reg hGH1 10 : σ1.regs.get? Register.x10
       = some (bytesVal MKind.lw [c0, c1, c2, c3]))
   have hx17_1 : σ1.regs.get? Register.x17
@@ -253,7 +256,7 @@ theorem evalBinopChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 
     (hframe2 Register.x2 (by decide) (by decide)).trans hx2_1
   have hx12_2 : σ2.regs.get? Register.x12 = some token :=
     (hframe2 Register.x12 (by decide) (by decide)).trans hx12_1
-  have hx10_2 : σ2.regs.get? Register.x10 = some (2#64) :=
+  have hx10_2 : σ2.regs.get? Register.x10 = some kindR :=
     (hframe2 Register.x10 (by decide) (by decide)).trans hx10_1
   have hx17_2 : σ2.regs.get? Register.x17
       = some (bytesVal MKind.ld [d0, d1, d2, d3, d4, d5, d6, d7]) :=
@@ -310,12 +313,12 @@ theorem evalBinopChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 
             = BitVec.update ((bytesVal MKind.lw [s0, s1, s2, s3]
               + 0x80019f84#64) + sign_extend (m := 64) (0x000#12)) 0 0#1
           rfl] at hpc3
-  have hx16_3 : σ3.regs.get? Register.x16 = some (2#64) :=
+  have hx16_3 : σ3.regs.get? Register.x16 = some kindL :=
     hk ▸ (block_reg hGH3 16 : σ3.regs.get? Register.x16
       = some (bytesVal MKind.ld [k0, k1, k2, k3, k4, k5, k6, k7]))
   have hx12_3 : σ3.regs.get? Register.x12 = some token :=
     (hframe3 Register.x12 (by decide) (by decide)).trans hx12_2
-  have hx10_3 : σ3.regs.get? Register.x10 = some (2#64) :=
+  have hx10_3 : σ3.regs.get? Register.x10 = some kindR :=
     (hframe3 Register.x10 (by decide) (by decide)).trans hx10_2
   have hx17_3 : σ3.regs.get? Register.x17
       = some (bytesVal MKind.ld [d0, d1, d2, d3, d4, d5, d6, d7]) :=
