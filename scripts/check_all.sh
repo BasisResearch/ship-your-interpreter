@@ -38,9 +38,10 @@ fail() { echo "check_all: FAIL: $*" >&2; exit 1; }
 
 # ---------------------------------------------------------------- (a) build
 if [ "$SKIP_BUILD" -eq 0 ]; then
-  echo "== stage a: lake build"
+  VSA_LAKE_JOBS="${VSA_LAKE_JOBS:-3}"
+  echo "== stage a: lake build (jobs=$VSA_LAKE_JOBS)"
   BUILD_LOG=$(mktemp)
-  lake build 2>&1 | tee "$BUILD_LOG" || fail "stage a: lake build failed"
+  lake -Kjobs="$VSA_LAKE_JOBS" build 2>&1 | tee "$BUILD_LOG" || fail "stage a: lake build failed"
   grep -q "Build completed successfully" "$BUILD_LOG" \
     || fail "stage a: lake build did not complete successfully"
 
@@ -86,6 +87,11 @@ PYEOF
 else
   echo "== stage a: lake build SKIPPED (--skip-build)"
 fi
+
+# ----------------------------------------- stage a3: generated-interface drift
+echo "== stage a3: generated term-case bundle"
+python3 scripts/gen_term_case_bundle.py --check \
+  || fail "stage a3: Vsa/Sim/TermCaseBundle.lean is stale"
 
 # ------------------------------------------------------------ (b) grep gate
 echo "== stage b: sorry / native_decide / axiom gate"
@@ -453,6 +459,12 @@ THEOREMS=(
   # L7/L8 close skeleton — term/stuck_sim → refinement (conditional)
   Vsa.Sim.TermSimClose.execSeq_sim_of_cases         # TermSimClose (L7: ExecSeq-rooted twin of term_sim_of_cases — same 9 motives + 50 premises via @ExecSeq.rec, exposes mExecSeq)
   Vsa.Sim.TermSimClose.termSimClosed                # TermSimClose (L7: InterpSim.term_sim from the 50-premise M4 bundle + the program-entry bridge hEntryHalts)
+  Vsa.Sim.ImageGeom.stackBounds                     # TermImageGeom (shared static image geometry + dynamic frame facts → StackBounds)
+  Vsa.Sim.imageGeom_of_addResid                     # TermImageGeom (compatibility bridge from the first concrete binary residual)
+  Vsa.Sim.addResid_stackBounds                      # TermImageGeom (first case-row consumer of the shared geometry carrier)
+  Vsa.Sim.TermCaseBundle.term_sim_of_bundle         # TermCaseBundle (generated named interface for all 50 mutual-recursion case premises)
+  Vsa.Sim.TermCaseBundle.execSeq_sim_of_bundle      # TermCaseBundle (ExecSeq-rooted assembly from the same named bundle)
+  Vsa.Sim.TermCaseBundle.termSimClosed_of_bundle    # TermCaseBundle (term_sim from the named bundle + sole entry bridge)
   Vsa.Sim.stepOnce_tohost_G                          # TermEntry (M4/M6: exit-store stepOnce halts, generic exit code e — exit-70 sibling generalized)
   Vsa.Sim.exitStoreHalts0                            # TermEntry (M4/M6: clean-exit(0) store → HTIF-halt-0 bridge; exit-0 twin of exitStoreHalts)
   Vsa.Sim.cleanExitTail                              # TermEntry (M4/M6: .normal-return continuation → Halts c out 0, via ExitTailChain0 + exitStoreHalts0)

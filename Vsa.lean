@@ -140,6 +140,7 @@ import Vsa.Sim.rows.EvalLtRow
 import Vsa.Sim.rows.EvalLeRow
 import Vsa.Sim.rows.EvalGtRow
 import Vsa.Sim.rows.EvalAddRow
+import Vsa.Sim.TermImageGeom
 import Vsa.Sim.rows.EvalSubRow
 import Vsa.Sim.rows.IntPostEpilogue
 import Vsa.Sim.BinopTailGen
@@ -420,6 +421,7 @@ import Vsa.Sim.ExitPathSeg
 import Vsa.Sim.ExitPathSpans
 import Vsa.Sim.ErrorSimFull
 import Vsa.Sim.TermSimClose
+import Vsa.Sim.TermCaseBundle
 import Vsa.Sim.TermEntry
 import Vsa.Sim.StuckSimClose
 import Vsa.Sim.InterpSimBundle
