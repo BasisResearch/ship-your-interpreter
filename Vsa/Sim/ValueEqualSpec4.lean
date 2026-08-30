@@ -58,13 +58,14 @@ namespace Vsa.Sim
 `mem = m0`, memory agrees with `m0` outside the scratch window `[sp-16, sp)`, and `x2` is
 back to the entry `sp`. -/
 def ve_str_post (g : (R : Register) → Option (RegisterType R)) (r sp : BitVec 64)
-    (va vb : Value) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
+    (va vb : Value) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
   GoodState c.σ ∧
   c.σ.regs.get? Register.PC = some (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1) ∧
   c.σ.regs.get? Register.x10 = some (cond (Value.equal va vb) (1#64) (0#64)) ∧
   c.σ.regs.get? Register.x1 = some r ∧
   c.σ.regs.get? Register.x2 = some sp ∧
   (∃ w, c.σ.regs.get? Register.minstret = some w) ∧ c.tick < 2 ∧
+  c.σ.sailOutput = o ∧
   (∀ a, ¬ (sp.toNat - 16 ≤ a ∧ a < sp.toNat) → c.σ.mem[a]? = m0[a]?) ∧
   -- The frame is over `NotWrittenVEStr` — strcmp additionally clobbers its caller-saved
   -- scratch (`x5-x7`, `x11-x13`), which the str handler does NOT restore, so the wider
@@ -82,9 +83,9 @@ where `m1` agrees with `m0` off `[sp-16, sp)` and the spill slot `[sp-8, sp)` ho
 reads the spilled `r` back from the untouched slot `mem[sp-8] = sdData_val r`. -/
 theorem ve_str_epilogue
     (g : (R : Register) → Option (RegisterType R)) (r sp : BitVec 64) (x : BitVec 64)
-    (va vb : Value) (m0 m1 : Std.ExtHashMap Nat (BitVec 8))
+    (va vb : Value) (m0 m1 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
     (c : Config) (hi : c.tick < 2) (hG : GoodState c.σ)
-    (hloaded1 : Value_equalLoaded m1) (hmem : c.σ.mem = m1)
+    (hloaded1 : Value_equalLoaded m1) (hmem : c.σ.mem = m1) (hout : c.σ.sailOutput = o)
     (hpc : c.σ.regs.get? Register.PC = some (0x800028d8#64 : BitVec 64))
     (hra : c.σ.regs.get? Register.x1 = some (0x800028d8#64 : BitVec 64))
     (hx10 : c.σ.regs.get? Register.x10 = some x)
@@ -101,7 +102,7 @@ theorem ve_str_epilogue
     (he4lo : 0x80000000 ≤ (0x800028e4 : Nat)) (he4hi : (0x800028e4 : Nat) + 4 ≤ tohostAddr)
     -- the spill slot `[sp-8, sp)` of `m1` holds `sdData_val r` (from the `sd ra,8(sp)`)
     (hspill : m1 = writeMap8 m0 ((sp - 16#64).toNat + 8) (sdData_val r)) :
-    ∃ c', Steps c c' ∧ ve_str_post g r sp va vb m0 c' := by
+    ∃ c', Steps c c' ∧ ve_str_post g r sp va vb m0 o c' := by
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- spn = sp - 16 arithmetic
   have hspn_toNat : (sp - 16#64).toNat = sp.toNat - 16 := ve_sp_sub16_toNat sp hsp16
@@ -210,9 +211,11 @@ theorem ve_str_epilogue
   have hmemframe : ∀ a, ¬ (sp.toNat - 16 ≤ a ∧ a < sp.toNat) → σ4.mem[a]? = m0[a]? := by
     intro a ha
     rw [hmem4eq, hspill, getElem_writeMap8_disjoint _ _ _ _ (by rw [hspn_toNat]; omega)]
+  have hout4 : σ4.sailOutput = o :=
+    (by chain_out [hobs1, hobs2, hobs3, hobs4] : σ4.sailOutput = c.σ.sailOutput).trans hout
   refine ⟨⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩,
     (((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans (Steps.single hs4),
-    hG4, hpc4, ha0_4, hra_4, hsp_4, ⟨vmi4, hmi4⟩, hi4, hmemframe, hframe4⟩
+    hG4, hpc4, ha0_4, hra_4, hsp_4, ⟨vmi4, hmi4⟩, hi4, hout4, hmemframe, hframe4⟩
 
 /-! ## The whole `str` handler `0x800028c4 → ret`
 
@@ -223,9 +226,9 @@ with the stack-window post. -/
 theorem ve_str_handler
     (g : (R : Register) → Option (RegisterType R)) (bufa bufb r sp : BitVec 64)
     (sa sb : String) (pa' pb' : Nat) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) (σ : MState) (i : Nat) (steps0 : Nat)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) (σ : MState) (i : Nat) (steps0 : Nat)
     (hsteps0 : Steps c ⟨σ, i, steps0⟩) (hi : i < 2)
-    (hG : GoodState σ) (hmem : σ.mem = m0) (hloaded : Value_equalLoaded m0)
+    (hG : GoodState σ) (hmem : σ.mem = m0) (hout : σ.sailOutput = o) (hloaded : Value_equalLoaded m0)
     (hstrc : StrcmpLoaded m0) (hmask : MaskPinned m0)
     (hpc : σ.regs.get? Register.PC = some (0x800028c4#64 : BitVec 64))
     (ha0 : σ.regs.get? Register.x10 = some bufa) (ha1 : σ.regs.get? Register.x11 = some bufb)
@@ -243,20 +246,20 @@ theorem ve_str_handler
     (hwra : StrcmpWRegion (BitVec.ofNat 64 pa') csa.length)
     (hwrb : StrcmpWRegion (BitVec.ofNat 64 pb') csb.length)
     (hSR : VEStrRegions sp pa' pb' csa.length csb.length) :
-    ∃ c', Steps c c' ∧ ve_str_post g r sp (.str sa) (.str sb) m0 c' := by
+    ∃ c', Steps c c' ∧ ve_str_post g r sp (.str sa) (.str sb) m0 o c' := by
   -- the str frame at the handler entry (`NotWrittenVEStr ⊆ NotWrittenVE`)
   have hframestr : ∀ R : Register, NotWrittenVEStr R → σ.regs.get? R = g R :=
     fun R hR => hframe R (notWrittenVE_of_str hR)
   -- run through the strcmp call to `0x800028d8`
-  obtain ⟨c6, m1, x, hs6, hG6, htick6, hpc6, hra6, hx10_6, hbridge, hsp6, hmem6, _hmemframe6,
+  obtain ⟨c6, m1, x, hs6, hG6, htick6, hpc6, hra6, hx10_6, hbridge, hsp6, hmem6, hout6, _hmemframe6,
     hframeStr6, hm1def, hloaded1⟩ :=
-    ve_str_reaches_result g bufa bufb r sp sa sb pa' pb' csa csb m0 c σ i steps0
-      hsteps0 hi hG hmem hloaded hstrc hmask hpc ha0 ha1 hra hsp vmi hmi hrega hregb hraln4
+    ve_str_reaches_result g bufa bufb r sp sa sb pa' pb' csa csb m0 o c σ i steps0
+      hsteps0 hi hG hmem hout hloaded hstrc hmask hpc ha0 ha1 hra hsp vmi hmi hrega hregb hraln4
       hframe hpa hpb hca hcb hsa hsb hbra hbrb hwra hwrb hSR
   -- run the epilogue (minstret at c6 comes from `GoodState`)
   obtain ⟨vmi6, hmi6⟩ := hG6.minstret
   obtain ⟨c', hs', hpost'⟩ :=
-    ve_str_epilogue g r sp x (.str sa) (.str sb) m0 m1 c6 htick6 hG6 hloaded1 hmem6
+    ve_str_epilogue g r sp x (.str sa) (.str sb) m0 m1 o c6 htick6 hG6 hloaded1 hmem6 hout6
       hpc6 hra6 hx10_6 hsp6 vmi6 hmi6 hframeStr6 hbridge
       hSR.sp16 hSR.win_lo hSR.win_hi hSR.win_htif hSR.win_align hralign (by decide) (by decide)
       hm1def
@@ -273,8 +276,8 @@ theorem value_equal_spec_str
     (g : (R : Register) → Option (RegisterType R)) (bufa bufb r sp : BitVec 64)
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (sa sb : String)
     (pa' pb' : Nat) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config)
-    (hpre : ve_pre g bufa bufb r N φc (.str sa) (.str sb) m0 c)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config)
+    (hpre : ve_pre g bufa bufb r N φc (.str sa) (.str sb) m0 o c)
     (hsp : c.σ.regs.get? Register.x2 = some sp)
     (hstrc : StrcmpLoaded m0) (hmask : MaskPinned m0)
     (hraln4 : r.toNat % 4 = 0)
@@ -287,21 +290,21 @@ theorem value_equal_spec_str
     (hwra : StrcmpWRegion (BitVec.ofNat 64 pa') csa.length)
     (hwrb : StrcmpWRegion (BitVec.ofNat 64 pb') csb.length)
     (hSR : VEStrRegions sp pa' pb' csa.length csb.length) :
-    ∃ c', Steps c c' ∧ ve_str_post g r sp (.str sa) (.str sb) m0 c' := by
-  obtain ⟨hG, hloaded, hjt, hmem, hpc, ha0, ha1, hra, ⟨vmi, hmi⟩, htick,
+    ∃ c', Steps c c' ∧ ve_str_post g r sp (.str sa) (.str sb) m0 o c' := by
+  obtain ⟨hG, hloaded, hjt, hmem, hout, hpc, ha0, ha1, hra, ⟨vmi, hmi⟩, htick,
     hra', hrb', hrega, hregb, hrettgt, hframe⟩ := hpre
   -- dispatch to the handler at `0x800028c4` (`handlerAddr (.str _)`)
-  obtain ⟨σd, idd, hstepsd, hidd, hGd, hmemd, hpcd, ha0d, ha1d, hrad, ⟨vmid, hmid⟩, hframed⟩ :=
-    ve_to_handler g bufa bufb r N φc (.str sa) (.str sb) m0 c rfl hG hloaded hjt
-      hmem hpc ha0 ha1 hra vmi hmi htick hra' hrb' hrega hregb hframe
+  obtain ⟨σd, idd, hstepsd, hidd, hGd, hmemd, houtd, hpcd, ha0d, ha1d, hrad, ⟨vmid, hmid⟩, hframed⟩ :=
+    ve_to_handler g bufa bufb r N φc (.str sa) (.str sb) m0 o c rfl hG hloaded hjt
+      hmem hout hpc ha0 ha1 hra vmi hmi htick hra' hrb' hrega hregb hframe
   rw [show handlerAddr (Value.str sa) = 0x800028c4#64 from rfl] at hpcd
   -- `x2 = sp` survives the dispatch (`x2 ∈ NotWrittenVE`, tied to `g`)
   have hspd : σd.regs.get? Register.x2 = some sp := by
     rw [hframed Register.x2 (by decide)]
     have := hframe Register.x2 (by decide); rw [hsp] at this; exact this.symm
   -- run the handler from `0x800028c4`
-  exact ve_str_handler g bufa bufb r sp sa sb pa' pb' csa csb m0 c σd idd
-    (c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) hstepsd hidd hGd hmemd (hmem ▸ hloaded)
+  exact ve_str_handler g bufa bufb r sp sa sb pa' pb' csa csb m0 o c σd idd
+    (c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) hstepsd hidd hGd hmemd houtd (hmem ▸ hloaded)
     hstrc hmask hpcd ha0d ha1d hrad hspd vmid hmid hrega hregb hrettgt hraln4 hframed
     hpa hpb hca hcb hsa hsb hbra hbrb hwra hwrb hSR
 
@@ -317,10 +320,10 @@ if both operands are strings) to the stack-window post `ve_str_post`. -/
 theorem value_equal_spec_full
     (g : (R : Register) → Option (RegisterType R)) (bufa bufb r sp : BitVec 64)
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (va vb : Value)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config)
     (hφc : ∀ (a b : Vsa.While.Addr), φc a = φc b → a = b)
     (hN : ∀ (f h : NativeFn), N.addr f = N.addr h → f = h)
-    (hpre : ve_pre g bufa bufb r N φc va vb m0 c)
+    (hpre : ve_pre g bufa bufb r N φc va vb m0 o c)
     (hsp : c.σ.regs.get? Register.x2 = some sp)
     (hstrc : StrcmpLoaded m0) (hmask : MaskPinned m0) (hraln4 : r.toNat % 4 = 0)
     -- `str`-path witnesses, only consumed when `va = .str sa ∧ vb = .str sb`
@@ -333,13 +336,13 @@ theorem value_equal_spec_full
         StrcmpWRegion (BitVec.ofNat 64 pa') csa.length ∧
         StrcmpWRegion (BitVec.ofNat 64 pb') csb.length ∧
         VEStrRegions sp pa' pb' csa.length csb.length) :
-    ∃ c', Steps c c' ∧ ve_str_post g r sp va vb m0 c' := by
+    ∃ c', Steps c c' ∧ ve_str_post g r sp va vb m0 o c' := by
   by_cases hstr : ∃ sa sb, va = .str sa ∧ vb = .str sb
   · obtain ⟨sa, sb, hva, hvb⟩ := hstr
     subst hva; subst hvb
     obtain ⟨pa', pb', csa, csb, hpa, hpb, hca, hcb, hsa, hsb, hbra, hbrb, hwra, hwrb, hSR⟩ :=
       hstrwit sa sb rfl rfl
-    exact value_equal_spec_str g bufa bufb r sp N φc sa sb pa' pb' csa csb m0 c hpre hsp
+    exact value_equal_spec_str g bufa bufb r sp N φc sa sb pa' pb' csa csb m0 o c hpre hsp
       hstrc hmask hraln4 hpa hpb hca hcb hsa hsb hbra hbrb hwra hwrb hSR
   · -- non-`str`: use `value_equal_spec_nonstr`, weaken `mem = m0` to the window form
     have hnotstr : ∀ sa sb, ¬ (va = .str sa ∧ vb = .str sb) :=
@@ -347,14 +350,14 @@ theorem value_equal_spec_full
     -- `g x2 = sp` from the entry frame (`x2 ∈ NotWrittenVE`)
     have hgx2 : g Register.x2 = some sp := by
       have hframe0 : ∀ R : Register, NotWrittenVE R → c.σ.regs.get? R = g R :=
-        hpre.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2
+        hpre.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2
       have := hframe0 Register.x2 (by decide); rw [hsp] at this; exact this.symm
-    obtain ⟨c', hs', hG', hpc', ha0', hra', ⟨w, hmi'⟩, htick', hmem', hframe'⟩ :=
-      value_equal_spec_nonstr g bufa bufb r N φc va vb m0 hφc hN hnotstr c hpre
+    obtain ⟨c', hs', hG', hpc', ha0', hra', ⟨w, hmi'⟩, htick', hmem', hout', hframe'⟩ :=
+      value_equal_spec_nonstr g bufa bufb r N φc va vb m0 o hφc hN hnotstr c hpre
     -- `x2` is untouched by the non-`str` handlers: `x2 = g x2 = sp`
     have hsp' : c'.σ.regs.get? Register.x2 = some sp := by
       rw [hframe' Register.x2 (by decide), hgx2]
-    refine ⟨c', hs', hG', hpc', ha0', hra', hsp', ⟨w, hmi'⟩, htick', ?_,
+    refine ⟨c', hs', hG', hpc', ha0', hra', hsp', ⟨w, hmi'⟩, htick', hout', ?_,
       fun R hR => hframe' R (notWrittenVE_of_str hR)⟩
     intro a _; rw [hmem']
 

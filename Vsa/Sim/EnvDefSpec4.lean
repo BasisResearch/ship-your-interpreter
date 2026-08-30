@@ -280,25 +280,25 @@ scan-iteration `strcmp` call *without* any privFoot/disjointness ledger — the
 /-- `strcmp`'s post leaves memory unchanged: from a `strcmp_post` witness the returned
 config's memory equals the pinned entry memory `m0`.  (Projection of `strcmp_post`.) -/
 theorem strcmp_mem_unchanged (g : (R : Register) → Option (RegisterType R))
-    (r pa pb : BitVec 64) (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config)
-    (h : strcmp_post g r pa pb sa sb m0 c) : c.σ.mem = m0 :=
+    (r pa pb : BitVec 64) (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config)
+    (h : strcmp_post g r pa pb sa sb m0 o c) : c.σ.mem = m0 :=
   h.2.2.2.1
 
 /-- Any byte survives a `strcmp` call: the memory at the returned config equals the
 memory at entry.  Corollary used to carry the spilled callee-saveds and the env
 `FrameRepr` across each scan iteration. -/
 theorem byte_survives_strcmp (g : (R : Register) → Option (RegisterType R))
-    (r pa pb : BitVec 64) (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config)
-    (h : strcmp_post g r pa pb sa sb m0 c) (a : Nat) : c.σ.mem[a]? = m0[a]? := by
-  rw [strcmp_mem_unchanged g r pa pb sa sb m0 c h]
+    (r pa pb : BitVec 64) (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config)
+    (h : strcmp_post g r pa pb sa sb m0 o c) (a : Nat) : c.σ.mem[a]? = m0[a]? := by
+  rw [strcmp_mem_unchanged g r pa pb sa sb m0 o c h]
 
 /-- `Env_defineLoaded` survives a `strcmp` call: the returned memory equals `m0`, so the
 code text is unchanged.  (Rewrite of `strcmp_mem_unchanged` into the loaded predicate.) -/
 theorem loaded_envdef_survives_strcmp (g : (R : Register) → Option (RegisterType R))
-    (r pa pb : BitVec 64) (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config)
-    (h : strcmp_post g r pa pb sa sb m0 c) (hload : Env_defineLoaded m0) :
+    (r pa pb : BitVec 64) (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config)
+    (h : strcmp_post g r pa pb sa sb m0 o c) (hload : Env_defineLoaded m0) :
     Env_defineLoaded c.σ.mem := by
-  rw [strcmp_mem_unchanged g r pa pb sa sb m0 c h]; exact hload
+  rw [strcmp_mem_unchanged g r pa pb sa sb m0 o c h]; exact hload
 
 /-! ## Region / disjointness bundle for `env_define` Path 1
 

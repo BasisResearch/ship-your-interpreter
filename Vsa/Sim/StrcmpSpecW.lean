@@ -331,10 +331,11 @@ theorem neg_one_allOnes : (-1#64 : BitVec 64) = BitVec.allOnes 64 := by
 /-- Loop-head observation at `0xeb8`, word iteration `j` (stride 24). -/
 structure WHead (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (c : Config) : Prop where
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) (c : Config) : Prop where
   good : GoodState c.σ
   loaded : StrcmpLoaded c.σ.mem
   mem : c.σ.mem = m0
+  out : c.σ.sailOutput = o
   pc : c.σ.regs.get? Register.PC = some (0x80006eb8#64 : BitVec 64)
   a0 : c.σ.regs.get? Register.x10 = some (pa + BitVec.ofNat 64 (24*j))
   a1 : c.σ.regs.get? Register.x11 = some (pb + BitVec.ofNat 64 (24*j))
@@ -364,10 +365,11 @@ theorem strcmpWordVal_eq (w : BitVec 64) :
 `a5 = magic7f`. `wa`/`wb` are the ghost words at the current offset `24j`. -/
 structure WG0mid (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (c : Config) : Prop where
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) (c : Config) : Prop where
   good : GoodState c.σ
   loaded : StrcmpLoaded c.σ.mem
   mem : c.σ.mem = m0
+  out : c.σ.sailOutput = o
   pc : c.σ.regs.get? Register.PC = some (0x80006ed0#64 : BitVec 64)
   a0 : c.σ.regs.get? Register.x10 = some (pa + BitVec.ofNat 64 (24*j))
   a1 : c.σ.regs.get? Register.x11 = some (pb + BitVec.ofNat 64 (24*j))
@@ -392,10 +394,10 @@ structure WG0mid (g : (R : Register) → Option (RegisterType R))
 Produces `WG0mid` (`t0 = strlenWordVal wa`). -/
 theorem wg0_straight (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) :
-    Triple (WHead g pa pb r csa csb m0 j) (WG0mid g pa pb r csa csb m0 j) := by
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) :
+    Triple (WHead g pa pb r csa csb m0 o j) (WG0mid g pa pb r csa csb m0 o j) := by
   intro c hSt
-  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, ha5, ht2, hra, ⟨vmi, hmi⟩, htick,
+  obtain ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, ha5, ht2, hra, ⟨vmi, hmi⟩, htick,
     hrega, hregb, hcstra, hcstrb, hmaskpin, hpre, hjle, hframe⟩ := hSt
   -- offset-0 load address bounds for A and B
   obtain ⟨htna, hloa, hhia, hhtifa, halgna⟩ := wcmp_load_bounds pa csa.length (24*j) hrega hjle (by omega)
@@ -523,10 +525,13 @@ theorem wg0_straight (g : (R : Register) → Option (RegisterType R))
     fun R hR => (sframe_alu hobs6 R hR.1 hR).trans (hframe_5 R hR)
   obtain ⟨vmi6, hmi6'⟩ := obs_alu_minstret hobs6
   have hmem6eq : σ6.mem = c.σ.mem := by rw [hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]
+  have hout6 : σ6.sailOutput = o :=
+    (by chain_out [hobs1, hobs2, hobs3, hobs4, hobs5, hobs6] :
+      σ6.sailOutput = c.σ.sailOutput).trans hout
   refine ⟨⟨σ6, i6, c.steps + 1 + 1 + 1 + 1 + 1 + 1⟩,
     (((((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans
       (Steps.single hs4)).trans (Steps.single hs5)).trans (Steps.single hs6), ?_⟩
-  exact ⟨hG6, by rw [hmem6eq]; exact hloaded, by rw [hmem6eq]; exact hmem, hpc6, ha0_6, ha1_6,
+  exact ⟨hG6, by rw [hmem6eq]; exact hloaded, by rw [hmem6eq]; exact hmem, hout6, hpc6, ha0_6, ha1_6,
     ha2_6, ha3_6, ha5_6, ht0_6, ht2_6, hra_6, ⟨vmi6, hmi6'⟩, hi6, hrega, hregb, hcstra, hcstrb,
     hmaskpin, hpre, hjle, hframe_6⟩
 
@@ -551,10 +556,11 @@ A's word is NUL-free (`n + 8 ≤ la`). `a2 = wa`, `a3 = wb`. The machine's `slli
 probes over `a2`/`a3` isolate the first differing byte. -/
 structure WLaneCmp (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (n : Nat) (c : Config) : Prop where
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (n : Nat) (c : Config) : Prop where
   good : GoodState c.σ
   loaded : StrcmpLoaded c.σ.mem
   mem : c.σ.mem = m0
+  out : c.σ.sailOutput = o
   pc : c.σ.regs.get? Register.PC = some (0x80006f20#64 : BitVec 64)
   a2 : c.σ.regs.get? Register.x12 = some (cwordAt m0 (pa.toNat + n))
   a3 : c.σ.regs.get? Register.x13 = some (cwordAt m0 (pb.toNat + n))
@@ -578,20 +584,21 @@ NUL-exit; we surface it as the raw PC-state fact plus the byte-level `la < 24j+8
 uniform we return the disjunction of the three PC-tagged states. -/
 theorem wg0_dispatch (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) :
-    Triple (WG0mid g pa pb r csa csb m0 j)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) :
+    Triple (WG0mid g pa pb r csa csb m0 o j)
       (fun c =>
         -- (a) NUL-exit at 0xfac: A's word has the NUL
         (c.σ.regs.get? Register.PC = some (0x80006fac#64 : BitVec 64) ∧
-          csa.length < 24*j + 8 ∧ 24*j ≤ csa.length ∧ c.σ.mem = m0 ∧ GoodState c.σ ∧ c.tick < 2)
+          csa.length < 24*j + 8 ∧ 24*j ≤ csa.length ∧ c.σ.mem = m0 ∧ c.σ.sailOutput = o ∧
+          GoodState c.σ ∧ c.tick < 2)
         -- (b) lane compare at 0xf20
-        ∨ WLaneCmp g pa pb r csa csb m0 (24*j) c
+        ∨ WLaneCmp g pa pb r csa csb m0 o (24*j) c
         -- (c) continue: at 0xed8 with prefix extended (surfaced as a raw PC/prefix fact)
         ∨ (c.σ.regs.get? Register.PC = some (0x80006ed8#64 : BitVec 64) ∧
           BytePrefix csa csb (24*j + 8) ∧ 24*j + 8 ≤ csa.length ∧ c.σ.mem = m0 ∧
-          GoodState c.σ ∧ c.tick < 2)) := by
+          c.σ.sailOutput = o ∧ GoodState c.σ ∧ c.tick < 2)) := by
   intro c hSt
-  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, ha2, ha3, ha5, ht0, ht2, hra, ⟨vmi, hmi⟩, htick,
+  obtain ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, ha2, ha3, ha5, ht0, ht2, hra, ⟨vmi, hmi⟩, htick,
     hrega, hregb, hcstra, hcstrb, hmaskpin, hpre, hjle, hframe⟩ := hSt
   by_cases hnul : strlenWordVal (cwordAt m0 (pa.toNat + 24*j)) = BitVec.allOnes 64
   · -- t0 = allOnes ⇒ A's word is NUL-free (24j+8 ≤ la); bne t0,t2 NOT taken → 0xed4
@@ -626,8 +633,10 @@ theorem wg0_dispatch (g : (R : Register) → Option (RegisterType R))
       have hmem2eq : σ2.mem = c.σ.mem := by rw [hmem2, hmem1]
       have hpre1 : BytePrefix csa csb (24*j + 8) :=
         byte_prefix_extend m0 pa pb csa csb hcstra hcstrb (24*j) hpre (prefix_le_lenb hpre) hwordeq hnf
+      have hout2 : σ2.sailOutput = o :=
+        (by chain_out [hobs1, hobs2] : σ2.sailOutput = c.σ.sailOutput).trans hout
       refine ⟨⟨σ2, i2, c.steps + 1 + 1⟩, (Steps.single hs1).trans (Steps.single hs2), Or.inr (Or.inr ?_)⟩
-      exact ⟨hpc2, hpre1, hnf, by rw [hmem2eq]; exact hmem, hG2, hi2⟩
+      exact ⟨hpc2, hpre1, hnf, by rw [hmem2eq]; exact hmem, hout2, hG2, hi2⟩
     · -- bne a2,a3 taken → 0xf20 lane compare
       have hguard2 : ((cwordAt m0 (pa.toNat + 24*j)) != (cwordAt m0 (pb.toNat + 24*j))) = true := by rw [bne_iff_ne]; exact hwordeq
       obtain ⟨σ2, i2, hs2, hi2, hG2, hmem2, hobs2⟩ :=
@@ -645,8 +654,10 @@ theorem wg0_dispatch (g : (R : Register) → Option (RegisterType R))
         fun R hR => (sframe_btaken hobs2 R hR).trans (hframe_1 R hR)
       obtain ⟨vmi2, hmi2'⟩ := obs_btaken_minstret hobs2
       have hmem2eq : σ2.mem = c.σ.mem := by rw [hmem2, hmem1]
+      have hout2 : σ2.sailOutput = o :=
+        (by chain_out [hobs1, hobs2] : σ2.sailOutput = c.σ.sailOutput).trans hout
       refine ⟨⟨σ2, i2, c.steps + 1 + 1⟩, (Steps.single hs1).trans (Steps.single hs2), Or.inr (Or.inl ?_)⟩
-      exact ⟨hG2, by rw [hmem2eq]; exact hloaded, by rw [hmem2eq]; exact hmem, hpc2, ha2_2, ha3_2,
+      exact ⟨hG2, by rw [hmem2eq]; exact hloaded, by rw [hmem2eq]; exact hmem, hout2, hpc2, ha2_2, ha3_2,
         hra_2, ⟨vmi2, hmi2'⟩, hi2, hrega, hregb, hcstra, hcstrb, hpre, hnf, hwordeq, hframe_2⟩
   · -- t0 ≠ allOnes ⇒ A's word has the NUL; bne t0,t2 TAKEN → 0xfac
     have hguard : ((strlenWordVal (cwordAt m0 (pa.toNat + 24*j))) != (BitVec.allOnes 64)) = true := by rw [bne_iff_ne]; exact hnul
@@ -664,8 +675,10 @@ theorem wg0_dispatch (g : (R : Register) → Option (RegisterType R))
       rcases Nat.lt_or_ge csa.length (24*j + 8) with hlt | hge
       · exact hlt
       · exact absurd (word_nul_free m0 pa csa hcstra (24*j) hge) hnul
+    have hout1 : σ1.sailOutput = o :=
+      (by chain_out [hobs1] : σ1.sailOutput = c.σ.sailOutput).trans hout
     refine ⟨⟨σ1, i1, c.steps + 1⟩, Steps.single hs1, Or.inl ?_⟩
-    exact ⟨hpc1, hhasnul, hjle, by rw [hmem1eq]; exact hmem, hG1, hi1⟩
+    exact ⟨hpc1, hhasnul, hjle, by rw [hmem1eq]; exact hmem, hout1, hG1, hi1⟩
 
 /-! ## Closing note — what lands, the lane-compare plan, what remains
 

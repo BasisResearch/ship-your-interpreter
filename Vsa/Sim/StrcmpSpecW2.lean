@@ -90,10 +90,11 @@ load at offset `8g`, so `a2/a3` cover the word at `pa.toNat + 24j + 8g`. -/
 /-- Group-1 entry at `0xed8` (offset `24j + 8`). -/
 structure WHead1 (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (c : Config) : Prop where
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) (c : Config) : Prop where
   good : GoodState c.σ
   loaded : StrcmpLoaded c.σ.mem
   mem : c.σ.mem = m0
+  out : c.σ.sailOutput = o
   pc : c.σ.regs.get? Register.PC = some (0x80006ed8#64 : BitVec 64)
   a0 : c.σ.regs.get? Register.x10 = some (pa + BitVec.ofNat 64 (24*j))
   a1 : c.σ.regs.get? Register.x11 = some (pb + BitVec.ofNat 64 (24*j))
@@ -114,10 +115,11 @@ structure WHead1 (g : (R : Register) → Option (RegisterType R))
 /-- Group-2 entry at `0xef8` (offset `24j + 16`). -/
 structure WHead2 (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (c : Config) : Prop where
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) (c : Config) : Prop where
   good : GoodState c.σ
   loaded : StrcmpLoaded c.σ.mem
   mem : c.σ.mem = m0
+  out : c.σ.sailOutput = o
   pc : c.σ.regs.get? Register.PC = some (0x80006ef8#64 : BitVec 64)
   a0 : c.σ.regs.get? Register.x10 = some (pa + BitVec.ofNat 64 (24*j))
   a1 : c.σ.regs.get? Register.x11 = some (pb + BitVec.ofNat 64 (24*j))
@@ -140,10 +142,11 @@ non-zero groups: `a2 = wa`, `a3 = wb`, `t0 = strlenWordVal wa`, `t2 = allOnes`,
 pointers still at `pa+24j`. The prefix invariant is at offset `n`. -/
 structure WGmid (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j n : Nat) (pc : BitVec 64) (c : Config) : Prop where
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j n : Nat) (pc : BitVec 64) (c : Config) : Prop where
   good : GoodState c.σ
   loaded : StrcmpLoaded c.σ.mem
   mem : c.σ.mem = m0
+  out : c.σ.sailOutput = o
   pc : c.σ.regs.get? Register.PC = some pc
   a0 : c.σ.regs.get? Register.x10 = some (pa + BitVec.ofNat 64 (24*j))
   a1 : c.σ.regs.get? Register.x11 = some (pb + BitVec.ofNat 64 (24*j))
@@ -168,11 +171,11 @@ structure WGmid (g : (R : Register) → Option (RegisterType R))
 ops. Produces `WGmid` at PC `0xef0`, offset `24j + 8`. -/
 theorem wg1_straight (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) :
-    Triple (WHead1 g pa pb r csa csb m0 j)
-      (WGmid g pa pb r csa csb m0 j (24*j + 8) (0x80006ef0#64)) := by
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) :
+    Triple (WHead1 g pa pb r csa csb m0 o j)
+      (WGmid g pa pb r csa csb m0 o j (24*j + 8) (0x80006ef0#64)) := by
   intro c hSt
-  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, ha5, ht2, hra, ⟨vmi, hmi⟩, htick,
+  obtain ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, ha5, ht2, hra, ⟨vmi, hmi⟩, htick,
     hrega, hregb, hcstra, hcstrb, hmaskpin, hpre, hjle, hframe⟩ := hSt
   have hjleb : 24*j + 8 ≤ csb.length := prefix_le_lenb hpre
   -- load bounds at offset 24j+8 for A and B (n = 24j+8, n % 8 = 0)
@@ -304,10 +307,13 @@ theorem wg1_straight (g : (R : Register) → Option (RegisterType R))
     fun R hR => (sframe_alu hobs6 R hR.1 hR).trans (hframe_5 R hR)
   obtain ⟨vmi6, hmi6'⟩ := obs_alu_minstret hobs6
   have hmem6eq : σ6.mem = c.σ.mem := by rw [hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]
+  have hout6 : σ6.sailOutput = o :=
+    (by chain_out [hobs1, hobs2, hobs3, hobs4, hobs5, hobs6] :
+      σ6.sailOutput = c.σ.sailOutput).trans hout
   refine ⟨⟨σ6, i6, c.steps + 1 + 1 + 1 + 1 + 1 + 1⟩,
     (((((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans
       (Steps.single hs4)).trans (Steps.single hs5)).trans (Steps.single hs6), ?_⟩
-  exact ⟨hG6, by rw [hmem6eq]; exact hloaded, by rw [hmem6eq]; exact hmem, hpc6, ha0_6, ha1_6,
+  exact ⟨hG6, by rw [hmem6eq]; exact hloaded, by rw [hmem6eq]; exact hmem, hout6, hpc6, ha0_6, ha1_6,
     ha2_6, ha3_6, ha5_6, ht0_6, ht2_6, hra_6, ⟨vmi6, hmi6'⟩, hi6, hrega, hregb, hcstra, hcstrb,
     hmaskpin, hpre, hjle, hframe_6⟩
 
@@ -339,12 +345,13 @@ words are `a2 = cwordAt (pa+n)`, `a3 = cwordAt (pb+n)`. Mirrors the lane arm / `
 the register content it preserves. -/
 structure WNulExit (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (pc : BitVec 64) (c : Config) : Prop where
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) (pc : BitVec 64) (c : Config) : Prop where
   pcv : pc = (0x80006fac#64 : BitVec 64) ∨ pc = (0x80006fa4#64 : BitVec 64)
       ∨ pc = (0x80006fb8#64 : BitVec 64)
   good : GoodState c.σ
   loaded : StrcmpLoaded c.σ.mem
   mem : c.σ.mem = m0
+  out : c.σ.sailOutput = o
   pcget : c.σ.regs.get? Register.PC = some pc
   a0 : c.σ.regs.get? Register.x10 = some (pa + BitVec.ofNat 64 (24*j))
   a1 : c.σ.regs.get? Register.x11 = some (pb + BitVec.ofNat 64 (24*j))
@@ -367,18 +374,18 @@ structure WNulExit (g : (R : Register) → Option (RegisterType R))
 carries `WNulExit` (full register state at a NUL block). -/
 def WordExit (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  (∃ n, WLaneCmp g pa pb r csa csb m0 n c) ∨
-  (∃ (j : Nat) (pc : BitVec 64), WNulExit g pa pb r csa csb m0 j pc c)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
+  (∃ n, WLaneCmp g pa pb r csa csb m0 o n c) ∨
+  (∃ (j : Nat) (pc : BitVec 64), WNulExit g pa pb r csa csb m0 o j pc c)
 
 /-- Group-1 three-way dispatch `0xef0 → {0xfa4, 0xf20, 0xef8}`. -/
 theorem wg1_dispatch (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) :
-    Triple (WGmid g pa pb r csa csb m0 j (24*j + 8) (0x80006ef0#64))
-      (fun c => WHead2 g pa pb r csa csb m0 j c ∨ WordExit g pa pb r csa csb m0 c) := by
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) :
+    Triple (WGmid g pa pb r csa csb m0 o j (24*j + 8) (0x80006ef0#64))
+      (fun c => WHead2 g pa pb r csa csb m0 o j c ∨ WordExit g pa pb r csa csb m0 o c) := by
   intro c hSt
-  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, ha2, ha3, ha5, ht0, ht2, hra, ⟨vmi, hmi⟩, htick,
+  obtain ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, ha2, ha3, ha5, ht0, ht2, hra, ⟨vmi, hmi⟩, htick,
     hrega, hregb, hcstra, hcstrb, hmaskpin, hpre, hjle, hframe⟩ := hSt
   by_cases hnul : strlenWordVal (cwordAt m0 (pa.toNat + (24*j+8))) = BitVec.allOnes 64
   · have hguard : ((strlenWordVal (cwordAt m0 (pa.toNat + (24*j+8)))) != (BitVec.allOnes 64)) = false := by rw [hnul]; simp
@@ -421,8 +428,10 @@ theorem wg1_dispatch (g : (R : Register) → Option (RegisterType R))
       have hmem2eq : σ2.mem = c.σ.mem := by rw [hmem2, hmem1]
       have hpre1 : BytePrefix csa csb (24*j + 8 + 8) :=
         byte_prefix_extend m0 pa pb csa csb hcstra hcstrb (24*j+8) hpre (prefix_le_lenb hpre) hwordeq hnf
+      have hout2 : σ2.sailOutput = o :=
+        (by chain_out [hobs1, hobs2] : σ2.sailOutput = c.σ.sailOutput).trans hout
       refine ⟨⟨σ2, i2, c.steps + 1 + 1⟩, (Steps.single hs1).trans (Steps.single hs2), Or.inl ?_⟩
-      exact ⟨hG2, by rw [hmem2eq]; exact hloaded, by rw [hmem2eq]; exact hmem, hpc2,
+      exact ⟨hG2, by rw [hmem2eq]; exact hloaded, by rw [hmem2eq]; exact hmem, hout2, hpc2,
         ha0_2, ha1_2, ha5_2, ht2_2, hra_2, ⟨vmi2, hmi2'⟩, hi2, hrega, hregb, hcstra, hcstrb,
         hmaskpin, (by rw [show 24*j + 16 = 24*j + 8 + 8 from by omega]; exact hpre1),
         (by rw [show 24*j + 16 = 24*j + 8 + 8 from by omega]; exact hnf), hframe_2⟩
@@ -442,8 +451,10 @@ theorem wg1_dispatch (g : (R : Register) → Option (RegisterType R))
         fun R hR => (sframe_btaken hobs2 R hR).trans (hframe_1 R hR)
       obtain ⟨vmi2, hmi2'⟩ := obs_btaken_minstret hobs2
       have hmem2eq : σ2.mem = c.σ.mem := by rw [hmem2, hmem1]
+      have hout2 : σ2.sailOutput = o :=
+        (by chain_out [hobs1, hobs2] : σ2.sailOutput = c.σ.sailOutput).trans hout
       refine ⟨⟨σ2, i2, c.steps + 1 + 1⟩, (Steps.single hs1).trans (Steps.single hs2), Or.inr (Or.inl ⟨24*j+8, ?_⟩)⟩
-      exact ⟨hG2, by rw [hmem2eq]; exact hloaded, by rw [hmem2eq]; exact hmem, hpc2, ha2_2, ha3_2,
+      exact ⟨hG2, by rw [hmem2eq]; exact hloaded, by rw [hmem2eq]; exact hmem, hout2, hpc2, ha2_2, ha3_2,
         hra_2, ⟨vmi2, hmi2'⟩, hi2, hrega, hregb, hcstra, hcstrb, hpre, hnf, hwordeq, hframe_2⟩
   · have hguard : ((strlenWordVal (cwordAt m0 (pa.toNat + (24*j+8)))) != (BitVec.allOnes 64)) = true := by rw [bne_iff_ne]; exact hnul
     obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
@@ -468,9 +479,11 @@ theorem wg1_dispatch (g : (R : Register) → Option (RegisterType R))
       · exact hlt
       · exact absurd (word_nul_free m0 pa csa hcstra (24*j+8) hge) hnul
     have hoff : nulOff (0x80006fa4#64 : BitVec 64) = 8 := by decide
+    have hout1 : σ1.sailOutput = o :=
+      (by chain_out [hobs1] : σ1.sailOutput = c.σ.sailOutput).trans hout
     refine ⟨⟨σ1, i1, c.steps + 1⟩, Steps.single hs1, Or.inr (Or.inr ⟨j, 0x80006fa4#64, ?_⟩)⟩
     exact ⟨Or.inr (Or.inl rfl), hG1, by rw [hmem1eq]; exact hloaded, by rw [hmem1eq]; exact hmem,
-      hpc1, ha0_1, ha1_1, (by rw [hoff]; exact ha2_1), (by rw [hoff]; exact ha3_1), hra_1,
+      hout1, hpc1, ha0_1, ha1_1, (by rw [hoff]; exact ha2_1), (by rw [hoff]; exact ha3_1), hra_1,
       ⟨vmi1, hmi1'⟩, hi1, hrega, hregb, hcstra, hcstrb, hmaskpin,
       (by rw [hoff]; exact hpre), (by rw [hoff]; omega), (by rw [hoff]; exact hjle), hframe_1⟩
 
@@ -478,11 +491,11 @@ theorem wg1_dispatch (g : (R : Register) → Option (RegisterType R))
 magic-ALU ops. Produces `WGmid` at PC `0xf10`, offset `24j + 16`. -/
 theorem wg2_straight (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) :
-    Triple (WHead2 g pa pb r csa csb m0 j)
-      (WGmid g pa pb r csa csb m0 j (24*j + 16) (0x80006f10#64)) := by
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) :
+    Triple (WHead2 g pa pb r csa csb m0 o j)
+      (WGmid g pa pb r csa csb m0 o j (24*j + 16) (0x80006f10#64)) := by
   intro c hSt
-  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, ha5, ht2, hra, ⟨vmi, hmi⟩, htick,
+  obtain ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, ha5, ht2, hra, ⟨vmi, hmi⟩, htick,
     hrega, hregb, hcstra, hcstrb, hmaskpin, hpre, hjle, hframe⟩ := hSt
   have hjleb : 24*j + 16 ≤ csb.length := prefix_le_lenb hpre
   obtain ⟨htna, hloa, hhia, hhtifa, halgna⟩ := wcmp_load_bounds pa csa.length (24*j+16) hrega hjle (by omega)
@@ -613,10 +626,13 @@ theorem wg2_straight (g : (R : Register) → Option (RegisterType R))
     fun R hR => (sframe_alu hobs6 R hR.1 hR).trans (hframe_5 R hR)
   obtain ⟨vmi6, hmi6'⟩ := obs_alu_minstret hobs6
   have hmem6eq : σ6.mem = c.σ.mem := by rw [hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]
+  have hout6 : σ6.sailOutput = o :=
+    (by chain_out [hobs1, hobs2, hobs3, hobs4, hobs5, hobs6] :
+      σ6.sailOutput = c.σ.sailOutput).trans hout
   refine ⟨⟨σ6, i6, c.steps + 1 + 1 + 1 + 1 + 1 + 1⟩,
     (((((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans
       (Steps.single hs4)).trans (Steps.single hs5)).trans (Steps.single hs6), ?_⟩
-  exact ⟨hG6, by rw [hmem6eq]; exact hloaded, by rw [hmem6eq]; exact hmem, hpc6, ha0_6, ha1_6,
+  exact ⟨hG6, by rw [hmem6eq]; exact hloaded, by rw [hmem6eq]; exact hmem, hout6, hpc6, ha0_6, ha1_6,
     ha2_6, ha3_6, ha5_6, ht0_6, ht2_6, hra_6, ⟨vmi6, hmi6'⟩, hi6, hrega, hregb, hcstra, hcstrb,
     hmaskpin, hpre, hjle, hframe_6⟩
 
@@ -625,11 +641,11 @@ NUL); else `addi a0,24; addi a1,24; beq a2,a3 → eb8` (words equal → `WHead (
 fall-through to lane compare `0xf20` (words differ). -/
 theorem wg2_dispatch (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) :
-    Triple (WGmid g pa pb r csa csb m0 j (24*j + 16) (0x80006f10#64))
-      (fun c => WHead g pa pb r csa csb m0 (j+1) c ∨ WordExit g pa pb r csa csb m0 c) := by
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) :
+    Triple (WGmid g pa pb r csa csb m0 o j (24*j + 16) (0x80006f10#64))
+      (fun c => WHead g pa pb r csa csb m0 o (j+1) c ∨ WordExit g pa pb r csa csb m0 o c) := by
   intro c hSt
-  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, ha2, ha3, ha5, ht0, ht2, hra, ⟨vmi, hmi⟩, htick,
+  obtain ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, ha2, ha3, ha5, ht0, ht2, hra, ⟨vmi, hmi⟩, htick,
     hrega, hregb, hcstra, hcstrb, hmaskpin, hpre, hjle, hframe⟩ := hSt
   by_cases hnul : strlenWordVal (cwordAt m0 (pa.toNat + (24*j+16))) = BitVec.allOnes 64
   · -- A NUL-free → f14/f18/f1c
@@ -712,9 +728,11 @@ theorem wg2_dispatch (g : (R : Register) → Option (RegisterType R))
       have hmem4eq : σ4.mem = c.σ.mem := by rw [hmem4, hmem3, hmem2, hmem1]
       have hpre1 : BytePrefix csa csb (24*j + 16 + 8) :=
         byte_prefix_extend m0 pa pb csa csb hcstra hcstrb (24*j+16) hpre (prefix_le_lenb hpre) hwordeq hnf
+      have hout4 : σ4.sailOutput = o :=
+        (by chain_out [hobs1, hobs2, hobs3, hobs4] : σ4.sailOutput = c.σ.sailOutput).trans hout
       refine ⟨⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩,
         (((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans (Steps.single hs4), Or.inl ?_⟩
-      exact ⟨hG4, by rw [hmem4eq]; exact hloaded, by rw [hmem4eq]; exact hmem, hpc4, ha0_4, ha1_4,
+      exact ⟨hG4, by rw [hmem4eq]; exact hloaded, by rw [hmem4eq]; exact hmem, hout4, hpc4, ha0_4, ha1_4,
         ha5_4, ht2_4, hra_4, ⟨vmi4, hmi4'⟩, hi4, hrega, hregb, hcstra, hcstrb, hmaskpin,
         (by rw [show 24*(j+1) = 24*j + 16 + 8 from by omega]; exact hpre1),
         (by rw [show 24*(j+1) = 24*j + 16 + 8 from by omega]; exact hnf), hframe_4⟩
@@ -734,10 +752,12 @@ theorem wg2_dispatch (g : (R : Register) → Option (RegisterType R))
         fun R hR => (sframe_bnottaken hobs4 R hR).trans (hframe_3 R hR)
       obtain ⟨vmi4, hmi4'⟩ := obs_bnottaken_minstret hobs4
       have hmem4eq : σ4.mem = c.σ.mem := by rw [hmem4, hmem3, hmem2, hmem1]
+      have hout4 : σ4.sailOutput = o :=
+        (by chain_out [hobs1, hobs2, hobs3, hobs4] : σ4.sailOutput = c.σ.sailOutput).trans hout
       refine ⟨⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩,
         (((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans (Steps.single hs4),
         Or.inr (Or.inl ⟨24*j+16, ?_⟩)⟩
-      exact ⟨hG4, by rw [hmem4eq]; exact hloaded, by rw [hmem4eq]; exact hmem, hpc4, ha2_4, ha3_4,
+      exact ⟨hG4, by rw [hmem4eq]; exact hloaded, by rw [hmem4eq]; exact hmem, hout4, hpc4, ha2_4, ha3_4,
         hra_4, ⟨vmi4, hmi4'⟩, hi4, hrega, hregb, hcstra, hcstrb, hpre, hnf, hwordeq, hframe_4⟩
   · -- A-word has NUL → fb8
     have hguard : ((strlenWordVal (cwordAt m0 (pa.toNat + (24*j+16)))) != (BitVec.allOnes 64)) = true := by rw [bne_iff_ne]; exact hnul
@@ -763,9 +783,11 @@ theorem wg2_dispatch (g : (R : Register) → Option (RegisterType R))
       · exact hlt
       · exact absurd (word_nul_free m0 pa csa hcstra (24*j+16) hge) hnul
     have hoff : nulOff (0x80006fb8#64 : BitVec 64) = 16 := by decide
+    have hout1 : σ1.sailOutput = o :=
+      (by chain_out [hobs1] : σ1.sailOutput = c.σ.sailOutput).trans hout
     refine ⟨⟨σ1, i1, c.steps + 1⟩, Steps.single hs1, Or.inr (Or.inr ⟨j, 0x80006fb8#64, ?_⟩)⟩
     exact ⟨Or.inr (Or.inr rfl), hG1, by rw [hmem1eq]; exact hloaded, by rw [hmem1eq]; exact hmem,
-      hpc1, ha0_1, ha1_1, (by rw [hoff]; exact ha2_1), (by rw [hoff]; exact ha3_1), hra_1,
+      hout1, hpc1, ha0_1, ha1_1, (by rw [hoff]; exact ha2_1), (by rw [hoff]; exact ha3_1), hra_1,
       ⟨vmi1, hmi1'⟩, hi1, hrega, hregb, hcstra, hcstrb, hmaskpin,
       (by rw [hoff]; exact hpre), (by rw [hoff]; omega), (by rw [hoff]; exact hjle), hframe_1⟩
 
@@ -773,11 +795,11 @@ theorem wg2_dispatch (g : (R : Register) → Option (RegisterType R))
 thin PC/prefix fact, so the loop body can chain into group 1. Mirrors `wg0_dispatch`. -/
 theorem wg0_dispatch2 (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) :
-    Triple (WG0mid g pa pb r csa csb m0 j)
-      (fun c => WHead1 g pa pb r csa csb m0 j c ∨ WordExit g pa pb r csa csb m0 c) := by
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) :
+    Triple (WG0mid g pa pb r csa csb m0 o j)
+      (fun c => WHead1 g pa pb r csa csb m0 o j c ∨ WordExit g pa pb r csa csb m0 o c) := by
   intro c hSt
-  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, ha2, ha3, ha5, ht0, ht2, hra, ⟨vmi, hmi⟩, htick,
+  obtain ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, ha2, ha3, ha5, ht0, ht2, hra, ⟨vmi, hmi⟩, htick,
     hrega, hregb, hcstra, hcstrb, hmaskpin, hpre, hjle, hframe⟩ := hSt
   by_cases hnul : strlenWordVal (cwordAt m0 (pa.toNat + 24*j)) = BitVec.allOnes 64
   · have hguard : ((strlenWordVal (cwordAt m0 (pa.toNat + 24*j))) != (BitVec.allOnes 64)) = false := by rw [hnul]; simp
@@ -820,8 +842,10 @@ theorem wg0_dispatch2 (g : (R : Register) → Option (RegisterType R))
       have hmem2eq : σ2.mem = c.σ.mem := by rw [hmem2, hmem1]
       have hpre1 : BytePrefix csa csb (24*j + 8) :=
         byte_prefix_extend m0 pa pb csa csb hcstra hcstrb (24*j) hpre (prefix_le_lenb hpre) hwordeq hnf
+      have hout2 : σ2.sailOutput = o :=
+        (by chain_out [hobs1, hobs2] : σ2.sailOutput = c.σ.sailOutput).trans hout
       refine ⟨⟨σ2, i2, c.steps + 1 + 1⟩, (Steps.single hs1).trans (Steps.single hs2), Or.inl ?_⟩
-      exact ⟨hG2, by rw [hmem2eq]; exact hloaded, by rw [hmem2eq]; exact hmem, hpc2,
+      exact ⟨hG2, by rw [hmem2eq]; exact hloaded, by rw [hmem2eq]; exact hmem, hout2, hpc2,
         ha0_2, ha1_2, ha5_2, ht2_2, hra_2, ⟨vmi2, hmi2'⟩, hi2, hrega, hregb, hcstra, hcstrb,
         hmaskpin, hpre1, hnf, hframe_2⟩
     · have hguard2 : ((cwordAt m0 (pa.toNat + 24*j)) != (cwordAt m0 (pb.toNat + 24*j))) = true := by rw [bne_iff_ne]; exact hwordeq
@@ -840,8 +864,10 @@ theorem wg0_dispatch2 (g : (R : Register) → Option (RegisterType R))
         fun R hR => (sframe_btaken hobs2 R hR).trans (hframe_1 R hR)
       obtain ⟨vmi2, hmi2'⟩ := obs_btaken_minstret hobs2
       have hmem2eq : σ2.mem = c.σ.mem := by rw [hmem2, hmem1]
+      have hout2 : σ2.sailOutput = o :=
+        (by chain_out [hobs1, hobs2] : σ2.sailOutput = c.σ.sailOutput).trans hout
       refine ⟨⟨σ2, i2, c.steps + 1 + 1⟩, (Steps.single hs1).trans (Steps.single hs2), Or.inr (Or.inl ⟨24*j, ?_⟩)⟩
-      exact ⟨hG2, by rw [hmem2eq]; exact hloaded, by rw [hmem2eq]; exact hmem, hpc2, ha2_2, ha3_2,
+      exact ⟨hG2, by rw [hmem2eq]; exact hloaded, by rw [hmem2eq]; exact hmem, hout2, hpc2, ha2_2, ha3_2,
         hra_2, ⟨vmi2, hmi2'⟩, hi2, hrega, hregb, hcstra, hcstrb, hpre, hnf, hwordeq, hframe_2⟩
   · have hguard : ((strlenWordVal (cwordAt m0 (pa.toNat + 24*j))) != (BitVec.allOnes 64)) = true := by rw [bne_iff_ne]; exact hnul
     obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
@@ -867,9 +893,11 @@ theorem wg0_dispatch2 (g : (R : Register) → Option (RegisterType R))
       · exact absurd (word_nul_free m0 pa csa hcstra (24*j) hge) hnul
     have hoff : (24*j + nulOff (0x80006fac#64 : BitVec 64)) = 24*j := by
       rw [show nulOff (0x80006fac#64 : BitVec 64) = 0 from by decide, Nat.add_zero]
+    have hout1 : σ1.sailOutput = o :=
+      (by chain_out [hobs1] : σ1.sailOutput = c.σ.sailOutput).trans hout
     refine ⟨⟨σ1, i1, c.steps + 1⟩, Steps.single hs1, Or.inr (Or.inr ⟨j, 0x80006fac#64, ?_⟩)⟩
     exact ⟨Or.inl rfl, hG1, by rw [hmem1eq]; exact hloaded, by rw [hmem1eq]; exact hmem,
-      hpc1, ha0_1, ha1_1, (by rw [hoff]; exact ha2_1), (by rw [hoff]; exact ha3_1), hra_1,
+      hout1, hpc1, ha0_1, ha1_1, (by rw [hoff]; exact ha2_1), (by rw [hoff]; exact ha3_1), hra_1,
       ⟨vmi1, hmi1'⟩, hi1, hrega, hregb, hcstra, hcstrb, hmaskpin,
       (by rw [hoff]; exact hpre), (by rw [hoff]; omega), (by rw [hoff]; exact hjle), hframe_1⟩
 
@@ -882,59 +910,59 @@ one-iteration step `Triple (WHead j) (WHead (j+1) ∨ WordExit)`. -/
 /-- Group 0: `WHead j → WHead1 j ∨ WordExit`. -/
 theorem wg0_body (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) :
-    Triple (WHead g pa pb r csa csb m0 j)
-      (fun c => WHead1 g pa pb r csa csb m0 j c ∨ WordExit g pa pb r csa csb m0 c) :=
-  (wg0_straight g pa pb r csa csb m0 j).seq (wg0_dispatch2 g pa pb r csa csb m0 j)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) :
+    Triple (WHead g pa pb r csa csb m0 o j)
+      (fun c => WHead1 g pa pb r csa csb m0 o j c ∨ WordExit g pa pb r csa csb m0 o c) :=
+  (wg0_straight g pa pb r csa csb m0 o j).seq (wg0_dispatch2 g pa pb r csa csb m0 o j)
 
 /-- Group 1: `WHead1 j → WHead2 j ∨ WordExit`. -/
 theorem wg1_body (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) :
-    Triple (WHead1 g pa pb r csa csb m0 j)
-      (fun c => WHead2 g pa pb r csa csb m0 j c ∨ WordExit g pa pb r csa csb m0 c) :=
-  (wg1_straight g pa pb r csa csb m0 j).seq (wg1_dispatch g pa pb r csa csb m0 j)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) :
+    Triple (WHead1 g pa pb r csa csb m0 o j)
+      (fun c => WHead2 g pa pb r csa csb m0 o j c ∨ WordExit g pa pb r csa csb m0 o c) :=
+  (wg1_straight g pa pb r csa csb m0 o j).seq (wg1_dispatch g pa pb r csa csb m0 o j)
 
 /-- Group 2: `WHead2 j → WHead (j+1) ∨ WordExit`. -/
 theorem wg2_body (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) :
-    Triple (WHead2 g pa pb r csa csb m0 j)
-      (fun c => WHead g pa pb r csa csb m0 (j+1) c ∨ WordExit g pa pb r csa csb m0 c) :=
-  (wg2_straight g pa pb r csa csb m0 j).seq (wg2_dispatch g pa pb r csa csb m0 j)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) :
+    Triple (WHead2 g pa pb r csa csb m0 o j)
+      (fun c => WHead g pa pb r csa csb m0 o (j+1) c ∨ WordExit g pa pb r csa csb m0 o c) :=
+  (wg2_straight g pa pb r csa csb m0 o j).seq (wg2_dispatch g pa pb r csa csb m0 o j)
 
 /-- **One loop iteration** `WHead j → WHead (j+1) ∨ WordExit`. Composes the three
 groups; `WordExit` short-circuits to itself in each intermediate `cases`. -/
 theorem wbody (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) :
-    Triple (WHead g pa pb r csa csb m0 j)
-      (fun c => WHead g pa pb r csa csb m0 (j+1) c ∨ WordExit g pa pb r csa csb m0 c) := by
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) :
+    Triple (WHead g pa pb r csa csb m0 o j)
+      (fun c => WHead g pa pb r csa csb m0 o (j+1) c ∨ WordExit g pa pb r csa csb m0 o c) := by
   -- WordExit → target (right injection)
-  have hexit : Triple (WordExit g pa pb r csa csb m0)
-      (fun c => WHead g pa pb r csa csb m0 (j+1) c ∨ WordExit g pa pb r csa csb m0 c) :=
+  have hexit : Triple (WordExit g pa pb r csa csb m0 o)
+      (fun c => WHead g pa pb r csa csb m0 o (j+1) c ∨ WordExit g pa pb r csa csb m0 o c) :=
     Triple.of_imp (fun _ h => Or.inr h)
   -- group 2: WHead2 ∨ WordExit → target
-  have h2 : Triple (fun c => WHead2 g pa pb r csa csb m0 j c ∨ WordExit g pa pb r csa csb m0 c)
-      (fun c => WHead g pa pb r csa csb m0 (j+1) c ∨ WordExit g pa pb r csa csb m0 c) :=
-    Triple.cases (wg2_body g pa pb r csa csb m0 j) hexit
+  have h2 : Triple (fun c => WHead2 g pa pb r csa csb m0 o j c ∨ WordExit g pa pb r csa csb m0 o c)
+      (fun c => WHead g pa pb r csa csb m0 o (j+1) c ∨ WordExit g pa pb r csa csb m0 o c) :=
+    Triple.cases (wg2_body g pa pb r csa csb m0 o j) hexit
   -- group 1: WHead1 ∨ WordExit → target (via group 2)
-  have h1 : Triple (fun c => WHead1 g pa pb r csa csb m0 j c ∨ WordExit g pa pb r csa csb m0 c)
-      (fun c => WHead g pa pb r csa csb m0 (j+1) c ∨ WordExit g pa pb r csa csb m0 c) :=
-    Triple.cases ((wg1_body g pa pb r csa csb m0 j).seq h2) hexit
-  exact (wg0_body g pa pb r csa csb m0 j).seq h1
+  have h1 : Triple (fun c => WHead1 g pa pb r csa csb m0 o j c ∨ WordExit g pa pb r csa csb m0 o c)
+      (fun c => WHead g pa pb r csa csb m0 o (j+1) c ∨ WordExit g pa pb r csa csb m0 o c) :=
+    Triple.cases ((wg1_body g pa pb r csa csb m0 o j).seq h2) hexit
+  exact (wg0_body g pa pb r csa csb m0 o j).seq h1
 
 /-! ### Loop invariant, guard, PC-guarded measure -/
 
 /-- Loop invariant: at a head `WHead j` for some `j`, or at a word exit. -/
 def SWLoopI (g : (R : Register) → Option (RegisterType R)) (pa pb r : BitVec 64)
-    (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  (∃ j, WHead g pa pb r csa csb m0 j c) ∨ WordExit g pa pb r csa csb m0 c
+    (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
+  (∃ j, WHead g pa pb r csa csb m0 o j c) ∨ WordExit g pa pb r csa csb m0 o c
 
 /-- Loop guard: at a head. -/
 def SWLoopB (g : (R : Register) → Option (RegisterType R)) (pa pb r : BitVec 64)
-    (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  ∃ j, WHead g pa pb r csa csb m0 j c
+    (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
+  ∃ j, WHead g pa pb r csa csb m0 o j c
 
 /-- PC-guarded measure: `la + 1 - 24j` at the head `0xeb8` (via `a0 = pa + 24j`),
 else `0` (a `WordExit` PC drops the measure). -/
@@ -946,8 +974,8 @@ def SWLoopMu (pa : BitVec 64) (csa : List Char) (c : Config) : Nat :=
 /-- At a head, `SWLoopMu = la + 1 - 24j`. -/
 theorem swloopmu_head (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (c : Config)
-    (hSt : WHead g pa pb r csa csb m0 j c) :
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) (c : Config)
+    (hSt : WHead g pa pb r csa csb m0 o j c) :
     SWLoopMu pa csa c = csa.length + 1 - 24*j := by
   simp only [SWLoopMu, hSt.pc, hSt.a0, Option.getD_some, if_pos]
   have h : (pa + BitVec.ofNat 64 (24*j)).toNat = pa.toNat + 24*j :=
@@ -957,8 +985,8 @@ theorem swloopmu_head (g : (R : Register) → Option (RegisterType R))
 /-- A `WordExit` config has PC ≠ `0xeb8`, so its measure is `0`. -/
 theorem swloopmu_exit (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config)
-    (hEx : WordExit g pa pb r csa csb m0 c) :
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config)
+    (hEx : WordExit g pa pb r csa csb m0 o c) :
     SWLoopMu pa csa c = 0 := by
   simp only [SWLoopMu]
   rcases hEx with ⟨n, hlane⟩ | ⟨j, pc, hnul⟩
@@ -972,30 +1000,31 @@ NOT required — the measure drops because `24j < 24(j+1)` and both are `≤ la+
 `24*j ≤ la` at the head (else no continue). Exit: measure `0`. -/
 theorem swloop_body (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (nn : Nat) :
-    Triple (fun c => SWLoopI g pa pb r csa csb m0 c ∧ SWLoopB g pa pb r csa csb m0 c
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (nn : Nat) :
+    Triple (fun c => SWLoopI g pa pb r csa csb m0 o c ∧ SWLoopB g pa pb r csa csb m0 o c
              ∧ SWLoopMu pa csa c = nn)
-           (fun c => SWLoopI g pa pb r csa csb m0 c ∧ SWLoopMu pa csa c < nn) := by
+           (fun c => SWLoopI g pa pb r csa csb m0 o c ∧ SWLoopMu pa csa c < nn) := by
   intro c hc
   obtain ⟨_, ⟨j, hSt⟩, hmu⟩ := hc
-  have hmu_eq : SWLoopMu pa csa c = csa.length + 1 - 24*j := swloopmu_head g pa pb r csa csb m0 j c hSt
+  have hmu_eq : SWLoopMu pa csa c = csa.length + 1 - 24*j := swloopmu_head g pa pb r csa csb m0 o j c hSt
   rw [hmu_eq] at hmu
   have hjla : 24*j ≤ csa.length := hSt.jle
-  obtain ⟨c1, hs1, hstep⟩ := wbody g pa pb r csa csb m0 j c hSt
+  obtain ⟨c1, hs1, hstep⟩ := wbody g pa pb r csa csb m0 o j c hSt
   rcases hstep with hHead | hExit
   · refine ⟨c1, hs1, Or.inl ⟨j+1, hHead⟩, ?_⟩
     have hmu1 : SWLoopMu pa csa c1 = csa.length + 1 - 24*(j+1) :=
-      swloopmu_head g pa pb r csa csb m0 (j+1) c1 hHead
+      swloopmu_head g pa pb r csa csb m0 o (j+1) c1 hHead
     rw [hmu1, ← hmu]; omega
   · refine ⟨c1, hs1, Or.inr hExit, ?_⟩
-    rw [swloopmu_exit g pa pb r csa csb m0 c1 hExit]; omega
+    rw [swloopmu_exit g pa pb r csa csb m0 o c1 hExit]; omega
 
 /-- The word loop runs from `SWLoopI` to `WordExit`. -/
 theorem swloop_to_exit (g : (R : Register) → Option (RegisterType R))
-    (pa pb r : BitVec 64) (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (SWLoopI g pa pb r csa csb m0) (WordExit g pa pb r csa csb m0) := by
-  have hloop := Triple.loop (I := SWLoopI g pa pb r csa csb m0)
-    (B := SWLoopB g pa pb r csa csb m0) (SWLoopMu pa csa) (swloop_body g pa pb r csa csb m0)
+    (pa pb r : BitVec 64) (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (o : Array String) :
+    Triple (SWLoopI g pa pb r csa csb m0 o) (WordExit g pa pb r csa csb m0 o) := by
+  have hloop := Triple.loop (I := SWLoopI g pa pb r csa csb m0 o)
+    (B := SWLoopB g pa pb r csa csb m0 o) (SWLoopMu pa csa) (swloop_body g pa pb r csa csb m0 o)
   refine hloop.seq ?_
   intro c hc
   obtain ⟨hI, hnB⟩ := hc

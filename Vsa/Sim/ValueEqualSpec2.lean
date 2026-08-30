@@ -41,10 +41,10 @@ instructions, ending at the return target with `x10 = cond (payA - payB == 0) 1 
 preserving `x1`, memory, and the ghost frame. Parameterised by the three site lemmas so
 it serves all three payload handlers. -/
 theorem ve_sub_seqz_ret (g : (R : Register) → Option (RegisterType R)) (r : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) (σ : MState) (i : Nat) (steps0 : Nat)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) (σ : MState) (i : Nat) (steps0 : Nat)
     (payA payB : BitVec 64) (subaddr seqzaddr retaddr : BitVec 64)
     (hsteps0 : Steps c ⟨σ, i, steps0⟩) (hi : i < 2)
-    (hG : GoodState σ) (hmem : σ.mem = m0) (hloaded : Value_equalLoaded m0)
+    (hG : GoodState σ) (hmem : σ.mem = m0) (hout : σ.sailOutput = o) (hloaded : Value_equalLoaded m0)
     (hpc : σ.regs.get? Register.PC = some subaddr)
     (ha0 : σ.regs.get? Register.x10 = some payA) (ha5 : σ.regs.get? Register.x15 = some payB)
     (hra : σ.regs.get? Register.x1 = some r)
@@ -82,7 +82,7 @@ theorem ve_sub_seqz_ret (g : (R : Register) → Option (RegisterType R)) (r : Bi
       σ2.regs.get? Register.PC = some (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1) ∧
       σ2.regs.get? Register.x10 = some (cond ((payA - payB) == 0#64) (1#64) (0#64)) ∧
       σ2.regs.get? Register.x1 = some r ∧
-      (∃ w, σ2.regs.get? Register.minstret = some w) ∧ σ2.mem = m0 ∧
+      (∃ w, σ2.regs.get? Register.minstret = some w) ∧ σ2.mem = m0 ∧ σ2.sailOutput = o ∧
       (∀ R : Register, NotWrittenVE R → σ2.regs.get? R = g R) := by
   -- sub
   obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
@@ -114,10 +114,12 @@ theorem ve_sub_seqz_ret (g : (R : Register) → Option (RegisterType R)) (r : Bi
     site_ret_gen σ2 i2 (steps0 + 1 + 1) retaddr vmi2 r (0x67#8) (0x80#8) (0x00#8) (0x00#8)
       hG2 hpc2 hmi2 hra_2 (hmem2eq ▸ hbb0) (hmem2eq ▸ hbb1) (hmem2eq ▸ hbb2) (hmem2eq ▸ hbb3)
       rfl hretlo hrethi hretalign hrettgt hi2
+  have hout3 : σ3.sailOutput = o :=
+    (by chain_out [hobs1, hobs2, hobs3] : σ3.sailOutput = σ.sailOutput).trans hout
   refine ⟨σ3, i3, ((hsteps0.trans (Steps.single hs1)).trans (Steps.single hs2)).trans (Steps.single hs3),
     hi3, hG3, obs_jr_pc hobs3, ?_,
     obs_jr_other hobs3 Register.x1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hra_2,
-    obs_jr_minstret hobs3, by rw [hmem3, hmem2eq],
+    obs_jr_minstret hobs3, by rw [hmem3, hmem2eq], hout3,
     fun R hR => (frame_jr_ve hobs3 R hR).trans (hframe2 R hR)⟩
   exact obs_jr_other hobs3 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0_2
 
@@ -179,10 +181,10 @@ Loads both 8-byte payloads at `+8`, subtracts, `seqz`, returns. The `sub == 0` b
 `int_eq_bridge` (int) / `ptr_eq_bridge` (closure). This lemma runs the shared 8-byte load
 sequence + tail, leaving the caller to supply the two payloads `q1 q2` and the bridge. -/
 theorem ve_int_handler (g : (R : Register) → Option (RegisterType R)) (bufa bufb r : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) (σ : MState) (i : Nat) (steps0 : Nat)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) (σ : MState) (i : Nat) (steps0 : Nat)
     (q1 q2 : Nat)
     (hsteps0 : Steps c ⟨σ, i, steps0⟩) (hi : i < 2)
-    (hG : GoodState σ) (hmem : σ.mem = m0) (hloaded : Value_equalLoaded m0)
+    (hG : GoodState σ) (hmem : σ.mem = m0) (hout : σ.sailOutput = o) (hloaded : Value_equalLoaded m0)
     (hpc : σ.regs.get? Register.PC = some (0x80002894#64 : BitVec 64))
     (ha0 : σ.regs.get? Register.x10 = some bufa) (ha1 : σ.regs.get? Register.x11 = some bufb)
     (hra : σ.regs.get? Register.x1 = some r)
@@ -197,7 +199,7 @@ theorem ve_int_handler (g : (R : Register) → Option (RegisterType R)) (bufa bu
       σ2.regs.get? Register.x10 =
         some (cond ((BitVec.ofNat 64 q1 - BitVec.ofNat 64 q2) == 0#64) (1#64) (0#64)) ∧
       σ2.regs.get? Register.x1 = some r ∧
-      (∃ w, σ2.regs.get? Register.minstret = some w) ∧ σ2.mem = m0 ∧
+      (∃ w, σ2.regs.get? Register.minstret = some w) ∧ σ2.mem = m0 ∧ σ2.sailOutput = o ∧
       (∀ R : Register, NotWrittenVE R → σ2.regs.get? R = g R) := by
   obtain ⟨a0, a1, a2, a3, a4, a5, a6, a7, hab0, hab1, hab2, hab3, hab4, hab5, hab6, hab7, harec⟩ :=
     read64_bytes m0 (bufa.toNat + 8) _ hp1
@@ -247,9 +249,11 @@ theorem ve_int_handler (g : (R : Register) → Option (RegisterType R)) (bufa bu
     (frame_alu_ve hobs2 R hR hR.2.2.1).trans (hframe1 R hR)
   obtain ⟨hbb0, hbb1, hbb2, hbb3⟩ := value_equal_at_800028a4 hloaded
   -- shared sub; seqz; ret tail
-  have htail := ve_sub_seqz_ret g r m0 c σ2 i2 (steps0 + 1 + 1)
+  have hout2 : σ2.sailOutput = o :=
+    (by chain_out [hobs1, hobs2] : σ2.sailOutput = σ.sailOutput).trans hout
+  have htail := ve_sub_seqz_ret g r m0 o c σ2 i2 (steps0 + 1 + 1)
     (BitVec.ofNat 64 q1) (BitVec.ofNat 64 q2) (0x8000289c#64) (0x800028a0#64) (0x800028a4#64)
-    (((hsteps0.trans (Steps.single hs1)).trans (Steps.single hs2))) hi2 hG2 hmem2eq hloaded
+    (((hsteps0.trans (Steps.single hs1)).trans (Steps.single hs2))) hi2 hG2 hmem2eq hout2 hloaded
     hpc2 ha0_2 ha5_2 hra_2 vmi2 hmi2 hrettgt hframe2
     (fun σ0 i0 u0 v10 v15 hG0 hpc0 hmi0 h10 h15 hl0 hi0 =>
       site_8000289c σ0 i0 u0 (0x8000289c#64) vmi2 v10 v15 hG0 hpc0 hmi0 h10 h15 hl0 rfl hi0)
@@ -269,10 +273,10 @@ theorem ve_int_handler (g : (R : Register) → Option (RegisterType R)) (bufa bu
 Loads both 4-byte `{0,1}` bool payloads at `+8`. `sext_word_small` folds each to
 `cond b (1#64) (0#64)`; `bool_eq_bridge` bridges the `sub == 0` test. -/
 theorem ve_bool_handler (g : (R : Register) → Option (RegisterType R)) (bufa bufb r : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) (σ : MState) (i : Nat) (steps0 : Nat)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) (σ : MState) (i : Nat) (steps0 : Nat)
     (b1 b2 : Bool)
     (hsteps0 : Steps c ⟨σ, i, steps0⟩) (hi : i < 2)
-    (hG : GoodState σ) (hmem : σ.mem = m0) (hloaded : Value_equalLoaded m0)
+    (hG : GoodState σ) (hmem : σ.mem = m0) (hout : σ.sailOutput = o) (hloaded : Value_equalLoaded m0)
     (hpc : σ.regs.get? Register.PC = some (0x800028b0#64 : BitVec 64))
     (ha0 : σ.regs.get? Register.x10 = some bufa) (ha1 : σ.regs.get? Register.x11 = some bufb)
     (hra : σ.regs.get? Register.x1 = some r)
@@ -287,7 +291,7 @@ theorem ve_bool_handler (g : (R : Register) → Option (RegisterType R)) (bufa b
       σ2.regs.get? Register.PC = some (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1) ∧
       σ2.regs.get? Register.x10 = some (cond (b1 == b2) (1#64) (0#64)) ∧
       σ2.regs.get? Register.x1 = some r ∧
-      (∃ w, σ2.regs.get? Register.minstret = some w) ∧ σ2.mem = m0 ∧
+      (∃ w, σ2.regs.get? Register.minstret = some w) ∧ σ2.mem = m0 ∧ σ2.sailOutput = o ∧
       (∀ R : Register, NotWrittenVE R → σ2.regs.get? R = g R) := by
   obtain ⟨a0, a1, a2, a3, hab0, hab1, hab2, hab3, harec⟩ := read32_bytes m0 (bufa.toNat + 8) _ hp1
   obtain ⟨d0, d1, d2, d3, hdb0, hdb1, hdb2, hdb3, hdrec⟩ := read32_bytes m0 (bufb.toNat + 8) _ hp2
@@ -349,9 +353,11 @@ theorem ve_bool_handler (g : (R : Register) → Option (RegisterType R)) (bufa b
   have hframe2 : ∀ R : Register, NotWrittenVE R → σ2.regs.get? R = g R := fun R hR =>
     (frame_alu_ve hobs2 R hR hR.2.2.1).trans (hframe1 R hR)
   obtain ⟨hbb0, hbb1, hbb2, hbb3⟩ := value_equal_at_800028c0 hloaded
-  have htail := ve_sub_seqz_ret g r m0 c σ2 i2 (steps0 + 1 + 1)
+  have hout2 : σ2.sailOutput = o :=
+    (by chain_out [hobs1, hobs2] : σ2.sailOutput = σ.sailOutput).trans hout
+  have htail := ve_sub_seqz_ret g r m0 o c σ2 i2 (steps0 + 1 + 1)
     (cond b1 (1#64) (0#64)) (cond b2 (1#64) (0#64)) (0x800028b8#64) (0x800028bc#64) (0x800028c0#64)
-    (((hsteps0.trans (Steps.single hs1)).trans (Steps.single hs2))) hi2 hG2 hmem2eq hloaded
+    (((hsteps0.trans (Steps.single hs1)).trans (Steps.single hs2))) hi2 hG2 hmem2eq hout2 hloaded
     hpc2 ha0_2 ha5_2 hra_2 vmi2 hmi2 hrettgt hframe2
     (fun σ0 i0 u0 v10 v15 hG0 hpc0 hmi0 h10 h15 hl0 hi0 =>
       site_800028b8 σ0 i0 u0 (0x800028b8#64) vmi2 v10 v15 hG0 hpc0 hmi0 h10 h15 hl0 rfl hi0)
@@ -372,10 +378,10 @@ theorem ve_bool_handler (g : (R : Register) → Option (RegisterType R)) (bufa b
 Loads both fn pointers at `+16`, subtracts, `seqz`, returns. Same shape as the int
 handler but at offset `+16` and using the `f0/f4/f8` tail sites. -/
 theorem ve_native_handler (g : (R : Register) → Option (RegisterType R)) (bufa bufb r : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) (σ : MState) (i : Nat) (steps0 : Nat)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) (σ : MState) (i : Nat) (steps0 : Nat)
     (q1 q2 : Nat)
     (hsteps0 : Steps c ⟨σ, i, steps0⟩) (hi : i < 2)
-    (hG : GoodState σ) (hmem : σ.mem = m0) (hloaded : Value_equalLoaded m0)
+    (hG : GoodState σ) (hmem : σ.mem = m0) (hout : σ.sailOutput = o) (hloaded : Value_equalLoaded m0)
     (hpc : σ.regs.get? Register.PC = some (0x800028e8#64 : BitVec 64))
     (ha0 : σ.regs.get? Register.x10 = some bufa) (ha1 : σ.regs.get? Register.x11 = some bufb)
     (hra : σ.regs.get? Register.x1 = some r)
@@ -390,7 +396,7 @@ theorem ve_native_handler (g : (R : Register) → Option (RegisterType R)) (bufa
       σ2.regs.get? Register.x10 =
         some (cond ((BitVec.ofNat 64 q1 - BitVec.ofNat 64 q2) == 0#64) (1#64) (0#64)) ∧
       σ2.regs.get? Register.x1 = some r ∧
-      (∃ w, σ2.regs.get? Register.minstret = some w) ∧ σ2.mem = m0 ∧
+      (∃ w, σ2.regs.get? Register.minstret = some w) ∧ σ2.mem = m0 ∧ σ2.sailOutput = o ∧
       (∀ R : Register, NotWrittenVE R → σ2.regs.get? R = g R) := by
   obtain ⟨a0, a1, a2, a3, a4, a5, a6, a7, hab0, hab1, hab2, hab3, hab4, hab5, hab6, hab7, harec⟩ :=
     read64_bytes m0 (bufa.toNat + 16) _ hp1
@@ -439,9 +445,11 @@ theorem ve_native_handler (g : (R : Register) → Option (RegisterType R)) (bufa
   have hframe2 : ∀ R : Register, NotWrittenVE R → σ2.regs.get? R = g R := fun R hR =>
     (frame_alu_ve hobs2 R hR hR.2.2.1).trans (hframe1 R hR)
   obtain ⟨hbb0, hbb1, hbb2, hbb3⟩ := value_equal_at_800028f8 hloaded
-  have htail := ve_sub_seqz_ret g r m0 c σ2 i2 (steps0 + 1 + 1)
+  have hout2 : σ2.sailOutput = o :=
+    (by chain_out [hobs1, hobs2] : σ2.sailOutput = σ.sailOutput).trans hout
+  have htail := ve_sub_seqz_ret g r m0 o c σ2 i2 (steps0 + 1 + 1)
     (BitVec.ofNat 64 q1) (BitVec.ofNat 64 q2) (0x800028f0#64) (0x800028f4#64) (0x800028f8#64)
-    (((hsteps0.trans (Steps.single hs1)).trans (Steps.single hs2))) hi2 hG2 hmem2eq hloaded
+    (((hsteps0.trans (Steps.single hs1)).trans (Steps.single hs2))) hi2 hG2 hmem2eq hout2 hloaded
     hpc2 ha0_2 ha5_2 hra_2 vmi2 hmi2 hrettgt hframe2
     (fun σ0 i0 u0 v10 v15 hG0 hpc0 hmi0 h10 h15 hl0 hi0 =>
       site_800028f0 σ0 i0 u0 (0x800028f0#64) vmi2 v10 v15 hG0 hpc0 hmi0 h10 h15 hl0 rfl hi0)
@@ -469,10 +477,10 @@ with the buffer pointers/ra/frame preserved. Shared by every same-kind payload c
 theorem ve_to_handler
     (g : (R : Register) → Option (RegisterType R)) (bufa bufb r : BitVec 64)
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (va vb : Value)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config)
     (hkeq : kindTag va = kindTag vb)
     (hG : GoodState c.σ) (hloaded : Value_equalLoaded c.σ.mem) (hjt : JumpTable c.σ.mem)
-    (hmem : c.σ.mem = m0)
+    (hmem : c.σ.mem = m0) (hout : c.σ.sailOutput = o)
     (hpc : c.σ.regs.get? Register.PC = some (0x8000285c#64 : BitVec 64))
     (ha0 : c.σ.regs.get? Register.x10 = some bufa) (ha1 : c.σ.regs.get? Register.x11 = some bufb)
     (hra : c.σ.regs.get? Register.x1 = some r)
@@ -482,74 +490,74 @@ theorem ve_to_handler
     (hframe : ∀ R : Register, NotWrittenVE R → c.σ.regs.get? R = g R) :
     ∃ (σd : MState) (idd : Nat),
       Steps c ⟨σd, idd, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩ ∧ idd < 2 ∧
-      GoodState σd ∧ σd.mem = m0 ∧ σd.regs.get? Register.PC = some (handlerAddr va) ∧
+      GoodState σd ∧ σd.mem = m0 ∧ σd.sailOutput = o ∧ σd.regs.get? Register.PC = some (handlerAddr va) ∧
       σd.regs.get? Register.x10 = some bufa ∧ σd.regs.get? Register.x11 = some bufb ∧
       σd.regs.get? Register.x1 = some r ∧ (∃ w, σd.regs.get? Register.minstret = some w) ∧
       (∀ R : Register, NotWrittenVE R → σd.regs.get? R = g R) := by
   have hloaded0 : Value_equalLoaded m0 := hmem ▸ hloaded
   have hjt0 : JumpTable m0 := hmem ▸ hjt
-  obtain ⟨σp, ip, hstepsp, hip, hGp, hmemp, hpcp, hx15p, ha0p, ha1p, hrap, ⟨vmip, hmip⟩, hframep⟩ :=
-    ve_prefix g bufa bufb r N φc va vb m0 c hG hloaded hmem hpc ha0 ha1 hra vmi hmi
+  obtain ⟨σp, ip, hstepsp, hip, hGp, hmemp, houtp, hpcp, hx15p, ha0p, ha1p, hrap, ⟨vmip, hmip⟩, hframep⟩ :=
+    ve_prefix g bufa bufb r N φc va vb m0 o c hG hloaded hmem hout hpc ha0 ha1 hra vmi hmi
       htick hra' hrb' hrega hregb hkeq hframe
   have hx15p' : σp.regs.get? Register.x15 = some (BitVec.ofNat 64 (kindTag va)) := by rw [hx15p, hkeq]
-  obtain ⟨σd, idd, hstepsd, hidd, hGd, hmemd, hpcd, ha0d, ha1d, hrad, hmid, hframed⟩ :=
-    ve_dispatch g bufa bufb r va m0 c σp ip (c.steps + 1 + 1 + 1 + 1 + 1)
-      hstepsp hip hGp hmemp hloaded0 hjt0 hpcp hx15p' ha0p ha1p hrap vmip hmip hframep
-  exact ⟨σd, idd, hstepsd, hidd, hGd, hmemd, hpcd, ha0d, ha1d, hrad, hmid, hframed⟩
+  obtain ⟨σd, idd, hstepsd, hidd, hGd, hmemd, houtd, hpcd, ha0d, ha1d, hrad, hmid, hframed⟩ :=
+    ve_dispatch g bufa bufb r va m0 o c σp ip (c.steps + 1 + 1 + 1 + 1 + 1)
+      hstepsp hip hGp hmemp houtp hloaded0 hjt0 hpcp hx15p' ha0p ha1p hrap vmip hmip hframep
+  exact ⟨σd, idd, hstepsd, hidd, hGd, hmemd, houtd, hpcd, ha0d, ha1d, hrad, hmid, hframed⟩
 
 theorem value_equal_spec_nonstr
     (g : (R : Register) → Option (RegisterType R)) (bufa bufb r : BitVec 64)
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (va vb : Value)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
     (hφc : ∀ (a b : Vsa.While.Addr), φc a = φc b → a = b)
     (hN : ∀ (f h : NativeFn), N.addr f = N.addr h → f = h)
     (hnotstr : ∀ sa sb, ¬ (va = .str sa ∧ vb = .str sb)) :
-    Triple (ve_pre g bufa bufb r N φc va vb m0) (ve_post g r va vb m0) := by
+    Triple (ve_pre g bufa bufb r N φc va vb m0 o) (ve_post g r va vb m0 o) := by
   -- If kinds mismatch, use the mismatch theorem directly.
   rcases Classical.em (kindTag va = kindTag vb) with hkeq | hkeq
-  case inr => exact value_equal_spec_null_mismatch g bufa bufb r N φc va vb m0 (Or.inl hkeq)
+  case inr => exact value_equal_spec_null_mismatch g bufa bufb r N φc va vb m0 (Or.inl hkeq) o
   intro c hpre
-  obtain ⟨hG, hloaded, hjt, hmem, hpc, ha0, ha1, hra, ⟨vmi, hmi⟩, htick,
+  obtain ⟨hG, hloaded, hjt, hmem, hout, hpc, ha0, ha1, hra, ⟨vmi, hmi⟩, htick,
     hra', hrb', hrega, hregb, hrettgt, hframe⟩ := hpre
   have hloaded0 : Value_equalLoaded m0 := hmem ▸ hloaded
   cases va with
   | null =>
     cases vb
     case null =>
-      exact value_equal_spec_null_mismatch g bufa bufb r N φc _ _ m0 (Or.inr ⟨rfl, rfl⟩) c
-        ⟨hG, hloaded, hjt, hmem, hpc, ha0, ha1, hra, ⟨vmi, hmi⟩, htick,
+      exact value_equal_spec_null_mismatch g bufa bufb r N φc _ _ m0 (Or.inr ⟨rfl, rfl⟩) o c
+        ⟨hG, hloaded, hjt, hmem, hout, hpc, ha0, ha1, hra, ⟨vmi, hmi⟩, htick,
           hra', hrb', hrega, hregb, hrettgt, hframe⟩
     all_goals (exfalso; simp [kindTag] at hkeq)
   | bool b1 =>
     cases vb
     case bool b2 =>
-      obtain ⟨σd, idd, hstepsd, hidd, hGd, hmemd, hpcd, ha0d, ha1d, hrad, ⟨vmid, hmid⟩, hframed⟩ :=
-        ve_to_handler g bufa bufb r N φc (Value.bool b1) (Value.bool b2) m0 c hkeq hG hloaded hjt
-          hmem hpc ha0 ha1 hra vmi hmi htick hra' hrb' hrega hregb hframe
+      obtain ⟨σd, idd, hstepsd, hidd, hGd, hmemd, houtd, hpcd, ha0d, ha1d, hrad, ⟨vmid, hmid⟩, hframed⟩ :=
+        ve_to_handler g bufa bufb r N φc (Value.bool b1) (Value.bool b2) m0 o c hkeq hG hloaded hjt
+          hmem hout hpc ha0 ha1 hra vmi hmi htick hra' hrb' hrega hregb hframe
       obtain ⟨_, hpb1⟩ := hra'
       obtain ⟨_, hpb2⟩ := hrb'
       rw [show handlerAddr (Value.bool b1) = 0x800028b0#64 from rfl] at hpcd
-      obtain ⟨σ2, i2, hs2, hi2, hG2, hpc2, ha0_2, hra_2, hmi2, hmem2, hframe2⟩ :=
-        ve_bool_handler g bufa bufb r m0 c σd idd _ b1 b2 hstepsd hidd hGd hmemd hloaded0
+      obtain ⟨σ2, i2, hs2, hi2, hG2, hpc2, ha0_2, hra_2, hmi2, hmem2, hout2, hframe2⟩ :=
+        ve_bool_handler g bufa bufb r m0 o c σd idd _ b1 b2 hstepsd hidd hGd hmemd houtd hloaded0
           hpcd ha0d ha1d hrad vmid hmid hrega hregb hrettgt hframed hpb1 hpb2
-      exact ⟨⟨σ2, i2, _⟩, hs2, hG2, hpc2, by rw [ha0_2]; rfl, hra_2, hmi2, hi2, hmem2, hframe2⟩
+      exact ⟨⟨σ2, i2, _⟩, hs2, hG2, hpc2, by rw [ha0_2]; rfl, hra_2, hmi2, hi2, hmem2, hout2, hframe2⟩
     all_goals (exfalso; simp [kindTag] at hkeq)
   | int n1 =>
     cases vb
     case int n2 =>
-      obtain ⟨σd, idd, hstepsd, hidd, hGd, hmemd, hpcd, ha0d, ha1d, hrad, ⟨vmid, hmid⟩, hframed⟩ :=
-        ve_to_handler g bufa bufb r N φc (Value.int n1) (Value.int n2) m0 c hkeq hG hloaded hjt
-          hmem hpc ha0 ha1 hra vmi hmi htick hra' hrb' hrega hregb hframe
+      obtain ⟨σd, idd, hstepsd, hidd, hGd, hmemd, houtd, hpcd, ha0d, ha1d, hrad, ⟨vmid, hmid⟩, hframed⟩ :=
+        ve_to_handler g bufa bufb r N φc (Value.int n1) (Value.int n2) m0 o c hkeq hG hloaded hjt
+          hmem hout hpc ha0 ha1 hra vmi hmi htick hra' hrb' hrega hregb hframe
       obtain ⟨_, hpb1⟩ := hra'
       obtain ⟨_, hpb2⟩ := hrb'
       simp only [readI64, Option.map_eq_some_iff] at hpb1 hpb2
       obtain ⟨p1, hp1, hpn1⟩ := hpb1
       obtain ⟨p2, hp2, hpn2⟩ := hpb2
       rw [show handlerAddr (Value.int n1) = 0x80002894#64 from rfl] at hpcd
-      obtain ⟨σ2, i2, hs2, hi2, hG2, hpc2, ha0_2, hra_2, hmi2, hmem2, hframe2⟩ :=
-        ve_int_handler g bufa bufb r m0 c σd idd _ p1 p2 hstepsd hidd hGd hmemd hloaded0
+      obtain ⟨σ2, i2, hs2, hi2, hG2, hpc2, ha0_2, hra_2, hmi2, hmem2, hout2, hframe2⟩ :=
+        ve_int_handler g bufa bufb r m0 o c σd idd _ p1 p2 hstepsd hidd hGd hmemd houtd hloaded0
           hpcd ha0d ha1d hrad vmid hmid hrega hregb hrettgt hframed hp1 hp2
-      refine ⟨⟨σ2, i2, _⟩, hs2, hG2, hpc2, ?_, hra_2, hmi2, hi2, hmem2, hframe2⟩
+      refine ⟨⟨σ2, i2, _⟩, hs2, hG2, hpc2, ?_, hra_2, hmi2, hi2, hmem2, hout2, hframe2⟩
       rw [ha0_2, int_eq_bridge p1 p2 n1 n2 hpn1 hpn2]; rfl
     all_goals (exfalso; simp [kindTag] at hkeq)
   | str sa =>
@@ -559,16 +567,16 @@ theorem value_equal_spec_nonstr
   | closure ca1 =>
     cases vb
     case closure ca2 =>
-      obtain ⟨σd, idd, hstepsd, hidd, hGd, hmemd, hpcd, ha0d, ha1d, hrad, ⟨vmid, hmid⟩, hframed⟩ :=
-        ve_to_handler g bufa bufb r N φc (Value.closure ca1) (Value.closure ca2) m0 c hkeq hG hloaded hjt
-          hmem hpc ha0 ha1 hra vmi hmi htick hra' hrb' hrega hregb hframe
+      obtain ⟨σd, idd, hstepsd, hidd, hGd, hmemd, houtd, hpcd, ha0d, ha1d, hrad, ⟨vmid, hmid⟩, hframed⟩ :=
+        ve_to_handler g bufa bufb r N φc (Value.closure ca1) (Value.closure ca2) m0 o c hkeq hG hloaded hjt
+          hmem hout hpc ha0 ha1 hra vmi hmi htick hra' hrb' hrega hregb hframe
       obtain ⟨_, hpb1, _⟩ := hra'
       obtain ⟨_, hpb2, _⟩ := hrb'
       rw [show handlerAddr (Value.closure ca1) = 0x80002894#64 from rfl] at hpcd
-      obtain ⟨σ2, i2, hs2, hi2, hG2, hpc2, ha0_2, hra_2, hmi2, hmem2, hframe2⟩ :=
-        ve_int_handler g bufa bufb r m0 c σd idd _ (φc ca1) (φc ca2) hstepsd hidd hGd hmemd hloaded0
+      obtain ⟨σ2, i2, hs2, hi2, hG2, hpc2, ha0_2, hra_2, hmi2, hmem2, hout2, hframe2⟩ :=
+        ve_int_handler g bufa bufb r m0 o c σd idd _ (φc ca1) (φc ca2) hstepsd hidd hGd hmemd houtd hloaded0
           hpcd ha0d ha1d hrad vmid hmid hrega hregb hrettgt hframed hpb1 hpb2
-      refine ⟨⟨σ2, i2, _⟩, hs2, hG2, hpc2, ?_, hra_2, hmi2, hi2, hmem2, hframe2⟩
+      refine ⟨⟨σ2, i2, _⟩, hs2, hG2, hpc2, ?_, hra_2, hmi2, hi2, hmem2, hout2, hframe2⟩
       rw [ha0_2,
         ptr_eq_bridge φc ca1 ca2 (φc ca1) (φc ca2) rfl rfl
           (read64_lt m0 (bufa.toNat + 8) _ hpb1) (read64_lt m0 (bufb.toNat + 8) _ hpb2)
@@ -578,16 +586,16 @@ theorem value_equal_spec_nonstr
   | native f1 =>
     cases vb
     case native f2 =>
-      obtain ⟨σd, idd, hstepsd, hidd, hGd, hmemd, hpcd, ha0d, ha1d, hrad, ⟨vmid, hmid⟩, hframed⟩ :=
-        ve_to_handler g bufa bufb r N φc (Value.native f1) (Value.native f2) m0 c hkeq hG hloaded hjt
-          hmem hpc ha0 ha1 hra vmi hmi htick hra' hrb' hrega hregb hframe
+      obtain ⟨σd, idd, hstepsd, hidd, hGd, hmemd, houtd, hpcd, ha0d, ha1d, hrad, ⟨vmid, hmid⟩, hframed⟩ :=
+        ve_to_handler g bufa bufb r N φc (Value.native f1) (Value.native f2) m0 o c hkeq hG hloaded hjt
+          hmem hout hpc ha0 ha1 hra vmi hmi htick hra' hrb' hrega hregb hframe
       obtain ⟨_, _, hpb1⟩ := hra'
       obtain ⟨_, _, hpb2⟩ := hrb'
       rw [show handlerAddr (Value.native f1) = 0x800028e8#64 from rfl] at hpcd
-      obtain ⟨σ2, i2, hs2, hi2, hG2, hpc2, ha0_2, hra_2, hmi2, hmem2, hframe2⟩ :=
-        ve_native_handler g bufa bufb r m0 c σd idd _ (N.addr f1) (N.addr f2) hstepsd hidd hGd hmemd hloaded0
+      obtain ⟨σ2, i2, hs2, hi2, hG2, hpc2, ha0_2, hra_2, hmi2, hmem2, hout2, hframe2⟩ :=
+        ve_native_handler g bufa bufb r m0 o c σd idd _ (N.addr f1) (N.addr f2) hstepsd hidd hGd hmemd houtd hloaded0
           hpcd ha0d ha1d hrad vmid hmid hrega hregb hrettgt hframed hpb1 hpb2
-      refine ⟨⟨σ2, i2, _⟩, hs2, hG2, hpc2, ?_, hra_2, hmi2, hi2, hmem2, hframe2⟩
+      refine ⟨⟨σ2, i2, _⟩, hs2, hG2, hpc2, ?_, hra_2, hmi2, hi2, hmem2, hout2, hframe2⟩
       rw [ha0_2,
         ptr_eq_bridge N.addr f1 f2 (N.addr f1) (N.addr f2) rfl rfl
           (read64_lt m0 (bufa.toNat + 16) _ hpb1) (read64_lt m0 (bufb.toNat + 16) _ hpb2)

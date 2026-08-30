@@ -387,9 +387,9 @@ spill via `cstr_writeMap8_disjoint` / `strcmpLoaded_of_agree` / `maskPinned_of_a
 theorem ve_str_reaches_result
     (g : (R : Register) → Option (RegisterType R)) (bufa bufb r sp : BitVec 64)
     (sa sb : String) (pa' pb' : Nat) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) (σ : MState) (i : Nat) (steps0 : Nat)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) (σ : MState) (i : Nat) (steps0 : Nat)
     (hsteps0 : Steps c ⟨σ, i, steps0⟩) (hi : i < 2)
-    (hG : GoodState σ) (hmem : σ.mem = m0) (hloaded : Value_equalLoaded m0)
+    (hG : GoodState σ) (hmem : σ.mem = m0) (hout : σ.sailOutput = o) (hloaded : Value_equalLoaded m0)
     (hstrc : StrcmpLoaded m0) (hmask : MaskPinned m0)
     (hpc : σ.regs.get? Register.PC = some (0x800028c4#64 : BitVec 64))
     (ha0 : σ.regs.get? Register.x10 = some bufa) (ha1 : σ.regs.get? Register.x11 = some bufb)
@@ -418,7 +418,7 @@ theorem ve_str_reaches_result
       ((x == 0#64) = Value.equal (.str sa) (.str sb)) ∧
       -- `sp` is recovered across the call via strcmp's ghost frame (`x2 ∉ write-set`):
       c6.σ.regs.get? Register.x2 = some (sp - 16#64) ∧
-      c6.σ.mem = m1 ∧
+      c6.σ.mem = m1 ∧ c6.σ.sailOutput = o ∧
       (∀ a, ¬ (sp.toNat - 16 ≤ a ∧ a < sp.toNat) → m1[a]? = m0[a]?) ∧
       -- the whole `NotWrittenVEStr` frame carries back to the handler-entry ghost `g`
       -- (strcmp's frame ∘ the pre-call str frame); the epilogue consumes this.
@@ -596,9 +596,11 @@ theorem ve_str_reaches_result
   have ha0_5' : σ5.regs.get? Register.x10 = some (BitVec.ofNat 64 pa') := ha0_5
   have hca1' : CStr m1 (BitVec.ofNat 64 pa').toNat csa := by rw [hpa_nat]; exact hca1
   have hcb1' : CStr m1 (BitVec.ofNat 64 pb').toNat csb := by rw [hpb_nat]; exact hcb1
+  have hout5 : σ5.sailOutput = o :=
+    (by chain_out [hobs1, hobs2, hobs3, hobs4, hobs5] : σ5.sailOutput = σ.sailOutput).trans hout
   have hcorepre : strcmp_full_pre (fun R => σ5.regs.get? R) (BitVec.ofNat 64 pa')
-      (BitVec.ofNat 64 pb') (0x800028d8#64) sa sb m1 ⟨σ5, i5, steps0 + 1 + 1 + 1 + 1 + 1⟩ := by
-    refine ⟨hG5, hmem5eq ▸ hstrc1, hmem5eq, ?_, ha0_5', ha1_5, hra_5,
+      (BitVec.ofNat 64 pb') (0x800028d8#64) sa sb m1 o ⟨σ5, i5, steps0 + 1 + 1 + 1 + 1 + 1⟩ := by
+    refine ⟨hG5, hmem5eq ▸ hstrc1, hmem5eq, hout5, ?_, ha0_5', ha1_5, hra_5,
       ⟨vmi5, hmi5⟩, hi5, (by decide), hcstra1, hcstrb1, hmem5eq ▸ hmask1,
       (fun cs hcs => cstr_functional m1 _ cs csa hcs hca1' ▸ hbra),
       (fun cs hcs => cstr_functional m1 _ cs csb hcs hcb1' ▸ hbrb),
@@ -607,9 +609,9 @@ theorem ve_str_reaches_result
     rw [hpc5]
   obtain ⟨c6, hs6, hpost6⟩ :=
     strcmp_full_spec (fun R => σ5.regs.get? R) (BitVec.ofNat 64 pa') (BitVec.ofNat 64 pb')
-      (0x800028d8#64) sa sb m1 ⟨σ5, i5, steps0 + 1 + 1 + 1 + 1 + 1⟩ hcorepre
+      (0x800028d8#64) sa sb m1 o ⟨σ5, i5, steps0 + 1 + 1 + 1 + 1 + 1⟩ hcorepre
   -- strcmp post: returned to 0x800028d8, mem = m1, x10's sign the spec sign
-  obtain ⟨hG6, hpc6, hra6, hmem6, htick6, hframe6, csa', csb', x10v, hca6, hcb6, hsa6, hsb6, hx10_6, hsign6⟩ := hpost6
+  obtain ⟨hG6, hpc6, hra6, hmem6, hout6, htick6, hframe6, csa', csb', x10v, hca6, hcb6, hsa6, hsb6, hx10_6, hsign6⟩ := hpost6
   -- recover `sp` across the call: `x2 ∉ NotWrittenStrcmp`'s write-set, so the ghost frame ties
   -- `c6.σ.regs.get? x2` back to `σ5.regs.get? x2 = sp - 16`.
   have hsp6 : c6.σ.regs.get? Register.x2 = some (sp - 16#64) :=
@@ -650,7 +652,7 @@ theorem ve_str_reaches_result
   -- the full VEStr frame at c6: strcmp's frame (over σ5's ghost) ∘ the pre-call str frame
   have hframeStr6 : ∀ R : Register, NotWrittenVEStr R → c6.σ.regs.get? R = g R := fun R hR =>
     (hframe6 R (notWrittenStrcmp_of_str hR)).trans (hframe5 R hR)
-  exact ⟨c6, m1, x10v, hsteps_all, hG6, htick6, hpc6, hra6, hx10_6, hbridge, hsp6, hmem6,
+  exact ⟨c6, m1, x10v, hsteps_all, hG6, htick6, hpc6, hra6, hx10_6, hbridge, hsp6, hmem6, hout6,
     hmem_frame, hframeStr6, hm1def, hloaded1⟩
 
 end Vsa.Sim

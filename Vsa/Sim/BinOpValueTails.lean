@@ -112,13 +112,13 @@ theorem eqNeValueTail {P Q : Config → Prop}
         StrcmpWRegion (BitVec.ofNat 64 pa') csa.length ∧
         StrcmpWRegion (BitVec.ofNat 64 pb') csb.length ∧
         VEStrRegions sp pa' pb' csa.length csb.length)
-    (pre : Triple P (fun c => ve_pre g bufa bufb rC N φc va vb mA c ∧
+    (pre : Triple P (fun c => ve_pre g bufa bufb rC N φc va vb mA out0 c ∧
               c.σ.regs.get? Register.x2 = some sp))
-    (stage : Triple (ve_str_post g rC sp va vb mA) (boxBool_pre g sret bw rB mB out0))
+    (stage : Triple (ve_str_post g rC sp va vb mA out0) (boxBool_pre g sret bw rB mB out0))
     (suf : Triple (boxBool_post g sret bw rB N φc mB out0) Q) :
     Triple P Q :=
   valueBoolCallSeam g sret bw rB N φc mB out0
-    (valueEqualCallSeam g bufa bufb rC sp N φc va vb mA
+    (valueEqualCallSeam g bufa bufb rC sp N φc va vb mA out0
       hφc hN hstrc hmask hraln4 hstrwit pre stage) suf
 
 #print axioms eqNeValueTail

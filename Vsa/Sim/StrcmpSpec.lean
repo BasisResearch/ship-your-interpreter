@@ -1,4 +1,5 @@
 import Vsa.Sim.StrcmpSites
+import Vsa.Sim.ChainFrameOut
 import Vsa.Sim.Muldi3Spec
 import Vsa.Sim.DivSpec
 import Vsa.Sim.StrlenSpec
@@ -278,10 +279,11 @@ def BytePrefix (csa csb : List Char) (k : Nat) : Prop :=
 /-- Loop-head observation at `0xf84`, byte iteration `k`. -/
 structure BSt (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (k : Nat) (c : Config) : Prop where
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (k : Nat) (c : Config) : Prop where
   good : GoodState c.σ
   loaded : StrcmpLoaded c.σ.mem
   mem : c.σ.mem = m0
+  out : c.σ.sailOutput = o
   pc : c.σ.regs.get? Register.PC = some (0x80006f84#64 : BitVec 64)
   a0 : c.σ.regs.get? Register.x10 = some (pa + BitVec.ofNat 64 k)
   a1 : c.σ.regs.get? Register.x11 = some (pb + BitVec.ofNat 64 k)
@@ -300,11 +302,12 @@ spec sign. Carries the blanket ghost-frame over `NotWrittenStrcmp` so callers re
 `sp` and every callee-saved register across the call (the ghost-frame rule). -/
 structure BDone (g : (R : Register) → Option (RegisterType R))
     (r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop where
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop where
   good : GoodState c.σ
   pc : c.σ.regs.get? Register.PC = some r
   ra : c.σ.regs.get? Register.x1 = some r
   mem : c.σ.mem = m0
+  out : c.σ.sailOutput = o
   tick : c.tick < 2
   result : ∃ x, c.σ.regs.get? Register.x10 = some x ∧ strcmpSign x = strcmpSpecSign csa csb
   hframe : ∀ R : Register, NotWrittenStrcmp R → c.σ.regs.get? R = g R
@@ -500,10 +503,11 @@ theorem zext_bne (ba bb : BitVec 8) :
 `a3 = zext byte@(pb+k)`, pointers advanced to `pa+(k+1)`, `pb+(k+1)`. -/
 structure B94 (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char) (ba bb : BitVec 8)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (k : Nat) (c : Config) : Prop where
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (k : Nat) (c : Config) : Prop where
   good : GoodState c.σ
   loaded : StrcmpLoaded c.σ.mem
   mem : c.σ.mem = m0
+  out : c.σ.sailOutput = o
   pc : c.σ.regs.get? Register.PC = some (0x80006f94#64 : BitVec 64)
   a0 : c.σ.regs.get? Register.x10 = some (pa + BitVec.ofNat 64 (k+1))
   a1 : c.σ.regs.get? Register.x11 = some (pb + BitVec.ofNat 64 (k+1))
@@ -542,10 +546,11 @@ theorem prefix_le_lenb {csa csb : List Char} {k : Nat} (h : BytePrefix csa csb k
 and the sign target `isign ba bb = strcmpSpecSign csa csb` is already discharged. -/
 structure BF9c (g : (R : Register) → Option (RegisterType R))
     (r : BitVec 64) (csa csb : List Char) (ba bb : BitVec 8)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop where
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop where
   good : GoodState c.σ
   loaded : StrcmpLoaded c.σ.mem
   mem : c.σ.mem = m0
+  out : c.σ.sailOutput = o
   pc : c.σ.regs.get? Register.PC = some (0x80006f9c#64 : BitVec 64)
   a2 : c.σ.regs.get? Register.x12 = some (zero_extend (m := 64) ba)
   a3 : c.σ.regs.get? Register.x13 = some (zero_extend (m := 64) bb)
@@ -562,12 +567,12 @@ either the loop head `BSt (k+1)` (bytes equal and nonzero) or `BF9c` (bytes diff
 or both NUL). The `BF9c` sign target is discharged via `strcmpSpecSign_at`/`_eq`. -/
 theorem byte_dispatch (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char) (ba bb : BitVec 8)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (k : Nat) :
-    Triple (B94 g pa pb r csa csb ba bb m0 k)
-      (fun c => BSt g pa pb r csa csb m0 (k+1) c
-        ∨ (∃ ba' bb', BF9c g r csa csb ba' bb' m0 c)) := by
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (k : Nat) :
+    Triple (B94 g pa pb r csa csb ba bb m0 o k)
+      (fun c => BSt g pa pb r csa csb m0 o (k+1) c
+        ∨ (∃ ba' bb', BF9c g r csa csb ba' bb' m0 o c)) := by
   intro c hSt
-  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, ha2, ha3, hra, ⟨vmi, hmi⟩, htick,
+  obtain ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, ha2, ha3, hra, ⟨vmi, hmi⟩, htick,
     hrega, hregb, hcstra, hcstrb, hpre, hba, hbb, hframe⟩ := hSt
   have hba128 : ba.toNat < 128 := by rw [hba]; exact byteVal_lt m0 pa.toNat csa hcstra k
   have hbb128 : bb.toNat < 128 := by rw [hbb]; exact byteVal_lt m0 pb.toNat csb hcstrb k
@@ -607,6 +612,8 @@ theorem byte_dispatch (g : (R : Register) → Option (RegisterType R))
         fun R hR => (sframe_bnottaken hobs2 R hR).trans (hframe_1 R hR)
       obtain ⟨vmi2, hmi2'⟩ := obs_bnottaken_minstret hobs2
       have hmem2eq : σ2.mem = c.σ.mem := by rw [hmem2, hmem1]
+      have hout2 : σ2.sailOutput = o :=
+        (by chain_out [hobs1, hobs2] : σ2.sailOutput = c.σ.sailOutput).trans hout
       -- both bytes NUL ⇒ k = length for both
       have hka : csa.length = k := (cstr_byteVal_zero m0 pa.toNat csa hcstra k
         (prefix_le_lena hpre) (by rw [← hba]; rfl)).symm
@@ -616,6 +623,7 @@ theorem byte_dispatch (g : (R : Register) → Option (RegisterType R))
         rw [strcmpSpecSign_eq csa csb k hpre hka hkb]; simp [isign]
       refine ⟨⟨σ2, i2, c.steps + 1 + 1⟩, (Steps.single hs1).trans (Steps.single hs2), Or.inr ?_⟩
       exact ⟨0#8, 0#8, hG2, by rw [hmem2eq]; exact hloaded, by rw [hmem2eq]; exact hmem,
+        hout2,
         hpc2, ha2_2, ha3_2, hra_2, ⟨vmi2, hmi2'⟩, hi2, (by decide), (by decide), hsign, hframe_2⟩
     · -- bnez a2 taken (a2 ≠ 0) → f84 (loop back), BSt (k+1)
       have hguard98 : ((zero_extend (m := 64) ba) != (0#64)) = true := by
@@ -639,6 +647,8 @@ theorem byte_dispatch (g : (R : Register) → Option (RegisterType R))
         fun R hR => (sframe_btaken hobs2 R hR).trans (hframe_1 R hR)
       obtain ⟨vmi2, hmi2'⟩ := obs_btaken_minstret hobs2
       have hmem2eq : σ2.mem = c.σ.mem := by rw [hmem2, hmem1]
+      have hout2 : σ2.sailOutput = o :=
+        (by chain_out [hobs1, hobs2] : σ2.sailOutput = c.σ.sailOutput).trans hout
       -- extend BytePrefix to k+1: bytes agree (equal) and nonzero (ba ≠ 0)
       have hbaz : byteVal csa k ≠ 0 := by
         rw [← hba]; intro h
@@ -651,7 +661,8 @@ theorem byte_dispatch (g : (R : Register) → Option (RegisterType R))
           subst this
           exact ⟨by rw [← hba, ← hbb], hbaz⟩
       refine ⟨⟨σ2, i2, c.steps + 1 + 1⟩, (Steps.single hs1).trans (Steps.single hs2), Or.inl ?_⟩
-      exact ⟨hG2, by rw [hmem2eq]; exact hloaded, by rw [hmem2eq]; exact hmem, hpc2,
+      exact ⟨hG2, by rw [hmem2eq]; exact hloaded, by rw [hmem2eq]; exact hmem,
+        hout2, hpc2,
         ha0_2, ha1_2, hra_2, ⟨vmi2, hmi2'⟩, hi2, hrega, hregb, hcstra, hcstrb, hpre1, hframe_2⟩
   · -- bytes differ: bne taken → f9c
     have hguard94 : ((zero_extend (m := 64) ba) != (zero_extend (m := 64) bb)) = true := by
@@ -676,18 +687,21 @@ theorem byte_dispatch (g : (R : Register) → Option (RegisterType R))
       apply hdiff; apply BitVec.eq_of_toNat_eq; exact h
     have hsign : isign ba.toNat bb.toNat = strcmpSpecSign csa csb := by
       rw [hba, hbb, ← strcmpSpecSign_at csa csb k hpre hbytene]
+    have hout1 : σ1.sailOutput = o :=
+      (by chain_out [hobs1] : σ1.sailOutput = c.σ.sailOutput).trans hout
     refine ⟨⟨σ1, i1, c.steps + 1⟩, Steps.single hs1, Or.inr ?_⟩
     exact ⟨ba, bb, hG1, by rw [hmem1]; exact hloaded, by rw [hmem1]; exact hmem,
+      hout1,
       hpc1, ha2_1, ha3_1, hra_1, ⟨vmi1, hmi1'⟩, hi1, hba128, hbb128, hsign, hframe_1⟩
 
 /-- `0xf9c → ret → BDone`: `sub a0,a2,a3` writes the byte difference; `ret` returns to
 `r` with `x10`'s sign the spec sign. Needs `r` 4-aligned (bit-0 clear a no-op). -/
 theorem byte_f9c_ret (g : (R : Register) → Option (RegisterType R))
     (r : BitVec 64) (csa csb : List Char) (ba bb : BitVec 8)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (halignr : r.toNat % 4 = 0) :
-    Triple (BF9c g r csa csb ba bb m0) (BDone g r csa csb m0) := by
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (halignr : r.toNat % 4 = 0) :
+    Triple (BF9c g r csa csb ba bb m0 o) (BDone g r csa csb m0 o) := by
   intro c hSt
-  obtain ⟨hgood, hloaded, hmem, hpc, ha2, ha3, hra, ⟨vmi, hmi⟩, htick, hba, hbb, hsign, hframe⟩ := hSt
+  obtain ⟨hgood, hloaded, hmem, hout, hpc, ha2, ha3, hra, ⟨vmi, hmi⟩, htick, hba, hbb, hsign, hframe⟩ := hSt
   -- === f9c: sub a0,a2,a3 ===
   obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
     site_80006f9c c.σ c.tick c.steps (0x80006f9c#64) vmi
@@ -714,19 +728,22 @@ theorem byte_f9c_ret (g : (R : Register) → Option (RegisterType R))
   have hframe_2 : ∀ R, NotWrittenStrcmp R → σ2.regs.get? R = g R :=
     fun R hR => (sframe_jr hobs2 R hR).trans (hframe_1 R hR)
   have hmem2eq : σ2.mem = c.σ.mem := by rw [hmem2, hmem1]
+  have hout2 : σ2.sailOutput = o :=
+    (by chain_out [hobs1, hobs2] : σ2.sailOutput = c.σ.sailOutput).trans hout
   refine ⟨⟨σ2, i2, c.steps + 1 + 1⟩, (Steps.single hs1).trans (Steps.single hs2),
-    hG2, hpc2, hra_2, by rw [hmem2eq]; exact hmem, hi2, ?_, hframe_2⟩
+    hG2, hpc2, hra_2, by rw [hmem2eq]; exact hmem, hout2,
+    hi2, ?_, hframe_2⟩
   refine ⟨zero_extend (m := 64) ba - zero_extend (m := 64) bb, ha0_2, ?_⟩
   rw [strcmpSign_sub ba bb hba hbb]; exact hsign
 
 /-- Straight-line body `0xf84 → 0xf94`: `lbu a2; lbu a3; addi a0,1; addi a1,1`. -/
 theorem byte_straight (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (k : Nat) :
-    Triple (BSt g pa pb r csa csb m0 k)
-      (fun c => ∃ ba bb, B94 g pa pb r csa csb ba bb m0 k c) := by
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (k : Nat) :
+    Triple (BSt g pa pb r csa csb m0 o k)
+      (fun c => ∃ ba bb, B94 g pa pb r csa csb ba bb m0 o k c) := by
   intro c hSt
-  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, hra, ⟨vmi, hmi⟩, htick,
+  obtain ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, hra, ⟨vmi, hmi⟩, htick,
     hrega, hregb, hcstra, hcstrb, hpre, hframe⟩ := hSt
   have hka : k ≤ csa.length := prefix_le_lena hpre
   have hkb : k ≤ csb.length := prefix_le_lenb hpre
@@ -799,10 +816,13 @@ theorem byte_straight (g : (R : Register) → Option (RegisterType R))
     fun R hR => (sframe_alu hobs4 R hR.2.2.2.2.1 hR).trans (hframe_3 R hR)
   obtain ⟨vmi4, hmi4'⟩ := obs_alu_minstret hobs4
   have hmem4eq : σ4.mem = c.σ.mem := by rw [hmem4, hmem3, hmem2, hmem1]
+  have hout4 : σ4.sailOutput = o :=
+    (by chain_out [hobs1, hobs2, hobs3, hobs4] : σ4.sailOutput = c.σ.sailOutput).trans hout
   refine ⟨⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩,
     (((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans (Steps.single hs4),
     ba, bb, ?_⟩
-  exact ⟨hG4, by rw [hmem4eq]; exact hloaded, by rw [hmem4eq]; exact hmem, hpc4, ha0_4, ha1_4,
+  exact ⟨hG4, by rw [hmem4eq]; exact hloaded, by rw [hmem4eq]; exact hmem,
+    hout4, hpc4, ha0_4, ha1_4,
     ha2_4, ha3_4, hra_4, ⟨vmi4, hmi4'⟩, hi4, hrega, hregb, hcstra, hcstrb, hpre,
     hbaval, hbbval, hframe_4⟩
 
@@ -817,31 +837,31 @@ Invariant `BLoopI`: either at the loop head `0xf84` (some iteration `k`) or done
 /-- The full body `0xf84 → (0xf84 | 0xf9c)`: straight-line then dispatch. -/
 theorem byte_body_step (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (k : Nat) :
-    Triple (BSt g pa pb r csa csb m0 k)
-      (fun c => BSt g pa pb r csa csb m0 (k+1) c
-        ∨ (∃ ba' bb', BF9c g r csa csb ba' bb' m0 c)) :=
-  (byte_straight g pa pb r csa csb m0 k).seq
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (k : Nat) :
+    Triple (BSt g pa pb r csa csb m0 o k)
+      (fun c => BSt g pa pb r csa csb m0 o (k+1) c
+        ∨ (∃ ba' bb', BF9c g r csa csb ba' bb' m0 o c)) :=
+  (byte_straight g pa pb r csa csb m0 o k).seq
     (by
       intro c hc
       obtain ⟨ba, bb, hB94⟩ := hc
-      exact byte_dispatch g pa pb r csa csb ba bb m0 k c hB94)
+      exact byte_dispatch g pa pb r csa csb ba bb m0 o k c hB94)
 
 def BAtHead (g : (R : Register) → Option (RegisterType R)) (pa pb r : BitVec 64)
-    (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  ∃ k, BSt g pa pb r csa csb m0 k c
+    (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
+  ∃ k, BSt g pa pb r csa csb m0 o k c
 
 def BAtDone (g : (R : Register) → Option (RegisterType R)) (r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  ∃ ba bb, BF9c g r csa csb ba bb m0 c
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
+  ∃ ba bb, BF9c g r csa csb ba bb m0 o c
 
 def BLoopI (g : (R : Register) → Option (RegisterType R)) (pa pb r : BitVec 64)
-    (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  BAtHead g pa pb r csa csb m0 c ∨ BAtDone g r csa csb m0 c
+    (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
+  BAtHead g pa pb r csa csb m0 o c ∨ BAtDone g r csa csb m0 o c
 
 def BLoopB (g : (R : Register) → Option (RegisterType R)) (pa pb r : BitVec 64)
-    (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  BAtHead g pa pb r csa csb m0 c
+    (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
+  BAtHead g pa pb r csa csb m0 o c
 
 /-- Measure: `max la lb + 1 - k` at the head `0xf84` (via `a0 = pa + k`), else `0`. -/
 def BLoopMu (pa : BitVec 64) (csa csb : List Char) (c : Config) : Nat :=
@@ -852,8 +872,8 @@ def BLoopMu (pa : BitVec 64) (csa csb : List Char) (c : Config) : Nat :=
 /-- At the head, `BLoopMu = max la lb + 1 - k`. -/
 theorem bloopmu_head (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (k : Nat) (c : Config)
-    (hSt : BSt g pa pb r csa csb m0 k c) :
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (k : Nat) (c : Config)
+    (hSt : BSt g pa pb r csa csb m0 o k c) :
     BLoopMu pa csa csb c = max csa.length csb.length + 1 - k := by
   simp only [BLoopMu, hSt.pc, hSt.a0, Option.getD_some, if_pos]
   have h : (pa + BitVec.ofNat 64 k).toNat = pa.toNat + k :=
@@ -865,22 +885,22 @@ theorem bloopmu_head (g : (R : Register) → Option (RegisterType R))
 (`BF9c`): measure `0` (PC ≠ `0xf84`). -/
 theorem byte_loop_body (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (n : Nat) :
-    Triple (fun c => BLoopI g pa pb r csa csb m0 c ∧ BLoopB g pa pb r csa csb m0 c
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (n : Nat) :
+    Triple (fun c => BLoopI g pa pb r csa csb m0 o c ∧ BLoopB g pa pb r csa csb m0 o c
              ∧ BLoopMu pa csa csb c = n)
-           (fun c => BLoopI g pa pb r csa csb m0 c ∧ BLoopMu pa csa csb c < n) := by
+           (fun c => BLoopI g pa pb r csa csb m0 o c ∧ BLoopMu pa csa csb c < n) := by
   intro c hc
   obtain ⟨_, ⟨k, hSt⟩, hmu⟩ := hc
   have hmu_eq : BLoopMu pa csa csb c = max csa.length csb.length + 1 - k :=
-    bloopmu_head g pa pb r csa csb m0 k c hSt
+    bloopmu_head g pa pb r csa csb m0 o k c hSt
   rw [hmu_eq] at hmu
   have hkla : k ≤ csa.length := prefix_le_lena hSt.prefixEq
-  obtain ⟨c1, hs1, hstep⟩ := byte_body_step g pa pb r csa csb m0 k c hSt
+  obtain ⟨c1, hs1, hstep⟩ := byte_body_step g pa pb r csa csb m0 o k c hSt
   rcases hstep with hHead | hDone
   · -- back-edge: BSt (k+1), measure drops (k ≤ la ⇒ k < la+1 ≤ max+1)
     refine ⟨c1, hs1, Or.inl ⟨k+1, hHead⟩, ?_⟩
     have hmu1 : BLoopMu pa csa csb c1 = max csa.length csb.length + 1 - (k+1) :=
-      bloopmu_head g pa pb r csa csb m0 (k+1) c1 hHead
+      bloopmu_head g pa pb r csa csb m0 o (k+1) c1 hHead
     rw [hmu1, ← hmu]; omega
   · -- exit: BF9c, measure 0
     refine ⟨c1, hs1, Or.inr hDone, ?_⟩
@@ -892,10 +912,11 @@ theorem byte_loop_body (g : (R : Register) → Option (RegisterType R))
 
 /-- The byte loop runs from `BLoopI` to `BAtDone` (`0xf9c`). -/
 theorem byte_loop_to_done (g : (R : Register) → Option (RegisterType R))
-    (pa pb r : BitVec 64) (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (BLoopI g pa pb r csa csb m0) (BAtDone g r csa csb m0) := by
-  have hloop := Triple.loop (I := BLoopI g pa pb r csa csb m0)
-    (B := BLoopB g pa pb r csa csb m0) (BLoopMu pa csa csb) (byte_loop_body g pa pb r csa csb m0)
+    (pa pb r : BitVec 64) (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (o : Array String) :
+    Triple (BLoopI g pa pb r csa csb m0 o) (BAtDone g r csa csb m0 o) := by
+  have hloop := Triple.loop (I := BLoopI g pa pb r csa csb m0 o)
+    (B := BLoopB g pa pb r csa csb m0 o) (BLoopMu pa csa csb) (byte_loop_body g pa pb r csa csb m0 o)
   refine hloop.seq ?_
   intro c hc
   obtain ⟨hI, hnB⟩ := hc
@@ -912,10 +933,11 @@ Entry at `0xea0`: `or a4,a0,a1`; `li t2,-1`; `andi a4,a4,7`; `bnez a4,0xf84`. Th
 /-- Entry precondition at `0x80006ea0` (byte path: `(pa|pb) % 8 ≠ 0` misaligned). -/
 structure PreBCmp (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop where
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop where
   good : GoodState c.σ
   loaded : StrcmpLoaded c.σ.mem
   mem : c.σ.mem = m0
+  out : c.σ.sailOutput = o
   pc : c.σ.regs.get? Register.PC = some (0x80006ea0#64 : BitVec 64)
   a0 : c.σ.regs.get? Register.x10 = some pa
   a1 : c.σ.regs.get? Register.x11 = some pb
@@ -936,10 +958,11 @@ theorem bnez_ne {v : BitVec 64} (h : v ≠ 0#64) : (v != (0#64)) = true := by
 /-- **Entry (misaligned)** `0xea0 → 0xf84`: `or a4,a0,a1`; `li t2,-1`; `andi a4,a4,7`;
 `bnez a4` taken. Establishes the byte-loop head `BSt 0`. -/
 theorem entry_byte (g : (R : Register) → Option (RegisterType R))
-    (pa pb r : BitVec 64) (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (PreBCmp g pa pb r csa csb m0) (BAtHead g pa pb r csa csb m0) := by
+    (pa pb r : BitVec 64) (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (o : Array String) :
+    Triple (PreBCmp g pa pb r csa csb m0 o) (BAtHead g pa pb r csa csb m0 o) := by
   intro c hPre
-  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, hra, ⟨vmi, hmi⟩, htick,
+  obtain ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, hra, ⟨vmi, hmi⟩, htick,
     hrega, hregb, hcstra, hcstrb, hmisal, hframe⟩ := hPre
   -- ea0: or a4,a0,a1 → a4 = pa | pb
   obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
@@ -996,10 +1019,13 @@ theorem entry_byte (g : (R : Register) → Option (RegisterType R))
     fun R hR => (sframe_btaken hobs4 R hR).trans (hframe_3 R hR)
   obtain ⟨vmi4, hmi4'⟩ := obs_btaken_minstret hobs4
   have hmem4eq : σ4.mem = c.σ.mem := by rw [hmem4, hmem3, hmem2, hmem1]
+  have hout4 : σ4.sailOutput = o :=
+    (by chain_out [hobs1, hobs2, hobs3, hobs4] : σ4.sailOutput = c.σ.sailOutput).trans hout
   refine ⟨⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩,
     (((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans (Steps.single hs4),
     0, ?_⟩
-  refine ⟨hG4, by rw [hmem4eq]; exact hloaded, by rw [hmem4eq]; exact hmem, hpc4, ?_, ?_,
+  refine ⟨hG4, by rw [hmem4eq]; exact hloaded, by rw [hmem4eq]; exact hmem,
+    hout4, hpc4, ?_, ?_,
     hra_4, ⟨vmi4, hmi4'⟩, hi4, hrega, hregb, hcstra, hcstrb, (fun i hi => absurd hi (by omega)), hframe_4⟩
   · rw [show pa + BitVec.ofNat 64 0 = pa from by simp]; exact ha0_4
   · rw [show pb + BitVec.ofNat 64 0 = pb from by simp]; exact ha1_4
@@ -1009,15 +1035,15 @@ theorem entry_byte (g : (R : Register) → Option (RegisterType R))
 For the misaligned dispatch: entry → byte loop → `sub`/`ret`. `r` must be 4-aligned. -/
 theorem strcmp_byte_path (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (halignr : r.toNat % 4 = 0) :
-    Triple (PreBCmp g pa pb r csa csb m0) (BDone g r csa csb m0) := by
-  refine ((entry_byte g pa pb r csa csb m0).seq
-    ((fun c hc => byte_loop_to_done g pa pb r csa csb m0 c (Or.inl hc)) :
-      Triple (BAtHead g pa pb r csa csb m0) (BAtDone g r csa csb m0))).seq ?_
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (halignr : r.toNat % 4 = 0) :
+    Triple (PreBCmp g pa pb r csa csb m0 o) (BDone g r csa csb m0 o) := by
+  refine ((entry_byte g pa pb r csa csb m0 o).seq
+    ((fun c hc => byte_loop_to_done g pa pb r csa csb m0 o c (Or.inl hc)) :
+      Triple (BAtHead g pa pb r csa csb m0 o) (BAtDone g r csa csb m0 o))).seq ?_
   -- BAtDone (∃ ba bb, BF9c) → BDone
   intro c hc
   obtain ⟨ba, bb, hF9c⟩ := hc
-  exact byte_f9c_ret g r csa csb ba bb m0 halignr c hF9c
+  exact byte_f9c_ret g r csa csb ba bb m0 o halignr c hF9c
 
 /-! ## Top-level `strcmp` specification (byte path)
 
@@ -1034,8 +1060,8 @@ exactly what the interpreter's `!strcmp` / `strcmp < 0` uses), `x1 = r`, `mem = 
 
 /-- Top-level precondition (byte path). -/
 def strcmp_pre (g : (R : Register) → Option (RegisterType R)) (pa pb r : BitVec 64)
-    (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  GoodState c.σ ∧ StrcmpLoaded c.σ.mem ∧ c.σ.mem = m0 ∧
+    (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
+  GoodState c.σ ∧ StrcmpLoaded c.σ.mem ∧ c.σ.mem = m0 ∧ c.σ.sailOutput = o ∧
   c.σ.regs.get? Register.PC = some (0x80006ea0#64 : BitVec 64) ∧
   c.σ.regs.get? Register.x10 = some pa ∧ c.σ.regs.get? Register.x11 = some pb ∧
   c.σ.regs.get? Register.x1 = some r ∧
@@ -1051,9 +1077,9 @@ sign of comparing `sa`, `sb` as byte streams (the `csa`/`csb` char lists witness
 `CString` representations, so `strcmpSpecSign csa csb` is the honest comparison). -/
 def strcmp_post (g : (R : Register) → Option (RegisterType R))
     (r : BitVec 64) (pa pb : BitVec 64) (sa sb : String)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
   GoodState c.σ ∧ c.σ.regs.get? Register.PC = some r ∧
-  c.σ.regs.get? Register.x1 = some r ∧ c.σ.mem = m0 ∧ c.tick < 2 ∧
+  c.σ.regs.get? Register.x1 = some r ∧ c.σ.mem = m0 ∧ c.σ.sailOutput = o ∧ c.tick < 2 ∧
   (∀ R : Register, NotWrittenStrcmp R → c.σ.regs.get? R = g R) ∧
   ∃ (csa csb : List Char) (x : BitVec 64),
     CStr m0 pa.toNat csa ∧ CStr m0 pb.toNat csb ∧
@@ -1064,17 +1090,17 @@ def strcmp_post (g : (R : Register) → Option (RegisterType R))
 runs to `strcmp_post`: it returns to `r` with `x10`'s sign the comparison sign, memory
 unchanged. Bridges the `CString` existentials to the concrete `CStr` char-list ghosts. -/
 theorem strcmp_spec (g : (R : Register) → Option (RegisterType R)) (pa pb r : BitVec 64)
-    (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (strcmp_pre g pa pb r sa sb m0) (strcmp_post g r pa pb sa sb m0) := by
+    (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) :
+    Triple (strcmp_pre g pa pb r sa sb m0 o) (strcmp_post g r pa pb sa sb m0 o) := by
   intro c hpre
-  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, hra, hmi, htick, halignr,
+  obtain ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, hra, hmi, htick, halignr,
     ⟨csa, hcstra, hsa⟩, ⟨csb, hcstrb, hsb⟩, hmisal, hrega, hregb, hframe⟩ := hpre
-  have hPreB : PreBCmp g pa pb r csa csb m0 c :=
-    ⟨hgood, hloaded, hmem, hpc, ha0, ha1, hra, hmi, htick,
+  have hPreB : PreBCmp g pa pb r csa csb m0 o c :=
+    ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, hra, hmi, htick,
       hrega csa hcstra, hregb csb hcstrb, hcstra, hcstrb, hmisal, hframe⟩
-  obtain ⟨c', hsteps, hDone⟩ := strcmp_byte_path g pa pb r csa csb m0 halignr c hPreB
-  obtain ⟨hG', hpc', hra', hmem', htick', ⟨x, hx, hsign⟩, hframe'⟩ := hDone
-  exact ⟨c', hsteps, hG', hpc', hra', hmem', htick', hframe', csa, csb, x, hcstra, hcstrb, hsa, hsb, hx, hsign⟩
+  obtain ⟨c', hsteps, hDone⟩ := strcmp_byte_path g pa pb r csa csb m0 o halignr c hPreB
+  obtain ⟨hG', hpc', hra', hmem', hout', htick', ⟨x, hx, hsign⟩, hframe'⟩ := hDone
+  exact ⟨c', hsteps, hG', hpc', hra', hmem', hout', htick', hframe', csa, csb, x, hcstra, hcstrb, hsa, hsb, hx, hsign⟩
 
 /-! ## Closing note — what lands and what remains
 

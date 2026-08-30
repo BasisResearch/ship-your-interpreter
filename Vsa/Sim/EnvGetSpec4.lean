@@ -293,8 +293,8 @@ theorem scan_iter (g : (R : Register) → Option (RegisterType R))
   -- the ghost at the call site: the ABI-frame entry is `rfl`.
   let g4 : (R : Register) → Option (RegisterType R) := fun R => σ4.regs.get? R
   have hStrPre : strcmp_full_pre g4 (BitVec.ofNat 64 q) name (0x80002c6c#64) (f.vars[i].1) nameStr m0
-      ⟨σ4, i4, c2.steps + 1 + 1⟩ := by
-    refine ⟨hG4, hloadedS4, hmem4', hpc4, hx10_4, hx11_4, hra4, ⟨vmi4, hmi4⟩, hi4, by decide, ?_, ?_,
+      σ4.sailOutput ⟨σ4, i4, c2.steps + 1 + 1⟩ := by
+    refine ⟨hG4, hloadedS4, hmem4', rfl, hpc4, hx10_4, hx11_4, hra4, ⟨vmi4, hmi4⟩, hi4, by decide, ?_, ?_,
       hSt.names.maskPinned, ?_, ?_, ?_, ?_, ?_⟩
     · -- CString m0 (ofNat q).toNat (f.vars[i].1)
       rw [hqNat]; exact hCSq
@@ -312,8 +312,8 @@ theorem scan_iter (g : (R : Register) → Option (RegisterType R))
       intro R _; rfl
   obtain ⟨c5, hstepsStr, hStrPost⟩ :=
     strcmp_full_spec g4 (BitVec.ofNat 64 q) name (0x80002c6c#64) (f.vars[i].1) nameStr m0
-      ⟨σ4, i4, c2.steps + 1 + 1⟩ hStrPre
-  obtain ⟨hG5, hpc5, hra5, hmem5, htick5, hframe5,
+      σ4.sailOutput ⟨σ4, i4, c2.steps + 1 + 1⟩ hStrPre
+  obtain ⟨hG5, hpc5, hra5, hmem5, _hout5, htick5, hframe5,
     csa, csb, xres, hCSa, hCSb, hsaEq, hsbEq, hx10_5, hsign5⟩ := hStrPost
   -- recover saved registers at c5 through strcmp's frame ∘ hghost4 (AbiPreserved ⊆ NotWrittenStrcmp)
   have crecover : ∀ (R : Register) (w : RegisterType R), AbiPreserved R = true →

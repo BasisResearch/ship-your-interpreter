@@ -325,17 +325,18 @@ low bytes `ba = v4.extractLsb' 0 8`, `bb = v5.extractLsb' 0 8` are `< 128` and w
 correct result sign. -/
 theorem lane_f74_to_done (g : (R : Register) → Option (RegisterType R))
     (r v4 v5 : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (halignr : r.toNat % 4 = 0)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (halignr : r.toNat % 4 = 0)
     (hba128 : (v4.extractLsb' 0 8).toNat < 128) (hbb128 : (v5.extractLsb' 0 8).toNat < 128)
     (hsign : isign (v4.extractLsb' 0 8).toNat (v5.extractLsb' 0 8).toNat = strcmpSpecSign csa csb)
     (c : Config)
     (hgood : GoodState c.σ) (hloaded : StrcmpLoaded c.σ.mem) (hmem : c.σ.mem = m0)
+    (hout : c.σ.sailOutput = o)
     (hpc : c.σ.regs.get? Register.PC = some (0x80006f74#64 : BitVec 64))
     (ha4 : c.σ.regs.get? Register.x14 = some v4) (ha5 : c.σ.regs.get? Register.x15 = some v5)
     (hra : c.σ.regs.get? Register.x1 = some r)
     (hmi : ∃ v, c.σ.regs.get? Register.minstret = some v) (htick : c.tick < 2)
     (hframe : ∀ R : Register, NotWrittenStrcmp R → c.σ.regs.get? R = g R) :
-    ∃ c', Steps c c' ∧ BDone g r csa csb m0 c' := by
+    ∃ c', Steps c c' ∧ BDone g r csa csb m0 o c' := by
   obtain ⟨vmi, hmi⟩ := hmi
   -- f74: a4 = v4 & 0xff
   obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
@@ -389,9 +390,11 @@ theorem lane_f74_to_done (g : (R : Register) → Option (RegisterType R))
   have hframe_4 : ∀ R, NotWrittenStrcmp R → σ4.regs.get? R = g R :=
     fun R hR => (sframe_jr hobs4 R hR).trans (hframe_3 R hR)
   have hmem4eq : σ4.mem = c.σ.mem := by rw [hmem4, hmem3, hmem2, hmem1]
+  have hout4 : σ4.sailOutput = o :=
+    (by chain_out [hobs1, hobs2, hobs3, hobs4] : σ4.sailOutput = c.σ.sailOutput).trans hout
   refine ⟨⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩,
     (((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans (Steps.single hs4), ?_⟩
-  refine ⟨hG4, hpc4, hra_4, by rw [hmem4eq]; exact hmem, hi4, ?_, hframe_4⟩
+  refine ⟨hG4, hpc4, hra_4, by rw [hmem4eq]; exact hmem, hout4, hi4, ?_, hframe_4⟩
   refine ⟨_, ha0_4, ?_⟩
   rw [strcmpSign_sub (v4.extractLsb' 0 8) (v5.extractLsb' 0 8) hba128 hbb128]; exact hsign
 
@@ -401,7 +404,7 @@ theorem lane_f74_to_done (g : (R : Register) → Option (RegisterType R))
 differs, `j0 = 6-s'`) or `f70` ret (block diff, `j0 = 7-s'`). -/
 theorem lane_f5c_tail (g : (R : Register) → Option (RegisterType R))
     (r wa wb : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (n j0 s' : Nat) (halignr : r.toNat % 4 = 0)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (n j0 s' : Nat) (halignr : r.toNat % 4 = 0)
     (hs' : s' = 2 ∨ s' = 4 ∨ s' = 6) (hj0lo : j0 = 6 - s' ∨ j0 = 7 - s')
     (hlop : wa.extractLsb' (8*(6-s')) 8 = wb.extractLsb' (8*(6-s')) 8 ∨ j0 = 6 - s')
     (hbytelo_ne : j0 = 6 - s' → wa.extractLsb' (8*(6-s')) 8 ≠ wb.extractLsb' (8*(6-s')) 8)
@@ -409,12 +412,13 @@ theorem lane_f5c_tail (g : (R : Register) → Option (RegisterType R))
     (hsign : isign (wa.extractLsb' (8*j0) 8).toNat (wb.extractLsb' (8*j0) 8).toNat = strcmpSpecSign csa csb)
     (c : Config)
     (hgood : GoodState c.σ) (hloaded : StrcmpLoaded c.σ.mem) (hmem : c.σ.mem = m0)
+    (hout : c.σ.sailOutput = o)
     (hpc : c.σ.regs.get? Register.PC = some (0x80006f5c#64 : BitVec 64))
     (ha4 : c.σ.regs.get? Register.x14 = some (wa <<< (8*s'))) (ha5 : c.σ.regs.get? Register.x15 = some (wb <<< (8*s')))
     (hra : c.σ.regs.get? Register.x1 = some r)
     (hmi : ∃ v, c.σ.regs.get? Register.minstret = some v) (htick : c.tick < 2)
     (hframe : ∀ R : Register, NotWrittenStrcmp R → c.σ.regs.get? R = g R) :
-    ∃ c', Steps c c' ∧ BDone g r csa csb m0 c' := by
+    ∃ c', Steps c c' ∧ BDone g r csa csb m0 o c' := by
   obtain ⟨vmi, hmi⟩ := hmi
   have hs'6 : s' ≤ 6 := by rcases hs' with h|h|h <;> omega
   -- block value blk = (w <<< 8s') >>> 48; low byte = byte (6-s'), high byte = byte (7-s')
@@ -521,10 +525,13 @@ theorem lane_f5c_tail (g : (R : Register) → Option (RegisterType R))
     have hframe_6 : ∀ R, NotWrittenStrcmp R → σ6.regs.get? R = g R :=
       fun R hR => (sframe_jr hobs6 R hR).trans (hframe_5 R hR)
     have hmem6eq : σ6.mem = c.σ.mem := by rw [hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]
+    have hout6 : σ6.sailOutput = o :=
+      (by chain_out [hobs1, hobs2, hobs3, hobs4, hobs5, hobs6] :
+        σ6.sailOutput = c.σ.sailOutput).trans hout
     refine ⟨⟨σ6, i6, c.steps + 1 + 1 + 1 + 1 + 1 + 1⟩,
       (((((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans
         (Steps.single hs4)).trans (Steps.single hs5)).trans (Steps.single hs6), ?_⟩
-    refine ⟨hG6, hpc6, hra_6, by rw [hmem6eq]; exact hmem, hi6, ?_, hframe_6⟩
+    refine ⟨hG6, hpc6, hra_6, by rw [hmem6eq]; exact hmem, hout6, hi6, ?_, hframe_6⟩
     refine ⟨_, ha0_6, ?_⟩
     have hlomatch : ((wa <<< (8*s')) >>> (48:Nat)).toNat % 256 = ((wb <<< (8*s')) >>> (48:Nat)).toNat % 256 := by
       have := congrArg BitVec.toNat (hloA.trans (hlobyteeq.trans hloB.symm)); rw [block_lo, block_lo] at this; exact this
@@ -561,11 +568,12 @@ theorem lane_f5c_tail (g : (R : Register) → Option (RegisterType R))
         · omega
     have hlowA : ((wa <<< (8*s')) >>> (48:Nat)).extractLsb' 0 8 = wa.extractLsb' (8*j0) 8 := by rw [hloA, hj0lo6]
     have hlowB : ((wb <<< (8*s')) >>> (48:Nat)).extractLsb' 0 8 = wb.extractLsb' (8*j0) 8 := by rw [hloB, hj0lo6]
-    obtain ⟨c', hsteps', hDone'⟩ := lane_f74_to_done g r ((wa <<< (8*s')) >>> (48:Nat)) ((wb <<< (8*s')) >>> (48:Nat)) csa csb m0 halignr
+    obtain ⟨c', hsteps', hDone'⟩ := lane_f74_to_done g r ((wa <<< (8*s')) >>> (48:Nat)) ((wb <<< (8*s')) >>> (48:Nat)) csa csb m0 o halignr
       (by rw [hlowA]; exact hba128) (by rw [hlowB]; exact hbb128)
       (by rw [hlowA, hlowB]; exact hsign)
       ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩
       hG5 (by rw [hmem5, hmem4, hmem3, hmem2, hmem1]; exact hloaded) (by rw [hmem5, hmem4, hmem3, hmem2, hmem1]; exact hmem)
+      ((by chain_out [hobs1, hobs2, hobs3, hobs4, hobs5] : σ5.sailOutput = c.σ.sailOutput).trans hout)
       hpc5 ha4_5 ha5_5 hra_5 ⟨vmi5, hmi5'⟩ hi5 hframe_5
     exact ⟨c', ((((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans
       (Steps.single hs4)).trans ((Steps.single hs5).trans hsteps'), hDone'⟩
@@ -576,7 +584,7 @@ with `a2 = wa`, `a3 = wb`, `a1 = r`: `srli 0x30` extracts the {6,7} block; `sub`
 `j0=7`). The provided sign facts land `BDone`. -/
 theorem lane_fallthrough_tail (g : (R : Register) → Option (RegisterType R))
     (r wa wb : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (n j0 : Nat) (halignr : r.toNat % 4 = 0)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (n j0 : Nat) (halignr : r.toNat % 4 = 0)
     (hj0 : 6 ≤ j0) (hj0lt : j0 < 8)
     (hlo6 : wa.extractLsb' (8*6) 8 = wb.extractLsb' (8*6) 8 ∨ j0 = 6)
     (hbyte6ne : j0 = 6 → wa.extractLsb' (8*6) 8 ≠ wb.extractLsb' (8*6) 8)
@@ -584,12 +592,13 @@ theorem lane_fallthrough_tail (g : (R : Register) → Option (RegisterType R))
     (hsign : isign (wa.extractLsb' (8*j0) 8).toNat (wb.extractLsb' (8*j0) 8).toNat = strcmpSpecSign csa csb)
     (c : Config)
     (hgood : GoodState c.σ) (hloaded : StrcmpLoaded c.σ.mem) (hmem : c.σ.mem = m0)
+    (hout : c.σ.sailOutput = o)
     (hpc : c.σ.regs.get? Register.PC = some (0x80006f44#64 : BitVec 64))
     (ha2 : c.σ.regs.get? Register.x12 = some wa) (ha3 : c.σ.regs.get? Register.x13 = some wb)
     (hra : c.σ.regs.get? Register.x1 = some r)
     (hmi : ∃ v, c.σ.regs.get? Register.minstret = some v) (htick : c.tick < 2)
     (hframe : ∀ R : Register, NotWrittenStrcmp R → c.σ.regs.get? R = g R) :
-    ∃ c', Steps c c' ∧ BDone g r csa csb m0 c' := by
+    ∃ c', Steps c c' ∧ BDone g r csa csb m0 o c' := by
   obtain ⟨vmi, hmi⟩ := hmi
   -- f44: a4 = wa >>> 48
   obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
@@ -700,10 +709,13 @@ theorem lane_fallthrough_tail (g : (R : Register) → Option (RegisterType R))
     have hframe_6 : ∀ R, NotWrittenStrcmp R → σ6.regs.get? R = g R :=
       fun R hR => (sframe_jr hobs6 R hR).trans (hframe_5 R hR)
     have hmem6eq : σ6.mem = c.σ.mem := by rw [hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]
+    have hout6 : σ6.sailOutput = o :=
+      (by chain_out [hobs1, hobs2, hobs3, hobs4, hobs5, hobs6] :
+        σ6.sailOutput = c.σ.sailOutput).trans hout
     refine ⟨⟨σ6, i6, c.steps + 1 + 1 + 1 + 1 + 1 + 1⟩,
       (((((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans
         (Steps.single hs4)).trans (Steps.single hs5)).trans (Steps.single hs6), ?_⟩
-    refine ⟨hG6, hpc6, hra_6, by rw [hmem6eq]; exact hmem, hi6, ?_, hframe_6⟩
+    refine ⟨hG6, hpc6, hra_6, by rw [hmem6eq]; exact hmem, hout6, hi6, ?_, hframe_6⟩
     refine ⟨_, ha0_6, ?_⟩
     -- sign: strcmpSign (wa>>>48 - wb>>>48) = isign (high bytes) = isign (byte7) = strcmpSpecSign
     have hblkA : (wa >>> (48:Nat)).toNat < 2^16 := shr48_lt wa
@@ -757,11 +769,12 @@ theorem lane_fallthrough_tail (g : (R : Register) → Option (RegisterType R))
     -- feed lane_f74_to_done: at f74, a4 = wa>>>48, a5 = wb>>>48; low byte = byte 6 = byte j0
     have hlowA : (wa >>> (48:Nat)).extractLsb' 0 8 = wa.extractLsb' (8*j0) 8 := by rw [hlobyteA, hj06]
     have hlowB : (wb >>> (48:Nat)).extractLsb' 0 8 = wb.extractLsb' (8*j0) 8 := by rw [hlobyteB, hj06]
-    obtain ⟨c', hsteps', hDone'⟩ := lane_f74_to_done g r (wa >>> (48:Nat)) (wb >>> (48:Nat)) csa csb m0 halignr
+    obtain ⟨c', hsteps', hDone'⟩ := lane_f74_to_done g r (wa >>> (48:Nat)) (wb >>> (48:Nat)) csa csb m0 o halignr
       (by rw [hlowA]; exact hba128) (by rw [hlowB]; exact hbb128)
       (by rw [hlowA, hlowB]; exact hsign)
       ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩
       hG5 (by rw [hmem5, hmem4, hmem3, hmem2, hmem1]; exact hloaded) (by rw [hmem5, hmem4, hmem3, hmem2, hmem1]; exact hmem)
+      ((by chain_out [hobs1, hobs2, hobs3, hobs4, hobs5] : σ5.sailOutput = c.σ.sailOutput).trans hout)
       hpc5 ha4_5 ha5_5 hra_5 ⟨vmi5, hmi5'⟩ hi5 hframe_5
     exact ⟨c', ((((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans
       (Steps.single hs4)).trans ((Steps.single hs5).trans hsteps'), hDone'⟩
@@ -771,10 +784,10 @@ values, and the reduced target sign. Kept as one big proof since the machine lea
 tightly coupled to the located byte. -/
 theorem wlane_to_done (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (n : Nat) (halignr : r.toNat % 4 = 0) :
-    Triple (WLaneCmp g pa pb r csa csb m0 n) (BDone g r csa csb m0) := by
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (n : Nat) (halignr : r.toNat % 4 = 0) :
+    Triple (WLaneCmp g pa pb r csa csb m0 o n) (BDone g r csa csb m0 o) := by
   intro c hSt
-  obtain ⟨hgood, hloaded, hmem, hpc, ha2, ha3, hra, ⟨vmi, hmi⟩, htick,
+  obtain ⟨hgood, hloaded, hmem, hout, hpc, ha2, ha3, hra, ⟨vmi, hmi⟩, htick,
     hrega, hregb, hcstra, hcstrb, hpre, hnulfree, hwne, hframe⟩ := hSt
   classical
   -- first differing byte index j0 < 8 of the two words
@@ -989,7 +1002,7 @@ theorem wlane_to_done (g : (R : Register) → Option (RegisterType R))
           fun R hR => (sframe_bnottaken hobs9 R hR).trans (hframe_8 R hR)
         obtain ⟨vmi9, hmi9'⟩ := obs_bnottaken_minstret hobs9
         have hj078 : 6 ≤ j0 := hj0ge6
-        obtain ⟨c', hsteps', hDone'⟩ := lane_fallthrough_tail g r (cwordAt m0 (pa.toNat + n)) (cwordAt m0 (pb.toNat + n)) csa csb m0 n j0 halignr
+        obtain ⟨c', hsteps', hDone'⟩ := lane_fallthrough_tail g r (cwordAt m0 (pa.toNat + n)) (cwordAt m0 (pb.toNat + n)) csa csb m0 o n j0 halignr
           hj0ge6 hj0lt8
           (by rcases Nat.lt_or_ge 6 j0 with h | h
               · left; exact hj0min 6 (by omega)
@@ -999,6 +1012,8 @@ theorem wlane_to_done (g : (R : Register) → Option (RegisterType R))
           ⟨σ9, i9, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩
           hG9 (by rw [hmem9, hmem8, hmem7, hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]; exact hloaded)
           (by rw [hmem9, hmem8, hmem7, hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]; exact hmem)
+          ((by chain_out [hobs1, hobs2, hobs3, hobs4, hobs5, hobs6, hobs7, hobs8, hobs9] :
+            σ9.sailOutput = c.σ.sailOutput).trans hout)
           hpc9 ha2_9 ha3_9 hra_9 ⟨vmi9, hmi9'⟩ hi9 hframe_9
         exact ⟨c', (((((((((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans
           (Steps.single hs4)).trans (Steps.single hs5)).trans (Steps.single hs6)).trans (Steps.single hs7)).trans
@@ -1024,7 +1039,7 @@ theorem wlane_to_done (g : (R : Register) → Option (RegisterType R))
         have hframe_9 : ∀ R, NotWrittenStrcmp R → σ9.regs.get? R = g R :=
           fun R hR => (sframe_btaken hobs9 R hR).trans (hframe_8 R hR)
         obtain ⟨vmi9, hmi9'⟩ := obs_btaken_minstret hobs9
-        obtain ⟨c', hsteps', hDone'⟩ := lane_f5c_tail g r (cwordAt m0 (pa.toNat + n)) (cwordAt m0 (pb.toNat + n)) csa csb m0 n j0 2 halignr
+        obtain ⟨c', hsteps', hDone'⟩ := lane_f5c_tail g r (cwordAt m0 (pa.toNat + n)) (cwordAt m0 (pb.toNat + n)) csa csb m0 o n j0 2 halignr
           (by left; rfl) (by omega)
           (by rcases hj045 with h | h
               · right; omega
@@ -1034,6 +1049,8 @@ theorem wlane_to_done (g : (R : Register) → Option (RegisterType R))
           ⟨σ9, i9, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩
           hG9 (by rw [hmem9, hmem8, hmem7, hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]; exact hloaded)
           (by rw [hmem9, hmem8, hmem7, hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]; exact hmem)
+          ((by chain_out [hobs1, hobs2, hobs3, hobs4, hobs5, hobs6, hobs7, hobs8, hobs9] :
+            σ9.sailOutput = c.σ.sailOutput).trans hout)
           hpc9 (by rw [show 8*2 = 16 from by decide]; exact ha4_9) (by rw [show 8*2 = 16 from by decide]; exact ha5_9) hra_9 ⟨vmi9, hmi9'⟩ hi9 hframe_9
         exact ⟨c', (((((((((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans
           (Steps.single hs4)).trans (Steps.single hs5)).trans (Steps.single hs6)).trans (Steps.single hs7)).trans
@@ -1059,7 +1076,7 @@ theorem wlane_to_done (g : (R : Register) → Option (RegisterType R))
       have hframe_6 : ∀ R, NotWrittenStrcmp R → σ6.regs.get? R = g R :=
         fun R hR => (sframe_btaken hobs6 R hR).trans (hframe_5 R hR)
       obtain ⟨vmi6, hmi6'⟩ := obs_btaken_minstret hobs6
-      obtain ⟨c', hsteps', hDone'⟩ := lane_f5c_tail g r (cwordAt m0 (pa.toNat + n)) (cwordAt m0 (pb.toNat + n)) csa csb m0 n j0 4 halignr
+      obtain ⟨c', hsteps', hDone'⟩ := lane_f5c_tail g r (cwordAt m0 (pa.toNat + n)) (cwordAt m0 (pb.toNat + n)) csa csb m0 o n j0 4 halignr
         (by right; left; rfl) (by omega)
         (by rcases hj023 with h | h
             · right; omega
@@ -1069,6 +1086,8 @@ theorem wlane_to_done (g : (R : Register) → Option (RegisterType R))
         ⟨σ6, i6, c.steps + 1 + 1 + 1 + 1 + 1 + 1⟩
         hG6 (by rw [hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]; exact hloaded)
         (by rw [hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]; exact hmem)
+        ((by chain_out [hobs1, hobs2, hobs3, hobs4, hobs5, hobs6] :
+          σ6.sailOutput = c.σ.sailOutput).trans hout)
         hpc6 (by rw [show 8*4 = 32 from by decide]; exact ha4_6) (by rw [show 8*4 = 32 from by decide]; exact ha5_6) hra_6 ⟨vmi6, hmi6'⟩ hi6 hframe_6
       exact ⟨c', ((((((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans
         (Steps.single hs4)).trans (Steps.single hs5)).trans (Steps.single hs6)).trans hsteps', hDone'⟩
@@ -1093,7 +1112,7 @@ theorem wlane_to_done (g : (R : Register) → Option (RegisterType R))
     have hframe_3 : ∀ R, NotWrittenStrcmp R → σ3.regs.get? R = g R :=
       fun R hR => (sframe_btaken hobs3 R hR).trans (hframe_2 R hR)
     obtain ⟨vmi3, hmi3'⟩ := obs_btaken_minstret hobs3
-    obtain ⟨c', hsteps', hDone'⟩ := lane_f5c_tail g r (cwordAt m0 (pa.toNat + n)) (cwordAt m0 (pb.toNat + n)) csa csb m0 n j0 6 halignr
+    obtain ⟨c', hsteps', hDone'⟩ := lane_f5c_tail g r (cwordAt m0 (pa.toNat + n)) (cwordAt m0 (pb.toNat + n)) csa csb m0 o n j0 6 halignr
       (by right; right; rfl) (by omega)
       (by rcases hj001 with h | h
           · right; omega
@@ -1103,6 +1122,7 @@ theorem wlane_to_done (g : (R : Register) → Option (RegisterType R))
       ⟨σ3, i3, c.steps + 1 + 1 + 1⟩
       hG3 (by rw [hmem3, hmem2, hmem1]; exact hloaded)
       (by rw [hmem3, hmem2, hmem1]; exact hmem)
+      ((by chain_out [hobs1, hobs2, hobs3] : σ3.sailOutput = c.σ.sailOutput).trans hout)
       hpc3 (by rw [show 8*6 = 48 from by decide]; exact ha4_3) (by rw [show 8*6 = 48 from by decide]; exact ha5_3) hra_3 ⟨vmi3, hmi3'⟩ hi3 hframe_3
     exact ⟨c', (((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans hsteps', hDone'⟩
 
@@ -1300,10 +1320,11 @@ loop head `WHead 0` (`t2 = allOnes` via `neg_one_allOnes`, `a5 = magic7f` via
 /-- Aligned word-entry precondition at `0x80006ea0`. -/
 structure PreWCmp (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop where
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop where
   good : GoodState c.σ
   loaded : StrcmpLoaded c.σ.mem
   mem : c.σ.mem = m0
+  out : c.σ.sailOutput = o
   pc : c.σ.regs.get? Register.PC = some (0x80006ea0#64 : BitVec 64)
   a0 : c.σ.regs.get? Register.x10 = some pa
   a1 : c.σ.regs.get? Register.x11 = some pb
@@ -1320,10 +1341,11 @@ structure PreWCmp (g : (R : Register) → Option (RegisterType R))
 
 /-- **Aligned entry** `0xea0 → 0xeb8`: establishes `WHead 0`. -/
 theorem entry_word (g : (R : Register) → Option (RegisterType R))
-    (pa pb r : BitVec 64) (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (PreWCmp g pa pb r csa csb m0) (WHead g pa pb r csa csb m0 0) := by
+    (pa pb r : BitVec 64) (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (o : Array String) :
+    Triple (PreWCmp g pa pb r csa csb m0 o) (WHead g pa pb r csa csb m0 o 0) := by
   intro c hPre
-  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, hra, ⟨vmi, hmi⟩, htick,
+  obtain ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, hra, ⟨vmi, hmi⟩, htick,
     hrega, hregb, hcstra, hcstrb, hmaskpin, halign, hframe⟩ := hPre
   -- ea0: or a4,a0,a1 → a4 = pa | pb
   obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
@@ -1428,10 +1450,13 @@ theorem entry_word (g : (R : Register) → Option (RegisterType R))
     fun R hR => (sframe_alu hobs6 R hR.2.2.2.2.2.2.2.2.1 hR).trans (hframe_5 R hR)
   obtain ⟨vmi6, hmi6'⟩ := obs_alu_minstret hobs6
   have hmem6eq : σ6.mem = c.σ.mem := by rw [hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]
+  have hout6 : σ6.sailOutput = o :=
+    (by chain_out [hobs1, hobs2, hobs3, hobs4, hobs5, hobs6] :
+      σ6.sailOutput = c.σ.sailOutput).trans hout
   refine ⟨⟨σ6, i6, c.steps + 1 + 1 + 1 + 1 + 1 + 1⟩,
     (((((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans
       (Steps.single hs4)).trans (Steps.single hs5)).trans (Steps.single hs6), ?_⟩
-  refine ⟨hG6, by rw [hmem6eq]; exact hloaded, by rw [hmem6eq]; exact hmem, hpc6, ?_, ?_,
+  refine ⟨hG6, by rw [hmem6eq]; exact hloaded, by rw [hmem6eq]; exact hmem, hout6, hpc6, ?_, ?_,
     ha5_6, ht2_6, hra_6, ⟨vmi6, hmi6'⟩, hi6, hrega, hregb, hcstra, hcstrb, hmaskpin,
     (fun i hi => absurd hi (by omega)), (by omega), hframe_6⟩
   · rw [show pa + BitVec.ofNat 64 (24*0) = pa from by simp]; exact ha0_6
@@ -1441,12 +1466,13 @@ theorem entry_word (g : (R : Register) → Option (RegisterType R))
 `WHead 0`) with the verified word loop `swloop_to_exit`. Lands in `WordExit` = the lane
 compare `WLaneCmp` (which `wlane_to_done` carries to `BDone`) or a NUL-word block. -/
 theorem strcmp_word_reaches_exit (g : (R : Register) → Option (RegisterType R))
-    (pa pb r : BitVec 64) (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (PreWCmp g pa pb r csa csb m0) (WordExit g pa pb r csa csb m0) := by
-  refine (entry_word g pa pb r csa csb m0).seq ?_
+    (pa pb r : BitVec 64) (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (o : Array String) :
+    Triple (PreWCmp g pa pb r csa csb m0 o) (WordExit g pa pb r csa csb m0 o) := by
+  refine (entry_word g pa pb r csa csb m0 o).seq ?_
   -- WHead 0 ⟹ SWLoopI, then swloop_to_exit
-  refine (?_ : Triple (WHead g pa pb r csa csb m0 0) (SWLoopI g pa pb r csa csb m0)).seq
-    (swloop_to_exit g pa pb r csa csb m0)
+  refine (?_ : Triple (WHead g pa pb r csa csb m0 o 0) (SWLoopI g pa pb r csa csb m0 o)).seq
+    (swloop_to_exit g pa pb r csa csb m0 o)
   intro c hHead
   exact ⟨c, .refl c, Or.inl ⟨0, hHead⟩⟩
 

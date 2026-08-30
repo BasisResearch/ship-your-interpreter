@@ -142,25 +142,25 @@ sign. -/
 csa csb m0` (the WHOLE-string `BDone`), given `[0,n)` agreement. -/
 theorem bst_suffix_to_done (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (n : Nat) (halignr : r.toNat % 4 = 0)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (n : Nat) (halignr : r.toNat % 4 = 0)
     (hagree : ∀ i, i < n → byteVal csa i = byteVal csb i) :
     Triple (BSt g (pa + BitVec.ofNat 64 n) (pb + BitVec.ofNat 64 n) r
-              (csa.drop n) (csb.drop n) m0 0)
-           (BDone g r csa csb m0) := by
+              (csa.drop n) (csb.drop n) m0 o 0)
+           (BDone g r csa csb m0 o) := by
   intro c hBSt
   -- run the byte loop to BF9c, then the ret
   obtain ⟨c1, hs1, hDone⟩ :=
     ((byte_loop_to_done g (pa + BitVec.ofNat 64 n) (pb + BitVec.ofNat 64 n) r
-        (csa.drop n) (csb.drop n) m0).seq
+        (csa.drop n) (csb.drop n) m0 o).seq
       (fun c hc => by
         obtain ⟨ba, bb, hF9c⟩ := hc
-        exact byte_f9c_ret g r (csa.drop n) (csb.drop n) ba bb m0 halignr c hF9c))
+        exact byte_f9c_ret g r (csa.drop n) (csb.drop n) ba bb m0 o halignr c hF9c))
       c (Or.inl ⟨0, hBSt⟩)
   -- weaken suffix BDone to whole-string BDone via strcmpSpecSign_drop; the ghost frame is
   -- the SAME g (the byte loop preserves NotWrittenStrcmp, so the suffix run's frame is the
   -- outer pre-call frame — no re-instantiation needed).
-  obtain ⟨hG, hpc, hra, hmem, htick, ⟨x, hx, hsign⟩, hframe⟩ := hDone
-  refine ⟨c1, hs1, hG, hpc, hra, hmem, htick, ⟨x, hx, ?_⟩, hframe⟩
+  obtain ⟨hG, hpc, hra, hmem, hout, htick, ⟨x, hx, hsign⟩, hframe⟩ := hDone
+  refine ⟨c1, hs1, hG, hpc, hra, hmem, hout, htick, ⟨x, hx, ?_⟩, hframe⟩
   rw [hsign, strcmpSpecSign_drop csa csb n hagree]
 
 /-! ## Shared byte-loop head builder at a NUL `bne`-taken target (`0xf84`)
@@ -173,23 +173,24 @@ strings so `bst_suffix_to_done` closes it. -/
 `csa' = csa.drop n`, with the byte region and CStr derived from the word witnesses. -/
 theorem mk_suffix_bst (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (n : Nat)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (n : Nat)
     (hrega : StrcmpWRegion pa csa.length) (hregb : StrcmpWRegion pb csb.length)
     (hcstra : CStr m0 pa.toNat csa) (hcstrb : CStr m0 pb.toNat csb)
     (hnle : n ≤ csa.length) (hnleb : n ≤ csb.length) (c : Config)
     (hgood : GoodState c.σ) (hloaded : StrcmpLoaded c.σ.mem) (hmem : c.σ.mem = m0)
+    (hout : c.σ.sailOutput = o)
     (hpc : c.σ.regs.get? Register.PC = some (0x80006f84#64 : BitVec 64))
     (ha0 : c.σ.regs.get? Register.x10 = some (pa + BitVec.ofNat 64 n))
     (ha1 : c.σ.regs.get? Register.x11 = some (pb + BitVec.ofNat 64 n))
     (hra : c.σ.regs.get? Register.x1 = some r)
     (hmi : ∃ v, c.σ.regs.get? Register.minstret = some v) (htick : c.tick < 2)
     (hframe : ∀ R : Register, NotWrittenStrcmp R → c.σ.regs.get? R = g R) :
-    BSt g (pa + BitVec.ofNat 64 n) (pb + BitVec.ofNat 64 n) r (csa.drop n) (csb.drop n) m0 0 c := by
+    BSt g (pa + BitVec.ofNat 64 n) (pb + BitVec.ofNat 64 n) r (csa.drop n) (csb.drop n) m0 o 0 c := by
   have hptra : (pa + BitVec.ofNat 64 n).toNat = pa.toNat + n :=
     ptrN pa n (by have := hrega.nowrap; omega)
   have hptrb : (pb + BitVec.ofNat 64 n).toNat = pb.toNat + n :=
     ptrN pb n (by have := hregb.nowrap; omega)
-  refine ⟨hgood, hloaded, hmem, hpc, ?_, ?_, hra, hmi, htick, ?_, ?_, ?_, ?_,
+  refine ⟨hgood, hloaded, hmem, hout, hpc, ?_, ?_, hra, hmi, htick, ?_, ?_, ?_, ?_,
     (fun i hi => absurd hi (by omega)), hframe⟩
   · rw [show pa + BitVec.ofNat 64 n + BitVec.ofNat 64 0 = pa + BitVec.ofNat 64 n from by simp]
     exact ha0
@@ -212,12 +213,13 @@ only in the ret-path site names (`fb0/fb4` vs `fc4/fc8`). -/
 /-- The `0xfac` `bne a2,a3` site. -/
 theorem nul_bne_fac (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (n : Nat) (halignr : r.toNat % 4 = 0)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (n : Nat) (halignr : r.toNat % 4 = 0)
     (hrega : StrcmpWRegion pa csa.length) (hregb : StrcmpWRegion pb csb.length)
     (hcstra : CStr m0 pa.toNat csa) (hcstrb : CStr m0 pb.toNat csb)
     (hpre : BytePrefix csa csb n) (hnle : n ≤ csa.length) (hnf : csa.length < n + 8)
     (c : Config)
     (hgood : GoodState c.σ) (hloaded : StrcmpLoaded c.σ.mem) (hmem : c.σ.mem = m0)
+    (hout : c.σ.sailOutput = o)
     (hpc : c.σ.regs.get? Register.PC = some (0x80006fac#64 : BitVec 64))
     (ha0 : c.σ.regs.get? Register.x10 = some (pa + BitVec.ofNat 64 n))
     (ha1 : c.σ.regs.get? Register.x11 = some (pb + BitVec.ofNat 64 n))
@@ -226,7 +228,7 @@ theorem nul_bne_fac (g : (R : Register) → Option (RegisterType R))
     (hra : c.σ.regs.get? Register.x1 = some r)
     (hmi : ∃ v, c.σ.regs.get? Register.minstret = some v) (htick : c.tick < 2)
     (hframe : ∀ R : Register, NotWrittenStrcmp R → c.σ.regs.get? R = g R) :
-    ∃ c', Steps c c' ∧ BDone g r csa csb m0 c' := by
+    ∃ c', Steps c c' ∧ BDone g r csa csb m0 o c' := by
   obtain ⟨vmi, hmi⟩ := hmi
   have hnleb : n ≤ csb.length := prefix_le_lenb hpre
   by_cases hwe : cwordAt m0 (pa.toNat + n) = cwordAt m0 (pb.toNat + n)
@@ -265,11 +267,13 @@ theorem nul_bne_fac (g : (R : Register) → Option (RegisterType R))
     have hframe_3 : ∀ R, NotWrittenStrcmp R → σ3.regs.get? R = g R :=
       fun R hR => (sframe_jr hobs3 R hR).trans (hframe_2 R hR)
     have hmem3eq : σ3.mem = c.σ.mem := by rw [hmem3, hmem2, hmem1]
+    have hout3 : σ3.sailOutput = o :=
+      (by chain_out [hobs1, hobs2, hobs3] : σ3.sailOutput = c.σ.sailOutput).trans hout
     have hsign0 : strcmpSpecSign csa csb = 0 :=
       nul_eq_spec_zero m0 pa pb csa csb hcstra hcstrb n hpre hnle hnf hwe
     refine ⟨⟨σ3, i3, c.steps + 1 + 1 + 1⟩,
       ((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3), ?_⟩
-    refine ⟨hG3, hpc3, hra_3, by rw [hmem3eq]; exact hmem, hi3, ?_, hframe_3⟩
+    refine ⟨hG3, hpc3, hra_3, by rw [hmem3eq]; exact hmem, hout3, hi3, ?_, hframe_3⟩
     refine ⟨(0#64) + sign_extend (m := 64) (0x000#12), ha0_3, ?_⟩
     rw [hsign0, show ((0#64) + sign_extend (m := 64) (0x000#12) : BitVec 64) = 0#64 from by
       apply BitVec.eq_of_toNat_eq; decide]
@@ -290,10 +294,13 @@ theorem nul_bne_fac (g : (R : Register) → Option (RegisterType R))
       fun R hR => (sframe_btaken hobs1 R hR).trans (hframe R hR)
     obtain ⟨vmi1, hmi1'⟩ := obs_btaken_minstret hobs1
     have hmem1eq : σ1.mem = c.σ.mem := hmem1
-    have hBSt := mk_suffix_bst g pa pb r csa csb m0 n hrega hregb hcstra hcstrb hnle hnleb
+    have hout1 : σ1.sailOutput = o :=
+      (by chain_out [hobs1] : σ1.sailOutput = c.σ.sailOutput).trans hout
+    have hBSt := mk_suffix_bst g pa pb r csa csb m0 o n hrega hregb hcstra hcstrb hnle hnleb
       ⟨σ1, i1, c.steps + 1⟩ hG1 (by rw [hmem1eq]; exact hloaded) (by rw [hmem1eq]; exact hmem)
+      hout1
       hpc1 ha0_1 ha1_1 hra_1 ⟨vmi1, hmi1'⟩ hi1 hframe_1
-    obtain ⟨c', hsteps', hDone'⟩ := bst_suffix_to_done g pa pb r csa csb m0 n halignr
+    obtain ⟨c', hsteps', hDone'⟩ := bst_suffix_to_done g pa pb r csa csb m0 o n halignr
       (fun i hi => (hpre i hi).1) ⟨σ1, i1, c.steps + 1⟩ hBSt
     exact ⟨c', (Steps.single hs1).trans hsteps', hDone'⟩
 
@@ -301,12 +308,13 @@ theorem nul_bne_fac (g : (R : Register) → Option (RegisterType R))
 ret-path site names (`fc4`/`fc8`) and branch offset (`0x1fc4`). -/
 theorem nul_bne_fc0 (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (n : Nat) (halignr : r.toNat % 4 = 0)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (n : Nat) (halignr : r.toNat % 4 = 0)
     (hrega : StrcmpWRegion pa csa.length) (hregb : StrcmpWRegion pb csb.length)
     (hcstra : CStr m0 pa.toNat csa) (hcstrb : CStr m0 pb.toNat csb)
     (hpre : BytePrefix csa csb n) (hnle : n ≤ csa.length) (hnf : csa.length < n + 8)
     (c : Config)
     (hgood : GoodState c.σ) (hloaded : StrcmpLoaded c.σ.mem) (hmem : c.σ.mem = m0)
+    (hout : c.σ.sailOutput = o)
     (hpc : c.σ.regs.get? Register.PC = some (0x80006fc0#64 : BitVec 64))
     (ha0 : c.σ.regs.get? Register.x10 = some (pa + BitVec.ofNat 64 n))
     (ha1 : c.σ.regs.get? Register.x11 = some (pb + BitVec.ofNat 64 n))
@@ -315,7 +323,7 @@ theorem nul_bne_fc0 (g : (R : Register) → Option (RegisterType R))
     (hra : c.σ.regs.get? Register.x1 = some r)
     (hmi : ∃ v, c.σ.regs.get? Register.minstret = some v) (htick : c.tick < 2)
     (hframe : ∀ R : Register, NotWrittenStrcmp R → c.σ.regs.get? R = g R) :
-    ∃ c', Steps c c' ∧ BDone g r csa csb m0 c' := by
+    ∃ c', Steps c c' ∧ BDone g r csa csb m0 o c' := by
   obtain ⟨vmi, hmi⟩ := hmi
   have hnleb : n ≤ csb.length := prefix_le_lenb hpre
   by_cases hwe : cwordAt m0 (pa.toNat + n) = cwordAt m0 (pb.toNat + n)
@@ -351,11 +359,13 @@ theorem nul_bne_fc0 (g : (R : Register) → Option (RegisterType R))
     have hframe_3 : ∀ R, NotWrittenStrcmp R → σ3.regs.get? R = g R :=
       fun R hR => (sframe_jr hobs3 R hR).trans (hframe_2 R hR)
     have hmem3eq : σ3.mem = c.σ.mem := by rw [hmem3, hmem2, hmem1]
+    have hout3 : σ3.sailOutput = o :=
+      (by chain_out [hobs1, hobs2, hobs3] : σ3.sailOutput = c.σ.sailOutput).trans hout
     have hsign0 : strcmpSpecSign csa csb = 0 :=
       nul_eq_spec_zero m0 pa pb csa csb hcstra hcstrb n hpre hnle hnf hwe
     refine ⟨⟨σ3, i3, c.steps + 1 + 1 + 1⟩,
       ((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3), ?_⟩
-    refine ⟨hG3, hpc3, hra_3, by rw [hmem3eq]; exact hmem, hi3, ?_, hframe_3⟩
+    refine ⟨hG3, hpc3, hra_3, by rw [hmem3eq]; exact hmem, hout3, hi3, ?_, hframe_3⟩
     refine ⟨(0#64) + sign_extend (m := 64) (0x000#12), ha0_3, ?_⟩
     rw [hsign0, show ((0#64) + sign_extend (m := 64) (0x000#12) : BitVec 64) = 0#64 from by
       apply BitVec.eq_of_toNat_eq; decide]
@@ -375,10 +385,13 @@ theorem nul_bne_fc0 (g : (R : Register) → Option (RegisterType R))
       fun R hR => (sframe_btaken hobs1 R hR).trans (hframe R hR)
     obtain ⟨vmi1, hmi1'⟩ := obs_btaken_minstret hobs1
     have hmem1eq : σ1.mem = c.σ.mem := hmem1
-    have hBSt := mk_suffix_bst g pa pb r csa csb m0 n hrega hregb hcstra hcstrb hnle hnleb
+    have hout1 : σ1.sailOutput = o :=
+      (by chain_out [hobs1] : σ1.sailOutput = c.σ.sailOutput).trans hout
+    have hBSt := mk_suffix_bst g pa pb r csa csb m0 o n hrega hregb hcstra hcstrb hnle hnleb
       ⟨σ1, i1, c.steps + 1⟩ hG1 (by rw [hmem1eq]; exact hloaded) (by rw [hmem1eq]; exact hmem)
+      hout1
       hpc1 ha0_1 ha1_1 hra_1 ⟨vmi1, hmi1'⟩ hi1 hframe_1
-    obtain ⟨c', hsteps', hDone'⟩ := bst_suffix_to_done g pa pb r csa csb m0 n halignr
+    obtain ⟨c', hsteps', hDone'⟩ := bst_suffix_to_done g pa pb r csa csb m0 o n halignr
       (fun i hi => (hpre i hi).1) ⟨σ1, i1, c.steps + 1⟩ hBSt
     exact ⟨c', (Steps.single hs1).trans hsteps', hDone'⟩
 
@@ -392,18 +405,18 @@ does `addi a0,8; addi a1,8` (via `word_off8`) then falls into `fac`; `fb8` does
 /-- **The NUL-word exit.** From `WNulExit` to `BDone`. -/
 theorem wnul_to_done (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (pc : BitVec 64) (halignr : r.toNat % 4 = 0) :
-    Triple (WNulExit g pa pb r csa csb m0 j pc) (BDone g r csa csb m0) := by
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (j : Nat) (pc : BitVec 64) (halignr : r.toNat % 4 = 0) :
+    Triple (WNulExit g pa pb r csa csb m0 o j pc) (BDone g r csa csb m0 o) := by
   intro c hSt
-  obtain ⟨hpcv, hgood, hloaded, hmem, hpcget, ha0, ha1, ha2, ha3, hra, ⟨vmi, hmi⟩, htick,
+  obtain ⟨hpcv, hgood, hloaded, hmem, hout, hpcget, ha0, ha1, ha2, ha3, hra, ⟨vmi, hmi⟩, htick,
     hrega, hregb, hcstra, hcstrb, hmaskpin, hpre, hhasnul, hjle, hframe⟩ := hSt
   rcases hpcv with hpc | hpc | hpc
   · -- fac: nulOff = 0, n = 24j, pointers already at pa+n
     subst hpc
     have hoff : nulOff (0x80006fac#64 : BitVec 64) = 0 := by decide
     rw [hoff, Nat.add_zero] at ha2 ha3 hpre hhasnul hjle
-    exact nul_bne_fac g pa pb r csa csb m0 (24*j) halignr hrega hregb hcstra hcstrb hpre hjle hhasnul
-      c hgood hloaded hmem hpcget ha0 ha1 ha2 ha3 hra ⟨vmi, hmi⟩ htick hframe
+    exact nul_bne_fac g pa pb r csa csb m0 o (24*j) halignr hrega hregb hcstra hcstrb hpre hjle hhasnul
+      c hgood hloaded hmem hout hpcget ha0 ha1 ha2 ha3 hra ⟨vmi, hmi⟩ htick hframe
   · -- fa4: nulOff = 8, n = 24j+8. addi a0,8; addi a1,8 → fac
     subst hpc
     have hoff : nulOff (0x80006fa4#64 : BitVec 64) = 8 := by decide
@@ -439,9 +452,12 @@ theorem wnul_to_done (g : (R : Register) → Option (RegisterType R))
       fun R hR => (sframe_alu hobs2 R hR.2.2.2.2.1 hR).trans (hframe_1 R hR)
     obtain ⟨vmi2, hmi2'⟩ := obs_alu_minstret hobs2
     have hmem2eq : σ2.mem = c.σ.mem := by rw [hmem2, hmem1]
-    obtain ⟨c', hsteps', hDone'⟩ := nul_bne_fac g pa pb r csa csb m0 (24*j + 8) halignr
+    have hout2 : σ2.sailOutput = o :=
+      (by chain_out [hobs1, hobs2] : σ2.sailOutput = c.σ.sailOutput).trans hout
+    obtain ⟨c', hsteps', hDone'⟩ := nul_bne_fac g pa pb r csa csb m0 o (24*j + 8) halignr
       hrega hregb hcstra hcstrb hpre hjle hhasnul
       ⟨σ2, i2, c.steps + 1 + 1⟩ hG2 (by rw [hmem2eq]; exact hloaded) (by rw [hmem2eq]; exact hmem)
+      hout2
       hpc2 ha0_2 ha1_2 ha2_2 ha3_2 hra_2 ⟨vmi2, hmi2'⟩ hi2 hframe_2
     exact ⟨c', ((Steps.single hs1).trans (Steps.single hs2)).trans hsteps', hDone'⟩
   · -- fb8: nulOff = 16, n = 24j+16. addi a0,16; addi a1,16 → fc0
@@ -479,9 +495,12 @@ theorem wnul_to_done (g : (R : Register) → Option (RegisterType R))
       fun R hR => (sframe_alu hobs2 R hR.2.2.2.2.1 hR).trans (hframe_1 R hR)
     obtain ⟨vmi2, hmi2'⟩ := obs_alu_minstret hobs2
     have hmem2eq : σ2.mem = c.σ.mem := by rw [hmem2, hmem1]
-    obtain ⟨c', hsteps', hDone'⟩ := nul_bne_fc0 g pa pb r csa csb m0 (24*j + 16) halignr
+    have hout2 : σ2.sailOutput = o :=
+      (by chain_out [hobs1, hobs2] : σ2.sailOutput = c.σ.sailOutput).trans hout
+    obtain ⟨c', hsteps', hDone'⟩ := nul_bne_fc0 g pa pb r csa csb m0 o (24*j + 16) halignr
       hrega hregb hcstra hcstrb hpre hjle hhasnul
       ⟨σ2, i2, c.steps + 1 + 1⟩ hG2 (by rw [hmem2eq]; exact hloaded) (by rw [hmem2eq]; exact hmem)
+      hout2
       hpc2 ha0_2 ha1_2 ha2_2 ha3_2 hra_2 ⟨vmi2, hmi2'⟩ hi2 hframe_2
     exact ⟨c', ((Steps.single hs1).trans (Steps.single hs2)).trans hsteps', hDone'⟩
 
@@ -493,14 +512,14 @@ the lane arm goes to `BDone` via `wlane_to_done`, the NUL arm via `wnul_to_done`
 /-- **Aligned word path, end to end.** From `PreWCmp` (`0xea0`, aligned) to `BDone`. -/
 theorem strcmp_word_spec (g : (R : Register) → Option (RegisterType R))
     (pa pb r : BitVec 64) (csa csb : List Char) (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (halignr : r.toNat % 4 = 0) :
-    Triple (PreWCmp g pa pb r csa csb m0) (BDone g r csa csb m0) := by
-  refine (strcmp_word_reaches_exit g pa pb r csa csb m0).seq ?_
+    (o : Array String) (halignr : r.toNat % 4 = 0) :
+    Triple (PreWCmp g pa pb r csa csb m0 o) (BDone g r csa csb m0 o) := by
+  refine (strcmp_word_reaches_exit g pa pb r csa csb m0 o).seq ?_
   -- WordExit → BDone: lane arm | NUL arm
   intro c hEx
   rcases hEx with ⟨n, hlane⟩ | ⟨j, pc, hnul⟩
-  · exact wlane_to_done g pa pb r csa csb m0 n halignr c hlane
-  · exact wnul_to_done g pa pb r csa csb m0 j pc halignr c hnul
+  · exact wlane_to_done g pa pb r csa csb m0 o n halignr c hlane
+  · exact wnul_to_done g pa pb r csa csb m0 o j pc halignr c hnul
 
 /-! ## Top-level `strcmp` full spec (byte path ∪ word path)
 
@@ -514,8 +533,8 @@ misaligned → `strcmp_byte_path`. -/
 guard, and carrying BOTH the byte-region and word-region/mask witnesses so either entry
 path is discharged. -/
 def strcmp_full_pre (g : (R : Register) → Option (RegisterType R)) (pa pb r : BitVec 64)
-    (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  GoodState c.σ ∧ StrcmpLoaded c.σ.mem ∧ c.σ.mem = m0 ∧
+    (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) : Prop :=
+  GoodState c.σ ∧ StrcmpLoaded c.σ.mem ∧ c.σ.mem = m0 ∧ c.σ.sailOutput = o ∧
   c.σ.regs.get? Register.PC = some (0x80006ea0#64 : BitVec 64) ∧
   c.σ.regs.get? Register.x10 = some pa ∧ c.σ.regs.get? Register.x11 = some pb ∧
   c.σ.regs.get? Register.x1 = some r ∧
@@ -532,25 +551,25 @@ def strcmp_full_pre (g : (R : Register) → Option (RegisterType R)) (pa pb r : 
 alignment guard) the machine runs to `strcmp_post`; the entry alignment test selects the
 byte path or the word path, both landing the same result sign. -/
 theorem strcmp_full_spec (g : (R : Register) → Option (RegisterType R)) (pa pb r : BitVec 64)
-    (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (strcmp_full_pre g pa pb r sa sb m0) (strcmp_post g r pa pb sa sb m0) := by
+    (sa sb : String) (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) :
+    Triple (strcmp_full_pre g pa pb r sa sb m0 o) (strcmp_post g r pa pb sa sb m0 o) := by
   intro c hpre
-  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, hra, hmi, htick, halignr,
+  obtain ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, hra, hmi, htick, halignr,
     ⟨csa, hcstra, hsa⟩, ⟨csb, hcstrb, hsb⟩, hmaskpin, hbrega, hbregb, hwrega, hwregb, hframe⟩ := hpre
   by_cases hal : ((pa ||| pb) &&& sign_extend (m := 64) (0x007#12)) = 0#64
   · -- aligned → word path
-    have hPreW : PreWCmp g pa pb r csa csb m0 c :=
-      ⟨hgood, hloaded, hmem, hpc, ha0, ha1, hra, hmi, htick,
+    have hPreW : PreWCmp g pa pb r csa csb m0 o c :=
+      ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, hra, hmi, htick,
         hwrega csa hcstra, hwregb csb hcstrb, hcstra, hcstrb, hmaskpin, hal, hframe⟩
-    obtain ⟨c', hsteps, hDone⟩ := strcmp_word_spec g pa pb r csa csb m0 halignr c hPreW
-    obtain ⟨hG', hpc', hra', hmem', htick', ⟨x, hx, hsign⟩, hframe'⟩ := hDone
-    exact ⟨c', hsteps, hG', hpc', hra', hmem', htick', hframe', csa, csb, x, hcstra, hcstrb, hsa, hsb, hx, hsign⟩
+    obtain ⟨c', hsteps, hDone⟩ := strcmp_word_spec g pa pb r csa csb m0 o halignr c hPreW
+    obtain ⟨hG', hpc', hra', hmem', hout', htick', ⟨x, hx, hsign⟩, hframe'⟩ := hDone
+    exact ⟨c', hsteps, hG', hpc', hra', hmem', hout', htick', hframe', csa, csb, x, hcstra, hcstrb, hsa, hsb, hx, hsign⟩
   · -- misaligned → byte path
-    have hPreB : PreBCmp g pa pb r csa csb m0 c :=
-      ⟨hgood, hloaded, hmem, hpc, ha0, ha1, hra, hmi, htick,
+    have hPreB : PreBCmp g pa pb r csa csb m0 o c :=
+      ⟨hgood, hloaded, hmem, hout, hpc, ha0, ha1, hra, hmi, htick,
         hbrega csa hcstra, hbregb csb hcstrb, hcstra, hcstrb, hal, hframe⟩
-    obtain ⟨c', hsteps, hDone⟩ := strcmp_byte_path g pa pb r csa csb m0 halignr c hPreB
-    obtain ⟨hG', hpc', hra', hmem', htick', ⟨x, hx, hsign⟩, hframe'⟩ := hDone
-    exact ⟨c', hsteps, hG', hpc', hra', hmem', htick', hframe', csa, csb, x, hcstra, hcstrb, hsa, hsb, hx, hsign⟩
+    obtain ⟨c', hsteps, hDone⟩ := strcmp_byte_path g pa pb r csa csb m0 o halignr c hPreB
+    obtain ⟨hG', hpc', hra', hmem', hout', htick', ⟨x, hx, hsign⟩, hframe'⟩ := hDone
+    exact ⟨c', hsteps, hG', hpc', hra', hmem', hout', htick', hframe', csa, csb, x, hcstra, hcstrb, hsa, hsb, hx, hsign⟩
 
 end Vsa.Sim

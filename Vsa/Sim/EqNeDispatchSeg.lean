@@ -209,7 +209,7 @@ carried as hypotheses. -/
 theorem valueEqualTriple
     (g : (R : Register) → Option (RegisterType R)) (bufa bufb r sp : BitVec 64)
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (va vb : Vsa.While.Value)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String)
     (hφc : ∀ (a b : Vsa.While.Addr), φc a = φc b → a = b)
     (hN : ∀ (f h : NativeFn), N.addr f = N.addr h → f = h)
     (hstrc : StrcmpLoaded m0) (hmask : MaskPinned m0) (hraln4 : r.toNat % 4 = 0)
@@ -222,11 +222,11 @@ theorem valueEqualTriple
         StrcmpWRegion (BitVec.ofNat 64 pa') csa.length ∧
         StrcmpWRegion (BitVec.ofNat 64 pb') csb.length ∧
         VEStrRegions sp pa' pb' csa.length csb.length) :
-    Triple (fun c => ve_pre g bufa bufb r N φc va vb m0 c ∧
+    Triple (fun c => ve_pre g bufa bufb r N φc va vb m0 out0 c ∧
               c.σ.regs.get? Register.x2 = some sp)
-      (ve_str_post g r sp va vb m0) := by
+      (ve_str_post g r sp va vb m0 out0) := by
   intro c hc
-  exact value_equal_spec_full g bufa bufb r sp N φc va vb m0 c hφc hN hc.1 hc.2
+  exact value_equal_spec_full g bufa bufb r sp N φc va vb m0 out0 c hφc hN hc.1 hc.2
     hstrc hmask hraln4 hstrwit
 
 /-- **The `value_equal` seam, realized via `callSeg` with the real
@@ -240,7 +240,7 @@ as the threaded callee.  Shared by both `eq` and `ne`. -/
 theorem valueEqualCallSeam {P Q : Config → Prop}
     (g : (R : Register) → Option (RegisterType R)) (bufa bufb r sp : BitVec 64)
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (va vb : Vsa.While.Value)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String)
     (hφc : ∀ (a b : Vsa.While.Addr), φc a = φc b → a = b)
     (hN : ∀ (f h : NativeFn), N.addr f = N.addr h → f = h)
     (hstrc : StrcmpLoaded m0) (hmask : MaskPinned m0) (hraln4 : r.toNat % 4 = 0)
@@ -253,11 +253,11 @@ theorem valueEqualCallSeam {P Q : Config → Prop}
         StrcmpWRegion (BitVec.ofNat 64 pa') csa.length ∧
         StrcmpWRegion (BitVec.ofNat 64 pb') csb.length ∧
         VEStrRegions sp pa' pb' csa.length csb.length)
-    (pre : Triple P (fun c => ve_pre g bufa bufb r N φc va vb m0 c ∧
+    (pre : Triple P (fun c => ve_pre g bufa bufb r N φc va vb m0 out0 c ∧
               c.σ.regs.get? Register.x2 = some sp))
-    (suf : Triple (ve_str_post g r sp va vb m0) Q) :
+    (suf : Triple (ve_str_post g r sp va vb m0 out0) Q) :
     Triple P Q :=
-  callSeg pre (valueEqualTriple g bufa bufb r sp N φc va vb m0
+  callSeg pre (valueEqualTriple g bufa bufb r sp N φc va vb m0 out0
     hφc hN hstrc hmask hraln4 hstrwit) suf
 
 #print axioms valueEqualTriple
