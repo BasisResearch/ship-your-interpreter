@@ -430,6 +430,8 @@ THEOREMS=(
   Vsa.Sim.entryHalts                                 # TermEntry (M4/M6: hEntryHalts discharged — clean-exit(0) entry bridge; conditional on prologue-bridge + tail-span residuals)
   Vsa.Sim.StuckSimClose.stuckSimClosed              # StuckSimClose (L8: InterpSim.stuck_sim per (p,c) from Trichotomy + divergence Corr/DivStep/entry + the 42 error-site residuals)
   Vsa.Sim.InterpSimBundle.errFamily_of_sites        # InterpSimBundle (M5 error family: ErrFamily L from the 42 per-error-site residuals, c-generalized)
+  Vsa.Sim.errFamilyClosed                           # rows/ErrorRouting (herrFam: 42/42 premises routed onto the 19 errSite rows; residual = per-premise hsite + ErrShared SC/HT)
+  Vsa.Sim.interpContSeg_of                          # ExitPathSpans (InterpContSeg discharged: interp_run setjmp-continuation -> AtMainRet)
   Vsa.Sim.InterpSimFinal.interpSim_conditional      # InterpSimFinal (ENDGAME CAPSTONE, field form: InterpSim L = ⟨hterm, hstuck⟩)
   Vsa.Sim.InterpSimFinal.stuckField_of_families     # InterpSimFinal (stuck_sim field from Trichotomy + DivFamily + ErrFamily)
   Vsa.Sim.InterpSimFinal.interpSimClosed_of_families # InterpSimFinal (ENDGAME CAPSTONE, families form: InterpSim L from term arm + M5 families)

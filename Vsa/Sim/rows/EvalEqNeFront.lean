@@ -29,6 +29,7 @@ open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState Config Step Steps)
 open Vsa.Logic
 open Vsa.RuntimeRepr Vsa.MemRepr Vsa.While
+open Vsa.Alloc
 open Vsa.Sim.Code
 
 set_option maxHeartbeats 4000000
@@ -392,8 +393,8 @@ theorem blockC_eqne_front
     (fbase sret : BitVec 64) (vl vr : Value) (link jalPC : BitVec 64) (jImm : BitVec 21)
     (mA : Mem) (out0 : Array String) (cD : Config)
     (hData : EqFrontData g N φc fbase sret vl vr link jalPC jImm mA out0 cD) :
-    ∃ (mEnt : Mem) (cR : Config), Steps cD cR ∧
-      VeReturn g fbase sret vl vr link out0 mEnt cR := by
+    ∃ (cR : Config), Steps cD cR ∧
+      VeReturn g fbase sret vl vr link out0 mA cR := by
   -- === eqnePreBridge: jal value_equal → ve_pre (gpre = the dispatch snapshot) ===
   obtain ⟨cP, hStepsP, hx2P, hx9P, hframeP, hVePre⟩ :=
     eqnePreBridge (fun R => cD.σ.regs.get? R) N φc fbase sret vl vr mA out0
@@ -430,7 +431,7 @@ theorem blockC_eqne_front
       exact hData.hsnapEval R hR hx1ne he9 he19
   have hMemExtV : MemExtends mA cV.σ.mem :=
     hData.hMemExtRet cV hVePost.2.2.2.2.2.2.2.2.1
-  refine ⟨mA, cV, (hStepsP.trans hStepsV), ?_⟩
+  refine ⟨cV, (hStepsP.trans hStepsV), ?_⟩
   exact veReturnBridge (fun R => cP.σ.regs.get? R) g fbase sret vl vr link out0 mA cV
     hx9P hEvalCollapse hMemExtV hVePost
 
@@ -442,29 +443,33 @@ theorem blockC_eqne_front
 eq/ne front residual: the dispatch has run from `c2` to a config `cD` at the `jal
 value_equal` PC (`link`/`jalPC`/`jImm` op-specific) with the `EqFrontData` transport
 (operand reprs read back out of the reflected copy, `value_equal` caller obligations,
-str-witness, frame collapse), and the shared post-`value_equal` `EqNeBoxPre` box bundle.
-This is the eq/ne analogue of `DivResid`'s post-dispatch operand + loaded-image data —
-the residual the reseated `evalEqNeSim` threads exactly as `evalDivSim` threads
-`DivResid`. -/
-structure EqResid
-    (gpre g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf' φc' : Addr → Nat)
-    (st'' : Vsa.While.St)
+str-witness, frame collapse); the `φfm`/`φcm`/`φf'`/`φc'` sub-derivation maps + their
+`PhiExtends` chain; and the shared post-`value_equal` `EqNeBoxPre` box bundle.  This is the
+eq/ne analogue of `DivResid`'s post-dispatch operand + loaded-image data — the residual the
+reseated `evalEqNeSim` threads exactly as `evalDivSim` threads `DivResid`. -/
+def EqResid
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st' st'' : Vsa.While.St)
     (sp r sret : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64)
     (vl vr : Value) (link jalPC : BitVec 64) (jImm : BitVec 21)
-    (out0 : Array String) (m0 : Mem) (c2 : Config) : Prop where
-  mA : Mem
-  cD : Config
-  hStepsD : Steps c2 cD
-  hFront : EqFrontData g N φc (sp - 1088#64) sret vl vr link jalPC jImm mA out0 cD
-  hBox : EqNeBoxPre g N A SL φf' φc' st'' sp r sret v8 v9 v18 v19 w19 out0 m0 mA
+    (out0 : Array String) (m0 : Mem) (c2 : Config) : Prop :=
+  ∃ (mA : Mem) (cD : Config) (φfm φcm φf' φc' : Addr → Nat),
+    PhiExtends φf φfm st'.store.frames.size ∧
+    PhiExtends φc φcm st'.store.closures.size ∧
+    PhiExtends φfm φf' st''.store.frames.size ∧
+    PhiExtends φcm φc' st''.store.closures.size ∧
+    Steps c2 cD ∧
+    EqFrontData g N φc (sp - 1088#64) sret vl vr link jalPC jImm mA out0 cD ∧
+    EqNeBoxPre g N A SL φf' φc' st'' sp r sret v8 v9 v18 v19 w19 out0 m0 mA
 
-/-- **`eqBlockC_bridge`** — build the `hblockC` obligation (for the shared `blockC_eq`/
-`blockC_ne` selector `blockCsel`) from a `TwoSubReturn` config plus its `EqResid` and the
-caller's `φ` threading, via `blockC_eqne_front ≫ blockCsel`.  `blockCsel` is `blockC_eq`
-for eq (`resVal = .bool (vl.equal vr)`, `link = 0x80003720`) and `blockC_ne` for ne. -/
+/-- **`eqBlockC_bridge`** — build the `hblockC` obligation for the shared `blockC_eq`/
+`blockC_ne` selector `blockCsel` from a `TwoSubReturn` config plus its `EqResid`, via
+`blockC_eqne_front ≫ blockCsel`.  `blockCsel` is `blockC_eq` for eq (`resVal =
+.bool (vl.equal vr)`, `link = 0x80003720`) / `blockC_ne` for ne.  The dispatch-run + box
+transport is the `EqResid` residual; the `PhiExtends` chain rides through `blockCsel`. -/
 theorem eqBlockC_bridge
-    (gpre g : (R : Register) → Option (RegisterType R))
+    (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st' st'' : Vsa.While.St)
     (sp r sret : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64)
@@ -472,30 +477,152 @@ theorem eqBlockC_bridge
     (out0 : Array String) (m0 : Mem) (c2 : Config)
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
-    -- the shared post-VeReturn box: `blockC_eq`/`blockC_ne` specialised to this op
-    (blockCsel : ∀ (φf φc φfm φcm φf' φc' : Addr → Nat)
+    (hOut0 : c2.σ.sailOutput = out0)
+    (blockCsel : ∀ (φfa φca φfma φcma φf'a φc'a : Addr → Nat)
       (mEnt : Mem) (cR : Config),
-      PhiExtends φf φfm st'.store.frames.size → PhiExtends φc φcm st'.store.closures.size →
-      PhiExtends φfm φf' st''.store.frames.size → PhiExtends φcm φc' st''.store.closures.size →
+      PhiExtends φfa φfma st'.store.frames.size → PhiExtends φca φcma st'.store.closures.size →
+      PhiExtends φfma φf'a st''.store.frames.size → PhiExtends φcma φc'a st''.store.closures.size →
       VeReturn g (sp - 1088#64) sret vl vr link out0 mEnt cR →
-      EqNeBoxPre g N A SL φf' φc' st'' sp r sret v8 v9 v18 v19 w19 out0 m0 mEnt →
+      EqNeBoxPre g N A SL φf'a φc'a st'' sp r sret v8 v9 v18 v19 w19 out0 m0 mEnt →
       ∃ (mpre : Mem) (φfm' φcm' φfe φce : Addr → Nat) (cfin : Config),
         Steps cR cfin ∧
-        PhiExtends φf φfm' st'.store.frames.size ∧
-        PhiExtends φc φcm' st'.store.closures.size ∧
+        PhiExtends φfa φfm' st'.store.frames.size ∧
+        PhiExtends φca φcm' st'.store.closures.size ∧
         PhiExtends φfm' φfe st''.store.frames.size ∧
         PhiExtends φcm' φce st''.store.closures.size ∧
         PreEpilogueVD g N A SL φfe φce st'' resVal sp r sret v8 v9 v18 out0 m0 mpre cfin)
-    (hTS : TwoSubReturn gpre N A SL φf φc st' st'' vl vr sp r sret v8 v9 v18 m0 c2)
-    (hResid : EqResid gpre g N A SL
-      (Classical.choose (Classical.choose_spec hTS.2.2.2.2.2.2.2.2.2.1).2.2.2.2.2.2.2.2.2.1)
-      (Classical.choose (Classical.choose_spec (Classical.choose_spec hTS.2.2.2.2.2.2.2.2.2.1).2.2.2.2.2.2.2.2.2.1))
-      st'' sp r sret v8 v9 v18 v19 w19 vl vr link jalPC jImm out0 m0 c2) :
+    (hResid : EqResid g N A SL φf φc st' st''
+      sp r sret v8 v9 v18 v19 w19 vl vr link jalPC jImm out0 m0 c2) :
     ∃ (c3 : Config) (mpre : Mem) (φfe φce : Addr → Nat),
       Steps c2 c3 ∧
       PhiExtends φf φfe st''.store.frames.size ∧
       PhiExtends φc φce st''.store.closures.size ∧
       PreEpilogueVD g N A SL φfe φce st'' resVal sp r sret v8 v9 v18 c2.σ.sailOutput m0 mpre c3 := by
-  sorry
+  obtain ⟨mA, cD, φfm, φcm, φf', φc', hpfm, hpcm, hpf', hpc', hStepsD, hFront, hBox⟩ := hResid
+  -- front: dispatch-run c2 → cD, then blockC_eqne_front → VeReturn at cR
+  obtain ⟨cR, hStepsFront, hVeReturn⟩ :=
+    blockC_eqne_front g N φc (sp - 1088#64) sret vl vr link jalPC jImm mA out0 cD hFront
+  -- box: blockCsel VeReturn + EqNeBoxPre → PreEpilogueVD
+  obtain ⟨mpre, φfm', φcm', φfe, φce, cfin, hStepsBox, hp1, hp2, hp3, hp4, hPre⟩ :=
+    blockCsel φf φc φfm φcm φf' φc' mA cR hpfm hpcm hpf' hpc' hVeReturn hBox
+  refine ⟨cfin, mpre, φfe, φce, (hStepsD.trans hStepsFront).trans hStepsBox, ?_, ?_, ?_⟩
+  · exact (hSizeF ▸ hp1).trans hp3
+  · exact (hSizeC ▸ hp2).trans hp4
+  · rw [hOut0]; exact hPre
+
+#print axioms eqBlockC_bridge
+
+/-! ## Reseated `evalEqSim` / `evalNeSim` (div-parity)
+
+The div-parity reseat of the eq/ne value cases: the precondition carries
+`(∀ c2, TwoSubReturn … → EqResid … c2)` (the front residual, exactly as `evalDivSim`
+carries `∀ c', TwoSubReturn → DivResid`), and the body discharges the shared
+`evalEqSim`/`evalNeSim` core's `hblockC` obligation via `eqBlockC_bridge` (⇒
+`blockC_eqne_front ≫ blockC_eq/blockC_ne`).  These are the thin op wrappers; everything
+else (the two IHs, `blockB`/`blockD`, φ/store threading) is the shared row core. -/
+
+/-- **`evalEqSimD`** — the div-parity `EvalE.binary .eq` recursive case: the `hblockC`
+bridge residual replaced by an `EqResid` precondition (front closed to `blockC_eq`). -/
+theorem evalEqSimD
+    (gouter gpre g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (vl vr : Value)
+    (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64)
+    (out0 : Array String) (m0 : Mem)
+    (hIHl : EvalIH st d env el st' vl) (hIHr : EvalIH st' d env er st'' vr)
+    (hSizeF : st'.store.frames.size = st''.store.frames.size)
+    (hSizeC : st'.store.closures.size = st''.store.closures.size)
+    (hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
+      ValueRepr mm N φ (sp.toNat - 968) vl →
+      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
+        ¬ ((sp.toNat - 944) ≤ k ∧ k < (sp.toNat - 944) + 24) → mm[k]? = mm'[k]?) →
+      ValueRepr mm' N φ (sp.toNat - 968) vl)
+    (hResid : ∀ c2 : Vsa.Machine.Config,
+      TwoSubReturn gpre N A SL φf φc st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
+      EqResid g N A SL φf φc st' st'' sp r sret v8 v9 v18 v19 w19 vl vr
+        (0x80003720#64) (0x8000371c#64) (0x1ff140#21) c2.σ.sailOutput m0 c2) :
+    Triple
+      (fun c => ∃ ment,
+        ArmEntryK gouter N A SL φf φc st (0x800034e8#64) UnaryArmCallee (.binary .eq el er)
+          sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
+        BinExtras N A SL el er ment sp sret aExpr aLOp aROp ∧
+        c.σ.regs.get? Register.x11 = some aEnv ∧
+        c.σ.regs.get? Register.x13 = some aEnvReg ∧
+        c.σ.regs.get? Register.x19 = some v19 ∧
+        (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
+        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        gpre Register.x8 = some aExpr ∧ gpre Register.x18 = some aEnv ∧
+        gpre Register.x19 = some v19 ∧
+        read64 ment (aExpr.toNat + 16) = some aLOp.toNat ∧
+        ExprRepr ment aLOp.toNat el ∧
+        read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
+        ExprRepr ment aROp.toNat er ∧
+        (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
+        MemExtends m0 ment)
+      (EvalExitD g N A SL φf φc st'' (.bool (vl.equal vr)) sp r sret m0) :=
+  evalEqSim gouter gpre g N A SL φf φc st st' st'' d env el er vl vr
+    sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0
+    hIHl hIHr hSizeF hSizeC hVlSurv
+    (fun c2 hTS _hOut2 =>
+      eqBlockC_bridge g N A SL φf φc st' st'' sp r sret v8 v9 v18 v19 w19 vl vr
+        (.bool (vl.equal vr)) (0x80003720#64) (0x8000371c#64) (0x1ff140#21)
+        c2.σ.sailOutput m0 c2 hSizeF hSizeC rfl
+        (fun φfa φca φfma φcma φf'a φc'a mEnt cR hp1 hp2 hp3 hp4 hVe hBox =>
+          blockC_eq g N A SL φfa φca φfma φcma φf'a φc'a st' st''
+            sp r sret v8 v9 v18 v19 w19 vl vr c2.σ.sailOutput m0 mEnt cR hp1 hp2 hp3 hp4 hVe hBox)
+        (hResid c2 hTS))
+
+/-- **`evalNeSimD`** — the div-parity `EvalE.binary .ne` recursive case (ne clone). -/
+theorem evalNeSimD
+    (gouter gpre g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (vl vr : Value)
+    (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64)
+    (out0 : Array String) (m0 : Mem)
+    (hIHl : EvalIH st d env el st' vl) (hIHr : EvalIH st' d env er st'' vr)
+    (hSizeF : st'.store.frames.size = st''.store.frames.size)
+    (hSizeC : st'.store.closures.size = st''.store.closures.size)
+    (hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
+      ValueRepr mm N φ (sp.toNat - 968) vl →
+      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
+        ¬ ((sp.toNat - 944) ≤ k ∧ k < (sp.toNat - 944) + 24) → mm[k]? = mm'[k]?) →
+      ValueRepr mm' N φ (sp.toNat - 968) vl)
+    (hResid : ∀ c2 : Vsa.Machine.Config,
+      TwoSubReturn gpre N A SL φf φc st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
+      EqResid g N A SL φf φc st' st'' sp r sret v8 v9 v18 v19 w19 vl vr
+        (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21) c2.σ.sailOutput m0 c2) :
+    Triple
+      (fun c => ∃ ment,
+        ArmEntryK gouter N A SL φf φc st (0x800034e8#64) UnaryArmCallee (.binary .ne el er)
+          sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
+        BinExtras N A SL el er ment sp sret aExpr aLOp aROp ∧
+        c.σ.regs.get? Register.x11 = some aEnv ∧
+        c.σ.regs.get? Register.x13 = some aEnvReg ∧
+        c.σ.regs.get? Register.x19 = some v19 ∧
+        (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
+        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        gpre Register.x8 = some aExpr ∧ gpre Register.x18 = some aEnv ∧
+        gpre Register.x19 = some v19 ∧
+        read64 ment (aExpr.toNat + 16) = some aLOp.toNat ∧
+        ExprRepr ment aLOp.toNat el ∧
+        read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
+        ExprRepr ment aROp.toNat er ∧
+        (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
+        MemExtends m0 ment)
+      (EvalExitD g N A SL φf φc st'' (.bool (!(vl.equal vr))) sp r sret m0) :=
+  evalNeSim gouter gpre g N A SL φf φc st st' st'' d env el er vl vr
+    sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0
+    hIHl hIHr hSizeF hSizeC hVlSurv
+    (fun c2 hTS _hOut2 =>
+      eqBlockC_bridge g N A SL φf φc st' st'' sp r sret v8 v9 v18 v19 w19 vl vr
+        (.bool (!(vl.equal vr))) (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21)
+        c2.σ.sailOutput m0 c2 hSizeF hSizeC rfl
+        (fun φfa φca φfma φcma φf'a φc'a mEnt cR hp1 hp2 hp3 hp4 hVe hBox =>
+          blockC_ne g N A SL φfa φca φfma φcma φf'a φc'a st' st''
+            sp r sret v8 v9 v18 v19 w19 vl vr c2.σ.sailOutput m0 mEnt cR hp1 hp2 hp3 hp4 hVe hBox)
+        (hResid c2 hTS))
+
+#print axioms evalEqSimD
+#print axioms evalNeSimD
 
 end Vsa.Sim

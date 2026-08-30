@@ -148,6 +148,7 @@ import Vsa.Sim.rows.EvalMulRow
 import Vsa.Sim.rows.EvalDivRow
 import Vsa.Sim.rows.EvalModRow
 import Vsa.Sim.rows.EvalEqNeRow
+import Vsa.Sim.rows.EvalEqNeFront
 import Vsa.Sim.rows.EvalGeRow
 import Vsa.Sim.LogicalSites
 import Vsa.Sim.EvalAndSim
@@ -339,6 +340,7 @@ import Vsa.Sim.rows.ErrSitesBatch0
 import Vsa.Sim.rows.ErrSitesBatch1
 import Vsa.Sim.rows.ErrSitesBatch2
 import Vsa.Sim.rows.ErrSitesBatch3
+import Vsa.Sim.rows.ErrorRouting
 import Vsa.While.Trichotomy
 import Vsa.Sim.DivergeSim
 import Vsa.Sim.SnprintfSpec19
@@ -410,6 +412,7 @@ import Vsa.Sim.ErrorSim
 import Vsa.Sim.ErrorTail
 import Vsa.Sim.ExitPath
 import Vsa.Sim.ExitPathSeg
+import Vsa.Sim.ExitPathSpans
 import Vsa.Sim.ErrorSimFull
 import Vsa.Sim.TermSimClose
 import Vsa.Sim.TermEntry
