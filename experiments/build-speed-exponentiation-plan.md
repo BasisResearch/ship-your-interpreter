@@ -128,3 +128,35 @@ make a typical edit touch a small cone, and to keep the two root modules frozen.
   leaf whose `decide` exceeds the ceiling.
 - Splitting `Elf`/`InitValues` is a wide, load-bearing edit; do it as one atomic
   changeset with a full-build gate, exactly as blocker A was run.
+
+## RESULTS (campaign executed 2026-08-29/30, 3 commits)
+
+Measured ground truth overturned the static ranking above: the top-8 table's
+files cost ~190s isolated combined; `Vsa/Sim/DecodeTable/*` was 31,627s of
+39,700s CPU (80% of the build). Per-job durations under 10-way parallel load
+inflate 3-15x vs isolated `lake env lean`; rank by isolated time.
+
+**World rebuild (identical Elf-edit shape): 75:35 → 25:47 wall (34.1k → 10.0k s CPU).**
+
+What landed:
+1. `DecodeTable/DecodeCommon.lean` seed lemma + grounding `simp only`+`rfl`
+   template, 530 files regenerated (per-module cost was match-splitter
+   realization of `currentlyEnabled`/`hartSupports`, persisted once).
+   Family: 31,627s → ~3,300s.
+2. `ObsAvoid.lean` bundled obs_*_other wrappers + `apply_obs_bundle.py`:
+   105 files, 5,448 sites, ~36k `(by decide)` blocks removed
+   (SnprintfSpec17 48→16s).
+3. Axis 2: `Vsa.Elf` frozen (setupElf+stepOnce interface); runner+blob in new
+   `Vsa.ElfRun` (3-module cone); InitValues+DecodeTable off the Elf cone.
+4. check_all stage a2: per-module elab-budget gate from the build log
+   (180s hard / 90s warn + allowlist).
+5. Straggler cuts: EnvGetSpec4 case-fanout simp_all → decidable idiom
+   (56.7s→0.4s tactic); EvalCallNative2 via `OmegaHelpers2.lean` (−34%).
+
+Measured negatives (do not retry; evidence in experiments/):
+- rows/Logical omega residue post-Chain-refactor is cheaper than by-name
+  helper application (`rows-omega-migration.md`). Remaining lever there is
+  structural `#derive_case` migration.
+- EvalSimCommon's 3,708 chunk-transfer `simp_all only []` calls are intrinsic
+  to the 3,712-conjunct membership split; needs `eval_exprChunk` reflection
+  (`straggler-migration.md`).
