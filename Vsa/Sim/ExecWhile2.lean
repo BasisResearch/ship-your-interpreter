@@ -74,13 +74,15 @@ theorem execExit_extend
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (φf φc φf' φc' : Addr → Nat)
+    (nf nc nf' nc' : Nat)
     (st' : Vsa.While.St) (status : Status) (sp r aRet : BitVec 64) (m0 mNow : Mem) (c : Config)
-    (hpf : PhiExtends φf φf' st'.store.frames.size)
-    (hpc : PhiExtends φc φc' st'.store.closures.size)
+    (hpf : PhiExtends φf φf' nf)
+    (hpc : PhiExtends φc φc' nc)
+    (hle : nf ≤ nf' ∧ nc ≤ nc')
     (hmem : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       mNow[a]? = m0[a]?)
-    (hexit : ExecExit g N A SL φf' φc' st' status sp r aRet mNow c) :
-    ExecExit g N A SL φf φc st' status sp r aRet m0 c := by
+    (hexit : ExecExit g N A SL φf' φc' nf' nc' st' status sp r aRet mNow c) :
+    ExecExit g N A SL φf φc nf nc st' status sp r aRet m0 c := by
   obtain ⟨φf'', φc'', hpf'', hpc'', hstore⟩ := hexit.store
   exact
     { good := hexit.good
@@ -90,12 +92,13 @@ theorem execExit_extend
       ra := hexit.ra
       spReg := hexit.spReg
       minstret := hexit.minstret
-      store := ⟨φf'', φc'', hpf.trans hpf'', hpc.trans hpc'', hstore⟩
+      store := ⟨φf'', φc'', hpf.trans (PhiExtends.mono hle.1 hpf''),
+        hpc.trans (PhiExtends.mono hle.2 hpc''), hstore⟩
       out := hexit.out
       retval := by
         intro v hv
         obtain ⟨φcr, hpcr, hval⟩ := hexit.retval v hv
-        exact ⟨φcr, hpc.trans hpcr, hval⟩
+        exact ⟨φcr, hpc.trans (PhiExtends.mono hle.2 hpcr), hval⟩
       frame := hexit.frame
       memFrame := by
         intro a hstk harena
@@ -136,6 +139,13 @@ theorem execWhileLoopSim
     -- the loop's spec derivation via `whileLoop` (bundles `EvalE`, truthy, body,
     -- the loop-back status side-condition, and the recursive sub-`while`):
     (_hExec : ExecS st d env (.whileStmt c b) st''' status')
+    -- store counts only grow: the entry `st` is no larger than the re-entry `st''`
+    -- (one body iteration) nor the final `st'''` (supplied from the `whileLoop`
+    -- constructor's sub-derivations at the caller).
+    (hSizeMid : st.store.frames.size ≤ st''.store.frames.size ∧
+      st.store.closures.size ≤ st''.store.closures.size)
+    (hSizeFin : st.store.frames.size ≤ st'''.store.frames.size ∧
+      st.store.closures.size ≤ st'''.store.closures.size)
     -- the loop-back side-condition: the body completed `.normal`/`.cont`.
     (hloop : bodyStatus = .normal ∨ bodyStatus = .cont)
     -- ONE machine iteration from `st` (its loop-back branch re-enters at `st''`).
@@ -148,11 +158,13 @@ theorem execWhileLoopSim
       Triple
         (fun cfg => ExecEntry g N A SL φf' φc' st'' d env (.whileStmt c b)
           sp r aInterp aStmt aEnv aRet m0' cfg ∧ cfg.σ.sailOutput = out0)
-        (ExecExit g N A SL φf' φc' st''' status' sp r aRet m0')) :
+        (ExecExit g N A SL φf' φc' st''.store.frames.size st''.store.closures.size
+          st''' status' sp r aRet m0')) :
     Triple
       (fun cfg => ExecEntry g N A SL φf φc st d env (.whileStmt c b)
         sp r aInterp aStmt aEnv aRet m0 cfg ∧ cfg.σ.sailOutput = out0)
-      (ExecExit g N A SL φf φc st''' status' sp r aRet m0) := by
+      (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st''' status' sp r aRet m0) := by
   intro cfg hpre
   -- one iteration → the loop-back re-entry (extended φ, rebased-to-`m0` memory).
   obtain ⟨c₁, hs₁, hpost⟩ := hstep cfg hpre
@@ -163,8 +175,11 @@ theorem execWhileLoopSim
     -- … then re-base its exit (maps `φf'`/`φc'`, baseline `c₁.σ.mem`) to the entry
     -- maps `φf`/`φc` and baseline `m0` via the step's φ-extensions + mem-agreement.
     refine ⟨c₂, hs₁.trans hs₂, ?_⟩
-    exact execExit_extend g N A SL φf φc φf' φc' st''' status' sp r aRet m0 c₁.σ.mem
-      c₂ hpf hpc hmem' hexit
+    exact execExit_extend g N A SL φf φc φf' φc'
+      st.store.frames.size st.store.closures.size
+      st''.store.frames.size st''.store.closures.size
+      st''' status' sp r aRet m0 c₁.σ.mem c₂
+      (PhiExtends.mono hSizeFin.1 hpf) (PhiExtends.mono hSizeFin.2 hpc) hSizeMid hmem' hexit
   · -- exit disjunct: impossible — the body status is `.normal`/`.cont` (`hloop`).
     exact absurd hloop hne
 
@@ -212,14 +227,16 @@ theorem execWhileSim
         Triple
           (fun cfg => ExecEntry g N A SL φf' φc' st'' d env (.whileStmt c b)
             sp r aInterp aStmt aEnv aRet m0' cfg ∧ cfg.σ.sailOutput = out0')
-          (ExecExit g N A SL φf' φc' st''' status' sp r aRet m0'))
+          (ExecExit g N A SL φf' φc' st''.store.frames.size st''.store.closures.size
+            st''' status' sp r aRet m0'))
     (φf φc : Addr → Nat) (st st' : Vsa.While.St) (status : Status) (m0 : Mem)
     (out0 : Array String)
     (hExec : ExecS st d env (.whileStmt c b) st' status) :
     Triple
       (fun cfg => ExecEntry g N A SL φf φc st d env (.whileStmt c b)
         sp r aInterp aStmt aEnv aRet m0 cfg ∧ cfg.σ.sailOutput = out0)
-      (ExecExit g N A SL φf φc st' status sp r aRet m0) := by
+      (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' status sp r aRet m0) := by
   cases hExec
   case whileFalse v hfalsy hEval =>
     -- cond falsy → no body: single-iteration exit (any exit-shaped body status).
@@ -241,9 +258,18 @@ theorem execWhileSim
   case whileLoop stI1 stI2 v bs htruthy hloop hEval hBody hRest =>
     -- recursive: one iteration (loop-back, body status `bs = .normal/.cont`) ≫
     -- the recursive sub-`while` IH on the strictly-smaller `whileLoop` premise.
+    have hmMid : st.store.frames.size ≤ stI2.store.frames.size ∧
+        st.store.closures.size ≤ stI2.store.closures.size :=
+      ⟨Nat.le_trans (evalE_store_mono hEval).1 (execS_store_mono hBody).1,
+       Nat.le_trans (evalE_store_mono hEval).2 (execS_store_mono hBody).2⟩
+    have hmFin : st.store.frames.size ≤ st'.store.frames.size ∧
+        st.store.closures.size ≤ st'.store.closures.size :=
+      ⟨Nat.le_trans hmMid.1 (execS_store_mono hRest).1,
+       Nat.le_trans hmMid.2 (execS_store_mono hRest).2⟩
     exact execWhileLoopSim g N A SL φf φc st stI1 stI2 st' d env c b v bs status
       sp r aInterp aStmt aEnv aRet m0 out0
       (.whileLoop st d env c b stI1 stI2 st' v bs status hEval htruthy hBody hloop hRest)
+      hmMid hmFin
       hloop
       (hstep φf φc st stI2 st' bs status m0 out0)
       (fun φf' φc' m0' => hWhileIH φf' φc' stI2 st' status m0' out0 hRest)

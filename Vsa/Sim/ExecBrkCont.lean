@@ -243,12 +243,13 @@ brk/cont path). `retval` is vacuous (brk/cont are not `.ret`). -/
 theorem execBlockD
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' : Vsa.While.St) (status : Status)
     (sp r aRet : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String) (m0 : Mem)
     (hnotret : ∀ v, status ≠ .ret v) :
     Triple
       (fun c => ∃ mpre, PreExecEpilogue g N A SL φf φc st' status sp r aRet v8 v9 v18 v19 out0 m0 mpre c)
-      (ExecExit g N A SL φf φc st' status sp r aRet m0) := by
+      (ExecExit g N A SL φf φc nf nc st' status sp r aRet m0) := by
   intro c hpre
   obtain ⟨mpre, hG, htick, hpc, ha0, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmem, hcode, hstore, hframe,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3, hgx8, hgx9, hgx18, hgx19, hgx2, hmemframe,
@@ -1209,7 +1210,7 @@ theorem execBrkSim
     Triple
       (fun c => ExecEntry g N A SL φf φc st d env .brk sp r aInterp aStmt aEnv aRet m0 c
         ∧ c.σ.sailOutput = out0)
-      (ExecExit g N A SL φf φc st .brk sp r aRet m0) := by
+      (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size st .brk sp r aRet m0) := by
   intro c hpre
   -- kind read `read32 m0 aStmt = 7` from the `.brk` StmtRepr (via `c.σ.mem = m0`)
   have hkind : read32 m0 aStmt.toNat = some 7 := by
@@ -1255,7 +1256,7 @@ theorem execBrkSim
     · rw [beq_iff_eq] at hXR; rw [hXR] at hX; rw [hX] at hR; exact absurd hR (by decide)
   -- block D: the shared epilogue → ExecExit
   obtain ⟨cD, hstepsD, hExit⟩ :=
-    execBlockD g N A SL φf φc st .brk sp r aRet v8 v9 v18 v19 out0 m0 (by intro v hv; cases hv)
+    execBlockD g N A SL φf φc st.store.frames.size st.store.closures.size st .brk sp r aRet v8 v9 v18 v19 out0 m0 (by intro v hv; cases hv)
       ⟨σB, iB, cA.steps + 1⟩
       ⟨ment,
         hGB, hiB, hpcB, ha0B, hspB, ⟨_, hmiB⟩,
@@ -1295,7 +1296,7 @@ theorem execContSim
     Triple
       (fun c => ExecEntry g N A SL φf φc st d env .cont sp r aInterp aStmt aEnv aRet m0 c
         ∧ c.σ.sailOutput = out0)
-      (ExecExit g N A SL φf φc st .cont sp r aRet m0) := by
+      (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size st .cont sp r aRet m0) := by
   intro c hpre
   have hkind : read32 m0 aStmt.toNat = some 8 := by
     have := hpre.1.stmt; rw [hpre.1.mem] at this; cases this; assumption

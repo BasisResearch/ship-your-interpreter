@@ -643,7 +643,8 @@ def EvalBoolSimGoal : Prop :=
     EvalE st d a (.bool b) st (.bool b) →
     Triple
       (EvalBoolEntry g N A SL φf φc st d a b sp r sret aEnv aExpr m0)
-      (EvalExit g N A SL φf φc st (.bool b) sp r sret m0)
+      (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st (.bool b) sp r sret m0)
 
 /-- **The M4 `EvalE.bool` gate.** Composes `blockA_k` (prologue + dispatch →
 `ArmEntryK` at the bool arm), `blockC_bool` (arm + `value_bool` → epilogue entry),

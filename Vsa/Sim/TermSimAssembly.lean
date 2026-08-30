@@ -96,7 +96,7 @@ def mEvalArgs (st : SpecSt) (d : Nat) (env : Addr) (_es : List Expr)
     (dLeft aLeft : Nat) (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft evalArgsLoopPC m0)
-      (SegExit g N A SL φf φc st' evalArgsContPC m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' evalArgsContPC m0)
 
 /-- `Call` motive: the `SegEntry → SegExit` Triple at the decoded fval-dispatch
 entry / epilogue join (`callDispatchPC`/`callJoinPC`). `Call.closure` is where
@@ -108,7 +108,7 @@ def mCall (st : SpecSt) (d : Nat) (_fv : Value) (_vs : List Value)
     (dLeft aLeft : Nat) (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
-      (SegExit g N A SL φf φc st' callJoinPC m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' callJoinPC m0)
 
 /-- `ExecInit` motive: `SegEntry → SegExit` skeleton Triple. -/
 def mExecInit (st : SpecSt) (d : Nat) (env : Addr) (_init : Option Stmt)
@@ -118,7 +118,7 @@ def mExecInit (st : SpecSt) (d : Nat) (env : Addr) (_init : Option Stmt)
     (dLeft aLeft : Nat) (p q : Nat) (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st' q m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' q m0)
 
 /-- `ForLoop` motive: `SegEntry → SegExit` skeleton Triple. -/
 def mForLoop (st : SpecSt) (d : Nat) (env : Addr) (_cnd _step : Option Expr)
@@ -129,7 +129,7 @@ def mForLoop (st : SpecSt) (d : Nat) (env : Addr) (_cnd _step : Option Expr)
     (dLeft aLeft : Nat) (p q : Nat) (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st' q m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' q m0)
 
 /-- `ForCond` motive: `SegEntry → SegExit` skeleton Triple. -/
 def mForCond (st : SpecSt) (d : Nat) (env : Addr) (_cnd : Option Expr)
@@ -139,7 +139,7 @@ def mForCond (st : SpecSt) (d : Nat) (env : Addr) (_cnd : Option Expr)
     (dLeft aLeft : Nat) (p q : Nat) (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st' q m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' q m0)
 
 /-- `ExecStep` motive: `SegEntry → SegExit` skeleton Triple. -/
 def mExecStep (st : SpecSt) (d : Nat) (env : Addr) (_step : Option Expr)
@@ -149,7 +149,7 @@ def mExecStep (st : SpecSt) (d : Nat) (env : Addr) (_step : Option Expr)
     (dLeft aLeft : Nat) (p q : Nat) (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st' q m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' q m0)
 
 /-- `ExecSeq` motive: `SegEntry → SegExit` skeleton Triple (the statement-list
 loop; `interp_run` and the `block`/closure-body loops consume this). -/
@@ -160,7 +160,7 @@ def mExecSeq (st : SpecSt) (d : Nat) (env : Addr) (_ss : List Stmt)
     (dLeft aLeft : Nat) (p q : Nat) (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st' q m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' q m0)
 
 /-! ## §2. The assembled mutual induction — `term_sim_of_cases`
 

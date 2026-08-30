@@ -111,6 +111,7 @@ sub-derivation with post spec state `st'` and returned value `vsub` in the buffe
 def SubExecReturn
     (garm : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' : Vsa.While.St) (vsub : Value)
     (sp r aRet subsret retPC : BitVec 64) (v1 v8 v9 v18 v19 : BitVec 64)
     (m0 mcall : Mem)
@@ -129,11 +130,11 @@ def SubExecReturn
     (Register.x2 == R) = false → c.σ.regs.get? R = garm R) ∧
   garm Register.x8 = some v8 ∧ garm Register.x9 = some v9 ∧
   garm Register.x18 = some v18 ∧ garm Register.x19 = some v19 ∧ garm Register.x2 = some sp ∧
-  (∃ φc' : Addr → Nat, PhiExtends φc φc' st'.store.closures.size ∧
+  (∃ φc' : Addr → Nat, PhiExtends φc φc' nc ∧
     ValueRepr c.σ.mem N φc' subsret.toNat vsub) ∧
   (∃ φf' φc' : Addr → Nat,
-    PhiExtends φf φf' st'.store.frames.size ∧
-    PhiExtends φc φc' st'.store.closures.size ∧
+    PhiExtends φf φf' nf ∧
+    PhiExtends φc φc' nc ∧
     StoreRepr c.σ.mem N A φf' φc' st'.store) ∧
   Exec_stmtLoaded c.σ.mem ∧
   read64 c.σ.mem (sp.toNat - 8) = some r.toNat ∧
@@ -160,7 +161,7 @@ def ExecExprSimGoal
   Triple
     (fun c => ExecEntry g N A SL φf φc st d env (.expr e) sp r aInterp aStmt aEnv aRet m0 c
       ∧ c.σ.sailOutput = out0)
-    (ExecExit g N A SL φf φc st' .normal sp r aRet m0)
+    (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size st' .normal sp r aRet m0)
 
 /-! ## `execExprSim` — `ExecS.expr`: `execBlockA ≫ (jal eval_expr ≫ IH) ≫ execBlockD`
 
@@ -191,7 +192,7 @@ theorem execExprSim
           ExecArmEntryK g N A SL φf φc st execArmExpr sp r aInterp aStmt aEnv aRet
             v8 v9 v18 v19 out0 m0 ment c)
         (fun c => ∃ subsret v1 v8 v9 v18 v19 mcall,
-          SubExecReturn g N A SL φf φc st' v
+          SubExecReturn g N A SL φf φc st.store.frames.size st.store.closures.size st' v
             sp r aRet subsret (0x80004184#64) v1 v8 v9 v18 v19 m0 mcall c)) :
     ExecExprSimGoal g N A SL φf φc st st' d env e v
       sp r aInterp aStmt aEnv aRet m0 out0 := by
@@ -285,7 +286,8 @@ theorem execExprSim
   -- resulting `ExecExit.memFrame` is then relative to `cG.σ.mem`, and we re-base it
   -- to the true entry `m0` from the `SubExecReturn` framing below. =====
   obtain ⟨cD, hstepsD, hExitE⟩ :=
-    execBlockD g N A SL φfE φcE st' .normal sp r aRet v8 v9 v18 v19 σ2.sailOutput cG.σ.mem
+    execBlockD g N A SL φfE φcE st.store.frames.size st.store.closures.size
+      st' .normal sp r aRet v8 v9 v18 v19 σ2.sailOutput cG.σ.mem
       (by intro w hw; cases hw)
       ⟨σ2, i2, cG.steps + 1 + 1⟩
       ⟨cG.σ.mem,

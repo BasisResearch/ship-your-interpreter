@@ -167,7 +167,7 @@ def NativeAssertOkSpec
     (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem) : Prop :=
   Triple
     (CallEntryP g N A SL φf φc st d dLeft aLeft m0)
-    (CallExitP g N A SL φf φc st m0)
+    (CallExitP g N A SL φf φc st.store.frames.size st.store.closures.size st m0)
 
 /-- **`Call.assertOk` minor premise** (native `assert`, truthy arg → `.null`, no
 output) at the machine level. From the `EX_CALL` dispatch the native branch runs
@@ -188,7 +188,7 @@ theorem callAssertOk
     (hNative : NativeAssertOkSpec g N A SL φf φc st d dLeft aLeft m0) :
     Triple
       (CallEntryP g N A SL φf φc st d dLeft aLeft m0)
-      (CallExitP g N A SL φf φc st m0) :=
+      (CallExitP g N A SL φf φc st.store.frames.size st.store.closures.size st m0) :=
   hNative
 
 end Vsa.Sim

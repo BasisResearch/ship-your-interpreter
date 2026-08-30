@@ -50,6 +50,7 @@ theorem boolBoxEpilogue
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (φf φc φfm φcm φf' φc' : Addr → Nat)
+    (nf nc nf2 nc2 : Nat)
     (st' st'' : Vsa.While.St)
     (sp r sret : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64) (pay : BitVec 64)
     (bres : Bool) (out0 : Array String)
@@ -80,10 +81,10 @@ theorem boolBoxEpilogue
     (hval_bridge : (pay != 0#64) = bres)
     -- === the arm's transport of `τ0.σ.mem` back to `c`/`m0`/store/geometry ===
     -- φ-extension chain
-    (hpfm : PhiExtends φf φfm st'.store.frames.size)
-    (hpcm : PhiExtends φc φcm st'.store.closures.size)
-    (hpf' : PhiExtends φfm φf' st''.store.frames.size)
-    (hpc' : PhiExtends φcm φc' st''.store.closures.size)
+    (hpfm : PhiExtends φf φfm nf)
+    (hpcm : PhiExtends φc φcm nc)
+    (hpf' : PhiExtends φfm φf' nf2)
+    (hpc' : PhiExtends φcm φc' nc2)
     (houtStr : String.join out0.toList = st''.out)
     -- store survival outside SL (from τ0.mem)
     (hSurvSL0 : ∀ m' : Mem,
@@ -125,10 +126,10 @@ theorem boolBoxEpilogue
     ∃ (mpre : Mem) (φfm' φcm' φfe φce : Addr → Nat)
       (cfin : Config),
       Steps τ0 cfin ∧
-      PhiExtends φf φfm' st'.store.frames.size ∧
-      PhiExtends φc φcm' st'.store.closures.size ∧
-      PhiExtends φfm' φfe st''.store.frames.size ∧
-      PhiExtends φcm' φce st''.store.closures.size ∧
+      PhiExtends φf φfm' nf ∧
+      PhiExtends φc φcm' nc ∧
+      PhiExtends φfm' φfe nf2 ∧
+      PhiExtends φcm' φce nc2 ∧
       PreEpilogueVD g N A SL φfe φce st'' (.bool bres) sp r sret v8 v9 v18 out0 m0 mpre cfin := by
   -- === value_bool callee (via value_bool_box): buf = sret, vb = pay, ghost = τ0 snapshot ===
   have hcallpre : boxBool_pre (fun R => τ0.σ.regs.get? R) sret pay boxLink τ0.σ.mem out0 τ0 := by
@@ -265,7 +266,7 @@ theorem boolBoxEpilogue
   have hchain : Steps τ0 ⟨τ5, j5, cvi.steps + 1 + 1⟩ :=
     hsvi.trans <| (Steps.single hstepτ4).trans (Steps.single hstepτ5)
   obtain ⟨mpre, φfm2, φcm2, φfe, φce, hp1, hp2, hp3, hp4, hPre⟩ :=
-    intPostToEpilogue g N A SL φf φc φfm φcm φf' φc' st' st'' (.bool bres)
+    intPostToEpilogue g N A SL φf φc φfm φcm φf' φc' nf nc nf2 nc2 st' st'' (.bool bres)
       sp r sret v8 v9 v18 out0 m0 ⟨τ5, j5, cvi.steps + 1 + 1⟩
       hpfm hpcm hpf' hpc' hGτ5 hj5 hpc_fin hs1_fin hsp_fin ⟨vmifin, hmifin⟩
       hout_fin houtStr hcode_fin (by rw [hmemτ5e]; exact hvalfinal) hstore_fin hSurvSL_fin

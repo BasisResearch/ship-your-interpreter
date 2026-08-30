@@ -67,14 +67,15 @@ theorem intPostToEpilogue
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (φf φc φfm φcm φf' φc' : Addr → Nat)
+    (nf nc nf2 nc2 : Nat)
     (st' st'' : Vsa.While.St) (v : Value)
     (sp r sret : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
     (m0 : Mem) (c : Config)
     -- φ-extension chain from block C's callee subproofs (`φf → φfm → φf'`)
-    (hpfm : PhiExtends φf φfm st'.store.frames.size)
-    (hpcm : PhiExtends φc φcm st'.store.closures.size)
-    (hpf' : PhiExtends φfm φf' st''.store.frames.size)
-    (hpc' : PhiExtends φcm φc' st''.store.closures.size)
+    (hpfm : PhiExtends φf φfm nf)
+    (hpcm : PhiExtends φc φcm nc)
+    (hpf' : PhiExtends φfm φf' nf2)
+    (hpc' : PhiExtends φcm φc' nc2)
     -- epilogue-exit register / tick / output state
     (hG : GoodState c.σ) (htick : c.tick < 2)
     (hpc : c.σ.regs.get? Register.PC = some (0x800033ec#64))
@@ -111,10 +112,10 @@ theorem intPostToEpilogue
     (hspLo : 0x80000000 ≤ sp.toNat) (hspHtif : tohostAddr + 16 + 1088 ≤ sp.toNat)
     (hsp8 : sp.toNat % 8 = 0) (hraAl : r.toNat % 4 = 0) :
     ∃ (mpre : Mem) (φfm' φcm' φfe φce : Addr → Nat),
-      PhiExtends φf φfm' st'.store.frames.size ∧
-      PhiExtends φc φcm' st'.store.closures.size ∧
-      PhiExtends φfm' φfe st''.store.frames.size ∧
-      PhiExtends φcm' φce st''.store.closures.size ∧
+      PhiExtends φf φfm' nf ∧
+      PhiExtends φc φcm' nc ∧
+      PhiExtends φfm' φfe nf2 ∧
+      PhiExtends φcm' φce nc2 ∧
       PreEpilogueVD g N A SL φfe φce st'' v sp r sret v8 v9 v18 out0 m0 mpre c := by
   refine ⟨c.σ.mem, φfm, φcm, φf', φc',
     hpfm, hpcm, hpf', hpc', ⟨?_, hMemExt, hSurvSL⟩⟩

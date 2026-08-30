@@ -183,6 +183,7 @@ structure SegExit
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' : SpecSt) (exitPC : Nat)
     (m0 : Mem)
     (c : Config) : Prop where
@@ -195,8 +196,8 @@ structure SegExit
   /-- The store is re-represented for `st'` with φ-maps extended over the
   allocated prefix (SKELETON: same φ-extension shape as `EvalExit.store`). -/
   store : ∃ (φf' φc' : Addr → Nat),
-    PhiExtends φf φf' st'.store.frames.size ∧
-    PhiExtends φc φc' st'.store.closures.size ∧
+    PhiExtends φf φf' nf ∧
+    PhiExtends φc φc' nc ∧
     StoreRepr c.σ.mem N A φf' φc' st'.store
   /-- Console output correspondence for `st'`. -/
   out : OutRepr c.σ st'
@@ -233,7 +234,7 @@ def motive_EvalE (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt)
     (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
     Triple
       (EvalEntry g N A SL φf φc st d env e sp r sret aEnv aExpr m0)
-      (EvalExit g N A SL φf φc st' v sp r sret m0)
+      (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st' v sp r sret m0)
 
 /-- `EvalArgs` motive: SKELETON Triple. The arg vector `vs` and its ABI
 placement are part of the skeleton exit (a per-case field). -/
@@ -244,7 +245,7 @@ def motive_EvalArgs (st : SpecSt) (d : Nat) (env : Addr) (_es : List Expr)
     (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d (depthLeft d) 0 0 m0)
-      (SegExit g N A SL φf φc st' 0 m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' 0 m0)
 
 /-- `Call` motive: SKELETON Triple. `Call.closure` is where the depth budget
 (`d < maxCallDepth`) actually bites and a fresh frame is allocated. -/
@@ -255,7 +256,7 @@ def motive_Call (st : SpecSt) (d : Nat) (_fv : Value) (_vs : List Value)
     (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d (depthLeft d) 0 0 m0)
-      (SegExit g N A SL φf φc st' 0 m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' 0 m0)
 
 /-- `ExecS` motive: SKELETON Triple. The `Status` result and its ABI encoding
 are per-case skeleton fields. -/
@@ -266,7 +267,7 @@ def motive_ExecS (st : SpecSt) (d : Nat) (env : Addr) (_s : Stmt) (st' : SpecSt)
     (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d (depthLeft d) 0 0 m0)
-      (SegExit g N A SL φf φc st' 0 m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' 0 m0)
 
 /-- `ExecInit` motive: SKELETON Triple. -/
 def motive_ExecInit (st : SpecSt) (d : Nat) (env : Addr) (_init : Option Stmt)
@@ -276,7 +277,7 @@ def motive_ExecInit (st : SpecSt) (d : Nat) (env : Addr) (_init : Option Stmt)
     (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d (depthLeft d) 0 0 m0)
-      (SegExit g N A SL φf φc st' 0 m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' 0 m0)
 
 /-- `ForLoop` motive: SKELETON Triple. -/
 def motive_ForLoop (st : SpecSt) (d : Nat) (env : Addr) (_cnd _step : Option Expr)
@@ -287,7 +288,7 @@ def motive_ForLoop (st : SpecSt) (d : Nat) (env : Addr) (_cnd _step : Option Exp
     (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d (depthLeft d) 0 0 m0)
-      (SegExit g N A SL φf φc st' 0 m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' 0 m0)
 
 /-- `ForCond` motive: SKELETON Triple. -/
 def motive_ForCond (st : SpecSt) (d : Nat) (env : Addr) (_cnd : Option Expr)
@@ -297,7 +298,7 @@ def motive_ForCond (st : SpecSt) (d : Nat) (env : Addr) (_cnd : Option Expr)
     (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d (depthLeft d) 0 0 m0)
-      (SegExit g N A SL φf φc st' 0 m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' 0 m0)
 
 /-- `ExecStep` motive: SKELETON Triple. -/
 def motive_ExecStep (st : SpecSt) (d : Nat) (env : Addr) (_step : Option Expr)
@@ -307,7 +308,7 @@ def motive_ExecStep (st : SpecSt) (d : Nat) (env : Addr) (_step : Option Expr)
     (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d (depthLeft d) 0 0 m0)
-      (SegExit g N A SL φf φc st' 0 m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' 0 m0)
 
 /-- `ExecSeq` motive: SKELETON Triple. The statement-list loop lands here (this
 is what `interp_run` consumes). -/
@@ -318,7 +319,7 @@ def motive_ExecSeq (st : SpecSt) (d : Nat) (env : Addr) (_ss : List Stmt)
     (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d (depthLeft d) 0 0 m0)
-      (SegExit g N A SL φf φc st' 0 m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' 0 m0)
 
 /-! ## §4. The top-level `term_sim`-shaped goal for the `EvalE` relation
 
@@ -375,35 +376,35 @@ def motive_EvalE_completedLeaf (st : SpecSt) (d : Nat) (env : Addr) (e : Expr)
         (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
         Triple
           (EvalEntry g N A SL φf φc st d env (.int n) sp r sret aEnv aExpr m0)
-          (EvalExit g N A SL φf φc st' v sp r sret m0)
+          (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st' v sp r sret m0)
   | .str s =>
       ∀ (g : (R : Register) → Option (RegisterType R))
         (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
         (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
         Triple
           (EvalStrEntry g N A SL φf φc st d env s sp r sret aEnv aExpr m0)
-          (EvalExit g N A SL φf φc st' v sp r sret m0)
+          (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st' v sp r sret m0)
   | .bool b =>
       ∀ (g : (R : Register) → Option (RegisterType R))
         (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
         (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
         Triple
           (EvalBoolEntry g N A SL φf φc st d env b sp r sret aEnv aExpr m0)
-          (EvalExit g N A SL φf φc st' v sp r sret m0)
+          (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st' v sp r sret m0)
   | .null =>
       ∀ (g : (R : Register) → Option (RegisterType R))
         (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
         (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
         Triple
           (EvalNullEntry g N A SL φf φc st d env sp r sret aEnv aExpr m0)
-          (EvalExit g N A SL φf φc st' v sp r sret m0)
+          (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st' v sp r sret m0)
   | .var x =>
       ∀ (g : (R : Register) → Option (RegisterType R))
         (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
         (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
         Triple
           (EvalVarEntry g N A SL φf φc st d env x v sp r sret aEnv aExpr m0)
-          (EvalExit g N A SL φf φc st' v sp r sret m0)
+          (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st' v sp r sret m0)
   | _ => True
 
 /-- The generated mutual recursor accepts all five completed leaf simulation

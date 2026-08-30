@@ -134,7 +134,8 @@ theorem blockB_logical
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo))
       (fun c => ∃ mcall,
-        SubEvalReturn gpre N A SL φf φc st' vl sp r sret
+        SubEvalReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+          st' vl sp r sret
           ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)) (0x8000356c#64)
           v8 v9 v18 mcall c ∧
         (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?)) := by
@@ -370,13 +371,14 @@ Output: `PreEpilogueVD … (.bool false) 0x800033ec` (fed to `blockD_v_rec`). -/
 theorem blockC_andFalse
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' : Vsa.While.St) (vl : Value)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
     (el er : Expr) (m0 : Mem)
     (hvlfalse : vl.truthy = false) :
     Triple
       (fun c => ∃ mcall,
-        SubEvalReturn gpre N A SL φf φc st' vl sp r sret
+        SubEvalReturn gpre N A SL φf φc nf nc st' vl sp r sret
           ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)) (0x8000356c#64)
           v8 v9 v18 mcall c ∧
         gpre Register.x8 = some aExpr ∧
@@ -416,8 +418,8 @@ theorem blockC_andFalse
           (Register.x18 == R) = false → (Register.x2 == R) = false →
           gpre R = g R))
       (fun c => ∃ (mpre : Mem) (φfe φce : Addr → Nat),
-        PhiExtends φf φfe st'.store.frames.size ∧
-        PhiExtends φc φce st'.store.closures.size ∧
+        PhiExtends φf φfe nf ∧
+        PhiExtends φc φce nc ∧
         PreEpilogueVD g N A SL φfe φce st' (.bool false) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hpre
   obtain ⟨mcall, hSub, hgx8, hexpr, hStackPop, hexprAl, hexprLo, hexprHi, hexprWin,
@@ -1312,7 +1314,8 @@ def EvalAndSimGoal : Prop :=
         (∀ mcall : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
           ∀ a : Nat, ∃ b, mcall[a]? = some b))
-      (EvalExitD g N A SL φf φc st' (.bool false) sp r sret m0)
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' (.bool false) sp r sret m0)
 
 /-- `read32 m aExpr = some 7` from `ExprRepr m aExpr (.logical op el er)`. -/
 theorem exprRepr_logical_kind {m : Mem} {a : Nat} {op : LogOp} {el er : Expr}
@@ -1442,7 +1445,8 @@ theorem evalAndSim : EvalAndSimGoal := by
       (fun p s hvr' hp k hk => hx.pay_disj c2.σ.mem φc' p s hvr' hp k hk)⟩
   -- === block C: post-call short-circuit tail → PreEpilogueVD .bool false @0x800033ec ===
   obtain ⟨c3, hs3, mpreC, φfe, φce, hpfe, hpce, hPreD⟩ :=
-    blockC_andFalse (fun R => c1.σ.regs.get? R) g N A SL φf φc st' vl sp r sret aExpr v8 v9 v18
+    blockC_andFalse (fun R => c1.σ.regs.get? R) g N A SL φf φc st.store.frames.size
+      st.store.closures.size st' vl sp r sret aExpr v8 v9 v18
       c2.σ.sailOutput el er m0 hvlfalse
       c2 ⟨mcall, hSubR, hgpre_x8, hExprMcall, hStackPop,
         hx.expr_align4, hc.expr_ram.1, hc.expr_ram.2, hx.expr_win8,
@@ -1461,9 +1465,12 @@ theorem evalAndSim : EvalAndSimGoal := by
     blockD_v_rec g N A SL φfe φce st' (.bool false) sp r sret v8 v9 v18 c2.σ.sailOutput m0
       c3 ⟨mpreC, hPreD⟩
   obtain ⟨hExitE, hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
-  have hExit : EvalExit g N A SL φf φc st' (.bool false) sp r sret m0 c4 :=
-    evalExit_of_phiExtends hpfe hpce hExitE
+  have hStoreLe := evalE_store_mono _hEvalE
+  have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      st' (.bool false) sp r sret m0 c4 :=
+    evalExit_of_phiExtends hpfe hpce hExitE hStoreLe.1 hStoreLe.2
   exact ⟨c4, ((hs1.trans hs2).trans hs3).trans hs4, hExit, hMemExt,
-    φf', φc', hpfe.trans hpf', hpce.trans hpc', hSurv⟩
+    φf', φc', hpfe.trans (PhiExtends.mono hStoreLe.1 hpf'),
+    hpce.trans (PhiExtends.mono hStoreLe.2 hpc'), hSurv⟩
 
 end Vsa.Sim

@@ -78,7 +78,8 @@ def ExecForStartSimGoal
   Triple
     (fun c => ExecEntry g N A SL φf φc st d env (.forStmt init cnd step b)
         sp r aInterp aStmt aEnv aRet m0 c ∧ c.σ.sailOutput = out0)
-    (ExecExit g N A SL φf φc st'' status sp r aRet m0)
+    (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      st'' status sp r aRet m0)
 
 /-! ## `execForStartSim` — `ExecS.forStart`: `hArm (env_new + ExecInit) ≫ execForLoopBody`
 
@@ -114,7 +115,8 @@ theorem execForStartSim
         Triple
           (fun cfg => ExecEntry g N A SL φf' φc' stA d outer (.forStmt init cnd step b)
             sp r aInterp aStmt aEnv aRet m0' cfg ∧ cfg.σ.sailOutput = out0')
-          (ExecExit g N A SL φf' φc' stB status' sp r aRet m0'))
+          (ExecExit g N A SL φf' φc' stA.store.frames.size stA.store.closures.size
+            stB status' sp r aRet m0'))
     -- the arm prologue residual: from the outer block `ExecEntry` (at `env`), run
     -- `execBlockA` (kind 5) ≫ `env_new` (allocating `outer` per `env_new_spec`) ≫
     -- the optional `ExecInit` (init `ExecIH` via `armExec_rec`) ≫ the fall to the
@@ -135,8 +137,10 @@ theorem execForStartSim
     -- `execBlockSim`'s `hEpi`):
     (hEpi : ∀ (φf' φc' : Addr → Nat) (m0' : Mem),
       Triple
-        (ExecExit g N A SL φf' φc' st'' status sp r aRet m0')
-        (ExecExit g N A SL φf φc st'' status sp r aRet m0)) :
+        (ExecExit g N A SL φf' φc' st'.store.frames.size st'.store.closures.size
+          st'' status sp r aRet m0')
+        (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+          st'' status sp r aRet m0)) :
     ExecForStartSimGoal g N A SL φf φc st st'' d env init cnd step b status
       sp r aInterp aStmt aEnv aRet m0 out0 := by
   intro c hpre

@@ -88,7 +88,8 @@ def ExecWhileFalseSimGoal
   Triple
     (fun cfg => ExecEntry g N A SL φf φc st d env (.whileStmt c b) sp r aInterp aStmt aEnv aRet m0 cfg
       ∧ cfg.σ.sailOutput = out0)
-    (ExecExit g N A SL φf φc st' .normal sp r aRet m0)
+    (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      st' .normal sp r aRet m0)
 
 /-! ## `execWhileFalseSim` — `ExecS.whileFalse`: `execBlockA ≫ hGlue ≫ (li a0,0 ; j ; execBlockD)`
 
@@ -121,7 +122,7 @@ theorem execWhileFalseSim
           ExecArmEntryK g N A SL φf φc st execArmWhile sp r aInterp aStmt aEnv aRet
             v8 v9 v18 v19 out0 m0 ment cfg)
         (fun cfg => ∃ subsret v1 v8 v9 v18 v19 mcall,
-          SubExecReturn g N A SL φf φc st' v
+          SubExecReturn g N A SL φf φc st.store.frames.size st.store.closures.size st' v
             sp r aRet subsret (0x80004090#64) v1 v8 v9 v18 v19 m0 mcall cfg)) :
     ExecWhileFalseSimGoal g N A SL φf φc st st' d env c b v
       sp r aInterp aStmt aEnv aRet m0 out0 := by
@@ -209,7 +210,8 @@ theorem execWhileFalseSim
   have hraAl := he.ra_align
   -- ===== execBlockD (at the EXTENDED maps, baseline `m0 := cG.σ.mem`) → ExecExit =====
   obtain ⟨cD, hstepsD, hExitE⟩ :=
-    execBlockD g N A SL φfE φcE st' .normal sp r aRet v8 v9 v18 v19 σ2.sailOutput cG.σ.mem
+    execBlockD g N A SL φfE φcE st.store.frames.size st.store.closures.size
+      st' .normal sp r aRet v8 v9 v18 v19 σ2.sailOutput cG.σ.mem
       (by intro w hw; cases hw)
       ⟨σ2, i2, cG.steps + 1 + 1⟩
       ⟨cG.σ.mem,
@@ -297,7 +299,8 @@ def ExecWhileStep
       ) ∨
       -- exit branch: falsy / brk / ret → land the exit against `m0`
       (¬ (bodyStatus = .normal ∨ bodyStatus = .cont) ∧
-        ExecExit g N A SL φf φc stMid loopStatus sp r aRet m0 cfg))
+        ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+          stMid loopStatus sp r aRet m0 cfg))
 
 /-! ## `execWhileExit` — the three non-recursive `whileStmt` constructors
 
@@ -328,7 +331,8 @@ theorem execWhileExit
     Triple
       (fun cfg => ExecEntry g N A SL φf φc st d env (.whileStmt c b) sp r aInterp aStmt aEnv aRet m0 cfg
         ∧ cfg.σ.sailOutput = out0)
-      (ExecExit g N A SL φf φc st' status sp r aRet m0) := by
+      (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' status sp r aRet m0) := by
   intro cfg hpre
   obtain ⟨cE, hs, hpost⟩ := hstep φf φc st st' st' bodyStatus status m0 out0 cfg hpre
   rcases hpost with ⟨hlb, _⟩ | ⟨_, hE⟩

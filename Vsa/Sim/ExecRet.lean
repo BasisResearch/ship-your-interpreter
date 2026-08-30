@@ -83,11 +83,12 @@ sret write — does fill all 24 bytes; this is the abstraction's residual.) -/
 def SubExecReturnR
     (garm : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' : Vsa.While.St) (vsub : Value)
     (sp r aRet subsret retPC : BitVec 64) (v1 v8 v9 v18 v19 : BitVec 64)
     (m0 mcall : Mem)
     (c : Config) : Prop :=
-  SubExecReturn garm N A SL φf φc st' vsub sp r aRet subsret retPC v1 v8 v9 v18 v19 m0 mcall c ∧
+  SubExecReturn garm N A SL φf φc nf nc st' vsub sp r aRet subsret retPC v1 v8 v9 v18 v19 m0 mcall c ∧
   -- the sub-sret buffer sits at the in-frame slot `sp' + 16 = sp - 160`
   -- (`armTail_rec_es` was invoked with `subsret := (sp-176)+16`):
   subsret.toNat = sp.toNat - 160 ∧
@@ -101,8 +102,8 @@ def SubExecReturnR
   -- survival clause, restricted to the retslot window — SubExecReturn only carries
   -- the plain exit StoreRepr, which cannot be transported without arena facts.)
   (∃ φf' φc' : Addr → Nat,
-    PhiExtends φf φf' st'.store.frames.size ∧
-    PhiExtends φc φc' st'.store.closures.size ∧
+    PhiExtends φf φf' nf ∧
+    PhiExtends φc φc' nc ∧
     ∀ m' : Mem, (∀ k, (k < aRet.toNat ∨ aRet.toNat + 24 ≤ k) → c.σ.mem[k]? = m'[k]?) →
       StoreRepr m' N A φf' φc' st'.store) ∧
   -- the returned value's string payload (if any) is disjoint from the retslot
@@ -119,7 +120,8 @@ def ExecRetSimGoal
   Triple
     (fun c => ExecEntry g N A SL φf φc st d env (.ret (some e)) sp r aInterp aStmt aEnv aRet m0 c
       ∧ c.σ.sailOutput = out0)
-    (ExecExit g N A SL φf φc st' (.ret v) sp r aRet m0)
+    (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      st' (.ret v) sp r aRet m0)
 
 /-! ## `execRetSim` — `ExecS.ret`: `execBlockA ≫ (jal eval_expr ≫ IH) ≫ copy ≫ epilogue`
 
@@ -158,7 +160,7 @@ theorem execRetSim
           ExecArmEntryK g N A SL φf φc st execArmRet sp r aInterp aStmt aEnv aRet
             v8 v9 v18 v19 out0 m0 ment c)
         (fun c => ∃ subsret v1 v8 v9 v18 v19 mcall,
-          SubExecReturnR g N A SL φf φc st' v
+          SubExecReturnR g N A SL φf φc st.store.frames.size st.store.closures.size st' v
             sp r aRet subsret (0x80004138#64) v1 v8 v9 v18 v19 m0 mcall c)) :
     ExecRetSimGoal g N A SL φf φc st st' d env e v
       sp r aInterp aStmt aEnv aRet m0 out0 := by

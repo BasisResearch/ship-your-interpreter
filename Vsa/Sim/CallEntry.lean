@@ -258,8 +258,9 @@ abbrev EvalArgsEntry
 abbrev EvalArgsExit
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' : SpecSt) (m0 : Mem) : Config → Prop :=
-  SegExit g N A SL φf φc st' evalArgsContPC m0
+  SegExit g N A SL φf φc nf nc st' evalArgsContPC m0
 
 /-! ## `Call` entry/exit (the fval-dispatch `SegEntry`/`SegExit` at real PCs)
 
@@ -280,8 +281,9 @@ abbrev CallEntryP
 abbrev CallExitP
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' : SpecSt) (m0 : Mem) : Config → Prop :=
-  SegExit g N A SL φf φc st' callJoinPC m0
+  SegExit g N A SL φf φc nf nc st' callJoinPC m0
 
 /-! ## `evalArgsNil` — the `EvalArgs.nil` case (FIRST GREEN PIECE)
 
@@ -309,7 +311,7 @@ theorem evalArgsNil
     (_hArgs : EvalArgs st d env [] st []) :
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft evalArgsContPC m0)
-      (EvalArgsExit g N A SL φf φc st m0) := by
+      (EvalArgsExit g N A SL φf φc st.store.frames.size st.store.closures.size st m0) := by
   intro c hc
   refine ⟨c, .refl c, ?_⟩
   exact

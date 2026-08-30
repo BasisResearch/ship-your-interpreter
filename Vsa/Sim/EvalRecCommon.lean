@@ -138,15 +138,16 @@ def EvalExitD
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' : Vsa.While.St) (v : Value)
     (sp r sret : BitVec 64)
     (m0 : Mem)
     (c : Config) : Prop :=
-  EvalExit g N A SL φf φc st' v sp r sret m0 c ∧
+  EvalExit g N A SL φf φc nf nc st' v sp r sret m0 c ∧
   MemExtends m0 c.σ.mem ∧
   ∃ φf' φc' : Addr → Nat,
-    PhiExtends φf φf' st'.store.frames.size ∧
-    PhiExtends φc φc' st'.store.closures.size ∧
+    PhiExtends φf φf' nf ∧
+    PhiExtends φc φc' nc ∧
     ∀ m' : Mem,
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
       StoreRepr m' N A φf' φc' st'.store
@@ -165,7 +166,8 @@ def EvalIH (st : Vsa.While.St) (d : Nat) (env : Addr) (e : Expr)
     (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
     Triple
       (EvalEntry g N A SL φf φc st d env e sp r sret aEnv aExpr m0)
-      (EvalExitD g N A SL φf φc st' v sp r sret m0)
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' v sp r sret m0)
 
 /-! ## `SubEvalReturn` — the post-sub-call machine state -/
 
@@ -186,6 +188,7 @@ def EvalIH (st : Vsa.While.St) (d : Nat) (env : Addr) (e : Expr)
 def SubEvalReturn
     (gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' : Vsa.While.St) (vsub : Value)
     (sp r sret subsret retPC : BitVec 64) (v8 v9 v18 : BitVec 64)
     (mcall : Mem)
@@ -199,11 +202,11 @@ def SubEvalReturn
   (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
   OutRepr c.σ st' ∧
   (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
-  (∃ φc' : Addr → Nat, PhiExtends φc φc' st'.store.closures.size ∧
+  (∃ φc' : Addr → Nat, PhiExtends φc φc' nc ∧
     ValueRepr c.σ.mem N φc' subsret.toNat vsub) ∧
   (∃ φf' φc' : Addr → Nat,
-    PhiExtends φf φf' st'.store.frames.size ∧
-    PhiExtends φc φc' st'.store.closures.size ∧
+    PhiExtends φf φf' nf ∧
+    PhiExtends φc φc' nc ∧
     StoreRepr c.σ.mem N A φf' φc' st'.store ∧
     (∀ m' : Mem,
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
@@ -289,7 +292,8 @@ theorem armTail_rec
         ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo))
-      (SubEvalReturn gpre N A SL φf φc st' vsub sp r sret subsret retPC v8 v9 v18 mcall) := by
+      (SubEvalReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+        st' vsub sp r sret subsret retPC v8 v9 v18 mcall) := by
   intro c hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, hx11, hx12, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
     hcode, hviCode, hslot, hsubexpr, hstore, hstoreSurv, hframe, ⟨⟨w8, hw8⟩, ⟨w18, hw18⟩⟩,
@@ -498,7 +502,8 @@ theorem blockD_v_rec
     (sp r sret : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem) :
     Triple
       (fun c => ∃ mpre, PreEpilogueVD g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpre c)
-      (EvalExitD g N A SL φf φc st v sp r sret m0) := by
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st v sp r sret m0) := by
   intro c hpre
   obtain ⟨mpre, hPre, hMemExt, hSurv⟩ := hpre
   obtain ⟨c', hs, hExit, hMemExt', hSurv'⟩ :=

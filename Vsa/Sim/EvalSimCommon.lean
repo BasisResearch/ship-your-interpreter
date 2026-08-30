@@ -314,7 +314,8 @@ theorem blockD_v
     (Q : Mem → Prop) :
     Triple
       (fun c => ∃ mpre, PreEpilogueV g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpre c ∧ Q mpre)
-      (fun c => EvalExit g N A SL φf φc st v sp r sret m0 c ∧ Q c.σ.mem) := by
+      (fun c => EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+          st v sp r sret m0 c ∧ Q c.σ.mem) := by
   intro c hpre
   obtain ⟨mpre, ⟨hG, htick, hpc, hs1, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmem, hcode, hval, hstore, hframe,
     hslotRa, hslotS0, hslotS1, hslotS2, hgx8, hgx9, hgx18, hgx2, hmemframe,

@@ -66,6 +66,7 @@ Output: `PreEpilogueVD … (.bool vr.truthy) 0x800033ec` (fed to `blockD_v_rec`)
 theorem blockC_orFalse
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (vl vr : Value)
     (sp r sret aExpr aEnv aRight : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
     (el er : Expr) (m0 : Mem)
@@ -73,10 +74,13 @@ theorem blockC_orFalse
     (hIHr : EvalIH st' d env er st'' vr)
     -- store-size stability (mirrors `blockB_binary`'s `hSizeF`/`hSizeC` residual):
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
-    (hSizeC : st'.store.closures.size = st''.store.closures.size) :
+    (hSizeC : st'.store.closures.size = st''.store.closures.size)
+    -- the entry-agreement sizes sit under the RIGHT call's entry state (the LEFT
+    -- sub-derivation only grows the store — `evalE_store_mono` at the caller):
+    (hnf : nf ≤ st'.store.frames.size ∧ nc ≤ st'.store.closures.size) :
     Triple
       (fun c => ∃ mcall,
-        SubEvalReturn gpre N A SL φf φc st' vl sp r sret
+        SubEvalReturn gpre N A SL φf φc nf nc st' vl sp r sret
           ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)) (0x8000356c#64)
           v8 v9 v18 mcall c ∧
         gpre Register.x8 = some aExpr ∧
@@ -148,8 +152,8 @@ theorem blockC_orFalse
           (Register.x18 == R) = false → (Register.x2 == R) = false →
           gpre R = g R))
       (fun c => ∃ (mpre : Mem) (φfe φce : Addr → Nat) (outF : Array String),
-        PhiExtends φf φfe st''.store.frames.size ∧
-        PhiExtends φc φce st''.store.closures.size ∧
+        PhiExtends φf φfe nf ∧
+        PhiExtends φc φce nc ∧
         PreEpilogueVD g N A SL φfe φce st'' (.bool vr.truthy) sp r sret v8 v9 v18 outF m0 mpre c) := by
   intro c hpre
   obtain ⟨mcall, hSub, hgx8, hgx18, hexpr, hPayRight, hStackPop, hexprAl, hexprLo, hexprHi, hexprHi32,
@@ -900,10 +904,12 @@ theorem blockC_orFalse
   -- The rv value at sp-944 = (sp-944#64).toNat
   -- transport the RIGHT value to the STORE map φc2 (agree with φcvR on closures.size)
   -- both φcvR and φc2 extend the RIGHT-call entry map φc' over st''.closures.size.
-  have hφagree : ∀ i, i < st''.store.closures.size → φcvR i = φc2 i := by
+  have hφagree : ∀ i, i < st'.store.closures.size → φcvR i = φc2 i := by
     intro i hi; rw [hpcvR i hi, hpc2'' i hi]
+  have hφagree' : ∀ i, i < st''.store.closures.size → φcvR i = φc2 i := by
+    intro i hi; exact hφagree i (by have := hSizeC; omega)
   have hvalRφc2 : ValueRepr cR.σ.mem N φc2 (sp.toNat - 944) vr :=
-    hVrMapCoh cR.σ.mem φcvR φc2 hφagree hvalR848
+    hVrMapCoh cR.σ.mem φcvR φc2 hφagree' hvalR848
   have hvalRbuf : ValueRepr cR.σ.mem N φc2 (sp - 944#64).toNat vr := by rw [hsretRnat]; exact hvalRφc2
   -- payload-disjointness for the copy at logTail: rv's payload at sretR+8 vs sp-1024 buffer
   have hpayDisjR : ∀ (p : Nat) (s : String),
@@ -1065,11 +1071,10 @@ theorem blockC_orFalse
     refine (Steps.single hstepρ3).trans (?_)
     refine (Steps.single hstepρ4).trans (?_)
     exact hsFin
-  -- compose the two-phase φ-chain to the OUTER maps via size stability.
-  have hpf'' : PhiExtends φf φf' st''.store.frames.size := hSizeF ▸ hpf'
-  have hpc''' : PhiExtends φc φc' st''.store.closures.size := hSizeC ▸ hpc'
-  have hpfF : PhiExtends φf φf2 st''.store.frames.size := hpf''.trans hpf2
-  have hpcF : PhiExtends φc φc2 st''.store.closures.size := hpc'''.trans hpc2''
+  -- compose the two-phase φ-chain to the OUTER (entry-agreement) sizes `nf`/`nc`:
+  -- `hpf' : φf→φf' @ nf`, `hpf2 : φf'→φf2 @ st'` — collapse via `hnf : nf ≤ st'`.
+  have hpfF : PhiExtends φf φf2 nf := hpf'.trans (PhiExtends.mono hnf.1 hpf2)
+  have hpcF : PhiExtends φc φc2 nc := hpc'.trans (PhiExtends.mono hnf.2 hpc2'')
   exact ⟨cFin, hSteps, mpreFin, φf2, φc2, cR.σ.sailOutput, hpfF, hpcF, hPreFin⟩
 
 /-! ## `OrFalseExtras` — the two-eval recursive-case facts
@@ -1173,7 +1178,8 @@ def EvalOrFalseSimGoal : Prop :=
         (∀ mcall : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
           ∀ a : Nat, ∃ b, mcall[a]? = some b))
-      (EvalExitD g N A SL φf φc st'' (.bool vr.truthy) sp r sret m0)
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st'' (.bool vr.truthy) sp r sret m0)
 
 /-- **`evalOrFalseSim`** — the `EvalE.orFalse` (two-eval) recursive case, in the
 `EvalIH` motive shape with TWO IH premises. Composes `blockA_k` (prologue+dispatch
@@ -1310,10 +1316,17 @@ theorem evalOrFalseSim : EvalOrFalseSimGoal := by
       (by have := hx.sp_headroom; omega),
       (fun p s hvr' hp k hk => hx.pay_disj c2.σ.mem φc' p s hvr' hp k hk)⟩
   -- === block C: post-call two-eval tail → PreEpilogueVD .bool vr.truthy @0x800033ec ===
+  -- the entry-agreement sizes `st.store.*.size` sit under the RIGHT call's entry
+  -- state `st'` (store counts only grow; `st.store ≤ st''.store = st'.store` sized).
+  have hmono := evalE_store_mono _hEvalE
+  have hnf : st.store.frames.size ≤ st'.store.frames.size ∧
+      st.store.closures.size ≤ st'.store.closures.size :=
+    ⟨hx.size_frames ▸ hmono.1, hx.size_closures ▸ hmono.2⟩
   obtain ⟨c3, hs3, mpreC, φfe, φce, outF, hpfe, hpce, hPreD⟩ :=
-    blockC_orFalse (fun R => c1.σ.regs.get? R) g N A SL φf φc st' st'' d env vl vr
+    blockC_orFalse (fun R => c1.σ.regs.get? R) g N A SL φf φc
+      st.store.frames.size st.store.closures.size st' st'' d env vl vr
       sp r sret aExpr aEnv aRight v8 v9 v18 c2.σ.sailOutput el er m0 hvlfalse hIHr
-      hx.size_frames hx.size_closures
+      hx.size_frames hx.size_closures hnf
       c2 ⟨mcall, hSubR, hgpre_x8, hAEx18, hExprMcall, hPayRightMcall, hStackPop,
         hx.expr_align4, hc.expr_ram.1, hc.expr_ram.2, hx.expr32, hx.expr_win8,
         hc.expr_stack_disjoint, hx.expr32_stk, hx.expr_A, hx.expr_A32, hx.expr_sub,
@@ -1334,9 +1347,11 @@ theorem evalOrFalseSim : EvalOrFalseSimGoal := by
     blockD_v_rec g N A SL φfe φce st'' (.bool vr.truthy) sp r sret v8 v9 v18 outF m0
       c3 ⟨mpreC, hPreD⟩
   obtain ⟨hExitE, hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
-  have hExit : EvalExit g N A SL φf φc st'' (.bool vr.truthy) sp r sret m0 c4 :=
-    evalExit_of_phiExtends hpfe hpce hExitE
+  have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      st'' (.bool vr.truthy) sp r sret m0 c4 :=
+    evalExit_of_phiExtends hpfe hpce hExitE hmono.1 hmono.2
   exact ⟨c4, ((hs1.trans hs2).trans hs3).trans hs4, hExit, hMemExt,
-    φf', φc', hpfe.trans hpf', hpce.trans hpc', hSurv⟩
+    φf', φc', hpfe.trans (PhiExtends.mono hmono.1 hpf'),
+    hpce.trans (PhiExtends.mono hmono.2 hpc'), hSurv⟩
 
 end Vsa.Sim

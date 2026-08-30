@@ -87,6 +87,7 @@ structure ExecSeqExit
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' : St) (status : Status)
     (sp r : BitVec 64) (p : Nat)
     (m0 : Mem)
@@ -99,8 +100,8 @@ structure ExecSeqExit
   pc : c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 p)
   /-- The store re-represented for `st'` with extended maps. -/
   store : ∃ (φf' φc' : Addr → Nat),
-    PhiExtends φf φf' st'.store.frames.size ∧
-    PhiExtends φc φc' st'.store.closures.size ∧
+    PhiExtends φf φf' nf ∧
+    PhiExtends φc φc' nc ∧
     StoreRepr c.σ.mem N A φf' φc' st'.store
   /-- Console output for `st'`. -/
   out : OutRepr c.σ st'
@@ -123,7 +124,8 @@ theorem execSeqNil
     (_hSeq : ExecSeq st d env [] st .normal) :
     Triple
       (ExecSeqEntry g N A SL φf φc st d env [] sp r p m0)
-      (ExecSeqExit g N A SL φf φc st .normal sp r p m0) := by
+      (ExecSeqExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st .normal sp r p m0) := by
   intro c hc
   refine ⟨c, .refl c, ?_⟩
   exact

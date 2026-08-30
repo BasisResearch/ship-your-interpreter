@@ -167,7 +167,7 @@ def NativePrintSpec
     (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem) (vs : List Value) : Prop :=
   Triple
     (CallEntryP g N A SL φf φc st d dLeft aLeft m0)
-    (CallExitP g N A SL φf φc ⟨st.store, st.out ++ printArgs st.store vs⟩ m0)
+    (CallExitP g N A SL φf φc st.store.frames.size st.store.closures.size ⟨st.store, st.out ++ printArgs st.store vs⟩ m0)
 
 /-- **`Call.print` minor premise** (native `print`, render args space-separated,
 append to console → `.null`) at the machine level. From the `EX_CALL` dispatch
@@ -188,7 +188,7 @@ theorem callPrint
     (hNative : NativePrintSpec g N A SL φf φc st d dLeft aLeft m0 vs) :
     Triple
       (CallEntryP g N A SL φf φc st d dLeft aLeft m0)
-      (CallExitP g N A SL φf φc ⟨st.store, st.out ++ printArgs st.store vs⟩ m0) :=
+      (CallExitP g N A SL φf φc st.store.frames.size st.store.closures.size ⟨st.store, st.out ++ printArgs st.store vs⟩ m0) :=
   hNative
 
 /-! ## `Call.println` — the native `println` case (`print` then a trailing `"\n"`) -/
@@ -203,7 +203,7 @@ def NativePrintlnSpec
     (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem) (vs : List Value) : Prop :=
   Triple
     (CallEntryP g N A SL φf φc st d dLeft aLeft m0)
-    (CallExitP g N A SL φf φc ⟨st.store, st.out ++ printArgs st.store vs ++ "\n"⟩ m0)
+    (CallExitP g N A SL φf φc st.store.frames.size st.store.closures.size ⟨st.store, st.out ++ printArgs st.store vs ++ "\n"⟩ m0)
 
 /-- **`Call.println` minor premise** (native `println`, render args
 space-separated then a trailing newline, append to console → `.null`) at the
@@ -223,7 +223,7 @@ theorem callPrintln
     (hNative : NativePrintlnSpec g N A SL φf φc st d dLeft aLeft m0 vs) :
     Triple
       (CallEntryP g N A SL φf φc st d dLeft aLeft m0)
-      (CallExitP g N A SL φf φc ⟨st.store, st.out ++ printArgs st.store vs ++ "\n"⟩ m0) :=
+      (CallExitP g N A SL φf φc st.store.frames.size st.store.closures.size ⟨st.store, st.out ++ printArgs st.store vs ++ "\n"⟩ m0) :=
   hNative
 
 end Vsa.Sim

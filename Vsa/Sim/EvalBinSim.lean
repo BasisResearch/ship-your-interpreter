@@ -118,6 +118,7 @@ memory `m0` outside `[SL.lo, sp)` and presence-extended. -/
 def TwoSubReturn
     (gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' st'' : Vsa.While.St) (vl vr : Value)
     (sp r sret : BitVec 64) (v8 v9 v18 : BitVec 64)
     (m0 : Mem)
@@ -137,16 +138,19 @@ def TwoSubReturn
   -- the `s3` spill slot `[sp-40, sp-32)` still holds the entry `s3` value.
   (∃ w, gpre Register.x19 = some w ∧ read64 c.σ.mem (sp.toNat - 40) = some w.toNat) ∧
   -- the store is re-represented at the FINAL maps, exposed as a two-phase chain:
-  -- `φf/φc → φfm/φcm` (left sub-derivation `st'`) → `φf'/φc'` (right, `st''`).
+  -- `φf/φc → φfm/φcm` (left sub-derivation's exit maps, ENTRY-sized agreement)
+  -- → `φf'/φc'` (right sub-derivation's exit maps, sized by the right call's
+  -- ENTRY state `st'`). Rows compose to the ROW-entry-sized agreements
+  -- `φf → φf'` via `evalE_store_mono` (store counts only grow).
   (∃ φfm φcm : Addr → Nat,
-    PhiExtends φf φfm st'.store.frames.size ∧
-    PhiExtends φc φcm st'.store.closures.size ∧
-    (∃ φcr : Addr → Nat, PhiExtends φcm φcr st''.store.closures.size ∧
+    PhiExtends φf φfm nf ∧
+    PhiExtends φc φcm nc ∧
+    (∃ φcr : Addr → Nat, PhiExtends φcm φcr st'.store.closures.size ∧
       ValueRepr c.σ.mem N φcr (sp.toNat - 944) vr) ∧
     (∃ φcl : Addr → Nat, ValueRepr c.σ.mem N φcl (sp.toNat - 968) vl) ∧
     (∃ φf' φc' : Addr → Nat,
-      PhiExtends φfm φf' st''.store.frames.size ∧
-      PhiExtends φcm φc' st''.store.closures.size ∧
+      PhiExtends φfm φf' st'.store.frames.size ∧
+      PhiExtends φcm φc' st'.store.closures.size ∧
       StoreRepr c.σ.mem N A φf' φc' st''.store ∧
       (∀ m' : Mem,
         (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
@@ -279,7 +283,8 @@ theorem blockB_binary
         -- the arm-entry memory presence-extends the case-entry memory (M6 Layout).
         MemExtends m0 ment)
       (fun c =>
-        TwoSubReturn gpre N A SL φf φc st' st'' vl vr sp r sret v8 v9 v18 m0 c) := by
+        TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+          st' st'' vl vr sp r sret v8 v9 v18 m0 c) := by
   intro c hpre
   obtain ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v,
     hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0⟩ := hpre

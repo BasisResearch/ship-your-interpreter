@@ -71,7 +71,7 @@ def CallArmSpec
   Call st'' d fval vs st''' v →
   Triple
     (EvalEntry g N A SL φf φc st d env (.call f args) sp r sret aEnv aExpr m0)
-    (EvalExit g N A SL φf φc st''' v sp r sret m0)
+    (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st''' v sp r sret m0)
 
 /-- **`evalCallSim`**: the `EvalE.call` minor premise (the call-expression
 composition) at the machine level, in the recursor motive shape. From the
@@ -102,7 +102,7 @@ theorem evalCallSim
       sp r sret aEnv aExpr m0) :
     Triple
       (EvalEntry g N A SL φf φc st d env (.call f args) sp r sret aEnv aExpr m0)
-      (EvalExit g N A SL φf φc st''' v sp r sret m0) :=
+      (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st''' v sp r sret m0) :=
   hArm hIH_f hArgs hCall
 
 end Vsa.Sim

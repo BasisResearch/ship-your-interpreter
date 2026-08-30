@@ -231,7 +231,7 @@ theorem blockD_ee
     (sp r sret : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem) :
     Triple
       (fun c => ∃ mpre, PreEpilogue g N A SL φf φc st n sp r sret v8 v9 v18 out0 m0 mpre c)
-      (EvalExit g N A SL φf φc st (.int n) sp r sret m0) := by
+      (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st (.int n) sp r sret m0) := by
   intro c hpre
   obtain ⟨mpre, hPre⟩ := hpre
   obtain ⟨c', hs, hExit, _⟩ :=

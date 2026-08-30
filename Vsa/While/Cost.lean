@@ -1030,4 +1030,71 @@ theorem bigStep_budget_exists {p : Program} {out : String} :
   obtain ⟨m, hm⟩ := execSeq_cost_exists hseq
   exact ⟨m, st', m, hm, hout, Nat.le_refl m⟩
 
+/-! ## Per-relation store monotonicity (embedding wrappers)
+
+`execSeq_store_mono` proves the append-only invariant for all nine relations at
+once. The per-relation versions follow by embedding each derivation into a
+one-statement `ExecSeq` (`ExecS.expr` + `ExecSeq.consNormal`/`nil`) or by a
+direct two-constructor induction — no new recursors. These discharge the
+size-stability guards the simulation rows formerly assumed (`hSizeF`/`hSizeC`). -/
+
+/-- `EvalE` never shrinks the store: frame/closure counts are monotone along an
+expression derivation. -/
+theorem evalE_store_mono {st d a e st' v} (h : EvalE st d a e st' v) :
+    StoreLe st.store st'.store :=
+  execSeq_store_mono
+    (ExecSeq.consNormal st d a (.expr e) [] st' st' .normal
+      (ExecS.expr st d a e st' v h) (ExecSeq.nil st' d a))
+
+/-- `ExecS` never shrinks the store. -/
+theorem execS_store_mono {st d a s st' status} (h : ExecS st d a s st' status) :
+    StoreLe st.store st'.store := by
+  match status with
+  | .normal =>
+      exact execSeq_store_mono
+        (ExecSeq.consNormal st d a s [] st' st' .normal h (ExecSeq.nil st' d a))
+  | .brk =>
+      exact execSeq_store_mono
+        (ExecSeq.consAbrupt st d a s [] st' .brk h (by intro w; cases w))
+  | .cont =>
+      exact execSeq_store_mono
+        (ExecSeq.consAbrupt st d a s [] st' .cont h (by intro w; cases w))
+  | .ret v =>
+      exact execSeq_store_mono
+        (ExecSeq.consAbrupt st d a s [] st' (.ret v) h (by intro w; cases w))
+
+/-- `EvalArgs` never shrinks the store (structural recursion on the list). -/
+theorem evalArgs_store_mono : ∀ {st d a es st' vs},
+    EvalArgs st d a es st' vs → StoreLe st.store st'.store
+  | _, _, _, _, _, _, .nil _ _ _ => StoreLe.refl _
+  | _, _, _, _, _, _, .cons _ _ _ _ _ _ _ _ _ hE hArgs =>
+      (evalE_store_mono hE).trans (evalArgs_store_mono hArgs)
+
+/-- `ForCond` never shrinks the store (`none` = identity, `some` = an `EvalE`). -/
+theorem forCond_store_mono {st d env cnd st'} (h : ForCond st d env cnd st') :
+    StoreLe st.store st'.store := by
+  cases h with
+  | none _ _ _ => exact StoreLe.refl _
+  | some _ _ _ _ _ _ hE _ => exact evalE_store_mono hE
+
+/-- `ExecStep` never shrinks the store (`none` = identity, `some` = an `EvalE`). -/
+theorem execStep_store_mono {st d env step st'} (h : ExecStep st d env step st') :
+    StoreLe st.store st'.store := by
+  cases h with
+  | none _ _ _ => exact StoreLe.refl _
+  | some _ _ _ _ _ _ hE => exact evalE_store_mono hE
+
+/-- `ForLoop` never shrinks the store (structural recursion: each `loop` iteration
+composes cond ≫ body ≫ step ≫ the recursive tail). -/
+theorem forLoop_store_mono : ∀ {st d env cnd step b st' status},
+    ForLoop st d env cnd step b st' status → StoreLe st.store st'.store
+  | _, _, _, _, _, _, _, _, .condFalse _ _ _ _ _ _ _ _ hE _ => evalE_store_mono hE
+  | _, _, _, _, _, _, _, _, .bodyBreak _ _ _ _ _ _ _ _ hc hb =>
+      (forCond_store_mono hc).trans (execS_store_mono hb)
+  | _, _, _, _, _, _, _, _, .bodyRet _ _ _ _ _ _ _ _ _ hc hb =>
+      (forCond_store_mono hc).trans (execS_store_mono hb)
+  | _, _, _, _, _, _, _, _, .loop _ _ _ _ _ _ _ _ _ _ _ _ hc hb _ hs hr =>
+      (((forCond_store_mono hc).trans (execS_store_mono hb)).trans
+        (execStep_store_mono hs)).trans (forLoop_store_mono hr)
+
 end Vsa.While

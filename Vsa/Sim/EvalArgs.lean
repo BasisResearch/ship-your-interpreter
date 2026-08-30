@@ -1,5 +1,6 @@
 import Vsa.Sim.CallEntry
 import Vsa.Sim.EvalRecCommon
+import Vsa.While.Cost
 
 /-!
 # Layer 4 — M4: the `EvalArgs.cons` argument-evaluation loop rule
@@ -147,19 +148,22 @@ theorem segExit_extend
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (φf φc φf' φc' : Addr → Nat)
+    (nf nc nf' nc' : Nat)
     (st' : SpecSt) (exitPC : Nat) (m0 mNow : Mem) (c : Config)
-    (hpf : PhiExtends φf φf' st'.store.frames.size)
-    (hpc : PhiExtends φc φc' st'.store.closures.size)
+    (hpf : PhiExtends φf φf' nf)
+    (hpc : PhiExtends φc φc' nc)
+    (hle : nf ≤ nf' ∧ nc ≤ nc')
     (hmid : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < SL.hi) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       mNow[a]? = m0[a]?)
-    (hexit : SegExit g N A SL φf' φc' st' exitPC mNow c) :
-    SegExit g N A SL φf φc st' exitPC m0 c := by
+    (hexit : SegExit g N A SL φf' φc' nf' nc' st' exitPC mNow c) :
+    SegExit g N A SL φf φc nf nc st' exitPC m0 c := by
   obtain ⟨φf'', φc'', hpf'', hpc'', hstore⟩ := hexit.store
   exact
     { good := hexit.good
       tick := hexit.tick
       pc := hexit.pc
-      store := ⟨φf'', φc'', hpf.trans hpf'', hpc.trans hpc'', hstore⟩
+      store := ⟨φf'', φc'', hpf.trans (PhiExtends.mono hle.1 hpf''),
+        hpc.trans (PhiExtends.mono hle.2 hpc''), hstore⟩
       out := hexit.out
       frame := hexit.frame
       memFrame := fun a ha1 ha2 => (hexit.memFrame a ha1 ha2).trans (hmid a ha1 ha2) }
@@ -197,13 +201,13 @@ theorem evalArgsLoop
     (hnil : ∀ (φf φc : Addr → Nat) (st : SpecSt) (m0 : Mem),
         Triple
           (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-          (SegExit g N A SL φf φc st q m0)) :
+          (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st q m0)) :
     ∀ (es : List Expr) (φf φc : Addr → Nat) (st st' : SpecSt) (vs : List Value)
       (m0 : Mem),
       EvalArgs st d env es st' vs →
       Triple
         (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-        (SegExit g N A SL φf φc st' q m0) := by
+        (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' q m0) := by
   -- `EvalArgs` is mutually inductive (with `EvalE`/`Call`), so we cannot
   -- `induction` on the derivation directly. Instead we induct on the argument
   -- list `es` (the measure), and `cases` the `EvalArgs` derivation to peel
@@ -233,8 +237,22 @@ theorem evalArgsLoop
       -- The tail's exit is stated for the extended maps `φf'`/`φc'` and the mid
       -- memory `c₁.σ.mem`; re-expose it against the original `φf`/`φc`/`m0` by
       -- composing the φ-extensions and the mid-to-original memory frame `hmid`.
+      -- Store counts only grow: `st.store ≤ stMid.store ≤ st'.store`.  The
+      -- iteration's `hpf`/`hpc` are `st'`-sized (weaken to the `st`-entry size);
+      -- the tail exit is `stMid`-sized (lower to the `st`-entry size).
+      have hmonoHead := evalE_store_mono hE
+      have hmonoTail := evalArgs_store_mono hArgsTail
+      have hleMid : st.store.frames.size ≤ stMid.store.frames.size ∧
+          st.store.closures.size ≤ stMid.store.closures.size := ⟨hmonoHead.1, hmonoHead.2⟩
+      have hleFin : st.store.frames.size ≤ st'.store.frames.size ∧
+          st.store.closures.size ≤ st'.store.closures.size :=
+        ⟨Nat.le_trans hmonoHead.1 hmonoTail.1, Nat.le_trans hmonoHead.2 hmonoTail.2⟩
       refine ⟨c₂, hs₁.trans hs₂, ?_⟩
-      exact segExit_extend g N A SL φf φc φf' φc' st' q m0 c₁.σ.mem c₂ hpf hpc hmid hexit
+      exact segExit_extend g N A SL φf φc φf' φc'
+        st.store.frames.size st.store.closures.size
+        stMid.store.frames.size stMid.store.closures.size
+        st' q m0 c₁.σ.mem c₂
+        (PhiExtends.mono hleFin.1 hpf) (PhiExtends.mono hleFin.2 hpc) hleMid hmid hexit
 
 /-! ## `evalArgsCons` — the `EvalArgs.cons` minor premise (via the loop rule)
 
@@ -255,13 +273,13 @@ theorem evalArgsCons
     (hnil : ∀ (φf φc : Addr → Nat) (st : SpecSt) (m0 : Mem),
         Triple
           (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-          (SegExit g N A SL φf φc st q m0))
+          (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st q m0))
     (φf φc : Addr → Nat) (st st' : SpecSt) (e : Expr) (es : List Expr)
     (v : Value) (vs : List Value) (m0 : Mem)
     (hArgs : EvalArgs st d env (e :: es) st' (v :: vs)) :
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st' q m0) :=
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' q m0) :=
   evalArgsLoop g N A SL d env dLeft aLeft p q hstep hnil
     (e :: es) φf φc st st' (v :: vs) m0 hArgs
 

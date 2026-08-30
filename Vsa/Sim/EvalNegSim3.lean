@@ -1,3 +1,4 @@
+import Vsa.While.Cost
 import Vsa.Sim.EvalNegSim2
 import Vsa.Sim.EvalIntSim2
 
@@ -138,7 +139,8 @@ def EvalNegSimGoal : Prop :=
         (∀ mcall : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
           ∀ a : Nat, ∃ b, mcall[a]? = some b))
-      (EvalExitD g N A SL φf φc st' (.int (wrap64 (-n))) sp r sret m0)
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' (.int (wrap64 (-n))) sp r sret m0)
 
 /-- `read32 m aExpr = some 8` from `ExprRepr m aExpr (.unary op esub)`. -/
 theorem exprRepr_unary_kind {m : Mem} {a : Nat} {op : UnOp} {esub : Expr}
@@ -161,19 +163,22 @@ other `EvalExit` field is φ-independent). -/
 theorem evalExit_of_phiExtends
     {g : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc φfe φce : Addr → Nat}
+    {nf nc nf' nc' : Nat}
     {st' : Vsa.While.St} {v : Value} {sp r sret : BitVec 64} {m0 : Mem} {c : Config}
-    (hpfe : PhiExtends φf φfe st'.store.frames.size)
-    (hpce : PhiExtends φc φce st'.store.closures.size)
-    (h : EvalExit g N A SL φfe φce st' v sp r sret m0 c) :
-    EvalExit g N A SL φf φc st' v sp r sret m0 c := by
+    (hpfe : PhiExtends φf φfe nf)
+    (hpce : PhiExtends φc φce nc)
+    (h : EvalExit g N A SL φfe φce nf' nc' st' v sp r sret m0 c)
+    (hmf : nf ≤ nf') (hmc : nc ≤ nc') :
+    EvalExit g N A SL φf φc nf nc st' v sp r sret m0 c := by
   obtain ⟨φc1, hpc1, hval⟩ := h.result
   obtain ⟨φf2, φc2, hpf2, hpc2, hstore⟩ := h.store
   exact
     { good := h.good, tick := h.tick, pc := h.pc, a0 := h.a0, ra := h.ra,
       spReg := h.spReg, minstret := h.minstret, out := h.out, frame := h.frame,
       memFrame := h.memFrame
-      result := ⟨φc1, hpce.trans hpc1, hval⟩
-      store := ⟨φf2, φc2, hpfe.trans hpf2, hpce.trans hpc2, hstore⟩ }
+      result := ⟨φc1, hpce.trans (PhiExtends.mono hmc hpc1), hval⟩
+      store := ⟨φf2, φc2, hpfe.trans (PhiExtends.mono hmf hpf2),
+        hpce.trans (PhiExtends.mono hmc hpc2), hstore⟩ }
 
 /-- **`evalNegSim`**: the `EvalE.neg` (EX_UNARY, negation) recursive case of the
 simulation, in the `EvalIH` motive shape. Composes `blockA_k` (prologue+dispatch
@@ -299,7 +304,9 @@ theorem evalNegSim : EvalNegSimGoal := by
     hx.expr_survives mcall (fun a ha => (hAgM0 a ha).symm)
   -- === block C: post-call neg tail → PreEpilogueV .int(wrap64 -n) @0x800033ec ===
   obtain ⟨c3, hs3, mpreC, φfe, φce, hpfe, hpce, hPreD⟩ :=
-    blockC_neg (fun R => c1.σ.regs.get? R) g N A SL φf φc st' n sp r sret aExpr v8 v9 v18 c2.σ.sailOutput esub m0
+    blockC_neg (fun R => c1.σ.regs.get? R) g N A SL φf φc
+      st.store.frames.size st.store.closures.size
+      st' n sp r sret aExpr v8 v9 v18 c2.σ.sailOutput esub m0
       c2 ⟨mcall, hSubR, hgpre_x8, hExprMcall, hStackPop,
         hx.expr_align4, hc.expr_ram.1, hc.expr_ram.2, hx.expr_win8,
         hc.expr_stack_disjoint, hx.expr_A, hx.expr_sub,
@@ -317,9 +324,12 @@ theorem evalNegSim : EvalNegSimGoal := by
         c3 ⟨mpreC, hPreD⟩
     -- transport the widened exit back to the entry maps φf/φc (the goal's maps)
     obtain ⟨hExitE, hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
-    have hExit : EvalExit g N A SL φf φc st' (.int (wrap64 (-n))) sp r sret m0 c4 :=
-      evalExit_of_phiExtends hpfe hpce hExitE
+    have hStoreLe := evalE_store_mono _hEvalE
+    have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' (.int (wrap64 (-n))) sp r sret m0 c4 :=
+      evalExit_of_phiExtends hpfe hpce hExitE hStoreLe.1 hStoreLe.2
     exact ⟨c4, ((hs1.trans hs2).trans hs3).trans hs4, hExit, hMemExt,
-      φf', φc', hpfe.trans hpf', hpce.trans hpc', hSurv⟩
+      φf', φc', hpfe.trans (PhiExtends.mono hStoreLe.1 hpf'),
+      hpce.trans (PhiExtends.mono hStoreLe.2 hpc'), hSurv⟩
 
 end Vsa.Sim

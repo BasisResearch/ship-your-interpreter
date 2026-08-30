@@ -296,6 +296,7 @@ structure EvalExit
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (φf φc : Addr → Nat)          -- the ENTRY maps
+    (nf nc : Nat)                 -- the ENTRY agreement sizes (frames/closures)
     (st' : St) (v : Value)
     (sp r sret : BitVec 64)
     (m0 : Mem)
@@ -319,12 +320,12 @@ structure EvalExit
   (`φc'` existential extension is exposed via the `store` field below; the raw
   `ValueRepr` uses the entry `φc` when `v` is not a fresh closure — true for
   `.int`.) -/
-  result : ∃ φc', PhiExtends φc φc' st'.store.closures.size ∧
+  result : ∃ φc', PhiExtends φc φc' nc ∧
     ValueRepr c.σ.mem N φc' sret.toNat v
   /-- **The store is re-represented** for `st'.store` with extended maps. -/
   store : ∃ (φf' φc' : Addr → Nat),
-    PhiExtends φf φf' st'.store.frames.size ∧
-    PhiExtends φc φc' st'.store.closures.size ∧
+    PhiExtends φf φf' nf ∧
+    PhiExtends φc φc' nc ∧
     StoreRepr c.σ.mem N A φf' φc' st'.store
   /-- Console output correspondence for `st'`. -/
   out : OutRepr c.σ st'

@@ -132,7 +132,7 @@ theorem execWhileStepOf
             (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
               cfg'.σ.mem[a]? = m0[a]?)))
         ∨ (¬ (bodyStatus = .normal ∨ bodyStatus = .cont) ∧
-          ExecExit g N A SL φf φc stMid loopStatus sp r aRet m0 cfg')))
+          ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size stMid loopStatus sp r aRet m0 cfg')))
     -- the loop-back φ-alloc upgrade (stMid-sized extension → stFin-sized), preserving
     -- the re-entry `ExecEntry` and its output/memory-agreement clauses:
     (hphi : ∀ (φf' φc' : Addr → Nat) (cfg' : Config),
@@ -186,7 +186,7 @@ theorem execForStepOf
             (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
               cfg'.σ.mem[a]? = m0[a]?)))
         ∨ (¬ (bodyStatus = .normal ∨ bodyStatus = .cont) ∧
-          ExecExit g N A SL φf φc stMid loopStatus sp r aRet m0 cfg')))
+          ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size stMid loopStatus sp r aRet m0 cfg')))
     (hphi : ∀ (φf' φc' : Addr → Nat) (cfg' : Config),
       PhiExtends φf φf' stMid.store.frames.size →
       PhiExtends φc φc' stMid.store.closures.size →
@@ -281,7 +281,7 @@ theorem execWhileExit_of_bodyOracle
                 (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
                   cfg'.σ.mem[a]? = m0[a]?)))
             ∨ (¬ (bodyStatus = .normal ∨ bodyStatus = .cont) ∧
-              ExecExit g N A SL φf φc stMid loopStatus sp r aRet m0 cfg')))
+              ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size stMid loopStatus sp r aRet m0 cfg')))
     (mkPhi : ∀ (φf φc : Addr → Nat) (stMid stFin : St),
         ∀ (φf' φc' : Addr → Nat) (cfg' : Config),
           PhiExtends φf φf' stMid.store.frames.size →
@@ -300,7 +300,7 @@ theorem execWhileExit_of_bodyOracle
     Triple
       (fun cfg => ExecEntry g N A SL φf φc st d env (.whileStmt c b) sp r aInterp aStmt aEnv aRet m0 cfg
         ∧ cfg.σ.sailOutput = out0)
-      (ExecExit g N A SL φf φc st' status sp r aRet m0) :=
+      (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size st' status sp r aRet m0) :=
   execWhileExit g N A SL d env c b sp r aInterp aStmt aEnv aRet
     (fun φf φc st stMid stFin bs ls m0 out0 =>
       execWhileStepOf g N A SL φf φc st stMid stFin d env c b sp r aInterp aStmt aEnv aRet m0 out0

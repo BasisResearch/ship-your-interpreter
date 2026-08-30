@@ -172,6 +172,7 @@ def EvalIntSimGoal : Prop :=
     EvalE st d a (.int n) st (.int n) →
     Triple
       (EvalEntry g N A SL φf φc st d a (.int n) sp r sret aEnv aExpr m0)
-      (EvalExit g N A SL φf φc st (.int n) sp r sret m0)
+      (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st (.int n) sp r sret m0)
 
 end Vsa.Sim

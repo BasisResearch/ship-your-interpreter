@@ -707,6 +707,7 @@ theorem eqBlockC_bridge
     (op : EqNeOp)
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' st'' : Vsa.While.St)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64)
     (vl vr : Value) (resVal : Value) (link jalPC : BitVec 64) (jImm : BitVec 21)
@@ -714,7 +715,7 @@ theorem eqBlockC_bridge
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
     (hOut0 : c2.σ.sailOutput = out0)
-    (hTS : TwoSubReturn gpre N A SL φf φc st' st'' vl vr
+    (hTS : TwoSubReturn gpre N A SL φf φc nf nc st' st'' vl vr
       sp r sret v8 v9 v18 m0 c2)
     (blockCsel : ∀ (φfa φca φfma φcma φf'a φc'a : Addr → Nat)
       (mEnt : Mem) (cR : Config),
@@ -739,7 +740,7 @@ theorem eqBlockC_bridge
   obtain ⟨Wl, hDispatch, hTail⟩ := hResid
   obtain ⟨cD, lds, hStepsD, hDispatchPost⟩ :=
     evalEqNeChain_dispatch_of_twoSubReturn op gpre
-      N A SL φf φc st' st'' vl vr sp r sret aExpr v8 v9 v18 Wl m0 c2 hTS hDispatch
+      N A SL φf φc nf nc st' st'' vl vr sp r sret aExpr v8 v9 v18 Wl m0 c2 hTS hDispatch
   obtain ⟨mA, φfm, φcm, φf', φc', hpfm, hpcm, hpf', hpc', hFront, hBox⟩ :=
     hTail cD lds hDispatchPost
   -- front: dispatch-run c2 → cD, then blockC_eqne_front → VeReturn at cR
@@ -773,6 +774,7 @@ theorem evalEqSimD
     (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64)
     (out0 : Array String) (m0 : Mem)
     (hIHl : EvalIH st d env el st' vl) (hIHr : EvalIH st' d env er st'' vr)
+    (_hEvalE : EvalE st d env (.binary .eq el er) st'' (.bool (vl.equal vr)))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
     (hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -781,7 +783,8 @@ theorem evalEqSimD
         ¬ ((sp.toNat - 944) ≤ k ∧ k < (sp.toNat - 944) + 24) → mm[k]? = mm'[k]?) →
       ValueRepr mm' N φ (sp.toNat - 968) vl)
     (hResid : ∀ c2 : Vsa.Machine.Config,
-      TwoSubReturn gpre N A SL φf φc st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
+      TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+        st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
       EqResid .eq gpre g N A SL φf φc st' st'' sp r sret aExpr v8 v9 v18 v19 w19 vl vr
         (0x80003720#64) (0x8000371c#64) (0x1ff140#21) c2.σ.sailOutput m0 c2) :
     Triple
@@ -802,12 +805,13 @@ theorem evalEqSimD
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
         MemExtends m0 ment)
-      (EvalExitD g N A SL φf φc st'' (.bool (vl.equal vr)) sp r sret m0) :=
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st'' (.bool (vl.equal vr)) sp r sret m0) :=
   evalEqSim gouter gpre g N A SL φf φc st st' st'' d env el er vl vr
     sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0
-    hIHl hIHr hSizeF hSizeC hVlSurv
+    hIHl hIHr _hEvalE hSizeF hSizeC hVlSurv
     (fun c2 hTS _hOut2 =>
-      eqBlockC_bridge .eq gpre g N A SL φf φc st' st'' sp r sret aExpr v8 v9 v18 v19 w19 vl vr
+      eqBlockC_bridge .eq gpre g N A SL φf φc st.store.frames.size st.store.closures.size st' st'' sp r sret aExpr v8 v9 v18 v19 w19 vl vr
         (.bool (vl.equal vr)) (0x80003720#64) (0x8000371c#64) (0x1ff140#21)
         c2.σ.sailOutput m0 c2 hSizeF hSizeC rfl hTS
         (fun φfa φca φfma φcma φf'a φc'a mEnt cR hp1 hp2 hp3 hp4 hVe hBox =>
@@ -823,6 +827,7 @@ theorem evalNeSimD
     (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64)
     (out0 : Array String) (m0 : Mem)
     (hIHl : EvalIH st d env el st' vl) (hIHr : EvalIH st' d env er st'' vr)
+    (_hEvalE : EvalE st d env (.binary .ne el er) st'' (.bool (!(vl.equal vr))))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
     (hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -831,7 +836,8 @@ theorem evalNeSimD
         ¬ ((sp.toNat - 944) ≤ k ∧ k < (sp.toNat - 944) + 24) → mm[k]? = mm'[k]?) →
       ValueRepr mm' N φ (sp.toNat - 968) vl)
     (hResid : ∀ c2 : Vsa.Machine.Config,
-      TwoSubReturn gpre N A SL φf φc st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
+      TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+        st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
       EqResid .ne gpre g N A SL φf φc st' st'' sp r sret aExpr v8 v9 v18 v19 w19 vl vr
         (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21) c2.σ.sailOutput m0 c2) :
     Triple
@@ -852,12 +858,13 @@ theorem evalNeSimD
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
         MemExtends m0 ment)
-      (EvalExitD g N A SL φf φc st'' (.bool (!(vl.equal vr))) sp r sret m0) :=
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st'' (.bool (!(vl.equal vr))) sp r sret m0) :=
   evalNeSim gouter gpre g N A SL φf φc st st' st'' d env el er vl vr
     sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0
-    hIHl hIHr hSizeF hSizeC hVlSurv
+    hIHl hIHr _hEvalE hSizeF hSizeC hVlSurv
     (fun c2 hTS _hOut2 =>
-      eqBlockC_bridge .ne gpre g N A SL φf φc st' st'' sp r sret aExpr v8 v9 v18 v19 w19 vl vr
+      eqBlockC_bridge .ne gpre g N A SL φf φc st.store.frames.size st.store.closures.size st' st'' sp r sret aExpr v8 v9 v18 v19 w19 vl vr
         (.bool (!(vl.equal vr))) (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21)
         c2.σ.sailOutput m0 c2 hSizeF hSizeC rfl hTS
         (fun φfa φca φfma φcma φf'a φc'a mEnt cR hp1 hp2 hp3 hp4 hVe hBox =>

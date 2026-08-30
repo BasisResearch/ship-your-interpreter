@@ -62,7 +62,8 @@ theorem execBlockHnil
     (st : Vsa.While.St) (d : Nat) (env : Addr) (sp r : BitVec 64) (p : Nat) (m0 : Mem) :
     Triple
       (ExecSeqEntry g N A SL φf φc st d env [] sp r p m0)
-      (ExecSeqExit g N A SL φf φc st .normal sp r p m0) :=
+      (ExecSeqExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st .normal sp r p m0) :=
   execSeqNil g N A SL φf φc st d env sp r p m0 (ExecSeq.nil st d env)
 
 /-! ## `ExecStepGeom` — the per-iteration loop-head machine geometry residual
@@ -240,7 +241,8 @@ theorem execBlockStep
             PhiExtends φc φc' st'.store.closures.size ∧
             ExecSeqEntry g N A SL φf' φc' st' d env ss sp r 0x800041a4 c'.σ.mem c')
         ∨ (status ≠ .normal ∧
-          ExecSeqExit g N A SL φf φc st' status sp r 0x8000409c m0 c')))
+          ExecSeqExit g N A SL φf φc st.store.frames.size st.store.closures.size
+            st' status sp r 0x8000409c m0 c')))
     -- the frame-alloc φ-upgrade (st'-sized extension → stFin-sized extension,
     -- preserving the tail's `ExecSeqEntry`):
     (hphi : ∀ (φf' φc' : Addr → Nat) (c' : Config),
@@ -307,7 +309,8 @@ theorem execBlockSim
     (hnil : ∀ (φf₀ φc₀ : Addr → Nat) (stN : Vsa.While.St) (m00 : Mem),
         Triple
           (ExecSeqEntry g N A SL φf₀ φc₀ stN d inner [] sp r execSeqLoopPC m00)
-          (ExecSeqExit g N A SL φf₀ φc₀ stN .normal sp r execSeqContPC m00))
+          (ExecSeqExit g N A SL φf₀ φc₀ stN.store.frames.size stN.store.closures.size
+            stN .normal sp r execSeqContPC m00))
     -- the arm prologue residual (block ExecEntry → ExecSeqEntry at the loop head,
     -- after `execBlockA` + `env_new` + loop setup, in the child scope `inner`):
     (hArm : ∀ (φf' φc' : Addr → Nat),
@@ -317,15 +320,20 @@ theorem execBlockSim
         (fun c => ∃ m0', PhiExtends φf φf' store'.frames.size ∧
           PhiExtends φc φc' store'.closures.size ∧
           ExecSeqEntry g N A SL φf' φc' ⟨store', st.out⟩ d inner ss sp r execSeqLoopPC m0' c))
-    -- the epilogue residual (ExecSeqExit at the continuation → ExecExit):
+    -- the epilogue residual (ExecSeqExit at the continuation → ExecExit). The
+    -- sequence's entry state is the child-scope state `⟨store', st.out⟩`, so the
+    -- exit's φ-agreement sizes are `store'`'s:
     (hEpi : ∀ (φf' φc' : Addr → Nat) (m0' : Mem),
       Triple
-        (ExecSeqExit g N A SL φf' φc' st' status sp r execSeqContPC m0')
-        (ExecExit g N A SL φf φc st' status sp r aRet m0)) :
+        (ExecSeqExit g N A SL φf' φc' store'.frames.size store'.closures.size
+          st' status sp r execSeqContPC m0')
+        (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+          st' status sp r aRet m0)) :
     Triple
       (fun c => ExecEntry g N A SL φf φc st d env (.block ss) sp r aInterp aStmt aEnv aRet m0 c
         ∧ c.σ.sailOutput = out0)
-      (ExecExit g N A SL φf φc st' status sp r aRet m0) := by
+      (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' status sp r aRet m0) := by
   -- pick the child-scope φ-maps existentially via `hArm`; compose arm ≫ loop ≫ epi.
   intro c hpre
   -- The arm prologue lands at the loop head with child-scope maps `φf'`/`φc'`

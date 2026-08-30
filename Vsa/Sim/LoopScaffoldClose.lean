@@ -38,7 +38,7 @@ theorem segIdentity
     (st : Vsa.While.St) (d dLeft aLeft p : Nat) (m0 : Mem) :
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st p m0) := by
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st p m0) := by
   intro c hc
   refine ⟨c, .refl c, ?_⟩
   exact
@@ -57,7 +57,7 @@ theorem segIdentity_of_eq
     (st : Vsa.While.St) (d dLeft aLeft p q : Nat) (m0 : Mem) (hpq : p = q) :
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st q m0) := by
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st q m0) := by
   subst q
   exact segIdentity g N A SL φf φc st d dLeft aLeft p m0
 
@@ -69,7 +69,7 @@ theorem execInitNone_samePC
     (_h : ExecInit st d env none st) :
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st p m0) :=
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st p m0) :=
   segIdentity g N A SL φf φc st d dLeft aLeft p m0
 
 /-- Honest `ForCond.none` row at the loop-head control point. -/
@@ -80,7 +80,7 @@ theorem forCondNone_samePC
     (_h : ForCond st d env none st) :
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st p m0) :=
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st p m0) :=
   segIdentity g N A SL φf φc st d dLeft aLeft p m0
 
 /-- Honest `ExecStep.none` row at the loop-head control point. -/
@@ -91,7 +91,7 @@ theorem execStepNone_samePC
     (_h : ExecStep st d env none st) :
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st p m0) :=
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st p m0) :=
   segIdentity g N A SL φf φc st d dLeft aLeft p m0
 
 #print axioms segIdentity

@@ -173,7 +173,8 @@ theorem armTail_rec_es
         -- survival of `Exec_stmtLoaded` across the sub-call):
         (sp.toNat ≤ 0x80003fe0 ∨ 0x80004308 ≤ SL.lo) ∧
         (A.hi ≤ 0x80003fe0 ∨ 0x80004308 ≤ A.lo))
-      (SubExecReturn garm N A SL φf φc st' vsub sp r aRet subsret retPC
+      (SubExecReturn garm N A SL φf φc st.store.frames.size st.store.closures.size
+        st' vsub sp r aRet subsret retPC
         r v8 v9 v18 v19 mcall mcall) := by
   intro c hpre
   obtain ⟨hG, htick, hpc, ha0, hx11, hx12, hs2, hsp, ⟨wx8, hwx8⟩, ⟨wx9, hwx9⟩, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
@@ -422,7 +423,8 @@ theorem execExprGlue
         ExecArmEntryK g N A SL φf φc st execArmExpr sp r aInterp aStmt aEnv aRet
           v8 v9 v18 v19 out0 m0 ment c)
       (fun c => ∃ subsret v1 v8 v9 v18 v19 mcall,
-        SubExecReturn g N A SL φf φc st' v
+        SubExecReturn g N A SL φf φc st.store.frames.size st.store.closures.size
+          st' v
           sp r aRet subsret (0x80004184#64) v1 v8 v9 v18 v19 m0 mcall c) := by
   intro c hpre
   obtain ⟨ment, v8, v9, v18, v19, hArm⟩ := hpre

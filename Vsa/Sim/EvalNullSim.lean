@@ -345,7 +345,8 @@ def EvalNullSimGoal : Prop :=
     EvalE st d a .null st .null →
     Triple
       (EvalNullEntry g N A SL φf φc st d a sp r sret aEnv aExpr m0)
-      (EvalExit g N A SL φf φc st .null sp r sret m0)
+      (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st .null sp r sret m0)
 
 /-- **The M4 `EvalE.null` gate.** Composes `blockA_k` (prologue + dispatch →
 `ArmEntryK` at the null arm), `blockC_null` (arm + `value_null` → epilogue entry),

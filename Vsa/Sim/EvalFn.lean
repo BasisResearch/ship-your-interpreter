@@ -68,7 +68,8 @@ def FnArmSpec
   st.store.allocClosure ⟨env, name, params, body⟩ = (store', a) →
   Triple
     (EvalEntry g N A SL φf φc st d env (.fn name params body) sp r sret aEnv aExpr m0)
-    (EvalExit g N A SL φf φc ⟨store', st.out⟩ (.closure a) sp r sret m0)
+    (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      ⟨store', st.out⟩ (.closure a) sp r sret m0)
 
 /-- **`evalFnSim`**: the `EvalE.fn` minor premise (closure allocation, near-leaf)
 at the machine level, in the recursor motive shape. From the `EvalEntry` for
@@ -96,7 +97,8 @@ theorem evalFnSim
       sp r sret aEnv aExpr m0) :
     Triple
       (EvalEntry g N A SL φf φc st d env (.fn name params body) sp r sret aEnv aExpr m0)
-      (EvalExit g N A SL φf φc ⟨store', st.out⟩ (.closure a) sp r sret m0) :=
+      (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        ⟨store', st.out⟩ (.closure a) sp r sret m0) :=
   hArm hAlloc
 
 end Vsa.Sim

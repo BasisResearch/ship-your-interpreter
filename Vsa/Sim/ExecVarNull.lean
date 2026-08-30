@@ -97,7 +97,8 @@ def ExecVarNullSimGoal
   Triple
     (fun c => ExecEntry g N A SL φf φc st d env (.varDecl x none)
         sp r aInterp aStmt aEnv aRet m0 c ∧ c.σ.sailOutput = out0)
-    (ExecExit g N A SL φf φc ⟨st.store.define env x .null, st.out⟩ .normal sp r aRet m0)
+    (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      ⟨st.store.define env x .null, st.out⟩ .normal sp r aRet m0)
 
 /-! ## `execVarDeclNullSim` — `ExecS.varNull`: `execBlockA ≫ (value_null body glue) ≫ execBlockD`
 
@@ -129,7 +130,8 @@ theorem execVarDeclNullSim
           ExecArmEntryK g N A SL φf φc st execArmVarDecl sp r aInterp aStmt aEnv aRet
             v8 v9 v18 v19 out0 m0 ment c)
         (fun c => ∃ subsret v1 v8 v9 v18 v19 mcall,
-          SubExecReturn g N A SL φf φc ⟨st.store.define env x .null, st.out⟩ .null
+          SubExecReturn g N A SL φf φc st.store.frames.size st.store.closures.size
+            ⟨st.store.define env x .null, st.out⟩ .null
             sp r aRet subsret (0x80004118#64) v1 v8 v9 v18 v19 m0 mcall c)) :
     ExecVarNullSimGoal g N A SL φf φc st d env x
       sp r aInterp aStmt aEnv aRet m0 out0 := by
@@ -219,7 +221,8 @@ theorem execVarDeclNullSim
   have hraAl := he.ra_align
   -- ===== execBlockD (at the EXTENDED maps, baseline `m0 := cG.σ.mem`) → ExecExit =====
   obtain ⟨cD, hstepsD, hExitE⟩ :=
-    execBlockD g N A SL φfE φcE ⟨st.store.define env x .null, st.out⟩ .normal sp r aRet
+    execBlockD g N A SL φfE φcE st.store.frames.size st.store.closures.size
+      ⟨st.store.define env x .null, st.out⟩ .normal sp r aRet
       v8 v9 v18 v19 σ2.sailOutput cG.σ.mem
       (by intro w hw; cases hw)
       ⟨σ2, i2, cG.steps + 1 + 1⟩

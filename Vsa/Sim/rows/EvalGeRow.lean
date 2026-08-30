@@ -73,12 +73,13 @@ theorem binOpSem_ge_int (s : Store) (a b : Int) :
 theorem blockC_ge
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' st'' : Vsa.While.St) (a b : Int)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 Wl : BitVec 64) (out0 : Array String)
     (m0 : Mem) :
     Triple
       (fun c =>
-        TwoSubReturn gpre N A SL φf φc st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c ∧
+        TwoSubReturn gpre N A SL φf φc nf nc st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c ∧
         gpre Register.x8 = some aExpr ∧
         read32 c.σ.mem (aExpr.toNat + 8) = some 23 ∧      -- op token = binOpTok .ge
         GeSlotPinned c.σ.mem ∧
@@ -113,10 +114,10 @@ theorem blockC_ge
           (Register.x18 == R) = false → (Register.x2 == R) = false →
           gpre R = g R))
       (fun c => ∃ (mpre : Mem) (φfm φcm φfe φce : Addr → Nat),
-        PhiExtends φf φfm st'.store.frames.size ∧
-        PhiExtends φc φcm st'.store.closures.size ∧
-        PhiExtends φfm φfe st''.store.frames.size ∧
-        PhiExtends φcm φce st''.store.closures.size ∧
+        PhiExtends φf φfm nf ∧
+        PhiExtends φc φcm nc ∧
+        PhiExtends φfm φfe st'.store.frames.size ∧
+        PhiExtends φcm φce st'.store.closures.size ∧
         PreEpilogueVD g N A SL φfe φce st'' (.bool (a ≥ b)) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hpre
   obtain ⟨hTS, hgx8, hopTok, hSlot, hFullPop, hX19, hWlBuf, hKindResp,
@@ -791,7 +792,8 @@ def EvalGeSimGoal : Prop :=
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
         MemExtends m0 ment ∧
         (∀ c' : Vsa.Machine.Config,
-          TwoSubReturn gpre N A SL φf φc st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
+          TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+            st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
           GeResid gpre N A SL sp r sret aExpr Wl c') ∧
         g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
         g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧ g Register.x19 = some v19 ∧
@@ -799,7 +801,8 @@ def EvalGeSimGoal : Prop :=
           (Register.x8 == R) = false → (Register.x9 == R) = false →
           (Register.x18 == R) = false → (Register.x2 == R) = false →
           gpre R = g R))
-      (EvalExitD g N A SL φf φc st'' (.bool (a ≥ b)) sp r sret m0)
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st'' (.bool (a ≥ b)) sp r sret m0)
 
 theorem evalGeSim : EvalGeSimGoal := by
   intro gouter gpre g N A SL φf φc st st' st'' d env el er a b
@@ -831,7 +834,8 @@ theorem evalGeSim : EvalGeSimGoal := by
   have hR : GeResid gpre N A SL sp r sret aExpr Wl c2 := hResid c2 hTS
   have hOutC2 : String.join c2.σ.sailOutput.toList = st''.out := hTS.2.2.2.2.2.2.2.1
   obtain ⟨c3, hs3, mpre, φfm, φcm, φfe, φce, hpfm, hpcm, hpfe, hpce, hPreD⟩ :=
-    blockC_ge gpre g N A SL φf φc st' st'' a b sp r sret aExpr v8 v9 v18 v19 Wl c2.σ.sailOutput m0
+    blockC_ge gpre g N A SL φf φc st.store.frames.size st.store.closures.size
+      st' st'' a b sp r sret aExpr v8 v9 v18 v19 Wl c2.σ.sailOutput m0
       c2 ⟨hTS, hR.gx8, hR.opTok, hR.slot, hR.fullpop, hR.x19, hR.wlbuf, hR.kindresp,
         hR.exprAl, hR.exprLo, hR.exprHi, hR.exprWin, hR.exprSL, hOutC2, rfl,
         hR.sretAl, hR.sretLo, hR.sretHi, hR.sretWin, hR.sretVi, hR.sretStk, hR.sretEvalCode, hR.raAl,
@@ -842,13 +846,16 @@ theorem evalGeSim : EvalGeSimGoal := by
     blockD_v_rec g N A SL φfe φce st'' (.bool (a ≥ b)) sp r sret v8 v9 v18 c2.σ.sailOutput m0
       c3 ⟨mpre, hPreD⟩
   obtain ⟨hExitE, hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
-  have hpfm' : PhiExtends φf φfm st''.store.frames.size := hSizeF ▸ hpfm
-  have hpcm' : PhiExtends φc φcm st''.store.closures.size := hSizeC ▸ hpcm
-  have hpfF : PhiExtends φf φfe st''.store.frames.size := hpfm'.trans hpfe
-  have hpcF : PhiExtends φc φce st''.store.closures.size := hpcm'.trans hpce
-  have hExit : EvalExit g N A SL φf φc st'' (.bool (a ≥ b)) sp r sret m0 c4 :=
-    evalExit_of_phiExtends hpfF hpcF hExitE
+  have hmono := evalE_store_mono _hEvalE
+  have hleF' : st.store.frames.size ≤ st'.store.frames.size := hSizeF ▸ hmono.1
+  have hleC' : st.store.closures.size ≤ st'.store.closures.size := hSizeC ▸ hmono.2
+  have hpfF : PhiExtends φf φfe st.store.frames.size := hpfm.trans (PhiExtends.mono hleF' hpfe)
+  have hpcF : PhiExtends φc φce st.store.closures.size := hpcm.trans (PhiExtends.mono hleC' hpce)
+  have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      st'' (.bool (a ≥ b)) sp r sret m0 c4 :=
+    evalExit_of_phiExtends hpfF hpcF hExitE hmono.1 hmono.2
   exact ⟨c4, ((hs2.trans hs3).trans hs4), hExit, hMemExt,
-    φf', φc', hpfF.trans hpf', hpcF.trans hpc', hSurv⟩
+    φf', φc', hpfF.trans (PhiExtends.mono hmono.1 hpf'),
+    hpcF.trans (PhiExtends.mono hmono.2 hpc'), hSurv⟩
 
 end Vsa.Sim

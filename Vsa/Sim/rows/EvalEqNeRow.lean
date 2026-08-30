@@ -374,7 +374,9 @@ theorem blockC_eqne
   let cvb : Config := ⟨τ3, j3, cR.steps + 1 + 1 + 1⟩
   have hmemcvb : cvb.σ.mem = cR.σ.mem := hmemτ3e
   obtain ⟨mpre, φfm2, φcm2, φfe, φce, cfin, hStepsFin, hp1, hp2, hp3, hp4, hPre⟩ :=
-    boolBoxEpilogue g N A SL φf φc φfm φcm φf' φc' st' st''
+    boolBoxEpilogue g N A SL φf φc φfm φcm φf' φc'
+      st'.store.frames.size st'.store.closures.size
+      st''.store.frames.size st''.store.closures.size st' st''
       sp r sret v8 v9 v18 v19 w19 (bwOf (cond (Value.equal vl vr) (1#64) (0#64))) bres out0 m0
       cvb ldPC ldPC jPC jImm
       (fun σ i u pc vminstret v2 b0 b1 b2 b3 b4 b5 b6 b7 => ldS3 σ i u pc vminstret v2 b0 b1 b2 b3 b4 b5 b6 b7)
@@ -577,6 +579,7 @@ theorem evalEqNeSim
     (out0 : Array String) (m0 : Mem)
     (hIHl : EvalIH st d env el st' vl)
     (hIHr : EvalIH st' d env er st'' vr)
+    (_hEvalE : EvalE st d env (.binary op el er) st'' resVal)
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
     (hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -587,7 +590,8 @@ theorem evalEqNeSim
     -- the op-specific `blockC` bridge (dispatch + value_equal + box), threaded as
     -- the caller residual (operand-copy read-back + value_equal output invariance).
     (hblockC : ∀ c2 : Vsa.Machine.Config,
-      TwoSubReturn gpre N A SL φf φc st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
+      TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+        st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
       String.join c2.σ.sailOutput.toList = st''.out →
       ∃ (c3 : Vsa.Machine.Config) (mpre : Mem) (φfe φce : Addr → Nat),
         Steps c2 c3 ∧
@@ -612,7 +616,8 @@ theorem evalEqNeSim
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
         MemExtends m0 ment)
-      (EvalExitD g N A SL φf φc st'' resVal sp r sret m0) := by
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st'' resVal sp r sret m0) := by
   intro c hpre
   obtain ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
     hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0⟩ := hpre
@@ -630,10 +635,16 @@ theorem evalEqNeSim
     blockD_v_rec g N A SL φfe φce st'' resVal sp r sret v8 v9 v18 c2.σ.sailOutput m0
       c3 ⟨mpre, hPre⟩
   obtain ⟨hExitE, hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
-  have hExit : EvalExit g N A SL φf φc st'' resVal sp r sret m0 c4 :=
-    evalExit_of_phiExtends hpfe hpce hExitE
+  -- store counts only grow (`st.store ≤ st''.store` across both sub-calls).
+  have hmono := evalE_store_mono _hEvalE
+  have hpfF : PhiExtends φf φfe st.store.frames.size := PhiExtends.mono hmono.1 hpfe
+  have hpcF : PhiExtends φc φce st.store.closures.size := PhiExtends.mono hmono.2 hpce
+  have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      st'' resVal sp r sret m0 c4 :=
+    evalExit_of_phiExtends hpfF hpcF hExitE hmono.1 hmono.2
   exact ⟨c4, ((hs2.trans hs3).trans hs4), hExit, hMemExt,
-    φf', φc', hpfe.trans hpf', hpce.trans hpc', hSurv⟩
+    φf', φc', hpfF.trans (PhiExtends.mono hmono.1 hpf'),
+    hpcF.trans (PhiExtends.mono hmono.2 hpc'), hSurv⟩
 
 /-- **`evalEqSim`** — the `EvalE.binary .eq` recursive case, result `.bool (vl.equal vr)`. -/
 theorem evalEqSim
@@ -643,6 +654,7 @@ theorem evalEqSim
     (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 : BitVec 64)
     (out0 : Array String) (m0 : Mem)
     (hIHl : EvalIH st d env el st' vl) (hIHr : EvalIH st' d env er st'' vr)
+    (_hEvalE : EvalE st d env (.binary .eq el er) st'' (.bool (vl.equal vr)))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
     (hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -651,7 +663,8 @@ theorem evalEqSim
         ¬ ((sp.toNat - 944) ≤ k ∧ k < (sp.toNat - 944) + 24) → mm[k]? = mm'[k]?) →
       ValueRepr mm' N φ (sp.toNat - 968) vl)
     (hblockC : ∀ c2 : Vsa.Machine.Config,
-      TwoSubReturn gpre N A SL φf φc st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
+      TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+        st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
       String.join c2.σ.sailOutput.toList = st''.out →
       ∃ (c3 : Vsa.Machine.Config) (mpre : Mem) (φfe φce : Addr → Nat),
         Steps c2 c3 ∧
@@ -676,10 +689,11 @@ theorem evalEqSim
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
         MemExtends m0 ment)
-      (EvalExitD g N A SL φf φc st'' (.bool (vl.equal vr)) sp r sret m0) :=
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st'' (.bool (vl.equal vr)) sp r sret m0) :=
   evalEqNeSim gouter gpre g N A SL φf φc st st' st'' d env el er .eq vl vr (.bool (vl.equal vr))
     sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0
-    hIHl hIHr hSizeF hSizeC hVlSurv hblockC
+    hIHl hIHr _hEvalE hSizeF hSizeC hVlSurv hblockC
 
 /-- **`evalNeSim`** — the `EvalE.binary .ne` recursive case, result `.bool (!(vl.equal vr))`. -/
 theorem evalNeSim
@@ -689,6 +703,7 @@ theorem evalNeSim
     (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 : BitVec 64)
     (out0 : Array String) (m0 : Mem)
     (hIHl : EvalIH st d env el st' vl) (hIHr : EvalIH st' d env er st'' vr)
+    (_hEvalE : EvalE st d env (.binary .ne el er) st'' (.bool (!(vl.equal vr))))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
     (hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -697,7 +712,8 @@ theorem evalNeSim
         ¬ ((sp.toNat - 944) ≤ k ∧ k < (sp.toNat - 944) + 24) → mm[k]? = mm'[k]?) →
       ValueRepr mm' N φ (sp.toNat - 968) vl)
     (hblockC : ∀ c2 : Vsa.Machine.Config,
-      TwoSubReturn gpre N A SL φf φc st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
+      TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+        st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
       String.join c2.σ.sailOutput.toList = st''.out →
       ∃ (c3 : Vsa.Machine.Config) (mpre : Mem) (φfe φce : Addr → Nat),
         Steps c2 c3 ∧
@@ -722,10 +738,11 @@ theorem evalNeSim
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
         MemExtends m0 ment)
-      (EvalExitD g N A SL φf φc st'' (.bool (!(vl.equal vr))) sp r sret m0) :=
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st'' (.bool (!(vl.equal vr))) sp r sret m0) :=
   evalEqNeSim gouter gpre g N A SL φf φc st st' st'' d env el er .ne vl vr (.bool (!(vl.equal vr)))
     sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0
-    hIHl hIHr hSizeF hSizeC hVlSurv hblockC
+    hIHl hIHr _hEvalE hSizeF hSizeC hVlSurv hblockC
 
 #print axioms evalEqSim
 #print axioms evalNeSim

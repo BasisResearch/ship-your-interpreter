@@ -1041,7 +1041,7 @@ theorem blockC_var
     (hsret_stack : sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat) :
     Triple
       (fun c => ∃ mpc, VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpc c)
-      (EvalExit g N A SL φf φc st v sp r sret m0) := by
+      (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st v sp r sret m0) := by
   intro c hc
   obtain ⟨mpc, hG, htick, hpc, ⟨a0v, ha0v, ha0vnz⟩, hs1, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmem, hcode,
     ⟨d0, d1, d2, hsrc0, hsrc1, hsrc2, hcopy⟩, hstore, hframe,
@@ -1563,7 +1563,7 @@ def EvalVarSimGoal : Prop :=
     EvalE st d a (.var x) st v →
     Triple
       (EvalVarEntry g N A SL φf φc st d a x v sp r sret aEnv aExpr m0)
-      (EvalExit g N A SL φf φc st v sp r sret m0)
+      (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st v sp r sret m0)
 
 /-- **The M4 `EvalE.var` gate.**  Composes `blockA_k` (k=4, prologue + dispatch →
 `ArmEntryK` at the var arm `0x80003434`), the honest `env_get`-found contract

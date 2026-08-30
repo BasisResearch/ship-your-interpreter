@@ -67,15 +67,16 @@ def ExecExitD
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' : Vsa.While.St) (status : Status)
     (sp r aRet : BitVec 64)
     (m0 : Mem)
     (c : Config) : Prop :=
-  ExecExit g N A SL φf φc st' status sp r aRet m0 c ∧
+  ExecExit g N A SL φf φc nf nc st' status sp r aRet m0 c ∧
   MemExtends m0 c.σ.mem ∧
   ∃ φf' φc' : Addr → Nat,
-    PhiExtends φf φf' st'.store.frames.size ∧
-    PhiExtends φc φc' st'.store.closures.size ∧
+    PhiExtends φf φf' nf ∧
+    PhiExtends φc φc' nc ∧
     ∀ m' : Mem,
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
       StoreRepr m' N A φf' φc' st'.store
@@ -94,7 +95,8 @@ def ExecIH (st : Vsa.While.St) (d : Nat) (env : Addr) (s : Stmt)
     (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
     Triple
       (ExecEntry g N A SL φf φc st d env s sp r aInterp aStmt aEnv aRet m0)
-      (ExecExitD g N A SL φf φc st' status sp r aRet m0)
+      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' status sp r aRet m0)
 
 /-! ## `SubStmtReturn` — the post-`jal exec_stmt` machine state
 
@@ -121,6 +123,7 @@ spec state `st'` and produced abrupt-completion `status`:
 def SubStmtReturn
     (garm : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' : Vsa.While.St) (status : Status)
     (sp r aRet aRetSub retPC : BitVec 64) (v8 v9 v18 v19 : BitVec 64)
     (m0 mcall : Mem)
@@ -141,12 +144,12 @@ def SubStmtReturn
   garm Register.x8 = some v8 ∧ garm Register.x9 = some v9 ∧
   garm Register.x18 = some v18 ∧ garm Register.x19 = some v19 ∧ garm Register.x2 = some sp ∧
   (∃ φf' φc' : Addr → Nat,
-    PhiExtends φf φf' st'.store.frames.size ∧
-    PhiExtends φc φc' st'.store.closures.size ∧
+    PhiExtends φf φf' nf ∧
+    PhiExtends φc φc' nc ∧
     StoreRepr c.σ.mem N A φf' φc' st'.store) ∧
   -- on the `ret v` sub-status the sub-retslot holds `ValueRepr v`.
   (∀ v : Value, status = .ret v →
-    ∃ φc' : Addr → Nat, PhiExtends φc φc' st'.store.closures.size ∧
+    ∃ φc' : Addr → Nat, PhiExtends φc φc' nc ∧
       ValueRepr c.σ.mem N φc' aRetSub.toNat v) ∧
   Exec_stmtLoaded c.σ.mem ∧
   read64 c.σ.mem (sp.toNat - 8) = some r.toNat ∧
@@ -262,7 +265,8 @@ theorem armExec_rec
         -- survival of `Exec_stmtLoaded` across the sub-call and the entry `code`):
         (sp.toNat ≤ 0x80003fe0 ∨ 0x80004308 ≤ SL.lo) ∧
         (A.hi ≤ 0x80003fe0 ∨ 0x80004308 ≤ A.lo))
-      (SubStmtReturn garm N A SL φf φc st' status sp r aRet aRetSub retPC
+      (SubStmtReturn garm N A SL φf φc st.store.frames.size st.store.closures.size
+        st' status sp r aRet aRetSub retPC
         v8 v9 v18 v19 mcall mcall) := by
   intro c hpre
   obtain ⟨hG, htick, hpc, ha0, hx11, hx12, hx13, hs2, hsp,

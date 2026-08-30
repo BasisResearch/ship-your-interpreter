@@ -77,7 +77,8 @@ def ExecRetNullSimGoal
   Triple
     (fun c => ExecEntry g N A SL φf φc st d env (.ret none) sp r aInterp aStmt aEnv aRet m0 c
       ∧ c.σ.sailOutput = out0)
-    (ExecExit g N A SL φf φc st (.ret .null) sp r aRet m0)
+    (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      st (.ret .null) sp r aRet m0)
 
 /-! ## `execRetNullSim` — `ExecS.retNull`: `execBlockA ≫ (value_null bridge) ≫ copy ≫ epilogue`
 
@@ -116,7 +117,7 @@ theorem execRetNullSim
           ExecArmEntryK g N A SL φf φc st execArmRet sp r aInterp aStmt aEnv aRet
             v8 v9 v18 v19 out0 m0 ment c)
         (fun c => ∃ subsret v1 v8 v9 v18 v19 mcall,
-          SubExecReturnR g N A SL φf φc st .null
+          SubExecReturnR g N A SL φf φc st.store.frames.size st.store.closures.size st .null
             sp r aRet subsret (0x80004138#64) v1 v8 v9 v18 v19 m0 mcall c)) :
     ExecRetNullSimGoal g N A SL φf φc st d env
       sp r aInterp aStmt aEnv aRet m0 out0 := by

@@ -74,10 +74,11 @@ theorem evalEqNeChain_dispatch_of_twoSubReturn
     (op : EqNeOp)
     (gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' st'' : Vsa.While.St) (vl vr : Value)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 Wl : BitVec 64)
     (m0 : Mem) (c : Config)
-    (hTS : TwoSubReturn gpre N A SL φf φc st' st'' vl vr
+    (hTS : TwoSubReturn gpre N A SL φf φc nf nc st' st'' vl vr
       sp r sret v8 v9 v18 m0 c)
     (hIn : EqNeDispatchInput op gpre SL sp aExpr Wl vl c) :
     ∃ (cD : Config) (lds : List (List (BitVec 8))),

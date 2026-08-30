@@ -91,7 +91,8 @@ def ExecIfTrueSimGoal
   Triple
     (fun cfg => ExecEntry g N A SL φf φc st d env (.ifStmt c t e) sp r aInterp aStmt aEnv aRet m0 cfg
       ∧ cfg.σ.sailOutput = out0)
-    (ExecExit g N A SL φf φc st'' status sp r aRet m0)
+    (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      st'' status sp r aRet m0)
 
 /-! ## `execIfTrueSim` — `ExecS.ifTrue`: `execBlockA ≫ (cond-eval + truthy + re-dispatch) ≫ ExecDispatchIH`
 
@@ -125,8 +126,10 @@ theorem execIfTrueSim
     (hmaps : ∀ (φfE φcE : Addr → Nat) (cD : Config),
       PhiExtends φf φfE st'.store.frames.size →
       PhiExtends φc φcE st'.store.closures.size →
-      ExecExit g N A SL φfE φcE st'' status sp r aRet m0 cD →
-      ExecExit g N A SL φf φc st'' status sp r aRet m0 cD)
+      ExecExit g N A SL φfE φcE st'.store.frames.size st'.store.closures.size
+        st'' status sp r aRet m0 cD →
+      ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st'' status sp r aRet m0 cD)
     -- the arm-body glue: from the arm-entry state at `0x800041e8`, the cond setup +
     -- `jal eval_expr` + the sub-call (the `EvalIH`) + the reload/copy + `value_truthy`
     -- (result nonzero, `v.truthy = true`) + the TRUTHY branch (`beqz a0` NOT taken) +
@@ -184,7 +187,8 @@ def ExecIfFalseSimGoal
   Triple
     (fun cfg => ExecEntry g N A SL φf φc st d env (.ifStmt c t (some e)) sp r aInterp aStmt aEnv aRet m0 cfg
       ∧ cfg.σ.sailOutput = out0)
-    (ExecExit g N A SL φf φc st'' status sp r aRet m0)
+    (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      st'' status sp r aRet m0)
 
 /-! ## `execIfFalseSim` — `ExecS.ifFalse`: symmetric to `execIfTrueSim`
 
@@ -212,8 +216,10 @@ theorem execIfFalseSim
     (hmaps : ∀ (φfE φcE : Addr → Nat) (cD : Config),
       PhiExtends φf φfE st'.store.frames.size →
       PhiExtends φc φcE st'.store.closures.size →
-      ExecExit g N A SL φfE φcE st'' status sp r aRet m0 cD →
-      ExecExit g N A SL φf φc st'' status sp r aRet m0 cD)
+      ExecExit g N A SL φfE φcE st'.store.frames.size st'.store.closures.size
+        st'' status sp r aRet m0 cD →
+      ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st'' status sp r aRet m0 cD)
     -- the arm-body glue, symmetric to `execIfTrueSim`: cond eval + `value_truthy`
     -- (result zero, `v.truthy = false`) + the FALSY branch (`beqz a0` taken to
     -- `0x800042cc`) + `ld s0,24(s0)` (`s0 := stmt->else` = `aElse`) + `bnez s0`

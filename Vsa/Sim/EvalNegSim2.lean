@@ -117,12 +117,13 @@ theorem loaded_value_int_agreeP (m m' : Mem)
 theorem blockC_neg
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' : Vsa.While.St) (n : Int)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
     (esub : Expr) (m0 : Mem) :
     Triple
       (fun c => ∃ mcall,
-        SubEvalReturn gpre N A SL φf φc st' (.int n) sp r sret
+        SubEvalReturn gpre N A SL φf φc nf nc st' (.int n) sp r sret
           ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) (0x800035ec#64)
           v8 v9 v18 mcall c ∧
         gpre Register.x8 = some aExpr ∧
@@ -167,8 +168,8 @@ theorem blockC_neg
           (Register.x18 == R) = false → (Register.x2 == R) = false →
           gpre R = g R))
       (fun c => ∃ (mpre : Mem) (φfe φce : Addr → Nat),
-        PhiExtends φf φfe st'.store.frames.size ∧
-        PhiExtends φc φce st'.store.closures.size ∧
+        PhiExtends φf φfe nf ∧
+        PhiExtends φc φce nc ∧
         PreEpilogueVD g N A SL φfe φce st' (.int (wrap64 (-n))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hpre
   obtain ⟨mcall, hSub, hgx8, hexpr, hStackPop, hexprAl, hexprLo, hexprHi, hexprWin,

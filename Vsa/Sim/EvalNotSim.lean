@@ -189,12 +189,13 @@ structure NotExtras
 theorem blockC_not
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' : Vsa.While.St) (vsub : Value)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
     (esub : Expr) (m0 : Mem) :
     Triple
       (fun c => ∃ mcall,
-        SubEvalReturn gpre N A SL φf φc st' vsub sp r sret
+        SubEvalReturn gpre N A SL φf φc nf nc st' vsub sp r sret
           ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) (0x800035ec#64)
           v8 v9 v18 mcall c ∧
         gpre Register.x8 = some aExpr ∧
@@ -238,8 +239,8 @@ theorem blockC_not
           (Register.x18 == R) = false → (Register.x2 == R) = false →
           gpre R = g R))
       (fun c => ∃ (mpre : Mem) (φfe φce : Addr → Nat),
-        PhiExtends φf φfe st'.store.frames.size ∧
-        PhiExtends φc φce st'.store.closures.size ∧
+        PhiExtends φf φfe nf ∧
+        PhiExtends φc φce nc ∧
         PreEpilogueVD g N A SL φfe φce st' (.bool (!vsub.truthy)) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hpre
   obtain ⟨mcall, hSub, hgx8, hexpr, hStackPop, hexprAl, hexprLo, hexprHi, hexprWin,
@@ -1079,7 +1080,8 @@ def EvalNotSimGoal : Prop :=
         (∀ mcall : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
           ∀ a : Nat, ∃ b, mcall[a]? = some b))
-      (EvalExitD g N A SL φf φc st' (.bool (!vsub.truthy)) sp r sret m0)
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' (.bool (!vsub.truthy)) sp r sret m0)
 
 /-- `read32 m aExpr = some 8` from `ExprRepr m aExpr (.unary .not esub)`. -/
 theorem exprRepr_not_kind {m : Mem} {a : Nat} {esub : Expr}
@@ -1196,7 +1198,8 @@ theorem evalNotSim : EvalNotSimGoal := by
       (fun p s hvr' hp k hk => hx.pay_disj c2.σ.mem φc' p s hvr' hp k hk)⟩
   -- === block C: post-call not tail → PreEpilogueVD .bool(!truthy) @0x800033ec ===
   obtain ⟨c3, hs3, mpreC, φfe, φce, hpfe, hpce, hPreD⟩ :=
-    blockC_not (fun R => c1.σ.regs.get? R) g N A SL φf φc st' vsub sp r sret aExpr v8 v9 v18 c2.σ.sailOutput esub m0
+    blockC_not (fun R => c1.σ.regs.get? R) g N A SL φf φc st.store.frames.size
+      st.store.closures.size st' vsub sp r sret aExpr v8 v9 v18 c2.σ.sailOutput esub m0
       c2 ⟨mcall, hSubR, hgpre_x8, hExprMcall, hStackPop,
         hx.expr_align4, hc.expr_ram.1, hc.expr_ram.2, hx.expr_win8,
         hc.expr_stack_disjoint, hx.expr_A, hx.expr_sub,
@@ -1214,9 +1217,12 @@ theorem evalNotSim : EvalNotSimGoal := by
     blockD_v_rec g N A SL φfe φce st' (.bool (!vsub.truthy)) sp r sret v8 v9 v18 c2.σ.sailOutput m0
       c3 ⟨mpreC, hPreD⟩
   obtain ⟨hExitE, hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
-  have hExit : EvalExit g N A SL φf φc st' (.bool (!vsub.truthy)) sp r sret m0 c4 :=
-    evalExit_of_phiExtends hpfe hpce hExitE
+  have hStoreLe := evalE_store_mono _hEvalE
+  have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      st' (.bool (!vsub.truthy)) sp r sret m0 c4 :=
+    evalExit_of_phiExtends hpfe hpce hExitE hStoreLe.1 hStoreLe.2
   exact ⟨c4, ((hs1.trans hs2).trans hs3).trans hs4, hExit, hMemExt,
-    φf', φc', hpfe.trans hpf', hpce.trans hpc', hSurv⟩
+    φf', φc', hpfe.trans (PhiExtends.mono hStoreLe.1 hpf'),
+    hpce.trans (PhiExtends.mono hStoreLe.2 hpc'), hSurv⟩
 
 end Vsa.Sim

@@ -620,7 +620,8 @@ def EvalStrSimGoal : Prop :=
     EvalE st d a (.str s) st (.str s) →
     Triple
       (EvalStrEntry g N A SL φf φc st d a s sp r sret aEnv aExpr m0)
-      (EvalExit g N A SL φf φc st (.str s) sp r sret m0)
+      (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st (.str s) sp r sret m0)
 
 /-- **The M4 `EvalE.str` gate.** Composes `blockA_k` (prologue + dispatch →
 `ArmEntryK` at the str arm), `blockC_str` (arm + `value_str` → epilogue entry),

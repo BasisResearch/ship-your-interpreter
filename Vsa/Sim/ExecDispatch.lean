@@ -891,6 +891,7 @@ def ExecDispatchIH (st : Vsa.While.St) (_d : Nat) (_env : Addr) (s' : Stmt)
     Triple
       (ExecDispatchReady g N A SL φf φc st s' sp r aInterp aStmt' aEnv aRet
         v8 v9 v18 v19 out0 m0 ment)
-      (ExecExitD g N A SL φf φc st' status sp r aRet m0)
+      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' status sp r aRet m0)
 
 end Vsa.Sim

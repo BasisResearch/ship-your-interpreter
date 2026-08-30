@@ -290,6 +290,7 @@ structure ExecExit
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (φf φc : Addr → Nat)          -- the ENTRY maps
+    (nf nc : Nat)                 -- the ENTRY agreement sizes
     (st' : St) (status : Status)
     (sp r aRet : BitVec 64)
     (m0 : Mem)
@@ -311,15 +312,15 @@ structure ExecExit
   minstret : ∃ v, c.σ.regs.get? Register.minstret = some v
   /-- **The store is re-represented** for `st'.store` with extended maps. -/
   store : ∃ (φf' φc' : Addr → Nat),
-    PhiExtends φf φf' st'.store.frames.size ∧
-    PhiExtends φc φc' st'.store.closures.size ∧
+    PhiExtends φf φf' nf ∧
+    PhiExtends φc φc' nc ∧
     StoreRepr c.σ.mem N A φf' φc' st'.store
   /-- Console output correspondence for `st'`. -/
   out : OutRepr c.σ st'
   /-- On the `ret v` arm the `retslot` holds `ValueRepr v` (extended `φc`). Other
   statuses leave `retslot` unconstrained. -/
   retval : ∀ v, status = .ret v →
-    ∃ φc', PhiExtends φc φc' st'.store.closures.size ∧
+    ∃ φc', PhiExtends φc φc' nc ∧
       ValueRepr c.σ.mem N φc' aRet.toNat v
   /-- The blanket ghost frame: every callee-preserved register restored to `g R`. -/
   frame : ∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R

@@ -232,7 +232,8 @@ theorem blockB_unary
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo))
       (fun c => ∃ mcall,
-        SubEvalReturn gpre N A SL φf φc st' vsub sp r sret
+        SubEvalReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+          st' vsub sp r sret
           ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) (0x800035ec#64)
           v8 v9 v18 mcall c ∧
         (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?)) := by

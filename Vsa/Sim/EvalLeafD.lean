@@ -80,7 +80,8 @@ def LeafWiden
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st' : Vsa.While.St) (v : Value) (sp r sret : BitVec 64) (m0 : Mem) : Prop :=
-  ∀ c : Config, EvalExit g N A SL φf φc st' v sp r sret m0 c →
+  ∀ c : Config, EvalExit g N A SL φf φc st'.store.frames.size st'.store.closures.size
+      st' v sp r sret m0 c →
     -- (a) presence monotonicity `MemExtends m0 (exit mem)`
     MemExtends m0 c.σ.mem ∧
     -- (b) the `[SL.lo, SL.hi)`-survival of the exit store
@@ -97,9 +98,11 @@ theorem evalExitD_of_evalExit
     {g : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
     {st' : Vsa.While.St} {v : Value} {sp r sret : BitVec 64} {m0 : Mem} {c : Config}
-    (hExit : EvalExit g N A SL φf φc st' v sp r sret m0 c)
+    (hExit : EvalExit g N A SL φf φc st'.store.frames.size st'.store.closures.size
+      st' v sp r sret m0 c)
     (hW : LeafWiden g N A SL φf φc st' v sp r sret m0) :
-    EvalExitD g N A SL φf φc st' v sp r sret m0 c :=
+    EvalExitD g N A SL φf φc st'.store.frames.size st'.store.closures.size
+      st' v sp r sret m0 c :=
   let ⟨hpres, hsurv⟩ := hW c hExit
   ⟨hExit, hpres, φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, hsurv⟩
 
@@ -120,7 +123,8 @@ theorem evalIntSimD
     (hW : LeafWiden g N A SL φf φc st (.int n) sp r sret m0) :
     Triple
       (EvalEntry g N A SL φf φc st d a (.int n) sp r sret aEnv aExpr m0)
-      (EvalExitD g N A SL φf φc st (.int n) sp r sret m0) := by
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st (.int n) sp r sret m0) := by
   intro c hEntry
   obtain ⟨c', hs, hExit⟩ :=
     evalIntSim g N A SL φf φc st d a n sp r sret aEnv aExpr m0 hE c hEntry
@@ -136,7 +140,8 @@ theorem evalNullSimD
     (hW : LeafWiden g N A SL φf φc st .null sp r sret m0) :
     Triple
       (EvalNullEntry g N A SL φf φc st d a sp r sret aEnv aExpr m0)
-      (EvalExitD g N A SL φf φc st .null sp r sret m0) := by
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st .null sp r sret m0) := by
   intro c hEntry
   obtain ⟨c', hs, hExit⟩ :=
     evalNullSim g N A SL φf φc st d a sp r sret aEnv aExpr m0 hE c hEntry
@@ -152,7 +157,8 @@ theorem evalBoolSimD
     (hW : LeafWiden g N A SL φf φc st (.bool b) sp r sret m0) :
     Triple
       (EvalBoolEntry g N A SL φf φc st d a b sp r sret aEnv aExpr m0)
-      (EvalExitD g N A SL φf φc st (.bool b) sp r sret m0) := by
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st (.bool b) sp r sret m0) := by
   intro c hEntry
   obtain ⟨c', hs, hExit⟩ :=
     evalBoolSim g N A SL φf φc st d a b sp r sret aEnv aExpr m0 hE c hEntry
@@ -168,7 +174,8 @@ theorem evalStrSimD
     (hW : LeafWiden g N A SL φf φc st (.str s) sp r sret m0) :
     Triple
       (EvalStrEntry g N A SL φf φc st d a s sp r sret aEnv aExpr m0)
-      (EvalExitD g N A SL φf φc st (.str s) sp r sret m0) := by
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st (.str s) sp r sret m0) := by
   intro c hEntry
   obtain ⟨c', hs, hExit⟩ :=
     evalStrSim g N A SL φf φc st d a s sp r sret aEnv aExpr m0 hE c hEntry
@@ -185,7 +192,8 @@ theorem evalVarSimD
     (hW : LeafWiden g N A SL φf φc st v sp r sret m0) :
     Triple
       (EvalVarEntry g N A SL φf φc st d a x v sp r sret aEnv aExpr m0)
-      (EvalExitD g N A SL φf φc st v sp r sret m0) := by
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st v sp r sret m0) := by
   intro c hEntry
   obtain ⟨c', hs, hExit⟩ :=
     evalVarSim g N A SL φf φc st d a x v sp r sret aEnv aExpr m0 hE c hEntry

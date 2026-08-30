@@ -35,12 +35,13 @@ namespace Vsa.Sim
 theorem blockC_add
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
     (st' st'' : Vsa.While.St) (a b : Int)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 Wl : BitVec 64) (out0 : Array String)
     (m0 : Mem) :
     Triple
       (fun c =>
-        TwoSubReturn gpre N A SL φf φc st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c ∧
+        TwoSubReturn gpre N A SL φf φc nf nc st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c ∧
         -- the operator-token node (`.binary` node, offsets 4/8 read after the calls)
         gpre Register.x8 = some aExpr ∧
         read32 c.σ.mem (aExpr.toNat + 8) = some 11 ∧      -- op token = binOpTok .add
@@ -79,10 +80,10 @@ theorem blockC_add
           (Register.x18 == R) = false → (Register.x2 == R) = false →
           gpre R = g R))
       (fun c => ∃ (mpre : Mem) (φfm φcm φfe φce : Addr → Nat),
-        PhiExtends φf φfm st'.store.frames.size ∧
-        PhiExtends φc φcm st'.store.closures.size ∧
-        PhiExtends φfm φfe st''.store.frames.size ∧
-        PhiExtends φcm φce st''.store.closures.size ∧
+        PhiExtends φf φfm nf ∧
+        PhiExtends φc φcm nc ∧
+        PhiExtends φfm φfe st'.store.frames.size ∧
+        PhiExtends φcm φce st'.store.closures.size ∧
         PreEpilogueVD g N A SL φfe φce st'' (.int (wrap64 (a + b))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hpre
   obtain ⟨hTS, hgx8, hopTok, hSlot, hFullPop, hX19, hWlBuf, hKindResp,
@@ -779,7 +780,8 @@ def EvalAddSimGoal : Prop :=
         -- the blockC_add residuals hold at EVERY config reachable as the
         -- post-`TwoSubReturn` landing (stated ∀-closed over the post config):
         (∀ c' : Vsa.Machine.Config,
-          TwoSubReturn gpre N A SL φf φc st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
+          TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+            st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
           AddResid gpre N A SL sp r sret aExpr Wl c') ∧
         -- entry-ghost g bridge (as blockC_add / blockC_neg consume it)
         g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
@@ -788,7 +790,8 @@ def EvalAddSimGoal : Prop :=
           (Register.x8 == R) = false → (Register.x9 == R) = false →
           (Register.x18 == R) = false → (Register.x2 == R) = false →
           gpre R = g R))
-      (EvalExitD g N A SL φf φc st'' (.int (wrap64 (a + b))) sp r sret m0)
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st'' (.int (wrap64 (a + b))) sp r sret m0)
 
 /-- **`evalAddSim`**: the `EvalE.binary .add` (int-pilot) recursive case, composing
 `blockB_binary ≫ blockC_add ≫ blockD_v_rec` in the `EvalIH` motive shape. -/
@@ -830,7 +833,8 @@ theorem evalAddSim : EvalAddSimGoal := by
   have hOutC2 : String.join c2.σ.sailOutput.toList = st''.out := hTS.2.2.2.2.2.2.2.1
   -- === block C: dispatch + add tail → PreEpilogueVD @0x800033ec ===
   obtain ⟨c3, hs3, mpre, φfm, φcm, φfe, φce, hpfm, hpcm, hpfe, hpce, hPreD⟩ :=
-    blockC_add gpre g N A SL φf φc st' st'' a b sp r sret aExpr v8 v9 v18 v19 Wl c2.σ.sailOutput m0
+    blockC_add gpre g N A SL φf φc st.store.frames.size st.store.closures.size
+      st' st'' a b sp r sret aExpr v8 v9 v18 v19 Wl c2.σ.sailOutput m0
       c2 ⟨hTS, hR.gx8, hR.opTok, hR.slot, hR.fullpop, hR.x19, hR.wlbuf, hR.kindresp,
         hR.exprAl, hR.exprLo, hR.exprHi, hR.exprWin, hR.exprSL, hOutC2, rfl,
         hR.sretAl, hR.sretLo, hR.sretHi, hR.sretWin, hR.sretVi, hR.sretStk, hR.sretEvalCode, hR.raAl,
@@ -844,13 +848,16 @@ theorem evalAddSim : EvalAddSimGoal := by
   obtain ⟨hExitE, hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
   -- compose the two-phase φ-chain to the OUTER entry maps (size stability lets the
   -- `st'`-sized left leg meet the `st''`-sized right leg).
-  have hpfm' : PhiExtends φf φfm st''.store.frames.size := hSizeF ▸ hpfm
-  have hpcm' : PhiExtends φc φcm st''.store.closures.size := hSizeC ▸ hpcm
-  have hpfF : PhiExtends φf φfe st''.store.frames.size := hpfm'.trans hpfe
-  have hpcF : PhiExtends φc φce st''.store.closures.size := hpcm'.trans hpce
-  have hExit : EvalExit g N A SL φf φc st'' (.int (wrap64 (a + b))) sp r sret m0 c4 :=
-    evalExit_of_phiExtends hpfF hpcF hExitE
+  have hmono := evalE_store_mono _hEvalE
+  have hleF' : st.store.frames.size ≤ st'.store.frames.size := hSizeF ▸ hmono.1
+  have hleC' : st.store.closures.size ≤ st'.store.closures.size := hSizeC ▸ hmono.2
+  have hpfF : PhiExtends φf φfe st.store.frames.size := hpfm.trans (PhiExtends.mono hleF' hpfe)
+  have hpcF : PhiExtends φc φce st.store.closures.size := hpcm.trans (PhiExtends.mono hleC' hpce)
+  have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      st'' (.int (wrap64 (a + b))) sp r sret m0 c4 :=
+    evalExit_of_phiExtends hpfF hpcF hExitE hmono.1 hmono.2
   exact ⟨c4, ((hs2.trans hs3).trans hs4), hExit, hMemExt,
-    φf', φc', hpfF.trans hpf', hpcF.trans hpc', hSurv⟩
+    φf', φc', hpfF.trans (PhiExtends.mono hmono.1 hpf'),
+    hpcF.trans (PhiExtends.mono hmono.2 hpc'), hSurv⟩
 
 end Vsa.Sim

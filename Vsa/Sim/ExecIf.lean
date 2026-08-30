@@ -91,7 +91,8 @@ def ExecIfNoneSimGoal
   Triple
     (fun cfg => ExecEntry g N A SL φf φc st d env (.ifStmt c t none) sp r aInterp aStmt aEnv aRet m0 cfg
       ∧ cfg.σ.sailOutput = out0)
-    (ExecExit g N A SL φf φc st' .normal sp r aRet m0)
+    (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      st' .normal sp r aRet m0)
 
 /-! ## `execIfNoneSim` — `ExecS.ifNone`: `execBlockA ≫ (arm body ≫ IH ≫ value_truthy) ≫ tail`
 
@@ -123,7 +124,7 @@ theorem execIfNoneSim
           ExecArmEntryK g N A SL φf φc st execArmIf sp r aInterp aStmt aEnv aRet
             v8 v9 v18 v19 out0 m0 ment cfg)
         (fun cfg => ∃ subsret v1 v8 v9 v18 v19 mcall,
-          SubExecReturn g N A SL φf φc st' v
+          SubExecReturn g N A SL φf φc st.store.frames.size st.store.closures.size st' v
             sp r aRet subsret (0x800042d4#64) v1 v8 v9 v18 v19 m0 mcall cfg)) :
     ExecIfNoneSimGoal g N A SL φf φc st st' d env c t v
       sp r aInterp aStmt aEnv aRet m0 out0 := by
@@ -211,7 +212,8 @@ theorem execIfNoneSim
   have hraAl := he.ra_align
   -- ===== execBlockD (at the EXTENDED maps, baseline `m0 := cG.σ.mem`) → ExecExit =====
   obtain ⟨cD, hstepsD, hExitE⟩ :=
-    execBlockD g N A SL φfE φcE st' .normal sp r aRet v8 v9 v18 v19 σ2.sailOutput cG.σ.mem
+    execBlockD g N A SL φfE φcE st.store.frames.size st.store.closures.size
+      st' .normal sp r aRet v8 v9 v18 v19 σ2.sailOutput cG.σ.mem
       (by intro w hw; cases hw)
       ⟨σ2, i2, cG.steps + 1 + 1⟩
       ⟨cG.σ.mem,
