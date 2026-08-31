@@ -511,6 +511,7 @@ import Vsa.Sim.rows.DriveLoopSetupAGen
 import Vsa.Sim.rows.DriveLoopSetupBGen
 import Vsa.Sim.DriveToLoopHeadSpans
 import Vsa.Sim.DivLoopProgressClose
+import Vsa.Sim.InterpRunLoopSeamsClose
 import Vsa.While.StmtDispatch
 import Vsa.While.StmtDispatchClose
 import Vsa.Sim.InterpSimBundle

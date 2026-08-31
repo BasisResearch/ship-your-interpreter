@@ -620,9 +620,17 @@ THEOREMS=(
   Vsa.Sim.divEntryDrive_of_driveToLoopHead          # EntryDrive (divergence arm ← the SAME drive; both entry arms converge on DriveToLoopHead)
   Vsa.Sim.driveSpillBridge                          # rows/DriveSpillGen (the framed spill span: sp is callee-saved — bridgeOfSegFramed with AbiExceptSp; genseg sp-reseat gap logged)
   Vsa.Sim.driveToLoopHead_of_spans                  # DriveToLoopHeadSpans (spill ≫ setjmp ≫ bnez ≫ setupA ≫ setupB ≫ j — the REAL Steps chain)
-  Vsa.Sim.driveToLoopHead_interpRunLayout           # DriveToLoopHeadSpans (DriveToLoopHead AT THE CONCRETE LAYOUT — feeds both entry consumers; modulo SetjmpSplice + SegEntryFields + span staged facts)
+  Vsa.Sim.driveToLoopHead_interpRunLayout           # DriveToLoopHeadSpans (DriveToLoopHead AT THE CONCRETE LAYOUT — feeds both entry consumers)
+  Vsa.Sim.hLoopA_of_row                             # DriveToLoopHeadSpans §4 (loop-setup A SegLanded ← the PROVED row via segToTriple; coarse premise discharged)
+  Vsa.Sim.hLoopB_of_row                             # DriveToLoopHeadSpans §4 (loop-setup B SegLanded ← the PROVED row; lands at the loop head 0x8000448c)
+  Vsa.Sim.hSplice_of_setjmpSpec                     # DriveToLoopHeadSpans §5 (setjmp splice ← landed JmpSpec.setjmp_spec verbatim; residuals = buffer geometry + SpRetSurvives + BnezFallthrough)
+  Vsa.Sim.driveToLoopHead_closed                    # DriveToLoopHeadSpans §6 (CAPSTONE: hSplice/hLoopA/hLoopB GONE; honest residuals = hSpill + setjmp geometry + span entry data + off-path hFields)
   Vsa.Sim.DivLoopProgressClose.divLoopProgress_of_seams  # DivLoopProgressClose (DivLoopProgress ← InterpRunLoopSeams: iter back-edge + approx still-running; k=0 divCorr repack proved)
   Vsa.Sim.DivLoopProgressClose.divFamily_of_seams        # DivLoopProgressClose (capstone: DivFamily L ← DivEntryDrive + InterpRunLoopSeams — divergence arm fully plumbed)
+  Vsa.Sim.InterpRunLoopSeamsClose.iterFromCountedRun     # InterpRunLoopSeamsClose (forgetful TripleN 1 → iter landing bridge)
+  Vsa.Sim.InterpRunLoopSeamsClose.approxFromCountedRun   # InterpRunLoopSeamsClose (forgetful TripleN (n+1) → approx step-lower-bound bridge)
+  Vsa.Sim.InterpRunLoopSeamsClose.interpRunLoopSeams_of_residuals  # InterpRunLoopSeamsClose (seams ← the minimal 2-field InterpRunLoopResiduals; both fields verified irreducible)
+  Vsa.Sim.InterpRunLoopSeamsClose.divFamily_of_residuals # InterpRunLoopSeamsClose (DivFamily L ← entry drive + the 2 residuals — the divergence family's FINAL reduction)
   Vsa.Sim.storeChainList                             # StoreSeg (variable-arity env-call fold — the Call.closure params-fold skeleton; subsumes InitSeg via Ent morphisms)
   Vsa.Sim.interpInitStore_compose_viaStoreSeg        # StoreSeg (DEMO: InterpInit's composition through storeChain3 with dimap-reindexed seams, R8-clean)
   Vsa.Sim.execVarDeclSimD                            # rows/ExecVarInitRow (varInit at ExecExitD via ExecRecWiden; define grows the binding list)
@@ -734,6 +742,9 @@ allowed = {"propext", "Classical.choice", "Quot.sound"}
 expected = int(os.environ["AX_EXPECTED"])
 out = os.environ["AX_OUT"]
 bad, seen = [], 0
+# Lean wraps long axiom reports across lines (continuations start with
+# whitespace); join them so the bracket regex sees whole reports.
+out = re.sub(r"\n[ \t]+", " ", out)
 for line in out.splitlines():
     m = re.search(r"'(.*)' depends on axioms: \[([^\]]*)\]", line)
     if m:

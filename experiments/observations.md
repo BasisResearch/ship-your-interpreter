@@ -1380,3 +1380,53 @@ it, still stop and report instead.
   clause but with EMPTY write footprint (free touches only allocator-private
   metadata). One `decide`-free structure field; then every free call is a
   `callSeg` with a trivial frame-preserving suffix, same as the other callees.
+
+## 2026-08-31 setjmp-post-no-sp-frame (task #66, SetjmpSplice)
+- missing: `setjmp_post` (Vsa/Sim/JmpSpec.lean) does NOT preserve the stack
+  pointer `x2`. Its frame conclusion is `∀ R, NotWrittenJmp R → σ' R = g R`, and
+  `NotWrittenJmp` EXCLUDES x2 (it is the SHARED union predicate covering both
+  setjmp and longjmp; longjmp writes x2, setjmp does not). So even though setjmp
+  physically writes only x10 + the 14 buffer stores (never x2), the post cannot
+  state `sp` survives the call. The `SetjmpSplice` seam in DriveToLoopHeadSpans
+  needs `sp = spNew` at the setjmp return (loop-setup A/B reload 16(sp)/24(sp)
+  off it), and `setjmp_spec` alone cannot supply it.
+- workaround: NONE in the theorem — named the sp-preservation as an explicit
+  typed residual `spRet` field on `SetjmpGeom` (the setjmp caller must supply
+  "x2 unchanged across the setjmp call", which is TRUE — setjmp does not write
+  x2 — but not derivable from the current post). `hSplice_of_setjmpSpec` reuses
+  `setjmp_spec` verbatim for the ret + a0=0 and consumes `spRet` for x2.
+- cost: every setjmp-call splice that must preserve sp (this drive; any interp
+  path that setjmps and then reloads off sp) re-argues sp survival by hand or
+  carries it as a premise. The buffer-geometry residual already blocks full
+  discharge, but this makes even the sp thread a named input.
+- proposal: add a setjmp-SPECIFIC frame `setjmp_post.frameSetjmp : ∀ R,
+  NotWrittenSetjmp R → σ' R = c.σ R` where `NotWrittenSetjmp` excludes only
+  x10/PC/noise (NOT x2/callee-saveds) — setjmp genuinely preserves every GPR but
+  x10. The proof already threads `h_x2_*`/`h_x1_*`/`h_x8..x27_*` through all 14
+  store sites (they are all in scope at the ret), so it is a strengthening of the
+  existing frame clause, no new site work. Then sp (and every callee-saved) is
+  free from the post.
+
+## 2026-08-31 landing-bundle-must-be-prop-existential (DriveToLoopHeadSpans §1/§5, resume task)
+- missing: a canonical shape for a "seam landing" bundle that (a) carries the
+  reached Config as DATA, (b) is BUILT from a `Triple`/callee-spec result (an
+  `Exists`), and (c) is CONSUMED inside Prop-goal proofs. A `structure … where`
+  (Type-valued) fails (c-side) because building it from the `Triple`'s `Exists`
+  is large elimination (Exists→Type, forbidden: "recursor Exists.casesOn can only
+  eliminate into Prop"); a `structure … : Prop where` fails at DECLARATION —
+  projection generation errors "field must be a proof, but it has type Config"
+  (the WidenMeta gotcha, but here it kills the whole structure, not just usage);
+  and a Type-valued structure mixing a `g : (R:Register)→Option (RegisterType R)`
+  field beside 12 `BitVec 64` value fields ALSO wedges universe inference
+  (`?u+1 =?= max(…)` / CoeT typeclass timeout).
+- workaround: write the bundle as a Prop-valued `def … : Prop := ∃ (data…), (props…)`
+  and consume via `obtain` (Prop-into-Prop elim, legal). Applied to SpillLanded,
+  SegLanded, SetjmpSplice, SetjmpGeom. Also split the two big Prop obligations
+  inside the geometry (SpRetSurvives, BnezFallthrough) into their own named defs.
+- cost: no positional-tower navigation (each obtain is a flat named pattern at the
+  binder site), but the pattern is re-derived per bundle; every future "landing"
+  seam (bridge/row/callee-splice → reached-config carrier) will re-invent it.
+- proposal: a `Landed` combinator/abbrev family — `def Landed (c : Config)
+  (P : Config → Prop) : Prop := ∃ c', Steps c c' ∧ P c'` — so SegLanded/SpillLanded
+  are `Landed c (fun c' => …)` and the destructurer is shared. The `Triple`
+  result IS `Landed` at the pre-config; marshalling becomes `id`.

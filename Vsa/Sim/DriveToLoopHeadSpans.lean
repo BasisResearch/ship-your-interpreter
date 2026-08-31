@@ -78,12 +78,16 @@ open Vsa.Sim.LayoutInstance (interpRunLayout interpRunEntry)
 
 namespace Vsa.Sim
 
--- discipline: allow(R7-conj-tower-def) Every predicate in this file is already a
--- named-field `structure` (SetjmpSplice/SegEntryFields/SpillLanded/SegLanded — no
--- anonymous ∃/∧ post tower). The remaining 7 `∃` are all the SINGLE-binder
--- `minstret`-present witness `∃ w, … minstret = some w` (the standard
--- `GoodState.minstret` idiom, one per landing structure + per premise), NOT post
--- definitions — so the >8-∃ heuristic is a false positive here.
+-- discipline: allow(R7-conj-tower-def) The predicates in this file are either
+-- named-field `structure`s (SegEntryData/SegEntryFields — projected as DATA into
+-- the `SegEntry` witness / the seg `SegPre`) or NAMED Prop-valued existential
+-- `def`s (SpillLanded/SegLanded/SetjmpSplice/SetjmpGeom + BnezFallthrough/
+-- SpRetSurvives). The latter MUST be `def … : Prop := ∃ data, props` rather than
+-- `structure`: they carry a reached `Config` (DATA) yet are BUILT from a
+-- `Triple`/`setjmp_spec` `Exists` (Type-valued structure ⇒ large elimination
+-- forbidden) and CONSUMED in Prop goals (see observation
+-- `landing-bundle-must-be-prop-existential`). Each is destructured ONCE at its
+-- consumer's binder site via a flat named `obtain` pattern (no `.2.2.2` towers).
 
 local notation "SpecSt" => Vsa.While.St
 
@@ -112,22 +116,15 @@ its `16(sp)` reload + the code), and the `sp = spSp` the spill bridge exposed
 marshalled — its precondition (`SetjmpLoaded`, `WinRAM jb`, the 14 callee pins,
 `ra0`-alignment) is the setjmp-buffer geometry, NOT a consequence of the spill
 decode, so it is NAMED. -/
-structure SetjmpSplice (σSp : MState) (iSp uSp : Nat) (spSp : BitVec 64) where
-  /-- the reached post-splice config (parked at loop-setup A's entry). -/
-  σ2 : MState
-  i2 : Nat
-  u2 : Nat
-  /-- the machine ran from the setjmp entry to `0x8000442c`. -/
-  steps : Steps ⟨σSp, iSp, uSp⟩ ⟨σ2, i2, u2⟩
-  tick : i2 < 2
-  good : GoodState σ2
-  /-- PC at loop-setup A's entry (`setjmp` returned, `bnez` fell through). -/
-  pc : σ2.regs.get? Register.PC = some (0x8000442c#64 : BitVec 64)
-  /-- `a0 = 0` (the first-return value — why the `bnez` is not taken). -/
-  a0 : σ2.regs.get? Register.x10 = some (0#64 : BitVec 64)
-  /-- `sp` preserved (the frame the loop setup reloads off). -/
-  sp : σ2.regs.get? Register.x2 = some spSp
-  minstret : ∃ w, σ2.regs.get? Register.minstret = some w
+def SetjmpSplice (σSp : MState) (iSp uSp : Nat) (spSp : BitVec 64) : Prop :=
+  ∃ (σ2 : MState) (i2 u2 : Nat),
+    Steps ⟨σSp, iSp, uSp⟩ ⟨σ2, i2, u2⟩ ∧
+    i2 < 2 ∧
+    GoodState σ2 ∧
+    σ2.regs.get? Register.PC = some (0x8000442c#64 : BitVec 64) ∧
+    σ2.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧
+    σ2.regs.get? Register.x2 = some spSp ∧
+    (∃ w, σ2.regs.get? Register.minstret = some w)
 
 /-- **The loop-setup → `SegEntry` representation seam.**  From the config the loop
 setup lands (parked at `interpLoopHeadPC = 0x8000448c`, `GoodState`, tick-bounded),
@@ -166,29 +163,34 @@ structure SegEntryFields (cH : Config) where
 
 /-- **The spill bridge landing.**  What `driveSpillBridge` delivers from the
 `Loaded` config: the spill body ≫ `jal setjmp` bridge run to the setjmp entry
-`0x80006ffc`, link `x1 = 0x80004428`, the reseated `sp` exposed.  Named-field per
-the gate (the `∃ c1 spNew, …` a bridge conclusion would be). -/
-structure SpillLanded (c : Config) where
-  c1 : Config
-  spNew : BitVec 64
-  steps : Steps c c1
-  pc : c1.σ.regs.get? Register.PC = some (0x80006ffc#64 : BitVec 64)
-  ra : c1.σ.regs.get? Register.x1 = some (0x80004428#64 : BitVec 64)
-  sp : c1.σ.regs.get? Register.x2 = some spNew
-  good : GoodState c1.σ
-  tick : c1.tick < 2
-  minstret : ∃ w, c1.σ.regs.get? Register.minstret = some w
+`0x80006ffc`, link `x1 = 0x80004428`, the reseated `sp` exposed.  A Prop-valued
+existential over the reached config (the `∃ c1 spNew, …` a bridge conclusion is);
+consumed by `obtain` (destructuring a Prop into a Prop goal — legal).  It carries
+DATA (`c1 : Config`), so it MUST be a Prop-valued `def`, not a `structure … : Prop`
+(the WidenMeta gotcha: a `structure … : Prop` cannot project a data field, and a
+Type-valued structure cannot be BUILT from a `Triple`'s `Exists` — large
+elimination forbidden).  The named destructurer `SpillLanded.elim` below reads it. -/
+def SpillLanded (c : Config) : Prop :=
+  ∃ (c1 : Config) (spNew : BitVec 64),
+    Steps c c1 ∧
+    c1.σ.regs.get? Register.PC = some (0x80006ffc#64 : BitVec 64) ∧
+    c1.σ.regs.get? Register.x1 = some (0x80004428#64 : BitVec 64) ∧
+    c1.σ.regs.get? Register.x2 = some spNew ∧
+    GoodState c1.σ ∧
+    c1.tick < 2 ∧
+    (∃ w, c1.σ.regs.get? Register.minstret = some w)
 
 /-- **A loop-setup span landing.**  What `driveLoopSetupARow`/`driveLoopSetupBRow`
-deliver: the seg run to the span's computed end PC `endPC`, control good.  Named
-per the gate. -/
-structure SegLanded (c : Config) (endPC : BitVec 64) where
-  c' : Config
-  steps : Steps c c'
-  pc : c'.σ.regs.get? Register.PC = some endPC
-  good : GoodState c'.σ
-  tick : c'.tick < 2
-  minstret : ∃ w, c'.σ.regs.get? Register.minstret = some w
+deliver: the seg run to the span's computed end PC `endPC`, control good.  A
+Prop-valued existential over the reached config (same rationale as `SpillLanded`).
+Consumed by `obtain`; the named destructurer `SegLanded.elim` reads it. -/
+def SegLanded (c : Config) (endPC : BitVec 64) : Prop :=
+  ∃ (c' : Config),
+    Steps c c' ∧
+    c'.σ.regs.get? Register.PC = some endPC ∧
+    GoodState c'.σ ∧
+    c'.tick < 2 ∧
+    (∃ w, c'.σ.regs.get? Register.minstret = some w)
 
 /-! ## §2. The assembled drive — REAL `Steps` composition of the three seg runs
 
@@ -243,24 +245,27 @@ theorem driveToLoopHead_of_spans
     ∀ p, InterpInitStoreRepr interpRunLayout p := by
   intro p c hL
   -- 1. spill body ≫ jal setjmp → parked at setjmp entry, sp exposed.
-  have S1 := hSpill p c hL
+  obtain ⟨c1, spNew, s1steps, s1pc, s1ra, s1sp, s1good, s1tick, _s1mi⟩ := hSpill p c hL
   -- 2. setjmp first return (a0 = 0) + bnez not taken → 0x8000442c.
-  have S2 := hSplice S1.c1 S1.spNew S1.pc S1.ra S1.sp S1.good S1.tick
+  obtain ⟨σ2, i2, u2, s2steps, s2tick, s2good, s2pc, s2a0, s2sp, s2mi⟩ :=
+    hSplice c1 spNew s1pc s1ra s1sp s1good s1tick
   -- 3. loop-setup A → 0x80004438.
-  have S3 := hLoopA ⟨S2.σ2, S2.i2, S2.u2⟩ S2.pc S2.good S2.tick S2.minstret
+  obtain ⟨cA, sAsteps, sApc, sAgood, sAtick, sAmi⟩ :=
+    hLoopA ⟨σ2, i2, u2⟩ s2pc s2good s2tick s2mi
   -- 4. loop-setup B → loop head 0x8000448c.
-  have S4 := hLoopB S3.c' S3.pc S3.good S3.tick S3.minstret
+  obtain ⟨cB, sBsteps, sBpc, sBgood, sBtick, sBmi⟩ :=
+    hLoopB cA sApc sAgood sAtick sAmi
   -- 5. the off-path SegEntry representation at the loop head.
-  have F := hFields S4.c' S4.pc S4.good S4.tick
+  have F := hFields cB sBpc sBgood sBtick
   -- compose the four runs (the middle Steps share the same underlying config).
-  have hSteps : Steps c S4.c' :=
-    (((S1.steps.trans S2.steps).trans S3.steps).trans S4.steps)
-  refine ⟨S4.c', F.g, F.N, F.A, F.SL, F.φf, F.φc, F.dLeft, F.aLeft, F.m0, hSteps, ?_⟩
-  have hpcH' : S4.c'.σ.regs.get? Register.PC = some (BitVec.ofNat 64 interpLoopHeadPC) := by
-    rw [S4.pc]; rfl
+  have hSteps : Steps c cB :=
+    (((s1steps.trans s2steps).trans sAsteps).trans sBsteps)
+  refine ⟨cB, F.g, F.N, F.A, F.SL, F.φf, F.φc, F.dLeft, F.aLeft, F.m0, hSteps, ?_⟩
+  have hpcH' : cB.σ.regs.get? Register.PC = some (BitVec.ofNat 64 interpLoopHeadPC) := by
+    rw [sBpc]; rfl
   exact
-    { good := S4.good
-      tick := S4.tick
+    { good := sBgood
+      tick := sBtick
       pc := hpcH'
       store := F.mem ▸ F.store
       out := F.out
@@ -310,5 +315,295 @@ theorem driveToLoopHead_interpRunLayout
   exact driveToLoopHead_of_spans hSpill hSplice hLoopA hLoopB hFields p c hL
 
 #print axioms driveToLoopHead_interpRunLayout
+
+/-! ## §4. DISCHARGING the loop-setup premises from the proved rows
+
+The two `SegLanded`-producing premises `hLoopA`/`hLoopB` above are the *coarse*
+interface (they demand a whole seg run from a bare PC).  The concrete drive over
+`interpRunLayout` has the two loop-setup spans PROVED as `driveLoopSetupARow` /
+`driveLoopSetupBRow`.  This section wires those rows in, reducing each coarse
+premise to exactly the seg-entry data the row consumes — the entry `GHolds` pin
+list and the memory-decode `ChainFacts` (the honest residuals: a `main`-prologue
+register state + a memory decode, neither a consequence of the bare `PC`).
+
+The row-backed producers below are the *tight* interface: supplying them a
+`SegLanded` is now equivalent to supplying the seg `SegPre` bundle, and the whole
+`Steps`/end-PC content of the span is discharged by the row (no re-run). -/
+
+/-- The seg-entry residual a loop-setup row genuinely needs beyond the bare PC:
+the entry `GHolds` pin list `L`, its `KeysOK`, and the memory-decode `ChainFacts`
+for the span's chain `seg` (with the entry memory pinned to `m0`).  This is a
+`main`-prologue register state (`GHolds`) + a memory decode (`ChainFacts`) — the
+per-config off-`Loaded` datum, named-field per the gate. -/
+structure SegEntryData (seg : List BBlock) (L : GRegs)
+    (lds : List (List (BitVec 8))) (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (c : Config) : Prop where
+  mem : c.σ.mem = m0
+  hL : GHolds c.σ L
+  keys : KeysOK (keysG L)
+  facts : ChainFacts c.σ.mem c.σ.mem L lds seg
+
+/-- **`hLoopA` discharged by the `driveLoopSetupA` seg via `segToTriple`.**  From
+the seg-entry data at loop-setup A's entry (`GHolds [(2,sp),(10,a0)]` + its
+`ChainFacts`), the SAME seg the proved row runs (`driveLoopSetupASeg`, ONE
+`ChainOK` `decide`, `segToTriple` marshalling) reaches `0x80004438`, delivering a
+`SegLanded` that carries the reached config's tick bound (`i' < 2`).  We go through
+`segToTriple` directly (rather than the row's `Triple`) ONLY because the row's
+`DriveLoopSetupAPost` does not surface `i' < 2` — the reached-config tick bound the
+downstream setup-B/loop-head consumers need; it is the identical run, one `decide`,
+no re-threaded machine sites. -/
+theorem hLoopA_of_row
+    (sp a0 : BitVec 64) (lds : List (List (BitVec 8)))
+    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (hData : ∀ (c2 : Config),
+        c2.σ.regs.get? Register.PC = some (0x8000442c#64 : BitVec 64) →
+        GoodState c2.σ → c2.tick < 2 →
+        (∃ w, c2.σ.regs.get? Register.minstret = some w) →
+        SegEntryData driveLoopSetupASeg (driveLoopSetupAL sp a0) lds m0 c2) :
+    ∀ (c2 : Config),
+        c2.σ.regs.get? Register.PC = some (0x8000442c#64 : BitVec 64) →
+        GoodState c2.σ → c2.tick < 2 →
+        (∃ w, c2.σ.regs.get? Register.minstret = some w) →
+        SegLanded c2 (0x80004438#64) := by
+  intro c2 hpc hG htick hmi
+  have hd := hData c2 hpc hG htick hmi
+  -- The tick-carrying post `Q c' := (control state @0x80004438, tick<2, minstret)`
+  -- is EXACTLY `SegLanded c' 0x80004438`'s existential body at the reached config, so
+  -- `Triple pre Q` applied to `c2` yields `SegLanded c2 0x80004438` directly.
+  have hT : Triple (SegPre driveLoopSetupASeg (driveLoopSetupAL sp a0) lds 0x8000442c#64 m0)
+      (fun c' => c'.σ.regs.get? Register.PC = some (0x80004438#64 : BitVec 64) ∧
+        GoodState c'.σ ∧ c'.tick < 2 ∧
+        (∃ w, c'.σ.regs.get? Register.minstret = some w)) := by
+    apply segToTriple driveLoopSetupASeg (driveLoopSetupAL sp a0) lds 0x8000442c#64 m0 _
+      (by have h : keysG (driveLoopSetupAL sp a0) = [2, 10] := rfl
+          rw [h]; show ChainOK 0x8000442c#64 [2, 10] driveLoopSetupASeg; decide)
+    intro σ' i' u' hG' hi' _hmem' hpc' hmi' _hregs
+    refine ⟨?_, hG', hi', hmi'⟩
+    rw [hpc']; rfl
+  obtain ⟨c', hsteps, hpcE, hG', htickE, hmiE⟩ :=
+    hT c2 ⟨hG, hd.mem, hpc, hmi, hd.hL, hd.keys, hd.facts, htick⟩
+  exact ⟨c', hsteps, hpcE, hG', htickE, hmiE⟩
+
+/-- **`hLoopB` discharged by the `driveLoopSetupB` seg via `segToTriple`.**  From
+the seg-entry data at loop-setup B's entry (`GHolds [(2,sp),(3,gp)]` + its
+`ChainFacts`), the SAME seg the proved row runs (`driveLoopSetupBSeg`) reaches the
+loop head `0x8000448c`, delivering a `SegLanded` carrying the reached-config tick
+bound.  Same rationale as `hLoopA_of_row` (the row's post drops `i' < 2`); identical
+run, one `decide`. -/
+theorem hLoopB_of_row
+    (sp gp : BitVec 64) (lds : List (List (BitVec 8)))
+    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (hData : ∀ (c3 : Config),
+        c3.σ.regs.get? Register.PC = some (0x80004438#64 : BitVec 64) →
+        GoodState c3.σ → c3.tick < 2 →
+        (∃ w, c3.σ.regs.get? Register.minstret = some w) →
+        SegEntryData driveLoopSetupBSeg (driveLoopSetupBL sp gp) lds m0 c3) :
+    ∀ (c3 : Config),
+        c3.σ.regs.get? Register.PC = some (0x80004438#64 : BitVec 64) →
+        GoodState c3.σ → c3.tick < 2 →
+        (∃ w, c3.σ.regs.get? Register.minstret = some w) →
+        SegLanded c3 (0x8000448c#64) := by
+  intro c3 hpc hG htick hmi
+  have hd := hData c3 hpc hG htick hmi
+  have hT : Triple (SegPre driveLoopSetupBSeg (driveLoopSetupBL sp gp) lds 0x80004438#64 m0)
+      (fun c' => c'.σ.regs.get? Register.PC = some (0x8000448c#64 : BitVec 64) ∧
+        GoodState c'.σ ∧ c'.tick < 2 ∧
+        (∃ w, c'.σ.regs.get? Register.minstret = some w)) := by
+    apply segToTriple driveLoopSetupBSeg (driveLoopSetupBL sp gp) lds 0x80004438#64 m0 _
+      (by have h : keysG (driveLoopSetupBL sp gp) = [2, 3] := rfl
+          rw [h]; show ChainOK 0x80004438#64 [2, 3] driveLoopSetupBSeg; decide)
+    intro σ' i' u' hG' hi' _hmem' hpc' hmi' _hregs
+    refine ⟨?_, hG', hi', hmi'⟩
+    rw [hpc']; rfl
+  obtain ⟨c', hsteps, hpcE, hG', htickE, hmiE⟩ :=
+    hT c3 ⟨hG, hd.mem, hpc, hmi, hd.hL, hd.keys, hd.facts, htick⟩
+  exact ⟨c', hsteps, hpcE, hG', htickE, hmiE⟩
+
+#print axioms hLoopA_of_row
+#print axioms hLoopB_of_row
+
+/-! ## §5. DISCHARGING the setjmp splice from `JmpSpec.setjmp_spec`
+
+The `SetjmpSplice` premise is the `jal setjmp` first return.  The landed contract
+is `JmpSpec.setjmp_spec` (`setjmp_pre → setjmp_post`, `a0 = 0`, `PC = ra0`).  This
+section wires it in, reducing `hSplice` to exactly the setjmp-buffer geometry the
+contract's precondition demands (`SetjmpLoaded`, `WinRAM jb`, the 14 live
+callee-saved pins, `ra0`-alignment) — the honest off-`interp_run` residual (the
+setjmp buffer is `&interp->on_error = a0`, its geometry a `main`/`interp_init`
+startup fact, not a consequence of the spill decode).
+
+The splice ALSO absorbs the following `bnez a0` at `0x80004428`: since `setjmp`'s
+first passage returns `a0 = 0`, the `bnez` is NOT taken and falls through to
+`0x8000442c` — that last not-taken branch step is the named `hBnez` residual (a
+single `beq`-class step over the setjmp-post config).  `setjmp_spec` gives the ret;
+`hBnez` gives the fallthrough. -/
+
+/-- The not-taken `bnez a0` fallthrough obligation (`a0 = 0` ⇒ falls to
+`0x8000442c`), as a single step over the setjmp-post config parked at `0x80004428`
+with `a0 = 0`.  Named separately so it reads cleanly inside `SetjmpGeom`'s
+existential and can be discharged on its own (one `beq`-class step). -/
+def BnezFallthrough (spNew : BitVec 64) : Prop :=
+  ∀ (σ' : MState) (i' u' : Nat),
+    GoodState σ' → i' < 2 →
+    σ'.regs.get? Register.PC = some (0x80004428#64 : BitVec 64) →
+    σ'.regs.get? Register.x10 = some (0#64 : BitVec 64) →
+    σ'.regs.get? Register.x2 = some spNew →
+    (∃ w, σ'.regs.get? Register.minstret = some w) →
+    ∃ (σ2 : MState) (i2 u2 : Nat),
+      Steps ⟨σ', i', u'⟩ ⟨σ2, i2, u2⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧
+      σ2.regs.get? Register.PC = some (0x8000442c#64 : BitVec 64) ∧
+      σ2.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧
+      σ2.regs.get? Register.x2 = some spNew ∧
+      (∃ w, σ2.regs.get? Register.minstret = some w)
+
+/-- The sp-survival residual: `sp = spNew` is preserved across the setjmp call.
+This is TRUE (setjmp writes only `x10` + the buffer stores, never `x2`), but
+`setjmp_post`'s frame is stated over `NotWrittenJmp`, which EXCLUDES `x2` (the
+shared setjmp/longjmp union frame — longjmp writes `x2`), so it is not derivable
+from the contract as landed.  Named per observations `setjmp-post-no-sp-frame`. -/
+def SpRetSurvives (spNew : BitVec 64) : Prop :=
+  ∀ (cR : Config),
+    GoodState cR.σ →
+    cR.σ.regs.get? Register.PC = some (0x80004428#64 : BitVec 64) →
+    cR.σ.regs.get? Register.x10 = some (0#64 : BitVec 64) →
+    cR.σ.regs.get? Register.x2 = some spNew
+
+/-- **The setjmp-buffer geometry residual, as a Prop-valued existential.**  It
+carries DATA (the buffer address `jb`, the 14 saved values, the ghost frame `g`,
+the pinned memory `m0`) so it MUST be a Prop-valued `def`, not a Type-valued
+`structure` (a `structure` with a `g : (R:Register)→Option (RegisterType R)` field
+next to the 12 `BitVec 64` value fields wedges universe inference; and a Prop-shaped
+consumer cannot project a Type-structure's data anyway).  Consumed by `obtain` at
+the top of `hSplice_of_setjmpSpec` (destructuring a Prop into a Prop goal — legal).
+Exactly `setjmp_pre`'s content beyond the drive's control state, plus the two named
+post-side residuals (`SpRetSurvives`, `BnezFallthrough`). -/
+def SetjmpGeom (c1 : Config) (spNew : BitVec 64) : Prop :=
+  ∃ (jb : BitVec 64)
+    (s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v : BitVec 64)
+    (g : (R : Register) → Option (RegisterType R))
+    (m0 : Mem),
+    c1.σ.mem = m0 ∧
+    Code.SetjmpLoaded c1.σ.mem ∧
+    c1.σ.regs.get? Register.x10 = some jb ∧
+    (0x80004428#64 : BitVec 64).toNat % 4 = 0 ∧
+    c1.σ.regs.get? Register.x8 = some s0v ∧
+    c1.σ.regs.get? Register.x9 = some s1v ∧
+    c1.σ.regs.get? Register.x18 = some s2v ∧
+    c1.σ.regs.get? Register.x19 = some s3v ∧
+    c1.σ.regs.get? Register.x20 = some s4v ∧
+    c1.σ.regs.get? Register.x21 = some s5v ∧
+    c1.σ.regs.get? Register.x22 = some s6v ∧
+    c1.σ.regs.get? Register.x23 = some s7v ∧
+    c1.σ.regs.get? Register.x24 = some s8v ∧
+    c1.σ.regs.get? Register.x25 = some s9v ∧
+    c1.σ.regs.get? Register.x26 = some s10v ∧
+    c1.σ.regs.get? Register.x27 = some s11v ∧
+    WinRAM jb ∧
+    (∀ R : Register, NotWrittenJmp R → c1.σ.regs.get? R = g R) ∧
+    SpRetSurvives spNew ∧
+    BnezFallthrough spNew
+
+/-- **`hSplice` discharged by `JmpSpec.setjmp_spec`.**  From the setjmp-buffer
+geometry `SetjmpGeom` at the parked setjmp entry, `setjmp_spec`'s FIRST return
+(`a0 = 0`, `PC = ra0 = 0x80004428`) runs; then the named not-taken `bnez` step
+(`hGeom.bnez`) falls through to loop-setup A's entry `0x8000442c`, producing the
+`SetjmpSplice`.  `setjmp_spec` is REUSED verbatim; the only residuals are the
+buffer geometry + the single `bnez` step, both genuinely off the spill decode. -/
+theorem hSplice_of_setjmpSpec
+    (hGeom : ∀ (c1 : Config) (spNew : BitVec 64),
+        c1.σ.regs.get? Register.PC = some (0x80006ffc#64 : BitVec 64) →
+        c1.σ.regs.get? Register.x1 = some (0x80004428#64 : BitVec 64) →
+        c1.σ.regs.get? Register.x2 = some spNew →
+        GoodState c1.σ → c1.tick < 2 →
+        SetjmpGeom c1 spNew) :
+    ∀ (c1 : Config) (spNew : BitVec 64),
+        c1.σ.regs.get? Register.PC = some (0x80006ffc#64 : BitVec 64) →
+        c1.σ.regs.get? Register.x1 = some (0x80004428#64 : BitVec 64) →
+        c1.σ.regs.get? Register.x2 = some spNew →
+        GoodState c1.σ → c1.tick < 2 →
+        SetjmpSplice c1.σ c1.tick c1.steps spNew := by
+  intro c1 spNew hpc hra hsp hG htick
+  -- Destructure the geometry existential (goal is the Prop `SetjmpSplice`, so this
+  -- Prop-into-Prop elimination is legal).
+  obtain ⟨jb, s0v, s1v, s2v, s3v, s4v, s5v, s6v, s7v, s8v, s9v, s10v, s11v, g, m0,
+      gmem, gloaded, ga0, graA, gs0, gs1, gs2, gs3, gs4, gs5, gs6, gs7, gs8, gs9,
+      gs10, gs11, gwin, gframe, gspRet, gbnez⟩ :=
+    hGeom c1 spNew hpc hra hsp hG htick
+  -- Run `setjmp_spec` (first return) from the geometry.
+  obtain ⟨cR, hstepsR, hpostR⟩ :=
+    setjmp_spec g jb (0x80004428#64) s0v s1v s2v s3v s4v s5v
+      s6v s7v s8v s9v s10v s11v spNew m0 c1
+      ⟨hG, gloaded, gmem, hpc, ga0, hra, graA, gs0, gs1, gs2, gs3,
+        gs4, gs5, gs6, gs7, gs8, gs9, gs10, gs11, hsp, gwin,
+        hG.minstret, htick, gframe⟩
+  obtain ⟨hGR, htickR, hpcR, ha0R, _hmemR, hmiR, _hframeR⟩ := hpostR
+  -- `sp = spNew` at the setjmp return: the named sp-survival residual (setjmp does not
+  -- write x2, but the union-framed post cannot state it — observations
+  -- `setjmp-post-no-sp-frame`).
+  have hspR : cR.σ.regs.get? Register.x2 = some spNew := gspRet cR hGR hpcR ha0R
+  -- Now the not-taken `bnez` fallthrough.
+  obtain ⟨σ2, i2, u2, hsteps2, hi2, hG2, hpc2, ha02, hsp2, hmi2⟩ :=
+    gbnez cR.σ cR.tick cR.steps hGR htickR hpcR ha0R hspR hmiR
+  refine ⟨σ2, i2, u2, ?_, hi2, hG2, hpc2, ha02, hsp2, hmi2⟩
+  have hstepsC : Steps ⟨c1.σ, c1.tick, c1.steps⟩ cR := hstepsR
+  exact hstepsC.trans hsteps2
+
+#print axioms hSplice_of_setjmpSpec
+
+/-! ## §6. The capstone — `driveToLoopHead_closed` with the discharged premises removed
+
+`driveToLoopHead_interpRunLayout` (§3) demanded FIVE premises, two of which — the
+setjmp splice (`hSplice`) and the two loop-setup landings (`hLoopA`/`hLoopB`) — are
+now DISCHARGED by the proved rows / the landed `setjmp_spec` (§4/§5).  This capstone
+threads those dischargers in, leaving ONLY the honest residuals:
+
+* `hSpill` — the spill-body ≫ `jal setjmp` bridge landing (the `driveSpillBridge`
+  row's per-config obligation: a `main`-prologue register state + memory decode);
+* `hGeom` — the setjmp-buffer geometry (`SetjmpGeom`: `setjmp_pre`'s content beyond
+  the drive's control state, plus the sp-survival + `bnez`-fallthrough residuals,
+  all off the `interp_run` prologue path — the `interp`-block/on_error geometry);
+* `hDataA` / `hDataB` — the two loop-setup seg-entry data suppliers (`SegEntryData`:
+  the entry `GHolds` pin list + memory-decode `ChainFacts` for each span);
+* `hFields` — the loop-head `SegEntryFields` (the off-path `interp_init`-built store
+  representation `StoreRepr`/`OutRepr` + budgets — consumed, not re-derived).
+
+The `hSplice`/`hLoopA`/`hLoopB` obligations are GONE: they are supplied internally
+by `hSplice_of_setjmpSpec hGeom` / `hLoopA_of_row … hDataA` / `hLoopB_of_row … hDataB`.
+Everything downstream (`interpInitStoreRepr_of_driveToLoopHead`,
+`divEntryDrive_of_driveToLoopHead`, both entry consumers) is unchanged. -/
+theorem driveToLoopHead_closed
+    (spA a0A : BitVec 64) (ldsA : List (List (BitVec 8)))
+    (m0A : Std.ExtHashMap Nat (BitVec 8))
+    (spB gpB : BitVec 64) (ldsB : List (List (BitVec 8)))
+    (m0B : Std.ExtHashMap Nat (BitVec 8))
+    (hSpill : ∀ (p : Program) (c : Config), Loaded interpRunLayout p c → SpillLanded c)
+    (hGeom : ∀ (c1 : Config) (spNew : BitVec 64),
+        c1.σ.regs.get? Register.PC = some (0x80006ffc#64 : BitVec 64) →
+        c1.σ.regs.get? Register.x1 = some (0x80004428#64 : BitVec 64) →
+        c1.σ.regs.get? Register.x2 = some spNew →
+        GoodState c1.σ → c1.tick < 2 →
+        SetjmpGeom c1 spNew)
+    (hDataA : ∀ (c2 : Config),
+        c2.σ.regs.get? Register.PC = some (0x8000442c#64 : BitVec 64) →
+        GoodState c2.σ → c2.tick < 2 →
+        (∃ w, c2.σ.regs.get? Register.minstret = some w) →
+        SegEntryData driveLoopSetupASeg (driveLoopSetupAL spA a0A) ldsA m0A c2)
+    (hDataB : ∀ (c3 : Config),
+        c3.σ.regs.get? Register.PC = some (0x80004438#64 : BitVec 64) →
+        GoodState c3.σ → c3.tick < 2 →
+        (∃ w, c3.σ.regs.get? Register.minstret = some w) →
+        SegEntryData driveLoopSetupBSeg (driveLoopSetupBL spB gpB) ldsB m0B c3)
+    (hFields : ∀ (cH : Config),
+        cH.σ.regs.get? Register.PC = some (0x8000448c#64 : BitVec 64) →
+        GoodState cH.σ → cH.tick < 2 → SegEntryFields cH) :
+    DriveToLoopHead interpRunLayout :=
+  driveToLoopHead_interpRunLayout
+    hSpill
+    (hSplice_of_setjmpSpec hGeom)
+    (hLoopA_of_row spA a0A ldsA m0A hDataA)
+    (hLoopB_of_row spB gpB ldsB m0B hDataB)
+    hFields
+
+#print axioms driveToLoopHead_closed
 
 end Vsa.Sim
