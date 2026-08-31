@@ -1,0 +1,11 @@
+# Proof-discipline rules — one rule per line, TAB-separated.
+# Columns: rule_id	scope_glob	pattern(regex, python)	message
+# Applies to files NOT listed in discipline_grandfather.txt (legacy files are
+# grandfathered as-is; NEW files are strict). A line may be exempted with a
+# trailing comment marker:  -- discipline: allow(<rule_id>) <justification>
+# Add rules over time: append a line here; no code changes needed.
+R1-site-battery	Vsa/**/*.lean	^\s*theorem\s+site_[0-9a-fA-F]{8}	hand per-site StepObs lemma: the region is on the block-reflection decode table — use #derive_case/block_facts (model: Vsa/Sim/EnvDefSeg.lean; 58 hand lines became 14)
+R2-heartbeat-raise	Vsa/**/*.lean	set_option\s+maxHeartbeats\s+(?!400000\b|200000\b|8000000\b)\d+	nonstandard maxHeartbeats: a timeout means the construction is wrong — fix with more abstraction (check ground literals first), never a budget raise
+R3-hand-abi-frame	Vsa/**/*.lean	strlenFrame_(alu|btaken|bnottaken|jr)	hand ABI-frame threading: framed variants are FREE — use FrameMeta (abiFrame_of_wrChain / memFrame_of_chain / bblocks_sound_framed, one decide per block)
+R4-hand-framed-ghost	Vsa/**/*.lean	_framed\b.*:=\s*by\s*$	per-callee framed re-derivation: before re-running a chain with a ghost conjunct, check FrameMeta metatheorems apply (they subsume ABI + footprint frames)
+R5-stepobs-volume	Vsa/**/*.lean	COUNT>12:stepObs_	>12 stepObs_ references in one new file: this is a hand-threaded chain — use the seg/block-reflection layer (block_facts, #derive_case, chain_facts)
