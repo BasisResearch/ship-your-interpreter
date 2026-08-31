@@ -441,6 +441,8 @@ import Vsa.Sim.rows.ExecRouting
 import Vsa.Sim.rows.ExecRecRows
 import Vsa.Sim.rows.CallRows
 import Vsa.Sim.rows.CallResidProviders
+import Vsa.Sim.rows.CallArmEpilogue
+import Vsa.Sim.rows.ExecRetNullGlue
 import Vsa.Sim.TermEntry
 import Vsa.Sim.EntryHalts
 import Vsa.Sim.EntryHaltsSpans
