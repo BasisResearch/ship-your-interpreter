@@ -121,6 +121,7 @@ import Vsa.Sim.EvalBoolSim
 import Vsa.Sim.EvalVarSim
 import Vsa.Sim.InductionScaffold
 import Vsa.Sim.EvalRecCommon
+import Vsa.Sim.WidenMeta
 import Vsa.Sim.EvalLeafD
 import Vsa.Sim.EvalNegSim
 import Vsa.Sim.NegTailSites
@@ -422,6 +423,7 @@ import Vsa.Sim.Code.FnFmt
 import Vsa.Sim.FrameOn
 import Vsa.Sim.WriteLogNF
 import Vsa.Sim.FrameMeta
+import Vsa.Sim.SegReadback
 import Vsa.Sim.SnprintfPost
 import Vsa.Sim.ErrorSim
 import Vsa.Sim.ErrorTail
@@ -433,6 +435,7 @@ import Vsa.Sim.TermSimClose
 import Vsa.Sim.TermCaseBundle
 import Vsa.Sim.rows.ArmPostGeom
 import Vsa.Sim.rows.TermRouting
+import Vsa.Sim.TermBundles
 import Vsa.Sim.rows.EvalVarRow
 import Vsa.Sim.rows.EvalVarBridge
 import Vsa.Sim.rows.EvalVarBridgeCallee

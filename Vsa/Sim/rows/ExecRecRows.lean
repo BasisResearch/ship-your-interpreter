@@ -1,6 +1,7 @@
 import Vsa.Sim.ExecExprRet
 import Vsa.Sim.ExecRet
 import Vsa.Sim.ExecRetNull
+import Vsa.Sim.ExecVarNull
 import Vsa.Sim.rows.ExecCaseGeom
 import Vsa.Sim.TermSimClose
 
@@ -77,26 +78,23 @@ satisfying the sim's `ExecExit` (the widener is applied ONLY to the sim's own
 exit), it yields `MemExtends m0 c.σ.mem` and the `[SL.lo,SL.hi)`-survival of
 `st'.store` at some extended pair `φf'/φc'`.  This is the recursive analog of
 `ExecLeafWiden` (the identity-φ leaf widener): the survival clause here binds its
-own `∃ φf' φc'`, matching the `ExecExitD.store`/`SubEvalReturn` shape. -/
-def ExecRecWiden
+own `∃ φf' φc'`, matching the `ExecExitD.store`/`SubEvalReturn` shape.
+
+**Re-landed (T1.2)** as a THIN ALIAS of the parametric `Widen` (`WidenMeta.lean`)
+at the `ExecExit` family and the canonical `stackFoot SL` footprint; the bridge is
+`execExitD_of_widen`. -/
+abbrev ExecRecWiden
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat)
     (st' : Vsa.While.St) (status : Status) (sp r aRet : BitVec 64) (m0 : Mem) : Prop :=
-  ∀ c : Config, ExecExit g N A SL φf φc nf nc st' status sp r aRet m0 c →
-    MemExtends m0 c.σ.mem ∧
-    ∃ φf' φc' : Addr → Nat,
-      PhiExtends φf φf' nf ∧
-      PhiExtends φc φc' nc ∧
-      (∀ m' : Mem,
-        (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
-        StoreRepr m' N A φf' φc' st'.store)
+  Widen (ExecExit g N A SL φf φc nf nc st' status sp r aRet m0)
+    N A φf φc nf nc st' m0 (stackFoot SL)
 
 /-- **The recursive widening.** `ExecExit … c ∧ ExecRecWiden …` gives
-`ExecExitD … c` — the `mExecS` motive shape (`ExecBlock.ExecExitD`).  The
-non-identity `φf'/φc'` witnesses come from the widener (not `PhiExtends.refl`, as
-the leaf widener uses), because the recursive sub-derivation extends the store
-maps. -/
+`ExecExitD … c` — the `mExecS` motive shape (`ExecBlock.ExecExitD`).  A THIN
+COROLLARY of the parametric family bridge `execExitD_of_widen`
+(`WidenMeta.lean`). -/
 theorem execExitD_of_execExit_rec
     {g : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
@@ -104,9 +102,8 @@ theorem execExitD_of_execExit_rec
     {st' : Vsa.While.St} {status : Status} {sp r aRet : BitVec 64} {m0 : Mem} {c : Config}
     (hExit : ExecExit g N A SL φf φc nf nc st' status sp r aRet m0 c)
     (hW : ExecRecWiden g N A SL φf φc nf nc st' status sp r aRet m0) :
-    ExecExitD g N A SL φf φc nf nc st' status sp r aRet m0 c := by
-  obtain ⟨hpres, φf', φc', hpf', hpc', hsurv⟩ := hW c hExit
-  exact ⟨hExit, hpres, φf', φc', hpf', hpc', hsurv⟩
+    ExecExitD g N A SL φf φc nf nc st' status sp r aRet m0 c :=
+  execExitD_of_widen hExit hW
 
 /-! ## `ExecExprGeom` — the `hSExpr` recursor-supplied residual bundle
 
@@ -288,6 +285,72 @@ theorem execRetNullSimD
       hRetArena hRetCode (hGlue c.σ.sailOutput) c ⟨hEntry, rfl⟩
   exact ⟨c', hs, execExitD_of_execExit_rec hExit hW⟩
 
+/-! ## PAYOFF DEMO (T1.2) — `execVarNullSimD`: the non-identity-φ statement leaf
+
+`ExecS.varNull` (`.varDecl x none`) is the statement case whose exit store is
+`st.store.define env x .null` — a `Store.define` that ADDS a frame binding, so the
+exit frame count `≠` the entry `nf` and the survival φ-pair is genuinely
+NON-identity.  Under the OLD identity-φ-only `ExecLeafWiden` (`PhiExtends.refl`)
+this case could NOT be re-landed at `ExecExitD` (the step-6b ledger's
+`hSVarNull`-blocked note).  The parametric `Widen` (= the re-landed `ExecRecWiden`
+at the `ExecExit` family, `stackFoot SL` footprint) carries its own
+`∃ φf' φc', PhiExtends φf φf' nf ∧ …`, so the `define`-widened φ is exactly the
+supplied witness — the case is now dischargeable.  `execVarNullSimD` composes
+`execVarDeclNullSim`'s packaged `ExecExit` with `execExitD_of_execExit_rec`,
+threading the widener from the geom bundle.  This is the statement twin of
+`execRetNullSimD`; the `value_null`+`env_define` body `hGlue` is the surfaced open
+residual (unchanged from `execVarDeclNullSim`).
+
+The retslot/`define` footprint story is captured by `Widen`'s `foot` parameter:
+`execVarDeclNullSim`'s survival clause already lands at `stackFoot SL` (the
+`define`d binding lives in the frame arena, disjoint from `[SL.lo,SL.hi)`), and
+`Widen.footMono` (`retslotFoot SL aRet ⊇ stackFoot SL`) is the bridge available for
+any variant whose survival is stated at the wider retslot-augmented footprint. -/
+def ExecVarNullGeom
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (env : Addr) (x : String)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop :=
+  StmtSlotPinned 1 execArmVarDecl m0 ∧
+  (stmtJumpTableBase + 4 * 1 + 4 ≤ SL.lo ∨ sp.toNat ≤ stmtJumpTableBase + 4 * 1) ∧
+  -- the OPEN `value_null` + `env_define` body glue (∀-closed over `out0`):
+  (∀ out0 : Array String,
+    Triple
+      (fun c => ∃ ment v8 v9 v18 v19,
+        ExecArmEntryK g N A SL φf φc st execArmVarDecl sp r aInterp aStmt aEnv aRet
+          v8 v9 v18 v19 out0 m0 ment c)
+      (fun c => ∃ subsret v1 v8 v9 v18 v19 mcall,
+        SubExecReturn g N A SL φf φc st.store.frames.size st.store.closures.size
+          ⟨st.store.define env x .null, st.out⟩ .null
+          sp r aRet subsret (0x80004118#64) v1 v8 v9 v18 v19 m0 mcall c)) ∧
+  -- the NON-identity-φ widener (`define` grew the frame count): the payoff.
+  ExecRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
+    ⟨st.store.define env x .null, st.out⟩ .normal sp r aRet m0
+
+/-- **`execVarNullSimD`** — `ExecS.varNull` re-landed at `ExecExitD`, the
+non-identity-φ statement leaf.  Discharges the `hSVarNull` motive shape via the
+parametric widener (`ExecRecWiden = Widen … (stackFoot SL)`). -/
+theorem execVarNullSimD
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (env : Addr) (x : String)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem)
+    (hSpec : ExecS st d env (.varDecl x none)
+      ⟨st.store.define env x .null, st.out⟩ .normal)
+    (hG : ExecVarNullGeom g N A SL φf φc st d env x
+      sp r aInterp aStmt aEnv aRet m0) :
+    Triple
+      (ExecEntry g N A SL φf φc st d env (.varDecl x none)
+        sp r aInterp aStmt aEnv aRet m0)
+      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        ⟨st.store.define env x .null, st.out⟩ .normal sp r aRet m0) := by
+  intro c hEntry
+  obtain ⟨hslot, htableStk, hGlue, hW⟩ := hG
+  obtain ⟨c', hs, hExit⟩ :=
+    execVarDeclNullSim g N A SL φf φc st d env x sp r aInterp aStmt aEnv aRet m0
+      c.σ.sailOutput hSpec hslot htableStk (hGlue c.σ.sailOutput) c ⟨hEntry, rfl⟩
+  exact ⟨c', hs, execExitD_of_execExit_rec hExit hW⟩
+
 end Vsa.Sim
 
 /-! ## The `mExecS`-motive case rows (the recursor-premise adapters)
@@ -375,5 +438,31 @@ theorem exec_retNull_row
   exact Vsa.Sim.execRetNullSimD g N A SL φf φc st d env
     sp r aInterp aStmt aEnv aRet m0 (ExecS.retNull st d env)
     (hR st d env g N A SL φf φc sp r aInterp aStmt aEnv aRet m0)
+
+/-- The varNull-case residual: the `ExecVarNullGeom` bundle (carrying the OPEN
+`value_null`+`env_define` glue), ∀-closed over the ghosts. -/
+def VarNullResid (st : SpecSt) (d : Nat) (env : Addr) (x : String) : Prop :=
+  ∀ (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    Vsa.Sim.ExecVarNullGeom g N A SL φf φc st d env x
+      sp r aInterp aStmt aEnv aRet m0
+
+/-- Route `hSVarNull` → `execVarNullSimD` (the PAYOFF: non-identity-φ statement
+leaf, unblocked by the parametric widener; conditional on the surfaced
+`value_null`+`env_define` glue inside `VarNullResid`). -/
+theorem exec_varNull_row
+    (hR : ∀ st d env x, VarNullResid st d env x) :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (x : String),
+      mExecS st d env (Stmt.varDecl x none)
+        { store := st.store.define env x Value.null, out := st.out }
+        Status.normal (ExecS.varNull st d env x) := by
+  intro st d env x
+  show Vsa.Sim.ExecIH st d env (.varDecl x none)
+    ⟨st.store.define env x .null, st.out⟩ .normal
+  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  exact Vsa.Sim.execVarNullSimD g N A SL φf φc st d env x
+    sp r aInterp aStmt aEnv aRet m0 (ExecS.varNull st d env x)
+    (hR st d env x g N A SL φf φc sp r aInterp aStmt aEnv aRet m0)
 
 end Vsa.Sim.Rows

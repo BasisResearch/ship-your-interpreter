@@ -4,6 +4,7 @@ import Vsa.Sim.EvalCallPrint
 import Vsa.Sim.EvalCallNative
 import Vsa.Sim.rows.LoopSteps
 import Vsa.Sim.TermCaseBundle
+import Vsa.Sim.WidenMeta
 
 /-!
 # `CallRows` — the call-subsystem case rows (step-6c, HAND-WRITTEN)
@@ -47,25 +48,22 @@ at `EvalExit` (the packaged exit config existential); the `mEvalE` motive
 PLUS the `[SL.lo,SL.hi)`-survival of the exit store at some EXTENDED φ-pair.
 Unlike `LeafWiden` (identity φ, `PhiExtends.refl`), the recursive/allocating exit
 carries its own `∃ φf' φc'` (the call frame / closure array grew), matching
-`EvalExitD`'s existential shape. -/
-def EvalRecWiden
+`EvalExitD`'s existential shape.
+
+**Re-landed (T1.2)** as a THIN ALIAS of the parametric `Widen` (`WidenMeta.lean`)
+at the `EvalExit` family and the canonical `stackFoot SL` footprint; the bridge is
+`evalExitD_of_widen`. -/
+abbrev EvalRecWiden
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat)
     (st' : Vsa.While.St) (v : Value) (sp r sret : BitVec 64) (m0 : Mem) : Prop :=
-  ∀ c : Config, EvalExit g N A SL φf φc nf nc st' v sp r sret m0 c →
-    MemExtends m0 c.σ.mem ∧
-    ∃ φf' φc' : Addr → Nat,
-      PhiExtends φf φf' nf ∧
-      PhiExtends φc φc' nc ∧
-      (∀ m' : Mem,
-        (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
-        StoreRepr m' N A φf' φc' st'.store)
+  Widen (EvalExit g N A SL φf φc nf nc st' v sp r sret m0)
+    N A φf φc nf nc st' m0 (stackFoot SL)
 
 /-- **The recursive eval widening.** `EvalExit … c ∧ EvalRecWiden …` gives
-`EvalExitD … c` — the `mEvalE` motive shape.  The non-identity `φf'/φc'`
-witnesses come from the widener (not `PhiExtends.refl`), because the recursive /
-allocating sub-derivation extends the store maps. -/
+`EvalExitD … c` — the `mEvalE` motive shape.  A THIN COROLLARY of the parametric
+family bridge `evalExitD_of_widen` (`WidenMeta.lean`). -/
 theorem evalExitD_of_evalExit_rec
     {g : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
@@ -73,9 +71,8 @@ theorem evalExitD_of_evalExit_rec
     {st' : Vsa.While.St} {v : Value} {sp r sret : BitVec 64} {m0 : Mem} {c : Config}
     (hExit : EvalExit g N A SL φf φc nf nc st' v sp r sret m0 c)
     (hW : EvalRecWiden g N A SL φf φc nf nc st' v sp r sret m0) :
-    EvalExitD g N A SL φf φc nf nc st' v sp r sret m0 c := by
-  obtain ⟨hpres, φf', φc', hpf', hpc', hsurv⟩ := hW c hExit
-  exact ⟨hExit, hpres, φf', φc', hpf', hpc', hsurv⟩
+    EvalExitD g N A SL φf φc nf nc st' v sp r sret m0 c :=
+  evalExitD_of_widen hExit hW
 
 /-! ## `hCall` — the composite `EX_CALL` arm re-landed at `EvalExitD`
 

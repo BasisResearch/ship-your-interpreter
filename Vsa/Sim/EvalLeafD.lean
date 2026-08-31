@@ -1,6 +1,7 @@
 import Vsa.Sim.EvalVarSim
 import Vsa.Sim.EvalBoolSim
 import Vsa.Sim.EvalRecCommon
+import Vsa.Sim.WidenMeta
 
 /-!
 # Layer 4 — M4 leaf `EvalE` cases re-landed at `EvalExitD` (the shape-gap discharge)
@@ -75,25 +76,25 @@ a *widener*: a function that, for ANY config `c` satisfying the leaf's own
 exit (the delta is a `writeMap` chain over `m0` — presence-preserving — and the
 store footprint is disjoint from `[SL.lo,SL.hi)`), and is the leaf analog of the
 neg case's `hMcallPop`: the honest re-supply of what `EvalExit` forgets. The
-recursor's leaf minor premise provides it. -/
-def LeafWiden
+recursor's leaf minor premise provides it.
+
+**Re-landed (T1.2)** as a THIN ALIAS of the parametric `Widen` (`WidenMeta.lean`)
+at the `EvalExit` family and the canonical `stackFoot SL` footprint, with
+`nf/nc := st'.store.…size`.  A leaf allocates nothing, so the survival φ-pair is
+witnessed at `PhiExtends.refl` when the recursor supplies the residual; the
+uniform `Widen` shape (a `∃ φf' φc'` field) makes leaves and the recursive cases
+one object. -/
+abbrev LeafWiden
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st' : Vsa.While.St) (v : Value) (sp r sret : BitVec 64) (m0 : Mem) : Prop :=
-  ∀ c : Config, EvalExit g N A SL φf φc st'.store.frames.size st'.store.closures.size
-      st' v sp r sret m0 c →
-    -- (a) presence monotonicity `MemExtends m0 (exit mem)`
-    MemExtends m0 c.σ.mem ∧
-    -- (b) the `[SL.lo, SL.hi)`-survival of the exit store
-    (∀ m' : Mem,
-      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
-      StoreRepr m' N A φf φc st'.store)
+  Widen (EvalExit g N A SL φf φc st'.store.frames.size st'.store.closures.size
+      st' v sp r sret m0)
+    N A φf φc st'.store.frames.size st'.store.closures.size st' m0 (stackFoot SL)
 
 /-- **The leaf widening.** `EvalExit … c ∧ LeafWiden …` gives `EvalExitD … c` —
-the `mEvalE` motive shape. `LeafWiden` at the (already-established) `EvalExit`
-supplies the `MemExtends` clause and the `[SL.lo,SL.hi)`-survival clause, at the
-identity `φ` extensions (a leaf allocates nothing, so `st'.store = st.store` at
-the entry maps). -/
+the `mEvalE` motive shape.  A THIN COROLLARY of the parametric family bridge
+`evalExitD_of_widen` (`WidenMeta.lean`). -/
 theorem evalExitD_of_evalExit
     {g : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
@@ -103,8 +104,7 @@ theorem evalExitD_of_evalExit
     (hW : LeafWiden g N A SL φf φc st' v sp r sret m0) :
     EvalExitD g N A SL φf φc st'.store.frames.size st'.store.closures.size
       st' v sp r sret m0 c :=
-  let ⟨hpres, hsurv⟩ := hW c hExit
-  ⟨hExit, hpres, φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, hsurv⟩
+  evalExitD_of_widen hExit hW
 
 /-! ## The five leaf `*D` lemmas
 

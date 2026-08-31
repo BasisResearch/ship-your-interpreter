@@ -1,6 +1,7 @@
 import Vsa.Sim.ExecBrkCont
 import Vsa.Sim.ExecRetNull
 import Vsa.Sim.ExecBlock
+import Vsa.Sim.WidenMeta
 
 /-!
 # Layer 4 — M4 leaf `ExecS` cases re-landed at `ExecExitD` (the statement shape-gap)
@@ -62,25 +63,25 @@ a *widener*: a function that, for ANY config `c` satisfying the leaf's own
 register-only leaf exit (the delta is a `writeMap8` chain over `m0` — presence-
 preserving — and the store footprint is disjoint from `[SL.lo,SL.hi)`), and is the
 honest re-supply of what `ExecExit` forgets.  The recursor's leaf minor premise
-provides it. -/
-def ExecLeafWiden
+provides it.
+
+**Re-landed (T1.2)** as a THIN ALIAS of the parametric `Widen`
+(`WidenMeta.lean`), at the `ExecExit` family and the canonical `stackFoot SL`
+footprint, with `nf/nc := st'.store.…size`.  A register-only leaf allocates
+nothing, so the survival φ-pair is witnessed at `PhiExtends.refl` when the
+recursor supplies the residual — but the `Widen` shape (a `∃ φf' φc'` field) is
+uniform with the recursive wideners, so leaves and rec cases share ONE object. -/
+abbrev ExecLeafWiden
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st' : Vsa.While.St) (status : Status) (sp r aRet : BitVec 64) (m0 : Mem) : Prop :=
-  ∀ c : Config, ExecExit g N A SL φf φc st'.store.frames.size st'.store.closures.size
-      st' status sp r aRet m0 c →
-    -- (a) presence monotonicity `MemExtends m0 (exit mem)`
-    MemExtends m0 c.σ.mem ∧
-    -- (b) the `[SL.lo, SL.hi)`-survival of the exit store
-    (∀ m' : Mem,
-      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
-      StoreRepr m' N A φf φc st'.store)
+  Widen (ExecExit g N A SL φf φc st'.store.frames.size st'.store.closures.size
+      st' status sp r aRet m0)
+    N A φf φc st'.store.frames.size st'.store.closures.size st' m0 (stackFoot SL)
 
 /-- **The leaf widening.** `ExecExit … c ∧ ExecLeafWiden …` gives `ExecExitD … c`
-— the `mExecS` motive shape.  `ExecLeafWiden` at the (already-established)
-`ExecExit` supplies the `MemExtends` clause and the `[SL.lo,SL.hi)`-survival
-clause, at the identity `φ` extensions (a register-only leaf allocates nothing, so
-`st'.store = st.store` at the entry maps). -/
+— the `mExecS` motive shape.  A THIN COROLLARY of the parametric family bridge
+`execExitD_of_widen` (`WidenMeta.lean`). -/
 theorem execExitD_of_execExit
     {g : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
@@ -90,8 +91,7 @@ theorem execExitD_of_execExit
     (hW : ExecLeafWiden g N A SL φf φc st' status sp r aRet m0) :
     ExecExitD g N A SL φf φc st'.store.frames.size st'.store.closures.size
       st' status sp r aRet m0 c :=
-  let ⟨hpres, hsurv⟩ := hW c hExit
-  ⟨hExit, hpres, φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, hsurv⟩
+  execExitD_of_widen hExit hW
 
 /-! ## `ExecCaseGeom` — the per-leaf geometry bundle (the recursor-supplied residual)
 

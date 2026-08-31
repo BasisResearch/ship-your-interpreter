@@ -278,3 +278,106 @@ it, still stop and report instead.
   beside each LANDED tower that must stay; enforce mechanically.
 > harvested: gate rules R6/R7 + CLAUDE.md law 6 + table rows (153 legacy
 > violators grandfathered at rule introduction)
+
+## 2026-08-31 segreadback-mechanized (SegReadback.lean, T1.5)
+- missing: N/A (deliverable note) — the two hand idioms from the two prior
+  entries (`loadbearing-seg-register-readback`, `chainfacts-branchguard-arith-
+  overflow`) are now MECHANIZED in `Vsa/Sim/SegReadback.lean`, axiom-clean, ~1.3s:
+  (1) `seg_guard_close [pin,…]` — a standalone tactic = the exact working
+  `simp only [runGM,stepGM,wvalM,srcVal,guardB,lookupG,eraseG,<caller pins>,
+  Nat.reduceEqDiff,if_true,if_false,Option.getD_some] <;> decide`; call it in an
+  `all_goals` after `chain_facts`, ADDITIVE (does not touch ChainFactsTac). Demo
+  `gcDemo_facts` = strKindCheck's two arith guards, verified (probe: `chain_facts`
+  alone genuinely leaves the 2 `guardB … = false` goals) at maxRecDepth 4000.
+  (2) `gholds_lookup_ld` + `lookupG_runGM_snoc` — the load-bearing companion of
+  `gholds_lookup`. `lookupG_runGM_snoc pre a L lds hstore n hrd` reads the value
+  the seg's LAST writer `a` (`a.rd=n`, non-store) deposits as `wvalM a (runGM pre …)`,
+  the leading loads peeled by the existing `srcVal_runGM_ne` (Fix 1a) — no fold
+  reduction, no deep rfl. `gholds_lookup_ld L bs lds hregs hread` then lands
+  `gprGet σ n = some v`. Demos `rbDemo_x11`/`rbDemo_gprGet` = strRejoin's
+  `[ld x12,0(x2); mv x11,x10]` readback of x11, 6 lines vs the 10-line hand simp.
+- workaround: none — bricks, not workarounds.
+- cost: ZERO to callers now; each row calls one lemma/tactic. SegReadback imports
+  SegFrameFactsAuto + ChainFactsTac + rows/StrCmpSignTail.
+- proposal (follow-up, NOT done here): reseat the 3 live hand sites onto these —
+  `StrArmChain.strKindCheck_facts` (→ seg_guard_close), `strRejoin_x11`/`_x9`
+  (→ lookupG_runGM_snoc), owned by a sibling this session so NOT edited. Plus the
+  SWEEP found 3 more hand-unfold sites of this class:
+  `EntryHaltsSpans.lean:178` (`hlk`: lookupG 10 through a 2-block restoreChain —
+  the mv copies a LOADED s5=a0v, so lookupG_runGM_snoc reaches the writer but the
+  value is load-carried not source-peelable; needs a load-value variant),
+  `EntryHaltsSpans.lean:162` + `ExitPathSpans.lean:219` (both `srcVal 1 (runGM …)`
+  = restored-ra PC readbacks feeding `chainEndPC`, a srcVal-not-lookupG shape that
+  `srcval_peel` already covers — reseat onto `srcval_peel`). Total remaining
+  hand-unfold sites of this class after this file: 6 (3 in StrArmChain +
+  2 EntryHaltsSpans + 1 ExitPathSpans), all reseatable, none blocking.
+
+## 2026-08-31 widen-meta-unification (T1.2 parametric exit-widener)
+- missing (now built): ONE parametric exit-widener replacing the 5-widener zoo
+  (`LeafWiden`/`ExecLeafWiden`/`ExecRecWiden`/`EvalRecWiden` + the
+  `evalExit_rebase`/`blockD_v_phic` epilogue). Built `Vsa/Sim/WidenMeta.lean`:
+  named-field `structure Widen (ExitP : Config → Prop) N A φf φc nf nc st' m0
+  (foot : Nat → Prop)` with fields `pres` (MemExtends) + `surv` (∃ φf' φc',
+  PhiExtends ∧ PhiExtends ∧ survival-at-foot). Relation-agnostic (ExitP fully
+  applied). `foot` = FrameMeta-style footprint predicate (`stackFoot SL`,
+  `retslotFoot SL aRet`). Two family bridges `evalExitD_of_widen`/
+  `execExitD_of_widen` + `Widen.footMono` (foot ⊇ stackFoot ⇒ discharges the
+  [SL.lo,SL.hi)-fixed *ExitD). Elab ~1s, axiom-clean.
+- LANDED: 4 of the 5 wideners re-landed as THIN ALIASES — `LeafWiden`
+  (EvalLeafD), `ExecLeafWiden` (ExecCaseGeom), `ExecRecWiden` (ExecRecRows),
+  `EvalRecWiden` (CallRows) are now `abbrev`s = `Widen … (stackFoot SL)`; their
+  `*_of_*` bridges are one-line corollaries of the family bridges. Consumers
+  (TermRouting/EvalVarRow/EvalVarBridge/ExecRouting/CallResidProviders/
+  CallArmEpilogue) UNCHANGED and green (they carry the widener opaquely).
+- GOTCHA: a `structure … : Prop` cannot carry the φ witnesses as DATA fields
+  (`φfExt : Addr → Nat`) — large-elim restriction means those projections aren't
+  generated. Bind the φ pair inside the `surv` field's `∃` instead (also matches
+  the *ExitD existential shape exactly, so bridges are trivial `⟨…⟩`).
+- PAYOFF: the 5th widener (`evalExit_rebase`/`blockD_v_phic`) is NOT an
+  ExitD-producer — it is the pure `PhiExtends.mono/.trans` φ-rebasing PRIMITIVE
+  the survival witnesses use, orthogonal to the widening reassembly; left as-is
+  (statement unchanged, green). The step-6b `hSVarNull`/`hSRetNull` "blocked by
+  identity-φ ExecLeafWiden" note was already stale (both use ExecRecWiden). I
+  built the missing `execVarNullSimD` + `exec_varNull_row` (ExecRecRows) — the
+  genuine non-identity-φ statement leaf (`Store.define` grows the frame count),
+  discharged by the parametric widener's `∃ φf' φc'`; the surfaced open residual
+  is only the `value_null`+`env_define` body glue (unchanged from
+  `execVarDeclNullSim`), NOT the widener. Wiring: `import Vsa.Sim.WidenMeta` into
+  EvalLeafD/CallRows/ExecCaseGeom; `import Vsa.Sim.ExecVarNull` into ExecRecRows.
+
+## 2026-08-31 termbundles-loop-measures-and-envdefine (T1.4 TermBundles assembly target)
+- missing: (1) a SHAPE-generic loop back-edge termination measure the four loop
+  premises (`hSWhileLoop`/`hFlLoop`/`hArgsCons`/`hSeqCons*`) share — `loopFromBody`
+  consumes one per shape but there is no landed generic carrier; (2) a landed
+  COMPOSED `env_define` post-predicate to type `TermCallees.envDefine` against
+  (`envDefContract` is a `Triple P Q`-combinator theorem, not a named contract
+  struct like `MallocContract`/`ReallocOps`).
+- workaround: (1) typed the four `*Measure` fields as opaque named `Prop` slots
+  in `TermGuards` (law-2 named typed premise + doc), SHAPE fixed by field name,
+  witness deferred to the per-shape `loopFromBody` argument; (2) typed
+  `TermCallees.envDefine` as the general `∀ {P Q}, Triple P Q → Triple P Q`
+  combinator shape (matches `envDefContract`'s form; instantiated at M6 by the
+  composed append≫grow≫dispatch join from EnvDefCompose).
+- cost: the `Prop` loop-measure slots carry no structure, so the capstone can only
+  discharge them per loop shape (4 witnesses), not once; the `envDefine` combinator
+  typing means the eventual wiring must thread `envDefContract`'s P/Q through the
+  three consuming premises (`hAssign`/`hSVarInit`/`hCallClosure`) rather than
+  projecting one field.
+- proposal: (1) a `LoopMeasure`/`loopFromBody`-facing carrier record (one field per
+  loop SHAPE with the well-founded relation) so `TermGuards` holds structured
+  measures; (2) promote the composed `env_define` behaviour to a named
+  `EnvDefineContract` struct (like `MallocContract`) in EnvDefCompose so
+  `TermCallees.envDefine` is a projectable field, matching the malloc/realloc form.
+
+## 2026-08-31 imagegeom-sufficient-for-termshared (T1.4 TermBundles)
+- missing: nothing — `ImageGeom` (TermImageGeom.lean) already carries exactly the
+  two `decide`-provable G facts (`stack_ram`, `stack_win`) that `TermShared.geom`
+  needs; the sp-dependent facts (`stackBounds`) are correctly site-parameters via
+  `ImageGeom.stackBounds`, NOT struct fields (matches the record's own doc: "Static
+  facts common to the current EvalE rows ... site-dependent facts remain explicit").
+- workaround: NONE — reused `ImageGeom N A SL` verbatim as the `geom` field; no
+  additive extension required.
+- cost: none.
+- proposal: keep `ImageGeom` as-is; if a future row needs a NEW whole-program
+  (non-sp) constant, add it additively to `ImageGeom` (one field) — do NOT widen
+  `TermShared` directly.
