@@ -573,6 +573,7 @@ theorem domRun_keys_bt : ∀ (is : List MInstr) (L : GRegs)
     | subw => exact dom_cons_erase h
     | auipc => exact dom_cons_erase h
     | xori => exact dom_cons_erase h
+    | slliw => exact dom_cons_erase h
     | sw => exact h
     | sd => exact h
     | sb => exact h
@@ -634,6 +635,9 @@ theorem keysOK_runGM_bt : ∀ (is : List MInstr) (pc0 : BitVec 64) (dom : List N
     | xori =>
       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .xori ard ars1 ars2)
       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | slliw =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .slliw ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
     | sw => exact ih _ _ _ _ hwfr hkeys
     | sd => exact ih _ _ _ _ hwfr hkeys
     | sb => exact ih _ _ _ _ hwfr hkeys
@@ -677,6 +681,7 @@ theorem writeLog_wlog_low_bt (mc : Std.ExtHashMap Nat (BitVec 8)) :
     | subw => exact ih m _ _ hfr j hj
     | auipc => exact ih m _ _ hfr j hj
     | xori => exact ih m _ _ hfr j hj
+    | slliw => exact ih m _ _ hfr j hj
     | sw =>
       have hwin : tohostAddr + 16 ≤
           (eaddrM ⟨apc, aword, ab0, ab1, ab2, ab3, .sw, ard, ars1, ars2, aimm⟩ L).toNat :=

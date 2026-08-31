@@ -22,43 +22,97 @@ file `interpsim-completion-campaign.md`, and the per-front ledgers in
   work is discharging the rows' named residuals plus the un-rowed ExecS
   dispatch/loop family, then the table assembly.
 
+## The exponentiating layer (LANDED 2026-08-31) and its enforcement
+
+Diagnosis: env_define's cost came from proving on the wrong layer — bespoke
+per-site batteries (four near-identical prefix-runs beside a region that was
+already 106/106 decode-tabled) and per-callee framed-post re-derivations. The
+force multipliers are now LANDED; queue items below are consumed THROUGH this
+layer, not beside it:
+
+- **`FrameMeta`** (`abiFrame_of_wrChain`/`memFrame_of_chain`/
+  `bblocks_sound_framed`): ABI + memory frames for any reflected chain by one
+  `decide` each — framed callee variants are FREE (the block-reflection
+  soundness lemmas already carried the clauses; these are thin corollaries).
+- **`BridgeSeg.bridgeOfSeg`** + `jalStep_of_obs`: the Shape-A bridge shape
+  factored once. Measured on capCompute: 350 hand lines / 6.8s → 72 lines /
+  1.5s; each remaining bridge ≈ 35 lines. `MKind.slliw` added to the shared
+  core (5-bit shamt; whole-struct `mkLine` rfl freezes for it — assert
+  decoded fields individually). Model files: `EnvDefSeg.lean`.
+- **Discipline gate** (`check_all` stage a4 = `scripts/check_discipline.py` +
+  `scripts/discipline_rules.tsv`): hand site batteries, heartbeat raises,
+  hand frame threading, framed re-derivations, stepObs-volume — FAIL for new
+  files. 647 legacy files grandfathered (shrink-only). Extending: one TSV
+  line per new rule; when a new abstraction lands, add it to CLAUDE.md's
+  mandatory-use table AND add a rule catching its hand-rolled equivalent.
+- **`CLAUDE.md`**: the standing laws + task-shape→tool table for every future
+  session. **`experiments/observations.md`**: agents append missing-general-
+  fact observations AT THE MOMENT OF NOTICING (survives stalls); coordinator
+  harvests to the task board.
+
+Legacy shrink (`experiments/legacy-elimination-plan.md`): NOT campaign
+priority. Only its Tier-0 build-time experiment (the 512 generated DecodeTable
+files' uniform 16M-heartbeat constant — DecodeTable dominates build CPU) is
+worth a slot DURING the campaign, and only if the measurement shows a rebuild-
+speed win that pays back in iteration rate. Everything else is post-campaign
+hygiene under the ratchet.
+
 ## Discharge queue
 
 Ordered by leverage and dependency; each item is scoped with reuse identified
 (details in the session task board and ledgers).
 
-1. **env_define bridges** (6 of 9 remain: bridgeStore via a FrameRepr-append
-   core lemma; namesToVals/appendHead via a GrowEnvEntry struct-pin seam;
-   hUpdate + dispatch scan via the env_get scan shape; memcpy word-route framed
-   epilogue). Unblocks hAssign, hSVarInit/hSVarNull/hSBlock, and the
+1. **env_define bridges** (5 of 9 remain — namesToVals CLOSED via the
+   `GrowEnvEntry` struct-pin seam): each remaining bridge = a `#derive_case`
+   seg + `bridgeOfSeg` application (~35 lines; `capComputeSeg_run` is the
+   model). bridgeStore additionally uses the landed `frameRepr_append` core;
+   appendHead reuses the realloc `JalStep` shape; hUpdate's straight-line
+   prefix via `bridgeOfSeg`, its scan via the env_get scan shape
+   (`loopFromBody`); memcpy word-route framed epilogue via `FrameMeta` (no
+   ghost re-run). Unblocks hAssign, hSVarInit/hSVarNull/hSBlock, and the
    Call.closure env-fold.
-2. **ExecS dispatch/loop arms** (if/while/for/block/seq) — the largest un-rowed
-   family; `execBlockA`/`execBlockD` + the loop shapes exist, each arm is a
-   chain instance.
-3. **Call residuals** — native print char-loop body, `CallArmSpec`/`FnArmSpec`
-   (unblocked by `blockD_v_phic`), retNull glue assembly, `ArgsNilHop`,
-   `ArgsBodyOracle`.
+2. **ExecS dispatch/loop arms** (if/while/for/block/seq) — the largest
+   un-rowed family; `execBlockA`/`execBlockD` + the loop shapes exist; each
+   arm = seg chains (`#derive_case`/`chain_facts`) + `callSeg` seams +
+   `ExecRecWiden`, frames free via `FrameMeta`.
+3. **Call residuals** — native print char-loop body (`loopFromBody` +
+   `NativeDispatchSpan`), `CallArmSpec`/`FnArmSpec` (unblocked by
+   `blockD_v_phic`; entry via `blockA_binaryArm`-style bridges), retNull glue
+   assembly (site batteries + `NullBridgeSeam` landed — the ld-step +
+   splice compose via `callSeg`), `ArgsNilHop`, `ArgsBodyOracle`.
 4. **hBinary str cells** — str-cmp arm chain (sign tails + callees landed;
-   `StrCmpOrderBridge` = String.lt ↔ strcmp sign is the one spec-layer gap) and
-   the stringify/concat path (biggest single new development; `stringify` has
-   no spec).
+   assemble via `cmpDispatch`-style segs + `callSeg` on `strcmp_full_spec`;
+   `StrCmpOrderBridge` = String.lt ↔ strcmp sign is the one spec-layer gap)
+   and the stringify/concat path (biggest single new development; give
+   `stringify` its framed spec via `FrameMeta` over its reflected chain, not
+   a ghost re-run).
 5. **hVar last layer** — `VarPostRepack` + `EnvGetCallerGeom` discharge at the
-   arm (marshalling + framed post landed).
-6. **Entry seams** — `StoreInitSeam` (env_new startup decode) +
-   `EpilogueFrame` (`restoreRetChain_run` reuse); closes hEntryHalts.
+   arm (`foundSt_of_storeRepr` marshalling + `env_get_found_framed` landed;
+   the repack consumes the memory-frame post).
+6. **Entry seams** — `StoreInitSeam` (env_new startup: seg the prologue via
+   the tabled region + `setjmp_spec` `callSeg` splice) + `EpilogueFrame`
+   (`restoreRetChain_run` reuse); closes hEntryHalts via `hEntryHalts_closed`.
 7. **hCallClosure** — after (1): arity + depth guard + env_new +
-   env_define-fold + body-ExecSeq at d+1, all callSeg seams.
-8. **StmtDispatchD + hroot** — classical totality induction over the Stmt/Expr
-   mutual family (runs ∨ errors ∨ SApprox-∀); closes htri.
+   env_define-fold (`frameRepr_append` per slot) + body-ExecSeq at d+1, all
+   `callSeg` seams.
+8. **Error-judgment amendment** (3 rules: ExecSeqErr abrupt-head,
+   CallErr.badClosure, for-init) — discharges the three named holes of the
+   LANDED `trichotomy_closed`/`htri_closed`, making htri unconditional; audit
+   the error-family consumers (routing generator absorbs new premises).
 9. **Assembly + M6** — unify residuals into `TermShared`/`TermCallees`/
-   `TermGuards`, fill the `@EvalE.rec` table, `termSimClosed`, hdivFam from the
-   same Triples, Layout bundling into `Vsa.Refine.refinement`, final axiom
-   audit, end-to-end theorem into check_all.
+   `TermGuards`, fill the `@EvalE.rec` table, `termSimClosed`, hdivFam from
+   the same Triples (the `DivStep` conjunction's two arms), Layout bundling
+   into `Vsa.Refine.refinement`, final axiom audit, end-to-end theorem into
+   check_all.
 
-Non-blocking exponentiation refactors, do opportunistically: strlen byte-tail
-on block-reflection; AbiFrameKit hoist; re-seat `interpContSeg_of` on
-`restoreRetChain_run`; generic-`w` cmp fixup bridges; generator for the
-thrice-duplicated 42-premise error-site list.
+Non-blocking exponentiation refactors, do opportunistically (each also
+retires grandfathered files): re-seat the strlen byte-tail + the four hand
+prefix-runs on `bridgeOfSeg`/`FrameMeta` (retires the R3/R1 files); re-seat
+`interpContSeg_of` on `restoreRetChain_run`; generic-`w` cmp fixup bridges
+(serve int + str arms); `keys_evalBlocks` subset lemma (task #31 — drops
+`bridgeOfSeg`'s per-seg key decides to zero); generator for the
+thrice-duplicated 42-premise error-site list. Harvest
+`experiments/observations.md` every wave for new candidates.
 
 ## Execution notes
 

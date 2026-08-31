@@ -75,8 +75,12 @@ def decodeM (w : BitVec 32) : Option (MKind × Nat × Nat × Nat × BitVec 12) :
      else if funct3 = 0 then some (.sb, 0, rs1, rs2, immS)
      else none)
   else if opcode = 0x1b then
-    -- OP-IMM-32: addiw (funct3 = 0); rs2 unused
-    (if funct3 = 0 then some (.addiw, rd, rs1, 0, immI) else none)
+    -- OP-IMM-32: addiw (funct3 = 0) / slliw (funct3 = 1); rs2 unused.  For
+    -- `slliw` the `imm` field is unused (the 5-bit shamt is read off the raw
+    -- word via `shamt5Of` in `astOfM`/`wvalM`); we park `immI` there for shape.
+    (if funct3 = 0 then some (.addiw, rd, rs1, 0, immI)
+     else if funct3 = 1 then some (.slliw, rd, rs1, 0, immI)
+     else none)
   else if opcode = 0x3b then
     -- OP-32: subw (funct3 = 0, funct7 = 0x20)
     (if funct3 = 0 then
@@ -153,6 +157,23 @@ example : mkLine 0x8000364c#64 0x02079713#32
     = ⟨0x8000364c#64, 0x02079713#32, 0x13#8, 0x97#8, 0x07#8, 0x02#8, .slli, 14, 15, 0, 0x020#12⟩ := by rfl
 example : mkLine 0x80003650#64 0x01d75793#32
     = ⟨0x80003650#64, 0x01d75793#32, 0x93#8, 0x57#8, 0xd7#8, 0x01#8, .srli, 15, 14, 0, 0x01d#12⟩ := by rfl
+-- slliw (grow-path head 0x80002b90: `slliw a5,a5,1`, rd=rs1=15, shamt=1).  Checked
+-- field-by-field: the whole-struct `⟨…⟩` `rfl` freezes the kernel here (the LOAD/
+-- STORE `immS` `.append` branches in the opcode chain balloon the combined defeq
+-- problem past its budget — the individual field projections all reduce fine, and
+-- `decodeM` reduces to `some (.slliw, …)` standalone), so we assert the *decoded*
+-- fields directly.  `astOfM` below then confirms the reflected AST equals the
+-- DecodeTable output.
+example : decodeM 0x0017979b#32 = some (.slliw, 15, 15, 0, 0x001#12) := by rfl
+example : (mkLine 0x80002b90#64 0x0017979b#32).kind = MKind.slliw := by rfl
+example : (mkLine 0x80002b90#64 0x0017979b#32).rd = 15 := by rfl
+example : (mkLine 0x80002b90#64 0x0017979b#32).rs1 = 15 := by rfl
+example : (mkLine 0x80002b90#64 0x0017979b#32).imm = 0x001#12 := by rfl
+-- the reflected AST matches the DecodeTable lemma output (shamt5 read off the word):
+example : astOfM ⟨0x80002b90#64, 0x0017979b#32, 0x9b#8, 0x79#8, 0x17#8, 0x00#8, .slliw, 15, 15, 0, 0x001#12⟩
+    = LeanRV64DExecutable.instruction.SHIFTIWOP
+        (0x01#5, LeanRV64DExecutable.regidx.Regidx 0x0f#5,
+         LeanRV64DExecutable.regidx.Regidx 0x0f#5, LeanRV64DExecutable.sopw.SLLIW) := by rfl
 example : mkLine 0x80003640#64 0x00016697#32
     = ⟨0x80003640#64, 0x00016697#32, 0x97#8, 0x66#8, 0x01#8, 0x00#8, .auipc, 13, 0, 0, 0#12⟩ := by rfl
 example : mkLine 0x80003698#64 0x0138a733#32

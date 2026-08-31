@@ -82,6 +82,15 @@ Extend `scripts/check_discipline.py` (data-only where possible):
 3. **Retirement credit**: `check_discipline.py --report` prints the current
    count by tier/rule so progress is visible in every check_all run.
 
+## Priority stance (2026-08-31)
+
+This plan is NOT on the campaign's critical path. It runs only where it
+increases proof-completion RATE: the Tier-0 DecodeTable heartbeat experiment
+(a possible rebuild-speed win on the build's dominant cost — worth one slot,
+measured before adopted) and Tier 2's as-you-touch re-seats (which happen
+anyway through the campaign tasks). Tiers 1/3 and everything cosmetic wait
+for post-campaign hygiene; the ratchet prevents rot meanwhile.
+
 ## Order and estimate
 
 Tier 0 now (one session, -513 files). Tier 1 audit next quiet slot (-10..30).

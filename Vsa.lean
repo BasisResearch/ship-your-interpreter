@@ -328,6 +328,9 @@ import Vsa.Sim.BoxSuffixSeams
 import Vsa.Sim.BinOpValueTails
 import Vsa.Sim.EnvDefCompose
 import Vsa.Sim.EnvDefBridges2
+import Vsa.Sim.EnvDefBridges3
+import Vsa.Sim.BridgeSeg
+import Vsa.Sim.EnvDefSeg
 import Vsa.Sim.EnvDefBridges
 import Vsa.Sim.EvalDivChain
 import Vsa.Sim.SegFrameFacts
@@ -417,6 +420,7 @@ import Vsa.Sim.ImageDischarge
 import Vsa.Sim.Code.FnFmt
 import Vsa.Sim.FrameOn
 import Vsa.Sim.WriteLogNF
+import Vsa.Sim.FrameMeta
 import Vsa.Sim.SnprintfPost
 import Vsa.Sim.ErrorSim
 import Vsa.Sim.ErrorTail
@@ -450,6 +454,7 @@ import Vsa.Sim.StuckSimClose
 import Vsa.Sim.Trichotomy
 import Vsa.Sim.DivFamily
 import Vsa.While.StmtDispatch
+import Vsa.While.StmtDispatchClose
 import Vsa.Sim.InterpSimBundle
 import Vsa.Sim.InterpSimFinal
 import Vsa.Sim.LayoutInstance

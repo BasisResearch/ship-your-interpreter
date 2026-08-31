@@ -94,6 +94,10 @@ python3 scripts/gen_term_case_bundle.py --check \
   || fail "stage a3: Vsa/Sim/TermCaseBundle.lean is stale"
 
 # ------------------------------------------------------------ (b) grep gate
+echo "== stage a4: proof-discipline gate (exponentiating layer mandatory for new files)"
+python3 scripts/check_discipline.py || fail "stage a4: discipline violation (see above)"
+echo "stage a4: OK"
+
 echo "== stage b: sorry / native_decide / axiom gate"
 python3 - <<'PYEOF' || fail "stage b: forbidden token(s) found (see above)"
 import pathlib, re, sys
@@ -358,6 +362,10 @@ THEOREMS=(
   Vsa.Sim.segEval_sound                            # SegEvalSound (L1: reflected block-chain → Machine.Steps in SegEvalState normal form — canonical writeLog, computed regs/PC, one ChainOK decide per row)
   Vsa.Sim.FrameCalc.valueRepr_copy                 # FrameCalc (L2: canonical marshalling/frame calculus — logs compose by append; ValueRepr copy through one write window)
   Vsa.Sim.StepFrameOut.trans                       # StepFrameOut (L3: per-step register-frame + sailOutput preservation folded into one record; write-sets union by ++ in .trans, mirroring FrameCalc — replaces obs_CLASS_other×8 + hobs.out hand-threading)
+  Vsa.Sim.abiFrame_of_wrChain                       # FrameMeta (METATHEOREM c: wrChain ∩ AbiPreserved = ∅ by one decide ⇒ ABI callee-saved frame carried — framed callee variants FREE)
+  Vsa.Sim.memFrame_of_chain                         # FrameMeta (METATHEOREM d: memChain footprint predicate ⇒ memory-frame post, symbolic addresses supported)
+  Vsa.Sim.bblocks_sound_framed                      # FrameMeta (packaged: block-chain soundness with ABI+footprint frames pre-collapsed; caller supplies two decides)
+  Vsa.Sim.mv_dispatch_setup_abiFramed               # FrameMeta (DEMO on the real memmove dispatch segment: O(sites) hand-threading → one decide)
   Vsa.Sim.StepFrameOut.of_alu                      # StepFrameOut (L3: ALU-class smart constructor from a ReadsLikePost — composes hobs.1 + get?_sigmaPost_alu + sailOutput_sigmaPost_alu)
   Vsa.Sim.chainFrameOut_get_demo                   # ChainFrameOut (L3: chain_frame_out folds a whole straight-line run's per-step ReadsLikePost hyps into ONE StepFrameOut by syntactic sigmaPost_* head-dispatch + left-fold .trans; capstone exercises the 8-step fold + whole-run .get/.out over a ~44-elt unioned W (18ms decide). Retrofits blockC_mul's hframeG f_14…f_21 ladder → 3 chain_frame_out calls)
   Vsa.Sim.chainOut_demo                            # ChainFrameOut (L3: chain_out [ho…] = the whole-run sailOutput-invariance projection (σₙ.sailOutput = σ₀.sailOutput) from the same fold, with the unioned write-set W inferred/never-named — the one-line exponentiating replacement for a per-step hout ladder when threading output through a straight-line run)
@@ -443,6 +451,15 @@ THEOREMS=(
   Vsa.Sim.capComputePrefix_run                      # EnvDefBridges2 (grow-path cap-compute prefix run: slliw/slli/sw/mv/jal, first slliw machine site)
   Vsa.Sim.bridgeCapCompute_closed                   # EnvDefBridges2 (3rd Shape-A bridge closed: cap-compute → ReallocPre at realloc entry; residuals hpTie/hnTie/hAInvStableCap named)
   Vsa.Sim.loaded_envdef_writeMap4                   # EnvDefBridges2 (Env_defineLoaded survives disjoint 4-byte stores; grow-path sw reusable)
+  Vsa.Sim.namesToValsPrefix_run                     # EnvDefBridges3 (grow-path staging run lw;sd;ld;slli;add;slli;jal — 4th of the prefix-run family, first RTYPE add site)
+  Vsa.Sim.bridgeNamesToVals_closed                  # EnvDefBridges3 (4th Shape-A bridge closed: GrowEnvEntry → ReallocPre(vals); struct pins survive realloc via HeapPublicFrame)
+  Vsa.Sim.bridgeNamesToVals_wired                   # EnvDefBridges3 (conseq adapter producing envDefGrowContract's bridgeNamesToVals premise verbatim)
+  Vsa.Sim.frameRepr_append                          # EnvDefBridges3 (FrameRepr extended by one bound slot — shared core for bridgeStore + env_define-update + Call.closure env-fold)
+  Vsa.Sim.mallocArgRow                              # EnvDefSeg (DEMO: malloc-prefix body as #derive_case seg — 58 hand lines → 14; region was already 106/106 tabled)
+  Vsa.Sim.strlenArgRow                              # EnvDefSeg (strlen-prefix body as seg; jal stays the callSeg seam by design — TKind excludes calls)
+  Vsa.Sim.bridgeOfSeg                               # BridgeSeg (the mkBridge combinator: seg run + FrameMeta ABI frame + jal transport, 3 decides per bridge; 4.9x fewer lines, 4.5x faster)
+  Vsa.Sim.jalStep_of_obs                            # BridgeSeg (jal-seam glue factored once: PC/link readbacks + gprGet nonRa + ABI frame across the jal)
+  Vsa.Sim.capComputeSeg_run                         # EnvDefSeg (DEMO: capCompute prefix via bridgeOfSeg — 350 hand lines/6.8s → 72 lines/1.5s; first slliw seg)
   Vsa.Sim.envDefGrowContract                        # EnvDefCompose (Shape-D COMPOSED: whole grow path cap' ≫ realloc(names) ≫ realloc(vals) ≫ append-head as one callSeg-chain over ReallocOps.grow twice; residual = the 3 machine bridges capCompute/namesToVals/appendHead + the grow2 arena/frame algebra in EnvDefineClose)
   Vsa.Sim.envDefContract                            # EnvDefCompose (Shape-D TOP-LEVEL: env_define = dispatch ≫ (update ⊕ append ⊕ grow) join; append/grow segments built from the *Contract theorems over the real allocator contracts; residual = dispatch (prologue proved + scan loop) + per-path bridges)
   Vsa.Sim.erow_demo_seg                            # ErrorSiteRows (M5 Wave-D pilot: a real #derive_case (L3) run theorem for the pure stack-spill body 0x800034d0→0x800034e0 preceding the jal runtime_error @0x800034e4 — an eval_expr error-site path — in SegEvalState normal form; pins recipe step 2 on a genuine error-site body)
@@ -557,6 +574,10 @@ THEOREMS=(
   Vsa.While.trichotomy_of_dispatch4                 # While/Trichotomy §5 (repaired trichotomy: only NodeDispatch4 + hroot — hExclude eliminated)
   Vsa.While.nodeDispatch4_of_stmtDispatchD          # While/Trichotomy §5 (per-statement atom lifts to the 4-way node dispatch)
   Vsa.While.trichotomy_of_stmtDispatchD             # While/Trichotomy §5 (FINAL htri reduction: StmtDispatchD + hroot — both honestly provable)
+  Vsa.While.progress                                # StmtDispatchClose (fuel-bounded classical mutual progress over all 6 judgments)
+  Vsa.While.stmtDispatchD_of_holes                  # StmtDispatchClose (StmtDispatchD closed modulo 2 unreachable-config spec holes)
+  Vsa.While.trichotomy_closed                       # StmtDispatchClose (htri CLOSED modulo 3 named spec holes; hroot-as-stated was FALSE — capstone re-assembled, top-level abrupt routed to BigStepErr)
+  Vsa.While.htri_closed                             # StmtDispatchClose (htri-shaped corollary plugging directly into interpSimClosed_of_families)
   # M4 binary-op dispatcher (rows/BinArmBridge + rows/BinDispatchRow)
   Vsa.Sim.blockA_binaryArm                          # rows/BinArmBridge (op-independent EX_BINARY arm entry bridge: EvalEntry (.binary op) -> the blockB_binary ArmEntryK entry)
   Vsa.Sim.eval_binary_row                           # rows/BinDispatchRow (hBinary DISPATCHER: binOpSem-inversion routes all 10 int cells through binRow_<op>; 5 str cells + div-overflow = named EvalIH residual slots)

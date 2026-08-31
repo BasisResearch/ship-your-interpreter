@@ -4,3 +4,6 @@
 # see experiments/module-build-times-baseline.tsv for the pre-campaign ranking.)
 Vsa.Sim.SnprintfSpec20   # 411s under load; obs cut barely helped — needs its own diagnosis (next wave)
 Vsa.Sim.EvalCallNative2  # 194s under load; obs cut took 293->194 — block-reflection migration pending
+Vsa.Sim.rows.EvalGtRow   # 194s under full-world parallel load ONLY; isolated 36.4s (2026-08-31, at/below the 68s historical baseline) — no regression, load inflation on the slliw world-rebuild
+Vsa.Sim.rows.EvalLeRow   # 194s under load; isolated 35.9s (baseline 38s) — same
+Vsa.Sim.rows.EvalLtRow   # 188s under load; isolated 34.9s (baseline 38s) — same

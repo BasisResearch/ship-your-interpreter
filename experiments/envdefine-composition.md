@@ -589,3 +589,82 @@ facts in F + malloc-post→memcpy-entry prefix), `hUpdate` (~30-site + scan `Tri
 dispatch scan loop (Shape-C `Triple.loop`; the env_get/env_define scan factoring the task
 flags is real but both sides are themselves un-assembled `Triple.loop`s — a cross-file
 effort touching read-only EnvGetSpec3/4).
+
+## bridgeNamesToVals + GrowEnvEntry + frameRepr_append — GREEN + axiom-clean (2026-08-31, `Vsa/Sim/EnvDefBridges3.lean`)
+
+New file `Vsa/Sim/EnvDefBridges3.lean` builds green + axiom-clean (`[propext, Classical.choice,
+Quot.sound]`), elab **3.07s** (≤120s budget). No sorry/axiom/native_decide/bv_decide; no Mathlib.
+11 declarations, all `#print axioms`-verified.
+
+### Bridges closed: 4 / 9 (was 3/9) — `bridgeNamesToVals`
+
+- **`bridgeNamesToVals_closed`** — the grow-path names→vals staging prefix
+  `0x80002ba4..0x80002bbc` (`lw a5,4(s4) ; sd a0,8(s4) ; ld a0,16(s4) ; slli a1,a5,1 ;
+  add a1,a1,a5 ; slli a1,a1,3 ; jal realloc`) lands `ReallocPre(vals)` at the realloc entry.
+  From `GrowEnvEntry` (the strengthened source, item 1) it reads back `env->cap`/`env->vals`,
+  stores the new `names` pointer, computes `env->cap*24` (the vals realloc arg `n`), and jal's
+  realloc with `x1=0x80002bc0`, `x10=ofNat pValsOld`, `x11=ofNat nValsNew`.  Frame-carrying:
+  the prefix writes only `{x15,x10,x11,x1}` + the `env->names` word, so sp/gp/callee-saveds
+  survive; `AInv` survives the RAM `env->names` store via `hAInvStableNames` (store-analogue of
+  `bridgeCapCompute_closed`'s `hAInvStableCap`).
+- **`bridgeNamesToVals_wired`** — thin `Triple.conseq` adapter producing the
+  `envDefGrowContract.bridgeNamesToVals` premise shape VERBATIM from `bridgeNamesToVals_closed`
+  given `hEntry : Src → GrowEnvEntry` (the dispatch's `ReallocPost∧ReallocGrowResult → GrowEnvEntry`
+  construction, source-agnostic).  Makes the seam a direct plug into `envDefGrowContract`.
+
+### Item 1 — `GrowEnvEntry` struct-field carrier (the seam design)
+
+`structure GrowEnvEntry SL gpv headroom AInv exts sp g s4Ptr pNamesNew pValsOld capw mN` — the
+ADDITIVE frame-carrying carrier for the grow-path inter-realloc staging.  Beyond `EnvDefFrame`
+(sp/gp/ABI-callee-saveds/AInv) it pins the `Env`-struct field CONTENTS the staging READS —
+`capEq : read32 mN (s4+4) = some capw` and `valsEq : read64 mN (s4+16) = some pValsOld` — plus
+the machine state at `0x80002ba4` and `memEq : c.σ.mem = mN`.  Those struct words survived the
+first realloc (they live in the caller's `Env` struct = public memory, disjoint from the
+realloc'd extent, so `ReallocGrowResult`'s `HeapPublicFrame` outside-clause preserved them); the
+dispatch supplies their values as data — the `AppendStrlenEntry`/`GrowCapEntry` precedent.  KEY:
+the field pins are threaded on the ENTRY memory `mN`; the load-vs-store disjointness inside the
+run (`env->vals` at `s4+16` read AFTER the `env->names` store at `s4+8`) is discharged by
+`getElem_writeMap8_disjoint` (adjacent 8-byte windows).
+
+### Item 3 — `frameRepr_append` (the FrameRepr append core, shared)
+
+`frameRepr_append m N φf φc e parent vars x v cap pn pv` — proves `FrameRepr m N φf φc e
+⟨parent, vars ++ [(x,v)]⟩` from the readback facts of the EXTENDED structure (count `n+1`, cap
+with `n+1≤cap`, names/vals base pointers, the OLD `n` slots' name+value reps surviving, the NEW
+slot's `CString`/`ValueRepr`, parent unchanged).  Pure spec-side memory reasoning (NO machine
+steps), assembled over `define_append_{length,getElem_new,getElem_old}` (EnvDefSpec2).  **This is
+the shared reconstruction the task predicted: it serves `bridgeStore` (append path) AND the
+`env_define`-update append arm AND `Call.closure`'s env-fold — each appends one bound slot to a
+`FrameRepr`.**  `foundSt_of_storeRepr` (EnvGetMarshal) is the REVERSE (StoreRepr→FoundSt, HIT
+readback); this is the forward append — the two are complementary.  The residual for LIVE
+`bridgeStore` is ONLY the MACHINE side (the store-block Steps chain threading the four `sd`/`sw`
+sites + count fold, delivering these readback facts) — named, not built.
+
+### Reusable infrastructure landed (exponentiating)
+
+- 7 new site lemmas `site_80002ba4_ed`..`site_80002bbc_ed` (lw / sd / ld / slli / add / slli /
+  jal).  FIRST `add`(RTYPE) machine site in the env_define family (via `execute_rtype_add_char`);
+  the `lw`/`ld` loads reuse `exec_lw`/`exec_ld` (ValueSites) with `stepObs_alu` (a load's post IS
+  a register-write `sigmaPost_alu`); the `sd` reuses `exec_sd_val`; jal reuses `obs_jal_*_env`.
+- `namesToValsPrefix_run` — the whole 7-step staging as one `Steps` run (mirrors
+  `capComputePrefix_run`/`mallocPrefix_run`/`strlenPrefix_run` — the monolithic-run FAMILY).
+  Carries the load-vs-store disjointness for the `env->vals` read, the `env->names` writeMap8
+  memory equality, and a blanket `{x15,x10,x11,x1}`+control register frame.
+- `ld64_bytes` / `read32_bytes` / `ld_value_eq_read64` (EnvGetSpec3/6, ValueTruthySpec) REUSED
+  VERBATIM to decompose the struct-field `read32`/`read64` pins to byte pins for the run and to
+  tie the loaded `x10` back to `ofNat pValsOld` — zero cloning.
+
+### Wiring for coordinator (NOT applied — do not edit Vsa.lean/check_all.sh here)
+- `Vsa.lean`: add `import Vsa.Sim.EnvDefBridges3` AFTER `import Vsa.Sim.EnvDefBridges2`.
+- `check_all.sh` THEOREMS: add `namesToValsPrefix_run`, `bridgeNamesToVals_closed`,
+  `bridgeNamesToVals_wired`, `frameRepr_append` (all `[propext, Classical.choice, Quot.sound]`);
+  optionally the 7 `site_80002b*_ed`.
+- Regenerate `Vsa.olean` after the import (else top-level `#print axioms` sees unknown const).
+
+### Remaining bridges (updated, precise) — 5/9 open
+`bridgeAppendHead` (grow-path `ld a5,8(s4) ; sd a0,16(s4) ; beqz names→OOM ; bnez vals→0xb1c` —
+2 loads/stores + 2 branches to the append head, consuming `realloc_grow2_arena`/
+`heapPublicFrame_trans`; the branch sites are the new work vs the straight-line `bridgeNamesToVals`),
+`bridgeStore` (MACHINE side only — `frameRepr_append` now discharges its FrameRepr-reconstruction
+content), `bridgeMemcpyPre` (copy-source facts in F + malloc-post→memcpy-entry prefix), `hUpdate`
+(~30-site + scan `Triple.loop`), dispatch scan loop (Shape-C `Triple.loop`).
