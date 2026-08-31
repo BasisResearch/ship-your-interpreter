@@ -1,0 +1,18 @@
+name       = "callClosureArgLoopEntry"
+namespace  = "Vsa.Sim"
+entry      = 0x800031cc
+span_end   = 0x800031d8
+terminator = "br"
+taken      = false
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac"]
+doc        = "CallClosureGeom seam — the EX_CALL closure-arm arg-loop ENTRY block (0x800031cc..0x800031d8): sd s7,1016(sp) (spill the caller env) ; ld a3,0(sp) (reload the closure ptr) ; li a6,0 (arg index := 0) ▷ blez a5 (argc≤0? NOT taken on the has-args path → fall through to the per-arg eval-and-store loop at 0x800031dc). A genuine straight-line machine seam inside the hCallClosure arm that no landed row builds; the terminator is a branch (in-model TKind.br), so it is a plain segToTriple row."
+
+[[pin]]
+reg = 2
+name = "sp"
+[[pin]]
+reg = 23
+name = "s7v"
+[[pin]]
+reg = 15
+name = "a5v"

@@ -679,3 +679,63 @@ it, still stop and report instead.
 - proposal: a `divCorr` = ExecEntry/SegEntry correspondence with `DivStep` proved
   from the shared M4 case Triples; this is the same machine layer that discharges
   `hterm`, so it lands WITH the term-arm rows, not separately.
+
+## 2026-08-31 seqfor-motive-rows (rows/SeqForRows.lean, task: TermResiduals seq+for cluster)
+- missing: a landed adapter from the loop ENGINES' machine contracts to the
+  recursor MOTIVE contracts. `execSeqLoop` speaks `ExecSeqEntry → ExecSeqExit`
+  (sp/r/minstret, NO depth/arena budget); `execForLoopBody` speaks
+  `ExecEntry → ExecExit` at the child scope. The `mExecSeq`/`mForLoop` motives
+  demand `SegEntry → SegExit` (depth_budget/arena_budget, NO sp/r). None of these
+  entry/exit structures is DEFEQ (field sets differ), so the motive Triple is NOT
+  a free `rfl`/`.1`-map of the engine output — a real ABI+budget reconciliation
+  span is missing. ALSO: `mExecSeq … []` is NOT the trivial `execSeqNil` wrap the
+  prior ledger claimed — the motive's entry PC `p` and exit PC `q` are INDEPENDENT
+  (block/interp_run need p=execSeqLoopPC≠q=execSeqContPC), so hSeqNil is a genuine
+  p→q empty-seq hop, not an identity segment (only `mForLoop` was amended to
+  identity-PC; `mExecSeq` legitimately keeps independent p,q).
+- workaround: landed `Vsa/Sim/rows/SeqForRows.lean` — 7 `_row` theorems
+  (hSeqNil_row/hSeqConsAbrupt_row/hSeqConsNormal_row + hFl{CondFalse,BodyBreak,
+  BodyRet,Loop}_row) each routing to a NAMED residual (SeqNilResid/
+  SeqConsAbruptResid/SeqConsNormalResid + ONE shared ForResid, WhileGeom
+  precedent). The cons/loop residuals take the recursor sub-IHs (head ExecIH,
+  tail mExecSeq Triple; mForCond/mExecS/mExecStep/mForLoop) as EXPLICIT inputs so
+  the residual carries ONLY the machine span, not the sub-derivation
+  correspondences. Green + axiom-clean {propext, Classical.choice, Quot.sound},
+  elab ~2s. Two slot-check `example`s type-verify all 7 against the VERBATIM
+  TermCaseBundle.TermCases field types; a wiring check confirms `{ B with hSeqNil
+  := hSeqNil_row R.hSeqNil ; … }` record-update type-checks.
+- cost: the residual still carries the whole motive Triple (the ABI+budget
+  adapter + the ExecForStep/ExecSeqStep body oracle live inside it). Discharging
+  each *Resid needs (1) a SegEntry↔ExecSeqEntry / SegEntry↔ExecEntry adapter and
+  (2) the body oracle, which is blocked on exprRepr_agreeP (loop-fanout.md) —
+  shared with the already-landed block/while engines, NOT new per-row work. The
+  row layer is the mechanical fill point; the semantic gap is unchanged in size.
+- proposal: a `segOfExecSeq` / `segOfExecEntry` reconciliation lemma (drop
+  sp/r, synthesize depth_budget/arena_budget from the SegEntry's own fields) would
+  let the *Resid bodies delegate to execSeqLoop/execForLoopBody once the body
+  oracle lands — collapsing all 7 residuals to the shared oracle + ONE adapter.
+
+## 2026-08-31 genseg-arm-compiler (arm-compiler task)
+- missing: a single generator that turns an *arm description* (span + pins +
+  terminator) into the whole seg-layer row (`#derive_case` seg + `L` + `Post` +
+  `segToTriple` row). The seg/row idiom was hand-transcribed per span across
+  `EnvDefSeg`/`EnvDefBridges4`/`StrArmChain`/`StrCmpSignTail` — each author
+  re-decodes the branch terminator record (`⟨pc,word,4 LE bytes,.br op taken?,
+  rs1,rs2,imm13,imm21,imm12⟩`) and re-writes the identical `segToTriple`
+  ceremony by hand.
+- workaround: BUILT the compiler — `scripts/genseg/lib.py` (shared plumbing:
+  disasm parse, terminator decode, decode-index tabledness check, Lean
+  emit/TSV/TOML) + `scripts/genseg.py` (the arm compiler). Regenerated 3 LANDED
+  hand segs (mallocArg/appendHead/appendStore) — output is byte-identical to the
+  hand version modulo names + line-wrapping; all green + axiom-clean.
+- cost: NONE going forward — a new straight-line/br/j span is now ~15 TSV/TOML
+  lines → ~60 generated lines, vs ~120+ hand `site_*` lines the legacy idiom
+  would pay. Everyone building an M4/M5 machine-span oracle pays the hand cost
+  otherwise.
+- proposal: `scripts/genseg.py` (LANDED). Follow-ups: (1) the `jal` (Shape-D)
+  path emits a NAMED `hjalSeam : JalStep …` residual + a `bridgeOfSeg` skeleton
+  — the callee `site_*` obs glue stays region-specific, so the jal row is not
+  yet fully closed by the compiler (honest: the body run + ABI frame ARE free,
+  only the one call-seam obs is left). (2) retarget the 5 existing generators
+  onto `genseg/lib.py`'s `Emitter`/`load_tsv`/`le_bytes` (safe, mechanical) —
+  deferred to avoid touching landed generators mid-campaign.

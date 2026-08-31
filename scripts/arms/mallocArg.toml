@@ -1,0 +1,10 @@
+name       = "mallocArgGenTest"
+entry      = 0x80002b24
+span_end   = 0x80002b2c
+terminator = "fallthrough"
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac", "Vsa.Sim.BridgeSeg", "Vsa.Sim.EnvDefBridges2"]
+doc        = "The env_define malloc-arg prefix: addi s0,a0,1 ; mv a0,s0 (size = strlen(name)+1 marshalled into a0), parked at the jal malloc seam."
+
+[[pin]]
+reg = 10
+name = "a0"

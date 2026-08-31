@@ -1,0 +1,16 @@
+name       = "appendStoreGenTest"
+entry      = 0x80002b44
+span_end   = 0x80002b8c
+terminator = "j"
+imports    = ["Vsa.Sim.EnvDefSeg", "Vsa.Sim.DeriveCaseRow", "Vsa.Sim.EnvDefBridges3"]
+doc        = "The append-path store block: loads/shifts/adds + 5 stores ▷ j 0x80002aec (names[n], vals[n].{0,1,2}, count+1), parked at the shared finalize tail."
+
+[[pin]]
+reg = 20
+name = "s4Ptr"
+[[pin]]
+reg = 21
+name = "s5Ptr"
+[[pin]]
+reg = 9
+name = "s1Ptr"

@@ -456,9 +456,11 @@ import Vsa.Sim.rows.ExecRecRows
 import Vsa.Sim.rows.ExecIHWiden
 import Vsa.Sim.rows.ExecDispatchRows
 import Vsa.Sim.rows.ScaffoldRows
+import Vsa.Sim.rows.SeqForRows
 import Vsa.Sim.rows.CallRows
 import Vsa.Sim.rows.CallResidProviders
 import Vsa.Sim.rows.CallClosureRow
+import Vsa.Sim.rows.CallClosureArgLoopEntryGen
 import Vsa.Sim.rows.CallArmEpilogue
 import Vsa.Sim.rows.ExecRetNullGlue
 import Vsa.Sim.TermEntry

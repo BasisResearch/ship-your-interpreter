@@ -1,0 +1,18 @@
+name       = "appendHeadGenTest"
+entry      = 0x80002bc0
+span_end   = 0x80002bcc
+terminator = "br"
+taken      = true
+imports    = ["Vsa.Sim.EnvDefSeg", "Vsa.Sim.DeriveCaseRow", "Vsa.Sim.EnvDefBridges3"]
+doc        = "The grow-path append-head span: [ld a5,8(s4) ; sd a0,16(s4)] ▷ beqz(false) ;; [] ▷ bnez(true) → 0x80002b1c (the append head). Two-block chain, both branches write no GPR."
+
+[[pin]]
+reg = 20
+name = "s4Ptr"
+[[pin]]
+reg = 10
+name = "a0"
+
+[[block]]
+end   = 0x80002bc8
+taken = false
