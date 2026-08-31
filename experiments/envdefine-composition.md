@@ -451,3 +451,141 @@ StrlenSpec (axiom-clean), StrlenSpecU (2.6s), EnvDefCompose (2.0s), EnvDefBridge
 `bridgeStrlenPre_closed`/`bridgeMallocPre_closed` still green), StrcmpSpec (1.6s).
 All changes ADDITIVE — no existing signature changed; `strlen_spec`/`strlen_post`/`Done`
 untouched.  StrlenSpec olean regenerated.
+
+## memcpy_spec_framed — GREEN + memcpy seam DISCHARGED (2026-08-30)
+
+The memcpy analogue of `strlen_spec_framed`, closing the `env_define` **memcpy** seam.
+
+### Landed GREEN + axiom-clean (all `[propext, Classical.choice, Quot.sound]`)
+- `Vsa/Sim/MemcpySpecFramed.lean` (NEW, 354 lines, 2.0s) — imports `MemcpySpec4` +
+  `StrlenSpec`.  `memcpy_spec_framed_byte : Triple (PreDispatch gm ∧ ABI(gm))
+  ((∃g', memcpy_bytepath_post g') ∧ ABI(gm))` for the BYTE route
+  (`(src^^^dst)%8≠0 ∨ n<8`).  Chain: `to_bd4_framed` (3-ALU dispatch prologue framed),
+  `dispatch_misaligned_to_byte_framed` / `dispatch_small_to_byte_framed` (byte-route
+  dispatch framed), `bytepath_abi` (byte copy loop transports the ABI conjunct via the
+  path's native same-`g'` `NotWrittenB` frame — NO loop re-run), `abiPreserved_notWrittenB`
+  (`AbiPreserved ⊆ NotWrittenB`), `memcpy_framed_ainv_stable` (the memory-clause corollary).
+- `Vsa/Sim/EnvDefCompose.lean` (2.0s→5.2s w/ new thms) — `envDefMemcpyFramedSplice`
+  (frame-carrying memcpy splice, memcpy analogue of `envDefStrlenSplice`) +
+  `envDefMemcpyFramed` (DISCHARGES the `memcpyFramed` premise from `memcpy_spec_framed_byte`,
+  reconstructing the full `EnvDefFrame`).  `envDefAppendContract` REWIRED: the memcpy seam
+  now threads `EnvDefFrame` (was frame-losing `envDefMemcpySplice`), so `bridgeStore` finally
+  sees `sp`/`gp`/`AInv`/callee-saveds — the whole point.  All 10 capstones axiom-clean.
+
+### The EXPONENTIATION finding — strlen frame primitives REUSED VERBATIM (no clone)
+`strlenFrame_alu`/`_btaken`/`_bnottaken`/`_jr` + `abiPreserved_wr`/`abiPreserved_pinned`
+(StrlenSpec) are keyed ONLY on the `sigmaPost_*` families + `AbiPreserved`, with NO
+strlen-site dependency.  memcpy's dispatch sites emit the SAME `ReadsLikePost (sigmaPost_alu
+…)` shape, so the primitives applied UNCHANGED — zero cloning, zero factoring.  **This is
+the shared abstraction that prevents the third clone**: any future callee's register-only
+prologue frames with these four primitives directly.  Recommend RENAMING them
+`frame_alu`/`frame_btaken`/… (drop the `strlen` prefix) + relocating to a tiny
+`AbiFrameKit.lean` so the naming stops implying strlen-specificity.
+
+### KEY DIFFERENCE vs strlen — the memory clause (destination write)
+strlen: `mem = m0`, `AInv` trivial.  memcpy WRITES `[dst,dst+n)`.
+`memcpy_bytepath_post` ALREADY carries the write-footprint containment
+`∀ a, (a < dst ∨ dst+n ≤ a) → mem[a] = m0[a]` (agrees with `m0` OUTSIDE `[dst,dst+n)`), so
+NO new frame calculus was needed — `envDefMemcpyFramed` reconstructs `AInv` via
+`hAInvStableFoot` (mem-agree-off-`[dst,dst+n)` + gp-agree ⇒ `AInv`), the entry side sourced
+from `PreDispatch.meminv.outside` and the exit side from `memcpy_framed_ainv_stable`.  The
+caller owns `[dst,dst+n)` (fresh `malloc` block, disjoint from `exts`).
+
+### Honest residual (NAMED, never sorry)
+`memcpy_spec_framed_byte` covers the BYTE route only.  The WORD route
+(`dst%8=0 ∧ 8*(n/8)≤64`) resets the ghost at the `NotWrittenW → NotWrittenB` epilogue
+crossover (`epilogue_{notail,tail}_spec`, MemcpySpec4:68), so its ABI-frame carry needs a
+FRAMED word epilogue (≈10 more `strlenFrame_alu` sites) — mechanical follow-up, NOT a
+blocker: a `len+1`-byte C-string copy into a fresh block takes the byte route whenever
+`src`/`dst` are mutually misaligned or `len+1 < 8`.  `envDefAppendContract` is parameterised
+on `hrouteCbyte : (src^^^dst)%8≠0 ∨ nMemcpy<8` (the byte route) — tightening to the 3-way
+route is exactly the framed-word-epilogue follow-up.
+
+### Wiring for coordinator (NOT applied — do not edit Vsa.lean/check_all.sh here)
+- `Vsa.lean`: add `import Vsa.Sim.MemcpySpecFramed` AFTER `import Vsa.Sim.MemcpySpec4`,
+  BEFORE `import Vsa.Sim.EnvDefCompose`.
+- `check_all.sh` THEOREMS: add `memcpy_spec_framed_byte`, `envDefMemcpyFramed`,
+  `envDefMemcpyFramedSplice` (all `[propext, Classical.choice, Quot.sound]`).
+- Regenerate `Vsa.olean` after the import (else top-level `#print axioms` sees unknown const).
+
+## bridgeCapCompute — GREEN + axiom-clean (2026-08-30, `Vsa/Sim/EnvDefBridges2.lean`)
+
+The grow-path cap-compute prefix bridge `bridgeCapCompute` is DISCHARGED as
+`bridgeCapCompute_closed`.  New file `Vsa/Sim/EnvDefBridges2.lean` builds green +
+axiom-clean (`[propext, Classical.choice, Quot.sound]`), elab **6.83s** (≤120s budget; the
+5-step chained frame readback dominates — still well under budget).  No
+sorry/axiom/native_decide/bv_decide; no Mathlib.  EnvDefBridges (1.4s) + EnvDefCompose
+(2.3s) re-verified green + untouched.
+
+### Bridges closed: 3 / 9 (was 2/9)
+
+- **`bridgeCapCompute_closed`** — the grow-path prefix `0x80002b90..0x80002ba0`
+  (`slliw a5,a5,1 ; slli a1,a5,3 ; sw a5,4(s4) ; mv a0,s6 ; jal realloc`) lands
+  `ReallocPre SL gpv headroom AInv extsN pNamesOld nNamesNew spN 0x80002ba4 mN gN` at the
+  realloc entry `0x8000527c`, where `mN = writeMap4 m0 capAddr (swData newcap)` (the
+  post-cap-store memory).  Frame-carrying: source `P` bundles the machine args + the
+  carried `EnvDefFrame` (sp/gp/ABI callee-saveds/AInv).  The prefix writes only
+  `{x15,x11,x10,x1}`, so the frame survives; `AInv` survives the RAM cap store via the
+  named `hAInvStableCap` (store-analogue of `bridgeStrlenPre_closed`'s `hAInvStable`:
+  mem-agree-off-the-4-byte-cap-word ∧ gp-agree ⇒ AInv — legitimate since AInv is abstract,
+  the cap word is inside the caller-owned `Env` struct, disjoint from every allocator
+  extent).  The realloc-entry `rN = 0x80002ba4` (the jal link).
+
+### Reusable infrastructure landed (the exponentiating deliverables)
+
+- **`capComputePrefix_run`** — the whole 5-step cap-compute prefix as one `Steps` run
+  (mirrors `EnvDefBridges.mallocPrefix_run`/`strlenPrefix_run`).  Threads the two shifts
+  (x15/x11), the RAM cap store (memory), the `mv` (x10) and the linking `jal` (x1/PC),
+  delivering PC=reallocEntry, x10=s6, x11=(2*cap)<<<3, x1=0x80002ba4, the full memory
+  equality `σ'.mem = writeMap4 σ.mem capAddr (swData newcap)`, and a blanket register frame
+  for every register outside `{x15,x11,x10,x1}` + control.
+- **5 new site lemmas** `site_80002b90_ed` … `site_80002ba0_ed` (slliw / slli / sw / mv /
+  jal), hand-built from pin + decode + `stepObs_alu`/`stepObs_store`/`stepObs_jal`.  These
+  are the FIRST `slliw` (SHIFTIWOP) machine site in the codebase (built from
+  `execute_shiftiwop_slliw_char`); the `slli`/`sw`/`mv`/`jal` site recipes reuse the
+  EnvDefSites/SnprintfSitesWrap/EnvNewSpec patterns verbatim.
+- **`loaded_envdef_writeMap4`** — the `writeMap4` (`sw`) analogue of EnvDefSpec4's
+  `loaded_envdef_writeMap8`: `Env_defineLoaded` survives any 4-byte store disjoint from the
+  `env_define` code region `[0x80002a5c, 0x80002c10)`.  Reusable for every `sw` into the
+  `Env`/heap in the grow path.
+
+### The `mv;jal` tail observation (further mechanical duplication)
+
+`capComputePrefix_run`'s `mv a0,s6 ; jal realloc` tail is the SAME 2-instruction idiom as
+`strlenPrefix_run`/`mallocPrefix_run` — the third instance of the idiom.  A fully-generic
+`mvJal_run` callback combinator (over the two site-step lemmas) would collapse the tail, but
+each instance is only ~10 lines and the site lemmas differ per-word (decode + register
+dataflow), so the honest factoring is the `capComputePrefix_run`/`mallocPrefix_run`/
+`strlenPrefix_run` FAMILY of monolithic runs sharing the `obs_jal_*`/`get?_sigmaPost_*`
+readbacks (already the shared substrate).  `bridgeNamesToVals` (`0x80002ba4` prefix:
+`lw a5,4(s4) ; sd a0,8(s4) ; ld a0,16(s4) ; slli;add;slli ; jal realloc`) reuses these site
+recipes + `loaded_envdef_writeMap4`, but adds `lw`/`ld` LOADS reading back `Env`-struct
+fields — so it needs a richer source pinning the `env->cap`/`env->vals` field CONTENTS
+(analogous to how `GrowCapEntry` pins the cap register), not just the `ReallocPost` frame.
+
+### Named residual premises of `bridgeCapCompute_closed` (all typed, honest)
+
+- `hpTie : s6Ptr = ofNat pNamesOld` — the `env->names` register holds the old names ptr.
+- `hnTie : (2*cap)<<<3 = ofNat nNamesNew` — the machine shift result equals the realloc
+  arg `n` (`newcap*8`).  A bitvector-shift-vs-`ofNat` equality the dispatch/scan supplies
+  from the concrete `cap` value + a no-wraparound bound; deliberately a named premise
+  (not proved inline) per the "one small decide per fact" rule — the caller knows `cap`.
+- `hAInvStableCap` — AInv survives the RAM cap store (the `MallocContract`-interface
+  stability property, footprint = the 4-byte `env->cap` word).
+- store geometry (`halo`/`hahiram`/`hahiwin`/`haalign`/`hcapCode`) — the `env->cap` word is
+  in RAM, 4-aligned, above `tohostAddr`, disjoint from the `env_define` code.
+
+### Wiring for coordinator (NOT applied — do not edit Vsa.lean/check_all.sh here)
+- `Vsa.lean`: add `import Vsa.Sim.EnvDefBridges2` AFTER `import Vsa.Sim.EnvDefBridges`.
+- `check_all.sh` THEOREMS: add `capComputePrefix_run`, `bridgeCapCompute_closed`,
+  `loaded_envdef_writeMap4` (all `[propext, Classical.choice, Quot.sound]`).
+- Regenerate `Vsa.olean` after the import (else top-level `#print axioms` sees unknown const).
+
+### Remaining bridges (unchanged, precise)
+`bridgeStore` (FrameRepr `Store.define` append-frame reconstruction — large),
+`bridgeNamesToVals`/`bridgeAppendHead` (grow-path load/store over `Env`-struct fields —
+need a source pinning struct-field contents, per above), `bridgeMemcpyPre` (copy-source
+facts in F + malloc-post→memcpy-entry prefix), `hUpdate` (~30-site + scan `Triple.loop`),
+dispatch scan loop (Shape-C `Triple.loop`; the env_get/env_define scan factoring the task
+flags is real but both sides are themselves un-assembled `Triple.loop`s — a cross-file
+effort touching read-only EnvGetSpec3/4).

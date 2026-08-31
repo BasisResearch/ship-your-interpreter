@@ -77,6 +77,7 @@ import Vsa.Sim.MemcpySites3
 import Vsa.Sim.MemcpySpec3
 import Vsa.Sim.MemcpySites4
 import Vsa.Sim.MemcpySpec4
+import Vsa.Sim.MemcpySpecFramed
 import Vsa.Sim.Code.Strlen
 import Vsa.Sim.Code.Strcmp
 import Vsa.Sim.Code.Strcpy
@@ -251,6 +252,8 @@ import Vsa.Sim.EnvGetSpec6
 import Vsa.Sim.EnvGetSpec7
 import Vsa.Sim.EnvGetSpec8
 import Vsa.Sim.EnvGetSpec9
+import Vsa.Sim.EnvGetSpec10
+import Vsa.Sim.EnvGetMarshal
 import Vsa.Sim.SnprintfSites
 import Vsa.Sim.SnprintfSites2
 import Vsa.Sim.SnprintfSites3
@@ -324,6 +327,7 @@ import Vsa.Sim.EqNeDispatchSeg
 import Vsa.Sim.BoxSuffixSeams
 import Vsa.Sim.BinOpValueTails
 import Vsa.Sim.EnvDefCompose
+import Vsa.Sim.EnvDefBridges2
 import Vsa.Sim.EnvDefBridges
 import Vsa.Sim.EvalDivChain
 import Vsa.Sim.SegFrameFacts
@@ -424,11 +428,18 @@ import Vsa.Sim.TermSimClose
 import Vsa.Sim.TermCaseBundle
 import Vsa.Sim.rows.ArmPostGeom
 import Vsa.Sim.rows.TermRouting
+import Vsa.Sim.rows.EvalVarRow
+import Vsa.Sim.rows.EvalVarBridge
+import Vsa.Sim.rows.EvalVarBridgeCallee
 import Vsa.Sim.rows.BinDispatchRow
 import Vsa.Sim.rows.BinDispatchProbe
+import Vsa.Sim.rows.BinStrCells
 import Vsa.Sim.rows.ExecCaseGeom
 import Vsa.Sim.rows.ExecRouting
+import Vsa.Sim.rows.ExecRecRows
+import Vsa.Sim.rows.CallRows
 import Vsa.Sim.TermEntry
+import Vsa.Sim.EntryHalts
 import Vsa.Sim.StuckSimClose
 import Vsa.Sim.InterpSimBundle
 import Vsa.Sim.InterpSimFinal

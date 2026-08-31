@@ -3,6 +3,7 @@ import Vsa.Sim.EnvDefineClose
 import Vsa.Sim.EnvDefSpec3
 import Vsa.Sim.StrlenSpec
 import Vsa.Sim.MemcpySpec4
+import Vsa.Sim.MemcpySpecFramed
 
 /-!
 # `EnvDefCompose` — the composed `env_define` contract (Shape-D)
@@ -239,6 +240,92 @@ theorem envDefMemcpySplice {P Q : Config → Prop}
     Triple P Q :=
   callSeg pre (memcpy_spec g r dst src n m0 bs halign hroute) suf
 
+/-- **Frame-carrying `memcpy` call splice** — the memcpy analogue of the
+frame-carrying `strlen` splice (`envDefStrlenSplice`).  Where `envDefMemcpySplice`
+runs the bare `memcpy_spec` (whose `∃ g'` post drops the ABI/`sp`/`gp`/`AInv` frame
+the store block needs), this threads the carried `EnvDefFrame` THROUGH the memcpy
+call via the named premise `memcpyFramed : Triple (PreDispatch gm ∧ F) (∃ g',
+memcpy_bytepath_post g' ∧ F)` — the exact frame-preservation clause `memcpy` supplies,
+discharged from `memcpy_spec_framed_byte` by `envDefMemcpyFramed` below.  The downstream
+`bridgeStore` then draws its `sp`/`gp`/`AInv`/callee-saved facts from `F`, not thin air. -/
+theorem envDefMemcpyFramedSplice {P Q F : Config → Prop}
+    (gm : (R : Register) → Option (RegisterType R)) (r dst src : BitVec 64) (n : Nat)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (bs : Nat → BitVec 8)
+    (memcpyFramed : Triple
+      (fun c => PreDispatch gm r dst src n m0 bs c ∧ F c)
+      (fun c => (∃ g', memcpy_bytepath_post g' r dst n m0 bs c) ∧ F c))
+    (pre : Triple P (fun c => PreDispatch gm r dst src n m0 bs c ∧ F c))
+    (suf : Triple (fun c => (∃ g', memcpy_bytepath_post g' r dst n m0 bs c) ∧ F c) Q) :
+    Triple P Q :=
+  callSeg pre memcpyFramed suf
+
+/-- **The `memcpyFramed` premise DISCHARGED** from `memcpy_spec_framed_byte`
+(`MemcpySpecFramed`), reconstructing the whole `EnvDefFrame` across the `memcpy` call —
+the memcpy analogue of `envDefStrlenFramed`.
+
+`memcpy_spec_framed_byte` gives `(∃ g', memcpy_bytepath_post g') ∧ (∀ R, AbiPreserved R →
+get? R = gm R)`.  The ABI-frame clause reconstructs `x2=sp` / `x3=gp` (both `AbiPreserved`,
+tied to the ENTRY-pinned `gm`), `StackOK` (an `sp`-value property, unchanged), and the
+callee-saved tie.  `c.tick < 2` comes from `memcpy_bytepath_post`.
+
+**KEY DIFFERENCE vs strlen (the memory clause).**  `strlen` preserves `mem = m0` outright;
+`memcpy` WRITES `[dst,dst+n)`.  `AInv` survives via `hAInvStableFoot`: the memcpy post
+(`memcpy_framed_ainv_stable`) gives memory agreement with the entry memory `m0` at every
+address OUTSIDE the copy footprint `[dst,dst+n)`, and the caller supplies the disjointness
+`hFootDisjoint` (`dst` is the freshly-`malloc`'d block, disjoint from every live extent —
+sourced from the malloc post's `ExtDisjoint`, carried in `EnvDefFrame`'s `AInv exts`).  So
+`AInv` is stable under memory-off-a-disjoint-footprint + gp-agreement.  This is the honest
+footprint-containment reconstruction the task specifies: the writes land only in the extent
+the composition owns. -/
+theorem envDefMemcpyFramed (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
+    (AInv : MState → List (Nat × Nat) → Prop) (exts : List (Nat × Nat))
+    (sp : BitVec 64) (gm : (R : Register) → Option (RegisterType R))
+    (r dst src : BitVec 64) (n : Nat)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (bs : Nat → BitVec 8)
+    (halign : r.toNat % 4 = 0)
+    (hroute : (src.toNat ^^^ dst.toNat) % 8 ≠ 0 ∨ n < 8)
+    -- `AInv` survives memory changes confined to `[dst,dst+n)` (given gp preserved):
+    -- the caller owns that footprint (freshly-malloc'd block, disjoint from `exts`).
+    (hAInvStableFoot : ∀ (σa σb : MState),
+      σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
+      (∀ a : Nat, (a < dst.toNat ∨ dst.toNat + n ≤ a) → σa.mem[a]? = σb.mem[a]?) →
+      AInv σa exts → AInv σb exts) :
+    Triple
+      (fun c => PreDispatch gm r dst src n m0 bs c ∧
+        EnvDefFrame SL gpv headroom AInv exts sp gm c)
+      (fun c => (∃ g', memcpy_bytepath_post g' r dst n m0 bs c) ∧
+        EnvDefFrame SL gpv headroom AInv exts sp gm c) := by
+  intro c ⟨hpre, hFrame⟩
+  obtain ⟨hsp, hstackOK, hgp, hAbi, hAInv, htickF⟩ := hFrame
+  -- entry ghost values: gm x2 = sp, gm x3 = gpv
+  have hgm_x2 : gm Register.x2 = some sp := by rw [← hAbi Register.x2 (by decide)]; exact hsp
+  have hgm_x3 : gm Register.x3 = some gpv := by rw [← hAbi Register.x3 (by decide)]; exact hgp
+  -- entry mem = m0 (from PreDispatch.loaded is about loaded code; the copy source is m0);
+  -- PreDispatch does not pin `c.σ.mem = m0`, but `memcpy_bytepath_post`'s outside clause
+  -- is stated against `m0` = the copy source memory, and AInv at entry is over `c.σ`.
+  -- The composition supplies AInv survival against the entry state directly:
+  -- we need mem agreement between entry `c.σ` and exit `c'.σ` outside [dst,dst+n).
+  -- `memcpy_bytepath_post`'s clause is exit-vs-`m0`; the caller's `PreDispatch` fixes
+  -- the copy invariant `MemInv … m0 c.σ.mem`, from which entry mem = m0 outside the
+  -- footprint follows.  We source it from `PreDispatch.meminv.outside`.
+  have hentry_out : ∀ a : Nat, (a < dst.toNat ∨ dst.toNat + n ≤ a) → c.σ.mem[a]? = m0[a]? :=
+    fun a ha => hpre.meminv.outside a ha
+  obtain ⟨c', hsteps, hpost, hgh'⟩ :=
+    memcpy_spec_framed_byte gm r dst src n m0 bs halign hroute c ⟨hpre, hAbi⟩
+  obtain ⟨g', hbp⟩ := hpost
+  refine ⟨c', hsteps, ⟨g', hbp⟩, ?_, hstackOK, ?_, hgh', ?_, hbp.2.2.2.2.2.2.1⟩
+  · -- x2 = sp
+    rw [hgh' Register.x2 (by decide)]; exact hgm_x2
+  · -- x3 = gpv
+    rw [hgh' Register.x3 (by decide)]; exact hgm_x3
+  · -- AInv survives: mem agrees outside [dst,dst+n) between entry c.σ and exit c'.σ
+    refine hAInvStableFoot c.σ c'.σ ?_ ?_ hAInv
+    · -- gp agree: entry get? x3 = gpv, exit get? x3 = gm x3 = gpv
+      rw [hgp, hgh' Register.x3 (by decide), hgm_x3]
+    · -- mem agree outside footprint: entry = m0 (via meminv.outside), exit = m0 (post.outside)
+      intro a ha
+      rw [hentry_out a ha, ← memcpy_framed_ainv_stable g' r dst n m0 bs c' hbp a ha]
+
 /-! ## `realloc` splices — over `ReallocOps.grow` (both grow-path calls) -/
 
 /-- **`realloc(names)` call splice** (`0x80002b9c mv a0,s6 ; 0x80002ba0 jal realloc`,
@@ -302,13 +389,10 @@ theorem envDefAppendContract
     -- malloc call data
     (exts : List (Nat × Nat)) (nMalloc : Nat) (spM rM : BitVec 64)
     (mMalloc : Std.ExtHashMap Nat (BitVec 8)) (hnM : nMalloc ≤ maxReq)
-    -- memcpy call data
-    (gc : (R : Register) → Option (RegisterType R))
+    -- memcpy call data (memcpy dispatch ghost = the ABI ghost `gm`; byte route)
     (rMemcpy dst src : BitVec 64) (nMemcpy : Nat)
     (mMemcpy : Std.ExtHashMap Nat (BitVec 8)) (bs : Nat → BitVec 8)
     (halignC : rMemcpy.toNat % 4 = 0)
-    (hrouteC : (src.toNat ^^^ dst.toNat) % 8 ≠ 0 ∨ nMemcpy < 8 ∨
-      (dst.toNat % 8 = 0 ∧ 8 * (nMemcpy / 8) ≤ 64))
     -- strlen preserves the carried frame (its missing preservation clause, named).
     -- The carried frame is `EnvDefFrame … spM gm` (the malloc-entry frame minus arg
     -- pins); on the strlen seam memory is still `m0` (strlen does not store).
@@ -333,6 +417,20 @@ theorem envDefAppendContract
         c.σ.regs.get? Register.x3 = some gpv ∧
         (∀ R, AbiPreserved R = true → c.σ.regs.get? R = gm R) ∧
         M.AInv c.σ exts ∧ c.σ.mem = mMalloc))
+    -- memcpy route (byte path — the C-string copy into the fresh malloc block)
+    (extsC : List (Nat × Nat)) (spC : BitVec 64)
+    (hrouteCbyte : (src.toNat ^^^ dst.toNat) % 8 ≠ 0 ∨ nMemcpy < 8)
+    -- memcpy preserves the carried frame: its ABI-callee-saved tie is native
+    -- (`memcpy_bytepath_post`'s `NotWrittenB` frame ⊇ `AbiPreserved`), and `AInv`
+    -- survives because the writes are confined to the fresh block `[dst,dst+nMemcpy)`,
+    -- disjoint from the live extents.  Discharged by `envDefMemcpyFramed` from
+    -- `memcpy_spec_framed_byte` + `hAInvStableFootC`.
+    (hAInvStableFootC : ∀ (σa σb : MState),
+      σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
+      (∀ a : Nat, (a < dst.toNat ∨ dst.toNat + nMemcpy ≤ a) → σa.mem[a]? = σb.mem[a]?) →
+      M.AInv σa extsC → M.AInv σb extsC)
+    -- the four machine bridges — malloc-pre and memcpy-pre FRAME-CARRYING; the
+    -- memcpy seam now threads `EnvDefFrame` so `bridgeStore` sees `sp`/`gp`/`AInv`.
     (bridgeMemcpyPre : Triple
       (fun c =>
         GoodState c.σ ∧ c.tick < 2 ∧
@@ -347,14 +445,18 @@ theorem envDefAppendContract
            M.AInv c.σ ((p, nMalloc) :: exts))) ∧
         (∀ a, ¬ M.privFoot a → ¬ (SL.lo ≤ a ∧ a < spM.toNat) →
           c.σ.mem[a]? = mMalloc[a]?))
-      (PreDispatch gc rMemcpy dst src nMemcpy mMemcpy bs))
+      (fun c => PreDispatch gm rMemcpy dst src nMemcpy mMemcpy bs c ∧
+        EnvDefFrame SL gpv headroom M.AInv extsC spC gm c))
     (bridgeStore : Triple
-      (fun c => ∃ g', memcpy_bytepath_post g' rMemcpy dst nMemcpy mMemcpy bs c) Q) :
+      (fun c => (∃ g', memcpy_bytepath_post g' rMemcpy dst nMemcpy mMemcpy bs c) ∧
+        EnvDefFrame SL gpv headroom M.AInv extsC spC gm c) Q) :
     Triple P Q :=
-  -- strlen ≫ [malloc ≫ [memcpy ≫ store]]
+  -- strlen ≫ [malloc ≫ [memcpy(framed) ≫ store]]
   envDefStrlenSplice namePtr rStrlen nameStr m0 strlenFramed bridgeStrlenPre
     (envDefMallocSplice M gm exts nMalloc spM rM mMalloc hnM bridgeMallocPre
-      (envDefMemcpySplice gc rMemcpy dst src nMemcpy mMemcpy bs halignC hrouteC
+      (envDefMemcpyFramedSplice gm rMemcpy dst src nMemcpy mMemcpy bs
+        (envDefMemcpyFramed SL gpv headroom M.AInv extsC spC gm rMemcpy dst src nMemcpy
+          mMemcpy bs halignC hrouteCbyte hAInvStableFootC)
         bridgeMemcpyPre bridgeStore))
 
 /-! ## The GROW path composed — `cap' ≫ realloc(names) ≫ realloc(vals) ≫ append-head`
@@ -446,6 +548,8 @@ theorem envDefContract {P Pup Pap Pgr Q : Config → Prop}
 #print axioms envDefStrlenSplice
 #print axioms envDefMallocSplice
 #print axioms envDefMemcpySplice
+#print axioms envDefMemcpyFramedSplice
+#print axioms envDefMemcpyFramed
 #print axioms envDefReallocNamesSplice
 #print axioms envDefReallocValsSplice
 #print axioms envDefAppendContract
