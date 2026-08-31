@@ -566,3 +566,48 @@ it, still stop and report instead.
 - proposal: `StoreSeg N A SL φf φc store pc` + a `storeChain` combinator
   (`Triple` fold over a list of `(Store.define-step, seam)` pairs) so any
   env_new/env_define call sequence composes by naming the per-step contracts only.
+
+## 2026-08-31 scaffold-motive-independent-pq-RESOLVED (TermSimAssembly, scaffold motive amendment)
+- missing: the four loop-scaffold motives (mExecInit/mForCond/mExecStep/mForLoop)
+  quantified entry PC `p` and exit PC `q` INDEPENDENTLY, so the `.none` premises
+  (hInitNone/hFcNone/hEsNone) were unfillable — segIdentity yields exit=entry but
+  the motive demanded arbitrary `q`.
+- workaround: NONE (statement-change, authorized). AMENDED the four motive defs to
+  a single identity-PC parameter `p` (entry PC = exit PC = `p`). The 50-premise
+  lists in TermSimAssembly/TermSimClose/TermCaseBundle are UNCHANGED (they only ever
+  reference the fully-applied motive `mExecInit st d env none st (proof)`; no p/q is
+  visible in any premise), so only the four defs changed. ExecDispatchRows'
+  exec_forStart_row consumes the mExecInit/mForLoop IHs as ignored (`_`) opaque
+  values — stable. Downstream all green + axiom-clean.
+- cost: zero re-threading of consumers (the p/q was fully hidden inside the motive
+  bodies); the `.some` companions now state an honest identity-PC span at `p` (their
+  named residuals hInitSome_resid/hFcSome_resid/hEsSome_resid in rows/ScaffoldRows.lean).
+- proposal: LANDED — rows/ScaffoldRows.lean (hInitNone_row/hFcNone_row/hEsNone_row
+  via LoopScaffoldClose.segIdentity, slot-verified against TermCases fields). The
+  `.some` bridges (straight-line init/cond/step machine seg collapsing to loop PC `p`)
+  remain the only open scaffold obligation — a #derive_case seg / callSeg per arm.
+
+---
+
+## 2026-08-31 storeseg-storechain (StoreSeg/exec_varInit/eval_assign, task: env_define capstone fan-out)
+- missing: (1) a store-generic carrier + chain combinator generalizing InterpInit's
+  bespoke `InitSeg`/`interpInitStore_compose`; (2) an `env_set` top-level Triple / an
+  `evalAssignSim` machine derivation; (3) an `env_define`→`SubExecReturn` varInit-arm
+  call-linkage bridge.
+- workaround: (1) LANDED `Vsa/Sim/StoreSeg.lean` — `StoreSeg` (store/PC/out-parametric
+  named-field carrier) + `storeChain1/3/List` (fold of `Triple.seq` over env-call
+  seams); re-expressed `interpInitStore_compose` through it non-invasively
+  (`interpInitStore_compose_viaStoreSeg`, InitSeg↔StoreSeg via `Ent` dimap, R8-clean).
+  (2)/(3) NAMED oracles, NOT built: `eval_assign_row` (rows/EvalAssignRow.lean) threads
+  the whole assign arm as `AssignArmSpec` (the EvalVarRow "row now, arm spec later"
+  precedent); `exec_varInit_row` (rows/ExecVarInitRow.lean) threads the env_define
+  callee inside `ExecVarInitGeom.hGlue`.
+- cost: the two arm-spec oracles must each be discharged once by a callSeg-style splice
+  (assign: arg-setup ≫ jal eval_expr ≫ jal env_set = Store.set? ≫ HIT-return @0x80003448;
+  varInit: same shape ≫ jal env_define ≫ li a0,0 @0x80004118). env_set's in-place update
+  IS the `hUpdate_wired` shape (EnvDefMarshal), env_define's append IS
+  `env_define_append_spec` — both landed spec-side; only the arm call-linkage is left.
+- proposal: a shared `envCallArmBridge` (callSeg over the env_set/env_define contract
+  into the recursive-arm SubExecReturn/EvalExitD carrier) would discharge BOTH oracles
+  and Call.closure's params-fold from one template; StoreSeg's `storeChainList` is the
+  spec-side skeleton it targets.

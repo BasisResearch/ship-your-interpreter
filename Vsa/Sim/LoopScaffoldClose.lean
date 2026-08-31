@@ -7,11 +7,17 @@ import Vsa.Sim.InductionScaffold
 specification state. Their machine rows are identity triples only when the
 entry and exit PCs coincide. This file provides that common proof once.
 
-The current `TermSimAssembly` motives quantify independent `p` and `q` for
-these constructors. That stronger shape cannot be discharged by an identity
-row. Callers must supply the actual control-flow segment or first repair the
-motive with relation-specific PCs and ABI/code pins. A no-op row must use one
-shared PC.
+HISTORICAL (resolved 2026-08-31, ledger `scaffold-motive-independent-pq`): the
+`TermSimAssembly` scaffold motives (`mExecInit`/`mForCond`/`mExecStep`/`mForLoop`)
+formerly quantified independent `p` and `q`, which no identity row could
+discharge. They are now AMENDED to a single identity-PC parameter `p` (entry PC =
+exit PC), so `segIdentity` fills them directly. The three no-op premises
+(`hInitNone`/`hFcNone`/`hEsNone`) are LANDED in
+`Vsa/Sim/rows/ScaffoldRows.lean` (`hInitNone_row`/`hFcNone_row`/`hEsNone_row`),
+slot-verified against the `TermCases` bundle-field types. The `.some` companions
+still need the actual control-flow segment (their named residuals
+`hInitSome_resid`/`hFcSome_resid`/`hEsSome_resid` in the same file). A no-op row
+uses one shared PC.
 
 Timing witness (2026-08-26): `lake env lean Vsa/Sim/LoopScaffoldClose.lean`
 completed in 4.55 seconds.

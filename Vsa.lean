@@ -442,6 +442,8 @@ import Vsa.Sim.TermBundles
 import Vsa.Sim.rows.EvalVarRow
 import Vsa.Sim.rows.EvalVarBridge
 import Vsa.Sim.rows.EvalVarBridgeCallee
+import Vsa.Sim.rows.EvalAssignRow
+import Vsa.Sim.rows.ExecVarInitRow
 import Vsa.Sim.rows.BinDispatchRow
 import Vsa.Sim.rows.BinDispatchProbe
 import Vsa.Sim.rows.BinStrCells
@@ -453,6 +455,7 @@ import Vsa.Sim.rows.ExecRouting
 import Vsa.Sim.rows.ExecRecRows
 import Vsa.Sim.rows.ExecIHWiden
 import Vsa.Sim.rows.ExecDispatchRows
+import Vsa.Sim.rows.ScaffoldRows
 import Vsa.Sim.rows.CallRows
 import Vsa.Sim.rows.CallResidProviders
 import Vsa.Sim.rows.CallArmEpilogue
@@ -462,6 +465,7 @@ import Vsa.Sim.EntryHalts
 import Vsa.Sim.EntryHaltsSpans
 import Vsa.Sim.EntrySeams
 import Vsa.Sim.InterpInit
+import Vsa.Sim.StoreSeg
 import Vsa.Sim.StuckSimClose
 import Vsa.Sim.Trichotomy
 import Vsa.Sim.DivFamily

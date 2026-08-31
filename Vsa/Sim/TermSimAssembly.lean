@@ -110,46 +110,59 @@ def mCall (st : SpecSt) (d : Nat) (_fv : Value) (_vs : List Value)
       (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
       (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' callJoinPC m0)
 
-/-- `ExecInit` motive: `SegEntry → SegExit` skeleton Triple. -/
+/-- `ExecInit` motive: `SegEntry → SegExit` skeleton Triple.
+
+**PC shape (amended 2026-08-31, ledger `scaffold-motive-independent-pq`).** The
+entry PC `p` and exit PC now COINCIDE (both `p`): the loop-scaffold sub-segments
+are internal, re-entrant control points of the `for` body and, as consumed by
+`ForLoop.*`, they begin and end at the same abstract loop-structural PC `p` (the
+cond head / step continuation). The former independent `(p q)` was the machine-
+checked obstruction: it demanded an arbitrary exit PC `q` no identity row can
+supply. With entry PC = exit PC = `p` the `.none` constructor closes directly by
+`LoopScaffoldClose.segIdentity`; the `.some` constructor states the real span
+collapsing to `p` (its named residual). -/
 def mExecInit (st : SpecSt) (d : Nat) (env : Addr) (_init : Option Stmt)
     (st' : SpecSt) (_h : ExecInit st d env _init st') : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (p q : Nat) (m0 : Mem),
+    (dLeft aLeft : Nat) (p : Nat) (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' q m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' p m0)
 
-/-- `ForLoop` motive: `SegEntry → SegExit` skeleton Triple. -/
+/-- `ForLoop` motive: `SegEntry → SegExit` skeleton Triple (identity-PC span at
+the loop head `p`; see `mExecInit`). -/
 def mForLoop (st : SpecSt) (d : Nat) (env : Addr) (_cnd _step : Option Expr)
     (_b : Stmt) (st' : SpecSt) (_status : Status)
     (_h : ForLoop st d env _cnd _step _b st' _status) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (p q : Nat) (m0 : Mem),
+    (dLeft aLeft : Nat) (p : Nat) (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' q m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' p m0)
 
-/-- `ForCond` motive: `SegEntry → SegExit` skeleton Triple. -/
+/-- `ForCond` motive: `SegEntry → SegExit` skeleton Triple (identity-PC span at
+the cond head `p`; see `mExecInit`). -/
 def mForCond (st : SpecSt) (d : Nat) (env : Addr) (_cnd : Option Expr)
     (st' : SpecSt) (_h : ForCond st d env _cnd st') : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (p q : Nat) (m0 : Mem),
+    (dLeft aLeft : Nat) (p : Nat) (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' q m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' p m0)
 
-/-- `ExecStep` motive: `SegEntry → SegExit` skeleton Triple. -/
+/-- `ExecStep` motive: `SegEntry → SegExit` skeleton Triple (identity-PC span at
+the step continuation `p`; see `mExecInit`). -/
 def mExecStep (st : SpecSt) (d : Nat) (env : Addr) (_step : Option Expr)
     (st' : SpecSt) (_h : ExecStep st d env _step st') : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (p q : Nat) (m0 : Mem),
+    (dLeft aLeft : Nat) (p : Nat) (m0 : Mem),
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' q m0)
+      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' p m0)
 
 /-- `ExecSeq` motive: `SegEntry → SegExit` skeleton Triple (the statement-list
 loop; `interp_run` and the `block`/closure-body loops consume this). -/
