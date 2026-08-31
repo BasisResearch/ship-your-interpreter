@@ -630,7 +630,9 @@ THEOREMS=(
   Vsa.Sim.bridgeOfSegFramed                         # BridgeSegFramed (delta-exposing bridge for ABI-writing spans; reseat values read off out.regs)
   Vsa.Sim.negType_link_closed                       # BridgeSegFramed (FIRST COMPLETE ERROR LINK: spill seg ≫ JalErrPre ≫ ErrHalts, modulo named arm-linkage + Runtime_errorLoaded — the template for the other 41)
   Vsa.Sim.spillSeg_toJalErr                         # rows/ErrSpillCore (the seg-generic spill-prefix core: SpillArmPre named-field structure)
-  Vsa.Sim.errLinkA_hVarUndef                        # rows/ErrArmLinks (GENERATED, ZERO hand Lean/site: 8/19 PC classes templated, 16/42 premises → ErrArmLinks named fields; Family B (11 PCs) = second-wave x10-computed template)
+  Vsa.Sim.errLinkA_hVarUndef                        # rows/ErrArmLinks (GENERATED, ZERO hand Lean/site: Family A — 8 PC classes, 16 premises → named fields)
+  Vsa.Sim.spillSetupSeg_toJalErr                    # rows/ErrSetupCore (Family-B core: SetupArmPre + x10-computed readback + middle-writer lookupG peels)
+  Vsa.Sim.errLinkB_hBinaryOp                        # rows/ErrArmLinksB (GENERATED: Family B — 11 PC classes, 26 premises. COMBINED: 19/19 classes, 42/42 premises to named arm links, zero hand Lean/site)
   Vsa.Sim.interpContSeg_of                          # ExitPathSpans (InterpContSeg discharged: interp_run setjmp-continuation -> AtMainRet)
   Vsa.Sim.InterpSimFinal.interpSim_conditional      # InterpSimFinal (ENDGAME CAPSTONE, field form: InterpSim L = ⟨hterm, hstuck⟩)
   Vsa.Sim.InterpSimFinal.stuckField_of_families     # InterpSimFinal (stuck_sim field from Trichotomy + DivFamily + ErrFamily)
@@ -676,6 +678,8 @@ THEOREMS=(
   Vsa.Sim.strCmpOrderBridge_le                      # rows/StrCmpOrderClose
   Vsa.Sim.strCmpOrderBridge_gt                      # rows/StrCmpOrderClose
   Vsa.Sim.strCmpOrderBridge_ge                      # rows/StrCmpOrderClose
+  Vsa.Sim.strOperandsStaged_of_twoSubReturn         # rows/BinStrReadback (kind-3 readback — blockB was ALREADY kind-generic; ledger premise machine-corrected)
+  Vsa.Sim.strReadbackToKindCheck                    # rows/BinStrReadback (readback ≫ stage ≫ kindCheck ≫ seam → strcmp entry; residual = ONE staging span + hVlSurv)
   Vsa.Sim.strKindCheckRow                           # rows/StrArmChain (kind-3 branch span seg row)
   Vsa.Sim.strRejoinRow                              # rows/StrArmChain (strcmp-ret rejoin seg row: ld;mv;j → shared sign tail)
   Vsa.Sim.strArmFront                               # rows/StrArmChain (strcmp_full_spec ≫ rejoin ≫ SignTailLeg ≫ value_bool box, the blockC_eqne_front analogue)

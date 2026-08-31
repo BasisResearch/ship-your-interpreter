@@ -1111,3 +1111,57 @@ it, still stop and report instead.
   operand-value kinds) so the str arm and the eq/ne/int arms share ONE operand
   prologue — the single abstraction that unblocks both `StrArmPrologue` and the
   concat cell.
+
+## 2026-08-31 blockB-already-kind-generic (CORRECTS strarm-kind3-blockb, this task)
+- missing: NOTHING new for the operand recursion — the prior entry's premise
+  ("`blockB_binary` AT KIND 3 is missing") is WRONG.  Machine-checked reading of the
+  LANDED statement (`Vsa/Sim/EvalBinSim.lean:242`): `blockB_binary`'s value params are
+  `vl vr : Value` (no `.int`); its entry `ArmEntryK … (.binary op el er)` is kind-blind
+  (`EvalSimCommon.lean`); the two operands are consumed via `EvalIH`/`SubEvalReturn`
+  whose post is `ValueRepr … vsub` for ARBITRARY `vsub` (`EvalRecCommon.lean:205`); and
+  its post `TwoSubReturn` (`EvalBinSim.lean:118`) stages the sub-values as GENERIC
+  `ValueRepr … (sp-944) vr` / `… (sp-968) vl` (lines 149–150).  The ONLY int-flavoured
+  thing is the `hVlSurv` PREMISE (left value survives the right sub-call) — a parameter,
+  vacuous for int, non-vacuous for str; NOT baked-in int-ness.  So the (a)-vs-(b)
+  verdict of this task is (b): the landed statement already lands a kind-blind
+  `TwoSubReturn`; the str side needs a READBACK, not a new blockB.
+- workaround: NONE — landed the correct cheap thing.  `Vsa/Sim/rows/BinStrReadback.lean`:
+  `StrOperandsStaged` (named-field bundle: two operand kind tags = 3 + two CString
+  pointers) + `strOperandsStaged_of_twoSubReturn` (the readback — a definitional
+  projection: `ValueRepr … (.str s) = read32 = 3 ∧ ∃ p, read64 (a+8) = p ∧ p≠0 ∧
+  CString`, consumed through ONE named `obtain` on the `TwoSubReturn` tower per R7).
+  Plus `StrArmStageSpan` (the box→register op-dispatch staging span, NAMED residual) +
+  `strReadbackToKindCheck` (readback ≫ staging ≫ LANDED `strKindCheckRow` ≫ named
+  `StrSeamSpan2` → reaches `strcmp_full_pre`).  All green + axiom-clean (~clean {propext,
+  Classical.choice, Quot.sound}).
+- cost: the genuine remainder shrinks to: (i) `StrArmStageSpan` — the op-dispatch
+  str-arm box→register staging span `0x8000351c → 0x80003628` (`#derive_case` seg once
+  the `jr` route to the str-compare arm is pinned), (ii) `blockB_binary`'s `hVlSurv`
+  supplied non-vacuously for `.str` (a layout survival residual, like `store_survives`),
+  (iii) the ALREADY-named `StrSeamSpan2` + box→EvalIH epilogue.  NO kind-3 blockB rebuild
+  — that class does not exist.  The eq/ne arm reuses the SAME generic blockB + a kind-2
+  readback (int payload) instead of kind-3.
+- proposal: the operand recursion is DONE (kind-generic already).  The reusable
+  abstraction to still factor is a per-kind READBACK family (`StrOperandsStaged` at
+  kind 3 here; a kind-2 int-payload readback + kind-1 bool for eq/ne) projecting
+  `TwoSubReturn`'s two generic `ValueRepr` boxes into the register-staging obligations —
+  one tiny lemma per kind, all definitional unfolds of `ValueRepr`.
+
+## 2026-08-31 famB-middle-writer-readback (errlink Family-B x10-computed)
+- missing: `SegReadback` had `lookupG_runGM_snoc` (readback of a register whose
+  writer is the body's LAST instruction) but NO readback for a MIDDLE writer —
+  Family-B setup runs write `x10` via `mv a0,sN` and then keep writing `a2/a3`
+  (`auipc/addi` message ptr) AFTER it, so `x10`'s writer is not last and
+  `lookupG_runGM_snoc` does not apply.
+- workaround: added `lookupG_stepGM_ne`/`lookupG_runGM_ne` (lookupG preserved by a
+  step/run not writing n, the `srcVal_runGM_ne` analogue for lookupG) + a
+  `lookupG_runGM_mid pre a post` peel that reduces the middle-writer case to
+  `lookupG_stepGM_writer` after peeling `post` — all in `rows/ErrSetupCore.lean`,
+  axiom-clean, structural (never reduces the fold).
+- cost: ~35 lines once; the per-site x10 readback is then a fixed 8-line
+  `rw`-chain the emitter generates (`lookupG_runGM_mid` ≫ `srcVal_runGM_ne` ≫
+  `sext 0` cleanup). Every future register-setup arm (the `mv a0,sN`-computed
+  dispatch-arg shape) reuses it.
+- proposal: promote `lookupG_stepGM_ne`/`lookupG_runGM_ne`/`lookupG_runGM_mid` up
+  into `Vsa/Sim/SegReadback.lean` beside `lookupG_runGM_snoc` (the natural home)
+  so non-error rows (rejoin/kind-check with trailing writes) can call them too.
