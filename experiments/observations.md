@@ -426,3 +426,71 @@ it, still stop and report instead.
   as the required motive repair), OR give them a single shared PC parameter. Once
   `p = q`, `execInitNone_samePC`/`forCondNone_samePC`/`execStepNone_samePC` close them
   immediately (already landed, awaiting the motive fix).
+
+## 2026-08-31 store-init-locus-off-interp_run-path (EntrySeams, StoreInitSeam)
+- missing: no fact ties `Loaded interpRunLayout p c` (machine at `interp_run` entry
+  `0x800043ec`, `a0`/`a1` = AST base/len) to `StoreRepr … initSt.store` at the loop
+  head. The store (single global frame + 3 natives) is built by `interp_init`
+  (`0x80004308`: `env_new` @ `0x80004324` + `env_define`×3 @ `0x80004364/9c/d4`), which
+  `main` calls at `0x800045b4` — a call that has ALREADY RETURNED before the
+  `interp_run`-entry `Loaded` config. So the store-init representation is genuinely
+  OFF the `interp_run` prologue path: decoding `[0x800043ec, 0x8000448c)` (spills, jal
+  setjmp, loop-bound setup) never touches the store. `interpRunLayout.atInterpRun`
+  pins only PC + a0/a1, not the store.
+- workaround: NONE for the store fact itself — named it precisely as the ONE residual
+  `InterpInitStoreRepr` (PC spans decoded in its doc) and reduced `StoreInitSeam` to
+  it via `storeInitSeam_of_initRepr`. The epilogue side WAS tightened: 4 of 5
+  `EpilogueFrame` control conjuncts (GoodState/tick/PC/output) are direct `SegExit`
+  projections (`epilogueControl_of_segExit`), reseating the seam on the smaller
+  `EpilogueSpill` (spill ChainFacts + s5=0 + Interp_runLoaded + ExitTailChain0).
+- cost: whoever closes `InterpInitStoreRepr` must either (a) strengthen
+  `interpRunLayout.atInterpRun`/`Loaded` to carry the store-init representation as a
+  precondition (statement change — the store IS established before interp_run, so this
+  is faithful), or (b) run a main-prologue machine span that invokes `interp_init`'s
+  env_new/env_define specs (all landed: EnvNewSpec.env_new_spec, EnvDefSpec*). Option
+  (a) is cheap and honest; the AST→store correspondence is `interp_init`'s postcondition.
+- proposal: an `InterpInitSpec` (interp_init's total-correctness spec: `env_new` +
+  3× `env_define` over `ProgramRepr` → `StoreRepr initSt.store` in the interp struct),
+  composed via `callSeg` at main's `jal interp_init` @ `0x800045b4`; then strengthen
+  `atInterpRun` to assert the store is represented at the `a0` interp base, so `Loaded`
+  discharges `InterpInitStoreRepr` directly.
+
+## 2026-08-31 framerepr-update-no-append-analogue (env_define marshal, bridgeStore/hUpdate)
+- missing: no landed forward `FrameRepr`-UPDATE reconstruction (the update-path
+  analogue of `EnvDefBridges3.frameRepr_append`). `frameRepr_append` reconstructs the
+  name-ABSENT/append frame `⟨parent, vars ++ [(x,v)]⟩` from readback facts; the
+  name-PRESENT/UPDATE case (`env_define_update_post`'s `if f.vars.any … then map …`
+  branch — slot `hit`'s value replaced by `v`, all others survive) has NO such lemma.
+- workaround: `frameRepr_of_updateStore` (EnvDefMarshal) takes the update `FrameRepr`
+  as a named premise `hFrameUpdate` (dispatch-supplied), same as `bridgeStore`'s
+  `hFrameAppend` — but for append the dispatch has `frameRepr_append` to discharge it,
+  for update it has NOTHING landed, so `hFrameUpdate` is an unbacked named residual.
+- cost: whoever closes `hUpdate` for real must first build `frameRepr_update` (the
+  map-branch reconstruction: OLD slots ≠ hit survive their name/value readback, slot
+  hit reads back the new `v`, count/cap/pointers unchanged) — ~1 lemma mirroring
+  `frameRepr_append`'s structure but over `List.map`/`getElem_map` instead of `++`.
+- proposal: `frameRepr_update (m N φf φc e f nameStr v hit …) : FrameRepr m N φf φc e
+  ⟨f.parent, f.vars.map (fun p => if p.1==nameStr then (nameStr,v) else p)⟩`, beside
+  `frameRepr_append` in EnvDefBridges3, consuming the same header/slot readback shape.
+  Note the `if any then map else append` join in `env_define_update_post` means the
+  UPDATE arm needs the map branch; `hit < length ∧ vars[hit].1 = nameStr` gives `any`.
+
+## 2026-08-31 env-define-store-seg-post-shape (EnvDefMarshal, marshalling boundary)
+- missing: the seg rows (`appendStoreRow`/`appendHeadRow`/`updateStoreRow`,
+  EnvDefBridges4) land `c.σ.mem = writeLog m0 (evalBlocks seg init).log`, but the
+  readback facts `frameRepr_append` needs (`read32/read64/CString/ValueRepr` over that
+  computed memory) have NO landed reduction from the write-log — they are re-supplied
+  as caller data. So the seg row's computed memory and the representation predicates
+  are only tied at the call site, by hand, per-field.
+- workaround: took the whole `FrameRepr`/`EnvDefFrame` over `c.σ.mem` as named premises
+  (`hFrameAppend`/`hCarry`), marshalled to the epilogue-entry carrier by `rfl`-level
+  destructuring. NONE of the write-log→readback reduction is done here.
+- cost: the dispatch/caller pays a per-field readback (`getElem_writeMap8_disjoint`
+  towers, like `namesToValsPrefix_run`'s env->vals-survives-env->names-store) to turn
+  the 5-store `writeLog` into the `read32/read64` header + slot facts, for EACH of the
+  append/update/head store blocks.
+- proposal: a `writeLogReadback` calculus over `evalBlocks seg init` (project
+  `read32/read64` at a target address off the canonical seg log by
+  disjointness/last-writer, à la `FrameCalc.pin8`/`pin4`/`slot` but delivering
+  `read32 (writeLog …) a = some w` directly), so the store-block posts feed
+  `frameRepr_append` mechanically instead of by hand-threaded byte pins.

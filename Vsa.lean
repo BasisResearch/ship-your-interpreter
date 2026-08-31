@@ -333,6 +333,7 @@ import Vsa.Sim.EnvDefBridges3
 import Vsa.Sim.BridgeSeg
 import Vsa.Sim.EnvDefSeg
 import Vsa.Sim.EnvDefBridges4
+import Vsa.Sim.EnvDefMarshal
 import Vsa.Sim.EnvDefBridges
 import Vsa.Sim.EvalDivChain
 import Vsa.Sim.SegFrameFacts
@@ -457,6 +458,7 @@ import Vsa.Sim.rows.ExecRetNullGlue
 import Vsa.Sim.TermEntry
 import Vsa.Sim.EntryHalts
 import Vsa.Sim.EntryHaltsSpans
+import Vsa.Sim.EntrySeams
 import Vsa.Sim.StuckSimClose
 import Vsa.Sim.Trichotomy
 import Vsa.Sim.DivFamily
