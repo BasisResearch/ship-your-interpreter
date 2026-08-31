@@ -37,6 +37,12 @@ Before ANY proof work: run `scripts/abs_inventory.sh` and reuse by name.
 3. If work feels duplicated/mechanical, STOP and report it — that is a signal
    an abstraction is missing. Build the abstraction (or name it precisely),
    then instantiate. Two similar proofs = factor before writing the third.
+3b. THE MOMENT you notice a missing general fact ("no lemma for X, the
+   practical way around is Y"), append an entry to
+   `experiments/observations.md` (format at its top) BEFORE proceeding with
+   any workaround. Entries on disk survive session/agent death; final reports
+   don't. Noting a workaround there does not sanction it — the other laws
+   still apply.
 4. If a plan step is infeasible, return the machine-checked obstruction, not a
    workaround (precedent: the `Trichotomy` spec bug was FOUND as a falsity
    proof, then fixed by amendment — `Vsa/While/StmtDispatch.lean`).
