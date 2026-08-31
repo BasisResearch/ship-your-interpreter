@@ -357,6 +357,7 @@ import Vsa.Sim.rows.ErrSitesBatch1
 import Vsa.Sim.rows.ErrSitesBatch2
 import Vsa.Sim.rows.ErrSitesBatch3
 import Vsa.Sim.rows.ErrorRouting
+import Vsa.Sim.rows.ErrorRoutingClasses
 import Vsa.While.Trichotomy
 import Vsa.Sim.DivergeSim
 import Vsa.Sim.SnprintfSpec19
@@ -469,6 +470,8 @@ import Vsa.Sim.EntryHaltsSpans
 import Vsa.Sim.EntrySeams
 import Vsa.Sim.InterpInit
 import Vsa.Sim.StoreSeg
+import Vsa.Sim.EnvCallBridge
+import Vsa.Sim.EnvCallBridgeDemos
 import Vsa.Sim.StuckSimClose
 import Vsa.Sim.Trichotomy
 import Vsa.Sim.DivFamily

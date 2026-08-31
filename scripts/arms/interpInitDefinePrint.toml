@@ -1,0 +1,18 @@
+name       = "interpInitDefinePrint"
+namespace  = "Vsa.Sim"
+entry      = 0x80004328
+span_end   = 0x80004364
+terminator = "jal"
+callee     = "env_define"
+callee_pc  = 0x80002a5c
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac", "Vsa.Sim.BridgeSeg"]
+doc        = "interp_init's define(\"print\") arg-setup seg (0x80004328..0x80004360): sw/ld/sd/auipc/addi stage name \"print\"@0x80019538 + &native_print@0x80002ed4 + env ptr, then jal env_define @0x80004364. The jal seam is a NAMED bridgeOfSeg residual (env_define entry 0x80002a5c)."
+
+# entry pins: registers read-before-written across the arg-setup span.
+# a0 = fresh Env* (env_new's result); s0 = &globals slot (interp_init's out-param).
+[[pin]]
+reg = 10
+name = "a0"
+[[pin]]
+reg = 8
+name = "s0"

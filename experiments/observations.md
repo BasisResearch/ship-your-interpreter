@@ -739,3 +739,84 @@ it, still stop and report instead.
   only the one call-seam obs is left). (2) retarget the 5 existing generators
   onto `genseg/lib.py`'s `Emitter`/`load_tsv`/`le_bytes` (safe, mechanical) —
   deferred to avoid touching landed generators mid-campaign.
+
+## 2026-08-31 envcallbridge-defineprint-untabled (EnvCallBridge demo (a), genseg define("print") arm)
+- missing: the interp_init define("print") arg-setup span (0x80004328..0x80004360)
+  has SIX body words NOT on the block-reflection decode table: sw@0x80004328
+  (02912423), addi@0x80004338 (20458593), sb@0x80004344 (0e040023), auipc@0x80004348
+  (fffff797), addi@0x8000434c (b8c78793), mv@0x80004350 (00010613). So `genseg` on
+  this TOML (scripts/arms/interpInitDefinePrint.toml, written + committed) HALTS at
+  the decode-index gate ("NOT ALL WORDS TABLED"), before even the jal seam. The jal
+  word ef8fe0ef is also untabled (the expected region-specific call-seam residual).
+- workaround: threaded the demo's `hPre` (arg-setup prefix ≫ jal env_define) as a
+  NAMED genseg-shaped `Triple` premise (exactly how InterpInit threads `hDefPrint`),
+  and instantiated `envDefineArmBridge` over it — the template demo is complete and
+  green; only the machine derivation of that ONE seg row is blocked on decode-table
+  coverage. NOT fabricated.
+- cost: every InterpInit define seam + any arg-setup seg over this 0x80004xxx region
+  pays the same untabled-words wall until the six words (+ the jal) are added to
+  scripts/decode_index.tsv and the corresponding DecodeTable batches. That is a
+  decode-batch rebuild (per memory: DecodeTable = ~80% of build CPU), out of scope
+  for the template task and gated by the elab budget.
+- proposal: a targeted decode-index extension for the interp_init init region
+  (six store/addi/auipc/mv words), OR route these arg-setup segs through a
+  lighter store-only reflection path; until then the InterpInit define seams stay
+  named genseg-row residuals the template consumes (which is the honest split).
+
+## 2026-08-31 m5-error-hsites-coalesce (gen_m5_error_routing fix + ErrShared/hsite classes)
+- missing: an arm-context → `JalErrPre` projection that could DISCHARGE the 42
+  `errFamily_of_sites` `hsite` residuals. `JalErrPre g inp m0 <pc> <bytes> c`
+  pins `c` to the error `jal`'s PC with `x10=inp`, `mem=m0` (runtime_error/longjmp
+  images), ghost `g` preserved, tick<2, and the 4 decode bytes present. NO landed
+  arm row establishes a config parked at any error `jal`: the 50 arm rows post the
+  SUCCESS path; the error branch (spill `sd s3..s7` ≫ `auipc/addi` msg-ptr ≫ `mv
+  a0,s2` ≫ `jal runtime_error`) is a different span the rows never run. So the
+  hsites are irreducibly the M4 caller-linkage residual — not provable unconditionally
+  (JalErrPre is false for a `c` not at that jal).
+- workaround: COALESCED not closed. The 42 hsite types depend ONLY on the PC (+S),
+  not the premise body → they collapse to 19 distinct classes (= the 19 `errSite_<pc>`
+  Triples). Landed `Vsa/Sim/rows/ErrorRoutingClasses.lean` (generated): `ErrSiteLinks S`
+  = 19 `hlink_<pc>` fields; `errFamilyClosed_ofClasses` feeds each of the 42 route
+  slots the shared per-PC field (pure identity projection) + the 2 passthroughs.
+  Axiom-clean. Reduces the error-side supplier's work 42 → 19 NAMED links. 0 of 43
+  closed (none dischargeable from existing rows), 19 classes named (was 42).
+- cost: the 19 `hlink_<pc>` are still open — each needs a `#derive_case` prefix seg
+  over its error-branch spill run (ending `JalErrPre`) composed with the arm's
+  error-branch entry context. The arm rows would first have to expose an error-branch
+  entry post (a config at the spill-prefix head with `g`/`inp`/`m0` staged); today they
+  don't. Whoever supplies `hErrFam` pays 19 seg derivations + 19 arm-entry glues.
+- proposal: add an error-branch-entry post to each arm row (or a shared `ArmErrEntry`
+  geom like ArmPostGeom for the success path), then a `hlink_of_armErrEntry` family:
+  one `#derive_case` spill-prefix seg per PC (19), marshalled to `JalErrPre` exactly
+  as `jalStep_to_runtimeError` consumes it. That closes the 19 classes mechanically.
+
+## 2026-08-31 envcallbridge-template-LANDED (EnvCallBridge.lean + Demos, task: the ONE env-call arm template)
+- missing: the ~8 env-call arm seams (4 InterpInit defines, AssignArmSpec's env_set,
+  hSVarInit's hGlue, CallClosureGeom's entryFold) each hand-composed "prefix ≫ callee
+  contract ≫ FrameRepr-post → StoreSeg marshalling" — no single template.
+- workaround: NONE (built the template). LANDED `Vsa/Sim/EnvCallBridge.lean`:
+  `envCallArmBridge` (= hPre ≫ hCallee ≫ rmap hMarshal, pure Triple.seq/rmap) +
+  `StoreDefineAdvance` (the marshalling core, a named-field structure lifting
+  EnvDefMarshal's per-frame FrameRepr readback to the whole-store StoreRepr advance;
+  `Store.define a` mutates only frame `a` + leaves closures, so the advance = mutated
+  frame's FrameRepr + others survive + injectivity/arena preserved) + its
+  `toStoreRepr` assembler + `storeSeg_advance_define` (the marshalling Ent) + three
+  flavor wrappers (`envDefineArmBridge`/`envNewArmBridge`... actually envDefine +
+  envSet; env_new is the empty-frame define special case). All green+axiom-clean ~1.4s.
+  Demos `Vsa/Sim/EnvCallBridgeDemos.lean`: discharged TWO InterpInit seams
+  (interpInitStore_compose's hDefPrint + hDefAssert) through envDefineArmBridge,
+  reindexed StoreSeg→InitSeg by the landed storeSeg_ent_initSeg Ent (R8 rmap), each
+  ~30 lines, differing ONLY in (store,x,v,pc) data. Shared readback factored ONCE as
+  `NativeDefinePins`. Green+axiom-clean ~1.2s.
+- cost: remaining per-seam residual through the template = the THREE named premises
+  (hPre = genseg arg-setup+jal row [blocked on decode-table coverage for the 0x80004xxx
+  init region, see envcallbridge-defineprint-untabled]; hCallee = the landed contract
+  [env_define_append_spec done; env_set/env_new contracts likewise landed]; hPins =
+  the StoreDefineAdvance readback [caller's frameRepr_append data]). Once genseg's
+  region words are tabled, hPre falls out of the compiler; the other two are already
+  spec-side. Estimate: each of the remaining ~6 seams is ~30 lines of instantiation +
+  its own hPins data, sharing NativeDefinePins for the native defines.
+- proposal: LANDED — envCallArmBridge IS the ledger's requested template; wire into
+  Vsa.lean after `import Vsa.Sim.StoreSeg` (line 471): `import Vsa.Sim.EnvCallBridge`
+  then `import Vsa.Sim.EnvCallBridgeDemos`. Fan-out: instantiate for the env_set assign
+  seam + the closure params-fold (storeChainList carrier) next.
