@@ -1,0 +1,21 @@
+name       = "assignArmEntry"
+namespace  = "Vsa.Sim"
+entry      = 0x8000347c
+span_end   = 0x80003488
+terminator = "jal"
+callee     = "eval_expr"
+callee_pc  = 0x80003164
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac", "Vsa.Sim.BridgeSeg"]
+doc        = "AssignArmSpec entry-to-jal-eval span (0x8000347c..0x80003484): ld a2,16(a2) (a2 := expr->child[16] = the RHS node e) ; addi a0,sp,240 (a0 := sret buffer @sp+240) ; sd a3,0(sp) (spill env across the sub-call), parked at jal eval_expr @0x80003488. The jal seam is a NAMED bridgeOfSeg residual (eval_expr internal entry 0x80003164); the callee run consumes the sub-EvalIH for e."
+
+# entry pins: registers read-before-written across the arg-setup span.
+# a2 = the expr node ptr (source of the ld a2,16(a2)); sp = frame ptr; a3 = env spilled.
+[[pin]]
+reg = 12
+name = "a2"
+[[pin]]
+reg = 2
+name = "sp"
+[[pin]]
+reg = 13
+name = "a3"

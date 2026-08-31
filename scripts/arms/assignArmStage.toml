@@ -1,0 +1,18 @@
+name       = "assignArmStage"
+namespace  = "Vsa.Sim"
+entry      = 0x8000348c
+span_end   = 0x800034b0
+terminator = "jal"
+callee     = "env_set"
+callee_pc  = 0x80002cdc
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac", "Vsa.Sim.BridgeSeg"]
+doc        = "AssignArmSpec post-eval staging span (0x8000348c..0x800034ac): reload the assign target name a1:=name[8], the 24-byte sub-eval value (a6/a4/a5 from 240/248/256(sp)), reload env a0:=0(sp), point a2 at the pv buffer @sp+64, spill the value words into the pv buffer (64/72/80(sp)), parked at jal env_set @0x800034b0. The jal seam is a NAMED bridgeOfSeg residual (env_set entry 0x80002cdc = Store.set?, the hUpdate_wired-shape callee)."
+
+# entry pins: registers read-before-written across the staging span.
+# s0 = expr node ptr (ld a1,8(s0)); sp = frame ptr (the 240/248/256/0 reloads + 64/72/80 spills).
+[[pin]]
+reg = 8
+name = "s0"
+[[pin]]
+reg = 2
+name = "sp"

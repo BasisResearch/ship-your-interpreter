@@ -1,0 +1,44 @@
+name       = "callClosureEntryBase"
+namespace  = "Vsa.Sim"
+entry      = 0x80003254
+span_end   = 0x800032bc
+terminator = "jal"
+callee     = "env_new"
+callee_pc  = 0x800029fc
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac", "Vsa.Sim.BridgeSeg"]
+doc        = "CallClosureGeom.entryBase base seam (0x80003254..0x800032b8): the fval-kind dispatch decode on the closure-success path — spill the 24-byte fval value, load fv->kind, take the closure branch (kind==4, so beq a4,5 native NOT taken ; bne a4,4 error NOT taken), load the ClosureData ptr, check arity (bne a5,arity error NOT taken = a_2), bump+guard call_depth (blt 1000 error NOT taken = a_3), stage a0:=cd->env (8(a3)), parked at jal env_new @0x800032bc (= allocFrame (some cd.env), a_4). Four guard branches all NOT-taken (in-model TKind.br chain), ending in the env_new CALL seam (NAMED bridgeOfSeg residual, env_new entry 0x800029fc). This is the EMPTY-fold base of entryBase; the per-param env_define fold (entryFold) composes after."
+
+# entry pins: sp (the 96/104/112 loads + 120/128/136 + 1032/1048/0(sp) spills),
+# s0 (fval-node ptr, lw a1,4(s0)), a3 (closure struct ptr, ld a4,0(a3)),
+# a5 (arg count, bne a5,a4), s2 (interp*, lw a4,8(s2) for call_depth).
+[[pin]]
+reg = 2
+name = "sp"
+[[pin]]
+reg = 8
+name = "s0"
+[[pin]]
+reg = 13
+name = "a3"
+[[pin]]
+reg = 15
+name = "a5"
+[[pin]]
+reg = 18
+name = "s2"
+
+[[block]]
+end   = 0x8000327c
+taken = false
+
+[[block]]
+end   = 0x80003284
+taken = false
+
+[[block]]
+end   = 0x80003298
+taken = false
+
+[[block]]
+end   = 0x800032b0
+taken = false

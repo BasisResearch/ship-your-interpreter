@@ -300,10 +300,15 @@ def emit_post_and_row(E, a, end_pc, keys):
 def emit_jal_row(E, a, end_pc, keys):
     """Emit the Shape-D `bridgeOfSeg` row for a jal-terminated span.
 
-    The straight-line body run + ABI frame are FREE via `bridgeOfSeg`; the jal
-    seam glue (the callee `site_*` obs → `JalStep` via `jalStep_of_obs`) is
-    region-specific and consumed as a NAMED residual `hjal` — we do NOT fabricate
-    a `site_*` lemma (that would trip the discipline gate / be unsound)."""
+    The straight-line body run + ABI callee-saved frame are FREE via
+    `bridgeOfSeg`; the region-specific jal seam (the callee `site_*` obs →
+    `JalStep`) is consumed as a NAMED residual `hjalSeam` — we do NOT fabricate a
+    `site_*` lemma (that would trip the discipline gate / be unsound).  The row
+    is a drop-in for the hand `*Seg_run` idiom (model:
+    `EnvDefSeg.capComputeSeg_run`): its conclusion is the landed `∃ σ2 i2, Steps
+    … ∧ PC = calleeEntry ∧ x1 = link ∧ writeLog-mem ∧ ABI-frame`, NOT a `True`
+    stub.  `calleeEntry` = the callee entry PC; `link` = span_end + 4 (the jal's
+    return address)."""
     name = a["name"]
     seg = name + "Seg"
     pins = a["pins"]
@@ -313,6 +318,9 @@ def emit_jal_row(E, a, end_pc, keys):
     pbind = "".join(f" ({n} : BitVec 64)" for _, n in pins)
     keylist = "[" + ", ".join(str(k) for k in keys) + "]"
     calleeS = a["callee"] or "callee"
+    entryS = lib.bv64(a["entry"])
+    calleeE = lib.bv64(a["callee_pc"])
+    linkS = lib.bv64(a["span_end"] + 4)
     E(f"/-! ## The jal seam is Shape-D (`bridgeOfSeg`)")
     E(f"")
     E(f"The `{name}` body ends in `jal {calleeS}` (a CALL — deliberately outside "
@@ -324,26 +332,64 @@ def emit_jal_row(E, a, end_pc, keys):
       f"would trip the discipline gate).  The row shape mirrors "
       f"`EnvDefSeg.capComputeSeg_run`. -/")
     E("")
-    E(f"-- discipline: allow(R5-stepobs-volume) jal-seam residual is a single "
-      f"NAMED premise, not a hand-threaded chain")
-    E(f"/-- **`{name}Run`** — the `{name}` body ≫ `jal {calleeS}` bridge.  The "
-      f"body run + frame are FREE (`bridgeOfSeg`); `hjalSeam` supplies the "
-      f"call-seam `JalStep` (region-specific). -/")
-    E(f"theorem {name}Run")
+    E(f"/-- **`{name}Bridge`** — the `{name}` body ≫ `jal {calleeS}` bridge, via "
+      f"`bridgeOfSeg`.  The seg run + ABI frame are FREE; `hfacts` (the memory "
+      f"chain-facts, one `chain_facts` call at the caller) and `hjalSeam` (the "
+      f"call-seam `JalStep` off the callee `site_*` obs) are the only "
+      f"region-specific residuals.  Conclusion: parked at the callee entry "
+      f"`{calleeE}` with link `{linkS}`, memory = the seg write-log, ABI frame "
+      f"preserved. -/")
+    E(f"theorem {name}Bridge")
     E(f"    (σ : MState) (i u : Nat) (vminstret : BitVec 64){pbind}")
     E(f"    (m0 : Std.ExtHashMap Nat (BitVec 8))")
-    E(f"    (hjalSeam : JalStep")
-    E(f"      (evalBlocksPC {lib.bv64(a['entry'])} (SegEvalState.init {Lapp} []) {seg})")
-    E(f"      {lib.bv64(a['callee_pc'])} {lib.bv64(a['span_end'] + 4)}")
-    E(f"      (writeLog m0 (evalBlocks {seg} (SegEvalState.init {Lapp} [])).log)) :")
-    E(f"    True := by")
-    E(f"  -- Shape-D bridge: `bridgeOfSeg {seg} {Lapp} [] σ i u ...` composed with")
-    E(f"  -- `hjalSeam`; the concrete run/frame decides are as in "
-      f"`capComputeSeg_run`.")
-    E(f"  -- (This stub records the seam interface; instantiate `bridgeOfSeg` at "
-      f"the")
-    E(f"  --  region's callee entry to land the full `Steps` chain.)")
-    E(f"  trivial")
+    E(f"    (hG : GoodState σ)")
+    E(f"    (hpc : σ.regs.get? Register.PC = some ({entryS} : BitVec 64))")
+    E(f"    (hminstret : σ.regs.get? Register.minstret = some vminstret)")
+    E(f"    (hmem : σ.mem = m0)")
+    E(f"    (hL : GHolds σ {Lapp})")
+    E(f"    (hfacts : ChainFacts σ.mem σ.mem {Lapp} [] {seg})")
+    E(f"    (hi : i < 2)")
+    E(f"    -- output-regs key hygiene: the keys are value-free, but they mention the")
+    E(f"    -- pins as values, so they stall `decide` under the pin binders; the")
+    E(f"    -- caller closes each with ONE `decide` (see observations "
+      f"`keys-decides-per-seg`).")
+    E(f"    (hKeysOut : KeysOK (keysG (evalBlocks {seg} (SegEvalState.init {Lapp} [])).regs))")
+    E(f"    (hRaOut : KeysAvoidRa (evalBlocks {seg} (SegEvalState.init {Lapp} [])).regs)")
+    E(f"    (hjalSeam : ∀ (σ' : MState) (i' u' : Nat),")
+    E(f"      GoodState σ' → i' < 2 →")
+    E(f"      σ'.regs.get? Register.PC = some")
+    E(f"        (evalBlocksPC {entryS} (SegEvalState.init {Lapp} []) {seg}) →")
+    E(f"      (∃ w, σ'.regs.get? Register.minstret = some w) →")
+    E(f"      σ'.mem = writeLog m0 (evalBlocks {seg} (SegEvalState.init {Lapp} [])).log →")
+    E(f"      GHolds σ' (evalBlocks {seg} (SegEvalState.init {Lapp} [])).regs →")
+    E(f"      JalStep {calleeE} {linkS} σ' i' u') :")
+    E(f"    ∃ (σ2 : MState) (i2 : Nat),")
+    E(f"      Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + evalBlocksFuel {seg} + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧")
+    E(f"      σ2.regs.get? Register.PC = some ({calleeE} : BitVec 64) ∧")
+    E(f"      σ2.regs.get? Register.x1 = some ({linkS} : BitVec 64) ∧")
+    E(f"      (∃ w, σ2.regs.get? Register.minstret = some w) ∧")
+    E(f"      GHolds σ2 (evalBlocks {seg} (SegEvalState.init {Lapp} [])).regs ∧")
+    E(f"      σ2.mem = writeLog m0 (evalBlocks {seg} (SegEvalState.init {Lapp} [])).log ∧")
+    E(f"      (∀ R, Vsa.Alloc.AbiPreserved R = true → σ2.regs.get? R = σ.regs.get? R) := by")
+    E(f"  apply bridgeOfSeg {seg} {Lapp} []")
+    E(f"    σ i u ({entryS}) ({calleeE}) ({linkS}) vminstret m0")
+    E(f"    hG hpc hminstret hmem hL")
+    if len(keys) <= 1:
+        E(f"    (by show KeysOK {keylist}; decide)")
+    else:
+        E(f"    (by have h : keysG {Lapp} = {keylist} := rfl")
+        E(f"        rw [h]; decide)")
+    E(f"    hfacts hi")
+    if len(keys) <= 1:
+        E(f"    (by show ChainOK {entryS} {keylist} {seg}; decide)")
+    else:
+        E(f"    (by have h : keysG {Lapp} = {keylist} := rfl")
+        E(f"        rw [h]; show ChainOK {entryS} {keylist} {seg}; decide)")
+    E(f"    (by show WrChainAvoidAbi {seg}; decide)")
+    E(f"    hKeysOut hRaOut")
+    E(f"  exact hjalSeam")
+    E("")
+    E(f"#print axioms {name}Bridge")
     E("")
 
 

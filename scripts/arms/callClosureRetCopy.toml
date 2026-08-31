@@ -1,0 +1,15 @@
+name       = "callClosureRetCopy"
+namespace  = "Vsa.Sim"
+entry      = 0x8000339c
+span_end   = 0x800033c0
+terminator = "j"
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac"]
+doc        = "CallClosureGeom.ret result-copy span (0x8000339c..0x800033bc), the .ret v arm: load the 24-byte body return Value (a3/a4/a5 := 144/152/160(sp)), restore callee-saved s3/s5/s7 (1048/1032/1016(sp)), store the 24 bytes into the CALL's sret (0/8/16(s1)) ▷ j 0x800033ec (callJoinPC, the shared eval_expr epilogue join). A straight-line j-terminated seam on the closure return path; no recursion, no callee. Reached from callBodyRetPC=0x80003378 after the status=.ret v classification (beqz a0 not-taken ; bgeu not-taken ; bne a0,3 not-taken)."
+
+# entry pins: sp (the 144/152/160 + 1048/1032/1016 reloads) and s1 (the sret dst).
+[[pin]]
+reg = 2
+name = "sp"
+[[pin]]
+reg = 9
+name = "s1"

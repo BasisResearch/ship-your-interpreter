@@ -1,0 +1,22 @@
+name       = "fnArmClosureBuild"
+namespace  = "Vsa.Sim"
+entry      = 0x800033d8
+span_end   = 0x800033ec
+terminator = "fallthrough"
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac"]
+doc        = "FnArmSpec (EX_FN) VAL_CLOSURE build span (0x800033d8..0x800033e8), the closure-Value materialisation after malloc succeeds: li a5,4 (kind := VAL_CLOSURE) ; sd s0,0(a0) (closure->env := s0) ; sd a3,8(a0) (closure->data := a3, the closure record ptr) ; sd a0,8(s1) (sret->payload := a0 = closure addr) ; sw a5,0(s1) (sret->kind := 4). Falls through to callJoinPC=0x800033ec (the shared eval_expr epilogue). Straight-line, no callee, no branch — the .closure a result the FnArmSpec exit demands (a = the fresh closure address). The malloc-fail edge (beqz a0,0x80003e1c @0x800033d4) precedes and is the EvalErr OOM path, OFF this success premise."
+
+# entry pins: a0 (malloc result = closure addr; sd s0,0(a0)/sd a3,8(a0)/sd a0,8(s1));
+# s0 (captured env), a3 (closure record ptr), s1 (sret dst).
+[[pin]]
+reg = 10
+name = "a0"
+[[pin]]
+reg = 8
+name = "s0"
+[[pin]]
+reg = 13
+name = "a3"
+[[pin]]
+reg = 9
+name = "s1"

@@ -1,0 +1,20 @@
+name       = "callClosureEnvNewCall"
+namespace  = "Vsa.Sim"
+entry      = 0x800032b4
+span_end   = 0x800032bc
+terminator = "jal"
+callee     = "env_new"
+callee_pc  = 0x800029fc
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac", "Vsa.Sim.BridgeSeg"]
+doc        = "CallClosureGeom.entryBase jal-adjacent tail (0x800032b4..0x800032b8): ld a0,8(a3) (a0 := cd->env, the env_new arg) ; sd a5,0(sp) (spill arg-count a5 across the call), parked at jal env_new @0x800032bc (= allocFrame (some cd.env), a_4). This is the FRAME-FREE tail of the dispatch prefix — it writes only a0 (caller-saved) and stores, so WrChainAvoidAbi holds and it IS a bridgeOfSeg row. The callee-saved-spill dispatch head (0x80003254..0x800032b0, mv s7/s5, sd s5/s3, guard branches) precedes it and is threaded by a frame-tracking decode (see observations callclosure-entrybase-abi)."
+
+# entry pins: a3 (closure struct ptr, ld a0,8(a3)); sp (spill dst); a5 (arg count spilled).
+[[pin]]
+reg = 13
+name = "a3"
+[[pin]]
+reg = 2
+name = "sp"
+[[pin]]
+reg = 15
+name = "a5"

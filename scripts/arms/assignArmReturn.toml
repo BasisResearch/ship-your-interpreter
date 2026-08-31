@@ -1,0 +1,13 @@
+name       = "assignArmReturn"
+namespace  = "Vsa.Sim"
+entry      = 0x800034b4
+span_end   = 0x800034b4
+terminator = "br"
+taken      = true
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac"]
+doc        = "AssignArmSpec bnez-to-HIT-return span (0x800034b4): bnez a0,0x80003448 — a0 = env_set result NONZERO (found/updated, the hAssign premise's set?=some store'' path) → taken to the shared HIT-return tail @0x80003448 (reload value @240, restore, ret, a0=v). The a0==0 (UNBOUND) fallthrough is the EvalErr .assignUnbound case, OFF this premise. Empty-body single-branch block (in-model TKind.br)."
+
+# entry pin: bnez reads a0 (the env_set result).
+[[pin]]
+reg = 10
+name = "a0"

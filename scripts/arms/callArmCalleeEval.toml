@@ -1,0 +1,20 @@
+name       = "callArmCalleeEval"
+namespace  = "Vsa.Sim"
+entry      = 0x800031b0
+span_end   = 0x800031bc
+terminator = "jal"
+callee     = "eval_expr"
+callee_pc  = 0x80003164
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac", "Vsa.Sim.BridgeSeg"]
+doc        = "CallArmSpec (EX_CALL composite arm) callee-eval prefix seam (0x800031b0..0x800031b8): ld a2,8(a2) (a2 := call->callee node = f) ; addi a0,sp,96 (a0 := callee-result sret @sp+96) ; sd a3,0(sp) (spill env across the sub-call), parked at jal eval_expr @0x800031bc (the recursive callee evaluation f -> fval, one EvalIH consumed by CallArmSpec). Frame-free (writes a2/a0 + store), a bridgeOfSeg row. This is stage 1 of the four-stage EX_CALL arm (callee eval >> arg loop >> fv->kind dispatch @callDispatchPC=0x80003254 >> epilogue @callJoinPC); the jal seam is the eval_expr internal entry 0x80003164."
+
+# entry pins: a2 (call node ptr, ld a2,8(a2)); sp (sret + spill); a3 (env spilled).
+[[pin]]
+reg = 12
+name = "a2"
+[[pin]]
+reg = 2
+name = "sp"
+[[pin]]
+reg = 13
+name = "a3"

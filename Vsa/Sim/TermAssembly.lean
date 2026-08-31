@@ -321,9 +321,10 @@ structure TermResiduals (L : Layout) where
   /-- **ERROR** — the M5 error family `ErrFamily L`.  Supplier:
       `Vsa.Sim.errFamilyClosed L S hsite…`, fed the shared L7/L8 `ErrShared` bundle `S`
       (`SnprintfContract SC` + `ErrorTailChain HT`, M3/M6 error-path inputs) and the 43
-      per-error-site `hsite` reachability residuals (M4 caller-linkage: config `c`
-      parked at each `jal runtime_error`, `m5_error_routing.tsv`).  `errFamily_ofShared`
-      below is the one-liner that builds this field from those pieces. -/
+      per-error-site `hsite` residuals (M4 caller-linkage, `SitePre`-conditioned: the
+      spec-derivation context → `ReachJal … c`, i.e. config `c` RUNS to each
+      `jal runtime_error`; `m5_error_routing.tsv`).  `errFamily_ofShared` below is the
+      one-liner that builds this field from those pieces. -/
   hErrFam : ErrFamily L
 
 /-! ## The record fill — `termCases_of_residuals`
@@ -433,54 +434,148 @@ theorem divStep_vacuous :
 /-! ## `errFamily_ofShared` — build the `hErrFam` field from `ErrShared` + 43 hsites
 
 The one-liner that discharges `TermResiduals.hErrFam`: `errFamilyClosed` fed the
-shared L7/L8 bundle and the 43 per-error-site reachability residuals.  Its argument
-list IS the honest error-side remaining work; recorded here so the supplier of
-`hErrFam` is machine-checked to be exactly `errFamilyClosed`. -/
+shared L7/L8 bundle and the 43 per-error-site residuals.  Each routed residual is
+now the CORRECTED `SitePre`-conditioned reachability (`ErrorReach.lean`): the
+premise's spec-derivation context → `ReachJal S … <pc> <bytes> c` (the entry config
+`c` RUNS to the jal), NOT the refuted `∀ c, JalErrPre … c`.  Its argument list IS
+the honest error-side remaining work; recorded here so the supplier of `hErrFam` is
+machine-checked to be exactly `errFamilyClosed`. -/
 theorem errFamily_ofShared (L : Layout) (S : Vsa.Sim.ErrShared)
-    (hsite_hVarUndef : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003b54#64 0xef#8 0xf0#8 0x4f#8 0xa5#8 c)
-    (hsite_hAssignE : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003b9c#64 0xef#8 0xf0#8 0xcf#8 0xa0#8 c)
-    (hsite_hAssignUnbound : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003bc8#64 0xef#8 0xf0#8 0x0f#8 0x9e#8 c)
-    (hsite_hBinaryL : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003c10#64 0xef#8 0xf0#8 0x8f#8 0x99#8 c)
-    (hsite_hBinaryR : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003c7c#64 0xef#8 0xf0#8 0xcf#8 0x92#8 c)
-    (hsite_hBinaryOp : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003cc4#64 0xef#8 0xf0#8 0x4f#8 0x8e#8 c)
-    (hsite_hOrL : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003ce8#64 0xef#8 0xf0#8 0x0f#8 0x8c#8 c)
-    (hsite_hOrR : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003d14#64 0xef#8 0xf0#8 0x4f#8 0x89#8 c)
-    (hsite_hAndL : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003d5c#64 0xef#8 0xf0#8 0xcf#8 0x84#8 c)
-    (hsite_hAndR : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003da0#64 0xef#8 0xf0#8 0x8f#8 0x80#8 c)
-    (hsite_hUnaryE : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003950#64 0xef#8 0xf0#8 0x8f#8 0xc5#8 c)
-    (hsite_hNegType : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x800034e4#64 0xef#8 0xf0#8 0x5f#8 0x8c#8 c)
-    (hsite_hCallF : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003de8#64 0xef#8 0xe0#8 0x1f#8 0xfc#8 c)
-    (hsite_hCallArgs : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003e98#64 0xef#8 0xe0#8 0x1f#8 0xf1#8 c)
-    (hsite_hCallC : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003f58#64 0xef#8 0xe0#8 0x1f#8 0xe5#8 c)
-    (hsite_hArgsHead : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003fac#64 0xef#8 0xe0#8 0xdf#8 0xdf#8 c)
-    (hsite_hArgsTail : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003fdc#64 0xef#8 0xe0#8 0xdf#8 0xdc#8 c)
-    (hsite_hNotCallable : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
-    (hsite_hBadClosure : ∀ (c : Config) (st : SpecSt) (_d : Nat) (a : Vsa.While.Addr)
-      (_vs : List Vsa.While.Value), st.store.closures[a]? = none → ErrHalts c)
-    (hsite_hArity : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002ebc#64 0xef#8 0xf0#8 0xdf#8 0xee#8 c)
-    (hsite_hDepth : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
-    (hsite_hBody : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002ebc#64 0xef#8 0xf0#8 0xdf#8 0xee#8 c)
-    (hsite_hEscape : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
-    (hsite_hAssertFail : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002ebc#64 0xef#8 0xf0#8 0xdf#8 0xee#8 c)
-    (hsite_hAssertArity : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
-    (hsite_hExpr : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003b54#64 0xef#8 0xf0#8 0x4f#8 0xa5#8 c)
-    (hsite_hVarInit : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003b9c#64 0xef#8 0xf0#8 0xcf#8 0xa0#8 c)
-    (hsite_hBlock : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003bc8#64 0xef#8 0xf0#8 0x0f#8 0x9e#8 c)
-    (hsite_hIfCond : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003c10#64 0xef#8 0xf0#8 0x8f#8 0x99#8 c)
-    (hsite_hIfThen : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003c7c#64 0xef#8 0xf0#8 0xcf#8 0x92#8 c)
-    (hsite_hIfElse : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003cc4#64 0xef#8 0xf0#8 0x4f#8 0x8e#8 c)
-    (hsite_hWhileCond : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003ce8#64 0xef#8 0xf0#8 0x0f#8 0x8c#8 c)
-    (hsite_hWhileBody : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003d14#64 0xef#8 0xf0#8 0x4f#8 0x89#8 c)
-    (hsite_hWhileLoop : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003d5c#64 0xef#8 0xf0#8 0xcf#8 0x84#8 c)
-    (hsite_hForInit : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003da0#64 0xef#8 0xf0#8 0x8f#8 0x80#8 c)
-    (hsite_hForLoop : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003950#64 0xef#8 0xf0#8 0x8f#8 0xc5#8 c)
-    (hsite_hRet : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x800034e4#64 0xef#8 0xf0#8 0x5f#8 0x8c#8 c)
-    (hsite_hFlCond : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003de8#64 0xef#8 0xe0#8 0x1f#8 0xfc#8 c)
-    (hsite_hFlBody : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003e98#64 0xef#8 0xe0#8 0x1f#8 0xf1#8 c)
-    (hsite_hFlStep : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003f58#64 0xef#8 0xe0#8 0x1f#8 0xe5#8 c)
-    (hsite_hFlLoop : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003fac#64 0xef#8 0xe0#8 0xdf#8 0xdf#8 c)
-    (hsite_hSeqHead : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003fdc#64 0xef#8 0xe0#8 0xdf#8 0xdc#8 c)
-    (hsite_hSeqTail : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
+    (hsite_hVarUndef : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (x : String),
+      st.store.get? env x = none → ReachJal S.g S.inp S.m0 0x80003b54#64 0xef#8 0xf0#8 0x4f#8 0xa5#8 c)
+    (hsite_hAssignE : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (x : String) (e : Expr),
+      EvalErr st d env e → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003b9c#64 0xef#8 0xf0#8 0xcf#8 0xa0#8 c)
+    (hsite_hAssignUnbound : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (x : String) (e : Expr)
+      (st' : SpecSt) (v : Value),
+      EvalE st d env e st' v → st'.store.set? env x v = none → ReachJal S.g S.inp S.m0 0x80003bc8#64 0xef#8 0xf0#8 0x0f#8 0x9e#8 c)
+    (hsite_hBinaryL : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (op : BinOp) (l r : Expr),
+      EvalErr st d env l → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003c10#64 0xef#8 0xf0#8 0x8f#8 0x99#8 c)
+    (hsite_hBinaryR : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (op : BinOp) (l r : Expr)
+      (st' : SpecSt) (lv : Value),
+      EvalE st d env l st' lv → EvalErr st' d env r → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003c7c#64 0xef#8 0xf0#8 0xcf#8 0x92#8 c)
+    (hsite_hBinaryOp : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (op : BinOp) (l r : Expr)
+      (st' st'' : SpecSt) (lv rv : Value),
+      EvalE st d env l st' lv → EvalE st' d env r st'' rv →
+      binOpSem st''.store op lv rv = none → ReachJal S.g S.inp S.m0 0x80003cc4#64 0xef#8 0xf0#8 0x4f#8 0x8e#8 c)
+    (hsite_hOrL : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr),
+      EvalErr st d env l → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003ce8#64 0xef#8 0xf0#8 0x0f#8 0x8c#8 c)
+    (hsite_hOrR : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr) (st' : SpecSt)
+      (lv : Value),
+      EvalE st d env l st' lv → lv.truthy = false → EvalErr st' d env r →
+      ErrHalts c → ReachJal S.g S.inp S.m0 0x80003d14#64 0xef#8 0xf0#8 0x4f#8 0x89#8 c)
+    (hsite_hAndL : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr),
+      EvalErr st d env l → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003d5c#64 0xef#8 0xf0#8 0xcf#8 0x84#8 c)
+    (hsite_hAndR : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr) (st' : SpecSt)
+      (lv : Value),
+      EvalE st d env l st' lv → lv.truthy = true → EvalErr st' d env r →
+      ErrHalts c → ReachJal S.g S.inp S.m0 0x80003da0#64 0xef#8 0xf0#8 0x8f#8 0x80#8 c)
+    (hsite_hUnaryE : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (op : UnOp) (e : Expr),
+      EvalErr st d env e → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003950#64 0xef#8 0xf0#8 0x8f#8 0xc5#8 c)
+    (hsite_hNegType : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt)
+      (v : Value),
+      EvalE st d env e st' v → (∀ n : Int, v ≠ .int n) → ReachJal S.g S.inp S.m0 0x800034e4#64 0xef#8 0xf0#8 0x5f#8 0x8c#8 c)
+    (hsite_hCallF : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (f : Expr) (args : List Expr),
+      EvalErr st d env f → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003de8#64 0xef#8 0xe0#8 0x1f#8 0xfc#8 c)
+    (hsite_hCallArgs : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (f : Expr) (args : List Expr)
+      (st' : SpecSt) (fv : Value),
+      EvalE st d env f st' fv → EvalArgsErr st' d env args → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003e98#64 0xef#8 0xe0#8 0x1f#8 0xf1#8 c)
+    (hsite_hCallC : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (f : Expr) (args : List Expr)
+      (st' st'' : SpecSt) (fv : Value) (vs : List Value),
+      EvalE st d env f st' fv → EvalArgs st' d env args st'' vs →
+      CallErr st'' d fv vs → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003f58#64 0xef#8 0xe0#8 0x1f#8 0xe5#8 c)
+    (hsite_hArgsHead : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (es : List Expr),
+      EvalErr st d env e → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003fac#64 0xef#8 0xe0#8 0xdf#8 0xdf#8 c)
+    (hsite_hArgsTail : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (es : List Expr)
+      (st' : SpecSt) (v : Value),
+      EvalE st d env e st' v → EvalArgsErr st' d env es → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003fdc#64 0xef#8 0xe0#8 0xdf#8 0xdc#8 c)
+    (hsite_hNotCallable : ∀ (c : Config) (st : SpecSt) (d : Nat) (fv : Value) (vs : List Value),
+      (∀ a, fv ≠ .closure a) → (∀ f, fv ≠ .native f) → ReachJal S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
+    (hsite_hBadClosure : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Vsa.While.Addr)
+      (vs : List Vsa.While.Value), st.store.closures[a]? = none → ErrHalts c)
+    (hsite_hArity : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value),
+      st.store.closures[a]? = some cd → vs.length ≠ cd.params.length → ReachJal S.g S.inp S.m0 0x80002ebc#64 0xef#8 0xf0#8 0xdf#8 0xee#8 c)
+    (hsite_hDepth : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value),
+      st.store.closures[a]? = some cd → vs.length = cd.params.length →
+      ¬ d < maxCallDepth → ReachJal S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
+    (hsite_hBody : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value)
+      (store' : Store) (frame : Addr),
+      st.store.closures[a]? = some cd → vs.length = cd.params.length →
+      d < maxCallDepth → st.store.allocFrame (some cd.env) = (store', frame) →
+      ExecSeqErr ⟨(cd.params.zip vs).foldl (fun s (x, v) => s.define frame x v) store',
+        st.out⟩ (d + 1) frame cd.body → ErrHalts c → ReachJal S.g S.inp S.m0 0x80002ebc#64 0xef#8 0xf0#8 0xdf#8 0xee#8 c)
+    (hsite_hEscape : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value)
+      (store' : Store) (frame : Addr) (st' : SpecSt) (status : Status),
+      st.store.closures[a]? = some cd → vs.length = cd.params.length →
+      d < maxCallDepth → st.store.allocFrame (some cd.env) = (store', frame) →
+      ExecSeq ⟨(cd.params.zip vs).foldl (fun s (x, v) => s.define frame x v) store',
+        st.out⟩ (d + 1) frame cd.body st' status →
+      (status = .brk ∨ status = .cont) → ReachJal S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
+    (hsite_hAssertFail : ∀ (c : Config) (st : SpecSt) (d : Nat) (vs : List Value) (v m : Value),
+      (vs = [v] ∨ vs = [v, m]) → v.truthy = false → ReachJal S.g S.inp S.m0 0x80002ebc#64 0xef#8 0xf0#8 0xdf#8 0xee#8 c)
+    (hsite_hAssertArity : ∀ (c : Config) (st : SpecSt) (d : Nat) (vs : List Value),
+      (∀ v, vs ≠ [v]) → (∀ v m, vs ≠ [v, m]) → ReachJal S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
+    (hsite_hExpr : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (e : Expr),
+      EvalErr st d env e → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003b54#64 0xef#8 0xf0#8 0x4f#8 0xa5#8 c)
+    (hsite_hVarInit : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (x : String) (e : Expr),
+      EvalErr st d env e → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003b9c#64 0xef#8 0xf0#8 0xcf#8 0xa0#8 c)
+    (hsite_hBlock : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (ss : List Stmt) (store' : Store)
+      (inner : Addr),
+      st.store.allocFrame (some env) = (store', inner) →
+      ExecSeqErr ⟨store', st.out⟩ d inner ss → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003bc8#64 0xef#8 0xf0#8 0x0f#8 0x9e#8 c)
+    (hsite_hIfCond : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (cnd : Expr) (t : Stmt)
+      (e : Option Stmt),
+      EvalErr st d env cnd → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003c10#64 0xef#8 0xf0#8 0x8f#8 0x99#8 c)
+    (hsite_hIfThen : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (cnd : Expr) (t : Stmt)
+      (e : Option Stmt) (st' : SpecSt) (v : Value),
+      EvalE st d env cnd st' v → v.truthy = true → ExecErr st' d env t →
+      ErrHalts c → ReachJal S.g S.inp S.m0 0x80003c7c#64 0xef#8 0xf0#8 0xcf#8 0x92#8 c)
+    (hsite_hIfElse : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (cnd : Expr) (t e : Stmt)
+      (st' : SpecSt) (v : Value),
+      EvalE st d env cnd st' v → v.truthy = false → ExecErr st' d env e →
+      ErrHalts c → ReachJal S.g S.inp S.m0 0x80003cc4#64 0xef#8 0xf0#8 0x4f#8 0x8e#8 c)
+    (hsite_hWhileCond : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (cnd : Expr) (b : Stmt),
+      EvalErr st d env cnd → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003ce8#64 0xef#8 0xf0#8 0x0f#8 0x8c#8 c)
+    (hsite_hWhileBody : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (cnd : Expr) (b : Stmt)
+      (st' : SpecSt) (v : Value),
+      EvalE st d env cnd st' v → v.truthy = true → ExecErr st' d env b →
+      ErrHalts c → ReachJal S.g S.inp S.m0 0x80003d14#64 0xef#8 0xf0#8 0x4f#8 0x89#8 c)
+    (hsite_hWhileLoop : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (cnd : Expr) (b : Stmt)
+      (st' st'' : SpecSt) (v : Value) (status : Status),
+      EvalE st d env cnd st' v → v.truthy = true → ExecS st' d env b st'' status →
+      (status = .normal ∨ status = .cont) → ExecErr st'' d env (.whileStmt cnd b) →
+      ErrHalts c → ReachJal S.g S.inp S.m0 0x80003d5c#64 0xef#8 0xf0#8 0xcf#8 0x84#8 c)
+    (hsite_hForInit : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (init : Stmt) (cnd : Option Expr)
+      (step : Option Expr) (b : Stmt) (store' : Store) (outer : Addr),
+      st.store.allocFrame (some env) = (store', outer) →
+      ExecErr ⟨store', st.out⟩ d outer init → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003da0#64 0xef#8 0xf0#8 0x8f#8 0x80#8 c)
+    (hsite_hForLoop : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (init : Option Stmt)
+      (cnd : Option Expr) (step : Option Expr) (b : Stmt) (store' : Store)
+      (outer : Addr) (st' : SpecSt),
+      st.store.allocFrame (some env) = (store', outer) →
+      ExecInit ⟨store', st.out⟩ d outer init st' →
+      ForLoopErr st' d outer cnd step b → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003950#64 0xef#8 0xf0#8 0x8f#8 0xc5#8 c)
+    (hsite_hRet : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (e : Expr),
+      EvalErr st d env e → ErrHalts c → ReachJal S.g S.inp S.m0 0x800034e4#64 0xef#8 0xf0#8 0x5f#8 0x8c#8 c)
+    (hsite_hFlCond : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (cnd : Expr) (step : Option Expr)
+      (b : Stmt),
+      EvalErr st d env cnd → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003de8#64 0xef#8 0xe0#8 0x1f#8 0xfc#8 c)
+    (hsite_hFlBody : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (cnd : Option Expr)
+      (step : Option Expr) (b : Stmt) (st' : SpecSt),
+      ForCond st d env cnd st' → ExecErr st' d env b → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003e98#64 0xef#8 0xe0#8 0x1f#8 0xf1#8 c)
+    (hsite_hFlStep : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (cnd : Option Expr) (e : Expr)
+      (b : Stmt) (st' st'' : SpecSt) (status : Status),
+      ForCond st d env cnd st' → ExecS st' d env b st'' status →
+      (status = .normal ∨ status = .cont) → EvalErr st'' d env e → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003f58#64 0xef#8 0xe0#8 0x1f#8 0xe5#8 c)
+    (hsite_hFlLoop : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (cnd : Option Expr)
+      (step : Option Expr) (b : Stmt) (st' st'' st''' : SpecSt) (status : Status),
+      ForCond st d env cnd st' → ExecS st' d env b st'' status →
+      (status = .normal ∨ status = .cont) → ExecStep st'' d env step st''' →
+      ForLoopErr st''' d env cnd step b → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003fac#64 0xef#8 0xe0#8 0xdf#8 0xdf#8 c)
+    (hsite_hSeqHead : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt),
+      ExecErr st d env s → ErrHalts c → ReachJal S.g S.inp S.m0 0x80003fdc#64 0xef#8 0xe0#8 0xdf#8 0xdc#8 c)
+    (hsite_hSeqTail : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt)
+      (st' : SpecSt),
+      ExecS st d env s st' .normal → ExecSeqErr st' d env ss → ErrHalts c → ReachJal S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
     (hsite_hTopAbrupt : ∀ (p : Vsa.While.Program) (c : Config),
       Vsa.While.TopAbrupt p → ErrHalts c) :
     ErrFamily L :=

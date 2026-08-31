@@ -1,0 +1,14 @@
+name       = "callClosureEnvDefineCall"
+namespace  = "Vsa.Sim"
+entry      = 0x8000330c
+span_end   = 0x80003310
+terminator = "jal"
+callee     = "env_define"
+callee_pc  = 0x80002a5c
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac", "Vsa.Sim.BridgeSeg"]
+doc        = "CallClosureGeom.entryFold per-param env_define call seam (frame-free tail, 0x8000330c): ld a1,0(a4) (a1 := params[i], the name ptr), parked at jal env_define @0x80003310 (= Store.define frame params[i] vs[i], one param-bind of the closureBoundStore fold). The param-staging head of the loop body (0x800032dc..0x80003308: a0:=s3 frame, a2:=&pv buffer, spill vs[i] words, addi s0,s0,24 advancing the param cursor — writes callee-saved s0) precedes it; this jal-adjacent tail writes no ABI reg (only reads a4, writes nothing but the jal link) so it IS a bridgeOfSeg row. The per-param seam entryFold's storeChainList composes over cd.params.zip vs; the env_define callee is EnvDefCompose.envDefContract."
+
+# entry pin: a4 (the params array element ptr, ld a1,0(a4)).
+[[pin]]
+reg = 14
+name = "a4"
