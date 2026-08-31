@@ -319,6 +319,193 @@ running for `n` more.  We keep the relation minimal (sequence-level): it is
 enough for the trichotomy, whose real work is the classical case split, not the
 inductive structure of `Approx`. -/
 
+mutual
+
+/-- An expression's evaluation is **still running after `n` rule steps**.  The
+1:1 fuel mirror of `EvalErr`'s propagation constructors (error LEAVES have no
+divergence analogue — they terminate the computation): a sub-computation still
+running after a normal prefix keeps the whole expression running one step
+longer.  Expression divergence enters through calls (`CApprox`). -/
+inductive EApprox : Nat → St → Nat → Addr → Expr → Prop where
+  | zero (st : St) (d : Nat) (env : Addr) (e : Expr) :
+    EApprox 0 st d env e
+  | assignE (n : Nat) (st : St) (d : Nat) (env : Addr) (x : String) (e : Expr) :
+    EApprox n st d env e →
+    EApprox (n + 1) st d env (.assign x e)
+  | binaryL (n : Nat) (st : St) (d : Nat) (env : Addr) (op : BinOp) (l r : Expr) :
+    EApprox n st d env l →
+    EApprox (n + 1) st d env (.binary op l r)
+  | binaryR (n : Nat) (st : St) (d : Nat) (env : Addr) (op : BinOp) (l r : Expr)
+      (st' : St) (lv : Value) :
+    EvalE st d env l st' lv →
+    EApprox n st' d env r →
+    EApprox (n + 1) st d env (.binary op l r)
+  | orL (n : Nat) (st : St) (d : Nat) (env : Addr) (l r : Expr) :
+    EApprox n st d env l →
+    EApprox (n + 1) st d env (.logical .or l r)
+  | orR (n : Nat) (st : St) (d : Nat) (env : Addr) (l r : Expr) (st' : St)
+      (lv : Value) :
+    EvalE st d env l st' lv → lv.truthy = false →
+    EApprox n st' d env r →
+    EApprox (n + 1) st d env (.logical .or l r)
+  | andL (n : Nat) (st : St) (d : Nat) (env : Addr) (l r : Expr) :
+    EApprox n st d env l →
+    EApprox (n + 1) st d env (.logical .and l r)
+  | andR (n : Nat) (st : St) (d : Nat) (env : Addr) (l r : Expr) (st' : St)
+      (lv : Value) :
+    EvalE st d env l st' lv → lv.truthy = true →
+    EApprox n st' d env r →
+    EApprox (n + 1) st d env (.logical .and l r)
+  | unaryE (n : Nat) (st : St) (d : Nat) (env : Addr) (op : UnOp) (e : Expr) :
+    EApprox n st d env e →
+    EApprox (n + 1) st d env (.unary op e)
+  | callF (n : Nat) (st : St) (d : Nat) (env : Addr) (f : Expr)
+      (args : List Expr) :
+    EApprox n st d env f →
+    EApprox (n + 1) st d env (.call f args)
+  | callArgs (n : Nat) (st : St) (d : Nat) (env : Addr) (f : Expr)
+      (args : List Expr) (st' : St) (fv : Value) :
+    EvalE st d env f st' fv →
+    ArgsApprox n st' d env args →
+    EApprox (n + 1) st d env (.call f args)
+  | callC (n : Nat) (st : St) (d : Nat) (env : Addr) (f : Expr)
+      (args : List Expr) (st' st'' : St) (fv : Value) (vs : List Value) :
+    EvalE st d env f st' fv →
+    EvalArgs st' d env args st'' vs →
+    CApprox n st'' d fv vs →
+    EApprox (n + 1) st d env (.call f args)
+
+/-- An argument list's evaluation is still running (mirror of `EvalArgsErr`). -/
+inductive ArgsApprox : Nat → St → Nat → Addr → List Expr → Prop where
+  | zero (st : St) (d : Nat) (env : Addr) (es : List Expr) :
+    ArgsApprox 0 st d env es
+  | head (n : Nat) (st : St) (d : Nat) (env : Addr) (e : Expr) (es : List Expr) :
+    EApprox n st d env e →
+    ArgsApprox (n + 1) st d env (e :: es)
+  | tail (n : Nat) (st : St) (d : Nat) (env : Addr) (e : Expr) (es : List Expr)
+      (st' : St) (v : Value) :
+    EvalE st d env e st' v →
+    ArgsApprox n st' d env es →
+    ArgsApprox (n + 1) st d env (e :: es)
+
+/-- A call is still running: the closure body's sequence is still running at
+depth `d + 1` (mirror of `CallErr.body`; natives always terminate). -/
+inductive CApprox : Nat → St → Nat → Value → List Value → Prop where
+  | zero (st : St) (d : Nat) (fv : Value) (vs : List Value) :
+    CApprox 0 st d fv vs
+  | body (n : Nat) (st : St) (d : Nat) (a : Addr) (cd : ClosureData)
+      (vs : List Value) (store' : Store) (frame : Addr) :
+    st.store.closures[a]? = some cd →
+    vs.length = cd.params.length →
+    d < maxCallDepth →
+    st.store.allocFrame (some cd.env) = (store', frame) →
+    Approx n ⟨(cd.params.zip vs).foldl (fun s (x, v) => s.define frame x v) store',
+      st.out⟩ (d + 1) frame cd.body →
+    CApprox (n + 1) st d (.closure a) vs
+
+/-- A single statement is still running after `n` rule steps — the
+WITHIN-statement divergence relation (mirror of `ExecErr`'s propagation
+constructors).  `whileLoop` is the load-bearing case: each loop iteration whose
+cond+body complete normally consumes one unit of fuel, so `while (true) {}`
+satisfies `SApprox n` for every `n`. -/
+inductive SApprox : Nat → St → Nat → Addr → Stmt → Prop where
+  | zero (st : St) (d : Nat) (env : Addr) (s : Stmt) :
+    SApprox 0 st d env s
+  | expr (n : Nat) (st : St) (d : Nat) (env : Addr) (e : Expr) :
+    EApprox n st d env e →
+    SApprox (n + 1) st d env (.expr e)
+  | varInit (n : Nat) (st : St) (d : Nat) (env : Addr) (x : String) (e : Expr) :
+    EApprox n st d env e →
+    SApprox (n + 1) st d env (.varDecl x (some e))
+  | block (n : Nat) (st : St) (d : Nat) (env : Addr) (ss : List Stmt)
+      (store' : Store) (inner : Addr) :
+    st.store.allocFrame (some env) = (store', inner) →
+    Approx n ⟨store', st.out⟩ d inner ss →
+    SApprox (n + 1) st d env (.block ss)
+  | ifCond (n : Nat) (st : St) (d : Nat) (env : Addr) (c : Expr) (t : Stmt)
+      (e : Option Stmt) :
+    EApprox n st d env c →
+    SApprox (n + 1) st d env (.ifStmt c t e)
+  | ifThen (n : Nat) (st : St) (d : Nat) (env : Addr) (c : Expr) (t : Stmt)
+      (e : Option Stmt) (st' : St) (v : Value) :
+    EvalE st d env c st' v → v.truthy = true →
+    SApprox n st' d env t →
+    SApprox (n + 1) st d env (.ifStmt c t e)
+  | ifElse (n : Nat) (st : St) (d : Nat) (env : Addr) (c : Expr) (t e : Stmt)
+      (st' : St) (v : Value) :
+    EvalE st d env c st' v → v.truthy = false →
+    SApprox n st' d env e →
+    SApprox (n + 1) st d env (.ifStmt c t (some e))
+  | whileCond (n : Nat) (st : St) (d : Nat) (env : Addr) (c : Expr) (b : Stmt) :
+    EApprox n st d env c →
+    SApprox (n + 1) st d env (.whileStmt c b)
+  | whileBody (n : Nat) (st : St) (d : Nat) (env : Addr) (c : Expr) (b : Stmt)
+      (st' : St) (v : Value) :
+    EvalE st d env c st' v → v.truthy = true →
+    SApprox n st' d env b →
+    SApprox (n + 1) st d env (.whileStmt c b)
+  | whileLoop (n : Nat) (st : St) (d : Nat) (env : Addr) (c : Expr) (b : Stmt)
+      (st' st'' : St) (v : Value) (status : Status) :
+    EvalE st d env c st' v → v.truthy = true →
+    ExecS st' d env b st'' status →
+    (status = .normal ∨ status = .cont) →
+    SApprox n st'' d env (.whileStmt c b) →
+    SApprox (n + 1) st d env (.whileStmt c b)
+  | forInit (n : Nat) (st : St) (d : Nat) (env : Addr) (init : Stmt)
+      (cnd : Option Expr) (step : Option Expr) (b : Stmt) (store' : Store)
+      (outer : Addr) :
+    st.store.allocFrame (some env) = (store', outer) →
+    SApprox n ⟨store', st.out⟩ d outer init →
+    SApprox (n + 1) st d env (.forStmt (some init) cnd step b)
+  | forLoop (n : Nat) (st : St) (d : Nat) (env : Addr) (init : Option Stmt)
+      (cnd : Option Expr) (step : Option Expr) (b : Stmt) (store' : Store)
+      (outer : Addr) (st' : St) :
+    st.store.allocFrame (some env) = (store', outer) →
+    ExecInit ⟨store', st.out⟩ d outer init st' →
+    FlApprox n st' d outer cnd step b →
+    SApprox (n + 1) st d env (.forStmt init cnd step b)
+  | ret (n : Nat) (st : St) (d : Nat) (env : Addr) (e : Expr) :
+    EApprox n st d env e →
+    SApprox (n + 1) st d env (.ret (some e))
+
+/-- A `for` loop is still running (mirror of `ForLoopErr`). -/
+inductive FlApprox : Nat → St → Nat → Addr → Option Expr → Option Expr → Stmt →
+    Prop where
+  | zero (st : St) (d : Nat) (env : Addr) (cnd : Option Expr)
+      (step : Option Expr) (b : Stmt) :
+    FlApprox 0 st d env cnd step b
+  | cond (n : Nat) (st : St) (d : Nat) (env : Addr) (c : Expr)
+      (step : Option Expr) (b : Stmt) :
+    EApprox n st d env c →
+    FlApprox (n + 1) st d env (some c) step b
+  | body (n : Nat) (st : St) (d : Nat) (env : Addr) (cnd : Option Expr)
+      (step : Option Expr) (b : Stmt) (st' : St) :
+    ForCond st d env cnd st' →
+    SApprox n st' d env b →
+    FlApprox (n + 1) st d env cnd step b
+  | step (n : Nat) (st : St) (d : Nat) (env : Addr) (cnd : Option Expr)
+      (e : Expr) (b : Stmt) (st' st'' : St) (status : Status) :
+    ForCond st d env cnd st' →
+    ExecS st' d env b st'' status →
+    (status = .normal ∨ status = .cont) →
+    EApprox n st'' d env e →
+    FlApprox (n + 1) st d env cnd (some e) b
+  | loop (n : Nat) (st : St) (d : Nat) (env : Addr) (cnd : Option Expr)
+      (step : Option Expr) (b : Stmt) (st' st'' st''' : St) (status : Status) :
+    ForCond st d env cnd st' →
+    ExecS st' d env b st'' status →
+    (status = .normal ∨ status = .cont) →
+    ExecStep st'' d env step st''' →
+    FlApprox n st''' d env cnd step b →
+    FlApprox (n + 1) st d env cnd step b
+
+/-- The sequence-level bounded-progress relation.  The original two constructors
+are UNCHANGED; `head` is the amendment (2026-08-31) that lets a head statement
+consume fuel INTERNALLY (`SApprox`), so within-statement divergence — a
+diverging loop or a non-terminating closure body — is finally in `Approx`'s
+range.  (Before the amendment `Approx (n+1)` forced the head to complete
+`.normal`, making `BigStepDiverges`, and with it `Trichotomy`, FALSE at
+`[while (true) {}]` — the machine-checked finding in `Vsa/While/StmtDispatch`.) -/
 inductive Approx : Nat → St → Nat → Addr → List Stmt → Prop where
   /-- Zero fuel: always still running. -/
   | zero (st : St) (d : Nat) (env : Addr) (ss : List Stmt) :
@@ -330,6 +517,12 @@ inductive Approx : Nat → St → Nat → Addr → List Stmt → Prop where
     ExecS st d env s st' .normal →
     Approx n st' d env ss →
     Approx (n + 1) st d env (s :: ss)
+  /-- The head statement is itself still running after `n` internal steps. -/
+  | head (n : Nat) (st : St) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt) :
+    SApprox n st d env s →
+    Approx (n + 1) st d env (s :: ss)
+
+end
 
 /-- **A program runs forever** (spec-side divergence): for every fuel `n`, the
 top-level sequence is still running after `n` steps.  The divergence simulation

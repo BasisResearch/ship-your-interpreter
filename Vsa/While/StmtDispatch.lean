@@ -119,73 +119,52 @@ theorem hExclude_entails_false
     False :=
   (hExclude [] initSt 0 0 [] .base).1 ⟨initSt, .normal, .nil initSt 0 0⟩
 
-/-! ## Finding 2 — `Approx` forces a normal head completion -/
+/-! ## Findings 2/3 — RESOLVED by the 2026-08-31 amendment
 
-/-- **`Approx (n+1)` on a cons forces the head to run to `.normal`.**  The only
-`Approx` constructor that makes progress is `Approx.step`, which requires
-`ExecS st d env s st' .normal`.  So a head statement that never completes normally
-(a diverging loop, a non-terminating closure body) can never satisfy
-`Approx (n+1)` — the landed `Approx`/`BigStepDiverges` cannot witness
-within-statement divergence. -/
-theorem approx_succ_needs_normalHead {n : Nat} {st : St} {d : Nat} {env : Addr}
-    {s : Stmt} {ss : List Stmt} (h : Approx (n + 1) st d env (s :: ss)) :
-    ∃ st', ExecS st d env s st' .normal ∧ Approx n st' d env ss := by
-  cases h with
-  | step _ _ _ _ _ _ st' hhead htail => exact ⟨st', hhead, htail⟩
-
-/-! ## Finding 3 — the canonical diverging program witnesses the gap
-
-`loopP` is `while (true) {}` (empty-block body).  We record the two facts a
-falsity proof of `Trichotomy loopP` rests on:
-
-* `loopP_approx1_needs_completion` — `Approx 1 initSt 0 0 loopP` would require the
-  loop head to complete to `.normal` (instance of Finding 2).  The loop head never
-  does (`while_true_no_normal_completion`, see below), so `Approx 1` fails and
-  `BigStepDiverges loopP` is false.
-
-The complementary "the loop head never completes to `.normal`" fact
-(`while_true_no_normal_completion`) is *true* but its only proof route is a
-well-founded inversion over the **mutually**-inductive `ExecS` (peeling
-`ExecS.whileLoop` recursively), whose `sizeOf` measure this repo's Lean does not
-expose as reducible `sizeOf_spec` lemmas — discharging it cleanly is a
-mutual-inductive-metatheory exercise that exceeds this file's elab budget and is
-orthogonal to the reduction-shape finding.  It is therefore surfaced as a
-**named typed premise** (NOT assumed anywhere that would make a landed theorem
-vacuous). -/
+The original Finding-2/3 witnesses (`approx_succ_needs_normalHead`,
+`loopP_not_diverges`) proved that the PRE-amendment `Approx` — whose only
+progress constructor forced the head to complete `.normal` — could not witness
+within-statement divergence, making `BigStepDiverges` (and `Trichotomy`) FALSE
+at `loopP = [while (true) {}]`.  The amendment (the `SApprox` mutual fuel family
++ `Approx.head` in `Vsa/While/ErrorSem.lean`) makes those two statements false,
+so they are REPLACED here by the positive demonstration: `loopP` now provably
+DIVERGES.  (`hExclude_entails_false` above remains valid — the §1–§4 `Spine`
+construction is still uninstantiable; the repaired §5 construction in
+`Vsa/While/Trichotomy.lean` no longer uses it.) -/
 
 /-- The canonical diverging program: `while (true) {}` with an empty-block body. -/
 def loopP : Program := [ .whileStmt (.bool true) (.block []) ]
 
-/-- `Approx 1 initSt 0 0 loopP` would require the loop head to complete to
-`.normal` — an instance of `approx_succ_needs_normalHead`. -/
-theorem loopP_approx1_needs_completion
-    (h : Approx 1 initSt 0 0 loopP) :
-    ∃ st', ExecS initSt 0 0 (.whileStmt (.bool true) (.block [])) st' .normal := by
-  obtain ⟨st', hhead, _⟩ := approx_succ_needs_normalHead (n := 0) h
-  exact ⟨st', hhead⟩
+/-- The `while (true) {}` head is still-running for EVERY fuel: each iteration's
+cond (`.bool true`) and body (empty block) complete normally and `whileLoop`
+recurses.  The generalization over `st` is what lets the induction step move
+through the body's `allocFrame` store change. -/
+theorem whileTrue_sapprox :
+    ∀ (n : Nat) (st : St) (d : Nat) (env : Addr),
+      SApprox n st d env (.whileStmt (.bool true) (.block [])) := by
+  intro n
+  induction n with
+  | zero => intro st d env; exact .zero st d env _
+  | succ n ih =>
+    intro st d env
+    exact .whileLoop n st d env (.bool true) (.block []) st
+      ⟨(st.store.allocFrame (some env)).1, st.out⟩ (.bool true) .normal
+      (.bool st d env true) rfl
+      (.block st d env [] (st.store.allocFrame (some env)).1
+        (st.store.allocFrame (some env)).2 ⟨(st.store.allocFrame (some env)).1, st.out⟩
+        .normal rfl (.nil ⟨(st.store.allocFrame (some env)).1, st.out⟩ d
+          (st.store.allocFrame (some env)).2))
+      (Or.inl rfl) (ih ⟨(st.store.allocFrame (some env)).1, st.out⟩ d env)
 
-/-- **Named premise (true, not discharged here).**  The diverging loop head
-`while (true) {}` never runs to a `.normal` completion.  Its base cases
-(`whileFalse` needs a falsy `true`, `whileBreak`/`whileRet` need the empty block
-to yield `.brk`/`.ret` — it only yields `.normal`) are immediately refuted; the
-only remaining rule is `whileLoop`, whose recursive premise is another `.normal`
-completion of the *same* statement, so a well-founded inversion over the `ExecS`
-derivation closes it.  Left as a typed premise because the required `sizeOf`
-metatheory of the mutual `ExecS` is not reducible in this repo's Lean; it is used
-only to state the falsity witnesses, never to prove a landed theorem. -/
-def WhileTrueNoNormal : Prop :=
-  ∀ (st st' : St) (d : Nat) (env : Addr),
-    ¬ ExecS st d env (.whileStmt (.bool true) (.block [])) st' .normal
-
-/-- **`BigStepDiverges loopP` is false**, given the (true) named premise
-`WhileTrueNoNormal`: `Approx 1` already fails because it would demand a `.normal`
-completion of the loop head that does not exist.  This is the load-bearing half of
-"`Trichotomy` is false for `loopP`". -/
-theorem loopP_not_diverges (hnn : WhileTrueNoNormal) :
-    ¬ BigStepDiverges loopP := by
-  intro hdiv
-  obtain ⟨st', hcomplete⟩ := loopP_approx1_needs_completion (hdiv 1)
-  exact hnn initSt st' 0 0 hcomplete
+/-- **`loopP` diverges** — the positive witness that the amended
+`Approx`/`BigStepDiverges` capture within-statement divergence (the exact
+program the pre-amendment falsity proof used). -/
+theorem loopP_diverges : BigStepDiverges loopP := by
+  intro n
+  cases n with
+  | zero => exact .zero initSt 0 0 loopP
+  | succ n =>
+    exact .head n initSt 0 0 _ [] (whileTrue_sapprox n initSt 0 0)
 
 /-! ## The correctly-typed refined atom (for a future amended `BigStepDiverges`)
 

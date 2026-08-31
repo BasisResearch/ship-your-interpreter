@@ -211,4 +211,120 @@ theorem trichotomy_of_dispatch (hnode : NodeDispatch)
     · obtain ⟨st', ss', hstep⟩ := hS
       exact ⟨st', ss', hstep, .step st d env ss st' ss' hspine hstep⟩
 
+/-! ## §5. The REPAIRED construction (2026-08-31 amendment)
+
+`Vsa/While/StmtDispatch.lean` machine-checked that the §1–§4 construction can
+never be instantiated: `hExclude` is unsatisfiable (`Spine.base` seeds every
+program's root, including terminating ones), and the pre-amendment `Approx`
+could not witness within-statement divergence, making `NodeDispatch`'s three
+verdicts non-exhaustive at a diverging loop head.  With the amended `Approx`
+(the `head`/`SApprox` fuel family in `Vsa/While/ErrorSem.lean`) both defects
+close:
+
+* the dispatch gains a fourth verdict (D) "the head statement is internally
+  still-running for every fuel" — making the per-node split honestly exhaustive;
+* the spine exclusion is **provable by contraposition**: a non-terminating,
+  non-erroring node's (S)-successor is again non-terminating (else
+  `ExecSeq.consNormal` would terminate the node) and non-erroring (else
+  `ExecSeqErr.tail` would error it).  `hExclude` disappears entirely.
+
+The §1–§4 declarations are kept verbatim (they still compile; `StmtDispatch`'s
+falsity witnesses reference their shapes). -/
+
+/-- **The 4-way per-node classical dispatch** — `NodeDispatch` + the (D) verdict
+the amendment makes expressible: the head statement diverges in place. -/
+def NodeDispatch4 : Prop :=
+  ∀ (st : St) (d : Nat) (env : Addr) (ss : List Stmt),
+    (∃ st' status, ExecSeq st d env ss st' status) ∨
+    ExecSeqErr st d env ss ∨
+    (∃ st' ss', SeqStep st d env ss st' ss') ∨
+    (∃ s ss', ss = s :: ss' ∧ ∀ n, SApprox n st d env s)
+
+/-- From the 4-way dispatch, every non-terminating, non-erroring node is
+`Approx n` for every `n`.  Fuel induction; the exclusion at the (S)-successor is
+PROVED by contraposition with `ExecSeq.consNormal`/`ExecSeqErr.tail` — the
+content `hExclude` wrongly assumed. -/
+theorem approx_of_nodeDispatch4 (hnode : NodeDispatch4) :
+    ∀ (n : Nat) (st : St) (d : Nat) (env : Addr) (ss : List Stmt),
+      ¬ (∃ st' status, ExecSeq st d env ss st' status) →
+      ¬ ExecSeqErr st d env ss →
+      Approx n st d env ss := by
+  intro n
+  induction n with
+  | zero => intro st d env ss _ _; exact .zero st d env ss
+  | succ n ih =>
+    intro st d env ss hnoT hnoE
+    rcases hnode st d env ss with hT | hE | ⟨st', ss', s, hcons, hhead⟩ |
+      ⟨s, ss', hcons, hdiv⟩
+    · exact absurd hT hnoT
+    · exact absurd hE hnoE
+    · subst hcons
+      refine .step n st d env s ss' st' hhead (ih st' d env ss' ?_ ?_)
+      · rintro ⟨st'', status, hseq⟩
+        exact hnoT ⟨st'', status, .consNormal st d env s ss' st' st'' status hhead hseq⟩
+      · intro herr
+        exact hnoE (.tail st d env s ss' st' hhead herr)
+    · subst hcons
+      exact .head n st d env s ss' (hdiv n)
+
+/-- **The repaired trichotomy** — conditional on ONLY the 4-way dispatch and the
+root (T)-classification.  No exclusion residual: it is proved inside
+`approx_of_nodeDispatch4`. -/
+theorem trichotomy_of_dispatch4 (hnode : NodeDispatch4)
+    (hroot : ∀ p : Program,
+      (∃ st' status, ExecSeq initSt 0 0 p st' status) → ∃ out, BigStep p out) :
+    Trichotomy := by
+  intro p
+  by_cases hterm : ∃ st' status, ExecSeq initSt 0 0 p st' status
+  · exact Or.inl (hroot p hterm)
+  by_cases herr : BigStepErr p
+  · exact Or.inr (Or.inl herr)
+  · exact Or.inr (Or.inr (fun n =>
+      approx_of_nodeDispatch4 hnode n initSt 0 0 p hterm herr))
+
+/-! ### The per-STATEMENT dispatch atom, and its lift to `NodeDispatch4`
+
+The honest single-statement atom the survey called `StmtDispatch3`: every
+statement runs to some status, errors, or diverges in place (`∀ n, SApprox n`).
+The lift to sequence nodes is proved: nil terminates; an abrupt head terminates
+the node (`consAbrupt`); a normal head is the (S) verdict; an erroring head is
+(E) via `ExecSeqErr.head`; a diverging head is (D). -/
+
+/-- The classical per-statement dispatch with the divergence disjunct — the ONE
+spec-layer residual of the repaired trichotomy (plus `hroot`). -/
+def StmtDispatchD : Prop :=
+  ∀ (st : St) (d : Nat) (env : Addr) (s : Stmt),
+    (∃ st' status, ExecS st d env s st' status) ∨
+    ExecErr st d env s ∨
+    (∀ n, SApprox n st d env s)
+
+theorem nodeDispatch4_of_stmtDispatchD (h : StmtDispatchD) : NodeDispatch4 := by
+  intro st d env ss
+  cases ss with
+  | nil => exact Or.inl ⟨st, .normal, .nil st d env⟩
+  | cons s ss' =>
+    rcases h st d env s with ⟨st', status, hrun⟩ | herr | hdiv
+    · cases status with
+      | normal =>
+        exact Or.inr (Or.inr (Or.inl ⟨st', ss', s, rfl, hrun⟩))
+      | brk =>
+        exact Or.inl ⟨st', .brk,
+          .consAbrupt st d env s ss' st' .brk hrun (by intro h; cases h)⟩
+      | cont =>
+        exact Or.inl ⟨st', .cont,
+          .consAbrupt st d env s ss' st' .cont hrun (by intro h; cases h)⟩
+      | ret v =>
+        exact Or.inl ⟨st', .ret v,
+          .consAbrupt st d env s ss' st' (.ret v) hrun (by intro h; cases h)⟩
+    · exact Or.inr (Or.inl (.head st d env s ss' herr))
+    · exact Or.inr (Or.inr (Or.inr ⟨s, ss', rfl, hdiv⟩))
+
+/-- **`Trichotomy` from the per-statement atom** — the final spec-layer
+reduction: `htri` rests on exactly `StmtDispatchD` + `hroot`. -/
+theorem trichotomy_of_stmtDispatchD (h : StmtDispatchD)
+    (hroot : ∀ p : Program,
+      (∃ st' status, ExecSeq initSt 0 0 p st' status) → ∃ out, BigStep p out) :
+    Trichotomy :=
+  trichotomy_of_dispatch4 (nodeDispatch4_of_stmtDispatchD h) hroot
+
 end Vsa.While
