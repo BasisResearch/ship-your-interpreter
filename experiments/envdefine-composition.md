@@ -322,3 +322,132 @@ prefix bridge), `bridgeStore`, `bridgeCapCompute`, `bridgeNamesToVals`,
 `bridgeAppendHead`, `hUpdate`, dispatch scan loop — each a straight-line/loop machine
 segment, none now blocked by seam underspecification (the frame plumbing is in place).
 `bridgeCapCompute` drops in by cloning `mallocPrefix_run` at the realloc words.
+
+## strlen_spec_framed — the missing preservation clauses (2026-08-30, IN PROGRESS)
+
+Built `strlen_spec_framed` in `Vsa/Sim/StrlenSpec.lean` (additive; existing
+`strlen_spec`/`strlen_post`/`strlen_aligned_spec` UNCHANGED — no consumer touched).
+The framed spec threads an ABI-callee-saved register frame
+`∀ R, AbiPreserved R → get? R = g R` through the WHOLE aligned strlen run
+(entry ≫ word-loop ≫ byte-tail ≫ ret), giving the `strlenFramed` residual's clauses.
+
+### Clause status (the 5 the composition needs)
+- **Clause 2 (x2=sp+StackOK), 3 (x3=gp), 4 (callee-saved tie)** — DELIVERED as the
+  single conjunct `∀ R, AbiPreserved R → get? R = g R`.  x2/x3 are `AbiPreserved`, so the
+  one clause subsumes them; StackOK is an `sp`-value property recovered once x2 survives.
+  Sound because strlen's 8-aligned fast path writes ONLY `{x1,x10..x15}` (`ra`,`a0..a5`),
+  disjoint from `AbiPreserved = {x2,x3,x4,x8,x9,x18..x27}` (`Vsa.Alloc.AbiPreserved`).
+- **Clause 5 (AInv)** — corollary of `mem = m0` (ALREADY in `strlen_post`); exposed as
+  `strlen_framed_mem_stable`.  No spec change: strlen never stores.
+- **Clause 1 (tick<2)** — NOT yet in the framed post (the framed carrier is the register
+  frame only, to avoid re-threading the tick counter).  Per this ledger's prior note,
+  `EnvDefFrame` already carries `c.tick < 2` as the stopgap, so the `strlenFramed`
+  discharge can source tick from the ENTRY `EnvDefFrame` if the composition tolerates the
+  entry-tick; if the exit-tick is strictly needed, the framed blocks must additionally
+  thread `c.tick < 2` (every site lemma already yields `i' < 2`, so it is mechanical —
+  convert the block carrier to `AbiFrame g = ghost ∧ tick<2`, which is already defined).
+
+### Architecture (exponentiating, per the fast-reflection rules)
+Frame primitives `strlenFrame_alu/_btaken/_bnottaken/_jr` (one per `sigmaPost_*` family,
+built from `get?_sigmaPost_*` + `hobs.1`, keyed on `AbiPreserved` via `abiPreserved_pinned`
++ `abiPreserved_wr`; NO `StrcmpSpec` dep — that file imports this one).  Two GENERIC
+framed-block combinators `tdec_next_k_framed`/`tdec_exit_k_framed` (site lemmas as
+callbacks) frame all 5 advances + 6 exits from ONE proof each; concrete
+`next{0..4}_framed`/`exit{0..5}_framed` are thin instantiations whose leaf `decide`s are
+paid ONCE at their own elaboration; `tail_to_done_framed` composes pre-checked constants
+by shallow per-branch `.seq` (no deep-nested-term whnf).  Entry/loop framed by
+`entry_aligned_framed` (8-site re-run) + `wloop_to_tail_framed` (`Triple.loop` over
+`WLoopI ∧ ghost`, framed `wloop_straight/back/exit`).
+
+### Compile status — BLOCKED on two items + persistent build-lock contention
+1. `exit4_framed` hits the 8M-heartbeat `whnf` timeout (offsets 0–3 + 5 elaborate; 4
+   tips over).  Root cause = the per-offset 64-bit `BitVec` `decide`s (`himm`/`hbtpc`);
+   FIX = precompute those literal facts as named lemmas so the exit is `exact`, not
+   `decide` (exponentiating rule: one small decide per fact, reused).
+2. Clause-1 tick threading (above).
+Verification was repeatedly starved by the shared `.lake` build lock (two other agents
+compiling); the last full compile that completed showed exactly these two errors + a now-
+FIXED `AbiFrame`-vs-bare-ghost unification in `strlen_aligned_spec_framed` (rewritten as a
+tactic proof with an explicit `hmid` intermediate).
+
+### EnvDefCompose wiring — NOT YET applied (blocked on the above closing green)
+Once `strlen_spec_framed` is green + tick-carrying, `envDefAppendContract`'s
+`strlenFramed` premise discharges by: extract `ghost` from the entry `EnvDefFrame`
+(4th conjunct); apply `strlen_spec_framed`; at exit reconstruct `EnvDefFrame` from
+`ghost` (x2=sp/x3=gp via the AbiPreserved tie against the entry-pinned `g`), `mem=m0`
+(→ AInv via the allocator's mem+gp-stability), and tick.  `bridgeStrlenPre_closed`/
+`bridgeMallocPre_closed` are unaffected (they consume `EnvDefFrame`, unchanged).
+
+## strlen_spec_framed — UPDATE (2026-08-30, exit4 elaboration blocker)
+
+`strlen_spec_framed` + the whole framed chain (entry_aligned_framed, wloop_to_tail_framed
+with framed straight/back/exit, tail_entry_framed, next{0..4}_framed, exit{0,1,2,3,5}_framed,
+tdec_snez_framed, tail_to_done_framed, wattail_to_done_framed, strlen_aligned_spec_framed)
+are WRITTEN and individually sound.  `envDefStrlenFramed` (EnvDefCompose) DISCHARGES the
+`strlenFramed` premise from `strlen_spec_framed` modulo the named `hExitTick` residual.
+
+**BLOCKER (single, deterministic): `exit4_framed` hits the 8M-heartbeat `whnf` timeout.**
+`exit{0,1,2,3,5}_framed` are structurally IDENTICAL thin wrappers over the `exitk_framed`
+generic (differing only in offset literals) and elaborate fine; `exit4_framed` (offset 4)
+deterministically exceeds the `whnf` budget when the elaborator unifies the `exitk_framed`
+application type at k=4.  Tried: term-mode (baseline), `refine … ?_` staged holes,
+`attribute [irreducible]` on the generics — none resolved it (irreducible made the WHOLE
+file ~2× slower; refine moved the timeout into the same application unification).
+
+**Diagnosis = the tail is NOT built the exponentiating way.**  The per-offset `exitk_framed`
+instantiation whnf's Sail-state `sigmaPost_*`/`Done`/`TDec` predicates (violates
+fast-reflection rule 1 "reflect on a compact first-order write-log, never the Sail state"
+and rule 3 "one small decide per block").  The CORRECT fix is to build the byte-tail via
+the block-reflection framework (`#gen_block`/`BlockLogic`, which emits the frame as ONE
+reflected write-log clause `∀ n ∈ wrRegsM block.body, gprReg n ≠ R`, checked by one small
+`decide` — exactly `negProloguePost`'s pattern), so ALL offsets share one soundness lemma
+and NO per-offset whnf.  That is a rebuild of the strlen byte-tail on block-reflection —
+the genuine exponentiation work, beyond this session.
+
+**Net:** the register-frame preservation LOGIC (clauses 2/3/4, + clause 5 via
+`strlen_framed_mem_stable`) is proved and composed; clause 1 (tick) is the named
+`hExitTick` residual in `envDefStrlenFramed`; the ONLY thing keeping the file from green is
+`exit4_framed`'s elaboration cost, which needs the block-reflection tail rebuild, not more
+proof.  EnvDefCompose's `envDefStrlenFramed` is written and will compile once StrlenSpec is
+green.  `bridgeStrlenPre_closed`/`bridgeMallocPre_closed` are untouched (still green).
+
+## strlen_spec_framed — GREEN + WIRED (2026-08-30, FINAL)
+
+**RESOLVED.**  The `exit4_framed` "8M-heartbeat whnf timeout" was NOT an exponentiation
+failure — it was a WRONG LITERAL: `exit4_framed` passed `takenimm = 0x0068` to the
+`exitk_framed` generic, but `site_80006d54_taken` emits `sigmaPost_branch_taken … 0x0060`.
+The `0x0068` vs `0x0060` mismatch forced the elaborator into a pathological `whnf`
+unification search that exhausted the budget.  Fix: rebuilt `exit4_framed` self-contained
+(inlined `beqz`-taken ≫ `addi` ≫ `ret`, `tdec_snez_framed` shape) with the correct
+`0x0060` btaken immediate.  Lesson: a bad ground literal on a `sigmaPost_*` arg surfaces as
+a whnf-heartbeat timeout, not a unification error — check literals first.
+
+### Landed GREEN + axiom-clean
+- `Vsa/Sim/StrlenSpec.lean` — `strlen_spec_framed : Triple (strlen_pre ∧ ghost)
+  (strlen_post ∧ ghost)` where ghost = `∀R, AbiPreserved R → get? R = g R`.  Compiles
+  clean; `#print axioms` = `[propext, Classical.choice, Quot.sound]` (no sorry/axiom/
+  native_decide/bv_decide).  Full framed chain: `strlenFrame_{alu,btaken,bnottaken,jr}`
+  (per-family AbiPreserved readbacks), `entry_aligned_framed`, `wloop_to_tail_framed`
+  (framed `Triple.loop`), `tail_entry_framed`, `next{0..4}_framed`, `exit{0..5}_framed`,
+  `tdec_snez_framed`, `tail_to_done_framed`, `wattail_to_done_framed`,
+  `strlen_aligned_spec_framed`.  `strlen_framed_mem_stable` exposes clause 5's `mem = m0`.
+- `Vsa/Sim/EnvDefCompose.lean` — `envDefStrlenFramed` DISCHARGES the `strlenFramed`
+  premise from `strlen_spec_framed` + `hAInvStable`, reconstructing the full `EnvDefFrame`
+  (x2=sp / x3=gp via the AbiPreserved tie against the entry-pinned `gm`; StackOK unchanged;
+  AInv from `mem=m0` via `hAInvStable`) modulo the ONE named `hExitTick` residual.
+  Compiles clean (1.6s).
+
+### Clause status (of the 5 the composition needs)
+- **2 (x2=sp+StackOK), 3 (x3=gp), 4 (callee-saved tie)** — CLOSED (the one ghost clause).
+- **5 (AInv)** — CLOSED as a `mem=m0` corollary via `hAInvStable`.
+- **1 (tick<2)** — the SINGLE remaining residual, exposed as the honest named premise
+  `hExitTick` in `envDefStrlenFramed`.  `strlen_spec_framed`'s carrier is register-only;
+  threading tick through the framed blocks (each site lemma already yields `i'<2`) is
+  mechanical follow-up (add `∧ c.tick<2` to the block posts + final constructors — was
+  attempted, reverted only because it interacted with the (now-fixed) exit4 literal bug).
+
+### Consumers verified GREEN (serial `lake env lean`)
+StrlenSpec (axiom-clean), StrlenSpecU (2.6s), EnvDefCompose (2.0s), EnvDefBridges (1.4s;
+`bridgeStrlenPre_closed`/`bridgeMallocPre_closed` still green), StrcmpSpec (1.6s).
+All changes ADDITIVE — no existing signature changed; `strlen_spec`/`strlen_post`/`Done`
+untouched.  StrlenSpec olean regenerated.

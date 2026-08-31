@@ -1,5 +1,6 @@
 import Vsa.Sim.EvalLeafD
 import Vsa.Sim.EvalNegSim3
+import Vsa.Sim.EvalLogical4
 import Vsa.Sim.ValueEqualSpec2
 import Vsa.Sim.TermCaseBundle
 
@@ -16,7 +17,7 @@ DO NOT hand-edit.  NO `sorry`/`axiom`/`native_decide`/`bv_decide`.
 
 open LeanRV64DExecutable Sail Vsa
 open Register
-open Vsa.Machine (MState Config Halts)
+open Vsa.Machine (MState Config Halts Steps)
 open Vsa.Logic (Triple)
 open Vsa.RuntimeRepr Vsa.MemRepr Vsa.While Vsa.Alloc
 open Vsa.Sim.Code
@@ -111,6 +112,43 @@ theorem eval_bool_row (hR : ∀ st b, BoolLeafResid st b) :
   exact Vsa.Sim.evalBoolSimD g N A SL φf φc st d env b sp r sret aEnv aExpr m0
     (EvalE.bool st d env b) hW c hEntry
 
+/-- The str-leaf residual: the `LeafWiden` widening + the callee geometry
+`EvalStrEntry` carries beyond `EvalEntry`. -/
+def StrLeafResid (st : SpecSt) (s : String) : Prop :=
+  ∀ (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sp r sret aExpr : BitVec 64) (m0 : Mem) (c : Config),
+    (∀ p : Nat, read64 c.σ.mem (aExpr.toNat + 8) = some p →
+      p + s.length < SL.lo ∨ sp.toNat ≤ p) ∧
+    (∀ p : Nat, read64 c.σ.mem (aExpr.toNat + 8) = some p →
+      p ≠ 0 ∧ (sret.toNat + 16 ≤ p ∨ p + s.length < sret.toNat)) ∧
+    (sret.toNat + 24 ≤ 0x8000281c ∨ 0x8000282c ≤ sret.toNat) ∧
+    ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000281c) ∧
+    Value_strLoaded c.σ.mem ∧
+    Vsa.Sim.StrSlotPinned c.σ.mem ∧
+    ((0x80019f58 : Nat) + 8 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58 + 4) ∧
+    Vsa.Sim.LeafWiden g N A SL φf φc st (.str s) sp r sret m0
+
+/-- Route `hStr` → `evalStrSimD`, bridging `EvalEntry → EvalStrEntry`. -/
+theorem eval_str_row (hR : ∀ st s, StrLeafResid st s) :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (s : String),
+      mEvalE st d env (Expr.str s) st (Value.str s) (EvalE.str st d env s) := by
+  intro st d env s
+  show Vsa.Sim.EvalIH st d env (.str s) st (.str s)
+  intro g N A SL φf φc sp r sret aEnv aExpr m0
+  intro c hc
+  obtain ⟨hssd, hsrd, hvsc, hvss, hvsl, hsl, htsd, hW⟩ := hR st s g N A SL φf φc sp r sret aExpr m0 c
+  have hEntry : Vsa.Sim.EvalStrEntry g N A SL φf φc st d env s sp r sret aEnv aExpr m0 c :=
+    { good := hc.good, tick := hc.tick, pc := hc.pc, a0 := hc.a0, a1 := hc.a1, a2 := hc.a2,
+      ra := hc.ra, ra_align := hc.ra_align, spReg := hc.spReg, stackOK := hc.stackOK, minstret := hc.minstret, mem := hc.mem,
+      code := hc.code, expr := hc.expr, store := hc.store, store_survives := hc.store_survives, out := hc.out, frame := hc.frame,
+      code_stack_disjoint := hc.code_stack_disjoint, expr_stack_disjoint := hc.expr_stack_disjoint, expr_align := hc.expr_align, expr_ram := hc.expr_ram, expr_win := hc.expr_win, sret_align := hc.sret_align,
+      sret_ram := hc.sret_ram, sret_win := hc.sret_win, sret_vicode_disjoint := hc.sret_vicode_disjoint, sret_stack_disjoint := hc.sret_stack_disjoint, sret_evalcode_disjoint := hc.sret_evalcode_disjoint, stack_ram := hc.stack_ram,
+      stack_win := hc.stack_win, spill_defined := hc.spill_defined, str_stack_disjoint := hssd, str_sret_disjoint := hsrd, sret_vstrcode_disjoint := hvsc, vstrcode_stack_disjoint := hvss,
+      value_str_code := hvsl, str_slot := hsl, table_stack_disjoint := htsd }
+  exact Vsa.Sim.evalStrSimD g N A SL φf φc st d env s sp r sret aEnv aExpr m0
+    (EvalE.str st d env s) hW c hEntry
+
 /-! ## Recursive rows. -/
 
 /-- The neg-case residual: `NegExtras` + `hMcallPop`, keyed to the operand pointer
@@ -146,5 +184,213 @@ theorem eval_neg_row (hR : ∀ st esub, NegResid st esub) :
     (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
   exact Vsa.Sim.evalNegSim g N A SL φf φc st st' d env esub n sp r sret aEnv aExpr
     (BitVec.ofNat 64 p) m0 ihE (EvalE.neg st d env esub st' n hE) c ⟨hc, hNegX, hMcallPop⟩
+
+/-- The not-case residual: `NotSimExtras` + `hMcallPop`, keyed to the operand pointer
+witnessed by the entry `ExprRepr` (the operand value `vsub` is spec-level). -/
+def NotResid (esub : Expr) (vsub : Value) : Prop :=
+  ∀ (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (sp r sret aEnv aExpr aOperand : BitVec 64) (m0 : Mem),
+    read64 m0 (aExpr.toNat + 16) = some aOperand.toNat →
+    ExprRepr m0 aOperand.toNat esub →
+    Vsa.Sim.NotSimExtras N A SL esub vsub sp sret aExpr aOperand m0 ∧
+    (∀ mcall : Mem,
+      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
+      ∀ a : Nat, ∃ b, mcall[a]? = some b)
+
+/-- Route `hNot` → `evalNotSim`. -/
+theorem eval_not_row (hR : ∀ esub vsub, NotResid esub vsub) :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt) (v : Value)
+      (a : EvalE st d env e st' v),
+      mEvalE st d env e st' v a →
+      mEvalE st d env (Expr.unary UnOp.not e) st' (Value.bool (!v.truthy))
+        (EvalE.not st d env e st' v a) := by
+  intro st d env esub st' vsub hE ihE
+  show Vsa.Sim.EvalIH st d env (.unary .not esub) st' (.bool (!vsub.truthy))
+  intro g N A SL φf φc sp r sret aEnv aExpr m0
+  intro c hc
+  have hexpr : ExprRepr c.σ.mem aExpr.toNat (.unary .not esub) := hc.expr
+  rw [hc.mem] at hexpr
+  obtain ⟨p, hpay, hpexpr⟩ : ∃ p, read64 m0 (aExpr.toNat + 16) = some p ∧ ExprRepr m0 p esub := by
+    cases hexpr with | unary _ _ hp hpe => exact ⟨_, hp, hpe⟩
+  have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
+  obtain ⟨hNotX, hMcallPop⟩ := hR esub vsub N A SL sp r sret aEnv aExpr (BitVec.ofNat 64 p) m0
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
+  exact Vsa.Sim.evalNotSim g N A SL φf φc st st' d env esub vsub sp r sret aEnv aExpr
+    (BitVec.ofNat 64 p) m0 ihE (EvalE.not st d env esub st' vsub hE) c ⟨hc, hNotX, hMcallPop⟩
+
+/-- The orTrue-case residual: `OrTrueExtras` + the `aEnv3` x13-survival
+Steps-residual + `hMcallPop`, keyed to the LEFT-operand pointer witnessed by the
+entry `ExprRepr` (logical node payload at offset 16). -/
+def OrTrueResid (el er : Expr) (vl : Value) : Prop :=
+  ∀ (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (sp r sret aEnv aExpr aLeft : BitVec 64) (m0 : Mem) (c : Config),
+    read64 m0 (aExpr.toNat + 16) = some aLeft.toNat →
+    ExprRepr m0 aLeft.toNat el →
+    Vsa.Sim.OrTrueExtras N A SL el er vl sp sret aExpr aLeft m0 ∧
+    (∃ aEnv3 : BitVec 64, ∀ cm : Config, Steps c cm →
+      cm.σ.regs.get? Register.PC = some (0x8000355c#64) →
+      cm.σ.regs.get? Register.x13 = some aEnv3) ∧
+    (∀ mcall : Mem,
+      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
+      ∀ a : Nat, ∃ b, mcall[a]? = some b)
+
+/-- Route `hOrTrue` → `evalOrTrueSim`. -/
+theorem eval_orTrue_row (hR : ∀ el er vl, OrTrueResid el er vl) :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr) (st' : SpecSt) (lv : Value)
+      (a : EvalE st d env l st' lv) (a_1 : lv.truthy = true),
+      mEvalE st d env l st' lv a →
+      mEvalE st d env (Expr.logical LogOp.or l r) st' (Value.bool true)
+        (EvalE.orTrue st d env l r st' lv a a_1) := by
+  intro st d env el er st' vl hE hvl ihE
+  show Vsa.Sim.EvalIH st d env (.logical .or el er) st' (.bool true)
+  intro g N A SL φf φc sp r sret aEnv aExpr m0
+  intro c hc
+  have hexpr : ExprRepr c.σ.mem aExpr.toNat (.logical .or el er) := hc.expr
+  rw [hc.mem] at hexpr
+  obtain ⟨p, hpay, hpexpr⟩ : ∃ p, read64 m0 (aExpr.toNat + 16) = some p ∧ ExprRepr m0 p el := by
+    cases hexpr with | logical _ _ hl hle _ _ => exact ⟨_, hl, hle⟩
+  have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
+  obtain ⟨hX, ⟨aEnv3, hx13⟩, hMcallPop⟩ := hR el er vl N A SL sp r sret aEnv aExpr
+    (BitVec.ofNat 64 p) m0 c
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
+  exact Vsa.Sim.evalOrTrueSim g N A SL φf φc st st' d env el er vl sp r sret aEnv aExpr
+    (BitVec.ofNat 64 p) aEnv3 m0 hvl ihE (EvalE.orTrue st d env el er st' vl hE hvl) c
+    ⟨hc, hX, hx13, hMcallPop⟩
+
+/-- The andFalse-case residual: `AndFalseExtras` + the `aEnv3` x13-survival
+Steps-residual + `hMcallPop`, keyed to the LEFT-operand pointer witnessed by the
+entry `ExprRepr` (logical node payload at offset 16). -/
+def AndFalseResid (el er : Expr) (vl : Value) : Prop :=
+  ∀ (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (sp r sret aEnv aExpr aLeft : BitVec 64) (m0 : Mem) (c : Config),
+    read64 m0 (aExpr.toNat + 16) = some aLeft.toNat →
+    ExprRepr m0 aLeft.toNat el →
+    Vsa.Sim.AndFalseExtras N A SL el er vl sp sret aExpr aLeft m0 ∧
+    (∃ aEnv3 : BitVec 64, ∀ cm : Config, Steps c cm →
+      cm.σ.regs.get? Register.PC = some (0x8000355c#64) →
+      cm.σ.regs.get? Register.x13 = some aEnv3) ∧
+    (∀ mcall : Mem,
+      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
+      ∀ a : Nat, ∃ b, mcall[a]? = some b)
+
+/-- Route `hAndFalse` → `evalAndSim`. -/
+theorem eval_andFalse_row (hR : ∀ el er vl, AndFalseResid el er vl) :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr) (st' : SpecSt) (lv : Value)
+      (a : EvalE st d env l st' lv) (a_1 : lv.truthy = false),
+      mEvalE st d env l st' lv a →
+      mEvalE st d env (Expr.logical LogOp.and l r) st' (Value.bool false)
+        (EvalE.andFalse st d env l r st' lv a a_1) := by
+  intro st d env el er st' vl hE hvl ihE
+  show Vsa.Sim.EvalIH st d env (.logical .and el er) st' (.bool false)
+  intro g N A SL φf φc sp r sret aEnv aExpr m0
+  intro c hc
+  have hexpr : ExprRepr c.σ.mem aExpr.toNat (.logical .and el er) := hc.expr
+  rw [hc.mem] at hexpr
+  obtain ⟨p, hpay, hpexpr⟩ : ∃ p, read64 m0 (aExpr.toNat + 16) = some p ∧ ExprRepr m0 p el := by
+    cases hexpr with | logical _ _ hl hle _ _ => exact ⟨_, hl, hle⟩
+  have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
+  obtain ⟨hX, ⟨aEnv3, hx13⟩, hMcallPop⟩ := hR el er vl N A SL sp r sret aEnv aExpr
+    (BitVec.ofNat 64 p) m0 c
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
+  exact Vsa.Sim.evalAndSim g N A SL φf φc st st' d env el er vl sp r sret aEnv aExpr
+    (BitVec.ofNat 64 p) aEnv3 m0 hvl ihE (EvalE.andFalse st d env el er st' vl hE hvl) c
+    ⟨hc, hX, hx13, hMcallPop⟩
+
+/-- The orFalse-case residual: `OrFalseExtras` (two-eval: takes the mid/post spec
+states and BOTH values) + the `aEnv3` x13-survival Steps-residual + `hMcallPop`,
+keyed to BOTH operand pointers witnessed by the entry `ExprRepr` (offsets 16/24). -/
+def OrFalseResid (st' st'' : SpecSt) (el er : Expr) (vl vr : Value) : Prop :=
+  ∀ (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (sp r sret aEnv aExpr aLeft aRight : BitVec 64) (m0 : Mem) (c : Config),
+    read64 m0 (aExpr.toNat + 16) = some aLeft.toNat →
+    ExprRepr m0 aLeft.toNat el →
+    read64 m0 (aExpr.toNat + 24) = some aRight.toNat →
+    ExprRepr m0 aRight.toNat er →
+    Vsa.Sim.OrFalseExtras N A SL st' st'' el er vl vr sp sret aExpr aLeft aRight m0 ∧
+    (∃ aEnv3 : BitVec 64, ∀ cm : Config, Steps c cm →
+      cm.σ.regs.get? Register.PC = some (0x8000355c#64) →
+      cm.σ.regs.get? Register.x13 = some aEnv3) ∧
+    (∀ mcall : Mem,
+      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
+      ∀ a : Nat, ∃ b, mcall[a]? = some b)
+
+/-- Route `hOrFalse` → `evalOrFalseSim` (two IH premises). -/
+theorem eval_orFalse_row (hR : ∀ st' st'' el er vl vr, OrFalseResid st' st'' el er vl vr) :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr) (st' st'' : SpecSt) (lv rv : Value)
+      (a : EvalE st d env l st' lv) (a_1 : lv.truthy = false) (a_2 : EvalE st' d env r st'' rv),
+      mEvalE st d env l st' lv a → mEvalE st' d env r st'' rv a_2 →
+      mEvalE st d env (Expr.logical LogOp.or l r) st'' (Value.bool rv.truthy)
+        (EvalE.orFalse st d env l r st' st'' lv rv a a_1 a_2) := by
+  intro st d env el er st' st'' vl vr hEl hvl hEr ihL ihR
+  show Vsa.Sim.EvalIH st d env (.logical .or el er) st'' (.bool vr.truthy)
+  intro g N A SL φf φc sp r sret aEnv aExpr m0
+  intro c hc
+  have hexpr : ExprRepr c.σ.mem aExpr.toNat (.logical .or el er) := hc.expr
+  rw [hc.mem] at hexpr
+  obtain ⟨p, q, hpay, hpexpr, hqay, hqexpr⟩ :
+      ∃ p q, read64 m0 (aExpr.toNat + 16) = some p ∧ ExprRepr m0 p el ∧
+        read64 m0 (aExpr.toNat + 24) = some q ∧ ExprRepr m0 q er := by
+    cases hexpr with | logical _ _ hl hle hr' hre => exact ⟨_, _, hl, hle, hr', hre⟩
+  have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
+  have hqlt : q < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 24) q hqay
+  obtain ⟨hX, ⟨aEnv3, hx13⟩, hMcallPop⟩ := hR st' st'' el er vl vr N A SL sp r sret aEnv aExpr
+    (BitVec.ofNat 64 p) (BitVec.ofNat 64 q) m0 c
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]; exact hqay)
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]; exact hqexpr)
+  exact Vsa.Sim.evalOrFalseSim g N A SL φf φc st st' st'' d env el er vl vr sp r sret aEnv aExpr
+    (BitVec.ofNat 64 p) (BitVec.ofNat 64 q) aEnv3 m0 hvl ihL ihR
+    (EvalE.orFalse st d env el er st' st'' vl vr hEl hvl hEr) c ⟨hc, hX, hx13, hMcallPop⟩
+
+/-- The andTrue-case residual: `AndTrueExtras` (two-eval: takes the mid/post spec
+states and BOTH values) + the `aEnv3` x13-survival Steps-residual + `hMcallPop`,
+keyed to BOTH operand pointers witnessed by the entry `ExprRepr` (offsets 16/24). -/
+def AndTrueResid (st' st'' : SpecSt) (el er : Expr) (vl vr : Value) : Prop :=
+  ∀ (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (sp r sret aEnv aExpr aLeft aRight : BitVec 64) (m0 : Mem) (c : Config),
+    read64 m0 (aExpr.toNat + 16) = some aLeft.toNat →
+    ExprRepr m0 aLeft.toNat el →
+    read64 m0 (aExpr.toNat + 24) = some aRight.toNat →
+    ExprRepr m0 aRight.toNat er →
+    Vsa.Sim.AndTrueExtras N A SL st' st'' el er vl vr sp sret aExpr aLeft aRight m0 ∧
+    (∃ aEnv3 : BitVec 64, ∀ cm : Config, Steps c cm →
+      cm.σ.regs.get? Register.PC = some (0x8000355c#64) →
+      cm.σ.regs.get? Register.x13 = some aEnv3) ∧
+    (∀ mcall : Mem,
+      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
+      ∀ a : Nat, ∃ b, mcall[a]? = some b)
+
+/-- Route `hAndTrue` → `evalAndTrueSim` (two IH premises). -/
+theorem eval_andTrue_row (hR : ∀ st' st'' el er vl vr, AndTrueResid st' st'' el er vl vr) :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr) (st' st'' : SpecSt) (lv rv : Value)
+      (a : EvalE st d env l st' lv) (a_1 : lv.truthy = true) (a_2 : EvalE st' d env r st'' rv),
+      mEvalE st d env l st' lv a → mEvalE st' d env r st'' rv a_2 →
+      mEvalE st d env (Expr.logical LogOp.and l r) st'' (Value.bool rv.truthy)
+        (EvalE.andTrue st d env l r st' st'' lv rv a a_1 a_2) := by
+  intro st d env el er st' st'' vl vr hEl hvl hEr ihL ihR
+  show Vsa.Sim.EvalIH st d env (.logical .and el er) st'' (.bool vr.truthy)
+  intro g N A SL φf φc sp r sret aEnv aExpr m0
+  intro c hc
+  have hexpr : ExprRepr c.σ.mem aExpr.toNat (.logical .and el er) := hc.expr
+  rw [hc.mem] at hexpr
+  obtain ⟨p, q, hpay, hpexpr, hqay, hqexpr⟩ :
+      ∃ p q, read64 m0 (aExpr.toNat + 16) = some p ∧ ExprRepr m0 p el ∧
+        read64 m0 (aExpr.toNat + 24) = some q ∧ ExprRepr m0 q er := by
+    cases hexpr with | logical _ _ hl hle hr' hre => exact ⟨_, _, hl, hle, hr', hre⟩
+  have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
+  have hqlt : q < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 24) q hqay
+  obtain ⟨hX, ⟨aEnv3, hx13⟩, hMcallPop⟩ := hR st' st'' el er vl vr N A SL sp r sret aEnv aExpr
+    (BitVec.ofNat 64 p) (BitVec.ofNat 64 q) m0 c
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]; exact hqay)
+    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]; exact hqexpr)
+  exact Vsa.Sim.evalAndTrueSim g N A SL φf φc st st' st'' d env el er vl vr sp r sret aEnv aExpr
+    (BitVec.ofNat 64 p) (BitVec.ofNat 64 q) aEnv3 m0 hvl ihL ihR
+    (EvalE.andTrue st d env el er st' st'' vl vr hEl hvl hEr) c ⟨hc, hX, hx13, hMcallPop⟩
 
 end Vsa.Sim.Rows

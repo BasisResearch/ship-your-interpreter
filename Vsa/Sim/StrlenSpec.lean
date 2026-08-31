@@ -4,6 +4,7 @@ import Vsa.Sim.Muldi3Spec
 import Vsa.MemRepr
 import Vsa.Triple
 import Vsa.Sim.ObsAvoid
+import Vsa.Alloc
 
 /-!
 # Layer 3 — `strlen` total-correctness spec (`strlen_spec`)
@@ -34,6 +35,7 @@ open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState Config Step Steps)
 open Vsa.Logic
 open Vsa.MemRepr
+open Vsa.Alloc
 open Vsa.Sim.Code (StrlenLoaded)
 
 set_option maxHeartbeats 8000000
@@ -2184,4 +2186,1070 @@ Two items complete the unaligned path (`bnez a5` taken at `0xcf8`):
    extra `off0`/`base` parameters.  No new mathematical content is required.
 -/
 
-end Vsa.Sim
+/-! ## Frame-preserving `strlen` spec (`strlen_spec_framed`)
+
+The composition consumers (`EnvDefCompose`) need `strlen` to preserve the caller's
+ABI-callee-saved register frame across the call: the exact "missing preservation
+clauses" the ledger flagged.  `strlen` physically preserves them — its 8-aligned fast
+path writes ONLY `{x1, x10, x11, x12, x13, x14, x15}` (`ra`, `a0…a5`), and
+`AbiPreserved` = `{x2,x3,x4,x8,x9,x18…x27}` is disjoint from that set — but the stated
+`strlen_post` (PC/x10/x1/mem only) does not express it.
+
+`AbiFrame g c` is the carried register frame (`∀ R, AbiPreserved R → get? R = g R`)
+plus the intra-tick bound `c.tick < 2`.  We thread it through the whole aligned chain
+(entry ≫ word loop ≫ byte tail ≫ ret) as an explicit conjunct, re-running the SAME
+per-site observations used by the unframed spec and lifting the frame at each step via
+the `strlenFrame_*` readbacks (built directly from `get?_sigmaPost_*`, no `strcmp`
+dependency — `StrcmpSpec` imports this file, so its `sframe_*` are unreachable here).
+
+The frame survives every site because the written register is never `AbiPreserved`
+(`abiPreserved_wr` closes `(rd == R) = false` from `AbiPreserved R` by `decide` on the
+concrete `rd`).  Memory is unchanged (already in `strlen_post`), so any mem-and-gp
+–stable allocator invariant survives as a downstream corollary. -/
+
+/-- The carried caller frame: ABI-callee-saved registers tied to `g`, plus `tick<2`. -/
+def AbiFrame (g : (R : Register) → Option (RegisterType R)) (c : Config) : Prop :=
+  (∀ R : Register, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧ c.tick < 2
+
+/-- Any `AbiPreserved R` differs from a concrete non-preserved written register `rd`:
+`(rd == R) = false`.  Instantiated per site with `rd` a literal (`x1`/`x10`…`x15`). -/
+theorem abiPreserved_wr {R rd : Register} (hrd : AbiPreserved rd = false)
+    (hR : AbiPreserved R = true) : (rd == R) = false := by
+  rcases hb : (rd == R) with _ | _
+  · rfl
+  · rw [beq_iff_eq] at hb; subst hb; rw [hrd] at hR; exact absurd hR (by simp)
+
+/-- Every control/CSR register the `sigmaPost_*` frames pin is distinct from any
+`AbiPreserved` (GPR) register `R`: the seven ground diseqs `hobs.1` and
+`get?_sigmaPost_*` demand, packaged so the frame lemmas need only `AbiPreserved R`. -/
+theorem abiPreserved_pinned {R : Register} (hR : AbiPreserved R = true) :
+    (Register.mcycle == R) = false ∧ (Register.mtime == R) = false ∧
+    (Register.mip == R) = false ∧ (Register.minstret == R) = false ∧
+    (Register.PC == R) = false ∧ (Register.nextPC == R) = false ∧
+    (Register.minstret_increment == R) = false := by
+  cases R <;> simp_all [AbiPreserved]
+
+/-- ALU-step frame readback for an `AbiPreserved` register `R` (written `rd` not
+preserved).  Used for every `andi/mv/li/lui/addi/slli/add/sub/ld/lbu` site. -/
+theorem strlenFrame_alu {σ' σ : MState} {pc vm : BitVec 64} {rd : Register}
+    {v : RegisterType rd} (hobs : ReadsLikePost σ' (sigmaPost_alu σ pc vm rd v))
+    (R : Register) (hrd : AbiPreserved rd = false) (hR : AbiPreserved R = true) :
+    σ'.regs.get? R = σ.regs.get? R := by
+  obtain ⟨hmc, hmt, hmip, hmi, hpc, hnpc, hmii⟩ := abiPreserved_pinned hR
+  rw [hobs.1 R hmc hmt hmip]
+  exact get?_sigmaPost_alu σ pc vm rd v R hmi hpc (abiPreserved_wr hrd hR) hnpc hmii
+
+/-- Taken-branch frame readback for an `AbiPreserved` register (branches write no GPR). -/
+theorem strlenFrame_btaken {σ' σ : MState} {pc vm : BitVec 64} {imm : BitVec 13}
+    (hobs : ReadsLikePost σ' (sigmaPost_branch_taken σ pc vm imm)) (R : Register)
+    (hR : AbiPreserved R = true) : σ'.regs.get? R = σ.regs.get? R := by
+  obtain ⟨hmc, hmt, hmip, hmi, hpc, hnpc, hmii⟩ := abiPreserved_pinned hR
+  rw [hobs.1 R hmc hmt hmip]
+  exact get?_sigmaPost_branch_taken σ pc vm imm R hmi hpc hnpc hmii
+
+/-- Not-taken-branch frame readback for an `AbiPreserved` register. -/
+theorem strlenFrame_bnottaken {σ' σ : MState} {pc vm : BitVec 64}
+    (hobs : ReadsLikePost σ' (sigmaPost_branch_nottaken σ pc vm)) (R : Register)
+    (hR : AbiPreserved R = true) : σ'.regs.get? R = σ.regs.get? R := by
+  obtain ⟨hmc, hmt, hmip, hmi, hpc, hnpc, hmii⟩ := abiPreserved_pinned hR
+  rw [hobs.1 R hmc hmt hmip]
+  exact get?_sigmaPost_branch_nottaken σ pc vm R hmi hpc hnpc hmii
+
+/-- `jr`/`ret` frame readback for an `AbiPreserved` register (writes only PC). -/
+theorem strlenFrame_jr {σ' σ : MState} {pc vm tgt : BitVec 64}
+    (hobs : ReadsLikePost σ' (sigmaPost_jump_x0 σ pc vm tgt)) (R : Register)
+    (hR : AbiPreserved R = true) : σ'.regs.get? R = σ.regs.get? R := by
+  obtain ⟨hmc, hmt, hmip, hmi, hpc, hnpc, hmii⟩ := abiPreserved_pinned hR
+  rw [hobs.1 R hmc hmt hmip]
+  exact get?_sigmaPost_jump_x0 σ pc vm tgt R hmi hpc hnpc hmii
+
+/-! ### Framed block Triples — re-run each aligned block carrying `AbiFrame g`.
+
+Each mirrors its unframed sibling (`entry_aligned`/`wloop_to_tail`/`wattail_to_done`),
+threading the ghost tie `hghost : ∀R, AbiPreserved R → get? R = g R` across every site
+via the `strlenFrame_*` readbacks.  `c.tick < 2` re-derives at the exit from the site's
+`i' < 2` (the observations carry it) — bundled into `AbiFrame`. -/
+
+/-- Framed entry: `Pre ∧ AbiFrame g` runs `0xcf0 → 0xd10` to `WAtHead ∧ AbiFrame g`.
+Self-contained re-run of `entry_aligned` (8 sites) threading `hgN : ∀R AbiPreserved →
+σN.get? R = g R` at each step; the resulting `⟨σ8,…⟩` is the `WSt 0`/frame witness. -/
+theorem entry_aligned_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => Pre p r len cs m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => WAtHead p r len cs m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R)) := by
+  intro c ⟨hPre, hgh0⟩
+  obtain ⟨hgood, hloaded, hmem, hpc, ha0, hra, ⟨vmi, hmi⟩, htick, hreg, halign, hcstr, hlen⟩ := hPre
+  obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+    site_80006cf0 c.σ c.tick c.steps (0x80006cf0#64) vmi p hgood hpc hmi ha0 hloaded rfl htick
+  have hpc1 : σ1.regs.get? Register.PC = some (0x80006cf4#64 : BitVec 64) := by
+    have := obs_alu_pc hobs1; rwa [show BitVec.addInt (0x80006cf0#64) 4 = (0x80006cf4#64 : BitVec 64) from by decide] at this
+  have ha0_1 := obs_alu_other' hobs1 Register.x10 (by decide) ha0
+  have hra_1 := obs_alu_other' hobs1 Register.x1 (by decide) hra
+  have ha5_1 : σ1.regs.get? Register.x15 = some (0#64) := by
+    have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [andi7_aligned p halign] at this
+  obtain ⟨vmi1, hmi1'⟩ := obs_alu_minstret hobs1
+  have hg1 : ∀ R, AbiPreserved R = true → σ1.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs1 R (by decide) hR]; exact hgh0 R hR
+  obtain ⟨σ2, i2, hs2, hi2, hG2, hmem2, hobs2⟩ :=
+    site_80006cf4 σ1 i1 (c.steps + 1) (0x80006cf4#64) vmi1 p hG1 hpc1 hmi1' ha0_1 (by rw [hmem1]; exact hloaded) rfl hi1
+  have hpc2 : σ2.regs.get? Register.PC = some (0x80006cf8#64 : BitVec 64) := by
+    have := obs_alu_pc hobs2; rwa [show BitVec.addInt (0x80006cf4#64) 4 = (0x80006cf8#64 : BitVec 64) from by decide] at this
+  have ha0_2 := obs_alu_other' hobs2 Register.x10 (by decide) ha0_1
+  have hra_2 := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
+  have ha5_2 := obs_alu_other' hobs2 Register.x15 (by decide) ha5_1
+  have ha4_2 : σ2.regs.get? Register.x14 = some p := by
+    have := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [sext0_add] at this
+  obtain ⟨vmi2, hmi2'⟩ := obs_alu_minstret hobs2
+  have hg2 : ∀ R, AbiPreserved R = true → σ2.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs2 R (by decide) hR]; exact hg1 R hR
+  obtain ⟨σ3, i3, hs3, hi3, hG3, hmem3, hobs3⟩ :=
+    site_80006cf8_nottaken σ2 i2 (c.steps + 1 + 1) (0x80006cf8#64) vmi2 (0#64)
+      hG2 hpc2 hmi2' ha5_2 (by rw [hmem2, hmem1]; exact hloaded) rfl bnez_zero_false hi2
+  have hpc3 : σ3.regs.get? Register.PC = some (0x80006cfc#64 : BitVec 64) := by
+    have := obs_bnottaken_pc hobs3; rwa [show BitVec.addInt (0x80006cf8#64) 4 = (0x80006cfc#64 : BitVec 64) from by decide] at this
+  have ha0_3 := obs_bnottaken_other' hobs3 Register.x10 (by decide) ha0_2
+  have hra_3 := obs_bnottaken_other' hobs3 Register.x1 (by decide) hra_2
+  have ha4_3 := obs_bnottaken_other' hobs3 Register.x14 (by decide) ha4_2
+  obtain ⟨vmi3, hmi3'⟩ := obs_bnottaken_minstret hobs3
+  have hg3 : ∀ R, AbiPreserved R = true → σ3.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_bnottaken hobs3 R hR]; exact hg2 R hR
+  obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
+    site_80006cfc σ3 i3 (c.steps + 1 + 1 + 1) (0x80006cfc#64) vmi3 hG3 hpc3 hmi3' (by rw [hmem3, hmem2, hmem1]; exact hloaded) rfl hi3
+  have hpc4 : σ4.regs.get? Register.PC = some (0x80006d00#64 : BitVec 64) := by
+    have := obs_alu_pc hobs4; rwa [show BitVec.addInt (0x80006cfc#64) 4 = (0x80006d00#64 : BitVec 64) from by decide] at this
+  have ha0_4 := obs_alu_other' hobs4 Register.x10 (by decide) ha0_3
+  have hra_4 := obs_alu_other' hobs4 Register.x1 (by decide) hra_3
+  have ha4_4 := obs_alu_other' hobs4 Register.x14 (by decide) ha4_3
+  have ha5_4 := obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
+  obtain ⟨vmi4, hmi4'⟩ := obs_alu_minstret hobs4
+  have hg4 : ∀ R, AbiPreserved R = true → σ4.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs4 R (by decide) hR]; exact hg3 R hR
+  obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
+    site_80006d00 σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x80006d00#64) vmi4
+      (sign_extend (m := 64) ((0x7f7f8#20) +++ (0x000#12)))
+      hG4 hpc4 hmi4' ha5_4 (by rw [hmem4, hmem3, hmem2, hmem1]; exact hloaded) rfl hi4
+  have hpc5 : σ5.regs.get? Register.PC = some (0x80006d04#64 : BitVec 64) := by
+    have := obs_alu_pc hobs5; rwa [show BitVec.addInt (0x80006d00#64) 4 = (0x80006d04#64 : BitVec 64) from by decide] at this
+  have ha0_5 := obs_alu_other' hobs5 Register.x10 (by decide) ha0_4
+  have hra_5 := obs_alu_other' hobs5 Register.x1 (by decide) hra_4
+  have ha4_5 := obs_alu_other' hobs5 Register.x14 (by decide) ha4_4
+  have ha5_5 := obs_alu_rd hobs5 (by decide) (by decide) (by decide) (by decide) (by decide)
+  obtain ⟨vmi5, hmi5'⟩ := obs_alu_minstret hobs5
+  have hg5 : ∀ R, AbiPreserved R = true → σ5.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs5 R (by decide) hR]; exact hg4 R hR
+  obtain ⟨σ6, i6, hs6, hi6, hG6, hmem6, hobs6⟩ :=
+    site_80006d04 σ5 i5 (c.steps + 1 + 1 + 1 + 1 + 1) (0x80006d04#64) vmi5
+      (sign_extend (m := 64) ((0x7f7f8#20) +++ (0x000#12)) + sign_extend (m := 64) (0xf7f#12))
+      hG5 hpc5 hmi5' ha5_5 (by rw [hmem5, hmem4, hmem3, hmem2, hmem1]; exact hloaded) rfl hi5
+  have hpc6 : σ6.regs.get? Register.PC = some (0x80006d08#64 : BitVec 64) := by
+    have := obs_alu_pc hobs6; rwa [show BitVec.addInt (0x80006d04#64) 4 = (0x80006d08#64 : BitVec 64) from by decide] at this
+  have ha0_6 := obs_alu_other' hobs6 Register.x10 (by decide) ha0_5
+  have hra_6 := obs_alu_other' hobs6 Register.x1 (by decide) hra_5
+  have ha4_6 := obs_alu_other' hobs6 Register.x14 (by decide) ha4_5
+  have ha5_6 := obs_alu_other' hobs6 Register.x15 (by decide) ha5_5
+  have ha3_6 := obs_alu_rd hobs6 (by decide) (by decide) (by decide) (by decide) (by decide)
+  obtain ⟨vmi6, hmi6'⟩ := obs_alu_minstret hobs6
+  have hg6 : ∀ R, AbiPreserved R = true → σ6.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs6 R (by decide) hR]; exact hg5 R hR
+  obtain ⟨σ7, i7, hs7, hi7, hG7, hmem7, hobs7⟩ :=
+    site_80006d08 σ6 i6 (c.steps + 1 + 1 + 1 + 1 + 1 + 1) (0x80006d08#64) vmi6
+      (shift_bits_left (sign_extend (m := 64) ((0x7f7f8#20) +++ (0x000#12)) + sign_extend (m := 64) (0xf7f#12)) (Sail.BitVec.extractLsb (0x20#6) 5 0))
+      (sign_extend (m := 64) ((0x7f7f8#20) +++ (0x000#12)) + sign_extend (m := 64) (0xf7f#12))
+      hG6 hpc6 hmi6' ha3_6 ha5_6 (by rw [hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]; exact hloaded) rfl hi6
+  have hpc7 : σ7.regs.get? Register.PC = some (0x80006d0c#64 : BitVec 64) := by
+    have := obs_alu_pc hobs7; rwa [show BitVec.addInt (0x80006d08#64) 4 = (0x80006d0c#64 : BitVec 64) from by decide] at this
+  have ha0_7 := obs_alu_other' hobs7 Register.x10 (by decide) ha0_6
+  have hra_7 := obs_alu_other' hobs7 Register.x1 (by decide) hra_6
+  have ha4_7 := obs_alu_other' hobs7 Register.x14 (by decide) ha4_6
+  have ha3_7 : σ7.regs.get? Register.x13 = some magic7f := by
+    have := obs_alu_rd hobs7 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [magic_build] at this
+  obtain ⟨vmi7, hmi7'⟩ := obs_alu_minstret hobs7
+  have hg7 : ∀ R, AbiPreserved R = true → σ7.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs7 R (by decide) hR]; exact hg6 R hR
+  obtain ⟨σ8, i8, hs8, hi8, hG8, hmem8, hobs8⟩ :=
+    site_80006d0c σ7 i7 (c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1) (0x80006d0c#64) vmi7
+      hG7 hpc7 hmi7' (by rw [hmem7, hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]; exact hloaded) rfl hi7
+  have hpc8 : σ8.regs.get? Register.PC = some (0x80006d10#64 : BitVec 64) := by
+    have := obs_alu_pc hobs8; rwa [show BitVec.addInt (0x80006d0c#64) 4 = (0x80006d10#64 : BitVec 64) from by decide] at this
+  have ha0_8 := obs_alu_other' hobs8 Register.x10 (by decide) ha0_7
+  have hra_8 := obs_alu_other' hobs8 Register.x1 (by decide) hra_7
+  have ha4_8 := obs_alu_other' hobs8 Register.x14 (by decide) ha4_7
+  have ha3_8 := obs_alu_other' hobs8 Register.x13 (by decide) ha3_7
+  have ha1_8 : σ8.regs.get? Register.x11 = some (BitVec.allOnes 64) := by
+    have := obs_alu_rd hobs8 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [allOnes_build] at this
+  obtain ⟨vmi8, hmi8'⟩ := obs_alu_minstret hobs8
+  have hg8 : ∀ R, AbiPreserved R = true → σ8.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs8 R (by decide) hR]; exact hg7 R hR
+  have hmem8eq : σ8.mem = c.σ.mem := by rw [hmem8, hmem7, hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]
+  have ha4_8p : σ8.regs.get? Register.x14 = some (p + BitVec.ofNat 64 (8*0)) := by
+    rw [ptr_zero]; exact ha4_8
+  refine ⟨⟨σ8, i8, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩,
+    (((((((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans
+      (Steps.single hs4)).trans (Steps.single hs5)).trans (Steps.single hs6)).trans
+      (Steps.single hs7)).trans (Steps.single hs8),
+    ⟨0, ⟨hG8, by rw [hmem8eq]; exact hloaded, by rw [hmem8eq]; exact hmem, hpc8, ha0_8, ha1_8,
+      ha3_8, ha4_8p, hra_8, ⟨vmi8, hmi8'⟩, hi8, hreg, halign, hcstr, hlen, by omega⟩⟩,
+    hg8⟩
+
+/-- Framed word-loop straight body (`0xd10 → 0xd28`, 6 ALU sites): self-contained
+re-run of `wloop_straight` producing `W28` directly and threading the ghost. -/
+theorem wloop_straight_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => WSt p r len cs m0 j c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => W28 p r len cs m0 j c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R)) := by
+  intro c ⟨hSt, hgh0⟩
+  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, ha3, ha4, hra, ⟨vmi, hmi⟩, htick,
+    hreg, halign, hcstr, hlen, hjle⟩ := hSt
+  obtain ⟨htn, hlo, hhi, hhtif, halgn⟩ := wload_bounds p len j hreg halign hjle
+  obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+    site_80006d10 c.σ c.tick c.steps (0x80006d10#64) vmi (p + BitVec.ofNat 64 (8*j))
+      hgood hpc hmi ha4 hloaded rfl hlo hhi hhtif halgn htick
+  have hpc1 : σ1.regs.get? Register.PC = some (0x80006d14#64 : BitVec 64) := by
+    have := obs_alu_pc hobs1; rwa [show BitVec.addInt (0x80006d10#64) 4 = (0x80006d14#64 : BitVec 64) from by decide] at this
+  have ha0_1 := obs_alu_other' hobs1 Register.x10 (by decide) ha0
+  have ha1_1 := obs_alu_other' hobs1 Register.x11 (by decide) ha1
+  have ha3_1 := obs_alu_other' hobs1 Register.x13 (by decide) ha3
+  have ha4_1 := obs_alu_other' hobs1 Register.x14 (by decide) ha4
+  have hra_1 := obs_alu_other' hobs1 Register.x1 (by decide) hra
+  have hword : (sign_extend (m := 64)
+        (ldBytesT (afterNextPC (afterPrelude c.σ) (0x80006d10#64))
+          ((p + BitVec.ofNat 64 (8*j)) + sign_extend (m := 64) (0x000#12))))
+      = strlenWordAt m0 (p.toNat + 8*j) := by
+    rw [sext64_self, sext0_add, ldBytesT_wordAt, mem_afterNextPC, mem_afterPrelude, hmem, htn]
+  have ha2_1 : σ1.regs.get? Register.x12 = some (strlenWordAt m0 (p.toNat + 8*j)) := by
+    have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [hword] at this
+  obtain ⟨vmi1, hmi1'⟩ := obs_alu_minstret hobs1
+  have hg1 : ∀ R, AbiPreserved R = true → σ1.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs1 R (by decide) hR]; exact hgh0 R hR
+  obtain ⟨σ2, i2, hs2, hi2, hG2, hmem2, hobs2⟩ :=
+    site_80006d14 σ1 i1 (c.steps + 1) (0x80006d14#64) vmi1 (p + BitVec.ofNat 64 (8*j))
+      hG1 hpc1 hmi1' ha4_1 (by rw [hmem1]; exact hloaded) rfl hi1
+  have hpc2 : σ2.regs.get? Register.PC = some (0x80006d18#64 : BitVec 64) := by
+    have := obs_alu_pc hobs2; rwa [show BitVec.addInt (0x80006d14#64) 4 = (0x80006d18#64 : BitVec 64) from by decide] at this
+  have ha0_2 := obs_alu_other' hobs2 Register.x10 (by decide) ha0_1
+  have ha1_2 := obs_alu_other' hobs2 Register.x11 (by decide) ha1_1
+  have ha2_2 := obs_alu_other' hobs2 Register.x12 (by decide) ha2_1
+  have ha3_2 := obs_alu_other' hobs2 Register.x13 (by decide) ha3_1
+  have hra_2 := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
+  have ha4_2 : σ2.regs.get? Register.x14 = some (p + BitVec.ofNat 64 (8*(j+1))) := by
+    have := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [a4_incr p j] at this
+  obtain ⟨vmi2, hmi2'⟩ := obs_alu_minstret hobs2
+  have hg2 : ∀ R, AbiPreserved R = true → σ2.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs2 R (by decide) hR]; exact hg1 R hR
+  obtain ⟨σ3, i3, hs3, hi3, hG3, hmem3, hobs3⟩ :=
+    site_80006d18 σ2 i2 (c.steps + 1 + 1) (0x80006d18#64) vmi2 (strlenWordAt m0 (p.toNat + 8*j)) magic7f
+      hG2 hpc2 hmi2' ha2_2 ha3_2 (by rw [hmem2, hmem1]; exact hloaded) rfl hi2
+  have hpc3 : σ3.regs.get? Register.PC = some (0x80006d1c#64 : BitVec 64) := by
+    have := obs_alu_pc hobs3; rwa [show BitVec.addInt (0x80006d18#64) 4 = (0x80006d1c#64 : BitVec 64) from by decide] at this
+  have ha0_3 := obs_alu_other' hobs3 Register.x10 (by decide) ha0_2
+  have ha1_3 := obs_alu_other' hobs3 Register.x11 (by decide) ha1_2
+  have ha2_3 := obs_alu_other' hobs3 Register.x12 (by decide) ha2_2
+  have ha3_3 := obs_alu_other' hobs3 Register.x13 (by decide) ha3_2
+  have ha4_3 := obs_alu_other' hobs3 Register.x14 (by decide) ha4_2
+  have hra_3 := obs_alu_other' hobs3 Register.x1 (by decide) hra_2
+  have ha5_3 := obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
+  obtain ⟨vmi3, hmi3'⟩ := obs_alu_minstret hobs3
+  have hg3 : ∀ R, AbiPreserved R = true → σ3.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs3 R (by decide) hR]; exact hg2 R hR
+  obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
+    site_80006d1c σ3 i3 (c.steps + 1 + 1 + 1) (0x80006d1c#64) vmi3 (strlenWordAt m0 (p.toNat + 8*j) &&& magic7f) magic7f
+      hG3 hpc3 hmi3' ha5_3 ha3_3 (by rw [hmem3, hmem2, hmem1]; exact hloaded) rfl hi3
+  have hpc4 : σ4.regs.get? Register.PC = some (0x80006d20#64 : BitVec 64) := by
+    have := obs_alu_pc hobs4; rwa [show BitVec.addInt (0x80006d1c#64) 4 = (0x80006d20#64 : BitVec 64) from by decide] at this
+  have ha0_4 := obs_alu_other' hobs4 Register.x10 (by decide) ha0_3
+  have ha1_4 := obs_alu_other' hobs4 Register.x11 (by decide) ha1_3
+  have ha2_4 := obs_alu_other' hobs4 Register.x12 (by decide) ha2_3
+  have ha3_4 := obs_alu_other' hobs4 Register.x13 (by decide) ha3_3
+  have ha4_4 := obs_alu_other' hobs4 Register.x14 (by decide) ha4_3
+  have hra_4 := obs_alu_other' hobs4 Register.x1 (by decide) hra_3
+  have ha5_4 := obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
+  obtain ⟨vmi4, hmi4'⟩ := obs_alu_minstret hobs4
+  have hg4 : ∀ R, AbiPreserved R = true → σ4.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs4 R (by decide) hR]; exact hg3 R hR
+  obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
+    site_80006d20 σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x80006d20#64) vmi4
+      ((strlenWordAt m0 (p.toNat + 8*j) &&& magic7f) + magic7f) (strlenWordAt m0 (p.toNat + 8*j))
+      hG4 hpc4 hmi4' ha5_4 ha2_4 (by rw [hmem4, hmem3, hmem2, hmem1]; exact hloaded) rfl hi4
+  have hpc5 : σ5.regs.get? Register.PC = some (0x80006d24#64 : BitVec 64) := by
+    have := obs_alu_pc hobs5; rwa [show BitVec.addInt (0x80006d20#64) 4 = (0x80006d24#64 : BitVec 64) from by decide] at this
+  have ha0_5 := obs_alu_other' hobs5 Register.x10 (by decide) ha0_4
+  have ha1_5 := obs_alu_other' hobs5 Register.x11 (by decide) ha1_4
+  have ha3_5 := obs_alu_other' hobs5 Register.x13 (by decide) ha3_4
+  have ha4_5 := obs_alu_other' hobs5 Register.x14 (by decide) ha4_4
+  have hra_5 := obs_alu_other' hobs5 Register.x1 (by decide) hra_4
+  have ha5_5 := obs_alu_rd hobs5 (by decide) (by decide) (by decide) (by decide) (by decide)
+  obtain ⟨vmi5, hmi5'⟩ := obs_alu_minstret hobs5
+  have hg5 : ∀ R, AbiPreserved R = true → σ5.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs5 R (by decide) hR]; exact hg4 R hR
+  obtain ⟨σ6, i6, hs6, hi6, hG6, hmem6, hobs6⟩ :=
+    site_80006d24 σ5 i5 (c.steps + 1 + 1 + 1 + 1 + 1) (0x80006d24#64) vmi5
+      (((strlenWordAt m0 (p.toNat + 8*j) &&& magic7f) + magic7f) ||| strlenWordAt m0 (p.toNat + 8*j)) magic7f
+      hG5 hpc5 hmi5' ha5_5 ha3_5 (by rw [hmem5, hmem4, hmem3, hmem2, hmem1]; exact hloaded) rfl hi5
+  have hpc6 : σ6.regs.get? Register.PC = some (0x80006d28#64 : BitVec 64) := by
+    have := obs_alu_pc hobs6; rwa [show BitVec.addInt (0x80006d24#64) 4 = (0x80006d28#64 : BitVec 64) from by decide] at this
+  have ha0_6 := obs_alu_other' hobs6 Register.x10 (by decide) ha0_5
+  have ha1_6 := obs_alu_other' hobs6 Register.x11 (by decide) ha1_5
+  have ha3_6 := obs_alu_other' hobs6 Register.x13 (by decide) ha3_5
+  have ha4_6 := obs_alu_other' hobs6 Register.x14 (by decide) ha4_5
+  have hra_6 := obs_alu_other' hobs6 Register.x1 (by decide) hra_5
+  have ha5_6 : σ6.regs.get? Register.x15 = some (strlenWordVal (strlenWordAt m0 (p.toNat + 8*j))) := by
+    have := obs_alu_rd hobs6 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [strlenWordVal_eq] at this
+  obtain ⟨vmi6, hmi6'⟩ := obs_alu_minstret hobs6
+  have hmem6eq : σ6.mem = c.σ.mem := by rw [hmem6, hmem5, hmem4, hmem3, hmem2, hmem1]
+  have hg6 : ∀ R, AbiPreserved R = true → σ6.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs6 R (by decide) hR]; exact hg5 R hR
+  exact ⟨⟨σ6, i6, c.steps + 1 + 1 + 1 + 1 + 1 + 1⟩,
+    (((((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans
+      (Steps.single hs4)).trans (Steps.single hs5)).trans (Steps.single hs6),
+    ⟨hG6, by rw [hmem6eq]; exact hloaded, by rw [hmem6eq]; exact hmem, hpc6, ha0_6, ha1_6, ha3_6,
+      ha5_6, ha4_6, hra_6, ⟨vmi6, hmi6'⟩, hi6, hreg, halign, hcstr, hlen, hjle⟩, hg6⟩
+
+/-- Framed word-loop back-edge (single `beq` step, self-contained). -/
+theorem wloop_back_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (hle : 8*(j+1) ≤ len)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => W28 p r len cs m0 j c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => WSt p r len cs m0 (j+1) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R)) := by
+  intro c ⟨hSt, hgh0⟩
+  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, ha3, ha5, ha4, hra, ⟨vmi, hmi⟩, htick,
+    hreg, halign, hcstr, hlen, hjle⟩ := hSt
+  have hpos : (p + BitVec.ofNat 64 (8*j)).toNat = p.toNat + 8*j :=
+    ptrN p (8*j) (by have := hreg.nowrap; omega)
+  have hdet : strlenWordVal (strlenWordAt m0 (p.toNat + 8*j)) = BitVec.allOnes 64 := by
+    rw [wordAt_eq_ldBytesT c m0 p j hmem hpos]
+    exact detect_taken c.σ p len j cs (by rw [hmem]; exact hcstr) hlen hpos hle
+  have hv : ((strlenWordVal (strlenWordAt m0 (p.toNat + 8*j))) == (BitVec.allOnes 64)) = true := by
+    rw [hdet]; simp
+  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
+    site_80006d28_taken c.σ c.tick c.steps (0x80006d28#64) vmi
+      (strlenWordVal (strlenWordAt m0 (p.toNat + 8*j))) (BitVec.allOnes 64)
+      hgood hpc hmi ha5 ha1 hloaded rfl hv htick
+  have hpceq : (0x80006d28#64 : BitVec 64) + sign_extend (m := 64) (0x1fe8#13) = (0x80006d10#64 : BitVec 64) := by
+    apply BitVec.eq_of_toNat_eq; decide
+  have hpc'' : σ'.regs.get? Register.PC = some (0x80006d10#64 : BitVec 64) := by
+    rw [obs_btaken_pc hobs, hpceq]
+  have hg' : ∀ R, AbiPreserved R = true → σ'.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_btaken hobs R hR]; exact hgh0 R hR
+  exact ⟨⟨σ', i', c.steps + 1⟩, Steps.single (by cases c; exact hstep),
+    ⟨hG', by rw [hmem']; exact hloaded, by rw [hmem']; exact hmem, hpc'',
+      obs_btaken_other' hobs Register.x10 (by decide) ha0,
+      obs_btaken_other' hobs Register.x11 (by decide) ha1,
+      obs_btaken_other' hobs Register.x13 (by decide) ha3,
+      obs_btaken_other' hobs Register.x14 (by decide) ha4,
+      obs_btaken_other' hobs Register.x1 (by decide) hra,
+      obs_btaken_minstret hobs, hi', hreg, halign, hcstr, hlen, by omega⟩, hg'⟩
+
+/-- Framed word-loop exit (single `beq` not-taken step, self-contained). -/
+theorem wloop_exit_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (hlo : 8*j ≤ len) (hhi : len < 8*(j+1))
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => W28 p r len cs m0 j c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => WTail p r len cs m0 j c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R)) := by
+  intro c ⟨hSt, hgh0⟩
+  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha1, ha3, ha5, ha4, hra, ⟨vmi, hmi⟩, htick,
+    hreg, halign, hcstr, hlen, hjle⟩ := hSt
+  have hpos : (p + BitVec.ofNat 64 (8*j)).toNat = p.toNat + 8*j :=
+    ptrN p (8*j) (by have := hreg.nowrap; omega)
+  have hdet : strlenWordVal (strlenWordAt m0 (p.toNat + 8*j)) ≠ BitVec.allOnes 64 := by
+    rw [wordAt_eq_ldBytesT c m0 p j hmem hpos]
+    exact detect_nottaken c.σ p len j cs (by rw [hmem]; exact hcstr) hlen hlo hhi hpos
+  have hv : ((strlenWordVal (strlenWordAt m0 (p.toNat + 8*j))) == (BitVec.allOnes 64)) = false := by
+    rw [beq_eq_false_iff_ne]; exact hdet
+  obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
+    site_80006d28_nottaken c.σ c.tick c.steps (0x80006d28#64) vmi
+      (strlenWordVal (strlenWordAt m0 (p.toNat + 8*j))) (BitVec.allOnes 64)
+      hgood hpc hmi ha5 ha1 hloaded rfl hv htick
+  have hpc' : σ'.regs.get? Register.PC = some (0x80006d2c#64 : BitVec 64) := by
+    have := obs_bnottaken_pc hobs
+    rwa [show BitVec.addInt (0x80006d28#64) 4 = (0x80006d2c#64 : BitVec 64) from by decide] at this
+  have hg' : ∀ R, AbiPreserved R = true → σ'.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_bnottaken hobs R hR]; exact hgh0 R hR
+  exact ⟨⟨σ', i', c.steps + 1⟩, Steps.single (by cases c; exact hstep),
+    ⟨hG', by rw [hmem']; exact hloaded, by rw [hmem']; exact hmem, hpc',
+      obs_bnottaken_other' hobs Register.x10 (by decide) ha0,
+      obs_bnottaken_other' hobs Register.x14 (by decide) ha4,
+      obs_bnottaken_other' hobs Register.x1 (by decide) hra,
+      obs_bnottaken_minstret hobs, hi', hreg, halign, hcstr, hlen, hlo, hhi⟩, hg'⟩
+
+/-- Framed word-loop assembly (`WLoopI ∧ frame → WAtTail ∧ frame`).  Mirrors
+`wloop_body`/`wloop_to_tail` with the ghost conjoined to the loop invariant. -/
+theorem wloop_to_tail_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => WLoopI p r len cs m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => WAtTail p r len cs m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R)) := by
+  have hloop := Triple.loop
+    (I := fun c => WLoopI p r len cs m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+    (B := fun c => WLoopB p r len cs m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+    (WLoopMu p len) (fun n => ?_)
+  case _ =>
+    refine hloop.seq ?_
+    intro c ⟨⟨hI, hgh⟩, hnB⟩
+    rcases hI with hHead | hTail
+    · exact absurd ⟨hHead, hgh⟩ hnB
+    · exact ⟨c, .refl c, hTail, hgh⟩
+  -- framed body
+  intro c ⟨⟨hI, hgh⟩, ⟨hB, _⟩, hmu⟩
+  obtain ⟨j, hSt⟩ := hB
+  have hmu_eq : WLoopMu p len c = len + 1 - 8*j := wloopmu_head p r len cs m0 j c hSt
+  rw [hmu_eq] at hmu
+  have hjle := hSt.jle
+  obtain ⟨c1, hs1, hSt28, hgh1⟩ := wloop_straight_framed p r len cs m0 j g c ⟨hSt, hgh⟩
+  by_cases hdone : 8*(j+1) ≤ len
+  · obtain ⟨c2, hs2, hSt2, hgh2⟩ := wloop_back_framed p r len cs m0 j hdone g c1 ⟨hSt28, hgh1⟩
+    refine ⟨c2, hs1.trans hs2, ⟨Or.inl ⟨j+1, hSt2⟩, hgh2⟩, ?_⟩
+    have hmu2 : WLoopMu p len c2 = len + 1 - 8*(j+1) := wloopmu_head p r len cs m0 (j+1) c2 hSt2
+    rw [hmu2, ← hmu]; omega
+  · have hhi : len < 8*(j+1) := by omega
+    obtain ⟨c2, hs2, hTail, hgh2⟩ := wloop_exit_framed p r len cs m0 j hjle hhi g c1 ⟨hSt28, hgh1⟩
+    refine ⟨c2, hs1.trans hs2, ⟨Or.inr ⟨j, hTail⟩, hgh2⟩, ?_⟩
+    have hmu2 : WLoopMu p len c2 = 0 := by
+      simp only [WLoopMu, hTail.pc]
+      rw [if_neg (by intro h; injection h with h; exact absurd h (by decide))]
+    rw [hmu2]; omega
+
+/-! ### Framed byte tail — re-run each tail piece carrying the ghost.
+
+Each piece writes only `{x10,x13,x15}` (`a0/a3/a5`) plus branches — none `AbiPreserved`
+— so the frame survives every site via `strlenFrame_alu`/`strlenFrame_btaken`/
+`strlenFrame_bnottaken`.  We provide framed siblings for the pieces the aligned tail
+composes, then reassemble exactly as `tail_to_done`/`wattail_to_done`. -/
+
+/-- Framed tail entry (`0xd2c → 0xd34`, `lbu`+`sub`): `WTail ∧ frame → TDec 0 ∧ frame`. -/
+theorem tail_entry_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => WTail p r len cs m0 j c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => TDec p r len cs m0 j 0 (0x80006d34#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R)) := by
+  intro c ⟨hSt, hgh0⟩
+  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha4, hra, ⟨vmi, hmi⟩, htick,
+    hreg, halign, hcstr, hlen, hjlo, hjhi⟩ := hSt
+  obtain ⟨htlo, hthi, hthtif⟩ := tail_lbu_bounds p len j 0 hreg hjlo (by omega)
+  obtain ⟨b0, hb0mem, _⟩ := tail_byte_some p len j 0 cs m0 hcstr hlen (by omega)
+  have haddr : ((p + BitVec.ofNat 64 (8*(j+1))) + sign_extend (m := 64) (0xff8#12)).toNat
+      = p.toNat + 8*j + 0 := by
+    rw [lbu_addr p j 0 (by omega) (0xff8#12) (by apply BitVec.eq_of_toNat_eq; decide)]
+    rw [show (8*j + 0 : Nat) = 8*j from by omega]
+    exact ptrN p (8*j) (by have := hreg.nowrap; omega)
+  obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+    site_80006d2c c.σ c.tick c.steps (0x80006d2c#64) vmi (p + BitVec.ofNat 64 (8*(j+1))) b0
+      hgood hpc hmi ha4 hloaded rfl
+      (by rw [haddr]; exact htlo) (by rw [haddr]; exact hthi) (by rw [haddr]; exact hthtif)
+      (by rw [haddr]; rw [hmem]; exact hb0mem) htick
+  have hpc1 : σ1.regs.get? Register.PC = some (0x80006d30#64 : BitVec 64) := by
+    have := obs_alu_pc hobs1; rwa [show BitVec.addInt (0x80006d2c#64) 4 = (0x80006d30#64 : BitVec 64) from by decide] at this
+  have ha0_1 := obs_alu_other' hobs1 Register.x10 (by decide) ha0
+  have ha4_1 := obs_alu_other' hobs1 Register.x14 (by decide) ha4
+  have hra_1 := obs_alu_other' hobs1 Register.x1 (by decide) hra
+  have ha5_1 := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
+  obtain ⟨vmi1, hmi1'⟩ := obs_alu_minstret hobs1
+  have hg1 : ∀ R, AbiPreserved R = true → σ1.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs1 R (by decide) hR]; exact hgh0 R hR
+  obtain ⟨σ2, i2, hs2, hi2, hG2, hmem2, hobs2⟩ :=
+    site_80006d30 σ1 i1 (c.steps + 1) (0x80006d30#64) vmi1 (p + BitVec.ofNat 64 (8*(j+1))) p
+      hG1 hpc1 hmi1' ha4_1 ha0_1 (by rw [hmem1]; exact hloaded) rfl hi1
+  have hpc2 : σ2.regs.get? Register.PC = some (0x80006d34#64 : BitVec 64) := by
+    have := obs_alu_pc hobs2; rwa [show BitVec.addInt (0x80006d30#64) 4 = (0x80006d34#64 : BitVec 64) from by decide] at this
+  have ha0_2 := obs_alu_other' hobs2 Register.x10 (by decide) ha0_1
+  have ha4_2 := obs_alu_other' hobs2 Register.x14 (by decide) ha4_1
+  have hra_2 := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
+  have ha5_2 := obs_alu_other' hobs2 Register.x15 (by decide) ha5_1
+  have ha3_2 : σ2.regs.get? Register.x13 = some (BitVec.ofNat 64 (8*(j+1))) := by
+    have := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [sub_a4_a0_val] at this
+  obtain ⟨vmi2, hmi2'⟩ := obs_alu_minstret hobs2
+  have hmem2eq : σ2.mem = c.σ.mem := by rw [hmem2, hmem1]
+  have ha5b : σ2.regs.get? Register.x15 = some (zero_extend (m := 64) ((m0[p.toNat + 8*j + 0]?).getD 0)) := by
+    rw [ha5_2, show b0 = (m0[p.toNat + 8*j + 0]?).getD 0 from by rw [hb0mem]; rfl]
+  have hg2 : ∀ R, AbiPreserved R = true → σ2.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs2 R (by decide) hR]; exact hg1 R hR
+  exact ⟨⟨σ2, i2, c.steps + 1 + 1⟩, (Steps.single hs1).trans (Steps.single hs2),
+    ⟨hG2, by rw [hmem2eq]; exact hloaded, by rw [hmem2eq]; exact hmem, hpc2, ha0_2, ha3_2, ha5b,
+      ha4_2, hra_2, ⟨vmi2, hmi2'⟩, hi2, hreg, halign, hcstr, hlen, hjlo, hjhi, by omega⟩, hg2⟩
+
+/-- Framed tail advance `k → k+1` (`beqz` not-taken then next `lbu`).  Byte-offset data
+(`beqzpc`, `nottaken` site, `lbupc`, `lbu` site, `lbuimm`, `nextpc`) is passed via the
+concrete step lemmas as explicit callbacks so one proof frames all five advances. -/
+theorem tdec_next_k_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j k : Nat)
+    (g : (R : Register) → Option (RegisterType R))
+    (beqzpc lbupc nextpc : BitVec 64) (lbuimm : BitVec 12)
+    (hk1 : k + 1 ≤ 7) (hlt : 8*j + k < len)
+    (hbeqz_pc : ∀ (σ : MState) (i u : Nat) (vm : BitVec 64),
+      GoodState σ → σ.regs.get? Register.PC = some beqzpc →
+      σ.regs.get? Register.minstret = some vm →
+      σ.regs.get? Register.x15 = some (zero_extend (m := 64) ((m0[p.toNat + 8*j + k]?).getD 0)) →
+      StrlenLoaded σ.mem → i < 2 →
+      ((zero_extend (m := 64) ((m0[p.toNat + 8*j + k]?).getD 0)) == (0#64)) = false →
+      ∃ (σ' : MState) (i' : Nat), Step ⟨σ, i, u⟩ ⟨σ', i', u+1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+        σ'.mem = σ.mem ∧ ReadsLikePost σ' (sigmaPost_branch_nottaken σ beqzpc vm))
+    (hlbu : ∀ (σ : MState) (i u : Nat) (vm a4v : BitVec 64) (bb : BitVec 8),
+      GoodState σ → σ.regs.get? Register.PC = some lbupc →
+      σ.regs.get? Register.minstret = some vm →
+      σ.regs.get? Register.x14 = some a4v → StrlenLoaded σ.mem →
+      0x80000000 ≤ (a4v + sign_extend (m := 64) lbuimm).toNat →
+      (a4v + sign_extend (m := 64) lbuimm).toNat + 1 ≤ 0x100000000 →
+      ((a4v + sign_extend (m := 64) lbuimm).toNat + 1 ≤ tohostAddr ∨
+        tohostAddr + 8 ≤ (a4v + sign_extend (m := 64) lbuimm).toNat) →
+      σ.mem[(a4v + sign_extend (m := 64) lbuimm).toNat]? = some bb → i < 2 →
+      ∃ (σ' : MState) (i' : Nat), Step ⟨σ, i, u⟩ ⟨σ', i', u+1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+        σ'.mem = σ.mem ∧ ReadsLikePost σ'
+          (sigmaPost_alu σ lbupc vm Register.x15 (zero_extend (m := 64) bb)))
+    (hbeqz_next : ∀ (σ : MState), σ.regs.get? Register.PC = some (BitVec.addInt beqzpc 4) →
+      σ.regs.get? Register.PC = some lbupc)
+    (hlbu_next : ∀ (σ : MState), σ.regs.get? Register.PC = some (BitVec.addInt lbupc 4) →
+      σ.regs.get? Register.PC = some nextpc)
+    (hlbuimm : (sign_extend (m := 64) lbuimm : BitVec 64) = -(BitVec.ofNat 64 (8 - (k+1)))) :
+    Triple (fun c => TDec p r len cs m0 j k beqzpc c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => TDec p r len cs m0 j (k+1) nextpc c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R)) := by
+  intro c ⟨hSt, hgh0⟩
+  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha3, ha5, ha4, hra, ⟨vmi, hmi⟩, htick,
+    hreg, halgn, hcstr, hlen', hjlo, hjhi, hkle⟩ := hSt
+  have hv : ((zero_extend (m := 64) ((m0[p.toNat + 8*j + k]?).getD 0)) == (0#64)) = false := by
+    rw [tdec_guard p len j k cs m0 hcstr hlen' hkle]; simp; omega
+  obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+    hbeqz_pc c.σ c.tick c.steps vmi hgood hpc hmi ha5 hloaded htick hv
+  have hpc1 : σ1.regs.get? Register.PC = some lbupc := by
+    apply hbeqz_next; rw [obs_bnottaken_pc hobs1]
+  have ha4_1 := obs_bnottaken_other' hobs1 Register.x14 (by decide) ha4
+  have ha0_1 := obs_bnottaken_other' hobs1 Register.x10 (by decide) ha0
+  have ha3_1 := obs_bnottaken_other' hobs1 Register.x13 (by decide) ha3
+  have hra_1 := obs_bnottaken_other' hobs1 Register.x1 (by decide) hra
+  obtain ⟨vmi1, hmi1'⟩ := obs_bnottaken_minstret hobs1
+  have hg1 : ∀ R, AbiPreserved R = true → σ1.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_bnottaken hobs1 R hR]; exact hgh0 R hR
+  obtain ⟨htlo, hthi, hthtif⟩ := tail_lbu_bounds p len j (k+1) hreg hjlo (by omega)
+  obtain ⟨bb, hbbmem, _⟩ := tail_byte_some p len j (k+1) cs m0 hcstr hlen' (by omega)
+  have haddr' : ((p + BitVec.ofNat 64 (8*(j+1))) + sign_extend (m := 64) lbuimm).toNat
+      = p.toNat + 8*j + (k+1) := by
+    rw [lbu_addr p j (k+1) (by omega) lbuimm hlbuimm]
+    rw [ptrN p (8*j + (k+1)) (by have := hreg.nowrap; omega)]; omega
+  obtain ⟨σ2, i2, hs2, hi2, hG2, hmem2, hobs2⟩ :=
+    hlbu σ1 i1 (c.steps + 1) vmi1 (p + BitVec.ofNat 64 (8*(j+1))) bb hG1 hpc1 hmi1' ha4_1
+      (by rw [hmem1]; exact hloaded)
+      (by rw [haddr']; exact htlo) (by rw [haddr']; exact hthi) (by rw [haddr']; exact hthtif)
+      (by rw [haddr', hmem1, hmem]; exact hbbmem) hi1
+  have hpc2 : σ2.regs.get? Register.PC = some nextpc := by
+    apply hlbu_next; rw [obs_alu_pc hobs2]
+  have ha0_2 := obs_alu_other' hobs2 Register.x10 (by decide) ha0_1
+  have ha3_2 := obs_alu_other' hobs2 Register.x13 (by decide) ha3_1
+  have ha4_2 := obs_alu_other' hobs2 Register.x14 (by decide) ha4_1
+  have hra_2 := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
+  have ha5_2 : σ2.regs.get? Register.x15 = some (zero_extend (m := 64) ((m0[p.toNat + 8*j + (k+1)]?).getD 0)) := by
+    have := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [show bb = (m0[p.toNat + 8*j + (k+1)]?).getD 0 from by rw [hbbmem]; rfl] at this
+  obtain ⟨vmi2, hmi2'⟩ := obs_alu_minstret hobs2
+  have hmem2eq : σ2.mem = c.σ.mem := by rw [hmem2, hmem1]
+  have hg2 : ∀ R, AbiPreserved R = true → σ2.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs2 R (by decide) hR]; exact hg1 R hR
+  exact ⟨⟨σ2, i2, c.steps + 1 + 1⟩, (Steps.single hs1).trans (Steps.single hs2),
+    ⟨hG2, by rw [hmem2eq]; exact hloaded, by rw [hmem2eq]; exact hmem, hpc2, ha0_2, ha3_2, ha5_2,
+      ha4_2, hra_2, ⟨vmi2, hmi2'⟩, hi2, hreg, halgn, hcstr, hlen', hjlo, hjhi, by omega⟩, hg2⟩
+
+/-- Framed tail exit `TDec k → Done` (`beqz` taken, `addi a0,a3,-imm`, `ret`), threading
+the ghost through the three sites.  Byte-offset data via callbacks; one proof frames all
+six exits + the snez path shares this ret-tail shape. -/
+theorem tdec_exit_k_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j k : Nat)
+    (g : (R : Register) → Option (RegisterType R))
+    (beqzpc addipc retpc : BitVec 64) (addiimm : BitVec 12) (takenimm : BitVec 13)
+    (hk : k ≤ 5) (hlen : 8*j + k = len) (halign : r.toNat % 4 = 0)
+    (hretlo : 0x80000000 ≤ retpc.toNat) (hrethi : retpc.toNat + 4 ≤ tohostAddr)
+    (hretalgn : retpc.toNat % 4 = 0)
+    (hretbytes : ∀ (mem : Std.ExtHashMap Nat (BitVec 8)), StrlenLoaded mem → RetBytes mem retpc.toNat)
+    (himm : (sign_extend (m := 64) addiimm : BitVec 64) = -(BitVec.ofNat 64 (8 - k)))
+    (htaken : ∀ (σ : MState) (i u : Nat) (vm : BitVec 64),
+      GoodState σ → σ.regs.get? Register.PC = some beqzpc →
+      σ.regs.get? Register.minstret = some vm →
+      σ.regs.get? Register.x15 = some (zero_extend (m := 64) ((m0[p.toNat + 8*j + k]?).getD 0)) →
+      StrlenLoaded σ.mem → i < 2 →
+      ((zero_extend (m := 64) ((m0[p.toNat + 8*j + k]?).getD 0)) == (0#64)) = true →
+      ∃ (σ' : MState) (i' : Nat), Step ⟨σ, i, u⟩ ⟨σ', i', u+1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+        σ'.mem = σ.mem ∧ ReadsLikePost σ'
+          (sigmaPost_branch_taken σ beqzpc vm takenimm) ∧
+        σ'.regs.get? Register.PC = some addipc)
+    (haddi : ∀ (σ : MState) (i u : Nat) (vm : BitVec 64),
+      GoodState σ → σ.regs.get? Register.PC = some addipc →
+      σ.regs.get? Register.minstret = some vm →
+      σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (8*(j+1))) →
+      StrlenLoaded σ.mem → i < 2 →
+      ∃ (σ' : MState) (i' : Nat), Step ⟨σ, i, u⟩ ⟨σ', i', u+1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+        σ'.mem = σ.mem ∧ ReadsLikePost σ'
+          (sigmaPost_alu σ addipc vm Register.x10
+            (BitVec.ofNat 64 (8*(j+1)) + sign_extend (m := 64) addiimm)) ∧
+        σ'.regs.get? Register.PC = some retpc) :
+    Triple (fun c => TDec p r len cs m0 j k beqzpc c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => Done p r len m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧ c.tick < 2) := by
+  intro c ⟨hSt, hgh0⟩
+  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha3, ha5, ha4, hra, ⟨vmi, hmi⟩, htick,
+    hreg, halgn, hcstr, hlen', hjlo, hjhi, hkle⟩ := hSt
+  have hv : ((zero_extend (m := 64) ((m0[p.toNat + 8*j + k]?).getD 0)) == (0#64)) = true := by
+    rw [tdec_guard p len j k cs m0 hcstr hlen' hkle]; simp [hlen]
+  -- beqz taken → addipc
+  obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1, hpc1⟩ :=
+    htaken c.σ c.tick c.steps vmi hgood hpc hmi ha5 hloaded htick hv
+  have ha3_1 := obs_btaken_other' hobs1 Register.x13 (by decide) ha3
+  have hra_1 := obs_btaken_other' hobs1 Register.x1 (by decide) hra
+  obtain ⟨vmi1, hmi1'⟩ := obs_btaken_minstret hobs1
+  have hg1 : ∀ R, AbiPreserved R = true → σ1.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_btaken hobs1 R hR]; exact hgh0 R hR
+  -- addi a0,a3,-imm → retpc, a0 = ofNat len
+  obtain ⟨σ2, i2, hs2, hi2, hG2, hmem2, hobs2, hpc2⟩ :=
+    haddi σ1 i1 (c.steps + 1) vmi1 hG1 hpc1 hmi1' ha3_1 (by rw [hmem1]; exact hloaded) hi1
+  have ha0_2 : σ2.regs.get? Register.x10 = some (BitVec.ofNat 64 len) := by
+    have := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [exit_addi_val j len k addiimm (by omega) hlen himm] at this
+  have hra_2 := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
+  obtain ⟨vmi2, hmi2'⟩ := obs_alu_minstret hobs2
+  have hmem2eq : σ2.mem = c.σ.mem := by rw [hmem2, hmem1]
+  have hg2 : ∀ R, AbiPreserved R = true → σ2.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs2 R (by decide) hR]; exact hg1 R hR
+  -- ret → Done
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := hretbytes σ2.mem (by rw [hmem2eq]; exact hloaded)
+  have htgt : (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
+    rw [ret_tgt r halign]; exact halign
+  obtain ⟨σ3, i3, hs3, hi3, hG3, hmem3, hobs3⟩ :=
+    site_exit_ret σ2 i2 (c.steps + 1 + 1) retpc vmi2 r hG2 hpc2 hmi2' hra_2 hb0 hb1 hb2 hb3
+      hretlo hrethi hretalgn htgt hi2
+  have hpc3 : σ3.regs.get? Register.PC = some r := by rw [obs_jr_pc hobs3, ret_tgt r halign]
+  have ha0_3 := obs_jr_other' hobs3 Register.x10 (by decide) ha0_2
+  have hra_3 := obs_jr_other' hobs3 Register.x1 (by decide) hra_2
+  have hmem3eq : σ3.mem = c.σ.mem := by rw [hmem3]; exact hmem2eq
+  have hg3 : ∀ R, AbiPreserved R = true → σ3.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_jr hobs3 R hR]; exact hg2 R hR
+  exact ⟨⟨σ3, i3, c.steps + 1 + 1 + 1⟩,
+    ((Steps.single (by cases c; exact hs1)).trans (Steps.single hs2)).trans (Steps.single hs3),
+    ⟨hG3, hpc3, ha0_3, hra_3, by rw [hmem3eq]; exact hmem⟩, hg3, hi3⟩
+
+/-- Framed snez path (`0xd5c → Done`, offsets 6/7): beqz-nottaken, `lbu`, `snez`, `add`,
+`addi`, `ret` — threads the ghost through all six sites (all write non-`AbiPreserved`). -/
+theorem tdec_snez_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (hlt : 8*j + 5 < len) (halign : r.toNat % 4 = 0)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => TDec p r len cs m0 j 5 (0x80006d5c#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => Done p r len m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧ c.tick < 2) := by
+  intro c ⟨hSt, hgh0⟩
+  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha3, ha5, ha4, hra, ⟨vmi, hmi⟩, htick,
+    hreg, halgn, hcstr, hlen', hjlo, hjhi, hkle⟩ := hSt
+  have hv : ((zero_extend (m := 64) ((m0[p.toNat + 8*j + 5]?).getD 0)) == (0#64)) = false := by
+    rw [tdec_guard p len j 5 cs m0 hcstr hlen' hkle]; simp; omega
+  obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+    site_80006d5c_nottaken c.σ c.tick c.steps (0x80006d5c#64) vmi
+      (zero_extend (m := 64) ((m0[p.toNat + 8*j + 5]?).getD 0)) hgood hpc hmi ha5 hloaded rfl hv htick
+  have hpc1 : σ1.regs.get? Register.PC = some (0x80006d60#64 : BitVec 64) := by
+    have := obs_bnottaken_pc hobs1; rwa [show BitVec.addInt (0x80006d5c#64) 4 = (0x80006d60#64 : BitVec 64) from by decide] at this
+  have ha3_1 := obs_bnottaken_other' hobs1 Register.x13 (by decide) ha3
+  have ha4_1 := obs_bnottaken_other' hobs1 Register.x14 (by decide) ha4
+  have hra_1 := obs_bnottaken_other' hobs1 Register.x1 (by decide) hra
+  obtain ⟨vmi1, hmi1'⟩ := obs_bnottaken_minstret hobs1
+  have hg1 : ∀ R, AbiPreserved R = true → σ1.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_bnottaken hobs1 R hR]; exact hgh0 R hR
+  obtain ⟨htlo, hthi, hthtif⟩ := tail_lbu_bounds p len j 6 hreg hjlo (by omega)
+  obtain ⟨b6, hb6mem, hb6z⟩ := tail_byte_some p len j 6 cs m0 hcstr hlen' (by omega)
+  have haddr : ((p + BitVec.ofNat 64 (8*(j+1))) + sign_extend (m := 64) (0xffe#12)).toNat
+      = p.toNat + 8*j + 6 := by
+    rw [lbu_addr p j 6 (by omega) (0xffe#12) (by apply BitVec.eq_of_toNat_eq; decide)]
+    exact ptrN p (8*j + 6) (by have := hreg.nowrap; omega)
+  obtain ⟨σ2, i2, hs2, hi2, hG2, hmem2, hobs2⟩ :=
+    site_80006d60 σ1 i1 (c.steps + 1) (0x80006d60#64) vmi1 (p + BitVec.ofNat 64 (8*(j+1))) b6
+      hG1 hpc1 hmi1' ha4_1 (by rw [hmem1]; exact hloaded) rfl
+      (by rw [haddr]; exact htlo) (by rw [haddr]; exact hthi) (by rw [haddr]; exact hthtif)
+      (by rw [haddr, hmem1, hmem]; exact hb6mem) hi1
+  have hpc2 : σ2.regs.get? Register.PC = some (0x80006d64#64 : BitVec 64) := by
+    have := obs_alu_pc hobs2; rwa [show BitVec.addInt (0x80006d60#64) 4 = (0x80006d64#64 : BitVec 64) from by decide] at this
+  have ha3_2 := obs_alu_other' hobs2 Register.x13 (by decide) ha3_1
+  have hra_2 := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
+  have ha5_2 := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
+  obtain ⟨vmi2, hmi2'⟩ := obs_alu_minstret hobs2
+  have hg2 : ∀ R, AbiPreserved R = true → σ2.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs2 R (by decide) hR]; exact hg1 R hR
+  obtain ⟨σ3, i3, hs3, hi3, hG3, hmem3, hobs3⟩ :=
+    site_80006d64 σ2 i2 (c.steps + 1 + 1) (0x80006d64#64) vmi2 (zero_extend (m := 64) b6)
+      hG2 hpc2 hmi2' ha5_2 (by rw [hmem2, hmem1]; exact hloaded) rfl hi2
+  have hpc3 : σ3.regs.get? Register.PC = some (0x80006d68#64 : BitVec 64) := by
+    have := obs_alu_pc hobs3; rwa [show BitVec.addInt (0x80006d64#64) 4 = (0x80006d68#64 : BitVec 64) from by decide] at this
+  have ha3_3 := obs_alu_other' hobs3 Register.x13 (by decide) ha3_2
+  have hra_3 := obs_alu_other' hobs3 Register.x1 (by decide) hra_2
+  have ha0_3 := obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
+  obtain ⟨vmi3, hmi3'⟩ := obs_alu_minstret hobs3
+  have hg3 : ∀ R, AbiPreserved R = true → σ3.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs3 R (by decide) hR]; exact hg2 R hR
+  obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
+    site_80006d68 σ3 i3 (c.steps + 1 + 1 + 1) (0x80006d68#64) vmi3
+      (zero_extend (m := 64) (bool_to_bit (zopz0zI_u (0#64) (zero_extend (m := 64) b6))))
+      (BitVec.ofNat 64 (8*(j+1)))
+      hG3 hpc3 hmi3' ha0_3 ha3_3 (by rw [hmem3, hmem2, hmem1]; exact hloaded) rfl hi3
+  have hpc4 : σ4.regs.get? Register.PC = some (0x80006d6c#64 : BitVec 64) := by
+    have := obs_alu_pc hobs4; rwa [show BitVec.addInt (0x80006d68#64) 4 = (0x80006d6c#64 : BitVec 64) from by decide] at this
+  have hra_4 := obs_alu_other' hobs4 Register.x1 (by decide) hra_3
+  have ha0_4 := obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
+  obtain ⟨vmi4, hmi4'⟩ := obs_alu_minstret hobs4
+  have hg4 : ∀ R, AbiPreserved R = true → σ4.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs4 R (by decide) hR]; exact hg3 R hR
+  obtain ⟨σ5, i5, hs5, hi5, hG5, hmem5, hobs5⟩ :=
+    site_80006d6c σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x80006d6c#64) vmi4
+      ((zero_extend (m := 64) (bool_to_bit (zopz0zI_u (0#64) (zero_extend (m := 64) b6)))) + BitVec.ofNat 64 (8*(j+1)))
+      hG4 hpc4 hmi4' ha0_4 (by rw [hmem4, hmem3, hmem2, hmem1]; exact hloaded) rfl hi4
+  have hpc5 : σ5.regs.get? Register.PC = some (0x80006d70#64 : BitVec 64) := by
+    have := obs_alu_pc hobs5; rwa [show BitVec.addInt (0x80006d6c#64) 4 = (0x80006d70#64 : BitVec 64) from by decide] at this
+  have hra_5 := obs_alu_other' hobs5 Register.x1 (by decide) hra_4
+  have ha0_5 : σ5.regs.get? Register.x10 = some (BitVec.ofNat 64 len) := by
+    have := obs_alu_rd hobs5 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [snez_final p len j b6 hlt hjhi (by have := hreg.nowrap; omega) (by rw [hb6z])] at this
+  obtain ⟨vmi5, hmi5'⟩ := obs_alu_minstret hobs5
+  have hmem5eq : σ5.mem = c.σ.mem := by rw [hmem5, hmem4, hmem3, hmem2, hmem1]
+  have hg5 : ∀ R, AbiPreserved R = true → σ5.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs5 R (by decide) hR]; exact hg4 R hR
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := retbytes_d70 σ5.mem (by rw [hmem5eq]; exact hloaded)
+  have htgt : (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
+    rw [ret_tgt r halign]; exact halign
+  obtain ⟨σ6, i6, hs6, hi6, hG6, hmem6, hobs6⟩ :=
+    site_exit_ret σ5 i5 (c.steps + 1 + 1 + 1 + 1 + 1) (0x80006d70#64) vmi5 r hG5 hpc5 hmi5' hra_5
+      hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) htgt hi5
+  have hpc6 : σ6.regs.get? Register.PC = some r := by rw [obs_jr_pc hobs6, ret_tgt r halign]
+  have ha0_6 := obs_jr_other' hobs6 Register.x10 (by decide) ha0_5
+  have hra_6 := obs_jr_other' hobs6 Register.x1 (by decide) hra_5
+  have hmem6eq : σ6.mem = c.σ.mem := by rw [hmem6]; exact hmem5eq
+  have hg6 : ∀ R, AbiPreserved R = true → σ6.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_jr hobs6 R hR]; exact hg5 R hR
+  exact ⟨⟨σ6, i6, c.steps + 1 + 1 + 1 + 1 + 1 + 1⟩,
+    (((((Steps.single (by cases c; exact hs1)).trans (Steps.single hs2)).trans (Steps.single hs3)).trans
+      (Steps.single hs4)).trans (Steps.single hs5)).trans (Steps.single hs6),
+    ⟨hG6, hpc6, ha0_6, hra_6, by rw [hmem6eq]; exact hmem⟩, hg6, hi6⟩
+
+/-! ### Concrete framed advances/exits — thin wrappers over the generics. -/
+
+theorem next0_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (hlt : 8*j + 0 < len)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => TDec p r len cs m0 j 0 (0x80006d34#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => TDec p r len cs m0 j 1 (0x80006d3c#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R)) :=
+  tdec_next_k_framed p r len cs m0 j 0 g (0x80006d34#64) (0x80006d38#64) (0x80006d3c#64) (0xff9#12) (by omega) hlt
+    (fun σ i u vm hG hpc hmi hx15 hmem hi hv => site_80006d34_nottaken σ i u _ vm _ hG hpc hmi hx15 hmem rfl hv hi)
+    (fun σ i u vm a4v bb hG hpc hmi hx14 hmem hlo hhi hhtif hbb hi => site_80006d38 σ i u _ vm a4v bb hG hpc hmi hx14 hmem rfl hlo hhi hhtif hbb hi)
+    (fun σ h => by rw [show BitVec.addInt (0x80006d34#64) 4 = (0x80006d38#64 : BitVec 64) from by decide] at h; exact h)
+    (fun σ h => by rw [show BitVec.addInt (0x80006d38#64) 4 = (0x80006d3c#64 : BitVec 64) from by decide] at h; exact h)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+
+theorem next1_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (hlt : 8*j + 1 < len)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => TDec p r len cs m0 j 1 (0x80006d3c#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => TDec p r len cs m0 j 2 (0x80006d44#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R)) :=
+  tdec_next_k_framed p r len cs m0 j 1 g (0x80006d3c#64) (0x80006d40#64) (0x80006d44#64) (0xffa#12) (by omega) hlt
+    (fun σ i u vm hG hpc hmi hx15 hmem hi hv => site_80006d3c_nottaken σ i u _ vm _ hG hpc hmi hx15 hmem rfl hv hi)
+    (fun σ i u vm a4v bb hG hpc hmi hx14 hmem hlo hhi hhtif hbb hi => site_80006d40 σ i u _ vm a4v bb hG hpc hmi hx14 hmem rfl hlo hhi hhtif hbb hi)
+    (fun σ h => by rw [show BitVec.addInt (0x80006d3c#64) 4 = (0x80006d40#64 : BitVec 64) from by decide] at h; exact h)
+    (fun σ h => by rw [show BitVec.addInt (0x80006d40#64) 4 = (0x80006d44#64 : BitVec 64) from by decide] at h; exact h)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+
+theorem next2_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (hlt : 8*j + 2 < len)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => TDec p r len cs m0 j 2 (0x80006d44#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => TDec p r len cs m0 j 3 (0x80006d4c#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R)) :=
+  tdec_next_k_framed p r len cs m0 j 2 g (0x80006d44#64) (0x80006d48#64) (0x80006d4c#64) (0xffb#12) (by omega) hlt
+    (fun σ i u vm hG hpc hmi hx15 hmem hi hv => site_80006d44_nottaken σ i u _ vm _ hG hpc hmi hx15 hmem rfl hv hi)
+    (fun σ i u vm a4v bb hG hpc hmi hx14 hmem hlo hhi hhtif hbb hi => site_80006d48 σ i u _ vm a4v bb hG hpc hmi hx14 hmem rfl hlo hhi hhtif hbb hi)
+    (fun σ h => by rw [show BitVec.addInt (0x80006d44#64) 4 = (0x80006d48#64 : BitVec 64) from by decide] at h; exact h)
+    (fun σ h => by rw [show BitVec.addInt (0x80006d48#64) 4 = (0x80006d4c#64 : BitVec 64) from by decide] at h; exact h)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+
+theorem next3_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (hlt : 8*j + 3 < len)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => TDec p r len cs m0 j 3 (0x80006d4c#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => TDec p r len cs m0 j 4 (0x80006d54#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R)) :=
+  tdec_next_k_framed p r len cs m0 j 3 g (0x80006d4c#64) (0x80006d50#64) (0x80006d54#64) (0xffc#12) (by omega) hlt
+    (fun σ i u vm hG hpc hmi hx15 hmem hi hv => site_80006d4c_nottaken σ i u _ vm _ hG hpc hmi hx15 hmem rfl hv hi)
+    (fun σ i u vm a4v bb hG hpc hmi hx14 hmem hlo hhi hhtif hbb hi => site_80006d50 σ i u _ vm a4v bb hG hpc hmi hx14 hmem rfl hlo hhi hhtif hbb hi)
+    (fun σ h => by rw [show BitVec.addInt (0x80006d4c#64) 4 = (0x80006d50#64 : BitVec 64) from by decide] at h; exact h)
+    (fun σ h => by rw [show BitVec.addInt (0x80006d50#64) 4 = (0x80006d54#64 : BitVec 64) from by decide] at h; exact h)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+
+theorem next4_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (hlt : 8*j + 4 < len)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => TDec p r len cs m0 j 4 (0x80006d54#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => TDec p r len cs m0 j 5 (0x80006d5c#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R)) :=
+  tdec_next_k_framed p r len cs m0 j 4 g (0x80006d54#64) (0x80006d58#64) (0x80006d5c#64) (0xffd#12) (by omega) hlt
+    (fun σ i u vm hG hpc hmi hx15 hmem hi hv => site_80006d54_nottaken σ i u _ vm _ hG hpc hmi hx15 hmem rfl hv hi)
+    (fun σ i u vm a4v bb hG hpc hmi hx14 hmem hlo hhi hhtif hbb hi => site_80006d58 σ i u _ vm a4v bb hG hpc hmi hx14 hmem rfl hlo hhi hhtif hbb hi)
+    (fun σ h => by rw [show BitVec.addInt (0x80006d54#64) 4 = (0x80006d58#64 : BitVec 64) from by decide] at h; exact h)
+    (fun σ h => by rw [show BitVec.addInt (0x80006d58#64) 4 = (0x80006d5c#64 : BitVec 64) from by decide] at h; exact h)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+
+/-- Concrete framed exit at offset `k`; the `htaken`/`haddi` callbacks wrap the taken +
+addi sites and derive the target PCs. -/
+theorem exitk_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j k : Nat) (hk : k ≤ 5)
+    (halign : r.toNat % 4 = 0) (hlen : 8*j + k = len)
+    (g : (R : Register) → Option (RegisterType R))
+    (beqzpc addipc retpc : BitVec 64) (addiimm : BitVec 12) (takenimm : BitVec 13)
+    (hretlo : 0x80000000 ≤ retpc.toNat) (hrethi : retpc.toNat + 4 ≤ tohostAddr)
+    (hretalgn : retpc.toNat % 4 = 0)
+    (hretbytes : ∀ (mem : Std.ExtHashMap Nat (BitVec 8)), StrlenLoaded mem → RetBytes mem retpc.toNat)
+    (himm : (sign_extend (m := 64) addiimm : BitVec 64) = -(BitVec.ofNat 64 (8 - k)))
+    (hbtpc : (beqzpc + sign_extend (m := 64) takenimm) = addipc)
+    (haddipc : BitVec.addInt addipc 4 = retpc)
+    (htaken : ∀ (σ : MState) (i u : Nat) (vm v15 : BitVec 64),
+      GoodState σ → σ.regs.get? Register.PC = some beqzpc →
+      σ.regs.get? Register.minstret = some vm → σ.regs.get? Register.x15 = some v15 →
+      StrlenLoaded σ.mem → (v15 == (0#64)) = true → i < 2 →
+      ∃ (σ' : MState) (i' : Nat), Step ⟨σ, i, u⟩ ⟨σ', i', u+1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+        σ'.mem = σ.mem ∧ ReadsLikePost σ' (sigmaPost_branch_taken σ beqzpc vm takenimm))
+    (haddi : ∀ (σ : MState) (i u : Nat) (vm v13 : BitVec 64),
+      GoodState σ → σ.regs.get? Register.PC = some addipc →
+      σ.regs.get? Register.minstret = some vm → σ.regs.get? Register.x13 = some v13 →
+      StrlenLoaded σ.mem → i < 2 →
+      ∃ (σ' : MState) (i' : Nat), Step ⟨σ, i, u⟩ ⟨σ', i', u+1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+        σ'.mem = σ.mem ∧ ReadsLikePost σ'
+          (sigmaPost_alu σ addipc vm Register.x10 (v13 + sign_extend (m := 64) addiimm))) :
+    Triple (fun c => TDec p r len cs m0 j k beqzpc c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => Done p r len m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧ c.tick < 2) :=
+  tdec_exit_k_framed p r len cs m0 j k g beqzpc addipc retpc addiimm takenimm hk hlen halign
+    hretlo hrethi hretalgn hretbytes himm
+    (fun σ i u vm hG hpc hmi hx15 hmem hi hv => by
+      obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ := htaken σ i u vm _ hG hpc hmi hx15 hmem hv hi
+      refine ⟨σ', i', hstep, hi', hG', hmem', hobs, ?_⟩
+      rw [obs_btaken_pc hobs, hbtpc])
+    (fun σ i u vm hG hpc hmi hx13 hmem hi => by
+      obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ := haddi σ i u vm _ hG hpc hmi hx13 hmem hi
+      refine ⟨σ', i', hstep, hi', hG', hmem', hobs, ?_⟩
+      rw [obs_alu_pc hobs, haddipc])
+
+/-! ### Exponentiating tail composition.
+
+The dispatch composes at most five `next` advances then one `exit`.  To keep
+elaboration linear (avoid the deep-nested-`.seq` whnf blowup + eager per-offset
+`decide`s), each offset's advance/exit is packaged as a **standalone framed Triple
+theorem** (`next{0..4}_framed`, `exit{0..5}_framed`, `tdec_snez_framed`) whose heavy
+`decide`s are paid ONCE at that theorem's own elaboration, and the assembly composes
+them by name — a plain `.seq` fold over already-checked constants (rule: emit plain
+terms, seams `rfl`, no re-elaboration of leaf `decide`s).
+
+The concrete `exit{k}_framed` wrappers each apply the `exitk_framed` generic with the
+offset's literals; the 64-bit `BitVec` side `decide`s are paid once per wrapper. -/
+
+theorem exit0_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (hlen : 8*j + 0 = len) (halign : r.toNat % 4 = 0)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => TDec p r len cs m0 j 0 (0x80006d34#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => Done p r len m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧ c.tick < 2) :=
+  exitk_framed p r len cs m0 j 0 (by omega) halign hlen g
+    (0x80006d34#64) (0x80006d9c#64) (0x80006da0#64) (0xff8#12) (0x0068#13)
+    (by decide) (by decide) (by decide) retbytes_da0 (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide) (by decide)
+    (fun σ i u vm v15 hG hpc hmi hx15 hmem hv hi => site_80006d34_taken σ i u _ vm v15 hG hpc hmi hx15 hmem rfl hv hi)
+    (fun σ i u vm v13 hG hpc hmi hx13 hmem hi => site_80006d9c σ i u _ vm v13 hG hpc hmi hx13 hmem rfl hi)
+
+theorem exit1_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (hlen : 8*j + 1 = len) (halign : r.toNat % 4 = 0)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => TDec p r len cs m0 j 1 (0x80006d3c#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => Done p r len m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧ c.tick < 2) :=
+  exitk_framed p r len cs m0 j 1 (by omega) halign hlen g
+    (0x80006d3c#64) (0x80006d94#64) (0x80006d98#64) (0xff9#12) (0x0058#13)
+    (by decide) (by decide) (by decide) retbytes_d98 (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide) (by decide)
+    (fun σ i u vm v15 hG hpc hmi hx15 hmem hv hi => site_80006d3c_taken σ i u _ vm v15 hG hpc hmi hx15 hmem rfl hv hi)
+    (fun σ i u vm v13 hG hpc hmi hx13 hmem hi => site_80006d94 σ i u _ vm v13 hG hpc hmi hx13 hmem rfl hi)
+
+theorem exit2_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (hlen : 8*j + 2 = len) (halign : r.toNat % 4 = 0)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => TDec p r len cs m0 j 2 (0x80006d44#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => Done p r len m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧ c.tick < 2) :=
+  exitk_framed p r len cs m0 j 2 (by omega) halign hlen g
+    (0x80006d44#64) (0x80006dac#64) (0x80006db0#64) (0xffa#12) (0x0068#13)
+    (by decide) (by decide) (by decide) retbytes_db0 (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide) (by decide)
+    (fun σ i u vm v15 hG hpc hmi hx15 hmem hv hi => site_80006d44_taken σ i u _ vm v15 hG hpc hmi hx15 hmem rfl hv hi)
+    (fun σ i u vm v13 hG hpc hmi hx13 hmem hi => site_80006dac σ i u _ vm v13 hG hpc hmi hx13 hmem rfl hi)
+
+theorem exit3_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (hlen : 8*j + 3 = len) (halign : r.toNat % 4 = 0)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => TDec p r len cs m0 j 3 (0x80006d4c#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => Done p r len m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧ c.tick < 2) :=
+  exitk_framed p r len cs m0 j 3 (by omega) halign hlen g
+    (0x80006d4c#64) (0x80006da4#64) (0x80006da8#64) (0xffb#12) (0x0058#13)
+    (by decide) (by decide) (by decide) retbytes_da8 (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide) (by decide)
+    (fun σ i u vm v15 hG hpc hmi hx15 hmem hv hi => site_80006d4c_taken σ i u _ vm v15 hG hpc hmi hx15 hmem rfl hv hi)
+    (fun σ i u vm v13 hG hpc hmi hx13 hmem hi => site_80006da4 σ i u _ vm v13 hG hpc hmi hx13 hmem rfl hi)
+
+theorem exit4_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (hlen : 8*j + 4 = len) (halign : r.toNat % 4 = 0)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => TDec p r len cs m0 j 4 (0x80006d54#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => Done p r len m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧ c.tick < 2) := by
+  -- SELF-CONTAINED (not via `exitk_framed`): offset 4's application of the generic
+  -- deterministically overruns the `whnf` heartbeat budget; inlining the three-site chain
+  -- (`beqz`-taken ≫ `addi` ≫ `ret`) as its own proof — exactly the `tdec_snez_framed`
+  -- shape — sidesteps the generic's type unification entirely.  (The genuine fix is a
+  -- block-reflection byte tail; see the ledger.)
+  intro c ⟨hSt, hgh0⟩
+  obtain ⟨hgood, hloaded, hmem, hpc, ha0, ha3, ha5, ha4, hra, ⟨vmi, hmi⟩, htick,
+    hreg, halgn, hcstr, hlen', hjlo, hjhi, hkle⟩ := hSt
+  have hv : ((zero_extend (m := 64) ((m0[p.toNat + 8*j + 4]?).getD 0)) == (0#64)) = true := by
+    rw [tdec_guard p len j 4 cs m0 hcstr hlen' hkle]; simp [hlen]
+  obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+    site_80006d54_taken c.σ c.tick c.steps (0x80006d54#64) vmi
+      (zero_extend (m := 64) ((m0[p.toNat + 8*j + 4]?).getD 0)) hgood hpc hmi ha5 hloaded rfl hv htick
+  have hpceq : (0x80006d54#64 : BitVec 64) + sign_extend (m := 64) (0x0060#13) = (0x80006db4#64 : BitVec 64) := by
+    apply BitVec.eq_of_toNat_eq; decide
+  have hpc1 : σ1.regs.get? Register.PC = some (0x80006db4#64 : BitVec 64) := by
+    rw [obs_btaken_pc hobs1, hpceq]
+  have ha3_1 := obs_btaken_other' hobs1 Register.x13 (by decide) ha3
+  have hra_1 := obs_btaken_other' hobs1 Register.x1 (by decide) hra
+  obtain ⟨vmi1, hmi1'⟩ := obs_btaken_minstret hobs1
+  have hg1 : ∀ R, AbiPreserved R = true → σ1.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_btaken hobs1 R hR]; exact hgh0 R hR
+  obtain ⟨σ2, i2, hs2, hi2, hG2, hmem2, hobs2⟩ :=
+    site_80006db4 σ1 i1 (c.steps + 1) (0x80006db4#64) vmi1 (BitVec.ofNat 64 (8*(j+1)))
+      hG1 hpc1 hmi1' ha3_1 (by rw [hmem1]; exact hloaded) rfl hi1
+  have hpc2 : σ2.regs.get? Register.PC = some (0x80006db8#64 : BitVec 64) := by
+    have := obs_alu_pc hobs2; rwa [show BitVec.addInt (0x80006db4#64) 4 = (0x80006db8#64 : BitVec 64) from by decide] at this
+  have ha0_2 : σ2.regs.get? Register.x10 = some (BitVec.ofNat 64 len) := by
+    have := obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [exit_addi_val j len 4 (0xffc#12) (by omega) hlen (by apply BitVec.eq_of_toNat_eq; decide)] at this
+  have hra_2 := obs_alu_other' hobs2 Register.x1 (by decide) hra_1
+  obtain ⟨vmi2, hmi2'⟩ := obs_alu_minstret hobs2
+  have hmem2eq : σ2.mem = c.σ.mem := by rw [hmem2, hmem1]
+  have hg2 : ∀ R, AbiPreserved R = true → σ2.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_alu hobs2 R (by decide) hR]; exact hg1 R hR
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := retbytes_db8 σ2.mem (by rw [hmem2eq]; exact hloaded)
+  have htgt : (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
+    rw [ret_tgt r halign]; exact halign
+  obtain ⟨σ3, i3, hs3, hi3, hG3, hmem3, hobs3⟩ :=
+    site_exit_ret σ2 i2 (c.steps + 1 + 1) (0x80006db8#64) vmi2 r hG2 hpc2 hmi2' hra_2
+      hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) htgt hi2
+  have hpc3 : σ3.regs.get? Register.PC = some r := by rw [obs_jr_pc hobs3, ret_tgt r halign]
+  have ha0_3 := obs_jr_other' hobs3 Register.x10 (by decide) ha0_2
+  have hra_3 := obs_jr_other' hobs3 Register.x1 (by decide) hra_2
+  have hmem3eq : σ3.mem = c.σ.mem := by rw [hmem3]; exact hmem2eq
+  have hg3 : ∀ R, AbiPreserved R = true → σ3.regs.get? R = g R := fun R hR => by
+    rw [strlenFrame_jr hobs3 R hR]; exact hg2 R hR
+  exact ⟨⟨σ3, i3, c.steps + 1 + 1 + 1⟩,
+    ((Steps.single (by cases c; exact hs1)).trans (Steps.single hs2)).trans (Steps.single hs3),
+    ⟨hG3, hpc3, ha0_3, hra_3, by rw [hmem3eq]; exact hmem⟩, hg3, hi3⟩
+
+theorem exit5_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (hlen : 8*j + 5 = len) (halign : r.toNat % 4 = 0)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => TDec p r len cs m0 j 5 (0x80006d5c#64) c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => Done p r len m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧ c.tick < 2) :=
+  exitk_framed p r len cs m0 j 5 (by omega) halign hlen g
+    (0x80006d5c#64) (0x80006dbc#64) (0x80006dc0#64) (0xffd#12) (0x0060#13)
+    (by decide) (by decide) (by decide) retbytes_dc0 (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide) (by decide)
+    (fun σ i u vm v15 hG hpc hmi hx15 hmem hv hi => site_80006d5c_taken σ i u _ vm v15 hG hpc hmi hx15 hmem rfl hv hi)
+    (fun σ i u vm v13 hG hpc hmi hx13 hmem hi => site_80006dbc σ i u _ vm v13 hG hpc hmi hx13 hmem rfl hi)
+
+/-- Framed byte-tail assembly `WTail → Done`, dispatching on `i₀ = len - 8j`.  The
+advance→exit chains are pre-checked standalone theorems, composed by a shallow `.seq`
+per branch (no nested-term whnf, no re-run `decide`). -/
+theorem tail_to_done_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (j : Nat) (halign : r.toNat % 4 = 0)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => WTail p r len cs m0 j c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => Done p r len m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧ c.tick < 2) := by
+  refine (tail_entry_framed p r len cs m0 j g).seq ?_
+  intro c hc
+  have hjlo := hc.1.jlo; have hjhi := hc.1.jhi
+  rcases (show len = 8*j + 0 ∨ len = 8*j + 1 ∨ len = 8*j + 2 ∨ len = 8*j + 3 ∨
+      len = 8*j + 4 ∨ len = 8*j + 5 ∨ len = 8*j + 6 ∨ len = 8*j + 7 from by omega)
+    with h0 | h1 | h2 | h3 | h4 | h5 | h6 | h7
+  · exact exit0_framed p r len cs m0 j (by omega) halign g c hc
+  · exact ((next0_framed p r len cs m0 j (by omega) g).seq
+      (exit1_framed p r len cs m0 j (by omega) halign g)) c hc
+  · have s1 := (next0_framed p r len cs m0 j (by omega) g).seq (next1_framed p r len cs m0 j (by omega) g)
+    exact (s1.seq (exit2_framed p r len cs m0 j (by omega) halign g)) c hc
+  · have s1 := (next0_framed p r len cs m0 j (by omega) g).seq (next1_framed p r len cs m0 j (by omega) g)
+    have s2 := s1.seq (next2_framed p r len cs m0 j (by omega) g)
+    exact (s2.seq (exit3_framed p r len cs m0 j (by omega) halign g)) c hc
+  · have s1 := (next0_framed p r len cs m0 j (by omega) g).seq (next1_framed p r len cs m0 j (by omega) g)
+    have s2 := s1.seq (next2_framed p r len cs m0 j (by omega) g)
+    have s3 := s2.seq (next3_framed p r len cs m0 j (by omega) g)
+    exact (s3.seq (exit4_framed p r len cs m0 j (by omega) halign g)) c hc
+  · have s1 := (next0_framed p r len cs m0 j (by omega) g).seq (next1_framed p r len cs m0 j (by omega) g)
+    have s2 := s1.seq (next2_framed p r len cs m0 j (by omega) g)
+    have s3 := s2.seq (next3_framed p r len cs m0 j (by omega) g)
+    have s4 := s3.seq (next4_framed p r len cs m0 j (by omega) g)
+    exact (s4.seq (exit5_framed p r len cs m0 j (by omega) halign g)) c hc
+  · have s1 := (next0_framed p r len cs m0 j (by omega) g).seq (next1_framed p r len cs m0 j (by omega) g)
+    have s2 := s1.seq (next2_framed p r len cs m0 j (by omega) g)
+    have s3 := s2.seq (next3_framed p r len cs m0 j (by omega) g)
+    have s4 := s3.seq (next4_framed p r len cs m0 j (by omega) g)
+    exact (s4.seq (tdec_snez_framed p r len cs m0 j (by omega) halign g)) c hc
+  · have s1 := (next0_framed p r len cs m0 j (by omega) g).seq (next1_framed p r len cs m0 j (by omega) g)
+    have s2 := s1.seq (next2_framed p r len cs m0 j (by omega) g)
+    have s3 := s2.seq (next3_framed p r len cs m0 j (by omega) g)
+    have s4 := s3.seq (next4_framed p r len cs m0 j (by omega) g)
+    exact (s4.seq (tdec_snez_framed p r len cs m0 j (by omega) halign g)) c hc
+
+/-- Framed `WAtTail → Done`. -/
+theorem wattail_to_done_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (halign : r.toNat % 4 = 0)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => WAtTail p r len cs m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => Done p r len m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧ c.tick < 2) := by
+  intro c ⟨hWAt, hgh⟩
+  obtain ⟨j, hWT⟩ := hWAt
+  exact tail_to_done_framed p r len cs m0 j halign g c ⟨hWT, hgh⟩
+
+/-- **Frame-preserving aligned `strlen` spec.**  Composes the framed entry, word loop and
+byte tail: from `Pre ∧ AbiFrame g` the run reaches `Done ∧ AbiFrame g`.  The frame is the
+ABI-callee-saved register tie the composition consumers need. -/
+theorem strlen_aligned_spec_framed (p r : BitVec 64) (len : Nat) (cs : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (halign : r.toNat % 4 = 0)
+    (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => Pre p r len cs m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => Done p r len m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧ c.tick < 2) := by
+  have hmid : Triple (fun c => WAtHead p r len cs m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => WAtTail p r len cs m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R)) := by
+    intro c hc
+    exact wloop_to_tail_framed p r len cs m0 g c ⟨Or.inl hc.1, hc.2⟩
+  exact ((entry_aligned_framed p r len cs m0 g).seq hmid).seq
+    (wattail_to_done_framed p r len cs m0 halign g)
+
+/-- **Frame-preserving top-level `strlen` spec (`strlen_spec_framed`).**  Strengthens
+`strlen_spec` with the ABI-callee-saved preservation clause the `env_define` composition
+needs, over an entry register-map ghost `g`: `strlen_post` (which already pins `mem = m0`)
+PLUS `∀ R, AbiPreserved R → get? R = g R`.  This one clause subsumes `x2 = sp` / `x3 = gp`
+and every callee-saved tie (clauses 2–4 of the `strlenFramed` residual); clause 5
+(`AInv`-preservation) is a corollary of `mem = m0` (already in `strlen_post`, exposed by
+`strlen_framed_mem_stable`); clause 1 (`c.tick < 2`) is now ALSO carried by this post —
+every framed byte-tail exit / snez block threads the terminating site's `i' < 2` into the
+`Done` carrier, so `EnvDefCompose` sources the exit-tick from here rather than an assumed
+premise.  Memory reasoning is not re-run — this composes the framed aligned blocks after
+bridging `CString`'s existential. -/
+theorem strlen_spec_framed (p r : BitVec 64) (s : String)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (g : (R : Register) → Option (RegisterType R)) :
+    Triple (fun c => strlen_pre p r s m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R))
+      (fun c => strlen_post r s m0 c ∧ (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧ c.tick < 2) := by
+  intro c ⟨hpre, hgh⟩
+  obtain ⟨hgood, hloaded, hmem, hpc, ha0, hra, hmi, htick, hreg, halign, hcstring, halignr⟩ := hpre
+  obtain ⟨cs, hcstr, hlens⟩ := cstring_length m0 p.toNat s hcstring
+  have hPre : Pre p r s.length cs m0 c :=
+    ⟨hgood, hloaded, hmem, hpc, ha0, hra, hmi, htick, hreg, halign, hcstr, hlens.symm⟩
+  obtain ⟨c', hsteps, hdone, hgh', htick'⟩ :=
+    strlen_aligned_spec_framed p r s.length cs m0 halignr g c ⟨hPre, hgh⟩
+  obtain ⟨hG', hpc', ha0', hra', hmem'⟩ := hdone
+  exact ⟨c', hsteps, ⟨hG', hpc', by rw [ha0', hlens], hra', hmem'⟩, hgh', htick'⟩
+
+/-- **Clause 5 corollary.**  Since `strlen_post` already states `mem = m0`, any allocator
+invariant stable under memory-and-gp equality survives the call: `strlen` is a pure
+reader.  Exposed so `EnvDefCompose` discharges `AInv`-preservation from `mem = m0` without
+a spec change. -/
+theorem strlen_framed_mem_stable (r : BitVec 64) (s : String)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) (h : strlen_post r s m0 c) :
+    c.σ.mem = m0 := h.2.2.2.2

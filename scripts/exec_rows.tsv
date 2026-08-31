@@ -1,0 +1,36 @@
+# exec_rows.tsv — statement-side case-row table for gen_exec_row.py
+#
+# Columns (tab-separated):
+#   name   : premise name (hSBrk/hSCont/…) → emits exec_<key>_row
+#   key    : short case key used in the theorem/def names
+#   shape  : row body shape — one of
+#              leaf_reg  (register-only leaf: entry IS ExecEntry, exit ExecExit;
+#                         apply <simD> directly with an ExecCaseGeom residual)
+#   simD   : the landed *D lemma to marshal (rows/ExecCaseGeom.lean)
+#   stmt   : the Stmt constructor pattern (the `s` index of the premise)
+#   status : the produced Status pattern
+#   ctor   : the ExecS constructor application (recursor derivation term)
+#   k      : the statement-kind jump-table index
+#   armpc  : the per-kind arm-entry PC constant (Vsa.Sim.<armpc>)
+#   notes  : free text
+#
+# EMITTED (register-only leaves, sims fully unconditional modulo geometry):
+#   hSBrk hSCont
+#
+# BLOCKED — NOT emitted (honest per-row reasons, see survey ledger step-6b):
+#   hSRetNull : execRetNullSim carries an OPEN `hGlue` residual (arm setup +
+#               beqz-TAKEN value_null bridge → SubExecReturnR) AND writes the
+#               retslot [aRet,aRet+24) (a memFrame disjunct ExecLeafWiden does not
+#               yet cover) — needs a retslot-aware widener + the glue closed.
+#   hSVarNull : execVarDeclNullSim carries an OPEN `hGlue` residual (env_define is
+#               NOT a landed Triple — M3 verified its prologue only) AND the exit
+#               store CHANGES to `st.store.define env x null` (non-identity φ), so
+#               ExecLeafWiden (identity-φ, unchanged store) does not apply.
+#   hSExpr    : execExprSim takes a sub-EvalIH + an OPEN `hGlue`; the exit store is
+#               st'.store (sub-eval mutated), non-identity φ — needs a rec-shaped
+#               ExecExitD reland (armExec_rec territory), not a leaf widener.
+#   hSRet     : as hSExpr plus the retslot write (rec + retslot).
+#
+name	key	shape	simD	stmt	status	ctor	k	armpc	notes
+hSBrk	brk	leaf_reg	execBrkSimD	Stmt.brk	Status.brk	ExecS.brk st d env	7	execArmBrk	register-only leaf
+hSCont	cont	leaf_reg	execContSimD	Stmt.cont	Status.cont	ExecS.cont st d env	8	execArmCont	register-only leaf

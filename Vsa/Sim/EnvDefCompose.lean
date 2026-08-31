@@ -142,6 +142,50 @@ theorem envDefStrlenSplice {P Q F : Config → Prop}
     Triple P Q :=
   callSeg pre strlenFramed suf
 
+/-- **The `strlenFramed` premise DISCHARGED** from `strlen_spec_framed`.
+`strlen_spec_framed` gives `strlen_post ∧ (∀R, AbiPreserved R → get? R = gm R) ∧
+c.tick < 2`; that register-frame clause reconstructs the whole `EnvDefFrame`: `x2=sp` /
+`x3=gp` (both `AbiPreserved`, tied to the ENTRY-pinned `gm` via the entry frame),
+`StackOK` (an `sp`-value property, unchanged), `AInv` (survives from `mem = m0` in
+`strlen_post` via the `MallocContract`-interface stability `hAInvStable`), and `c.tick < 2`
+(now carried directly by `strlen_spec_framed`'s strengthened post — every framed byte-tail
+exit / snez block threads its terminating site's `i' < 2`).  The former `hExitTick` premise
+is ELIMINATED: the exit tick is sourced from the strlen post, not assumed.  No strlen
+machine reasoning is re-run. -/
+theorem envDefStrlenFramed (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
+    (AInv : MState → List (Nat × Nat) → Prop) (exts : List (Nat × Nat))
+    (sp : BitVec 64) (gm : (R : Register) → Option (RegisterType R))
+    (namePtr rStrlen : BitVec 64) (nameStr : String)
+    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (hAInvStable : ∀ (σa σb : MState),
+      σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
+      (∀ a : Nat, σa.mem[a]? = σb.mem[a]?) → AInv σa exts → AInv σb exts) :
+    Triple
+      (fun c => strlen_pre namePtr rStrlen nameStr m0 c ∧
+        EnvDefFrame SL gpv headroom AInv exts sp gm c)
+      (fun c => strlen_post rStrlen nameStr m0 c ∧
+        EnvDefFrame SL gpv headroom AInv exts sp gm c) := by
+  intro c ⟨hpre, hFrame⟩
+  obtain ⟨hsp, hstackOK, hgp, hAbi, hAInv, htickF⟩ := hFrame
+  -- entry ghost values: gm x2 = sp, gm x3 = gpv (AbiPreserved regs tied to gm at entry)
+  have hgm_x2 : gm Register.x2 = some sp := by rw [← hAbi Register.x2 (by decide)]; exact hsp
+  have hgm_x3 : gm Register.x3 = some gpv := by rw [← hAbi Register.x3 (by decide)]; exact hgp
+  -- entry mem = m0 (from strlen_pre) for the AInv-stability mem-agreement
+  have hmem0 : c.σ.mem = m0 := hpre.2.2.1
+  obtain ⟨c', hsteps, hpost, hgh', htick'⟩ :=
+    strlen_spec_framed namePtr rStrlen nameStr m0 gm c ⟨hpre, hAbi⟩
+  refine ⟨c', hsteps, hpost, ?_, hstackOK, ?_, hgh', ?_, htick'⟩
+  · -- x2 = sp: exit ghost gives get? x2 = gm x2 = some sp
+    rw [hgh' Register.x2 (by decide)]; exact hgm_x2
+  · -- x3 = gpv
+    rw [hgh' Register.x3 (by decide)]; exact hgm_x3
+  · -- AInv survives: mem = m0 = entry mem (strlen never stores), gp preserved
+    refine hAInvStable c.σ c'.σ ?_ ?_ hAInv
+    · -- gp agree: entry get? x3 = gpv, exit get? x3 = gm x3 = gpv
+      rw [hgp, hgh' Register.x3 (by decide), hgm_x3]
+    · -- mem agree: both are m0
+      intro a; rw [hmem0, hpost.2.2.2.2]
+
 /-- **`malloc` call splice** (`0x80002b28 mv a0,s0 ; 0x80002b2c jal malloc`).
 Prefix marshals `len+1` into `a0` and lands `MallocContract.spec`'s entry
 predicate; the allocator contract runs; suffix consumes its post (fresh block or

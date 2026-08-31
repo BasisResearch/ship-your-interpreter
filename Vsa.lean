@@ -424,6 +424,10 @@ import Vsa.Sim.TermSimClose
 import Vsa.Sim.TermCaseBundle
 import Vsa.Sim.rows.ArmPostGeom
 import Vsa.Sim.rows.TermRouting
+import Vsa.Sim.rows.BinDispatchRow
+import Vsa.Sim.rows.BinDispatchProbe
+import Vsa.Sim.rows.ExecCaseGeom
+import Vsa.Sim.rows.ExecRouting
 import Vsa.Sim.TermEntry
 import Vsa.Sim.StuckSimClose
 import Vsa.Sim.InterpSimBundle

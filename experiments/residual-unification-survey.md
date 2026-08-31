@@ -462,3 +462,284 @@ hOrTrue, hOrFalse, hAndFalse, hAndTrue. The survey's "~38 pure rows" over-counts
 the 10 binary rows collapse to ONE dispatcher premise (blocked), and every ExecS
 row needs the un-built `blockA_stmt`. Realistic pure-row EvalE frontier now =
 {int,null,bool,neg,not,orTrue,orFalse,andFalse,andTrue} = 9, of which 4 landed.
+
+---
+
+## APPENDIX — BINARY-ARM ENTRY BRIDGE `blockA_binaryArm` (LANDED 2026-08-30)
+
+Deviation-1 ("`eval_add_row` BLOCKED on the missing `EvalEntry (.binary) →
+ArmEntryK@0x800034e8` bridge") is now **UNBLOCKED**.  New files (both green,
+axiom-clean = `[propext, Classical.choice, Quot.sound]` only; ≤1.3s/file elab):
+
+* **`Vsa/Sim/rows/BinArmBridge.lean`** — `blockA_binaryArm` (the bridge) +
+  `BinArmExtras` (its `NegExtras`-analogue residual bundle).
+* **`Vsa/Sim/rows/BinArmBridgeProbe.lean`** — `binArm_add_entry_connects` (the
+  composition probe).
+
+### What the bridge proves
+
+```
+blockA_binaryArm :
+  Triple (EvalEntry g … st d env (.binary op el er) sp r sret aEnv aExpr m0)
+         (fun c => ∃ gpre aEnvReg v8 v9 v18 v19 ment,
+            ArmEntryK g … 0x800034e8 UnaryArmCallee (.binary op el er) … ment c
+            ∧ BinExtras … ∧ <x11/x13/x19 + gpre frame + operand reads
+                             + ExprRepr el/er + hMentPop + MemExtends m0 ment>)
+```
+
+i.e. **exactly the `blockB_binary` entry** (`EvalBinSim.lean:262`), which is the
+entry every `eval<Op>Sim` starts from (`blockA_k` factored out).  ONE proof,
+**operator-INDEPENDENT** (parameterised over `op : BinOp` — the operator token is
+not read until `0x8000351c`, after both recursive calls).  Body = `evalNegSim`'s
+block-A pattern transposed to the binary node (tag `k = 6`, arm `0x800034e8`,
+`e := .binary op el er`, `calleeLoaded := UnaryArmCallee`): run `blockA_k` →
+repackage its `ArmEntryK` with the binary-arm extras.  `gpre := c1.σ.regs.get?`
+(frame `rfl`); `x11`/`x8`/`x18` off the widened `ArmEntryK`; the two operand
+pointers + `ExprRepr` peeled from `ExprRepr.binary` (offsets 16/24).
+
+### `BinArmExtras` — the supplied residual (all M6-Layout / `EvalCaseGeom`-widening
+facts, stated over the ENTRY `m0`, threaded like `NegExtras`):
+slot-6 pin `KindSlotPinned 6 0x800034e8`; node/operand geometry (BinExtras
+mirror); `pay_l`/`pay_r` (the two operand-ptr reads); `expr_survives` +
+`lexpr_surv`/`rexpr_surv` (AST survival closures); `frame_pop` (the `[sp-1120,sp)`
+population, `hMcallPop`-style); `tableStk` strengthened to slot 6 (`+28≤SL.lo`);
+plus **three genuinely-residual register/memory facts** blockA_k does NOT expose:
+- `gx19_pres : ∃w, g x19 = some w` — `s3` ghost presence (EvalEntry.spill_defined
+  covers only s0/s1/s2; `blockA_k`'s frame ties `c1.regs x19 = g x19`).
+- `x13_pres` — `a3` machine-liveness at the arm (a caller-save temp NOT covered by
+  `blockA_k`'s callee-saved frame; the dispatch span never writes a3).  The ONE
+  register a `blockA_k` widening (tracking `x13`) would internalise.
+- `mem_ext` — `MemExtends m0 ment` presence-monotonicity closure (the prologue
+  spills are inserts; `EvalExitD`-presence widening).
+
+### Composition probe (`binArm_add_entry_connects`)
+
+`blockA_binaryArm ≫ blockB_binary` at `.add`/int operands:
+`Triple (EvalEntry (.binary .add el er)) (∃ gpre v8 v9 v18, TwoSubReturn …)`.
+The bridge's ∃-ghosts unpack straight into `blockB_binary`'s ∀-parameters — the
+seam is `rfl`-tight (only the two `EvalIH` sub-derivations + the left-value
+survival closure thread through).  **The `ArmEntryK`-∃ entry the case theorems
+consume is now PRODUCED from the `hBinary` recursor premise's `EvalEntry`.**
+
+### What `hBinary` STILL needs (precise)
+
+1. **The op×kind DISPATCHER (deviation-2).** `hBinary` quantifies over arbitrary
+   `op : BinOp` + `lv rv v` with `binOpSem st''.store op lv rv = some v`
+   (`Semantics.lean:258`).  The bridge+`blockB_binary`+`blockC_<op>` chain covers
+   ONE `(op, kind)` cell each; a top dispatcher must case-split `op` × operand
+   value-kinds and route each cell.  This is a `.binary`-arm analogue of the leaf
+   kind-dispatch, NOT yet built.  Per bridge, each cell's entry is now uniform.
+2. **The row-level residuals PER cell** (thread THROUGH the bridge unchanged): the
+   op-specific `∀c' TwoSubReturn → <Op>Resid` post-dispatch slot (the `ArmPostGeom`
+   twin) + the outer `g`-bridge conjuncts + the guard set (`b≠0`/overflow for
+   div/mod/mul, `store.size`-stability).  The bridge deliberately does NOT produce
+   `<Op>Resid`/the g-bridge — they are consumed by `blockC_<op>`/`blockD_v_rec`
+   downstream, so they compose after, exactly as `evalAddSim` does today.
+3. **STR-OPERAND arms are genuine gaps** (from `binOpSem`): `.add` str
+   concatenation (`str++`/`display`), and `.lt/.le/.gt/.ge` STR comparisons
+   (`a < b` on `String`).  The 10 landed `eval<Op>Sim` are all `.int`-restricted
+   (`eq/ne` cover all kinds via `value_equal_spec_full`, already landed).  So the
+   str cells of `add`/`lt`/`le`/`gt`/`ge` need NEW block-C tails (the strcmp /
+   string-concat callee seams) — the bridge+entry is shared, the block-C is not.
+
+Net: the bridge removes the SINGLE structural blocker (entry linkage) common to
+all 10 ops.  Remaining `hBinary` work is (a) one op×kind dispatcher shell, (b) the
+existing per-cell `blockC_<op>` + row residuals composed after the bridge (add/sub/
+lt/le/gt/ge/mul/div/mod/eqne int cells all have their block-C landed), (c) the 5
+str cells' new block-C tails.
+
+### LEDGER — `hBinary` DISPATCHER LANDED (2026-08-30)
+
+Deviation-1/2 of the appendix are now CLOSED.  New files (all green, axiom-clean =
+`[propext, Classical.choice, Quot.sound]`; elab: `BinDispatchRow` 3.5s, probe 1.2s):
+
+* **`Vsa/Sim/rows/BinDispatchRow.lean`** (GENERATED by
+  `scripts/gen_bin_dispatch_row.py`) — 11 per-op row lemmas `binRow_<op>` (each =
+  `blockA_binaryArm ≫ eval<Op>Sim(D)`, from the `EvalEntry (.binary op el er)`
+  recursor entry straight to `EvalExitD`) + the dispatcher shell **`eval_binary_row`**.
+* **`Vsa/Sim/rows/BinDispatchProbe.lean`** — `binary_row_fills_hBinary`: the
+  decisive slot-verify (`eval_binary_row` applied to its 18 residual slots, ascribed
+  to the VERBATIM `hBinary` premise type — type-checks, so the shell fills the slot).
+
+**Generated vs hand.**  The 9 int-op rows (add/sub/mul/div/mod/lt/le/gt/ge) are
+SYNTACTICALLY UNIFORM modulo the 5-tuple `(op token, value form, <Op>Resid struct,
+sim name, guards)` — emitted from the generator's `INT_ROWS` table.  eq/ne resisted
+Lean-level uniformity (they use `evalEqSimD`/`evalNeSimD`, whose precondition is a
+DIFFERENT shape: a SEPARATE `hResid`/`hVlSurv` rather than the inline
+`AddResid`/g-bridge conjuncts) — emitted from their own template.  The shell's
+op × operand-kind case tree is not table-uniform (`binOpSem`'s success condition
+differs per op: int ops need `.int a, .int b`; div/mod add `b ≠ 0` guards; cmps need
+ints; eq/ne any kind; add/cmps have str cells) — hand-templated.
+
+**`hBinary` closed MODULO exactly these slots** (all named, none hidden):
+- 9 int-op providers `hIAdd…hIGe : BinIntCellResid <op> <Resid> …` (∃-commits the
+  operand nodes `aLOp aROp`, the left word `Wl`, store-size stability, `BinArmExtras`,
+  and the post-dispatch `∀c' TwoSubReturn → <Op>Resid` + g-bridge slot) — the
+  `evalDivRow`-style row residual an M6 `EvalCaseGeom` widening supplies;
+- `hIDiv` additionally takes the no-overflow premise `¬(a = -2^63 ∧ b = -1)`
+  (`binOpSem .div` supplies only `b ≠ 0`; the div sim demands ¬overflow — the machine
+  `__divdi3` path differs);
+- 2 eq/ne providers `hEq`/`hNe : BinEqCellResid …` (∃-commits `aLOp aROp w19` + the
+  left-value survival closure + the `EqResid` front residual);
+- **5 STR-cell residual slots** `hStrAddL`/`hStrAddR`/`hStrLt`/`hStrLe`/`hStrGt`/`hStrGe`
+  — genuine gaps (`binOpSem` succeeds on strings, NO sim exists), each a whole-node
+  `EvalIH` the shell routes to unchanged;
+- 1 div-overflow slot `hDivOv` (whole-node `EvalIH` at `INT64_MIN / -1`).
+
+Everything else is discharged inside the shell by `binOpSem`-inversion (`cases op`
+then `match lv, rv`; each non-succeeding kind pair falls to `none = some v`
+contradiction; each succeeding cell routes to its `binRow_<op>`).  The bridge's
+existential ghosts (`gpre`/`aEnvReg`/`v8..v19`/`ment`) unpack `rfl`-tight into each
+`eval<Op>Sim(D)` — the seam re-derives nothing.
+
+INFEASIBLE-WITHOUT-RESIDUAL (honest): the 5 str cells need the string
+concat/`strcmp` block-C tails (no sim exists yet); store-size stability across the
+right sub-derivation is a genuine spec-level residual (no monotonicity lemma); div
+overflow is a genuine machine-path residual.  All three are surfaced as typed
+slots, not `sorry`.
+
+---
+
+## 6. LEDGER APPENDIX — logical/not/str rows (executed 2026-08-30)
+
+The five "tractable-next" rows from §5 are LANDED, plus `hStr` (deferred there,
+re-examined and found to be a pure leaf_bridge). `TermRouting.lean` now has
+**10 rows**; all compiled isolated (`lake env lean`, ~1.0s file elab), axiom-clean
+(`{propext, Classical.choice, Quot.sound}`), and slot-probed (record-update fill
+of the exact `TermCases` field, all 6 new slots in one probe, 3.9s green).
+
+### Rows landed
+
+- **`eval_not_row`** (`hNot` → `evalNotSim`) — new `rec_not` shape: `eval_neg_row`
+  verbatim except the operand value is an arbitrary `vsub : Value` (spec-level in
+  the residual `NotResid esub vsub`) and the produced value is `.bool (!vsub.truthy)`.
+  Pure table row + small template variant; `NotSimExtras` takes no `st` (unlike
+  `NegExtras`).
+- **`eval_orTrue_row`**, **`eval_andFalse_row`** (`hOrTrue`/`hAndFalse` →
+  `evalOrTrueSim`/`evalAndSim`) — new `rec_logical1` shape (one-IH short-circuit):
+  like rec_unary but the extracted pointer is the LEFT operand (logical node payload
+  offset 16), and the residual additionally carries the `aEnv3` x13-survival
+  Steps-residual the logical sims take. Since `aEnv3` is a per-entry-config ghost,
+  the residual is quantified over the entry `c` and ∃-quantifies `aEnv3` (the row
+  obtains the witness and passes it to the sim).
+- **`eval_orFalse_row`**, **`eval_andTrue_row`** (`hOrFalse`/`hAndTrue` →
+  `evalOrFalseSim`/`evalAndTrueSim`) — new `rec_logical2` shape (two-IH): as
+  rec_logical1 plus the RIGHT operand pointer (offset 24, second `ExprRepr`
+  extraction from the same `logical` constructor) and the second IH threaded to the
+  sim; the `<Op>Extras` take the mid/post spec states `st' st''` and both values.
+- **`eval_str_row`** (`hStr` → `evalStrSimD`) — plain **leaf_bridge**, NOT the
+  feared R-class CString-readback bridge. MEASURED against current `EvalStrEntry`
+  (EvalStrSim.lean:550): it is exactly `EvalEntry`'s 32 shared projections + 7
+  extra conjuncts (`str_stack_disjoint`/`str_sret_disjoint`/`sret_vstrcode_disjoint`/
+  `vstrcode_stack_disjoint`/`value_str_code`/`str_slot`/`table_stack_disjoint`).
+  The two `str_*` fields are ∀-quantified over the payload pointer
+  (`∀ p, read64 c.σ.mem (aExpr+8) = some p → …`), so the bridge never reads the
+  CString — the residual provider supplies the geometry hypothetically. Template
+  change: leaf_bridge dicts gained `vbinds` (value binders, e.g. `(s : String)`)
+  and `extra_ghosts` (extra resid ∀-ghosts; str threads `aExpr`); null/bool
+  regenerate byte-identical.
+
+### Template extensions (gen_m4_term_row.py)
+
+Three new shapes (`rec_not`, `rec_logical1`, `rec_logical2`) + the generalized
+`leaf_bridge` (dict-driven value binders/ghosts). New shared text constants
+`MCALLPOP` (M6 populated-memory residual) and `X13RESID` (the ∃`aEnv3` Steps
+residual). Header now imports `EvalLogical4` (covers all four logical sims +
+`EvalNotSim` transitively) and opens `Steps`.
+
+### Count update
+
+Rows landed filling real premise slots: **10** (hInt, hNull, hBool, hStr, hNeg,
+hNot, hOrTrue, hAndFalse, hOrFalse, hAndTrue) — the full realistic pure-row EvalE
+frontier from §5 (9) plus hStr. Remaining EvalE premises are all genuinely gated:
+hVar (env_get_found oracle), hAssign (env_define), hBinary (∀-op dispatcher +
+str arms), call subsystem, and the ExecS/loop family (blockA_stmt).
+
+---
+
+## LEDGER — step-6b: the `ExecS` statement-leaf rows (LANDED)
+
+**The real gap was BUNDLE-ONLY, not a new machine proof and not a `blockA_stmt`
+build.** The survey's §5 note ("all ExecS/loop premises need `ExecCaseGeom`/
+`blockA_stmt`") was pessimistic: `execBlockA` (prologue+dispatch, UNCONDITIONAL)
++ `execBlockD` (epilogue) ALREADY landed (`ExecBrkCont.lean`), and the register-
+only leaf sims `execBrkSim`/`execContSim` already compose them into a full
+`Triple (ExecEntry ∧ sailOutput=out0) (ExecExit …)` unconditionally (modulo the
+jump-table slot pin + its stack-disjointness — the same geometry the EvalE leaves
+carry as `EvalEntry` fields). So NO `ExecEntry→execBlockA` bridge was missing.
+
+The ONLY gap between the landed sim and the recursor's `hSBrk`/`hSCont` premise
+(which, via `TermSimAssembly.mExecS = ExecBlock.ExecIH` by `rfl`, is
+`∀ ghosts, Triple (ExecEntry …) (ExecExitD …)`) is the exact statement-side twin
+of the `EvalLeafD` gap:
+
+1. **entry `out0`** — drop the sim's `∧ sailOutput = out0` conjunct by taking
+   `out0 := c.σ.sailOutput` (`rfl`). Pure marshalling.
+2. **exit `ExecExit → ExecExitD`** — add `MemExtends m0 mem` + the
+   `[SL.lo,SL.hi)`-store-survival clause. Re-supplied as the honest exit-quantified
+   widener `ExecLeafWiden` (the `LeafWiden` twin), true of every register-only leaf
+   (delta = the prologue `writeMap8` spills, presence-preserving; store `= st`,
+   footprint-disjoint from `[SL.lo,SL.hi)`).
+
+### Deliverables
+
+- **`Vsa/Sim/rows/ExecCaseGeom.lean`** (the bundle + bridge, hand-written once):
+  - `ExecLeafWiden` — the two `ExecExitD` upgrade clauses as an exit-quantified
+    widener (`LeafWiden` analog).
+  - `execExitD_of_execExit` — `ExecExit ∧ ExecLeafWiden → ExecExitD` at identity φ
+    (`evalExitD_of_evalExit` twin).
+  - `ExecCaseGeom g N A SL φf φc st status k armPC sp r aRet m0` — the per-leaf
+    recursor-supplied residual = `StmtSlotPinned k armPC m0` ∧ its stack-disjoint
+    disjunct ∧ `ExecLeafWiden`. (The `ArmPostGeom` twin: one bundle, per-row
+    `(k, armPC, status)`.)
+  - `execBrkSimD`/`execContSimD` — the register-only leaves re-landed at
+    `ExecExitD` (compose the landed `execBrkSim`/`execContSim` with the bridge;
+    do NOT re-prove the run).
+- **`scripts/exec_rows.tsv` + `scripts/gen_exec_row.py`** → **`Vsa/Sim/rows/ExecRouting.lean`**
+  (GENERATED): `exec_brk_row`/`exec_cont_row`, each routing the real
+  `hSBrk`/`hSCont` premise onto the `*D` lemma with a `<Key>Resid` = the
+  `ExecCaseGeom` bundle ∀-closed over the ghosts.
+- `Vsa.lean` imports both new files; `scripts/check_all.sh` THEOREMS extended with
+  `execExitD_of_execExit`, `execBrkSimD`, `execContSimD`, `exec_brk_row`,
+  `exec_cont_row`.
+
+### Verification
+
+Pilot `exec_brk_row` slot-verified against the REAL `hSBrk` premise of
+`execSeq_sim_of_cases` (record-update/`show ExecIH` probe, `/tmp/exec_brk_probe.lean`,
+green); `exec_cont_row` likewise. All five new declarations axiom-clean
+(`[propext, Classical.choice, Quot.sound]` only). Each file elaborates <1s isolated
+(well under the 120s budget; deps cached). No `sorry`/`axiom`/`native_decide`/
+`bv_decide`; landed statements unchanged (bundle/adapter/rows only).
+
+### Rows emitted vs candidates (honest per-row)
+
+- **EMITTED (2)**: `hSBrk`, `hSCont` — register-only leaves; sims fully
+  unconditional modulo geometry; `ExecLeafWiden` (identity-φ, unchanged store,
+  spill-only delta) applies verbatim.
+- **BLOCKED — NOT emitted (per-row reasons)**:
+  - `hSRetNull` (`execRetNullSim`) — carries an OPEN `hGlue` residual (arm setup +
+    `beqz`-TAKEN `value_null` bridge → `SubExecReturnR`) AND writes the retslot
+    `[aRet,aRet+24)`, a `memFrame` disjunct the current `ExecLeafWiden` does not
+    cover. Needs a retslot-aware widener + `hGlue` closed. (Store `= st`, so the
+    φ side is identity — only the retslot-window widener + glue are missing.)
+  - `hSVarNull` (`execVarDeclNullSim`) — OPEN `hGlue` (env_define is NOT a landed
+    Triple; M3 verified only its prologue) AND the exit store CHANGES to
+    `st.store.define env x null` (non-identity φ), so the identity-φ leaf widener
+    does not apply. Needs the recursive-shaped `ExecExitD` reland + env_define.
+  - `hSExpr` (`execExprSim`), `hSRet` (`execRetSim`) — recursive (a sub-`EvalIH`),
+    exit store `= st'.store` (sub-eval mutated, non-identity φ); these are
+    `armExec_rec`/`SubExecReturn` territory, not a leaf widener. `hSRet` adds the
+    retslot write on top.
+  - All dispatch/loop cases (`hSBlock`/`hSIf*`/`hSWhile*`/`hSForStart`/for-loop
+    scaffold/`hSeqConsNormal`/`hSeqConsAbrupt`) — recursive with sub-`ExecIH`/
+    `mExecSeq` premises + allocFrame/env geometry; out of scope for the leaf-row
+    family.
+
+**Net: 2 statement-leaf rows landed** (brk/cont), each an EXPONENTIATING template
+instance — the `ExecCaseGeom` bundle + `execExitD_of_execExit` bridge + the
+`gen_exec_row.py` `leaf_reg` shape mean any future register-only statement leaf is
+one TSV line. The statement side now has the `blockA_k`/`ArmPostGeom`/`*SimD`/
+`gen_*_row` equivalents the EvalE side had; the remaining ExecS premises are all
+genuinely gated (open `hGlue`/env_define/non-identity-φ/recursive), not
+shape-gap-blocked.
