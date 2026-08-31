@@ -6,7 +6,8 @@ import Vsa.Sim.EvalBinSim
 # `DeriveMetaTowers` — `#derive_destructurer` on the two REAL towers
 
 CLAUDE.md task #32 ("consuming a LANDED ∃/∧ tower ⇒ ONE named destructuring
-lemma beside the tower, never `.2.2.2.2` positional chains") mechanized.
+lemma beside the tower, never positional projection chains") mechanized.
+-- discipline: allow(R6-anon-projection-tower) the flagged text is the RULE QUOTE in this doc header, not code
 
 The two towers picked by the task:
 
