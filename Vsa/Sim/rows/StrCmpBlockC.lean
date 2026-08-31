@@ -1,5 +1,6 @@
 import Vsa.Sim.rows.StrCmpSignTail
 import Vsa.Sim.rows.BinStrCells
+import Vsa.While.StringOrder
 
 /-!
 # `StrCmpBlockC` — the four STR-comparison cell providers, factored through the
@@ -93,11 +94,23 @@ def sTailWord : BinOp → BitVec 64 → BitVec 64
 
 `value_bool` boxes `sTailWord op w` into `.bool (sTailWord op w != 0)`.  The order
 bridge names the agreement between that boxed boolean and the source-level
-`bres sl sr`, for `w` = the `strcmp` return on the two operand strings.  This is
-the single String-theory obligation the spec layer lacks (it has only the
-equality bridge `string_eq_iff_strcmpSpecSign_zero`). -/
+`bres sl sr`, for `w` = the `strcmp` return on the two operand strings.
+
+**HONEST (tied) form.**  An earlier version quantified `w` free of `sl`/`sr`
+(`∀ w sl sr, (sTailWord op w != 0) = bres sl sr`); that is FALSE — nothing tied the
+`strcmp` return `w` to the operand strings (machine-checked falsity, see
+`experiments/observations.md`).  The correct bridge ties `w` to the operand strings
+through the `strcmp`-post sign fact `strcmpSign w = strcmpSpecSign csa csb` over the
+`CStr` char lists (`sl = ofList csa`, `sr = ofList csb`, `AllNonzero` = the `CStr`
+interior invariant).  This is the single String-theory obligation the spec layer
+lacked (it had only the equality bridge `string_eq_iff_strcmpSpecSign_zero`); it is
+now PROVED for the four `binOpSem` closures in `Vsa/Sim/rows/StrCmpOrderClose.lean`
+(`strCmpOrderBridge_{lt,le,gt,ge}`), resting on `Vsa/While/StringOrder.lean`. -/
 def StrCmpOrderBridge (op : BinOp) (bres : String → String → Bool) : Prop :=
-  ∀ (w : BitVec 64) (sl sr : String), (sTailWord op w != 0#64) = bres sl sr
+  ∀ (w : BitVec 64) (csa csb : List Char),
+    Vsa.While.AllNonzero csa → Vsa.While.AllNonzero csb →
+    strcmpSign w = strcmpSpecSign csa csb →
+    (sTailWord op w != 0#64) = bres (String.ofList csa) (String.ofList csb)
 
 /-! ## Named premise 2 — the str-arm MACHINE chain (sign-tail segment proved)
 

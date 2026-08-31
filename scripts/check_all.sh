@@ -626,6 +626,9 @@ THEOREMS=(
   Vsa.Sim.errRow_reach                              # rows/ErrorRouting (the corrected route core: reachJal_triple ≫ errSite — reachability INTO the jal, not location AT it)
   Vsa.Sim.reachJal_triple                           # ErrorReach (ReachJal's ∃-witness IS the run + JalErrPre post)
   Vsa.Sim.negType_hsite_of_armBranch                # rows/ErrorReachInhab (INHABITABILITY DEMO: the corrected residual closes from an arm-branch Triple — well-typed where the old shape was impossible)
+  Vsa.Sim.frame_of_wrChain_avoids                   # BridgeSegFramed (the avoid-set-GENERIC frame core; AbiPreserved = thin instance, landed path untouched)
+  Vsa.Sim.bridgeOfSegFramed                         # BridgeSegFramed (delta-exposing bridge for ABI-writing spans; reseat values read off out.regs)
+  Vsa.Sim.negType_link_closed                       # BridgeSegFramed (FIRST COMPLETE ERROR LINK: spill seg ≫ JalErrPre ≫ ErrHalts, modulo named arm-linkage + Runtime_errorLoaded — the template for the other 41)
   Vsa.Sim.interpContSeg_of                          # ExitPathSpans (InterpContSeg discharged: interp_run setjmp-continuation -> AtMainRet)
   Vsa.Sim.InterpSimFinal.interpSim_conditional      # InterpSimFinal (ENDGAME CAPSTONE, field form: InterpSim L = ⟨hterm, hstuck⟩)
   Vsa.Sim.InterpSimFinal.stuckField_of_families     # InterpSimFinal (stuck_sim field from Trichotomy + DivFamily + ErrFamily)
@@ -666,6 +669,11 @@ THEOREMS=(
   Vsa.Sim.strCmpCell_le_of                          # rows/StrCmpBlockC (le provider)
   Vsa.Sim.strCmpCell_gt_of                          # rows/StrCmpBlockC (gt provider)
   Vsa.Sim.strCmpCell_ge_of                          # rows/StrCmpBlockC (ge provider; ge tail = landed cmpFixupTail)
+  Vsa.While.strcmpSpecSign_neg_iff_lex              # While/StringOrder (the mathematical core: byte-lex ↔ List.Lex over the ASCII CStr repr — no UTF-8 subtlety, CStr is single-byte <128)
+  Vsa.Sim.strCmpOrderBridge_lt                      # rows/StrCmpOrderClose (StrCmpOrderBridge CLOSED — the landed statement was FALSE (unconstrained w), restated tied to the strcmp post)
+  Vsa.Sim.strCmpOrderBridge_le                      # rows/StrCmpOrderClose
+  Vsa.Sim.strCmpOrderBridge_gt                      # rows/StrCmpOrderClose
+  Vsa.Sim.strCmpOrderBridge_ge                      # rows/StrCmpOrderClose
   Vsa.Sim.strKindCheckRow                           # rows/StrArmChain (kind-3 branch span seg row)
   Vsa.Sim.strRejoinRow                              # rows/StrArmChain (strcmp-ret rejoin seg row: ld;mv;j → shared sign tail)
   Vsa.Sim.strArmFront                               # rows/StrArmChain (strcmp_full_spec ≫ rejoin ≫ SignTailLeg ≫ value_bool box, the blockC_eqne_front analogue)

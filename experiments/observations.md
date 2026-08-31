@@ -942,3 +942,102 @@ it, still stop and report instead.
   same); add `Vsa.Sim.errRow_reach`, `Vsa.Sim.reachJal_triple`,
   `Vsa.Sim.negType_hsite_of_armBranch` if desired; update the 621 comment (19-class
   coalescing → 42 conditioned links).
+
+## 2026-08-31 strcmp-order-bridge-false (StrCmpOrderBridge close, StrCmpBlockC)
+- missing: an HONEST order bridge between the C strcmp sign and Lean `String.<`.
+  The LANDED `StrCmpOrderBridge op bres := ∀ (w:BitVec 64) (sl sr:String),
+  (sTailWord op w != 0) = bres sl sr` is FALSE as demanded (`TermBundles.strCmp`
+  requires it `∀ op bres`, and even per-op it quantifies `w` FREE of `sl sr`).
+  Machine-checked falsity (`/tmp/falsity.lean`): for `op=.lt`, `bres=fun _ _=>true`,
+  `w=0`: `sTailWordLt 0 = srli 0 0x3f = 0`, so LHS=false≠true. The bug: `w` (the
+  strcmp return) is unconstrained; nothing ties it to `sl sr`.
+- workaround: restated the bridge honestly in `Vsa/While/StringOrder.lean` as the
+  order agreement tied through `strcmpSign w = strcmpSpecSign csa csb`
+  (`sl=ofList csa`, `sr=ofList csb`, CStr ⇒ ASCII bytes<128 ⇒ byteVal=codepoint),
+  proved it (List.Lex ↔ byte-lex, no UTF-8 multibyte since CStr is single-byte),
+  and reseated the `StrCmpBlockC` def + `strCmpCell_*_of` legs onto it. The four
+  `binOpSem` closures (.lt/.le/.gt/.ge) are the only instances needed; the
+  `∀ bres` form in TermBundles.strCmp must narrow to those four (falsifiable
+  otherwise).
+- cost: statement change (like the Trichotomy spec bug precedent). Downstream
+  `StrArmChain.hOrder` and `TermBundles.strCmp` slots must adopt the tied form.
+- proposal: `StringOrder.lean` order-agreement lemmas
+  `strcmpSpecSign_neg_iff_lt` / `_pos_iff_gt` / `_zero_iff_eq` as the reusable
+  spec-layer bridge; the machine bridge instantiates them at
+  `strcmpSign w = strcmpSpecSign`.
+
+## 2026-08-31 bridgeOfSegFramed (avoid-set-generic frame core, both ABI-mutating fronts)
+- resolves: callclosure-entrybase-abi (above) + supplies the error-branch spill
+  seg for errlink-forall-shape-fix's `hlink`. LANDED `Vsa/Sim/BridgeSegFramed.lean`
+  (green 9.8s, axiom-clean, discipline OK).
+- design verdict (the two consumers DIFFER — this was the key finding):
+  * (b) error-branch spill prefixes need NO framed variant AT ALL. The `sd s3..s7`
+    are STORES: `wrChain = []`, so the raw seg frame preserves every register free;
+    s3..s7 (=x19..x23) are exempt in NotWrittenJmp anyway. The ONLY real obligation
+    is MEMORY: `Runtime_errorLoaded`/`LongjmpLoaded` must survive the stack stores
+    (code ⊥ stack) — the footprint frame, avoid-set-independent. Neither spill
+    tracking NOR an avoid-set swap; a plain `segEval_sound` + the raw frame clause
+    (wrChain-guard vacuous) discharges the whole `JalErrPre` register+ghost side.
+  * (a) closure entryBase (`mv s7,a1`@0x80003278 / `mv s5,a4`@0x80003290) genuinely
+    needs delta EXPOSURE, not an avoid-set swap: s5,s7 are BOTH written AND
+    callee-saved, so no predicate collapse recovers their frame. The seg ALREADY
+    computes the reseated values in `out.regs` (`GHolds σ' out.regs`) — that IS the
+    "spill tracking"; expose it, and assert the ABI frame only for the UNwritten
+    callee-saveds via a restricted predicate.
+- generic core (the exponentiating fix): FrameMeta's KERNEL (`abiPreserved_ne`) was
+  never AbiPreserved-specific — it proves `(X==R)=false` from R,X on opposite sides
+  of the SAME predicate. Factored the hardcoding out into ONE `P`-generic layer:
+  `regAvoids_ne`/`WrChainAvoids P`/`noise_avoids`/`wrChain_avoids`/
+  `frame_of_wrChain_avoids (P : Register → Bool)`. `AbiPreserved` re-expressed as a
+  THIN instance (`wrChainAvoids_abi_eq : WrChainAvoids AbiPreserved = WrChainAvoidAbi`
+  by rfl; `frame_of_wrChain_avoids_abi` recovers `abiFrame_of_wrChain`). Landed
+  `bridgeOfSeg` path untouched.
+- `bridgeOfSegFramed`: `bridgeOfSeg` with `WrChainAvoidAbi` REPLACED by
+  (`hnoiseP` + `WrChainAvoids P` + `hPabi : P ⊆ AbiPreserved`), exposing
+  `GHolds σ2 out.regs` (the reseat deltas) + the P-restricted callee-saved frame.
+  The jal side reuses `JalStep`'s own AbiPreserved frame via `hPabi`.
+- demos (both green, axiom ⊆ {propext, Classical.choice, Quot.sound}):
+  * (a) `entryBaseReseat_framed` — the REAL `mv s7,a1` reseat (0x80003278, word
+    0x00058b93) bridged at `P := AbiExceptS7`; post carries `s7 = a1v` (off
+    out.regs) + ABI frame for all callee-saveds EXCEPT s7. env_new `JalStep` stays a
+    NAMED per-callee residual. (Full 5-block entryBase adds a guard-branch ChainOK
+    concern, orthogonal to the frame issue — that's a separate genseg branch-chain.)
+  * (b) `spillNeg_toJalErr` + `negType_link_closed` — a REAL `#derive_case` on the
+    hNegType spill prefix (0x800034d0..0x800034e0, five `sd`) → `Triple ArmBranchPre
+    (JalErrPre S … 0x800034e4 …)` via `segEval_sound`, fed through
+    `negType_hsite_of_armBranch`. ONE complete hNegType error link CLOSES to
+    `ErrHalts c` modulo ONLY the arm-linkage `hlink` (the genuine M4 residual
+    ErrorReachInhab already names) and `SpillNegArmPre`'s named `Runtime_errorLoaded
+    S.m0` (code ⊥ stack, the honest geometric datum). No bridgeOfSegFramed used for
+    (b) — precisely because (b) never needed frame tracking.
+- fan-out: the P-generic core is the reusable frame collapse for ANY prologue that
+  spills callee-saveds before its first jal (fn-arm alloc, call-arm dispatch);
+  instantiate `P` at AbiPreserved-minus-written-set, read deltas off out.regs. The
+  42 error spill prefixes are all the (b) shape — plain seg, no framed variant.
+- wiring: add `import Vsa.Sim.BridgeSegFramed` to Vsa.lean; add
+  `Vsa/Sim/BridgeSegFramed.lean` to scripts/check_all.sh (owner: do not edit those
+  here per task constraint).
+
+## 2026-08-31 strcmp-order-bridge-CLOSED (StrCmpOrderClose landed)
+- missing: N/A — the order bridge is now PROVED.  `Vsa/While/StringOrder.lean`
+  (`strcmpSpecSign_neg_iff_lex` / `_pos_iff_lex`, byte-lex ↔ List.Lex under the
+  ASCII `AllNonzero` invariant, no UTF-8 multibyte since CStr is single-byte) +
+  `Vsa/Sim/rows/StrCmpOrderClose.lean` (four fixup lemmas `{lt,gt,le,ge}_fix`
+  reducing `sTailWord op w` to a signed test on `w`; `strCmpOrderBridge_{lt,le,gt,ge}`
+  discharge the now-honest `StrCmpBlockC.StrCmpOrderBridge` for the four binOpSem
+  closures).  All axiom-clean {propext, Classical.choice, Quot.sound}.
+  `StrCmpBlockC.StrCmpOrderBridge` REDEFINED to the honest tied form (was false);
+  `strCmpCell_*_of` (unused `_hOrder`) + `StrArmChain` still compile axiom-clean.
+- REMAINING SEAM (statement change, out of this task's scope): `TermBundles.strCmp`
+  demands `∀ op bres, StrCmpOrderBridge op bres` — with the honest def this is STILL
+  FALSE for arbitrary `bres` (same falsity class: `bres = fun _ _ => true`, op=.lt,
+  w=0, csa=csb=[] gives strcmpSign 0 = 0 = strcmpSpecSign [] [] but LHS false ≠ true).
+  The field MUST narrow to the four binOpSem closures (supplied by
+  `strCmpOrderBridge_{lt,le,gt,ge}`).  Likewise `StrArmChain.strArmFront` line ~371
+  DISCARDS (`⟨_csa,_csb,x,-⟩`) the strcmp-post sign fact `strcmpSign x =
+  strcmpSpecSign csa csb`; to CONSUME the honest bridge it must retain that fact and
+  pass it (+ the operand-string `AllNonzero` from the CStr witnesses) into
+  `hData.hOrder`.  That is a `StrArmFrontData.hOrder`/`strArmFront` restatement
+  (BridgeSeg territory, sibling-owned) — flagged, not done here.
+- proposal: narrow `TermGuards.strCmp` to the four cells; reshape
+  `StrArmFrontData.hOrder` to the tied signature and thread the retained sign fact.
