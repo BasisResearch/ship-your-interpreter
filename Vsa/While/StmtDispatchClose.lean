@@ -12,26 +12,31 @@ exactly two spec-layer residuals (`trichotomy_of_stmtDispatchD`):
 * `hroot` — a top-level completing sequence yields a `BigStep`.
 
 This file closes `StmtDispatchD` and `hroot` via a classical mutual totality
-induction over the whole `EvalE`/`EvalArgs`/`Call`/`ExecS`/… family, modulo
-**three precisely-named spec-completeness holes** — each an *arbitrary-config*
-shape (malformed AST or store) that the LANDED error judgment cannot dispatch but
-that is UNREACHABLE from `initSt` (excluded by well-formedness invariants the
-per-config quantifiers of `StmtDispatchD`/`hroot` drop).  All three are documented
-precisely below and surfaced as typed premises:
+induction over the whole `EvalE`/`EvalArgs`/`Call`/`ExecS`/… family.  It was
+originally conditional on **three precisely-named spec-completeness holes** — each
+an *arbitrary-config* shape (malformed AST or store) that the then-LANDED error
+judgment could not dispatch but that is UNREACHABLE from `initSt`.  All three are
+now CLOSED by the (authorized) landed-def amendments cross-checked against the C
+source (`c/src/interp.c`):
 
-* `TopLevelAbruptErrs` (Hole 1) — a top-level `break`/`continue`/`return`
-  (`interp_run`, `c/src/interp.c:333`) is a runtime error (exit 70), but no
-  `ExecSeqErr` rule covers an abrupt sequence head → blocks `hroot`;
-* `DanglingClosureErrs` (Hole 2) — a `.closure a` with `closures[a]? = none`
-  (never arises: closures come from `allocClosure`) is stuck: no `Call`, no
-  `CallErr` (`.notCallable`'s guard wrongly excludes closures), no `CApprox`;
-* `ForInitAbruptErrs` (Hole 3) — a `for (break; …)` init (parser never emits
-  non-`.normal` inits) completes abrupt, which the C *swallows*
-  (`c/src/interp.c:308`) but the spec's `ExecInit.some` demands `.normal`.
+* Hole 1 — a top-level `break`/`continue`/`return` (`interp_run`,
+  `c/src/interp.c:333-361`) is a runtime error (exit 70).  A nested `.block`'s
+  abrupt head, by contrast, *propagates* (`ST_BLOCK`, `c/src/interp.c:286`,
+  `return st`), so this is a TOP-LEVEL-only judgment: `BigStepErr` gained a
+  `TopAbrupt` disjunct (`Vsa/While/ErrorSem.lean`), `ExecSeqErr` unchanged.
+  Discharged by `topLevelAbruptErrs`.
+* Hole 2 — a `.closure a` with `closures[a]? = none` (never arises: closures come
+  from `allocClosure`) is stuck.  Added the `CallErr.badClosure` leaf; discharged
+  by `danglingClosureErrs`.
+* Hole 3 — a `for (break; …)` init completes abrupt, which the C *swallows*
+  (`c/src/interp.c:308`: `exec_stmt(init)`'s status is discarded, the loop
+  proceeds).  So `ExecInit.some` was GENERALIZED to accept any completing status
+  (a SEMANTICS change, C-faithful) — the abrupt init PROGRESSES rather than
+  errors, so no error premise is needed (the former `ForInitAbruptErrs`, which
+  demanded an `ExecErr`, was FALSE and is removed).
 
-With any of the three landed-def amendments (see each premise's docstring) the
-corresponding premise becomes provable; with all three, `trichotomy_closed` is
-unconditional.
+`trichotomy_unconditional` is therefore a plain `Trichotomy` with no residual
+premises.
 
 ## The `StmtDispatchD` proof: fuel-bounded classical progress
 
@@ -72,12 +77,13 @@ and `ExecErr` has no `.brk`/`.cont` leaf nor a top-level-`.ret` rule.  So for
 `p = [.brk]` all three trichotomy disjuncts fail: not `BigStep` (abrupt), not
 `BigStepErr` (no `ExecErr` rule), not `BigStepDiverges`.
 
-This is a genuine spec-completeness hole in the LANDED error judgment (a
-statement change, out of this file's additive scope).  We surface it as one
-precisely-typed premise, `TopLevelAbruptErrs`, and close the capstone conditional
-on it.  With the hole fixed (add an `ExecSeqErr` rule for an abrupt head at the
-top level, or a `BigStepErr` re-route), `TopLevelAbruptErrs` becomes provable and
-`trichotomy_closed` becomes unconditional.
+This was a genuine spec-completeness hole in the then-LANDED error judgment.  The
+authorized amendment took the `BigStepErr` re-route (NOT an `ExecSeqErr` rule,
+which would wrongly error a nested `.block`'s propagated abrupt head): `BigStepErr`
+now = `ExecSeqErr initSt 0 0 p ∨ TopAbrupt p` (`Vsa/While/ErrorSem.lean`), so a
+top-level abrupt completion lands in the error disjunct directly.  The former
+premise `TopLevelAbruptErrs` is therefore a theorem (`topLevelAbruptErrs`, via
+`Or.inr`) and `trichotomy_unconditional` is unconditional.
 
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`.  `#print axioms` ⊆
 {`propext`, `Classical.choice`, `Quot.sound`}.
@@ -97,44 +103,26 @@ per-config quantifiers of `StmtDispatchD` drop), so both are UNREACHABLE for the
 top-level `Trichotomy` — but closing them for *arbitrary* configs is a landed-def
 change, out of this file's additive scope.  We surface each as a typed premise. -/
 
-/-- **Hole 1 — top-level abrupt status is a runtime error.**  `interp_run`
-(`c/src/interp.c:333`) turns a top-level `.brk`/`.cont`/`.ret` into a runtime
-error (exit 70), but `ExecSeqErr`/`ExecErr` have no rule for an abrupt sequence
-head.  This premise routes such a top-level completion into `BigStepErr`.  (With
-an `ExecSeqErr` "abrupt head" rule added it is provable.) -/
-def TopLevelAbruptErrs : Prop :=
-  ∀ (p : Program) (st' : St) (status : Status),
-    status ≠ .normal → ExecSeq initSt 0 0 p st' status → BigStepErr p
+/-- **Hole 1 — top-level abrupt status is a runtime error (NOW PROVABLE).**
+`interp_run` (`c/src/interp.c:333-361`) turns a top-level `.brk`/`.cont`/`.ret`
+into a runtime error (exit 70).  The landed-def amendment routed this through
+`BigStepErr`'s new `TopAbrupt` disjunct (`Vsa/While/ErrorSem.lean`), so the
+premise is a theorem: an abrupt top-level `ExecSeq` completion is a `BigStepErr`.
+(This is a top-level-only judgment; a nested `.block`'s abrupt head still
+PROPAGATES via `ExecSeq.consAbrupt`, mirroring `ST_BLOCK`.) -/
+theorem topLevelAbruptErrs (p : Program) (st' : St) (status : Status)
+    (hne : status ≠ .normal) (h : ExecSeq initSt 0 0 p st' status) : BigStepErr p :=
+  Or.inr ⟨st', status, hne, h⟩
 
-/-- **Hole 2 — a closure value whose address does not resolve is an error.**
-`call_value` (`c/src/interp.c:171`) dereferences the closure pointer, which is
-valid by construction; a `.closure a` with `st.store.closures[a]? = none` never
-arises from `initSt`, but `StmtDispatchD` quantifies over arbitrary states where
-it does, and `CallErr.notCallable`'s guard `∀ a, fv ≠ .closure a` wrongly
-excludes closures, leaving the config stuck (no `Call`, no `CallErr`, no
-`CApprox`).  This premise supplies the missing `CallErr` leaf.  (With a
-`CallErr.badClosure` rule added it is provable.) -/
-def DanglingClosureErrs : Prop :=
-  ∀ (st : St) (d : Nat) (a : Addr) (vs : List Value),
-    st.store.closures[a]? = none → CallErr st d (.closure a) vs
-
-/-- **Hole 3 — an abrupt-completing `for` initializer.**  The C `for`
-(`c/src/interp.c:308`) runs `exec_stmt(init)` and *discards* its status, so a
-`for (break; …)` init's `.brk`/`.cont`/`.ret` is silently swallowed; the spec's
-`ExecInit.some` instead requires the init to complete `.normal`, and `ExecErr`
-has no rule for an abrupt-completing init.  The parser only ever emits
-varDecl/expr inits (always `.normal`), so this never arises from a real program,
-but `StmtDispatchD` quantifies over arbitrary ASTs.  This premise supplies the
-missing `ExecErr` leaf.  (With a `for`-init-abrupt rule — matching the C's
-swallow, or an error — it is dischargeable.) -/
-def ForInitAbruptErrs : Prop :=
-  ∀ (st : St) (d : Nat) (env : Addr) (si : Stmt) (cnd : Option Expr)
-    (step : Option Expr) (b : Stmt) (store' : Store) (outer : Addr) (st' : St)
-    (status : Status),
-    st.store.allocFrame (some env) = (store', outer) →
-    ExecS ⟨store', st.out⟩ d outer si st' status →
-    status ≠ .normal →
-    ExecErr st d env (.forStmt (some si) cnd step b)
+/-- **Hole 2 — a closure value whose address does not resolve is an error (NOW
+PROVABLE).**  `call_value` (`c/src/interp.c:171`) dereferences the closure
+pointer, valid by construction; a `.closure a` with `st.store.closures[a]? =
+none` never arises from `initSt`.  The landed-def amendment added the
+`CallErr.badClosure` leaf (`Vsa/While/ErrorSem.lean`), so the premise is a
+theorem. -/
+theorem danglingClosureErrs (st : St) (d : Nat) (a : Addr) (vs : List Value)
+    (hcl : st.store.closures[a]? = none) : CallErr st d (.closure a) vs :=
+  .badClosure st d a vs hcl
 
 /-! ## The combined fuel-bounded progress bundle
 
@@ -370,8 +358,9 @@ theorem progressArgs_succ (hE : ProgressE n) (hA : ProgressArgs n)
     · exact absurd (.head st d env e es' herr) hne
     · exact .head n st d env e es' hdiv
 
-/-- Call progress at `n+1`.  Conditional on `DanglingClosureErrs` (Hole 2). -/
-theorem progressC_succ (hDangling : DanglingClosureErrs) (hSeq : ProgressSeq n)
+/-- Call progress at `n+1`.  Hole 2 (dangling closure) is now discharged
+directly via `CallErr.badClosure`. -/
+theorem progressC_succ (hSeq : ProgressSeq n)
     (st : St) (d : Nat) (fv : Value) (vs : List Value)
     (hnc : ¬ (∃ st' v, Call st d fv vs st' v)) (hne : ¬ CallErr st d fv vs) :
     CApprox (n + 1) st d fv vs := by
@@ -409,7 +398,7 @@ theorem progressC_succ (hDangling : DanglingClosureErrs) (hSeq : ProgressSeq n)
             (by intro v m h; exact harity2 ⟨v, m, h⟩)) hne
   | closure a =>
     cases hcl : st.store.closures[a]? with
-    | none => exact absurd (hDangling st d a vs hcl) hne
+    | none => exact absurd (.badClosure st d a vs hcl) hne
     | some cd =>
       by_cases harity : vs.length = cd.params.length
       · by_cases hdepth : d < maxCallDepth
@@ -477,8 +466,10 @@ theorem progressSeq_succ (hS : ProgressS n) (hSeq : ProgressSeq n)
     · exact absurd (.head st d env s ss' herr) hne
     · exact .head n st d env s ss' hdiv
 
-/-- Statement progress at `n+1`.  Conditional on `ForInitAbruptErrs` (Hole 3). -/
-theorem progressS_succ (hForInit : ForInitAbruptErrs) (hE : ProgressE n)
+/-- Statement progress at `n+1`.  Hole 3 (abrupt `for`-init) is now discharged
+directly: the C swallows the init's status (`ExecInit.some` accepts any status),
+so an abrupt init makes the `for` PROGRESS rather than error. -/
+theorem progressS_succ (hE : ProgressE n)
     (hS : ProgressS n) (hFl : ProgressFl n) (hSeq : ProgressSeq n)
     (st : St) (d : Nat) (env : Addr) (s : Stmt)
     (hnc : ¬ (∃ st' status, ExecS st d env s st' status)) (hne : ¬ ExecErr st d env s) :
@@ -566,23 +557,18 @@ theorem progressS_succ (hForInit : ForInitAbruptErrs) (hE : ProgressE n)
         · exact .forLoop n st d env none cnd step b store' outer ⟨store', st.out⟩
             halloc (.none ⟨store', st.out⟩ d outer) hdiv
       | some si =>
+        -- The C swallows the init's status (`c/src/interp.c:308`): `ExecInit.some`
+        -- accepts ANY completing status, so an abrupt init proceeds into the loop
+        -- exactly like a `.normal` one.  No status case-split, no error route.
         rcases stmtTri hS ⟨store', st.out⟩ d outer si with ⟨st', status, hsi⟩ | herr | hdiv
-        · cases status with
-          | normal =>
-            rcases flTri hFl st' d outer cnd step b with ⟨st'', status', hfl⟩ | herr | hdiv
-            · exact absurd ⟨st'', status',
-                .forStart st d env (some si) cnd step b store' outer st' st'' status'
-                  halloc (.some ⟨store', st.out⟩ d outer si st' hsi) hfl⟩ hnc
-            · exact absurd (.forLoop st d env (some si) cnd step b store' outer st'
-                halloc (.some ⟨store', st.out⟩ d outer si st' hsi) herr) hne
-            · exact .forLoop n st d env (some si) cnd step b store' outer st'
-                halloc (.some ⟨store', st.out⟩ d outer si st' hsi) hdiv
-          | brk => exact absurd (hForInit st d env si cnd step b store' outer st' .brk
-              halloc hsi (by intro h; cases h)) hne
-          | cont => exact absurd (hForInit st d env si cnd step b store' outer st' .cont
-              halloc hsi (by intro h; cases h)) hne
-          | ret rv => exact absurd (hForInit st d env si cnd step b store' outer st' (.ret rv)
-              halloc hsi (by intro h; cases h)) hne
+        · rcases flTri hFl st' d outer cnd step b with ⟨st'', status', hfl⟩ | herr | hdiv
+          · exact absurd ⟨st'', status',
+              .forStart st d env (some si) cnd step b store' outer st' st'' status'
+                halloc (.some ⟨store', st.out⟩ d outer si st' status hsi) hfl⟩ hnc
+          · exact absurd (.forLoop st d env (some si) cnd step b store' outer st'
+              halloc (.some ⟨store', st.out⟩ d outer si st' status hsi) herr) hne
+          · exact .forLoop n st d env (some si) cnd step b store' outer st'
+              halloc (.some ⟨store', st.out⟩ d outer si st' status hsi) hdiv
         · exact absurd (.forInit st d env si cnd step b store' outer halloc herr) hne
         · exact .forInit n st d env si cnd step b store' outer halloc hdiv
   | ret e =>
@@ -660,9 +646,10 @@ theorem progressFl_succ (hE : ProgressE n) (hS : ProgressS n) (hFl : ProgressFl 
   · exact .body n st d env cnd step b st' hfc hdiv
 
 /-- **The progress bundle holds at every fuel.**  Structural induction on `n`.
-Conditional on the two arbitrary-config spec holes (`DanglingClosureErrs`,
-`ForInitAbruptErrs`) that the fuel-`n` sub-computations may hit. -/
-theorem progress (hDangling : DanglingClosureErrs) (hForInit : ForInitAbruptErrs) :
+Now UNCONDITIONAL: the two former arbitrary-config holes (dangling closure, abrupt
+`for`-init) are discharged directly by the landed-def amendments
+(`CallErr.badClosure`, the swallowing `ExecInit.some`). -/
+theorem progress :
     ∀ n, Progress n := by
   intro n
   induction n with
@@ -684,10 +671,10 @@ theorem progress (hDangling : DanglingClosureErrs) (hForInit : ForInitAbruptErrs
       exact progressArgs_succ ihE ihA st d env es hnc hne
     · -- ProgressC (n+1)
       intro st d fv vs hnc hne
-      exact progressC_succ hDangling ihSeq st d fv vs hnc hne
+      exact progressC_succ ihSeq st d fv vs hnc hne
     · -- ProgressS (n+1)
       intro st d env s hnc hne
-      exact progressS_succ hForInit ihE ihS ihFl ihSeq st d env s hnc hne
+      exact progressS_succ ihE ihS ihFl ihSeq st d env s hnc hne
     · -- ProgressFl (n+1)
       intro st d env cnd step b hnc hne
       exact progressFl_succ ihE ihS ihFl st d env cnd step b hnc hne
@@ -695,16 +682,15 @@ theorem progress (hDangling : DanglingClosureErrs) (hForInit : ForInitAbruptErrs
       intro st d env ss hnc hne
       exact progressSeq_succ ihS ihSeq st d env ss hnc hne
 
-/-! ## `StmtDispatchD`, closed (modulo the two arbitrary-config holes)
+/-! ## `StmtDispatchD`, closed (UNCONDITIONAL)
 
 `StmtDispatchD` is `progress`'s `ProgressS` conjunct wrapped in `Classical.em`:
 split on `∃ result`; then on `ExecErr`; the last branch is `∀ n, SApprox n` by
 `progress` at every `n`. -/
 
-/-- **`StmtDispatchD`, closed.**  Conditional on `DanglingClosureErrs` +
-`ForInitAbruptErrs` (both unreachable from `initSt`; see their docstrings). -/
-theorem stmtDispatchD_of_holes (hDangling : DanglingClosureErrs)
-    (hForInit : ForInitAbruptErrs) : StmtDispatchD := by
+/-- **`StmtDispatchD`, closed** — unconditional (both former arbitrary-config
+holes are discharged inside `progress` by the landed-def amendments). -/
+theorem stmtDispatchD_holds : StmtDispatchD := by
   intro st d env s
   by_cases hc : ∃ st' status, ExecS st d env s st' status
   · exact Or.inl hc
@@ -712,7 +698,7 @@ theorem stmtDispatchD_of_holes (hDangling : DanglingClosureErrs)
   · exact Or.inr (Or.inl he)
   · refine Or.inr (Or.inr ?_)
     intro n
-    exact (progress hDangling hForInit n).2.2.2.1 st d env s hc he
+    exact (progress n).2.2.2.1 st d env s hc he
 
 /-! ## `hroot`, closed (modulo the top-level-abrupt hole)
 
@@ -721,21 +707,21 @@ is FALSE as literally stated (an abrupt top-level status is an `ExecSeq` but not
 `BigStep`; see the module docstring).  What is TRUE — and what
 `trichotomy_of_dispatch4` actually needs once we route the abrupt case to the
 error disjunct — is a *dichotomy*: a top-level completion is either a `BigStep`
-(`.normal`) or a `BigStepErr` (abrupt, via `TopLevelAbruptErrs`).  We therefore
+(`.normal`) or a `BigStepErr` (abrupt, via `topLevelAbruptErrs`).  We therefore
 DON'T use `trichotomy_of_stmtDispatchD` (whose `hroot` forces the false shape);
 we re-assemble the top level directly. -/
 
 /-- A top-level completing sequence is a clean `BigStep` OR a `BigStepErr`,
-routing the abrupt-status completions to the error disjunct via the top-level
-abrupt hole. -/
-theorem bigStep_or_err_of_execSeq (hAbrupt : TopLevelAbruptErrs) (p : Program)
+routing the abrupt-status completions to the error disjunct via
+`topLevelAbruptErrs` (the amended `BigStepErr`'s `TopAbrupt` disjunct). -/
+theorem bigStep_or_err_of_execSeq (p : Program)
     {st' : St} {status : Status} (h : ExecSeq initSt 0 0 p st' status) :
     (∃ out, BigStep p out) ∨ BigStepErr p := by
   cases status with
   | normal => exact Or.inl ⟨st'.out, st', h, rfl⟩
-  | brk => exact Or.inr (hAbrupt p st' .brk (by intro h; cases h) h)
-  | cont => exact Or.inr (hAbrupt p st' .cont (by intro h; cases h) h)
-  | ret v => exact Or.inr (hAbrupt p st' (.ret v) (by intro h; cases h) h)
+  | brk => exact Or.inr (topLevelAbruptErrs p st' .brk (by intro h; cases h) h)
+  | cont => exact Or.inr (topLevelAbruptErrs p st' .cont (by intro h; cases h) h)
+  | ret v => exact Or.inr (topLevelAbruptErrs p st' (.ret v) (by intro h; cases h) h)
 
 /-! ## The capstone
 
@@ -743,43 +729,41 @@ Re-assemble `Trichotomy` directly (not via `trichotomy_of_dispatch4`, whose
 `hroot` slot forces the false shape), reusing `approx_of_nodeDispatch4` and
 `nodeDispatch4_of_stmtDispatchD` for the divergence half. -/
 
-/-- **`Trichotomy`, closed** — conditional on exactly the three precisely-named
-spec-completeness holes, all UNREACHABLE from `initSt`:
+/-- **`Trichotomy`, closed — UNCONDITIONAL.**  All three former
+spec-completeness holes are discharged by the landed-def amendments (all three
+were UNREACHABLE from `initSt`; the amendments merely make the arbitrary-config
+quantifiers total):
 
-* `TopLevelAbruptErrs` (Hole 1) — top-level abrupt status → `BigStepErr`;
-* `DanglingClosureErrs` (Hole 2) — unresolvable closure address → `CallErr`;
-* `ForInitAbruptErrs` (Hole 3) — abrupt `for`-init → `ExecErr`.
-
-With any of the three landed-def amendments described in their docstrings, the
-corresponding premise becomes provable and drops out; with all three,
-`trichotomy_closed` is unconditional. -/
-theorem trichotomy_closed (hAbrupt : TopLevelAbruptErrs)
-    (hDangling : DanglingClosureErrs) (hForInit : ForInitAbruptErrs) :
-    Trichotomy := by
+* Hole 1 — top-level abrupt status → `BigStepErr` via the new `TopAbrupt`
+  disjunct (`topLevelAbruptErrs`);
+* Hole 2 — unresolvable closure address → `CallErr.badClosure`
+  (`danglingClosureErrs`);
+* Hole 3 — abrupt `for`-init is SWALLOWED by the generalized `ExecInit.some`
+  (C-faithful; it PROGRESSES rather than errors), so it never blocks progress. -/
+theorem trichotomy_unconditional : Trichotomy := by
   have hnode : NodeDispatch4 :=
-    nodeDispatch4_of_stmtDispatchD (stmtDispatchD_of_holes hDangling hForInit)
+    nodeDispatch4_of_stmtDispatchD stmtDispatchD_holds
   intro p
   by_cases hterm : ∃ st' status, ExecSeq initSt 0 0 p st' status
   · obtain ⟨st', status, hexec⟩ := hterm
-    rcases bigStep_or_err_of_execSeq hAbrupt p hexec with hbs | herr
+    rcases bigStep_or_err_of_execSeq p hexec with hbs | herr
     · exact Or.inl hbs
     · exact Or.inr (Or.inl herr)
   by_cases herr : BigStepErr p
   · exact Or.inr (Or.inl herr)
   · exact Or.inr (Or.inr (fun n =>
-      approx_of_nodeDispatch4 hnode n initSt 0 0 p hterm herr))
+      approx_of_nodeDispatch4 hnode n initSt 0 0 p hterm
+        (fun hseqerr => herr (Or.inl hseqerr))))
 
 /-! ## `htri`-shaped corollary for `interpSimClosed_of_families`
 
 `interpSimClosed_of_families` (`Vsa/Sim/InterpSimFinal.lean`) consumes a
-`htri : Trichotomy` argument by that exact name/type.  `trichotomy_closed` IS a
-`Trichotomy`, so it plugs in directly once the three holes are supplied. -/
+`htri : Trichotomy` argument by that exact name/type.  `trichotomy_unconditional`
+IS a `Trichotomy`, so it plugs in directly with no residual premises. -/
 
-/-- The `htri` argument for `interpSimClosed_of_families`, ready to plug in given
-the three spec-completeness premises. -/
-theorem htri_closed (hAbrupt : TopLevelAbruptErrs)
-    (hDangling : DanglingClosureErrs) (hForInit : ForInitAbruptErrs) :
-    Trichotomy :=
-  trichotomy_closed hAbrupt hDangling hForInit
+/-- The `htri` argument for `interpSimClosed_of_families`, ready to plug in
+unconditionally. -/
+theorem htri_unconditional : Trichotomy :=
+  trichotomy_unconditional
 
 end Vsa.While

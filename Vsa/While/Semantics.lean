@@ -455,11 +455,18 @@ inductive ExecS : St → Nat → Addr → Stmt → St → Status → Prop where
   | brk (st : St) (d : Nat) (env : Addr) : ExecS st d env .brk st .brk
   | cont (st : St) (d : Nat) (env : Addr) : ExecS st d env .cont st .cont
 
-/-- The optional `for` initializer, run in the loop's outer frame. -/
+/-- The optional `for` initializer, run in the loop's outer frame.  The C
+(`c/src/interp.c:308`) runs `exec_stmt(init)` and *discards* its status, so the
+`some` rule accepts the init completing with ANY status `status` (the loop then
+proceeds from the resulting state) — this is the C-faithful "swallow" (a
+`for (break; …)` init's `.brk`/`.cont`/`.ret` is silently absorbed).  The parser
+only ever emits varDecl/expr inits, which complete `.normal`, so the generalized
+`status` is a spec-completeness closure for arbitrary ASTs, never exercised by a
+real program. -/
 inductive ExecInit : St → Nat → Addr → Option Stmt → St → Prop where
   | none (st : St) (d : Nat) (env : Addr) : ExecInit st d env none st
-  | some (st : St) (d : Nat) (env : Addr) (s : Stmt) (st' : St) :
-    ExecS st d env s st' .normal →
+  | some (st : St) (d : Nat) (env : Addr) (s : Stmt) (st' : St) (status : Status) :
+    ExecS st d env s st' status →
     ExecInit st d env (some s) st'
 
 /-- The `for` loop proper (cond → body → step → repeat). A missing

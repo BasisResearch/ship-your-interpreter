@@ -280,7 +280,11 @@ theorem trichotomy_of_dispatch4 (hnode : NodeDispatch4)
   by_cases herr : BigStepErr p
   · exact Or.inr (Or.inl herr)
   · exact Or.inr (Or.inr (fun n =>
-      approx_of_nodeDispatch4 hnode n initSt 0 0 p hterm herr))
+      -- `BigStepErr` is now `ExecSeqErr … ∨ TopAbrupt` (`Vsa/While/ErrorSem.lean`);
+      -- `approx_of_nodeDispatch4` needs only the `ExecSeqErr` non-error, so lift
+      -- `¬ BigStepErr` to `¬ ExecSeqErr` via the `Or.inl` injection.
+      approx_of_nodeDispatch4 hnode n initSt 0 0 p hterm
+        (fun hseqerr => herr (Or.inl hseqerr))))
 
 /-! ### The per-STATEMENT dispatch atom, and its lift to `NodeDispatch4`
 

@@ -211,8 +211,13 @@ theorem errorSim (c : Config) (p : Program)
       ExecErr st d env s → ErrHalts c)
     (hTail : ∀ (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt) (st' : SpecSt),
       ExecS st d env s st' .normal → ExecSeqErr st' d env ss → ErrHalts c)
-    (h : BigStepErr p) : ∃ out, Halts c out 70 :=
-  errorSim_execSeq c hHead hTail h
+    -- Top-level abrupt route (the new `BigStepErr` disjunct `TopAbrupt p`,
+    -- `interp_run` → exit 70); same exit-70 shape as the site residuals.
+    (hTopAbrupt : TopAbrupt p → ErrHalts c)
+    (h : BigStepErr p) : ∃ out, Halts c out 70 := by
+  rcases h with hseq | habrupt
+  · exact errorSim_execSeq c hHead hTail hseq
+  · exact hTopAbrupt habrupt
 
 /-- **Discharging `stuck_sim`'s error disjunct.**  From the error simulation
 (`∃ out, Halts c out 70`) and `stuck_of_halts_70` (`Vsa/While/ErrorSem.lean`), a
@@ -222,9 +227,11 @@ theorem stuck_of_bigStepErr (c : Config) (p : Program)
       ExecErr st d env s → ErrHalts c)
     (hTail : ∀ (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt) (st' : SpecSt),
       ExecS st d env s st' .normal → ExecSeqErr st' d env ss → ErrHalts c)
+    -- Top-level abrupt route (the new `BigStepErr` disjunct); see `errorSim`.
+    (hTopAbrupt : TopAbrupt p → ErrHalts c)
     (h : BigStepErr p) :
     Vsa.Machine.Diverges c ∨ ∃ out e, Vsa.Machine.Halts c out e ∧ e ≠ 0 := by
-  obtain ⟨out, hh⟩ := errorSim c p hHead hTail h
+  obtain ⟨out, hh⟩ := errorSim c p hHead hTail hTopAbrupt h
   exact stuck_of_halts_70 hh
 
 end Vsa.Sim

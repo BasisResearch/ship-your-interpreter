@@ -156,6 +156,12 @@ theorem errorSim_of_sites
     -- CallErr constructors -------------------------------------------------
     (hNotCallable : ∀ (st : SpecSt) (d : Nat) (fv : Value) (vs : List Value),
       (∀ a, fv ≠ .closure a) → (∀ f, fv ≠ .native f) → ErrHalts c)
+    -- 43rd site: dangling closure address (`CallErr.badClosure`, the leaf added
+    -- by the landed amendment; `st.store.closures[a]? = none`).  Same exit-70
+    -- constant-motive shape as the other CallErr sites; unreachable from a
+    -- well-formed `initSt` but demanded by the `@ExecSeqErr.rec` minor premises.
+    (hBadClosure : ∀ (st : SpecSt) (d : Nat) (a : Addr) (vs : List Value),
+      st.store.closures[a]? = none → ErrHalts c)
     (hArity : ∀ (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value),
       st.store.closures[a]? = some cd → vs.length ≠ cd.params.length → ErrHalts c)
     (hDepth : ∀ (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value),
@@ -251,7 +257,7 @@ theorem errorSim_of_sites
     hVarUndef hAssignE hAssignUnbound hBinaryL hBinaryR hBinaryOp hOrL hOrR hAndL
     hAndR hUnaryE hNegType hCallF hCallArgs hCallC
     hArgsHead hArgsTail
-    hNotCallable hArity hDepth hBody hEscape hAssertFail hAssertArity
+    hNotCallable hBadClosure hArity hDepth hBody hEscape hAssertFail hAssertArity
     hExpr hVarInit hBlock hIfCond hIfThen hIfElse hWhileCond hWhileBody hWhileLoop
     hForInit hForLoop hRet
     hFlCond hFlBody hFlStep hFlLoop
@@ -313,6 +319,10 @@ theorem errorSimFull (p : Program)
       EvalE st d env e st' v → EvalArgsErr st' d env es → ErrHalts c → ErrHalts c)
     (hNotCallable : ∀ (st : SpecSt) (d : Nat) (fv : Value) (vs : List Value),
       (∀ a, fv ≠ .closure a) → (∀ f, fv ≠ .native f) → ErrHalts c)
+    -- 43rd site: dangling closure address (`CallErr.badClosure`); see
+    -- `errorSim_of_sites`.
+    (hBadClosure : ∀ (st : SpecSt) (d : Nat) (a : Addr) (vs : List Value),
+      st.store.closures[a]? = none → ErrHalts c)
     (hArity : ∀ (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value),
       st.store.closures[a]? = some cd → vs.length ≠ cd.params.length → ErrHalts c)
     (hDepth : ∀ (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value),
@@ -397,13 +407,20 @@ theorem errorSimFull (p : Program)
     (hSeqTail : ∀ (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt)
       (st' : SpecSt),
       ExecS st d env s st' .normal → ExecSeqErr st' d env ss → ErrHalts c → ErrHalts c)
-    (h : BigStepErr p) : ∃ out, Halts c out 70 :=
-  errorSim_of_sites c
-    hVarUndef hAssignE hAssignUnbound hBinaryL hBinaryR hBinaryOp hOrL hOrR hAndL
-    hAndR hUnaryE hNegType hCallF hCallArgs hCallC hArgsHead hArgsTail hNotCallable
-    hArity hDepth hBody hEscape hAssertFail hAssertArity hExpr hVarInit hBlock hIfCond
-    hIfThen hIfElse hWhileCond hWhileBody hWhileLoop hForInit hForLoop hRet hFlCond
-    hFlBody hFlStep hFlLoop hSeqHead hSeqTail h
+    -- The 43rd error route: a top-level `ExecSeq` completing with an abrupt
+    -- status (`TopAbrupt p`, the new `BigStepErr` disjunct — `interp_run`,
+    -- `c/src/interp.c:333-361`, prints `runtime error` and `exit 70`).  Same
+    -- exit-70 shape as the other 42 site residuals; no new machine proof here.
+    (hTopAbrupt : TopAbrupt p → ErrHalts c)
+    (h : BigStepErr p) : ∃ out, Halts c out 70 := by
+  rcases h with hseq | habrupt
+  · exact errorSim_of_sites c
+      hVarUndef hAssignE hAssignUnbound hBinaryL hBinaryR hBinaryOp hOrL hOrR hAndL
+      hAndR hUnaryE hNegType hCallF hCallArgs hCallC hArgsHead hArgsTail hNotCallable
+      hBadClosure hArity hDepth hBody hEscape hAssertFail hAssertArity hExpr hVarInit hBlock hIfCond
+      hIfThen hIfElse hWhileCond hWhileBody hWhileLoop hForInit hForLoop hRet hFlCond
+      hFlBody hFlStep hFlLoop hSeqHead hSeqTail hseq
+  · exact hTopAbrupt habrupt
 
 /-- **Discharging `stuck_sim`'s error disjunct (full assembly).**  From the full
 six-relation error simulation and `stuck_of_halts_70`, a program that hits any
@@ -460,6 +477,10 @@ theorem stuck_of_bigStepErrFull (p : Program)
       EvalE st d env e st' v → EvalArgsErr st' d env es → ErrHalts c → ErrHalts c)
     (hNotCallable : ∀ (st : SpecSt) (d : Nat) (fv : Value) (vs : List Value),
       (∀ a, fv ≠ .closure a) → (∀ f, fv ≠ .native f) → ErrHalts c)
+    -- 43rd site: dangling closure address (`CallErr.badClosure`); see
+    -- `errorSim_of_sites`.
+    (hBadClosure : ∀ (st : SpecSt) (d : Nat) (a : Addr) (vs : List Value),
+      st.store.closures[a]? = none → ErrHalts c)
     (hArity : ∀ (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value),
       st.store.closures[a]? = some cd → vs.length ≠ cd.params.length → ErrHalts c)
     (hDepth : ∀ (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value),
@@ -544,15 +565,17 @@ theorem stuck_of_bigStepErrFull (p : Program)
     (hSeqTail : ∀ (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt)
       (st' : SpecSt),
       ExecS st d env s st' .normal → ExecSeqErr st' d env ss → ErrHalts c → ErrHalts c)
+    -- The 43rd error route (top-level abrupt → exit 70); see `errorSimFull`.
+    (hTopAbrupt : TopAbrupt p → ErrHalts c)
     (h : BigStepErr p) :
     Vsa.Machine.Diverges c ∨ ∃ out e, Vsa.Machine.Halts c out e ∧ e ≠ 0 := by
   obtain ⟨out, hh⟩ :=
     errorSimFull c p
       hVarUndef hAssignE hAssignUnbound hBinaryL hBinaryR hBinaryOp hOrL hOrR hAndL
       hAndR hUnaryE hNegType hCallF hCallArgs hCallC hArgsHead hArgsTail hNotCallable
-      hArity hDepth hBody hEscape hAssertFail hAssertArity hExpr hVarInit hBlock hIfCond
+      hBadClosure hArity hDepth hBody hEscape hAssertFail hAssertArity hExpr hVarInit hBlock hIfCond
       hIfThen hIfElse hWhileCond hWhileBody hWhileLoop hForInit hForLoop hRet hFlCond
-      hFlBody hFlStep hFlLoop hSeqHead hSeqTail h
+      hFlBody hFlStep hFlLoop hSeqHead hSeqTail hTopAbrupt h
   exact stuck_of_halts_70 hh
 
 end Vsa.Sim

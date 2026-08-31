@@ -100,6 +100,10 @@ theorem errFamily_of_sites (L : Layout)
       EvalE st d env e st' v → EvalArgsErr st' d env es → ErrHalts c → ErrHalts c)
     (hNotCallable : ∀ (c : Config) (st : SpecSt) (d : Nat) (fv : Value) (vs : List Value),
       (∀ a, fv ≠ .closure a) → (∀ f, fv ≠ .native f) → ErrHalts c)
+    -- 43rd site: dangling closure address (`CallErr.badClosure`), config-
+    -- quantified like the other 42; see `ErrorSimFull.errorSim_of_sites`.
+    (hBadClosure : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Addr) (vs : List Value),
+      st.store.closures[a]? = none → ErrHalts c)
     (hArity : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value),
       st.store.closures[a]? = some cd → vs.length ≠ cd.params.length → ErrHalts c)
     (hDepth : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value),
@@ -183,16 +187,19 @@ theorem errFamily_of_sites (L : Layout)
       ExecErr st d env s → ErrHalts c → ErrHalts c)
     (hSeqTail : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt)
       (st' : SpecSt),
-      ExecS st d env s st' .normal → ExecSeqErr st' d env ss → ErrHalts c → ErrHalts c) :
+      ExecS st d env s st' .normal → ExecSeqErr st' d env ss → ErrHalts c → ErrHalts c)
+    -- The 43rd error route (top-level abrupt → exit 70, `TopAbrupt p`), config-
+    -- and program-quantified like the other 42; see `ErrorSimFull.errorSimFull`.
+    (hTopAbrupt : ∀ (p : Program) (c : Config), TopAbrupt p → ErrHalts c) :
     ErrFamily L := by
   intro p c _ herr
   exact stuck_of_bigStepErrFull c p
     (hVarUndef c) (hAssignE c) (hAssignUnbound c) (hBinaryL c) (hBinaryR c) (hBinaryOp c)
     (hOrL c) (hOrR c) (hAndL c) (hAndR c) (hUnaryE c) (hNegType c) (hCallF c) (hCallArgs c)
-    (hCallC c) (hArgsHead c) (hArgsTail c) (hNotCallable c) (hArity c) (hDepth c) (hBody c)
+    (hCallC c) (hArgsHead c) (hArgsTail c) (hNotCallable c) (hBadClosure c) (hArity c) (hDepth c) (hBody c)
     (hEscape c) (hAssertFail c) (hAssertArity c) (hExpr c) (hVarInit c) (hBlock c) (hIfCond c)
     (hIfThen c) (hIfElse c) (hWhileCond c) (hWhileBody c) (hWhileLoop c) (hForInit c)
     (hForLoop c) (hRet c) (hFlCond c) (hFlBody c) (hFlStep c) (hFlLoop c) (hSeqHead c)
-    (hSeqTail c) herr
+    (hSeqTail c) (hTopAbrupt p c) herr
 
 end Vsa.Sim.InterpSimBundle

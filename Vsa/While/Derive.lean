@@ -439,12 +439,12 @@ private partial def dExecS (st d env s : Lean.Expr) :
       | none =>
         pure (mkApp3 (mkConst ``Vsa.While.ExecInit.none) st0 d outer, st0)
       | some is =>
+        -- The C swallows the init's status (`c/src/interp.c:308`), so
+        -- `ExecInit.some` accepts ANY completing status `sv`; a real program's
+        -- init is always `.normal`, but the constructor no longer requires it.
         let (ps, st1, sv) ← dExecS st0 d outer is
-        match sv with
-        | .normal =>
-          pure (mkAppN (mkConst ``Vsa.While.ExecInit.some)
-            #[st0, d, outer, is, st1, ps], st1)
-        | _ => throwError "for-initializer did not finish normally"
+        pure (mkAppN (mkConst ``Vsa.While.ExecInit.some)
+          #[st0, d, outer, is, st1, statusExpr sv, ps], st1)
     let (ploop, st2, sv) ← dForLoop st1 d outer cnd step b
     let prf := mkAppN (mkConst ``Vsa.While.ExecS.forStart)
       #[st, d, env, init, cnd, step, b, store', outer, st1, st2, statusExpr sv,

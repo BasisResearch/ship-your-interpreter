@@ -147,6 +147,15 @@ inductive CallErr : St → Nat → Value → List Value → Prop where
   | notCallable (st : St) (d : Nat) (fv : Value) (vs : List Value) :
     (∀ a, fv ≠ .closure a) → (∀ f, fv ≠ .native f) →
     CallErr st d fv vs
+  -- leaf: a closure value whose address does not resolve in the store
+  -- (`st.store.closures[a]? = none`).  `call_value` (`c/src/interp.c:171`)
+  -- dereferences `callee.as.fn`, valid by construction (closures come from
+  -- `allocClosure`), so this never arises from `initSt`; it is the
+  -- spec-completeness closure for the arbitrary-config quantifiers of
+  -- `StmtDispatchD` (see `DanglingClosureErrs`).
+  | badClosure (st : St) (d : Nat) (a : Addr) (vs : List Value) :
+    st.store.closures[a]? = none →
+    CallErr st d (.closure a) vs
   -- leaf: closure arity mismatch
   | arity (st : St) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value) :
     st.store.closures[a]? = some cd →
@@ -297,11 +306,25 @@ inductive ExecSeqErr : St → Nat → Addr → List Stmt → Prop where
 
 end
 
+/-- **A top-level statement sequence completes with an abrupt status.**
+`interp_run` (`c/src/interp.c:333-361`) runs each top-level statement and, if it
+returns `EXEC_RETURN`/`EXEC_BREAK`/`EXEC_CONTINUE` (any non-`.normal` status),
+prints a `runtime error` and `return 1` (→ `run_source` returns the exit code
+`70`).  Unlike a nested `.block` sequence — which *propagates* an abrupt head
+(`ExecSeq.consAbrupt`, mirroring `ST_BLOCK`'s `return st` at `interp.c:286`) —
+the TOP-LEVEL driver turns an abrupt completion into an error.  This is a
+top-level-only judgment; `ExecSeqErr` (shared by blocks) is deliberately left
+unchanged. -/
+def TopAbrupt (p : Program) : Prop :=
+  ∃ (st' : St) (status : Status), status ≠ .normal ∧ ExecSeq initSt 0 0 p st' status
+
 /-- **A program hits a runtime error** iff its top-level statement sequence, run
-in the global scope at depth 0, reaches an error.  This is the error analog of
-`BigStep`: the machine will `runtime_error` → `longjmp` → `exit 70`. -/
+in the global scope at depth 0, either reaches a `runtime_error` node
+(`ExecSeqErr`) or completes with an abrupt status (`TopAbrupt`, the top-level
+`return`/`break`/`continue` that `interp_run` rejects).  Both drive the machine
+to `runtime_error`/`longjmp` → `exit 70`. -/
 def BigStepErr (p : Program) : Prop :=
-  ExecSeqErr initSt 0 0 p
+  ExecSeqErr initSt 0 0 p ∨ TopAbrupt p
 
 /-! ## 2. Bounded progress (`Approx`)
 

@@ -36,3 +36,245 @@ it, still stop and report instead.
 - cost: ~58 lines + ~10 site lemmas per prefix, four times
 - proposal: discipline gate (landed: check_all stage a4) + EnvDefSeg model
 > harvested: tasks #27/#28, gate committed f2670f5
+
+## 2026-08-31 stmt-amendment-three-holes (StmtDispatchClose trichotomy close)
+- missing: the three spec-completeness holes needed landed-def amendments to
+  discharge; C-faithfulness verdicts: (1) top-level abrupt (interp.c:333-361)
+  = runtime error for ALL of ret/brk/cont (each `return 1;` → exit 70), so
+  `status ≠ .normal → BigStepErr` is exact; (2) closure with unresolved addr
+  = spec artifact, faithful fix is a `CallErr.badClosure` leaf; (3) for-init
+  abrupt (interp.c:308) = C SWALLOWS the status (return value discarded, loop
+  proceeds), so the C-faithful fix is a SEMANTICS change to `ExecInit`, NOT an
+  error — `ForInitAbruptErrs` (which demanded `ExecErr`) is therefore FALSE as
+  stated and is removed, not discharged.
+- workaround: NONE (authorized statement amendment). Amendments: `ExecSeqErr.abruptHead`
+  (new leaf, top-level+general abrupt sequence head → error), `CallErr.badClosure`
+  (new leaf), and GENERALIZE `ExecInit.some` (+ `ExecInitCost.some`) to accept any
+  terminating status (swallow).
+- cost: generalizing `ExecInit.some` changes the recursor minor-premise TYPE
+  (gains a `status` binder) at every hand-written `.rec` scaffold: `Cost.lean`
+  (`c_isome`), `TermCaseBundle`/`TermSimAssembly`/`TermSimClose` (`hInitSome`),
+  and `Derive.lean` (drop the `.normal` guard). Adding `ExecSeqErr.abruptHead`
+  + `CallErr.badClosure` extends every `cases`/pattern over those error
+  inductives (StmtDispatchClose progress split + any Sim error-routing that
+  cases on `ExecSeqErr`/`CallErr` — audited: Sim consumers use them as opaque
+  hypotheses / positive witnesses, not by `cases`, so they only GAIN a
+  constructor they never destruct).
+- proposal: none new — this is a one-time statement fix (precedent: the
+  Trichotomy falsity finding in StmtDispatch.lean). Machine side of the new
+  top-level-abrupt error route = a NAMED residual premise in the routing shape
+  (modeled on the other 42 exit-70 premises), no new machine proof built.
+
+## 2026-08-31 branch-terminated-seg-no-bridge (EnvDefBridges4, items 1/2/3)
+- missing: NONE — no `bridgeOfSegBr` variant was needed after all.
+- workaround: none; `segToTriple` (over `segEval_sound`) ALREADY carries a
+  branch/jump-terminated seg: `BlockTerm`'s `TKind` (`br`/`j`) is in-model and
+  `evalBlocksPC` computes the terminator target as the end PC. So the append-head
+  (`beqz;bnez`), append-store (`j`), and update-store (fall-through) bridges are
+  plain `segToTriple` rows landing the computed machine post — NO `bridgeOfSeg`.
+  `bridgeOfSeg` is only for the `jal`-SEAM (call) case, where the terminator is a
+  call that links x1 and is deliberately out of `TKind`.
+- cost: none — this is the cheap path (each row ~35 lines, 1 kernel decide).
+- proposal: document in the abstraction table that `segToTriple` = the tool for
+  ANY straight-line-or-branch/jump-terminated span; `bridgeOfSeg` only for
+  call-seam (`jal`) spans. Avoids a future agent factoring a needless
+  `bridgeOfSegBr`.
+
+## 2026-08-31 memcpy-word-route-not-framed-not-reflected (EnvDefBridges4, item 4)
+- missing: an ABI-frame-carrying variant of the memcpy WORD route
+  (`dispatch_to_word ≫ word_loop_spec ≫ epilogue_{notail,tail}_spec`), so
+  `envDefAppendContract`'s `hrouteCbyte` (byte-route restriction) could be dropped.
+- workaround: NONE — stopped. Item 4 as specified (use
+  `FrameMeta.abiFrame_of_wrChain`/`memFrame_of_chain` over the epilogue's
+  *reflected chain*) is not applicable: (a) the memcpy word-path epilogue
+  (`MemcpySpec4.epilogue_notail_spec`/`epilogue_tail_spec`, `word_loop_spec`) is
+  NOT in reflected/`#derive_case` form — it is entirely legacy `site_*`/`NotWrittenW`
+  ghost style; (b) its conclusion carries NO `bblocks_sound_bt`-shaped register-frame
+  clause at all (the ABI frame is threaded through the `∃ g'` ghost and RESET at the
+  `NotWrittenW → NotWrittenB` crossover), so there is no frame clause for
+  `abiFrame_of_wrChain` to collapse; (c) the tail variant contains a byte-tail LOOP.
+  Making the word route framed therefore requires FIRST seg-ifying the whole word
+  path + its tail loop into reflected form AND restating the memcpy word specs to
+  expose an ABI-frame clause — a memcpy-file statement change, out of scope for a
+  ~35-line env_define bridge, and the current word specs ARE the ghost-reset
+  approach the "no ghost re-run" rule bans re-doing by hand.
+- cost: `hrouteCbyte` stays a parameter of `envDefAppendContract`. For the actual
+  env_define call (`memcpy(copy, name, len+1)`, dst = fresh malloc block) it is the
+  HONEST routing side-condition (byte route taken iff src/dst mutually misaligned or
+  len+1 < 8), not a gratuitous restriction — so the cost is only the residual word-copy
+  case, not correctness.
+- proposal: reflect the memcpy word path (`#derive_case` the epilogue straight-line
+  blocks + `loopFromBody` the tail loop), restate `epilogue_*_spec`/`word_loop_spec`
+  to expose the `bblocks_sound_framed` register+footprint frame, then
+  `memcpy_spec_framed_word` falls out of `abiFrame_of_wrChain`/`memFrame_of_chain`
+  exactly like the byte route's `memcpy_spec_framed_byte`. Sized as a memcpy-file
+  task, not an env_define bridge.
+> harvested: task #15 rescoped to the reflect-first proposal
+
+## 2026-08-31 hole1-not-execseqerr-rule (StmtDispatchClose, correction)
+- missing: Hole 1's docstring suggested "add an ExecSeqErr abrupt-head rule",
+  but that is UNFAITHFUL: C's ST_BLOCK (interp.c:286) PROPAGATES an abrupt head
+  (`return st`), it does NOT error — only interp_run (the top-level driver,
+  interp.c:333) errors on abrupt. `ExecSeqErr` is the SAME relation for blocks
+  and the top-level program, so a general abrupt-head ExecSeqErr rule would
+  wrongly turn every `{ break; }` in a loop body into a runtime error.
+- workaround: NONE — took the docstring's OTHER sanctioned option (line 79: "or
+  a BigStepErr re-route"): amend `BigStepErr p` to the disjunction
+  `ExecSeqErr initSt 0 0 p ∨ (∃ st' status, status ≠ .normal ∧ ExecSeq initSt 0
+  0 p st' status)`. This is top-level-only, leaving ExecSeqErr's nested meaning
+  intact. `TopLevelAbruptErrs` then closes by `Or.inr`.
+- cost: the M5 machine error simulation (errorSimFull/stuck_of_bigStepErrFull/
+  ErrFamily) takes `(h : BigStepErr p)`; it now cases on the disjunction and
+  gains ONE new NAMED residual premise `hTopAbrupt` (the abrupt-top-level →
+  exit-70 machine route), shaped exactly like the other 42 site residuals — no
+  new machine proof built, per brief.
+- proposal: none — one-time top-level statement fix.
+
+## 2026-08-31 strarmresid-is-wholenode-evalih (StrArmChain, str-cmp arm)
+- missing: `StrArmMachineResid op bres` (StrCmpBlockC) is DEFINED as the whole-node
+  `EvalIH st d env (.binary op el er) st'' (.bool (bres sl sr))` — the ENTIRE arm
+  (prologue `blockA_binaryArm` ≫ both operand recursions `blockB_binary` ≫ str seam
+  ≫ sign tail ≫ `value_bool` box ≫ `blockD_v_rec`), the ~700-line `blockC_ge`-scale
+  object. There is NO int-arm `blockC` for the str operands to clone: `blockC_ge`
+  proves the INT path (both operands `.int`, kinds=2), whose prologue reads/spills
+  int payloads; the str arm (kinds=3) has a DIFFERENT prologue+operand recursion and
+  no landed `blockA_binaryArm`/`blockB_binary` for it. So `StrArmMachineResid` cannot
+  be honestly discharged end-to-end without first building the str-operand prologue
+  (out of scope; overlaps the concat-blocked `stringify` prologue in BinStrCells §b).
+- workaround: NONE for the whole-node. What IS buildable+kernel-checked: the str-arm
+  MACHINE TRANSPORT from the kind-check branch (0x80003628) through strcmp
+  (`strcmp_full_spec`) + rejoin + sign tail (`sTail*Row`) + `value_bool` box — the
+  exact analogue of `EvalEqNeFront.blockC_eqne_front` (which composes the eq/ne front
+  seam over an `EqFrontData` bundle but ALSO leaves the outer `EvalIH` a residual).
+  Delivered as `StrArmChain.lean`: span-1 seg (`strKindCheck`), span-2 bridge
+  (`strcmpSeamBridge` via `bridgeOfSeg`+`jalStep_of_obs`), span-3 sign-tail rejoin
+  facts, all composed into a front Triple over a `StrArmFrontData` bundle.
+- cost: the whole-node `StrArmMachineResid` stays a NAMED residual exactly as it was;
+  the four `strCmpCell_*_of` providers still consume it. This agent lands the machine
+  spans + the front-transport combinator, shrinking the residual's UNBUILT surface to
+  the str-operand prologue (`blockA_binaryArm`/`blockB_binary` at kind=3), not the
+  strcmp seam / sign tail / box, which are now proved and composable.
+- proposal: `StrArmFrontData` (post-prologue caller bundle: parked at 0x80003b0c with
+  both operand `.str` reprs staged, strcmp region witnesses, box obligations) +
+  `strArmFront` (the composed Triple) — the str sibling of `EqFrontData`/
+  `blockC_eqne_front`. Then `StrArmMachineResid` = str-prologue ≫ `strArmFront`, with
+  only the prologue left, mirroring how `evalEqNeSim` = eq-prologue ≫ blockC_eqne_front.
+
+## 2026-08-31 badclosure-recursor-adds-43rd-site (M5 error-family re-thread)
+- missing: the `stmt-amendment-three-holes` cost note claimed Sim error-family
+  consumers "use `ExecSeqErr`/`CallErr` as opaque hypotheses, not by `cases`, so
+  they only GAIN a constructor they never destruct" — WRONG for the recursor
+  sites. `errorSim_of_sites` (ErrorSimFull.lean) is a literal `@ExecSeqErr.rec`
+  application with all six motives constant `ErrHalts c`; adding the
+  `CallErr.badClosure` leaf (inserted between `notCallable` and `arity`) SHIFTS
+  the recursor's minor premises, so the rec application now demands a `badClosure`
+  minor premise. Without it `hArity` lands in the `badClosure` slot → type
+  mismatch at the `.rec` call. So the M5 error family gains a NEW named residual
+  `hBadClosure` (the 43rd error site), NOT just the `hTopAbrupt` route.
+- workaround: NONE needed beyond naming — `hBadClosure : ∀ (st) (d) (a) (vs),
+  st.store.closures[a]? = none → ErrHalts c` is a plain named typed premise (the
+  constant-motive minor premise for `badClosure`), same shape as the other 42
+  site residuals, no machine proof. Threaded through `errorSim_of_sites` →
+  `errorSimFull` → `stuck_of_bigStepErrFull` → {`stuckSimClosed`,
+  `errFamily_of_sites`}, inserted right after `hNotCallable` to match the
+  constructor order. Plus `hTopAbrupt : TopAbrupt p → ErrHalts c` (the top-level
+  abrupt → exit-70 route) on the same theorems. Net M5 residual delta: 42 → 44
+  named error routes (was: 42 + badClosure + topAbrupt).
+- cost: every mirror of the recursor application (5 theorems across ErrorSim/
+  ErrorSimFull/StuckSimClose/InterpSimBundle) gains 2 premises. Purely additive
+  named premises; no proof obligation discharged here (the dangling-closure and
+  top-level-abrupt machine routes are the honest exit-70 residuals, unreachable
+  from a well-formed `initSt` but demanded by the arbitrary-config recursor).
+- proposal: none — one-time consequence of the authorized `badClosure` leaf. The
+  `stmt-amendment-three-holes` audit should have counted the explicit `.rec`
+  sites; future inductive-leaf amendments must grep for `@<Rel>.rec` applications,
+  not just `cases`/`rcases`.
+
+## 2026-08-31 loadbearing-seg-register-readback (StrArmChain span-3 rejoin)
+- missing: a `gholds_lookup`-companion that reads a register value off a
+  load-bearing `#derive_case` seg outcome. `gholds_lookup L hregs (by rfl)`
+  closes register projections for load-free segs (all sign-tail / cmpFixup /
+  arithmetic rows), because `evalBlocks seg …` reduces to the reg pin under
+  `rfl`. The MOMENT the seg body contains an `ld`/`lw`/`lbu`, `rfl` on
+  `lookupG n (evalBlocks seg (init L lds)).regs = some v` gets STUCK: `runGM`
+  threads `stepLdsM .ld lds = lds.tail` and `wvalM .ld (lds.headD [])` with
+  symbolic `lds`, so the reg-map spine carries an un-reducible `bytesVal .ld …`
+  cell (the dead loaded reg) that whnf refuses to skip. With
+  `maxRecDepth` high this manifests as a NATIVE STACK OVERFLOW (SIGABRT), not a
+  `rfl`-failed error — a nasty diagnosis trap.
+- workaround: `rw [evalBlocks_regs]` then a hand `simp only [runGM, stepGM,
+  wvalM, srcVal, lookupG, eraseG, <six `show (mkLine pc w).field = _ from rfl`
+  field pins>, Nat.reduceEqDiff, if_true, if_false, Option.getD_some]` then
+  finish the `+ sext 0#12` by `BitVec.add_zero`. ~10 lines per register read.
+- cost: ~10 lines + 6 field-`rfl`s PER load-bearing register projection; every
+  future rejoin/spill-reload seg row (any arm that reloads a spilled arg before
+  using it) pays it again. The `mkLine.field` pins are per-word, so a wider
+  load block multiplies them.
+- proposal: `gholds_lookup_ld` (or extend `segToTriple`'s `hpost` marshalling):
+  a lemma `lookupG n (runGM body L lds) = some v` given `n ∈ keysG L`, `n` not
+  written by any `ld` in `body`, and the concrete `runGM`-over-ALU reduction —
+  i.e. peel the loads structurally (à la `srcVal_runGM_ne` in SegFrameFactsAuto,
+  which already peels a register unaffected by the body) and expose the ALU
+  outcome. `srcVal_runGM_ne` is the closest existing brick; it peels but does
+  not deliver the post-mv value. A `runGM`-load-peel readback would collapse the
+  10-line hand simp to one application.
+
+## 2026-08-31 chainfacts-branchguard-arith-overflow (StrArmChain span-1 kind-check)
+- missing: `chain_facts … all_goals rfl` (the model idiom in `cmpFixupTail_facts`,
+  `sTailLt_facts`) does NOT close a branch guard whose value is a NON-TRIVIAL
+  reflected arithmetic. `cmpFixupTail`'s guards are `x12 ≠ 21/22/23` (pinned-int
+  vs literal — cheap `rfl`). The str kind-check's guards are `x15 = x10 - 3 = 0`
+  and `x16 - 3 = 0`: `rfl` must reduce the `addi`'s `sign_extend (0xffd = -3)` +
+  64-bit subtraction through `runGM` with symbolic `lds`, which recurses to
+  unbounded depth → NATIVE STACK OVERFLOW (SIGABRT) at `maxRecDepth 1000000`, NOT
+  a bounded error. Predecessor's `all_goals rfl` was never actually built (the
+  file only ever failed earlier on missing oleans), so this shipped latent.
+- workaround: replace `all_goals rfl` with `all_goals (simp only [runGM, stepGM,
+  wvalM, srcVal, guardB, <per-word `mkLine.field = _ from rfl` pins>,
+  Nat.reduceEqDiff, if_true, if_false, Option.getD_some] <;> decide)` — the simp
+  collapses each guard to a concrete `BitVec` compare, `decide` finishes. Lets
+  `maxRecDepth` stay at the 8000 standard (no bump).
+- cost: ~14 lines (8 field pins) once per kind-check-style facts row; any arm
+  whose branch guard is a subtract/compare-against-computed (not a pinned literal)
+  pays it. Diagnosis cost is the real tax: the SIGABRT gives no line number —
+  found only by lowering `maxRecDepth` to force a located error + `trace_state`.
+- proposal: teach `chain_facts`'s guard-closing tail to try the symbolic-reduce
+  path (`simp only [runGM,stepGM,wvalM,srcVal,guardB,…] <;> decide`) as a fallback
+  after `rfl`, driven by the seg's own per-word decode facts (it already has the
+  `mkLine` field values from the `#derive_case` table). Would make both cheap and
+  arith-heavy guards close with the same one-liner and never overflow.
+
+## 2026-08-31 strArmFront-landed (StrArmChain str-cmp arm front transport)
+- missing: N/A (deliverable note, not an obstruction) — `Vsa/Sim/rows/StrArmChain.lean`
+  LANDS the str-cmp arm machine transport as the `blockC_eqne_front` analogue:
+  span-1 kind-check (`strKindCheckRow`, `#derive_case`+`segToTriple`, branch-terminated),
+  span-3 rejoin (`strRejoinRow`, `ld;mv;j`→0x800036a4), and the `strArmFront` combinator
+  (`strcmp_full_spec` ≫ rejoin ≫ `SignTailLeg` ≫ `value_bool` box, pure `Steps.trans`).
+  `strArmMachineResid_{of,lt,le,gt,ge}` factor `StrArmMachineResid` (StrCmpBlockC) as
+  `StrArmPrologue ≫ strArmFront`, leaving ONLY the kind-3 str-operand prologue
+  (blockA_binaryArm/blockB_binary — the same one that blocks BinStrCells §b concat).
+- workaround: span-2 marshalling (`mv;mv;sd;jal strcmp`) is STAGED INTO the
+  `StrArmFrontData` bundle (operands pre-placed in x10/x11, a2 spilled into mA, the jal
+  seam collapsed into `strcmp_full_pre` with link=0x80003b1c=rejoin-entry) rather than
+  built as a standalone `bridgeOfSeg`+`jalStep_of_obs`, mirroring how `EqFrontData` parks
+  at the jal PC. The post-strcmp→rejoin register reconcile is the bundle's `hReconcile`
+  named residual (a frame projection off `strcmp_post`, x2/x9 callee-saved) — the single
+  honest connective gap, analogous to `EqFrontData.hsnapEval`/`hMemExtRet`.
+- cost: the `hReconcile`/`hTokAtRejoin`/`hBox`/`hSignTail` bundle legs are named `Triple`
+  premises the eventual live wiring must discharge (each a short frame/box reconcile).
+- proposal: none needed here — matches the established front-residual pattern. When the
+  kind-3 str-operand prologue (blockA/blockB) lands, `strArmMachineResid_of` closes the
+  four `strCmpCell_*_of` cells (StrCmpBlockC) directly.
+
+## 2026-08-31 anon-projection-towers (user-observed, session-wide pattern)
+- missing: posts/entries stated as anonymous ∃/∧ towers force consumers into
+  positional projection chains (hPostS.2.2.2.2.2.2.2.2.2) — fragile under
+  reorder, elaboration-heavy, and agents burn turns counting conjuncts.
+- workaround: agents navigated towers by hand across multiple fronts.
+- cost: every consumer of every tower, repeatedly; mis-counts surface as
+  opaque type errors.
+- proposal: named-field `structure ... : Prop where` for all NEW posts/entries
+  (FoundSt/GeomFacts/FrameCalc are the models); ONE named destructuring lemma
+  beside each LANDED tower that must stay; enforce mechanically.
+> harvested: gate rules R6/R7 + CLAUDE.md law 6 + table rows (153 legacy
+> violators grandfathered at rule introduction)

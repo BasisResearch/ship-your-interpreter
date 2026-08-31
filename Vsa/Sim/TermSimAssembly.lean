@@ -283,7 +283,7 @@ theorem term_sim_of_cases
     (hInitNone :
       ∀ (st : SpecSt) (d : Nat) (env : Addr), mExecInit st d env none st (ExecInit.none st d env))
     (hInitSome :
-      ∀ (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (st' : SpecSt) (a : ExecS st d env s st' Status.normal), mExecS st d env s st' Status.normal a → mExecInit st d env (some s) st' (ExecInit.some st d env s st' a))
+      ∀ (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (st' : SpecSt) (status : Status) (a : ExecS st d env s st' status), mExecS st d env s st' status a → mExecInit st d env (some s) st' (ExecInit.some st d env s st' status a))
     (hFlCondFalse :
       ∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (step : Option Expr) (b : Stmt) (st' : SpecSt) (v : Value) (a : EvalE st d env c st' v) (a_1 : v.truthy = false), mEvalE st d env c st' v a → mForLoop st d env (some c) step b st' Status.normal (ForLoop.condFalse st d env c step b st' v a a_1))
     (hFlBodyBreak :

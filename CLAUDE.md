@@ -14,7 +14,8 @@ Before ANY proof work: run `scripts/abs_inventory.sh` and reuse by name.
 
 | Task shape | Use (never hand-roll) |
 |---|---|
-| Straight-line machine run | `#derive_case` seg / `block_facts` / `chain_facts` (model: `Vsa/Sim/EnvDefSeg.lean` — 58 hand lines → 14) |
+| Straight-line OR branch/jump-terminated span | `#derive_case` seg + `segToTriple` (br/j/jr terminators are in-model; model: `Vsa/Sim/EnvDefSeg.lean` — 58 hand lines → 14, `EnvDefBridges4.lean` for branch-ended rows) |
+| Span ending in a CALL (`jal`) | `BridgeSeg.bridgeOfSeg` + `jalStep_of_obs` (the jal seam is deliberately outside `TKind`) |
 | ABI register frame on a run | `FrameMeta.abiFrame_of_wrChain` (one `decide`) — NEVER per-site frame threading |
 | Memory-frame / footprint post | `FrameMeta.memFrame_of_chain` / `bblocks_sound_framed` |
 | Framed variant of a callee spec | FrameMeta metatheorems over its reflected chain — NEVER re-run the chain with a ghost conjunct |
@@ -24,6 +25,8 @@ Before ANY proof work: run `scripts/abs_inventory.sh` and reuse by name.
 | Recursor case row | the `gen_*_row.py` generators + TSV (TermRouting/ExecRouting/BinDispatchRow) |
 | Exit widening | `LeafWiden`/`ExecRecWiden`/`EvalRecWiden`/`blockD_v_phic` |
 | Store↔frame marshalling | `foundSt_of_storeRepr` / `frameRepr_append` |
+| NEW post/entry predicate | named-field `structure ... : Prop where` (model: `FoundSt`/`GeomFacts`/`FrameCalc`) — NEVER an anonymous ∃/∧ tower |
+| Consuming a LANDED ∃/∧ tower | write ONE named destructuring lemma beside the tower's def and consume through it — never `.2.2.2.2` positional chains |
 
 ## Laws
 
@@ -49,6 +52,12 @@ Before ANY proof work: run `scripts/abs_inventory.sh` and reuse by name.
 5. Verify with `lake env lean <file>` only; never `lake build`, never LSP
    tools (they spawn racing builds). Axioms of every new theorem ⊆
    {propext, Classical.choice, Quot.sound}.
+6. Complexity must be HIDDEN by shape, not navigated by hand. If you find
+   yourself counting conjuncts (`h.2.2.2.2…`), tracking positional indices, or
+   re-deriving where a fact sits inside a tower, STOP: the statement wants a
+   named-field structure (new defs) or a named destructurer (landed defs).
+   Positional navigation is fragile (reorders shift every index), slow to
+   elaborate, and burns your turns — gate rules R6/R7 enforce this.
 
 ## Extending the discipline
 

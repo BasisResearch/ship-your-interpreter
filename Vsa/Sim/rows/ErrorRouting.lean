@@ -600,6 +600,8 @@ theorem errFamilyClosed (L : Vsa.Refine.Layout) (S : ErrShared)
     (hsite_hArgsHead : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003fac#64 0xef#8 0xe0#8 0xdf#8 0xdf#8 c)
     (hsite_hArgsTail : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003fdc#64 0xef#8 0xe0#8 0xdf#8 0xdc#8 c)
     (hsite_hNotCallable : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
+    (hsite_hBadClosure : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Vsa.While.Addr)
+      (vs : List Vsa.While.Value), st.store.closures[a]? = none → ErrHalts c)
     (hsite_hArity : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002ebc#64 0xef#8 0xf0#8 0xdf#8 0xee#8 c)
     (hsite_hDepth : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
     (hsite_hBody : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002ebc#64 0xef#8 0xf0#8 0xdf#8 0xee#8 c)
@@ -624,6 +626,8 @@ theorem errFamilyClosed (L : Vsa.Refine.Layout) (S : ErrShared)
     (hsite_hFlLoop : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003fac#64 0xef#8 0xe0#8 0xdf#8 0xdf#8 c)
     (hsite_hSeqHead : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003fdc#64 0xef#8 0xe0#8 0xdf#8 0xdc#8 c)
     (hsite_hSeqTail : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
+    (hsite_hTopAbrupt : ∀ (p : Vsa.While.Program) (c : Config),
+      Vsa.While.TopAbrupt p → ErrHalts c)
     : Vsa.Sim.InterpSimBundle.ErrFamily L :=
   Vsa.Sim.InterpSimBundle.errFamily_of_sites L
     (route_hVarUndef S hsite_hVarUndef)
@@ -644,6 +648,7 @@ theorem errFamilyClosed (L : Vsa.Refine.Layout) (S : ErrShared)
     (route_hArgsHead S hsite_hArgsHead)
     (route_hArgsTail S hsite_hArgsTail)
     (route_hNotCallable S hsite_hNotCallable)
+    hsite_hBadClosure
     (route_hArity S hsite_hArity)
     (route_hDepth S hsite_hDepth)
     (route_hBody S hsite_hBody)
@@ -668,6 +673,7 @@ theorem errFamilyClosed (L : Vsa.Refine.Layout) (S : ErrShared)
     (route_hFlLoop S hsite_hFlLoop)
     (route_hSeqHead S hsite_hSeqHead)
     (route_hSeqTail S hsite_hSeqTail)
+    hsite_hTopAbrupt
 
 #print axioms errFamilyClosed
 
@@ -697,6 +703,8 @@ example (L : Vsa.Refine.Layout) (S : ErrShared)
     (hsite_hArgsHead : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003fac#64 0xef#8 0xe0#8 0xdf#8 0xdf#8 c)
     (hsite_hArgsTail : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003fdc#64 0xef#8 0xe0#8 0xdf#8 0xdc#8 c)
     (hsite_hNotCallable : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
+    (hsite_hBadClosure : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Vsa.While.Addr)
+      (vs : List Vsa.While.Value), st.store.closures[a]? = none → ErrHalts c)
     (hsite_hArity : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002ebc#64 0xef#8 0xf0#8 0xdf#8 0xee#8 c)
     (hsite_hDepth : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
     (hsite_hBody : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002ebc#64 0xef#8 0xf0#8 0xdf#8 0xee#8 c)
@@ -721,6 +729,8 @@ example (L : Vsa.Refine.Layout) (S : ErrShared)
     (hsite_hFlLoop : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003fac#64 0xef#8 0xe0#8 0xdf#8 0xdf#8 c)
     (hsite_hSeqHead : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80003fdc#64 0xef#8 0xe0#8 0xdf#8 0xdc#8 c)
     (hsite_hSeqTail : ∀ c : Config, JalErrPre S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
+    (hsite_hTopAbrupt : ∀ (p : Vsa.While.Program) (c : Config),
+      Vsa.While.TopAbrupt p → ErrHalts c)
     (hterm : ∀ (p : Program) (c : Config) (out : String),
       Vsa.Refine.Loaded L p c → Vsa.While.BigStep p out → Halts c out 0)
     (htri : Trichotomy) (hdivFam : Vsa.Sim.InterpSimBundle.DivFamily L) :
@@ -745,6 +755,7 @@ example (L : Vsa.Refine.Layout) (S : ErrShared)
       hsite_hArgsHead
       hsite_hArgsTail
       hsite_hNotCallable
+      hsite_hBadClosure
       hsite_hArity
       hsite_hDepth
       hsite_hBody
@@ -769,6 +780,7 @@ example (L : Vsa.Refine.Layout) (S : ErrShared)
       hsite_hFlLoop
       hsite_hSeqHead
       hsite_hSeqTail
+      hsite_hTopAbrupt
     )
 
 end Vsa.Sim

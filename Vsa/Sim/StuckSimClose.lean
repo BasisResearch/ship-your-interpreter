@@ -94,6 +94,10 @@ theorem stuckSimClosed (p : Program) (c : Config)
       EvalE st d env e st' v → EvalArgsErr st' d env es → ErrHalts c → ErrHalts c)
     (hNotCallable : ∀ (st : SpecSt) (d : Nat) (fv : Value) (vs : List Value),
       (∀ a, fv ≠ .closure a) → (∀ f, fv ≠ .native f) → ErrHalts c)
+    -- 43rd site: dangling closure address (`CallErr.badClosure`); see
+    -- `ErrorSimFull.errorSim_of_sites`.
+    (hBadClosure : ∀ (st : SpecSt) (d : Nat) (a : Addr) (vs : List Value),
+      st.store.closures[a]? = none → ErrHalts c)
     (hArity : ∀ (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value),
       st.store.closures[a]? = some cd → vs.length ≠ cd.params.length → ErrHalts c)
     (hDepth : ∀ (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value),
@@ -178,6 +182,10 @@ theorem stuckSimClosed (p : Program) (c : Config)
     (hSeqTail : ∀ (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt)
       (st' : SpecSt),
       ExecS st d env s st' .normal → ExecSeqErr st' d env ss → ErrHalts c → ErrHalts c)
+    -- The 43rd error route (top-level abrupt `return`/`break`/`continue` →
+    -- exit 70, `TopAbrupt p`), same exit-70 shape as the other 42 site
+    -- residuals; see `ErrorSimFull.errorSimFull`.
+    (hTopAbrupt : TopAbrupt p → ErrHalts c)
     (hno : ¬ ∃ out, BigStep p out) :
     Diverges c ∨ ∃ out e, Halts c out e ∧ e ≠ 0 :=
   stuckSim htri
@@ -185,9 +193,9 @@ theorem stuckSimClosed (p : Program) (c : Config)
       stuck_of_bigStepErrFull c p
         hVarUndef hAssignE hAssignUnbound hBinaryL hBinaryR hBinaryOp hOrL hOrR hAndL
         hAndR hUnaryE hNegType hCallF hCallArgs hCallC hArgsHead hArgsTail hNotCallable
-        hArity hDepth hBody hEscape hAssertFail hAssertArity hExpr hVarInit hBlock hIfCond
+        hBadClosure hArity hDepth hBody hEscape hAssertFail hAssertArity hExpr hVarInit hBlock hIfCond
         hIfThen hIfElse hWhileCond hWhileBody hWhileLoop hForInit hForLoop hRet hFlCond
-        hFlBody hFlStep hFlLoop hSeqHead hSeqTail herr)
+        hFlBody hFlStep hFlLoop hSeqHead hSeqTail hTopAbrupt herr)
     (fun hdiv => stuck_of_divergenceSim Corr hDivStep hentry hdiv)
     hno
 

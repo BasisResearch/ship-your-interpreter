@@ -331,6 +331,7 @@ import Vsa.Sim.EnvDefBridges2
 import Vsa.Sim.EnvDefBridges3
 import Vsa.Sim.BridgeSeg
 import Vsa.Sim.EnvDefSeg
+import Vsa.Sim.EnvDefBridges4
 import Vsa.Sim.EnvDefBridges
 import Vsa.Sim.EvalDivChain
 import Vsa.Sim.SegFrameFacts
@@ -440,6 +441,7 @@ import Vsa.Sim.rows.BinDispatchProbe
 import Vsa.Sim.rows.BinStrCells
 import Vsa.Sim.rows.StrCmpSignTail
 import Vsa.Sim.rows.StrCmpBlockC
+import Vsa.Sim.rows.StrArmChain
 import Vsa.Sim.rows.ExecCaseGeom
 import Vsa.Sim.rows.ExecRouting
 import Vsa.Sim.rows.ExecRecRows

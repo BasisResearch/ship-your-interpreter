@@ -340,11 +340,12 @@ inductive ExecSCost : St → Nat → Addr → Stmt → St → Status → Nat →
   | brk (st : St) (d : Nat) (env : Addr) : ExecSCost st d env .brk st .brk 0
   | cont (st : St) (d : Nat) (env : Addr) : ExecSCost st d env .cont st .cont 0
 
-/-- Cost companion of `ExecInit`. -/
+/-- Cost companion of `ExecInit` (the init runs to ANY status; C swallows it). -/
 inductive ExecInitCost : St → Nat → Addr → Option Stmt → St → Nat → Prop where
   | none (st : St) (d : Nat) (env : Addr) : ExecInitCost st d env none st 0
-  | some (st : St) (d : Nat) (env : Addr) (s : Stmt) (st' : St) (n : Nat) :
-    ExecSCost st d env s st' .normal n →
+  | some (st : St) (d : Nat) (env : Addr) (s : Stmt) (st' : St) (status : Status)
+      (n : Nat) :
+    ExecSCost st d env s st' status n →
     ExecInitCost st d env (some s) st' n
 
 /-- Cost companion of `ForLoop`. -/
@@ -715,12 +716,13 @@ private theorem c_inone : ∀ st d env, M5 st d env none st (.none ..)
     := by
   intro _ _ _
   exact ⟨_, .none ..⟩
-private theorem c_isome : ∀ st d env s st' (hs : ExecS st d env s st' .normal),
-    M4 st d env s st' .normal hs → M5 st d env (some s) st' (.some st d env s st' hs)
+private theorem c_isome : ∀ st d env s st' status (hs : ExecS st d env s st' status),
+    M4 st d env s st' status hs →
+    M5 st d env (some s) st' (.some st d env s st' status hs)
     := by
-  intro st d env s st' hs ih
+  intro st d env s st' status hs ih
   obtain ⟨_, hn⟩ := ih
-  exact ⟨_, .some _ _ _ _ _ _ hn⟩
+  exact ⟨_, .some _ _ _ _ _ _ _ hn⟩
 private theorem c_lcf : ∀ st d env c step b st' v
     (hc : EvalE st d env c st' v) (hf : v.truthy = false),
     M1 st d env c st' v hc →
