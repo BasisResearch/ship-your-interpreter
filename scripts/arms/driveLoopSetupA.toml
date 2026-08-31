@@ -1,0 +1,17 @@
+name       = "driveLoopSetupA"
+namespace  = "Vsa.Sim"
+entry      = 0x8000442c
+span_end   = 0x80004434
+terminator = "br"
+taken      = false
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac"]
+doc        = "interp_run loop-setup block A [0x8000442c, 0x80004434): ld a5,16(sp) (x15 := n, the spilled AST length a1) ; mv s5,a0 (x21 := setjmp return = 0) ▷ blez a5,0x80004514 — br BGE(x0,a5) NOT taken on the drive (n = program-length > 0, so a5 > 0), falls through to block B @0x80004438. The n<=0 taken arm jumps to the empty-program normal exit @0x80004514, OFF this drive."
+
+# entry pins: sp (ld a5,16(sp) reloads n); a0 (mv s5,a0 = setjmp's 0 return);
+# a5 is written by the ld then read by the blez guard (from the write-log).
+[[pin]]
+reg = 2
+name = "sp"
+[[pin]]
+reg = 10
+name = "a0"

@@ -1292,3 +1292,72 @@ it, still stop and report instead.
   a lone `elabCommand`-emitted theorem is fine; a theorem emitted AFTER a structure
   in the same command needs the `addDecl` route (or emit the structure in a
   separate command first). Keeps the helper proposal but narrows when it is needed.
+
+## 2026-08-31 stringify-display-level-contract (StrConcatCellResid / stringify decode)
+- missing: a framed callee contract for `stringify`@0x80002fc0 that composes via
+  callSeg (the landed value_str/strlen/malloc/memcpy specs are low-level machine
+  Triples over bespoke pre/post records, NOT callSeg-composable high-level
+  contracts; no `free` contract exists at all — the arena is no-free, so the two
+  `jal free` in the concat arm are frame no-ops with no spec to consume).
+- workaround: NONE for the machine Triple. Instead I DECODED stringify per-kind
+  and factored StrConcatCellResid at the `Value.display` level: proved the
+  load-bearing reductions GREEN (`stringifyDisplay_str/int/bool/null`), named the
+  callee post as `StringifyContract`/`StringifyResult` and the shared strdup tail
+  as `StringifyStrdupTailResid`, and reduced `StrConcatCellResid` to a
+  `stringify`-free `StrConcatHeapResid` (`strConcatCellResid_of_heapResid`) — so
+  the "blocked on a stringify spec" gate is closed at the display level; the only
+  residual left is the byte-exact malloc/memcpy/strcpy/value_str concat-into-a-
+  fresh-ValueRepr .str.
+- cost: the concat heap Triple (malloc+memcpy+strcpy+value_str byte-exact into a
+  fresh heap ValueRepr .str, plus showing free×2 don't disturb the public heap) is
+  still bespoke (~several hundred lines); every future value-formatting concat pays
+  it. The int/bool/null stringify branches each still need the strdup-tail Triple.
+- proposal: a `CalleeContract`/`callSeg`-shaped wrapper over the landed
+  strlen/malloc/memcpy machine specs (a StrdupContract), reused by BOTH the
+  stringify tail and the concat cell; plus a `freeFrame` no-op lemma (free = frame
+  identity on the public heap under the no-free arena) so free×2 discharges by
+  frame metatheory instead of a bespoke argument.
+
+## 2026-08-31 genseg-jal-sp-reseat (DriveToLoopHead assembly, task #33)
+- missing: genseg.py's `terminator = "jal"` path emits a `bridgeOfSeg` row with
+  `WrChainAvoidAbi bs` hardcoded, but does not detect when the span reseats a
+  callee-saved register (here `addi sp,sp,-176` writes x2 = sp). The generated
+  `driveSpillBridge`'s `WrChainAvoidAbi driveSpillSeg` decide is FALSE.
+- workaround: hand-reseat the generated jal row on `bridgeOfSegFramed` with
+  `P := AbiExceptSp` (AbiPreserved && !(R == x2)), reading the new sp off the
+  exposed `GHolds σ2 out.regs` post bundle (exactly the BridgeSegFramed demo (a)
+  idiom for the closure `mv s7`/`mv s5` reseats). The prologue frame-setup
+  `addi sp,sp,-C` is a UNIVERSAL idiom (every C function prologue), so every
+  prologue-drive jal row pays this.
+- cost: one hand-edited row per prologue-terminated-in-jal span (~30 lines vs the
+  generated ~10), plus the sp-delta readback; recurs for interp_init's prologue,
+  every callee prologue that calls before the frame is torn down.
+- proposal: genseg detect `wrChain bs ∩ AbiPreserved ≠ ∅` and emit the
+  `bridgeOfSegFramed` shape with `P := AbiPreserved && !(R ∈ wrChain∩Abi)`
+  automatically, exposing the reseated callee-saveds' deltas off out.regs.
+
+## 2026-08-31 driveToLoopHead-store-offpath (DriveToLoopHead assembly, task #33)
+- missing: NOTHING new — this is a CONFIRMATION of the codebase's own analysis
+  (EntrySeams.lean:149-160). `DriveToLoopHead L` demands a loop-head `SegEntry`
+  whose `store` field is `StoreRepr initSt.store`, but `Loaded L p c` (via
+  `atInterpRun`) pins ONLY PC + a0/a1 — never the store. The store is built by
+  `interp_init`, which `main` calls @0x800045b4 BEFORE `interp_run` (@0x800045e8),
+  so it has already returned by the time the machine is `Loaded`. The `interp_run`
+  prologue spans [0x800043ec, 0x8000448c) NEVER touch the store (spill/setjmp/loop
+  bound only). CONCLUSION: the SegEntry's `store`/`out` representation fields can
+  NEVER be closed by the prologue machine drive; they are irreducibly NAMED
+  premises consuming the interp_init build (InterpInit.interpInitStore_compose).
+- second finding: `DriveToLoopHead L` is stated over an ABSTRACT `L`, so
+  `L.atInterpRun` is opaque — the drive has NO machine facts at all until
+  instantiated at the CONCRETE `interpRunLayout` (whose atInterpRun unfolds). So
+  the assembly target is `DriveToLoopHead interpRunLayout` /
+  `InterpInitStoreRepr interpRunLayout`, not the abstract carrier.
+- workaround: NONE needed — assembled the REAL machine Steps chain (3 proved seg
+  rows spliced through the named setjmp seam) and left the store/out
+  representation + setjmp-buffer geometry as named-field structure premises, which
+  is the correct decomposition (the convergence point EntrySeams describes).
+- proposal: the store premise should be discharged by wiring
+  InterpInit.interpInitStore_compose's output (StoreRepr storeAfterAssert =
+  StoreRepr initSt.store) into hFields — but that needs a main-frame fact
+  (interp_init ran and its store survives to interp_run's loop head across the
+  intervening main code), which is a genuine separate machine obligation.

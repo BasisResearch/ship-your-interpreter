@@ -1,0 +1,51 @@
+name       = "driveSpill"
+namespace  = "Vsa.Sim"
+entry      = 0x800043ec
+span_end   = 0x80004424
+terminator = "jal"
+callee     = "setjmp"
+callee_pc  = 0x80006ffc
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac", "Vsa.Sim.BridgeSeg"]
+doc        = "interp_run prologue spill span [0x800043ec, 0x80004424): addi sp,sp,-176 ; sd a0,0(sp) ; addi a0,a0,16 ; sd ra/s0/s1/s2/s3/s4/s5/s6,168..112(sp) ; sd a1,24(sp) ; sd a2,16(sp) ; sd a3,8(sp) ▷ jal setjmp @0x80004424. Frame setup: 13 callee-saved/arg spills to the fresh 176-byte stack window + the sp adjust and a0+=16 reseat. Ends in jal setjmp (the first-return splice, JmpSpec.setjmp_spec) — a bridgeOfSeg row."
+
+# entry pins: a0 (spilled + reseated a0+16), sp (frame base for all spills),
+# ra/s0..s6/a1/a2/a3 (each spilled).
+[[pin]]
+reg = 10
+name = "a0"
+[[pin]]
+reg = 2
+name = "sp"
+[[pin]]
+reg = 1
+name = "ra"
+[[pin]]
+reg = 8
+name = "s0"
+[[pin]]
+reg = 9
+name = "s1"
+[[pin]]
+reg = 18
+name = "s2"
+[[pin]]
+reg = 19
+name = "s3"
+[[pin]]
+reg = 20
+name = "s4"
+[[pin]]
+reg = 21
+name = "s5"
+[[pin]]
+reg = 22
+name = "s6"
+[[pin]]
+reg = 11
+name = "a1"
+[[pin]]
+reg = 12
+name = "a2"
+[[pin]]
+reg = 13
+name = "a3"

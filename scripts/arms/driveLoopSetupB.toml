@@ -1,0 +1,16 @@
+name       = "driveLoopSetupB"
+namespace  = "Vsa.Sim"
+entry      = 0x80004438
+span_end   = 0x80004454
+terminator = "j"
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac"]
+doc        = "interp_run loop-setup block B [0x80004438, 0x80004454): ld a5,16(sp) (x15 := n) ; ld s0,24(sp) (x8 := AST base, spilled a1... the stmt array) ; addi s6,gp,1120 (x22 := _impure_ptr @0x8001b970) ; slli s2,a5,0x3 (x18 := n*8) ; add s2,s0,s2 (x18 := s0 + n*8 = loop bound) ; li s3,3 (x19 := 3) ; li s4,1 (x20 := 1) ▷ j 0x8000448c — the statement-loop head. Sets up the loop bound s2, the constants s3/s4, and the _impure_ptr base s6; all reseats + reloads, no stores."
+
+# entry pins: sp (two reloads @16/24); gp (addi s6,gp,1120 = _impure_ptr);
+# s0 is written by ld then read by add; a5 written by ld then read by slli.
+[[pin]]
+reg = 2
+name = "sp"
+[[pin]]
+reg = 3
+name = "gp"
