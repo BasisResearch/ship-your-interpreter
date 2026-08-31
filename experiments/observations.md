@@ -381,3 +381,48 @@ it, still stop and report instead.
 - proposal: keep `ImageGeom` as-is; if a future row needs a NEW whole-program
   (non-sp) constant, add it additively to `ImageGeom` (one field) — do NOT widen
   `TermShared` directly.
+
+## 2026-08-31 armpostgeomv-two-hidden-axes (T1.1 fan-out)
+- missing: the survey's "byte-identical modulo opTok/slot/value-form" understated
+  two axes: (1) the value-image region is a literal PAIR (viLo/viHi) appearing in
+  two fields, not a single predicate swap; (2) tableStk's offset is per-op
+  (4 add/sub/cmp, 12 mul, 20 div/mod).
+- workaround: none — both became parameters of ArmPostGeomV (the right fix).
+- cost: none paid; a naive bool-copy would have been WRONG silently.
+- proposal: none new; lesson = when a survey claims "identical modulo X", the
+  fan-out agent should diff two instances mechanically before templating.
+> harvested: ArmPostGeomV landed (7/8 ops; EqResid correctly resisted — its
+> collapse point is EqNeBoxPre, documented in-file)
+
+## 2026-08-31 if-branch-dispatch-ih (ExecDispatchRows, dispatch/loop rows task)
+- missing: `ExecIH → ExecDispatchIH` bridge for the `if` re-dispatch branch. The
+  recursor hands the then/else branch sub-derivation as `mExecS = ExecIH`
+  (full-entry, through the prologue at 0x80003fe0); `execIfTrueSim`/`execIfFalseSim`
+  consume it as `ExecDispatchIH` (post-prologue re-entry at 0x80004014, shared frame).
+- workaround: carried `ExecDispatchIH` as a NAMED field `hBranch` of
+  `IfTrueGeom`/`IfFalseGeom`; the recursor's `ExecIH` is threaded but unused by the sim.
+- cost: the branch-from-dispatch simulation is duplicated per if-arm as a residual;
+  it cannot be supplied from the recursor IH.
+- proposal: a `dispatchIH_of_execIH` lemma is FALSE in general (re-dispatch skips the
+  prologue). The honest fix is either (a) `execPrologue`-strip: a metatheorem that the
+  branch's `ExecDispatchIH` follows from its `ExecIH` composed with the fact that the
+  re-dispatch state IS a valid `ExecEntry`-minus-prologue — i.e. prove
+  `ExecDispatchReady → ∃ pre-prologue ExecEntry` is UNREACHABLE and instead land the
+  branch sim natively at `ExecDispatchReady`; or (b) a second motive `mExecS_dispatch`
+  in the recursor giving branches the `ExecDispatchIH` shape directly.
+
+## 2026-08-31 scaffold-motive-independent-pq (ExecDispatchRows, hInitNone/hFcNone/hEsNone)
+- missing: the `mExecInit`/`mForCond`/`mExecStep` recursor motives quantify the
+  entry PC `p` and exit PC `q` INDEPENDENTLY (`TermSimAssembly.lean:114-152`), so the
+  honest identity rows `LoopScaffoldClose.segIdentity{,_of_eq}` (which need `p = q`)
+  cannot discharge `hInitNone`/`hFcNone`/`hEsNone`. Machine-checked: `segIdentity`
+  yields `SegExit … st p`, the motive demands `SegExit … st q`, `q ≠ p`.
+- workaround: NONE — stopped; these rows are blocked at the current motive shape.
+- cost: hInitNone/hFcNone/hEsNone (3 scaffold no-op premises) + hInitSome (needs a real
+  ExecIH→Seg control bridge) remain open; hFl*/hEs*/hFc-some are the actual machine
+  segments (not identity), also blocked on the Seg-motive control-flow.
+- proposal: amend the four Seg-skeleton motives to relation-specific PCs with `p = q`
+  for the no-op relations (the `LoopScaffoldClose.lean` module doc already flags this
+  as the required motive repair), OR give them a single shared PC parameter. Once
+  `p = q`, `execInitNone_samePC`/`forCondNone_samePC`/`execStepNone_samePC` close them
+  immediately (already landed, awaiting the motive fix).

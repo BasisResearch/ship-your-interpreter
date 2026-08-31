@@ -448,6 +448,8 @@ import Vsa.Sim.rows.StrArmChain
 import Vsa.Sim.rows.ExecCaseGeom
 import Vsa.Sim.rows.ExecRouting
 import Vsa.Sim.rows.ExecRecRows
+import Vsa.Sim.rows.ExecIHWiden
+import Vsa.Sim.rows.ExecDispatchRows
 import Vsa.Sim.rows.CallRows
 import Vsa.Sim.rows.CallResidProviders
 import Vsa.Sim.rows.CallArmEpilogue

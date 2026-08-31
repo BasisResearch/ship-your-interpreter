@@ -35,8 +35,10 @@ fi
 HOST="$RBUILD_HOST"
 JOBS="${RBUILD_JOBS:-10}"
 RDIR="Documents/code/verified-semantic-abstraction"
-# Non-interactive ssh gets no brew/elan PATH — set it explicitly.
-RENV='export PATH="$HOME/.elan/bin:/opt/homebrew/bin:$PATH"'
+# Non-interactive ssh gets no brew/elan PATH — set it explicitly. The
+# caffeinate (keyed to the remote shell's lifetime) stops the Pro sleeping
+# mid-build; the initial seed died to exactly that.
+RENV='export PATH="$HOME/.elan/bin:/opt/homebrew/bin:$PATH"; (caffeinate -ims -w $$ &)'
 
 fail() { echo "rbuild: FAIL: $*" >&2; exit 1; }
 
