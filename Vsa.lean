@@ -466,6 +466,8 @@ import Vsa.Sim.rows.StrCmpOrderClose
 import Vsa.Sim.rows.BinStrReadback
 import Vsa.Sim.rows.BinIntReadback
 import Vsa.Sim.rows.StringifySpec
+import Vsa.Sim.rows.StringifyStrdupTail
+import Vsa.Sim.rows.StrConcatHeap
 import Vsa.Sim.rows.ExecCaseGeom
 import Vsa.Sim.rows.ExecRouting
 import Vsa.Sim.rows.ExecRecRows
@@ -508,6 +510,7 @@ import Vsa.Sim.rows.DriveSpillGen
 import Vsa.Sim.rows.DriveLoopSetupAGen
 import Vsa.Sim.rows.DriveLoopSetupBGen
 import Vsa.Sim.DriveToLoopHeadSpans
+import Vsa.Sim.DivLoopProgressClose
 import Vsa.While.StmtDispatch
 import Vsa.While.StmtDispatchClose
 import Vsa.Sim.InterpSimBundle

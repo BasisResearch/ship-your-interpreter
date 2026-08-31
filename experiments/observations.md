@@ -1361,3 +1361,22 @@ it, still stop and report instead.
   StoreRepr initSt.store) into hFields — but that needs a main-frame fact
   (interp_init ran and its store survives to interp_run's loop head across the
   intervening main code), which is a genuine separate machine obligation.
+
+## 2026-08-31 strconcat-no-free-contract (task #64 gap 3, StrConcatHeap)
+- missing: a `free` contract. The str-concat arm (`0x80003abc`/`0x80003ac4`)
+  calls `free` twice on the two `stringify` scratch buffers, but the arena
+  allocator (`Vsa/Alloc.lean` `MallocContract`) models NO free — the arena
+  never reclaims. So there is no theorem "`free(p)` leaves the public heap /
+  every live extent `AInv`-unchanged".
+- workaround: named the two frees as a public-heap frame NO-OP obligation
+  folded into `StrConcatCBlockResid` (the concat-C-block residual). Not built —
+  it is one of the sub-facts of that named typed residual.
+- cost: every arena-frees-nothing call site (concat here; any future
+  interpreter path that calls `free` on a scratch buffer) must re-argue that
+  `free` is a public-heap no-op from scratch inside its block residual.
+- proposal: add `MallocContract.freeNoOp : ∀ g exts p n sp r m0, Triple (free-pre
+  p) (free-post : mem-agrees-outside-privFoot ∧ AInv unchanged ∧ ABI frame)` —
+  a frame-only contract mirroring `memcpy_framed_ainv_stable`'s outside-footprint
+  clause but with EMPTY write footprint (free touches only allocator-private
+  metadata). One `decide`-free structure field; then every free call is a
+  `callSeg` with a trivial frame-preserving suffix, same as the other callees.
