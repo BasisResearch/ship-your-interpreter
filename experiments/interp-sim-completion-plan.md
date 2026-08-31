@@ -1,107 +1,99 @@
-# InterpSim completion plan (2026-08-30)
+# InterpSim completion plan (updated 2026-08-31; original 2026-08-30)
 
 State: `InterpSimFinal.interpSimClosed_of_families L hterm htri hdivFam herrFam :
 InterpSim L` is a complete theorem. Completion = discharging the four residual
-bundles. The v2 metaprogram layer is complete (one combinator per machine-code
-shape: `chain_facts`, `#derive_error_site`, `segToTriple`, `loopFromBody`,
-`callSeg`), so every remaining leaf is an instance of a shape, not an invention.
-Build iteration is ~3x faster post build-speed campaign; decode-table additions
-cost ~0.25s/lemma via the generator; `check_all` stage a2 guards elab budgets.
+bundles. The v2 metaprogram layer is complete; the 2026-08-30/31 campaign
+(waves 1-5, commits `7813980`/`00c2475`/`6de8d77`/`409c6b7`/`34dbd7e`, every
+wave check_all: OK, currently 400/400 axiom-audited) additionally built the
+ROW/REDUCTION LAYER: every bundle is now reduced to named, typed residuals.
+Remaining work = discharging those residuals; no unscoped gaps remain.
 
-Worktree audit (2026-08-30): the three stale agent worktrees are removed. Two
-were byte-identical to work already merged in `35921b2`. The third held a
-52-line WIP `eqDispatch_lpins` whose proof was incomplete; its statement is
-parked at `experiments/eqne-front-wip-eqDispatch_lpins.lean.txt` for step 1.
-`EqNeReprReadback` was orphaned (never imported); now wired into `Vsa.lean`.
+Coordination: coordinator owns `Vsa.lean` + `scripts/check_all.sh`; agents
+return wiring lines. Standing rules: `scripts/abs_inventory.sh` before every
+dispatch; reuse by name; elaboration-budget law (no heartbeat/timeout raises —
+a timeout means the construction is wrong, fix with more abstraction); agents
+return blocker details, never workarounds; residuals are named typed premises,
+never sorry.
 
-Steps, in dependency-and-leverage order. Each lands with `check_all: OK` and
-axioms ⊆ {propext, Classical.choice, Quot.sound}; capstones join check_all
-THEOREMS as they close.
+## Status of the original steps
 
-## 1. eq/ne front wiring (recovers the dead worktree task)
+1. **eq/ne front** — DONE (commits through `46667a2`; evalEqSimD/evalNeSimD
+   consumed by the binary dispatcher).
+2. **ge, mul** — DONE (pre-campaign).
+3. **M5 error family** — DONE (`errFamilyClosed`; ExitPathSpans wired).
+4. **Shape-C loops** — LAYER DONE (`LoopSteps.lean`, `evalArgsStepOf`
+   marshalling paid once per shape); per-arm machine chains remain (see below).
+5. **env_define/realloc** — composition landed (`envDefContract` +
+   append/grow); framed-callee posts landed for strlen (tick-complete) +
+   memcpy byte-route; **3/9 Shape-A bridges closed**
+   (strlenPre/mallocPre/capCompute). Open: bridgeStore (FrameRepr-append core),
+   namesToVals/appendHead (need the grow-seam struct-field pins — GrowEnvEntry
+   carrier), hUpdate + dispatch scan (reuse env_get scan shape), memcpy
+   word-route framed epilogue.
+6. **Residual unification / rows** — LAYER BUILT: ~26 of the 50 recursor
+   premises have landed slot-verified rows (10 EvalE leaf/logical/unary,
+   hBinary dispatcher `eval_binary_row` + `binary_row_fills_hBinary`, hVar
+   (`eval_var_row_closed`), all 7 call-subsystem, hSBrk/hSCont/hSExpr/hSRet/
+   hSRetNull). The three exit wideners exist (`LeafWiden`/`ExecRecWiden`/
+   `EvalRecWiden` + `blockD_v_phic`). Open premises: hAssign (env_define-gated),
+   hCallClosure (depth crux), ExecS dispatch/loop arms (if/while/for/block/seq),
+   scaffold premises; then the `@EvalE.rec` table assembly (naming discipline).
+7. **M5 second half + M6** — MAJOR PROGRESS: the trichotomy spec bug
+   (machine-checked in `Vsa/While/StmtDispatch.lean`: pre-amendment `Approx`
+   could not witness within-statement divergence; `hExclude` unsatisfiable;
+   `Trichotomy` false at `[while(true){}]`) is FIXED by the wave-5 amendment —
+   `SApprox` mutual fuel family (1:1 mirror of the error judgment) +
+   `Approx.head`; exclusion proved by contraposition; `loopP_diverges` demo.
+   `htri` now rests on `StmtDispatchD` + `hroot`
+   (`trichotomy_of_stmtDispatchD`, both honestly provable). `hdivFam` =
+   `DivCorrFamily` (gated on the same forward-sim Triples as hterm; `DivStep`
+   redefined as a conjunction so downstream signatures were unchanged).
+   M6 close (Layout bundling + `Vsa.Refine.refinement` plug) still open.
 
-Recipe: `experiments/eqne-front-closure-execution.md` (models named per item).
-Build, in order:
-1. `eqDispatch_lpins` (statement in the parked WIP file) — bridge
-   `evalEqChain_dispatch`'s existential `lds` to the six-elt `[b0..b5]` form
-   `EqNeReprReadback`'s repr lemmas expect.
-2. `eqnePreBridge` (model: `divPreBridge`, `EvalDivValueTail.lean:47`) — jal →
-   `ve_pre g bufa bufb r N φc va vb m0 o c`.
-3. `veReturnBridge` (no direct model; spec in the execution doc) —
-   `ve_str_post … → VeReturn g (sp-1088) sret vl vr link out0 mEnt`.
-4. `EqResid` bundle (model: `DivResid`, `rows/EvalDivRow.lean:662`).
-5. `blockC_eqne_front` (model: `blockC_div`, `rows/EvalDivRow.lean:202`) —
-   `evalEqChain_dispatch ≫ repr readback ≫ eqnePreBridge ≫
-   value_equal_spec_full ≫ veReturnBridge ≫ blockC_eqne`.
-6. Reseat `evalEqNeSim` to div-parity (model: `evalDivSim`,
-   `rows/EvalDivRow.lean:751`); keep `evalEqSim`/`evalNeSim` thin.
-Gate: `#print axioms evalEqSim evalNeSim` clean; add to check_all.
+## Remaining work (the discharge queue, by front)
 
-## 2. Last binary ops: ge, mul
+Machine-side (each scoped, callees/reuse identified in the session task notes):
+- **env_define bridges** (6 remaining; agent pattern established) → unblocks
+  hAssign, hSVarInit/hSVarNull/hSBlock, and the Call.closure env-fold.
+- **ExecS dispatch/loop arms** — the largest un-rowed family; loop shapes and
+  `execBlockA`/`execBlockD` exist, each arm is a chain instance.
+- **hBinary str cells**: str-cmp arm chain (sign tails + all callees landed;
+  order bridge `StrCmpOrderBridge` = String.lt ↔ strcmp sign, spec layer has
+  only equality today) + stringify/concat path (biggest single new
+  development; `stringify` = the snprintf-family formatter, no spec yet).
+- **Call residuals**: native print char-loop body (`NativeBodyContract`),
+  `CallArmSpec`/`FnArmSpec` (unblocked by `blockD_v_phic`), retNull glue
+  assembly (site batteries + `NullBridgeSeam` landed), `ArgsNilHop`,
+  `ArgsBodyOracle` (mutual-recursor-gated).
+- **hVar last layer**: `VarPostRepack` + `EnvGetCallerGeom` discharge at the
+  arm (marshalling `foundSt_of_storeRepr` + framed post landed).
+- **Entry seams**: `StoreInitSeam` (env_new startup decode) + `EpilogueFrame`
+  (mostly `restoreRetChain_run` reuse). Closes hEntryHalts.
+- **hCallClosure** — the depth crux; after env_define lands, it is
+  arity+depth-guard+env_new+env_define-fold+body-ExecSeq at d+1 via callSeg.
 
-- `ge`: DONE — the divergence flag was stale (token 23 is the comparison arm's
-  compiled fall-through; `experiments/ge-semantics-investigation.md`), and
-  `evalGeSim`/`blockC_ge` already landed (526f575, in check_all).
-- `mul`: ALSO DONE — landed in `7a96b72` (`evalMulSim` + `blockC_mul`,
-  green + axiom-clean); the `experiments/mul-wip/` capture is superseded.
-Step 2 is therefore COMPLETE: with div/mod already landed, every `EvalE`
-constructor has a landed Triple modulo the step-1 eq/ne reseat.
+Spec-side:
+- **`StmtDispatchD` + `hroot`** — the final htri residuals; classical totality
+  induction over the Stmt/Expr mutual family (runs ∨ errors ∨ SApprox-∀).
 
-## 3. M5 error family routing (cheapest bundle, closes `herrFam`)
+Exponentiation refactors (queued, non-blocking):
+- strlen byte-tail rebuild on block-reflection (kills ~1000 hand lines).
+- AbiFrameKit hoist (frame primitives proven callee-generic by verbatim reuse).
+- re-seat `interpContSeg_of` on `restoreRetChain_run`; generic-`w` cmp fixup
+  bridges (serve int + str arms); generator for the thrice-duplicated
+  42-premise error-site list.
 
-All 19 distinct error-site Triples are proved (`rows/ErrSitesBatch{0..3}`,
-`errSite_<pc>`). Remaining is routing, no new machine proofs:
-- map each `errorSimFull` minor premise → its `errSite_<pc>` (SitePre/hsite);
-- supply the shared `SC`/`HT` facts ONCE at L7/L8 (same for all 42 premises).
-Also in this area: fix and land `Vsa/Sim/ExitPathSpans.lean` (untracked,
-broken at `c.σ` field resolution ~line 156) — it discharges `InterpContSeg`
-of the exit-70 tail; `ExitPathSeg` shows the working idiom.
-
-## 4. Shape-C loop fan-out (`loopFromBody`)
-
-The per-iteration step contracts listed as residuals — `ExecWhileStep`,
-`ExecForStep`, `EvalArgsStep`, block-`hstep` — are each `Triple.loop` over one
-back-edge block. One invariant+measure per loop SHAPE (not per site), bodies
-emitted by `loopFromBody` (`DeriveLoop.lean`). Env-scan loops (env_get/
-env_define) share the scan shape; `env_get_found`'s `hreach` residual closes
-here too (unblocks unconditional `evalVarSim`).
-
-## 5. Shape-D: composed `env_define`/`realloc` contract (biggest semantic gap)
-
-Gates `Call.closure`, `varDecl`, `assign`. Compose via `callSeg`/`callSegConseq`
-(`DeriveCallSeg.lean`): M3's env_define prologue ≫ strlen_spec ≫ MallocSpec
-(named hypothesis per the Layer-2 decision — NOT an axiom) ≫ memcpy ≫ realloc
-(`ReallocSpec.lean`: `ReallocOps`/`ReallocPre`/`ReallocPost`/grow2 arena lemmas
-exist; the machine-level realloc row is the main new proof). Then `Call.closure`
-= arity+depth-guard+env_new+env_define-fold+body-ExecSeq at d+1, all seams
-`Triple.seq`.
-
-## 6. Residual unification → mutual-recursor assembly (`hterm`, `htri`)
-
-Normalize every case's heterogeneous named residuals into the four-bundle
-interface — the `DivResid`→`EqResid` pattern is the template: each case's
-residual becomes one named `<Op>Resid` Prop threaded through its row. Then the
-`@EvalE.rec`/`InductionScaffold` assembly is a table: motive = the `EvalIH`
-shape, each arm supplied by its row. This is the step PLAN-InterpSim flags as
-"blocked on residual unification"; the unblocntion is naming discipline, not
-new machine proofs.
-
-## 7. M5 second half + M6 close
-
-- `Approx` trichotomy + divergence simulation (per-piece plan in
-  `memory/m5-stuck-sim.md`): every spec rule costs ≥1 instruction; resource
-  exhaustion (depth cap 1000, arena) lands in the `Halts e ≠ 0` disjunct.
-- M6: bundle `ImageStaticsLoaded` (statics) + capstone geometry into the
-  concrete `Layout L` record (`LayoutInstance.lean` already pins
-  Layout+GeomFacts), plug into `Vsa.Refine.refinement`, final
-  `#print axioms` audit, add the end-to-end theorem to check_all.
+Then: residual unification into `TermShared`/`TermCallees`/`TermGuards`, the
+recursor table assembly, `termSimClosed`, `hdivFam` from the same Triples, M6
+Layout close, final `#print axioms` audit, end-to-end theorem into check_all.
 
 ## Execution notes
 
-- Fan-out mechanics: COW-clone worktree workflow (proven on the error-site
-  fan-out) for independent rows; ≤3 concurrent lean; agents use
-  `lake env lean` only, never `lake build`, never LSP (spawns a racing build).
-- Steps 1-2 are independent of 3; 4 and 5 are independent of each other;
-  6 needs 1-5; 7 needs 6 (term_sim side) but 3 (error family) can start now.
-- Standing rule: run `scripts/abs_inventory.sh` before every dispatch; reuse
-  by name, never reinvent.
+- ≤3 concurrent lean; agents use `lake env lean` only, never `lake build`,
+  never LSP. During API instability: single-agent regime, never run check_all
+  concurrently with agents, bake salvaged diagnoses into relaunches, do
+  near-done/spec-layer items inline.
+- check_all stage b scans UNTRACKED files — move agent WIP aside for
+  validating runs; read the output tail, not just the exit code.
+- Full session state: memory `interpsim-completion-campaign.md` + the task
+  board (#6/#10/#11/#13/#15/#18/#20/#21/#24/#26 open at time of writing).
