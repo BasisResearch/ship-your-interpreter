@@ -1430,3 +1430,60 @@ it, still stop and report instead.
   (P : Config → Prop) : Prop := ∃ c', Steps c c' ∧ P c'` — so SegLanded/SpillLanded
   are `Landed c (fun c' => …)` and the destructurer is shared. The `Triple`
   result IS `Landed` at the pre-config; marshalling becomes `id`.
+
+## 2026-08-31 step-count-layer-landed (Task #70, resume)
+- RESOLVED (uncommitted): `Vsa/Sim/StepCount.lean` (3.5s, all thms axiom-clean
+  ⊆ {propext,Classical.choice,Quot.sound}). Delivers the step-counting
+  exponentiating layer.
+- KEY REUSE: the whole `TripleN` algebra ALREADY exists in `Vsa/Triple.lean`
+  (`TripleN.mono` = the weaken lemma, `TripleN.seq` = counted `Triple.seq` with
+  counts adding, plus `of_triple`/`of_step`/`conseq`/`toTriple`). Task parts 2
+  needed NO new composition lemmas — point future agents there.
+- CRUX FACT: `Config.steps` is threaded by `stepOnce` (Elf.lean:47) as `used + 1`
+  on BOTH `.inr` continue leaves, so every `Step` advances `steps` by exactly 1
+  (`Step.steps_succ`, proved by `unfold stepOnce; repeat' (simp bind/EStateM
+  layer | split | inject-payload | .inl→False)`). ⇒ `Steps a b` with
+  `b.steps = a.steps + k` is `StepsN k` (`Steps.toN_of_stepsEq`). `segEval_sound`
+  already pins the reached `steps` to `u + evalBlocksFuel bs`, so
+  `segToTripleN bs L lds pc0 m0 Q hwf hpost : TripleN (evalBlocksFuel bs)
+  (SegPre …) Q` — SAME hwf/hpost as `segToTriple`, upgraded count. THIS is the
+  free lower bound for every existing/future `#derive_case` seg row.
+- `Landed`/`LandedN` combinators landed (the resolution of the prior
+  landing-bundle entry): `Landed c P := ∃ c', Steps c c' ∧ P c'` +
+  mk/refl/weaken/bind/of_triple, and counted `LandedN n` +
+  mk/toLanded/weakenCount/weaken/bind(adds counts)/of_tripleN. SpillLanded/
+  SegLanded in DriveToLoopHeadSpans are literal `Landed` instances — reseat is
+  future work, combinator is ready.
+- RECIPE for a future agent to count a row `myRow : Triple (SegPre bs …) Q`:
+  don't touch myRow; call `segToTripleN bs L lds pc0 m0 Q hwf hpost` with the
+  same args → `TripleN (evalBlocksFuel bs) …`; then `TripleN.mono` down to
+  `TripleN 1` (iterFromCountedRun) or `TripleN (n+1)` (approxFromCountedRun) via
+  a `decide` on the fuel (`segToTripleN_one`/`_succ` package that arithmetic).
+
+## 2026-08-31 interior-call-span-combinator (Task #69 loop-head dispatch span)
+- missing: a combinator for a span shape `seg ≫ CALL ≫ seg ≫ jal` (an INTERIOR
+  call in the middle of a straight-line span, then more marshalling, then a
+  terminal jal). `bridgeOfSeg` handles `seg ≫ jal` (one trailing call);
+  `callSeg` handles `prefix ≫ callee ≫ suffix` at the Config→Prop `Triple`
+  level. Neither composes a `#derive_case` seg run ACROSS an interior call at
+  the raw `Steps` level and continues into a second seg + trailing jal.
+- workaround: the interp_run loop-head→exec_stmt span
+  (0x8000448c br → value_null CALL @0x8000445c → arg-setup seg → jal exec_stmt
+  @0x80004474) was split into `loopHeadDispatchRow` (br seg) + a NAMED
+  `ValueNullSplice` premise (the interior value_null call, phrased like
+  `DriveToLoopHeadSpans.SetjmpSplice`) + `loopHeadArgSetupBridge` (bridgeOfSeg
+  for the second seg + trailing jal), then `Steps.trans`-composed by hand in
+  `loopHeadDispatch_span`. The value_null splice is a genuine off-path CALL so
+  naming it is legitimate — but the HAND `Steps.trans` composition + the manual
+  richer-landing helper (`loopHeadDispatchLanded`, needed because the generated
+  `*Row` post drops the tick/minstret the next splice consumes) is the
+  mechanical part.
+- cost: ~40 lines of hand composition + one bespoke `loopHeadDispatchLanded`
+  helper per interior-call span. The `hterm` back-edge assembly and any other
+  interp-loop-body span with an interior helper call (there are several:
+  value_print, env_get in the eval arms) will pay it again.
+- proposal: `callSpanSeg` — a combinator taking (segA, calleeSplicePremise,
+  segB, jalSeam) and returning the composed `Steps` landing, folding the
+  `Steps.trans` + the tick/minstret threading. Alternatively, extend the genseg
+  arm compiler with a `mid_call` terminator-list so a single arm description
+  emits the whole `seg ≫ CALL ≫ seg ≫ jal` row with the interior call named.

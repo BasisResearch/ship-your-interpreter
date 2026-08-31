@@ -1,0 +1,16 @@
+name       = "loopHeadDispatch"
+namespace  = "Vsa.Sim"
+entry      = 0x8000448c
+span_end   = 0x80004494
+terminator = "br"
+taken      = true
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac"]
+doc        = "interp_run loop-head dispatch prefix [0x8000448c, 0x80004494): ld a5,8(sp) (x15 := *(sp+8), the REPL-echo flag) ; ld s1,0(s0) (x9 := *s0 = current Stmt* at the loop cursor) ▷ beqz a5,0x80004458 — the non-REPL exec-stmt dispatch branch (TAKEN when the flag is 0). Lands at 0x80004458, the exec_stmt-marshalling head (value_null retslot init ≫ jal exec_stmt)."
+
+# entry pins: sp (x2, the flag reload @8(sp)); s0 (x8, the statement-array cursor).
+[[pin]]
+reg = 2
+name = "sp"
+[[pin]]
+reg = 8
+name = "s0"
