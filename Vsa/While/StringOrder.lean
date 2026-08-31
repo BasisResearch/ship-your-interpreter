@@ -106,6 +106,25 @@ theorem allNonzero_tail {a : Char} {as : List Char} (h : AllNonzero (a :: as)) :
 theorem allNonzero_head {a : Char} {as : List Char} (h : AllNonzero (a :: as)) :
     0 < a.toNat := h a (List.mem_cons_self ..)
 
+/-- **`cstr_allNonzero`** — a `CStr` witness supplies the `AllNonzero` recursion
+invariant: every stored char is `Char.ofNat b.toNat` with `b ≠ 0` and `b.toNat < 128`,
+so its codepoint `(Char.ofNat b.toNat).toNat = b.toNat` (by `char_ofNat_toNat`) is
+positive.  This is the one fact `StrCmpOrderClose` needs to feed the proved order
+bridges (`strcmpSpecSign_{neg,pos}_iff_lex`) from a `strcmp_post` `CStr` witness. -/
+theorem cstr_allNonzero {m : Vsa.MemRepr.Mem} {a : Nat} {cs : List Char}
+    (h : Vsa.MemRepr.CStr m a cs) : AllNonzero cs := by
+  induction h with
+  | nil _ => exact allNonzero_nil
+  | @cons a b cs hmem hbne hlt _htail ih =>
+    intro c hc
+    rcases List.mem_cons.mp hc with hhead | htail
+    · subst hhead
+      rw [char_ofNat_toNat b hlt]
+      have : b.toNat ≠ 0 := fun hz => hbne (by
+        apply BitVec.eq_of_toNat_eq; rw [hz]; rfl)
+      omega
+    · exact ih c htail
+
 /-! ## The ORDER BRIDGE — byte-lex sign ↔ `List.Lex` codepoint order -/
 
 /-- **The strict order bridge (`<`).**  For char lists with nonzero chars (the
@@ -253,5 +272,6 @@ theorem strcmpSpecSign_self_zero (cs : List Char) (h : AllNonzero cs) :
 #print axioms strcmpSpecSign_neg_iff_lex
 #print axioms strcmpSpecSign_pos_iff_lex
 #print axioms eq_of_strcmpSpecSign_zero_ascii
+#print axioms cstr_allNonzero
 
 end Vsa.While

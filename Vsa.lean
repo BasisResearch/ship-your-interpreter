@@ -362,6 +362,9 @@ import Vsa.Sim.rows.ErrorRouting
 import Vsa.Sim.rows.ErrorRoutingClasses
 import Vsa.Sim.rows.ErrLinkObstruction
 import Vsa.Sim.rows.ErrorReachInhab
+import Vsa.Sim.rows.ErrSpillCore
+import Vsa.Sim.rows.ErrSpillRows
+import Vsa.Sim.rows.ErrArmLinks
 import Vsa.While.Trichotomy
 import Vsa.Sim.DivergeSim
 import Vsa.Sim.SnprintfSpec19

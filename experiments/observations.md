@@ -1041,3 +1041,73 @@ it, still stop and report instead.
   (BridgeSeg territory, sibling-owned) — flagged, not done here.
 - proposal: narrow `TermGuards.strCmp` to the four cells; reshape
   `StrArmFrontData.hOrder` to the tied signature and thread the retained sign fact.
+
+## 2026-08-31 errlink-familyB-x10-computed (error-site fan-out, task cont.)
+- missing: a spill-prefix bridge whose entry does NOT pre-hold `x10 = inp`.
+  The 8 Family-A error sites (jal preceded ONLY by `sd sN,off(sp)` stores,
+  `wrChain=[]`) fan mechanically off the negType model: `ErrSpillCore.spillSeg_toJalErr`
+  + the `gen_err_spill_rows.py` emitter close all 16 Family-A premises modulo the
+  named `ErrArmLinks.link_*` residual.  The 11 Family-B sites (`0x80002e90`,
+  `0x80002ebc`, `0x80003b9c`, `0x80003c10`, `0x80003c7c`, `0x80003cc4`, `0x80003d5c`,
+  `0x80003da0`, `0x80003de8`, `0x80003e98`, `0x80003f58`) have a register-SETUP
+  prefix ending `mv a0,s2; li a4,0; auipc a2; addi a2,a2,off` (msg-ptr + `a0:=s2`).
+  So `wrChain ≠ []` AND — decisively — `x10 (=a0)` is SET by the seg (`mv a0,s2`),
+  not preserved; `JalErrPre` demands `x10 = inp` as a POST, so the entry predicate
+  cannot carry it as a preserved fact. Several also sit AFTER a `jal value_kind_name`
+  call, so the true error-branch entry is a call-return, not a straight-line block.
+- workaround: NONE for Family B — templated only the 8 pure-store sites; Family B
+  emitted as named residual comments (report). `spillSeg_toJalErr`'s `wrChain=[]`
+  hypothesis structurally rejects them (correct: it must, they write registers).
+- cost: 11 PCs / 27 premises still need per-site bridges. Each needs the seg's
+  computed `a0`-post read off `GHolds σ' out.regs` (the s2 value = inp), plus the
+  arg-register writes (a2/a3/a4) shown ABI-irrelevant to `NotWrittenJmp` — a
+  DIFFERENT marshalling than the pure-store carry.
+- proposal: a `spillSetupSeg_toJalErr` variant whose `SpillSetupArmPre` drops the
+  entry `x10=inp` and instead demands `lookupG 10 out.regs = some inp` (the seg
+  computes it), reusing the `NotWrittenJmp`-noise frame for the g-frame only
+  (a0/a2/a3/a4 are all noise-disjoint from the protected jmp set). The value_kind_name
+  call-return sites additionally need a `callSeg` prefix. Family B is the honest
+  next wave; Family A is closed by shape here.
+
+## 2026-08-31 strarm-order-retie (str-order consumer seams, this task)
+- missing: nothing new — `cstr_allNonzero` (CStr → AllNonzero) was the one glue
+  lemma the proved bridges needed; landed in `Vsa/While/StringOrder.lean` (uses
+  `char_ofNat_toNat`, axiom-clean). The over-general `StrArmFrontData.hOrder`
+  (`∀ x, (sTailWord op x != 0) = bres`, `bres : Bool`) discarded the strcmp-post
+  sign fact and was the same falsity shape the tied `StrCmpOrderBridge` already fixed.
+- workaround: NONE — retied honestly. `StrArmFrontData` now carries `bres :
+  String → String → Bool` + `hOrder : StrCmpOrderBridge op bres` (the proved
+  bridge); `strArmFront` retains `⟨csa,csb,x,…,hsign⟩` from strcmp_post (no longer
+  `⟨_,_,x,-⟩`), feeds `cstr_allNonzero` + `hsign` to `hOrder`, and rewrites the
+  box's `.bool (sTailWord op x != 0)` to `.bool (bres sa sb)`. `TermGuards.strCmp`
+  retyped from `∀ op bres` to the FOUR `strCmp{Lt,Le,Gt,Ge}` fields at the exact
+  binOpSem closures (supplied by `strCmpOrderBridge_{lt,le,gt,ge}`).
+- cost: none ongoing — the retype is additive; no consumer re-thread (TermAssembly
+  references `TermGuards.strCmp` only in doc comments; TermResiduals' str fields are
+  the `EvalIH` cells, not the bridge). check verified: StringOrder, StrArmChain,
+  StrCmpBlockC, BinStrCells, TermBundles, TermAssembly all green + axiom-clean.
+- proposal: none needed for these two seams. Item 3 (`StrArmPrologue`) remainder
+  below.
+
+## 2026-08-31 strarm-kind3-blockb (StrArmPrologue front residual, this task)
+- missing: `blockB_binary` AT KIND 3 (the str-operand operand-recursion prologue).
+  `blockA_binaryArm` is LANDED (entry → 0x800034e8, conditional on `BinArmExtras`)
+  and `strKindCheckRow` is LANDED (kind-check span 0x80003628→0x80003b0c), but the
+  two-operand recursion that lands `TwoSubReturn` with `.str` operands has no kind-3
+  instance — only the int-arm blockB paths exist (same gap that blocks the concat
+  cell, BinStrCells §b). So `StrArmPrologue` cannot be discharged end-to-end.
+- workaround: named decomposition, NOT a full build. Landed: `StrSeamSpan2` (the
+  SPAN-2 `mv a1,a7; mv a0,s3; sd a2,0(sp); jal strcmp` residual, `bridgeOfSeg`
+  shape) + `strKindToStrcmp_seam` = `Triple.seq (strKindCheckRow mA) hSpan2` — a
+  GENUINE composition making the landed kind-check row load-bearing (reaches the
+  strcmp entry `strcmp_full_pre` from 0x80003628, residual = only the span-2 seam).
+  Plus `StrArmToStrcmp`/`strArmPrologue_of_parts` naming the reach+marshal residual
+  bracketing the LANDED `strArmFront` middle. All green + axiom-clean.
+- cost: the genuine remainder is (i) kind-3 `blockB_binary` (~operand-recursion
+  prologue, blockC_ge-scale), (ii) ONE `bridgeOfSeg` for `StrSeamSpan2` (store+jal,
+  strcmp link 0x80003b1c), (iii) the box→EvalIH epilogue marshalling. The eq/ne arm
+  will pay the same kind-3 blockB cost.
+- proposal: a kind-generic `blockB_binary` (operand recursions parameterised by the
+  operand-value kinds) so the str arm and the eq/ne/int arms share ONE operand
+  prologue — the single abstraction that unblocks both `StrArmPrologue` and the
+  concat cell.

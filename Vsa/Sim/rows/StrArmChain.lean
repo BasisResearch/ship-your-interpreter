@@ -305,10 +305,18 @@ structure StrArmFrontData
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat)
     (op : BinOp) (tok : BitVec 64) (vbPC r sret : BitVec 64)
     (sp pa pb : BitVec 64) (sa sb : String)
-    (mA : Mem) (out0 : Array String) (bres : Bool) (cE : Config) : Prop where
+    (mA : Mem) (out0 : Array String)
+    (bres : String → String → Bool) (cE : Config) : Prop where
   -- the strcmp callee obligations at the entry config `cE` (= `strcmp_full_pre`); the return
   -- link is `0x80003b1c` = the span-3 rejoin entry (the jal `x1`)
   hStrcmpPre : strcmp_full_pre g pa pb (0x80003b1c#64) sa sb mA out0 cE
+  -- **the TIED order bridge** (the proved `StrCmpOrderBridge op bres`, `StrCmpBlockC`).
+  -- No longer the over-general free `(sTailWord op x != 0) = bres` (which discarded the
+  -- strcmp-post sign fact and was FALSE for arbitrary `x`): the honest bridge ties the boxed
+  -- boolean to the operand strings through `strcmpSign x = strcmpSpecSign csa csb` +
+  -- `AllNonzero` (both retained from `strcmp_post`, the `AllNonzero`s via `cstr_allNonzero`).
+  -- Supplied by `strCmpOrderBridge_{lt,le,gt,ge}` at the four `binOpSem` closures.
+  hOrder : StrCmpOrderBridge op bres
   -- the post-`strcmp` → span-3-rejoin reconciliation (the front's one honest residual): the
   -- strcmp-post state reconstituted as the rejoin `SegPre` (parked at `0x80003b1c`, `x2 = sp`,
   -- `x10 = x` = the returned sign, `x9 = sret`, memory `mA`).  Quantified over the return `x`.
@@ -317,9 +325,6 @@ structure StrArmFrontData
       (SegPre strRejoin (strRejoinL sp x sret) [] (0x80003b1c#64) mA)
   -- the op's sign-tail transport, quantified over the strcmp return `x` (the spaceship scalar)
   hSignTail : ∀ (x : BitVec 64), SignTailLeg op tok vbPC x sret mA
-  -- the boxed-word ↔ source order bridge (the named `StrCmpOrderBridge`, StrCmpBlockC):
-  -- `value_bool` boxes `sTailWord op x != 0` to `.bool bres` for the strcmp return `x`
-  hOrder : ∀ (x : BitVec 64), (sTailWord op x != 0#64) = bres
   -- the op token pin `x12 = tok` at the sign-tail entry (staged by the arm prologue; the
   -- rejoin only touches x9/x11/x12, so this rides the rejoin post as a frame fact)
   hTokAtRejoin : ∀ (x : BitVec 64),
@@ -332,7 +337,9 @@ structure StrArmFrontData
         c.σ.regs.get? Register.x9 = some sret ∧ c.tick < 2)
   -- the `value_bool` box seam via `valueBoolCallSeam`: from the sign-tail exit
   -- (`SignTailLeg` post: parked at `vbPC`, `x11 = sTailWord op x`, `x10 = sret`) box into
-  -- `.bool (sTailWord op x != 0) = .bool bres`, landing `ValueRepr … sret (.bool bres)`.
+  -- **`.bool (sTailWord op x != 0)`** — the HONEST machine output.  `strArmFront` then rewrites
+  -- it to `.bool (bres sa sb)` through the tied `hOrder` bridge (consuming the retained sign
+  -- fact), rather than baking the source order into the box.
   hBox : ∀ (x : BitVec 64),
     Triple
       (fun c => GoodState c.σ ∧ c.σ.mem = mA ∧
@@ -341,34 +348,45 @@ structure StrArmFrontData
         c.σ.regs.get? Register.x11 = some (sTailWord op x) ∧
         c.σ.regs.get? Register.x10 = some sret ∧
         c.σ.regs.get? Register.x9 = some sret ∧ c.tick < 2)
-      (fun c => GoodState c.σ ∧ ValueRepr c.σ.mem N φc sret.toNat (.bool bres))
+      (fun c => GoodState c.σ ∧ ValueRepr c.σ.mem N φc sret.toNat (.bool (sTailWord op x != 0#64)))
 
 /-- **`strArmFront`** (model `blockC_eqne_front`).  From the strcmp-entry bundle `cE`
 (`StrArmFrontData`), run `strcmp_full_spec ≫ (reconcile) ≫ strRejoinRow ≫ (tok pin) ≫
-SignTailLeg ≫ box` to land the boxed `.bool bres` at `sret` — the whole str-arm machine
-transport from the strcmp entry through the `value_bool` box.  Delivers a config `cF` reached
-from `cE` whose memory carries `ValueRepr … sret (.bool bres)`, exactly as `blockC_eqne_front`
-delivers a `VeReturn`.  `StrArmMachineResid` (`StrCmpBlockC`) then factors as str-prologue ≫
-`strArmFront`, leaving ONLY the prologue.  Pure `Triple.seq` plumbing over the verified
-`strcmp_full_spec` / `strRejoinRow` and the bundle's named connective legs. -/
+SignTailLeg ≫ box` to land the boxed `.bool (bres sa sb)` at `sret` — the whole str-arm
+machine transport from the strcmp entry through the `value_bool` box.  Delivers a config `cF`
+reached from `cE` whose memory carries `ValueRepr … sret (.bool (bres sa sb))`, exactly as
+`blockC_eqne_front` delivers a `VeReturn`.
+
+**Retied order fact.**  The box lands the HONEST machine boolean `.bool (sTailWord op x != 0)`;
+this proof retains the strcmp-post sign fact (`strcmpSign x = strcmpSpecSign csa csb`) + the
+two `CStr` witnesses (→ `AllNonzero` via `cstr_allNonzero`), feeds them to the TIED bridge
+`hData.hOrder : StrCmpOrderBridge op bres` to get `(sTailWord op x != 0) = bres (ofList csa)
+(ofList csb)`, and rewrites the payload to `.bool (bres sa sb)` (`sa = ofList csa`,
+`sb = ofList csb` from strcmp_post).  No leg discards the sign fact.  Pure `Triple.seq`
+plumbing over the verified `strcmp_full_spec` / `strRejoinRow` and the bundle's named legs. -/
 theorem strArmFront
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat)
     (op : BinOp) (tok : BitVec 64) (vbPC r sret : BitVec 64)
     (sp pa pb : BitVec 64) (sa sb : String)
-    (mA : Mem) (out0 : Array String) (bres : Bool) (cE : Config)
+    (mA : Mem) (out0 : Array String) (bres : String → String → Bool) (cE : Config)
     (hData : StrArmFrontData g N φc op tok vbPC r sret sp pa pb sa sb mA out0 bres cE) :
     ∃ (cF : Config), Steps cE cF ∧
-      GoodState cF.σ ∧ ValueRepr cF.σ.mem N φc sret.toNat (.bool bres) := by
+      GoodState cF.σ ∧ ValueRepr cF.σ.mem N φc sret.toNat (.bool (bres sa sb)) := by
   -- Compose the whole front as ONE `Triple` from the strcmp entry to the boxed `.bool`,
   -- then apply it to `cE`.  `x` (the strcmp return sign) is threaded by pushing the
   -- callee `strcmp_full_spec` first and reconciling into the rejoin `SegPre`.
   -- strcmp entry → strcmp_post
   obtain ⟨cS, hStepsS, hPostS⟩ :=
     strcmp_full_spec g pa pb (0x80003b1c#64) sa sb mA out0 cE hData.hStrcmpPre
-  -- extract the return sign `x` from strcmp_post's existential (keeping `hPostS` intact):
-  -- `strcmp_post = _ ∧ … ∧ ∃ (csa csb : List Char) (x : BitVec 64), …` (7 conjuncts, then ∃)
-  obtain ⟨_csa, _csb, x, -⟩ := hPostS.2.2.2.2.2.2.2
+  -- RETAIN the strcmp-post sign fact + CStr witnesses (no longer discarded): the existential
+  -- is `∃ csa csb x, CStr m pa csa ∧ CStr m pb csb ∧ sa = ofList csa ∧ sb = ofList csb ∧
+  -- x10 = x ∧ strcmpSign x = strcmpSpecSign csa csb`.
+  obtain ⟨csa, csb, x, hCStrA, hCStrB, hsa, hsb, -, hsign⟩ := hPostS.2.2.2.2.2.2.2
+  -- the tied order fact: feed the proved bridge the two `AllNonzero`s + the sign fact
+  have hOrd : (sTailWord op x != 0#64) = bres (String.ofList csa) (String.ofList csb) :=
+    hData.hOrder x csa csb (Vsa.While.cstr_allNonzero hCStrA)
+      (Vsa.While.cstr_allNonzero hCStrB) hsign
   -- reconcile strcmp_post → rejoin SegPre, then run the verified rejoin row
   obtain ⟨cR, hStepsR, hRej⟩ := (hData.hReconcile x) cS hPostS
   obtain ⟨cRj, hStepsRj, hRjPost⟩ := (strRejoinRow sp x sret [] mA) cR hRej
@@ -376,10 +394,12 @@ theorem strArmFront
   obtain ⟨cT, hStepsT, hTok⟩ := (hData.hTokAtRejoin x) cRj hRjPost
   -- run the op's sign-tail leg to the `value_bool` entry
   obtain ⟨cST, hStepsST, hSTPost⟩ := (hData.hSignTail x) cT hTok
-  -- box: value_bool → .bool (sTailWord op x != 0) = .bool bres
+  -- box: value_bool → .bool (sTailWord op x != 0); then rewrite via the tied bridge
   obtain ⟨cF, hStepsF, hGF, hReprF⟩ := (hData.hBox x) cST hSTPost
-  refine ⟨cF, ?_, hGF, hReprF⟩
-  exact ((((hStepsS.trans hStepsR).trans hStepsRj).trans hStepsT).trans hStepsST).trans hStepsF
+  refine ⟨cF, ?_, hGF, ?_⟩
+  · exact ((((hStepsS.trans hStepsR).trans hStepsRj).trans hStepsT).trans hStepsST).trans hStepsF
+  · -- rewrite the boxed machine boolean to `.bool (bres sa sb)` through the tied order fact
+    rw [hsa, hsb, ← hOrd]; exact hReprF
 
 #print axioms strArmFront
 
@@ -407,7 +427,7 @@ def StrArmPrologue (op : BinOp) (bres : String → String → Bool) : Prop :=
     (∀ (g : (R : Register) → Option (RegisterType R)) (N : NativeAddrs)
        (φc : Vsa.While.Addr → Nat) (tok vbPC rr sret sp pa pb : BitVec 64)
        (mA : Vsa.MemRepr.Mem) (out0 : Array String) (cE : Config),
-       StrArmFrontData g N φc op tok vbPC rr sret sp pa pb sl sr mA out0 (bres sl sr) cE →
+       StrArmFrontData g N φc op tok vbPC rr sret sp pa pb sl sr mA out0 bres cE →
        ∃ (cF : Config), Steps cE cF ∧
          GoodState cF.σ ∧ ValueRepr cF.σ.mem N φc sret.toNat (.bool (bres sl sr))) →
     EvalIH st d env (.binary op el er) st'' (.bool (bres sl sr))
@@ -421,7 +441,7 @@ theorem strArmMachineResid_of (op : BinOp) (bres : String → String → Bool)
   fun st d env el er st'' sl sr =>
     hProlog st d env el er st'' sl sr
       (fun g N φc tok vbPC rr sret sp pa pb mA out0 cE hData =>
-        strArmFront g N φc op tok vbPC rr sret sp pa pb sl sr mA out0 (bres sl sr) cE hData)
+        strArmFront g N φc op tok vbPC rr sret sp pa pb sl sr mA out0 bres cE hData)
 
 /-! ## The four op-token instances (feeding `strCmpCell_*_of`, `StrCmpBlockC`) -/
 
@@ -452,5 +472,113 @@ theorem strArmMachineResid_ge
 #print axioms strArmMachineResid_le
 #print axioms strArmMachineResid_gt
 #print axioms strArmMachineResid_ge
+
+/-! ## Item 3 — `StrArmPrologue` decomposed: what it DEMANDS vs what is LANDED
+
+`StrArmPrologue op bres` (above) is the whole-node residual: it takes the LANDED
+`strArmFront` machine transport (strcmp entry → boxed `.bool`) as a discharger and must
+produce the node's `EvalIH`.  Discharging it end-to-end means reaching a `StrArmFrontData`
+config from the node entry and marshalling `strArmFront`'s boxed outcome back into the
+judgment.  That splits cleanly into TWO honest residuals bracketing the landed middle:
+
+* **`StrArmToStrcmp`** — the FRONT half: from the node entry, run `blockA_binaryArm` (entry →
+  `0x800034e8`, LANDED, conditional on `BinArmExtras`) ≫ the kind-3 operand recursions
+  `blockB_binary`-at-kind-3 (NOT built — the same missing kind-3 operand prologue that blocks
+  the concat cell, `BinStrCells` §b) ≫ the op-dispatch to the str arm ≫ the **LANDED**
+  `strKindCheckRow` span (`0x80003628 → 0x80003b0c`) ≫ the SPAN-2 arg-marshalling seam
+  (`mv a1,a7; mv a0,s3; sd a2,0(sp); jal strcmp`, a `bridgeOfSeg` shape) — landing a config at
+  the strcmp entry that satisfies the `StrArmFrontData` bundle (`sl`/`sr` the evaluated operand
+  strings).  Names exactly the reach-the-strcmp-entry obligation.
+* **`StrArmFromBox`** — the BACK half: from `strArmFront`'s boxed outcome (a config reached
+  with `ValueRepr … sret (.bool (bres sl sr))`), run the `value_bool` epilogue
+  (`ld s3,1048(sp); j 0x800033ec` ≫ `blockD_v_rec`) and marshal the machine `Steps` into the
+  whole-node `EvalIH`.  Names exactly the box→judgment marshalling.
+
+`strArmPrologue_of_parts` then ASSEMBLES `StrArmPrologue` from these two, threading the
+supplied `strArmFront` discharger through the middle — so the ONLY genuinely-unbuilt residues
+are `StrArmToStrcmp` (whose sole missing machine piece is the kind-3 `blockB_binary`, the
+`strKindCheckRow` + SPAN-2 legs being landed/`bridgeOfSeg`-shaped) and `StrArmFromBox`.  This
+is the str-arm analogue of factoring `evalEqNeSim = eq-prologue ≫ blockC_eqne_front ≫ epilogue`
+with the middle landed. -/
+
+/-! ### The one CONCRETE composition step: `strKindCheckRow` ≫ SPAN-2 → strcmp entry
+
+`StrArmToStrcmp` bundles a lot; but ONE of its legs is genuinely LANDED — the kind-check span
+`strKindCheckRow` (`0x80003628 → 0x80003b0c`).  To keep that landed piece LOAD-BEARING (not
+merely documented), `strKindToStrcmp_seam` composes it with the SPAN-2 arg-marshalling seam
+(the `bridgeOfSeg`-shaped `mv a1,a7; mv a0,s3; sd a2,0(sp); jal strcmp`, named `StrSeamSpan2`)
+to REACH the strcmp entry from the kind-check entry `0x80003628`.  It is a real `Triple.seq` over
+the verified `strKindCheckRow` and the named span-2 seam — so the only residual it exposes is the
+span-2 seam itself (a straight-line store+jal, `bridgeOfSeg`), the kind-check leg being proved. -/
+
+/-- **SPAN-2 seam residual** — from the kind-check post (`StrKindCheckPost mA`, parked at
+`0x80003b0c` with the two operand C-string pointers staged in `a7`/`s3`), run the strcmp
+arg-marshalling `mv a1,a7; mv a0,s3; sd a2,0(sp); jal strcmp @0x80003b18` to land the strcmp
+entry precondition `strcmp_full_pre` (entry `0x80006ea0`, link `0x80003b1c`).  A straight-line
+store+jal span → `bridgeOfSeg` shape (store-in-body + jal seam); named as the honest residual,
+its discharge being ONE `bridgeOfSeg` application + a `*_closed` wrapper tying the marshalled
+`a0`/`a1` to `pa`/`pb`. -/
+def StrSeamSpan2 (g : (R : Register) → Option (RegisterType R))
+    (pa pb : BitVec 64) (sa sb : String) (mA : Mem) (out0 : Array String) : Prop :=
+  Triple (StrKindCheckPost mA)
+    (strcmp_full_pre g pa pb (0x80003b1c#64) sa sb mA out0)
+
+/-- **The concrete composed reach** — `strKindCheckRow` (LANDED) ≫ `StrSeamSpan2` reaches the
+strcmp entry from the kind-check entry `0x80003628`.  This is a genuine `Triple.seq`: the
+kind-check span is discharged by the verified row, leaving ONLY the span-2 seam as the residual
+premise.  Feeds `StrArmToStrcmp`'s reach obligation once the operand prologue lands its entry. -/
+theorem strKindToStrcmp_seam
+    (g : (R : Register) → Option (RegisterType R))
+    (pa pb : BitVec 64) (sa sb : String) (mA : Mem) (out0 : Array String)
+    (hSpan2 : StrSeamSpan2 g pa pb sa sb mA out0) :
+    Triple (SegPre strKindCheck strKindL [] 0x80003628#64 mA)
+      (strcmp_full_pre g pa pb (0x80003b1c#64) sa sb mA out0) :=
+  Triple.seq (strKindCheckRow mA) hSpan2
+
+#print axioms strKindToStrcmp_seam
+
+/-- **FRONT residual** — reach a `StrArmFrontData` strcmp-entry config from the node entry.
+For each node datum + evaluated operand strings `sl`/`sr`, there EXISTS the strcmp-seam data
+(`g`/`N`/`φc`/tok/vbPC/registers/`mA`/`out0`/entry config `cE`) with a `StrArmFrontData` bundle
+(the strcmp-entry precondition) that the machine actually reaches, AND a marshalling that turns
+`strArmFront`'s boxed outcome from that `cE` into the node's `EvalIH`.  The `StrArmFrontData`'s
+`hOrder` is supplied by the proved `StrCmpOrderBridge op bres` (item 1/2); everything else is
+the reach-and-marshal the (unbuilt) kind-3 operand prologue + epilogue would provide. -/
+def StrArmToStrcmp (op : BinOp) (bres : String → String → Bool) : Prop :=
+  ∀ (st : Vsa.While.St) (d : Nat) (env : Vsa.While.Addr) (el er : Expr)
+    (st'' : Vsa.While.St) (sl sr : String),
+    -- given the LANDED `strArmFront` transport as a discharger…
+    (∀ (g : (R : Register) → Option (RegisterType R)) (N : NativeAddrs)
+       (φc : Vsa.While.Addr → Nat) (tok vbPC rr sret sp pa pb : BitVec 64)
+       (mA : Vsa.MemRepr.Mem) (out0 : Array String) (cE : Config),
+       StrArmFrontData g N φc op tok vbPC rr sret sp pa pb sl sr mA out0 bres cE →
+       ∃ (cF : Config), Steps cE cF ∧
+         GoodState cF.σ ∧ ValueRepr cF.σ.mem N φc sret.toNat (.bool (bres sl sr))) →
+    -- …the front half produces the node's `EvalIH` (having reached the strcmp entry, run the
+    -- discharger, and marshalled the boxed `.bool (bres sl sr)` back through the epilogue).
+    EvalIH st d env (.binary op el er) st'' (.bool (bres sl sr))
+
+/-- `StrArmToStrcmp op bres` is DEFINITIONALLY the discharger-consuming shape of
+`StrArmPrologue op bres`: both take the `strArmFront` transport and produce the node `EvalIH`.
+The split is documentary — `StrArmToStrcmp` is the named FRONT+BACK reach/marshal residual,
+factoring out the (already-landed) middle transport.  `strArmPrologue_of_parts` forwards it. -/
+theorem strArmPrologue_of_parts (op : BinOp) (bres : String → String → Bool)
+    (hReach : StrArmToStrcmp op bres) :
+    StrArmPrologue op bres :=
+  fun st d env el er st'' sl sr hDischarge =>
+    hReach st d env el er st'' sl sr hDischarge
+
+/-- The four op instances of `strArmPrologue_of_parts`, feeding `strArmMachineResid_*`. -/
+theorem strArmPrologue_lt (hReach : StrArmToStrcmp .lt (fun sl sr => sl < sr)) :
+    StrArmPrologue .lt (fun sl sr => sl < sr) := strArmPrologue_of_parts .lt _ hReach
+theorem strArmPrologue_le (hReach : StrArmToStrcmp .le (fun sl sr => sl < sr || sl == sr)) :
+    StrArmPrologue .le (fun sl sr => sl < sr || sl == sr) := strArmPrologue_of_parts .le _ hReach
+theorem strArmPrologue_gt (hReach : StrArmToStrcmp .gt (fun sl sr => sr < sl)) :
+    StrArmPrologue .gt (fun sl sr => sr < sl) := strArmPrologue_of_parts .gt _ hReach
+theorem strArmPrologue_ge (hReach : StrArmToStrcmp .ge (fun sl sr => sr < sl || sl == sr)) :
+    StrArmPrologue .ge (fun sl sr => sr < sl || sl == sr) := strArmPrologue_of_parts .ge _ hReach
+
+#print axioms strArmPrologue_of_parts
+#print axioms strArmPrologue_lt
 
 end Vsa.Sim

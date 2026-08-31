@@ -10,6 +10,7 @@ import Vsa.Sim.EnvDefCompose
 import Vsa.Sim.rows.TermRouting
 import Vsa.Sim.rows.BinStrCells
 import Vsa.Sim.rows.StrCmpBlockC
+import Vsa.Sim.rows.StrCmpOrderClose
 import Vsa.Sim.rows.StrArmChain
 
 /-!
@@ -267,10 +268,18 @@ structure TermGuards where
   storeSize : ∀ (st' st'' : SpecSt),
       st'.store.frames.size = st''.store.frames.size ∧
       st'.store.closures.size = st''.store.closures.size
-  /-- **strCmp** — the str comparison-order boxing bridge.  Consumed by the four str
-      compare cells of `eval_binary_row` (via `StrCmpBlockC`).  Supplied by the
-      landed `StrCmpOrderBridge op bres` slot (`rows/StrCmpBlockC.lean`). -/
-  strCmp : ∀ (op : BinOp) (bres : String → String → Bool), Vsa.Sim.StrCmpOrderBridge op bres
+  /-- **strCmp** — the str comparison-order boxing bridges, at EXACTLY the four
+      `binOpSem` closures (NOT `∀ op bres`, which is FALSE for arbitrary `bres` — the
+      boxed sign test only agrees with the source order for the four real comparison
+      closures; the free-`bres` form was the machine-checked falsity that the tied
+      `StrCmpOrderBridge` fixed).  Consumed by the four str compare cells of
+      `eval_binary_row` (via `StrCmpBlockC.strCmpCell_{lt,le,gt,ge}_of`).  Supplied by
+      the LANDED `strCmpOrderBridge_{lt,le,gt,ge}` (`rows/StrCmpOrderClose.lean`),
+      resting on `Vsa/While/StringOrder.lean`. -/
+  strCmpLt : Vsa.Sim.StrCmpOrderBridge .lt (fun sl sr => sl < sr)
+  strCmpLe : Vsa.Sim.StrCmpOrderBridge .le (fun sl sr => sl < sr || sl == sr)
+  strCmpGt : Vsa.Sim.StrCmpOrderBridge .gt (fun sl sr => sr < sl)
+  strCmpGe : Vsa.Sim.StrCmpOrderBridge .ge (fun sl sr => sr < sl || sl == sr)
   /-- **strArmProlog** — the str-arm machine-chain prologue.  Consumed by the str
       compare cells' `StrArmMachineResid` (via `strArmMachineResid_of`).  Supplied by
       the landed `StrArmPrologue op bres` slot (`rows/StrArmChain.lean`). -/
@@ -402,5 +411,32 @@ theorem bin_add_cell_ofBundle (G : TermGuards)
 
 #print axioms eval_int_row_ofBundle
 #print axioms bin_add_cell_ofBundle
+
+/-! ## Probe 4c — the four retyped `TermGuards.strCmp*` fields instantiate verbatim
+
+The `strCmp` field is now FOUR fields, one per `binOpSem` comparison closure (NOT the
+`∀ op bres` form, which is FALSE for arbitrary `bres`).  Each is exactly the type of the
+LANDED `strCmpOrderBridge_{lt,le,gt,ge}` (`rows/StrCmpOrderClose.lean`), so the eventual
+`TermGuards` instantiation supplies them by name.  This probe proves that verbatim
+correspondence — the theorem name alone is accepted as the witness for each field. -/
+
+/-- `strCmpLt` = `strCmpOrderBridge_lt` verbatim. -/
+example : Vsa.Sim.StrCmpOrderBridge .lt (fun sl sr => sl < sr) := strCmpOrderBridge_lt
+/-- `strCmpLe` = `strCmpOrderBridge_le` verbatim. -/
+example : Vsa.Sim.StrCmpOrderBridge .le (fun sl sr => sl < sr || sl == sr) := strCmpOrderBridge_le
+/-- `strCmpGt` = `strCmpOrderBridge_gt` verbatim. -/
+example : Vsa.Sim.StrCmpOrderBridge .gt (fun sl sr => sr < sl) := strCmpOrderBridge_gt
+/-- `strCmpGe` = `strCmpOrderBridge_ge` verbatim. -/
+example : Vsa.Sim.StrCmpOrderBridge .ge (fun sl sr => sr < sl || sl == sr) := strCmpOrderBridge_ge
+
+/-- **`TermGuards.strCmp*` sub-bundle probe** — the four str-order fields assembled from
+their landed bridges by name, exactly the M6 instantiation shape (the other `TermGuards`
+fields elided; this isolates the retyped `strCmp*` slots). -/
+example :
+    Vsa.Sim.StrCmpOrderBridge .lt (fun sl sr => sl < sr) ∧
+    Vsa.Sim.StrCmpOrderBridge .le (fun sl sr => sl < sr || sl == sr) ∧
+    Vsa.Sim.StrCmpOrderBridge .gt (fun sl sr => sr < sl) ∧
+    Vsa.Sim.StrCmpOrderBridge .ge (fun sl sr => sr < sl || sl == sr) :=
+  ⟨strCmpOrderBridge_lt, strCmpOrderBridge_le, strCmpOrderBridge_gt, strCmpOrderBridge_ge⟩
 
 end Vsa.Sim
