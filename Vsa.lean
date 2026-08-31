@@ -464,6 +464,7 @@ import Vsa.Sim.rows.StrCmpBlockC
 import Vsa.Sim.rows.StrArmChain
 import Vsa.Sim.rows.StrCmpOrderClose
 import Vsa.Sim.rows.BinStrReadback
+import Vsa.Sim.rows.BinIntReadback
 import Vsa.Sim.rows.ExecCaseGeom
 import Vsa.Sim.rows.ExecRouting
 import Vsa.Sim.rows.ExecRecRows
@@ -474,6 +475,7 @@ import Vsa.Sim.rows.SeqForRows
 import Vsa.Sim.rows.CallRows
 import Vsa.Sim.rows.CallResidProviders
 import Vsa.Sim.rows.CallClosureRow
+import Vsa.Sim.ArmSpecBridge
 import Vsa.Sim.rows.CallClosureArgLoopEntryGen
 import Vsa.Sim.rows.AssignArmEntryGen
 import Vsa.Sim.rows.AssignArmStageGen

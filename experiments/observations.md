@@ -1165,3 +1165,53 @@ it, still stop and report instead.
 - proposal: promote `lookupG_stepGM_ne`/`lookupG_runGM_ne`/`lookupG_runGM_mid` up
   into `Vsa/Sim/SegReadback.lean` beside `lookupG_runGM_snoc` (the natural home)
   so non-error rows (rejoin/kind-check with trailing writes) can call them too.
+
+## 2026-08-31 armspec-oracle-family (armSpec_of_seams, ArmSpecBridge.lean)
+- missing: the three composite-arm oracles (FnArmSpec/CallArmSpec are machine
+  `Triple EvalEntry→EvalExit`; AssignArmSpec is `EvalIH→EvalIH`) have the SAME
+  entry≫seams≫epilogue spine but at different type indices, so no single
+  combinator captures all three; ALSO the generic `InterpEntry.EvalEntry` bakes
+  in int-callee fields (`value_int_code`/`int_slot`/`vicode_stack_disjoint`/
+  `table_stack_disjoint`), so `blockA_k` cannot run at the fn/call/assign armPC
+  off a bare `EvalEntry` — the var arm already worked around this with a bespoke
+  `EvalVarEntry`. There is no generic "arm-entry widening" from `EvalEntry` to an
+  arbitrary arm's `ArmEntryK` (callee-loaded/slot generalized over the arm).
+- workaround: a FAMILY of three combinators (fnArmSpec_of_geom /
+  assignArmSpec_of_machine / callArmSpec_of_geom), each closed modulo a per-arm
+  NAMED structure (FnArmGeom / AssignArmMachine / CallArmGeom) whose `hArm` field
+  IS the entry→PreEpilogueV (or EvalEntry→EvalExitD) run — i.e. the entry-widen +
+  seam-marshal is deferred INTO the geom field rather than composed from the
+  landed gens. The combinator proper is pure Triple.seq + blockD_v_phic (fn/call)
+  / pure EvalIH-rewrap (assign). Axiom-clean, ~1.6s user CPU.
+- cost: the `hArm` field still hides the real machine work (blockA_k at the arm
+  slot + marshalling the fnArmMallocCall/ClosureBuild `Steps`-chains and the
+  CallClosure crux into PreEpilogueV's ValueRepr/StoreRepr). Each arm pays that
+  marshalling separately when its geom is discharged; the seams are landed but
+  their write-log→PreEpilogueV lift is not.
+- proposal: (1) a generic `armEntry_widen : EvalEntry → (∃ ment v8 v9 v18,
+  ArmEntryK … armPC calleeLoaded e …)` parameterized by (armPC, calleeLoaded,
+  slot-pin), factoring blockA_k's precondition off a callee-generic entry (the
+  EvalVarEntry pattern generalized) — would let the fn/call `hArm` fields START
+  from ArmEntryK not EvalEntry; (2) a `preEpilogueV_of_writeLog` marshaller
+  (segToTriple's FnArmClosureBuildPost write-log memory → PreEpilogueV's
+  ValueRepr sret + StoreRepr survival), the box/store lift every leaf arm's
+  block-C already does by hand — factor it once.
+
+## 2026-08-31 bin-int-readback-reverse-isos (kind-2 operand readback + ArmPostGeomV cell consumer)
+- missing: `ArmPostGeom.lean` landed FORWARD `armPostGeomV_of_{add,sub}Resid` (via
+  `armPostGeom_of_addResid` ≫ `armPostGeomV_of_armPostGeom`) and BOTH directions for
+  lt/le/gt/ge/mul/div/mod, but NO reverse `{add,sub}Resid_of_armPostGeomV`. To reduce a
+  `.add`/`.sub` int cell's `AddResid`/`SubResid` production to an `ArmPostGeomV` instance
+  (the point of the geometry-collapse), a reverse iso is required — the two int/`tblOff=4`
+  cells were the only ones without it.
+- workaround: NONE (built the two reverse isos in the new file `rows/BinIntReadback.lean`
+  as clean `⟨…⟩` projections, mirroring `ltResid_of_armPostGeomV`; axiom-clean). No hand
+  navigation — each is a 32-field structural iso.
+- cost: ~10 lines each, one-time; anyone doing the add/sub geometry collapse would have
+  re-derived them. The 9 `binIntCellResid_<op>_ofStaged` corollaries then all follow the
+  SAME 4-line `refine ⟨…⟩; intro; obtain; exact` shape (mul/div/mod thread their libgcc
+  `…Loaded`/`<op>Stk` extras through the reverse iso).
+- proposal: relocate `addResid_of_armPostGeomV` + `subResid_of_armPostGeomV` into
+  `rows/ArmPostGeom.lean` beside the other reverse isos so the int/tblOff=4 pair is
+  symmetric with the bool/int-seam ops; then the 9-cell fan-out is a single `gen_*_row.py`
+  emitter row (op → opTok/slotDef/valLoaded/viLo/viHi/tblOff/reverseIso/extras).
