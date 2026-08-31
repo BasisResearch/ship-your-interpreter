@@ -163,7 +163,55 @@ theorem interpInitDefineAssert_seam
     (storeSeg_ent_initSeg N A SL φf φc storeAfterAssert 0x800043d8)
     hseam
 
+/-! ## §4. Demo (c) — the `define("println")` seam (the byte-route-gated middle define)
+
+`storeAfterPrintln = storeAfterPrint.define 0 "println" (.native .println)`
+(`InterpInit`, by `rfl`).  This is the SECOND of the three `interp_init` defines —
+`interpInitStore_compose`'s `hDefPrintln` premise (PCs `0x80004368 → 0x800043a0`).
+
+It is STRUCTURALLY IDENTICAL to demos (a)/(b): the SAME `envDefineArmBridge`
+template, the SAME shared `NativeDefinePins` bundle, differing only in the binding
+data (`store := storeAfterPrint`, `x := "println"`, `v := .native .println`).
+
+The `hRoutePrintln` gate the `InterpInit` doc flags (the `println` name is 8 bytes
+including NUL, so `env_define`'s `nMemcpy < 8` byte-route disjunct is FALSE, leaving
+only the mutual-misalignment `(src ^^^ dst) % 8 ≠ 0`) lives ENTIRELY inside whoever
+supplies `hCallee` — the `env_define_append_spec` Triple carries its `hrouteCbyte`
+premise.  `envDefineArmBridge` consumes `hCallee` as an already-formed Triple, so at
+THIS bridge layer the println seam is a clean clone: the route condition is
+discharged one level down (in `hCallee`'s construction), named there, not here.
+So no `hRoutePrintln` conjunct appears in this seam's statement — it is folded into
+`hCallee` exactly as for print/assert (whose byte route is unconditional). -/
+
+/-- **Demo (c): the `define("println")` `InitSeg` seam, via the template.**  Identical
+to demos (a)/(b) modulo the binding data (`store := storeAfterPrint`, `x := "println"`,
+`v := .native .println`, PCs `0x80004368 → 0x800043a0`).  This IS
+`interpInitStore_compose`'s `hDefPrintln` premise — discharged, not assumed.  The
+`hRoutePrintln` byte-route gate is carried by `hCallee` (the `env_define_append_spec`
+Triple), one layer down, per the module doc. -/
+theorem interpInitDefinePrintln_seam
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {MidPre MidPost : Config → Prop}
+    (hPre : Triple
+      (StoreSeg N A SL φf φc storeAfterPrint 0x80004368 initSt) MidPre)
+    (hCallee : Triple MidPre MidPost)
+    (hPins : NativeDefinePins N φf φc storeAfterPrint 0 "println" (.native .println)
+      0x800043a0 MidPost A) :
+    Triple
+      (InitSeg N A SL φf φc storeAfterPrint 0x80004368)
+      (InitSeg N A SL φf φc storeAfterPrintln 0x800043a0) := by
+  have hseam :
+      Triple (StoreSeg N A SL φf φc storeAfterPrint 0x80004368 initSt)
+        (StoreSeg N A SL φf φc storeAfterPrintln 0x800043a0 initSt) :=
+    envDefineArmBridge (a := 0) (x := "println") (v := .native .println)
+      hPre hCallee hPins
+  exact Triple.dimap
+    (initSeg_ent_storeSeg N A SL φf φc storeAfterPrint 0x80004368)
+    (storeSeg_ent_initSeg N A SL φf φc storeAfterPrintln 0x800043a0)
+    hseam
+
 #print axioms interpInitDefinePrint_seam
+#print axioms interpInitDefinePrintln_seam
 #print axioms interpInitDefineAssert_seam
 
 end Vsa.Sim

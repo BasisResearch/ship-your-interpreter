@@ -1215,3 +1215,80 @@ it, still stop and report instead.
   `rows/ArmPostGeom.lean` beside the other reverse isos so the int/tblOff=4 pair is
   symmetric with the bool/int-seam ops; then the 9-cell fan-out is a single `gen_*_row.py`
   emitter row (op → opTok/slotDef/valLoaded/viLo/viHi/tblOff/reverseIso/extras).
+
+## 2026-08-31 divcorr-loophead-reflect (entry+divergence endgame, hDivCorr item)
+- missing: a FAITHFUL loop-head divergence correspondence — `SegEntry` at
+  `interpLoopHeadPC` pins the spec STATE `st` (store+out) but carries NO reflection
+  of WHICH statements remain (`ss`) nor the active scope `Addr` (`env`), so a naive
+  `divCorr` built on `SegEntry` alone collapses distinct spec nodes and drops
+  `env`/`ss` (Lean flags them unused).
+- workaround: LANDED `Vsa/Sim/DivCorrClose.lean` — `divCorr` carries an ABSTRACT
+  per-node reflection `Reflect : Config → Addr → List Stmt → Prop` (a section
+  variable) as an explicit conjunct, so distinct `(env, ss)` are distinct nodes and
+  the loop-body progress residual supplies+consumes it. `DivCorrFamily` reseated on
+  TWO named residuals: `DivEntryDrive` (= the SAME `Loaded → SegEntry@loopHead` drive
+  as the term-arm entry / `InterpInitStoreRepr`) and `DivLoopProgress` (the
+  still-running per-statement forward sim). All reachability plumbing (StepsN prepend
+  via `trans_add`, entry k=0 reindex) PROVED, axiom-clean.
+- cost: ~130 lines; the `Reflect` predicate is un-instantiated (whoever supplies the
+  loop-body machine seams must define the concrete induction-register reflection:
+  `s0`=Stmt* cursor, loop bound `s2`, scope pointer). Every future consumer of the
+  loop-head correspondence (both divergence AND the term-arm loop) pays this once.
+- proposal: promote a concrete `LoopHeadReflect` to a landed def beside `SegEntry`
+  (reflecting the top-level statement-loop induction registers against `(env, ss)`),
+  and re-export it so BOTH the term-arm `mExecSeq` loop drive and this divergence
+  `divCorr` share ONE reflection — the loop head is the single convergence point the
+  brief flags ("the drive is the shared crux").
+
+## 2026-08-31 epiloguespill-genuinely-open (entry endgame, EpilogueSpill item)
+- missing: NO discharge of `EntrySeams.EpilogueSpill` from `SegExit` — its fields
+  (`x21=0` s5-latch, `Interp_runLoaded`, `ExitTailChain0` = a machine-span Triple,
+  and the restore-block `ChainFacts`) are BYTE-LEVEL facts + a downstream tail-span
+  Triple that `SegExit`'s abstract M4 representation genuinely does NOT expose (that
+  is exactly why `EntrySeams` named it the residual). The `s5=0` latch needs the
+  PROLOGUE fact `g s5 = 0` (not in `SegExit`); `ExitTailChain0.chain` is the
+  interp_run-return/main/crt0/exit span Triple (genuine machine content).
+- workaround: NONE (stopped — did not fabricate). Verified against
+  `EntrySeams.lean:105-131` + `TermEntry.lean:452-458`: EpilogueSpill is the honest
+  irreducible epilogue seam, not derivable from `SegExit` + `restoreRetChain_run`.
+- cost: item-3 as briefed ("discharge EpilogueSpill from SegExit facts") is
+  infeasible without the prologue s5-latch + the exit tail-span decode; both are
+  off-`SegExit` machine content.
+- proposal: EpilogueSpill's ONLY genuine sub-gaps are (a) the prologue `s5:=0` latch
+  (a fact of the ENTRY drive — factor it out of the shared drive as `latchS5_of_drive`
+  once the drive lands) and (b) `ExitTailChain0` (already isolated + consumed by
+  `cleanExitTail`). Re-state EpilogueSpill to REFERENCE those two rather than re-bundle
+  the bytes, so it shrinks to exactly the restore `ChainFacts` (the one honest spill).
+
+## 2026-08-31 elabCommand-theorem-async-invisible (DeriveMeta #derive_destructurer, meta task)
+- missing: a reliable way for a custom `command_elab` to emit a `theorem` whose
+  constant is IMMEDIATELY visible to the rest of the same command / the rest of the
+  file. `elabCommand <|← `(command| theorem …)` from inside a `CommandElab`
+  elaborates the theorem WITHOUT error (logInfo of the generated syntax is perfect,
+  no elab error surfaces) yet `(← getEnv).contains name = false` afterward and every
+  later reference reads "unknown constant". A `structure` emitted the same way IS
+  visible — the divergence is theorem async/snapshot proof elaboration. `set_option
+  Elab.async false in <theorem>` in the generated syntax did NOT fix it; `withOptions`
+  is unavailable in `CommandElabM` (no `MonadWithOptions`).
+- workaround: build the theorem's proof term + type as `Expr` in `liftTermElabM`
+  (elaborate `fun params => (bodyStx : Src → Tgt)`, `instantiateMVars`, `inferType`)
+  and `addDecl (.thmDecl { name, levelParams := [], type, value })` directly. This
+  commits synchronously; the constant is visible immediately and downstream. Works
+  for the destructurer isos (green + axiom-clean on the real ArmEntryK/TwoSubReturn
+  towers). The `structure` can still go through `elabCommand` (structures are sync).
+- cost: any future command that GENERATES theorems (not just structures) — row
+  emitters, iso generators, `#derive_row`-style commands — must use the `addDecl`
+  route or they silently produce unusable "unknown constant" theorems. Cost me ~5
+  build cycles to localize (the swallowed-error behavior is the trap).
+- proposal: a tiny shared helper `Vsa.Sim.DeriveMeta.addThmFromSyntax (name)
+  (binders) (type) (body) : TermElabM Unit` wrapping the elabTerm→instantiateMVars→
+  addDecl dance, reused by every theorem-emitting command.
+- REFINED (measured after the fix): the trap is NOT "any theorem via elabCommand".
+  `#derive_row` emits a SINGLE `theorem … := segRow_of_hpost … (by decide) hpost`
+  via `elabCommand` and it commits fine (`demoRowGen` axiom-clean, visible to
+  `#print axioms` and consumers). The destructurer failed because it emits a
+  `structure` AND then two theorems in the SAME command elaborator: the structure's
+  async snapshot is what left the following theorems' env-extension invisible. So:
+  a lone `elabCommand`-emitted theorem is fine; a theorem emitted AFTER a structure
+  in the same command needs the `addDecl` route (or emit the structure in a
+  separate command first). Keeps the helper proposal but narrows when it is needed.
