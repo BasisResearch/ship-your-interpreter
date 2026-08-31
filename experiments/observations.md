@@ -494,3 +494,75 @@ it, still stop and report instead.
   disjointness/last-writer, à la `FrameCalc.pin8`/`pin4`/`slot` but delivering
   `read32 (writeLog …) a = some w` directly), so the store-block posts feed
   `frameRepr_append` mechanically instead of by hand-threaded byte pins.
+
+## 2026-08-31 triple-profunctor-calculus (TripleCat task)
+- missing: a first-class name for the `Triple` consequence rule as a profunctor
+  action (`dimap`), for entailment (`Ent`) as its acting preorder, and for an
+  adapter PAIR as one iso (`PredIso`). Every `_wired`/`_ofBundle` conseq adapter
+  and every `X_of_Y`+`Y_of_X` pair was hand-rolling `Triple.conseq …` /
+  `⟨…⟩ + ⟨…⟩` with the identity-side entailment (`fun _ h => h`) written out.
+- workaround: NONE — built `Vsa/Sim/TripleCat.lean` (Ent/refl/trans, Triple.dimap
+  /lmap/rmap, PredIso/symm/trans/transportPre/transportPost) + demos in
+  `Vsa/Sim/TripleCatDemos.lean` re-expressing `callSegConseq`,
+  `bridgeNamesToVals_wired`, and the `LtResid↔ArmPostGeomV` pair. Both files
+  green + axiom-clean, elab <1.5s (dominated by heavy olean loads, not the new
+  decls). Discipline: OK.
+- cost: the compression is real but MODEST for the residual-iso pairs — the two
+  33-field `⟨…⟩` projections are irreducible (they physically shuffle fields);
+  PredIso only saves the caller a `conseq` at the USE site, not the pair's body.
+  The clean win is on conseq-shaped `_wired` adapters: `Triple.lmap hEntry core`
+  drops the `(fun _ h => h)` postcondition-identity noise and names the
+  profunctor direction. KEY FINDING: because `Triple` is a `Prop`, ALL the
+  interchange/associativity/functoriality laws hold DEFINITIONALLY by proof
+  irrelevance (`Subsingleton.elim`) — there is nothing to prove and nothing for
+  simp to rewrite between equal proofs; the value is purely the directional
+  CONSTRUCTORS (`dimap`, `transportPre`), not equational normalization.
+- proposal: gate rule — new consequence adapters (`*_wired`, `*_ofBundle`, any
+  `Triple.conseq` application whose postcondition side is `fun _ h => h` or whose
+  pre side is `fun _ h => h`) SHOULD be written as `Triple.dimap`/`lmap`/`rmap`;
+  new predicate adapter PAIRS SHOULD be a single `PredIso` with the two
+  directions in its fields + `transportPre`/`transportPost` at use sites. A
+  COUNT>N discipline rule catching bare `Triple.conseq _ (fun _ h => h)` /
+  `(fun _ h => h) _` outside TripleCat.lean would enforce it once the calculus is
+  wired into Vsa.lean.
+
+---
+
+## 2026-08-31 interp-init-println-route (InterpInit, InterpInitStoreRepr close)
+- missing: a framed WORD-route memcpy spec (the task's "#15") + a layout fact
+  deciding `(src ^^^ dst) % 8` for `interp_init`'s statics-vs-malloc-block copies.
+  `env_define`'s memcpy copies `len+1` bytes; `env_define_append_spec`'s byte-route
+  premise `hrouteCbyte = (src^^^dst)%8≠0 ∨ nMemcpy<8` covers print(6) and assert(7)
+  by `nMemcpy<8`, but println is `len+1 = 8` so `nMemcpy<8` is FALSE — the println
+  cell is gated ONLY on mutual misalignment `(src^^^dst)%8≠0`, a concrete layout
+  fact not derivable at the composition level (src = static "println"@0x80019540,
+  dst = fresh malloc'd 8-byte block).
+- workaround: NONE — named it as the precise per-define premise (`hRoutePrintln`
+  in the InterpInit doc; the println `hDefPrintln` seam carries it). Did not
+  fabricate a route. print/assert cells are byte-route unconditional.
+- cost: until a word-route framed memcpy spec lands OR the M6 layout pins the
+  static/heap alignment, EVERY 8-byte-name native binding (here just "println",
+  but any future len-7 native) carries this named misalignment obligation.
+- proposal: `memcpy_spec_framed_word` (word-route analogue of
+  `memcpy_spec_framed_byte`, MemcpySpecFramed) + an `ImageStatics` alignment lemma
+  giving `(N.staticName ^^^ mallocBlock) % 8` from the linker layout; then the
+  println cell discharges without the named premise.
+
+## 2026-08-31 interp-init-store-carrier (InterpInit, env_new ≫ define×3 compose)
+- missing: a reusable STORE-ACCUMULATOR seam for a sequence of store-mutating
+  callee splices (env_new then N×env_define) — a `Config→Prop` carrying
+  `StoreRepr <store-so-far>` + control pins, advanced one `Store.define` per splice.
+  `SegEntry` is store-parametric but bundles budget/frame/mem fields the pure
+  store-threading composition doesn't need; there was no lean carrier for "the
+  store built so far at PC k".
+- workaround: NONE (built the named structure) — landed `InitSeg` (5-field
+  named structure, GoodState/tick/PC/StoreRepr/OutRepr) + `interpInitStore_compose`
+  (pure `Triple.seq` chain of env_new + 3 define seams). The 3-fold `Store.define`
+  = `initSt.store` holds by `rfl` (`initStore_eq_initSt`, axiom-free); each
+  intermediate append verified by `rfl` (append path, name absent).
+- cost: `InitSeg` is bespoke to interp_init's store shape; a second store-building
+  caller (e.g. a runtime that binds more globals, or nested-scope init) would want
+  the same carrier generalized over the store-advance function.
+- proposal: `StoreSeg N A SL φf φc store pc` + a `storeChain` combinator
+  (`Triple` fold over a list of `(Store.define-step, seam)` pairs) so any
+  env_new/env_define call sequence composes by naming the per-step contracts only.

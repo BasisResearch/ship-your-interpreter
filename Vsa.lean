@@ -435,6 +435,8 @@ import Vsa.Sim.ErrorSimFull
 import Vsa.Sim.TermSimClose
 import Vsa.Sim.TermCaseBundle
 import Vsa.Sim.rows.ArmPostGeom
+import Vsa.Sim.TripleCat
+import Vsa.Sim.TripleCatDemos
 import Vsa.Sim.rows.TermRouting
 import Vsa.Sim.TermBundles
 import Vsa.Sim.rows.EvalVarRow
@@ -459,6 +461,7 @@ import Vsa.Sim.TermEntry
 import Vsa.Sim.EntryHalts
 import Vsa.Sim.EntryHaltsSpans
 import Vsa.Sim.EntrySeams
+import Vsa.Sim.InterpInit
 import Vsa.Sim.StuckSimClose
 import Vsa.Sim.Trichotomy
 import Vsa.Sim.DivFamily
