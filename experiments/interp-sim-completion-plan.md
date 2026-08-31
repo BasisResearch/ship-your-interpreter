@@ -9,6 +9,19 @@ axiom-audited. History lives in git (waves `7813980`..`34dbd7e`), the memory
 file `interpsim-completion-campaign.md`, and the per-front ledgers in
 `experiments/`.
 
+## THE ASSEMBLY IS LANDED (2026-08-31, wave 13)
+
+`TermAssembly.interpSim_of_residuals (R : TermResiduals L) : InterpSim L` and
+`refinement_of_residuals` are green + axiom-clean: all 50 recursor premises
+have slot-verified rows, the record fill is one theorem, and THE ENTIRE
+REMAINING PROJECT is the named fields of `TermResiduals L` (each
+doc-commented with its supplier) plus the M6 Layout close. Discharge order:
+work down `TermResiduals`' field list — the machine-span oracles (arm specs,
+call seams, scaffold some-cases, seq back-edges), the caller-geometry
+bundles, hInitStore/hEpilogueSpill, hDivCorr, and the ErrShared/43-hsite
+error links — each through the tower (segs + bridgeOfSeg + FrameMeta +
+storeChainList + dimap), then instantiate at the concrete Layout for M6.
+
 ## Where the four bundles stand
 
 - **herrFam** — CLOSED (`errFamilyClosed`).

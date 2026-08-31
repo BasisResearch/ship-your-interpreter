@@ -611,3 +611,71 @@ it, still stop and report instead.
   into the recursive-arm SubExecReturn/EvalExitD carrier) would discharge BOTH oracles
   and Call.closure's params-fold from one template; StoreSeg's `storeChainList` is the
   spec-side skeleton it targets.
+
+## 2026-08-31 callclosure-row (eval_callClosure_row, hCallClosure crux, task: last recursor premise)
+- missing: (1) the stale `Vsa/Sim/EvalCallClosure.lean` no longer type-checks — the
+  store-size ghost refactor (git 9d853eb "nf/nc threaded through the full M4 stack")
+  added `nf nc` size args to `SegExit`/`CallExitP`, so `callClosureSim`'s
+  `CallExitP g N A SL φf φc st' m0` (8 args, missing `nf nc`) is now an
+  application-type-mismatch. That file is NOT imported into Vsa.lean/check_all, so the
+  breakage was invisible. (2) no landed `env_new_spec`→SegEntry or `env_define`-fold→
+  SegEntry seam for the closure arm (the machine spans between the fval-kind dispatch,
+  `jal env_new`, the per-param `env_define`s, and `callBodyLoopPC`).
+- workaround: built `Vsa/Sim/rows/CallClosureRow.lean` fresh, size-correct: a
+  `CallClosureGeom` named-field structure with the two straight-line seams
+  (`entryBase` dispatch→callBodyLoopPC in the FULL bound store, `ret`
+  callBodyRetPC→callJoinPC WITH the boundSt.sizes→st.store.sizes ghost bridge) +
+  the `storeChainList`-shaped `entryFold` params-fold field. `callClosureSim`
+  re-landed via `DeriveCallSeg.callSeg` (prefix ≫ body-IH ≫ return); the body IH is
+  the recursor's `a_5`/`mExecSeq` motive at callBodyLoopPC/callBodyRetPC (dLeft-1/
+  aLeft-1), passed through unconditionally. `closureParamsFold` witnesses the fold
+  IS `StoreSeg.storeChainList` over `foldStore … k` (`foldStore_full` = take-length).
+  Slot-verified against the VERBATIM hCallClosure premise
+  (`eval_callClosure_row_fills_hCallClosure`). Green+axiom-clean ~1.5s.
+- cost: the stale `EvalCallClosure.lean` should be DELETED or reseated (its
+  `callClosureSim`/`ClosureEntrySpec`/`ClosureRetSpec` are superseded by the
+  size-correct ones in the row). The two `CallClosureGeom` seams remain NAMED
+  oracles: `entryBase` = closure-arm decode ≫ `env_new_spec` (EnvNewSpec) ≫ the
+  per-param `env_define` fold (envDefContract); `ret` = return-block reflection
+  (value_null / 24-byte memcpy) + the size-ghost revert. Each is a callSeg-style
+  splice — the SAME `envCallArmBridge` template the assign/varInit oracles want.
+- proposal: the ledger's `envCallArmBridge` (callSeg over env_new/env_define into the
+  recursive SegEntry carrier) discharges `entryBase`+`entryFold` here AND the
+  assign/varInit oracles from one template; `storeChainList`+`foldStore` are the
+  spec-side skeleton it targets (now instantiated). Separately: reseat or delete the
+  stale EvalCallClosure.lean so the M4 stack has ONE size-correct closure crux.
+
+## 2026-08-31 term-assembly-capstone (TermAssembly.lean, the assembly capstone)
+- missing: 10 recursor premises have NO landed `_row` theorem — the for-loop
+  scaffold `.some`/body/loop cases (`hInitSome`/`hFcSome`/`hEsSome`/`hFlCondFalse`
+  /`hFlBodyBreak`/`hFlBodyRet`/`hFlLoop`) and the `ExecSeq` cases
+  (`hSeqNil`/`hSeqConsNormal`/`hSeqConsAbrupt`). ScaffoldRows has `_resid` DEFs
+  (statement-only) for the three `.some` cases; the other 7 have neither a row nor
+  a residual def. `hSeqNil` is essentially LANDED (`ExecSimCommon.execSeqNil`,
+  seg-identity) — only a `_row` wrapper is missing. These are the honest tail of
+  the "49/50 rows landed" claim: 40 `_row` theorems exist + hCallClosure crux =
+  41; the remaining 9 (10 minus hSeqNil) are genuine whole-premise gaps carried as
+  named `TermResiduals` fields typed VERBATIM as the `TermCases` field.
+- workaround: carried all 10 as whole-premise `TermResiduals` fields (law-2 named
+  typed premises, doc comment names supplier). No assertion; the fill uses them
+  directly (definitional match for the ScaffoldRows `_resid` defs).
+- cost: NONE beyond the field count; the capstone is agnostic to whether a field
+  is a row-residual or a whole premise. Each becomes a discharge task.
+- proposal: `hSeqNil_row` (trivial `execSeqNil` wrap) + `execSeqLoop`-based
+  `hSeqConsNormal_row`/`hSeqConsAbrupt_row` + `execForLoopSim`-based for-loop rows;
+  once these land, swap the 10 fields for row applications (mechanical, like the
+  other 40). Tracked as the `TermResiduals` for-loop/seq field cluster.
+
+## 2026-08-31 divstep-corr-machine-gated (TermAssembly.lean hdivFam design)
+- missing: no spec-only concrete `Corr` for `DivFamily` — confirmed by
+  `DivFamily.lean`'s verdict AND now machine-checked here: `divStep_vacuous`
+  proves `DivStep (fun _ … => False)` (both arms vacuous), so the ONLY genuine gap
+  is the entry `Corr c initSt 0 0 p`, which is machine-side (`Loaded L p c`). The
+  progress arm is the M4 exec_stmt Triples' "≥1 step, still corresponds" skeleton.
+- workaround: kept the `DivCorrFamily` reduction (`R.hDivCorr`) as the single named
+  divergence residual; added `divStep_vacuous` to record the obligation is
+  well-formed and localize the gap to entry-not-progress.
+- cost: NONE — the reduction was already the honest design in DivFamily.lean.
+- proposal: a `divCorr` = ExecEntry/SegEntry correspondence with `DivStep` proved
+  from the shared M4 case Triples; this is the same machine layer that discharges
+  `hterm`, so it lands WITH the term-arm rows, not separately.

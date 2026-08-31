@@ -458,6 +458,7 @@ import Vsa.Sim.rows.ExecDispatchRows
 import Vsa.Sim.rows.ScaffoldRows
 import Vsa.Sim.rows.CallRows
 import Vsa.Sim.rows.CallResidProviders
+import Vsa.Sim.rows.CallClosureRow
 import Vsa.Sim.rows.CallArmEpilogue
 import Vsa.Sim.rows.ExecRetNullGlue
 import Vsa.Sim.TermEntry
@@ -473,4 +474,5 @@ import Vsa.While.StmtDispatch
 import Vsa.While.StmtDispatchClose
 import Vsa.Sim.InterpSimBundle
 import Vsa.Sim.InterpSimFinal
+import Vsa.Sim.TermAssembly
 import Vsa.Sim.LayoutInstance
