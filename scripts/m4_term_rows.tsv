@@ -1,0 +1,25 @@
+# m4_term_rows.tsv — term-side case-row table for gen_m4_term_row.py
+#
+# Columns (tab-separated):
+#   name    : premise name (hInt/hNull/…) → emits eval_<key>_row
+#   key     : short case key used in the theorem/def names
+#   shape   : row body shape — one of
+#               leaf_direct  (entry IS EvalEntry; apply <simD> directly)
+#               leaf_bridge  (bridge EvalEntry → <Entry>; extra <callee> geometry)
+#               rec_unary    (recursive single-operand sim; extract operand ptr)
+#   simD    : the landed *D / sim lemma to marshal
+#   entry   : the leaf's own entry structure (leaf_bridge only; '-' otherwise)
+#   value   : the Value constructor pattern for the leaf ('-' for rec)
+#   notes   : free text
+#
+# DEFERRED (not emitted — eq/ne family + env_define-gated, per brief):
+#   hAssign(env_define) hSVarInit/hSVarNull/hSBlock/hSForStart(alloc/env_define)
+#   hVar(env_get_found open oracle) hStr(CString repr readback)
+#   hBinary(∀-op dispatch — see ledger) hCall/hFn/hCallClosure(call subsystem)
+#   all ExecS/loop premises (need ExecCaseGeom/blockA_stmt — survey step 5)
+#
+name	key	shape	simD	entry	value	notes
+hInt	int	leaf_direct	evalIntSimD	-	int	direct EvalEntry
+hNull	null	leaf_bridge	evalNullSimD	EvalNullEntry	null	value_null callee geom
+hBool	bool	leaf_bridge	evalBoolSimD	EvalBoolEntry	bool	value_bool callee geom
+hNeg	neg	rec_unary	evalNegSim	-	-	NegExtras+hMcallPop

@@ -422,6 +422,8 @@ import Vsa.Sim.ExitPathSpans
 import Vsa.Sim.ErrorSimFull
 import Vsa.Sim.TermSimClose
 import Vsa.Sim.TermCaseBundle
+import Vsa.Sim.rows.ArmPostGeom
+import Vsa.Sim.rows.TermRouting
 import Vsa.Sim.TermEntry
 import Vsa.Sim.StuckSimClose
 import Vsa.Sim.InterpSimBundle

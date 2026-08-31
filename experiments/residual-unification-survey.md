@@ -358,3 +358,107 @@ small refactor before the adapter is a pure row):**
 Steps 1–3 close ~38 of 51 premises as pure rows; the remaining 13 are the known
 semantic gaps (steps 4–5 of the completion plan), now each pinned to exactly one
 bundle field.
+
+---
+
+## 5. IMPLEMENTATION LEDGER (steps 1-3, executed 2026-08-30)
+
+State verified against CURRENT source (post store-size `nf nc` refactor, commit
+b606376). Row bodies compiled with `lake env lean <file>` (isolated), axiom-clean
+(`{propext, Classical.choice, Quot.sound}`); scratch-probes green.
+
+### LANDED (green + axiom-clean)
+
+- **`Vsa/Sim/rows/ArmPostGeom.lean`** (step 1). `ArmPostGeom` = the shared
+  post-`TwoSubReturn` binary residual, parameterised by `(opTok : Nat)`,
+  `(slotDef : Mem → Prop)`. Four thin adapters, ~1s elab:
+  `armPostGeom_of_addResid`/`addResid_of_armPostGeom` (`AddResid ↔ ArmPostGeom 11
+  AddSlotPinned`) and the `sub` pair (`12 SubSlotPinned`). MEASURED: `AddResid`
+  and `SubResid` are byte-identical modulo exactly `opTok` (11 vs 12) and `slot`
+  (`AddSlotPinned` vs `SubSlotPinned`) — the survey's §2.2 `<Op>Resid = ArmPostGeom`
+  generalization is SOUND for the shared tail. (`ImageGeom` was already landed thin
+  in `TermImageGeom.lean` at commit b0bccdc; left as-is.)
+
+- **`Vsa/Sim/rows/TermRouting.lean`** (steps 2-3) + **`scripts/gen_m4_term_row.py`**
+  + **`scripts/m4_term_rows.tsv`**. Generator (model `gen_m5_error_routing.py`)
+  emits three row shapes from the TSV; regenerated output compiles green (~1s):
+  - `eval_int_row` (leaf_direct) — fills `hInt` via `evalIntSimD` directly.
+  - `eval_null_row`, `eval_bool_row` (leaf_bridge) — fill `hNull`/`hBool` by
+    bridging `EvalEntry → EvalNullEntry`/`EvalBoolEntry` (record built from the 32
+    shared `EvalEntry` projections + a 5-conjunct callee-geometry residual), then
+    `evalNullSimD`/`evalBoolSimD`.
+  - `eval_neg_row` (rec_unary) — fills `hNeg` via the already-motive-shaped
+    `evalNegSim`, supplying `NegExtras` + `hMcallPop` keyed to the operand pointer
+    extracted from the entry `ExprRepr`.
+
+- **Pilot verification.** `/tmp/probe_fill.lean`: all four rows fill their EXACT
+  `TermCaseBundle.TermCases` field slots (`hInt`/`hNull`/`hBool`/`hNeg`) via record
+  update — type-checks the row types against the bundle premise types. Green.
+  Wired into `Vsa.lean` (imports after `TermCaseBundle`) and `scripts/check_all.sh`
+  THEOREMS (8 new capstones).
+
+### DESIGN DEVIATIONS (honest, from real premise shapes)
+
+1. **`eval_add_row` as the pilot is BLOCKED, not just mechanical.** The survey's
+   step-2 pilot (`eval_add_row` composing `blockA_k ≫ evalAddSim ≫ blockD_v_rec`)
+   presumes an `EvalEntry (.binary .add) → ArmEntryK@0x800034e8` bridge exists to
+   prepend to `evalAddSim` (which starts from the `ArmEntryK`-∃ entry — `blockA_k`
+   is factored OUT of it, unlike `evalNegSim` which INCLUDES `blockA_k`). No such
+   binary-arm bridge is landed (`EvalBinSim4` stops at slot lemmas). Building it is
+   ~200 lines of real machine-proof (reconstruct the EX_BINARY dispatch entry facts
+   + `BinExtras` + `AddResid`-via-`ArmPostGeom` + the two-IH plumbing), NOT a table
+   row. So the recursive PILOT here is **`eval_neg_row`** (neg's `evalNegSim` is
+   already motive-shaped) — a working recursive-row demonstration — and add is on
+   the blocked list.
+
+2. **`hBinary` is a SINGLE ∀-op premise, not one-row-per-op.** `execSeq_sim_of_cases`'s
+   `hBinary` (and `TermCases.hBinary`) quantifies over arbitrary `op : BinOp`,
+   `lv rv v : Value` with `binOpSem st''.store op lv rv = some v`. The 10 landed
+   `eval<Op>Sim` each cover only ONE op restricted to `.int`/`.str` operands (e.g.
+   `evalAddSim`: `op=.add, lv=.int a, rv=.int b`). Filling `hBinary` needs a
+   DISPATCHER that case-splits `op` × value-kinds and routes each arm — AND several
+   kind combinations are NOT covered by the int-restricted sims (str concatenation
+   for `.add`, str comparisons for `.lt/.le/.gt/.ge`). So the 10 binary rows the
+   survey counts toward the ~38 do NOT individually fill a premise slot; they are
+   inputs to one composite `hBinary` dispatcher that remains to be built (and whose
+   str-operand arms are genuine gaps).
+
+3. **Leaf entries are per-leaf structures, not `EvalEntry`.** Only `hInt` uses
+   `EvalEntry` directly. `hNull`/`hBool`/`hStr`/`hVar` route through
+   `EvalNullEntry`/`EvalBoolEntry`/`EvalStrEntry`/`EvalVarEntry`, each carrying
+   extra callee-code/slot facts (and, for `var`, the `env_get_found` open oracle).
+   Handled by the leaf_bridge shape (a per-leaf `<Leaf>Extras` residual) — confirms
+   the survey's `EvalCaseGeom`-twin design, but the bridge is a real (small) record,
+   not a def-alias.
+
+### DEFERRED / BLOCKED (not emitted; each pinned to its gap)
+
+- **eq/ne family** — per brief, the sibling agent owns it; not touched.
+- **`hStr`** — needs CString `ExprRepr`/`ValueRepr` readback in the entry bridge
+  (`R`-class); leaf_bridge extension, deferred.
+- **`hVar`** — `evalVarSim`/`EvalVarEntry` bundle `env_get_found` (a Triple hyp,
+  `O`-class open oracle); row is a conditional leaf_bridge, deferred to step-5.
+- **`hAssign`, `hSVarInit`, `hSVarNull`, `hSBlock`, `hSForStart`** — native-store /
+  env_define / allocFrame seams (env_define-gated per brief); deferred.
+- **`hBinary`** — blocked on the ∀-op dispatcher + str-operand arms (deviation 2)
+  and the binary-arm `blockA_k` bridge (deviation 1).
+- **`hNot`, `hOrTrue`, `hOrFalse`, `hAndFalse`, `hAndTrue`** — TRACTABLE (their
+  `eval*Sim` are already motive-shaped like `evalNegSim`, with `<Op>Extras`
+  [+`aEnv3` Steps-residual for the two-eval cases] + `hMcallPop`). Same rec-row
+  recipe as `eval_neg_row`; not emitted this pass only for time (add to the TSV as
+  `rec_unary`/`rec_logical` shapes next).
+- **`hCall`, `hFn`, `hCallClosure`, `hArgs*`, native `Call`** — call subsystem;
+  deferred.
+- **All `ExecS`/`ExecSeq`/`ExecInit`/`ForLoop`/`ForCond`/`ExecStep` premises** —
+  need `ExecCaseGeom` + a `blockA_stmt` analogue of `blockA_k` (survey §4 refactor
+  5); the exec dispatch prologue is not yet factored into a reusable entry bridge.
+  Deferred to a follow-on ExecRouting pass.
+
+### Count
+
+Rows landed filling real premise slots: **4** (hInt, hNull, hBool, hNeg), all
+green + axiom-clean + slot-verified. Tractable-next (documented recipe, ~5): hNot,
+hOrTrue, hOrFalse, hAndFalse, hAndTrue. The survey's "~38 pure rows" over-counts:
+the 10 binary rows collapse to ONE dispatcher premise (blocked), and every ExecS
+row needs the un-built `blockA_stmt`. Realistic pure-row EvalE frontier now =
+{int,null,bool,neg,not,orTrue,orFalse,andFalse,andTrue} = 9, of which 4 landed.

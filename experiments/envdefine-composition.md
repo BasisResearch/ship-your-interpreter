@@ -242,3 +242,83 @@ remaining FREE-source prefix bridges (`bridgeCapCompute`) drop in by cloning
 `strlenPrefix_run` at new words. The two `*Pre` append bridges beyond strlen are
 BLOCKED at the stated signature (callee-post sources too narrow) — closing them needs
 frame-preserving `strlen`/`memcpy` post-conditions, a statement change flagged here.
+
+## Structural frame-gap FIX — assertion-carried framing (2026-08-30)
+
+Reworked `EnvDefCompose.lean` + `EnvDefBridges.lean`. Both build green +
+axiom-clean (`[propext, Classical.choice, Quot.sound]`); elab 1.53s / 1.22s (≤120s
+budget). No sorry/axiom/native_decide/bv_decide; oleans regenerated.
+
+### The fix: FRAME-CARRYING seams (`EnvDefFrame`)
+
+The prior session diagnosed the gap correctly: the seam between two callees was the
+BARE downstream callee-post (`strlen_post`, malloc-post), discarding sp/gp/ABI
+callee-saveds/AInv — so `bridgeMallocPre`/`bridgeMemcpyPre` were unprovable.
+
+Applied the house pattern (assertion-carried framing — `BlockLogic.negProloguePost`,
+`BinOpValueTails`, `ReallocPost`; NOT a generic `Triple.frame`, which is unsound per
+`BlockLogic.lean:78`). New `EnvDefCompose.EnvDefFrame SL gpv headroom AInv exts sp gm`
+bundles the carried caller context: `x2=sp ∧ StackOK ∧ x3=gpv ∧ (AbiPreserved-tie gm)
+∧ AInv c.σ exts ∧ c.tick < 2` — exactly the malloc/realloc-entry frame minus the
+argument pins (PC/x10/x1/mem).
+
+- `envDefStrlenSplice` is now frame-carrying: it takes a NAMED premise `strlenFramed :
+  Triple (strlen_pre ∧ F) (strlen_post ∧ F)` and threads `F` across the call. This is
+  the honest, auditable form of strlen's missing preservation clause (below).
+- `envDefAppendContract`'s `bridgeStrlenPre`/`bridgeMallocPre` premises are RE-SOURCED
+  to `strlen_pre ∧ EnvDefFrame` / `strlen_post ∧ EnvDefFrame`. Top-level names +
+  conclusions (`envDefAppendContract`/`envDefGrowContract`/`envDefContract`) unchanged.
+
+### Bridges closed: 2 / 9 (was 1/9) — both frame-carrying
+
+- **`bridgeStrlenPre_closed`** — REPROVED against the enriched seam. `AppendStrlenEntry`
+  now also carries the frame ghosts (`SL gpv headroom AInv exts sp gm`); the `mv;jal`
+  prefix lands `strlen_pre ∧ EnvDefFrame` at `0x80006cf0`. Frame survives because the
+  prefix writes only x10 (mv) / x1 (jal): `strlenPrefix_run` was EXTENDED with x2/x8
+  pins + a blanket `NotWrittenEnv` frame clause (via `get?_sigmaPost_alu/jal` readbacks);
+  AInv survives by a stability premise `hAInvStable` (mem-agree ∧ gp-agree ⇒ AInv), the
+  same `MallocContract`-interface property `env_new` uses (`EnvNewSpec:496`).
+- **`bridgeMallocPre_closed`** — NEWLY CLOSED (the previously-BLOCKED bridge). From
+  `strlen_post ∧ EnvDefFrame`, the real malloc prefix
+  `0x80002b24 addi s0,a0,1 ; 0x80002b28 mv a0,s0 ; 0x80002b2c jal malloc` lands the
+  `MallocContract.spec` entry predicate: `nMalloc = nameStr.length+1`, `rM=0x80002b30`,
+  `sp/gp/AInv` from the carried frame. NEW: three site lemmas `site_80002b24_ed`
+  (addi), `site_80002b28_ed` (mv), `site_80002b2c_ed` (jal, imm=0x001c64 → mallocEntry),
+  composed in `mallocPrefix_run` (3-step run + frame). The one callee-saved the prefix
+  rewrites is x8/s0 (holds the size across the call), so the malloc-entry ABI ghost `g'`
+  differs from the strlen-frame ghost `gm` ONLY on x8 — carried as two clean premises
+  `hg'x8`/`hg'other`. Decode lemmas `decode_00150413/00040513/465010ef` all present.
+
+### Contract preservation gaps NAMED (honest residuals, NOT weakened)
+
+The `strlenFramed` premise is UNPROVED here on purpose — it is exactly the set of
+`strlen_spec`-conclusion clauses that are MISSING and would let it be discharged. To
+close `strlenFramed` (and, symmetrically, the memcpy seam), `strlen_post`/`Done`
+(StrlenSpec.lean:763,2139) must be EXTENDED to additionally state (a statement change,
+out of my file-ownership scope — flagged, not made):
+
+1. **`c.tick < 2`** — the intra-tick counter bound. `strlen_post` drops it entirely;
+   every downstream Step lemma needs `i < 2`. (Carried in `EnvDefFrame` as the stopgap.)
+2. **`c.σ.regs.get? Register.x2 = some sp`** (sp preserved) + `StackOK`.
+3. **`c.σ.regs.get? Register.x3 = some gpv`** (gp preserved).
+4. **`∀ R, AbiPreserved R → c.σ.regs.get? R = g R`** — the ABI callee-saved tie against
+   an entry ghost `g` (strlen honours the psABI; leaf reader, no callee-saved clobber).
+5. **`AInv`-preservation** (or the `hAInvStable` interface property as a `strlen_spec`
+   field), since strlen never stores (`mem = m0`), so any mem+gp-stable AInv survives.
+
+These five are precisely the `strlen_post`↔malloc-entry delta. strlen PHYSICALLY
+satisfies all five (8-aligned fast path is a pure reader), but its stated Triple does
+not express them. `memcpy_bytepath_post` (MemcpySpec.lean:782) is BETTER: it already
+carries `(∀ R, NotWrittenB R → regs R = g R)` (NotWrittenB excludes only x11/x14/x15 +
+control, so sp/gp/callee-saveds ARE tied) plus the outside-footprint memory frame — so
+the memcpy seam's frame is derivable once its `PreDispatch`-side copy facts
+(`MemcpyLoaded`/`Regions`/`MemInv`) are threaded from `P` (not blocked on a memcpy
+statement change; blocked only on the store-block bridge machine work).
+
+### Remaining (unchanged budget-scope residuals)
+
+`bridgeMemcpyPre` (needs copy-source facts carried in F + the malloc-post→memcpy-entry
+prefix bridge), `bridgeStore`, `bridgeCapCompute`, `bridgeNamesToVals`,
+`bridgeAppendHead`, `hUpdate`, dispatch scan loop — each a straight-line/loop machine
+segment, none now blocked by seam underspecification (the frame plumbing is in place).
+`bridgeCapCompute` drops in by cloning `mallocPrefix_run` at the realloc words.

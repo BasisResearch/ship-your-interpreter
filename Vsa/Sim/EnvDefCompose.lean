@@ -75,6 +75,43 @@ open Vsa.Sim.Code (Env_defineLoaded)
 
 namespace Vsa.Sim
 
+/-! ## The CARRIED FRAME — assertion-carried framing across the callee seams
+
+The structural gap diagnosed in `experiments/envdefine-composition.md` (last
+ledger section) is this: the seam predicate between two callees was the BARE
+downstream-callee post (`strlen_post`, malloc-post), which discards the
+caller-saved context (`sp`/`gp`/ABI callee-saveds/`AInv`) that the NEXT callee's
+entry requires.  So `bridgeMallocPre`/`bridgeMemcpyPre` were unprovable as
+stated — there was nowhere for the malloc-entry `sp`/`gp`/`AInv` facts to come
+from.
+
+The fix is the house pattern (`BlockLogic.negProloguePost`, `BinOpValueTails`,
+`ReallocPost`): **assertion-carried framing** — the seam is
+`calleePost ∧ <carried frame>`, where the frame is precisely the ABI/heap
+context the downstream entry needs, and it is threaded THROUGH each callee by a
+frame-preservation clause the callee's own contract supplies.  A generic
+`Triple.frame` would be unsound (`BlockLogic.lean:78`); the frame is instead
+carried as an explicit conjunct proved by the segment that spans it.
+
+`EnvDefFrame` is that carried context: the ABI callee-saveds tie (`gm`), `sp` +
+`StackOK`, `gp`, and the allocator invariant `AInv` over the live extents — i.e.
+the malloc/realloc-entry frame minus the argument-specific pins (PC/x10/x1/mem),
+which each prefix supplies. -/
+
+/-- **The carried caller-frame** threaded across the append/grow callee seams:
+the ABI callee-saved register tie (`gm`), the stack pointer + `StackOK`, the
+global pointer, and the allocator invariant over the live extents.  This is
+exactly the sub-state the downstream malloc/realloc entry predicate needs beyond
+the argument pins — conjoined to each callee seam so it survives the call. -/
+def EnvDefFrame (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
+    (AInv : MState → List (Nat × Nat) → Prop) (exts : List (Nat × Nat))
+    (sp : BitVec 64) (gm : (R : Register) → Option (RegisterType R))
+    (c : Config) : Prop :=
+  c.σ.regs.get? Register.x2 = some sp ∧ StackOK SL sp headroom ∧
+  c.σ.regs.get? Register.x3 = some gpv ∧
+  (∀ R, AbiPreserved R = true → c.σ.regs.get? R = gm R) ∧
+  AInv c.σ exts ∧ c.tick < 2
+
 /-! ## Single-call splices — each `prefix ≫ callee ≫ suffix` over one real contract
 
 Each splice is `callSeg pre callee suf` (`DeriveCallSeg.lean`): the caller prefix
@@ -84,13 +121,26 @@ the Shape-D algebra; the callee is threaded, never re-proved. -/
 
 /-- **`strlen` call splice** (`0x80002b1c mv a0,s2 ; 0x80002b20 jal strlen`).
 Prefix marshals `name` into `a0` and lands `strlen_pre`; `strlen_spec` runs;
-suffix consumes `strlen_post` (`a0 = len`) to `Q`. -/
-theorem envDefStrlenSplice {P Q : Config → Prop}
+suffix consumes `strlen_post` (`a0 = len`) to `Q`.
+
+**FRAME-CARRYING form.**  `strlen_post` carries only PC/x10/x1/mem — it drops
+`sp`/`gp`/ABI/`AInv`.  strlen physically preserves those (it is a leaf reader:
+no stores, callee-saveds honoured), but that preservation is NOT in
+`strlen_post`'s stated conclusion — it is the exact **missing preservation
+clause** the ledger flagged.  Rather than silently assume it (unsound) or weaken
+the seam (dishonest), we thread the carried frame through strlen as the EXPLICIT
+named premise `strlenFramed : Triple (strlen_pre ∧ F) (strlen_post ∧ F)`.  This
+makes the missing clause a visible, auditable hypothesis; the downstream
+`bridgeMallocPre` then draws its `sp`/`gp`/`AInv` facts from `F`, not from thin
+air.  See the frame-preservation residual note in the ledger. -/
+theorem envDefStrlenSplice {P Q F : Config → Prop}
     (p r : BitVec 64) (s : String) (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (pre : Triple P (strlen_pre p r s m0))
-    (suf : Triple (strlen_post r s m0) Q) :
+    (strlenFramed : Triple (fun c => strlen_pre p r s m0 c ∧ F c)
+      (fun c => strlen_post r s m0 c ∧ F c))
+    (pre : Triple P (fun c => strlen_pre p r s m0 c ∧ F c))
+    (suf : Triple (fun c => strlen_post r s m0 c ∧ F c) Q) :
     Triple P Q :=
-  callSeg pre (strlen_spec p r s m0) suf
+  callSeg pre strlenFramed suf
 
 /-- **`malloc` call splice** (`0x80002b28 mv a0,s0 ; 0x80002b2c jal malloc`).
 Prefix marshals `len+1` into `a0` and lands `MallocContract.spec`'s entry
@@ -215,9 +265,21 @@ theorem envDefAppendContract
     (halignC : rMemcpy.toNat % 4 = 0)
     (hrouteC : (src.toNat ^^^ dst.toNat) % 8 ≠ 0 ∨ nMemcpy < 8 ∨
       (dst.toNat % 8 = 0 ∧ 8 * (nMemcpy / 8) ≤ 64))
-    -- the four machine bridges
-    (bridgeStrlenPre : Triple P (strlen_pre namePtr rStrlen nameStr m0))
-    (bridgeMallocPre : Triple (strlen_post rStrlen nameStr m0)
+    -- strlen preserves the carried frame (its missing preservation clause, named).
+    -- The carried frame is `EnvDefFrame … spM gm` (the malloc-entry frame minus arg
+    -- pins); on the strlen seam memory is still `m0` (strlen does not store).
+    (strlenFramed : Triple
+      (fun c => strlen_pre namePtr rStrlen nameStr m0 c ∧
+        EnvDefFrame SL gpv headroom M.AInv exts spM gm c)
+      (fun c => strlen_post rStrlen nameStr m0 c ∧
+        EnvDefFrame SL gpv headroom M.AInv exts spM gm c))
+    -- the four machine bridges — now FRAME-CARRYING
+    (bridgeStrlenPre : Triple P
+      (fun c => strlen_pre namePtr rStrlen nameStr m0 c ∧
+        EnvDefFrame SL gpv headroom M.AInv exts spM gm c))
+    (bridgeMallocPre : Triple
+      (fun c => strlen_post rStrlen nameStr m0 c ∧
+        EnvDefFrame SL gpv headroom M.AInv exts spM gm c)
       (fun c =>
         GoodState c.σ ∧ c.tick < 2 ∧
         c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 mallocEntry) ∧
@@ -246,7 +308,7 @@ theorem envDefAppendContract
       (fun c => ∃ g', memcpy_bytepath_post g' rMemcpy dst nMemcpy mMemcpy bs c) Q) :
     Triple P Q :=
   -- strlen ≫ [malloc ≫ [memcpy ≫ store]]
-  envDefStrlenSplice namePtr rStrlen nameStr m0 bridgeStrlenPre
+  envDefStrlenSplice namePtr rStrlen nameStr m0 strlenFramed bridgeStrlenPre
     (envDefMallocSplice M gm exts nMalloc spM rM mMalloc hnM bridgeMallocPre
       (envDefMemcpySplice gc rMemcpy dst src nMemcpy mMemcpy bs halignC hrouteC
         bridgeMemcpyPre bridgeStore))

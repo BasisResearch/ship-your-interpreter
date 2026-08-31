@@ -229,3 +229,69 @@ lemmas.  This is mechanical once route (a)/(b) supplies the `LPins8`s.
   operand reprs + geometry + str-witness + φ box — same shape class as `DivResid`.
 - Truncation: landed SPECIFIC (eqDispatch + neDispatch), not general — rationale above.
 - Elab: whole `rows/EvalEqNeFront.lean` = ~3.1s (well under 120s); truncation standalone 0.5s.
+
+---
+
+## Execution log (2026-08-30, session 3) — route (a) COMPLETE: EqResid.hFront eliminated, div-parity reached
+
+Route (a) (steps 1+2 of the mission) was ALREADY landed at session start by a prior
+agent: `EqNeSrcPins` is defined in `EqNeDispatchStrong.lean`, threaded into
+`EqDispatchPostS`/`NeDispatchPostS` (last conjunct), proved via `eqDispatch_srcPins`/
+`neDispatch_srcPins` and wired through `eqDispatchRowS`/`neDispatchRowS` +
+`evalEqChain_dispatch`/`evalNeChain_dispatch` (the `hpinsD` projection). Baselines green:
+`EqNeDispatchStrong` 9.5s, `EvalEqNeArm` 1.5s, `EqNeReprReadback` 6.0s, `EqNeDispatchInput`
+1.6s — all axiom-clean. The session-2 "blocker (a)" note is now STALE.
+
+### Step 3 LANDED — EqResid rebuilt to div-parity (this session, `rows/EvalEqNeFront.lean`, ~3.5s)
+
+New `EqFrontDataNoRepr` (= `EqFrontData` minus `hReprA`/`hReprB`) + `eqFrontData_of_readback`
+(reassembles full `EqFrontData` from `EqFrontDataNoRepr` + `EqNeSrcPins` + the two SOURCE
+reprs on `c2.σ.mem` + payload disjointness, DERIVING the operand reprs on the post-dispatch
+memory `mA := cD.σ.mem` via `eqDispatch_bufa/bufb_repr_lds` — the readback fed by route
+(a)'s `EqNeSrcPins`). `EqResid` no longer supplies `hReprA`/`hReprB` as caller data (the
+semantically-hardest part of the old `hFront`); its post-dispatch tail now supplies
+`EqFrontDataNoRepr` + `EqNeBoxPre` on `cD.σ.mem`, and `EqResid` itself carries the two
+source `ValueRepr c2.σ.mem N φc ((sp-1088)+0x78/0x90) vl/vr` + the two `hpaydisj` + `hbase`
+(`(sp-1088).toNat+4096 ≤ 2^64`). `eqBlockC_bridge` reassembles via `eqFrontData_of_readback`
+(cased on op to project the concrete `EqDispatchPostS`/`NeDispatchPostS` memEq + `EqNeSrcPins`).
+Note: the dispatch-run `Steps c2 cD` was ALREADY internal (`evalEqNeChain_dispatch_of_twoSubReturn`
+inside `eqBlockC_bridge`); it was never bundled in the current `EqResid` — the session-2
+"bundles Steps c2 cD" claim referred to a pre-refactor version.
+
+All statement CONCLUSIONS preserved for the check_all-audited names (`blockC_eqne_front`,
+`eqBlockC_bridge`, `evalEqSimD`, `evalNeSimD`); only the `EqResid` PRECONDITION shrank
+(sanctioned). New capstone `eqFrontData_of_readback` added to check_all.
+
+### EqResid vs DivResid field comparison (against CURRENT `rows/EvalDivRow.lean:663`)
+
+`DivResid` (structure about POST-`TwoSubReturn` config `c'`): `gx8`, `opTok`, `slot`,
+`fullpop`, `x19`, `wlbuf`, `kindresp`, expr/sret geometry (~20 bound/align/window fields),
+`vint`/`divdi3`/`umoddi3`/`udivdi3` loaded images, stack-disjointness fields. It supplies
+NO reprs (the __divdi3 tail produces the int result directly) and NO post-dispatch memory —
+`blockC_div` runs the dispatch + libgcc call internally.
+
+`EqResid` (now, about `c2`): `∃ Wl, EqNeDispatchInput op … c2` (= the `gx8`/`opTok`/`slot`/
+`fullpop`/`x19`/`kindResp`/expr+stack-geometry analogue, packaged as the existing dispatch
+input structure) ∧ `hbase` ∧ two `hpaydisj` ∧ two SOURCE `ValueRepr` ∧ the post-dispatch
+tail (`∀ cD lds, DispatchPost … → ∃ φ…, PhiExtends×4 ∧ EqFrontDataNoRepr … cD.σ.mem ∧
+EqNeBoxPre … cD.σ.mem`). Same KIND as `DivResid`: geometry + loaded images (carried inside
+`EqFrontDataNoRepr`: `hVeLoaded`/`hJT`/`hEE`/`hStrc`/`hMask`, all on the post-dispatch mem,
+transportable m0→mA off `[base,base+0x108)` by `eqDispatch_mem_frame` — the code regions are
+in `[0x80003164,…]`/`[0x8000285c,…]`/mask/jump-table, far outside the RAM window) + the box.
+
+DIFFERENCE from strict `DivResid` parity: `EqResid` carries the loaded images + str-witness +
+box FRAME-CONDITIONALLY on the post-dispatch `cD` (via the `∀ cD lds, DispatchPost →` tail)
+rather than as flat fields on `c2`, because eq/ne's `value_equal` call needs the loaded
+IMAGE on the callee-entry memory `mA` and the two operand reprs (which `DivResid`'s libgcc
+path does not). The operand reprs are now DERIVED (readback), not given — matching div's
+"produced internally" character. The residual is genuinely `DivResid`-shaped in kind
+(geometry + loaded images + box, about the config, no bundled `Steps`/no given post-dispatch
+reprs); the remaining frame-conditionality is intrinsic to the value_equal-callee shape.
+
+### Verification (serial, deepest-first; oleans regenerated)
+- `rows/EvalEqNeFront.lean` 3.5s, olean regenerated. `#print axioms` on
+  `evalEqSimD`/`evalNeSimD`/`blockC_eqne_front`/`eqBlockC_bridge`/`eqFrontData_of_readback`
+  all ⊆ {propext, Classical.choice, Quot.sound} (no sorryAx). Upstream owned files unchanged
+  and reverified green+clean (`EqNeDispatchStrong` 9.5s, `EvalEqNeArm` 1.5s, `EqNeReprReadback`
+  6.0s, `EqNeDispatchInput` 1.6s). No external consumers of `EqResid`/`evalEqSimD`/`evalNeSimD`/
+  `EqFrontData`/`blockC_eqne_front` (grep tree-wide) — the `EqResid` statement change is safe.
