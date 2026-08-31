@@ -9,7 +9,13 @@ echo "# recent stack commits:"
 git log --oneline -15 | grep -iE 'abstraction|geom|segeval|seg[- ]?eval|framecalc|frame|heapops|realloc|derive|loopstep|reflect|marshal' | sed 's/^/#   /' || true
 FILES=$(ls Vsa/Sim/GeomFacts.lean Vsa/Sim/SegEval*.lean Vsa/Sim/FrameCalc.lean Vsa/Sim/DeriveCase.lean \
            Vsa/Sim/LoopStep.lean Vsa/Sim/HeapOps.lean Vsa/Sim/ReallocSpec.lean Vsa/Sim/EnvDefineClose.lean \
-           Vsa/Sim/ErrorSites.lean 2>/dev/null)
+           Vsa/Sim/ErrorSites.lean \
+           Vsa/Sim/DeriveCallSeg.lean Vsa/Sim/DeriveLoop.lean Vsa/Sim/DeriveErrorSite.lean \
+           Vsa/Sim/DeriveCaseRow.lean Vsa/Sim/ChainFactsTac.lean \
+           Vsa/Sim/FrameMeta.lean Vsa/Sim/BridgeSeg.lean Vsa/Sim/WidenMeta.lean \
+           Vsa/Sim/SegReadback.lean Vsa/Sim/TermBundles.lean Vsa/Sim/TermImageGeom.lean \
+           Vsa/Sim/EnvDefSeg.lean Vsa/Sim/EnvGetMarshal.lean \
+           Vsa/Sim/rows/ArmPostGeom.lean Vsa/Sim/rows/LoopSteps.lean 2>/dev/null)
 for p in $FILES; do
   if git ls-files --error-unmatch "$p" >/dev/null 2>&1; then
     echo "# [COMMITTED — reuse] $p — public API:"
@@ -20,3 +26,5 @@ for p in $FILES; do
   fi
 done
 echo "# fast-elab rules: memory/fast-reflection-rules.md (7 laws) — every abstraction file obeys them."
+echo "# MANDATORY task-shape->tool table + discipline laws: CLAUDE.md (gate-enforced, check_all stage a4)."
+echo "# missing-general-fact observations channel: experiments/observations.md (append at the moment of noticing)."
