@@ -585,7 +585,7 @@ THEOREMS=(
   Vsa.Sim.hEntryHalts_closed                         # EntryHaltsSpans (hEntryHalts CLOSED modulo StoreInitSeam + EpilogueFrame — the two honest program-entry seams)
   Vsa.Sim.epilogueControl_of_segExit                 # EntrySeams (4 of 5 EpilogueFrame control conjuncts = direct SegExit projections)
   Vsa.Sim.storeInitSeam_of_initRepr                  # EntrySeams (StoreInitSeam localized to InterpInitStoreRepr — the off-path interp_init store build, spans decoded)
-  Vsa.Sim.hEntryHalts_closed'                        # EntrySeams (entry premise now rests ONLY on EpilogueSpill + InterpInitStoreRepr)
+  "Vsa.Sim.hEntryHalts_closed'"                      # EntrySeams (entry premise now rests ONLY on EpilogueSpill + InterpInitStoreRepr; NAME HAS A PRIME — must stay quoted in this bash array)
   Vsa.Sim.exitStoreHalts0                            # TermEntry (M4/M6: clean-exit(0) store → HTIF-halt-0 bridge; exit-0 twin of exitStoreHalts)
   Vsa.Sim.cleanExitTail                              # TermEntry (M4/M6: .normal-return continuation → Halts c out 0, via ExitTailChain0 + exitStoreHalts0)
   Vsa.Sim.entryHalts                                 # TermEntry (M4/M6: hEntryHalts discharged — clean-exit(0) entry bridge; conditional on prologue-bridge + tail-span residuals)
