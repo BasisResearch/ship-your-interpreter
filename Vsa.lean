@@ -514,6 +514,10 @@ import Vsa.Sim.DivLoopProgressClose
 import Vsa.Sim.InterpRunLoopSeamsClose
 import Vsa.Sim.StepCount
 import Vsa.Sim.rows.LoopHeadDispatch
+import Vsa.Sim.rows.InterpBackEdgeSeg
+import Vsa.Sim.IterSeamAssembly
+import Vsa.Sim.rows.StrdupTailBridges
+import Vsa.Sim.rows.StrcpyContract
 import Vsa.While.StmtDispatch
 import Vsa.While.StmtDispatchClose
 import Vsa.Sim.InterpSimBundle

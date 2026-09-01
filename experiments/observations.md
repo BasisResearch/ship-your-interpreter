@@ -1380,6 +1380,16 @@ it, still stop and report instead.
   clause but with EMPTY write footprint (free touches only allocator-private
   metadata). One `decide`-free structure field; then every free call is a
   `callSeg` with a trivial frame-preserving suffix, same as the other callees.
+- RESOLVED (2026-08-31, task #68): landed as `MallocContract.freeSpec`
+  (`Vsa/Alloc.lean`), entry `freeEntry = 0x8000479c`. NOT a pure no-op (the
+  proposal's `freeNoOp` was too weak): the extent is POPPED (`AInv c.σ' exts`
+  from pre `AInv c.σ ((q,n)::exts)`) because dlmalloc REUSES freed blocks — a
+  frame-only free would keep `(q,n)` live and make malloc's `ExtDisjoint`
+  freshness clause uninhabitable after enough cycles. And the freed chunk's
+  bytes `[q, q+n)` are FORFEIT (free writes free-list link pointers into the
+  payload) so the untouched region excludes `privFoot ∪ [q,q+n) ∪ stack
+  window`. Pre mirrors `spec`'s ABI entry. World re-elaborates; EnvDefCompose +
+  Alloc axiom-clean. Consume it as a `callSeg` callee, same as `spec`.
 
 ## 2026-08-31 setjmp-post-no-sp-frame (task #66, SetjmpSplice)
 - missing: `setjmp_post` (Vsa/Sim/JmpSpec.lean) does NOT preserve the stack
@@ -1487,3 +1497,31 @@ it, still stop and report instead.
   `Steps.trans` + the tick/minstret threading. Alternatively, extend the genseg
   arm compiler with a `mid_call` terminator-list so a single arm description
   emits the whole `seg ≫ CALL ≫ seg ≫ jal` row with the interior call named.
+
+---
+
+## 2026-08-31 dirty-tree-olean-cascade (iterSeam assembly, task iterSeam)
+- missing: a supported way to complete the olean closure for `lake env lean
+  <file>` when the working tree has modified sim sources (EnvDefCompose/
+  TermRouting/StrlenSpec were `M` in git status). Wave-25 files
+  (ExecDispatchRows/ExecWhile2/TermSimClose/EvalIntSim2-4/ExecBrkCont/
+  EvalVarSim/ExecExprRet/ExecRet/ExecVarNull/WidenMeta/EvalRecCommon/
+  EvalSimCommon/SnprintfSpec20) had NO committed olean, so the target's import
+  closure was incomplete and `lake env lean` errors "object file … does not
+  exist" ONE missing module at a time (it stops at the first missing import).
+- workaround: computed the target's import closure in python, topo-sorted, and
+  built each genuinely-missing olean with `lake env lean -o <olean> <src>`
+  SERIALLY (parallel `-o` builds of sibling modules appeared to delete/
+  invalidate each other's freshly-written oleans — SnprintfSpec20 vanished twice
+  after concurrent builds; likely a non-atomic olean write or shared temp).
+  ~14 oleans, several multi-minute (EvalIntSim2/SnprintfSpec20 heavy). NEVER used
+  `lake build` (forbidden).
+- cost: ~40 min of wall time chasing the cascade one module at a time; every
+  future agent whose target sits above the wave-25 sim layer pays this again
+  until those oleans are committed or a warm .lake is seeded.
+- proposal: (a) commit the wave-25 oleans (or seed a warm .lake per the
+  remote-build-pro memory), so downstream targets load without a rebuild; OR
+  (b) a `scripts/warm_closure.sh <module>` that topo-builds exactly the missing
+  oleans in a target's closure SERIALLY with `lake env lean -o` (never parallel,
+  never `lake build`) — the mtime heuristic is wrong (content-hash, not mtime;
+  build only the MISSING, not the "stale").

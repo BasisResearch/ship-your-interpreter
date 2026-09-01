@@ -1,0 +1,10 @@
+name       = "strdupStrlenArg"
+entry      = 0x80003044
+span_end   = 0x80003048
+terminator = "fallthrough"
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac"]
+doc        = "stringify strdup-tail strlen prefix: mv a0,s1 (marshal the scratch buffer s1 into a0), parked at the jal strlen seam @0x80003048."
+
+[[pin]]
+reg = 9
+name = "s1"

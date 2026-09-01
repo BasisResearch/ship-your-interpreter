@@ -1,0 +1,13 @@
+name       = "strdupMallocArg"
+entry      = 0x8000304c
+span_end   = 0x80003058
+terminator = "fallthrough"
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac"]
+doc        = "stringify strdup-tail malloc prefix: addi a2,a0,1 ; mv a0,a2 ; sd a2,8(sp) (size = len+1 marshalled into a0 and spilled), parked at the jal malloc seam @0x80003058."
+
+[[pin]]
+reg = 10
+name = "a0"
+[[pin]]
+reg = 2
+name = "sp"

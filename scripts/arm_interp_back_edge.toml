@@ -1,0 +1,33 @@
+name = "interpBackEdge"
+namespace = "Vsa.Sim"
+entry = 0x80004478
+span_end = 0x80004488
+terminator = "br"
+taken = false
+imports = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac"]
+doc = "interp_run back-edge suffix [0x80004478 -> 0x8000448c): the exec_stmt return landing. beq a0,s3 NOT taken (status .normal -> a0=0 != s3=3), addiw a0,a0,-1, bgeu s4,a0 NOT taken (s4=1 < a0=0xFFFF..FFFF unsigned), addi s0,s0,8 (advance the statement cursor), beq s0,s2 NOT taken (tail non-empty -> cursor != array-end bound). Lands at the loop head 0x8000448c for the next iteration."
+
+# intermediate not-taken branch blocks, each ends at a branch terminator:
+[[block]]
+end = 0x80004478
+taken = false
+[[block]]
+end = 0x80004480
+taken = false
+
+# entry pins (read-before-written): a0(status), s3(=3), s4(=1), s0(cursor), s2(bound).
+[[pin]]
+reg = 10
+name = "a0"
+[[pin]]
+reg = 19
+name = "s3"
+[[pin]]
+reg = 20
+name = "s4"
+[[pin]]
+reg = 8
+name = "s0"
+[[pin]]
+reg = 18
+name = "s2"

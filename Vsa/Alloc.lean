@@ -35,6 +35,10 @@ open LeanRV64DExecutable
 /-- `malloc`'s entry address in the fixed binary (symbol table). -/
 def mallocEntry : Nat := 0x80004790
 
+/-- `free`'s entry address in the fixed binary (symbol table): `<free>` is the
+3-instruction reentrancy wrapper `mv a1,a0 ; ld a0,1120(gp) ; j _free_r`. -/
+def freeEntry : Nat := 0x8000479c
+
 /-- The C stack region (concrete bounds from the linker script at M6). -/
 structure StackLayout where
   lo : Nat
@@ -103,5 +107,60 @@ structure MallocContract (A : Arena) (SL : StackLayout) (gpv : BitVec 64)
         -- window strictly below the entry sp is untouched:
         (∀ a, ¬ privFoot a → ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
           c.σ.mem[a]? = m0[a]?))
+  /-- **The total-correctness triple for one `free(q)` call** (entry
+  `freeEntry`, the wrapper into `_free_r`).
+
+  `free` is part of the SAME allocator interface as `malloc`: the two are duals
+  over the abstract live list `AInv … exts`.  We give `free` a real contract —
+  not a frame-only no-op — for two reasons dlmalloc's implementation forces:
+
+  1. **The extent must LEAVE the live list.**  dlmalloc REUSES freed blocks: a
+  later `malloc` can hand back exactly the just-freed chunk.  If `free(q)` left
+  `(q, n)` in `exts`, then `malloc`'s post (`ExtDisjoint (p, n') e` for every
+  `e ∈ exts` — the freshness clause) would forbid ever returning that address
+  again, so after enough alloc/free cycles the freshness clause becomes
+  uninhabitable (the arena is finite).  The post therefore POPS the extent:
+  `AInv c.σ' exts` with `(q, n)` gone.
+
+  2. **The freed chunk's bytes are FORFEIT.**  `free` writes free-list link
+  pointers INTO the freed chunk (dlmalloc stores `fd`/`bk` in the payload).  So
+  the frame clause may NOT claim `[q, q+n)` is preserved — those bytes belong to
+  the allocator again the instant `free` returns.  The untouched region is
+  therefore everything OUTSIDE `privFoot ∪ [q, q+n) ∪ the stack window below the
+  entry sp`.
+
+  Pre mirrors `spec`'s ABI entry (GoodState, `tick < 2`, PC = `freeEntry`,
+  `x10 = q` the block to free, `ra`/`sp`+`StackOK`/`gp` pinned, `AbiPreserved`
+  tie to `g`) with `AInv c.σ ((q, n) :: exts)` — `q` must be a currently-live
+  extent of size `n`, at the head (the caller knows which block it is freeing).
+  Post returns to `ra`, restores the ABI frame, and asserts `AInv c.σ' exts`
+  (the tail — extent popped).  Nobody constructs `MallocContract`; this field is
+  a named hypothesis of the final theorem, so adding it breaks no proof. -/
+  freeSpec : ∀ (g : (R : Register) → Option (RegisterType R))
+      (exts : List (Nat × Nat)) (q : Nat) (n : Nat) (sp r : BitVec 64)
+      (m0 : Std.ExtHashMap Nat (BitVec 8)),
+    Triple
+      (fun c =>
+        GoodState c.σ ∧ c.tick < 2 ∧
+        c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 freeEntry) ∧
+        c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 q) ∧
+        c.σ.regs.get? Register.x1 = some r ∧ r.toNat % 4 = 0 ∧
+        c.σ.regs.get? Register.x2 = some sp ∧ StackOK SL sp headroom ∧
+        c.σ.regs.get? Register.x3 = some gpv ∧
+        (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧
+        AInv c.σ ((q, n) :: exts) ∧ c.σ.mem = m0)
+      (fun c =>
+        GoodState c.σ ∧ c.tick < 2 ∧
+        c.σ.regs.get? Register.PC = some r ∧
+        c.σ.regs.get? Register.x2 = some sp ∧
+        c.σ.regs.get? Register.x3 = some gpv ∧
+        (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧
+        -- the extent is popped off the live list:
+        AInv c.σ exts ∧
+        -- memory outside the allocator-private footprint, the freed chunk
+        -- `[q, q+n)` (whose bytes free reclaims for its link pointers), and the
+        -- stack window strictly below the entry sp is untouched:
+        (∀ a, ¬ privFoot a → ¬ (q ≤ a ∧ a < q + n) →
+          ¬ (SL.lo ≤ a ∧ a < sp.toNat) → c.σ.mem[a]? = m0[a]?))
 
 end Vsa.Alloc
