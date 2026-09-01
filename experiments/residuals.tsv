@@ -59,7 +59,7 @@ crux-fold-leg-inputs	crux-marshal	open	43		per-leg fold inputs hStage (foldStage
 falsity-9-segexit-frame	amendment	open	44		RATIFY: weaken SegExit.frame at callJoinPC to joinRestored-guarded set (stackWin precedent); obstruction segExitJoin_frame_x8_false	no
 sentryc-amendment	amendment	open	44		SEntryC re-seat on ExecDispatchEntry (twin-1 obstruction sEntryC_false_at_dispatchHead); touches ArmStagesWave34 29 refs + 6 files	no
 stmtwhileloop-shape	bridge-twin	open	44		stmtWhileLoop 3rd entry shape: bne to while-ARM head 0x80004034, needs own entry predicate	no
-mkind-lwu	infra	open	44		MKind.lwu missing from block decoder (blocks value_print dispatch head; xori-add recipe in observation lwu-missing-from-block-decoder)	no
+mkind-lwu	infra	closed	44	45	MKind.lwu landed in decoder (BlockDecode/BlockMem/BlockTerm/LoopStep/ValueSites + LayoutVpTableGen slot pins)	no
 valueprint-dispatch	native-serial	open	44		ValuePrintDispatch residual: jump-table head as seg, blocked on mkind-lwu	no
 valueprint-framed-splice	native-serial	open	44		framed arm variant + Triple.seq splice (segToTriple hides sailOutput/ra/sp - needs bblocks_sound_framed route)	no
 fprintf-contract	io-callee	open	44		FprintfContract named (newlib fprintf -> HTIF; no code image)	no
@@ -69,4 +69,4 @@ fprintf-stderr-neutral	io-callee	open	44		FprintfStderrNeutral: stderr bypasses 
 exit-interior-neutral	io-callee	open	44		ExitInteriorNeutral: exit() interior 0x80004764->0x80000180 output-neutral	no
 crt0-jframe	m6-layout	open	44		Crt0JFrame byte pins (no crt0/_start Code module in tree)	no
 mainerr-frame	m6-layout	open	44		MainErrFrame byte pins (dischargeable from existing MainLoaded)	yes
-snprintf-frame-contract	m6-decode	open	44		factor format-generic SnprintfFrameContract from snprintf_lld_spec residuals (only footprint bound load-bearing for SnprintfContract)	no
+snprintf-frame-contract	m6-decode	closed	44	45	SnprintfFrameContract landed (rows/SnprintfFrame, axiom-audited); SnprintfContract seg composition quarantined to experiments/wip/ErrSegSnprintf.lean.w45 (lane stalled mid-flight)	no

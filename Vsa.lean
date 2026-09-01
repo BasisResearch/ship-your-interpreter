@@ -631,3 +631,7 @@ import Vsa.Sim.rows.ErrSegCrt0
 import Vsa.Sim.rows.ErrSegMain
 import Vsa.Sim.rows.CallCruxMarshal5
 import Vsa.Sim.rows.StoreWF
+-- wave 45
+import Vsa.Sim.rows.LayoutVpTableGen
+import Vsa.Sim.rows.CallArgsSegPreB
+import Vsa.Sim.rows.SnprintfFrame

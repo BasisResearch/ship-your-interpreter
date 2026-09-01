@@ -63,10 +63,11 @@ def decodeM (w : BitVec 32) : Option (MKind × Nat × Nat × Nat × BitVec 12) :
      else if funct3 = 2 then some (.slt, rd, rs1, rs2, 0#12)
      else none)
   else if opcode = 0x03 then
-    -- LOAD: lw (2) / ld (3) / lbu (4); rs2 unused
+    -- LOAD: lw (2) / ld (3) / lbu (4) / lwu (6, unsigned word); rs2 unused
     (if funct3 = 2 then some (.lw, rd, rs1, 0, immI)
      else if funct3 = 3 then some (.ld, rd, rs1, 0, immI)
      else if funct3 = 4 then some (.lbu, rd, rs1, 0, immI)
+     else if funct3 = 6 then some (.lwu, rd, rs1, 0, immI)
      else none)
   else if opcode = 0x23 then
     -- STORE: sw (2) / sd (3) / sb (0); rd unused, rs1 = base, rs2 = data

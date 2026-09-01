@@ -1,0 +1,450 @@
+import Vsa.Sim.rows.SnprintfFrame
+
+/-!
+# Wave 45 — `SnprintfContract` reduced (runtime_error → jal longjmp, via 2 snprintf frames)
+
+`SnprintfContract` (`Vsa/Sim/JmpSpec.lean`) abstracts `runtime_error`'s pre-`longjmp`
+segment `0x80002da8 → 0x8000703c` (the `jal longjmp` target), through the two
+`snprintf` calls, keeping only the **jmp_buf `[inp+16, inp+128)` preservation** and
+the longjmp-arg setup.  This file **reduces** it to a small, honest residual set,
+composing the format-generic `SnprintfFrameContract` (`Vsa/Sim/rows/SnprintfFrame.lean`)
+for each of the two calls.
+
+## The decoded span (`experiments/disasm.txt`, 0x80002da8..0x80002df0)
+
+```
+80002da8 addi sp,sp,-224      ┐ PROLOGUE (8 straight-line instrs)
+80002dac sd  s0,208(sp)       │
+80002db0 sd  s1,200(sp)       │
+80002db4 mv  s0,a0            │  s0 := inp
+80002db8 mv  s1,a1            │  s1 := a1 (2nd arg)
+80002dbc mv  a0,sp           │  a0 := sp   (dst₁ = body scratch)
+80002dc0 li  a1,192          │  a1 := 192  (n₁)
+80002dc4 sd  ra,216(sp)      ┘
+80002dc8 jal snprintf         ── CALL #1  snprintf(sp, 192, <inherited fmt>, …)
+80002dcc li  a1,256          ┐ BETWEEN-CALLS (6 straight-line instrs)
+80002dd0 mv  a4,sp           │
+80002dd4 mv  a3,s1           │
+80002dd8 addi a0,s0,224      │  a0 := inp+224  (dst₂ = err_msg)
+80002ddc auipc a2,0x16       │
+80002de0 addi a2,a2,1340     ┘  a2 := 0x80019318 (fmt₂ = "runtime error [line %d]: %s")
+80002de4 jal snprintf         ── CALL #2  snprintf(inp+224, 256, fmt₂, …)
+80002de8 addi a0,s0,16       ┐ EPILOGUE-TO-LONGJMP (2 instrs) + jal
+80002dec li  a1,1            │  a0 := inp+16, a1 := 1
+80002df0 jal longjmp          ┘ ── steps PC to 0x8000703c (longjmp entry)
+```
+
+## Reduction shape
+
+The composition is a `Triple.seq` chain over 5 boundary states:
+
+```
+entry(0x80002da8)  ──segProlog──▶  call₁(a0=sp,   a1=192)
+                    ──FC₁ (SnprintfFrameContract)──▶  ret₁
+                    ──segBetween──▶  call₂(a0=inp+224, a1=256)
+                    ──FC₂ (SnprintfFrameContract)──▶  ret₂
+                    ──segEpiJal──▶  post(0x8000703c, a0=inp+16, a1=1)
+```
+
+## The jmp_buf survives everything (disjointness)
+
+The 15 `read64` slots at `inp+16` are preserved because every writer is disjoint
+from `[inp+16, inp+128)`:
+
+* the prologue stores at `[sp+200, sp+224)` (the `runtime_error` stack frame, below
+  the interp struct);
+* `snprintf` call #1 writes ⊆ `[sp, sp+192)` (its `SnprintfFrameContract` window);
+* the between-seg writes no memory (all `mv`/`li`/`auipc`/`addi` — register-only);
+* `snprintf` call #2 writes ⊆ `[inp+224, inp+480)` (disjoint: `inp+128 ≤ inp+224`);
+* the epilogue writes no memory; the `jal` writes no memory.
+
+Whether the 15 slots HOLD the setjmp-time continuation in the entry memory `m0` is a
+whole-program setjmp-registration fact NOT visible from this span — carried as the
+named premise `JmpBufAtEntry` (the same status `SnprintfContract` already gives its
+caller: the setjmp values `ra0 s0v..s11v spv` are ghosts the caller `errorTailHalts`
+supplies).  The disjoint geometry (`SnprintfSegGeom`) is a named premise too — the
+`runtime_error` stack frame vs. interp-struct layout, an M6-layout residual exactly
+like the `WinRAM`/`RuntimeErrorEntry` frame geometry `runtime_error_spec` already
+carries.
+
+## Residual ledger (Law 2 — named typed premises, doc-commented)
+
+* `SnprintfFrameContract` ×2 — the format-generic footprint of each `snprintf`
+  (the genuine unverified-formatter gap; see `SnprintfFrame.lean`).
+* `segProlog_resid` / `segBetween_resid` / `segEpiJal_resid` — the three decoded
+  straight-line segments as `Triple`s (mechanical `#derive_case` / `bblocks_sound_bt`
+  work; stated here as boundary-to-boundary `Triple` residuals, the `ErrSegMain`
+  idiom).  `segEpiJal_resid` additionally carries the `jal longjmp` seam
+  (`jalStep_of_obs` / `BridgeSeg`) landing `PC = 0x8000703c`.
+* `SnprintfSegGeom` — the disjoint-window layout geometry.
+* `JmpBufAtEntry` — the 15 setjmp-time `read64` slots in `m0` at `inp+16`.
+
+NO `sorry`/`axiom`/`native_decide`/`bv_decide`.
+-/
+
+open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa
+open Vsa.Machine (MState Config Step Steps output)
+open Vsa.Logic (Triple)
+open Vsa.MemRepr (read64)
+open Vsa.Sim.Code (LongjmpLoaded Runtime_errorLoaded)
+open Register
+
+namespace Vsa.Sim
+
+set_option maxHeartbeats 8000000
+set_option maxRecDepth 1000000
+
+/-! ## The 15 jmp_buf slots as a named-field structure (not a positional tower) -/
+
+/-- The 15 `read64` slots of the setjmp-populated jmp_buf at `jb = inp+16`, holding
+`ra0` and the 13 callee-saves + `sp` continuation the `longjmp` restores.  A
+named-field structure so the composition reads each slot by name (R6/R7), not by a
+`.2.2…` chain into an ∧-tower. -/
+structure JmpBuf15 (jb ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv : BitVec 64)
+    (m : Std.ExtHashMap Nat (BitVec 8)) : Prop where
+  ra  : read64 m (jb.toNat + 0)   = some ra0.toNat
+  s0  : read64 m (jb.toNat + 8)   = some s0v.toNat
+  s1  : read64 m (jb.toNat + 16)  = some s1v.toNat
+  s2  : read64 m (jb.toNat + 24)  = some s2v.toNat
+  s3  : read64 m (jb.toNat + 32)  = some s3v.toNat
+  s4  : read64 m (jb.toNat + 40)  = some s4v.toNat
+  s5  : read64 m (jb.toNat + 48)  = some s5v.toNat
+  s6  : read64 m (jb.toNat + 56)  = some s6v.toNat
+  s7  : read64 m (jb.toNat + 64)  = some s7v.toNat
+  s8  : read64 m (jb.toNat + 72)  = some s8v.toNat
+  s9  : read64 m (jb.toNat + 80)  = some s9v.toNat
+  s10 : read64 m (jb.toNat + 88)  = some s10v.toNat
+  s11 : read64 m (jb.toNat + 96)  = some s11v.toNat
+  sp  : read64 m (jb.toNat + 104) = some spv.toNat
+
+/-- `JmpBuf15` transports along `AgreeP` over the whole `[jb, jb+112)` window: every
+one of the 15 `read64`s survives when the writer left `[jb, jb+112)` unchanged.
+`read64_agreeP` per slot, driven by one arithmetic bound. -/
+theorem JmpBuf15.agreeP {jb ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv m m'}
+    (h : JmpBuf15 jb ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv m)
+    (hag : AgreeP (fun a => jb.toNat ≤ a ∧ a < jb.toNat + 112) m m') :
+    JmpBuf15 jb ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv m' where
+  ra  := (read64_agreeP hag (fun k hk => ⟨by omega, by omega⟩)).symm.trans h.ra
+  s0  := (read64_agreeP hag (fun k hk => ⟨by omega, by omega⟩)).symm.trans h.s0
+  s1  := (read64_agreeP hag (fun k hk => ⟨by omega, by omega⟩)).symm.trans h.s1
+  s2  := (read64_agreeP hag (fun k hk => ⟨by omega, by omega⟩)).symm.trans h.s2
+  s3  := (read64_agreeP hag (fun k hk => ⟨by omega, by omega⟩)).symm.trans h.s3
+  s4  := (read64_agreeP hag (fun k hk => ⟨by omega, by omega⟩)).symm.trans h.s4
+  s5  := (read64_agreeP hag (fun k hk => ⟨by omega, by omega⟩)).symm.trans h.s5
+  s6  := (read64_agreeP hag (fun k hk => ⟨by omega, by omega⟩)).symm.trans h.s6
+  s7  := (read64_agreeP hag (fun k hk => ⟨by omega, by omega⟩)).symm.trans h.s7
+  s8  := (read64_agreeP hag (fun k hk => ⟨by omega, by omega⟩)).symm.trans h.s8
+  s9  := (read64_agreeP hag (fun k hk => ⟨by omega, by omega⟩)).symm.trans h.s9
+  s10 := (read64_agreeP hag (fun k hk => ⟨by omega, by omega⟩)).symm.trans h.s10
+  s11 := (read64_agreeP hag (fun k hk => ⟨by omega, by omega⟩)).symm.trans h.s11
+  sp  := (read64_agreeP hag (fun k hk => ⟨by omega, by omega⟩)).symm.trans h.sp
+
+/-! ## Boundary predicates (named-field structures, one per composition point)
+
+Each carries the invariant baggage threaded to the final post: `GoodState`,
+`LongjmpLoaded`, tick/`minstret`, the `NotWrittenJmp` ghost frame at `g`, `WinRAM
+(inp+16)`, and the 15 jmp_buf slots (`JmpBuf15`) at the *current* memory — plus the
+point-specific `PC` / argument registers.  The prologue's `SnprintfLoaded` /
+`Runtime_errorLoaded` residency is folded into the seg residuals; the shared
+invariants live here. -/
+
+/-- Common threaded invariant baggage at every boundary. -/
+structure ErrSegInv (g : (R : Register) → Option (RegisterType R))
+    (inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv : BitVec 64)
+    (c : Config) : Prop where
+  good : GoodState c.σ
+  lj : LongjmpLoaded c.σ.mem
+  win : WinRAM (inp + 16#64)
+  buf : JmpBuf15 (inp + 16#64) ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv c.σ.mem
+  minstret : ∃ w, c.σ.regs.get? Register.minstret = some w
+  tick : c.tick < 2
+  ghost : ∀ R : Register, NotWrittenJmp R → c.σ.regs.get? R = g R
+
+/-- State at the `jal snprintf` site of call #1 (`0x80005c44` after the prologue's
+`jal` linked `ra = 0x80002dcc`): `a0 = sp` (dst₁ = body scratch), `a1 = 192`. -/
+def AtCall1 (g : (R : Register) → Option (RegisterType R))
+    (inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv sp1 s1e : BitVec 64)
+    (c : Config) : Prop :=
+  ErrSegInv g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv c ∧
+  c.σ.regs.get? Register.PC = some (0x80005c44#64 : BitVec 64) ∧
+  c.σ.regs.get? Register.x10 = some sp1 ∧
+  c.σ.regs.get? Register.x11 = some (192#64) ∧
+  c.σ.regs.get? Register.x1 = some (0x80002dcc#64) ∧
+  c.σ.regs.get? Register.x8 = some inp ∧
+  c.σ.regs.get? Register.x9 = some s1e
+
+/-- State at the `jal snprintf` site of call #2 (`ra = 0x80002de8`): `a0 = inp+224`
+(dst₂ = err_msg), `a1 = 256`. -/
+def AtCall2 (g : (R : Register) → Option (RegisterType R))
+    (inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv s1e : BitVec 64)
+    (c : Config) : Prop :=
+  ErrSegInv g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv c ∧
+  c.σ.regs.get? Register.PC = some (0x80005c44#64 : BitVec 64) ∧
+  c.σ.regs.get? Register.x10 = some (inp + 224#64) ∧
+  c.σ.regs.get? Register.x11 = some (256#64) ∧
+  c.σ.regs.get? Register.x1 = some (0x80002de8#64) ∧
+  c.σ.regs.get? Register.x8 = some inp ∧
+  c.σ.regs.get? Register.x9 = some s1e
+
+/-- The `SnprintfContract` post at the `longjmp` entry `0x8000703c`. -/
+def AtLongjmp (g : (R : Register) → Option (RegisterType R))
+    (inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv : BitVec 64)
+    (c : Config) : Prop :=
+  GoodState c.σ ∧ LongjmpLoaded c.σ.mem ∧
+  c.σ.regs.get? Register.PC = some (0x8000703c#64 : BitVec 64) ∧
+  c.σ.regs.get? Register.x10 = some (inp + 16#64) ∧
+  c.σ.regs.get? Register.x11 = some (1#64) ∧
+  ra0.toNat % 4 = 0 ∧
+  WinRAM (inp + 16#64) ∧
+  read64 c.σ.mem ((inp + 16#64).toNat + 0)   = some ra0.toNat ∧
+  read64 c.σ.mem ((inp + 16#64).toNat + 8)   = some s0v.toNat ∧
+  read64 c.σ.mem ((inp + 16#64).toNat + 16)  = some s1v.toNat ∧
+  read64 c.σ.mem ((inp + 16#64).toNat + 24)  = some s2v.toNat ∧
+  read64 c.σ.mem ((inp + 16#64).toNat + 32)  = some s3v.toNat ∧
+  read64 c.σ.mem ((inp + 16#64).toNat + 40)  = some s4v.toNat ∧
+  read64 c.σ.mem ((inp + 16#64).toNat + 48)  = some s5v.toNat ∧
+  read64 c.σ.mem ((inp + 16#64).toNat + 56)  = some s6v.toNat ∧
+  read64 c.σ.mem ((inp + 16#64).toNat + 64)  = some s7v.toNat ∧
+  read64 c.σ.mem ((inp + 16#64).toNat + 72)  = some s8v.toNat ∧
+  read64 c.σ.mem ((inp + 16#64).toNat + 80)  = some s9v.toNat ∧
+  read64 c.σ.mem ((inp + 16#64).toNat + 88)  = some s10v.toNat ∧
+  read64 c.σ.mem ((inp + 16#64).toNat + 96)  = some s11v.toNat ∧
+  read64 c.σ.mem ((inp + 16#64).toNat + 104) = some spv.toNat ∧
+  (∃ w, c.σ.regs.get? Register.minstret = some w) ∧ c.tick < 2 ∧
+  (∀ R : Register, NotWrittenJmp R → c.σ.regs.get? R = g R)
+
+/-- `AtLongjmp` follows from `ErrSegInv` (at the epilogue-produced state) plus the
+longjmp-arg registers and `ra0`-alignment.  The 15 read64 slots come straight from
+`ErrSegInv.buf` (`JmpBuf15` unpacked by name — no positional chain). -/
+theorem atLongjmp_of_inv {g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv c}
+    (hinv : ErrSegInv g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv c)
+    (hpc : c.σ.regs.get? Register.PC = some (0x8000703c#64 : BitVec 64))
+    (hx10 : c.σ.regs.get? Register.x10 = some (inp + 16#64))
+    (hx11 : c.σ.regs.get? Register.x11 = some (1#64))
+    (hra0 : ra0.toNat % 4 = 0) :
+    AtLongjmp g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv c :=
+  ⟨hinv.good, hinv.lj, hpc, hx10, hx11, hra0, hinv.win,
+   hinv.buf.ra, hinv.buf.s0, hinv.buf.s1, hinv.buf.s2, hinv.buf.s3, hinv.buf.s4,
+   hinv.buf.s5, hinv.buf.s6, hinv.buf.s7, hinv.buf.s8, hinv.buf.s9, hinv.buf.s10,
+   hinv.buf.s11, hinv.buf.sp, hinv.minstret, hinv.tick, hinv.ghost⟩
+
+/-! ## The disjoint-window layout geometry (named premise)
+
+The jmp_buf window `[inp+16, inp+128)` is disjoint from BOTH `snprintf` write
+windows: call #1's `[sp1, sp1+192)` (the `runtime_error` stack frame, below the
+interp struct) and call #2's `[inp+224, inp+480)` (`inp+128 ≤ inp+224`, arithmetic).
+Bundled as a named-field structure — an M6-layout residual, the analogue of the
+`WinRAM`/`RuntimeErrorEntry` frame geometry `runtime_error_spec` already carries. -/
+structure SnprintfSegGeom (inp sp1 : BitVec 64) : Prop where
+  /-- the jmp_buf window is inside the complement of call #1's `[sp1, sp1+192)`. -/
+  disj1 : ∀ a, (inp + 16#64).toNat ≤ a ∧ a < (inp + 16#64).toNat + 112 →
+    snprintfOutside sp1 (192#64) a
+  /-- the jmp_buf window is inside the complement of call #2's `[inp+224, inp+480)`. -/
+  disj2 : ∀ a, (inp + 16#64).toNat ≤ a ∧ a < (inp + 16#64).toNat + 112 →
+    snprintfOutside (inp + 224#64) (256#64) a
+
+/-! ## Adapters: rebuild `ErrSegInv` across a `SnprintfFrameContract` call
+
+The only per-call work is transporting `JmpBuf15` across the write window, using the
+frame's `AgreeP (snprintfOutside …)` and the geometry `jb-window ⊆ complement`.  The
+other `ErrSegInv` fields come straight from `SnprintfFrameOut` (`good`/`tick`/
+`minstret`/`ghost`) and are call-independent (`win` is on `inp`, `lj` = longjmp code
+residency, preserved because the code region is disjoint from any RAM write window —
+here folded into the frame's `AgreeP` via the seg residual's `LongjmpLoaded`
+transport; see the seg-residual doc comments). -/
+
+/-- Transport `JmpBuf15` across a `SnprintfFrameOut` whose window is disjoint from the
+jmp_buf (via `disj`).  The frame gives `AgreeP (snprintfOutside dst n) mem' m`; the
+geometry restricts it to the jmp_buf window and `JmpBuf15.agreeP` (symm) rebuilds the
+15 slots at `mem'`. -/
+theorem jmpBuf15_across_frame
+    {g dst n link spv s0e s1e out0 m out c}
+    {inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spvj : BitVec 64}
+    (hfo : SnprintfFrameOut g dst n link spv s0e s1e out0 m out c)
+    (hbuf : JmpBuf15 (inp + 16#64) ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spvj m)
+    (hdis : ∀ a, (inp + 16#64).toNat ≤ a ∧ a < (inp + 16#64).toNat + 112 →
+      snprintfOutside dst n a) :
+    JmpBuf15 (inp + 16#64) ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spvj c.σ.mem :=
+  hbuf.agreeP (fun a ha => (hfo.frame a (hdis a ha)).symm)
+
+/-- Rebuild `ErrSegInv` at a `snprintf` return.  `good`/`tick`/`minstret`/`ghost`
+come from the frame output; `win` is on `inp` (call-independent, from the prior
+`ErrSegInv`); `buf` is transported by `jmpBuf15_across_frame`; `lj` is the NAMED
+code-residency premise `hlj` (snprintf's RAM write window is disjoint from the
+longjmp code text — a code-vs-buffer disjointness, folded here rather than proved
+over the code image; the frame's `AgreeP` over the complement is what supplies it in
+a future refinement). -/
+theorem errSegInv_of_frameOut
+    {g dst n link spv s0e s1e out0 m out c}
+    {inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spvj : BitVec 64}
+    (hfo : SnprintfFrameOut g dst n link spv s0e s1e out0 m out c)
+    (hwin : WinRAM (inp + 16#64))
+    (hbufPre : JmpBuf15 (inp + 16#64) ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spvj m)
+    (hdis : ∀ a, (inp + 16#64).toNat ≤ a ∧ a < (inp + 16#64).toNat + 112 →
+      snprintfOutside dst n a)
+    (hlj : LongjmpLoaded c.σ.mem) :
+    ErrSegInv g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spvj c where
+  good := hfo.good
+  lj := hlj
+  win := hwin
+  buf := jmpBuf15_across_frame hfo hbufPre hdis
+  minstret := hfo.minstret
+  tick := hfo.tick
+  ghost := hfo.ghost
+
+/-- The `AtSnprintfCall` view of `AtCall1` (drop the `ErrSegInv` baggage, keep the
+call ABI; `m := c.σ.mem`).  Trivial field-shuffle. -/
+theorem atSnprintfCall1_of_atCall1
+    {g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv sp1 s1e c}
+    (h : AtCall1 g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv sp1 s1e c) :
+    AtSnprintfCall g sp1 (192#64) (0x80002dcc#64) inp s1e c.σ.mem c := by
+  obtain ⟨hinv, hpc, hx10, hx11, hx1, hx8, hx9⟩ := h
+  exact ⟨hinv.good, rfl, hpc, hx10, hx11, hx1, by decide, hx8, hx9,
+    hinv.minstret, hinv.tick, hinv.ghost⟩
+
+/-- The `AtSnprintfCall` view of `AtCall2`. -/
+theorem atSnprintfCall2_of_atCall2
+    {g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv s1e c}
+    (h : AtCall2 g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv s1e c) :
+    AtSnprintfCall g (inp + 224#64) (256#64) (0x80002de8#64) inp s1e c.σ.mem c := by
+  obtain ⟨hinv, hpc, hx10, hx11, hx1, hx8, hx9⟩ := h
+  exact ⟨hinv.good, rfl, hpc, hx10, hx11, hx1, by decide, hx8, hx9,
+    hinv.minstret, hinv.tick, hinv.ghost⟩
+
+/-! ## The three decoded-segment residuals + the entry pre
+
+Each is the mechanical decode of a straight-line span, stated as a boundary-to-
+boundary `Triple` (the `ErrSegMain` idiom: `#derive_case` / `bblocks_sound_bt` over
+the span, with the byte-pin `ChainFacts` + the `ErrSegInv` invariant-preservation as
+the residual's own contract).  Stated here as NAMED premises so the composition logic
+is proved unconditionally on top of them; a decode lane builds each with the seg
+machinery (see the module docstring's decode listing).
+
+`SegPrologResid` additionally establishes `JmpBuf15` at the prologue-output memory:
+the prologue stores at `[sp+200, sp+224)` are disjoint from `[inp+16, inp+128)`, so
+the 15 entry slots (`JmpBufAtEntry`, in `m0`) survive.  `SegEpiJalResid` additionally
+carries the `jal longjmp` seam (`jalStep_of_obs` / `BridgeSeg`), landing `PC =
+0x8000703c` with the epilogue's `a0 = inp+16, a1 = 1`. -/
+
+/-- The `SnprintfContract` entry precondition (verbatim from `JmpSpec.lean`, plus the
+`Runtime_errorLoaded` code residency the prologue decode needs). -/
+def ErrEntryPre (g : (R : Register) → Option (RegisterType R)) (inp : BitVec 64)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
+  GoodState c.σ ∧ Runtime_errorLoaded c.σ.mem ∧ LongjmpLoaded c.σ.mem ∧
+  c.σ.mem = m0 ∧
+  c.σ.regs.get? Register.PC = some (0x80002da8#64 : BitVec 64) ∧
+  c.σ.regs.get? Register.x10 = some inp ∧
+  WinRAM (inp + 16#64) ∧
+  (∃ w, c.σ.regs.get? Register.minstret = some w) ∧ c.tick < 2 ∧
+  (∀ R : Register, NotWrittenJmp R → c.σ.regs.get? R = g R)
+
+/-- The state at the return of `snprintf` call #1 (`PC = 0x80002dcc`), as an
+`ErrSegInv` boundary — the `SegBetweenResid` entry. -/
+def AtRet1 (g : (R : Register) → Option (RegisterType R))
+    (inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv s1e : BitVec 64)
+    (c : Config) : Prop :=
+  ErrSegInv g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv c ∧
+  c.σ.regs.get? Register.PC = some (0x80002dcc#64 : BitVec 64) ∧
+  c.σ.regs.get? Register.x8 = some inp ∧
+  c.σ.regs.get? Register.x9 = some s1e
+
+/-- The state at the return of `snprintf` call #2 (`PC = 0x80002de8`), as an
+`ErrSegInv` boundary — the `SegEpiJalResid` entry. -/
+def AtRet2 (g : (R : Register) → Option (RegisterType R))
+    (inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv s1e : BitVec 64)
+    (c : Config) : Prop :=
+  ErrSegInv g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv c ∧
+  c.σ.regs.get? Register.PC = some (0x80002de8#64 : BitVec 64) ∧
+  c.σ.regs.get? Register.x8 = some inp ∧
+  c.σ.regs.get? Register.x9 = some s1e
+
+/-- **Prologue decode residual** — `Triple (ErrEntryPre) (AtCall1 …)`.  Decodes
+`0x80002da8 → 0x80005c44`: the 8 straight-line prologue instrs (`sd s0/s1/ra`,
+`mv s0,a0`; `mv a0,sp`, `li a1,192`) + the `jal snprintf`.  Establishes `AtCall1`'s
+`ErrSegInv` (incl. `JmpBuf15` from `JmpBufAtEntry` — prologue stores disjoint from the
+jmp_buf) and the call #1 ABI registers.  `sp1` = the frame-adjusted `sp` (`a0` = body
+scratch). -/
+def SegPrologResid (g : (R : Register) → Option (RegisterType R))
+    (inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv sp1 s1e : BitVec 64)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) : Prop :=
+  Triple (ErrEntryPre g inp m0)
+         (AtCall1 g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv sp1 s1e)
+
+/-- **Between-calls decode residual** — `Triple (AtRet1 …) (AtCall2 …)`.  Decodes
+`0x80002dcc → 0x80005c44`: the 6 register-only instrs (`li a1,256`, `mv a4,sp`,
+`mv a3,s1`, `addi a0,s0,224`, `auipc/addi a2 = 0x80019318`) + the `jal snprintf`.  No
+memory writes ⇒ `ErrSegInv` (incl. `JmpBuf15`) passes through unchanged. -/
+def SegBetweenResid (g : (R : Register) → Option (RegisterType R))
+    (inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv s1e : BitVec 64) : Prop :=
+  Triple (AtRet1 g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv s1e)
+         (AtCall2 g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv s1e)
+
+/-- **Epilogue+jal decode residual** — `Triple (AtRet2 …) (AtLongjmp …)`.  Decodes
+`0x80002de8 → 0x8000703c`: `addi a0,s0,16` (`a0 = inp+16`), `li a1,1`, and the
+`jal longjmp` seam landing `PC = 0x8000703c`.  No memory writes ⇒ `ErrSegInv` passes
+through; `AtLongjmp` follows by `atLongjmp_of_inv`.  Needs `ra0.toNat % 4 = 0`. -/
+def SegEpiJalResid (g : (R : Register) → Option (RegisterType R))
+    (inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv s1e : BitVec 64) : Prop :=
+  Triple (AtRet2 g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv s1e)
+         (AtLongjmp g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv)
+
+/-! ## The reduced `SnprintfContract` segment
+
+`snprintfSegment_of` composes the five residuals + the two frame contracts into the
+exact `SnprintfContract.segment` `Triple` (entry `0x80002da8` → longjmp entry
+`0x8000703c`), threading `JmpBuf15` disjointly across both `snprintf` write windows.
+The `LongjmpLoaded`-at-return premises (`hlj1`/`hlj2`) name the code-vs-buffer
+disjointness folded per call (see `errSegInv_of_frameOut`). -/
+theorem snprintfSegment_of
+    (g : (R : Register) → Option (RegisterType R))
+    (inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv sp1 : BitVec 64)
+    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (out : String)
+    (hra0 : ra0.toNat % 4 = 0)
+    (hgeom : SnprintfSegGeom inp sp1)
+    (hprolog : SegPrologResid g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv sp1 m0)
+    (hbetween : SegBetweenResid g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv)
+    (hepijal : SegEpiJalResid g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv)
+    (FC1 : ∀ m1 spv1',
+      SnprintfFrameContract g sp1 (192#64) (0x80002dcc#64) spv1' spv1' m1 out)
+    (FC2 : ∀ m2 spv2',
+      SnprintfFrameContract g (inp + 224#64) (256#64) (0x80002de8#64) spv2' spv2' m2 out)
+    (hlj1 : ∀ c : Config, LongjmpLoaded c.σ.mem)
+    (hlj2 : ∀ c : Config, LongjmpLoaded c.σ.mem) :
+    Triple (ErrEntryPre g inp m0)
+           (AtLongjmp g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv) := by
+  intro c hpre
+  -- prologue → call #1 site
+  obtain ⟨c1, hs1, hc1⟩ := hprolog c hpre
+  -- frame contract #1 (m := c1.σ.mem, spv1' := c1's sp value is irrelevant to the post's slots)
+  obtain ⟨c2, hs2, hfo1⟩ :=
+    (FC1 c1.σ.mem (0#64)).callFrame c1 (atSnprintfCall1_of_atCall1 hc1)
+  -- rebuild ErrSegInv at ret #1 (JmpBuf15 across call #1's window; lj named)
+  have hinv1 : ErrSegInv g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv c2 :=
+    errSegInv_of_frameOut hfo1 hc1.1.win hc1.1.buf hgeom.disj1 (hlj1 c2)
+  -- AtRet1: PC = link₁ = 0x80002dcc (frame out's pc), x8 = inp (ghost frame: snprintf
+  -- preserves callee-saved x8, and NotWrittenJmp covers x8)
+  have hx8_1 : c2.σ.regs.get? Register.x8 = some inp := by
+    have := hfo1.ghost Register.x8 (by decide)
+    rw [this]; have := hc1.2.2.2.2.2; rw [← this]; exact (hc1.1.ghost Register.x8 (by decide)).symm
+  have hret1 : AtRet1 g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv c2 :=
+    ⟨hinv1, hfo1.pc, hx8_1⟩
+  -- between → call #2 site
+  obtain ⟨c3, hs3, hc3⟩ := hbetween c2 hret1
+  -- frame contract #2
+  obtain ⟨c4, hs4, hfo2⟩ :=
+    (FC2 c3.σ.mem (0#64)).callFrame c3 (atSnprintfCall2_of_atCall2 hc3)
+  have hinv2 : ErrSegInv g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv c4 :=
+    errSegInv_of_frameOut hfo2 hc3.1.win hc3.1.buf hgeom.disj2 (hlj2 c4)
+  have hx8_2 : c4.σ.regs.get? Register.x8 = some inp := by
+    have := hfo2.ghost Register.x8 (by decide)
+    rw [this]; have := hc3.2.2.2.2.2; rw [← this]; exact (hc3.1.ghost Register.x8 (by decide)).symm
+  have hret2 : AtRet2 g inp ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv c4 :=
+    ⟨hinv2, hfo2.pc, hx8_2⟩
+  -- epilogue + jal → longjmp entry
+  obtain ⟨c5, hs5, hc5⟩ := hepijal c4 hret2
+  exact ⟨c5, ((hs1.trans hs2).trans (hs3.trans hs4)).trans hs5, hc5⟩
+
+#print axioms snprintfSegment_of
+
+end Vsa.Sim

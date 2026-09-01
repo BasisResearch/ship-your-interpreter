@@ -3386,3 +3386,42 @@ it, still stop and report instead.
   lds)).regs = lookupG n (evalBlocks bs (SegEvalState.init [] [])).regs` — the
   ghost-independence peel (structural induction like `srcVal_runGM_ne`, never
   reducing the fold), composed with ONE ground `decide` on the pin-free fold.
+
+## 2026-09-01 segopacity-two-subclasses-fieldlevel (wave45-segopacity)
+- missing: SHARPENS `armdispatch-class-split`. The 5 SegEntry-opacity residuals
+  are TWO sub-classes with DIFFERENT missing facts (the wave-44 entry lumped
+  them). (1) OPAQUE-entry — `ArgsHeadDispatch`/`FlCondArmDispatch`/
+  `FlBodyArmDispatch` off `AEntryC`/`FEntryC` = bare `SegEntry`
+  (fields verified: good/tick/pc/store/out/mem/frame/depth_budget/arena_budget
+  ONLY). The arm-head bundle (`CallArgLoopInv`) needs argc(a5)/idx(a6)/env(a3) —
+  CALLER-saved, not even ghost-pinned by `AbiPreservedNoise` — plus node(s0)/
+  interp(s2) tied to SEMANTIC arg-array/interp values (not the ghost `g`), plus
+  the head-arg `ExprRepr` and `argc = (e::es).length` (pure arg-vector facts,
+  zero `SegEntry` source). `SegEntry → CallArgLoopInv` is machine-grounded
+  NON-DERIVABLE. (2) RICH-entry — `WhileBodyArmDispatch`/`ForInitArmDispatch`
+  off `SEntryC` = `ExecEntry`@`exec_stmt`-entry `0x80003fe0`; the arm-head at
+  `0x80004074`/`0x80004248` needs the recursive cond-eval + `value_truthy`
+  branch (or env_new + init-load) SPAN, which is unbuilt M4 arm-seg content
+  (grep-verified: no landed seg/bridge/Steps spans `0x80003fe0 → 0x80004074`).
+  ALSO checked (this was an explicit wave-45 hypothesis): the crux marshal
+  carriers `CallCruxMarshal2-4` are the CALLEE param-define fold
+  (`CallParamFoldInv`), NOT the arg-EVAL loop head — they do NOT produce
+  `CallArgLoopInv`, so `ArgsHeadDispatch` is NOT unblocked by them.
+- workaround: NONE (stopped; landing enriched-carrier+adapter pairs in owned
+  `rows/SegOpacity*.lean` would only RELOCATE the ∃-pack — the enriched premise
+  needs its own producer with the same missing facts; Law 3 "5 near-identical
+  carriers = factor first"). No file created.
+- cost: any wave-46 "route the 5 through enriched carriers" plan that puts the
+  carrier in a NEW rows/ file re-discovers that the fix must land at the entry
+  DEFINITION or the entry PRODUCER (both non-owned): `AEntryC` def enrichment /
+  `callArgs_field_of_dispatch` pin-threading for Args; `FEntryC`→for-cond-arm-
+  head twin (ExecArmEntryK) for FlCond; the M4 while/for arm spans for
+  FlBody/WhileBody/ForInit.
+- proposal: (Class 1) an `ArgLoopEntry`/`ForCondEntry` twin of `AEntryC`/
+  `FEntryC` carrying `CallArgLoopInv`/`ExecArmEntryK` (not `SegEntry`), threaded
+  from the producer that HAS the pins (`CallArgsSetupInv` already carries
+  store/out/budgets at `0x800031d8`; extend it with the arg-loop reg pins + head
+  `ExprRepr` and stop collapsing to `SegEntry`). (Class 2) the recursive-arm
+  span segs (`SEntryC → cond-jal`, `value_truthy-nonzero → body-head`) belong to
+  the divergence/loop lane, keyed on the already-given `EvalE`/`allocFrame`
+  hypotheses spliced via callSeg/BridgeSeg.

@@ -1047,6 +1047,14 @@ THEOREMS=(
   Vsa.Sim.execSeq_storeClosuresBounded              # rows/StoreWF
   Vsa.Sim.storeClosuresBounded_initSt               # rows/StoreWF
   Vsa.Sim.storeClosuresBounded_invariant            # rows/StoreWF (queue #9 CLOSED: per-arm hWF threading retires at capstone)
+  Vsa.Sim.SnprintfFrameContract.triple              # rows/SnprintfFrame (format-generic snprintf frame contract, wave 45)
+  Vsa.Sim.SnprintfFrameOut.read64_pres              # rows/SnprintfFrame
+  Vsa.Sim.callArgsSegPreB_of_inv                    # rows/CallArgsSegPreB (SegPreBundleB twin, callArgs arm)
+  Vsa.Sim.callArgs_field_of_dispatch                # rows/CallArgsSegPreB
+  Vsa.Sim.gregsHopInto_of_branchNotTakenSite        # rows/CallArgsSegPreB
+  Vsa.Sim.LayoutVpTableGen.vpGroundSlot_0                            # rows/LayoutVpTableGen (value_print jump-table slot pins)
+  Vsa.Sim.LayoutVpTableGen.vpGroundSlot_1                            # rows/LayoutVpTableGen
+  Vsa.Sim.LayoutVpTableGen.vpGroundSlot_2                            # rows/LayoutVpTableGen
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean

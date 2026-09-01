@@ -395,6 +395,7 @@ inductive MKind where
   | add  : MKind
   | sub  : MKind
   | lw   : MKind
+  | lwu  : MKind
   | ld   : MKind
   | lbu  : MKind
   | sw   : MKind
@@ -454,6 +455,7 @@ def astOfM (a : MInstr) : instruction :=
   | .add  => instruction.RTYPE (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, rop.ADD)
   | .sub  => instruction.RTYPE (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, rop.SUB)
   | .lw   => instruction.LOAD (a.imm, gprIdx a.rs1, gprIdx a.rd, false, 4)
+  | .lwu  => instruction.LOAD (a.imm, gprIdx a.rs1, gprIdx a.rd, true, 4)
   | .ld   => instruction.LOAD (a.imm, gprIdx a.rs1, gprIdx a.rd, false, 8)
   | .lbu  => instruction.LOAD (a.imm, gprIdx a.rs1, gprIdx a.rd, true, 1)
   | .sw   => instruction.STORE (a.imm, gprIdx a.rs2, gprIdx a.rs1, 4)
@@ -475,7 +477,7 @@ def eaddrM (a : MInstr) (L : GRegs) : BitVec 64 :=
 
 /-- Access width of a memory kind (`0` for ALU). -/
 def widthOfM : MKind → Nat
-  | .lw | .sw => 4
+  | .lw | .lwu | .sw => 4
   | .ld | .sd => 8
   | .lbu | .sb => 1
   | _ => 0
@@ -486,6 +488,9 @@ no length side condition is needed. -/
 def bytesVal (k : MKind) (bs : List (BitVec 8)) : BitVec 64 :=
   match k with
   | .lw => sign_extend (m := 64)
+      (((((bs.getD 3 0#8).append (bs.getD 2 0#8)).append (bs.getD 1 0#8)).append
+        (bs.getD 0 0#8)) : BitVec (8 * 4))
+  | .lwu => zero_extend (m := 64)
       (((((bs.getD 3 0#8).append (bs.getD 2 0#8)).append (bs.getD 1 0#8)).append
         (bs.getD 0 0#8)) : BitVec (8 * 4))
   | .ld => sign_extend (m := 64)
@@ -526,7 +531,7 @@ def stepGM (a : MInstr) (L : GRegs) (bs : List (BitVec 8)) : GRegs :=
 /-- Load-data consumption: loads pop one byte-list, everything else none. -/
 def stepLdsM (k : MKind) (lds : List (List (BitVec 8))) : List (List (BitVec 8)) :=
   match k with
-  | .lw | .ld | .lbu => lds.tail
+  | .lw | .lwu | .ld | .lbu => lds.tail
   | _ => lds
 
 /-- The write-log entry of a store. -/
@@ -610,6 +615,11 @@ def MemFacts (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (bs : List (BitVec 
      ((eaddrM a L).toNat + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat) ∧
      (eaddrM a L).toNat % 4 = 0) ∧
     LPins4 m (eaddrM a L).toNat bs
+  | .lwu =>
+    (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 4 ≤ 0x100000000 ∧
+     ((eaddrM a L).toNat + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat) ∧
+     (eaddrM a L).toNat % 4 = 0) ∧
+    LPins4 m (eaddrM a L).toNat bs
   | .ld =>
     (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 8 ≤ 0x100000000 ∧
      ((eaddrM a L).toNat + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat) ∧
@@ -646,7 +656,7 @@ def KindOK (dom : List Nat) (k : MKind) (rd rs1 rs2 : Nat) : Prop :=
   | .addi => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
   | .add  => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom ∧ SrcOK rs2 dom
   | .sub  => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom ∧ SrcOK rs2 dom
-  | .lw | .ld | .lbu => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
+  | .lw | .lwu | .ld | .lbu => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
   | .sw | .sd | .sb  => SrcOK rs1 dom ∧ SrcOK rs2 dom
   | .addiw | .slti => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
   | .slli | .srli => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
@@ -662,6 +672,7 @@ instance instDecKindOK (dom : List Nat) (k : MKind) (rd rs1 rs2 : Nat) :
   | .add  => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
   | .sub  => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
   | .lw   => inferInstanceAs (Decidable (_ ∧ _))
+  | .lwu  => inferInstanceAs (Decidable (_ ∧ _))
   | .ld   => inferInstanceAs (Decidable (_ ∧ _))
   | .lbu  => inferInstanceAs (Decidable (_ ∧ _))
   | .sw   => inferInstanceAs (Decidable (_ ∧ _))
@@ -969,6 +980,56 @@ theorem block_mem_run (is : List MInstr) :
         ih σ1 i1 (u + 1) (BitVec.addInt apc 4) vm1
           (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .lw, ard, ars1, ars2, aimm⟩ L (lds.headD []))
           (stepLdsM .lw lds) mc σ.mem (ard :: dom)
+          hG1 hpc1 hmi1 hmem1 hlow hL1 hkeys1 hdom1 hfr hwfr hi1
+      refine ⟨σf, i', ?_, hi', hGf, hmemf, houtf.trans hout1, hpcf, hmif, hGHf, ?_⟩
+      · have hsteps' : Steps ⟨σ, i, u⟩ ⟨σf, i', u + 1 + r.length⟩ := Steps.head hs1 hsteps
+        have e : u + 1 + r.length = u + (r.length + 1) := by omega
+        rw [e] at hsteps'
+        exact hsteps'
+      · intro R hn hrds
+        exact (hframef R hn (fun a' ha' => hrds a' (List.mem_cons_of_mem _ ha'))).trans
+          (frame_step_alu hobs1 R hn (hrds _ (List.mem_cons_self ..)))
+    | lwu =>
+      obtain ⟨⟨hrd1, hrd31⟩, hs1ok⟩ :=
+        (hkok : KindOK dom .lwu ard ars1 ars2)
+      obtain ⟨⟨halo, hahiram, hahtif, haalign⟩, hp0, hp1, hp2, hp3⟩ := hextra
+      have hrd31' : ard ≤ 31 := hrd31
+      have hrdf := gpr_rd_ok ard (Nat.lt_succ_of_le hrd31') hrd1
+      have hsp1 : srcPin σ ars1 (srcVal ars1 L) :=
+        srcPin_srcVal σ L ars1 (hs1ok.2.imp (fun h => h) (hdom ars1)) hL
+      have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
+      have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
+        (bytesVal .lwu (lds.headD [])) ard hrd1 hrd31
+      have hexec := exec_lwu σ apc aimm (gprIdx ars1) (gprIdx ard)
+        (sigma3_alu σ apc (gprReg ard) (gprRT ard (bytesVal .lwu (lds.headD []))))
+        (srcVal ars1 L)
+        ((lds.headD []).getD 0 0#8) ((lds.headD []).getD 1 0#8)
+        ((lds.headD []).getD 2 0#8) ((lds.headD []).getD 3 0#8)
+        hG hrx1 hwx halo hahiram hahtif haalign hp0 hp1 hp2 hp3
+      obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+        stepObs_alu σ i u apc vm aword
+          (instruction.LOAD (aimm, gprIdx ars1, gprIdx ard, true, 4))
+          (gprReg ard) (gprRT ard (bytesVal .lwu (lds.headD [])))
+          ab0 ab1 ab2 ab3 hG hpc hmi hword hnotrvc hdec' hexec
+          hrdf.1 hrdf.2.1 hrdf.2.2.1 hrdf.2.2.2.1 hrdf.2.2.2.2
+          hb0 hb1 hb2 hb3 hlo hhi halign hi
+      have hpc1 := obs_alu_pc hobs1
+      obtain ⟨vm1, hmi1⟩ := obs_alu_minstret hobs1
+      have hout1 : σ1.sailOutput = σ.sailOutput := hobs1.2
+      have hL1 : GHolds σ1
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .lwu, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
+        ⟨obs_gpr_rd ard hrd1 hrd31 (bytesVal .lwu (lds.headD [])) hobs1,
+         gholds_eraseG hobs1 hrd1 hrd31 L hkeys hL⟩
+      have hkeys1 : KeysOK (keysG
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .lwu, ard, ars1, ars2, aimm⟩ L (lds.headD []))) :=
+        keysOK_cons_erase hrd1 hrd31 L hkeys
+      have hdom1 : ∀ n ∈ (ard :: dom), n ∈ keysG
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .lwu, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
+        dom_cons_erase hdom
+      obtain ⟨σf, i', hsteps, hi', hGf, hmemf, houtf, hpcf, hmif, hGHf, hframef⟩ :=
+        ih σ1 i1 (u + 1) (BitVec.addInt apc 4) vm1
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .lwu, ard, ars1, ars2, aimm⟩ L (lds.headD []))
+          (stepLdsM .lwu lds) mc σ.mem (ard :: dom)
           hG1 hpc1 hmi1 hmem1 hlow hL1 hkeys1 hdom1 hfr hwfr hi1
       refine ⟨σf, i', ?_, hi', hGf, hmemf, houtf.trans hout1, hpcf, hmif, hGHf, ?_⟩
       · have hsteps' : Steps ⟨σ, i, u⟩ ⟨σf, i', u + 1 + r.length⟩ := Steps.head hs1 hsteps

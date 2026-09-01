@@ -100,6 +100,7 @@ theorem wlogM_width : ∀ (is : List MInstr) (L : GRegs) (lds : List (List (BitV
     | add => exact ih _ _ _ he
     | sub => exact ih _ _ _ he
     | lw => exact ih _ _ _ he
+    | lwu => exact ih _ _ _ he
     | ld => exact ih _ _ _ he
     | lbu => exact ih _ _ _ he
     | addiw => exact ih _ _ _ he

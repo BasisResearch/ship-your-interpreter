@@ -14,10 +14,16 @@ Progress = removing fields (by supplying them inside the theorem) or shrinking a
 field's own premises. The wave-39 M6 log (`experiments/logs/wave39-m6.md`) has the
 last full field-by-field table.
 
-State: HEAD `e991e3f` (wave 40). check_all: OK, **743/743** axiom-audited (622 at
-wave 33). Seven statement falsities found + amended lifetime, every one within its
-wave. History: waves 34–40 = commits `bb8eb8c..e991e3f`, one log per lane in
-`experiments/logs/wave<N>-<lane>.md`, ledger in `experiments/observations.md`.
+State: HEAD past wave 44 (`80aab36`); wave 45 = the GREEN partial: mkind-lwu
+landed (value_print unblocked), SnprintfFrameContract landed, CallArgsSegPreB
+twin landed, segopacity verdict (5 dispatch residuals are genuine upstream
+gaps — see its log for the wave-46 per-arm owner table). The sentryc +
+segexit9 amendment lanes were REVERTED (stalled mid-flight, 7 red consumers;
+re-landing checklists in their wave-45 logs). check_all: OK, **875/875**
+axiom-audited. Seven statement falsities found + amended lifetime, every one
+within its wave. History: waves 34–44 = commits `bb8eb8c..80aab36`, one log per
+lane in `experiments/logs/wave<N>-<lane>.md`, ledger in
+`experiments/observations.md`.
 
 ## The discharge queue (session task list #s; leverage order)
 

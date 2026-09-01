@@ -939,6 +939,57 @@ theorem exec_lw (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regid
     ((((b3.append b2).append b1).append b0) : BitVec (8 * 4)) (afterNextPC (afterPrelude σ) pc)
     σ' (by decide) hread hwr
 
+/-- Generic **unsigned** 4-byte load `lwu rd,off(rs1)` at `afterNextPC …`: reads
+the LE word `(((b3.append b2).append b1).append b0)` at `vbase + sext off` and
+writes `zero_extend word` to `rd`.  Identical to `exec_lw` except `is_unsigned =
+true` and the write value is `zero_extend` (via `execute_load_unsigned_char`);
+the underlying `vmem_read` at width 4 is the same, so the read side is shared. -/
+theorem exec_lwu (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
+    (σ' : MState) (vbase : BitVec 64) (b0 b1 b2 b3 : BitVec 8)
+    (hG : GoodState σ)
+    (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
+      = .ok vbase (afterNextPC (afterPrelude σ) pc))
+    (hwr : (wX_bits rd (zero_extend (m := 64)
+        ((((b3.append b2).append b1).append b0) : BitVec (8 * 4)))).run (afterNextPC (afterPrelude σ) pc)
+      = .ok () σ')
+    (hlo : 0x80000000 ≤ (vbase + sign_extend (m := 64) off).toNat)
+    (hhiram : (vbase + sign_extend (m := 64) off).toNat + 4 ≤ 0x100000000)
+    (hhtif : (vbase + sign_extend (m := 64) off).toNat + 4 ≤ tohostAddr
+      ∨ tohostAddr + 8 ≤ (vbase + sign_extend (m := 64) off).toNat)
+    (halign : (vbase + sign_extend (m := 64) off).toNat % 4 = 0)
+    (h0 : σ.mem[(vbase + sign_extend (m := 64) off).toNat]? = some b0)
+    (h1 : σ.mem[(vbase + sign_extend (m := 64) off).toNat + 1]? = some b1)
+    (h2 : σ.mem[(vbase + sign_extend (m := 64) off).toNat + 2]? = some b2)
+    (h3 : σ.mem[(vbase + sign_extend (m := 64) off).toNat + 3]? = some b3) :
+    (execute (instruction.LOAD (off, rs1, rd, true, 4))).run (afterNextPC (afterPrelude σ) pc)
+      = .ok RETIRE_SUCCESS σ' := by
+  have hpriv : (afterNextPC (afterPrelude σ) pc).regs.get? Register.cur_privilege
+      = some (Privilege.Machine : RegisterType Register.cur_privilege) := by
+    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.cur_privilege
+  have hmstatus : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mstatus = some initMstatus := by
+    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mstatus
+  have hseccfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mseccfg = some (0#64) := by
+    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mseccfg
+  have hpma : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pma_regions
+      = some (initPmaRegions : RegisterType Register.pma_regions) := by
+    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pma_regions
+  have hcfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpcfg_n
+      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n) := by
+    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpcfg_n
+  have haddr : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpaddr_n = some initPmpaddr := by
+    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpaddr_n
+  have hbase' : (afterNextPC (afterPrelude σ) pc).regs.get? Register.htif_tohost_base
+      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base) := by
+    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.htif_tohost_base
+  have hread := vmem_read_data_four (afterNextPC (afterPrelude σ) pc) rs1
+    (sign_extend (m := 64) off) vbase b0 b1 b2 b3 initMstatus initPmpaddr
+    hpriv hmstatus (by decide) hseccfg hpma hcfg haddr hbase' hrs1 hlo hhiram hhtif halign
+    (by rw [mem_afterNextPC]; exact h0) (by rw [mem_afterNextPC]; exact h1)
+    (by rw [mem_afterNextPC]; exact h2) (by rw [mem_afterNextPC]; exact h3)
+  exact execute_load_unsigned_char off rs1 rd 4
+    ((((b3.append b2).append b1).append b0) : BitVec (8 * 4)) (afterNextPC (afterPrelude σ) pc)
+    σ' (by decide) hread hwr
+
 /-- Generic signed 8-byte load `ld rd,off(rs1)` at `afterNextPC …`: reads the LE
 dword at `vbase + sext off` and writes it (sign_extend of a full 64-bit value is
 itself) to `rd`. -/
