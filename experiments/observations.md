@@ -3083,3 +3083,149 @@ it, still stop and report instead.
 - proposal: reseat `naEntry`/`naExit` on `NativePrintEntry`/`NativeFnOutExit`
   (outApp := "", plus assert's truthy/argc extras in the `Extra` rider) and
   retire `nativeBodyAssert`'s bespoke marshal onto `nativeBodyOut`.
+
+## 2026-09-01 nonevalchild-jal-exec_stmt-arms-uniform (wave43 lane nonevalmm, plan #6)
+- missing: no generator for the NonEvalChildStages jal-exec_stmt staging arms. The
+  4 SEntryC-landing fields (stmtIfThen/stmtWhileBody/stmtForInit/for-body) share ONE
+  shape: #derive_case seg (straight-line arm head: some mv/ld setup) + bridgeOfSeg
+  (jal exec_stmt @0x80003fe0) + IfThenArmHeadInv/IfThenArmStagePre/IfThenArmDispatch
+  residual trio + `*_field_of_dispatch` composer landing at ExecStmtPreBundle. They
+  differ ONLY in: (a) body instr list, (b) jal callPC/link, (c) the child-node read
+  offset (ld a1,16(s0) etc.), (d) the parent Stmt ctor + spec-side hyps in the field.
+- workaround: hand-write each from the argsHead/StmtIfThen template (~110 lines each,
+  landed FIRST TRY). stmtIfThen LANDED (rows/StmtIfThenArmStagePre.lean).
+- cost: ~110 lines × 4 arms; but each is a mechanical rename of the template, one
+  ChainOK decide, no new theory. The residuals (StagePre marshalling + Dispatch) stay
+  named premises identically shaped — a future consumer discharges the 4 uniformly.
+- proposal: extend gen_stagepre.py with a `jal-exec_stmt SEntryC` template class
+  (5-tuple: seg-instr-list TOML + callPC/link + read-offset + child Stmt selector),
+  emitting the seg+bridge+trio+composer — OR (cheaper) a Lean macro
+  `#nonEvalStmtArm <name> <seg> <callPC> <link>` generating the trio+composer over a
+  supplied seg/bridge. The 7 SegPreBundle-landing fields are a SECOND uniform class
+  (segEntry_of_jalPrefix, interior j/b control) deserving its own template.
+
+## 2026-09-01 layout-dispatch-slot-pins (wave43 layoutgen, plan#5 leg1 — LANDED)
+- missing: NONE (this is an abstraction-landed note, not a gap). The per-arm
+  jump-table slot pins (`KindSlotPinned k armPC m`) were being carried as premises
+  per leaf/arm row down to the M6 Layout, one hand-decoded `.rodata` byte battery
+  per tag (int carried via EvalEntry.int_slot; bool/null/var/str each a bespoke
+  `*SlotPinned` theorem).
+- workaround: NONE. Extended `scripts/gen_layout.py` to read the whole 11-slot
+  dispatch table (base 0x80019f58) from the ELF and emit `groundSlot_0..10` (one
+  `KindSlotPinned k armPC m` per ExprKind tag) into `rows/LayoutJumpTableGen.lean`,
+  self-verifying (lake+sorryAx+axiom-audit) with an arm-PC cross-check against the
+  9 known anchors. `fnSlot_grounded` (rows/FnArmSeamSupply) consumes groundSlot_10
+  for the fn arm.
+- cost: paid ONCE (generator run). Any arm still threading its own hand `*SlotPinned`
+  can now be reseated on `groundSlot_<k>` (slots 5 EX_ASSIGN + 6 EX_BINARY were
+  previously unpinned and are now covered too).
+- proposal: reseat the existing bespoke `BoolSlotPinned`/`NullSlotPinned`/
+  `VarSlotPinned`/`StrSlotPinned` theorems (EvalBoolSim/EvalNullSim/EvalVarSim/
+  EvalStrSim) onto the generated `groundSlot_<k>` and delete the hand decodes; add
+  `gen_layout.py`'s dispatch-pin output to CLAUDE.md's generator row.
+
+## 2026-09-01 ifstmt-then-else-tail-redispatch-not-jal (wave43 lane nonevalmm, plan #6)
+- missing: the `.ifStmt` then/else arms do NOT recurse via `jal exec_stmt`. In the
+  binary (`experiments/disasm.txt`, if-arm @0x800041e8), after eval cnd + value_truthy,
+  the TRUE branch does `ld s0,16(s0); j 0x80004014` (reload s0:=then-node, JUMP back to
+  the dispatch-loop head @0x80004014, post-prologue) — a TAIL re-dispatch in the SAME
+  frame, NOT a fresh `jal exec_stmt`. The FALSE branch (@0x800042cc region) similarly.
+  So `NonEvalChildStages.stmtIfThen`/`stmtIfElse` land at `ExecStmtPreBundle t`/`e`
+  (which REQUIRES a `jal exec_stmt` callPC with hjaltgt callPC+jalImm=execStmtEntry) —
+  but the machine reaches the then/else child via a `j` to 0x80004014 (interior
+  post-prologue re-entry), reusing the frame. The `ExecStmtPreBundle` bundle's
+  jal-site premise is thus NOT the literal machine shape for if-then/else.
+- workaround: NONE yet for if-then/else. Only landed the arms that genuinely `jal
+  exec_stmt`: stmtWhileBody@0x80004074 (loops back via bne). The other 3 jal-exec_stmt
+  sites (0x800041c4=block/seq iter, 0x80004254=for?, 0x800042b8=for-body?) still to map.
+- cost: if-then/else fields (2 of 11) need either (a) a SegPreBundle-style twin that
+  lands at the 0x80004014 re-dispatch head with s0:=child-node (a DIFFERENT bridge:
+  `j`-terminated, target=dispatch head, same frame — the exec_stmt prologue is skipped),
+  or (b) an amendment to the field type to reflect tail re-dispatch. The `landedN_
+  sEntryC_of_preBundle`/`ExecStmtPreBundle` machinery assumes a fresh jal+prologue.
+- proposal: a `ExecStmtTailPreBundle`/`execEntry_of_jTailRedispatch` twin: `j
+  0x80004014` (dispatch head, post-prologue, same sp) with s0:=child-node StmtRepr →
+  SEntryC child (the prologue already ran; SEntryC's ExecEntry needs sp lowered +
+  spill slots, which the CURRENT frame already has since it's a tail call at the same
+  depth). This is the honest machine shape for if-then/else (and likely block-seq).
+  Surfaced per Law 4 — NOT worked around with a false ExecStmtPreBundle attribution.
+
+## 2026-09-01 nonevalchild-remaining-8-shape-map (wave43 lane nonevalmm, plan #6)
+- missing: a per-arm machine-shape map for the 8 unlanded `NonEvalChildStages` fields
+  (+3 SqEntry +flStep) showing WHY each does not fit its declared pre-bundle target.
+  The 3 that DO fit (`stmtWhileBody`@jal 0x80004084, `stmtForInit`@jal 0x80004254,
+  `flBody`@jal 0x800042b8) landed cleanly as straight-line-seg + bridgeOfSeg to
+  `jal exec_stmt` + 2 named residuals (`rows/Stmt{WhileBody,ForInit}ArmStagePre.lean`,
+  `rows/FlBodyArmStagePre.lean`, all green+axiom-clean, wired in
+  `nonEvalChildStages_wave43_wired`). The OTHER 8:
+    * `stmtIfThen`/`stmtIfElse` — TAIL re-dispatch (`ld s0,16/24(s0); j/bnez 0x80004014`),
+      NOT `jal exec_stmt`. Target `ExecStmtPreBundle` (needs fresh jal+prologue) is the
+      WRONG shape. (already filed: `ifstmt-then-else-tail-redispatch-not-jal`.)
+    * `stmtWhileLoop` — loop RE-ENTRY of the same while node via `bne a0,a5,0x80004034`
+      (0x8000408c), a backward branch to the loop-head block, NOT a fresh jal exec_stmt.
+    * `callArgs`/`argsTail` — land at `SegPreBundle argLoopPC` (arg loop head
+      0x800031dc); reached by post-f-eval fallthrough / `j`-back, NOT a jal whose
+      target IS argLoopPC. `SegPreBundle` (via `segEntry_of_jalPrefix`) hardcodes a
+      jal-site premise (`callPC+jalImm=entryPC`) — the arg loop head is an INTERIOR
+      fallthrough/branch target, no jal jumps to it.
+    * `callC` — lands at `SegPreBundle calleeBodyPC`; the callee body is entered by
+      `jalr` (closure dispatch), not a `jal` with static imm=entryPC — again the
+      SegPreBundle jal-site model does not match `jalr`.
+    * `stmtForLoop`/`flLoop` — land at `SegPreBundle forCondPC` (for-cond 0x8000426c),
+      reached by `j 0x8000426c`/step-`j`, a branch target not a jal target.
+    * SqEntry `stmtBlock`/`callBody`/`seqHead` — land at `SqLoopHeadPreBundle` =
+      `SegEntry @interpLoopHeadPC(0x8000448c) + Reflect c' env ss`. Needs the `Reflect`
+      abstraction WITNESS (crux/IterSeam boundary, plan #4), plus a SegEntry at an
+      interp_run loop head reached by branch — not a jal twin. The ArmSegSplitNonEval
+      doc itself flags these as "NOT a bare jal→SegEntry".
+    * `flStep` — evaluates the for STEP expr via `jal eval_expr`@0x800042e8 in the
+      EXEC frame (sp-176), but `flStep_split` (ArmSegSplitEval) hardcodes target
+      `JalPreBundle` (sp-1088 eval-frame convention). The exec-frame step arm needs
+      the wave-41 ghost re-parametrization (sp:=esp+1088) landing at `ExecJalPreBundle`
+      + `execEvalEntry_of_jalPrefix` — but the split combinator wants plain
+      `JalPreBundle`. SEAM MISMATCH: flStep_split's pre-bundle type is eval-frame, the
+      machine arm is exec-frame. (like the wave-38 exec-eval-frameshift, unresolved
+      for flStep because the combinator target is not ExecJalPreBundle.)
+- workaround: NONE — did not force false pre-bundle attributions (Law 4). Landed only
+  the 3 genuine jal-exec_stmt arms (prior session; re-verified green+axiom-clean).
+- cost: the 8 remaining fields stay `∀`-premises of `nonEvalChildStages_mk` /
+  `divFamily_of_armStageComponents`; the divergence board stays at its wave-42 count
+  for the non-eval side + 3 fields wired. Each unlanded arm needs a NEW bridge shape
+  (j-tail-redispatch to dispatch head; branch-entry SegEntry; jalr-callee SegEntry;
+  exec-frame JalPreBundle re-parametrization) or a field-type amendment — statement
+  surgery, not template instantiation.
+- proposal: (a) `execEntry_of_jTailRedispatch` twin (j to 0x80004014 post-prologue,
+  same frame) for if-then/else + stmtWhileLoop; (b) a `segEntry_of_branchEntry` /
+  `segEntry_of_jalrEntry` variant of `segEntry_of_jalPrefix` dropping the static-jal
+  premise for the 4 SegPreBundle interior arms; (c) flStep_split re-typed to
+  `ExecJalPreBundle` (or a dedicated `flStep_split'` twin) so the exec-frame step arm
+  composes via `execEvalEntry_of_jalPrefix`; (d) the Reflect witness (plan #4) for the
+  3 SqEntry fields. All four are one small statement-shaped item each — the same
+  cadence as the 3 landed arms, but each needs a new named twin first.
+
+## 2026-09-01 callparamfold-carrier-n-unreachable (wave 43, lane cruxdefine — the 8th statement falsity)
+- missing: a machine-honest fold-exit seam. `callClosureEntrySplice`'s premise
+  family (`rows/CallClosureSplice.lean`, wave 37) demands `hFoldSeam : ∀ k < n,
+  Triple (carrier k) (carrier (k+1))` and `hFoldToHandoff : Triple (carrier n)
+  (BodyHandoff)`, with `carrier k` pinned at the loop-head PC `0x800032dc`. The
+  params-fold is a DO-WHILE (disasm 3358-3384): the head is entered exactly n
+  times (k = 0..n-1); after the LAST `env_define` the back-edge
+  `bne s6,a5 @0x8000331c` compares `8·n` with `8·n` and FALLS THROUGH to
+  `0x80003320` — `carrier n` (PC = head) is never reached, so the k = n-1 seam
+  is machine-undischargeable and `hFoldToHandoff`'s source is dead.
+  Machine-checked obstruction: `foldBackLoop_facts_last_false` /
+  `foldDefineReturn_last_false` (`rows/CallCruxMarshal3.lean`) — the loop-row
+  `ChainFacts` at the last param is UNINHABITED (its bne-TAKEN guard reduces to
+  `8·(k+1) != 8·(k+1) = true`).
+- workaround: NONE — amended within-wave (Law 4, 8th precedent):
+  `hFoldSeam` re-ranged to `k + 1 < n` (the mid-loop back-edges) and
+  `hFoldToHandoff` re-sourced at `carrier (n-1)` (the LAST iteration owns
+  staging ≫ env_define ≫ exit-polarity back-edge ≫ value_null ≫ body entry);
+  composition via `storeChainList` at `n-1`. No downstream consumers existed
+  (grep: comments only).
+- cost: the `hFoldToHandoff` supplier now carries one full fold iteration
+  (staging + env_define + exit row) instead of a bare exit hop — that is the
+  machine truth, not an artifact.
+- proposal: none needed beyond the amendment; `callParamFoldSeamStep`
+  (CallCruxMarshal2 §5) already discharges exactly the amended `k+1 < n` range
+  (its `FoldDefineReturn` is uninhabited at `k+1 = n`, consistently).

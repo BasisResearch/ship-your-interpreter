@@ -160,9 +160,12 @@ One fold seam = the loop-body staging (`0x800032dc..0x80003308` 24-byte value
 copy to `sp+64` + cursor bump, then the GEN `callClosureEnvDefineCallBridge`
 jal seam) ≫ the `env_define` contract (`EnvDefCompose.envDefContract`, the
 append≫grow≫dispatch join over the real Malloc/Realloc contracts) ≫ the return
-+ back-edge (`0x80003314..0x8000331c`, `bne s6,a5` taken for `k+1 < n` — and
-for `k+1 = n` the not-taken exit is the `hFoldToHandoff` bridge's entry, which
-is why the carrier is stated at the HEAD PC only). -/
++ back-edge (`0x80003314..0x8000331c`, `bne s6,a5` TAKEN — which requires
+`k+1 < n`; wave-43 amendment, ledger `callparamfold-carrier-n-unreachable`:
+the fold is a DO-WHILE, so for `k+1 = n` the machine falls through the bne and
+the head PC — the carrier's pin — is NEVER re-reached; the last iteration
+belongs to the `hFoldToHandoff` leg, obstruction
+`foldBackLoop_facts_last_false` in `rows/CallCruxMarshal3.lean`). -/
 
 /-- **Per-param seam from its three named pieces** — the naming theorem: any
 discharge of one fold seam is `staging ≫ env_define ≫ back-edge` for SOME
@@ -233,15 +236,22 @@ theorem callClosureEntrySplice
       (fun c => ∃ φf' : Addr → Nat,
         PhiExtends φf φf' st.store.frames.size ∧
         callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0 0 c))
+    -- wave-43 amendment (ledger `callparamfold-carrier-n-unreachable`): the
+    -- seam family covers ONLY the mid-loop back-edges `k + 1 < n` — the
+    -- carrier at index `n` is machine-unreachable (do-while; the last bne
+    -- falls through), obstruction `foldBackLoop_facts_last_false`.
     (hFoldSeam : ∀ (φf' : Addr → Nat),
       PhiExtends φf φf' st.store.frames.size →
-      ∀ k, k < (cd.params.zip vs).length → Triple
+      ∀ k, k + 1 < (cd.params.zip vs).length → Triple
         (callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0 k)
         (callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0 (k + 1)))
+    -- wave-43 amendment: sourced at `carrier (n-1)` — the LAST iteration
+    -- (staging ≫ env_define ≫ EXIT-polarity back-edge ≫ value_null ≫ body
+    -- entry) is this leg's machine content.
     (hFoldToHandoff : ∀ (φf' : Addr → Nat),
       PhiExtends φf φf' st.store.frames.size → Triple
         (callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0
-          (cd.params.zip vs).length)
+          ((cd.params.zip vs).length - 1))
         (BodyHandoff g N A SL φf φc st store' cd vs frame d dLeft aLeft m0))
     (hNoParams : (cd.params.zip vs).length = 0 → Triple
       (env_new_post A SL gpv headroom maxReq M gE par (0x800032c0#64) sp s0E
@@ -258,14 +268,15 @@ theorem callClosureEntrySplice
   -- the tail: env_new_post → BodyHandoff, split on the zero-param bypass.
   rcases Nat.eq_zero_or_pos (cd.params.zip vs).length with h0 | hpos
   · exact hNoParams h0
-  · -- fold route: bind φf', run the storeChainList fold, hand off.
+  · -- fold route: bind φf', run the storeChainList fold over the n-1 mid-loop
+    -- back-edges to `carrier (n-1)`, hand the LAST iteration to the handoff leg.
     intro c hc
     obtain ⟨c1, hs1, φf', hpe, hcar0⟩ := hEnvNewToFold hpos c hc
     obtain ⟨c2, hs2, hcarN⟩ :=
       storeChainList
         (callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0)
-        (cd.params.zip vs).length
-        (fun k hk => hFoldSeam φf' hpe k hk) c1 hcar0
+        ((cd.params.zip vs).length - 1)
+        (fun k hk => hFoldSeam φf' hpe k (by omega)) c1 hcar0
     obtain ⟨c3, hs3, hHand⟩ := hFoldToHandoff φf' hpe c2 hcarN
     exact ⟨c3, Steps.trans hs1 (Steps.trans hs2 hs3), hHand⟩
 

@@ -62,6 +62,23 @@ wave. History: waves 34–40 = commits `bb8eb8c..e991e3f`, one log per lane in
 
 Estimate: 2–3 waves of the current cadence. Nothing left is research-shaped.
 
+## Residual burn-down (coordinator-enforced, added wave 43)
+
+- Ledger: `experiments/residuals.tsv` (id, class, status, created/closed wave,
+  description). The COORDINATOR updates it per wave: every named residual an
+  agent creates gets a row AT LANDING TIME; every closure flips its row.
+  Dashboard: `tools/residual_dashboard/` (see its README; d3 burn-down +
+  per-class open list, reads the TSV live).
+- RULE (the ≥3 law, an instance of Law 3): no residual class with ≥3 open
+  instances gets instantiated by hand. First land its combinator/generator,
+  THEN a mail-merge lane. Current class targets: `arm-dispatch` (9 — the
+  dispatch-bridge combinator consuming the LayoutJumpTableGen slot pins),
+  `m4-linkage` (42 — the errSite generator + COW-clone fan-out precedent).
+- "Waves left" = number of open classes without a landed combinator/generator
+  + the one serial decode chain (native-serial + m6-decode: value_print/fputc,
+  Snprintf/MainError/Crt0Exit). The serial chain is the critical path — start
+  it early, run it beside the mechanical fan-outs; no abstraction removes it.
+
 ## The abstraction stack (REUSE BY NAME — this is what made waves cheap)
 
 - **Call splices**: `CallSpec` (uniform callee record, explicit clobber sets) +

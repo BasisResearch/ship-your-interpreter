@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Residual Tracking Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<style>
+  :root {
+    --bg: #14171c; --panel: #1c2129; --panel2: #232935; --fg: #dfe4ec;
+    --muted: #8a94a6; --accent: #5cc8ff; --open: #ff9d5c; --closed: #6ee7a0;
+    --flag: #ff5c7a; --grid: #2c333f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    padding: 14px 20px; border-bottom: 1px solid var(--grid);
+    display: flex; align-items: baseline; gap: 16px;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  #stamp { margin-left: auto; color: var(--muted); font-size: 11px; }
+  .layout { display: grid; grid-template-columns: 1fr 320px; gap: 16px; padding: 16px 20px; }
+  .main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--grid); border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .card .num { font-size: 30px; font-weight: 700; line-height: 1; }
+  .card .lbl { color: var(--muted); font-size: 11px; margin-top: 6px; text-transform: uppercase; letter-spacing: .04em; }
+  .card.open .num { color: var(--open); }
+  .card.closed .num { color: var(--closed); }
+  .card.flag .num { color: var(--flag); }
+  .panel {
+    background: var(--panel); border: 1px solid var(--grid); border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .panel h2 { font-size: 12px; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+  .sidebar { display: flex; flex-direction: column; gap: 10px; }
+  .cls { background: var(--panel); border: 1px solid var(--grid); border-radius: 8px; overflow: hidden; }
+  .cls-hdr {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    background: var(--panel2); cursor: default;
+  }
+  .cls-hdr .name { font-weight: 600; }
+  .cls-hdr .cnt {
+    margin-left: auto; background: var(--grid); color: var(--fg);
+    border-radius: 10px; padding: 1px 8px; font-size: 11px;
+  }
+  .cls.flagged .cls-hdr { border-left: 3px solid var(--flag); }
+  .cls.hasgen .cls-hdr .name::after {
+    content: "gen"; margin-left: 6px; font-size: 9px; color: var(--closed);
+    border: 1px solid var(--closed); border-radius: 4px; padding: 0 4px; vertical-align: middle;
+  }
+  .cls.flagged.hasgen .cls-hdr { border-left-color: var(--closed); }
+  .badge-flag { font-size: 9px; color: var(--flag); border: 1px solid var(--flag); border-radius: 4px; padding: 0 4px; }
+  .rows { padding: 4px 0; }
+  .row {
+    padding: 3px 12px; display: flex; gap: 8px; align-items: baseline;
+    cursor: default;
+  }
+  .row:hover { background: var(--panel2); }
+  .row .id { color: var(--accent); font-family: ui-monospace, monospace; font-size: 11px; white-space: nowrap; }
+  .row .desc { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  svg text { fill: var(--muted); font-size: 10px; }
+  .axis path, .axis line { stroke: var(--grid); }
+  .legend { display: flex; gap: 14px; font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  .lg-open::before { background: var(--open); }
+  .lg-closed::before { background: var(--closed); }
+  .tip {
+    position: fixed; pointer-events: none; background: #000d; color: var(--fg);
+    border: 1px solid var(--grid); border-radius: 6px; padding: 6px 9px;
+    font-size: 11px; max-width: 320px; opacity: 0; transition: opacity .1s; z-index: 10;
+  }
+  .empty { color: var(--muted); padding: 8px 12px; font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Residual Tracking</h1>
+  <span class="sub">verified-semantic-abstraction · ≥3-open classes want a combinator/generator</span>
+  <span id="stamp">loading…</span>
+</header>
+<div class="layout">
+  <div class="main">
+    <div class="cards" id="cards"></div>
+    <div class="panel">
+      <h2>Burn-down · open residuals at end of each wave</h2>
+      <svg id="burndown" height="240"></svg>
+    </div>
+    <div class="panel">
+      <h2>Per-wave flow · created vs closed</h2>
+      <svg id="flow" height="220"></svg>
+      <div class="legend"><span class="lg-open">created</span><span class="lg-closed">closed</span></div>
+    </div>
+  </div>
+  <div class="sidebar" id="sidebar"></div>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+const TSV = "/experiments/residuals.tsv";
+const FLAG_MIN = 3;                 // ≥3 open instances ⇒ combinator/generator candidate
+const tip = d3.select("#tip");
+
+// Optional hardcoded fallback for class→hasGenerator. The TSV `gen` column (7th) wins.
+const GEN_FALLBACK = { "m4-linkage": true, "m6-layout": true };
+
+function showTip(html, ev) {
+  tip.html(html).style("opacity", 1)
+     .style("left", (ev.clientX + 12) + "px")
+     .style("top", (ev.clientY + 12) + "px");
+}
+function hideTip() { tip.style("opacity", 0); }
+
+function parseRows(text) {
+  // Tab-separated; header: id class status created_wave closed_wave description [gen]
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length);
+  const header = lines[0].split("\t");
+  const idx = Object.fromEntries(header.map((h, i) => [h.trim(), i]));
+  const out = [];
+  for (let i = 1; i < lines.length; i++) {
+    const c = lines[i].split("\t");
+    const created = parseInt(c[idx.created_wave], 10);
+    const closedRaw = c[idx.closed_wave];
+    const closed_wave = (closedRaw && closedRaw.trim().length) ? parseInt(closedRaw, 10) : null;
+    const genRaw = (idx.gen != null && c[idx.gen]) ? c[idx.gen].trim().toLowerCase() : "";
+    out.push({
+      id: (c[idx.id] || "").trim(),
+      class: (c[idx.class] || "").trim(),
+      status: (c[idx.status] || "").trim(),
+      created_wave: created,
+      closed_wave: closed_wave,
+      gen: genRaw === "yes",
+      genExplicit: genRaw === "yes" || genRaw === "no",
+      description: (c[idx.description] || "").trim(),
+    });
+  }
+  return out;
+}
+
+// hasGenerator per class: any explicit gen=yes row, else TSV explicit, else fallback map.
+function classGen(rows) {
+  const m = {};
+  for (const r of rows) {
+    if (r.gen) m[r.class] = true;
+    else if (!(r.class in m)) m[r.class] = m[r.class] || false;
+  }
+  for (const cls in m) {
+    if (!m[cls] && GEN_FALLBACK[cls]) m[cls] = true;
+  }
+  return m;
+}
+
+function render(rows) {
+  const open = rows.filter(r => r.status === "open");
+  const closed = rows.filter(r => r.status === "closed");
+  const gen = classGen(rows);
+
+  // open classes
+  const openByClass = d3.group(open, r => r.class);
+  const openClasses = [...openByClass.keys()];
+  const openNoGen = openClasses.filter(c => !gen[c]);
+
+  renderCards(open.length, closed.length, openClasses.length, openNoGen.length);
+  renderBurndown(rows);
+  renderFlow(rows);
+  renderSidebar(openByClass, gen);
+
+  d3.select("#stamp").text("updated " + new Date().toLocaleTimeString());
+}
+
+function renderCards(o, c, oc, ong) {
+  const data = [
+    { cls: "open", num: o, lbl: "open residuals" },
+    { cls: "closed", num: c, lbl: "closed residuals" },
+    { cls: "", num: oc, lbl: "open classes" },
+    { cls: "flag", num: ong, lbl: "open classes · no generator" },
+  ];
+  const sel = d3.select("#cards").selectAll(".card").data(data);
+  const enter = sel.enter().append("div");
+  enter.append("div").attr("class", "num");
+  enter.append("div").attr("class", "lbl");
+  const all = enter.merge(sel).attr("class", d => "card " + d.cls);
+  all.select(".num").text(d => d.num);
+  all.select(".lbl").text(d => d.lbl);
+}
+
+// open count at end of wave w: created ≤ w AND (still open OR closed_wave > w)
+function openAt(rows, w) {
+  return rows.filter(r =>
+    r.created_wave <= w &&
+    (r.status !== "closed" || (r.closed_wave != null && r.closed_wave > w))
+  ).length;
+}
+
+function waveExtent(rows) {
+  const created = rows.map(r => r.created_wave);
+  const closed = rows.filter(r => r.closed_wave != null).map(r => r.closed_wave);
+  const min = d3.min(created);
+  const max = Math.max(d3.max(created), closed.length ? d3.max(closed) : -Infinity);
+  return d3.range(min, max + 1);
+}
+
+function renderBurndown(rows) {
+  const svg = d3.select("#burndown");
+  const W = svg.node().clientWidth || 800, H = 240;
+  const m = { t: 12, r: 16, b: 28, l: 34 };
+  const waves = waveExtent(rows);
+  const data = waves.map(w => ({ w, n: openAt(rows, w) }));
+
+  const x = d3.scaleLinear().domain(d3.extent(waves)).range([m.l, W - m.r]);
+  const y = d3.scaleLinear().domain([0, d3.max(data, d => d.n) || 1]).nice().range([H - m.b, m.t]);
+
+  svg.selectAll("*").remove();
+  const g = svg.append("g");
+  // grid
+  g.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`)
+    .call(d3.axisBottom(x).ticks(waves.length).tickFormat(d3.format("d")));
+  g.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`)
+    .call(d3.axisLeft(y).ticks(5));
+
+  const line = d3.line().x(d => x(d.w)).y(d => y(d.n));
+  g.append("path").datum(data).attr("fill", "none")
+    .attr("stroke", "var(--accent)").attr("stroke-width", 2).attr("d", line);
+  g.selectAll("circle").data(data).enter().append("circle")
+    .attr("cx", d => x(d.w)).attr("cy", d => y(d.n)).attr("r", 3.5)
+    .attr("fill", "var(--accent)")
+    .on("mousemove", (ev, d) => showTip(`wave <b>${d.w}</b><br>${d.n} open`, ev))
+    .on("mouseout", hideTip);
+}
+
+function renderFlow(rows) {
+  const svg = d3.select("#flow");
+  const W = svg.node().clientWidth || 800, H = 220;
+  const m = { t: 12, r: 16, b: 28, l: 34 };
+  const waves = waveExtent(rows);
+  const data = waves.map(w => ({
+    w,
+    created: rows.filter(r => r.created_wave === w).length,
+    closed: rows.filter(r => r.closed_wave === w).length,
+  }));
+
+  const x0 = d3.scaleBand().domain(waves).range([m.l, W - m.r]).padding(0.25);
+  const x1 = d3.scaleBand().domain(["created", "closed"]).range([0, x0.bandwidth()]).padding(0.08);
+  const y = d3.scaleLinear()
+    .domain([0, d3.max(data, d => Math.max(d.created, d.closed)) || 1]).nice()
+    .range([H - m.b, m.t]);
+  const color = { created: "var(--open)", closed: "var(--closed)" };
+
+  svg.selectAll("*").remove();
+  const g = svg.append("g");
+  g.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`)
+    .call(d3.axisBottom(x0).tickFormat(d3.format("d")));
+  g.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`)
+    .call(d3.axisLeft(y).ticks(5));
+
+  const grp = g.selectAll(".wg").data(data).enter().append("g")
+    .attr("transform", d => `translate(${x0(d.w)},0)`);
+  grp.selectAll("rect").data(d => [
+      { k: "created", v: d.created, w: d.w },
+      { k: "closed", v: d.closed, w: d.w },
+    ]).enter().append("rect")
+    .attr("x", d => x1(d.k)).attr("width", x1.bandwidth())
+    .attr("y", d => y(d.v)).attr("height", d => y(0) - y(d.v))
+    .attr("fill", d => color[d.k]).attr("rx", 2)
+    .on("mousemove", (ev, d) => showTip(`wave <b>${d.w}</b><br>${d.k}: ${d.v}`, ev))
+    .on("mouseout", hideTip);
+}
+
+function renderSidebar(openByClass, gen) {
+  const entries = [...openByClass.entries()]
+    .map(([cls, rows]) => ({ cls, rows, n: rows.length }))
+    .sort((a, b) => b.n - a.n || a.cls.localeCompare(b.cls));
+
+  const host = d3.select("#sidebar");
+  host.selectAll("*").remove();
+  const panel = host.append("div").attr("class", "panel");
+  panel.append("h2").text(`Open residuals by class · ${entries.length} classes`);
+
+  if (!entries.length) { host.append("div").attr("class", "empty").text("nothing open 🎉"); return; }
+
+  for (const e of entries) {
+    const flagged = e.n >= FLAG_MIN && !gen[e.cls];
+    const hasgen = !!gen[e.cls];
+    const box = host.append("div")
+      .attr("class", "cls" + (flagged ? " flagged" : "") + (hasgen ? " hasgen" : ""));
+    const hdr = box.append("div").attr("class", "cls-hdr");
+    hdr.append("span").attr("class", "name").text(e.cls);
+    if (flagged) hdr.append("span").attr("class", "badge-flag").text("wants gen");
+    hdr.append("span").attr("class", "cnt").text(e.n);
+    const rowsDiv = box.append("div").attr("class", "rows");
+    for (const r of e.rows) {
+      const row = rowsDiv.append("div").attr("class", "row")
+        .on("mousemove", ev => showTip(
+          `<b>${r.id}</b> · created wave ${r.created_wave}<br>${r.description}`, ev))
+        .on("mouseout", hideTip);
+      row.append("span").attr("class", "id").text(r.id);
+      row.append("span").attr("class", "desc").text(r.description);
+    }
+  }
+}
+
+async function tick() {
+  try {
+    const text = await d3.text(TSV + "?t=" + Date.now());  // cache-bust
+    render(parseRows(text));
+  } catch (e) {
+    d3.select("#stamp").text("fetch error: " + e.message);
+  }
+}
+tick();
+setInterval(tick, 5000);
+</script>
+</body>
+</html>

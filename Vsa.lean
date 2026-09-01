@@ -607,3 +607,12 @@ import Vsa.Sim.rows.NativeBodyAssert
 -- wave 42
 import Vsa.Sim.rows.NativeBodyPrint
 import Vsa.Sim.rows.CallCruxMarshal
+-- wave 43
+import Vsa.Sim.rows.StmtWhileBodyArmStagePre
+import Vsa.Sim.rows.StmtForInitArmStagePre
+import Vsa.Sim.rows.FlBodyArmStagePre
+import Vsa.Sim.rows.LayoutJumpTableGen
+import Vsa.Sim.rows.FnArmSeamSupply
+import Vsa.Sim.rows.CallCruxMarshal2
+import Vsa.Sim.rows.CallCruxMarshal3
+import Vsa.Sim.rows.CallCruxMarshal4

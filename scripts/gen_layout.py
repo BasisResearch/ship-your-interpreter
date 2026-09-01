@@ -24,6 +24,153 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ELF = os.path.join(ROOT, 'c', 'while-riscv-htif.elf')
 OUT = os.path.join(ROOT, 'Vsa', 'Sim', 'rows', 'LayoutGround.lean')
+OUT_JT = os.path.join(ROOT, 'Vsa', 'Sim', 'rows', 'LayoutJumpTableGen.lean')
+
+# --------------------------------------------------------------------------
+# The `eval_expr` `.rodata` jump table (M6 dispatch): base `0x80019f58`, one
+# 4-byte little-endian slot per `ExprKind` tag (`c/src/ast.h` enum, 11 tags).
+# The dispatch reads slot `k` at `base + 4*k`, then jumps to
+# `base + (Int32) slot`.  This generator reads the slot bytes out of the ELF
+# `.rodata` at generation time, computes each arm PC, CROSS-CHECKS the ones
+# already pinned elsewhere in the proof (the two known generator bug classes:
+# a false `decide` → sorryAx, and a zero-pinned / drifted byte read), and emits
+# one `KindSlotPinned k armPC m` theorem per tag so every arm gets its 9
+# dispatch bytes from ONE generator run (`EvalSimCommon.KindSlotPinned`).
+# --------------------------------------------------------------------------
+JUMP_TABLE_BASE = 0x80019f58
+
+# `ExprKind` tag -> C name (c/src/ast.h: EX_INT..EX_FN, 11 tags 0..10).
+TAG_NAMES = ['EX_INT', 'EX_STR', 'EX_BOOL', 'EX_NULL', 'EX_VAR', 'EX_ASSIGN',
+             'EX_BINARY', 'EX_LOGICAL', 'EX_UNARY', 'EX_CALL', 'EX_FN']
+NTAGS = len(TAG_NAMES)
+
+# Cross-check anchors: arm PCs already pinned in the proof (grep for
+# `KindSlotPinned <k> (0x…` / the per-kind `*SlotPinned` theorems).  A drift
+# here means the ELF changed or a byte read is wrong — hard-abort.
+EXPECTED_ARM_PC = {
+    0: 0x80003408,   # EvalSimCommon.int_slot_kindPinned
+    1: 0x80003414,   # EvalStrSim.StrSlotPinned
+    2: 0x80003420,   # EvalBoolSim.BoolSlotPinned
+    3: 0x8000342c,   # EvalNullSim.NullSlotPinned
+    4: 0x80003434,   # EvalVarSim.VarSlotPinned
+    7: 0x8000355c,   # EvalLogical (KindSlotPinned 7)
+    8: 0x800035e0,   # EvalUnary  (KindSlotPinned 8)
+    9: 0x800031b0,   # EvalCall   callArmPC
+    10: 0x800033c4,  # FnArmSeams.AllocBuildStagingLink.hpc (the EX_FN arm front)
+}
+
+
+def parse_objdump_s(text):
+    """`objdump -s` hex dump -> {addr: byte}."""
+    mem = {}
+    line_re = re.compile(r'^ ([0-9a-f]{4,16}) ')
+    for line in text.splitlines():
+        m = line_re.match(line)
+        if not m:
+            continue
+        addr = int(m.group(1), 16)
+        data = line[m.end():m.end() + 36]  # 4 groups of 8 hex chars + spaces
+        for g in range(4):
+            chunk = data[g * 9:g * 9 + 8]
+            for k in range(4):
+                pair = chunk[2 * k:2 * k + 2] if len(chunk) >= 2 * k + 2 else ''
+                if re.fullmatch(r'[0-9a-f]{2}', pair):
+                    mem[addr + g * 4 + k] = int(pair, 16)
+    return mem
+
+
+def read_jump_table(elf):
+    """Read the 11 dispatch slots out of `.rodata`, compute each arm PC, and
+    cross-check the known anchors.  Returns [(k, [b0,b1,b2,b3], arm_pc)]."""
+    text = subprocess.run(['objdump', '-s', '--section=.rodata', elf],
+                          check=True, capture_output=True, text=True).stdout
+    mem = parse_objdump_s(text)
+    slots = []
+    for k in range(NTAGS):
+        bs = []
+        for i in range(4):
+            a = JUMP_TABLE_BASE + 4 * k + i
+            b = mem.get(a)
+            if b is None:
+                sys.exit(f'gen_layout.py: jump-table slot {k} byte @0x{a:x} '
+                         f'absent from .rodata (zero-pinned-lds bug class)')
+            bs.append(b)
+        off = bs[0] | bs[1] << 8 | bs[2] << 16 | bs[3] << 24
+        if off & 0x80000000:          # sign-extend the 32-bit offset
+            off -= 0x100000000
+        arm_pc = (JUMP_TABLE_BASE + off) & 0xffffffffffffffff
+        exp = EXPECTED_ARM_PC.get(k)
+        if exp is not None and arm_pc != exp:
+            sys.exit(f'gen_layout.py: jump-table slot {k} ({TAG_NAMES[k]}) '
+                     f'computed arm PC 0x{arm_pc:x} != expected 0x{exp:x} '
+                     f'(ELF drift or bad byte read); aborting')
+        slots.append((k, bs, arm_pc))
+    return slots
+
+
+def emit_jump_table(slots):
+    lines = []
+    for k, bs, arm_pc in slots:
+        byte_hs = ' '.join(f'{b:02x}' for b in bs)
+        prem = '\n'.join(
+            f'    (h{i} : m[(jumpTableBase + 4 * {k} + {i} : Nat)]? '
+            f'= some (0x{bs[i]:02x} : BitVec 8))' for i in range(4))
+        wits = ', '.join(f'0x{bs[i]:02x}#8' for i in range(4))
+        lines.append(f'''/-- `{TAG_NAMES[k]}` (tag {k}) jump-table slot @ `0x{JUMP_TABLE_BASE + 4*k:x}`:
+bytes `{byte_hs}` (LE offset) → arm PC `0x{arm_pc:x}` = `jumpTableBase + (Int32)`.
+Read from the ELF `.rodata` at generation time; the sign-extended reassembly is
+machine-checked by `decide`. -/
+theorem groundSlot_{k} {{m : Mem}}
+{prem} :
+    KindSlotPinned {k} (0x{arm_pc:x}#64) m :=
+  ⟨{wits}, h0, h1, h2, h3, by
+    apply BitVec.eq_of_toNat_eq; simp only [jumpTableBase]; decide⟩
+
+#print axioms groundSlot_{k}
+''')
+    table_rows = '\n'.join(
+        f'  {k:2d}  {TAG_NAMES[k]:9s}  0x{JUMP_TABLE_BASE + 4*k:x}  '
+        f'{"".join(f"{b:02x} " for b in bs).strip()}  0x{arm_pc:x}'
+        for k, bs, arm_pc in slots)
+    body = '\n'.join(lines)
+    return f'''import Vsa.Sim.EvalSimCommon
+
+/-!
+# `LayoutJumpTableGen` — the M6 `eval_expr` dispatch jump-table slot pins
+
+GENERATED by `scripts/gen_layout.py` from `objdump -s --section=.rodata
+c/while-riscv-htif.elf`.  DO NOT hand-edit — regenerate.
+
+The `EX_*` dispatch reads a 4-byte offset from the `.rodata` jump table at
+`jumpTableBase = 0x{JUMP_TABLE_BASE:x}`, slot `k` (the `ExprKind` tag, `c/src/ast.h`)
+living at `jumpTableBase + 4*k`, then jumps to `jumpTableBase + (Int32) offset`.
+This file emits ONE `EvalSimCommon.KindSlotPinned k armPC m` theorem per tag —
+the per-arm dispatch coupling every leaf/arm row threads down to the Layout —
+so a single generator run supplies all 11 arms' slot facts at once (each arm
+consumes its `groundSlot_<k>` from its own 4 byte pins).
+
+Slot table (tag, name, slot addr, LE bytes, arm PC), read from the fixed ELF:
+
+{table_rows}
+
+The arm PCs of the tags already pinned in the proof (int/str/bool/null/var/
+logical/unary/call/fn) are cross-checked against their known values at
+generation time (`EXPECTED_ARM_PC`); a drift hard-aborts the generator.
+
+NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
+-/
+
+open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
+open Register
+open Vsa.Machine (MState Config)
+open Vsa.RuntimeRepr Vsa.MemRepr Vsa.While Vsa.Alloc Vsa.Sim.Code
+
+namespace Vsa.Sim.LayoutJumpTableGen
+
+{body}
+end Vsa.Sim.LayoutJumpTableGen
+'''
+
 
 # The symbols the concrete Layout instantiation pins (LayoutInstance.lean).
 SYMBOLS = ['interp_run', 'main', 'eval_expr', 'exec_stmt', 'runtime_error',
@@ -131,46 +278,70 @@ end Vsa.Sim.LayoutGround
 '''
 
 
-def main():
-    vals = read_symbols(ELF)
-    content = emit(vals)
+def write_if_changed(path, content):
     try:
-        with open(OUT) as f:
+        with open(path) as f:
             unchanged = f.read() == content
     except FileNotFoundError:
         unchanged = False
     if not unchanged:
-        with open(OUT, 'w') as f:
+        with open(path, 'w') as f:
             f.write(content)
-    print(f'gen_layout.py: emitted {OUT} ({"unchanged" if unchanged else "updated"})')
-    for s in SYMBOLS:
-        print(f'  {s:14s} = 0x{vals[s]:x}')
+    print(f'gen_layout.py: emitted {path} '
+          f'({"unchanged" if unchanged else "updated"})')
+    return unchanged
 
-    if '--no-verify' in sys.argv[1:]:
-        return
-    # MANDATORY self-verification (the genseg lesson): elaborate + sorryAx grep.
-    r = subprocess.run(['lake', 'env', 'lean', OUT], cwd=ROOT,
+
+def self_verify(path, content):
+    """MANDATORY self-verification (the genseg lesson): elaborate the emitted
+    file, hard-error on any lean error, on `sorryAx` (false-decide bug class),
+    on an axiom-audit count mismatch, or on an unexpected axiom."""
+    r = subprocess.run(['lake', 'env', 'lean', path], cwd=ROOT,
                        capture_output=True, text=True)
     output = r.stdout + r.stderr
     if r.returncode != 0:
         print(output)
-        sys.exit('gen_layout.py: SELF-VERIFY FAILED — lake env lean errored')
+        sys.exit(f'gen_layout.py: SELF-VERIFY FAILED ({path}) — '
+                 f'lake env lean errored')
     if 'sorryAx' in output:
         print(output)
-        sys.exit('gen_layout.py: SELF-VERIFY FAILED — sorryAx in axiom audit')
+        sys.exit(f'gen_layout.py: SELF-VERIFY FAILED ({path}) — '
+                 f'sorryAx in axiom audit')
     audits = (output.count('depends on axioms')
               + output.count('does not depend on any axioms'))
     expected = content.count('#print axioms')
     if audits != expected:
         print(output)
-        sys.exit(f'gen_layout.py: SELF-VERIFY FAILED — {audits} axiom audits, '
-                 f'expected {expected}')
+        sys.exit(f'gen_layout.py: SELF-VERIFY FAILED ({path}) — {audits} '
+                 f'axiom audits, expected {expected}')
     bad = [ln for ln in output.splitlines() if 'depends on axioms' in ln
            and not re.search(r"\[(propext, )?(Classical\.choice, )?(Quot\.sound)?\]|\[\]", ln)]
     if bad:
         print('\n'.join(bad))
-        sys.exit('gen_layout.py: SELF-VERIFY FAILED — unexpected axioms')
-    print(f'gen_layout.py: self-verify OK ({audits} axiom audits, no sorryAx)')
+        sys.exit(f'gen_layout.py: SELF-VERIFY FAILED ({path}) — '
+                 f'unexpected axioms')
+    print(f'gen_layout.py: self-verify OK ({path}: '
+          f'{audits} axiom audits, no sorryAx)')
+
+
+def main():
+    vals = read_symbols(ELF)
+    content = emit(vals)
+    write_if_changed(OUT, content)
+    for s in SYMBOLS:
+        print(f'  {s:14s} = 0x{vals[s]:x}')
+
+    slots = read_jump_table(ELF)
+    content_jt = emit_jump_table(slots)
+    write_if_changed(OUT_JT, content_jt)
+    for k, bs, arm_pc in slots:
+        print(f'  slot {k:2d} {TAG_NAMES[k]:9s} '
+              f'{"".join(f"{b:02x} " for b in bs).strip():12s} -> 0x{arm_pc:x}')
+
+    if '--no-verify' in sys.argv[1:]:
+        return
+    self_verify(OUT, content)
+    self_verify(OUT_JT, content_jt)
 
 
 if __name__ == '__main__':

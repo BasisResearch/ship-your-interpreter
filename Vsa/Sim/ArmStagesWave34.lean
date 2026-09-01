@@ -10,6 +10,9 @@ import Vsa.Sim.rows.StmtIfCondArmStagePre
 import Vsa.Sim.rows.StmtWhileCondArmStagePre
 import Vsa.Sim.rows.FlCondArmStagePre
 import Vsa.Sim.rows.ArgsHeadArmStagePre
+import Vsa.Sim.rows.StmtWhileBodyArmStagePre
+import Vsa.Sim.rows.StmtForInitArmStagePre
+import Vsa.Sim.rows.FlBodyArmStagePre
 
 /-!
 # `ArmStagesWave34` — the partial `armStages` supplier with the wave-34 landed fields
@@ -471,5 +474,171 @@ theorem divFamily_wave42
 #print axioms divFamily_wave42
 
 #print axioms evalChildStages_ublracSEA_wired
+
+/-! ## §6. Wave-43 — the non-eval-child side: 3 jal-`exec_stmt` staging fields wired
+
+`nonEvalChildStages_mk` is the flat 11-field builder for `NonEvalChildStages` (the
+counterpart of `evalChildStages_mk`/`sqEntryStages_mk`; `ArmStagesPartial` left this
+one as "the `NonEvalChildStages` literal", so it lives here).  Then
+`nonEvalChildStages_wave43_wired` threads the THREE non-eval-child fields whose whole
+staging span is now machine-composed — `stmtWhileBody`, `stmtForInit`, `flBody`
+(each a `#derive_case` seg + `bridgeOfSeg` `jal exec_stmt` + the `*_field_of_dispatch`
+composer, wave 43) — so the caller no longer owes their `∀`-staging premise, only the
+strictly-smaller `*ArmDispatch` residual.  The other 8 fields stay raw `∀`-premises
+(stmtIfThen/stmtIfElse are the tail-re-dispatch shape, see observation
+`ifstmt-then-else-tail-redispatch-not-jal`; the 6 SegPreBundle-landing arms are a
+second uniform class).  Board: non-eval-child 0/11 → 3/11 machine-composed. -/
+
+-- discipline: allow(R7-conj-tower-def) the ∃-existentials counted in this file are
+-- NOT new anonymous posts: they are the argument TYPES of `nonEvalChildStages_mk`,
+-- which re-state VERBATIM the already-sanctioned `NonEvalChildStages` field types
+-- (the `∃ (argLoopPC dLeft aLeft : Nat), LandedN 1 (SegPreBundle …)` SegPreBundle
+-- fields) whose landing bundles carry ghost interior-PC + budget DATA a
+-- `structure : Prop` cannot project — sanctioned at their def site in
+-- `ArmSegSplitNonEval.lean` (`allow(R6-conj-tower-def)` on `NonEvalChildStages` /
+-- `SegPreBundle`). The builder consumes them by name (each `∀`-field is threaded
+-- positionally into `NonEvalChildStages.mk`), no positional `.2.2` navigation.
+/-- **Flat builder for `NonEvalChildStages`.**  Each argument is one field type; the
+result is the bundle.  A partial supplier passes its landed staging spans and leaves
+the rest as named holes it still owes. -/
+def nonEvalChildStages_mk
+    (stmtIfThen : ∀ (cnd : Expr) (t : Stmt) (e : Option Stmt) (c : Config) (st st' : SpecSt)
+      (d : Nat) (env : Addr) (v : Value),
+      EvalE st d env cnd st' v → v.truthy = true → SEntryC c st d env (.ifStmt cnd t e) →
+      LandedN 1 c (fun c' => ExecStmtPreBundle t c' st' d env))
+    (stmtIfElse : ∀ (cnd : Expr) (t e : Stmt) (c : Config) (st st' : SpecSt)
+      (d : Nat) (env : Addr) (v : Value),
+      EvalE st d env cnd st' v → v.truthy = false → SEntryC c st d env (.ifStmt cnd t (some e)) →
+      LandedN 1 c (fun c' => ExecStmtPreBundle e c' st' d env))
+    (stmtWhileBody : ∀ (cnd : Expr) (b : Stmt) (c : Config) (st st' : SpecSt)
+      (d : Nat) (env : Addr) (v : Value),
+      EvalE st d env cnd st' v → v.truthy = true → SEntryC c st d env (.whileStmt cnd b) →
+      LandedN 1 c (fun c' => ExecStmtPreBundle b c' st' d env))
+    (stmtWhileLoop : ∀ (cnd : Expr) (b : Stmt) (c : Config) (st st' st'' : SpecSt)
+      (d : Nat) (env : Addr) (v : Value) (status : Status),
+      EvalE st d env cnd st' v → v.truthy = true → ExecS st' d env b st'' status →
+      (status = .normal ∨ status = .cont) → SEntryC c st d env (.whileStmt cnd b) →
+      LandedN 1 c (fun c' => ExecStmtPreBundle (.whileStmt cnd b) c' st'' d env))
+    (stmtForInit : ∀ (init : Stmt) (cnd step : Option Expr) (b : Stmt) (c : Config)
+      (st : SpecSt) (d : Nat) (env : Addr) (store' : Store) (outer : Addr),
+      st.store.allocFrame (some env) = (store', outer) →
+      SEntryC c st d env (.forStmt (some init) cnd step b) →
+      LandedN 1 c (fun c' => ExecStmtPreBundle init c' ⟨store', st.out⟩ d outer))
+    (flBody : ∀ (cnd : Option Expr) (step : Option Expr) (b : Stmt) (c : Config)
+      (st st' : SpecSt) (d : Nat) (env : Addr),
+      ForCond st d env cnd st' → FEntryC c st d env cnd step b →
+      LandedN 1 c (fun c' => ExecStmtPreBundle b c' st' d env))
+    (callArgs : ∀ (f : Expr) (args : List Expr) (c : Config) (st st' : SpecSt)
+      (d : Nat) (env : Addr) (fv : Value),
+      EvalE st d env f st' fv → EEntryC c st d env (.call f args) →
+      ∃ (argLoopPC dLeft aLeft : Nat),
+        LandedN 1 c (fun c' => SegPreBundle argLoopPC c' st' d dLeft aLeft))
+    (argsTail : ∀ (e : Expr) (es : List Expr) (c : Config) (st st' : SpecSt)
+      (d : Nat) (env : Addr) (v : Value),
+      EvalE st d env e st' v → AEntryC c st d env (e :: es) →
+      ∃ (argLoopPC dLeft aLeft : Nat),
+        LandedN 1 c (fun c' => SegPreBundle argLoopPC c' st' d dLeft aLeft))
+    (callC : ∀ (f : Expr) (args : List Expr) (c : Config) (st st' st'' : SpecSt)
+      (d : Nat) (env : Addr) (fv : Value) (vs : List Value),
+      EvalE st d env f st' fv → EvalArgs st' d env args st'' vs →
+      EEntryC c st d env (.call f args) →
+      ∃ (calleeBodyPC dLeft aLeft : Nat),
+        LandedN 1 c (fun c' => SegPreBundle calleeBodyPC c' st'' d dLeft aLeft))
+    (stmtForLoop : ∀ (init : Option Stmt) (cnd step : Option Expr) (b : Stmt) (c : Config)
+      (st st' : SpecSt) (d : Nat) (env : Addr) (store' : Store) (outer : Addr),
+      st.store.allocFrame (some env) = (store', outer) →
+      ExecInit ⟨store', st.out⟩ d outer init st' →
+      SEntryC c st d env (.forStmt init cnd step b) →
+      ∃ (forCondPC dLeft aLeft : Nat),
+        LandedN 1 c (fun c' => SegPreBundle forCondPC c' st' d dLeft aLeft))
+    (flLoop : ∀ (cnd : Option Expr) (step : Option Expr) (b : Stmt) (c : Config)
+      (st st' st'' st''' : SpecSt) (d : Nat) (env : Addr) (status : Status),
+      ForCond st d env cnd st' → ExecS st' d env b st'' status →
+      (status = .normal ∨ status = .cont) → ExecStep st'' d env step st''' →
+      FEntryC c st d env cnd step b →
+      ∃ (forCondPC dLeft aLeft : Nat),
+        LandedN 1 c (fun c' => SegPreBundle forCondPC c' st''' d dLeft aLeft)) :
+    NonEvalChildStages :=
+  { stmtIfThen, stmtIfElse, stmtWhileBody, stmtWhileLoop, stmtForInit, flBody,
+    callArgs, argsTail, callC, stmtForLoop, flLoop }
+
+/-- **`NonEvalChildStages` with the 3 wave-43 jal-`exec_stmt` staging fields wired.**
+`stmtWhileBody`/`stmtForInit`/`flBody` are supplied by their `*_field_of_dispatch`
+composers off the strictly-smaller `*ArmDispatch` residuals; the other 8 fields stay
+raw `∀`-staging premises the caller still owes. -/
+def nonEvalChildStages_wave43_wired
+    (hWhileBodyDisp : ∀ (cnd : Expr) (b : Stmt) (c : Config) (st st' : SpecSt)
+      (d : Nat) (env : Addr) (v : Value),
+      WhileBodyArmDispatch cnd b st st' d env v c)
+    (hForInitDisp : ∀ (init : Stmt) (cnd step : Option Expr) (b : Stmt) (c : Config)
+      (st : SpecSt) (d : Nat) (env : Addr) (store' : Store) (outer : Addr),
+      ForInitArmDispatch init cnd step b st d env store' outer c)
+    (hFlBodyDisp : ∀ (cnd : Option Expr) (step : Option Expr) (b : Stmt) (c : Config)
+      (st st' : SpecSt) (d : Nat) (env : Addr),
+      FlBodyArmDispatch cnd step b st st' d env c)
+    -- the 8 still-owed raw staging fields
+    (stmtIfThen : ∀ (cnd : Expr) (t : Stmt) (e : Option Stmt) (c : Config) (st st' : SpecSt)
+      (d : Nat) (env : Addr) (v : Value),
+      EvalE st d env cnd st' v → v.truthy = true → SEntryC c st d env (.ifStmt cnd t e) →
+      LandedN 1 c (fun c' => ExecStmtPreBundle t c' st' d env))
+    (stmtIfElse : ∀ (cnd : Expr) (t e : Stmt) (c : Config) (st st' : SpecSt)
+      (d : Nat) (env : Addr) (v : Value),
+      EvalE st d env cnd st' v → v.truthy = false → SEntryC c st d env (.ifStmt cnd t (some e)) →
+      LandedN 1 c (fun c' => ExecStmtPreBundle e c' st' d env))
+    (stmtWhileLoop : ∀ (cnd : Expr) (b : Stmt) (c : Config) (st st' st'' : SpecSt)
+      (d : Nat) (env : Addr) (v : Value) (status : Status),
+      EvalE st d env cnd st' v → v.truthy = true → ExecS st' d env b st'' status →
+      (status = .normal ∨ status = .cont) → SEntryC c st d env (.whileStmt cnd b) →
+      LandedN 1 c (fun c' => ExecStmtPreBundle (.whileStmt cnd b) c' st'' d env))
+    (callArgs : ∀ (f : Expr) (args : List Expr) (c : Config) (st st' : SpecSt)
+      (d : Nat) (env : Addr) (fv : Value),
+      EvalE st d env f st' fv → EEntryC c st d env (.call f args) →
+      ∃ (argLoopPC dLeft aLeft : Nat),
+        LandedN 1 c (fun c' => SegPreBundle argLoopPC c' st' d dLeft aLeft))
+    (argsTail : ∀ (e : Expr) (es : List Expr) (c : Config) (st st' : SpecSt)
+      (d : Nat) (env : Addr) (v : Value),
+      EvalE st d env e st' v → AEntryC c st d env (e :: es) →
+      ∃ (argLoopPC dLeft aLeft : Nat),
+        LandedN 1 c (fun c' => SegPreBundle argLoopPC c' st' d dLeft aLeft))
+    (callC : ∀ (f : Expr) (args : List Expr) (c : Config) (st st' st'' : SpecSt)
+      (d : Nat) (env : Addr) (fv : Value) (vs : List Value),
+      EvalE st d env f st' fv → EvalArgs st' d env args st'' vs →
+      EEntryC c st d env (.call f args) →
+      ∃ (calleeBodyPC dLeft aLeft : Nat),
+        LandedN 1 c (fun c' => SegPreBundle calleeBodyPC c' st'' d dLeft aLeft))
+    (stmtForLoop : ∀ (init : Option Stmt) (cnd step : Option Expr) (b : Stmt) (c : Config)
+      (st st' : SpecSt) (d : Nat) (env : Addr) (store' : Store) (outer : Addr),
+      st.store.allocFrame (some env) = (store', outer) →
+      ExecInit ⟨store', st.out⟩ d outer init st' →
+      SEntryC c st d env (.forStmt init cnd step b) →
+      ∃ (forCondPC dLeft aLeft : Nat),
+        LandedN 1 c (fun c' => SegPreBundle forCondPC c' st' d dLeft aLeft))
+    (flLoop : ∀ (cnd : Option Expr) (step : Option Expr) (b : Stmt) (c : Config)
+      (st st' st'' st''' : SpecSt) (d : Nat) (env : Addr) (status : Status),
+      ForCond st d env cnd st' → ExecS st' d env b st'' status →
+      (status = .normal ∨ status = .cont) → ExecStep st'' d env step st''' →
+      FEntryC c st d env cnd step b →
+      ∃ (forCondPC dLeft aLeft : Nat),
+        LandedN 1 c (fun c' => SegPreBundle forCondPC c' st''' d dLeft aLeft)) :
+    NonEvalChildStages :=
+  nonEvalChildStages_mk
+    stmtIfThen stmtIfElse
+    -- stmtWhileBody: wave-43 machine-composed
+    (fun cnd b c st st' d env v hE ht hSE =>
+      stmtWhileBody_field_of_dispatch cnd b c st st' d env v
+        (hWhileBodyDisp cnd b c st st' d env v) hE ht hSE)
+    stmtWhileLoop
+    -- stmtForInit: wave-43 machine-composed
+    (fun init cnd step b c st d env store' outer hAlloc hSE =>
+      stmtForInit_field_of_dispatch init cnd step b c st d env store' outer
+        (hForInitDisp init cnd step b c st d env store' outer) hAlloc hSE)
+    -- flBody: wave-43 machine-composed
+    (fun cnd step b c st st' d env hFC hFE =>
+      flBody_field_of_dispatch cnd step b c st st' d env
+        (hFlBodyDisp cnd step b c st st' d env) hFC hFE)
+    callArgs argsTail callC stmtForLoop flLoop
+
+#print axioms nonEvalChildStages_mk
+#print axioms nonEvalChildStages_wave43_wired
 
 end Vsa.Sim

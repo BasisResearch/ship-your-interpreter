@@ -966,6 +966,40 @@ THEOREMS=(
   Vsa.Sim.foldBackLoop_passthrough                  # rows/CallCruxMarshal (R7 destructurer over the FoldBack loop row)
   Vsa.Sim.normalJoin_exit                           # rows/CallCruxMarshal
   Vsa.Sim.foldStore_succ                            # rows/CallCruxMarshal (fold take-succ decomposition for CallParamFoldInv k+1)
+  # Wave 43: non-eval jal arms + jump-table pins ALL tags + fn assembly + env_define fold splice (falsity #8 amended)
+  Vsa.Sim.stmtWhileBodyBridge                       # rows/StmtWhileBodyArmStagePre
+  Vsa.Sim.stmtWhileBody_field_of_dispatch           # rows/StmtWhileBodyArmStagePre
+  Vsa.Sim.stmtForInitBodyBridge                     # rows/StmtForInitArmStagePre
+  Vsa.Sim.stmtForInit_field_of_dispatch             # rows/StmtForInitArmStagePre
+  Vsa.Sim.flBodyBodyBridge                          # rows/FlBodyArmStagePre
+  Vsa.Sim.flBody_field_of_dispatch                  # rows/FlBodyArmStagePre
+  Vsa.Sim.nonEvalChildStages_mk                     # ArmStagesWave34
+  Vsa.Sim.nonEvalChildStages_wave43_wired           # ArmStagesWave34 (3 jal-exec_stmt fields swapped for *ArmDispatch residuals)
+  Vsa.Sim.LayoutJumpTableGen.groundSlot_0           # rows/LayoutJumpTableGen (GENERATED: .rodata dispatch slot pins, all 11 tags)
+  Vsa.Sim.LayoutJumpTableGen.groundSlot_1           # rows/LayoutJumpTableGen
+  Vsa.Sim.LayoutJumpTableGen.groundSlot_2           # rows/LayoutJumpTableGen
+  Vsa.Sim.LayoutJumpTableGen.groundSlot_3           # rows/LayoutJumpTableGen
+  Vsa.Sim.LayoutJumpTableGen.groundSlot_4           # rows/LayoutJumpTableGen
+  Vsa.Sim.LayoutJumpTableGen.groundSlot_5           # rows/LayoutJumpTableGen
+  Vsa.Sim.LayoutJumpTableGen.groundSlot_6           # rows/LayoutJumpTableGen
+  Vsa.Sim.LayoutJumpTableGen.groundSlot_7           # rows/LayoutJumpTableGen
+  Vsa.Sim.LayoutJumpTableGen.groundSlot_8           # rows/LayoutJumpTableGen
+  Vsa.Sim.LayoutJumpTableGen.groundSlot_9           # rows/LayoutJumpTableGen
+  Vsa.Sim.LayoutJumpTableGen.groundSlot_10          # rows/LayoutJumpTableGen (EX_FN slot -> 0x800033c4)
+  Vsa.Sim.fnSlot_grounded                           # rows/FnArmSeamSupply (consumes groundSlot_10)
+  Vsa.Sim.fnResidBundle_of_parts                    # rows/FnArmSeamSupply
+  Vsa.Sim.fnResid_of_parts                          # rows/FnArmSeamSupply
+  Vsa.Sim.storeDefineAdvance_of                     # rows/CallCruxMarshal2 (env_define post -> StoreDefineAdvance)
+  Vsa.Sim.foldStoreAdvance_toStoreRepr              # rows/CallCruxMarshal2 (advance @ foldStore k -> StoreRepr (foldStore k+1))
+  Vsa.Sim.foldDefineReturn_step                     # rows/CallCruxMarshal2
+  Vsa.Sim.callParamFoldSeamStep                     # rows/CallCruxMarshal2 (per-param seam closes to hStage/hDefine/hPins)
+  Vsa.Sim.foldBackLoop_facts_last_false             # rows/CallCruxMarshal3 (FALSITY #8 obstruction: do-while, carrier n unreachable)
+  Vsa.Sim.foldDefineReturn_last_false               # rows/CallCruxMarshal3
+  Vsa.Sim.bridgeOfSegOut                            # rows/CallCruxMarshal4 (sailOutput-carrying twin of bridgeOfSeg — jal-bridge class fix)
+  Vsa.Sim.valueNullHandoffSplice                    # rows/CallCruxMarshal4 (ValueNullStage -> BodyHandoff via real value_null_spec_full)
+  Vsa.Sim.foldDefineExitReturn_step                 # rows/CallCruxMarshal4
+  Vsa.Sim.foldToHandoff_of                          # rows/CallCruxMarshal4 (the amended hFoldToHandoff composed)
+  Vsa.Sim.callClosureEntrySplice                    # rows/CallClosureSplice (AMENDED: hFoldSeam k+1<n, hFoldToHandoff at carrier n-1)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean
