@@ -1,0 +1,14 @@
+name = "assign"
+namespace = "Vsa.Sim"
+armPC0 = 0x8000347c
+operand_off = 16
+buf_off = 240
+callee = "UnaryArmCallee"
+node_pat = ".assign x e"
+node_binders = "(x : String) (e : Expr)"
+node_argnames = "x e"
+child = "e"
+operand = "aRhs"
+sfx = "as"
+field = "assignE"
+doc = "The assign arm evaluates the RHS `e` first, then env_set."

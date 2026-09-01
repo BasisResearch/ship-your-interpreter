@@ -196,6 +196,40 @@ field that reuses an entry-pinned predicate (`SegEntry` at the same
 `m0`/caller-`φ`/caller-`g`) as an intermediate POST of an allocating,
 callee-saved-clobbering route is wrong on arrival. -/
 
+/-- **The body ghost tie** (wave 38): the registers the RETURN routes read that
+must agree between the arm's ghost `g` and the body's own ghost `g'` — the
+shared eval-frame `sp` (`x2`, anchors the spill slots and the `stackWin`
+window), the CALL's sret pointer `s1 = x9` (the `.ret` copy destination), and
+the interp pointer `s2 = x18` (`--call_depth` at `8(s2)`).  All three are
+`AbiPreservedNoise`, never written between the dispatch entry and the body-loop
+head, so the entry-route discharger proves each by chaining its frame facts. -/
+structure BodyGhostTie
+    (g g' : (R : Register) → Option (RegisterType R)) : Prop where
+  sp : g' Register.x2 = g Register.x2
+  sret : g' Register.x9 = g Register.x9
+  interp : g' Register.x18 = g Register.x18
+
+/-- **The caller spill slots at the body-loop head** (wave 38): what the entry
+route knows about the handoff memory `mB` at the eval-frame slots the return
+routes restore from.  `s5@1032(sp)`/`s3@1048(sp)` were spilled INSIDE the
+dispatch span (`0x8000328c`/`0x800032ac`) — their bytes are the arm ghost's
+values; the `s7@1016(sp)` slot predates the span (`0x800031cc`, the arg-loop
+entry), so only its m0-CARRY is stated here (its g-image is the ledgered
+`segentry-no-caller-spill-image` entry-side gap).  Byte-level, LE — the ret
+discharger reassembles through its seg readback. -/
+structure CallerSpillSlots
+    (g : (R : Register) → Option (RegisterType R)) (spv : BitVec 64)
+    (mB m0 : Mem) : Prop where
+  /-- `1032..1039(sp)` holds the arm's `s5 = g x21` (LE bytes). -/
+  s5 : ∀ w : BitVec 64, g Register.x21 = some w →
+    ∀ i : Nat, i < 8 → mB[spv.toNat + 1032 + i]? = some (w.extractLsb' (8 * i) 8)
+  /-- `1048..1055(sp)` holds the arm's `s3 = g x19` (LE bytes). -/
+  s3 : ∀ w : BitVec 64, g Register.x19 = some w →
+    ∀ i : Nat, i < 8 → mB[spv.toNat + 1048 + i]? = some (w.extractLsb' (8 * i) 8)
+  /-- `1016..1023(sp)` is UNTOUCHED by the entry route (the `s7` slot's content
+  is `m0`'s — see ledger `segentry-no-caller-spill-image` for the g-image). -/
+  s7carry : ∀ i : Nat, i < 8 → mB[spv.toNat + 1016 + i]? = m0[spv.toNat + 1016 + i]?
+
 -- discipline: allow(R7-conj-tower-def) `BodyHandoff` is a reached-Config
 -- landing bundle carrying DATA binders (φf', mB) — the sanctioned
 -- `def : Prop := ∃ …` shape (Prop structures cannot carry data fields, cf. the
@@ -211,6 +245,7 @@ window and the arena (the frame clause back to the dispatch-entry `m0`).  The
 ∃-bound triple is what the recursor's `mExecSeq` motive (universal in
 `g`/`φf`/`m0`) is instantiated at. -/
 def BodyHandoff
+    (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : SpecSt) (store' : Store) (cd : ClosureData) (vs : List Value)
     (frame : Addr) (d dLeft aLeft : Nat) (m0 : Mem) (c : Config) : Prop :=
@@ -218,6 +253,9 @@ def BodyHandoff
     PhiExtends φf φf' st.store.frames.size ∧
     (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < SL.hi) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       mB[a]? = m0[a]?) ∧
+    BodyGhostTie g g' ∧
+    (∀ spv : BitVec 64, g Register.x2 = some spv →
+      CallerSpillSlots g spv mB m0) ∧
     SegEntry g' N A SL φf' φc
       (closureBoundSt st store' cd vs frame) (d + 1) (dLeft - 1) (aLeft - 1)
       callBodyLoopPC mB c
@@ -245,7 +283,7 @@ structure CallClosureGeom
     cd.body ≠ [] →
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
-      (BodyHandoff N A SL φf φc st store' cd vs frame d dLeft aLeft m0)
+      (BodyHandoff g N A SL φf φc st store' cd vs frame d dLeft aLeft m0)
   -- (The former `entryFold` field — a per-param `StoreSeg` seam family over an
   -- ARBITRARY `pcf : Nat → Nat` — was DELETED in the wave-37 amendment: the
   -- ∀-pcf quantification was the independent-PC disease (unsatisfiable for
@@ -274,6 +312,9 @@ structure CallClosureGeom
       PhiExtends φf φf' st.store.frames.size →
       (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < SL.hi) → ¬ (A.lo ≤ a ∧ a < A.hi) →
         mB[a]? = m0[a]?) →
+      BodyGhostTie g g' →
+      (∀ spv : BitVec 64, g Register.x2 = some spv →
+        CallerSpillSlots g spv mB m0) →
       Triple
         (SegExit g' N A SL φf' φc
           (closureBoundSt st store' cd vs frame).store.frames.size
@@ -351,12 +392,15 @@ theorem callClosureSim
     -- prefix ≫ body-IH ≫ return (DeriveCallSeg.callSeg), the mid-predicates
     -- carrying the ∃-bound handoff pair through the body IH.
     refine callSeg (hGeom.entryBase hne)
-      (Mid1 := BodyHandoff N A SL φf φc st store' cd vs frame d dLeft aLeft m0)
+      (Mid1 := BodyHandoff g N A SL φf φc st store' cd vs frame d dLeft aLeft m0)
       (Mid2 := fun c => ∃ (g' : (R : Register) → Option (RegisterType R))
           (φf' : Addr → Nat) (mB : Mem),
         PhiExtends φf φf' st.store.frames.size ∧
         (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < SL.hi) → ¬ (A.lo ≤ a ∧ a < A.hi) →
           mB[a]? = m0[a]?) ∧
+        BodyGhostTie g g' ∧
+        (∀ spv : BitVec 64, g Register.x2 = some spv →
+          CallerSpillSlots g spv mB m0) ∧
         SegExit g' N A SL φf' φc
           (closureBoundSt st store' cd vs frame).store.frames.size
           (closureBoundSt st store' cd vs frame).store.closures.size
@@ -364,13 +408,13 @@ theorem callClosureSim
       ?_ ?_
     · -- body hop: run the IH at the handoff triple, carry its facts across.
       intro c hc
-      obtain ⟨g', φf', mB, hpe, hfr, hSeg⟩ := hc
+      obtain ⟨g', φf', mB, hpe, hfr, htie, hslots, hSeg⟩ := hc
       obtain ⟨c', hsteps, hExit⟩ := hBodyIH g' φf' mB c hSeg
-      exact ⟨c', hsteps, g', φf', mB, hpe, hfr, hExit⟩
-    · -- return hop: `ret` at the carried handoff triple.
+      exact ⟨c', hsteps, g', φf', mB, hpe, hfr, htie, hslots, hExit⟩
+    · -- return hop: `ret` at the carried handoff facts.
       intro c hc
-      obtain ⟨g', φf', mB, hpe, hfr, hExit⟩ := hc
-      exact hGeom.ret hne g' φf' mB hpe hfr c hExit
+      obtain ⟨g', φf', mB, hpe, hfr, htie, hslots, hExit⟩ := hc
+      exact hGeom.ret hne g' φf' mB hpe hfr htie hslots c hExit
 
 /-! ## §4. The params-fold discharged through `storeChainList`
 

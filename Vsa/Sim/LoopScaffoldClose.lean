@@ -55,7 +55,10 @@ theorem segIdentity
       store := ⟨φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, hc.store⟩
       out := hc.out
       frame := hc.frame
-      memFrame := fun a _ _ => by rw [hc.mem] }
+      memFrame := fun a _ _ => by rw [hc.mem]
+      -- zero-step identity: memory IS `m0`, so the stack window survives at any
+      -- tabled exit PC (wave-38 clause).
+      stackWin := fun _ _ _ _ a _ _ _ => by rw [hc.mem] }
 
 /-- Identity row with an explicit proof that the two PC parameters coincide. -/
 theorem segIdentity_of_eq

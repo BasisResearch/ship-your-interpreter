@@ -242,14 +242,14 @@ theorem callClosureEntrySplice
       PhiExtends φf φf' st.store.frames.size → Triple
         (callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0
           (cd.params.zip vs).length)
-        (BodyHandoff N A SL φf φc st store' cd vs frame d dLeft aLeft m0))
+        (BodyHandoff g N A SL φf φc st store' cd vs frame d dLeft aLeft m0))
     (hNoParams : (cd.params.zip vs).length = 0 → Triple
       (env_new_post A SL gpv headroom maxReq M gE par (0x800032c0#64) sp s0E
         extsE N φf φc (some cd.env) mEnvNew)
-      (BodyHandoff N A SL φf φc st store' cd vs frame d dLeft aLeft m0)) :
+      (BodyHandoff g N A SL φf φc st store' cd vs frame d dLeft aLeft m0)) :
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
-      (BodyHandoff N A SL φf φc st store' cd vs frame d dLeft aLeft m0) := by
+      (BodyHandoff g N A SL φf φc st store' cd vs frame d dLeft aLeft m0) := by
   -- one SpliceChain: staging hop ≫ the REAL env_new contract ≫ the tail.
   refine spliceFold (.step hDispatchStage
     (env_new_spec A SL gpv headroom maxReq M gE par (0x800032c0#64) sp s0E
@@ -291,6 +291,9 @@ def CallRetShape
     PhiExtends φf φf' st.store.frames.size →
     (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < SL.hi) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       mB[a]? = m0[a]?) →
+    BodyGhostTie g g' →
+    (∀ spv : BitVec 64, g Register.x2 = some spv →
+      CallerSpillSlots g spv mB m0) →
     Triple
       (SegExit g' N A SL φf' φc
         (closureBoundSt st store' cd vs frame).store.frames.size
@@ -301,10 +304,14 @@ def CallRetShape
 
 /-- **The status split.**  `hNormal` = the `.normal` route (`--call_depth` ≫
 the `0x80003954` null-copy path ≫ join); `hRetV` = the `.ret v` route
-(classification ≫ `callClosureRetCopyRow` ≫ join marshalling).  Note the
-residual-strength gap documented on `CallClosureGeom.ret` (ledger
-`body-ih-no-caller-frame-slots`): both routes' dischargers need the caller's
-spill slots to survive the body, which the motive family does not yet supply. -/
+(classification ≫ `callClosureRetCopyRow` ≫ join marshalling).  The
+wave-37 residual-strength gap (`body-ih-no-caller-frame-slots`) is now SUPPLIED:
+the body IH's `SegExit.stackWin` at the tabled `callBodyRetPC` (`k = 168`, see
+`callerSlotsSurviveBody` below) preserves `[sp+168, SL.hi)` across the body, and
+`CallRetShape`'s `BodyGhostTie`/`CallerSpillSlots` hypotheses carry the slot
+contents + register ties around the IH.  The remaining ret-route residuals are
+the status→`a0` ABI gap (`seqfor-motive-rows` class) and the `s7@1016` g-image
+(`segentry-no-caller-spill-image`, entry-side). -/
 theorem callClosureRet_of_status
     {g : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
@@ -322,6 +329,31 @@ theorem callClosureRet_of_status
 
 #print axioms callClosureRet_of_status
 
+/-- **The caller slots survive the body** — the wave-38 `stackWin` clause
+FIRING at its tabled exit PC.  From the body IH's `SegExit` at
+`callBodyRetPC = 0x80003378` (table entry `k = 168`), the sp anchor
+`g' x2 = some spv`, and the two geometry side conditions (the spill window
+`[spv+1016, spv+1056)` lies inside the stack region and outside the arena —
+`StackOK`-level facts the arm carries), every byte of the restore window
+survives to the handoff memory `mB`.  Composed with `CallerSpillSlots` this
+hands the ret-route discharger the exact bytes its `ld s3/s5/s7` reload. -/
+theorem callerSlotsSurviveBody
+    {g' : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf' φc : Addr → Nat}
+    {nf nc : Nat} {st' : SpecSt} {mB : Mem} {c : Config} {spv : BitVec 64}
+    (hexit : SegExit g' N A SL φf' φc nf nc st' callBodyRetPC mB c)
+    (hspv : g' Register.x2 = some spv)
+    (hhi : spv.toNat + 1056 ≤ SL.hi)
+    (hArena : ∀ a : Nat, spv.toNat + 1016 ≤ a → a < spv.toNat + 1056 →
+      ¬ (A.lo ≤ a ∧ a < A.hi)) :
+    ∀ a : Nat, spv.toNat + 1016 ≤ a → a < spv.toNat + 1056 →
+      c.σ.mem[a]? = mB[a]? := by
+  intro a hlo hhi'
+  exact hexit.stackWin 168 (by decide) spv hspv a (by omega) (by omega)
+    (hArena a hlo hhi')
+
+#print axioms callerSlotsSurviveBody
+
 /-! ## §5. Assembly into the residual slot -/
 
 /-- **Assemble `CallClosureGeom`** from the three route providers (the amended
@@ -336,7 +368,7 @@ theorem callClosureGeom_of
     {dLeft aLeft : Nat} {m0 : Mem}
     (hEntry : cd.body ≠ [] → Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
-      (BodyHandoff N A SL φf φc st store' cd vs frame d dLeft aLeft m0))
+      (BodyHandoff g N A SL φf φc st store' cd vs frame d dLeft aLeft m0))
     (hRet : cd.body ≠ [] →
       CallRetShape g N A SL φf φc st st' store' cd vs frame m0)
     (hEmpty : cd.body = [] →

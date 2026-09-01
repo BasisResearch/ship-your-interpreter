@@ -1,0 +1,14 @@
+name = "call"
+namespace = "Vsa.Sim"
+armPC0 = 0x800031b0
+operand_off = 8
+buf_off = 96
+callee = "UnaryArmCallee"
+node_pat = ".call f args"
+node_binders = "(f : Expr) (args : List Expr)"
+node_argnames = "f args"
+child = "f"
+operand = "aClo"
+sfx = "cf"
+field = "callF"
+doc = "The call arm evaluates the CALLEE `f` first, before the arg loop."

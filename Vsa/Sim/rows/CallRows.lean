@@ -246,6 +246,8 @@ theorem eval_argsCons_row (hR : ∀ st d env, ArgsConsResid st d env) :
   intro g N A SL φf φc dLeft aLeft m0
   obtain ⟨hstep, hnil⟩ := hR st d env g N A SL dLeft aLeft m0
   exact Vsa.Sim.evalArgsCons g N A SL d env dLeft aLeft evalArgsLoopPC evalArgsContPC
+    -- `evalArgsContPC` is untabled in the stack-window discipline (wave 38).
+    (by decide)
     (fun φf φc st0 e es st' stFin v mm => hstep φf φc st0 e es st' stFin v mm)
     (fun φf φc st0 mm => hnil φf φc st0 mm)
     φf φc st st'' e es v vs m0 (EvalArgs.cons st d env e es st' st'' v vs hE hArgs)

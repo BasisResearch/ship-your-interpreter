@@ -558,7 +558,13 @@ import Vsa.Sim.MidArmFieldWire
 import Vsa.Sim.rows.FnArmClosureBuild
 import Vsa.Sim.rows.AllocClosureInhab
 import Vsa.Sim.rows.AllocBuildEntrySplice
+import Vsa.Sim.rows.FnArmSeams
 import Vsa.Sim.rows.CallClosureSplice
+import Vsa.Sim.rows.CallClosureEnvNewMarshal
+import Vsa.Sim.rows.CallClosureDispatchStage
+import Vsa.Sim.rows.CallClosureFoldStage
+import Vsa.Sim.rows.CallClosureEnvNewRet
+import Vsa.Sim.rows.CallClosureBodyEntry
 import Vsa.Sim.rows.BlockAUnaryArmGen
 import Vsa.Sim.rows.BlockALogicalArmGen
 import Vsa.Sim.CallSpec

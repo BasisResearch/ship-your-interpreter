@@ -866,6 +866,20 @@ THEOREMS=(
   Vsa.Sim.callClosureRet_of_status                  # rows/CallClosureSplice (the a_6 status classification split)
   Vsa.Sim.callClosureGeom_of                        # rows/CallClosureSplice (3-field assembly into the amended residual slot)
   Vsa.Sim.callClosureEnvNewSeamFrame                # rows/CallClosureSplice (rzSeamFrame_of_run firing on the real env_new spill log — AInv + Env_newLoaded one-shot)
+  Vsa.Sim.prune_of_exit                             # rows/FnArmSeams (reusable: the malloc NULL/success disjunction collapsed via nonNull_of_bounded, memOut exposed)
+  Vsa.Sim.allocBuildEntry_tail                      # rows/FnArmSeams (all ~30 AllocBuildEntry fields off ExitPost; foot/memOut transport used as designed)
+  Vsa.Sim.staging_of_link                           # rows/FnArmSeams (malloc EntryP off the arm front; AllocBuildStagingLink = the irreducible named front bundle)
+  Vsa.Sim.fnArmSeamRun_of_seams                     # rows/FnArmSeams (capstone: the whole FnArmSeamRun pipeline closes from the two bundles)
+  Vsa.Sim.callerSlotsSurviveBody                    # rows/CallClosureSplice (the stackWin motive clause FIRING at callBodyRetPC — caller restore slots survive the body IH)
+  Vsa.Sim.storeRepr_allocFrame                      # rows/CallClosureEnvNewMarshal (the frame sibling of storeRepr_pushClosure)
+  Vsa.Sim.allocFrame_inv                            # rows/CallClosureEnvNewMarshal
+  Vsa.Sim.pushFrameMap_extends                      # rows/CallClosureEnvNewMarshal
+  Vsa.Sim.callClosureDispatchStageBridge            # rows/CallClosureDispatchStage (the frame-tracking head span, bridgeOfSegFramed @ AbiExceptS7S5)
+  Vsa.Sim.callClosureFoldStageBridge                # rows/CallClosureFoldStage (ONE framed bridge serving every param index k, @ AbiExceptS0)
+  Vsa.Sim.callClosureEnvNewRetBypassRow             # rows/CallClosureEnvNewRet (blez zero-param bypass)
+  Vsa.Sim.callClosureEnvNewRetFoldRow               # rows/CallClosureEnvNewRet
+  Vsa.Sim.callClosureBodyEntryRow                   # rows/CallClosureBodyEntry (bgtz → callBodyLoopPC)
+  Vsa.Sim.callClosureBodyBypassRow                  # rows/CallClosureBodyEntry (empty-body j bypass)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean

@@ -321,7 +321,10 @@ theorem evalArgsNil
       store := ⟨φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, hc.store⟩
       out := hc.out
       frame := hc.frame
-      memFrame := fun a _ _ => by rw [hc.mem] }
+      memFrame := fun a _ _ => by rw [hc.mem]
+      -- zero-step identity: the memory IS the entry `m0`, so the stack window
+      -- survives trivially at ANY tabled exit PC.
+      stackWin := fun _ _ _ _ a _ _ _ => by rw [hc.mem] }
 
 /-! ## Per-constructor difficulty / plan for the `call` subsystem
 

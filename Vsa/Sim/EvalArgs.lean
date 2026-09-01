@@ -155,6 +155,11 @@ theorem segExit_extend
     (hle : nf ≤ nf' ∧ nc ≤ nc')
     (hmid : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < SL.hi) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       mNow[a]? = m0[a]?)
+    -- the exit PC is UNTABLED in the stack-window discipline (wave 38): the
+    -- rebase's `hmid` frames only outside the stack, so a tabled window could
+    -- not be re-based through it; every current caller exits at an untabled
+    -- continuation PC (`evalArgsContPC`), discharged by `decide`.
+    (hwin : stackScratchTop exitPC = none)
     (hexit : SegExit g N A SL φf' φc' nf' nc' st' exitPC mNow c) :
     SegExit g N A SL φf φc nf nc st' exitPC m0 c := by
   obtain ⟨φf'', φc'', hpf'', hpc'', hstore⟩ := hexit.store
@@ -166,7 +171,8 @@ theorem segExit_extend
         hpc.trans (PhiExtends.mono hle.2 hpc''), hstore⟩
       out := hexit.out
       frame := hexit.frame
-      memFrame := fun a ha1 ha2 => (hexit.memFrame a ha1 ha2).trans (hmid a ha1 ha2) }
+      memFrame := fun a ha1 ha2 => (hexit.memFrame a ha1 ha2).trans (hmid a ha1 ha2)
+      stackWin := fun _k hk => absurd (hk.symm.trans hwin) (Option.some_ne_none _k) }
 
 /-! ## `evalArgsLoop` — the argument-evaluation loop rule (the reusable heart)
 
@@ -188,6 +194,9 @@ theorem evalArgsLoop
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (d : Nat) (env : Addr) (dLeft aLeft : Nat) (p q : Nat)
+    -- the continuation PC is untabled in the stack-window discipline (wave 38;
+    -- see `segExit_extend.hwin`): concrete callers discharge by `decide`.
+    (hqWin : stackScratchTop q = none)
     -- The per-suffix packaging of one loop iteration; parametric in the suffix
     -- and the intermediate maps/state, so a single hypothesis covers every
     -- iteration. This is the residual (the machine loop-body glue + the
@@ -252,7 +261,7 @@ theorem evalArgsLoop
         st.store.frames.size st.store.closures.size
         stMid.store.frames.size stMid.store.closures.size
         st' q m0 c₁.σ.mem c₂
-        (PhiExtends.mono hleFin.1 hpf) (PhiExtends.mono hleFin.2 hpc) hleMid hmid hexit
+        (PhiExtends.mono hleFin.1 hpf) (PhiExtends.mono hleFin.2 hpc) hleMid hmid hqWin hexit
 
 /-! ## `evalArgsCons` — the `EvalArgs.cons` minor premise (via the loop rule)
 
@@ -267,6 +276,7 @@ theorem evalArgsCons
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (d : Nat) (env : Addr) (dLeft aLeft : Nat) (p q : Nat)
+    (hqWin : stackScratchTop q = none)
     (hstep : ∀ (φf φc : Addr → Nat) (st : SpecSt) (e : Expr) (es : List Expr)
         (st' stFin : SpecSt) (v : Value) (m0 : Mem),
         EvalArgsStep g N A SL φf φc st d env e es dLeft aLeft p m0 st' stFin v)
@@ -280,7 +290,7 @@ theorem evalArgsCons
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
       (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' q m0) :=
-  evalArgsLoop g N A SL d env dLeft aLeft p q hstep hnil
+  evalArgsLoop g N A SL d env dLeft aLeft p q hqWin hstep hnil
     (e :: es) φf φc st st' (v :: vs) m0 hArgs
 
 end Vsa.Sim

@@ -175,6 +175,25 @@ structure SegEntry
   predicate bounds this subtree's allocations by `aLeft` (`MallocContract`). -/
   arena_budget : A.lo + aLeft ≤ A.hi
 
+/-- **The stack-window discipline table** (wave 38, ledger
+`body-ih-no-caller-frame-slots`): maps a segment EXIT PC to the segment's
+stack-scratch bound `k`.  A span landing at a tabled `q` scribbles the stack
+only STRICTLY BELOW `(entry sp) + k` — its own inline scratch slots plus every
+callee frame (all below sp) — so stack bytes at/above `sp + k` survive the span
+(`SegExit.stackWin`).  Untabled exit PCs keep the clause vacuous (exactly the
+pre-amendment `SegExit`).  The bound is keyed per segment because it is genuine
+per-site geometry: the closure-body `ExecSeq` loop (`→ 0x80003378`) writes
+`0(sp)` (a6 spill, `0x80003370`) and the result buffer `144..167(sp)` (the
+`addi a3,sp,144` pointer at `0x8000335c`, written by the `exec_stmt` subtree),
+so its bound is `168`; the eval-frame arm spans (`→ callJoinPC`) scribble up to
+`sp+1088` and stay untabled; one global or per-motive constant is impossible
+(analysis: `experiments/logs/wave38-cruxresid.md`).  The sp anchor is the ghost
+frame — `AbiPreservedNoise x2` holds, so `SegEntry.frame`/`SegExit.frame` pin
+the machine sp to `g x2` at both ends; no new parameter anywhere. -/
+def stackScratchTop : Nat → Option Nat
+  | 0x80003378 => some 168  -- callBodyRetPC: the closure-body ExecSeq loop
+  | _ => none
+
 /-- Skeleton machine postcondition shared by the non-`EvalE` relations. `exitPC`
 is the segment's return/continuation PC (placeholder `0`); `st'` the spec
 post-state, re-represented with EXTENDED correspondence maps (φ-extension order
@@ -208,6 +227,20 @@ structure SegExit
   carve-out which is EvalE-specific). -/
   memFrame : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < SL.hi) → ¬ (A.lo ≤ a ∧ a < A.hi) →
     c.σ.mem[a]? = m0[a]?
+  /-- **The stack-window clause** (wave 38, ledger
+  `body-ih-no-caller-frame-slots`): caller-window survival.  For a TABLED exit
+  PC (`stackScratchTop exitPC = some k`), stack bytes at/above `sp + k` — the
+  caller's window above the segment's scratch — survive to the segment's entry
+  memory `m0`; `sp` is the segment's ABI stack pointer, tied to the ghost frame
+  (`frame` + `AbiPreservedNoise x2`, pinned at entry and exit alike).  Stated
+  the way `memFrame` states its frame (implication-guarded), scoped to the
+  stack region (`a < SL.hi`) and outside the arena.  Vacuous when
+  `stackScratchTop exitPC = none` — every pre-amendment producer is unaffected
+  at untabled exit PCs. -/
+  stackWin : ∀ k : Nat, stackScratchTop exitPC = some k →
+    ∀ spv : BitVec 64, g Register.x2 = some spv →
+    ∀ a : Nat, spv.toNat + k ≤ a → a < SL.hi → ¬ (A.lo ≤ a ∧ a < A.hi) →
+      c.σ.mem[a]? = m0[a]?
 
 /-! ## The REAL motive family (§4)
 

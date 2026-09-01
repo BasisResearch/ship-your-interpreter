@@ -2593,3 +2593,84 @@ it, still stop and report instead.
   caller's frame) — the standard stack-discipline invariant; thread it once
   through TermSimAssembly's motives (the same amendment lane that fixed the
   scaffold p/q motives).
+
+## 2026-09-01 exec-eval-stagepre-frameshift-and-nonuniform (wave38 exec-class verdict)
+- missing: the 6 exec-eval EvalChildStages fields (stmtExpr/stmtRet/stmtVarInit/
+  stmtIfCond/stmtWhileCond/flCond) produce `JalPreBundle child` but from
+  `SEntryC`/`FEntryC` at exec_stmt/for_loop arm PCs. Two hard obstructions, both
+  machine-confirmed from disasm this wave:
+  (1) FRAME SHIFT: exec_stmt lowers sp by only 176 (`addi sp,sp,-176` @0x80003fe0),
+      NOT 1088. `JalPreBundle` HARDWIRES `x2 = sp - 1088#64` + spill slots at
+      sp-8..sp-32 + `subsret ∈ [sp-1088, sp-32]`. Satisfiable only by instantiating
+      JalPreBundle's ghost `sp := (exec x2) + 1088` and then PROVING exec_stmt's own
+      176-byte spill layout (ra@168 s0@160 s1@152 s2@144 s3@136) maps into the
+      JalPreBundle spill-window fields `read64 mcall (sp-8/-16/-24/-32)`. That
+      reconciliation is genuinely per-frame Lean, NOT a clone of the eval battery
+      (blockB_assign_stagePre uses eval_expr's OWN sp-1088).
+  (2) NON-UNIFORM HEADS: the exec-eval arm heads are NOT one shape. Surveyed:
+      stmtExpr 0x80004170 `ld a2,8(s0);addi a0,sp,16;mv a3,s3;mv a1,s1;jal` (4-instr);
+      0x8000403c `ld;mv a3,s3;addi a0,sp,80;mv a1,s1;jal` (mv/addi SWAPPED);
+      0x800040d8 `ld a2,16(s0);beqz a2,…;mv a1,s1;mv a3,s3;addi a0,sp,104;jal` (has a
+      NULL-CHECK BRANCH mid-head + 16-offset ld);
+      0x80004120 similar with beqz; 0x800041e8 `ld;mv;mv;addi` (addi LAST);
+      0x800042dc `mv a3,s3;mv a1,s1;addi a0,sp,16;jal` (NO ld — a2 preset);
+      0x800044b4 (interp_run) s1-based entirely different. So even a generator
+      would need a per-arm instruction-order + optional-branch + optional-ld schema.
+- workaround: NONE (deferred; only the eval-side 3-step class was in scope + closed
+  by gen_stagepre.py this wave).
+- cost: each of the 6 is a distinct 4-5-instr `_es` site battery (mv reflection via
+  addi rd,rs,0 + sign_extend 0) + the frame-shift reconciliation + (for 2 of them) a
+  beqz null-branch peel. ~450-500 lines each, ~5 truly-distinct sub-shapes.
+- proposal: a SECOND generator `gen_exec_stagepre.py` over a RICHER schema
+  {armPC0, head = ordered list of {ld off | addi buf | mv rd rs} + optional leading
+  beqz, jalPC, callee, node} feeding a shared `execFrameShift` lemma
+  (`JalPreBundle` at `sp := x2+1088` from an exec_stmt-layout spill map). The
+  frame-shift lemma is the reusable core; build it ONCE (hand, over stmtExpr), then
+  the generator fans the head-order variants. Precondition: the frame-shift lemma
+  must be proved feasible first (it is the real risk, not the mv sites).
+
+## 2026-09-01 segentry-no-caller-spill-image (wave38 call crux, motive-family gap — the DUAL of body-ih-no-caller-frame-slots)
+- missing: an ENTRY-side clause pinning pre-spilled caller-saved images in `m0`.
+  The closure `ret` routes restore `s7` from `1016(sp)` (`ld s7,1016(sp)` at
+  `0x800033b0` / `0x80003970`), but that slot was written at `0x800031cc` — the
+  ARG-LOOP entry, BEFORE `callDispatchPC` — so its content (`= g x23`, the arm
+  ghost's s7) is a fact about the ∀-quantified `m0`, underivable inside the
+  `mCall` row: `SegEntry` links nothing between `m0` and `g`, yet
+  `SegExit@callJoinPC.frame` demands `regs x23 = g x23` after the machine
+  restores from `m0[sp+1016..]`.  For an (m0, g)-inconsistent instantiation the
+  route lands the wrong s7 ⇒ the `ret` residual (and hence the closure `mCall`
+  discharge) is unsatisfiable at full strength.  (`s5@1032`/`s3@1048` are FINE:
+  spilled INSIDE the span, carried through `BodyHandoff`; only pre-span spills
+  have this gap.)
+- workaround: the wave-38 `ret`-route shape carries a NAMED premise
+  `hS7Image : read64 m0 (sp+1016) = g x23`-shaped (doc'd at the field); no
+  second global surgery attempted this wave (the sanctioned amendment was the
+  exit-side stack-window clause).
+- cost: the closure `ret` discharger stays conditional on one per-arm image
+  premise; every arm whose restore slot predates its motive span will pay it.
+- proposal: the ENTRY-side sibling of `stackScratchTop`: a table
+  `entrySpillImage : Nat → List (Nat × Register)` (entry PC ↦ (sp-offset, ABI
+  reg) pairs) + a `SegEntry` named field `spillImage` pinning
+  `read64 m0 (sp+off) = (g R).toNat` for each tabled pair — vacuous (empty
+  list) at untabled entry PCs, exactly the wave-38 pattern; producers of
+  `SegEntry` at `callDispatchPC` (the arm-level `CallArmSpec` splice, which
+  KNOWS the `0x800031cc` spill) supply it.
+
+## 2026-09-01 genseg-jal-rows-zero-pin-loads (wave38 span (a) prep)
+- missing: `scripts/genseg.py`'s `bridgeOfSeg`-shaped (jal) rows hardcode
+  `lds = []` in BOTH the `ChainFacts` hypothesis and the `evalBlocks` normal
+  form.  `MemFacts`' load pins are `bs.getD i 0#8` (BlockMem), so an empty lds
+  entry pins the loaded bytes to ZERO — a loads-containing jal row (e.g. the
+  committed `callClosureEnvNewCallBridge`, `ld a0,8(a3)` = cd->env ≠ 0) is
+  UNDISCHARGEABLE as stated: its consumer must prove the pointer bytes are 0.
+  The `segToTriple`-shaped rows are fine (lds is a real parameter there).
+- workaround: the wave-38 hand span (`rows/CallClosureDispatchStage.lean`)
+  threads `lds` parametrically through `bridgeOfSegFramed` (which already takes
+  it); the Gen bridge rows with loads are left as-is (their jal seams are still
+  named residuals, so nothing landed consumes the zero-pins yet).
+- cost: every generated jal row whose body loads memory must be re-emitted
+  with a parametric lds before its seam can be discharged; silent
+  wall-at-discharge-time otherwise.
+- proposal: genseg.py: emit `(lds : List (List (BitVec 8)))` as a binder on
+  jal rows exactly as on segToTriple rows (the emitter already does it for the
+  latter — one code path to unify).
