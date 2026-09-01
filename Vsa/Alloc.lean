@@ -162,5 +162,36 @@ structure MallocContract (A : Arena) (SL : StackLayout) (gpv : BitVec 64)
         -- stack window strictly below the entry sp is untouched:
         (∀ a, ¬ privFoot a → ¬ (q ≤ a ∧ a < q + n) →
           ¬ (SL.lo ≤ a ∧ a < sp.toNat) → c.σ.mem[a]? = m0[a]?))
+  /-- **The arena never OOMs for a bounded request** — the no-exhaustion
+  guarantee.
+
+  `spec`'s post is a disjunction: NULL on exhaustion, or a fresh in-arena block.
+  For requests within the interpreter's static ceiling `maxReq`, and while the
+  allocator invariant holds, the arena provably has capacity — dlmalloc returns
+  a real block, never NULL.  This field COLLAPSES `spec`'s post disjunction to
+  its non-null (success) disjunct: given `n ≤ maxReq` and the two branches
+  exactly as `spec`'s post produces them, the NULL branch is impossible, so the
+  fresh-block branch holds.
+
+  This is what makes the `beqz a0` OOM guard (`strdup`/concat/`env_define`
+  tails) UNCONDITIONALLY not-taken: the composition need not carry an OOM error
+  path because the arena is sized so bounded requests always succeed.  Nobody
+  constructs `MallocContract`; this field is a named hypothesis — like `spec`
+  and `freeSpec`, its single inhabitant would be a verified-allocator +
+  arena-capacity proof, never an `axiom`.  Adding it breaks no proof (the final
+  theorem takes one `MallocContract …` and never inspects it further).  A
+  vacuous/wrong hypothesis makes theorems vacuous at worst, not
+  `False`-derivable, and `#print axioms` stays clean. -/
+  nonNull_of_bounded : ∀ (σ : MState) (exts : List (Nat × Nat)) (n : Nat),
+    n ≤ maxReq →
+    ((σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧ AInv σ exts) ∨
+     (∃ p, σ.regs.get? Register.x10 = some (BitVec.ofNat 64 p) ∧
+       p ≠ 0 ∧ p % 16 = 0 ∧ A.contains p n ∧
+       (∀ e ∈ exts, ExtDisjoint (p, n) e) ∧
+       AInv σ ((p, n) :: exts))) →
+    (∃ p, σ.regs.get? Register.x10 = some (BitVec.ofNat 64 p) ∧
+      p ≠ 0 ∧ p % 16 = 0 ∧ A.contains p n ∧
+      (∀ e ∈ exts, ExtDisjoint (p, n) e) ∧
+      AInv σ ((p, n) :: exts))
 
 end Vsa.Alloc

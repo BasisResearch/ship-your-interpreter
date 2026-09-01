@@ -2056,3 +2056,210 @@ it, still stop and report instead.
 - proposal: a `binArmStrResid_of_cblock` combinator (STR-arm analogue of the
   add/sub blockC rows) that lifts a concatHeapCore Triple to `StrConcatCBlockResid`
   via blockA_binaryArm/blockD_v_rec, once concatHeapCore is a Triple.
+
+## 2026-08-31 seqhead-loopheaddispatch-depth-phantom (Task #81 item 5)
+- missing: a `SeqHeadStagePre`-producer wrapping `loopHeadDispatch_span`. The span
+  concludes `ExecEntry g N A SL φf φc st 0 env s ...` (depth HARDCODED to 0), while
+  `ArmSegSplitSqEntry.SeqHeadStagePre` needs `ExecEntry ... st d env s` for arbitrary
+  `d`. VERDICT (machine-checkable): `ExecEntry`'s field bodies (InductionScaffold /
+  ExecEntry.lean:207-280) reference `d` ONLY through `st`/`env`/`s` — NO machine-state
+  field mentions `d`; the depth is a PHANTOM parameter on the machine side. So the
+  span at `0` re-types to any `d` for free (the `ExecEntry` term is definitionally
+  independent of `d`). The real gap is that `SegEntry` (SqEntryC's payload) does NOT
+  project the `x2=sp` / `x8=s0` register pins that `loopHeadDispatch_span` demands as
+  `hspH`/`hs0H`; those + the span's `hGeom`/`hValueNullSplice`/`hArgSetup` splices are
+  the honest carried residual.
+- workaround: landed `seqHeadStagePre_of_span` (SeqHeadStages.lean) — packages the
+  loop-head sp/s0 pins + the span premises into a `SeqHeadStagePre`, collapsing the
+  seqHead field to `loopHeadDispatch_span`'s already-built inputs. NOT closing the
+  span premises themselves (geom/value_null/arg-setup — the standing DriveToLoopHead
+  residual).
+- cost: seqHead now = loopHeadDispatch_span inputs (no NEW machine content); the span's
+  4 premise families remain (shared with driveToLoopHead, already the endgame residual).
+- proposal: extend SegEntry with the `sp`/`s0` loop-head register pins (or a
+  `SegEntry.loopHeadRegs` projection) so SqEntryC directly feeds loopHeadDispatch_span.
+
+## 2026-08-31 strdup-memcpy-s0-reseat-frameghost (Task #82 Part 1)
+- missing: `stringifyStrdupTailContract`'s `bridgeMemcpyPre` target (and the
+  `bridgeEpilogue` source + the `envDefMemcpyFramedSplice`/`envDefMemcpyFramed`
+  threading) uses ONE frame ghost `gm` for BOTH the malloc-staging entry (`rM`,
+  pre-`mv s0,a0`) and the memcpy entry (post-`mv s0,a0`). But the memcpy-staging span
+  RESEATS s0/x8 to the malloc result (`mv s0,a0` @0x80003060 — deliberate: s0 carries
+  `new` across memcpy for the epilogue's `mv a0,s0`). `EnvDefFrame.hAbi` pins
+  `∀ R AbiPreserved → get? R = gm R` and `AbiPreserved x8 = true`, so the pre pins
+  `s0 = gm x8` (old) and the target pins `s0 = gm x8` (= new). No single gm satisfies
+  both ⇒ `StrdupTailMemcpyBridge` (the exact Triple the contract demands) is
+  UNCLOSABLE as stated. Machine-checked: `strdupMemcpy_frame_obstruction`
+  (StrdupTailContractClose.lean §2b) isolates `sOld = dst` from the two same-gm frame
+  pins over the reseated s0.
+- workaround: NONE for the bridge (statement is READ-ONLY; Law 4 → reported not
+  worked-around). The TWO documented gaps ARE discharged as standalone witnesses:
+  `strdupMemcpy_prune_null` (gap 2, via new `M.nonNull_of_bounded`) and
+  `strdupMemcpyArg_a2_reload` (gap 1, via the now-lds-generic `strdupTail_memcpy_run`
+  at singleton `[sizeBytes]` + a `bytesVal MKind.ld sizeBytes = ofNat nMemcpy`
+  readback) — both green + axiom-clean.
+- ALSO: the §2 doc UNDER-COUNTED the bridge's suppliers — beyond the a2-reload +
+  no-OOM it also needs `MemcpyLoaded`/`Regions`/`MemInv`/`0<nMemcpy`/`dst=ofNat p`
+  (the memcpy CALL's own precondition over the fresh block + copy-source `mMalloc`).
+  Those are genuine additional residuals, orthogonal to the frame-ghost bug.
+- cost: `stringifyStrdupTailContract_closed` still takes `hMemcpyBridge` as a
+  hypothesis; the whole strdup tail (and thus every non-str `stringify` branch's
+  fresh-copy) stays gated on the unclosable bridge until the contract is amended.
+  Any spill-then-callee-with-callee-saved-reseat splice pays the same (env_define's
+  own memcpy bridge is safe ONLY because it does not reseat a callee-saved before the
+  call).
+- proposal: AMEND `stringifyStrdupTailContract` to thread `gm[x8 := dst]` (the
+  reseated ghost) in the memcpy target / epilogue source / the framed-memcpy splice,
+  OR state the memcpy target's `EnvDefFrame` over `AbiExceptS0` (the frame the run
+  actually preserves) + a separate `s0 = dst` pin. Then `strdupTailMemcpyBridge_of`
+  (drafted here, blocked on this) closes from the two witnesses + the memcpy-content
+  bundle.
+
+## 2026-09-01 concat-blockC-stringify-dispatch-missing (Task #82b step 2)
+- missing: a `blockC_concat`-analogue combinator lifting the concat C-block to
+  `StrConcatCBlockResid`. `blockA_binaryArm` (BinArmBridge) lands
+  `EvalEntry (.binary op) → blockB_binary`'s entry, and `blockB_binary` produces
+  `TwoSubReturn @0x8000351c` for the ARITH/comparison path (operator token read at
+  0x8000351c → int add/sub/cmp tail). But the STR/concat arm does NOT reuse
+  blockB_binary's two `eval_expr` sub-calls the same way: the concat C-block
+  (0x80003a20) is reached through the operator-dispatch → STRINGIFY-arm span, and
+  its two sub-calls are `stringify` (0x80002fc0), NOT the two operand `eval_expr`
+  calls blockB_binary threads. So the `blockA_binaryArm ≫ blockB_binary ≫
+  concatHeapCore ≫ blockD_v_rec` pipeline named in the plan is NOT type-correct as
+  stated — the middle needs a bespoke `blockC_concat` span (operator-token dispatch
+  → the two-stringify entry → concatHeapCore's P) that has never been built. That
+  span is ~200+ lines of straight-line + jal-split machine content (the forbidden
+  site-battery shape).
+- workaround: NONE for step 2 (stopped per Law 3b). Step 1 IS landed: `ConcatSeams.lean`
+  (green + axiom-clean) discharges the 3 MallocContract callee slots (malloc=M.spec,
+  free1/free2=M.freeSpec), the no-OOM prune (M.nonNull_of_bounded → concatOOM_prune),
+  and the value_str readback seam (concatReadback → concatValueStrSeam_readback), and
+  packages the rest as `concatCBlockTriple_of` (concatHeapCore with those slots
+  pre-plugged; the 4 call-threaded callees + 7 marshalling seams remain arguments).
+- cost: `StrConcatCBlockResid` stays the one bespoke residual until the
+  `blockC_concat` span + the two-stringify jal-split sub-EvalIH marshalling is built;
+  the concat C-block Triple (`concatCBlockTriple_of`) is ready to be its C-block core
+  the moment that entry/exit marshalling exists.
+- proposal: a `blockC_concat` combinator (the STR-arm analogue of blockC_add) landing
+  `operator-dispatch-at-str-token → concatHeapCore.P`, plus a `binArmStrResid_of_cblock`
+  that composes `blockA_binaryArm ≫ blockC_concat ≫ concatCBlockTriple_of ≫ blockD_v_rec`
+  — mirroring evalAddSim's blockB≫blockC≫blockD but with the stringify sub-calls
+  (jal-split layer / evalEntry_of_jalPrefix) in place of the eval_expr operand calls.
+
+## 2026-09-01 evalchild-field-combinator (Task #81 item 1)
+- signal (Law 3): THREE eval-child arm-head cuts had landed as ~200-line hand
+  batteries (`blockB_unary_stagePre` 2 steps, `blockB_binary_leftStagePre` 4 steps,
+  `blockB_logical_stagePre` 3 steps), all stated over the `ArmEntryK`-∃ ENTRY bundle
+  (their `hpre`), NOT the `EvalChildStages`-field entry `EEntryC`. The gap to each
+  field is the SAME two-factor composition: `EEntryC node ─unpack→ EvalEntry
+  ─blockA(Triple)→ (stagePre entry bundle) ─stagePre(LandedN k)→ JalPreBundle child`.
+  Building that seam per-field is the forbidden 3rd+ clone.
+- FACTORED: `evalChildField_of_blockA_stage` (Vsa/Sim/EvalChildFieldCombinator.lean,
+  green + axiom-clean) — the ONE parametric composer: `Triple P Mid` (dispatch bridge)
+  + `∀c Mid c → LandedN k (JalPreBundle child)` (arm-head cut, 1≤k) ⇒ `LandedN 1
+  (JalPreBundle child)`. Prefix `Steps` lifted via `Steps.toN`, counts added via
+  `StepsN.trans_add`, total ≥ k ≥ 1. Kills the hand composition out of all ~14
+  eval-child fields; each field is now one `evalChildField_of_blockA_stage` call.
+- INSTANTIATED: `binaryL_field_of_extras` — FIRST fully-machine-composed eval-child
+  field. `blockA_binaryArm`'s POST is bit-for-bit `blockB_binary_leftStagePre`'s
+  `hpre`, so the two landed halves thread with ZERO impedance. Closes
+  `EvalChildStages.binaryL` MODULO one honest named premise `BinArmGeomProvider`
+  (= `blockA_binaryArm`'s `BinArmExtras`, over the rich entry's own ghosts + the two
+  run-time operand-node addresses aLOp/aROp under ∃).
+- STILL bespoke (the ACTUAL residual, not the seam): `unaryE`/`logicalL` cannot use
+  the combinator yet because there is NO packaged `blockA_unaryArm`/`blockA_logicalArm`
+  bridge (`EvalEntry (.unary/.logical) → the stagePre entry bundle`). Only the binary
+  arm has its `blockA_binaryArm` (rows/BinArmBridge.lean) built; unary/logical apply
+  `blockA_k` INLINE inside each evalXSim, and their stagePre `hpre` needs operand
+  geometry (`ExprRepr esub`, `hpay`, sub-buffer disjointness) NOT in `blockA_k`'s
+  post. So `unaryE`/`logicalL` fields wait on a `blockA_unaryArm`/`blockA_logicalArm`
+  (each ~ the `BinArmBridge.lean` build: `blockA_k` ≫ the operand-pointer read-back +
+  the `*Extras` packaging). Once built, both are one-line combinator instantiations.
+- proposal: build `blockA_unaryArm` / `blockA_logicalArm` as `BinArmBridge.lean`
+  clones (they ARE clones of each other — a fourth signal: parametrize the arm bridge
+  over {armPC, calleeLoaded, operand-count, the `*Extras` struct}). Then all of
+  unaryE/binaryL/logicalL/assignE/callF/stmtExpr/... close via one combinator call
+  each.
+
+## 2026-09-01 blockc-concat-landed (Wave-34 blockC_concat)
+- missing: (1) a `bridgeOfSeg` variant whose ABI-frame post tracks a SMALL SET of
+  intentionally-clobbered callee-saved regs.  The concat arm's SECOND stringify-arg
+  staging span `0x80003a44 → 0x80003a68` runs `mv s2,a0 ; mv s3,a0` (writes x18/x19 =
+  s2/s3, both `AbiPreserved`) to record the L-stringify result pointer — so
+  `WrChainAvoidAbi concatStringifyRArgSeg` is FALSE and the genseg-emitted
+  `bridgeOfSeg` row's `decide` fails (a `sorryAx` sneaks in).  The R staging genuinely
+  clobbers callee-saved regs by design; `bridgeOfSeg`'s frame no-op cannot model it.
+  (2) `ConcatDispatchResid` = the operator-dispatch + str-kind-branch span
+  `TwoSubReturn@0x8000356c → concat arm 0x80003a20`: the STR-kind twin of
+  `evalAddChain_run` (which hardcodes int×int, kind loads = 2, lands x10=2/x16=2, both
+  `beqz@0x8000388c/0x80003894` NOT taken → int-add fallthrough).  The str case needs
+  the SAME block-reflected dispatch chain with a kind load = 3, landing at 0x80003888
+  and taking the `beqz` to 0x80003a20.  Genuine new block-reflection content, not built.
+- workaround: LANDED `Vsa/Sim/rows/BlockCConcat.lean` (green + axiom-clean, discipline
+  OK) as PURE composition algebra over named `Config→Prop`-boundary Triples, matching
+  the `concatHeapCore` design: `concatStringifySpan` (2 stringify callees + 3 staging
+  seams), `blockC_concat` (= dispatch ≫ two-stringify span), `binArmStrResid_of_cblock`
+  (= blockA ≫ blockB ≫ blockC_concat ≫ concatCBlockTriple_of ≫ blockD_v_rec as a
+  `Triple.seq` tower), and `ConcatDispatchResid`/`blockC_concat_of_dispatchResid`.  The
+  two StringifyContracts thread from blockC_concat's stringify slots into the C-block's
+  EvalIH obligation.  LANDED `Vsa/Sim/rows/ConcatStringifyLArg.lean` (green + axiom-clean)
+  = the FIRST stringify-arg staging seg (0x80003a20, `concatStringifyLArgBridge` via
+  genseg's `bridgeOfSeg`; L span writes only caller-saved x10/x13/x14/x15 + memory, so
+  ABI-frame holds).  The R staging seg is NOT landed (ABI-clobber above).
+- cost: `binArmStrResid_of_cblock` closes the WHOLE-node lift modulo exactly THREE honest
+  named residuals: (a) `ConcatDispatchResid` (the dispatch+branch block-reflection twin),
+  (b) the R staging seg's non-ABI bridge (segR slot), (c) the two `StringifyContract`
+  discharges (str LANDED, int-tail assembled).  All composition is done.
+- proposal: (1) a `bridgeOfSegClobber` combinator = `bridgeOfSeg` whose post reads the
+  reflected write-log for the named clobbered regs (s2/s3 here) and only frames the
+  UNwritten ABI regs — one `decide` over `wrChain \ {clobbered}`.  Then the R staging
+  seg lands like the L one.  (2) parametrize `evalAddChain_run` over the operand kind tag
+  {2=int, 3=str} + the landing PC / taken-branch, yielding `ConcatDispatchResid` as the
+  kind=3 instance — the dispatch span is op-generic, only the kind literal + branch fate
+  differ.
+
+## 2026-09-01 arm-dispatch-bridge-parametrized (wave34 task #81 item 1-2)
+- missing: the arm-dispatch bridges `blockA_unaryArm`/`blockA_logicalArm` (the unary/
+  logical companions of `blockA_binaryArm`) did not exist — only the binary arm had a
+  packaged `EvalEntry → ArmEntryK`-∃ bridge, so `evalChildField_of_blockA_stage` could
+  not fire for unary/logical even though their `blockB_*_stagePre` cuts were landed.
+- workaround: NONE (built the real thing). LANDED `Vsa/Sim/rows/UnaryLogicalArmBridge.lean`
+  = `blockA_unaryArm` (tag 8, 0x800035e0, UnaryArmCallee) + `blockA_logicalArm` (tag 7,
+  0x8000355c, LogicalArmCallee), each = the block-A prefix of `evalNegSim`/`evalAndSim`
+  cut at the stagePre `hpre` instead of consuming the eval IH. Both axiom-clean first-run.
+  Then closed `unaryE`/`logicalL` EvalChildStages fields via `evalChildField_of_blockA_stage`
+  (EvalChildFieldCombinator §3/§4), each modulo its arm-geometry provider.
+- cost: 3-of-14 eval-child recursive-eval fields now machine-composed (was 1). No new
+  machine steps — pure bridge+seam composition of two landed halves each.
+- PARAMETRIZATION VERDICT (the "4th-clone signal"): the shared body (blockA_k run +
+  ArmEntryK-copy destructure + gpre call-point ghost + node-ExprRepr operand transport +
+  out0 realign) IS identical verbatim across all 3 arms. The three bridges differ ONLY in
+  {tag, armPC, calleeLoaded + its writeMap8-survival lemma, #operands transported, output
+  post shape}. Because the output post genuinely differs (each downstream stagePre demands
+  a different conjunct list), a single fully-parametric theorem would need the POST itself
+  as a parameter -> a trivial wrapper. The real factored seam is the FIELD-LEVEL composer
+  `evalChildField_of_blockA_stage` (already landed last wave) — the ONE point all three
+  plug into. VERDICT: 3 concrete arm bridges is the right shape; a `blockA_arm_core`
+  helper factoring the shared prologue+destructure would save ~40 lines/bridge but the
+  post-packaging refine is irreducibly per-arm. NOT pursued (diminishing return; 3 bridges
+  is the closed set for recursive-eval single-child arms — binaryR/logicalR are MID-arm,
+  a DIFFERENT SubEvalReturn-entry bridge, not a blockA_k instance).
+- BLOCKER (honest, not falsity): assignE/callF/argsHead/logicalR + all 6 exec-side
+  stmt*/flCond fields have NO landed `blockB_*_stagePre` arm-head cut — each needs a fresh
+  #derive_case seg at its arm PC/spill offsets (+ for exec, an ExecEntry→exec-ArmEntryK
+  dispatch bridge, unbuilt). That is per-arm machine work, out of scope for the
+  bridge-parametrization+ready-field-fanout this wave. The 3 fields closed here are exactly
+  those whose stagePre was ALREADY landed.
+
+## 2026-09-01 fnarm-closurebuild-seg-duplication (wave 34, coordinator)
+- duplicate: an agent hand-wrote `#derive_case fnArmClosureBuildSeg` for the EX_FN
+  closure-build span although the GENERATED `rows/FnArmClosureBuildGen.lean` already
+  defines the identical seg + a `segToTriple` row (surfaced only as an import clash
+  at Vsa.lean wiring time — `environment already contains 'fnArmClosureBuildSeg'`).
+- cost: none after the fact (the duplicate file was re-seated on the Gen seg, keeping
+  only its NEW write-log reflection layer: log_eq/mem_eq/reads); but the collision
+  was silent until top-level wiring.
+- proposal: (a) `abs_inventory.sh` should list the `rows/*Gen.lean` generated files
+  under a dedicated GENERATED heading so agents grep them before any `#derive_case`;
+  (b) a discipline rule catching a second `#derive_case <name>` for a PC span whose
+  first instruction address already appears in another seg's chain literal.

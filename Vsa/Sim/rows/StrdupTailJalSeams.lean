@@ -301,14 +301,14 @@ def AbiExceptS0 (R : Register) : Bool := AbiPreserved R && !(R == Register.x8)
 
 theorem strdupTail_memcpy_run
     (σ : MState) (i u : Nat) (vminstret sp a0 s1 : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (lds : List (List (BitVec 8)))
     (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some (0x8000305c#64 : BitVec 64))
     (hminstret : σ.regs.get? Register.minstret = some vminstret)
     (hmem : σ.mem = m0)
     (hL : GHolds σ (strdupMemcpyArgL sp a0 s1))
-    (hfacts : ChainFacts σ.mem σ.mem (strdupMemcpyArgL sp a0 s1) [] strdupMemcpyArgSeg)
+    (hfacts : ChainFacts σ.mem σ.mem (strdupMemcpyArgL sp a0 s1) lds strdupMemcpyArgSeg)
     (hjalmem : StringifyLoaded (writeLog m0
-      (evalBlocks strdupMemcpyArgSeg (SegEvalState.init (strdupMemcpyArgL sp a0 s1) [])).log))
+      (evalBlocks strdupMemcpyArgSeg (SegEvalState.init (strdupMemcpyArgL sp a0 s1) lds)).log))
     (hi : i < 2) :
     ∃ (σ2 : MState) (i2 : Nat),
       Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + evalBlocksFuel strdupMemcpyArgSeg + 1⟩ ∧ i2 < 2 ∧
@@ -316,10 +316,10 @@ theorem strdupTail_memcpy_run
       σ2.regs.get? Register.PC = some (0x80006bc8#64 : BitVec 64) ∧
       σ2.regs.get? Register.x1 = some (0x80003070#64 : BitVec 64) ∧
       (∃ w, σ2.regs.get? Register.minstret = some w) ∧
-      GHolds σ2 (evalBlocks strdupMemcpyArgSeg (SegEvalState.init (strdupMemcpyArgL sp a0 s1) [])).regs ∧
-      σ2.mem = writeLog m0 (evalBlocks strdupMemcpyArgSeg (SegEvalState.init (strdupMemcpyArgL sp a0 s1) [])).log ∧
+      GHolds σ2 (evalBlocks strdupMemcpyArgSeg (SegEvalState.init (strdupMemcpyArgL sp a0 s1) lds)).regs ∧
+      σ2.mem = writeLog m0 (evalBlocks strdupMemcpyArgSeg (SegEvalState.init (strdupMemcpyArgL sp a0 s1) lds)).log ∧
       (∀ R, AbiExceptS0 R = true → σ2.regs.get? R = σ.regs.get? R) := by
-  apply bridgeOfSegFramed AbiExceptS0 strdupMemcpyArgSeg (strdupMemcpyArgL sp a0 s1) []
+  apply bridgeOfSegFramed AbiExceptS0 strdupMemcpyArgSeg (strdupMemcpyArgL sp a0 s1) lds
     σ i u (0x8000305c#64) (0x80006bc8#64) (0x80003070#64) vminstret m0
     hG hpc hminstret hmem hL
     (by have h : keysG (strdupMemcpyArgL sp a0 s1) = [2, 10, 9] := rfl
@@ -330,17 +330,17 @@ theorem strdupTail_memcpy_run
     (by show ∀ rr ∈ noiseRegs, AbiExceptS0 rr = false; decide)
     (by show WrChainAvoids AbiExceptS0 strdupMemcpyArgSeg; decide)
     (by have h : keysG (evalBlocks strdupMemcpyArgSeg
-          (SegEvalState.init (strdupMemcpyArgL sp a0 s1) [])).regs = [11, 8, 12, 2, 10, 9] := rfl
+          (SegEvalState.init (strdupMemcpyArgL sp a0 s1) lds)).regs = [11, 8, 12, 2, 10, 9] := rfl
         rw [h]; decide)
     (by have h : keysG (evalBlocks strdupMemcpyArgSeg
-          (SegEvalState.init (strdupMemcpyArgL sp a0 s1) [])).regs = [11, 8, 12, 2, 10, 9] := rfl
+          (SegEvalState.init (strdupMemcpyArgL sp a0 s1) lds)).regs = [11, 8, 12, 2, 10, 9] := rfl
         show ∀ n ∈ keysG _, n ≠ 1; rw [h]; decide)
     (by intro R hR; show AbiPreserved R = true
         have := (Bool.and_eq_true _ _).mp hR; exact this.1)
   intro σ' i' u' hG' hi' hpc' hmi' hmem' _hregs'
   obtain ⟨vm', hmi'v⟩ := hmi'
   have hpcE : (evalBlocksPC (0x8000305c#64)
-      (SegEvalState.init (strdupMemcpyArgL sp a0 s1) []) strdupMemcpyArgSeg)
+      (SegEvalState.init (strdupMemcpyArgL sp a0 s1) lds) strdupMemcpyArgSeg)
       = (0x8000306c#64 : BitVec 64) := by rfl
   have hpc'' : σ'.regs.get? Register.PC = some (0x8000306c#64 : BitVec 64) := hpcE ▸ hpc'
   obtain ⟨hb0, hb1, hb2, hb3⟩ := stringify_at_8000306c (hmem' ▸ hjalmem)

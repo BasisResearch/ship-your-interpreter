@@ -59,6 +59,32 @@ open Vsa.Alloc
 
 namespace Vsa.Sim
 
+/-! ## The reseated frame ghost — `gm[x8 := dst]`
+
+The strdup tail's `mv s0,a0` (`0x80003060`) RESEATS the callee-saved `s0`/x8 from the
+malloc-staging value (`old`) to the malloc result `dst` (deliberate: s0 carries `new`
+across the memcpy call for the epilogue's `mv a0,s0`).  The malloc frame is threaded
+under the entry ghost `gm` (s0 = gm x8 = old); the memcpy frame must therefore be
+threaded under the RESEATED ghost `gm[x8 := dst]`.  `AbiPreserved x8 = true`, so
+`EnvDefFrame.hAbi` genuinely pins s0 — a single `gm` cannot honour both entries
+(machine-checked in `strdupMemcpy_frame_obstruction`, `StrdupTailContractClose.lean`).
+This is the amendment the ledger's `strdup-memcpy-s0-reseat-frameghost` entry proposed. -/
+
+/-- **The reseated frame ghost** `gm[x8 := dst]`: agrees with `gm` off `x8`, maps `x8`
+to the malloc result `dst`.  `RegisterType Register.x8 = BitVec 64` (by `rfl`), so the
+dependent update `h ▸ dst` is well-typed. -/
+def ghostReseatS0 (gm : (R : Register) → Option (RegisterType R)) (dst : BitVec 64) :
+    (R : Register) → Option (RegisterType R) :=
+  fun R => if h : R = Register.x8 then some (h ▸ dst) else gm R
+
+@[simp] theorem ghostReseatS0_x8 (gm : (R : Register) → Option (RegisterType R))
+    (dst : BitVec 64) : ghostReseatS0 gm dst Register.x8 = some dst := by
+  simp [ghostReseatS0]
+
+theorem ghostReseatS0_ne (gm : (R : Register) → Option (RegisterType R)) (dst : BitVec 64)
+    {R : Register} (h : R ≠ Register.x8) : ghostReseatS0 gm dst R = gm R := by
+  simp [ghostReseatS0, h]
+
 /-! ## The tail's exit predicate — a fresh `CString` in `a0`
 
 The strdup tail returns (in `a0`) a fresh, non-null heap pointer whose C-string is
@@ -159,22 +185,23 @@ theorem stringifyStrdupTailContract
            M.AInv c.σ ((p, nMalloc) :: exts))) ∧
         (∀ a, ¬ M.privFoot a → ¬ (SL.lo ≤ a ∧ a < spM.toNat) →
           c.σ.mem[a]? = mMalloc[a]?))
-      (fun c => PreDispatch gm rMemcpy dst src nMemcpy mMemcpy bs c ∧
-        EnvDefFrame SL gpv headroom M.AInv extsC spC gm c))
+      (fun c => PreDispatch (ghostReseatS0 gm dst) rMemcpy dst src nMemcpy mMemcpy bs c ∧
+        EnvDefFrame SL gpv headroom M.AInv extsC spC (ghostReseatS0 gm dst) c))
     -- the return epilogue: reads back the fresh block's CString from the copied
     -- bytes (memcpy copied `len+1` bytes incl. NUL → `CString m' dst str`), lands
-    -- `mv a0,s0 ; ret` at `rRet`.
+    -- `mv a0,s0 ; ret` at `rRet`.  The frame is threaded under the RESEATED ghost
+    -- `gm[x8 := dst]` (the `mv s0,a0` reseated s0 to `dst`; see `ghostReseatS0`).
     (bridgeEpilogue : Triple
       (fun c => (∃ g', memcpy_bytepath_post g' rMemcpy dst nMemcpy mMemcpy bs c) ∧
-        EnvDefFrame SL gpv headroom M.AInv extsC spC gm c)
+        EnvDefFrame SL gpv headroom M.AInv extsC spC (ghostReseatS0 gm dst) c)
       (StrdupTailExit rRet str)) :
     Triple P (StrdupTailExit rRet str) :=
   -- strlen ≫ [malloc ≫ [memcpy(framed) ≫ epilogue]]
   envDefStrlenSplice bufPtr rStrlen str m0 strlenFramed bridgeStrlenPre
     (envDefMallocSplice M gm exts nMalloc spM rM mMalloc hnM bridgeMallocPre
-      (envDefMemcpyFramedSplice gm rMemcpy dst src nMemcpy mMemcpy bs
-        (envDefMemcpyFramed SL gpv headroom M.AInv extsC spC gm rMemcpy dst src nMemcpy
-          mMemcpy bs halignC hrouteCbyte hAInvStableFootC)
+      (envDefMemcpyFramedSplice (ghostReseatS0 gm dst) rMemcpy dst src nMemcpy mMemcpy bs
+        (envDefMemcpyFramed SL gpv headroom M.AInv extsC spC (ghostReseatS0 gm dst)
+          rMemcpy dst src nMemcpy mMemcpy bs halignC hrouteCbyte hAInvStableFootC)
         bridgeMemcpyPre bridgeEpilogue))
 
 /-! ## Discharging `StringifyStrdupTailResid` from the composed contract
@@ -253,6 +280,9 @@ theorem stringifyContract_of_call
   obtain ⟨res, hne, hcs'⟩ := hexit.freshCString
   exact ⟨res, c'.σ.mem, hne, hcs'⟩
 
+#print axioms ghostReseatS0
+#print axioms ghostReseatS0_x8
+#print axioms ghostReseatS0_ne
 #print axioms StrdupTailExit
 #print axioms stringifyStrdupTailContract
 #print axioms stringifyStrdupTailResid_of_contract

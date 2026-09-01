@@ -1,0 +1,16 @@
+name       = "concatStringifyLArg"
+namespace  = "Vsa.Sim"
+entry      = 0x80003a20
+span_end   = 0x80003a40
+terminator = "jal"
+callee     = "stringify"
+callee_pc  = 0x80002fc0
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac", "Vsa.Sim.BridgeSeg"]
+doc        = "concat arm stringify(L) arg staging (0x80003a20..0x80003a40): ld a3,120(sp) ; ld a4,128(sp) ; ld a5,136(sp) ; addi a0,sp,64 (stringify arg = the packed left Value) ; sd s5,1032(sp) (park the right-node ptr) ; sd a3,64(sp) ; sd a4,72(sp) ; sd a5,80(sp) ▷ jal stringify@0x80002fc0.  The straight-line staging that copies the left operand's boxed Value into the stringify(L) scratch window and sets a0, parked at the jal-stringify seam.  Feeds concatStringifySpan's segL slot; the jal-seam glue is the StringifyContract callee (StrConcatCBlockResid HYP), consumed as a NAMED residual."
+
+[[pin]]
+reg = 2
+name = "sp"
+[[pin]]
+reg = 21
+name = "s5v"
