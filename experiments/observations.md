@@ -1716,3 +1716,118 @@ it, still stop and report instead.
   env_new_spec) — it is the ONE fact blocking `FnArmSeamRun` and thus
   `fnArmGeom_closed`. The call/assign bundles want `evalAssignSim` and the
   CallClosure crux assembly respectively (separate, larger machine spans).
+
+## 2026-08-31 allocClosure-contract-decode (FnArmSeamRun / fnArmGeom_closed)
+- missing: an `allocClosure` machine callee contract (the closures-arena analog of
+  `env_new_spec`): from a fresh `malloc(16)` block `p` (MallocContract.spec) + the
+  two closure-build stores (closure[0]=fn_expr, closure[8]=φf env), assemble
+  `StoreRepr mpre N A φf φc' (st.store with closures.push cd)` at an EXTENDED
+  `φc'` with `φc' (st.store.closures.size) = p ≠ 0`, i.e. `PhiExtends φc φc' n`.
+  There is NO StoreRepr-grow / push-closure lemma anywhere (grep: only PhiExtends
+  refl/mono used; no `storeRepr_grow`/`closures.push` StoreRepr constructor).
+- decoded EX_FN arm path (validated vs disasm 0x800031ac dispatch → arm):
+  * eval_expr prologue @0x80003168 lowers sp by 1088, spills ra/s0/s1/s2, sets
+    s0=a2(Expr node=aExpr), s2=a1(interp*=aEnv), s1=a0(sret). jump-table @0x80019f58,
+    dispatch `jr a5` @0x800031ac. `ArmEntryK` = exactly this dispatch-target config.
+  * fn slot targets 0x800033c4 DIRECTLY (nothing branches to 0x800033c4; 0x800033c0
+    is `j 0x800033ec`, NOT fallthrough). So there is a per-fn-arm HEAD (dispatch→
+    0x800033c4) that must set a3 := (env frame ptr) — NOT yet decoded/landed and NOT
+    in ArmEntryK's pins (which pin x8=aExpr,x9=sret,x18=aEnv but NOT a3). This is the
+    concurrent arm-head-prefix agent's territory OR a genuine gap. The two malloc/
+    build seg rows (fnArmMallocCallBridge @0x800033c4→jal malloc, fnArmClosureBuildRow
+    @0x800033d8→0x800033ec) ARE landed+green.
+  * fnArmClosureBuild stores: sd s0,0(a0)=closure[0]:=aExpr(fn_expr ✓ ClosureRepr
+    offset 0), sd a3,8(a0)=closure[8]:=a3(must be φf env ✓ ClosureRepr offset 8),
+    sd a0,8(s1)=sret[8]:=p(closure addr), sw a5,0(s1)=sret[0]:=4(VAL_CLOSURE kind).
+- workaround: land `AllocClosureContract` as a named-field structure (env_new_spec
+  analog) + `fnArmSeamRun_of_allocClosure` consuming it; genuine opens (arm-head a3
+  decode, malloc splice ABI threading, StoreRepr-grow) become doc-commented fields.
+- cost: the StoreRepr-grow lemma is a real reusable fact needed by EVERY future
+  allocating arm (allocFrame/env_new already inline it by hand in env_new_spec's tail).
+- proposal: `StoreRepr.pushClosure` — StoreRepr m φf φc s → (fresh p, ClosureRepr at p,
+  arena/align/inj-extension) → StoreRepr m φf φc' (s.closures.push cd). One lemma,
+  reused by allocClosure here and any closure producer.
+
+## 2026-08-31 armsegsplit-marshalling-fact-built + unary-class-done (task #75)
+- missing: the shared jal→child-entry marshalling fact feeding ApproxArmResidGap's
+  Eval-child fields, and the per-class arm-seg splits.
+- workaround: NONE for the marshalling fact — LANDED as `evalEntry_of_jalPrefix`
+  (`Vsa/Sim/ArmSegSplit.lean`, green ~2.8s, axiom-clean). It is EXACTLY
+  `EvalRecCommon.armTail_rec` truncated BEFORE its `hIH` call (lines 311–401,
+  verbatim): from the arm state at the recursive `jal eval_expr` PC with the sub-call
+  args staged (a0=subsret,a1=aIn,a2=aOperand, sp lowered to sp-1088) + the full
+  lowered-frame geometry bundle, ONE jal step ⇒ `LandedN 1 c (fun c' => EvalEntry …
+  esub … (sp-1088) …)`. FINDING (field-by-field audit of EvalEntry's ~40 fields):
+  the jal step SUPPLIES for free good/tick/pc(=evalExprEntry via hjaltgt)/a0/a1/a2/
+  ra(=retPC)/spReg/minstret/mem/out/frame(sub-ghosts=post-jal regfile ⇒ rfl)/
+  spill_defined; the sub-call GEOMETRY at the lowered frame (stackOK@sp-1088 needing
+  SL.lo+3264≤sp, operand ExprRepr/align/RAM/disjointness@sp-1088, sub-buffer geom,
+  StoreRepr+survival, code/table/arena disjointness re-checked vs sp-1088) MUST be
+  premises — these are precisely blockB_unary's "recursive-case extras" beyond
+  ArmEntryK (the ArmEntryK widening residual), NOT projectable from EvalEntry(parent).
+- cost: unary class LANDED (`Vsa/Sim/ArmSegSplitEval.lean`, green ~5s, axiom-clean):
+  `landedN_eentryC_of_jalPrefix` (wraps the marshalling fact into the ∃-ghost
+  `EEntryC` divergence-fold entry — the ONE reusable bridge for ALL Eval-child
+  classes), `JalPreBundle e` (the pre-bundle as a config predicate, ghosts ∃'d),
+  `landedN_eentryC_of_preBundle` (pre-bundle ⇒ EEntryC, pure bridge application),
+  and `unaryE_split` = ApproxArmResid.unaryE's EXACT type, proved by `LandedN.bind`
+  of the staging residual `UnaryStagePre` onto the marshalling bridge (counts add
+  1+1, weakenCount→1). `unaryE_split` covers BOTH neg AND not (blockB_unary is
+  op-agnostic). The ONLY residual per Eval-child class is now `UnaryStagePre`-shaped:
+  `EEntryC(compound) → LandedN 1 (JalPreBundle child)`, strictly SMALLER than the raw
+  field (stops at the jal pre-bundle; the verified marshalling finishes). That
+  residual = blockB_unary's body (dispatch blockA_k + operand ld + sub-buffer addi)
+  RE-CUT to land at JalPreBundle instead of consuming hIH — an upstream arm-seg
+  surgery, still unbuilt.
+- proposal: land the per-class *StagePre lemmas by re-cutting each arm seg at its
+  recursive jal (the "stop at JalPreBundle" cut). The dispatch prefix (blockA_k) is
+  SHARED across all EX_* arms, so factor `dispatchToArm : EEntryC(compound)@evalEntry
+  → LandedN k (armPC-with-kind-read)` ONCE, then each arm adds only its short head
+  (operand load / operand staging) to reach JalPreBundle. binaryL/logicalL reuse the
+  unary shape with a 2-operand head; binaryR/logicalR/argsTail need the MID-arm
+  re-staging span (second jal, after left/head returned) = a second JalPreBundle cut.
+
+## 2026-08-31 allocClosure-contract RESOLUTION (FnArmSeamRun)
+- landed: Vsa/Sim/AllocClosure.lean = `storeRepr_pushClosure` (THE missing
+  StoreRepr-grow / closures.push lemma, axiom-clean {propext,Classical.choice,
+  Quot.sound}) + `AllocClosureContract` (env_new_spec analog structure, fixed
+  φc'/p/mpre params so its Triple post composes). Vsa/Sim/rows/FnArmSeamReduce.lean
+  = `fnArmSeamRun_of_allocClosure` (contract.spec ≫ storeRepr_pushClosure ⇒
+  FnArmSeamRun at grown store, axiom-clean). Composition probe: the produced
+  FnArmSeamRun feeds fnArmGeom_hArm_of_seam ⇒ FnArmGeom.hArm end-to-end (green).
+- residual for fnArmGeom_closed = ONLY constructing an AllocClosureContract, i.e.
+  its .spec Triple: ArmEntryK-dispatch → fresh-block+ClosureRepr+sret-bundle. That
+  is the genuine machine work (EX_FN arm-head `a3 := φf env` decode from armPC to
+  0x800033c4 [NOT in ArmEntryK's pins — likely the concurrent arm-head agent's
+  seg]; malloc splice via MallocContract.spec over fnArmMallocCallBridge; the
+  fnArmClosureBuild write-log → mpre/ClosureRepr/sret reads marshalling). The two
+  seg rows (fnArmMallocCallBridge/fnArmClosureBuildRow) are landed+green already.
+- the proposed StoreRepr.pushClosure abstraction is DONE and reusable.
+
+## 2026-08-31 armsegsplit-eval-child-fan-out-complete (task #75 cont'd)
+- missing: (follow-up to armsegsplit-marshalling-fact-built) fan-out of the
+  marshalling bridge across ALL eval-child-landing fields of ApproxArmResidGap.
+- workaround: NONE — LANDED. The unary result generalised into ONE combinator
+  `evalChildSplit_of_stage` (`Vsa/Sim/ArmSegSplitEval.lean`, green ~6s, axiom-clean)
+  = `LandedN.bind` of a staging residual (to `JalPreBundle child`) onto the verified
+  marshalling bridge (`landedN_eentryC_of_preBundle` ∘ `evalEntry_of_jalPrefix`),
+  counts 1+1→weakenCount→1. 15 eval-child fields landed as `<field>_split` corollaries
+  (unaryE/binaryL/binaryR/logicalL/logicalR/assignE/callF/argsHead/stmtExpr/stmtRet/
+  stmtVarInit/stmtIfCond/stmtWhileCond/flCond + flStep w/ extra ForCond/ExecS hyps),
+  each EXACTLY the corresponding ApproxArmResid field type. Capstone: `EvalChildStages`
+  (bundle of the 14 hyp-free staging residuals) + `armResidGap_evalChildFields`
+  (discharges all 14 fields as a field-typed conjunction the final ApproxArmResidGap
+  assembly consumes). CONFIRMED both binary AND for-loop arms use the SAME `armTail_rec`
+  seam for their recursive jals (EvalBinSim.blockB_binary:513 left / :911 right;
+  binaryR/logicalR/flStep = the MID-arm re-staging = a SECOND JalPreBundle cut at the
+  second jal after the left/head returned).
+- cost: the 14+1 staging spans are the ONLY remaining upstream work for eval-child
+  fields — each = the arm-head+dispatch chain re-cut to LAND at JalPreBundle instead
+  of consuming the eval IH. Strictly SMALLER than the raw field (the verified
+  marshalling finishes). blockA_k dispatch prefix is SHARED across all EX_* arms.
+- proposal: factor `dispatchToArm` (EEntryC(compound)@evalEntry → armPC, shared) ONCE
+  so each staging span adds only its short operand-load head. The ~21 NON-eval-child
+  fields (AEntryC arg-tail, CEntryC callee body, SEntryC/SqEntryC/FEntryC statement/for
+  control) need their OWN marshalling facts (exec_stmt-entry via `ExecRecCommon`'s
+  armTail analogue / SegEntry-anchored) — the exec-stmt-entry twin of
+  `evalEntry_of_jalPrefix` is the next shared fact to extract.

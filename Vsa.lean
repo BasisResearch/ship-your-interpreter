@@ -522,6 +522,10 @@ import Vsa.Sim.ApproxArmReseat
 import Vsa.Sim.ArmEntryWiden
 import Vsa.Sim.PreEpilogueWriteLog
 import Vsa.Sim.FnArmGeomReduce
+import Vsa.Sim.AllocClosure
+import Vsa.Sim.rows.FnArmSeamReduce
+import Vsa.Sim.ArmSegSplit
+import Vsa.Sim.ArmSegSplitEval
 import Vsa.Sim.rows.StrdupTailBridges
 import Vsa.Sim.rows.StrcpyContract
 import Vsa.While.StmtDispatch
