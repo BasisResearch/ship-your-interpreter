@@ -55,3 +55,56 @@ See observations.md entry.
 - Remaining: the AllocClosureContract inhabitant assembly (malloc splice over
   FnArmMallocCallGen ≫ OOM prune ≫ fnArmClosureBuildSeg ≫ post bundle w/
   storeRepr_pushClosure + the named hA3Pre premise).
+
+## LANDED (2026-09-01): allocClosureContract_of
+
+`Vsa/Sim/rows/AllocClosureInhab.lean` — GREEN, axiom-clean {propext, Classical.choice,
+Quot.sound}, discipline-clean (the check_discipline FAIL is on a sibling agent's
+ConcatDispatchChain.lean, not this file).
+
+### Design
+- `structure AllocBuildEntry` (named-field reached-config `: Prop where`) captures the
+  state at the closure-build entry 0x800033d8 (post malloc+reload+no-OOM), carrying:
+  the four build-seg register pins (a0=p, s0=aExpr, a3=φf env, s1=sret), the malloc result
+  geometry (p≠0/p%8=0/A.contains p 16/freshness/φc' size=p/PhiExtends), the OLD-store-at-φc'
+  and ExprRepr/code-loaded survival closures, the spill reads + memframe at the post-build
+  map, and the build seg's ChainFacts/KeysOK.
+- `allocClosureContract_of`: takes `hEntry : Triple Pre AllocBuildEntry` (the malloc splice,
+  the ONE named machine gap) and PROVES the contract's spec Triple by:
+  * running the pure build seg via `fnArmClosureBuildSeg_seg` (the GENERATED run thm — note
+    the run theorem is `<segname>_seg`, i.e. `fnArmClosureBuildSeg_seg`, NOT the row);
+  * `fnArmClosureBuild_reads` → the four record reads → ClosureRepr + VAL_CLOSURE sret reads;
+  * `storeRepr_pushClosure` supplied downstream by the seam consumer (hOld → grown store);
+  * register/geometry/frame bundle transferred from AllocBuildEntry through the build's
+    register-frame (only x15 written; noiseRegs-avoidance from AbiPreservedNoise fields) and
+    the hMpreFrame/hSpillReads memory-frame.
+
+### mpre is FIXED
+`allocClosureContract_of` produces the contract at
+`mpre := writeLog mMalloc (fnArmClosureBuildSeg write-log)`. The seam consumer's mpre is this
+same expression (probe confirms fnArmSeamRun_of_allocClosure accepts it).
+
+### End-to-end (probe green, /tmp/probe_compose.lean)
+`hEntry (malloc splice)` → `allocClosureContract_of` → `fnArmSeamRun_of_allocClosure` →
+(`FnArmSeamRun` with store' = (allocClosure cd).1) → `fnArmGeom_hArm_of_seam` →
+`Triple (EvalEntry …) (PreEpilogueV … (.closure a))` → evalFnSim.
+
+### GOTCHAS hit
+- `set`/`with` tactic is ABSENT (Mathlib-less repo) → use `let` (no eqn hyp; the one
+  hmpreDef use became `hEqMalloc.trans hEqM0`).
+- `#derive_case NAME` generates run theorem `NAME_seg`, the seg def `NAME`. Applying the
+  def (List BBlock) to a config = "function expected" error.
+- `wrChain fnArmClosureBuildSeg = [15]` by decide; `noiseRegs` avoidance from the 7
+  AbiPreservedNoise fields via `h ▸ hXR` (subst fails; the 7th list elem leaves `∈ []`,
+  clear with `List.not_mem_nil, or_false`).
+- `(BitVec.ofNat 64 (φf env)).toNat = φf env` and `(ofNat p).toNat = p` are NOT free →
+  named fields hEnvToNat/hpToNat (φf env / p fit in 64 bits — real addresses).
+
+### REMAINING for evalFnSim (single residual)
+Build `hEntry : Triple Pre AllocBuildEntry` = the malloc splice
+(`fnArmMallocCallBridge ≫ MallocContract.spec ≫ nonNull_of_bounded ≫ ld a3,0(sp) reload ≫
+beqz-not-taken`). Template: env_new_spec's malloc splice, landing AllocBuildEntry.
+
+### WIRING (report-only; NOT applied — do not touch Vsa.lean/check_all.sh)
+- add `import Vsa.Sim.rows.AllocClosureInhab` to Vsa.lean (after FnArmSeamReduce import).
+- check_all axiom entry: `Vsa.Sim.allocClosureContract_of`.

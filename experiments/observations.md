@@ -2263,3 +2263,124 @@ it, still stop and report instead.
   under a dedicated GENERATED heading so agents grep them before any `#derive_case`;
   (b) a discipline rule catching a second `#derive_case <name>` for a PC span whose
   first instruction address already appears in another seg's chain literal.
+
+## 2026-09-01 binaryR-field-lacks-machine-IH (wave 35, ArmStages fan-out)
+- missing: the `EvalChildStages.binaryR`/`logicalR` field, as typed, takes only the
+  SPEC-level `EvalE st d env l st' lv` (+ `EEntryC c ... (.binary op l r)` at the ARM
+  ENTRY config `c`) and must produce `LandedN 1 c (JalPreBundle r c' st')`. The landed
+  mid-arm combinator `MidArmCombinator.binaryR_midStage1` starts from `cL` at
+  `SubEvalReturn` (PC 0x800034fc, POST-left-return) — NOT from the arm entry `c`. Bridging
+  `c → cL` requires running the LEFT `jal eval_expr` and applying `armTail_rec`, which
+  demands the MACHINE-level `EvalIH st d env l st' vsub` (EvalRecCommon). That IH is NOT a
+  field parameter and is NOT threaded into the binaryR field by
+  `armResidGap_of_stages`/`ApproxArmResidGapAssembly` (it only passes `EvalE`+config).
+- workaround: NONE. binaryR/logicalR stay as named residual fields this wave. The mid-arm
+  cut is landed but cannot be wired at the field level because its entry precondition
+  (a config at SubEvalReturn) is unreachable from the field's inputs.
+- cost: 2 of the 14 eval-child fields (binaryR, logicalR) blocked on a layer above the
+  field — the recursive-descent (left-eval-run-and-return) that lives in the fold's
+  strong-induction, not in the per-field staging. Same block will hit callArgs/argsTail
+  mid-arms and any other post-sub-call-return staging.
+- proposal: either (a) re-type the binaryR/logicalR fields to receive a reached-config
+  `cL` at SubEvalReturn (a `SubEvalReturnReached` premise) so the mid-arm cut wires
+  directly — moving the left-descent obligation up to the fold where the IH lives; or
+  (b) a `midArmField_of_IH` combinator: `EvalIH l → armTail_rec ≫ binaryR_midStage1`,
+  taking the IH as an explicit premise, that the fold instantiates with its
+  strong-induction IH. (b) is the honest shape: the field's `EvalE` premise is the SPEC
+  witness, but the MACHINE staging genuinely needs the IH — so the field type is
+  under-powered and must gain an IH premise to be closable. NAMED, not worked around.
+
+## 2026-09-01 midarm-field-ih-seam-BUILT (wave 35, follow-up to binaryR-field-lacks-machine-IH)
+- resolved-partial: built the honest seam proposal (b) named above:
+  `Vsa/Sim/MidArmFieldIH.lean` (green + axiom-clean, olean regen'd):
+  * `MidArmRightMarshal` (def : Prop) = the DELTA `SubEvalReturn` does not carry (the
+    right-operand facts surviving the left call — node ptr transport, frame pop,
+    ExprRepr survival, Value_intLoaded/IntSlotPinned, BinExtras-shaped right geometry).
+  * `midStage1_of_marshal` = SubEvalReturn-reached config + MidArmRightMarshal →
+    `binaryR_midStage1` → `JalPreBundle er`.
+  * `midArmField_of_IH` = the FULL seam `armTail_rec` (left call, via `EvalIH`) ≫
+    `binaryR_midStage1`, landing `JalPreBundle r st'`. Op-independent (arm PCs
+    0x800034f8/0x800034fc/imm 0x1ffc6c shared) → ONE seam for BOTH binaryR AND logicalR.
+- STILL BLOCKED (structural, not falsity): the `binaryR`/`logicalR` FIELDS cannot be
+  wired because they are typed with `EvalE` (spec) not `EvalIH` (machine). The seam is
+  READY; the fold must re-type the two fields to carry the IH before they close. That
+  re-typing is a fold-level change (owner: whoever owns ApproxArmResidGapAssembly /
+  ArmStages), out of scope for the stagePre-fan-out lane.
+- cost after seam: closing binaryR/logicalR is now a ONE-call `midArmField_of_IH` per
+  field (no re-derivation of the 7 mid-arm sites or the ~80-line node transport) — the
+  moment the field gains its IH premise.
+
+## 2026-09-01 allocClosureContract-inhabited-malloc-splice-named (wave 34)
+- resolved-partial: BUILT `allocClosureContract_of` (`Vsa/Sim/rows/AllocClosureInhab.lean`,
+  green + axiom-clean {propext, Classical.choice, Quot.sound}, discipline-clean).
+  Inhabits `AllocClosureContract` (`Vsa/Sim/AllocClosure.lean`) end-to-end EXCEPT the
+  malloc splice, which is packaged as ONE named-field reached-config structure
+  `AllocBuildEntry` + the premise `hEntry : Triple Pre AllocBuildEntry` (Pre = the
+  ArmEntryK-∃ the seam consumer fixes). PROVED with no further hypotheses: the pure
+  `fnArmClosureBuildSeg` run (`fnArmClosureBuildSeg_seg`), the four record reads
+  (`fnArmClosureBuild_reads`) → `ClosureRepr` + `VAL_CLOSURE` sret reads, the
+  register/geometry/frame bundle transfer (build writes only x15; `hframe'` register-frame
+  + `hMpreFrame`/`hSpillReads` for the memory-frame), and `storeRepr_pushClosure` (via the
+  seam consumer). Composition `allocClosureContract_of → fnArmSeamRun_of_allocClosure →
+  fnArmGeom_hArm_of_seam` typechecks (probe green).
+- missing (the honest gap, now a single named premise): the malloc-splice machine run
+  `Pre → AllocBuildEntry`. It must establish (AllocBuildEntry's fields): the build-entry
+  config at 0x800033d8 with a0=p/s0=aExpr/a3=φf env/s1=sret pinned; the malloc result
+  (p≠0, p%8=0, A.contains p 16, freshness, φc' size = p, PhiExtends); the OLD store at φc'
+  and ExprRepr/code-loaded/spill-reads/memframe survival to the post-build map; and the
+  build-seg's ChainFacts/KeysOK. That is exactly the `fnArmMallocCallBridge ≫
+  MallocContract.spec ≫ nonNull_of_bounded prune ≫ ld a3,0(sp) reload ≫ beqz-not-taken`
+  chain (the reload seg 0x800033d0 was NOT separately built — folded into hEntry).
+- proposal: build `hEntry` from `fnArmMallocCallBridge` (already GENERATED) spliced with
+  `MallocContract.spec` via `callSeg`/`bridgeOfSeg`, the OOM prune, and the reload — the
+  env_new_spec malloc-splice template but landing `AllocBuildEntry` instead of env_new_post.
+  This is the SINGLE remaining machine residual for fnArmGeom_closed → evalFnSim on EX_FN.
+
+## 2026-09-01 genseg-false-wrchainavoid-silent-sorryax (wave35 residual 2)
+- missing: `scripts/genseg.py` `emit_jal_row` (line 388) emits
+  `(by show WrChainAvoidAbi {seg}; decide)` UNCONDITIONALLY for EVERY jal-terminated
+  span. When the span writes a callee-saved register (e.g. `mv s2,a0`/`mv s3,a0` =
+  `addi x18/x19,...` in the concat R-arg span 0x80003a44), `WrChainAvoidAbi seg`
+  reduces to `False`, `decide` cannot produce a proof, elaboration errors, and Lean's
+  error-recovery inserts `sorryAx` into the partial term — so the file LOOKS green at
+  a glance (the row still elaborates) but `#print axioms` shows sorryAx. This is the
+  "genseg emitted a false decide → sorryAx" the wave-34 note flagged; the mechanism is
+  now pinned: it is line 388's unconditional emission + Lean error-recovery, NOT a
+  decode error.
+- workaround: NONE for genseg (bypassed it). Built the R-arg bridge by hand with
+  `BridgeSegFramed.bridgeOfSegFramed` at a new `AbiExceptS2S3` avoid-set predicate
+  (`AbiPreserved && !x18 && !x19`), exactly the `entryBaseReseat_framed`/`AbiExceptS7`
+  idiom — NOT the proposed new `bridgeOfSegClobber`. `Vsa/Sim/rows/ConcatStringifyRArg.lean`
+  `concatStringifyRArgBridge`, axiom-clean.
+- cost: one hand file per callee-saved-clobbering jal span (the L-arg span, which
+  writes only caller-saved regs, WAS genseg-able; the R-arg was not). Any future
+  reseat-then-call span hits this.
+- proposal: genseg `emit_jal_row` should (a) compute `wrChain(seg)` and, if any written
+  reg is `AbiPreserved`, emit the `bridgeOfSegFramed`-at-restricted-predicate path
+  (avoid-set = `AbiPreserved && !clobbered_i`) with the exposed `GHolds σ2 out.regs`
+  bundle, instead of `bridgeOfSeg`; OR (b) at minimum STATIC-CHECK `WrChainAvoidAbi`
+  before emitting line 388 and hard-ERROR (refuse to emit) rather than emit an
+  unprovable `decide` that silently sorryAx's. Either kills the whole "green file with
+  sorryAx" failure class. (Broader: any genseg-emitted `decide` on a proposition that
+  could be `False` should be guarded — a `decide` that can't succeed must not be emitted.)
+
+## 2026-09-01 evalAddChain-kind-generic-parametrization (wave35 residual 1) SUCCESS
+- finding: the "exponentiating move" the wave-34 note proposed WORKED verbatim.
+  `evalAddChain_run`'s ~190-line dispatch-chain proof (0x8000351c → 0x80003888) NEVER
+  inspects the operand kind VALUE — it threads it only via `hc ▸`/`hk ▸` (value-agnostic
+  `block_reg` rewrites). Parametrizing the two kind-load hyps (`hc`/`hk`) and the `x10 =
+  x16 = 2` conclusion over a free `κ : BitVec 64` yielded `evalConcatDispatchChain_run`
+  (`Vsa/Sim/rows/ConcatDispatchChain.lean`) axiom-clean ON FIRST RUN with ZERO proof
+  edits (only the 6 literal `2#64` → `κ` substitutions in the statement). The int route
+  is the `κ=2` instance, the str route the `κ=3` instance. Then the str-kind head block
+  `concatStrHead` (`addi x15,x10,-3 ; beqz x15,0x80003a20`, x10=3 ⇒ x15=0 ⇒ TAKEN) chains
+  onto it to reach the concat arm entry 0x80003a20 (`evalConcatDispatch_run`). Taken end-PC
+  via the direct `tgtPC0 = pc + sext imm13` reduction (`show (0x8000388c#64) + sign_extend
+  (0x0194#13) = 0x80003a20#64; decide`) — NOT `chainEndPC_eq_bt` (that lemma is for
+  `chainEndPC`/multi-block NoJr, not single-block `endPCB`; the wave-34 hint mislabelled it).
+- cost: none beyond the one κ-clone (a genseg-adjacent mechanical transform). `blenB` of a
+  1-body+terminator block = 2 not 1 (fuel bookkeeping gotcha caught by `decide`).
+- proposal: a `#derive_dispatch_chain`-style generator that emits the block-reflected
+  operator-dispatch chain parametrized over {kind tag, landing PC, branch fate} would let
+  every future kind-arm reuse ONE chain. Not built this wave (the κ-clone is the closed set
+  for the add-family dispatch); named as the abstraction if a 4th kind-arm appears.

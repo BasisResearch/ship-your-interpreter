@@ -26,6 +26,19 @@ remaining honest residual.  The two wired fields carry ONLY their upstream geome
 premises (`BinArmGeomProvider` / the seqHead span), which are strictly smaller than
 the fields they discharge.
 
+## Wave-35 note — the `binaryR`/`logicalR` mid-arm seam is BUILT but not field-wired
+
+`MidArmFieldIH.midArmField_of_IH` (wave 35) is the composed mid-arm seam
+`armTail_rec` (left recursive call, via the machine IH) ≫ `binaryR_midStage1`
+(mid-arm re-cut), landing `JalPreBundle r st'` — the exact `binaryR`/`logicalR`
+staging obligation, op-independent so ONE seam serves both.  It is NOT wired into the
+`binaryR`/`logicalR` fields here because those fields are typed to receive only the
+SPEC-level `EvalE l st' lv`, NOT the MACHINE-level `EvalIH st d env l st' vsub` the
+left recursive call needs.  Closing the fields requires the fold to re-type them to
+carry the IH (observation `2026-09-01 binaryR-field-lacks-machine-IH`, proposal (b));
+once it does, each field is a ONE-call `midArmField_of_IH`.  So these two fields stay
+named residuals this wave — a STRUCTURAL block at the field type, not a wiring gap.
+
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib; no `maxHeartbeats` bump.
 Axioms of every theorem ⊆ {propext, Classical.choice, Quot.sound}.
 -/

@@ -825,6 +825,18 @@ THEOREMS=(
   Vsa.Sim.evalChildStages_ublr_wired                # ArmStagesWave34 (unary+binaryL+logicalL wired into the capstone — 3/14 eval-child fields machine-composed)
   Vsa.Sim.fnArmClosureBuild_log_eq                  # rows/FnArmClosureBuild (the concrete 4-entry closure-build log — the FAST reflection layer, 0.4s rfl)
   Vsa.Sim.fnArmClosureBuild_reads                   # rows/FnArmClosureBuild (all four closure-record reads off the write-log; was an 800k-heartbeat whnf timeout, fixed by the two-layer log-list idiom)
+  Vsa.Sim.midStage1_of_marshal                      # MidArmFieldIH (binaryR_midStage1 from the named MidArmRightMarshal residual)
+  Vsa.Sim.midArmField_of_IH                         # MidArmFieldIH (THE mid-arm field seam: armTail_rec left-IH ≫ midStage1 → JalPreBundle r; ONE seam for binaryR+logicalR — fields close once the fold re-types them to carry EvalIH, see observations)
+  Vsa.Sim.allocClosureContract_of                   # rows/AllocClosureInhab (AllocClosureContract INHABITED from ONE named premise hEntry; the whole EX_FN arm = hEntry → contract → seam → geom → evalFnSim)
+  Vsa.Sim.evalConcatDispatchChain_run               # rows/ConcatDispatchChain (the κ-PARAMETRIZED dispatch chain: evalAddChain_run generalized over the operand kind tag with ZERO proof edits)
+  Vsa.Sim.evalConcatDispatch_run                    # rows/ConcatDispatchChain (κ=3 instance + the taken str-kind beqz head → concat arm entry 0x80003a20)
+  Vsa.Sim.concatDispatch_toTriple                   # rows/ConcatDispatchChain (the run packaged as Triple _ ConcatDispatchPost)
+  Vsa.Sim.concatStringifyRArgSeg_seg                # rows/ConcatStringifyRArg (the R staging seg run)
+  Vsa.Sim.concatStringifyRArgBridge                 # rows/ConcatStringifyRArg (the R staging bridge via bridgeOfSegFramed at AbiExceptS2S3 — no new combinator)
+  Vsa.Sim.stringifyContract_int_of_call             # rows/StringifyIntTail (.int n through the shared strdup tail via stringifyDisplay_int; snprintf interior = the LANDED specs)
+  Vsa.Sim.intBranchCallResid_of_halves              # rows/StringifyIntTail (IntBranchCallResid = the one named int-arm dispatch→snprintf-entry seam)
+  Vsa.Sim.concatDispatchResid_closed                # rows/BlockCConcat (residual 1 of the STR-arm lift CLOSED)
+  Vsa.Sim.blockC_concat_str_closed                  # rows/BlockCConcat (blockC_concat with all three wave-34 residuals discharged)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean

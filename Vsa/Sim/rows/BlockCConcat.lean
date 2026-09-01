@@ -1,6 +1,9 @@
 import Vsa.Sim.rows.ConcatSeams
 import Vsa.Sim.rows.StringifySpec
 import Vsa.Sim.DeriveCallSeg
+import Vsa.Sim.rows.ConcatDispatchChain
+import Vsa.Sim.rows.ConcatStringifyRArg
+import Vsa.Sim.rows.StringifyIntTail
 
 /-!
 # `BlockCConcat` — the STR-arm middle span `blockC_concat` + `binArmStrResid_of_cblock`
@@ -62,7 +65,7 @@ Axioms of every theorem ⊆ {propext, Classical.choice, Quot.sound}.
 -/
 
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr Vsa.Alloc
-open Vsa.Machine (MState Config)
+open Vsa.Machine (MState Config Steps)
 open Vsa.Logic (Triple)
 open LeanRV64DExecutable (Register RegisterType)
 
@@ -170,5 +173,71 @@ theorem blockC_concat_of_dispatchResid {B E S1 S1' S2 S2' P : Config → Prop}
 #print axioms binArmStrResid_of_cblock
 #print axioms ConcatDispatchResid
 #print axioms blockC_concat_of_dispatchResid
+
+/-! ## Wave-35: the three residuals CLOSED and re-instantiated
+
+The three honest residuals the wave-34 note named are now BUILT (axiom-clean):
+
+* **Residual 1 — `ConcatDispatchResid`** : `concatDispatch_toTriple`
+  (`rows/ConcatDispatchChain.lean`) — the str-kind dispatch chain (κ=3, the
+  parametrized twin of `evalAddChain_run`) ▸ the taken `beqz`, as a
+  `Triple _ ConcatDispatchPost`.  `concatDispatchResid_closed` below plugs it into the
+  `hdisp` slot.
+* **Residual 2 — the R staging seg** : `concatStringifyRArgBridge`
+  (`rows/ConcatStringifyRArg.lean`) — the `mv s2/s3` callee-saved-reseat span, bridged
+  via `bridgeOfSegFramed` at the `AbiExceptS2S3` avoid-set (NOT a new
+  `bridgeOfSegClobber`).  Feeds the `segR` slot after `segToTriple`-marshalling.
+* **Residual 3 — the int-tail `StringifyContract`** : `stringifyContract_int_of_call`
+  (`rows/StringifyIntTail.lean`) — `.int n` closes through the SHARED strdup tail the
+  same way str does, via the `v`-generic `stringifyContract_of_call` + `snprintf_lld_spec`
+  (LANDED).  Supplies the `strL`/`strR` callee slots for int operands.
+
+`concatDispatchResid_closed` re-instantiates `blockC_concat_of_dispatchResid` with the
+now-BUILT dispatch Triple; the remaining `segL/segR/segP/strL/strR` slots are the
+per-arm staging seams (`concatStringifyLArgBridge`/`concatStringifyRArgBridge` +
+`segToTriple`-marshalling) and the stringify callee contracts (`stringifyContract_*_of_call`)
+the caller threads. -/
+
+/-- **`ConcatDispatchResid` inhabited** by the built str-dispatch Triple.  For any entry
+predicate `P` whose configs satisfy the `evalConcatDispatch_run` pins (supplied through
+`hrun`), `ConcatDispatchResid P (ConcatDispatchPost v2 sret Wl · .σ.mem)` holds — the
+dispatch slot of `blockC_concat` is no longer a bare `Triple` assumption but the
+assembled block-reflected chain. -/
+theorem concatDispatchResid_closed (v2 sret Wl : BitVec 64) (P : Config → Prop)
+    (hrun : ∀ c, P c → ∃ (σ' : MState) (i' : Nat),
+      Steps ⟨c.σ, c.tick, c.steps⟩ ⟨σ', i', c.steps + 18⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.regs.get? Register.PC = some (0x80003a20#64) ∧
+      σ'.regs.get? Register.x2 = some v2 ∧
+      σ'.regs.get? Register.x9 = some sret ∧
+      σ'.regs.get? Register.x19 = some Wl ∧
+      σ'.mem = c.σ.mem ∧
+      (∃ w, σ'.regs.get? Register.minstret = some w)) :
+    ConcatDispatchResid P (fun c => ConcatDispatchPost v2 sret Wl c.σ.mem c) :=
+  concatDispatch_toTriple v2 sret Wl P hrun
+
+/-- **`blockC_concat` with the dispatch slot BUILT.**  Re-instantiates
+`blockC_concat_of_dispatchResid` with `concatDispatchResid_closed` (Residual 1 closed);
+the staging seams (`segL/segR/segP`) and stringify callees (`strL/strR`) remain the
+caller's per-arm slots (Residual 2/3 providers land them). -/
+theorem blockC_concat_str_closed
+    {S1 S1' S2 S2' P : Config → Prop}
+    (v2 sret Wl : BitVec 64) (Pdisp : Config → Prop)
+    (hrun : ∀ c, Pdisp c → ∃ (σ' : MState) (i' : Nat),
+      Steps ⟨c.σ, c.tick, c.steps⟩ ⟨σ', i', c.steps + 18⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.regs.get? Register.PC = some (0x80003a20#64) ∧
+      σ'.regs.get? Register.x2 = some v2 ∧
+      σ'.regs.get? Register.x9 = some sret ∧
+      σ'.regs.get? Register.x19 = some Wl ∧
+      σ'.mem = c.σ.mem ∧
+      (∃ w, σ'.regs.get? Register.minstret = some w))
+    (strL : Triple S1 S1') (strR : Triple S2 S2')
+    (segL : Triple (fun c => ConcatDispatchPost v2 sret Wl c.σ.mem c) S1)
+    (segR : Triple S1' S2) (segP : Triple S2' P) :
+    Triple Pdisp P :=
+  blockC_concat_of_dispatchResid (concatDispatchResid_closed v2 sret Wl Pdisp hrun)
+    strL strR segL segR segP
+
+#print axioms concatDispatchResid_closed
+#print axioms blockC_concat_str_closed
 
 end Vsa.Sim

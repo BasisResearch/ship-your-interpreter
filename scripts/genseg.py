@@ -186,7 +186,43 @@ def build_body(a, di, idx):
         raise SystemExit(
             "NOT ALL WORDS TABLED (seg layer needs every word on the decode "
             "table): " + ", ".join(f"0x{m.addr:08x}:{m.word:08x}" for m in miss))
+    if kind == "jal":
+        _check_abi_writes(blocks, a)
     return blocks, end_pc
+
+
+# Callee-saved ABI registers (RISC-V): s0/fp..s11.  A jal row emitted by
+# `emit_jal_row` proves its frame with `(by show WrChainAvoidAbi <seg>; decide)`;
+# if the span WRITES a callee-saved register that proposition is FALSE, the
+# `decide` fails to elaborate, and Lean's error recovery lands `sorryAx` in the
+# row — the file LOOKS green until `#print axioms`.  (Post-mortem: the wave-34
+# concatStringifyRArg span, `mv s2,a0 ; mv s3,a0`.)  So: static-check and
+# HARD-ERROR here, pointing at the framed bridge that handles such spans.
+_CALLEE_SAVED = {"s0": 8, "fp": 8, "s1": 9, "s2": 18, "s3": 19, "s4": 20,
+                 "s5": 21, "s6": 22, "s7": 23, "s8": 24, "s9": 25,
+                 "s10": 26, "s11": 27}
+_NO_GPR_WRITE = {"sd", "sw", "sh", "sb", "fsd", "fsw", "beq", "bne", "blt",
+                 "bge", "bltu", "bgeu", "beqz", "bnez", "blez", "bgez", "bltz",
+                 "bgtz", "j", "jr", "ret", "fence", "fence.i", "ecall", "ebreak"}
+
+
+def _check_abi_writes(blocks, a):
+    bad = []
+    for blk in blocks:
+        for ins in blk["body"]:
+            if ins.mnem in _NO_GPR_WRITE:
+                continue
+            rd = ins.ops.split(",")[0].strip() if ins.ops else ""
+            if rd in _CALLEE_SAVED:
+                bad.append(f"0x{ins.addr:08x}: {ins.mnem} {ins.ops} "
+                           f"(writes callee-saved {rd}=x{_CALLEE_SAVED[rd]})")
+    if bad:
+        raise SystemExit(
+            f"arm {a['name']}: the jal span writes CALLEE-SAVED register(s) — "
+            "`WrChainAvoidAbi` is FALSE and the emitted `decide` would land "
+            "error-recovery sorryAx.  Use `bridgeOfSegFramed` with a restricted "
+            "avoid-set instead (model: rows/ConcatStringifyRArg.lean at "
+            "AbiExceptS2S3):\n  " + "\n  ".join(bad))
 
 
 def emit_seg(E, a, blocks):
