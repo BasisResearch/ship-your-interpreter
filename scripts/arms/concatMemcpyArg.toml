@@ -1,0 +1,14 @@
+name       = "concatMemcpyArg"
+namespace  = "Vsa.Sim"
+entry      = 0x80003aa0
+span_end   = 0x80003aa8
+terminator = "fallthrough"
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac"]
+doc        = "concat arm memcpy-arg staging: mv a2,s2 (len |L|) ; mv a1,s3 (L buffer), parked at the jal memcpy seam @0x80003aa8."
+
+[[pin]]
+reg = 18
+name = "s2"
+[[pin]]
+reg = 19
+name = "s3"

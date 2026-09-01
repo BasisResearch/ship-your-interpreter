@@ -1,0 +1,14 @@
+name       = "concatMallocArg"
+namespace  = "Vsa.Sim"
+entry      = 0x80003a88
+span_end   = 0x80003a90
+terminator = "fallthrough"
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac"]
+doc        = "concat arm malloc-arg staging: add a0,s2,a0 (|L|+|R|) ; addi a0,a0,1 (+1 for NUL), parked at the jal malloc seam @0x80003a90."
+
+[[pin]]
+reg = 18
+name = "s2"
+[[pin]]
+reg = 10
+name = "a0"

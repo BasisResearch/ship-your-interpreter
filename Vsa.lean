@@ -526,8 +526,15 @@ import Vsa.Sim.AllocClosure
 import Vsa.Sim.rows.FnArmSeamReduce
 import Vsa.Sim.ArmSegSplit
 import Vsa.Sim.ArmSegSplitEval
+import Vsa.Sim.ArmSegSplitExec
+import Vsa.Sim.ArmSegSplitSeg
+import Vsa.Sim.ArmSegSplitNonEval
+import Vsa.Sim.StagePreSuppliers
 import Vsa.Sim.rows.StrdupTailBridges
 import Vsa.Sim.rows.StrcpyContract
+import Vsa.Sim.rows.StrdupEpilogueSeg
+import Vsa.Sim.rows.StrcpyContractInhab
+import Vsa.Sim.rows.ConcatCBlockStaging
 import Vsa.While.StmtDispatch
 import Vsa.While.StmtDispatchClose
 import Vsa.Sim.InterpSimBundle

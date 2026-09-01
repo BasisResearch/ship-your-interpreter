@@ -1,0 +1,17 @@
+name       = "concatStrcpyArg"
+namespace  = "Vsa.Sim"
+entry      = 0x80003aac
+span_end   = 0x80003ab4
+terminator = "fallthrough"
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac"]
+doc        = "concat arm strcpy-arg staging: mv a1,s5 (R buffer) ; add a0,s0,s2 (dst = new + |L|), parked at the jal strcpy seam @0x80003ab4."
+
+[[pin]]
+reg = 21
+name = "s5"
+[[pin]]
+reg = 8
+name = "s0"
+[[pin]]
+reg = 18
+name = "s2"

@@ -1831,3 +1831,62 @@ it, still stop and report instead.
   control) need their OWN marshalling facts (exec_stmt-entry via `ExecRecCommon`'s
   armTail analogue / SegEntry-anchored) — the exec-stmt-entry twin of
   `evalEntry_of_jalPrefix` is the next shared fact to extract.
+
+## 2026-08-31 stringify-code-pins-missing (task #71 strdup-tail jal seams)
+- missing: `Vsa/Sim/Code/Stringify.lean` byte-pin lemmas (`stringify_at_80003048`
+  = strlen jal, `_at_80003058` = malloc jal, `_at_8000306c` = memcpy jal, and the
+  `StringifyLoaded`/`Env`-style loaded predicate over the stringify function's
+  bytes). Every OTHER function with jal-seam bridges (env_define, env_new) has a
+  Code file supplying `<fn>_at_<pc>` byte pins; stringify has NONE.
+- impact: the strdup-tail seg CORES (strdupStrlenArgSeg/…MallocArg/…MemcpyArg)
+  are landed + green, but they park at the jal seam over caller-supplied `lds`.
+  Composing the trailing `jal` via `jalStep_of_obs`/`bridgeOfSeg` needs the
+  callee-jal DECODE, which needs the stringify code bytes present in `σ'.mem`
+  (`writeLog m0 out.log`) — i.e. a `StringifyLoaded m0` code-pin battery. Without
+  it the frame-carrying bridges (bridgeStrlenPre/MallocPre/MemcpyPre for the
+  strdup tail) CANNOT close their jal seam; they remain typed residuals citing
+  the seg core + the missing Code pins.
+- workaround: NONE for the jal seams. Landed only the self-contained epilogue seg
+  (jr-terminated, no external jal) + named the three jal-seam frame residuals.
+- proposal: generate `Vsa/Sim/Code/Stringify.lean` from the disasm byte pins
+  (same generator as `Code/Env_define.lean`), then the three bridges are the
+  exact `bridgeStrlenPre_closed`/`bridgeOfSeg` idiom over those pins.
+
+## 2026-08-31 strcpycontract-frame-unsound (task #71 Part 2)
+- missing: nothing — `strcpy_full_spec` (StrcpySpecW3.lean:1217) IS the complete
+  entry-to-ret strcpy spec (both paths, CString-phrased). `StrcpyContract.lean`'s
+  doc ("no composed strcpy_full_spec exists") is STALE.
+- bug: `StrcpyContract`'s post frame `∀ R, StrcpyNotWritten R → get? R = g R` with
+  `StrcpyNotWritten := NotWrittenB` (avoid {x11,x14,x15}) is UNSOUND. The aligned
+  word path clobbers x12/x13/x16 (a2/a3/a6, disasm 0x80006e00..e78, no restore
+  before ret). Machine-checked: `NotWrittenB x16` holds but `¬NotWrittenCpw x16`,
+  so the contract falsely claims `get? x16 = g x16` for aligned inputs → the
+  contract is FALSE on the word path and cannot be inhabited.
+- workaround: landed `StrcpyContractCpw` (Vsa/Sim/rows/StrcpyContractInhab.lean) —
+  the corrected contract with the honest frame split (pre pins g on NotWrittenCpy,
+  post restores only NotWrittenCpw), fully proved from strcpy_full_spec + a caller
+  geometry supplier `StrcpyGeom` (StrcpyLoaded + CpyRegions + CpwRegions +
+  SrcWordMapped). Also landed `cstr_shift_copy`/`cstring_shift_copy` (transport a
+  CStr/CString along a byte-equal copy — the dual of cstring_bytes, reusable).
+- proposal: re-point `StrcpyContract.lean`'s `StrcpyNotWritten` alias from
+  `NotWrittenB` to `NotWrittenCpw` and add the pre `NotWrittenCpy` frame (one-line
+  fix; the file was read-only for this task). Then StrConcatHeap's strcpy splice
+  consumes StrcpyContractCpw directly.
+
+## 2026-08-31 approxarmresid-field-count-29-not-36 (Task #76)
+- missing: NONE (documentation drift, not a missing fact). The Task #76 brief and
+  the `ApproxArmReseat`/`ApproxDispatchSuppliers` file headers say
+  `ApproxArmResid`/`ApproxArmResidGap` has "36 fields"; the structure actually has
+  29 fields (counted: 9 EApprox + 2 ArgsApprox + 1 CApprox + 14 SApprox/FlApprox +
+  seqHead). The "36" appears to double-count or predate a merge.
+- workaround: covered the real field set — 15 eval-child (ArmSegSplitEval) + 11
+  non-eval-child (ArmSegSplitNonEval: stmtIfThen/stmtIfElse/stmtWhileBody/
+  stmtWhileLoop/stmtForInit/flBody/callArgs/argsTail/callC/stmtForLoop/flLoop) = 26
+  of 29. The 3 remaining (callBody/stmtBlock/seqHead) land at `SqEntryC`
+  (`SegEntry + Reflect`), needing the extra `Reflect` witness a bare jal→SegEntry
+  twin cannot supply — correctly the IterSeamAssembly/SqEntryC boundary.
+- cost: none beyond the miscount confusion; future agents should treat "36" as "29
+  actual fields, 26 twin-dischargeable + 3 SqEntryC-boundary".
+- proposal: correct the "36" literal to "29" in ApproxArmReseat.lean /
+  ApproxDispatchSuppliers.lean headers when those files are next edited (read-only
+  this task).

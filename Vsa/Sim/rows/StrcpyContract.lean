@@ -1,4 +1,5 @@
 import Vsa.Sim.rows.StringifyStrdupTail
+import Vsa.Sim.StrcpySpecW
 
 /-!
 # `StrcpyContract` — the composed `strcpy` callee contract as a NAMED residual
@@ -41,9 +42,13 @@ namespace Vsa.Sim
 /-- `strcpy`'s entry address in the fixed binary (symbol table). -/
 def strcpyEntry : Nat := 0x80006dc4
 
-/-- Registers `strcpy` must leave to the caller (the shared no-write class the
-`memcpy` byte path uses — `strcpy` is the same leaf-copy shape). -/
-abbrev StrcpyNotWritten : Register → Prop := NotWrittenB
+/-- Registers `strcpy` must leave to the caller.  AMENDED (wave 31, Law 4):
+was `NotWrittenB`, which is UNSOUND here — strcpy's aligned word path clobbers
+`x12/x13/x16` (a2/a3/a6) with no restore before `ret` (disasm 0x80006e00..e78),
+so the `NotWrittenB` frame promise is uninhabitable.  `NotWrittenCpw` is the
+honest frame (machine-checked witnesses + the sound inhabitant:
+`rows/StrcpyContractInhab.lean`). -/
+abbrev StrcpyNotWritten : Register → Prop := NotWrittenCpw
 
 /-- **The composed `strcpy(dst, src)` contract**, at the `CString`-copy post.
 
