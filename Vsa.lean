@@ -518,6 +518,10 @@ import Vsa.Sim.rows.InterpBackEdgeSeg
 import Vsa.Sim.IterSeamAssembly
 import Vsa.Sim.ApproxSeamFold
 import Vsa.Sim.ApproxDispatchSuppliers
+import Vsa.Sim.ApproxArmReseat
+import Vsa.Sim.ArmEntryWiden
+import Vsa.Sim.PreEpilogueWriteLog
+import Vsa.Sim.FnArmGeomReduce
 import Vsa.Sim.rows.StrdupTailBridges
 import Vsa.Sim.rows.StrcpyContract
 import Vsa.While.StmtDispatch

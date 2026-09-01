@@ -1635,3 +1635,84 @@ it, still stop and report instead.
   `segToTripleN` over the arm dispatch seg (forgetting post) landing at the
   child's SegPreEntry. The child-PC computation is the ONE piece Corr must carry;
   once that lemma exists the 35 fields fan out mechanically per class.
+
+## 2026-08-31 approxarmresid-fields-need-arm-seg-split-at-jal (task #74)
+- missing: for each ApproxArmResid field (binaryL/unaryE/argsHead/stmtExpr/callBody
+  /flCond/…), a lemma cutting the M4 arm seg at its recursive `jal`/dispatch-to-
+  child point: `arm-head-entry → LandedN ≥1 → child-rich-entry` (EvalEntry/ExecEntry
+  at the child sub-node, or SegEntry at the new frame's loop head). The divergence
+  fold recurses INTO the child (which never returns), so it needs the PREFIX landing
+  AT the child entry — the exact opposite of what the normal-termination arm segs
+  produce.
+- workaround: instantiate the five interior entries (EEntryC/AEntryC/CEntryC/SEntryC
+  /FEntryC in Vsa/Sim/ApproxArmReseat.lean) as ∃-ghost bundles over the rich
+  EvalEntry/ExecEntry (child address carried by aExpr/aStmt) or SegEntry@interior-PC
+  (args/callee/for), bundle the 36 fields as ApproxArmResidGap = ApproxArmResid at
+  those entries (NO smaller remainder — none of the 36 discharges from an existing
+  seg), and give the capstone divFamily_of_armResidGap. Each field is now a
+  precisely-typed, upstream-dischargeable split-lemma statement. Verified: axiom-
+  clean, ⊆{propext,Classical.choice,Quot.sound}.
+- cost: the 36 split lemmas are not built here — each is arm-seg surgery (re-cut
+  blockA_binaryArm/blockB_unary/ExecDispatchRows at the recursive jal). blockB_unary
+  literally CONSUMES `hIH : EvalIH …` and lands at SubEvalReturn (post-return), so
+  the child EvalEntry is a buried sub-config of its Steps chain, not a lemma. Whoever
+  closes the divergence arm pays this per class (~6-8 classes: eval-kind-dispatch,
+  binary-arm, unary-arm, call/args, exec-dispatch, for/scaffold).
+- proposal: split each arm seg into (prefix: arm-head → recursive-jal-target =
+  child entry) ⊗ (suffix: child-return → arm exit), the prefix supplying the
+  ApproxArmResid field via segToTripleN, the suffix + child IH re-composing the
+  existing normal-path arm Triple. The `jal`-target-is-child-entry marshalling is
+  the ONE shared fact (analogous to jalStep_of_obs for the CALL seam).
+
+## 2026-08-31 armentry-widen+preepilogue-writelog (Task #48 remainder, ArmSpecBridge *Geom discharge)
+- missing: the two proposals from the 2026-08-31 armspec-oracle-family entry were
+  documented but unbuilt: (1) a generic arm-entry widening from `EvalEntry` to the
+  arm dispatch target, and (2) a value-region marshaller off an arm's reflected
+  write-log into `PreEpilogueV`.
+- workaround: NONE — both LANDED as parametric lemmas (green, axiom-clean):
+  * `armEntry_widen` (`Vsa/Sim/ArmEntryWiden.lean`, ~2.8s): `EvalEntry g … e …` +
+    the arm-specific callee-generic dispatch facts (`hkind`/`hslot`/`hcallee`/
+    `hcalleeSurv`/`hexprSurv`/`harmAl`/`htableStk`) → `∃ out0 ment v8 v9 v18,
+    ArmEntryK … armPC calleeLoaded e`. Pure `blockA_k`-application: the
+    case-independent tower is reconstructed from `EvalEntry`'s named fields (the
+    exact projection `evalVarSim` did inline). CONFIRMS the int-coupling finding:
+    the callee-loaded/slot facts CANNOT come from `EvalEntry` (which bakes in
+    int-only `value_int_code`/`int_slot`), so they are explicit args. `out0` is
+    EXISTENTIAL in the post (not `c.σ.sailOutput`) because `ArmEntryK` pins
+    `sailOutput = out0` and the dispatch preserves it — pinning to the entry's
+    sailOutput makes the exit-config post mismatch.
+  * `preEpilogueV_of_writeLog` (`Vsa/Sim/PreEpilogueWriteLog.lean`, ~0.6s):
+    value-region readback `valueRepr_closure_of_reads` (kind4+payload=φc a+nz →
+    `ValueRepr … (.closure a)`) folded into a `PreEpilogueV … (.closure a)`
+    assembler that takes the register/store/geometry `hrest` bundle separately.
+- MACHINE-CHECKED OBSTRUCTIONS (why no *Geom bundle fully closes today):
+  * `FnArmGeom.hArm` needs the `allocClosure` callee contract (`EvalFn.lean:26`:
+    "no allocClosure machine contract exists yet") to link the malloc'd payload to
+    `φc' a`/`φc' a ≠ 0` and give `hpc : PhiExtends`. NOT fabricated.
+  * `AssignArmMachine` needs `evalAssignSim` (the `EvalEntry (.assign) → EvalExitD`
+    sim; `jal eval_expr` ⋈ IH ≫ value-stage ≫ `jal env_set`) — unbuilt; the
+    AssignArmEntry/Stage/Return gens are landed seg rows but not composed.
+  * `CallArmGeom.hArm` needs the full CallClosure crux assembly (`Call`-consuming
+    sim); the CallClosure*Gen seg rows are landed but not composed.
+  * `PreEpilogueV` demands MANY facts NOT in the arm write-log (registers x9/x2/
+    minstret/ABI-frame, StoreRepr@φc', GoodState, ~20 geometry facts);
+    `FnArmClosureBuildPost` carries only `GoodState ∧ mem=writeLog ∧ PC`. So the
+    write-log determines ONLY the value region — proposal 2 correctly factors
+    exactly that; the rest is threaded from the seam context.
+  * `ArmPostGeomV` (rows/ArmPostGeom) is the binary post-`TwoSubReturn` residual
+    over the operator jump-table region, a DIFFERENT memory region than the fn-arm
+    sret buffer — NOT a source for the closure `ValueRepr` (its `vloaded` pins
+    Value_int/boolLoaded code, not sret contents). So the "ArmPostGeomV
+    consumption" framing does not literally apply; the honest analogue is the
+    value-region readback built here.
+- cost: `fnArmGeom_hArm_of_seam` (`Vsa/Sim/FnArmGeomReduce.lean`, ~0.9s,
+  axiom-clean) brackets the whole `EX_FN` run with the two new lemmas (front =
+  armEntry_widen, back = preEpilogueV_of_writeLog), reducing `FnArmGeom.hArm` to
+  the strictly-smaller NAMED middle residual `FnArmSeamRun` (ArmEntryK → the two
+  sret reads + hrest bundle) whose opens are exactly the malloc/build write-log
+  marshalling + the missing allocClosure contract. Every future closure arm reuses
+  the front/back for free; only `FnArmSeamRun` is per-arm.
+- proposal: land the `allocClosure` callee contract (closure-arena analog of
+  env_new_spec) — it is the ONE fact blocking `FnArmSeamRun` and thus
+  `fnArmGeom_closed`. The call/assign bundles want `evalAssignSim` and the
+  CallClosure crux assembly respectively (separate, larger machine spans).
