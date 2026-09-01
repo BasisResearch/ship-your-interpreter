@@ -1,81 +1,136 @@
-# InterpSim completion plan (updated 2026-09-01, wave 37)
+# InterpSim completion plan (updated 2026-09-01, wave 40 — NEW-SESSION HANDOFF)
 
-`InterpSimFinal.interpSimClosed_of_families L hterm htri hdivFam herrFam :
-InterpSim L` is a complete theorem; completion = discharging the four bundles.
-check_all: OK, 691/691 axiom-audited (622 at wave 33 — the delta is waves
-34–37). History: git waves `bb8eb8c`..`a47bbe0`, the memory files, the
-observations sidechannel `experiments/observations.md`, per-wave agent logs
-in `experiments/logs/`.
+## The one-theorem view (READ THIS FIRST)
 
-## Where the four bundles stand
+`Vsa/Sim/EndToEnd.lean`:
 
-- **herrFam** — CLOSED (`errFamilyClosed`); residual = the M6-side `ErrShared`
-  instantiation + per-arm `link_*` facts (task #54, mechanical — fully
-  templated/generated, zero hand Lean per site).
-- **htri** — UNCONDITIONAL (premise-free).
-- **hdivFam** — final reduction filling: 7/14 eval-child ArmStages fields
-  machine-composed (unary/binaryL/binaryR/logicalL/logicalR/assignE/callF)
-  + seqHead; remaining 7 eval (argsHead + 6 stmt*/flCond) + 11 non-eval +
-  2 SqEntry + flStep are cut-shaped (task #19: gen_stagepre for the uniform
-  3-step class, the argsHead arg-loop shape, the exec-frame class).
-- **hterm** — the CALL CRUX IS COMPOSED (wave 37): depth step needed no new
-  proof shape; falsities #5/#6 amended (BodyHandoff/emptyBypass); residual =
-  the named spans in task #20. EX_FN reduces to 2 named seams (task #18).
+    theorem endToEnd (W : RemainingWork interpRunLayout) : InterpSim interpRunLayout
+    theorem endToEnd_refinement …   -- full BigStep ↔ Halts correspondence
 
-## The wave-34..37 arc
+**The remaining project = the field list of `RemainingWork`** (= `TermResidualsCore`
++ `errWork : ErrWork`, defined in `Vsa/Sim/TermAssembly.lean` + `rows/ErrFamilyAssembly.lean`).
+To know the live status, read that record's fields and grep each for its supplier.
+Progress = removing fields (by supplying them inside the theorem) or shrinking a
+field's own premises. The wave-39 M6 log (`experiments/logs/wave39-m6.md`) has the
+last full field-by-field table.
 
-- **Falsities #4–#6 found + amended** (s0-reseat frame ghost; the
-  CallClosureGeom entryBase 4-way; entryFold independent-pcf). Pattern
-  holds: found + amended within the wave, regression guards kept.
-- **The CallSpec calling-convention layer** (wave 36, THE exponentiator):
-  `CallSpec` (uniform callee record, explicit clobber sets — the
-  frame/clobber falsity class is now unstatable), `rzSeamFrame_of_run`
-  (ONE red-zone theorem replacing the per-splice hAInvStable*/hjalmem/
-  spill-disjointness families), `spliceFold` (zero per-callee theorems at
-  any arity). MEASURED: hEntry = 2 named seams + a one-line proof vs the
-  strdup hand route's 28 premise lines.
-- **Generators hardened + extended**: genseg static callee-saved guard
-  (the false-decide→sorryAx mechanism found + fixed); gen_arm_bridge with
-  mandatory self-verification (caught a real sorryAx and refused);
-  abs_inventory refreshed (GENERATED section + dynamic all-segs index).
-- **The concat/STR front CLOSED to plumbing**: blockC_concat_str_closed
-  (κ-parametrized dispatch chain — zero proof edits; AbiExceptS2S3 framed
-  staging; int tail through the landed snprintf interior).
-- **EX_FN**: AllocClosureContract inhabited; hEntry spliced; the arm =
-  staging + tail marshalling (task #18).
+State: HEAD `e991e3f` (wave 40). check_all: OK, **743/743** axiom-audited (622 at
+wave 33). Seven statement falsities found + amended lifetime, every one within its
+wave. History: waves 34–40 = commits `bb8eb8c..e991e3f`, one log per lane in
+`experiments/logs/wave<N>-<lane>.md`, ledger in `experiments/observations.md`.
 
-## Discharge queue (the remaining board, task numbers = session task list)
+## The discharge queue (session task list #s; leverage order)
 
-1. **#18** evalFnSim close: the staging + tail seams of hEntry.
-2. **#20** CallClosure residual spans + the exec-motive stack-window
-   clause (statement amendment, consumer-analysis-first).
-3. **#19** gen_stagepre + the argsHead/exec-side cut classes → divergence
-   board to 29/29.
-4. **#7** (=old #49/#15) native contracts (print/println via loopFromBody,
-   assertOk) + the memcpy word-route framed epilogue.
-5. **#8** (=old #54/#55) ErrShared instantiation + link facts; then the M6
-   geometry emitter (Layout decides from the linker script), thread
-   `interpSim_of_residuals`, end-to-end theorem into check_all.
+1. **#26 nativeArmSplice** (observation `native-call-segentry-wrapper`): factor the
+   native dispatch/join wrapper ONCE (analogue of `callClosureSim`), +
+   `nativeAddr_of_valueRepr` (jalr a6 resolution), + 3 fn-body Triples
+   (assertOk = value_truthy ≫ value_null; print/println = `loopFromBody` char loop
+   + `chain_out` OutRepr invariant). Per-site batteries already exist
+   (NativeWrapperSites/NativeAssertSites). Then 3 native RemainingWork fields close.
+2. **The exec mail-merge** (5 arms: stmtRet/stmtVarInit/stmtIfCond/stmtWhileCond/
+   flCond): ride `ExecJalPreBundle` + `execEvalEntry_of_jalPrefix`
+   (`ArmSegSplitExecEval.lean`) exactly like the landed stmtExpr
+   (`rows/StmtExprArmStagePre.lean` — the model; reuses landed `_es` sites).
+   Extend `gen_stagepre.py` with the exec template if ≥3 heads are uniform
+   (heads differ by instr order + optional beqz). → divergence board 13/14.
+3. **argsHead** (the last eval-child field): the arg-loop-entry shape; consume
+   `CallArgLoopInv` (rows/CallClosureSplice.lean) — do not duplicate.
+4. **The crux marshalling residue** (wave-40 log `wave40-cruxfinal.md`, itemized):
+   env_new_pre side-conditions at the dispatch seam; carrier re-assembly between
+   rows (GHolds → CallParamFoldInv/BodyHandoff/SegExit); the env_define splice per
+   fold param (`foundSt_of_storeRepr`/`frameRepr_append` class); the seq-row
+   suppliers (stackWin k=168 + BodyStatusABI); 2 value_null splices; per-bridge
+   ChainFacts/hjalSeam instantiations. All marshalling-class, no new theory.
+5. **The fn bundle suppliers at the arm site** (AllocBuildStagingLink /
+   AllocBuildTailFacts / AllocBuildReloadPost fields — `rows/FnArmSeams.lean` doc
+   comments are the spec) + the 9 fn dispatch facts (Layout .rodata jump-table
+   bytes at slot 10 — an M6 table item; consider extending `gen_layout.py` to
+   emit jump-table slot pins for ALL tags at once: every arm needs its 9).
+6. **The 11 NonEvalChildStages fields + SqEntry stmtBlock/callBody + flStep**:
+   same `ExecJalPreBundle`/split machinery; suppliers exist
+   (`armResidGap_nonEvalChildFields`, `callBody_split`, `stmtBlock_split`).
+7. **Remaining TermResidualsCore oracles** (see the wave-39 table): hInitStore
+   (drive premises: hSpill/setjmp geometry/span data), hDivCorr (= the ArmStages
+   board, items 2/3/6), the leaf/cell `*Resid` oracles (StrCmpOrderBridge landed;
+   stringify blocks conditional), var/assign rows, hEpilogueSpill, for-loop GAPs.
+8. **ErrWork stragglers**: hBadClosure + hTopAbrupt (non-jal passthroughs), plus
+   ErrSharedInputs' open segments (SnprintfContract / MainErrorSeg / Crt0ExitSeg
+   — M6 decode class) and the 42 SpillArmPre/SetupArmPre arm linkages (M4).
+9. **StoreClosuresBounded** (`rows/StoreReprPhicRebase.lean`): consider proving it
+   as a global store-WF invariant of EvalE/ExecStmt (closures only made by
+   allocClosure at in-bounds indices) instead of threading per-arm.
 
-Estimate: ~2 waves to the assembled close. Tail risks: the exec-motive
-stack-window amendment (statement surgery over the exec motive family) and
-any 7th falsity.
+Estimate: 2–3 waves of the current cadence. Nothing left is research-shaped.
 
-## Execution notes (binding)
+## The abstraction stack (REUSE BY NAME — this is what made waves cheap)
 
-- Coordinator owns `Vsa.lean` + `scripts/check_all.sh`; agents return
-  wiring lines. `scripts/abs_inventory.sh` before every dispatch (it now
-  lists GENERATED segs + all #derive_case names — grep before deriving).
-- Mixed fleet: Fable agents for statement surgery / novel composition;
-  opus for template instantiation + crank. Agents log incrementally to
-  `experiments/logs/wave<N>-<lane>.md` (stall recovery seed) and append
-  observations AT THE MOMENT OF NOTICING.
-- Generators MUST self-verify emitted files (`lake env lean` + grep
-  sorryAx) — the genseg lesson.
-- Elaboration law: no heartbeat raises; log-list rfl BEFORE writeLog
-  reflection (the FnArmClosureBuild idiom). Reached-Config bundles are
-  `def : Prop := ∃ …` (+ R7 allow when the gate trips on genuine ones).
-- Verify with `lake env lean` only; ≤3 concurrent lean; oleans only into
-  `.lake/build/lib/lean/`; regen top-level Vsa.olean after Vsa.lean edits
-  (else #print axioms sees unknown constants); quiesce agent WIP before
-  validating check_all runs.
+- **Call splices**: `CallSpec` (uniform callee record, explicit clobber sets) +
+  `spliceFold`/`SpliceChain` (zero per-callee theorems) + `rzSeamFrame_of_run`
+  (`LogInRZ` one-omega check ⇒ ABI frame + AInv + code pins + spill disjointness).
+  Models: `rows/StrdupTailSpliceFold.lean`, `rows/AllocBuildEntrySplice.lean`,
+  `rows/CallClosureSplice.lean`. NEVER thread hAInvStable*/hjalmem families by hand.
+- **Divergence fields**: `evalChildField_of_blockA_stage` (eval) /
+  `ExecJalPreBundle` + `execEvalEntry_of_jalPrefix` (exec) + the `_mk` builders
+  (ArmStagesPartial) + the capstones (`divFamily_wave40`, ArmStagesWave34).
+- **Generators** (ALL self-verifying — `lake env lean` + sorryAx grep, hard-error):
+  `genseg.py` (segs/bridges; callee-saved-write guard; lds threading — never
+  hand-roll a seg), `gen_arm_bridge.py` (blockA bridges), `gen_stagepre.py`
+  (the eval 3-step cut class from a 5-tuple TOML), `gen_layout.py` (Layout↔ELF).
+- **Motive tables** (signature-free statement extension pattern):
+  `stackScratchTop`/`SegExit.stackWin` + `EntryImage` (InductionScaffold) —
+  per-PC tables, vacuous when untabled. Use this pattern for any new motive need.
+- **Write-log reflection**: log-list rfl FIRST, then offset-normalize, then cheap
+  foldl rfl (`fnArmClosureBuild_log_eq` idiom). NEVER rfl writeLog vs an abstract map.
+- The full inventory: `scripts/abs_inventory.sh` (run BEFORE every dispatch; has a
+  GENERATED section + a dynamic all-segs index — grep it before any #derive_case).
+
+## Fleet protocol (verified across ~20 dispatches this session)
+
+- ≤3 concurrent agents, each ONE lean process. Mixed fleet: **Fable** for statement
+  surgery / novel composition / falsity-risk items; **opus** for template
+  instantiation, generators, marshalling.
+- Every agent prompt: CLAUDE.md laws verbatim reminder; run abs_inventory + `ls
+  rows/*Gen.lean`; WORK INCREMENTALLY with a log at
+  `experiments/logs/wave<N>-<lane>.md` updated per landing (the stall-recovery
+  seed — ~1/3 of dispatches stall on a stream watchdog; with the logs, ZERO work
+  was lost across ~8 stalls); observations appended AT THE MOMENT OF NOTICING;
+  named-field structures; reached-Config bundles `def : Prop := ∃…` (+ R7
+  `-- discipline: allow(...)` when genuine); Law 4 for falsities (machine-checked
+  obstruction, never a workaround — 7 precedents); do NOT touch Vsa.lean/
+  check_all.sh (coordinator-owned; agents return wiring lines); disjoint file
+  ownership per lane spelled out in the prompt; axioms ⊆ {propext,
+  Classical.choice, Quot.sound}; `#print axioms` everything.
+- On a stall: ground-truth the tree (`lake env lean` the touched files — editor
+  diagnostics LIE both ways), read the lane log, respawn with the log as
+  inheritance. Two stalls were "finished, died during cleanup" — check before
+  redoing anything.
+- Known gotchas (put in every proof-agent prompt): `mv`/`li` reflect
+  `+ sign_extend imm` (hsext idiom); `gholds_lookup` concludes `gprGet` (use
+  exact / rewrite-in-hypothesis, not rw-on-goal); symbolic lookups `by rfl` not
+  `by decide`; TAKEN-branch end PCs via `chainEndPC_eq_bt` (multi-block only).
+
+## Checking scripts (the coordinator loop per wave)
+
+1. `scripts/abs_inventory.sh` — before every dispatch.
+2. Per agent file: `lake env lean <file>` (green) + `#print axioms` (clean).
+3. Wire: imports into `Vsa.lean`, entries into `scripts/check_all.sh` THEOREMS.
+4. `lake env lean -o .lake/build/lib/lean/Vsa.olean Vsa.lean` — ALWAYS regen the
+   top olean after editing Vsa.lean (else stage c sees unknown constants). If it
+   reports a missing module olean, rebuild that module with `-o` serially (the
+   dirty-tree cascade); NEVER `lake build`, never LSP tools.
+5. `bash scripts/check_all.sh` on the QUIESCED tree (no agent WIP — stage b scans
+   untracked files). Stages: a=build+elab-budget, a4=discipline
+   (`check_discipline.py`), b=sorry/axiom scan, c=axiom audit of every listed
+   theorem. Beware pipefail illusions: `cmd | grep -c error` exits 1 on ZERO
+   matches — read the actual tail, don't trust `$?` through a pipe.
+6. Commit per wave with the wave summary; end each commit message with the
+   check_all count. Update this plan + the memory file every 2-3 waves.
+
+## Standing risks
+
+- The watchdog stalls (infrastructure): mitigated by the log protocol, not fixed.
+- Editor/LSP racing builds invalidate oleans mid-wave: rebuild serially, don't fight it.
+- An 8th falsity may exist in the un-exercised residue: the pattern says it costs
+  one wave, found via the same Law-4 route.
+- Generator emissions: trust nothing without the self-verification pass (two real
+  bug classes found: false decide → sorryAx; zero-pinned lds).
