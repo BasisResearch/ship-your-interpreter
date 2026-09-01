@@ -625,6 +625,7 @@ Vsa/Sim/Code/Native_println.lean
 Vsa/Sim/Code/Runtime_error.lean
 Vsa/Sim/Code/Setjmp.lean
 Vsa/Sim/Code/Snprintf.lean
+Vsa/Sim/Code/Stringify.lean
 Vsa/Sim/Code/Strcmp.lean
 Vsa/Sim/Code/Strcpy.lean
 Vsa/Sim/Code/Strlen.lean

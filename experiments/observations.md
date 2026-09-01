@@ -1890,3 +1890,80 @@ it, still stop and report instead.
 - proposal: correct the "36" literal to "29" in ApproxArmReseat.lean /
   ApproxDispatchSuppliers.lean headers when those files are next edited (read-only
   this task).
+
+## 2026-08-31 sqentryc-boundary-3-fields-closed + halfB-recut-cost (Task #78)
+- missing (Half A): NONE — the 3 SqEntryC-boundary fields (callBody/stmtBlock/
+  seqHead) are now closed the same way as the 26 twin fields. Key finding: the
+  target `SqEntryC Reflect c' st d env ss = ∃ ghosts, SegEntry@loopHead c' ∧
+  Reflect c' env ss`. The `SegEntry` half is machine content; the `Reflect` half is
+  the OPAQUE section variable (DivCorrClose) — machine-underivable. Honest shape:
+  the `*StagePre` residual LANDS at a config carrying BOTH (SqLoopHeadPreBundle for
+  callBody/stmtBlock; loopHeadDispatch_span's ExecEntry for seqHead — the reverse
+  direction), the Reflect component TRANSPORTED by the caller from its own Reflect
+  at the compound node. Bridge = definitional repack (mirror of sqEntryC_of_seg).
+  Landed `Vsa/Sim/ArmSegSplitSqEntry.lean` (5 thms, axiom-clean, 22s) +
+  `Vsa/Sim/ApproxArmResidGapAssembly.lean` (armResidGap_of_stages assembles the
+  FULL 29-field ApproxArmResidGap from 4 staging bundles: EvalChildStages(14) +
+  flStep(1) + NonEvalChildStages(11) + SqEntryStages(3); divFamily_of_armStages →
+  DivFamily L, both axiom-clean 1.3s).
+- missing (Half B, binary-RIGHT + the other re-stagings): a cheap way to re-cut the
+  MID-arm span. binaryR's span (0x800034fc..0x80003518, 7 sites → RIGHT jal) is NOT
+  a truncation of a straight-line head like blockB_unary/leftStagePre: it starts
+  from `cL` = the post-LEFT-return SubEvalReturn bundle and needs the memory
+  transport ment↔mcall1↔cL.mem (hAgNode/hMemExtM0) + hPopCL frame-population +
+  node-24 readback before the 7 sites even begin. A clean re-cut is ~250 lines of
+  bespoke machine threading PER mid-arm (binaryR/logicalR/callC-mid/argsTail-mid),
+  each entangled with its own SubEvalReturn post — the EvalBinSim.blockB_binary body
+  lines 512-911.
+- workaround (Half B): NOT built (budget: each re-cut risks the elaboration wall the
+  discipline forbids bumping). Delivered Half A + the full capstone instead (higher
+  leverage: it is the LAST divergence content reduced to ONE supplier interface).
+  The two landed models (blockB_unary_stagePre, blockB_binary_leftStagePre) already
+  cover unary + binary-LEFT; the rest are the honest named ArmStages fields.
+- cost: the mid-arm/exec-side stagings (~13 spans) each pay ~150-250 lines when
+  built; whoever builds them reuses evalChildSplit_of_stage/execChildSplit_of_stage
+  (the marshalling is done — only the head span remains).
+- proposal: a `subEvalReturn → JalPreBundle` mid-arm combinator that abstracts the
+  "transport node pointer across a returned sub-call + run the operand-load sites"
+  shape, so binaryR/logicalR share ONE re-cut like binaryL shares one marshalling
+  bridge. Until then each mid-arm is its own StagePreSuppliers2 entry.
+
+## 2026-08-31 strdup-tail-memcpy-seam-needs-framed (Task #77 Part 2)
+- missing: NONE (abstraction existed). The strdup-tail memcpy arg-staging seg
+  `strdupMemcpyArgSeg` (`ld a2,8(sp) ; mv s0,a0 ▷ beqz(false) ; mv a1,s1`) reseats
+  the CALLEE-SAVED `x8`/s0 (holds the malloc result across the memcpy call), so
+  `WrChainAvoidAbi strdupMemcpyArgSeg` is FALSE and plain `BridgeSeg.bridgeOfSeg`
+  cannot land its jal seam.
+- workaround: used `BridgeSegFramed.bridgeOfSegFramed` at `P := AbiExceptS0`
+  (`AbiPreserved R && !(R==x8)`) — the EXACT `mvS7Seg` idiom already in that file;
+  s0's reseated value is exposed via the `GHolds σ2 out.regs` post. Green + axiom-clean.
+- cost: one extra `def AbiExceptS0` + two `decide`s (hnoiseP/hAvoidP) + one hPabi
+  one-liner. The strlen/malloc seams use plain `bridgeOfSeg` (WrChainAvoidAbi holds).
+- proposal: none — the two-combinator split (bridgeOfSeg / bridgeOfSegFramed) is the
+  right factoring. A future generator (`scripts/genseg.py`) emitting the jal-seam
+  bridge should pick bridgeOfSegFramed automatically when `wrChain ∩ calleeSaved ≠ ∅`.
+
+## 2026-08-31 strdup-tail-bridges-closed + concat-cblock-scope (Task #77)
+- DONE (Parts 1+2): `Vsa/Sim/Code/Stringify.lean` (generated, 105 sites/7 chunks,
+  grandfathered) + `Vsa/Sim/rows/StrdupTailJalSeams.lean` (5 thms green+axiom-clean):
+  the wave-31 obstruction (three strdup-tail jal seams needed a byte-pin battery) is
+  CLOSED. `strdupTail_{strlen,malloc,memcpy}_run` = bridgeOfSeg(Framed) + jalStep_of_obs
+  over the Stringify pins; `strdupTailBridgeStrlenPre_closed` = the frame-carrying
+  strlen bridge (contract's `bridgeStrlenPre` shape).
+- residual (Part 2): the malloc + memcpy `*Pre_closed` wrappers (contract's
+  `bridgeMallocPre`/`bridgeMemcpyPre` shapes) + `bridgeEpilogue` — the seams are the
+  machine cores; the wrappers are the ~50-line-each field marshalling into the
+  malloc-entry/PreDispatch predicates (malloc: x8 ghost reseat g', x1%4=0; memcpy:
+  PreDispatch + OOM non-null branch, reads s0 off the exposed GHolds since memcpy seam
+  is AbiExceptS0). Then `stringifyStrdupTailContract` instantiates modulo entry supplier.
+- residual (Part 3): `StrConcatCBlockResid` (StrConcatHeap.lean) unbuilt — the
+  10-callee heap splice 0x80003a20→0x80003ae0 (2×stringify HYP ≫ strlen ≫ strlen ≫
+  malloc ≫ [beqz] ≫ memcpy ≫ strcpy ≫ free ≫ free ≫ value_str) + EvalIH lift. All 7
+  callee contracts EXIST (MallocContract.{spec,freeSpec} @ Alloc.lean:80/139,
+  strlen framed via EnvDefCompose, memcpy framed splice, StrcpyContractCpw @
+  StrcpyContractInhab, value_str_spec_full @ EvalStrSim:200) + 3 staging segs landed
+  (ConcatCBlockStaging). This is a several-hundred-line callSeg/Triple.seq assembly —
+  needs its own session; land in stages (heap-splice core, then EvalIH lift).
+- WIRING (report-only, not applied per task): add `import Vsa.Sim.rows.StrdupTailJalSeams`
+  to Vsa.lean; check_all axiom entries strdupTail_{strlen,malloc,memcpy}_run +
+  strdupTailBridgeStrlenPre_closed. Stringify.lean added to discipline_grandfather.txt.
