@@ -7,6 +7,7 @@ import Vsa.Sim.ReprCopy
 import Vsa.Sim.EvalNotSim
 import Vsa.Sim.EvalNullSim
 import Vsa.Sim.ObsAvoid
+import Vsa.Sim.StepFrameOut
 
 /-!
 # Layer 4 — M4: discharging the `native_assert` INTERNAL run (`Call.assertOk`)
@@ -230,7 +231,29 @@ def naExit (g : (R : Register) → Option (RegisterType R))
   (∀ a : Nat, (a < fsp.toNat - 80 ∨ fsp.toNat + 40 ≤ a) → (a < sret.toNat ∨ sret.toNat + 24 ≤ a) →
     c.σ.mem[a]? = m0[a]?) ∧
   (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
-  c.σ.regs.get? Register.x2 = some fsp
+  c.σ.regs.get? Register.x2 = some fsp ∧
+  -- the FULL ABI callee-saved frame (wave-42 amendment, observation
+  -- `naexit-lacks-abi-frame-clause`): the epilogue reloads `ra/s0/s1/s2` from
+  -- their spills and re-adjusts `sp`; no other callee-saved register is
+  -- written anywhere in the run (including the two callee sub-runs).
+  (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R)
+
+/-- Named destructurer (R7): the ABI callee-saved frame clause of `naExit`. -/
+theorem naExit_abiFrame {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {φc : Addr → Nat} {fsp sret retAddr : BitVec 64}
+    {m0 : Mem} {out0 : Array String} {c : Config}
+    (h : naExit g N φc fsp sret retAddr m0 out0 c) :
+    ∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R := by
+  obtain ⟨_, _, _, _, _, _, _, _, hframe⟩ := h; exact hframe
+
+/-- `AbiPreserved` enumerated: a callee-saved register is one of the fifteen
+`sp/gp/tp/s0–s11`. Lets a whole-run frame clause split the machine-written
+callee-saveds (tracked values) from the never-written rest (`StepFrameOut`). -/
+theorem abiPreserved_enum (R : Register) (h : AbiPreserved R = true) :
+    R = .x2 ∨ R = .x3 ∨ R = .x4 ∨ R = .x8 ∨ R = .x9 ∨ R = .x18 ∨ R = .x19 ∨
+    R = .x20 ∨ R = .x21 ∨ R = .x22 ∨ R = .x23 ∨ R = .x24 ∨ R = .x25 ∨
+    R = .x26 ∨ R = .x27 := by
+  revert h; cases R <;> decide
 
 /-- Addressing lemma: `fsp + sext imm` for the small positive offsets used by the
 buffer stores, as `fsp.toNat + off`, no wrap (using `fsp + 40 ≤ 2^32`). -/
@@ -1316,6 +1339,9 @@ theorem nativeAssertInternal
     have := obs_alu_pc hobs29
     rwa [show BitVec.addInt (0x80002e64#64) 4 = (0x80002e68#64 : BitVec 64) from by decide] at this
   have hx1_29 : σ29.regs.get? Register.x1 = some retAddr := obs_alu_other' hobs29 Register.x1 (by decide) hx1_28
+  have hx8_29 : σ29.regs.get? Register.x8 = some s0v := by
+    have := obs_alu_rd hobs29 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [hreload_eq sb0 sb1 sb2 sb3 sb4 sb5 sb6 sb7 s0v hsbrec] at this
   have hsp_29 : σ29.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other' hobs29 Register.x2 (by decide) hsp_28
   obtain ⟨vmi29, hmi29⟩ := obs_alu_minstret hobs29
   have hout29 : σ29.sailOutput = out0 := by rw [hobs29.out, sailOutput_sigmaPost_alu]; exact hout28
@@ -1334,6 +1360,10 @@ theorem nativeAssertInternal
     have := obs_alu_pc hobs30
     rwa [show BitVec.addInt (0x80002e68#64) 4 = (0x80002e6c#64 : BitVec 64) from by decide] at this
   have hx1_30 : σ30.regs.get? Register.x1 = some retAddr := obs_alu_other' hobs30 Register.x1 (by decide) hx1_29
+  have hx9_30 : σ30.regs.get? Register.x9 = some s1v := by
+    have := obs_alu_rd hobs30 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [hreload_eq tb0 tb1 tb2 tb3 tb4 tb5 tb6 tb7 s1v htbrec] at this
+  have hx8_30 : σ30.regs.get? Register.x8 = some s0v := obs_alu_other' hobs30 Register.x8 (by decide) hx8_29
   have hsp_30 : σ30.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other' hobs30 Register.x2 (by decide) hsp_29
   obtain ⟨vmi30, hmi30⟩ := obs_alu_minstret hobs30
   have hout30 : σ30.sailOutput = out0 := by rw [hobs30.out, sailOutput_sigmaPost_alu]; exact hout29
@@ -1352,6 +1382,11 @@ theorem nativeAssertInternal
     have := obs_alu_pc hobs31
     rwa [show BitVec.addInt (0x80002e6c#64) 4 = (0x80002e70#64 : BitVec 64) from by decide] at this
   have hx1_31 : σ31.regs.get? Register.x1 = some retAddr := obs_alu_other' hobs31 Register.x1 (by decide) hx1_30
+  have hx18_31 : σ31.regs.get? Register.x18 = some s2v := by
+    have := obs_alu_rd hobs31 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [hreload_eq ub0 ub1 ub2 ub3 ub4 ub5 ub6 ub7 s2v hubrec] at this
+  have hx8_31 : σ31.regs.get? Register.x8 = some s0v := obs_alu_other' hobs31 Register.x8 (by decide) hx8_30
+  have hx9_31 : σ31.regs.get? Register.x9 = some s1v := obs_alu_other' hobs31 Register.x9 (by decide) hx9_30
   have hsp_31 : σ31.regs.get? Register.x2 = some (fsp - 80#64) := obs_alu_other' hobs31 Register.x2 (by decide) hsp_30
   obtain ⟨vmi31, hmi31⟩ := obs_alu_minstret hobs31
   have hout31 : σ31.sailOutput = out0 := by rw [hobs31.out, sailOutput_sigmaPost_alu]; exact hout30
@@ -1372,6 +1407,9 @@ theorem nativeAssertInternal
       rw [BitVec.toNat_add, hspNat, show (sign_extend (m := 64) (0x050#12) : BitVec 64).toNat = 80 from by decide]
       have := hRG.fsp_hi; have := fsp.isLt; omega] at this
   have hx1_32 : σ32.regs.get? Register.x1 = some retAddr := obs_alu_other' hobs32 Register.x1 (by decide) hx1_31
+  have hx8_32 : σ32.regs.get? Register.x8 = some s0v := obs_alu_other' hobs32 Register.x8 (by decide) hx8_31
+  have hx9_32 : σ32.regs.get? Register.x9 = some s1v := obs_alu_other' hobs32 Register.x9 (by decide) hx9_31
+  have hx18_32 : σ32.regs.get? Register.x18 = some s2v := obs_alu_other' hobs32 Register.x18 (by decide) hx18_31
   obtain ⟨vmi32, hmi32⟩ := obs_alu_minstret hobs32
   have hout32 : σ32.sailOutput = out0 := by rw [hobs32.out, sailOutput_sigmaPost_alu]; exact hout31
   have hNA32 : Native_assertLoaded σ32.mem := by rw [hmem32e]; exact hmem31e ▸ hNA31
@@ -1385,8 +1423,43 @@ theorem nativeAssertInternal
     have := obs_jr_pc hobs33
     exact this
   have hsp_fin : σ33.regs.get? Register.x2 = some fsp := obs_jr_other' hobs33 Register.x2 (by decide) hsp_32
+  have hx8_fin : σ33.regs.get? Register.x8 = some s0v := obs_jr_other' hobs33 Register.x8 (by decide) hx8_32
+  have hx9_fin : σ33.regs.get? Register.x9 = some s1v := obs_jr_other' hobs33 Register.x9 (by decide) hx9_32
+  have hx18_fin : σ33.regs.get? Register.x18 = some s2v := obs_jr_other' hobs33 Register.x18 (by decide) hx18_32
   obtain ⟨vmi33, hmi33⟩ := obs_jr_minstret hobs33
   have hout_fin : σ33.sailOutput = out0 := by rw [hobs33.out, sailOutput_sigmaPost_jump_x0]; exact hout32
+  ------------------------------------------------------------------------
+  -- Whole-run register frame: one `StepFrameOut` per site, the two callee
+  -- sub-runs wrapped from their `NotWrittenT`/`NotWrittenV` frame clauses.
+  ------------------------------------------------------------------------
+  have sfoT : StepFrameOut ([Register.x10, Register.x14, Register.x15] ++ noiseRegs) σ21 cT.σ :=
+    ⟨houtT.trans hout21.symm, fun R hav =>
+      hframeT R ⟨hav _ (by decide), hav _ (by decide), hav _ (by decide),
+        hav _ (by decide), hav _ (by decide), hav _ (by decide), hav _ (by decide),
+        hav _ (by decide), hav _ (by decide), hav _ (by decide)⟩⟩
+  have sfoN : StepFrameOut ([Register.x11, Register.x15] ++ noiseRegs) σ26 cN.σ :=
+    ⟨houtN.trans hout26.symm, fun R hav =>
+      hframeN R ⟨hav _ (by decide), hav _ (by decide), hav _ (by decide),
+        hav _ (by decide), hav _ (by decide), hav _ (by decide), hav _ (by decide),
+        hav _ (by decide), hav _ (by decide)⟩⟩
+  have sfoAll :=
+    ((((((((((((((((((((((((((((((((((StepFrameOut.of_alu hobs1).trans
+      (StepFrameOut.of_store hobs2)).trans (StepFrameOut.of_store hobs3)).trans
+      (StepFrameOut.of_store hobs4)).trans (StepFrameOut.of_store hobs5)).trans
+      (StepFrameOut.of_alu hobs6)).trans (StepFrameOut.of_alu hobs7)).trans
+      (StepFrameOut.of_alu hobs8)).trans (StepFrameOut.of_alu hobs9)).trans
+      (StepFrameOut.of_branch_nottaken hobs10)).trans (StepFrameOut.of_alu hobs11)).trans
+      (StepFrameOut.of_alu hobs12)).trans (StepFrameOut.of_alu hobs13)).trans
+      (StepFrameOut.of_alu hobs14)).trans (StepFrameOut.of_alu hobs15)).trans
+      (StepFrameOut.of_store hobs16)).trans (StepFrameOut.of_store hobs17)).trans
+      (StepFrameOut.of_store hobs18)).trans (StepFrameOut.of_store hobs19)).trans
+      (StepFrameOut.of_store hobs20)).trans (StepFrameOut.of_jal hobs21)).trans
+      sfoT).trans (StepFrameOut.of_alu hobs22)).trans (StepFrameOut.of_alu hobs23)).trans
+      (StepFrameOut.of_branch_nottaken hobs24)).trans (StepFrameOut.of_alu hobs25)).trans
+      (StepFrameOut.of_jal hobs26)).trans sfoN).trans (StepFrameOut.of_alu hobs27)).trans
+      (StepFrameOut.of_alu hobs28)).trans (StepFrameOut.of_alu hobs29)).trans
+      (StepFrameOut.of_alu hobs30)).trans (StepFrameOut.of_alu hobs31)).trans
+      (StepFrameOut.of_alu hobs32)).trans (StepFrameOut.of_jr hobs33)
   ------------------------------------------------------------------------
   -- Assemble the whole run and the naExit postcondition.
   ------------------------------------------------------------------------
@@ -1394,7 +1467,7 @@ theorem nativeAssertInternal
   · -- the full Steps chain
     exact (((((((((((((((((((((((((((((((((((Steps.single hstep1).trans (Steps.single hstep2)).trans (Steps.single hstep3)).trans (Steps.single hstep4)).trans (Steps.single hstep5)).trans (Steps.single hstep6)).trans (Steps.single hstep7)).trans (Steps.single hstep8)).trans (Steps.single hstep9)).trans (Steps.single hstep10)).trans (Steps.single hstep11)).trans (Steps.single hstep12)).trans (Steps.single hstep13)).trans (Steps.single hstep14)).trans (Steps.single hstep15)).trans (Steps.single hstep16)).trans (Steps.single hstep17)).trans (Steps.single hstep18)).trans (Steps.single hstep19)).trans (Steps.single hstep20)).trans (Steps.single hstep21)).trans hsT).trans (Steps.single hstep22)).trans (Steps.single hstep23)).trans (Steps.single hstep24)).trans (Steps.single hstep25)).trans (Steps.single hstep26)).trans hsN).trans (Steps.single hstep27)).trans (Steps.single hstep28)).trans (Steps.single hstep29)).trans (Steps.single hstep30)).trans (Steps.single hstep31)).trans (Steps.single hstep32)).trans (Steps.single hstep33))
   · -- naExit
-    refine ⟨hG33, hi33, hpc_fin, ?_, hout_fin, ?_, ⟨_, hmi33⟩, hsp_fin⟩
+    refine ⟨hG33, hi33, hpc_fin, ?_, hout_fin, ?_, ⟨_, hmi33⟩, hsp_fin, ?_⟩
     · -- ValueRepr sret .null (from value_null, survives the pure-register epilogue)
       rw [hmem33e]; exact hvalNull
     · -- memory framed outside [fsp-80, fsp+40) ∪ [sret, sret+24):
@@ -1403,5 +1476,27 @@ theorem nativeAssertInternal
       intro a hframe_a hsret_a
       rw [hmem33e, ← hmemframeN a (by rcases hsret_a with h|h <;> omega)]
       exact hbufout a hframe_a
+    · -- the ABI callee-saved frame: `ra/s0/s1/s2` reload their spills, `sp`
+      -- is re-adjusted, and no other callee-saved register is written
+      -- anywhere in the run (whole-run `StepFrameOut`).
+      intro R hR
+      obtain ⟨hab, _, _, _, _, _, _, _⟩ := hR
+      rcases abiPreserved_enum R hab with
+        rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl
+      · exact hsp_fin.trans ((hframe _ (by decide)).symm.trans hsp).symm
+      · exact (sfoAll.frame _ (by decide)).trans (hframe _ (by decide))
+      · exact (sfoAll.frame _ (by decide)).trans (hframe _ (by decide))
+      · exact hx8_fin.trans ((hframe _ (by decide)).symm.trans hs0r).symm
+      · exact hx9_fin.trans ((hframe _ (by decide)).symm.trans hs1r).symm
+      · exact hx18_fin.trans ((hframe _ (by decide)).symm.trans hs2r).symm
+      · exact (sfoAll.frame _ (by decide)).trans (hframe _ (by decide))
+      · exact (sfoAll.frame _ (by decide)).trans (hframe _ (by decide))
+      · exact (sfoAll.frame _ (by decide)).trans (hframe _ (by decide))
+      · exact (sfoAll.frame _ (by decide)).trans (hframe _ (by decide))
+      · exact (sfoAll.frame _ (by decide)).trans (hframe _ (by decide))
+      · exact (sfoAll.frame _ (by decide)).trans (hframe _ (by decide))
+      · exact (sfoAll.frame _ (by decide)).trans (hframe _ (by decide))
+      · exact (sfoAll.frame _ (by decide)).trans (hframe _ (by decide))
+      · exact (sfoAll.frame _ (by decide)).trans (hframe _ (by decide))
 
 end Vsa.Sim

@@ -62,19 +62,15 @@ structure NativeAssertExtra (argsBase spv : BitVec 64) (c : Config) : Prop where
     read64 c.σ.mem (argsBase.toNat + 8) = some p →
     ∀ k, k ≤ s.length → (p + k < spv.toNat - 80 ∨ spv.toNat + 40 ≤ p + k)
 
-/-! ## §2. The named residual (observation `naexit-lacks-abi-frame-clause`) -/
+/-! ## §2. The (wave-41) residual, DISCHARGED (wave 42)
 
-/-- **NAMED RESIDUAL — the ABI-framed `native_assert` internal run.**  The
-landed `nativeAssertInternal` (`EvalCallNative2.lean`) proves exactly this
-Triple MINUS the exit frame conjunct: its `naExit` pins only `x2` among the
-callee-saved registers, although the machine restores every one (the epilogue
-reloads `ra/s0/s1/s2` from the frame spills; no other callee-saved is written)
-and the landed proof tracks all the values site-by-site.  Supplied by a
-one-clause `naExit` amendment + threading the already-tracked register facts
-(coordinator: `EvalCallNative2.lean` is outside wave-41 file ownership) — see
-the observation for the exact plan.  `g_na` is the internal run's OWN ghost
-frame (its tie is `naEntry`'s existing final clause); the exit conjunct
-re-establishes it. -/
+`naExit` now carries the full ABI callee-saved frame clause (the wave-42
+amendment resolving observation `naexit-lacks-abi-frame-clause`), so the
+framed variant is the landed `nativeAssertInternal` plus the named
+destructurer `naExit_abiFrame`. -/
+
+/-- The ABI-framed `native_assert` internal run (wave-41's named residual;
+kept as a def so the wave-41 statement trail survives). -/
 def NativeAssertInternalAbi (N : NativeAddrs) (φc : Addr → Nat) : Prop :=
   ∀ (g_na : (R : Register) → Option (RegisterType R)) (v : Value)
     (fsp sret retAddr argsBase argc interp scratch s0v s1v s2v : BitVec 64)
@@ -84,6 +80,20 @@ def NativeAssertInternalAbi (N : NativeAddrs) (φc : Addr → Nat) : Prop :=
         s0v s1v s2v m0 out0)
       (fun c => naExit g_na N φc fsp sret retAddr m0 out0 c ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g_na R))
+
+/-- **The residual discharged verbatim**: `nativeAssertInternal`'s amended
+`naExit` already contains the frame clause; project it back out through
+`naExit_abiFrame`. -/
+theorem nativeAssertInternalAbi_closed (N : NativeAddrs) (φc : Addr → Nat) :
+    NativeAssertInternalAbi N φc := by
+  intro g_na v fsp sret retAddr argsBase argc interp scratch s0v s1v s2v m0 out0
+  intro c hc
+  obtain ⟨c', hsteps, hexit⟩ :=
+    nativeAssertInternal g_na N φc v fsp sret retAddr argsBase argc interp
+      scratch s0v s1v s2v m0 out0 c hc
+  exact ⟨c', hsteps, hexit, naExit_abiFrame hexit⟩
+
+#print axioms nativeAssertInternalAbi_closed
 
 /-! ## §3. The body provider -/
 
@@ -119,8 +129,7 @@ theorem nativeBodyAssert
     (hsretStack : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi)
     (hsretSlot : sret.toNat + 24 ≤ spv.toNat + 1016 ∨ spv.toNat + 1024 ≤ sret.toNat)
     (hcodeStack : ∀ a : Nat, 0x80003164 ≤ a → a < 0x80003fe0 →
-      ¬ (SL.lo ≤ a ∧ a < SL.hi))
-    (hInternal : NativeAssertInternalAbi N φc) :
+      ¬ (SL.lo ≤ a ∧ a < SL.hi)) :
     Triple
       (fun c => NativeBodyPre g N A SL φf φc st vs fentry
           spv s7v sret interp argsBase scratch m0 c ∧
@@ -158,10 +167,10 @@ theorem nativeBodyAssert
       exact hpre.argsBytes j (by omega)
   -- run the (framed) internal body
   obtain ⟨c', hsteps, hexit, hframe'⟩ :=
-    hInternal (fun R => c.σ.regs.get? R) v spv sret (0x800039f8#64)
-      argsBase (BitVec.ofNat 64 vs.length) interp scratch s0v s1v s2v
-      c.σ.mem c.σ.sailOutput c hentry
-  obtain ⟨hG', htick', hpc', _hnull, hout', hmemF', ⟨w', hw'⟩, _hsp'⟩ := hexit
+    nativeAssertInternalAbi_closed N φc (fun R => c.σ.regs.get? R) v spv sret
+      (0x800039f8#64) argsBase (BitVec.ofNat 64 vs.length) interp scratch
+      s0v s1v s2v c.σ.mem c.σ.sailOutput c hentry
+  obtain ⟨hG', htick', hpc', _hnull, hout', hmemF', ⟨w', hw'⟩, _hsp', _⟩ := hexit
   have hfsp80 : 80 ≤ spv.toNat := by have := hRG.fsp_lo; omega
   -- exit memory agrees with the entry memory outside frame ∪ sret
   -- (both windows sit inside the stack region)
@@ -215,11 +224,11 @@ theorem nativeBodyAssert
 
 /-! ## §4. The assertOk contract, assembled
 
-`NativeAssertOkSpec` from the splice + this body: the ONLY remaining legs are
+`NativeAssertOkSpec` from the splice + this body: the ONLY remaining leg is
 the dispatch (`Triple CallEntryP (NativeBodyPre ∧ NativeAssertExtra)` — machine
 body in `rows/NativeArmDispatch.lean`, its `SegEntry`→ABI geometry with the M6
-caller, exactly the closure `hDispatchStage` residual class) and the
-`NativeAssertInternalAbi` frame residual (§2). -/
+caller, exactly the closure `hDispatchStage` residual class); the wave-41
+`NativeAssertInternalAbi` frame residual is CLOSED (§2). -/
 theorem nativeAssertOkSpec_of_dispatch
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -248,7 +257,6 @@ theorem nativeAssertOkSpec_of_dispatch
     (hsretSlot : sret.toNat + 24 ≤ spv.toNat + 1016 ∨ spv.toNat + 1024 ≤ sret.toNat)
     (hcodeStack : ∀ a : Nat, 0x80003164 ≤ a → a < 0x80003fe0 →
       ¬ (SL.lo ≤ a ∧ a < SL.hi))
-    (hInternal : NativeAssertInternalAbi N φc)
     (hDispatch : Triple (CallEntryP g N A SL φf φc st d dLeft aLeft m0)
       (fun c => NativeBodyPre g N A SL φf φc st vs fentry
           spv s7v sret interp argsBase scratch m0 c ∧
@@ -259,7 +267,7 @@ theorem nativeAssertOkSpec_of_dispatch
     (nativeBodyAssert g N A SL φf φc st vs v mv fentry
       spv s7v sret interp argsBase scratch s0v s1v s2v m0
       hvs htruthy hfe hg8 hg9 hg18 hRG hargsFrame hargsHi hargsWin hargsAlign
-      hframeStack hsretStack hsretSlot hcodeStack hInternal)
+      hframeStack hsretStack hsretSlot hcodeStack)
 
 #print axioms nativeAssertOkSpec_of_dispatch
 

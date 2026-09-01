@@ -4,6 +4,12 @@ import Vsa.Sim.MidArmFieldWire
 import Vsa.Sim.rows.AssignArmStagePre
 import Vsa.Sim.rows.CallArmStagePre
 import Vsa.Sim.rows.StmtExprArmStagePre
+import Vsa.Sim.rows.StmtRetArmStagePre
+import Vsa.Sim.rows.StmtVarInitArmStagePre
+import Vsa.Sim.rows.StmtIfCondArmStagePre
+import Vsa.Sim.rows.StmtWhileCondArmStagePre
+import Vsa.Sim.rows.FlCondArmStagePre
+import Vsa.Sim.rows.ArgsHeadArmStagePre
 
 /-!
 # `ArmStagesWave34` — the partial `armStages` supplier with the wave-34 landed fields
@@ -355,5 +361,115 @@ theorem divFamily_wave40
   divFamily_of_armStageComponents Reflect L hEntry hIter eval nonEval sq flStep
 
 #print axioms divFamily_wave40
+
+/-! ## §1e. Wave 42 — the 5 remaining exec-eval fields + `argsHead` machine-composed (14/14)
+
+The wave-41 lanes landed the last six eval-child field-composers:
+
+* the 5 exec-eval twins `stmtRet`/`stmtVarInit`/`stmtIfCond`/`stmtWhileCond`/`flCond`
+  (`rows/Stmt*ArmStagePre.lean`, `rows/FlCondArmStagePre.lean`) — each rides the SAME
+  `ExecJalPreBundle` + `execEvalEntry_of_jalPrefix` core as the wave-40 `stmtExpr`
+  model, closing via `*_field_of_dispatch` MODULO its dispatch residual
+  `*ArmDispatch` (the `ExecEntry → ExecArmEntryK` bridge + child-payload / eval-code /
+  wide-window-survival / enlarged-frame facts a `blockA` cannot produce — the exec
+  twins of `StmtExprArmDispatch`, differing only by instruction order / an optional
+  null-branch peel);
+* `argsHead` (`rows/ArgsHeadArmStagePre.lean`) — the last eval-child field, the
+  arg-loop-entry shape: closes via `argsHead_field_of_dispatch` (the `#derive_case`
+  body seg ≫ `bridgeOfSeg` jal, the FIRST consumer of the crux's `CallArgLoopInv`)
+  MODULO `ArgsHeadDispatch` (`AEntryC (e::es) →` the loop-head bundle + head-node
+  `ExprRepr` the pin-agnostic `SegEntry` lacks).
+
+With these six swapped, `EvalChildStages` is FULLY machine-composed (14/14): the caller
+owes NO eval-child `∀`-staging premise, only the six strictly-smaller dispatch
+residuals (`StmtRetArmDispatch`/`StmtVarInitArmDispatch`/`StmtIfCondArmDispatch`/
+`StmtWhileCondArmDispatch`/`FlCondArmDispatch`/`ArgsHeadDispatch`) alongside the earlier
+geometry/dispatch residuals.  Board: 8/14 → 14/14 eval-child-side. -/
+def evalChildStages_ublracSEA_wired
+    (evalIH : ∀ (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt) (v : Value),
+      EvalE st d env e st' v → EvalIH st d env e st' v)
+    (hUnGeom : ∀ (op : UnOp) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      UnaryArmGeomProvider op e st d env c)
+    (hBinGeom : ∀ (op : BinOp) (l r : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      BinArmGeomProvider op l r st d env c)
+    (hLogGeom : ∀ (lop : Vsa.While.LogOp) (l r : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      LogicalArmGeomProvider lop l r st d env c)
+    (hBinRStage : ∀ (op : BinOp) (l r : Expr) (c : Config) (st st' : SpecSt) (d : Nat)
+      (env : Addr) (lv : Value),
+      BinaryRStagePre op l r c st st' d env lv)
+    (hLogRStage : ∀ (lop : Vsa.While.LogOp) (l r : Expr) (c : Config) (st st' : SpecSt)
+      (d : Nat) (env : Addr) (lv : Value),
+      LogicalRStagePre lop l r c st st' d env lv)
+    (hAssignDisp : ∀ (x : String) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      AssignArmDispatch x e st d env c)
+    (hCallDisp : ∀ (f : Expr) (args : List Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      CallArmDispatch f args st d env c)
+    (hStmtExprDisp : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      StmtExprArmDispatch e st d env c)
+    (hArgsDisp : ∀ (e : Expr) (es : List Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      ArgsHeadDispatch e es st d env c)
+    (hStmtRetDisp : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      StmtRetArmDispatch e st d env c)
+    (hStmtVarInitDisp : ∀ (x : String) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      StmtVarInitArmDispatch x e st d env c)
+    (hStmtIfCondDisp : ∀ (cnd : Expr) (t : Stmt) (els : Option Stmt) (c : Config) (st : SpecSt)
+      (d : Nat) (env : Addr),
+      StmtIfCondArmDispatch cnd t els st d env c)
+    (hStmtWhileCondDisp : ∀ (cnd : Expr) (b : Stmt) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      StmtWhileCondArmDispatch cnd b st d env c)
+    (hFlCondDisp : ∀ (cc : Expr) (step : Option Expr) (b : Stmt) (c : Config) (st : SpecSt)
+      (d : Nat) (env : Addr),
+      FlCondArmDispatch cc step b st d env c) :
+    EvalChildStages :=
+  evalChildStages_ublracSE_wired evalIH hUnGeom hBinGeom hLogGeom hBinRStage hLogRStage
+    hAssignDisp hCallDisp hStmtExprDisp
+    -- argsHead: the wave-42 machine-composed arg-loop-entry field
+    (fun e es c st d env hAE =>
+      argsHead_field_of_dispatch e es c st d env (hArgsDisp e es c st d env) hAE)
+    -- stmtRet: the wave-42 machine-composed exec-eval field
+    (fun e c st d env hSE =>
+      stmtRet_field_of_dispatch e c st d env (hStmtRetDisp e c st d env) hSE)
+    -- stmtVarInit
+    (fun x e c st d env hSE =>
+      stmtVarInit_field_of_dispatch x e c st d env (hStmtVarInitDisp x e c st d env) hSE)
+    -- stmtIfCond
+    (fun cnd t els c st d env hSE =>
+      stmtIfCond_field_of_dispatch cnd t els c st d env (hStmtIfCondDisp cnd t els c st d env) hSE)
+    -- stmtWhileCond
+    (fun cnd b c st d env hSE =>
+      stmtWhileCond_field_of_dispatch cnd b c st d env (hStmtWhileCondDisp cnd b c st d env) hSE)
+    -- flCond
+    (fun cc step b c st d env hFE =>
+      flCond_field_of_dispatch cc step b c st d env (hFlCondDisp cc step b c st d env) hFE)
+
+/-! ## §5. Wave-42 capstone — the eval-child side of the board FULLY wired (14/14)
+
+`divFamily_wave42` takes the `eval : EvalChildStages` bundle already carrying ALL 14
+machine-composed eval-child fields (built by `evalChildStages_ublracSEA_wired`): the
+caller no longer owes ANY eval-child `∀`-staging premise, only the strictly-smaller
+dispatch residuals.  The body is identical to `divFamily_wave40`
+(`divFamily_of_armStageComponents` feeds the four bundles); the progress is entirely in
+the `eval` bundle's construction.  Board: 8/14 → 14/14 eval-child; the named remainder
+is the six dispatch residuals (`Args`/`StmtRet`/`StmtVarInit`/`StmtIfCond`/
+`StmtWhileCond`/`FlCond` `*Dispatch`) plus the earlier geometry/dispatch residuals — no
+eval-child staging span left. -/
+theorem divFamily_wave42
+    (Reflect : Config → Addr → List Stmt → Prop) (L : Layout)
+    (hEntry : Vsa.Sim.DivCorrClose.DivEntryDrive Reflect L)
+    (hIter : Vsa.Sim.IterSeamAssembly.IterSeamResid Reflect)
+    (eval : EvalChildStages)
+    (nonEval : NonEvalChildStages)
+    (sq : SqEntryStages Reflect)
+    (flStep : ∀ (cnd : Option Expr) (e : Expr) (b : Stmt) (status : Status)
+      (c : Config) (st st' st'' : SpecSt) (d : Nat) (env : Addr),
+      ForCond st d env cnd st' → ExecS st' d env b st'' status →
+      (status = .normal ∨ status = .cont) → FEntryC c st d env cnd (some e) b →
+      LandedN 1 c (fun c' => JalPreBundle e c' st'' d env)) :
+    Vsa.Sim.InterpSimBundle.DivFamily L :=
+  divFamily_of_armStageComponents Reflect L hEntry hIter eval nonEval sq flStep
+
+#print axioms divFamily_wave42
+
+#print axioms evalChildStages_ublracSEA_wired
 
 end Vsa.Sim

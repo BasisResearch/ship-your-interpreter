@@ -134,3 +134,91 @@ wrapper factored ONCE, (2) `nativeAddr_of_valueRepr`, (3) fn-body Triples
 - coordinator amendment REQUEST: EvalCallNative2.naExit + one clause
   `∀ R, AbiPreservedNoise R → c.σ.regs.get? R = g R` (values already tracked
   in the proof) — discharges NativeAssertInternalAbi verbatim.
+
+## wave 42 (nativefin lane, inherits wave 41)
+
+### Landing 1 — the naExit ABI amendment (queue item 1, DONE)
+- `Vsa/Sim/EvalCallNative2.lean` AMENDED (green 58s, unchanged from baseline;
+  discipline OK):
+  * `naExit` + final clause `∀ R, AbiPreservedNoise R → c.σ.regs.get? R = g R`;
+  * `naExit_abiFrame` — the R7 named destructurer for the new clause;
+  * `abiPreserved_enum` — `AbiPreserved R = true → R ∈ {x2,x3,x4,x8,x9,
+    x18..x27}` (15-way), proved `revert h; cases R <;> decide` (349 ctors,
+    cheap); REUSABLE for any whole-run ABI frame clause;
+  * `nativeAssertInternal` exit frame proof: reload VALUES captured at the
+    "dead" epilogue lds (hx8_29 := s0v via `hreload_eq sb* hsbrec`, hx9_30,
+    hx18_31) and threaded to σ33; whole-run `StepFrameOut` `sfoAll` = 33
+    `.of_alu/of_store/of_jal/of_branch_nottaken/of_jr` composed with 2
+    sub-run wrappers `sfoT`/`sfoN` (NotWrittenT/NotWrittenV → StepFrameOut,
+    see observation `notwritten-frame-clauses-not-stepframeout`); final
+    clause = rcases on `abiPreserved_enum`: 4 tracked-value lines (x2 fsp,
+    x8/x9/x18 reloads) + 11 uniform `(sfoAll.frame _ (by decide)).trans
+    (hframe _ (by decide))` lines.
+- `Vsa/Sim/rows/NativeBodyAssert.lean`: `NativeAssertInternalAbi` residual
+  DISCHARGED — `nativeAssertInternalAbi_closed` (= nativeAssertInternal +
+  naExit_abiFrame projection, verbatim); `hInternal` premise DROPPED from
+  `nativeBodyAssert` AND `nativeAssertOkSpec_of_dispatch`.
+- Downstream re-verified (`lake env lean`, oleans regenerated with `-o`):
+  EvalCallNative2 (58s), EvalCallNative3 (1s), rows/NativeAddrResolve,
+  rows/NativeArmDispatch, rows/NativeArmSplice, rows/NativeBodyAssert — ALL
+  green, ALL axioms ⊆ {propext, Classical.choice, Quot.sound}.
+- hCallAssertOk state: `nativeAssertOkSpec_of_dispatch` is now conditional on
+  ONLY `hDispatch` (the CallEntryP→pins arm-caller seam) + geometry ghosts.
+
+### Landing 2 — the print/println body legs (queue items 2+3, contract layer)
+- `Vsa/Sim/rows/NativeBodyPrint.lean` NEW (green 2.3s, axiom-clean,
+  discipline OK). Wave-39's warning held: `value_print` (0x800028fc) and
+  `fputc` (0x800062e0) have NO code images / site batteries — the internal
+  runs are genuinely multi-wave, so this wave lands the CONTRACT LAYER + the
+  factored marshal, with the internal runs as the two named residuals:
+  * §1 `printedPrefix` algebra: `sepTail` + `intercalate_eq_sepTail` (the
+    hidden `String.intercalate.go✝` tamed by the DEFINITIONAL acc-shift
+    `intercalate s (a::x::l) = intercalate s ((a++s++x)::l)` — both sides ARE
+    `go (a++s++x) s l`; no core intercalate lemmas exist), snoc lemma,
+    `printedPrefix_full/_one/_step` — the loop-invariant output arithmetic
+    ready for the eventual `loopFromBody` discharge.
+  * §2 named-field boundaries `NativePrintRegion` / `NativePrintEntry` /
+    `NativeFnOutExit` (exit carries the FULL ABI frame from day one — the
+    naExit lesson — and a memFrame carve "at/above fsp OR outside stack,
+    minus the sret window"; NO tohost carve since `htif_store` never touches
+    σ.mem, verified against Htif.lean/HtifLift.lean).
+  * §3 residuals `NativePrintInternal` / `NativePrintlnInternal` (+ the
+    `NativePrintExtra`/`NativePrintlnExtra` code-image riders). Discharge
+    shape documented in-place (prologue seg ≫ loopFromBody@0x80002f4c,
+    measure argc−i ≫ value_null ≫ ret; frontier = value_print + fputc
+    contracts). RISK NOTE recorded: fputc may write `_impure_ptr` FILE state
+    (data segment) — would force a memFrame carve amendment.
+  * §4 `nativeBodyOut` — ONE parametric marshal (outApp / entry PC / Extra),
+    print+println are instances (law-3 factoring; observation
+    `native-fnbody-marshal-shape` proposes reseating assert on it too).
+  * §5 `nativeBodyPrint` / `nativeBodyPrintln` (the hBody legs) and
+    `nativePrintSpec_of_internal` / `nativePrintlnSpec_of_internal`.
+- hCallPrint/hCallPrintln state: each reduced to hDispatch (same arm-caller
+  seam class as assert/closure) + ONE internal-run residual + geometry.
+
+## Wiring (coordinator — wave 42 additions, NOT applied by me)
+- Vsa.lean (after `import Vsa.Sim.rows.NativeBodyAssert`):
+    import Vsa.Sim.rows.NativeBodyPrint
+- scripts/check_all.sh axiom list additions:
+    Vsa.Sim.naExit_abiFrame Vsa.Sim.abiPreserved_enum
+    Vsa.Sim.nativeAssertInternalAbi_closed
+    Vsa.Sim.nativeBodyOut Vsa.Sim.nativeBodyPrint Vsa.Sim.nativeBodyPrintln
+    Vsa.Sim.nativePrintSpec_of_internal Vsa.Sim.nativePrintlnSpec_of_internal
+    Vsa.Sim.printedPrefix_full Vsa.Sim.printedPrefix_step
+  (all verified ⊆ {propext, Classical.choice, Quot.sound})
+- NOTE: `nativeBodyAssert`/`nativeAssertOkSpec_of_dispatch` DROPPED their
+  `hInternal : NativeAssertInternalAbi` premise (now supplied internally by
+  `nativeAssertInternalAbi_closed`) — no external consumers existed.
+
+### Task 4 probe — the hDispatch seat (confirmed, no landing)
+Verified against the closure precedent (`rows/CallClosureDispatchStage.lean` +
+`CallClosureSplice.lean`): the closure twin ALSO keeps the machine span as a
+bridge (`bridgeOfSegFramed` at a restricted avoid-set) and leaves the
+`CallEntryP → seg-pre pins` marshalling to the arm assembly at CONCRETE
+ghosts — `SegEntry` names no a5/argc/staged-fv spill facts; they are produced
+by the PRECEDING args-loop-exit + fv-staging spans in the arm chain.
+Strengthening the `Extra` rider with the pins would only relocate the same
+caller obligation, not discharge it.  Wave-41 verdict stands: the clean seat
+for the native `hDispatch` IS the M6/ArmStages arm assembly (compose
+`nativeDispatchStageBridge` + `nativeDispatchJalSeam_of` + the pins available
+there).  No generic theorem is missing.

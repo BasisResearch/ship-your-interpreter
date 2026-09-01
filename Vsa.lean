@@ -604,3 +604,6 @@ import Vsa.Sim.rows.NativeAddrResolve
 import Vsa.Sim.rows.NativeArmSplice
 import Vsa.Sim.rows.NativeArmDispatch
 import Vsa.Sim.rows.NativeBodyAssert
+-- wave 42
+import Vsa.Sim.rows.NativeBodyPrint
+import Vsa.Sim.rows.CallCruxMarshal

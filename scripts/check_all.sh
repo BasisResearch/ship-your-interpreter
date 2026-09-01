@@ -947,6 +947,25 @@ THEOREMS=(
   Vsa.Sim.nativeDispatchJalSeam_of                  # rows/NativeArmDispatch
   Vsa.Sim.nativeBodyAssert                          # rows/NativeBodyAssert (assertOk body: value_truthy ≫ value_null)
   Vsa.Sim.nativeAssertOkSpec_of_dispatch            # rows/NativeBodyAssert (hCallAssertOk ← geometry + hDispatch + NativeAssertInternalAbi)
+  # Wave 42: divergence board 14/14 eval-child + naExit ABI amendment + print contract layer + crux marshal bricks
+  Vsa.Sim.evalChildStages_ublracSEA_wired           # ArmStagesWave34 (all 14 eval-child fields machine-composed; residuals = the 9 named *Dispatch)
+  Vsa.Sim.divFamily_wave42                          # ArmStagesWave34 (capstone)
+  Vsa.Sim.naExit_abiFrame                           # EvalCallNative2 (naExit ABI clause destructurer)
+  Vsa.Sim.abiPreserved_enum                         # EvalCallNative2 (reusable 15-way AbiPreserved enumeration)
+  Vsa.Sim.nativeAssertInternalAbi_closed            # rows/NativeBodyAssert (NativeAssertInternalAbi DISCHARGED — hCallAssertOk ← hDispatch + geometry only)
+  Vsa.Sim.nativeBodyOut                             # rows/NativeBodyPrint (ONE parametric fn-body out-marshal; print/println instances)
+  Vsa.Sim.nativeBodyPrint                           # rows/NativeBodyPrint
+  Vsa.Sim.nativeBodyPrintln                         # rows/NativeBodyPrint
+  Vsa.Sim.nativePrintSpec_of_internal               # rows/NativeBodyPrint (hCallPrint ← hDispatch + NativePrintInternal + geometry)
+  Vsa.Sim.nativePrintlnSpec_of_internal             # rows/NativeBodyPrint
+  Vsa.Sim.printedPrefix_full                        # rows/NativeBodyPrint (loop-invariant output algebra)
+  Vsa.Sim.printedPrefix_step                        # rows/NativeBodyPrint
+  Vsa.Sim.segToTripleOut                            # rows/CallCruxMarshal (segToTriple + sailOutput carry — unblocks OutRepr in carrier marshals)
+  Vsa.Sim.outRepr_transport                         # rows/CallCruxMarshal
+  Vsa.Sim.gholds_reg                                # rows/CallCruxMarshal (GHolds → regs.get? pin reader)
+  Vsa.Sim.foldBackLoop_passthrough                  # rows/CallCruxMarshal (R7 destructurer over the FoldBack loop row)
+  Vsa.Sim.normalJoin_exit                           # rows/CallCruxMarshal
+  Vsa.Sim.foldStore_succ                            # rows/CallCruxMarshal (fold take-succ decomposition for CallParamFoldInv k+1)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean

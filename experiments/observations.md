@@ -3027,3 +3027,59 @@ it, still stop and report instead.
   → ∀ n ∈ 1..31, n ≠ idx rd → gprGet-transport` over `StepFrameOut` (whose
   `of_alu/of_jal/of_jr` already package the per-class frame), so each class's
   JalStep glue is ONE StepFrameOut + one generic GPR-dispatch lemma.
+
+## 2026-09-01 rowpost-drops-sailoutput-blocks-outrepr (wave42-cruxmarsh #4)
+- missing: the `#derive_case`/`segToTriple` row `Post` shape (`GoodState ∧
+  mem = writeLog ∧ PC ∧ GHolds`) DROPS the `σ'.sailOutput = σ.sailOutput` fact
+  that `segEval_sound` proves and `segToTriple`'s internal `hpost` could carry —
+  its signature simply omits it.  Every CallClosure* span row (FoldBack /
+  RetClass / NormalJoin / BodyExit) is defined this way.  Re-assembling any of
+  these row-Posts into `SegExit`/`SegEntry`/`CallParamFoldInv` (item-1 carrier
+  marshalling) requires `OutRepr` at the new state, which `outRepr_of_sailOutput_eq`
+  supplies ONLY from a `sailOutput` equation the Post does not expose.
+- workaround: NONE yet — marshalling these Posts to a carrier needs the
+  sailOutput carry; without it OutRepr cannot transport.  (A memory-only span
+  never touches sailOutput, so the fact is TRUE, just not surfaced.)
+- cost: without the carry, every carrier re-assembly lemma (there are ~6 seams
+  in the crux tail alone, and this shape is every future span→carrier marshal)
+  must re-derive sailOutput from scratch — but the row Post has discarded the
+  witness, so it is UNDERIVABLE at the Post; the fix must be at the Post/`hpost`.
+- proposal: add `c.σ.sailOutput = σentry.sailOutput` (or directly an
+  `OutRepr c.σ st → OutRepr` transport clause) to the row `Post` defs and thread
+  `segEval_sound`'s `hout` through `segToTriple`'s `hpost` (ONE extra hypothesis;
+  additive — existing `hpost` callers ignore it).  Then a `segExit_of_rowPost`
+  combinator marshals any memory-framed row Post + transported StoreRepr into
+  `SegExit` uniformly.
+
+## 2026-09-01 notwritten-frame-clauses-not-stepframeout (wave42-nativefin #1)
+- missing: the per-callee `NotWritten*` frame clauses (`NotWrittenT`
+  value_truthy, `NotWrittenV` value_null, `NotWrittenVE`/`NotWrittenVEStr`
+  value_equal, ...) are ad-hoc ∧-towers of `(rd == R) = false` diseqs, NOT
+  `StepFrameOut`-shaped, so composing a callee sub-run into a whole-run
+  `StepFrameOut` chain needs a hand adapter per callee (build the write-set
+  list, re-derive each conjunct from the `∀ r ∈ W` avoidance).
+- workaround: wrote the two adapters inline in `nativeAssertInternal`'s exit
+  frame (`sfoT`/`sfoN`, ~8 lines each, 10/9 `hav _ (by decide)` conjuncts).
+- cost: ~8 lines + one membership `decide` per conjunct, per callee spec
+  consumed inside any whole-run frame; two instances now (truthy/null), a
+  third appears the moment another `value_*` callee is threaded through a
+  framed run (value_print/value_equal in the print body are next).
+- proposal: `stepFrameOut_of_notWritten (W : List Register)` — one lemma per
+  `NotWritten*` family (or restate the families as `∀ r ∈ W, (r == R) = false`
+  in the first place) so a callee spec's frame clause IS a `StepFrameOut W`
+  and sub-runs splice into `chain_frame_out` folds with zero adapter code.
+
+## 2026-09-01 native-fnbody-marshal-shape (wave42-nativefin #2)
+- missing: ONE parametric "callee-internal-run contract → NativeBody boundary"
+  marshal.  Wave 41's `nativeBodyAssert` (naEntry construction + naExit→Post
+  rebuild) and wave 42's print/println legs are the same proof shape.
+- workaround: wave 42 factored the OUTPUT pair once (`nativeBodyOut` in
+  `rows/NativeBodyPrint.lean`, parametric over `outApp`/entry PC/`Extra` —
+  print and println are instances), but `nativeBodyAssert` still stands on its
+  own bespoke `naEntry`/`naExit` ∧-tower boundary instead of the named-field
+  `NativePrintEntry`/`NativeFnOutExit` pair.
+- cost: the assert sibling duplicates ~80 lines of boundary rebuild; any
+  fourth native (or a reseat of assert) pays it again.
+- proposal: reseat `naEntry`/`naExit` on `NativePrintEntry`/`NativeFnOutExit`
+  (outApp := "", plus assert's truthy/argc extras in the `Extra` rider) and
+  retire `nativeBodyAssert`'s bespoke marshal onto `nativeBodyOut`.
