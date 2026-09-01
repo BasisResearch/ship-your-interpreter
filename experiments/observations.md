@@ -1526,7 +1526,21 @@ it, still stop and report instead.
   never `lake build`) — the mtime heuristic is wrong (content-hash, not mtime;
   build only the MISSING, not the "stale").
 
-## 2026-08-31 nullbridgeseam-splice-entry-contradictory (hterm glue batch, task #13)
+## 2026-08-31 nullbridgeseam-splice-entry-contradictory RESOLVED (task #72, amendment `nullBridgeSeam_oldEntry_false` + `execRetNullGlue_closed`)
+- resolution: AMENDED `NullBridgeSeam.splice`'s entry from the contradictory
+  `∃ mid, … PC=0x800042f0 … ∧ ExecArmEntryK … execArmRet …` (which pinned PC to BOTH
+  0x800042f0 and execArmRet=0x80004120 = False) to the plain post-beqz predicate
+  `RetNullPostBeqz g … out0 m0 ment` at 0x800042f0 (moved `RetNullPostBeqz` above the
+  struct so the field can reference it). Also fixed `retNoneExpr` to be `ment`-indexed
+  (`∀ ment, (frame m0) → read64 ment (aStmt+8) = some 0`) so the prefix's `ld` reads
+  the current memory, not `m0`. `retNullGluePrefix` now lands EXACTLY in
+  `RetNullPostBeqz`, so `execRetNullGlue_closed` composes `retNullGluePrefix ≫
+  S.splice` via `Steps.trans` (`ExecArmEntryK@0x80004120 → SubExecReturnR@0x80004138`)
+  — the machine half of `ExecRetNullGeom.hGlue`, MODULO the still-named `value_null`
+  callee content inside `S.splice`. Regression guard `nullBridgeSeam_oldEntry_false`
+  (theorem: the OLD entry ⇒ False). All 4 theorems axiom-clean, ~ under file elab
+  budget. Consumers of NullBridgeSeam/RetNullPostBeqz/retNullGluePrefix: NONE outside
+  ExecRetNullGlue.lean (grep-verified). Vsa.lean green.
 - missing: a usable NullBridgeSeam.splice whose ENTRY predicate is inhabitable.
   As landed (Vsa/Sim/rows/ExecRetNullGlue.lean lines ~220-232) the `splice`
   field's entry conjoins `c.σ.regs.get? PC = some 0x800042f0` with
@@ -1551,7 +1565,22 @@ it, still stop and report instead.
   below composes into it by Triple.seq. (Same shape as EvalVarBridge's post-call
   predicates, which do not reuse the arm-entry predicate at a moved PC.)
 
-## 2026-08-31 scaffold-some-motive-unsatisfiable (hterm glue batch, task #50)
+## 2026-08-31 scaffold-some-motive-unsatisfiable RESOLVED (task #72, motives→True + `hInit/Fc/EsSome_row`)
+- resolution: took the proposal's first option — set `mExecInit`/`mForCond`/
+  `mExecStep` (TermSimAssembly.lean) to `True` (dead recursor plumbing;
+  `execForStartSim` ignores these sub-derivations, real work in `hArm` + `ExecForStep`
+  oracle). This makes BOTH `.none` and `.some` constructors `trivial`. LANDED the six
+  rows `hInitNone_row`/`hInitSome_row`/`hFcNone_row`/`hFcSome_row`/`hEsNone_row`/
+  `hEsSome_row` (all `trivial`) in rows/ScaffoldRows.lean; DELETED the unsatisfiable
+  `hInitSome_resid`/`hFcSome_resid`/`hEsSome_resid` defs. Removed the corresponding
+  GAP fields `hInitSome`/`hFcSome`/`hEsSome` from `TermResiduals` (TermAssembly.lean)
+  and changed `termCases_of_residuals` to supply them unconditionally
+  (`hInitSome := hInitSome_row` etc, mirroring the `.none` treatment). ZERO consumer
+  re-threading confirmed: SeqForRows ForLoop rows consume `mForCond`/`mExecStep`
+  sub-IHs as ignored `_`; `exec_forStart_row` consumes `mExecInit`/`mForLoop` as `_`;
+  `mForLoop` UNCHANGED (still identity-PC, used by `ForResid`/`segIdentity`). All
+  downstream green + axiom-clean (TermSimAssembly, ScaffoldRows, TermCaseBundle,
+  TermSimClose, ExecForStart, SeqForRows, ExecDispatchRows, TermAssembly, Vsa.lean).
 - missing: an inhabitable statement for the `.some` loop-scaffold rows
   (hInitSome_resid/hFcSome_resid/hEsSome_resid, Vsa/Sim/rows/ScaffoldRows.lean).
   The amended scaffold motives (mExecInit/mForCond/mExecStep, TermSimAssembly.lean)
@@ -1577,3 +1606,32 @@ it, still stop and report instead.
   `bridgeOfSeg`/callSeg span; the current single-`p` shape is provably vacuous for
   `.some`. Matches precedent: the (p,q)→p amendment fixed `.none` but created this
   dual gap.
+
+## 2026-08-31 approxdispatch-entries-cannot-be-weakest-pc-only (task #73)
+- missing: a concrete instantiation of the six ApproxSeamFold entry predicates
+  (EEntry/AEntry/CEntry/SEntry/FEntry/SqEntry) under which ALL 37 ApproxDispatch
+  fields are provable FROM EXISTING segs via segToTripleN. The brief's "weakest =
+  PC + GoodState + GHolds + tick/minstret" is NOT sufficient: each field maps
+  entry-of-COMPOUND to entry-of-CHILD, and a PC-only entry cannot compute the
+  child's machine entry PC (it depends on the child NODE ADDRESS, carried by
+  neither the spec term nor a PC pin). This is exactly why DivergeSim.Corr keeps
+  correspondence abstract. Moreover the real M4 arm segs (blockA_binaryArm,
+  ExecDispatchRows sims) start from the RICH EvalEntry/ExecEntry and produce rich
+  posts; forgetting the post is easy (LandedN drops it) but the ENTRY they need
+  is SegPre-at-arm-PC (needs GHolds pins + ChainFacts decode), not a weak entry.
+- workaround: instantiate SqEntry = SegEntry@interpLoopHeadPC ∧ Reflect (the
+  loop-head shape) so hSqEntry is DEFINITIONAL; discharge the two Approx-sequence
+  fields (seqHead via loopHeadDispatch_span, seqStep via the iterSeam body span)
+  as the genuinely-supplied class; leave the other five entries as an abstract
+  Corr-family and the 35 non-sequence fields as a NAMED residual structure
+  (ApproxArmResid) with one field per SEG CLASS, each stating precisely the
+  step-lower-bound the class's M4 arm seg would supply once weakened.
+- cost: the 35 arm fields are not closed here; each needs its M4 arm seg
+  (blockA_binaryArm / blockB_binary / ExecDispatchRows / ScaffoldRows) re-exposed
+  as a LandedN-1 step-lower-bound FROM a weak SegPre-at-arm-PC entry TO a weak
+  SegPre-at-child-PC entry — a per-class re-seat (~6-8 classes), not per-field.
+- proposal: a `weakEntry`/`SegPreEntry` predicate = SegPre at the relation's arm
+  entry PC, PLUS a Corr-carried child-node-address map, so each class's field is
+  `segToTripleN` over the arm dispatch seg (forgetting post) landing at the
+  child's SegPreEntry. The child-PC computation is the ONE piece Corr must carry;
+  once that lemma exists the 35 fields fan out mechanically per class.

@@ -236,22 +236,14 @@ structure TermResiduals (L : Layout) where
   /-- `hSWhileBreak`/`exec_whileBreak_row`.  Supplier: `WhileResid` (shared with
       whileRet/whileLoop; `TermGuards.whileMeasure`, `execWhileIH_of_resid`). -/
   hSWhileBreak : ∀ st st' d env c b status, WhileResid st st' d env c b status
-  -- ===== ScaffoldRows.lean — the 3 unconditional identity scaffolds =====
-  -- hInitNone/hFcNone/hEsNone are UNCONDITIONAL (seg-identity); no residual field.
+  -- ===== ScaffoldRows.lean — the 6 unconditional (`True`-motive) scaffolds =====
+  -- hInit{None,Some}/hFc{None,Some}/hEs{None,Some} are UNCONDITIONAL (the scaffold
+  -- motives are `True`; see the `scaffold-some-motive-unsatisfiable` ledger); NO
+  -- residual field.  The old `.some` GAP fields + `*_resid` defs are DELETED.
 
   -- ===== The genuine whole-premise gaps (no landed row; typed VERBATIM as the
-  -- TermCases field).  These are the for-loop scaffold `.some`/body/loop cases +
-  -- the ExecSeq cases, which have NO `_row` theorem yet. =====
-  /-- **GAP** — `hInitSome` (`ExecInit.some`).  Supplier: the `for` initializer seg
-      (`exec_stmt(init)`, `p`→`p` identity-PC span over the sub-`ExecS` IH); the named
-      residual type is `Vsa.Sim.ScaffoldRows.hInitSome_resid`. -/
-  hInitSome : Vsa.Sim.ScaffoldRows.hInitSome_resid
-  /-- **GAP** — `hFcSome` (`ForCond.some`).  Supplier: the truthy `for` condition seg
-      (`eval_expr(c)` + `value_truthy`, `p`→`p`); `Vsa.Sim.ScaffoldRows.hFcSome_resid`. -/
-  hFcSome : Vsa.Sim.ScaffoldRows.hFcSome_resid
-  /-- **GAP** — `hEsSome` (`ExecStep.some`).  Supplier: the `for` step-expr seg
-      (`eval_expr(e)`, `p`→`p`); `Vsa.Sim.ScaffoldRows.hEsSome_resid`. -/
-  hEsSome : Vsa.Sim.ScaffoldRows.hEsSome_resid
+  -- TermCases field).  These are the for-loop body/loop cases + the ExecSeq cases,
+  -- which have NO `_row` theorem yet. =====
   /-- **GAP** — `hFlCondFalse` (`ForLoop.condFalse`).  Supplier: the for-loop
       condition-false exit arm (`TermGuards.forMeasure` shape). -/
   hFlCondFalse :
@@ -373,15 +365,15 @@ def termCases_of_residuals {L : Layout} (R : TermResiduals L) :
   hSBrk := exec_brk_row R.hSBrk
   hSCont := exec_cont_row R.hSCont
   hInitNone := hInitNone_row
-  hInitSome := R.hInitSome
+  hInitSome := hInitSome_row
   hFlCondFalse := R.hFlCondFalse
   hFlBodyBreak := R.hFlBodyBreak
   hFlBodyRet := R.hFlBodyRet
   hFlLoop := R.hFlLoop
   hFcNone := hFcNone_row
-  hFcSome := R.hFcSome
+  hFcSome := hFcSome_row
   hEsNone := hEsNone_row
-  hEsSome := R.hEsSome
+  hEsSome := hEsSome_row
   hSeqNil := R.hSeqNil
   hSeqConsNormal := R.hSeqConsNormal
   hSeqConsAbrupt := R.hSeqConsAbrupt

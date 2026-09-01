@@ -179,68 +179,14 @@ theorem site_800042f8_es (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret :
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
     htgt hi
 
-/-! ## `NullBridgeSeam` — the caller-linkage seam for the `value_null` bridge
-
-The facts the `value_null` splice + `SubExecReturnR` assembly need but that
-`ExecArmEntryK` (the arm-entry state) does NOT expose — the statement-frame analog
-of `EvalVarBridge.VarCallLinkage`.  All are supplied ABOVE the arm by the `EX_RET`
-recursor from `ExecEntry`'s stack/arena geometry.
-
-Rather than re-derive them from below (impossible: `ExecArmEntryK` carries neither
-the sub-sret buffer's `NullRegion` nor the arena-vs-buffer disjointness), we take
-this ONE record and prove the full glue from it, exactly as `varBridge` consumes
-`VarCallLinkage`.
-
-The `retNoneExpr` field encodes the semantic fact that fixes the `beqz` as TAKEN:
-for `.ret none` the machine `a2 = stmt->expr` read at `0x80004120` is `0` (the NULL
-`Expr*`), so the branch guard `a2 = 0` holds.  This is the `StmtRepr (.ret none)`
-fact — carried in `ExecEntry` but not re-exposed by `ExecArmEntryK`, so threaded. -/
-structure NullBridgeSeam
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : Vsa.While.St) (sp r aInterp aStmt aEnv aRet : BitVec 64)
-    (out0 : Array String) (m0 : Mem) : Prop where
-  /-- the `.ret none` `beqz` guard + `ld a2,8(s0)` geometry: `stmt->expr` (the
-  8-byte word at `aStmt+8`) is `0` (the NULL `Expr*`), and the load slot is an
-  aligned RAM word above HTIF.  From `StmtRepr (.ret none)` (carried in `ExecEntry`
-  but hidden by `ExecArmEntryK`).  Fixes the `beqz` at `0x80004124` as TAKEN. -/
-  retNoneExpr : read64 m0 (aStmt.toNat + 8) = some 0
-  exprLo : 0x80000000 ≤ aStmt.toNat + 8
-  exprHi : aStmt.toNat + 8 + 8 ≤ 0x100000000
-  exprWin : aStmt.toNat + 8 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aStmt.toNat + 8
-  exprAl : (aStmt.toNat + 8) % 8 = 0
-  /-- the whole `value_null` splice + `SubExecReturnR` assembly, from the machine
-  state at the `value_null`-bridge entry (`0x800042f0`, `sp = sp-176`, mem framed
-  to `ment`) to the `SubExecReturnR` rejoin at `0x80004138`.  Dischargeable ABOVE
-  the arm: `value_null_spec` (over the `subsret = sp'+16` buffer's `NullRegion`) +
-  the `j 0x80004138` + the buffer→`SubExecReturnR` relocation (the store/spill
-  survival across the 16-byte null write, all disjoint from the arena/spills, and
-  the payload disjointness — the exact `SubExecReturn` fields).  Threaded because
-  none of these arena/buffer-geometry facts live in `ExecArmEntryK`. -/
-  splice : ∀ (ment : Mem) (v8 v9 v18 v19 : BitVec 64),
-    Triple
-      (fun c => ∃ (mid : Mem),
-        GoodState c.σ ∧ c.tick < 2 ∧ c.σ.mem = mid ∧
-        c.σ.regs.get? Register.PC = some (0x800042f0#64) ∧
-        c.σ.regs.get? Register.x2 = some (sp - 176#64) ∧
-        c.σ.regs.get? Register.x18 = some aRet ∧
-        c.σ.regs.get? Register.x1 = some (0x80004124#64) ∧
-        (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
-        Exec_stmtLoaded mid ∧
-        (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mid[a]? = m0[a]?) ∧
-        ExecArmEntryK g N A SL φf φc st execArmRet sp r aInterp aStmt aEnv aRet
-          v8 v9 v18 v19 out0 m0 ment c)
-      (fun c => ∃ subsret v1 v8' v9' v18' v19' mcall,
-        SubExecReturnR g N A SL φf φc st.store.frames.size st.store.closures.size st .null
-          sp r aRet subsret (0x80004138#64) v1 v8' v9' v18' v19' m0 mcall c)
-
 /-! ## `RetNullPostBeqz` — the post-`beqz` machine state at `0x800042f0`
 
 The honest re-statement of the fields `ExecArmEntryK` carries, MINUS the PC pin,
 at the beqz-TAKEN target `0x800042f0` (the `value_null`-bridge head).  This is the
-predicate `NullBridgeSeam.splice`'s entry SHOULD have used (see observation
+predicate `NullBridgeSeam.splice`'s entry uses (see observation
 `nullbridgeseam-splice-entry-contradictory`): reusing `ExecArmEntryK` verbatim at a
-moved PC is unsatisfiable, so the prefix segment below lands in THIS predicate.
+moved PC is unsatisfiable, so the prefix segment below lands in THIS predicate and
+the amended `splice` consumes it.
 
 Every field is transported unchanged across the `ld a2,8(s0)` (writes only `x12`,
 memory unchanged) and the `beqz` (writes only PC, memory unchanged): `s0`/`s1`/`s2`
@@ -280,6 +226,66 @@ def RetNullPostBeqz
   176 ≤ sp.toNat ∧ sp.toNat ≤ 0x100000000 ∧ 0x80000000 ≤ sp.toNat ∧
   tohostAddr + 16 + 176 ≤ sp.toNat ∧ sp.toNat % 8 = 0 ∧ r.toNat % 4 = 0
 
+/-! ## `NullBridgeSeam` — the caller-linkage seam for the `value_null` bridge
+
+The facts the `value_null` splice + `SubExecReturnR` assembly need but that
+`ExecArmEntryK` (the arm-entry state) does NOT expose — the statement-frame analog
+of `EvalVarBridge.VarCallLinkage`.  All are supplied ABOVE the arm by the `EX_RET`
+recursor from `ExecEntry`'s stack/arena geometry.
+
+Rather than re-derive them from below (impossible: `ExecArmEntryK` carries neither
+the sub-sret buffer's `NullRegion` nor the arena-vs-buffer disjointness), we take
+this ONE record and prove the full glue from it, exactly as `varBridge` consumes
+`VarCallLinkage`.
+
+The `retNoneExpr` field encodes the semantic fact that fixes the `beqz` as TAKEN:
+for `.ret none` the machine `a2 = stmt->expr` read at `0x80004120` is `0` (the NULL
+`Expr*`), so the branch guard `a2 = 0` holds.  This is the `StmtRepr (.ret none)`
+fact — carried in `ExecEntry` but not re-exposed by `ExecArmEntryK`, so threaded. -/
+structure NullBridgeSeam
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (sp r aInterp aStmt aEnv aRet : BitVec 64)
+    (out0 : Array String) (m0 : Mem) : Prop where
+  /-- the `.ret none` `beqz` guard + `ld a2,8(s0)` geometry: `stmt->expr` (the
+  8-byte word at `aStmt+8`) is `0` (the NULL `Expr*`) in the ARM-ENTRY memory
+  `ment` (any memory agreeing with `m0` outside the stack window `[SL.lo, sp)`, as
+  the prologue leaves the AST region untouched), and the load slot is an aligned
+  RAM word above HTIF.  From `StmtRepr (.ret none)` (carried in `ExecEntry` but
+  hidden by `ExecArmEntryK`).  Fixes the `beqz` at `0x80004124` as TAKEN.  Indexed
+  by `ment` (not `m0`) because the `ld` reads the current memory; the seam's
+  discharger above the arm has the `StmtRepr`-over-`m0` value plus the AST/stack
+  disjointness that transports it across the prologue frame. -/
+  retNoneExpr : ∀ (ment : Mem),
+    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
+    read64 ment (aStmt.toNat + 8) = some 0
+  exprLo : 0x80000000 ≤ aStmt.toNat + 8
+  exprHi : aStmt.toNat + 8 + 8 ≤ 0x100000000
+  exprWin : aStmt.toNat + 8 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aStmt.toNat + 8
+  exprAl : (aStmt.toNat + 8) % 8 = 0
+  /-- the whole `value_null` splice + `SubExecReturnR` assembly, from the machine
+  state at the `value_null`-bridge entry (`0x800042f0`, `sp = sp-176`, mem framed
+  to `ment`) to the `SubExecReturnR` rejoin at `0x80004138`.  Dischargeable ABOVE
+  the arm: `value_null_spec` (over the `subsret = sp'+16` buffer's `NullRegion`) +
+  the `j 0x80004138` + the buffer→`SubExecReturnR` relocation (the store/spill
+  survival across the 16-byte null write, all disjoint from the arena/spills, and
+  the payload disjointness — the exact `SubExecReturn` fields).  Threaded because
+  none of these arena/buffer-geometry facts live in `ExecArmEntryK`.
+
+  **Amended (task #72):** the entry is now the plain post-`beqz` predicate
+  `RetNullPostBeqz` at `0x800042f0` — NOT `ExecArmEntryK … execArmRet …` verbatim,
+  which pinned `PC = execArmRet = 0x80004120` and so conjoined `False` with the
+  `PC = 0x800042f0` clause (see `nullBridgeSeam_oldEntry_false` and the observation
+  `nullbridgeseam-splice-entry-contradictory`).  `retNullGluePrefix` lands exactly
+  in `RetNullPostBeqz`, so `retNullGluePrefix ≫ splice` now composes. -/
+  splice : ∀ (ment : Mem) (v8 v9 v18 v19 : BitVec 64),
+    Triple
+      (RetNullPostBeqz g N A SL φf φc st sp r aInterp aStmt aEnv aRet
+        v8 v9 v18 v19 out0 m0 ment)
+      (fun c => ∃ subsret v1 v8' v9' v18' v19' mcall,
+        SubExecReturnR g N A SL φf φc st.store.frames.size st.store.closures.size st .null
+          sp r aRet subsret (0x80004138#64) v1 v8' v9' v18' v19' m0 mcall c)
+
 /-! ## `retNullGluePrefix` — `ExecArmEntryK@0x80004120 → RetNullPostBeqz@0x800042f0`
 
 The composable HALF of the `value_null`-bridge glue: `ld a2,8(s0)` loads
@@ -287,12 +293,12 @@ The composable HALF of the `value_null`-bridge glue: `ld a2,8(s0)` loads
 TAKEN to the `value_null`-bridge head `0x800042f0`.  Every register/geometry field
 survives (both instructions touch only `x12`/PC and leave memory fixed).
 
-This is as far as the landed `NullBridgeSeam` permits: its `splice` field's entry
-reuses `ExecArmEntryK` verbatim at PC `0x800042f0`, which is unsatisfiable (the PC
-pin conflicts), so `splice` cannot be composed after this prefix.  The final
-`RetNullPostBeqz → SubExecReturnR@0x80004138` (the `value_null` call + rejoin +
-`SubExecReturnR` assembly) remains OPEN, blocked on the seam statement — see the
-observation ledger `nullbridgeseam-splice-entry-contradictory`. -/
+Lands exactly in `RetNullPostBeqz`, which is the (amended, task #72) entry of
+`NullBridgeSeam.splice`, so `retNullGluePrefix ≫ S.splice` composes into
+`execRetNullGlue_closed` (below).  The pre-amendment `splice` entry reused
+`ExecArmEntryK` verbatim at PC `0x800042f0`, which was unsatisfiable (the PC pin
+conflicts — see `nullBridgeSeam_oldEntry_false`), so `splice` could not be composed
+after this prefix.  That obstruction is now removed. -/
 theorem retNullGluePrefix
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -301,7 +307,12 @@ theorem retNullGluePrefix
     (v8 v9 v18 v19 : BitVec 64) (out0 : Array String) (ment : Mem)
     -- the `.ret none` `beqz` guard: `stmt->expr` (word at `aStmt+8`) is `0`, and
     -- the load slot is an aligned RAM word above HTIF (from `NullBridgeSeam`).
-    (hExpr : read64 ment (aStmt.toNat + 8) = some 0)
+    -- Seam-shaped: the value is given for ANY memory framed to `m0` outside
+    -- `[SL.lo, sp)`; we apply it to `ment` via `ExecArmEntryK`'s own memframe below,
+    -- so the composition consumes `NullBridgeSeam.retNoneExpr` with no re-destructure.
+    (hExpr : ∀ (ment : Mem),
+      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
+      read64 ment (aStmt.toNat + 8) = some 0)
     (hExprLo : 0x80000000 ≤ aStmt.toNat + 8)
     (hExprHi : aStmt.toNat + 8 + 8 ≤ 0x100000000)
     (hExprWin : aStmt.toNat + 8 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aStmt.toNat + 8)
@@ -325,7 +336,8 @@ theorem retNullGluePrefix
     rw [BitVec.toNat_add]
     have hv : (sign_extend (m := 64) (0x008#12) : BitVec 64).toNat = 8 := by decide
     rw [hv]; have := aStmt.isLt; omega
-  have hExpr' : read64 c.σ.mem (aStmt.toNat + 8) = some 0 := by rw [hmem0]; exact hExpr
+  have hExpr' : read64 c.σ.mem (aStmt.toNat + 8) = some 0 := by
+    rw [hmem0]; exact hExpr ment hmemframe0
   obtain ⟨e0,e1,e2,e3,e4,e5,e6,e7, he0,he1,he2,he3,he4,he5,he6,he7⟩ :=
     ld64_bytes c.σ.mem (aStmt.toNat + 8) 0 hExpr'
   -- ============ 0x80004120: ld a2,8(s0) → x12 := stmt->expr = 0 ============
@@ -427,29 +439,81 @@ theorem retNullGluePrefix
   · -- ment: σ2.mem = ment (= c.σ.mem, pinned by ExecArmEntryK.mem)
     rw [hmem2e]; exact hmem0
 
-/-! ## Residual — the closed `value_null`-bridge glue (NOT yet assembled)
+/-! ## Falsity witness — the OLD `NullBridgeSeam.splice` entry was `False`
 
-The site batteries above (`site_80004124_taken_es`, `site_800042f0_es`,
-`site_800042f4_es_valueNull`, `site_800042f8_es`) and the honest `NullBridgeSeam`
-record are landed GREEN.  The final assembly `execRetNullGlue_closed`
-(`ExecArmEntryK → SubExecReturnR@0x80004138`, discharging `ExecRetNullGeom.hGlue`)
-**Update (2026-08-31):** the prefix half `retNullGluePrefix`
-(`ExecArmEntryK@0x80004120 → RetNullPostBeqz@0x800042f0`) is now LANDED (the
-`ld a2,8(s0)` step + `beqz`-TAKEN hop, taking the `retNoneExpr` pin).  The
-remaining `RetNullPostBeqz → SubExecReturnR@0x80004138` half is BLOCKED on the
-`NullBridgeSeam.splice` statement (its entry reuses `ExecArmEntryK` verbatim at
-PC `0x800042f0`, which is unsatisfiable — see the observation ledger).
+Regression guard for the amendment (task #72, observation
+`nullbridgeseam-splice-entry-contradictory`).  The pre-amendment `splice` entry
+conjoined `c.σ.regs.get? PC = some 0x800042f0` with `ExecArmEntryK … execArmRet …`,
+and `ExecArmEntryK` pins `PC = some armPC = execArmRet = 0x80004120`.  The two PC
+readbacks are `some 0x800042f0` and `some 0x80004120` for the SAME register, so the
+conjunction is `False` — the old splice could never fire from any real config. -/
+theorem nullBridgeSeam_oldEntry_false
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (sp r aInterp aStmt aEnv aRet : BitVec 64)
+    (v8 v9 v18 v19 : BitVec 64) (out0 : Array String) (m0 ment : Mem) (c : Config)
+    (hOld :
+      c.σ.regs.get? Register.PC = some (0x800042f0#64) ∧
+      ExecArmEntryK g N A SL φf φc st execArmRet sp r aInterp aStmt aEnv aRet
+        v8 v9 v18 v19 out0 m0 ment c) :
+    False := by
+  obtain ⟨hpc042f0, hK⟩ := hOld
+  -- `ExecArmEntryK` pins `PC = some execArmRet = some 0x80004120` (named, not
+  -- positional: the same field `retNullGluePrefix` binds as `hpc0`).
+  obtain ⟨_hG0, _htick0, hpc04120, _rest⟩ := hK
+  rw [hpc042f0] at hpc04120
+  exact absurd hpc04120 (by decide)
 
-remains OPEN: it must (a) step the `ld a2,8(s0)` at `0x80004120` from the
-`ExecArmEntryK`-pinned entry PC before `site_80004124_taken_es` applies (the
-loaded value is pinned to 0 by the seam's `retNoneExpr`), then (b) chain the
-beqz-TAKEN hop, the `value_null` splice (`addi a0,sp,16 ≫ jal value_null ≫ body`,
-with `x1 = r` UNCHANGED at `0x800042f0` — the `jal` is inside the splice), the
-rejoin `j 0x80004138`, and assemble `SubExecReturnR`.  The `Exec_stmtLoaded`
-fact must be transported to each intermediate memory (`loaded_*_writeMap`
-family).  Until assembled, `exec_retNull_row`'s `hGlue` stays a named premise. -/
+/-! ## `execRetNullGlue_closed` — the closed `value_null`-bridge glue
+
+The final assembly discharging `execRetNullSimD`'s `hGlue` residual: from any
+`ExecArmEntryK`-entry config (the `EX_RET .none` arm entry at `0x80004120`) to a
+`SubExecReturnR` config at the rejoin `0x80004138`.  Assembled by `Triple.seq` of
+the two now-composable halves over a `NullBridgeSeam`:
+
+* `retNullGluePrefix`: `ExecArmEntryK@0x80004120 → RetNullPostBeqz@0x800042f0`
+  (the `ld a2,8(s0)` step loading `stmt->expr = 0` + the `beqz`-TAKEN hop), taking
+  the seam's `retNoneExpr`/`expr*` geometry pins;
+* `S.splice`: `RetNullPostBeqz@0x800042f0 → SubExecReturnR@0x80004138` (the
+  `addi a0,sp,16 ≫ jal value_null ≫ j 0x80004138` splice + `SubExecReturnR`
+  assembly), now typed against the honest post-`beqz` predicate rather than the
+  contradictory `ExecArmEntryK`-at-moved-PC.  The `value_null` callee content stays
+  packaged inside the seam's `splice` field (a NAMED residual dischargeable ABOVE
+  the arm — see `NullBridgeSeam`'s doc); this theorem shows the two halves COMPOSE.
+
+This closes the machine half of `ExecRetNullGeom.hGlue` MODULO the seam. -/
+theorem execRetNullGlue_closed
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (env : Addr)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (out0 : Array String)
+    (S : ∀ (ment : Mem) (v8 v9 v18 v19 : BitVec 64),
+      NullBridgeSeam g N A SL φf φc st sp r aInterp aStmt aEnv aRet out0 m0) :
+    Triple
+      (fun c => ∃ ment v8 v9 v18 v19,
+        ExecArmEntryK g N A SL φf φc st execArmRet sp r aInterp aStmt aEnv aRet
+          v8 v9 v18 v19 out0 m0 ment c)
+      (fun c => ∃ subsret v1 v8 v9 v18 v19 mcall,
+        SubExecReturnR g N A SL φf φc st.store.frames.size st.store.closures.size st .null
+          sp r aRet subsret (0x80004138#64) v1 v8 v9 v18 v19 m0 mcall c) := by
+  intro c hpre
+  obtain ⟨ment, v8, v9, v18, v19, hK⟩ := hpre
+  have hseam := S ment v8 v9 v18 v19
+  -- prefix: ExecArmEntryK@0x80004120 → RetNullPostBeqz@0x800042f0.  The seam-shaped
+  -- `retNoneExpr` is passed straight through; `retNullGluePrefix` applies it to `ment`
+  -- via ExecArmEntryK's own memframe (no positional re-destructure of the tower).
+  obtain ⟨cM, hstepsM, hMid⟩ :=
+    retNullGluePrefix g N A SL φf φc st d env sp r aInterp aStmt aEnv aRet m0
+      v8 v9 v18 v19 out0 ment
+      hseam.retNoneExpr
+      hseam.exprLo hseam.exprHi hseam.exprWin hseam.exprAl c hK
+  -- splice: RetNullPostBeqz@0x800042f0 → SubExecReturnR@0x80004138
+  obtain ⟨cG, hstepsG, hOut⟩ := hseam.splice ment v8 v9 v18 v19 cM hMid
+  exact ⟨cG, hstepsM.trans hstepsG, hOut⟩
 
 #print axioms site_80004124_taken_es
 #print axioms retNullGluePrefix
+#print axioms nullBridgeSeam_oldEntry_false
+#print axioms execRetNullGlue_closed
 
 end Vsa.Sim

@@ -110,25 +110,27 @@ def mCall (st : SpecSt) (d : Nat) (_fv : Value) (_vs : List Value)
       (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
       (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' callJoinPC m0)
 
-/-- `ExecInit` motive: `SegEntry → SegExit` skeleton Triple.
+/-- `ExecInit` motive.
 
-**PC shape (amended 2026-08-31, ledger `scaffold-motive-independent-pq`).** The
-entry PC `p` and exit PC now COINCIDE (both `p`): the loop-scaffold sub-segments
-are internal, re-entrant control points of the `for` body and, as consumed by
-`ForLoop.*`, they begin and end at the same abstract loop-structural PC `p` (the
-cond head / step continuation). The former independent `(p q)` was the machine-
-checked obstruction: it demanded an arbitrary exit PC `q` no identity row can
-supply. With entry PC = exit PC = `p` the `.none` constructor closes directly by
-`LoopScaffoldClose.segIdentity`; the `.some` constructor states the real span
-collapsing to `p` (its named residual). -/
-def mExecInit (st : SpecSt) (d : Nat) (env : Addr) (_init : Option Stmt)
-    (st' : SpecSt) (_h : ExecInit st d env _init st') : Prop :=
-  ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (p : Nat) (m0 : Mem),
-    Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' p m0)
+**Shape (amended 2026-08-31, ledgers `scaffold-motive-independent-pq` then
+`scaffold-some-motive-unsatisfiable`).** This motive is now `True`.
+
+History: the motive was first a `SegEntry → SegExit` Triple with INDEPENDENT entry
+PC `p` / exit PC `q` (the `.none` obstruction: identity rows give exit = entry, the
+motive demanded arbitrary `q`); the first amendment tied both to a single `p`,
+fixing `.none` (`LoopScaffoldClose.segIdentity`) but creating the DUAL `.some`
+obstruction (`ExecInit.some` mutates the store, `st' ≠ st`, so a same-PC span with a
+different store post is unsatisfiable — no store-mutating call returns to the same
+abstract PC).  The honest init/cond/step machine work is NOT carried by this motive
+anyway: `execForStartSim` (`ExecForStart.lean`) consumes the `ExecInit`/`ForCond`/
+`ExecStep` sub-derivations as ignored `_`, and the real per-iteration work flows
+through `hArm` + the `ExecForStep` `hstep` oracle.  So this motive is DEAD recursor
+plumbing; setting it to `True` makes BOTH the `.none` and `.some` constructors
+trivially fillable (`ScaffoldRows.{hInitNone_row,hInitSome_row}` = `trivial`) with
+ZERO consumer re-threading (every consumer references it opaquely / as `_`). -/
+def mExecInit (_st : SpecSt) (_d : Nat) (_env : Addr) (_init : Option Stmt)
+    (_st' : SpecSt) (_h : ExecInit _st _d _env _init _st') : Prop :=
+  True
 
 /-- `ForLoop` motive: `SegEntry → SegExit` skeleton Triple (identity-PC span at
 the loop head `p`; see `mExecInit`). -/
@@ -142,27 +144,21 @@ def mForLoop (st : SpecSt) (d : Nat) (env : Addr) (_cnd _step : Option Expr)
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
       (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' p m0)
 
-/-- `ForCond` motive: `SegEntry → SegExit` skeleton Triple (identity-PC span at
-the cond head `p`; see `mExecInit`). -/
-def mForCond (st : SpecSt) (d : Nat) (env : Addr) (_cnd : Option Expr)
-    (st' : SpecSt) (_h : ForCond st d env _cnd st') : Prop :=
-  ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (p : Nat) (m0 : Mem),
-    Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' p m0)
+/-- `ForCond` motive.  `True` — dead recursor plumbing; see `mExecInit`.  The
+`.some` case (`ForCond.some`, truthy-cond) mutates the store, so a same-PC span is
+unsatisfiable; the honest cond work flows through `execForStartSim`'s oracle, not
+this motive.  Fillable by `ScaffoldRows.{hFcNone_row,hFcSome_row}` = `trivial`. -/
+def mForCond (_st : SpecSt) (_d : Nat) (_env : Addr) (_cnd : Option Expr)
+    (_st' : SpecSt) (_h : ForCond _st _d _env _cnd _st') : Prop :=
+  True
 
-/-- `ExecStep` motive: `SegEntry → SegExit` skeleton Triple (identity-PC span at
-the step continuation `p`; see `mExecInit`). -/
-def mExecStep (st : SpecSt) (d : Nat) (env : Addr) (_step : Option Expr)
-    (st' : SpecSt) (_h : ExecStep st d env _step st') : Prop :=
-  ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (p : Nat) (m0 : Mem),
-    Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' p m0)
+/-- `ExecStep` motive.  `True` — dead recursor plumbing; see `mExecInit`.  The
+`.some` case (`ExecStep.some`, step-expr) mutates the store, so a same-PC span is
+unsatisfiable; the honest step work flows through `execForStartSim`'s oracle, not
+this motive.  Fillable by `ScaffoldRows.{hEsNone_row,hEsSome_row}` = `trivial`. -/
+def mExecStep (_st : SpecSt) (_d : Nat) (_env : Addr) (_step : Option Expr)
+    (_st' : SpecSt) (_h : ExecStep _st _d _env _step _st') : Prop :=
+  True
 
 /-- `ExecSeq` motive: `SegEntry → SegExit` skeleton Triple (the statement-list
 loop; `interp_run` and the `block`/closure-body loops consume this). -/
