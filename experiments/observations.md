@@ -2904,3 +2904,126 @@ it, still stop and report instead.
 - proposal: the exec-eval fields are structurally an exec-side family; a future
   refactor could split `EvalChildStages` into `EvalArmChildStages` (8, JalPreBundle)
   + `ExecArmChildStages` (6, ExecJalPreBundle). For now the in-place re-type suffices.
+
+## 2026-09-01 argshead-exprrepr-of-head-arg-node-not-in-loopinv (wave41-argshead)
+- missing: the `argsHead` field `AEntryC (e::es) → LandedN 1 (JalPreBundle e)` needs
+  `ExprRepr mcall aOperand e` (the head arg NODE's repr) in its target `JalPreBundle`,
+  but NEITHER `AEntryC` (ApproxArmReseat.lean:122 — bare `SegEntry ... argLoopPC`, no
+  arg-node field despite the doc claiming "the abstract node fact carries the arg-list
+  correspondence") NOR `CallArgLoopInv` (CallClosureSplice.lean:79 — carries the
+  evaluated PREFIX `vsPre` slot reprs + the call `node` pointer, but NOT `ExprRepr` of
+  the REMAINING arg nodes) carries it. The machine reads the head arg node from
+  `16(s0)` (args array base) + `8*i` (0x800031dc `ld a2,16(s0)`; 0x800031e8 `add
+  a2,a2,a4` with a4 = 8*i; 0x800031f4 `ld a2,0(a2)`) — so the head node addr is
+  `read64(mem, argsArrayBase + 8*i)` and its `ExprRepr` is an ARG-VECTOR correspondence
+  fact analogous to `EvalArgs`'s `ArgVecRepr` (but for the arg NODES, not the evaluated
+  VALUES). This fact is genuinely upstream (established when the EX_CALL arm materialises
+  the args-array pointer at 0x800031dc's `s0`), not projectable from either entry.
+- workaround: name it as a field of the `argsHead` dispatch residual
+  `ArgsHeadDispatch` (the analog of `CallArmDispatch`) — the residual bridges
+  `AEntryC`'s bare SegEntry to `CallArgLoopInv (vsPre=[])` AND supplies the head-arg
+  node's `ExprRepr` (+ the args-array read + its geometry). NOT a workaround that
+  bypasses a law: it is the honest upstream (matching how `CallArmDispatch` supplies
+  `ExprRepr … f` for the callee node). Consumed by `argsHead_field_of_dispatch`.
+- cost: the arg-node `ExprRepr` correspondence stays a named premise until a future
+  `ArgNodeVecRepr`-carrying arg-loop invariant subsumes it (would also serve
+  `EvalArgs.cons`). One residual, doc'd.
+- proposal: extend `CallArgLoopInv` with an `argNodes : ∀ i, i < n → ExprRepr mem
+  (argsArrayBase + read...) (argExprs[i])` field (the arg-NODE-vector correspondence);
+  then argsHead consumes it directly and `EvalArgs.cons`/`callArgs` reuse it. Deferred
+  (would edit the crux-owned CallClosureSplice.lean structure — out of this lane).
+
+## 2026-09-01 argshead-body-stagepre-is-bridgeOfSeg-not-site-battery (wave41-argshead)
+- missing: prior notes (wave38 genstagepre ITEM 3) treated argsHead's body span
+  (0x800031dc→jal@0x80003220, ~16 instrs) as needing a hand site_* battery like the
+  3-instr arm heads (blockB_call_stagePre etc.). It does NOT: the body is a plain
+  straight-line span ending in a jal — the LITERAL shape `bridgeOfSeg` (BridgeSeg.lean)
+  factors ("straight-line body ≫ CALL"). The GEN `loopHeadArgSetupBridge` is the exact
+  template. So argsHeadBodyBridge = #derive_case seg + bridgeOfSeg (one ChainOK decide),
+  NOT 16 site lemmas. This is the discipline-correct route and it LANDED green.
+- workaround: NONE needed — used the mandated abstraction. The only residuals are the
+  JalPreBundle marshalling (ArgsHeadStagePre) + the AEntryC→loop-head dispatch
+  (ArgsHeadDispatch), both honest named premises.
+- cost: the JalPreBundle marshalling from bridgeOfSeg's GHolds/writeLog output is still
+  per-arm (~150 lines, same shape as blockB_call_stagePre's last third), threading the
+  arg-array reads as `lds` tied to CallArgLoopInv.node + the head-node ExprRepr.
+- proposal: a `stagePreOfBridge` combinator — bridgeOfSeg output (GHolds out.regs +
+  writeLog out.log + ABI frame at a jal PC) → JalPreBundle, parametrized by {aOperand
+  projection, sret offset, the geometry side-condition list}. Would close argsHead's
+  ArgsHeadStagePre AND re-seat blockB_call/assign/logical stagePre (the site-battery
+  ones) on the seg layer. The geometry list is the non-uniform part (same blocker
+  gen_stagepre hit); likely 1 template + regeneration. Flagged for coordinator.
+
+## 2026-09-01 exec-mailmerge-5-arms-landed-no-generator (wave41 execmm, plan #2)
+- missing: NOTHING new — the 5 exec-eval arm-head cuts (stmtRet/stmtVarInit/
+  stmtIfCond/stmtWhileCond/flCond) are now LANDED by hand off the wave-40 model
+  `blockB_stmtExpr_stagePre`, each riding the already-landed
+  `execEvalEntry_of_jalPrefix` + `ExecJalPreBundle` bridge (`ArmSegSplitExecEval`)
+  and the `*_split'` field splits. Files: `rows/StmtRetArmStagePre.lean`,
+  `rows/StmtVarInitArmStagePre.lean`, `rows/StmtIfCondArmStagePre.lean`,
+  `rows/StmtWhileCondArmStagePre.lean`, `rows/FlCondArmStagePre.lean` +
+  `ExecCondArmSites.lean` (the if/while/for `_es` site batteries, which did not
+  exist; stmtRet/stmtVarInit sites were already landed).
+- workaround: NONE — this closes the class the obs
+  `exec-eval-stagepre-frameshift-and-nonuniform` (wave38) deferred. Its two
+  "obstructions" both dissolved: (1) frame-shift is the ghost `JalPreBundle.sp :=
+  esp+1088` rebase, ALREADY solved in wave40's model; (2) non-uniform heads = just
+  a per-arm 5-tuple {armPC0, ld-offset (8 vs 16), buf-offset, jal imm, mv/addi
+  order} + optional beqz-nottaken peel (3 of 5 arms). Each blockB landed FIRST TRY
+  from the model with only those knobs turned.
+- cost: ~230-260 lines per arm blockB (~1250 total) + ~16 site lemmas (~600 lines).
+  Verified `lake env lean` green + `#print axioms` ⊆ {propext,Classical.choice,
+  Quot.sound} for all 10 theorems + all sites.
+- proposal: gen_stagepre.py was NOT extended (CLAUDE.md mandate says extend IF ≥3
+  heads uniform). VERDICT: heads are NON-uniform (instr order permutes, ld-offset
+  varies, 3/5 have a mid-head beqz), and gen_stagepre.py targets a DIFFERENT shape
+  (the EVAL 3-step `ld+addi+sd→jal` producing `JalPreBundle`, not the exec 4-6-step
+  `ld[+beqz]+mv/mv/addi→jal` producing `ExecJalPreBundle`). A generator would need a
+  full ordered-instruction-list + optional-beqz schema — more machinery than the 5
+  one-shot instances. The TRUE shared abstraction is `execEvalEntry_of_jalPrefix` +
+  `ExecJalPreBundle` (the frame-shift/marshalling bridge), which IS landed and IS
+  reused by name in all 5. No code-gen template is justified here.
+> divergence board: 13/14 (the 6th exec-eval field stmtExpr was wave40; these 5
+  complete the EvalChildStages exec-twin fields modulo the per-arm dispatch
+  residuals StmtRet/VarInit/IfCond/WhileCond/FlCondArmDispatch — the blockA→ArmEntryK
+  bridge + child-payload/wide-window facts, same residual class as stmtExpr's
+  StmtExprArmDispatch).
+
+## 2026-09-01 naexit-lacks-abi-frame-clause (wave41-native #26)
+- missing: `naExit` (`Vsa/Sim/EvalCallNative2.lean:220`) — the post of the
+  landed `nativeAssertInternal` internal run — pins ONLY `x2 = fsp` among the
+  callee-saved registers.  It has NO ABI-frame clause, although the machine
+  fact is TRUE (the epilogue `0x80002e5c..0x80002e70` reloads ra/s0/s1/s2 from
+  the frame spills, and no other callee-saved is touched) and the proof
+  TRACKED every callee-saved value through all 33 sites (`hx8_1`/`hx9_1`/
+  `hx18_1` chains) — the clause was simply not stated.  The `nativeArmSplice`
+  join (`rows/NativeArmSplice.lean`) needs `NativeBodyPost.frame` (callee-saved
+  except `s7` back to the ghost `g`) to rebuild `SegExit.frame` at `callJoinPC`.
+- workaround: named typed premise `NativeAssertInternalAbi`
+  (`rows/NativeBodyAssert.lean`) = the ABI-framed variant of
+  `nativeAssertInternal` (same `naEntry`, post = `naExit` ∧ the
+  `AbiPreservedNoise` tie to `g_na` re-established).  All other marshalling
+  (naEntry construction, naExit → NativeBodyPost rebuild) is landed against it.
+- cost: `nativeAssertOkSpec` stays conditional on this ONE premise; every
+  future consumer of `nativeAssertInternal` needing a frame pays again; the
+  print/println internal runs (unbuilt) must NOT repeat the omission.
+- proposal: amend `naExit` with one clause
+  `frame : ∀ R, AbiPreservedNoise R → c.σ.regs.get? R = g R` (naEntry already
+  carries the same tie, so the amendment is ~1 line of statement + threading
+  the tracked per-site register facts through the epilogue — the values are
+  already in the proof).  EvalCallNative2 is outside wave-41 file ownership;
+  coordinator amendment discharges `NativeAssertInternalAbi` verbatim.
+
+## 2026-09-01 nonra-gpr-dispatch-duplicated-jal-jalr (wave41-native #26)
+- missing: a factored "every GPR in 1..31 except rd survives one linking step"
+  lemma over a class-generic `sigmaPost_*` observation.  `jalStep_of_obs`
+  (BridgeSeg.lean) and the new `jalrStep_of_obs` (rows/NativeAddrResolve.lean)
+  each carry an IDENTICAL 30-branch `match n` dispatch (obs_jal_other vs
+  obs_jalr_other per GPR, 8 decides each) — only the obs consumer differs.
+- workaround: mirrored the 30-branch block once more (second instance).
+- cost: ~35 lines + 240 decides per future linking-step class (e.g. a
+  jalr-to-non-x1-rd seam); two instances exist now — factor before a third.
+- proposal: `nonRa_of_frame : (∀ R, (rd::noiseRegs)-avoidance → get? R = get? R)
+  → ∀ n ∈ 1..31, n ≠ idx rd → gprGet-transport` over `StepFrameOut` (whose
+  `of_alu/of_jal/of_jr` already package the per-class frame), so each class's
+  JalStep glue is ONE StepFrameOut + one generic GPR-dispatch lemma.

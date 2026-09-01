@@ -592,3 +592,15 @@ import Vsa.Sim.DeriveMetaDemo
 import Vsa.Sim.DeriveMetaTowers
 import Vsa.Sim.DeriveRow
 import Vsa.Sim.LayoutInstance
+-- wave 41
+import Vsa.Sim.ExecCondArmSites
+import Vsa.Sim.rows.StmtRetArmStagePre
+import Vsa.Sim.rows.StmtVarInitArmStagePre
+import Vsa.Sim.rows.StmtIfCondArmStagePre
+import Vsa.Sim.rows.StmtWhileCondArmStagePre
+import Vsa.Sim.rows.FlCondArmStagePre
+import Vsa.Sim.rows.ArgsHeadArmStagePre
+import Vsa.Sim.rows.NativeAddrResolve
+import Vsa.Sim.rows.NativeArmSplice
+import Vsa.Sim.rows.NativeArmDispatch
+import Vsa.Sim.rows.NativeBodyAssert

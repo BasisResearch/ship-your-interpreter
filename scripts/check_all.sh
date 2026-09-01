@@ -919,6 +919,34 @@ THEOREMS=(
   Vsa.Sim.EndToEnd.interpSim_ofWork                 # EndToEnd (InterpSim L from ONE RemainingWork record at any layout)
   Vsa.Sim.EndToEnd.endToEnd                         # EndToEnd (THE THEOREM: InterpSim interpRunLayout from RemainingWork — the hypothesis list IS the remaining project)
   Vsa.Sim.EndToEnd.endToEnd_refinement              # EndToEnd (the full BigStep↔Halts behavioral correspondence)
+  # Wave 41: exec mail-merge (5 arms) + argsHead + the native splice stack
+  Vsa.Sim.blockB_stmtRet_stagePre                   # rows/StmtRetArmStagePre (exec-eval cut, _es sites reused)
+  Vsa.Sim.stmtRet_field_of_dispatch                 # rows/StmtRetArmStagePre
+  Vsa.Sim.blockB_stmtVarInit_stagePre               # rows/StmtVarInitArmStagePre
+  Vsa.Sim.stmtVarInit_field_of_dispatch             # rows/StmtVarInitArmStagePre
+  Vsa.Sim.blockB_stmtIfCond_stagePre                # rows/StmtIfCondArmStagePre (new ExecCondArmSites battery)
+  Vsa.Sim.stmtIfCond_field_of_dispatch              # rows/StmtIfCondArmStagePre
+  Vsa.Sim.blockB_stmtWhileCond_stagePre             # rows/StmtWhileCondArmStagePre
+  Vsa.Sim.stmtWhileCond_field_of_dispatch           # rows/StmtWhileCondArmStagePre
+  Vsa.Sim.blockB_flCond_stagePre                    # rows/FlCondArmStagePre
+  Vsa.Sim.flCond_field_of_dispatch                  # rows/FlCondArmStagePre
+  Vsa.Sim.argsHeadBodyBridge                        # rows/ArgsHeadArmStagePre (16-instr arg-loop body via ONE bridgeOfSeg — no site battery)
+  Vsa.Sim.argsHead_field_of_dispatch                # rows/ArgsHeadArmStagePre (argsHead FIELD-COMPOSED — 9/14 eval-child)
+  Vsa.Sim.nativeAddr_of_valueRepr                   # rows/NativeAddrResolve (ValueRepr .native → jalr target)
+  Vsa.Sim.nativeKind_of_valueRepr                   # rows/NativeAddrResolve
+  Vsa.Sim.nativeName_of_valueRepr                   # rows/NativeAddrResolve
+  Vsa.Sim.jalrStep_of_obs                           # rows/NativeAddrResolve (indirect-call twin of jalStep_of_obs)
+  Vsa.Sim.nativeJalrStep                            # rows/NativeAddrResolve (the concrete 0x800039f4 jalr a6 seam)
+  Vsa.Sim.nativeJoin                                # rows/NativeArmSplice (join leg machine-discharged)
+  Vsa.Sim.nativeArmSplice                           # rows/NativeArmSplice (the native dispatch/join wrapper factored ONCE)
+  Vsa.Sim.nativeAssertOkSpec_of_splice              # rows/NativeArmSplice
+  Vsa.Sim.nativePrintSpec_of_splice                 # rows/NativeArmSplice
+  Vsa.Sim.nativePrintlnSpec_of_splice               # rows/NativeArmSplice
+  Vsa.Sim.nativeDispatchStageSeg_seg                # rows/NativeArmDispatch (beq-taken dispatch seg)
+  Vsa.Sim.nativeDispatchStageBridge                 # rows/NativeArmDispatch (bridgeOfSegFramed at AbiExceptS7)
+  Vsa.Sim.nativeDispatchJalSeam_of                  # rows/NativeArmDispatch
+  Vsa.Sim.nativeBodyAssert                          # rows/NativeBodyAssert (assertOk body: value_truthy ≫ value_null)
+  Vsa.Sim.nativeAssertOkSpec_of_dispatch            # rows/NativeBodyAssert (hCallAssertOk ← geometry + hDispatch + NativeAssertInternalAbi)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean
