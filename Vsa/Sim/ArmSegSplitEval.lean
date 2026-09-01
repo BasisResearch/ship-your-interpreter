@@ -560,20 +560,28 @@ structure EvalChildStages : Prop where
     EEntryC c st d env (.call f args) → LandedN 1 c (fun c' => JalPreBundle f c' st d env)
   argsHead : ∀ (e : Expr) (es : List Expr) (c : Config) (st : Vsa.While.St) (d : Nat) (env : Addr),
     AEntryC c st d env (e :: es) → LandedN 1 c (fun c' => JalPreBundle e c' st d env)
+  -- **The 6 exec-eval fields land at `EEntryC` DIRECTLY (wave 40).**  Their `jal
+  -- eval_expr` lives in exec_stmt text, so they cannot produce `JalPreBundle` (the
+  -- `Eval_exprLoaded`-typed seam) — only `ExecJalPreBundle` (in `ArmSegSplitExecEval`,
+  -- which imports THIS file, so cannot be referenced here without a cycle).  So these
+  -- fields carry the POST-split `EEntryC` landing directly; the exec supplier
+  -- (`StmtExprArmStagePre.stmtExpr_field_of_dispatch`, via `stmtExpr_split'`) produces
+  -- exactly this shape.  (Observation
+  -- `evalchildstages-6-exec-fields-mistyped-JalPreBundle-amend-to-ExecJalPreBundle`.)
   stmtExpr : ∀ (e : Expr) (c : Config) (st : Vsa.While.St) (d : Nat) (env : Addr),
-    SEntryC c st d env (.expr e) → LandedN 1 c (fun c' => JalPreBundle e c' st d env)
+    SEntryC c st d env (.expr e) → LandedN 1 c (fun c' => EEntryC c' st d env e)
   stmtRet : ∀ (e : Expr) (c : Config) (st : Vsa.While.St) (d : Nat) (env : Addr),
-    SEntryC c st d env (.ret (some e)) → LandedN 1 c (fun c' => JalPreBundle e c' st d env)
+    SEntryC c st d env (.ret (some e)) → LandedN 1 c (fun c' => EEntryC c' st d env e)
   stmtVarInit : ∀ (x : String) (e : Expr) (c : Config) (st : Vsa.While.St) (d : Nat) (env : Addr),
-    SEntryC c st d env (.varDecl x (some e)) → LandedN 1 c (fun c' => JalPreBundle e c' st d env)
+    SEntryC c st d env (.varDecl x (some e)) → LandedN 1 c (fun c' => EEntryC c' st d env e)
   stmtIfCond : ∀ (cnd : Expr) (t : Stmt) (e : Option Stmt) (c : Config) (st : Vsa.While.St)
     (d : Nat) (env : Addr),
-    SEntryC c st d env (.ifStmt cnd t e) → LandedN 1 c (fun c' => JalPreBundle cnd c' st d env)
+    SEntryC c st d env (.ifStmt cnd t e) → LandedN 1 c (fun c' => EEntryC c' st d env cnd)
   stmtWhileCond : ∀ (cnd : Expr) (b : Stmt) (c : Config) (st : Vsa.While.St) (d : Nat) (env : Addr),
-    SEntryC c st d env (.whileStmt cnd b) → LandedN 1 c (fun c' => JalPreBundle cnd c' st d env)
+    SEntryC c st d env (.whileStmt cnd b) → LandedN 1 c (fun c' => EEntryC c' st d env cnd)
   flCond : ∀ (cc : Expr) (step : Option Expr) (b : Stmt) (c : Config) (st : Vsa.While.St)
     (d : Nat) (env : Addr),
-    FEntryC c st d env (some cc) step b → LandedN 1 c (fun c' => JalPreBundle cc c' st d env)
+    FEntryC c st d env (some cc) step b → LandedN 1 c (fun c' => EEntryC c' st d env cc)
 
 /-- **The 15 eval-child fields of `ApproxArmResidGap`, discharged from
 `EvalChildStages`.**  Each is `<field>_split` fed the bundled staging residual.
@@ -624,12 +632,13 @@ theorem armResidGap_evalChildFields (S : EvalChildStages) :
    fun x e c st d env => assignE_split x e c st d env (S.assignE x e c st d env),
    fun f args c st d env => callF_split f args c st d env (S.callF f args c st d env),
    fun e es c st d env => argsHead_split e es c st d env (S.argsHead e es c st d env),
-   fun e c st d env => stmtExpr_split e c st d env (S.stmtExpr e c st d env),
-   fun e c st d env => stmtRet_split e c st d env (S.stmtRet e c st d env),
-   fun x e c st d env => stmtVarInit_split x e c st d env (S.stmtVarInit x e c st d env),
-   fun cnd t e c st d env => stmtIfCond_split cnd t e c st d env (S.stmtIfCond cnd t e c st d env),
-   fun cnd b c st d env => stmtWhileCond_split cnd b c st d env (S.stmtWhileCond cnd b c st d env),
-   fun cc step b c st d env => flCond_split cc step b c st d env (S.flCond cc step b c st d env)⟩
+   -- the 6 exec-eval fields already land at `EEntryC` (wave 40 re-type) — used directly
+   fun e c st d env => S.stmtExpr e c st d env,
+   fun e c st d env => S.stmtRet e c st d env,
+   fun x e c st d env => S.stmtVarInit x e c st d env,
+   fun cnd t e c st d env => S.stmtIfCond cnd t e c st d env,
+   fun cnd b c st d env => S.stmtWhileCond cnd b c st d env,
+   fun cc step b c st d env => S.flCond cc step b c st d env⟩
 
 #print axioms armResidGap_evalChildFields
 

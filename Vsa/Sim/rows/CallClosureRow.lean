@@ -308,6 +308,10 @@ structure CallClosureGeom
       result-copy row ≫ the join marshalling (`rows/CallClosureSplice.lean`). -/
   ret :
     cd.body ≠ [] →
+    -- wave 40: the entry-side spill image (`s7@1016(sp)` = `g x23`, tabled at
+    -- `callDispatchPC`) — the ret routes' restore source, supplied by the
+    -- amended `mCall` motive (ledger `segentry-no-caller-spill-image`).
+    EntryImage callDispatchPC g m0 →
     ∀ (g' : (R : Register) → Option (RegisterType R)) (φf' : Addr → Nat) (mB : Mem),
       PhiExtends φf φf' st.store.frames.size →
       (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < SL.hi) → ¬ (A.lo ≤ a ∧ a < A.hi) →
@@ -355,6 +359,9 @@ theorem callClosureSim
     (st st' : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value)
     (store' : Store) (frame : Addr) (status : Status) (v : Value)
     (dLeft aLeft : Nat) (m0 : Mem)
+    -- wave 40: the entry-side spill image (the amended `mCall` hypothesis),
+    -- threaded to the `ret` seam (its restore routes read `1016(sp)` off `m0`).
+    (hImg : EntryImage callDispatchPC g m0)
     (_hClos : st.store.closures[a]? = some cd)
     (_hArity : vs.length = cd.params.length)
     (_hDepth : d < maxCallDepth)
@@ -414,7 +421,7 @@ theorem callClosureSim
     · -- return hop: `ret` at the carried handoff facts.
       intro c hc
       obtain ⟨g', φf', mB, hpe, hfr, htie, hslots, hExit⟩ := hc
-      exact hGeom.ret hne g' φf' mB hpe hfr htie hslots c hExit
+      exact hGeom.ret hne hImg g' φf' mB hpe hfr htie hslots c hExit
 
 /-! ## §4. The params-fold discharged through `storeChainList`
 
@@ -507,11 +514,12 @@ theorem eval_callClosure_row
   show ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (dLeft aLeft : Nat) (m0 : Mem),
+    EntryImage callDispatchPC g m0 →
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
       (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st'
         callJoinPC m0)
-  intro g N A SL φf φc dLeft aLeft m0
+  intro g N A SL φf φc dLeft aLeft m0 hImg
   -- `ExecSeq.nil` inversion: on the empty body the exit state is the bound state.
   have hNilLink : cd.body = [] → st' = closureBoundSt st store' cd vs frame := by
     intro hb
@@ -540,7 +548,7 @@ theorem eval_callClosure_row
     fun g' φf' mB =>
       hBody g' N A SL φf' φc (dLeft - 1) (aLeft - 1) callBodyLoopPC callBodyRetPC mB
   exact callClosureSim g N A SL φf φc st st' d a cd vs store' frame status v
-    dLeft aLeft m0 a_1 a_2 a_3 a_4 a_6 hNilLink hBodyIH
+    dLeft aLeft m0 hImg a_1 a_2 a_3 a_4 a_6 hNilLink hBodyIH
     (hR st st' d a cd vs store' frame status v g N A SL φf φc dLeft aLeft m0)
 
 /-- **Slot-verify.** `eval_callClosure_row` fills the EXACT `hCallClosure`

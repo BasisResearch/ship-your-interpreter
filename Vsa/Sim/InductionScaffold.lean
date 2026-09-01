@@ -194,6 +194,96 @@ def stackScratchTop : Nat → Option Nat
   | 0x80003378 => some 168  -- callBodyRetPC: the closure-body ExecSeq loop
   | _ => none
 
+/-- **The entry-side spill-image table** (wave 40, ledger
+`segentry-no-caller-spill-image` — the DUAL of `stackScratchTop`): maps a
+segment ENTRY PC to the caller-frame spill slot whose `m0`-image the segment's
+routes RESTORE from, as `(sp-offset, GPR index)`.  A tabled entry PC asserts
+(via `EntryImage`) that the pre-memory `m0` holds, at `sp + off`, the LE bytes
+of the ghost frame's value for that GPR — the link between the ∀-quantified
+`m0` and `g` that a restore-route (`ld <reg>, off(sp)` after a sub-run) needs
+to re-establish the exit `frame` clause.  One entry today: the closure-call
+dispatch `callDispatchPC = 0x80003254` restores `s7 = x23` from `1016(sp)`
+(`ld s7,1016(sp)` at `0x800033b0`/`0x80003970`), a slot spilled at
+`0x800031cc` — BEFORE the segment (all other slots — `s5@1032`, `s3@1048`,
+`s6@1024` — are in-span, carried by `CallerSpillSlots`).  Untabled entry PCs
+keep the clause vacuous.  SEAT NOTE (ledger
+`segentry-spillimage-field-blocked-by-frozen-generic-producer`): the clause is
+consumed as an `mCall`-motive hypothesis (`TermSimAssembly.mCall`), not yet a
+`SegEntry` field — `ArmSegSplitSeg.segEntry_of_jalPrefix` constructs `SegEntry`
+at a ∀-quantified entry PC and is frozen this wave; the hoist is mechanical
+once that file may take an `entrySpillImage entryPC = none` hypothesis. -/
+def entrySpillImage : Nat → Option (Nat × Nat)
+  | 0x80003254 => some (1016, 23)  -- callDispatchPC: the s7 slot (0x800031cc)
+  | _ => none
+
+/-- Homogeneous ghost-frame GPR read — the ghost twin of `BlockPilot.gprGet`:
+dispatches the heterogeneous `RegisterType` register file at concrete GPR
+indices, so every branch reduces to `BitVec 64` and no cast is needed.
+Non-GPR indices read `none`. -/
+def gGpr (g : (R : Register) → Option (RegisterType R)) : Nat → Option (BitVec 64)
+  | 1 => g Register.x1
+  | 2 => g Register.x2
+  | 3 => g Register.x3
+  | 4 => g Register.x4
+  | 5 => g Register.x5
+  | 6 => g Register.x6
+  | 7 => g Register.x7
+  | 8 => g Register.x8
+  | 9 => g Register.x9
+  | 10 => g Register.x10
+  | 11 => g Register.x11
+  | 12 => g Register.x12
+  | 13 => g Register.x13
+  | 14 => g Register.x14
+  | 15 => g Register.x15
+  | 16 => g Register.x16
+  | 17 => g Register.x17
+  | 18 => g Register.x18
+  | 19 => g Register.x19
+  | 20 => g Register.x20
+  | 21 => g Register.x21
+  | 22 => g Register.x22
+  | 23 => g Register.x23
+  | 24 => g Register.x24
+  | 25 => g Register.x25
+  | 26 => g Register.x26
+  | 27 => g Register.x27
+  | 28 => g Register.x28
+  | 29 => g Register.x29
+  | 30 => g Register.x30
+  | 31 => g Register.x31
+  | _ => none
+
+/-- `gGpr` at the one tabled register, for the consumer side. -/
+theorem gGpr_x23 (g : (R : Register) → Option (RegisterType R)) :
+    gGpr g 23 = g Register.x23 := rfl
+
+/-- **The entry-side spill-image clause** — guard-implication style, the
+`stackWin` dual: for a TABLED entry PC, the pre-memory `m0` holds at
+`sp + off` the LE bytes of the ghost's value for GPR `n` (`sp` anchored at
+`g x2`, exactly as `stackWin` anchors its window).  Vacuous when
+`entrySpillImage entryPC = none` — generic producers discharge it by
+`entryImage_of_none`.  Byte-level LE, matching `CallerSpillSlots.s5/.s3` so
+the restore-route dischargers consume one uniform shape. -/
+def EntryImage (entryPC : Nat)
+    (g : (R : Register) → Option (RegisterType R)) (m0 : Mem) : Prop :=
+  ∀ (off n : Nat), entrySpillImage entryPC = some (off, n) →
+    ∀ spv : BitVec 64, g Register.x2 = some spv →
+    ∀ w : BitVec 64, gGpr g n = some w →
+    ∀ i : Nat, i < 8 →
+      m0[spv.toNat + off + i]? = some (w.extractLsb' (8 * i) 8)
+
+/-- The vacuous case: an untabled entry PC carries no image obligation. -/
+theorem entryImage_of_none {entryPC : Nat}
+    {g : (R : Register) → Option (RegisterType R)} {m0 : Mem}
+    (h : entrySpillImage entryPC = none) : EntryImage entryPC g m0 := by
+  intro off n hoff
+  rw [h] at hoff
+  exact absurd hoff (by simp)
+
+#print axioms gGpr_x23
+#print axioms entryImage_of_none
+
 /-- Skeleton machine postcondition shared by the non-`EvalE` relations. `exitPC`
 is the segment's return/continuation PC (placeholder `0`); `st'` the spec
 post-state, re-represented with EXTENDED correspondence maps (φ-extension order

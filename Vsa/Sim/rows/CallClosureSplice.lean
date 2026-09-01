@@ -271,6 +271,60 @@ theorem callClosureEntrySplice
 
 #print axioms callClosureEntrySplice
 
+/-! ## §3b. env_new_pre side-condition marshalling (wave 40)
+
+The `hDispatchStage` residual owes `env_new_pre`'s side conditions.  The one
+that is a pure `StoreRepr` projection is the parent-link selector at
+`parentSpec := some cd.env`: the dispatch stage's `ld a0,8(a3)` (a3 = the
+closure record `φc a`) reads `cd->env`, and `ClosureRepr` pins those bytes to
+`φf cd.env ≠ 0` — so the load readback IS the selector's witness.  The
+remaining pre conditions are NOT `SegEntry`-derivable and stay with the named
+stage: `Env_newLoaded` (a code pin — `SegEntry` carries no Loaded clause, the
+`segEntry_of_jalPrefix` class), `M.AInv`/`StackOK`/non-exhaustion (contract/
+layout facts of the arm). -/
+
+/-- **The closure record off the store** — `st.store.closures[a]? = some cd`
+inverted through `StoreRepr.closures`. -/
+theorem closureRepr_of_storeRepr
+    {m : Mem} {N : NativeAddrs} {A : Arena} {φf φc : Addr → Nat} {s : Store}
+    {a : Addr} {cd : ClosureData}
+    (hstore : StoreRepr m N A φf φc s)
+    (hClos : s.closures[a]? = some cd) :
+    ClosureRepr m φf (φc a) cd := by
+  obtain ⟨hlt, heq⟩ := Array.getElem?_eq_some_iff.mp hClos
+  have h := hstore.closures a hlt
+  rwa [heq] at h
+
+/-- **The env_new parent-link marshalling**: the `cd->env` field bytes at
+`8(φc a)` are the extended-map image `φf cd.env`, non-NULL — exactly the
+`env_new_pre` `parentSpec := some cd.env` selector's content, and the honest
+`lds` instantiation for the dispatch bridge's `ld a0,8(a3)`. -/
+theorem envNewParentLink_of_storeRepr
+    {m : Mem} {N : NativeAddrs} {A : Arena} {φf φc : Addr → Nat} {s : Store}
+    {a : Addr} {cd : ClosureData}
+    (hstore : StoreRepr m N A φf φc s)
+    (hClos : s.closures[a]? = some cd) :
+    read64 m (φc a + 8) = some (φf cd.env) ∧ φf cd.env ≠ 0 :=
+  (closureRepr_of_storeRepr hstore hClos).2
+
+/-- **The selector in `env_new_pre`'s match shape**: given the machine's
+loaded parent word `par` (= the `8(φc a)` readback), the
+`parentSpec = some cd.env` clause `φf cd.env = par.toNat ∧ par ≠ 0#64`. -/
+theorem envNewParentSel_of_storeRepr
+    {m : Mem} {N : NativeAddrs} {A : Arena} {φf φc : Addr → Nat} {s : Store}
+    {a : Addr} {cd : ClosureData} {par : BitVec 64}
+    (hstore : StoreRepr m N A φf φc s)
+    (hClos : s.closures[a]? = some cd)
+    (hpar : par.toNat = φf cd.env) :
+    φf cd.env = par.toNat ∧ par ≠ 0#64 := by
+  refine ⟨hpar.symm, fun h0 => ?_⟩
+  exact (envNewParentLink_of_storeRepr hstore hClos).2
+    (by rw [← hpar, h0]; rfl)
+
+#print axioms closureRepr_of_storeRepr
+#print axioms envNewParentLink_of_storeRepr
+#print axioms envNewParentSel_of_storeRepr
+
 /-! ## §4. The return route — the status split named
 
 The amended `ret` field is ONE Triple covering both `a_6` statuses; the machine
@@ -287,6 +341,8 @@ def CallRetShape
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' : SpecSt) (store' : Store) (cd : ClosureData) (vs : List Value)
     (frame : Addr) (m0 : Mem) : Prop :=
+  -- wave 40: the entry-side spill image (the amended `mCall`/`ret` hypothesis).
+  Scaffold.EntryImage callDispatchPC g m0 →
   ∀ (g' : (R : Register) → Option (RegisterType R)) (φf' : Addr → Nat) (mB : Mem),
     PhiExtends φf φf' st.store.frames.size →
     (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < SL.hi) → ¬ (A.lo ≤ a ∧ a < A.hi) →
@@ -353,6 +409,47 @@ theorem callerSlotsSurviveBody
     (hArena a hlo hhi')
 
 #print axioms callerSlotsSurviveBody
+
+/-- **The `s7` restore image at the body exit** — the wave-40 entry-side
+spill-image clause MEETING the wave-38 carry: `EntryImage@callDispatchPC`
+(table entry `(1016, 23)`) pins the `m0` bytes at `[sp+1016, sp+1024)` to the
+arm ghost's `s7 = g x23`, and `CallerSpillSlots.s7carry` says the entry route
+left that window untouched (`mB = m0` there).  Composed with
+`callerSlotsSurviveBody` (the `stackWin` firing, `mExec = mB` on
+`[sp+1016, sp+1056)`) the `.normal`/`.ret` restore segs' `ld s7,1016(sp)`
+readback is the ghost value — the last register fact the join `frame` clause
+needed (ledger `segentry-no-caller-spill-image`: RESOLVED at this seam). -/
+theorem s7ImageAtBody
+    {g : (R : Register) → Option (RegisterType R)} {spv w : BitVec 64}
+    {mB m0 : Mem}
+    (hImg : EntryImage callDispatchPC g m0)
+    (hslots : CallerSpillSlots g spv mB m0)
+    (hspv : g Register.x2 = some spv)
+    (hw : g Register.x23 = some w) :
+    ∀ i : Nat, i < 8 →
+      mB[spv.toNat + 1016 + i]? = some (w.extractLsb' (8 * i) 8) := by
+  intro i hi
+  rw [hslots.s7carry i hi]
+  exact hImg 1016 23 (by decide) spv hspv w (by rw [gGpr_x23]; exact hw) i hi
+
+#print axioms s7ImageAtBody
+
+/-- **The status→a0 ABI residual** (wave 40, the `SeqForRows` class — named,
+NOT a motive change): the `mExecSeq` motive's `SegExit@callBodyRetPC` does not
+pin the status word, but the return side branches on it — `beqz a0
+@0x80003378` (normal → back-edge/exit vs abrupt → classification) and
+`bne a0,3 @0x80003398`.  What the body run actually guarantees (exec_stmt's
+status ABI: 0 = normal, 1 = brk, 2 = cont, 3 = ret) at the body-exit config;
+supplied by the eventual `mExecSeq`-side seq rows (the same layer that owes
+`SegExit.stackWin` at the tabled `callBodyRetPC`), consumed by the ret-route
+discharger to pick the `callClosureRetClassRow` vs the loop-exit route. -/
+structure BodyStatusABI (status : Status) (c : Config) : Prop where
+  /-- `.normal` exits with `a0 = 0` (the `beqz` back-edge/exit side). -/
+  normal : status = Status.normal →
+    c.σ.regs.get? Register.x10 = some (0#64 : BitVec 64)
+  /-- `.ret v` exits with `a0 = 3` (the classification fall-through side). -/
+  retv : ∀ v : Value, status = Status.ret v →
+    c.σ.regs.get? Register.x10 = some (3#64 : BitVec 64)
 
 /-! ## §5. Assembly into the residual slot -/
 

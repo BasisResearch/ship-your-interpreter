@@ -555,6 +555,8 @@ import Vsa.Sim.EvalChildFieldCombinator
 import Vsa.Sim.ArmStagesWave34
 import Vsa.Sim.MidArmFieldIH
 import Vsa.Sim.MidArmFieldWire
+import Vsa.Sim.ArmSegSplitExecEval
+import Vsa.Sim.rows.StmtExprArmStagePre
 import Vsa.Sim.rows.FnArmClosureBuild
 import Vsa.Sim.rows.AllocClosureInhab
 import Vsa.Sim.rows.AllocBuildEntrySplice
@@ -570,6 +572,10 @@ import Vsa.Sim.rows.CallClosureDispatchStage
 import Vsa.Sim.rows.CallClosureFoldStage
 import Vsa.Sim.rows.CallClosureEnvNewRet
 import Vsa.Sim.rows.CallClosureBodyEntry
+import Vsa.Sim.rows.CallClosureFoldBack
+import Vsa.Sim.rows.CallClosureRetClass
+import Vsa.Sim.rows.CallClosureNormalRet
+import Vsa.Sim.rows.CallClosureBodyExit
 import Vsa.Sim.rows.BlockAUnaryArmGen
 import Vsa.Sim.rows.BlockALogicalArmGen
 import Vsa.Sim.CallSpec

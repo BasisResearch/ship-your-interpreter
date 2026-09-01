@@ -79,20 +79,21 @@ def evalChildStages_mk
       EEntryC c st d env (.call f args) → LandedN 1 c (fun c' => JalPreBundle f c' st d env))
     (argsHead : ∀ (e : Expr) (es : List Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
       AEntryC c st d env (e :: es) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+    -- the 6 exec-eval fields land at `EEntryC` directly (wave 40 re-type)
     (stmtExpr : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.expr e) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+      SEntryC c st d env (.expr e) → LandedN 1 c (fun c' => EEntryC c' st d env e))
     (stmtRet : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.ret (some e)) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+      SEntryC c st d env (.ret (some e)) → LandedN 1 c (fun c' => EEntryC c' st d env e))
     (stmtVarInit : ∀ (x : String) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.varDecl x (some e)) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+      SEntryC c st d env (.varDecl x (some e)) → LandedN 1 c (fun c' => EEntryC c' st d env e))
     (stmtIfCond : ∀ (cnd : Expr) (t : Stmt) (e : Option Stmt) (c : Config) (st : SpecSt)
       (d : Nat) (env : Addr),
-      SEntryC c st d env (.ifStmt cnd t e) → LandedN 1 c (fun c' => JalPreBundle cnd c' st d env))
+      SEntryC c st d env (.ifStmt cnd t e) → LandedN 1 c (fun c' => EEntryC c' st d env cnd))
     (stmtWhileCond : ∀ (cnd : Expr) (b : Stmt) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.whileStmt cnd b) → LandedN 1 c (fun c' => JalPreBundle cnd c' st d env))
+      SEntryC c st d env (.whileStmt cnd b) → LandedN 1 c (fun c' => EEntryC c' st d env cnd))
     (flCond : ∀ (cc : Expr) (step : Option Expr) (b : Stmt) (c : Config) (st : SpecSt)
       (d : Nat) (env : Addr),
-      FEntryC c st d env (some cc) step b → LandedN 1 c (fun c' => JalPreBundle cc c' st d env)) :
+      FEntryC c st d env (some cc) step b → LandedN 1 c (fun c' => EEntryC c' st d env cc)) :
     EvalChildStages :=
   { evalIH, unary, binaryL, binaryR, logicalL, logicalR, assignE, callF, argsHead,
     stmtExpr, stmtRet, stmtVarInit, stmtIfCond, stmtWhileCond, flCond }

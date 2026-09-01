@@ -1,5 +1,6 @@
 import Vsa.Sim.rows.CallRows
 import Vsa.Sim.rows.FnArmSeamReduce
+import Vsa.Sim.rows.StoreReprPhicRebase
 
 /-!
 # `FnResidSupply` — supply the `hFn` residual `FnResid` from the `EX_FN` pipeline
@@ -174,8 +175,132 @@ theorem fnResid_of_pipeline
   exact ⟨fnArmSpec_of_geom g N A SL φf φc φc' st d env name params body store' a
     sp r sret aEnv aExpr m0 v8 v9 v18 out0 mpre hfr hcl hGeom, hW⟩
 
+/-- **`fnResid_of_pipeline_wf`** — the same `FnResid` supplier, but with the opaque
+`hEntryRebase` premise DISCHARGED from the honest store well-formedness invariant
+`StoreClosuresBounded st.store` (every closure address stored in a frame binding is
+in-bounds — it was returned by an earlier `allocClosure`) plus the closure-alloc
+`PhiExtends` (`hpc`).  `storeRepr_phic_mono` (`StoreReprPhicRebase`) rebases every
+`StoreRepr` field: the frame values through the bounded refs, the closures/inj/arena
+fields verbatim (their `φc`-uses are all at indices `< st.store.closures.size`, where
+`hpc` pins `φc' = φc`).  This is the closures-side analog of the φf-rebase, now a real
+lemma rather than a named premise. -/
+theorem fnResid_of_pipeline_wf
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc φc' : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (env : Addr)
+    (name : Option String) (params : List String) (body : List Stmt)
+    (store' : Store) (a : Addr)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
+    (v8 v9 v18 : BitVec 64) (out0 : Array String) (mpre : Mem)
+    (k : Nat) (armPC : BitVec 64) (calleeLoaded : Mem → Prop)
+    (hAlloc : st.store.allocClosure ⟨env, name, params, body⟩ = (store', a))
+    (hpc : PhiExtends φc φc' st.store.closures.size)
+    (hout : String.join out0.toList = st.out)
+    (hkle : k ≤ 10) (hklt : k < 128)
+    (hkind : read32 m0 aExpr.toNat = some k)
+    (hslot : KindSlotPinned k armPC m0) (hcallee : calleeLoaded m0)
+    (hcalleeSurv : ∀ (mem : Mem) (a8 : Nat) (dd : BitVec (8 * 8)),
+      SL.lo ≤ a8 → a8 + 8 ≤ sp.toNat → calleeLoaded mem → calleeLoaded (writeMap8 mem a8 dd))
+    (hexprSurv : ∀ m' : Mem,
+      (∀ aa : Nat, ¬ (SL.lo ≤ aa ∧ aa < sp.toNat) → m0[aa]? = m'[aa]?) →
+        ExprRepr m' aExpr.toNat (.fn name params body))
+    (harmAl : armPC.toNat % 4 = 0)
+    (htableStk : jumpTableBase + 4 * k + 4 ≤ SL.lo ∨ sp.toNat ≤ jumpTableBase + 4 * k)
+    (hSeam : FnArmSeamRun g N A SL φf φc' st a armPC calleeLoaded name params body store'
+      sp r sret aExpr aEnv m0 v8 v9 v18 out0 mpre)
+    -- the honest store well-formedness invariant (closures-in-bounds); DISCHARGES hEntryRebase:
+    (hWF : StoreClosuresBounded st.store)
+    (hW : EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
+      ⟨store', st.out⟩ (.closure a) sp r sret m0) :
+    Vsa.Sim.FnArmSpec g N A SL φf φc st d env name params body store' a
+      sp r sret aEnv aExpr m0 ∧
+    Vsa.Sim.EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
+      ⟨store', st.out⟩ (.closure a) sp r sret m0 :=
+  fnResid_of_pipeline g N A SL φf φc φc' st d env name params body store' a
+    sp r sret aEnv aExpr m0 v8 v9 v18 out0 mpre k armPC calleeLoaded
+    hAlloc hpc hout hkle hklt hkind hslot hcallee hcalleeSurv hexprSurv harmAl htableStk hSeam
+    (fun _ hsr => storeRepr_phic_mono hWF hpc hsr) hW
+
+/-! ## The `FnResid` top-level supplier — premise-free modulo ONE named bundle
+
+`eval_fn_row` (`rows/CallRows`) fills the recursor's `hFn` slot from
+`∀ st d env …, FnResid …`; `FnResid` is itself `∀ g N A SL φf φc sp r sret aEnv
+aExpr m0, FnArmSpec ∧ EvalRecWiden`.  `fnResid_of_pipeline_wf` produces
+`FnArmSpec ∧ EvalRecWiden` for FIXED ghosts from a per-ghost residual set (the
+widened map `φc'`, the closure-alloc `PhiExtends`, the 9 Layout-grounded dispatch
+facts, the `EX_FN` middle seam `FnArmSeamRun`, the store-WF invariant, and the
+`EvalRecWiden` widener).  Those residuals are all ghost-dependent, so the honest
+top-level supplier packages them ∀-closed as ONE named-field bundle
+`FnResidBundle` (CLAUDE.md — never an anonymous ∀/∧ tower), and `fnResid_from_bundle`
+produces `FnResid` verbatim.  What remains inside the bundle is EXACTLY the
+irreducible off-path machine + Layout residuals (itemized in the file doc): they
+are the same class every leaf/arm row threads down to the M6 Layout, plus the
+`EX_FN` seam bundles (`AllocBuildStagingLink`/`AllocBuildTailFacts`, closed in
+`FnArmSeams`). -/
+
+/-- **`FnResidBundle`** — the ∀-closed residual set that supplies `FnResid` for the
+`.fn` arm.  Every field is a per-ghost residual `fnResid_of_pipeline_wf` consumes,
+∀-closed exactly as `FnResid` is; each is a NAMED typed premise (never `sorry`).
+`store'`/`a` are FIXED by the caller's `allocClosure` (the row's `hAlloc`). -/
+structure FnResidBundle
+    (st : Vsa.While.St) (d : Nat) (env : Addr)
+    (name : Option String) (params : List String) (body : List Stmt)
+    (store' : Store) (a : Addr) : Prop where
+  /-- the `allocClosure` result is `(store', a)` (the row's own `hAlloc`). -/
+  hAlloc : st.store.allocClosure ⟨env, name, params, body⟩ = (store', a)
+  /-- the store well-formedness invariant (closures-in-bounds): a spec-level fact,
+  discharges the φc-entry rebase via `storeRepr_phic_mono`. -/
+  hWF : StoreClosuresBounded st.store
+  /-- for every choice of ghosts, the widened closures map `φc'`, the closure-alloc
+  `PhiExtends`, the output invariant, the 9 Layout-grounded dispatch facts, the
+  `EX_FN` middle seam, and the `EvalRecWiden` widener — the exact inputs of
+  `fnResid_of_pipeline_wf`. -/
+  perGhost : ∀ (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
+    ∃ (φc' : Addr → Nat) (v8 v9 v18 : BitVec 64) (out0 : Array String) (mpre : Mem)
+      (kk : Nat) (armPC : BitVec 64) (calleeLoaded : Mem → Prop),
+      PhiExtends φc φc' st.store.closures.size ∧
+      String.join out0.toList = st.out ∧
+      kk ≤ 10 ∧ kk < 128 ∧
+      read32 m0 aExpr.toNat = some kk ∧
+      KindSlotPinned kk armPC m0 ∧ calleeLoaded m0 ∧
+      (∀ (mem : Mem) (a8 : Nat) (dd : BitVec (8 * 8)),
+        SL.lo ≤ a8 → a8 + 8 ≤ sp.toNat → calleeLoaded mem → calleeLoaded (writeMap8 mem a8 dd)) ∧
+      (∀ m' : Mem,
+        (∀ aa : Nat, ¬ (SL.lo ≤ aa ∧ aa < sp.toNat) → m0[aa]? = m'[aa]?) →
+          ExprRepr m' aExpr.toNat (.fn name params body)) ∧
+      armPC.toNat % 4 = 0 ∧
+      (jumpTableBase + 4 * kk + 4 ≤ SL.lo ∨ sp.toNat ≤ jumpTableBase + 4 * kk) ∧
+      FnArmSeamRun g N A SL φf φc' st a armPC calleeLoaded name params body store'
+        sp r sret aExpr aEnv m0 v8 v9 v18 out0 mpre ∧
+      EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
+        ⟨store', st.out⟩ (.closure a) sp r sret m0
+
+/-- **`fnResid_from_bundle`** — SUPPLY `FnResid` from the ∀-closed `FnResidBundle`.
+Intros the `FnResid` ghosts, unpacks the per-ghost residuals, and applies
+`fnResid_of_pipeline_wf`.  This is the premise-free `FnResid` supplier modulo the
+ONE named bundle (whose fields are the itemized irreducible residuals). -/
+theorem fnResid_from_bundle
+    (st : Vsa.While.St) (d : Nat) (env : Addr)
+    (name : Option String) (params : List String) (body : List Stmt)
+    (store' : Store) (a : Addr)
+    (B : FnResidBundle st d env name params body store' a) :
+    FnResid st d env name params body store' a := by
+  intro g N A SL φf φc sp r sret aEnv aExpr m0
+  obtain ⟨φc', v8, v9, v18, out0, mpre, kk, armPC, calleeLoaded,
+    hpc, hout, hkle, hklt, hkind, hslot, hcallee, hcalleeSurv, hexprSurv,
+    harmAl, htableStk, hSeam, hW⟩ :=
+    B.perGhost g N A SL φf φc sp r sret aEnv aExpr m0
+  exact fnResid_of_pipeline_wf g N A SL φf φc φc' st d env name params body store' a
+    sp r sret aEnv aExpr m0 v8 v9 v18 out0 mpre kk armPC calleeLoaded
+    B.hAlloc hpc hout hkle hklt hkind hslot hcallee hcalleeSurv hexprSurv harmAl htableStk hSeam
+    B.hWF hW
+
 #print axioms fnArmGeom_hArm_offdiag
 #print axioms store_size_of_allocClosure
 #print axioms fnResid_of_pipeline
+#print axioms fnResid_of_pipeline_wf
+#print axioms fnResid_from_bundle
 
 end Vsa.Sim

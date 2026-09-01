@@ -883,6 +883,26 @@ THEOREMS=(
   Vsa.Sim.fnArmGeom_hArm_offdiag                    # rows/FnResidSupply (FnArmGeom.hArm from the diagonal seam + 9 dispatch facts; residual hEntryRebase = the φc-entry rebase)
   Vsa.Sim.store_size_of_allocClosure                # rows/FnResidSupply (store-size monotonicity — trivial, done)
   Vsa.Sim.fnResid_of_pipeline                       # rows/FnResidSupply (FnResid = FnArmSpec ∧ EvalRecWiden, end-to-end through FnArmGeom)
+  Vsa.Sim.valueRepr_phic_mono                       # rows/StoreReprPhicRebase (the .closure-case core of the φc rebase)
+  Vsa.Sim.frameRepr_phic_mono                       # rows/StoreReprPhicRebase
+  Vsa.Sim.storeRepr_phic_mono                       # rows/StoreReprPhicRebase (under StoreClosuresBounded — the GENERAL lemma is provably false; the bound is the genuine spec invariant)
+  Vsa.Sim.fnResid_of_pipeline_wf                    # rows/FnResidSupply (hEntryRebase DISCHARGED from StoreClosuresBounded)
+  Vsa.Sim.fnResid_from_bundle                       # rows/FnResidSupply (FnResid premise-free modulo ONE named FnResidBundle — the standard M6/off-path class)
+  Vsa.Sim.s7ImageAtBody                             # rows/CallClosureSplice (EntryImage ⋈ s7carry — segentry-no-caller-spill-image RESOLVED)
+  Vsa.Sim.closureRepr_of_storeRepr                  # rows/CallClosureSplice
+  Vsa.Sim.envNewParentSel_of_storeRepr              # rows/CallClosureSplice (the parent-link selector closed)
+  Vsa.Sim.callClosureFoldBackLoopRow                # rows/CallClosureFoldBack (the fold back-edge, loop arm)
+  Vsa.Sim.callClosureFoldBackExitRow                # rows/CallClosureFoldBack (exit arm)
+  Vsa.Sim.callClosureRetClassRow                    # rows/CallClosureRetClass (the status classification span)
+  Vsa.Sim.callClosureNormalDepthBridge              # rows/CallClosureNormalRet
+  Vsa.Sim.callClosureNormalJoinRow                  # rows/CallClosureNormalRet (.normal tail to the join)
+  Vsa.Sim.callClosureBodyExitRetRow                 # rows/CallClosureBodyExit
+  Vsa.Sim.callClosureBodyExitNormalRow              # rows/CallClosureBodyExit
+  Vsa.Sim.execEvalEntry_of_jalPrefix                # ArmSegSplitExecEval (the exec twin of the jal-split bridge — site loaded-predicate flipped to Exec_stmtLoaded; falsity #7 amended)
+  Vsa.Sim.landedN_eentryC_of_execPreBundle          # ArmSegSplitExecEval (ExecJalPreBundle → LandedN 1 EEntryC)
+  Vsa.Sim.blockB_stmtExpr_stagePre                  # rows/StmtExprArmStagePre (the first exec-eval cut — landed _es sites reused, no new battery)
+  Vsa.Sim.stmtExpr_field_of_dispatch                # rows/StmtExprArmStagePre (stmtExpr FIELD-COMPOSED — 8/14)
+  Vsa.Sim.divFamily_wave40                          # ArmStagesWave34 (capstone: 8 eval-child fields wired)
   Vsa.Sim.memcpy_spec_framed_word                   # MemcpySpecFramedWord (the aligned WORD route with the ABI frame end-to-end; post = the byte variant's, consumers route on hroute)
   Vsa.Sim.dispatch_to_word_framed                   # MemcpySpecFramedWord
   Vsa.Sim.wordloop_abi                              # MemcpySpecFramedWord (ABI transport free through word_loop_spec)

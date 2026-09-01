@@ -271,11 +271,14 @@ theorem eval_callPrint_row (hR : ∀ st d vs, CallPrintResid st d vs) :
   show ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (dLeft aLeft : Nat) (m0 : Mem),
+    EntryImage callDispatchPC g m0 →
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
       (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size
         ⟨st.store, st.out +++ printArgs st.store vs⟩ callJoinPC m0)
-  intro g N A SL φf φc dLeft aLeft m0
+  -- The wave-40 spill-image hypothesis is unused on the native routes (they
+  -- never restore from `1016(sp)`).
+  intro g N A SL φf φc dLeft aLeft m0 _hImg
   exact Vsa.Sim.callPrint g N A SL φf φc st d dLeft aLeft m0 vs
     (Call.print st d vs) (hR st d vs g N A SL φf φc dLeft aLeft m0)
 
@@ -296,11 +299,12 @@ theorem eval_callPrintln_row (hR : ∀ st d vs, CallPrintlnResid st d vs) :
   show ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (dLeft aLeft : Nat) (m0 : Mem),
+    EntryImage callDispatchPC g m0 →
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
       (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size
         ⟨st.store, st.out +++ printArgs st.store vs +++ "\n"⟩ callJoinPC m0)
-  intro g N A SL φf φc dLeft aLeft m0
+  intro g N A SL φf φc dLeft aLeft m0 _hImg
   exact Vsa.Sim.callPrintln g N A SL φf φc st d dLeft aLeft m0 vs
     (Call.println st d vs) (hR st d vs g N A SL φf φc dLeft aLeft m0)
 
@@ -323,10 +327,11 @@ theorem eval_callAssertOk_row (hR : ∀ st d, CallAssertOkResid st d) :
   show ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (dLeft aLeft : Nat) (m0 : Mem),
+    EntryImage callDispatchPC g m0 →
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
       (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st callJoinPC m0)
-  intro g N A SL φf φc dLeft aLeft m0
+  intro g N A SL φf φc dLeft aLeft m0 _hImg
   exact Vsa.Sim.callAssertOk g N A SL φf φc st d dLeft aLeft m0 vs v m
     hvs htruthy (Call.assertOk st d vs v m hvs htruthy)
     (hR st d g N A SL φf φc dLeft aLeft m0)

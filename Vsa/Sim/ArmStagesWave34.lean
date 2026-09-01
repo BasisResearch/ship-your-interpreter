@@ -3,6 +3,7 @@ import Vsa.Sim.EvalChildFieldCombinator
 import Vsa.Sim.MidArmFieldWire
 import Vsa.Sim.rows.AssignArmStagePre
 import Vsa.Sim.rows.CallArmStagePre
+import Vsa.Sim.rows.StmtExprArmStagePre
 
 /-!
 # `ArmStagesWave34` — the partial `armStages` supplier with the wave-34 landed fields
@@ -100,19 +101,19 @@ def evalChildStages_binaryL_wired
     (argsHead : ∀ (e : Expr) (es : List Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
       AEntryC c st d env (e :: es) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
     (stmtExpr : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.expr e) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+      SEntryC c st d env (.expr e) → LandedN 1 c (fun c' => EEntryC c' st d env e))
     (stmtRet : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.ret (some e)) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+      SEntryC c st d env (.ret (some e)) → LandedN 1 c (fun c' => EEntryC c' st d env e))
     (stmtVarInit : ∀ (x : String) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.varDecl x (some e)) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+      SEntryC c st d env (.varDecl x (some e)) → LandedN 1 c (fun c' => EEntryC c' st d env e))
     (stmtIfCond : ∀ (cnd : Expr) (t : Stmt) (e : Option Stmt) (c : Config) (st : SpecSt)
       (d : Nat) (env : Addr),
-      SEntryC c st d env (.ifStmt cnd t e) → LandedN 1 c (fun c' => JalPreBundle cnd c' st d env))
+      SEntryC c st d env (.ifStmt cnd t e) → LandedN 1 c (fun c' => EEntryC c' st d env cnd))
     (stmtWhileCond : ∀ (cnd : Expr) (b : Stmt) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.whileStmt cnd b) → LandedN 1 c (fun c' => JalPreBundle cnd c' st d env))
+      SEntryC c st d env (.whileStmt cnd b) → LandedN 1 c (fun c' => EEntryC c' st d env cnd))
     (flCond : ∀ (cc : Expr) (step : Option Expr) (b : Stmt) (c : Config) (st : SpecSt)
       (d : Nat) (env : Addr),
-      FEntryC c st d env (some cc) step b → LandedN 1 c (fun c' => JalPreBundle cc c' st d env)) :
+      FEntryC c st d env (some cc) step b → LandedN 1 c (fun c' => EEntryC c' st d env cc)) :
     EvalChildStages :=
   evalChildStages_mk evalIH unary
     -- binaryL: the machine-composed field
@@ -153,19 +154,19 @@ def evalChildStages_ublr_wired
     (argsHead : ∀ (e : Expr) (es : List Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
       AEntryC c st d env (e :: es) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
     (stmtExpr : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.expr e) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+      SEntryC c st d env (.expr e) → LandedN 1 c (fun c' => EEntryC c' st d env e))
     (stmtRet : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.ret (some e)) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+      SEntryC c st d env (.ret (some e)) → LandedN 1 c (fun c' => EEntryC c' st d env e))
     (stmtVarInit : ∀ (x : String) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.varDecl x (some e)) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+      SEntryC c st d env (.varDecl x (some e)) → LandedN 1 c (fun c' => EEntryC c' st d env e))
     (stmtIfCond : ∀ (cnd : Expr) (t : Stmt) (e : Option Stmt) (c : Config) (st : SpecSt)
       (d : Nat) (env : Addr),
-      SEntryC c st d env (.ifStmt cnd t e) → LandedN 1 c (fun c' => JalPreBundle cnd c' st d env))
+      SEntryC c st d env (.ifStmt cnd t e) → LandedN 1 c (fun c' => EEntryC c' st d env cnd))
     (stmtWhileCond : ∀ (cnd : Expr) (b : Stmt) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.whileStmt cnd b) → LandedN 1 c (fun c' => JalPreBundle cnd c' st d env))
+      SEntryC c st d env (.whileStmt cnd b) → LandedN 1 c (fun c' => EEntryC c' st d env cnd))
     (flCond : ∀ (cc : Expr) (step : Option Expr) (b : Stmt) (c : Config) (st : SpecSt)
       (d : Nat) (env : Addr),
-      FEntryC c st d env (some cc) step b → LandedN 1 c (fun c' => JalPreBundle cc c' st d env)) :
+      FEntryC c st d env (some cc) step b → LandedN 1 c (fun c' => EEntryC c' st d env cc)) :
     EvalChildStages :=
   evalChildStages_mk evalIH
     (fun op e c st d env hEE => unaryE_field_of_extras op e c st d env (hUnGeom op e c st d env) hEE)
@@ -215,19 +216,19 @@ def evalChildStages_ublrac_wired
     (argsHead : ∀ (e : Expr) (es : List Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
       AEntryC c st d env (e :: es) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
     (stmtExpr : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.expr e) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+      SEntryC c st d env (.expr e) → LandedN 1 c (fun c' => EEntryC c' st d env e))
     (stmtRet : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.ret (some e)) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+      SEntryC c st d env (.ret (some e)) → LandedN 1 c (fun c' => EEntryC c' st d env e))
     (stmtVarInit : ∀ (x : String) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.varDecl x (some e)) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+      SEntryC c st d env (.varDecl x (some e)) → LandedN 1 c (fun c' => EEntryC c' st d env e))
     (stmtIfCond : ∀ (cnd : Expr) (t : Stmt) (e : Option Stmt) (c : Config) (st : SpecSt)
       (d : Nat) (env : Addr),
-      SEntryC c st d env (.ifStmt cnd t e) → LandedN 1 c (fun c' => JalPreBundle cnd c' st d env))
+      SEntryC c st d env (.ifStmt cnd t e) → LandedN 1 c (fun c' => EEntryC c' st d env cnd))
     (stmtWhileCond : ∀ (cnd : Expr) (b : Stmt) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
-      SEntryC c st d env (.whileStmt cnd b) → LandedN 1 c (fun c' => JalPreBundle cnd c' st d env))
+      SEntryC c st d env (.whileStmt cnd b) → LandedN 1 c (fun c' => EEntryC c' st d env cnd))
     (flCond : ∀ (cc : Expr) (step : Option Expr) (b : Stmt) (c : Config) (st : SpecSt)
       (d : Nat) (env : Addr),
-      FEntryC c st d env (some cc) step b → LandedN 1 c (fun c' => JalPreBundle cc c' st d env)) :
+      FEntryC c st d env (some cc) step b → LandedN 1 c (fun c' => EEntryC c' st d env cc)) :
     EvalChildStages :=
   evalChildStages_ublr_wired evalIH hUnGeom hBinGeom hLogGeom hBinRStage hLogRStage
     -- assignE: the wave-37 machine-composed arm-head field
@@ -237,6 +238,62 @@ def evalChildStages_ublrac_wired
     (fun f args c st d env hEE =>
       callF_field_of_dispatch f args c st d env (hCallDisp f args c st d env) hEE)
     argsHead stmtExpr stmtRet stmtVarInit stmtIfCond stmtWhileCond flCond
+
+/-! ## §1d. Wave 40 — `stmtExpr` machine-composed (8/14)
+
+The FIRST exec-eval field.  Its `jal eval_expr` lives in exec_stmt text, so it cannot
+produce `JalPreBundle` (the `Eval_exprLoaded`-typed seam) — the field was RE-TYPED to
+land at `EEntryC` directly (see `ArmSegSplitEval`), and closes via
+`StmtExprArmStagePre.stmtExpr_field_of_dispatch` (the exec twin
+`execEvalEntry_of_jalPrefix` ≫ the landed arm-head cut `blockB_stmtExpr_stagePre`),
+MODULO its dispatch residual `StmtExprArmDispatch` (the `ExecEntry → ExecArmEntryK`
+bridge `execBlockA` supplies, plus the child-payload / eval-code / wide-window-survival
+/ enlarged-frame-geometry facts a `blockA` cannot produce).  8/14 eval-child fields
+machine-composed; the other 5 exec-eval fields (stmtRet/stmtVarInit/stmtIfCond/
+stmtWhileCond/flCond) ride the SAME `ExecJalPreBundle` core and split twins — their
+per-arm heads differ only in instruction order / an optional null-branch. -/
+def evalChildStages_ublracSE_wired
+    (evalIH : ∀ (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt) (v : Value),
+      EvalE st d env e st' v → EvalIH st d env e st' v)
+    (hUnGeom : ∀ (op : UnOp) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      UnaryArmGeomProvider op e st d env c)
+    (hBinGeom : ∀ (op : BinOp) (l r : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      BinArmGeomProvider op l r st d env c)
+    (hLogGeom : ∀ (lop : Vsa.While.LogOp) (l r : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      LogicalArmGeomProvider lop l r st d env c)
+    (hBinRStage : ∀ (op : BinOp) (l r : Expr) (c : Config) (st st' : SpecSt) (d : Nat)
+      (env : Addr) (lv : Value),
+      BinaryRStagePre op l r c st st' d env lv)
+    (hLogRStage : ∀ (lop : Vsa.While.LogOp) (l r : Expr) (c : Config) (st st' : SpecSt)
+      (d : Nat) (env : Addr) (lv : Value),
+      LogicalRStagePre lop l r c st st' d env lv)
+    (hAssignDisp : ∀ (x : String) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      AssignArmDispatch x e st d env c)
+    (hCallDisp : ∀ (f : Expr) (args : List Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      CallArmDispatch f args st d env c)
+    (hStmtExprDisp : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      StmtExprArmDispatch e st d env c)
+    (argsHead : ∀ (e : Expr) (es : List Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      AEntryC c st d env (e :: es) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+    (stmtRet : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      SEntryC c st d env (.ret (some e)) → LandedN 1 c (fun c' => EEntryC c' st d env e))
+    (stmtVarInit : ∀ (x : String) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      SEntryC c st d env (.varDecl x (some e)) → LandedN 1 c (fun c' => EEntryC c' st d env e))
+    (stmtIfCond : ∀ (cnd : Expr) (t : Stmt) (e : Option Stmt) (c : Config) (st : SpecSt)
+      (d : Nat) (env : Addr),
+      SEntryC c st d env (.ifStmt cnd t e) → LandedN 1 c (fun c' => EEntryC c' st d env cnd))
+    (stmtWhileCond : ∀ (cnd : Expr) (b : Stmt) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      SEntryC c st d env (.whileStmt cnd b) → LandedN 1 c (fun c' => EEntryC c' st d env cnd))
+    (flCond : ∀ (cc : Expr) (step : Option Expr) (b : Stmt) (c : Config) (st : SpecSt)
+      (d : Nat) (env : Addr),
+      FEntryC c st d env (some cc) step b → LandedN 1 c (fun c' => EEntryC c' st d env cc)) :
+    EvalChildStages :=
+  evalChildStages_ublrac_wired evalIH hUnGeom hBinGeom hLogGeom hBinRStage hLogRStage
+    hAssignDisp hCallDisp argsHead
+    -- stmtExpr: the wave-40 machine-composed exec-eval field
+    (fun e c st d env hSE =>
+      stmtExpr_field_of_dispatch e c st d env (hStmtExprDisp e c st d env) hSE)
+    stmtRet stmtVarInit stmtIfCond stmtWhileCond flCond
 
 /-! ## §2. The partial `SqEntryStages` — `seqHead` wired from the span, the rest named
 
@@ -273,5 +330,30 @@ theorem divFamily_wave34
   divFamily_of_armStageComponents Reflect L hEntry hIter eval nonEval sq flStep
 
 #print axioms divFamily_wave34
+
+/-! ## §4. Wave-40 capstone — `stmtExpr` closed, the premise list shrinks
+
+`divFamily_wave40` takes the `eval` bundle already carrying the wave-40
+machine-composed `stmtExpr` (8/14): the caller no longer owes a `stmtExpr`
+`∀`-premise, only the strictly-smaller dispatch residual `StmtExprArmDispatch` (the
+`ExecEntry → ExecArmEntryK` bridge + layout facts).  The board moves 7/14 → 8/14
+eval-child; the exec-eval class is UNBLOCKED (the `ExecJalPreBundle` core + the 6
+split twins land, and the remaining 5 exec arms reuse them). -/
+theorem divFamily_wave40
+    (Reflect : Config → Addr → List Stmt → Prop) (L : Layout)
+    (hEntry : Vsa.Sim.DivCorrClose.DivEntryDrive Reflect L)
+    (hIter : Vsa.Sim.IterSeamAssembly.IterSeamResid Reflect)
+    (eval : EvalChildStages)
+    (nonEval : NonEvalChildStages)
+    (sq : SqEntryStages Reflect)
+    (flStep : ∀ (cnd : Option Expr) (e : Expr) (b : Stmt) (status : Status)
+      (c : Config) (st st' st'' : SpecSt) (d : Nat) (env : Addr),
+      ForCond st d env cnd st' → ExecS st' d env b st'' status →
+      (status = .normal ∨ status = .cont) → FEntryC c st d env cnd (some e) b →
+      LandedN 1 c (fun c' => JalPreBundle e c' st'' d env)) :
+    Vsa.Sim.InterpSimBundle.DivFamily L :=
+  divFamily_of_armStageComponents Reflect L hEntry hIter eval nonEval sq flStep
+
+#print axioms divFamily_wave40
 
 end Vsa.Sim

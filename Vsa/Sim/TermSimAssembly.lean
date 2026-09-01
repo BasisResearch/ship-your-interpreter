@@ -100,12 +100,25 @@ def mEvalArgs (st : SpecSt) (d : Nat) (env : Addr) (_es : List Expr)
 
 /-- `Call` motive: the `SegEntry → SegExit` Triple at the decoded fval-dispatch
 entry / epilogue join (`callDispatchPC`/`callJoinPC`). `Call.closure` is where
-the depth budget (`d < maxCallDepth`) bites. -/
+the depth budget (`d < maxCallDepth`) bites.
+
+**AMENDED (wave 40, ledgers `segentry-no-caller-spill-image` +
+`segentry-spillimage-field-blocked-by-frozen-generic-producer`):** the Triple
+is guarded by the entry-side spill-image clause
+(`Scaffold.EntryImage callDispatchPC g m0` — the table pins the `s7@1016(sp)`
+slot, spilled at `0x800031cc` BEFORE this segment): the ret routes restore
+`s7` from `1016(sp)`, so for an `(m0, g)`-inconsistent instantiation the exit
+`frame` clause is FALSE — the precondition must link them.  Signature-free:
+every recursor/`TermCases` reference is fully applied; only the unfolding
+producers (`rows/CallRows` native rows, `rows/CallClosureRow`) intro the
+hypothesis.  The supplier of an `mCall` IH (the eventual `CallArmSpec`
+splice) owns the `0x800031cc` spill and supplies the clause. -/
 def mCall (st : SpecSt) (d : Nat) (_fv : Value) (_vs : List Value)
     (st' : SpecSt) (_v : Value) (_h : Call st d _fv _vs st' _v) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (dLeft aLeft : Nat) (m0 : Mem),
+    Scaffold.EntryImage callDispatchPC g m0 →
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
       (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' callJoinPC m0)

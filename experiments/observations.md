@@ -2712,6 +2712,18 @@ it, still stop and report instead.
   s.closures.size → StoreRepr m N A φf φc' s` (old store unaffected by a fresh
   closure index), OR generalize `fnArmGeom_hArm_of_seam` to two maps `φc`/`φc'`
   with an entry-rebase premise, so it produces `FnArmGeom.hArm` verbatim.
+- RESOLVED 2026-09-01 (wave40, uncommitted): `Vsa/Sim/rows/StoreReprPhicRebase.lean`
+  landed `storeRepr_phic_mono` — but the FULLY-GENERAL version is FALSE (a frame
+  binding `.closure ca` with `ca ≥ s.closures.size` reads `φc ca` under `φc`,
+  `φc' ca` under `φc'`, and `PhiExtends` says NOTHING at those indices → the two
+  `ValueRepr`s can disagree). The honest lemma carries the well-formedness invariant
+  `StoreClosuresBounded s` (named-field structure: every frame-value closure ref is
+  `< s.closures.size` — it was returned by an earlier `allocClosure`). Under it,
+  `storeRepr_phic_mono` holds: `ValueRepr` mentions `φc` ONLY in the `.closure` case
+  and `PhiExtends` pins the bounded refs; every other `StoreRepr` field uses `φc` at
+  indices `< size`. `hEntryRebase` is now DISCHARGED in `fnResid_of_pipeline_wf`
+  (FnResidSupply.lean) via `(fun _ hsr => storeRepr_phic_mono hWF hpc hsr)`. Reusable
+  by every future allocating-EvalE leaf. All green + axiom-clean.
 
 ## 2026-09-01 native-call-segentry-wrapper (wave39-native #49)
 - missing: the native branch residuals `NativeAssertOkSpec` / `NativePrintSpec`
@@ -2748,3 +2760,147 @@ it, still stop and report instead.
   assertOk ≈ value_truthy≫value_null leaf; print/println ≈ loopFromBody over the
   char loop with an OutRepr-append invariant (chain_out threading). With that
   wrapper the three contracts become instantiations, not bespoke builds.
+
+## 2026-09-01 jalprebundle-spill-window-vestigial-so-execframeshift-EASY (wave40 execFrameShift core)
+- missing: nothing — this is a POSITIVE finding that dissolves the wave-38
+  frame-shift obstruction. `evalEntry_of_jalPrefix` (ArmSegSplit.lean:143-251)
+  DESTRUCTURES `hslotRa/hslotS0/hslotS1/hslotS2` (the `read64 mcall (sp-8/-16/
+  -24/-32)` spill-window facts) and `hspSLhi` from its `hpre` bundle but NEVER
+  USES them: the child `EvalEntry.spill_defined` is built from REGISTER facts
+  (`hx8_1`/`hs1_1`/`hx18_1` = the post-jal x8/x9/x18 values), not the memory
+  slots. `landedN_eentryC_of_jalPrefix`/`landedN_eentryC_of_preBundle` just wrap
+  `evalEntry_of_jalPrefix`, so those five JalPreBundle premises are DEAD for the
+  divergence-fold entry.
+- consequence: the wave-38 "FRAME SHIFT" obstruction (`exec-eval-stagepre-
+  frameshift-and-nonuniform`) is NOT a blocker for the eval-CHILD exec fields.
+  The exec_stmt arm (e.g. stmtExpr @0x80004170) calls eval_expr with x2 = the
+  exec frame's own lowered sp (execSp-176), never lowering by 1088. Instantiate
+  JalPreBundle's ghost `sp := execSp - 176 + 1088` so `sp - 1088 = execSp-176`
+  matches the jal-time x2; the geometry facts (stackOK-ish bounds, operand
+  ExprRepr @aOperand, StoreRepr survival over [SL.lo, sp)) are all satisfiable
+  from ExecEntry's own geometry (ExecEntry.stackOK gives `176+1088` headroom).
+  The five dead spill-window premises are discharged by ANY witness (the exec
+  frame's ra/s0/s1/s2 slots at execSp-176+{168,160,152,144}, or trivially since
+  they are never read). NO ExecJalPreBundle twin, NO per-frame spill-layout
+  reconciliation needed — the wave-38 cost estimate (~450-500 lines/arm + frame
+  reconciliation) was pessimistic because it assumed the spill-window was
+  load-bearing.
+- workaround: none needed; building stmtExpr end-to-end this wave to confirm.
+- proposal: (a) prune the dead premises from `evalEntry_of_jalPrefix`/`JalPreBundle`
+  in a future cleanup (they inflate every stagePre supplier); (b) the exec-eval
+  stagePre generator over the non-uniform heads is now UNBLOCKED — the frame-shift
+  core is a ghost re-parametrization, not a lemma.
+
+## 2026-09-01 execframeshift-survival-window-is-a-named-premise-not-derivable (wave40)
+- missing: `ExecEntry.store_survives` frames only `[SL.lo, sp_exec)` (the exec
+  frame). `JalPreBundle` (instantiated with sp := esp+1088 = sp_exec+912) demands
+  StoreRepr survival over the LARGER `[SL.lo, esp+1088)`, whose extra region
+  `[sp_exec, sp_exec+912)` is the CALLER's frame — untouched by the exec arm but
+  NOT covered by `ExecEntry.store_survives`. There is no lemma reducing the
+  wide-window survival to the narrow one (the windows are not nested the tolerant
+  way: an m' differing in [sp_exec, esp+1088) escapes ExecEntry's clause).
+- workaround: carry the wide-window survival as a NAMED premise of the exec
+  stagePre supplier (`blockB_stmtExpr_stagePre`), exactly as the eval side gets
+  its `store_survives` window from `ArmEntryK`/`EvalEntry` (whose sp IS the frame
+  top = JalPreBundle.sp). The M6 layout caller — which knows the full stack/arena/
+  AST geometry — supplies it; StoreRepr survives ANY C-stack change because the
+  store lives in the arena (disjoint from `[SL.lo, esp+1088)` via the arena
+  disjunct `esp+1088 ≤ A.lo`, also a JalPreBundle field). This is NOT a workaround
+  around a false goal — it is the correct layer for the fact.
+- cost: each of the 6 exec-eval stagePre suppliers carries one wide-window
+  survival premise (~1 line) + the arena/AST disjointness at esp+1088 (already
+  JalPreBundle fields). Trivial vs the wave-38 estimate.
+- proposal: a reusable `execEvalFrameSurvives` helper: from `ExecEntry`'s arena/
+  AST/stack layout facts + `esp+1088 ≤ A.lo`, produce the wide-window StoreRepr
+  survival via `storeRepr_agreeP` (all per-object footprints land in the arena/AST,
+  disjoint from `[SL.lo, esp+1088)`). Build once; the 6 arms reuse. For THIS wave
+  it is a named premise (the frame-shift core is proved; the survival helper is a
+  separable follow-up).
+
+## 2026-09-01 execframeshift-REAL-obstruction-is-jalSite-loaded-predicate-not-frame (wave40 CRUX)
+- missing: `JalPreBundle.hjalSite` (and its consumer `evalEntry_of_jalPrefix`'s
+  `hjalSite`) is typed `… → Eval_exprLoaded σ.mem → … ∃ Step firing the jal`.
+  On the EVAL side the recursive `jal eval_expr` lives INSIDE eval_expr's own text
+  (0x80003164..0x80003fe0), so `Eval_exprLoaded` supplies its 4 instruction bytes.
+  On the EXEC side the `jal eval_expr` at 0x80004180 lives in exec_stmt's text —
+  its bytes come from `Exec_stmtLoaded`, and 0x80004180 is NOT covered by ANY
+  `eval_exprChunk`. So the `hjalSite` closure, given only `Eval_exprLoaded σ.mem`,
+  CANNOT fire the exec-arm jal (`site_80004180_es` needs `Exec_stmtLoaded`). This
+  is the ACTUAL blocker for the 6 exec-eval fields — NOT the frame offset (that is
+  a ghost rebase, confirmed easy) and NOT the survival window (a named premise).
+  MACHINE-CHECKED: grep shows 0x80004180 absent from Eval_exprLoaded's chunks;
+  `site_80004180_es` consumes `Exec_stmtLoaded`.
+- workaround: build an `ExecJalPreBundle` TWIN (identical to `JalPreBundle` but
+  `hjalSite` typed with `Exec_stmtLoaded σ.mem`; the CHILD-entry field
+  `Eval_exprLoaded mcall` stays — the child eval frame still needs eval text) + a
+  variant marshalling bridge `execEvalEntry_of_jalPrefix` (a clone of
+  `evalEntry_of_jalPrefix` passing `Exec_stmtLoaded` to the site) →
+  `landedN_eentryC_of_execPreBundle`. The `*_split` corollaries
+  (`stmtExpr_split` etc.) already reduce the field to `JalPreBundle e`; the twin
+  needs a sibling `stmtExpr_split'` landing at `EEntryC` through the exec bridge.
+- cost: ONE cloned bridge lemma (~110 lines, `evalEntry_of_jalPrefix` with the
+  jalSite loaded-predicate swapped) + a thin `ExecJalPreBundle` def + a
+  `landedN_eentryC_of_execPreBundle`. The 6 exec arm-head cuts then land at
+  `ExecJalPreBundle` instead of `JalPreBundle`; everything else (frame rebase,
+  survival premise, mv/ld sites) is as designed. NOT the ~450-line/arm wave-38
+  estimate — the twin is shared across all 6.
+- proposal: `ExecJalPreBundle` + `execEvalEntry_of_jalPrefix` in a new
+  `ArmSegSplitExecEval.lean`; the wave-38 `execFrameShift` core = (ghost rebase +
+  survival premise + the loaded-predicate twin). Two of three pieces are trivial;
+  the twin is the only real (but mechanical, shared) construction.
+
+## 2026-09-01 segentry-spillimage-field-blocked-by-frozen-generic-producer (wave40 item 1)
+- missing: the prescribed SEAT for the entry-side spill-image clause — a new
+  named field on `Scaffold.SegEntry` guarded by a per-entry-PC table (the
+  exact dual of the wave-38 `SegExit.stackWin`) — is UNLANDABLE this wave:
+  `ArmSegSplitSeg.segEntry_of_jalPrefix` constructs `SegEntry` by structure
+  literal at a ∀-QUANTIFIED `entryPC` (line ~95), so a mandatory contentful
+  field cannot be supplied there without adding an
+  `entrySpillImage entryPC = none` hypothesis (the wave-38 `segExit_extend`
+  escape) — and `ArmSegSplit*` (plus the `SegPreBundle` plumbing in
+  `ArmSegSplitNonEval` and its suppliers in `ArmStagesWave34`) is FROZEN
+  (sibling-owned) this wave.  Structure-field defaults cannot rescue it (the
+  vacuity proof needs the concrete PC).
+- workaround: the SAME table + PC-indexed clause landed in
+  `InductionScaffold.lean` (`entrySpillImage` / `gGpr` / `EntryImage`,
+  vacuous-at-untabled-PCs, byte-level LE matching `CallerSpillSlots`), but
+  SEATED as ONE hypothesis on the `mCall` motive BODY
+  (`TermSimAssembly.mCall`: `EntryImage callDispatchPC g m0 → Triple …`) —
+  signature-free (all recursor/TermCases references are fully applied, the
+  scaffold-motive-independent-pq precedent); unfolding producers re-threaded
+  (CallRows native rows intro-ignore; CallClosureRow threads it into
+  `CallClosureGeom.ret`).
+- cost: the clause is `mCall`-scoped, not `SegEntry`-global: a future arm
+  whose restore slot predates its motive span (the class the ledger predicts)
+  needs its own motive-body hypothesis until the field is hoisted; the
+  eventual `CallArmSpec` supplier must supply `EntryImage` when instantiating
+  the `mCall` IH (it can: it owns the `0x800031cc` spill).
+- proposal: when the `ArmSegSplit*` freeze lifts, hoist `EntryImage` from the
+  `mCall` hypothesis to a `SegEntry` field (the clause is already stated
+  against `(entryPC, g, m0)`; the hoist is mechanical: add the field, give
+  `segEntry_of_jalPrefix`/`SegPreBundle` the `= none` hypothesis, drop the
+  motive hypothesis).
+
+## 2026-09-01 evalchildstages-6-exec-fields-mistyped-JalPreBundle-amend-to-ExecJalPreBundle (wave40)
+- missing: `EvalChildStages`'s 6 exec-eval fields (stmtExpr/stmtRet/stmtVarInit/
+  stmtIfCond/stmtWhileCond/flCond) are typed `SEntryC … → LandedN 1 (JalPreBundle
+  child)`, but the exec arm's `jal eval_expr` lives in exec_stmt text and can ONLY
+  produce `ExecJalPreBundle` (the `Exec_stmtLoaded`-typed seam). So the fields are
+  UNSATISFIABLE as typed (machine-checked: `JalPreBundle.hjalSite` demands firing
+  the jal from `Eval_exprLoaded`, impossible at 0x80004180).
+- workaround: AMENDED (Law 4 — mis-typed spec) the 6 fields in
+  `Vsa/Sim/ArmSegSplitEval.lean` to `… → LandedN 1 (ExecJalPreBundle child)`, and
+  switched their `armResidGap_evalChildFields` discharge from `stmtExpr_split`/… to
+  the exec twins `stmtExpr_split'`/… (in `ArmSegSplitExecEval`). The OUTPUT type of
+  `armResidGap_evalChildFields` (the conjunction of `→ EEntryC`) is UNCHANGED, so no
+  downstream consumer is affected; only the 6 field SUPPLIERS change — which is
+  exactly the exec stagePre suppliers this wave builds. The 8 eval-side fields
+  (unary/binaryL/…/argsHead) keep `JalPreBundle` (their jal IS in eval text).
+- cost: a contained structure amendment + import of `ArmSegSplitExecEval` into
+  `ArmSegSplitEval`; the wave-34 partial builders (`evalChildStages_*_wired`) must
+  re-type their 6 exec-eval `∀`-params from `JalPreBundle` to `ExecJalPreBundle`
+  (mechanical). Sibling files that consume `armResidGap_evalChildFields`'s output
+  are untouched.
+- proposal: the exec-eval fields are structurally an exec-side family; a future
+  refactor could split `EvalChildStages` into `EvalArmChildStages` (8, JalPreBundle)
+  + `ExecArmChildStages` (6, ExecJalPreBundle). For now the in-place re-type suffices.
