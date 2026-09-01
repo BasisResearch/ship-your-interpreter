@@ -1,6 +1,8 @@
 import Vsa.Sim.ArmStagesPartial
 import Vsa.Sim.EvalChildFieldCombinator
 import Vsa.Sim.MidArmFieldWire
+import Vsa.Sim.rows.AssignArmStagePre
+import Vsa.Sim.rows.CallArmStagePre
 
 /-!
 # `ArmStagesWave34` — the partial `armStages` supplier with the wave-34 landed fields
@@ -180,6 +182,61 @@ def evalChildStages_ublr_wired
         (hLogRStage lop l r c st st' d env lv) hIH hEv hEE)
     assignE callF argsHead
     stmtExpr stmtRet stmtVarInit stmtIfCond stmtWhileCond flCond
+
+/-! ## §1c. Wave 37 — `assignE`/`callF` machine-composed (7/14)
+
+The two composite-arm eval-child fields whose head is the shared `ld+addi+sd → jal
+eval_expr` shape (`.assign x e` at `0x8000347c`, `.call f args` at `0x800031b0`) close
+via `AssignArmStagePre.assignE_field_of_dispatch` /
+`CallArmStagePre.callF_field_of_dispatch` (the landed arm-head cuts
+`blockB_assign_stagePre` / `blockB_call_stagePre`), each MODULO its dispatch residual
+`AssignArmDispatch` / `CallArmDispatch` — the standing `EvalEntry → ArmEntryK` upstream,
+exactly the residual shape unary/binary/logical carry as their `*ArmGeomProvider`.
+7/14 eval-child fields machine-composed. -/
+def evalChildStages_ublrac_wired
+    (evalIH : ∀ (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt) (v : Value),
+      EvalE st d env e st' v → EvalIH st d env e st' v)
+    (hUnGeom : ∀ (op : UnOp) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      UnaryArmGeomProvider op e st d env c)
+    (hBinGeom : ∀ (op : BinOp) (l r : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      BinArmGeomProvider op l r st d env c)
+    (hLogGeom : ∀ (lop : Vsa.While.LogOp) (l r : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      LogicalArmGeomProvider lop l r st d env c)
+    (hBinRStage : ∀ (op : BinOp) (l r : Expr) (c : Config) (st st' : SpecSt) (d : Nat)
+      (env : Addr) (lv : Value),
+      BinaryRStagePre op l r c st st' d env lv)
+    (hLogRStage : ∀ (lop : Vsa.While.LogOp) (l r : Expr) (c : Config) (st st' : SpecSt)
+      (d : Nat) (env : Addr) (lv : Value),
+      LogicalRStagePre lop l r c st st' d env lv)
+    (hAssignDisp : ∀ (x : String) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      AssignArmDispatch x e st d env c)
+    (hCallDisp : ∀ (f : Expr) (args : List Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      CallArmDispatch f args st d env c)
+    (argsHead : ∀ (e : Expr) (es : List Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      AEntryC c st d env (e :: es) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+    (stmtExpr : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      SEntryC c st d env (.expr e) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+    (stmtRet : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      SEntryC c st d env (.ret (some e)) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+    (stmtVarInit : ∀ (x : String) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      SEntryC c st d env (.varDecl x (some e)) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
+    (stmtIfCond : ∀ (cnd : Expr) (t : Stmt) (e : Option Stmt) (c : Config) (st : SpecSt)
+      (d : Nat) (env : Addr),
+      SEntryC c st d env (.ifStmt cnd t e) → LandedN 1 c (fun c' => JalPreBundle cnd c' st d env))
+    (stmtWhileCond : ∀ (cnd : Expr) (b : Stmt) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      SEntryC c st d env (.whileStmt cnd b) → LandedN 1 c (fun c' => JalPreBundle cnd c' st d env))
+    (flCond : ∀ (cc : Expr) (step : Option Expr) (b : Stmt) (c : Config) (st : SpecSt)
+      (d : Nat) (env : Addr),
+      FEntryC c st d env (some cc) step b → LandedN 1 c (fun c' => JalPreBundle cc c' st d env)) :
+    EvalChildStages :=
+  evalChildStages_ublr_wired evalIH hUnGeom hBinGeom hLogGeom hBinRStage hLogRStage
+    -- assignE: the wave-37 machine-composed arm-head field
+    (fun x e c st d env hEE =>
+      assignE_field_of_dispatch x e c st d env (hAssignDisp x e c st d env) hEE)
+    -- callF: the wave-37 machine-composed arm-head field
+    (fun f args c st d env hEE =>
+      callF_field_of_dispatch f args c st d env (hCallDisp f args c st d env) hEE)
+    argsHead stmtExpr stmtRet stmtVarInit stmtIfCond stmtWhileCond flCond
 
 /-! ## §2. The partial `SqEntryStages` — `seqHead` wired from the span, the rest named
 

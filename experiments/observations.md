@@ -2479,3 +2479,117 @@ it, still stop and report instead.
 - proposal: emit `@[simp] theorem <spec>_foot_eq : <spec>.foot g a ↔ …` (and
   mem0/entry/ret) beside each instance, or a tiny `callspec_defeq` macro; keeps
   Sat proofs pure field-assembly.
+
+## 2026-09-01 callclosuregeom-entrybase-unsatisfiable (wave37 call crux, CallClosureRow.lean)
+- missing: a SATISFIABLE mid-predicate for the closure-arm entry seam. The landed
+  `CallClosureGeom.entryBase` post was `SegEntry g N A SL φf φc (closureBoundSt …)
+  (d+1) … callBodyLoopPC m0` — THREE independent unsatisfiabilities for a machine
+  discharger: (1) `SegEntry.mem` pins the body-loop-head memory EQUAL to the
+  dispatch-entry `m0`, but the route necessarily writes (callee-saved spills at
+  1032/1048(sp), `env_new`'s fresh 32-byte Env + malloc metadata, the per-param
+  `env_define` heap growth); (2) the post reuses the CALLER's `φf` unextended, but
+  `CallClosureResid` ∀-quantifies `φf`, so the discharger would have to place the
+  fresh machine Env at `φf(frame)` for EVERY `φf` — the fresh-frame address must
+  come from an ∃-bound `PhiExtends` extension (exactly what `SegExit.store` and
+  the mCall exit already do); (3) for `cd.body = []` the machine (bgtz a5
+  @0x80003338 not taken → j 0x80003954) NEVER visits `callBodyLoopPC`/`callBodyRetPC`
+  — the prefix≫IH≫suffix decomposition through those PCs has no machine run on the
+  empty-body route (same through-PC disease as the amended scaffold `.some` motives).
+  Same class for the zero-params route: `blez a5 @0x800032c8` bypasses the
+  param-fold loop head, so any fold carrier pinning PC=0x800032dc is off-route
+  at n=0.
+- workaround: NONE bypassed — amending `CallClosureGeom` in place (wave37):
+  `BodyHandoff` mid (`∃ φf' mB, PhiExtends … ∧ stack/arena frame to m0 ∧
+  SegEntry@callBodyLoopPC over mB,φf'`), `ret` ∀-quantified over `(φf', mB)`,
+  both guarded `cd.body ≠ []`, new `emptyBypass` field for the `[]` route;
+  `callClosureSim`/row re-proved (body IH instantiated at `φf'`,`mB` — free,
+  `mExecSeq` quantifies both). Zero outside consumers of `CallClosureResid`
+  (grepped), so the amendment is contained to CallClosureRow.lean + wave37 files.
+- cost: one wave of re-proof in CallClosureRow.lean; the falsity would otherwise
+  surface only at discharge time (undischargeable residual = dead row).
+- proposal: the recurring lesson is a LAW-shape: any Geom field that re-uses an
+  ENTRY-pinned predicate (`SegEntry`-with-m0 / caller-φ) as an intermediate POST
+  of an allocating route is wrong on arrival; mid-posts must ∃-bind (mem, φ) with
+  a frame clause. Candidate gate rule: flag `Triple (SegEntry … m0) (SegEntry …
+  m0)`-shaped fields whose route crosses a callee contract.
+
+## 2026-09-01 assign-call-logical-stagepre-uniform (wave37 stagePre cuts)
+- missing: no generator for the `ld+addi+sd → JalPreBundle` arm-head stagePre cut.
+  `blockB_unary_stagePre` (2-step), `blockB_binary_leftStagePre` (4-step),
+  `blockB_logical_stagePre` / `blockB_assign_stagePre` / `blockB_call_stagePre`
+  (all 3-step `ld a2,off(a2) ; addi a0,sp,buf ; sd a3,0(sp) ; jal eval_expr`) are
+  hand clones differing ONLY in the 5-tuple (arm PC, operand-load offset, sret
+  buffer offset, jal target imm, callee bundle). The four per-PC `site_*_ee` site
+  lemmas per arm are ALSO clones differing only in (PC, offset, encoding bytes).
+- workaround: cloned `blockB_logical_stagePre` + `LogicalSites.site_*_lg` to the
+  assign arm (`rows/AssignArmStagePre.lean`) and call arm (`rows/CallArmStagePre.lean`),
+  both green + axiom-clean.
+- cost: ~380 lines per arm (4 site lemmas ~200 + the 3-step chain ~180), verbatim
+  modulo the 5-tuple. The remaining EEntryC-valued fields (stmtExpr/stmtRet/
+  stmtVarInit/stmtIfCond/stmtWhileCond/flCond) are the SAME shape at exec/for arm
+  PCs — 6 more clones owed. This REVIVES the gen_stagepre.py proposal the #14 agent
+  deferred: the non-uniformity it feared (per-arm JalPreBundle conjunct list) is
+  NOT real for the 3-step class — the conjunct list is IDENTICAL, only the 5-tuple
+  and the site-lemma encodings vary.
+- proposal: `scripts/gen_stagepre.py` over a `.toml` row
+  {name, armPC, opLoadOff, bufOff, jalPC, jalImm, jalBytes, calleeBundle, node_pat,
+   child_field} emitting the 4 site lemmas + the `blockB_<name>_stagePre` body +
+   the `<Node>ArmDispatch` residual + `<field>_field_of_dispatch` composer. The
+   3-step `ld+addi+sd` template is the invariant 95%; the site encodings come from
+   `eval_expr_at_<PC>` (already generated) + the decode_<enc> lemmas (already exist).
+
+## 2026-09-01 exec-stmt-stagepre-different-frame (wave37 exec-side assessment)
+- missing: the exec-side stmt* stagePre cuts (stmtExpr/stmtRet/stmtVarInit/
+  stmtIfCond/stmtWhileCond/flCond) are NOT the eval-side 3-step `ld+addi+sd → jal`
+  shape. The exec stmtExpr arm (0x80004170) head is
+  `ld a2,8(s0) ; addi a0,sp,16 ; mv a3,s3 ; mv a1,s1 ; jal eval_expr@0x80003164` —
+  5 instrs, s0-based operand load, two `mv` moves, EXEC-frame buffer at sp+16 (the
+  exec_stmt prologue does NOT lower sp by 1088). `JalPreBundle` pins the EVAL frame.
+- workaround: NONE (deferred, out of the wave-allowed eval 3-step class).
+- cost: each of the 6 exec/for stmt* cuts is a distinct 5-instr `_es`-site battery in
+  the exec frame + an `ExecEntry`→`JalPreBundle` marshalling (via
+  `execEntry_of_jalPrefix`, ArmSegSplitExec), not a clone of the eval 3-step template.
+- proposal: a SECOND stagePre template for the exec class (5-instr `ld s0 ; addi ;
+  mv ; mv ; jal`) parametrized on (armPC, opLoadOff, bufOff, jalPC, jalImm), feeding
+  the exec-frame JalPreBundle marshalling. Separate from the eval gen_stagepre.py.
+
+## 2026-09-01 callclosuregeom-entryfold-pcf-unsatisfiable (wave37 call crux, CallClosureRow.lean)
+- missing: same independent-PC disease, second instance in the same structure:
+  `CallClosureGeom.entryFold` ∀-quantified an ARBITRARY `pcf : Nat → Nat` and
+  demanded a per-param `StoreSeg (pcf k) → StoreSeg (pcf (k+1))` Triple — for a
+  garbage `pcf` the pre is satisfiable (StoreSeg pins only PC/StoreRepr/OutRepr)
+  but no machine run advances the fold store, so the ∀-pcf field is
+  unsatisfiable. It was also DEAD plumbing: `callClosureSim` never consumed it
+  (the fold is absorbed into `entryBase`), exactly the amended scaffold-`.some`
+  precedent (unsatisfiable AND dead ⇒ delete).
+- workaround: NONE — field DELETED (wave37); the fold's named home is now the
+  machine-honest `CallParamFoldInv` carrier + `storeChainList` composition in
+  `rows/CallClosureSplice.lean` (concrete loop-head PC 0x800032dc, cursor/index
+  register pins from the disasm).
+- cost: none (no consumers); `closureParamsFold` (the storeChainList witness)
+  stays, re-pointed at the splice carrier.
+- proposal: gate-rule candidate: flag `∀ (pcf? : Nat → Nat)` /
+  `∀ (p q : Nat)`-quantified PC arguments appearing INSIDE Triple-valued
+  structure fields — independent-PC quantification over machine control points
+  is wrong unless the predicate family is PC-agnostic.
+
+## 2026-09-01 body-ih-no-caller-frame-slots (wave37 call crux, motive-family gap)
+- missing: the `mExecSeq`/`SegExit` motive gives the body IH NO caller-stack
+  discipline: `SegExit.memFrame` frames memory only OUTSIDE `[SL.lo, SL.hi)`,
+  but the closure arm's caller-frame spill slots (`s5@1032(sp)`, `s3@1048(sp)`,
+  `s7@1016(sp)`, `s6@1024(sp)`, the sret buffer `sp+144`, the body-block ptr
+  spill `0(sp)`) are INSIDE SL. So `CallClosureGeom.ret`'s discharger cannot
+  derive the spill slots' survival across the recursive body from the IH — the
+  restore loads (`ld s3,1048(sp)` … in the retCopy seg) read values the motive
+  does not pin. Every recursive arm with a post-IH restore has this gap
+  (same class as seqfor-motive-rows "motives lack sp/ABI").
+- workaround: kept `ret` as a NAMED residual field (law 2) with the gap
+  documented on it; no motive change attempted (global M4-stack statement
+  change, exec-side lane).
+- cost: `ret`/`emptyBypass` (and every sibling arm's return seam) stay
+  undischargeable until the motive family carries a stack-window clause.
+- proposal: add to `SegEntry`/`SegExit` a per-call stack cursor `sp` with
+  `SegExit` framing `[spBody, sp)` only (callee scribbles strictly BELOW the
+  caller's frame) — the standard stack-discipline invariant; thread it once
+  through TermSimAssembly's motives (the same amendment lane that fixed the
+  scaffold p/q motives).
