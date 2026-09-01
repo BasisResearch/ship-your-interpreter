@@ -34,39 +34,39 @@ def callClosureEnvDefineCallL (a4 : BitVec 64) : GRegs := [(14, a4)]
 
 The `callClosureEnvDefineCall` body ends in `jal env_define` (a CALL — deliberately outside `TKind`).  The straight-line body run + the ABI callee-saved frame are FREE via `bridgeOfSeg`; the ONLY region-specific input is the jal seam's `JalStep` (the callee entry obs, packaged by `jalStep_of_obs` from the region's `site_80003310_*` lemma).  That seam is threaded as a NAMED residual `hjalSeam` — it is NOT fabricated here (a hand `site_*` would trip the discipline gate).  The row shape mirrors `EnvDefSeg.capComputeSeg_run`. -/
 
-/-- **`callClosureEnvDefineCallBridge`** — the `callClosureEnvDefineCall` body ≫ `jal env_define` bridge, via `bridgeOfSeg`.  The seg run + ABI frame are FREE; `hfacts` (the memory chain-facts, one `chain_facts` call at the caller) and `hjalSeam` (the call-seam `JalStep` off the callee `site_*` obs) are the only region-specific residuals.  Conclusion: parked at the callee entry `0x80002a5c#64` with link `0x80003314#64`, memory = the seg write-log, ABI frame preserved. -/
+/-- **`callClosureEnvDefineCallBridge`** — the `callClosureEnvDefineCall` body ≫ `jal env_define` bridge, via `bridgeOfSeg`.  The seg run + ABI frame are FREE; `hfacts` (the memory chain-facts, one `chain_facts` call at the caller) and `hjalSeam` (the call-seam `JalStep` off the callee `site_*` obs) are the only region-specific residuals.  `lds` is the parametric load-readback list (a body `ld/lw/lb` reads `lds.getD i 0#8`, NOT a zero-pin — instantiate downstream, e.g. at a singleton, like the segToTriple rows).  Conclusion: parked at the callee entry `0x80002a5c#64` with link `0x80003314#64`, memory = the seg write-log, ABI frame preserved. -/
 theorem callClosureEnvDefineCallBridge
     (σ : MState) (i u : Nat) (vminstret : BitVec 64) (a4 : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (lds : List (List (BitVec 8)))
     (hG : GoodState σ)
     (hpc : σ.regs.get? Register.PC = some (0x8000330c#64 : BitVec 64))
     (hminstret : σ.regs.get? Register.minstret = some vminstret)
     (hmem : σ.mem = m0)
     (hL : GHolds σ (callClosureEnvDefineCallL a4))
-    (hfacts : ChainFacts σ.mem σ.mem (callClosureEnvDefineCallL a4) [] callClosureEnvDefineCallSeg)
+    (hfacts : ChainFacts σ.mem σ.mem (callClosureEnvDefineCallL a4) lds callClosureEnvDefineCallSeg)
     (hi : i < 2)
     -- output-regs key hygiene: the keys are value-free, but they mention the
     -- pins as values, so they stall `decide` under the pin binders; the
     -- caller closes each with ONE `decide` (see observations `keys-decides-per-seg`).
-    (hKeysOut : KeysOK (keysG (evalBlocks callClosureEnvDefineCallSeg (SegEvalState.init (callClosureEnvDefineCallL a4) [])).regs))
-    (hRaOut : KeysAvoidRa (evalBlocks callClosureEnvDefineCallSeg (SegEvalState.init (callClosureEnvDefineCallL a4) [])).regs)
+    (hKeysOut : KeysOK (keysG (evalBlocks callClosureEnvDefineCallSeg (SegEvalState.init (callClosureEnvDefineCallL a4) lds)).regs))
+    (hRaOut : KeysAvoidRa (evalBlocks callClosureEnvDefineCallSeg (SegEvalState.init (callClosureEnvDefineCallL a4) lds)).regs)
     (hjalSeam : ∀ (σ' : MState) (i' u' : Nat),
       GoodState σ' → i' < 2 →
       σ'.regs.get? Register.PC = some
-        (evalBlocksPC 0x8000330c#64 (SegEvalState.init (callClosureEnvDefineCallL a4) []) callClosureEnvDefineCallSeg) →
+        (evalBlocksPC 0x8000330c#64 (SegEvalState.init (callClosureEnvDefineCallL a4) lds) callClosureEnvDefineCallSeg) →
       (∃ w, σ'.regs.get? Register.minstret = some w) →
-      σ'.mem = writeLog m0 (evalBlocks callClosureEnvDefineCallSeg (SegEvalState.init (callClosureEnvDefineCallL a4) [])).log →
-      GHolds σ' (evalBlocks callClosureEnvDefineCallSeg (SegEvalState.init (callClosureEnvDefineCallL a4) [])).regs →
+      σ'.mem = writeLog m0 (evalBlocks callClosureEnvDefineCallSeg (SegEvalState.init (callClosureEnvDefineCallL a4) lds)).log →
+      GHolds σ' (evalBlocks callClosureEnvDefineCallSeg (SegEvalState.init (callClosureEnvDefineCallL a4) lds)).regs →
       JalStep 0x80002a5c#64 0x80003314#64 σ' i' u') :
     ∃ (σ2 : MState) (i2 : Nat),
       Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + evalBlocksFuel callClosureEnvDefineCallSeg + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧
       σ2.regs.get? Register.PC = some (0x80002a5c#64 : BitVec 64) ∧
       σ2.regs.get? Register.x1 = some (0x80003314#64 : BitVec 64) ∧
       (∃ w, σ2.regs.get? Register.minstret = some w) ∧
-      GHolds σ2 (evalBlocks callClosureEnvDefineCallSeg (SegEvalState.init (callClosureEnvDefineCallL a4) [])).regs ∧
-      σ2.mem = writeLog m0 (evalBlocks callClosureEnvDefineCallSeg (SegEvalState.init (callClosureEnvDefineCallL a4) [])).log ∧
+      GHolds σ2 (evalBlocks callClosureEnvDefineCallSeg (SegEvalState.init (callClosureEnvDefineCallL a4) lds)).regs ∧
+      σ2.mem = writeLog m0 (evalBlocks callClosureEnvDefineCallSeg (SegEvalState.init (callClosureEnvDefineCallL a4) lds)).log ∧
       (∀ R, Vsa.Alloc.AbiPreserved R = true → σ2.regs.get? R = σ.regs.get? R) := by
-  apply bridgeOfSeg callClosureEnvDefineCallSeg (callClosureEnvDefineCallL a4) []
+  apply bridgeOfSeg callClosureEnvDefineCallSeg (callClosureEnvDefineCallL a4) lds
     σ i u (0x8000330c#64) (0x80002a5c#64) (0x80003314#64) vminstret m0
     hG hpc hminstret hmem hL
     (by show KeysOK [14]; decide)

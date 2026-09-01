@@ -556,6 +556,7 @@ Vsa/Sim/MemcpySites2.lean
 Vsa/Sim/MemcpySites3.lean
 Vsa/Sim/MemcpySites4.lean
 Vsa/Sim/MemcpySpecFramed.lean
+Vsa/Sim/MemcpySpecFramedWord.lean
 Vsa/Sim/ModTailSites.lean
 Vsa/Sim/MulTailSites.lean
 Vsa/Sim/Muldi3Sites.lean

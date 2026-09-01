@@ -2674,3 +2674,77 @@ it, still stop and report instead.
 - proposal: genseg.py: emit `(lds : List (List (BitVec 8)))` as a binder on
   jal rows exactly as on segToTriple rows (the emitter already does it for the
   latter — one code path to unify).
+- RESOLVED (2026-09-01, wave39, uncommitted): `emit_jal_row` now threads the
+  `(lds : ...)` binder and replaced every literal `[]` (SegEvalState.init /
+  ChainFacts / bridgeOfSeg / hjalSeam / conclusion).  Re-emitted the 5 affected
+  Gen jal rows (AssignArmEntry/AssignArmStage/CallArmCalleeEval/
+  CallClosureEnvDefineCall/CallClosureEnvNewCall — the only jal rows whose body
+  loads memory); the other 3 jal Gen rows (ValueNullCall/DriveSpill/
+  FnArmMallocCall) have no loads and were left.  Theorem names KEPT (statements
+  only GAIN lds generality); all 5 + all 3 consumers (CallClosureSplice,
+  CallClosureFoldStage, CallClosureDispatchStage) GREEN + axiom-clean.  Consumers
+  reference the Gen `*Seg`/`*L` only (0 refs to the Gen `*Bridge`), so the
+  zero-pin was latent, never yet discharged — no landed proof changed meaning.
+
+## 2026-09-01 fnArmGeom-hArm-diagonal-phic-only (wave39 evalFnSim assembly)
+- missing: `fnArmGeom_hArm_of_seam` (`FnArmGeomReduce.lean`) has ONE closures-map
+  parameter `φc'`, used for BOTH the `EvalEntry` front (via `armEntry_widen`) and
+  the `PreEpilogueV` exit.  It therefore only produces the DIAGONAL
+  `Triple (EvalEntry … φc' …) (PreEpilogueV … φc' …)`.  But `FnArmGeom.hArm`
+  (`ArmSpecBridge`) needs the OFF-DIAGONAL `Triple (EvalEntry … φc …)
+  (PreEpilogueV … φc' …)` — entry at the PRE-alloc map `φc`, exit at the widened
+  `φc'` (the closures array grows by one across the `.fn` arm).  `EvalEntry.store`
+  = `StoreRepr … φc st.store` genuinely depends on the closures map, so the two are
+  not defeq; the gap is a `StoreRepr … φc st.store → StoreRepr … φc' st.store`
+  entry-rebase (φc ⊆ φc' over `st.store.closures.size`, the OLD store references
+  no fresh index) — the closures-side analog of the φf-rebase in
+  `CallClosureEnvNewMarshal` (`storeRepr … φf` through `PhiExtends φf φf'`).
+- workaround: NONE landed.  `eval_fn_row` (the recursor hFn slot) ALREADY EXISTS
+  and is green in `rows/CallRows.lean` (routes to `evalFnSimD` over `FnResid`); the
+  hFn slot is filled.  The open work is the `FnResid` SUPPLIER (no provider yet):
+  assemble `FnArmSpec` from the seam pipeline.  The whole pipeline is green MODULO
+  this one entry-rebase + the two off-path bundles + hfr/hcl + EvalRecWiden.
+- cost: without the rebase lemma, `fnArmGeom_hArm_of_seam` cannot feed
+  `FnArmGeom.hArm` directly; any FnResid provider must either add the φc-entry
+  rebase as a named premise or prove the one-closure StoreRepr mono.  Every future
+  allocating-EvalE leaf (only `.fn` today, but the pattern) pays the same.
+- proposal: `storeRepr_phic_mono : StoreRepr m N A φf φc s → PhiExtends φc φc'
+  s.closures.size → StoreRepr m N A φf φc' s` (old store unaffected by a fresh
+  closure index), OR generalize `fnArmGeom_hArm_of_seam` to two maps `φc`/`φc'`
+  with an entry-rebase premise, so it produces `FnArmGeom.hArm` verbatim.
+
+## 2026-09-01 native-call-segentry-wrapper (wave39-native #49)
+- missing: the native branch residuals `NativeAssertOkSpec` / `NativePrintSpec`
+  / `NativePrintlnSpec` (`Vsa/Sim/EvalCallNative.lean`, `EvalCallPrint.lean`)
+  are FULL `Triple (CallEntryP … callDispatchPC) (CallExitP … callJoinPC)` over
+  the WHOLE spec-store representation (StoreRepr/OutRepr/memFrame/φ). Building
+  them needs three abstractions that do NOT exist: (1) a native-entry-dispatch
+  seam `CallEntryP → SegEntry(native arm)` (the `beq kind==5 taken` + arm ABI
+  marshal, analogue of the closure `CallClosureDispatchStage`); (2) the `jalr a6`
+  native-addr resolution lemma `ValueRepr (.native f) → read64 m (fvAddr+16) =
+  N.addr f ⇒ a6 = N.addr f` (extract from StoreRepr — NOT yet a lemma; the only
+  `N.addr` facts are injectivity in ValueEqualSpec/EqNeDispatchSeg); (3) the
+  native-fn-body Triple as a StoreRepr/OutRepr-preserving span (assert:
+  value_truthy+value_null, store+out unchanged; print/println: the char loop as
+  a `Triple.loop` composing per-char HTIF `OutRepr` appends via
+  htif_store_putchar + value_print's %lld render path).
+- workaround: NONE — stopped. The per-site batteries EXIST and are ready
+  (`NativeWrapperSites` `site_*_nw` for the 0x80003254 dispatch + 0x800039e0
+  arm; `NativeAssertSites` `site_*_na` for the whole native_assert body;
+  `Native_print`/`Native_println` code pins; `value_null_spec`/
+  `value_truthy_spec` callee contracts). But the StoreRepr-preserving
+  SegEntry→SegExit wrapper is the BULK — the same character/scale as the closure
+  `Call` crux (waves 22-37), i.e. multi-wave, not one. Hand-threading it here
+  would be exactly the "work beside a missing abstraction" the discipline
+  forbids (Law 3).
+- cost: if hand-rolled per-native: ~200-line bespoke SegEntry→SegExit machine
+  Triple EACH (×3), plus a re-derivation of the shared dispatch/join wrapper 3×.
+- proposal: factor the native-branch wrapper ONCE as
+  `nativeArmSplice : (native-fn-body Triple over SegEntry(nativeArm)→SegExit at
+  the arm return) → Triple (CallEntryP callDispatchPC) (CallExitP callJoinPC)`
+  (the native analogue of the closure `callClosureSim` decomposition:
+  entry-dispatch seam ≫ arm body ≫ join), + a standalone `nativeAddr_of_valueRepr`
+  lemma (jalr a6 resolution). Then each native = the fn-body Triple only:
+  assertOk ≈ value_truthy≫value_null leaf; print/println ≈ loopFromBody over the
+  char loop with an OutRepr-append invariant (chain_out threading). With that
+  wrapper the three contracts become instantiations, not bespoke builds.

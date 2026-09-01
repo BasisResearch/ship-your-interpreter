@@ -372,42 +372,45 @@ def emit_jal_row(E, a, end_pc, keys):
       f"`bridgeOfSeg`.  The seg run + ABI frame are FREE; `hfacts` (the memory "
       f"chain-facts, one `chain_facts` call at the caller) and `hjalSeam` (the "
       f"call-seam `JalStep` off the callee `site_*` obs) are the only "
-      f"region-specific residuals.  Conclusion: parked at the callee entry "
+      f"region-specific residuals.  `lds` is the parametric load-readback list "
+      f"(a body `ld/lw/lb` reads `lds.getD i 0#8`, NOT a zero-pin — instantiate "
+      f"downstream, e.g. at a singleton, like the segToTriple rows).  "
+      f"Conclusion: parked at the callee entry "
       f"`{calleeE}` with link `{linkS}`, memory = the seg write-log, ABI frame "
       f"preserved. -/")
     E(f"theorem {name}Bridge")
     E(f"    (σ : MState) (i u : Nat) (vminstret : BitVec 64){pbind}")
-    E(f"    (m0 : Std.ExtHashMap Nat (BitVec 8))")
+    E(f"    (m0 : Std.ExtHashMap Nat (BitVec 8)) (lds : List (List (BitVec 8)))")
     E(f"    (hG : GoodState σ)")
     E(f"    (hpc : σ.regs.get? Register.PC = some ({entryS} : BitVec 64))")
     E(f"    (hminstret : σ.regs.get? Register.minstret = some vminstret)")
     E(f"    (hmem : σ.mem = m0)")
     E(f"    (hL : GHolds σ {Lapp})")
-    E(f"    (hfacts : ChainFacts σ.mem σ.mem {Lapp} [] {seg})")
+    E(f"    (hfacts : ChainFacts σ.mem σ.mem {Lapp} lds {seg})")
     E(f"    (hi : i < 2)")
     E(f"    -- output-regs key hygiene: the keys are value-free, but they mention the")
     E(f"    -- pins as values, so they stall `decide` under the pin binders; the")
     E(f"    -- caller closes each with ONE `decide` (see observations "
       f"`keys-decides-per-seg`).")
-    E(f"    (hKeysOut : KeysOK (keysG (evalBlocks {seg} (SegEvalState.init {Lapp} [])).regs))")
-    E(f"    (hRaOut : KeysAvoidRa (evalBlocks {seg} (SegEvalState.init {Lapp} [])).regs)")
+    E(f"    (hKeysOut : KeysOK (keysG (evalBlocks {seg} (SegEvalState.init {Lapp} lds)).regs))")
+    E(f"    (hRaOut : KeysAvoidRa (evalBlocks {seg} (SegEvalState.init {Lapp} lds)).regs)")
     E(f"    (hjalSeam : ∀ (σ' : MState) (i' u' : Nat),")
     E(f"      GoodState σ' → i' < 2 →")
     E(f"      σ'.regs.get? Register.PC = some")
-    E(f"        (evalBlocksPC {entryS} (SegEvalState.init {Lapp} []) {seg}) →")
+    E(f"        (evalBlocksPC {entryS} (SegEvalState.init {Lapp} lds) {seg}) →")
     E(f"      (∃ w, σ'.regs.get? Register.minstret = some w) →")
-    E(f"      σ'.mem = writeLog m0 (evalBlocks {seg} (SegEvalState.init {Lapp} [])).log →")
-    E(f"      GHolds σ' (evalBlocks {seg} (SegEvalState.init {Lapp} [])).regs →")
+    E(f"      σ'.mem = writeLog m0 (evalBlocks {seg} (SegEvalState.init {Lapp} lds)).log →")
+    E(f"      GHolds σ' (evalBlocks {seg} (SegEvalState.init {Lapp} lds)).regs →")
     E(f"      JalStep {calleeE} {linkS} σ' i' u') :")
     E(f"    ∃ (σ2 : MState) (i2 : Nat),")
     E(f"      Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + evalBlocksFuel {seg} + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧")
     E(f"      σ2.regs.get? Register.PC = some ({calleeE} : BitVec 64) ∧")
     E(f"      σ2.regs.get? Register.x1 = some ({linkS} : BitVec 64) ∧")
     E(f"      (∃ w, σ2.regs.get? Register.minstret = some w) ∧")
-    E(f"      GHolds σ2 (evalBlocks {seg} (SegEvalState.init {Lapp} [])).regs ∧")
-    E(f"      σ2.mem = writeLog m0 (evalBlocks {seg} (SegEvalState.init {Lapp} [])).log ∧")
+    E(f"      GHolds σ2 (evalBlocks {seg} (SegEvalState.init {Lapp} lds)).regs ∧")
+    E(f"      σ2.mem = writeLog m0 (evalBlocks {seg} (SegEvalState.init {Lapp} lds)).log ∧")
     E(f"      (∀ R, Vsa.Alloc.AbiPreserved R = true → σ2.regs.get? R = σ.regs.get? R) := by")
-    E(f"  apply bridgeOfSeg {seg} {Lapp} []")
+    E(f"  apply bridgeOfSeg {seg} {Lapp} lds")
     E(f"    σ i u ({entryS}) ({calleeE}) ({linkS}) vminstret m0")
     E(f"    hG hpc hminstret hmem hL")
     if len(keys) <= 1:

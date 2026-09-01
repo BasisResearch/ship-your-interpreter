@@ -36,39 +36,39 @@ def assignArmEntryL (a2 sp a3 : BitVec 64) : GRegs := [(12, a2), (2, sp), (13, a
 
 The `assignArmEntry` body ends in `jal eval_expr` (a CALL — deliberately outside `TKind`).  The straight-line body run + the ABI callee-saved frame are FREE via `bridgeOfSeg`; the ONLY region-specific input is the jal seam's `JalStep` (the callee entry obs, packaged by `jalStep_of_obs` from the region's `site_80003488_*` lemma).  That seam is threaded as a NAMED residual `hjalSeam` — it is NOT fabricated here (a hand `site_*` would trip the discipline gate).  The row shape mirrors `EnvDefSeg.capComputeSeg_run`. -/
 
-/-- **`assignArmEntryBridge`** — the `assignArmEntry` body ≫ `jal eval_expr` bridge, via `bridgeOfSeg`.  The seg run + ABI frame are FREE; `hfacts` (the memory chain-facts, one `chain_facts` call at the caller) and `hjalSeam` (the call-seam `JalStep` off the callee `site_*` obs) are the only region-specific residuals.  Conclusion: parked at the callee entry `0x80003164#64` with link `0x8000348c#64`, memory = the seg write-log, ABI frame preserved. -/
+/-- **`assignArmEntryBridge`** — the `assignArmEntry` body ≫ `jal eval_expr` bridge, via `bridgeOfSeg`.  The seg run + ABI frame are FREE; `hfacts` (the memory chain-facts, one `chain_facts` call at the caller) and `hjalSeam` (the call-seam `JalStep` off the callee `site_*` obs) are the only region-specific residuals.  `lds` is the parametric load-readback list (a body `ld/lw/lb` reads `lds.getD i 0#8`, NOT a zero-pin — instantiate downstream, e.g. at a singleton, like the segToTriple rows).  Conclusion: parked at the callee entry `0x80003164#64` with link `0x8000348c#64`, memory = the seg write-log, ABI frame preserved. -/
 theorem assignArmEntryBridge
     (σ : MState) (i u : Nat) (vminstret : BitVec 64) (a2 : BitVec 64) (sp : BitVec 64) (a3 : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (lds : List (List (BitVec 8)))
     (hG : GoodState σ)
     (hpc : σ.regs.get? Register.PC = some (0x8000347c#64 : BitVec 64))
     (hminstret : σ.regs.get? Register.minstret = some vminstret)
     (hmem : σ.mem = m0)
     (hL : GHolds σ (assignArmEntryL a2 sp a3))
-    (hfacts : ChainFacts σ.mem σ.mem (assignArmEntryL a2 sp a3) [] assignArmEntrySeg)
+    (hfacts : ChainFacts σ.mem σ.mem (assignArmEntryL a2 sp a3) lds assignArmEntrySeg)
     (hi : i < 2)
     -- output-regs key hygiene: the keys are value-free, but they mention the
     -- pins as values, so they stall `decide` under the pin binders; the
     -- caller closes each with ONE `decide` (see observations `keys-decides-per-seg`).
-    (hKeysOut : KeysOK (keysG (evalBlocks assignArmEntrySeg (SegEvalState.init (assignArmEntryL a2 sp a3) [])).regs))
-    (hRaOut : KeysAvoidRa (evalBlocks assignArmEntrySeg (SegEvalState.init (assignArmEntryL a2 sp a3) [])).regs)
+    (hKeysOut : KeysOK (keysG (evalBlocks assignArmEntrySeg (SegEvalState.init (assignArmEntryL a2 sp a3) lds)).regs))
+    (hRaOut : KeysAvoidRa (evalBlocks assignArmEntrySeg (SegEvalState.init (assignArmEntryL a2 sp a3) lds)).regs)
     (hjalSeam : ∀ (σ' : MState) (i' u' : Nat),
       GoodState σ' → i' < 2 →
       σ'.regs.get? Register.PC = some
-        (evalBlocksPC 0x8000347c#64 (SegEvalState.init (assignArmEntryL a2 sp a3) []) assignArmEntrySeg) →
+        (evalBlocksPC 0x8000347c#64 (SegEvalState.init (assignArmEntryL a2 sp a3) lds) assignArmEntrySeg) →
       (∃ w, σ'.regs.get? Register.minstret = some w) →
-      σ'.mem = writeLog m0 (evalBlocks assignArmEntrySeg (SegEvalState.init (assignArmEntryL a2 sp a3) [])).log →
-      GHolds σ' (evalBlocks assignArmEntrySeg (SegEvalState.init (assignArmEntryL a2 sp a3) [])).regs →
+      σ'.mem = writeLog m0 (evalBlocks assignArmEntrySeg (SegEvalState.init (assignArmEntryL a2 sp a3) lds)).log →
+      GHolds σ' (evalBlocks assignArmEntrySeg (SegEvalState.init (assignArmEntryL a2 sp a3) lds)).regs →
       JalStep 0x80003164#64 0x8000348c#64 σ' i' u') :
     ∃ (σ2 : MState) (i2 : Nat),
       Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + evalBlocksFuel assignArmEntrySeg + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧
       σ2.regs.get? Register.PC = some (0x80003164#64 : BitVec 64) ∧
       σ2.regs.get? Register.x1 = some (0x8000348c#64 : BitVec 64) ∧
       (∃ w, σ2.regs.get? Register.minstret = some w) ∧
-      GHolds σ2 (evalBlocks assignArmEntrySeg (SegEvalState.init (assignArmEntryL a2 sp a3) [])).regs ∧
-      σ2.mem = writeLog m0 (evalBlocks assignArmEntrySeg (SegEvalState.init (assignArmEntryL a2 sp a3) [])).log ∧
+      GHolds σ2 (evalBlocks assignArmEntrySeg (SegEvalState.init (assignArmEntryL a2 sp a3) lds)).regs ∧
+      σ2.mem = writeLog m0 (evalBlocks assignArmEntrySeg (SegEvalState.init (assignArmEntryL a2 sp a3) lds)).log ∧
       (∀ R, Vsa.Alloc.AbiPreserved R = true → σ2.regs.get? R = σ.regs.get? R) := by
-  apply bridgeOfSeg assignArmEntrySeg (assignArmEntryL a2 sp a3) []
+  apply bridgeOfSeg assignArmEntrySeg (assignArmEntryL a2 sp a3) lds
     σ i u (0x8000347c#64) (0x80003164#64) (0x8000348c#64) vminstret m0
     hG hpc hminstret hmem hL
     (by have h : keysG (assignArmEntryL a2 sp a3) = [12, 2, 13] := rfl

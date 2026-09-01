@@ -559,6 +559,11 @@ import Vsa.Sim.rows.FnArmClosureBuild
 import Vsa.Sim.rows.AllocClosureInhab
 import Vsa.Sim.rows.AllocBuildEntrySplice
 import Vsa.Sim.rows.FnArmSeams
+import Vsa.Sim.rows.FnResidSupply
+import Vsa.Sim.MemcpySpecFramedWord
+import Vsa.Sim.rows.ErrFamilyAssembly
+import Vsa.Sim.rows.LayoutGround
+import Vsa.Sim.EndToEnd
 import Vsa.Sim.rows.CallClosureSplice
 import Vsa.Sim.rows.CallClosureEnvNewMarshal
 import Vsa.Sim.rows.CallClosureDispatchStage

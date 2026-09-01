@@ -880,6 +880,25 @@ THEOREMS=(
   Vsa.Sim.callClosureEnvNewRetFoldRow               # rows/CallClosureEnvNewRet
   Vsa.Sim.callClosureBodyEntryRow                   # rows/CallClosureBodyEntry (bgtz → callBodyLoopPC)
   Vsa.Sim.callClosureBodyBypassRow                  # rows/CallClosureBodyEntry (empty-body j bypass)
+  Vsa.Sim.fnArmGeom_hArm_offdiag                    # rows/FnResidSupply (FnArmGeom.hArm from the diagonal seam + 9 dispatch facts; residual hEntryRebase = the φc-entry rebase)
+  Vsa.Sim.store_size_of_allocClosure                # rows/FnResidSupply (store-size monotonicity — trivial, done)
+  Vsa.Sim.fnResid_of_pipeline                       # rows/FnResidSupply (FnResid = FnArmSpec ∧ EvalRecWiden, end-to-end through FnArmGeom)
+  Vsa.Sim.memcpy_spec_framed_word                   # MemcpySpecFramedWord (the aligned WORD route with the ABI frame end-to-end; post = the byte variant's, consumers route on hroute)
+  Vsa.Sim.dispatch_to_word_framed                   # MemcpySpecFramedWord
+  Vsa.Sim.wordloop_abi                              # MemcpySpecFramedWord (ABI transport free through word_loop_spec)
+  Vsa.Sim.epilogue_notail_framed                    # MemcpySpecFramedWord
+  Vsa.Sim.epilogue_tail_framed                      # MemcpySpecFramedWord
+  # Wave 39: the error close + the grounded layout + THE END-TO-END THEOREM
+  Vsa.Sim.ErrSharedInputs.toShared                  # rows/ErrFamilyAssembly (ErrShared instantiated ONCE over the landed exit-tail segments)
+  Vsa.Sim.errFamily_ofArmLinks                      # rows/ErrFamilyAssembly (ALL 42/42 routed hsites from the generated link families)
+  Vsa.Sim.errFamily_ofWork                          # rows/ErrFamilyAssembly (ErrFamily Ly from the ErrWork bundle — stragglers hBadClosure/hTopAbrupt named)
+  Vsa.Sim.LayoutGround.ground_atInterpRun           # rows/LayoutGround (GENERATED: the concrete Layout pinned to the ELF's interp_run symbol)
+  Vsa.Sim.LayoutGround.ground_interpRunCode         # rows/LayoutGround
+  Vsa.Sim.LayoutGround.ground_stackSL               # rows/LayoutGround
+  Vsa.Sim.LayoutGround.ground_tohostAddr            # rows/LayoutGround
+  Vsa.Sim.EndToEnd.interpSim_ofWork                 # EndToEnd (InterpSim L from ONE RemainingWork record at any layout)
+  Vsa.Sim.EndToEnd.endToEnd                         # EndToEnd (THE THEOREM: InterpSim interpRunLayout from RemainingWork — the hypothesis list IS the remaining project)
+  Vsa.Sim.EndToEnd.endToEnd_refinement              # EndToEnd (the full BigStep↔Halts behavioral correspondence)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean

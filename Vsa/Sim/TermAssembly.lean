@@ -66,8 +66,14 @@ local notation "SpecSt" => Vsa.While.St
 
 Every field is a NAMED typed premise (R6/R7).  The doc comment names the row/family
 that CONSUMES it and the supplier task that DISCHARGES it.  This is the entire
-residual surface of the development after the capstone. -/
-structure TermResiduals (L : Layout) where
+residual surface of the development after the capstone.
+
+The record is split in two: `TermResidualsCore` carries every term/divergence-side
+field; `TermResiduals extends TermResidualsCore` adds the error family `hErrFam`.
+The split lets `Vsa/Sim/EndToEnd.lean` swap `hErrFam` for its link-level residuals
+(`ErrWork`, `rows/ErrFamilyAssembly.lean`) without restating the core fields; every
+`R.hInt`-style consumer below is unchanged (parent projections). -/
+structure TermResidualsCore (L : Layout) where
   -- ===== TermRouting.lean — the 10 leaf/logical rows =====
   /-- `hInt`/`eval_int_row`.  Supplier: `LeafWiden` int-leaf geometry (`LeafWiden`/`GeomFrom`). -/
   hInt : ∀ st n, IntLeafResid st n
@@ -310,6 +316,11 @@ structure TermResiduals (L : Layout) where
       (`Vsa.Sim.DivFamily.DivCorrFamily L`), discharged by the M4 `exec_stmt` case
       Triples' progress-only ("≥1 step, still corresponds") skeleton. -/
   hDivCorr : Vsa.Sim.DivFamily.DivCorrFamily L
+
+/-- The full residual record: the core plus the error family.  `interpSim_of_residuals`
+consumes this; `EndToEnd.lean` builds it from `TermResidualsCore` + the error-side
+link work (`errFamily_ofWork`). -/
+structure TermResiduals (L : Layout) extends TermResidualsCore L where
   /-- **ERROR** — the M5 error family `ErrFamily L`.  Supplier:
       `Vsa.Sim.errFamilyClosed L S hsite…`, fed the shared L7/L8 `ErrShared` bundle `S`
       (`SnprintfContract SC` + `ErrorTailChain HT`, M3/M6 error-path inputs) and the 43
