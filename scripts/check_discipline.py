@@ -12,6 +12,7 @@ a file contains more than N occurrences of <needle> (whole-file rules).
 
 Exit 1 on any violation. Extensible: add rules to the TSV, no code changes.
 """
+import fnmatch
 import re
 import sys
 from pathlib import Path
@@ -62,6 +63,8 @@ def main():
         text = f.read_text()
         lines = text.splitlines()
         for rid, scope, pat, msg in rules:
+            if not fnmatch.fnmatch(rel, scope):
+                continue
             if pat.startswith("COUNT>"):
                 m = re.match(r"COUNT>(\d+):(.*)", pat)
                 n, needle = int(m.group(1)), m.group(2)

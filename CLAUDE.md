@@ -14,6 +14,7 @@ Before ANY proof work: run `scripts/abs_inventory.sh` and reuse by name.
 
 | Task shape | Use (never hand-roll) |
 |---|---|
+| WHOLE FUNCTION (multi-block: branches, loops, calls, tail-j, tohost seams) | `scripts/gen_fn.py --fn <f> --entry <pc> [--fold]` — emits the block arms + (recognised counted-loop shape) the derived `FnSummary` fold; fold combinators `FnSummary.{seq,callSplice,tailJump}` + `segRowFramed` (`Vsa/Sim/FnSummary.lean`, `SegToTripleFramed.lean`; model fold: `rows/FnWriteFold.lean`); rule R9 catches hand-rolled multi-seg function files |
 | Straight-line OR branch/jump-terminated span | `#derive_case` seg + `segToTriple` (br/j/jr terminators are in-model; model: `Vsa/Sim/EnvDefSeg.lean` — 58 hand lines → 14, `EnvDefBridges4.lean` for branch-ended rows) |
 | Span ending in a CALL (`jal`) | `BridgeSeg.bridgeOfSeg` + `jalStep_of_obs` (the jal seam is deliberately outside `TKind`) |
 | ABI register frame on a run | `FrameMeta.abiFrame_of_wrChain` (one `decide`) — NEVER per-site frame threading |

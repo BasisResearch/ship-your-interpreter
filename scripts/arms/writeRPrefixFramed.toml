@@ -1,0 +1,52 @@
+# The REAL `_write_r` prefix span, as the t2 `framed = true` regression
+# artifact: the arg-shuffle/spill prologue ends in `jal _write` and WRITES the
+# ABI-preserved `sp` (frame push `addi sp,sp,-16`) and `s0` (reseat
+# `mv s0,a0`), so the plain `bridgeOfSeg` `WrChainAvoidAbi` decide is FALSE —
+# `framed = true` + `avoid = [2, 8]` routes the row through
+# `bridgeOfSegFramed` (model: Vsa/Sim/rows/ConcatStringifyRArg.lean).
+#
+# NOTE (regression artifact only): the live `_write_r` proof is the gen_fn P2
+# fold (`rows/FnWriteRFold.lean`), which covers this span via segRowFramed +
+# the stepObs_jal seam.  Because this span READS `ra` (the `sd ra,8(sp)`
+# spill), `ra = x1` is an entry pin, so the emitted bridge's `hRaOut`
+# (`KeysAvoidRa` on the output regs) is not satisfiable — bridgeOfSeg-shaped
+# rows are for spans that do NOT read `ra`.  The TOML exercises the framed
+# emission path end-to-end (green + axiom-clean); the emitted .lean is not
+# kept.
+name       = "writeRPrefixFramed"
+namespace  = "Vsa.Sim"
+entry      = 0x800104fc
+span_end   = 0x80010520
+terminator = "jal"
+callee     = "_write"
+callee_pc  = 0x8000003c
+framed     = true
+avoid      = [2, 8]
+imports    = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac", "Vsa.Sim.BridgeSegFramed"]
+doc        = "The _write_r prologue 0x800104fc..0x80010520: mv a5,a1 ; addi sp,sp,-16 ; sd s0,0(sp) ; mv a1,a2 ; mv s0,a0 (reseat the reent ptr into callee-saved s0) ; mv a2,a3 ; mv a0,a5 ; sd ra,8(sp) ; sw zero,1272(gp) (clear errno) ▷ jal _write@0x8000003c.  Writes ABI-preserved sp (frame push) + s0 (reseat) — the framed bridge exposes both in the GHolds post bundle and frames every other ABI-preserved register."
+
+# entry pins, first-use order (matches FnWriteR's write_rX04fcL):
+[[pin]]
+reg = 11
+name = "a1"
+[[pin]]
+reg = 2
+name = "sp"
+[[pin]]
+reg = 8
+name = "s0"
+[[pin]]
+reg = 12
+name = "a2"
+[[pin]]
+reg = 10
+name = "a0"
+[[pin]]
+reg = 13
+name = "a3"
+[[pin]]
+reg = 1
+name = "ra"
+[[pin]]
+reg = 3
+name = "gp"

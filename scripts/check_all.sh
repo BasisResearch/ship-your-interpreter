@@ -155,6 +155,15 @@ echo "stage b: OK"
 # ------------------------------------------------------- (c) #print axioms
 echo "== stage c: #print axioms on the key spec theorems"
 THEOREMS=(
+  # gen_fn whole-function summary layer (FnSummary/SegToTripleFramed/HtifStepObs/FnWriteFold)
+  Vsa.Sim.segToTripleFramed
+  Vsa.Sim.segRowFramed
+  Vsa.Sim.tailJump_of_summary
+  Vsa.Sim.stepObs_tohost_putchar
+  Vsa.Sim.goodstate_sigmaPutcharFinal
+  Vsa.Sim.write_summary
+  Vsa.Sim.write_r_summary
+  Vsa.Sim.swrite_summary
   # strlen family (StrlenSpec / StrlenSpecU)
   Vsa.Sim.strlen_spec
   Vsa.Sim.strlen_full_spec

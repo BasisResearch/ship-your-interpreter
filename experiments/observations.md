@@ -3425,3 +3425,208 @@ it, still stop and report instead.
   span segs (`SEntryC → cond-jal`, `value_truthy-nonzero → body-head`) belong to
   the divergence/loop lane, keyed on the already-given `EvalE`/`allocFrame`
   hypotheses spliced via callSeg/BridgeSeg.
+
+## 2026-09-01 io-contracts-buffering-falsity (gen_fn de-risk pass, main session)
+- missing: a stream-state abstraction between the IO contracts and
+  `Vsa.Machine.output`. The three wave-44 contracts in
+  `rows/ValuePrintContract.lean` (FprintfLldContract/FwriteContract/
+  FputsContract) post `Vsa.Machine.output c.σ = out0 ++ frag` at RETURN, but
+  `output` = raw `String.join σ.sailOutput.toList` and stdout is LINE-BUFFERED
+  (`_isatty`@0x80000110 is `slti a0,a0,3` → 1 for fds 0-2 → newlib `__SLBF`,
+  malloc'd buffer via `__swsetup_r`/`__smakebuf_r`): `fputs("null",stdout)`
+  returns with the bytes in the FILE buffer, NOT in sailOutput. The contracts
+  are unprovable as stated — latent falsity #10, found statically before any
+  proof consumed them.
+- workaround: NONE (stopped; statement amendment required before Lane-1 fan-out).
+- cost: if unamended, every gen_fn-derived summary for the fputs/fwrite/fprintf
+  DAG would contradict the named contracts mid-splice — a stalled-lane class
+  bug (cf. the reverted wave-45 amendment lanes).
+- proposal: `StreamRepr` named-field structure (FILE flags/buf base/pos/end read
+  off the static `_impure_ptr` reent + the pending byte string) + `conOut σ S =
+  output σ ++ S.pending`; re-state the three contracts as `conOut' = conOut ++
+  frag`; per-line flush facts from `__sfvwrite_r`'s `memchr '\n'` arm; the
+  endToEnd output claim is UNAFFECTED because `exit`@0x80004764 drains the
+  buffer (`__call_exitprocs` then `jalr a5` = reent `__cleanup` → `_fflush_r`
+  → `__swrite`) so `pending = ""` at the final state.
+
+## 2026-09-01 mkind-io-census (gen_fn de-risk pass, main session)
+- missing: 13 MKind cases the io DAG needs — census over
+  _write/_write_r/__swrite/_putc_r/_fputc_r/__sfvwrite_r/_fputs_r/_fwrite_r/
+  shims/__swsetup_r/__smakebuf_r/_fflush_r/__sflush_r/locks/__sinit/std/
+  _cleanup_r: andi×52 lh×30 sh×15 lui×14 lhu×13 ori×11 or×5 and×5 addw×4
+  srai/sraiw/srl/srliw×1. Even `_write` (the HTIF leaf) uses `or`; `__swrite`
+  uses lh/sh/lui/and/andi. Pseudo-ops covered (mv/li/sext.w/not/negw/zext.b).
+- workaround: NONE (prerequisite D0 of experiments/gen-fn-tooling-plan.md).
+- cost: without it, every io-DAG seg attempt fails at decodeM; per-site
+  StepObs hand batteries (the snprintf-era regression) would be the only path.
+- proposal: mail-merge clone of the xori/slliw/lwu precedents
+  (BlockMem constructor + decodeM branch + astOfM + width/fold rows + rfl
+  example; lh/lhu/sh = width-2 twins of exec_lbu_bm/exec_sb_bm).
+
+## 2026-09-01 stringify-bool-doc-swap (probe pass 2, main session)
+- missing: ELF-byte ground-truthing for doc-comment address↔literal claims.
+  `rows/StringifySpec.lean`'s bool-arm doc said "true"@80019010 /
+  "false"@80019008; objdump .rodata shows 19008="true", 19010="false" (both
+  the stringify AND value_print bool arms default a1/a0=19010 and reassign to
+  19008 on the fall-through = true case). Doc FIXED in place; no machine
+  statement carried the swap yet — but any prover writing byte pins from the
+  prose would have produced falsity #11.
+- workaround: n/a (doc corrected; ELF bytes recorded in gen-fn-tooling-plan.md).
+- cost: a stalled amendment lane, had it reached a statement.
+- proposal: gen_layout.py/gen_image_pins.py-style generators as the ONLY
+  source for literal-address pins (never prose); extend gen_image_pins.py
+  expected-bytes table to cover the value_print/stringify literal pool.
+
+## 2026-09-01 wentry-width-set-hardcoded (gen_fn D0 mail-merge, mkind agent)
+- missing: a single named predicate for the reflected write-log entry width set.
+  `wlogM_width` (LoopStep.lean:77) and its duplicate `wlogM_widths`
+  (SegFrameFactsAuto.lean:175) state every `WEntry` width `= 1 ∨ = 4 ∨ = 8`,
+  and that disjunction is threaded VERBATIM (rcases arms + typed ascriptions)
+  through BlockAdapter.lean:34/51/72, SegFrameFactsAuto.lean:319,
+  ReprStackSurvival.lean:118/159/171, BlockLogic.lean:574,
+  rows/EvalEqNeFront.lean:102, rows/EvalDivRow.lean:126.  Adding the width-2
+  store kind `.sh` (proven: experiments/probe-sh-width2.lean) falsifies both
+  theorems as stated; there is no per-arm fix.
+- workaround: NONE (agent stopped per Law 4 and reported the obstruction);
+  amendment {1,4,8}→{1,2,4,8} being landed as a dedicated synchronous pass.
+- cost: ~8-file synchronous edit per width addition, forever, until named.
+- proposal: `WEntryWidthOK : Nat → Prop` abbrev (or a `widths` list constant)
+  used by wlogM_width + every consumer, so a new store width is a one-line
+  change + the new `writeMapN` disjoint branch.
+
+## 2026-09-01 goodstate-htif-tohost-overpin (HtifStepObs putchar Step layer, htif-stepobs agent)
+- missing: a `GoodState` that survives the console-putchar tohost store.
+  `GoodState.htif_tohost` (Vsa/Sim/GoodState.lean:49) pins the VALUE
+  `some (BitVec.ofNat 64 tohostAddr)` (= 0x8001ad00, the post-init value),
+  but the machine's putchar transition (mem_write_value_tohost_putchar,
+  Vsa/Sim/HtifLift.lean:187) ends its insert tower with
+  `htif_tohost := zeros (n := 64)` (= 0#64). So GoodState is provably FALSE
+  after the first putchar store — machine-checked as
+  `not_goodState_sigmaPutcharFinal` in Vsa/Sim/HtifStepObs.lean. No consumer
+  ever uses the pinned value: every HTIF store lemma takes
+  `hth : … htif_tohost = some th` with th ARBITRARY (HtifLift putchar/exit,
+  probe, ErrorTail). The pin was never exercised because the only previously
+  proven tohost store (exit) HALTS in the same stepOnce.
+- workaround: NONE forced; delivered everything except the `GoodState σ'`
+  conjuncts: stepOnce/Step/stepObs putchar lemmas land WITHOUT the GoodState
+  clause (tick_clock_char inputs derived from GoodState σ through the write
+  frame instead of GoodState of the post-state), plus the falsity proof.
+- cost: `stepObs_tohost_putchar` cannot re-establish the loop invariant's
+  GoodState conjunct; every _write-loop consumer is blocked on the amendment;
+  wrappers must be revisited (one-line each) once GoodState is amended.
+- proposal: amend `GoodState.htif_tohost` to `∃ v, σ.regs.get? Register.htif_tohost = some v`
+  (presence-only, exactly like mip/mtime/…); consumers change from
+  `hG.htif_tohost` to `obtain ⟨th, hth⟩ := hG.htif_tohost` (all already
+  th-generic). Then `goodstate_sigmaPutcharFinal` + the GoodState conjuncts
+  here become the standard insert_nonpinned/frame proof.
+
+## 2026-09-01 isnonpinned-htif-tohost-stale (HtifStepObs GoodState re-add, sandbox /tmp/vsa-probe)
+- missing: post-amendment (`GoodState.htif_tohost` now `∃`-shaped), `Frame.lean`'s
+  `isNonPinned` still classifies `htif_tohost` as pinned, so
+  `GoodState.insert_nonpinned` cannot be chained through the putchar tower's two
+  `htif_tohost` inserts (no single-insert `GoodState` preservation lemma for
+  `htif_tohost`).
+- workaround: `goodstate_sigmaPutcharFinal` in `Vsa/Sim/HtifStepObs.lean` is a
+  field-by-field `constructor` proof (untouched fields via the
+  `get?_sigmaPutcharFinal` 7-diseq frame, touched `∃`-fields via explicit
+  witnesses), instead of a 10-link `insert_nonpinned` chain + `of_regs_eq` like
+  `goodstate_sigmaPost_store`.
+- cost: ~140 lines / ~190 decides once in HtifStepObs; ANY future lemma that
+  inserts into `htif_tohost` (other HTIF mailbox stores) pays it again.
+- proposal: when the GoodState amendment lands in main, also move `htif_tohost`
+  from the pinned match-arm of `isNonPinned` to nonpinned and flip
+  `insert_nonpinned`'s `htif_tohost` case from `P` to `E`; then
+  `goodstate_sigmaPutcharFinal` collapses to the standard insert chain.
+
+## 2026-09-01 chain-facts-no-op-after-have (gen_fn P1 fold, main session)
+- missing: robustness (or a loud failure) in `chain_facts` (ChainFactsTac.lean)
+  when ANY tactic step precedes it: with a `have` in the local context the
+  tactic SILENTLY leaves the whole `ChainFacts` goal untouched (no error), so
+  downstream bullets hit the unsplit goal with baffling defeq failures.
+  Minimal repro: cf-mem3 probe — `have hx : (1:Nat) = 1 := rfl` before
+  `chain_facts hcode with ...` → 0 leftover-goal descent; without the have →
+  full descent to the MemFacts leaf. Also fires when the loaded-image
+  hypothesis itself is have-bound (`have hcode := hg.code`).
+- workaround: call chain_facts as the FIRST tactic; pass the loaded-image
+  hypothesis as a lemma PARAMETER; move all `have`s after it (into the
+  leftover-goal bullets).
+- cost: ~90 min of blind bisection this session; will recur for every gen_fn
+  facts lemma author.
+- proposal: make cfSolve fail loudly when it closes nothing, and fix the
+  underlying local-context sensitivity (likely the walker's use of the goal's
+  mvar context when applying generated lemma names).
+
+## 2026-09-01 seg-guard-close-symbolic-pins (gen_fn P2, FnWriteRFold)
+- missing: a seg_guard_close variant whose tail is caller-supplied instead of
+  `<;> decide` — guards over SYMBOLIC pins (here `beq a0,a5` with a0 = ghost
+  `len`) reduce fine under its simp-set but cannot be decided; also a
+  packaged "seg log is empty ⇒ writeLog collapses" brick (`rfl` directly on
+  `writeLog (mImage g) segLog = mImage g` native-overflows the unifier when
+  the memory is itself a writeLog def — it unfolds both sides into
+  ExtHashMap internals).
+- workaround: inlined seg_guard_close's fixed simp-set + manual finish
+  (rw computed-literal + beq_eq_false_iff_ne + the fact); added local
+  writeLog_nil + per-seg `<seg>_log_nil : (evalBlocks …).log = [] := rfl`
+  lemmas and rw-chained them before the mem field.
+- cost: ~12 lines per symbolic-pin guard and 3 lines + 1 rw-chain per
+  store-free seg, re-paid by every gen_fn fold with a branch twin or a
+  read-only seg over a reified store image (every call-wrapper P2-shape fn).
+- proposal: `seg_guard_reduce` (the simp-set, no decide tail, leaves the
+  reduced comparison) in SegReadback; `segLog_nil`-emission in gen_fn.py per
+  store-free seg + a `mem_of_framedPost_nilLog` one-liner in
+  SegToTripleFramed.
+
+## 2026-09-01 io-buffering-falsity-RETRACTED (empirical run, main session)
+- missing: nothing — CORRECTION of `io-contracts-buffering-falsity` above,
+  which is WRONG. `main.c:155` is `setvbuf(stdout, NULL, _IONBF, 0)` — the
+  FIRST statement of main (jal setvbuf@0x800058c0 at 0x800045ac): stdout is
+  explicitly UNBUFFERED in this binary. EMPIRICALLY CONFIRMED in the Sail
+  model (lean_riscv_emulator on /tmp-built test ELFs; proof ELF untouched,
+  sha256 b146c6ed… verified): `print(1); <runtime error>` emits "1" BEFORE
+  the stderr message (immediate visibility); `print(7)`+clean-exit emits "7";
+  all four value_print arms emit exact expected bytes ("truehi3false\n").
+  The wave-44 contracts' `output = out0 ++ frag`-at-return posts are TRUE.
+- workaround: n/a. StreamRepr/conOut amendment CANCELLED (plan b item 0
+  rewritten). The io contracts' precondition instead pins the stdout FILE
+  state as left by main's setvbuf (__SNBF; part of the main-init image the
+  induction already parameterizes).
+- cost: none incurred — caught before any proof consumed the wrong amendment.
+  LESSON: static libc-source reasoning about runtime configuration is not
+  evidence; the emulator harness (exact model, ~10s/run) is, and is now the
+  t5 falsity-tester mechanism.
+- proposal: t5 recipe = craft .wl → build ELF in a /tmp COPY of c/ (NEVER in
+  c/ — proof ELF is sacred, keep the sha256 guard) → lean_riscv_emulator →
+  compare sailOutput/exit. Test every RUN-1-consumed statement this way.
+
+## 2026-09-01 field-claims-empirical-sweep (t5 harness, main session)
+- missing: nothing — POSITIVE sweep results, recorded so RUN-1/RUN-2 lanes
+  know these statements are empirically grounded (t6.elf, exact model):
+  StrConcat "ab"+"cd"→"abcd"; String order "a"<"b" T, "ab"<"b" T, "a"<"ab" T,
+  "b"<="a" F, "x"=="x" T (strcmp-sign ↔ String.lt DIRECTION CONFIRMED for the
+  order bridge); anonymous closure print → fwrite "<fn>"@0x800192d0 4B (the
+  inner-beqz route, covered by FwriteContract); hDivOv: INT64_MIN/-1 prints
+  -9223372036854775808 (wrap CONFIRMED); (-7)%3 = -1 (tdiv-parity ✓);
+  runtime-error exit code 70 ✓ ("FAILURE: 70", t4).
+- workaround: n/a.
+- cost: n/a.
+- proposal: keep /tmp/wl-test + the t*.elf battery as the standing t5 corpus;
+  extend with a case per RemainingWork field before RUN 2 assembly.
+
+## 2026-09-01 bridge-row-ra-pin-unfillable-hRaOut (t2 genseg framed emission)
+- missing: a bridgeOfSeg/bridgeOfSegFramed variant for spans that READ `ra`
+  (spill prologues: `sd ra,k(sp)` forces `x1` into the entry pin list L, so
+  `1 ∈ keysG (evalBlocks …).regs` and the row's `hRaOut : KeysAvoidRa out.regs`
+  is FALSE — the jal overwrites x1, so `gholds_of_jal` rightly refuses).
+- workaround: none needed for the live span — the gen_fn P2 fold
+  (rows/FnWriteRFold.lean) covers `_write_r`'s prologue via segRowFramed + a
+  separate stepObs_jal seam; the t2 regression artifact
+  (scripts/arms/writeRPrefixFramed.toml) emits the framed row anyway as a
+  compile-shape exercise (green + axiom-clean, hypothesis vacuous, .lean not
+  kept).
+- cost: any future jal-terminated span that spills `ra` cannot use the bridge
+  rows at all and must fall back to the fn-fold shape; nothing warns at
+  emission time.
+- proposal: `bridgeOfSegRa` (or a `dropKey 1` pre-pass in bridgeOfSeg[Framed])
+  that deletes the stale x1 binding from the exposed out-bundle instead of
+  demanding `KeysAvoidRa`; plus a genseg-side warning when reg 1 is pinned on
+  a jal arm.

@@ -47,7 +47,7 @@ structure GoodState (σ : MState) : Prop where
   hart_state : σ.regs.get? Register.hart_state = some (HartState.HART_ACTIVE ())
   htif_done : σ.regs.get? Register.htif_done = some false
   htif_tohost :
-    σ.regs.get? Register.htif_tohost = some (BitVec.ofNat 64 tohostAddr)
+    ∃ v, σ.regs.get? Register.htif_tohost = some v
   htif_tohost_base :
     σ.regs.get? Register.htif_tohost_base =
       some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base)

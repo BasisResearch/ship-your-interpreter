@@ -339,9 +339,9 @@ theorem exitPrologSeg_of (out : String) (hgeom : ExitPrologGeom out) :
         = .ok ((70#64 <<< 1) ||| 1#64) (afterNextPC (afterPrelude σ4) (0x80000190#64)) := by
       apply rX_bits_x15
       rw [get?_afterNextPC σ4 _ _ (by decide) (by decide)]; exact hx15_4
-    have hth4 : σ4.regs.get? Register.htif_tohost = some (BitVec.ofNat 64 tohostAddr) := hG4.htif_tohost
+    obtain ⟨thv4, hth4⟩ := hG4.htif_tohost
     refine ⟨0x80000190#64, vm4, 0xb6f73a23#32, 0xb74#12, regidx.Regidx 0x0f#5, regidx.Regidx 0x0e#5,
-      0x8001b18c#64, (70#64 <<< 1) ||| 1#64, BitVec.ofNat 64 tohostAddr,
+      0x8001b18c#64, (70#64 <<< 1) ||| 1#64, thv4,
       0x23#8, 0x3a#8, 0xf7#8, 0xb6#8,
       hG4, hpc4, hm4, ?_, ?_, ?_, hra1, hra2, ?_, rfl, hpw4, hth4, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · apply BitVec.eq_of_toNat_eq; decide

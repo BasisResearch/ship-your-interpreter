@@ -41,6 +41,7 @@ def decodeM (w : BitVec 32) : Option (MKind × Nat × Nat × Nat × BitVec 12) :
   let opcode := (w.extractLsb' 0 7).toNat
   let funct3 := (w.extractLsb' 12 3).toNat
   let funct7 := (w.extractLsb' 25 7).toNat
+  let funct6 := (w.extractLsb' 26 6).toNat
   let rd     := (w.extractLsb' 7 5).toNat
   let rs1    := (w.extractLsb' 15 5).toNat
   let rs2    := (w.extractLsb' 20 5).toNat
@@ -51,8 +52,13 @@ def decodeM (w : BitVec 32) : Option (MKind × Nat × Nat × Nat × BitVec 12) :
     (if funct3 = 0 then some (.addi, rd, rs1, 0, immI)
      else if funct3 = 2 then some (.slti, rd, rs1, 0, immI)
      else if funct3 = 1 then some (.slli, rd, rs1, 0, immI)
-     else if funct3 = 5 then some (.srli, rd, rs1, 0, immI)
+     else if funct3 = 5 then
+       (if funct6 = 0x00 then some (.srli, rd, rs1, 0, immI)
+        else if funct6 = 0x10 then some (.srai, rd, rs1, 0, immI)
+        else none)
      else if funct3 = 4 then some (.xori, rd, rs1, 0, immI)
+     else if funct3 = 7 then some (.andi, rd, rs1, 0, immI)
+     else if funct3 = 6 then some (.ori, rd, rs1, 0, immI)
      else none)
   else if opcode = 0x33 then
     -- OP: add / sub (funct3 = 0, funct7 selects); slt (funct3 = 2)
@@ -61,19 +67,25 @@ def decodeM (w : BitVec 32) : Option (MKind × Nat × Nat × Nat × BitVec 12) :
        else if funct7 = 0x20 then some (.sub, rd, rs1, rs2, 0#12)
        else none)
      else if funct3 = 2 then some (.slt, rd, rs1, rs2, 0#12)
+     else if funct3 = 6 then (if funct7 = 0x00 then some (.or, rd, rs1, rs2, 0#12) else none)
+     else if funct3 = 7 then (if funct7 = 0x00 then some (.and, rd, rs1, rs2, 0#12) else none)
+     else if funct3 = 5 then (if funct7 = 0x00 then some (.srl, rd, rs1, rs2, 0#12) else none)
      else none)
   else if opcode = 0x03 then
     -- LOAD: lw (2) / ld (3) / lbu (4) / lwu (6, unsigned word); rs2 unused
     (if funct3 = 2 then some (.lw, rd, rs1, 0, immI)
      else if funct3 = 3 then some (.ld, rd, rs1, 0, immI)
      else if funct3 = 4 then some (.lbu, rd, rs1, 0, immI)
+     else if funct3 = 1 then some (.lh, rd, rs1, 0, immI)
+     else if funct3 = 5 then some (.lhu, rd, rs1, 0, immI)
      else if funct3 = 6 then some (.lwu, rd, rs1, 0, immI)
      else none)
   else if opcode = 0x23 then
-    -- STORE: sw (2) / sd (3) / sb (0); rd unused, rs1 = base, rs2 = data
+    -- STORE: sw (2) / sd (3) / sb (0) / sh (1); rd unused, rs1 = base, rs2 = data
     (if funct3 = 2 then some (.sw, 0, rs1, rs2, immS)
      else if funct3 = 3 then some (.sd, 0, rs1, rs2, immS)
      else if funct3 = 0 then some (.sb, 0, rs1, rs2, immS)
+     else if funct3 = 1 then some (.sh, 0, rs1, rs2, immS)
      else none)
   else if opcode = 0x1b then
     -- OP-IMM-32: addiw (funct3 = 0) / slliw (funct3 = 1); rs2 unused.  For
@@ -81,15 +93,24 @@ def decodeM (w : BitVec 32) : Option (MKind × Nat × Nat × Nat × BitVec 12) :
     -- word via `shamt5Of` in `astOfM`/`wvalM`); we park `immI` there for shape.
     (if funct3 = 0 then some (.addiw, rd, rs1, 0, immI)
      else if funct3 = 1 then some (.slliw, rd, rs1, 0, immI)
+     else if funct3 = 5 then
+       (if funct7 = 0x00 then some (.srliw, rd, rs1, 0, immI)
+        else if funct7 = 0x20 then some (.sraiw, rd, rs1, 0, immI)
+        else none)
      else none)
   else if opcode = 0x3b then
-    -- OP-32: subw (funct3 = 0, funct7 = 0x20)
+    -- OP-32: addw (funct3 = 0, funct7 = 0x00) / subw (funct3 = 0, funct7 = 0x20)
     (if funct3 = 0 then
-      (if funct7 = 0x20 then some (.subw, rd, rs1, rs2, 0#12) else none)
+      (if funct7 = 0x00 then some (.addw, rd, rs1, rs2, 0#12)
+       else if funct7 = 0x20 then some (.subw, rd, rs1, rs2, 0#12)
+       else none)
      else none)
   else if opcode = 0x17 then
     -- AUIPC: imm field unused (imm20 lives in the word; see `imm20Of`)
     some (.auipc, rd, 0, 0, 0#12)
+  else if opcode = 0x37 then
+    -- LUI: imm field unused (imm20 lives in the word; see `imm20Of`)
+    some (.lui, rd, 0, 0, 0#12)
   else none
 
 /-- Assemble a full `MInstr` from `pc` and `word`.  Nested-`if` on `decodeM w`

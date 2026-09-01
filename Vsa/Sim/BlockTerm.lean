@@ -562,22 +562,35 @@ theorem domRun_keys_bt : ∀ (is : List MInstr) (L : GRegs)
     | addi => exact dom_cons_erase h
     | add => exact dom_cons_erase h
     | sub => exact dom_cons_erase h
+    | or => exact dom_cons_erase h
+    | and => exact dom_cons_erase h
+    | srl => exact dom_cons_erase h
     | lw => exact dom_cons_erase h
     | lwu => exact dom_cons_erase h
     | ld => exact dom_cons_erase h
     | lbu => exact dom_cons_erase h
+    | lh => exact dom_cons_erase h
+    | lhu => exact dom_cons_erase h
     | addiw => exact dom_cons_erase h
     | slli => exact dom_cons_erase h
     | srli => exact dom_cons_erase h
+    | srai => exact dom_cons_erase h
     | slti => exact dom_cons_erase h
     | slt => exact dom_cons_erase h
     | subw => exact dom_cons_erase h
+    | addw => exact dom_cons_erase h
     | auipc => exact dom_cons_erase h
+    | lui => exact dom_cons_erase h
     | xori => exact dom_cons_erase h
+    | andi => exact dom_cons_erase h
+    | ori => exact dom_cons_erase h
     | slliw => exact dom_cons_erase h
+    | srliw => exact dom_cons_erase h
+    | sraiw => exact dom_cons_erase h
     | sw => exact h
     | sd => exact h
     | sb => exact h
+    | sh => exact h
 
 /-- The computed pin keys stay GPR indices (`1..31`), given the body VC. -/
 theorem keysOK_runGM_bt : ∀ (is : List MInstr) (pc0 : BitVec 64) (dom : List Nat)
@@ -603,6 +616,15 @@ theorem keysOK_runGM_bt : ∀ (is : List MInstr) (pc0 : BitVec 64) (dom : List N
     | sub =>
       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .sub ard ars1 ars2)
       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | or =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .or ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | and =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .and ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | srl =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .srl ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
     | lw =>
       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .lw ard ars1 ars2)
       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
@@ -615,6 +637,12 @@ theorem keysOK_runGM_bt : ∀ (is : List MInstr) (pc0 : BitVec 64) (dom : List N
     | lbu =>
       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .lbu ard ars1 ars2)
       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | lh =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .lh ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | lhu =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .lhu ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
     | addiw =>
       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .addiw ard ars1 ars2)
       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
@@ -623,6 +651,9 @@ theorem keysOK_runGM_bt : ∀ (is : List MInstr) (pc0 : BitVec 64) (dom : List N
       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
     | srli =>
       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .srli ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | srai =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .srai ard ars1 ars2)
       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
     | slti =>
       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .slti ard ars1 ars2)
@@ -633,18 +664,37 @@ theorem keysOK_runGM_bt : ∀ (is : List MInstr) (pc0 : BitVec 64) (dom : List N
     | subw =>
       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .subw ard ars1 ars2)
       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | addw =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .addw ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
     | auipc =>
       obtain ⟨hrd1, hrd31⟩ := (hkok : KindOK dom .auipc ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | lui =>
+      obtain ⟨hrd1, hrd31⟩ := (hkok : KindOK dom .lui ard ars1 ars2)
       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
     | xori =>
       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .xori ard ars1 ars2)
       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | andi =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .andi ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | ori =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .ori ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
     | slliw =>
       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .slliw ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | srliw =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .srliw ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | sraiw =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .sraiw ard ars1 ars2)
       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
     | sw => exact ih _ _ _ _ hwfr hkeys
     | sd => exact ih _ _ _ _ hwfr hkeys
     | sb => exact ih _ _ _ _ hwfr hkeys
+    | sh => exact ih _ _ _ _ hwfr hkeys
 
 /-- The computed write-log image agrees with the input memory below the HTIF
 window: every logged store lands above `tohostAddr + 16` (its `MemFacts`
@@ -674,19 +724,31 @@ theorem writeLog_wlog_low_bt (mc : Std.ExtHashMap Nat (BitVec 8)) :
     | addi => exact ih m _ _ hfr j hj
     | add => exact ih m _ _ hfr j hj
     | sub => exact ih m _ _ hfr j hj
+    | or => exact ih m _ _ hfr j hj
+    | and => exact ih m _ _ hfr j hj
+    | srl => exact ih m _ _ hfr j hj
     | lw => exact ih m _ _ hfr j hj
     | lwu => exact ih m _ _ hfr j hj
     | ld => exact ih m _ _ hfr j hj
     | lbu => exact ih m _ _ hfr j hj
+    | lh => exact ih m _ _ hfr j hj
+    | lhu => exact ih m _ _ hfr j hj
     | addiw => exact ih m _ _ hfr j hj
     | slli => exact ih m _ _ hfr j hj
     | srli => exact ih m _ _ hfr j hj
+    | srai => exact ih m _ _ hfr j hj
     | slti => exact ih m _ _ hfr j hj
     | slt => exact ih m _ _ hfr j hj
     | subw => exact ih m _ _ hfr j hj
+    | addw => exact ih m _ _ hfr j hj
     | auipc => exact ih m _ _ hfr j hj
+    | lui => exact ih m _ _ hfr j hj
     | xori => exact ih m _ _ hfr j hj
+    | andi => exact ih m _ _ hfr j hj
+    | ori => exact ih m _ _ hfr j hj
     | slliw => exact ih m _ _ hfr j hj
+    | srliw => exact ih m _ _ hfr j hj
+    | sraiw => exact ih m _ _ hfr j hj
     | sw =>
       have hwin : tohostAddr + 16 ≤
           (eaddrM ⟨apc, aword, ab0, ab1, ab2, ab3, .sw, ard, ars1, ars2, aimm⟩ L).toNat :=
@@ -702,6 +764,11 @@ theorem writeLog_wlog_low_bt (mc : Std.ExtHashMap Nat (BitVec 8)) :
           (eaddrM ⟨apc, aword, ab0, ab1, ab2, ab3, .sb, ard, ars1, ars2, aimm⟩ L).toNat :=
         hmf.2.2
       exact (ih _ _ _ hfr j hj).trans (insert_low_miss m _ _ j (by omega))
+    | sh =>
+      have hwin : tohostAddr + 16 ≤
+          (eaddrM ⟨apc, aword, ab0, ab1, ab2, ab3, .sh, ard, ars1, ars2, aimm⟩ L).toNat :=
+        hmf.2.2.1
+      exact (ih _ _ _ hfr j hj).trans (writeMap2_low_miss m _ _ j (by omega))
 
 /-! ## The basic block -/
 

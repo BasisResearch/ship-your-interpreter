@@ -22,7 +22,7 @@ pin extraction:
   is disjoint from all *later* entries reads back out of the fold;
 * `slotHolds_of_writeLog` — the `SlotHolds` shape of the same.
 
-Widths outside `{1,4,8}` never occur in real logs; `applyW` ignores them
+Widths outside `{1,2,4,8}` never occur in real logs; `applyW` ignores them
 (`applyW_eq_of_ne`), so every lemma is total over `WEntry` anyway.
 -/
 
@@ -60,9 +60,9 @@ theorem writeLog_append (m : Std.ExtHashMap Nat (BitVec 8)) (l1 l2 : List WEntry
     writeLog m (l1 ++ l2) = writeLog (writeLog m l1) l2 :=
   List.foldl_append
 
-/-- `applyW` is the identity at widths outside `{1,4,8}`. -/
+/-- `applyW` is the identity at widths outside `{1,2,4,8}`. -/
 theorem applyW_eq_of_ne (m : Std.ExtHashMap Nat (BitVec 8)) (A w : Nat) (dv : BitVec 64)
-    (h1 : w ≠ 1) (h4 : w ≠ 4) (h8 : w ≠ 8) : applyW m (A, w, dv) = m := by
+    (h1 : w ≠ 1) (h2 : w ≠ 2) (h4 : w ≠ 4) (h8 : w ≠ 8) : applyW m (A, w, dv) = m := by
   unfold applyW
   split <;> simp_all
 
@@ -74,15 +74,20 @@ theorem applyW_out (m : Std.ExtHashMap Nat (BitVec 8)) (A w : Nat) (dv : BitVec 
   · subst h1
     show (m.insert A (sbData dv))[a]? = m[a]?
     rw [Std.ExtHashMap.getElem?_insert, if_neg (by simp only [beq_iff_eq]; omega)]
-  · by_cases h4 : w = 4
-    · subst h4
-      show (writeMap4 m A (swData dv))[a]? = m[a]?
-      exact getElem?_writeMap4_out _ _ _ _ (by omega)
-    · by_cases h8 : w = 8
-      · subst h8
-        show (writeMap8 m A (sdData_val dv))[a]? = m[a]?
-        exact getElem?_writeMap8_out _ _ _ _ (by omega)
-      · rw [applyW_eq_of_ne m A w dv h1 h4 h8]
+  · by_cases h2 : w = 2
+    · subst h2
+      show ((m.insert A ((shData dv).extractLsb' 0 8)).insert (A + 1)
+          ((shData dv).extractLsb' 8 8))[a]? = m[a]?
+      exact getElem_writeMap2_disjoint m A a (shData dv) (by omega)
+    · by_cases h4 : w = 4
+      · subst h4
+        show (writeMap4 m A (swData dv))[a]? = m[a]?
+        exact getElem?_writeMap4_out _ _ _ _ (by omega)
+      · by_cases h8 : w = 8
+        · subst h8
+          show (writeMap8 m A (sdData_val dv))[a]? = m[a]?
+          exact getElem?_writeMap8_out _ _ _ _ (by omega)
+        · rw [applyW_eq_of_ne m A w dv h1 h2 h4 h8]
 
 /-- Reads outside the whole log's footprint pass through the fold. -/
 theorem writeLog_out (m : Std.ExtHashMap Nat (BitVec 8)) (log : List WEntry) (a : Nat)

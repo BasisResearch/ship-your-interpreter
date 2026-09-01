@@ -1,0 +1,13 @@
+name       = "writeBodyProbe"
+entry      = 0x8000004c
+span_end   = 0x8000005c
+terminator = "fallthrough"
+imports    = ["Vsa.Sim.DeriveCaseRow"]
+doc        = "P1 probe: the _write putchar-loop body [lbu a5,0(a1) ; addi a1,a1,1 ; or a5,a5,a4 ; auipc a6,0x1b], parking at the sd-to-tohost site 0x8000005c."
+
+[[pin]]
+reg = 11
+name = "bufPtr"
+[[pin]]
+reg = 14
+name = "cmdBase"

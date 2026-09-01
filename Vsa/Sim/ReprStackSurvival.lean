@@ -96,7 +96,7 @@ theorem exprRepr_survives_stackWrite
 `writeLog_agreeP_disjoint` (`BlockAdapter`) already gives agreement off every
 store window; here we specialise it to the stack-window complement using the
 concrete loop-body geometry: every store lies in `[SL.lo, sp)` or the arena
-(`WinsInSA`), and every reflected store has width 1/4/8 (`wlogM_width`). For the
+(`WinsInSA`), and every reflected store has width 1/2/4/8 (`wlogM_width`). For the
 AST survival we need agreement OFF the stack window — so we also require the
 arena to be disjoint from the AST footprint, threaded via the same off-window
 predicate (the AST is disjoint from BOTH stack and arena; the caller's
@@ -115,7 +115,7 @@ loop-body log with no per-site hand-threading. -/
 theorem writeLog_agreeP_offStackArena
     {SL : StackLayout} {sp : Nat} {A : Arena}
     (m : Mem) (log : List WEntry)
-    (hw : ∀ e ∈ log, e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8)
+    (hw : ∀ e ∈ log, e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8)
     (hwins : WinsInSA SL sp A log) :
     AgreeP (OffStackArena SL sp A) m (writeLog m log) := by
   refine writeLog_agreeP_disjoint m log (OffStackArena SL sp A) hw ?_
@@ -156,7 +156,7 @@ across the whole iteration's writes. THE lemma the four body oracles reuse. -/
 theorem stmtRepr_survives_writeLog
     {SL : StackLayout} {sp : Nat} {A : Arena}
     {m : Mem} {a : Nat} {s : Stmt} (log : List WEntry)
-    (hw : ∀ e ∈ log, e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8)
+    (hw : ∀ e ∈ log, e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8)
     (hwins : WinsInSA SL sp A log)
     (hfpDisj : ∀ addr, StmtFp m a s addr →
       ¬ (SL.lo ≤ addr ∧ addr < sp) ∧ ¬ (A.lo ≤ addr ∧ addr < A.hi))
@@ -168,7 +168,7 @@ loop-condition / arg-expression survival across the iteration. -/
 theorem exprRepr_survives_writeLog
     {SL : StackLayout} {sp : Nat} {A : Arena}
     {m : Mem} {a : Nat} {e : Expr} (log : List WEntry)
-    (hw : ∀ ent ∈ log, ent.2.1 = 1 ∨ ent.2.1 = 4 ∨ ent.2.1 = 8)
+    (hw : ∀ ent ∈ log, ent.2.1 = 1 ∨ ent.2.1 = 2 ∨ ent.2.1 = 4 ∨ ent.2.1 = 8)
     (hwins : WinsInSA SL sp A log)
     (hfpDisj : ∀ addr, ExprFp m a e addr →
       ¬ (SL.lo ≤ addr ∧ addr < sp) ∧ ¬ (A.lo ≤ addr ∧ addr < A.hi))

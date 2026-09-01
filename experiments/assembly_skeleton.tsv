@@ -1,0 +1,63 @@
+field	status	supplier_note
+hInt	hole	`hInt`/`eval_int_row`.  Supplier: `LeafWiden` int-leaf geometry (`LeafWiden`/`GeomFrom`).
+hNull	hole	`hNull`/`eval_null_row`.  Supplier: null-slot geometry + `LeafWiden` (`NullSlotPinned`).
+hBool	hole	`hBool`/`eval_bool_row`.  Supplier: bool-region geometry + `LeafWiden`.
+hStr	hole	`hStr`/`eval_str_row`.  Supplier: str-leaf geometry + `LeafWiden` (str repr readback).
+hNeg	hole	`hNeg`/`eval_neg_row`.  Supplier: neg-arm geometry (`EvalRecCommon`/`blockB_unary`).
+hNot	hole	`hNot`/`eval_not_row`.  Supplier: not-arm geometry.
+hOrTrue	hole	`hOrTrue`/`eval_orTrue_row`.  Supplier: logical short-circuit geometry.
+hAndFalse	hole	`hAndFalse`/`eval_andFalse_row`.  Supplier: logical short-circuit geometry.
+hOrFalse	hole	`hOrFalse`/`eval_orFalse_row`.  Supplier: logical fall-through geometry.
+hAndTrue	hole	`hAndTrue`/`eval_andTrue_row`.  Supplier: logical fall-through geometry.
+hVar	hole	`hVar`/`eval_var_row`.  Supplier: `VarLeafResid` — carries the `env_get_found` caller-linkage oracle (dischargeable from `env_get_found_uncond''` once the eval-var-arm call bridge lands; the `TermCallees.envGet` contract
+hAssign	hole	`hAssign`/`eval_assign_row`.  Supplier: `AssignArmSpec` arm oracle ("row now, arm spec later" precedent) — the composed `env_define` (`TermCallees.envDefine`, OPEN) store-set arm.  No `evalAssignSim` exists yet; whole ar
+hIAdd	hole	`hBinary` add int-cell.  Supplier: `AddResid` value-path (`EvalAddRow`, block-reflected).
+hISub	hole	`hBinary` sub int-cell.  Supplier: `SubResid` (`EvalSubRow`).
+hIMul	hole	`hBinary` mul int-cell.  Supplier: `MulResid` (`EvalMulRow`, `__muldi3` seam).
+hIDiv	hole	`hBinary` div int-cell (non-overflow arm; the `¬(a=-2^63 ∧ b=-1)` guard is the `TermGuards.binNoOvf` side-condition).  Supplier: `DivResid` (`EvalDivRow`, `__divdi3` seam via `TermCallees.divdi3`).
+hIMod	hole	`hBinary` mod int-cell.  Supplier: `ModResid` (`EvalModRow`, div-parity).
+hILt	hole	`hBinary` lt int-cell.  Supplier: `LtResid` (`EvalLtRow`).
+hILe	hole	`hBinary` le int-cell.  Supplier: `LeResid` (`EvalLeRow`).
+hIGt	hole	`hBinary` gt int-cell.  Supplier: `GtResid` (`EvalGtRow`).
+hIGe	hole	`hBinary` ge int-cell.  Supplier: `GeResid` (`EvalGeRow`, xori clone).
+hEq	hole	`hBinary` eq cell.  Supplier: `EqResid` via `value_equal_spec_full` (`TermCallees.valueEqual`, LANDED) + `EvalEqNeRow`.
+hNe	hole	`hBinary` ne cell.  Supplier: `EqResid` (`EvalEqNeRow`).
+hStrAddL	hole	`hBinary` str `+` (left-str) cell.  Supplier: `StrConcatCellResid` (`TermGuards.strConcat`, blocked on the stringify spec).
+hStrAddR	hole	`hBinary` str `+` (right-str) cell.  Supplier: `StrConcatCellResid`.
+hStrLt	hole	`hBinary` str `<` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue` (`TermGuards.strCmp`/`strArmProlog`, LANDED slots via `strcmp_full_spec`).
+hStrLe	hole	`hBinary` str `≤` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`.
+hStrGt	hole	`hBinary` str `>` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`.
+hStrGe	hole	`hBinary` str `≥` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`.
+hDivOv	hole	`hBinary` div-overflow arm (`INT64_MIN / -1` wraps).  Supplier: `TermGuards.divOvfArm` wrap-semantics div row.
+hArgsNil	hole	`hArgsNil`/`eval_argsNil_row`.  Supplier: `ArgsNilResid` seg-identity at `evalArgsLoopPC`→`evalArgsContPC`.
+hArgsCons	hole	`hArgsCons`/`eval_argsCons_row`.  Supplier: `ArgsConsResid` per-iter body oracle + fall-through (`TermGuards.argsMeasure`, `evalArgsStepOf`/`loopFromBody`).
+hCallPrint	hole	`hCallPrint`/`eval_callPrint_row`.  Supplier: native `print` seg (`NativePrintSpec`).
+hCallPrintln	hole	`hCallPrintln`/`eval_callPrintln_row`.  Supplier: native `println` seg.
+hCallAssertOk	hole	`hCallAssertOk`/`eval_callAssertOk_row`.  Supplier: native `assert` seg.
+hCall	hole	`hCall`/`eval_call_row`.  Supplier: `CallResid` = `CallArmSpec` arm + widen.
+hFn	hole	`hFn`/`eval_fn_row`.  Supplier: `FnResid` = closure-alloc arm + native-store repr.
+hCallClosure	hole	**CRUX** — `hCallClosure`.  Consumed positionally by the recursor; NO landed row (depth-crux + `env_define` env-fold gated).  Supplied as a WHOLE PREMISE by the sibling-owned `rows/CallClosureRow` (`TermGuards.depthCrux`
+hSExpr	hole	`hSExpr`/`exec_expr_row`.  Supplier: `ExprResid` = `execExprSimD` geometry.
+hSRet	hole	`hSRet`/`exec_ret_row`.  Supplier: `RetResid` = `ExecRetGeom`.
+hSRetNull	hole	`hSRetNull`/`exec_retNull_row`.  Supplier: `RetNullResid` = `ExecRetNullGeom` (carries the OPEN `value_null`-bridge glue).
+hSVarNull	hole	`hSVarNull`/`exec_varNull_row`.  Supplier: `VarNullResid` = `ExecVarNullGeom` (carries the OPEN `value_null`+`env_define` glue, `TermCallees.envDefine`).
+hSBrk	hole	`hSBrk`/`exec_brk_row`.  Supplier: `BrkResid` = `ExecCaseGeom` brk arm.
+hSCont	hole	`hSCont`/`exec_cont_row`.  Supplier: `ContResid` = `ExecCaseGeom` cont arm.
+hSVarInit	hole	`hSVarInit`/`exec_varInit_row`.  Supplier: `VarInitResid` = `ExecVarInitGeom` (`hGlue` threads the `env_define` callee oracle, `TermCallees.envDefine`).
+hSIfNone	hole	`hSIfNone`/`exec_ifNone_row`.  Supplier: `IfNoneResid` = exit-sim geometry.
+hSWhileFalse	hole	`hSWhileFalse`/`exec_whileFalse_row`.  Supplier: `WhileFalseResid`.
+hSIfTrue	hole	`hSIfTrue`/`exec_ifTrue_row`.  Supplier: `IfTrueResid` (branch exit-sim).
+hSIfFalse	hole	`hSIfFalse`/`exec_ifFalse_row`.  Supplier: `IfFalseResid` (else-branch exit-sim).
+hSBlock	hole	`hSBlock`/`exec_block_row`.  Supplier: `BlockResid` = `allocFrame` + seq exit-sim.
+hSForStart	hole	`hSForStart`/`exec_forStart_row`.  Supplier: `ForStartResid` = `allocFrame` + init/for-loop exit-sim (`TermGuards.forMeasure`).
+hSWhileBreak	hole	`hSWhileBreak`/`exec_whileBreak_row`.  Supplier: `WhileResid` (shared with whileRet/whileLoop; `TermGuards.whileMeasure`, `execWhileIH_of_resid`).
+hFlCondFalse	hole	**GAP** — `hFlCondFalse` (`ForLoop.condFalse`).  Supplier: the for-loop condition-false exit arm (`TermGuards.forMeasure` shape).
+hFlBodyBreak	hole	**GAP** — `hFlBodyBreak` (`ForLoop.bodyBreak`).  Supplier: for-loop body-break arm.
+hFlBodyRet	hole	**GAP** — `hFlBodyRet` (`ForLoop.bodyRet`).  Supplier: for-loop body-ret arm.
+hFlLoop	hole	**GAP** — `hFlLoop` (`ForLoop.loop`).  Supplier: for-loop back-edge (`TermGuards.forMeasure`, `execForStepOf`/`loopFromBody`).
+hSeqNil	hole	**GAP** — `hSeqNil` (`ExecSeq.nil`).  Supplier: `execSeqNil` seg-identity (`ExecSimCommon.execSeqNil`, essentially LANDED — a `_row` wrap is trivial).
+hSeqConsNormal	hole	**GAP** — `hSeqConsNormal` (`ExecSeq.consNormal`).  Supplier: `execSeqLoop` back-edge (`TermGuards.seqMeasure`).
+hSeqConsAbrupt	hole	**GAP** — `hSeqConsAbrupt` (`ExecSeq.consAbrupt`).  Supplier: `execSeqLoop` abrupt-exit arm (`TermGuards.seqMeasure`).
+hInitStore	hole	**ENTRY (prologue)** — `hEntryHalts` store-init locus.  Supplier: the off-path `interp_init` store representation at the `interp_run` loop head (`Vsa.Sim.InterpInitStoreRepr`, decoded PC span in its doc).
+hEpilogueSpill	hole	**ENTRY (epilogue)** — `hEntryHalts` exit-0 spill seam.  Supplier: the epilogue restore-block byte-level spill/frame/image/tail facts (`Vsa.Sim.EpilogueSpill`, the `s5=0` latch + restore `ChainFacts`).
+hDivCorr	hole	**DIVERGENCE** — `hdivFam`.  Supplier: the per-load divergence correspondence (`Vsa.Sim.DivFamily.DivCorrFamily L`), discharged by the M4 `exec_stmt` case Triples' progress-only ("≥1 step, still corresponds") skeleton.

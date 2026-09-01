@@ -432,6 +432,9 @@ import Vsa.Sim.SnprintfRecords
 import Vsa.Sim.Code.ImageStatics
 import Vsa.Sim.ImageDischarge
 import Vsa.Sim.Code.FnFmt
+import Vsa.Sim.Code._write
+import Vsa.Sim.Code._write_r
+import Vsa.Sim.Code.__swrite
 import Vsa.Sim.FrameOn
 import Vsa.Sim.WriteLogNF
 import Vsa.Sim.FrameMeta
@@ -627,6 +630,18 @@ import Vsa.Sim.rows.FlStepArmStagePre
 import Vsa.Sim.rows.StmtForLoopSegPreB
 import Vsa.Sim.rows.ValuePrintArms
 import Vsa.Sim.rows.ValuePrintContract
+-- gen_fn whole-function summary layer (plan a, 2026-09-01)
+import Vsa.Sim.FnSummary
+import Vsa.Sim.SegToTripleFramed
+import Vsa.Sim.HtifStepObs
+import Vsa.Sim.rows.FnWrite
+import Vsa.Sim.rows.FnWriteFold
+import Vsa.Sim.rows.FnWriteR
+import Vsa.Sim.rows.FnWriteRFold
+import Vsa.Sim.rows.FnSwrite
+import Vsa.Sim.rows.FnSwriteFold
+import Vsa.Sim.rows.AssemblySkeleton
+import Vsa.Sim.RepackTac
 import Vsa.Sim.rows.ErrSegCrt0
 import Vsa.Sim.rows.ErrSegMain
 import Vsa.Sim.rows.CallCruxMarshal5

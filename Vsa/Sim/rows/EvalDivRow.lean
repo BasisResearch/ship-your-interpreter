@@ -96,7 +96,7 @@ theorem evalBlocks_frame_offsets :
       (base : BitVec 64) (m : Std.ExtHashMap Nat (BitVec 8)) (fb : FrameBundle m base),
       srcVal 2 L = base →
       (∀ b ∈ bs, ∀ a ∈ b.body, a.rd ≠ 2) →
-      (∀ b ∈ bs, ∀ a ∈ b.body, (a.kind = .sw ∨ a.kind = .sd ∨ a.kind = .sb) →
+      (∀ b ∈ bs, ∀ a ∈ b.body, (a.kind = .sw ∨ a.kind = .sd ∨ a.kind = .sb ∨ a.kind = .sh) →
         a.rs1 = 2 ∧ (sign_extend (m := 64) a.imm : BitVec 64).toNat + 8 ≤ 0x108) →
       ∀ e ∈ (evalBlocks bs (SegEvalState.init L lds)).log,
         base.toNat ≤ e.1 ∧ e.1 + e.2.1 ≤ base.toNat + 0x108 := by
@@ -123,10 +123,10 @@ theorem evalBlocks_frame_offsets :
           (fun x hx hkx => ⟨(hst b (List.mem_cons_self ..) x hx hkx).1,
             by have := (hst b (List.mem_cons_self ..) x hx hkx).2; omega⟩) e hbb
       obtain ⟨hrs1, hoff⟩ := hst b (List.mem_cons_self ..) a ha hk
-      have hw : e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8 :=
+      have hw : e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8 :=
         wlogM_width b.body L lds e hbb
       refine ⟨by rw [haddr]; omega, ?_⟩
-      rw [haddr]; rcases hw with h | h | h <;> omega
+      rw [haddr]; rcases hw with h | h | h | h <;> omega
     · -- e is in the rest chain; base preserved because b doesn't write x2
       have hbase' : srcVal 2 (evalBlock (SegEvalState.init L lds) b).regs = base := by
         show srcVal 2 (runGM b.body (SegEvalState.init L lds).regs (SegEvalState.init L lds).loads) = base

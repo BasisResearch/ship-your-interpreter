@@ -188,6 +188,15 @@ theorem getElem_writeMap4_disjoint (mem : Std.ExtHashMap Nat (BitVec 8)) (a4 k :
     getElem_insert_ne _ _ _ _ (by simp only [beq_eq_false_iff_ne, ne_eq]; omega),
     getElem_insert_ne _ _ _ _ (by simp only [beq_eq_false_iff_ne, ne_eq]; omega)]
 
+/-- A single byte read at `k` disjoint from the width-2 store window `[a2, a2+2)`
+passes through to `mem`.  Stated on the raw two-insert image — the unfolding of
+`writeMap2` (`PinW`, an `abbrev`), so it applies to `writeMap2` terms directly. -/
+theorem getElem_writeMap2_disjoint (mem : Std.ExtHashMap Nat (BitVec 8)) (a2 k : Nat)
+    (d : BitVec (8 * 2)) (hk : k < a2 ∨ a2 + 2 ≤ k) :
+    ((mem.insert a2 (d.extractLsb' 0 8)).insert (a2 + 1) (d.extractLsb' 8 8))[k]? = mem[k]? := by
+  rw [getElem_insert_ne _ _ _ _ (by simp only [beq_eq_false_iff_ne, ne_eq]; omega),
+    getElem_insert_ne _ _ _ _ (by simp only [beq_eq_false_iff_ne, ne_eq]; omega)]
+
 /-- `read32` at `a` is unaffected by a `writeMap8` whose window `[a8, a8+8)` is
 disjoint from `[a, a+4)`. -/
 theorem read32_writeMap8_disjoint (mem : Std.ExtHashMap Nat (BitVec 8)) (a a8 : Nat)

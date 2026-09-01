@@ -28,18 +28,21 @@ open Vsa
 namespace Vsa.Sim
 
 /-- One write-log entry misses a byte disjoint from its `[addr, addr+width)`
-window. Dispatches on the width literal (`sb`/`sw`/`sd`) into the existing
+window. Dispatches on the width literal (`sb`/`sh`/`sw`/`sd`) into the existing
 per-width disjoint lemmas; the `applyW` catch-all never fires because every real
-`wentryM` has width `1`, `4`, or `8`. -/
+`wentryM` has width `1`, `2`, `4`, or `8`. -/
 theorem applyW_getElem_disjoint (m : Std.ExtHashMap Nat (BitVec 8)) (e : WEntry)
-    (k : Nat) (hw : e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8)
+    (k : Nat) (hw : e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8)
     (hdisj : k < e.1 ∨ e.1 + e.2.1 ≤ k) : (applyW m e)[k]? = m[k]? := by
   obtain ⟨a, w, d⟩ := e
-  have hw' : w = 1 ∨ w = 4 ∨ w = 8 := hw
+  have hw' : w = 1 ∨ w = 2 ∨ w = 4 ∨ w = 8 := hw
   have hdisj' : k < a ∨ a + w ≤ k := hdisj
-  rcases hw' with h | h | h <;> subst h
+  rcases hw' with h | h | h | h <;> subst h
   · show (m.insert a (sbData d))[k]? = m[k]?
     exact getElem_insert_ne m k a (sbData d) (by simp only [beq_eq_false_iff_ne, ne_eq]; omega)
+  · show ((m.insert a ((shData d).extractLsb' 0 8)).insert (a + 1)
+        ((shData d).extractLsb' 8 8))[k]? = m[k]?
+    exact getElem_writeMap2_disjoint m a k (shData d) (by omega)
   · show (writeMap4 m a (swData d))[k]? = m[k]?
     exact getElem_writeMap4_disjoint m a k (swData d) (by omega)
   · show (writeMap8 m a (sdData_val d))[k]? = m[k]?
@@ -47,10 +50,10 @@ theorem applyW_getElem_disjoint (m : Std.ExtHashMap Nat (BitVec 8)) (e : WEntry)
 
 /-- The whole write-log fold misses a byte disjoint from every store window. One
 induction over the log replaces the hand proof's per-store `getElem_writeMap8_disjoint`
-peeling. Width-generic over the `{1,4,8}` a real block emits. -/
+peeling. Width-generic over the `{1,2,4,8}` a real block emits. -/
 theorem writeLog_getElem_disjoint (k : Nat) :
     ∀ (log : List WEntry) (m : Std.ExtHashMap Nat (BitVec 8)),
-      (∀ e ∈ log, e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8) →
+      (∀ e ∈ log, e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8) →
       (∀ e ∈ log, k < e.1 ∨ e.1 + e.2.1 ≤ k) →
       (writeLog m log)[k]? = m[k]? := by
   intro log
@@ -71,7 +74,7 @@ window. Feeds directly into `read64_agreeP` / `read32_agreeP` and the
 `StoreRepr`-survival premises the domain proofs discharge. -/
 theorem writeLog_agreeP_disjoint (m : Std.ExtHashMap Nat (BitVec 8))
     (log : List WEntry) (P : Nat → Prop)
-    (hw : ∀ e ∈ log, e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8)
+    (hw : ∀ e ∈ log, e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8)
     (hdisj : ∀ k, P k → ∀ e ∈ log, k < e.1 ∨ e.1 + e.2.1 ≤ k) :
     AgreeP P m (writeLog m log) :=
   fun k hk => (writeLog_getElem_disjoint k log m hw (hdisj k hk)).symm

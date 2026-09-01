@@ -1,0 +1,9 @@
+batch	fields	template_pointers	gating
+B1-leaves	hInt,hNull,hBool,hStr	LeafWiden/GeomFrom; EvalSimCommon leaf machinery; WidenMeta	ready
+B2-unary-logic	hNeg,hNot,hOrTrue,hAndFalse,hOrFalse,hAndTrue	EvalRecCommon/blockB_unary; logical short-circuit geometry; EvalLogical*	ready
+B3-intcells	hIAdd,hISub,hIMul,hIDiv,hIMod,hILt,hILe,hIGt,hIGe	BinDispatchRow BinIntCellResid; rows/Eval{Add,Sub,Mul,Div,Mod,Lt,Le,Gt,Ge}Row; ONE template x9	gated:arm-chains
+B4-eqstr	hEq,hNe,hStrLt,hStrLe,hStrGt,hStrGe,hStrAddL,hStrAddR	value_equal_spec_full; rows/StrCmpBlockC strCmpCell_*_of; rows/EvalEqNeFront	gated:bridges-lane
+B5-execarms	hSExpr,hSRet,hSRetNull,hSVarNull,hSBrk,hSCont,hSVarInit,hSIfNone,hSWhileFalse,hSIfTrue,hSIfFalse,hSBlock,hSForStart,hSWhileBreak	Exec*Geom rows; ExecRecWiden; rows/ExecRouting; exec_varNull_row model	ready
+B6-loopseq	hFlCondFalse,hFlBodyBreak,hFlBodyRet,hFlLoop,hSeqNil,hSeqConsNormal,hSeqConsAbrupt	rows/ScaffoldRows; execSeqNil/execSeqLoop; LoopScaffoldClose	partial
+B7-callnative	hArgsNil,hArgsCons,hCallPrint,hCallPrintln,hCallAssertOk,hCall,hFn,hCallClosure	rows/CallRows; rows/CallClosureSplice; rows/NativeBodyPrint; FnSummary io splices	gated:io-lane+crux
+B8-bespoke	hVar,hAssign,hInitStore,hEpilogueSpill,hDivOv,hDivCorr	per-field (hErrFam/ErrWork = coordinator, RUN 2) (no shared template) — STRONG MODEL ONLY	bespoke

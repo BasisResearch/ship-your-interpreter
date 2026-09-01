@@ -72,10 +72,10 @@ theorem winsInSA_append {SL : StackLayout} {sp : Nat} {A : Arena}
 
 /-! ## Reflected logs only contain 1/4/8-byte stores -/
 
-/-- Every entry of a reflected body log has width 1, 4, or 8 (the store kinds
-`sb`/`sw`/`sd` are the only log producers). -/
+/-- Every entry of a reflected body log has width 1, 2, 4, or 8 (the store kinds
+`sb`/`sh`/`sw`/`sd` are the only log producers). -/
 theorem wlogM_width : ∀ (is : List MInstr) (L : GRegs) (lds : List (List (BitVec 8)))
-    (e : WEntry), e ∈ wlogM is L lds → e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8 := by
+    (e : WEntry), e ∈ wlogM is L lds → e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8 := by
   intro is
   induction is with
   | nil => intro L lds e he; exact by simp [wlogM] at he
@@ -86,38 +86,54 @@ theorem wlogM_width : ∀ (is : List MInstr) (L : GRegs) (lds : List (List (BitV
     cases akind with
     | sw =>
         rcases List.mem_cons.mp he with heq | hetail
-        · subst heq; exact Or.inr (Or.inl rfl)
+        · subst heq; exact Or.inr (Or.inr (Or.inl rfl))
         · exact ih _ _ _ hetail
     | sd =>
         rcases List.mem_cons.mp he with heq | hetail
-        · subst heq; exact Or.inr (Or.inr rfl)
+        · subst heq; exact Or.inr (Or.inr (Or.inr rfl))
         · exact ih _ _ _ hetail
     | sb =>
         rcases List.mem_cons.mp he with heq | hetail
         · subst heq; exact Or.inl rfl
         · exact ih _ _ _ hetail
+    | sh =>
+        rcases List.mem_cons.mp he with heq | hetail
+        · subst heq; exact Or.inr (Or.inl rfl)
+        · exact ih _ _ _ hetail
     | addi => exact ih _ _ _ he
     | add => exact ih _ _ _ he
     | sub => exact ih _ _ _ he
+    | or => exact ih _ _ _ he
+    | and => exact ih _ _ _ he
+    | srl => exact ih _ _ _ he
     | lw => exact ih _ _ _ he
     | lwu => exact ih _ _ _ he
     | ld => exact ih _ _ _ he
     | lbu => exact ih _ _ _ he
+    | lh => exact ih _ _ _ he
+    | lhu => exact ih _ _ _ he
     | addiw => exact ih _ _ _ he
     | slli => exact ih _ _ _ he
     | srli => exact ih _ _ _ he
+    | srai => exact ih _ _ _ he
     | slti => exact ih _ _ _ he
     | slt => exact ih _ _ _ he
     | subw => exact ih _ _ _ he
+    | addw => exact ih _ _ _ he
     | auipc => exact ih _ _ _ he
+    | lui => exact ih _ _ _ he
     | xori => exact ih _ _ _ he
+    | andi => exact ih _ _ _ he
+    | ori => exact ih _ _ _ he
     | slliw => exact ih _ _ _ he
+    | srliw => exact ih _ _ _ he
+    | sraiw => exact ih _ _ _ he
 
 /-- The computed log of a whole chain only contains 1/4/8-byte stores (the
 entry state's log must already satisfy it; `init` has `log := []`). -/
 theorem evalBlocks_log_width : ∀ (bs : List BBlock) (s : SegEvalState),
-    (∀ e ∈ s.log, e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8) →
-    ∀ e ∈ (evalBlocks bs s).log, e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8 := by
+    (∀ e ∈ s.log, e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8) →
+    ∀ e ∈ (evalBlocks bs s).log, e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8 := by
   intro bs
   induction bs with
   | nil => intro s hlog e he; exact hlog e he
@@ -132,7 +148,7 @@ theorem evalBlocks_log_width : ∀ (bs : List BBlock) (s : SegEvalState),
 theorem evalBlocks_init_log_width (bs : List BBlock) (L : GRegs)
     (lds : List (List (BitVec 8))) (e : WEntry)
     (he : e ∈ (evalBlocks bs (SegEvalState.init L lds)).log) :
-    e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8 :=
+    e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8 :=
   evalBlocks_log_width bs (SegEvalState.init L lds)
     (fun _ he' => by simp [SegEvalState.init] at he') e he
 
@@ -144,7 +160,7 @@ derived from `BlockAdapter.writeLog_getElem_disjoint` (one use, no
 `ExtHashMap` reduction). -/
 theorem mem_agree_of_winsInSA {SL : StackLayout} {sp : Nat} {A : Arena}
     {m : Std.ExtHashMap Nat (BitVec 8)} {log : List WEntry}
-    (hw : ∀ e ∈ log, e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8)
+    (hw : ∀ e ∈ log, e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8)
     (hwin : WinsInSA SL sp A log) :
     ∀ a, ¬ (SL.lo ≤ a ∧ a < sp) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       (writeLog m log)[a]? = m[a]? := by

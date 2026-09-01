@@ -58,10 +58,11 @@ set_option maxRecDepth 4000
 exactly the value written, `wvalM a L bs`.  The one-instruction base case of the
 readback: no fold, one match reduction on the concrete `a.kind`. -/
 theorem lookupG_stepGM_writer (a : MInstr) (L : GRegs) (bs : List (BitVec 8))
-    (hstore : a.kind ≠ .sw ∧ a.kind ≠ .sd ∧ a.kind ≠ .sb) (n : Nat) (hrd : a.rd = n) :
+    (hstore : a.kind ≠ .sw ∧ a.kind ≠ .sd ∧ a.kind ≠ .sb ∧ a.kind ≠ .sh) (n : Nat)
+    (hrd : a.rd = n) :
     lookupG n (stepGM a L bs) = some (wvalM a L bs) := by
   unfold stepGM
-  obtain ⟨h1, h2, h3⟩ := hstore
+  obtain ⟨h1, h2, h3, h4⟩ := hstore
   cases hk : a.kind <;> first
     | (exact absurd hk (by assumption))
     | (subst hrd; rw [lookupG, if_pos rfl])
@@ -81,7 +82,8 @@ reduces `lookupG n (runGM body L lds)` to `some (srcVal k (runGM body L lds) + s
 which `srcVal_runGM_ne` then collapses to `some (srcVal k L)` = the pre-load source. -/
 theorem lookupG_runGM_snoc (pre : List MInstr) (a : MInstr) (L : GRegs)
     (lds : List (List (BitVec 8)))
-    (hstore : a.kind ≠ .sw ∧ a.kind ≠ .sd ∧ a.kind ≠ .sb) (n : Nat) (hrd : a.rd = n) :
+    (hstore : a.kind ≠ .sw ∧ a.kind ≠ .sd ∧ a.kind ≠ .sb ∧ a.kind ≠ .sh) (n : Nat)
+    (hrd : a.rd = n) :
     lookupG n (runGM (pre ++ [a]) L lds)
       = some (wvalM a (runGM pre L lds) ((ldsRunM pre lds).headD [])) := by
   induction pre generalizing L lds with

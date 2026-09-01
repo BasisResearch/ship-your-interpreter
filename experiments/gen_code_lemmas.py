@@ -72,12 +72,15 @@ def emit(name, insts):
              f"def {F}Loaded (mem : ExtHashMap Nat (BitVec 8)) : Prop :=\n  {top}\n")
 
     # chunk projections out of the top-level conjunction
+    ALLOW = ("  -- discipline: allow(R6-anon-projection-tower) generated "
+             "code-pin projections (bounded, chunked)\n")
     for ci in range(len(chunks)):
         proj = "h" if len(chunks) == 1 else (
             "h." + ".".join(["2"] * ci + (["1"] if ci < len(chunks) - 1 else [])))
         proj = proj.rstrip(".")
+        allow = ALLOW if ci >= 3 else ""
         L.append(f"theorem {f}_chunk{ci} {{mem : ExtHashMap Nat (BitVec 8)}}\n"
-                 f"    (h : {F}Loaded mem) : {f}Chunk{ci} mem := {proj}\n")
+                 f"    (h : {F}Loaded mem) : {f}Chunk{ci} mem :=\n{allow}  {proj}\n")
 
     # per-site lemmas project 4 consecutive byte facts out of the chunk
     for ci, ch in enumerate(chunks):
@@ -94,9 +97,10 @@ def emit(name, insts):
                 return "hc" + "".join(".2" for _ in range(i)) + ".1"
 
             parts = ", ".join(proj(k) for k in range(4))
+            allow = ALLOW if ii >= 1 else ""
             L.append(f"theorem {f}_at_{addr:x} {{mem : ExtHashMap Nat (BitVec 8)}}\n"
                      f"    (h : {F}Loaded mem) :\n      {concl} :=\n"
-                     f"  have hc := {f}_chunk{ci} h\n  ⟨{parts}⟩\n")
+                     f"  have hc := {f}_chunk{ci} h\n{allow}  ⟨{parts}⟩\n")
 
     L.append("end Vsa.Sim.Code\n")
     out = pathlib.Path(f"Vsa/Sim/Code/{F}.lean")

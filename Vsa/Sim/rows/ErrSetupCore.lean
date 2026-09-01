@@ -81,6 +81,7 @@ theorem lookupG_stepGM_ne (a : MInstr) (L : GRegs) (bs : List (BitVec 8)) (n : N
   · rfl
   · rfl
   · rfl
+  · rfl
   · show lookupG n ((a.rd, wvalM a L bs) :: eraseG a.rd L) = lookupG n L
     rw [lookupG, if_neg (by omega), lookupG_eraseG_ne n a.rd (by omega) L]
 
@@ -102,7 +103,8 @@ back the writer's `wvalM` over the peeled-source pin state, peeling `post` with
 `lookupG_runGM_ne` and `pre` with the source lemmas at the use site. -/
 theorem lookupG_runGM_mid (pre : List MInstr) (a : MInstr) (post : List MInstr)
     (L : GRegs) (lds : List (List (BitVec 8)))
-    (hstore : a.kind ≠ .sw ∧ a.kind ≠ .sd ∧ a.kind ≠ .sb) (n : Nat) (hrd : a.rd = n)
+    (hstore : a.kind ≠ .sw ∧ a.kind ≠ .sd ∧ a.kind ≠ .sb ∧ a.kind ≠ .sh) (n : Nat)
+    (hrd : a.rd = n)
     (hpost : ∀ b ∈ post, b.rd ≠ n) :
     lookupG n (runGM (pre ++ a :: post) L lds)
       = some (wvalM a (runGM pre L lds) ((ldsRunM pre lds).headD [])) := by

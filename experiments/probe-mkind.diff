@@ -1,0 +1,540 @@
+diff --git a/Vsa/Sim/BlockDecode.lean b/Vsa/Sim/BlockDecode.lean
+index 31ab049..3efdf5f 100644
+--- a/Vsa/Sim/BlockDecode.lean
++++ b/Vsa/Sim/BlockDecode.lean
+@@ -53,6 +53,7 @@ def decodeM (w : BitVec 32) : Option (MKind × Nat × Nat × Nat × BitVec 12) :
+      else if funct3 = 1 then some (.slli, rd, rs1, 0, immI)
+      else if funct3 = 5 then some (.srli, rd, rs1, 0, immI)
+      else if funct3 = 4 then some (.xori, rd, rs1, 0, immI)
++     else if funct3 = 7 then some (.andi, rd, rs1, 0, immI)
+      else none)
+   else if opcode = 0x33 then
+     -- OP: add / sub (funct3 = 0, funct7 selects); slt (funct3 = 2)
+@@ -61,12 +62,14 @@ def decodeM (w : BitVec 32) : Option (MKind × Nat × Nat × Nat × BitVec 12) :
+        else if funct7 = 0x20 then some (.sub, rd, rs1, rs2, 0#12)
+        else none)
+      else if funct3 = 2 then some (.slt, rd, rs1, rs2, 0#12)
++     else if funct3 = 6 then (if funct7 = 0x00 then some (.or, rd, rs1, rs2, 0#12) else none)
+      else none)
+   else if opcode = 0x03 then
+     -- LOAD: lw (2) / ld (3) / lbu (4) / lwu (6, unsigned word); rs2 unused
+     (if funct3 = 2 then some (.lw, rd, rs1, 0, immI)
+      else if funct3 = 3 then some (.ld, rd, rs1, 0, immI)
+      else if funct3 = 4 then some (.lbu, rd, rs1, 0, immI)
++     else if funct3 = 1 then some (.lh, rd, rs1, 0, immI)
+      else if funct3 = 6 then some (.lwu, rd, rs1, 0, immI)
+      else none)
+   else if opcode = 0x23 then
+diff --git a/Vsa/Sim/BlockMem.lean b/Vsa/Sim/BlockMem.lean
+index 61c68f7..1977cfa 100644
+--- a/Vsa/Sim/BlockMem.lean
++++ b/Vsa/Sim/BlockMem.lean
+@@ -173,6 +173,47 @@ theorem exec_lbu_bm (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : r
+   exact execute_load_unsigned_char off rs1 rd 1 (b0 : BitVec (8 * 1))
+     (afterNextPC (afterPrelude σ) pc) σ' (by decide) hread hwr
+ 
++theorem exec_lh_bm (σ : MState) (pc : BitVec 64) (off : BitVec 12) (rs1 rd : regidx)
++    (σ' : MState) (vbase : BitVec 64) (b0 b1 : BitVec 8)
++    (hG : GoodState σ)
++    (hrs1 : (rX_bits rs1).run (afterNextPC (afterPrelude σ) pc)
++      = .ok vbase (afterNextPC (afterPrelude σ) pc))
++    (hwr : (wX_bits rd (sign_extend (m := 64) (b1.append b0 : BitVec (8 * 2)))).run
++        (afterNextPC (afterPrelude σ) pc) = .ok () σ')
++    (hlo : 0x80000000 ≤ (vbase + sign_extend (m := 64) off).toNat)
++    (hhiram : (vbase + sign_extend (m := 64) off).toNat + 2 ≤ 0x100000000)
++    (hhtif : (vbase + sign_extend (m := 64) off).toNat + 2 ≤ tohostAddr
++      ∨ tohostAddr + 8 ≤ (vbase + sign_extend (m := 64) off).toNat)
++    (halign : (vbase + sign_extend (m := 64) off).toNat % 2 = 0)
++    (h0 : σ.mem[(vbase + sign_extend (m := 64) off).toNat]? = some b0)
++    (h1 : σ.mem[(vbase + sign_extend (m := 64) off).toNat + 1]? = some b1) :
++    (execute (instruction.LOAD (off, rs1, rd, false, 2))).run (afterNextPC (afterPrelude σ) pc)
++      = .ok RETIRE_SUCCESS σ' := by
++  have hpriv : (afterNextPC (afterPrelude σ) pc).regs.get? Register.cur_privilege
++      = some (Privilege.Machine : RegisterType Register.cur_privilege) := by
++    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.cur_privilege
++  have hmstatus : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mstatus = some initMstatus := by
++    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mstatus
++  have hseccfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.mseccfg = some (0#64) := by
++    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.mseccfg
++  have hpma : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pma_regions
++      = some (initPmaRegions : RegisterType Register.pma_regions) := by
++    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pma_regions
++  have hcfg : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpcfg_n
++      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n) := by
++    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpcfg_n
++  have haddr : (afterNextPC (afterPrelude σ) pc).regs.get? Register.pmpaddr_n = some initPmpaddr := by
++    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.pmpaddr_n
++  have hbase' : (afterNextPC (afterPrelude σ) pc).regs.get? Register.htif_tohost_base
++      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base) := by
++    rw [get?_afterNextPC σ pc _ (by decide) (by decide)]; exact hG.htif_tohost_base
++  have hread := vmem_read_data_two (afterNextPC (afterPrelude σ) pc) rs1
++    (sign_extend (m := 64) off) vbase b0 b1 initMstatus initPmpaddr
++    hpriv hmstatus (by decide) hseccfg hpma hcfg haddr hbase' hrs1 hlo hhiram hhtif halign
++    (by rw [mem_afterNextPC]; exact h0) (by rw [mem_afterNextPC]; exact h1)
++  exact execute_load_signed_char off rs1 rd 2 (b1.append b0 : BitVec (8 * 2))
++    (afterNextPC (afterPrelude σ) pc) σ' (by decide) hread hwr
++
+ /-- Generic width-1 `sb rs2,off(rs1)` execute characterization: stores the low
+ byte of `rs2` at `vbase + sext off`; post memory is the single insert.  No
+ alignment side condition at width 1. -/
+@@ -394,10 +435,12 @@ inductive MKind where
+   | addi : MKind
+   | add  : MKind
+   | sub  : MKind
++  | or   : MKind
+   | lw   : MKind
+   | lwu  : MKind
+   | ld   : MKind
+   | lbu  : MKind
++  | lh   : MKind
+   | sw   : MKind
+   | sd   : MKind
+   | sb   : MKind
+@@ -409,6 +452,7 @@ inductive MKind where
+   | subw  : MKind
+   | auipc : MKind
+   | xori  : MKind
++  | andi  : MKind
+   | slliw : MKind
+ deriving DecidableEq
+ 
+@@ -454,10 +498,12 @@ def astOfM (a : MInstr) : instruction :=
+   | .addi => instruction.ITYPE (a.imm, gprIdx a.rs1, gprIdx a.rd, iop.ADDI)
+   | .add  => instruction.RTYPE (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, rop.ADD)
+   | .sub  => instruction.RTYPE (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, rop.SUB)
++  | .or   => instruction.RTYPE (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, rop.OR)
+   | .lw   => instruction.LOAD (a.imm, gprIdx a.rs1, gprIdx a.rd, false, 4)
+   | .lwu  => instruction.LOAD (a.imm, gprIdx a.rs1, gprIdx a.rd, true, 4)
+   | .ld   => instruction.LOAD (a.imm, gprIdx a.rs1, gprIdx a.rd, false, 8)
+   | .lbu  => instruction.LOAD (a.imm, gprIdx a.rs1, gprIdx a.rd, true, 1)
++  | .lh   => instruction.LOAD (a.imm, gprIdx a.rs1, gprIdx a.rd, false, 2)
+   | .sw   => instruction.STORE (a.imm, gprIdx a.rs2, gprIdx a.rs1, 4)
+   | .sd   => instruction.STORE (a.imm, gprIdx a.rs2, gprIdx a.rs1, 8)
+   | .sb   => instruction.STORE (a.imm, gprIdx a.rs2, gprIdx a.rs1, 1)
+@@ -469,6 +515,7 @@ def astOfM (a : MInstr) : instruction :=
+   | .subw  => instruction.RTYPEW (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, ropw.SUBW)
+   | .auipc => instruction.UTYPE (imm20Of a, gprIdx a.rd, uop.AUIPC)
+   | .xori  => instruction.ITYPE (a.imm, gprIdx a.rs1, gprIdx a.rd, iop.XORI)
++  | .andi  => instruction.ITYPE (a.imm, gprIdx a.rs1, gprIdx a.rd, iop.ANDI)
+   | .slliw => instruction.SHIFTIWOP (shamt5Of a, gprIdx a.rs1, gprIdx a.rd, sopw.SLLIW)
+ 
+ /-- Effective address of a load/store: base pin + concrete offset. -/
+@@ -480,6 +527,7 @@ def widthOfM : MKind → Nat
+   | .lw | .lwu | .sw => 4
+   | .ld | .sd => 8
+   | .lbu | .sb => 1
++  | .lh => 2
+   | _ => 0
+ 
+ /-- The value a load writes, from its supplied byte list (LE).  Phrased over
+@@ -498,6 +546,7 @@ def bytesVal (k : MKind) (bs : List (BitVec 8)) : BitVec 64 :=
+         (bs.getD 4 0#8)).append (bs.getD 3 0#8)).append (bs.getD 2 0#8)).append
+         (bs.getD 1 0#8)).append (bs.getD 0 0#8)) : BitVec (8 * 8))
+   | .lbu => zero_extend (m := 64) ((bs.getD 0 0#8) : BitVec (8 * 1))
++  | .lh => sign_extend (m := 64) ((((bs.getD 1 0#8).append (bs.getD 0 0#8))) : BitVec (8 * 2))
+   | _ => 0#64
+ 
+ /-- The value written to `rd` (ALU result or loaded value); unused for stores. -/
+@@ -506,6 +555,7 @@ def wvalM (a : MInstr) (L : GRegs) (bs : List (BitVec 8)) : BitVec 64 :=
+   | .addi => srcVal a.rs1 L + sign_extend (m := 64) a.imm
+   | .add  => srcVal a.rs1 L + srcVal a.rs2 L
+   | .sub  => srcVal a.rs1 L - srcVal a.rs2 L
++  | .or   => srcVal a.rs1 L ||| srcVal a.rs2 L
+   | .addiw => sign_extend (m := 64)
+       (Sail.BitVec.extractLsb (srcVal a.rs1 L + sign_extend (m := 64) a.imm) 31 0)
+   | .slli => shift_bits_left (srcVal a.rs1 L) (Sail.BitVec.extractLsb (shamtOf a) 5 0)
+@@ -518,6 +568,7 @@ def wvalM (a : MInstr) (L : GRegs) (bs : List (BitVec 8)) : BitVec 64 :=
+         - Sail.BitVec.extractLsb (srcVal a.rs2 L) 31 0)
+   | .auipc => a.pc + sign_extend (m := 64) (imm20Of a +++ (0x000#12))
+   | .xori => srcVal a.rs1 L ^^^ sign_extend (m := 64) a.imm
++  | .andi => srcVal a.rs1 L &&& sign_extend (m := 64) a.imm
+   | .slliw => sign_extend (m := 64)
+       (shift_bits_left (Sail.BitVec.extractLsb (srcVal a.rs1 L) 31 0) (shamt5Of a))
+   | k => bytesVal k bs
+@@ -531,7 +582,7 @@ def stepGM (a : MInstr) (L : GRegs) (bs : List (BitVec 8)) : GRegs :=
+ /-- Load-data consumption: loads pop one byte-list, everything else none. -/
+ def stepLdsM (k : MKind) (lds : List (List (BitVec 8))) : List (List (BitVec 8)) :=
+   match k with
+-  | .lw | .lwu | .ld | .lbu => lds.tail
++  | .lw | .lwu | .ld | .lbu | .lh => lds.tail
+   | _ => lds
+ 
+ /-- The write-log entry of a store. -/
+@@ -608,8 +659,8 @@ mention symbolic values. -/
+ def MemFacts (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (bs : List (BitVec 8))
+     (a : MInstr) : Prop :=
+   match a.kind with
+-  | .addi | .add | .sub => True
+-  | .addiw | .slli | .srli | .slti | .slt | .subw | .auipc | .xori | .slliw => True
++  | .addi | .add | .sub | .or => True
++  | .addiw | .slli | .srli | .slti | .slt | .subw | .auipc | .xori | .andi | .slliw => True
+   | .lw =>
+     (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 4 ≤ 0x100000000 ∧
+      ((eaddrM a L).toNat + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat) ∧
+@@ -629,6 +680,12 @@ def MemFacts (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (bs : List (BitVec
+     (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 1 ≤ 0x100000000 ∧
+      ((eaddrM a L).toNat + 1 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat)) ∧
+     m[(eaddrM a L).toNat]? = some (bs.getD 0 0#8)
++  | .lh =>
++    (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 2 ≤ 0x100000000 ∧
++     ((eaddrM a L).toNat + 2 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat) ∧
++     (eaddrM a L).toNat % 2 = 0) ∧
++    m[(eaddrM a L).toNat]? = some (bs.getD 0 0#8) ∧
++    m[(eaddrM a L).toNat + 1]? = some (bs.getD 1 0#8)
+   | .sw =>
+     0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 4 ≤ 0x100000000 ∧
+     tohostAddr + 16 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat % 4 = 0
+@@ -656,13 +713,15 @@ def KindOK (dom : List Nat) (k : MKind) (rd rs1 rs2 : Nat) : Prop :=
+   | .addi => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
+   | .add  => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom ∧ SrcOK rs2 dom
+   | .sub  => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom ∧ SrcOK rs2 dom
+-  | .lw | .lwu | .ld | .lbu => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
++  | .or   => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom ∧ SrcOK rs2 dom
++  | .lw | .lwu | .ld | .lbu | .lh => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
+   | .sw | .sd | .sb  => SrcOK rs1 dom ∧ SrcOK rs2 dom
+   | .addiw | .slti => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
+   | .slli | .srli => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
+   | .slt | .subw  => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom ∧ SrcOK rs2 dom
+   | .auipc => (1 ≤ rd ∧ rd ≤ 31)
+   | .xori => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
++  | .andi => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
+   | .slliw => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
+ 
+ instance instDecKindOK (dom : List Nat) (k : MKind) (rd rs1 rs2 : Nat) :
+@@ -671,10 +730,12 @@ instance instDecKindOK (dom : List Nat) (k : MKind) (rd rs1 rs2 : Nat) :
+   | .addi => inferInstanceAs (Decidable (_ ∧ _))
+   | .add  => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+   | .sub  => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
++  | .or   => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+   | .lw   => inferInstanceAs (Decidable (_ ∧ _))
+   | .lwu  => inferInstanceAs (Decidable (_ ∧ _))
+   | .ld   => inferInstanceAs (Decidable (_ ∧ _))
+   | .lbu  => inferInstanceAs (Decidable (_ ∧ _))
++  | .lh   => inferInstanceAs (Decidable (_ ∧ _))
+   | .sw   => inferInstanceAs (Decidable (_ ∧ _))
+   | .sd   => inferInstanceAs (Decidable (_ ∧ _))
+   | .sb   => inferInstanceAs (Decidable (_ ∧ _))
+@@ -686,6 +747,7 @@ instance instDecKindOK (dom : List Nat) (k : MKind) (rd rs1 rs2 : Nat) :
+   | .subw  => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+   | .auipc => inferInstanceAs (Decidable (_ ∧ _))
+   | .xori  => inferInstanceAs (Decidable (_ ∧ _))
++  | .andi  => inferInstanceAs (Decidable (_ ∧ _))
+   | .slliw => inferInstanceAs (Decidable (_ ∧ _))
+ 
+ /-- The computable per-instruction VC (structure only — symbolic pin/load/store
+@@ -939,6 +1001,57 @@ theorem block_mem_run (is : List MInstr) :
+       · intro R hn hrds
+         exact (hframef R hn (fun a' ha' => hrds a' (List.mem_cons_of_mem _ ha'))).trans
+           (frame_step_alu hobs1 R hn (hrds _ (List.mem_cons_self ..)))
++    | or =>
++      obtain ⟨⟨hrd1, hrd31⟩, hs1ok, hs2ok⟩ :=
++        (hkok : KindOK dom .or ard ars1 ars2)
++      have hrd31' : ard ≤ 31 := hrd31
++      have hrdf := gpr_rd_ok ard (Nat.lt_succ_of_le hrd31') hrd1
++      have hsp1 : srcPin σ ars1 (srcVal ars1 L) :=
++        srcPin_srcVal σ L ars1 (hs1ok.2.imp (fun h => h) (hdom ars1)) hL
++      have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
++      have hsp2 : srcPin σ ars2 (srcVal ars2 L) :=
++        srcPin_srcVal σ L ars2 (hs2ok.2.imp (fun h => h) (hdom ars2)) hL
++      have hrx2 := rX_src σ apc ars2 hs2ok.1 (srcVal ars2 L) hsp2
++      have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
++        (srcVal ars1 L ||| srcVal ars2 L) ard hrd1 hrd31
++      have hexec := execute_rtype_or_char (gprIdx ars2) (gprIdx ars1) (gprIdx ard)
++        (srcVal ars1 L) (srcVal ars2 L)
++        (afterNextPC (afterPrelude σ) apc)
++        (sigma3_alu σ apc (gprReg ard) (gprRT ard (srcVal ars1 L ||| srcVal ars2 L)))
++        hrx1 hrx2 hwx
++      obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
++        stepObs_alu σ i u apc vm aword
++          (instruction.RTYPE (gprIdx ars2, gprIdx ars1, gprIdx ard, rop.OR))
++          (gprReg ard) (gprRT ard (srcVal ars1 L ||| srcVal ars2 L))
++          ab0 ab1 ab2 ab3 hG hpc hmi hword hnotrvc hdec' hexec
++          hrdf.1 hrdf.2.1 hrdf.2.2.1 hrdf.2.2.2.1 hrdf.2.2.2.2
++          hb0 hb1 hb2 hb3 hlo hhi halign hi
++      have hpc1 := obs_alu_pc hobs1
++      obtain ⟨vm1, hmi1⟩ := obs_alu_minstret hobs1
++      have hout1 : σ1.sailOutput = σ.sailOutput := hobs1.2
++      have hL1 : GHolds σ1
++          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .or, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
++        ⟨obs_gpr_rd ard hrd1 hrd31 (srcVal ars1 L ||| srcVal ars2 L) hobs1,
++         gholds_eraseG hobs1 hrd1 hrd31 L hkeys hL⟩
++      have hkeys1 : KeysOK (keysG
++          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .or, ard, ars1, ars2, aimm⟩ L (lds.headD []))) :=
++        keysOK_cons_erase hrd1 hrd31 L hkeys
++      have hdom1 : ∀ n ∈ (ard :: dom), n ∈ keysG
++          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .or, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
++        dom_cons_erase hdom
++      obtain ⟨σf, i', hsteps, hi', hGf, hmemf, houtf, hpcf, hmif, hGHf, hframef⟩ :=
++        ih σ1 i1 (u + 1) (BitVec.addInt apc 4) vm1
++          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .or, ard, ars1, ars2, aimm⟩ L (lds.headD []))
++          (stepLdsM .or lds) mc σ.mem (ard :: dom)
++          hG1 hpc1 hmi1 hmem1 hlow hL1 hkeys1 hdom1 hfr hwfr hi1
++      refine ⟨σf, i', ?_, hi', hGf, hmemf, houtf.trans hout1, hpcf, hmif, hGHf, ?_⟩
++      · have hsteps' : Steps ⟨σ, i, u⟩ ⟨σf, i', u + 1 + r.length⟩ := Steps.head hs1 hsteps
++        have e : u + 1 + r.length = u + (r.length + 1) := by omega
++        rw [e] at hsteps'
++        exact hsteps'
++      · intro R hn hrds
++        exact (hframef R hn (fun a' ha' => hrds a' (List.mem_cons_of_mem _ ha'))).trans
++          (frame_step_alu hobs1 R hn (hrds _ (List.mem_cons_self ..)))
+     | lw =>
+       obtain ⟨⟨hrd1, hrd31⟩, hs1ok⟩ :=
+         (hkok : KindOK dom .lw ard ars1 ars2)
+@@ -1139,6 +1252,54 @@ theorem block_mem_run (is : List MInstr) :
+       · intro R hn hrds
+         exact (hframef R hn (fun a' ha' => hrds a' (List.mem_cons_of_mem _ ha'))).trans
+           (frame_step_alu hobs1 R hn (hrds _ (List.mem_cons_self ..)))
++    | lh =>
++      obtain ⟨⟨hrd1, hrd31⟩, hs1ok⟩ :=
++        (hkok : KindOK dom .lh ard ars1 ars2)
++      obtain ⟨⟨halo, hahiram, hahtif, haalign2⟩, hp0, hp1⟩ := hextra
++      have hrd31' : ard ≤ 31 := hrd31
++      have hrdf := gpr_rd_ok ard (Nat.lt_succ_of_le hrd31') hrd1
++      have hsp1 : srcPin σ ars1 (srcVal ars1 L) :=
++        srcPin_srcVal σ L ars1 (hs1ok.2.imp (fun h => h) (hdom ars1)) hL
++      have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
++      have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
++        (bytesVal .lh (lds.headD [])) ard hrd1 hrd31
++      have hexec := exec_lh_bm σ apc aimm (gprIdx ars1) (gprIdx ard)
++        (sigma3_alu σ apc (gprReg ard) (gprRT ard (bytesVal .lh (lds.headD []))))
++        (srcVal ars1 L) ((lds.headD []).getD 0 0#8) ((lds.headD []).getD 1 0#8)
++        hG hrx1 hwx halo hahiram hahtif haalign2 hp0 hp1
++      obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
++        stepObs_alu σ i u apc vm aword
++          (instruction.LOAD (aimm, gprIdx ars1, gprIdx ard, false, 2))
++          (gprReg ard) (gprRT ard (bytesVal .lh (lds.headD [])))
++          ab0 ab1 ab2 ab3 hG hpc hmi hword hnotrvc hdec' hexec
++          hrdf.1 hrdf.2.1 hrdf.2.2.1 hrdf.2.2.2.1 hrdf.2.2.2.2
++          hb0 hb1 hb2 hb3 hlo hhi halign hi
++      have hpc1 := obs_alu_pc hobs1
++      obtain ⟨vm1, hmi1⟩ := obs_alu_minstret hobs1
++      have hout1 : σ1.sailOutput = σ.sailOutput := hobs1.2
++      have hL1 : GHolds σ1
++          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .lh, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
++        ⟨obs_gpr_rd ard hrd1 hrd31 (bytesVal .lh (lds.headD [])) hobs1,
++         gholds_eraseG hobs1 hrd1 hrd31 L hkeys hL⟩
++      have hkeys1 : KeysOK (keysG
++          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .lh, ard, ars1, ars2, aimm⟩ L (lds.headD []))) :=
++        keysOK_cons_erase hrd1 hrd31 L hkeys
++      have hdom1 : ∀ n ∈ (ard :: dom), n ∈ keysG
++          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .lh, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
++        dom_cons_erase hdom
++      obtain ⟨σf, i', hsteps, hi', hGf, hmemf, houtf, hpcf, hmif, hGHf, hframef⟩ :=
++        ih σ1 i1 (u + 1) (BitVec.addInt apc 4) vm1
++          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .lh, ard, ars1, ars2, aimm⟩ L (lds.headD []))
++          (stepLdsM .lh lds) mc σ.mem (ard :: dom)
++          hG1 hpc1 hmi1 hmem1 hlow hL1 hkeys1 hdom1 hfr hwfr hi1
++      refine ⟨σf, i', ?_, hi', hGf, hmemf, houtf.trans hout1, hpcf, hmif, hGHf, ?_⟩
++      · have hsteps' : Steps ⟨σ, i, u⟩ ⟨σf, i', u + 1 + r.length⟩ := Steps.head hs1 hsteps
++        have e : u + 1 + r.length = u + (r.length + 1) := by omega
++        rw [e] at hsteps'
++        exact hsteps'
++      · intro R hn hrds
++        exact (hframef R hn (fun a' ha' => hrds a' (List.mem_cons_of_mem _ ha'))).trans
++          (frame_step_alu hobs1 R hn (hrds _ (List.mem_cons_self ..)))
+     | sw =>
+       obtain ⟨hs1ok, hs2ok⟩ := (hkok : KindOK dom .sw ard ars1 ars2)
+       obtain ⟨halo, hahiram, hahiwin, haalign⟩ := hextra
+@@ -1536,6 +1697,56 @@ theorem block_mem_run (is : List MInstr) :
+       · intro R hn hrds
+         exact (hframef R hn (fun a' ha' => hrds a' (List.mem_cons_of_mem _ ha'))).trans
+           (frame_step_alu hobs1 R hn (hrds _ (List.mem_cons_self ..)))
++    | andi =>
++      obtain ⟨⟨hrd1, hrd31⟩, hs1ok⟩ :=
++        (hkok : KindOK dom .andi ard ars1 ars2)
++      have hrd31' : ard ≤ 31 := hrd31
++      have hrdf := gpr_rd_ok ard (Nat.lt_succ_of_le hrd31') hrd1
++      have hsp1 : srcPin σ ars1 (srcVal ars1 L) :=
++        srcPin_srcVal σ L ars1 (hs1ok.2.imp (fun h => h) (hdom ars1)) hL
++      have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
++      have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
++        (srcVal ars1 L &&& sign_extend (m := 64) aimm) ard hrd1 hrd31
++      have hexec := execute_itype_andi_char aimm (gprIdx ars1) (gprIdx ard) (srcVal ars1 L)
++        (afterNextPC (afterPrelude σ) apc)
++        (sigma3_alu σ apc (gprReg ard) (gprRT ard
++          (srcVal ars1 L &&& sign_extend (m := 64) aimm)))
++        hrx1 hwx
++      obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
++        stepObs_alu σ i u apc vm aword
++          (instruction.ITYPE (aimm, gprIdx ars1, gprIdx ard, iop.ANDI))
++          (gprReg ard) (gprRT ard
++            (srcVal ars1 L &&& sign_extend (m := 64) aimm))
++          ab0 ab1 ab2 ab3 hG hpc hmi hword hnotrvc hdec' hexec
++          hrdf.1 hrdf.2.1 hrdf.2.2.1 hrdf.2.2.2.1 hrdf.2.2.2.2
++          hb0 hb1 hb2 hb3 hlo hhi halign hi
++      have hpc1 := obs_alu_pc hobs1
++      obtain ⟨vm1, hmi1⟩ := obs_alu_minstret hobs1
++      have hout1 : σ1.sailOutput = σ.sailOutput := hobs1.2
++      have hL1 : GHolds σ1
++          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .andi, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
++        ⟨obs_gpr_rd ard hrd1 hrd31
++            (srcVal ars1 L &&& sign_extend (m := 64) aimm) hobs1,
++         gholds_eraseG hobs1 hrd1 hrd31 L hkeys hL⟩
++      have hkeys1 : KeysOK (keysG
++          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .andi, ard, ars1, ars2, aimm⟩ L (lds.headD []))) :=
++        keysOK_cons_erase hrd1 hrd31 L hkeys
++      have hdom1 : ∀ n ∈ (ard :: dom), n ∈ keysG
++          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .andi, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
++        dom_cons_erase hdom
++      obtain ⟨σf, i', hsteps, hi', hGf, hmemf, houtf, hpcf, hmif, hGHf, hframef⟩ :=
++        ih σ1 i1 (u + 1) (BitVec.addInt apc 4) vm1
++          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .andi, ard, ars1, ars2, aimm⟩ L (lds.headD []))
++          (stepLdsM .andi lds) mc σ.mem (ard :: dom)
++          hG1 hpc1 hmi1 hmem1 hlow hL1 hkeys1 hdom1 hfr hwfr hi1
++      refine ⟨σf, i', ?_, hi', hGf, hmemf, houtf.trans hout1, hpcf, hmif, hGHf, ?_⟩
++      · have hsteps' : Steps ⟨σ, i, u⟩ ⟨σf, i', u + 1 + r.length⟩ := Steps.head hs1 hsteps
++        have e : u + 1 + r.length = u + (r.length + 1) := by omega
++        rw [e] at hsteps'
++        exact hsteps'
++      · intro R hn hrds
++        exact (hframef R hn (fun a' ha' => hrds a' (List.mem_cons_of_mem _ ha'))).trans
++          (frame_step_alu hobs1 R hn (hrds _ (List.mem_cons_self ..)))
+     | slliw =>
+       obtain ⟨⟨hrd1, hrd31⟩, hs1ok⟩ :=
+         (hkok : KindOK dom .slliw ard ars1 ars2)
+diff --git a/Vsa/Sim/BlockTerm.lean b/Vsa/Sim/BlockTerm.lean
+index 5a73d55..b1a787c 100644
+--- a/Vsa/Sim/BlockTerm.lean
++++ b/Vsa/Sim/BlockTerm.lean
+@@ -562,10 +562,12 @@ theorem domRun_keys_bt : ∀ (is : List MInstr) (L : GRegs)
+     | addi => exact dom_cons_erase h
+     | add => exact dom_cons_erase h
+     | sub => exact dom_cons_erase h
++    | or => exact dom_cons_erase h
+     | lw => exact dom_cons_erase h
+     | lwu => exact dom_cons_erase h
+     | ld => exact dom_cons_erase h
+     | lbu => exact dom_cons_erase h
++    | lh => exact dom_cons_erase h
+     | addiw => exact dom_cons_erase h
+     | slli => exact dom_cons_erase h
+     | srli => exact dom_cons_erase h
+@@ -574,6 +576,7 @@ theorem domRun_keys_bt : ∀ (is : List MInstr) (L : GRegs)
+     | subw => exact dom_cons_erase h
+     | auipc => exact dom_cons_erase h
+     | xori => exact dom_cons_erase h
++    | andi => exact dom_cons_erase h
+     | slliw => exact dom_cons_erase h
+     | sw => exact h
+     | sd => exact h
+@@ -603,6 +606,9 @@ theorem keysOK_runGM_bt : ∀ (is : List MInstr) (pc0 : BitVec 64) (dom : List N
+     | sub =>
+       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .sub ard ars1 ars2)
+       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
++    | or =>
++      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .or ard ars1 ars2)
++      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+     | lw =>
+       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .lw ard ars1 ars2)
+       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+@@ -615,6 +621,9 @@ theorem keysOK_runGM_bt : ∀ (is : List MInstr) (pc0 : BitVec 64) (dom : List N
+     | lbu =>
+       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .lbu ard ars1 ars2)
+       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
++    | lh =>
++      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .lh ard ars1 ars2)
++      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+     | addiw =>
+       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .addiw ard ars1 ars2)
+       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+@@ -639,6 +648,9 @@ theorem keysOK_runGM_bt : ∀ (is : List MInstr) (pc0 : BitVec 64) (dom : List N
+     | xori =>
+       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .xori ard ars1 ars2)
+       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
++    | andi =>
++      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .andi ard ars1 ars2)
++      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+     | slliw =>
+       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .slliw ard ars1 ars2)
+       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+@@ -674,10 +686,12 @@ theorem writeLog_wlog_low_bt (mc : Std.ExtHashMap Nat (BitVec 8)) :
+     | addi => exact ih m _ _ hfr j hj
+     | add => exact ih m _ _ hfr j hj
+     | sub => exact ih m _ _ hfr j hj
++    | or => exact ih m _ _ hfr j hj
+     | lw => exact ih m _ _ hfr j hj
+     | lwu => exact ih m _ _ hfr j hj
+     | ld => exact ih m _ _ hfr j hj
+     | lbu => exact ih m _ _ hfr j hj
++    | lh => exact ih m _ _ hfr j hj
+     | addiw => exact ih m _ _ hfr j hj
+     | slli => exact ih m _ _ hfr j hj
+     | srli => exact ih m _ _ hfr j hj
+@@ -686,6 +700,7 @@ theorem writeLog_wlog_low_bt (mc : Std.ExtHashMap Nat (BitVec 8)) :
+     | subw => exact ih m _ _ hfr j hj
+     | auipc => exact ih m _ _ hfr j hj
+     | xori => exact ih m _ _ hfr j hj
++    | andi => exact ih m _ _ hfr j hj
+     | slliw => exact ih m _ _ hfr j hj
+     | sw =>
+       have hwin : tohostAddr + 16 ≤
+diff --git a/Vsa/Sim/LoopStep.lean b/Vsa/Sim/LoopStep.lean
+index 8f32214..2c1ba74 100644
+--- a/Vsa/Sim/LoopStep.lean
++++ b/Vsa/Sim/LoopStep.lean
+@@ -99,10 +99,12 @@ theorem wlogM_width : ∀ (is : List MInstr) (L : GRegs) (lds : List (List (BitV
+     | addi => exact ih _ _ _ he
+     | add => exact ih _ _ _ he
+     | sub => exact ih _ _ _ he
++    | or => exact ih _ _ _ he
+     | lw => exact ih _ _ _ he
+     | lwu => exact ih _ _ _ he
+     | ld => exact ih _ _ _ he
+     | lbu => exact ih _ _ _ he
++    | lh => exact ih _ _ _ he
+     | addiw => exact ih _ _ _ he
+     | slli => exact ih _ _ _ he
+     | srli => exact ih _ _ _ he
+@@ -111,6 +113,7 @@ theorem wlogM_width : ∀ (is : List MInstr) (L : GRegs) (lds : List (List (BitV
+     | subw => exact ih _ _ _ he
+     | auipc => exact ih _ _ _ he
+     | xori => exact ih _ _ _ he
++    | andi => exact ih _ _ _ he
+     | slliw => exact ih _ _ _ he
+ 
+ /-- The computed log of a whole chain only contains 1/4/8-byte stores (the
+diff --git a/experiments/observations.md b/experiments/observations.md
+index 019cc84..9e69798 100644
+--- a/experiments/observations.md
++++ b/experiments/observations.md
+@@ -3425,3 +3425,40 @@ it, still stop and report instead.
+   span segs (`SEntryC → cond-jal`, `value_truthy-nonzero → body-head`) belong to
+   the divergence/loop lane, keyed on the already-given `EvalE`/`allocFrame`
+   hypotheses spliced via callSeg/BridgeSeg.
++
++## 2026-09-01 io-contracts-buffering-falsity (gen_fn de-risk pass, main session)
++- missing: a stream-state abstraction between the IO contracts and
++  `Vsa.Machine.output`. The three wave-44 contracts in
++  `rows/ValuePrintContract.lean` (FprintfLldContract/FwriteContract/
++  FputsContract) post `Vsa.Machine.output c.σ = out0 ++ frag` at RETURN, but
++  `output` = raw `String.join σ.sailOutput.toList` and stdout is LINE-BUFFERED
++  (`_isatty`@0x80000110 is `slti a0,a0,3` → 1 for fds 0-2 → newlib `__SLBF`,
++  malloc'd buffer via `__swsetup_r`/`__smakebuf_r`): `fputs("null",stdout)`
++  returns with the bytes in the FILE buffer, NOT in sailOutput. The contracts
++  are unprovable as stated — latent falsity #10, found statically before any
++  proof consumed them.
++- workaround: NONE (stopped; statement amendment required before Lane-1 fan-out).
++- cost: if unamended, every gen_fn-derived summary for the fputs/fwrite/fprintf
++  DAG would contradict the named contracts mid-splice — a stalled-lane class
++  bug (cf. the reverted wave-45 amendment lanes).
++- proposal: `StreamRepr` named-field structure (FILE flags/buf base/pos/end read
++  off the static `_impure_ptr` reent + the pending byte string) + `conOut σ S =
++  output σ ++ S.pending`; re-state the three contracts as `conOut' = conOut ++
++  frag`; per-line flush facts from `__sfvwrite_r`'s `memchr '\n'` arm; the
++  endToEnd output claim is UNAFFECTED because `exit`@0x80004764 drains the
++  buffer (`__call_exitprocs` then `jalr a5` = reent `__cleanup` → `_fflush_r`
++  → `__swrite`) so `pending = ""` at the final state.
++
++## 2026-09-01 mkind-io-census (gen_fn de-risk pass, main session)
++- missing: 13 MKind cases the io DAG needs — census over
++  _write/_write_r/__swrite/_putc_r/_fputc_r/__sfvwrite_r/_fputs_r/_fwrite_r/
++  shims/__swsetup_r/__smakebuf_r/_fflush_r/__sflush_r/locks/__sinit/std/
++  _cleanup_r: andi×52 lh×30 sh×15 lui×14 lhu×13 ori×11 or×5 and×5 addw×4
++  srai/sraiw/srl/srliw×1. Even `_write` (the HTIF leaf) uses `or`; `__swrite`
++  uses lh/sh/lui/and/andi. Pseudo-ops covered (mv/li/sext.w/not/negw/zext.b).
++- workaround: NONE (prerequisite D0 of experiments/gen-fn-tooling-plan.md).
++- cost: without it, every io-DAG seg attempt fails at decodeM; per-site
++  StepObs hand batteries (the snprintf-era regression) would be the only path.
++- proposal: mail-merge clone of the xori/slliw/lwu precedents
++  (BlockMem constructor + decodeM branch + astOfM + width/fold rows + rfl
++  example; lh/lhu/sh = width-2 twins of exec_lbu_bm/exec_sb_bm).

@@ -70,3 +70,8 @@ exit-interior-neutral	io-callee	open	44		ExitInteriorNeutral: exit() interior 0x
 crt0-jframe	m6-layout	open	44		Crt0JFrame byte pins (no crt0/_start Code module in tree)	no
 mainerr-frame	m6-layout	open	44		MainErrFrame byte pins (dischargeable from existing MainLoaded)	yes
 snprintf-frame-contract	m6-decode	closed	44	45	SnprintfFrameContract landed (rows/SnprintfFrame, axiom-audited); SnprintfContract seg composition quarantined to experiments/wip/ErrSegSnprintf.lean.w45 (lane stalled mid-flight)	no
+goodstate-htif-tohost	spec-falsity	closed	46	46	GoodState.htif_tohost pinned init VALUE; putchar zeroes it (falsity #10, HtifStepObs); amended to ∃-form + 589-module closure regen	no
+isnonpinned-htif-tohost	cleanup	open	46		Frame.lean isNonPinned still classifies htif_tohost as pinned; move to nonpinned + flip insert_nonpinned case so goodstate_sigmaPutcharFinal collapses to the standard chain	no
+chain-facts-preceding-tactic	tooling	open	46		chain_facts silently no-ops when any tactic precedes it or h is have-bound; make cfSolve fail loudly + fix local-context sensitivity	no
+wentry-width-named-pred	cleanup	open	46		width set {1,2,4,8} amended across 9 files but still hard-coded; WEntryWidthOK named predicate would make next width one-line	no
+io-buffering-amendment	statement	open	46		fputs/fwrite/fprintf contracts post raw sailOutput but stdout is line-buffered (falsity #10b, pre-existing observation); StreamRepr amendment = plan-b item 0	no

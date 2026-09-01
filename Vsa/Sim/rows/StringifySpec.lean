@@ -57,8 +57,10 @@ intToString n` (`stringifyDisplay_int`).
 ### BOOL (kind 1) — literal "true"/"false" via `strcpy`  @0x80002fec
 ```
 80002fec  lw   a5,8(a0)                       -- a5 = the bool byte
-80002ff0  a1 = "true"@80019010                -- (default)
-80002ff8  beqz a5 -> a1 = "false"@80019008    -- if !b
+80002ff0  a1 = "false"@80019010               -- (default; survives the beqz, i.e. !b)
+80002ff8  beqz a5 -> 80003004 ; else a1 = "true"@80019008
+          -- ELF-checked 2026-09-01 (objdump -s .rodata): 19008="true", 19010="false";
+          -- an earlier revision of this comment had the two labels SWAPPED.
 80003004  addi s1,sp,16 ; mv a0,s1 ; jal strcpy@80006dc4  -- copy literal into buf
 80003010  j    80003044                       -- shared strdup tail
 ```

@@ -84,6 +84,7 @@ theorem pop_applyW (m : Std.ExtHashMap Nat (BitVec 8)) (e : WEntry)
   unfold applyW
   split
   · exact pop_insert _ _ hpop
+  · exact pop_insert _ _ (pop_insert _ _ hpop)
   · unfold writeMap4
     exact pop_insert _ _ (pop_insert _ _ (pop_insert _ _ (pop_insert _ _ hpop)))
   · unfold writeMap8
@@ -169,11 +170,11 @@ theorem frame_ld_read (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (a : MInst
     (by rw [hea]; exact popByte_spec _ _ _) (by rw [hea]; exact popByte_spec _ _ _)
     (by rw [hea]; exact popByte_spec _ _ _) (by rw [hea]; exact popByte_spec _ _ _)
 
-/-- Every write-log entry a block body emits has width `1`/`4`/`8` — a `wlogM` entry
-is a `wentryM` of a `sb`/`sw`/`sd`, whose width is `widthOfM` of that kind.  Discharges
+/-- Every write-log entry a block body emits has width `1`/`2`/`4`/`8` — a `wlogM` entry
+is a `wentryM` of a `sb`/`sh`/`sw`/`sd`, whose width is `widthOfM` of that kind.  Discharges
 `frame_ld_read_thru`'s `hw` for ANY seg, no reduction. -/
 theorem wlogM_widths : ∀ (body : List MInstr) (L : GRegs) (lds : List (List (BitVec 8)))
-    (e : WEntry), e ∈ wlogM body L lds → e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8 := by
+    (e : WEntry), e ∈ wlogM body L lds → e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8 := by
   intro body
   induction body with
   | nil => intro L lds e he; simp only [wlogM, List.not_mem_nil] at he
@@ -244,10 +245,10 @@ theorem wlogM_store_offsets :
       (base : BitVec 64) (m : Std.ExtHashMap Nat (BitVec 8)) (fb : FrameBundle m base),
       srcVal 2 L = base →
       (∀ a ∈ body, a.rd ≠ 2) →
-      (∀ a ∈ body, (a.kind = .sw ∨ a.kind = .sd ∨ a.kind = .sb) →
+      (∀ a ∈ body, (a.kind = .sw ∨ a.kind = .sd ∨ a.kind = .sb ∨ a.kind = .sh) →
         a.rs1 = 2 ∧ (sign_extend (m := 64) a.imm : BitVec 64).toNat ≤ 0x108) →
       ∀ e ∈ wlogM body L lds,
-        ∃ a, a ∈ body ∧ (a.kind = .sw ∨ a.kind = .sd ∨ a.kind = .sb) ∧
+        ∃ a, a ∈ body ∧ (a.kind = .sw ∨ a.kind = .sd ∨ a.kind = .sb ∨ a.kind = .sh) ∧
           e.1 = base.toNat + (sign_extend (m := 64) a.imm : BitVec 64).toNat := by
   intro body
   induction body with
@@ -282,9 +283,9 @@ theorem wlogM_below (body : List MInstr) (L : GRegs) (lds : List (List (BitVec 8
     (base : BitVec 64) (m : Std.ExtHashMap Nat (BitVec 8)) (fb : FrameBundle m base) (off : Nat)
     (h2 : srcVal 2 L = base)
     (hrd : ∀ a ∈ body, a.rd ≠ 2)
-    (hst : ∀ a ∈ body, (a.kind = .sw ∨ a.kind = .sd ∨ a.kind = .sb) →
+    (hst : ∀ a ∈ body, (a.kind = .sw ∨ a.kind = .sd ∨ a.kind = .sb ∨ a.kind = .sh) →
       a.rs1 = 2 ∧ (sign_extend (m := 64) a.imm : BitVec 64).toNat ≤ 0x108)
-    (hgap : ∀ a ∈ body, (a.kind = .sw ∨ a.kind = .sd ∨ a.kind = .sb) →
+    (hgap : ∀ a ∈ body, (a.kind = .sw ∨ a.kind = .sd ∨ a.kind = .sb ∨ a.kind = .sh) →
       off + 8 ≤ (sign_extend (m := 64) a.imm : BitVec 64).toNat) :
     ∀ e ∈ wlogM body L lds, base.toNat + off + 8 ≤ e.1 := by
   intro e he
@@ -316,7 +317,7 @@ theorem frame_ld_read_thru (m0 : Std.ExtHashMap Nat (BitVec 8)) (log : List WEnt
     (hsrc : srcVal a.rs1 L = base)
     (hoff : (sign_extend (m := 64) a.imm : BitVec 64).toNat + 8 ≤ 0x108)
     (hoff8 : (sign_extend (m := 64) a.imm : BitVec 64).toNat % 8 = 0)
-    (hw : ∀ e ∈ log, e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8)
+    (hw : ∀ e ∈ log, e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8)
     (hbelow : ∀ e ∈ log,
       base.toNat + (sign_extend (m := 64) a.imm : BitVec 64).toNat + 8 ≤ e.1) :
     MemFacts (writeLog m0 log) L

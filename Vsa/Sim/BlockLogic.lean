@@ -571,10 +571,10 @@ theorem neg_blocks_triple (vm v8 v2 v9 v1 : BitVec 64)
     q0 q1 q2 q3 q4 q5 q6 q7 kb0 kb1 kb2 kb3
   have hwidths : ∀ e ∈ wlogM negLoadStoreBlk.body [(2, v2), (13, K13), (9, v9)]
       [[pb0,pb1,pb2,pb3,pb4,pb5,pb6,pb7], [q0,q1,q2,q3,q4,q5,q6,q7], [kb0,kb1,kb2,kb3]],
-      e.2.1 = 1 ∨ e.2.1 = 4 ∨ e.2.1 = 8 := by
+      e.2.1 = 1 ∨ e.2.1 = 2 ∨ e.2.1 = 4 ∨ e.2.1 = 8 := by
     rw [hlog]; intro e he
     simp only [List.mem_cons, List.not_mem_nil, or_false] at he
-    rcases he with h | h | h <;> (rw [h]; right; right; rfl)
+    rcases he with h | h | h <;> (rw [h]; right; right; right; rfl)
   -- Eval_exprLoaded survives the three stores (code region disjoint from windows)
   have hcode10 : Eval_exprLoaded c10.σ.mem := by
     rw [hmem10]

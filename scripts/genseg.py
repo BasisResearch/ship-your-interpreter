@@ -26,6 +26,10 @@ Terminator kinds
                emits a `bridgeOfSeg` row (Shape D) — NOTE: the jal-seam glue
                (`jalStep_of_obs` + the callee `site_*` lemma) is region-specific
                and emitted as a NAMED residual the row consumes, not fabricated.
+               If the span writes ABI-preserved registers (reseats/frame
+               pushes), set `framed = true` + `avoid = [..]` to emit a
+               `bridgeOfSegFramed` row instead (model:
+               `Vsa/Sim/rows/ConcatStringifyRArg.lean`).
 
 Arm-description format
 ======================
@@ -62,6 +66,16 @@ ARM DESCRIPTION FORMAT (.toml)
   # for terminator = "jal": the callee entry symbol/addr + the residual name —
   callee      = "malloc"
   callee_pc   = 0x80004790
+  # for terminator = "jal" when the span WRITES ABI-preserved registers
+  # (callee-saved s0..s11, or sp/gp/tp) — deliberate reseats/frame pushes.
+  # `framed = true` switches the row to `bridgeOfSegFramed` (model:
+  # Vsa/Sim/rows/ConcatStringifyRArg.lean) with the restricted avoid-set
+  # "AbiPreserved EXCEPT the regs in `avoid`"; `avoid` lists the reg INDICES
+  # the span writes (e.g. [8] for s0, [2, 8] for sp+s0).  Every ABI-preserved
+  # write must be listed (checked against the disasm); the written values are
+  # NOT framed — they are read off the row's EXPOSED `GHolds` post bundle.
+  framed      = true
+  avoid       = [2, 8]
 
   imports     = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac"]
   doc         = "One-line summary of the span."
@@ -117,6 +131,22 @@ def norm_arm(d):
                 (lib.hexint(b["end"]), _tobool(b.get("taken", True))))
     a["callee"] = d.get("callee")
     a["callee_pc"] = lib.hexint(d["callee_pc"]) if d.get("callee_pc") else None
+    # framed jal row (bridgeOfSegFramed): the ABI-preserved regs the span writes.
+    a["framed"] = _tobool(d.get("framed", False))
+    avoid = d.get("avoid", [])
+    if isinstance(avoid, str):
+        avoid = [x.strip() for x in avoid.split(",") if x.strip()]
+    a["avoid"] = [int(str(x), 0) for x in avoid]
+    if a["framed"] and a["terminator"] != "jal":
+        raise SystemExit(
+            f"arm {a['name']}: framed = true only applies to terminator = "
+            "\"jal\" (bridgeOfSegFramed rows)")
+    bad_avoid = [r for r in a["avoid"] if r not in _ABI_PRESERVED.values()]
+    if bad_avoid:
+        raise SystemExit(
+            f"arm {a['name']}: avoid = {a['avoid']} lists non-ABI-preserved "
+            f"register index(es) {bad_avoid} (ABI-preserved = sp/gp/tp + "
+            "s0..s11 = x2/x3/x4, x8, x9, x18..x27)")
     imports = d.get("imports", [])
     if isinstance(imports, str):
         imports = [x.strip() for x in imports.split(",") if x.strip()]
@@ -191,16 +221,20 @@ def build_body(a, di, idx):
     return blocks, end_pc
 
 
-# Callee-saved ABI registers (RISC-V): s0/fp..s11.  A jal row emitted by
+# ABI-preserved registers (`Vsa.Alloc.AbiPreserved`, RISC-V): sp/gp/tp +
+# s0/fp..s11 (x2/x3/x4, x8, x9, x18..x27).  A jal row emitted by
 # `emit_jal_row` proves its frame with `(by show WrChainAvoidAbi <seg>; decide)`;
-# if the span WRITES a callee-saved register that proposition is FALSE, the
+# if the span WRITES an ABI-preserved register that proposition is FALSE, the
 # `decide` fails to elaborate, and Lean's error recovery lands `sorryAx` in the
 # row — the file LOOKS green until `#print axioms`.  (Post-mortem: the wave-34
 # concatStringifyRArg span, `mv s2,a0 ; mv s3,a0`.)  So: static-check and
 # HARD-ERROR here, pointing at the framed bridge that handles such spans.
-_CALLEE_SAVED = {"s0": 8, "fp": 8, "s1": 9, "s2": 18, "s3": 19, "s4": 20,
-                 "s5": 21, "s6": 22, "s7": 23, "s8": 24, "s9": 25,
-                 "s10": 26, "s11": 27}
+# With `framed = true` the check DOWNGRADES: every ABI-preserved write must be
+# listed in the arm's `avoid` set (the bridgeOfSegFramed avoid-set).
+_ABI_PRESERVED = {"sp": 2, "gp": 3, "tp": 4,
+                  "s0": 8, "fp": 8, "s1": 9, "s2": 18, "s3": 19, "s4": 20,
+                  "s5": 21, "s6": 22, "s7": 23, "s8": 24, "s9": 25,
+                  "s10": 26, "s11": 27}
 _NO_GPR_WRITE = {"sd", "sw", "sh", "sb", "fsd", "fsw", "beq", "bne", "blt",
                  "bge", "bltu", "bgeu", "beqz", "bnez", "blez", "bgez", "bltz",
                  "bgtz", "j", "jr", "ret", "fence", "fence.i", "ecall", "ebreak"}
@@ -208,21 +242,30 @@ _NO_GPR_WRITE = {"sd", "sw", "sh", "sb", "fsd", "fsw", "beq", "bne", "blt",
 
 def _check_abi_writes(blocks, a):
     bad = []
+    avoid = set(a["avoid"]) if a["framed"] else set()
     for blk in blocks:
         for ins in blk["body"]:
             if ins.mnem in _NO_GPR_WRITE:
                 continue
             rd = ins.ops.split(",")[0].strip() if ins.ops else ""
-            if rd in _CALLEE_SAVED:
+            if rd in _ABI_PRESERVED and _ABI_PRESERVED[rd] not in avoid:
                 bad.append(f"0x{ins.addr:08x}: {ins.mnem} {ins.ops} "
-                           f"(writes callee-saved {rd}=x{_CALLEE_SAVED[rd]})")
+                           f"(writes ABI-preserved {rd}=x{_ABI_PRESERVED[rd]})")
+    if bad and a["framed"]:
+        raise SystemExit(
+            f"arm {a['name']}: framed = true but the jal span writes "
+            f"ABI-preserved register(s) NOT listed in avoid = {a['avoid']} — "
+            "`WrChainAvoids <avoid-pred>` would be FALSE and the emitted "
+            "`decide` would land error-recovery sorryAx.  Add the reg "
+            "index(es) to `avoid`:\n  " + "\n  ".join(bad))
     if bad:
         raise SystemExit(
-            f"arm {a['name']}: the jal span writes CALLEE-SAVED register(s) — "
+            f"arm {a['name']}: the jal span writes ABI-PRESERVED register(s) — "
             "`WrChainAvoidAbi` is FALSE and the emitted `decide` would land "
-            "error-recovery sorryAx.  Use `bridgeOfSegFramed` with a restricted "
-            "avoid-set instead (model: rows/ConcatStringifyRArg.lean at "
-            "AbiExceptS2S3):\n  " + "\n  ".join(bad))
+            "error-recovery sorryAx.  Set `framed = true` + `avoid = [..]` to "
+            "emit a `bridgeOfSegFramed` row with a restricted avoid-set "
+            "(model: rows/ConcatStringifyRArg.lean at AbiExceptS2S3):\n  "
+            + "\n  ".join(bad))
 
 
 def emit_seg(E, a, blocks):
@@ -330,6 +373,134 @@ def emit_post_and_row(E, a, end_pc, keys):
     E(f"  rfl")
     E("")
     E(f"#print axioms {name}Row")
+    E("")
+
+
+# reg index → conventional ABI name (for docs; 8 reads as s0, not fp).
+_ABI_NAME = {2: "sp", 3: "gp", 4: "tp", 8: "s0", 9: "s1", 18: "s2", 19: "s3",
+             20: "s4", 21: "s5", 22: "s6", 23: "s7", 24: "s8", 25: "s9",
+             26: "s10", 27: "s11"}
+
+
+def emit_jal_row_framed(E, a, end_pc, keys):
+    """Emit the Shape-D `bridgeOfSegFramed` row for a jal-terminated span that
+    WRITES ABI-preserved registers (reseats/frame pushes; the arm lists them in
+    `avoid`).  Mirrors the hand model `rows/ConcatStringifyRArg.lean`
+    (`AbiExceptS2S3`) exactly: a restricted avoid-set predicate
+    "AbiPreserved EXCEPT the `avoid` regs" (one `def`), the same
+    `have`+`decide` idiom (`hkeys`/`hwf`/`hnoiseP`/`hAvoidP`), the
+    `Bool.and_eq_true` peel for `P → AbiPreserved`, and the
+    `obtain … := bridgeOfSegFramed …` splice.  The written ABI-preserved
+    values are NOT framed — they are read off the EXPOSED `GHolds` post
+    bundle; the frame conclusion covers every ABI-preserved register EXCEPT
+    the `avoid` set."""
+    name = a["name"]
+    seg = name + "Seg"
+    pins = a["pins"]
+    avoid = a["avoid"]
+    pnames = " ".join(n for _, n in pins)
+    Ldecl = f"{name}L {pnames}".strip()
+    Lapp = f"({Ldecl})" if pins else name + "L"
+    pbind = "".join(f" ({n} : BitVec 64)" for _, n in pins)
+    keylist = "[" + ", ".join(str(k) for k in keys) + "]"
+    calleeS = a["callee"] or "callee"
+    entryS = lib.bv64(a["entry"])
+    calleeE = lib.bv64(a["callee_pc"])
+    linkS = lib.bv64(a["span_end"] + 4)
+    P = name + "Avoid"
+    avoidDoc = ", ".join(
+        f"`{_ABI_NAME.get(r, 'x' + str(r))} = x{r}`" for r in avoid)
+    E(f"/-! ## The jal seam is Shape-D (`bridgeOfSegFramed` — the FRAMED front)")
+    E(f"")
+    E(f"The `{name}` body ends in `jal {calleeS}` (a CALL — deliberately outside "
+      f"`TKind`) and WRITES the ABI-preserved register(s) {avoidDoc} — deliberate "
+      f"reseats/frame pushes, so `WrChainAvoidAbi` is FALSE and the plain "
+      f"`bridgeOfSeg` ABI no-op fails.  The RIGHT tool is "
+      f"`BridgeSegFramed.bridgeOfSegFramed` at the restricted avoid-set `{P}` "
+      f"(ABI-preserved EXCEPT the written regs — the "
+      f"`rows/ConcatStringifyRArg.lean` `AbiExceptS2S3` idiom).  The body run + "
+      f"the restricted ABI frame are FREE; the written values are read off the "
+      f"EXPOSED `GHolds` post bundle; the ONLY region-specific input is the jal "
+      f"seam's `JalStep`, threaded as the NAMED residual `hjalSeam` — it is NOT "
+      f"fabricated here (a hand `site_*` would trip the discipline gate). -/")
+    E("")
+    E(f"/-- The restricted ABI frame predicate: ABI-preserved EXCEPT the "
+      f"span-written {avoidDoc}.  `bridgeOfSegFramed`'s frame conclusion holds "
+      f"for exactly these; the new {avoidDoc} value(s) are read off the exposed "
+      f"post bundle instead. -/")
+    E(f"def {P} (R : Register) : Bool :=")
+    E(f"  Vsa.Alloc.AbiPreserved R"
+      + "".join(f" && !(R == Register.x{r})" for r in avoid))
+    E("")
+    E(f"/-- **`{name}Bridge`** — the `{name}` body ≫ `jal {calleeS}` bridge, via "
+      f"`bridgeOfSegFramed` at `{P}`.  The seg run + the restricted ABI frame "
+      f"are FREE; the written {avoidDoc} are read off the EXPOSED post bundle.  "
+      f"`hfacts` (the memory chain-facts, one `chain_facts` call at the caller) "
+      f"and `hjalSeam` (the call-seam `JalStep` off the callee `site_*` obs) are "
+      f"the only region-specific residuals.  `lds` is the parametric "
+      f"load-readback list (a body `ld/lw/lb` reads `lds.getD i 0#8`, NOT a "
+      f"zero-pin — instantiate downstream).  Conclusion: parked at the callee "
+      f"entry `{calleeE}` with link `{linkS}`, memory = the seg write-log, the "
+      f"whole reseated register bundle EXPOSED, and the ABI frame for every "
+      f"ABI-preserved register EXCEPT {avoidDoc}. -/")
+    E(f"theorem {name}Bridge")
+    E(f"    (σ : MState) (i u : Nat) (vminstret : BitVec 64){pbind}")
+    E(f"    (m0 : Std.ExtHashMap Nat (BitVec 8)) (lds : List (List (BitVec 8)))")
+    E(f"    (hG : GoodState σ)")
+    E(f"    (hpc : σ.regs.get? Register.PC = some ({entryS} : BitVec 64))")
+    E(f"    (hminstret : σ.regs.get? Register.minstret = some vminstret)")
+    E(f"    (hmem : σ.mem = m0)")
+    E(f"    (hL : GHolds σ {Lapp})")
+    E(f"    (hfacts : ChainFacts σ.mem σ.mem {Lapp} lds {seg})")
+    E(f"    (hi : i < 2)")
+    E(f"    -- output-regs key hygiene: the keys are value-free, but they mention the")
+    E(f"    -- pins as values, so they stall `decide` under the pin binders; the")
+    E(f"    -- caller closes each with ONE `decide` (see observations "
+      f"`keys-decides-per-seg`).")
+    E(f"    (hKeysOut : KeysOK (keysG (evalBlocks {seg} (SegEvalState.init {Lapp} lds)).regs))")
+    E(f"    (hRaOut : KeysAvoidRa (evalBlocks {seg} (SegEvalState.init {Lapp} lds)).regs)")
+    E(f"    (hjalSeam : ∀ (σ' : MState) (i' u' : Nat),")
+    E(f"      GoodState σ' → i' < 2 →")
+    E(f"      σ'.regs.get? Register.PC = some")
+    E(f"        (evalBlocksPC {entryS} (SegEvalState.init {Lapp} lds) {seg}) →")
+    E(f"      (∃ w, σ'.regs.get? Register.minstret = some w) →")
+    E(f"      σ'.mem = writeLog m0 (evalBlocks {seg} (SegEvalState.init {Lapp} lds)).log →")
+    E(f"      GHolds σ' (evalBlocks {seg} (SegEvalState.init {Lapp} lds)).regs →")
+    E(f"      JalStep {calleeE} {linkS} σ' i' u') :")
+    E(f"    ∃ (σ2 : MState) (i2 : Nat),")
+    E(f"      Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + evalBlocksFuel {seg} + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧")
+    E(f"      σ2.regs.get? Register.PC = some ({calleeE} : BitVec 64) ∧")
+    E(f"      σ2.regs.get? Register.x1 = some ({linkS} : BitVec 64) ∧")
+    E(f"      (∃ w, σ2.regs.get? Register.minstret = some w) ∧")
+    E(f"      -- the whole reseated register bundle, EXPOSED (carries the new "
+      f"{avoidDoc}")
+    E(f"      -- value(s) as deltas the seg computed — read off via `gholds_lookup`):")
+    E(f"      GHolds σ2 (evalBlocks {seg} (SegEvalState.init {Lapp} lds)).regs ∧")
+    E(f"      σ2.mem = writeLog m0 (evalBlocks {seg} (SegEvalState.init {Lapp} lds)).log ∧")
+    E(f"      -- the ABI frame for every ABI-preserved register EXCEPT {avoidDoc}:")
+    E(f"      (∀ R, {P} R = true → σ2.regs.get? R = σ.regs.get? R) := by")
+    E(f"  have hkeys : KeysOK (keysG {Lapp}) := by")
+    E(f"    show KeysOK {keylist}; decide")
+    E(f"  have hwf : ChainOK {entryS} (keysG {Lapp}) {seg} := by")
+    E(f"    show ChainOK {entryS} {keylist} {seg}; decide")
+    E(f"  have hnoiseP : ∀ rr ∈ noiseRegs, {P} rr = false := by decide")
+    E(f"  have hAvoidP : WrChainAvoids {P} {seg} := by decide")
+    E(f"  -- `{P} R → AbiPreserved R`: the restricted predicate is a subset (Bool `&&`).")
+    E(f"  have hPabi : ∀ R, {P} R = true → Vsa.Alloc.AbiPreserved R = true := by")
+    E(f"    intro R hR")
+    E(f"    unfold {P} at hR")
+    peel = "hR"
+    for _ in avoid:
+        peel = f"(Bool.and_eq_true .. |>.mp {peel}).1"
+    E(f"    exact {peel}")
+    E(f"  obtain ⟨σ2, i2, hsteps, hi2, hG2, hpc2, hra2, hmi2, hregs2, hmem2, hframe2⟩ :=")
+    E(f"    bridgeOfSegFramed {P} {seg} {Lapp} lds")
+    E(f"      σ i u {entryS} {calleeE} {linkS} vminstret m0")
+    E(f"      hG hpc hminstret hmem hL hkeys hfacts hi hwf")
+    E(f"      hnoiseP hAvoidP hKeysOut hRaOut hPabi hjalSeam")
+    E(f"  exact ⟨σ2, i2, hsteps, hi2, hG2, hpc2, hra2, hmi2, hregs2, hmem2, hframe2⟩")
+    E("")
+    E(f"#print axioms {name}Bridge")
     E("")
 
 
@@ -441,6 +612,8 @@ def compile_arm(arm_path, out_path):
 
     E = lib.Emitter()
     default_imports = ["Vsa.Sim.DeriveCaseRow", "Vsa.Sim.ChainFactsTac"]
+    if a["framed"]:
+        default_imports.append("Vsa.Sim.BridgeSegFramed")
     imports = a["imports"] or default_imports
     doc = (
         f"# `{a['name']}` — GENERATED seg-layer arm (scripts/genseg.py)\n\n"
@@ -467,7 +640,9 @@ def compile_arm(arm_path, out_path):
 
     emit_seg(E, a, blocks)
     keys = emit_L(E, a)
-    if a["terminator"] == "jal":
+    if a["terminator"] == "jal" and a["framed"]:
+        emit_jal_row_framed(E, a, end_pc, keys)
+    elif a["terminator"] == "jal":
         emit_jal_row(E, a, end_pc, keys)
     else:
         emit_post_and_row(E, a, end_pc, keys)
@@ -475,8 +650,9 @@ def compile_arm(arm_path, out_path):
     E(f"end {a['namespace']}")
     E.write(out_path)
     print(f"wrote {out_path}")
+    framedS = f" framed avoid={a['avoid']}" if a["framed"] else ""
     print(f"  arm={a['name']} span=0x{a['entry']:08x}..0x{a['span_end']:08x} "
-          f"term={a['terminator']} pins={keys} end_pc=0x{end_pc:08x}")
+          f"term={a['terminator']}{framedS} pins={keys} end_pc=0x{end_pc:08x}")
 
 
 def main():
