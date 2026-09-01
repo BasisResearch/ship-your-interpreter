@@ -1967,3 +1967,92 @@ it, still stop and report instead.
 - WIRING (report-only, not applied per task): add `import Vsa.Sim.rows.StrdupTailJalSeams`
   to Vsa.lean; check_all axiom entries strdupTail_{strlen,malloc,memcpy}_run +
   strdupTailBridgeStrlenPre_closed. Stringify.lean added to discipline_grandfather.txt.
+
+## 2026-08-31 midarm-combinator-landed (Task #79 priority 1)
+- missing: a `SubEvalReturn → JalPreBundle` mid-arm re-cut (the 2026-08-31
+  halfB-recut-cost proposal). binaryR/logicalR (and callC-mid/argsTail-mid) each
+  paid ~250 lines of bespoke machine threading (EvalBinSim.blockB_binary:540-929).
+- workaround: NOT a workaround — BUILT the combinator. `Vsa/Sim/MidArmCombinator.lean`
+  `binaryR_midStagePre` (green, axiom-clean {propext,Classical.choice,Quot.sound},
+  ~6s). VERDICT: **factorable**. The hand threading's ONLY entanglement with the
+  left span (ment↔mcall1↔cL.mem node transport + hPopCL frame-pop) is consumed
+  purely as facts ABOUT cL.σ.mem (`read64 cL.σ.mem (aExpr+24)=aROp`, presence on
+  [sp-1120,sp)), which SubEvalReturn's memframe+MemExtends clause already
+  establishes at the caller — so honest carried premises, not re-derived internals.
+  The 7 sites (0x800034fc→0x80003518) + mcall2 marshalling are op-INDEPENDENT (arm
+  PC is op-generic; op matters only at the value-combine tail after the right
+  returns), so ONE combinator serves every binary/logical operator.
+- KEY GOTCHAS: (1) the right-operand node `ExprRepr` survival needs `rop_stkfull`
+  (aROp+16≤SL.lo ∨ sp≤aROp — node either below the whole stack or above sp), NOT
+  `rop_stk` (which allows sp-1088≤aROp, overlapping the sd a6,0(sp) write at
+  [sp-1088,sp-1080)); use it with getElem_writeMap8_disjoint against the SINGLE
+  write, not hAgMcall2 over all of [SL.lo,sp). (2) site_800034fc_ee needs the RIGHT
+  NODE geometry at aExpr+24 (node_lo 0x80000000≤aExpr, node_align aExpr%8=0,
+  node_win tohost+32≤aExpr, node_hi aExpr+32≤2^64) — carry all four, not just
+  node_hi. A failing omega inside a nested `(by …)` shows up as `sorryAx` in
+  `#print axioms` (not an error), with the omega dump printed — grep the error line.
+- cost: none; landed. binaryR/logicalR now instantiate this cheaply (the 7-site
+  span is shared). Remaining per-op work at the caller = unpack SubEvalReturn +
+  supply the node/geometry facts (all present in the arm's BinExtras/SubEvalReturn).
+- proposal: DONE (binaryR_midStagePre). Same shape re-usable for callC-mid /
+  argsTail-mid once their entries are pinned (both are the "returned sub-call →
+  reload next node ptr → jal" idiom).
+
+## 2026-08-31 logical-left-head-cut + midarm-recut-verdict (Task #79 priority 2)
+- LANDED (priority 2, logicalL): `Vsa/Sim/StagePreSuppliers2.lean`
+  `blockB_logical_stagePre` (green, axiom-clean, ~10.7s) — the logical-arm-head
+  → JalPreBundle cut, mirror of StagePreSuppliers.blockB_unary_stagePre but for the
+  two-operand logical arm @0x8000355c (3-site head: ld a2,16(a2) ≫ addi a0,sp,120 ≫
+  sd a3,0(sp) env-spill → σ3 @0x80003568 = LEFT jal). Op-generic (`&&`/`||` share
+  the head). Now unary + binary-LEFT + logical-LEFT all have their ArmEntryK→JalPreBundle
+  head cut; each is a drop-in EvalChildStages.{unary,binaryL,logicalL} supplier
+  MODULO the shared blockA_k dispatch (EEntryC→ArmEntryK, standing upstream).
+- NOT a cheap clone (machine-checked): logicalR (the logical mid-arm) is NOT an
+  instantiation of binaryR_midStagePre. binaryR's mid-arm is 7 straight-line ALU/store
+  sites (0x800034fc→0x80003518). logicalR's span (EvalLogical3, from SubEvalReturn
+  @0x8000356c) includes a `jal value_truthy` CALL (0x80003594) for the short-circuit
+  test + a 24-byte copy — a structurally different, larger span. It needs its own
+  re-cut (a value_truthy-seam mid-arm combinator), not this one.
+- assignE / callF / argsHead / the exec-side stagings (stmtExpr/stmtRet/...): each is
+  its OWN arm-head straight cut (different arm PC, different spill pattern), same
+  SHAPE as blockB_unary_stagePre/blockB_logical_stagePre. Not built this task
+  (budget); the template is now demonstrated twice (unary model + logical clone).
+
+## 2026-08-31 strdup-memcpy-a2-reload (Task #80 Half A)
+- missing: a `lds`-carrying variant of `strdupTail_memcpy_run` (or a `writeLog`/`ld`
+  readback lemma) that reconstructs the reloaded `x12 = ofNat nMemcpy` from the
+  `sd a2,8(sp)` spill the malloc-staging wrote into `mMalloc`. `strdupTail_memcpy_run`
+  runs the seg with `lds = []`, so the `ld a2,8(sp)` reads the empty loads list, NOT
+  `mMalloc[spM+8]` — the `PreDispatch.a2` field cannot be discharged from it.
+- workaround: named the whole memcpy bridge as the typed residual
+  `StrdupTailMemcpyBridge` (Vsa/Sim/rows/StrdupTailContractClose.lean §2); the
+  contract instantiation `stringifyStrdupTailContract_closed` takes it as a hypothesis.
+- cost: the memcpy bridge stays a hypothesis; also blocks the analogous
+  `bridgeMemcpyPre` of any spill-then-reload arg-staging seam (env_define's memcpy
+  bridge would pay the same if re-seated on the seg layer).
+- ALSO missing (same bridge): a NULL-branch exclusion. The malloc-post disjunction's
+  NULL branch (`x10=0`) takes the seg's `beqz a0 → 80003140` (OOM error path), so the
+  unconditional `PreDispatch @ memcpy-entry` target is only provable with the arena
+  no-OOM guarantee (`nMalloc ≤ maxReq ⇒ malloc ≠ NULL`, a MallocContract property).
+- proposal: `segToTripleLds` — a `segToTriple` variant threading a caller `lds` whose
+  head is the spilled-value image (`writeLog`-consistent), so reload-after-spill segs
+  read back the spilled datum; plus a `MallocContract.nonNull_of_bounded` field
+  exposing the arena's no-OOM guarantee to prune the NULL disjunct.
+
+## 2026-08-31 concat-cblock-evalih-lift (Task #80 Half B)
+- missing: the whole-node `EvalIH` lift for the `.binary .add` str-concat arm — the
+  `blockA_binaryArm ≫ blockB_binary(two sub-EvalIH) ≫ concatHeapCore ≫ blockD_v_rec`
+  pipeline (BinArmBridge pattern) does NOT yet exist for the STR/concat arm, and
+  `concatHeapCore` itself (the ~7-callee post-stringify splice: strlen×2 ≫ staging ≫
+  malloc ≫ beqz ≫ memcpy ≫ strcpy ≫ free×2 ≫ value_str) is unbuilt.
+- workaround: landed the reusable byte fact `cstring_append`/`concatReadback`
+  (Vsa/Sim/rows/CStringAppend.lean, green+axiom-clean) — the concat CString readback
+  (memcpy's NUL-free left run ++ strcpy's NUL-terminated right tail); left
+  `concatHeapCore` + the EvalIH lift as `StrConcatCBlockResid` (the existing named
+  residual in rows/StrConcatHeap.lean).
+- cost: `StrConcatCBlockResid` stays the one bespoke heap Triple; the concatHeapCore
+  splice + STR-arm BinArmBridge remain to build. concatReadback removes the CString
+  reasoning from that build (it was the one non-mechanical step in the splice's post).
+- proposal: a `binArmStrResid_of_cblock` combinator (STR-arm analogue of the
+  add/sub blockC rows) that lifts a concatHeapCore Triple to `StrConcatCBlockResid`
+  via blockA_binaryArm/blockD_v_rec, once concatHeapCore is a Triple.

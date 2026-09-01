@@ -531,6 +531,8 @@ import Vsa.Sim.ArmSegSplitSeg
 import Vsa.Sim.ArmSegSplitNonEval
 import Vsa.Sim.StagePreSuppliers
 import Vsa.Sim.ArmSegSplitSqEntry
+import Vsa.Sim.MidArmCombinator
+import Vsa.Sim.StagePreSuppliers2
 import Vsa.Sim.ApproxArmResidGapAssembly
 import Vsa.Sim.rows.StrdupTailBridges
 import Vsa.Sim.rows.StrcpyContract
@@ -538,6 +540,8 @@ import Vsa.Sim.rows.StrdupEpilogueSeg
 import Vsa.Sim.rows.StrcpyContractInhab
 import Vsa.Sim.rows.ConcatCBlockStaging
 import Vsa.Sim.rows.StrdupTailJalSeams
+import Vsa.Sim.rows.StrdupTailContractClose
+import Vsa.Sim.rows.CStringAppend
 import Vsa.While.StmtDispatch
 import Vsa.While.StmtDispatchClose
 import Vsa.Sim.InterpSimBundle
