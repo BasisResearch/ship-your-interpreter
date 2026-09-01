@@ -1525,3 +1525,55 @@ it, still stop and report instead.
   oleans in a target's closure SERIALLY with `lake env lean -o` (never parallel,
   never `lake build`) — the mtime heuristic is wrong (content-hash, not mtime;
   build only the MISSING, not the "stale").
+
+## 2026-08-31 nullbridgeseam-splice-entry-contradictory (hterm glue batch, task #13)
+- missing: a usable NullBridgeSeam.splice whose ENTRY predicate is inhabitable.
+  As landed (Vsa/Sim/rows/ExecRetNullGlue.lean lines ~220-232) the `splice`
+  field's entry conjoins `c.σ.regs.get? PC = some 0x800042f0` with
+  `ExecArmEntryK … execArmRet …`, and `ExecArmEntryK` (Vsa/Sim/ExecBrkCont.lean:162)
+  PINS `PC = some armPC = execArmRet = 0x80004120`. Both cannot hold: the entry
+  is `False`, so `splice` is vacuously provable but can never fire from the real
+  post-beqz config (PC=0x800042f0, no longer ExecArmEntryK). `execRetNullGlue_closed`
+  (ExecArmEntryK@0x80004120 → SubExecReturnR@0x80004138) therefore CANNOT be
+  assembled from this seam: after site_80004120_es ≫ site_80004124_taken_es the
+  config is at 0x800042f0 and does not satisfy the splice's entry.
+- workaround: NONE (stopped; landed only the honest partial glue segment
+  0x80004120→0x800042f0 as ExecRetNullGlue.retNullGluePrefix, taking NullBridgeSeam
+  for the retNoneExpr pin — see file). The final splice→SubExecReturnR remains open
+  and BLOCKED on the seam statement.
+- cost: the value_null-bridge glue (#13) cannot close until the seam is amended;
+  any agent picking up hSRetNull.hGlue pays a statement fix first.
+- proposal: amend NullBridgeSeam.splice's entry to a PLAIN post-beqz predicate at
+  0x800042f0 (GoodState + tick + PC=0x800042f0 + x2=sp-176 + x18=aRet + x8=aStmt +
+  minstret + Exec_stmtLoaded + the stack memframe + the StoreRepr/spill survival
+  carried explicitly), i.e. the fields ExecArmEntryK gives MINUS the PC pin,
+  restated at 0x800042f0 — NOT ExecArmEntryK verbatim. Then the prefix segment
+  below composes into it by Triple.seq. (Same shape as EvalVarBridge's post-call
+  predicates, which do not reuse the arm-entry predicate at a moved PC.)
+
+## 2026-08-31 scaffold-some-motive-unsatisfiable (hterm glue batch, task #50)
+- missing: an inhabitable statement for the `.some` loop-scaffold rows
+  (hInitSome_resid/hFcSome_resid/hEsSome_resid, Vsa/Sim/rows/ScaffoldRows.lean).
+  The amended scaffold motives (mExecInit/mForCond/mExecStep, TermSimAssembly.lean)
+  demand, for the `.some` constructor, `∀ p, Triple (SegEntry … st … p) (SegExit …
+  st' … p)` with entry PC = exit PC = a SINGLE universally-quantified `p` and
+  `st' ≠ st` (the sub-stmt/expr mutates the store). No machine seg runs a
+  store-mutating call from an ARBITRARY abstract PC back to the SAME PC; the
+  `.none` amendment fixed the identity case but gives `.some` the mirror-image
+  obstruction the old independent-(p,q) motive had for `.none`. Crucially
+  execForStartSim (Vsa/Sim/ExecForStart.lean:101) takes the ExecInit/ForCond/
+  ExecStep sub-derivations as IGNORED `_` — the REAL init/cond/step machine work
+  flows through hArm + the ExecForStep `hstep` oracle, NOT the scaffold motives.
+  So the `.some` scaffold Triples are DEAD recursor-plumbing that cannot be
+  honestly inhabited.
+- workaround: NONE (stopped; the three rows remain `def *_resid` statements,
+  threaded as `R.hInitSome`/etc. in TermAssembly.lean — an unfillable premise the
+  top-level residual carries).
+- cost: the `for`-family TermCases can never be assembled UNCONDITIONALLY while
+  these three premises are unsatisfiable-as-stated; #50 blocked on a motive fix.
+- proposal: change the `.some` scaffold motives to `True` (they are consumed as
+  `_` — the honest work is already in ExecForStep), OR give them a two-PC shape
+  `(entryPC pRet)` with `pRet` the sub-call's fixed return address and a real
+  `bridgeOfSeg`/callSeg span; the current single-`p` shape is provably vacuous for
+  `.some`. Matches precedent: the (p,q)→p amendment fixed `.none` but created this
+  dual gap.

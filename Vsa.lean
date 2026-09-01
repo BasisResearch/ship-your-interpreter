@@ -516,6 +516,7 @@ import Vsa.Sim.StepCount
 import Vsa.Sim.rows.LoopHeadDispatch
 import Vsa.Sim.rows.InterpBackEdgeSeg
 import Vsa.Sim.IterSeamAssembly
+import Vsa.Sim.ApproxSeamFold
 import Vsa.Sim.rows.StrdupTailBridges
 import Vsa.Sim.rows.StrcpyContract
 import Vsa.While.StmtDispatch

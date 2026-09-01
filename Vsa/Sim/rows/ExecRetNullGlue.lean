@@ -234,12 +234,212 @@ structure NullBridgeSeam
         SubExecReturnR g N A SL φf φc st.store.frames.size st.store.closures.size st .null
           sp r aRet subsret (0x80004138#64) v1 v8' v9' v18' v19' m0 mcall c)
 
+/-! ## `RetNullPostBeqz` — the post-`beqz` machine state at `0x800042f0`
+
+The honest re-statement of the fields `ExecArmEntryK` carries, MINUS the PC pin,
+at the beqz-TAKEN target `0x800042f0` (the `value_null`-bridge head).  This is the
+predicate `NullBridgeSeam.splice`'s entry SHOULD have used (see observation
+`nullbridgeseam-splice-entry-contradictory`): reusing `ExecArmEntryK` verbatim at a
+moved PC is unsatisfiable, so the prefix segment below lands in THIS predicate.
+
+Every field is transported unchanged across the `ld a2,8(s0)` (writes only `x12`,
+memory unchanged) and the `beqz` (writes only PC, memory unchanged): `s0`/`s1`/`s2`
+(=`aRet`)/`s3`/`sp`/`ra` survive, `StoreRepr`/spills survive (memory is the entry
+`ment`), and the stack memframe vs `m0` is unchanged. -/
+def RetNullPostBeqz
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (sp r aInterp aStmt aEnv aRet : BitVec 64)
+    (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
+    (m0 ment : Mem) (c : Config) : Prop :=
+  GoodState c.σ ∧ c.tick < 2 ∧
+  c.σ.regs.get? Register.PC = some (0x800042f0#64) ∧
+  c.σ.regs.get? Register.x8 = some aStmt ∧
+  c.σ.regs.get? Register.x9 = some aInterp ∧
+  c.σ.regs.get? Register.x19 = some aEnv ∧
+  c.σ.regs.get? Register.x18 = some aRet ∧
+  c.σ.regs.get? Register.x2 = some (sp - 176#64) ∧
+  c.σ.regs.get? Register.x1 = some r ∧
+  (∃ v, c.σ.regs.get? Register.minstret = some v) ∧
+  c.σ.sailOutput = out0 ∧ String.join out0.toList = st.out ∧
+  c.σ.mem = ment ∧ Exec_stmtLoaded ment ∧
+  StoreRepr ment N A φf φc st.store ∧
+  read64 ment (sp.toNat - 8) = some r.toNat ∧
+  read64 ment (sp.toNat - 16) = some v8.toNat ∧
+  read64 ment (sp.toNat - 24) = some v9.toNat ∧
+  read64 ment (sp.toNat - 32) = some v18.toNat ∧
+  read64 ment (sp.toNat - 40) = some v19.toNat ∧
+  g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
+  g Register.x18 = some v18 ∧ g Register.x19 = some v19 ∧
+  g Register.x2 = some sp ∧
+  (∀ R : Register, AbiPreservedNoise R →
+    (Register.x8 == R) = false → (Register.x9 == R) = false →
+    (Register.x18 == R) = false → (Register.x19 == R) = false →
+    (Register.x2 == R) = false → c.σ.regs.get? R = g R) ∧
+  (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) ∧
+  176 ≤ sp.toNat ∧ sp.toNat ≤ 0x100000000 ∧ 0x80000000 ≤ sp.toNat ∧
+  tohostAddr + 16 + 176 ≤ sp.toNat ∧ sp.toNat % 8 = 0 ∧ r.toNat % 4 = 0
+
+/-! ## `retNullGluePrefix` — `ExecArmEntryK@0x80004120 → RetNullPostBeqz@0x800042f0`
+
+The composable HALF of the `value_null`-bridge glue: `ld a2,8(s0)` loads
+`stmt->expr = 0` (pinned by `NullBridgeSeam.retNoneExpr`), then the `beqz a2` is
+TAKEN to the `value_null`-bridge head `0x800042f0`.  Every register/geometry field
+survives (both instructions touch only `x12`/PC and leave memory fixed).
+
+This is as far as the landed `NullBridgeSeam` permits: its `splice` field's entry
+reuses `ExecArmEntryK` verbatim at PC `0x800042f0`, which is unsatisfiable (the PC
+pin conflicts), so `splice` cannot be composed after this prefix.  The final
+`RetNullPostBeqz → SubExecReturnR@0x80004138` (the `value_null` call + rejoin +
+`SubExecReturnR` assembly) remains OPEN, blocked on the seam statement — see the
+observation ledger `nullbridgeseam-splice-entry-contradictory`. -/
+theorem retNullGluePrefix
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (env : Addr)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem)
+    (v8 v9 v18 v19 : BitVec 64) (out0 : Array String) (ment : Mem)
+    -- the `.ret none` `beqz` guard: `stmt->expr` (word at `aStmt+8`) is `0`, and
+    -- the load slot is an aligned RAM word above HTIF (from `NullBridgeSeam`).
+    (hExpr : read64 ment (aStmt.toNat + 8) = some 0)
+    (hExprLo : 0x80000000 ≤ aStmt.toNat + 8)
+    (hExprHi : aStmt.toNat + 8 + 8 ≤ 0x100000000)
+    (hExprWin : aStmt.toNat + 8 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aStmt.toNat + 8)
+    (hExprAl : (aStmt.toNat + 8) % 8 = 0) :
+    Triple
+      (fun c => ExecArmEntryK g N A SL φf φc st execArmRet sp r aInterp aStmt aEnv aRet
+        v8 v9 v18 v19 out0 m0 ment c)
+      (RetNullPostBeqz g N A SL φf φc st sp r aInterp aStmt aEnv aRet
+        v8 v9 v18 v19 out0 m0 ment) := by
+  intro c hK
+  -- unpack ExecArmEntryK (armPC = execArmRet = 0x80004120)
+  obtain ⟨hG0, htick0, hpc0, hx8_0, hx9_0, hx19_0, hx18_0, hsp_0, hra_0,
+    ⟨vmi0, hmi0⟩, hout0, houtJoin, hmem0, hcode0, hstore0,
+    hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
+    hgx8, hgx9, hgx18, hgx19, hgx2, hframe0, hmemframe0,
+    hsp176, hsphi, hsplo, hspwin, hspal, hral⟩ := hK
+  have hpc0' : c.σ.regs.get? Register.PC = some (0x80004120#64) := hpc0
+  have hcode0' : Exec_stmtLoaded c.σ.mem := by rw [hmem0]; exact hcode0
+  -- the loaded word address `x8 + 8 = aStmt + 8`, and its bytes (= 0):
+  have haddr : (aStmt + sign_extend (m := 64) (0x008#12)).toNat = aStmt.toNat + 8 := by
+    rw [BitVec.toNat_add]
+    have hv : (sign_extend (m := 64) (0x008#12) : BitVec 64).toNat = 8 := by decide
+    rw [hv]; have := aStmt.isLt; omega
+  have hExpr' : read64 c.σ.mem (aStmt.toNat + 8) = some 0 := by rw [hmem0]; exact hExpr
+  obtain ⟨e0,e1,e2,e3,e4,e5,e6,e7, he0,he1,he2,he3,he4,he5,he6,he7⟩ :=
+    ld64_bytes c.σ.mem (aStmt.toNat + 8) 0 hExpr'
+  -- ============ 0x80004120: ld a2,8(s0) → x12 := stmt->expr = 0 ============
+  obtain ⟨σ1, i1, hstep1', hi1, hG1, hmem1, hobs1⟩ :=
+    site_80004120_es c.σ c.tick c.steps (0x80004120#64) vmi0 aStmt
+      e0 e1 e2 e3 e4 e5 e6 e7 hG0 hpc0' hmi0 hx8_0 hcode0' rfl
+      (by rw [haddr]; omega) (by rw [haddr]; omega) (by rw [haddr]; exact hExprWin)
+      (by rw [haddr]; exact hExprAl)
+      (by rw [haddr]; exact he0) (by rw [haddr]; exact he1) (by rw [haddr]; exact he2)
+      (by rw [haddr]; exact he3) (by rw [haddr]; exact he4) (by rw [haddr]; exact he5)
+      (by rw [haddr]; exact he6) (by rw [haddr]; exact he7) htick0
+  have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hstep1'
+  have hmem1e : σ1.mem = c.σ.mem := hmem1
+  have hpc1 : σ1.regs.get? Register.PC = some (0x80004124#64) := by
+    have := obs_alu_pc hobs1
+    rwa [show BitVec.addInt (0x80004120#64) 4 = (0x80004124#64 : BitVec 64) from by decide] at this
+  -- the loaded value is 0 (all bytes 0):
+  have hx12val : (sign_extend (m := 64)
+      ((((((((e7.append e6).append e5).append e4).append e3).append e2).append e1).append e0) : BitVec (8 * 8)) : BitVec 64) = (0#64) := by
+    have h := ld_value_eq_read64 c.σ.mem (aStmt.toNat + 8) 0 e0 e1 e2 e3 e4 e5 e6 e7 hExpr'
+      he0 he1 he2 he3 he4 he5 he6 he7
+    rw [h]
+  have hx12_1 : σ1.regs.get? Register.x12 = some (0#64) := by
+    have := obs_alu_rd hobs1 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [hx12val] at this
+  have hsp_1 : σ1.regs.get? Register.x2 = some (sp - 176#64) := obs_alu_other' hobs1 Register.x2 (by decide) hsp_0
+  have hx8_1 : σ1.regs.get? Register.x8 = some aStmt := obs_alu_other' hobs1 Register.x8 (by decide) hx8_0
+  have hx9_1 : σ1.regs.get? Register.x9 = some aInterp := obs_alu_other' hobs1 Register.x9 (by decide) hx9_0
+  have hx18_1 : σ1.regs.get? Register.x18 = some aRet := obs_alu_other' hobs1 Register.x18 (by decide) hx18_0
+  have hx19_1 : σ1.regs.get? Register.x19 = some aEnv := obs_alu_other' hobs1 Register.x19 (by decide) hx19_0
+  have hra_1 : σ1.regs.get? Register.x1 = some r := obs_alu_other' hobs1 Register.x1 (by decide) hra_0
+  obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
+  have hcode1 : Exec_stmtLoaded σ1.mem := by rw [hmem1e]; exact hcode0'
+  -- callee-saved frame outside {s0,s1,s2,s3,sp,x12} survives (x12 written, but the
+  -- ExecArmEntryK frame clause already excludes s0/s1/s2/s3/sp; x12 is not AbiPreserved).
+  have hframe1 : ∀ R : Register, AbiPreservedNoise R →
+      (Register.x8 == R) = false → (Register.x9 == R) = false →
+      (Register.x18 == R) = false → (Register.x19 == R) = false →
+      (Register.x2 == R) = false → σ1.regs.get? R = g R := by
+    intro R hAbi h8 h9 h18 h19 h2
+    -- `R` is AbiPreservedNoise; `x12` is not, so all the pinned-field disequalities hold.
+    have hdis := (by revert hAbi; cases R <;> decide :
+      AbiPreservedNoise R →
+        ((Register.mcycle == R) = false ∧ (Register.mtime == R) = false ∧
+         (Register.mip == R) = false ∧ (Register.minstret == R) = false ∧
+         (Register.PC == R) = false ∧ (Register.x12 == R) = false ∧
+         (Register.nextPC == R) = false ∧
+         (Register.minstret_increment == R) = false)) hAbi
+    -- transport the option-valued frame `= g R` across the ld (writes only x12/PC).
+    rw [hobs1.1 R hdis.1 hdis.2.1 hdis.2.2.1,
+        get?_sigmaPost_alu c.σ (0x80004120#64) vmi0 Register.x12 _ R
+          hdis.2.2.2.1 hdis.2.2.2.2.1 hdis.2.2.2.2.2.1 hdis.2.2.2.2.2.2.1 hdis.2.2.2.2.2.2.2]
+    exact hframe0 R hAbi h8 h9 h18 h19 h2
+  -- ============ 0x80004124: beqz a2 (TAKEN, a2 = 0) → 0x800042f0 ============
+  obtain ⟨σ2, i2, hstep2', hi2, hG2, hmem2, hobs2⟩ :=
+    site_80004124_taken_es σ1 i1 (c.steps + 1) (0x80004124#64) vmi1 (0#64)
+      hG1 hpc1 hmi1 hx12_1 hcode1 rfl (by decide) hi1
+  have hstep2 : Step ⟨σ1, i1, c.steps + 1⟩ ⟨σ2, i2, c.steps + 1 + 1⟩ := hstep2'
+  have hmem2e : σ2.mem = c.σ.mem := by rw [hmem2]; exact hmem1e
+  have hpc2 : σ2.regs.get? Register.PC = some (0x800042f0#64) := by
+    have := obs_branch_taken_pc hobs2
+    rwa [show (0x80004124#64 : BitVec 64) + sign_extend (m := 64) (0x01cc#13)
+      = (0x800042f0#64 : BitVec 64) from by decide] at this
+  have hsp_2 : σ2.regs.get? Register.x2 = some (sp - 176#64) := obs_branch_taken_other' hobs2 Register.x2 (by decide) hsp_1
+  have hx8_2 : σ2.regs.get? Register.x8 = some aStmt := obs_branch_taken_other' hobs2 Register.x8 (by decide) hx8_1
+  have hx9_2 : σ2.regs.get? Register.x9 = some aInterp := obs_branch_taken_other' hobs2 Register.x9 (by decide) hx9_1
+  have hx18_2 : σ2.regs.get? Register.x18 = some aRet := obs_branch_taken_other' hobs2 Register.x18 (by decide) hx18_1
+  have hx19_2 : σ2.regs.get? Register.x19 = some aEnv := obs_branch_taken_other' hobs2 Register.x19 (by decide) hx19_1
+  have hra_2 : σ2.regs.get? Register.x1 = some r := obs_branch_taken_other' hobs2 Register.x1 (by decide) hra_1
+  obtain ⟨vmi2, hmi2⟩ := obs_branch_taken_minstret hobs2
+  have hcode2 : Exec_stmtLoaded σ2.mem := by rw [hmem2e]; exact hcode0'
+  have hframe2 : ∀ R : Register, AbiPreservedNoise R →
+      (Register.x8 == R) = false → (Register.x9 == R) = false →
+      (Register.x18 == R) = false → (Register.x19 == R) = false →
+      (Register.x2 == R) = false → σ2.regs.get? R = g R := by
+    intro R hAbi h8 h9 h18 h19 h2
+    have hdis := (by revert hAbi; cases R <;> decide :
+      AbiPreservedNoise R →
+        ((Register.mcycle == R) = false ∧ (Register.mtime == R) = false ∧
+         (Register.mip == R) = false ∧ (Register.minstret == R) = false ∧
+         (Register.PC == R) = false ∧ (Register.nextPC == R) = false ∧
+         (Register.minstret_increment == R) = false)) hAbi
+    -- transport across the beqz (writes only PC).
+    rw [hobs2.1 R hdis.1 hdis.2.1 hdis.2.2.1,
+        get?_sigmaPost_branch_taken σ1 (0x80004124#64) vmi1 (0x01cc#13) R
+          hdis.2.2.2.1 hdis.2.2.2.2.1 hdis.2.2.2.2.2.1 hdis.2.2.2.2.2.2]
+    exact hframe1 R hAbi h8 h9 h18 h19 h2
+  -- assemble the two Steps and the post-beqz predicate
+  refine ⟨⟨σ2, i2, c.steps + 1 + 1⟩, Steps.head hstep1 (Steps.head hstep2 (Steps.refl _)), ?_⟩
+  refine ⟨hG2, hi2, hpc2, hx8_2, hx9_2, hx19_2, hx18_2, hsp_2, hra_2, ⟨vmi2, hmi2⟩, ?_, houtJoin,
+    ?_, hcode0, hstore0, hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
+    hgx8, hgx9, hgx18, hgx19, hgx2, hframe2, hmemframe0, hsp176, hsphi, hsplo, hspwin, hspal, hral⟩
+  · -- sailOutput unchanged across ld + beqz
+    have h2out : σ2.sailOutput = σ1.sailOutput := by
+      rw [hobs2.out, sailOutput_sigmaPost_branch_taken]
+    have h1out : σ1.sailOutput = c.σ.sailOutput := by
+      rw [hobs1.out, sailOutput_sigmaPost_alu]
+    rw [h2out, h1out]; exact hout0
+  · -- ment: σ2.mem = ment (= c.σ.mem, pinned by ExecArmEntryK.mem)
+    rw [hmem2e]; exact hmem0
+
 /-! ## Residual — the closed `value_null`-bridge glue (NOT yet assembled)
 
 The site batteries above (`site_80004124_taken_es`, `site_800042f0_es`,
 `site_800042f4_es_valueNull`, `site_800042f8_es`) and the honest `NullBridgeSeam`
 record are landed GREEN.  The final assembly `execRetNullGlue_closed`
 (`ExecArmEntryK → SubExecReturnR@0x80004138`, discharging `ExecRetNullGeom.hGlue`)
+**Update (2026-08-31):** the prefix half `retNullGluePrefix`
+(`ExecArmEntryK@0x80004120 → RetNullPostBeqz@0x800042f0`) is now LANDED (the
+`ld a2,8(s0)` step + `beqz`-TAKEN hop, taking the `retNoneExpr` pin).  The
+remaining `RetNullPostBeqz → SubExecReturnR@0x80004138` half is BLOCKED on the
+`NullBridgeSeam.splice` statement (its entry reuses `ExecArmEntryK` verbatim at
+PC `0x800042f0`, which is unsatisfiable — see the observation ledger).
+
 remains OPEN: it must (a) step the `ld a2,8(s0)` at `0x80004120` from the
 `ExecArmEntryK`-pinned entry PC before `site_80004124_taken_es` applies (the
 loaded value is pinned to 0 by the seam's `retNoneExpr`), then (b) chain the
@@ -248,5 +448,8 @@ with `x1 = r` UNCHANGED at `0x800042f0` — the `jal` is inside the splice), the
 rejoin `j 0x80004138`, and assemble `SubExecReturnR`.  The `Exec_stmtLoaded`
 fact must be transported to each intermediate memory (`loaded_*_writeMap`
 family).  Until assembled, `exec_retNull_row`'s `hGlue` stays a named premise. -/
+
+#print axioms site_80004124_taken_es
+#print axioms retNullGluePrefix
 
 end Vsa.Sim
