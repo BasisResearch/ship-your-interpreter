@@ -8,22 +8,22 @@ crux-sailoutput-wall	crux-marshal	closed	42	42	rowpost-drops-sailoutput wall (se
 evalchild-wiring	divergence	closed	40	42	eval-child board wiring 8/14 -> 14/14 (evalChildStages_ublracSEA_wired, divFamily_wave42)	yes
 jumptable-pins	m6-layout	closed	40	43	.rodata jump-table slot pins ALL 11 tags (gen_layout.py extension, LayoutJumpTableGen)	yes
 fn-bundle-assembly	fn-seam	closed	40	43	fnResidBundle_of_parts / fnResid_of_parts assembly consuming groundSlot_10	no
-assign-arm-dispatch	arm-dispatch	open	37		AssignArmDispatch: blockA->ArmEntryK bridge + child-payload/layout facts	no
-call-arm-dispatch	arm-dispatch	open	37		CallArmDispatch	no
-stmtexpr-arm-dispatch	arm-dispatch	open	40		StmtExprArmDispatch	no
-argshead-dispatch	arm-dispatch	open	41		ArgsHeadDispatch: AEntryC -> arg-loop-head bundle bridge	no
-stmtret-arm-dispatch	arm-dispatch	open	41		StmtRetArmDispatch	no
-stmtvarinit-arm-dispatch	arm-dispatch	open	41		StmtVarInitArmDispatch	no
-stmtifcond-arm-dispatch	arm-dispatch	open	41		StmtIfCondArmDispatch	no
-stmtwhilecond-arm-dispatch	arm-dispatch	open	41		StmtWhileCondArmDispatch	no
-flcond-arm-dispatch	arm-dispatch	open	41		FlCondArmDispatch	no
+assign-arm-dispatch	arm-dispatch	closed	37	44	AssignArmDispatch: blockA->ArmEntryK bridge + child-payload/layout facts	no
+call-arm-dispatch	arm-dispatch	closed	37	44	CallArmDispatch	no
+stmtexpr-arm-dispatch	arm-dispatch	closed	40	44	StmtExprArmDispatch	no
+argshead-dispatch	segentry-opacity	open	41		ArgsHeadDispatch: AEntryC -> arg-loop-head bundle bridge [RECLASS w44: FEntryC/AEntryC SegEntry ghost-interior entry, no slot-pin route - the *ArmHeadInv named-entry fix model]	no
+stmtret-arm-dispatch	arm-dispatch	closed	41	44	StmtRetArmDispatch	no
+stmtvarinit-arm-dispatch	arm-dispatch	closed	41	44	StmtVarInitArmDispatch	no
+stmtifcond-arm-dispatch	arm-dispatch	closed	41	44	StmtIfCondArmDispatch	no
+stmtwhilecond-arm-dispatch	arm-dispatch	closed	41	44	StmtWhileCondArmDispatch	no
+flcond-arm-dispatch	segentry-opacity	open	41		FlCondArmDispatch [RECLASS w44: FEntryC/AEntryC SegEntry ghost-interior entry, no slot-pin route - the *ArmHeadInv named-entry fix model]	no
 argshead-stagepre	stagepre-marshal	open	41		ArgsHeadStagePre: bridgeOfSeg output -> JalPreBundle marshal (stagePreOfBridge candidate)	no
 native-hdispatch	native	open	41		hDispatch: CallEntryP -> NativeBodyPre register-pin marshal (arm caller's seat)	no
 native-print-internal	native-serial	open	42		NativePrintInternal: value_print machine contract (code image needed; closure-crux scale)	no
 native-println-internal	native-serial	open	42		NativePrintlnInternal: print + fputc('\n')	no
 crux-callparamfoldinv	crux-marshal	closed	40	43	CallParamFoldInv carrier (callParamFoldSeamStep + foldStoreAdvance_toStoreRepr; per-leg inputs remain as crux-fold-leg-inputs)	yes
 crux-bodyhandoff	crux-marshal	closed	40	43	BodyHandoff via valueNullHandoffSplice (real value_null_spec_full threaded)	yes
-crux-segexit	crux-marshal	open	40		.normal-route splice -> SegExit@callJoinPC: s3/s5/s7 restores meet CallerSpillSlots/s7ImageAtBody; bricks named (bridgeOfSegOut + callClosureNormalJoinRow re-stated)	yes
+crux-segexit	crux-marshal	open	40		.normal/.ret route splice BLOCKED on falsity #9 (SegExit.frame at pre-epilogue join); legs all landed (normalDepthBridgeOut/normalJoinRowOut)	yes
 crux-bodystatusabi	crux-marshal	open	40		BodyStatusABI supplier (mExecSeq seq rows + stackWin@callBodyRetPC)	yes
 crux-valuenull-splices	crux-marshal	closed	40	43	fold-exit value_null splice landed (valueNullHandoffSplice); .normal-route moved to crux-segexit	yes
 crux-bridge-inst	crux-marshal	open	40		per-bridge ChainFacts/hjalSeam instantiations at concrete lds/ghosts	yes
@@ -32,7 +32,7 @@ fn-staginglink	fn-seam	open	38		AllocBuildStagingLink (irreducible off-path mach
 fn-tailfacts	fn-seam	open	38		AllocBuildTailFacts	no
 fn-reloadpost	fn-seam	open	38		AllocBuildReloadPost	no
 fn-allocclosure	fn-seam	open	38		AllocClosureContract	no
-store-closures-bounded	global-invariant	open	38		StoreClosuresBounded: prove ONCE as store-WF invariant of EvalE/ExecStmt (queue #9)	no
+store-closures-bounded	global-invariant	closed	38	44	StoreClosuresBounded: prove ONCE as store-WF invariant of EvalE/ExecStmt (queue #9) -> storeClosuresBounded_invariant (9-relation mutual induction), retires at capstone	no
 oracle-hinitstore	term-oracle	open	39		hInitStore (drive premises: hSpill / setjmp geometry / span data)	no
 oracle-hdivcorr	term-oracle	open	39		hDivCorr (= the ArmStages board)	no
 oracle-strconcat	term-oracle	open	39		StrConcatCellResid str + cells (blocked on stringify spec)	no
@@ -42,17 +42,31 @@ oracle-forloop-gaps	term-oracle	open	39		for-loop GAPs	no
 err-hbadclosure	err-straggler	open	39		hBadClosure (non-jal passthrough)	no
 err-htopabrupt	err-straggler	open	39		hTopAbrupt (non-jal passthrough)	no
 err-snprintfcontract	m6-decode	open	39		SnprintfContract open segment	no
-err-mainerrorseg	m6-decode	open	39		MainErrorSeg open segment	no
-err-crt0exitseg	m6-decode	open	39		Crt0ExitSeg open segment	no
+err-mainerrorseg	m6-decode	closed	39	44	MainErrorSeg discharged (mainErrorSeg_of) <- MainErrFrame + FprintfStderrNeutral	no
+err-crt0exitseg	m6-decode	closed	39	44	Crt0ExitSeg discharged (crt0ExitSeg_of) <- Crt0JFrame + ExitInteriorNeutral	no
 err-42-armlinkages	m4-linkage	open	39		42 SpillArmPre/SetupArmPre arm linkages (fan-out class; errSite COW-clone precedent)	yes
 noneval-3-jalarms	stagepre-exec	closed	40	43	stmtWhileBody/stmtForInit/flBody (the jal-exec_stmt arms; argsHead template, no site batteries)	yes
-noneval-tail-redispatch	bridge-twin	open	43		stmtIfThen/stmtIfElse/stmtWhileLoop: j/bnez TAIL re-dispatch to 0x80004014 - needs execEntry_of_jTailRedispatch twin	no
-noneval-branch-entry	bridge-twin	open	43		callArgs/argsTail/callC/stmtForLoop/flLoop: fallthrough/branch/jalr interior entry - needs branch-entry SegEntry variant	no
+noneval-tail-redispatch	bridge-twin	open	43		stmtIfThen/stmtIfElse via jTailRedispatch twin (LANDED w44 + pilot; CONDITIONAL on SEntryC amendment); stmtWhileLoop = 3rd shape (bne to while-arm head)	yes
+noneval-branch-entry	stagepre-exec	open	43		callArgs/argsTail/callC/flLoop via SegPreBundleB twin (LANDED w44 + stmtForLoop pilot) - wave-45 mail-merge on StmtForLoopSegPreB template	yes
 sqentry-fields	stagepre-exec	open	40		SqEntry stmtBlock/callBody/seqHead: SqLoopHeadPreBundle needs the Reflect witness (crux/IterSeam boundary, queue #4)	yes
-flstep-field	bridge-twin	open	40		flStep: evals step expr in EXEC frame (sp-176) but flStep_split hardcodes eval-frame JalPreBundle - needs exec-frame flStep_split prime	yes
-stmtwhilebody-arm-dispatch	arm-dispatch	open	43		stmtwhilebody ArmDispatch residual (wave-43 nonevalmm)	no
-stmtforinit-arm-dispatch	arm-dispatch	open	43		stmtforinit ArmDispatch residual (wave-43 nonevalmm)	no
-flbody-arm-dispatch	arm-dispatch	open	43		flbody ArmDispatch residual (wave-43 nonevalmm)	no
+flstep-field	bridge-twin	closed	40	44	flStep field composed (flStep_split' twin + flStepBridge pilot); consumed directly, ArmStages.flStep stays mistyped	yes
+stmtwhilebody-arm-dispatch	segentry-opacity	open	43		stmtwhilebody ArmDispatch residual (wave-43 nonevalmm) [RECLASS w44: FEntryC/AEntryC SegEntry ghost-interior entry, no slot-pin route - the *ArmHeadInv named-entry fix model]	no
+stmtforinit-arm-dispatch	segentry-opacity	open	43		stmtforinit ArmDispatch residual (wave-43 nonevalmm) [RECLASS w44: FEntryC/AEntryC SegEntry ghost-interior entry, no slot-pin route - the *ArmHeadInv named-entry fix model]	no
+flbody-arm-dispatch	segentry-opacity	open	43		flbody ArmDispatch residual (wave-43 nonevalmm) [RECLASS w44: FEntryC/AEntryC SegEntry ghost-interior entry, no slot-pin route - the *ArmHeadInv named-entry fix model]	no
 falsity-8-foldcarrier	falsity	closed	43	43	params-fold is do-while: carrier n unreachable; hFoldSeam re-ranged k+1<n, hFoldToHandoff at carrier n-1 (uninhabitedness proofs in CallCruxMarshal3)	no
 crux-jalbridge-out	crux-marshal	closed	43	43	jal-bridge class drops sailOutput (same wall as rowpost): bridgeOfSegOut + JalStepO twins landed	yes
 crux-fold-leg-inputs	crux-marshal	open	43		per-leg fold inputs hStage (foldStageBridge marshalling) / hDefine (envDefContract) / hPins (pin readback) - ChainFacts/jalSeam fields are M6 code-pin class	yes
+falsity-9-segexit-frame	amendment	open	44		RATIFY: weaken SegExit.frame at callJoinPC to joinRestored-guarded set (stackWin precedent); obstruction segExitJoin_frame_x8_false	no
+sentryc-amendment	amendment	open	44		SEntryC re-seat on ExecDispatchEntry (twin-1 obstruction sEntryC_false_at_dispatchHead); touches ArmStagesWave34 29 refs + 6 files	no
+stmtwhileloop-shape	bridge-twin	open	44		stmtWhileLoop 3rd entry shape: bne to while-ARM head 0x80004034, needs own entry predicate	no
+mkind-lwu	infra	open	44		MKind.lwu missing from block decoder (blocks value_print dispatch head; xori-add recipe in observation lwu-missing-from-block-decoder)	no
+valueprint-dispatch	native-serial	open	44		ValuePrintDispatch residual: jump-table head as seg, blocked on mkind-lwu	no
+valueprint-framed-splice	native-serial	open	44		framed arm variant + Triple.seq splice (segToTriple hides sailOutput/ra/sp - needs bblocks_sound_framed route)	no
+fprintf-contract	io-callee	open	44		FprintfContract named (newlib fprintf -> HTIF; no code image)	no
+fwrite-contract	io-callee	open	44		FwriteContract named	no
+fputs-contract	io-callee	open	44		FputsContract named	no
+fprintf-stderr-neutral	io-callee	open	44		FprintfStderrNeutral: stderr bypasses tohost, output-neutral	no
+exit-interior-neutral	io-callee	open	44		ExitInteriorNeutral: exit() interior 0x80004764->0x80000180 output-neutral	no
+crt0-jframe	m6-layout	open	44		Crt0JFrame byte pins (no crt0/_start Code module in tree)	no
+mainerr-frame	m6-layout	open	44		MainErrFrame byte pins (dischargeable from existing MainLoaded)	yes
+snprintf-frame-contract	m6-decode	open	44		factor format-generic SnprintfFrameContract from snprintf_lld_spec residuals (only footprint bound load-bearing for SnprintfContract)	no

@@ -616,3 +616,18 @@ import Vsa.Sim.rows.FnArmSeamSupply
 import Vsa.Sim.rows.CallCruxMarshal2
 import Vsa.Sim.rows.CallCruxMarshal3
 import Vsa.Sim.rows.CallCruxMarshal4
+-- wave 44
+import Vsa.Sim.rows.ArmDispatchCombinator
+import Vsa.Sim.rows.ArmDispatchCombinatorExec
+import Vsa.Sim.rows.ArmDispatchInstancesEval
+import Vsa.Sim.rows.ArmDispatchInstancesExec
+import Vsa.Sim.ArmSegSplitTwins
+import Vsa.Sim.rows.StmtIfThenArmStagePre
+import Vsa.Sim.rows.FlStepArmStagePre
+import Vsa.Sim.rows.StmtForLoopSegPreB
+import Vsa.Sim.rows.ValuePrintArms
+import Vsa.Sim.rows.ValuePrintContract
+import Vsa.Sim.rows.ErrSegCrt0
+import Vsa.Sim.rows.ErrSegMain
+import Vsa.Sim.rows.CallCruxMarshal5
+import Vsa.Sim.rows.StoreWF

@@ -1000,6 +1000,53 @@ THEOREMS=(
   Vsa.Sim.foldDefineExitReturn_step                 # rows/CallCruxMarshal4
   Vsa.Sim.foldToHandoff_of                          # rows/CallCruxMarshal4 (the amended hFoldToHandoff composed)
   Vsa.Sim.callClosureEntrySplice                    # rows/CallClosureSplice (AMENDED: hFoldSeam k+1<n, hFoldToHandoff at carrier n-1)
+  # Wave 44: arm-dispatch combinator (7/12), bridge twins + pilots, value_print arms, exit segs, falsity #9, StoreWF invariant
+  Vsa.Sim.evalArmDispatch_of_slot                   # rows/ArmDispatchCombinator (Group-A parametric dispatch via KindSlotPinned)
+  Vsa.Sim.execArmDispatch_of_slot                   # rows/ArmDispatchCombinatorExec (Group-B twin)
+  Vsa.Sim.assignArmDispatch_of_resid                # rows/ArmDispatchInstancesEval
+  Vsa.Sim.callArmDispatch_of_resid                  # rows/ArmDispatchInstancesEval
+  Vsa.Sim.stmtExprArmDispatch_of_resid              # rows/ArmDispatchInstancesExec
+  Vsa.Sim.stmtRetArmDispatch_of_resid               # rows/ArmDispatchInstancesExec
+  Vsa.Sim.stmtVarInitArmDispatch_of_resid           # rows/ArmDispatchInstancesExec
+  Vsa.Sim.stmtIfCondArmDispatch_of_resid            # rows/ArmDispatchInstancesExec
+  Vsa.Sim.stmtWhileCondArmDispatch_of_resid         # rows/ArmDispatchInstancesExec
+  Vsa.Sim.sEntryC_false_at_dispatchHead             # ArmSegSplitTwins (obstruction: SEntryC pins entry PC, if-arm tails unreachable)
+  Vsa.Sim.execEntry_of_jTailRedispatch              # ArmSegSplitTwins (twin 1)
+  Vsa.Sim.landedN_sDispatchC_of_preBundle           # ArmSegSplitTwins
+  Vsa.Sim.stmtIfThen_splitT                         # ArmSegSplitTwins
+  Vsa.Sim.stmtIfElse_splitT                         # ArmSegSplitTwins
+  Vsa.Sim.segPreBundleB_of_jal                      # ArmSegSplitTwins (twin 2: jal refines StepInto)
+  Vsa.Sim.landedN_segEntry_of_preBundleB            # ArmSegSplitTwins
+  Vsa.Sim.callArgs_splitB                           # ArmSegSplitTwins
+  Vsa.Sim.argsTail_splitB                           # ArmSegSplitTwins
+  Vsa.Sim.callC_splitB                              # ArmSegSplitTwins
+  Vsa.Sim.stmtForLoop_splitB                        # ArmSegSplitTwins
+  Vsa.Sim.flLoop_splitB                             # ArmSegSplitTwins
+  "Vsa.Sim.flStep_split'"                           # ArmSegSplitTwins (twin 3: exec-frame ExecJalPreBundle)
+  Vsa.Sim.stmtIfThenTailRow                         # rows/StmtIfThenArmStagePre (twin-1 pilot)
+  Vsa.Sim.stmtIfThenTail_a4_computed                # rows/StmtIfThenArmStagePre
+  Vsa.Sim.flStepBridge                              # rows/FlStepArmStagePre (twin-3 pilot)
+  Vsa.Sim.flStep_field_of_dispatch                  # rows/FlStepArmStagePre
+  Vsa.Sim.forLoopSegPreB_of_inv                     # rows/StmtForLoopSegPreB (twin-2 pilot: real j-entry arm inhabits B)
+  Vsa.Sim.stmtForLoop_field_of_dispatch             # rows/StmtForLoopSegPreB
+  Vsa.Sim.vpIntArmRow                               # rows/ValuePrintArms (value_print case arms parked at IO callees)
+  Vsa.Sim.vpStrArmRow                               # rows/ValuePrintArms
+  Vsa.Sim.vpNativeArmRow                            # rows/ValuePrintArms
+  Vsa.Sim.vpNullArmRow                              # rows/ValuePrintArms
+  Vsa.Sim.vpBoolTrueArmRow                          # rows/ValuePrintArms
+  Vsa.Sim.vpBoolFalseArmRow                         # rows/ValuePrintArms
+  Vsa.Sim.vpClosureArmRow                           # rows/ValuePrintArms
+  Vsa.Sim.crt0ExitSeg_of                            # rows/ErrSegCrt0 (Crt0ExitSeg <- Crt0JFrame + ExitInteriorNeutral)
+  Vsa.Sim.mainErrorSeg_of                           # rows/ErrSegMain (MainErrorSeg <- MainErrFrame + FprintfStderrNeutral)
+  Vsa.Sim.segExitJoin_frame_x8_false                # rows/CallCruxMarshal5 (FALSITY #9: SegExit.frame x8 at pre-epilogue join)
+  Vsa.Sim.normalDepthBridgeOut                      # rows/CallCruxMarshal5
+  Vsa.Sim.normalJoinRowOut                          # rows/CallCruxMarshal5
+  Vsa.Sim.storeClosuresBounded_mutual               # rows/StoreWF (global invariant, 9-relation mutual induction)
+  Vsa.Sim.evalE_storeClosuresBounded                # rows/StoreWF
+  Vsa.Sim.execS_storeClosuresBounded                # rows/StoreWF
+  Vsa.Sim.execSeq_storeClosuresBounded              # rows/StoreWF
+  Vsa.Sim.storeClosuresBounded_initSt               # rows/StoreWF
+  Vsa.Sim.storeClosuresBounded_invariant            # rows/StoreWF (queue #9 CLOSED: per-arm hWF threading retires at capstone)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean

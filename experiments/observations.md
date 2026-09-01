@@ -3229,3 +3229,160 @@ it, still stop and report instead.
 - proposal: none needed beyond the amendment; `callParamFoldSeamStep`
   (CallCruxMarshal2 §5) already discharges exactly the amended `k+1 < n` range
   (its `FoldDefineReturn` is uninhabited at `k+1 = n`, consistently).
+
+## 2026-09-01 segexit-frame-preepilogue-x8-unrestored (wave 44, lane normalroute)
+- missing: `SegExit @ callJoinPC` (= `CallExitP`, `CallEntry.lean`) states its
+  `frame` field `∀ R, AbiPreservedNoise R → c.σ.regs.get? R = g R` at
+  `exitPC = callJoinPC = 0x800033ec`, but that PC is the FIRST instruction of
+  the shared eval_expr epilogue (`0x800033ec ld ra,1080(sp) ; 0x800033f0 ld
+  s0,1072(sp) ; 0x800033f4 ld s2,1056(sp) ; 0x800033f8 mv a0,s1 ; 0x800033fc
+  ld s1,1064(sp) ; 0x80003400 addi sp,+1088 ; 0x80003404 ret`).  The callee-
+  saved restores (ra/s0/s2/s1/sp) run AFTER `callJoinPC`, so at the join NONE of
+  them equal `g R` yet.  The `.normal` route reaches the join via
+  `callClosureNormalDepthBridge ≫ value_null ≫ callClosureNormalJoinRow`
+  (`0x80003954..0x80003974`), which restores ONLY s3/s5/s7 (x19/x21/x23) — it
+  does NOT restore x8 (s0, `= AbiPreserved`, `= AbiPreservedNoise`).  On the
+  body loop x8=s0 is the ExecSeq loop counter (`0x80003344 addi s0,s0,1`), so at
+  `callJoinPC` x8 = the body statement count, NOT `g x8` (the caller's EX_CALL
+  node ptr, `CallArgLoopInv.node`).  Hence `SegExit.frame` at `callJoinPC` is
+  UNSATISFIABLE for x8 on the normal route — and equally for ra/s1/s2/sp, all
+  restored only inside the epilogue.  THE 9TH STATEMENT FALSITY.
+- workaround: NONE.  Landed the machine-checked obstruction
+  `segExitJoin_frame_x8_false` (`rows/CallCruxMarshal5.lean`, Law 4): from a
+  `SegExit @ callJoinPC` whose `frame` pins x8 and the route fact `x8 = cnt`
+  with `g x8 = node`, `cnt ≠ node` ⇒ False.
+- root cause: the skeleton `SegExit` (InductionScaffold.lean) was designed with a
+  post-epilogue register frame (mirroring `EvalExit`, whose `pc` is the
+  RETURNED-TO target `BitVec.update (r+..) 0`, i.e. AFTER `ret`), but
+  `CallExitP`/`motive_*` instantiate `exitPC := callJoinPC` = the PRE-epilogue
+  join.  The exit PC and the frame clause disagree about whether the epilogue
+  has run.
+- proposal (amendment, analogous to the wave-38 `stackWin` guard): either
+  (a) move the `Call`/EX_CALL exit PC PAST the epilogue to the RETURNED-TO caller
+  target (the `EvalExit.pc` shape — but the skeleton has no `r` return-addr
+  ghost), OR (b) restrict `SegExit.frame` to the registers ACTUALLY restored at
+  a PRE-epilogue join.  Recommended: keep `exitPC = callJoinPC` and weaken
+  `frame` to a tabled `joinRestored : Nat → Register → Bool`-guarded clause
+  (parallel to `stackScratchTop`/`stackWin`): at `callJoinPC` the restored set is
+  {s3,s5,s7} (the normal route) resp. the ret route's set, NOT all AbiPreserved.
+  The full callee-saved restoration is the epilogue's job, provable ONLY at the
+  returned-to config — which is where the CALLER's arm (`armTail`/`EvalExit`)
+  already re-establishes `g`.  So the join `SegExit.frame` should pin only the
+  registers the join itself restores (x2 anchor via the untouched-sp fact, plus
+  s3/s5/s7), and the epilogue closes the rest at the caller boundary.
+
+## 2026-09-01 lwu-missing-from-block-decoder (wave44 valueprint lane, value_print dispatch head)
+- missing: `MKind`/`decodeM` (Vsa/Sim/BlockMem.lean + BlockDecode.lean, the
+  block-reflection layer that `#derive_case`/SegEval runs on) has NO `lwu`
+  case (LOAD group covers only lw=funct3-2, ld=3, lbu=4; lwu=6 is absent). The
+  value_print dispatch head at 0x80002908 is `lwu a5,0(a0)` (reload the
+  ValueKind unsigned) — the FIRST body instruction of the jump-table span, so
+  the whole dispatch head cannot be a `#derive_case` seg as-is. (The DecodeTable
+  lemma for the word 00056783 EXISTS — this is purely the SegEval MKind gap,
+  the same class as the wave-38 `xori` addition.)
+- workaround: NONE yet (stopped at the seg build). Semantically `lwu` here =
+  `lw`: the kind is < 6 so the loaded 32-bit value is non-negative and zero-
+  vs sign-extension agree; but SegEval's `runGM`/`wvalM` have no `.lwu` arm to
+  even fold, so I cannot silently substitute `.lw` in a `#derive_case` block
+  (mkLine derives the kind from the word via decodeM, which returns `none` ⇒
+  the block falls to the `.addi 0 0 0` junk default and the seg VC is wrong).
+- cost: every jump-table dispatch that reloads an unsigned sub-word (value_kind
+  dispatch is the idiom — value_print here, and value_equal/value_kind_name use
+  the SAME `lwu a5,0(a0)` at 0x80002908-adjacent addresses) hits this. Until
+  `.lwu` lands in MKind, these dispatch heads must be hand `Steps` chains
+  (the ValueEqualSpec.lean legacy idiom) instead of segs — exactly the
+  regression CLAUDE.md's header warns against.
+- proposal: add `MKind.lwu` (coordinator-level, mirrors the wave-38 xori add):
+  decodeM LOAD `funct3=6 → some (.lwu, rd, rs1, 0, immI)`; wvalM/astOfM `.lwu`
+  = zero-extend the 32-bit load (astOfM → instruction.LOAD lwu shape); runGM
+  reads the same `lds` positional bytes as `.lw` but zero- not sign-extends;
+  ldsRunM consumes one load like `.lw`; ChainFacts decode leaf uses the
+  existing DecodeTable lemma. Then value_print's dispatch head is a clean seg.
+
+## 2026-09-01 snprintf-frame-generic (wave44 errsegs lane, SnprintfContract probe)
+- missing: a FORMAT-GENERIC snprintf frame/footprint contract. The only landed
+  snprintf spec (`snprintf_lld_spec`, SnprintfSpec42) is the byte-EXACT `"%lld"`
+  capstone (fixed format 0x800192c0, renders intToString). `SnprintfContract`
+  (JmpSpec.lean:1450) needs snprintf's frame property (writes ⊆ [dst,dst+n),
+  jmp_buf [inp+16,inp+128) preserved, output-neutral, ghost frame) for TWO calls
+  in `runtime_error` (0x80002dc8, 0x80002de4) whose formats are the caller-inherited
+  fmt and a fixed non-%lld fmt 0x80019318 — NEITHER is %lld.
+- workaround: NONE (did not build SnprintfContract; out of the errseg decode lane's
+  scope). Documented the 4-piece breakdown in experiments/logs/wave44-errsegs.md.
+- cost: whoever discharges SnprintfContract (M3/error-tail lane) must either
+  (a) re-verify snprintf twice at two non-%lld formats byte-exactly (enormous, and
+  the byte content is UNUSED — the post only needs footprint disjointness), or
+  (b) invent the frame contract from scratch.
+- proposal: `SnprintfFrameContract (dst n : BitVec 64) : Prop` = "snprintf(dst,n,·,·)
+  terminates leaving GoodState/tick/minstret, writes only within [dst.toNat, dst.toNat+n),
+  is output-neutral (sailOutput unchanged), and preserves NotWrittenJmp regs" — a
+  format-AGNOSTIC frame lemma. The footprint reasoning already exists inside
+  snprintf_lld_spec's residual ledger; factor it OUT of the byte-exact rendering so
+  both the %lld capstone and the two runtime_error calls consume the SAME frame fact.
+
+## 2026-09-01 armdispatch-class-split (wave44-armdispatch)
+- missing: the "12 open `*ArmDispatch` residuals" are NOT one class.  Only 7 are
+  jump-table-dispatch-dischargeable (rich-entry-headed: `AssignArmDispatch`/
+  `CallArmDispatch` off `EvalEntry` + the five `Stmt*ArmDispatch` off
+  `ExecEntry`) — all 7 are now DISCHARGED by the two wave-44 combinators
+  (`evalArmDispatch_of_slot`/`execArmDispatch_of_slot`, rows/ArmDispatchCombinator*).
+  The other 5 (`FlCondArmDispatch`, `FlBodyArmDispatch`, `WhileBodyArmDispatch`,
+  `ForInitArmDispatch`, `ArgsHeadDispatch`) are headed by `FEntryC`/`AEntryC` =
+  `SegEntry` ∃-packs at a GHOST interior `entryPC` (`InductionScaffold.SegEntry`
+  pins only PC/store/out/frame/budgets — no node address, no arg-reg ABI, no
+  StmtRepr), so there is NO machine run a slot pin could drive: the missing
+  general fact is a RICHER interior-entry predicate (or per-interior-PC
+  `SegEntry → arm-head` seg rows) — the standing SegEntry-opacity gap, not the
+  dispatch-ladder gap.
+- workaround: NONE (stopped; the 5 stay named residuals).
+- cost: any future "arm-dispatch fan-out" plan that counts these 5 into the
+  slot-combinator class will re-discover this; the divergence/loop lanes pay
+  the SegEntry enrichment instead.
+- proposal: enrich `SegEntry` (or land per-interior-point twins: forCondPC /
+  argLoopPC entries with GHolds + node-addr fields, like `FlBodyArmHeadInv`
+  already is) and route the 5 through `LandedN 0` re-packagings; the wave-43
+  `*ArmHeadInv` defs are the model.
+
+## 2026-09-01 blockA_k-x13-loss-now-parametric (wave44-armdispatch)
+- missing: `blockA_k`/`ArmEntryK` still drop the liveness of `a3`(x13) at the
+  arm entry (dispatch never writes a3; ArmEntryK's frame covers only
+  callee-saveds).  Already noted per-arm by `BinArmExtras.x13_pres`; wave 44
+  generalizes the SAME closure into `EvalArmHeadExtras.x13_pres` (parametric in
+  armPC) rather than fixing blockA_k, because appending a conjunct to the
+  LANDED `ArmEntryK` ∧-tower breaks every positional destructure downstream.
+- workaround: the named `x13_pres` closure field (one per Group-A extras
+  record, shared by assign/call).
+- cost: one un-machine-checked liveness premise per eval composite arm, until
+  a blockA_k widening (or an ArmEntryK named destructurer + appended field +
+  one rebuild) lands.
+- proposal: an `blockA_k_x13` twin concluding `ArmEntryK ∧ (∃ w, x13 = some w)`
+  (21 `obs_*_other'` threads, mechanical), or the ArmEntryK-tower-to-structure
+  refactor R6 already wants.
+
+## 2026-09-01 lookupG-evalBlocks-value-peel-missing (wave44 lane bridgetwins)
+- missing: a peel lemma for reading a COMPUTED CONSTANT register value out of a
+  symbolic-pin `evalBlocks` fold: `lookupG n (evalBlocks bs (SegEvalState.init L
+  lds)).regs = some <closed value>` when `x n` is written only by closed-operand
+  instructions (`li`/`auipc`/`addi rd,rd,imm`). Symbolic `by rfl` blows the
+  elaborator (stack overflow / maxRecDepth even at 100000 — the `sign_extend` of
+  a negative 12-bit imm plus the auipc fold whnf's through Int on 2^64-scale
+  literals); `by decide` is blocked by the free ghost pins elsewhere in the list;
+  the ∃-extraction trick (`⟨_, rfl, by decide⟩`) leaves the value term still
+  mentioning the symbolic `stepGM` tower, so it is not closed. The existing peel
+  layer (`srcVal_runGM_ne`/`srcval_peel`, SegFrameFactsAuto) peels PRESERVED pins
+  through `runGM` bodies, not WRITTEN-constant values through `evalBlocks` chains.
+- workaround: rows keep their posts GHolds-abstract (the landed wave-43 row
+  shape) and machine-check the constant at a GROUND instantiation
+  (`stmtIfThenTail_a4_computed` in `rows/StmtIfThenArmStagePre.lean`: ghosts:=0,
+  one kernel `decide`, ~1s). The symbolic `x16 = 8` case DOES close `by rfl`
+  (small positive imm — no Int churn), so shallow constants stay in posts.
+- cost: consumers of a row's computed-constant registers (here the
+  `ExecDispatchEntry.a4 = stmtJumpTableBase` staging) must re-derive the value
+  from `GHolds` + the ground lemma + a ghost-independence argument, per site;
+  every future row whose span rematerializes an `auipc`-based table pointer
+  (jump-table dispatch heads) pays again.
+- proposal: `lookupG_evalBlocks_const (n) (bs) (h : writersOf n bs are
+  closed-operand) : ∀ L lds, lookupG n (evalBlocks bs (SegEvalState.init L
+  lds)).regs = lookupG n (evalBlocks bs (SegEvalState.init [] [])).regs` — the
+  ghost-independence peel (structural induction like `srcVal_runGM_ne`, never
+  reducing the fold), composed with ONE ground `decide` on the pin-free fold.
