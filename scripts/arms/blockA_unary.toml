@@ -1,0 +1,91 @@
+name = "unaryGen"
+namespace = "Vsa.Sim"
+tag = 8
+armPC = 0x800035e0
+callee = "UnaryArmCallee"
+node_pat = ".unary op esub"
+node_binders = "(op : UnOp) (esub : Expr)"
+x13_reach = false
+doc = "The EX_UNARY arm entry bridge (regenerated twin of the hand blockA_unaryArm, tag 8)."
+
+[extras]
+name = "UnaryArmExtrasGen"
+binders = "(N : NativeAddrs) (A : Arena) (SL : StackLayout)\n    (op : UnOp) (esub : Expr)\n    (sp sret aExpr aOperand : BitVec 64)\n    (m0 : Mem)"
+body = '''  slot8 : KindSlotPinned 8 (0x800035e0#64) m0
+  expr_survives : ∀ m' : Mem,
+    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → m0[a]? = m'[a]?) →
+    ExprRepr m' aExpr.toNat (.unary op esub)
+  pay : read64 m0 (aExpr.toNat + 16) = some aOperand.toNat
+  operand_repr : ExprRepr m0 aOperand.toNat esub
+  expr24 : aExpr.toNat + 24 ≤ 0x100000000
+  expr24_stk : aExpr.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
+  op_align : aOperand.toNat % 8 = 0
+  op_lo : 0x80000000 ≤ aOperand.toNat
+  op_hi : aOperand.toNat + 16 ≤ 0x100000000
+  op_win : tohostAddr + 16 ≤ aOperand.toNat
+  op_stk : aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat
+  sp_headroom : SL.lo + 3264 ≤ sp.toNat
+  sp_SLhi : sp.toNat ≤ SL.hi
+  sp16 : sp.toNat % 16 = 0
+  SLhi_ram : SL.hi ≤ 0x100000000
+  code_stk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
+  vicode_stk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c
+  table_stk : (0x80019f7c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58
+  arena_stk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
+  arena_code : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo'''
+
+[triple]
+thm_binders = '''    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (env : Addr) (op : UnOp) (esub : Expr)
+    (sp r sret aEnv aExpr aOperand : BitVec 64)
+    (m0 : Mem)
+    (hX : UnaryArmExtrasGen N A SL op esub sp sret aExpr aOperand m0) :'''
+post = '''      (fun c => ∃ (v8 v9 v18 : BitVec 64) (ment : Mem),
+        ArmEntryK g N A SL φf φc st (0x800035e0#64) UnaryArmCallee (.unary op esub)
+          sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0 ment c ∧
+        c.σ.regs.get? Register.x11 = some aEnv ∧
+        (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = (fun R => c.σ.regs.get? R) R) ∧
+        (∃ w, (fun R => c.σ.regs.get? R) Register.x8 = some w) ∧
+        (∃ w, (fun R => c.σ.regs.get? R) Register.x18 = some w) ∧
+        read64 ment (aExpr.toNat + 16) = some aOperand.toNat ∧
+        ExprRepr ment aOperand.toNat esub ∧
+        aExpr.toNat + 24 ≤ 0x100000000 ∧
+        aOperand.toNat % 8 = 0 ∧
+        0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
+        tohostAddr + 16 ≤ aOperand.toNat ∧
+        (aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat) ∧
+        SL.lo + 3264 ≤ sp.toNat ∧ sp.toNat ≤ SL.hi ∧ sp.toNat % 16 = 0 ∧
+        SL.hi ≤ 0x100000000 ∧
+        (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
+        ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
+        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
+        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo))'''
+
+[proof]
+slot_field = "slot8"
+kind_read = "unary hk _ _ _ => exact hk"
+callee_loaded_arg = "⟨hc.mem ▸ hc.value_int_code, hc.mem ▸ hc.int_slot⟩"
+callee_surv = '''(fun mem a8 dd hlo hhi hcl => by
+        obtain ⟨hvi, hsl⟩ := hcl
+        refine ⟨loaded_int_writeMap8 mem a8 dd (by
+          have := hc.vicode_stack_disjoint; omega) hvi, ?_⟩
+        exact intSlot_writeMap8 mem a8 dd (by
+          have := hc.table_stack_disjoint; simp only [jumpTableBase]; omega) hsl)'''
+operand_addr = "aOperand"
+armentryk_realign = '''ArmEntryK g N A SL φf φc st (0x800035e0#64) UnaryArmCallee (.unary op esub)
+      sp r sret aExpr aEnv v8 v9 v18 c1.σ.sailOutput m0 ment c1'''
+extra_haves = '''  obtain ⟨p, hk8m, hopTok, hpayMent, hsubReprMent⟩ : ∃ p,
+      read32 ment aExpr.toNat = some 8 ∧
+      read32 ment (aExpr.toNat + 8) = some (unOpTok op) ∧
+      read64 ment (aExpr.toNat + 16) = some p ∧ ExprRepr ment p esub := by
+    cases hExprMent with | unary hk htok hp hpe => exact ⟨_, hk, htok, hp, hpe⟩
+  have hpeq : p = aOperand.toNat := Option.some.inj (hpayMent.symm.trans hpayMent')
+  subst hpeq'''
+refine_head = "refine ⟨c1, hs1, v8, v9, v18, ment, hArm', hAEx11, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩,"
+refine_tail = '''hpayMent', hsubReprMent, hX.expr24,
+    hX.op_align, hX.op_lo, hX.op_hi, hX.op_win, hX.op_stk,
+    hX.sp_headroom, hX.sp_SLhi, hX.sp16, hX.SLhi_ram,
+    hX.code_stk, hX.vicode_stk, (by have := hX.table_stk; omega),
+    hX.arena_stk, hX.arena_code⟩'''

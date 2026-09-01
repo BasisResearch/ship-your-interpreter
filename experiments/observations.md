@@ -2384,3 +2384,98 @@ it, still stop and report instead.
   operator-dispatch chain parametrized over {kind tag, landing PC, branch fate} would let
   every future kind-arm reuse ONE chain. Not built this wave (the κ-clone is the closed set
   for the add-family dispatch); named as the abstraction if a 4th kind-arm appears.
+
+## 2026-09-01 blockA-arm-bridge-emitter-scope (wave36-armgen)
+- missing: a uniform DOWNSTREAM target for the blockA_*Arm dispatch bridge across
+  ALL eval arms. unary/logical/binary feed a `blockB_*_stagePre` cut (post = ∃ ment
+  ArmEntryK + N geometry conjuncts); but assign/call/args have NO stagePre — their
+  arm-head is a genseg jal-seg (`assignArmEntryBridge`) whose precondition is a
+  SegPre/ChainFacts bundle, not an ArmEntryK-post. And there is NO `AssignArmCallee`/
+  `CallArmCallee`/`ArgsArmCallee` calleeLoaded Mem→Prop predicate, nor a
+  `KindSlotPinned 5` assign-slot pin, established anywhere.
+- workaround: the emitter parametrizes the blockA_*Arm bridge over {tag, armPC,
+  calleeLoaded, calleeSurv proof-term, #operands, post-conjunct list, extra-reach
+  (x13)}; it can regenerate unary+logical+binary verbatim. It CANNOT emit
+  assign/call/args blockA bridges without those three missing per-arm inputs
+  (calleeLoaded predicate + its writeMap8 survival lemma + KindSlotPinned tag).
+- cost: assign/call/args dispatch bridges remain unbuilt until someone defines
+  `AssignArmCallee`/`CallArmCallee`/`ArgsArmCallee` + the `*_writeMap8` survival
+  lemma + establishes the dispatch tag. The emitter is READY to consume them.
+- proposal: the emitter is the abstraction; the residual is 3 per-arm calleeLoaded
+  predicates + survival lemmas (small, model: UnaryArmCallee + loaded_int_writeMap8).
+
+## 2026-09-01 eval-missing-arms-are-stagePre-not-blockA (wave36-armgen)
+- missing: the eval-side residual owed for assignE/callF/argsHead is a `LandedN 1 c
+  (JalPreBundle e …)` STAGING CUT (the `hstage` premise of assignE_split/callF_split/
+  argsHead_split in ArmSegSplitEval.lean:361-493), which is the blockB_*_stagePre
+  FAMILY (a bespoke machine-step chain: per-arm site_* lemmas, addi sub-buffer
+  offsets, jal-target BitVec computation — see blockB_unary_stagePre in
+  StagePreSuppliers.lean), NOT the blockA_*Arm dispatch-bridge family the emitter
+  generates. The blockA bridge is the OTHER factor (EvalEntry → ArmEntryK-post);
+  unary/logical/binary already have BOTH factors, so they are closed.
+- workaround: NONE for the stagePre cut — it does not parametrize as literals. The
+  AssignArmEntryGen/CallArm*Gen/CallClosure*Gen segs (genseg.py output) DO provide
+  the straight-line machine spans, so a stagePre cut for these arms = compose the
+  existing Gen seg's Steps chain + the jal-pre-bundle packaging (a `bridgeOfSeg` +
+  JalPreBundle assembly, ~40 lines each), but the JalPreBundle field list and the
+  jal-target arithmetic are per-arm.
+- cost: assignE/callF/argsHead stagePre cuts remain hand-built (~40 lines each,
+  reusing the existing Gen segs). The blockA emitter does NOT reduce them.
+- proposal: a SECOND emitter (gen_stagepre.py) consuming {arm seg name, jal-target,
+  JalPreBundle field projections} — but the per-arm JalPreBundle conjunct list is
+  the same non-uniformity that blocks the blockA post; likely 1 hand template +
+  regeneration rather than a clean compiler. Deferred; flagged for coordinator.
+
+## 2026-09-01 armtailrec-pre-tower-has-no-named-def (wave 36, binaryR/logicalR re-type)
+- missing: a single NAMED def for `armTail_rec`'s precondition (the "config at a
+  `jal eval_expr` with the sub-call staged" tower: ~45 conjuncts of regs/mem/store/
+  geometry). It is currently spelled THREE times: inline in `armTail_rec`
+  (EvalRecCommon), as the body of `JalPreBundle` (ArmSegSplitEval, ∃-wrapping the
+  callPC/retPC/jalImm pins away), and as `midArmField_of_IH`'s `hpre`
+  (MidArmFieldIH, pins instantiated at 0x800034f8/0x800034fc/0x1ffc6c).
+- workaround: wave-36 adds a FOURTH copy — `MidArmLeftJalBundle` (MidArmFieldWire),
+  the ∃-ghost landing bundle for the binaryR/logicalR staging residual, which must
+  carry the pinned-PC pre + the jal-site fact + `MidArmRightMarshal` under ONE ∃ so
+  the ghosts cohere (JalPreBundle cannot be reused: its ∃ forgets the PC pins, and
+  the marshal must be stated over the SAME ghost tuple as the pre).
+- cost: ~45 conjuncts re-spelled once more; any future change to the sub-call
+  staging contract must now be threaded through 4 sites; the same will hit the
+  callArgs/argsTail mid-arm staging bundles when they are built.
+- proposal: factor `def SubCallStagedPre (gpre N A SL φf φc st l callPC sp rr sret
+  subsret aIn aOperand v8 v9 v18 out0 mcall) (c : Config) : Prop := <the tower>` in
+  EvalRecCommon; restate `armTail_rec`'s pre, `JalPreBundle`'s body,
+  `midArmField_of_IH.hpre`, and `MidArmLeftJalBundle` as applications of it (each a
+  1-line rewrap; all landed consumers keep their statements via the definitional
+  unfold). One def, four call sites.
+
+## 2026-09-01 loaded-batteries-lack-footprint-stability-lemmas (wave36-callspec)
+- missing: per-code-object stability lemmas `MemPredStableOn XLoaded F` (for
+  StringifyLoaded/StrlenLoaded/MemcpyLoaded/…): "the pin battery survives any
+  memory change confined to a footprint disjoint from the code region". The
+  interface now exists (`Vsa/Sim/CallFrameMeta.lean:MemPredStableOn` +
+  `loaded_writeLog_of_rz`, the hjalmem-killer), but no instance is proved for
+  any concrete *Loaded battery.
+- workaround: NONE needed for this wave (the pilot re-seat keeps the hand
+  route's hjalmem-shaped premises); the metatheorem's code-survival leg stays
+  conditional on the once-per-object instance.
+- cost: until instances land, every splice still threads a bespoke
+  `hjalmem : XLoaded (writeLog m0 seg.log)` premise (currently one per staging
+  seam, ~19+ sites across the tail/concat/env_define families).
+- proposal: one generator-style lemma per *Loaded def: unfold the battery to
+  its pin list, each pin address in the code range [lo,hi), then
+  `MemPredStableOn XLoaded F` for any F with `∀ a, F a → a < lo ∨ hi ≤ a`
+  (Layout-level disjointness, stated once). Could be emitted by the same
+  script that emits the *Loaded defs.
+
+## 2026-09-01 record-projection-fields-opaque-to-tactics (wave36-callspec)
+- missing: a `@[simp]`-lemma battery (or unfold attribute discipline) for
+  `CallSpec` instance projections (`strlenCallSpec.foot g a`,
+  `memcpyByteCallSpec.mem0 g`, …): omega/rw cannot see through structure-
+  instance field projections even though they are defeq to their literals.
+- workaround: defeq re-statement at each use (`have ha' : ¬(dst.toNat ≤ a ∧ …)
+  := ha`, `show c'.σ.mem[a]? = g.m0[a]? …`) inside the Sat proofs.
+- cost: 1-2 bridge lines per Sat proof field; every future CallSpec instance
+  pays it again.
+- proposal: emit `@[simp] theorem <spec>_foot_eq : <spec>.foot g a ↔ …` (and
+  mem0/entry/ret) beside each instance, or a tiny `callspec_defeq` macro; keeps
+  Sat proofs pure field-assembly.

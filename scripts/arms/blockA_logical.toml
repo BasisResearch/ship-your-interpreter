@@ -1,0 +1,107 @@
+name = "logicalGen"
+namespace = "Vsa.Sim"
+tag = 7
+armPC = 0x8000355c
+callee = "LogicalArmCallee"
+node_pat = ".logical op el er"
+node_binders = "(op : LogOp) (el er : Expr)"
+x13_reach = true
+doc = "The EX_LOGICAL arm entry bridge (regenerated twin of the hand blockA_logicalArm, tag 7, x13-reach threaded)."
+
+[extras]
+name = "LogicalArmExtrasGen"
+binders = "(N : NativeAddrs) (A : Arena) (SL : StackLayout)\n    (op : LogOp) (el er : Expr)\n    (sp sret aExpr aLeft : BitVec 64)\n    (m0 : Mem)"
+body = '''  slot7 : KindSlotPinned 7 (0x8000355c#64) m0
+  expr_survives : ∀ m' : Mem,
+    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → m0[a]? = m'[a]?) →
+    ExprRepr m' aExpr.toNat (.logical op el er)
+  left_survives : ∀ m' : Mem,
+    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → m0[a]? = m'[a]?) →
+    ExprRepr m' aLeft.toNat el
+  pay : read64 m0 (aExpr.toNat + 16) = some aLeft.toNat
+  expr24 : aExpr.toNat + 24 ≤ 0x100000000
+  expr24_stk : aExpr.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
+  op_align : aLeft.toNat % 8 = 0
+  op_lo : 0x80000000 ≤ aLeft.toNat
+  op_hi : aLeft.toNat + 16 ≤ 0x100000000
+  op_win : tohostAddr + 16 ≤ aLeft.toNat
+  op_stk : aLeft.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aLeft.toNat
+  sp_headroom : SL.lo + 3264 ≤ sp.toNat
+  sp_SLhi : sp.toNat ≤ SL.hi
+  sp16 : sp.toNat % 16 = 0
+  SLhi_ram : SL.hi ≤ 0x100000000
+  code_stk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
+  vicode_stk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c
+  table_stk : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ (0x80019f58 : Nat)
+  arena_stk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
+  arena_code : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
+  truthy_loaded : Value_truthyLoaded m0
+  bool_loaded : Value_boolLoaded m0
+  int_loaded : Value_intLoaded m0
+  intslot : IntSlotPinned m0
+  truthy_stk : sp.toNat ≤ 0x8000282c ∨ 0x8000285c ≤ SL.lo
+  boolcode_stk : sp.toNat ≤ 0x800027f8 ∨ 0x8000280c ≤ SL.lo'''
+
+[triple]
+thm_binders = '''    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (env : Addr) (op : LogOp) (el er : Expr)
+    (sp r sret aEnv aExpr aLeft aEnv3 : BitVec 64)
+    (m0 : Mem)
+    (hX : LogicalArmExtrasGen N A SL op el er sp sret aExpr aLeft m0) :'''
+triple_pre = '''      (fun c =>
+        EvalEntry g N A SL φf φc st d env (.logical op el er) sp r sret aEnv aExpr m0 c ∧
+        (∀ cm : Config, Steps c cm →
+          cm.σ.regs.get? Register.PC = some (0x8000355c#64) →
+          cm.σ.regs.get? Register.x13 = some aEnv3))'''
+post = '''      (fun c => ∃ (v8 v9 v18 : BitVec 64) (ment : Mem),
+        ArmEntryK g N A SL φf φc st (0x8000355c#64) LogicalArmCallee (.logical op el er)
+          sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0 ment c ∧
+        c.σ.regs.get? Register.x11 = some aEnv ∧
+        c.σ.regs.get? Register.x13 = some aEnv3 ∧
+        (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = (fun R => c.σ.regs.get? R) R) ∧
+        (∃ w, (fun R => c.σ.regs.get? R) Register.x8 = some w) ∧
+        (∃ w, (fun R => c.σ.regs.get? R) Register.x18 = some w) ∧
+        read64 ment (aExpr.toNat + 16) = some aLeft.toNat ∧
+        (∀ m' : Mem,
+          (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m'[a]?) →
+          ExprRepr m' aLeft.toNat el) ∧
+        aExpr.toNat + 24 ≤ 0x100000000 ∧
+        aLeft.toNat % 8 = 0 ∧
+        0x80000000 ≤ aLeft.toNat ∧ aLeft.toNat + 16 ≤ 0x100000000 ∧
+        tohostAddr + 16 ≤ aLeft.toNat ∧
+        (aLeft.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aLeft.toNat) ∧
+        SL.lo + 3264 ≤ sp.toNat ∧ sp.toNat ≤ SL.hi ∧ sp.toNat % 16 = 0 ∧
+        SL.hi ≤ 0x100000000 ∧
+        (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
+        ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
+        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
+        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo))'''
+
+[proof]
+intro = "intro c ⟨hc, hx13reachC⟩"
+slot_field = "slot7"
+kind_read = "logical hk _ _ _ _ _ => exact hk"
+callee_loaded_arg = "⟨hX.int_loaded, hX.intslot, hX.truthy_loaded, hX.bool_loaded⟩"
+callee_surv = '''(fun mem a8 dd hlo hhi hcl =>
+        logicalCallee_writeMap8 mem a8 dd
+          (by have := hX.vicode_stk; omega)
+          (by simp only [jumpTableBase]; have := hX.table_stk; omega)
+          (by have := hX.truthy_stk; omega)
+          (by have := hX.boolcode_stk; omega) hcl)'''
+operand_addr = "aLeft"
+armentryk_realign = '''ArmEntryK g N A SL φf φc st (0x8000355c#64) LogicalArmCallee (.logical op el er)
+      sp r sret aExpr aEnv v8 v9 v18 c1.σ.sailOutput m0 ment c1'''
+extra_haves = '''  obtain ⟨lp, rp, hk7m, hopTok, hlptrM, hlRM, hrptrM, hrRM⟩ : ∃ lp rp,
+      read32 ment aExpr.toNat = some 7 ∧
+      read32 ment (aExpr.toNat + 8) = some (logOpTok op) ∧
+      read64 ment (aExpr.toNat + 16) = some lp ∧ ExprRepr ment lp el ∧
+      read64 ment (aExpr.toNat + 24) = some rp ∧ ExprRepr ment rp er := by
+    cases hExprMent with | logical hk htok hl hlp hr hrp => exact ⟨_, _, hk, htok, hl, hlp, hr, hrp⟩'''
+refine_head = "refine ⟨c1, hs1, v8, v9, v18, ment, hArm', hAEx11, hx13c1, (fun R _ => rfl),\n    ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩, hpayMent',"
+refine_tail = '''(fun m' hag => hX.left_survives m' (fun a ha => (hMentM0 a ha).symm.trans (hag a ha))),
+    hX.expr24, hX.op_align, hX.op_lo, hX.op_hi, hX.op_win, hX.op_stk,
+    hX.sp_headroom, hX.sp_SLhi, hX.sp16, hX.SLhi_ram,
+    hX.code_stk, hX.vicode_stk, (by have := hX.table_stk; omega),
+    hX.arena_stk, hX.arena_code⟩'''

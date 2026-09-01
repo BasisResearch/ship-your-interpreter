@@ -837,6 +837,21 @@ THEOREMS=(
   Vsa.Sim.intBranchCallResid_of_halves              # rows/StringifyIntTail (IntBranchCallResid = the one named int-arm dispatch→snprintf-entry seam)
   Vsa.Sim.concatDispatchResid_closed                # rows/BlockCConcat (residual 1 of the STR-arm lift CLOSED)
   Vsa.Sim.blockC_concat_str_closed                  # rows/BlockCConcat (blockC_concat with all three wave-34 residuals discharged)
+  Vsa.Sim.blockA_unaryGenArm                        # rows/BlockAUnaryArmGen (GENERATOR-EMITTED twin of blockA_unaryArm — gen_arm_bridge regression guard)
+  Vsa.Sim.blockA_logicalGenArm                      # rows/BlockALogicalArmGen (emitted twin of blockA_logicalArm, exercises the x13-reach branch)
+  # Wave 36: the CallSpec calling-convention layer
+  Vsa.Sim.strlenCallSpec_sat                        # CallSpec (strlen as a CallSpec instance — thin wrapper, hand theorem untouched)
+  Vsa.Sim.mallocCallSpec_sat                        # CallSpec (malloc-from-contract instance; Res := Nat with 0 = NULL encodes the disjunction)
+  Vsa.Sim.memcpyByteCallSpec_sat                    # CallSpec (memcpy byte-route instance; NotWrittenB via the G-projected ghost)
+  Vsa.Sim.rzSeamFrame_of_run                        # CallFrameMeta (THE red-zone frame metatheorem: LogInRZ ⇒ ABI frame + AInv + code pins + memOut in one shot)
+  Vsa.Sim.loaded_writeLog_of_rz                     # CallFrameMeta (*Loaded survival off footprint stability)
+  Vsa.Sim.spliceFold                                # SpliceFold (SpliceChain → composite Triple by structural fold — zero per-callee splice theorems at any arity)
+  Vsa.Sim.stringifyStrdupTailContract_viaSpliceFold # rows/StrdupTailSpliceFold (PILOT: the hand contract re-proved as one 8-line chain over the real contracts)
+  Vsa.Sim.strdupMallocSpill_logInRZ                 # rows/StrdupTailSpliceFold (the real strdup spill log inside the red zone — one omega)
+  Vsa.Sim.strdupAInvStableSpill_of_rz               # rows/StrdupTailSpliceFold (the old hAInvStableSpill premise DERIVED from the canonical AInvStableOn)
+  Vsa.Sim.jalPreBundle_of_midArmBundle              # MidArmFieldWire (MidArmLeftJalBundle → JalPreBundle; jal site = landed site_800034f8_ee, pins decided)
+  Vsa.Sim.binaryR_field_of_stage                    # MidArmFieldWire (binaryR FIELD-COMPOSED: staging ≫ armTail_rec(IH) ≫ midStage1; residual BinaryRStagePre strictly smaller)
+  Vsa.Sim.logicalR_field_of_stage                   # MidArmFieldWire (logicalR twin — 5/14 eval-child fields machine-composed; evalIH bundle field = term_sim_of_cases, the families' convergence)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean

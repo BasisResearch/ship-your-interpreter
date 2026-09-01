@@ -319,14 +319,21 @@ second `jal eval_expr` at `0x80003518`, after the LEFT returned into the spill a
 the right operand pointer is reloaded — `EvalBinSim.blockB_binary:611..911`) stages
 the RIGHT sub-call at the updated store `st'`, then the SAME `armTail_rec` seam
 marshals.  The staging residual carries the `EvalE l st' lv` fact (the left result
-determines `st'`). -/
+determines `st'`) AND — wave 36 — the MACHINE-level left IH `EvalIH st d env l st'
+lv` (`hIH`): reaching the mid-arm requires actually RUNNING the left `jal eval_expr`
+and returning (`armTail_rec`), which the spec-level `EvalE` cannot drive
+(observation `2026-09-01 binaryR-field-lacks-machine-IH`, proposal (b)).  The split's
+CONCLUSION keeps the `ApproxArmResid.binaryR` type unchanged; the IH is discharged by
+the bundle's `evalIH` link in `armResidGap_evalChildFields`. -/
 theorem binaryR_split (op : BinOp) (l r : Expr) (c : Config) (st st' : Vsa.While.St)
     (d : Nat) (env : Addr) (lv : Value)
-    (hstage : EvalE st d env l st' lv → EEntryC c st d env (.binary op l r) →
+    (hIH : EvalIH st d env l st' lv)
+    (hstage : EvalIH st d env l st' lv → EvalE st d env l st' lv →
+      EEntryC c st d env (.binary op l r) →
       LandedN 1 c (fun c' => JalPreBundle r c' st' d env)) :
     EvalE st d env l st' lv → EEntryC c st d env (.binary op l r) →
     LandedN 1 c (fun c' => EEntryC c' st' d env r) :=
-  fun hEval hEE => evalChildSplit_of_stage r c st' d env (hstage hEval hEE)
+  fun hEval hEE => evalChildSplit_of_stage r c st' d env (hstage hIH hEval hEE)
 
 #print axioms binaryR_split
 
@@ -343,14 +350,17 @@ theorem logicalL_split (lop : Vsa.While.LogOp) (l r : Expr) (c : Config)
 #print axioms logicalL_split
 
 /-- **`logicalR` class field.**  Identical shape to `binaryR` — the second logical
-sub-call at store `st'` after the left short-circuit test evaluated. -/
+sub-call at store `st'` after the left short-circuit test evaluated; carries the
+same machine-level left IH (wave 36). -/
 theorem logicalR_split (lop : Vsa.While.LogOp) (l r : Expr) (c : Config)
     (st st' : Vsa.While.St) (d : Nat) (env : Addr) (lv : Value)
-    (hstage : EvalE st d env l st' lv → EEntryC c st d env (.logical lop l r) →
+    (hIH : EvalIH st d env l st' lv)
+    (hstage : EvalIH st d env l st' lv → EvalE st d env l st' lv →
+      EEntryC c st d env (.logical lop l r) →
       LandedN 1 c (fun c' => JalPreBundle r c' st' d env)) :
     EvalE st d env l st' lv → EEntryC c st d env (.logical lop l r) →
     LandedN 1 c (fun c' => EEntryC c' st' d env r) :=
-  fun hEval hEE => evalChildSplit_of_stage r c st' d env (hstage hEval hEE)
+  fun hEval hEE => evalChildSplit_of_stage r c st' d env (hstage hIH hEval hEE)
 
 #print axioms logicalR_split
 
@@ -514,12 +524,26 @@ per-class arm-head-to-`JalPreBundle` span (the strictly-smaller upstream residua
 Bundling them lets the capstone discharge all 15 fields uniformly through
 `evalChildSplit_of_stage`. -/
 structure EvalChildStages : Prop where
+  /-- **The completed-sub-derivation simulation link `EvalE → EvalIH` (wave 36).**
+  The `binaryR`/`logicalR` staging spans must RUN the completed LEFT sub-eval on the
+  machine (`armTail_rec`), which needs the machine-level `EvalIH` — underivable from
+  the spec `EvalE` alone, and NOT derivable inside the divergence fold (its strong
+  induction yields only `Divg` step lower bounds for still-running derivations).
+  SUPPLIER: `TermSimAssembly.term_sim_of_cases` — its conclusion `mEvalE … t` IS
+  `EvalIH st d env e st' v` (`TermSimAssembly.lean:80-82`) for every derivation
+  `t : EvalE …` — i.e. the term-family capstone, conditionally on the M4 residual
+  bundle.  Non-circular: `term_sim_of_cases` is the `@EvalE.rec` assembly and does
+  not depend on any divergence-family theorem. -/
+  evalIH : ∀ (st : Vsa.While.St) (d : Nat) (env : Addr) (e : Expr)
+    (st' : Vsa.While.St) (v : Value),
+    EvalE st d env e st' v → EvalIH st d env e st' v
   unary : ∀ (op : UnOp) (e : Expr) (c : Config) (st : Vsa.While.St) (d : Nat) (env : Addr),
     EEntryC c st d env (.unary op e) → LandedN 1 c (fun c' => JalPreBundle e c' st d env)
   binaryL : ∀ (op : BinOp) (l r : Expr) (c : Config) (st : Vsa.While.St) (d : Nat) (env : Addr),
     EEntryC c st d env (.binary op l r) → LandedN 1 c (fun c' => JalPreBundle l c' st d env)
   binaryR : ∀ (op : BinOp) (l r : Expr) (c : Config) (st st' : Vsa.While.St) (d : Nat)
     (env : Addr) (lv : Value),
+    EvalIH st d env l st' lv →
     EvalE st d env l st' lv → EEntryC c st d env (.binary op l r) →
     LandedN 1 c (fun c' => JalPreBundle r c' st' d env)
   logicalL : ∀ (lop : Vsa.While.LogOp) (l r : Expr) (c : Config) (st : Vsa.While.St)
@@ -527,6 +551,7 @@ structure EvalChildStages : Prop where
     EEntryC c st d env (.logical lop l r) → LandedN 1 c (fun c' => JalPreBundle l c' st d env)
   logicalR : ∀ (lop : Vsa.While.LogOp) (l r : Expr) (c : Config) (st st' : Vsa.While.St)
     (d : Nat) (env : Addr) (lv : Value),
+    EvalIH st d env l st' lv →
     EvalE st d env l st' lv → EEntryC c st d env (.logical lop l r) →
     LandedN 1 c (fun c' => JalPreBundle r c' st' d env)
   assignE : ∀ (x : String) (e : Expr) (c : Config) (st : Vsa.While.St) (d : Nat) (env : Addr),
@@ -591,9 +616,11 @@ theorem armResidGap_evalChildFields (S : EvalChildStages) :
       LandedN 1 c (fun c' => EEntryC c' st d env cc)) :=
   ⟨fun op e c st d env => unaryE_split op e c st d env (S.unary op e c st d env),
    fun op l r c st d env => binaryL_split op l r c st d env (S.binaryL op l r c st d env),
-   fun op l r c st st' d env lv => binaryR_split op l r c st st' d env lv (S.binaryR op l r c st st' d env lv),
+   fun op l r c st st' d env lv hEv => binaryR_split op l r c st st' d env lv
+     (S.evalIH st d env l st' lv hEv) (S.binaryR op l r c st st' d env lv) hEv,
    fun lop l r c st d env => logicalL_split lop l r c st d env (S.logicalL lop l r c st d env),
-   fun lop l r c st st' d env lv => logicalR_split lop l r c st st' d env lv (S.logicalR lop l r c st st' d env lv),
+   fun lop l r c st st' d env lv hEv => logicalR_split lop l r c st st' d env lv
+     (S.evalIH st d env l st' lv hEv) (S.logicalR lop l r c st st' d env lv) hEv,
    fun x e c st d env => assignE_split x e c st d env (S.assignE x e c st d env),
    fun f args c st d env => callF_split f args c st d env (S.callF f args c st d env),
    fun e es c st d env => argsHead_split e es c st d env (S.argsHead e es c st d env),

@@ -554,8 +554,15 @@ import Vsa.Sim.rows.BlockCConcat
 import Vsa.Sim.EvalChildFieldCombinator
 import Vsa.Sim.ArmStagesWave34
 import Vsa.Sim.MidArmFieldIH
+import Vsa.Sim.MidArmFieldWire
 import Vsa.Sim.rows.FnArmClosureBuild
 import Vsa.Sim.rows.AllocClosureInhab
+import Vsa.Sim.rows.BlockAUnaryArmGen
+import Vsa.Sim.rows.BlockALogicalArmGen
+import Vsa.Sim.CallSpec
+import Vsa.Sim.CallFrameMeta
+import Vsa.Sim.SpliceFold
+import Vsa.Sim.rows.StrdupTailSpliceFold
 import Vsa.While.StmtDispatch
 import Vsa.While.StmtDispatchClose
 import Vsa.Sim.InterpSimBundle

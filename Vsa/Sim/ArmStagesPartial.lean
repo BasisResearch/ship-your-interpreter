@@ -12,7 +12,8 @@ landed field in as it lands, and mark the rest as its remaining residual.  This 
 supplies the per-class *builders* that turn a flat list of field-typed lemmas into the
 corresponding bundle, so:
 
-* `evalChildStages_mk` — the 15-arg builder for `EvalChildStages` (14 group fields;
+* `evalChildStages_mk` — the flat builder for `EvalChildStages` (14 group fields plus
+  the wave-36 `evalIH` term-family link;
   `flStep` is the separate lone bundle field, built alongside).  Each argument is
   EXACTLY one `EvalChildStages` field type, so a landed `*_stagePre` supplier
   (composed with `blockA_k` into the `EEntryC`-source shape) plugs straight in and the
@@ -53,12 +54,15 @@ result is the bundle.  A partial supplier passes its landed staging spans (as th
 matching `∀ ... → LandedN 1 ... JalPreBundle ...` lemmas) and leaves the rest as
 named holes it still owes. -/
 def evalChildStages_mk
+    (evalIH : ∀ (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt) (v : Value),
+      EvalE st d env e st' v → EvalIH st d env e st' v)
     (unary : ∀ (op : UnOp) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
       EEntryC c st d env (.unary op e) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
     (binaryL : ∀ (op : BinOp) (l r : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
       EEntryC c st d env (.binary op l r) → LandedN 1 c (fun c' => JalPreBundle l c' st d env))
     (binaryR : ∀ (op : BinOp) (l r : Expr) (c : Config) (st st' : SpecSt) (d : Nat)
       (env : Addr) (lv : Value),
+      EvalIH st d env l st' lv →
       EvalE st d env l st' lv → EEntryC c st d env (.binary op l r) →
       LandedN 1 c (fun c' => JalPreBundle r c' st' d env))
     (logicalL : ∀ (lop : Vsa.While.LogOp) (l r : Expr) (c : Config) (st : SpecSt)
@@ -66,6 +70,7 @@ def evalChildStages_mk
       EEntryC c st d env (.logical lop l r) → LandedN 1 c (fun c' => JalPreBundle l c' st d env))
     (logicalR : ∀ (lop : Vsa.While.LogOp) (l r : Expr) (c : Config) (st st' : SpecSt)
       (d : Nat) (env : Addr) (lv : Value),
+      EvalIH st d env l st' lv →
       EvalE st d env l st' lv → EEntryC c st d env (.logical lop l r) →
       LandedN 1 c (fun c' => JalPreBundle r c' st' d env))
     (assignE : ∀ (x : String) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
@@ -89,7 +94,7 @@ def evalChildStages_mk
       (d : Nat) (env : Addr),
       FEntryC c st d env (some cc) step b → LandedN 1 c (fun c' => JalPreBundle cc c' st d env)) :
     EvalChildStages :=
-  { unary, binaryL, binaryR, logicalL, logicalR, assignE, callF, argsHead,
+  { evalIH, unary, binaryL, binaryR, logicalL, logicalR, assignE, callF, argsHead,
     stmtExpr, stmtRet, stmtVarInit, stmtIfCond, stmtWhileCond, flCond }
 
 /-! ## §2. `SqEntryStages` — the 3-field builder -/
