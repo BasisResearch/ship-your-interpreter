@@ -4840,3 +4840,29 @@ it, still stop and report instead.
   `blockA_binaryArm(_budgeted)` + 11 `binRow_*` + 10 `eval*Sim` + 6 unary sims.
   Feasible (the intrinsic facts exist) but NOT a one-field tweak; not landable
   green in a single bounded pass without a broken-tree window.
+
+## 2026-09-02 binarmextras-mem_ext-redundant-framepop-x13-are-new-rungs (wave 48f drop-and-thread)
+- missing: (1) a NEW entry-ground frame-window presence field (`m0` populated on
+  `[sp-1120,sp)`, honest footprint `[subsret+4,+8) ∪ [subsret+16,+24)`, subsret=sp-944);
+  (2) a `blockA_k`/`ArmEntryK` widening that tracks `x13`(a3) live across the dispatch
+  span `0x80003164→0x800034e8`. These are the true blockers of the 11 int/eq cells +
+  6 unary/logic residuals, NOT the over-quant `mem_ext` closure 48e flagged.
+- workaround: NONE for the two new rungs (STOPPED per Law 4). DID land the one clean
+  redundancy: DROPPED `BinArmExtras.mem_ext` and threaded `blockA_k`'s intrinsic
+  `_hpresM : MemExtends m0 ment` in `blockA_binaryArm` — the 48e "thread the concrete
+  fact" move, which holds for mem_ext ONLY. Zero downstream churn (all consumers take
+  `BinArmExtras` as a hypothesis, never project `.mem_ext`); census unchanged 6/58.
+- cost: any agent re-attempting the "drop frame_pop/x13_pres + thread block output"
+  cure pays a dead end: machine-checked `BinArmExtrasFramePopNewRung.lean` shows
+  `frame_pop` is refutable as an isolated field and the dead sub-result bytes are
+  unconstrained by ValueRepr / unwritten by the prologue ⇒ their presence reduces to an
+  `m0` fact absent from EvalGround. `x13_pres` reduces to a config-liveness fact absent
+  from ArmEntryK. Neither is a "thread the existing block fact" move.
+- proposal: TWO rungs, in dependency order. (A) `EvalGround`/`EvalEntry` frame-presence
+  field `∀a∈[sp-1120,sp), ∃b, m0[a]?=some b` (or the tighter dead-byte footprint) —
+  supplies `frame_pop`'s concrete instance for `ment`/`mcall` via the memframe; then the
+  B2 `EvalEntry`-hypothesis carry (X2 design) makes `BinIntCellResid` buildable modulo
+  (B). (B) `blockA_k` widening: emit `∃w, c1.regs x13 = some w` as a 3rd output (the
+  dispatch span 0x80003164→0x800034e8 provably never writes a3) — supplies `x13_pres`.
+  With BOTH + the B2 carry, all 11 int/eq cells + the 6 unary/logic residuals' presence
+  conjuncts relight. Each is a genuine statement/widening change, one bounded pass each.

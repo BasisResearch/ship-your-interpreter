@@ -237,3 +237,63 @@ from `blockA_binaryArm`/`blockB_unary`, with `blockB_unary` extended to also emi
 but a multi-file restatement, NOT a one-field statement tweak — not landable green
 in one bounded pass. LANDED THIS PASS: harvest + 3 machine-checked obstruction
 classes + observations entry. FIELDS FOUND: 0 new (census 6/58, honest).
+
+---
+## Wave 48f — BinArmExtras closure-drop: mem_ext REDUNDANT (landable), frame_pop/x13_pres are NEW RUNGS (machine-checked, STOP per Law 4)
+
+Read 48e trail + full cone (BinArmBridge/blockA_k/ArmEntryK/blockB_unary/blockC_neg/
+SubEvalReturn/EvalGround/TermRouting). Machine-grounded findings BEFORE editing:
+
+- `mem_ext` (BinArmExtras + the `∀mcall→MemExtends` conjunct in all 6 unary/logic
+  Resids): TRULY REDUNDANT. `blockA_k`'s 2nd output `_hpresM : MemExtends m0 ment`
+  (EvalIntSim2.lean:326) and `SubEvalReturn.MemExtends mcall c.σ.mem` (EvalRecCommon
+  .lean:173) already supply the concrete fact. Droppable + rethreadable.
+- `frame_pop` / the windowed-presence conjunct: NOT redundant, NOT block-derivable.
+  Consumer (blockC_neg:231-276 via `stackpop_present`) needs PRESENCE of the DEAD
+  sub-result-buffer bytes `[subsret+4,+8) ∪ [subsret+16,+24)` (subsret=sp-944) in the
+  PRE-call memory `mcall`=`ment`. Those bytes ⊆ `[SL.lo,sp)` scribble window where
+  ment=m0 (memframe), and are UNCONSTRAINED by ValueRepr (.int pins only kind+payload
+  — EvalRecCommon.lean:14-20 documents exactly this). The prologue writes only the 4
+  spill slots [sp-8..sp-32]. So the presence is a genuine `m0` ENTRY fact, absent from
+  EvalGround (which carries table/AST pins + disjointness, NOT frame-window presence).
+  Dropping it needs a NEW entry-ground frame-presence field = a genuine new rung.
+- `x13_pres`: NOT redundant. `ArmEntryK` does not expose x13 (a caller-save temp);
+  discharging needs a blockA_k/ArmEntryK widening that tracks x13 across the dispatch
+  span 0x80003164→0x800034e8 = a genuine new rung.
+
+The 48e proposal ("thread the concrete ment/mcall from block output") holds ONLY for
+mem_ext. frame_pop/x13_pres are the TWO new rungs. Landing mem_ext drop alone relights
+0 fields (residuals still carry the false frame_pop ∀-closure). Proceeding to LAND the
+mem_ext redundancy proof (shrinks false surface, confirms the claim), then STOP.
+
+### LANDED + VERDICT (48f)
+
+LANDED (green, axioms ⊆ {propext,Classical.choice,Quot.sound}):
+- `BinArmExtras.mem_ext` DROPPED (`Vsa/Sim/rows/BinArmBridge.lean`); `blockA_binaryArm`
+  now threads `blockA_k`'s intrinsic 2nd output `hpresM : MemExtends m0 ment` in its
+  place. Proves the redundancy concretely. No downstream churn — every consumer
+  (BinDispatchRow 11 binRow_*/BinIntCellResid/BinEqCellResid, BinIntReadback,
+  the 10 sims, EvalChildFieldCombinator, ArmDispatchCombinator, TermAssembly capstone)
+  takes `BinArmExtras` as a HYPOTHESIS and never projects `.mem_ext`. All recompiled
+  green. discipline OK (9 rules). census unchanged 6/58.
+
+MACHINE-CHECKED OBSTRUCTION (new evidence, Law 4 STOP):
+- `experiments/fleet/obstructions/BinArmExtrasFramePopNewRung.lean` (axiom-clean):
+  `BinArmExtras.frame_pop` refuted as an isolated field over the actual `[sp-1120,sp)`
+  window (empty mcall). Plus the analysis that it is NOT block-derivable: the DEAD
+  sub-result-buffer bytes it must witness present are unconstrained by ValueRepr and
+  unwritten by the prologue ⇒ its honest cure is a NEW entry-ground frame-presence
+  field. `x13_pres` needs a blockA_k/ArmEntryK x13-tracking widening. BOTH are genuine
+  new rungs, distinct from the redundant `mem_ext` class.
+
+INVERSION: `X2_Field_hIAdd.lean` STILL refutes `BinIntCellResid .add` (green) — the
+statement remains false as stated (slot6/frame_pop/x13_pres unprovable without
+entry+the two new rungs), so no false lemma entered the tree.
+
+FIELDS FOUND: 0 new (census 6/58, honest). The 17 fields CANNOT relight from the
+mem_ext drop alone: even with the designed B2 `EvalEntry`-hypothesis carry added,
+`BinArmExtras.frame_pop` (frame-window presence) and `x13_pres` (x13 liveness) are not
+entry/EvalGround-derivable. These are the TWO genuine rungs blocking the whole int/eq
+cone. Per Law 4 + brief ("genuine NEW rung = machine-check + land + STOP; do not
+improvise a 5th cure"), STOPPING here with the analysis rather than fabricating an
+entry field or a widening in this bounded pass.

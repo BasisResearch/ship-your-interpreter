@@ -144,13 +144,12 @@ structure BinArmExtras
       c1.σ.regs.get? R = g R) →
     c1.σ.regs.get? Register.PC = some (0x800034e8#64) →
     ∃ w, c1.σ.regs.get? Register.x13 = some w
-  -- ===== presence-monotonicity of the arm-entry memory: any memory that agrees
-  -- with the entry `m0` OUTSIDE the scribbled stack window `[SL.lo, sp)`
-  -- presence-extends `m0` (the prologue spills are memory INSERTS — nothing is
-  -- deleted — so every `m0`-present byte survives).  M6 Layout residual
-  -- (`MemExtends m0 ment`, the `EvalExitD`-presence widening). =====
-  mem_ext : ∀ m : Mem,
-    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → m[a]? = m0[a]?) → MemExtends m0 m
+  -- WAVE 48f: the `mem_ext : ∀m … → MemExtends m0 m` closure was DROPPED — it is
+  -- over-quantified and machine-REFUTED as stated
+  -- (`experiments/fleet/obstructions/BinArmExtrasMemExtOverquant.lean`), AND it is
+  -- REDUNDANT: `blockA_k` already produces the concrete `MemExtends m0 ment`
+  -- intrinsically (its 2nd output `_hpresM`, `EvalIntSim2.lean:326`).
+  -- `blockA_binaryArm` now threads that concrete fact instead of this closure.
 
 /-! ## `blockA_binaryArm` — the EX_BINARY arm entry bridge
 
@@ -198,7 +197,7 @@ theorem blockA_binaryArm
     have := hc.mem ▸ hc.expr
     cases this with | binary hk _ _ _ _ _ => exact hk
   -- === block A: prologue + dispatch → widened ArmEntryK @0x800034e8 ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, hpresM⟩ :=
     blockA_k g N A SL φf φc st (.binary op el er) 6 (0x800034e8#64) UnaryArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
@@ -282,8 +281,9 @@ theorem blockA_binaryArm
   have hMentPop : ∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, ment[a]? = some b) :=
     hX.frame_pop ment hMentM0
   -- `MemExtends m0 ment`: the prologue spills are memory inserts, so `ment`
-  -- presence-extends `m0` (from the `mem_ext` closure + the memframe).
-  have hMemExt : MemExtends m0 ment := hX.mem_ext ment hMentM0
+  -- presence-extends `m0` — WAVE 48f: taken DIRECTLY from `blockA_k`'s intrinsic
+  -- 2nd output `hpresM` (the dropped `mem_ext` closure was redundant with this).
+  have hMemExt : MemExtends m0 ment := hpresM
   -- `x19` (s3) is callee-saved (`AbiPreservedNoise`, ∉ {x8,x9,x18,x2}), so
   -- `blockA_k`'s frame gives `c1.regs x19 = g x19`; presence follows from the
   -- ghost-frame presence fact `hX.gx19_pres`.
