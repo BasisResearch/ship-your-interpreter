@@ -72,6 +72,25 @@ loop-arm.md (slot 7/8, conditioned on `m0`):
 These are the acceptance cases — `exec_brk_bridge.lean` SURVIVED, mutant REFUTED.
 Gated on the `ExecEntry.ground` insertion (same wave as loop-arm LA-stmt).
 
+**WAVE 48b DELTA (X3, machine-checked).** The `ExecEntry.ground` insertion
+LANDED (wave 47i) but does NOT alone flip hSBrk/hSCont: `execGround_caseGeom_brk/
+_cont` supply only the SLOT-PIN + TABLE halves of `ExecCaseGeom`; the third
+conjunct is the `ExecLeafWiden` widener, which needs the leaf exit's presence
+monotonicity `MemExtends m0 mem`.  Wave 48b LANDED the full pinned re-seat
+scaffold (`Vsa/Sim/rows/ExecLeafPin.lean`, all axiom-clean): `execBrkSimP`/
+`execContSimP` (→ `ExecExitPinned`), `execBrkSimDP`/`execContSimDP` (→ the
+`ExecExitD` motive shape via `execLeafWidenP_of_entry`), and `field_hSBrk`/
+`field_hSCont`/`skelHS{Brk,Cont}_of_pin` — each discharging its skeleton hole
+MODULO EXACTLY ONE named premise `ExecArmMemExt st .{brk,cont}` (the exit pin
+`ExecLeafMemPin`, whose `pres` = `MemExtends m0 ment`).  That `pres` is provable
+only from the prologue `writeMap8` chain INSIDE `execBlockA`, exposed by amending
+the SHARED `ExecArmEntryK` ∧-tower — the exec twin of the 47e eval `blockA_k`
+`MemExtends m0 ment` amendment (`EvalSimCommon.lean:907`), a ~10-file ITEM-ZERO
+fan-out (`ExecBrkCont`/`ExecDispatch`/`ExecRecCommon` + 6 `Stmt*ArmStagePre`
+rows).  So brk/cont are GATED on X3-b (the `execBlockA` MemExtends exposure),
+which is its own ≤1-session amendment wave, NOT the pure-record-fill 0a shape.
+Census UNCHANGED at 4/58 (the fields carry the premise; honest not-found).
+
 ### S-entry: hEpilogueSpill (X8)
 
 ```lean

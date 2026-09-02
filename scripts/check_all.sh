@@ -1092,6 +1092,10 @@ THEOREMS=(
   Vsa.Sim.Rows.execGround_caseGeom_cont             # rows/EntryGroundRows
   Vsa.Sim.Rows.stmtTablePins_of_bytes               # rows/EntryGroundRows (M6 supplier off generated pins)
   Vsa.Sim.Rows.kindTablePins_of_bytes               # rows/EntryGroundRows (M6 supplier, eval table)
+  Vsa.Sim.Rows.execBrkSimDP                         # rows/ExecLeafPin (X3 pinned brk sim → ExecExitD, wave 48b)
+  Vsa.Sim.Rows.execContSimDP                        # rows/ExecLeafPin (X3 pinned cont sim → ExecExitD)
+  Vsa.Sim.Rows.field_hSBrk                          # rows/ExecLeafPin (hSBrk discharge modulo ExecArmMemExt premise)
+  Vsa.Sim.Rows.field_hSCont                         # rows/ExecLeafPin (hSCont discharge modulo ExecArmMemExt premise)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean

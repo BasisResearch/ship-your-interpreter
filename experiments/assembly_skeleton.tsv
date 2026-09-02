@@ -41,8 +41,8 @@ hSExpr	hole	`hSExpr`/`exec_expr_row`.  Supplier: `ExprResid` = `execExprSimD` ge
 hSRet	hole	`hSRet`/`exec_ret_row`.  Supplier: `RetResid` = `ExecRetGeom`.
 hSRetNull	hole	`hSRetNull`/`exec_retNull_row`.  Supplier: `RetNullResid` = `ExecRetNullGeom` (carries the OPEN `value_null`-bridge glue).
 hSVarNull	hole	`hSVarNull`/`exec_varNull_row`.  Supplier: `VarNullResid` = `ExecVarNullGeom` (carries the OPEN `value_null`+`env_define` glue, `TermCallees.envDefine`).
-hSBrk	hole	`hSBrk`/`exec_brk_row`.  Supplier: `BrkResid` = `ExecCaseGeom` brk arm.
-hSCont	hole	`hSCont`/`exec_cont_row`.  Supplier: `ContResid` = `ExecCaseGeom` cont arm.
+hSBrk	hole	`hSBrk`/`exec_brk_row`.  Supplier: `BrkResid` = `ExecCaseGeom` brk arm.  Wave 48b (X3 scaffold, `rows/ExecLeafPin.lean`): pinned re-seat LANDED — `execBrkSimP`/`execBrkSimDP` conclude `ExecExitPinned`/`ExecExitD`, `field_hSBrk`/`skelHSBrk_of_pin` discharge the hole MODULO EXACTLY ONE named premise `ExecArmMemExt st .brk` (the exit pin `execBlockA` must expose: `MemExtends m0 ment` from the prologue write chain).  Machine-checked obstruction (Law 4): exposing it amends the SHARED `ExecArmEntryK` ∧-tower (~10-file ITEM-ZERO fan-out) — the exec twin of the 47e eval `blockA_k` `MemExtends` amendment; deferred as its own ≤1-session wave.  All 5 scaffold thms axiom-clean.
+hSCont	hole	`hSCont`/`exec_cont_row`.  Supplier: `ContResid` = `ExecCaseGeom` cont arm.  Wave 48b (X3 scaffold, `rows/ExecLeafPin.lean`): `execContSimP`/`execContSimDP` + `field_hSCont`/`skelHSCont_of_pin` discharge the hole MODULO `ExecArmMemExt st .cont` (same `execBlockA`-`MemExtends` exposure obstruction as `hSBrk`).
 hSVarInit	hole	`hSVarInit`/`exec_varInit_row`.  Supplier: `VarInitResid` = `ExecVarInitGeom` (`hGlue` threads the `env_define` callee oracle, `TermCallees.envDefine`).
 hSIfNone	hole	`hSIfNone`/`exec_ifNone_row`.  Supplier: `IfNoneResid` = exit-sim geometry.
 hSWhileFalse	hole	`hSWhileFalse`/`exec_whileFalse_row`.  Supplier: `WhileFalseResid`.

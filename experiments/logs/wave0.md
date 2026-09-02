@@ -78,3 +78,43 @@ risking the green tree. Named residual, per Law 2/4.
 Census UNCHANGED at 4/58 (hBool/hInt/hNull/hStr) — no field flips without the X3
 re-land above, which is out of this pure-statement gate's safe scope. Discipline:
 OK (9 rules, 751 grandfathered). Landing 1 is additive + axiom-clean.
+
+## Wave 48b — X3 exec-leaf re-seat (this session)
+
+**LANDED** `Vsa/Sim/rows/ExecLeafPin.lean` (additive, all thms axiom-clean
+⊆ {propext, Classical.choice, Quot.sound}; wired into `Vsa.lean` after
+`EntryGroundRows`; discipline OK 9 rules; Vsa root green):
+
+- `execBrkSimP`/`execContSimP` — the register-only leaf sims re-seated at
+  `ExecExitPinned` (= `ExecExit ∧ ExecLeafMemPin`), wrapping the landed
+  `execBrkSim`/`execContSim` plain-`ExecExit` `Triple`s with the exit pin.
+- `execBrkSimDP`/`execContSimDP` — the `ExecExitD` (`mExecS`-motive) rows, via
+  `execExitD_of_pinnedExecExit` + the entry-derivable `execLeafWidenP_of_entry`.
+- `execLeafWiden_of_entry` — the PLAIN `ExecLeafWiden` from entry survival + pin.
+- `field_hSBrk`/`field_hSCont` + `skelHS{Brk,Cont}_of_pin` — discharge the two
+  `assembly_skeleton.tsv` holes (`∀ st, BrkResid st` / `ContResid st`) via
+  `ExecEntry.ground` (slot+table) + the widener, MODULO one named premise.
+
+**Machine-checked obstruction (Law 4) — the re-seat DID hit a genuine gap.**
+The one unfilled premise is `ExecArmMemExt st .{brk,cont}` = the exit pin
+`ExecLeafMemPin SL sp m0 c'.σ.mem`, whose `pres` field is `MemExtends m0 c'.σ.mem`.
+`agree` is internally free (`execBlockD`'s `hmem7e ▸ hmemframe`, arena-inclusive).
+`pres` is provable ONLY from the prologue `writeMap8`-spill chain
+(`ExecBrkCont.lean:621-711`), which lives INSIDE `execBlockA` and is NOT exposed
+by `ExecArmEntryK` (whose memory clause is m0-*agreement*, not presence).  Exposing
+it is the exec twin of the 47e eval move that amended `blockA_k`'s post to carry
+`MemExtends m0 ment` (`EvalSimCommon.lean:907`), but on exec it lands into the
+SHARED `ExecArmEntryK` ∧-tower — a ~10-file ITEM-ZERO positional-destructure
+fan-out (`ExecBrkCont`/`ExecDispatch`/`ExecRecCommon` + 6 `Stmt*ArmStagePre`
+rows).  Machine-verified the tower sites: full destructures at ExecRecCommon:462,
+ExecBrkCont:{256,1227,1311}, ExecDispatch:611 + 6 StagePre rows; constructions at
+ExecBrkCont:1179 (execBlockA), ExecDispatch:570.  NOT safely completable inside a
+bounded single-lean-process gate (sole writer, green-tree risk) — named as X3-b,
+its own ≤1-session amendment wave.  The 48a report's "block re-land" was this.
+
+**Census UNCHANGED at 4/58** (hInt/hNull/hBool/hStr; verified `field_census.py
+-j4` = {FOUND:4, NOT_FOUND:54}).  hSBrk/hSCont stay `hole` — they carry the named
+premise (honest not-found), so the TSV rows are NOT flipped to `done`; the notes
+record the scaffold + the X3-b obstruction.  Once `execBlockA` exposes
+`MemExtends m0 ment` (X3-b), `field_hSBrk`/`field_hSCont` become unconditional and
+the census flips to 6/58 — the scaffold makes that a mechanical premise fill.

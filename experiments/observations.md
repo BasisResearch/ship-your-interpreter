@@ -4671,3 +4671,66 @@ it, still stop and report instead.
   family (mirroring `evalIntSimD` using `LeafWidenP`).
 - proposal: dispatch that re-land as the exec-leaf task; `field_hSBrk`/`_hSCont`
   are then one-liners off `execLeafWidenP_of_entry` + `execGround_caseGeom_*`.
+
+## 2026-09-02 spec-driver-call-opacity (invgen relational batch, gap-1 closure)
+- missing: the general spec-trace driver (scripts/spec_trace_driver.lean.tmpl) is
+  an EXECUTABLE mirror of the WHILE relation (Semantics.lean is relational Prop,
+  not runnable), and it evaluates `.call` OPAQUELY — it emits the call-site event
+  but never descends into the callee body. So on any `.wl` with a called function
+  (scope.wl `fn shadow`, functions.wl, rec_fib.wl) the machine trace has strictly
+  MORE stmt/expr events than the spec trace (the callee's ret/binary/etc.), giving
+  spurious per-kind count mismatches (e.g. hInitStore: machine ret=1, spec ret=0).
+- workaround: the relational miner aligns by (kind, ordinal) and only flags a
+  CONTRADICTION on value-repr disagreement of an ALIGNED event, never on a
+  kind-count divergence — so call-opacity does NOT produce false falsity claims.
+  Kind-count divergence is reported as an informational signal, not a contradiction.
+- cost: relational coverage on env-seam call cases (hCall*, hSVarInit) is limited
+  to the pre-call prefix events; the callee-body conjuncts (the crux hCallClosure
+  depth/budget relations) are NOT minable until the driver models call descent
+  (needs a store/closure model — the executable Call relation, non-trivial).
+- proposal: extend the driver's `.call` to push a frame and execute the closure
+  body under a depth counter (mirrors env_new + ExecSeq); this also unlocks the
+  depth/store-size conjuncts the stackBudget ladder wants. Scoped out of this
+  batch (design-time; ZERO-LLM mechanical run only).
+
+## 2026-09-02 value-repr-needs-arm-exit-probe (invgen loop-arm relational)
+- missing: a value-repr conjunct `gprGet a0 = reprOf(spec value)` needs the
+  machine to probe the BOXED RESULT pointer (a0 at the arm EXIT, after
+  value_int/value_bool boxes the computed value) and read back its payload.
+  The eval DISPATCH PC 0x80003164 reads the node KIND word; the a2+8 word there
+  is the node's operand field (an AST pointer), not the value — so a value-repr
+  probe at dispatch produces SPURIOUS mismatches (e.g. hIAdd logical#2 machine
+  24 = operand ptr vs spec 2 = bool-true).
+- workaround: DISABLED payload/value-repr conjunct mining for the loop-arm and
+  value-box-tail clusters; the kind bridge (read32[node]&0xff = kindOfExpr) is
+  the solid mined fact those cases carry. No false CTIs emitted.
+- cost: value-repr (the Approx `reprOf` conjunct — the highest-value stage-3
+  target) is NOT mined this batch; only the kind/slot bridges are.
+- proposal: add an arm-exit probe point per arm (the PC after the value_* jal
+  returns, dumping a0 + read64[a0+8] payload) and align it to the spec vint/vtag
+  at the corresponding eval event. One extra trace PC per arm; mechanical.
+
+## 2026-09-02 execblocka-memextends-unexposed (wave 48b / X3 exec-leaf re-seat)
+- missing: `execBlockA` (`ExecBrkCont.lean`) does NOT expose `MemExtends m0 ment`
+  (presence monotonicity of the arm-entry memory over the entry `m0`).  Its output
+  `ExecArmEntryK` carries only the m0-*agreement* frame (`∀k ¬(SL.lo≤k<sp)→
+  ment[k]?=m0[k]?`), which is silent on presence INSIDE the stack window.  The
+  eval twin (`blockA_k`, `EvalSimCommon.lean:907`) DOES expose `MemExtends m0
+  ment` — the asymmetry is the whole X3 gap: it blocks the exec-leaf pin `pres`
+  (`ExecLeafMemPin.pres`), hence hSBrk/hSCont.
+- workaround: named it as one typed premise `ExecArmMemExt st status` (the exit
+  pin `ExecLeafMemPin`) and built the ENTIRE pinned re-seat around it
+  (`rows/ExecLeafPin.lean`, axiom-clean).  Fields `field_hSBrk`/`field_hSCont`
+  discharge MODULO it.  STOPPED short of the amendment (Law 4).
+- cost: the amendment lands `MemExtends m0 ment` into the SHARED `ExecArmEntryK`
+  ∧-tower → ~10-file positional-destructure fan-out (ExecBrkCont/ExecDispatch/
+  ExecRecCommon + 6 Stmt*ArmStagePre rows) + `PreExecEpilogue` twin.  ITEM-ZERO
+  scale.  Every future exec-leaf/rec case that wants presence pays it once here.
+- proposal: amend `execBlockA` to thread `MemExtends m0 ment` (trans of the 5
+  prologue `memExtends_writeMap8` over `hmem2e..hmem6e`, already in-proof) and
+  append it as the LAST conjunct of `ExecArmEntryK`; mechanically extend the ~10
+  full destructures with one trailing binder + the 2 constructions (execBlockA,
+  execDispatch — dispatch writes no memory so `ment = c.σ.mem`, `MemExtends.refl`)
+  with one term.  Then `ExecArmMemExt` is a one-liner and hSBrk/hSCont flip to
+  6/58 with zero further proof.  This is the exec `EntryStackSurv`/`LeafExitPin`
+  analog — a dedicated wave, NOT a bounded gate.
