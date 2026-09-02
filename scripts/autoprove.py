@@ -213,20 +213,89 @@ def encode_execleaf_frame(tag, clause, control=False):
     return L
 
 
-def run_execleaf_frame(field, tag):
+# ===========================================================================
+# STEP 1'' — the RECURSIVE StoreRepr-survival branch, INLINE.
+#
+# Previously the frame-slice closed and the recursive StoreRepr survival was
+# DEFERRED with a bare "ENCODE-GAP -> Houdini/Lean" string (the note at run_
+# execleaf_frame's residual).  We now WIRE that deferral into a generation step:
+# call gen_storerepr.storerepr_survival_certificate() INLINE — it encodes the
+# recursive Repr bounded, runs Houdini to SELECT + SMT-validate the survival IH,
+# and applies the base/step DECOMPOSITION of the structural induction on the
+# frames vector (base P(nil) -> Z3; step (∀children,P)->P(node) with the IH as a
+# hypothesis -> Z3).  The HONEST design point (blockmem-rewrite-plan.md §aside):
+# the goal is NOT to close the Lean proof — it is to hand a Z3-SUFFICIENCY-
+# CERTIFIED IH (base+step both UNSAT under it) + non-vacuity (wall SAT).  We emit
+# the certified IH per field, not a Lean term.
+#
+# `grows_frames`=True (hSVarNull / Store.define): the arm GROWS the frame vector,
+# so its StoreRepr needs a φf' from the widener, not pure survival — the survival
+# certificate still validates the KEPT frames, but we mark the widener residual.
+# ===========================================================================
+_SURVIVAL_CACHE = {}
+
+def survival_ih_certificate(grows_frames=False):
+    """Run the recursive StoreRepr-survival branch inline (imports the bounded
+    recursive-Repr encoder).  Returns a per-branch dict:
+      verdict ∈ {SURVIVAL-IH-VALIDATED, SURVIVAL-IH-UNCERTIFIED, NOVEL}
+      ih, base, step, wall, detail."""
+    key = "grow" if grows_frames else "keep"
+    if key in _SURVIVAL_CACHE:
+        return _SURVIVAL_CACHE[key]
+    try:
+        import gen_storerepr as S
+        c = S.storerepr_survival_certificate(verbose=False)
+    except Exception as ex:
+        r = {"verdict": "NOVEL", "ih": "(none)",
+             "detail": f"recursive encoder unavailable: {ex}"}
+        _SURVIVAL_CACHE[key] = r
+        return r
+    if not c["survivors"] or not c["houdini_closes"].startswith("unsat"):
+        # Houdini converged WITHOUT closing => vocabulary insufficient => NOVEL.
+        r = {"verdict": "NOVEL", "ih": c["ih_name"], "base": c["base_unsat"],
+             "step": c["step_unsat"], "wall": c["wall_sat"],
+             "detail": ("Houdini vocabulary insufficient for the StoreRepr "
+                        "survival cone -> LLM-protocol (propose a survival "
+                        "predicate shape past the recursion cut)")}
+    elif c["certified"]:
+        widen = (" ; hSVarNull GROWS frames (Store.define) -> needs φf' from the "
+                 "widener for the NEW binding; survival certifies the KEPT frames"
+                 if grows_frames else "")
+        r = {"verdict": "SURVIVAL-IH-VALIDATED", "ih": c["ih_name"],
+             "base": c["base_unsat"], "step": c["step_unsat"], "wall": c["wall_sat"],
+             "detail": (f"IH={c['ih_name']} SELECTED by Houdini + Z3-confirms "
+                        f"base(P nil)={c['base_unsat']}({c['base_time']}s) & "
+                        f"step((∀p,P)→P node)={c['step_unsat']}({c['step_time']}s) "
+                        f"under it; wall(no-IH)={c['wall_sat']} (non-vacuous)"
+                        f"{widen}")}
+    else:
+        r = {"verdict": "SURVIVAL-IH-UNCERTIFIED", "ih": c["ih_name"],
+             "base": c["base_unsat"], "step": c["step_unsat"], "wall": c["wall_sat"],
+             "detail": (f"IH selected but base/step not both UNSAT: "
+                        f"base={c['base_unsat']} step={c['step_unsat']} "
+                        f"wall={c['wall_sat']}")}
+    _SURVIVAL_CACHE[key] = r
+    return r
+
+
+def run_execleaf_frame(field, tag, grows_frames=False):
     """Discharge the FRAME slice of an exec-arm supplier field via the extracted
-    write-log.  Returns a verdict dict; frame closes iff both agree+pres UNSAT and
-    the agree control SATs (refute-capable, non-vacuous)."""
+    write-log AND run the recursive StoreRepr-survival branch inline.  Returns a
+    verdict dict; frame closes iff both agree+pres UNSAT and the agree control
+    SATs (refute-capable, non-vacuous).  The survival IH is now VALIDATED here
+    (base+step Z3-confirmed), not deferred to a bare ENCODE-GAP string."""
     va, _, dta = z3_run(encode_execleaf_frame(tag, "agree", control=False))
     vp, _, dtp = z3_run(encode_execleaf_frame(tag, "pres", control=False))
     vc, _, dtc = z3_run(encode_execleaf_frame(tag, "agree", control=True))
     closed = va.startswith("unsat") and vp.startswith("unsat") and vc.startswith("sat")
-    r = {"field": field, "verdict": "", "detail": "", "cert": "", "lean": ""}
+    surv = survival_ih_certificate(grows_frames=grows_frames)
+    r = {"field": field, "verdict": "", "detail": "", "cert": "", "lean": "",
+         "survival": surv}
     if closed:
         r["verdict"] = "FRAME-PROVED"
         r["detail"] = (f"ExecLeafMemPin FRAME slice via wlogM-extracted write-log: "
-                       f"agree UNSAT({dta}s) pres UNSAT({dtp}s) ctrl SAT; residual = "
-                       f"recursive StoreRepr survival (ENCODE-GAP -> Houdini/Lean)")
+                       f"agree UNSAT({dta}s) pres UNSAT({dtp}s) ctrl SAT; "
+                       f"survival: {surv['verdict']} ({surv['ih']})")
         r["cert"] = f"agree:{va} pres:{vp} ctrl_window:{vc}"
     else:
         r["verdict"] = "FRAME-UNCLOSED"
@@ -507,6 +576,16 @@ def run_field(field, do_transcribe=True, do_lean=True, block_llm=True):
         r["verdict"] = "PROVED-WITH-IH"
         r["detail"] = f"neg SAT; Houdini survivors: {', '.join(names)}; leaf {lean_lemma}"
         r["cert"] = f"IH-closed:UNSAT survivors={names}"
+        # RECURSIVE branch: the str kind's leaf lemma is cstring_agreeP, the base of
+        # the storeRepr_agreeP survival cone.  Run the survival certificate INLINE so
+        # the recursive field reports the base/step decomposition (reproducing the
+        # standalone Houdini StoreRepr result THROUGH autoprove).
+        if kind.startswith("str") and "ReprSurvival" in lean_lemma:
+            surv = survival_ih_certificate(grows_frames=False)
+            r["survival"] = surv
+            r["detail"] += (f" | survival-IH: {surv['verdict']} ({surv['ih']}; "
+                            f"base={surv.get('base','?')} step={surv.get('step','?')} "
+                            f"wall={surv.get('wall','?')})")
         if do_transcribe:
             p = transcribe(field, kind, lean_lemma, "PROVED-WITH-IH", survivors, [])
             if do_lean:
@@ -624,31 +703,44 @@ def frame_slice_coverage(json_out=False):
     rows = []
     for f in fields:
         cls, resid = FRAME_SLICE.get(f, ("no-frame:unclassified", "?"))
+        grows = (f == "hSVarNull")
         if cls.startswith("frame:"):
             tag = cls.split(":", 1)[1]
-            fr = run_execleaf_frame(f, tag)
+            fr = run_execleaf_frame(f, tag, grows_frames=grows)
             closed = fr["verdict"] == "FRAME-PROVED"
+            surv = fr.get("survival", {})
             rows.append({"field": f, "frame": "PROVED" if closed else "UNCLOSED",
-                         "cert": fr.get("cert", ""), "residual": resid})
+                         "survival": surv.get("verdict", "?"),
+                         "ih": surv.get("ih", ""), "cert": fr.get("cert", ""),
+                         "residual": resid})
         else:
+            # no straight-line frame slice; the field STILL carries a recursive
+            # StoreRepr survival obligation on its kept frames (unless it is a
+            # pure PC-hop / native seg with no Store) — but with no frame slice
+            # the whole arm Triple defers to landed marshalling.
             rows.append({"field": f, "frame": "N/A (no-frame)",
-                         "cert": cls.split(":", 1)[1], "residual": resid})
+                         "survival": "COMPOSITION-DEFER",
+                         "ih": "", "cert": cls.split(":", 1)[1], "residual": resid})
     proved = sum(1 for r in rows if r["frame"] == "PROVED")
     noframe = sum(1 for r in rows if r["frame"].startswith("N/A"))
+    survval = sum(1 for r in rows if r["survival"] == "SURVIVAL-IH-VALIDATED")
+    novel = sum(1 for r in rows if r["survival"] == "NOVEL")
     if json_out:
         print(json.dumps({"proved": proved, "noframe": noframe,
+                          "survival_validated": survval, "novel": novel,
                           "total": len(rows), "rows": rows}, indent=2))
         return 0
-    print(f"# FRAME-SLICE coverage over the {len(rows)} supplier fields "
-          f"(frame slice = ExecLeafMemPin pres+agree via wlogM-extracted write-log)")
-    print(f"{'field':16} {'frame-slice':16} residual (stays ENCODE-GAP → Houdini/Lean)")
-    print("-" * 96)
+    print(f"# SUPPLIER coverage over the {len(rows)} fields — per-branch: FRAME "
+          f"(ExecLeafMemPin via wlogM) + SURVIVAL-IH (recursive StoreRepr, base/step)")
+    print(f"{'field':16} {'frame':12} {'survival-IH':22} residual (composition → landed)")
+    print("-" * 100)
     for r in rows:
-        print(f"{r['field']:16} {r['frame']:16} {r['residual'][:56]}")
-    print("-" * 96)
-    print(f"FRAME-PROVED: {proved}/{len(rows)}   no-frame (no write-log slice): "
-          f"{noframe}/{len(rows)}   (whole field never closes here — all keep a "
-          f"recursive/∀ residual)")
+        print(f"{r['field']:16} {r['frame']:12} {r['survival']:22.22} {r['residual'][:40]}")
+    print("-" * 100)
+    print(f"FRAME-PROVED: {proved}/{len(rows)}   SURVIVAL-IH-VALIDATED: "
+          f"{survval}/{len(rows)}   NOVEL: {novel}   no-frame: {noframe}/{len(rows)}")
+    print("Every field keeps a COMPOSITION-DEFER residual (arm Triple → landed "
+          "marshalling, out of solver scope).  No whole field closes here.")
     return 0
 
 
@@ -666,11 +758,24 @@ def main():
                     help="don't block polling for an LLM response (single check)")
     ap.add_argument("--frame-slice-coverage", action="store_true",
                     help="report the ExecLeafMemPin frame slice over the 24 supplier fields")
+    ap.add_argument("--survival", action="store_true",
+                    help="run ONLY the recursive StoreRepr survival-IH base/step certificate")
     ap.add_argument("--json", action="store_true", help="JSON output (coverage mode)")
     args = ap.parse_args()
 
-    if args.frame_slice_coverage:
+    # --batch supplier : the supplier-class per-branch batch (frame + survival-IH
+    # + composition-defer + novel) over the 24 NO-CURE-SEMANTIC-GAP fields.
+    if args.frame_slice_coverage or (args.batch and args.batch.strip() == "supplier"):
         return frame_slice_coverage(json_out=args.json)
+
+    if args.survival:
+        surv = survival_ih_certificate(grows_frames=False)
+        print(f"survival-IH: {surv['verdict']}")
+        print(f"  IH       = {surv['ih']}")
+        print(f"  base     = {surv.get('base','?')}   step = {surv.get('step','?')}"
+              f"   wall = {surv.get('wall','?')}")
+        print(f"  {surv['detail']}")
+        return 0
 
     if args.serve_request:
         if not args.response:
