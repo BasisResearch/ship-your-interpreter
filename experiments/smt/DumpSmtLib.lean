@@ -295,6 +295,17 @@ partial def encProp (e0 : Expr) (bound : Option (Name × String)) :
 partial def encAtom (e0 : Expr) (bound : Option (Name × String)) :
     ExpM (Option String) := do
   let e := e0
+  -- MemExtends m0 m  →  ∀ za, def0 za → def za  (emit directly; unfolding it to
+  -- the ∀ a b, … ∃ b', … form would introduce a BitVec-8 value binder the
+  -- generic ∀-encoder would mis-sort as Int).
+  if e.isAppOfArity ``Vsa.Sim.MemExtends 2 then
+    let a := e.getAppArgs
+    match a[0]!, a[1]! with
+    | .fvar f0, .fvar f1 =>
+      let m0 := smtName (← f0.getUserName)
+      let mm := smtName (← f1.getUserName)
+      return some s!"(forall ((za Int)) (=> (select {m0}_def za) (select {mm}_def za)))"
+    | _, _ => pure ()
   -- ¬ P
   if e.isAppOfArity ``Not 1 then
     match ← encProp e.appArg! bound with

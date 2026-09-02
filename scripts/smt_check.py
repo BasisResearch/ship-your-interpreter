@@ -61,6 +61,15 @@ LOG = os.path.join(LOGDIR, "smt-check.md")
 AX_OK = {"propext", "Classical.choice", "Quot.sound"}
 W64 = 2 ** 64
 
+# The Lean-side export tactic (encoder v2). Its compiled olean is cached under
+# OLEAN_DIR so the per-statement dump probe can `import DumpSmtLib` cheaply.
+SMT_DIR = os.path.join(ROOT, "experiments", "smt")
+DUMP_SRC = os.path.join(SMT_DIR, "DumpSmtLib.lean")
+SUPPORT_SRC = os.path.join(SMT_DIR, "SmtReplaySupport.lean")
+OLEAN_DIR = os.path.join(LOGDIR, "smt-olean")
+DUMP_OLEAN = os.path.join(OLEAN_DIR, "DumpSmtLib.olean")
+SUPPORT_OLEAN = os.path.join(OLEAN_DIR, "SmtReplaySupport.olean")
+
 # Opaque Lean predicate name-stems: an atom whose head is one of these is
 # encoded as an UNINTERPRETED predicate (sound for refutation search only if the
 # countermodel does not hinge on it — we track that and mark MODULO-OPAQUE).
@@ -73,7 +82,7 @@ OPAQUE_HEADS = ("ValueRepr", "ExprRepr", "CString", "GoodState", "Repr",
 # Lean plumbing
 # ==========================================================================
 
-def run_lean(src, timeout=600):
+def run_lean(src, timeout=600, env=None):
     os.makedirs(LOGDIR, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", suffix=".lean", dir=LOGDIR,
                                      delete=False) as f:
@@ -81,7 +90,8 @@ def run_lean(src, timeout=600):
         path = f.name
     try:
         r = subprocess.run(["lake", "env", "lean", path], cwd=ROOT,
-                           capture_output=True, text=True, timeout=timeout)
+                           capture_output=True, text=True, timeout=timeout,
+                           env=env)
         return r.returncode, r.stdout + r.stderr
     except subprocess.TimeoutExpired:
         return 124, "TIMEOUT"
@@ -111,6 +121,116 @@ def run_z3(smt, timeout_ms=20000):
             os.unlink(path)
         except OSError:
             pass
+
+
+# ==========================================================================
+# Lean-side export tactic (encoder v2): dump_smt_lib
+# ==========================================================================
+
+def _build_olean(src, olean, log=None):
+    """Compile a single experiments/smt/*.lean file to `olean` under OLEAN_DIR
+    if missing/stale.  Returns True on success."""
+    if not os.path.exists(src):
+        return False
+    if (os.path.exists(olean) and
+            os.path.getmtime(olean) >= os.path.getmtime(src)):
+        return True
+    os.makedirs(OLEAN_DIR, exist_ok=True)
+    try:
+        r = subprocess.run(
+            ["lake", "env", "lean", "-o", olean, "--root", SMT_DIR, src],
+            cwd=ROOT, capture_output=True, text=True, timeout=400)
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    ok = r.returncode == 0 and os.path.exists(olean)
+    if not ok and log:
+        log.write(f"- olean build FAILED ({os.path.basename(src)}): "
+                  f"{(r.stderr or r.stdout)[-300:]}\n")
+    return ok
+
+
+def ensure_dump_olean(log=None):
+    """Compile the DumpSmtLib export tactic to a cached olean.  Returns True on
+    success, False if it does not compile (⇒ Python encoder fallback)."""
+    return _build_olean(DUMP_SRC, DUMP_OLEAN, log)
+
+
+def ensure_support_olean(log=None):
+    """Compile the replay-support lemmas to a cached olean.  Returns True on
+    success (the agree-window replays `import SmtReplaySupport`)."""
+    return _build_olean(SUPPORT_SRC, SUPPORT_OLEAN, log)
+
+
+def _lean_path_env():
+    """Base LEAN_PATH from `lake env`, with OLEAN_DIR prepended."""
+    try:
+        r = subprocess.run(["lake", "env", "printenv", "LEAN_PATH"], cwd=ROOT,
+                           capture_output=True, text=True, timeout=60)
+        base = r.stdout.strip()
+    except (subprocess.TimeoutExpired, OSError):
+        base = os.environ.get("LEAN_PATH", "")
+    env = dict(os.environ)
+    env["LEAN_PATH"] = OLEAN_DIR + (os.pathsep + base if base else "")
+    return env
+
+
+def _hoist_imports(body_text):
+    """Split a Lean source into (import-lines, rest) so the dump probe can put
+    `import DumpSmtLib` alongside the target's own imports at the top."""
+    imports, rest = [], []
+    for line in body_text.splitlines():
+        if line.strip().startswith("import "):
+            imports.append(line)
+        else:
+            rest.append(line)
+    return "\n".join(imports), "\n".join(rest)
+
+
+def lean_dump(path, prop, log=None, timeout=400):
+    """Run the `dump_smt_lib` export tactic on `prop` (defined in `path`).
+    Returns (smt_text, opaque_set) or (None, reason).  Hermetic: the target's
+    source is inlined (imports hoisted) + `import DumpSmtLib` + the dump cmd, so
+    no experiments/ module-path resolution is needed."""
+    if not ensure_dump_olean(log):
+        return None, "dump-olean-unavailable"
+    body_text = open(path).read()
+    imports, rest = _hoist_imports(body_text)
+    out_smt = os.path.join(LOGDIR, "smt-dump-" +
+                           str(abs(hash(prop)) % 100000) + ".smt2")
+    probe = (f"import DumpSmtLib\n{imports}\n{rest}\n\n"
+             f"dump_smt_lib \"{out_smt}\" for {prop}\n")
+    os.makedirs(LOGDIR, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", suffix=".lean", dir=LOGDIR,
+                                     delete=False) as f:
+        f.write(probe)
+        ppath = f.name
+    try:
+        r = subprocess.run(["lake", "env", "lean", ppath], cwd=ROOT,
+                           capture_output=True, text=True, timeout=timeout,
+                           env=_lean_path_env())
+    except subprocess.TimeoutExpired:
+        return None, "dump-timeout"
+    finally:
+        try:
+            os.unlink(ppath)
+        except OSError:
+            pass
+    if r.returncode != 0 or not os.path.exists(out_smt):
+        detail = (r.stderr or r.stdout).strip().splitlines()
+        return None, "dump-error: " + (detail[-1] if detail else "?")
+    smt = open(out_smt).read()
+    try:
+        os.unlink(out_smt)
+    except OSError:
+        pass
+    # ENCODE-GAP in the dump ⇒ fall back to Python for this statement
+    if "; ENCODE-GAP" in smt or "; GAPS:" in smt:
+        return None, "dump-encode-gap"
+    opaque = set()
+    for line in smt.splitlines():
+        if line.startswith("; OPAQUE:"):
+            opaque = {h for h in line[len("; OPAQUE:"):].split() if h}
+    return smt, opaque
 
 
 # ==========================================================================
@@ -693,35 +813,71 @@ def load(path, prop):
     return binders, chain, sig, body_text
 
 
+class _DumpShim:
+    """Stands in for an EncCtx when the Lean export tactic produced the SMT.
+    Carries only what the downstream replay path reads: `.opaque`."""
+    def __init__(self, opaque):
+        self.opaque = set(opaque)
+
+
 def smt_check(mode, path, prop, log, timeout_ms=20000):
     binders, chain, sig, body_text = load(path, prop)
     if binders is None:
         v = f"- `{prop}` → **ENCODE-FAIL** (def body not found)"
         print(v); log.write(v + "\n"); log.flush()
         return "ENCODE-FAIL", None
-    ns = ".".join(prop.split(".")[:-1])
-    ctx, hyps, concl = encode_statement(binders, chain, body_text, ns)
-    if concl is None or any(h is None for h in hyps):
-        v = (f"- `{prop}` → **ENCODE-GAP** (unencodable atom; hyps="
-             f"{hyps} concl={concl})")
-        print(v); log.write(v + "\n"); log.flush()
-        return "ENCODE-GAP", None
 
-    if mode == "inhabit":
-        smt = build_smt(ctx, hyps)
-        out = run_z3(smt, timeout_ms)
-        sat = out.strip().startswith("sat")
-        v = "NON-VACUOUS" if sat else ("VACUOUS" if out.strip().startswith("unsat") else "UNKNOWN")
-        model = parse_model(out) if sat else {}
-        line = f"- `{prop}` → **{v}**" + (f" — witness {_short(model)}" if model else "")
-        print(line); log.write(line + "\n"); log.flush()
-        return v, model
+    # ---- encoder v2: try the Lean-side dump_smt_lib export tactic first -----
+    # It walks the ELABORATED goal (no source re-parse drift) and emits the
+    # negated-statement refute query directly.  Fall back to the Python encoder
+    # for statements the tactic cannot handle (reported as the encoder path).
+    #
+    # Scope: the Lean dump is used for --refute, where a spurious SAT cannot
+    # yield a false green — the machine-checked Lean replay gates the verdict
+    # (SAT-without-replay ⇒ ENCODING-GAP, reported loudly).  --validate's
+    # VALID-IN-FRAGMENT is an advisory SOUNDNESS claim (UNSAT of the negation);
+    # it is left on the Python encoder whose fragment is the one the acceptance
+    # battery certified, so a looser Lean over-approximation cannot silently
+    # weaken a VALID verdict.
+    enc_path = "python"
+    ctx = None
+    smt_neg = None                 # full SMT text for the negated-statement query
+    if mode == "refute":
+        dump_smt, dump_info = lean_dump(path, prop, log)
+        if dump_smt is not None:
+            enc_path = "lean"
+            smt_neg = dump_smt
+            ctx = _DumpShim(dump_info)
+        else:
+            log.write(f"  (dump path unavailable for {prop}: {dump_info} "
+                      f"— falling back to Python encoder)\n")
 
-    # refute / validate both negate the statement: (∧ hyps) ∧ ¬concl SAT?
-    neg = ["(and " + " ".join(hyps) + ")"] if hyps else []
-    neg.append(f"(not {concl})")
-    smt = build_smt(ctx, neg, get_model=(mode == "refute"))
-    out = run_z3(smt, timeout_ms)
+    if ctx is None:                # Python encoder path (fallback / inhabit)
+        ns = ".".join(prop.split(".")[:-1])
+        ctx, hyps, concl = encode_statement(binders, chain, body_text, ns)
+        if concl is None or any(h is None for h in hyps):
+            v = (f"- `{prop}` → **ENCODE-GAP** (unencodable atom; hyps="
+                 f"{hyps} concl={concl})")
+            print(v); log.write(v + "\n"); log.flush()
+            return "ENCODE-GAP", None
+
+        if mode == "inhabit":
+            smt = build_smt(ctx, hyps)
+            out = run_z3(smt, timeout_ms)
+            sat = out.strip().startswith("sat")
+            v = "NON-VACUOUS" if sat else ("VACUOUS" if out.strip().startswith("unsat") else "UNKNOWN")
+            model = parse_model(out) if sat else {}
+            line = f"- `{prop}` → **{v}**" + (f" — witness {_short(model)}" if model else "")
+            print(line); log.write(line + "\n"); log.flush()
+            return v, model
+
+        # refute / validate both negate the statement: (∧ hyps) ∧ ¬concl SAT?
+        neg = ["(and " + " ".join(hyps) + ")"] if hyps else []
+        neg.append(f"(not {concl})")
+        smt_neg = build_smt(ctx, neg, get_model=(mode == "refute"))
+
+    log.write(f"  (encoder: {enc_path})\n")
+    out = run_z3(smt_neg, timeout_ms)
     first = out.strip().split("\n", 1)[0].strip()
 
     if mode == "validate":
@@ -732,14 +888,14 @@ def smt_check(mode, path, prop, log, timeout_ms=20000):
             v = "REFUTABLE"; note = " (negation SAT — not valid)"
         else:
             v = "UNKNOWN"; note = f" ({first or out.strip()[:60]})"
-        line = f"- `{prop}` → **{v}**{note}"
+        line = f"- `{prop}` → **{v}**{note} [enc:{enc_path}]"
         print(line); log.write(line + "\n"); log.flush()
         return v, None
 
     # --refute
     if first != "sat":
         v = ("VALID-IN-FRAGMENT" if first == "unsat" else "UNKNOWN")
-        line = f"- `{prop}` → **NOT-REFUTED / {v}** ({first})"
+        line = f"- `{prop}` → **NOT-REFUTED / {v}** ({first}) [enc:{enc_path}]"
         print(line); log.write(line + "\n"); log.flush()
         return v, None
     model = parse_model(out)
@@ -757,7 +913,7 @@ def smt_check(mode, path, prop, log, timeout_ms=20000):
         detail = f"Z3 SAT but Lean replay FAILED — translator bug: {replay_detail}"
     else:
         v = "REFUTED-Z3-ONLY"; detail = f"no replay generator for class ({replay_detail})"
-    line = f"- `{prop}` → **{v}** — {detail} | model {_short(model)}"
+    line = f"- `{prop}` → **{v}** — {detail} | model {_short(model)} [enc:{enc_path}]"
     print(line); log.write(line + "\n"); log.flush()
     return v, model
 
@@ -789,13 +945,237 @@ def classify_concl(chain):
     return "unknown"
 
 
+def _int_lit(s):
+    s = s.strip()
+    return int(s, 16) if s.lower().startswith("0x") else int(s)
+
+
+def detect_agree_window(chain):
+    """Detect the agree-window falsity family and extract its parameters.
+
+    Returns a dict {guards, A, V, kind, m0_first} for the agree-window family
+    (∀ m0, [m0[A]?=some V →] ∀ mq, (⋀ᵢ ∀k, Gᵢ(k) → m0[k]?=mq[k]?) → CONCL),
+    or None if the chain is not in this family.
+
+    The UNIVERSAL witness (any cover topology, any conclusion kind): m0 = {A↦V},
+    mq = ∅.  They differ ONLY at A; since A is UNCOVERED (Z3 certified the
+    negation SAT ⟺ A ∉ ⋃ Gᵢ), every guard excludes A (¬Gᵢ(A)), so `∀k, Gᵢ(k) →
+    m0[k]?=mq[k]?` holds for every guard by `k ≠ A` (omega, from Gᵢ(k) + the
+    concrete uncovered A).  The demand at A then fails (mq[A]? = none)."""
+    flat = " ".join(chain.split())
+    if "∀ mq" not in flat and "∀mq" not in flat:
+        return None
+    # guards: each nested agree-hyp `∀ k, <G> → m0[k]? = mq[k]?`, where <G> is a
+    # simple range predicate (no nested → or ∀ — that would be the range-pin or
+    # a following hyp bleeding in).
+    guards = []
+    for gm in re.finditer(r"∀\s*k\s*,\s*([^→∀]+?)\s*→\s*\w+\[k\]\?\s*=\s*\w+\[k\]\?",
+                          flat):
+        guards.append(gm.group(1).strip())
+    if not guards:
+        return None
+    # RANGE-pin: `∀ k, k < P → m0[k]? = some V` forces m0 populated on [0,P);
+    # the universal ∅ witness cannot satisfy it, so a pop-populated m0 is needed.
+    rp = re.search(r"∀\s*k\s*,\s*k\s*<\s*(0x[0-9a-fA-F]+|\d+)\s*→\s*m0\[k\]\?\s*=\s*"
+                   r"some\s*\(?\s*(0x[0-9a-fA-F]+|\d+)", flat)
+    range_pin = (_int_lit(rp.group(1)), _int_lit(rp.group(2))) if rp else None
+    # conclusion kind + demand address A
+    concl = flat.rsplit("→", 1)[-1].strip()
+    A = V = None
+    kind = None
+    mc = re.search(r"\w+\[\(?\s*(0x[0-9a-fA-F]+|\d+)[^\]]*\]\?\s*=\s*some\s*"
+                   r"\(?\s*(0x[0-9a-fA-F]+|\d+)", concl)
+    mp = re.search(r"∃\s*\w+\s*,\s*\w+\[\(?\s*(0x[0-9a-fA-F]+|\d+)", concl)
+    ma = re.search(r"\w+\[\(?\s*(0x[0-9a-fA-F]+|\d+)[^\]]*\]\?\s*=\s*\w+\[", concl)
+    # range-quantified agree conclusion `∀ a, LO ≤ a ∧ a < HI → mq[a]?=m0[a]?`
+    mr = re.search(r"∀\s*\w+\s*,\s*(0x[0-9a-fA-F]+|\d+)\s*≤\s*\w+\s*∧\s*\w+\s*<\s*"
+                   r"(0x[0-9a-fA-F]+|\d+)\s*→\s*\w+\[\w+\]\?\s*=\s*\w+\[\w+\]\?", flat)
+    me = "MemExtends" in concl
+    # pull the outer POINT pin (m0[A]? = some V) if present
+    pin = re.search(r"m0\[\(?\s*(0x[0-9a-fA-F]+|\d+)\s*:", flat)
+    pinv = re.search(r"m0\[\(?\s*(?:0x[0-9a-fA-F]+|\d+)[^\]]*\]\?\s*=\s*some\s*"
+                     r"\(?\s*(0x[0-9a-fA-F]+|\d+)", flat)
+    if mc:
+        kind = "value"; A, V = _int_lit(mc.group(1)), _int_lit(mc.group(2))
+    elif mp:
+        kind = "present"; A = _int_lit(mp.group(1))
+        V = _int_lit(pinv.group(1)) if pinv else 0x2a
+    elif me:
+        kind = "extends"
+        if not pin:
+            return None
+        A = _int_lit(pin.group(1)); V = _int_lit(pinv.group(1)) if pinv else 0x2a
+    elif mr and range_pin is not None:
+        # C-shape: range-pinned m0, gap-demand.  A = gap lower bound.
+        kind = "gapagree"; A = _int_lit(mr.group(1)); V = range_pin[1]
+    elif ma:
+        kind = "agree"; A = _int_lit(ma.group(1)); V = 0x2a
+    else:
+        return None
+    return {"guards": guards, "A": A, "V": V, "kind": kind,
+            "range_pin": range_pin}
+
+
 def gen_and_run_replay(path, prop, binders, chain, body_text, model, ctx):
+    # agree-window family (∀-mcall / prefix-agree over-quant): the uncontaminated
+    # NovelProbe class + the historical amendments + the fuzzer gen-battery.
+    # ONE universal witness generator, cover-topology-agnostic.
+    aw = detect_agree_window(chain)
+    if aw is not None:
+        if aw["kind"] == "gapagree":
+            return replay_gapagree(prop, body_text, aw)
+        return replay_agree_general(prop, body_text, aw)
     cls = classify_concl(chain)
-    if cls == "arith":
-        return replay_arith(path, prop, binders, chain, body_text, model)
     if cls in ("memext", "presence"):
         return replay_mem(path, prop, binders, chain, body_text, model, cls)
+    if cls == "arith":
+        return replay_arith(path, prop, binders, chain, body_text, model)
     return ("NONE", cls, None)
+
+
+def _replay_header(body_text):
+    """Imports for a replay probe: the target's own imports + the replay support
+    module (which carries pop / pop_mem / pop_not_mem / ins_comm)."""
+    imports = [l for l in body_text.splitlines() if l.strip().startswith("import ")]
+    rest = "\n".join(l for l in body_text.splitlines()
+                     if not l.strip().startswith("import "))
+    hdr = "import SmtReplaySupport\n" + "\n".join(imports) + "\n"
+    return hdr, rest
+
+
+def replay_agree_general(prop, body_text, aw):
+    """UNIVERSAL agree-window refutation, cover-topology + conclusion-kind
+    agnostic.  Witness: m0 = {A ↦ V}, mq = ∅ (differ ONLY at the uncovered A).
+    Each agree-hyp `∀ k, Gᵢ(k) → m0[k]? = mq[k]?` holds because Gᵢ(k) forces
+    `k ≠ A` (A ∉ ⋃ Gᵢ), so both sides are `none`; `k ≠ A` is `by omega` from the
+    guard's numeric constraint and the concrete uncovered literal A.  The demand
+    at A then fails (mq[A]? = none)."""
+    A, V, kind, guards = aw["A"], aw["V"], aw["kind"], aw["guards"]
+    W = 64                                        # any width shim (unused)
+    hdr, rest = _replay_header(body_text)
+    has_pin = kind in ("value", "present", "extends")
+    extra = _extra_args(prop, body_text)
+    # one hagree per guard.  `k ≠ A` via omega: after `intro k hk`, hk : Gᵢ(k).
+    # `simp only` normalises ¬(…) / conjunction so omega sees the bounds.
+    hagrees = []
+    hnames = []
+    for i, g in enumerate(guards):
+        hn = f"hag{i}"
+        hnames.append(hn)
+        hagrees.append(
+            f"  have {hn} : (∀ k, {g} → (m0W[k]? : Option (BitVec 8)) = (∅ : Mem)[k]?) := by\n"
+            f"    intro k hk\n"
+            f"    have hkA : k ≠ {A} := by\n"
+            f"      intro he; subst he; first | omega | exact hk (by omega)\n"
+            f"    rw [show (m0W[k]? : Option (BitVec 8)) = none from by\n"
+            f"          simp only [m0W]\n"
+            f"          rw [getElem?_insert_out (∅ : Mem) {A} ({V}#8) k hkA]\n"
+            f"          simp only [Std.ExtHashMap.getElem?_empty]]\n"
+            f"    simp only [Std.ExtHashMap.getElem?_empty]\n")
+    # hm0 (m0W has the byte at A) is always TRUE for m0W; supplied as an H arg
+    # only when the statement has the outer pin hypothesis.
+    pin_line = (
+        f"  have hm0 : m0W[({A} : Nat)]? = some ({V} : BitVec 8) := by\n"
+        f"    simp only [m0W]; exact Std.ExtHashMap.getElem?_insert_self\n")
+    pin_arg = "hm0 " if has_pin else ""
+    apply_line = f"  have hc := H m0W {extra} {pin_arg}(∅ : Mem) {' '.join(hnames)}\n"
+    empty_none = (f"  have hE : ((∅ : Mem)[({A}:Nat)]? : Option (BitVec 8)) = none := by\n"
+                  f"    simp only [Std.ExtHashMap.getElem?_empty]\n")
+    if kind in ("value", "agree"):
+        # hc : mq[A]? = some V   (value)  |  mq[A]? = m0[A]?  (agree)
+        refute = ("  rw [hE] at hc\n  exact absurd hc (by simp)\n"
+                  if kind == "value" else
+                  # agree: hc : ∅[A]? = m0W[A]? ; LHS none, RHS some V → contra
+                  "  rw [hE, hm0] at hc\n  exact absurd hc (by simp)\n")
+    elif kind == "present":
+        refute = ("  obtain ⟨b, hb⟩ := hc\n  rw [hE] at hb\n"
+                  "  exact absurd hb (by simp)\n")
+    else:  # extends : MemExtends m0W ∅ ; but m0W[A]?=some V ⇒ ∃b', ∅[A]?=some b'
+        refute = (f"  obtain ⟨b', hb'⟩ := hc {A} ({V}#8) hm0\n  rw [hE] at hb'\n"
+                  f"  exact absurd hb' (by simp)\n")
+    probe = (
+        f"{hdr}{rest}\n\nnamespace SmtReplayProbe\nopen Vsa.SmtReplay\n"
+        f"private def m0W : Mem := (∅ : Mem).insert {A} ({V}#8)\n"
+        f"set_option maxHeartbeats 2000000 in\n"
+        f"theorem refuted : ¬ {prop} := by\n"
+        f"  intro H\n"
+        f"{pin_line}"
+        f"{''.join(hagrees)}"
+        f"{apply_line}"
+        f"{empty_none}"
+        f"{refute}"
+        f"#print axioms refuted\nend SmtReplayProbe\n")
+    return _run_replay(probe)
+
+
+def replay_gapagree(prop, body_text, aw):
+    """RANGE-pinned agree family (NovelResidC shape): `∀ m0, (∀k<P, m0[k]?=some
+    V) → ∀ mq, (⋀ᵢ ∀k, Gᵢ(k)→m0=mq) → ∀ a, LO≤a<HI → mq[a]?=m0[a]?`.
+    Witness: m0 = pop [0,P) V (satisfies the range pin), mq = m0.insert A W where
+    A = LO is the gap address (uncovered by every Gᵢ).  m0 and mq differ ONLY at
+    A, so each agree-hyp holds by `Gᵢ(k) → k ≠ A` (omega); the demand at A fails
+    (mq[A]? = some W, m0[A]? = none since A ∉ [0,P))."""
+    A, V, guards = aw["A"], aw["V"], aw["guards"]
+    P = aw["range_pin"][0]
+    W = (V + 6) % 256
+    hdr, rest = _replay_header(body_text)
+    hnames, hagrees = [], []
+    for i, g in enumerate(guards):
+        hn = f"hag{i}"; hnames.append(hn)
+        hagrees.append(
+            f"  have {hn} : (∀ k, {g} → m0C[k]? = mqC[k]?) := by\n"
+            f"    intro k hk\n"
+            f"    have hkA : k ≠ {A} := by\n"
+            f"      intro he; subst he; first | omega | exact hk (by omega)\n"
+            f"    simp only [mqC]; exact (getElem?_insert_out m0C {A} ({W}#8) k hkA).symm\n")
+    probe = (
+        f"{hdr}{rest}\n\nnamespace SmtReplayProbe\nopen Vsa.SmtReplay\n"
+        f"private def m0C : Mem := pop (List.range {P}) ({V}#8)\n"
+        f"private def mqC : Mem := m0C.insert {A} ({W}#8)\n"
+        f"set_option maxHeartbeats 2000000 in\n"
+        f"theorem refuted : ¬ {prop} := by\n"
+        f"  intro H\n"
+        f"  have hy0 : (∀ k, k < {P} → m0C[k]? = some ({V} : BitVec 8)) := by\n"
+        f"    intro k hk; exact pop_mem _ k (List.range {P}) (List.mem_range.mpr hk)\n"
+        f"{''.join(hagrees)}"
+        f"  have hc := H m0C hy0 mqC {' '.join(hnames)} {A} (by omega)\n"
+        f"  rw [show (mqC[({A}:Nat)]? : Option (BitVec 8)) = some ({W}#8) from by\n"
+        f"        simp only [mqC]; exact Std.ExtHashMap.getElem?_insert_self] at hc\n"
+        f"  rw [show (m0C[({A}:Nat)]? : Option (BitVec 8)) = none from\n"
+        f"        pop_not_mem _ {A} _ (fun h => by simp only [List.mem_range] at h; omega)] at hc\n"
+        f"  exact absurd hc (by simp)\n"
+        f"#print axioms refuted\nend SmtReplayProbe\n")
+    return _run_replay(probe)
+
+
+def _extra_args(prop, body_text):
+    """Extra non-m0 outer binders between the first Mem binder and the nested mq
+    quantifier (e.g. a `base : BitVec 64`).  Supplied as `_` placeholders (their
+    value is irrelevant to the refutation)."""
+    # count outer binders after the leading Mem (bytesurvive assumes m0 first).
+    sig, rhs = extract_def_body(body_text, prop)
+    if rhs is None:
+        return ""
+    binders, _ = parse_binders(rhs)
+    extra = []
+    seen_mem = False
+    for nm, ty in binders:
+        t = ty.strip()
+        if not seen_mem and (t.endswith("Mem") or "ExtHashMap" in t):
+            seen_mem = True
+            continue
+        if seen_mem:
+            if "BitVec 64" in t or t.endswith("Addr"):
+                extra.append("(0#64)")
+            elif "BitVec 32" in t:
+                extra.append("(0#32)")
+            elif "BitVec 8" in t:
+                extra.append("(0#8)")
+            elif t.endswith("Nat") or t.endswith("Int"):
+                extra.append("0")
+            else:
+                extra.append("_")
+    return " ".join(extra)
 
 
 def replay_arith(path, prop, binders, chain, body_text, model):
@@ -818,7 +1198,7 @@ def replay_arith(path, prop, binders, chain, body_text, model):
             args.append(_struct_from_model(nm, t, model))
     short = prop.split(".")[-1]
     argstr = " ".join(args)
-    probe = (f"{body_text}\n\nnamespace SmtReplay\n"
+    probe = (f"{body_text}\n\nnamespace SmtReplayProbe\n"
              f"set_option maxHeartbeats 1000000 in\n"
              f"theorem refuted : ¬ {prop} := by\n"
              f"  intro H\n"
@@ -826,7 +1206,7 @@ def replay_arith(path, prop, binders, chain, body_text, model):
              f"  simp only [{prop}] at h\n"
              f"  revert h\n"
              f"  decide\n"
-             f"#print axioms refuted\nend SmtReplay\n")
+             f"#print axioms refuted\nend SmtReplayProbe\n")
     return _run_replay(probe)
 
 
@@ -878,7 +1258,7 @@ def replay_mem(path, prop, binders, chain, body_text, model, cls):
             f"        simp only [Std.ExtHashMap.getElem?_empty]] at hb'\n"
             f"  exact absurd hb' (by simp)\n")
     probe = (
-        f"{hd}{body_text}\n\nnamespace SmtReplay\n"
+        f"{hd}{body_text}\n\nnamespace SmtReplayProbe\n"
         f"private def m0W : Mem := (∅ : Mem).insert {A} (0#8)\n"
         f"set_option maxHeartbeats 1000000 in\n"
         f"theorem refuted : ¬ {prop} := by\n"
@@ -897,7 +1277,7 @@ def replay_mem(path, prop, binders, chain, body_text, model, cls):
         f"          rw [if_neg (by decide), Std.ExtHashMap.getElem?_empty]]\n"
         f"  have hme := H {argstr} hagree\n"
         f"{refute_tail}"
-        f"#print axioms refuted\nend SmtReplay\n")
+        f"#print axioms refuted\nend SmtReplayProbe\n")
     return _run_replay(probe)
 
 
@@ -905,7 +1285,12 @@ def _run_replay(probe):
     os.makedirs(LOGDIR, exist_ok=True)
     with open(os.path.join(LOGDIR, "smt-last-replay.lean"), "w") as f:
         f.write(probe)
-    rc, out = run_lean(probe)
+    # agree-window replays `import SmtReplaySupport`; build+expose its olean.
+    env = None
+    if "import SmtReplaySupport" in probe:
+        ensure_support_olean()
+        env = _lean_path_env()
+    rc, out = run_lean(probe, env=env)
     if rc != 0:
         return "GAP", (out.strip().splitlines()[-1] if out.strip() else "?"), probe
     if "sorryAx" in out:

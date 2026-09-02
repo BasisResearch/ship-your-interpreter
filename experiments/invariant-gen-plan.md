@@ -379,6 +379,70 @@ GENUINELY opaque (uninterpreted) is reported as MODULO-OPAQUE and left unreplaye
 > statement_fuzz witness idiom. The ENCODING-GAP verdict class stays (a
 > replay failure still indicates an export bug).
 
+## SMT encoder v2: export tactic
+
+LANDED 2026-09-02.  The Python source-parser (RecursionError/ENCODE-GAP on the
+uncontaminated NovelProbe battery — observations `smt-encoder-novelty-gap`) is
+superseded for `--refute` by a Lean-side `dump_smt_lib` EXPORT COMMAND that
+walks the ELABORATED goal `Expr`.  It PROVES NOTHING (a pure exporter run as an
+`elab` command; no `sorry`/`axiom`/`native_decide` — Law 2 untouched) and is NOT
+wired into `Vsa.lean`.
+
+**Files.**
+- `experiments/smt/DumpSmtLib.lean` — the `dump_smt_lib "<path>" for <Prop>`
+  command.  Walks the outer ∀ telescope + the `→`/`∧`/`∨`/`¬`/`∃`/nested-∀ body
+  and writes the negated-statement refute query as SMT-LIB2.  Metaprogram
+  precedents: RepackTac / ChainFactsTac / DeriveCase.
+- `experiments/smt/SmtReplaySupport.lean` — `pop`/`pop_mem`/`pop_not_mem`/
+  `ins_comm` (axiom-clean ⊆ {propext, Classical.choice, Quot.sound}); the
+  finite-prefix map lemmas the range-pinned replay witness needs.
+- `scripts/smt_check.py` — reworked: `--refute` now tries the Lean dump first
+  (probe imports target + `DumpSmtLib` via a cached olean on `LEAN_PATH`), runs
+  Z3, replays countermodels; **the Python encoder remains the fallback** for any
+  statement the tactic GAPs (`; ENCODE-GAP`/`; GAPS:` in the dump ⇒ Python) and
+  is retained wholesale for `--validate`/`--inhabit`.  Each verdict line is
+  tagged `[enc:lean]` or `[enc:python]`.
+
+**Unfolding policy (the principled OPAQUE boundary — a WHNF decision, not a
+hand-list).**  `BitVec 64/32/8` → SMT BV + Int `.toNat` mirror (`0 ≤ v`);
+`Nat`/`Int` → Int (Nat `≥ 0`); `Mem` → `(def : Array Int Bool, val : Array Int
+(BitVec 8))` pair with `m[a]?=some b ↦ def a ∧ val a=b`, `m[a]?=m0[a]? ↦ defs∧
+vals agree`; `MemExtends m0 m` emitted directly as `∀ za, def0 za → def za`;
+`StackOK`/`.lo`/`.hi`/`HAdd`/`HSub`(truncated `ite (≥)(-)0`)/`HMod`/`HMul`/
+`Nat.succ`/`OfNat`/`<`(=`succ ≤`)/`≤`/`=`/`∃`(presence) unfolded to arithmetic/
+array form.  Any head that does NOT WHNF-reduce into that vocabulary — the
+genuinely SEMANTIC predicates `ValueRepr`/`ExprRepr`/`CString`/`GoodState`/
+`StoreRepr`/`FoundSt`/`Approx`/`Loaded`/`InterpSim`/`frameRepr` — is emitted as
+an UNINTERPRETED 0-ary Bool (recorded in a `; OPAQUE:` comment the driver reads
+back; a model touching one ⇒ REFUTED-MODULO-OPAQUE, not auto-replayed).
+
+**Scope choice.** The Lean dump drives `--refute`, where a spurious SAT cannot
+be a false green: the machine-checked Lean replay gates the verdict (SAT-without-
+replay ⇒ ENCODING-GAP, loud).  `--validate`'s VALID-IN-FRAGMENT is a soundness
+claim (UNSAT of the negation) and stays on the Python encoder whose fragment the
+acceptance battery certified — a looser Lean over-approximation cannot silently
+weaken a VALID verdict.
+
+**Universal replay witness (Law-3 abstraction, not per-shape hand-tuning).** The
+agree-window falsity family (∀-mcall / prefix-agree over-quant) is refuted by ONE
+generator (`replay_agree_general`), cover-topology- AND conclusion-kind-agnostic:
+`m0 = {A ↦ V}`, `mq = ∅` differ ONLY at the uncovered demand `A`; every agree-hyp
+`∀k, Gᵢ(k) → m0[k]?=mq[k]?` holds because `Gᵢ(k) → k ≠ A` (`by omega`, from the
+guard's numeric constraint + the concrete uncovered `A`).  A range-pinned variant
+(`replay_gapagree`, NovelResidC-shape: `∀k<P, m0[k]?=some V` forces `m0` populated
+on `[0,P)`) uses `pop [0,P) V` for `m0` and a gap byte for `mq`, same per-guard
+`k ≠ A` discharge.  Kinds handled: `value`/`present`/`extends`/`agree`/`gapagree`.
+
+**HARD ACCEPTANCE (all gates PASS 2026-09-02).**
+- (a) history battery (`--acceptance`): PASS — a/b/c REFUTED-REPLAYED via the
+  Lean encoder, **all 4 Lean replays green + axiom-clean**, d VALID (python),
+  e NOT-REFUTED.
+- (b) UNCONTAMINATED `experiments/fuzz-battery/NovelProbe.lean`: A → REFUTED-
+  REPLAYED, B → NOT-REFUTED, C → REFUTED-REPLAYED (all `[enc:lean]`, replays
+  axiom-clean).
+- (c) `statement_fuzz.py --gen-battery` fresh sample of 10 through the SMT
+  checker: 10/10 correct across seeds {3,7,11,99,123}.
+
 ## Fuzzer v2: descent
 
 `statement_fuzz.py --descend [depth]` (default 2) adds NESTED-QUANTIFIER

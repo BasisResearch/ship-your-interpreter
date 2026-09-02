@@ -1060,3 +1060,31 @@ validation, like the ELF emulator harness).
 ## statement_fuzz.py run
 
 - `FreshTriWinT` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+
+### --gen-battery 10 (fresh sample, seed=42)
+
+- GenProbe0_F [value] truth=F demand@0x3338 cover=[0,13112)∪[17208,∞) → REFUTED [OK]
+- GenProbe0_T [value] truth=T demand@0x0 cover=[0,221208)∪[221224,∞) → SURVIVED [OK]
+- GenProbe1_F [agree] truth=F demand@0x19738 cover=[0,104248)∪[137016,∞) → REFUTED [OK]
+- GenProbe1_T [value] truth=T demand@0x0 cover=[0,221571)∪[225667,∞) → SURVIVED [OK]
+- GenProbe2_F [agree] truth=F demand@0xbdf1 cover=[0,48625)∪[81393,∞) → REFUTED [OK]
+- GenProbe2_T [agree] truth=T demand@0x3ace6 cover=[240870,240886) → SURVIVED [OK]
+- GenProbe3_F [present] truth=F demand@0x0 cover=[36466,36482) → REFUTED [OK]
+- GenProbe3_T [agree] truth=T demand@0x0 cover=[0,199295)∪[203391,∞) → SURVIVED [OK]
+- GenProbe4_F [extends] truth=F demand@0x0 cover=[37435,37691)∪[186264,186520) → REFUTED [OK]
+- GenProbe4_T [present] truth=T demand@0x1c1c5 cover=[115141,119237)∪[120087,120103) → SURVIVED [OK]
+- GenProbe5_F [present] truth=F demand@0x0 cover=[80132,80388) → REFUTED [OK]
+- GenProbe5_T [agree] truth=T demand@0x1783 cover=[6019,6035)∪[245392,249488) → SURVIVED [OK]
+- GenProbe6_F [present] truth=F demand@0x25916 cover=[0,153878)∪[186646,∞) → REFUTED [OK]
+- GenProbe6_T [value] truth=T demand@0xd9ed cover=[55789,59885) → SURVIVED [OK]
+- GenProbe7_F [agree] truth=F demand@0x0 cover=[58650,62746)∪[84698,84714) → REFUTED [OK]
+- GenProbe7_T [extends] truth=T demand@0x0 cover=[0,126286)∪[126302,∞) → SURVIVED [OK]
+- GenProbe8_F [extends] truth=F demand@0x0 cover=[67314,100082) → REFUTED [OK]
+- GenProbe8_T [extends] truth=T demand@0x27e65 cover=[163429,196197) → SURVIVED [OK]
+- GenProbe9_F [present] truth=F demand@0x1fbb5 cover=[0,129973)∪[130229,∞) → REFUTED [OK]
+- GenProbe9_T [present] truth=T demand@0xeba cover=[3770,3786) → SURVIVED [OK]
+
+**gen-battery: 20/20 correct → PASS**

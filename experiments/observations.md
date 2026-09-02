@@ -4994,6 +4994,15 @@ it, still stop and report instead.
 - proposal: encoder v2 = Lean-side dump_smt_lib tactic; hard acceptance =
   history battery + NovelProbe + a --gen-battery fresh sample (once v2.1's
   generator lands). No generality claims except via uncontaminated tests.
+- RESOLVED 2026-09-02: encoder v2 LANDED (experiments/smt/DumpSmtLib.lean elab
+  command + SmtReplaySupport.lean pop-lemmas; smt_check.py reworked with Python
+  fallback + [enc:lean|python] tags). ALL gates PASS: (a) history --acceptance
+  4/4 Lean replays; (b) NovelProbe A/C REFUTED-REPLAYED axiom-clean, B NOT-
+  REFUTED; (c) --gen-battery fresh 10-sample 10/10 across seeds {3,7,11,99,123}.
+  Key abstraction (Law 3): ONE universal agree-window replay witness (m0={A↦V},
+  mq=∅ differ only at uncovered A; per-guard k≠A by omega) — cover-topology AND
+  conclusion-kind agnostic; range-pinned C-shape uses a pop-populated m0. See
+  invariant-gen-plan '## SMT encoder v2: export tactic'.
 
 ## 2026-09-02 fuzzer-v21-semantic-rule (statement_fuzz --semantic/--gen-battery)
 - missing: (was) a GENERALIZATION of --descend. v2's ADVERSARY_BUILDERS keyed on
@@ -5027,3 +5036,17 @@ it, still stop and report instead.
   True twin SURVIVED. Backlog: agree-demand refuter template (small).
   Standing rule: each validation round uses a FRESH hand probe; used
   batteries are spent as evidence of generality.
+
+## 2026-09-02 replay-emitter-lag (coordinator fresh-probe check, encoder v2)
+- verdict: the SEARCH layer is general (Z3 SAT on both fresh falsities,
+  FreshTriWin + FreshValDemand; true twin VALID) — the REPLAY generator is
+  template-bound (both → ENCODING-GAP, loud, sorryAx surfaced). Same
+  gap-class as v2.1's agree-demand emitter. Across all three validator
+  generations: detection generalizes, auto-certification lags.
+- operating mode until closed: search-layer flags are ACTIONABLE (the model
+  pinpoints the witness); the Lean refutation is written by hand/agent in
+  ~5 lines from the flagged witness. No silent verdict exists in any tool.
+- backlog (one bounded task, not urgent): generalize the replay generator —
+  synthesize map literals + discharge obligations from the MODEL generically
+  (decide/omega), not from shape templates. Acceptance: the spent batteries
+  + fresh-per-round probes.
