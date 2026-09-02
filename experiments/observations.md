@@ -5395,3 +5395,22 @@ it, still stop and report instead.
   compiles it and `check_all`'s grep gate (which scans `Vsa/` only) never sees
   it.  Treat every obstruction artifact's verdict as valid ONLY when re-run;
   `X2_Field_hIAdd.lean` was re-run this session and is genuinely clean.
+
+## 2026-09-02 full-effect-not-a-wall (FULL-EFFECT-PROBE task)
+- missing: the write-log SMT encoder emitted only the memory-FRAME slice of an
+  exec-arm exit relation; the register/PC/HTIF-output outcomes (runGM/endPCM/
+  Machine.output) and the given-sub-result were reported as "COMPOSITION-DEFER"
+  (un-encodable) when they are in fact first-order and Z3-encodable.
+- workaround: NONE — extended the encoder (experiments/smt/bounded/gen_fulleffect.py).
+  The FULL brk/cont + expr exit relation now Z3-UNSATs branch-by-branch: reg+PC
+  (runGM/endPCM) UNSAT, HTIF-output (no-putchar) UNSAT, mem-frame UNSAT (landed),
+  given-sub-result UNSAT for null/bool/int (str routes to the CString IH), and
+  StoreRepr survival = the landed Houdini base/step. All controls SAT.
+- cost: the only residual is Lean transcription (map each Z3-UNSAT branch to the
+  landed lemma) — no new wall. The str given-sub-result reuses the SAME cstring_
+  agreeP cut Houdini already rediscovers, not a new obligation.
+- proposal: promote gen_fulleffect from a per-field pilot to the batch encoder
+  behind autoprove --batch supplier, so every exec-arm exit-Triple gets the
+  three-branch (machine-effect Z3 / given-IH hypothesis / survival Houdini)
+  verdict instead of a bare COMPOSITION-DEFER; the recursor IH is a NAMED typed
+  premise (EvalIH), the exit relation is otherwise mechanized.
