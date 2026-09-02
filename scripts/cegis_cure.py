@@ -542,6 +542,40 @@ def filter_semantic(cand, timeout_ms=15000):
     return True, "semantic: undecidable (kept)"
 
 
+def filter_joint(cand, demands, timeout_ms=15000):
+    """FILTER 3b (INTERLOCK): `smt_check.py --consumer-check` — does the AMENDED
+    structure still IMPLY every harvested consumer demand?  A CONJUNCT-DELETION
+    candidate is NOT refutable per-statement (a weaker Prop has no countermodel of
+    its own), so filter_smt/filter_semantic PASS it; but if the deleted conjunct
+    was load-bearing (e.g. `x13_pres`, spilled by blockB_binary) the structure
+    becomes too weak — consumer-check FAILS.  This is the 48e/48c interlock the
+    per-statement filters miss.  Only runs when `demands` are supplied (the
+    consumer projections harvested for this field)."""
+    if not demands:
+        return True, "no consumer demands harvested (skipped)"
+    path = _write_tmp_module(cand)
+    try:
+        r = subprocess.run(
+            ["python3", SMT, "--consumer-check", "--demands", ";".join(demands),
+             "--file", path, "--prop", cand.full_prop()],
+            cwd=ROOT, capture_output=True, text=True,
+            timeout=timeout_ms / 1000 * 4 + 400)
+        out = r.stdout + r.stderr
+    except subprocess.TimeoutExpired:
+        return True, "consumer-check timeout (kept)"
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    if "CONSUMER-FAILS" in out:
+        d = next((l for l in out.splitlines() if "CONSUMER-FAILS" in l), "")
+        return False, f"interlock: amended structure too weak for a consumer — {d.strip()[:90]}"
+    if "SATISFIED" in out:
+        return True, "interlock: all consumer demands still satisfied"
+    return True, "interlock: consumer demands opaque/undecidable (kept)"
+
+
 def filter_trace(cand, field):
     """FILTER 4 (advisory): a mined candidate for this field under
     experiments/invariants/ — cross-check, don't hard-drop."""
@@ -581,7 +615,7 @@ def opens_of(body_text):
 
 
 def cure_one(path, prop, field, do_smt=True, do_semantic=True, topk=5,
-             quiet=False, unfold=None):
+             quiet=False, unfold=None, demands=None):
     body_text = open(path).read()
     imports = imports_of(body_text)
     ns = ".".join(prop.split(".")[:-1])
@@ -603,7 +637,7 @@ def cure_one(path, prop, field, do_smt=True, do_semantic=True, topk=5,
     cands, defects, has_entry = enumerate_candidates(binders, body, sig, ns, imports)
     space_size = len(cands)
 
-    kills = {"syntactic": 0, "smt": 0, "semantic": 0}
+    kills = {"syntactic": 0, "smt": 0, "semantic": 0, "joint": 0}
     survivors = []
     for c in cands:
         ok, ev = filter_syntactic(c)
@@ -625,6 +659,13 @@ def cure_one(path, prop, field, do_smt=True, do_semantic=True, topk=5,
             if not ok:
                 c.dropped_by = "semantic"
                 kills["semantic"] += 1
+                continue
+        if demands:                          # FILTER 3b — INTERLOCK
+            ok, ev = filter_joint(c, demands)
+            c.filters["joint"] = ("PASS" if ok else "CONSUMER-FAILS", ev)
+            if not ok:
+                c.dropped_by = "joint"
+                kills["joint"] += 1
                 continue
         tv, te = filter_trace(c, field)
         if tv is not None:
@@ -654,7 +695,8 @@ def write_report(result, src_path):
              f"Template space: {result['space_size']} candidate(s).  ",
              f"Filter kills: syntactic {result['kills']['syntactic']}, "
              f"Z3-refute {result['kills']['smt']}, "
-             f"semantic {result['kills']['semantic']}.  ",
+             f"semantic {result['kills']['semantic']}, "
+             f"interlock {result['kills'].get('joint', 0)}.  ",
              f"Survivors: {len(survivors)}.", ""]
     RELIGHT = {
         "entry-conditioning": "B2/47i class — value-path sims relight verbatim; "
@@ -762,6 +804,11 @@ def main():
     ap.add_argument("--unfold", nargs="+", default=None, metavar="DEF",
                     help="def name(s) to unfold when the prop is an APPLICATION "
                          "of another Resid (exposes its body via trace_state)")
+    ap.add_argument("--demands", default=None,
+                    help="';'-separated consumer demand texts → enables the "
+                         "INTERLOCK filter (smt_check --consumer-check): drops a "
+                         "candidate whose amended structure is too weak for a "
+                         "load-bearing consumer projection")
     args = ap.parse_args()
 
     if args.llm_rank:
@@ -770,8 +817,9 @@ def main():
         sys.exit(0 if acceptance(not args.no_smt, not args.no_semantic) else 1)
     if not (args.file and args.prop):
         ap.error("need --file and --prop (or --acceptance)")
+    dem = [d.strip() for d in args.demands.split(";")] if args.demands else None
     cure_one(args.file, args.prop, args.field, not args.no_smt,
-             not args.no_semantic, args.topk, unfold=args.unfold)
+             not args.no_semantic, args.topk, unfold=args.unfold, demands=dem)
 
 
 if __name__ == "__main__":

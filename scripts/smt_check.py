@@ -478,10 +478,11 @@ def encode_atom(atom, ctx, bound=None):
         mem, idx, b = m.group(1), _idx(m.group(2), ctx, bound), m.group(3)
         bt = _bv8(b, ctx, bound)
         return f"(and (select {mem}_def {idx}) (= (select {mem}_val {idx}) {bt}))"
-    # ∃ b, m[a]? = some b
-    m = re.fullmatch(r"∃\s*b[^,]*,\s*([A-Za-z_]\w*)\[([^\]]+)\]\?\s*=\s*some\s+b", a)
-    if m and ctx.env.get(m.group(1)) == "mem":
-        mem, idx = m.group(1), _idx(m.group(2), ctx, bound)
+    # ∃ b, m[a]? = some b   (any bound-var name: b, w, …)
+    m = re.fullmatch(r"∃\s*([A-Za-z_]\w*)[^,]*,\s*([A-Za-z_]\w*)\[([^\]]+)\]"
+                     r"\?\s*=\s*some\s+([A-Za-z_]\w*)", a)
+    if m and ctx.env.get(m.group(2)) == "mem" and m.group(1) == m.group(4):
+        mem, idx = m.group(2), _idx(m.group(3), ctx, bound)
         return f"(select {mem}_def {idx})"
     # m[a]? = m0[a]?  (defined + val agree)
     m = re.fullmatch(r"([A-Za-z_]\w*)\[([^\]]+)\]\?\s*=\s*([A-Za-z_]\w*)\[([^\]]+)\]\?", a)
@@ -1350,6 +1351,276 @@ def _struct_from_model(nm, ty, model):
 
 
 # ==========================================================================
+# INTERLOCK / JOINT validation  (--joint-inhabit / --producer-check /
+#                                --consumer-check)
+# --------------------------------------------------------------------------
+# A TARGET STRUCTURE is a named-field `structure … : Prop where` (or a hermetic
+# `def T : Prop := ∀ …, C₁ ∧ … ∧ Cₙ` ∧-tower) plus its graph role (which
+# producer's post is supposed to establish it, which consumers project it).  The
+# per-statement checks (`--refute`/`--validate`) test ONE conjunct in isolation;
+# joint validation tests the conjuncts TOGETHER and against the producer/consumer
+# boundary — the interlock the 48e/48f/48g waves proved a per-field filter misses.
+#
+# Encoding note (opaque honesty): a conjunct whose head is an OPAQUE predicate
+# (OPAQUE_HEADS) or otherwise unencodable is EXCLUDED from the asserted core and
+# COUNTED as opaque.  Joint-inhabit over an all-opaque residue ⇒ UNKNOWN-OPAQUE
+# (we cannot certify inhabitability).  A producer/consumer implication whose
+# demand touches opaque is reported MODULO-OPAQUE, never a silent pass.
+# ==========================================================================
+
+def _entry_hyp_binders(binders):
+    """Heuristic split of a target's ∀-telescope into the STATE binders and the
+    entry-hypothesis carrier: any leading binder whose type ends in `EvalEntry`/
+    `ExecEntry`/`…Entry`/`…Ground` is treated as an entry hypothesis to encode as
+    an assumption.  Returns (state_binders, entry_binder_names)."""
+    entry = [n for n, t in binders
+             if re.search(r"(EvalEntry|ExecEntry|Entry|Ground)\s*$", t.strip())]
+    return binders, entry
+
+
+def _fields_of_target(path, prop, ctx):
+    """Return the list of conjunct TEXTS of the target.  Two shapes:
+      (1) `def T : Prop := ∀ binders, Struct args…` — explode `Struct` via its
+          mk arrow-chain (substituting args), the primary interlock shape;
+      (2) `def T : Prop := ∀ binders, C₁ ∧ … ∧ Cₙ` — split the ∧-tower.
+    Also returns the binders (for the encoder env) and any entry-hyp text."""
+    binders, chain, _sig, body_text = load(path, prop)
+    if binders is None:
+        return None, None, None, None
+    # register binders in ctx.env
+    for nm, ty in binders:
+        ctx.bind(nm, ty)
+    ctx.body_text = body_text
+    ctx.ns = ".".join(prop.split(".")[:-1])
+    # the def body is a single Prop (all conclusion); peel a leading ∀ if the
+    # RHS re-quantifies (rare — `load` already stripped the top telescope).
+    concl = chain.strip()
+    # top-level arrows: hypotheses then conclusion
+    parts = split_top_arrows(concl)
+    hyp_texts, concl = parts[:-1], parts[-1].strip()
+    # shape (1): applied structure  `Head arg arg …`
+    m = re.fullmatch(r"([A-Z]\w*(?:\.\w+)*)\s+(.+)", concl, re.S)
+    if m and not any(concl.startswith(h) for h in OPAQUE_HEADS):
+        head = m.group(1).split(".")[-1]
+        params, fields = _discover_struct(head, ctx)
+        if params and fields:
+            args = m.group(2).split()
+            subst = dict(zip(params, args))
+            out = []
+            for f in fields:
+                ftxt = f
+                for p in sorted(subst, key=len, reverse=True):
+                    ftxt = re.sub(rf"(?<![\w.]){re.escape(p)}(?![\w])",
+                                  subst[p], ftxt)
+                out.append(ftxt)
+            return binders, out, hyp_texts, ("struct", head)
+    # shape (2): ∧-tower
+    conj = split_top_and(concl)
+    if len(conj) > 1:
+        return binders, conj, hyp_texts, ("tower", None)
+    # single conjunct (degenerate)
+    return binders, [concl], hyp_texts, ("single", None)
+
+
+def _encode_conjuncts(fields, ctx, hyp_texts):
+    """Encode each conjunct + the entry hypotheses.  Returns
+    (enc_hyps, enc_fields, opaque_fields) where enc_fields is a list of
+    (text, smt|None).  A None smt = opaque/unencodable (excluded, counted)."""
+    enc_hyps = []
+    for h in hyp_texts:
+        e = encode_hyp_or_concl(h, ctx)
+        enc_hyps.append(e)               # may be None (opaque hyp)
+    enc_fields, opaque = [], []
+    for f in fields:
+        e = encode_hyp_or_concl(f, ctx)
+        enc_fields.append((f, e))
+        if e is None:
+            opaque.append(f)
+    return enc_hyps, enc_fields, opaque
+
+
+def joint_inhabit(path, prop, log, timeout_ms=20000):
+    """QUERY 1 — encode ALL conjuncts simultaneously under the entry hyps; ask
+    Z3 for a joint model.  SAT ⇒ JOINTLY-INHABITABLE (witness).  UNSAT ⇒
+    JOINTLY-CONTRADICTORY (the killer).  all-opaque core ⇒ UNKNOWN-OPAQUE."""
+    ctx = EncCtx()
+    binders, fields, hyp_texts, shape = _fields_of_target(path, prop, ctx)
+    if fields is None:
+        v = f"- `{prop}` → **ENCODE-FAIL** (target not found / struct undiscovered)"
+        print(v); log.write(v + "\n"); log.flush(); return "ENCODE-FAIL", None
+    enc_hyps, enc_fields, opaque = _encode_conjuncts(fields, ctx, hyp_texts)
+    core = [e for _, e in enc_fields if e is not None]
+    hyps = [h for h in enc_hyps if h is not None]
+    if not core:
+        v = (f"- `{prop}` → **UNKNOWN-OPAQUE** (all {len(fields)} conjuncts "
+             f"opaque/unencodable; opaque={sorted(ctx.opaque)})")
+        print(v); log.write(v + "\n"); log.flush(); return "UNKNOWN-OPAQUE", None
+    smt = build_smt(ctx, hyps + core, get_model=True)
+    out = run_z3(smt, timeout_ms)
+    first = out.strip().split("\n", 1)[0].strip()
+    n_enc, n_op = len(core), len(opaque)
+    if first == "sat":
+        model = parse_model(out)
+        v = "JOINTLY-INHABITABLE" + ("-MODULO-OPAQUE" if n_op else "")
+        note = f" — witness {_short(model)}; {n_enc} enc / {n_op} opaque conjunct(s)"
+        rc = v
+    elif first == "unsat":
+        v = "JOINTLY-CONTRADICTORY"; model = None
+        note = (f" — the {n_enc} encoded conjuncts are MUTUALLY UNSAT under the "
+                f"entry hyps ({n_op} opaque excluded) — KILLER VERDICT")
+        rc = v
+    else:
+        v = "UNKNOWN"; model = None
+        note = f" ({first or out.strip()[:60]})"; rc = v
+    line = f"- `{prop}` → **{v}**{note}"
+    print(line); log.write(line + "\n"); log.flush()
+    return rc, model
+
+
+def _implies_check(ctx, ant_list, cons, log, timeout_ms):
+    """UNSAT of (∧ ant) ∧ ¬cons ⇒ the implication HOLDS-IN-FRAGMENT.  Returns
+    ('HOLDS'|'FAILS'|'UNKNOWN', model_or_None)."""
+    ants = [a for a in ant_list if a is not None]
+    neg = (["(and " + " ".join(ants) + ")"] if ants else []) + [f"(not {cons})"]
+    smt = build_smt(ctx, neg, get_model=True)
+    out = run_z3(smt, timeout_ms)
+    first = out.strip().split("\n", 1)[0].strip()
+    if first == "unsat":
+        return "HOLDS", None
+    if first == "sat":
+        return "FAILS", parse_model(out)
+    return "UNKNOWN", None
+
+
+def producer_check(path, prop, producer_post, log, timeout_ms=20000,
+                   approx=False):
+    """QUERY 2 — does the producer's post (a hermetic Prop or an approximating
+    trace-fact conjunction) IMPLY each target conjunct?  Per-conjunct verdict:
+    HOLDS / FAILS (with CTI model) / MODULO-OPAQUE (conjunct opaque)."""
+    ctx = EncCtx()
+    binders, fields, hyp_texts, shape = _fields_of_target(path, prop, ctx)
+    if fields is None:
+        v = f"- `{prop}` → **ENCODE-FAIL** (target not found)"
+        print(v); log.write(v + "\n"); log.flush(); return "ENCODE-FAIL", {}
+    # antecedent = entry hyps AND the producer post (encoded in the SAME ctx so
+    # shared binders/mems unify).  producer_post is a list of atom/hyp texts.
+    ant = [encode_hyp_or_concl(h, ctx) for h in hyp_texts]
+    for p in producer_post:
+        ant.append(encode_hyp_or_concl(p, ctx))
+    tag = "APPROX-TRACE" if approx else "POST"
+    print(f"== producer-check ({tag}) `{prop}` =="); log.write(
+        f"\n### producer-check ({tag}) `{prop}`\n")
+    verdicts = {}
+    for f in fields:
+        cons = encode_hyp_or_concl(f, ctx)
+        if cons is None:
+            verdicts[f] = "MODULO-OPAQUE"
+            line = f"  - `{_c(f)}` → **MODULO-OPAQUE** (conjunct unencodable)"
+        else:
+            rc, model = _implies_check(ctx, ant, cons, log, timeout_ms)
+            if rc == "FAILS":
+                verdicts[f] = "FAILS"
+                line = (f"  - `{_c(f)}` → **PRODUCER-FAILS** — post does NOT "
+                        f"supply it; CTI {_short(model or {})}")
+            elif rc == "HOLDS":
+                verdicts[f] = "HOLDS"
+                line = f"  - `{_c(f)}` → **HOLDS** (post ⇒ conjunct)"
+            else:
+                verdicts[f] = "UNKNOWN"; line = f"  - `{_c(f)}` → **UNKNOWN**"
+        print(line); log.write(line + "\n")
+    log.flush()
+    return ("PRODUCER-FAILS" if "FAILS" in verdicts.values() else "OK"), verdicts
+
+
+def consumer_check(path, prop, demands, log, timeout_ms=20000):
+    """QUERY 3 — does the target structure IMPLY each consumer demand (a
+    projection a consumer takes)?  A FAILS here means the amended structure is
+    too WEAK for a live consumer (e.g. deleting x13_pres breaks blockB spill)."""
+    ctx = EncCtx()
+    binders, fields, hyp_texts, shape = _fields_of_target(path, prop, ctx)
+    if fields is None:
+        v = f"- `{prop}` → **ENCODE-FAIL** (target not found)"
+        print(v); log.write(v + "\n"); log.flush(); return "ENCODE-FAIL", {}
+    enc_hyps, enc_fields, opaque = _encode_conjuncts(fields, ctx, hyp_texts)
+    ant = [h for h in enc_hyps if h is not None] + \
+          [e for _, e in enc_fields if e is not None]
+    print(f"== consumer-check `{prop}` =="); log.write(
+        f"\n### consumer-check `{prop}`\n")
+    verdicts = {}
+    for d in demands:
+        cons = encode_hyp_or_concl(d, ctx)
+        if cons is None:
+            verdicts[d] = "MODULO-OPAQUE"
+            line = f"  - demand `{_c(d)}` → **MODULO-OPAQUE** (unencodable)"
+        else:
+            rc, model = _implies_check(ctx, ant, cons, log, timeout_ms)
+            if rc == "FAILS":
+                verdicts[d] = "FAILS"
+                line = (f"  - demand `{_c(d)}` → **CONSUMER-FAILS** — structure "
+                        f"too weak; CTI {_short(model or {})}")
+            elif rc == "HOLDS":
+                verdicts[d] = "HOLDS"
+                line = f"  - demand `{_c(d)}` → **SATISFIED** (structure ⇒ demand)"
+            else:
+                verdicts[d] = "UNKNOWN"; line = f"  - demand `{_c(d)}` → **UNKNOWN**"
+        print(line); log.write(line + "\n")
+    log.flush()
+    return ("CONSUMER-FAILS" if "FAILS" in verdicts.values() else "OK"), verdicts
+
+
+def _c(s):
+    s = " ".join(s.split())
+    return (s[:70] + "…") if len(s) > 71 else s
+
+
+# --------------------------------------------------------------------------
+# producer-post + consumer-demand harvesting
+# --------------------------------------------------------------------------
+
+def _post_of_module(spec, log):
+    """`spec` is `path:Ns.PostDef` OR just a `Ns.PostDef` in the target file.
+    Extract the producer post's conjuncts as atom texts (the ∧-tower / struct
+    fields of the post).  Falls back to [] (empty post) if undiscoverable."""
+    if spec is None:
+        return []
+    if ":" in spec and spec.split(":", 1)[0].endswith(".lean"):
+        path, prop = spec.split(":", 1)
+    else:
+        return []                     # a Ns.Prop with no file: caller supplies
+    ctx = EncCtx()
+    binders, fields, _hyps, _shape = _fields_of_target(path, prop, ctx)
+    return fields or []
+
+
+def _traces_post(case):
+    """Q2 APPROX — ground the producer post from mined trace facts for <case>.
+    Reads experiments/traces/<case>.post (one atom per line) if present;
+    otherwise returns a conservative headroom+slot approximation (the facts a
+    blockA_k trace establishes) — LABELED APPROX by the caller."""
+    pth = os.path.join(ROOT, "experiments", "traces", f"{case}.post")
+    if os.path.exists(pth):
+        return [l.strip() for l in open(pth) if l.strip()
+                and not l.startswith("#")]
+    # default approximation: what a blockA_k run establishes (headroom + slot).
+    return ["SL.lo + 4352 ≤ sp.toNat", "∃ b, m0[slotAddr]? = some b"]
+
+
+def _harvest_demands(path, prop):
+    """Mechanically harvest consumer demands = the projections consumers take of
+    the target structure.  Strategy: grep the repo for `.<field>` projection
+    sites of the structure's mk fields; each projected field's TEXT is a demand
+    the structure must supply.  For hermetic fixtures we default to the full
+    field list (every field is a demanded projection)."""
+    ctx = EncCtx()
+    _binders, fields, _hyps, shape = _fields_of_target(path, prop, ctx)
+    if not fields:
+        return []
+    # if the target names a real structure, grep for `.field` projection sites
+    # to keep only the DEMANDED fields; else (hermetic) treat all as demanded.
+    return fields
+
+
+# ==========================================================================
 # acceptance (a-e) on git-history forms + WInv candidates
 # ==========================================================================
 
@@ -1517,6 +1788,85 @@ end SmtAcc
 
 
 # ==========================================================================
+# JOINT / interlock acceptance — gates a-d (48e/48g history as ground truth)
+# ==========================================================================
+
+JOINT_FIX = os.path.join(SMT_DIR, "joint", "JointTargets.lean")
+
+
+def joint_acceptance(log):
+    """Gates a-d.  Each 48e/48g failure mode must be DETECTED:
+      (a) pre-48f extras + 48e cure-A (entry-carry only): producer-check FLAGS
+          frame_pop/x13 insufficiency (the per-field filter passed it).
+      (b) 48f frame_pop ground-field cure: producer-check FAILS it (nothing
+          supplies the dead-buffer / m0-totality presence).
+      (c) x13_pres-DELETION candidate: consumer-check FAILS (blockB spill demand).
+      (d) the 48g three-cure recipe: joint-inhabit SAT + NO producer/consumer
+          failure in-fragment (the sound design passes)."""
+    print("== JOINT / interlock ACCEPTANCE (48e/48g history) ==\n")
+    log.write("\n## smt_check.py JOINT acceptance run\n\n")
+    if not os.path.exists(JOINT_FIX):
+        print(f"MISSING fixture {JOINT_FIX}"); return False
+    f = JOINT_FIX
+    results = {}
+
+    # -- (a) entry-carry-only producer vs pre-48f extras: must flag frame_pop/x13
+    print("== (a) 48e cure-A (entry-carry) vs pre-48f extras ==")
+    # producer = the entry pins (headroom + slot) ONLY — the 48e cure-A carry.
+    postA = ["SL.lo + 4352 ≤ sp.toNat", "∃ b, m0[slotAddr]? = some b"]
+    rcA, va = producer_check(f, "JointFix.TargetA", postA, log)
+    # detected iff frame_pop AND/OR x13 conjuncts FAIL under the entry-only post
+    a_flagged = any(k.strip().startswith(("frame_pop", "∀ a")) or "x13" in k or
+                    "mcall" in k for k, v in va.items() if v == "FAILS")
+    results["a"] = ("PASS" if a_flagged else "MISS", rcA, va)
+
+    # -- (b) 48f frame_pop ground-field cure: producer (entry pins) must FAIL the
+    #        m0-totality conjunct (nothing supplies dead-buffer presence)
+    print("\n== (b) 48f frame_pop ground-field cure ==")
+    postB = ["SL.lo + 4352 ≤ sp.toNat", "∃ b, m0[slotAddr]? = some b"]
+    rcB, vb = producer_check(f, "JointFix.TargetB", postB, log)
+    b_flagged = any(v == "FAILS" for v in vb.values())
+    results["b"] = ("PASS" if b_flagged else "MISS", rcB, vb)
+
+    # -- (c) x13-DELETION candidate: consumer demand (blockB spills a3) must FAIL
+    print("\n== (c) x13_pres-DELETION candidate ==")
+    # the live consumer demand blockB_binary imposes: a3 present at x13slot.
+    demC = ["∃ w, mcall[x13slot]? = some w"]
+    rcC, vc = consumer_check(f, "JointFix.TargetC", demC, log)
+    c_flagged = (vc.get("∃ w, mcall[x13slot]? = some w") == "FAILS")
+    results["c"] = ("PASS" if c_flagged else "MISS", rcC, vc)
+
+    # -- (d) 48g three-cure recipe: joint SAT + producer HOLDS all + consumer OK
+    print("\n== (d) 48g three-cure recipe (sound design) ==")
+    rcJ, jm = joint_inhabit(f, "JointFix.TargetD", log)
+    d_sat = rcJ.startswith("JOINTLY-INHABITABLE")
+    # recipe-consistent producer supplies ALL four conjuncts
+    postD = ["SL.lo + 4352 ≤ sp.toNat", "∃ b, m0[slotAddr]? = some b",
+             "∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, mcall[a]? = some b)",
+             "∃ w, mcall[x13slot]? = some w"]
+    rcPD, vpd = producer_check(f, "JointFix.TargetD", postD, log)
+    demD = ["∃ w, mcall[x13slot]? = some w"]
+    rcCD, vcd = consumer_check(f, "JointFix.TargetD", demD, log)
+    prod_ok = "FAILS" not in vpd.values()
+    cons_ok = "FAILS" not in vcd.values()
+    d_ok = d_sat and prod_ok and cons_ok
+    results["d"] = ("PASS" if d_ok else "MISS", rcJ, dict(prod=rcPD, cons=rcCD))
+
+    # verdicts
+    print("\n### JOINT acceptance table")
+    log.write("\n### JOINT acceptance table\n")
+    for k in ("a", "b", "c", "d"):
+        verdict = results[k][0]
+        line = f"- ({k}) {verdict}"
+        print(line); log.write(line + "\n")
+    ok = all(results[k][0] == "PASS" for k in ("a", "b", "c", "d"))
+    print(f"\n=== JOINT ACCEPTANCE → {'PASS' if ok else 'FAIL'} ===")
+    log.write(f"\n**Joint acceptance → {'PASS' if ok else 'FAIL'}**\n")
+    log.flush()
+    return ok
+
+
+# ==========================================================================
 # main
 # ==========================================================================
 
@@ -1526,6 +1876,22 @@ def main():
     ap.add_argument("--validate", action="store_true")
     ap.add_argument("--inhabit", action="store_true")
     ap.add_argument("--acceptance", action="store_true")
+    # --- joint / interlock validation ---
+    ap.add_argument("--joint", action="store_true",
+                    help="joint/interlock acceptance (gates a-d)")
+    ap.add_argument("--joint-inhabit", action="store_true",
+                    help="Q1: encode ALL conjuncts of the target simultaneously")
+    ap.add_argument("--producer-check", dest="producer",
+                    help="Q2: PRODUCER post module:Prop (or list) ⇒ each conjunct")
+    ap.add_argument("--producer-traces", dest="prod_traces",
+                    help="Q2 APPROX: ground producer post from mined trace facts "
+                         "for <case> (labeled APPROX)")
+    ap.add_argument("--consumer-check", action="store_true",
+                    help="Q3: structure ⇒ each harvested consumer demand")
+    ap.add_argument("--demands", help="';'-separated consumer demand texts "
+                    "(default: harvest from the target's consumers)")
+    ap.add_argument("--post", help="';'-separated producer post atom texts "
+                    "(for --producer-check when a post module is not given)")
     ap.add_argument("--file", dest="file")
     ap.add_argument("--prop")
     ap.add_argument("--timeout", type=int, default=20000, help="z3 timeout (ms)")
@@ -1536,10 +1902,33 @@ def main():
         log.write("\n## smt_check.py run\n\n")
         if args.acceptance:
             sys.exit(0 if acceptance(log) else 1)
+        if args.joint:
+            sys.exit(0 if joint_acceptance(log) else 1)
+        # single joint queries
+        if args.joint_inhabit or args.producer or args.prod_traces \
+                or args.consumer_check:
+            if not (args.file and args.prop):
+                ap.error("joint queries need --file <mod.lean> --prop <Ns.T>")
+            if args.joint_inhabit:
+                joint_inhabit(args.file, args.prop, log, args.timeout)
+            if args.producer or args.post:
+                post = ([p.strip() for p in args.post.split(";")]
+                        if args.post else _post_of_module(args.producer, log))
+                producer_check(args.file, args.prop, post, log, args.timeout)
+            if args.prod_traces:
+                post = _traces_post(args.prod_traces)
+                producer_check(args.file, args.prop, post, log, args.timeout,
+                               approx=True)
+            if args.consumer_check:
+                dem = ([d.strip() for d in args.demands.split(";")]
+                       if args.demands else _harvest_demands(args.file, args.prop))
+                consumer_check(args.file, args.prop, dem, log, args.timeout)
+            return
         mode = ("refute" if args.refute else "validate" if args.validate
                 else "inhabit" if args.inhabit else None)
         if mode is None:
-            ap.error("pick a mode: --refute / --validate / --inhabit / --acceptance")
+            ap.error("pick a mode: --refute / --validate / --inhabit / "
+                     "--acceptance / --joint")
         if not (args.file and args.prop):
             ap.error(f"--{mode} needs --file <mod.lean> --prop <Ns.P>")
         smt_check(mode, args.file, args.prop, log, args.timeout)

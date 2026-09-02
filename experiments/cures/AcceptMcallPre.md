@@ -4,7 +4,7 @@ Source: `experiments/cegis/AcceptC_McallPair.lean`
 Detected defects: mcall-total-presence → (ii) quantifier repair, agree-off-window → (iii) guard repair  
 Entry hypothesis already present: False  
 Template space: 2 candidate(s).  
-Filter kills: syntactic 0, Z3-refute 0, semantic 0.  
+Filter kills: syntactic 0, Z3-refute 0, semantic 0, interlock 0.  
 Survivors: 2.
 
 ## Candidate 1 — (iii) guard repair
@@ -23,7 +23,6 @@ def AcceptMcallPre …: Prop :=
 Per-filter evidence:
 - **syntactic**: PASS — elaborates
 - **smt**: PASS — Z3 SAT but replay sorry'd (spurious SAT, symbolic window; kept)
-- **semantic**: PASS — semantic rule: every demand address covered (or SMT territory)
 
 Relights: EntryStackSurv/47e class — the store-survival + agree conduits widen to the full stack window; children absorbed.
 
@@ -45,7 +44,6 @@ def AcceptMcallPre …: Prop :=
 Per-filter evidence:
 - **syntactic**: PASS — elaborates
 - **smt**: PASS — Z3 SAT but replay sorry'd (spurious SAT, symbolic window; kept)
-- **semantic**: PASS — semantic rule: every demand address covered (or SMT territory)
 
 Relights: McallPop class — the 6 unary/logical Resid + NegResid/NotResid presence conjuncts; SubEvalReturn buffer-write supplies the footprint presence.
 

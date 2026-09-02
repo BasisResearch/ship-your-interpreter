@@ -5103,3 +5103,29 @@ it, still stop and report instead.
   experiments/cures/ BEFORE any cure wave touches them; the landed cures
   later confirm/refute the predictions. Fold prospective runs into each
   cure wave's prep step.
+
+## 2026-09-02 smt-joint-interlock-validation (tool task — smt_check --joint)
+- missing: an INTERLOCK validator. `smt_check.py --refute/--validate` test ONE
+  conjunct in isolation, so they PASS the exact cures 48e/48f/48g caught by hand:
+  a per-statement filter cannot see that (i) the 48e entry-carry cure leaves
+  frame_pop/x13 unsupplied by the available producer post, nor (ii) that an
+  x13_pres DELETION makes the struct too weak for blockB_binary's a3 spill (a
+  weaker Prop has no countermodel of its own → smt/semantic filters pass it).
+- workaround: NONE — BUILT the joint layer. `smt_check.py` gains `--joint-inhabit`
+  (all conjuncts SAT together under entry hyps; UNSAT=killer, all-opaque→
+  UNKNOWN-OPAQUE), `--producer-check`/`--producer-traces` (post⇒each conjunct,
+  APPROX from mined traces), `--consumer-check` (struct⇒each harvested demand),
+  and `--joint` acceptance (gates a-d, 48e/48g as ground truth — ALL PASS:
+  a=producer-check flags frame_pop+x13 under entry-only carry; b=frame_pop
+  ground-field cure producer-FAILS; c=x13-deletion consumer-FAILS; d=48g recipe
+  joint-SAT + no producer/consumer failure). Wired into `cegis_cure.py` as
+  FILTER 3b (`filter_joint`, `--demands`): drops a candidate whose amended
+  structure consumer-check-FAILS a load-bearing projection. Reuses the existing
+  `_discover_struct` field-explosion — no new encoder fragment.
+- cost: fixtures model the interlock in the encodable fragment (window presence /
+  headroom / x13-as-presence-bit), NOT the full ValueRepr/ExprRepr opaque cone;
+  those conjuncts report MODULO-OPAQUE honestly (never a silent pass). Real
+  BinArmExtras run needs its mk-chain to encode past the opaque geometry fields.
+- proposal: point `--joint`/`filter_joint` at the LIVE `BinArmExtras` (via
+  `_discover_struct`) once its opaque geometry conjuncts get fragment encodings,
+  and harvest real consumer `.field` projection sites for `--demands`.
