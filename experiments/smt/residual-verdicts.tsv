@@ -1,0 +1,59 @@
+field	z3_verdict	coverage
+hAndFalse	REFUTED	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.Sim.Code.Value_truthyLoaded, Vsa.RuntimeRepr.ValueRepr, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hAndTrue	REFUTED	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.Sim.Code.Value_truthyLoaded, Vsa.RuntimeRepr.ValueRepr, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hArgsCons	REFUTED	recfun:[Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.RuntimeRepr.StoreRepr]
+hArgsNil	REFUTED	recfun:[Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.RuntimeRepr.StoreRepr]
+hAssign	REFUTED	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hBool	UNKNOWN	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hCall	REFUTED	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hCallAssertOk	REFUTED	recfun:[Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.RuntimeRepr.StoreRepr]
+hCallClosure	REFUTED	gap×2
+hCallPrint	REFUTED	recfun:[Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.RuntimeRepr.StoreRepr]
+hCallPrintln	REFUTED	recfun:[Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.RuntimeRepr.StoreRepr]
+hDivCorr	REFUTED	recfun:[Vsa.Refine.Loaded]
+hDivOv	REFUTED	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hEpilogueSpill	REFUTED	gap×1
+hEq	REFUTED	opaque:[Nat.le, Eq]
+hFn	REFUTED	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hIAdd	REFUTED	opaque:[Nat.le, Eq]
+hIDiv	REFUTED	opaque:[Nat.le, Eq]
+hIGe	REFUTED	opaque:[Nat.le, Eq]
+hIGt	REFUTED	opaque:[Nat.le, Eq]
+hILe	REFUTED	opaque:[Nat.le, Eq]
+hILt	REFUTED	opaque:[Nat.le, Eq]
+hIMod	REFUTED	opaque:[Nat.le, Eq]
+hIMul	REFUTED	opaque:[Nat.le, Eq]
+hISub	REFUTED	opaque:[Nat.le, Eq]
+hInitStore	REFUTED	recfun:[Vsa.Sim.InterpInitStoreRepr]
+hInt	UNKNOWN	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hNe	REFUTED	opaque:[Nat.le, Eq]
+hNeg	UNKNOWN	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hNot	UNKNOWN	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.Sim.Code.Value_truthyLoaded, Vsa.RuntimeRepr.ValueRepr, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hNull	UNKNOWN	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hOrFalse	REFUTED	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.Sim.Code.Value_truthyLoaded, Vsa.RuntimeRepr.ValueRepr, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hOrTrue	REFUTED	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.Sim.Code.Value_truthyLoaded, Vsa.RuntimeRepr.ValueRepr, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hSBlock	REFUTED	gap×2
+hSBrk	UNKNOWN	recfun:[Vsa.Sim.Code.Exec_stmtLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.MemRepr.StmtRepr, Vsa.RuntimeRepr.StoreRepr]
+hSCont	UNKNOWN	recfun:[Vsa.Sim.Code.Exec_stmtLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.MemRepr.StmtRepr, Vsa.RuntimeRepr.StoreRepr]
+hSExpr	REFUTED	gap×1
+hSForStart	UNKNOWN	gap×3
+hSIfFalse	UNKNOWN	gap×1
+hSIfNone	UNKNOWN	gap×1
+hSIfTrue	UNKNOWN	gap×1
+hSRet	REFUTED	gap×1
+hSRetNull	REFUTED	gap×1
+hSVarInit	REFUTED	gap×1
+hSVarNull	REFUTED	gap×1
+hSWhileBreak	UNKNOWN	gap×2
+hSWhileFalse	UNKNOWN	gap×1
+hSeqConsAbrupt	REFUTED	gap×1
+hSeqConsNormal	REFUTED	gap×2
+hSeqNil	REFUTED	gap×1
+hStr	UNKNOWN	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hStrAddL	REFUTED	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hStrAddR	REFUTED	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hStrGe	REFUTED	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hStrGt	REFUTED	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hStrLe	REFUTED	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hStrLt	REFUTED	recfun:[Vsa.Sim.InterpCodeLoaded, Vsa.Sim.Code.Value_intLoaded, Vsa.Sim.Code.Value_boolLoaded, Vsa.Sim.Code.Value_nullLoaded, Vsa.Sim.GoodState, Vsa.RuntimeRepr.OutRepr, Vsa.Sim.Code.Value_strLoaded, Vsa.MemRepr.ExprRepr, Vsa.RuntimeRepr.StoreRepr]
+hVar	REFUTED	gap×1

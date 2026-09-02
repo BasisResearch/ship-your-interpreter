@@ -69,6 +69,13 @@ structure St where
   opaqueHeads : Std.HashSet String := {} -- opaque heads emitted
   gaps     : Array String := #[]     -- atoms that could not be encoded
   fresh    : Nat := 0                 -- fresh-name counter (opaque symbols)
+  inProg   : Std.HashSet Name := {}   -- heads CURRENTLY being expanded (cycle
+                                      -- detection): structures expand finitely,
+                                      -- and a head seen again is genuinely
+                                      -- RECURSIVE ⇒ hand it to Z3's define-fun-rec
+                                      -- (Z3's datatype-theory recursion), never a
+                                      -- static Lean fuel constant.
+  recFuns  : Std.HashSet String := {} -- recursive predicate symbols emitted
   deriving Inhabited
 
 abbrev ExpM := StateRefT St MetaM
@@ -401,23 +408,54 @@ partial def encAtom (e0 : Expr) (bound : Option (Name × String)) :
     match ← encInt a[1]!, ← encInt a[2]! with
     | some l, some r => return some s!"(not (= {l} {r}))"
     | _, _ => pure ()
-  -- No syntactic match: try WHNF-unfolding a reducible predicate
-  -- (StackOK, MemExtends, …) exactly ONCE, then re-encode.
+  -- No syntactic match.  Un-opaque by kernel reduction:
+  --   * a STRUCTURE-Prop (EvalEntry/GoodState/StoreRepr/…) expands to the
+  --     CONJUNCTION of its field types (finite — no fuel);
+  --   * a genuinely RECURSIVE head (seen again while expanding) is handed to
+  --     Z3 as a recursive-function symbol (Z3's datatype recursion), not a
+  --     static Lean cut;
+  --   * a plain reducible def WHNF-unfolds once and re-encodes.
   let head := e.getAppFn
   match head with
-  | .const c _ =>
+  | .const c us =>
     let cn := c.toString
-    -- opaque backstop: genuinely semantic heads are uninterpreted
+    let env ← getEnv
+    -- RECURSIVE-over-datatype predicates (and the huge code-image fact) are NOT
+    -- whnf-expanded in the elaborator — they are handed to Z3 as recfun symbols
+    -- (Z3's datatype-theory recursion is where the unrolling belongs).  Only the
+    -- FIRST-ORDER FINITE structures below get expanded.
     if opaqueStems.any (fun stem => (cn.splitOn stem).length > 1) then
-      return some (← opaqueSym cn e)
-    -- try to unfold the definition once and re-encode
+      modify fun s => { s with recFuns := s.recFuns.insert cn }
+      return some (← opaqueSym ("rec_" ++ smtName c) e)
+    -- cycle: this head is already being expanded ⇒ recursive ⇒ Z3 recfun symbol
+    if (← get).inProg.contains c then
+      modify fun s => { s with recFuns := s.recFuns.insert cn }
+      return some (← opaqueSym ("rec_" ++ smtName c) e)
+    -- structure-Prop ⇒ expand to the conjunction of its field types
+    if isStructure env c then
+      let ctor := getStructureCtor env c
+      if e.getAppArgs.size == ctor.numParams then
+        modify fun s => { s with inProg := s.inProg.insert c }
+        let ctorApplied := mkAppN (mkConst ctor.name us) e.getAppArgs
+        let ctorTy ← inferType ctorApplied
+        let parts ← controlAt MetaM fun runInBase =>
+          forallTelescope ctorTy fun fields _ => runInBase do
+            let mut ps := #[]
+            for f in fields do
+              match ← encProp (← f.fvarId!.getType) bound with
+              | some p => ps := ps.push p
+              | none => pure ()
+            return ps
+        modify fun s => { s with inProg := s.inProg.erase c }
+        if parts.isEmpty then return some "true"
+        return some ("(and " ++ String.intercalate " " parts.toList ++ ")")
+    -- plain def: WHNF-unfold once (mark in-progress to catch self-recursion)
+    modify fun s => { s with inProg := s.inProg.insert c }
     let e' ← whnf e
-    if e' != e then
-      return (← encProp e' bound)
-    else
-      return some (← opaqueSym cn e)   -- irreducible non-arith head ⇒ opaque
+    let r ← if e' != e then encProp e' bound else pure (some (← opaqueSym cn e))
+    modify fun s => { s with inProg := s.inProg.erase c }
+    return r
   | _ =>
-    -- unknown non-const head that we could not reduce
     noteGap (toString (← liftM (ppExpr e)))
     return none
 

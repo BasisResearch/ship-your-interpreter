@@ -36,7 +36,7 @@ def runZ3 (smt : String) : IO String := do
   handle.putStr smt
   handle.flush
   let out ← IO.Process.output
-    { cmd := "z3", args := #["-smt2", "-T:60", path.toString] }
+    { cmd := "z3", args := #["-smt2", "-T:15", path.toString] }
   try IO.FS.removeFile path catch _ => pure ()
   return out.stdout ++ out.stderr
 
