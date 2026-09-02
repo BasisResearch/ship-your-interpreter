@@ -68,7 +68,33 @@ toward a false statement, which has been the dominant historical cost
 | `smt_check.py` | Z3 countermodel search (`--refute`, model replayed through Lean — Lean remains the authority), validity (`--validate`), inhabitation (`--inhabit`); encoder v2 = the `dump_smt_lib` export tactic (`experiments/smt/DumpSmtLib.lean`) walking the elaborated Expr | search layer general; REPLAY generator template-bound (loud ENCODING-GAP on novel shapes — flagged witness + ~5-line hand refutation is the operating mode). Opaque predicates (ValueRepr/CString/GoodState/…) uninterpreted → REFUTED-MODULO-OPAQUE never auto-replayed |
 | `smt_check.py --joint` | INTERLOCK validation: joint inhabitation of a whole structure + producer⇒statement + statement⇒consumer queries — the 48e/48g composition failures as machine checks | landed; all 4 history failure modes detected at intended verdicts. Fixtures cover the encodable fragment only; opaque geometry → MODULO-OPAQUE, never silent. Prospective test = live use in the interlock sessions |
 | `cegis_cure.py` | candidate AMENDED statements for a false/blocked Resid: enumerate the cure-template space (entry-conditioning, quantifier repair, guard repair, redundancy deletion, oracle re-homing), filter by elaboration/Z3/`--joint`/descent | landed; history acceptance rank-1 on the 47i/48f/48g cures, and GENUINE under `--blind` ablation (statement + machine-checked obstruction only, docs excluded — the ghost the refutation witness degenerates names the repair template). Intra-candidate ranking on symbolic-window forms stays a template+edit-cost heuristic; prospective sealed suites are the strongest test. Only `REFUTED-REPLAYED` drops a candidate |
+| `smt_check.py` bounded (`experiments/smt/bounded/gen_probe.py`) | prove a supplier field by definition-encoding — datatypes + `define-fun-rec` + QF_ABV Mem, negation-UNSAT = a validity proof | proves the non-recursive stratum (ValueRepr null/bool/int readback → UNSAT ~20ms, replayable to `read32_copy`/`readLE_copy`). The inductive wall is sharp: recursive Repr (CString) → SAT until the IH is added, because the gap is the hypothesis, not depth |
+| `writelog_smt.py` | emit an arm's computed write-log (block-reflection's `wlogM`/`writeLog`) as SMT array-stores, so the machine effect is expressible without encoding the Sail step | flips exec-arm FRAME obligations (`MemExtends` + window-`agree` + pins) from ENCODE-GAP to Z3-UNSAT ~20ms, control-SAT faithful. The recursive `StoreRepr` survival half stays Houdini territory; data-value readbacks thread `runGM` (encodable, not yet exercised) |
+| `houdini_ih.py` | in-house Houdini IH-selector: seed candidates (the `*_agree`/`*_preserves` zoo + Z3's CTI + traces), drop the non-inductive ones against Z3, keep the maximal inductive subset | rediscovered `cstring_agreeP` blind (Z3-oracle only, no Spacer), and the acceptance held under ablation. Houdini SELECTS from the vocabulary, it does not invent — the LLM expands the vocabulary when the pool is short |
+| `autoprove.py` + skill (`experiments/autoprove/`) | the integrated IVy-style loop per field: write-log encode → Z3 close → Houdini IH-select → LLM-protocol on a vocabulary gap → transcribe to Lean, kernel-check | in build (write-log emitter landed first). Decomposes the field bundle: frame → Z3, recursion → Houdini, novel induction → LLM; a Z3-UNSAT is a design-time certificate, the Lean term is still transcribed |
 | Batteries | `experiments/fuzz-battery/` (NovelProbe, FreshTriWin, FreshValDemand) | spent-vs-fresh discipline: generality claims only via probes the tool never saw |
+
+`autoprove` is the IVy loop for supplier fields, with an LLM where IVy keeps a
+human. IVy proposes an inductive invariant, Z3 checks it, and a
+counterexample-to-induction sends you back to strengthen. The pieces map
+straight across. Z3 checks a candidate in ~20ms. Z3's SAT model is the CTI. The
+LLM reads that CTI and proposes the strengthening through the request/response
+protocol. Houdini prunes to the maximal inductive subset, and the loop repeats
+to UNSAT. Two guards go beyond vanilla IVy: every proposed clause is
+fuzzer-checked for falsity before it is accepted, so a bad proposal cannot slip
+a false lemma into the chain, and the loop ends in a Lean term the kernel
+checks rather than a formula in its own logic. The discipline that makes the
+oracle complete is IVy's own: stay in a decidable fragment. IVy uses EPR; we
+bound the datatypes so every check lands in QF_ABV and Z3 always answers.
+
+The reach is a decomposition, not a blanket. A supplier field is a conjunction
+of obligations, so `autoprove` splits it: frame and window and pin clauses go
+to Z3, recursive-Repr clauses go to Houdini, and the genuinely novel induction
+goes to the LLM or a hand proof. Nearly all of this corpus closes at the design
+level. The residue is three things, each real and each smaller than "not
+provable": the Lean transcription of a closed loop, the rare invariant the
+vocabulary cannot reach, and convergence reliability. Undecidability is why it
+is not literally all; the machine encoding is not the wall.
 
 ## 4. Invariant generation (mining pipeline)
 
