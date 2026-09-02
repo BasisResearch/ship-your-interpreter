@@ -4443,3 +4443,86 @@ it, still stop and report instead.
 - proposal: promote `pin8_peel_sd` to WriteLogNF/ValueSpec beside
   `getElem_writeMap8_disjoint` when a second consumer appears; chain_facts doc
   should warn that pins goals after in-block stores are TOWER goals.
+
+## 2026-09-02 leafwiden-entry-gap-persists (fleet B1-leaves re-attempt, post-a46b7ab)
+- missing: a supplier for the `LeafWiden` conclusion of the AMENDED (entry-
+  conditioned) leaf residuals.  The amendment closed the fleet's refutation
+  witnesses (m0 = ∅ / sp = 0 / sret-in-code now contradict `EvalEntry`), but
+  `LeafWiden = Widen (EvalExit …) … (stackFoot SL)` quantifies over EVERY
+  config `c'` satisfying the bare `EvalExit`, and `EvalEntry` constrains only
+  the ENTRY config `c` and `m0`.  Two independent gaps: (1) `pres` needs
+  `MemExtends m0 c'.σ.mem`, but `EvalExit.memFrame` carves out
+  `[SL.lo, sp) ∪ [A.lo, A.hi) ∪ [sret, sret+24)` — an exit config with a
+  presence-dropped byte there still satisfies `EvalExit`; no `EvalEntry` field
+  reaches `c'`.  (2) `surv` needs `StoreRepr` survival under rewrites of the
+  FULL `stackFoot SL = [SL.lo, SL.hi)`, but `EvalEntry.store_survives`'s
+  footprint is only `[SL.lo, sp) ∪ [sret, sret+24)` — the caller-stack strip
+  `[sp.toNat, SL.hi)` (nonempty whenever `StackOK`'s `sp ≤ SL.hi` is strict)
+  and the arena drift `memFrame` permits on `A` are both uncovered; the
+  `EvalExit.store` route needs A/AST/strings ∩ `[SL.lo,SL.hi)` = ∅, absent.
+- workaround: NONE — fields skipped; gap machine-checked as named premises in
+  `experiments/fleet/obstructions/B1_leaves_reattempt.lean`
+  (`LeafEntryGap`, `skelH{Int,Null,Bool,Str}_of_entryGap`).
+- cost: B1 stays 0/4; any worker re-dispatched on these fields re-derives this.
+- proposal: EITHER (a) re-land the four leaf sims to conclude `EvalExitD`
+  directly from their write chains (they already prove `MemExtends` + the
+  survival witness internally — `EvalIntSim2.lean:835-844`) and restate the
+  residuals without the `Widen`-over-bare-`EvalExit` shape, OR (b) widen
+  `EvalEntry.store_survives` to the full stack region + drop the arena
+  carve-out from leaf `EvalExit.memFrame` (leaves allocate nothing), making
+  `LeafEntryGap` dischargeable.
+
+## 2026-09-02 evalentry-missing-nbs-callee-geom (fleet B1-leaves re-attempt)
+- missing: entry-side suppliers for the null/bool/str CALLEE geometry the
+  amended `{Null,Bool,Str}LeafResid` still assert about `c.σ.mem`/`SL`/`sp`/
+  `sret`: `Value_{null,bool,str}Loaded`, `{Null,Bool,Str}SlotPinned`, the
+  sret-vs-`value_*`-window and window-vs-stack disjointness, and the tag-3/2/1
+  jump-table-slot stack disjointness.  `EvalEntry` carries ONLY the int-pilot
+  geometry (`value_int_code`, `int_slot`, `sret_vicode_disjoint`,
+  `vicode_stack_disjoint`, `table_stack_disjoint` at slot 0); the value_null/
+  bool/str windows `[0x800027ec,0x8000282c)` and table slots +4..+16 are
+  independent byte/layout facts (e.g. `sret = 0x800027e0` satisfies every
+  `EvalEntry` sret conjunct yet straddles the value_null window).
+- workaround: NONE — fields skipped; the exact residual geometry is pinned as
+  `{Null,Bool,Str}GeomOfEntry` premises in
+  `experiments/fleet/obstructions/B1_leaves_reattempt.lean`.
+- cost: hNull/hBool/hStr undischargeable regardless of the LeafWiden fix.
+- proposal: the `GeomFrom`/`TermShared.geom` supplier layer the TSV already
+  names — widen `InterpCodeLoaded` to the whole `value_*` text + a
+  `KindSlotPinned`-family table pin + one stack/sret-vs-interp-image
+  disjointness field in `EvalEntry` (the `EvalNullEntry`-minus-`EvalEntry`
+  delta, stated once, drawn by all three rows).
+
+## 2026-09-02 leaf-reseat-blocked-on-entry-footprint (wave 47d, B1-leaves re-seat on main)
+- missing: an entry-side supplier for store survival over the CALLER STRIP
+  `[sp.toNat, SL.hi)`.  The re-seat per proposal (a) of
+  `leafwiden-entry-gap-persists` was attempted and is INSUFFICIENT alone: the
+  survival witness the leaf sims prove internally
+  (`EvalIntSim2.lean:836-859`, `hagree6`/`hstoreSurv6`) is the entry
+  `store_survives` transported through the spill chain, footprint
+  `[SL.lo, sp) ∪ sret-window` — but the motive-fixed `EvalExitD`/`Widen`
+  survival clause is at `stackFoot SL = [SL.lo, SL.hi)` (and must be: the
+  recursive caller's post-sub-call writes land in `[sub_sp, sp)`).  The strip
+  `[sp, SL.hi)` is covered by NOTHING: `StoreRepr` pins only frames/closures
+  to the arena (`frames_arena`/`closures_arena`); binding-name strings and
+  `fn_expr` AST nodes are region-unpinned, so no disjointness route.
+- workaround: NONE — fields NOT discharged.  Verdict machine-checked in
+  `experiments/fleet/obstructions/B1_reseat_footprint_verdict.lean`:
+  `EntryStackSurv` (the widened-footprint entry survival) + `LeafExitPin`
+  (the block-interface re-land: `MemExtends m0` + no-arena-drift mem pin) are
+  JOINTLY SUFFICIENT — `skelH{Int,Null,Bool,Str}_of_pins` are record fills
+  given them (+ the independent null/bool/str callee geometry).
+- cost: B1 leaves stay 0/4; any re-dispatch on proposal (a) alone re-derives
+  this refutation.
+- proposal: TWO-PART amendment, both halves mandatory: (1) widen
+  `EvalEntry.store_survives` footprint `[SL.lo, sp)` → `[SL.lo, SL.hi)`
+  (+ the matching `ExecEntry.store_survives`, `ExecEntry.lean:267` — exec→eval
+  bridges construct `EvalEntry` from it).  Measured fan-out @ eb2a139:
+  `store_survives :=` at 15 construction sites in 13 files, 43 use sites; use
+  sites weaken (wide ⇒ narrow, one mono lemma), construction sites must supply
+  the wider fact — ITEM-ZERO-scale wave, needs a fleet.  (2) re-land the four
+  leaf sims' block interfaces (`ArmEntryK`/`PreEpilogueV` gain the
+  `LeafExitPin` conjuncts; `blockD_v`'s `Q : Mem → Prop` parameter,
+  `EvalSimCommon.lean:297+`, already transports them across the epilogue for
+  free) and restate the leaf residuals without the `Widen`-over-bare-`EvalExit`
+  shape.  Geometry gap (`evalentry-missing-nbs-callee-geom`) unchanged.
