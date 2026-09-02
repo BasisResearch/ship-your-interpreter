@@ -201,3 +201,39 @@ eval-mirror hypothesis HELD end-to-end.  Verified via `lake env lean` per-file
 PRE-EXISTING broken ORPHAN (4 errors at HEAD, imported by nothing, not in
 `Vsa.lean`) — it breaks whole-tree `lake build` but is irrelevant to the `Vsa`
 image / census / axiom audit.  TSV + singletons.md + observations.md updated.
+
+---
+## Wave 48e — X2 entry-carry: OBSTRUCTION (both literal cures insufficient), census 6/58
+
+Harvested two cluster provers' artifacts (intcells refutations Field_hI*/hEq/hNe,
+unary overquant obstructions, both logs) and, per Law 4, MACHINE-CHECKED that the
+literal cures do NOT relight any field.
+
+**Cure A (int/eq cells)** — specced as "add `EvalEntry` hyp to
+`BinIntCellResid`/`BinEqCellResid`; value paths relight verbatim". FALSE premise:
+`BinIntCellResid` packs a whole `BinArmExtras`, whose `mem_ext`/`frame_pop`/
+`x13_pres` are the IDENTICAL `∀m`/`∀mcall` over-quant shape prove-unary refuted.
+`EvalEntry`'s finite pins don't force `[SL.lo,sp)` populated ⇒ these are false
+as ∀-conclusions. New machine-checked witness:
+`experiments/fleet/obstructions/BinArmExtrasMemExtOverquant.lean`
+(axioms {propext,Classical.choice,Quot.sound}). The int-cell prover's slot6-only
+refutation UNDER-reported this — slot6 becomes entry-supplied, but the memory
+closures do not. So the amended `BinIntCellResid` is STILL false; no relight.
+
+**Cure B (6 unary/logic)** — the `∀mcall` presence+memExt pair is the same class
+(prove-unary: `UnaryLogic{MemExt,Presence}Overquant.lean`, harvested). Consumer
+`evalNegSim` uses them only for the ONE concrete `mcall` from `blockB_unary`, but
+`blockB_unary` outputs only `∀a ¬stack → mcall[a]?=m0[a]?`, NOT `MemExtends m0 mcall`
+— so even the sim cannot currently derive them; it was relying on the false residual.
+
+**Root cause (unified) + the real cure** — `blockA_binaryArm` ALREADY produces
+`MemExtends m0 ment` intrinsically (`blockA_k` 2nd output, `EvalIntSim2.lean:324`
+`_hpresM`), so `BinArmExtras.mem_ext` is REDUNDANT. The correct amendment DROPS the
+3 memory closures from `BinArmExtras` (+ the 2 from each unary/logic `*Resid`) and
+threads the concrete post-dispatch `ment`/`mcall` (a writeMap extension of `m0`)
+from `blockA_binaryArm`/`blockB_unary`, with `blockB_unary` extended to also emit
+`MemExtends m0 mcall` intrinsically. Cone: `BinArmExtras` + `blockA_binaryArm(_budgeted)`
++ 11 `binRow_*` + 10 `eval*Sim` + 6 unary sims. FEASIBLE (the intrinsic facts exist)
+but a multi-file restatement, NOT a one-field statement tweak — not landable green
+in one bounded pass. LANDED THIS PASS: harvest + 3 machine-checked obstruction
+classes + observations entry. FIELDS FOUND: 0 new (census 6/58, honest).

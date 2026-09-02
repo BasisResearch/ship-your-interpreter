@@ -4813,3 +4813,30 @@ it, still stop and report instead.
   eval frame 1088 = evalFrame, recursion level 1264 = evalFrame+execFrame, all
   <= perCallBudget 6144; StackOK.child carries 1088 through the ladder axiom-clean
   (/tmp/crux_budget_probe.lean). Design VALIDATED, no amendment needed.
+
+## 2026-09-02 binarmextras-overquant-blocks-both-cures (wave 48e X2 entry-carry)
+- missing: an entry-derivable `BinArmExtras`. Cure A (int/eq cells) was specced
+  as "add `EvalEntry` hyp to `BinIntCellResid`/`BinEqCellResid`, value paths
+  relight verbatim". BUT `BinIntCellResid` packs a whole `BinArmExtras`, three
+  of whose fields are the SAME over-quantified `∀m`/`∀mcall` shape prove-unary
+  machine-refuted for the 6 unary residuals:
+  `mem_ext : ∀m, (∀a ¬(SL.lo≤a<sp)→m[a]?=m0[a]?) → MemExtends m0 m`,
+  `frame_pop` (presence on [sp-1120,sp)), `x13_pres`. `EvalEntry`'s finite pins
+  do NOT force [SL.lo,sp) populated, so these are FALSE as ∀-conclusions —
+  machine-checked `experiments/fleet/obstructions/BinArmExtrasMemExtOverquant.lean`
+  ({propext,Classical.choice,Quot.sound}). So the int-cell prover's slot6-only
+  refutation UNDER-reported: cure A as literally stated cannot relight the cells;
+  the root cause is IDENTICAL to cure B's `∀mcall` pair.
+- workaround: NONE (stopped, Law 4). Harvested the machine-checked obstruction.
+- cost: the "add EvalEntry hyp only" recipe would loop forever — the amended
+  `BinIntCellResid` is still false. Any agent re-attempting cure A pays it again.
+- proposal: `blockA_binaryArm` ALREADY produces `MemExtends m0 ment` intrinsically
+  (`blockA_k`'s 2nd output, `EvalIntSim2.lean:324` `_hpresM`), so `BinArmExtras.mem_ext`
+  is REDUNDANT — DROP it and consume `_hpresM`. Same restatement class as cure B:
+  drop the 3 `∀m`/`∀mcall` closures from `BinArmExtras` (`mem_ext`/`frame_pop`/
+  `x13_pres`) and the 2 from each unary/logic `*Resid`, thread the concrete
+  post-dispatch `ment`/`mcall` (a writeMap extension of `m0`) from
+  `blockA_binaryArm`/`blockB_unary` output. Multi-file cone: `BinArmExtras` +
+  `blockA_binaryArm(_budgeted)` + 11 `binRow_*` + 10 `eval*Sim` + 6 unary sims.
+  Feasible (the intrinsic facts exist) but NOT a one-field tweak; not landable
+  green in a single bounded pass without a broken-tree window.
