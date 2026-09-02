@@ -194,10 +194,10 @@ theorem evalBinopChain_run (σ : MState) (i u : Nat)
       (show KeysOK [8, 2] by decide)
       (by
         block_facts hmem with "Vsa.Sim.Code.eval_expr_at_"
-        · exact ⟨⟨a_lo, a_hi, a_ht, a_al⟩, a_p0, a_p1, a_p2, a_p3⟩
-        · exact ⟨⟨b_lo, b_hi, b_ht, b_al⟩, b_p0, b_p1, b_p2, b_p3⟩
-        · exact ⟨⟨c_lo, c_hi, c_ht, c_al⟩, c_p0, c_p1, c_p2, c_p3⟩
-        · exact ⟨⟨d_lo, d_hi, d_ht, d_al⟩, d_p0, d_p1, d_p2, d_p3, d_p4, d_p5, d_p6, d_p7⟩
+        · exact ⟨⟨a_lo, a_hi, a_ht, a_al⟩, lpin_of_present a_p0, lpin_of_present a_p1, lpin_of_present a_p2, lpin_of_present a_p3⟩
+        · exact ⟨⟨b_lo, b_hi, b_ht, b_al⟩, lpin_of_present b_p0, lpin_of_present b_p1, lpin_of_present b_p2, lpin_of_present b_p3⟩
+        · exact ⟨⟨c_lo, c_hi, c_ht, c_al⟩, lpin_of_present c_p0, lpin_of_present c_p1, lpin_of_present c_p2, lpin_of_present c_p3⟩
+        · exact ⟨⟨d_lo, d_hi, d_ht, d_al⟩, lpin_of_present d_p0, lpin_of_present d_p1, lpin_of_present d_p2, lpin_of_present d_p3, lpin_of_present d_p4, lpin_of_present d_p5, lpin_of_present d_p6, lpin_of_present d_p7⟩
         · exact hBltu)
       (show BBlockOK (0x8000351c#64) [8, 2] gtChainB1 by decide) hi
   have hmem1e : σ1.mem = σ.mem := hmem1
@@ -298,10 +298,10 @@ theorem evalBinopChain_run (σ : MState) (i u : Nat)
         block_facts (hmem2e ▸ hmem : Vsa.Sim.Code.Eval_exprLoaded σ2.mem)
           with "Vsa.Sim.Code.eval_expr_at_"
         · exact ⟨⟨sLo', sHi', sHt', sAl'⟩,
-            hSlot2.1, hSlot2.2.1, hSlot2.2.2.1, hSlot2.2.2.2⟩
+            lpin_of_present hSlot2.1, lpin_of_present hSlot2.2.1, lpin_of_present hSlot2.2.2.1, lpin_of_present hSlot2.2.2.2⟩
         · exact ⟨⟨e_lo, e_hi, e_ht, e_al⟩,
-            hKind2.1, hKind2.2.1, hKind2.2.2.1, hKind2.2.2.2.1,
-            hKind2.2.2.2.2.1, hKind2.2.2.2.2.2.1, hKind2.2.2.2.2.2.2.1, hKind2.2.2.2.2.2.2.2⟩
+            lpin_of_present hKind2.1, lpin_of_present hKind2.2.1, lpin_of_present hKind2.2.2.1, lpin_of_present hKind2.2.2.2.1,
+            lpin_of_present hKind2.2.2.2.2.1, lpin_of_present hKind2.2.2.2.2.2.1, lpin_of_present hKind2.2.2.2.2.2.2.1, lpin_of_present hKind2.2.2.2.2.2.2.2⟩
         · exact hRoutesAl)
       (show BBlockOK (0x8000354c#64) [15, 2, 14] gtChainB2b by decide) hi2
   rw [show endPCB (0x8000354c#64) gtChainB2b

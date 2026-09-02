@@ -7,6 +7,7 @@ import Vsa.Sim.LogicalSites
 import Vsa.Sim.ValueTruthySpec
 import Vsa.Sim.EvalBoolSim
 import Vsa.Sim.ObsAvoid
+import Vsa.Sim.LoadSitesTotB
 import Vsa.Sim.EntryGroundKit
 
 /-!
@@ -188,14 +189,14 @@ theorem blockB_logical
     spill_roundtrip_ee ment (aExpr.toNat + 16) aLeft hpay
   -- ============ 0x8000355c: ld a2,16(a2) → x12 := aLeft ============
   obtain ⟨σ1, i1, hs1', hi1, hG1, hmem1, hobs1⟩ :=
-    site_8000355c_lg c.σ c.tick c.steps (0x8000355c#64) vmi aExpr pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7
+    site_8000355c_totb c.σ c.tick c.steps (0x8000355c#64) vmi aExpr pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7
       hG hpc hmi ha2 (hmem ▸ hcode) rfl
       (by rw [haddr16]; omega) (by rw [haddr16]; omega)
       (by rw [haddr16, htoh]; right; omega) (by rw [haddr16]; omega)
-      (by rw [haddr16, hmem]; exact hp0) (by rw [haddr16, hmem]; exact hp1)
-      (by rw [haddr16, hmem]; exact hp2) (by rw [haddr16, hmem]; exact hp3)
-      (by rw [haddr16, hmem]; exact hp4) (by rw [haddr16, hmem]; exact hp5)
-      (by rw [haddr16, hmem]; exact hp6) (by rw [haddr16, hmem]; exact hp7) htick
+      (by rw [haddr16, hmem]; try (first | exact hp0 | exact lpin_of_present hp0)) (by rw [haddr16, hmem]; try (first | exact hp1 | exact lpin_of_present hp1))
+      (by rw [haddr16, hmem]; try (first | exact hp2 | exact lpin_of_present hp2)) (by rw [haddr16, hmem]; try (first | exact hp3 | exact lpin_of_present hp3))
+      (by rw [haddr16, hmem]; try (first | exact hp4 | exact lpin_of_present hp4)) (by rw [haddr16, hmem]; try (first | exact hp5 | exact lpin_of_present hp5))
+      (by rw [haddr16, hmem]; try (first | exact hp6 | exact lpin_of_present hp6)) (by rw [haddr16, hmem]; try (first | exact hp7 | exact lpin_of_present hp7)) htick
   have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hs1'
   have hmem1e : σ1.mem = ment := by rw [hmem1]; exact hmem
   have hpc1 : σ1.regs.get? Register.PC = some (0x80003560#64) := by
@@ -429,10 +430,7 @@ theorem blockC_andFalse
         -- dead-byte read footprint — the lowered-frame window `[sp-1120, sp)`
         -- plus the node's line-word bytes `[aExpr+4, aExpr+8)` — replacing the
         -- REFUTED total-population oracle.
-        (∀ a : Nat,
-          (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
-            (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-          (∃ b, mcall[a]? = some b)) ∧
+        -- WAVE 48k: the dead-byte presence conjunct is GONE (total reads).
         -- presence-monotonicity over the entry `m0` (`mem_ext` residual).
         MemExtends m0 mcall ∧
         aExpr.toNat % 4 = 0 ∧
@@ -473,7 +471,7 @@ theorem blockC_andFalse
         PhiExtends φc φce nc ∧
         PreEpilogueVD g N A SL φfe φce st' (.bool false) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hpre
-  obtain ⟨mcall, hSub, hgx8, hexpr, hStackPop, hMemExtM0, hexprAl, hexprLo, hexprHi, hexprWin,
+  obtain ⟨mcall, hSub, hgx8, hexpr, hMemExtM0, hexprAl, hexprLo, hexprHi, hexprWin,
     hexprSL, hexprA, hexprSub,
     houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretStk, hsretEvalCode,
     hraAl, hSLloSp, hSLlo, hSLwin,
@@ -533,11 +531,15 @@ theorem blockC_andFalse
     apply BitVec.eq_of_toNat_eq; decide
   have hne2425 : ((24#64 : BitVec 64) == (25#64 : BitVec 64)) = false := by decide
   -- the whole 24-byte sub-Value buffer bytes at c.σ.mem[sp-968 .. +24) (present).
+  -- WAVE 48k: TOTAL reads.  The model's `readByte` is `getD 0`, so these dead
+  -- sub-`Value`/node bytes need no map presence at all — each is simply NAMED
+  -- as its own total read.  (This replaces the refuted `frame_pop` oracle;
+  -- the window hypothesis is kept so every call site is unchanged.)
   have hStackPopC : ∀ a : Nat,
       (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
         (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-      ∃ b, c.σ.mem[a]? = some b :=
-    fun a h => stackpop_present hMemExt (hStackPop a h)
+      ∃ b : BitVec 8, (c.σ.mem[a]?).getD 0 = b :=
+    fun _ _ => ⟨_, rfl⟩
   obtain ⟨kb0, hkb0⟩ := hStackPopC (sp.toNat - 968) (by omega)
   obtain ⟨kb1, hkb1⟩ := hStackPopC (sp.toNat - 968 + 1) (by omega)
   obtain ⟨kb2, hkb2⟩ := hStackPopC (sp.toNat - 968 + 2) (by omega)
@@ -586,12 +588,12 @@ theorem blockC_andFalse
   ------------------------------------------------------------------------
   -- 0x8000356c: lw a4,8(s0) → x14 := 24 (op token)
   obtain ⟨σ1, i1, hs1', hi1, hG1, hmem1, hobs1⟩ :=
-    site_8000356c_lg c.σ c.tick c.steps (0x8000356c#64) vmi aExpr
+    site_8000356c_totb c.σ c.tick c.steps (0x8000356c#64) vmi aExpr
       ob0 ob1 ob2 ob3 hG hpc hmi hx8 hcode rfl
       (by rw [hop8]; omega) (by rw [hop8]; omega)
       (by rw [hop8, htoh]; right; omega) (by rw [hop8]; omega)
-      (by rw [hop8]; exact hoc0) (by rw [hop8]; exact hoc1)
-      (by rw [hop8]; exact hoc2) (by rw [hop8]; exact hoc3) htick
+      (by rw [hop8]; try (first | exact hoc0 | exact lpin_of_present hoc0)) (by rw [hop8]; try (first | exact hoc1 | exact lpin_of_present hoc1))
+      (by rw [hop8]; try (first | exact hoc2 | exact lpin_of_present hoc2)) (by rw [hop8]; try (first | exact hoc3 | exact lpin_of_present hoc3)) htick
   have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hs1'
   have hmem1e : σ1.mem = c.σ.mem := hmem1
   have hpc1 : σ1.regs.get? Register.PC = some (0x80003570#64) := by
@@ -625,7 +627,7 @@ theorem blockC_andFalse
   have hcode2 : Eval_exprLoaded σ2.mem := by rw [hmem2e]; exact hcode
   -- 0x80003574: ld a2,120(sp) → x12 := K13 (kind dword)
   obtain ⟨σ3, i3, hs3', hi3, hG3, hmem3, hobs3⟩ :=
-    site_80003574_lg σ2 i2 (c.steps + 1 + 1) (0x80003574#64) vmi2 (sp - 1088#64)
+    site_80003574_totb σ2 i2 (c.steps + 1 + 1) (0x80003574#64) vmi2 (sp - 1088#64)
       kb0 kb1 kb2 kb3 kb4 kb5 kb6 kb7 hG2 hpc2 hmi2 hsp_2 hcode2 rfl
       (by rw [haddr120]; omega) (by rw [haddr120]; omega)
       (by rw [haddr120, htoh]; right; omega) (by rw [haddr120]; omega)
@@ -664,14 +666,14 @@ theorem blockC_andFalse
   have hcode4 : Eval_exprLoaded σ4.mem := by rw [hmem4e]; exact hcode
   -- 0x8000357c: ld a4,128(sp) → x14 := PV
   obtain ⟨σ5, i5, hs5', hi5, hG5, hmem5, hobs5⟩ :=
-    site_8000357c_lg σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x8000357c#64) vmi4 (sp - 1088#64)
+    site_8000357c_totb σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x8000357c#64) vmi4 (sp - 1088#64)
       pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 hG4 hpc4 hmi4 hsp_4 hcode4 rfl
       (by rw [haddr128]; omega) (by rw [haddr128]; omega)
       (by rw [haddr128, htoh]; right; omega) (by rw [haddr128]; omega)
-      (by rw [haddr128, hmem4e]; exact hpb0) (by rw [haddr128, hmem4e]; exact hpb1)
-      (by rw [haddr128, hmem4e]; exact hpb2) (by rw [haddr128, hmem4e]; exact hpb3)
-      (by rw [haddr128, hmem4e]; exact hpb4) (by rw [haddr128, hmem4e]; exact hpb5)
-      (by rw [haddr128, hmem4e]; exact hpb6) (by rw [haddr128, hmem4e]; exact hpb7) hi4
+      (by rw [haddr128, hmem4e]; try (first | exact hpb0 | exact lpin_of_present hpb0)) (by rw [haddr128, hmem4e]; try (first | exact hpb1 | exact lpin_of_present hpb1))
+      (by rw [haddr128, hmem4e]; try (first | exact hpb2 | exact lpin_of_present hpb2)) (by rw [haddr128, hmem4e]; try (first | exact hpb3 | exact lpin_of_present hpb3))
+      (by rw [haddr128, hmem4e]; try (first | exact hpb4 | exact lpin_of_present hpb4)) (by rw [haddr128, hmem4e]; try (first | exact hpb5 | exact lpin_of_present hpb5))
+      (by rw [haddr128, hmem4e]; try (first | exact hpb6 | exact lpin_of_present hpb6)) (by rw [haddr128, hmem4e]; try (first | exact hpb7 | exact lpin_of_present hpb7)) hi4
   have hstep5 : Step ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩ := hs5'
   have hmem5e : σ5.mem = c.σ.mem := by rw [hmem5]; exact hmem4e
   have hpc5 : σ5.regs.get? Register.PC = some (0x80003580#64) := by
@@ -687,14 +689,14 @@ theorem blockC_andFalse
   have hcode5 : Eval_exprLoaded σ5.mem := by rw [hmem5e]; exact hcode
   -- 0x80003580: ld a5,136(sp) → x15 := QV
   obtain ⟨σ6, i6, hs6', hi6, hG6, hmem6, hobs6⟩ :=
-    site_80003580_lg σ5 i5 (c.steps + 1 + 1 + 1 + 1 + 1) (0x80003580#64) vmi5 (sp - 1088#64)
+    site_80003580_totb σ5 i5 (c.steps + 1 + 1 + 1 + 1 + 1) (0x80003580#64) vmi5 (sp - 1088#64)
       qb0 qb1 qb2 qb3 qb4 qb5 qb6 qb7 hG5 hpc5 hmi5 hsp_5 hcode5 rfl
       (by rw [haddr136]; omega) (by rw [haddr136]; omega)
       (by rw [haddr136, htoh]; right; omega) (by rw [haddr136]; omega)
-      (by rw [haddr136, hmem5e]; exact hqb0) (by rw [haddr136, hmem5e]; exact hqb1)
-      (by rw [haddr136, hmem5e]; exact hqb2) (by rw [haddr136, hmem5e]; exact hqb3)
-      (by rw [haddr136, hmem5e]; exact hqb4) (by rw [haddr136, hmem5e]; exact hqb5)
-      (by rw [haddr136, hmem5e]; exact hqb6) (by rw [haddr136, hmem5e]; exact hqb7) hi5
+      (by rw [haddr136, hmem5e]; try (first | exact hqb0 | exact lpin_of_present hqb0)) (by rw [haddr136, hmem5e]; try (first | exact hqb1 | exact lpin_of_present hqb1))
+      (by rw [haddr136, hmem5e]; try (first | exact hqb2 | exact lpin_of_present hqb2)) (by rw [haddr136, hmem5e]; try (first | exact hqb3 | exact lpin_of_present hqb3))
+      (by rw [haddr136, hmem5e]; try (first | exact hqb4 | exact lpin_of_present hqb4)) (by rw [haddr136, hmem5e]; try (first | exact hqb5 | exact lpin_of_present hqb5))
+      (by rw [haddr136, hmem5e]; try (first | exact hqb6 | exact lpin_of_present hqb6)) (by rw [haddr136, hmem5e]; try (first | exact hqb7 | exact lpin_of_present hqb7)) hi5
   have hstep6 : Step ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩ ⟨σ6, i6, c.steps + 1 + 1 + 1 + 1 + 1 + 1⟩ := hs6'
   have hmem6e : σ6.mem = c.σ.mem := by rw [hmem6]; exact hmem5e
   have hpc6 : σ6.regs.get? Register.PC = some (0x80003584#64) := by
@@ -827,7 +829,7 @@ theorem blockC_andFalse
     intro o ho
     show (writeMap8 m2 (sp.toNat-1008) (sdData_val QV))[_]? = _
     rw [getElem_writeMap8_disjoint m2 (sp.toNat-1008) _ (sdData_val QV) (by omega)]
-  have hm3_copy : ∀ j, j < 24 → m3[(sp.toNat - 1024) + j]? = c.σ.mem[(sp.toNat - 968) + j]? := by
+  have hm3_copy : ∀ j, j < 24 → m3[(sp.toNat - 1024) + j]? = some ((c.σ.mem[(sp.toNat - 968) + j]?).getD 0) := by
     intro j hj
     rcases (show j = 0 ∨ j = 1 ∨ j = 2 ∨ j = 3 ∨ j = 4 ∨ j = 5 ∨ j = 6 ∨ j = 7 ∨
         j = 8 ∨ j = 9 ∨ j = 10 ∨ j = 11 ∨ j = 12 ∨ j = 13 ∨ j = 14 ∨ j = 15 ∨
@@ -835,49 +837,49 @@ theorem blockC_andFalse
       with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
         rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
     · rw [hK 0 (by omega), show sp.toNat-1024+0 = sp.toNat-1024 from by omega,
-        getElem_writeMap8_0, eK0, show sp.toNat-968+0 = sp.toNat-968 from by omega]; exact hkb0.symm
-    · rw [hK 1 (by omega), getElem_writeMap8_1, eK1]; exact hkb1.symm
-    · rw [hK 2 (by omega), getElem_writeMap8_2, eK2]; exact hkb2.symm
-    · rw [hK 3 (by omega), getElem_writeMap8_3, eK3]; exact hkb3.symm
-    · rw [hK 4 (by omega), getElem_writeMap8_4, eK4]; exact hkb4.symm
-    · rw [hK 5 (by omega), getElem_writeMap8_5, eK5]; exact hkb5.symm
-    · rw [hK 6 (by omega), getElem_writeMap8_6, eK6]; exact hkb6.symm
-    · rw [hK 7 (by omega), getElem_writeMap8_7, eK7]; exact hkb7.symm
+        getElem_writeMap8_0, eK0, show sp.toNat-968+0 = sp.toNat-968 from by omega]; exact congrArg some hkb0.symm
+    · rw [hK 1 (by omega), getElem_writeMap8_1, eK1]; exact congrArg some hkb1.symm
+    · rw [hK 2 (by omega), getElem_writeMap8_2, eK2]; exact congrArg some hkb2.symm
+    · rw [hK 3 (by omega), getElem_writeMap8_3, eK3]; exact congrArg some hkb3.symm
+    · rw [hK 4 (by omega), getElem_writeMap8_4, eK4]; exact congrArg some hkb4.symm
+    · rw [hK 5 (by omega), getElem_writeMap8_5, eK5]; exact congrArg some hkb5.symm
+    · rw [hK 6 (by omega), getElem_writeMap8_6, eK6]; exact congrArg some hkb6.symm
+    · rw [hK 7 (by omega), getElem_writeMap8_7, eK7]; exact congrArg some hkb7.symm
     · rw [show sp.toNat-1024+8 = sp.toNat-1016+0 from by omega, hP 0 (by omega),
         show sp.toNat-1016+0 = sp.toNat-1016 from by omega, getElem_writeMap8_0, eP0,
-        show sp.toNat-968+8 = sp.toNat-960 from by omega]; exact hpb0.symm
+        show sp.toNat-968+8 = sp.toNat-960 from by omega]; exact congrArg some hpb0.symm
     · rw [show sp.toNat-1024+9 = sp.toNat-1016+1 from by omega, hP 1 (by omega), getElem_writeMap8_1, eP1,
-        show sp.toNat-968+9 = sp.toNat-960+1 from by omega]; exact hpb1.symm
+        show sp.toNat-968+9 = sp.toNat-960+1 from by omega]; exact congrArg some hpb1.symm
     · rw [show sp.toNat-1024+10 = sp.toNat-1016+2 from by omega, hP 2 (by omega), getElem_writeMap8_2, eP2,
-        show sp.toNat-968+10 = sp.toNat-960+2 from by omega]; exact hpb2.symm
+        show sp.toNat-968+10 = sp.toNat-960+2 from by omega]; exact congrArg some hpb2.symm
     · rw [show sp.toNat-1024+11 = sp.toNat-1016+3 from by omega, hP 3 (by omega), getElem_writeMap8_3, eP3,
-        show sp.toNat-968+11 = sp.toNat-960+3 from by omega]; exact hpb3.symm
+        show sp.toNat-968+11 = sp.toNat-960+3 from by omega]; exact congrArg some hpb3.symm
     · rw [show sp.toNat-1024+12 = sp.toNat-1016+4 from by omega, hP 4 (by omega), getElem_writeMap8_4, eP4,
-        show sp.toNat-968+12 = sp.toNat-960+4 from by omega]; exact hpb4.symm
+        show sp.toNat-968+12 = sp.toNat-960+4 from by omega]; exact congrArg some hpb4.symm
     · rw [show sp.toNat-1024+13 = sp.toNat-1016+5 from by omega, hP 5 (by omega), getElem_writeMap8_5, eP5,
-        show sp.toNat-968+13 = sp.toNat-960+5 from by omega]; exact hpb5.symm
+        show sp.toNat-968+13 = sp.toNat-960+5 from by omega]; exact congrArg some hpb5.symm
     · rw [show sp.toNat-1024+14 = sp.toNat-1016+6 from by omega, hP 6 (by omega), getElem_writeMap8_6, eP6,
-        show sp.toNat-968+14 = sp.toNat-960+6 from by omega]; exact hpb6.symm
+        show sp.toNat-968+14 = sp.toNat-960+6 from by omega]; exact congrArg some hpb6.symm
     · rw [show sp.toNat-1024+15 = sp.toNat-1016+7 from by omega, hP 7 (by omega), getElem_writeMap8_7, eP7,
-        show sp.toNat-968+15 = sp.toNat-960+7 from by omega]; exact hpb7.symm
+        show sp.toNat-968+15 = sp.toNat-960+7 from by omega]; exact congrArg some hpb7.symm
     · rw [show sp.toNat-1024+16 = sp.toNat-1008 from by omega, getElem_writeMap8_0, eQ0,
-        show sp.toNat-968+16 = sp.toNat-952 from by omega]; exact hqb0.symm
+        show sp.toNat-968+16 = sp.toNat-952 from by omega]; exact congrArg some hqb0.symm
     · rw [show sp.toNat-1024+17 = sp.toNat-1008+1 from by omega, getElem_writeMap8_1, eQ1,
-        show sp.toNat-968+17 = sp.toNat-952+1 from by omega]; exact hqb1.symm
+        show sp.toNat-968+17 = sp.toNat-952+1 from by omega]; exact congrArg some hqb1.symm
     · rw [show sp.toNat-1024+18 = sp.toNat-1008+2 from by omega, getElem_writeMap8_2, eQ2,
-        show sp.toNat-968+18 = sp.toNat-952+2 from by omega]; exact hqb2.symm
+        show sp.toNat-968+18 = sp.toNat-952+2 from by omega]; exact congrArg some hqb2.symm
     · rw [show sp.toNat-1024+19 = sp.toNat-1008+3 from by omega, getElem_writeMap8_3, eQ3,
-        show sp.toNat-968+19 = sp.toNat-952+3 from by omega]; exact hqb3.symm
+        show sp.toNat-968+19 = sp.toNat-952+3 from by omega]; exact congrArg some hqb3.symm
     · rw [show sp.toNat-1024+20 = sp.toNat-1008+4 from by omega, getElem_writeMap8_4, eQ4,
-        show sp.toNat-968+20 = sp.toNat-952+4 from by omega]; exact hqb4.symm
+        show sp.toNat-968+20 = sp.toNat-952+4 from by omega]; exact congrArg some hqb4.symm
     · rw [show sp.toNat-1024+21 = sp.toNat-1008+5 from by omega, getElem_writeMap8_5, eQ5,
-        show sp.toNat-968+21 = sp.toNat-952+5 from by omega]; exact hqb5.symm
+        show sp.toNat-968+21 = sp.toNat-952+5 from by omega]; exact congrArg some hqb5.symm
     · rw [show sp.toNat-1024+22 = sp.toNat-1008+6 from by omega, getElem_writeMap8_6, eQ6,
-        show sp.toNat-968+22 = sp.toNat-952+6 from by omega]; exact hqb6.symm
+        show sp.toNat-968+22 = sp.toNat-952+6 from by omega]; exact congrArg some hqb6.symm
     · rw [show sp.toNat-1024+23 = sp.toNat-1008+7 from by omega, getElem_writeMap8_7, eQ7,
-        show sp.toNat-968+23 = sp.toNat-952+7 from by omega]; exact hqb7.symm
+        show sp.toNat-968+23 = sp.toNat-952+7 from by omega]; exact congrArg some hqb7.symm
   have hbufRepr : ValueRepr m3 N φcv (sp.toNat - 1024) vl :=
-    valueRepr_copy_of_writeWindow (srcAddr := sp.toNat - 968) (dstAddr := sp.toNat - 1024)
+    valueRepr_copy_total_of_writeWindow (srcAddr := sp.toNat - 968) (dstAddr := sp.toNat - 1024)
       hm3_copy hm3_out
       (fun p s hp k hk => hBE.pay_disj p s hvalSub' hp k hk) hvalSub'
   ------------------------------------------------------------------------
@@ -968,16 +970,15 @@ theorem blockC_andFalse
   have hspill0Nat : ((sp - 1088#64) + sign_extend (m := 64) (0x000#12)).toNat = sp.toNat - 1088 :=
     spill_addr sp (0x000#12) 1088 (by decide) (by omega) hsp1088
   -- present bytes at [sp-1088, sp-1080) in cT.σ.mem = m3 (from c.σ.mem present + writes disjoint)
+  -- WAVE 48k: TOTAL reads.  The model's `readByte` is `getD 0`, so these dead
+  -- sub-`Value`/node bytes need no map presence at all — each is simply NAMED
+  -- as its own total read.  (This replaces the refuted `frame_pop` oracle;
+  -- the window hypothesis is kept so every call site is unchanged.)
   have hStackPopM3 : ∀ a : Nat,
       (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
         (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-      ∃ b, m3[a]? = some b := by
-    intro a hw
-    obtain ⟨b, hb⟩ := hStackPopC a hw
-    exact ((MemExtends.refl c.σ.mem).trans
-      ((memExtends_writeMap8 c.σ.mem (sp.toNat - 1024) (sdData_val K13)).trans
-        ((memExtends_writeMap8 m1 (sp.toNat - 1016) (sdData_val PV)).trans
-          (memExtends_writeMap8 m2 (sp.toNat - 1008) (sdData_val QV))))) a b hb
+      ∃ b : BitVec 8, (m3[a]?).getD 0 = b :=
+    fun _ _ => ⟨_, rfl⟩
   obtain ⟨eb0, heb0⟩ := hStackPopM3 (sp.toNat - 1088) (by omega)
   obtain ⟨eb1, heb1⟩ := hStackPopM3 (sp.toNat - 1088 + 1) (by omega)
   obtain ⟨eb2, heb2⟩ := hStackPopM3 (sp.toNat - 1088 + 2) (by omega)
@@ -987,7 +988,7 @@ theorem blockC_andFalse
   obtain ⟨eb6, heb6⟩ := hStackPopM3 (sp.toNat - 1088 + 6) (by omega)
   obtain ⟨eb7, heb7⟩ := hStackPopM3 (sp.toNat - 1088 + 7) (by omega)
   obtain ⟨σ12, i12, hs12', hi12, hG12, hmem12, hobs12⟩ :=
-    site_80003598_lg cT.σ cT.tick cT.steps (0x80003598#64) vmiT (sp - 1088#64)
+    site_80003598_totb cT.σ cT.tick cT.steps (0x80003598#64) vmiT (sp - 1088#64)
       eb0 eb1 eb2 eb3 eb4 eb5 eb6 eb7 hGT hpcT' hmiT hsp_T (hmemT' ▸ hcode_m3) rfl
       (by rw [hspill0Nat]; omega) (by rw [hspill0Nat]; omega)
       (by rw [hspill0Nat, htoh]; right; omega) (by rw [hspill0Nat]; omega)
@@ -1369,12 +1370,7 @@ def EvalAndSimGoal : Prop :=
           cm.σ.regs.get? Register.x13 = some aEnv3) ∧
         -- WAVE 47i (`McallPopTotality` amendment): windowed frame/node presence
         -- + `mem_ext`, replacing the refuted totality oracle.
-        (∀ mcall : Mem,
-          (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-          ∀ a : Nat,
-            (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
-              (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-            (∃ b, mcall[a]? = some b)) ∧
+        -- WAVE 48k: the dead-byte presence CLOSURE is GONE (total reads).
         (∀ mcall : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
           MemExtends m0 mcall))
@@ -1411,7 +1407,7 @@ Mirrors `evalNotSim`; the AND-TRUE constructor (two evals) is documented as rema
 theorem evalAndSim : EvalAndSimGoal := by
   intro g N A SL φf φc st st' d env el er vl sp r sret aEnv aExpr aLeft aEnv3
     m0 hvlfalse hIH _hEvalE
-  intro c ⟨hc, hx, hx13reach, hFramePop, hMemExtRes⟩
+  intro c ⟨hc, hx, hx13reach, hMemExtRes⟩
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- === block A: prologue + dispatch → widened ArmEntryK @0x8000355c ===
   have hkm0 : read32 m0 aExpr.toNat = some 7 := exprRepr_logical_kind (hc.mem ▸ hc.expr)
@@ -1517,10 +1513,6 @@ theorem evalAndSim : EvalAndSimGoal := by
       (fun a ha => (hAgM0 a (by have := hx.boolcode_stk; omega)).symm) hx.bool_loaded
   have hMcallM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       mcall[a]? = m0[a]? := fun a ha _ => hAgM0 a ha
-  have hStackPop : ∀ a : Nat,
-      (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
-        (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-      ∃ b, mcall[a]? = some b := hFramePop mcall hAgM0
   have hMemExtM0mc : MemExtends m0 mcall := hMemExtRes mcall hAgM0
   have hExprMcall : ExprRepr mcall aExpr.toNat (.logical .and el er) :=
     hx.expr_survives mcall (fun a ha => (hAgM0 a ha).symm)
@@ -1535,7 +1527,7 @@ theorem evalAndSim : EvalAndSimGoal := by
     blockC_andFalse (fun R => c1.σ.regs.get? R) g N A SL φf φc st.store.frames.size
       st.store.closures.size st' vl sp r sret aExpr v8 v9 v18
       c2.σ.sailOutput el er m0 hvlfalse
-      c2 ⟨mcall, hSubR, hgpre_x8, hExprMcall, hStackPop, hMemExtM0mc,
+      c2 ⟨mcall, hSubR, hgpre_x8, hExprMcall, hMemExtM0mc,
         hx.expr_align4, hc.expr_ram.1, hc.expr_ram.2, hx.expr_win8,
         hc.expr_stack_disjoint, hx.expr_A, hx.expr_sub,
         houtStr, hc.sret_align, hc.sret_ram.1, hc.sret_ram.2, hc.sret_win,

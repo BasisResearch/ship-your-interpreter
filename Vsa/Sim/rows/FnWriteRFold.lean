@@ -448,14 +448,14 @@ theorem wrM1_ra_pins (g : WRG) (hg : WRGOk g) :
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · have h := hpeel 0 (by omega)
     rw [Nat.add_zero] at h
-    exact h.trans (getElem_writeMap8_0 _ _ _)
-  · exact (hpeel 1 (by omega)).trans (getElem_writeMap8_1 _ _ _)
-  · exact (hpeel 2 (by omega)).trans (getElem_writeMap8_2 _ _ _)
-  · exact (hpeel 3 (by omega)).trans (getElem_writeMap8_3 _ _ _)
-  · exact (hpeel 4 (by omega)).trans (getElem_writeMap8_4 _ _ _)
-  · exact (hpeel 5 (by omega)).trans (getElem_writeMap8_5 _ _ _)
-  · exact (hpeel 6 (by omega)).trans (getElem_writeMap8_6 _ _ _)
-  · exact (hpeel 7 (by omega)).trans (getElem_writeMap8_7 _ _ _)
+    exact lpin_of_present (h.trans (getElem_writeMap8_0 _ _ _))
+  · exact lpin_of_present ((hpeel 1 (by omega)).trans (getElem_writeMap8_1 _ _ _))
+  · exact lpin_of_present ((hpeel 2 (by omega)).trans (getElem_writeMap8_2 _ _ _))
+  · exact lpin_of_present ((hpeel 3 (by omega)).trans (getElem_writeMap8_3 _ _ _))
+  · exact lpin_of_present ((hpeel 4 (by omega)).trans (getElem_writeMap8_4 _ _ _))
+  · exact lpin_of_present ((hpeel 5 (by omega)).trans (getElem_writeMap8_5 _ _ _))
+  · exact lpin_of_present ((hpeel 6 (by omega)).trans (getElem_writeMap8_6 _ _ _))
+  · exact lpin_of_present ((hpeel 7 (by omega)).trans (getElem_writeMap8_7 _ _ _))
 
 /-- The `ld s0,0(sp)` byte pins on `wrM1`: peel the `sw` and the `sd ra`
 window, then read the `sd s0` `writeMap8` back. -/
@@ -476,14 +476,14 @@ theorem wrM1_s0_pins (g : WRG) (hg : WRGOk g) :
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · have h := hpeel 0 (by omega)
     rw [Nat.add_zero] at h
-    exact h.trans (getElem_writeMap8_0 _ _ _)
-  · exact (hpeel 1 (by omega)).trans (getElem_writeMap8_1 _ _ _)
-  · exact (hpeel 2 (by omega)).trans (getElem_writeMap8_2 _ _ _)
-  · exact (hpeel 3 (by omega)).trans (getElem_writeMap8_3 _ _ _)
-  · exact (hpeel 4 (by omega)).trans (getElem_writeMap8_4 _ _ _)
-  · exact (hpeel 5 (by omega)).trans (getElem_writeMap8_5 _ _ _)
-  · exact (hpeel 6 (by omega)).trans (getElem_writeMap8_6 _ _ _)
-  · exact (hpeel 7 (by omega)).trans (getElem_writeMap8_7 _ _ _)
+    exact lpin_of_present (h.trans (getElem_writeMap8_0 _ _ _))
+  · exact lpin_of_present ((hpeel 1 (by omega)).trans (getElem_writeMap8_1 _ _ _))
+  · exact lpin_of_present ((hpeel 2 (by omega)).trans (getElem_writeMap8_2 _ _ _))
+  · exact lpin_of_present ((hpeel 3 (by omega)).trans (getElem_writeMap8_3 _ _ _))
+  · exact lpin_of_present ((hpeel 4 (by omega)).trans (getElem_writeMap8_4 _ _ _))
+  · exact lpin_of_present ((hpeel 5 (by omega)).trans (getElem_writeMap8_5 _ _ _))
+  · exact lpin_of_present ((hpeel 6 (by omega)).trans (getElem_writeMap8_6 _ _ _))
+  · exact lpin_of_present ((hpeel 7 (by omega)).trans (getElem_writeMap8_7 _ _ _))
 
 /-! ## Per-seg `ChainFacts` lemmas (ONE `chain_facts` each) -/
 

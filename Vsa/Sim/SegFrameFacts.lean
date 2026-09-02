@@ -48,7 +48,9 @@ theorem memFacts_ld_frame (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (a : M
     (p6 : m[(eaddrM a L).toNat + 6]? = some b6) (p7 : m[(eaddrM a L).toNat + 7]? = some b7) :
     MemFacts m L [b0, b1, b2, b3, b4, b5, b6, b7] a := by
   unfold MemFacts; rw [hk]
-  exact ⟨⟨hlo, hhi, hht, hal⟩, p0, p1, p2, p3, p4, p5, p6, p7⟩
+  exact ⟨⟨hlo, hhi, hht, hal⟩, lpin_of_present p0, lpin_of_present p1,
+    lpin_of_present p2, lpin_of_present p3, lpin_of_present p4,
+    lpin_of_present p5, lpin_of_present p6, lpin_of_present p7⟩
 
 /-- A `sd` `MemFacts` from its window bounds (no pins; the data list is irrelevant). -/
 theorem memFacts_sd_frame (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (a : MInstr)

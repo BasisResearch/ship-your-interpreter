@@ -185,10 +185,10 @@ theorem writeX004c_facts (g : WG) (hg : WGOk g)
       rcases hg.htif with h | h
       · exact Or.inl (by omega)
       · exact Or.inr (by omega)
-    · show g.m0[(g.buf + BitVec.ofNat 64 k
-        + sign_extend (m := 64) (0x000#12)).toNat]? = some (g.bytes[k]'hk)
+    · show (g.m0[(g.buf + BitVec.ofNat 64 k
+        + sign_extend (m := 64) (0x000#12)).toNat]?).getD 0 = (g.bytes[k]'hk)
       rw [hea]
-      exact hg.pins k hk
+      exact lpin_of_present (hg.pins k hk)
 
 /-- Back-edge bne, TAKEN arm (`k+1 < len`: pointers differ). -/
 theorem writeX0060T_facts (g : WG) (hcode : Vsa.Sim.Code._writeLoaded g.m0)

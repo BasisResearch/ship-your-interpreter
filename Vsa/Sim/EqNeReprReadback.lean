@@ -74,9 +74,11 @@ theorem sp_off_toNat (sp : BitVec 64) (off : Nat) (hoff : off < 4096)
   rw [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega),
     Nat.mod_eq_of_lt (by omega)]
 
-/-- `LPins8` read at byte offset `k`. -/
+/-- `LPins8` read at byte offset `k` — the TOTAL read (wave 48k: `LPins8` is a
+total-read equality, not a presence claim). -/
 theorem lpins8_byte (m0 : Std.ExtHashMap Nat (BitVec 8)) (ea : Nat) (bs : List (BitVec 8))
-    (h : LPins8 m0 ea bs) (k : Nat) (hk : k < 8) : m0[ea + k]? = some (bs.getD k 0#8) := by
+    (h : LPins8 m0 ea bs) (k : Nat) (hk : k < 8) :
+    (m0[ea + k]?).getD 0 = bs.getD k 0#8 := by
   obtain ⟨p0,p1,p2,p3,p4,p5,p6,p7⟩ := h
   match k, hk with
   | 0, _ => rw [Nat.add_zero]; exact p0
@@ -161,7 +163,7 @@ theorem eqTower_copy_bufa (hsp : sp.toNat + 4096 ≤ 2 ^ 64)
     (h0 : LPins8 m0 (sp + 0x78#64).toNat b0) (h1 : LPins8 m0 (sp + 0x80#64).toNat b1)
     (h2 : LPins8 m0 (sp + 0x88#64).toNat b2) :
     ∀ j, j < 24 → (eqTower sp m0 b0 b1 b2 b3 b4 b5)[(sp + 0x40#64).toNat + j]?
-      = m0[(sp + 0x78#64).toNat + j]? := by
+      = some ((m0[(sp + 0x78#64).toNat + j]?).getD 0) := by
   obtain ⟨e40,e48,e50,e20,e28,e30⟩ := win_norm sp hsp
   have e78 : (sp + 0x78#64).toNat = sp.toNat + 120 := sp_off_toNat sp 120 (by omega) hsp
   have e80 : (sp + 0x80#64).toNat = sp.toNat + 128 := sp_off_toNat sp 128 (by omega) hsp
@@ -178,7 +180,7 @@ theorem eqTower_copy_bufa (hsp : sp.toNat + 4096 ≤ 2 ^ 64)
         getElem_writeMap8_disjoint _ _ _ _ (by rw [e48, e40]; omega),
         writeMap8_ld_byte _ (sp + 0x40#64).toNat b0 j hj0]
     rw [show (sp + 0x78#64).toNat + j = (sp + 0x78#64).toNat + j from rfl]
-    exact (lpins8_byte m0 (sp + 0x78#64).toNat b0 h0 j hj0).symm
+    exact congrArg some (lpins8_byte m0 (sp + 0x78#64).toNat b0 h0 j hj0).symm
   · by_cases hj1 : j < 16
     · -- word 1: window 0x48; index = 0x48 + (j-8)
       have hk : j - 8 < 8 := by omega
@@ -189,7 +191,7 @@ theorem eqTower_copy_bufa (hsp : sp.toNat + 4096 ≤ 2 ^ 64)
       rw [show (sp + 0x40#64).toNat + j = (sp + 0x48#64).toNat + (j - 8) by rw [e40, e48]; omega,
           writeMap8_ld_byte _ (sp + 0x48#64).toNat b1 (j - 8) hk,
           show (sp + 0x78#64).toNat + j = (sp + 0x80#64).toNat + (j - 8) by rw [e78, e80]; omega]
-      exact (lpins8_byte m0 (sp + 0x80#64).toNat b1 h1 (j - 8) hk).symm
+      exact congrArg some (lpins8_byte m0 (sp + 0x80#64).toNat b1 h1 (j - 8) hk).symm
     · -- word 2: window 0x50 (outermost of the bufa three); index = 0x50 + (j-16)
       have hk : j - 16 < 8 := by omega
       rw [getElem_writeMap8_disjoint _ _ _ _ (by rw [e30, e40]; omega),
@@ -198,7 +200,7 @@ theorem eqTower_copy_bufa (hsp : sp.toNat + 4096 ≤ 2 ^ 64)
       rw [show (sp + 0x40#64).toNat + j = (sp + 0x50#64).toNat + (j - 16) by rw [e40, e50]; omega,
           writeMap8_ld_byte _ (sp + 0x50#64).toNat b2 (j - 16) hk,
           show (sp + 0x78#64).toNat + j = (sp + 0x88#64).toNat + (j - 16) by rw [e78, e88]; omega]
-      exact (lpins8_byte m0 (sp + 0x88#64).toNat b2 h2 (j - 16) hk).symm
+      exact congrArg some (lpins8_byte m0 (sp + 0x88#64).toNat b2 h2 (j - 16) hk).symm
 
 /-- The `bufb` window copy: the 24 bytes at `bufb = sp+0x20` in the tower equal the
 24 bytes at the source `sp+0x90` in `m0`, given the three source `LPins8`
@@ -207,7 +209,7 @@ theorem eqTower_copy_bufb (hsp : sp.toNat + 4096 ≤ 2 ^ 64)
     (h3 : LPins8 m0 (sp + 0x90#64).toNat b3) (h4 : LPins8 m0 (sp + 0x98#64).toNat b4)
     (h5 : LPins8 m0 (sp + 0xa0#64).toNat b5) :
     ∀ j, j < 24 → (eqTower sp m0 b0 b1 b2 b3 b4 b5)[(sp + 0x20#64).toNat + j]?
-      = m0[(sp + 0x90#64).toNat + j]? := by
+      = some ((m0[(sp + 0x90#64).toNat + j]?).getD 0) := by
   obtain ⟨e40,e48,e50,e20,e28,e30⟩ := win_norm sp hsp
   have e90 : (sp + 0x90#64).toNat = sp.toNat + 144 := sp_off_toNat sp 144 (by omega) hsp
   have e98 : (sp + 0x98#64).toNat = sp.toNat + 152 := sp_off_toNat sp 152 (by omega) hsp
@@ -219,19 +221,19 @@ theorem eqTower_copy_bufb (hsp : sp.toNat + 4096 ≤ 2 ^ 64)
     rw [getElem_writeMap8_disjoint _ _ _ _ (by rw [e30, e20]; omega),
         getElem_writeMap8_disjoint _ _ _ _ (by rw [e28, e20]; omega),
         writeMap8_ld_byte _ (sp + 0x20#64).toNat b3 j hj0]
-    exact (lpins8_byte m0 (sp + 0x90#64).toNat b3 h3 j hj0).symm
+    exact congrArg some (lpins8_byte m0 (sp + 0x90#64).toNat b3 h3 j hj0).symm
   · by_cases hj1 : j < 16
     · have hk : j - 8 < 8 := by omega
       rw [getElem_writeMap8_disjoint _ _ _ _ (by rw [e30, e20]; omega)]
       rw [show (sp + 0x20#64).toNat + j = (sp + 0x28#64).toNat + (j - 8) by rw [e20, e28]; omega,
           writeMap8_ld_byte _ (sp + 0x28#64).toNat b4 (j - 8) hk,
           show (sp + 0x90#64).toNat + j = (sp + 0x98#64).toNat + (j - 8) by rw [e90, e98]; omega]
-      exact (lpins8_byte m0 (sp + 0x98#64).toNat b4 h4 (j - 8) hk).symm
+      exact congrArg some (lpins8_byte m0 (sp + 0x98#64).toNat b4 h4 (j - 8) hk).symm
     · have hk : j - 16 < 8 := by omega
       rw [show (sp + 0x20#64).toNat + j = (sp + 0x30#64).toNat + (j - 16) by rw [e20, e30]; omega,
           writeMap8_ld_byte _ (sp + 0x30#64).toNat b5 (j - 16) hk,
           show (sp + 0x90#64).toNat + j = (sp + 0xa0#64).toNat + (j - 16) by rw [e90, ea0]; omega]
-      exact (lpins8_byte m0 (sp + 0xa0#64).toNat b5 h5 (j - 16) hk).symm
+      exact congrArg some (lpins8_byte m0 (sp + 0xa0#64).toNat b5 h5 (j - 16) hk).symm
 
 /-! ## The reusable readback core -/
 
@@ -249,12 +251,13 @@ since `neDispatch` yields the identical tower (`neDispatch_mem_tower`), the same
 lemma serves `ne`. -/
 theorem valueRepr_of_reflected_copy (hsp : sp.toNat + 4096 ≤ 2 ^ 64)
     {N : NativeAddrs} {φc : Addr → Nat} {srcAddr dstAddr : Nat} {v : Value}
-    (hcopy : ∀ j, j < 24 → (eqTower sp m0 b0 b1 b2 b3 b4 b5)[dstAddr + j]? = m0[srcAddr + j]?)
+    (hcopy : ∀ j, j < 24 →
+      (eqTower sp m0 b0 b1 b2 b3 b4 b5)[dstAddr + j]? = some ((m0[srcAddr + j]?).getD 0))
     (hpaydisj : ∀ (p : Nat) (s : String), read64 m0 (srcAddr + 8) = some p →
       ∀ k, k ≤ s.length → (p + k < sp.toNat + 32 ∨ sp.toNat + 88 ≤ p + k))
     (hv : ValueRepr m0 N φc srcAddr v) :
     ValueRepr (eqTower sp m0 b0 b1 b2 b3 b4 b5) N φc dstAddr v := by
-  refine valueRepr_copy hcopy ?_ hv
+  refine valueRepr_copy_total hcopy ?_ hv
   intro p s hp a ha
   obtain ⟨k, hk, rfl⟩ := ha
   exact (eqTower_outside sp m0 b0 b1 b2 b3 b4 b5 hsp (p + k) (hpaydisj p s hp k hk)).symm

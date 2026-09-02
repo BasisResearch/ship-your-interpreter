@@ -58,9 +58,13 @@ def bytes8 (v : BitVec 64) : List (BitVec 8) :=
 theorem bytes8_val (v : BitVec 64) : bytesVal MKind.ld (bytes8 v) = v :=
   sext_reassemble v _ _ _ _ _ _ _ _ rfl rfl rfl rfl rfl rfl rfl rfl
 
-/-- `Pin8` IS `LPins8` at the `bytes8` list (definitional). -/
+/-- `Pin8` (presence) gives `LPins8` at the `bytes8` list.  Since wave 48k
+`LPins8` is the TOTAL read, so each conjunct lifts through `lpin_of_present`. -/
 theorem lpins8_of_pin8 {m : Std.ExtHashMap Nat (BitVec 8)} {a : Nat} {v : BitVec 64}
-    (h : Pin8 m a v) : LPins8 m a (bytes8 v) := h
+    (h : Pin8 m a v) : LPins8 m a (bytes8 v) := by
+  obtain ⟨p0, p1, p2, p3, p4, p5, p6, p7⟩ := h
+  exact ⟨lpin_of_present p0, lpin_of_present p1, lpin_of_present p2, lpin_of_present p3,
+    lpin_of_present p4, lpin_of_present p5, lpin_of_present p6, lpin_of_present p7⟩
 
 /-- Peel ONE disjoint 8-byte store image off a `Pin8` — the in-block
 store-then-load transport.  A load AFTER stores in the same block gets its
@@ -796,13 +800,13 @@ theorem sfvDe94F_facts (g : SFVG) (hg : SFVGOk g)
       rw [sfv_flAddr g hg]
       have := hg.fp_align
       omega
-    · show g.m0[(g.fp + sign_extend (m := 64) (0x010#12)).toNat]? = some g.fl0
+    · show (g.m0[(g.fp + sign_extend (m := 64) (0x010#12)).toNat]?).getD 0 = g.fl0
       rw [sfv_flAddr g hg]
-      exact hg.fl_pin0
-    · show g.m0[(g.fp + sign_extend (m := 64) (0x010#12)).toNat + 1]? = some g.fl1
+      exact lpin_of_present hg.fl_pin0
+    · show (g.m0[(g.fp + sign_extend (m := 64) (0x010#12)).toNat + 1]?).getD 0 = g.fl1
       rw [sfv_flAddr g hg,
         show g.fp.toNat + 16 + 1 = g.fp.toNat + 17 from by omega]
-      exact hg.fl_pin1
+      exact lpin_of_present hg.fl_pin1
   · -- sd s0,80(sp)
     have ht : tohostAddr = 0x8001ad00 := rfl
     have h96 : 96 ≤ g.sp0.toNat := by have := hg.sp_htif; omega

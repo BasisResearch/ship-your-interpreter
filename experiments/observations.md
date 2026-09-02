@@ -5293,3 +5293,88 @@ it, still stop and report instead.
   cluster than the 48f→48j entry-field ladder — a COORDINATOR decision, not an 8th wave.
   The int/eq/unary cluster (17 fields) stays gated on this; five waves (48e→48j) with
   census unmoved is the signal the cluster wants (a), the total-read load layer.
+
+## 2026-09-02 blockmem-total-read-rewrite (wave 48k — the load layer now matches the model)
+- missing: nothing any more — this entry RECORDS the fix for the five-wave
+  `frame_pop` stall (48e→48j), not a new gap.  The gap was: the Lean load
+  abstraction demanded HASHMAP PRESENCE (`m[a]? = some b`) where the Sail model
+  only ever reads TOTALLY (`readByte a = (m.get? a).getD 0`).
+- workaround: NONE — the layer was rewritten instead of worked around, per
+  `experiments/blockmem-rewrite-plan.md`.  Landed, in dependency order:
+  * `Vsa/Sim/MemLoad.lean` — the four `Load Data` layers FACTORED over the value
+    the layer below returns (`checked_mem_read_data_*_of_ram`,
+    `mem_read_data_*_of_cmr`, `translate_and_read_value_data_*_of_mr`).  One
+    proof now serves both the presence leaf and the total leaf; the twelve
+    original theorems became one-line instantiations (≈ 240 lines deleted).
+  * `Vsa/Sim/MemLoadTotal.lean` — `read_ram_*_total` at widths 1/2/4/8 (the ONLY
+    genuinely new content) + the whole chain up to `vmem_read_data_*_total`.
+    Mem-level total-read abbrevs `bytesT{1,2,4,8}`.
+  * `Vsa/Sim/ExecLoadTotal.lean` (NEW) — `SiteGood` (the seven `GoodState`→site
+    register facts as ONE named-field structure, replacing the 20-line block
+    every `exec_*` repeated) + `exec_{ld,lw,lwu,lh,lhu,lbu}_tot` and the
+    value-parameterized `_totv` siblings.
+  * `Vsa/Sim/BlockMem.lean` — `LPins4`/`LPins8` and the width-1/2 inline pins are
+    now TOTAL-READ EQUALITIES `(m[ea+k]?).getD 0 = bs[k]`, not presence.  `lds`
+    is DELIBERATELY kept as the value name, so reflected execution stays tied to
+    memory through these equations (dropping `lds` would disconnect `runGM`
+    from the machine).  Bridges `bytesT{1,2,4,8}_of_*`; migration helpers
+    `lpin_of_present`/`lpins{4,8}_of_present` for suppliers that DO know a byte.
+  * `scripts/gen_sites.py` — new `ld_tot`/`lw_tot`/`lbu_tot` (presence-free) and
+    `ld_totb`/`lw_totb` (same signature, total byte hypotheses) classes;
+    `Vsa/Sim/LoadSitesTot.lean` + `LoadSitesTotB.lean` generated (17 + 68 sites).
+  * `Vsa/Sim/ReprCopy.lean` — `valueRepr_copy_total{,_of_writeWindow}`: the
+    STOP-LOUD case.  A machine byte-copy moves `getD 0`, so plain byte-for-byte
+    agreement is false at unwritten source bytes — but `ValueRepr` already
+    WITNESSES presence for every byte it reads, so the total copy reproduces the
+    value exactly there.  The value facts come from the source `ValueRepr`, not
+    from a blanket presence premise.
+  * `BinArmExtras.frame_pop` DELETED (with its 6 unary/logic `∀mcall` siblings,
+    the `hpop` mid-arm premise, and the `hMentPop` conjunct in 14 rows).
+- cost: none recurring.  The one-time cost was the sim migration (bin/not/neg/
+  and/or/logical3/logical4 + the And/Or prefix chains + `LogTailPre`'s 24 byte
+  fields), all mechanical: a site rename plus `lpin_of_present` where a supplier
+  genuinely knew the byte.
+- proposal: KEEP the presence form OUT of new load-side statements.  If a proof
+  needs a byte's VALUE, thread the write fact that produced it (the
+  `valueRepr_copy_total` pattern); never re-introduce blanket window presence.
+  `ld_ok8`/`ld_ok4` now try `rfl` FIRST, so a byte named as its own total read
+  costs nothing.
+
+## 2026-09-02 framepop-deletion-does-not-relight-the-17-fields (wave 48k, Law 4 STOP on step 5)
+- missing: the `blockmem-rewrite-plan.md` step 5 premise — "relight the 17 int/eq +
+  unary/logical fields; their `frame_pop` conjunct is gone and the remaining
+  conjuncts were already dischargeable" — is FALSE.  MACHINE-CHECKED: after the
+  total-read rewrite landed and `BinArmExtras.frame_pop` was DELETED,
+  `experiments/fleet/obstructions/X2_Field_hIAdd.lean` still compiles and still
+  proves `field_hIAdd_refuted`, axiom-clean ⊆ {propext, Classical.choice,
+  Quot.sound}.  `field_census.py` on the rebuilt tree reports **6 FOUND / 52
+  NOT_FOUND — UNCHANGED** (the same six: hBool hInt hNull hSBrk hSCont hStr).
+- why: `frame_pop` was never the only refuting conjunct.  `BinIntCellResid`
+  ∀-closes over ALL ghosts — in particular `m0` and `g` — with NO leading
+  hypothesis, and its ∃-body still demands `BinArmExtras.slot6 :
+  KindSlotPinned 6 (0x800034e8#64) m0` (a STATIC jump-table pin) and
+  `gx19_pres : ∃ w, g x19 = some w`.  Instantiate `m0 := ∅` and no `aLOp aROp Wl`
+  can satisfy `slot6`, so the cell is false REGARDLESS of `frame_pop`.  Deleting a
+  field only weakens the ∃-body, so the X2 refutation goes through verbatim.
+  Wave 48i's note ("the resids stay refuted BECAUSE they carry frame_pop") named a
+  sufficient cause and read it as the necessary one.
+- workaround: NONE (Law 4 — obstruction returned, not routed around).  Everything
+  else in the plan landed: the total-read load layer, the `frame_pop` class
+  deleted (field + the 6 unary/logic `∀mcall` closures + the `hpop` mid-arm
+  premise + the `hMentPop` conjunct in 14 rows), full tree green
+  (`rbuild.sh check` → 1378 jobs + `check_all: OK`), discipline OK.
+- cost: any agent expecting the census to move on a `frame_pop`-only wave pays a
+  dead end.  The X2/B2 class is orthogonal to the load layer.
+- proposal: the 17 fields want the **B2-carry amendment** already named in
+  `X2_Field_hIAdd.lean` — add `entry : EvalEntry …` as a HYPOTHESIS field to
+  `BinIntCellResid` (and the analogous entry carry to `NegResid`/`NotResid`/the
+  four logical resids) so `slot6`/`sproom`/`gx19_pres` become preconditions the
+  entry SUPPLIES rather than free conclusions under ∀-`m0`.  That is a statement
+  change to `rows/BinDispatchRow.lean` + the six unary/logic resid defs, NOT a
+  load-layer change; the value paths relight verbatim.  It is a coordinator
+  decision and a separate wave.
+- note: `experiments/fleet/obstructions/B2_Field_hNeg.lean` no longer elaborates
+  cleanly — but for an UNRELATED, PRE-EXISTING reason: it builds `NativeAddrs`
+  and `StackLayout` with anonymous constructors that are now short of fields
+  (arity drift since it was written), so Lean fills them with `sorryAx`.  Nothing
+  in wave 48k touched those structures; the artifact needs re-pinning.

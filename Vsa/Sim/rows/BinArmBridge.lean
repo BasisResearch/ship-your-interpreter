@@ -119,14 +119,13 @@ structure BinArmExtras
   arenaVi : A.hi ≤ 0x800027ec ∨ 0x8000282c ≤ A.lo
   arenaTable : A.hi ≤ 0x80019f58 ∨ 0x80019f58 + 44 ≤ A.lo
   sret_inSL : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi
-  -- ===== the RIGHT sub-call spill-slot second frame is populated (BinExtras hSlot2
-  -- / `blockB_binary`'s `hMentPop`): the whole lowered frame `[sp-1120, sp)` plus
-  -- the right call's own spill slots are present in any pre-call memory that agrees
-  -- with `m0` outside the scribbled stack window `[SL.lo, sp)`.  M6 Layout residual
-  -- (`hMcallPop`-style). =====
-  frame_pop : ∀ mcall : Mem,
-    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-    ∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, mcall[a]? = some b)
+  -- WAVE 48k: the `frame_pop` field is DELETED, not supplied.  It demanded HASHMAP
+  -- PRESENCE on `[sp-1120, sp)` — the callee's own, as-yet-unwritten entry frame —
+  -- and was machine-refuted as an entry premise
+  -- (`experiments/fleet/obstructions/FramePopRamTotalityVerdict48j.lean`).  The
+  -- load layer now consumes the model's TOTAL read (`readByte = getD 0`), so the
+  -- dead reloads over that window need nothing at all.  Five waves (48e-48j) tried
+  -- to supply this field; the right move was to remove the demand.
   -- ===== ghost-frame presence of `s3`(x19): the outer `g` has a live `x19` (a
   -- callee-saved register that `blockA_k`'s frame ties `c1.regs x19 = g x19` to).
   -- `EvalEntry.spill_defined` only covers `s0`/`s1`/`s2`, so `x19` is threaded here. =====
@@ -175,7 +174,6 @@ theorem blockA_binaryArm
         ExprRepr ment aLOp.toNat el ∧
         read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
         ExprRepr ment aROp.toNat er ∧
-        (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, ment[a]? = some b)) ∧
         MemExtends m0 ment ∧
         -- WAVE 47i: the parent node's entry-ground bundle at the arm entry
         -- (derived HERE from `hc.ground` — the bridge owns the `EvalEntry`).
@@ -266,10 +264,6 @@ theorem blockA_binaryArm
       tableStk := hX.tableStk.imp (fun h => by omega) (fun h => h)
       arenaStk := hX.arenaStk, arenaCode := hX.arenaCode, arenaVi := hX.arenaVi,
       arenaTable := hX.arenaTable, sret_inSL := hX.sret_inSL }
-  -- The arm-entry frame-population: transport `frame_pop` (over `m0` outside stack)
-  -- to `ment` via the `ArmEntryK` memframe.
-  have hMentPop : ∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, ment[a]? = some b) :=
-    hX.frame_pop ment hMentM0
   -- `MemExtends m0 ment`: the prologue spills are memory inserts, so `ment`
   -- presence-extends `m0` — WAVE 48f: taken DIRECTLY from `blockA_k`'s intrinsic
   -- 2nd output `hpresM` (the dropped `mem_ext` closure was redundant with this).
@@ -292,7 +286,7 @@ theorem blockA_binaryArm
       sp r sret aExpr aEnv v8 v9 v18 c1.σ.sailOutput m0 ment c1 := _hAout.symm ▸ hArm
   refine ⟨c1, hs1, (fun R => c1.σ.regs.get? R), v13, v8, v9, v18, v19, ment, hArm', hBE,
     hAEx11, hx13c1, hx19c1, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩, hAEx8, hAEx18,
-    hx19c1, hpayLment, hlReprMent, hpayRment, hrReprMent, hMentPop, hMemExt,
+    hx19c1, hpayLment, hlReprMent, hpayRment, hrReprMent, hMemExt,
     (hc.mem ▸ hc.ground).transport_offstack hc.table_stack_disjoint hX.spSLhi hMentM0⟩
 
 /-- **`blockA_binaryArm_budgeted`** — `blockA_binaryArm` with the ITEM ZERO B1
@@ -330,7 +324,6 @@ theorem blockA_binaryArm_budgeted
         ExprRepr ment aLOp.toNat el ∧
         read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
         ExprRepr ment aROp.toNat er ∧
-        (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, ment[a]? = some b)) ∧
         MemExtends m0 ment ∧
         -- WAVE 47i: the parent node's entry-ground bundle (pass-through).
         EvalGround ment SL A sp sret aExpr.toNat (.binary op el er) ∧
@@ -345,14 +338,14 @@ theorem blockA_binaryArm_budgeted
   intro c hc
   obtain ⟨c1, hs1, gpre, aEnvReg, v8, v9, v18, v19, ment, hArm, hBX,
     hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt⟩ :=
+    hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt⟩ :=
     blockA_binaryArm g N A SL φf φc st d env op el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc
   have h1 : (Expr.binary op el er).stackNeed
       = evalFrame + max el.stackNeed er.stackNeed := rfl
   have h2 : ((1088#64 : BitVec 64)).toNat = 1088 := by decide
   exact ⟨c1, hs1, gpre, aEnvReg, v8, v9, v18, v19, ment, hArm, hBX,
     hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+    hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hc.stackBudget.child (by decide)
       (by have hm := Nat.le_max_left el.stackNeed er.stackNeed
           simp only [h1, h2, evalFrame]; omega),

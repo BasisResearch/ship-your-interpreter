@@ -104,42 +104,42 @@ theorem evalOrPrefix_run (σ : MState) (i u : Nat)
     (hK_ht : (v2 + sign_extend (m := 64) (0x078#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x078#12)).toNat)
     (hK_al : (v2 + sign_extend (m := 64) (0x078#12)).toNat % 8 = 0)
-    (hK_p0 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat]? = some k0)
-    (hK_p1 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 1]? = some k1)
-    (hK_p2 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 2]? = some k2)
-    (hK_p3 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 3]? = some k3)
-    (hK_p4 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 4]? = some k4)
-    (hK_p5 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 5]? = some k5)
-    (hK_p6 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 6]? = some k6)
-    (hK_p7 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 7]? = some k7)
+    (hK_p0 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat]?).getD 0 = k0)
+    (hK_p1 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 1]?).getD 0 = k1)
+    (hK_p2 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 2]?).getD 0 = k2)
+    (hK_p3 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 3]?).getD 0 = k3)
+    (hK_p4 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 4]?).getD 0 = k4)
+    (hK_p5 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 5]?).getD 0 = k5)
+    (hK_p6 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 6]?).getD 0 = k6)
+    (hK_p7 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 7]?).getD 0 = k7)
     -- PV load @ v2+0x080 (8-byte)
     (hP_lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x080#12)).toNat)
     (hP_hi : (v2 + sign_extend (m := 64) (0x080#12)).toNat + 8 ≤ 0x100000000)
     (hP_ht : (v2 + sign_extend (m := 64) (0x080#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x080#12)).toNat)
     (hP_al : (v2 + sign_extend (m := 64) (0x080#12)).toNat % 8 = 0)
-    (hP_p0 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat]? = some p0)
-    (hP_p1 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 1]? = some p1)
-    (hP_p2 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 2]? = some p2)
-    (hP_p3 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 3]? = some p3)
-    (hP_p4 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 4]? = some p4)
-    (hP_p5 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 5]? = some p5)
-    (hP_p6 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 6]? = some p6)
-    (hP_p7 : σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 7]? = some p7)
+    (hP_p0 : (σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat]?).getD 0 = p0)
+    (hP_p1 : (σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 1]?).getD 0 = p1)
+    (hP_p2 : (σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 2]?).getD 0 = p2)
+    (hP_p3 : (σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 3]?).getD 0 = p3)
+    (hP_p4 : (σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 4]?).getD 0 = p4)
+    (hP_p5 : (σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 5]?).getD 0 = p5)
+    (hP_p6 : (σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 6]?).getD 0 = p6)
+    (hP_p7 : (σ.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 7]?).getD 0 = p7)
     -- QV load @ v2+0x088 (8-byte)
     (hQ_lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x088#12)).toNat)
     (hQ_hi : (v2 + sign_extend (m := 64) (0x088#12)).toNat + 8 ≤ 0x100000000)
     (hQ_ht : (v2 + sign_extend (m := 64) (0x088#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x088#12)).toNat)
     (hQ_al : (v2 + sign_extend (m := 64) (0x088#12)).toNat % 8 = 0)
-    (hQ_p0 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat]? = some q0)
-    (hQ_p1 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 1]? = some q1)
-    (hQ_p2 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 2]? = some q2)
-    (hQ_p3 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 3]? = some q3)
-    (hQ_p4 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 4]? = some q4)
-    (hQ_p5 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 5]? = some q5)
-    (hQ_p6 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 6]? = some q6)
-    (hQ_p7 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 7]? = some q7)
+    (hQ_p0 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat]?).getD 0 = q0)
+    (hQ_p1 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 1]?).getD 0 = q1)
+    (hQ_p2 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 2]?).getD 0 = q2)
+    (hQ_p3 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 3]?).getD 0 = q3)
+    (hQ_p4 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 4]?).getD 0 = q4)
+    (hQ_p5 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 5]?).getD 0 = q5)
+    (hQ_p6 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 6]?).getD 0 = q6)
+    (hQ_p7 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 7]?).getD 0 = q7)
     -- store safety @ v2+0x040 / 0x048 / 0x050 (buf, 8-byte each)
     (s0lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x040#12)).toNat)
     (s0hi : (v2 + sign_extend (m := 64) (0x040#12)).toNat + 8 ≤ 0x100000000)
@@ -169,7 +169,7 @@ theorem evalOrPrefix_run (σ : MState) (i u : Nat)
           (v2 + sign_extend (m := 64) (0x050#12)).toNat D3 ∧
       -- 24-byte copy: buffer @ v2+0x40 mirrors the sub-value @ v2+0x78.
       (∀ j : Nat, j < 24 →
-        σ'.mem[v2.toNat + 0x40 + j]? = σ.mem[v2.toNat + 0x78 + j]?) ∧
+        σ'.mem[v2.toNat + 0x40 + j]? = some ((σ.mem[v2.toNat + 0x78 + j]?).getD 0)) ∧
       -- everything outside the 24-byte buffer window is unchanged.
       (∀ a : Nat, (a < v2.toNat + 0x40 ∨ v2.toNat + 0x40 + 24 ≤ a) →
         σ'.mem[a]? = σ.mem[a]?) ∧
@@ -191,7 +191,8 @@ theorem evalOrPrefix_run (σ : MState) (i u : Nat)
       (show KeysOK [8, 2] by decide)
       (by
         block_facts hmem with "Vsa.Sim.Code.eval_expr_at_"
-        · exact ⟨⟨o_lo, o_hi, o_ht, o_al⟩, o_p0, o_p1, o_p2, o_p3⟩
+        · exact ⟨⟨o_lo, o_hi, o_ht, o_al⟩, lpin_of_present o_p0,
+            lpin_of_present o_p1, lpin_of_present o_p2, lpin_of_present o_p3⟩
         · exact ⟨⟨hK_lo, hK_hi, hK_ht, hK_al⟩,
             hK_p0, hK_p1, hK_p2, hK_p3, hK_p4, hK_p5, hK_p6, hK_p7⟩
         · show guardB bop.BEQ (bytesVal MKind.lw [0x19#8, 0x00#8, 0x00#8, 0x00#8])
@@ -211,23 +212,23 @@ theorem evalOrPrefix_run (σ : MState) (i u : Nat)
       = some (bytesVal MKind.ld [k0, k1, k2, k3, k4, k5, k6, k7]) := block_reg hGH1 12
   obtain ⟨vm1, hmi1'⟩ := hmi1
   -- PV/QV load pins over σ1.mem (= σ.mem).
-  have hP1 : σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat]? = some p0 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 1]? = some p1 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 2]? = some p2 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 3]? = some p3 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 4]? = some p4 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 5]? = some p5 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 6]? = some p6 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 7]? = some p7 := by
+  have hP1 : (σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat]?).getD 0 = p0 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 1]?).getD 0 = p1 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 2]?).getD 0 = p2 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 3]?).getD 0 = p3 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 4]?).getD 0 = p4 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 5]?).getD 0 = p5 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 6]?).getD 0 = p6 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x080#12)).toNat + 7]?).getD 0 = p7 := by
     rw [hmem1e]; exact ⟨hP_p0, hP_p1, hP_p2, hP_p3, hP_p4, hP_p5, hP_p6, hP_p7⟩
-  have hQ1 : σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat]? = some q0 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 1]? = some q1 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 2]? = some q2 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 3]? = some q3 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 4]? = some q4 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 5]? = some q5 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 6]? = some q6 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 7]? = some q7 := by
+  have hQ1 : (σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat]?).getD 0 = q0 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 1]?).getD 0 = q1 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 2]?).getD 0 = q2 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 3]?).getD 0 = q3 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 4]?).getD 0 = q4 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 5]?).getD 0 = q5 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 6]?).getD 0 = q6 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 7]?).getD 0 = q7 := by
     rw [hmem1e]; exact ⟨hQ_p0, hQ_p1, hQ_p2, hQ_p3, hQ_p4, hQ_p5, hQ_p6, hQ_p7⟩
   -- ── B2: ld/ld/addi/sd/sd/sd (fall-through) ──────────────────────────────────
   obtain ⟨σ2, i2, hsteps2, hi2, hG2, hmem2, hout2, hpc2, hmi2, hGH2, hframe2⟩ :=
@@ -306,7 +307,7 @@ theorem evalOrPrefix_run (σ : MState) (i u : Nat)
     rw [hmemCopy,
       getElem_writeMap8_disjoint _ (v2 + sign_extend (m := 64) (0x050#12)).toNat _ _ (by rw [hn50]; omega)]
   have hcopyWin : ∀ j : Nat, j < 24 →
-      σ2.mem[v2.toNat + 0x40 + j]? = σ.mem[v2.toNat + 0x78 + j]? := by
+      σ2.mem[v2.toNat + 0x40 + j]? = some ((σ.mem[v2.toNat + 0x78 + j]?).getD 0) := by
     intro j hj
     rcases (show j = 0 ∨ j = 1 ∨ j = 2 ∨ j = 3 ∨ j = 4 ∨ j = 5 ∨ j = 6 ∨ j = 7 ∨
         j = 8 ∨ j = 9 ∨ j = 10 ∨ j = 11 ∨ j = 12 ∨ j = 13 ∨ j = 14 ∨ j = 15 ∨
@@ -315,62 +316,62 @@ theorem evalOrPrefix_run (σ : MState) (i u : Nat)
         rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
     · rw [hDK 0 (by omega), hn40, show v2.toNat + 0x40 + 0 = v2.toNat + 0x40 from by omega,
         getElem_writeMap8_0, eK0, show v2.toNat + 0x78 + 0 = v2.toNat + 0x78 from by omega]
-      rw [hn78] at hK_p0; exact hK_p0.symm
-    · rw [hDK 1 (by omega), hn40, getElem_writeMap8_1, eK1]; rw [hn78] at hK_p1; exact hK_p1.symm
-    · rw [hDK 2 (by omega), hn40, getElem_writeMap8_2, eK2]; rw [hn78] at hK_p2; exact hK_p2.symm
-    · rw [hDK 3 (by omega), hn40, getElem_writeMap8_3, eK3]; rw [hn78] at hK_p3; exact hK_p3.symm
-    · rw [hDK 4 (by omega), hn40, getElem_writeMap8_4, eK4]; rw [hn78] at hK_p4; exact hK_p4.symm
-    · rw [hDK 5 (by omega), hn40, getElem_writeMap8_5, eK5]; rw [hn78] at hK_p5; exact hK_p5.symm
-    · rw [hDK 6 (by omega), hn40, getElem_writeMap8_6, eK6]; rw [hn78] at hK_p6; exact hK_p6.symm
-    · rw [hDK 7 (by omega), hn40, getElem_writeMap8_7, eK7]; rw [hn78] at hK_p7; exact hK_p7.symm
+      rw [hn78] at hK_p0; exact congrArg some hK_p0.symm
+    · rw [hDK 1 (by omega), hn40, getElem_writeMap8_1, eK1]; rw [hn78] at hK_p1; exact congrArg some hK_p1.symm
+    · rw [hDK 2 (by omega), hn40, getElem_writeMap8_2, eK2]; rw [hn78] at hK_p2; exact congrArg some hK_p2.symm
+    · rw [hDK 3 (by omega), hn40, getElem_writeMap8_3, eK3]; rw [hn78] at hK_p3; exact congrArg some hK_p3.symm
+    · rw [hDK 4 (by omega), hn40, getElem_writeMap8_4, eK4]; rw [hn78] at hK_p4; exact congrArg some hK_p4.symm
+    · rw [hDK 5 (by omega), hn40, getElem_writeMap8_5, eK5]; rw [hn78] at hK_p5; exact congrArg some hK_p5.symm
+    · rw [hDK 6 (by omega), hn40, getElem_writeMap8_6, eK6]; rw [hn78] at hK_p6; exact congrArg some hK_p6.symm
+    · rw [hDK 7 (by omega), hn40, getElem_writeMap8_7, eK7]; rw [hn78] at hK_p7; exact congrArg some hK_p7.symm
     · rw [show v2.toNat + 0x40 + 8 = v2.toNat + 0x48 + 0 from by omega, hDP 0 (by omega), hn48,
         show v2.toNat + 0x48 + 0 = v2.toNat + 0x48 from by omega, getElem_writeMap8_0, eP0,
-        show v2.toNat + 0x78 + 8 = v2.toNat + 0x80 from by omega]; rw [hn80] at hP_p0; exact hP_p0.symm
+        show v2.toNat + 0x78 + 8 = v2.toNat + 0x80 from by omega]; rw [hn80] at hP_p0; exact congrArg some hP_p0.symm
     · rw [show v2.toNat + 0x40 + 9 = v2.toNat + 0x48 + 1 from by omega, hDP 1 (by omega), hn48,
         getElem_writeMap8_1, eP1, show v2.toNat + 0x78 + 9 = v2.toNat + 0x80 + 1 from by omega]
-      rw [hn80] at hP_p1; exact hP_p1.symm
+      rw [hn80] at hP_p1; exact congrArg some hP_p1.symm
     · rw [show v2.toNat + 0x40 + 10 = v2.toNat + 0x48 + 2 from by omega, hDP 2 (by omega), hn48,
         getElem_writeMap8_2, eP2, show v2.toNat + 0x78 + 10 = v2.toNat + 0x80 + 2 from by omega]
-      rw [hn80] at hP_p2; exact hP_p2.symm
+      rw [hn80] at hP_p2; exact congrArg some hP_p2.symm
     · rw [show v2.toNat + 0x40 + 11 = v2.toNat + 0x48 + 3 from by omega, hDP 3 (by omega), hn48,
         getElem_writeMap8_3, eP3, show v2.toNat + 0x78 + 11 = v2.toNat + 0x80 + 3 from by omega]
-      rw [hn80] at hP_p3; exact hP_p3.symm
+      rw [hn80] at hP_p3; exact congrArg some hP_p3.symm
     · rw [show v2.toNat + 0x40 + 12 = v2.toNat + 0x48 + 4 from by omega, hDP 4 (by omega), hn48,
         getElem_writeMap8_4, eP4, show v2.toNat + 0x78 + 12 = v2.toNat + 0x80 + 4 from by omega]
-      rw [hn80] at hP_p4; exact hP_p4.symm
+      rw [hn80] at hP_p4; exact congrArg some hP_p4.symm
     · rw [show v2.toNat + 0x40 + 13 = v2.toNat + 0x48 + 5 from by omega, hDP 5 (by omega), hn48,
         getElem_writeMap8_5, eP5, show v2.toNat + 0x78 + 13 = v2.toNat + 0x80 + 5 from by omega]
-      rw [hn80] at hP_p5; exact hP_p5.symm
+      rw [hn80] at hP_p5; exact congrArg some hP_p5.symm
     · rw [show v2.toNat + 0x40 + 14 = v2.toNat + 0x48 + 6 from by omega, hDP 6 (by omega), hn48,
         getElem_writeMap8_6, eP6, show v2.toNat + 0x78 + 14 = v2.toNat + 0x80 + 6 from by omega]
-      rw [hn80] at hP_p6; exact hP_p6.symm
+      rw [hn80] at hP_p6; exact congrArg some hP_p6.symm
     · rw [show v2.toNat + 0x40 + 15 = v2.toNat + 0x48 + 7 from by omega, hDP 7 (by omega), hn48,
         getElem_writeMap8_7, eP7, show v2.toNat + 0x78 + 15 = v2.toNat + 0x80 + 7 from by omega]
-      rw [hn80] at hP_p7; exact hP_p7.symm
+      rw [hn80] at hP_p7; exact congrArg some hP_p7.symm
     · rw [hmemCopy, show v2.toNat + 0x40 + 16 = (v2 + sign_extend (m := 64) (0x050#12)).toNat from by rw [hn50],
         getElem_writeMap8_0, eQ0, show v2.toNat + 0x78 + 16 = v2.toNat + 0x88 from by omega]
-      rw [hn88] at hQ_p0; exact hQ_p0.symm
+      rw [hn88] at hQ_p0; exact congrArg some hQ_p0.symm
     · rw [hmemCopy, show v2.toNat + 0x40 + 17 = (v2 + sign_extend (m := 64) (0x050#12)).toNat + 1 from by rw [hn50],
         getElem_writeMap8_1, eQ1, show v2.toNat + 0x78 + 17 = v2.toNat + 0x88 + 1 from by omega]
-      rw [hn88] at hQ_p1; exact hQ_p1.symm
+      rw [hn88] at hQ_p1; exact congrArg some hQ_p1.symm
     · rw [hmemCopy, show v2.toNat + 0x40 + 18 = (v2 + sign_extend (m := 64) (0x050#12)).toNat + 2 from by rw [hn50],
         getElem_writeMap8_2, eQ2, show v2.toNat + 0x78 + 18 = v2.toNat + 0x88 + 2 from by omega]
-      rw [hn88] at hQ_p2; exact hQ_p2.symm
+      rw [hn88] at hQ_p2; exact congrArg some hQ_p2.symm
     · rw [hmemCopy, show v2.toNat + 0x40 + 19 = (v2 + sign_extend (m := 64) (0x050#12)).toNat + 3 from by rw [hn50],
         getElem_writeMap8_3, eQ3, show v2.toNat + 0x78 + 19 = v2.toNat + 0x88 + 3 from by omega]
-      rw [hn88] at hQ_p3; exact hQ_p3.symm
+      rw [hn88] at hQ_p3; exact congrArg some hQ_p3.symm
     · rw [hmemCopy, show v2.toNat + 0x40 + 20 = (v2 + sign_extend (m := 64) (0x050#12)).toNat + 4 from by rw [hn50],
         getElem_writeMap8_4, eQ4, show v2.toNat + 0x78 + 20 = v2.toNat + 0x88 + 4 from by omega]
-      rw [hn88] at hQ_p4; exact hQ_p4.symm
+      rw [hn88] at hQ_p4; exact congrArg some hQ_p4.symm
     · rw [hmemCopy, show v2.toNat + 0x40 + 21 = (v2 + sign_extend (m := 64) (0x050#12)).toNat + 5 from by rw [hn50],
         getElem_writeMap8_5, eQ5, show v2.toNat + 0x78 + 21 = v2.toNat + 0x88 + 5 from by omega]
-      rw [hn88] at hQ_p5; exact hQ_p5.symm
+      rw [hn88] at hQ_p5; exact congrArg some hQ_p5.symm
     · rw [hmemCopy, show v2.toNat + 0x40 + 22 = (v2 + sign_extend (m := 64) (0x050#12)).toNat + 6 from by rw [hn50],
         getElem_writeMap8_6, eQ6, show v2.toNat + 0x78 + 22 = v2.toNat + 0x88 + 6 from by omega]
-      rw [hn88] at hQ_p6; exact hQ_p6.symm
+      rw [hn88] at hQ_p6; exact congrArg some hQ_p6.symm
     · rw [hmemCopy, show v2.toNat + 0x40 + 23 = (v2 + sign_extend (m := 64) (0x050#12)).toNat + 7 from by rw [hn50],
         getElem_writeMap8_7, eQ7, show v2.toNat + 0x78 + 23 = v2.toNat + 0x88 + 7 from by omega]
-      rw [hn88] at hQ_p7; exact hQ_p7.symm
+      rw [hn88] at hQ_p7; exact congrArg some hQ_p7.symm
   -- combined ABI-noise frame over the two blocks.
   have hframeC : ∀ R : Register, AbiPreservedNoise R → σ2.regs.get? R = σ.regs.get? R := by
     intro R hR

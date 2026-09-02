@@ -83,9 +83,9 @@ def MidArmRightMarshal
   cL.σ.regs.get? Register.x8 = some aExpr ∧
   cL.σ.regs.get? Register.x18 = some aEnv ∧
   gpre Register.x8 = some aExpr ∧ gpre Register.x18 = some aEnv ∧
-  -- transported right-operand node + frame population:
+  -- transported right-operand node (wave 48k: the frame-population conjunct is
+  -- gone — the arm's dead reloads are total reads):
   read64 cL.σ.mem (aExpr.toNat + 24) = some aROp.toNat ∧
-  (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, cL.σ.mem[a]? = some b)) ∧
   -- store/expr/value survival + spills at cL.σ.mem:
   StoreRepr cL.σ.mem N A φf1 φc1 st'.store ∧
   (∀ m' : Mem,
@@ -150,7 +150,7 @@ theorem midStage1_of_marshal
             sp r sret aExpr aEnv aROp v8 v9 v18 cL) :
     LandedN 1 cL (fun c' => JalPreBundle er c' st' d env) := by
   obtain ⟨hpcL, hs1L, hspL, houtStrL, hframeL, hx8L, hx18L, hgx8v, hgx18v,
-    hnode, hpop, hstoreCL, hstoreSurvCL, hexprSurvCL, hviCL, hviSlotCL, hnbsCL,
+    hnode, hstoreCL, hstoreSurvCL, hexprSurvCL, hviCL, hviSlotCL, hnbsCL,
     hslotRaL, hslotS0L, hslotS1L, hslotS2L,
     hnode_hi, hnode_lo, hnode_align, hnode_win, hrop_align, hrop_ram, hrop_win,
     hrop_stk, hrop_stkfull, hsp1088, hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam,
@@ -158,7 +158,7 @@ theorem midStage1_of_marshal
     hstackBudgetR, hexprBodiesR, hstoreBodiesR, hGroundR_CL⟩ := hM
   exact binaryR_midStage1 gpre N A SL φf1 φc1 st' d env er sp r sret aExpr aEnv aROp
     v8 v9 v18 cL hGL htickL hpcL hs1L hspL hmiL houtStrL hframeL hx8L hx18L hgx8v hgx18v
-    hcodeL hnode hpop hstoreCL hstoreSurvCL hexprSurvCL hviCL hviSlotCL hnbsCL hslotRaL hslotS0L
+    hcodeL hnode hstoreCL hstoreSurvCL hexprSurvCL hviCL hviSlotCL hnbsCL hslotRaL hslotS0L
     hslotS1L hslotS2L hnode_hi hnode_lo hnode_align hnode_win hrop_align hrop_ram hrop_win
     hrop_stk hrop_stkfull hsp1088 hsproom hspSLhi hsp16 hsphi hSLlo hSLhiRam hSLwin
     hcodeStk hviStk htableStk harenaStk harenaCode

@@ -407,11 +407,15 @@ access type, composing `pmaCheck_ram_read`, `split_misaligned_aligned` (⇒ N=1)
 Proved per width (the `to_bits w`, the loop-offset/word arithmetic, and the
 final `updateSubrange` reassembly are all width-specific). -/
 
-/-- `checked_mem_read (Load Data) PBMT_PMA Machine (Physaddr a) 8 …` reads the
-eight code/data bytes into a `BitVec 64`, unchanged state. -/
-theorem checked_mem_read_data_eight
+/-- Width-8 `checked_mem_read` on the RAM `Load Data` path, **parametric in the
+value the RAM leaf returns**.  Byte-level information enters ONLY through
+`hram`, so this single proof serves both the presence-hypothesis leaf
+(`read_ram_eight`) and the TOTAL leaf (`read_ram_eight_total`,
+`Vsa/Sim/MemLoadTotal.lean`) — the Sail model reads memory totally
+(`readByte = getD 0`), so presence is never a semantic requirement of a load. -/
+theorem checked_mem_read_data_eight_of_ram
     (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8)
+    (a : BitVec 64) (v : BitVec 64)
     (vpmpaddr : RegisterType Register.pmpaddr_n)
     (hpma : σ.regs.get? Register.pma_regions
       = some (initPmaRegions : RegisterType Register.pma_regions))
@@ -424,15 +428,12 @@ theorem checked_mem_read_data_eight
     (hhiram : a.toNat + 8 ≤ 0x100000000)
     (hhtif : a.toNat + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat)
     (halign : a.toNat % 8 = 0)
-    (h0 : σ.mem[a.toNat]? = some b0) (h1 : σ.mem[a.toNat + 1]? = some b1)
-    (h2 : σ.mem[a.toNat + 2]? = some b2) (h3 : σ.mem[a.toNat + 3]? = some b3)
-    (h4 : σ.mem[a.toNat + 4]? = some b4) (h5 : σ.mem[a.toNat + 5]? = some b5)
-    (h6 : σ.mem[a.toNat + 6]? = some b6) (h7 : σ.mem[a.toNat + 7]? = some b7) :
+    (hram : (Functions.read_ram read_kind.Read_plain (physaddr.Physaddr a) 8 false).run σ
+      = .ok (v, ()) σ) :
     (checked_mem_read (MemoryAccessType.Load mem_payload.Data)
         page_based_mem_type.PBMT_PMA Privilege.Machine (physaddr.Physaddr a)
         8 false false false false).run σ
-      = .ok (.Ok (((((((b7.append b6).append b5).append b4).append b3).append
-          b2).append b1).append b0, ())) σ := by
+      = .ok (.Ok (v, ())) σ := by
   have htmod : Int.tmod (BitVec.toNatInt a) 8 = 0 := by
     simp only [BitVec.toNatInt]
     have : ((Int.ofNat a.toNat).tmod (Int.ofNat 8)) = Int.ofNat (a.toNat % 8) :=
@@ -446,7 +447,6 @@ theorem checked_mem_read_data_eight
       = .ok (1, (8 : Int)) σ := by
     have h := split_misaligned_aligned_w σ a 8 0 Splittability.CannotSplit htmod
     rw [h, show ((8 : Nat) : Int) = (8 : Int) from rfl]
-  have hram := read_ram_eight σ a b0 b1 b2 b3 b4 b5 b6 b7 h0 h1 h2 h3 h4 h5 h6 h7
   simp only [EStateM.run] at hpmaC hpmp hmmio hsplit hram
   unfold checked_mem_read
   simp only [check_pma_with_pmp_priority, read_kind_of_flags, misaligned_order,
@@ -473,8 +473,7 @@ theorem checked_mem_read_data_eight
     show (↑(0 : Nat) * (8 : Int)) = (0 : Int) from by decide, addInt_zero_pa,
     hpmp, hmmio, Bool.false_eq_true, if_false]
   have hram' : Functions.read_ram read_kind.Read_plain (physaddr.Physaddr a) (Int.toNat 8) false σ
-      = EStateM.Result.ok (((((((b7.append b6).append b5).append b4).append b3).append
-          b2).append b1).append b0, ()) σ := hram
+      = EStateM.Result.ok (v, ()) σ := hram
   rw [hram']
   simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont,
     beq_self_eq_true, if_true, default_meta]
@@ -483,17 +482,52 @@ theorem checked_mem_read_data_eight
   rw [e1, e2]
   congr 3
   simp only [BitVec.updateSubrange, Sail.BitVec.updateSubrange', Functions.zeros]
-  have key : (0#64 ||| (b7 +++ b6 +++ b5 +++ b4 +++ b3 +++ b2 +++ b1 +++ b0) <<< 0)
-      = b7 +++ b6 +++ b5 +++ b4 +++ b3 +++ b2 +++ b1 +++ b0 := by
+  have key : (0#64 ||| v <<< 0) = v := by
     apply BitVec.eq_of_toNat_eq; simp [BitVec.shiftLeft_zero]
   exact key
 
-/-- `checked_mem_read (Load Data) PBMT_PMA Machine (Physaddr a) 4 …` reads the
-four data bytes into a `BitVec 32`, unchanged state. Width-4 clone of
-`checked_mem_read_data_eight`. -/
-theorem checked_mem_read_data_four
+/-- `checked_mem_read (Load Data) PBMT_PMA Machine (Physaddr a) 8 …` reads the
+eight code/data bytes into a `BitVec 64`, unchanged state. -/
+theorem checked_mem_read_data_eight
     (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (b0 b1 b2 b3 : BitVec 8)
+    (a : BitVec 64) (b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8)
+    (vpmpaddr : RegisterType Register.pmpaddr_n)
+    (hpma : σ.regs.get? Register.pma_regions
+      = some (initPmaRegions : RegisterType Register.pma_regions))
+    (hcfg : σ.regs.get? Register.pmpcfg_n
+      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
+    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
+    (hbase : σ.regs.get? Register.htif_tohost_base
+      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
+    (hlo : 0x80000000 ≤ a.toNat)
+    (hhiram : a.toNat + 8 ≤ 0x100000000)
+    (hhtif : a.toNat + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat)
+    (halign : a.toNat % 8 = 0)
+    (h0 : σ.mem[a.toNat]? = some b0)
+    (h1 : σ.mem[a.toNat + 1]? = some b1)
+    (h2 : σ.mem[a.toNat + 2]? = some b2)
+    (h3 : σ.mem[a.toNat + 3]? = some b3)
+    (h4 : σ.mem[a.toNat + 4]? = some b4)
+    (h5 : σ.mem[a.toNat + 5]? = some b5)
+    (h6 : σ.mem[a.toNat + 6]? = some b6)
+    (h7 : σ.mem[a.toNat + 7]? = some b7) :
+    (checked_mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA Privilege.Machine (physaddr.Physaddr a)
+        8 false false false false).run σ
+      = .ok (.Ok ((((((((b7.append b6).append b5).append b4).append b3).append
+          b2).append b1).append b0), ())) σ :=
+  checked_mem_read_data_eight_of_ram σ a _ vpmpaddr hpma hcfg haddr hbase
+    hlo hhiram hhtif halign (read_ram_eight σ a b0 b1 b2 b3 b4 b5 b6 b7 h0 h1 h2 h3 h4 h5 h6 h7)
+
+/-- Width-4 `checked_mem_read` on the RAM `Load Data` path, **parametric in the
+value the RAM leaf returns**.  Byte-level information enters ONLY through
+`hram`, so this single proof serves both the presence-hypothesis leaf
+(`read_ram_four`) and the TOTAL leaf (`read_ram_four_total`,
+`Vsa/Sim/MemLoadTotal.lean`) — the Sail model reads memory totally
+(`readByte = getD 0`), so presence is never a semantic requirement of a load. -/
+theorem checked_mem_read_data_four_of_ram
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (v : BitVec 32)
     (vpmpaddr : RegisterType Register.pmpaddr_n)
     (hpma : σ.regs.get? Register.pma_regions
       = some (initPmaRegions : RegisterType Register.pma_regions))
@@ -506,12 +540,12 @@ theorem checked_mem_read_data_four
     (hhiram : a.toNat + 4 ≤ 0x100000000)
     (hhtif : a.toNat + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat)
     (halign : a.toNat % 4 = 0)
-    (h0 : σ.mem[a.toNat]? = some b0) (h1 : σ.mem[a.toNat + 1]? = some b1)
-    (h2 : σ.mem[a.toNat + 2]? = some b2) (h3 : σ.mem[a.toNat + 3]? = some b3) :
+    (hram : (Functions.read_ram read_kind.Read_plain (physaddr.Physaddr a) 4 false).run σ
+      = .ok (v, ()) σ) :
     (checked_mem_read (MemoryAccessType.Load mem_payload.Data)
         page_based_mem_type.PBMT_PMA Privilege.Machine (physaddr.Physaddr a)
         4 false false false false).run σ
-      = .ok (.Ok ((((b3.append b2).append b1).append b0), ())) σ := by
+      = .ok (.Ok (v, ())) σ := by
   have htmod : Int.tmod (BitVec.toNatInt a) 4 = 0 := by
     simp only [BitVec.toNatInt]
     have : ((Int.ofNat a.toNat).tmod (Int.ofNat 4)) = Int.ofNat (a.toNat % 4) :=
@@ -525,7 +559,6 @@ theorem checked_mem_read_data_four
       = .ok (1, (4 : Int)) σ := by
     have h := split_misaligned_aligned_w σ a 4 0 Splittability.CannotSplit htmod
     rw [h, show ((4 : Nat) : Int) = (4 : Int) from rfl]
-  have hram := read_ram_four σ a b0 b1 b2 b3 h0 h1 h2 h3
   simp only [EStateM.run] at hpmaC hpmp hmmio hsplit hram
   unfold checked_mem_read
   simp only [check_pma_with_pmp_priority, read_kind_of_flags, misaligned_order,
@@ -552,7 +585,7 @@ theorem checked_mem_read_data_four
     show (↑(0 : Nat) * (4 : Int)) = (0 : Int) from by decide, addInt_zero_pa,
     hpmp, hmmio, Bool.false_eq_true, if_false]
   have hram' : Functions.read_ram read_kind.Read_plain (physaddr.Physaddr a) (Int.toNat 4) false σ
-      = EStateM.Result.ok ((((b3.append b2).append b1).append b0), ()) σ := hram
+      = EStateM.Result.ok (v, ()) σ := hram
   rw [hram']
   simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont,
     beq_self_eq_true, if_true, default_meta]
@@ -561,17 +594,48 @@ theorem checked_mem_read_data_four
   rw [e1, e2]
   congr 3
   simp only [BitVec.updateSubrange, Sail.BitVec.updateSubrange', Functions.zeros]
-  have key : (0#32 ||| (b3 +++ b2 +++ b1 +++ b0) <<< 0)
-      = b3 +++ b2 +++ b1 +++ b0 := by
+  have key : (0#32 ||| v <<< 0) = v := by
     apply BitVec.eq_of_toNat_eq; simp [BitVec.shiftLeft_zero]
   exact key
 
-/-- `checked_mem_read (Load Data) PBMT_PMA Machine (Physaddr a) 2 …` reads the
-two data bytes into a `BitVec 16`, unchanged state. Width-2 clone of
+/-- `checked_mem_read (Load Data) PBMT_PMA Machine (Physaddr a) 4 …` reads the
+four data bytes into a `BitVec 32`, unchanged state. Width-4 clone of
 `checked_mem_read_data_eight`. -/
-theorem checked_mem_read_data_two
+theorem checked_mem_read_data_four
     (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (b0 b1 : BitVec 8)
+    (a : BitVec 64) (b0 b1 b2 b3 : BitVec 8)
+    (vpmpaddr : RegisterType Register.pmpaddr_n)
+    (hpma : σ.regs.get? Register.pma_regions
+      = some (initPmaRegions : RegisterType Register.pma_regions))
+    (hcfg : σ.regs.get? Register.pmpcfg_n
+      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
+    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
+    (hbase : σ.regs.get? Register.htif_tohost_base
+      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
+    (hlo : 0x80000000 ≤ a.toNat)
+    (hhiram : a.toNat + 4 ≤ 0x100000000)
+    (hhtif : a.toNat + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat)
+    (halign : a.toNat % 4 = 0)
+    (h0 : σ.mem[a.toNat]? = some b0)
+    (h1 : σ.mem[a.toNat + 1]? = some b1)
+    (h2 : σ.mem[a.toNat + 2]? = some b2)
+    (h3 : σ.mem[a.toNat + 3]? = some b3) :
+    (checked_mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA Privilege.Machine (physaddr.Physaddr a)
+        4 false false false false).run σ
+      = .ok (.Ok (((((b3.append b2).append b1).append b0)), ())) σ :=
+  checked_mem_read_data_four_of_ram σ a _ vpmpaddr hpma hcfg haddr hbase
+    hlo hhiram hhtif halign (read_ram_four σ a b0 b1 b2 b3 h0 h1 h2 h3)
+
+/-- Width-2 `checked_mem_read` on the RAM `Load Data` path, **parametric in the
+value the RAM leaf returns**.  Byte-level information enters ONLY through
+`hram`, so this single proof serves both the presence-hypothesis leaf
+(`read_ram_two`) and the TOTAL leaf (`read_ram_two_total`,
+`Vsa/Sim/MemLoadTotal.lean`) — the Sail model reads memory totally
+(`readByte = getD 0`), so presence is never a semantic requirement of a load. -/
+theorem checked_mem_read_data_two_of_ram
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (v : BitVec 16)
     (vpmpaddr : RegisterType Register.pmpaddr_n)
     (hpma : σ.regs.get? Register.pma_regions
       = some (initPmaRegions : RegisterType Register.pma_regions))
@@ -584,11 +648,12 @@ theorem checked_mem_read_data_two
     (hhiram : a.toNat + 2 ≤ 0x100000000)
     (hhtif : a.toNat + 2 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat)
     (halign : a.toNat % 2 = 0)
-    (h0 : σ.mem[a.toNat]? = some b0) (h1 : σ.mem[a.toNat + 1]? = some b1) :
+    (hram : (Functions.read_ram read_kind.Read_plain (physaddr.Physaddr a) 2 false).run σ
+      = .ok (v, ()) σ) :
     (checked_mem_read (MemoryAccessType.Load mem_payload.Data)
         page_based_mem_type.PBMT_PMA Privilege.Machine (physaddr.Physaddr a)
         2 false false false false).run σ
-      = .ok (.Ok ((b1.append b0), ())) σ := by
+      = .ok (.Ok (v, ())) σ := by
   have htmod : Int.tmod (BitVec.toNatInt a) 2 = 0 := by
     simp only [BitVec.toNatInt]
     have : ((Int.ofNat a.toNat).tmod (Int.ofNat 2)) = Int.ofNat (a.toNat % 2) :=
@@ -602,7 +667,6 @@ theorem checked_mem_read_data_two
       = .ok (1, (2 : Int)) σ := by
     have h := split_misaligned_aligned_w σ a 2 0 Splittability.CannotSplit htmod
     rw [h, show ((2 : Nat) : Int) = (2 : Int) from rfl]
-  have hram := read_ram_two σ a b0 b1 h0 h1
   simp only [EStateM.run] at hpmaC hpmp hmmio hsplit hram
   unfold checked_mem_read
   simp only [check_pma_with_pmp_priority, read_kind_of_flags, misaligned_order,
@@ -629,7 +693,7 @@ theorem checked_mem_read_data_two
     show (↑(0 : Nat) * (2 : Int)) = (0 : Int) from by decide, addInt_zero_pa,
     hpmp, hmmio, Bool.false_eq_true, if_false]
   have hram' : Functions.read_ram read_kind.Read_plain (physaddr.Physaddr a) (Int.toNat 2) false σ
-      = EStateM.Result.ok ((b1.append b0), ()) σ := hram
+      = EStateM.Result.ok (v, ()) σ := hram
   rw [hram']
   simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont,
     beq_self_eq_true, if_true, default_meta]
@@ -638,16 +702,46 @@ theorem checked_mem_read_data_two
   rw [e1, e2]
   congr 3
   simp only [BitVec.updateSubrange, Sail.BitVec.updateSubrange', Functions.zeros]
-  have key : (0#16 ||| (b1 +++ b0) <<< 0) = b1 +++ b0 := by
+  have key : (0#16 ||| v <<< 0) = v := by
     apply BitVec.eq_of_toNat_eq; simp [BitVec.shiftLeft_zero]
   exact key
 
-/-- `checked_mem_read (Load Data) PBMT_PMA Machine (Physaddr a) 1 …` reads one
-data byte into a `BitVec 8`, unchanged state. Width-1 clone of
+/-- `checked_mem_read (Load Data) PBMT_PMA Machine (Physaddr a) 2 …` reads the
+two data bytes into a `BitVec 16`, unchanged state. Width-2 clone of
 `checked_mem_read_data_eight`. -/
-theorem checked_mem_read_data_one
+theorem checked_mem_read_data_two
     (σ : SequentialState RegisterType trivialChoiceSource)
-    (a : BitVec 64) (b0 : BitVec 8)
+    (a : BitVec 64) (b0 b1 : BitVec 8)
+    (vpmpaddr : RegisterType Register.pmpaddr_n)
+    (hpma : σ.regs.get? Register.pma_regions
+      = some (initPmaRegions : RegisterType Register.pma_regions))
+    (hcfg : σ.regs.get? Register.pmpcfg_n
+      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
+    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
+    (hbase : σ.regs.get? Register.htif_tohost_base
+      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
+    (hlo : 0x80000000 ≤ a.toNat)
+    (hhiram : a.toNat + 2 ≤ 0x100000000)
+    (hhtif : a.toNat + 2 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat)
+    (halign : a.toNat % 2 = 0)
+    (h0 : σ.mem[a.toNat]? = some b0)
+    (h1 : σ.mem[a.toNat + 1]? = some b1) :
+    (checked_mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA Privilege.Machine (physaddr.Physaddr a)
+        2 false false false false).run σ
+      = .ok (.Ok (((b1.append b0)), ())) σ :=
+  checked_mem_read_data_two_of_ram σ a _ vpmpaddr hpma hcfg haddr hbase
+    hlo hhiram hhtif halign (read_ram_two σ a b0 b1 h0 h1)
+
+/-- Width-1 `checked_mem_read` on the RAM `Load Data` path, **parametric in the
+value the RAM leaf returns**.  Byte-level information enters ONLY through
+`hram`, so this single proof serves both the presence-hypothesis leaf
+(`read_ram_one`) and the TOTAL leaf (`read_ram_one_total`,
+`Vsa/Sim/MemLoadTotal.lean`) — the Sail model reads memory totally
+(`readByte = getD 0`), so presence is never a semantic requirement of a load. -/
+theorem checked_mem_read_data_one_of_ram
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (v : BitVec 8)
     (vpmpaddr : RegisterType Register.pmpaddr_n)
     (hpma : σ.regs.get? Register.pma_regions
       = some (initPmaRegions : RegisterType Register.pma_regions))
@@ -659,11 +753,12 @@ theorem checked_mem_read_data_one
     (hlo : 0x80000000 ≤ a.toNat)
     (hhiram : a.toNat + 1 ≤ 0x100000000)
     (hhtif : a.toNat + 1 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat)
-    (h0 : σ.mem[a.toNat]? = some b0) :
+    (hram : (Functions.read_ram read_kind.Read_plain (physaddr.Physaddr a) 1 false).run σ
+      = .ok (v, ()) σ) :
     (checked_mem_read (MemoryAccessType.Load mem_payload.Data)
         page_based_mem_type.PBMT_PMA Privilege.Machine (physaddr.Physaddr a)
         1 false false false false).run σ
-      = .ok (.Ok (b0, ())) σ := by
+      = .ok (.Ok (v, ())) σ := by
   have htmod : Int.tmod (BitVec.toNatInt a) 1 = 0 := by
     simp only [BitVec.toNatInt]
     have : ((Int.ofNat a.toNat).tmod (Int.ofNat 1)) = Int.ofNat (a.toNat % 1) :=
@@ -677,7 +772,6 @@ theorem checked_mem_read_data_one
       = .ok (1, (1 : Int)) σ := by
     have h := split_misaligned_aligned_w σ a 1 0 Splittability.CannotSplit htmod
     rw [h, show ((1 : Nat) : Int) = (1 : Int) from rfl]
-  have hram := read_ram_one σ a b0 h0
   simp only [EStateM.run] at hpmaC hpmp hmmio hsplit hram
   unfold checked_mem_read
   simp only [check_pma_with_pmp_priority, read_kind_of_flags, misaligned_order,
@@ -704,7 +798,7 @@ theorem checked_mem_read_data_one
     show (↑(0 : Nat) * (1 : Int)) = (0 : Int) from by decide, addInt_zero_pa,
     hpmp, hmmio, Bool.false_eq_true, if_false]
   have hram' : Functions.read_ram read_kind.Read_plain (physaddr.Physaddr a) (Int.toNat 1) false σ
-      = EStateM.Result.ok (b0, ()) σ := hram
+      = EStateM.Result.ok (v, ()) σ := hram
   rw [hram']
   simp only [EStateM.pure, EStateM.bind, ExceptT.bindCont,
     beq_self_eq_true, if_true, default_meta]
@@ -713,9 +807,34 @@ theorem checked_mem_read_data_one
   rw [e1, e2]
   congr 3
   simp only [BitVec.updateSubrange, Sail.BitVec.updateSubrange', Functions.zeros]
-  have key : (0#8 ||| b0 <<< 0) = b0 := by
+  have key : (0#8 ||| v <<< 0) = v := by
     apply BitVec.eq_of_toNat_eq; simp [BitVec.shiftLeft_zero]
   exact key
+
+/-- `checked_mem_read (Load Data) PBMT_PMA Machine (Physaddr a) 1 …` reads one
+data byte into a `BitVec 8`, unchanged state. Width-1 clone of
+`checked_mem_read_data_eight`. -/
+theorem checked_mem_read_data_one
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (b0 : BitVec 8)
+    (vpmpaddr : RegisterType Register.pmpaddr_n)
+    (hpma : σ.regs.get? Register.pma_regions
+      = some (initPmaRegions : RegisterType Register.pma_regions))
+    (hcfg : σ.regs.get? Register.pmpcfg_n
+      = some ((Vector.replicate 64 (0#8)) : RegisterType Register.pmpcfg_n))
+    (haddr : σ.regs.get? Register.pmpaddr_n = some vpmpaddr)
+    (hbase : σ.regs.get? Register.htif_tohost_base
+      = some (some (BitVec.ofNat 64 tohostAddr) : RegisterType Register.htif_tohost_base))
+    (hlo : 0x80000000 ≤ a.toNat)
+    (hhiram : a.toNat + 1 ≤ 0x100000000)
+    (hhtif : a.toNat + 1 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat)
+    (h0 : σ.mem[a.toNat]? = some b0) :
+    (checked_mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA Privilege.Machine (physaddr.Physaddr a)
+        1 false false false false).run σ
+      = .ok (.Ok ((b0), ())) σ :=
+  checked_mem_read_data_one_of_ram σ a _ vpmpaddr hpma hcfg haddr hbase
+    hlo hhiram hhtif (read_ram_one σ a b0 h0)
 
 /-! ## `mem_read` on the `Load Data` RAM path.
 
@@ -726,6 +845,32 @@ type. Resolves the effective privilege via `effectivePrivilege_data`
 `mem_read_callback`) down to the width-`w` `checked_mem_read_data_*`. The
 `(aq,rl,res) = (false,false,false)` tuple lands on the `(_,_,_)` catch-all.
 Requires `mstatus.MPRV = 0` (the extra data-path hypothesis absent for fetch). -/
+
+/-- Width-8 `mem_read` on the `Load Data` RAM path, parametric in the value the
+`checked_mem_read` layer returns (see `checked_mem_read_data_eight_of_ram`). -/
+theorem mem_read_data_eight_of_cmr
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (v : BitVec 64)
+    (vmstatus : RegisterType Register.mstatus)
+    (hpriv : σ.regs.get? Register.cur_privilege
+      = some (Privilege.Machine : RegisterType Register.cur_privilege))
+    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
+    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
+    (hcmr : (checked_mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA Privilege.Machine (physaddr.Physaddr a)
+        8 false false false false).run σ = .ok (.Ok (v, ())) σ) :
+    (mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA (physaddr.Physaddr a) 8 false false false).run σ
+      = .ok (.Ok v) σ := by
+  have hep := effectivePrivilege_data σ vmstatus Privilege.Machine hmprv
+  simp only [EStateM.run] at hcmr hep
+  unfold mem_read mem_read_priv mem_read_priv_meta
+  simp only [EStateM.run, bind, EStateM.bind, pure, EStateM.pure,
+    LeanRV64DExecutable.readReg, Sail.ConcurrencyInterfaceV1.PreSail.readReg,
+    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
+  rw [hep]
+  simp only [MemoryOpResult_drop_meta]
+  rw [hcmr]
 
 /-- `mem_read (Load Data) PBMT_PMA (Physaddr a) 8 …` returns `Ok w`, unchanged. -/
 theorem mem_read_data_eight
@@ -748,16 +893,38 @@ theorem mem_read_data_eight
     (hhiram : a.toNat + 8 ≤ 0x100000000)
     (hhtif : a.toNat + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat)
     (halign : a.toNat % 8 = 0)
-    (h0 : σ.mem[a.toNat]? = some b0) (h1 : σ.mem[a.toNat + 1]? = some b1)
-    (h2 : σ.mem[a.toNat + 2]? = some b2) (h3 : σ.mem[a.toNat + 3]? = some b3)
-    (h4 : σ.mem[a.toNat + 4]? = some b4) (h5 : σ.mem[a.toNat + 5]? = some b5)
-    (h6 : σ.mem[a.toNat + 6]? = some b6) (h7 : σ.mem[a.toNat + 7]? = some b7) :
+    (h0 : σ.mem[a.toNat]? = some b0)
+    (h1 : σ.mem[a.toNat + 1]? = some b1)
+    (h2 : σ.mem[a.toNat + 2]? = some b2)
+    (h3 : σ.mem[a.toNat + 3]? = some b3)
+    (h4 : σ.mem[a.toNat + 4]? = some b4)
+    (h5 : σ.mem[a.toNat + 5]? = some b5)
+    (h6 : σ.mem[a.toNat + 6]? = some b6)
+    (h7 : σ.mem[a.toNat + 7]? = some b7) :
     (mem_read (MemoryAccessType.Load mem_payload.Data)
         page_based_mem_type.PBMT_PMA (physaddr.Physaddr a) 8 false false false).run σ
       = .ok (.Ok (((((((b7.append b6).append b5).append b4).append b3).append
-          b2).append b1).append b0)) σ := by
-  have hcmr := checked_mem_read_data_eight σ a b0 b1 b2 b3 b4 b5 b6 b7 vpmpaddr hpma hcfg
-    haddr hbase hlo hhiram hhtif halign h0 h1 h2 h3 h4 h5 h6 h7
+          b2).append b1).append b0)) σ :=
+  mem_read_data_eight_of_cmr σ a _ vmstatus hpriv hmstatus hmprv
+    (checked_mem_read_data_eight σ a b0 b1 b2 b3 b4 b5 b6 b7 vpmpaddr hpma hcfg haddr hbase
+      hlo hhiram hhtif halign h0 h1 h2 h3 h4 h5 h6 h7)
+
+/-- Width-4 `mem_read` on the `Load Data` RAM path, parametric in the value the
+`checked_mem_read` layer returns (see `checked_mem_read_data_four_of_ram`). -/
+theorem mem_read_data_four_of_cmr
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (v : BitVec 32)
+    (vmstatus : RegisterType Register.mstatus)
+    (hpriv : σ.regs.get? Register.cur_privilege
+      = some (Privilege.Machine : RegisterType Register.cur_privilege))
+    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
+    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
+    (hcmr : (checked_mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA Privilege.Machine (physaddr.Physaddr a)
+        4 false false false false).run σ = .ok (.Ok (v, ())) σ) :
+    (mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA (physaddr.Physaddr a) 4 false false false).run σ
+      = .ok (.Ok v) σ := by
   have hep := effectivePrivilege_data σ vmstatus Privilege.Machine hmprv
   simp only [EStateM.run] at hcmr hep
   unfold mem_read mem_read_priv mem_read_priv_meta
@@ -789,13 +956,33 @@ theorem mem_read_data_four
     (hhiram : a.toNat + 4 ≤ 0x100000000)
     (hhtif : a.toNat + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat)
     (halign : a.toNat % 4 = 0)
-    (h0 : σ.mem[a.toNat]? = some b0) (h1 : σ.mem[a.toNat + 1]? = some b1)
-    (h2 : σ.mem[a.toNat + 2]? = some b2) (h3 : σ.mem[a.toNat + 3]? = some b3) :
+    (h0 : σ.mem[a.toNat]? = some b0)
+    (h1 : σ.mem[a.toNat + 1]? = some b1)
+    (h2 : σ.mem[a.toNat + 2]? = some b2)
+    (h3 : σ.mem[a.toNat + 3]? = some b3) :
     (mem_read (MemoryAccessType.Load mem_payload.Data)
         page_based_mem_type.PBMT_PMA (physaddr.Physaddr a) 4 false false false).run σ
-      = .ok (.Ok ((((b3.append b2).append b1).append b0))) σ := by
-  have hcmr := checked_mem_read_data_four σ a b0 b1 b2 b3 vpmpaddr hpma hcfg
-    haddr hbase hlo hhiram hhtif halign h0 h1 h2 h3
+      = .ok (.Ok ((((b3.append b2).append b1).append b0))) σ :=
+  mem_read_data_four_of_cmr σ a _ vmstatus hpriv hmstatus hmprv
+    (checked_mem_read_data_four σ a b0 b1 b2 b3 vpmpaddr hpma hcfg haddr hbase
+      hlo hhiram hhtif halign h0 h1 h2 h3)
+
+/-- Width-2 `mem_read` on the `Load Data` RAM path, parametric in the value the
+`checked_mem_read` layer returns (see `checked_mem_read_data_two_of_ram`). -/
+theorem mem_read_data_two_of_cmr
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (v : BitVec 16)
+    (vmstatus : RegisterType Register.mstatus)
+    (hpriv : σ.regs.get? Register.cur_privilege
+      = some (Privilege.Machine : RegisterType Register.cur_privilege))
+    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
+    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
+    (hcmr : (checked_mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA Privilege.Machine (physaddr.Physaddr a)
+        2 false false false false).run σ = .ok (.Ok (v, ())) σ) :
+    (mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA (physaddr.Physaddr a) 2 false false false).run σ
+      = .ok (.Ok v) σ := by
   have hep := effectivePrivilege_data σ vmstatus Privilege.Machine hmprv
   simp only [EStateM.run] at hcmr hep
   unfold mem_read mem_read_priv mem_read_priv_meta
@@ -827,12 +1014,31 @@ theorem mem_read_data_two
     (hhiram : a.toNat + 2 ≤ 0x100000000)
     (hhtif : a.toNat + 2 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat)
     (halign : a.toNat % 2 = 0)
-    (h0 : σ.mem[a.toNat]? = some b0) (h1 : σ.mem[a.toNat + 1]? = some b1) :
+    (h0 : σ.mem[a.toNat]? = some b0)
+    (h1 : σ.mem[a.toNat + 1]? = some b1) :
     (mem_read (MemoryAccessType.Load mem_payload.Data)
         page_based_mem_type.PBMT_PMA (physaddr.Physaddr a) 2 false false false).run σ
-      = .ok (.Ok ((b1.append b0))) σ := by
-  have hcmr := checked_mem_read_data_two σ a b0 b1 vpmpaddr hpma hcfg
-    haddr hbase hlo hhiram hhtif halign h0 h1
+      = .ok (.Ok ((b1.append b0))) σ :=
+  mem_read_data_two_of_cmr σ a _ vmstatus hpriv hmstatus hmprv
+    (checked_mem_read_data_two σ a b0 b1 vpmpaddr hpma hcfg haddr hbase
+      hlo hhiram hhtif halign h0 h1)
+
+/-- Width-1 `mem_read` on the `Load Data` RAM path, parametric in the value the
+`checked_mem_read` layer returns (see `checked_mem_read_data_one_of_ram`). -/
+theorem mem_read_data_one_of_cmr
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (v : BitVec 8)
+    (vmstatus : RegisterType Register.mstatus)
+    (hpriv : σ.regs.get? Register.cur_privilege
+      = some (Privilege.Machine : RegisterType Register.cur_privilege))
+    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
+    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
+    (hcmr : (checked_mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA Privilege.Machine (physaddr.Physaddr a)
+        1 false false false false).run σ = .ok (.Ok (v, ())) σ) :
+    (mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA (physaddr.Physaddr a) 1 false false false).run σ
+      = .ok (.Ok v) σ := by
   have hep := effectivePrivilege_data σ vmstatus Privilege.Machine hmprv
   simp only [EStateM.run] at hcmr hep
   unfold mem_read mem_read_priv mem_read_priv_meta
@@ -866,18 +1072,10 @@ theorem mem_read_data_one
     (h0 : σ.mem[a.toNat]? = some b0) :
     (mem_read (MemoryAccessType.Load mem_payload.Data)
         page_based_mem_type.PBMT_PMA (physaddr.Physaddr a) 1 false false false).run σ
-      = .ok (.Ok b0) σ := by
-  have hcmr := checked_mem_read_data_one σ a b0 vpmpaddr hpma hcfg
-    haddr hbase hlo hhiram hhtif h0
-  have hep := effectivePrivilege_data σ vmstatus Privilege.Machine hmprv
-  simp only [EStateM.run] at hcmr hep
-  unfold mem_read mem_read_priv mem_read_priv_meta
-  simp only [EStateM.run, bind, EStateM.bind, pure, EStateM.pure,
-    LeanRV64DExecutable.readReg, Sail.ConcurrencyInterfaceV1.PreSail.readReg,
-    get, getThe, MonadStateOf.get, EStateM.get, hmstatus, hpriv]
-  rw [hep]
-  simp only [MemoryOpResult_drop_meta]
-  rw [hcmr]
+      = .ok (.Ok (b0)) σ :=
+  mem_read_data_one_of_cmr σ a _ vmstatus hpriv hmstatus hmprv
+    (checked_mem_read_data_one σ a b0 vpmpaddr hpma hcfg haddr hbase
+      hlo hhiram hhtif h0)
 
 /-! ## `translateAddr` and `translate_and_read_value` on the `Load Data` path. -/
 
@@ -921,6 +1119,32 @@ theorem translateAddr_machine_data
     ExceptT.bindCont, Bool.not_false, Bool.and_false,
     if_false, if_true, Bool.false_eq_true]
 
+/-- Width-8 `translate_and_read_value` on the `Load Data` RAM path, parametric
+in the value the `mem_read` layer returns (see `mem_read_data_eight_of_cmr`). -/
+theorem translate_and_read_value_data_eight_of_mr
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (v : BitVec 64)
+    (vmstatus : RegisterType Register.mstatus)
+    (hpriv : σ.regs.get? Register.cur_privilege
+      = some (Privilege.Machine : RegisterType Register.cur_privilege))
+    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
+    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
+    (hmr : (mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA (physaddr.Physaddr a) 8 false false false).run σ
+      = .ok (.Ok v) σ) :
+    (translate_and_read_value (virtaddr.Virtaddr a) 8
+        (MemoryAccessType.Load mem_payload.Data) false false false).run σ
+      = .ok (.Ok (physaddr.Physaddr (zero_extend (m := 64) a), v)) σ := by
+  have htr := translateAddr_machine_data σ a vmstatus hpriv hmstatus hmprv
+  simp only [EStateM.run] at htr hmr
+  unfold translate_and_read_value
+  simp only [bind, EStateM.bind, EStateM.run, pure]
+  have hze : (zero_extend (m := 64) a : BitVec 64) = a := BitVec.setWidth_eq a
+  rw [htr]
+  simp only [EStateM.bind, hze]
+  rw [hmr]
+  simp only [EStateM.pure]
+
 /-- `translate_and_read_value (Virtaddr a) 8 (Load Data) …` returns
 `Ok (Physaddr (zero_extend a), w)`, unchanged state. Composes
 `translateAddr_machine_data` (Bare identity ⇒ `Physaddr (zero_extend a)`) with
@@ -945,19 +1169,40 @@ theorem translate_and_read_value_data_eight
     (hhiram : a.toNat + 8 ≤ 0x100000000)
     (hhtif : a.toNat + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat)
     (halign : a.toNat % 8 = 0)
-    (h0 : σ.mem[a.toNat]? = some b0) (h1 : σ.mem[a.toNat + 1]? = some b1)
-    (h2 : σ.mem[a.toNat + 2]? = some b2) (h3 : σ.mem[a.toNat + 3]? = some b3)
-    (h4 : σ.mem[a.toNat + 4]? = some b4) (h5 : σ.mem[a.toNat + 5]? = some b5)
-    (h6 : σ.mem[a.toNat + 6]? = some b6) (h7 : σ.mem[a.toNat + 7]? = some b7) :
+    (h0 : σ.mem[a.toNat]? = some b0)
+    (h1 : σ.mem[a.toNat + 1]? = some b1)
+    (h2 : σ.mem[a.toNat + 2]? = some b2)
+    (h3 : σ.mem[a.toNat + 3]? = some b3)
+    (h4 : σ.mem[a.toNat + 4]? = some b4)
+    (h5 : σ.mem[a.toNat + 5]? = some b5)
+    (h6 : σ.mem[a.toNat + 6]? = some b6)
+    (h7 : σ.mem[a.toNat + 7]? = some b7) :
     (translate_and_read_value (virtaddr.Virtaddr a) 8
         (MemoryAccessType.Load mem_payload.Data) false false false).run σ
       = .ok (.Ok (physaddr.Physaddr (zero_extend (m := 64) a),
           (((((((b7.append b6).append b5).append b4).append b3).append
-          b2).append b1).append b0))) σ := by
+          b2).append b1).append b0))) σ :=
+  translate_and_read_value_data_eight_of_mr σ a _ vmstatus hpriv hmstatus hmprv
+    (mem_read_data_eight σ a b0 b1 b2 b3 b4 b5 b6 b7 vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg
+      haddr hbase hlo hhiram hhtif halign h0 h1 h2 h3 h4 h5 h6 h7)
+
+/-- Width-4 `translate_and_read_value` on the `Load Data` RAM path, parametric
+in the value the `mem_read` layer returns (see `mem_read_data_four_of_cmr`). -/
+theorem translate_and_read_value_data_four_of_mr
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (v : BitVec 32)
+    (vmstatus : RegisterType Register.mstatus)
+    (hpriv : σ.regs.get? Register.cur_privilege
+      = some (Privilege.Machine : RegisterType Register.cur_privilege))
+    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
+    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
+    (hmr : (mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA (physaddr.Physaddr a) 4 false false false).run σ
+      = .ok (.Ok v) σ) :
+    (translate_and_read_value (virtaddr.Virtaddr a) 4
+        (MemoryAccessType.Load mem_payload.Data) false false false).run σ
+      = .ok (.Ok (physaddr.Physaddr (zero_extend (m := 64) a), v)) σ := by
   have htr := translateAddr_machine_data σ a vmstatus hpriv hmstatus hmprv
-  have hmr := mem_read_data_eight σ a b0 b1 b2 b3 b4 b5 b6 b7 vmstatus vpmpaddr hpriv
-    hmstatus hmprv hpma hcfg haddr hbase hlo hhiram hhtif halign
-    h0 h1 h2 h3 h4 h5 h6 h7
   simp only [EStateM.run] at htr hmr
   unfold translate_and_read_value
   simp only [bind, EStateM.bind, EStateM.run, pure]
@@ -988,15 +1233,35 @@ theorem translate_and_read_value_data_four
     (hhiram : a.toNat + 4 ≤ 0x100000000)
     (hhtif : a.toNat + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat)
     (halign : a.toNat % 4 = 0)
-    (h0 : σ.mem[a.toNat]? = some b0) (h1 : σ.mem[a.toNat + 1]? = some b1)
-    (h2 : σ.mem[a.toNat + 2]? = some b2) (h3 : σ.mem[a.toNat + 3]? = some b3) :
+    (h0 : σ.mem[a.toNat]? = some b0)
+    (h1 : σ.mem[a.toNat + 1]? = some b1)
+    (h2 : σ.mem[a.toNat + 2]? = some b2)
+    (h3 : σ.mem[a.toNat + 3]? = some b3) :
     (translate_and_read_value (virtaddr.Virtaddr a) 4
         (MemoryAccessType.Load mem_payload.Data) false false false).run σ
       = .ok (.Ok (physaddr.Physaddr (zero_extend (m := 64) a),
-          ((((b3.append b2).append b1).append b0)))) σ := by
+          ((((b3.append b2).append b1).append b0)))) σ :=
+  translate_and_read_value_data_four_of_mr σ a _ vmstatus hpriv hmstatus hmprv
+    (mem_read_data_four σ a b0 b1 b2 b3 vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg
+      haddr hbase hlo hhiram hhtif halign h0 h1 h2 h3)
+
+/-- Width-2 `translate_and_read_value` on the `Load Data` RAM path, parametric
+in the value the `mem_read` layer returns (see `mem_read_data_two_of_cmr`). -/
+theorem translate_and_read_value_data_two_of_mr
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (v : BitVec 16)
+    (vmstatus : RegisterType Register.mstatus)
+    (hpriv : σ.regs.get? Register.cur_privilege
+      = some (Privilege.Machine : RegisterType Register.cur_privilege))
+    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
+    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
+    (hmr : (mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA (physaddr.Physaddr a) 2 false false false).run σ
+      = .ok (.Ok v) σ) :
+    (translate_and_read_value (virtaddr.Virtaddr a) 2
+        (MemoryAccessType.Load mem_payload.Data) false false false).run σ
+      = .ok (.Ok (physaddr.Physaddr (zero_extend (m := 64) a), v)) σ := by
   have htr := translateAddr_machine_data σ a vmstatus hpriv hmstatus hmprv
-  have hmr := mem_read_data_four σ a b0 b1 b2 b3 vmstatus vpmpaddr hpriv
-    hmstatus hmprv hpma hcfg haddr hbase hlo hhiram hhtif halign h0 h1 h2 h3
   simp only [EStateM.run] at htr hmr
   unfold translate_and_read_value
   simp only [bind, EStateM.bind, EStateM.run, pure]
@@ -1027,14 +1292,33 @@ theorem translate_and_read_value_data_two
     (hhiram : a.toNat + 2 ≤ 0x100000000)
     (hhtif : a.toNat + 2 ≤ tohostAddr ∨ tohostAddr + 8 ≤ a.toNat)
     (halign : a.toNat % 2 = 0)
-    (h0 : σ.mem[a.toNat]? = some b0) (h1 : σ.mem[a.toNat + 1]? = some b1) :
+    (h0 : σ.mem[a.toNat]? = some b0)
+    (h1 : σ.mem[a.toNat + 1]? = some b1) :
     (translate_and_read_value (virtaddr.Virtaddr a) 2
         (MemoryAccessType.Load mem_payload.Data) false false false).run σ
       = .ok (.Ok (physaddr.Physaddr (zero_extend (m := 64) a),
-          ((b1.append b0)))) σ := by
+          ((b1.append b0)))) σ :=
+  translate_and_read_value_data_two_of_mr σ a _ vmstatus hpriv hmstatus hmprv
+    (mem_read_data_two σ a b0 b1 vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg
+      haddr hbase hlo hhiram hhtif halign h0 h1)
+
+/-- Width-1 `translate_and_read_value` on the `Load Data` RAM path, parametric
+in the value the `mem_read` layer returns (see `mem_read_data_one_of_cmr`). -/
+theorem translate_and_read_value_data_one_of_mr
+    (σ : SequentialState RegisterType trivialChoiceSource)
+    (a : BitVec 64) (v : BitVec 8)
+    (vmstatus : RegisterType Register.mstatus)
+    (hpriv : σ.regs.get? Register.cur_privilege
+      = some (Privilege.Machine : RegisterType Register.cur_privilege))
+    (hmstatus : σ.regs.get? Register.mstatus = some vmstatus)
+    (hmprv : _get_Mstatus_MPRV vmstatus = 0#1)
+    (hmr : (mem_read (MemoryAccessType.Load mem_payload.Data)
+        page_based_mem_type.PBMT_PMA (physaddr.Physaddr a) 1 false false false).run σ
+      = .ok (.Ok v) σ) :
+    (translate_and_read_value (virtaddr.Virtaddr a) 1
+        (MemoryAccessType.Load mem_payload.Data) false false false).run σ
+      = .ok (.Ok (physaddr.Physaddr (zero_extend (m := 64) a), v)) σ := by
   have htr := translateAddr_machine_data σ a vmstatus hpriv hmstatus hmprv
-  have hmr := mem_read_data_two σ a b0 b1 vmstatus vpmpaddr hpriv
-    hmstatus hmprv hpma hcfg haddr hbase hlo hhiram hhtif halign h0 h1
   simp only [EStateM.run] at htr hmr
   unfold translate_and_read_value
   simp only [bind, EStateM.bind, EStateM.run, pure]
@@ -1067,17 +1351,10 @@ theorem translate_and_read_value_data_one
     (h0 : σ.mem[a.toNat]? = some b0) :
     (translate_and_read_value (virtaddr.Virtaddr a) 1
         (MemoryAccessType.Load mem_payload.Data) false false false).run σ
-      = .ok (.Ok (physaddr.Physaddr (zero_extend (m := 64) a), b0)) σ := by
-  have htr := translateAddr_machine_data σ a vmstatus hpriv hmstatus hmprv
-  have hmr := mem_read_data_one σ a b0 vmstatus vpmpaddr hpriv
-    hmstatus hmprv hpma hcfg haddr hbase hlo hhiram hhtif h0
-  simp only [EStateM.run] at htr hmr
-  unfold translate_and_read_value
-  simp only [bind, EStateM.bind, EStateM.run, pure]
-  have hze : (zero_extend (m := 64) a : BitVec 64) = a := BitVec.setWidth_eq a
-  rw [htr]
-  simp only [EStateM.bind, hze]
-  rw [hmr]
-  simp only [EStateM.pure]
+      = .ok (.Ok (physaddr.Physaddr (zero_extend (m := 64) a),
+          (b0))) σ :=
+  translate_and_read_value_data_one_of_mr σ a _ vmstatus hpriv hmstatus hmprv
+    (mem_read_data_one σ a b0 vmstatus vpmpaddr hpriv hmstatus hmprv hpma hcfg
+      haddr hbase hlo hhiram hhtif h0)
 
 end Vsa.Sim

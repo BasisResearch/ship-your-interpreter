@@ -155,6 +155,36 @@ echo "stage b: OK"
 # ------------------------------------------------------- (c) #print axioms
 echo "== stage c: #print axioms on the key spec theorems"
 THEOREMS=(
+  # WAVE 48k — the TOTAL-READ load layer (presence -> total read; frame_pop deleted)
+  Vsa.Sim.read_ram_one_total
+  Vsa.Sim.read_ram_two_total
+  Vsa.Sim.read_ram_four_total
+  Vsa.Sim.read_ram_eight_total
+  Vsa.Sim.vmem_read_data_one_total
+  Vsa.Sim.vmem_read_data_two_total
+  Vsa.Sim.vmem_read_data_four_total
+  Vsa.Sim.vmem_read_data_eight_total
+  Vsa.Sim.siteGood_of_good
+  Vsa.Sim.exec_ld_tot
+  Vsa.Sim.exec_lw_tot
+  Vsa.Sim.exec_lwu_tot
+  Vsa.Sim.exec_lh_tot
+  Vsa.Sim.exec_lhu_tot
+  Vsa.Sim.exec_lbu_tot
+  Vsa.Sim.exec_ld_totv
+  Vsa.Sim.exec_lw_totv
+  Vsa.Sim.exec_lbu_totv
+  Vsa.Sim.lpin_of_present
+  Vsa.Sim.lpins4_of_present
+  Vsa.Sim.lpins8_of_present
+  Vsa.Sim.bytesT4_of_lpins4
+  Vsa.Sim.bytesT8_of_lpins8
+  Vsa.Sim.readLE_copy_total
+  Vsa.Sim.valueRepr_copy_total
+  Vsa.Sim.valueRepr_copy_total_of_writeWindow
+  Vsa.Sim.site_80003500_tot
+  Vsa.Sim.site_80003504_tot
+  Vsa.Sim.site_800035b0_totb
   # gen_fn whole-function summary layer (FnSummary/SegToTripleFramed/HtifStepObs/FnWriteFold)
   Vsa.Sim.segToTripleFramed
   Vsa.Sim.segRowFramed

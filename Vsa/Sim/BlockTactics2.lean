@@ -116,15 +116,26 @@ macro "ld_ok8" haddr:term:max " [" ps:term,* "]" : tactic =>
       first
         | (rw [show tohostAddr = (0x8001ad00 : Nat) from rfl, $haddr:term]; omega)
         | (rw [$haddr:term]; omega)
-        | (rw [$haddr:term]; first $[| exact $ps]*))
+        | (rw [$haddr:term]; first
+            | rfl
+            $[| exact $ps]*
+            $[| exact Vsa.Sim.lpin_of_present $ps]*))
 
-/-- `LdOK4` variant of `ld_ok8` — four byte pins. -/
+/-- `LdOK4` variant of `ld_ok8` — four byte pins.
+
+WAVE 48k: the byte obligations are TOTAL-READ equalities now, so each alternative
+tries, in order, `rfl` (the byte IS named as the total read — the case that used
+to need the refuted `frame_pop` presence), the supplied fact as-is, and the
+supplied PRESENCE fact lifted through `lpin_of_present`. -/
 macro "ld_ok4" haddr:term:max " [" ps:term,* "]" : tactic =>
   `(tactic|
     refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_⟩ <;>
       first
         | (rw [show tohostAddr = (0x8001ad00 : Nat) from rfl, $haddr:term]; omega)
         | (rw [$haddr:term]; omega)
-        | (rw [$haddr:term]; first $[| exact $ps]*))
+        | (rw [$haddr:term]; first
+            | rfl
+            $[| exact $ps]*
+            $[| exact Vsa.Sim.lpin_of_present $ps]*))
 
 end Vsa.Sim

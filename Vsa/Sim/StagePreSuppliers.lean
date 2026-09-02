@@ -256,7 +256,6 @@ theorem blockB_binary_leftStagePre
         ExprRepr ment aLOp.toNat el ∧
         read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
         ExprRepr ment aROp.toNat er ∧
-        (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, ment[a]? = some b)) ∧
         MemExtends m0 ment ∧
         -- WAVE 47i: the parent node's entry-ground bundle (pass-through from
         -- `blockA_binaryArm`).
@@ -270,7 +269,7 @@ theorem blockB_binary_leftStagePre
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 4 c (fun c' => JalPreBundle el c' st d env) := by
   obtain ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v,
-    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0, hGmt47,
+    hpayL, hexprL, hpayR, hexprR, hMemExtM0, hGmt47,
     hstackBudgetL, hexprBodiesL, hstoreBodiesL⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
     hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,

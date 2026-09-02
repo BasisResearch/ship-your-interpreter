@@ -146,10 +146,10 @@ theorem evalConcatDispatchChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl 
       (by
         -- BBlockFacts: block1 four load MemFacts + bltu guard (block_facts handles pins)
         block_facts hmem with "Vsa.Sim.Code.eval_expr_at_"
-        · exact ⟨⟨a_lo, a_hi, a_ht, a_al⟩, a_p0, a_p1, a_p2, a_p3⟩
-        · exact ⟨⟨b_lo, b_hi, b_ht, b_al⟩, b_p0, b_p1, b_p2, b_p3⟩
-        · exact ⟨⟨c_lo, c_hi, c_ht, c_al⟩, c_p0, c_p1, c_p2, c_p3⟩
-        · exact ⟨⟨d_lo, d_hi, d_ht, d_al⟩, d_p0, d_p1, d_p2, d_p3, d_p4, d_p5, d_p6, d_p7⟩
+        · exact ⟨⟨a_lo, a_hi, a_ht, a_al⟩, lpin_of_present a_p0, lpin_of_present a_p1, lpin_of_present a_p2, lpin_of_present a_p3⟩
+        · exact ⟨⟨b_lo, b_hi, b_ht, b_al⟩, lpin_of_present b_p0, lpin_of_present b_p1, lpin_of_present b_p2, lpin_of_present b_p3⟩
+        · exact ⟨⟨c_lo, c_hi, c_ht, c_al⟩, lpin_of_present c_p0, lpin_of_present c_p1, lpin_of_present c_p2, lpin_of_present c_p3⟩
+        · exact ⟨⟨d_lo, d_hi, d_ht, d_al⟩, lpin_of_present d_p0, lpin_of_present d_p1, lpin_of_present d_p2, lpin_of_present d_p3, lpin_of_present d_p4, lpin_of_present d_p5, lpin_of_present d_p6, lpin_of_present d_p7⟩
         -- bltu = false.  Compound two SHALLOW reductions: `show` peels the 6-instr
         -- `runGM` wrapper to the clean structural operand forms (li 12 / addiw over
         -- the op-token load), then `decide` evaluates the concrete arithmetic.
@@ -279,15 +279,15 @@ theorem evalConcatDispatchChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl 
           with "Vsa.Sim.Code.eval_expr_at_"
         -- slot lw @ 0x80019f84 (input-relative address, shallow):
         · exact ⟨⟨sLo, sHi, sHt, sAl⟩,
-            hSlot2.1, hSlot2.2.1, hSlot2.2.2.1, hSlot2.2.2.2⟩
+            lpin_of_present hSlot2.1, lpin_of_present hSlot2.2.1, lpin_of_present hSlot2.2.2.1, lpin_of_present hSlot2.2.2.2⟩
         -- kind ld @ v2+0.  `hKind2` is a LOCAL block_facts pin-bundle (8 byte pins for
         -- one `ld` MemFact), destructured inline into the `block_facts` obligation
         -- exactly as in the grandfathered `evalAddChain_run` this chain is the
         -- κ-parametrized twin of — not a landed post/entry tower.
         · exact ⟨⟨e_lo, e_hi, e_ht, e_al⟩,
-            hKind2.1, hKind2.2.1, hKind2.2.2.1, hKind2.2.2.2.1,
+            lpin_of_present hKind2.1, lpin_of_present hKind2.2.1, lpin_of_present hKind2.2.2.1, lpin_of_present hKind2.2.2.2.1,
             -- discipline: allow(R6-anon-projection-tower) local block_facts ld pin-bundle
-            hKind2.2.2.2.2.1, hKind2.2.2.2.2.2.1, hKind2.2.2.2.2.2.2.1, hKind2.2.2.2.2.2.2.2⟩
+            lpin_of_present hKind2.2.2.2.2.1, lpin_of_present hKind2.2.2.2.2.2.1, lpin_of_present hKind2.2.2.2.2.2.2.1, lpin_of_present hKind2.2.2.2.2.2.2.2⟩
         -- jr target aligned: peel B2b (3 instrs) to the clean form, then decide.
         · show (BitVec.update ((bytesVal MKind.lw [0x04#8, 0x99#8, 0xfe#8, 0xff#8]
               + 0x80019f84#64) + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0

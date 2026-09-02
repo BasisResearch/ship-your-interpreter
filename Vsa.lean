@@ -50,6 +50,7 @@ import Vsa.Alloc
 import Vsa.Sim.Code.«__muldi3»
 import Vsa.Sim.StepObs
 import Vsa.Sim.MemLoadTotal
+import Vsa.Sim.ExecLoadTotal
 import Vsa.Sim.StrlenMagic
 import Vsa.Sim.StrlenSites
 import Vsa.Sim.StrlenSpec
@@ -293,6 +294,8 @@ import Vsa.Sim.Mfr
 import Vsa.Sim.SegState
 import Vsa.Sim.BlockPilot
 import Vsa.Sim.BlockMem
+import Vsa.Sim.LoadSitesTot
+import Vsa.Sim.LoadSitesTotB
 import Vsa.Sim.BlockDecode
 import Vsa.Sim.BlockGen
 import Vsa.Sim.BlockMemDemo

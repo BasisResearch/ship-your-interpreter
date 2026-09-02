@@ -447,10 +447,10 @@ store image (`getElem_writeMap8_*`). -/
 theorem swM1_ra_pins (g : SWG) :
     LPins8 (swM1 g) ((swSpE g + sign_extend (m := 64) (0x028#12)).toNat)
       (swRaBytes g) :=
-  ⟨getElem_writeMap8_0 _ _ _, getElem_writeMap8_1 _ _ _,
-   getElem_writeMap8_2 _ _ _, getElem_writeMap8_3 _ _ _,
-   getElem_writeMap8_4 _ _ _, getElem_writeMap8_5 _ _ _,
-   getElem_writeMap8_6 _ _ _, getElem_writeMap8_7 _ _ _⟩
+  ⟨lpin_of_present (getElem_writeMap8_0 _ _ _), lpin_of_present (getElem_writeMap8_1 _ _ _),
+   lpin_of_present (getElem_writeMap8_2 _ _ _), lpin_of_present (getElem_writeMap8_3 _ _ _),
+   lpin_of_present (getElem_writeMap8_4 _ _ _), lpin_of_present (getElem_writeMap8_5 _ _ _),
+   lpin_of_present (getElem_writeMap8_6 _ _ _), lpin_of_present (getElem_writeMap8_7 _ _ _)⟩
 
 /-- The fd halfword pins survive onto `swM1` (the FILE window avoids the
 frame). -/
@@ -542,13 +542,13 @@ theorem swEntry_facts (g : SWG) (hg : SWGOk g)
       rw [sw_flAddr g hg]
       have := hg.fp_align
       omega
-    · show g.m0[(g.fp + sign_extend (m := 64) (0x010#12)).toNat]? = some g.fl0
+    · show (g.m0[(g.fp + sign_extend (m := 64) (0x010#12)).toNat]?).getD 0 = g.fl0
       rw [sw_flAddr g hg]
-      exact hg.fl_pin0
-    · show g.m0[(g.fp + sign_extend (m := 64) (0x010#12)).toNat + 1]? = some g.fl1
+      exact lpin_of_present hg.fl_pin0
+    · show (g.m0[(g.fp + sign_extend (m := 64) (0x010#12)).toNat + 1]?).getD 0 = g.fl1
       rw [sw_flAddr g hg,
         show g.fp.toNat + 16 + 1 = g.fp.toNat + 17 from by omega]
-      exact hg.fl_pin1
+      exact lpin_of_present hg.fl_pin1
   · -- sd ra,40(sp)
     show 0x80000000 ≤ (swSpE g + sign_extend (m := 64) (0x028#12)).toNat ∧
       (swSpE g + sign_extend (m := 64) (0x028#12)).toNat + 8 ≤ 0x100000000 ∧
@@ -624,8 +624,8 @@ theorem swTail_facts (g : SWG) (hg : SWGOk g)
       rw [sw_fdAddr g hg]
       have := hg.fp_align
       omega
-    · exact swM1_fd_pin0 g hg
-    · exact swM1_fd_pin1 g hg
+    · exact lpin_of_present (swM1_fd_pin0 g hg)
+    · exact lpin_of_present (swM1_fd_pin1 g hg)
   · -- sh a5,16(a4)
     show 0x80000000 ≤ (g.fp + sign_extend (m := 64) (0x010#12)).toNat ∧
       (g.fp + sign_extend (m := 64) (0x010#12)).toNat + 2 ≤ 0x100000000 ∧

@@ -118,32 +118,34 @@ structure LogTailPre
   boolLoaded : Value_boolLoaded c.σ.mem
   -- the RIGHT value is represented at `sretR` (extended `φc`)
   vrepr : ValueRepr c.σ.mem N φc sretR.toNat rv
-  -- the 24 source bytes at the RIGHT buffer `sretR` (which the `a3/a4/a5` words
-  -- sign-extend), pinned so `sd a3/a4/a5,64/72/80(sp)` byte-copies `rv` to sp-1024.
-  bK0 : c.σ.mem[sretR.toNat]? = some kb0
-  bK1 : c.σ.mem[sretR.toNat + 1]? = some kb1
-  bK2 : c.σ.mem[sretR.toNat + 2]? = some kb2
-  bK3 : c.σ.mem[sretR.toNat + 3]? = some kb3
-  bK4 : c.σ.mem[sretR.toNat + 4]? = some kb4
-  bK5 : c.σ.mem[sretR.toNat + 5]? = some kb5
-  bK6 : c.σ.mem[sretR.toNat + 6]? = some kb6
-  bK7 : c.σ.mem[sretR.toNat + 7]? = some kb7
-  bP0 : c.σ.mem[sretR.toNat + 8]? = some pb0
-  bP1 : c.σ.mem[sretR.toNat + 8 + 1]? = some pb1
-  bP2 : c.σ.mem[sretR.toNat + 8 + 2]? = some pb2
-  bP3 : c.σ.mem[sretR.toNat + 8 + 3]? = some pb3
-  bP4 : c.σ.mem[sretR.toNat + 8 + 4]? = some pb4
-  bP5 : c.σ.mem[sretR.toNat + 8 + 5]? = some pb5
-  bP6 : c.σ.mem[sretR.toNat + 8 + 6]? = some pb6
-  bP7 : c.σ.mem[sretR.toNat + 8 + 7]? = some pb7
-  bQ0 : c.σ.mem[sretR.toNat + 16]? = some qb0
-  bQ1 : c.σ.mem[sretR.toNat + 16 + 1]? = some qb1
-  bQ2 : c.σ.mem[sretR.toNat + 16 + 2]? = some qb2
-  bQ3 : c.σ.mem[sretR.toNat + 16 + 3]? = some qb3
-  bQ4 : c.σ.mem[sretR.toNat + 16 + 4]? = some qb4
-  bQ5 : c.σ.mem[sretR.toNat + 16 + 5]? = some qb5
-  bQ6 : c.σ.mem[sretR.toNat + 16 + 6]? = some qb6
-  bQ7 : c.σ.mem[sretR.toNat + 16 + 7]? = some qb7
+  -- The 24 source bytes at the RIGHT buffer `sretR` (which the `a3/a4/a5` words
+  -- sign-extend), as TOTAL READS (wave 48k) so `sd a3/a4/a5,64/72/80(sp)`
+  -- byte-copies `rv` to sp-1024 without demanding the dead padding bytes be
+  -- mapped — the machine's `ld` never needed that.
+  bK0 : (c.σ.mem[sretR.toNat]?).getD 0 = kb0
+  bK1 : (c.σ.mem[sretR.toNat + 1]?).getD 0 = kb1
+  bK2 : (c.σ.mem[sretR.toNat + 2]?).getD 0 = kb2
+  bK3 : (c.σ.mem[sretR.toNat + 3]?).getD 0 = kb3
+  bK4 : (c.σ.mem[sretR.toNat + 4]?).getD 0 = kb4
+  bK5 : (c.σ.mem[sretR.toNat + 5]?).getD 0 = kb5
+  bK6 : (c.σ.mem[sretR.toNat + 6]?).getD 0 = kb6
+  bK7 : (c.σ.mem[sretR.toNat + 7]?).getD 0 = kb7
+  bP0 : (c.σ.mem[sretR.toNat + 8]?).getD 0 = pb0
+  bP1 : (c.σ.mem[sretR.toNat + 8 + 1]?).getD 0 = pb1
+  bP2 : (c.σ.mem[sretR.toNat + 8 + 2]?).getD 0 = pb2
+  bP3 : (c.σ.mem[sretR.toNat + 8 + 3]?).getD 0 = pb3
+  bP4 : (c.σ.mem[sretR.toNat + 8 + 4]?).getD 0 = pb4
+  bP5 : (c.σ.mem[sretR.toNat + 8 + 5]?).getD 0 = pb5
+  bP6 : (c.σ.mem[sretR.toNat + 8 + 6]?).getD 0 = pb6
+  bP7 : (c.σ.mem[sretR.toNat + 8 + 7]?).getD 0 = pb7
+  bQ0 : (c.σ.mem[sretR.toNat + 16]?).getD 0 = qb0
+  bQ1 : (c.σ.mem[sretR.toNat + 16 + 1]?).getD 0 = qb1
+  bQ2 : (c.σ.mem[sretR.toNat + 16 + 2]?).getD 0 = qb2
+  bQ3 : (c.σ.mem[sretR.toNat + 16 + 3]?).getD 0 = qb3
+  bQ4 : (c.σ.mem[sretR.toNat + 16 + 4]?).getD 0 = qb4
+  bQ5 : (c.σ.mem[sretR.toNat + 16 + 5]?).getD 0 = qb5
+  bQ6 : (c.σ.mem[sretR.toNat + 16 + 6]?).getD 0 = qb6
+  bQ7 : (c.σ.mem[sretR.toNat + 16 + 7]?).getD 0 = qb7
   -- the payload-disjointness for the copy (mirrors LogicalBufExtras.pay_disj)
   payDisj : ∀ (p : Nat) (s : String),
     read64 c.σ.mem (sretR.toNat + 8) = some p →
@@ -365,7 +367,7 @@ theorem blockC_logTail
     intro o ho
     show (writeMap8 m2 (sp.toNat-1008) (sdData_val qv))[_]? = _
     rw [getElem_writeMap8_disjoint m2 (sp.toNat-1008) _ (sdData_val qv) (by omega)]
-  have hm3_copy : ∀ j, j < 24 → m3[(sp.toNat - 1024) + j]? = c.σ.mem[sretR.toNat + j]? := by
+  have hm3_copy : ∀ j, j < 24 → m3[(sp.toNat - 1024) + j]? = some ((c.σ.mem[sretR.toNat + j]?).getD 0) := by
     intro j hj
     rcases (show j = 0 ∨ j = 1 ∨ j = 2 ∨ j = 3 ∨ j = 4 ∨ j = 5 ∨ j = 6 ∨ j = 7 ∨
         j = 8 ∨ j = 9 ∨ j = 10 ∨ j = 11 ∨ j = 12 ∨ j = 13 ∨ j = 14 ∨ j = 15 ∨
@@ -373,50 +375,50 @@ theorem blockC_logTail
       with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
         rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
     · rw [hK 0 (by omega), show sp.toNat-1024+0 = sp.toNat-1024 from by omega,
-        getElem_writeMap8_0, eK0, show sretR.toNat+0 = sretR.toNat from by omega]; exact hkb0.symm
-    · rw [hK 1 (by omega), getElem_writeMap8_1, eK1]; exact hkb1.symm
-    · rw [hK 2 (by omega), getElem_writeMap8_2, eK2]; exact hkb2.symm
-    · rw [hK 3 (by omega), getElem_writeMap8_3, eK3]; exact hkb3.symm
-    · rw [hK 4 (by omega), getElem_writeMap8_4, eK4]; exact hkb4.symm
-    · rw [hK 5 (by omega), getElem_writeMap8_5, eK5]; exact hkb5.symm
-    · rw [hK 6 (by omega), getElem_writeMap8_6, eK6]; exact hkb6.symm
-    · rw [hK 7 (by omega), getElem_writeMap8_7, eK7]; exact hkb7.symm
+        getElem_writeMap8_0, eK0, show sretR.toNat+0 = sretR.toNat from by omega]; exact congrArg some hkb0.symm
+    · rw [hK 1 (by omega), getElem_writeMap8_1, eK1]; exact congrArg some hkb1.symm
+    · rw [hK 2 (by omega), getElem_writeMap8_2, eK2]; exact congrArg some hkb2.symm
+    · rw [hK 3 (by omega), getElem_writeMap8_3, eK3]; exact congrArg some hkb3.symm
+    · rw [hK 4 (by omega), getElem_writeMap8_4, eK4]; exact congrArg some hkb4.symm
+    · rw [hK 5 (by omega), getElem_writeMap8_5, eK5]; exact congrArg some hkb5.symm
+    · rw [hK 6 (by omega), getElem_writeMap8_6, eK6]; exact congrArg some hkb6.symm
+    · rw [hK 7 (by omega), getElem_writeMap8_7, eK7]; exact congrArg some hkb7.symm
     · rw [show sp.toNat-1024+8 = sp.toNat-1016+0 from by omega, hP 0 (by omega),
         show sp.toNat-1016+0 = sp.toNat-1016 from by omega, getElem_writeMap8_0, eP0,
-        show sretR.toNat+8 = sretR.toNat+8 from by omega]; exact hpb0.symm
+        show sretR.toNat+8 = sretR.toNat+8 from by omega]; exact congrArg some hpb0.symm
     · rw [show sp.toNat-1024+9 = sp.toNat-1016+1 from by omega, hP 1 (by omega), getElem_writeMap8_1, eP1,
-        show sretR.toNat+9 = sretR.toNat+8+1 from by omega]; exact hpb1.symm
+        show sretR.toNat+9 = sretR.toNat+8+1 from by omega]; exact congrArg some hpb1.symm
     · rw [show sp.toNat-1024+10 = sp.toNat-1016+2 from by omega, hP 2 (by omega), getElem_writeMap8_2, eP2,
-        show sretR.toNat+10 = sretR.toNat+8+2 from by omega]; exact hpb2.symm
+        show sretR.toNat+10 = sretR.toNat+8+2 from by omega]; exact congrArg some hpb2.symm
     · rw [show sp.toNat-1024+11 = sp.toNat-1016+3 from by omega, hP 3 (by omega), getElem_writeMap8_3, eP3,
-        show sretR.toNat+11 = sretR.toNat+8+3 from by omega]; exact hpb3.symm
+        show sretR.toNat+11 = sretR.toNat+8+3 from by omega]; exact congrArg some hpb3.symm
     · rw [show sp.toNat-1024+12 = sp.toNat-1016+4 from by omega, hP 4 (by omega), getElem_writeMap8_4, eP4,
-        show sretR.toNat+12 = sretR.toNat+8+4 from by omega]; exact hpb4.symm
+        show sretR.toNat+12 = sretR.toNat+8+4 from by omega]; exact congrArg some hpb4.symm
     · rw [show sp.toNat-1024+13 = sp.toNat-1016+5 from by omega, hP 5 (by omega), getElem_writeMap8_5, eP5,
-        show sretR.toNat+13 = sretR.toNat+8+5 from by omega]; exact hpb5.symm
+        show sretR.toNat+13 = sretR.toNat+8+5 from by omega]; exact congrArg some hpb5.symm
     · rw [show sp.toNat-1024+14 = sp.toNat-1016+6 from by omega, hP 6 (by omega), getElem_writeMap8_6, eP6,
-        show sretR.toNat+14 = sretR.toNat+8+6 from by omega]; exact hpb6.symm
+        show sretR.toNat+14 = sretR.toNat+8+6 from by omega]; exact congrArg some hpb6.symm
     · rw [show sp.toNat-1024+15 = sp.toNat-1016+7 from by omega, hP 7 (by omega), getElem_writeMap8_7, eP7,
-        show sretR.toNat+15 = sretR.toNat+8+7 from by omega]; exact hpb7.symm
+        show sretR.toNat+15 = sretR.toNat+8+7 from by omega]; exact congrArg some hpb7.symm
     · rw [show sp.toNat-1024+16 = sp.toNat-1008 from by omega, getElem_writeMap8_0, eQ0,
-        show sretR.toNat+16 = sretR.toNat+16 from by omega]; exact hqb0.symm
+        show sretR.toNat+16 = sretR.toNat+16 from by omega]; exact congrArg some hqb0.symm
     · rw [show sp.toNat-1024+17 = sp.toNat-1008+1 from by omega, getElem_writeMap8_1, eQ1,
-        show sretR.toNat+17 = sretR.toNat+16+1 from by omega]; exact hqb1.symm
+        show sretR.toNat+17 = sretR.toNat+16+1 from by omega]; exact congrArg some hqb1.symm
     · rw [show sp.toNat-1024+18 = sp.toNat-1008+2 from by omega, getElem_writeMap8_2, eQ2,
-        show sretR.toNat+18 = sretR.toNat+16+2 from by omega]; exact hqb2.symm
+        show sretR.toNat+18 = sretR.toNat+16+2 from by omega]; exact congrArg some hqb2.symm
     · rw [show sp.toNat-1024+19 = sp.toNat-1008+3 from by omega, getElem_writeMap8_3, eQ3,
-        show sretR.toNat+19 = sretR.toNat+16+3 from by omega]; exact hqb3.symm
+        show sretR.toNat+19 = sretR.toNat+16+3 from by omega]; exact congrArg some hqb3.symm
     · rw [show sp.toNat-1024+20 = sp.toNat-1008+4 from by omega, getElem_writeMap8_4, eQ4,
-        show sretR.toNat+20 = sretR.toNat+16+4 from by omega]; exact hqb4.symm
+        show sretR.toNat+20 = sretR.toNat+16+4 from by omega]; exact congrArg some hqb4.symm
     · rw [show sp.toNat-1024+21 = sp.toNat-1008+5 from by omega, getElem_writeMap8_5, eQ5,
-        show sretR.toNat+21 = sretR.toNat+16+5 from by omega]; exact hqb5.symm
+        show sretR.toNat+21 = sretR.toNat+16+5 from by omega]; exact congrArg some hqb5.symm
     · rw [show sp.toNat-1024+22 = sp.toNat-1008+6 from by omega, getElem_writeMap8_6, eQ6,
-        show sretR.toNat+22 = sretR.toNat+16+6 from by omega]; exact hqb6.symm
+        show sretR.toNat+22 = sretR.toNat+16+6 from by omega]; exact congrArg some hqb6.symm
     · rw [show sp.toNat-1024+23 = sp.toNat-1008+7 from by omega, getElem_writeMap8_7, eQ7,
-        show sretR.toNat+23 = sretR.toNat+16+7 from by omega]; exact hqb7.symm
+        show sretR.toNat+23 = sretR.toNat+16+7 from by omega]; exact congrArg some hqb7.symm
   -- ValueRepr m3 (sp-1024) rv
   have hbufRepr : ValueRepr m3 N φc (sp.toNat - 1024) rv :=
-    valueRepr_copy_of_writeWindow (srcAddr := sretR.toNat) (dstAddr := sp.toNat - 1024)
+    valueRepr_copy_total_of_writeWindow (srcAddr := sretR.toNat) (dstAddr := sp.toNat - 1024)
       hm3_copy hm3_out
       (fun p s hp k hk => hpayDisj p s hp k hk) hvrepr
   -- value_truthy / value_bool code loaded at m3

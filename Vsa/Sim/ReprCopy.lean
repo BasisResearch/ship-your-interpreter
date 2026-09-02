@@ -213,6 +213,129 @@ theorem valueRepr_copy_of_writeWindow {m m' : Mem} {N : NativeAddrs} {φc : Addr
   obtain ⟨k, hk, rfl⟩ := ha
   exact (houtside (p + k) (hdisj p s hp k hk)).symm
 
+
+/-! ## Total-read copy (wave 48k)
+
+The Sail model copies memory TOTALLY: a `ld`/`sd` pair moves
+`(m[a]?).getD 0`, so the destination window always holds `some` byte even where
+the SOURCE byte is absent from the map.  Plain byte-for-byte agreement
+(`hcopy` above) therefore does NOT hold for a total copy — but it is not what
+`ValueRepr` needs.  `ValueRepr m … srcAddr v` already WITNESSES that every byte
+it reads is present (a successful `readLE` forces each byte to be `some`), and
+exactly there the total copy reproduces the source value.  That is the honest
+form of the copy for a machine that never faults on absence: the value facts
+come from the source `ValueRepr`, not from a blanket presence premise.
+
+Bytes 4..7 of a `Value` struct (and 16..23 for the non-`.native` variants) are
+never read by `ValueRepr`; under a total copy they hold `0`, and nothing
+depends on them. -/
+
+/-- `readLE` over a TOTALLY copied window: whenever the SOURCE read succeeds,
+the destination reads the same value.  The source's success supplies the byte
+presence that turns `getD 0` back into the byte itself. -/
+theorem readLE_copy_total {m m' : Mem} {srcAddr dstAddr n : Nat}
+    (hcopyT : ∀ k, k < n → m'[dstAddr + k]? = some ((m[srcAddr + k]?).getD 0)) :
+    ∀ (w off : Nat), off + w ≤ n → ∀ {x : Nat},
+      readLE m (srcAddr + off) w = some x → readLE m' (dstAddr + off) w = some x := by
+  intro w
+  induction w with
+  | zero => intro off _ x hx; exact hx
+  | succ w ih =>
+    intro off hle x hx
+    simp only [readLE, Option.bind_eq_bind, Option.bind_eq_some_iff] at hx
+    obtain ⟨b, hb, rest, hrest, hval⟩ := hx
+    have hhead : m'[dstAddr + off]? = some b := by
+      rw [hcopyT off (by omega), hb]; rfl
+    have htail : readLE m' (dstAddr + (off + 1)) w = some rest := by
+      refine ih (off + 1) (by omega) ?_
+      rw [show srcAddr + (off + 1) = srcAddr + off + 1 by omega]; exact hrest
+    simp only [readLE, Option.bind_eq_bind, Option.bind_eq_some_iff]
+    refine ⟨b, hhead, rest, ?_, hval⟩
+    rw [show dstAddr + off + 1 = dstAddr + (off + 1) by omega]; exact htail
+
+/-- `read32` through a total copy, given the source read. -/
+theorem read32_copy_total {m m' : Mem} {srcAddr dstAddr : Nat}
+    (hcopyT : ∀ k, k < 24 → m'[dstAddr + k]? = some ((m[srcAddr + k]?).getD 0))
+    {off x : Nat} (hoff : off + 4 ≤ 24) (h : read32 m (srcAddr + off) = some x) :
+    read32 m' (dstAddr + off) = some x :=
+  readLE_copy_total hcopyT 4 off hoff h
+
+/-- `read64` through a total copy, given the source read. -/
+theorem read64_copy_total {m m' : Mem} {srcAddr dstAddr : Nat}
+    (hcopyT : ∀ k, k < 24 → m'[dstAddr + k]? = some ((m[srcAddr + k]?).getD 0))
+    {off x : Nat} (hoff : off + 8 ≤ 24) (h : read64 m (srcAddr + off) = some x) :
+    read64 m' (dstAddr + off) = some x :=
+  readLE_copy_total hcopyT 8 off hoff h
+
+/-- `readI64` through a total copy, given the source read. -/
+theorem readI64_copy_total {m m' : Mem} {srcAddr dstAddr : Nat}
+    (hcopyT : ∀ k, k < 24 → m'[dstAddr + k]? = some ((m[srcAddr + k]?).getD 0))
+    {off : Nat} {x : Int} (hoff : off + 8 ≤ 24) (h : readI64 m (srcAddr + off) = some x) :
+    readI64 m' (dstAddr + off) = some x := by
+  simp only [readI64, Option.map_eq_some_iff] at h ⊢
+  obtain ⟨n, hn, hx⟩ := h
+  exact ⟨n, read64_copy_total hcopyT hoff hn, hx⟩
+
+/-- **`ValueRepr` TRANSLATION-COPY, TOTAL form.**  Same conclusion as
+`valueRepr_copy`, but the copy hypothesis is the one a real machine can supply:
+the destination window holds the TOTAL reads of the source window.  No
+byte-presence premise anywhere — the presence each read needs is already inside
+`hv`. -/
+theorem valueRepr_copy_total {m m' : Mem} {N : NativeAddrs} {φc : Addr → Nat}
+    {srcAddr dstAddr : Nat} {v : Value}
+    (hcopyT : ∀ j, j < 24 → m'[dstAddr + j]? = some ((m[srcAddr + j]?).getD 0))
+    (hpay : ∀ (p : Nat) (s : String), read64 m (srcAddr + 8) = some p →
+      AgreeP (fun a => ∃ k, k ≤ s.length ∧ a = p + k) m m')
+    (hv : ValueRepr m N φc srcAddr v) : ValueRepr m' N φc dstAddr v := by
+  have h0dst : dstAddr = dstAddr + 0 := by omega
+  have h0src : srcAddr = srcAddr + 0 := by omega
+  cases v with
+  | null =>
+    simp only [ValueRepr] at hv ⊢
+    rw [h0dst]; exact read32_copy_total hcopyT (by omega) (by rw [← h0src]; exact hv)
+  | bool b =>
+    simp only [ValueRepr] at hv ⊢
+    obtain ⟨hk, h8⟩ := hv
+    exact ⟨by rw [h0dst]; exact read32_copy_total hcopyT (by omega) (by rw [← h0src]; exact hk),
+      read32_copy_total hcopyT (off := 8) (by omega) h8⟩
+  | int n =>
+    simp only [ValueRepr] at hv ⊢
+    obtain ⟨hk, h8⟩ := hv
+    exact ⟨by rw [h0dst]; exact read32_copy_total hcopyT (by omega) (by rw [← h0src]; exact hk),
+      readI64_copy_total hcopyT (off := 8) (by omega) h8⟩
+  | str s =>
+    simp only [ValueRepr] at hv ⊢
+    obtain ⟨hk, p, hp, hpne, hcstr⟩ := hv
+    exact ⟨by rw [h0dst]; exact read32_copy_total hcopyT (by omega) (by rw [← h0src]; exact hk),
+      p, read64_copy_total hcopyT (off := 8) (by omega) hp, hpne,
+      cstring_agreeP (hpay p s hp) hcstr (fun k hk => ⟨k, hk, rfl⟩)⟩
+  | closure ca =>
+    simp only [ValueRepr] at hv ⊢
+    obtain ⟨hk, h8, hne⟩ := hv
+    exact ⟨by rw [h0dst]; exact read32_copy_total hcopyT (by omega) (by rw [← h0src]; exact hk),
+      read64_copy_total hcopyT (off := 8) (by omega) h8, hne⟩
+  | native f =>
+    simp only [ValueRepr] at hv ⊢
+    obtain ⟨hk, ⟨p, hp, hcstr⟩, h16⟩ := hv
+    exact ⟨by rw [h0dst]; exact read32_copy_total hcopyT (by omega) (by rw [← h0src]; exact hk),
+      ⟨p, read64_copy_total hcopyT (off := 8) (by omega) hp,
+        cstring_agreeP (hpay p _ hp) hcstr (fun k hk => ⟨k, hk, rfl⟩)⟩,
+      read64_copy_total hcopyT (off := 16) (by omega) h16⟩
+
+/-- **`ValueRepr` TRANSLATION-COPY, TOTAL write-window form.**  The total-read
+sibling of `valueRepr_copy_of_writeWindow`. -/
+theorem valueRepr_copy_total_of_writeWindow {m m' : Mem} {N : NativeAddrs} {φc : Addr → Nat}
+    {srcAddr dstAddr : Nat} {v : Value}
+    (hcopyT : ∀ j, j < 24 → m'[dstAddr + j]? = some ((m[srcAddr + j]?).getD 0))
+    (houtside : ∀ a, (a < dstAddr ∨ dstAddr + 24 ≤ a) → m'[a]? = m[a]?)
+    (hdisj : ∀ (p : Nat) (s : String), read64 m (srcAddr + 8) = some p →
+      ∀ k, k ≤ s.length → (p + k < dstAddr ∨ dstAddr + 24 ≤ p + k))
+    (hv : ValueRepr m N φc srcAddr v) : ValueRepr m' N φc dstAddr v := by
+  refine valueRepr_copy_total hcopyT ?_ hv
+  intro p s hp a ha
+  obtain ⟨k, hk, rfl⟩ := ha
+  exact (houtside (p + k) (hdisj p s hp k hk)).symm
+
 /-! ## `#print axioms` sanity — main lemmas kernel-clean -/
 
 section Sanity
@@ -227,5 +350,7 @@ end Sanity
 
 #print axioms valueRepr_copy
 #print axioms valueRepr_copy_of_writeWindow
+#print axioms valueRepr_copy_total
+#print axioms valueRepr_copy_total_of_writeWindow
 
 end Vsa.Sim

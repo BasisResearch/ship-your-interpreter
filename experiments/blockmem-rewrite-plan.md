@@ -106,3 +106,44 @@ decomposition; it does NOT need Lean induction to be *discovered*, only
    them — a one-liner; the kernel applies the schema and checks.
 The residual creative core is only step 1 (finding the strengthening); 2-4 are
 mechanical. Fold into scripts/autoprove.py's recursive branch.
+
+---
+
+## VERDICT (wave 48k, 2026-09-02)
+
+**Steps 1-4 LANDED; step 5 is machine-refuted and returned as an obstruction.**
+
+Landed:
+* the `Load Data` chain in `MemLoad.lean` FACTORED over the value the layer below
+  returns, so one proof serves presence and total;
+* `read_ram_*_total` at widths 1/2/4/8 and the whole total chain up to
+  `vmem_read_data_*_total` (`MemLoadTotal.lean`);
+* `SiteGood` + `exec_{ld,lw,lwu,lh,lhu,lbu}_tot`/`_totv` (`ExecLoadTotal.lean`, NEW);
+* `LPins4`/`LPins8` and the width-1/2 pins are TOTAL-READ EQUALITIES.  `lds` is
+  KEPT as the value name — dropping it would disconnect `runGM`/`wlogM` from
+  memory; the equations are what keeps reflected execution tied to the machine;
+* `gen_sites.py` grew `ld_tot`/`lw_tot`/`lbu_tot` and `ld_totb`/`lw_totb`;
+  `LoadSitesTot.lean` (17) + `LoadSitesTotB.lean` (68) generated;
+* `valueRepr_copy_total{,_of_writeWindow}` — the STOP-LOUD case: a machine copy
+  moves `getD 0`, so byte-for-byte agreement is false at unwritten source bytes,
+  but `ValueRepr` already witnesses presence for every byte it READS.  Value
+  facts come from the source `ValueRepr`, not a blanket presence premise;
+* `frame_pop` DELETED — with the 6 unary/logic `∀mcall` closures, the `hpop`
+  mid-arm premise, and the `hMentPop` conjunct in 14 rows;
+* full tree green: `rbuild.sh check` → 1378 jobs, `check_all: OK` (grep gate,
+  the whole `#print axioms` battery ⊆ {propext, Classical.choice, Quot.sound},
+  discipline OK).
+
+**Step 5 (relight the 17 fields) is FALSE as premised.**  `field_census.py` on
+the rebuilt tree: **6 FOUND / 52 NOT_FOUND — unchanged**.
+`experiments/fleet/obstructions/X2_Field_hIAdd.lean` still proves
+`field_hIAdd_refuted`, axiom-clean: `BinIntCellResid` ∀-closes over `m0`/`g` with
+no entry hypothesis, and its ∃-body still demands `BinArmExtras.slot6`
+(a static jump-table pin) and `gx19_pres`.  At `m0 := ∅` the cell is false
+regardless of `frame_pop`; deleting a field only weakens the ∃-body.
+
+The 17 fields want the **B2-carry amendment** (already named in that artifact):
+add `entry : EvalEntry …` as a hypothesis field to `BinIntCellResid` and the six
+unary/logic resids, so `slot6`/`sproom`/`gx19_pres` become preconditions the
+entry supplies.  That is a statement change to `rows/BinDispatchRow.lean` and the
+resid defs — a different wave, and a coordinator decision.

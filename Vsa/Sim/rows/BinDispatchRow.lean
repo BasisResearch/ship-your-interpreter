@@ -74,7 +74,7 @@ theorem binRow_add
         st'' (.int (wrap64 (a + b))) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .add el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -98,7 +98,7 @@ theorem binRow_add
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+        hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
@@ -137,7 +137,7 @@ theorem binRow_sub
         st'' (.int (wrap64 (a - b))) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .sub el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -161,7 +161,7 @@ theorem binRow_sub
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+        hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
@@ -200,7 +200,7 @@ theorem binRow_mul
         st'' (.int (wrap64 (a * b))) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .mul el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -224,7 +224,7 @@ theorem binRow_mul
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+        hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
@@ -265,7 +265,7 @@ theorem binRow_div
         st'' (.int (wrap64 (a.tdiv b))) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .div el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -289,7 +289,7 @@ theorem binRow_div
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hbNe hOv hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+        hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
@@ -329,7 +329,7 @@ theorem binRow_mod
         st'' (.int (wrap64 (a.tmod b))) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .mod el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -353,7 +353,7 @@ theorem binRow_mod
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hbNe hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+        hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
@@ -392,7 +392,7 @@ theorem binRow_lt
         st'' (.bool (a < b)) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .lt el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -416,7 +416,7 @@ theorem binRow_lt
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+        hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
@@ -455,7 +455,7 @@ theorem binRow_le
         st'' (.bool (a ≤ b)) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .le el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -479,7 +479,7 @@ theorem binRow_le
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+        hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
@@ -518,7 +518,7 @@ theorem binRow_gt
         st'' (.bool (a > b)) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .gt el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -542,7 +542,7 @@ theorem binRow_gt
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+        hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
@@ -581,7 +581,7 @@ theorem binRow_ge
         st'' (.bool (a ≥ b)) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .ge el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -605,7 +605,7 @@ theorem binRow_ge
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+        hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
@@ -644,7 +644,7 @@ theorem binRow_eq
         st'' (.bool (vl.equal vr)) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .eq el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   obtain ⟨c2, hs2, hExit⟩ :=
@@ -652,7 +652,7 @@ theorem binRow_eq
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' w19 c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC hVlSurv (hResid gpre' v8' v9' v18' v19')
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+        hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
 
@@ -690,7 +690,7 @@ theorem binRow_ne
         st'' (.bool (!(vl.equal vr))) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .ne el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   obtain ⟨c2, hs2, hExit⟩ :=
@@ -698,7 +698,7 @@ theorem binRow_ne
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' w19 c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC hVlSurv (hResid gpre' v8' v9' v18' v19')
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
+        hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
 

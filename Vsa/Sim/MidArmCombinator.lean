@@ -1,5 +1,6 @@
 import Vsa.Sim.EvalBinSim
 import Vsa.Sim.ArmSegSplitEval
+import Vsa.Sim.LoadSitesTotB
 
 /-!
 # `MidArmCombinator` — the `SubEvalReturn → JalPreBundle` mid-arm re-cut (Task #79, priority 1)
@@ -64,7 +65,6 @@ the carried node/geometry facts that the left span established over `cL.σ.mem`:
 * `hpc/ha0/hs1/hsp` — PC/regs at `cL` (from `SubEvalReturn`);
 * `hx8/hx18` — `s0 = aExpr` / `s2 = aEnv` restored by the left call's ABI frame;
 * `hnode` — the RIGHT operand pointer `read64 cL.σ.mem (aExpr+24) = aROp` (transported);
-* `hpop` — the RIGHT sub-frame region `[sp-1120, sp)` is present in `cL.σ.mem`;
 * `hexprSurv` — `ExprRepr … aROp er` survives any write outside `[SL.lo, sp)`;
 * `hstoreSurv` — `st'.store` re-represents under the same survival window;
 * `hviCL` / `hviSlotCL` — `Value_intLoaded` / `IntSlotPinned` at `cL.σ.mem`;
@@ -90,8 +90,6 @@ theorem binaryR_midStagePre
     (hcodeL : Eval_exprLoaded cL.σ.mem)
     -- the transported right-operand pointer + node bytes present:
     (hnode : read64 cL.σ.mem (aExpr.toNat + 24) = some aROp.toNat)
-    -- the right sub-frame region present (frame-population, from SubEvalReturn's memframe):
-    (hpop : ∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, cL.σ.mem[a]? = some b))
     -- StoreRepr / ExprRepr / Value_intLoaded / IntSlotPinned survival at cL.σ.mem:
     (hstoreCL : StoreRepr cL.σ.mem N A φf1 φc1 st'.store)
     (hstoreSurvCL : ∀ m' : Mem,
@@ -168,36 +166,58 @@ theorem binaryR_midStagePre
   have haddr144' : ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)).toNat = sp.toNat - 944 :=
     spill_addr sp (0x090#12) 944 (by decide) (by omega) hsp1088
   -- present bytes for the reads (env @sp-1088, lw @sp-968, s3 @sp-960)
-  obtain ⟨eb0, heb0⟩ := hpop (sp.toNat - 1088) (by omega) (by omega)
-  obtain ⟨eb1, heb1⟩ := hpop (sp.toNat - 1088 + 1) (by omega) (by omega)
-  obtain ⟨eb2, heb2⟩ := hpop (sp.toNat - 1088 + 2) (by omega) (by omega)
-  obtain ⟨eb3, heb3⟩ := hpop (sp.toNat - 1088 + 3) (by omega) (by omega)
-  obtain ⟨eb4, heb4⟩ := hpop (sp.toNat - 1088 + 4) (by omega) (by omega)
-  obtain ⟨eb5, heb5⟩ := hpop (sp.toNat - 1088 + 5) (by omega) (by omega)
-  obtain ⟨eb6, heb6⟩ := hpop (sp.toNat - 1088 + 6) (by omega) (by omega)
-  obtain ⟨eb7, heb7⟩ := hpop (sp.toNat - 1088 + 7) (by omega) (by omega)
-  obtain ⟨wb0, hwb0⟩ := hpop (sp.toNat - 968) (by omega) (by omega)
-  obtain ⟨wb1, hwb1⟩ := hpop (sp.toNat - 968 + 1) (by omega) (by omega)
-  obtain ⟨wb2, hwb2⟩ := hpop (sp.toNat - 968 + 2) (by omega) (by omega)
-  obtain ⟨wb3, hwb3⟩ := hpop (sp.toNat - 968 + 3) (by omega) (by omega)
-  obtain ⟨sb0, hsb0⟩ := hpop (sp.toNat - 960) (by omega) (by omega)
-  obtain ⟨sb1, hsb1⟩ := hpop (sp.toNat - 960 + 1) (by omega) (by omega)
-  obtain ⟨sb2, hsb2⟩ := hpop (sp.toNat - 960 + 2) (by omega) (by omega)
-  obtain ⟨sb3, hsb3⟩ := hpop (sp.toNat - 960 + 3) (by omega) (by omega)
-  obtain ⟨sb4, hsb4⟩ := hpop (sp.toNat - 960 + 4) (by omega) (by omega)
-  obtain ⟨sb5, hsb5⟩ := hpop (sp.toNat - 960 + 5) (by omega) (by omega)
-  obtain ⟨sb6, hsb6⟩ := hpop (sp.toNat - 960 + 6) (by omega) (by omega)
-  obtain ⟨sb7, hsb7⟩ := hpop (sp.toNat - 960 + 7) (by omega) (by omega)
+  -- WAVE 48k: the arm's dead reloads are named AS their own total reads
+  -- (`bytesT1`), so their `site_*_totb` byte obligations close by `rfl`.
+  let eb0 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088)
+  have heb0 : (cL.σ.mem[sp.toNat - 1088]?).getD 0 = eb0 := rfl
+  let eb1 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088 + 1)
+  have heb1 : (cL.σ.mem[sp.toNat - 1088 + 1]?).getD 0 = eb1 := rfl
+  let eb2 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088 + 2)
+  have heb2 : (cL.σ.mem[sp.toNat - 1088 + 2]?).getD 0 = eb2 := rfl
+  let eb3 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088 + 3)
+  have heb3 : (cL.σ.mem[sp.toNat - 1088 + 3]?).getD 0 = eb3 := rfl
+  let eb4 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088 + 4)
+  have heb4 : (cL.σ.mem[sp.toNat - 1088 + 4]?).getD 0 = eb4 := rfl
+  let eb5 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088 + 5)
+  have heb5 : (cL.σ.mem[sp.toNat - 1088 + 5]?).getD 0 = eb5 := rfl
+  let eb6 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088 + 6)
+  have heb6 : (cL.σ.mem[sp.toNat - 1088 + 6]?).getD 0 = eb6 := rfl
+  let eb7 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088 + 7)
+  have heb7 : (cL.σ.mem[sp.toNat - 1088 + 7]?).getD 0 = eb7 := rfl
+  let wb0 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 968)
+  have hwb0 : (cL.σ.mem[sp.toNat - 968]?).getD 0 = wb0 := rfl
+  let wb1 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 968 + 1)
+  have hwb1 : (cL.σ.mem[sp.toNat - 968 + 1]?).getD 0 = wb1 := rfl
+  let wb2 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 968 + 2)
+  have hwb2 : (cL.σ.mem[sp.toNat - 968 + 2]?).getD 0 = wb2 := rfl
+  let wb3 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 968 + 3)
+  have hwb3 : (cL.σ.mem[sp.toNat - 968 + 3]?).getD 0 = wb3 := rfl
+  let sb0 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 960)
+  have hsb0 : (cL.σ.mem[sp.toNat - 960]?).getD 0 = sb0 := rfl
+  let sb1 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 960 + 1)
+  have hsb1 : (cL.σ.mem[sp.toNat - 960 + 1]?).getD 0 = sb1 := rfl
+  let sb2 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 960 + 2)
+  have hsb2 : (cL.σ.mem[sp.toNat - 960 + 2]?).getD 0 = sb2 := rfl
+  let sb3 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 960 + 3)
+  have hsb3 : (cL.σ.mem[sp.toNat - 960 + 3]?).getD 0 = sb3 := rfl
+  let sb4 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 960 + 4)
+  have hsb4 : (cL.σ.mem[sp.toNat - 960 + 4]?).getD 0 = sb4 := rfl
+  let sb5 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 960 + 5)
+  have hsb5 : (cL.σ.mem[sp.toNat - 960 + 5]?).getD 0 = sb5 := rfl
+  let sb6 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 960 + 6)
+  have hsb6 : (cL.σ.mem[sp.toNat - 960 + 6]?).getD 0 = sb6 := rfl
+  let sb7 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 960 + 7)
+  have hsb7 : (cL.σ.mem[sp.toNat - 960 + 7]?).getD 0 = sb7 := rfl
   -- ============ 0x800034fc: ld a2,24(s0) → x12 := aROp ============
   obtain ⟨τ1, j1, ht1', hj1, hGτ1, hmemτ1, hoτ1⟩ :=
-    site_800034fc_ee cL.σ cL.tick cL.steps (0x800034fc#64) vmiL aExpr rp0 rp1 rp2 rp3 rp4 rp5 rp6 rp7
+    site_800034fc_totb cL.σ cL.tick cL.steps (0x800034fc#64) vmiL aExpr rp0 rp1 rp2 rp3 rp4 rp5 rp6 rp7
       hGL hpcL hmiLw hx8L hcodeL rfl
       (by rw [hoff24_s0]; omega) (by rw [hoff24_s0]; omega)
       (by rw [hoff24_s0, htoh]; right; omega) (by rw [hoff24_s0]; omega)
-      (by rw [hoff24_s0]; exact hrp0) (by rw [hoff24_s0]; exact hrp1)
-      (by rw [hoff24_s0]; exact hrp2) (by rw [hoff24_s0]; exact hrp3)
-      (by rw [hoff24_s0]; exact hrp4) (by rw [hoff24_s0]; exact hrp5)
-      (by rw [hoff24_s0]; exact hrp6) (by rw [hoff24_s0]; exact hrp7) htickL
+      (by rw [hoff24_s0]; try (first | exact hrp0 | exact lpin_of_present hrp0)) (by rw [hoff24_s0]; try (first | exact hrp1 | exact lpin_of_present hrp1))
+      (by rw [hoff24_s0]; try (first | exact hrp2 | exact lpin_of_present hrp2)) (by rw [hoff24_s0]; try (first | exact hrp3 | exact lpin_of_present hrp3))
+      (by rw [hoff24_s0]; try (first | exact hrp4 | exact lpin_of_present hrp4)) (by rw [hoff24_s0]; try (first | exact hrp5 | exact lpin_of_present hrp5))
+      (by rw [hoff24_s0]; try (first | exact hrp6 | exact lpin_of_present hrp6)) (by rw [hoff24_s0]; try (first | exact hrp7 | exact lpin_of_present hrp7)) htickL
   have hstepτ1 : Step cL ⟨τ1, j1, cL.steps + 1⟩ := by cases cL; exact ht1'
   have hmemτ1e : τ1.mem = cL.σ.mem := hmemτ1
   have hpcτ1 : τ1.regs.get? Register.PC = some (0x80003500#64) := by
@@ -214,14 +234,14 @@ theorem binaryR_midStagePre
   have hcodeτ1 : Eval_exprLoaded τ1.mem := by rw [hmemτ1e]; exact hcodeL
   -- ============ 0x80003500: ld a3,0(sp) → x13 := env (dead) ============
   obtain ⟨τ2, j2, ht2', hj2, hGτ2, hmemτ2, hoτ2⟩ :=
-    site_80003500_ee τ1 j1 (cL.steps + 1) (0x80003500#64) vmiτ1 (sp - 1088#64)
+    site_80003500_totb τ1 j1 (cL.steps + 1) (0x80003500#64) vmiτ1 (sp - 1088#64)
       eb0 eb1 eb2 eb3 eb4 eb5 eb6 eb7 hGτ1 hpcτ1 hmiτ1 hspτ1 hcodeτ1 rfl
       (by rw [haddr0']; omega) (by rw [haddr0']; omega)
       (by rw [haddr0', htoh]; right; omega) (by rw [haddr0']; omega)
-      (by rw [haddr0', hmemτ1e]; exact heb0) (by rw [haddr0', hmemτ1e]; exact heb1)
-      (by rw [haddr0', hmemτ1e]; exact heb2) (by rw [haddr0', hmemτ1e]; exact heb3)
-      (by rw [haddr0', hmemτ1e]; exact heb4) (by rw [haddr0', hmemτ1e]; exact heb5)
-      (by rw [haddr0', hmemτ1e]; exact heb6) (by rw [haddr0', hmemτ1e]; exact heb7) hj1
+      (by rw [haddr0', hmemτ1e]; try (first | exact heb0 | exact lpin_of_present heb0)) (by rw [haddr0', hmemτ1e]; try (first | exact heb1 | exact lpin_of_present heb1))
+      (by rw [haddr0', hmemτ1e]; try (first | exact heb2 | exact lpin_of_present heb2)) (by rw [haddr0', hmemτ1e]; try (first | exact heb3 | exact lpin_of_present heb3))
+      (by rw [haddr0', hmemτ1e]; try (first | exact heb4 | exact lpin_of_present heb4)) (by rw [haddr0', hmemτ1e]; try (first | exact heb5 | exact lpin_of_present heb5))
+      (by rw [haddr0', hmemτ1e]; try (first | exact heb6 | exact lpin_of_present heb6)) (by rw [haddr0', hmemτ1e]; try (first | exact heb7 | exact lpin_of_present heb7)) hj1
   have hstepτ2 : Step ⟨τ1, j1, cL.steps + 1⟩ ⟨τ2, j2, cL.steps + 1 + 1⟩ := ht2'
   have hmemτ2e : τ2.mem = cL.σ.mem := by rw [hmemτ2]; exact hmemτ1e
   have hpcτ2 : τ2.regs.get? Register.PC = some (0x80003504#64) := by
@@ -239,12 +259,12 @@ theorem binaryR_midStagePre
   have hcodeτ2 : Eval_exprLoaded τ2.mem := by rw [hmemτ2e]; exact hcodeL
   -- ============ 0x80003504: lw a6,120(sp) → x16 (dead) ============
   obtain ⟨τ3, j3, ht3', hj3, hGτ3, hmemτ3, hoτ3⟩ :=
-    site_80003504_ee τ2 j2 (cL.steps + 1 + 1) (0x80003504#64) vmiτ2 (sp - 1088#64)
+    site_80003504_totb τ2 j2 (cL.steps + 1 + 1) (0x80003504#64) vmiτ2 (sp - 1088#64)
       wb0 wb1 wb2 wb3 hGτ2 hpcτ2 hmiτ2 hspτ2 hcodeτ2 rfl
       (by rw [haddr120]; omega) (by rw [haddr120]; omega)
       (by rw [haddr120, htoh]; right; omega) (by rw [haddr120]; omega)
-      (by rw [haddr120, hmemτ2e]; exact hwb0) (by rw [haddr120, hmemτ2e]; exact hwb1)
-      (by rw [haddr120, hmemτ2e]; exact hwb2) (by rw [haddr120, hmemτ2e]; exact hwb3) hj2
+      (by rw [haddr120, hmemτ2e]; try (first | exact hwb0 | exact lpin_of_present hwb0)) (by rw [haddr120, hmemτ2e]; try (first | exact hwb1 | exact lpin_of_present hwb1))
+      (by rw [haddr120, hmemτ2e]; try (first | exact hwb2 | exact lpin_of_present hwb2)) (by rw [haddr120, hmemτ2e]; try (first | exact hwb3 | exact lpin_of_present hwb3)) hj2
   have hstepτ3 : Step ⟨τ2, j2, cL.steps + 1 + 1⟩ ⟨τ3, j3, cL.steps + 1 + 1 + 1⟩ := ht3'
   have hmemτ3e : τ3.mem = cL.σ.mem := by rw [hmemτ3]; exact hmemτ2e
   have hpcτ3 : τ3.regs.get? Register.PC = some (0x80003508#64) := by
@@ -312,14 +332,14 @@ theorem binaryR_midStagePre
   have hcodeτ5 : Eval_exprLoaded τ5.mem := by rw [hmemτ5e]; exact hcodeL
   -- ============ 0x80003510: ld s3,128(sp) → x19 (dead) ============
   obtain ⟨τ6, j6, ht6', hj6, hGτ6, hmemτ6, hoτ6⟩ :=
-    site_80003510_ee τ5 j5 (cL.steps + 1 + 1 + 1 + 1 + 1) (0x80003510#64) vmiτ5 (sp - 1088#64)
+    site_80003510_totb τ5 j5 (cL.steps + 1 + 1 + 1 + 1 + 1) (0x80003510#64) vmiτ5 (sp - 1088#64)
       sb0 sb1 sb2 sb3 sb4 sb5 sb6 sb7 hGτ5 hpcτ5 hmiτ5 hspτ5 hcodeτ5 rfl
       (by rw [haddr128]; omega) (by rw [haddr128]; omega)
       (by rw [haddr128, htoh]; right; omega) (by rw [haddr128]; omega)
-      (by rw [haddr128, hmemτ5e]; exact hsb0) (by rw [haddr128, hmemτ5e]; exact hsb1)
-      (by rw [haddr128, hmemτ5e]; exact hsb2) (by rw [haddr128, hmemτ5e]; exact hsb3)
-      (by rw [haddr128, hmemτ5e]; exact hsb4) (by rw [haddr128, hmemτ5e]; exact hsb5)
-      (by rw [haddr128, hmemτ5e]; exact hsb6) (by rw [haddr128, hmemτ5e]; exact hsb7) hj5
+      (by rw [haddr128, hmemτ5e]; try (first | exact hsb0 | exact lpin_of_present hsb0)) (by rw [haddr128, hmemτ5e]; try (first | exact hsb1 | exact lpin_of_present hsb1))
+      (by rw [haddr128, hmemτ5e]; try (first | exact hsb2 | exact lpin_of_present hsb2)) (by rw [haddr128, hmemτ5e]; try (first | exact hsb3 | exact lpin_of_present hsb3))
+      (by rw [haddr128, hmemτ5e]; try (first | exact hsb4 | exact lpin_of_present hsb4)) (by rw [haddr128, hmemτ5e]; try (first | exact hsb5 | exact lpin_of_present hsb5))
+      (by rw [haddr128, hmemτ5e]; try (first | exact hsb6 | exact lpin_of_present hsb6)) (by rw [haddr128, hmemτ5e]; try (first | exact hsb7 | exact lpin_of_present hsb7)) hj5
   have hstepτ6 : Step ⟨τ5, j5, cL.steps + 1 + 1 + 1 + 1 + 1⟩ ⟨τ6, j6, cL.steps + 1 + 1 + 1 + 1 + 1 + 1⟩ := ht6'
   have hmemτ6e : τ6.mem = cL.σ.mem := by rw [hmemτ6]; exact hmemτ5e
   have hpcτ6 : τ6.regs.get? Register.PC = some (0x80003514#64) := by
@@ -500,7 +520,6 @@ theorem binaryR_midStage1
     (hgx8v : gpre Register.x8 = some aExpr) (hgx18v : gpre Register.x18 = some aEnv)
     (hcodeL : Eval_exprLoaded cL.σ.mem)
     (hnode : read64 cL.σ.mem (aExpr.toNat + 24) = some aROp.toNat)
-    (hpop : ∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, cL.σ.mem[a]? = some b))
     (hstoreCL : StoreRepr cL.σ.mem N A φf1 φc1 st'.store)
     (hstoreSurvCL : ∀ m' : Mem,
       (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
@@ -545,7 +564,7 @@ theorem binaryR_midStage1
   LandedN.weakenCount (by omega : 1 ≤ 7)
     (binaryR_midStagePre gpre N A SL φf1 φc1 st' d env er sp r sret aExpr aEnv aROp
       v8 v9 v18 cL hGL htickL hpcL hs1L hspL hmiL houtStrL hframeL hx8L hx18L hgx8v hgx18v
-      hcodeL hnode hpop hstoreCL hstoreSurvCL hexprSurvCL hviCL hviSlotCL hnbsCL hslotRaL hslotS0L
+      hcodeL hnode hstoreCL hstoreSurvCL hexprSurvCL hviCL hviSlotCL hnbsCL hslotRaL hslotS0L
       hslotS1L hslotS2L hnode_hi hnode_lo hnode_align hnode_win hrop_align hrop_ram hrop_win
       hrop_stk hrop_stkfull hsp1088 hsproom hspSLhi hsp16 hsphi hSLlo hSLhiRam hSLwin
       hcodeStk hviStk htableStk harenaStk harenaCode

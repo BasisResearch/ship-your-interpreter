@@ -130,11 +130,11 @@ theorem binaryL_field_of_extras
   -- unpack `blockA_binaryArm`'s POST → feed `blockB_binary_leftStagePre`'s `hpre`
   obtain ⟨gpre, aEnvReg, v8, v9, v18, v19, ment, hArm, hBE, hx11, hx13, hx19,
     hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v, hpayL, hexprL, hpayR, hexprR,
-    hMentPop, hMemExtM0, hGmt47⟩ := hMid
+    hMemExtM0, hGmt47⟩ := hMid
   exact blockB_binary_leftStagePre g gpre N A SL φf φc st d env op l r
     sp r0 sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 c'.σ.sailOutput m0 c'
     ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v,
-      hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0, hGmt47,
+      hpayL, hexprL, hpayR, hexprR, hMemExtM0, hGmt47,
       -- ITEM ZERO B1: the LEFT child budget, DERIVED from the entry's fields.
       hEntry.stackBudget.child (by decide)
         (by

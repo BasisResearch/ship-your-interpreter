@@ -1,6 +1,7 @@
 import Vsa.Sim.BlockPilot
 import Vsa.Sim.ValueSites
 import Vsa.Sim.ObsAvoid
+import Vsa.Sim.ExecLoadTotal
 
 /-!
 # `BlockMem` — proof-by-reflection block lemma for straight-line ALU + LOAD + STORE runs
@@ -808,16 +809,80 @@ def DecodeFactM (a : MInstr) : Prop :=
     s.regs.get? Register.mseccfg = some ((0#64) : RegisterType Register.mseccfg) →
     (ext_decode a.word).run s = .ok (astOfM a) s
 
-/-- Load byte pins at widths 4/8 (width 1 is the single pin inline). -/
+/-- Load byte pins at widths 4/8 (width 1 is the single pin inline).
+
+**WAVE 48k — TOTAL READS, not presence.**  The Sail model reads memory totally
+(`readByte a = (m.get? a).getD 0`), so a load NEVER needs a byte to be in the
+map; it needs the byte the total read returns.  These pins therefore say
+"the total read at `ea + k` is `bs[k]`", which is exactly what
+`bytesVal`/`runGM` consume and is STRICTLY WEAKER than the old
+`m[ea+k]? = some bs[k]`: a supplier that knows the byte (an earlier store,
+`ValueRepr`, a code pin) still discharges it in one rewrite
+(`lpins4_of_present`), while a supplier reading the callee's own unwritten
+frame discharges it by `rfl` at `bs[k] = 0`.  Keeping `bs`/`lds` as the value
+name is deliberate: the reflected execution stays tied to memory through these
+equations, which is what the presence hypotheses used to (over-)provide. -/
 def LPins4 (m : Std.ExtHashMap Nat (BitVec 8)) (ea : Nat) (bs : List (BitVec 8)) : Prop :=
-  m[ea]? = some (bs.getD 0 0#8) ∧ m[ea + 1]? = some (bs.getD 1 0#8) ∧
-  m[ea + 2]? = some (bs.getD 2 0#8) ∧ m[ea + 3]? = some (bs.getD 3 0#8)
+  (m[ea]?).getD 0 = bs.getD 0 0#8 ∧ (m[ea + 1]?).getD 0 = bs.getD 1 0#8 ∧
+  (m[ea + 2]?).getD 0 = bs.getD 2 0#8 ∧ (m[ea + 3]?).getD 0 = bs.getD 3 0#8
 
 def LPins8 (m : Std.ExtHashMap Nat (BitVec 8)) (ea : Nat) (bs : List (BitVec 8)) : Prop :=
-  m[ea]? = some (bs.getD 0 0#8) ∧ m[ea + 1]? = some (bs.getD 1 0#8) ∧
-  m[ea + 2]? = some (bs.getD 2 0#8) ∧ m[ea + 3]? = some (bs.getD 3 0#8) ∧
-  m[ea + 4]? = some (bs.getD 4 0#8) ∧ m[ea + 5]? = some (bs.getD 5 0#8) ∧
-  m[ea + 6]? = some (bs.getD 6 0#8) ∧ m[ea + 7]? = some (bs.getD 7 0#8)
+  (m[ea]?).getD 0 = bs.getD 0 0#8 ∧ (m[ea + 1]?).getD 0 = bs.getD 1 0#8 ∧
+  (m[ea + 2]?).getD 0 = bs.getD 2 0#8 ∧ (m[ea + 3]?).getD 0 = bs.getD 3 0#8 ∧
+  (m[ea + 4]?).getD 0 = bs.getD 4 0#8 ∧ (m[ea + 5]?).getD 0 = bs.getD 5 0#8 ∧
+  (m[ea + 6]?).getD 0 = bs.getD 6 0#8 ∧ (m[ea + 7]?).getD 0 = bs.getD 7 0#8
+
+/-- A byte a supplier KNOWS (from a store, a `ValueRepr`, a code pin) discharges
+its total-read pin in one rewrite.  This is the migration path for every
+pre-48k supplier: `⟨h0, h1, h2, h3⟩` becomes `lpins4_of_present h0 h1 h2 h3`. -/
+theorem lpin_of_present {m : Std.ExtHashMap Nat (BitVec 8)} {a : Nat} {b : BitVec 8}
+    (h : m[a]? = some b) : (m[a]?).getD 0 = b := by rw [h]; rfl
+
+theorem lpins4_of_present {m : Std.ExtHashMap Nat (BitVec 8)} {ea : Nat} {bs : List (BitVec 8)}
+    (h0 : m[ea]? = some (bs.getD 0 0#8)) (h1 : m[ea + 1]? = some (bs.getD 1 0#8))
+    (h2 : m[ea + 2]? = some (bs.getD 2 0#8)) (h3 : m[ea + 3]? = some (bs.getD 3 0#8)) :
+    LPins4 m ea bs :=
+  ⟨lpin_of_present h0, lpin_of_present h1, lpin_of_present h2, lpin_of_present h3⟩
+
+theorem lpins8_of_present {m : Std.ExtHashMap Nat (BitVec 8)} {ea : Nat} {bs : List (BitVec 8)}
+    (h0 : m[ea]? = some (bs.getD 0 0#8)) (h1 : m[ea + 1]? = some (bs.getD 1 0#8))
+    (h2 : m[ea + 2]? = some (bs.getD 2 0#8)) (h3 : m[ea + 3]? = some (bs.getD 3 0#8))
+    (h4 : m[ea + 4]? = some (bs.getD 4 0#8)) (h5 : m[ea + 5]? = some (bs.getD 5 0#8))
+    (h6 : m[ea + 6]? = some (bs.getD 6 0#8)) (h7 : m[ea + 7]? = some (bs.getD 7 0#8)) :
+    LPins8 m ea bs :=
+  ⟨lpin_of_present h0, lpin_of_present h1, lpin_of_present h2, lpin_of_present h3,
+   lpin_of_present h4, lpin_of_present h5, lpin_of_present h6, lpin_of_present h7⟩
+
+
+/-! ### Total-read bridges — `bytesT* = ` the pinned byte append
+
+`exec_*_totv` states its loaded value as the model's total read; `runGM` names it
+`bytesVal … lds`.  These are the one-line reconciliations, and they are the ONLY
+place the two descriptions meet. -/
+
+theorem bytesT1_of_pin {m : Std.ExtHashMap Nat (BitVec 8)} {ea : Nat} {b : BitVec 8}
+    (h : (m[ea]?).getD 0 = b) : (bytesT1 m ea : BitVec (8 * 1)) = b := h
+
+theorem bytesT2_of_pins {m : Std.ExtHashMap Nat (BitVec 8)} {ea : Nat} {b0 b1 : BitVec 8}
+    (h0 : (m[ea]?).getD 0 = b0) (h1 : (m[ea + 1]?).getD 0 = b1) :
+    (bytesT2 m ea : BitVec (8 * 2)) = b1.append b0 := by
+  simp only [bytesT2, h0, h1]
+
+theorem bytesT4_of_lpins4 {m : Std.ExtHashMap Nat (BitVec 8)} {ea : Nat} {bs : List (BitVec 8)}
+    (h : LPins4 m ea bs) :
+    (bytesT4 m ea : BitVec (8 * 4))
+      = (((bs.getD 3 0#8).append (bs.getD 2 0#8)).append (bs.getD 1 0#8)).append (bs.getD 0 0#8) := by
+  obtain ⟨h0, h1, h2, h3⟩ := h
+  simp only [bytesT4, h0, h1, h2, h3]
+
+theorem bytesT8_of_lpins8 {m : Std.ExtHashMap Nat (BitVec 8)} {ea : Nat} {bs : List (BitVec 8)}
+    (h : LPins8 m ea bs) :
+    (bytesT8 m ea : BitVec (8 * 8))
+      = (((((((bs.getD 7 0#8).append (bs.getD 6 0#8)).append (bs.getD 5 0#8)).append
+          (bs.getD 4 0#8)).append (bs.getD 3 0#8)).append (bs.getD 2 0#8)).append
+          (bs.getD 1 0#8)).append (bs.getD 0 0#8) := by
+  obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7⟩ := h
+  simp only [bytesT8, h0, h1, h2, h3, h4, h5, h6, h7]
 
 /-- The data-dependent side conditions of one element: RAM bounds / HTIF window
 / alignment at the *symbolic* effective address, plus (loads) the byte pins on
@@ -847,19 +912,19 @@ def MemFacts (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (bs : List (BitVec 
   | .lbu =>
     (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 1 ≤ 0x100000000 ∧
      ((eaddrM a L).toNat + 1 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat)) ∧
-    m[(eaddrM a L).toNat]? = some (bs.getD 0 0#8)
+    ((m[(eaddrM a L).toNat]?).getD 0 = bs.getD 0 0#8)
   | .lh =>
     (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 2 ≤ 0x100000000 ∧
      ((eaddrM a L).toNat + 2 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat) ∧
      (eaddrM a L).toNat % 2 = 0) ∧
-    m[(eaddrM a L).toNat]? = some (bs.getD 0 0#8) ∧
-    m[(eaddrM a L).toNat + 1]? = some (bs.getD 1 0#8)
+    (m[(eaddrM a L).toNat]?).getD 0 = bs.getD 0 0#8 ∧
+    (m[(eaddrM a L).toNat + 1]?).getD 0 = bs.getD 1 0#8
   | .lhu =>
     (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 2 ≤ 0x100000000 ∧
      ((eaddrM a L).toNat + 2 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat) ∧
      (eaddrM a L).toNat % 2 = 0) ∧
-    m[(eaddrM a L).toNat]? = some (bs.getD 0 0#8) ∧
-    m[(eaddrM a L).toNat + 1]? = some (bs.getD 1 0#8)
+    (m[(eaddrM a L).toNat]?).getD 0 = bs.getD 0 0#8 ∧
+    (m[(eaddrM a L).toNat + 1]?).getD 0 = bs.getD 1 0#8
   | .sw =>
     0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 4 ≤ 0x100000000 ∧
     tohostAddr + 16 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat % 4 = 0
@@ -1263,12 +1328,13 @@ theorem block_mem_run (is : List MInstr) :
       have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
       have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
         (bytesVal .lw (lds.headD [])) ard hrd1 hrd31
-      have hexec := exec_lw σ apc aimm (gprIdx ars1) (gprIdx ard)
+      have hexec := exec_lw_totv σ apc aimm (gprIdx ars1) (gprIdx ard)
         (sigma3_alu σ apc (gprReg ard) (gprRT ard (bytesVal .lw (lds.headD []))))
-        (srcVal ars1 L)
-        ((lds.headD []).getD 0 0#8) ((lds.headD []).getD 1 0#8)
-        ((lds.headD []).getD 2 0#8) ((lds.headD []).getD 3 0#8)
-        hG hrx1 hwx halo hahiram hahtif haalign hp0 hp1 hp2 hp3
+        (srcVal ars1 L) (bytesVal .lw (lds.headD [])) hG hrx1
+        (by simp only [bytesVal]
+            exact congrArg (fun w : BitVec (8 * 4) => (sign_extend (m := 64) w : BitVec 64))
+              (bytesT4_of_lpins4 ⟨hp0, hp1, hp2, hp3⟩))
+        hwx halo hahiram hahtif haalign
       obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
         stepObs_alu σ i u apc vm aword
           (instruction.LOAD (aimm, gprIdx ars1, gprIdx ard, false, 4))
@@ -1313,12 +1379,13 @@ theorem block_mem_run (is : List MInstr) :
       have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
       have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
         (bytesVal .lwu (lds.headD [])) ard hrd1 hrd31
-      have hexec := exec_lwu σ apc aimm (gprIdx ars1) (gprIdx ard)
+      have hexec := exec_lwu_totv σ apc aimm (gprIdx ars1) (gprIdx ard)
         (sigma3_alu σ apc (gprReg ard) (gprRT ard (bytesVal .lwu (lds.headD []))))
-        (srcVal ars1 L)
-        ((lds.headD []).getD 0 0#8) ((lds.headD []).getD 1 0#8)
-        ((lds.headD []).getD 2 0#8) ((lds.headD []).getD 3 0#8)
-        hG hrx1 hwx halo hahiram hahtif haalign hp0 hp1 hp2 hp3
+        (srcVal ars1 L) (bytesVal .lwu (lds.headD [])) hG hrx1
+        (by simp only [bytesVal]
+            exact congrArg (fun w : BitVec (8 * 4) => (zero_extend (m := 64) w : BitVec 64))
+              (bytesT4_of_lpins4 ⟨hp0, hp1, hp2, hp3⟩))
+        hwx halo hahiram hahtif haalign
       obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
         stepObs_alu σ i u apc vm aword
           (instruction.LOAD (aimm, gprIdx ars1, gprIdx ard, true, 4))
@@ -1363,14 +1430,13 @@ theorem block_mem_run (is : List MInstr) :
       have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
       have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
         (bytesVal .ld (lds.headD [])) ard hrd1 hrd31
-      have hexec := exec_ld σ apc aimm (gprIdx ars1) (gprIdx ard)
+      have hexec := exec_ld_totv σ apc aimm (gprIdx ars1) (gprIdx ard)
         (sigma3_alu σ apc (gprReg ard) (gprRT ard (bytesVal .ld (lds.headD []))))
-        (srcVal ars1 L)
-        ((lds.headD []).getD 0 0#8) ((lds.headD []).getD 1 0#8)
-        ((lds.headD []).getD 2 0#8) ((lds.headD []).getD 3 0#8)
-        ((lds.headD []).getD 4 0#8) ((lds.headD []).getD 5 0#8)
-        ((lds.headD []).getD 6 0#8) ((lds.headD []).getD 7 0#8)
-        hG hrx1 hwx halo hahiram hahtif haalign hp0 hp1 hp2 hp3 hp4 hp5 hp6 hp7
+        (srcVal ars1 L) (bytesVal .ld (lds.headD [])) hG hrx1
+        (by simp only [bytesVal]
+            exact congrArg (fun w : BitVec (8 * 8) => (sign_extend (m := 64) w : BitVec 64))
+              (bytesT8_of_lpins8 ⟨hp0, hp1, hp2, hp3, hp4, hp5, hp6, hp7⟩))
+        hwx halo hahiram hahtif haalign
       obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
         stepObs_alu σ i u apc vm aword
           (instruction.LOAD (aimm, gprIdx ars1, gprIdx ard, false, 8))
@@ -1415,10 +1481,13 @@ theorem block_mem_run (is : List MInstr) :
       have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
       have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
         (bytesVal .lbu (lds.headD [])) ard hrd1 hrd31
-      have hexec := exec_lbu_bm σ apc aimm (gprIdx ars1) (gprIdx ard)
+      have hexec := exec_lbu_totv σ apc aimm (gprIdx ars1) (gprIdx ard)
         (sigma3_alu σ apc (gprReg ard) (gprRT ard (bytesVal .lbu (lds.headD []))))
-        (srcVal ars1 L) ((lds.headD []).getD 0 0#8)
-        hG hrx1 hwx halo hahiram hahtif hp0
+        (srcVal ars1 L) (bytesVal .lbu (lds.headD [])) hG hrx1
+        (by simp only [bytesVal]
+            exact congrArg (fun w : BitVec (8 * 1) => (zero_extend (m := 64) w : BitVec 64))
+              (bytesT1_of_pin hp0))
+        hwx halo hahiram hahtif
       obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
         stepObs_alu σ i u apc vm aword
           (instruction.LOAD (aimm, gprIdx ars1, gprIdx ard, true, 1))
@@ -1463,10 +1532,13 @@ theorem block_mem_run (is : List MInstr) :
       have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
       have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
         (bytesVal .lh (lds.headD [])) ard hrd1 hrd31
-      have hexec := exec_lh_bm σ apc aimm (gprIdx ars1) (gprIdx ard)
+      have hexec := exec_lh_totv σ apc aimm (gprIdx ars1) (gprIdx ard)
         (sigma3_alu σ apc (gprReg ard) (gprRT ard (bytesVal .lh (lds.headD []))))
-        (srcVal ars1 L) ((lds.headD []).getD 0 0#8) ((lds.headD []).getD 1 0#8)
-        hG hrx1 hwx halo hahiram hahtif haalign2 hp0 hp1
+        (srcVal ars1 L) (bytesVal .lh (lds.headD [])) hG hrx1
+        (by simp only [bytesVal]
+            exact congrArg (fun w : BitVec (8 * 2) => (sign_extend (m := 64) w : BitVec 64))
+              (bytesT2_of_pins hp0 hp1))
+        hwx halo hahiram hahtif haalign2
       obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
         stepObs_alu σ i u apc vm aword
           (instruction.LOAD (aimm, gprIdx ars1, gprIdx ard, false, 2))
@@ -2692,10 +2764,13 @@ theorem block_mem_run (is : List MInstr) :
       have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
       have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
         (bytesVal .lhu (lds.headD [])) ard hrd1 hrd31
-      have hexec := exec_lhu_bm σ apc aimm (gprIdx ars1) (gprIdx ard)
+      have hexec := exec_lhu_totv σ apc aimm (gprIdx ars1) (gprIdx ard)
         (sigma3_alu σ apc (gprReg ard) (gprRT ard (bytesVal .lhu (lds.headD []))))
-        (srcVal ars1 L) ((lds.headD []).getD 0 0#8) ((lds.headD []).getD 1 0#8)
-        hG hrx1 hwx halo hahiram hahtif haalign2 hp0 hp1
+        (srcVal ars1 L) (bytesVal .lhu (lds.headD [])) hG hrx1
+        (by simp only [bytesVal]
+            exact congrArg (fun w : BitVec (8 * 2) => (zero_extend (m := 64) w : BitVec 64))
+              (bytesT2_of_pins hp0 hp1))
+        hwx halo hahiram hahtif haalign2
       obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
         stepObs_alu σ i u apc vm aword
           (instruction.LOAD (aimm, gprIdx ars1, gprIdx ard, true, 2))

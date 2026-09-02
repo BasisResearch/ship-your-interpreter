@@ -94,7 +94,7 @@ The dead bytes (`[subsret+4, subsret+8)`, `[subsret+16, subsret+24)`) must still
 be PRESENT for the machine `ld`. They live in the caller's lowered frame
 `[SL.lo, sp)` (populated at the pre-call memory `mcall` by the layout), so
 `MemExtends mcall c.σ.mem` carries their presence to the post-call memory. The
-caller supplies the pre-call frame-populated fact `hStackPop`.
+the dead sub-`Value` padding bytes are read TOTALLY (wave 48k) — no frame-populated premise.
 **WAVE 47i (`McallPopTotality`) AMENDMENT**: pointwise form — the old
 totality-consuming form (`hpop : ∀ a, ∃ b, mcall[a]? = some b`) fed the
 refuted `hMcallPop` oracle (`experiments/fleet/obstructions/
@@ -133,15 +133,9 @@ theorem blockC_neg
         gpre Register.x8 = some aExpr ∧
         ExprRepr mcall aExpr.toNat (.unary .neg esub) ∧
         -- WAVE 47i (`McallPopTotality` amendment): presence ONLY on the actual
-        -- dead-byte read footprint — the lowered-frame window `[sp-1120, sp)`
-        -- (sub-`Value` padding `[subsret+4,+8) ∪ [subsret+16,+24)`,
-        -- `subsret = sp-944`) plus the node's line-word bytes
-        -- `[aExpr+4, aExpr+8)` — replacing the REFUTED total-population oracle
-        -- (`experiments/fleet/obstructions/McallPopTotality.lean`).
-        (∀ a : Nat,
-          (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
-            (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-          (∃ b, mcall[a]? = some b)) ∧
+        -- WAVE 48k: the dead-byte PRESENCE conjunct is GONE.  Those bytes are
+        -- read TOTALLY (`readByte = getD 0`) and are named here AS their total
+        -- reads, so their `MemFacts` obligations close by `rfl`.
         -- presence-monotonicity of the pre-call memory over the entry `m0`
         -- (writes are inserts; the `mem_ext` residual, `BinArmExtras` shape).
         MemExtends m0 mcall ∧
@@ -188,7 +182,7 @@ theorem blockC_neg
         PhiExtends φc φce nc ∧
         PreEpilogueVD g N A SL φfe φce st' (.int (wrap64 (-n))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hpre
-  obtain ⟨mcall, hSub, hgx8, hexpr, hStackPop, hMemExtM0, hexprAl, hexprLo, hexprHi, hexprWin,
+  obtain ⟨mcall, hSub, hgx8, hexpr, hMemExtM0, hexprAl, hexprLo, hexprHi, hexprWin,
     hexprSL, hexprA, hexprSub,
     houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
     hraAl, hSLloSp, hSLlo, hSLwin,
@@ -227,11 +221,12 @@ theorem blockC_neg
   have hoptok12 : read32 mcall (aExpr.toNat + 8) = some 12 := by simpa [unOpTok] using hoptok
   obtain ⟨ob0, ob1, ob2, ob3, hob0, hob1, hob2, hob3, hobrec⟩ :=
     read32_bytes mcall (aExpr.toNat + 8) 12 hoptok12
-  -- e->line bytes (aExpr+4): present from MemExtends (whole mcall present)
-  obtain ⟨lb0, hlb0⟩ := stackpop_present hMemExt (hStackPop (aExpr.toNat + 4) (by omega))
-  obtain ⟨lb1, hlb1⟩ := stackpop_present hMemExt (hStackPop (aExpr.toNat + 4 + 1) (by omega))
-  obtain ⟨lb2, hlb2⟩ := stackpop_present hMemExt (hStackPop (aExpr.toNat + 4 + 2) (by omega))
-  obtain ⟨lb3, hlb3⟩ := stackpop_present hMemExt (hStackPop (aExpr.toNat + 4 + 3) (by omega))
+  -- e->line bytes (aExpr+4): NAMED as their total reads (wave 48k) — the `lw`
+  -- of the node's line word never needed them to be in the map.
+  let lb0 : BitVec 8 := bytesT1 c.σ.mem (aExpr.toNat + 4)
+  let lb1 : BitVec 8 := bytesT1 c.σ.mem (aExpr.toNat + 4 + 1)
+  let lb2 : BitVec 8 := bytesT1 c.σ.mem (aExpr.toNat + 4 + 2)
+  let lb3 : BitVec 8 := bytesT1 c.σ.mem (aExpr.toNat + 4 + 3)
   -- op-token bytes with VALUE in c.σ.mem: aExpr node is AST memory, agrees with
   -- mcall (disjoint from sub-frame ∪ arena ∪ subsret window) via memFrame.
   have hAgOp : ∀ k : Nat, aExpr.toNat + 8 ≤ k → k < aExpr.toNat + 12 →
@@ -262,18 +257,20 @@ theorem blockC_neg
     rw [sext_full, word8_toNat_recon, hprec]
   -- dead bytes present in c.σ.mem (whole mcall present ⇒ MemExtends):
   -- kind dword bytes 4-7 at (sp-944)+4..7, and v[16..24) at (sp-944)+16..23.
-  obtain ⟨d4, hd4⟩ := stackpop_present hMemExt (hStackPop (sp.toNat - 944 + 4) (by omega))
-  obtain ⟨d5, hd5⟩ := stackpop_present hMemExt (hStackPop (sp.toNat - 944 + 5) (by omega))
-  obtain ⟨d6, hd6⟩ := stackpop_present hMemExt (hStackPop (sp.toNat - 944 + 6) (by omega))
-  obtain ⟨d7, hd7⟩ := stackpop_present hMemExt (hStackPop (sp.toNat - 944 + 7) (by omega))
-  obtain ⟨q0, hq0⟩ := stackpop_present hMemExt (hStackPop (sp.toNat - 944 + 16) (by omega))
-  obtain ⟨q1, hq1⟩ := stackpop_present hMemExt (hStackPop (sp.toNat - 944 + 16 + 1) (by omega))
-  obtain ⟨q2, hq2⟩ := stackpop_present hMemExt (hStackPop (sp.toNat - 944 + 16 + 2) (by omega))
-  obtain ⟨q3, hq3⟩ := stackpop_present hMemExt (hStackPop (sp.toNat - 944 + 16 + 3) (by omega))
-  obtain ⟨q4, hq4⟩ := stackpop_present hMemExt (hStackPop (sp.toNat - 944 + 16 + 4) (by omega))
-  obtain ⟨q5, hq5⟩ := stackpop_present hMemExt (hStackPop (sp.toNat - 944 + 16 + 5) (by omega))
-  obtain ⟨q6, hq6⟩ := stackpop_present hMemExt (hStackPop (sp.toNat - 944 + 16 + 6) (by omega))
-  obtain ⟨q7, hq7⟩ := stackpop_present hMemExt (hStackPop (sp.toNat - 944 + 16 + 7) (by omega))
+  -- the sub-`Value`'s dead padding bytes, NAMED as their total reads (wave 48k):
+  -- `[subsret+4,+8)` (kind-dword padding) and `[subsret+16,+24)` (v[16..24)).
+  let d4 : BitVec 8 := bytesT1 c.σ.mem (sp.toNat - 944 + 4)
+  let d5 : BitVec 8 := bytesT1 c.σ.mem (sp.toNat - 944 + 5)
+  let d6 : BitVec 8 := bytesT1 c.σ.mem (sp.toNat - 944 + 6)
+  let d7 : BitVec 8 := bytesT1 c.σ.mem (sp.toNat - 944 + 7)
+  let q0 : BitVec 8 := bytesT1 c.σ.mem (sp.toNat - 928)
+  let q1 : BitVec 8 := bytesT1 c.σ.mem (sp.toNat - 928 + 1)
+  let q2 : BitVec 8 := bytesT1 c.σ.mem (sp.toNat - 928 + 2)
+  let q3 : BitVec 8 := bytesT1 c.σ.mem (sp.toNat - 928 + 3)
+  let q4 : BitVec 8 := bytesT1 c.σ.mem (sp.toNat - 928 + 4)
+  let q5 : BitVec 8 := bytesT1 c.σ.mem (sp.toNat - 928 + 5)
+  let q6 : BitVec 8 := bytesT1 c.σ.mem (sp.toNat - 928 + 6)
+  let q7 : BitVec 8 := bytesT1 c.σ.mem (sp.toNat - 928 + 7)
   -- payload-load bytes present in c.σ.mem: read64 already gives them (hpb0..hpb7).
   -- the op-token loaded value = 12#64
   have hopVal : (sign_extend (m := 64) ((((ob3.append ob2).append ob1).append ob0) : BitVec (8*4)))
@@ -323,9 +320,7 @@ theorem blockC_neg
   -- the `neg_blocks_triple` outputs land on the domain `payV`/`K13`/`V14` names.
   -- normalize the payload / dead-word byte addresses to the site-load offsets
   have e936 : sp.toNat - 944 + 8 = sp.toNat - 936 := by omega
-  have e928 : sp.toNat - 944 + 16 = sp.toNat - 928 := by omega
   rw [e936] at hpb0 hpb1 hpb2 hpb3 hpb4 hpb5 hpb6 hpb7
-  rw [e928] at hq0 hq1 hq2 hq3 hq4 hq5 hq6 hq7
   -- the `wlogM` of the spine reduces to the three error stores at sp-848/840/832
   -- (defeq to the `m3` tower after the address normalisations).
   let W : Mem := writeLog c.σ.mem (wlogM negLoadStoreBlk.body
@@ -348,15 +343,15 @@ theorem blockC_neg
       lb0 lb1 lb2 lb3 c.σ.regs.get? c.σ.sailOutput c.σ.mem c
       ⟨⟨⟨hG, rfl, rfl, hpc, hmi, hx8, hsp, hs1, hra, hcode, hopVal,
           (by ld_ok4 hop8 [hoc0, hoc1, hoc2, hoc3]),
-          (by ld_ok8 haddr144 [hkb0, hkb1, hkb2, hkb3, hd4, hd5, hd6, hd7]),
+          (by ld_ok8 haddr144 [hkb0, hkb1, hkb2, hkb3]),
           htick, (fun R _ _ => rfl)⟩,
          hcode,
          (by ld_ok8 haddr152 [hpb0, hpb1, hpb2, hpb3, hpb4, hpb5, hpb6, hpb7]),
-         (by ld_ok8 haddr160 [hq0, hq1, hq2, hq3, hq4, hq5, hq6, hq7]),
+         (by ld_ok8 haddr160 [hkb0]),
          (by ld_ok4 haddr144 [hkb0, hkb1, hkb2, hkb3]),
          (by st_ok haddr240), (by st_ok haddr248), (by st_ok haddr256)⟩,
        hkindVal,
-       (by ld_ok4 hline4 [hlb0, hlb1, hlb2, hlb3]),
+       (by ld_ok4 hline4 [hkb0]),
        -- e→line window `[aExpr+4, aExpr+8)` disjoint from the three store windows
        (by intro k hk1 hk2
            rw [haddr240, haddr248, haddr256]

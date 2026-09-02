@@ -941,7 +941,6 @@ theorem evalEqSimD
         ExprRepr ment aLOp.toNat el ∧
         read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
         ExprRepr ment aROp.toNat er ∧
-        (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
         MemExtends m0 ment ∧
         -- WAVE 47i: the parent node's entry-ground bundle at the arm entry.
         EvalGround ment SL A sp sret aExpr.toNat (.binary .eq el er) ∧
@@ -1006,7 +1005,6 @@ theorem evalNeSimD
         ExprRepr ment aLOp.toNat el ∧
         read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
         ExprRepr ment aROp.toNat er ∧
-        (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
         MemExtends m0 ment ∧
         -- WAVE 47i: the parent node's entry-ground bundle at the arm entry.
         EvalGround ment SL A sp sret aExpr.toNat (.binary .ne el er) ∧

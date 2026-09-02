@@ -133,19 +133,9 @@ def EvalNegSimGoal : Prop :=
       (fun c =>
         EvalEntry g N A SL φf φc st d env (.unary .neg esub) sp r sret aEnv aExpr m0 c ∧
         NegExtras N A SL st esub sp sret aExpr aOperand m0 ∧
-        -- Layout residuals (M6): WAVE 47i (`McallPopTotality` amendment) — the
-        -- pre-recursive-call memory is populated ONLY on the actual dead-byte
-        -- read footprint (the lowered-frame window `[sp-1120, sp)` holding the
-        -- sub-`Value` padding `[subsret+4,+8) ∪ [subsret+16,+24)`, plus the
-        -- node line-word `[aExpr+4, aExpr+8)`), and presence-extends `m0`.
-        -- The old total-population oracle is REFUTED
-        -- (`experiments/fleet/obstructions/McallPopTotality.lean`).
-        (∀ mcall : Mem,
-          (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-          ∀ a : Nat,
-            (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
-              (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-            (∃ b, mcall[a]? = some b)) ∧
+        -- WAVE 48k: the dead-byte presence CLOSURE is GONE — those bytes are
+        -- read totally, so nothing downstream asks for them to be mapped.
+        -- Only the `mem_ext` (presence-monotonicity) residual remains.
         (∀ mcall : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
           MemExtends m0 mcall))
@@ -204,7 +194,7 @@ call-point ghost `gpre := c1.σ.regs.get?` (frame is `rfl`) and reading `x11`/`x
 theorem evalNegSim : EvalNegSimGoal := by
   intro g N A SL φf φc st st' d env esub n sp r sret aEnv aExpr aOperand
     m0 hIH _hEvalE
-  intro c ⟨hc, hx, hFramePop, hMemExtRes⟩
+  intro c ⟨hc, hx, hMemExtRes⟩
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- === block A: prologue + dispatch → widened ArmEntryK @0x800035e0 ===
   have hkm0 : read32 m0 aExpr.toNat = some 8 := exprRepr_unary_kind (hc.mem ▸ hc.expr)
@@ -336,11 +326,6 @@ theorem evalNegSim : EvalNegSimGoal := by
   -- `mcall ↔ m0` outside stack ∪ arena (blockC's `hMcallM0`)
   have hMcallM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       mcall[a]? = m0[a]? := fun a ha _ => hAgM0 a ha
-  -- the stack-populated fact for `mcall` (Layout residual)
-  have hStackPop : ∀ a : Nat,
-      (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
-        (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-      ∃ b, mcall[a]? = some b := hFramePop mcall hAgM0
   have hMemExtM0mc : MemExtends m0 mcall := hMemExtRes mcall hAgM0
   -- `ExprRepr mcall aExpr (.unary .neg esub)` (AST survives the stack scribble)
   have hExprMcall : ExprRepr mcall aExpr.toNat (.unary .neg esub) :=
@@ -350,7 +335,7 @@ theorem evalNegSim : EvalNegSimGoal := by
     blockC_neg (fun R => c1.σ.regs.get? R) g N A SL φf φc
       st.store.frames.size st.store.closures.size
       st' n sp r sret aExpr v8 v9 v18 c2.σ.sailOutput esub m0
-      c2 ⟨mcall, hSubR, hgpre_x8, hExprMcall, hStackPop, hMemExtM0mc,
+      c2 ⟨mcall, hSubR, hgpre_x8, hExprMcall, hMemExtM0mc,
         hx.expr_align4, hc.expr_ram.1, hc.expr_ram.2, hx.expr_win8,
         hc.expr_stack_disjoint, hx.expr_A, hx.expr_sub,
         houtStr, hc.sret_align, hc.sret_ram.1, hc.sret_ram.2, hc.sret_win,

@@ -5,6 +5,7 @@ import Vsa.Sim.EvalAndSim
 import Vsa.Sim.EvalBinSim
 import Vsa.Sim.EvalOrChain
 import Vsa.Sim.ObsAvoid
+import Vsa.Sim.LoadSitesTotB
 import Vsa.Sim.EntryGroundKit
 
 /-!
@@ -92,10 +93,7 @@ theorem blockC_orFalse
         -- dead-byte read footprint — the lowered-frame window `[sp-1120, sp)`
         -- plus the node's line-word bytes `[aExpr+4, aExpr+8)` — replacing the
         -- REFUTED total-population oracle.
-        (∀ a : Nat,
-          (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
-            (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-          (∃ b, mcall[a]? = some b)) ∧
+        -- WAVE 48k: the dead-byte presence conjunct is GONE (total reads).
         -- presence-monotonicity over the entry `m0` (`mem_ext` residual).
         MemExtends m0 mcall ∧
         -- WAVE 47i: the parent node's entry-ground bundle at the pre-call
@@ -175,7 +173,7 @@ theorem blockC_orFalse
         PhiExtends φc φce nc ∧
         PreEpilogueVD g N A SL φfe φce st'' (.bool vr.truthy) sp r sret v8 v9 v18 outF m0 mpre c) := by
   intro c hpre
-  obtain ⟨mcall, hSub, hgx8, hgx18, hexpr, hPayRight, hStackPop, hMemExtM0, hgroundP, hexprAl, hexprLo, hexprHi, hexprHi32,
+  obtain ⟨mcall, hSub, hgx8, hgx18, hexpr, hPayRight, hMemExtM0, hgroundP, hexprAl, hexprLo, hexprHi, hexprHi32,
     hexprWin, hexprSL, hexprSL32, hexprA, hexprA32, hexprSub,
     hRightSurv, hropAl, hropLo, hropHi, hropWin, hropStk, hPayDisjRight, hVrMapCoh,
     houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretStk, hsretEvalCode, hSretBoolCode,
@@ -234,11 +232,15 @@ theorem blockC_orFalse
     apply BitVec.eq_of_toNat_eq; decide
   have heq2525 : ((25#64 : BitVec 64) == (25#64 : BitVec 64)) = true := by decide
   -- the whole 24-byte sub-Value buffer bytes at c.σ.mem[sp-968 .. +24) (present).
+  -- WAVE 48k: TOTAL reads.  The model's `readByte` is `getD 0`, so these dead
+  -- sub-`Value`/node bytes need no map presence at all — each is simply NAMED
+  -- as its own total read.  (This replaces the refuted `frame_pop` oracle;
+  -- the window hypothesis is kept so every call site is unchanged.)
   have hStackPopC : ∀ a : Nat,
       (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
         (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-      ∃ b, c.σ.mem[a]? = some b :=
-    fun a h => stackpop_present hMemExt (hStackPop a h)
+      ∃ b : BitVec 8, (c.σ.mem[a]?).getD 0 = b :=
+    fun _ _ => ⟨_, rfl⟩
   obtain ⟨kb0, hkb0⟩ := hStackPopC (sp.toNat - 968) (by omega)
   obtain ⟨kb1, hkb1⟩ := hStackPopC (sp.toNat - 968 + 1) (by omega)
   obtain ⟨kb2, hkb2⟩ := hStackPopC (sp.toNat - 968 + 2) (by omega)
@@ -345,13 +347,13 @@ theorem blockC_orFalse
   -- outside-window agreement (baked into the block; = the old copy tower).
   have hm3_out : ∀ a, (a < sp.toNat - 1024 ∨ sp.toNat - 1024 + 24 ≤ a) →
       m3[a]? = c.σ.mem[a]? := fun a ha => hcopyOut a (by rw [hspsub]; omega)
-  have hm3_copy : ∀ j, j < 24 → m3[sp.toNat - 1024 + j]? = c.σ.mem[sp.toNat - 968 + j]? := by
+  have hm3_copy : ∀ j, j < 24 → m3[sp.toNat - 1024 + j]? = some ((c.σ.mem[sp.toNat - 968 + j]?).getD 0) := by
     intro j hj
     rw [show sp.toNat - 1024 + j = (sp - 1088#64).toNat + 0x40 + j from by rw [hspsub]; omega,
       show sp.toNat - 968 + j = (sp - 1088#64).toNat + 0x78 + j from by rw [hspsub]; omega]
     exact hcopyWin j hj
   have hbufRepr : ValueRepr m3 N φcv (sp.toNat - 1024) vl :=
-    valueRepr_copy_of_writeWindow (srcAddr := sp.toNat - 968) (dstAddr := sp.toNat - 1024)
+    valueRepr_copy_total_of_writeWindow (srcAddr := sp.toNat - 968) (dstAddr := sp.toNat - 1024)
       hm3_copy hm3_out
       (fun p s hp k hk => hBE.pay_disj p s hvalSub' hp k hk) hvalSub'
   -- code image survives the buffer scribble.
@@ -365,11 +367,15 @@ theorem blockC_orFalse
     rw [hmemD]
     exact (memExtends_writeMap8 _ _ _).trans
       ((memExtends_writeMap8 _ _ _).trans (memExtends_writeMap8 _ _ _))
+  -- WAVE 48k: TOTAL reads.  The model's `readByte` is `getD 0`, so these dead
+  -- sub-`Value`/node bytes need no map presence at all — each is simply NAMED
+  -- as its own total read.  (This replaces the refuted `frame_pop` oracle;
+  -- the window hypothesis is kept so every call site is unchanged.)
   have hStackPopM3 : ∀ a : Nat,
       (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
         (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-      ∃ b, m3[a]? = some b := fun a hw => by
-    obtain ⟨b, hb⟩ := hStackPopC a hw; exact hMEc_m3 a b hb
+      ∃ b : BitVec 8, (m3[a]?).getD 0 = b :=
+    fun _ _ => ⟨_, rfl⟩
   ------------------------------------------------------------------------
   -- 0x80003990: jal value_truthy → PC := value_truthy entry, ra := 0x80003994
   ------------------------------------------------------------------------
@@ -463,7 +469,7 @@ theorem blockC_orFalse
   obtain ⟨eb6, heb6⟩ := hStackPopM3 (sp.toNat - 1088 + 6) (by omega)
   obtain ⟨eb7, heb7⟩ := hStackPopM3 (sp.toNat - 1088 + 7) (by omega)
   obtain ⟨σ12, i12, hs12', hi12, hG12, hmem12, hobs12⟩ :=
-    site_80003994_lg cT.σ cT.tick cT.steps (0x80003994#64) vmiT (sp - 1088#64)
+    site_80003994_totb cT.σ cT.tick cT.steps (0x80003994#64) vmiT (sp - 1088#64)
       eb0 eb1 eb2 eb3 eb4 eb5 eb6 eb7 hGT hpcT' hmiT hsp_T (hmemT' ▸ hcode_m3) rfl
       (by rw [hspill0Nat]; omega) (by rw [hspill0Nat]; omega)
       (by rw [hspill0Nat, htoh]; right; omega) (by rw [hspill0Nat]; omega)
@@ -542,14 +548,14 @@ theorem blockC_orFalse
   have hr24m3_7 : m3[aExpr.toNat + 24 + 7]? = some rp7 := (hNodeM3 _ (by omega) (by omega)).trans ((hAgNode _ (by omega) (by omega)).trans hrp7)
   -- 0x80003a00: ld x12,0x18(x8) → x12 := aRight
   obtain ⟨τ1, j1, ht1', hj1, hGτ1, hmemτ1, hoτ1⟩ :=
-    site_80003a00_lg σ13 i13 (cT.steps + 1 + 1) (0x80003a00#64) vmi13 aExpr
+    site_80003a00_totb σ13 i13 (cT.steps + 1 + 1) (0x80003a00#64) vmi13 aExpr
       rp0 rp1 rp2 rp3 rp4 rp5 rp6 rp7 hG13 hpc13 hmi13 hx8_13 hcode_13 rfl
       (by rw [hoff24_s0]; omega) (by rw [hoff24_s0]; omega)
       (by rw [hoff24_s0]; right; rw [htoh] at hexprWin ⊢; omega) (by rw [hoff24_s0]; have := hexprAl; omega)
-      (by rw [hoff24_s0, hmem13e]; exact hr24m3_0) (by rw [hoff24_s0, hmem13e]; exact hr24m3_1)
-      (by rw [hoff24_s0, hmem13e]; exact hr24m3_2) (by rw [hoff24_s0, hmem13e]; exact hr24m3_3)
-      (by rw [hoff24_s0, hmem13e]; exact hr24m3_4) (by rw [hoff24_s0, hmem13e]; exact hr24m3_5)
-      (by rw [hoff24_s0, hmem13e]; exact hr24m3_6) (by rw [hoff24_s0, hmem13e]; exact hr24m3_7) hi13
+      (by rw [hoff24_s0, hmem13e]; try (first | exact hr24m3_0 | exact lpin_of_present hr24m3_0)) (by rw [hoff24_s0, hmem13e]; try (first | exact hr24m3_1 | exact lpin_of_present hr24m3_1))
+      (by rw [hoff24_s0, hmem13e]; try (first | exact hr24m3_2 | exact lpin_of_present hr24m3_2)) (by rw [hoff24_s0, hmem13e]; try (first | exact hr24m3_3 | exact lpin_of_present hr24m3_3))
+      (by rw [hoff24_s0, hmem13e]; try (first | exact hr24m3_4 | exact lpin_of_present hr24m3_4)) (by rw [hoff24_s0, hmem13e]; try (first | exact hr24m3_5 | exact lpin_of_present hr24m3_5))
+      (by rw [hoff24_s0, hmem13e]; try (first | exact hr24m3_6 | exact lpin_of_present hr24m3_6)) (by rw [hoff24_s0, hmem13e]; try (first | exact hr24m3_7 | exact lpin_of_present hr24m3_7)) hi13
   have hstepτ1 : Step ⟨σ13, i13, cT.steps + 1 + 1⟩ ⟨τ1, j1, cT.steps + 1 + 1 + 1⟩ := ht1'
   have hmemτ1e : τ1.mem = m3 := by rw [hmemτ1]; exact hmem13e
   have hpcτ1 : τ1.regs.get? Register.PC = some (0x80003a04#64) := by
@@ -849,13 +855,15 @@ theorem blockC_orFalse
   -- 0x800035b0 / b4 / b8: the three post-call loads of the rv buffer (sp-848).
   -- present bytes in cR.mem via MemExtends m3 cR.mem + m3-stackpop.
   ------------------------------------------------------------------------
+  -- WAVE 48k: TOTAL reads.  The model's `readByte` is `getD 0`, so these dead
+  -- sub-`Value`/node bytes need no map presence at all — each is simply NAMED
+  -- as its own total read.  (This replaces the refuted `frame_pop` oracle;
+  -- the window hypothesis is kept so every call site is unchanged.)
   have hPopCR : ∀ a : Nat,
       (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
         (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-      (∃ b, cR.σ.mem[a]? = some b) := by
-    intro a hw
-    obtain ⟨b, hb⟩ := hStackPopM3 a hw
-    exact hMemExtR a b hb
+      ∃ b : BitVec 8, (cR.σ.mem[a]?).getD 0 = b :=
+    fun _ _ => ⟨_, rfl⟩
   obtain ⟨rb0, hrb0⟩ := hPopCR (sp.toNat - 944) (by omega)
   obtain ⟨rb1, hrb1⟩ := hPopCR (sp.toNat - 944 + 1) (by omega)
   obtain ⟨rb2, hrb2⟩ := hPopCR (sp.toNat - 944 + 2) (by omega)
@@ -887,7 +895,7 @@ theorem blockC_orFalse
     spill_addr sp (0x0a0#12) 928 (by decide) (by omega) hsp1088
   -- 0x80003a10: ld x13,0x90(x2) → x13 := rv kind word
   obtain ⟨ρ1, k1, hρ1', hk1, hGρ1, hmemρ1, hoρ1⟩ :=
-    site_80003a10_lg cR.σ cR.tick cR.steps (0x80003a10#64) vmiR (sp - 1088#64)
+    site_80003a10_totb cR.σ cR.tick cR.steps (0x80003a10#64) vmiR (sp - 1088#64)
       rb0 rb1 rb2 rb3 rb4 rb5 rb6 rb7 hGR hpcR hmiR hspR hcodeR rfl
       (by rw [haddr240']; omega) (by rw [haddr240']; omega)
       (by rw [haddr240', htoh]; right; omega) (by rw [haddr240']; omega)
@@ -910,7 +918,7 @@ theorem blockC_orFalse
   have hcodeρ1 : Eval_exprLoaded ρ1.mem := by rw [hmemρ1e]; exact hcodeR
   -- 0x80003a14: ld x14,0x98(x2) → x14 := rv payload word
   obtain ⟨ρ2, k2, hρ2', hk2, hGρ2, hmemρ2, hoρ2⟩ :=
-    site_80003a14_lg ρ1 k1 (cR.steps + 1) (0x80003a14#64) vmiρ1 (sp - 1088#64)
+    site_80003a14_totb ρ1 k1 (cR.steps + 1) (0x80003a14#64) vmiρ1 (sp - 1088#64)
       sb0 sb1 sb2 sb3 sb4 sb5 sb6 sb7 hGρ1 hpcρ1 hmiρ1 hspρ1 hcodeρ1 rfl
       (by rw [haddr248]; omega) (by rw [haddr248]; omega)
       (by rw [haddr248, htoh]; right; omega) (by rw [haddr248]; omega)
@@ -936,7 +944,7 @@ theorem blockC_orFalse
   have hcodeρ2 : Eval_exprLoaded ρ2.mem := by rw [hmemρ2e]; exact hcodeR
   -- 0x80003a18: ld x15,0xa0(x2) → x15 := rv[16..24) word
   obtain ⟨ρ3, k3, hρ3', hk3, hGρ3, hmemρ3, hoρ3⟩ :=
-    site_80003a18_lg ρ2 k2 (cR.steps + 1 + 1) (0x80003a18#64) vmiρ2 (sp - 1088#64)
+    site_80003a18_totb ρ2 k2 (cR.steps + 1 + 1) (0x80003a18#64) vmiρ2 (sp - 1088#64)
       tb0 tb1 tb2 tb3 tb4 tb5 tb6 tb7 hGρ2 hpcρ2 hmiρ2 hspρ2 hcodeρ2 rfl
       (by rw [haddr256]; omega) (by rw [haddr256]; omega)
       (by rw [haddr256, htoh]; right; omega) (by rw [haddr256]; omega)
@@ -1279,12 +1287,7 @@ def EvalOrFalseSimGoal : Prop :=
           cm.σ.regs.get? Register.x13 = some aEnv3) ∧
         -- WAVE 47i (`McallPopTotality` amendment): windowed frame/node presence
         -- + `mem_ext`, replacing the refuted totality oracle.
-        (∀ mcall : Mem,
-          (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-          ∀ a : Nat,
-            (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
-              (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-            (∃ b, mcall[a]? = some b)) ∧
+        -- WAVE 48k: the dead-byte presence CLOSURE is GONE (total reads).
         (∀ mcall : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
           MemExtends m0 mcall))
@@ -1301,7 +1304,7 @@ epilogue → `EvalExitD`). Mirrors `evalAndTrueSim`, with the second IH. -/
 theorem evalOrFalseSim : EvalOrFalseSimGoal := by
   intro g N A SL φf φc st st' st'' d env el er vl vr sp r sret aEnv aExpr aLeft aRight aEnv3
     m0 hvlfalse hIH hIHr _hEvalE
-  intro c ⟨hc, hx, hx13reach, hFramePop, hMemExtRes⟩
+  intro c ⟨hc, hx, hx13reach, hMemExtRes⟩
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- === block A: prologue + dispatch → widened ArmEntryK @0x8000355c ===
   have hkm0 : read32 m0 aExpr.toNat = some 7 := exprRepr_logical_kind (hc.mem ▸ hc.expr)
@@ -1420,10 +1423,6 @@ theorem evalOrFalseSim : EvalOrFalseSimGoal := by
     (hc.mem ▸ hc.nbs_pins : NBSPins m0).transport
       (fun a ha => (hAgM0 a (by have := hx.vicode_stk; omega)).symm)
       (fun a ha => (hAgM0 a (by have := hx.table_stk; omega)).symm)
-  have hStackPop : ∀ a : Nat,
-      (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
-        (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-      ∃ b, mcall[a]? = some b := hFramePop mcall hAgM0
   have hMemExtM0mc : MemExtends m0 mcall := hMemExtRes mcall hAgM0
   have hExprMcall : ExprRepr mcall aExpr.toNat (.logical .or el er) :=
     hx.expr_survives mcall (fun a ha => (hAgM0 a ha).symm)
@@ -1461,7 +1460,7 @@ theorem evalOrFalseSim : EvalOrFalseSimGoal := by
       st.store.frames.size st.store.closures.size st' st'' d env vl vr
       sp r sret aExpr aEnv aRight v8 v9 v18 c2.σ.sailOutput el er m0 hvlfalse hIHr
       hx.size_frames hx.size_closures hnf
-      c2 ⟨mcall, hSubR, hgpre_x8, hAEx18, hExprMcall, hPayRightMcall, hStackPop, hMemExtM0mc,
+      c2 ⟨mcall, hSubR, hgpre_x8, hAEx18, hExprMcall, hPayRightMcall, hMemExtM0mc,
         -- WAVE 47i: the parent ground at the pre-call memory (ONE kit call).
         ((hc.mem ▸ hc.ground).transport_offstack hc.table_stack_disjoint
           hx.sp_SLhi hAgM0),

@@ -21,6 +21,9 @@ Classes (registers are decimal x-register numbers, immediates hex):
     branch_taken    bop rs1 rs2 imm13   # bop in BEQ/BNE/BLT/BGE/BLTU/BGEU
     branch_nottaken bop rs1 rs2 imm13
     ld  rd rs1 imm12               # 8-byte load  (exec_ld)
+    ld_tot  rd rs1 imm12           # 8-byte load, TOTAL: value = bytesT8, no byte hyps
+    lw_tot  rd rs1 imm12           # 4-byte load, TOTAL: value = bytesT4, no byte hyps
+    lbu_tot rd rs1 imm12           # 1-byte load, TOTAL: value = bytesT1, no byte hyps
     lw  rd rs1 imm12               # 4-byte load  (exec_lw)
     lbu rd rs1 imm12               # 1-byte load  (exec_lbu_gen)
     sd  rs2 rs1 imm12              # 8-byte store (exec_sd_val / writeMap8)
@@ -147,6 +150,8 @@ class Emitter:
         vparams = " ".join(["vminstret"] + [f"v{n}" for n in vregs])
         return (
             f"/-- 0x{addr:08x}: {doc} -/\n"
+            "-- discipline: allow(R1-site-battery) machine-emitted from a TSV by "
+            "scripts/gen_sites.py; R1 targets HAND-written batteries\n"
             f"theorem {name} (σ : MState) (i u : Nat) (pc : BitVec 64) "
             f"({vparams} : BitVec 64){extra_params}\n"
             "    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)\n"
@@ -436,6 +441,143 @@ class Emitter:
             f"sigmaPost_alu σ pc vminstret Register.x{rd} {value}")
         return head + self.alu_body(s, instr, rd, value, exec_proof)
 
+
+    # -- TOTAL (presence-free) load classes -----------------------------------
+    #
+    # The Sail model reads memory totally (`readByte = getD 0`), so a load needs
+    # NO byte-presence hypothesis: the loaded value IS the total read
+    # (`bytesT{1,2,4,8}`).  These emit the same `StepObs` shape as `ld`/`lw`/`lbu`
+    # minus the `b*`/`h*` parameters — the sibling every caller that cannot honestly
+    # supply presence over unwritten stack bytes should use (see
+    # `experiments/blockmem-rewrite-plan.md`).
+
+    def _load_wide_tot(self, s: Site, nbytes: int) -> str:
+        rd, rs1, imm = int(s.fields[0]), int(s.fields[1]), int(s.fields[2], 16)
+        if rd == 0 or rs1 == 0:
+            raise ValueError(f"line {s.lineno}: load with x0 operand unsupported")
+        mn = {8: "ld", 4: "lw"}[nbytes]
+        ea = f"(v{rs1} + sign_extend (m := 64) (0x{imm:03x}#12))"
+        tot = f"(bytesT{nbytes} σ.mem {ea}.toNat : BitVec (8 * {nbytes}))"
+        value = f"(sign_extend (m := 64) {tot})"
+        extra_hyps = (
+            f"\n    (hlo : 0x80000000 ≤ {ea}.toNat)\n"
+            f"    (hhiram : {ea}.toNat + {nbytes} ≤ 0x100000000)\n"
+            f"    (hhtif : {ea}.toNat + {nbytes} ≤ tohostAddr\n"
+            f"      ∨ tohostAddr + 8 ≤ {ea}.toNat)\n"
+            f"    (halign : {ea}.toNat % {nbytes} = 0)\n   "
+        )
+        instr = (f"instruction.LOAD (0x{imm:03x}#12, {regidx(rs1)}, "
+                 f"{regidx(rd)}, false, {nbytes})")
+        exec_proof = (
+            f"    (exec_{mn}_tot σ (0x{s.addr:08x}#64) (0x{imm:03x}#12) ({regidx(rs1)}) "
+            f"({regidx(rd)})\n"
+            f"      (sigma3_alu σ (0x{s.addr:08x}#64) Register.x{rd} {value})\n"
+            f"      v{rs1} hG\n"
+            f"      {rx_read(rs1, s.addr)}\n"
+            f"      (wX_bits_x{rd} _ {value})\n"
+            f"      hlo hhiram hhtif halign)")
+        head = self.head(
+            self.site_name(s.addr), s.addr,
+            f"`{mn} x{rd},0x{imm:x}(x{rs1})` — TOTAL (no byte-presence hypothesis).",
+            [rs1], "", reg_hyp(rs1), extra_hyps,
+            "σ'.mem = σ.mem",
+            f"sigmaPost_alu σ pc vminstret Register.x{rd}\n"
+            f"        (sign_extend (m := 64)\n          {tot})")
+        return head + self.alu_body(s, instr, rd, value, exec_proof)
+
+    def emit_ld_tot(self, s: Site) -> str:
+        return self._load_wide_tot(s, 8)
+
+    def emit_lw_tot(self, s: Site) -> str:
+        return self._load_wide_tot(s, 4)
+
+    def emit_lbu_tot(self, s: Site) -> str:
+        rd, rs1, imm = int(s.fields[0]), int(s.fields[1]), int(s.fields[2], 16)
+        if rd == 0 or rs1 == 0:
+            raise ValueError(f"line {s.lineno}: lbu with x0 operand unsupported")
+        ea = f"(v{rs1} + sign_extend (m := 64) (0x{imm:03x}#12))"
+        tot = f"(bytesT1 σ.mem {ea}.toNat : BitVec (8 * 1))"
+        value = f"(zero_extend (m := 64) {tot})"
+        extra_hyps = (
+            f"\n    (hlo : 0x80000000 ≤ {ea}.toNat)\n"
+            f"    (hhiram : {ea}.toNat + 1 ≤ 0x100000000)\n"
+            f"    (hhtif : {ea}.toNat + 1 ≤ tohostAddr\n"
+            f"      ∨ tohostAddr + 8 ≤ {ea}.toNat)\n   ")
+        instr = (f"instruction.LOAD (0x{imm:03x}#12, {regidx(rs1)}, "
+                 f"{regidx(rd)}, true, 1)")
+        exec_proof = (
+            f"    (exec_lbu_tot σ (0x{s.addr:08x}#64) (0x{imm:03x}#12) ({regidx(rs1)}) "
+            f"({regidx(rd)})\n"
+            f"      (sigma3_alu σ (0x{s.addr:08x}#64) Register.x{rd} {value})\n"
+            f"      v{rs1} hG\n"
+            f"      {rx_read(rs1, s.addr)}\n"
+            f"      (wX_bits_x{rd} _ {value})\n"
+            "      hlo hhiram hhtif)")
+        head = self.head(
+            self.site_name(s.addr), s.addr,
+            f"`lbu x{rd},0x{imm:x}(x{rs1})` — TOTAL (no byte-presence hypothesis).",
+            [rs1], "", reg_hyp(rs1), extra_hyps,
+            "σ'.mem = σ.mem",
+            f"sigmaPost_alu σ pc vminstret Register.x{rd} {value}")
+        return head + self.alu_body(s, instr, rd, value, exec_proof)
+
+
+    # -- TOTAL, byte-parameterized (`_totb`) --------------------------------
+    #
+    # EXACTLY the `ld`/`lw`/`lbu` signature, with each byte hypothesis weakened
+    # from PRESENCE (`σ.mem[ea+k]? = some bk`) to the TOTAL READ
+    # (`(σ.mem[ea+k]?).getD 0 = bk`).  Same argument positions, same conclusion,
+    # so a caller migrates by swapping the site name and sourcing its bytes from
+    # `⟨_, rfl⟩` instead of a presence oracle.
+
+    def _load_wide_totb(self, s: Site, nbytes: int) -> str:
+        rd, rs1, imm = int(s.fields[0]), int(s.fields[1]), int(s.fields[2], 16)
+        if rd == 0 or rs1 == 0:
+            raise ValueError(f"line {s.lineno}: load with x0 operand unsupported")
+        mn = {8: "ld", 4: "lw"}[nbytes]
+        ea = f"(v{rs1} + sign_extend (m := 64) (0x{imm:03x}#12))"
+        app = append_expr(nbytes)
+        value = f"(sign_extend (m := 64) {app})"
+        bparams = " ".join(f"b{k}" for k in range(nbytes))
+        extra_params = f"\n    ({bparams} : BitVec 8)"
+        byte_hyps = "".join(
+            f"    (h{k} : ({{σ.mem[{ea}.toNat{f' + {k}' if k else ''}]?}}).getD 0 = b{k})\n"
+            .replace("{", "").replace("}", "")
+            for k in range(nbytes))
+        extra_hyps = (
+            f"\n    (hlo : 0x80000000 ≤ {ea}.toNat)\n"
+            f"    (hhiram : {ea}.toNat + {nbytes} ≤ 0x100000000)\n"
+            f"    (hhtif : {ea}.toNat + {nbytes} ≤ tohostAddr\n"
+            f"      ∨ tohostAddr + 8 ≤ {ea}.toNat)\n"
+            f"    (halign : {ea}.toNat % {nbytes} = 0)\n"
+            f"{byte_hyps}   ")
+        instr = (f"instruction.LOAD (0x{imm:03x}#12, {regidx(rs1)}, "
+                 f"{regidx(rd)}, false, {nbytes})")
+        hs = ", ".join(f"h{k}" for k in range(nbytes))
+        exec_proof = (
+            f"    (exec_{mn}_totv σ (0x{s.addr:08x}#64) (0x{imm:03x}#12) ({regidx(rs1)}) "
+            f"({regidx(rd)})\n"
+            f"      (sigma3_alu σ (0x{s.addr:08x}#64) Register.x{rd} {value})\n"
+            f"      v{rs1} {value} hG\n"
+            f"      {rx_read(rs1, s.addr)}\n"
+            f"      (by simp only [bytesT{nbytes}, {hs}])\n"
+            f"      (wX_bits_x{rd} _ {value})\n"
+            f"      hlo hhiram hhtif halign)")
+        head = self.head(
+            self.site_name(s.addr), s.addr,
+            f"`{mn} x{rd},0x{imm:x}(x{rs1})` — TOTAL-READ byte hypotheses.", [rs1],
+            extra_params, reg_hyp(rs1), extra_hyps,
+            "σ'.mem = σ.mem",
+            f"sigmaPost_alu σ pc vminstret Register.x{rd}\n"
+            f"        (sign_extend (m := 64)\n          {app})")
+        return head + self.alu_body(s, instr, rd, value, exec_proof)
+
+    def emit_ld_totb(self, s: Site) -> str:
+        return self._load_wide_totb(s, 8)
+
+    def emit_lw_totb(self, s: Site) -> str:
+        return self._load_wide_totb(s, 4)
+
     def _store(self, s: Site, nbytes: int) -> str:
         rs2, rs1, imm = int(s.fields[0]), int(s.fields[1]), int(s.fields[2], 16)
         if rs1 == 0:
@@ -601,6 +743,11 @@ CLASS_EMITTERS = {
     "ld": "emit_ld",
     "lw": "emit_lw",
     "lbu": "emit_lbu",
+    "ld_tot": "emit_ld_tot",
+    "lw_tot": "emit_lw_tot",
+    "lbu_tot": "emit_lbu_tot",
+    "ld_totb": "emit_ld_totb",
+    "lw_totb": "emit_lw_totb",
     "sd": "emit_sd",
     "sw": "emit_sw",
     "sb": "emit_sb",
@@ -682,6 +829,8 @@ def main() -> int:
         decode_imports.add(index[key])
 
     imports = ["Vsa.Sim.ValueSites"]
+    if any(s.cls.endswith("_tot") or s.cls.endswith("_totb") for s in sites):
+        imports.append("Vsa.Sim.ExecLoadTotal")
     if any(s.cls in NEEDS_STRCPY_SITES for s in sites):
         imports.append("Vsa.Sim.StrcpySites")
     imports.append(code_import)
@@ -708,6 +857,12 @@ open Vsa.Machine (MState Config Step Steps)
 
 set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000
+
+-- discipline: allow(R5-stepobs-volume) a per-site battery is one `stepObs_` per
+-- site BY CONSTRUCTION; this file is machine-emitted from a TSV, not a
+-- hand-threaded chain.
+-- discipline: allow(R7-conj-tower-def) the existentials are the `∃ σ' i'` of each
+-- site's `StepObs` conclusion (the landed shape), not new ∃/∧-tower posts.
 
 namespace {args.namespace}
 """)

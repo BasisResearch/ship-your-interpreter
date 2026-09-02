@@ -184,13 +184,10 @@ def NegResid (st : SpecSt) (esub : Expr) : Prop :=
     -- Amended to the honest pair: presence on the actual dead-byte read
     -- footprint (lowered frame `[sp-1120, sp)` + node line-word
     -- `[aExpr+4, aExpr+8)`) and presence-monotonicity over `m0` (both M6
-    -- Layout facts, the `BinArmExtras.frame_pop`/`mem_ext` shape).
-    (∀ mcall : Mem,
-      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-      ∀ a : Nat,
-        (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
-          (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-        (∃ b, mcall[a]? = some b)) ∧
+    -- Layout facts, the `BinArmExtras.mem_ext` shape; the `frame_pop`
+    -- presence sibling was DELETED in wave 48k — loads read totally).
+    -- WAVE 48k: the dead-byte presence CLOSURE is GONE (the load layer
+    -- consumes the model's total read; nothing asks for map presence).
     (∀ mcall : Mem,
       (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
       MemExtends m0 mcall)
@@ -211,12 +208,12 @@ theorem eval_neg_row (hR : ∀ st esub, NegResid st esub) :
   obtain ⟨p, hpay, hpexpr⟩ : ∃ p, read64 m0 (aExpr.toNat + 16) = some p ∧ ExprRepr m0 p esub := by
     cases hexpr with | unary _ _ hp hpe => exact ⟨_, hp, hpe⟩
   have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
-  obtain ⟨hNegX, hFramePop, hMemExtRes⟩ :=
+  obtain ⟨hNegX, hMemExtRes⟩ :=
     hR st esub g N A SL φf φc d env sp r sret aEnv aExpr (BitVec.ofNat 64 p) m0 c hc
     (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
     (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
   exact Vsa.Sim.evalNegSim g N A SL φf φc st st' d env esub n sp r sret aEnv aExpr
-    (BitVec.ofNat 64 p) m0 ihE (EvalE.neg st d env esub st' n hE) c ⟨hc, hNegX, hFramePop, hMemExtRes⟩
+    (BitVec.ofNat 64 p) m0 ihE (EvalE.neg st d env esub st' n hE) c ⟨hc, hNegX, hMemExtRes⟩
 
 /-- The not-case residual: `NotSimExtras` + the 47i windowed presence/`mem_ext` pair, keyed to the operand pointer
 witnessed by the entry `ExprRepr` (the operand value `vsub` is spec-level). -/
@@ -235,13 +232,10 @@ def NotResid (esub : Expr) (vsub : Value) : Prop :=
     -- Amended to the honest pair: presence on the actual dead-byte read
     -- footprint (lowered frame `[sp-1120, sp)` + node line-word
     -- `[aExpr+4, aExpr+8)`) and presence-monotonicity over `m0` (both M6
-    -- Layout facts, the `BinArmExtras.frame_pop`/`mem_ext` shape).
-    (∀ mcall : Mem,
-      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-      ∀ a : Nat,
-        (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
-          (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-        (∃ b, mcall[a]? = some b)) ∧
+    -- Layout facts, the `BinArmExtras.mem_ext` shape; the `frame_pop`
+    -- presence sibling was DELETED in wave 48k — loads read totally).
+    -- WAVE 48k: the dead-byte presence CLOSURE is GONE (the load layer
+    -- consumes the model's total read; nothing asks for map presence).
     (∀ mcall : Mem,
       (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
       MemExtends m0 mcall)
@@ -262,12 +256,12 @@ theorem eval_not_row (hR : ∀ esub vsub, NotResid esub vsub) :
   obtain ⟨p, hpay, hpexpr⟩ : ∃ p, read64 m0 (aExpr.toNat + 16) = some p ∧ ExprRepr m0 p esub := by
     cases hexpr with | unary _ _ hp hpe => exact ⟨_, hp, hpe⟩
   have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
-  obtain ⟨hNotX, hFramePop, hMemExtRes⟩ :=
+  obtain ⟨hNotX, hMemExtRes⟩ :=
     hR esub vsub g N A SL φf φc st d env sp r sret aEnv aExpr (BitVec.ofNat 64 p) m0 c hc
     (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
     (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
   exact Vsa.Sim.evalNotSim g N A SL φf φc st st' d env esub vsub sp r sret aEnv aExpr
-    (BitVec.ofNat 64 p) m0 ihE (EvalE.not st d env esub st' vsub hE) c ⟨hc, hNotX, hFramePop, hMemExtRes⟩
+    (BitVec.ofNat 64 p) m0 ihE (EvalE.not st d env esub st' vsub hE) c ⟨hc, hNotX, hMemExtRes⟩
 
 /-- The orTrue-case residual: `OrTrueExtras` + the `aEnv3` x13-survival
 Steps-residual + the 47i windowed presence/`mem_ext` pair, keyed to the LEFT-operand pointer witnessed by the
@@ -290,13 +284,10 @@ def OrTrueResid (el er : Expr) (vl : Value) : Prop :=
     -- Amended to the honest pair: presence on the actual dead-byte read
     -- footprint (lowered frame `[sp-1120, sp)` + node line-word
     -- `[aExpr+4, aExpr+8)`) and presence-monotonicity over `m0` (both M6
-    -- Layout facts, the `BinArmExtras.frame_pop`/`mem_ext` shape).
-    (∀ mcall : Mem,
-      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-      ∀ a : Nat,
-        (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
-          (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-        (∃ b, mcall[a]? = some b)) ∧
+    -- Layout facts, the `BinArmExtras.mem_ext` shape; the `frame_pop`
+    -- presence sibling was DELETED in wave 48k — loads read totally).
+    -- WAVE 48k: the dead-byte presence CLOSURE is GONE (the load layer
+    -- consumes the model's total read; nothing asks for map presence).
     (∀ mcall : Mem,
       (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
       MemExtends m0 mcall)
@@ -317,14 +308,14 @@ theorem eval_orTrue_row (hR : ∀ el er vl, OrTrueResid el er vl) :
   obtain ⟨p, hpay, hpexpr⟩ : ∃ p, read64 m0 (aExpr.toNat + 16) = some p ∧ ExprRepr m0 p el := by
     cases hexpr with | logical _ _ hl hle _ _ => exact ⟨_, hl, hle⟩
   have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
-  obtain ⟨hX, ⟨aEnv3, hx13⟩, hFramePop, hMemExtRes⟩ :=
+  obtain ⟨hX, ⟨aEnv3, hx13⟩, hMemExtRes⟩ :=
     hR el er vl g N A SL φf φc st d env sp r sret aEnv aExpr
     (BitVec.ofNat 64 p) m0 c hc
     (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
     (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
   exact Vsa.Sim.evalOrTrueSim g N A SL φf φc st st' d env el er vl sp r sret aEnv aExpr
     (BitVec.ofNat 64 p) aEnv3 m0 hvl ihE (EvalE.orTrue st d env el er st' vl hE hvl) c
-    ⟨hc, hX, hx13, hFramePop, hMemExtRes⟩
+    ⟨hc, hX, hx13, hMemExtRes⟩
 
 /-- The andFalse-case residual: `AndFalseExtras` + the `aEnv3` x13-survival
 Steps-residual + the 47i windowed presence/`mem_ext` pair, keyed to the LEFT-operand pointer witnessed by the
@@ -347,13 +338,10 @@ def AndFalseResid (el er : Expr) (vl : Value) : Prop :=
     -- Amended to the honest pair: presence on the actual dead-byte read
     -- footprint (lowered frame `[sp-1120, sp)` + node line-word
     -- `[aExpr+4, aExpr+8)`) and presence-monotonicity over `m0` (both M6
-    -- Layout facts, the `BinArmExtras.frame_pop`/`mem_ext` shape).
-    (∀ mcall : Mem,
-      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-      ∀ a : Nat,
-        (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
-          (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-        (∃ b, mcall[a]? = some b)) ∧
+    -- Layout facts, the `BinArmExtras.mem_ext` shape; the `frame_pop`
+    -- presence sibling was DELETED in wave 48k — loads read totally).
+    -- WAVE 48k: the dead-byte presence CLOSURE is GONE (the load layer
+    -- consumes the model's total read; nothing asks for map presence).
     (∀ mcall : Mem,
       (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
       MemExtends m0 mcall)
@@ -374,14 +362,14 @@ theorem eval_andFalse_row (hR : ∀ el er vl, AndFalseResid el er vl) :
   obtain ⟨p, hpay, hpexpr⟩ : ∃ p, read64 m0 (aExpr.toNat + 16) = some p ∧ ExprRepr m0 p el := by
     cases hexpr with | logical _ _ hl hle _ _ => exact ⟨_, hl, hle⟩
   have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
-  obtain ⟨hX, ⟨aEnv3, hx13⟩, hFramePop, hMemExtRes⟩ :=
+  obtain ⟨hX, ⟨aEnv3, hx13⟩, hMemExtRes⟩ :=
     hR el er vl g N A SL φf φc st d env sp r sret aEnv aExpr
     (BitVec.ofNat 64 p) m0 c hc
     (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
     (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
   exact Vsa.Sim.evalAndSim g N A SL φf φc st st' d env el er vl sp r sret aEnv aExpr
     (BitVec.ofNat 64 p) aEnv3 m0 hvl ihE (EvalE.andFalse st d env el er st' vl hE hvl) c
-    ⟨hc, hX, hx13, hFramePop, hMemExtRes⟩
+    ⟨hc, hX, hx13, hMemExtRes⟩
 
 /-- The orFalse-case residual: `OrFalseExtras` (two-eval: takes the mid/post spec
 states and BOTH values) + the `aEnv3` x13-survival Steps-residual + the 47i windowed presence/`mem_ext` pair,
@@ -406,13 +394,10 @@ def OrFalseResid (st' st'' : SpecSt) (el er : Expr) (vl vr : Value) : Prop :=
     -- Amended to the honest pair: presence on the actual dead-byte read
     -- footprint (lowered frame `[sp-1120, sp)` + node line-word
     -- `[aExpr+4, aExpr+8)`) and presence-monotonicity over `m0` (both M6
-    -- Layout facts, the `BinArmExtras.frame_pop`/`mem_ext` shape).
-    (∀ mcall : Mem,
-      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-      ∀ a : Nat,
-        (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
-          (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-        (∃ b, mcall[a]? = some b)) ∧
+    -- Layout facts, the `BinArmExtras.mem_ext` shape; the `frame_pop`
+    -- presence sibling was DELETED in wave 48k — loads read totally).
+    -- WAVE 48k: the dead-byte presence CLOSURE is GONE (the load layer
+    -- consumes the model's total read; nothing asks for map presence).
     (∀ mcall : Mem,
       (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
       MemExtends m0 mcall)
@@ -436,7 +421,7 @@ theorem eval_orFalse_row (hR : ∀ st' st'' el er vl vr, OrFalseResid st' st'' e
     cases hexpr with | logical _ _ hl hle hr' hre => exact ⟨_, _, hl, hle, hr', hre⟩
   have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
   have hqlt : q < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 24) q hqay
-  obtain ⟨hX, ⟨aEnv3, hx13⟩, hFramePop, hMemExtRes⟩ :=
+  obtain ⟨hX, ⟨aEnv3, hx13⟩, hMemExtRes⟩ :=
     hR st' st'' el er vl vr g N A SL φf φc st d env sp r sret aEnv aExpr
     (BitVec.ofNat 64 p) (BitVec.ofNat 64 q) m0 c hc
     (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
@@ -445,7 +430,7 @@ theorem eval_orFalse_row (hR : ∀ st' st'' el er vl vr, OrFalseResid st' st'' e
     (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]; exact hqexpr)
   exact Vsa.Sim.evalOrFalseSim g N A SL φf φc st st' st'' d env el er vl vr sp r sret aEnv aExpr
     (BitVec.ofNat 64 p) (BitVec.ofNat 64 q) aEnv3 m0 hvl ihL ihR
-    (EvalE.orFalse st d env el er st' st'' vl vr hEl hvl hEr) c ⟨hc, hX, hx13, hFramePop, hMemExtRes⟩
+    (EvalE.orFalse st d env el er st' st'' vl vr hEl hvl hEr) c ⟨hc, hX, hx13, hMemExtRes⟩
 
 /-- The andTrue-case residual: `AndTrueExtras` (two-eval: takes the mid/post spec
 states and BOTH values) + the `aEnv3` x13-survival Steps-residual + the 47i windowed presence/`mem_ext` pair,
@@ -470,13 +455,10 @@ def AndTrueResid (st' st'' : SpecSt) (el er : Expr) (vl vr : Value) : Prop :=
     -- Amended to the honest pair: presence on the actual dead-byte read
     -- footprint (lowered frame `[sp-1120, sp)` + node line-word
     -- `[aExpr+4, aExpr+8)`) and presence-monotonicity over `m0` (both M6
-    -- Layout facts, the `BinArmExtras.frame_pop`/`mem_ext` shape).
-    (∀ mcall : Mem,
-      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-      ∀ a : Nat,
-        (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
-          (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
-        (∃ b, mcall[a]? = some b)) ∧
+    -- Layout facts, the `BinArmExtras.mem_ext` shape; the `frame_pop`
+    -- presence sibling was DELETED in wave 48k — loads read totally).
+    -- WAVE 48k: the dead-byte presence CLOSURE is GONE (the load layer
+    -- consumes the model's total read; nothing asks for map presence).
     (∀ mcall : Mem,
       (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
       MemExtends m0 mcall)
@@ -500,7 +482,7 @@ theorem eval_andTrue_row (hR : ∀ st' st'' el er vl vr, AndTrueResid st' st'' e
     cases hexpr with | logical _ _ hl hle hr' hre => exact ⟨_, _, hl, hle, hr', hre⟩
   have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
   have hqlt : q < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 24) q hqay
-  obtain ⟨hX, ⟨aEnv3, hx13⟩, hFramePop, hMemExtRes⟩ :=
+  obtain ⟨hX, ⟨aEnv3, hx13⟩, hMemExtRes⟩ :=
     hR st' st'' el er vl vr g N A SL φf φc st d env sp r sret aEnv aExpr
     (BitVec.ofNat 64 p) (BitVec.ofNat 64 q) m0 c hc
     (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
@@ -509,6 +491,6 @@ theorem eval_andTrue_row (hR : ∀ st' st'' el er vl vr, AndTrueResid st' st'' e
     (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]; exact hqexpr)
   exact Vsa.Sim.evalAndTrueSim g N A SL φf φc st st' st'' d env el er vl vr sp r sret aEnv aExpr
     (BitVec.ofNat 64 p) (BitVec.ofNat 64 q) aEnv3 m0 hvl ihL ihR
-    (EvalE.andTrue st d env el er st' st'' vl vr hEl hvl hEr) c ⟨hc, hX, hx13, hFramePop, hMemExtRes⟩
+    (EvalE.andTrue st d env el er st' st'' vl vr hEl hvl hEr) c ⟨hc, hX, hx13, hMemExtRes⟩
 
 end Vsa.Sim.Rows

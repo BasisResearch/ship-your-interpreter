@@ -26,6 +26,7 @@ Before ANY proof work: run `scripts/abs_inventory.sh` and reuse by name.
 | Recursor case row | the `gen_*_row.py` generators + TSV (TermRouting/ExecRouting/BinDispatchRow) |
 | Exit widening | `LeafWiden`/`ExecRecWiden`/`EvalRecWiden`/`blockD_v_phic` |
 | Store↔frame marshalling | `foundSt_of_storeRepr` / `frameRepr_append` |
+| Load / byte-read obligation | TOTAL reads (`bytesT{1,2,4,8}`, `exec_*_tot`/`_totv`, `LPins*` as total-read equalities, `site_*_tot`/`_totb` from `gen_sites.py`) — the model's `readByte` is `getD 0`, so NEVER demand `m[a]? = some b` for a byte a proof does not already own; if the VALUE matters, thread the write fact (`valueRepr_copy_total`) |
 | NEW post/entry predicate | named-field `structure ... : Prop where` (model: `FoundSt`/`GeomFacts`/`FrameCalc`) — NEVER an anonymous ∃/∧ tower |
 | Consuming a LANDED ∃/∧ tower | write ONE named destructuring lemma beside the tower's def and consume through it — never `.2.2.2.2` positional chains |
 | Entry-side ground fact (jump-table pin / AST-node/string region / arena/result-slot geometry) | `EvalGround`/`ExecGround` (`EntryGround.lean`; region layer `MemRegion.lean`, repr transport `AstTransport.lean`, generated pins `Layout*TableGen`) — NEVER per-site literals; the need audit is `experiments/entry-needs-audit.md` |
