@@ -289,6 +289,110 @@ def positive_model_sat(L):
                    f"(assert {H})", f"(assert {C})", f"(assert {Cncl})"]
     return z3(s)[0]
 
+# ===========================================================================
+# BASE / STEP DECOMPOSITION of the structural induction on the `frames` vector
+# (blockmem-rewrite-plan.md §"the recursive-Repr residual", steps 2-4).
+#
+# storeRepr_agreeP recurses on the parent-frame chain (φf pa).  The Lean proof
+# is `induction on s.frames.size with | nil => <base> | cons => <step using ih>`.
+# We Z3-DISCHARGE the two schema obligations SEPARATELY, each non-recursive/QF
+# once the IH is a hypothesis:
+#
+#   BASE  P(nil):   empty parent chain (ep = 0, no parent frame) ⇒ the frame's
+#                   own byte-windows (header + value slot + name/value strings)
+#                   suffice; there is no parent recursion to close.  UNSAT.
+#   STEP  (∀parent,P) → P(node):  the parent-frame survival IH is a HYPOTHESIS
+#                   (the `frame_par` equality cut = `P(parent)`); under it the
+#                   current node's FrameRepr survives from the byte-windows +
+#                   the parent-link window.  UNSAT.  This is the L3 WALL-probe
+#                   with the IH supplied — the exact point structural induction
+#                   discharges by the IH.
+#
+# The survivors of houdini(3) are the selected+SMT-validated IH; base+step both
+# UNSAT under it is the Z3-SUFFICIENCY CERTIFICATE the plan asks for (NOT a Lean
+# proof — a certified IH that base and step both close).
+# ===========================================================================
+def _nonrec_windows():
+    """the frame's own (non-parent) byte-window agreements — valhdr, nameptr,
+    name/val strings + string tails.  These are P's per-node footprint."""
+    C = [cand_valhdr(), cand_nameptr()]
+    for i in range(W): C.append(cand_namestr(i))
+    for i in range(W): C.append(cand_valstr(i))
+    C += [cand_name_tail(), cand_val_tail()]
+    return C
+
+def base_case():
+    """P(nil): no parent frame (ep=0 ⇒ parent_link's `ep≠0` is unreachable).
+    We assert L2 framerepr (header+value+name, no parent axis) and the node
+    windows; the goal (framerepr mp at L2) must be UNSAT-forced.  UNSAT ⇒ base
+    closes."""
+    s = decls() + base_asserts(2) + [f"(assert {e})" for _, e in _nonrec_windows()]
+    v, dt, _ = z3(s)
+    return v, dt
+
+def step_case():
+    """(∀parent,P(parent)) → P(node): L3 framerepr WITH the parent-frame IH cut
+    (`storeRepr_agreeP@parent-frame(IH)`) supplied as a hypothesis, plus the
+    node's own windows + the parent-link window.  UNSAT ⇒ step closes under IH.
+    Mirrors the WALL probe's `with_ih` = UNSAT."""
+    cands = _nonrec_windows() + [cand_parlink(), cand_par_cut()]
+    s = decls() + base_asserts(3) + [f"(assert {e})" for _, e in cands]
+    v, dt, _ = z3(s)
+    return v, dt
+
+def step_wall():
+    """CONTROL for the step: WITHHOLD the parent IH cut → must stay SAT (the
+    recursion is genuinely open without the IH; the step is non-vacuous)."""
+    cands = _nonrec_windows() + [cand_parlink()]
+    s = decls() + base_asserts(3) + [f"(assert {e})" for _, e in cands]
+    v, dt, _ = z3(s)
+    return v, dt
+
+def storerepr_survival_certificate(verbose=False):
+    """PROGRAMMATIC entry (imported by scripts/autoprove.py's recursive branch).
+    Selects the survival IH by Houdini at L3, then base/step-DECOMPOSES the
+    structural induction and Z3-validates each half.
+
+    Returns a dict:
+      { ih_name, survivors, unstrengthened, positive_model,
+        base_unsat, step_unsat, wall_sat,   # the base/step certificate
+        certified }                          # base ∧ step both UNSAT ∧ wall SAT
+    The IH is `storeRepr_agreeP@parent-frame(IH)` + the frame-window survivors.
+    """
+    v_uns, _, _ = z3(decls() + base_asserts(3), model=False)
+    pos = positive_model_sat(3)
+    survivors, hlog, vf = houdini(3)
+    vb, dtb = base_case()
+    vs, dts = step_case()
+    vw, _ = step_wall()
+    ih = [c[0] for c in survivors if "parent-frame(IH)" in c[0]]
+    certified = (vb.startswith("unsat") and vs.startswith("unsat")
+                 and vw.startswith("sat") and vf.startswith("unsat"))
+    r = {
+        "ih_name": ih[0] if ih else "(none)",
+        "survivors": [c[0] for c in survivors],
+        "unstrengthened": v_uns,
+        "positive_model": pos,
+        "houdini_closes": vf,
+        "base_unsat": vb,
+        "step_unsat": vs,
+        "wall_sat": vw,
+        "base_time": round(dtb, 3),
+        "step_time": round(dts, 3),
+        "certified": certified,
+    }
+    if verbose:
+        print("=== StoreRepr survival: Houdini IH + base/step certificate ===")
+        print(f"  unstrengthened(L3)      = {v_uns}  (SAT ⇒ IH load-bearing)")
+        print(f"  positive-model          = {pos}  (SAT ⇒ non-vacuous)")
+        print(f"  Houdini survivors       = {r['survivors']}")
+        print(f"  selected IH             = {r['ih_name']}")
+        print(f"  BASE  P(nil)            = {vb}  ({r['base_time']}s)  [UNSAT ⇒ base closes]")
+        print(f"  STEP  (∀p,P)→P(node)    = {vs}  ({r['step_time']}s)  [UNSAT ⇒ step closes under IH]")
+        print(f"  STEP wall (no IH)       = {vw}  [SAT ⇒ IH load-bearing in step]")
+        print(f"  CERTIFIED (base∧step)   = {certified}")
+    return r
+
 def main():
     print("=== StoreRepr-survival bounded probe: un-strengthened goal per depth ===")
     for L in (0, 1, 2, 3):
@@ -318,6 +422,9 @@ def main():
             print(f"  [{kind:12}] {str(a):48.48} -> {v:8} {dt:5.2f}s")
         print(f"  survivors: {[c[0] for c in survivors]}")
         print(f"  goal closes under survivors: {vf}")
+
+    print()
+    storerepr_survival_certificate(verbose=True)
 
 if __name__ == "__main__":
     main()
