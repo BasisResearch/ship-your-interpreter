@@ -261,6 +261,33 @@ FIELDS = {
 }
 
 
+# ---- category-A str-finitization demonstrator -------------------------------
+# gen_fulleffect.py's `encode_given_subresult(str)` returns SAT (the CString
+# recursion wall).  This shows the SAME finitization that flips B2-str to UNSAT
+# closes it: WITHOUT the bounded payload byte-agreement [p,p+W) => SAT; WITH it =>
+# UNSAT.  Demonstrated here without touching the sibling's file.
+def encode_str_finitize(with_payload):
+    L = ["(set-logic ALL)", "(set-option :timeout 60000)"]
+    for m in ("subMem", "exitMem"):
+        L += G.decls_mem(m)
+    L += ["(declare-fun subsret () Int)"]
+    L += [f"(declare-fun {m}_p () Int)" for m in ("subMem", "exitMem")]
+    L += [f"(declare-fun cstr_tail_{m} () Bool)" for m in ("subMem", "exitMem")]
+    L.append("(assert (>= subsret 0))")
+    L.append(f"(assert {G.valuerepr('subMem', 'subsret', 'str', 3)})")
+    for j in range(24):  # 24-byte struct frame-agreement (the sibling's clause)
+        L.append(f"(assert (= (select exitMem_def (+ subsret {j})) (select subMem_def (+ subsret {j}))))")
+        L.append(f"(assert (= (select exitMem_val (+ subsret {j})) (select subMem_val (+ subsret {j}))))")
+    L.append("(assert (= exitMem_p subMem_p))")
+    L.append("(assert (= cstr_tail_exitMem cstr_tail_subMem))")
+    if with_payload:  # THE finitization: bounded char-prefix definedness agreement
+        for i in range(3):
+            L.append(f"(assert (= (select exitMem_def (+ subMem_p {i})) "
+                     f"(select subMem_def (+ subMem_p {i}))))")
+    L.append(f"(assert (not {G.valuerepr('exitMem', 'subsret', 'str', 3)}))")
+    return L
+
+
 def run_field(field):
     cat, enc, params = FIELDS[field]
     rows = []
@@ -293,7 +320,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--field", default=None, help="one of " + ",".join(FIELDS))
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--demo-str-finitize", action="store_true",
+                    help="show the CString-payload finitization flips A-str SAT->UNSAT")
     args = ap.parse_args()
+    if args.demo_str_finitize:
+        no, _, dt0 = z3_run(encode_str_finitize(False))
+        yes, _, dt1 = z3_run(encode_str_finitize(True))
+        print("category-A / B2 .str CString-wall finitization:")
+        print(f"    WITHOUT bounded payload agree [p,p+3) : {cls(no):14} ({dt0}s)  <- the wall (spurious countermodel)")
+        print(f"    WITH    bounded payload agree [p,p+3) : {cls(yes):14} ({dt1}s)  <- FINITIZED to definite UNSAT")
+        return 0
     fields = [args.field] if args.field else list(FIELDS)
     allrows = {}
     for f in fields:
