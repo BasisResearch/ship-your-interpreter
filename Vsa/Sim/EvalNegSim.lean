@@ -221,6 +221,10 @@ theorem blockB_unary
         (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
         read64 ment (aExpr.toNat + 16) = some aOperand.toNat ∧
         ExprRepr ment aOperand.toNat esub ∧
+        -- WAVE 47i: the child's entry-ground bundle (derived at the sim from
+        -- `hc.ground` via `EvalGround.child_at`).
+        EvalGround ment SL A (sp - 1088#64)
+          ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aOperand.toNat esub ∧
         aExpr.toNat + 24 ≤ 0x100000000 ∧
         aOperand.toNat % 8 = 0 ∧
         0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
@@ -247,7 +251,7 @@ theorem blockB_unary
           v8 v9 v18 mcall c ∧
         (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?)) := by
   intro c hpre
-  obtain ⟨ment, hArm, hx11, hgframe, hg8, hg18, hpay, hsubexpr, hexprHi24,
+  obtain ⟨ment, hArm, hx11, hgframe, hg8, hg18, hpay, hsubexpr, hground, hexprHi24,
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -357,7 +361,7 @@ theorem blockB_unary
       hIH
       ⟨σ2, i2, c.steps + 1 + 1⟩
       ⟨hG2, hi2, hpc2, hx10_2, hs1_2, hx11_2, hx12_2, hsp_2, ⟨vmi2, hmi2⟩, hout2, houtStr,
-        hmem2e, hcode, hviInt, hviSlot, hnbs, hsubexpr, hstore, hstoreSurv, hframeB, ⟨hg8, hg18⟩,
+        hmem2e, hcode, hviInt, hviSlot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframeB, ⟨hg8, hg18⟩,
         hslotRa, hslotS0, hslotS1, hslotS2,
         hopAl, hopLo, hopHi, hopWin, hopStk,
         (by rw [hsub944]; omega), (by rw [hsub944]; omega), (by rw [hsub944]; omega),

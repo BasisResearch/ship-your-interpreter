@@ -14,6 +14,7 @@ import Vsa.Sim.EvalBoolSim
 import Vsa.Sim.ReprCopy
 import Vsa.Sim.DivSites2
 import Vsa.Sim.ObsAvoid
+import Vsa.Sim.EntryGroundKit
 
 /-!
 # Layer 4 — M4 RECURSIVE case: `evalNotSim` (the `EvalE.not` case)
@@ -194,7 +195,16 @@ theorem blockC_not
           v8 v9 v18 mcall c ∧
         gpre Register.x8 = some aExpr ∧
         ExprRepr mcall aExpr.toNat (.unary .not esub) ∧
-        (∀ a : Nat, (∃ b, mcall[a]? = some b)) ∧
+        -- WAVE 47i (`McallPopTotality` amendment): presence ONLY on the actual
+        -- dead-byte read footprint — the lowered-frame window `[sp-1120, sp)`
+        -- plus the node's line-word bytes `[aExpr+4, aExpr+8)` — replacing the
+        -- REFUTED total-population oracle.
+        (∀ a : Nat,
+          (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
+            (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
+          (∃ b, mcall[a]? = some b)) ∧
+        -- presence-monotonicity over the entry `m0` (`mem_ext` residual).
+        MemExtends m0 mcall ∧
         aExpr.toNat % 4 = 0 ∧
         0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 8 ≤ aExpr.toNat ∧
@@ -237,7 +247,7 @@ theorem blockC_not
         PhiExtends φc φce nc ∧
         PreEpilogueVD g N A SL φfe φce st' (.bool (!vsub.truthy)) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hpre
-  obtain ⟨mcall, hSub, hgx8, hexpr, hStackPop, hexprAl, hexprLo, hexprHi, hexprWin,
+  obtain ⟨mcall, hSub, hgx8, hexpr, hStackPop, hMemExtM0, hexprAl, hexprLo, hexprHi, hexprWin,
     hexprSL, hexprA, hexprSub,
     houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretStk, hsretEvalCode,
     hraAl, hSLloSp, hSLlo, hSLwin,
@@ -299,32 +309,35 @@ theorem blockC_not
   have hne1612 : ((16#64 : BitVec 64) == (12#64 : BitVec 64)) = false := by decide
   -- the whole 24-byte sub-Value buffer bytes at c.σ.mem[sp-944 .. +24) (present).
   -- kind dword (a3, ld 144), payload (a4, ld 152), v[16..24) (a5, ld 160).
-  have hStackPopC : ∀ a : Nat, ∃ b, c.σ.mem[a]? = some b :=
-    fun a => stackpop_present hMemExt hStackPop a
-  obtain ⟨kb0, hkb0⟩ := hStackPopC (sp.toNat - 944)
-  obtain ⟨kb1, hkb1⟩ := hStackPopC (sp.toNat - 944 + 1)
-  obtain ⟨kb2, hkb2⟩ := hStackPopC (sp.toNat - 944 + 2)
-  obtain ⟨kb3, hkb3⟩ := hStackPopC (sp.toNat - 944 + 3)
-  obtain ⟨kb4, hkb4⟩ := hStackPopC (sp.toNat - 944 + 4)
-  obtain ⟨kb5, hkb5⟩ := hStackPopC (sp.toNat - 944 + 5)
-  obtain ⟨kb6, hkb6⟩ := hStackPopC (sp.toNat - 944 + 6)
-  obtain ⟨kb7, hkb7⟩ := hStackPopC (sp.toNat - 944 + 7)
-  obtain ⟨pb0, hpb0⟩ := hStackPopC (sp.toNat - 936)
-  obtain ⟨pb1, hpb1⟩ := hStackPopC (sp.toNat - 936 + 1)
-  obtain ⟨pb2, hpb2⟩ := hStackPopC (sp.toNat - 936 + 2)
-  obtain ⟨pb3, hpb3⟩ := hStackPopC (sp.toNat - 936 + 3)
-  obtain ⟨pb4, hpb4⟩ := hStackPopC (sp.toNat - 936 + 4)
-  obtain ⟨pb5, hpb5⟩ := hStackPopC (sp.toNat - 936 + 5)
-  obtain ⟨pb6, hpb6⟩ := hStackPopC (sp.toNat - 936 + 6)
-  obtain ⟨pb7, hpb7⟩ := hStackPopC (sp.toNat - 936 + 7)
-  obtain ⟨qb0, hqb0⟩ := hStackPopC (sp.toNat - 928)
-  obtain ⟨qb1, hqb1⟩ := hStackPopC (sp.toNat - 928 + 1)
-  obtain ⟨qb2, hqb2⟩ := hStackPopC (sp.toNat - 928 + 2)
-  obtain ⟨qb3, hqb3⟩ := hStackPopC (sp.toNat - 928 + 3)
-  obtain ⟨qb4, hqb4⟩ := hStackPopC (sp.toNat - 928 + 4)
-  obtain ⟨qb5, hqb5⟩ := hStackPopC (sp.toNat - 928 + 5)
-  obtain ⟨qb6, hqb6⟩ := hStackPopC (sp.toNat - 928 + 6)
-  obtain ⟨qb7, hqb7⟩ := hStackPopC (sp.toNat - 928 + 7)
+  have hStackPopC : ∀ a : Nat,
+      (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
+        (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
+      ∃ b, c.σ.mem[a]? = some b :=
+    fun a h => stackpop_present hMemExt (hStackPop a h)
+  obtain ⟨kb0, hkb0⟩ := hStackPopC (sp.toNat - 944) (by omega)
+  obtain ⟨kb1, hkb1⟩ := hStackPopC (sp.toNat - 944 + 1) (by omega)
+  obtain ⟨kb2, hkb2⟩ := hStackPopC (sp.toNat - 944 + 2) (by omega)
+  obtain ⟨kb3, hkb3⟩ := hStackPopC (sp.toNat - 944 + 3) (by omega)
+  obtain ⟨kb4, hkb4⟩ := hStackPopC (sp.toNat - 944 + 4) (by omega)
+  obtain ⟨kb5, hkb5⟩ := hStackPopC (sp.toNat - 944 + 5) (by omega)
+  obtain ⟨kb6, hkb6⟩ := hStackPopC (sp.toNat - 944 + 6) (by omega)
+  obtain ⟨kb7, hkb7⟩ := hStackPopC (sp.toNat - 944 + 7) (by omega)
+  obtain ⟨pb0, hpb0⟩ := hStackPopC (sp.toNat - 936) (by omega)
+  obtain ⟨pb1, hpb1⟩ := hStackPopC (sp.toNat - 936 + 1) (by omega)
+  obtain ⟨pb2, hpb2⟩ := hStackPopC (sp.toNat - 936 + 2) (by omega)
+  obtain ⟨pb3, hpb3⟩ := hStackPopC (sp.toNat - 936 + 3) (by omega)
+  obtain ⟨pb4, hpb4⟩ := hStackPopC (sp.toNat - 936 + 4) (by omega)
+  obtain ⟨pb5, hpb5⟩ := hStackPopC (sp.toNat - 936 + 5) (by omega)
+  obtain ⟨pb6, hpb6⟩ := hStackPopC (sp.toNat - 936 + 6) (by omega)
+  obtain ⟨pb7, hpb7⟩ := hStackPopC (sp.toNat - 936 + 7) (by omega)
+  obtain ⟨qb0, hqb0⟩ := hStackPopC (sp.toNat - 928) (by omega)
+  obtain ⟨qb1, hqb1⟩ := hStackPopC (sp.toNat - 928 + 1) (by omega)
+  obtain ⟨qb2, hqb2⟩ := hStackPopC (sp.toNat - 928 + 2) (by omega)
+  obtain ⟨qb3, hqb3⟩ := hStackPopC (sp.toNat - 928 + 3) (by omega)
+  obtain ⟨qb4, hqb4⟩ := hStackPopC (sp.toNat - 928 + 4) (by omega)
+  obtain ⟨qb5, hqb5⟩ := hStackPopC (sp.toNat - 928 + 5) (by omega)
+  obtain ⟨qb6, hqb6⟩ := hStackPopC (sp.toNat - 928 + 6) (by omega)
+  obtain ⟨qb7, hqb7⟩ := hStackPopC (sp.toNat - 928 + 7) (by omega)
   -- the three load values reassembled
   let K13 : BitVec 64 := sign_extend (m := 64)
     ((((((((kb7.append kb6).append kb5).append kb4).append kb3).append kb2).append kb1).append kb0) : BitVec (8*8))
@@ -886,8 +899,7 @@ theorem blockC_not
       StoreRepr m' N A φf' φc' st'.store :=
     fun m' hm' => hstoreSurv' m' (fun k hk => (hSL17 k hk).trans (hm' k hk))
   -- the MemExtends m0 σ17.mem (mcall fully populated ⇒ all writes only ADD)
-  have hMemExt_m0_c : MemExtends m0 c.σ.mem := by
-    intro a b _; obtain ⟨bm, hbm⟩ := hStackPop a; exact hMemExt a bm hbm
+  have hMemExt_m0_c : MemExtends m0 c.σ.mem := hMemExtM0.trans hMemExt
   have hMemExt_c_15 : MemExtends c.σ.mem σ15.mem := by
     rw [hmem15e]
     exact ((MemExtends.refl c.σ.mem).trans
@@ -1071,9 +1083,17 @@ def EvalNotSimGoal : Prop :=
       (fun c =>
         EvalEntry g N A SL φf φc st d env (.unary .not esub) sp r sret aEnv aExpr m0 c ∧
         NotSimExtras N A SL esub vsub sp sret aExpr aOperand m0 ∧
+        -- WAVE 47i (`McallPopTotality` amendment): windowed frame/node presence
+        -- + `mem_ext`, replacing the refuted totality oracle.
         (∀ mcall : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-          ∀ a : Nat, ∃ b, mcall[a]? = some b))
+          ∀ a : Nat,
+            (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
+              (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
+            (∃ b, mcall[a]? = some b)) ∧
+        (∀ mcall : Mem,
+          (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
+          MemExtends m0 mcall))
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st' (.bool (!vsub.truthy)) sp r sret m0)
 
@@ -1091,7 +1111,7 @@ except for the block-C call (the `not` tail) and the produced value. -/
 theorem evalNotSim : EvalNotSimGoal := by
   intro g N A SL φf φc st st' d env esub vsub sp r sret aEnv aExpr aOperand
     m0 hIH _hEvalE
-  intro c ⟨hc, hx, hMcallPop⟩
+  intro c ⟨hc, hx, hFramePop, hMemExtRes⟩
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- === block A: prologue + dispatch → widened ArmEntryK @0x800035e0 ===
   have hkm0 : read32 m0 aExpr.toNat = some 8 := exprRepr_not_kind (hc.mem ▸ hc.expr)
@@ -1159,12 +1179,30 @@ theorem evalNotSim : EvalNotSimGoal := by
     have := hpayMent.symm.trans hpayMent'; exact Option.some.inj this
   subst hpeq
   have hOperandReprMent : ExprRepr ment aOperand.toNat esub := hsubReprMent
+  -- WAVE 47i: the child's entry-ground bundle from `hc.ground` (ONE kit call).
+  have hsp1088N : 1088 ≤ sp.toNat := by
+    have := hx.sp_headroom; have := hc.stack_ram.1; omega
+  have hspsubN : (sp - 1088#64).toNat = sp.toNat - 1088 := by
+    rw [BitVec.toNat_sub]
+    have h1088 : (1088#64 : BitVec 64).toNat = 1088 := by decide
+    rw [h1088]; have := sp.isLt; omega
+  have hsubsretN : ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)).toNat
+      = sp.toNat - 944 :=
+    spill_addr sp (0x090#12) 944 (by decide) (by decide) hsp1088N
+  have hgroundChild : EvalGround ment SL A (sp - 1088#64)
+      ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aOperand.toNat esub :=
+    (hc.mem ▸ hc.ground).child_at
+      (fun lo hi hin => exprIn_unary_child hin aOperand.toNat hpayMent')
+      hMentM0 hc.table_stack_disjoint hx.sp_SLhi
+      (by omega)
+      (by rw [hsubsretN]; have := hx.sp_headroom; have := hc.stack_ram.1; omega)
+      (by rw [hsubsretN]; omega)
   -- === block B: arm head + recursive call ⋈ IH → SubEvalReturn @0x800035ec ===
   obtain ⟨c2, hs2, hSub⟩ :=
     blockB_unary g (fun R => c1.σ.regs.get? R) N A SL φf φc st st' d env .not esub vsub
       sp r sret aExpr aEnv aOperand v8 v9 v18 c.σ.sailOutput m0 hIH
       c1 ⟨ment, hArm, hx11c1, hgpreframe, ⟨aExpr, hgpre_x8⟩, hgpre18,
-        hpayMent', hOperandReprMent, hx.expr24,
+        hpayMent', hOperandReprMent, hgroundChild, hx.expr24,
         hx.op_align, hx.op_lo, hx.op_hi, hx.op_win, hx.op_stk,
         hx.sp_headroom, hx.sp_SLhi, hx.sp16, hx.SLhi_ram,
         hx.code_stk, hx.vicode_stk, (by have := hx.table_stk; omega), hx.arena_stk, hx.arena_code,
@@ -1191,7 +1229,11 @@ theorem evalNotSim : EvalNotSimGoal := by
       (fun a ha => (hAgM0 a (by have := hx.boolcode_stk; omega)).symm) hx.bool_loaded
   have hMcallM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       mcall[a]? = m0[a]? := fun a ha _ => hAgM0 a ha
-  have hStackPop : ∀ a : Nat, ∃ b, mcall[a]? = some b := hMcallPop mcall hAgM0
+  have hStackPop : ∀ a : Nat,
+      (sp.toNat - 1120 ≤ a ∧ a < sp.toNat) ∨
+        (aExpr.toNat + 4 ≤ a ∧ a < aExpr.toNat + 8) →
+      ∃ b, mcall[a]? = some b := hFramePop mcall hAgM0
+  have hMemExtM0mc : MemExtends m0 mcall := hMemExtRes mcall hAgM0
   have hExprMcall : ExprRepr mcall aExpr.toNat (.unary .not esub) :=
     hx.expr_survives mcall (fun a ha => (hAgM0 a ha).symm)
   -- the NotExtras (buffer geometry) at any φc' — payload disjointness transported to c2.σ.mem
@@ -1205,7 +1247,7 @@ theorem evalNotSim : EvalNotSimGoal := by
   obtain ⟨c3, hs3, mpreC, φfe, φce, hpfe, hpce, hPreD⟩ :=
     blockC_not (fun R => c1.σ.regs.get? R) g N A SL φf φc st.store.frames.size
       st.store.closures.size st' vsub sp r sret aExpr v8 v9 v18 c2.σ.sailOutput esub m0
-      c2 ⟨mcall, hSubR, hgpre_x8, hExprMcall, hStackPop,
+      c2 ⟨mcall, hSubR, hgpre_x8, hExprMcall, hStackPop, hMemExtM0mc,
         hx.expr_align4, hc.expr_ram.1, hc.expr_ram.2, hx.expr_win8,
         hc.expr_stack_disjoint, hx.expr_A, hx.expr_sub,
         houtStr, hc.sret_align, hc.sret_ram.1, hc.sret_ram.2, hc.sret_win,

@@ -2,6 +2,7 @@ import Vsa.Sim.StagePreSuppliers
 import Vsa.Sim.StagePreSuppliers2
 import Vsa.Sim.rows.BinArmBridge
 import Vsa.Sim.rows.UnaryLogicalArmBridge
+import Vsa.Sim.EntryGroundKit
 
 /-!
 # `EvalChildFieldCombinator` — the parametric arm-head field composer (Task #81 item 1)
@@ -129,11 +130,11 @@ theorem binaryL_field_of_extras
   -- unpack `blockA_binaryArm`'s POST → feed `blockB_binary_leftStagePre`'s `hpre`
   obtain ⟨gpre, aEnvReg, v8, v9, v18, v19, ment, hArm, hBE, hx11, hx13, hx19,
     hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v, hpayL, hexprL, hpayR, hexprR,
-    hMentPop, hMemExtM0⟩ := hMid
+    hMentPop, hMemExtM0, hGmt47⟩ := hMid
   exact blockB_binary_leftStagePre g gpre N A SL φf φc st d env op l r
     sp r0 sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 c'.σ.sailOutput m0 c'
     ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v,
-      hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0,
+      hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0, hGmt47,
       -- ITEM ZERO B1: the LEFT child budget, DERIVED from the entry's fields.
       hEntry.stackBudget.child (by decide)
         (by

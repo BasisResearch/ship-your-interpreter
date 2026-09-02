@@ -118,7 +118,9 @@ def ExecStmtPreBundle (s : Stmt) (c' : Config) (st : SpecSt) (d : Nat)
     StackOK SL (sp - hdrm)
       (s.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
     Stmt.bodiesBound Vsa.While.perCallBudget s = true ∧
-    Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
+    Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget ∧
+    -- WAVE 47i: the child's exec entry-ground bundle.
+    ExecGround mcall SL A (sp - hdrm) aRet aStmt.toNat s
 
 /-- **The exec-stmt pre-bundle drives into `SEntryC`.**  A config at
 `ExecStmtPreBundle s` lands (`≥ 1` step, the `jal`) at `SEntryC s` — pure

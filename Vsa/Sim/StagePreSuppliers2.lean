@@ -1,5 +1,6 @@
 import Vsa.Sim.EvalAndSim
 import Vsa.Sim.ArmSegSplitEval
+import Vsa.Sim.EntryGroundKit
 
 /-!
 # `StagePreSuppliers2` — the logical arm-head → `JalPreBundle` cut (Task #79, priority 2)
@@ -68,6 +69,9 @@ theorem blockB_logical_stagePre
         (∀ m' : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m'[a]?) →
           ExprRepr m' aLeft.toNat el) ∧
+        -- WAVE 47i: the parent node's entry-ground bundle (pass-through from
+        -- `blockA_logicalArm`).
+        EvalGround ment SL A sp sret aExpr.toNat (.logical op el er) ∧
         aExpr.toNat + 24 ≤ 0x100000000 ∧
         aLeft.toNat % 8 = 0 ∧
         0x80000000 ≤ aLeft.toNat ∧ aLeft.toNat + 16 ≤ 0x100000000 ∧
@@ -88,7 +92,7 @@ theorem blockB_logical_stagePre
         Expr.bodiesBound Vsa.While.perCallBudget el = true ∧
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 3 c (fun c' => JalPreBundle el c' st d env) := by
-  obtain ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hexprHi24,
+  obtain ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hgroundP, hexprHi24,
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -208,6 +212,26 @@ theorem blockB_logical_stagePre
     hnbs.transport
       (fun a ha => (hAgSpill a (by rcases hviStk with h | h <;> omega)).symm)
       (fun a ha => (hAgSpill a (by rcases htableStk with h | h <;> omega)).symm)
+  -- WAVE 47i: the LEFT child's entry-ground bundle (kit moves 1+2+3; the
+  -- env-spill is inside the scribble).
+  have hGroundMc : EvalGround mcall SL A sp sret aExpr.toNat (.logical op el er) :=
+    hgroundP.transport_offstack htableStk hspSLhi
+      (fun a ha => hAgSpill a (by have := hsproom; have := hSLlo; omega))
+  have hpayMc : read64 mcall (aExpr.toNat + 16) = some aLeft.toNat := by
+    have hag := evalGround_ast_read64_agree hgroundP hspSLhi
+      (fun a ha => hAgSpill a (by have := hsproom; have := hSLlo; omega))
+      (off := 16) (by omega)
+    rw [hag]; exact hpay
+  have hspsubL : (sp - 1088#64).toNat = sp.toNat - 1088 := by
+    rw [BitVec.toNat_sub]
+    have h1088 : (1088#64 : BitVec 64).toNat = 1088 := by decide
+    rw [h1088]; have := sp.isLt; omega
+  have hGroundChildL : EvalGround mcall SL A (sp - 1088#64)
+      ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)) aLeft.toNat el :=
+    hGroundMc.child_params (fun lo hi hin => exprIn_logical_left hin aLeft.toNat hpayMc)
+      htableStk hspSLhi (by omega)
+      (by rw [hsub968]; have := hsproom; have := hSLlo; omega)
+      (by rw [hsub968]; have := hsproom; have := hSLlo; omega)
   have hExprMcall : ExprRepr mcall aLeft.toNat el :=
     hexprSurv mcall (fun a ha => (hAgSpill a (by omega)).symm)
   have hStoreMcall : StoreRepr mcall N A φf φc st.store := by
@@ -265,7 +289,7 @@ theorem blockB_logical_stagePre
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_80003568_lg σ i u (0x80003568#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
       hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, hx12_3, hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr,
-      hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hExprMcall, hStoreMcall, hStoreSurvMcall,
+      hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hGroundChildL, hExprMcall, hStoreMcall, hStoreSurvMcall,
       hframeB, ⟨hg8, hg18⟩,
       hslotRaMcall, hslotS0Mcall, hslotS1Mcall, hslotS2Mcall,
       hopAl, hopLo, hopHi, hopWin, hopStk,

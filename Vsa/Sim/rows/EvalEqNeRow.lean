@@ -616,6 +616,8 @@ theorem evalEqNeSim
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
         MemExtends m0 ment ∧
+        -- WAVE 47i: the parent node's entry-ground bundle at the arm entry.
+        EvalGround ment SL A sp sret aExpr.toNat (.binary op el er) ∧
         -- ITEM ZERO B1: BOTH operands' recursion-sound budgets at `sp - 1088`,
         -- their `.fn`-bodies bounds, and the store-bodies invariants (LEFT over
         -- the entry store `st`, RIGHT over the post-left store `st'`) --
@@ -632,7 +634,7 @@ theorem evalEqNeSim
         st'' resVal sp r sret m0) := by
   intro c hpre
   obtain ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0,
+    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0, hGmt47,
     hstackBudgetL, hexprBodiesL, hstoreBodiesL,
     hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩ := hpre
   -- === block B: two-operand head + IHs → TwoSubReturn @0x8000351c ===
@@ -640,7 +642,7 @@ theorem evalEqNeSim
     blockB_binary gouter gpre N A SL φf φc st st' st'' d env op el er vl vr
       sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hIHl hIHr hVlSurv
       c ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0,
+        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0, hGmt47,
         hstackBudgetL, hexprBodiesL, hstoreBodiesL,
         hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩
   have hOutC2 : String.join c2.σ.sailOutput.toList = st''.out := hTS.2.2.2.2.2.2.2.1
@@ -705,6 +707,8 @@ theorem evalEqSim
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
         MemExtends m0 ment ∧
+        -- WAVE 47i: the parent node's entry-ground bundle at the arm entry.
+        EvalGround ment SL A sp sret aExpr.toNat (.binary .eq el er) ∧
         -- ITEM ZERO B1: BOTH operands' recursion-sound budgets at `sp - 1088`,
         -- their `.fn`-bodies bounds, and the store-bodies invariants (LEFT over
         -- the entry store `st`, RIGHT over the post-left store `st'`) --
@@ -766,6 +770,8 @@ theorem evalNeSim
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
         MemExtends m0 ment ∧
+        -- WAVE 47i: the parent node's entry-ground bundle at the arm entry.
+        EvalGround ment SL A sp sret aExpr.toNat (.binary .ne el er) ∧
         -- ITEM ZERO B1: BOTH operands' recursion-sound budgets at `sp - 1088`,
         -- their `.fn`-bodies bounds, and the store-bodies invariants (LEFT over
         -- the entry store `st`, RIGHT over the post-left store `st'`) --

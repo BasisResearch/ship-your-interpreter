@@ -47,6 +47,22 @@ theorem strAstRegionBody_of_ground {m : Mem} {SL : StackLayout} {A : Arena}
   exact ⟨lo, hi, ⟨Vsa.Sim.exprIn_str_payload spec.nodes⟩,
     spec.stack_disjoint, spec.sret_disjoint⟩
 
+/-- **WAVE 47i: `hStr`'s named premise DISCHARGED outright** — the `ground`
+field landed, so the 47g Law-4 premise is a record fill. -/
+theorem evalEntryStrAstRegion_discharged : EvalEntryStrAstRegion :=
+  fun _st _s _g _N _A _SL _φf _φc _d _env _sp _r _sret _aEnv _aExpr _m0 _c hc =>
+    strAstRegionBody_of_ground hc.ground
+
+/-- **`hStr` DISCHARGED** (the fourth leaf field): geometry from the amended
+entry (47e/f) + the AST region from `ground` (47i). -/
+theorem field_hStr : ∀ (st : Vsa.While.St) (s : String), StrLeafResid st s :=
+  field_hStr_of_astRegion evalEntryStrAstRegion_discharged
+
+/-- The t6 skeleton hole, closed. -/
+theorem skelHStr_discharged (L : Vsa.Refine.Layout) :
+    Vsa.Sim.TermAssembly.Skel.SkelHStr L :=
+  fun st s => field_hStr st s
+
 /-! ## The exec-arm entry-suppliable halves -/
 
 /-- Generic slot-window narrowing: the whole-table stack disjunct gives every
@@ -184,6 +200,8 @@ theorem kindTablePins_of_bytes {m : Mem}
 end Vsa.Sim.Rows
 
 #print axioms Vsa.Sim.Rows.strAstRegionBody_of_ground
+#print axioms Vsa.Sim.Rows.field_hStr
+#print axioms Vsa.Sim.Rows.skelHStr_discharged
 #print axioms Vsa.Sim.Rows.execGround_caseGeom_brk
 #print axioms Vsa.Sim.Rows.execGround_caseGeom_cont
 #print axioms Vsa.Sim.Rows.stmtTablePins_of_bytes

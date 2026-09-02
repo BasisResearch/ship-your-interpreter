@@ -217,25 +217,9 @@ theorem epi_off428 (sp : BitVec 64) (hsp : 1088 ≤ sp.toNat) :
     ((sp - 1088#64) + sign_extend (m := 64) (0x428#12)).toNat = sp.toNat - 24 :=
   spill_addr sp (0x428#12) 24 (by decide) (by omega) hsp
 
-/-! ## `KindSlotPinned` — the per-kind jump-table slot pin (dispatch coupling)
-
-The `EX_*` dispatch reads a 4-byte offset from the `.rodata` jump table at
-`jumpTableBase = 0x80019f58`, slot `k` living at `jumpTableBase + 4*k`, then jumps
-to `jumpTableBase + (Int32)offset`. `KindSlotPinned k armPC m` says: the four
-bytes of slot `k` in `m` are `t0..t3`, and their sign-extended little-endian
-reassembly plus the table base equals the arm's landing PC `armPC`. This is the
-case-INDEPENDENT generalization of `IntSlotPinned` (`InterpEntry.lean`), which is
-exactly `KindSlotPinned 0 0x80003408` up to the target-arithmetic fact
-(`int_slot_kindPinned`). A `null`/`bool`/`str`/`var` case supplies its own
-`KindSlotPinned k armPC` for its tag `k` and arm `armPC`. -/
-def KindSlotPinned (k : Nat) (armPC : BitVec 64) (m : Mem) : Prop :=
-  ∃ t0 t1 t2 t3 : BitVec 8,
-    m[(jumpTableBase + 4 * k + 0 : Nat)]? = some t0 ∧
-    m[(jumpTableBase + 4 * k + 1 : Nat)]? = some t1 ∧
-    m[(jumpTableBase + 4 * k + 2 : Nat)]? = some t2 ∧
-    m[(jumpTableBase + 4 * k + 3 : Nat)]? = some t3 ∧
-    (sign_extend (m := 64) ((((t3.append t2).append t1).append t0) : BitVec (8 * 4))
-      + BitVec.ofNat 64 jumpTableBase) = armPC
+-- `KindSlotPinned` RELOCATED to `InterpEntry.lean` (wave 47i: the `EvalGround`
+-- entry bundle needs it below `EvalEntry`; same name/namespace — zero consumer
+-- changes; the tag-0 bridge `int_slot_kindPinned` stays here).
 
 /-- The `EX_INT` (tag 0) instance: `IntSlotPinned` (slot bytes `b0 94 fe ff` at
 `0x80019f58`, offset `0xfffe94b0`) gives `KindSlotPinned 0 0x80003408` — the arm

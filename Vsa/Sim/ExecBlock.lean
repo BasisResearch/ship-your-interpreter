@@ -270,7 +270,9 @@ theorem armExec_rec
         StackOK SL (sp - 176#64)
           (sSub.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
         Stmt.bodiesBound Vsa.While.perCallBudget sSub = true ∧
-        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget)
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget ∧
+        -- WAVE 47i: the child's exec entry-ground bundle.
+        ExecGround mcall SL A (sp - 176#64) aRetSub aStmtSub.toNat sSub)
       (SubStmtReturn garm N A SL φf φc st.store.frames.size st.store.closures.size
         st' status sp r aRet aRetSub retPC
         v8 v9 v18 v19 mcall mcall) := by
@@ -284,7 +286,7 @@ theorem armExec_rec
     hrsAl, hrsLo, hrsHi, hrsWin, hrsStk,
     hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin, hraAl,
     harenaStk, hexecCodeStk, hexecArenaCode,
-    hstackBudget, hstmtBodies, hstoreBodies⟩ := hpre
+    hstackBudget, hstmtBodies, hstoreBodies, hground⟩ := hpre
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hsp176 : 176 ≤ sp.toNat := by omega
   have hspsub : (sp - 176#64).toNat = sp.toNat - 176 := by
@@ -364,7 +366,8 @@ theorem armExec_rec
       stmt_align := hstAl
       stmt_ram := ⟨hstLo, hstHi⟩
       stmt_win := hstWin
-      spill_defined := ⟨⟨wx8, hx8_1⟩, ⟨wx9, hx9_1⟩, ⟨aRet, hs2_1⟩, ⟨wx19, hx19_1⟩⟩ }
+      spill_defined := ⟨⟨wx8, hx8_1⟩, ⟨wx9, hx9_1⟩, ⟨aRet, hs2_1⟩, ⟨wx19, hx19_1⟩⟩
+      ground := by rw [hmem1e]; exact hground }
   -- ============ the sub-call (the induction hypothesis) ============
   obtain ⟨c2, hs2', hExitD⟩ :=
     hIH (fun R => σ1.regs.get? R) N A SL φf φc (sp - 176#64) retPC aInterp aStmtSub aEnvSub aRetSub mcall

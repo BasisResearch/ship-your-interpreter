@@ -71,3 +71,58 @@ so the next wave is pure record plumbing.
   new modules and the amended `Vsa.lean` root built green inside it before the
   tail (`Vsa.Sim.MemRegion`/`EntryGround`/`LayoutStmtTableGen`/
   `EntryGroundRows` all `✔`).  47g precedent (regen + discipline + census).
+
+# RUN-1 wave 47i — entry field-insertion wave + McallPop amendment (2026-09-02, post-4240d7e)
+
+- Task: execute audit §D insertion (EvalEntry/ExecEntry gain `ground`; ctor
+  sites + NBSPins-conduit threading + regen); discharge record fills (hStr at
+  minimum); amend the 6 `hMcallPop` Resid statements per the
+  `McallPopTotality.lean` Law-4 verdict (falsity-amendment procedure).
+- Plan: (1) McallPop amendment — replace each Resid/sim/block totality
+  conjunct with the B3 `BinArmExtras` precedent pair `frame_pop`
+  (windowed `[sp-1120, sp)`; neg additionally `[aExpr+4, aExpr+8)` for the
+  blockC_neg node dead-byte lds) + `mem_ext` (`MemExtends m0` closure);
+  (2) insertion + threading; (3) fills; (4) census/discipline/commit.
+  ONE regen for both edits.
+- Measured blast radius (totality uses): EvalNegSim2 blockC_neg (aExpr+4..8 +
+  subsret windows + MemExtends@495), EvalNotSim (24B @sp-944..-928+8 +
+  MemExtends@888), EvalOrSim/EvalAndSim (sp-968..-944 windows + m3@sp-1088 +
+  MemExtends), EvalLogical3 (hPopCR sp-848..-832 + chain@764),
+  EvalLogical4 (hPopCR sp-944..-928 + chain@767), TermRouting 6 Resids.
+  All windows ⊆ [sp-1120, sp) ∪ node bytes. Skeleton fields reference Resids
+  BY NAME → no TermResidualsCore text change; skeleton regen = recompile.
+
+### 47i progress checkpoints (live)
+- Phase A (McallPop amendment) GREEN: EvalNegSim2 (stackpop_present →
+  pointwise; blockC_neg windowed pair), EvalNotSim, EvalOrSim, EvalAndSim,
+  EvalLogical3/4 (hStackPopC/M3/hPopCR windowed, ~240 use sites), 6 Resids +
+  6 rows in TermRouting.  MemExtends-from-totality derivations replaced by
+  the threaded `mem_ext` residual (`hMemExtM0.trans`).
+- Insertion landed: `EvalGround`→`InterpEntry` (+`KindSlotPinned` relocated
+  from EvalSimCommon, 47f-style), `ExecGround`→`ExecEntry`;
+  `EvalEntry.ground`/`ExecEntry.ground` fields; `EntryGround.lean` = shim.
+- NEW `Vsa/Sim/EntryGroundKit.lean` (green, axiom-clean): transport_offstack /
+  ast_read64_agree{,_via} / child_params / child_at / transport_via (+ exec
+  twins) + named ExprIn/StmtIn child projections.  ONE kit call per supplier.
+- Ctor sites DONE: EvalRecCommon, ExecRecCommon (armTail_rec{,_es} +
+  execExprGlue/execExprSimC closures), ArmSegSplit{,Exec,ExecEval},
+  ExecBlock, SeqHeadStages (field copy), LoopHeadDispatch (hGround premise),
+  EvalNegSim (blockB_unary), EvalBinSim (blockB_binary L+R children via
+  transport_via across the left sub-call), EvalAndSim (blockB_logical),
+  suppliers in EvalNegSim3/EvalNotSim/4 logical sims.
+- Driver: /tmp/regen_driver2.sh level-parallel (P3) with done-list
+  /tmp/regen_done.txt over /tmp/regen_levels.txt (307-file cone).
+
+### 47i RECOVERY (successor lane, 2026-09-02)
+- Found: driver stalled at level 15/33 (127/307 done), sole failure
+  `rows/EvalGtRow.lean` — predecessor had edited the 10 binary-row PROOFS
+  (`hGmt47` destructure/supply) but died before (a) inserting the
+  `EvalGround ment SL A sp sret aExpr.toNat (.binary <op> el er)` conjunct
+  into the row `SimGoal`/inline pres, (b) threading `hGmt` through
+  `rows/BinDispatchRow.lean` (22 sites), (c) `rows/EvalEqNeFront.lean`
+  (evalEqSimD/evalNeSimD pres).
+- Repaired: conjunct inserted in 9 int-row Goal defs + 3 EqNeRow pres
+  (op/.eq/.ne) + 2 EqNeFront pres; `hGmt` threaded in BinDispatchRow;
+  EvalGtRow now green. Variant-entry ctor sites (EvalVarRow/FnResidSupply/
+  CallCruxMarshal4/ArmSegSplitTwins) confirmed unaffected (audit §D).
+- Driver resumed under caffeinate (P3, done-list preserved).

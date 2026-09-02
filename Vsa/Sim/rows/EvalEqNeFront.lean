@@ -943,6 +943,8 @@ theorem evalEqSimD
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
         MemExtends m0 ment ∧
+        -- WAVE 47i: the parent node's entry-ground bundle at the arm entry.
+        EvalGround ment SL A sp sret aExpr.toNat (.binary .eq el er) ∧
         -- ITEM ZERO B1: BOTH operands' recursion-sound budgets (forwarded to
         -- the amended `evalEqSim`/`evalNeSim` core pre).
         StackOK SL (sp - 1088#64)
@@ -1006,6 +1008,8 @@ theorem evalNeSimD
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
         MemExtends m0 ment ∧
+        -- WAVE 47i: the parent node's entry-ground bundle at the arm entry.
+        EvalGround ment SL A sp sret aExpr.toNat (.binary .ne el er) ∧
         -- ITEM ZERO B1: BOTH operands' recursion-sound budgets (forwarded to
         -- the amended `evalEqSim`/`evalNeSim` core pre).
         StackOK SL (sp - 1088#64)

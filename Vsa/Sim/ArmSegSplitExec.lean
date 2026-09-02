@@ -117,7 +117,9 @@ theorem execEntry_of_jalPrefix
         StackOK SL (sp - hdrm)
           (s.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
         Stmt.bodiesBound Vsa.While.perCallBudget s = true ∧
-        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget ∧
+        -- WAVE 47i: the child's exec entry-ground bundle.
+        ExecGround mcall SL A (sp - hdrm) aRet aStmt.toNat s) :
     LandedN 1 c (fun c' =>
       ExecEntry (fun R => c'.σ.regs.get? R) N A SL φf φc st d env s
         (sp - hdrm) retPC aInterp aStmt aEnv aRet mcall c') := by
@@ -126,7 +128,7 @@ theorem execEntry_of_jalPrefix
     hout, houtStr, hmemc, hcodeS, hstmtR, hstore, hstoreSurv,
     hstAl, hstLo, hstHi, hstWin, hstStk,
     hstackOK, hSLlo, hSLhiRam, hSLwin, hcodeStk,
-    hstackBudget, hstmtBodies, hstoreBodies⟩ := hpre
+    hstackBudget, hstmtBodies, hstoreBodies, hground⟩ := hpre
   -- ============ callPC: jal exec_stmt → PC := execStmtEntry, x1 := retPC ============
   obtain ⟨σ1, i1, hs1', hi1, hG1, hmem1, hobs1⟩ :=
     hjalSite c.σ c.tick c.steps vmi hG hpc hmi (hmemc ▸ hcodeS) htick
@@ -194,7 +196,8 @@ theorem execEntry_of_jalPrefix
         stmt_align := hstAl
         stmt_ram := ⟨hstLo, hstHi⟩
         stmt_win := hstWin
-        spill_defined := ⟨⟨w8, hx8_1⟩, ⟨w9, hx9_1⟩, ⟨w18, hx18_1⟩, ⟨w19, hx19_1⟩⟩ }
+        spill_defined := ⟨⟨w8, hx8_1⟩, ⟨w9, hx9_1⟩, ⟨w18, hx18_1⟩, ⟨w19, hx19_1⟩⟩
+        ground := by rw [hmem1e]; exact hground }
 
 #print axioms execEntry_of_jalPrefix
 

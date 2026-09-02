@@ -293,6 +293,10 @@ theorem loopHeadDispatch_span
       ChainFacts cH.σ.mem cH.σ.mem (loopHeadDispatchL sp s0) [] loopHeadDispatchSeg)
     -- the geometry SegEntry cannot supply (stated at the exec_stmt-entry memory mE):
     (hGeom : LoopHeadDispatchGeom g N A SL φf φc st sp aStmt s mE)
+    -- WAVE 47i: the root exec entry-ground bundle (M6 supply point —
+    -- `stmtTablePins_of_bytes` from the `Loaded L` image + the parse-arena
+    -- Layout fact; threaded as a premise beside the Geom supplier).
+    (hGround : ExecGround mE SL A sp aRet aStmt.toNat s)
     -- the value_null call splice (a CALL; supplier: callSeg over value_null_spec):
     (hValueNullSplice : ∀ (c458 : Config),
         c458.σ.regs.get? Register.PC = some (0x80004458#64 : BitVec 64) →
@@ -371,7 +375,8 @@ theorem loopHeadDispatch_span
       stmt_align := hGeom.stmt_align
       stmt_ram := hGeom.stmt_ram
       stmt_win := hGeom.stmt_win
-      spill_defined := ⟨hx8E, hx9E, hx18E, hx19E⟩ }
+      spill_defined := ⟨hx8E, hx9E, hx18E, hx19E⟩
+      ground := by rw [hmemE]; exact hGround }
   · -- store survival: the callee sees `mem = mE`; a change confined to `[SL.lo, sp)`
     -- keeps the store representable, discharged by the geometry's `store_survives`.
     intro m' hm'

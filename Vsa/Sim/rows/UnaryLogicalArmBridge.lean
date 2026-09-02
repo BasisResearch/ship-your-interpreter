@@ -2,6 +2,7 @@ import Vsa.Sim.StagePreSuppliers
 import Vsa.Sim.StagePreSuppliers2
 import Vsa.Sim.EvalNegSim3
 import Vsa.Sim.EvalAndSim
+import Vsa.Sim.EntryGroundKit
 
 /-!
 # `UnaryLogicalArmBridge` — the EX_UNARY / EX_LOGICAL arm entry bridges
@@ -105,6 +106,9 @@ theorem blockA_unaryArm
         (∃ w, (fun R => c.σ.regs.get? R) Register.x18 = some w) ∧
         read64 ment (aExpr.toNat + 16) = some aOperand.toNat ∧
         ExprRepr ment aOperand.toNat esub ∧
+        -- WAVE 47i: the child's entry-ground bundle (derived from `hc.ground`).
+        EvalGround ment SL A (sp - 1088#64)
+          ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aOperand.toNat esub ∧
         aExpr.toNat + 24 ≤ 0x100000000 ∧
         aOperand.toNat % 8 = 0 ∧
         0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
@@ -178,11 +182,29 @@ theorem blockA_unaryArm
     simp only []; apply congrArg some; omega
   have hpeq : p = aOperand.toNat := Option.some.inj (hpayMent.symm.trans hpayMent')
   subst hpeq
+  -- WAVE 47i: the child's entry-ground bundle (ONE kit call).
+  have hsp1088N : 1088 ≤ sp.toNat := by
+    have := hX.sp_headroom; have := hc.stack_ram.1; omega
+  have hspsubN : (sp - 1088#64).toNat = sp.toNat - 1088 := by
+    rw [BitVec.toNat_sub]
+    have h1088 : (1088#64 : BitVec 64).toNat = 1088 := by decide
+    rw [h1088]; have := sp.isLt; omega
+  have hsubsretN : ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)).toNat
+      = sp.toNat - 944 :=
+    spill_addr sp (0x090#12) 944 (by decide) (by decide) hsp1088N
+  have hgroundChild : EvalGround ment SL A (sp - 1088#64)
+      ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aOperand.toNat esub :=
+    (hc.mem ▸ hc.ground).child_at
+      (fun lo hi hin => exprIn_unary_child hin aOperand.toNat hpayMent')
+      hMentM0 hc.table_stack_disjoint hX.sp_SLhi
+      (by omega)
+      (by rw [hsubsretN]; have := hX.sp_headroom; have := hc.stack_ram.1; omega)
+      (by rw [hsubsretN]; omega)
   -- realign the ArmEntryK `out0` from the entry `c.σ.sailOutput` to the reached `c1.σ.sailOutput`
   have hArm' : ArmEntryK g N A SL φf φc st (0x800035e0#64) UnaryArmCallee (.unary op esub)
       sp r sret aExpr aEnv v8 v9 v18 c1.σ.sailOutput m0 ment c1 := _hAout.symm ▸ hArm
   refine ⟨c1, hs1, v8, v9, v18, ment, hArm', hAEx11, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩,
-    hpayMent', hsubReprMent, hX.expr24,
+    hpayMent', hsubReprMent, hgroundChild, hX.expr24,
     hX.op_align, hX.op_lo, hX.op_hi, hX.op_win, hX.op_stk,
     hX.sp_headroom, hX.sp_SLhi, hX.sp16, hX.SLhi_ram,
     hX.code_stk, hX.vicode_stk, (by have := hX.table_stk; omega),
@@ -264,6 +286,8 @@ theorem blockA_logicalArm
         (∀ m' : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m'[a]?) →
           ExprRepr m' aLeft.toNat el) ∧
+        -- WAVE 47i: the parent node's entry-ground bundle at the arm entry.
+        EvalGround ment SL A sp sret aExpr.toNat (.logical op el er) ∧
         aExpr.toNat + 24 ≤ 0x100000000 ∧
         aLeft.toNat % 8 = 0 ∧
         0x80000000 ≤ aLeft.toNat ∧ aLeft.toNat + 16 ≤ 0x100000000 ∧
@@ -339,6 +363,7 @@ theorem blockA_logicalArm
   refine ⟨c1, hs1, v8, v9, v18, ment, hArm', hAEx11, hx13c1, (fun R _ => rfl),
     ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩, hlptrM',
     (fun m' hag => hX.left_survives m' (fun a ha => (hMentM0 a ha).symm.trans (hag a ha))),
+    ((hc.mem ▸ hc.ground).transport_offstack hc.table_stack_disjoint hX.sp_SLhi hMentM0),
     hX.expr24, hX.op_align, hX.op_lo, hX.op_hi, hX.op_win, hX.op_stk,
     hX.sp_headroom, hX.sp_SLhi, hX.sp16, hX.SLhi_ram,
     hX.code_stk, hX.vicode_stk, (by have := hX.table_stk; omega),

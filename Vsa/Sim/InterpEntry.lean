@@ -10,6 +10,12 @@ import Vsa.Sim.Code.Value_int
 import Vsa.Sim.Code.Value_null
 import Vsa.Sim.Code.Value_bool
 import Vsa.Sim.Code.Value_str
+import Vsa.Sim.MemRegion
+
+-- discipline: allow(R7-conj-tower-def) file-level ∃ count crossed 8 by the 47i
+-- RELOCATION of the landed `EvalGround`/`KindSlotPinned` layer into the entry's
+-- home file; every ∃ here is a data-carrying field of a NAMED structure (the
+-- WidenMeta "Prop structure cannot project data" idiom), not an anonymous tower.
 
 /-!
 # Layer 4 — the `EvalEntry`/`EvalExit` machine-side predicates for `eval_expr`
@@ -271,6 +277,152 @@ theorem NBSPins.survive_stack {SL : StackLayout} {sp : BitVec 64} {m m' : Mem}
     (fun a ha => hag a (by rcases hvi with hv | hv <;> omega))
     (fun a ha => hag a (by rcases htb with ht | ht <;> omega))
 
+/-! ## `KindSlotPinned` — the per-kind jump-table slot pin (dispatch coupling)
+
+RELOCATED from `EvalSimCommon.lean` (wave 47i — the `EvalGround` bundle below
+needs it; same name/namespace, zero consumer changes).  The `EX_*` dispatch
+reads a 4-byte offset from the `.rodata` jump table at
+`jumpTableBase = 0x80019f58`, slot `k` living at `jumpTableBase + 4*k`, then
+jumps to `jumpTableBase + (Int32)offset`. -/
+def KindSlotPinned (k : Nat) (armPC : BitVec 64) (m : Mem) : Prop :=
+  ∃ t0 t1 t2 t3 : BitVec 8,
+    m[(jumpTableBase + 4 * k + 0 : Nat)]? = some t0 ∧
+    m[(jumpTableBase + 4 * k + 1 : Nat)]? = some t1 ∧
+    m[(jumpTableBase + 4 * k + 2 : Nat)]? = some t2 ∧
+    m[(jumpTableBase + 4 * k + 3 : Nat)]? = some t3 ∧
+    (sign_extend (m := 64) ((((t3.append t2).append t1).append t0) : BitVec (8 * 4))
+      + BitVec.ofNat 64 jumpTableBase) = armPC
+
+/-! ## `EvalGround` — the batched entry-ground bundle (wave 47h/47i, audit N1/N3/N4/N5)
+
+RELOCATED from `EntryGround.lean` at insertion time (47i): `EvalEntry.ground`
+needs these BELOW the entry structure.  Same names/namespace — zero consumer
+changes.  See `experiments/entry-needs-audit.md` §C for the design. -/
+
+/-- N1 — the full eval jump-table pin bundle (tags 0-10).  Arm PCs are the
+generated table (`LayoutJumpTableGen` header); the per-wave trickle fields
+(`int_slot` tag 0, `nbs_pins` slots 1-3) stay for their landed consumers. -/
+structure KindTablePins (m : Mem) : Prop where
+  slot0 : KindSlotPinned 0 (0x80003408#64) m   -- EX_INT
+  slot1 : KindSlotPinned 1 (0x80003414#64) m   -- EX_STR
+  slot2 : KindSlotPinned 2 (0x80003420#64) m   -- EX_BOOL
+  slot3 : KindSlotPinned 3 (0x8000342c#64) m   -- EX_NULL
+  slot4 : KindSlotPinned 4 (0x80003434#64) m   -- EX_VAR
+  slot5 : KindSlotPinned 5 (0x8000347c#64) m   -- EX_ASSIGN
+  slot6 : KindSlotPinned 6 (0x800034e8#64) m   -- EX_BINARY
+  slot7 : KindSlotPinned 7 (0x8000355c#64) m   -- EX_LOGICAL
+  slot8 : KindSlotPinned 8 (0x800035e0#64) m   -- EX_UNARY
+  slot9 : KindSlotPinned 9 (0x800031b0#64) m   -- EX_CALL
+  slot10 : KindSlotPinned 10 (0x800033c4#64) m -- EX_FN
+
+/-- One slot's pin survives agreement on its own 4-byte window. -/
+theorem kindSlotPinned_agree {k : Nat} {armPC : BitVec 64} {m m' : Mem}
+    (h : KindSlotPinned k armPC m)
+    (ha : ∀ a, jumpTableBase + 4 * k ≤ a → a < jumpTableBase + 4 * k + 4 →
+      m[a]? = m'[a]?) :
+    KindSlotPinned k armPC m' := by
+  obtain ⟨t0, t1, t2, t3, h0, h1, h2, h3, he⟩ := h
+  exact ⟨t0, t1, t2, t3,
+    (ha _ (by omega) (by omega)).symm.trans h0,
+    (ha _ (by omega) (by omega)).symm.trans h1,
+    (ha _ (by omega) (by omega)).symm.trans h2,
+    (ha _ (by omega) (by omega)).symm.trans h3, he⟩
+
+/-- `KindTablePins` transport: agreement on the whole 44-byte table window. -/
+theorem KindTablePins.transport {m m' : Mem} (h : KindTablePins m)
+    (ha : ∀ a, jumpTableBase ≤ a → a < jumpTableBase + 44 → m[a]? = m'[a]?) :
+    KindTablePins m' where
+  slot0 := kindSlotPinned_agree h.slot0 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot1 := kindSlotPinned_agree h.slot1 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot2 := kindSlotPinned_agree h.slot2 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot3 := kindSlotPinned_agree h.slot3 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot4 := kindSlotPinned_agree h.slot4 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot5 := kindSlotPinned_agree h.slot5 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot6 := kindSlotPinned_agree h.slot6 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot7 := kindSlotPinned_agree h.slot7 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot8 := kindSlotPinned_agree h.slot8 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot9 := kindSlotPinned_agree h.slot9 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot10 := kindSlotPinned_agree h.slot10 (fun a h1 h2 => ha a (by omega) (by omega))
+
+/-- N3 — the AST region for the expression tree at `aExpr`: nodes hereditarily
+in `[lo, hi)` (`MemRegion.ExprIn`), region in RAM above HTIF, disjoint from the
+WHOLE stack region, from the result buffer, and from the arena. -/
+structure AstRegionSpec (m : Mem) (SL : StackLayout) (A : Arena)
+    (sret aExpr : Nat) (e : Vsa.While.Expr) (lo hi : Nat) : Prop where
+  nodes : ExprIn m lo hi aExpr e
+  lo_ram : 0x80000000 ≤ lo
+  hi_ram : hi ≤ 0x100000000
+  win : tohostAddr + 16 ≤ lo
+  stack_disjoint : hi ≤ SL.lo ∨ SL.hi ≤ lo
+  sret_disjoint : hi ≤ sret ∨ sret + 24 ≤ lo
+  arena_disjoint : hi ≤ A.lo ∨ A.hi ≤ lo
+
+/-- The ∃-packaged eval AST-region pin (a `Prop` structure cannot carry the
+`lo`/`hi` data fields — 47g `StrPayloadIn` precedent). -/
+structure AstRegionPins (m : Mem) (SL : StackLayout) (A : Arena)
+    (sret aExpr : Nat) (e : Vsa.While.Expr) : Prop where
+  region : ∃ lo hi, AstRegionSpec m SL A sret aExpr e lo hi
+
+/-- `AstRegionSpec` transports along agreement on `[lo, hi)` (only `nodes`
+touches `m`; `exprIn_agreeP` carries it). -/
+theorem AstRegionSpec.transport {m m' : Mem} {SL : StackLayout} {A : Arena}
+    {sret aExpr : Nat} {e : Vsa.While.Expr} {lo hi : Nat}
+    (h : AstRegionSpec m SL A sret aExpr e lo hi)
+    (ha : ∀ a, lo ≤ a → a < hi → m[a]? = m'[a]?) :
+    AstRegionSpec m' SL A sret aExpr e lo hi where
+  nodes := exprIn_agreeP (fun a hp => ha a hp.1 hp.2) e h.nodes
+  lo_ram := h.lo_ram
+  hi_ram := h.hi_ram
+  win := h.win
+  stack_disjoint := h.stack_disjoint
+  sret_disjoint := h.sret_disjoint
+  arena_disjoint := h.arena_disjoint
+
+/-- **The complete eval entry-ground bundle** (audit classes N1/N3/N4/N5).
+Inserted as `EvalEntry.ground` (47i); transported by `survive_stack`; children
+by `ExprIn` projection. -/
+structure EvalGround (m : Mem) (SL : StackLayout) (A : Arena)
+    (sp sret : BitVec 64) (aExpr : Nat) (e : Vsa.While.Expr) : Prop where
+  table : KindTablePins m
+  ast : AstRegionPins m SL A sret.toNat aExpr e
+  arena_stack : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
+  arena_code : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
+  arena_vi : A.hi ≤ 0x800027ec ∨ 0x8000282c ≤ A.lo
+  sret_inSL : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi
+  sret_table_disjoint : sret.toNat + 24 ≤ 0x80019f58 ∨ 0x80019f58 + 44 ≤ sret.toNat
+
+/-- **`EvalGround` survives any memory change confined to the stack scribble
+`[SL.lo, sp)` ∪ the sret window** — the standard entry→child-entry write
+footprint.  Needs the entry's whole-table stack disjointness (the 47f
+`table_stack_disjoint` literal) for the table half; the AST region and the
+literals are self-contained. -/
+theorem EvalGround.survive_stack {m m' : Mem} {SL : StackLayout} {A : Arena}
+    {sp sret : BitVec 64} {aExpr : Nat} {e : Vsa.While.Expr}
+    (h : EvalGround m SL A sp sret aExpr e)
+    (htb : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
+    (hsp : sp.toNat ≤ SL.hi)
+    (hag : ∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat) →
+      ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) → m[k]? = m'[k]?) :
+    EvalGround m' SL A sp sret aExpr e where
+  table := h.table.transport (fun a h1 h2 => by
+    have hj : jumpTableBase = 0x80019f58 := rfl
+    refine hag a (fun hcon => ?_) (fun hcon => ?_)
+    · rcases htb with ht | ht <;> omega
+    · rcases h.sret_table_disjoint with hs | hs <;> omega)
+  ast := ⟨by
+    obtain ⟨lo, hi, spec⟩ := h.ast.region
+    refine ⟨lo, hi, spec.transport (fun a h1 h2 => ?_)⟩
+    refine hag a (fun hcon => ?_) (fun hcon => ?_)
+    · rcases spec.stack_disjoint with hs | hs
+      · omega
+      · have := h.sret_inSL; omega
+    · rcases spec.sret_disjoint with hs | hs <;> omega⟩
+  arena_stack := h.arena_stack
+  arena_code := h.arena_code
+  arena_vi := h.arena_vi
+  sret_inSL := h.sret_inSL
+  sret_table_disjoint := h.sret_table_disjoint
+
 /-! ## `EvalEntry` — the machine precondition at `eval_expr`'s entry PC
 
 Parameters (ghosts, ∀-bound in the simulation lemma):
@@ -437,6 +589,13 @@ structure EvalEntry
   code-geometry half of `hStr`).  Child entries transport it via
   `NBSPins.survive_stack` (pre-call writes are stack-confined). -/
   nbs_pins : NBSPins c.σ.mem
+  /-- **The batched entry-ground bundle** (wave 47i insertion — audit
+  `experiments/entry-needs-audit.md` §C/§D): full jump-table pins (N1), the
+  hereditary AST region (N3), arena geometry (N4), sret whole-stack membership
+  (N5).  Children transport it via `EvalGround.survive_stack` + `ExprIn`
+  projection; top-level supply = the M6 image (`kindTablePins_of_bytes`) + the
+  parse-arena Layout fact. -/
+  ground : EvalGround c.σ.mem SL A sp sret aExpr.toNat e
   /-- **The spilled callee-saved registers `s0`(x8), `s1`(x9), `s2`(x18) are
   defined** at entry (the prologue `sd s0/s1/s2` requires their `rs2` reads not to
   throw). GoodState pins control registers but not GPRs, so this is stated here;

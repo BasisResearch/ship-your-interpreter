@@ -1,4 +1,5 @@
 import Vsa.Sim.EvalRecCommon
+import Vsa.Sim.EntryGroundKit
 import Vsa.Sim.EvalNegSim2
 import Vsa.Sim.EvalNegSim3
 import Vsa.Sim.BinHeadSites
@@ -282,6 +283,9 @@ theorem blockB_binary
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, ment[a]? = some b)) ∧
         -- the arm-entry memory presence-extends the case-entry memory (M6 Layout).
         MemExtends m0 ment ∧
+        -- WAVE 47i: the parent node's entry-ground bundle at the arm entry
+        -- (children derived inside via the `EntryGroundKit` combinators).
+        EvalGround ment SL A sp sret aExpr.toNat (.binary op el er) ∧
         -- ITEM ZERO B1: BOTH operands' recursion-sound budgets at `sp - 1088`,
         -- their `.fn`-bodies bounds, and the store-bodies invariants (LEFT over
         -- the entry store `st`, RIGHT over the post-left store `st'`), threaded
@@ -300,7 +304,7 @@ theorem blockB_binary
           st' st'' vl vr sp r sret v8 v9 v18 m0 c) := by
   intro c hpre
   obtain ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v,
-    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0,
+    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0, hgroundP,
     hstackBudgetL, hexprBodiesL, hstoreBodiesL,
     hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
@@ -526,6 +530,24 @@ theorem blockB_binary
   have hcodemcall1 : Eval_exprLoaded mcall1 := by rw [← hmem4e]; exact hcode4
   -- the two operand-buffer addresses
   have hsub968 : ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)).toNat = sp.toNat - 968 := hsretL
+  -- WAVE 47i: the LEFT child's entry-ground bundle (kit moves 1+2+3).
+  have hspsubB : (sp - 1088#64).toNat = sp.toNat - 1088 := by
+    rw [BitVec.toNat_sub]
+    have h1088 : (1088#64 : BitVec 64).toNat = 1088 := by decide
+    rw [h1088]; have := sp.isLt; omega
+  have hGroundM1 : EvalGround mcall1 SL A sp sret aExpr.toNat (.binary op el er) :=
+    hgroundP.transport_offstack hBE.tableStk hBE.spSLhi
+      (fun a ha => (hAgMcall1 a ha).symm)
+  have hpayL1 : read64 mcall1 (aExpr.toNat + 16) = some aLOp.toNat := by
+    rw [evalGround_ast_read64_agree hgroundP hBE.spSLhi
+      (fun a ha => (hAgMcall1 a ha).symm) (off := 16) (by omega)]
+    exact hpayL
+  have hGroundL : EvalGround mcall1 SL A (sp - 1088#64)
+      ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)) aLOp.toNat el :=
+    hGroundM1.child_params (fun lo hi hin => exprIn_binary_left hin aLOp.toNat hpayL1)
+      hBE.tableStk hBE.spSLhi (by omega)
+      (by rw [hsub968]; have := hBE.sproom; have := hSLlo; omega)
+      (by rw [hsub968]; have := hBE.sproom; have := hSLlo; omega)
   ------------------------------------------------------------------------------
   -- LEFT recursive call, via `armTail_rec` (subsret = sp-968, retPC = 0x800034fc).
   ------------------------------------------------------------------------------
@@ -542,7 +564,7 @@ theorem blockB_binary
       hIHl
       ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩
       ⟨hG4, hi4, hpc4, ha0_4, hs1_4, hx11_4, hx12_4, hsp_4, ⟨vmi4, hmi4⟩,
-        hout4, houtStr, hmem4e, hcodemcall1, hviInt1, hviSlot1, hnbs1, hexprL1, hstore1, hstoreSurv1,
+        hout4, houtStr, hmem4e, hcodemcall1, hviInt1, hviSlot1, hnbs1, hGroundL, hexprL1, hstore1, hstoreSurv1,
         hframe4, ⟨hg8, hg18⟩,
         hslotRa1, hslotS01, hslotS11, hslotS21,
         hBE.lop_align, hBE.lop_ram.1, hBE.lop_ram.2, hBE.lop_win, hBE.lop_stk,
@@ -932,6 +954,58 @@ theorem blockB_binary
     rw [read64_writeMap8_disj cL.σ.mem (sp.toNat - 24) (sp.toNat - 1088) _ (by omega)]; exact hslotS1L
   have hslotS22 : read64 mcall2 (sp.toNat - 32) = some v18.toNat := by
     rw [read64_writeMap8_disj cL.σ.mem (sp.toNat - 32) (sp.toNat - 1088) _ (by omega)]; exact hslotS2L
+  -- WAVE 47i: the RIGHT child's entry-ground bundle — parent ground carried
+  -- ACROSS the left sub-call (`transport_via`, per-window agreement chains),
+  -- then the kit child conversion.
+  have hGroundM2 : EvalGround mcall2 SL A sp sret aExpr.toNat (.binary op el er) := by
+    have hj : jumpTableBase = 0x80019f58 := rfl
+    refine hgroundP.transport_via (fun a h1 h2 => ?_) (fun lo hi spec a h1 h2 => ?_)
+    · rw [hj] at h1 h2
+      have hnst : ¬ (SL.lo ≤ a ∧ a < sp.toNat) := by
+        rcases hBE.tableStk with h | h <;> omega
+      have e1 : ment[a]? = mcall1[a]? := hAgMcall1 a hnst
+      have e2 : mcall1[a]? = cL.σ.mem[a]? := by
+        rcases hmemFrameL a (by rcases hBE.tableStk with h | h <;> omega)
+          (by rcases hBE.arenaTable with h | h <;> omega) with hin | heq
+        · exact absurd hin (by
+            have := hBE.sproom; rcases hBE.tableStk with h | h <;> omega)
+        · exact heq.symm
+      have e3 : cL.σ.mem[a]? = mcall2[a]? := hAgMcall2 a hnst
+      rw [e1, e2, e3]
+    · have hnst : ¬ (SL.lo ≤ a ∧ a < sp.toNat) := by
+        intro hcon
+        rcases spec.stack_disjoint with h | h
+        · have := hBE.spSLhi; omega
+        · omega
+      have e1 : ment[a]? = mcall1[a]? := hAgMcall1 a hnst
+      have e2 : mcall1[a]? = cL.σ.mem[a]? := by
+        rcases hmemFrameL a (by
+            intro hcon
+            rcases spec.stack_disjoint with h | h
+            · have := hBE.spSLhi; omega
+            · have := hBE.spSLhi; omega)
+          (by rcases spec.arena_disjoint with h | h <;> omega) with hin | heq
+        · exact absurd hin (by
+            rcases spec.stack_disjoint with h | h
+            · have := hBE.sproom; omega
+            · have := hBE.spSLhi; omega)
+        · exact heq.symm
+      have e3 : cL.σ.mem[a]? = mcall2[a]? := hAgMcall2 a hnst
+      rw [e1, e2, e3]
+  have hpayR2' : read64 mcall2 (aExpr.toNat + 24) = some aROp.toNat := by
+    have hAgNode2 : ∀ k : Nat, aExpr.toNat + 24 ≤ k → k < aExpr.toNat + 32 →
+        ment[k]? = mcall2[k]? := fun k hk1 hk2 => by
+      rw [hAgNode k hk1 hk2]
+      exact hAgMcall2 k (by rcases hBE.node_stk with h | h <;> omega)
+    rw [← read64_agreeP (P := fun k => aExpr.toNat + 24 ≤ k ∧ k < aExpr.toNat + 32)
+      (fun k hk => hAgNode2 k hk.1 hk.2) (fun k hk => ⟨by omega, by omega⟩)]
+    exact hpayR
+  have hGroundR : EvalGround mcall2 SL A (sp - 1088#64)
+      ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aROp.toNat er :=
+    hGroundM2.child_params (fun lo hi hin => exprIn_binary_right hin aROp.toNat hpayR2')
+      hBE.tableStk hBE.spSLhi (by omega)
+      (by rw [haddr144']; have := hBE.sproom; have := hSLlo; omega)
+      (by rw [haddr144']; have := hBE.sproom; have := hSLlo; omega)
   ----------------------------------------------------------------------------
   -- RIGHT recursive call, via `armTail_rec` (armTail `sp` = the arm's outer `sp`;
   -- the callee lowers to sp-2176; subsret = sp-944, retPC = 0x8000351c).
@@ -949,7 +1023,7 @@ theorem blockB_binary
       hIHr
       ⟨τ7, j7, cL.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩
       ⟨hGτ7, hj7, hpcτ7, ha0τ7, hs1τ7, hx11τ7, hx12τ7, hspτ7, ⟨vmiτ7, hmiτ7⟩,
-        houtτ7', houtStrR, hmemτ7e, hcodeτ7, hviInt2, hviSlot2, hnbs2, hexprR2, hstore2, hstoreSurv2,
+        houtτ7', houtStrR, hmemτ7e, hcodeτ7, hviInt2, hviSlot2, hnbs2, hGroundR, hexprR2, hstore2, hstoreSurv2,
         (fun R hR => rfl), ⟨⟨aExpr, hgR7_8⟩, ⟨aEnv, hgR7_18⟩⟩,
         hslotRa2, hslotS02, hslotS12, hslotS22,
         hBE.rop_align, hBE.rop_ram.1, hBE.rop_ram.2, hBE.rop_win, hBE.rop_stk,

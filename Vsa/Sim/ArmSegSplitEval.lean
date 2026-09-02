@@ -104,6 +104,8 @@ theorem landedN_eentryC_of_jalPrefix
         String.join out0.toList = st.out ∧
         c.σ.mem = mcall ∧
         Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
+        -- WAVE 47i: the child's entry-ground bundle.
+        EvalGround mcall SL A (sp - 1088#64) subsret aOperand.toNat esub ∧
         ExprRepr mcall aOperand.toNat esub ∧
         StoreRepr mcall N A φf φc st.store ∧
         (∀ m' : Mem,
@@ -203,6 +205,8 @@ def JalPreBundle (e : Expr) (c' : Config) (st : Vsa.While.St) (d : Nat)
     String.join out0.toList = st.out ∧
     c'.σ.mem = mcall ∧
     Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
+    -- WAVE 47i: the child's entry-ground bundle.
+    EvalGround mcall SL A (sp - 1088#64) subsret aOperand.toNat e ∧
     ExprRepr mcall aOperand.toNat e ∧
     StoreRepr mcall N A φf φc st.store ∧
     (∀ m' : Mem,

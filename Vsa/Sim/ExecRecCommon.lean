@@ -127,6 +127,8 @@ theorem armTail_rec_es
         c.σ.mem = mcall ∧
         Exec_stmtLoaded mcall ∧ Eval_exprLoaded mcall ∧
         Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
+        -- WAVE 47i: the child's entry-ground bundle.
+        EvalGround mcall SL A (sp - 176#64) subsret aOperand.toNat esub ∧
         ExprRepr mcall aOperand.toNat esub ∧
         StoreRepr mcall N A φf φc st.store ∧
         (∀ m' : Mem,
@@ -184,7 +186,7 @@ theorem armTail_rec_es
         r v8 v9 v18 v19 mcall mcall) := by
   intro c hpre
   obtain ⟨hG, htick, hpc, ha0, hx11, hx12, hs2, hsp, ⟨wx8, hwx8⟩, ⟨wx9, hwx9⟩, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
-    hcodeS, hcode, hviCode, hslot, hnbs, hsubexpr, hstore, hstoreSurv, hframe,
+    hcodeS, hcode, hviCode, hslot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframe,
     hgx8, hgx9, hgx18, hgx19, hgx2,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
     hopAl, hopLo, hopHi, hopWin, hopStk,
@@ -289,6 +291,7 @@ theorem armTail_rec_es
       value_int_code := by rw [hmem1e]; exact hviCode
       int_slot := by rw [hmem1e]; exact hslot
       nbs_pins := by rw [hmem1e]; exact hnbs
+      ground := by rw [hmem1e]; exact hground
       table_stack_disjoint := by
         rcases htableStk with h | h
         · left; exact h
@@ -412,6 +415,11 @@ theorem execExprGlue
       IntSlotPinned ment)
     (hnbsP : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       NBSPins ment)
+    -- WAVE 47i: the child's entry-ground closure (same residual shape as the
+    -- code pins above; the eval table/AST-region facts are NOT in `ExecGround`).
+    (hground : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
+      EvalGround ment SL A (sp - 176#64)
+        ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) aOperand.toNat e)
     -- the store-window survival (as in `ExecEntry.store_survives`):
     (hstoreSurv : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       ∀ m' : Mem, (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ment[k]? = m'[k]?) →
@@ -464,6 +472,9 @@ theorem execExprGlue
   have hviM : Value_intLoaded ment := hvicode ment hmemframe
   have hslotPM : IntSlotPinned ment := hslotP ment hmemframe
   have hnbsM : NBSPins ment := hnbsP ment hmemframe
+  have hgroundM : EvalGround ment SL A (sp - 176#64)
+      ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) aOperand.toNat e :=
+    hground ment hmemframe
   -- operand-pointer byte reassembly (for the `ld a2,8(s0)`):
   have haddr8 : (aStmt + sign_extend (m := 64) (0x008#12)).toNat = aStmt.toNat + 8 := by
     rw [BitVec.toNat_add]
@@ -604,7 +615,7 @@ theorem execExprGlue
       ⟨hG4, hi4, hpc4, hx10_4, hx11_4, hx12_4, hx18_4, hsp_4,
         ⟨aStmt, hx8_4⟩, ⟨aInterp, hx9_4⟩, ⟨vmi4, hmi4⟩, hout4, houtStr,
         hmem4e, (hmem4e ▸ hcode4), (hmem4e ▸ hevalM), (hmem4e ▸ hviM), (hmem4e ▸ hslotPM), (hmem4e ▸ hnbsM),
-        (hmem4e ▸ hsubexprM), (hmem4e ▸ hstore),
+        (hmem4e ▸ hgroundM), (hmem4e ▸ hsubexprM), (hmem4e ▸ hstore),
         (hstoreSurv ment hmemframe),
         hframe4, hgx8, hgx9, hgx18, hgx19, hgx2,
         (hmem4e ▸ hslotRa), (hmem4e ▸ hslotS0), (hmem4e ▸ hslotS1), (hmem4e ▸ hslotS2), (hmem4e ▸ hslotS3),
@@ -664,6 +675,11 @@ theorem execExprSimC
       IntSlotPinned ment)
     (hnbsP : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       NBSPins ment)
+    -- WAVE 47i: the child's entry-ground closure (same residual shape as the
+    -- code pins above; the eval table/AST-region facts are NOT in `ExecGround`).
+    (hground : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
+      EvalGround ment SL A (sp - 176#64)
+        ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) aOperand.toNat e)
     (hstoreSurv : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       ∀ m' : Mem, (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ment[k]? = m'[k]?) →
         StoreRepr m' N A φf φc st.store)
@@ -692,7 +708,7 @@ theorem execExprSimC
     hSpec hIH hslot htableStk0
     (fun hIH' =>
       execExprGlue g N A SL φf φc st st' d env e v sp r aInterp aStmt aEnv aRet aOperand m0 out0
-        hIH' hop hsubexpr hstmtAl hstmtLo hstmtHi hstmtWin hevalcode hvicode hslotP hnbsP hstoreSurv
+        hIH' hop hsubexpr hstmtAl hstmtLo hstmtHi hstmtWin hevalcode hvicode hslotP hnbsP hground hstoreSurv
         hopAl hopLo hopHi hopWin hopStk hsproom hspSLhi hsp16 hSLlo hSLhi hSLwin
         hcodeStk hviStk htableStk harenaStk harenaCode hexecArenaCode hexecCodeStk
         hstackBudget hexprBodies hstoreBodies)

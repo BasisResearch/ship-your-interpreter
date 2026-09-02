@@ -113,7 +113,7 @@ theorem execEntry_recast_depth
     code_stack_disjoint := h.code_stack_disjoint, stack_ram := h.stack_ram,
     stack_win := h.stack_win, stmt_stack_disjoint := h.stmt_stack_disjoint,
     stmt_align := h.stmt_align, stmt_ram := h.stmt_ram, stmt_win := h.stmt_win,
-    spill_defined := h.spill_defined }
+    spill_defined := h.spill_defined, ground := h.ground }
 
 #print axioms execEntry_recast_depth
 

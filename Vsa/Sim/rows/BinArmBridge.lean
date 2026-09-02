@@ -1,4 +1,5 @@
 import Vsa.Sim.EvalBinSim
+import Vsa.Sim.EntryGroundKit
 import Vsa.Sim.EvalIntSim2
 
 /-!
@@ -186,7 +187,10 @@ theorem blockA_binaryArm
         read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, ment[a]? = some b)) ∧
-        MemExtends m0 ment) := by
+        MemExtends m0 ment ∧
+        -- WAVE 47i: the parent node's entry-ground bundle at the arm entry
+        -- (derived HERE from `hc.ground` — the bridge owns the `EvalEntry`).
+        EvalGround ment SL A sp sret aExpr.toNat (.binary op el er)) := by
   intro c hc
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- `read32 m0 aExpr = some 6` (EX_BINARY tag) from the node's `ExprRepr`.
@@ -297,7 +301,8 @@ theorem blockA_binaryArm
       sp r sret aExpr aEnv v8 v9 v18 c1.σ.sailOutput m0 ment c1 := _hAout.symm ▸ hArm
   refine ⟨c1, hs1, (fun R => c1.σ.regs.get? R), aEnvReg, v8, v9, v18, v19, ment, hArm', hBE,
     hAEx11, hx13c1, hx19c1, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩, hAEx8, hAEx18,
-    hx19c1, hpayLment, hlReprMent, hpayRment, hrReprMent, hMentPop, hMemExt⟩
+    hx19c1, hpayLment, hlReprMent, hpayRment, hrReprMent, hMentPop, hMemExt,
+    (hc.mem ▸ hc.ground).transport_offstack hc.table_stack_disjoint hX.spSLhi hMentM0⟩
 
 /-- **`blockA_binaryArm_budgeted`** — `blockA_binaryArm` with the ITEM ZERO B1
 budget conjuncts APPENDED to its post (the amended `blockB_binary` pre-tail).
@@ -336,6 +341,8 @@ theorem blockA_binaryArm_budgeted
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, ment[a]? = some b)) ∧
         MemExtends m0 ment ∧
+        -- WAVE 47i: the parent node's entry-ground bundle (pass-through).
+        EvalGround ment SL A sp sret aExpr.toNat (.binary op el er) ∧
         StackOK SL (sp - 1088#64)
           (el.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
         Expr.bodiesBound Vsa.While.perCallBudget el = true ∧
@@ -347,14 +354,14 @@ theorem blockA_binaryArm_budgeted
   intro c hc
   obtain ⟨c1, hs1, gpre, aEnvReg, v8, v9, v18, v19, ment, hArm, hBX,
     hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩ :=
+    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt⟩ :=
     blockA_binaryArm g N A SL φf φc st d env op el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc
   have h1 : (Expr.binary op el er).stackNeed
       = evalFrame + max el.stackNeed er.stackNeed := rfl
   have h2 : ((1088#64 : BitVec 64)).toNat = 1088 := by decide
   exact ⟨c1, hs1, gpre, aEnvReg, v8, v9, v18, v19, ment, hArm, hBX,
     hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hGmt,
     hc.stackBudget.child (by decide)
       (by have hm := Nat.le_max_left el.stackNeed er.stackNeed
           simp only [h1, h2, evalFrame]; omega),

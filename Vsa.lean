@@ -663,5 +663,6 @@ import Vsa.Sim.rows.SnprintfFrame
 -- wave 47h: entry-completeness batched amendment (interface layer)
 import Vsa.Sim.MemRegion
 import Vsa.Sim.EntryGround
+import Vsa.Sim.EntryGroundKit
 import Vsa.Sim.rows.LayoutStmtTableGen
 import Vsa.Sim.rows.EntryGroundRows

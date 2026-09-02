@@ -1,6 +1,7 @@
 import Vsa.Sim.EvalNegSim
 import Vsa.Sim.EvalBinSim
 import Vsa.Sim.ArmSegSplitEval
+import Vsa.Sim.EntryGroundKit
 
 /-!
 # `StagePreSuppliers` — the arm-head→`JalPreBundle` cuts (Task #76, Half B)
@@ -75,6 +76,9 @@ theorem blockB_unary_stagePre
         (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
         read64 ment (aExpr.toNat + 16) = some aOperand.toNat ∧
         ExprRepr ment aOperand.toNat esub ∧
+        -- WAVE 47i: the child's entry-ground bundle (kit-derived at the sim).
+        EvalGround ment SL A (sp - 1088#64)
+          ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aOperand.toNat esub ∧
         aExpr.toNat + 24 ≤ 0x100000000 ∧
         aOperand.toNat % 8 = 0 ∧
         0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
@@ -95,7 +99,7 @@ theorem blockB_unary_stagePre
         Expr.bodiesBound Vsa.While.perCallBudget esub = true ∧
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 2 c (fun c' => JalPreBundle esub c' st d env) := by
-  obtain ⟨ment, hArm, hx11, hgframe, hg8, hg18, hpay, hsubexpr, hexprHi24,
+  obtain ⟨ment, hArm, hx11, hgframe, hg8, hg18, hpay, hsubexpr, hground, hexprHi24,
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -201,7 +205,7 @@ theorem blockB_unary_stagePre
               = (0x80003164#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
             decide) hiσ),
       hG2, hi2, hpc2, hx10_2, hs1_2, hx11_2, hx12_2, hsp_2, ⟨vmi2, hmi2⟩, hout2, houtStr,
-      hmem2e, hcode, hviInt, hviSlot, hnbs, hsubexpr, hstore, hstoreSurv, hframeB, ⟨hg8, hg18⟩,
+      hmem2e, hcode, hviInt, hviSlot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframeB, ⟨hg8, hg18⟩,
       hslotRa, hslotS0, hslotS1, hslotS2,
       hopAl, hopLo, hopHi, hopWin, hopStk,
       (by rw [hsub944]; omega), (by rw [hsub944]; omega), (by rw [hsub944]; omega),
@@ -251,6 +255,9 @@ theorem blockB_binary_leftStagePre
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, ment[a]? = some b)) ∧
         MemExtends m0 ment ∧
+        -- WAVE 47i: the parent node's entry-ground bundle (pass-through from
+        -- `blockA_binaryArm`).
+        EvalGround ment SL A sp sret aExpr.toNat (.binary op el er) ∧
         -- ITEM ZERO B1: the LEFT operand's recursion-sound budget at `sp - 1088`,
         -- its `.fn`-bodies bound, and the store-bodies invariant (the amended
         -- `JalPreBundle` tail; mirrors `blockB_binary`'s amended pre).
@@ -260,7 +267,7 @@ theorem blockB_binary_leftStagePre
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 4 c (fun c' => JalPreBundle el c' st d env) := by
   obtain ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v,
-    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0,
+    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0, hGmt47,
     hstackBudgetL, hexprBodiesL, hstoreBodiesL⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
     hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
@@ -468,6 +475,20 @@ theorem blockB_binary_leftStagePre
     rw [f4, f3, f2, f1]; exact hgframe R hR'
   have hcodemcall1 : Eval_exprLoaded mcall1 := by rw [← hmem4e]; exact hcode4
   have hsub968 : ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)).toNat = sp.toNat - 968 := hsretL
+  -- WAVE 47i: the LEFT child's entry-ground bundle at `mcall1` (kit moves 1+2+3).
+  have hGroundM1 : EvalGround mcall1 SL A sp sret aExpr.toNat (.binary op el er) :=
+    hGmt47.transport_offstack hBE.tableStk hBE.spSLhi
+      (fun a ha => (hAgMcall1 a ha).symm)
+  have hpayL1 : read64 mcall1 (aExpr.toNat + 16) = some aLOp.toNat := by
+    rw [evalGround_ast_read64_agree hGmt47 hBE.spSLhi
+      (fun a ha => (hAgMcall1 a ha).symm) (off := 16) (by omega)]
+    exact hpayL
+  have hGroundL : EvalGround mcall1 SL A (sp - 1088#64)
+      ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)) aLOp.toNat el :=
+    hGroundM1.child_params (fun lo hi hin => exprIn_binary_left hin aLOp.toNat hpayL1)
+      hBE.tableStk hBE.spSLhi (by omega)
+      (by rw [hsub968]; have := hBE.sproom; have := hSLlo; omega)
+      (by rw [hsub968]; have := hBE.sproom; have := hSLlo; omega)
   -- ============ land at σ4 (the LEFT jal PC) as `JalPreBundle el` ============
   refine ⟨4, ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩, Nat.le_refl _,
     StepsN.succ hstep1 (StepsN.succ hstep2 (StepsN.succ hstep3 (StepsN.succ hstep4 (StepsN.zero _)))),
@@ -481,7 +502,7 @@ theorem blockB_binary_leftStagePre
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_800034f8_ee σ i u (0x800034f8#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
       hG4, hi4, hpc4, ha0_4, hs1_4, hx11_4, hx12_4, hsp_4, ⟨vmi4, hmi4⟩,
-      hout4, houtStr, hmem4e, hcodemcall1, hviInt1, hviSlot1, hnbs1, hexprL1, hstore1, hstoreSurv1,
+      hout4, houtStr, hmem4e, hcodemcall1, hviInt1, hviSlot1, hnbs1, hGroundL, hexprL1, hstore1, hstoreSurv1,
       hframe4, ⟨hg8, hg18⟩,
       hslotRa1, hslotS01, hslotS11, hslotS21,
       hBE.lop_align, hBE.lop_ram.1, hBE.lop_ram.2, hBE.lop_win, hBE.lop_stk,

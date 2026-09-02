@@ -184,6 +184,130 @@ structure StmtSlotPinned (k : Nat) (armPC : BitVec 64) (m : Mem) : Prop where
     (BitVec.ofNat 64 stmtJumpTableBase +
       sign_extend (m := 64) (((b3.append b2).append b1).append b0)) = armPC
 
+/-! ## `ExecGround` — the batched exec entry-ground bundle (wave 47h/47i, audit N2/N3/N4/N5)
+
+RELOCATED from `EntryGround.lean` at insertion time (47i): `ExecEntry.ground`
+needs these BELOW the entry structure.  Same names/namespace — zero consumer
+changes.  See `experiments/entry-needs-audit.md` §C for the design. -/
+
+/-- N2 — the stmt jump-table pin bundle (tags 0-8). -/
+structure StmtTablePins (m : Mem) : Prop where
+  slot0 : StmtSlotPinned 0 execArmExpr m
+  slot1 : StmtSlotPinned 1 execArmVarDecl m
+  slot2 : StmtSlotPinned 2 execArmBlock m
+  slot3 : StmtSlotPinned 3 execArmIf m
+  slot4 : StmtSlotPinned 4 execArmWhile m
+  slot5 : StmtSlotPinned 5 execArmFor m
+  slot6 : StmtSlotPinned 6 execArmRet m
+  slot7 : StmtSlotPinned 7 execArmBrk m
+  slot8 : StmtSlotPinned 8 execArmCont m
+
+/-- One stmt slot's pin survives agreement on its own 4-byte window. -/
+theorem stmtSlotPinned_agree {k : Nat} {armPC : BitVec 64} {m m' : Mem}
+    (h : StmtSlotPinned k armPC m)
+    (ha : ∀ a, stmtJumpTableBase + 4 * k ≤ a → a < stmtJumpTableBase + 4 * k + 4 →
+      m[a]? = m'[a]?) :
+    StmtSlotPinned k armPC m' := by
+  obtain ⟨⟨t0, t1, t2, t3, h0, h1, h2, h3, he⟩⟩ := h
+  exact ⟨⟨t0, t1, t2, t3,
+    (ha _ (by omega) (by omega)).symm.trans h0,
+    (ha _ (by omega) (by omega)).symm.trans h1,
+    (ha _ (by omega) (by omega)).symm.trans h2,
+    (ha _ (by omega) (by omega)).symm.trans h3, he⟩⟩
+
+/-- `StmtTablePins` transport: agreement on the whole 36-byte table window. -/
+theorem StmtTablePins.transport {m m' : Mem} (h : StmtTablePins m)
+    (ha : ∀ a, stmtJumpTableBase ≤ a → a < stmtJumpTableBase + 36 → m[a]? = m'[a]?) :
+    StmtTablePins m' where
+  slot0 := stmtSlotPinned_agree h.slot0 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot1 := stmtSlotPinned_agree h.slot1 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot2 := stmtSlotPinned_agree h.slot2 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot3 := stmtSlotPinned_agree h.slot3 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot4 := stmtSlotPinned_agree h.slot4 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot5 := stmtSlotPinned_agree h.slot5 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot6 := stmtSlotPinned_agree h.slot6 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot7 := stmtSlotPinned_agree h.slot7 (fun a h1 h2 => ha a (by omega) (by omega))
+  slot8 := stmtSlotPinned_agree h.slot8 (fun a h1 h2 => ha a (by omega) (by omega))
+
+/-- N3 — the statement-side AST region (result slot = the `retslot` at `aRet`). -/
+structure StmtRegionSpec (m : Mem) (SL : StackLayout) (A : Arena)
+    (aRet aStmt : Nat) (s : Vsa.While.Stmt) (lo hi : Nat) : Prop where
+  nodes : StmtIn m lo hi aStmt s
+  lo_ram : 0x80000000 ≤ lo
+  hi_ram : hi ≤ 0x100000000
+  win : tohostAddr + 16 ≤ lo
+  stack_disjoint : hi ≤ SL.lo ∨ SL.hi ≤ lo
+  ret_disjoint : hi ≤ aRet ∨ aRet + 24 ≤ lo
+  arena_disjoint : hi ≤ A.lo ∨ A.hi ≤ lo
+
+structure StmtRegionPins (m : Mem) (SL : StackLayout) (A : Arena)
+    (aRet aStmt : Nat) (s : Vsa.While.Stmt) : Prop where
+  region : ∃ lo hi, StmtRegionSpec m SL A aRet aStmt s lo hi
+
+theorem StmtRegionSpec.transport {m m' : Mem} {SL : StackLayout} {A : Arena}
+    {aRet aStmt : Nat} {s : Vsa.While.Stmt} {lo hi : Nat}
+    (h : StmtRegionSpec m SL A aRet aStmt s lo hi)
+    (ha : ∀ a, lo ≤ a → a < hi → m[a]? = m'[a]?) :
+    StmtRegionSpec m' SL A aRet aStmt s lo hi where
+  nodes := stmtIn_agreeP (fun a hp => ha a hp.1 hp.2) s h.nodes
+  lo_ram := h.lo_ram
+  hi_ram := h.hi_ram
+  win := h.win
+  stack_disjoint := h.stack_disjoint
+  ret_disjoint := h.ret_disjoint
+  arena_disjoint := h.arena_disjoint
+
+/-- N5 — the `retslot` is a proper 24-byte `Value` slot: 8-aligned, in RAM above
+HTIF, disjoint from the stack scribble `[SL.lo, sp)`, and INSIDE the whole
+stack region (the caller's local — the exec twin of `NegExtras.sret_inSL`). -/
+structure RetSlotGeom (SL : StackLayout) (sp aRet : BitVec 64) : Prop where
+  align : aRet.toNat % 8 = 0
+  ram : 0x80000000 ≤ aRet.toNat ∧ aRet.toNat + 24 ≤ 0x100000000
+  win : tohostAddr + 16 ≤ aRet.toNat
+  scribble_disjoint : aRet.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ aRet.toNat
+  inSL : SL.lo ≤ aRet.toNat ∧ aRet.toNat + 24 ≤ SL.hi
+
+/-- **The complete exec entry-ground bundle** (audit classes N2/N3/N4/N5).
+Inserted as `ExecEntry.ground` (47i). -/
+structure ExecGround (m : Mem) (SL : StackLayout) (A : Arena)
+    (sp aRet : BitVec 64) (aStmt : Nat) (s : Vsa.While.Stmt) : Prop where
+  table : StmtTablePins m
+  table_stack : stmtJumpTableBase + 36 ≤ SL.lo ∨ sp.toNat ≤ stmtJumpTableBase
+  ast : StmtRegionPins m SL A aRet.toNat aStmt s
+  arena_stack : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
+  arena_code : A.hi ≤ execStmtEntry ∨ execStmtEnd ≤ A.lo
+  aret : RetSlotGeom SL sp aRet
+  aret_table_disjoint : aRet.toNat + 24 ≤ stmtJumpTableBase ∨
+    stmtJumpTableBase + 36 ≤ aRet.toNat
+
+/-- **`ExecGround` survives any memory change confined to the stack scribble
+`[SL.lo, sp)` ∪ the retslot window.**  Self-contained: the table/retslot
+disjointness literals ride in the bundle. -/
+theorem ExecGround.survive_stack {m m' : Mem} {SL : StackLayout} {A : Arena}
+    {sp aRet : BitVec 64} {aStmt : Nat} {s : Vsa.While.Stmt}
+    (h : ExecGround m SL A sp aRet aStmt s)
+    (hsp : sp.toNat ≤ SL.hi)
+    (hag : ∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat) →
+      ¬ (aRet.toNat ≤ k ∧ k < aRet.toNat + 24) → m[k]? = m'[k]?) :
+    ExecGround m' SL A sp aRet aStmt s where
+  table := h.table.transport (fun a h1 h2 => by
+    refine hag a (fun hcon => ?_) (fun hcon => ?_)
+    · rcases h.table_stack with ht | ht <;> omega
+    · rcases h.aret_table_disjoint with hs | hs <;> omega)
+  table_stack := h.table_stack
+  ast := ⟨by
+    obtain ⟨lo, hi, spec⟩ := h.ast.region
+    refine ⟨lo, hi, spec.transport (fun a h1 h2 => ?_)⟩
+    refine hag a (fun hcon => ?_) (fun hcon => ?_)
+    · rcases spec.stack_disjoint with hs | hs
+      · omega
+      · have := h.aret.inSL; omega
+    · rcases spec.ret_disjoint with hs | hs <;> omega⟩
+  arena_stack := h.arena_stack
+  arena_code := h.arena_code
+  aret := h.aret
+  aret_table_disjoint := h.aret_table_disjoint
+
 /-! ## `ExecEntry` — the machine precondition at `exec_stmt`'s entry PC
 
 Mirrors `EvalEntry` (`InterpEntry.lean`), adapted for statements:
@@ -296,6 +420,13 @@ structure ExecEntry
     (∃ v, c.σ.regs.get? Register.x9 = some v) ∧
     (∃ v, c.σ.regs.get? Register.x18 = some v) ∧
     (∃ v, c.σ.regs.get? Register.x19 = some v)
+  /-- **The batched exec entry-ground bundle** (wave 47i insertion — audit
+  `experiments/entry-needs-audit.md` §C/§D): full stmt jump-table pins +
+  whole-table stack disjointness (N2), the hereditary AST region (N3), arena
+  geometry (N4), retslot geometry (N5).  Children transport it via
+  `ExecGround.survive_stack` + `StmtIn` projection; top-level supply = the M6
+  image (`stmtTablePins_of_bytes`) + the parse-arena Layout fact. -/
+  ground : ExecGround c.σ.mem SL A sp aRet aStmt.toNat s
 
 /-- **The `sp`-window form of `store_survives`** (the pre-amendment field, ONE
 mono lemma; the exec twin of `EvalEntry.store_survives_sp`). -/

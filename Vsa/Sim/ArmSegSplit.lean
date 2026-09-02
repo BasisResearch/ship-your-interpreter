@@ -111,6 +111,8 @@ theorem evalEntry_of_jalPrefix
         String.join out0.toList = st.out ∧
         c.σ.mem = mcall ∧
         Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
+        -- WAVE 47i: the child's entry-ground bundle.
+        EvalGround mcall SL A (sp - 1088#64) subsret aOperand.toNat esub ∧
         ExprRepr mcall aOperand.toNat esub ∧
         StoreRepr mcall N A φf φc st.store ∧
         (∀ m' : Mem,
@@ -148,7 +150,7 @@ theorem evalEntry_of_jalPrefix
       EvalEntry (fun R => c'.σ.regs.get? R) N A SL φf φc st d env esub
         (sp - 1088#64) retPC subsret aIn aOperand mcall c') := by
   obtain ⟨hG, htick, hpc, ha0, hs1, hx11, hx12, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
-    hcode, hviCode, hslot, hnbs, hsubexpr, hstore, hstoreSurv, hframe, ⟨⟨w8, hw8⟩, ⟨w18, hw18⟩⟩,
+    hcode, hviCode, hslot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframe, ⟨⟨w8, hw8⟩, ⟨w18, hw18⟩⟩,
     hslotRa, hslotS0, hslotS1, hslotS2,
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hssAl, hssLo, hssHi,
@@ -256,6 +258,7 @@ theorem evalEntry_of_jalPrefix
         value_int_code := by rw [hmem1e]; exact hviCode
         int_slot := by rw [hmem1e]; exact hslot
         nbs_pins := by rw [hmem1e]; exact hnbs
+        ground := by rw [hmem1e]; exact hground
         table_stack_disjoint := by
           rcases htableStk with h | h
           · left; exact h

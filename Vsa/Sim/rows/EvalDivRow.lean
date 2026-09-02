@@ -734,6 +734,8 @@ def EvalDivSimGoal : Prop :=
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
         MemExtends m0 ment ∧
+        -- WAVE 47i: the parent node's entry-ground bundle at the arm entry.
+        EvalGround ment SL A sp sret aExpr.toNat (.binary .div el er) ∧
         -- ITEM ZERO B1: BOTH operands' recursion-sound budgets at `sp - 1088`,
         -- their `.fn`-bodies bounds, and the store-bodies invariants (LEFT over
         -- the entry store `st`, RIGHT over the post-left store `st'`) --
@@ -768,7 +770,7 @@ theorem evalDivSim : EvalDivSimGoal := by
     sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 Wl out0 m0 hbNe hOv hIHl hIHr _hEvalE hSizeF hSizeC
   intro c hpre
   obtain ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0,
+    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0, hGmt47,
     hstackBudgetL, hexprBodiesL, hstoreBodiesL,
     hstackBudgetR, hexprBodiesR, hstoreBodiesR, hResid,
     hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩ := hpre
@@ -792,7 +794,7 @@ theorem evalDivSim : EvalDivSimGoal := by
     blockB_binary gouter gpre N A SL φf φc st st' st'' d env .div el er (.int a) (.int b)
       sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hIHl hIHr hVlSurv
       c ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0,
+        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0, hGmt47,
         hstackBudgetL, hexprBodiesL, hstoreBodiesL,
         hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩
   have hR : DivResid gpre N A SL sp r sret aExpr Wl c2 := hResid c2 hTS
