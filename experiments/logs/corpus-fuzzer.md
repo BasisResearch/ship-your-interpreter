@@ -1088,3 +1088,87 @@ validation, like the ELF emulator harness).
 - GenProbe9_T [present] truth=T demand@0xeba cover=[3770,3786) → SURVIVED [OK]
 
 **gen-battery: 20/20 correct → PASS**
+
+## statement_fuzz.py run
+
+- `CegisAcceptC.AcceptMcallPre` → **SURVIVED** (v2.1: guard `¬ (SL.lo ≤ a ∧ a < sp.toNat)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `CegisAcceptA.CegisCand` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisAcceptA.CegisCand` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisAcceptB.CegisCand` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisAcceptB.CegisCand` → **SURVIVED** (v2.1: guard `(SL.lo ≤ a ∧ a < SL.hi)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `CegisAcceptC.CegisCand` → **SURVIVED** (v2.1: guard `¬ (SL.lo ≤ a ∧ a < sp.toNat)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `CegisAcceptC.CegisCand` → **SURVIVED** (v2.1: guard `(SL.lo ≤ a ∧ a < SL.hi)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `NovelResidA` → **REFUTED** (v2.1 uncovered-addr rule: demand @0x90000 ∉ cover [0,589824)∪[589840,∞)) — axioms=Classical.choice, Quot.sound, propext
+
+## statement_fuzz.py run
+
+- `NovelResidB` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisLive.CegisCand` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisAcceptA.CegisCand` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisAcceptB.CegisCand` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisAcceptB.CegisCand` → **SURVIVED** (v2.1: guard `(SL.lo ≤ a ∧ a < SL.hi)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `CegisAcceptC.CegisCand` → **SURVIVED** (v2.1: guard `¬ (SL.lo ≤ a ∧ a < sp.toNat)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `CegisAcceptC.CegisCand` → **SURVIVED** (v2.1: guard `(SL.lo ≤ a ∧ a < SL.hi)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `NegCtl.CegisCand` → **REFUTED** (v2.1 uncovered-addr rule: demand @0x90000 ∉ cover [0,589824)∪[589840,∞)) — axioms=Classical.choice, Quot.sound, propext
+
+## statement_fuzz.py run
+
+- `CegisAcceptA.CegisCand` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisAcceptB.CegisCand` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisAcceptB.CegisCand` → **SURVIVED** (v2.1: guard `(SL.lo ≤ a ∧ a < SL.hi)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `CegisAcceptC.CegisCand` → **SURVIVED** (v2.1: guard `¬ (SL.lo ≤ a ∧ a < sp.toNat)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `CegisAcceptC.CegisCand` → **SURVIVED** (v2.1: guard `(SL.lo ≤ a ∧ a < SL.hi)` outside address-map fragment → SMT territory)

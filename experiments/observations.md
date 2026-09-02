@@ -5050,3 +5050,56 @@ it, still stop and report instead.
   synthesize map literals + discharge obligations from the MODEL generically
   (decide/omega), not from shape templates. Acceptance: the spent batteries
   + fresh-per-round probes.
+
+## 2026-09-02 cegis-cure-generator (scripts/cegis_cure.py, tool task)
+- missing: an automated "discover the cure" step. Waves 47e–48g found each
+  amended Resid/field statement BY HAND. `scripts/cegis_cure.py` closes the CTI
+  loop over STATEMENTS: given a (possibly-false) Prop it enumerates a bounded
+  TEMPLATE SPACE of amendments — (i) entry-conditioning, (ii) quantifier repair
+  (∀-ghost→footprint-bounded ∃), (iii) guard repair (agree-off-W→agree-on-W'
+  over the interval algebra), (iv) conjunct deletion (block output supplies it),
+  (v) oracle re-homing — filters them in cost order (syntactic elab → Z3
+  --refute → v2.1 semantic rule → mined-artifact cross-check), ranks survivors
+  by minimal-edit/premise-penalty, and writes experiments/cures/<field>.md with
+  per-filter evidence + which landed assets each relights.
+- workaround: N/A (tool landed). ACCEPTANCE (history-as-ground-truth,
+  experiments/cegis/Accept{A,B,C}_*.lean reconstructing pre-47i NegResid /
+  pre-48f BinArmExtras.mem_ext / the ∀-mcall pair): the landed cure appears at
+  RANK 1 in all three (entry-conditioning / deletion / guard-repair+quant-repair).
+  KEY FILTER-SEMANTICS FINDING: smt_check `--refute` gives false-positive
+  REFUTED-MODULO-OPAQUE / ENCODING-GAP on the AMENDED (true) symbolic-window
+  forms (opaque `True`; Z3-SAT-but-replay-sorry'd = spurious SAT) — only
+  `REFUTED-REPLAYED` (machine-checked ¬P) is a genuine drop; MODULO-OPAQUE and
+  ENCODING-GAP must be KEPT and deferred to the semantic filter. The semantic
+  rule DOES bite on literal-window falsity (negative control: a NovelResidA-shape
+  candidate is DROPPED, "adversary found at uncovered demand"), so the CTI
+  channel is live, not a rubber stamp.
+- cost: on symbolic-window Resids (SL.lo/sp.toNat outer-quantified) both Z3 and
+  the semantic rule report "SMT territory / covered" and defer — so the tool
+  ranks by template+edit-cost, it does NOT machine-refute the amended candidate
+  there. That is the documented address-map-fragment boundary, not a tool bug;
+  the enumeration is the containing space, the ranking is the heuristic.
+- LIVE VALUE TEST (current still-false BinIntCellResid, wave-48g interlock's
+  target): top candidate = ENTRY-CONDITIONING = the 48g recipe's cure (C)
+  ("entry-carry on BinIntCellResid"). The report ALSO flags via the
+  `extras-bundle-entry-pins` defect that the opaque `BinArmExtras` packs the
+  over-quant closures (frame_pop/mem_ext/x13_pres) = the interlock (recipe A+B),
+  which are inside-the-∃ block-output-threading moves, NOT single-statement
+  edits — so the tool honestly does not claim to synthesize them. Matches the
+  recorded recipe: cure C alone relights 0; A+B need the sim-cone/blockA_k work.
+- proposal: (a) an LLM-rank stub is wired (`--llm-rank`, no API calls) for the
+  structured-candidate synthesis the mining can't do (∃-body shaping); (b) a
+  descent-into-∃ conjunct scanner would let (iv)/(iii) reach the BinArmExtras
+  sub-fields once they are inlined as named-field structures (the 0a restatement
+  wave) rather than opaque bundles.
+
+## 2026-09-02 cegis-acceptance-contamination (coordinator calibration)
+- the cegis_cure acceptance (3× rank-1 history rediscovery + 48g live match)
+  is CONTAMINATED: the tool's inputs included the docs describing those
+  cures. Its demonstrated value: correct ranking, honest interlock deferral,
+  live negative control, the REFUTED-REPLAYED-only drop rule.
+- CLEAN validation = PROSPECTIVE: run cegis on the un-cured clusters
+  (env-seam, exec-arm Geom statements), commit the sealed suites under
+  experiments/cures/ BEFORE any cure wave touches them; the landed cures
+  later confirm/refute the predictions. Fold prospective runs into each
+  cure wave's prep step.

@@ -888,3 +888,257 @@
 
   (encoder: lean)
 - `FreshValDemand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptA.AcceptNegPre` → **REFUTED-REPLAYED** — (axiom-free) | model {SL_hi=0, sp=#xffffffffffffffff), SL_lo=18446744073709548352, sp_n=18446744073709551615} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.AcceptMcallPre` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.AcceptMemExtPre` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_hi=0, sp=#xffeffffffff7fffb), op_True=false), SL_lo=0, sp_n=18442240474081656827} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptA.CegisCand` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat) [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_lo=0, SL_hi=0, sp=#xffffffffffffffff), sp_n=18446744073709551615, op_True=false)} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_hi=0, op_True=false), sp=#xffeffffffff7fffb), SL_lo=0, sp_n=18442240474081656827} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptA.CegisCand` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat) [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptA.CegisCand` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat) [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_lo=0, SL_hi=0, sp=#xffffffffffffffff), sp_n=18446744073709551615, op_True=false)} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_hi=0, op_True=false), sp=#xffeffffffff7fffb), SL_lo=0, sp_n=18442240474081656827} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_lo=0, SL_hi=0, sp=#xffffffffffffffff), sp_n=18446744073709551615, op_True=false)} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_hi=0, op_True=false), sp=#xffeffffffff7fffb), SL_lo=0, sp_n=18442240474081656827} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptA.CegisCand` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat) [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_lo=0, SL_hi=0, sp=#xffffffffffffffff), sp_n=18446744073709551615, op_True=false)} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_hi=0, op_True=false), sp=#xffeffffffff7fffb), SL_lo=0, sp_n=18442240474081656827} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+
+## smt_check.py acceptance run
+
+  (encoder: lean)
+- `SmtAcc.HeadroomBad` → **REFUTED-REPLAYED** — (axiom-free) | model {SL_hi=0, sp=#xffffffffffffffff), SL_lo=18446744073709548352, sp_n=18446744073709551615} [enc:lean]
+  (encoder: lean)
+- `SmtAcc.McallMemExt` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=15152151881707510024, sp=#xd24741db5bf15908), SL_lo=0} [enc:lean]
+  (encoder: lean)
+- `SmtAcc.McallPresence` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=136, sp=#x0000000000000088), SL_lo=0} [enc:lean]
+  (encoder: lean)
+- `SmtAcc.BinArmMemExt` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=15152151881707510024, sp=#xd24741db5bf15908), SL_lo=0} [enc:lean]
+  (encoder: python)
+- `IoWriteMined.IoWriteInvCandidate` → **VALID-IN-FRAGMENT** [enc:python]
+  (encoder: python)
+- `SmtAcc.BudgetLadderOk` → **VALID-IN-FRAGMENT** [enc:python]
+  (encoder: lean)
+- `SmtAcc.CurMemExt` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat) [enc:lean]
+  (encoder: lean)
+- `SmtAcc.AmdHeadroom` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat) [enc:lean]
+
+### Acceptance verdicts
+- a_headroom: REFUTED-REPLAYED
+- b_memext: REFUTED-REPLAYED
+- b_presence: REFUTED-REPLAYED
+- c_binarm: REFUTED-REPLAYED
+- d_io_write_loop.lean: VALID-IN-FRAGMENT
+- d_budget: VALID-IN-FRAGMENT
+- e_memext: VALID-IN-FRAGMENT
+- e_headroom: VALID-IN-FRAGMENT
+- REFUTED-REPLAYED count (need ≥2): 4
+
+**Acceptance → PASS** (replayed 4/4, need ≥2)
+
+## smt_check.py run
+
+  (dump path unavailable for CegisLive.CegisCand: dump-encode-gap — falling back to Python encoder)
+- `CegisLive.CegisCand` → **ENCODE-GAP** (unencodable atom; hyps=['(and (<= (+ SL_lo 3264) sp_n) (<= sp_n SL_hi) (= (mod sp_n 16) 0))'] concl=None)
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptA.CegisCand` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat) [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_lo=0, SL_hi=0, sp=#xffffffffffffffff), sp_n=18446744073709551615, op_True=false)} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_hi=0, op_True=false), sp=#xffeffffffff7fffb), SL_lo=0, sp_n=18442240474081656827} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptA.CegisCand` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat) [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_lo=0, SL_hi=0, sp=#xffffffffffffffff), sp_n=18446744073709551615, op_True=false)} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_hi=0, op_True=false), sp=#xffeffffffff7fffb), SL_lo=0, sp_n=18442240474081656827} [enc:lean]
+
+## smt_check.py run
+
+- `JointFix.TargetD` → **JOINTLY-INHABITABLE-MODULO-OPAQUE** — witness {SL_hi=0, x13slot=0, slotAddr=0, sp=#xd874fd7ffdf7fdfe), SL_lo=15597370135654427902, sp_n=15597370135654432254}; 3 enc / 1 opaque conjunct(s)
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+
+### producer-check (POST) `JointFix.TargetA`
+  - `SL.lo + 4352 ≤ sp.toNat` → **HOLDS** (post ⇒ conjunct)
+  - `(∃ b, m0[slotAddr]? = some b)` → **HOLDS** (post ⇒ conjunct)
+  - `(∀ (a : Nat), sp.toNat - 1120 ≤ a → a < sp.toNat → ∃ b, mcall[a]? = so…` → **PRODUCER-FAILS** — post does NOT supply it; CTI {SL_hi=0, sp_n=18446744073709551615, x13slot=0, slotAddr=0, sp=#xffffffffffffffff), SL_lo=18446744073709547263}
+  - `(∃ w, mcall[x13slot]? = some w)` → **MODULO-OPAQUE** (conjunct unencodable)
+
+## smt_check.py run
+
+
+### producer-check (POST) `JointFix.TargetA`
+  - `SL.lo + 4352 ≤ sp.toNat` → **HOLDS** (post ⇒ conjunct)
+  - `(∃ b, m0[slotAddr]? = some b)` → **HOLDS** (post ⇒ conjunct)
+  - `(∀ (a : Nat), sp.toNat - 1120 ≤ a → a < sp.toNat → ∃ b, mcall[a]? = so…` → **PRODUCER-FAILS** — post does NOT supply it; CTI {SL_hi=0, sp_n=18446744073709551615, x13slot=0, slotAddr=0, sp=#xffffffffffffffff), SL_lo=18446744073709547263}
+  - `(∃ w, mcall[x13slot]? = some w)` → **PRODUCER-FAILS** — post does NOT supply it; CTI {SL_hi=0, slotAddr=0, x13slot=0, sp=#xffffffffffffffff), SL_lo=18446744073709547263, sp_n=18446744073709551615}
+
+## smt_check.py run
+
+
+### consumer-check `JointFix.TargetC`
+  - demand `∃ w, mcall[x13slot]? = some w` → **CONSUMER-FAILS** — structure too weak; CTI {SL_hi=0, slotAddr=0, x13slot=0, sp=#x00c382874a020a04), SL_lo=55031138032417028, sp_n=55031138032421380}
+
+## smt_check.py run
+
+
+## smt_check.py JOINT acceptance run
+
+
+### producer-check (POST) `JointFix.TargetA`
+  - `SL.lo + 4352 ≤ sp.toNat` → **HOLDS** (post ⇒ conjunct)
+  - `(∃ b, m0[slotAddr]? = some b)` → **HOLDS** (post ⇒ conjunct)
+  - `(∀ (a : Nat), sp.toNat - 1120 ≤ a → a < sp.toNat → ∃ b, mcall[a]? = so…` → **PRODUCER-FAILS** — post does NOT supply it; CTI {SL_hi=0, sp_n=18446744073709551615, x13slot=0, slotAddr=0, sp=#xffffffffffffffff), SL_lo=18446744073709547263}
+  - `(∃ w, mcall[x13slot]? = some w)` → **PRODUCER-FAILS** — post does NOT supply it; CTI {SL_hi=0, slotAddr=0, x13slot=0, sp=#xffffffffffffffff), SL_lo=18446744073709547263, sp_n=18446744073709551615}
+
+### producer-check (POST) `JointFix.TargetB`
+  - `SL.lo + 4352 ≤ sp.toNat` → **HOLDS** (post ⇒ conjunct)
+  - `(∃ b, m0[slotAddr]? = some b)` → **HOLDS** (post ⇒ conjunct)
+  - `(∀ (a : Nat), SL.lo ≤ a → a < sp.toNat → ∃ b, m0[a]? = some b)` → **PRODUCER-FAILS** — post does NOT supply it; CTI {SL_hi=0, SL_lo=0, sp=#xfffffffdffffffff), sp_n=18446744065119617023, slotAddr=0}
+
+### consumer-check `JointFix.TargetC`
+  - demand `∃ w, mcall[x13slot]? = some w` → **CONSUMER-FAILS** — structure too weak; CTI {SL_hi=0, slotAddr=0, x13slot=0, sp=#x00c382874a020a04), SL_lo=55031138032417028, sp_n=55031138032421380}
+- `JointFix.TargetD` → **JOINTLY-INHABITABLE** — witness {SL_hi=0, slotAddr=0, x13slot=0, sp=#xfffffffdffffffff), SL_lo=18446744065119612671, sp_n=18446744065119617023}; 4 enc / 0 opaque conjunct(s)
