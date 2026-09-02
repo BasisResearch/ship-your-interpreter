@@ -1,6 +1,7 @@
 import Vsa.RuntimeRepr
 import Vsa.MemRepr
 import Vsa.Alloc
+import Vsa.While.StackNeed
 import Vsa.Triple
 import Vsa.Sim.GoodState
 import Vsa.Sim.Regions
@@ -191,6 +192,25 @@ structure EvalEntry
   spReg : c.σ.regs.get? Register.x2 = some sp
   /-- `sp` is a good C stack pointer with 1088 + callee headroom. -/
   stackOK : StackOK SL sp (1088 + 1088)
+  /-- **ITEM ZERO B1 (recursion-sound budget).** `sp` carries enough headroom
+  for THIS node's structural need plus every remaining call level's budget plus
+  the callee-`value_*` frame (`1088`). This is the recursion-sound replacement
+  for the constant `stackOK`: a recursive child (`eval_expr` at `sp - 1088`)
+  derives its own `stackBudget` from this one, because
+  `e.stackNeed = evalFrame + child.stackNeed` and `evalFrame = 1088`. The old
+  `stackOK` is kept and `stackBudget ⇒ stackOK` via `StackOK.mono`
+  (`e.stackNeed ≥ 1088`). -/
+  stackBudget : StackOK SL sp
+    (e.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088)
+  /-- **ITEM ZERO B1.** Every `.fn` literal reachable in `e` has a body fitting
+  the per-call budget — so any closure this expression allocates seeds a
+  budget-fitting `StoreBodiesBound`. -/
+  expr_bodies : Expr.bodiesBound Vsa.While.perCallBudget e = true
+  /-- **ITEM ZERO B1.** Every closure already in the store fits the per-call
+  budget — so a recursive `Call.closure` body executes within one budget level.
+  Preserved by `define`/`allocFrame` (no new closure) and by `allocClosure`
+  fed a `.fn`-bounded body. -/
+  store_bodies : Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
   /-- `minstret` present (`readReg` must not throw). -/
   minstret : ∃ v, c.σ.regs.get? Register.minstret = some v
   /-- Machine memory is the pinned `m0`. -/

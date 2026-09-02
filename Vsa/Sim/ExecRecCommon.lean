@@ -172,7 +172,13 @@ theorem armTail_rec_es
         -- exec_stmt code region `[0x80003fe0, 0x80004308)` disjointness (for the
         -- survival of `Exec_stmtLoaded` across the sub-call):
         (sp.toNat ≤ 0x80003fe0 ∨ 0x80004308 ≤ SL.lo) ∧
-        (A.hi ≤ 0x80003fe0 ∨ 0x80004308 ≤ A.lo))
+        (A.hi ≤ 0x80003fe0 ∨ 0x80004308 ≤ A.lo) ∧
+        -- ITEM ZERO B1: child EXPRESSION budget at the lowered `sp - 176` (the
+        -- statement frame), `.fn`-bodies bound, store-bodies invariant.
+        StackOK SL (sp - 176#64)
+          (esub.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget esub = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget)
       (SubExecReturn garm N A SL φf φc st.store.frames.size st.store.closures.size
         st' vsub sp r aRet subsret retPC
         r v8 v9 v18 v19 mcall mcall) := by
@@ -184,7 +190,8 @@ theorem armTail_rec_es
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hssAl, hssLo, hssHi,
     hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin, hraAl,
-    hcodeStk, hviStk, htableStk, harenaStk, harenaCode, hexecCodeStk, hexecArenaCode⟩ := hpre
+    hcodeStk, hviStk, htableStk, harenaStk, harenaCode, hexecCodeStk, hexecArenaCode,
+    hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hsp176 : 176 ≤ sp.toNat := by omega
   have hspsub : (sp - 176#64).toNat = sp.toNat - 176 := by
@@ -229,6 +236,9 @@ theorem armTail_rec_es
       ra_align := hretAl
       spReg := hsp_1
       stackOK := ⟨by rw [hspsub]; omega, by rw [hspsub]; omega, by rw [hspsub]; omega⟩
+      stackBudget := hstackBudget
+      expr_bodies := hexprBodies
+      store_bodies := hstoreBodies
       minstret := ⟨vmi1, hmi1⟩
       mem := hmem1e
       code := by show Eval_exprLoaded σ1.mem; rw [hmem1e]; exact hcode
@@ -417,7 +427,14 @@ theorem execExprGlue
     (harenaStk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo)
     (harenaCode : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)
     (hexecArenaCode : A.hi ≤ 0x80003fe0 ∨ 0x80004308 ≤ A.lo)
-    (hexecCodeStk : sp.toNat ≤ 0x80003fe0 ∨ 0x80004308 ≤ SL.lo) :
+    (hexecCodeStk : sp.toNat ≤ 0x80003fe0 ∨ 0x80004308 ≤ SL.lo)
+    -- ITEM ZERO B1: child EXPRESSION budget at the lowered `sp - 176` (the
+    -- statement frame), `.fn`-bodies bound, store-bodies invariant (forwarded
+    -- to `armTail_rec_es`).
+    (hstackBudget : StackOK SL (sp - 176#64)
+      (e.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088))
+    (hexprBodies : Expr.bodiesBound Vsa.While.perCallBudget e = true)
+    (hstoreBodies : Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     Triple
       (fun c => ∃ ment v8 v9 v18 v19,
         ExecArmEntryK g N A SL φf φc st execArmExpr sp r aInterp aStmt aEnv aRet
@@ -591,7 +608,8 @@ theorem execExprGlue
         (by rw [hsubval]; omega), (by rw [hsubval]; omega), (by rw [hsubval]; omega),
         hsproom, hspSLhi, hsp16, (by omega), hSLlo, hSLhi, hSLwin, hraAl,
         hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
-        hexecCodeStk, hexecArenaCode⟩
+        hexecCodeStk, hexecArenaCode,
+        hstackBudget, hexprBodies, hstoreBodies⟩
   -- `armTail_rec_es` yields `SubExecReturn … m0:=ment mcall:=ment` (last clause
   -- `ment = ment`); repackage to the TRUE entry `m0` (last clause `ment = m0`,
   -- which is exactly `hmemframe`), everything else being `m0`-independent.
@@ -655,7 +673,13 @@ theorem execExprSimC
     (harenaStk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo)
     (harenaCode : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)
     (hexecArenaCode : A.hi ≤ 0x80003fe0 ∨ 0x80004308 ≤ A.lo)
-    (hexecCodeStk : sp.toNat ≤ 0x80003fe0 ∨ 0x80004308 ≤ SL.lo) :
+    (hexecCodeStk : sp.toNat ≤ 0x80003fe0 ∨ 0x80004308 ≤ SL.lo)
+    -- ITEM ZERO B1: the `execExprGlue` budget residuals (child expression
+    -- budget at the statement frame, `.fn`-bodies bound, store-bodies).
+    (hstackBudget : StackOK SL (sp - 176#64)
+      (e.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088))
+    (hexprBodies : Expr.bodiesBound Vsa.While.perCallBudget e = true)
+    (hstoreBodies : Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     ExecExprSimGoal g N A SL φf φc st st' d env e v
       sp r aInterp aStmt aEnv aRet m0 out0 :=
   execExprSim g N A SL φf φc st st' d env e v sp r aInterp aStmt aEnv aRet m0 out0
@@ -664,6 +688,7 @@ theorem execExprSimC
       execExprGlue g N A SL φf φc st st' d env e v sp r aInterp aStmt aEnv aRet aOperand m0 out0
         hIH' hop hsubexpr hstmtAl hstmtLo hstmtHi hstmtWin hevalcode hvicode hslotP hstoreSurv
         hopAl hopLo hopHi hopWin hopStk hsproom hspSLhi hsp16 hSLlo hSLhi hSLwin
-        hcodeStk hviStk htableStk harenaStk harenaCode hexecArenaCode hexecCodeStk)
+        hcodeStk hviStk htableStk harenaStk harenaCode hexecArenaCode hexecCodeStk
+        hstackBudget hexprBodies hstoreBodies)
 
 end Vsa.Sim

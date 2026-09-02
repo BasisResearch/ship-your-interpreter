@@ -133,7 +133,17 @@ theorem binaryL_field_of_extras
   exact blockB_binary_leftStagePre g gpre N A SL φf φc st d env op l r
     sp r0 sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 c'.σ.sailOutput m0 c'
     ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v,
-      hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0⟩
+      hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0,
+      -- ITEM ZERO B1: the LEFT child budget, DERIVED from the entry's fields.
+      hEntry.stackBudget.child (by decide)
+        (by
+          have h1 : (Expr.binary op l r).stackNeed
+              = evalFrame + max l.stackNeed r.stackNeed := rfl
+          have h2 : ((1088#64 : BitVec 64)).toNat = 1088 := by decide
+          have hm := Nat.le_max_left l.stackNeed r.stackNeed
+          simp only [h1, h2, evalFrame]; omega),
+      (Expr.bodiesBound_binary hEntry.expr_bodies).1,
+      hEntry.store_bodies⟩
 
 #print axioms binaryL_field_of_extras
 
@@ -174,7 +184,15 @@ theorem unaryE_field_of_extras
     sp r0 sret aExpr aEnv aOperand v8 v9 v18 c'.σ.sailOutput m0 c'
     ⟨ment, hArm, hx11, hgframe, hg8, hg18, hpayL, hexprL, hexprHi24,
       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
-      hcodeStk, hviStk, htableStk, harenaStk, harenaCode⟩
+      hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
+      -- ITEM ZERO B1: the operand's child budget, DERIVED from the entry's fields.
+      hEntry.stackBudget.child (by decide)
+        (by
+          have h1 : (Expr.unary op e).stackNeed = evalFrame + e.stackNeed := rfl
+          have h2 : ((1088#64 : BitVec 64)).toNat = 1088 := by decide
+          simp only [h1, h2, evalFrame]; omega),
+      Expr.bodiesBound_unary hEntry.expr_bodies,
+      hEntry.store_bodies⟩
 
 #print axioms unaryE_field_of_extras
 
@@ -220,7 +238,17 @@ theorem logicalL_field_of_extras
     sp r0 sret aExpr aEnv aLeft aEnv3 v8 v9 v18 c'.σ.sailOutput m0 c'
     ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpayL, hexprSurvL, hexprHi24,
       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
-      hcodeStk, hviStk, htableStk, harenaStk, harenaCode⟩
+      hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
+      -- ITEM ZERO B1: the LEFT child budget, DERIVED from the entry's fields.
+      hEntry.stackBudget.child (by decide)
+        (by
+          have h1 : (Expr.logical op l r).stackNeed
+              = evalFrame + max l.stackNeed r.stackNeed := rfl
+          have h2 : ((1088#64 : BitVec 64)).toNat = 1088 := by decide
+          have hm := Nat.le_max_left l.stackNeed r.stackNeed
+          simp only [h1, h2, evalFrame]; omega),
+      (Expr.bodiesBound_logical hEntry.expr_bodies).1,
+      hEntry.store_bodies⟩
 
 #print axioms logicalL_field_of_extras
 

@@ -152,7 +152,9 @@ def VarInitResid (st st' : SpecSt) (d : Nat) (env : Addr) (x : String) (e : Expr
     (v : Value) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (c : Config),
+    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.varDecl x (some e))
+      sp r aInterp aStmt aEnv aRet m0 c →
     Vsa.Sim.ExecVarInitGeom g N A SL φf φc st st' d env x e v
       sp r aInterp aStmt aEnv aRet m0
 
@@ -171,9 +173,10 @@ theorem exec_varInit_row
   show Vsa.Sim.ExecIH st d env (.varDecl x (some e))
     ⟨st'.store.define env x v, st'.out⟩ .normal
   intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  intro c hEntry
   exact Vsa.Sim.execVarDeclSimD g N A SL φf φc st st' d env x e v
     sp r aInterp aStmt aEnv aRet m0 (ExecS.varInit st d env x e st' v a) hIH
-    (hR st st' d env x e v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0)
+    (hR st st' d env x e v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 c hEntry) c hEntry
 
 /-- **Slot-verify.** `exec_varInit_row` fills the EXACT `hSVarInit` minor-premise slot
 of `TermCaseBundle.TermCases.hSVarInit`: the type below is the verbatim premise type;

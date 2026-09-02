@@ -53,14 +53,19 @@ theorem binArm_add_entry_connects
       ValueRepr m N φ (sp.toNat - 968) (.int a) →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
         ¬ ((sp.toNat - 944) ≤ k ∧ k < (sp.toNat - 944) + 24) → m[k]? = m'[k]?) →
-      ValueRepr m' N φ (sp.toNat - 968) (.int a)) :
+      ValueRepr m' N φ (sp.toNat - 968) (.int a))
+    -- ITEM ZERO B1: the post-LEFT store-bodies invariant (spec-side
+    -- preservation residual, threaded to `blockA_binaryArm_budgeted`).
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget) :
     Triple
       (fun c => EvalEntry g N A SL φf φc st d env (.binary .add el er) sp r sret aEnv aExpr m0 c)
       (fun c => ∃ gpre v8 v9 v18,
         TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
           st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c) := by
-  -- block A: the bridge produces the `blockB_binary` entry from `EvalEntry`.
-  have hA := blockA_binaryArm g N A SL φf φc st d env .add el er sp r sret aEnv aExpr aLOp aROp m0 hX
+  -- block A: the BUDGETED bridge produces the amended `blockB_binary` entry
+  -- from `EvalEntry` (budget conjuncts derived once inside the bridge).
+  have hA := blockA_binaryArm_budgeted g N A SL φf φc st st' d env .add el er
+    sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR
   -- compose: for each entry config, run the bridge, unpack its ∃-ghosts, then run
   -- `blockB_binary` with those ghosts as its parameters.
   intro c hc

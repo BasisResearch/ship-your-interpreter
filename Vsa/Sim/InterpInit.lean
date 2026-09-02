@@ -296,13 +296,17 @@ theorem interpInitStoreRepr_of_drive
         (N : NativeAddrs) (A : Arena) (SL : Vsa.Alloc.StackLayout) (φf φc : Addr → Nat)
         (dLeft aLeft : Nat) (m0 : Mem),
         Steps c c1 ∧
+        -- ITEM ZERO (falsity #12, shape 3): the drive also certifies the
+        -- `interp_run` image in `m0` (the `SeqSpanGround` feed; its
+        -- discharger pins these bytes anyway).
+        Vsa.Sim.Code.Interp_runLoaded m0 ∧
         -- the loop-head SegEntry built over the COMPOSED store `storeAfterAssert`:
         SegEntry g N A SL φf φc { store := storeAfterAssert, out := initSt.out }
           0 dLeft aLeft interpLoopHeadPC m0 c1) :
     ∀ p, InterpInitStoreRepr L p := by
   intro p c hL
-  obtain ⟨c1, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, hSeg⟩ := hDrive p c hL
-  refine ⟨c1, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, ?_⟩
+  obtain ⟨c1, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, hImg, hSeg⟩ := hDrive p c hL
+  refine ⟨c1, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, hImg, ?_⟩
   -- `initSt = { store := storeAfterAssert, out := initSt.out }` by `initStore_eq_initSt`
   -- (out is "" on both sides), so the SegEntry over the composed store IS the witness.
   have hst : ({ store := storeAfterAssert, out := initSt.out } : SpecSt) = initSt := by

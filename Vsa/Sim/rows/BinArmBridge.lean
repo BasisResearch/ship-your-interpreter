@@ -295,3 +295,72 @@ theorem blockA_binaryArm
   refine ⟨c1, hs1, (fun R => c1.σ.regs.get? R), aEnvReg, v8, v9, v18, v19, ment, hArm', hBE,
     hAEx11, hx13c1, hx19c1, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩, hAEx8, hAEx18,
     hx19c1, hpayLment, hlReprMent, hpayRment, hrReprMent, hMentPop, hMemExt⟩
+
+/-- **`blockA_binaryArm_budgeted`** — `blockA_binaryArm` with the ITEM ZERO B1
+budget conjuncts APPENDED to its post (the amended `blockB_binary` pre-tail).
+The five entry-derivable conjuncts (both children's `StackOK.child` steps, both
+`bodiesBound` projections, the LEFT store-bodies) are DERIVED from the
+`EvalEntry`'s budgeted fields here, ONCE; the post-LEFT store-bodies
+(`st'`-dependent, spec-side preservation) is the single threaded premise.
+This is the ONE named destructurer/repacker beside `blockA_binaryArm`'s
+∃/∧-tower post — consumers marshal through it, never by positional splits. -/
+theorem blockA_binaryArm_budgeted
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' : Vsa.While.St) (d : Nat) (env : Addr) (op : BinOp) (el er : Expr)
+    (sp r sret aEnv aExpr aLOp aROp : BitVec 64)
+    (m0 : Mem)
+    (hX : BinArmExtras g N A SL op el er sp r sret aExpr aLOp aROp m0)
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget) :
+    Triple
+      (fun c =>
+        EvalEntry g N A SL φf φc st d env (.binary op el er) sp r sret aEnv aExpr m0 c)
+      (fun c => ∃ (gpre : (R : Register) → Option (RegisterType R))
+          (aEnvReg v8 v9 v18 v19 : BitVec 64) (ment : Mem),
+        ArmEntryK g N A SL φf φc st (0x800034e8#64) UnaryArmCallee (.binary op el er)
+          sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0 ment c ∧
+        BinExtras N A SL el er ment sp sret aExpr aLOp aROp ∧
+        c.σ.regs.get? Register.x11 = some aEnv ∧
+        c.σ.regs.get? Register.x13 = some aEnvReg ∧
+        c.σ.regs.get? Register.x19 = some v19 ∧
+        (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
+        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        gpre Register.x8 = some aExpr ∧ gpre Register.x18 = some aEnv ∧
+        gpre Register.x19 = some v19 ∧
+        read64 ment (aExpr.toNat + 16) = some aLOp.toNat ∧
+        ExprRepr ment aLOp.toNat el ∧
+        read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
+        ExprRepr ment aROp.toNat er ∧
+        (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, ment[a]? = some b)) ∧
+        MemExtends m0 ment ∧
+        StackOK SL (sp - 1088#64)
+          (el.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget el = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget ∧
+        StackOK SL (sp - 1088#64)
+          (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget er = true ∧
+        Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget) := by
+  intro c hc
+  obtain ⟨c1, hs1, gpre, aEnvReg, v8, v9, v18, v19, ment, hArm, hBX,
+    hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩ :=
+    blockA_binaryArm g N A SL φf φc st d env op el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc
+  have h1 : (Expr.binary op el er).stackNeed
+      = evalFrame + max el.stackNeed er.stackNeed := rfl
+  have h2 : ((1088#64 : BitVec 64)).toNat = 1088 := by decide
+  exact ⟨c1, hs1, gpre, aEnvReg, v8, v9, v18, v19, ment, hArm, hBX,
+    hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+    hc.stackBudget.child (by decide)
+      (by have hm := Nat.le_max_left el.stackNeed er.stackNeed
+          simp only [h1, h2, evalFrame]; omega),
+    (Expr.bodiesBound_binary hc.expr_bodies).1,
+    hc.store_bodies,
+    hc.stackBudget.child (by decide)
+      (by have hm := Nat.le_max_right el.stackNeed er.stackNeed
+          simp only [h1, h2, evalFrame]; omega),
+    (Expr.bodiesBound_binary hc.expr_bodies).2,
+    hstoreBodiesR⟩
+
+#print axioms blockA_binaryArm_budgeted

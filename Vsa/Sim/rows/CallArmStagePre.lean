@@ -250,12 +250,20 @@ theorem blockB_call_stagePre
         ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
         ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
-        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)) :
+        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
+        -- ITEM ZERO B1: the CALLEE operand's recursion-sound budget at `sp - 1088`,
+        -- its `.fn`-bodies bound, and the store-bodies invariant (the amended
+        -- `JalPreBundle` tail).
+        StackOK SL (sp - 1088#64)
+          (f.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget f = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 3 c (fun c' => JalPreBundle f c' st d env) := by
   obtain ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hexprHi16,
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
-    hcodeStk, hviStk, htableStk, harenaStk, harenaCode⟩ := hpre
+    hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
+    hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
     hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
@@ -427,7 +435,8 @@ theorem blockB_call_stagePre
       hopAl, hopLo, hopHi, hopWin, hopStk,
       (by rw [hsub992]; omega), (by rw [hsub992]; omega), (by rw [hsub992]; omega),
       hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin,
-      hcodeStk, hviStk, htableStk, harenaStk, harenaCode⟩
+      hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
+      hstackBudget, hexprBodies, hstoreBodies⟩
 
 #print axioms blockB_call_stagePre
 
@@ -483,14 +492,24 @@ theorem callF_field_of_dispatch
     (hDisp g N A SL φf φc sp r0 sret aEnv aExpr m0 hEntry)
     (fun c' hMid => ?_) c rfl
   obtain ⟨gpre, aIn, aClo, aEnv3, v8, v9, v18, ment, hArm, hx11, hx13, hgframe,
-    hg8, hg18, hpay, hexprSurv, hexprHi16, hopAl, hopLo, hopHi, hopWin,
+    hg8, hg18, hpay, hexprSurv, hexprHi16, hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam, hcodeStk, hviStk, htableStk,
     harenaStk, harenaCode⟩ := hMid
   exact blockB_call_stagePre g gpre N A SL φf φc st d env f args
     sp r0 sret aExpr aIn aClo aEnv3 v8 v9 v18 c'.σ.sailOutput m0 c'
     ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hexprHi16,
-      hopAl, hopLo, hopHi, hopWin, hsproom, hspSLhi, hsp16, hSLhiRam,
-      hcodeStk, hviStk, htableStk, harenaStk, harenaCode⟩
+      hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
+      hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
+      -- ITEM ZERO B1: the CALLEE child budget, DERIVED from the entry's fields.
+      hEntry.stackBudget.child (by decide)
+        (by
+          have h1 : (Expr.call f args).stackNeed
+              = evalFrame + max f.stackNeed (Expr.stackNeedList args) := rfl
+          have h2 : ((1088#64 : BitVec 64)).toNat = 1088 := by decide
+          have hm := Nat.le_max_left f.stackNeed (Expr.stackNeedList args)
+          simp only [h1, h2, evalFrame]; omega),
+      (Expr.bodiesBound_call hEntry.expr_bodies).1,
+      hEntry.store_bodies⟩
 
 #print axioms callF_field_of_dispatch
 

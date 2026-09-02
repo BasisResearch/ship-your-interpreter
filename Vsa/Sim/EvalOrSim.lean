@@ -1095,7 +1095,18 @@ theorem evalOrTrueSim : EvalOrTrueSimGoal := by
         hx.op_align, hx.op_lo, hx.op_hi, hx.op_win, hx.op_stk,
         hx.sp_headroom, hx.sp_SLhi, hx.sp16, hx.SLhi_ram,
         hx.code_stk, hx.vicode_stk, (by have := hx.table_stk; omega),
-        hx.arena_stk, hx.arena_code⟩
+        hx.arena_stk, hx.arena_code,
+        -- ITEM ZERO B1: the LEFT child budget, DERIVED from the entry's
+        -- budgeted fields (`StackOK.child` + `bodiesBound_logical`).
+        hc.stackBudget.child (by decide)
+          (by
+            have h1 : (Expr.logical LogOp.or el er).stackNeed
+                = evalFrame + max el.stackNeed er.stackNeed := rfl
+            have h2 : ((1088#64 : BitVec 64)).toNat = 1088 := by decide
+            have hm := Nat.le_max_left el.stackNeed er.stackNeed
+            simp only [h1, h2, evalFrame]; omega),
+        (Expr.bodiesBound_logical hc.expr_bodies).1,
+        hc.store_bodies⟩
   obtain ⟨mcall, hSubR, hMcallM0stk⟩ := hSub
   have hAgM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]? := hMcallM0stk
   have hOutC2 : OutRepr c2.σ st' := hSubR.2.2.2.2.2.2.2.2.1

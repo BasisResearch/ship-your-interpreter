@@ -83,14 +83,20 @@ theorem blockB_stmtWhileCond_stagePre
         (A.hi ≤ SL.lo ∨ (sp.toNat - 176) + 1088 ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
-        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w)) :
+        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        -- ITEM ZERO B1: the child expression's budget at the statement
+        -- frame `sp - 176`, `.fn`-bodies bound, store-bodies invariant.
+        StackOK SL (sp - 176#64)
+          (e.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget e = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 4 c (fun c' => ExecJalPreBundle e c' st d env) := by
   obtain ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
     hEvCode, hViInt, hViSlot, hStoreSurvJ,
     hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre,
     hSLlo, hSLhiRam, hSLwin,
     hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
-    hgframe, hg8, hg18⟩ := hpre
+    hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
   obtain ⟨hG, htick, hpc, hs0, hs1, hs3, hs2, hsp, hra, ⟨vmi, hmi⟩,
     hout, houtStr, hmem, hcode, hstore,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
@@ -310,7 +316,9 @@ theorem blockB_stmtWhileCond_stagePre
     · left; exact h
     · right; rw [hjspN]; exact h
   -- (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)
-  · exact harenaCode
+  · exact ⟨harenaCode,
+      (by rw [BitVec.add_sub_cancel]; exact hstackBudget),
+      hexprBodies, hstoreBodies⟩
 
 #print axioms blockB_stmtWhileCond_stagePre
 
@@ -352,34 +360,67 @@ def StmtWhileCondArmDispatch
         (A.hi ≤ SL.lo ∨ (sp.toNat - 176) + 1088 ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         (∀ R : Register, AbiPreservedNoise R → c'.σ.regs.get? R = gpre R) ∧
-        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w))
+        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        -- ITEM ZERO B1: the child expression's budget at the statement
+        -- frame `sp - 176`, `.fn`-bodies bound, store-bodies invariant.
+        StackOK SL (sp - 176#64)
+          (cnd.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget cnd = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget)
+
+/-- **The stmtWhileCond RE-ENTRY dispatch residual** (wave 45, the amended
+`SEntryC`'s dispatch-head leg): from `SDispatchC (.whileStmt cnd b)` — a tail
+re-dispatch landing this arm from `execStmtDispatchHead` — stage the sub-expr
+sub-call.  Supplied upstream by a dispatch-head → arm-head span (the jump-table
+half of `execBlockA` re-run from `0x80004014`, no prologue). -/
+def StmtWhileCondReentryDispatch
+    (cnd : Expr) (b : Stmt) (st : Vsa.While.St) (d : Nat) (env : Addr) (c : Config) : Prop :=
+  SDispatchC c st d env (.whileStmt cnd b) →
+  LandedN 1 c (fun c' => ExecJalPreBundle cnd c' st d env)
+
+/-- **The stmtWhileCond `viaWhileArm` residual** (wave 45): the while-arm-head
+leg of the amended `SEntryC` — the loop-back `bne a0,a5,0x80004034` re-entry.
+The ONLY genuinely-while leg (every other arm refutes it by shape); supplied
+upstream by the while-arm head span `0x80004034 → jal eval_expr`. -/
+def StmtWhileCondViaWhileArm
+    (cnd : Expr) (b : Stmt) (st : Vsa.While.St) (d : Nat) (env : Addr) (c : Config) : Prop :=
+  SWhileArmC c st d env (.whileStmt cnd b) →
+  LandedN 1 c (fun c' => ExecJalPreBundle cnd c' st d env)
 
 /-- **The `EvalChildStages.stmtWhileCond` field, machine-composed (exec twin).** -/
 theorem stmtWhileCond_field_of_dispatch
     (cnd : Expr) (b : Stmt) (c : Config) (st : Vsa.While.St) (d : Nat) (env : Addr)
-    (hDisp : StmtWhileCondArmDispatch cnd b st d env c) :
+    (hDisp : StmtWhileCondArmDispatch cnd b st d env c)
+    (hReentry : StmtWhileCondReentryDispatch cnd b st d env c)
+    (hViaWhileArm : StmtWhileCondViaWhileArm cnd b st d env c) :
     SEntryC c st d env (.whileStmt cnd b) →
     LandedN 1 c (fun c' => EEntryC c' st d env cnd) := by
   refine stmtWhileCond_split' cnd b c st d env (fun hSE => ?_)
-  obtain ⟨g, N, A, SL, φf, φc, sp, r, aInterp, aStmt, aEnv, aRet, m0, hEntry⟩ := hSE
-  obtain ⟨c1, hsteps1, hMid⟩ :=
-    hDisp g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 hEntry c rfl
-  obtain ⟨gpre, aExprChild, v8, v9, v18, v19, ment, hArm, hpay, hExprChild,
-    hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hStoreSurvJ,
-    hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
-    hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
-    hgframe, hg8, hg18⟩ := hMid
-  have hcut : LandedN 4 c1 (fun c' => ExecJalPreBundle cnd c' st d env) :=
-    blockB_stmtWhileCond_stagePre g gpre N A SL φf φc st d env cnd
-      sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1
-      ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
-       hEvCode, hViInt, hViSlot, hStoreSurvJ,
-       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
-       hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
-       hgframe, hg8, hg18⟩
-  obtain ⟨n1, hn1⟩ := hsteps1.toN
-  obtain ⟨m2, c2, hm2, hs2, hpb⟩ := hcut
-  exact ⟨n1 + m2, c2, by omega, hn1.trans_add hs2, hpb⟩
+  rcases hSE with hSE | hRe | hWA
+  · -- fresh-call leg (the pre-amendment body)
+    obtain ⟨g, N, A, SL, φf, φc, sp, r, aInterp, aStmt, aEnv, aRet, m0, hEntry⟩ := hSE
+    obtain ⟨c1, hsteps1, hMid⟩ :=
+      hDisp g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 hEntry c rfl
+    obtain ⟨gpre, aExprChild, v8, v9, v18, v19, ment, hArm, hpay, hExprChild,
+      hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hStoreSurvJ,
+      hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
+      hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
+      hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩ := hMid
+    have hcut : LandedN 4 c1 (fun c' => ExecJalPreBundle cnd c' st d env) :=
+      blockB_stmtWhileCond_stagePre g gpre N A SL φf φc st d env cnd
+        sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1
+        ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
+         hEvCode, hViInt, hViSlot, hStoreSurvJ,
+         hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
+         hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
+         hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩
+    obtain ⟨n1, hn1⟩ := hsteps1.toN
+    obtain ⟨m2, c2, hm2, hs2, hpb⟩ := hcut
+    exact ⟨n1 + m2, c2, by omega, hn1.trans_add hs2, hpb⟩
+  · -- dispatch-head re-entry leg (wave-45 named residual)
+    exact hReentry hRe
+  · -- while-arm loop-back leg (wave-45 `viaWhileArm` named residual)
+    exact hViaWhileArm hWA
 
 #print axioms stmtWhileCond_field_of_dispatch
 

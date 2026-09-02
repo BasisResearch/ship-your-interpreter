@@ -111,7 +111,13 @@ theorem execEntry_of_jalPrefix
         (aStmt.toNat + 16 ≤ SL.lo ∨ (sp - hdrm).toNat ≤ aStmt.toNat) ∧
         StackOK SL (sp - hdrm) (176 + 1088) ∧
         0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000 ∧ tohostAddr + 16 ≤ SL.lo ∧
-        ((sp - hdrm).toNat ≤ execStmtEntry ∨ execStmtEnd ≤ SL.lo)) :
+        ((sp - hdrm).toNat ≤ execStmtEntry ∨ execStmtEnd ≤ SL.lo) ∧
+        -- ITEM ZERO B1: the child statement's recursion-sound budget at the
+        -- lowered `sp`, its `.fn`-bodies bound, and the store-bodies invariant.
+        StackOK SL (sp - hdrm)
+          (s.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Stmt.bodiesBound Vsa.While.perCallBudget s = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 1 c (fun c' =>
       ExecEntry (fun R => c'.σ.regs.get? R) N A SL φf φc st d env s
         (sp - hdrm) retPC aInterp aStmt aEnv aRet mcall c') := by
@@ -119,7 +125,8 @@ theorem execEntry_of_jalPrefix
     ⟨⟨w8, hw8⟩, ⟨w9, hw9⟩, ⟨w18, hw18⟩, ⟨w19, hw19⟩⟩,
     hout, houtStr, hmemc, hcodeS, hstmtR, hstore, hstoreSurv,
     hstAl, hstLo, hstHi, hstWin, hstStk,
-    hstackOK, hSLlo, hSLhiRam, hSLwin, hcodeStk⟩ := hpre
+    hstackOK, hSLlo, hSLhiRam, hSLwin, hcodeStk,
+    hstackBudget, hstmtBodies, hstoreBodies⟩ := hpre
   -- ============ callPC: jal exec_stmt → PC := execStmtEntry, x1 := retPC ============
   obtain ⟨σ1, i1, hs1', hi1, hG1, hmem1, hobs1⟩ :=
     hjalSite c.σ c.tick c.steps vmi hG hpc hmi (hmemc ▸ hcodeS) htick
@@ -161,6 +168,9 @@ theorem execEntry_of_jalPrefix
         ra_align := hretAl
         spReg := hsp_1
         stackOK := hstackOK
+        stackBudget := hstackBudget
+        stmt_bodies := hstmtBodies
+        store_bodies := hstoreBodies
         minstret := ⟨vmi1, hmi1⟩
         mem := hmem1e
         code := by show Exec_stmtLoaded σ1.mem; rw [hmem1e]; exact hcodeS

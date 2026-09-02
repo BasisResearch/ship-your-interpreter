@@ -85,21 +85,24 @@ set_option linter.unusedVariables false
 
 /-! ## §1. The 9th statement falsity — the join `frame` clause over-pins x8 -/
 
-/-- **`segExitJoin_frame_x8_false`** — the machine-checked obstruction.  Any
-`SegExit g … st' callJoinPC m0` config whose x8 holds the `.normal` route's
-value (`cnt`, the body-loop counter — NOT restored to `g x8` at the join) is
-contradictory when `cnt ≠ node` and `g x8 = some node`.  Because
-`AbiPreservedNoise x8` holds (`by decide`), `SegExit.frame` forces
-`c.σ.regs.get? x8 = g x8`, i.e. `some cnt = some node` — impossible.  So the
-skeleton `SegExit`'s `frame` field cannot be met at `callJoinPC` on the
-`.normal` route: x8 is restored only by the epilogue's `ld s0,1072(sp)` at
-`0x800033f0`, PAST the join.  (The identical argument refutes ra/s1/s2/sp.) -/
+/-- **`segExitJoin_frame_x8_false`** — the machine-checked obstruction, RESTATED
+over the explicit PRE-amendment clause (wave 45: the amendment `joinRestored`-
+guards `SegExit.frame`, so the falsity is now pinned to the clause the skeleton
+DEMANDED before the guard — the blanket `∀ R, AbiPreservedNoise R → regs R = g R`
+AT the join).  Any join config whose x8 holds the `.normal` route's value
+(`cnt`, the body-loop counter — NOT restored to `g x8` at the join) contradicts
+that clause when `cnt ≠ node` and `g x8 = some node`: `AbiPreservedNoise x8`
+holds (`by decide`), so the pre-amendment clause forces `c.σ.regs.get? x8 =
+g x8`, i.e. `some cnt = some node` — impossible.  x8 is restored only by the
+epilogue's `ld s0,1072(sp)` at `0x800033f0`, PAST the join.  (The identical
+argument refutes ra/s1/s2/sp.)  This is exactly why the amended `SegExit.frame`
+excludes x8 from `joinRestored callJoinPC`. -/
 theorem segExitJoin_frame_x8_false
-    {g : (R : Register) → Option (RegisterType R)}
-    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
-    {nf nc : Nat} {st' : SpecSt} {m0 : Mem} {c : Config}
+    {g : (R : Register) → Option (RegisterType R)} {c : Config}
     {cnt node : BitVec 64}
-    (hExit : SegExit g N A SL φf φc nf nc st' callJoinPC m0 c)
+    -- the PRE-amendment blanket frame clause at the join (what `SegExit.frame`
+    -- demanded at `exitPC = callJoinPC` before the wave-45 `joinRestored` guard)
+    (hFramePre : ∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R)
     -- what the `.normal` route establishes at the join: x8 = the loop counter,
     -- unrestored (`callClosureBodyExitNormalSeg` writes `addiw s0,s0,1`; the
     -- exit span + value_null + the s3/s5/s7-only restore never rewrite x8).
@@ -111,7 +114,7 @@ theorem segExitJoin_frame_x8_false
     (hne : cnt ≠ node) :
     False := by
   have hframe : c.σ.regs.get? Register.x8 = g Register.x8 :=
-    hExit.frame Register.x8 (by decide)
+    hFramePre Register.x8 (by decide)
   rw [hRoute, hGhost] at hframe
   exact hne (Option.some.inj hframe)
 

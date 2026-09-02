@@ -132,7 +132,14 @@ theorem blockB_logical
         ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
         ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
-        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo))
+        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
+        -- ITEM ZERO B1: the LEFT operand's recursion-sound budget at `sp - 1088`,
+        -- its `.fn`-bodies bound, and the store-bodies invariant (threaded from
+        -- the parent `.logical op el er` node's budget by the arm-entry supplier).
+        StackOK SL (sp - 1088#64)
+          (el.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget el = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget)
       (fun c => ∃ mcall,
         SubEvalReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
           st' vl sp r sret
@@ -143,7 +150,8 @@ theorem blockB_logical
   obtain ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hexprHi24,
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
-    hcodeStk, hviStk, htableStk, harenaStk, harenaCode⟩ := hpre
+    hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
+    hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
     hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
@@ -340,7 +348,8 @@ theorem blockB_logical
         hopAl, hopLo, hopHi, hopWin, hopStk,
         (by rw [hsub968]; omega), (by rw [hsub968]; omega), (by rw [hsub968]; omega),
         hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin,
-        hcodeStk, hviStk, htableStk, harenaStk, harenaCode⟩
+        hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
+        hstackBudget, hexprBodies, hstoreBodies⟩
   exact ⟨c4, (Steps.single hstep1).trans ((Steps.single hstep2).trans
       ((Steps.single hstep3).trans hs4)),
     mcall, hpost, hMcallM0⟩
@@ -1421,7 +1430,18 @@ theorem evalAndSim : EvalAndSimGoal := by
         hx.op_align, hx.op_lo, hx.op_hi, hx.op_win, hx.op_stk,
         hx.sp_headroom, hx.sp_SLhi, hx.sp16, hx.SLhi_ram,
         hx.code_stk, hx.vicode_stk, (by have := hx.table_stk; omega),
-        hx.arena_stk, hx.arena_code⟩
+        hx.arena_stk, hx.arena_code,
+        -- ITEM ZERO B1: the LEFT child budget, DERIVED from the entry's
+        -- budgeted fields (`StackOK.child` + `bodiesBound_logical`).
+        hc.stackBudget.child (by decide)
+          (by
+            have h1 : (Expr.logical LogOp.and el er).stackNeed
+                = evalFrame + max el.stackNeed er.stackNeed := rfl
+            have h2 : ((1088#64 : BitVec 64)).toNat = 1088 := by decide
+            have hm := Nat.le_max_left el.stackNeed er.stackNeed
+            simp only [h1, h2, evalFrame]; omega),
+        (Expr.bodiesBound_logical hc.expr_bodies).1,
+        hc.store_bodies⟩
   obtain ⟨mcall, hSubR, hMcallM0stk⟩ := hSub
   have hAgM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]? := hMcallM0stk
   have hOutC2 : OutRepr c2.σ st' := hSubR.2.2.2.2.2.2.2.2.1

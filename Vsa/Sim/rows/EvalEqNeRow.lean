@@ -615,18 +615,34 @@ theorem evalEqNeSim
         read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
-        MemExtends m0 ment)
+        MemExtends m0 ment ∧
+        -- ITEM ZERO B1: BOTH operands' recursion-sound budgets at `sp - 1088`,
+        -- their `.fn`-bodies bounds, and the store-bodies invariants (LEFT over
+        -- the entry store `st`, RIGHT over the post-left store `st'`) --
+        -- forwarded to `blockB_binary`'s amended pre.
+        StackOK SL (sp - 1088#64)
+          (el.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget el = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget ∧
+        StackOK SL (sp - 1088#64)
+          (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget er = true ∧
+        Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' resVal sp r sret m0) := by
   intro c hpre
   obtain ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0⟩ := hpre
+    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0,
+    hstackBudgetL, hexprBodiesL, hstoreBodiesL,
+    hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩ := hpre
   -- === block B: two-operand head + IHs → TwoSubReturn @0x8000351c ===
   obtain ⟨c2, hs2, hTS⟩ :=
     blockB_binary gouter gpre N A SL φf φc st st' st'' d env op el er vl vr
       sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hIHl hIHr hVlSurv
       c ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0⟩
+        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0,
+        hstackBudgetL, hexprBodiesL, hstoreBodiesL,
+        hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩
   have hOutC2 : String.join c2.σ.sailOutput.toList = st''.out := hTS.2.2.2.2.2.2.2.1
   -- === block C: dispatch + value_equal + box → PreEpilogueVD @0x800033ec ===
   obtain ⟨c3, mpre, φfe, φce, hs3, hpfe, hpce, hPre⟩ := hblockC c2 hTS hOutC2
@@ -688,7 +704,19 @@ theorem evalEqSim
         read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
-        MemExtends m0 ment)
+        MemExtends m0 ment ∧
+        -- ITEM ZERO B1: BOTH operands' recursion-sound budgets at `sp - 1088`,
+        -- their `.fn`-bodies bounds, and the store-bodies invariants (LEFT over
+        -- the entry store `st`, RIGHT over the post-left store `st'`) --
+        -- forwarded to `blockB_binary`'s amended pre.
+        StackOK SL (sp - 1088#64)
+          (el.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget el = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget ∧
+        StackOK SL (sp - 1088#64)
+          (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget er = true ∧
+        Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.bool (vl.equal vr)) sp r sret m0) :=
   evalEqNeSim gouter gpre g N A SL φf φc st st' st'' d env el er .eq vl vr (.bool (vl.equal vr))
@@ -737,7 +765,19 @@ theorem evalNeSim
         read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
-        MemExtends m0 ment)
+        MemExtends m0 ment ∧
+        -- ITEM ZERO B1: BOTH operands' recursion-sound budgets at `sp - 1088`,
+        -- their `.fn`-bodies bounds, and the store-bodies invariants (LEFT over
+        -- the entry store `st`, RIGHT over the post-left store `st'`) --
+        -- forwarded to `blockB_binary`'s amended pre.
+        StackOK SL (sp - 1088#64)
+          (el.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget el = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget ∧
+        StackOK SL (sp - 1088#64)
+          (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget er = true ∧
+        Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.bool (!(vl.equal vr))) sp r sret m0) :=
   evalEqNeSim gouter gpre g N A SL φf φc st st' st'' d env el er .ne vl vr (.bool (!(vl.equal vr)))

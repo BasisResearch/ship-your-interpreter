@@ -269,7 +269,7 @@ theorem stringifyContract_of_call
     (store : Vsa.While.Store) (aVal : Nat) (v : Value) (m0 : Mem)
     (rRet : BitVec 64) (Pentry : BitVec 64 → BitVec 64 → Config → Prop)
     (call : ∀ (sp r : BitVec 64),
-      Triple (Pentry sp r) (StrdupTailExit rRet (v.display store)))
+      Triple (Pentry sp r) (StrdupTailExit rRet (v.catDisplay store)))
     (entry : ∀ (sp r : BitVec 64), ∃ c, Pentry sp r c) :
     StringifyContract g N A SL φf φc store aVal v m0 := by
   intro sp r

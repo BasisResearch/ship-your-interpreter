@@ -85,6 +85,7 @@ def SeqNilResid (st : SpecSt) (d : Nat) (env : Addr) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (dLeft aLeft p q : Nat) (m0 : Mem),
+    SeqSpanGround p q m0 →
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
       (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st q m0)
@@ -119,6 +120,7 @@ def SeqConsAbruptResid
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (dLeft aLeft p q : Nat) (m0 : Mem),
+    SeqSpanGround p q m0 →
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
       (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' q m0)
@@ -160,12 +162,14 @@ def SeqConsNormalResid
   (∀ (g : (R : Register) → Option (RegisterType R))
       (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
       (dLeft aLeft p q : Nat) (m0 : Mem),
+      SeqSpanGround p q m0 →
       Triple
         (SegEntry g N A SL φf φc st' d dLeft aLeft p m0)
         (SegExit g N A SL φf φc st'.store.frames.size st'.store.closures.size st'' q m0)) →
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (dLeft aLeft p q : Nat) (m0 : Mem),
+    SeqSpanGround p q m0 →
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
       (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st'' q m0)
@@ -186,99 +190,56 @@ theorem hSeqConsNormal_row
 
 #print axioms hSeqConsNormal_row
 
-/-! ## §4. The `ForLoop` family — ONE `ForResid`, four rows
+/-! ## §4. The `ForLoop` family — four UNCONDITIONAL rows (`mForLoop = True`)
 
-`mForLoop st d env cnd step b st' status` is the IDENTITY-PC span
-`SegEntry … st p → SegExit … st' p` (amended motive).  The four constructors
-(`condFalse`/`bodyBreak`/`bodyRet`/`loop`) all conclude this SAME motive shape,
-differing only in which sub-derivations the recursor threads and the produced
-`(st', status)`.  Mirroring the `while` family (`rows/ExecDispatchRows.lean`:
-ONE `WhileGeom` + `execWhileIH_of_resid` + three rows), we use ONE `ForResid`
-keyed on the loop endpoints `(st, st', status)` and the loop shape `(cnd, step,
-b)`, and four rows that consume each constructor's sub-IHs and route to it.
+**AMENDED (ITEM ZERO / falsity #12, shape 3, ledger
+`forloop-motive-identity-pc-store-mutation`).**  `mForLoop` is now `True`
+(joining `mExecInit`/`mForCond`/`mExecStep`; consumer census: the only consumer
+of an `mForLoop` IH is `exec_forStart_row`, which ignores it — the honest
+for-loop machine work flows through `ForStartGeom`'s `ExecForStep`/`hForIH`
+oracles).  The old identity-PC `ForResid` carrier was machine-checked
+unsatisfiable by fleet B6 (`zeroStep_forSpan_forces_rerepresentation`: every
+`ForLoop` constructor mutates the store, so the same-PC/same-`m0` span forces
+the unchanged entry memory to represent two different stores); it is DELETED.
+The four rows are now unconditional (`trivial`), so the corresponding
+`TermResidualsCore` fields are discharged and removed from the record. -/
 
-The genuine machine content behind `ForResid` is the `ExecForStep` body oracle
-composed by `execForLoopBody` (`ExecFor.lean`) — but that engine speaks
-`ExecEntry → ExecExit` at the child scope, not the identity-PC `SegEntry →
-SegExit` motive, and no landed adapter bridges them; so `ForResid` carries the
-motive Triple directly (the `experiments/loop-fanout.md` oracle-still-open
-state).  The rows thread the recursor sub-IHs into named positions. -/
-
-/-- The shared `ForLoop`-family residual: the identity-PC motive Triple, ∀-closed,
-keyed on the loop endpoints and shape. -/
-def ForResid
-    (st : SpecSt) (d : Nat) (env : Addr) (cnd step : Option Expr) (b : Stmt)
-    (st' : SpecSt) (status : Status) : Prop :=
-  ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft p : Nat) (m0 : Mem),
-    Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' p m0)
-
-/-- `ForResid st d env cnd step b st' status` IS `mForLoop … st' status` after
-δ-unfolding — the shared dispatcher used by every for-loop row. -/
-theorem forLoop_of_resid
-    {st : SpecSt} {d : Nat} {env : Addr} {cnd step : Option Expr} {b : Stmt}
-    {st' : SpecSt} {status : Status}
-    (hFor : ForLoop st d env cnd step b st' status)
-    (hR : ForResid st d env cnd step b st' status) :
-    mForLoop st d env cnd step b st' status hFor :=
-  hR
-
-/-- Route `hFlCondFalse` → `ForResid`.  The recursor gives `mEvalE c` (the cond
-sub-IH) and the falsy witness `a_1`; both are absorbed by the residual (the
-condition-eval span is inside the for-loop machine iteration).  Slot-verified
-against `TermCases.hFlCondFalse`. -/
-theorem hFlCondFalse_row
-    (hR : ∀ st d env c step b st' (v : Value), v.truthy = false →
-      ForResid st d env (some c) step b st' Status.normal) :
+/-- Route `hFlCondFalse` — unconditional (`mForLoop = True`). -/
+theorem hFlCondFalse_row :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (step : Option Expr) (b : Stmt)
       (st' : SpecSt) (v : Value) (a : EvalE st d env c st' v) (a_1 : v.truthy = false),
       mEvalE st d env c st' v a →
       mForLoop st d env (some c) step b st' Status.normal (ForLoop.condFalse st d env c step b st' v a a_1) := by
   intro st d env c step b st' v a a_1 _hCondIH
-  exact forLoop_of_resid (ForLoop.condFalse st d env c step b st' v a a_1)
-    (hR st d env c step b st' v a_1)
+  trivial
 
 #print axioms hFlCondFalse_row
 
-/-- Route `hFlBodyBreak` → `ForResid`.  Sub-IHs: `mForCond cnd` + `mExecS b`
-(`.brk`).  Slot-verified against `TermCases.hFlBodyBreak`. -/
-theorem hFlBodyBreak_row
-    (hR : ∀ st d env cnd step b st'', ForResid st d env cnd step b st'' Status.normal) :
+/-- Route `hFlBodyBreak` — unconditional (`mForLoop = True`). -/
+theorem hFlBodyBreak_row :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (cnd step : Option Expr) (b : Stmt)
       (st' st'' : SpecSt) (a : ForCond st d env cnd st') (a_1 : ExecS st' d env b st'' Status.brk),
       mForCond st d env cnd st' a → mExecS st' d env b st'' Status.brk a_1 →
       mForLoop st d env cnd step b st'' Status.normal (ForLoop.bodyBreak st d env cnd step b st' st'' a a_1) := by
   intro st d env cnd step b st' st'' a a_1 _hCondIH _hBodyIH
-  exact forLoop_of_resid (ForLoop.bodyBreak st d env cnd step b st' st'' a a_1)
-    (hR st d env cnd step b st'')
+  trivial
 
 #print axioms hFlBodyBreak_row
 
-/-- Route `hFlBodyRet` → `ForResid`.  Sub-IHs: `mForCond cnd` + `mExecS b`
-(`.ret rv`).  Slot-verified against `TermCases.hFlBodyRet`. -/
-theorem hFlBodyRet_row
-    (hR : ∀ st d env cnd step b st'' rv, ForResid st d env cnd step b st'' (Status.ret rv)) :
+/-- Route `hFlBodyRet` — unconditional (`mForLoop = True`). -/
+theorem hFlBodyRet_row :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (cnd step : Option Expr) (b : Stmt)
       (st' st'' : SpecSt) (rv : Value) (a : ForCond st d env cnd st')
       (a_1 : ExecS st' d env b st'' (Status.ret rv)),
       mForCond st d env cnd st' a → mExecS st' d env b st'' (Status.ret rv) a_1 →
       mForLoop st d env cnd step b st'' (Status.ret rv) (ForLoop.bodyRet st d env cnd step b st' st'' rv a a_1) := by
   intro st d env cnd step b st' st'' rv a a_1 _hCondIH _hBodyIH
-  exact forLoop_of_resid (ForLoop.bodyRet st d env cnd step b st' st'' rv a a_1)
-    (hR st d env cnd step b st'' rv)
+  trivial
 
 #print axioms hFlBodyRet_row
 
-/-- Route `hFlLoop` → `ForResid`.  Sub-IHs: `mForCond cnd` + `mExecS b` +
-`mExecStep step` + the RECURSIVE `mForLoop` (the back-edge tail).  All four are
-absorbed by the residual (the for-loop back-edge span composes one iteration with
-the recursive tail inside the machine engine).  Slot-verified against
-`TermCases.hFlLoop`. -/
-theorem hFlLoop_row
-    (hR : ∀ st d env cnd step b st'''' status', ForResid st d env cnd step b st'''' status') :
+/-- Route `hFlLoop` — unconditional (`mForLoop = True`). -/
+theorem hFlLoop_row :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (cnd step : Option Expr) (b : Stmt)
       (st' st'' st''' st'''' : SpecSt) (status status' : Status) (a : ForCond st d env cnd st')
       (a_1 : ExecS st' d env b st'' status) (a_2 : status = Status.normal ∨ status = Status.cont)
@@ -288,9 +249,7 @@ theorem hFlLoop_row
       mForLoop st d env cnd step b st'''' status' (ForLoop.loop st d env cnd step b st' st'' st''' st'''' status status' a a_1 a_2 a_3 a_4) := by
   intro st d env cnd step b st' st'' st''' st'''' status status' a a_1 a_2 a_3 a_4
     _hCondIH _hBodyIH _hStepIH _hRestIH
-  exact forLoop_of_resid
-    (ForLoop.loop st d env cnd step b st' st'' st''' st'''' status status' a a_1 a_2 a_3 a_4)
-    (hR st d env cnd step b st'''' status')
+  trivial
 
 #print axioms hFlLoop_row
 
@@ -320,13 +279,8 @@ example
         mExecSeq st d env (s :: ss) st'' status (ExecSeq.consNormal st d env s ss st' st'' status a a_1)) :=
   ⟨hSeqNil_row hNil, hSeqConsAbrupt_row hAbr, hSeqConsNormal_row hNorm⟩
 
-/-- Slot check: the four `hFl*` for-loop fields. -/
-example
-    (hCF : ∀ st d env c step b st' (v : Value), v.truthy = false →
-      ForResid st d env (some c) step b st' Status.normal)
-    (hBB : ∀ st d env cnd step b st'', ForResid st d env cnd step b st'' Status.normal)
-    (hBR : ∀ st d env cnd step b st'' rv, ForResid st d env cnd step b st'' (Status.ret rv))
-    (hL : ∀ st d env cnd step b st'''' status', ForResid st d env cnd step b st'''' status') :
+/-- Slot check: the four `hFl*` for-loop fields (now UNCONDITIONAL). -/
+example :
     (∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (step : Option Expr) (b : Stmt)
         (st' : SpecSt) (v : Value) (a : EvalE st d env c st' v) (a_1 : v.truthy = false),
         mEvalE st d env c st' v a →
@@ -347,6 +301,6 @@ example
         mForCond st d env cnd st' a → mExecS st' d env b st'' status a_1 →
         mExecStep st'' d env step st''' a_3 → mForLoop st''' d env cnd step b st'''' status' a_4 →
         mForLoop st d env cnd step b st'''' status' (ForLoop.loop st d env cnd step b st' st'' st''' st'''' status status' a a_1 a_2 a_3 a_4)) :=
-  ⟨hFlCondFalse_row hCF, hFlBodyBreak_row hBB, hFlBodyRet_row hBR, hFlLoop_row hL⟩
+  ⟨hFlCondFalse_row, hFlBodyBreak_row, hFlBodyRet_row, hFlLoop_row⟩
 
 end Vsa.Sim.Rows

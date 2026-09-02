@@ -132,16 +132,17 @@ def defineCost (store : Store) (a : Addr) (x : String) : Nat :=
       nameCopyCost x + growth
 
 /-- Bytes `stringify` requests for value `v` (`interp.c:84-106`): a copy of
-its displayed form (`Value.display`), rounded. Covers both the `VAL_STR`
-branch (copy the string) and the formatted branch. -/
+its CONCAT-rendered form (`Value.catDisplay` — `stringify` drops the native
+name, falsity `stringify-native-name-mismatch`), rounded. Covers both the
+`VAL_STR` branch (copy the string) and the formatted branch. -/
 def stringifyCost (store : Store) (v : Value) : Nat :=
-  roundUp16 ((v.display store).length + 1)
+  roundUp16 ((v.catDisplay store).length + 1)
 
 /-- Bytes a string `+` requests (`interp.c:117-123`): `stringify` of each
 operand plus the concatenation buffer (`la+lb+1`). -/
 def concatCost (store : Store) (lv rv : Value) : Nat :=
   stringifyCost store lv + stringifyCost store rv +
-    roundUp16 ((lv.display store).length + (rv.display store).length + 1)
+    roundUp16 ((lv.catDisplay store).length + (rv.catDisplay store).length + 1)
 
 /-- Allocation charge of a single `binOpSem` evaluation on `interp.c`'s
 `eval_binary`: only string `+` allocates; every other operator is arithmetic

@@ -84,7 +84,7 @@ def StrConcatCBlockResid : Prop :=
       StringifyContract g N A SL φf φc store aVal (.str sl) m0 →
       StringifyContract g N A SL φf φc store aVal rv m0 →
       EvalIH st d env (.binary .add el er) st''
-        (.str (sl ++ rv.display st''.store))) ∧
+        (.str (sl ++ rv.catDisplay st''.store))) ∧
   (∀ (g : (R : Register) → Option (RegisterType R))
      (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
      (store : Store) (aVal : Nat) (m0 : Mem)
@@ -92,7 +92,7 @@ def StrConcatCBlockResid : Prop :=
       StringifyContract g N A SL φf φc store aVal lv m0 →
       StringifyContract g N A SL φf φc store aVal (.str sr) m0 →
       EvalIH st d env (.binary .add el er) st''
-        (.str (lv.display st''.store ++ sr)))
+        (.str (lv.catDisplay st''.store ++ sr)))
 
 /-! ## Producing `StrConcatHeapResid`
 

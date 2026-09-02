@@ -285,8 +285,9 @@ theorem nativeJoin
     have : Vsa.Machine.output σ2 = Vsa.Machine.output c.σ := by
       unfold Vsa.Machine.output; rw [houtEq]
     exact this.trans hc.out
-  · -- the ghost frame, INCLUDING the reloaded s7
-    intro R hR
+  · -- the ghost frame, INCLUDING the reloaded s7 — the native route restores
+    -- the FULL frame, so the wave-45 `joinRestored` guard is ignored.
+    intro R hR _
     by_cases h23 : R = Register.x23
     · subst h23
       have hpres : σ2.regs.get? Register.x23 = σ1.regs.get? Register.x23 :=

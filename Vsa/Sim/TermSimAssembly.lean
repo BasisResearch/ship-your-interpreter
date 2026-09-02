@@ -3,6 +3,7 @@ import Vsa.Sim.EvalRecCommon
 import Vsa.Sim.ExecBlock
 import Vsa.Sim.ExecDispatch
 import Vsa.Sim.CallEntry
+import Vsa.Sim.Code.Interp_run
 
 /-!
 # Layer 4 — the M4 CAPSTONE: the mutual-recursor ASSEMBLY (`term_sim_of_cases`)
@@ -145,17 +146,29 @@ def mExecInit (_st : SpecSt) (_d : Nat) (_env : Addr) (_init : Option Stmt)
     (_st' : SpecSt) (_h : ExecInit _st _d _env _init _st') : Prop :=
   True
 
-/-- `ForLoop` motive: `SegEntry → SegExit` skeleton Triple (identity-PC span at
-the loop head `p`; see `mExecInit`). -/
-def mForLoop (st : SpecSt) (d : Nat) (env : Addr) (_cnd _step : Option Expr)
-    (_b : Stmt) (st' : SpecSt) (_status : Status)
-    (_h : ForLoop st d env _cnd _step _b st' _status) : Prop :=
-  ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (p : Nat) (m0 : Mem),
-    Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' p m0)
+/-- `ForLoop` motive.
+
+**Shape (amended, ITEM ZERO / falsity #12, ledger
+`forloop-motive-identity-pc-store-mutation`).**  This motive is now `True`,
+completing the `mExecInit`/`mForCond`/`mExecStep` scaffold family.
+
+History: the motive was an identity-PC `SegEntry st p → SegExit st' p` span, but
+EVERY `ForLoop` constructor mutates the spec state (cond eval / body exec / full
+iteration), so a zero-step discharge forces the unchanged entry memory to
+represent both `st.store` and `st'.store` (machine-checked by fleet B6,
+`zeroStep_forSpan_forces_rerepresentation`) and a stepping discharge is barred by
+the code-free `SegEntry` — the DUAL of `scaffold-some-motive-unsatisfiable`.
+CONSUMER CENSUS (this amendment): the ONLY consumer of an `mForLoop` IH is
+`exec_forStart_row`, which binds it as an IGNORED `_hForIH`; the honest per-
+iteration for-loop machine work flows through `execForStartSim`'s
+`ExecForStep`/`hForIH` oracles (`ForStartGeom`), exactly as for the other three
+`True` scaffold motives.  Setting it to `True` makes all four `ForLoop`
+constructors trivially fillable (`ScaffoldRows.hFl*_row`) with zero consumer
+re-threading. -/
+def mForLoop (_st : SpecSt) (_d : Nat) (_env : Addr) (_cnd _step : Option Expr)
+    (_b : Stmt) (_st' : SpecSt) (_status : Status)
+    (_h : ForLoop _st _d _env _cnd _step _b _st' _status) : Prop :=
+  True
 
 /-- `ForCond` motive.  `True` — dead recursor plumbing; see `mExecInit`.  The
 `.some` case (`ForCond.some`, truthy-cond) mutates the store, so a same-PC span is
@@ -173,16 +186,76 @@ def mExecStep (_st : SpecSt) (_d : Nat) (_env : Addr) (_step : Option Expr)
     (_st' : SpecSt) (_h : ExecStep _st _d _env _step _st') : Prop :=
   True
 
-/-- `ExecSeq` motive: `SegEntry → SegExit` skeleton Triple (the statement-list
-loop; `interp_run` and the `block`/closure-body loops consume this). -/
-def mExecSeq (st : SpecSt) (d : Nat) (env : Addr) (_ss : List Stmt)
-    (st' : SpecSt) (_status : Status) (_h : ExecSeq st d env _ss st' _status) : Prop :=
+/-! ### The seq-loop span table + ground (ITEM ZERO / falsity #12, shape 3)
+
+`mExecSeq`'s `∀ p q` is GENUINELY needed by consumers — the statement loop is
+compiled at (at least) THREE inlined copies, and landed consumers instantiate
+the motive at all three pairs:
+
+* `interp_run`'s top-level statement loop, `0x8000448c → 0x80004514`
+  (`EntryHalts.hPrologue_of` / `TermEntry` / `EntrySeams`);
+* the closure-body loop inside `eval_expr`'s `EX_CALL` arm,
+  `callBodyLoopPC = 0x80003354 → callBodyRetPC = 0x80003378`
+  (`rows/CallClosureRow`, the crux);
+* the `block` arm's loop inside `exec_stmt`,
+  `execSeqLoopPC = 0x800041a4 → execSeqContPC = 0x8000409c`
+  (`ExecDispatchRows.BlockGeom`'s `hArm`/`hEpi` seam).
+
+So the B6 "pin both PCs" cure is unavailable; instead the motive gets the
+`mCall`/`EntryImage` wave-40 precedent: an entry-side GUARD, table-driven.
+`seqLoopImage` maps exactly the legitimate loop-copy PC pairs to the landed
+code-image predicate covering that copy's bytes; `SeqSpanGround p q m0`
+(named-field, R6/R7) says the pair is TABLED and its image is loaded in `m0`.
+Untabled pairs make the motive VACUOUS (`tabled` is unsatisfiable), so a
+supplier of `hSeqNil`/`hSeqCons*` owes only the three real loop copies WITH
+their code bytes in hand — dissolving fleet B6's code-free-`SegEntry`
+obstruction (`seq-motive-independent-pq-no-code`).  Signature-free for every
+recursor/`TermCases` reference (all fully applied); only the unfolding
+producers/consumers intro/supply the hypothesis. -/
+
+/-- The seq-loop copy table: legitimate `(entryPC, exitPC)` statement-loop
+copies → the landed code-image predicate pinning that copy's bytes.  Extending
+the proof to a new loop copy = one new table line. -/
+def seqLoopImage : Nat → Nat → Option (Mem → Prop)
+  | 0x8000448c, 0x80004514 => some Vsa.Sim.Code.Interp_runLoaded
+  | 0x80003354, 0x80003378 => some Vsa.Sim.Code.Eval_exprLoaded
+  | 0x800041a4, 0x8000409c => some Vsa.Sim.Code.Exec_stmtLoaded
+  | _, _ => none
+
+/-- The entry-side ground for a seq-loop span `(p, q)`: the pair is a tabled
+loop copy and its code image is loaded in the pre-memory `m0`. -/
+structure SeqSpanGround (p q : Nat) (m0 : Mem) : Prop where
+  /-- `(p, q)` is one of the binary's statement-loop copies. -/
+  tabled : (seqLoopImage p q).isSome
+  /-- The copy's code image is loaded in `m0`. -/
+  image : ∀ P : Mem → Prop, seqLoopImage p q = some P → P m0
+
+/-- Build the ground from a table hit + the image fact. -/
+theorem seqSpanGround_of {p q : Nat} {m0 : Mem} {P : Mem → Prop}
+    (h : seqLoopImage p q = some P) (hP : P m0) : SeqSpanGround p q m0 :=
+  ⟨by rw [h]; rfl, fun _ h' => by rw [h] at h'; exact (Option.some.inj h') ▸ hP⟩
+
+/-- The seq-loop simulation IH, NAMED (the `mExecSeq` motive body): the guarded
+`SegEntry → SegExit` Triple family from spec state `st` at depth `d` to `st'`,
+over every tabled loop-copy span.  Named separately so shape-2 consumers
+(`BlockResid`) can thread the recursor's seq sub-IH as a hypothesis without
+mentioning a derivation node. -/
+def SeqSegIH (st : SpecSt) (d : Nat) (st' : SpecSt) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (dLeft aLeft : Nat) (p q : Nat) (m0 : Mem),
+    SeqSpanGround p q m0 →
     Triple
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
       (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' q m0)
+
+/-- `ExecSeq` motive: `SegEntry → SegExit` skeleton Triple (the statement-list
+loop; `interp_run` and the `block`/closure-body loops consume this), GUARDED by
+the entry-side seq-span ground (see the section doc above).  Definitionally
+`SeqSegIH st d st'`. -/
+def mExecSeq (st : SpecSt) (d : Nat) (_env : Addr) (_ss : List Stmt)
+    (st' : SpecSt) (_status : Status) (_h : ExecSeq st d _env _ss st' _status) : Prop :=
+  SeqSegIH st d st'
 
 /-! ## §2. The assembled mutual induction — `term_sim_of_cases`
 

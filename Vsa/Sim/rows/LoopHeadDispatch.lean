@@ -230,6 +230,16 @@ structure LoopHeadDispatchGeom
   store_survives : ∀ m' : Mem,
     (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → mE[k]? = m'[k]?) →
     StoreRepr m' N A φf φc st.store
+  /-- **ITEM ZERO B1 (recursion-sound budget at the loop-head, depth 0).** `sp`
+  carries the head statement `s`'s structural need + the FULL per-call budget
+  `(maxCallDepth - 0) * perCallBudget` + `1088`.  Supplier: the top-level
+  `Layout.atInterpRun` stack fact (the program is "properly loaded"). -/
+  stackBudget : StackOK SL sp
+    (s.stackNeed + (Vsa.While.maxCallDepth - 0) * Vsa.While.perCallBudget + 1088)
+  /-- **ITEM ZERO B1.** The head statement's `.fn`-bodies fit the budget. -/
+  stmt_bodies : Stmt.bodiesBound Vsa.While.perCallBudget s = true
+  /-- **ITEM ZERO B1.** The entry store's closures fit the budget. -/
+  store_bodies : Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
 
 /-! ## §3. The span composition + `ExecEntry` marshalling
 
@@ -343,6 +353,9 @@ theorem loopHeadDispatch_span
       ra_align := by decide
       spReg := hspE
       stackOK := hGeom.stackOK
+      stackBudget := hGeom.stackBudget
+      stmt_bodies := hGeom.stmt_bodies
+      store_bodies := hGeom.store_bodies
       minstret := hmiE
       mem := hmemE
       code := hmemE ▸ hGeom.code

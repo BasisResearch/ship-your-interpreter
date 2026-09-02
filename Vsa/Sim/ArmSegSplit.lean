@@ -136,7 +136,14 @@ theorem evalEntry_of_jalPrefix
         ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
         ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
-        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)) :
+        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
+        -- ITEM ZERO B1: the child expression's recursion-sound budget at the
+        -- lowered `sp - 1088`, its `.fn`-bodies bound, and the store-bodies
+        -- invariant (eval_expr does NOT bump `d`, so the child is at depth `d`).
+        StackOK SL (sp - 1088#64)
+          (esub.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget esub = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 1 c (fun c' =>
       EvalEntry (fun R => c'.σ.regs.get? R) N A SL φf φc st d env esub
         (sp - 1088#64) retPC subsret aIn aOperand mcall c') := by
@@ -146,7 +153,8 @@ theorem evalEntry_of_jalPrefix
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hssAl, hssLo, hssHi,
     hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin,
-    hcodeStk, hviStk, htableStk, harenaStk, harenaCode⟩ := hpre
+    hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
+    hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hsp1088 : 1088 ≤ sp.toNat := by omega
   have hspsub : (sp - 1088#64).toNat = sp.toNat - 1088 := by
@@ -195,6 +203,9 @@ theorem evalEntry_of_jalPrefix
         ra_align := hretAl
         spReg := hsp_1
         stackOK := ⟨by rw [hspsub]; omega, by rw [hspsub]; omega, by rw [hspsub]; omega⟩
+        stackBudget := hstackBudget
+        expr_bodies := hexprBodies
+        store_bodies := hstoreBodies
         minstret := ⟨vmi1, hmi1⟩
         mem := hmem1e
         code := by show Eval_exprLoaded σ1.mem; rw [hmem1e]; exact hcode

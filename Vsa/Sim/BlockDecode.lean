@@ -70,6 +70,8 @@ def decodeM (w : BitVec 32) : Option (MKind × Nat × Nat × Nat × BitVec 12) :
      else if funct3 = 6 then (if funct7 = 0x00 then some (.or, rd, rs1, rs2, 0#12) else none)
      else if funct3 = 7 then (if funct7 = 0x00 then some (.and, rd, rs1, rs2, 0#12) else none)
      else if funct3 = 5 then (if funct7 = 0x00 then some (.srl, rd, rs1, rs2, 0#12) else none)
+     else if funct3 = 4 then (if funct7 = 0x00 then some (.xor, rd, rs1, rs2, 0#12) else none)
+     else if funct3 = 1 then (if funct7 = 0x00 then some (.sll, rd, rs1, rs2, 0#12) else none)
      else none)
   else if opcode = 0x03 then
     -- LOAD: lw (2) / ld (3) / lbu (4) / lwu (6, unsigned word); rs2 unused
@@ -100,10 +102,16 @@ def decodeM (w : BitVec 32) : Option (MKind × Nat × Nat × Nat × BitVec 12) :
      else none)
   else if opcode = 0x3b then
     -- OP-32: addw (funct3 = 0, funct7 = 0x00) / subw (funct3 = 0, funct7 = 0x20)
+    -- / sllw (funct3 = 1) / srlw-sraw (funct3 = 5, funct7 selects)
     (if funct3 = 0 then
       (if funct7 = 0x00 then some (.addw, rd, rs1, rs2, 0#12)
        else if funct7 = 0x20 then some (.subw, rd, rs1, rs2, 0#12)
        else none)
+     else if funct3 = 1 then (if funct7 = 0x00 then some (.sllw, rd, rs1, rs2, 0#12) else none)
+     else if funct3 = 5 then
+       (if funct7 = 0x00 then some (.srlw, rd, rs1, rs2, 0#12)
+        else if funct7 = 0x20 then some (.sraw, rd, rs1, rs2, 0#12)
+        else none)
      else none)
   else if opcode = 0x17 then
     -- AUIPC: imm field unused (imm20 lives in the word; see `imm20Of`)
@@ -204,5 +212,22 @@ example : mkLine 0x800036a0#64 0x40f705bb#32
     = ⟨0x800036a0#64, 0x40f705bb#32, 0xbb#8, 0x05#8, 0xf7#8, 0x40#8, .subw, 11, 14, 15, 0#12⟩ := by rfl
 example : mkLine 0x80003af8#64 0x0015a593#32
     = ⟨0x80003af8#64, 0x0015a593#32, 0x93#8, 0xa5#8, 0x15#8, 0x00#8, .slti, 11, 11, 0, 0x001#12⟩ := by rfl
+
+-- io-DAG residue kinds (real words from the proof binary):
+-- xor a5,a1,a0 @ 0x80006bc8
+example : mkLine 0x80006bc8#64 0x00a5c7b3#32
+    = ⟨0x80006bc8#64, 0x00a5c7b3#32, 0xb3#8, 0xc7#8, 0xa5#8, 0x00#8, .xor, 15, 11, 10, 0#12⟩ := by rfl
+-- sll a2,a2,t1 @ 0x80004948
+example : mkLine 0x80004948#64 0x00661633#32
+    = ⟨0x80004948#64, 0x00661633#32, 0x33#8, 0x16#8, 0x66#8, 0x00#8, .sll, 12, 12, 6, 0#12⟩ := by rfl
+-- sllw a4,s5,s0 @ 0x80007138
+example : mkLine 0x80007138#64 0x008a973b#32
+    = ⟨0x80007138#64, 0x008a973b#32, 0x3b#8, 0x97#8, 0x8a#8, 0x00#8, .sllw, 14, 21, 8, 0#12⟩ := by rfl
+-- srlw a0,s5,a5 @ 0x80010c70
+example : mkLine 0x80010c70#64 0x00fad53b#32
+    = ⟨0x80010c70#64, 0x00fad53b#32, 0x3b#8, 0xd5#8, 0xfa#8, 0x00#8, .srlw, 10, 21, 15, 0#12⟩ := by rfl
+-- sraw a5,a4,a5 @ 0x80013a40
+example : mkLine 0x80013a40#64 0x40f757bb#32
+    = ⟨0x80013a40#64, 0x40f757bb#32, 0xbb#8, 0x57#8, 0xf7#8, 0x40#8, .sraw, 15, 14, 15, 0#12⟩ := by rfl
 
 end Vsa.Sim

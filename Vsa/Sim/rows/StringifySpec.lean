@@ -1,10 +1,11 @@
 import Vsa.Sim.rows.BinStrCells
 
 /-!
-# `StringifySpec` — the decode of `stringify`@0x80002fc0 (`Value.display`), factored
+# `StringifySpec` — the decode of `stringify`@0x80002fc0 (`Value.catDisplay`), factored
 
-`stringify`@0x80002fc0 is the C realisation of `Value.display` (`Vsa/While/
-Semantics.lean:183`): it takes a `Value*` and returns a FRESH heap `char*` holding
+`stringify`@0x80002fc0 is the C realisation of `Value.catDisplay` (`Vsa/While/
+Semantics.lean` — `display` except the NAMELESS native arm; falsity
+`stringify-native-name-mismatch`): it takes a `Value*` and returns a FRESH heap `char*` holding
 the printed form.  It is the missing callee under the two `.add` string-concat
 slots of `eval_binary_row` (`StrConcatCellResid`, `Vsa/Sim/rows/BinStrCells.lean`):
 concat = `stringify` LEFT ≫ `stringify` RIGHT ≫ `strlen`×2 ≫ `malloc(len+1)` ≫
@@ -116,7 +117,7 @@ reason at `binOpSem`'s level (`l.display ++ r.display`). -/
 freshly allocated printed form.  (`store` is the spec store `display` reads for the
 closure-name case; for the str/int/bool/null cases it is irrelevant.) -/
 def StringifyResult (m' : Mem) (store : Store) (res : Nat) (v : Value) : Prop :=
-  res ≠ 0 ∧ CString m' res (v.display store)
+  res ≠ 0 ∧ CString m' res (v.catDisplay store)
 
 /-! ## Provable `display` reductions — the load-bearing per-kind facts
 
@@ -129,20 +130,27 @@ result string is `sl ++ sr` with no `display` residue. -/
 `display (.str s) = s`.  This is why the str×str concat produces exactly `sl ++ sr`
 and needs NO general `display` formatter. -/
 @[simp] theorem stringifyDisplay_str (store : Store) (s : String) :
-    (Value.str s).display store = s := rfl
+    (Value.str s).catDisplay store = s := rfl
 
 /-- INT branch (kind 2): `display (.int n) = intToString n` — the string
 `snprintf_lld_spec` writes byte-for-byte (`(intToString n).toUTF8`). -/
 @[simp] theorem stringifyDisplay_int (store : Store) (n : Int) :
-    (Value.int n).display store = intToString n := rfl
+    (Value.int n).catDisplay store = intToString n := rfl
 
 /-- BOOL branch (kind 1): the "true"/"false" literal `strcpy`s. -/
 @[simp] theorem stringifyDisplay_bool (store : Store) (b : Bool) :
-    (Value.bool b).display store = (if b then "true" else "false") := rfl
+    (Value.bool b).catDisplay store = (if b then "true" else "false") := rfl
 
 /-- NULL branch (kind 0): the "null" literal. -/
 @[simp] theorem stringifyDisplay_null (store : Store) :
-    (Value.null).display store = "null" := rfl
+    (Value.null).catDisplay store = "null" := rfl
+
+/-- NATIVE branch (kind 5, the `default:` arm): the NAMELESS `"<native fn>"`
+literal — `stringify` DROPS the native's name (`interp.c:101`), unlike the
+print path's `Value.display` (falsity `stringify-native-name-mismatch`,
+empirically confirmed 2026-09-01). -/
+@[simp] theorem stringifyDisplay_native (store : Store) (w : Vsa.While.NativeFn) :
+    (Value.native w).catDisplay store = "<native fn>" := rfl
 
 /-- The kind tag `stringify` reads at `0x80002fc0` (`lw a5,0(a0)`) is `kindTag v`,
 consistent with `ValueRepr`'s `read32 m a = some (kindTag v)` pin (str case = 3). -/
@@ -253,10 +261,10 @@ public heap).  This is the honest, `stringify`-free surface of the concat cell. 
 def StrConcatHeapResid : Prop :=
   (∀ st d env el er st'' (sl : String) (rv : Value),
       EvalIH st d env (.binary .add el er) st''
-        (.str (sl ++ rv.display st''.store))) ∧
+        (.str (sl ++ rv.catDisplay st''.store))) ∧
   (∀ st d env el er st'' (lv : Value) (sr : String),
       EvalIH st d env (.binary .add el er) st''
-        (.str (lv.display st''.store ++ sr)))
+        (.str (lv.catDisplay st''.store ++ sr)))
 
 /-- `StrConcatCellResid` is EXACTLY `StrConcatHeapResid` after reducing the two
 `.str` operands' `display` to their payloads (`stringifyDisplay_str`): the concat

@@ -131,21 +131,22 @@ theorem stmtIfThenTail_a4_computed :
 
 #print axioms stmtIfThenTail_a4_computed
 
-/-! ## §3. The obstruction tie-in (Law 4)
+/-! ## §3. The obstruction tie-in (Law 4; wave-45 RESTATED over `SFreshC`)
 
 The route's landing (one `j` hop past the row's end) is the dispatch head
-`0x80004014`, where `SEntryC` is decidably REFUTED — this arm can NEVER discharge
-the frozen `NonEvalChildStages.stmtIfThen` field (target `ExecStmtPreBundle`,
-whose bridge lands at `SEntryC`); the amended `SDispatchC` shape (§4) is the
-machine truth. -/
+`0x80004014`, where the FRESH-call entry `SFreshC` is decidably REFUTED — this
+arm could never discharge the pre-amendment `NonEvalChildStages.stmtIfThen`
+field (target `ExecStmtPreBundle`, whose bridge lands at the fresh entry); the
+amended `SEntryC`'s `SDispatchC` disjunct (§4) is the machine truth. -/
 
-/-- Any config the then-arm tail hop lands on refutes `SEntryC` — the pilot-level
-witness that the frozen field conclusion is not this arm's machine shape. -/
+/-- Any config the then-arm tail hop lands on refutes the FRESH-call entry
+`SFreshC` — the pilot-level witness that forced the wave-45 `SEntryC` 3-way
+amendment (name kept from the pre-amendment statement). -/
 theorem stmtIfThenTail_target_not_sEntryC (c : Config) (st : Vsa.While.St)
     (d : Nat) (env : Addr) (s : Stmt)
     (hpc : c.σ.regs.get? Register.PC =
       some (BitVec.ofNat 64 execStmtDispatchHead)) :
-    ¬ SEntryC c st d env s :=
+    ¬ SFreshC c st d env s :=
   sEntryC_false_at_dispatchHead c st d env s hpc
 
 #print axioms stmtIfThenTail_target_not_sEntryC

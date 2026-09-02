@@ -125,7 +125,14 @@ theorem binaryR_midStagePre
     (hviStk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c)
     (htableStk : (0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
     (harenaStk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo)
-    (harenaCode : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) :
+    (harenaCode : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)
+    -- ITEM ZERO B1: the RIGHT operand's recursion-sound budget at `sp - 1088`,
+    -- its `.fn`-bodies bound, and the post-LEFT store-bodies invariant
+    -- (threaded; the caller derives them at the arm entry).
+    (hstackBudgetR : StackOK SL (sp - 1088#64)
+      (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088))
+    (hexprBodiesR : Expr.bodiesBound Vsa.While.perCallBudget er = true)
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget) :
     LandedN 7 cL (fun c' => JalPreBundle er c' st' d env) := by
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hspsub : (sp - 1088#64).toNat = sp.toNat - 1088 := by
@@ -439,7 +446,8 @@ theorem binaryR_midStagePre
       hrop_align, hrop_ram.1, hrop_ram.2, hrop_win, hrop_stk,
       (by rw [haddr144']; omega), (by rw [haddr144']; omega), (by rw [haddr144']; omega),
       (by omega), hspSLhi, hsp16, (by omega), hSLlo, hSLhiRam, hSLwin,
-      hcodeStk, hviStk, htableStk, harenaStk, harenaCode⟩
+      hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
+      hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩
 
 #print axioms binaryR_midStagePre
 
@@ -500,7 +508,12 @@ theorem binaryR_midStage1
     (hviStk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c)
     (htableStk : (0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
     (harenaStk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo)
-    (harenaCode : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) :
+    (harenaCode : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)
+    -- ITEM ZERO B1: threaded to `binaryR_midStagePre`.
+    (hstackBudgetR : StackOK SL (sp - 1088#64)
+      (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088))
+    (hexprBodiesR : Expr.bodiesBound Vsa.While.perCallBudget er = true)
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget) :
     LandedN 1 cL (fun c' => JalPreBundle er c' st' d env) :=
   LandedN.weakenCount (by omega : 1 ≤ 7)
     (binaryR_midStagePre gpre N A SL φf1 φc1 st' d env er sp r sret aExpr aEnv aROp
@@ -508,7 +521,8 @@ theorem binaryR_midStage1
       hcodeL hnode hpop hstoreCL hstoreSurvCL hexprSurvCL hviCL hviSlotCL hslotRaL hslotS0L
       hslotS1L hslotS2L hnode_hi hnode_lo hnode_align hnode_win hrop_align hrop_ram hrop_win
       hrop_stk hrop_stkfull hsp1088 hsproom hspSLhi hsp16 hsphi hSLlo hSLhiRam hSLwin
-      hcodeStk hviStk htableStk harenaStk harenaCode)
+      hcodeStk hviStk htableStk harenaStk harenaCode
+      hstackBudgetR hexprBodiesR hstoreBodiesR)
 
 #print axioms binaryR_midStage1
 

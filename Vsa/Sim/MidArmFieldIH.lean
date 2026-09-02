@@ -116,7 +116,13 @@ def MidArmRightMarshal
   ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
   ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
   (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
-  (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)
+  (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
+  -- ITEM ZERO B1: the RIGHT operand's recursion-sound budget at `sp - 1088`,
+  -- its `.fn`-bodies bound, and the post-LEFT store-bodies invariant.
+  StackOK SL (sp - 1088#64)
+    (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+  Expr.bodiesBound Vsa.While.perCallBudget er = true ∧
+  Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget
 
 /-- **`midStage1_of_marshal`** — feed a `SubEvalReturn`-reached config `cL` (via the
 `MidArmRightMarshal` residual, which repackages the right-operand geometry) into the
@@ -143,13 +149,15 @@ theorem midStage1_of_marshal
     hslotRaL, hslotS0L, hslotS1L, hslotS2L,
     hnode_hi, hnode_lo, hnode_align, hnode_win, hrop_align, hrop_ram, hrop_win,
     hrop_stk, hrop_stkfull, hsp1088, hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam,
-    hSLwin, hcodeStk, hviStk, htableStk, harenaStk, harenaCode⟩ := hM
+    hSLwin, hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
+    hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩ := hM
   exact binaryR_midStage1 gpre N A SL φf1 φc1 st' d env er sp r sret aExpr aEnv aROp
     v8 v9 v18 cL hGL htickL hpcL hs1L hspL hmiL houtStrL hframeL hx8L hx18L hgx8v hgx18v
     hcodeL hnode hpop hstoreCL hstoreSurvCL hexprSurvCL hviCL hviSlotCL hslotRaL hslotS0L
     hslotS1L hslotS2L hnode_hi hnode_lo hnode_align hnode_win hrop_align hrop_ram hrop_win
     hrop_stk hrop_stkfull hsp1088 hsproom hspSLhi hsp16 hsphi hSLlo hSLhiRam hSLwin
     hcodeStk hviStk htableStk harenaStk harenaCode
+    hstackBudgetR hexprBodiesR hstoreBodiesR
 
 #print axioms midStage1_of_marshal
 
@@ -235,7 +243,14 @@ theorem midArmField_of_IH
         ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
         ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
-        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)) :
+        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
+        -- ITEM ZERO B1: the LEFT operand's recursion-sound budget at `sp - 1088`,
+        -- its `.fn`-bodies bound, and the store-bodies invariant (the amended
+        -- `armTail_rec` pre-tail).
+        StackOK SL (sp - 1088#64)
+          (l.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget l = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 1 c (fun c' => JalPreBundle r c' st' d env) := by
   -- run the LEFT recursive call to `SubEvalReturn`
   have hTriple := armTail_rec gpre N A SL φf φc st st' d env l vsub

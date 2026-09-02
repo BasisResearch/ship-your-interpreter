@@ -90,13 +90,24 @@ conclusion to the arm's arbitrary `d`. -/
 theorem execEntry_recast_depth
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : SpecSt) (d₀ d : Nat) (env : Addr) (s : Stmt)
+    (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt)
     (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (c : Config)
-    (h : ExecEntry g N A SL φf φc st d₀ env s sp r aInterp aStmt aEnv aRet m0 c) :
+    (h : ExecEntry g N A SL φf φc st 0 env s sp r aInterp aStmt aEnv aRet m0 c) :
     ExecEntry g N A SL φf φc st d env s sp r aInterp aStmt aEnv aRet m0 c :=
   { good := h.good, tick := h.tick, pc := h.pc, a0 := h.a0, a1 := h.a1, a2 := h.a2,
     a3 := h.a3, ra := h.ra, ra_align := h.ra_align, spReg := h.spReg,
-    stackOK := h.stackOK, minstret := h.minstret, mem := h.mem, code := h.code,
+    stackOK := h.stackOK,
+    -- The source at depth 0 carries the MAXIMUM budget `(maxCallDepth - 0)`;
+    -- the target at depth `d` demands `(maxCallDepth - d) ≤ maxCallDepth`, so
+    -- `StackOK.mono` discharges the recast.
+    stackBudget := Vsa.Alloc.StackOK.mono
+      (by
+        have : (Vsa.While.maxCallDepth - d) ≤ (Vsa.While.maxCallDepth - 0) := by
+          omega
+        exact Nat.add_le_add_right (Nat.add_le_add_left
+          (Nat.mul_le_mul_right _ this) _) _) h.stackBudget,
+    stmt_bodies := h.stmt_bodies, store_bodies := h.store_bodies,
+    minstret := h.minstret, mem := h.mem, code := h.code,
     stmt := h.stmt, store := h.store, store_survives := h.store_survives,
     out := h.out, frame := h.frame,
     code_stack_disjoint := h.code_stack_disjoint, stack_ram := h.stack_ram,
@@ -184,7 +195,7 @@ theorem seqHeadStagePre_of_span
   -- recast the phantom depth 0 → d and re-pack the ExecEntry ghosts
   exact ⟨cE, hcount,
     ⟨g, N, A, SL, φf, φc, sp, (0x80004478#64), aInterp, aStmt, aEnv, aRet, mE,
-      execEntry_recast_depth g N A SL φf φc st 0 d env s sp (0x80004478#64)
+      execEntry_recast_depth g N A SL φf φc st d env s sp (0x80004478#64)
         aInterp aStmt aEnv aRet mE cE hEntry⟩⟩
 
 #print axioms seqHeadStagePre_of_span

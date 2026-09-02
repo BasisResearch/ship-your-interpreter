@@ -282,6 +282,9 @@ def evalChildStages_ublracSE_wired
       CallArmDispatch f args st d env c)
     (hStmtExprDisp : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
       StmtExprArmDispatch e st d env c)
+    -- wave 45 (SEntryC 3-way amendment): the dispatch-head re-entry leg
+    (hStmtExprReentry : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      StmtExprReentryDispatch e st d env c)
     (argsHead : ∀ (e : Expr) (es : List Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
       AEntryC c st d env (e :: es) → LandedN 1 c (fun c' => JalPreBundle e c' st d env))
     (stmtRet : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
@@ -299,9 +302,10 @@ def evalChildStages_ublracSE_wired
     EvalChildStages :=
   evalChildStages_ublrac_wired evalIH hUnGeom hBinGeom hLogGeom hBinRStage hLogRStage
     hAssignDisp hCallDisp argsHead
-    -- stmtExpr: the wave-40 machine-composed exec-eval field
+    -- stmtExpr: the wave-40 machine-composed exec-eval field (+ wave-45 re-entry leg)
     (fun e c st d env hSE =>
-      stmtExpr_field_of_dispatch e c st d env (hStmtExprDisp e c st d env) hSE)
+      stmtExpr_field_of_dispatch e c st d env (hStmtExprDisp e c st d env)
+        (hStmtExprReentry e c st d env) hSE)
     stmtRet stmtVarInit stmtIfCond stmtWhileCond flCond
 
 /-! ## §2. The partial `SqEntryStages` — `seqHead` wired from the span, the rest named
@@ -422,25 +426,44 @@ def evalChildStages_ublracSEA_wired
       StmtWhileCondArmDispatch cnd b st d env c)
     (hFlCondDisp : ∀ (cc : Expr) (step : Option Expr) (b : Stmt) (c : Config) (st : SpecSt)
       (d : Nat) (env : Addr),
-      FlCondArmDispatch cc step b st d env c) :
+      FlCondArmDispatch cc step b st d env c)
+    -- wave 45 (SEntryC 3-way amendment): the dispatch-head re-entry legs of the
+    -- five exec-eval arms, plus the while-arm loop-back leg (whileCond only)
+    (hStmtExprReentry : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      StmtExprReentryDispatch e st d env c)
+    (hStmtRetReentry : ∀ (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      StmtRetReentryDispatch e st d env c)
+    (hStmtVarInitReentry : ∀ (x : String) (e : Expr) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      StmtVarInitReentryDispatch x e st d env c)
+    (hStmtIfCondReentry : ∀ (cnd : Expr) (t : Stmt) (els : Option Stmt) (c : Config) (st : SpecSt)
+      (d : Nat) (env : Addr),
+      StmtIfCondReentryDispatch cnd t els st d env c)
+    (hStmtWhileCondReentry : ∀ (cnd : Expr) (b : Stmt) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      StmtWhileCondReentryDispatch cnd b st d env c)
+    (hStmtWhileCondViaWhileArm : ∀ (cnd : Expr) (b : Stmt) (c : Config) (st : SpecSt) (d : Nat) (env : Addr),
+      StmtWhileCondViaWhileArm cnd b st d env c) :
     EvalChildStages :=
   evalChildStages_ublracSE_wired evalIH hUnGeom hBinGeom hLogGeom hBinRStage hLogRStage
-    hAssignDisp hCallDisp hStmtExprDisp
+    hAssignDisp hCallDisp hStmtExprDisp hStmtExprReentry
     -- argsHead: the wave-42 machine-composed arg-loop-entry field
     (fun e es c st d env hAE =>
       argsHead_field_of_dispatch e es c st d env (hArgsDisp e es c st d env) hAE)
-    -- stmtRet: the wave-42 machine-composed exec-eval field
+    -- stmtRet: the wave-42 machine-composed exec-eval field (+ wave-45 re-entry leg)
     (fun e c st d env hSE =>
-      stmtRet_field_of_dispatch e c st d env (hStmtRetDisp e c st d env) hSE)
+      stmtRet_field_of_dispatch e c st d env (hStmtRetDisp e c st d env)
+        (hStmtRetReentry e c st d env) hSE)
     -- stmtVarInit
     (fun x e c st d env hSE =>
-      stmtVarInit_field_of_dispatch x e c st d env (hStmtVarInitDisp x e c st d env) hSE)
+      stmtVarInit_field_of_dispatch x e c st d env (hStmtVarInitDisp x e c st d env)
+        (hStmtVarInitReentry x e c st d env) hSE)
     -- stmtIfCond
     (fun cnd t els c st d env hSE =>
-      stmtIfCond_field_of_dispatch cnd t els c st d env (hStmtIfCondDisp cnd t els c st d env) hSE)
-    -- stmtWhileCond
+      stmtIfCond_field_of_dispatch cnd t els c st d env (hStmtIfCondDisp cnd t els c st d env)
+        (hStmtIfCondReentry cnd t els c st d env) hSE)
+    -- stmtWhileCond (+ the wave-45 viaWhileArm leg)
     (fun cnd b c st d env hSE =>
-      stmtWhileCond_field_of_dispatch cnd b c st d env (hStmtWhileCondDisp cnd b c st d env) hSE)
+      stmtWhileCond_field_of_dispatch cnd b c st d env (hStmtWhileCondDisp cnd b c st d env)
+        (hStmtWhileCondReentry cnd b c st d env) (hStmtWhileCondViaWhileArm cnd b c st d env) hSE)
     -- flCond
     (fun cc step b c st d env hFE =>
       flCond_field_of_dispatch cc step b c st d env (hFlCondDisp cc step b c st d env) hFE)

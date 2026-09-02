@@ -41,9 +41,9 @@ theorem binary_row_fills_hBinary
         BinEqCellResid .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21)
           g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0)
     (hStrAddL : ∀ st d env el er st'' (sl : String) (rv : Value),
-        EvalIH st d env (.binary .add el er) st'' (.str ((Value.str sl).display st''.store ++ rv.display st''.store)))
+        EvalIH st d env (.binary .add el er) st'' (.str ((Value.str sl).catDisplay st''.store ++ rv.catDisplay st''.store)))
     (hStrAddR : ∀ st d env el er st'' (lv : Value) (sr : String),
-        EvalIH st d env (.binary .add el er) st'' (.str (lv.display st''.store ++ (Value.str sr).display st''.store)))
+        EvalIH st d env (.binary .add el er) st'' (.str (lv.catDisplay st''.store ++ (Value.str sr).catDisplay st''.store)))
     (hStrLt : ∀ st d env el er st'' (sl sr : String),
         EvalIH st d env (.binary .lt el er) st'' (.bool (sl < sr)))
     (hStrLe : ∀ st d env el er st'' (sl sr : String),

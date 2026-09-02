@@ -376,7 +376,8 @@ local notation "SpecSt" => Vsa.While.St
 def ExprResid (st st' : SpecSt) (d : Nat) (env : Addr) (e : Expr) (v : Value) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (c : Config),
+    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.expr e) sp r aInterp aStmt aEnv aRet m0 c →
     Vsa.Sim.ExecExprGeom g N A SL φf φc st st' d env e v
       sp r aInterp aStmt aEnv aRet m0
 
@@ -391,15 +392,17 @@ theorem exec_expr_row
   intro st d env e st' v a hIH
   show Vsa.Sim.ExecIH st d env (.expr e) st' .normal
   intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  intro c hEntry
   exact Vsa.Sim.execExprSimD g N A SL φf φc st st' d env e v
     sp r aInterp aStmt aEnv aRet m0 (ExecS.expr st d env e st' v a) hIH
-    (hR st st' d env e v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0)
+    (hR st st' d env e v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 c hEntry) c hEntry
 
 /-- The ret-case residual: the `ExecRetGeom` bundle, ∀-closed over the ghosts. -/
 def RetResid (st st' : SpecSt) (d : Nat) (env : Addr) (e : Expr) (v : Value) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (c : Config),
+    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.ret (some e)) sp r aInterp aStmt aEnv aRet m0 c →
     Vsa.Sim.ExecRetGeom g N A SL φf φc st st' d env e v
       sp r aInterp aStmt aEnv aRet m0
 
@@ -413,16 +416,18 @@ theorem exec_ret_row
   intro st d env e st' v a hIH
   show Vsa.Sim.ExecIH st d env (.ret (some e)) st' (.ret v)
   intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  intro c hEntry
   exact Vsa.Sim.execRetSimD g N A SL φf φc st st' d env e v
     sp r aInterp aStmt aEnv aRet m0 (ExecS.ret st d env e st' v a) hIH
-    (hR st st' d env e v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0)
+    (hR st st' d env e v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 c hEntry) c hEntry
 
 /-- The retNull-case residual: the `ExecRetNullGeom` bundle (carrying the OPEN
 `value_null`-bridge glue), ∀-closed over the ghosts. -/
 def RetNullResid (st : SpecSt) (d : Nat) (env : Addr) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (c : Config),
+    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.ret none) sp r aInterp aStmt aEnv aRet m0 c →
     Vsa.Sim.ExecRetNullGeom g N A SL φf φc st d env
       sp r aInterp aStmt aEnv aRet m0
 
@@ -435,16 +440,18 @@ theorem exec_retNull_row
   intro st d env
   show Vsa.Sim.ExecIH st d env (.ret none) st (.ret .null)
   intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  intro c hEntry
   exact Vsa.Sim.execRetNullSimD g N A SL φf φc st d env
     sp r aInterp aStmt aEnv aRet m0 (ExecS.retNull st d env)
-    (hR st d env g N A SL φf φc sp r aInterp aStmt aEnv aRet m0)
+    (hR st d env g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 c hEntry) c hEntry
 
 /-- The varNull-case residual: the `ExecVarNullGeom` bundle (carrying the OPEN
 `value_null`+`env_define` glue), ∀-closed over the ghosts. -/
 def VarNullResid (st : SpecSt) (d : Nat) (env : Addr) (x : String) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (c : Config),
+    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.varDecl x none) sp r aInterp aStmt aEnv aRet m0 c →
     Vsa.Sim.ExecVarNullGeom g N A SL φf φc st d env x
       sp r aInterp aStmt aEnv aRet m0
 
@@ -461,8 +468,9 @@ theorem exec_varNull_row
   show Vsa.Sim.ExecIH st d env (.varDecl x none)
     ⟨st.store.define env x .null, st.out⟩ .normal
   intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  intro c hEntry
   exact Vsa.Sim.execVarNullSimD g N A SL φf φc st d env x
     sp r aInterp aStmt aEnv aRet m0 (ExecS.varNull st d env x)
-    (hR st d env x g N A SL φf φc sp r aInterp aStmt aEnv aRet m0)
+    (hR st d env x g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 c hEntry) c hEntry
 
 end Vsa.Sim.Rows

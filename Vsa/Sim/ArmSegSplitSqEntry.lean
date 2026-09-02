@@ -244,8 +244,10 @@ theorem seqHead_split (Reflect : Config → Addr → List Stmt → Prop)
   intro hSq
   obtain ⟨cE, ⟨m, hm, hsteps⟩, g, N, A, SL, φf, φc, sp, r, aInterp, aStmt, aEnv, aRet,
     m0, hEntry⟩ := hstage hSq
+  -- wave 45: the fresh-`jal` route lands the FIRST disjunct of the amended
+  -- 3-way `SEntryC` (`sEntryC_of_fresh`).
   exact ⟨m, cE, hm, hsteps,
-    ⟨g, N, A, SL, φf, φc, sp, r, aInterp, aStmt, aEnv, aRet, m0, hEntry⟩⟩
+    sEntryC_of_fresh ⟨g, N, A, SL, φf, φc, sp, r, aInterp, aStmt, aEnv, aRet, m0, hEntry⟩⟩
 
 #print axioms seqHead_split
 

@@ -178,8 +178,10 @@ def intToString : Int → String
   | .ofNat m => natToString m
   | .negSucc m => "-" ++ natToString (m + 1)
 
-/-- `value_print` / `stringify`: how values render on the console. Closure
-display needs the store (for the function name). -/
+/-- `value_print`: how values render on the console (the PRINT path). Closure
+display needs the store (for the function name). NOTE: the concat path
+(`stringify`, string `+`) renders natives WITHOUT the name — see
+`Value.catDisplay` below. -/
 def Value.display (s : Store) : Value → String
   | .null => "null"
   | .bool b => if b then "true" else "false"
@@ -198,6 +200,18 @@ def Value.display (s : Store) : Value → String
 /-- `native_print`: arguments separated by single spaces. -/
 def printArgs (s : Store) (args : List Value) : String :=
   String.intercalate " " (args.map (Value.display s))
+
+/-- `stringify` (`interp.c:84-106`): how values render when CONCATENATED by
+string `+`. Identical to `Value.display` EXCEPT `.native`: `stringify`'s
+default arm is `strcpy(buf, "<native fn>")` — the native's NAME is dropped,
+unlike `value_print` (`value.c:66`, `"<native fn %s>"`) which `display`
+models. Empirically confirmed on the Sail-model emulator (2026-09-01):
+`println("x" + println)` prints `x<native fn>` while `println(println)`
+prints `<native fn println>`. Keeping ONE renderer for both paths was falsity
+`stringify-native-name-mismatch` (`experiments/observations.md`). -/
+def Value.catDisplay (s : Store) : Value → String
+  | .native _ => "<native fn>"
+  | v => v.display s
 
 /-! ## 64-bit wrapping arithmetic
 
@@ -258,7 +272,7 @@ theorem wrap64_tmod_min : wrap64 ((-2^63 : Int).tmod (-1)) = 0 := by decide
 def binOpSem (s : Store) : BinOp → Value → Value → Option Value
   | .add, l, r =>
     match l, r with
-    | .str _, _ | _, .str _ => some (.str (l.display s ++ r.display s))
+    | .str _, _ | _, .str _ => some (.str (l.catDisplay s ++ r.catDisplay s))
     | .int a, .int b => some (.int (wrap64 (a + b)))
     | _, _ => none
   | .sub, .int a, .int b => some (.int (wrap64 (a - b)))

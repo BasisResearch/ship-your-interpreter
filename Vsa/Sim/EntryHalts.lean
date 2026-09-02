@@ -151,6 +151,11 @@ def EntryPrologueSpan (L : Layout) (p : Program) : Prop :=
       (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
       (dLeft aLeft : Nat) (m0 : Mem),
       Steps c c1 ∧
+      -- ITEM ZERO (falsity #12, shape 3): the prologue also certifies the
+      -- `interp_run` code image in `m0` — the `SeqSpanGround` feed for the
+      -- guarded `mExecSeq` application at `(interpLoopHeadPC, interpNormalExitPC)`.
+      -- The discharger pins these bytes anyway (its span decode reads them).
+      Vsa.Sim.Code.Interp_runLoaded m0 ∧
       -- the `∃`-bound ghost bundle is carried out so the SAME ghosts thread the
       -- `mExecSeq` Triple (`hbody`) and the epilogue span (`EntryEpilogueSpan`).
       SegEntry g N A SL φf φc initSt 0 dLeft aLeft interpLoopHeadPC m0 c1
@@ -215,16 +220,18 @@ theorem hPrologue_of
           c1.σ.regs.get? Register.PC = some ra0 ∧
           c1.σ.regs.get? Register.x10 = some (0#64 : BitVec 64)) := by
   intro p c out st' t hL hout hm
-  -- 1. Prologue span: Loaded → SegEntry@loopHead, producing the layout ghosts.
-  obtain ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hstepsH, hSeg⟩ := hPre p c hL
-  -- 2. The `mExecSeq` Triple at those ghosts, `p := loopHeadPC`, `q := exitPC`.
-  --    (`mExecSeq` quantifies its entry/exit PCs `p q : Nat` universally.)
+  -- 1. Prologue span: Loaded → SegEntry@loopHead, producing the layout ghosts
+  --    AND the `interp_run` image fact feeding the `mExecSeq` guard (ITEM ZERO).
+  obtain ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hstepsH, hImg, hSeg⟩ := hPre p c hL
+  -- 2. The `mExecSeq` Triple at those ghosts, `p := loopHeadPC`, `q := exitPC`,
+  --    its `SeqSpanGround` guard discharged from the tabled interp_run pair.
   have hbody :
       Triple
         (SegEntry g N A SL φf φc initSt 0 dLeft aLeft interpLoopHeadPC m0)
         (SegExit g N A SL φf φc initSt.store.frames.size initSt.store.closures.size
           st' interpNormalExitPC m0) :=
     hm g N A SL φf φc dLeft aLeft interpLoopHeadPC interpNormalExitPC m0
+      (Vsa.Sim.TermSimAssembly.seqSpanGround_of rfl hImg)
   -- 3. Epilogue span: SegExit@exit → interp_run continuation (+ the tail residual).
   have hepi := hEpi g N A SL φf φc st' m0 out hout
   -- Compose: run the body Triple from cH, then the epilogue Triple.

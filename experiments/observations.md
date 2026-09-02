@@ -3630,3 +3630,691 @@ it, still stop and report instead.
   that deletes the stale x1 binding from the exposed out-bundle instead of
   demanding `KeysAvoidRa`; plus a genseg-side warning when reg 1 is pinned on
   a jal arm.
+
+## 2026-09-01 leaf-resid-forall-ghost-falsity (fleet B1-leaves, hInt/hNull/hBool/hStr)
+- missing: the geometry-conditioned leaf-residual supplier layer. The four
+  `TermResidualsCore` leaf fields (`hInt`/`hNull`/`hBool`/`hStr`, skeleton holes
+  `SkelH{Int,Null,Bool,Str}`) ∀-close their `*LeafResid` over ALL layout ghosts
+  (`g N A SL φf φc sp r sret m0` and, for null/bool/str, an unconstrained
+  `c : Config`) with a bare conjunction body. The `TermBundles.lean` assembly
+  table assigns every leaf `TermShared.geom : ImageGeom N A SL` (G-class), but
+  the statements carry NO such premise, and the TSV-named supplier `GeomFrom`
+  does not exist anywhere in `Vsa/` (only the `TermAssembly.lean` doc comment).
+  Consequences, machine-checked in
+  `experiments/fleet/obstructions/B1_leaves_obstructions.lean` (green,
+  axiom-clean, 1.6s):
+  * `SkelHNull`/`SkelHBool`/`SkelHStr` are **FALSE** (`skelH*_false`): each
+    residual asserts its sret-vs-`value_*`-code disjointness conjunct for
+    ARBITRARY `sret`; `sret := 0x800027f0 / 0x80002800 / 0x80002820` (inside
+    the respective code windows) refutes them outright — no machine
+    construction needed, both disjuncts fail by `decide`.
+  * `SkelHInt` is unprovable as stated: its body is
+    `LeafWiden = Widen (EvalExit …) … (stackFoot SL)` whose `pres`/`surv`
+    quantify over EVERY `EvalExit` config; `EvalExit` is exactly the predicate
+    that forgets both (its `memFrame` leaves `[SL.lo,sp) ∪ A` ∪ sret-padding
+    presence unconstrained; `StoreRepr.frames_arena` places frames in `A` with
+    nothing relating `A` to `[SL.lo,SL.hi)` for ∀-ghosts). `skelHInt_of`
+    machine-checks the exact gap = two named premises `IntLeafPres`/`IntLeafSurv`.
+- workaround: NONE (stopped per Law 4; obstruction file + this entry).
+- cost: the whole B1 batch (4 fields) blocked; every other batch whose Resid
+  ∀-closes geometry conjuncts over ghosts (e.g. B5's `BrkResid` asserts
+  `StmtSlotPinned k armPC m0` for arbitrary `m0`, false at `m0 = ∅`) will hit
+  the same wall.
+- proposal: amend the `*LeafResid` statements to take the geometry as premises
+  (`ImageGeom N A SL` + a populated-`m0`/write-chain fact, the `hMcallPop`
+  analog) — the rows already destructure the conjuncts, so the amendment is
+  local to `rows/TermRouting.lean` defs + the skeleton regen; OR re-land the
+  leaf sims at `EvalExitD` directly (the writeMap chain inside
+  `evalIntSim`'s proof knows `pres`/`surv`; the abstract `EvalExit` does not),
+  making the widener residual disappear entirely.
+
+## 2026-09-01 b2-resid-fields-refutable (fleet B2-unary-logic worker)
+- missing: an entry-linkage hypothesis in the ∀-closed `TermResidualsCore`
+  Resid fields. `NegResid`/`NotResid`/`OrTrueResid`/`AndFalseResid`/
+  `OrFalseResid`/`AndTrueResid` (rows/TermRouting.lean) quantify over ALL
+  ghosts (`N A SL sp r sret aEnv aExpr a* m0`, and for the logical four an
+  unconstrained `c : Config`) with only the two operand `read64`/`ExprRepr`
+  hypotheses, yet their conclusions (`NegExtras` etc.) demand entry-only
+  geometry: `sp_headroom : SL.lo + 3264 ≤ sp.toNat`, `op_lo`, the
+  `KindSlotPinned` static-image pins, and `hMcallPop` (total `m0` at
+  `mcall := m0`). Nothing supplies these — the holes are REFUTABLE, so
+  `TermResidualsCore L` is uninstantiable as stated.
+- workaround: NONE (per law 4). Landed machine-checked refutations instead:
+  `Vsa/Sim/rows/Field_hNeg.lean` (`field_hNeg_refuted`, shared witness
+  `b2WitMem` = 24-byte concrete ExtHashMap with two `.null` nodes) + sibling
+  `Field_hNot/hOrTrue/hAndFalse/hOrFalse/hAndTrue.lean` consuming it, each
+  via `sp_headroom` at `sp = 0#64`.
+- cost: the whole B2 batch (and, by the same shape, likely B1's LeafWiden
+  `pres`/`surv` fields and every other ∀-closed Resid) cannot go green until
+  the field statements are amended; every fleet worker on these fields will
+  rediscover this.
+- proposal: amend each Resid to take the entry as a hypothesis — e.g.
+  `∀ …, EvalEntry g N A SL φf φc st d env (.unary .neg esub) sp r sret aEnv
+  aExpr m0 c → … → NegExtras … ∧ …` (the rows already HAVE the entry config
+  in scope at the consumption site, cf. `eval_neg_row`'s `hc`), or split each
+  Extras into (a) Layout-derivable static pins (`KindSlotPinned` from
+  `Loaded L`) + (b) an ArmEntryK widening supplied by `blockA_k`, as the
+  NegExtras doc comment already anticipates. Precedent: Trichotomy
+  falsity → amendment (`Vsa/While/StmtDispatch.lean`).
+
+## 2026-09-01 exec-resid-slot-pins-uninhabited (fleet B5-execarms)
+- missing: the exec-side residual bundles (`ExecCaseGeom`, `ExecExprGeom`,
+  `ExecRetGeom`, `ExecRetNullGeom`, `ExecVarNullGeom`, `ExecVarInitGeom`,
+  `IfNoneGeom`, `WhileFalseGeom`, `IfTrueGeom`, `IfFalseGeom`) put
+  `StmtSlotPinned k armPC m0` (and the table/stack disjunct) UNCONDITIONALLY
+  under a ∀-quantified `m0 : Mem` (and ∀ SL/sp) in the `*Resid` defs consumed
+  by `TermResidualsCore.hS*`.  At `m0 = ∅` the slot-pin's byte lookups are
+  `none`, so every such `*Resid` — hence every skeleton hole
+  `SkelHSExpr/…/SkelHSIfFalse` and hence `TermResidualsCore L` itself — is
+  PROVABLY FALSE (machine-checked: `Vsa/Sim/rows/B5ExecArmObstructions.lean`,
+  `skelHS*_false`, 11 fields).  The slot pin (and disjointness) must be
+  CONDITIONED on the pinned image (byte-pin premises per `gen_layout.py`'s
+  `groundSlot_k` idiom, or a `Loaded L`-derived hypothesis on `m0`) — i.e. the
+  residual statement needs amendment; a worker cannot land these fields.
+- workaround: NONE — falsity proofs landed as the machine-checked obstruction
+  (Law 4 precedent: Trichotomy), fields skipped.
+- cost: all 14 B5 fields blocked; B1-B4/B6-B8 fields whose residuals embed the
+  same unconditional-∀-m0 slot-pin/glue shape are equally uninhabited
+  (eval-side `KindSlotPinned` twins should be audited before those batches
+  burn time).
+- proposal: amend the `*Geom`/`*Resid` layer to take the jump-table byte pins
+  as named premises (the `groundSlot_k` supplier shape) or restate the
+  residual ∀ over `m0` satisfying a named `RodataPinned m0` predicate; then
+  the wave-43 generated pins discharge `hslot` and only `hGlue` remains open.
+
+## 2026-09-01 loop-geom-self-referential-oracles (fleet B5-execarms)
+- missing: `BlockGeom`/`ForStartGeom`/`WhileGeom` (fields `hSBlock`,
+  `hSForStart`, `hSWhileBreak`) have no slot pin but demand the loop knot
+  itself as unconditional ∀-ghost oracles: `hstep : ∀ …, ExecSeqStep …` /
+  `ExecForStep …` / `ExecWhileStep …` over ALL `stM/m00/out00/stMid/stFin/
+  status` (arbitrary, unlinked to any derivation), and `hWhileIH`/`hForIH` =
+  the FULL while/for statement simulation Triple.  Supplier would be the
+  statement-sim capstone being assembled — self-referential; no landed lemma
+  can discharge them field-wise.
+- workaround: NONE — skipped with this named obstruction.
+- cost: 3 B5 fields undischargeable until the Geom layer threads the loop IH
+  from the recursor (as the eval-side `armResidGap_of_stages` does) instead of
+  demanding it ∀-ghost-closed inside the residual.
+- proposal: restate the loop Geoms with the IH/step oracles as per-derivation
+  premises (recursor-supplied, like `mExecS` minor-premise IHs), not
+  ∀-quantified fields of the residual.
+
+## 2026-09-01 seq-motive-independent-pq-no-code (fleet B6-loopseq)
+- missing: any dischargeable form of the `mExecSeq` motive Triple
+  (TermSimAssembly.lean:178): it quantifies entry PC `p` and exit PC `q`
+  INDEPENDENTLY while `SegEntry` (InductionScaffold.lean:150) pins no code
+  byte — so the off-diagonal (`ofNat p ≠ ofNat q`) span is unprovable from
+  the hypothesis set (machine-checked:
+  `Vsa.Sim.B6LoopSeqObstruction.{zeroStep_segSpan_forces_pc_eq,
+  skelHSeqNil_offdiag_must_step}`).  The `TermAssembly.hSeqNil` supplier note
+  ("`execSeqNil` seg-identity, `_row` wrap trivial") is stale — identity
+  suppliers cover only the diagonal.  This is the `scaffold-motive-independent-pq`
+  disease on the `ExecSeq` motive, unfixable by the identity-PC amendment
+  (consumers need `p = execSeqLoopPC ≠ q = execSeqContPC`).
+- workaround: NONE — batch fields hSeqNil/hSeqConsNormal/hSeqConsAbrupt
+  skipped; `rows/SeqForRows.lean` rows + named resids
+  (`SeqNilResid`/`SeqConsNormalResid`/`SeqConsAbruptResid`) stay the carriers.
+- cost: 3 of the 7 B6 skeleton holes undischargeable until amended; every
+  future worker sent at them will re-derive this.
+- proposal: amend `mExecSeq` to pin the decoded PCs
+  (`execSeqLoopPC`/`execSeqContPC`, the only instantiation consumers use) or
+  add a code-image field to `SegEntry` (the pending sentryc/segexit re-land is
+  the natural vehicle); then providers come from `execSeqLoop` + an
+  `ExecSeqExit`→`SegExit` upgrade (needs `memFrame`/`stackWin` carried by the
+  engine exit, currently absent).
+
+## 2026-09-01 forloop-motive-identity-pc-store-mutation (fleet B6-loopseq)
+- missing: any dischargeable form of the `mForLoop` motive: it is an
+  identity-PC `SegEntry st p → SegExit st' p` span, but EVERY `ForLoop`
+  constructor mutates the spec state (cond eval / body exec / full iteration),
+  so a zero-step discharge forces the unchanged `m0` to represent both
+  `st.store` and `st'.store` (machine-checked:
+  `Vsa.Sim.B6LoopSeqObstruction.zeroStep_forSpan_forces_rerepresentation`) and
+  a stepping discharge is barred by the code-free `SegEntry`.  This is the
+  DUAL `scaffold-some-motive-unsatisfiable` shape that got
+  `mExecInit`/`mForCond`/`mExecStep` amended to `True`; `mForLoop` kept the
+  span form and inherited the disease.  Also re-confirmed the
+  `rows/SeqForRows.lean` engine seam: `execForLoopBody`'s `ExecEntry`/`ExecExit`
+  admit no adapter to/from `SegEntry`/`SegExit` in either direction.
+- workaround: NONE — batch fields hFlCondFalse/hFlBodyBreak/hFlBodyRet/hFlLoop
+  skipped; `Vsa.Sim.Rows.ForResid` stays the named carrier.
+- cost: 4 of the 7 B6 skeleton holes undischargeable until amended.
+- proposal: either amend `mForLoop` to honest distinct loop-head/loop-exit PCs
+  + code linkage, or (cheaper, matching how `execForStartSim` actually routes
+  the real work through the `ExecForStep` oracle) amend `mForLoop` to `True`
+  like its three scaffold siblings IF no consumer projects it — a consumer
+  census like the wave-45 §0 grep is the first step.
+
+## 2026-09-01 recursion-stack-budget-class (falsity #13 analysis, run1 coordinator)
+- missing: a recursion-sound stack-budget invariant in the entry-condition
+  layer. `EvalEntry.stackOK = StackOK SL sp (1088+1088)` is a CONSTANT, but
+  each eval recursion level consumes 1088 bytes (eval_expr frame), so the
+  child's entry demands `SL.lo + 3264 ≤ sp` at the parent — underivable from
+  the parent's own 2176.  This is exactly why every recursive-case Extras
+  bundle (`NegExtras.sp_headroom : SL.lo + 3264 ≤ sp.toNat`, the AddResid
+  `SLloSp`, …) parks the fact as an ∀-closed oracle — the class the fleet
+  refuted (falsity #12).  Threading `EvalEntry` into the Resids (the ITEM
+  ZERO brief shape) removes REFUTABILITY but not UNDERIVABILITY: the
+  amended `EvalEntry → NegExtras` is unprovable (2176 < 3264).  Worse, the
+  un-amended `EvalIH` itself is FALSE at expression depth ≥ 3 under a tight
+  `SL` (entry `sp − SL.lo = 2176`: level-3 frame `[SL.lo−1088, SL.lo)` writes
+  OUTSIDE `[SL.lo, sp)`, violating the exit memFrame clause) — analytic
+  refutation; a machine-checked witness would need a 3-deep concrete arm run
+  (not cheaply constructible tonight; recorded as the named obstruction).
+  Ledger precedent: `armsegsplit-marshalling-fact-built` (2026-08-31) already
+  recorded the extras as "NOT projectable from EvalEntry(parent)".
+- workaround: NONE (Law 4).  Amendment (ITEM ZERO phase B, this run):
+  budget-index the entry conditions with ZERO signature changes —
+  (1) `StackLayout` gains a `perCall : Nat` field (per-call-level budget);
+  (2) mutual `Expr.stackNeed`/`Stmt.stackNeed : … → Nat` (structural frame
+  bytes; call bodies accounted via the `perCall` term, NOT structurally);
+  (3) `EvalEntry.stackOK : StackOK SL sp (e.stackNeed + (maxCallDepth − d) *
+  SL.perCall + 1088)` (ExecEntry likewise over `s`), + new entry fields
+  `StoreBodiesBound st.store SL.perCall` and `Expr.BodiesBound e SL.perCall`
+  (fn-literal bodies fit the per-call budget; store invariant survives
+  define/alloc since bodies are program subterms);
+  (4) monotone bridge `stackOK_ge : … → StackOK SL sp 2176` keeps every
+  existing consumer proof one lemma away;
+  (5) the child-entry construction sites (armTail_rec/ArmSegSplit*) now
+  DERIVE the child stackOK by arithmetic — the sp_headroom oracles are
+  DELETED from the Extras/Resid layer.
+  Top-level: the concrete `Layout.atInterpRun` carries `StackOK SL* sp₀
+  (p.stackNeed …)` — "properly loaded" includes the stack fitting the
+  program; InterpSim's ∀-L shape is unchanged (maxCallDepth-cap precedent).
+- cost: the fleet's 20 refuted fields + the ~10 oracle-parked recursive
+  residuals are all uninhabitable/underivable until this lands; it gates the
+  whole RUN-1 field campaign.
+- proposal: land as ITEM ZERO phase B in /tmp/vsa-itemzero-sandbox, COW
+  agents per family, sweep-validate, apply to main in one motion with the
+  Resid entry-threading (phase A) and the B5/B6 slot-pin + motive amendments
+  (phases C/D).
+
+## 2026-09-01 leaf-resid-forall-ghost-falsity (fleet B1-leaves, hInt/hNull/hBool/hStr)
+- missing: the geometry-conditioned leaf-residual supplier layer. The four
+  `TermResidualsCore` leaf fields (`hInt`/`hNull`/`hBool`/`hStr`, skeleton holes
+  `SkelH{Int,Null,Bool,Str}`) ∀-close their `*LeafResid` over ALL layout ghosts
+  (`g N A SL φf φc sp r sret m0` and, for null/bool/str, an unconstrained
+  `c : Config`) with a bare conjunction body. The `TermBundles.lean` assembly
+  table assigns every leaf `TermShared.geom : ImageGeom N A SL` (G-class), but
+  the statements carry NO such premise, and the TSV-named supplier `GeomFrom`
+  does not exist anywhere in `Vsa/` (only the `TermAssembly.lean` doc comment).
+  Consequences, machine-checked in
+  `experiments/fleet/obstructions/B1_leaves_obstructions.lean` (green,
+  axiom-clean, 1.6s):
+  * `SkelHNull`/`SkelHBool`/`SkelHStr` are **FALSE** (`skelH*_false`): each
+    residual asserts its sret-vs-`value_*`-code disjointness conjunct for
+    ARBITRARY `sret`; `sret := 0x800027f0 / 0x80002800 / 0x80002820` (inside
+    the respective code windows) refutes them outright — no machine
+    construction needed, both disjuncts fail by `decide`.
+  * `SkelHInt` is unprovable as stated: its body is
+    `LeafWiden = Widen (EvalExit …) … (stackFoot SL)` whose `pres`/`surv`
+    quantify over EVERY `EvalExit` config; `EvalExit` is exactly the predicate
+    that forgets both (its `memFrame` leaves `[SL.lo,sp) ∪ A` ∪ sret-padding
+    presence unconstrained; `StoreRepr.frames_arena` places frames in `A` with
+    nothing relating `A` to `[SL.lo,SL.hi)` for ∀-ghosts). `skelHInt_of`
+    machine-checks the exact gap = two named premises `IntLeafPres`/`IntLeafSurv`.
+- workaround: NONE (stopped per Law 4; obstruction file + this entry).
+- cost: the whole B1 batch (4 fields) blocked; every other batch whose Resid
+  ∀-closes geometry conjuncts over ghosts (e.g. B5's `BrkResid` asserts
+  `StmtSlotPinned k armPC m0` for arbitrary `m0`, false at `m0 = ∅`) will hit
+  the same wall.
+- proposal: amend the `*LeafResid` statements to take the geometry as premises
+  (`ImageGeom N A SL` + a populated-`m0`/write-chain fact, the `hMcallPop`
+  analog) — the rows already destructure the conjuncts, so the amendment is
+  local to `rows/TermRouting.lean` defs + the skeleton regen; OR re-land the
+  leaf sims at `EvalExitD` directly (the writeMap chain inside
+  `evalIntSim`'s proof knows `pres`/`surv`; the abstract `EvalExit` does not),
+  making the widener residual disappear entirely.
+
+## 2026-09-01 b2-resid-fields-refutable (fleet B2-unary-logic worker)
+- missing: an entry-linkage hypothesis in the ∀-closed `TermResidualsCore`
+  Resid fields. `NegResid`/`NotResid`/`OrTrueResid`/`AndFalseResid`/
+  `OrFalseResid`/`AndTrueResid` (rows/TermRouting.lean) quantify over ALL
+  ghosts (`N A SL sp r sret aEnv aExpr a* m0`, and for the logical four an
+  unconstrained `c : Config`) with only the two operand `read64`/`ExprRepr`
+  hypotheses, yet their conclusions (`NegExtras` etc.) demand entry-only
+  geometry: `sp_headroom : SL.lo + 3264 ≤ sp.toNat`, `op_lo`, the
+  `KindSlotPinned` static-image pins, and `hMcallPop` (total `m0` at
+  `mcall := m0`). Nothing supplies these — the holes are REFUTABLE, so
+  `TermResidualsCore L` is uninstantiable as stated.
+- workaround: NONE (per law 4). Landed machine-checked refutations instead:
+  `Vsa/Sim/rows/Field_hNeg.lean` (`field_hNeg_refuted`, shared witness
+  `b2WitMem` = 24-byte concrete ExtHashMap with two `.null` nodes) + sibling
+  `Field_hNot/hOrTrue/hAndFalse/hOrFalse/hAndTrue.lean` consuming it, each
+  via `sp_headroom` at `sp = 0#64`.
+- cost: the whole B2 batch (and, by the same shape, likely B1's LeafWiden
+  `pres`/`surv` fields and every other ∀-closed Resid) cannot go green until
+  the field statements are amended; every fleet worker on these fields will
+  rediscover this.
+- proposal: amend each Resid to take the entry as a hypothesis — e.g.
+  `∀ …, EvalEntry g N A SL φf φc st d env (.unary .neg esub) sp r sret aEnv
+  aExpr m0 c → … → NegExtras … ∧ …` (the rows already HAVE the entry config
+  in scope at the consumption site, cf. `eval_neg_row`'s `hc`), or split each
+  Extras into (a) Layout-derivable static pins (`KindSlotPinned` from
+  `Loaded L`) + (b) an ArmEntryK widening supplied by `blockA_k`, as the
+  NegExtras doc comment already anticipates. Precedent: Trichotomy
+  falsity → amendment (`Vsa/While/StmtDispatch.lean`).
+
+## 2026-09-01 exec-resid-slot-pins-uninhabited (fleet B5-execarms)
+- missing: the exec-side residual bundles (`ExecCaseGeom`, `ExecExprGeom`,
+  `ExecRetGeom`, `ExecRetNullGeom`, `ExecVarNullGeom`, `ExecVarInitGeom`,
+  `IfNoneGeom`, `WhileFalseGeom`, `IfTrueGeom`, `IfFalseGeom`) put
+  `StmtSlotPinned k armPC m0` (and the table/stack disjunct) UNCONDITIONALLY
+  under a ∀-quantified `m0 : Mem` (and ∀ SL/sp) in the `*Resid` defs consumed
+  by `TermResidualsCore.hS*`.  At `m0 = ∅` the slot-pin's byte lookups are
+  `none`, so every such `*Resid` — hence every skeleton hole
+  `SkelHSExpr/…/SkelHSIfFalse` and hence `TermResidualsCore L` itself — is
+  PROVABLY FALSE (machine-checked: `Vsa/Sim/rows/B5ExecArmObstructions.lean`,
+  `skelHS*_false`, 11 fields).  The slot pin (and disjointness) must be
+  CONDITIONED on the pinned image (byte-pin premises per `gen_layout.py`'s
+  `groundSlot_k` idiom, or a `Loaded L`-derived hypothesis on `m0`) — i.e. the
+  residual statement needs amendment; a worker cannot land these fields.
+- workaround: NONE — falsity proofs landed as the machine-checked obstruction
+  (Law 4 precedent: Trichotomy), fields skipped.
+- cost: all 14 B5 fields blocked; B1-B4/B6-B8 fields whose residuals embed the
+  same unconditional-∀-m0 slot-pin/glue shape are equally uninhabited
+  (eval-side `KindSlotPinned` twins should be audited before those batches
+  burn time).
+- proposal: amend the `*Geom`/`*Resid` layer to take the jump-table byte pins
+  as named premises (the `groundSlot_k` supplier shape) or restate the
+  residual ∀ over `m0` satisfying a named `RodataPinned m0` predicate; then
+  the wave-43 generated pins discharge `hslot` and only `hGlue` remains open.
+
+## 2026-09-01 loop-geom-self-referential-oracles (fleet B5-execarms)
+- missing: `BlockGeom`/`ForStartGeom`/`WhileGeom` (fields `hSBlock`,
+  `hSForStart`, `hSWhileBreak`) have no slot pin but demand the loop knot
+  itself as unconditional ∀-ghost oracles: `hstep : ∀ …, ExecSeqStep …` /
+  `ExecForStep …` / `ExecWhileStep …` over ALL `stM/m00/out00/stMid/stFin/
+  status` (arbitrary, unlinked to any derivation), and `hWhileIH`/`hForIH` =
+  the FULL while/for statement simulation Triple.  Supplier would be the
+  statement-sim capstone being assembled — self-referential; no landed lemma
+  can discharge them field-wise.
+- workaround: NONE — skipped with this named obstruction.
+- cost: 3 B5 fields undischargeable until the Geom layer threads the loop IH
+  from the recursor (as the eval-side `armResidGap_of_stages` does) instead of
+  demanding it ∀-ghost-closed inside the residual.
+- proposal: restate the loop Geoms with the IH/step oracles as per-derivation
+  premises (recursor-supplied, like `mExecS` minor-premise IHs), not
+  ∀-quantified fields of the residual.
+
+## 2026-09-01 seq-motive-independent-pq-no-code (fleet B6-loopseq)
+- missing: any dischargeable form of the `mExecSeq` motive Triple
+  (TermSimAssembly.lean:178): it quantifies entry PC `p` and exit PC `q`
+  INDEPENDENTLY while `SegEntry` (InductionScaffold.lean:150) pins no code
+  byte — so the off-diagonal (`ofNat p ≠ ofNat q`) span is unprovable from
+  the hypothesis set (machine-checked:
+  `Vsa.Sim.B6LoopSeqObstruction.{zeroStep_segSpan_forces_pc_eq,
+  skelHSeqNil_offdiag_must_step}`).  The `TermAssembly.hSeqNil` supplier note
+  ("`execSeqNil` seg-identity, `_row` wrap trivial") is stale — identity
+  suppliers cover only the diagonal.  This is the `scaffold-motive-independent-pq`
+  disease on the `ExecSeq` motive, unfixable by the identity-PC amendment
+  (consumers need `p = execSeqLoopPC ≠ q = execSeqContPC`).
+- workaround: NONE — batch fields hSeqNil/hSeqConsNormal/hSeqConsAbrupt
+  skipped; `rows/SeqForRows.lean` rows + named resids
+  (`SeqNilResid`/`SeqConsNormalResid`/`SeqConsAbruptResid`) stay the carriers.
+- cost: 3 of the 7 B6 skeleton holes undischargeable until amended; every
+  future worker sent at them will re-derive this.
+- proposal: amend `mExecSeq` to pin the decoded PCs
+  (`execSeqLoopPC`/`execSeqContPC`, the only instantiation consumers use) or
+  add a code-image field to `SegEntry` (the pending sentryc/segexit re-land is
+  the natural vehicle); then providers come from `execSeqLoop` + an
+  `ExecSeqExit`→`SegExit` upgrade (needs `memFrame`/`stackWin` carried by the
+  engine exit, currently absent).
+
+## 2026-09-01 forloop-motive-identity-pc-store-mutation (fleet B6-loopseq)
+- missing: any dischargeable form of the `mForLoop` motive: it is an
+  identity-PC `SegEntry st p → SegExit st' p` span, but EVERY `ForLoop`
+  constructor mutates the spec state (cond eval / body exec / full iteration),
+  so a zero-step discharge forces the unchanged `m0` to represent both
+  `st.store` and `st'.store` (machine-checked:
+  `Vsa.Sim.B6LoopSeqObstruction.zeroStep_forSpan_forces_rerepresentation`) and
+  a stepping discharge is barred by the code-free `SegEntry`.  This is the
+  DUAL `scaffold-some-motive-unsatisfiable` shape that got
+  `mExecInit`/`mForCond`/`mExecStep` amended to `True`; `mForLoop` kept the
+  span form and inherited the disease.  Also re-confirmed the
+  `rows/SeqForRows.lean` engine seam: `execForLoopBody`'s `ExecEntry`/`ExecExit`
+  admit no adapter to/from `SegEntry`/`SegExit` in either direction.
+- workaround: NONE — batch fields hFlCondFalse/hFlBodyBreak/hFlBodyRet/hFlLoop
+  skipped; `Vsa.Sim.Rows.ForResid` stays the named carrier.
+- cost: 4 of the 7 B6 skeleton holes undischargeable until amended.
+- proposal: either amend `mForLoop` to honest distinct loop-head/loop-exit PCs
+  + code linkage, or (cheaper, matching how `execForStartSim` actually routes
+  the real work through the `ExecForStep` oracle) amend `mForLoop` to `True`
+  like its three scaffold siblings IF no consumer projects it — a consumer
+  census like the wave-45 §0 grep is the first step.
+
+## 2026-09-01 recursion-stack-budget-class (falsity #13 analysis, run1 coordinator)
+- missing: a recursion-sound stack-budget invariant in the entry-condition
+  layer. `EvalEntry.stackOK = StackOK SL sp (1088+1088)` is a CONSTANT, but
+  each eval recursion level consumes 1088 bytes (eval_expr frame), so the
+  child's entry demands `SL.lo + 3264 ≤ sp` at the parent — underivable from
+  the parent's own 2176.  This is exactly why every recursive-case Extras
+  bundle (`NegExtras.sp_headroom : SL.lo + 3264 ≤ sp.toNat`, the AddResid
+  `SLloSp`, …) parks the fact as an ∀-closed oracle — the class the fleet
+  refuted (falsity #12).  Threading `EvalEntry` into the Resids (the ITEM
+  ZERO brief shape) removes REFUTABILITY but not UNDERIVABILITY: the
+  amended `EvalEntry → NegExtras` is unprovable (2176 < 3264).  Worse, the
+  un-amended `EvalIH` itself is FALSE at expression depth ≥ 3 under a tight
+  `SL` (entry `sp − SL.lo = 2176`: level-3 frame `[SL.lo−1088, SL.lo)` writes
+  OUTSIDE `[SL.lo, sp)`, violating the exit memFrame clause) — analytic
+  refutation; a machine-checked witness would need a 3-deep concrete arm run
+  (not cheaply constructible tonight; recorded as the named obstruction).
+  Ledger precedent: `armsegsplit-marshalling-fact-built` (2026-08-31) already
+  recorded the extras as "NOT projectable from EvalEntry(parent)".
+- workaround: NONE (Law 4).  Amendment (ITEM ZERO phase B, this run):
+  budget-index the entry conditions with ZERO signature changes —
+  (1) `StackLayout` gains a `perCall : Nat` field (per-call-level budget);
+  (2) mutual `Expr.stackNeed`/`Stmt.stackNeed : … → Nat` (structural frame
+  bytes; call bodies accounted via the `perCall` term, NOT structurally);
+  (3) `EvalEntry.stackOK : StackOK SL sp (e.stackNeed + (maxCallDepth − d) *
+  SL.perCall + 1088)` (ExecEntry likewise over `s`), + new entry fields
+  `StoreBodiesBound st.store SL.perCall` and `Expr.BodiesBound e SL.perCall`
+  (fn-literal bodies fit the per-call budget; store invariant survives
+  define/alloc since bodies are program subterms);
+  (4) monotone bridge `stackOK_ge : … → StackOK SL sp 2176` keeps every
+  existing consumer proof one lemma away;
+  (5) the child-entry construction sites (armTail_rec/ArmSegSplit*) now
+  DERIVE the child stackOK by arithmetic — the sp_headroom oracles are
+  DELETED from the Extras/Resid layer.
+  Top-level: the concrete `Layout.atInterpRun` carries `StackOK SL* sp₀
+  (p.stackNeed …)` — "properly loaded" includes the stack fitting the
+  program; InterpSim's ∀-L shape is unchanged (maxCallDepth-cap precedent).
+- cost: the fleet's 20 refuted fields + the ~10 oracle-parked recursive
+  residuals are all uninhabitable/underivable until this lands; it gates the
+  whole RUN-1 field campaign.
+- proposal: land as ITEM ZERO phase B in /tmp/vsa-itemzero-sandbox, COW
+  agents per family, sweep-validate, apply to main in one motion with the
+  Resid entry-threading (phase A) and the B5/B6 slot-pin + motive amendments
+  (phases C/D).
+
+## 2026-09-01 err-reach-span-vs-m4-edge (err lane, 42 hsite reachability residuals)
+- missing: an M4 arm-sim ERROR-EDGE reachability span, per error branch — a
+  `Triple SpanPre (SpillArmPre/SetupArmPre S m0 L lds <seg> pc0 pcJal …)` where
+  `SpanPre` is a real reachable interpreter-entry predicate and the post is the
+  error block-entry (`pc0` just before the `jal runtime_error`). No landed arm-sim
+  produces one: EvalNegSim/EvalNotSim/exec arms model the SUCCESS branch only; the
+  error branch (e.g. value-not-int → jal) is never threaded to a reachability.
+  All 42 error links reduce to exactly one such span apiece (shared per PC).
+- workaround: NONE for the spans themselves (genuinely M4, out of err-lane reach).
+  Built the COMPOSITION abstraction `reachJal_of_span` (Vsa/Sim/rows/ErrReachSpan.lean,
+  green+axiom-clean) so a span drops straight in: it composes an arbitrary
+  reach-to-pc0 span with the landed `spill*/setup*_toJalErr` seg into `ReachJal … c`,
+  generalizing `reachJal_of_armBranch` (= the span:=Triple.rfl case, machine-checked).
+- cost: without the spans, the 42 collector fields ErrArmLinks(.16)/ErrArmLinksB(.26)
+  stay open; every future M4 arm-sim lane pays a bespoke reach-to-pc0 per error branch
+  unless the arm-sim exposes its error edge as this named span shape.
+- proposal: have the M4 eval/exec arm-sims, when they take the error branch, EXPORT
+  the reached config as `Triple <arm-entry-pre> (SpillArmPre/SetupArmPre …)` (post =
+  the existing block-entry predicate) — then `reachJal_of_span` closes the link with
+  zero extra error-side work. One span per distinct PC (19) serves all 42 hsites.
+
+## 2026-09-01 leaf-resid-forall-ghost-falsity (fleet B1-leaves, hInt/hNull/hBool/hStr)
+- missing: the geometry-conditioned leaf-residual supplier layer. The four
+  `TermResidualsCore` leaf fields (`hInt`/`hNull`/`hBool`/`hStr`, skeleton holes
+  `SkelH{Int,Null,Bool,Str}`) ∀-close their `*LeafResid` over ALL layout ghosts
+  (`g N A SL φf φc sp r sret m0` and, for null/bool/str, an unconstrained
+  `c : Config`) with a bare conjunction body. The `TermBundles.lean` assembly
+  table assigns every leaf `TermShared.geom : ImageGeom N A SL` (G-class), but
+  the statements carry NO such premise, and the TSV-named supplier `GeomFrom`
+  does not exist anywhere in `Vsa/` (only the `TermAssembly.lean` doc comment).
+  Consequences, machine-checked in
+  `experiments/fleet/obstructions/B1_leaves_obstructions.lean` (green,
+  axiom-clean, 1.6s):
+  * `SkelHNull`/`SkelHBool`/`SkelHStr` are **FALSE** (`skelH*_false`): each
+    residual asserts its sret-vs-`value_*`-code disjointness conjunct for
+    ARBITRARY `sret`; `sret := 0x800027f0 / 0x80002800 / 0x80002820` (inside
+    the respective code windows) refutes them outright — no machine
+    construction needed, both disjuncts fail by `decide`.
+  * `SkelHInt` is unprovable as stated: its body is
+    `LeafWiden = Widen (EvalExit …) … (stackFoot SL)` whose `pres`/`surv`
+    quantify over EVERY `EvalExit` config; `EvalExit` is exactly the predicate
+    that forgets both (its `memFrame` leaves `[SL.lo,sp) ∪ A` ∪ sret-padding
+    presence unconstrained; `StoreRepr.frames_arena` places frames in `A` with
+    nothing relating `A` to `[SL.lo,SL.hi)` for ∀-ghosts). `skelHInt_of`
+    machine-checks the exact gap = two named premises `IntLeafPres`/`IntLeafSurv`.
+- workaround: NONE (stopped per Law 4; obstruction file + this entry).
+- cost: the whole B1 batch (4 fields) blocked; every other batch whose Resid
+  ∀-closes geometry conjuncts over ghosts (e.g. B5's `BrkResid` asserts
+  `StmtSlotPinned k armPC m0` for arbitrary `m0`, false at `m0 = ∅`) will hit
+  the same wall.
+- proposal: amend the `*LeafResid` statements to take the geometry as premises
+  (`ImageGeom N A SL` + a populated-`m0`/write-chain fact, the `hMcallPop`
+  analog) — the rows already destructure the conjuncts, so the amendment is
+  local to `rows/TermRouting.lean` defs + the skeleton regen; OR re-land the
+  leaf sims at `EvalExitD` directly (the writeMap chain inside
+  `evalIntSim`'s proof knows `pres`/`surv`; the abstract `EvalExit` does not),
+  making the widener residual disappear entirely.
+
+## 2026-09-01 b2-resid-fields-refutable (fleet B2-unary-logic worker)
+- missing: an entry-linkage hypothesis in the ∀-closed `TermResidualsCore`
+  Resid fields. `NegResid`/`NotResid`/`OrTrueResid`/`AndFalseResid`/
+  `OrFalseResid`/`AndTrueResid` (rows/TermRouting.lean) quantify over ALL
+  ghosts (`N A SL sp r sret aEnv aExpr a* m0`, and for the logical four an
+  unconstrained `c : Config`) with only the two operand `read64`/`ExprRepr`
+  hypotheses, yet their conclusions (`NegExtras` etc.) demand entry-only
+  geometry: `sp_headroom : SL.lo + 3264 ≤ sp.toNat`, `op_lo`, the
+  `KindSlotPinned` static-image pins, and `hMcallPop` (total `m0` at
+  `mcall := m0`). Nothing supplies these — the holes are REFUTABLE, so
+  `TermResidualsCore L` is uninstantiable as stated.
+- workaround: NONE (per law 4). Landed machine-checked refutations instead:
+  `Vsa/Sim/rows/Field_hNeg.lean` (`field_hNeg_refuted`, shared witness
+  `b2WitMem` = 24-byte concrete ExtHashMap with two `.null` nodes) + sibling
+  `Field_hNot/hOrTrue/hAndFalse/hOrFalse/hAndTrue.lean` consuming it, each
+  via `sp_headroom` at `sp = 0#64`.
+- cost: the whole B2 batch (and, by the same shape, likely B1's LeafWiden
+  `pres`/`surv` fields and every other ∀-closed Resid) cannot go green until
+  the field statements are amended; every fleet worker on these fields will
+  rediscover this.
+- proposal: amend each Resid to take the entry as a hypothesis — e.g.
+  `∀ …, EvalEntry g N A SL φf φc st d env (.unary .neg esub) sp r sret aEnv
+  aExpr m0 c → … → NegExtras … ∧ …` (the rows already HAVE the entry config
+  in scope at the consumption site, cf. `eval_neg_row`'s `hc`), or split each
+  Extras into (a) Layout-derivable static pins (`KindSlotPinned` from
+  `Loaded L`) + (b) an ArmEntryK widening supplied by `blockA_k`, as the
+  NegExtras doc comment already anticipates. Precedent: Trichotomy
+  falsity → amendment (`Vsa/While/StmtDispatch.lean`).
+
+## 2026-09-01 exec-resid-slot-pins-uninhabited (fleet B5-execarms)
+- missing: the exec-side residual bundles (`ExecCaseGeom`, `ExecExprGeom`,
+  `ExecRetGeom`, `ExecRetNullGeom`, `ExecVarNullGeom`, `ExecVarInitGeom`,
+  `IfNoneGeom`, `WhileFalseGeom`, `IfTrueGeom`, `IfFalseGeom`) put
+  `StmtSlotPinned k armPC m0` (and the table/stack disjunct) UNCONDITIONALLY
+  under a ∀-quantified `m0 : Mem` (and ∀ SL/sp) in the `*Resid` defs consumed
+  by `TermResidualsCore.hS*`.  At `m0 = ∅` the slot-pin's byte lookups are
+  `none`, so every such `*Resid` — hence every skeleton hole
+  `SkelHSExpr/…/SkelHSIfFalse` and hence `TermResidualsCore L` itself — is
+  PROVABLY FALSE (machine-checked: `Vsa/Sim/rows/B5ExecArmObstructions.lean`,
+  `skelHS*_false`, 11 fields).  The slot pin (and disjointness) must be
+  CONDITIONED on the pinned image (byte-pin premises per `gen_layout.py`'s
+  `groundSlot_k` idiom, or a `Loaded L`-derived hypothesis on `m0`) — i.e. the
+  residual statement needs amendment; a worker cannot land these fields.
+- workaround: NONE — falsity proofs landed as the machine-checked obstruction
+  (Law 4 precedent: Trichotomy), fields skipped.
+- cost: all 14 B5 fields blocked; B1-B4/B6-B8 fields whose residuals embed the
+  same unconditional-∀-m0 slot-pin/glue shape are equally uninhabited
+  (eval-side `KindSlotPinned` twins should be audited before those batches
+  burn time).
+- proposal: amend the `*Geom`/`*Resid` layer to take the jump-table byte pins
+  as named premises (the `groundSlot_k` supplier shape) or restate the
+  residual ∀ over `m0` satisfying a named `RodataPinned m0` predicate; then
+  the wave-43 generated pins discharge `hslot` and only `hGlue` remains open.
+
+## 2026-09-01 loop-geom-self-referential-oracles (fleet B5-execarms)
+- missing: `BlockGeom`/`ForStartGeom`/`WhileGeom` (fields `hSBlock`,
+  `hSForStart`, `hSWhileBreak`) have no slot pin but demand the loop knot
+  itself as unconditional ∀-ghost oracles: `hstep : ∀ …, ExecSeqStep …` /
+  `ExecForStep …` / `ExecWhileStep …` over ALL `stM/m00/out00/stMid/stFin/
+  status` (arbitrary, unlinked to any derivation), and `hWhileIH`/`hForIH` =
+  the FULL while/for statement simulation Triple.  Supplier would be the
+  statement-sim capstone being assembled — self-referential; no landed lemma
+  can discharge them field-wise.
+- workaround: NONE — skipped with this named obstruction.
+- cost: 3 B5 fields undischargeable until the Geom layer threads the loop IH
+  from the recursor (as the eval-side `armResidGap_of_stages` does) instead of
+  demanding it ∀-ghost-closed inside the residual.
+- proposal: restate the loop Geoms with the IH/step oracles as per-derivation
+  premises (recursor-supplied, like `mExecS` minor-premise IHs), not
+  ∀-quantified fields of the residual.
+
+## 2026-09-01 seq-motive-independent-pq-no-code (fleet B6-loopseq)
+- missing: any dischargeable form of the `mExecSeq` motive Triple
+  (TermSimAssembly.lean:178): it quantifies entry PC `p` and exit PC `q`
+  INDEPENDENTLY while `SegEntry` (InductionScaffold.lean:150) pins no code
+  byte — so the off-diagonal (`ofNat p ≠ ofNat q`) span is unprovable from
+  the hypothesis set (machine-checked:
+  `Vsa.Sim.B6LoopSeqObstruction.{zeroStep_segSpan_forces_pc_eq,
+  skelHSeqNil_offdiag_must_step}`).  The `TermAssembly.hSeqNil` supplier note
+  ("`execSeqNil` seg-identity, `_row` wrap trivial") is stale — identity
+  suppliers cover only the diagonal.  This is the `scaffold-motive-independent-pq`
+  disease on the `ExecSeq` motive, unfixable by the identity-PC amendment
+  (consumers need `p = execSeqLoopPC ≠ q = execSeqContPC`).
+- workaround: NONE — batch fields hSeqNil/hSeqConsNormal/hSeqConsAbrupt
+  skipped; `rows/SeqForRows.lean` rows + named resids
+  (`SeqNilResid`/`SeqConsNormalResid`/`SeqConsAbruptResid`) stay the carriers.
+- cost: 3 of the 7 B6 skeleton holes undischargeable until amended; every
+  future worker sent at them will re-derive this.
+- proposal: amend `mExecSeq` to pin the decoded PCs
+  (`execSeqLoopPC`/`execSeqContPC`, the only instantiation consumers use) or
+  add a code-image field to `SegEntry` (the pending sentryc/segexit re-land is
+  the natural vehicle); then providers come from `execSeqLoop` + an
+  `ExecSeqExit`→`SegExit` upgrade (needs `memFrame`/`stackWin` carried by the
+  engine exit, currently absent).
+
+## 2026-09-01 forloop-motive-identity-pc-store-mutation (fleet B6-loopseq)
+- missing: any dischargeable form of the `mForLoop` motive: it is an
+  identity-PC `SegEntry st p → SegExit st' p` span, but EVERY `ForLoop`
+  constructor mutates the spec state (cond eval / body exec / full iteration),
+  so a zero-step discharge forces the unchanged `m0` to represent both
+  `st.store` and `st'.store` (machine-checked:
+  `Vsa.Sim.B6LoopSeqObstruction.zeroStep_forSpan_forces_rerepresentation`) and
+  a stepping discharge is barred by the code-free `SegEntry`.  This is the
+  DUAL `scaffold-some-motive-unsatisfiable` shape that got
+  `mExecInit`/`mForCond`/`mExecStep` amended to `True`; `mForLoop` kept the
+  span form and inherited the disease.  Also re-confirmed the
+  `rows/SeqForRows.lean` engine seam: `execForLoopBody`'s `ExecEntry`/`ExecExit`
+  admit no adapter to/from `SegEntry`/`SegExit` in either direction.
+- workaround: NONE — batch fields hFlCondFalse/hFlBodyBreak/hFlBodyRet/hFlLoop
+  skipped; `Vsa.Sim.Rows.ForResid` stays the named carrier.
+- cost: 4 of the 7 B6 skeleton holes undischargeable until amended.
+- proposal: either amend `mForLoop` to honest distinct loop-head/loop-exit PCs
+  + code linkage, or (cheaper, matching how `execForStartSim` actually routes
+  the real work through the `ExecForStep` oracle) amend `mForLoop` to `True`
+  like its three scaffold siblings IF no consumer projects it — a consumer
+  census like the wave-45 §0 grep is the first step.
+
+## 2026-09-01 recursion-stack-budget-class (falsity #13 analysis, run1 coordinator)
+- missing: a recursion-sound stack-budget invariant in the entry-condition
+  layer. `EvalEntry.stackOK = StackOK SL sp (1088+1088)` is a CONSTANT, but
+  each eval recursion level consumes 1088 bytes (eval_expr frame), so the
+  child's entry demands `SL.lo + 3264 ≤ sp` at the parent — underivable from
+  the parent's own 2176.  This is exactly why every recursive-case Extras
+  bundle (`NegExtras.sp_headroom : SL.lo + 3264 ≤ sp.toNat`, the AddResid
+  `SLloSp`, …) parks the fact as an ∀-closed oracle — the class the fleet
+  refuted (falsity #12).  Threading `EvalEntry` into the Resids (the ITEM
+  ZERO brief shape) removes REFUTABILITY but not UNDERIVABILITY: the
+  amended `EvalEntry → NegExtras` is unprovable (2176 < 3264).  Worse, the
+  un-amended `EvalIH` itself is FALSE at expression depth ≥ 3 under a tight
+  `SL` (entry `sp − SL.lo = 2176`: level-3 frame `[SL.lo−1088, SL.lo)` writes
+  OUTSIDE `[SL.lo, sp)`, violating the exit memFrame clause) — analytic
+  refutation; a machine-checked witness would need a 3-deep concrete arm run
+  (not cheaply constructible tonight; recorded as the named obstruction).
+  Ledger precedent: `armsegsplit-marshalling-fact-built` (2026-08-31) already
+  recorded the extras as "NOT projectable from EvalEntry(parent)".
+- workaround: NONE (Law 4).  Amendment (ITEM ZERO phase B, this run):
+  budget-index the entry conditions with ZERO signature changes —
+  (1) `StackLayout` gains a `perCall : Nat` field (per-call-level budget);
+  (2) mutual `Expr.stackNeed`/`Stmt.stackNeed : … → Nat` (structural frame
+  bytes; call bodies accounted via the `perCall` term, NOT structurally);
+  (3) `EvalEntry.stackOK : StackOK SL sp (e.stackNeed + (maxCallDepth − d) *
+  SL.perCall + 1088)` (ExecEntry likewise over `s`), + new entry fields
+  `StoreBodiesBound st.store SL.perCall` and `Expr.BodiesBound e SL.perCall`
+  (fn-literal bodies fit the per-call budget; store invariant survives
+  define/alloc since bodies are program subterms);
+  (4) monotone bridge `stackOK_ge : … → StackOK SL sp 2176` keeps every
+  existing consumer proof one lemma away;
+  (5) the child-entry construction sites (armTail_rec/ArmSegSplit*) now
+  DERIVE the child stackOK by arithmetic — the sp_headroom oracles are
+  DELETED from the Extras/Resid layer.
+  Top-level: the concrete `Layout.atInterpRun` carries `StackOK SL* sp₀
+  (p.stackNeed …)` — "properly loaded" includes the stack fitting the
+  program; InterpSim's ∀-L shape is unchanged (maxCallDepth-cap precedent).
+- cost: the fleet's 20 refuted fields + the ~10 oracle-parked recursive
+  residuals are all uninhabitable/underivable until this lands; it gates the
+  whole RUN-1 field campaign.
+- proposal: land as ITEM ZERO phase B in /tmp/vsa-itemzero-sandbox, COW
+  agents per family, sweep-validate, apply to main in one motion with the
+  Resid entry-threading (phase A) and the B5/B6 slot-pin + motive amendments
+  (phases C/D).
+
+## 2026-09-01 stringify-native-name-mismatch (bridges lane, run1)
+- missing: the concat-side renderer is NOT `Value.display`. `binOpSem .add`
+  (Vsa/While/Semantics.lean:261) renders BOTH operands with `Value.display`,
+  but the machine's `stringify` (interp.c:101, `default: strcpy(buf,
+  "<native fn>")`) drops the native's NAME, while `value_print` (value.c:66,
+  `"<native fn %s>"`) keeps it. `Value.display .native .print = "<native fn
+  print>"` matches value_print ONLY. EMPIRICALLY CONFIRMED (t5 emulator,
+  /tmp/wl-test tests/bridge_stringify.wl + bridge_native_print.wl):
+  `println("x" + println)` → `x<native fn>` (machine) vs spec `x<native fn
+  println>`; `println(println)` → `<native fn println>` (display correct on
+  the print path). All other constructors agree byte-for-byte on BOTH paths
+  (Atrue / falseB / nullC / 12D / `<fn foo>` / anon `<fn>`).
+- workaround: NONE yet (Law 4). Consequence: `StrConcatCellResid` /
+  `StrConcatHeapResid` / `eval_binary_row`'s hStrAddL/hStrAddR (and
+  TermAssembly's fields) are FALSE as stated whenever the non-str operand is
+  `.native` (falsity class: spec-side rendering bug, Trichotomy precedent).
+- cost: the concat cells cannot be discharged for native operands; every
+  consumer of `binOpSem .add`'s str arm carries the false rendering.
+- proposal: amendment — add `Value.catDisplay (s : Store) : Value → String`
+  = `display` except `.native _ => "<native fn>"`, and amend `binOpSem .add`
+  str arm to `some (.str (l.catDisplay s ++ r.catDisplay s))`; rethread the
+  finitely many `.display`-in-concat statements (BinStrCells, StringifySpec,
+  StrConcatHeap, BinDispatchRow hStrAddL/R, TermAssembly fields). display
+  stays as-is for value_print/printArgs (empirically right there).
+
+## 2026-09-01 fanout-whnf-explosion-blocks-entry-and-io (run1 coordinator)
+- missing: the entry-amendment fan-out (ITEM ZERO B1 across every recursive
+  arm sim) and the io DAG's __sfvwrite_r both stall on the SAME class — a
+  guard/geometry `whnf` through a store reified over a `writeLog`-def memory
+  (the "P2 explosion"): a `decide`/`omega`/`simp` that must reduce the large
+  EvalEntry/store structure blows the unifier (seg-guard-close-symbolic-pins
+  and seg_frame_facts-crossblock are prior instances). TWO worker agents died
+  to the 600s watchdog on it tonight (io F4; itemzero recursive-arm fan-out).
+- workaround: the itemzero PRIMARY amendment IS green (Vsa/Sim/InterpEntry.lean
+  amended EvalEntry + inhabit probe `itemzero_neg_sp_headroom` axiom-clean —
+  proves the budgeted `stackBudget` DERIVES the fleet-refuted `SL.lo+3264≤sp`,
+  falsity #13 cured on the primary structure). The BLOCK is only the fan-out:
+  ~30 arm-sim construction sites each need the 3 budget conjuncts forwarded,
+  and each forwarding proof hits the whnf wall unless the fact is ascribed
+  BEFORE any EvalEntry projection reaches the tactic (the probe's technique:
+  bind `hc.stackBudget.1` to a `have` with an explicit type, never `omega` on
+  a raw projection). Preserved as replayable patches:
+  experiments/wip/{itemzero-b1-amendment.patch (3367 lines),
+  io-lane-partial.patch (9863 lines)}.
+- cost: endToEnd stays CONDITIONAL on RemainingWork tonight — the record is
+  inhabitable-in-principle (probe) but not yet inhabited (fan-out blocked);
+  ErrWork blocked on the 42 M4 error-edge spans (separate, err-lane verdict).
+- proposal: complete the fan-out with the ascribe-before-project discipline
+  baked into a `budget_forward` tactic/lemma (one `StackOK.mono` +
+  `stackNeed` one-level-unfold per site), applied mechanically — NOT via a
+  general `omega` that whnf's the entry. Then regen skeleton + census.
+
+## 2026-09-02 store-bodies-eval-preservation (wave 47a B1 fan-out, main)
+- missing: the spec-side preservation lemma family
+  `EvalE st d env e st' v → StoreBodiesBound st.store P → e.bodiesBound P →
+   StoreBodiesBound st'.store P` (mutual with ExecS/EvalArgs). B1's budget
+  layer states the invariant (`Vsa/While/StackNeed.lean` doc comments say
+  "preserved by define/allocFrame/allocClosure") but nobody has PROVED the
+  judgment-level preservation.
+- workaround: every RIGHT-child site (blockB_binary's R conjuncts, the 10
+  binary-op row Goal towers, blockC_andTrue/orFalse via the
+  AndTrueExtras/OrFalseExtras `store_bodiesR` field, MidArmRightMarshal,
+  blockA_binaryArm_budgeted's `hstoreBodiesR` premise) threads
+  `StoreBodiesBound st'.store perCallBudget` as a NAMED premise/field.
+- cost: one extra named residual per two-child arm (~8 sites today); the
+  recursor-row layer that instantiates these towers will have to supply it at
+  every two-child case until the preservation lemma lands.
+- proposal: `Vsa/While/StackNeedPreserve.lean` — mutual induction over
+  EvalE/ExecS/EvalArgs proving StoreBodiesBound preservation (+ the `.fn`
+  seeding case from `Expr.bodiesBound`), then delete the threaded premises by
+  deriving at the recursor rows (they hold the EvalE derivations + entry
+  invariant).

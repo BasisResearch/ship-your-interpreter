@@ -24,6 +24,17 @@ SHA_BEFORE=$(shasum -a 256 "$ROOT/c/while-riscv-htif.elf" | cut -d' ' -f1)
 echo "cloning (APFS COW, warm oleans) -> $CLONE"
 cp -Rc "$ROOT" "$CLONE"
 
+# Headless opencode auto-rejects "ask" permissions; the global config also
+# injects a lean LSP (lake serve = racing builds, Law 5). Override both in the
+# throwaway clone only.
+cat > "$CLONE/opencode.json" << 'OCEOF'
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": { "edit": "allow", "bash": "allow" },
+  "lsp": { "lean": { "disabled": true } }
+}
+OCEOF
+
 echo "launching opencode ($MODEL) on $BATCH — sequential, one lean process"
 cd "$CLONE"
 opencode run -m "$MODEL" --title "vsa-fleet-$BATCH" "$(cat "$BRIEF")" || true

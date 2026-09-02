@@ -234,6 +234,20 @@ structure ExecEntry
   spReg : c.σ.regs.get? Register.x2 = some sp
   /-- `sp` is a good C stack pointer with 176 + callee headroom. -/
   stackOK : StackOK SL sp (176 + 1088)
+  /-- **ITEM ZERO B1 (recursion-sound budget).** `sp` carries enough headroom
+  for THIS statement's structural need plus every remaining call level's budget
+  plus `1088`. Recursion-sound replacement for the constant `stackOK`; a child
+  statement/expression derives its budget from this one (`s.stackNeed` unfolds
+  to `execFrame + child`, `execFrame = 176`). Old `stackOK` recovered via
+  `StackOK.mono` (`s.stackNeed ≥ 176`, so `s.stackNeed + … + 1088 ≥ 176 + 1088`). -/
+  stackBudget : StackOK SL sp
+    (s.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088)
+  /-- **ITEM ZERO B1.** Every `.fn` literal reachable in `s` fits the per-call
+  budget. -/
+  stmt_bodies : Stmt.bodiesBound Vsa.While.perCallBudget s = true
+  /-- **ITEM ZERO B1.** Every closure already in the store fits the per-call
+  budget. -/
+  store_bodies : Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
   /-- `minstret` present. -/
   minstret : ∃ v, c.σ.regs.get? Register.minstret = some v
   /-- Machine memory is the pinned `m0`. -/

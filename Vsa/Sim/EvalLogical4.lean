@@ -150,7 +150,13 @@ theorem blockC_orFalse
         (∀ R : Register, AbiPreservedNoise R →
           (Register.x8 == R) = false → (Register.x9 == R) = false →
           (Register.x18 == R) = false → (Register.x2 == R) = false →
-          gpre R = g R))
+          gpre R = g R) ∧
+        -- ITEM ZERO B1: the RIGHT operand's recursion-sound budget at `sp - 1088`,
+        -- its `.fn`-bodies bound, and the post-LEFT store-bodies invariant.
+        StackOK SL (sp - 1088#64)
+          (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget er = true ∧
+        Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
       (fun c => ∃ (mpre : Mem) (φfe φce : Addr → Nat) (outF : Array String),
         PhiExtends φf φfe nf ∧
         PhiExtends φc φce nc ∧
@@ -164,7 +170,8 @@ theorem blockC_orFalse
     hout0eq, hVtruthyMcall, hVboolMcall, hViIntMcall, hViSlotMcall, hBufExtras,
     hTruthyStk, hBoolStk, hTruthyArena, hBoolArena, hcodeStk, hviStk, htableStk,
     harenaStk, harenaCode, harenaVi, harenaTable, hsretInSL, hMcallM0,
-    hsphiRam, hsp8, hsp16, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge⟩ := hpre
+    hsphiRam, hsp8, hsp16, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge,
+    hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hra, hs1, hsp, ⟨vmi, hmi⟩, hout, hframe,
     ⟨φcv, hpcv, hvalSub⟩, hstoreBundle, hcode,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemFrame, hMemExt⟩ := hSub
@@ -716,7 +723,8 @@ theorem blockC_orFalse
         hropAl, hropLo, hropHi, hropWin, hropStk,
         (by rw [haddr240]; omega), (by rw [haddr240]; omega), (by rw [haddr240]; omega),
         hSLloSp, hspSLhi, hsp16, hsphiRam, hSLlo, hSLhiRam, hSLwin,
-        hcodeStk, hviStk, htableStk, harenaStk, harenaCode⟩
+        hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
+        hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩
   -- unpack the RIGHT SubEvalReturn
   obtain ⟨hGR, htickR, hpcR, ha0R, hraR, hs1R, hspR, ⟨vmiR, hmiR⟩, houtR, hframeR,
     ⟨φcvR, hpcvR, hvalR⟩, hstoreBundleR, hcodeR,
@@ -1151,6 +1159,10 @@ structure OrFalseExtras
     ValueRepr mR N φa (sp.toNat - 944) vr → ValueRepr mR N φb (sp.toNat - 944) vr
   size_frames : st'.store.frames.size = st''.store.frames.size
   size_closures : st'.store.closures.size = st''.store.closures.size
+  -- ITEM ZERO B1: the post-LEFT store keeps every closure body within the
+  -- per-call budget (supplied by the consuming row from the entry invariant
+  -- via spec-side preservation across the LEFT sub-derivation).
+  store_bodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget
 
 /-! ## `EvalOrFalseSimGoal` — the `EvalE.orFalse` (two-eval) projection
 
@@ -1267,7 +1279,18 @@ theorem evalOrFalseSim : EvalOrFalseSimGoal := by
         hx.op_align, hx.op_lo, hx.op_hi, hx.op_win, hx.op_stk,
         hx.sp_headroom, hx.sp_SLhi, hx.sp16, hx.SLhi_ram,
         hx.code_stk, hx.vicode_stk, (by have := hx.table_stk; omega),
-        hx.arena_stk, hx.arena_code⟩
+        hx.arena_stk, hx.arena_code,
+        -- ITEM ZERO B1: the LEFT child budget, DERIVED from the entry's
+        -- budgeted fields (`StackOK.child` + `bodiesBound_logical`).
+        hc.stackBudget.child (by decide)
+          (by
+            have h1 : (Expr.logical LogOp.or el er).stackNeed
+                = evalFrame + max el.stackNeed er.stackNeed := rfl
+            have h2 : ((1088#64 : BitVec 64)).toNat = 1088 := by decide
+            have hm := Nat.le_max_left el.stackNeed er.stackNeed
+            simp only [h1, h2, evalFrame]; omega),
+        (Expr.bodiesBound_logical hc.expr_bodies).1,
+        hc.store_bodies⟩
   obtain ⟨mcall, hSubR, hMcallM0stk⟩ := hSub
   have hAgM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]? := hMcallM0stk
   have hOutC2 : OutRepr c2.σ st' := hSubR.2.2.2.2.2.2.2.2.1
@@ -1341,7 +1364,18 @@ theorem evalOrFalseSim : EvalOrFalseSimGoal := by
         hx.arena_stk, hx.arena_code, hx.arena_vi, hx.arena_table, hx.sret_inSL, hMcallM0,
         (by have := hx.sp_SLhi; have := hx.SLhi_ram; omega), (by have := hx.sp16; omega),
         hx.sp16, hx.SLhi_ram, hx.sp_SLhi,
-        hArmg8, hArmg9, hArmg18, hArmg2, hbridge⟩
+        hArmg8, hArmg9, hArmg18, hArmg2, hbridge,
+        -- ITEM ZERO B1: the RIGHT child budget — StackOK/bodiesBound DERIVED
+        -- from the entry's budgeted fields; store-bodies from the extras field.
+        hc.stackBudget.child (by decide)
+          (by
+            have h1 : (Expr.logical LogOp.or el er).stackNeed
+                = evalFrame + max el.stackNeed er.stackNeed := rfl
+            have h2 : ((1088#64 : BitVec 64)).toNat = 1088 := by decide
+            have hm := Nat.le_max_right el.stackNeed er.stackNeed
+            simp only [h1, h2, evalFrame]; omega),
+        (Expr.bodiesBound_logical hc.expr_bodies).2,
+        hx.store_bodiesR⟩
   -- === block D: shared epilogue → EvalExitD .bool vr.truthy (via blockD_v_rec) ===
   obtain ⟨c4, hs4, hExitDe⟩ :=
     blockD_v_rec g N A SL φfe φce st'' (.bool vr.truthy) sp r sret v8 v9 v18 outF m0

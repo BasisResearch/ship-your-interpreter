@@ -256,6 +256,10 @@ def BodyHandoff
     BodyGhostTie g g' ∧
     (∀ spv : BitVec 64, g Register.x2 = some spv →
       CallerSpillSlots g spv mB m0) ∧
+    -- ITEM ZERO (falsity #12, shape 3): the entry route also certifies the
+    -- `eval_expr` image in the mid-memory `mB` — the `SeqSpanGround` feed for
+    -- the guarded `mExecSeq` body IH at `(callBodyLoopPC, callBodyRetPC)`.
+    Vsa.Sim.Code.Eval_exprLoaded mB ∧
     SegEntry g' N A SL φf' φc
       (closureBoundSt st store' cd vs frame) (d + 1) (dLeft - 1) (aLeft - 1)
       callBodyLoopPC mB c
@@ -375,6 +379,7 @@ theorem callClosureSim
     -- handoff triple `(g', φf', mB)` — FREE from `mExecSeq`'s own `∀ g φf φc … m0`:
     (hBodyIH : ∀ (g' : (R : Register) → Option (RegisterType R))
         (φf' : Addr → Nat) (mB : Mem),
+      Vsa.Sim.TermSimAssembly.SeqSpanGround callBodyLoopPC callBodyRetPC mB →
       Triple
         (SegEntry g' N A SL φf' φc
           (closureBoundSt st store' cd vs frame) (d + 1) (dLeft - 1) (aLeft - 1)
@@ -413,10 +418,12 @@ theorem callClosureSim
           (closureBoundSt st store' cd vs frame).store.closures.size
           st' callBodyRetPC mB c)
       ?_ ?_
-    · -- body hop: run the IH at the handoff triple, carry its facts across.
+    · -- body hop: run the IH at the handoff triple (guard fed from the
+      -- handoff's `Eval_exprLoaded mB`), carry its facts across.
       intro c hc
-      obtain ⟨g', φf', mB, hpe, hfr, htie, hslots, hSeg⟩ := hc
-      obtain ⟨c', hsteps, hExit⟩ := hBodyIH g' φf' mB c hSeg
+      obtain ⟨g', φf', mB, hpe, hfr, htie, hslots, hLoad, hSeg⟩ := hc
+      obtain ⟨c', hsteps, hExit⟩ :=
+        hBodyIH g' φf' mB (Vsa.Sim.TermSimAssembly.seqSpanGround_of rfl hLoad) c hSeg
       exact ⟨c', hsteps, g', φf', mB, hpe, hfr, htie, hslots, hExit⟩
     · -- return hop: `ret` at the carried handoff facts.
       intro c hc
@@ -537,6 +544,7 @@ theorem eval_callClosure_row
   -- triple).
   have hBodyIH : ∀ (g' : (R : Register) → Option (RegisterType R))
       (φf' : Addr → Nat) (mB : Mem),
+      Vsa.Sim.TermSimAssembly.SeqSpanGround callBodyLoopPC callBodyRetPC mB →
       Triple
         (SegEntry g' N A SL φf' φc
           (closureBoundSt st store' cd vs frame) (d + 1) (dLeft - 1) (aLeft - 1)
@@ -545,8 +553,8 @@ theorem eval_callClosure_row
           (closureBoundSt st store' cd vs frame).store.frames.size
           (closureBoundSt st store' cd vs frame).store.closures.size
           st' callBodyRetPC mB) :=
-    fun g' φf' mB =>
-      hBody g' N A SL φf' φc (dLeft - 1) (aLeft - 1) callBodyLoopPC callBodyRetPC mB
+    fun g' φf' mB hG =>
+      hBody g' N A SL φf' φc (dLeft - 1) (aLeft - 1) callBodyLoopPC callBodyRetPC mB hG
   exact callClosureSim g N A SL φf φc st st' d a cd vs store' frame status v
     dLeft aLeft m0 hImg a_1 a_2 a_3 a_4 a_6 hNilLink hBodyIH
     (hR st st' d a cd vs store' frame status v g N A SL φf φc dLeft aLeft m0)

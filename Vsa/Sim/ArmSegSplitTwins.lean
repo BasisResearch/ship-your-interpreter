@@ -101,27 +101,31 @@ head, and the child re-dispatch never revisits `0x80003fe0` (a fresh `jal
 exec_stmt` with the CHILD node happens only for grandchildren).  So any config on
 the tail route fails `SEntryC` — pinned here once, decidably. -/
 
-/-- The `exec_stmt` post-prologue dispatch head: the `lw a5,0(s0)` kind read at
-`0x80004014`, the target of the if-then/else tail re-dispatch `j`/`bnez`. -/
-def execStmtDispatchHead : Nat := 0x80004014
+/- `execStmtDispatchHead` / `ExecDispatchEntry` / `SDispatchC` MOVED UPSTREAM to
+`Vsa/Sim/ApproxArmReseat.lean` (wave-45 dedup): the amended 3-way `SEntryC`
+disjunction needs them at its own def site.  This file consumes them through
+`open Vsa.Sim.ApproxArmReseat`. -/
 
-/-- **`SEntryC` pins the entry PC.**  The named destructurer for the PC conjunct
-of the `SEntryC` landing bundle: any `SEntryC` config sits AT `execStmtEntry`. -/
+/-- **`SFreshC` pins the entry PC** (wave-45 RESTATEMENT of the obstruction
+destructurer over the fresh-call disjunct: the amended `SEntryC` no longer pins
+a single PC — exactly the amendment's point).  Any `SFreshC` config sits AT
+`execStmtEntry`.  Name kept from the pre-amendment statement (check_all). -/
 theorem sEntryC_pins_entry_pc (c : Config) (st : SpecSt) (d : Nat) (env : Addr)
-    (s : Stmt) (h : SEntryC c st d env s) :
+    (s : Stmt) (h : SFreshC c st d env s) :
     c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 execStmtEntry) := by
   obtain ⟨g, N, A, SL, φf, φc, sp, r, aI, aS, aE, aR, m0, hE⟩ := h
   exact hE.pc
 
-/-- **The obstruction core**: a config at the dispatch head (`0x80004014`, where
-the tail re-dispatch of `stmtIfThen`/`stmtIfElse` actually lands) can NEVER
-satisfy `SEntryC` — the frozen `ApproxArmResid.stmtIfThen`/`stmtIfElse` field
-conclusions are machine-unreachable on the tail route. -/
+/-- **The obstruction core** (wave-45 RESTATEMENT over `SFreshC`): a config at
+the dispatch head (`0x80004014`, where the tail re-dispatch of
+`stmtIfThen`/`stmtIfElse` actually lands) can NEVER satisfy the FRESH-call
+entry — this is the machine fact that forced the `SEntryC` 3-way amendment
+(the amended `SEntryC` reaches such configs via its `SDispatchC` disjunct). -/
 theorem sEntryC_false_at_dispatchHead (c : Config) (st : SpecSt) (d : Nat)
     (env : Addr) (s : Stmt)
     (hpc : c.σ.regs.get? Register.PC =
       some (BitVec.ofNat 64 execStmtDispatchHead)) :
-    ¬ SEntryC c st d env s := by
+    ¬ SFreshC c st d env s := by
   intro h
   have h2 := sEntryC_pins_entry_pc c st d env s h
   rw [hpc] at h2
@@ -253,78 +257,9 @@ ALREADY lowered (`stackOK … 1088`: the exec frame is live, only the eval headr
 remains).  Mirrors `ExecEntry` minus the call-boundary fields (`a0-a3`/`ra`: the
 frame's `ra` slot belongs to the PARENT call and is untouched by the tail). -/
 
-/-- **The post-prologue dispatch-head entry.**  What a fresh `ExecEntry` reaches
-after the 14-instruction prologue, and what the tail re-dispatch reaches directly
-— the honest common child-entry for the amended `stmtIfThen`/`stmtIfElse`
-recursion. -/
-structure ExecDispatchEntry
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (φf φc : Addr → Nat)
-    (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt)
-    (spD aInterp aStmt aEnv aRet : BitVec 64)
-    (m0 : Mem)
-    (c : Config) : Prop where
-  /-- Pinned control state. -/
-  good : GoodState c.σ
-  /-- Tick parity invariant. -/
-  tick : c.tick < 2
-  /-- PC at the dispatch head (the `lw a5,0(s0)` kind read). -/
-  pc : c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 execStmtDispatchHead)
-  /-- `s0` holds the `Stmt` node address (the tail route's reloaded child). -/
-  s0 : c.σ.regs.get? Register.x8 = some aStmt
-  /-- `s1` holds `interp*`. -/
-  s1 : c.σ.regs.get? Register.x9 = some aInterp
-  /-- `s2` holds the `retslot`. -/
-  s2 : c.σ.regs.get? Register.x18 = some aRet
-  /-- `s3` holds the scope machine address. -/
-  s3 : c.σ.regs.get? Register.x19 = some aEnv
-  /-- `a6 = 8` (the kind bound for the `bltu` table guard). -/
-  a6 : c.σ.regs.get? Register.x16 = some (8#64)
-  /-- `a4` holds the statement jump-table base. -/
-  a4 : c.σ.regs.get? Register.x14 = some (BitVec.ofNat 64 stmtJumpTableBase)
-  /-- The LOWERED stack pointer (frame live). -/
-  spReg : c.σ.regs.get? Register.x2 = some spD
-  /-- `spD` still has the eval-frame headroom. -/
-  stackOK : StackOK SL spD 1088
-  /-- `minstret` present. -/
-  minstret : ∃ v, c.σ.regs.get? Register.minstret = some v
-  /-- Machine memory is the pinned `m0`. -/
-  mem : c.σ.mem = m0
-  /-- `exec_stmt` loaded. -/
-  code : Exec_stmtLoaded c.σ.mem
-  /-- The `Stmt` node at `aStmt` represents `s`. -/
-  stmt : StmtRepr c.σ.mem aStmt.toNat s
-  /-- The whole spec store is represented. -/
-  store : StoreRepr c.σ.mem N A φf φc st.store
-  /-- `StoreRepr` survives any memory change confined to `[SL.lo, spD)`. -/
-  store_survives : ∀ m' : Mem,
-    (∀ k, ¬ (SL.lo ≤ k ∧ k < spD.toNat) → c.σ.mem[k]? = m'[k]?) →
-    StoreRepr m' N A φf φc st.store
-  /-- Console output correspondence. -/
-  out : OutRepr c.σ st
-  /-- The blanket ghost frame. -/
-  frame : ∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R
-  /-- Code/stack disjointness at the lowered `sp`. -/
-  code_stack_disjoint : spD.toNat ≤ execStmtEntry ∨ execStmtEnd ≤ SL.lo
-  /-- The stack region is in RAM above the HTIF window. -/
-  stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
-  stack_win : tohostAddr + 16 ≤ SL.lo
-  /-- The `Stmt` node is disjoint from the stack scribble. -/
-  stmt_stack_disjoint : aStmt.toNat + 16 ≤ SL.lo ∨ spD.toNat ≤ aStmt.toNat
-  /-- The `Stmt` node is an 8-aligned 16-byte slot in RAM above HTIF. -/
-  stmt_align : aStmt.toNat % 8 = 0
-  stmt_ram : 0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000
-  stmt_win : tohostAddr + 16 ≤ aStmt.toNat
-
-/-- **Dispatch-head entry, existentially bundled** — the `SEntryC`-shaped landing
-predicate the AMENDED `stmtIfThen`/`stmtIfElse` fields target (the amendment
-plan's `SEntryC ∨`-disjunct / re-seated recursion entry). -/
-def SDispatchC (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) : Prop :=
-  ∃ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (spD aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
-    ExecDispatchEntry g N A SL φf φc st d env s spD aInterp aStmt aEnv aRet m0 c
+/- `ExecDispatchEntry` / `SDispatchC` formerly defined HERE — MOVED UPSTREAM to
+`Vsa/Sim/ApproxArmReseat.lean` (wave-45 dedup, the amended `SEntryC`'s second
+disjunct).  Consumed below through `open Vsa.Sim.ApproxArmReseat`. -/
 
 /-- **The tail-re-dispatch marshalling twin** (of `execEntry_of_jalPrefix`).
 

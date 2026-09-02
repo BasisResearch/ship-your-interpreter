@@ -281,13 +281,28 @@ theorem blockB_binary
         -- lowered frame plus the right call's own spill slots is populated. =====
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, ment[a]? = some b)) ∧
         -- the arm-entry memory presence-extends the case-entry memory (M6 Layout).
-        MemExtends m0 ment)
+        MemExtends m0 ment ∧
+        -- ITEM ZERO B1: BOTH operands' recursion-sound budgets at `sp - 1088`,
+        -- their `.fn`-bodies bounds, and the store-bodies invariants (LEFT over
+        -- the entry store `st`, RIGHT over the post-left store `st'`), threaded
+        -- from the parent `.binary op el er` node's budget by the arm-entry
+        -- supplier (RIGHT store-bodies via eval-preservation at that layer).
+        StackOK SL (sp - 1088#64)
+          (el.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget el = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget ∧
+        StackOK SL (sp - 1088#64)
+          (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget er = true ∧
+        Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
       (fun c =>
         TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
           st' st'' vl vr sp r sret v8 v9 v18 m0 c) := by
   intro c hpre
   obtain ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v,
-    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0⟩ := hpre
+    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0,
+    hstackBudgetL, hexprBodiesL, hstoreBodiesL,
+    hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
     hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
@@ -528,7 +543,8 @@ theorem blockB_binary
         hBE.lop_align, hBE.lop_ram.1, hBE.lop_ram.2, hBE.lop_win, hBE.lop_stk,
         (by rw [hsub968]; omega), (by rw [hsub968]; omega), (by rw [hsub968]; omega),
         (by omega), hBE.spSLhi, hBE.sp16, (by omega), hSLlo, hBE.SLhiRam, hSLwin,
-        hBE.codeStk, hBE.viStk, hBE.tableStk, hBE.arenaStk, hBE.arenaCode⟩
+        hBE.codeStk, hBE.viStk, hBE.tableStk, hBE.arenaStk, hBE.arenaCode,
+        hstackBudgetL, hexprBodiesL, hstoreBodiesL⟩
   -- unpack the LEFT `SubEvalReturn`
   obtain ⟨hGL, htickL, hpcL, ha0L, hraL, hs1L, hspL, ⟨vmiL, hmiL⟩, houtL, hframeL,
     ⟨φcvL, hpcvL, hvalL⟩, hstoreBundleL, hcodeL,
@@ -926,7 +942,8 @@ theorem blockB_binary
         hBE.rop_align, hBE.rop_ram.1, hBE.rop_ram.2, hBE.rop_win, hBE.rop_stk,
         (by rw [haddr144']; omega), (by rw [haddr144']; omega), (by rw [haddr144']; omega),
         (by omega), hBE.spSLhi, hBE.sp16, (by omega), hSLlo, hBE.SLhiRam, hSLwin,
-        hBE.codeStk, hBE.viStk, hBE.tableStk, hBE.arenaStk, hBE.arenaCode⟩
+        hBE.codeStk, hBE.viStk, hBE.tableStk, hBE.arenaStk, hBE.arenaCode,
+        hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩
   -- unpack the RIGHT `SubEvalReturn`
   obtain ⟨hGR, htickR, hpcR, ha0R, hraR, hs1R, hspR, ⟨vmiR, hmiR⟩, houtR, hframeR,
     ⟨φcvR, hpcvR, hvalR⟩, hstoreBundleR, hcodeR,

@@ -90,14 +90,21 @@ theorem blockB_flCond_stagePre
         (A.hi ≤ SL.lo ∨ (sp.toNat - 176) + 1088 ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
-        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w)) :
+        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        -- ITEM ZERO B1: the cond child's recursion-sound budget at the
+        -- statement frame `sp - 176`, its `.fn`-bodies bound, and the
+        -- store-bodies invariant (the amended `ExecJalPreBundle` tail).
+        StackOK SL (sp - 176#64)
+          (e.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget e = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 5 c (fun c' => ExecJalPreBundle e c' st d env) := by
   obtain ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
     hEvCode, hViInt, hViSlot, hStoreSurvJ,
     hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre,
     hSLlo, hSLhiRam, hSLwin,
     hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
-    hgframe, hg8, hg18⟩ := hpre
+    hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
   obtain ⟨hG, htick, hpc, hs0, hs1, hs3, hs2, hsp, hra, ⟨vmi, hmi⟩,
     hout, houtStr, hmem, hcode, hstore,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
@@ -345,8 +352,12 @@ theorem blockB_flCond_stagePre
   · rcases harenaStkJ with h | h
     · left; exact h
     · right; rw [hjspN]; exact h
-  -- (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)
-  · exact harenaCode
+  -- (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) + the ITEM ZERO B1 budget trio
+  -- (the ghost `jsp = (sp-176)+1088` lowers back to the statement frame:
+  -- `jsp - 1088 = sp - 176`).
+  · exact ⟨harenaCode,
+      (by rw [BitVec.add_sub_cancel]; exact hstackBudget),
+      hexprBodies, hstoreBodies⟩
 
 #print axioms blockB_flCond_stagePre
 
@@ -389,7 +400,13 @@ def FlCondArmDispatch
       (A.hi ≤ SL.lo ∨ (sp.toNat - 176) + 1088 ≤ A.lo) ∧
       (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
       (∀ R : Register, AbiPreservedNoise R → c'.σ.regs.get? R = gpre R) ∧
-      (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w))
+      (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+      -- ITEM ZERO B1: the cond child's budget at the statement frame,
+      -- `.fn`-bodies bound, store-bodies invariant.
+      StackOK SL (sp - 176#64)
+        (cc.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+      Expr.bodiesBound Vsa.While.perCallBudget cc = true ∧
+      Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget)
 
 /-- **The `EvalChildStages.flCond` field, machine-composed (exec twin).** -/
 theorem flCond_field_of_dispatch
@@ -405,7 +422,7 @@ theorem flCond_field_of_dispatch
     hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hStoreSurvJ,
     hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
     hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
-    hgframe, hg8, hg18⟩ := hMid
+    hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩ := hMid
   have hcut : LandedN 5 c1 (fun c' => ExecJalPreBundle cc c' st d env) :=
     blockB_flCond_stagePre g gpre N A SL φf φc st d env cc
       sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1
@@ -413,7 +430,7 @@ theorem flCond_field_of_dispatch
        hEvCode, hViInt, hViSlot, hStoreSurvJ,
        hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
        hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
-       hgframe, hg8, hg18⟩
+       hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩
   obtain ⟨n1, hn1⟩ := hsteps1.toN
   obtain ⟨m2, c2, hm2, hs2, hpb⟩ := hcut
   exact ⟨n1 + m2, c2, by omega, hn1.trans_add hs2, hpb⟩

@@ -551,6 +551,8 @@ inductive MKind where
   | or   : MKind
   | and  : MKind
   | srl  : MKind
+  | xor  : MKind
+  | sll  : MKind
   | lw   : MKind
   | lwu  : MKind
   | ld   : MKind
@@ -568,6 +570,9 @@ inductive MKind where
   | slt   : MKind
   | subw  : MKind
   | addw  : MKind
+  | sllw  : MKind
+  | srlw  : MKind
+  | sraw  : MKind
   | auipc : MKind
   | lui   : MKind
   | xori  : MKind
@@ -624,6 +629,8 @@ def astOfM (a : MInstr) : instruction :=
   | .or   => instruction.RTYPE (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, rop.OR)
   | .and  => instruction.RTYPE (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, rop.AND)
   | .srl  => instruction.RTYPE (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, rop.SRL)
+  | .xor  => instruction.RTYPE (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, rop.XOR)
+  | .sll  => instruction.RTYPE (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, rop.SLL)
   | .lw   => instruction.LOAD (a.imm, gprIdx a.rs1, gprIdx a.rd, false, 4)
   | .lwu  => instruction.LOAD (a.imm, gprIdx a.rs1, gprIdx a.rd, true, 4)
   | .ld   => instruction.LOAD (a.imm, gprIdx a.rs1, gprIdx a.rd, false, 8)
@@ -641,6 +648,9 @@ def astOfM (a : MInstr) : instruction :=
   | .slt   => instruction.RTYPE (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, rop.SLT)
   | .subw  => instruction.RTYPEW (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, ropw.SUBW)
   | .addw  => instruction.RTYPEW (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, ropw.ADDW)
+  | .sllw  => instruction.RTYPEW (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, ropw.SLLW)
+  | .srlw  => instruction.RTYPEW (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, ropw.SRLW)
+  | .sraw  => instruction.RTYPEW (gprIdx a.rs2, gprIdx a.rs1, gprIdx a.rd, ropw.SRAW)
   | .auipc => instruction.UTYPE (imm20Of a, gprIdx a.rd, uop.AUIPC)
   | .lui   => instruction.UTYPE (imm20Of a, gprIdx a.rd, uop.LUI)
   | .xori  => instruction.ITYPE (a.imm, gprIdx a.rs1, gprIdx a.rd, iop.XORI)
@@ -692,6 +702,8 @@ def wvalM (a : MInstr) (L : GRegs) (bs : List (BitVec 8)) : BitVec 64 :=
   | .or   => srcVal a.rs1 L ||| srcVal a.rs2 L
   | .and  => srcVal a.rs1 L &&& srcVal a.rs2 L
   | .srl  => shift_bits_right (srcVal a.rs1 L) (Sail.BitVec.extractLsb (srcVal a.rs2 L) 5 0)
+  | .xor  => srcVal a.rs1 L ^^^ srcVal a.rs2 L
+  | .sll  => shift_bits_left (srcVal a.rs1 L) (Sail.BitVec.extractLsb (srcVal a.rs2 L) 5 0)
   | .addiw => sign_extend (m := 64)
       (Sail.BitVec.extractLsb (srcVal a.rs1 L + sign_extend (m := 64) a.imm) 31 0)
   | .slli => shift_bits_left (srcVal a.rs1 L) (Sail.BitVec.extractLsb (shamtOf a) 5 0)
@@ -706,6 +718,15 @@ def wvalM (a : MInstr) (L : GRegs) (bs : List (BitVec 8)) : BitVec 64 :=
   | .addw => sign_extend (m := 64)
       (Sail.BitVec.extractLsb (srcVal a.rs1 L) 31 0
         + Sail.BitVec.extractLsb (srcVal a.rs2 L) 31 0)
+  | .sllw => sign_extend (m := 64)
+      (shift_bits_left (Sail.BitVec.extractLsb (srcVal a.rs1 L) 31 0)
+        (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (srcVal a.rs2 L) 31 0) 4 0))
+  | .srlw => sign_extend (m := 64)
+      (shift_bits_right (Sail.BitVec.extractLsb (srcVal a.rs1 L) 31 0)
+        (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (srcVal a.rs2 L) 31 0) 4 0))
+  | .sraw => sign_extend (m := 64)
+      (shift_bits_right_arith (Sail.BitVec.extractLsb (srcVal a.rs1 L) 31 0)
+        (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (srcVal a.rs2 L) 31 0) 4 0))
   | .auipc => a.pc + sign_extend (m := 64) (imm20Of a +++ (0x000#12))
   | .lui => sign_extend (m := 64) (imm20Of a +++ (0x000#12))
   | .xori => srcVal a.rs1 L ^^^ sign_extend (m := 64) a.imm
@@ -805,9 +826,9 @@ mention symbolic values. -/
 def MemFacts (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (bs : List (BitVec 8))
     (a : MInstr) : Prop :=
   match a.kind with
-  | .addi | .add | .sub | .or | .and | .srl => True
+  | .addi | .add | .sub | .or | .and | .srl | .xor | .sll => True
   | .addiw | .slli | .srli | .srai | .slti | .slt | .subw | .addw | .auipc | .lui
-  | .xori | .andi | .ori | .slliw | .srliw | .sraiw => True
+  | .xori | .andi | .ori | .slliw | .srliw | .sraiw | .sllw | .srlw | .sraw => True
   | .lw =>
     (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 4 ≤ 0x100000000 ∧
      ((eaddrM a L).toNat + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat) ∧
@@ -877,6 +898,8 @@ def KindOK (dom : List Nat) (k : MKind) (rd rs1 rs2 : Nat) : Prop :=
   | .addiw | .slti => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
   | .slli | .srli | .srai => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
   | .slt | .subw | .addw => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom ∧ SrcOK rs2 dom
+  | .xor | .sll | .sllw | .srlw | .sraw =>
+      (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom ∧ SrcOK rs2 dom
   | .auipc => (1 ≤ rd ∧ rd ≤ 31)
   | .lui => (1 ≤ rd ∧ rd ≤ 31)
   | .xori => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 dom
@@ -912,6 +935,11 @@ instance instDecKindOK (dom : List Nat) (k : MKind) (rd rs1 rs2 : Nat) :
   | .slt   => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
   | .subw  => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
   | .addw  => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+  | .xor   => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+  | .sll   => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+  | .sllw  => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+  | .srlw  => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+  | .sraw  => inferInstanceAs (Decidable (_ ∧ _ ∧ _))
   | .auipc => inferInstanceAs (Decidable (_ ∧ _))
   | .lui   => inferInstanceAs (Decidable (_ ∧ _))
   | .xori  => inferInstanceAs (Decidable (_ ∧ _))
@@ -2692,6 +2720,276 @@ theorem block_mem_run (is : List MInstr) :
         ih σ1 i1 (u + 1) (BitVec.addInt apc 4) vm1
           (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .lhu, ard, ars1, ars2, aimm⟩ L (lds.headD []))
           (stepLdsM .lhu lds) mc σ.mem (ard :: dom)
+          hG1 hpc1 hmi1 hmem1 hlow hL1 hkeys1 hdom1 hfr hwfr hi1
+      refine ⟨σf, i', ?_, hi', hGf, hmemf, houtf.trans hout1, hpcf, hmif, hGHf, ?_⟩
+      · have hsteps' : Steps ⟨σ, i, u⟩ ⟨σf, i', u + 1 + r.length⟩ := Steps.head hs1 hsteps
+        have e : u + 1 + r.length = u + (r.length + 1) := by omega
+        rw [e] at hsteps'
+        exact hsteps'
+      · intro R hn hrds
+        exact (hframef R hn (fun a' ha' => hrds a' (List.mem_cons_of_mem _ ha'))).trans
+          (frame_step_alu hobs1 R hn (hrds _ (List.mem_cons_self ..)))
+    | xor =>
+      obtain ⟨⟨hrd1, hrd31⟩, hs1ok, hs2ok⟩ :=
+        (hkok : KindOK dom .xor ard ars1 ars2)
+      have hrd31' : ard ≤ 31 := hrd31
+      have hrdf := gpr_rd_ok ard (Nat.lt_succ_of_le hrd31') hrd1
+      have hsp1 : srcPin σ ars1 (srcVal ars1 L) :=
+        srcPin_srcVal σ L ars1 (hs1ok.2.imp (fun h => h) (hdom ars1)) hL
+      have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
+      have hsp2 : srcPin σ ars2 (srcVal ars2 L) :=
+        srcPin_srcVal σ L ars2 (hs2ok.2.imp (fun h => h) (hdom ars2)) hL
+      have hrx2 := rX_src σ apc ars2 hs2ok.1 (srcVal ars2 L) hsp2
+      have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
+        (srcVal ars1 L ^^^ srcVal ars2 L) ard hrd1 hrd31
+      have hexec := execute_rtype_xor_char (gprIdx ars2) (gprIdx ars1) (gprIdx ard)
+        (srcVal ars1 L) (srcVal ars2 L)
+        (afterNextPC (afterPrelude σ) apc)
+        (sigma3_alu σ apc (gprReg ard) (gprRT ard
+          (srcVal ars1 L ^^^ srcVal ars2 L)))
+        hrx1 hrx2 hwx
+      obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+        stepObs_alu σ i u apc vm aword
+          (instruction.RTYPE (gprIdx ars2, gprIdx ars1, gprIdx ard, rop.XOR))
+          (gprReg ard) (gprRT ard
+            (srcVal ars1 L ^^^ srcVal ars2 L))
+          ab0 ab1 ab2 ab3 hG hpc hmi hword hnotrvc hdec' hexec
+          hrdf.1 hrdf.2.1 hrdf.2.2.1 hrdf.2.2.2.1 hrdf.2.2.2.2
+          hb0 hb1 hb2 hb3 hlo hhi halign hi
+      have hpc1 := obs_alu_pc hobs1
+      obtain ⟨vm1, hmi1⟩ := obs_alu_minstret hobs1
+      have hout1 : σ1.sailOutput = σ.sailOutput := hobs1.2
+      have hL1 : GHolds σ1
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .xor, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
+        ⟨obs_gpr_rd ard hrd1 hrd31
+            (srcVal ars1 L ^^^ srcVal ars2 L) hobs1,
+         gholds_eraseG hobs1 hrd1 hrd31 L hkeys hL⟩
+      have hkeys1 : KeysOK (keysG
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .xor, ard, ars1, ars2, aimm⟩ L (lds.headD []))) :=
+        keysOK_cons_erase hrd1 hrd31 L hkeys
+      have hdom1 : ∀ n ∈ (ard :: dom), n ∈ keysG
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .xor, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
+        dom_cons_erase hdom
+      obtain ⟨σf, i', hsteps, hi', hGf, hmemf, houtf, hpcf, hmif, hGHf, hframef⟩ :=
+        ih σ1 i1 (u + 1) (BitVec.addInt apc 4) vm1
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .xor, ard, ars1, ars2, aimm⟩ L (lds.headD []))
+          (stepLdsM .xor lds) mc σ.mem (ard :: dom)
+          hG1 hpc1 hmi1 hmem1 hlow hL1 hkeys1 hdom1 hfr hwfr hi1
+      refine ⟨σf, i', ?_, hi', hGf, hmemf, houtf.trans hout1, hpcf, hmif, hGHf, ?_⟩
+      · have hsteps' : Steps ⟨σ, i, u⟩ ⟨σf, i', u + 1 + r.length⟩ := Steps.head hs1 hsteps
+        have e : u + 1 + r.length = u + (r.length + 1) := by omega
+        rw [e] at hsteps'
+        exact hsteps'
+      · intro R hn hrds
+        exact (hframef R hn (fun a' ha' => hrds a' (List.mem_cons_of_mem _ ha'))).trans
+          (frame_step_alu hobs1 R hn (hrds _ (List.mem_cons_self ..)))
+    | sll =>
+      obtain ⟨⟨hrd1, hrd31⟩, hs1ok, hs2ok⟩ :=
+        (hkok : KindOK dom .sll ard ars1 ars2)
+      have hrd31' : ard ≤ 31 := hrd31
+      have hrdf := gpr_rd_ok ard (Nat.lt_succ_of_le hrd31') hrd1
+      have hsp1 : srcPin σ ars1 (srcVal ars1 L) :=
+        srcPin_srcVal σ L ars1 (hs1ok.2.imp (fun h => h) (hdom ars1)) hL
+      have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
+      have hsp2 : srcPin σ ars2 (srcVal ars2 L) :=
+        srcPin_srcVal σ L ars2 (hs2ok.2.imp (fun h => h) (hdom ars2)) hL
+      have hrx2 := rX_src σ apc ars2 hs2ok.1 (srcVal ars2 L) hsp2
+      have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
+        (shift_bits_left (srcVal ars1 L) (Sail.BitVec.extractLsb (srcVal ars2 L) 5 0)) ard hrd1 hrd31
+      have hexec := execute_rtype_sll_char (gprIdx ars2) (gprIdx ars1) (gprIdx ard)
+        (srcVal ars1 L) (srcVal ars2 L)
+        (afterNextPC (afterPrelude σ) apc)
+        (sigma3_alu σ apc (gprReg ard) (gprRT ard
+          (shift_bits_left (srcVal ars1 L) (Sail.BitVec.extractLsb (srcVal ars2 L) 5 0))))
+        hrx1 hrx2 hwx
+      obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+        stepObs_alu σ i u apc vm aword
+          (instruction.RTYPE (gprIdx ars2, gprIdx ars1, gprIdx ard, rop.SLL))
+          (gprReg ard) (gprRT ard
+            (shift_bits_left (srcVal ars1 L) (Sail.BitVec.extractLsb (srcVal ars2 L) 5 0)))
+          ab0 ab1 ab2 ab3 hG hpc hmi hword hnotrvc hdec' hexec
+          hrdf.1 hrdf.2.1 hrdf.2.2.1 hrdf.2.2.2.1 hrdf.2.2.2.2
+          hb0 hb1 hb2 hb3 hlo hhi halign hi
+      have hpc1 := obs_alu_pc hobs1
+      obtain ⟨vm1, hmi1⟩ := obs_alu_minstret hobs1
+      have hout1 : σ1.sailOutput = σ.sailOutput := hobs1.2
+      have hL1 : GHolds σ1
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sll, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
+        ⟨obs_gpr_rd ard hrd1 hrd31
+            (shift_bits_left (srcVal ars1 L) (Sail.BitVec.extractLsb (srcVal ars2 L) 5 0)) hobs1,
+         gholds_eraseG hobs1 hrd1 hrd31 L hkeys hL⟩
+      have hkeys1 : KeysOK (keysG
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sll, ard, ars1, ars2, aimm⟩ L (lds.headD []))) :=
+        keysOK_cons_erase hrd1 hrd31 L hkeys
+      have hdom1 : ∀ n ∈ (ard :: dom), n ∈ keysG
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sll, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
+        dom_cons_erase hdom
+      obtain ⟨σf, i', hsteps, hi', hGf, hmemf, houtf, hpcf, hmif, hGHf, hframef⟩ :=
+        ih σ1 i1 (u + 1) (BitVec.addInt apc 4) vm1
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sll, ard, ars1, ars2, aimm⟩ L (lds.headD []))
+          (stepLdsM .sll lds) mc σ.mem (ard :: dom)
+          hG1 hpc1 hmi1 hmem1 hlow hL1 hkeys1 hdom1 hfr hwfr hi1
+      refine ⟨σf, i', ?_, hi', hGf, hmemf, houtf.trans hout1, hpcf, hmif, hGHf, ?_⟩
+      · have hsteps' : Steps ⟨σ, i, u⟩ ⟨σf, i', u + 1 + r.length⟩ := Steps.head hs1 hsteps
+        have e : u + 1 + r.length = u + (r.length + 1) := by omega
+        rw [e] at hsteps'
+        exact hsteps'
+      · intro R hn hrds
+        exact (hframef R hn (fun a' ha' => hrds a' (List.mem_cons_of_mem _ ha'))).trans
+          (frame_step_alu hobs1 R hn (hrds _ (List.mem_cons_self ..)))
+    | sllw =>
+      obtain ⟨⟨hrd1, hrd31⟩, hs1ok, hs2ok⟩ :=
+        (hkok : KindOK dom .sllw ard ars1 ars2)
+      have hrd31' : ard ≤ 31 := hrd31
+      have hrdf := gpr_rd_ok ard (Nat.lt_succ_of_le hrd31') hrd1
+      have hsp1 : srcPin σ ars1 (srcVal ars1 L) :=
+        srcPin_srcVal σ L ars1 (hs1ok.2.imp (fun h => h) (hdom ars1)) hL
+      have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
+      have hsp2 : srcPin σ ars2 (srcVal ars2 L) :=
+        srcPin_srcVal σ L ars2 (hs2ok.2.imp (fun h => h) (hdom ars2)) hL
+      have hrx2 := rX_src σ apc ars2 hs2ok.1 (srcVal ars2 L) hsp2
+      have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
+        (sign_extend (m := 64) (shift_bits_left (Sail.BitVec.extractLsb (srcVal ars1 L) 31 0) (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (srcVal ars2 L) 31 0) 4 0))) ard hrd1 hrd31
+      have hexec := execute_rtypew_sllw_char (gprIdx ars2) (gprIdx ars1) (gprIdx ard)
+        (srcVal ars1 L) (srcVal ars2 L)
+        (afterNextPC (afterPrelude σ) apc)
+        (sigma3_alu σ apc (gprReg ard) (gprRT ard
+          (sign_extend (m := 64) (shift_bits_left (Sail.BitVec.extractLsb (srcVal ars1 L) 31 0) (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (srcVal ars2 L) 31 0) 4 0)))))
+        hrx1 hrx2 hwx
+      obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+        stepObs_alu σ i u apc vm aword
+          (instruction.RTYPEW (gprIdx ars2, gprIdx ars1, gprIdx ard, ropw.SLLW))
+          (gprReg ard) (gprRT ard
+            (sign_extend (m := 64) (shift_bits_left (Sail.BitVec.extractLsb (srcVal ars1 L) 31 0) (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (srcVal ars2 L) 31 0) 4 0))))
+          ab0 ab1 ab2 ab3 hG hpc hmi hword hnotrvc hdec' hexec
+          hrdf.1 hrdf.2.1 hrdf.2.2.1 hrdf.2.2.2.1 hrdf.2.2.2.2
+          hb0 hb1 hb2 hb3 hlo hhi halign hi
+      have hpc1 := obs_alu_pc hobs1
+      obtain ⟨vm1, hmi1⟩ := obs_alu_minstret hobs1
+      have hout1 : σ1.sailOutput = σ.sailOutput := hobs1.2
+      have hL1 : GHolds σ1
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sllw, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
+        ⟨obs_gpr_rd ard hrd1 hrd31
+            (sign_extend (m := 64) (shift_bits_left (Sail.BitVec.extractLsb (srcVal ars1 L) 31 0) (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (srcVal ars2 L) 31 0) 4 0))) hobs1,
+         gholds_eraseG hobs1 hrd1 hrd31 L hkeys hL⟩
+      have hkeys1 : KeysOK (keysG
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sllw, ard, ars1, ars2, aimm⟩ L (lds.headD []))) :=
+        keysOK_cons_erase hrd1 hrd31 L hkeys
+      have hdom1 : ∀ n ∈ (ard :: dom), n ∈ keysG
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sllw, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
+        dom_cons_erase hdom
+      obtain ⟨σf, i', hsteps, hi', hGf, hmemf, houtf, hpcf, hmif, hGHf, hframef⟩ :=
+        ih σ1 i1 (u + 1) (BitVec.addInt apc 4) vm1
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sllw, ard, ars1, ars2, aimm⟩ L (lds.headD []))
+          (stepLdsM .sllw lds) mc σ.mem (ard :: dom)
+          hG1 hpc1 hmi1 hmem1 hlow hL1 hkeys1 hdom1 hfr hwfr hi1
+      refine ⟨σf, i', ?_, hi', hGf, hmemf, houtf.trans hout1, hpcf, hmif, hGHf, ?_⟩
+      · have hsteps' : Steps ⟨σ, i, u⟩ ⟨σf, i', u + 1 + r.length⟩ := Steps.head hs1 hsteps
+        have e : u + 1 + r.length = u + (r.length + 1) := by omega
+        rw [e] at hsteps'
+        exact hsteps'
+      · intro R hn hrds
+        exact (hframef R hn (fun a' ha' => hrds a' (List.mem_cons_of_mem _ ha'))).trans
+          (frame_step_alu hobs1 R hn (hrds _ (List.mem_cons_self ..)))
+    | srlw =>
+      obtain ⟨⟨hrd1, hrd31⟩, hs1ok, hs2ok⟩ :=
+        (hkok : KindOK dom .srlw ard ars1 ars2)
+      have hrd31' : ard ≤ 31 := hrd31
+      have hrdf := gpr_rd_ok ard (Nat.lt_succ_of_le hrd31') hrd1
+      have hsp1 : srcPin σ ars1 (srcVal ars1 L) :=
+        srcPin_srcVal σ L ars1 (hs1ok.2.imp (fun h => h) (hdom ars1)) hL
+      have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
+      have hsp2 : srcPin σ ars2 (srcVal ars2 L) :=
+        srcPin_srcVal σ L ars2 (hs2ok.2.imp (fun h => h) (hdom ars2)) hL
+      have hrx2 := rX_src σ apc ars2 hs2ok.1 (srcVal ars2 L) hsp2
+      have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
+        (sign_extend (m := 64) (shift_bits_right (Sail.BitVec.extractLsb (srcVal ars1 L) 31 0) (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (srcVal ars2 L) 31 0) 4 0))) ard hrd1 hrd31
+      have hexec := execute_rtypew_srlw_char (gprIdx ars2) (gprIdx ars1) (gprIdx ard)
+        (srcVal ars1 L) (srcVal ars2 L)
+        (afterNextPC (afterPrelude σ) apc)
+        (sigma3_alu σ apc (gprReg ard) (gprRT ard
+          (sign_extend (m := 64) (shift_bits_right (Sail.BitVec.extractLsb (srcVal ars1 L) 31 0) (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (srcVal ars2 L) 31 0) 4 0)))))
+        hrx1 hrx2 hwx
+      obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+        stepObs_alu σ i u apc vm aword
+          (instruction.RTYPEW (gprIdx ars2, gprIdx ars1, gprIdx ard, ropw.SRLW))
+          (gprReg ard) (gprRT ard
+            (sign_extend (m := 64) (shift_bits_right (Sail.BitVec.extractLsb (srcVal ars1 L) 31 0) (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (srcVal ars2 L) 31 0) 4 0))))
+          ab0 ab1 ab2 ab3 hG hpc hmi hword hnotrvc hdec' hexec
+          hrdf.1 hrdf.2.1 hrdf.2.2.1 hrdf.2.2.2.1 hrdf.2.2.2.2
+          hb0 hb1 hb2 hb3 hlo hhi halign hi
+      have hpc1 := obs_alu_pc hobs1
+      obtain ⟨vm1, hmi1⟩ := obs_alu_minstret hobs1
+      have hout1 : σ1.sailOutput = σ.sailOutput := hobs1.2
+      have hL1 : GHolds σ1
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .srlw, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
+        ⟨obs_gpr_rd ard hrd1 hrd31
+            (sign_extend (m := 64) (shift_bits_right (Sail.BitVec.extractLsb (srcVal ars1 L) 31 0) (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (srcVal ars2 L) 31 0) 4 0))) hobs1,
+         gholds_eraseG hobs1 hrd1 hrd31 L hkeys hL⟩
+      have hkeys1 : KeysOK (keysG
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .srlw, ard, ars1, ars2, aimm⟩ L (lds.headD []))) :=
+        keysOK_cons_erase hrd1 hrd31 L hkeys
+      have hdom1 : ∀ n ∈ (ard :: dom), n ∈ keysG
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .srlw, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
+        dom_cons_erase hdom
+      obtain ⟨σf, i', hsteps, hi', hGf, hmemf, houtf, hpcf, hmif, hGHf, hframef⟩ :=
+        ih σ1 i1 (u + 1) (BitVec.addInt apc 4) vm1
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .srlw, ard, ars1, ars2, aimm⟩ L (lds.headD []))
+          (stepLdsM .srlw lds) mc σ.mem (ard :: dom)
+          hG1 hpc1 hmi1 hmem1 hlow hL1 hkeys1 hdom1 hfr hwfr hi1
+      refine ⟨σf, i', ?_, hi', hGf, hmemf, houtf.trans hout1, hpcf, hmif, hGHf, ?_⟩
+      · have hsteps' : Steps ⟨σ, i, u⟩ ⟨σf, i', u + 1 + r.length⟩ := Steps.head hs1 hsteps
+        have e : u + 1 + r.length = u + (r.length + 1) := by omega
+        rw [e] at hsteps'
+        exact hsteps'
+      · intro R hn hrds
+        exact (hframef R hn (fun a' ha' => hrds a' (List.mem_cons_of_mem _ ha'))).trans
+          (frame_step_alu hobs1 R hn (hrds _ (List.mem_cons_self ..)))
+    | sraw =>
+      obtain ⟨⟨hrd1, hrd31⟩, hs1ok, hs2ok⟩ :=
+        (hkok : KindOK dom .sraw ard ars1 ars2)
+      have hrd31' : ard ≤ 31 := hrd31
+      have hrdf := gpr_rd_ok ard (Nat.lt_succ_of_le hrd31') hrd1
+      have hsp1 : srcPin σ ars1 (srcVal ars1 L) :=
+        srcPin_srcVal σ L ars1 (hs1ok.2.imp (fun h => h) (hdom ars1)) hL
+      have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
+      have hsp2 : srcPin σ ars2 (srcVal ars2 L) :=
+        srcPin_srcVal σ L ars2 (hs2ok.2.imp (fun h => h) (hdom ars2)) hL
+      have hrx2 := rX_src σ apc ars2 hs2ok.1 (srcVal ars2 L) hsp2
+      have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
+        (sign_extend (m := 64) (shift_bits_right_arith (Sail.BitVec.extractLsb (srcVal ars1 L) 31 0) (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (srcVal ars2 L) 31 0) 4 0))) ard hrd1 hrd31
+      have hexec := execute_rtypew_sraw_char (gprIdx ars2) (gprIdx ars1) (gprIdx ard)
+        (srcVal ars1 L) (srcVal ars2 L)
+        (afterNextPC (afterPrelude σ) apc)
+        (sigma3_alu σ apc (gprReg ard) (gprRT ard
+          (sign_extend (m := 64) (shift_bits_right_arith (Sail.BitVec.extractLsb (srcVal ars1 L) 31 0) (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (srcVal ars2 L) 31 0) 4 0)))))
+        hrx1 hrx2 hwx
+      obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
+        stepObs_alu σ i u apc vm aword
+          (instruction.RTYPEW (gprIdx ars2, gprIdx ars1, gprIdx ard, ropw.SRAW))
+          (gprReg ard) (gprRT ard
+            (sign_extend (m := 64) (shift_bits_right_arith (Sail.BitVec.extractLsb (srcVal ars1 L) 31 0) (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (srcVal ars2 L) 31 0) 4 0))))
+          ab0 ab1 ab2 ab3 hG hpc hmi hword hnotrvc hdec' hexec
+          hrdf.1 hrdf.2.1 hrdf.2.2.1 hrdf.2.2.2.1 hrdf.2.2.2.2
+          hb0 hb1 hb2 hb3 hlo hhi halign hi
+      have hpc1 := obs_alu_pc hobs1
+      obtain ⟨vm1, hmi1⟩ := obs_alu_minstret hobs1
+      have hout1 : σ1.sailOutput = σ.sailOutput := hobs1.2
+      have hL1 : GHolds σ1
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sraw, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
+        ⟨obs_gpr_rd ard hrd1 hrd31
+            (sign_extend (m := 64) (shift_bits_right_arith (Sail.BitVec.extractLsb (srcVal ars1 L) 31 0) (Sail.BitVec.extractLsb (Sail.BitVec.extractLsb (srcVal ars2 L) 31 0) 4 0))) hobs1,
+         gholds_eraseG hobs1 hrd1 hrd31 L hkeys hL⟩
+      have hkeys1 : KeysOK (keysG
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sraw, ard, ars1, ars2, aimm⟩ L (lds.headD []))) :=
+        keysOK_cons_erase hrd1 hrd31 L hkeys
+      have hdom1 : ∀ n ∈ (ard :: dom), n ∈ keysG
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sraw, ard, ars1, ars2, aimm⟩ L (lds.headD [])) :=
+        dom_cons_erase hdom
+      obtain ⟨σf, i', hsteps, hi', hGf, hmemf, houtf, hpcf, hmif, hGHf, hframef⟩ :=
+        ih σ1 i1 (u + 1) (BitVec.addInt apc 4) vm1
+          (stepGM ⟨apc, aword, ab0, ab1, ab2, ab3, .sraw, ard, ars1, ars2, aimm⟩ L (lds.headD []))
+          (stepLdsM .sraw lds) mc σ.mem (ard :: dom)
           hG1 hpc1 hmi1 hmem1 hlow hL1 hkeys1 hdom1 hfr hwfr hi1
       refine ⟨σf, i', ?_, hi', hGf, hmemf, houtf.trans hout1, hpcf, hmif, hGHf, ?_⟩
       · have hsteps' : Steps ⟨σ, i, u⟩ ⟨σf, i', u + 1 + r.length⟩ := Steps.head hs1 hsteps

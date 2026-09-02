@@ -320,7 +320,9 @@ theorem evalArgsNil
       pc := hc.pc
       store := ⟨φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, hc.store⟩
       out := hc.out
-      frame := hc.frame
+      -- wave-45 guarded frame: the full `SegEntry.frame` supplies every
+      -- register, so the `joinRestored` guard is ignored.
+      frame := fun R hR _ => hc.frame R hR
       memFrame := fun a _ _ => by rw [hc.mem]
       -- zero-step identity: the memory IS the entry `m0`, so the stack window
       -- survives trivially at ANY tabled exit PC.

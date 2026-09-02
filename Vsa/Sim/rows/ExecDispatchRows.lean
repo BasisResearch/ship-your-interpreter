@@ -100,7 +100,8 @@ structure IfNoneGeom
 def IfNoneResid (st st' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : Stmt) (v : Value) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (cfg : Config),
+    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.ifStmt c t none) sp r aInterp aStmt aEnv aRet m0 cfg →
     IfNoneGeom g N A SL φf φc st st' d env c t v sp r aInterp aStmt aEnv aRet m0
 
 /-- Route `hSIfNone` → `execIH_of_exitSim` over `execIfNoneSim`.  The cond `EvalIH`
@@ -114,11 +115,11 @@ theorem exec_ifNone_row
       mExecS st d env (Stmt.ifStmt c t none) st' Status.normal (ExecS.ifNone st d env c t st' v a a_1) := by
   intro st d env c t st' v a a_1 hIH
   show ExecIH st d env (.ifStmt c t none) st' .normal
-  exact execIH_of_exitSim
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 =>
-      (hR st st' d env c t v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0).hW)
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 out0 =>
-      let G := hR st st' d env c t v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  exact execIH_of_exitSim'
+    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
+      (hR st st' d env c t v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
+    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
+      let G := hR st st' d env c t v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE
       execIfNoneSim g N A SL φf φc st st' d env c t v sp r aInterp aStmt aEnv aRet m0
         out0 (ExecS.ifNone st d env c t st' v a a_1) hIH G.hslot G.htableStk (G.hGlue out0))
 
@@ -148,7 +149,8 @@ structure WhileFalseGeom
 def WhileFalseResid (st st' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt) (v : Value) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (cfg : Config),
+    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.whileStmt c b) sp r aInterp aStmt aEnv aRet m0 cfg →
     WhileFalseGeom g N A SL φf φc st st' d env c b v sp r aInterp aStmt aEnv aRet m0
 
 /-- Route `hSWhileFalse` → `execIH_of_exitSim` over `execWhileFalseSim`. -/
@@ -160,11 +162,11 @@ theorem exec_whileFalse_row
       mExecS st d env (Stmt.whileStmt c b) st' Status.normal (ExecS.whileFalse st d env c b st' v a a_1) := by
   intro st d env c b st' v a a_1 hIH
   show ExecIH st d env (.whileStmt c b) st' .normal
-  exact execIH_of_exitSim
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 =>
-      (hR st st' d env c b v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0).hW)
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 out0 =>
-      let G := hR st st' d env c b v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  exact execIH_of_exitSim'
+    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
+      (hR st st' d env c b v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
+    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
+      let G := hR st st' d env c b v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE
       execWhileFalseSim g N A SL φf φc st st' d env c b v sp r aInterp aStmt aEnv aRet m0
         out0 (ExecS.whileFalse st d env c b st' v a a_1) hIH a_1 G.hslot G.htableStk (G.hGlue out0))
 
@@ -207,7 +209,8 @@ def IfTrueResid (st st' st'' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : St
     (e : Option Stmt) (v : Value) (status : Status) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (cfg : Config),
+    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.ifStmt c t e) sp r aInterp aStmt aEnv aRet m0 cfg →
     IfTrueGeom g N A SL φf φc st st' st'' d env c t e v status sp r aInterp aStmt aEnv aRet m0
 
 /-- Route `hSIfTrue` → `execIH_of_exitSim` over `execIfTrueSim`.  The `hGlue` field is
@@ -223,11 +226,11 @@ theorem exec_ifTrue_row
       mExecS st d env (Stmt.ifStmt c t e) st'' status (ExecS.ifTrue st d env c t e st' st'' v status a a_1 a_2) := by
   intro st d env c t e st' st'' v status a a_1 a_2 hIH _hBranch
   show ExecIH st d env (.ifStmt c t e) st'' status
-  exact execIH_of_exitSim
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 =>
-      (hR st st' st'' d env c t e v status g N A SL φf φc sp r aInterp aStmt aEnv aRet m0).hW)
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 out0 =>
-      let G := hR st st' st'' d env c t e v status g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  exact execIH_of_exitSim'
+    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
+      (hR st st' st'' d env c t e v status g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
+    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
+      let G := hR st st' st'' d env c t e v status g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE
       execIfTrueSim g N A SL φf φc st st' st'' d env c t e status v
         sp r aInterp aStmt aEnv aRet m0 out0 (ExecS.ifTrue st d env c t e st' st'' v status a a_1 a_2)
         hIH a_1 G.hBranch G.hslot G.htableStk G.hmaps (G.hGlue out0))
@@ -270,7 +273,8 @@ def IfFalseResid (st st' st'' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t e :
     (v : Value) (status : Status) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (cfg : Config),
+    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.ifStmt c t (some e)) sp r aInterp aStmt aEnv aRet m0 cfg →
     IfFalseGeom g N A SL φf φc st st' st'' d env c t e v status sp r aInterp aStmt aEnv aRet m0
 
 /-- Route `hSIfFalse` → `execIH_of_exitSim` over `execIfFalseSim`. -/
@@ -284,11 +288,11 @@ theorem exec_ifFalse_row
       mExecS st d env (Stmt.ifStmt c t (some e)) st'' status (ExecS.ifFalse st d env c t e st' st'' v status a a_1 a_2) := by
   intro st d env c t e st' st'' v status a a_1 a_2 hIH _hBranch
   show ExecIH st d env (.ifStmt c t (some e)) st'' status
-  exact execIH_of_exitSim
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 =>
-      (hR st st' st'' d env c t e v status g N A SL φf φc sp r aInterp aStmt aEnv aRet m0).hW)
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 out0 =>
-      let G := hR st st' st'' d env c t e v status g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  exact execIH_of_exitSim'
+    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
+      (hR st st' st'' d env c t e v status g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
+    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
+      let G := hR st st' st'' d env c t e v status g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE
       execIfFalseSim g N A SL φf φc st st' st'' d env c t e status v
         sp r aInterp aStmt aEnv aRet m0 out0 (ExecS.ifFalse st d env c t e st' st'' v status a a_1 a_2)
         hIH a_1 G.hBranch G.hslot G.htableStk G.hmaps (G.hGlue out0))
@@ -334,7 +338,11 @@ def BlockResid (st st' : SpecSt) (d : Nat) (env : Addr) (ss : List Stmt) (status
     (store' : Store) (inner : Addr) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (cfg : Config),
+    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.block ss) sp r aInterp aStmt aEnv aRet m0 cfg →
+    -- shape 2 (oracle threading): the recursor's seq sub-IH, handed to the
+    -- supplier (the induction's own hypothesis; `SeqSegIH` = the `mExecSeq` body).
+    Vsa.Sim.TermSimAssembly.SeqSegIH { store := store', out := st.out } d st' →
     BlockGeom g N A SL φf φc st st' d env ss status store' inner sp r aInterp aStmt aEnv aRet m0
 
 /-- Route `hSBlock` → `execIH_of_exitSim` over `execBlockSim`.  The inner `mExecSeq`
@@ -346,13 +354,15 @@ theorem exec_block_row
       (a_1 : ExecSeq { store := store', out := st.out } d inner ss st' status),
       mExecSeq { store := store', out := st.out } d inner ss st' status a_1 →
       mExecS st d env (Stmt.block ss) st' status (ExecS.block st d env ss store' inner st' status a a_1) := by
-  intro st d env ss store' inner st' status a a_1 _hSeqIH
+  intro st d env ss store' inner st' status a a_1 hSeqIH
   show ExecIH st d env (.block ss) st' status
-  exact execIH_of_exitSim
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 =>
-      (hR st st' d env ss status store' inner g N A SL φf φc sp r aInterp aStmt aEnv aRet m0).hW)
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 out0 =>
+  exact execIH_of_exitSim'
+    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
+      (hR st st' d env ss status store' inner g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+        cfg hE hSeqIH).hW)
+    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
       let G := hR st st' d env ss status store' inner g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+        cfg hE hSeqIH
       execBlockSim g N A SL φf φc st st' d env ss status store' inner
         sp r aInterp aStmt aEnv aRet m0 out0 a a_1 G.hstep G.hnil (G.hArm out0) G.hEpi)
 
@@ -401,7 +411,11 @@ def ForStartResid (st st' st'' : SpecSt) (d : Nat) (env : Addr)
     (store' : Store) (outer : Addr) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (cfg : Config),
+    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.forStmt init cnd step b) sp r aInterp aStmt aEnv aRet m0 cfg →
+    -- shape 2 (oracle threading): the recursor's `ForLoop` derivation node
+    -- (`a_2`), handed to the supplier (its `mForLoop` IH is `True`).
+    ForLoop st' d outer cnd step b st'' status →
     ForStartGeom g N A SL φf φc st st' st'' d env init cnd step b status
       store' outer sp r aInterp aStmt aEnv aRet m0
 
@@ -420,13 +434,13 @@ theorem exec_forStart_row
         (ExecS.forStart st d env init cnd step b store' outer st' st'' status a a_1 a_2) := by
   intro st d env init cnd step b store' outer st' st'' status a a_1 a_2 _hInitIH _hForIH
   show ExecIH st d env (.forStmt init cnd step b) st'' status
-  exact execIH_of_exitSim
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 =>
+  exact execIH_of_exitSim'
+    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
       (hR st st' st'' d env init cnd step b status store' outer
-        g N A SL φf φc sp r aInterp aStmt aEnv aRet m0).hW)
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 out0 =>
+        g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE a_2).hW)
+    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
       let G := hR st st' st'' d env init cnd step b status store' outer
-        g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+        g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE a_2
       execForStartSim g N A SL φf φc st st' st'' d env init cnd step b status store' outer
         sp r aInterp aStmt aEnv aRet m0 out0 a a_1 a_2 G.hstep G.hForIH (G.hArm out0) G.hEpi)
 
@@ -465,7 +479,11 @@ structure WhileGeom
 def WhileResid (st st' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt) (status : Status) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (cfg : Config),
+    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.whileStmt c b) sp r aInterp aStmt aEnv aRet m0 cfg →
+    -- shape 2 (oracle threading): the recursor's `ExecS` derivation of the
+    -- whole `whileStmt` node, handed to the supplier.
+    ExecS st d env (.whileStmt c b) st' status →
     WhileGeom g N A SL φf φc st st' d env c b status sp r aInterp aStmt aEnv aRet m0
 
 /-- Shared while-family dispatcher: given the residual and an `ExecS` derivation of
@@ -476,11 +494,11 @@ theorem execWhileIH_of_resid
     (hExec : ExecS st d env (.whileStmt c b) st' status)
     (hR : WhileResid st st' d env c b status) :
     ExecIH st d env (.whileStmt c b) st' status :=
-  execIH_of_exitSim
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 =>
-      (hR g N A SL φf φc sp r aInterp aStmt aEnv aRet m0).hW)
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 out0 =>
-      let G := hR g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  execIH_of_exitSim'
+    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
+      (hR g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE hExec).hW)
+    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
+      let G := hR g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE hExec
       execWhileSim g N A SL d env c b sp r aInterp aStmt aEnv aRet G.hstep G.hWhileIH
         φf φc st st' status m0 out0 hExec)
 

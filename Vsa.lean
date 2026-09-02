@@ -368,6 +368,7 @@ import Vsa.Sim.rows.ErrArmLinks
 import Vsa.Sim.rows.ErrSetupCore
 import Vsa.Sim.rows.ErrSetupRows
 import Vsa.Sim.rows.ErrArmLinksB
+import Vsa.Sim.rows.ErrReachSpan
 import Vsa.While.Trichotomy
 import Vsa.Sim.DivergeSim
 import Vsa.Sim.SnprintfSpec19
@@ -470,6 +471,7 @@ import Vsa.Sim.rows.BinStrReadback
 import Vsa.Sim.rows.BinIntReadback
 import Vsa.Sim.rows.StringifySpec
 import Vsa.Sim.rows.StringifyStrdupTail
+import Vsa.Sim.rows.StringifyBridge
 import Vsa.Sim.rows.StrConcatHeap
 import Vsa.Sim.rows.ExecCaseGeom
 import Vsa.Sim.rows.ExecRouting

@@ -147,14 +147,20 @@ theorem blockB_stmtExpr_stagePre
         (A.hi ≤ SL.lo ∨ (sp.toNat - 176) + 1088 ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
-        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w)) :
+        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        -- ITEM ZERO B1: the child expression's budget at the statement
+        -- frame `sp - 176`, `.fn`-bodies bound, store-bodies invariant.
+        StackOK SL (sp - 176#64)
+          (e.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget e = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 4 c (fun c' => ExecJalPreBundle e c' st d env) := by
   obtain ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
     hEvCode, hViInt, hViSlot, hStoreSurvJ,
     hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre,
     hSLlo, hSLhiRam, hSLwin,
     hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
-    hgframe, hg8, hg18⟩ := hpre
+    hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
   -- unpack ExecArmEntryK
   obtain ⟨hG, htick, hpc, hs0, hs1, hs3, hs2, hsp, hra, ⟨vmi, hmi⟩,
     hout, houtStr, hmem, hcode, hstore,
@@ -400,7 +406,9 @@ theorem blockB_stmtExpr_stagePre
     · left; exact h
     · right; rw [hjspN]; exact h
   -- (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)
-  · exact harenaCode
+  · exact ⟨harenaCode,
+      (by rw [BitVec.add_sub_cancel]; exact hstackBudget),
+      hexprBodies, hstoreBodies⟩
 
 #print axioms blockB_stmtExpr_stagePre
 
@@ -452,40 +460,67 @@ def StmtExprArmDispatch
         (A.hi ≤ SL.lo ∨ (sp.toNat - 176) + 1088 ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         (∀ R : Register, AbiPreservedNoise R → c'.σ.regs.get? R = gpre R) ∧
-        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w))
+        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        -- ITEM ZERO B1: the child expression's budget at the statement
+        -- frame `sp - 176`, `.fn`-bodies bound, store-bodies invariant.
+        StackOK SL (sp - 176#64)
+          (e.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget e = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget)
+
+/-- **The stmtExpr RE-ENTRY dispatch residual** (wave 45, the amended `SEntryC`'s
+dispatch-head leg): from `SDispatchC (.expr e)` — a tail re-dispatch landing the
+expr arm from `execStmtDispatchHead` — stage the sub-expr sub-call.  Supplied
+upstream by a dispatch-head → arm-head span (the jump-table half of `execBlockA`
+re-run from `0x80004014`, no prologue). -/
+def StmtExprReentryDispatch
+    (e : Expr) (st : Vsa.While.St) (d : Nat) (env : Addr) (c : Config) : Prop :=
+  SDispatchC c st d env (.expr e) →
+  LandedN 1 c (fun c' => ExecJalPreBundle e c' st d env)
 
 /-- **The `EvalChildStages.stmtExpr` field, machine-composed (exec twin).**  From
-`SEntryC (.expr e)` plus the dispatch residual, the composer runs the dispatch Triple
-to `blockB_stmtExpr_stagePre`'s entry bundle, that cut stages the sub-expr sub-call
-(landing at `ExecJalPreBundle e`), and `stmtExpr_split'` finishes to `EEntryC e`. -/
+the AMENDED (wave-45, 3-way) `SEntryC (.expr e)` plus the dispatch residuals, the
+composer 3-way-cases the entry: fresh-call leg runs the dispatch Triple to
+`blockB_stmtExpr_stagePre`'s entry bundle and that cut stages the sub-expr
+sub-call (landing at `ExecJalPreBundle e`); the dispatch-head leg is the named
+wave-45 `StmtExprReentryDispatch` residual; the while-arm leg is structurally
+impossible (`.expr ≠ .whileStmt`); `stmtExpr_split'` finishes to `EEntryC e`. -/
 theorem stmtExpr_field_of_dispatch
     (e : Expr) (c : Config) (st : Vsa.While.St) (d : Nat) (env : Addr)
-    (hDisp : StmtExprArmDispatch e st d env c) :
+    (hDisp : StmtExprArmDispatch e st d env c)
+    (hReentry : StmtExprReentryDispatch e st d env c) :
     SEntryC c st d env (.expr e) →
     LandedN 1 c (fun c' => EEntryC c' st d env e) := by
   refine stmtExpr_split' e c st d env (fun hSE => ?_)
-  obtain ⟨g, N, A, SL, φf, φc, sp, r, aInterp, aStmt, aEnv, aRet, m0, hEntry⟩ := hSE
-  -- run the dispatch Triple to the arm-head entry bundle
-  obtain ⟨c1, hsteps1, hMid⟩ :=
-    hDisp g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 hEntry c rfl
-  obtain ⟨gpre, aExprChild, v8, v9, v18, v19, ment, hArm, hpay, hExprChild,
-    hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hStoreSurvJ,
-    hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
-    hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
-    hgframe, hg8, hg18⟩ := hMid
-  -- the arm-head cut stages the sub-call at `c1`
-  have hcut : LandedN 4 c1 (fun c' => ExecJalPreBundle e c' st d env) :=
-    blockB_stmtExpr_stagePre g gpre N A SL φf φc st d env e
-      sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1
-      ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
-       hEvCode, hViInt, hViSlot, hStoreSurvJ,
-       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
-       hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
-       hgframe, hg8, hg18⟩
-  -- compose the dispatch prefix (a `Steps`) with the counted cut
-  obtain ⟨n1, hn1⟩ := hsteps1.toN
-  obtain ⟨m2, c2, hm2, hs2, hpb⟩ := hcut
-  exact ⟨n1 + m2, c2, by omega, hn1.trans_add hs2, hpb⟩
+  rcases hSE with hSE | hRe | hWA
+  · -- fresh-call leg (the pre-amendment body)
+    obtain ⟨g, N, A, SL, φf, φc, sp, r, aInterp, aStmt, aEnv, aRet, m0, hEntry⟩ := hSE
+    -- run the dispatch Triple to the arm-head entry bundle
+    obtain ⟨c1, hsteps1, hMid⟩ :=
+      hDisp g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 hEntry c rfl
+    obtain ⟨gpre, aExprChild, v8, v9, v18, v19, ment, hArm, hpay, hExprChild,
+      hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hStoreSurvJ,
+      hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
+      hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
+      hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩ := hMid
+    -- the arm-head cut stages the sub-call at `c1`
+    have hcut : LandedN 4 c1 (fun c' => ExecJalPreBundle e c' st d env) :=
+      blockB_stmtExpr_stagePre g gpre N A SL φf φc st d env e
+        sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1
+        ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
+         hEvCode, hViInt, hViSlot, hStoreSurvJ,
+         hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
+         hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
+         hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩
+    -- compose the dispatch prefix (a `Steps`) with the counted cut
+    obtain ⟨n1, hn1⟩ := hsteps1.toN
+    obtain ⟨m2, c2, hm2, hs2, hpb⟩ := hcut
+    exact ⟨n1 + m2, c2, by omega, hn1.trans_add hs2, hpb⟩
+  · -- dispatch-head re-entry leg (wave-45 named residual)
+    exact hReentry hRe
+  · -- while-arm leg: `.expr e` is not a while statement
+    obtain ⟨cnd', b', hEq⟩ := sWhileArmC_shape hWA
+    exact nomatch hEq
 
 #print axioms stmtExpr_field_of_dispatch
 

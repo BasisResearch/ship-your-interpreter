@@ -114,7 +114,14 @@ def MidArmLeftJalBundle (l er : Expr) (c' : Config) (st st' : Vsa.While.St)
      ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
      ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
      (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
-     (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo))
+     (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
+     -- ITEM ZERO B1: the LEFT operand's recursion-sound budget at `sp - 1088`,
+     -- its `.fn`-bodies bound, and the store-bodies invariant (the amended
+     -- `armTail_rec` pre-tail).
+     StackOK SL (sp - 1088#64)
+       (l.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+     Expr.bodiesBound Vsa.While.perCallBudget l = true ∧
+     Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget)
 
 /-- **The named destructurer: bundle + left IH ⇒ `JalPreBundle er`.**  ONE
 `midArmField_of_IH` call: the three fixed-target facts are `decide`d, the jal-site

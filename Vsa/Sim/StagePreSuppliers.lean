@@ -86,12 +86,20 @@ theorem blockB_unary_stagePre
         ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
         ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
-        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)) :
+        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
+        -- ITEM ZERO B1: the operand's recursion-sound budget at `sp - 1088`, its
+        -- `.fn`-bodies bound, and the store-bodies invariant (the amended
+        -- `JalPreBundle` tail; mirrors `blockB_unary`'s amended pre).
+        StackOK SL (sp - 1088#64)
+          (esub.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget esub = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 2 c (fun c' => JalPreBundle esub c' st d env) := by
   obtain ⟨ment, hArm, hx11, hgframe, hg8, hg18, hpay, hsubexpr, hexprHi24,
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
-    hcodeStk, hviStk, htableStk, harenaStk, harenaCode⟩ := hpre
+    hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
+    hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
     hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
@@ -198,7 +206,8 @@ theorem blockB_unary_stagePre
       hopAl, hopLo, hopHi, hopWin, hopStk,
       (by rw [hsub944]; omega), (by rw [hsub944]; omega), (by rw [hsub944]; omega),
       hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin,
-      hcodeStk, hviStk, htableStk, harenaStk, harenaCode⟩
+      hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
+      hstackBudget, hexprBodies, hstoreBodies⟩
 
 #print axioms blockB_unary_stagePre
 
@@ -241,10 +250,18 @@ theorem blockB_binary_leftStagePre
         read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, ment[a]? = some b)) ∧
-        MemExtends m0 ment) :
+        MemExtends m0 ment ∧
+        -- ITEM ZERO B1: the LEFT operand's recursion-sound budget at `sp - 1088`,
+        -- its `.fn`-bodies bound, and the store-bodies invariant (the amended
+        -- `JalPreBundle` tail; mirrors `blockB_binary`'s amended pre).
+        StackOK SL (sp - 1088#64)
+          (el.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget el = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 4 c (fun c' => JalPreBundle el c' st d env) := by
   obtain ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v,
-    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0⟩ := hpre
+    hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExtM0,
+    hstackBudgetL, hexprBodiesL, hstoreBodiesL⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
     hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
@@ -465,7 +482,8 @@ theorem blockB_binary_leftStagePre
       hBE.lop_align, hBE.lop_ram.1, hBE.lop_ram.2, hBE.lop_win, hBE.lop_stk,
       (by rw [hsub968]; omega), (by rw [hsub968]; omega), (by rw [hsub968]; omega),
       (by omega), hBE.spSLhi, hBE.sp16, (by omega), hSLlo, hBE.SLhiRam, hSLwin,
-      hBE.codeStk, hBE.viStk, hBE.tableStk, hBE.arenaStk, hBE.arenaCode⟩
+      hBE.codeStk, hBE.viStk, hBE.tableStk, hBE.arenaStk, hBE.arenaCode,
+      hstackBudgetL, hexprBodiesL, hstoreBodiesL⟩
 
 #print axioms blockB_binary_leftStagePre
 

@@ -128,6 +128,11 @@ theorem wlogM_width : ∀ (is : List MInstr) (L : GRegs) (lds : List (List (BitV
     | slliw => exact ih _ _ _ he
     | srliw => exact ih _ _ _ he
     | sraiw => exact ih _ _ _ he
+    | xor => exact ih _ _ _ he
+    | sll => exact ih _ _ _ he
+    | sllw => exact ih _ _ _ he
+    | srlw => exact ih _ _ _ he
+    | sraw => exact ih _ _ _ he
 
 /-- The computed log of a whole chain only contains 1/4/8-byte stores (the
 entry state's log must already satisfy it; `init` has `log := []`). -/

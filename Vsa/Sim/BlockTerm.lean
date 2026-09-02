@@ -587,6 +587,11 @@ theorem domRun_keys_bt : ∀ (is : List MInstr) (L : GRegs)
     | slliw => exact dom_cons_erase h
     | srliw => exact dom_cons_erase h
     | sraiw => exact dom_cons_erase h
+    | xor => exact dom_cons_erase h
+    | sll => exact dom_cons_erase h
+    | sllw => exact dom_cons_erase h
+    | srlw => exact dom_cons_erase h
+    | sraw => exact dom_cons_erase h
     | sw => exact h
     | sd => exact h
     | sb => exact h
@@ -691,6 +696,21 @@ theorem keysOK_runGM_bt : ∀ (is : List MInstr) (pc0 : BitVec 64) (dom : List N
     | sraiw =>
       obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .sraiw ard ars1 ars2)
       exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | xor =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .xor ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | sll =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .sll ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | sllw =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .sllw ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | srlw =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .srlw ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
+    | sraw =>
+      obtain ⟨⟨hrd1, hrd31⟩, _⟩ := (hkok : KindOK dom .sraw ard ars1 ars2)
+      exact ih _ _ _ _ hwfr (keysOK_cons_erase hrd1 hrd31 L hkeys)
     | sw => exact ih _ _ _ _ hwfr hkeys
     | sd => exact ih _ _ _ _ hwfr hkeys
     | sb => exact ih _ _ _ _ hwfr hkeys
@@ -749,6 +769,11 @@ theorem writeLog_wlog_low_bt (mc : Std.ExtHashMap Nat (BitVec 8)) :
     | slliw => exact ih m _ _ hfr j hj
     | srliw => exact ih m _ _ hfr j hj
     | sraiw => exact ih m _ _ hfr j hj
+    | xor => exact ih m _ _ hfr j hj
+    | sll => exact ih m _ _ hfr j hj
+    | sllw => exact ih m _ _ hfr j hj
+    | srlw => exact ih m _ _ hfr j hj
+    | sraw => exact ih m _ _ hfr j hj
     | sw =>
       have hwin : tohostAddr + 16 ≤
           (eaddrM ⟨apc, aword, ab0, ab1, ab2, ab3, .sw, ard, ars1, ars2, aimm⟩ L).toNat :=

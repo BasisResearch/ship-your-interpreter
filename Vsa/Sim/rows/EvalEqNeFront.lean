@@ -942,7 +942,17 @@ theorem evalEqSimD
         read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
-        MemExtends m0 ment)
+        MemExtends m0 ment ∧
+        -- ITEM ZERO B1: BOTH operands' recursion-sound budgets (forwarded to
+        -- the amended `evalEqSim`/`evalNeSim` core pre).
+        StackOK SL (sp - 1088#64)
+          (el.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget el = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget ∧
+        StackOK SL (sp - 1088#64)
+          (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget er = true ∧
+        Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.bool (vl.equal vr)) sp r sret m0) :=
   evalEqSim gouter gpre g N A SL φf φc st st' st'' d env el er vl vr
@@ -995,7 +1005,17 @@ theorem evalNeSimD
         read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
         ExprRepr ment aROp.toNat er ∧
         (∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ bb, ment[a]? = some bb)) ∧
-        MemExtends m0 ment)
+        MemExtends m0 ment ∧
+        -- ITEM ZERO B1: BOTH operands' recursion-sound budgets (forwarded to
+        -- the amended `evalEqSim`/`evalNeSim` core pre).
+        StackOK SL (sp - 1088#64)
+          (el.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget el = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget ∧
+        StackOK SL (sp - 1088#64)
+          (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget er = true ∧
+        Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.bool (!(vl.equal vr))) sp r sret m0) :=
   evalNeSim gouter gpre g N A SL φf φc st st' st'' d env el er vl vr

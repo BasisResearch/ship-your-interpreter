@@ -59,8 +59,8 @@ entry config `c` (the oracle's statement mentions `c.σ.mem`/`c.σ.sailOutput`).
 def VarLeafResid (st : SpecSt) (x : String) (v : Value) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) (c : Config),
-    c.σ.mem = m0 →
+    (d : Nat) (env : Addr) (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) (c : Config),
+    Vsa.Sim.EvalEntry g N A SL φf φc st d env (.var x) sp r sret aEnv aExpr m0 c →
     -- var-name CString disjoint from the live stack frame
     (∀ p : Nat, read64 c.σ.mem (aExpr.toNat + 8) = some p →
       p + x.length < SL.lo ∨ sp.toNat ≤ p) ∧
@@ -93,10 +93,11 @@ theorem eval_var_row (hR : ∀ st x v, VarLeafResid st x v) :
   intro g N A SL φf φc sp r sret aEnv aExpr m0
   intro c hc
   obtain ⟨hvsd, hsad, hegc, hegsd, hvs, htsd, hfound, hW⟩ :=
-    hR st x v g N A SL φf φc sp r sret aEnv aExpr m0 c hc.mem
+    hR st x v g N A SL φf φc d env sp r sret aEnv aExpr m0 c hc
   have hEntry : Vsa.Sim.EvalVarEntry g N A SL φf φc st d env x v sp r sret aEnv aExpr m0 c :=
     { good := hc.good, tick := hc.tick, pc := hc.pc, a0 := hc.a0, a1 := hc.a1, a2 := hc.a2,
       ra := hc.ra, ra_align := hc.ra_align, spReg := hc.spReg, stackOK := hc.stackOK,
+      stackBudget := hc.stackBudget, expr_bodies := hc.expr_bodies, store_bodies := hc.store_bodies,
       minstret := hc.minstret, mem := hc.mem, code := hc.code, expr := hc.expr, store := hc.store,
       store_survives := hc.store_survives, out := hc.out, frame := hc.frame,
       code_stack_disjoint := hc.code_stack_disjoint, expr_stack_disjoint := hc.expr_stack_disjoint,

@@ -186,6 +186,10 @@ def InterpInitStoreRepr (L : Layout) (p : Program) : Prop :=
       (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
       (dLeft aLeft : Nat) (m0 : Mem),
       Steps c c1 ∧
+      -- ITEM ZERO (falsity #12, shape 3): also certify the `interp_run` image in
+      -- `m0` (the `SeqSpanGround` feed for the guarded `mExecSeq`; the span
+      -- discharger pins these bytes anyway).
+      Vsa.Sim.Code.Interp_runLoaded m0 ∧
       SegEntry g N A SL φf φc initSt 0 dLeft aLeft interpLoopHeadPC m0 c1
 
 /-- **`StoreInitSeam` reduced to `InterpInitStoreRepr`.**  These two have exactly

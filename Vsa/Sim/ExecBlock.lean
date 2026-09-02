@@ -264,7 +264,13 @@ theorem armExec_rec
         -- exec_stmt code region `[0x80003fe0, 0x80004308)` disjointness (for the
         -- survival of `Exec_stmtLoaded` across the sub-call and the entry `code`):
         (sp.toNat ≤ 0x80003fe0 ∨ 0x80004308 ≤ SL.lo) ∧
-        (A.hi ≤ 0x80003fe0 ∨ 0x80004308 ≤ A.lo))
+        (A.hi ≤ 0x80003fe0 ∨ 0x80004308 ≤ A.lo) ∧
+        -- ITEM ZERO B1: child STATEMENT budget at the lowered `sp - 176`,
+        -- `.fn`-bodies bound, store-bodies invariant.
+        StackOK SL (sp - 176#64)
+          (sSub.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Stmt.bodiesBound Vsa.While.perCallBudget sSub = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget)
       (SubStmtReturn garm N A SL φf φc st.store.frames.size st.store.closures.size
         st' status sp r aRet aRetSub retPC
         v8 v9 v18 v19 mcall mcall) := by
@@ -277,7 +283,8 @@ theorem armExec_rec
     hstAl, hstLo, hstHi, hstWin, hstStk,
     hrsAl, hrsLo, hrsHi, hrsWin, hrsStk,
     hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin, hraAl,
-    harenaStk, hexecCodeStk, hexecArenaCode⟩ := hpre
+    harenaStk, hexecCodeStk, hexecArenaCode,
+    hstackBudget, hstmtBodies, hstoreBodies⟩ := hpre
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hsp176 : 176 ≤ sp.toNat := by omega
   have hspsub : (sp - 176#64).toNat = sp.toNat - 176 := by
@@ -325,6 +332,9 @@ theorem armExec_rec
       ra_align := hretAl
       spReg := hsp_1
       stackOK := ⟨by rw [hspsub]; omega, by rw [hspsub]; omega, by rw [hspsub]; omega⟩
+      stackBudget := hstackBudget
+      stmt_bodies := hstmtBodies
+      store_bodies := hstoreBodies
       minstret := ⟨vmi1, hmi1⟩
       mem := hmem1e
       code := by show Exec_stmtLoaded σ1.mem; rw [hmem1e]; exact hcodeS

@@ -129,7 +129,13 @@ theorem landedN_eentryC_of_jalPrefix
         ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
         ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
-        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)) :
+        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
+        -- ITEM ZERO B1: the operand's recursion-sound budget at `sp - 1088`, its
+        -- `.fn`-bodies bound, and the store-bodies invariant.
+        StackOK SL (sp - 1088#64)
+          (esub.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget esub = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 1 c (fun c' => EEntryC c' st d env esub) := by
   have h := evalEntry_of_jalPrefix gpre N A SL φf φc st d env esub
     callPC retPC jalImm sp r sret subsret aIn aOperand v8 v9 v18 out0 mcall c
@@ -222,7 +228,13 @@ def JalPreBundle (e : Expr) (c' : Config) (st : Vsa.While.St) (d : Nat)
     ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
     ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
     (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
-    (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)
+    (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
+    -- ITEM ZERO B1: the operand's recursion-sound budget at `sp - 1088`, its
+    -- `.fn`-bodies bound, and the store-bodies invariant.
+    StackOK SL (sp - 1088#64)
+      (e.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+    Expr.bodiesBound Vsa.While.perCallBudget e = true ∧
+    Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
 
 /-- **The jal pre-bundle drives into `EEntryC`.**  A config at `JalPreBundle e`
 lands (in `≥ 1` step, the `jal`) at `EEntryC e` — pure application of the

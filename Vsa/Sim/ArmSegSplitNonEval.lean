@@ -112,7 +112,13 @@ def ExecStmtPreBundle (s : Stmt) (c' : Config) (st : SpecSt) (d : Nat)
     (aStmt.toNat + 16 ≤ SL.lo ∨ (sp - hdrm).toNat ≤ aStmt.toNat) ∧
     StackOK SL (sp - hdrm) (176 + 1088) ∧
     0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000 ∧ tohostAddr + 16 ≤ SL.lo ∧
-    ((sp - hdrm).toNat ≤ execStmtEntry ∨ execStmtEnd ≤ SL.lo)
+    ((sp - hdrm).toNat ≤ execStmtEntry ∨ execStmtEnd ≤ SL.lo) ∧
+    -- ITEM ZERO B1: the child statement's recursion-sound budget at the
+    -- lowered `sp`, its `.fn`-bodies bound, and the store-bodies invariant.
+    StackOK SL (sp - hdrm)
+      (s.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+    Stmt.bodiesBound Vsa.While.perCallBudget s = true ∧
+    Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
 
 /-- **The exec-stmt pre-bundle drives into `SEntryC`.**  A config at
 `ExecStmtPreBundle s` lands (`≥ 1` step, the `jal`) at `SEntryC s` — pure
@@ -127,8 +133,10 @@ theorem landedN_sEntryC_of_preBundle
   have hEE := execEntry_of_jalPrefix N A SL φf φc st d env s
     callPC retPC jalImm hdrm sp aInterp aStmt aEnv aRet out0 mcall c'
     hjaltgt hlink hretAl hjalSite hrest
+  -- wave 45: the fresh-`jal` route lands the FIRST disjunct of the amended
+  -- 3-way `SEntryC` (`sEntryC_of_fresh`).
   exact LandedN.weaken hEE (fun c'' hEntry =>
-    ⟨fun R => c''.σ.regs.get? R, N, A, SL, φf, φc,
+    sEntryC_of_fresh ⟨fun R => c''.σ.regs.get? R, N, A, SL, φf, φc,
       sp - hdrm, retPC, aInterp, aStmt, aEnv, aRet, mcall, hEntry⟩)
 
 #print axioms landedN_sEntryC_of_preBundle

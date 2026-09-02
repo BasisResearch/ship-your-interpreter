@@ -59,6 +59,7 @@ bump.  Axioms of every theorem ⊆ {propext, Classical.choice, Quot.sound}.
 
 open LeanRV64DExecutable Sail Vsa
 open Register
+open Vsa.Sim.Code
 open Vsa.Machine (MState Config Step Steps StepsN)
 open Vsa.Logic (TripleN)
 open Vsa.RuntimeRepr
@@ -106,13 +107,209 @@ def EEntryC (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) : Prop 
     (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
     EvalEntry g N A SL φf φc st d env e sp r sret aEnv aExpr m0 c
 
-/-- **Statement entry.**  `c` is at `exec_stmt`'s entry with the node `s` at some
-ghost address `aStmt`. -/
-def SEntryC (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) : Prop :=
+/-- **Fresh-call statement entry** (the PRE-amendment `SEntryC` body).  `c` is at
+`exec_stmt`'s entry (`execStmtEntry = 0x80003fe0`) with the node `s` at some
+ghost address `aStmt` — the fresh-`jal` route only. -/
+def SFreshC (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) : Prop :=
   ∃ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
     ExecEntry g N A SL φf φc st d env s sp r aInterp aStmt aEnv aRet m0 c
+
+/-! ### The wave-45 `SEntryC` amendment (re-land): the two re-entry routes
+
+Wave 44 machine-checked (`sEntryC_false_at_dispatchHead`, `ArmSegSplitTwins`)
+that the `stmtIfThen`/`stmtIfElse` tail re-dispatch (`j`/`bnez 0x80004014`) and
+the `stmtWhileLoop` loop-back (`bne a0,a5,0x80004034`) NEVER revisit
+`execStmtEntry` — a child statement can be entered three ways.  `SEntryC` is
+therefore re-seated as the 3-way disjunction of the honest entry classes:
+fresh call (`SFreshC`), post-prologue dispatch head (`SDispatchC`), and the
+while-arm head (`SWhileArmC`, shape-guarded to `.whileStmt` so every non-while
+consumer refutes the leg by `nomatch`).  `ExecDispatchEntry`/`SDispatchC` and
+`execStmtDispatchHead` are MOVED here from `ArmSegSplitTwins` (wave-45 dedup)
+so the disjunction sits upstream of every consumer. -/
+
+/-- The `exec_stmt` post-prologue dispatch head: the `lw a5,0(s0)` kind read at
+`0x80004014`, the target of the if-then/else tail re-dispatch `j`/`bnez`. -/
+def execStmtDispatchHead : Nat := 0x80004014
+
+/-- The `exec_stmt` while-ARM head: `0x80004034`, the post-dispatch while-arm
+block the `stmtWhileLoop` loop-back `bne a0,a5,0x80004034` re-enters (no
+`a4`/`a6` re-materialization on that path — NOT the dispatch head). -/
+def execStmtWhileArmHead : Nat := 0x80004034
+
+/-- **The post-prologue dispatch-head entry.**  What a fresh `ExecEntry` reaches
+after the 14-instruction prologue, and what the tail re-dispatch reaches directly
+— the honest common child-entry for the amended `stmtIfThen`/`stmtIfElse`
+recursion.  (Moved from `ArmSegSplitTwins`, wave 45.) -/
+structure ExecDispatchEntry
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (φf φc : Addr → Nat)
+    (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt)
+    (spD aInterp aStmt aEnv aRet : BitVec 64)
+    (m0 : Mem)
+    (c : Config) : Prop where
+  /-- Pinned control state. -/
+  good : GoodState c.σ
+  /-- Tick parity invariant. -/
+  tick : c.tick < 2
+  /-- PC at the dispatch head (the `lw a5,0(s0)` kind read). -/
+  pc : c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 execStmtDispatchHead)
+  /-- `s0` holds the `Stmt` node address (the tail route's reloaded child). -/
+  s0 : c.σ.regs.get? Register.x8 = some aStmt
+  /-- `s1` holds `interp*`. -/
+  s1 : c.σ.regs.get? Register.x9 = some aInterp
+  /-- `s2` holds the `retslot`. -/
+  s2 : c.σ.regs.get? Register.x18 = some aRet
+  /-- `s3` holds the scope machine address. -/
+  s3 : c.σ.regs.get? Register.x19 = some aEnv
+  /-- `a6 = 8` (the kind bound for the `bltu` table guard). -/
+  a6 : c.σ.regs.get? Register.x16 = some (8#64)
+  /-- `a4` holds the statement jump-table base. -/
+  a4 : c.σ.regs.get? Register.x14 = some (BitVec.ofNat 64 stmtJumpTableBase)
+  /-- The LOWERED stack pointer (frame live). -/
+  spReg : c.σ.regs.get? Register.x2 = some spD
+  /-- `spD` still has the eval-frame headroom. -/
+  stackOK : StackOK SL spD 1088
+  /-- `minstret` present. -/
+  minstret : ∃ v, c.σ.regs.get? Register.minstret = some v
+  /-- Machine memory is the pinned `m0`. -/
+  mem : c.σ.mem = m0
+  /-- `exec_stmt` loaded. -/
+  code : Exec_stmtLoaded c.σ.mem
+  /-- The `Stmt` node at `aStmt` represents `s`. -/
+  stmt : StmtRepr c.σ.mem aStmt.toNat s
+  /-- The whole spec store is represented. -/
+  store : StoreRepr c.σ.mem N A φf φc st.store
+  /-- `StoreRepr` survives any memory change confined to `[SL.lo, spD)`. -/
+  store_survives : ∀ m' : Mem,
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < spD.toNat) → c.σ.mem[k]? = m'[k]?) →
+    StoreRepr m' N A φf φc st.store
+  /-- Console output correspondence. -/
+  out : OutRepr c.σ st
+  /-- The blanket ghost frame. -/
+  frame : ∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R
+  /-- Code/stack disjointness at the lowered `sp`. -/
+  code_stack_disjoint : spD.toNat ≤ execStmtEntry ∨ execStmtEnd ≤ SL.lo
+  /-- The stack region is in RAM above the HTIF window. -/
+  stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
+  stack_win : tohostAddr + 16 ≤ SL.lo
+  /-- The `Stmt` node is disjoint from the stack scribble. -/
+  stmt_stack_disjoint : aStmt.toNat + 16 ≤ SL.lo ∨ spD.toNat ≤ aStmt.toNat
+  /-- The `Stmt` node is an 8-aligned 16-byte slot in RAM above HTIF. -/
+  stmt_align : aStmt.toNat % 8 = 0
+  stmt_ram : 0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000
+  stmt_win : tohostAddr + 16 ≤ aStmt.toNat
+
+/-- **Dispatch-head entry, existentially bundled** — the second `SEntryC`
+disjunct (the wave-44 amendment plan's landing shape, moved upstream wave 45). -/
+def SDispatchC (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) : Prop :=
+  ∃ (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (spD aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    ExecDispatchEntry g N A SL φf φc st d env s spD aInterp aStmt aEnv aRet m0 c
+
+/-- **The while-ARM-head entry** (the third tail shape, wave 45).  The
+`stmtWhileLoop` loop-back re-enters the while-arm block at `0x80004034` in the
+SAME frame — post-dispatch, so NO `a4`/`a6` re-materialization; otherwise the
+dispatch-head state.  `shape` pins the statement to `.whileStmt` so every
+non-while consumer refutes this leg structurally (`nomatch`). -/
+structure ExecWhileArmEntry
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (φf φc : Addr → Nat)
+    (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt)
+    (spD aInterp aStmt aEnv aRet : BitVec 64)
+    (m0 : Mem)
+    (c : Config) : Prop where
+  /-- Only a while statement re-enters the while-arm head. -/
+  shape : ∃ (cnd : Expr) (b : Stmt), s = .whileStmt cnd b
+  /-- Pinned control state. -/
+  good : GoodState c.σ
+  /-- Tick parity invariant. -/
+  tick : c.tick < 2
+  /-- PC at the while-arm head (`0x80004034`). -/
+  pc : c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 execStmtWhileArmHead)
+  /-- `s0` holds the `Stmt` node address (the while node, unchanged). -/
+  s0 : c.σ.regs.get? Register.x8 = some aStmt
+  /-- `s1` holds `interp*`. -/
+  s1 : c.σ.regs.get? Register.x9 = some aInterp
+  /-- `s2` holds the `retslot`. -/
+  s2 : c.σ.regs.get? Register.x18 = some aRet
+  /-- `s3` holds the scope machine address. -/
+  s3 : c.σ.regs.get? Register.x19 = some aEnv
+  /-- The LOWERED stack pointer (frame live). -/
+  spReg : c.σ.regs.get? Register.x2 = some spD
+  /-- `spD` still has the eval-frame headroom. -/
+  stackOK : StackOK SL spD 1088
+  /-- `minstret` present. -/
+  minstret : ∃ v, c.σ.regs.get? Register.minstret = some v
+  /-- Machine memory is the pinned `m0`. -/
+  mem : c.σ.mem = m0
+  /-- `exec_stmt` loaded. -/
+  code : Exec_stmtLoaded c.σ.mem
+  /-- The `Stmt` node at `aStmt` represents `s`. -/
+  stmt : StmtRepr c.σ.mem aStmt.toNat s
+  /-- The whole spec store is represented. -/
+  store : StoreRepr c.σ.mem N A φf φc st.store
+  /-- `StoreRepr` survives any memory change confined to `[SL.lo, spD)`. -/
+  store_survives : ∀ m' : Mem,
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < spD.toNat) → c.σ.mem[k]? = m'[k]?) →
+    StoreRepr m' N A φf φc st.store
+  /-- Console output correspondence. -/
+  out : OutRepr c.σ st
+  /-- The blanket ghost frame. -/
+  frame : ∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R
+  /-- Code/stack disjointness at the lowered `sp`. -/
+  code_stack_disjoint : spD.toNat ≤ execStmtEntry ∨ execStmtEnd ≤ SL.lo
+  /-- The stack region is in RAM above the HTIF window. -/
+  stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
+  stack_win : tohostAddr + 16 ≤ SL.lo
+  /-- The `Stmt` node is disjoint from the stack scribble. -/
+  stmt_stack_disjoint : aStmt.toNat + 16 ≤ SL.lo ∨ spD.toNat ≤ aStmt.toNat
+  /-- The `Stmt` node is an 8-aligned 16-byte slot in RAM above HTIF. -/
+  stmt_align : aStmt.toNat % 8 = 0
+  stmt_ram : 0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000
+  stmt_win : tohostAddr + 16 ≤ aStmt.toNat
+
+/-- **While-arm-head entry, existentially bundled** — the third `SEntryC`
+disjunct (`viaWhileArm`). -/
+def SWhileArmC (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) : Prop :=
+  ∃ (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (spD aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    ExecWhileArmEntry g N A SL φf φc st d env s spD aInterp aStmt aEnv aRet m0 c
+
+/-- **Statement entry (AMENDED, wave 45)** — the 3-way disjunction of the honest
+child-entry routes: fresh `jal exec_stmt` (`SFreshC`), tail re-dispatch to the
+post-prologue dispatch head (`SDispatchC`), while-loop-back to the while-arm
+head (`SWhileArmC`).  Producers land one disjunct via `sEntryC_of_fresh` /
+`sEntryC_of_dispatch` / `sEntryC_of_whileArm`; consumers 3-way `rcases`. -/
+def SEntryC (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) : Prop :=
+  SFreshC c st d env s ∨ SDispatchC c st d env s ∨ SWhileArmC c st d env s
+
+/-- Fresh-call leg intro (the pre-amendment producers' one-line adapter). -/
+theorem sEntryC_of_fresh {c : Config} {st : SpecSt} {d : Nat} {env : Addr}
+    {s : Stmt} (h : SFreshC c st d env s) : SEntryC c st d env s := Or.inl h
+
+/-- Dispatch-head leg intro. -/
+theorem sEntryC_of_dispatch {c : Config} {st : SpecSt} {d : Nat} {env : Addr}
+    {s : Stmt} (h : SDispatchC c st d env s) : SEntryC c st d env s :=
+  Or.inr (Or.inl h)
+
+/-- While-arm leg intro. -/
+theorem sEntryC_of_whileArm {c : Config} {st : SpecSt} {d : Nat} {env : Addr}
+    {s : Stmt} (h : SWhileArmC c st d env s) : SEntryC c st d env s :=
+  Or.inr (Or.inr h)
+
+/-- **Named refutation of the while-arm leg at a non-while statement** — the
+uniform discharge every non-while consumer uses for the third disjunct. -/
+theorem sWhileArmC_shape {c : Config} {st : SpecSt} {d : Nat} {env : Addr}
+    {s : Stmt} (h : SWhileArmC c st d env s) :
+    ∃ (cnd : Expr) (b : Stmt), s = .whileStmt cnd b := by
+  obtain ⟨g, N, A, SL, φf, φc, spD, aInterp, aStmt, aEnv, aRet, m0, hE⟩ := h
+  exact hE.shape
 
 /-- **Args entry.**  `c` is at the EX_CALL arg-loop control point (a ghost interior
 PC) for the remaining arg list `es`.  Anchored on `SegEntry` at that PC — the

@@ -53,6 +53,9 @@ theorem binRow_add
     (hEvalE : EvalE st d env (.binary .add el er) st'' (.int (wrap64 (a + b))))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
+    -- ITEM ZERO B1: the post-LEFT store-bodies invariant (threaded to
+    -- `blockA_binaryArm_budgeted` / the sim core's RIGHT budget).
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hPost : ∀ (gpre : (R : Register) → Option (RegisterType R))
         (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -71,8 +74,9 @@ theorem binRow_add
         st'' (.int (wrap64 (a + b))) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩ :=
-    blockA_binaryArm g N A SL φf φc st d env .add el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+    hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
+    blockA_binaryArm_budgeted g N A SL φf φc st st' d env .add el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) (.int a) →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -94,7 +98,8 @@ theorem binRow_add
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hResid,
+        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+        hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
 
@@ -111,6 +116,9 @@ theorem binRow_sub
     (hEvalE : EvalE st d env (.binary .sub el er) st'' (.int (wrap64 (a - b))))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
+    -- ITEM ZERO B1: the post-LEFT store-bodies invariant (threaded to
+    -- `blockA_binaryArm_budgeted` / the sim core's RIGHT budget).
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hPost : ∀ (gpre : (R : Register) → Option (RegisterType R))
         (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -129,8 +137,9 @@ theorem binRow_sub
         st'' (.int (wrap64 (a - b))) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩ :=
-    blockA_binaryArm g N A SL φf φc st d env .sub el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+    hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
+    blockA_binaryArm_budgeted g N A SL φf φc st st' d env .sub el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) (.int a) →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -152,7 +161,8 @@ theorem binRow_sub
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hResid,
+        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+        hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
 
@@ -169,6 +179,9 @@ theorem binRow_mul
     (hEvalE : EvalE st d env (.binary .mul el er) st'' (.int (wrap64 (a * b))))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
+    -- ITEM ZERO B1: the post-LEFT store-bodies invariant (threaded to
+    -- `blockA_binaryArm_budgeted` / the sim core's RIGHT budget).
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hPost : ∀ (gpre : (R : Register) → Option (RegisterType R))
         (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -187,8 +200,9 @@ theorem binRow_mul
         st'' (.int (wrap64 (a * b))) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩ :=
-    blockA_binaryArm g N A SL φf φc st d env .mul el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+    hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
+    blockA_binaryArm_budgeted g N A SL φf φc st st' d env .mul el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) (.int a) →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -210,7 +224,8 @@ theorem binRow_mul
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hResid,
+        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+        hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
 
@@ -229,6 +244,9 @@ theorem binRow_div
     (hEvalE : EvalE st d env (.binary .div el er) st'' (.int (wrap64 (a.tdiv b))))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
+    -- ITEM ZERO B1: the post-LEFT store-bodies invariant (threaded to
+    -- `blockA_binaryArm_budgeted` / the sim core's RIGHT budget).
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hPost : ∀ (gpre : (R : Register) → Option (RegisterType R))
         (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -247,8 +265,9 @@ theorem binRow_div
         st'' (.int (wrap64 (a.tdiv b))) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩ :=
-    blockA_binaryArm g N A SL φf φc st d env .div el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+    hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
+    blockA_binaryArm_budgeted g N A SL φf φc st st' d env .div el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) (.int a) →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -270,7 +289,8 @@ theorem binRow_div
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hbNe hOv hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hResid,
+        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+        hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
 
@@ -288,6 +308,9 @@ theorem binRow_mod
     (hEvalE : EvalE st d env (.binary .mod el er) st'' (.int (wrap64 (a.tmod b))))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
+    -- ITEM ZERO B1: the post-LEFT store-bodies invariant (threaded to
+    -- `blockA_binaryArm_budgeted` / the sim core's RIGHT budget).
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hPost : ∀ (gpre : (R : Register) → Option (RegisterType R))
         (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -306,8 +329,9 @@ theorem binRow_mod
         st'' (.int (wrap64 (a.tmod b))) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩ :=
-    blockA_binaryArm g N A SL φf φc st d env .mod el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+    hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
+    blockA_binaryArm_budgeted g N A SL φf φc st st' d env .mod el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) (.int a) →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -329,7 +353,8 @@ theorem binRow_mod
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hbNe hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hResid,
+        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+        hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
 
@@ -346,6 +371,9 @@ theorem binRow_lt
     (hEvalE : EvalE st d env (.binary .lt el er) st'' (.bool (a < b)))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
+    -- ITEM ZERO B1: the post-LEFT store-bodies invariant (threaded to
+    -- `blockA_binaryArm_budgeted` / the sim core's RIGHT budget).
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hPost : ∀ (gpre : (R : Register) → Option (RegisterType R))
         (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -364,8 +392,9 @@ theorem binRow_lt
         st'' (.bool (a < b)) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩ :=
-    blockA_binaryArm g N A SL φf φc st d env .lt el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+    hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
+    blockA_binaryArm_budgeted g N A SL φf φc st st' d env .lt el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) (.int a) →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -387,7 +416,8 @@ theorem binRow_lt
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hResid,
+        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+        hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
 
@@ -404,6 +434,9 @@ theorem binRow_le
     (hEvalE : EvalE st d env (.binary .le el er) st'' (.bool (a ≤ b)))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
+    -- ITEM ZERO B1: the post-LEFT store-bodies invariant (threaded to
+    -- `blockA_binaryArm_budgeted` / the sim core's RIGHT budget).
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hPost : ∀ (gpre : (R : Register) → Option (RegisterType R))
         (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -422,8 +455,9 @@ theorem binRow_le
         st'' (.bool (a ≤ b)) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩ :=
-    blockA_binaryArm g N A SL φf φc st d env .le el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+    hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
+    blockA_binaryArm_budgeted g N A SL φf φc st st' d env .le el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) (.int a) →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -445,7 +479,8 @@ theorem binRow_le
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hResid,
+        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+        hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
 
@@ -462,6 +497,9 @@ theorem binRow_gt
     (hEvalE : EvalE st d env (.binary .gt el er) st'' (.bool (a > b)))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
+    -- ITEM ZERO B1: the post-LEFT store-bodies invariant (threaded to
+    -- `blockA_binaryArm_budgeted` / the sim core's RIGHT budget).
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hPost : ∀ (gpre : (R : Register) → Option (RegisterType R))
         (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -480,8 +518,9 @@ theorem binRow_gt
         st'' (.bool (a > b)) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩ :=
-    blockA_binaryArm g N A SL φf φc st d env .gt el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+    hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
+    blockA_binaryArm_budgeted g N A SL φf φc st st' d env .gt el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) (.int a) →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -503,7 +542,8 @@ theorem binRow_gt
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hResid,
+        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+        hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
 
@@ -520,6 +560,9 @@ theorem binRow_ge
     (hEvalE : EvalE st d env (.binary .ge el er) st'' (.bool (a ≥ b)))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
+    -- ITEM ZERO B1: the post-LEFT store-bodies invariant (threaded to
+    -- `blockA_binaryArm_budgeted` / the sim core's RIGHT budget).
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hPost : ∀ (gpre : (R : Register) → Option (RegisterType R))
         (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -538,8 +581,9 @@ theorem binRow_ge
         st'' (.bool (a ≥ b)) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩ :=
-    blockA_binaryArm g N A SL φf φc st d env .ge el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+    hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
+    blockA_binaryArm_budgeted g N A SL φf φc st st' d env .ge el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) (.int a) →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -561,7 +605,8 @@ theorem binRow_ge
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hResid,
+        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+        hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
 
@@ -578,6 +623,9 @@ theorem binRow_eq
     (hEvalE : EvalE st d env (.binary .eq el er) st'' (.bool (vl.equal vr)))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
+    -- ITEM ZERO B1: the post-LEFT store-bodies invariant (threaded to
+    -- `blockA_binaryArm_budgeted` / the sim core's RIGHT budget).
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) vl →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -596,14 +644,16 @@ theorem binRow_eq
         st'' (.bool (vl.equal vr)) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩ :=
-    blockA_binaryArm g N A SL φf φc st d env .eq el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+    hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
+    blockA_binaryArm_budgeted g N A SL φf φc st st' d env .eq el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   obtain ⟨c2, hs2, hExit⟩ :=
     evalEqSimD g gpre' g N A SL φf φc st st' st'' d env el er vl vr
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' w19 c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC hVlSurv (hResid gpre' v8' v9' v18' v19')
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩
+        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+        hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
 
 /-- **`binRow_ne`** — the `.ne` cell (arbitrary operand kinds, `evalNeSimD`). -/
@@ -619,6 +669,9 @@ theorem binRow_ne
     (hEvalE : EvalE st d env (.binary .ne el er) st'' (.bool (!(vl.equal vr))))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
+    -- ITEM ZERO B1: the post-LEFT store-bodies invariant (threaded to
+    -- `blockA_binaryArm_budgeted` / the sim core's RIGHT budget).
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) vl →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -637,14 +690,16 @@ theorem binRow_ne
         st'' (.bool (!(vl.equal vr))) sp r sret m0) := by
   intro c hc
   obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
-    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩ :=
-    blockA_binaryArm g N A SL φf φc st d env .ne el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+    hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
+    blockA_binaryArm_budgeted g N A SL φf φc st st' d env .ne el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   obtain ⟨c2, hs2, hExit⟩ :=
     evalNeSimD g gpre' g N A SL φf φc st st' st'' d env el er vl vr
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' w19 c1.σ.sailOutput m0
       hIHl hIHr hEvalE hSizeF hSizeC hVlSurv (hResid gpre' v8' v9' v18' v19')
       c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
-        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩
+        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt,
+        hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
 
 /-! ## The dispatcher shell `eval_binary_row`
@@ -672,6 +727,9 @@ def BinIntCellResid
     (sp r sret aExpr : BitVec 64) (m0 : Mem) : Prop :=
   st'.store.frames.size = st''.store.frames.size ∧
   st'.store.closures.size = st''.store.closures.size ∧
+  -- ITEM ZERO B1: the post-LEFT store-bodies invariant (spec-side
+  -- preservation residual for the RIGHT sub-call's budget).
+  Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget ∧
   ∃ (aLOp aROp Wl : BitVec 64),
     BinArmExtras g N A SL opTok el er sp r sret aExpr aLOp aROp m0 ∧
     (∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
@@ -696,6 +754,9 @@ def BinEqCellResid
     (sp r sret aExpr : BitVec 64) (m0 : Mem) : Prop :=
   st'.store.frames.size = st''.store.frames.size ∧
   st'.store.closures.size = st''.store.closures.size ∧
+  -- ITEM ZERO B1: the post-LEFT store-bodies invariant (spec-side
+  -- preservation residual for the RIGHT sub-call's budget).
+  Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget ∧
   ∃ (aLOp aROp w19 : BitVec 64),
     BinArmExtras g N A SL opTok el er sp r sret aExpr aLOp aROp m0 ∧
     (∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -739,10 +800,10 @@ theorem eval_binary_row
           g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0)
     (hStrAddL : ∀ st d env el er st'' (sl : String) (rv : Value),
         EvalIH st d env (.binary .add el er) st''
-          (.str ((Value.str sl).display st''.store ++ rv.display st''.store)))
+          (.str ((Value.str sl).catDisplay st''.store ++ rv.catDisplay st''.store)))
     (hStrAddR : ∀ st d env el er st'' (lv : Value) (sr : String),
         EvalIH st d env (.binary .add el er) st''
-          (.str (lv.display st''.store ++ (Value.str sr).display st''.store)))
+          (.str (lv.catDisplay st''.store ++ (Value.str sr).catDisplay st''.store)))
     (hStrLt : ∀ st d env el er st'' (sl sr : String),
         EvalIH st d env (.binary .lt el er) st'' (.bool (sl < sr)))
     (hStrLe : ∀ st d env el er st'' (sl sr : String),
@@ -784,34 +845,34 @@ theorem eval_binary_row
     | .int a, .int b, hsem =>
       simp only [binOpSem] at hsem; cases hsem
       intro g N A SL φf φc sp r sret aEnv aExpr m0
-      obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
+      obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
         hIAdd g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
       exact binRow_add g N A SL φf φc st st' st'' d env el er a b
         sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
         (EvalE.binary st d env .add el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
-        hSF hSC hP
+        hSF hSC hSB hP
   | sub =>
     match lv, rv, hsem with
     | .int a, .int b, hsem =>
       simp only [binOpSem] at hsem; cases hsem
       intro g N A SL φf φc sp r sret aEnv aExpr m0
-      obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
+      obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
         hISub g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
       exact binRow_sub g N A SL φf φc st st' st'' d env el er a b
         sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
         (EvalE.binary st d env .sub el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
-        hSF hSC hP
+        hSF hSC hSB hP
   | mul =>
     match lv, rv, hsem with
     | .int a, .int b, hsem =>
       simp only [binOpSem] at hsem; cases hsem
       intro g N A SL φf φc sp r sret aEnv aExpr m0
-      obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
+      obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
         hIMul g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
       exact binRow_mul g N A SL φf φc st st' st'' d env el er a b
         sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
         (EvalE.binary st d env .mul el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
-        hSF hSC hP
+        hSF hSC hSB hP
   | div =>
     match lv, rv, hsem with
     | .int a, .int b, hsem =>
@@ -823,13 +884,13 @@ theorem eval_binary_row
         by_cases hov : (a = -2^63 ∧ b = -1)
         · obtain ⟨ha, hbm⟩ := hov; subst ha; subst hbm
           exact hDivOv st d env el er st'' g N A SL φf φc sp r sret aEnv aExpr m0
-        · obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
+        · obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
             hIDiv g N A SL φf φc st st' st'' el er a b hov sp r sret aExpr m0
           exact binRow_div g N A SL φf φc st st' st'' d env el er a b
             sp r sret aEnv aExpr aLOp aROp Wl m0 hb0 hov hX ihL' ihR'
             (EvalE.binary st d env .div el er st' st'' (.int a) (.int b) _ hEl hEr
               (by simp [binOpSem, hb0]))
-            hSF hSC hP
+            hSF hSC hSB hP
   | mod =>
     match lv, rv, hsem with
     | .int a, .int b, hsem =>
@@ -838,13 +899,13 @@ theorem eval_binary_row
       · subst hb0; simp at hsem
       · rw [if_neg (by simpa using hb0)] at hsem; cases hsem
         intro g N A SL φf φc sp r sret aEnv aExpr m0
-        obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
+        obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
           hIMod g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
         exact binRow_mod g N A SL φf φc st st' st'' d env el er a b
           sp r sret aEnv aExpr aLOp aROp Wl m0 hb0 hX ihL' ihR'
           (EvalE.binary st d env .mod el er st' st'' (.int a) (.int b) _ hEl hEr
             (by simp [binOpSem, hb0]))
-          hSF hSC hP
+          hSF hSC hSB hP
   | lt =>
     match lv, rv, hsem with
     | .str sl, .str sr, hsem =>
@@ -852,12 +913,12 @@ theorem eval_binary_row
     | .int a, .int b, hsem =>
       simp only [binOpSem] at hsem; cases hsem
       intro g N A SL φf φc sp r sret aEnv aExpr m0
-      obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
+      obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
         hILt g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
       exact binRow_lt g N A SL φf φc st st' st'' d env el er a b
         sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
         (EvalE.binary st d env .lt el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
-        hSF hSC hP
+        hSF hSC hSB hP
   | le =>
     match lv, rv, hsem with
     | .str sl, .str sr, hsem =>
@@ -865,12 +926,12 @@ theorem eval_binary_row
     | .int a, .int b, hsem =>
       simp only [binOpSem] at hsem; cases hsem
       intro g N A SL φf φc sp r sret aEnv aExpr m0
-      obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
+      obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
         hILe g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
       exact binRow_le g N A SL φf φc st st' st'' d env el er a b
         sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
         (EvalE.binary st d env .le el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
-        hSF hSC hP
+        hSF hSC hSB hP
   | gt =>
     match lv, rv, hsem with
     | .str sl, .str sr, hsem =>
@@ -878,12 +939,12 @@ theorem eval_binary_row
     | .int a, .int b, hsem =>
       simp only [binOpSem] at hsem; cases hsem
       intro g N A SL φf φc sp r sret aEnv aExpr m0
-      obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
+      obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
         hIGt g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
       exact binRow_gt g N A SL φf φc st st' st'' d env el er a b
         sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
         (EvalE.binary st d env .gt el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
-        hSF hSC hP
+        hSF hSC hSB hP
   | ge =>
     match lv, rv, hsem with
     | .str sl, .str sr, hsem =>
@@ -891,29 +952,29 @@ theorem eval_binary_row
     | .int a, .int b, hsem =>
       simp only [binOpSem] at hsem; cases hsem
       intro g N A SL φf φc sp r sret aEnv aExpr m0
-      obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
+      obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
         hIGe g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
       exact binRow_ge g N A SL φf φc st st' st'' d env el er a b
         sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
         (EvalE.binary st d env .ge el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
-        hSF hSC hP
+        hSF hSC hSB hP
   | eq =>
     simp only [binOpSem] at hsem; cases hsem
     intro g N A SL φf φc sp r sret aEnv aExpr m0
-    obtain ⟨hSF, hSC, aLOp, aROp, w19, hX, hVl, hRes⟩ :=
+    obtain ⟨hSF, hSC, hSB, aLOp, aROp, w19, hX, hVl, hRes⟩ :=
       hEq g N A SL φf φc st st' st'' el er lv rv sp r sret aExpr m0
     exact binRow_eq g N A SL φf φc st st' st'' d env el er lv rv
       sp r sret aEnv aExpr aLOp aROp w19 m0 hX ihL' ihR'
       (EvalE.binary st d env .eq el er st' st'' lv rv _ hEl hEr (by simp [binOpSem]))
-      hSF hSC hVl hRes
+      hSF hSC hSB hVl hRes
   | ne =>
     simp only [binOpSem] at hsem; cases hsem
     intro g N A SL φf φc sp r sret aEnv aExpr m0
-    obtain ⟨hSF, hSC, aLOp, aROp, w19, hX, hVl, hRes⟩ :=
+    obtain ⟨hSF, hSC, hSB, aLOp, aROp, w19, hX, hVl, hRes⟩ :=
       hNe g N A SL φf φc st st' st'' el er lv rv sp r sret aExpr m0
     exact binRow_ne g N A SL φf φc st st' st'' d env el er lv rv
       sp r sret aEnv aExpr aLOp aROp w19 m0 hX ihL' ihR'
       (EvalE.binary st d env .ne el er st' st'' lv rv _ hEl hEr (by simp [binOpSem]))
-      hSF hSC hVl hRes
+      hSF hSC hSB hVl hRes
 
 end Vsa.Sim

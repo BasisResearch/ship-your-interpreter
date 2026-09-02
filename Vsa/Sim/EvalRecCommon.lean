@@ -291,7 +291,13 @@ theorem armTail_rec
         ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
         ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
-        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo))
+        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
+        -- ITEM ZERO B1: child budget at the lowered `sp - 1088`, `.fn`-bodies
+        -- bound, store-bodies invariant (eval_expr keeps depth `d`).
+        StackOK SL (sp - 1088#64)
+          (esub.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget esub = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget)
       (SubEvalReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
         st' vsub sp r sret subsret retPC v8 v9 v18 mcall) := by
   intro c hpre
@@ -301,7 +307,8 @@ theorem armTail_rec
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hssAl, hssLo, hssHi,
     hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin,
-    hcodeStk, hviStk, htableStk, harenaStk, harenaCode⟩ := hpre
+    hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
+    hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hsp1088 : 1088 ≤ sp.toNat := by omega
   have hspsub : (sp - 1088#64).toNat = sp.toNat - 1088 := by
@@ -345,6 +352,9 @@ theorem armTail_rec
       ra_align := hretAl
       spReg := hsp_1
       stackOK := ⟨by rw [hspsub]; omega, by rw [hspsub]; omega, by rw [hspsub]; omega⟩
+      stackBudget := hstackBudget
+      expr_bodies := hexprBodies
+      store_bodies := hstoreBodies
       minstret := ⟨vmi1, hmi1⟩
       mem := hmem1e
       code := by show Eval_exprLoaded σ1.mem; rw [hmem1e]; exact hcode

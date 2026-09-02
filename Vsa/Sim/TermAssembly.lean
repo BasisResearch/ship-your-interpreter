@@ -9,6 +9,7 @@ import Vsa.Sim.rows.ScaffoldRows
 import Vsa.Sim.rows.ExecVarInitRow
 import Vsa.Sim.rows.EvalAssignRow
 import Vsa.Sim.rows.ErrorRouting
+import Vsa.Sim.rows.SeqForRows
 import Vsa.Sim.EntrySeams
 import Vsa.Sim.DivFamily
 import Vsa.While.StmtDispatchClose
@@ -149,11 +150,11 @@ structure TermResidualsCore (L : Layout) where
       (`TermGuards.strConcat`, blocked on the stringify spec). -/
   hStrAddL : ∀ st d env el er st'' (sl : String) (rv : Value),
       EvalIH st d env (.binary .add el er) st''
-        (.str ((Value.str sl).display st''.store ++ rv.display st''.store))
+        (.str ((Value.str sl).catDisplay st''.store ++ rv.catDisplay st''.store))
   /-- `hBinary` str `+` (right-str) cell.  Supplier: `StrConcatCellResid`. -/
   hStrAddR : ∀ st d env el er st'' (lv : Value) (sr : String),
       EvalIH st d env (.binary .add el er) st''
-        (.str (lv.display st''.store ++ (Value.str sr).display st''.store))
+        (.str (lv.catDisplay st''.store ++ (Value.str sr).catDisplay st''.store))
   /-- `hBinary` str `<` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`
       (`TermGuards.strCmp`/`strArmProlog`, LANDED slots via `strcmp_full_spec`). -/
   hStrLt : ∀ st d env el er st'' (sl sr : String),
@@ -250,36 +251,14 @@ structure TermResidualsCore (L : Layout) where
   -- ===== The genuine whole-premise gaps (no landed row; typed VERBATIM as the
   -- TermCases field).  These are the for-loop body/loop cases + the ExecSeq cases,
   -- which have NO `_row` theorem yet. =====
-  /-- **GAP** — `hFlCondFalse` (`ForLoop.condFalse`).  Supplier: the for-loop
-      condition-false exit arm (`TermGuards.forMeasure` shape). -/
-  hFlCondFalse :
-    ∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (step : Option Expr) (b : Stmt)
-      (st' : SpecSt) (v : Value) (a : EvalE st d env c st' v) (a_1 : v.truthy = false),
-      mEvalE st d env c st' v a →
-      mForLoop st d env (some c) step b st' Status.normal (ForLoop.condFalse st d env c step b st' v a a_1)
-  /-- **GAP** — `hFlBodyBreak` (`ForLoop.bodyBreak`).  Supplier: for-loop body-break arm. -/
-  hFlBodyBreak :
-    ∀ (st : SpecSt) (d : Nat) (env : Addr) (cnd step : Option Expr) (b : Stmt)
-      (st' st'' : SpecSt) (a : ForCond st d env cnd st') (a_1 : ExecS st' d env b st'' Status.brk),
-      mForCond st d env cnd st' a → mExecS st' d env b st'' Status.brk a_1 →
-      mForLoop st d env cnd step b st'' Status.normal (ForLoop.bodyBreak st d env cnd step b st' st'' a a_1)
-  /-- **GAP** — `hFlBodyRet` (`ForLoop.bodyRet`).  Supplier: for-loop body-ret arm. -/
-  hFlBodyRet :
-    ∀ (st : SpecSt) (d : Nat) (env : Addr) (cnd step : Option Expr) (b : Stmt)
-      (st' st'' : SpecSt) (rv : Value) (a : ForCond st d env cnd st')
-      (a_1 : ExecS st' d env b st'' (Status.ret rv)),
-      mForCond st d env cnd st' a → mExecS st' d env b st'' (Status.ret rv) a_1 →
-      mForLoop st d env cnd step b st'' (Status.ret rv) (ForLoop.bodyRet st d env cnd step b st' st'' rv a a_1)
-  /-- **GAP** — `hFlLoop` (`ForLoop.loop`).  Supplier: for-loop back-edge
-      (`TermGuards.forMeasure`, `execForStepOf`/`loopFromBody`). -/
-  hFlLoop :
-    ∀ (st : SpecSt) (d : Nat) (env : Addr) (cnd step : Option Expr) (b : Stmt)
-      (st' st'' st''' st'''' : SpecSt) (status status' : Status) (a : ForCond st d env cnd st')
-      (a_1 : ExecS st' d env b st'' status) (a_2 : status = Status.normal ∨ status = Status.cont)
-      (a_3 : ExecStep st'' d env step st''') (a_4 : ForLoop st''' d env cnd step b st'''' status'),
-      mForCond st d env cnd st' a → mExecS st' d env b st'' status a_1 →
-      mExecStep st'' d env step st''' a_3 → mForLoop st''' d env cnd step b st'''' status' a_4 →
-      mForLoop st d env cnd step b st'''' status' (ForLoop.loop st d env cnd step b st' st'' st''' st'''' status status' a a_1 a_2 a_3 a_4)
+  -- ===== ForLoop constructors: NO residual fields (ITEM ZERO / falsity #12,
+  -- shape 3).  `mForLoop` is `True` (ledger
+  -- `forloop-motive-identity-pc-store-mutation`; consumer census in
+  -- `TermSimAssembly.mForLoop`'s doc), so the four `ForLoop` minor premises are
+  -- UNCONDITIONAL rows (`rows/SeqForRows.hFl*_row`).  The old whole-premise
+  -- `hFlCondFalse`/`hFlBodyBreak`/`hFlBodyRet`/`hFlLoop` fields are DELETED
+  -- (scaffold-rows precedent).
+
   /-- **GAP** — `hSeqNil` (`ExecSeq.nil`).  Supplier: `execSeqNil` seg-identity
       (`ExecSimCommon.execSeqNil`, essentially LANDED — a `_row` wrap is trivial). -/
   hSeqNil :
@@ -377,10 +356,10 @@ def termCases_of_residuals {L : Layout} (R : TermResiduals L) :
   hSCont := exec_cont_row R.hSCont
   hInitNone := hInitNone_row
   hInitSome := hInitSome_row
-  hFlCondFalse := R.hFlCondFalse
-  hFlBodyBreak := R.hFlBodyBreak
-  hFlBodyRet := R.hFlBodyRet
-  hFlLoop := R.hFlLoop
+  hFlCondFalse := hFlCondFalse_row
+  hFlBodyBreak := hFlBodyBreak_row
+  hFlBodyRet := hFlBodyRet_row
+  hFlLoop := hFlLoop_row
   hFcNone := hFcNone_row
   hFcSome := hFcSome_row
   hEsNone := hEsNone_row

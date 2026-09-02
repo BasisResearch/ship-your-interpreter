@@ -216,6 +216,27 @@ def entrySpillImage : Nat → Option (Nat × Nat)
   | 0x80003254 => some (1016, 23)  -- callDispatchPC: the s7 slot (0x800031cc)
   | _ => none
 
+/-- **The exit-side restored-register table** (wave 45 re-land, ledger
+`segexit-frame-preepilogue-x8-unrestored` — FALSITY #9): maps a segment EXIT PC
+to the set of `AbiPreservedNoise` registers the routes into that exit ACTUALLY
+restore.  A tabled exit PC is a PRE-epilogue join: the callee-saved restores
+run AFTER it, so the blanket `frame` clause is machine-false there
+(`segExitJoin_frame_x8_false`, `rows/CallCruxMarshal5.lean` — on the `.normal`
+route x8 holds the body-loop counter at the join, and ra/s1/s2 are likewise
+restored only inside the epilogue).  One entry today: the eval_expr epilogue
+join `callJoinPC = 0x800033ec`, whose routes restore ONLY `s3/s5/s7`
+(`x19/x21/x23`, the `ld s3,1048(sp); ld s5,1032(sp); ld s7,1016(sp)` restores)
+while `sp` (`x2`) is untouched by every route into it.  The epilogue closes the
+remaining callee-saveds at the CALLER boundary (where `armTail`/`EvalExit`
+re-establish `g`).  Untabled exit PCs keep the clause total — exactly the
+pre-amendment `SegExit.frame`. -/
+def joinRestored : Nat → Option (Register → Bool)
+  | 0x800033ec => some (fun R =>
+      match R with
+      | .x2 | .x19 | .x21 | .x23 => true
+      | _ => false)  -- callJoinPC: sp untouched + the s3/s5/s7 restores
+  | _ => none
+
 /-- Homogeneous ghost-frame GPR read — the ghost twin of `BlockPilot.gprGet`:
 dispatches the heterogeneous `RegisterType` register file at concrete GPR
 indices, so every branch reduces to `BitVec 64` and no cast is needed.
@@ -310,8 +331,17 @@ structure SegExit
     StoreRepr c.σ.mem N A φf' φc' st'.store
   /-- Console output correspondence for `st'`. -/
   out : OutRepr c.σ st'
-  /-- The blanket ghost frame restored. -/
-  frame : ∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R
+  /-- The ghost frame restored — GUARDED (wave 45 re-land, FALSITY #9, ledger
+  `segexit-frame-preepilogue-x8-unrestored`): at a TABLED exit PC
+  (`joinRestored exitPC = some f`) only the registers `f` marks — the set the
+  routes into that pre-epilogue join actually restore — are pinned to `g`; the
+  epilogue re-establishes the rest at the caller boundary.  Untabled exit PCs
+  make the guard hypothesis vacuously dischargeable, so the clause is total
+  there — exactly the pre-amendment `SegExit.frame` (producers unaffected,
+  `fun R hR _ => …`-adapted). -/
+  frame : ∀ R : Register, AbiPreservedNoise R →
+    (∀ f, joinRestored exitPC = some f → f R = true) →
+    c.σ.regs.get? R = g R
   /-- SKELETON: memory outside the arena and the scribbled stack window is
   framed to `m0` (same shape as `EvalExit.memFrame`, minus the sret buffer
   carve-out which is EvalE-specific). -/

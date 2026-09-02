@@ -565,6 +565,10 @@ structure EvalStrEntry
   ra_align : r.toNat % 4 = 0
   spReg : c.σ.regs.get? Register.x2 = some sp
   stackOK : StackOK SL sp (1088 + 1088)
+  stackBudget : StackOK SL sp
+    ((Expr.str s).stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088)
+  expr_bodies : Expr.bodiesBound Vsa.While.perCallBudget (Expr.str s) = true
+  store_bodies : Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
   minstret : ∃ v, c.σ.regs.get? Register.minstret = some v
   mem : c.σ.mem = m0
   code : InterpCodeLoaded c.σ.mem
