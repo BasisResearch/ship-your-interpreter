@@ -1,5 +1,14 @@
 # Cluster design — env-seam (13 fields)
 
+> **RECONCILED @ea30e22.** All 13 fields still OPEN. `EvalEntry.ground`/
+> `ExecEntry.ground` LANDED (47i) — the `entry` carry the amendments call for is
+> available. Landed suppliers confirmed: `env_get_found_uncond''` (EnvGetSpec6),
+> env_define composition (envdefine-composition), StackNeed budget layer (B0).
+> Missing residuals unchanged: `EvalVarCallBridge`, `EnvDefineSplice` straight-line
+> bridges, `mEvalArgs` SeqSpanGround, hInitStore decode. hCallClosure crux (X7) and
+> hSBlock/hSForStart loop IHs (X4) are the flagged hard items (recursor/capstone).
+> See `experiments/REMAINING.md`.
+
 **Fields.** hArgsCons, hArgsNil, hCall, hCallAssertOk, hCallClosure, hCallPrint,
 hCallPrintln, hInitStore, hSBlock, hSForStart, hSVarInit, hSVarNull, hVar.
 

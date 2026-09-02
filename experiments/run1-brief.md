@@ -1,5 +1,12 @@
 # OVERNIGHT FULL-CLOSE brief (RUN 1 + RUN 2 — the proof ends tonight)
 
+> **HISTORICAL (superseded 2026-09-02, tree @ea30e22).** The single-overnight
+> full-close did not land; the proof-ELF sha here is stale. Current authoritative
+> map: `experiments/REMAINING.md`; current design: `experiments/design/MASTER.md`.
+> The Field_*/fleet-clone workflow described below DID succeed (hInt/hNull/hBool/
+> hStr landed, hSBrk/hSCont via 48d) — the mechanics are sound, only the "one
+> night" scope was wrong. Retained for the fleet-harvest protocol.
+
 GOAL: `endToEnd` UNCONDITIONAL by morning — RemainingWork premise-free,
 ErrWork discharged, full check_all + axiom audit green, committed. Sequence
 long poles FIRST. If something is genuinely blocked, the machine-checked

@@ -1,5 +1,14 @@
 # Post-tooling closure (plan b) — TWO Fable runs
 
+> **HISTORICAL (superseded 2026-09-02, tree @ea30e22).** The "two-run overnight
+> full-close" framing did not hold — closure took waves 41→48 incrementally, and
+> the surface below ("63 fields, 43 open residuals.tsv rows") is stale. The
+> authoritative remaining-work map is now `experiments/REMAINING.md`; the design
+> that supersedes this fan-out is `experiments/design/MASTER.md` + the 6 cluster
+> files. Item-0 (io-buffering falsity) was RETRACTED empirically (setvbuf _IONBF;
+> observations `io-contracts-buffering-falsity` reversal). Kept for the per-item
+> generator recipes, which remain valid. Do NOT drive new work from the ledger here.
+
 PRECONDITION: `experiments/gen-fn-tooling-plan.md` landed (gen_fn.py +
 FnSummary + pilots `_write`/`_write_r`/`__swrite` green).
 

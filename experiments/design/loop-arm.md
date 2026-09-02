@@ -1,5 +1,14 @@
 # Cluster design — loop-arm (36 fields)
 
+> **RECONCILED @ea30e22.** All 36 fields still OPEN (NOT_FOUND). Design remains
+> valid, with one landed dependency: `ExecEntry.ground`/`EvalEntry.ground`
+> (the "MISSING INSERTION wave" in the DAG below) **LANDED in 47i** — the
+> `.ground` field exists on both entries, so `StmtArmResid.slot/kind` and
+> `UnaryArmResid.slot`/`BinIntCellResid.entry` can now be threaded from
+> `entry.ground` directly. Blocker for LA-stmt/unary/logic is now the row-level
+> restate+discharge (T-LA-*), NOT the insertion. LA-str(6)+LA-div-ov(1) remain
+> genuinely X6-blocked. See `experiments/REMAINING.md`.
+
 **Fields.** hAndFalse, hAndTrue, hAssign, hDivOv, hEq, hIAdd, hIDiv, hIGe, hIGt,
 hILe, hILt, hIMod, hIMul, hISub, hNe, hNeg, hNot, hOrFalse, hOrTrue, hSExpr,
 hSIfFalse, hSIfNone, hSIfTrue, hSRet, hSRetNull, hSWhileBreak, hSWhileFalse,

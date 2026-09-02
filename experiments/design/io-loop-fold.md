@@ -1,5 +1,15 @@
 # Cluster design — io-loop-fold (16 fields) + io-fold (io_value_print)
 
+> **RECONCILED @ea30e22.** These 16+1 cases are machine functions on the print
+> path, NOT `TermResidualsCore` census fields — they feed hCallPrint/Println/
+> AssertOk (all still OPEN). Landed: io_write loop-fold (FnWriteFold / P1),
+> `ValuePrintContract` structures (Fputs/Fwrite/Fprintf), `LayoutVpTableGen` vp
+> jump-table pins (w44/45), snprintf %lld path (M3). The io-buffering falsity was
+> RETRACTED (setvbuf _IONBF — `IoEmits` is a direct byte-equality post, correct as
+> stated). Still MISSING: the flush-chain loop-folds, io_value_print dispatch,
+> `IoGround`, the CallPrint* compose. T-IO-reachability-audit (prune vfprintf) still
+> do-FIRST. vfprintf is a flagged hard item. See `experiments/REMAINING.md`.
+
 **Cases.** io_write, io_write_r, io_swrite, io_putc_r, io_fputc_r, io_fputs_r,
 io_fwrite_r, io_sfvwrite_r, io_sbprintf, io_swbuf_r, io_sflush_r, io_fflush_r,
 io_fflush, io_svfprintf_r, io_vfprintf_r, io_snprintf, + io_value_print (io-fold).

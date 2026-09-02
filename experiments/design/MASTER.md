@@ -1,5 +1,26 @@
 # MASTER — global design pass for the 55 remaining record fields
 
+> **RECONCILED against tree @ea30e22 (2026-09-02).** Per-item status stamped
+> inline below (LANDED-BY / OPEN / GATED-ON). The single largest delta: **Wave-0
+> item 0b (the `EvalEntry.ground`/`ExecEntry.ground` INSERTION) already LANDED in
+> wave 47i** — both entry structures now carry the `ground` field
+> (`InterpEntry.lean:598`, `ExecEntry.ground` `ExecEntry.lean:429`); it was
+> "MISSING" only because this design shipped after 47i. That insertion is what
+> flipped hStr→FOUND (`field_hStr` via `strAstRegionBody_of_ground`) and made the
+> brk/cont X3 flip mechanical. Wave-0 0c's vp jump-table generator ALSO partly
+> landed (`LayoutVpTableGen.lean`, wave 44/45 mkind-lwu). Live census (tree, incl.
+> the in-flight wave-48d write): **6/58 FOUND** = hInt, hNull, hBool, hStr, hSBrk,
+> hSCont. The authoritative remaining map is `experiments/REMAINING.md`.
+>
+> **NOTE — wave 48d is IN FLIGHT** (uncommitted working-tree edits to
+> `ExecBrkCont`/`ExecCaseGeom`/`ExecLeafD`/`ExecLeafPin`): `field_hSBrk`/
+> `field_hSCont` are premise-free (`ExecArmMemExt` DELETED) in the tree but
+> `field-census.tsv`/`wave0.md` may lag. Fold its final green verdict in on landing.
+>
+> **0a (residual→named-field restate): PARTIALLY OPEN.** The flat-∧ towers are NOT
+> yet uniformly restated as `structure … : Prop` — spot-check `ExecCaseGeom.lean`
+> shows 0 structures. Treat 0a as an OPEN statement-wave, tracked in REMAINING.md.
+
 One coherent design sitting (2026-09-02). Designs the statement shapes,
 invariants, bridge shapes, supplier DAGs, and bounded proving tasks for ALL
 remaining `TermResidualsCore`/`ErrWork` fields, so proving agents execute
@@ -54,10 +75,11 @@ regen; every supply term pre-proved in `EntryGroundRows.lean`).
 
 ```
 WAVE 0 (statement + generator, no proof risk):
-  0a. residual→named-field-structure restatement (ALL clusters, bridge-review)
-  0b. EvalEntry.ground / ExecEntry.ground INSERTION (audit §D fleet wave)
-  0c. IoGround / VpTablePins generator (singletons + io)
-  ⇒ UNLOCKS: hStr, hSBrk, hSCont (record fills), the B5/B2/X1 refutations gone
+  0a. residual→named-field-structure restatement (ALL clusters, bridge-review)   [OPEN — not yet uniform]
+  0b. EvalEntry.ground / ExecEntry.ground INSERTION (audit §D fleet wave)         [LANDED-BY 47i]
+  0c. IoGround / VpTablePins generator (singletons + io)                          [PARTIAL: LayoutVpTableGen LANDED w44/45; IoGround MISSING]
+  ⇒ UNLOCKED (actual): hStr (47g→47i), hSBrk/hSCont (48d in-flight). B5/B2/X1
+     refutations dissolve for the fields whose rows now consume `.ground`.
 
 WAVE 1 (near-landed, ride Wave 0):
   1a. LA-int relight (11 cells, value paths LANDED) — T-LA-carry + T-LA-int-relight

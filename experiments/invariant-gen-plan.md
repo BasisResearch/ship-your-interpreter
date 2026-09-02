@@ -1,5 +1,13 @@
 # Invariant generation on top of the fuzzer — plan (validated by experiment)
 
+> **RECONCILED @ea30e22 (2026-09-02): rounds 1-4 VERIFIED against the tree.**
+> Round-4 batch numbers (54 mined+SURVIVED / 17 mining-silent / 26 no-trace-path,
+> 0 contradictions) match `invariants/BATCH-REPORT.md` and commit ba31032
+> field-for-field. No correction needed. Open items honestly recorded in "What
+> remains" (value-repr arm-exit probe, driver call-descent, io-loop mining, LLM
+> seeding) are still open in the tree.
+
+
 Design-time only: NOTHING here enters a proof. Mined/SMT-checked candidates are
 seeds; every invariant still gets its pure Lean proof, gated by check_all
 stage-b/c (banned-tactic scan + axiom audit). Same contract as the emulator

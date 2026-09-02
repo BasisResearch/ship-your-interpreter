@@ -1,5 +1,13 @@
 # Cluster design — error-jal-seam (19 fields)
 
+> **RECONCILED @ea30e22.** All 19 errSite Triples LANDED (`ErrSitesBatch{0..3}`,
+> confirmed in tree). These 19 feed `ErrWork`/`hErrFam` (split out of
+> `TermResidualsCore`), so they are NOT among the 52 open `TermResidualsCore`
+> census fields — they are the error-family residual. Cluster status unchanged:
+> the hard part is done, residual = per-arm `Reaches` (T-ERR-reach) + kindname
+> readback + the `ErrWork` restate. See `experiments/REMAINING.md` (ErrWork reach
+> is a flagged hard item — no combinator supplies caller-linkage).
+
 **Fields (cases).** err_80003b54, err_80003b9c, err_80003bc8, err_80003c10,
 err_80003c7c, err_80003cc4, err_80003ce8, err_80003d14, err_80003d5c,
 err_80003da0, err_80003950, err_800034e4, err_80003de8, err_80003e98,
