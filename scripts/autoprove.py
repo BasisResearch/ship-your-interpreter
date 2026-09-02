@@ -70,6 +70,13 @@ FIELD_MAP = {
     "hBool":     ("valuerepr-copy:bool", "Vsa/Sim/ReprCopy.lean::read32_copy"),
     "hInt":      ("valuerepr-copy:int",  "Vsa/Sim/ReprCopy.lean::readLE_copy"),
     "hStr":      ("valuerepr-copy:str",  "Vsa/Sim/ReprSurvival.lean::cstring_agreeP"),
+    # exec-arm FRAME slice: the ExecLeafMemPin memory-frame obligation of a
+    # register-only exec leaf, ENCODED via the MECHANICALLY-EXTRACTED write-log
+    # (scripts/wlog_extract.py -> BlockMem.wlogM).  This is the FRAME half of the
+    # exec-arm supplier field (pres = MemExtends, agree = window-frame); the
+    # recursive StoreRepr survival half stays ENCODE-GAP (Houdini/Lean's job).
+    "hSBrk":     ("execleaf-frame:brkCont", "Vsa/Sim/ExecBrkCont.lean::ExecLeafMemPin"),
+    "hSCont":    ("execleaf-frame:brkCont", "Vsa/Sim/ExecBrkCont.lean::ExecLeafMemPin"),
     # a SHORT-VOCABULARY variant of the str field: the candidate pool is
     # deliberately missing the payload-agreement shape, so Houdini converges
     # WITHOUT closing the goal -> the LLM protocol fires.  This is the demo
@@ -131,6 +138,100 @@ def encode_vc(kind, control=False, extra_cands=None):
             L.append(f"(assert {expr})")
     concl_neg = f"(assert (not {G.valuerepr('mp', 'dstAddr', base_kind, W)}))"
     return L, concl_neg
+
+
+# ===========================================================================
+# STEP 1' — ENCODE an exec-arm's ExecLeafMemPin FRAME obligation via the
+# MECHANICALLY-EXTRACTED write-log (scripts/wlog_extract.py -> BlockMem.wlogM).
+#
+# This is the write-log probe (scripts/writelog_smt.py) rewired so the store list
+# is READ OFF wlogM, not hand-listed.  The FRAME obligation has two clauses:
+#   pres  : MemExtends m0 m         (inserts never delete presence)
+#   agree : ∀k ∉ [SL.lo, sp), m[k]?=m0[k]?   (writes stay in the window)
+# Both are pure QF_ABV over the extracted store addresses.  We return, per
+# clause, a self-contained script (validate = negate; UNSAT ⇒ PROVED-DIRECT) plus
+# a control that breaks it (agree window too narrow ⇒ SAT).
+# ===========================================================================
+def _extracted_wlog(tag):
+    sys.path.insert(0, HERE)
+    import wlog_extract as WX
+    r = WX.extract_wlog(tag, with_data=False)
+    stores, max_below = [], 0
+    for s in r["stores"]:
+        raw = s["raw"]
+        below = -raw["dstOff"] if raw["dstReg"] == 2 else 0
+        max_below = max(max_below, below)
+        stores.append((s["addr"], s["width"]))
+    return stores, max_below
+
+
+def _wm8_chain(pre_def, pre_val, addr, data_syms, out_def, out_val):
+    L = []
+    d, v = pre_def, pre_val
+    for j in range(8):
+        nd = f"{out_def}_s{j}" if j < 7 else out_def
+        nv = f"{out_val}_s{j}" if j < 7 else out_val
+        L.append(f"(define-fun {nd} () (Array Int Bool) (store {d} (+ {addr} {j}) true))")
+        L.append(f"(define-fun {nv} () (Array Int (_ BitVec 8)) (store {v} (+ {addr} {j}) {data_syms[j]}))")
+        d, v = nd, nv
+    return L
+
+
+def encode_execleaf_frame(tag, clause, control=False):
+    """Return SMT script (as lines) for the ExecLeafMemPin `clause` ∈ {agree,pres}
+    of the arm `tag`, encoded via the extracted write-log.  UNSAT ⇒ frame slice
+    PROVED.  control=True (agree only) narrows the window ⇒ SAT (refute-capable)."""
+    stores, max_below = _extracted_wlog(tag)
+    L = ["(set-logic ALL)", "(set-option :timeout 60000)"]
+    L += G.decls_mem("m0")
+    L += ["(declare-fun sp () Int)", "(declare-fun sllo () Int)"]
+    for s in range(len(stores)):
+        for j in range(8):
+            L.append(f"(declare-fun d{s}_{j} () (_ BitVec 8))")
+    L.append("(assert (<= 176 sp))")
+    if clause == "agree" and control:
+        L.append("(assert (= sllo (- sp 8)))")          # window too narrow
+    else:
+        L.append(f"(assert (<= sllo (- sp {max_below})))")  # window covers all spills
+    cur_def, cur_val = "m0_def", "m0_val"
+    for s, (addr, w) in enumerate(stores):
+        data = [f"d{s}_{j}" for j in range(8)]
+        od, ov = f"m{s+1}_def", f"m{s+1}_val"
+        L += _wm8_chain(cur_def, cur_val, addr, data, od, ov)
+        cur_def, cur_val = od, ov
+    mdef, mval = cur_def, cur_val
+    if clause == "agree":
+        L.append("(declare-fun k () Int)")
+        L.append("(assert (not (and (<= sllo k) (< k sp))))")
+        L.append(f"(assert (or (not (= (select m0_def k) (select {mdef} k))) "
+                 f"(and (select {mdef} k) (not (= (select {mval} k) (select m0_val k))))))")
+    elif clause == "pres":
+        L.append("(declare-fun a () Int)")
+        L.append("(declare-fun b () (_ BitVec 8))")
+        L.append("(assert (and (select m0_def a) (= (select m0_val a) b)))")
+        L.append(f"(assert (not (select {mdef} a)))")
+    return L
+
+
+def run_execleaf_frame(field, tag):
+    """Discharge the FRAME slice of an exec-arm supplier field via the extracted
+    write-log.  Returns a verdict dict; frame closes iff both agree+pres UNSAT and
+    the agree control SATs (refute-capable, non-vacuous)."""
+    va, _, dta = z3_run(encode_execleaf_frame(tag, "agree", control=False))
+    vp, _, dtp = z3_run(encode_execleaf_frame(tag, "pres", control=False))
+    vc, _, dtc = z3_run(encode_execleaf_frame(tag, "agree", control=True))
+    closed = va.startswith("unsat") and vp.startswith("unsat") and vc.startswith("sat")
+    r = {"field": field, "verdict": "", "detail": "", "cert": "", "lean": ""}
+    if closed:
+        r["verdict"] = "FRAME-PROVED"
+        r["detail"] = (f"ExecLeafMemPin FRAME slice via wlogM-extracted write-log: "
+                       f"agree UNSAT({dta}s) pres UNSAT({dtp}s) ctrl SAT; residual = "
+                       f"recursive StoreRepr survival (ENCODE-GAP -> Houdini/Lean)")
+        r["cert"] = f"agree:{va} pres:{vp} ctrl_window:{vc}"
+    else:
+        r["verdict"] = "FRAME-UNCLOSED"
+        r["detail"] = f"agree={va} pres={vp} ctrl={vc} (expected unsat/unsat/sat)"
+    return r
 
 
 # ===========================================================================
@@ -364,6 +465,10 @@ def run_field(field, do_transcribe=True, do_lean=True, block_llm=True):
     if target.startswith("encode-gap"):
         r["verdict"] = "ENCODE-GAP"; r["detail"] = target.split(":", 1)[1]
         return r
+
+    if target.startswith("execleaf-frame"):
+        tag = target.split(":", 1)[1]
+        return run_execleaf_frame(field, tag)
 
     kind = target.split(":", 1)[1]           # null | bool | int | str | str-short
 
