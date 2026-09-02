@@ -5129,3 +5129,16 @@ it, still stop and report instead.
 - proposal: point `--joint`/`filter_joint` at the LIVE `BinArmExtras` (via
   `_discover_struct`) once its opaque geometry conjuncts get fragment encodings,
   and harvest real consumer `.field` projection sites for `--demands`.
+
+## 2026-09-02 smt-cannot-prove-supplier-fields (coordinator, verified)
+- verified: smt_check --validate on SkelHSExpr/SkelHSRet → ENCODE-GAP. Supplier
+  fields' content = Sail step semantics + inductive Repr predicates (opaque to
+  Z3). Asymmetry: --refute works (falsities have in-fragment arithmetic
+  witnesses); --validate cannot (validity needs the opaque semantics
+  constrained; uninterpreted preds admit spurious models). Supplier fields →
+  Lean abstraction stack (gen_fn/seg/Widen seeded by mined invariants), not SMT.
+- BACKLOG (narrow, real): a Z3-certificate→Lean-replay path for HARD-ARITHMETIC
+  sub-goals only — the pockets where omega/decide time out and bv_decide is
+  banned. Not for the supplier fields' bulk (omega already closes their
+  side-conditions cheaply). Trigger: a proving agent reports an omega timeout
+  on a bitvector/nonlinear goal → dump_smt_lib that goal, Z3 prove, replay cert.
