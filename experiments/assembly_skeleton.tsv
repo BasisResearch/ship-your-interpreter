@@ -2,7 +2,7 @@ field	status	supplier_note
 hInt	done	DISCHARGED wave 47e: `field_hInt`/`skelHInt_discharged` (`rows/Field_hInt.lean`) — `EntryStackSurv` amendment + `LeafExitPin` re-land; pinned widener entry-derivable (`leafWidenP_of_entry`).
 hNull	done	DISCHARGED wave 47f: `field_hNull`/`skelHNull_discharged` (`rows/Field_hNull.lean`) — `GeomFrom` callee-geometry layer (`EvalEntry.nbs_pins` + widened disjointness literals) closes `NullLeafGeom` outright.
 hBool	done	DISCHARGED wave 47f: `field_hBool`/`skelHBool_discharged` (`rows/Field_hBool.lean`) — `GeomFrom` layer closes `BoolLeafGeom` outright.
-hStr	hole	`hStr`/`eval_str_row`.  Wave 47f: code/slot geometry DISCHARGED (`field_hStr_of_payload`, `rows/Field_hStr.lean`); wave 47g (Law-4 verdict): residual = EXACTLY ONE named premise `EvalEntryStrAstRegion` (`field_hStr_of_astRegion` machine-checks the discharge; the AST-region facts exist NOWHERE on main — ExprRepr/StoreRepr/ProgramRepr/Layout all region-free; needs the `ast_region` EvalEntry amendment wave).
+hStr	hole	`hStr`/`eval_str_row`.  Wave 47f: code/slot geometry DISCHARGED (`field_hStr_of_payload`, `rows/Field_hStr.lean`); wave 47g (Law-4 verdict): residual = EXACTLY ONE named premise `EvalEntryStrAstRegion` (`field_hStr_of_astRegion` machine-checks the discharge; the AST-region facts exist NOWHERE on main — ExprRepr/StoreRepr/ProgramRepr/Layout all region-free; needs the `ast_region` EvalEntry amendment wave). Wave 47h: the amendment INTERFACE is landed (`EvalGround`/`AstRegionPins`, `Vsa/Sim/EntryGround.lean`; `strAstRegionBody_of_ground` in `rows/EntryGroundRows.lean` is the exact ∃-body) — hStr becomes a record fill the moment `EvalEntry.ground` is inserted (fan-out map: `experiments/entry-needs-audit.md` §D).
 hNeg	hole	`hNeg`/`eval_neg_row`.  Supplier: neg-arm geometry (`EvalRecCommon`/`blockB_unary`).
 hNot	hole	`hNot`/`eval_not_row`.  Supplier: not-arm geometry.
 hOrTrue	hole	`hOrTrue`/`eval_orTrue_row`.  Supplier: logical short-circuit geometry.
@@ -10,7 +10,7 @@ hAndFalse	hole	`hAndFalse`/`eval_andFalse_row`.  Supplier: logical short-circuit
 hOrFalse	hole	`hOrFalse`/`eval_orFalse_row`.  Supplier: logical fall-through geometry.
 hAndTrue	hole	`hAndTrue`/`eval_andTrue_row`.  Supplier: logical fall-through geometry.
 hVar	hole	`hVar`/`eval_var_row`.  Supplier: `VarLeafResid` — carries the `env_get_found` caller-linkage oracle (dischargeable from `env_get_found_uncond''` once the eval-var-arm call bridge lands; the `TermCallees.envGet` contract
-hAssign	hole	`hAssign`/`eval_assign_row`.  Supplier: `AssignArmSpec` arm oracle ("row now, arm spec later" precedent) — the composed `env_define` (`TermCallees.envDefine`, OPEN) store-set arm.  No `evalAssignSim` exists yet; whole ar
+hAssign	hole	"`hAssign`/`eval_assign_row`.  Supplier: `AssignArmSpec` arm oracle (""row now, arm spec later"" precedent) — the composed `env_define` (`TermCallees.envDefine`, OPEN) store-set arm.  No `evalAssignSim` exists yet; whole ar"
 hIAdd	hole	`hBinary` add int-cell.  Supplier: `AddResid` value-path (`EvalAddRow`, block-reflected).
 hISub	hole	`hBinary` sub int-cell.  Supplier: `SubResid` (`EvalSubRow`).
 hIMul	hole	`hBinary` mul int-cell.  Supplier: `MulResid` (`EvalMulRow`, `__muldi3` seam).
@@ -56,4 +56,4 @@ hSeqConsNormal	hole	**GAP** — `hSeqConsNormal` (`ExecSeq.consNormal`).  Suppli
 hSeqConsAbrupt	hole	**GAP** — `hSeqConsAbrupt` (`ExecSeq.consAbrupt`).  Supplier: `execSeqLoop` abrupt-exit arm (`TermGuards.seqMeasure`).
 hInitStore	hole	**ENTRY (prologue)** — `hEntryHalts` store-init locus.  Supplier: the off-path `interp_init` store representation at the `interp_run` loop head (`Vsa.Sim.InterpInitStoreRepr`, decoded PC span in its doc).
 hEpilogueSpill	hole	**ENTRY (epilogue)** — `hEntryHalts` exit-0 spill seam.  Supplier: the epilogue restore-block byte-level spill/frame/image/tail facts (`Vsa.Sim.EpilogueSpill`, the `s5=0` latch + restore `ChainFacts`).
-hDivCorr	hole	**DIVERGENCE** — `hdivFam`.  Supplier: the per-load divergence correspondence (`Vsa.Sim.DivFamily.DivCorrFamily L`), discharged by the M4 `exec_stmt` case Triples' progress-only ("≥1 step, still corresponds") skeleton.
+hDivCorr	hole	"**DIVERGENCE** — `hdivFam`.  Supplier: the per-load divergence correspondence (`Vsa.Sim.DivFamily.DivCorrFamily L`), discharged by the M4 `exec_stmt` case Triples' progress-only (""≥1 step, still corresponds"") skeleton."

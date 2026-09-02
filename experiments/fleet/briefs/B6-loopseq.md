@@ -38,43 +38,7 @@ Also read: Vsa/Sim/rows/AssemblySkeleton.lean (your targets: the SkelH* hole abb
 - Do NOT rm the clone or anything in it when done. Final message: per-field
   status table (green/skipped+why), nothing else.
 
-## The fields (7), in order
-
-### hFlCondFalse
-```lean
-∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (step : Option Expr) (b : Stmt)
-      (st' : SpecSt) (v : Value) (a : EvalE st d env c st' v) (a_1 : v.truthy = false),
-      mEvalE st d env c st' v a →
-      mForLoop st d env (some c) step b st' Status.normal (ForLoop.condFalse st d env c step b st' v a a_1)
-```
-
-### hFlBodyBreak
-```lean
-∀ (st : SpecSt) (d : Nat) (env : Addr) (cnd step : Option Expr) (b : Stmt)
-      (st' st'' : SpecSt) (a : ForCond st d env cnd st') (a_1 : ExecS st' d env b st'' Status.brk),
-      mForCond st d env cnd st' a → mExecS st' d env b st'' Status.brk a_1 →
-      mForLoop st d env cnd step b st'' Status.normal (ForLoop.bodyBreak st d env cnd step b st' st'' a a_1)
-```
-
-### hFlBodyRet
-```lean
-∀ (st : SpecSt) (d : Nat) (env : Addr) (cnd step : Option Expr) (b : Stmt)
-      (st' st'' : SpecSt) (rv : Value) (a : ForCond st d env cnd st')
-      (a_1 : ExecS st' d env b st'' (Status.ret rv)),
-      mForCond st d env cnd st' a → mExecS st' d env b st'' (Status.ret rv) a_1 →
-      mForLoop st d env cnd step b st'' (Status.ret rv) (ForLoop.bodyRet st d env cnd step b st' st'' rv a a_1)
-```
-
-### hFlLoop
-```lean
-∀ (st : SpecSt) (d : Nat) (env : Addr) (cnd step : Option Expr) (b : Stmt)
-      (st' st'' st''' st'''' : SpecSt) (status status' : Status) (a : ForCond st d env cnd st')
-      (a_1 : ExecS st' d env b st'' status) (a_2 : status = Status.normal ∨ status = Status.cont)
-      (a_3 : ExecStep st'' d env step st''') (a_4 : ForLoop st''' d env cnd step b st'''' status'),
-      mForCond st d env cnd st' a → mExecS st' d env b st'' status a_1 →
-      mExecStep st'' d env step st''' a_3 → mForLoop st''' d env cnd step b st'''' status' a_4 →
-      mForLoop st d env cnd step b st'''' status' (ForLoop.loop st d env cnd step b st' st'' st''' st'''' status status' a a_1 a_2 a_3 a_4)
-```
+## The fields (3), in order
 
 ### hSeqNil
 ```lean

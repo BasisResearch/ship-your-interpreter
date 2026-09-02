@@ -13,6 +13,7 @@ FILES=$(ls Vsa/Sim/GeomFacts.lean Vsa/Sim/SegEval*.lean Vsa/Sim/FrameCalc.lean V
            Vsa/Sim/DeriveCallSeg.lean Vsa/Sim/DeriveLoop.lean Vsa/Sim/DeriveErrorSite.lean \
            Vsa/Sim/DeriveCaseRow.lean Vsa/Sim/ChainFactsTac.lean \
            Vsa/Sim/FrameMeta.lean Vsa/Sim/BridgeSeg.lean Vsa/Sim/BridgeSegFramed.lean Vsa/Sim/WidenMeta.lean \
+           Vsa/Sim/MemRegion.lean Vsa/Sim/EntryGround.lean Vsa/Sim/AstTransport.lean \
            Vsa/Sim/SegReadback.lean Vsa/Sim/TermBundles.lean Vsa/Sim/TermImageGeom.lean \
            Vsa/Sim/EnvDefSeg.lean Vsa/Sim/EnvGetMarshal.lean Vsa/Sim/WriteLogNF.lean \
            Vsa/Sim/StepCount.lean Vsa/Sim/MidArmCombinator.lean Vsa/Sim/EvalChildFieldCombinator.lean \

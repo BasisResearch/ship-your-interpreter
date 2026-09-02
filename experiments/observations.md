@@ -4595,3 +4595,42 @@ it, still stop and report instead.
   `nbs_pins` shape; top-level supply is a parse-arena/Layout fact, M6).
 - proposal: unchanged from `strleafgeom-payload-ast-region`; the interface is
   now LANDED, so the amendment's target statement is pinned in code.
+
+## 2026-09-02 entry-needs-complete-audit-and-ground-interface (wave 47h)
+- missing: the COMPLETE entry-side need set (three serial EvalEntry amendments
+  47e/f/g each added one class; a fourth was named; Law 3 demanded the factor).
+  Audited from every machine-checked source (obstruction verdicts, Field_h*
+  conditional discharges, all 55 NOT_FOUND fields' residual carriers):
+  entry-suppliable = N1 full eval table pins + N2 stmt table pins/disjointness
+  + N3 AST region + N4 arena literals + N5 result-slot-in-stack; everything
+  else is X-class (residual statements, block re-lands, motive layer, callee
+  seams) — table in `experiments/entry-needs-audit.md`.  NEW Law-4 finding:
+  the `hMcallPop` totality oracle (∀ mcall agreeing off-stack, TOTAL on Nat)
+  is unsuppliable by ANY amendment — no finite `Mem` is total (machine-checked
+  `experiments/fleet/obstructions/McallPopTotality.lean`, pigeonhole via
+  `size_erase`; instantiating `mcall := m0` already demands `m0` total).  Its
+  honest fix is a residual re-statement (presence on the dead-byte window),
+  and it blocks hNeg/hNot/the logical four INDEPENDENTLY of geometry.
+- workaround: NONE needed for the interface — LANDED green+axiom-clean+wired:
+  `Vsa/Sim/MemRegion.lean` (`ExprIn`/`StmtIn` hereditary region mirror,
+  structural not inductive, reads conditional so child projection is direct;
+  `exprIn_agreeP`/`stmtIn_agreeP` transports; pairs with the LANDED
+  `AstTransport.exprRepr_agreeP` — `ExprFp ⊆ [lo,hi)` bridge is the one
+  bounded follow-up), `Vsa/Sim/rows/LayoutStmtTableGen.lean` (GENERATED
+  `groundStmtSlot_0..8`, gen_layout.py extended; all 9 stmt slots decode to
+  the pinned `execArm*` PCs), `Vsa/Sim/EntryGround.lean` (`KindTablePins`/
+  `StmtTablePins`/`AstRegionPins`/`StmtRegionPins`/`RetSlotGeom` bundled as
+  ONE `EvalGround`/`ExecGround` each + `survive_stack` transports),
+  `Vsa/Sim/rows/EntryGroundRows.lean` (record-fill discharges:
+  `strAstRegionBody_of_ground` = the exact `EvalEntryStrAstRegion` ∃-body so
+  hStr closes at insertion; `execGround_caseGeom_brk/cont` + generic
+  `execGround_slot_window`; `kindTablePins_of_bytes`/`stmtTablePins_of_bytes`
+  M6 suppliers off the generated pins).
+- cost: the INSERTION (one `ground` field per entry) is NOT applied — it is
+  the measured fleet-scale fan-out (15 ctor sites / the 26-file `NBSPins`
+  conduit / ~304-file regen, map in the audit §D), beyond one lane with one
+  lean process; census stays 3/58 until it lands.
+- proposal: dispatch the insertion as the next fleet wave with the audit §D
+  map; every site's supply term is pre-proved here, so it is pure record
+  plumbing.  No future wave should touch EvalEntry/ExecEntry beyond inserting
+  `ground` — the audit shows no sixth entry-suppliable class exists.

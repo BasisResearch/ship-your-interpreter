@@ -82,12 +82,12 @@ Also read: Vsa/Sim/rows/AssemblySkeleton.lean (your targets: the SkelH* hole abb
 ```lean
 ∀ st d env el er st'' (sl : String) (rv : Value),
       EvalIH st d env (.binary .add el er) st''
-        (.str ((Value.str sl).display st''.store ++ rv.display st''.store))
+        (.str ((Value.str sl).catDisplay st''.store ++ rv.catDisplay st''.store))
 ```
 
 ### hStrAddR
 ```lean
 ∀ st d env el er st'' (lv : Value) (sr : String),
       EvalIH st d env (.binary .add el er) st''
-        (.str (lv.display st''.store ++ (Value.str sr).display st''.store))
+        (.str (lv.catDisplay st''.store ++ (Value.str sr).catDisplay st''.store))
 ```

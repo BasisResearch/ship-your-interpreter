@@ -28,6 +28,7 @@ Before ANY proof work: run `scripts/abs_inventory.sh` and reuse by name.
 | Store↔frame marshalling | `foundSt_of_storeRepr` / `frameRepr_append` |
 | NEW post/entry predicate | named-field `structure ... : Prop where` (model: `FoundSt`/`GeomFacts`/`FrameCalc`) — NEVER an anonymous ∃/∧ tower |
 | Consuming a LANDED ∃/∧ tower | write ONE named destructuring lemma beside the tower's def and consume through it — never `.2.2.2.2` positional chains |
+| Entry-side ground fact (jump-table pin / AST-node/string region / arena/result-slot geometry) | `EvalGround`/`ExecGround` (`EntryGround.lean`; region layer `MemRegion.lean`, repr transport `AstTransport.lean`, generated pins `Layout*TableGen`) — NEVER per-site literals; the need audit is `experiments/entry-needs-audit.md` |
 
 ## Laws
 

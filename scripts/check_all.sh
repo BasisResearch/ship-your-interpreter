@@ -1079,6 +1079,19 @@ THEOREMS=(
   Vsa.Sim.LayoutVpTableGen.vpGroundSlot_0                            # rows/LayoutVpTableGen (value_print jump-table slot pins)
   Vsa.Sim.LayoutVpTableGen.vpGroundSlot_1                            # rows/LayoutVpTableGen
   Vsa.Sim.LayoutVpTableGen.vpGroundSlot_2                            # rows/LayoutVpTableGen
+  # wave 47h: entry-completeness batched amendment (interface layer)
+  Vsa.Sim.exprIn_agreeP                             # MemRegion (hereditary AST-region transport, eval side)
+  Vsa.Sim.stmtIn_agreeP                             # MemRegion (stmt side)
+  Vsa.Sim.exprIn_str_payload                        # MemRegion (.str root projection feeding EvalEntryStrAstRegion)
+  Vsa.Sim.EvalGround.survive_stack                  # EntryGround (the ONE per-seam transport of the batched eval bundle)
+  Vsa.Sim.ExecGround.survive_stack                  # EntryGround (exec twin)
+  Vsa.Sim.LayoutStmtTableGen.groundStmtSlot_0       # rows/LayoutStmtTableGen (exec_stmt jump-table pins, GENERATED)
+  Vsa.Sim.LayoutStmtTableGen.groundStmtSlot_8       # rows/LayoutStmtTableGen
+  Vsa.Sim.Rows.strAstRegionBody_of_ground           # rows/EntryGroundRows (hStr = record fill at ground insertion)
+  Vsa.Sim.Rows.execGround_caseGeom_brk              # rows/EntryGroundRows (ExecCaseGeom entry-suppliable half)
+  Vsa.Sim.Rows.execGround_caseGeom_cont             # rows/EntryGroundRows
+  Vsa.Sim.Rows.stmtTablePins_of_bytes               # rows/EntryGroundRows (M6 supplier off generated pins)
+  Vsa.Sim.Rows.kindTablePins_of_bytes               # rows/EntryGroundRows (M6 supplier, eval table)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean
