@@ -760,8 +760,22 @@ def main():
                     help="report the ExecLeafMemPin frame slice over the 24 supplier fields")
     ap.add_argument("--survival", action="store_true",
                     help="run ONLY the recursive StoreRepr survival-IH base/step certificate")
+    ap.add_argument("--full-effect", metavar="FIELD",
+                    help="encode the FULL arm exit-relation (reg+PC+HTIF+mem+given-sub-result"
+                         "+survival) per FULL-EFFECT-PROBE.md; e.g. hSBrk / hSExpr")
     ap.add_argument("--json", action="store_true", help="JSON output (coverage mode)")
     args = ap.parse_args()
+
+    # --full-effect : the FULL arm-effect exit-relation probe (thesis of
+    # FULL-EFFECT-PROBE.md): the composition-defer residual, encoded whole.
+    if args.full_effect:
+        import gen_fulleffect as FE
+        r = FE.run_pilot(args.full_effect)
+        if args.json:
+            print(json.dumps(r, indent=2)); return 0
+        # reuse gen_fulleffect's pretty printer by re-dispatching
+        sys.argv = ["gen_fulleffect", "--field", args.full_effect]
+        return FE.main()
 
     # --batch supplier : the supplier-class per-branch batch (frame + survival-IH
     # + composition-defer + novel) over the 24 NO-CURE-SEMANTIC-GAP fields.
