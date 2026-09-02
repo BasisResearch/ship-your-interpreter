@@ -5142,3 +5142,33 @@ it, still stop and report instead.
   banned. Not for the supplier fields' bulk (omega already closes their
   side-conditions cheaply). Trigger: a proving agent reports an omega timeout
   on a bitvector/nonlinear goal → dump_smt_lib that goal, Z3 prove, replay cert.
+
+## 2026-09-02 smt-definition-encoding-nonrec-provable (bounded-SMT probe)
+- missing: (WAS) the prior smt-cannot-prove-supplier-fields verdict recorded
+  "--validate = ENCODE-GAP" for supplier fields, but that was measured against
+  the OPAQUE stop-policy (ValueRepr uninterpreted). It did not test what happens
+  when the DEFINITION is encoded (datatype case-split + readLE unfolded into the
+  working QF_ABV Mem model).
+- workaround: N/A — data-gathering probe (experiments/smt/bounded/gen_probe.py,
+  experiments/smt/BOUNDED-PROBE.md). Target = the shallowest supplier field, the
+  ValueRepr copy-readback of valueRepr_copy (ReprCopy.lean:132). RESULT: the
+  NON-RECURSIVE cases (.null/.bool/.int) are VALIDATE-UNSAT (real proof) at
+  k=1,2,3 in ~20ms, and the UNSAT is REPLAYABLE (it is exactly read32_copy /
+  readLE_copy, ReprCopy.lean:64,87, which valueRepr_copy already uses). The
+  refute-twin control is SAT at every depth. The .str case is VALIDATE-SAT (the
+  inductive wall): the shallow 24-byte copy hyp is genuinely too weak for the
+  recursive CString payload — confirmed by flipping to UNSAT (0.01s) once the
+  cstring_agreeP payload hyp is added. Increasing k does not help (SAT at
+  k=1,2,3 alike) — the missing piece is a HYPOTHESIS, not more unfolding.
+- cost: none (probe only, <1s full sweep). Sharpens, not contradicts, the prior
+  verdict: bounded-SMT IS a viable opportunistic validity prover for the LEAF
+  memory-arithmetic supplier fields (ValueRepr .null/.bool/.int, read* readbacks,
+  window side-conditions) — the same pocket the prior BACKLOG flagged for a
+  Z3-cert→Lean-replay path. The inductive wall falls SHARPLY at the first
+  recursive predicate (CString), where a bounded cut can only defer the recursion
+  to a hypothesis, never close it.
+- proposal: wire a definition-encoded validate mode into smt_check/DumpSmtLib for
+  the non-recursive ValueRepr/read* stratum (unfold the constructor case + readLE
+  rather than stopping opaque); keep the recursive-Repr cones (CString/StoreRepr/
+  ExprRepr) as opaque (Lean-stack territory). A fast VALIDATE-SAT there is a
+  useful signal that a stated leaf obligation is missing a payload/frame hyp.
