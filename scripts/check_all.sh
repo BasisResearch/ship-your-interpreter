@@ -578,9 +578,9 @@ THEOREMS=(
   Vsa.Sim.envGetContract_of_storeRepr               # EnvGetMarshal (combined marshalling incl. spec verdict via get?_immediate_hit; reusable for env_define call sites)
   Vsa.Sim.envGetFramed_triple                       # rows/EvalVarBridgeCallee (EnvGetEntryV → EnvGetFramedPost from the marshalling + framed post)
   Vsa.Sim.varCallLinkage_callee                     # rows/EvalVarBridgeCallee (VarCallLinkage.callee DISCHARGED modulo EnvGetCallerGeom/FrameStackDisj/VarPostRepack named caller premises)
-  Vsa.Sim.execExitD_of_execExit                     # rows/ExecCaseGeom (ExecExit + ExecLeafWiden to ExecExitD; the statement shape-gap bridge, LeafWiden twin)
-  Vsa.Sim.execBrkSimD                               # rows/ExecCaseGeom (ExecS.brk at ExecExitD via execBrkSim + ExecCaseGeom widener; the ExecIH motive shape)
-  Vsa.Sim.execContSimD                              # rows/ExecCaseGeom (ExecS.cont at ExecExitD via execContSim + ExecCaseGeom widener)
+  Vsa.Sim.execExitD_of_pinnedExecExit               # rows/ExecCaseGeom (X3-c: ExecExitPinned + ExecLeafWidenP → ExecExitD; the PINNED statement shape-gap bridge, wave 48d)
+  Vsa.Sim.execBrkSimD                               # rows/ExecCaseGeom (ExecS.brk at ExecExitD via execBrkSim(→ExecExitPinned) + ExecCaseGeom pinned widener; the ExecIH motive shape)
+  Vsa.Sim.execContSimD                              # rows/ExecCaseGeom (ExecS.cont at ExecExitD via execContSim + ExecCaseGeom pinned widener)
   Vsa.Sim.Rows.exec_brk_row                         # rows/ExecRouting (statement leaf pilot: fills the hSBrk premise slot via execBrkSimD, GENERATED)
   Vsa.Sim.Rows.exec_cont_row                        # rows/ExecRouting (statement leaf: fills hSCont via execContSimD, GENERATED)
   Vsa.Sim.execExitD_of_execExit_rec                 # rows/ExecRecRows (recursive-shaped ExecExit→ExecExitD bridge: non-identity-φ widener ExecRecWiden)
@@ -1092,10 +1092,9 @@ THEOREMS=(
   Vsa.Sim.Rows.execGround_caseGeom_cont             # rows/EntryGroundRows
   Vsa.Sim.Rows.stmtTablePins_of_bytes               # rows/EntryGroundRows (M6 supplier off generated pins)
   Vsa.Sim.Rows.kindTablePins_of_bytes               # rows/EntryGroundRows (M6 supplier, eval table)
-  Vsa.Sim.Rows.execBrkSimDP                         # rows/ExecLeafPin (X3 pinned brk sim → ExecExitD, wave 48b)
-  Vsa.Sim.Rows.execContSimDP                        # rows/ExecLeafPin (X3 pinned cont sim → ExecExitD)
-  Vsa.Sim.Rows.field_hSBrk                          # rows/ExecLeafPin (hSBrk discharge modulo ExecArmMemExt premise)
-  Vsa.Sim.Rows.field_hSCont                         # rows/ExecLeafPin (hSCont discharge modulo ExecArmMemExt premise)
+  Vsa.Sim.execLeafWidenP_of_entry                   # rows/ExecCaseGeom (X3-c pinned exec-leaf widener from entry alone, wave 48d)
+  Vsa.Sim.Rows.field_hSBrk                          # rows/ExecLeafPin (hSBrk discharged OUTRIGHT, premise-free, wave 48d X3-c)
+  Vsa.Sim.Rows.field_hSCont                         # rows/ExecLeafPin (hSCont discharged OUTRIGHT, premise-free, wave 48d X3-c)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean

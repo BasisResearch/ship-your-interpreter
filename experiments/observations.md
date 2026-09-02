@@ -4767,3 +4767,49 @@ it, still stop and report instead.
   (3) re-point `exec_brk_row`/`exec_cont_row` to the pinned `execBrkSimD`; (4)
   `field_hSBrk`/`field_hSCont := execLeafWidenP_of_entry hc` (drop the premise).
   Mirrors Field_hInt.lean exactly.  THEN 6/58.
+
+## 2026-09-02 X3-c-LANDED (wave 48d, execBlockD presence transport)
+- missing: (RESOLVED) the exec-leaf pin was recovered from a bare `ExecExit`
+  (`ExecArmMemExt`) — provably underivable (wave-48c obstruction). The eval
+  precedent (47e) never did that: it CARRIES presence through the epilogue.
+- workaround: NONE — landed the mandated general move, mirroring eval exactly.
+  (1) `execBlockD` gained `Q : Mem → Prop` (pre `∧ Q mpre`, post `∧ Q c.σ.mem`,
+  transported by `hmem7e` across the memory-pure epilogue) — exec twin of
+  `blockD_v`'s `Q`. (2) `execBrkSim`/`execContSim` now CONCLUDE `ExecExitPinned`
+  (brk via `Q := ExecLeafMemPin SL sp m0` through execBlockD; cont inline), pin =
+  ⟨arm `MemExtends m0 ment`, arena-inclusive arm frame `hmemframe`⟩. (3) moved
+  `ExecLeafMemPin`/`ExecExitPinned` UPSTREAM to `ExecBrkCont.lean` and
+  `ExecLeafWidenP`/`execLeafWidenP_of_entry`/`execExitD_of_pinnedExecExit` into
+  `ExecCaseGeom.lean` (dodging the ExecLeafD↓ExecCaseGeom↓ExecBrkCont cycle);
+  `ExecCaseGeom` now carries the PINNED widener; `execBrkSimD`/`execContSimD`
+  re-point at `execExitD_of_pinnedExecExit`. (4) `field_hSBrk`/`field_hSCont`
+  are now PREMISE-FREE (widener from `execLeafWidenP_of_entry hc`, slot/table
+  from `hc.ground`). `ExecArmMemExt` DELETED.
+- cost: ~1 lean-process/file; zero recursor-tree re-threading (the change is
+  confined to the brk/cont leaf bundle — recursive cases use `ExecRecCaseGeom`,
+  untouched). NO fourth rung emerged — the eval-mirror hypothesis HELD.
+- proposal: (DONE) the presence-transport `Q` is now on both `blockD_v` (eval)
+  and `execBlockD` (exec); any future leaf epilogue reuses the same shape.
+
+## 2026-09-02 crux-depth-counter-is-runtime-not-sp-nesting (invgen crux depth-descent)
+- missing: nothing broken — a DESIGN-RELEVANT fact for the hCallClosure crux `d`.
+  The closure-call depth trace (clo_depth.wl, /tmp/rl-trace/cruxDepth_trace.jsonl)
+  shows the machine `call_depth` counter at `8(s2)` (read/bumped at `0x8000329c`,
+  DECREMENTED on return via `--call_depth`) is a RUNTIME quantity tracking the
+  currently-active closure-call chain — it is NOT the sp-static lexical nesting
+  (which also counts top-level `println` frames and does not unwind on sibling-
+  call return). So `reconstructed_sp_depth != call_depth` across sibling calls is
+  EXPECTED, not a falsity. The crux's spec `d` (a_3 : d < maxCallDepth) == this
+  COUNTER. Within one pure recursion chain they move in lockstep (mined: countdown
+  d=0..4, per-descent sp delta CONSTANT 1264 = evalFrame+execFrame).
+- workaround: the crux miner (scripts/mine_crux_ladder.py) isolates pure-recursion
+  chains (d increments by 1 with sp descending) to report the clean per-level
+  ladder, and annotates the counter-vs-sp divergence as expected rather than
+  flagging it as a contradiction.
+- cost: none; the miner's R3 was initially mis-flagged as a mismatch then corrected.
+- proposal: the crux invariant should index the budget ladder by the machine
+  call_depth counter (the spec d), NOT an sp-reconstruction — StackNeed already
+  does (`(maxCallDepth - d) * perCallBudget`). Mined constants MATCH: per-descent
+  eval frame 1088 = evalFrame, recursion level 1264 = evalFrame+execFrame, all
+  <= perCallBudget 6144; StackOK.child carries 1088 through the ladder axiom-clean
+  (/tmp/crux_budget_probe.lean). Design VALIDATED, no amendment needed.

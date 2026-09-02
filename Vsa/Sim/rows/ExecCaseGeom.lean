@@ -32,8 +32,9 @@ the motive.  This file re-lands the register-only leaves at `ExecExitD`.
 
 `ExecCaseGeom` (below) is the per-case geometry bundle the recursor supplies: the
 jump-table slot pin + its stack-disjointness (the `execBlockA` inputs) + the
-`ExecLeafWiden` widener.  Each `*D` lemma composes the landed leaf `Triple`
-output with `execExitD_of_execExit` — it does NOT re-prove the machine run.
+PINNED `ExecLeafWidenP` widener (wave 48d).  Each `*D` lemma composes the landed
+leaf `Triple` output (now at `ExecExitPinned`) with `execExitD_of_pinnedExecExit`
+— it does NOT re-prove the machine run.
 
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`.
 -/
@@ -53,45 +54,64 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-! ## `ExecLeafWiden` — the two `ExecExitD` upgrade clauses, as an exit-quantified
-     widener (the `LeafWiden` statement analog)
+/-! ## `ExecLeafWidenP` — the PINNED exec-leaf widener (wave 48d, X3-c)
 
-The two `ExecExitD` upgrade clauses are facts about the EXIT configuration, which
-a leaf's `Triple` produces existentially.  So the widening residual is supplied as
-a *widener*: a function that, for ANY config `c` satisfying the leaf's own
-`ExecExit`, yields the two dropped clauses about `c`.  This is TRUE of every
-register-only leaf exit (the delta is a `writeMap8` chain over `m0` — presence-
-preserving — and the store footprint is disjoint from `[SL.lo,SL.hi)`), and is the
-honest re-supply of what `ExecExit` forgets.  The recursor's leaf minor premise
-provides it.
+Moved here from `rows/ExecLeafD.lean` and made the `ExecCaseGeom` widener half.
 
-**Re-landed (T1.2)** as a THIN ALIAS of the parametric `Widen`
-(`WidenMeta.lean`), at the `ExecExit` family and the canonical `stackFoot SL`
-footprint, with `nf/nc := st'.store.…size`.  A register-only leaf allocates
-nothing, so the survival φ-pair is witnessed at `PhiExtends.refl` when the
-recursor supplies the residual — but the `Widen` shape (a `∃ φf' φc'` field) is
-uniform with the recursive wideners, so leaves and rec cases share ONE object. -/
-abbrev ExecLeafWiden
+The plain (unpinned) `ExecLeafWiden` — a `Widen` over the bare `ExecExit`, quantified
+over EVERY `ExecExit`-satisfying config — is provably UNDERIVABLE from the entry:
+`ExecExit` forgets the in-stack presence (`pres`), so a universal `∀ c with ExecExit,
+MemExtends m0 c.σ.mem` cannot be supplied (the wave-48c machine-checked obstruction).
+The eval leaves (hInt/…) closed exactly this gap in wave 47e NOT with the plain
+widener but by RESTATING it at a PINNED exit family (`LeafWidenP` = `Widen` at
+`EvalExitPinned`) and proving THAT from the entry alone.  Wave 48d makes
+`execBrkSim`/`execContSim` conclude `ExecExitPinned` (the pin threaded through
+`execBlockD`'s `Q`), so the pinned widener is now the honest, entry-derivable
+residual — the exec twin of `LeafWidenP`.
+
+`ExecLeafMemPin`/`ExecExitPinned` are defined upstream (`ExecBrkCont.lean`).  THIN
+ALIAS of the parametric `Widen` (`WidenMeta.lean`) at the pinned exit family. -/
+abbrev ExecLeafWidenP
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st' : Vsa.While.St) (status : Status) (sp r aRet : BitVec 64) (m0 : Mem) : Prop :=
-  Widen (ExecExit g N A SL φf φc st'.store.frames.size st'.store.closures.size
-      st' status sp r aRet m0)
+  Widen (ExecExitPinned g N A SL φf φc st' status sp r aRet m0)
     N A φf φc st'.store.frames.size st'.store.closures.size st' m0 (stackFoot SL)
 
-/-- **The leaf widening.** `ExecExit … c ∧ ExecLeafWiden …` gives `ExecExitD … c`
-— the `mExecS` motive shape.  A THIN COROLLARY of the parametric family bridge
-`execExitD_of_widen` (`WidenMeta.lean`). -/
-theorem execExitD_of_execExit
+/-- **`execLeafWidenP_of_entry`** — the pinned-exit exec widener follows from the
+(47e-widened) `ExecEntry.store_survives` alone, at the identity φ-pair.  Since
+brk/cont leave the store unchanged the exit store is `st.store` (= `st'.store`),
+which the entry survival re-represents over any `[SL.lo,SL.hi)`-confined change;
+`pres` is the pin's first half; `surv` chains the pin's `m0`-agreement into the
+widened entry survival.  Mirrors `leafWidenP_of_entry` (`EvalLeafD.lean`) exactly. -/
+theorem execLeafWidenP_of_entry
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : Vsa.While.St} {d : Nat} {env : Addr} {s : Stmt} {status : Status}
+    {sp r aInterp aStmt aEnv aRet : BitVec 64} {m0 : Mem} {c : Config}
+    (hc : ExecEntry g N A SL φf φc st d env s sp r aInterp aStmt aEnv aRet m0 c) :
+    ExecLeafWidenP g N A SL φf φc st status sp r aRet m0 where
+  pres := fun _ hx => hx.2.pres
+  surv := fun _ hx =>
+    ⟨φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, fun m' hm' => by
+      refine hc.store_survives m' (fun k hk => ?_)
+      have hksp : ¬ (SL.lo ≤ k ∧ k < sp.toNat) := fun hcon =>
+        hk ⟨hcon.1, Nat.lt_of_lt_of_le hcon.2 hc.stackOK.2.1⟩
+      rw [hc.mem]
+      exact (hx.2.agree k hksp).symm.trans (hm' k hk)⟩
+
+/-- **The pinned leaf widening.** `ExecExitPinned … c ∧ ExecLeafWidenP …` gives
+`ExecExitD … c` — the `mExecS` motive shape.  Exec twin of `evalExitD_of_pinnedExit`;
+a THIN COROLLARY of the parametric family bridge `execExitD_of_widen`. -/
+theorem execExitD_of_pinnedExecExit
     {g : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
     {st' : Vsa.While.St} {status : Status} {sp r aRet : BitVec 64} {m0 : Mem} {c : Config}
-    (hExit : ExecExit g N A SL φf φc st'.store.frames.size st'.store.closures.size
-      st' status sp r aRet m0 c)
-    (hW : ExecLeafWiden g N A SL φf φc st' status sp r aRet m0) :
+    (hx : ExecExitPinned g N A SL φf φc st' status sp r aRet m0 c)
+    (hW : ExecLeafWidenP g N A SL φf φc st' status sp r aRet m0) :
     ExecExitD g N A SL φf φc st'.store.frames.size st'.store.closures.size
       st' status sp r aRet m0 c :=
-  execExitD_of_widen hExit hW
+  ⟨hx.1, hW.pres c hx, hW.surv c hx⟩
 
 /-! ## `ExecCaseGeom` — the per-leaf geometry bundle (the recursor-supplied residual)
 
@@ -106,15 +126,18 @@ def ExecCaseGeom
     (sp r aRet : BitVec 64) (m0 : Mem) : Prop :=
   StmtSlotPinned k armPC m0 ∧
   (stmtJumpTableBase + 4 * k + 4 ≤ SL.lo ∨ sp.toNat ≤ stmtJumpTableBase + 4 * k) ∧
-  ExecLeafWiden g N A SL φf φc st status sp r aRet m0
+  -- wave 48d (X3-c): the PINNED widener (over `ExecExitPinned`), entry-derivable
+  -- via `execLeafWidenP_of_entry` — the plain `ExecLeafWiden` was underivable.
+  ExecLeafWidenP g N A SL φf φc st status sp r aRet m0
 
 /-! ## The register-only leaf `*D` lemmas
 
-Each composes the existing leaf simulation `Triple` (`execBrkSim`/`execContSim`)
-with `execExitD_of_execExit`, threading the `ExecLeafWiden` widener from the
-`ExecCaseGeom` bundle, and supplying the entry `out0 := c.σ.sailOutput` by `rfl`.
-These are exactly the `mExecS`-motive (`ExecExitD`) minor premises `termSimClosed`
-consumes as `hSBrk`/`hSCont`, at the recursor-supplied `ExecCaseGeom`. -/
+Each composes the existing leaf simulation `Triple` (`execBrkSim`/`execContSim`,
+now at `ExecExitPinned`) with `execExitD_of_pinnedExecExit`, threading the pinned
+`ExecLeafWidenP` widener from the `ExecCaseGeom` bundle, and supplying the entry
+`out0 := c.σ.sailOutput` by `rfl`.  These are exactly the `mExecS`-motive
+(`ExecExitD`) minor premises `termSimClosed` consumes as `hSBrk`/`hSCont`, at the
+recursor-supplied `ExecCaseGeom`. -/
 
 /-- **`execBrkSimD`** — the `ExecS.brk` leaf at `ExecExitD` (the `ExecIH` shape). -/
 theorem execBrkSimD
@@ -130,10 +153,10 @@ theorem execBrkSimD
         st .brk sp r aRet m0) := by
   intro c hEntry
   obtain ⟨hslot, htableStk, hW⟩ := hG
-  obtain ⟨c', hs, hExit⟩ :=
+  obtain ⟨c', hs, hExitP⟩ :=
     execBrkSim g N A SL φf φc st d env sp r aInterp aStmt aEnv aRet m0 c.σ.sailOutput
       hE hslot htableStk c ⟨hEntry, rfl⟩
-  exact ⟨c', hs, execExitD_of_execExit hExit hW⟩
+  exact ⟨c', hs, execExitD_of_pinnedExecExit hExitP hW⟩
 
 /-- **`execContSimD`** — the `ExecS.cont` leaf at `ExecExitD` (the `ExecIH` shape). -/
 theorem execContSimD
@@ -149,9 +172,9 @@ theorem execContSimD
         st .cont sp r aRet m0) := by
   intro c hEntry
   obtain ⟨hslot, htableStk, hW⟩ := hG
-  obtain ⟨c', hs, hExit⟩ :=
+  obtain ⟨c', hs, hExitP⟩ :=
     execContSim g N A SL φf φc st d env sp r aInterp aStmt aEnv aRet m0 c.σ.sailOutput
       hE hslot htableStk c ⟨hEntry, rfl⟩
-  exact ⟨c', hs, execExitD_of_execExit hExit hW⟩
+  exact ⟨c', hs, execExitD_of_pinnedExecExit hExitP hW⟩
 
 end Vsa.Sim

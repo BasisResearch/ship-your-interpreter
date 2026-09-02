@@ -106,6 +106,18 @@ into an `ExecExitPinned` conclusion (mirroring eval `evalIntSimP`/`Field_hInt`) 
 wiring green-tree risk).  Census UNCHANGED at 4/58; recipe in observations.md
 `execarmmemext-exit-not-entry`.
 
+**WAVE 48d DELTA (X3-c LANDED — hSBrk/hSCont FLIPPED to FOUND).** The presence
+transport is DONE, mirroring the eval precedent exactly.  `execBlockD` gained a
+`Q : Mem → Prop` post-parameter (exec twin of `blockD_v`'s `Q`), threaded
+`Q mpre → Q c.σ.mem` across the memory-pure epilogue; `execBrkSim`/`execContSim`
+now CONCLUDE `ExecExitPinned` (the pin carried, `Q := ExecLeafMemPin SL sp m0`);
+`ExecCaseGeom` now carries the PINNED `ExecLeafWidenP` (entry-derivable via
+`execLeafWidenP_of_entry`); `execBrkSimD`/`execContSimD` re-point at
+`execExitD_of_pinnedExecExit`.  `field_hSBrk`/`field_hSCont` are now PREMISE-FREE
+(`ExecArmMemExt` DELETED).  Only the brk/cont leaf bundle changed — the 7
+recursive `execBlockD` callers were untouched (they don't consume the `Q`; the
+default is transparent).  NO fourth rung: the eval-mirror hypothesis HELD.
+
 ### S-entry: hEpilogueSpill (X8)
 
 ```lean

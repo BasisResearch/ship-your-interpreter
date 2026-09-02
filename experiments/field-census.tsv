@@ -33,8 +33,8 @@ hNull	FOUND
 hOrFalse	NOT_FOUND	
 hOrTrue	NOT_FOUND	
 hSBlock	NOT_FOUND	
-hSBrk	FOUND	wave 48d (X3-c, in-flight tree edit): field_hSBrk premise-free (ExecArmMemExt deleted); re-run field_census.py on 48d commit to confirm
-hSCont	FOUND	wave 48d (X3-c, in-flight tree edit): field_hSCont premise-free; re-run field_census.py on 48d commit to confirm
+hSBrk	FOUND	
+hSCont	FOUND	
 hSExpr	NOT_FOUND	
 hSForStart	NOT_FOUND	
 hSIfFalse	NOT_FOUND	

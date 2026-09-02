@@ -196,6 +196,35 @@ def ExecArmEntryK
   -- ~10-file re-thread — out of a bounded gate (debt noted, wave0.md).
   MemExtends m0 ment
 
+/-! ## `ExecLeafMemPin` / `ExecExitPinned` — the register-only exec-leaf memory pin
+
+Moved UPSTREAM here (wave 48d, X3-c) so `execBrkSim`/`execContSim` can CONCLUDE the
+pinned exit directly (the presence carried through `execBlockD`'s `Q`).  Formerly
+in `rows/ExecLeafD.lean`, but that file sits downstream of `ExecCaseGeom` (which
+imports this file), so the pin could not be referenced here.  The pinned widener
+`ExecLeafWidenP` + its entry-derivable proof stay in `ExecLeafD.lean` (they need
+`Widen`/`WidenMeta`, not imported here).  Exec twin of `LeafMemPin`
+(`EvalSimCommon.lean`). -/
+
+/-- The exec twin of `LeafMemPin`: the register-only leaf writes only insert
+(presence monotonicity), and outside the stack window `[SL.lo, sp)` the exit
+memory IS `m0` — no arena drift, no retslot write (the brk/cont path). -/
+structure ExecLeafMemPin (SL : StackLayout) (sp : BitVec 64) (m0 : Mem)
+    (m : Mem) : Prop where
+  /-- Presence monotonicity: the leaf writes only insert. -/
+  pres : MemExtends m0 m
+  /-- Outside `[SL.lo, sp)` the memory IS `m0`. -/
+  agree : ∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → m[k]? = m0[k]?
+
+/-- The pinned exec-leaf exit: `ExecExit` ∧ the exec-leaf memory pin. -/
+abbrev ExecExitPinned
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st' : Vsa.While.St) (status : Status) (sp r aRet : BitVec 64) (m0 : Mem) :
+    Config → Prop :=
+  fun c => ExecExit g N A SL φf φc st'.store.frames.size st'.store.closures.size
+      st' status sp r aRet m0 c ∧ ExecLeafMemPin SL sp m0 c.σ.mem
+
 /-! ## `execBlockD` — the shared `exec_stmt` epilogue (restore + `addi sp,176` + `ret`)
 
 The seven-instruction restore/return run at `0x8000409c`: `ld ra/s0/s1/s2/s3` from
@@ -243,23 +272,30 @@ def PreExecEpilogue
   tohostAddr + 16 + 176 ≤ sp.toNat ∧ sp.toNat % 8 = 0 ∧
   r.toNat % 4 = 0
 
-/-- The `ExecExit` produced by the epilogue, packaged as a `Triple`. The store /
-output are re-represented with IDENTITY φ-maps (`st'.store` unchanged on the
-brk/cont path). `retval` is vacuous (brk/cont are not `.ret`). -/
-theorem execBlockD
+/-- **`execBlockDQ`** (wave 48d, X3-c) — the epilogue `Triple` with an arbitrary
+memory predicate `Q : Mem → Prop` carried across the (memory-pure) epilogue: the
+seven epilogue instructions never write memory, so any `Q` holding at the
+epilogue-entry memory `mpre` also holds at the exit memory `c.σ.mem` (transported
+by `hmem7e : σ7.mem = mpre`).  The brk leaf takes `Q := ExecLeafMemPin SL sp m0`
+to carry the arm-entry pin to the exit, concluding `ExecExitPinned`.  Exec twin of
+`blockD_v`'s `Q` (`EvalSimCommon.lean`).  The plain `execBlockD` (below) is the
+`Q := fun _ => True` specialization — its 5 recursive-case callers are untouched. -/
+theorem execBlockDQ
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat)
     (st' : Vsa.While.St) (status : Status)
     (sp r aRet : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String) (m0 : Mem)
+    (Q : Mem → Prop)
     (hnotret : ∀ v, status ≠ .ret v) :
     Triple
-      (fun c => ∃ mpre, PreExecEpilogue g N A SL φf φc st' status sp r aRet v8 v9 v18 v19 out0 m0 mpre c)
-      (ExecExit g N A SL φf φc nf nc st' status sp r aRet m0) := by
+      (fun c => ∃ mpre, PreExecEpilogue g N A SL φf φc st' status sp r aRet v8 v9 v18 v19 out0 m0 mpre c
+        ∧ Q mpre)
+      (fun c => ExecExit g N A SL φf φc nf nc st' status sp r aRet m0 c ∧ Q c.σ.mem) := by
   intro c hpre
-  obtain ⟨mpre, hG, htick, hpc, ha0, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmem, hcode, hstore, hframe,
+  obtain ⟨mpre, ⟨hG, htick, hpc, ha0, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmem, hcode, hstore, hframe,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3, hgx8, hgx9, hgx18, hgx19, hgx2, hmemframe,
-    hsp176, hsphi, hsplo, hspwin, hsp8, hraAl⟩ := hpre
+    hsp176, hsphi, hsplo, hspwin, hsp8, hraAl⟩, hQ⟩ := hpre
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- restore addresses
   have haRa : ((sp - 176#64) + sign_extend (m := 64) (0x0a8#12)).toNat = sp.toNat - 8 := es_off168 sp hsp176
@@ -443,8 +479,9 @@ theorem execBlockD
       (ho.1 R hmc' hmt' hmip').trans (get?_sigmaPost_jump_x0 _ _ _ _ R hmi' hpc' hnpc' hmii')
     exact (jr hobs7).trans ((a hobs6 he2).trans ((a hobs5 he19).trans ((a hobs4 he18).trans
       ((a hobs3 he9).trans ((a hobs2 he8).trans (a hobs1 he1))))))
-  -- assemble ExecExit
-  refine ⟨⟨σ7, i7, c.steps+1+1+1+1+1+1+1⟩, ?_, ?_⟩
+  -- assemble ExecExit (paired with the carried memory predicate `Q c.σ.mem`,
+  -- transported from `Q mpre` through the memory-pure epilogue via `hmem7e`)
+  refine ⟨⟨σ7, i7, c.steps+1+1+1+1+1+1+1⟩, ?_, ?_, by rw [hmem7e]; exact hQ⟩
   · exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
       ((Steps.single hstep4).trans ((Steps.single hstep5).trans ((Steps.single hstep6).trans
       (Steps.single hstep7))))))
@@ -493,6 +530,27 @@ theorem execBlockD
     · -- memFrame: memory unchanged (σ7.mem = mpre), differs from m0 only in stack window
       intro a hstk _harena
       right; rw [hmem7e]; exact hmemframe a hstk
+
+/-- The `ExecExit` produced by the epilogue, packaged as a `Triple`. The store /
+output are re-represented with IDENTITY φ-maps (`st'.store` unchanged on the
+brk/cont path). `retval` is vacuous (brk/cont are not `.ret`).  The `Q := fun _ =>
+True` specialization of `execBlockDQ` — its 5 recursive-case callers
+(`ExecVarDecl`/`ExecExprRet`/`ExecVarNull`/`ExecIf`/`ExecWhile`) are unchanged. -/
+theorem execBlockD
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
+    (st' : Vsa.While.St) (status : Status)
+    (sp r aRet : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String) (m0 : Mem)
+    (hnotret : ∀ v, status ≠ .ret v) :
+    Triple
+      (fun c => ∃ mpre, PreExecEpilogue g N A SL φf φc st' status sp r aRet v8 v9 v18 v19 out0 m0 mpre c)
+      (ExecExit g N A SL φf φc nf nc st' status sp r aRet m0) := by
+  intro c hpre
+  obtain ⟨c', hsteps, hExit, _⟩ :=
+    execBlockDQ g N A SL φf φc nf nc st' status sp r aRet v8 v9 v18 v19 out0 m0
+      (fun _ => True) hnotret c (by obtain ⟨mpre, hp⟩ := hpre; exact ⟨mpre, hp, trivial⟩)
+  exact ⟨c', hsteps, hExit⟩
 
 /-! ## `execBlockA` — the prologue + jump-table dispatch (residual)
 
@@ -1224,7 +1282,7 @@ theorem execBrkSim
     Triple
       (fun c => ExecEntry g N A SL φf φc st d env .brk sp r aInterp aStmt aEnv aRet m0 c
         ∧ c.σ.sailOutput = out0)
-      (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size st .brk sp r aRet m0) := by
+      (ExecExitPinned g N A SL φf φc st .brk sp r aRet m0) := by
   intro c hpre
   -- kind read `read32 m0 aStmt = 7` from the `.brk` StmtRepr (via `c.σ.mem = m0`)
   have hkind : read32 m0 aStmt.toNat = some 7 := by
@@ -1268,12 +1326,18 @@ theorem execBrkSim
     rcases hXR : (X == R) with _ | _
     · rfl
     · rw [beq_iff_eq] at hXR; rw [hXR] at hX; rw [hX] at hR; exact absurd hR (by decide)
-  -- block D: the shared epilogue → ExecExit
-  obtain ⟨cD, hstepsD, hExit⟩ :=
-    execBlockD g N A SL φf φc st.store.frames.size st.store.closures.size st .brk sp r aRet v8 v9 v18 v19 out0 m0 (by intro v hv; cases hv)
+  -- wave 48d (X3-c): the arm-entry exec-leaf pin `ExecLeafMemPin SL sp m0 ment`.
+  -- `pres` is the arm presence `hMemExtArm : MemExtends m0 ment`; `agree` is the
+  -- arena-inclusive arm frame `hmemframeA` (brk writes no arena byte).  Carried
+  -- as `execBlockD`'s `Q` across the memory-pure epilogue to the exit.
+  have hPinArm : ExecLeafMemPin SL sp m0 ment := ⟨hMemExtArm, hmemframeA⟩
+  -- block D: the shared epilogue → ExecExit ∧ (pin transported to the exit)
+  obtain ⟨cD, hstepsD, hExit, hPinExit⟩ :=
+    execBlockDQ g N A SL φf φc st.store.frames.size st.store.closures.size st .brk sp r aRet v8 v9 v18 v19 out0 m0
+      (ExecLeafMemPin SL sp m0) (by intro v hv; cases hv)
       ⟨σB, iB, cA.steps + 1⟩
       ⟨ment,
-        hGB, hiB, hpcB, ha0B, hspB, ⟨_, hmiB⟩,
+       ⟨hGB, hiB, hpcB, ha0B, hspB, ⟨_, hmiB⟩,
         by rw [hobsB.out, sailOutput_sigmaPost_alu]; exact houtA,
         houtStrA,
         hmemBe, hcodeA,
@@ -1286,8 +1350,9 @@ theorem execBrkSim
         hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
         hgx8, hgx9, hgx18, hgx19, hgx2,
         hmemframeA,
-        hsp176, hsphi, hsplo, hspwin, hsp8, hraAl⟩
-  exact ⟨cD, (hstepsA.trans (Steps.single hstepB)).trans hstepsD, hExit⟩
+        hsp176, hsphi, hsplo, hspwin, hsp8, hraAl⟩,
+       hPinArm⟩
+  exact ⟨cD, (hstepsA.trans (Steps.single hstepB)).trans hstepsD, hExit, hPinExit⟩
 
 /-! ## `execContSim` — the `ExecS.cont` simulation Triple
 
@@ -1310,7 +1375,7 @@ theorem execContSim
     Triple
       (fun c => ExecEntry g N A SL φf φc st d env .cont sp r aInterp aStmt aEnv aRet m0 c
         ∧ c.σ.sailOutput = out0)
-      (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size st .cont sp r aRet m0) := by
+      (ExecExitPinned g N A SL φf φc st .cont sp r aRet m0) := by
   intro c hpre
   have hkind : read32 m0 aStmt.toNat = some 8 := by
     have := hpre.1.stmt; rw [hpre.1.mem] at this; cases this; assumption
@@ -1516,7 +1581,12 @@ theorem execContSim
       (ho.1 R hmc' hmt' hmip').trans (get?_sigmaPost_jump_x0 _ _ _ _ R hmi' hpc' hnpc' hmii')
     exact (jr hobs8).trans ((a hobs7 he2).trans ((a hobs6 he10).trans ((a hobs5 he19).trans
       ((a hobs4 he18).trans ((a hobs3 he9).trans ((a hobs2 he8).trans (a hobs1 he1)))))))
-  refine ⟨⟨σ8, i8, cA.steps+1+1+1+1+1+1+1+1⟩, ?_, ?_⟩
+  -- wave 48d (X3-c): the exit exec-leaf pin `ExecLeafMemPin SL sp m0 σ8.mem`.
+  -- `pres` = arm presence `hMemExtArm : MemExtends m0 ment` at the exit
+  -- (`hmem8e : σ8.mem = ment`); `agree` = arena-inclusive arm frame `hmemframeA`
+  -- transported likewise.  The cont tail is memory-pure (only loads + `li a0`).
+  have hPinExit : ExecLeafMemPin SL sp m0 σ8.mem := ⟨hmem8e ▸ hMemExtArm, hmem8e ▸ hmemframeA⟩
+  refine ⟨⟨σ8, i8, cA.steps+1+1+1+1+1+1+1+1⟩, ?_, ?_, hPinExit⟩
   · exact hstepsA.trans ((Steps.single hstep1).trans ((Steps.single hstep2).trans
       ((Steps.single hstep3).trans ((Steps.single hstep4).trans ((Steps.single hstep5).trans
       ((Steps.single hstep6).trans ((Steps.single hstep7).trans (Steps.single hstep8))))))))

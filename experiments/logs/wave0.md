@@ -159,3 +159,45 @@ exit via the SHARED `execBlockD` (7 recursive-case callers) into `ExecExitPinned
 `Field_hInt`) — a distinct ≤1-session wave, not this bounded gate (recursor
 green-tree risk).  Full recipe: observations.md `execarmmemext-exit-not-entry`;
 TSV + singletons.md updated.
+
+> COORDINATOR NOTE (live): `lake build` in the proof repo is AUTO-KILLED by a
+> watchdog (Law 5 — racing-build protection). It is not an environment fault.
+> Use `lake env lean <file>` / `lake env lean <file> -o <olean>` exclusively,
+> per your brief and CLAUDE.md.
+
+## Wave 48d — X3-c presence transport LANDED (census 4 → 6/58)
+
+**LANDED (green + axiom-clean ⊆ {propext, Classical.choice, Quot.sound}).**
+The X3-c presence transport, mirroring the eval precedent (47e
+`blockD_v`-`Q`/`evalIntSimP`/`Field_hInt`) exactly:
+
+- `execBlockDQ` (`ExecBrkCont.lean`): NEW — `execBlockD` with a `Q : Mem → Prop`
+  post-parameter carried across the memory-pure epilogue (`Q mpre → Q c.σ.mem`
+  via `hmem7e`).  `execBlockD` (plain) is now the `Q := fun _ => True`
+  specialization — its 5 recursive-case callers (ExecVarDecl/ExecExprRet/
+  ExecVarNull/ExecIf/ExecWhile) are UNTOUCHED (verified `lake env lean` clean).
+  So the feared "7-caller green-tree risk" did not materialize: the overload
+  isolates the change to the brk/cont leaf.
+- `execBrkSim`/`execContSim` now CONCLUDE `ExecExitPinned` (= `ExecExit ∧
+  ExecLeafMemPin`).  brk carries the pin via `execBlockDQ`'s `Q :=
+  ExecLeafMemPin SL sp m0`; cont inline through its tail.  Pin = ⟨arm
+  `MemExtends m0 ment` (48c's `hMemExtArm`), arena-inclusive arm frame
+  `hmemframe⟩`.
+- `ExecLeafMemPin`/`ExecExitPinned` MOVED UPSTREAM to `ExecBrkCont.lean` (dodging
+  the ExecLeafD↓ExecCaseGeom↓ExecBrkCont import cycle); `ExecLeafWidenP`/
+  `execLeafWidenP_of_entry`/`execExitD_of_pinnedExecExit` MOVED into
+  `ExecCaseGeom.lean` (they need `Widen`/`WidenMeta`).  `ExecCaseGeom` now carries
+  the PINNED `ExecLeafWidenP`; `execBrkSimD`/`execContSimD` re-point at
+  `execExitD_of_pinnedExecExit`.
+- `field_hSBrk`/`field_hSCont` (`ExecLeafPin.lean`) are now PREMISE-FREE — widener
+  from `execLeafWidenP_of_entry hc`, slot/table from `hc.ground`.  `ExecArmMemExt`
+  and the `execBrkSimP`/`execContSimP`/`*DP` premise-laden wrappers DELETED.
+
+**Census FLIPPED to 6/58** (`field_census.py -j4` = {FOUND:6, NOT_FOUND:52};
+FOUND = hBool/hInt/hNull/hStr/**hSBrk/hSCont**).  NO fourth rung emerged — the
+eval-mirror hypothesis HELD end-to-end.  Verified via `lake env lean` per-file
+(ExecBrkCont + all direct/transitive importers incl. TermAssembly capstone +
+5 recursive callers, all clean).  NOTE: `Vsa/Sim/EvalCallClosure.lean` is a
+PRE-EXISTING broken ORPHAN (4 errors at HEAD, imported by nothing, not in
+`Vsa.lean`) — it breaks whole-tree `lake build` but is irrelevant to the `Vsa`
+image / census / axiom audit.  TSV + singletons.md + observations.md updated.
