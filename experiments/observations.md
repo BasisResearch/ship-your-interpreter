@@ -4546,3 +4546,29 @@ it, still stop and report instead.
 - proposal: name the predicate ONCE (`StoreSurvives N A SL φf φc S sret m`
   := ∀ m', agreement outside `[SL.lo,SL.hi)` ∪ sret-window → `StoreRepr m'`)
   and re-seat the towers on it, so the NEXT footprint change is one def.
+
+## 2026-09-02 strleafgeom-payload-ast-region (wave 47f, GeomFrom callee-geometry layer)
+- missing: an AST-region supplier for the `.str`-literal PAYLOAD facts of
+  `StrLeafGeom` — under `EvalEntry … (.str s) … c`, that every `p` with
+  `read64 c.σ.mem (aExpr.toNat + 8) = some p` satisfies `p ≠ 0`,
+  `p + s.length < SL.lo ∨ sp.toNat ≤ p`, and the sret-window disjointness.
+  `ExprRepr`'s `.str` constructor (`Vsa/MemRepr.lean`) carries only
+  `read64` + `CString` — NO region facts — and the facts mention `SL`/`sp`/
+  `sret`, so no per-node repr amendment alone can carry them; child entries
+  are built for arbitrary SUBexpressions, so the fact must cover every
+  `.str` node reachable in the program AST (an AST-arena invariant), not just
+  the entry node.
+- workaround: NONE for the facts themselves — pinned as the ONE named premise
+  `StrPayloadGeom` (`rows/Field_hStr.lean`); the CODE/SLOT half of
+  `StrLeafGeom` is now discharged from the amended `EvalEntry`
+  (`field_hStr_of_payload`), so `hStr`'s residual shrank from 7 conjuncts to
+  the 2 payload ones.
+- cost: `hStr` stays NOT_FOUND in the census (hNull/hBool flip); any lane
+  needing str-leaf entry payload geometry re-derives nothing but must thread
+  `StrPayloadGeom`.
+- proposal: an AST-region bundle — an `ExprRegion` invariant (all AST nodes +
+  their string payloads live in `[AST.lo, AST.hi)`, one `EvalEntry` field
+  `ast_region : ExprRegion …` + `AST`-vs-stack/sret disjointness literals),
+  with `ExprRepr`-determinism (`read64` pins `p` uniquely) turning the
+  per-node facts into projections. Same amendment shape as wave 47f's
+  `nbs_pins` (entry field + child transport via stack-confined writes).

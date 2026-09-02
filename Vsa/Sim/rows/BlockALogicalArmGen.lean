@@ -57,7 +57,7 @@ structure LogicalArmExtrasGen
   sp16 : sp.toNat % 16 = 0
   SLhi_ram : SL.hi ≤ 0x100000000
   code_stk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
-  vicode_stk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c
+  vicode_stk : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec
   table_stk : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ (0x80019f58 : Nat)
   arena_stk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
   arena_code : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
@@ -102,8 +102,8 @@ theorem blockA_logicalGenArm
         SL.lo + 3264 ≤ sp.toNat ∧ sp.toNat ≤ SL.hi ∧ sp.toNat % 16 = 0 ∧
         SL.hi ≤ 0x100000000 ∧
         (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-        ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
-        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)) := by
   intro c ⟨hc, hx13reachC⟩
@@ -117,20 +117,22 @@ theorem blockA_logicalGenArm
       (by omega) (by omega)
       hkm0
       hX.slot7
-      ⟨hX.int_loaded, hX.intslot, hX.truthy_loaded, hX.bool_loaded⟩
+      ⟨hX.int_loaded, hX.intslot, hX.truthy_loaded, hX.bool_loaded, hc.mem ▸ hc.nbs_pins⟩
       (fun mem a8 dd hlo hhi hcl =>
         logicalCallee_writeMap8 mem a8 dd
           (by have := hX.vicode_stk; omega)
           (by simp only [jumpTableBase]; have := hX.table_stk; omega)
           (by have := hX.truthy_stk; omega)
-          (by have := hX.boolcode_stk; omega) hcl)
+          (by have := hX.boolcode_stk; omega)
+          (by have := hX.vicode_stk; omega)
+          (by have := hX.table_stk; omega) hcl)
       (fun m' hag => hX.expr_survives m' hag)
       (by decide)
       (by have := hX.table_stk; simp only [jumpTableBase]; omega)
       c ⟨⟨hc.good, hc.tick, hc.pc, hc.a0, hc.a1, hc.a2, hc.ra, hc.ra_align, hc.spReg,
         hc.stackOK, hc.minstret, hc.mem, hc.code, hc.expr, hc.store, hc.store_survives, hc.out,
         hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
-        hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
+        hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
         hc.spill_defined⟩, rfl⟩
   have hArmCopy := hArm

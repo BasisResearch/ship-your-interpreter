@@ -88,7 +88,7 @@ def MidArmLeftJalBundle (l er : Expr) (c' : Config) (st st' : Vsa.While.St)
      c'.σ.sailOutput = out0 ∧
      String.join out0.toList = st.out ∧
      c'.σ.mem = mcall ∧
-     Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧
+     Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
      ExprRepr mcall aLOp.toNat l ∧
      StoreRepr mcall N A φf φc st.store ∧
      (∀ m' : Mem,
@@ -111,8 +111,8 @@ def MidArmLeftJalBundle (l er : Expr) (c' : Config) (st st' : Vsa.While.St)
      sp.toNat ≤ 0x100000000 ∧
      0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000 ∧ tohostAddr + 16 ≤ SL.lo ∧
      (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-     ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
-     ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+     ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+     ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
      (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
      (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
      -- ITEM ZERO B1: the LEFT operand's recursion-sound budget at `sp - 1088`,

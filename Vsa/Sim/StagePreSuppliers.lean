@@ -83,8 +83,8 @@ theorem blockB_unary_stagePre
         SL.lo + 3264 ≤ sp.toNat ∧ sp.toNat ≤ SL.hi ∧ sp.toNat % 16 = 0 ∧
         SL.hi ≤ 0x100000000 ∧
         (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-        ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
-        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         -- ITEM ZERO B1: the operand's recursion-sound budget at `sp - 1088`, its
@@ -108,7 +108,7 @@ theorem blockB_unary_stagePre
     hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl,
     _hAEx11, _hAEx8, _hAEx18⟩ := hArm
   have htoh : tohostAddr = 0x8001ad00 := rfl
-  obtain ⟨hviInt, hviSlot⟩ : Value_intLoaded ment ∧ IntSlotPinned ment := hviCode
+  obtain ⟨hviInt, hviSlot, hnbs⟩ : Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment := hviCode
   have h16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = 16#64 := by
     apply BitVec.eq_of_toNat_eq; decide
   have haddr16 : (aExpr + sign_extend (m := 64) (0x010#12)).toNat = aExpr.toNat + 16 := by
@@ -201,7 +201,7 @@ theorem blockB_unary_stagePre
               = (0x80003164#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
             decide) hiσ),
       hG2, hi2, hpc2, hx10_2, hs1_2, hx11_2, hx12_2, hsp_2, ⟨vmi2, hmi2⟩, hout2, houtStr,
-      hmem2e, hcode, hviInt, hviSlot, hsubexpr, hstore, hstoreSurv, hframeB, ⟨hg8, hg18⟩,
+      hmem2e, hcode, hviInt, hviSlot, hnbs, hsubexpr, hstore, hstoreSurv, hframeB, ⟨hg8, hg18⟩,
       hslotRa, hslotS0, hslotS1, hslotS2,
       hopAl, hopLo, hopHi, hopWin, hopStk,
       (by rw [hsub944]; omega), (by rw [hsub944]; omega), (by rw [hsub944]; omega),
@@ -269,7 +269,7 @@ theorem blockB_binary_leftStagePre
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
     hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl,
     _hAEx11, _hAEx8, _hAEx18⟩ := hArm
-  obtain ⟨hviInt, hviSlot⟩ : Value_intLoaded ment ∧ IntSlotPinned ment := hviCode
+  obtain ⟨hviInt, hviSlot, hnbs⟩ : Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment := hviCode
   have hnodehi := hBE.node_hi
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hsp1088' : 1088 ≤ sp.toNat := by omega
@@ -405,6 +405,8 @@ theorem blockB_binary_leftStagePre
   have hviInt1 : Value_intLoaded mcall1 :=
     loaded_value_int_agreeP ment mcall1
       (fun a ha => hAgMcall1 a (by rcases hBE.viStk with h | h <;> omega)) hviInt
+  have hnbs1 : NBSPins mcall1 :=
+    hnbs.survive_stack hBE.viStk hBE.tableStk hAgMcall1
   have hviSlot1 : IntSlotPinned mcall1 := by
     apply intSlot_writeMap8 ma (sp.toNat - 1088) (sdData_val aEnvReg)
       (by simp only [jumpTableBase]; rcases hBE.tableStk with h | h
@@ -479,7 +481,7 @@ theorem blockB_binary_leftStagePre
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_800034f8_ee σ i u (0x800034f8#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
       hG4, hi4, hpc4, ha0_4, hs1_4, hx11_4, hx12_4, hsp_4, ⟨vmi4, hmi4⟩,
-      hout4, houtStr, hmem4e, hcodemcall1, hviInt1, hviSlot1, hexprL1, hstore1, hstoreSurv1,
+      hout4, houtStr, hmem4e, hcodemcall1, hviInt1, hviSlot1, hnbs1, hexprL1, hstore1, hstoreSurv1,
       hframe4, ⟨hg8, hg18⟩,
       hslotRa1, hslotS01, hslotS11, hslotS21,
       hBE.lop_align, hBE.lop_ram.1, hBE.lop_ram.2, hBE.lop_win, hBE.lop_stk,

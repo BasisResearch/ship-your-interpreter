@@ -535,12 +535,9 @@ theorem blockC_str
 
 Slot at `jumpTableBase + 4` holds `bc 94 fe ff` (LE) = offset `0xfffe94bc`, and
 `0x80019f58 + (Int32)0xfffe94bc = 0x80003414` (the str arm). Mirrors
-`NullSlotPinned`; discharges `KindSlotPinned 1 0x80003414`. -/
-def StrSlotPinned (m : Mem) : Prop :=
-  m[(jumpTableBase + 4 : Nat)]? = some (0xbc : BitVec 8) ∧
-  m[(jumpTableBase + 5 : Nat)]? = some (0x94 : BitVec 8) ∧
-  m[(jumpTableBase + 6 : Nat)]? = some (0xfe : BitVec 8) ∧
-  m[(jumpTableBase + 7 : Nat)]? = some (0xff : BitVec 8)
+`NullSlotPinned`; discharges `KindSlotPinned 1 0x80003414`.
+The def itself was RELOCATED to `InterpEntry.lean` (wave 47f, `GeomFrom`) so
+`EvalEntry.nbs_pins` can carry it; same name/namespace. -/
 
 theorem str_slot_kindPinned {m : Mem} (h : StrSlotPinned m) :
     KindSlotPinned 1 (0x80003414#64) m := by

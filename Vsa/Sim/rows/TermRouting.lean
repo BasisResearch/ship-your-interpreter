@@ -83,7 +83,7 @@ theorem eval_null_row (hR : ∀ st, NullLeafResid st) :
       stackBudget := hc.stackBudget, expr_bodies := hc.expr_bodies, store_bodies := hc.store_bodies, minstret := hc.minstret, mem := hc.mem,
       code := hc.code, expr := hc.expr, store := hc.store, store_survives := hc.store_survives, out := hc.out, frame := hc.frame,
       code_stack_disjoint := hc.code_stack_disjoint, expr_stack_disjoint := hc.expr_stack_disjoint, expr_align := hc.expr_align, expr_ram := hc.expr_ram, expr_win := hc.expr_win, sret_align := hc.sret_align,
-      sret_ram := hc.sret_ram, sret_win := hc.sret_win, sret_vicode_disjoint := hc.sret_vicode_disjoint, sret_stack_disjoint := hc.sret_stack_disjoint, sret_evalcode_disjoint := hc.sret_evalcode_disjoint, stack_ram := hc.stack_ram,
+      sret_ram := hc.sret_ram, sret_win := hc.sret_win, sret_vicode_disjoint := hc.sret_vicode_disjoint_int, sret_stack_disjoint := hc.sret_stack_disjoint, sret_evalcode_disjoint := hc.sret_evalcode_disjoint, stack_ram := hc.stack_ram,
       stack_win := hc.stack_win, spill_defined := hc.spill_defined, sret_vnullcode_disjoint := hvnc, vnullcode_stack_disjoint := hvns, value_null_code := hvnl, null_slot := hns,
       table_stack_disjoint := htsd }
   exact Vsa.Sim.evalNullSimD g N A SL φf φc st d env sp r sret aEnv aExpr m0
@@ -119,7 +119,7 @@ theorem eval_bool_row (hR : ∀ st b, BoolLeafResid st b) :
       stackBudget := hc.stackBudget, expr_bodies := hc.expr_bodies, store_bodies := hc.store_bodies, minstret := hc.minstret, mem := hc.mem,
       code := hc.code, expr := hc.expr, store := hc.store, store_survives := hc.store_survives, out := hc.out, frame := hc.frame,
       code_stack_disjoint := hc.code_stack_disjoint, expr_stack_disjoint := hc.expr_stack_disjoint, expr_align := hc.expr_align, expr_ram := hc.expr_ram, expr_win := hc.expr_win, sret_align := hc.sret_align,
-      sret_ram := hc.sret_ram, sret_win := hc.sret_win, sret_vicode_disjoint := hc.sret_vicode_disjoint, sret_stack_disjoint := hc.sret_stack_disjoint, sret_evalcode_disjoint := hc.sret_evalcode_disjoint, stack_ram := hc.stack_ram,
+      sret_ram := hc.sret_ram, sret_win := hc.sret_win, sret_vicode_disjoint := hc.sret_vicode_disjoint_int, sret_stack_disjoint := hc.sret_stack_disjoint, sret_evalcode_disjoint := hc.sret_evalcode_disjoint, stack_ram := hc.stack_ram,
       stack_win := hc.stack_win, spill_defined := hc.spill_defined, sret_vboolcode_disjoint := hvbc, vboolcode_stack_disjoint := hvbs, value_bool_code := hvbl, bool_slot := hbs,
       table_stack_disjoint := htsd }
   exact Vsa.Sim.evalBoolSimD g N A SL φf φc st d env b sp r sret aEnv aExpr m0
@@ -159,7 +159,7 @@ theorem eval_str_row (hR : ∀ st s, StrLeafResid st s) :
       stackBudget := hc.stackBudget, expr_bodies := hc.expr_bodies, store_bodies := hc.store_bodies, minstret := hc.minstret, mem := hc.mem,
       code := hc.code, expr := hc.expr, store := hc.store, store_survives := hc.store_survives, out := hc.out, frame := hc.frame,
       code_stack_disjoint := hc.code_stack_disjoint, expr_stack_disjoint := hc.expr_stack_disjoint, expr_align := hc.expr_align, expr_ram := hc.expr_ram, expr_win := hc.expr_win, sret_align := hc.sret_align,
-      sret_ram := hc.sret_ram, sret_win := hc.sret_win, sret_vicode_disjoint := hc.sret_vicode_disjoint, sret_stack_disjoint := hc.sret_stack_disjoint, sret_evalcode_disjoint := hc.sret_evalcode_disjoint, stack_ram := hc.stack_ram,
+      sret_ram := hc.sret_ram, sret_win := hc.sret_win, sret_vicode_disjoint := hc.sret_vicode_disjoint_int, sret_stack_disjoint := hc.sret_stack_disjoint, sret_evalcode_disjoint := hc.sret_evalcode_disjoint, stack_ram := hc.stack_ram,
       stack_win := hc.stack_win, spill_defined := hc.spill_defined, str_stack_disjoint := hssd, str_sret_disjoint := hsrd, sret_vstrcode_disjoint := hvsc, vstrcode_stack_disjoint := hvss,
       value_str_code := hvsl, str_slot := hsl, table_stack_disjoint := htsd }
   exact Vsa.Sim.evalStrSimD g N A SL φf φc st d env s sp r sret aEnv aExpr m0

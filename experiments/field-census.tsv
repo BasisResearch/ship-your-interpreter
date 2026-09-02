@@ -4,7 +4,7 @@ hAndTrue	NOT_FOUND
 hArgsCons	NOT_FOUND	
 hArgsNil	NOT_FOUND	
 hAssign	NOT_FOUND	
-hBool	NOT_FOUND	
+hBool	FOUND	
 hCall	NOT_FOUND	
 hCallAssertOk	NOT_FOUND	
 hCallClosure	NOT_FOUND	
@@ -29,7 +29,7 @@ hInt	FOUND
 hNe	NOT_FOUND	
 hNeg	NOT_FOUND	
 hNot	NOT_FOUND	
-hNull	NOT_FOUND	
+hNull	FOUND	
 hOrFalse	NOT_FOUND	
 hOrTrue	NOT_FOUND	
 hSBlock	NOT_FOUND	

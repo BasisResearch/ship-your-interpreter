@@ -68,7 +68,7 @@ theorem blockB_stmtVarInit_stagePre
         aStmt.toNat % 8 = 0 ∧
         0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 24 ≤ 0x100000000 ∧
         (aStmt.toNat + 24 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat) ∧
-        Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧
+        Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment ∧
         (∀ m' : Mem,
           (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) →
             ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
@@ -83,8 +83,8 @@ theorem blockB_stmtVarInit_stagePre
         0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000 ∧ tohostAddr + 16 ≤ SL.lo ∧
         ((sp.toNat - 176) + 1088 ≤ SL.hi) ∧
         (((sp.toNat - 176) + 1088) ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-        ((0x8000281c : Nat) ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x8000280c) ∧
-        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x80019f58) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ (sp.toNat - 176) + 1088 ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
@@ -97,7 +97,7 @@ theorem blockB_stmtVarInit_stagePre
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 5 c (fun c' => ExecJalPreBundle e c' st d env) := by
   obtain ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
-    hEvCode, hViInt, hViSlot, hStoreSurvJ,
+    hEvCode, hViInt, hViSlot, hNbsJ, hStoreSurvJ,
     hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre,
     hSLlo, hSLhiRam, hSLwin,
     hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
@@ -275,7 +275,7 @@ theorem blockB_stmtVarInit_stagePre
     (sp - 176#64) + 1088#64, r, aInterp, (sp - 176#64) + sign_extend (m := 64) (0x068#12),
     aInterp, aExprChild, v8, v9, v18, out0, ment, ?_, ?_, ?_, ?_,
     hG5, hi5, hpc5, hx10_5, ?_, hx11_val, hx12_5, hx2jsp, ⟨vmi5, hmi5⟩, hout5, ?_,
-    hmem5e, ?_, hEvCode, hViInt, hViSlot, ?_, ?_, ?_, hframe5, ⟨hg8, hg18⟩,
+    hmem5e, ?_, hEvCode, hViInt, hViSlot, hNbsJ, ?_, ?_, ?_, hframe5, ⟨hg8, hg18⟩,
     ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   -- hjaltgt
   · apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide
@@ -377,7 +377,7 @@ def StmtVarInitArmDispatch
         aStmt.toNat % 8 = 0 ∧
         0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 24 ≤ 0x100000000 ∧
         (aStmt.toNat + 24 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat) ∧
-        Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧
+        Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment ∧
         (∀ m' : Mem,
           (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) →
             ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
@@ -391,8 +391,8 @@ def StmtVarInitArmDispatch
         0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000 ∧ tohostAddr + 16 ≤ SL.lo ∧
         ((sp.toNat - 176) + 1088 ≤ SL.hi) ∧
         (((sp.toNat - 176) + 1088) ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-        ((0x8000281c : Nat) ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x8000280c) ∧
-        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x80019f58) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ (sp.toNat - 176) + 1088 ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         (∀ R : Register, AbiPreservedNoise R → c'.σ.regs.get? R = gpre R) ∧
@@ -428,7 +428,7 @@ theorem stmtVarInit_field_of_dispatch
     obtain ⟨c1, hsteps1, hMid⟩ :=
       hDisp g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 hEntry c rfl
     obtain ⟨gpre, aExprChild, v8, v9, v18, v19, ment, hArm, hpay, hExprChild,
-      hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hStoreSurvJ,
+      hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hNbsJ, hStoreSurvJ,
       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
       hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
       hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩ := hMid
@@ -436,7 +436,7 @@ theorem stmtVarInit_field_of_dispatch
       blockB_stmtVarInit_stagePre g gpre N A SL φf φc st d env e
         sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1
         ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
-         hEvCode, hViInt, hViSlot, hStoreSurvJ,
+         hEvCode, hViInt, hViSlot, hNbsJ, hStoreSurvJ,
          hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
          hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
          hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩

@@ -95,7 +95,7 @@ def MidArmRightMarshal
   (∀ m : Mem,
     (∀ k, aROp.toNat ≤ k → k < aROp.toNat + 16 → cL.σ.mem[k]? = m[k]?) →
     ExprRepr m aROp.toNat er) ∧
-  Value_intLoaded cL.σ.mem ∧ IntSlotPinned cL.σ.mem ∧
+  Value_intLoaded cL.σ.mem ∧ IntSlotPinned cL.σ.mem ∧ NBSPins cL.σ.mem ∧
   read64 cL.σ.mem (sp.toNat - 8) = some r.toNat ∧
   read64 cL.σ.mem (sp.toNat - 16) = some v8.toNat ∧
   read64 cL.σ.mem (sp.toNat - 24) = some v9.toNat ∧
@@ -113,8 +113,8 @@ def MidArmRightMarshal
   sp.toNat % 16 = 0 ∧ sp.toNat ≤ 0x100000000 ∧
   0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000 ∧ tohostAddr + 16 ≤ SL.lo ∧
   (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-  ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
-  ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+  ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+  ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
   (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
   (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
   -- ITEM ZERO B1: the RIGHT operand's recursion-sound budget at `sp - 1088`,
@@ -145,7 +145,7 @@ theorem midStage1_of_marshal
             sp r sret aExpr aEnv aROp v8 v9 v18 cL) :
     LandedN 1 cL (fun c' => JalPreBundle er c' st' d env) := by
   obtain ⟨hpcL, hs1L, hspL, houtStrL, hframeL, hx8L, hx18L, hgx8v, hgx18v,
-    hnode, hpop, hstoreCL, hstoreSurvCL, hexprSurvCL, hviCL, hviSlotCL,
+    hnode, hpop, hstoreCL, hstoreSurvCL, hexprSurvCL, hviCL, hviSlotCL, hnbsCL,
     hslotRaL, hslotS0L, hslotS1L, hslotS2L,
     hnode_hi, hnode_lo, hnode_align, hnode_win, hrop_align, hrop_ram, hrop_win,
     hrop_stk, hrop_stkfull, hsp1088, hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam,
@@ -153,7 +153,7 @@ theorem midStage1_of_marshal
     hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩ := hM
   exact binaryR_midStage1 gpre N A SL φf1 φc1 st' d env er sp r sret aExpr aEnv aROp
     v8 v9 v18 cL hGL htickL hpcL hs1L hspL hmiL houtStrL hframeL hx8L hx18L hgx8v hgx18v
-    hcodeL hnode hpop hstoreCL hstoreSurvCL hexprSurvCL hviCL hviSlotCL hslotRaL hslotS0L
+    hcodeL hnode hpop hstoreCL hstoreSurvCL hexprSurvCL hviCL hviSlotCL hnbsCL hslotRaL hslotS0L
     hslotS1L hslotS2L hnode_hi hnode_lo hnode_align hnode_win hrop_align hrop_ram hrop_win
     hrop_stk hrop_stkfull hsp1088 hsproom hspSLhi hsp16 hsphi hSLlo hSLhiRam hSLwin
     hcodeStk hviStk htableStk harenaStk harenaCode
@@ -217,7 +217,7 @@ theorem midArmField_of_IH
         c.σ.sailOutput = out0 ∧
         String.join out0.toList = st.out ∧
         c.σ.mem = mcall ∧
-        Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧
+        Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
         ExprRepr mcall aLOp.toNat l ∧
         StoreRepr mcall N A φf φc st.store ∧
         (∀ m' : Mem,
@@ -240,8 +240,8 @@ theorem midArmField_of_IH
         sp.toNat ≤ 0x100000000 ∧
         0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000 ∧ tohostAddr + 16 ≤ SL.lo ∧
         (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-        ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
-        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         -- ITEM ZERO B1: the LEFT operand's recursion-sound budget at `sp - 1088`,

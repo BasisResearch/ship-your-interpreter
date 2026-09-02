@@ -154,14 +154,8 @@ theorem loaded_na_agreeP (m m' : Mem)
       ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
       (rw [← ha _ (by omega)]; simp_all only [])
 
-/-- `Value_nullLoaded` survives an agreement on `value_null`'s code region
-`[0x800027ec, 0x800027f8)`. -/
-theorem loaded_null_agreeP (m m' : Mem)
-    (ha : ∀ a, (0x800027ec ≤ a ∧ a < 0x800027f8) → m[a]? = m'[a]?)
-    (h : Value_nullLoaded m) : Value_nullLoaded m' := by
-  simp only [Value_nullLoaded, Vsa.Sim.Code.value_nullChunk0] at h ⊢
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    (rw [← ha _ (by omega)]; simp_all only [])
+/- `loaded_null_agreeP` RELOCATED to `InterpEntry.lean` (wave 47f, `GeomFrom`);
+same name/namespace. -/
 
 /-! ## `nativeAssertInternal` — the `native_assert` internal run
 

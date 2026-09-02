@@ -83,6 +83,7 @@ structure ExecArmHeadExtras
   evalCode : Eval_exprLoaded m0
   viInt : Value_intLoaded m0
   viSlot : IntSlotPinned m0
+  nbsPins : NBSPins m0
   /-- **The wide-window `StoreRepr` survival** — since wave 47e stated at the
   FULL stack region `[SL.lo, SL.hi)` (the `EntryStackSurv` footprint) minus the
   interp buffer hole.  Now derivable from the WIDENED
@@ -104,8 +105,8 @@ structure ExecArmHeadExtras
   entry sp is `sp - 176` and IT lowers by 1088). -/
   jspSLhi : (sp.toNat - 176) + 1088 ≤ SL.hi
   codeStkJ : ((sp.toNat - 176) + 1088) ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
-  viStkJ : (0x8000281c : Nat) ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x8000280c
-  tableStkJ : (0x80019f58 : Nat) + 4 ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x80019f58
+  viStkJ : (0x8000282c : Nat) ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x800027ec
+  tableStkJ : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x80019f58
   arenaStkJ : A.hi ≤ SL.lo ∨ (sp.toNat - 176) + 1088 ≤ A.lo
   arenaCode : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
 
@@ -144,7 +145,7 @@ theorem execArmDispatch_of_slot
         aStmt.toNat % 8 = 0 ∧
         0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + nodeHi ≤ 0x100000000 ∧
         (aStmt.toNat + nodeHi ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat) ∧
-        Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧
+        Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment ∧
         (∀ m' : Mem,
           (∀ a, ¬ (SL.lo ≤ a ∧ a < SL.hi) →
             ¬ (aInterp.toNat ≤ a ∧ a < aInterp.toNat + 24) →
@@ -158,8 +159,8 @@ theorem execArmDispatch_of_slot
         0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000 ∧ tohostAddr + 16 ≤ SL.lo ∧
         ((sp.toNat - 176) + 1088 ≤ SL.hi) ∧
         (((sp.toNat - 176) + 1088) ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-        ((0x8000281c : Nat) ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x8000280c) ∧
-        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x80019f58) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ ((sp.toNat - 176) + 1088) ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ (sp.toNat - 176) + 1088 ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         (∀ R : Register, AbiPreservedNoise R → c'.σ.regs.get? R = gpre R) ∧
@@ -208,6 +209,10 @@ theorem execArmDispatch_of_slot
       (rw [hMentM0 _ (by
         simp only [jumpTableBase]; rcases hX.tableStkJ with h | h <;> omega)];
        assumption)
+  have hNbsMent : NBSPins ment :=
+    hX.nbsPins.transport
+      (fun a ha => (hMentM0 a (by rcases hX.viStkJ with h | h <;> omega)).symm)
+      (fun a ha => (hMentM0 a (by rcases hX.tableStkJ with h | h <;> omega)).symm)
   -- The wide-window survival at `ment` (compose the extras' `m0`-closure with
   -- the memframe; outside the ENLARGED window is outside the spill window).
   have hWideMent : ∀ m' : Mem,
@@ -225,7 +230,7 @@ theorem execArmDispatch_of_slot
   exact ⟨c1, hs1, (fun R => c1.σ.regs.get? R), aChild, v8, v9, v18, v19, ment,
     hArm', hpayMent, hChildMent,
     hE.stmt_align, hE.stmt_ram.1, hX.node_hi, Or.inr hE.stmt_win,
-    hEvalMent, hViIntMent, hViSlotMent, hWideMent,
+    hEvalMent, hViIntMent, hViSlotMent, hNbsMent, hWideMent,
     hX.child_align, hX.child_lo, hX.child_hi, hX.child_win, hX.child_stk,
     hX.sproom, hX.sp16, hE.stack_ram.1, hE.stack_ram.2, hE.stack_win,
     hX.jspSLhi, hX.codeStkJ, hX.viStkJ, hX.tableStkJ, hX.arenaStkJ, hX.arenaCode,

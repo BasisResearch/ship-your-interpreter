@@ -190,7 +190,9 @@ The dispatch must carry through the spills everything the ARM (not just one
 `Value_intLoaded` AND the `EX_INT` jump-table slot (`IntSlotPinned` — the
 operand may be an int literal), and the `neg` tail itself calls `value_int`.
 This is the `calleeLoaded` instantiation for `blockA_k` at this arm. -/
-def UnaryArmCallee (m : Mem) : Prop := Value_intLoaded m ∧ IntSlotPinned m
+/-- Wave 47f (`GeomFrom`): the recursive-arm callee bundle also carries the
+null/bool/str pins so child `EvalEntry.nbs_pins` can be filled. -/
+def UnaryArmCallee (m : Mem) : Prop := Value_intLoaded m ∧ IntSlotPinned m ∧ NBSPins m
 
 /-! ## `blockB_unary` — arm head + recursive call, composed with the IH
 
@@ -227,8 +229,8 @@ theorem blockB_unary
         SL.lo + 3264 ≤ sp.toNat ∧ sp.toNat ≤ SL.hi ∧ sp.toNat % 16 = 0 ∧
         SL.hi ≤ 0x100000000 ∧
         (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-        ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
-        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         -- ITEM ZERO B1: the operand's recursion-sound budget at `sp - 1088`, its
@@ -258,7 +260,7 @@ theorem blockB_unary
     hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl,
     _hAEx11, _hAEx8, _hAEx18⟩ := hArm
   have htoh : tohostAddr = 0x8001ad00 := rfl
-  obtain ⟨hviInt, hviSlot⟩ : Value_intLoaded ment ∧ IntSlotPinned ment := hviCode
+  obtain ⟨hviInt, hviSlot, hnbs⟩ : Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment := hviCode
   -- address arithmetic
   have h16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = 16#64 := by
     apply BitVec.eq_of_toNat_eq; decide
@@ -355,7 +357,7 @@ theorem blockB_unary
       hIH
       ⟨σ2, i2, c.steps + 1 + 1⟩
       ⟨hG2, hi2, hpc2, hx10_2, hs1_2, hx11_2, hx12_2, hsp_2, ⟨vmi2, hmi2⟩, hout2, houtStr,
-        hmem2e, hcode, hviInt, hviSlot, hsubexpr, hstore, hstoreSurv, hframeB, ⟨hg8, hg18⟩,
+        hmem2e, hcode, hviInt, hviSlot, hnbs, hsubexpr, hstore, hstoreSurv, hframeB, ⟨hg8, hg18⟩,
         hslotRa, hslotS0, hslotS1, hslotS2,
         hopAl, hopLo, hopHi, hopWin, hopStk,
         (by rw [hsub944]; omega), (by rw [hsub944]; omega), (by rw [hsub944]; omega),

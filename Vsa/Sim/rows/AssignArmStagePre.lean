@@ -272,8 +272,8 @@ theorem blockB_assign_stagePre
         SL.lo + 3264 ≤ sp.toNat ∧ sp.toNat ≤ SL.hi ∧ sp.toNat % 16 = 0 ∧
         SL.hi ≤ 0x100000000 ∧
         (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-        ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
-        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         -- ITEM ZERO B1: the RHS operand's recursion-sound budget at `sp - 1088`,
@@ -297,7 +297,7 @@ theorem blockB_assign_stagePre
     hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl,
     _hAEx11, _hAEx8, _hAEx18⟩ := hArm
   have htoh : tohostAddr = 0x8001ad00 := rfl
-  obtain ⟨hviInt, hviSlot⟩ : Value_intLoaded ment ∧ IntSlotPinned ment := hviCode
+  obtain ⟨hviInt, hviSlot, hnbs⟩ : Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment := hviCode
   have h16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = 16#64 := by
     apply BitVec.eq_of_toNat_eq; decide
   have haddr16 : (aExpr + sign_extend (m := 64) (0x010#12)).toNat = aExpr.toNat + 16 := by
@@ -397,6 +397,10 @@ theorem blockB_assign_stagePre
     obtain ⟨q0, q1, q2, q3⟩ := hviSlot
     refine ⟨?_, ?_, ?_, ?_⟩ <;>
       (rw [hAgSpill _ (by simp only [jumpTableBase] at *; rcases htableStk with h | h <;> omega)]; assumption)
+  have hnbsMcall : NBSPins mcall :=
+    hnbs.transport
+      (fun a ha => (hAgSpill a (by rcases hviStk with h | h <;> omega)).symm)
+      (fun a ha => (hAgSpill a (by rcases htableStk with h | h <;> omega)).symm)
   have hExprMcall : ExprRepr mcall aRhs.toNat e :=
     hexprSurv mcall (fun a ha => (hAgSpill a (by omega)).symm)
   have hStoreMcall : StoreRepr mcall N A φf φc st.store := by
@@ -454,7 +458,7 @@ theorem blockB_assign_stagePre
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_80003488_as σ i u (0x80003488#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
       hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, hx12_3, hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr,
-      hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hExprMcall, hStoreMcall, hStoreSurvMcall,
+      hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hExprMcall, hStoreMcall, hStoreSurvMcall,
       hframeB, ⟨hg8, hg18⟩,
       hslotRaMcall, hslotS0Mcall, hslotS1Mcall, hslotS2Mcall,
       hopAl, hopLo, hopHi, hopWin, hopStk,
@@ -507,8 +511,8 @@ def AssignArmDispatch
         SL.lo + 3264 ≤ sp.toNat ∧ sp.toNat ≤ SL.hi ∧ sp.toNat % 16 = 0 ∧
         SL.hi ≤ 0x100000000 ∧
         (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-        ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
-        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo))
 

@@ -87,13 +87,13 @@ structure EvalArmHeadExtras
   sp16 : sp.toNat % 16 = 0
   SLhiRam : SL.hi ≤ 0x100000000
   codeStk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
-  viStk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c
+  viStk : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec
   /-- The tag-`k` jump-table slot is disjoint from the stack window (the
   `blockA_k` `jr` read). -/
   tableStk : jumpTableBase + 4 * k + 4 ≤ SL.lo ∨ sp.toNat ≤ jumpTableBase + 4 * k
   /-- The table BASE slot (slot 0) is disjoint from the stack window (the Mid's
   `IntSlotPinned`-shaped conjunct downstream arms re-read). -/
-  tableStk0 : (0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58
+  tableStk0 : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58
   arenaStk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
   arenaCode : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
   /-- Machine-liveness of `a3`(x13) at the arm entry: the dispatch span
@@ -150,8 +150,8 @@ theorem evalArmDispatch_of_slot
         SL.lo + 3264 ≤ sp.toNat ∧ sp.toNat ≤ SL.hi ∧ sp.toNat % 16 = 0 ∧
         SL.hi ≤ 0x100000000 ∧
         (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-        ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
-        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)) := by
   intro c'' heq
@@ -163,20 +163,23 @@ theorem evalArmDispatch_of_slot
       hkle hklt
       hkind
       hX.slot
-      ⟨hE.mem ▸ hE.value_int_code, hE.mem ▸ hE.int_slot⟩
+      ⟨hE.mem ▸ hE.value_int_code, hE.mem ▸ hE.int_slot, hE.mem ▸ hE.nbs_pins⟩
       (fun mem a8 dd hlo hhi hcl => by
-        obtain ⟨hvi, hsl⟩ := hcl
+        obtain ⟨hvi, hsl, hnb⟩ := hcl
         refine ⟨loaded_int_writeMap8 mem a8 dd (by
-          have := hE.vicode_stack_disjoint; omega) hvi, ?_⟩
-        exact intSlot_writeMap8 mem a8 dd (by
-          have := hE.table_stack_disjoint; simp only [jumpTableBase]; omega) hsl)
+          have := hE.vicode_stack_disjoint; omega) hvi, ?_, ?_⟩
+        · exact intSlot_writeMap8 mem a8 dd (by
+            have := hE.table_stack_disjoint; simp only [jumpTableBase]; omega) hsl
+        · exact nbsPins_writeMap8 mem a8 dd
+            (by have := hE.vicode_stack_disjoint; omega)
+            (by have := hE.table_stack_disjoint; omega) hnb)
       (fun m' hag => hX.expr_survives m' hag)
       harmAl
       hX.tableStk
       c'' ⟨⟨hE.good, hE.tick, hE.pc, hE.a0, hE.a1, hE.a2, hE.ra, hE.ra_align, hE.spReg,
         hE.stackOK, hE.minstret, hE.mem, hE.code, hE.expr, hE.store, hE.store_survives, hE.out,
         hE.frame, hE.code_stack_disjoint, hE.expr_stack_disjoint, hE.expr_align, hE.expr_ram,
-        hE.expr_win, hE.sret_align, hE.sret_ram, hE.sret_win, hE.sret_vicode_disjoint,
+        hE.expr_win, hE.sret_align, hE.sret_ram, hE.sret_win, hE.sret_vicode_disjoint_int,
         hE.sret_stack_disjoint, hE.sret_evalcode_disjoint, hE.stack_ram, hE.stack_win,
         hE.spill_defined⟩, rfl⟩
   -- Destructure a COPY of the widened `ArmEntryK` (keep `hArm` intact for output).

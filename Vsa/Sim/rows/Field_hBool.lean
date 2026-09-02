@@ -45,6 +45,32 @@ theorem field_hBool_of_geom (hG : BoolLeafGeom) :
   obtain ⟨h1, h2, h3, h4, h5⟩ := hG st b g N A SL φf φc d env sp r sret aEnv aExpr m0 c hc
   exact ⟨h1, h2, h3, h4, h5, Vsa.Sim.leafWidenP_of_entry hc⟩
 
+/-- **The geometry, DISCHARGED** (wave 47f, the `GeomFrom` supplier layer):
+projected off the amended `EvalEntry` — `nbs_pins` + the widened disjointness
+literals (`omega` narrows the whole-text/whole-table windows to the bool ones). -/
+theorem boolLeafGeom_discharged : BoolLeafGeom := by
+  intro st b g N A SL φf φc d env sp r sret aEnv aExpr m0 c hc
+  refine ⟨?_, ?_, hc.nbs_pins.bool_code, hc.nbs_pins.bool_slot, ?_⟩
+  · rcases hc.sret_vicode_disjoint with h | h
+    · exact Or.inl (by omega)
+    · exact Or.inr (by omega)
+  · rcases hc.vicode_stack_disjoint with h | h
+    · exact Or.inl (by omega)
+    · exact Or.inr (by omega)
+  · rcases hc.table_stack_disjoint with h | h
+    · exact Or.inl (by omega)
+    · exact Or.inr (by omega)
+
+/-- **`hBool` DISCHARGED** (wave 47f): the bool-leaf residual holds outright. -/
+theorem field_hBool : ∀ (st : SpecSt) (b : Bool), BoolLeafResid st b :=
+  field_hBool_of_geom boolLeafGeom_discharged
+
+/-- The skeleton-hole form (`assembly_skeleton.tsv` row `hBool`). -/
+theorem skelHBool_discharged (L : Layout) : Vsa.Sim.TermAssembly.Skel.SkelHBool L :=
+  fun st b => field_hBool st b
+
 end Vsa.Sim.Rows
 
 #print axioms Vsa.Sim.Rows.field_hBool_of_geom
+#print axioms Vsa.Sim.Rows.field_hBool
+#print axioms Vsa.Sim.Rows.skelHBool_discharged

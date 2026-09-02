@@ -79,8 +79,10 @@ namespace Vsa.Sim
 The dispatch carries `Value_truthyLoaded` and `Value_boolLoaded` (both callees the
 arm invokes) plus, for the recursive sub-call's `EvalEntry`, `Value_intLoaded` and
 `IntSlotPinned` (the left/right sub-expression may itself be an int literal). -/
+/-- Wave 47f (`GeomFrom`): also carries the null/bool/str pins (child
+`EvalEntry.nbs_pins`). -/
 def LogicalArmCallee (m : Mem) : Prop :=
-  Value_intLoaded m ∧ IntSlotPinned m ∧ Value_truthyLoaded m ∧ Value_boolLoaded m
+  Value_intLoaded m ∧ IntSlotPinned m ∧ Value_truthyLoaded m ∧ Value_boolLoaded m ∧ NBSPins m
 
 /-! ## `blockB_logical` — arm head + LEFT recursive call, composed with the IH
 
@@ -129,8 +131,8 @@ theorem blockB_logical
         SL.lo + 3264 ≤ sp.toNat ∧ sp.toNat ≤ SL.hi ∧ sp.toNat % 16 = 0 ∧
         SL.hi ≤ 0x100000000 ∧
         (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-        ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
-        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         -- ITEM ZERO B1: the LEFT operand's recursion-sound budget at `sp - 1088`,
@@ -160,8 +162,9 @@ theorem blockB_logical
     hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl,
     _hAEx11, _hAEx8, _hAEx18⟩ := hArm
   have htoh : tohostAddr = 0x8001ad00 := rfl
-  obtain ⟨hviInt, hviSlot, hviTruthy, hviBool⟩ :
-      Value_intLoaded ment ∧ IntSlotPinned ment ∧ Value_truthyLoaded ment ∧ Value_boolLoaded ment :=
+  obtain ⟨hviInt, hviSlot, hviTruthy, hviBool, hnbs⟩ :
+      Value_intLoaded ment ∧ IntSlotPinned ment ∧ Value_truthyLoaded ment ∧ Value_boolLoaded ment ∧
+        NBSPins ment :=
     hviCode
   -- address arithmetic for the LEFT-operand load (offset 16) and sub-sret (offset 120)
   have h16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = 16#64 := by
@@ -278,6 +281,11 @@ theorem blockB_logical
     obtain ⟨q0, q1, q2, q3⟩ := hviSlot
     refine ⟨?_, ?_, ?_, ?_⟩ <;>
       (rw [hAgSpill _ (by simp only [jumpTableBase] at *; rcases htableStk with h | h <;> omega)]; assumption)
+  -- NBSPins mcall (value_* text + slots 1-3 disjoint from the spill window ⊂ stack)
+  have hnbsMcall : NBSPins mcall :=
+    hnbs.transport
+      (fun a ha => (hAgSpill a (by rcases hviStk with h | h <;> omega)).symm)
+      (fun a ha => (hAgSpill a (by rcases htableStk with h | h <;> omega)).symm)
   -- ExprRepr mcall aLeft el (operand node disjoint from stack; via the survival closure)
   have hExprMcall : ExprRepr mcall aLeft.toNat el :=
     hexprSurv mcall (fun a ha => (hAgSpill a (by omega)).symm)
@@ -342,7 +350,7 @@ theorem blockB_logical
       hIH
       ⟨σ3, i3, c.steps + 1 + 1 + 1⟩
       ⟨hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, hx12_3, hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr,
-        hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hExprMcall, hStoreMcall, hStoreSurvMcall,
+        hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hExprMcall, hStoreMcall, hStoreSurvMcall,
         hframeB, ⟨hg8, hg18⟩,
         hslotRaMcall, hslotS0Mcall, hslotS1Mcall, hslotS2Mcall,
         hopAl, hopLo, hopHi, hopWin, hopStk,
@@ -1273,7 +1281,7 @@ structure AndFalseExtras
   sp16 : sp.toNat % 16 = 0
   SLhi_ram : SL.hi ≤ 0x100000000
   code_stk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
-  vicode_stk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c
+  vicode_stk : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec
   table_stk : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ (0x80019f58 : Nat)
   arena_stk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
   arena_code : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
@@ -1337,12 +1345,15 @@ theorem logicalCallee_writeMap8 (mem : Mem) (a8 : Nat) (d : BitVec (8 * 8))
     (hslot : a8 + 8 ≤ jumpTableBase ∨ jumpTableBase + 4 ≤ a8)
     (htruthy : a8 + 8 ≤ 0x8000282c ∨ 0x8000285c ≤ a8)
     (hbool : a8 + 8 ≤ 0x800027f8 ∨ 0x8000280c ≤ a8)
+    (hnbstext : a8 + 8 ≤ 0x800027ec ∨ 0x8000282c ≤ a8)
+    (hnbstable : a8 + 8 ≤ 0x80019f5c ∨ 0x80019f68 ≤ a8)
     (h : LogicalArmCallee mem) : LogicalArmCallee (writeMap8 mem a8 d) := by
-  obtain ⟨hvi, hsl, htr, hbo⟩ := h
+  obtain ⟨hvi, hsl, htr, hbo, hnb⟩ := h
   exact ⟨loaded_int_writeMap8 mem a8 d hint hvi,
     intSlot_writeMap8 mem a8 d hslot hsl,
     loaded_truthy_writeMap8 mem a8 d htruthy htr,
-    loaded_bool_writeMap8 mem a8 d hbool hbo⟩
+    loaded_bool_writeMap8 mem a8 d hbool hbo,
+    nbsPins_writeMap8 mem a8 d hnbstext hnbstable hnb⟩
 
 /-- **`evalAndSim`** — the `EvalE.andFalse` (short-circuit) recursive case, in the
 `EvalIH` motive shape. Composes `blockA_k` (prologue+dispatch → widened
@@ -1363,20 +1374,22 @@ theorem evalAndSim : EvalAndSimGoal := by
       (by omega) (by omega)
       hkm0
       hx.slot7
-      ⟨hx.int_loaded, hx.intslot, hx.truthy_loaded, hx.bool_loaded⟩
+      ⟨hx.int_loaded, hx.intslot, hx.truthy_loaded, hx.bool_loaded, hc.mem ▸ hc.nbs_pins⟩
       (fun mem a8 dd hlo hhi hcl =>
         logicalCallee_writeMap8 mem a8 dd
           (by have := hx.vicode_stk; omega)
           (by simp only [jumpTableBase]; have := hx.table_stk; omega)
           (by have := hx.truthy_stk; omega)
-          (by have := hx.boolcode_stk; omega) hcl)
+          (by have := hx.boolcode_stk; omega)
+          (by have := hx.vicode_stk; omega)
+          (by have := hx.table_stk; omega) hcl)
       (fun m' hag => hx.expr_survives m' hag)
       (by decide)
       (by have := hx.table_stk; simp only [jumpTableBase]; omega)
       c ⟨⟨hc.good, hc.tick, hc.pc, hc.a0, hc.a1, hc.a2, hc.ra, hc.ra_align, hc.spReg,
         hc.stackOK, hc.minstret, hc.mem, hc.code, hc.expr, hc.store, hc.store_survives, hc.out,
         hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
-        hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
+        hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
         hc.spill_defined⟩, rfl⟩
   have hArmCopy := hArm

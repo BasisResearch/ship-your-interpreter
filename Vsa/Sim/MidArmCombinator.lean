@@ -102,6 +102,7 @@ theorem binaryR_midStagePre
       (∀ k, aROp.toNat ≤ k → k < aROp.toNat + 16 → cL.σ.mem[k]? = m[k]?) →
       ExprRepr m aROp.toNat er)
     (hviCL : Value_intLoaded cL.σ.mem) (hviSlotCL : IntSlotPinned cL.σ.mem)
+    (hnbsCL : NBSPins cL.σ.mem)
     (hslotRaL : read64 cL.σ.mem (sp.toNat - 8) = some r.toNat)
     (hslotS0L : read64 cL.σ.mem (sp.toNat - 16) = some v8.toNat)
     (hslotS1L : read64 cL.σ.mem (sp.toNat - 24) = some v9.toNat)
@@ -122,8 +123,8 @@ theorem binaryR_midStagePre
     (hSLlo : 0x80000000 ≤ SL.lo) (hSLhiRam : SL.hi ≤ 0x100000000)
     (hSLwin : tohostAddr + 16 ≤ SL.lo)
     (hcodeStk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo)
-    (hviStk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c)
-    (htableStk : (0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
+    (hviStk : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec)
+    (htableStk : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
     (harenaStk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo)
     (harenaCode : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)
     -- ITEM ZERO B1: the RIGHT operand's recursion-sound budget at `sp - 1088`,
@@ -380,6 +381,8 @@ theorem binaryR_midStagePre
     show cL.σ.mem[k]? = (writeMap8 cL.σ.mem (sp.toNat - 1088) _)[k]?
     rw [getElem_writeMap8_disjoint cL.σ.mem (sp.toNat - 1088) k _
       (by rcases hrop_stkfull with h | h <;> omega)]
+  have hnbs2 : NBSPins mcall2 :=
+    hnbsCL.survive_stack hviStk htableStk hAgMcall2
   -- `Value_intLoaded` / `IntSlotPinned` for mcall2
   have hviInt2 : Value_intLoaded mcall2 :=
     loaded_value_int_agreeP cL.σ.mem mcall2
@@ -442,7 +445,7 @@ theorem binaryR_midStagePre
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_80003518_ee σ i u (0x80003518#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
       hGτ7, hj7, hpcτ7, ha0τ7, hs1τ7, hx11τ7, hx12τ7, hspτ7, ⟨vmiτ7, hmiτ7⟩,
-      houtτ7, houtStrL, hmemτ7e, hcodeτ7, hviInt2, hviSlot2, hexprR2, hstore2, hstoreSurv2,
+      houtτ7, houtStrL, hmemτ7e, hcodeτ7, hviInt2, hviSlot2, hnbs2, hexprR2, hstore2, hstoreSurv2,
       (fun R hR => rfl), ⟨⟨aExpr, hgR7_8⟩, ⟨aEnv, hgR7_18⟩⟩,
       hslotRa2, hslotS02, hslotS12, hslotS22,
       hrop_align, hrop_ram.1, hrop_ram.2, hrop_win, hrop_stk,
@@ -488,6 +491,7 @@ theorem binaryR_midStage1
       (∀ k, aROp.toNat ≤ k → k < aROp.toNat + 16 → cL.σ.mem[k]? = m[k]?) →
       ExprRepr m aROp.toNat er)
     (hviCL : Value_intLoaded cL.σ.mem) (hviSlotCL : IntSlotPinned cL.σ.mem)
+    (hnbsCL : NBSPins cL.σ.mem)
     (hslotRaL : read64 cL.σ.mem (sp.toNat - 8) = some r.toNat)
     (hslotS0L : read64 cL.σ.mem (sp.toNat - 16) = some v8.toNat)
     (hslotS1L : read64 cL.σ.mem (sp.toNat - 24) = some v9.toNat)
@@ -507,8 +511,8 @@ theorem binaryR_midStage1
     (hSLlo : 0x80000000 ≤ SL.lo) (hSLhiRam : SL.hi ≤ 0x100000000)
     (hSLwin : tohostAddr + 16 ≤ SL.lo)
     (hcodeStk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo)
-    (hviStk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c)
-    (htableStk : (0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
+    (hviStk : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec)
+    (htableStk : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
     (harenaStk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo)
     (harenaCode : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)
     -- ITEM ZERO B1: threaded to `binaryR_midStagePre`.
@@ -520,7 +524,7 @@ theorem binaryR_midStage1
   LandedN.weakenCount (by omega : 1 ≤ 7)
     (binaryR_midStagePre gpre N A SL φf1 φc1 st' d env er sp r sret aExpr aEnv aROp
       v8 v9 v18 cL hGL htickL hpcL hs1L hspL hmiL houtStrL hframeL hx8L hx18L hgx8v hgx18v
-      hcodeL hnode hpop hstoreCL hstoreSurvCL hexprSurvCL hviCL hviSlotCL hslotRaL hslotS0L
+      hcodeL hnode hpop hstoreCL hstoreSurvCL hexprSurvCL hviCL hviSlotCL hnbsCL hslotRaL hslotS0L
       hslotS1L hslotS2L hnode_hi hnode_lo hnode_align hnode_win hrop_align hrop_ram hrop_win
       hrop_stk hrop_stkfull hsp1088 hsproom hspSLhi hsp16 hsphi hSLlo hSLhiRam hSLwin
       hcodeStk hviStk htableStk harenaStk harenaCode

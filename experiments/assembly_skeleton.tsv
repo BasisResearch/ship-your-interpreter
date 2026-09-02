@@ -1,8 +1,8 @@
 field	status	supplier_note
 hInt	done	DISCHARGED wave 47e: `field_hInt`/`skelHInt_discharged` (`rows/Field_hInt.lean`) — `EntryStackSurv` amendment + `LeafExitPin` re-land; pinned widener entry-derivable (`leafWidenP_of_entry`).
-hNull	hole	`hNull`/`eval_null_row`.  Wave 47e: widener half DISCHARGED (`field_hNull_of_geom`, `rows/Field_hNull.lean`); residual = ONLY `NullLeafGeom` (`evalentry-missing-nbs-callee-geom`).
-hBool	hole	`hBool`/`eval_bool_row`.  Wave 47e: widener half DISCHARGED (`field_hBool_of_geom`, `rows/Field_hBool.lean`); residual = ONLY `BoolLeafGeom` (`evalentry-missing-nbs-callee-geom`).
-hStr	hole	`hStr`/`eval_str_row`.  Wave 47e: widener half DISCHARGED (`field_hStr_of_geom`, `rows/Field_hStr.lean`); residual = ONLY `StrLeafGeom` incl. AST payload-region facts (`evalentry-missing-nbs-callee-geom`).
+hNull	done	DISCHARGED wave 47f: `field_hNull`/`skelHNull_discharged` (`rows/Field_hNull.lean`) — `GeomFrom` callee-geometry layer (`EvalEntry.nbs_pins` + widened disjointness literals) closes `NullLeafGeom` outright.
+hBool	done	DISCHARGED wave 47f: `field_hBool`/`skelHBool_discharged` (`rows/Field_hBool.lean`) — `GeomFrom` layer closes `BoolLeafGeom` outright.
+hStr	hole	`hStr`/`eval_str_row`.  Wave 47f: code/slot geometry DISCHARGED (`field_hStr_of_payload`, `rows/Field_hStr.lean`); residual = ONLY the 2 payload AST-region conjuncts (`StrPayloadGeom`, observation `strleafgeom-payload-ast-region`).
 hNeg	hole	`hNeg`/`eval_neg_row`.  Supplier: neg-arm geometry (`EvalRecCommon`/`blockB_unary`).
 hNot	hole	`hNot`/`eval_not_row`.  Supplier: not-arm geometry.
 hOrTrue	hole	`hOrTrue`/`eval_orTrue_row`.  Supplier: logical short-circuit geometry.

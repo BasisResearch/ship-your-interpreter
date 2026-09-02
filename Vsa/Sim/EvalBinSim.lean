@@ -225,14 +225,14 @@ structure BinExtras
   SLhiRam : SL.hi ≤ 0x100000000
   -- code/table/arena vs stack disjointness (as in `blockB_unary`)
   codeStk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
-  viStk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c
-  tableStk : (0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58
+  viStk : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec
+  tableStk : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58
   arenaStk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
   arenaCode : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
   -- `value_int` code `[0x8000280c, 0x8000281c)` and the jump-table word disjoint
   -- from the arena (so they survive the left sub-call's allocation).
-  arenaVi : A.hi ≤ 0x8000280c ∨ 0x8000281c ≤ A.lo
-  arenaTable : A.hi ≤ 0x80019f58 ∨ 0x80019f58 + 4 ≤ A.lo
+  arenaVi : A.hi ≤ 0x800027ec ∨ 0x8000282c ≤ A.lo
+  arenaTable : A.hi ≤ 0x80019f58 ∨ 0x80019f58 + 44 ≤ A.lo
   -- the outer sret buffer lies inside the whole stack region `[SL.lo, SL.hi)`
   -- (so the left store-survival clause, phrased over `[SL.lo, SL.hi)`, covers it).
   sret_inSL : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi
@@ -310,7 +310,7 @@ theorem blockB_binary
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
     hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl,
     _hAEx11, _hAEx8, _hAEx18⟩ := hArm
-  obtain ⟨hviInt, hviSlot⟩ : Value_intLoaded ment ∧ IntSlotPinned ment := hviCode
+  obtain ⟨hviInt, hviSlot, hnbs⟩ : Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment := hviCode
   have hnodehi := hBE.node_hi
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hsp1088' : 1088 ≤ sp.toNat := by omega
@@ -465,6 +465,8 @@ theorem blockB_binary
       (by simp only [jumpTableBase]; rcases hBE.tableStk with h | h
           · right; omega
           · left; omega) hviSlot
+  have hnbs1 : NBSPins mcall1 :=
+    hnbs.survive_stack hBE.viStk hBE.tableStk hAgMcall1
   -- `StoreRepr mcall1 st.store` + its survival, from the entry survival clause
   have hstore1 : StoreRepr mcall1 N A φf φc st.store :=
     hstoreSurv mcall1 (fun k hk1 _ => hAgMcall1 k (fun hcon =>
@@ -540,7 +542,7 @@ theorem blockB_binary
       hIHl
       ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩
       ⟨hG4, hi4, hpc4, ha0_4, hs1_4, hx11_4, hx12_4, hsp_4, ⟨vmi4, hmi4⟩,
-        hout4, houtStr, hmem4e, hcodemcall1, hviInt1, hviSlot1, hexprL1, hstore1, hstoreSurv1,
+        hout4, houtStr, hmem4e, hcodemcall1, hviInt1, hviSlot1, hnbs1, hexprL1, hstore1, hstoreSurv1,
         hframe4, ⟨hg8, hg18⟩,
         hslotRa1, hslotS01, hslotS11, hslotS21,
         hBE.lop_align, hBE.lop_ram.1, hBE.lop_ram.2, hBE.lop_win, hBE.lop_stk,
@@ -852,6 +854,14 @@ theorem blockB_binary
       (by simp only [jumpTableBase]; rcases hBE.tableStk with h | h
           · right; omega
           · left; omega) hviSlotCL
+  have hnbsCL : NBSPins cL.σ.mem :=
+    hnbs.transport
+      (fun a ha => hAgMentCL a (by rcases hBE.viStk with h | h <;> omega)
+        (by rcases hBE.arenaVi with h | h <;> omega))
+      (fun a ha => hAgMentCL a (by rcases hBE.tableStk with h | h <;> omega)
+        (by rcases hBE.arenaTable with h | h <;> omega))
+  have hnbs2 : NBSPins mcall2 :=
+    hnbsCL.survive_stack hBE.viStk hBE.tableStk hAgMcall2
   -- the RIGHT frame's four spill slots `[sp-1120, sp-1088)`: present in cL.mem,
   -- survive the `sp-1088` store (disjoint below it). Fresh witnesses r2/v82/v92/v182.
   have hslotpeel2 : ∀ (a : Nat), sp.toNat - 1120 ≤ a → a + 8 ≤ sp.toNat - 1088 →
@@ -939,7 +949,7 @@ theorem blockB_binary
       hIHr
       ⟨τ7, j7, cL.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩
       ⟨hGτ7, hj7, hpcτ7, ha0τ7, hs1τ7, hx11τ7, hx12τ7, hspτ7, ⟨vmiτ7, hmiτ7⟩,
-        houtτ7', houtStrR, hmemτ7e, hcodeτ7, hviInt2, hviSlot2, hexprR2, hstore2, hstoreSurv2,
+        houtτ7', houtStrR, hmemτ7e, hcodeτ7, hviInt2, hviSlot2, hnbs2, hexprR2, hstore2, hstoreSurv2,
         (fun R hR => rfl), ⟨⟨aExpr, hgR7_8⟩, ⟨aEnv, hgR7_18⟩⟩,
         hslotRa2, hslotS02, hslotS12, hslotS22,
         hBE.rop_align, hBE.rop_ram.1, hBE.rop_ram.2, hBE.rop_win, hBE.rop_stk,

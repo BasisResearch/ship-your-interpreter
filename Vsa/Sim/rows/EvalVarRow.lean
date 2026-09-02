@@ -103,7 +103,7 @@ theorem eval_var_row (hR : ∀ st x v, VarLeafResid st x v) :
       code_stack_disjoint := hc.code_stack_disjoint, expr_stack_disjoint := hc.expr_stack_disjoint,
       expr_align := hc.expr_align, expr_ram := hc.expr_ram, expr_win := hc.expr_win,
       sret_align := hc.sret_align, sret_ram := hc.sret_ram, sret_win := hc.sret_win,
-      sret_vicode_disjoint := hc.sret_vicode_disjoint, sret_stack_disjoint := hc.sret_stack_disjoint,
+      sret_vicode_disjoint := hc.sret_vicode_disjoint_int, sret_stack_disjoint := hc.sret_stack_disjoint,
       sret_evalcode_disjoint := hc.sret_evalcode_disjoint, stack_ram := hc.stack_ram,
       stack_win := hc.stack_win, spill_defined := hc.spill_defined,
       var_stack_disjoint := hvsd, sret_arena_disjoint := hsad, env_get_code := hegc,

@@ -7,6 +7,9 @@ import Vsa.Sim.GoodState
 import Vsa.Sim.Regions
 import Vsa.Sim.Code.Eval_expr
 import Vsa.Sim.Code.Value_int
+import Vsa.Sim.Code.Value_null
+import Vsa.Sim.Code.Value_bool
+import Vsa.Sim.Code.Value_str
 
 /-!
 # Layer 4 — the `EvalEntry`/`EvalExit` machine-side predicates for `eval_expr`
@@ -150,6 +153,124 @@ def IntSlotPinned (m : Mem) : Prop :=
   m[(jumpTableBase + 2 : Nat)]? = some (0xfe : BitVec 8) ∧
   m[(jumpTableBase + 3 : Nat)]? = some (0xff : BitVec 8)
 
+/-! ## The null/bool/str callee pins (wave 47f — `GeomFrom`)
+
+The three sibling leaf callees' code windows and jump-table slots, RELOCATED
+here from `EvalStrSim`/`EvalBoolSim`/`EvalNullSim` (same names, same namespace —
+zero consumer changes) so `EvalEntry` can carry them: the `hNull`/`hBool`/`hStr`
+residuals need them at the ENTRY config (`evalentry-missing-nbs-callee-geom`,
+machine-checked in `experiments/fleet/obstructions/
+B1_reseat_footprint_verdict.lean`).  The `*_slot_kindPinned` bridge theorems
+stay beside the sims (they mention `KindSlotPinned`, defined above this file's
+layer). -/
+
+/-- The `EX_STR` (tag 1) jump-table slot pin: `jumpTableBase + 4` holds
+`bc 94 fe ff` (LE offset `0xfffe94bc` → arm `0x80003414`). -/
+def StrSlotPinned (m : Mem) : Prop :=
+  m[(jumpTableBase + 4 : Nat)]? = some (0xbc : BitVec 8) ∧
+  m[(jumpTableBase + 5 : Nat)]? = some (0x94 : BitVec 8) ∧
+  m[(jumpTableBase + 6 : Nat)]? = some (0xfe : BitVec 8) ∧
+  m[(jumpTableBase + 7 : Nat)]? = some (0xff : BitVec 8)
+
+/-- The `EX_BOOL` (tag 2) jump-table slot pin: `jumpTableBase + 8` holds
+`c8 94 fe ff` (LE offset `0xfffe94c8` → arm `0x80003420`). -/
+def BoolSlotPinned (m : Mem) : Prop :=
+  m[(jumpTableBase + 8 : Nat)]? = some (0xc8 : BitVec 8) ∧
+  m[(jumpTableBase + 9 : Nat)]? = some (0x94 : BitVec 8) ∧
+  m[(jumpTableBase + 10 : Nat)]? = some (0xfe : BitVec 8) ∧
+  m[(jumpTableBase + 11 : Nat)]? = some (0xff : BitVec 8)
+
+/-- The `EX_NULL` (tag 3) jump-table slot pin: `jumpTableBase + 12` holds
+`d4 94 fe ff` (LE offset `0xfffe94d4` → arm `0x8000342c`). -/
+def NullSlotPinned (m : Mem) : Prop :=
+  m[(jumpTableBase + 12 : Nat)]? = some (0xd4 : BitVec 8) ∧
+  m[(jumpTableBase + 13 : Nat)]? = some (0x94 : BitVec 8) ∧
+  m[(jumpTableBase + 14 : Nat)]? = some (0xfe : BitVec 8) ∧
+  m[(jumpTableBase + 15 : Nat)]? = some (0xff : BitVec 8)
+
+/-- `Value_nullLoaded` survives an agreement on `value_null`'s code region
+`[0x800027ec, 0x800027f8)` (RELOCATED from `EvalCallNative2`). -/
+theorem loaded_null_agreeP (m m' : Mem)
+    (ha : ∀ a, (0x800027ec ≤ a ∧ a < 0x800027f8) → m[a]? = m'[a]?)
+    (h : Value_nullLoaded m) : Value_nullLoaded m' := by
+  simp only [Value_nullLoaded, Vsa.Sim.Code.value_nullChunk0] at h ⊢
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
+    (rw [← ha _ (by omega)]; simp_all only [])
+
+/-- `Value_boolLoaded` survives an agreement on `value_bool`'s code region
+`[0x800027f8, 0x8000280c)` (RELOCATED from `EvalNotSim`). -/
+theorem loaded_bool_agreeP (m m' : Mem)
+    (ha : ∀ a, (0x800027f8 ≤ a ∧ a < 0x8000280c) → m[a]? = m'[a]?)
+    (h : Value_boolLoaded m) : Value_boolLoaded m' := by
+  simp only [Value_boolLoaded, Vsa.Sim.Code.value_boolChunk0] at h ⊢
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
+    (rw [← ha _ (by omega)]; simp_all only [])
+
+/-- `Value_strLoaded` survives an agreement on `value_str`'s code region
+`[0x8000281c, 0x8000282c)`. -/
+theorem loaded_str_agreeP (m m' : Mem)
+    (ha : ∀ a, (0x8000281c ≤ a ∧ a < 0x8000282c) → m[a]? = m'[a]?)
+    (h : Value_strLoaded m) : Value_strLoaded m' := by
+  simp only [Value_strLoaded, Vsa.Sim.Code.value_strChunk0] at h ⊢
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
+    (rw [← ha _ (by omega)]; simp_all only [])
+
+/-- **`NBSPins` — the null/bool/str callee byte pins** (the `GeomFrom` supplier
+layer's memory half): the three sibling leaf callees' code windows loaded and
+their jump-table slots (tags 1-3) pinned.  Named-field structure (gate shape);
+carried by `EvalEntry.nbs_pins` and transported across stack-confined writes by
+`NBSPins.survive_stack`. -/
+structure NBSPins (m : Mem) : Prop where
+  null_code : Value_nullLoaded m
+  bool_code : Value_boolLoaded m
+  str_code : Value_strLoaded m
+  null_slot : NullSlotPinned m
+  bool_slot : BoolSlotPinned m
+  str_slot : StrSlotPinned m
+
+/-- `NBSPins` transport: agreement on the value_* text window
+`[0x800027ec, 0x8000282c)` and the tag-1..3 table slots `[0x80019f5c, 0x80019f68)`
+carries every pin. -/
+theorem NBSPins.transport {m m' : Mem} (h : NBSPins m)
+    (htext : ∀ a, (0x800027ec ≤ a ∧ a < 0x8000282c) → m[a]? = m'[a]?)
+    (htable : ∀ a, (0x80019f5c ≤ a ∧ a < 0x80019f68) → m[a]? = m'[a]?) :
+    NBSPins m' where
+  null_code := loaded_null_agreeP m m' (fun a ha => htext a (by omega)) h.null_code
+  bool_code := loaded_bool_agreeP m m' (fun a ha => htext a (by omega)) h.bool_code
+  str_code := loaded_str_agreeP m m' (fun a ha => htext a (by omega)) h.str_code
+  null_slot := by
+    obtain ⟨p0, p1, p2, p3⟩ := h.null_slot
+    exact ⟨(htable _ (by simp only [jumpTableBase]; omega)).symm.trans p0,
+      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p1,
+      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p2,
+      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p3⟩
+  bool_slot := by
+    obtain ⟨p0, p1, p2, p3⟩ := h.bool_slot
+    exact ⟨(htable _ (by simp only [jumpTableBase]; omega)).symm.trans p0,
+      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p1,
+      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p2,
+      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p3⟩
+  str_slot := by
+    obtain ⟨p0, p1, p2, p3⟩ := h.str_slot
+    exact ⟨(htable _ (by simp only [jumpTableBase]; omega)).symm.trans p0,
+      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p1,
+      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p2,
+      (htable _ (by simp only [jumpTableBase]; omega)).symm.trans p3⟩
+
+/-- `NBSPins` survives any memory change confined to the stack scribble
+`[SL.lo, sp)`, given the (widened) text/table stack-disjointness the entry
+carries.  The workhorse at every entry→child-entry seam: the pre-call writes
+between two entries are stack-confined. -/
+theorem NBSPins.survive_stack {SL : StackLayout} {sp : BitVec 64} {m m' : Mem}
+    (h : NBSPins m)
+    (hvi : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec)
+    (htb : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
+    (hag : ∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → m[k]? = m'[k]?) :
+    NBSPins m' :=
+  h.transport
+    (fun a ha => hag a (by rcases hvi with hv | hv <;> omega))
+    (fun a ha => hag a (by rcases htb with ht | ht <;> omega))
+
 /-! ## `EvalEntry` — the machine precondition at `eval_expr`'s entry PC
 
 Parameters (ghosts, ∀-bound in the simulation lemma):
@@ -269,15 +390,24 @@ structure EvalEntry
   sret_align : sret.toNat % 8 = 0
   sret_ram : 0x80000000 ≤ sret.toNat ∧ sret.toNat + 24 ≤ 0x100000000
   sret_win : tohostAddr + 16 ≤ sret.toNat
-  sret_vicode_disjoint : sret.toNat + 24 ≤ 0x8000280c ∨ 0x8000281c ≤ sret.toNat
+  /-- **WAVE 47f (`GeomFrom`) WIDENING**: the sret buffer is disjoint from the
+  WHOLE `value_null`≫`value_bool`≫`value_int`≫`value_str` text
+  `[0x800027ec, 0x8000282c)` (was: the `value_int` window `[0x8000280c,
+  0x8000281c)` only).  The null/bool/str leaf residuals need their own callee
+  windows; the four windows are contiguous, so ONE widened literal serves all.
+  Strictly stronger — the old int-window consumers close by `omega`. -/
+  sret_vicode_disjoint : sret.toNat + 24 ≤ 0x800027ec ∨ 0x8000282c ≤ sret.toNat
   sret_stack_disjoint : sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat
   /-- The sret buffer is disjoint from `eval_expr`'s code region `[0x80003164,
   0x80003fe0)`. Needed so `value_int`'s sret write leaves `Eval_exprLoaded` intact
   (the shared epilogue reads code after the callee returns). (v2 field.) -/
   sret_evalcode_disjoint : sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat
-  /-- `value_int`'s code `[0x8000280c, 0x8000281c)` is disjoint from the stack
-  region — needed so the prologue spills keep `Value_intLoaded`. (v1→v2 field.) -/
-  vicode_stack_disjoint : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c
+  /-- The `value_*` leaf-callee text `[0x800027ec, 0x8000282c)` is disjoint from
+  the stack region — needed so the prologue spills keep `Value_intLoaded` (and,
+  since wave 47f, the sibling `Value_{null,bool,str}Loaded` pins).
+  **WAVE 47f WIDENING**: was the `value_int` window `[0x8000280c, 0x8000281c)`
+  only; strictly stronger, old consumers close by `omega`. (v1→v2 field.) -/
+  vicode_stack_disjoint : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec
   /-- **The stack region is in RAM and above the HTIF window.** The prologue
   `sd` spills (targets in `[SL.lo, sp) ⊆ RAM`, above `tohost`) need these to pass
   the load/store region checks. (v1→v2 field.) -/
@@ -293,9 +423,20 @@ structure EvalEntry
   spills (the table is at `0x80019f58`, disjoint from `[SL.lo, sp)` since the table
   is below the stack). (v1→v2 field.) -/
   int_slot : IntSlotPinned c.σ.mem
-  /-- The jump table `[0x80019f58, 0x80019f5c)` is disjoint from the stack region
-  (so `IntSlotPinned` survives the spills). -/
-  table_stack_disjoint : (0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58
+  /-- The WHOLE dispatch jump table `[0x80019f58, 0x80019f84)` (11 × 4-byte
+  slots) is disjoint from the stack region (so the slot pins survive the
+  spills).  **WAVE 47f WIDENING**: was the tag-0 slot `+4` only; the
+  null/bool/str residuals need slots 1-3; strictly stronger, old consumers
+  close by `omega`. -/
+  table_stack_disjoint : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58
+  /-- **The null/bool/str leaf-callee pins** (wave 47f, the `GeomFrom` supplier
+  layer): `value_null`/`value_bool`/`value_str` code loaded + jump-table slots
+  1-3 pinned.  Together with the widened `sret_vicode_disjoint`/
+  `vicode_stack_disjoint`/`table_stack_disjoint` this closes the
+  `evalentry-missing-nbs-callee-geom` gap for `hNull`/`hBool` (and the
+  code-geometry half of `hStr`).  Child entries transport it via
+  `NBSPins.survive_stack` (pre-call writes are stack-confined). -/
+  nbs_pins : NBSPins c.σ.mem
   /-- **The spilled callee-saved registers `s0`(x8), `s1`(x9), `s2`(x18) are
   defined** at entry (the prologue `sd s0/s1/s2` requires their `rs2` reads not to
   throw). GoodState pins control registers but not GPRs, so this is stated here;
@@ -328,6 +469,44 @@ theorem EvalEntry.store_survives_sp
   fun m' h => hc.store_survives m'
     (fun k hk hr => h k
       (fun hcon => hk ⟨hcon.1, Nat.lt_of_lt_of_le hcon.2 hc.stackOK.2.1⟩) hr)
+
+/-! ### Narrow (pre-47f) forms of the widened geometry literals — mono lemmas
+
+Consumers that fed the old int-window literals structurally (`exact
+hc.sret_vicode_disjoint` and friends) switch to these one-token forms. -/
+
+theorem EvalEntry.sret_vicode_disjoint_int
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : St} {d : Nat} {a : Addr} {e : Expr}
+    {sp r sret aEnv aExpr : BitVec 64} {m0 : Mem} {c : Config}
+    (hc : EvalEntry g N A SL φf φc st d a e sp r sret aEnv aExpr m0 c) :
+    sret.toNat + 24 ≤ 0x8000280c ∨ 0x8000281c ≤ sret.toNat := by
+  rcases hc.sret_vicode_disjoint with h | h
+  · exact Or.inl (by omega)
+  · exact Or.inr (by omega)
+
+theorem EvalEntry.vicode_stack_disjoint_int
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : St} {d : Nat} {a : Addr} {e : Expr}
+    {sp r sret aEnv aExpr : BitVec 64} {m0 : Mem} {c : Config}
+    (hc : EvalEntry g N A SL φf φc st d a e sp r sret aEnv aExpr m0 c) :
+    (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c := by
+  rcases hc.vicode_stack_disjoint with h | h
+  · exact Or.inl (by omega)
+  · exact Or.inr (by omega)
+
+theorem EvalEntry.table_stack_disjoint_int
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : St} {d : Nat} {a : Addr} {e : Expr}
+    {sp r sret aEnv aExpr : BitVec 64} {m0 : Mem} {c : Config}
+    (hc : EvalEntry g N A SL φf φc st d a e sp r sret aEnv aExpr m0 c) :
+    (0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58 := by
+  rcases hc.table_stack_disjoint with h | h
+  · exact Or.inl (by omega)
+  · exact Or.inr (by omega)
 
 /-! ## `EvalExit` — the machine postcondition at the return PC
 

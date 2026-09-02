@@ -53,6 +53,34 @@ theorem field_hNull_of_geom (hG : NullLeafGeom) : ∀ st : SpecSt, NullLeafResid
   obtain ⟨h1, h2, h3, h4, h5⟩ := hG st g N A SL φf φc d env sp r sret aEnv aExpr m0 c hc
   exact ⟨h1, h2, h3, h4, h5, Vsa.Sim.leafWidenP_of_entry hc⟩
 
+/-- **The geometry, DISCHARGED** (wave 47f, the `GeomFrom` supplier layer):
+projected off the amended `EvalEntry` — `nbs_pins` supplies the code/slot pins,
+the widened `sret_vicode_disjoint`/`vicode_stack_disjoint`/
+`table_stack_disjoint` literals supply the window facts (`omega` narrows the
+whole-text/whole-table windows to the null ones). -/
+theorem nullLeafGeom_discharged : NullLeafGeom := by
+  intro st g N A SL φf φc d env sp r sret aEnv aExpr m0 c hc
+  refine ⟨?_, ?_, hc.nbs_pins.null_code, hc.nbs_pins.null_slot, ?_⟩
+  · rcases hc.sret_vicode_disjoint with h | h
+    · exact Or.inl (by omega)
+    · exact Or.inr (by omega)
+  · rcases hc.vicode_stack_disjoint with h | h
+    · exact Or.inl (by omega)
+    · exact Or.inr (by omega)
+  · rcases hc.table_stack_disjoint with h | h
+    · exact Or.inl (by omega)
+    · exact Or.inr (by omega)
+
+/-- **`hNull` DISCHARGED** (wave 47f): the null-leaf residual holds outright. -/
+theorem field_hNull : ∀ st : SpecSt, NullLeafResid st :=
+  field_hNull_of_geom nullLeafGeom_discharged
+
+/-- The skeleton-hole form (`assembly_skeleton.tsv` row `hNull`). -/
+theorem skelHNull_discharged (L : Layout) : Vsa.Sim.TermAssembly.Skel.SkelHNull L :=
+  fun st => field_hNull st
+
 end Vsa.Sim.Rows
 
 #print axioms Vsa.Sim.Rows.field_hNull_of_geom
+#print axioms Vsa.Sim.Rows.field_hNull
+#print axioms Vsa.Sim.Rows.skelHNull_discharged

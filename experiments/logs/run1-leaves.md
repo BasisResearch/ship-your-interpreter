@@ -91,3 +91,47 @@
   str payload region under a bare `EvalEntry`.
 - TSV: `hInt` flipped to `done`; null/bool/str notes updated (widener half
   discharged, geometry-only residual).  check_discipline OK (9 rules).
+
+## Wave 47f — the `GeomFrom` callee-geometry layer; hNull/hBool DISCHARGED (2026-09-02)
+
+- **The layer**: `NBSPins` (`InterpEntry.lean`) — ONE named-field structure
+  bundling the three sibling leaf callees' memory pins (`Value_nullLoaded` +
+  `Value_boolLoaded` + `Value_strLoaded` + jump-table slots 1-3), with the
+  transport kit `NBSPins.transport` (window agreement) /
+  `NBSPins.survive_stack` (stack-confined writes) / `nbsPins_writeMap8`
+  (`EvalIntSim2`, the `hcalleeSurv` leg).  Slot-pin defs
+  `Str/Bool/NullSlotPinned` + `loaded_{null,bool,str}_agreeP` RELOCATED down to
+  `InterpEntry` (same names/namespace — zero consumer changes); the
+  `*_slot_kindPinned` bridges stay beside the sims.
+- **The `EvalEntry` amendment**: new field `nbs_pins : NBSPins c.σ.mem` + THREE
+  literal widenings (`sret_vicode_disjoint` → whole value_* text
+  `[0x800027ec, 0x8000282c)`; `vicode_stack_disjoint` → whole text;
+  `table_stack_disjoint` → whole 44-byte table).  Narrow (pre-47f) forms
+  recovered by `EvalEntry.{sret_vicode,vicode_stack,table_stack}_disjoint_int`
+  mono lemmas (one-token consumer fixes).
+- **Conduit fan-out** (the 47e shape again): `UnaryArmCallee`/`LogicalArmCallee`
+  bundles widened with `NBSPins`; `NBSPins mcall`/`ment` conjunct threaded
+  through armTail_rec / armTail_rec_es / JalPreBundle / ExecJalPreBundle /
+  MidArmRightMarshal / the 6 `Stmt*ArmStagePre` towers +
+  `ArmDispatchCombinatorExec` (`ExecArmHeadExtras.nbsPins` field); vi/table
+  stack+arena literals widened in place at every seam (jsp-form variants
+  included).  ~35 files hand-touched; 304-file dependency-ordered
+  `lake env lean -o` regen, 303 green.
+- **Fields**: `field_hNull`/`skelHNull_discharged`, `field_hBool`/
+  `skelHBool_discharged` (`nullLeafGeom_discharged`/`boolLeafGeom_discharged`
+  project the geometry off the amended entry, omega narrows the windows).
+  `hStr`: code/slot half DISCHARGED (`field_hStr_of_payload`); residual = ONLY
+  the 2 payload AST-region conjuncts (`StrPayloadGeom`), machine-checked gap —
+  observation `strleafgeom-payload-ast-region` (the AST-region bundle is its
+  own amendment wave; `ExprRepr.str` carries no region facts and child entries
+  need them for arbitrary subexpressions).
+- **Census (`field_census.py -j2`)**: `{'FOUND': 3, 'NOT_FOUND': 55}` —
+  hInt + hNull + hBool.  The task brief's "expect 4 FOUND" elided the str
+  payload gap (same overcount as 47e's brief).
+- **Latent pre-existing break surfaced** (stale-olean gotcha, NOT 47f):
+  `Vsa/Sim/EvalCallClosure.lean` is an ORPHAN (not imported by `Vsa.lean`) and
+  does not elaborate against the current `SegExit` (missing the `nf nc`
+  binders an earlier amendment added).  Left as-is (outside the build).
+- All new/edited theorems axiom-clean ⊆ {propext, Classical.choice,
+  Quot.sound}; check_discipline OK (9 rules); TSV rows hNull/hBool flipped to
+  done, hStr note updated.

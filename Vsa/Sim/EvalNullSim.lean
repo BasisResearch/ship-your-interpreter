@@ -261,12 +261,9 @@ theorem blockC_null
 
 The slot at `jumpTableBase + 12` holds `d4 94 fe ff` (LE) = offset `0xfffe94d4`,
 and `0x80019f58 + (Int32)0xfffe94d4 = 0x8000342c` (the null arm). Mirrors
-`IntSlotPinned`; discharges `KindSlotPinned 3 0x8000342c` for the loaded image. -/
-def NullSlotPinned (m : Mem) : Prop :=
-  m[(jumpTableBase + 12 : Nat)]? = some (0xd4 : BitVec 8) ∧
-  m[(jumpTableBase + 13 : Nat)]? = some (0x94 : BitVec 8) ∧
-  m[(jumpTableBase + 14 : Nat)]? = some (0xfe : BitVec 8) ∧
-  m[(jumpTableBase + 15 : Nat)]? = some (0xff : BitVec 8)
+`IntSlotPinned`; discharges `KindSlotPinned 3 0x8000342c` for the loaded image.
+The def itself was RELOCATED to `InterpEntry.lean` (wave 47f, `GeomFrom`) so
+`EvalEntry.nbs_pins` can carry it; same name/namespace. -/
 
 theorem null_slot_kindPinned {m : Mem} (h : NullSlotPinned m) :
     KindSlotPinned 3 (0x8000342c#64) m := by

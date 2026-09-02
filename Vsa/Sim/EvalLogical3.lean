@@ -123,7 +123,7 @@ theorem blockC_andTrue
         SL.lo + 3264 ≤ sp.toNat ∧ 0x80000000 ≤ SL.lo ∧ tohostAddr + 16 ≤ SL.lo ∧
         c.σ.sailOutput = out0 ∧
         Value_truthyLoaded mcall ∧ Value_boolLoaded mcall ∧
-        Value_intLoaded mcall ∧ IntSlotPinned mcall ∧
+        Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
         (∀ φc' : Addr → Nat, ValueRepr c.σ.mem N φc' (sp.toNat - 968) vl →
           LogicalBufExtras N A SL φc' vl sp sret c.σ.mem) ∧
         (sp.toNat ≤ 0x8000282c ∨ 0x8000285c ≤ SL.lo) ∧
@@ -131,12 +131,12 @@ theorem blockC_andTrue
         (A.hi ≤ 0x8000282c ∨ 0x8000285c ≤ A.lo) ∧
         (A.hi ≤ 0x800027f8 ∨ 0x8000280c ≤ A.lo) ∧
         (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-        ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
-        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
-        (A.hi ≤ 0x8000280c ∨ 0x8000281c ≤ A.lo) ∧
-        (A.hi ≤ jumpTableBase ∨ jumpTableBase + 4 ≤ A.lo) ∧
+        (A.hi ≤ 0x800027ec ∨ 0x8000282c ≤ A.lo) ∧
+        (A.hi ≤ jumpTableBase ∨ jumpTableBase + 44 ≤ A.lo) ∧
         (SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi) ∧
         (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
           mcall[a]? = m0[a]?) ∧
@@ -164,7 +164,7 @@ theorem blockC_andTrue
     hRightSurv, hropAl, hropLo, hropHi, hropWin, hropStk, hPayDisjRight, hVrMapCoh,
     houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretStk, hsretEvalCode, hSretBoolCode,
     hraAl, hSLloSp, hSLlo, hSLwin,
-    hout0eq, hVtruthyMcall, hVboolMcall, hViIntMcall, hViSlotMcall, hBufExtras,
+    hout0eq, hVtruthyMcall, hVboolMcall, hViIntMcall, hViSlotMcall, hNbsMcall, hBufExtras,
     hTruthyStk, hBoolStk, hTruthyArena, hBoolArena, hcodeStk, hviStk, htableStk,
     harenaStk, harenaCode, harenaVi, harenaTable, hsretInSL, hMcallM0,
     hsphiRam, hsp8, hsp16, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge,
@@ -623,6 +623,22 @@ theorem blockC_andTrue
     · exact heq.symm
   have hViInt_m3 : Value_intLoaded m3 :=
     loaded_value_int_agreeP c.σ.mem m3 (fun a ha => (hm3_out a (by rcases hviStk with h | h <;> omega)).symm) hViInt_c
+  have hNbs_c : NBSPins c.σ.mem :=
+    hNbsMcall.transport
+      (fun a ha => by
+        rcases hmemFrame a (by rw [hspsub] at *; rcases hviStk with h | h <;> omega)
+          (by rcases harenaVi with h | h <;> omega) with hin | heq
+        · exact absurd hin (by rcases hviStk with h | h <;> omega)
+        · exact heq.symm)
+      (fun a ha => by
+        rcases hmemFrame a (by rw [hspsub] at *; rcases htableStk with h | h <;> omega)
+          (by simp only [jumpTableBase] at harenaTable; rcases harenaTable with h | h <;> omega) with hin | heq
+        · exact absurd hin (by rcases htableStk with h | h <;> omega)
+        · exact heq.symm)
+  have hNbs_m3 : NBSPins m3 :=
+    hNbs_c.transport
+      (fun a ha => (hm3_out a (by rcases hviStk with h | h <;> omega)).symm)
+      (fun a ha => (hm3_out a (by rcases htableStk with h | h <;> omega)).symm)
   have hViSlot_c : IntSlotPinned c.σ.mem := by
     obtain ⟨q0, q1, q2, q3⟩ := hViSlotMcall
     have ag : ∀ i : Nat, i < 4 → mcall[jumpTableBase + i]? = c.σ.mem[jumpTableBase + i]? := by
@@ -713,7 +729,7 @@ theorem blockC_andTrue
       hIHr
       ⟨τ3, j3, cT.steps + 1 + 1 + 1 + 1 + 1⟩
       ⟨hGτ3, hj3, hpcτ3, ha0τ3, hs1τ3, hx11τ3, hx12τ3, hspτ3, ⟨vmiτ3, hmiτ3⟩,
-        houtτ3, houtStr, hmemτ3e, hcode_m3, hViInt_m3, hViSlot_m3, hExprM3, hstoreM3, hstoreSurvM3,
+        houtτ3, houtStr, hmemτ3e, hcode_m3, hViInt_m3, hViSlot_m3, hNbs_m3, hExprM3, hstoreM3, hstoreSurvM3,
         (fun R _ => rfl), ⟨⟨aExpr, hgR3_8⟩, ⟨aEnv, hgR3_18⟩⟩,
         hslotRaM3, hslotS0M3, hslotS1M3, hslotS2M3,
         hropAl, hropLo, hropHi, hropWin, hropStk,
@@ -1093,12 +1109,12 @@ structure AndTrueExtras
   sp16 : sp.toNat % 16 = 0
   SLhi_ram : SL.hi ≤ 0x100000000
   code_stk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
-  vicode_stk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c
+  vicode_stk : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec
   table_stk : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ (0x80019f58 : Nat)
   arena_stk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
   arena_code : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
-  arena_vi : A.hi ≤ 0x8000280c ∨ 0x8000281c ≤ A.lo
-  arena_table : A.hi ≤ jumpTableBase ∨ jumpTableBase + 4 ≤ A.lo
+  arena_vi : A.hi ≤ 0x800027ec ∨ 0x8000282c ≤ A.lo
+  arena_table : A.hi ≤ jumpTableBase ∨ jumpTableBase + 44 ≤ A.lo
   expr_align4 : aExpr.toNat % 8 = 0
   expr_win8 : tohostAddr + 8 ≤ aExpr.toNat
   expr_A : aExpr.toNat + 16 ≤ A.lo ∨ A.hi ≤ aExpr.toNat
@@ -1179,20 +1195,22 @@ theorem evalAndTrueSim : EvalAndTrueSimGoal := by
       (by omega) (by omega)
       hkm0
       hx.slot7
-      ⟨hx.int_loaded, hx.intslot, hx.truthy_loaded, hx.bool_loaded⟩
+      ⟨hx.int_loaded, hx.intslot, hx.truthy_loaded, hx.bool_loaded, hc.mem ▸ hc.nbs_pins⟩
       (fun mem a8 dd hlo hhi hcl =>
         logicalCallee_writeMap8 mem a8 dd
           (by have := hx.vicode_stk; omega)
           (by simp only [jumpTableBase]; have := hx.table_stk; omega)
           (by have := hx.truthy_stk; omega)
-          (by have := hx.boolcode_stk; omega) hcl)
+          (by have := hx.boolcode_stk; omega)
+          (by have := hx.vicode_stk; omega)
+          (by have := hx.table_stk; omega) hcl)
       (fun m' hag => hx.expr_survives m' hag)
       (by decide)
       (by have := hx.table_stk; simp only [jumpTableBase]; omega)
       c ⟨⟨hc.good, hc.tick, hc.pc, hc.a0, hc.a1, hc.a2, hc.ra, hc.ra_align, hc.spReg,
         hc.stackOK, hc.minstret, hc.mem, hc.code, hc.expr, hc.store, hc.store_survives, hc.out,
         hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
-        hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
+        hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
         hc.spill_defined⟩, rfl⟩
   have hArmCopy := hArm
@@ -1279,6 +1297,10 @@ theorem evalAndTrueSim : EvalAndTrueSimGoal := by
       (ag 2 (by omega)).symm.trans q2, (ag 3 (by omega)).symm.trans q3⟩
   have hMcallM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       mcall[a]? = m0[a]? := fun a ha _ => hAgM0 a ha
+  have hNbsMcallC : NBSPins mcall :=
+    (hc.mem ▸ hc.nbs_pins : NBSPins m0).transport
+      (fun a ha => (hAgM0 a (by have := hx.vicode_stk; omega)).symm)
+      (fun a ha => (hAgM0 a (by have := hx.table_stk; omega)).symm)
   have hStackPop : ∀ a : Nat, ∃ b, mcall[a]? = some b := hMcallPop mcall hAgM0
   have hExprMcall : ExprRepr mcall aExpr.toNat (.logical .and el er) :=
     hx.expr_survives mcall (fun a ha => (hAgM0 a ha).symm)
@@ -1325,7 +1347,7 @@ theorem evalAndTrueSim : EvalAndTrueSimGoal := by
         houtStr, hc.sret_align, hc.sret_ram.1, hc.sret_ram.2, hc.sret_win,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hx.sret_boolcode,
         hc.ra_align, (by have := hx.sp_headroom; omega), hc.stack_ram.1, hc.stack_win,
-        rfl, hVtruthyMcall, hVboolMcall, hViIntMcall, hViSlotMcall, hBufExtras,
+        rfl, hVtruthyMcall, hVboolMcall, hViIntMcall, hViSlotMcall, hNbsMcallC, hBufExtras,
         hx.truthy_stk, hx.boolcode_stk, hx.truthy_arena, hx.bool_arena,
         hx.code_stk, (by have := hx.vicode_stk; omega), (by have := hx.table_stk; omega),
         hx.arena_stk, hx.arena_code, hx.arena_vi, hx.arena_table, hx.sret_inSL, hMcallM0,

@@ -126,7 +126,7 @@ theorem armTail_rec_es
         String.join out0.toList = st.out ∧
         c.σ.mem = mcall ∧
         Exec_stmtLoaded mcall ∧ Eval_exprLoaded mcall ∧
-        Value_intLoaded mcall ∧ IntSlotPinned mcall ∧
+        Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
         ExprRepr mcall aOperand.toNat esub ∧
         StoreRepr mcall N A φf φc st.store ∧
         (∀ m' : Mem,
@@ -165,8 +165,8 @@ theorem armTail_rec_es
         -- code/table/arena region disjointness (eval_expr code region, value_int
         -- code, expr jump-table, arena):
         (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-        ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
-        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         -- exec_stmt code region `[0x80003fe0, 0x80004308)` disjointness (for the
@@ -184,7 +184,7 @@ theorem armTail_rec_es
         r v8 v9 v18 v19 mcall mcall) := by
   intro c hpre
   obtain ⟨hG, htick, hpc, ha0, hx11, hx12, hs2, hsp, ⟨wx8, hwx8⟩, ⟨wx9, hwx9⟩, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
-    hcodeS, hcode, hviCode, hslot, hsubexpr, hstore, hstoreSurv, hframe,
+    hcodeS, hcode, hviCode, hslot, hnbs, hsubexpr, hstore, hstoreSurv, hframe,
     hgx8, hgx9, hgx18, hgx19, hgx2,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
     hopAl, hopLo, hopHi, hopWin, hopStk,
@@ -288,6 +288,7 @@ theorem armTail_rec_es
       stack_win := hSLwin
       value_int_code := by rw [hmem1e]; exact hviCode
       int_slot := by rw [hmem1e]; exact hslot
+      nbs_pins := by rw [hmem1e]; exact hnbs
       table_stack_disjoint := by
         rcases htableStk with h | h
         · left; exact h
@@ -409,6 +410,8 @@ theorem execExprGlue
       Value_intLoaded ment)
     (hslotP : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       IntSlotPinned ment)
+    (hnbsP : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
+      NBSPins ment)
     -- the store-window survival (as in `ExecEntry.store_survives`):
     (hstoreSurv : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       ∀ m' : Mem, (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ment[k]? = m'[k]?) →
@@ -422,8 +425,8 @@ theorem execExprGlue
     (hsproom : SL.lo + 2352 ≤ sp.toNat) (hspSLhi : sp.toNat ≤ SL.hi) (hsp16 : sp.toNat % 16 = 0)
     (hSLlo : 0x80000000 ≤ SL.lo) (hSLhi : SL.hi ≤ 0x100000000) (hSLwin : tohostAddr + 16 ≤ SL.lo)
     (hcodeStk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo)
-    (hviStk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c)
-    (htableStk : (0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
+    (hviStk : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec)
+    (htableStk : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
     (harenaStk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo)
     (harenaCode : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)
     (hexecArenaCode : A.hi ≤ 0x80003fe0 ∨ 0x80004308 ≤ A.lo)
@@ -460,6 +463,7 @@ theorem execExprGlue
   have hevalM : Eval_exprLoaded ment := hevalcode ment hmemframe
   have hviM : Value_intLoaded ment := hvicode ment hmemframe
   have hslotPM : IntSlotPinned ment := hslotP ment hmemframe
+  have hnbsM : NBSPins ment := hnbsP ment hmemframe
   -- operand-pointer byte reassembly (for the `ld a2,8(s0)`):
   have haddr8 : (aStmt + sign_extend (m := 64) (0x008#12)).toNat = aStmt.toNat + 8 := by
     rw [BitVec.toNat_add]
@@ -599,7 +603,7 @@ theorem execExprGlue
       ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩
       ⟨hG4, hi4, hpc4, hx10_4, hx11_4, hx12_4, hx18_4, hsp_4,
         ⟨aStmt, hx8_4⟩, ⟨aInterp, hx9_4⟩, ⟨vmi4, hmi4⟩, hout4, houtStr,
-        hmem4e, (hmem4e ▸ hcode4), (hmem4e ▸ hevalM), (hmem4e ▸ hviM), (hmem4e ▸ hslotPM),
+        hmem4e, (hmem4e ▸ hcode4), (hmem4e ▸ hevalM), (hmem4e ▸ hviM), (hmem4e ▸ hslotPM), (hmem4e ▸ hnbsM),
         (hmem4e ▸ hsubexprM), (hmem4e ▸ hstore),
         (hstoreSurv ment hmemframe),
         hframe4, hgx8, hgx9, hgx18, hgx19, hgx2,
@@ -658,6 +662,8 @@ theorem execExprSimC
       Value_intLoaded ment)
     (hslotP : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       IntSlotPinned ment)
+    (hnbsP : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
+      NBSPins ment)
     (hstoreSurv : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       ∀ m' : Mem, (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ment[k]? = m'[k]?) →
         StoreRepr m' N A φf φc st.store)
@@ -668,8 +674,8 @@ theorem execExprSimC
     (hsproom : SL.lo + 2352 ≤ sp.toNat) (hspSLhi : sp.toNat ≤ SL.hi) (hsp16 : sp.toNat % 16 = 0)
     (hSLlo : 0x80000000 ≤ SL.lo) (hSLhi : SL.hi ≤ 0x100000000) (hSLwin : tohostAddr + 16 ≤ SL.lo)
     (hcodeStk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo)
-    (hviStk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c)
-    (htableStk : (0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
+    (hviStk : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec)
+    (htableStk : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
     (harenaStk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo)
     (harenaCode : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)
     (hexecArenaCode : A.hi ≤ 0x80003fe0 ∨ 0x80004308 ≤ A.lo)
@@ -686,7 +692,7 @@ theorem execExprSimC
     hSpec hIH hslot htableStk0
     (fun hIH' =>
       execExprGlue g N A SL φf φc st st' d env e v sp r aInterp aStmt aEnv aRet aOperand m0 out0
-        hIH' hop hsubexpr hstmtAl hstmtLo hstmtHi hstmtWin hevalcode hvicode hslotP hstoreSurv
+        hIH' hop hsubexpr hstmtAl hstmtLo hstmtHi hstmtWin hevalcode hvicode hslotP hnbsP hstoreSurv
         hopAl hopLo hopHi hopWin hopStk hsproom hspSLhi hsp16 hSLlo hSLhi hSLwin
         hcodeStk hviStk htableStk harenaStk harenaCode hexecArenaCode hexecCodeStk
         hstackBudget hexprBodies hstoreBodies)

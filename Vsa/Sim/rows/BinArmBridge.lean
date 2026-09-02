@@ -109,14 +109,14 @@ structure BinArmExtras
   sp16 : sp.toNat % 16 = 0
   SLhiRam : SL.hi ≤ 0x100000000
   codeStk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
-  viStk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c
+  viStk : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec
   -- covers BOTH the EX_BINARY dispatch slot 6 `[0x80019f58 + 24, +4)` (read by
   -- `blockA_k`'s `jr`) and the table base `[0x80019f58, +4)` (read by `blockB_binary`).
   tableStk : (0x80019f58 : Nat) + 28 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58
   arenaStk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
   arenaCode : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
-  arenaVi : A.hi ≤ 0x8000280c ∨ 0x8000281c ≤ A.lo
-  arenaTable : A.hi ≤ 0x80019f58 ∨ 0x80019f58 + 4 ≤ A.lo
+  arenaVi : A.hi ≤ 0x800027ec ∨ 0x8000282c ≤ A.lo
+  arenaTable : A.hi ≤ 0x80019f58 ∨ 0x80019f58 + 44 ≤ A.lo
   sret_inSL : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi
   -- ===== the RIGHT sub-call spill-slot second frame is populated (BinExtras hSlot2
   -- / `blockB_binary`'s `hMentPop`): the whole lowered frame `[sp-1120, sp)` plus
@@ -200,20 +200,23 @@ theorem blockA_binaryArm
       (by omega) (by omega)
       hkm0
       hX.slot6
-      ⟨hc.mem ▸ hc.value_int_code, hc.mem ▸ hc.int_slot⟩
+      ⟨hc.mem ▸ hc.value_int_code, hc.mem ▸ hc.int_slot, hc.mem ▸ hc.nbs_pins⟩
       (fun mem a8 dd hlo hhi hcl => by
-        obtain ⟨hvi, hsl⟩ := hcl
+        obtain ⟨hvi, hsl, hnb⟩ := hcl
         refine ⟨loaded_int_writeMap8 mem a8 dd (by
-          have := hc.vicode_stack_disjoint; omega) hvi, ?_⟩
-        exact intSlot_writeMap8 mem a8 dd (by
-          have := hc.table_stack_disjoint; simp only [jumpTableBase]; omega) hsl)
+          have := hc.vicode_stack_disjoint; omega) hvi, ?_, ?_⟩
+        · exact intSlot_writeMap8 mem a8 dd (by
+            have := hc.table_stack_disjoint; simp only [jumpTableBase]; omega) hsl
+        · exact nbsPins_writeMap8 mem a8 dd
+            (by have := hc.vicode_stack_disjoint; omega)
+            (by have := hc.table_stack_disjoint; omega) hnb)
       (fun m' hag => hX.expr_survives m' hag)
       (by decide)
       (by have := hX.tableStk; simp only [jumpTableBase]; omega)
       c ⟨⟨hc.good, hc.tick, hc.pc, hc.a0, hc.a1, hc.a2, hc.ra, hc.ra_align, hc.spReg,
         hc.stackOK, hc.minstret, hc.mem, hc.code, hc.expr, hc.store, hc.store_survives, hc.out,
         hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
-        hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
+        hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
         hc.spill_defined⟩, rfl⟩
   -- Destructure a COPY of the widened `ArmEntryK` (keep `hArm` intact for output).

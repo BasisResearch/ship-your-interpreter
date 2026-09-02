@@ -556,12 +556,9 @@ theorem blockC_bool
 
 The slot at `jumpTableBase + 8` holds `c8 94 fe ff` (LE) = offset `0xfffe94c8`,
 and `0x80019f58 + (Int32)0xfffe94c8 = 0x80003420` (the bool arm). Mirrors
-`NullSlotPinned`; discharges `KindSlotPinned 2 0x80003420` for the loaded image. -/
-def BoolSlotPinned (m : Mem) : Prop :=
-  m[(jumpTableBase + 8 : Nat)]? = some (0xc8 : BitVec 8) ∧
-  m[(jumpTableBase + 9 : Nat)]? = some (0x94 : BitVec 8) ∧
-  m[(jumpTableBase + 10 : Nat)]? = some (0xfe : BitVec 8) ∧
-  m[(jumpTableBase + 11 : Nat)]? = some (0xff : BitVec 8)
+`NullSlotPinned`; discharges `KindSlotPinned 2 0x80003420` for the loaded image.
+The def itself was RELOCATED to `InterpEntry.lean` (wave 47f, `GeomFrom`) so
+`EvalEntry.nbs_pins` can carry it; same name/namespace. -/
 
 theorem bool_slot_kindPinned {m : Mem} (h : BoolSlotPinned m) :
     KindSlotPinned 2 (0x80003420#64) m := by

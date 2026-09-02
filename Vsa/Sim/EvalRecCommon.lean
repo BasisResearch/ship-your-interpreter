@@ -214,6 +214,7 @@ theorem armTail_rec
         String.join out0.toList = st.out ∧
         c.σ.mem = mcall ∧
         Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧
+        NBSPins mcall ∧
         ExprRepr mcall aOperand.toNat esub ∧
         StoreRepr mcall N A φf φc st.store ∧
         (∀ m' : Mem,
@@ -240,8 +241,8 @@ theorem armTail_rec
         0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000 ∧ tohostAddr + 16 ≤ SL.lo ∧
         -- code/table/arena region disjointness:
         (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-        ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
-        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         -- ITEM ZERO B1: child budget at the lowered `sp - 1088`, `.fn`-bodies
@@ -254,7 +255,7 @@ theorem armTail_rec
         st' vsub sp r sret subsret retPC v8 v9 v18 mcall) := by
   intro c hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, hx11, hx12, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
-    hcode, hviCode, hslot, hsubexpr, hstore, hstoreSurv, hframe, ⟨⟨w8, hw8⟩, ⟨w18, hw18⟩⟩,
+    hcode, hviCode, hslot, hnbs, hsubexpr, hstore, hstoreSurv, hframe, ⟨⟨w8, hw8⟩, ⟨w18, hw18⟩⟩,
     hslotRa, hslotS0, hslotS1, hslotS2,
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hssAl, hssLo, hssHi,
@@ -356,6 +357,7 @@ theorem armTail_rec
       stack_win := hSLwin
       value_int_code := by rw [hmem1e]; exact hviCode
       int_slot := by rw [hmem1e]; exact hslot
+      nbs_pins := by rw [hmem1e]; exact hnbs
       table_stack_disjoint := by
         rcases htableStk with h | h
         · left; exact h

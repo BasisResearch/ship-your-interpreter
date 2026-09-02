@@ -91,10 +91,10 @@ structure NegExtras
   sp16 : sp.toNat % 16 = 0
   SLhi_ram : SL.hi ≤ 0x100000000
   code_stk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
-  vicode_stk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c
+  vicode_stk : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec
   -- covers BOTH the dispatch slot 8 `[0x80019f78, +4)` (read by `blockA_k`) and
   -- the table base `[0x80019f58, +4)` (needed by `blockB_unary`).
-  table_stk : (0x80019f7c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58
+  table_stk : (0x80019f84 : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58
   arena_stk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
   arena_code : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
   -- ===== blockC_neg extras (op-token geometry) =====
@@ -204,20 +204,21 @@ theorem evalNegSim : EvalNegSimGoal := by
       (by omega) (by omega)
       hkm0
       hx.slot8
-      ⟨hc.mem ▸ hc.value_int_code, hc.mem ▸ hc.int_slot⟩
+      ⟨hc.mem ▸ hc.value_int_code, hc.mem ▸ hc.int_slot, hc.mem ▸ hc.nbs_pins⟩
       (fun mem a8 dd hlo hhi hcl => by
-        obtain ⟨hvi, hsl⟩ := hcl
+        obtain ⟨hvi, hsl, hnb⟩ := hcl
         have hvicodeD := hc.vicode_stack_disjoint
         have htableD := hc.table_stack_disjoint
-        refine ⟨loaded_int_writeMap8 mem a8 dd (by omega) hvi, ?_⟩
-        exact intSlot_writeMap8 mem a8 dd (by simp only [jumpTableBase]; omega) hsl)
+        refine ⟨loaded_int_writeMap8 mem a8 dd (by omega) hvi, ?_, ?_⟩
+        · exact intSlot_writeMap8 mem a8 dd (by simp only [jumpTableBase]; omega) hsl
+        · exact nbsPins_writeMap8 mem a8 dd (by omega) (by omega) hnb)
       (fun m' hag => hx.expr_survives m' hag)
       (by decide)
       (by have := hx.table_stk; simp only [jumpTableBase]; omega)
       c ⟨⟨hc.good, hc.tick, hc.pc, hc.a0, hc.a1, hc.a2, hc.ra, hc.ra_align, hc.spReg,
         hc.stackOK, hc.minstret, hc.mem, hc.code, hc.expr, hc.store, hc.store_survives, hc.out,
         hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
-        hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
+        hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
         hc.spill_defined⟩, rfl⟩
   -- destructure a COPY of the widened `ArmEntryK` (keeping `hArm` intact for
@@ -321,7 +322,7 @@ theorem evalNegSim : EvalNegSimGoal := by
         hx.expr_align4, hc.expr_ram.1, hc.expr_ram.2, hx.expr_win8,
         hc.expr_stack_disjoint, hx.expr_A, hx.expr_sub,
         houtStr, hc.sret_align, hc.sret_ram.1, hc.sret_ram.2, hc.sret_win,
-        hc.sret_vicode_disjoint, hc.sret_stack_disjoint, hc.sret_evalcode_disjoint,
+        hc.sret_vicode_disjoint_int, hc.sret_stack_disjoint, hc.sret_evalcode_disjoint,
         hc.ra_align, (by have := hx.sp_headroom; omega), hc.stack_ram.1, hc.stack_win,
         rfl, hVintMcall, hx.code_stk, (by have := hx.vicode_stk; omega), hx.vi_arena,
         hx.sret_inSL, hMcallM0,

@@ -239,6 +239,18 @@ theorem read64_writeMap8_disjoint_ee (mem : Std.ExtHashMap Nat (BitVec 8)) (a a8
   have g7 := getElem_writeMap8_disjoint mem a8 (a + 7) d (by omega)
   simp only [read64, readLE, g0, g1, g2, g3, g4, g5, g6, g7]
 
+/-- `NBSPins` (wave 47f `GeomFrom`) survives a disjoint 8-byte store: the spill
+window `[a8, a8+8)` misses both the value_* text `[0x800027ec, 0x8000282c)` and
+the tag-1..3 table slots `[0x80019f5c, 0x80019f68)`.  The `hcalleeSurv` leg for
+the widened `UnaryArmCallee`/`LogicalArmCallee` bundles. -/
+theorem nbsPins_writeMap8 (mem : Std.ExtHashMap Nat (BitVec 8)) (a8 : Nat) (d : BitVec (8 * 8))
+    (htext : a8 + 8 ≤ 0x800027ec ∨ 0x8000282c ≤ a8)
+    (htable : a8 + 8 ≤ 0x80019f5c ∨ 0x80019f68 ≤ a8)
+    (h : NBSPins mem) : NBSPins (writeMap8 mem a8 d) :=
+  h.transport
+    (fun a ha => (getElem_writeMap8_disjoint mem a8 a d (by omega)).symm)
+    (fun a ha => (getElem_writeMap8_disjoint mem a8 a d (by omega)).symm)
+
 /-! ## `blockA_k` — the case-INDEPENDENT prologue + jump-table dispatch
 
 Generalizes `blockA_ee`'s proof over the dispatched leaf kind. The three
@@ -1059,7 +1071,7 @@ theorem blockA_ee
     c ⟨⟨he.good, he.tick, he.pc, he.a0, he.a1, he.a2, he.ra, he.ra_align, he.spReg,
     he.stackOK, he.minstret, he.mem, he.code, he.expr, he.store, he.store_survives, he.out,
     he.frame, he.code_stack_disjoint, he.expr_stack_disjoint, he.expr_align, he.expr_ram,
-    he.expr_win, he.sret_align, he.sret_ram, he.sret_win, he.sret_vicode_disjoint,
+    he.expr_win, he.sret_align, he.sret_ram, he.sret_win, he.sret_vicode_disjoint_int,
     he.sret_stack_disjoint, he.sret_evalcode_disjoint, he.stack_ram, he.stack_win,
     he.spill_defined⟩, hout0⟩
 
