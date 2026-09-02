@@ -14,6 +14,10 @@ Everything that builds, builds with zero `sorry`s and zero axioms
 used). Obligations still being discharged are recorded honestly as
 `Prop`-valued `def`s — never as `sorry`'d theorems.
 
+**The tooling that makes this tractable** — the generator suite, the
+validation stack (fuzzer/SMT/census), the invariant-mining pipeline, and the
+proof-side abstraction layers — is documented in [`TOOLING.md`](TOOLING.md).
+
 ## Layout
 
 | File | Content |
