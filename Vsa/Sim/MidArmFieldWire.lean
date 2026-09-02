@@ -89,6 +89,9 @@ def MidArmLeftJalBundle (l er : Expr) (c' : Config) (st st' : Vsa.While.St)
      String.join out0.toList = st.out ∧
      c'.σ.mem = mcall ∧
      Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
+     -- WAVE 47i: the LEFT child's entry-ground bundle (the amended
+     -- `armTail_rec` pre).
+     EvalGround mcall SL A (sp - 1088#64) subsret aLOp.toNat l ∧
      ExprRepr mcall aLOp.toNat l ∧
      StoreRepr mcall N A φf φc st.store ∧
      (∀ m' : Mem,

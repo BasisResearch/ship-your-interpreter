@@ -264,6 +264,10 @@ theorem blockB_assign_stagePre
         (∀ m' : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m'[a]?) →
           ExprRepr m' aRhs.toNat e) ∧
+        -- WAVE 47i: the RHS child's entry-ground bundle at the PARENT windows
+        -- (the supplier derives it from `EvalEntry.ground` via
+        -- `exprIn_assign_child`; re-cut below to the child windows).
+        EvalGround ment SL A sp sret aRhs.toNat e ∧
         aExpr.toNat + 24 ≤ 0x100000000 ∧
         aRhs.toNat % 8 = 0 ∧
         0x80000000 ≤ aRhs.toNat ∧ aRhs.toNat + 16 ≤ 0x100000000 ∧
@@ -284,7 +288,7 @@ theorem blockB_assign_stagePre
         Expr.bodiesBound Vsa.While.perCallBudget e = true ∧
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 3 c (fun c' => JalPreBundle e c' st d env) := by
-  obtain ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hexprHi24,
+  obtain ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hGroundP, hexprHi24,
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -403,6 +407,19 @@ theorem blockB_assign_stagePre
       (fun a ha => (hAgSpill a (by rcases htableStk with h | h <;> omega)).symm)
   have hExprMcall : ExprRepr mcall aRhs.toNat e :=
     hexprSurv mcall (fun a ha => (hAgSpill a (by omega)).symm)
+  -- WAVE 47i: the child's ground at `mcall`, child windows — the carried
+  -- parent-window ground re-cut by `child_at` (identity projection) across
+  -- the env spill (an in-stack write).
+  have hspsubA : (sp - 1088#64).toNat = sp.toNat - 1088 := by
+    rw [BitVec.toNat_sub]
+    have h1088 : (1088#64 : BitVec 64).toNat = 1088 := by decide
+    rw [h1088]; have := sp.isLt; omega
+  have hGroundMcall : EvalGround mcall SL A (sp - 1088#64)
+      ((sp - 1088#64) + sign_extend (m := 64) (0x0f0#12)) aRhs.toNat e :=
+    hGroundP.child_at (fun _ _ h => h)
+      (fun a ha => hAgSpill a (by omega))
+      htableStk hspSLhi (by rw [hspsubA]; omega)
+      (by rw [hsub848]; omega) (by rw [hsub848]; omega)
   have hStoreMcall : StoreRepr mcall N A φf φc st.store := by
     refine hstoreSurv mcall (fun k hk1 _ => ?_)
     exact (hAgSpill k (by omega)).symm
@@ -458,7 +475,7 @@ theorem blockB_assign_stagePre
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_80003488_as σ i u (0x80003488#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
       hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, hx12_3, hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr,
-      hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hExprMcall, hStoreMcall, hStoreSurvMcall,
+      hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hGroundMcall, hExprMcall, hStoreMcall, hStoreSurvMcall,
       hframeB, ⟨hg8, hg18⟩,
       hslotRaMcall, hslotS0Mcall, hslotS1Mcall, hslotS2Mcall,
       hopAl, hopLo, hopHi, hopWin, hopStk,
@@ -503,6 +520,10 @@ def AssignArmDispatch
         (∀ m' : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m'[a]?) →
           ExprRepr m' aRhs.toNat e) ∧
+        -- WAVE 47i: the RHS child's entry-ground bundle at the PARENT windows
+        -- (the supplier derives it from `EvalEntry.ground` via
+        -- `exprIn_assign_child`; re-cut below to the child windows).
+        EvalGround ment SL A sp sret aRhs.toNat e ∧
         aExpr.toNat + 24 ≤ 0x100000000 ∧
         aRhs.toNat % 8 = 0 ∧
         0x80000000 ≤ aRhs.toNat ∧ aRhs.toNat + 16 ≤ 0x100000000 ∧
@@ -531,12 +552,12 @@ theorem assignE_field_of_dispatch
     (hDisp g N A SL φf φc sp r0 sret aEnv aExpr m0 hEntry)
     (fun c' hMid => ?_) c rfl
   obtain ⟨gpre, aIn, aRhs, aEnv3, v8, v9, v18, ment, hArm, hx11, hx13, hgframe,
-    hg8, hg18, hpay, hexprSurv, hexprHi24, hopAl, hopLo, hopHi, hopWin, hopStk,
+    hg8, hg18, hpay, hexprSurv, hGroundP, hexprHi24, hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam, hcodeStk, hviStk, htableStk,
     harenaStk, harenaCode⟩ := hMid
   exact blockB_assign_stagePre g gpre N A SL φf φc st d env x e
     sp r0 sret aExpr aIn aRhs aEnv3 v8 v9 v18 c'.σ.sailOutput m0 c'
-    ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hexprHi24,
+    ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hGroundP, hexprHi24,
       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
       hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
       -- ITEM ZERO B1: the RHS child budget, DERIVED from the entry's fields.

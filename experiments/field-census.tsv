@@ -49,7 +49,7 @@ hSWhileFalse	NOT_FOUND
 hSeqConsAbrupt	NOT_FOUND	
 hSeqConsNormal	NOT_FOUND	
 hSeqNil	NOT_FOUND	
-hStr	NOT_FOUND	
+hStr	FOUND	
 hStrAddL	NOT_FOUND	
 hStrAddR	NOT_FOUND	
 hStrGe	NOT_FOUND	

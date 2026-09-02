@@ -1,6 +1,7 @@
 import Vsa.Sim.ExecBrkCont
 import Vsa.Sim.EvalNegSim2
 import Vsa.Sim.ReprSurvival
+import Vsa.Sim.EntryGroundKit
 
 /-!
 # `ArmDispatchCombinatorExec` — the ONE parametric exec arm-dispatch bridge (wave 44)
@@ -98,6 +99,13 @@ structure ExecArmHeadExtras
   child_hi : aChild.toNat + 16 ≤ 0x100000000
   child_win : tohostAddr + 16 ≤ aChild.toNat
   child_stk : aChild.toNat + 16 ≤ SL.lo ∨ (sp.toNat - 176) ≤ aChild.toNat
+  /-- WAVE 47i: the eval child's entry-ground bundle at the entry memory,
+  stated at the ENTRY `sp` with the interp buffer as the (re-cut-irrelevant)
+  result slot; the combinator re-cuts to the staged callee's windows via
+  `child_params` (identity projection).  NOT derivable from `ExecGround`
+  (no eval `KindTablePins` there) — the M6 supplier fills it from
+  `kindTablePins_of_bytes` + the stmt region's hereditary expr children. -/
+  ground : EvalGround m0 SL A sp aInterp aChild.toNat ce
   /-- Deep-recursion headroom below the LOWERED frame (`sp - 176`). -/
   sproom : SL.lo + 3264 ≤ sp.toNat - 176
   sp16 : sp.toNat % 16 = 0
@@ -117,6 +125,18 @@ survival facts across the prologue spills, and assembles the arm-head Mid
 tower the `Stmt*ArmDispatch` residuals demand.  `gpre := c1.σ.regs.get?` (the
 reached frame — ghost frame conjunct `rfl`; `∃ x8`/`∃ x18` off
 `ExecArmEntryK`'s `s0 = aStmt`/`s2 = aRet`). -/
+/-- `(sp - 176) + sext imm` in `Nat` form, for the small in-frame arm
+offsets (`v < 176` keeps the sum below `sp`). -/
+theorem espOff_toNat (sp : BitVec 64) (imm : BitVec 12) (v : Nat)
+    (hv : (sign_extend (m := 64) imm : BitVec 64).toNat = v) (hvlt : v ≤ 176)
+    (hsp : 352 ≤ sp.toNat) :
+    ((sp - 176#64) + sign_extend (m := 64) imm).toNat = sp.toNat - 176 + v := by
+  have hespN : (sp - 176#64).toNat = sp.toNat - 176 := by
+    rw [BitVec.toNat_sub]
+    have h176 : (176#64 : BitVec 64).toNat = 176 := by decide
+    rw [h176]; have := sp.isLt; omega
+  rw [BitVec.toNat_add, hespN, hv, Nat.mod_eq_of_lt (by have := sp.isLt; omega)]
+
 theorem execArmDispatch_of_slot
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -133,6 +153,11 @@ theorem execArmDispatch_of_slot
     (hceBudget : StackOK SL (sp - 176#64)
       (ce.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088))
     (hceBodies : Expr.bodiesBound Vsa.While.perCallBudget ce = true)
+    -- WAVE 47i: the staged callee's sub-sret offset within the exec frame,
+    -- with its in-frame window bounds (per-row `espOff_toNat` discharges).
+    (subOff : BitVec 12)
+    (hsub_lo : SL.lo ≤ ((sp - 176#64) + sign_extend (m := 64) subOff).toNat)
+    (hsub_hi : ((sp - 176#64) + sign_extend (m := 64) subOff).toNat + 24 ≤ sp.toNat)
     (hX : ExecArmHeadExtras N A SL φf φc st k armPC ce payOff nodeHi sp aInterp aStmt aChild m0)
     (hE : ExecEntry g N A SL φf φc st d env s sp r aInterp aStmt aEnv aRet m0 c) :
     Triple (fun c'' => c'' = c)
@@ -146,6 +171,10 @@ theorem execArmDispatch_of_slot
         0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + nodeHi ≤ 0x100000000 ∧
         (aStmt.toNat + nodeHi ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat) ∧
         Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment ∧
+        -- WAVE 47i: the eval child's entry-ground bundle at the arm memory,
+        -- the staged callee's windows.
+        EvalGround ment SL A (sp - 176#64)
+          ((sp - 176#64) + sign_extend (m := 64) subOff) aCh.toNat ce ∧
         (∀ m' : Mem,
           (∀ a, ¬ (SL.lo ≤ a ∧ a < SL.hi) →
             ¬ (aInterp.toNat ≤ a ∧ a < aInterp.toNat + 24) →
@@ -213,6 +242,25 @@ theorem execArmDispatch_of_slot
     hX.nbsPins.transport
       (fun a ha => (hMentM0 a (by rcases hX.viStkJ with h | h <;> omega)).symm)
       (fun a ha => (hMentM0 a (by rcases hX.tableStkJ with h | h <;> omega)).symm)
+  -- WAVE 47i: the eval child's ground at `ment`, staged-callee windows —
+  -- off-stack transport at the ENTRY `sp`, then the identity `child_params`
+  -- re-cut to `(sp - 176, (sp - 176) + sext subOff)`.
+  have htbP : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58 := by
+    rcases hX.tableStkJ with h | h
+    · left; exact h
+    · right; have := hX.sproom; omega
+  have hspSLP : sp.toNat ≤ SL.hi := by
+    have := hX.jspSLhi; have := hX.sproom; omega
+  have hGroundMent : EvalGround ment SL A (sp - 176#64)
+      ((sp - 176#64) + sign_extend (m := 64) subOff) aChild.toNat ce :=
+    (hX.ground.transport_offstack htbP hspSLP hMentM0).child_params
+      (fun _ _ h => h) htbP hspSLP
+      (by rw [show (sp - 176#64).toNat = sp.toNat - 176 from by
+            rw [BitVec.toNat_sub]
+            have h176 : (176#64 : BitVec 64).toNat = 176 := by decide
+            rw [h176]; have := sp.isLt; omega]
+          omega)
+      hsub_lo hsub_hi
   -- The wide-window survival at `ment` (compose the extras' `m0`-closure with
   -- the memframe; outside the ENLARGED window is outside the spill window).
   have hWideMent : ∀ m' : Mem,
@@ -230,7 +278,7 @@ theorem execArmDispatch_of_slot
   exact ⟨c1, hs1, (fun R => c1.σ.regs.get? R), aChild, v8, v9, v18, v19, ment,
     hArm', hpayMent, hChildMent,
     hE.stmt_align, hE.stmt_ram.1, hX.node_hi, Or.inr hE.stmt_win,
-    hEvalMent, hViIntMent, hViSlotMent, hNbsMent, hWideMent,
+    hEvalMent, hViIntMent, hViSlotMent, hNbsMent, hGroundMent, hWideMent,
     hX.child_align, hX.child_lo, hX.child_hi, hX.child_win, hX.child_stk,
     hX.sproom, hX.sp16, hE.stack_ram.1, hE.stack_ram.2, hE.stack_win,
     hX.jspSLhi, hX.codeStkJ, hX.viStkJ, hX.tableStkJ, hX.arenaStkJ, hX.arenaCode,

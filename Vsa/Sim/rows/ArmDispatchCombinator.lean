@@ -82,6 +82,9 @@ structure EvalArmHeadExtras
   child_hi : aChild.toNat + 16 ≤ 0x100000000
   child_win : tohostAddr + 16 ≤ aChild.toNat
   child_stk : aChild.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aChild.toNat
+  /-- WAVE 47i: the child's entry-ground bundle at the entry memory, PARENT
+  windows (the supplier re-cuts `EvalEntry.ground` by `child_node`). -/
+  ground : EvalGround m0 SL A sp sret aChild.toNat ce
   sproom : SL.lo + 3264 ≤ sp.toNat
   spSLhi : sp.toNat ≤ SL.hi
   sp16 : sp.toNat % 16 = 0
@@ -142,6 +145,8 @@ theorem evalArmDispatch_of_slot
         (∀ m' : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m'[a]?) →
           ExprRepr m' aCh.toNat ce) ∧
+        -- WAVE 47i: the child's entry-ground bundle at the arm memory.
+        EvalGround ment SL A sp sret aCh.toNat ce ∧
         aExpr.toNat + nodeHi ≤ 0x100000000 ∧
         aCh.toNat % 8 = 0 ∧
         0x80000000 ≤ aCh.toNat ∧ aCh.toNat + 16 ≤ 0x100000000 ∧
@@ -203,6 +208,10 @@ theorem evalArmDispatch_of_slot
       (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m'[a]?) →
       ExprRepr m' aChild.toNat ce :=
     fun m' hag => hX.child_surv m' (fun a ha => (hMentM0 a ha).symm.trans (hag a ha))
+  -- WAVE 47i: the child ground at `ment` (off-stack transport of the
+  -- extras' PARENT-window bundle).
+  have hGroundMent : EvalGround ment SL A sp sret aChild.toNat ce :=
+    hX.ground.transport_offstack hX.tableStk0 hX.spSLhi hMentM0
   -- `x13` liveness at the reached arm entry (the named closure).
   obtain ⟨aEnv3, hx13c1⟩ := hX.x13_pres c1 hArmFrame _hApc
   -- Realign the ArmEntryK `out0` to the reached `c1.σ.sailOutput`.
@@ -210,7 +219,7 @@ theorem evalArmDispatch_of_slot
       sp r0 sret aExpr aEnv v8 v9 v18 c1.σ.sailOutput m0 ment c1 := _hAout.symm ▸ hArm
   exact ⟨c1, hs1, (fun R => c1.σ.regs.get? R), aEnv, aChild, aEnv3, v8, v9, v18, ment,
     hArm', hAEx11, hx13c1, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩,
-    hpayMent, hchildSurvMent, hX.node_hi,
+    hpayMent, hchildSurvMent, hGroundMent, hX.node_hi,
     hX.child_align, hX.child_lo, hX.child_hi, hX.child_win, hX.child_stk,
     hX.sproom, hX.spSLhi, hX.sp16, hX.SLhiRam,
     hX.codeStk, hX.viStk, hX.tableStk0, hX.arenaStk, hX.arenaCode⟩

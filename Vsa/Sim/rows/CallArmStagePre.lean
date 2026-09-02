@@ -239,6 +239,9 @@ theorem blockB_call_stagePre
         (∀ m' : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m'[a]?) →
           ExprRepr m' aClo.toNat f) ∧
+        -- WAVE 47i: the callee child's entry-ground bundle at the PARENT
+        -- windows (re-cut below to the child windows).
+        EvalGround ment SL A sp sret aClo.toNat f ∧
         aExpr.toNat + 16 ≤ 0x100000000 ∧
         aClo.toNat % 8 = 0 ∧
         0x80000000 ≤ aClo.toNat ∧ aClo.toNat + 16 ≤ 0x100000000 ∧
@@ -259,7 +262,7 @@ theorem blockB_call_stagePre
         Expr.bodiesBound Vsa.While.perCallBudget f = true ∧
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 3 c (fun c' => JalPreBundle f c' st d env) := by
-  obtain ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hexprHi16,
+  obtain ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hGroundP, hexprHi16,
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -378,6 +381,18 @@ theorem blockB_call_stagePre
       (fun a ha => (hAgSpill a (by rcases htableStk with h | h <;> omega)).symm)
   have hExprMcall : ExprRepr mcall aClo.toNat f :=
     hexprSurv mcall (fun a ha => (hAgSpill a (by omega)).symm)
+  -- WAVE 47i: the child's ground at `mcall`, child windows (`child_at`,
+  -- identity projection, across the in-stack env spill).
+  have hspsubC : (sp - 1088#64).toNat = sp.toNat - 1088 := by
+    rw [BitVec.toNat_sub]
+    have h1088 : (1088#64 : BitVec 64).toNat = 1088 := by decide
+    rw [h1088]; have := sp.isLt; omega
+  have hGroundMcall : EvalGround mcall SL A (sp - 1088#64)
+      ((sp - 1088#64) + sign_extend (m := 64) (0x060#12)) aClo.toNat f :=
+    hGroundP.child_at (fun _ _ h => h)
+      (fun a ha => hAgSpill a (by omega))
+      htableStk hspSLhi (by rw [hspsubC]; omega)
+      (by rw [hsub992]; omega) (by rw [hsub992]; omega)
   have hStoreMcall : StoreRepr mcall N A φf φc st.store := by
     refine hstoreSurv mcall (fun k hk1 _ => ?_)
     exact (hAgSpill k (by omega)).symm
@@ -433,7 +448,7 @@ theorem blockB_call_stagePre
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_800031bc_cf σ i u (0x800031bc#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
       hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, hx12_3, hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr,
-      hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hExprMcall, hStoreMcall, hStoreSurvMcall,
+      hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hGroundMcall, hExprMcall, hStoreMcall, hStoreSurvMcall,
       hframeB, ⟨hg8, hg18⟩,
       hslotRaMcall, hslotS0Mcall, hslotS1Mcall, hslotS2Mcall,
       hopAl, hopLo, hopHi, hopWin, hopStk,
@@ -468,6 +483,9 @@ def CallArmDispatch
         (∀ m' : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m'[a]?) →
           ExprRepr m' aClo.toNat f) ∧
+        -- WAVE 47i: the callee child's entry-ground bundle at the PARENT
+        -- windows (re-cut below to the child windows).
+        EvalGround ment SL A sp sret aClo.toNat f ∧
         aExpr.toNat + 16 ≤ 0x100000000 ∧
         aClo.toNat % 8 = 0 ∧
         0x80000000 ≤ aClo.toNat ∧ aClo.toNat + 16 ≤ 0x100000000 ∧
@@ -496,12 +514,12 @@ theorem callF_field_of_dispatch
     (hDisp g N A SL φf φc sp r0 sret aEnv aExpr m0 hEntry)
     (fun c' hMid => ?_) c rfl
   obtain ⟨gpre, aIn, aClo, aEnv3, v8, v9, v18, ment, hArm, hx11, hx13, hgframe,
-    hg8, hg18, hpay, hexprSurv, hexprHi16, hopAl, hopLo, hopHi, hopWin, hopStk,
+    hg8, hg18, hpay, hexprSurv, hGroundP, hexprHi16, hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam, hcodeStk, hviStk, htableStk,
     harenaStk, harenaCode⟩ := hMid
   exact blockB_call_stagePre g gpre N A SL φf φc st d env f args
     sp r0 sret aExpr aIn aClo aEnv3 v8 v9 v18 c'.σ.sailOutput m0 c'
-    ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hexprHi16,
+    ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hGroundP, hexprHi16,
       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
       hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
       -- ITEM ZERO B1: the CALLEE child budget, DERIVED from the entry's fields.

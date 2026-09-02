@@ -122,7 +122,12 @@ def MidArmRightMarshal
   StackOK SL (sp - 1088#64)
     (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
   Expr.bodiesBound Vsa.While.perCallBudget er = true ∧
-  Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget
+  Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget ∧
+  -- WAVE 47i: the RIGHT child's entry-ground bundle at `cL.σ.mem`, carried at
+  -- the PARENT windows (`sp`/`sret`) — the combinator re-cuts it to the child
+  -- windows via `EvalGround.child_at` (identity projection) across its one
+  -- in-stack `sd` write.
+  EvalGround cL.σ.mem SL A sp sret aROp.toNat er
 
 /-- **`midStage1_of_marshal`** — feed a `SubEvalReturn`-reached config `cL` (via the
 `MidArmRightMarshal` residual, which repackages the right-operand geometry) into the
@@ -150,14 +155,14 @@ theorem midStage1_of_marshal
     hnode_hi, hnode_lo, hnode_align, hnode_win, hrop_align, hrop_ram, hrop_win,
     hrop_stk, hrop_stkfull, hsp1088, hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam,
     hSLwin, hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
-    hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩ := hM
+    hstackBudgetR, hexprBodiesR, hstoreBodiesR, hGroundR_CL⟩ := hM
   exact binaryR_midStage1 gpre N A SL φf1 φc1 st' d env er sp r sret aExpr aEnv aROp
     v8 v9 v18 cL hGL htickL hpcL hs1L hspL hmiL houtStrL hframeL hx8L hx18L hgx8v hgx18v
     hcodeL hnode hpop hstoreCL hstoreSurvCL hexprSurvCL hviCL hviSlotCL hnbsCL hslotRaL hslotS0L
     hslotS1L hslotS2L hnode_hi hnode_lo hnode_align hnode_win hrop_align hrop_ram hrop_win
     hrop_stk hrop_stkfull hsp1088 hsproom hspSLhi hsp16 hsphi hSLlo hSLhiRam hSLwin
     hcodeStk hviStk htableStk harenaStk harenaCode
-    hstackBudgetR hexprBodiesR hstoreBodiesR
+    hstackBudgetR hexprBodiesR hstoreBodiesR hGroundR_CL
 
 #print axioms midStage1_of_marshal
 
@@ -218,6 +223,9 @@ theorem midArmField_of_IH
         String.join out0.toList = st.out ∧
         c.σ.mem = mcall ∧
         Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
+        -- WAVE 47i: the LEFT child's entry-ground bundle (the amended
+        -- `armTail_rec` pre).
+        EvalGround mcall SL A (sp - 1088#64) subsret aLOp.toNat l ∧
         ExprRepr mcall aLOp.toNat l ∧
         StoreRepr mcall N A φf φc st.store ∧
         (∀ m' : Mem,

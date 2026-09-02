@@ -73,6 +73,13 @@ theorem stmtExprArmDispatch_of_resid
       have h176 : (176#64 : BitVec 64).toNat = 176 := by decide
       simp only [Stmt.stackNeed, execFrame, h176]; omega) hE.stackBudget)
     (by exact hE.stmt_bodies)
+    (0x010#12)
+    (by rw [espOff_toNat sp (0x010#12) 16 (by decide) (by decide)
+          (by have := hX.sproom; omega)]
+        have := hX.sproom; omega)
+    (by rw [espOff_toNat sp (0x010#12) 16 (by decide) (by decide)
+          (by have := hX.sproom; omega)]
+        have := hX.sproom; omega)
     hX hE
 
 #print axioms stmtExprArmDispatch_of_resid
@@ -92,6 +99,13 @@ theorem stmtRetArmDispatch_of_resid
       have h176 : (176#64 : BitVec 64).toNat = 176 := by decide
       simp only [Stmt.stackNeed, execFrame, h176]; omega) hE.stackBudget)
     (by exact hE.stmt_bodies)
+    (0x010#12)
+    (by rw [espOff_toNat sp (0x010#12) 16 (by decide) (by decide)
+          (by have := hX.sproom; omega)]
+        have := hX.sproom; omega)
+    (by rw [espOff_toNat sp (0x010#12) 16 (by decide) (by decide)
+          (by have := hX.sproom; omega)]
+        have := hX.sproom; omega)
     hX hE
 
 #print axioms stmtRetArmDispatch_of_resid
@@ -112,6 +126,13 @@ theorem stmtVarInitArmDispatch_of_resid
       have h176 : (176#64 : BitVec 64).toNat = 176 := by decide
       simp only [Stmt.stackNeed, execFrame, h176]; omega) hE.stackBudget)
     (by exact hE.stmt_bodies)
+    (0x068#12)
+    (by rw [espOff_toNat sp (0x068#12) 104 (by decide) (by decide)
+          (by have := hX.sproom; omega)]
+        have := hX.sproom; omega)
+    (by rw [espOff_toNat sp (0x068#12) 104 (by decide) (by decide)
+          (by have := hX.sproom; omega)]
+        have := hX.sproom; omega)
     hX hE
 
 #print axioms stmtVarInitArmDispatch_of_resid
@@ -148,6 +169,13 @@ theorem stmtIfCondArmDispatch_of_resid
         simp only [Stmt.bodiesBound, Bool.and_eq_true] at h
       · exact h.1
       · exact h.1.1)
+    (0x038#12)
+    (by rw [espOff_toNat sp (0x038#12) 56 (by decide) (by decide)
+          (by have := hX.sproom; omega)]
+        have := hX.sproom; omega)
+    (by rw [espOff_toNat sp (0x038#12) 56 (by decide) (by decide)
+          (by have := hX.sproom; omega)]
+        have := hX.sproom; omega)
     hX hE
 
 #print axioms stmtIfCondArmDispatch_of_resid
@@ -173,6 +201,13 @@ theorem stmtWhileCondArmDispatch_of_resid
       have h := hE.stmt_bodies
       simp only [Stmt.bodiesBound, Bool.and_eq_true] at h
       exact h.1)
+    (0x050#12)
+    (by rw [espOff_toNat sp (0x050#12) 80 (by decide) (by decide)
+          (by have := hX.sproom; omega)]
+        have := hX.sproom; omega)
+    (by rw [espOff_toNat sp (0x050#12) 80 (by decide) (by decide)
+          (by have := hX.sproom; omega)]
+        have := hX.sproom; omega)
     hX hE
 
 #print axioms stmtWhileCondArmDispatch_of_resid

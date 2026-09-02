@@ -220,6 +220,33 @@ theorem exprIn_assign_child {m : Mem} {lo hi a : Nat} {x : String} {e : Expr}
     (h : ExprIn m lo hi a (.assign x e)) :
     ∀ q, read64 m (a + 16) = some q → ExprIn m lo hi q e := h.2.2
 
+/-- WAVE 47i: the `.call` callee projection (the arm-dispatch conduits' child). -/
+theorem exprIn_call_callee {m : Mem} {lo hi a : Nat} {f : Expr} {args : List Expr}
+    (h : ExprIn m lo hi a (.call f args)) :
+    ∀ p, read64 m (a + 8) = some p → ExprIn m lo hi p f := h.2.1
+
+/-- **WAVE 47i: child node at the SAME windows** (`sp`/`sret` unchanged): only
+the AST node moves, by the hereditary `ExprIn` projection — every window/
+sret/arena fact carries verbatim.  `child_params` cannot express this (it
+re-derives the sret facts from `subsret + 24 ≤ sp`, false for the parent's
+own result slot, which sits ABOVE `sp`). -/
+theorem EvalGround.child_node {m : Mem} {SL : StackLayout} {A : Arena}
+    {sp sret : BitVec 64} {aExpr : Nat} {e : Expr}
+    (h : EvalGround m SL A sp sret aExpr e)
+    {aChild : Nat} {echild : Expr}
+    (hproj : ∀ lo hi, ExprIn m lo hi aExpr e → ExprIn m lo hi aChild echild) :
+    EvalGround m SL A sp sret aChild echild where
+  table := h.table
+  ast := ⟨by
+    obtain ⟨lo, hi, spec⟩ := h.ast.region
+    exact ⟨lo, hi, ⟨hproj lo hi spec.nodes, spec.lo_ram, spec.hi_ram, spec.win,
+      spec.stack_disjoint, spec.sret_disjoint, spec.arena_disjoint⟩⟩⟩
+  arena_stack := h.arena_stack
+  arena_code := h.arena_code
+  arena_vi := h.arena_vi
+  sret_inSL := h.sret_inSL
+  sret_table_disjoint := h.sret_table_disjoint
+
 theorem stmtIn_expr_child {m : Mem} {lo hi a : Nat} {e : Expr}
     (h : StmtIn m lo hi a (.expr e)) :
     ∀ p, read64 m (a + 8) = some p → ExprIn m lo hi p e := h.2

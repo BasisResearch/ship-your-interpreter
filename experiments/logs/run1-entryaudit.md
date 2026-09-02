@@ -126,3 +126,57 @@ so the next wave is pure record plumbing.
   EvalGtRow now green. Variant-entry ctor sites (EvalVarRow/FnResidSupply/
   CallCruxMarshal4/ArmSegSplitTwins) confirmed unaffected (audit §D).
 - Driver resumed under caffeinate (P3, done-list preserved).
+
+### 47i RECOVERY (cont., post-d5d707d)
+- A coordinator committed the wave as d5d707d (includes this lane's row-pre +
+  BinDispatchRow + EqNeFront + ExecStmtPreBundle repairs) while regen was at
+  level 24/33.
+- Level-25 stall: `MidArmCombinator.binaryR_midStagePre` constructs
+  `JalPreBundle er` at `mcall2` — needed the RIGHT child's ground.  Thread
+  landed (uncommitted): `MidArmRightMarshal` +
+  `EvalGround cL.σ.mem SL A sp sret aROp.toNat er` (PARENT windows);
+  combinator re-cuts to child windows via `EvalGround.child_at` with the
+  IDENTITY projection across its one in-stack `sd` (the kit's move-1 cannot
+  fire at the child `sp'` since the write sits AT `sp'`); `midStage1`/
+  `midStage1_of_marshal` thread it; `midArmField_of_IH` hpre +
+  `MidArmLeftJalBundle` gain the LEFT child's ground conjunct (the amended
+  `armTail_rec` pre, opaque pass-through).  All 3 MidArm files green.
+- Driver resumed at level 25.
+
+### 47i RECOVERY (cont. 2)
+- Level-26/27 stalls repaired (uncommitted): SeqHeadStages hSpan tower +
+  ExecGround (threaded to the amended loopHeadDispatch_span); ECFC unary +
+  logical sites re-threaded (blockA post's new ground conjunct).
+- Level-28: all 8 *ArmStagePre rows repaired — 6 exec-stmt rows carry
+  `EvalGround ment SL A (sp-176) ((sp-176)+sext off) child e` beside the
+  eval-code-fact premises (offsets: stmtExpr/ret 0x010, ifCond 0x038,
+  whileCond 0x050, flCond/varInit 0x068; supplied at the jsp ghost via
+  `rw [hjspcancel]`); Assign/Call carry the PARENT-window ground and re-cut
+  at `mcall` via `child_at` identity across the env spill (subsret 0x0f0 /
+  0x060).  All 8 green; driver resumed.
+
+### 47i RECOVERY (cont. 3) — arm-dispatch combinator ground thread
+- Level-29: ArmDispatchInstances{Eval,Exec} repaired at the COMBINATOR level
+  (not per-instance towers): `EvalArmHeadExtras`/`ExecArmHeadExtras` gain a
+  `ground` field (eval: PARENT windows `(sp, sret)`; exec: entry `sp` with
+  `aInterp` as the re-cut-irrelevant slot — the eval `KindTablePins` half is
+  NOT in `ExecGround`, so it stays supplier-side, per the `execExprGlue`
+  precedent).  `evalArmDispatch_of_slot` transports it off-stack;
+  `execArmDispatch_of_slot` gains `(subOff, hsub_lo, hsub_hi)` and re-cuts by
+  the identity `child_params` (+ `espOff_toNat` helper).  Eval instances
+  compiled UNCHANGED; exec instances pass their `subOff` + 2 `espOff_toNat`
+  discharges (0x010/0x010/0x068/0x038/0x050).
+- NEW kit facts (Law 3b, observations.md entry): `EvalGround.child_node`
+  (child node at the SAME windows — `child_params` over-demands
+  `subsret+24 ≤ sp`) + `exprIn_call_callee` (.call projection).
+
+### 47i RECOVERY — ENDGAME (2026-09-02)
+- Cone 307/307 GREEN (driver ALL-DONE incl. root `Vsa.olean`); axiom spot
+  probe through `import Vsa` clean (binaryR_midStagePre /
+  {exec,eval}ArmDispatch_of_slot / field_hStr / blockB_flCond_stagePre /
+  evalGtSim ⊆ {propext, Classical.choice, Quot.sound}).
+- check_discipline: OK (9 rules).  field_census -j2: **4/58 FOUND**
+  (hInt/hNull/hBool/hStr — hStr FLIPPED by the insertion, as the 47g/47h
+  interface predicted; zero TYPE_ERROR).
+- Committing this lane's 17 Lean conduit repairs + logs as 47i completion;
+  the concurrent invariant-mining lane's files left untouched.

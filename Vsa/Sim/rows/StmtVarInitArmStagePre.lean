@@ -69,6 +69,10 @@ theorem blockB_stmtVarInit_stagePre
         0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 24 ≤ 0x100000000 ∧
         (aStmt.toNat + 24 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat) ∧
         Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment ∧
+        -- WAVE 47i: the eval child's entry-ground bundle (carried like the
+        -- eval-side code facts above; NOT derivable from `ExecGround`).
+        EvalGround ment SL A (sp - 176#64)
+          ((sp - 176#64) + sign_extend (m := 64) (0x068#12)) aExprChild.toNat e ∧
         (∀ m' : Mem,
           (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) →
             ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
@@ -97,7 +101,7 @@ theorem blockB_stmtVarInit_stagePre
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 5 c (fun c' => ExecJalPreBundle e c' st d env) := by
   obtain ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
-    hEvCode, hViInt, hViSlot, hNbsJ, hStoreSurvJ,
+    hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hStoreSurvJ,
     hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre,
     hSLlo, hSLhiRam, hSLwin,
     hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
@@ -275,7 +279,7 @@ theorem blockB_stmtVarInit_stagePre
     (sp - 176#64) + 1088#64, r, aInterp, (sp - 176#64) + sign_extend (m := 64) (0x068#12),
     aInterp, aExprChild, v8, v9, v18, out0, ment, ?_, ?_, ?_, ?_,
     hG5, hi5, hpc5, hx10_5, ?_, hx11_val, hx12_5, hx2jsp, ⟨vmi5, hmi5⟩, hout5, ?_,
-    hmem5e, ?_, hEvCode, hViInt, hViSlot, hNbsJ, ?_, ?_, ?_, hframe5, ⟨hg8, hg18⟩,
+    hmem5e, ?_, hEvCode, hViInt, hViSlot, hNbsJ, ?_, ?_, ?_, ?_, hframe5, ⟨hg8, hg18⟩,
     ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   -- hjaltgt
   · apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide
@@ -297,6 +301,8 @@ theorem blockB_stmtVarInit_stagePre
   -- Exec_stmtLoaded ment
   · exact hcode
   -- ExprRepr ment aExprChild e
+  -- WAVE 47i: EvalGround at the jsp ghost (cancel to the carried sp-176 form)
+  · rw [hjspcancel]; exact hGroundJ
   · exact hExprChild
   -- StoreRepr ment
   · exact hstore
@@ -378,6 +384,10 @@ def StmtVarInitArmDispatch
         0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 24 ≤ 0x100000000 ∧
         (aStmt.toNat + 24 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat) ∧
         Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment ∧
+        -- WAVE 47i: the eval child's entry-ground bundle (carried like the
+        -- eval-side code facts above; NOT derivable from `ExecGround`).
+        EvalGround ment SL A (sp - 176#64)
+          ((sp - 176#64) + sign_extend (m := 64) (0x068#12)) aExprChild.toNat e ∧
         (∀ m' : Mem,
           (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) →
             ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
@@ -428,7 +438,7 @@ theorem stmtVarInit_field_of_dispatch
     obtain ⟨c1, hsteps1, hMid⟩ :=
       hDisp g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 hEntry c rfl
     obtain ⟨gpre, aExprChild, v8, v9, v18, v19, ment, hArm, hpay, hExprChild,
-      hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hNbsJ, hStoreSurvJ,
+      hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hStoreSurvJ,
       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
       hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
       hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩ := hMid
@@ -436,7 +446,7 @@ theorem stmtVarInit_field_of_dispatch
       blockB_stmtVarInit_stagePre g gpre N A SL φf φc st d env e
         sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1
         ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
-         hEvCode, hViInt, hViSlot, hNbsJ, hStoreSurvJ,
+         hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hStoreSurvJ,
          hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
          hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
          hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩

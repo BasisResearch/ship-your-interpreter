@@ -133,7 +133,10 @@ theorem binaryR_midStagePre
     (hstackBudgetR : StackOK SL (sp - 1088#64)
       (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088))
     (hexprBodiesR : Expr.bodiesBound Vsa.While.perCallBudget er = true)
-    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget) :
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
+    -- WAVE 47i: the RIGHT child's entry-ground bundle at `cL.σ.mem`, carried at
+    -- the PARENT windows (re-cut to the child windows below via `child_at`).
+    (hGroundR_CL : EvalGround cL.σ.mem SL A sp sret aROp.toNat er) :
     LandedN 7 cL (fun c' => JalPreBundle er c' st' d env) := by
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hspsub : (sp - 1088#64).toNat = sp.toNat - 1088 := by
@@ -383,6 +386,14 @@ theorem binaryR_midStagePre
       (by rcases hrop_stkfull with h | h <;> omega)]
   have hnbs2 : NBSPins mcall2 :=
     hnbsCL.survive_stack hviStk htableStk hAgMcall2
+  -- WAVE 47i: the RIGHT child's entry-ground bundle at `mcall2`, child windows —
+  -- the carried parent-window ground re-cut by `child_at` (identity projection)
+  -- across the single in-stack `sd` write.
+  have hGroundR2 : EvalGround mcall2 SL A (sp - 1088#64)
+      ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aROp.toNat er :=
+    hGroundR_CL.child_at (fun _ _ h => h) (fun a ha => (hAgMcall2 a ha).symm)
+      htableStk hspSLhi (by rw [hspsub]; omega)
+      (by rw [haddr144']; omega) (by rw [haddr144']; omega)
   -- `Value_intLoaded` / `IntSlotPinned` for mcall2
   have hviInt2 : Value_intLoaded mcall2 :=
     loaded_value_int_agreeP cL.σ.mem mcall2
@@ -445,7 +456,7 @@ theorem binaryR_midStagePre
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_80003518_ee σ i u (0x80003518#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
       hGτ7, hj7, hpcτ7, ha0τ7, hs1τ7, hx11τ7, hx12τ7, hspτ7, ⟨vmiτ7, hmiτ7⟩,
-      houtτ7, houtStrL, hmemτ7e, hcodeτ7, hviInt2, hviSlot2, hnbs2, hexprR2, hstore2, hstoreSurv2,
+      houtτ7, houtStrL, hmemτ7e, hcodeτ7, hviInt2, hviSlot2, hnbs2, hGroundR2, hexprR2, hstore2, hstoreSurv2,
       (fun R hR => rfl), ⟨⟨aExpr, hgR7_8⟩, ⟨aEnv, hgR7_18⟩⟩,
       hslotRa2, hslotS02, hslotS12, hslotS22,
       hrop_align, hrop_ram.1, hrop_ram.2, hrop_win, hrop_stk,
@@ -519,7 +530,9 @@ theorem binaryR_midStage1
     (hstackBudgetR : StackOK SL (sp - 1088#64)
       (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088))
     (hexprBodiesR : Expr.bodiesBound Vsa.While.perCallBudget er = true)
-    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget) :
+    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
+    -- WAVE 47i: threaded to `binaryR_midStagePre`.
+    (hGroundR_CL : EvalGround cL.σ.mem SL A sp sret aROp.toNat er) :
     LandedN 1 cL (fun c' => JalPreBundle er c' st' d env) :=
   LandedN.weakenCount (by omega : 1 ≤ 7)
     (binaryR_midStagePre gpre N A SL φf1 φc1 st' d env er sp r sret aExpr aEnv aROp
@@ -528,7 +541,7 @@ theorem binaryR_midStage1
       hslotS1L hslotS2L hnode_hi hnode_lo hnode_align hnode_win hrop_align hrop_ram hrop_win
       hrop_stk hrop_stkfull hsp1088 hsproom hspSLhi hsp16 hsphi hSLlo hSLhiRam hSLwin
       hcodeStk hviStk htableStk harenaStk harenaCode
-      hstackBudgetR hexprBodiesR hstoreBodiesR)
+      hstackBudgetR hexprBodiesR hstoreBodiesR hGroundR_CL)
 
 #print axioms binaryR_midStage1
 

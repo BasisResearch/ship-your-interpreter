@@ -149,6 +149,9 @@ theorem seqHeadStagePre_of_span
           (∃ w, c.σ.regs.get? Register.minstret = some w)) ∧
         -- the geometry + splices `loopHeadDispatch_span` demands:
         LoopHeadDispatchGeom g N A SL φf φc st sp aStmt s mE ∧
+        -- WAVE 47i: the root exec entry-ground bundle (M6 supply point,
+        -- beside the Geom supplier).
+        ExecGround mE SL A sp aRet aStmt.toNat s ∧
         (ChainFacts c.σ.mem c.σ.mem (loopHeadDispatchL sp s0) [] loopHeadDispatchSeg) ∧
         (∀ (c458 : Config),
           c458.σ.regs.get? Register.PC = some (0x80004458#64 : BitVec 64) →
@@ -180,12 +183,12 @@ theorem seqHeadStagePre_of_span
     SeqHeadStagePre Reflect s ss c st d env := by
   intro hSq
   obtain ⟨g, N, A, SL, φf, φc, sp, s0, aStmt, aEnv, aInterp, aRet, m0, mE,
-    ⟨hGH, htickH, hpcH, hmemH, hspH, hs0H, hmiH⟩, hGeom, hDispatchFacts,
+    ⟨hGH, htickH, hpcH, hmemH, hspH, hs0H, hmiH⟩, hGeom, hGround, hDispatchFacts,
     hValueNullSplice, hArgSetup⟩ := hSpan hSq
   -- run the built span; it lands at `exec_stmt`'s entry carrying `ExecEntry ... 0 ...`
   obtain ⟨cE, hsteps, hEntry⟩ :=
     loopHeadDispatch_span c g N A SL φf φc st env sp s0 aStmt aEnv aInterp aRet s m0 mE
-      hGH htickH hpcH hmemH hspH hs0H hmiH hDispatchFacts hGeom hValueNullSplice hArgSetup
+      hGH htickH hpcH hmemH hspH hs0H hmiH hDispatchFacts hGeom hGround hValueNullSplice hArgSetup
   -- the landing PC (0x80003fe0) differs from the loop head (0x8000448c) ⇒ ≥ 1 step
   have hpcE : cE.σ.regs.get? Register.PC = some (BitVec.ofNat 64 execStmtEntry) := hEntry.pc
   have hcount : ∃ m, 1 ≤ m ∧ StepsN m c cE :=

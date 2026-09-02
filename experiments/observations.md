@@ -4634,3 +4634,21 @@ it, still stop and report instead.
   map; every site's supply term is pre-proved here, so it is pure record
   plumbing.  No future wave should touch EvalEntry/ExecEntry beyond inserting
   `ground` — the audit shows no sixth entry-suppliable class exists.
+
+## 2026-09-02 child-ground-at-same-windows (47i recovery, arm-dispatch conduits)
+- missing: (a) `EvalGround.child_node` — re-cut the ground to a CHILD node at
+  the SAME `(sp, sret)` windows (identity re-cut; `child_params` over-demands
+  `subsret+24 ≤ sp`, false for the parent's own sret which sits ABOVE `sp`);
+  (b) `exprIn_call_callee` — the `.call` callee `ExprIn` projection (kit had
+  binary/logical/assign/stmt-expr only).
+- workaround: NONE — both added to `Vsa/Sim/EntryGroundKit.lean` this wave;
+  the arm-dispatch combinators (`evalArmDispatch_of_slot`/
+  `execArmDispatch_of_slot`) instead carry the child ground as a NEW
+  `ExtrasRecord.ground` field (supplier-side), transported/`child_params`-re-cut
+  inside the combinator.
+- cost: the Group-A/B dispatch residual suppliers (M6 layout wave) must now
+  fill `ground` per row — they will use exactly (a)+(b) plus
+  `stmtIn_expr_child` on the entry's `EvalEntry.ground`/`StmtRegionPins`.
+- proposal: when the M6 supplier wave lands, fill the extras `ground` fields
+  through `child_node`/`child_at`; exec rows also need the eval-side
+  `KindTablePins` half from `kindTablePins_of_bytes` (NOT in `ExecGround`).
