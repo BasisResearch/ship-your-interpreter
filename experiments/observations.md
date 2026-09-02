@@ -5202,3 +5202,20 @@ it, still stop and report instead.
   structure (Z3 closes leaves, Houdini strengthens each node).
 - PIPELINE (design-time, nothing enters proof): mine/CTI → Houdini+Z3 select →
   named survivor → LLM transcribes to the Lean lemma it matched.
+
+## 2026-09-02 writelog-flips-encode-gap (corrects the 0% batch)
+- CORRECTION to houdini-batch "0/24 supplier fields automatable": that counted
+  each field as one atom. WRITE-LOG EMISSION (block-reflection's computed
+  wlogM/writeLog as SMT array-stores) flips the FRAME half of the bundle to
+  Z3-provable: ExecLeafMemPin (MemExtends + window-agree) → UNSAT 20ms,
+  control-SAT faithful, replayable to memExtends_writeMap8/getElem_writeMap8_
+  disjoint. scripts/writelog_smt.py, WRITELOG-SMT.md. The Sail step NEVER
+  needed encoding — block-reflection already reduced the arm to concrete stores.
+- CORRECTED REACH (per-OBLIGATION, not per-field): frame/window/pin → Z3 via
+  write-log; recursive-StoreRepr/CString survival → Houdini IH-selection
+  (Z3-confirmed); composition + novel induction → Lean stack + LLM. A
+  substantial slice of every supplier field auto-discharges; the field is a
+  bundle, not an atom.
+- GENERALISATION KEY (mechanical, in autoprove step 1): read the write-log off
+  wlogM of the reflected block via a DumpSmtLib-style extractor, not hand-listed
+  per arm. Same array-store fold.
