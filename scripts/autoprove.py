@@ -322,14 +322,14 @@ def transcribe(field, kind, lean_lemma, verdict, survivors, cert_lines):
 -/
 import {lemma_mod.replace("/", ".").replace(".lean", "")}
 
-open Vsa
+open Vsa Vsa.Sim
 
 /-- The field statement, restated for the {base} Value kind.  The proof term
     below is the landed lemma the Z3 certificate maps to; `lake env lean` on this
     file confirms it type-checks against the tree read-only (no new axioms). -/
 example : True := trivial   -- placeholder witness; the real discharger is:
-#check @{lemma_name}
-#print axioms {lemma_name}
+#check @Vsa.Sim.{lemma_name}
+#print axioms Vsa.Sim.{lemma_name}
 '''
     with open(path, "w") as f:
         f.write(body)
