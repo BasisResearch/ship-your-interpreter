@@ -91,6 +91,21 @@ rows).  So brk/cont are GATED on X3-b (the `execBlockA` MemExtends exposure),
 which is its own ≤1-session amendment wave, NOT the pure-record-fill 0a shape.
 Census UNCHANGED at 4/58 (the fields carry the premise; honest not-found).
 
+**WAVE 48c DELTA (X3-b LANDED; flip re-scoped to X3-c).** The `ExecArmEntryK`
+`MemExtends m0 ment` exposure is DONE (`execBlockA`+`execPrologue`/`execDispatch`,
+`ExecDispatchReady` threaded, all 8 tower consumers + `ExecRetNullGlue` given one
+trailing binder; green + axiom-clean; discipline OK).  But this did NOT flip the
+census: `ExecArmMemExt st status` is over the POST-EPILOGUE EXIT (`ExecExit →
+ExecLeafMemPin SL sp m0 c'.σ.mem`), and a bare `ExecExit` carries no presence
+(`memFrame` is arena/retslot-EXCLUDED agreement) — so `∀ ExecExit → pin` is
+provably underivable (ExecExit/ExecEntry have no `pres` field; verified).  The
+flip needs the presence carried to the EXIT via the SHARED `execBlockD` epilogue
+into an `ExecExitPinned` conclusion (mirroring eval `evalIntSimP`/`Field_hInt`) —
+`execBlockD` has 7 recursive-case callers, so that (or a `pres` field on
+`ExecExit`, ~20 constructions) is X3-c, a distinct ≤1-session wave (recursor-
+wiring green-tree risk).  Census UNCHANGED at 4/58; recipe in observations.md
+`execarmmemext-exit-not-entry`.
+
 ### S-entry: hEpilogueSpill (X8)
 
 ```lean

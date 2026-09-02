@@ -188,7 +188,13 @@ def ExecArmEntryK
   (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) ∧
   -- geometry the epilogue restores need
   176 ≤ sp.toNat ∧ sp.toNat ≤ 0x100000000 ∧ 0x80000000 ≤ sp.toNat ∧
-  tohostAddr + 16 + 176 ≤ sp.toNat ∧ sp.toNat % 8 = 0 ∧ r.toNat % 4 = 0
+  tohostAddr + 16 + 176 ≤ sp.toNat ∧ sp.toNat % 8 = 0 ∧ r.toNat % 4 = 0 ∧
+  -- wave 48c (exec twin of eval `blockA_k`'s `LeafExitPin`): arm-entry PRESENCE
+  -- over the entry `m0` (`ment = m0` + the five prologue spills, all inserts).
+  -- Positional-append per the 47e precedent (`EvalSimCommon.lean:907`); the shared
+  -- ∧-tower is grandfathered, so a named-field conversion would be an ITEM-ZERO
+  -- ~10-file re-thread — out of a bounded gate (debt noted, wave0.md).
+  MemExtends m0 ment
 
 /-! ## `execBlockD` — the shared `exec_stmt` epilogue (restore + `addi sp,176` + `ret`)
 
@@ -1171,13 +1177,21 @@ theorem execBlockA
       σ21.regs.get? R = g R := by
     intro R hR he8 he9 he18 he19 he2
     rw [hframe21 R hR he8 he9 he18 he19 he2]; exact hframe R hR
+  -- wave 48c: arm-entry PRESENCE `MemExtends m0 σ6.mem`. `σ6.mem` is the five
+  -- prologue `writeMap8` spills over `c.σ.mem = m0` (`hmem`); each insert
+  -- preserves presence (`memExtends_writeMap8`), composed by `MemExtends.trans`.
+  have hMemExt6 : MemExtends m0 σ6.mem := by
+    rw [hmem6e, hmem5e, hmem4e, hmem3e, hmem2e, hmem]
+    exact (memExtends_writeMap8 m0 _ _).trans
+      ((memExtends_writeMap8 _ _ _).trans ((memExtends_writeMap8 _ _ _).trans
+        ((memExtends_writeMap8 _ _ _).trans (memExtends_writeMap8 _ _ _))))
   -- assemble the full 21-step run + ExecArmEntryK
   refine ⟨⟨σ21, i21, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1⟩, ?_, σ6.mem, v8, v9, v18, v19,
     hG21, hi21, hpc21, hx8_21, hx9_21, hx19_21, hx18_21, hsp_21, hra_21, ⟨_, hmi21⟩,
     hout21, houtStr, hmem21e, hmem21e ▸ hload6, hmem21e ▸ hstore6,
     hmem21e ▸ hslotRa, hmem21e ▸ hslotS0, hmem21e ▸ hslotS1, hmem21e ▸ hslotS2, hmem21e ▸ hslotS3,
     hgx8, hgx9, hgx18, hgx19, hgx2, hframeArm, hmem21e ▸ hmemframe6,
-    hsp176, ?_, ?_, ?_, ?_, hraAl⟩
+    hsp176, ?_, ?_, ?_, ?_, hraAl, hMemExt6⟩
   · exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
       ((Steps.single hstep4).trans ((Steps.single hstep5).trans ((Steps.single hstep6).trans
       ((Steps.single hstep7).trans ((Steps.single hstep8).trans ((Steps.single hstep9).trans
@@ -1224,7 +1238,7 @@ theorem execBrkSim
   obtain ⟨hGA, htickA, hpcA, hx8A, hx9A, hx19A, hx18A, hspA, hraA, ⟨vmiA, hmiA⟩,
     houtA, houtStrA, hmemA, hcodeA, hstoreA, hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
     hgx8, hgx9, hgx18, hgx19, hgx2, hframeA, hmemframeA,
-    hsp176, hsphi, hsplo, hspwin, hsp8, hraAl⟩ := hArm
+    hsp176, hsphi, hsplo, hspwin, hsp8, hraAl, hMemExtArm⟩ := hArm
   -- arm: 0x80004098 `li a0,1` → x10 := 1 = StatusCode .brk, PC := 0x8000409c
   have hpcA' : cA.σ.regs.get? Register.PC = some (0x80004098#64) := by
     rw [hpcA]; rfl
@@ -1308,7 +1322,7 @@ theorem execContSim
   obtain ⟨hGA, htickA, hpcA, hx8A, hx9A, hx19A, hx18A, hspA, hraA, ⟨vmiA, hmiA⟩,
     houtA, houtStrA, hmemA, hcodeA, hstoreA, hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
     hgx8, hgx9, hgx18, hgx19, hgx2, hframeA, hmemframeA,
-    hsp176, hsphi, hsplo, hspwin, hsp8, hraAl⟩ := hArm
+    hsp176, hsphi, hsplo, hspwin, hsp8, hraAl, hMemExtArm⟩ := hArm
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have haRa : ((sp - 176#64) + sign_extend (m := 64) (0x0a8#12)).toNat = sp.toNat - 8 := es_off168 sp hsp176
   have haS0 : ((sp - 176#64) + sign_extend (m := 64) (0x0a0#12)).toNat = sp.toNat - 16 := es_off160 sp hsp176

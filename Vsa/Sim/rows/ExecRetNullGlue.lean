@@ -328,7 +328,7 @@ theorem retNullGluePrefix
     ⟨vmi0, hmi0⟩, hout0, houtJoin, hmem0, hcode0, hstore0,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
     hgx8, hgx9, hgx18, hgx19, hgx2, hframe0, hmemframe0,
-    hsp176, hsphi, hsplo, hspwin, hspal, hral⟩ := hK
+    hsp176, hsphi, hsplo, hspwin, hspal, hral, hMemExtK⟩ := hK
   have hpc0' : c.σ.regs.get? Register.PC = some (0x80004120#64) := hpc0
   have hcode0' : Exec_stmtLoaded c.σ.mem := by rw [hmem0]; exact hcode0
   -- the loaded word address `x8 + 8 = aStmt + 8`, and its bytes (= 0):

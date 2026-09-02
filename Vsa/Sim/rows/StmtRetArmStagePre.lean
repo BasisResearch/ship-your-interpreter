@@ -112,7 +112,7 @@ theorem blockB_stmtRet_stagePre
     hout, houtStr, hmem, hcode, hstore,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
     hgx8, hgx9, hgx18, hgx19, hgx2, hframeK, hmemframeK,
-    hsp176, hsphi, hsplo, hspwin, hsp8, hraAl⟩ := hArm
+    hsp176, hsphi, hsplo, hspwin, hsp8, hraAl, hMemExtK⟩ := hArm
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hespN : (sp - 176#64).toNat = sp.toNat - 176 := by
     rw [BitVec.toNat_sub]

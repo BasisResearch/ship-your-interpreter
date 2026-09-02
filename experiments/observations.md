@@ -4734,3 +4734,36 @@ it, still stop and report instead.
   with one term.  Then `ExecArmMemExt` is a one-liner and hSBrk/hSCont flip to
   6/58 with zero further proof.  This is the exec `EntryStackSurv`/`LeafExitPin`
   analog — a dedicated wave, NOT a bounded gate.
+
+## 2026-09-02 execarmmemext-exit-not-entry (wave 48c / exposure landed, flip still blocked)
+- missing: the wave-48b proposal above was HALF right.  The `ExecArmEntryK`
+  `MemExtends m0 ment` exposure is now LANDED (execBlockA + execPrologue/
+  execDispatch + ExecDispatchReady + all 8 tower consumers threaded, green+
+  axiom-clean).  But it is NOT sufficient to flip hSBrk/hSCont: `ExecArmMemExt
+  st status` is stated over the POST-EPILOGUE exit (`ExecExit → ExecLeafMemPin
+  SL sp m0 c'.σ.mem`), whose `pres = MemExtends m0 c'.σ.mem` is about the EXIT
+  memory, not the arm-entry `ment`.  A bare `ExecExit` does NOT carry presence
+  (only `memFrame` = arena/retslot-excluded agreement), so `∀ ExecExit → pin` is
+  provably underivable — CONFIRMED by construction (ExecExit has no `pres`/
+  `memExt` field; ExecEntry/ExecExit grep clean).
+- workaround: NONE for the flip (Law 4).  Landed the mandated general exposure;
+  hSBrk/hSCont stay `hole`/NOT_FOUND (census UNCHANGED 4/58 — honest).
+- cost: the flip needs the presence threaded to the EXIT, i.e. `execBlockA`'s
+  `MemExtends m0 ment` (now available) carried through the arm `li a0` (mem
+  unchanged) AND the SHARED `execBlockD` epilogue (pure loads, `cD.σ.mem =
+  ment`) into an `ExecExitPinned` conclusion — the exact eval-side move
+  (`evalIntSimP` concludes `EvalExit ∧ LeafMemPin`; `IntLeafResid`@`LeafWidenP`;
+  `field_hInt = leafWidenP_of_entry hc`).  Blast radius: `execBlockD` has 7
+  recursive-case callers (ExecVarDecl/ExecExprRet/ExecVarNull/ExecIf/ExecWhile
+  /…) whose `m0` baseline is post-sub-call `cG.σ.mem` — strengthening its
+  conclusion breaks all; OR add `pres` to `ExecExit` (~20 constructions incl
+  Call/Native marshalling that DO write arena).  Either is a genuine ≤1-session
+  wave, not a bounded single-lean-process gate (recursor-wiring green-tree risk).
+- proposal: dedicated wave X3-c: (1) `execBrkSimPinned`/`execContSimPinned` in
+  ExecBrkCont concluding `ExecExitPinned` — needs `cD.σ.mem = ment` exposed from
+  execBlockD (add it as a light conjunct on the brk/cont path ONLY, or a
+  standalone `execBlockD_memEq` lemma over its pure-load steps); (2) re-state
+  `BrkResid`/`ContResid` at `ExecLeafWidenP` (pinned, `ExecCaseGeom` variant);
+  (3) re-point `exec_brk_row`/`exec_cont_row` to the pinned `execBrkSimD`; (4)
+  `field_hSBrk`/`field_hSCont := execLeafWidenP_of_entry hc` (drop the premise).
+  Mirrors Field_hInt.lean exactly.  THEN 6/58.

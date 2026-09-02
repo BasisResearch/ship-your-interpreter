@@ -459,7 +459,7 @@ theorem execExprGlue
   obtain ⟨hG, htick, hpc, hx8, hx9, hx19, hx18, hsp, hra, ⟨vmi, hmi⟩, hout, houtStr,
     hmem, hcodeS, hstore, hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
     hgx8, hgx9, hgx18, hgx19, hgx2, hframe, hmemframe,
-    hsp176, hsphi, hsplo, hspwin, hsp8, hraAl⟩ := hArm
+    hsp176, hsphi, hsplo, hspwin, hsp8, hraAl, hMemExtK⟩ := hArm
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hspsub : (sp - 176#64).toNat = sp.toNat - 176 := by
     rw [BitVec.toNat_sub]

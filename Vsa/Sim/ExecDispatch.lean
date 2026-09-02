@@ -151,7 +151,11 @@ def ExecDispatchReady
   (aStmt'.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aStmt'.toNat) ∧
   aStmt'.toNat % 8 = 0 ∧
   (0x80000000 ≤ aStmt'.toNat ∧ aStmt'.toNat + 16 ≤ 0x100000000) ∧
-  tohostAddr + 16 ≤ aStmt'.toNat
+  tohostAddr + 16 ≤ aStmt'.toNat ∧
+  -- wave 48c: arm-entry PRESENCE over the entry `m0` (mirrors `ExecArmEntryK`;
+  -- `ment` = `m0` + the prologue spills, all `writeMap8` inserts). Threaded so
+  -- `execDispatch` can hand `MemExtends m0 ment` to the produced `ExecArmEntryK`.
+  MemExtends m0 ment
 
 
 /-! ## `execPrologue` — `ExecEntry → ExecDispatchReady` (prologue steps 1–13)
@@ -561,6 +565,13 @@ theorem execPrologue
     · rw [hmemframe6 _ (by have := hdisj; have := hSLlo; omega)]; exact hmem ▸ p1
     · rw [hmemframe6 _ (by have := hdisj; have := hSLlo; omega)]; exact hmem ▸ p2
     · rw [hmemframe6 _ (by have := hdisj; have := hSLlo; omega)]; exact hmem ▸ p3
+  -- wave 48c: arm-entry PRESENCE `MemExtends m0 σ6.mem` — the five prologue
+  -- `writeMap8` spills over `c.σ.mem = m0` (`hmem`), each an insert.
+  have hMemExt6 : MemExtends m0 σ6.mem := by
+    rw [hmem6e, hmem5e, hmem4e, hmem3e, hmem2e, hmem]
+    exact (memExtends_writeMap8 m0 _ _).trans
+      ((memExtends_writeMap8 _ _ _).trans ((memExtends_writeMap8 _ _ _).trans
+        ((memExtends_writeMap8 _ _ _).trans (memExtends_writeMap8 _ _ _))))
   -- assemble ExecDispatchReady
   refine ⟨⟨σ13, i13, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1⟩, ?_, σ6.mem, v8, v9, v18, v19,
     hG13, hi13, hpc13, hx8_13, hx9_13, hx19_13, hx18_13, hx14_13, hx16_13, hsp_13, hra_13,
@@ -568,7 +579,7 @@ theorem execPrologue
     hmem13e ▸ hstmt13, hmem13e ▸ hslotRes,
     hmem13e ▸ hslotRa, hmem13e ▸ hslotS0, hmem13e ▸ hslotS1, hmem13e ▸ hslotS2, hmem13e ▸ hslotS3,
     hgx8, hgx9, hgx18, hgx19, hgx2, hframe13, hmem13e ▸ hmemframe6,
-    hsp176, ?_, ?_, ?_, ?_, hraAl, ?_, hstmtAl, hstmtRam, hstmtWin⟩
+    hsp176, ?_, ?_, ?_, ?_, hraAl, ?_, hstmtAl, hstmtRam, hstmtWin, hMemExt6⟩
   · exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
       ((Steps.single hstep4).trans ((Steps.single hstep5).trans ((Steps.single hstep6).trans
       ((Steps.single hstep7).trans ((Steps.single hstep8).trans ((Steps.single hstep9).trans
@@ -608,7 +619,7 @@ theorem execDispatch
     hout, houtStr, hmem, hcode, hstore, hstmt, hslotRes,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
     hgx8, hgx9, hgx18, hgx19, hgx2, hframeG, hmemframe,
-    hsp176, hsphi, hsplo, hspwin, hsp8, hraAl, hstmtStk, hstmtAl, hstmtRam, hstmtWin⟩ := hpre
+    hsp176, hsphi, hsplo, hspwin, hsp8, hraAl, hstmtStk, hstmtAl, hstmtRam, hstmtWin, hMemExt⟩ := hpre
   -- derive the dispatched kind + slot pin
   have hkle : kindOfStmt s' ≤ 8 := kindOfStmt_le s'
   have hklt : kindOfStmt s' < 128 := by omega
@@ -863,12 +874,13 @@ theorem execDispatch
     hout21, houtStr, hmem21e, hcode, hstore,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
     hgx8, hgx9, hgx18, hgx19, hgx2, hframeArm, ?_,
-    hsp176, hsphi, hsplo, ?_, hsp8, hraAl⟩
+    hsp176, hsphi, hsplo, ?_, hsp8, hraAl, ?_⟩
   · exact (Steps.single hstep14).trans ((Steps.single hstep15).trans ((Steps.single hstep16).trans
       ((Steps.single hstep17).trans ((Steps.single hstep18).trans ((Steps.single hstep19).trans
       ((Steps.single hstep20).trans (Steps.single hstep21)))))))
   · intro a ha; exact hmemframe a ha
   · have := hspwin; rw [htoh]; omega
+  · exact hMemExt
 
 /-! ## `ExecDispatchIH` — the "body-from-dispatch" recursive statement IH
 

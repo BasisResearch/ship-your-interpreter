@@ -118,3 +118,44 @@ premise (honest not-found), so the TSV rows are NOT flipped to `done`; the notes
 record the scaffold + the X3-b obstruction.  Once `execBlockA` exposes
 `MemExtends m0 ment` (X3-b), `field_hSBrk`/`field_hSCont` become unconditional and
 the census flips to 6/58 — the scaffold makes that a mechanical premise fill.
+
+## Wave 48c — ExecArmEntryK `MemExtends m0 ment` EXPOSED (recovery; census still 4/58)
+
+**LANDED (green + axiom-clean ⊆ {propext, Classical.choice, Quot.sound}; discipline OK 9 rules).**
+Reconstructed + finished the predecessor's dead mid-edit (`ExecBrkCont.lean`, 3 errors).
+
+Fan-out ACTUAL (the "~10-file ITEM-ZERO" the 48b log predicted):
+- `ExecArmEntryK` (`ExecBrkCont.lean`): new last conjunct `MemExtends m0 ment`.
+  Producer `execBlockA` supplies `hMemExt6` (trans of 5 `memExtends_writeMap8`
+  over `hmem6e..hmem2e` + `hmem : c.σ.mem = m0`).
+- `ExecDispatchReady` (`ExecDispatch.lean`): twin last conjunct; `execPrologue`
+  supplies it (same 5-spill trans), `execDispatch` forwards it to the produced
+  `ExecArmEntryK`.
+- 8 full-tower destructures given one trailing binder: ExecBrkCont {brk@1241,
+  cont@1325}, ExecDispatch@611, ExecRecCommon@462, 5 `Stmt*/Fl*ArmStagePre`
+  rows, ArmDispatchCombinatorExec@215 (copy), ExecRetNullGlue@331 (the
+  `RetNullPostBeqz` re-cut — split `hral`).  Verified green: all StagePre rows
+  (axiom-clean), the 9 Exec* producers, ArmDispatchCombinatorExec,
+  ExecRetNullGlue, ExecCaseGeom/ExecRouting/ExecDispatchRows/ExecRecRows,
+  TermSimAssembly/TermSimClose/InductionScaffold/FnSummary capstones.
+- GOTCHA: `lake env lean` on a downstream file reads the STALE olean of an
+  edited import → phantom "Eq.refl 2 fields"/"No goals" errors.  Regen each
+  edited file's olean with `lake env lean -o .lake/build/lib/lean/<path>.olean`
+  in import order BEFORE compiling consumers.  (ExecBrkcont→ExecDispatch→
+  ExecRecCommon→rows.)
+
+**hSBrk/hSCont FLIP — machine-checked obstruction (Law 4), census UNCHANGED 4/58.**
+The 48b proposal ("expose ExecArmEntryK MemExtends → flip with zero further
+proof") was HALF right.  `ExecArmMemExt st status` is over the POST-EPILOGUE
+EXIT (`ExecExit → ExecLeafMemPin SL sp m0 c'.σ.mem`); its `pres` is about the
+EXIT memory, not the arm-entry `ment`.  A bare `ExecExit` carries NO presence
+(only arena/retslot-excluded `memFrame`), so `∀ ExecExit → pin` is provably
+underivable — CONFIRMED (ExecExit/ExecEntry have no `pres`/`memExt` field).
+`field_hSBrk`/`field_hSCont` therefore STILL carry the `ExecArmMemExt` premise;
+they stay `hole`/NOT_FOUND (honest).  The flip is X3-c: thread presence to the
+exit via the SHARED `execBlockD` (7 recursive-case callers) into `ExecExitPinned`
++ re-state `BrkResid`/`ContResid`@`ExecLeafWidenP` + re-point `exec_brk_row`/
+`exec_cont_row` (mirroring eval `evalIntSimP`/`IntLeafResid`@`LeafWidenP`/
+`Field_hInt`) — a distinct ≤1-session wave, not this bounded gate (recursor
+green-tree risk).  Full recipe: observations.md `execarmmemext-exit-not-entry`;
+TSV + singletons.md updated.

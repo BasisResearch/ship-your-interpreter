@@ -212,7 +212,7 @@ theorem execArmDispatch_of_slot
     hAout, _hAoutStr, _hAmem, _hAcode, _hAstore,
     _hAslotRa, _hAslotS0, _hAslotS1, _hAslotS2, _hAslotS3,
     _hAg8, _hAg9, _hAg18, _hAg19, _hAg2, _hAframe, hArmMemM0,
-    hAsp176, _hAsphi, _hAsplo, _hAspwin, _hAsp8, _hAraAl⟩ := hArmCopy
+    hAsp176, _hAsphi, _hAsplo, _hAspwin, _hAsp8, _hAraAl, _hAMemExt⟩ := hArmCopy
   have hMentM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]? := hArmMemM0
   have hAgP : AgreeP (fun a => ¬ (SL.lo ≤ a ∧ a < sp.toNat)) ment m0 := hMentM0
   -- Transport the payload read from `m0` (extras) to the arm-entry `ment`.
