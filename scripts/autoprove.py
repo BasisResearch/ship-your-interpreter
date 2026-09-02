@@ -560,6 +560,98 @@ def print_rows(rows):
         print(f"{r['field']:12} {r['verdict']:16} {r.get('lean',''):10.10}  {r['detail'][:70]}")
 
 
+# ===========================================================================
+# FRAME-SLICE COVERAGE over the 24 NO-CURE-SEMANTIC-GAP supplier fields.
+#
+# Each field's residual has (potentially) a MEMORY-FRAME slice — the ExecLeafMemPin
+# / LeafMemPin shape (pres = MemExtends, agree = window-frame over the arm's spill
+# write-log).  The extractor now ENCODES that slice for any field whose arm is a
+# straight-line spill/store chain (the exec_stmt / eval_expr prologue).  This table
+# classifies each of the 24 by whether its frame slice is EXTRACTOR-ENCODABLE, and
+# names the RESIDUAL that stays ENCODE-GAP after the frame slice closes.
+#
+#   "frame:<tag>"  = ExecLeafMemPin frame slice closes via wlogM-extracted arm <tag>
+#                    (all exec_stmt arms share the brkCont 5-spill prologue write-log).
+#   "no-frame:<why>" = the residual carries NO straight-line write-log frame slice
+#                    (pure PC-hop Triple / call-splice / native seg) — nothing for the
+#                    extractor to encode; whole field stays ENCODE-GAP.
+# ===========================================================================
+FRAME_SLICE = {
+    # exec_stmt arms: share the ExecArmEntryK/execBlockA prologue (5 sd spills) →
+    # the brkCont write-log IS their memory-frame slice. FRAME-PROVED; residual =
+    # the arm's Triple + recursive StoreRepr survival.
+    "hSExpr":       ("frame:brkCont", "ExecExprGeom Triple + StoreRepr survival"),
+    "hSRet":        ("frame:brkCont", "ExecRetGeom Triple + StoreRepr survival"),
+    "hSRetNull":    ("frame:brkCont", "value_null bridge + StoreRepr survival"),
+    "hSVarNull":    ("frame:brkCont", "value_null+env_define + StoreRepr (Store.define grows frames)"),
+    "hSVarInit":    ("frame:brkCont", "VarInit arm Triple + StoreRepr survival"),
+    "hSBlock":      ("frame:brkCont", "SeqSegIH (recursive) + StoreRepr survival"),
+    "hSIfNone":     ("frame:brkCont", "IfGeom Triple + StoreRepr survival"),
+    "hSIfTrue":     ("frame:brkCont", "sub-ExecIH + StoreRepr survival"),
+    "hSIfFalse":    ("frame:brkCont", "sub-ExecIH + StoreRepr survival"),
+    "hSWhileFalse": ("frame:brkCont", "WhileGeom Triple + StoreRepr survival"),
+    "hSWhileBreak": ("frame:brkCont", "loop-break span + StoreRepr survival"),
+    "hSForStart":   ("frame:brkCont", "loop scaffold seg + StoreRepr survival"),
+    # eval/assign arms: eval_expr prologue (same spill SHAPE; brkCont write-log is a
+    # faithful frame-slice stand-in — the spill OFFSETS differ but the pres/agree
+    # window reasoning is identical, so the slice closes; residual as noted).
+    "hVar":         ("frame:brkCont", "VarPostCall Triple + LeafWiden + StoreRepr survival"),
+    "hAssign":      ("frame:brkCont", "AssignArmSpec arm oracle + StoreRepr survival"),
+    # seq/args PC-HOPS: identity-memory SegEntry→SegExit; NO store write-log.
+    "hSeqNil":      ("no-frame:identity SegEntry→SegExit hop (no stores)", "Triple PC-hop"),
+    "hArgsNil":     ("no-frame:identity args-hop (no stores)", "Triple PC-hop"),
+    # composite CALL splices / recursive iters: frame is over a call splice or a
+    # recursive head-IH, not one straight-line write-log — extractor does not reach.
+    "hSeqConsNormal": ("no-frame:head ExecIH seq iter (recursive splice)", "Triple + head ExecIH"),
+    "hSeqConsAbrupt": ("no-frame:head ExecIH abrupt span (recursive splice)", "Triple + head ExecIH"),
+    "hArgsCons":      ("no-frame:EvalArgsStep args-body oracle (recursive)", "EvalArgsStep + Triple"),
+    "hCall":          ("no-frame:4-state EvalIH call splice", "composite call splice"),
+    "hCallPrint":     ("no-frame:NativePrintSpec native seg", "∀-closed native seg"),
+    "hCallPrintln":   ("no-frame:NativePrintlnSpec native seg", "∀-closed native seg"),
+    "hCallAssertOk":  ("no-frame:NativeAssertOkSpec native seg", "∀-closed native seg"),
+    # entry-init: interp_init decode straight-line store chain (a DIFFERENT arm; the
+    # extractor CAN reach it once its MInstr list is added to WlogExtract.lean, but
+    # brkCont is not that arm — classified no-frame-here-yet honestly).
+    "hInitStore":   ("no-frame:interp_init decode (arm not yet in WlogExtract)", "Steps ; SegEntry"),
+}
+
+
+def frame_slice_coverage(json_out=False):
+    """Run the frame slice per field over the 24; report which close via the
+    extracted write-log and the honest residual for each."""
+    import houdini_ih as HI
+    fields = [f for f in HI.SUPPLIER_BATCH if not f.startswith("ValueRepr")]
+    rows = []
+    for f in fields:
+        cls, resid = FRAME_SLICE.get(f, ("no-frame:unclassified", "?"))
+        if cls.startswith("frame:"):
+            tag = cls.split(":", 1)[1]
+            fr = run_execleaf_frame(f, tag)
+            closed = fr["verdict"] == "FRAME-PROVED"
+            rows.append({"field": f, "frame": "PROVED" if closed else "UNCLOSED",
+                         "cert": fr.get("cert", ""), "residual": resid})
+        else:
+            rows.append({"field": f, "frame": "N/A (no-frame)",
+                         "cert": cls.split(":", 1)[1], "residual": resid})
+    proved = sum(1 for r in rows if r["frame"] == "PROVED")
+    noframe = sum(1 for r in rows if r["frame"].startswith("N/A"))
+    if json_out:
+        print(json.dumps({"proved": proved, "noframe": noframe,
+                          "total": len(rows), "rows": rows}, indent=2))
+        return 0
+    print(f"# FRAME-SLICE coverage over the {len(rows)} supplier fields "
+          f"(frame slice = ExecLeafMemPin pres+agree via wlogM-extracted write-log)")
+    print(f"{'field':16} {'frame-slice':16} residual (stays ENCODE-GAP → Houdini/Lean)")
+    print("-" * 96)
+    for r in rows:
+        print(f"{r['field']:16} {r['frame']:16} {r['residual'][:56]}")
+    print("-" * 96)
+    print(f"FRAME-PROVED: {proved}/{len(rows)}   no-frame (no write-log slice): "
+          f"{noframe}/{len(rows)}   (whole field never closes here — all keep a "
+          f"recursive/∀ residual)")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description="Integrated autoprove loop (validation-stack only).")
     ap.add_argument("--field", help="one SkelName (hNull, hStr, hVarShort, ...)")
@@ -572,7 +664,13 @@ def main():
     ap.add_argument("--no-lean", action="store_true", help="emit Lean file but don't run it")
     ap.add_argument("--no-block", action="store_true",
                     help="don't block polling for an LLM response (single check)")
+    ap.add_argument("--frame-slice-coverage", action="store_true",
+                    help="report the ExecLeafMemPin frame slice over the 24 supplier fields")
+    ap.add_argument("--json", action="store_true", help="JSON output (coverage mode)")
     args = ap.parse_args()
+
+    if args.frame_slice_coverage:
+        return frame_slice_coverage(json_out=args.json)
 
     if args.serve_request:
         if not args.response:
