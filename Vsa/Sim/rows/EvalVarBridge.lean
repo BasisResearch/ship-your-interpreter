@@ -387,8 +387,10 @@ is `varBridge` lifted over the `∃ ment v8 v9 v18` witnesses (each supplies a
 `VarCallLinkage`, which additionally binds `penv`/`nm`). -/
 theorem varLeafResid_of_rowResid (st : SpecSt) (x : String) (v : Value)
     (hR : VarRowResid st x v) : Vsa.Sim.Rows.VarLeafResid st x v := by
-  intro g N A SL φf φc sp r sret aEnv aExpr m0 c hc
-  obtain ⟨hGeom, hW, hLink⟩ := hR g N A SL φf φc sp r sret aEnv aExpr m0 c hc
+  -- (wave 47e repair: `VarLeafResid` gained the ITEM-ZERO `d`/`env` binders +
+  -- the `EvalEntry` conditioning; this file's olean was latently stale.)
+  intro g N A SL φf φc d env sp r sret aEnv aExpr m0 c hc
+  obtain ⟨hGeom, hW, hLink⟩ := hR g N A SL φf φc sp r sret aEnv aExpr m0 c hc.mem
   refine ⟨hGeom.1, hGeom.2.1, hGeom.2.2.1, hGeom.2.2.2.1, hGeom.2.2.2.2.1, hGeom.2.2.2.2.2, ?_, hW⟩
   -- the `env_get_found` oracle: lift `varBridge` over the pre-existentials.
   intro c' hpre

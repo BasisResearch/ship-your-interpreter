@@ -29,16 +29,17 @@ local notation "SpecSt" => Vsa.While.St
 
 /-! ## Leaf rows. -/
 
-/-- The `LeafWiden` exit-widening bundle for the int leaf — ENTRY-CONDITIONED
-(ITEM ZERO / falsity #12, shape 1, ledger `leaf-resid-forall-ghost-falsity`):
-the ghosts are only demanded at configurations actually satisfying `EvalEntry`
-(the row has `hc` in scope at the consumption site). -/
+/-- The exit-widening bundle for the int leaf — ENTRY-CONDITIONED
+(ITEM ZERO / falsity #12, shape 1, ledger `leaf-resid-forall-ghost-falsity`),
+and since wave 47e stated at the PINNED exit family (`LeafWidenP` — the
+`LeafExitPin` re-land makes the sims produce `EvalExit ∧ LeafMemPin`, and the
+pinned-family widener is entry-derivable: `leafWidenP_of_entry`). -/
 def IntLeafResid (st : SpecSt) (n : Int) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (d : Nat) (env : Addr) (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) (c : Config),
     Vsa.Sim.EvalEntry g N A SL φf φc st d env (.int n) sp r sret aEnv aExpr m0 c →
-    Vsa.Sim.LeafWiden g N A SL φf φc st (.int n) sp r sret m0
+    Vsa.Sim.LeafWidenP g N A SL φf φc st (.int n) sp r sret m0
 
 /-- Route `hInt` → `evalIntSimD`. -/
 theorem eval_int_row (hR : ∀ st n, IntLeafResid st n) :
@@ -64,7 +65,7 @@ def NullLeafResid (st : SpecSt) : Prop :=
     Value_nullLoaded c.σ.mem ∧
     Vsa.Sim.NullSlotPinned c.σ.mem ∧
     ((0x80019f58 : Nat) + 16 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58 + 12) ∧
-    Vsa.Sim.LeafWiden g N A SL φf φc st .null sp r sret m0
+    Vsa.Sim.LeafWidenP g N A SL φf φc st .null sp r sret m0
 
 /-- Route `hNull` → `evalNullSimD`, bridging `EvalEntry → EvalNullEntry`. -/
 theorem eval_null_row (hR : ∀ st, NullLeafResid st) :
@@ -100,7 +101,7 @@ def BoolLeafResid (st : SpecSt) (b : Bool) : Prop :=
     Value_boolLoaded c.σ.mem ∧
     Vsa.Sim.BoolSlotPinned c.σ.mem ∧
     ((0x80019f58 : Nat) + 16 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58 + 8) ∧
-    Vsa.Sim.LeafWiden g N A SL φf φc st (.bool b) sp r sret m0
+    Vsa.Sim.LeafWidenP g N A SL φf φc st (.bool b) sp r sret m0
 
 /-- Route `hBool` → `evalBoolSimD`, bridging `EvalEntry → EvalBoolEntry`. -/
 theorem eval_bool_row (hR : ∀ st b, BoolLeafResid st b) :
@@ -140,7 +141,7 @@ def StrLeafResid (st : SpecSt) (s : String) : Prop :=
     Value_strLoaded c.σ.mem ∧
     Vsa.Sim.StrSlotPinned c.σ.mem ∧
     ((0x80019f58 : Nat) + 8 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58 + 4) ∧
-    Vsa.Sim.LeafWiden g N A SL φf φc st (.str s) sp r sret m0
+    Vsa.Sim.LeafWidenP g N A SL φf φc st (.str s) sp r sret m0
 
 /-- Route `hStr` → `evalStrSimD`, bridging `EvalEntry → EvalStrEntry`. -/
 theorem eval_str_row (hR : ∀ st s, StrLeafResid st s) :

@@ -124,7 +124,9 @@ theorem value_null_spec_full (g : (R : Register) → Option (RegisterType R)) (b
         ValueRepr c.σ.mem N φc buf.toNat .null ∧
         c.σ.sailOutput = out0 ∧
         (∀ k : Nat, ¬ (buf.toNat ≤ k ∧ k < buf.toNat + 24) → m0[k]? = c.σ.mem[k]?) ∧
-        (∀ R : Register, NotWrittenV R → c.σ.regs.get? R = g R)) := by
+        (∀ R : Register, NotWrittenV R → c.σ.regs.get? R = g R) ∧
+        -- wave 47e (`LeafExitPin`): presence monotonicity of the two buffer writes
+        MemExtends m0 c.σ.mem) := by
   intro c hpre
   obtain ⟨hG, hloaded, hmem, hpc, ha0, hra, ⟨vmi, hmi⟩, htick, hreg, hrettgt, hout, hframe⟩ := hpre
   have htag := null_tag_addr buf
@@ -180,7 +182,7 @@ theorem value_null_spec_full (g : (R : Register) → Option (RegisterType R)) (b
     obs_jr_other' hobs3 Register.x1 (by decide) hra_2,
     obs_jr_minstret hobs3, hi3, ?_, hout3.trans hout, ?_,
     fun R hR => (frame_jr_v hobs3 R hR).trans
-      ((frame_store_v hobs2 R hR).trans ((frame_store_v hobs1 R hR).trans (hframe R hR)))⟩
+      ((frame_store_v hobs2 R hR).trans ((frame_store_v hobs1 R hR).trans (hframe R hR))), ?_⟩
   · -- ValueRepr .null: read32 buf = 0
     show ValueRepr σ3.mem N φc buf.toNat .null
     show read32 σ3.mem buf.toNat = some 0
@@ -190,6 +192,10 @@ theorem value_null_spec_full (g : (R : Register) → Option (RegisterType R)) (b
     intro k hk
     rw [hmem3eq, getElem_writeMap8_disjoint _ _ _ _ (by omega),
         getElem_writeMap4_disjoint _ _ _ _ (by omega), hmem]
+  · -- presence: the two buffer writes are inserts over `m0 = c.σ.mem`
+    show MemExtends m0 σ3.mem
+    rw [hmem3eq, ← hmem]
+    exact (memExtends_writeMap4 _ _ _).trans (memExtends_writeMap8 _ _ _)
 
 /-! ## `blockC_null` — the `EX_NULL` arm via `armTail_v`
 
@@ -208,15 +214,18 @@ theorem blockC_null
     Triple
       (fun c => ∃ ment,
         ArmEntryK g N A SL φf φc st (0x8000342c#64) Value_nullLoaded .null
-          sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c)
-      (fun c => ∃ mpre, PreEpilogueV g N A SL φf φc st .null sp r sret v8 v9 v18 out0 m0 mpre c) := by
+          sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
+        MemExtends m0 ment)
+      (fun c => ∃ mpre, PreEpilogueV g N A SL φf φc st .null sp r sret v8 v9 v18 out0 m0 mpre c ∧
+        LeafMemPin SL sp sret m0 mpre) := by
   intro c hc
-  obtain ⟨ment, hG, htick, hpc, ha0, hs1, ha2, hsp, hra, hmiEx, hout, hmem, hcode, hviCode,
+  obtain ⟨ment, ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, hmiEx, hout, hmem, hcode, hviCode,
     hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl, _hx11, _hx8, _hx18⟩ := hc
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl, _hx11, _hx8, _hx18⟩,
+    hpresM⟩ := hc
   -- region facts for `value_null`'s buffer writes and its `ret`
   have hNullRegion : NullRegion sret := ⟨hsretAl, hsretLo, hsretHi, hsretWin, hsret_vnull⟩
   have hrettgt : (BitVec.update ((0x80003430#64 : BitVec 64) + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
@@ -246,7 +255,7 @@ theorem blockC_null
       houtStr, hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
       hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
       hsretStk, hsretEvalCode, hSLloSp,
-      hsp1088, hsphi, hsplo, hspwin, hsp8, hraAl⟩
+      hsp1088, hsphi, hsplo, hspwin, hsp8, hraAl, hpresM⟩
 
 /-! ## `NullSlotPinned` — the `EX_NULL` (tag 3) jump-table slot pin
 
@@ -302,7 +311,7 @@ structure EvalNullEntry
   expr : ExprRepr c.σ.mem aExpr.toNat .null
   store : StoreRepr c.σ.mem N A φf φc st.store
   store_survives : ∀ m' : Mem,
-    (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
       c.σ.mem[k]? = m'[k]?) →
     StoreRepr m' N A φf φc st.store
   out : OutRepr c.σ st
@@ -352,15 +361,22 @@ def EvalNullSimGoal : Prop :=
       (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
         st .null sp r sret m0)
 
-/-- **The M4 `EvalE.null` gate.** Composes `blockA_k` (prologue + dispatch →
-`ArmEntryK` at the null arm), `blockC_null` (arm + `value_null` → epilogue entry),
-and `blockD_v` at `.null` (epilogue → return). -/
-theorem evalNullSim : EvalNullSimGoal := by
-  intro g N A SL φf φc st d a sp r sret aEnv aExpr m0 _hEvalE
+/-- **The PINNED M4 `EvalE.null` gate** (wave 47e, `LeafExitPin`): as
+`evalNullSim` but with the exit memory pinned to the leaf's write chain
+(`LeafMemPin`), transported across the epilogue by `blockD_v`'s `Q`. -/
+theorem evalNullSimP
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (a : Addr)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) :
+    Triple
+      (EvalNullEntry g N A SL φf φc st d a sp r sret aEnv aExpr m0)
+      (fun c => EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st .null sp r sret m0 c ∧ LeafMemPin SL sp sret m0 c.σ.mem) := by
   intro c hc
   -- === block A: prologue + dispatch → ArmEntryK (via blockA_k) ===
   have hkm0 : read32 m0 aExpr.toNat = some 3 := hc.mem ▸ exprRepr_null_kind (hc.mem ▸ hc.expr)
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, hpresM⟩ :=
     blockA_k g N A SL φf φc st .null 3 (0x8000342c#64) Value_nullLoaded
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
@@ -388,14 +404,23 @@ theorem evalNullSim : EvalNullSimGoal := by
       hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
       hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
       hc.spill_defined⟩, rfl⟩
-  -- === block C: arm (jal value_null; j) → PreEpilogueV .null ===
-  obtain ⟨c2, hs2, mpre, hPre⟩ :=
+  -- === block C: arm (jal value_null; j) → PreEpilogueV .null + pin ===
+  obtain ⟨c2, hs2, mpre, hPre, hPin⟩ :=
     blockC_null g N A SL φf φc st sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0
-      hc.sret_vnullcode_disjoint c1 ⟨ment, hArm⟩
-  -- === block D: epilogue → EvalExit .null ===
-  obtain ⟨c3, hs3, hExit, _⟩ :=
-    blockD_v g N A SL φf φc st .null sp r sret v8 v9 v18 c.σ.sailOutput m0 (fun _ => True)
-      c2 ⟨mpre, hPre, trivial⟩
-  exact ⟨c3, (hs1.trans hs2).trans hs3, hExit⟩
+      hc.sret_vnullcode_disjoint c1 ⟨ment, hArm, hpresM⟩
+  -- === block D: epilogue → EvalExit .null (the pin rides `Q`) ===
+  obtain ⟨c3, hs3, hExit, hQ⟩ :=
+    blockD_v g N A SL φf φc st .null sp r sret v8 v9 v18 c.σ.sailOutput m0
+      (LeafMemPin SL sp sret m0) c2 ⟨mpre, hPre, hPin⟩
+  exact ⟨c3, (hs1.trans hs2).trans hs3, hExit, hQ⟩
+
+/-- **The M4 `EvalE.null` gate** — the pin-forgetting weakening of
+`evalNullSimP`. -/
+theorem evalNullSim : EvalNullSimGoal := by
+  intro g N A SL φf φc st d a sp r sret aEnv aExpr m0 _hEvalE
+  intro c hc
+  obtain ⟨c', hs, hExit, _⟩ :=
+    evalNullSimP g N A SL φf φc st d a sp r sret aEnv aExpr m0 c hc
+  exact ⟨c', hs, hExit⟩
 
 end Vsa.Sim

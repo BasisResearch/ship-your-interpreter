@@ -194,7 +194,7 @@ theorem blockA_binaryArm
     have := hc.mem ▸ hc.expr
     cases this with | binary hk _ _ _ _ _ => exact hk
   -- === block A: prologue + dispatch → widened ArmEntryK @0x800034e8 ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
     blockA_k g N A SL φf φc st (.binary op el er) 6 (0x800034e8#64) UnaryArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)

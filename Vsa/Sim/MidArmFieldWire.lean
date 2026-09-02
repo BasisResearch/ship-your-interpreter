@@ -92,7 +92,7 @@ def MidArmLeftJalBundle (l er : Expr) (c' : Config) (st st' : Vsa.While.St)
      ExprRepr mcall aLOp.toNat l ∧
      StoreRepr mcall N A φf φc st.store ∧
      (∀ m' : Mem,
-       (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+       (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
          mcall[k]? = m'[k]?) →
        StoreRepr m' N A φf φc st.store) ∧
      (∀ R : Register, AbiPreservedNoise R → c'.σ.regs.get? R = gpre R) ∧

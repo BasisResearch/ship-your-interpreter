@@ -258,14 +258,18 @@ structure ExecEntry
   stmt : StmtRepr c.σ.mem aStmt.toNat s
   /-- The whole spec store is represented. -/
   store : StoreRepr c.σ.mem N A φf φc st.store
-  /-- **`StoreRepr` survives any memory change confined to the stack window
-  `[SL.lo, sp)`.** The represented frames/closures and their strings live in the
-  arena/AST regions, disjoint from the C-stack scribble; so the prologue spills
-  (all inside `[SL.lo, sp)`) leave the store re-representable. (Mirror of
+  /-- **`StoreRepr` survives any memory change confined to the FULL stack region
+  `[SL.lo, SL.hi)`.** The represented frames/closures and their strings live in
+  the arena/AST regions, disjoint from the WHOLE C-stack region. (Mirror of
   `EvalEntry.store_survives`, minus the sret buffer — the brk/cont/dispatch path
-  writes only the stack window.) -/
+  writes only the stack window.)
+  **WAVE 47e (`EntryStackSurv`) AMENDMENT**: footprint widened from
+  `[SL.lo, sp)` to `[SL.lo, SL.hi)` — the exec→eval bridges construct
+  `EvalEntry` from this field, whose own footprint is now `SL.hi`-wide (verdict:
+  `experiments/fleet/obstructions/B1_reseat_footprint_verdict.lean`).  Old form
+  via `ExecEntry.store_survives_sp`. -/
   store_survives : ∀ m' : Mem,
-    (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → c.σ.mem[k]? = m'[k]?) →
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
     StoreRepr m' N A φf φc st.store
   /-- Console output correspondence. -/
   out : OutRepr c.σ st
@@ -292,6 +296,21 @@ structure ExecEntry
     (∃ v, c.σ.regs.get? Register.x9 = some v) ∧
     (∃ v, c.σ.regs.get? Register.x18 = some v) ∧
     (∃ v, c.σ.regs.get? Register.x19 = some v)
+
+/-- **The `sp`-window form of `store_survives`** (the pre-amendment field, ONE
+mono lemma; the exec twin of `EvalEntry.store_survives_sp`). -/
+theorem ExecEntry.store_survives_sp
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : St} {d : Nat} {env : Addr} {s : Stmt}
+    {sp r aInterp aStmt aEnv aRet : BitVec 64} {m0 : Mem} {c : Config}
+    (hc : ExecEntry g N A SL φf φc st d env s sp r aInterp aStmt aEnv aRet m0 c) :
+    ∀ m' : Mem,
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → c.σ.mem[k]? = m'[k]?) →
+      StoreRepr m' N A φf φc st.store :=
+  fun m' h => hc.store_survives m'
+    (fun k hk => h k
+      (fun hcon => hk ⟨hcon.1, Nat.lt_of_lt_of_le hcon.2 hc.stackOK.2.1⟩))
 
 /-! ## `ExecExit` — the machine postcondition at `exec_stmt`'s return PC
 

@@ -83,12 +83,12 @@ structure ExecArmHeadExtras
   evalCode : Eval_exprLoaded m0
   viInt : Value_intLoaded m0
   viSlot : IntSlotPinned m0
-  /-- **The wide-window `StoreRepr` survival** — genuine M6/payload fact: the
-  store survives any change confined to the ENLARGED window
-  `[SL.lo, (sp-176)+1088)` (the arm frame + the staged callee frame) minus the
-  interp buffer hole.  Strictly wider than `ExecEntry.store_survives`. -/
+  /-- **The wide-window `StoreRepr` survival** — since wave 47e stated at the
+  FULL stack region `[SL.lo, SL.hi)` (the `EntryStackSurv` footprint) minus the
+  interp buffer hole.  Now derivable from the WIDENED
+  `ExecEntry.store_survives` (matching footprints). -/
   wide_surv : ∀ m' : Mem,
-    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < (sp.toNat - 176) + 1088) →
+    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < SL.hi) →
       ¬ (aInterp.toNat ≤ a ∧ a < aInterp.toNat + 24) →
       m0[a]? = m'[a]?) →
     StoreRepr m' N A φf φc st.store
@@ -125,6 +125,13 @@ theorem execArmDispatch_of_slot
     (hkle : k ≤ 8) (hklt : k < 128) (harmAl : armPC.toNat % 4 = 0)
     (hpayHi : payOff + 8 ≤ nodeHi)
     (hkind : read32 m0 aStmt.toNat = some k)
+    -- ITEM ZERO B1 (threaded wave 47e): the CHILD expression's recursion-sound
+    -- budget at the lowered frame + its `.fn`-bodies bound (per-row structural
+    -- facts, derived at each instance via `StackOK.child` + the `bodiesBound`
+    -- projection kit).
+    (hceBudget : StackOK SL (sp - 176#64)
+      (ce.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088))
+    (hceBodies : Expr.bodiesBound Vsa.While.perCallBudget ce = true)
     (hX : ExecArmHeadExtras N A SL φf φc st k armPC ce payOff nodeHi sp aInterp aStmt aChild m0)
     (hE : ExecEntry g N A SL φf φc st d env s sp r aInterp aStmt aEnv aRet m0 c) :
     Triple (fun c'' => c'' = c)
@@ -139,7 +146,7 @@ theorem execArmDispatch_of_slot
         (aStmt.toNat + nodeHi ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat) ∧
         Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧
         (∀ m' : Mem,
-          (∀ a, ¬ (SL.lo ≤ a ∧ a < (sp.toNat - 176) + 1088) →
+          (∀ a, ¬ (SL.lo ≤ a ∧ a < SL.hi) →
             ¬ (aInterp.toNat ≤ a ∧ a < aInterp.toNat + 24) →
             ment[a]? = m'[a]?) →
           StoreRepr m' N A φf φc st.store) ∧
@@ -156,7 +163,11 @@ theorem execArmDispatch_of_slot
         (A.hi ≤ SL.lo ∨ (sp.toNat - 176) + 1088 ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         (∀ R : Register, AbiPreservedNoise R → c'.σ.regs.get? R = gpre R) ∧
-        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w)) := by
+        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        StackOK SL (sp - 176#64)
+          (ce.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget ce = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) := by
   intro c'' heq
   subst heq
   -- === execBlockA: prologue + jump-table dispatch → ExecArmEntryK @armPC ===
@@ -200,12 +211,13 @@ theorem execArmDispatch_of_slot
   -- The wide-window survival at `ment` (compose the extras' `m0`-closure with
   -- the memframe; outside the ENLARGED window is outside the spill window).
   have hWideMent : ∀ m' : Mem,
-      (∀ a, ¬ (SL.lo ≤ a ∧ a < (sp.toNat - 176) + 1088) →
+      (∀ a, ¬ (SL.lo ≤ a ∧ a < SL.hi) →
         ¬ (aInterp.toNat ≤ a ∧ a < aInterp.toNat + 24) →
         ment[a]? = m'[a]?) →
       StoreRepr m' N A φf φc st.store :=
     fun m' hag =>
-      hX.wide_surv m' (fun a h1 h2 => ((hMentM0 a (by omega)).symm).trans (hag a h1 h2))
+      hX.wide_surv m' (fun a h1 h2 => ((hMentM0 a (by
+        have := hX.jspSLhi; have := hX.sproom; omega)).symm).trans (hag a h1 h2))
   -- Realign the `ExecArmEntryK` `out0` to the reached `c1.σ.sailOutput`.
   have hArm' : ExecArmEntryK g N A SL φf φc st armPC
       sp r aInterp aStmt aEnv aRet v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1 :=
@@ -217,7 +229,8 @@ theorem execArmDispatch_of_slot
     hX.child_align, hX.child_lo, hX.child_hi, hX.child_win, hX.child_stk,
     hX.sproom, hX.sp16, hE.stack_ram.1, hE.stack_ram.2, hE.stack_win,
     hX.jspSLhi, hX.codeStkJ, hX.viStkJ, hX.tableStkJ, hX.arenaStkJ, hX.arenaCode,
-    (fun R _ => rfl), ⟨aStmt, hAx8⟩, ⟨aRet, hAx18⟩⟩
+    (fun R _ => rfl), ⟨aStmt, hAx8⟩, ⟨aRet, hAx18⟩,
+    hceBudget, hceBodies, hE.store_bodies⟩
 
 #print axioms execArmDispatch_of_slot
 

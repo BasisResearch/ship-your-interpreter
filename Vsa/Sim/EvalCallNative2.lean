@@ -1156,7 +1156,7 @@ theorem nativeAssertInternal
   ------------------------------------------------------------------------
   -- value_null callee (value_null_spec), buf = sret, ra = 0x80002e5c
   ------------------------------------------------------------------------
-  obtain ⟨cN, hsN, hGN, hpcN, ha0N, hraN, ⟨vmiN, hmiN⟩, htickN, hvalNull, houtN, hmemframeN, hframeN⟩ :=
+  obtain ⟨cN, hsN, hGN, hpcN, ha0N, hraN, ⟨vmiN, hmiN⟩, htickN, hvalNull, houtN, hmemframeN, hframeN, _hpresN⟩ :=
     value_null_spec_full (fun R => σ26.regs.get? R) sret (0x80002e5c#64) N φc mb5 out0
       ⟨σ26, i26, cT.steps + 1 + 1 + 1 + 1 + 1⟩
       ⟨hG26, hmem26e ▸ hVN_mb5, hmem26e, hpc26, ha0_26, hlink26, ⟨vmi26, hmi26⟩, hi26,

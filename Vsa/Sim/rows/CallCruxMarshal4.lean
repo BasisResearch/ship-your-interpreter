@@ -200,6 +200,13 @@ structure ValueNullStage
     c.σ.mem[sp.toNat + 1016 + i]? = m0[sp.toNat + 1016 + i]?
   /-- value_null's code loaded (code pin, M6 class). -/
   loaded : Value_nullLoaded c.σ.mem
+  /-- **ITEM ZERO (falsity #12, shape 3), threaded wave 47e**: `eval_expr`'s
+  code loaded at the stage memory — the `BodyHandoff.Eval_exprLoaded mB` feed
+  (the `SeqSpanGround` image certificate the amended handoff carries). -/
+  eval_code : Vsa.Sim.Code.Eval_exprLoaded c.σ.mem
+  /-- The value_null buffer `[sp+144, sp+168)` is disjoint from `eval_expr`'s
+  code region (so `eval_code` survives the buffer write; M6-class geometry). -/
+  buf_evalcode_disjoint : sp.toNat + 168 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sp.toNat + 144
   /-- The staging seg's `ChainFacts` (code-byte pins at `0x80003324`). -/
   stagefacts : ChainFacts c.σ.mem c.σ.mem (callClosureValueNullCallL sp) []
     callClosureValueNullCallSeg
@@ -287,7 +294,7 @@ theorem valueNullHandoffSplice
       ⟨σ2, i2, c.steps + evalBlocksFuel callClosureValueNullCallSeg + 1⟩
       ⟨hG2, hloaded2, rfl, hpc2, hx10_2, hra2, hmi2, hi2, hNR,
        (by decide), rfl, fun R _ => rfl⟩
-  obtain ⟨hG3, hpc3, _hx10_3, _hx1_3, hmi3, hi3, _hVR3, hout3, hmemf3, hfr3⟩ := hpost3
+  obtain ⟨hG3, hpc3, _hx10_3, _hx1_3, hmi3, hi3, _hVR3, hout3, hmemf3, hfr3, _hpres3⟩ := hpost3
   have hpc3' : c3.σ.regs.get? Register.PC = some (0x8000332c#64 : BitVec 64) := by
     rwa [(by decide : BitVec.update ((0x8000332c#64 : BitVec 64)
       + sign_extend (m := 64) (0x000#12)) 0 0#1 = (0x8000332c#64 : BitVec 64))] at hpc3
@@ -365,7 +372,15 @@ theorem valueNullHandoffSplice
           · intro i hi
             rw [hmem4', ← hagree (sp.toNat + 1016 + i) (by omega)]
             exact hstage.slot7 i hi
-        · -- the body SegEntry at callBodyLoopPC (g' := actual regs, by rfl)
+        · -- the amended handoff: the `eval_expr` image at `mB` + the body
+          -- SegEntry at callBodyLoopPC (g' := actual regs, by rfl)
+          refine ⟨?_, ?_⟩
+          · -- Eval_exprLoaded σ4.mem: transported across the buffer write
+            rw [hmem4']
+            exact loaded_eval_expr_agreeP c.σ.mem c3.σ.mem
+              (fun k hk => hagree k (by
+                rcases hstage.buf_evalcode_disjoint with h | h <;> omega))
+              hstage.eval_code
           refine { good := hG4, tick := hi4, pc := ?_, store := ?_, out := ?_,
                    mem := rfl, frame := fun R _ => rfl,
                    depth_budget := hdb, arena_budget := hab }
@@ -443,6 +458,10 @@ structure FoldDefineExitReturn
   slot7 : ∀ i : Nat, i < 8 →
     c.σ.mem[sp.toNat + 1016 + i]? = m0[sp.toNat + 1016 + i]?
   loaded : Value_nullLoaded c.σ.mem
+  /-- wave 47e: the `eval_expr` image + buffer disjointness (the amended
+  `BodyHandoff` feed, mirrored from `ValueNullStage`). -/
+  eval_code : Vsa.Sim.Code.Eval_exprLoaded c.σ.mem
+  buf_evalcode_disjoint : sp.toNat + 168 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sp.toNat + 144
   stagefacts : ChainFacts c.σ.mem c.σ.mem (callClosureValueNullCallL sp) []
     callClosureValueNullCallSeg
   jalSeam : ∀ (σ' : MState) (i' u' : Nat),
@@ -498,6 +517,8 @@ theorem foldDefineExitReturn_step
                    spReg := ?_, sret := ?_, interp := ?_, closReg := ?_,
                    store_survives := ?_, out := ?_, memFrame := ?_,
                    slot5 := ?_, slot3 := ?_, slot7 := ?_, loaded := ?_,
+                   eval_code := ?_,
+                   buf_evalcode_disjoint := hp.buf_evalcode_disjoint,
                    stagefacts := ?_, jalSeam := ?_, bodyReads := ?_ }
           · rw [hpc']; rfl
           · rw [← gprGet_x2]; exact gholds_reg hregs' (by rfl)
@@ -516,6 +537,8 @@ theorem foldDefineExitReturn_step
           · intro i hi; rw [hmm]; exact hp.slot7 i hi
           · show Value_nullLoaded σ'.mem
             rw [hmm]; exact hp.loaded
+          · show Vsa.Sim.Code.Eval_exprLoaded σ'.mem
+            rw [hmm]; exact hp.eval_code
           · show ChainFacts σ'.mem σ'.mem (callClosureValueNullCallL sp) []
               callClosureValueNullCallSeg
             rw [hmm]; exact hp.stagefacts

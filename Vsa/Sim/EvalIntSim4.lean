@@ -47,15 +47,20 @@ theorem blockC_ee
     (st : Vsa.While.St) (n : Int)
     (sp r sret aExpr aEnv : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem) :
     Triple
-      (fun c => ∃ ment, ArmEntry g N A SL φf φc st n sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c)
-      (fun c => ∃ mpre, PreEpilogue g N A SL φf φc st n sp r sret v8 v9 v18 out0 m0 mpre c) := by
+      (fun c => ∃ ment, ArmEntry g N A SL φf φc st n sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
+        MemExtends m0 ment)
+      (fun c => ∃ mpre, PreEpilogue g N A SL φf φc st n sp r sret v8 v9 v18 out0 m0 mpre c ∧
+        -- wave 47e (`LeafExitPin`): the arm's whole memory delta pinned —
+        -- carried across the epilogue by `blockD_v`'s `Q` parameter.
+        LeafMemPin SL sp sret m0 mpre) := by
   intro c hpre
-  obtain ⟨ment, hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hvicode, hexpr,
+  obtain ⟨ment, ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hvicode, hexpr,
     houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl, _hx11, _hx8, _hx18⟩ := hpre
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl, _hx11, _hx8, _hx18⟩,
+    hpresM⟩ := hpre
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hpayaddr : (aExpr + sign_extend (m := 64) (0x008#12)).toNat = aExpr.toNat + 8 :=
     expr_pay_addr aExpr hexprHi
@@ -118,7 +123,7 @@ theorem blockC_ee
       ⟨σ2, i2, c.steps + 1 + 1⟩ := by
     refine ⟨hG2, hvicode2, hmem2e, hpc2, ha0_2, hx11_2, hlink2, ⟨vmi2, hmi2⟩, hi2, hIntRegion,
       (by decide), hout2, fun R _ => rfl⟩
-  obtain ⟨c3, hs3, hG3, hpc3, ha0_3, hlink3, hmi3, htick3, hval3, hout3, hmemframe3, _hpres3, hframe3⟩ :=
+  obtain ⟨c3, hs3, hG3, hpc3, ha0_3, hlink3, hmi3, htick3, hval3, hout3, hmemframe3, hpres3, hframe3⟩ :=
     value_int_spec (fun R => σ2.regs.get? R) sret payV (0x80003410#64) N φc ment out0
       ⟨σ2, i2, c.steps + 1 + 1⟩ hcallpre
   -- payV.toNat = p, so `.int (ofNat payV.toNat).toInt = .int n`
@@ -175,12 +180,17 @@ theorem blockC_ee
   obtain ⟨vmi4, hmi4⟩ := obs_jr_minstret hobs4
   have hout4 : c4.sailOutput = out0 := by rw [hobs4.out, sailOutput_sigmaPost_jump_x0]; exact hout3
   -- transfer the per-block facts to c4.mem (= c3.mem)
-  refine ⟨⟨c4, i4', c3.steps + 1⟩, ?_, c4.mem, hG4, hi4, hpc4, hs1_4, hsp_4, ⟨_, hmi4⟩, hout4, houtStr,
+  refine ⟨⟨c4, i4', c3.steps + 1⟩, ?_, c4.mem, ⟨hG4, hi4, hpc4, hs1_4, hsp_4, ⟨_, hmi4⟩, hout4, houtStr,
     rfl, hmem4e ▸ hcode3, hmem4e ▸ hvalN, hmem4e ▸ hstore3,
     ?_,  -- the g-frame at the epilogue
     hmem4e ▸ hslotRa3, hmem4e ▸ hslotS03, hmem4e ▸ hslotS13, hmem4e ▸ hslotS23,
     hgx8, hgx9, hgx18, hgx2, ?_,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hraAl⟩
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hraAl⟩,
+    -- the wave-47e `LeafMemPin` at `mpre = c4.mem = c3.mem`
+    { pres := hmem4e ▸ (hpresM.trans hpres3)
+      agree := fun k hk hsr => by
+        rw [hmem4e]
+        exact (hmemframe3 k hsr).symm.trans (hmemframe k hk) }⟩
   · -- the composed run: step1 ; step2 ; value_int steps ; step4(j)
     exact (Steps.single hstep1).trans ((Steps.single hstep2).trans
       (hstep3.trans (Steps.single hstep4)))
@@ -239,22 +249,42 @@ theorem blockD_ee
       c ⟨mpre, hPre, trivial⟩
   exact ⟨c', hs, hExit⟩
 
-/-- **The M4 gate**: the `EvalE.int` simulation Triple. Composes `blockA_ee`
-(prologue + dispatch → arm entry), `blockC_ee` (arm + `value_int` call → epilogue
-entry), and `blockD_ee` (epilogue → return). -/
+/-- **The PINNED M4 gate** (wave 47e, `LeafExitPin`): the `EvalE.int` simulation
+Triple with the exit memory pinned to the leaf's write chain (`LeafMemPin`).
+Composes `blockA_ee` (prologue + dispatch → arm entry, + presence), `blockC_ee`
+(arm + `value_int` call → epilogue entry, + pin), and `blockD_v` with
+`Q := LeafMemPin …` (the memory-pure epilogue transports the pin for free). -/
+theorem evalIntSimP
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (a : Addr) (n : Int)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) :
+    Triple
+      (EvalEntry g N A SL φf φc st d a (.int n) sp r sret aEnv aExpr m0)
+      (fun c => EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st (.int n) sp r sret m0 c ∧ LeafMemPin SL sp sret m0 c.σ.mem) := by
+  intro c hc
+  -- run block A (out0 := the entry console output; the `sailOutput = out0` premise is `rfl`)
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, hpresM⟩ :=
+    blockA_ee g N A SL φf φc st d a n sp r sret aEnv aExpr m0 c.σ.sailOutput c ⟨hc, rfl⟩
+  -- run block C
+  obtain ⟨c2, hs2, mpre, hPre, hPin⟩ :=
+    blockC_ee g N A SL φf φc st n sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0 c1
+      ⟨ment, hArm, hpresM⟩
+  -- run block D (the pin rides `Q`)
+  obtain ⟨c3, hs3, hExit, hQ⟩ :=
+    blockD_v g N A SL φf φc st (.int n) sp r sret v8 v9 v18 c.σ.sailOutput m0
+      (LeafMemPin SL sp sret m0) c2 ⟨mpre, hPre, hPin⟩
+  exact ⟨c3, (hs1.trans hs2).trans hs3, hExit, hQ⟩
+
+/-- **The M4 gate**: the `EvalE.int` simulation Triple — the pin-forgetting
+weakening of `evalIntSimP`. -/
 theorem evalIntSim : EvalIntSimGoal := by
   intro g N A SL φf φc st d a n sp r sret aEnv aExpr m0 _hEvalE
   intro c hc
-  -- run block A (out0 := the entry console output; the `sailOutput = out0` premise is `rfl`)
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=
-    blockA_ee g N A SL φf φc st d a n sp r sret aEnv aExpr m0 c.σ.sailOutput c ⟨hc, rfl⟩
-  -- run block C
-  obtain ⟨c2, hs2, mpre, hPre⟩ :=
-    blockC_ee g N A SL φf φc st n sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0 c1 ⟨ment, hArm⟩
-  -- run block D
-  obtain ⟨c3, hs3, hExit⟩ :=
-    blockD_ee g N A SL φf φc st n sp r sret v8 v9 v18 c.σ.sailOutput m0 c2 ⟨mpre, hPre⟩
-  exact ⟨c3, (hs1.trans hs2).trans hs3, hExit⟩
+  obtain ⟨c', hs, hExit, _⟩ :=
+    evalIntSimP g N A SL φf φc st d a n sp r sret aEnv aExpr m0 c hc
+  exact ⟨c', hs, hExit⟩
 
 end Vsa.Sim
 

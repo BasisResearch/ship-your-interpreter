@@ -106,7 +106,7 @@ theorem fnArmGeom_hArm_offdiag
   refine hDiag c ?_
   have hstore' : StoreRepr c.σ.mem N A φf φc' st.store := hEntryRebase _ hc.store
   have hsurv' : ∀ m' : Mem,
-      (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
         c.σ.mem[k]? = m'[k]?) → StoreRepr m' N A φf φc' st.store :=
     fun m' hm' => hEntryRebase m' (hc.store_survives m' hm')
   exact { hc with store := hstore', store_survives := hsurv' }

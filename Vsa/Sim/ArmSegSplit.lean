@@ -114,7 +114,7 @@ theorem evalEntry_of_jalPrefix
         ExprRepr mcall aOperand.toNat esub ∧
         StoreRepr mcall N A φf φc st.store ∧
         (∀ m' : Mem,
-          (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+          (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
             mcall[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
@@ -212,13 +212,13 @@ theorem evalEntry_of_jalPrefix
         expr := by rw [hmem1e]; exact hsubexpr
         store := by rw [hmem1e]; exact hstore
         store_survives := by
+          -- wave 47e: identical WIDENED footprint parent/child (same `SL`);
+          -- the sub-sret window is inside `[SL.lo, SL.hi)`, so it is absorbed.
           intro m' hag
           refine hstoreSurv m' (fun k hk1 _ => ?_)
-          have hk1' : ¬ (SL.lo ≤ k ∧ k < (sp - 1088#64).toNat) := by
-            rw [hspsub]; intro ⟨ha, hb⟩; exact hk1 ⟨ha, by omega⟩
           have hk2' : ¬ (subsret.toNat ≤ k ∧ k < subsret.toNat + 24) := by
             intro ⟨ha, hb⟩; exact hk1 ⟨by omega, by omega⟩
-          have := hag k hk1' hk2'
+          have := hag k hk1 hk2'
           rwa [hmem1e] at this
         out := by
           show Vsa.Machine.output σ1 = st.out

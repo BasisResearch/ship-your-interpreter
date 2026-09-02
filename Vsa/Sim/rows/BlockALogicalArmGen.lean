@@ -111,7 +111,7 @@ theorem blockA_logicalGenArm
   have hkm0 : read32 m0 aExpr.toNat = some 7 := by
     cases (hc.mem ▸ hc.expr) with | logical hk _ _ _ _ _ => exact hk
   -- === block A: prologue + dispatch → widened ArmEntryK @0x8000355c#64 ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
     blockA_k g N A SL φf φc st (.logical op el er) 7 (0x8000355c#64) LogicalArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)

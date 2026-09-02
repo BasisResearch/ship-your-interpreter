@@ -1023,7 +1023,7 @@ theorem evalOrTrueSim : EvalOrTrueSimGoal := by
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- === block A: prologue + dispatch → widened ArmEntryK @0x8000355c ===
   have hkm0 : read32 m0 aExpr.toNat = some 7 := exprRepr_logical_or_kind (hc.mem ▸ hc.expr)
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
     blockA_k g N A SL φf φc st (.logical .or el er) 7 (0x8000355c#64) LogicalArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)

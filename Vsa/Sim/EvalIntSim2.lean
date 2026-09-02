@@ -286,7 +286,7 @@ theorem blockA_k
         c.σ.mem = m0 ∧ Eval_exprLoaded c.σ.mem ∧
         ExprRepr c.σ.mem aExpr.toNat e ∧
         StoreRepr c.σ.mem N A φf φc st.store ∧
-        (∀ m' : Mem, (∀ kk, ¬ (SL.lo ≤ kk ∧ kk < sp.toNat) →
+        (∀ m' : Mem, (∀ kk, ¬ (SL.lo ≤ kk ∧ kk < SL.hi) →
             ¬ (sret.toNat ≤ kk ∧ kk < sret.toNat + 24) → c.σ.mem[kk]? = m'[kk]?) →
           StoreRepr m' N A φf φc st.store) ∧
         OutRepr c.σ st ∧
@@ -307,7 +307,11 @@ theorem blockA_k
           (∃ v, c.σ.regs.get? Register.x18 = some v)))
         ∧ c.σ.sailOutput = out0)
       (fun c => ∃ ment v8 v9 v18,
-        ArmEntryK g N A SL φf φc st armPC calleeLoaded e sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c) := by
+        ArmEntryK g N A SL φf φc st armPC calleeLoaded e sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
+        -- wave 47e (`LeafExitPin`): the arm-entry memory is the four prologue
+        -- spills over `m0` — presence-preserving.  Surfaced so the leaf
+        -- `blockC_*` can pin their exit memory (`LeafMemPin`).
+        MemExtends m0 ment) := by
   intro c hpre'
   obtain ⟨hpre, hout0⟩ := hpre'
   obtain ⟨hG, htick, hpc, ha0, ha1, ha2, hra, hraAl, hspReg, hstackOK, ⟨vmi, hmi⟩,
@@ -841,7 +845,9 @@ theorem blockA_k
         getElem_writeMap8_disjoint _ _ _ _ (by omega),
         getElem_writeMap8_disjoint _ _ _ _ (by omega),
         getElem_writeMap8_disjoint _ _ _ _ (by omega)]
-  have hstore6 : StoreRepr σ6.mem N A φf φc st.store := hstoreSurv σ6.mem hagree6
+  have hstore6 : StoreRepr σ6.mem N A φf φc st.store :=
+    hstoreSurv σ6.mem (fun k hk hr =>
+      hagree6 k (fun hcon => hk ⟨hcon.1, Nat.lt_of_lt_of_le hcon.2 hsphi⟩) hr)
   -- memFrame: σ6.mem = m0 outside the stack window (spills all inside `[SL.lo,sp)`)
   have hmemframe6 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → σ6.mem[a]? = m0[a]? := by
     intro a ha
@@ -853,10 +859,13 @@ theorem blockA_k
   -- `store_survives` transported to σ6.mem: any m' agreeing with σ6.mem outside the
   -- window also agrees with c.σ.mem outside it (compose through hagree6).
   have hstoreSurv6 : ∀ m' : Mem,
-      (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
         σ6.mem[k]? = m'[k]?) → StoreRepr m' N A φf φc st.store := by
     intro m' hm'
-    refine hstoreSurv m' (fun k hk1 hk2 => (hagree6 k hk1 hk2).trans (hm' k hk1 hk2))
+    refine hstoreSurv m' (fun k hk1 hk2 => ?_)
+    have hk1' : ¬ (SL.lo ≤ k ∧ k < sp.toNat) := fun hcon =>
+      hk1 ⟨hcon.1, Nat.lt_of_lt_of_le hcon.2 hsphi⟩
+    exact (hagree6 k hk1' hk2).trans (hm' k hk1 hk2)
   -- the arm-entry blanket frame: callee-saved regs (excl. x8/x9/x18/x2) unchanged
   -- through the prologue (prologue rds are x14/x15/x2/x8/x18/x9; x14/x15 are
   -- caller-saved so `abi_ne` handles them; x2/x8/x18/x9 are the exclusions).
@@ -953,8 +962,13 @@ theorem blockA_k
   have ha1_17 : σ17.regs.get? Register.x11 = some aEnv := obs_alu_other' hobs17 Register.x11 (by decide) ha1_16
   have ha1_18 : σ18.regs.get? Register.x11 = some aEnv := obs_alu_other' hobs18 Register.x11 (by decide) ha1_17
   have ha1_19 : σ19.regs.get? Register.x11 = some aEnv := obs_jr_other' hobs19 Register.x11 (by decide) ha1_18
+  -- presence: the arm-entry memory is the 4-spill `writeMap8` chain over `m0`
+  have hpresM : MemExtends m0 σ6.mem := by
+    rw [hmem6e, hmem5e, hmem4e, hmem3e, ← hmem]
+    exact (((memExtends_writeMap8 _ _ _).trans (memExtends_writeMap8 _ _ _)).trans
+      (memExtends_writeMap8 _ _ _)).trans (memExtends_writeMap8 _ _ _)
   -- assemble the full 19-step run + ArmEntryK
-  refine ⟨⟨σ19, i19, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1⟩, ?_, σ6.mem, v8, v9, v18, hG19, hi19, hpc19, ha0_19, hx9_19, ha2_19, hsp_19, hra_19,
+  refine ⟨⟨σ19, i19, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1⟩, ?_, σ6.mem, v8, v9, v18, ⟨hG19, hi19, hpc19, ha0_19, hx9_19, ha2_19, hsp_19, hra_19,
     ⟨_, hmi19⟩, hout19, hmem19e, hmem19e ▸ hload6, hmem19e ▸ hvi6, hmem19e ▸ hexpr6,
     houtStr,
     hexprAl, hexprRam.1, hexprRam.2, hexprWin,
@@ -962,7 +976,8 @@ theorem blockA_k
     hmem19e ▸ hmemframe6,
     hgx8, hgx9, hgx18, hgx2, hmem19e ▸ hstore6, hmem19e ▸ hstoreSurv6, hframeArm,
     hsretAl, hsretRam.1, hsretRam.2, hsretWin, hsretVi, hsretStk, hsretEvalCode,
-    hsp1088, ?_, ?_, ?_, ?_, hstkRam.1, hstkWin, ?_, hraAl, ha1_19, hx8_19, hx18_19⟩
+    hsp1088, ?_, ?_, ?_, ?_, hstkRam.1, hstkWin, ?_, hraAl, ha1_19, hx8_19, hx18_19⟩,
+    hpresM⟩
   · exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
       ((Steps.single hstep4).trans ((Steps.single hstep5).trans ((Steps.single hstep6).trans
       ((Steps.single hstep7).trans ((Steps.single hstep8).trans ((Steps.single hstep9).trans
@@ -996,7 +1011,8 @@ theorem blockA_ee
       (fun c => EvalEntry g N A SL φf φc st d a (.int n) sp r sret aEnv aExpr m0 c
         ∧ c.σ.sailOutput = out0)
       (fun c => ∃ ment v8 v9 v18,
-        ArmEntry g N A SL φf φc st n sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c) := by
+        ArmEntry g N A SL φf φc st n sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
+        MemExtends m0 ment) := by
   intro c hpre'
   obtain ⟨he, hout0⟩ := hpre'
   -- the int kind tag + payload reads (in `m0`), for `hkind`/`hexprSurv`

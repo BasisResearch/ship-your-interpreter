@@ -4526,3 +4526,23 @@ it, still stop and report instead.
   `EvalSimCommon.lean:297+`, already transports them across the epilogue for
   free) and restate the leaf residuals without the `Widen`-over-bare-`EvalExit`
   shape.  Geometry gap (`evalentry-missing-nbs-callee-geom`) unchanged.
+
+## 2026-09-02 entry-footprint-amendment-conduit-fanout (wave 47e, EntryStackSurv landing)
+- missing: a SINGLE named store-survival predicate reused by every interface on
+  the entry→child-entry supply chain.  The `EvalEntry.store_survives` footprint
+  amendment (`sp` → `SL.hi`) was measured at 15 ctor sites / 43 field-use sites,
+  but the survival fact ALSO flows through ~a dozen INLINE ∧-tower literals
+  (`blockA_k` pre, `ArmEntryK`, `armTail_v`/`armTail_rec`/`armTail_rec_es` pres,
+  the `ArmSegSplit*` bundles, `ExecBlock`, `LoopHeadDispatchGeom`,
+  `ApproxArmReseat` twins, the 2 `ExecRecCommon` `hstoreSurv` premises) — each
+  restating the window inline, so the amendment had to be applied at every
+  conduit, not just the named fields.
+- workaround: widened each inline literal in place (same one-line ¬-implication
+  fix at each seam; children get EASIER — sub-sret windows are absorbed by
+  `[SL.lo, SL.hi)`).  Helpers `storeSurvSp`/`EvalEntry.store_survives_sp`/
+  `ExecEntry.store_survives_sp` recover the old form where an sp-window
+  consumer remains.
+- cost: ~25 files hand-touched instead of the measured 13; a full-cone regen.
+- proposal: name the predicate ONCE (`StoreSurvives N A SL φf φc S sret m`
+  := ∀ m', agreement outside `[SL.lo,SL.hi)` ∪ sret-window → `StoreRepr m'`)
+  and re-seat the towers on it, so the NEXT footprint change is one def.

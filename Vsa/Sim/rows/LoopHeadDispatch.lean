@@ -225,10 +225,10 @@ structure LoopHeadDispatchGeom
   `SegEntry.store` + the stack-window survival, exactly `ExecEntry.store_survives`.) -/
   store : StoreRepr mE N A φf φc st.store
   /-- **supplier: the same survival, exported for the callee.**  `StoreRepr` survives
-  any further change confined to `[SL.lo, sp)` — the mirror of
-  `ExecEntry.store_survives`. -/
+  any further change confined to `[SL.lo, SL.hi)` — the mirror of the wave-47e
+  WIDENED `ExecEntry.store_survives` (`EntryStackSurv` footprint). -/
   store_survives : ∀ m' : Mem,
-    (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → mE[k]? = m'[k]?) →
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → mE[k]? = m'[k]?) →
     StoreRepr m' N A φf φc st.store
   /-- **ITEM ZERO B1 (recursion-sound budget at the loop-head, depth 0).** `sp`
   carries the head statement `s`'s structural need + the FULL per-call budget

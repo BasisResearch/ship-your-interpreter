@@ -600,14 +600,13 @@ theorem blockC_orFalse
   have hstoreM3 : StoreRepr m3 N A φf' φc' st'.store :=
     hstoreSurv' m3 (fun k hk => (hAgM3stk k (fun ⟨ha, hb⟩ => hk ⟨ha, by omega⟩)).symm)
   have hstoreSurvM3 : ∀ m' : Mem,
-      (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) →
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) →
         ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) → m3[k]? = m'[k]?) →
       StoreRepr m' N A φf' φc' st'.store := by
     intro m' hag
     refine hstoreSurv' m' (fun k hk => ?_)
     rw [← hAgM3stk k (fun ⟨ha, hb⟩ => hk ⟨ha, by omega⟩)]
-    exact hag k (fun ⟨ha, hb⟩ => hk ⟨ha, by omega⟩)
-      (fun ⟨ha, hb⟩ => hk ⟨by omega, by omega⟩)
+    exact hag k hk (fun ⟨ha, hb⟩ => hk ⟨by omega, by omega⟩)
   -- ExprRepr m3 aRight er (right node disjoint from the buffer + stack + arena)
   have hExprM3 : ExprRepr m3 aRight.toNat er :=
     hRightSurv m3 (fun a ha1 ha2 => by
@@ -1207,7 +1206,7 @@ theorem evalOrFalseSim : EvalOrFalseSimGoal := by
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- === block A: prologue + dispatch → widened ArmEntryK @0x8000355c ===
   have hkm0 : read32 m0 aExpr.toNat = some 7 := exprRepr_logical_kind (hc.mem ▸ hc.expr)
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
     blockA_k g N A SL φf φc st (.logical .or el er) 7 (0x8000355c#64) LogicalArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)

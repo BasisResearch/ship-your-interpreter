@@ -69,6 +69,10 @@ theorem stmtExprArmDispatch_of_resid
     e 8 16 sp r aInterp aStmt aEnv aRet aChild m0 c
     (by omega) (by omega) (by decide) (by omega)
     (by cases (hE.mem ▸ hE.stmt) with | expr hk _ _ => exact hk)
+    (Vsa.Alloc.StackOK.child (by decide) (by
+      have h176 : (176#64 : BitVec 64).toNat = 176 := by decide
+      simp only [Stmt.stackNeed, execFrame, h176]; omega) hE.stackBudget)
+    (by exact hE.stmt_bodies)
     hX hE
 
 #print axioms stmtExprArmDispatch_of_resid
@@ -84,6 +88,10 @@ theorem stmtRetArmDispatch_of_resid
     (0x80004120#64) e 8 16 sp r aInterp aStmt aEnv aRet aChild m0 c
     (by omega) (by omega) (by decide) (by omega)
     (by cases (hE.mem ▸ hE.stmt) with | retSome hk _ _ _ => exact hk)
+    (Vsa.Alloc.StackOK.child (by decide) (by
+      have h176 : (176#64 : BitVec 64).toNat = 176 := by decide
+      simp only [Stmt.stackNeed, execFrame, h176]; omega) hE.stackBudget)
+    (by exact hE.stmt_bodies)
     hX hE
 
 #print axioms stmtRetArmDispatch_of_resid
@@ -100,6 +108,10 @@ theorem stmtVarInitArmDispatch_of_resid
     (0x800040d8#64) e 16 24 sp r aInterp aStmt aEnv aRet aChild m0 c
     (by omega) (by omega) (by decide) (by omega)
     (by cases (hE.mem ▸ hE.stmt) with | varInit hk _ _ _ _ _ => exact hk)
+    (Vsa.Alloc.StackOK.child (by decide) (by
+      have h176 : (176#64 : BitVec 64).toNat = 176 := by decide
+      simp only [Stmt.stackNeed, execFrame, h176]; omega) hE.stackBudget)
+    (by exact hE.stmt_bodies)
     hX hE
 
 #print axioms stmtVarInitArmDispatch_of_resid
@@ -120,6 +132,22 @@ theorem stmtIfCondArmDispatch_of_resid
     (by cases (hE.mem ▸ hE.stmt) with
       | ifElse hk _ _ _ _ _ _ _ => exact hk
       | ifNoElse hk _ _ _ _ _ => exact hk)
+    (by
+      have hB := hE.stackBudget
+      have h176 : (176#64 : BitVec 64).toNat = 176 := by decide
+      rcases els with _ | e2
+      · refine Vsa.Alloc.StackOK.child (by decide) ?_ hB
+        have hm := Nat.le_max_left cnd.stackNeed t.stackNeed
+        simp only [Stmt.stackNeed, execFrame, h176]; omega
+      · refine Vsa.Alloc.StackOK.child (by decide) ?_ hB
+        have hm := Nat.le_max_left cnd.stackNeed (max t.stackNeed e2.stackNeed)
+        simp only [Stmt.stackNeed, execFrame, h176]; omega)
+    (by
+      have h := hE.stmt_bodies
+      rcases els with _ | e2 <;>
+        simp only [Stmt.bodiesBound, Bool.and_eq_true] at h
+      · exact h.1
+      · exact h.1.1)
     hX hE
 
 #print axioms stmtIfCondArmDispatch_of_resid
@@ -136,6 +164,15 @@ theorem stmtWhileCondArmDispatch_of_resid
     (0x8000403c#64) cnd 8 16 sp r aInterp aStmt aEnv aRet aChild m0 c
     (by omega) (by omega) (by decide) (by omega)
     (by cases (hE.mem ▸ hE.stmt) with | whileS hk _ _ _ _ => exact hk)
+    (by
+      refine Vsa.Alloc.StackOK.child (by decide) ?_ hE.stackBudget
+      have h176 : (176#64 : BitVec 64).toNat = 176 := by decide
+      have hm := Nat.le_max_left cnd.stackNeed b.stackNeed
+      simp only [Stmt.stackNeed, execFrame, h176]; omega)
+    (by
+      have h := hE.stmt_bodies
+      simp only [Stmt.bodiesBound, Bool.and_eq_true] at h
+      exact h.1)
     hX hE
 
 #print axioms stmtWhileCondArmDispatch_of_resid

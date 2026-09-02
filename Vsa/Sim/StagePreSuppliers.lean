@@ -415,13 +415,16 @@ theorem blockB_binary_leftStagePre
           · right; omega
           · left; omega) hviSlot
   have hstore1 : StoreRepr mcall1 N A φf φc st.store :=
-    hstoreSurv mcall1 (fun k hk1 _ => hAgMcall1 k hk1)
+    hstoreSurv mcall1 (fun k hk1 _ => hAgMcall1 k (fun hcon =>
+      hk1 ⟨hcon.1, Nat.lt_of_lt_of_le hcon.2 hBE.spSLhi⟩))
   have hstoreSurv1 : ∀ m' : Mem,
-      (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
         mcall1[k]? = m'[k]?) → StoreRepr m' N A φf φc st.store := by
     intro m' hag
     refine hstoreSurv m' (fun k hk1 hk2 => ?_)
-    rw [hAgMcall1 k hk1]; exact hag k hk1 hk2
+    have hk1' : ¬ (SL.lo ≤ k ∧ k < sp.toNat) := fun hcon =>
+      hk1 ⟨hcon.1, Nat.lt_of_lt_of_le hcon.2 hBE.spSLhi⟩
+    rw [hAgMcall1 k hk1']; exact hag k hk1 hk2
   have hsproom := hBE.sproom
   have hspSLhi := hBE.spSLhi
   have hexprL1 : ExprRepr mcall1 aLOp.toNat el :=

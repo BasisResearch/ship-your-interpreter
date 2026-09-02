@@ -378,7 +378,7 @@ theorem blockB_call_stagePre
     refine hstoreSurv mcall (fun k hk1 _ => ?_)
     exact (hAgSpill k (by omega)).symm
   have hStoreSurvMcall : ∀ m' : Mem,
-      (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
         mcall[k]? = m'[k]?) → StoreRepr m' N A φf φc st.store := by
     intro m' hag
     refine hstoreSurv m' (fun k hk1 hk2 => ?_)

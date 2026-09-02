@@ -359,15 +359,18 @@ theorem blockC_bool
     Triple
       (fun c => ∃ ment,
         ArmEntryK g N A SL φf φc st (0x80003420#64) Value_boolLoaded (.bool b)
-          sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c)
-      (fun c => ∃ mpre, PreEpilogueV g N A SL φf φc st (.bool b) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+          sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
+        MemExtends m0 ment)
+      (fun c => ∃ mpre, PreEpilogueV g N A SL φf φc st (.bool b) sp r sret v8 v9 v18 out0 m0 mpre c ∧
+        LeafMemPin SL sp sret m0 mpre) := by
   intro c hc
-  obtain ⟨ment, hG, htick, hpc, ha0, hs1, ha2, hsp, hra, hmiEx, hout, hmem, hcode, hviCode,
+  obtain ⟨ment, ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, hmiEx, hout, hmem, hcode, hviCode,
     hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl, _hx11, _hx8, _hx18⟩ := hc
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl, _hx11, _hx8, _hx18⟩,
+    hpresM⟩ := hc
   obtain ⟨vmi, hmi⟩ := hmiEx
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- payload address no-wrap for `lw a1,8(a2)`
@@ -458,7 +461,7 @@ theorem blockC_bool
   have hviCode2 : Value_boolLoaded σ2.mem := by rw [hmem2e]; exact hviCode
   have hout2 : σ2.sailOutput = out0 := by rw [hobs2.out, sailOutput_sigmaPost_jal]; exact hout1
   -- ============ jal callee: value_bool_spec_full at vb := payV ============
-  obtain ⟨c3, hs3, hG3, hpc3, ha0_3, hlink3, hmi3, htick3, hval3, hout3, hmemframe3, _hMemExt3, hframe3⟩ :=
+  obtain ⟨c3, hs3, hG3, hpc3, ha0_3, hlink3, hmi3, htick3, hval3, hout3, hmemframe3, hMemExt3, hframe3⟩ :=
     value_bool_spec_full (fun R => σ2.regs.get? R) sret payV (0x80003428#64) N φc ment out0
       ⟨σ2, i2, c.steps + 1 + 1⟩
       ⟨hG2, hviCode2, hmem2e, hpc2, ha0_2, hx11_2, hlink2, ⟨vmi2, hmi2⟩, hi2, hBoolReg, hrettgt, hout2,
@@ -504,12 +507,16 @@ theorem blockC_bool
   obtain ⟨vmi4, hmi4⟩ := obs_jr_minstret hobs4
   have hout4 : c4.sailOutput = out0 := by rw [hobs4.out, sailOutput_sigmaPost_jump_x0]; exact hout3
   -- assemble PreEpilogueV at `.bool b`
-  refine ⟨⟨c4, i4', c3.steps + 1⟩, ?_, c4.mem, hG4, hi4, hpc4, hs1_4, hsp_4, ⟨_, hmi4⟩, hout4, houtStr,
+  refine ⟨⟨c4, i4', c3.steps + 1⟩, ?_, c4.mem, ⟨hG4, hi4, hpc4, hs1_4, hsp_4, ⟨_, hmi4⟩, hout4, houtStr,
     rfl, hmem4e ▸ hcode3, hmem4e ▸ hvalB, hmem4e ▸ hstore3,
     ?_,
     hmem4e ▸ hslotRa3, hmem4e ▸ hslotS03, hmem4e ▸ hslotS13, hmem4e ▸ hslotS23,
     hgx8, hgx9, hgx18, hgx2, ?_,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hraAl⟩
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hraAl⟩,
+    { pres := by rw [hmem4e]; exact hpresM.trans hMemExt3
+      agree := fun k hk hsr => by
+        rw [hmem4e]
+        exact (hmemframe3 k hsr).symm.trans (hmemframe_m0 k hk) }⟩
   · -- the composed run: step1(lw) ; step2(jal) ; callee steps ; step4(j)
     exact (Steps.single hstep1).trans ((Steps.single hstep2).trans (hs3.trans (Steps.single hstep4)))
   · -- the epilogue g-frame: callee-saved (excl x8/x9/x18/x2) preserved across block C.
@@ -599,7 +606,7 @@ structure EvalBoolEntry
   expr : ExprRepr c.σ.mem aExpr.toNat (.bool b)
   store : StoreRepr c.σ.mem N A φf φc st.store
   store_survives : ∀ m' : Mem,
-    (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
       c.σ.mem[k]? = m'[k]?) →
     StoreRepr m' N A φf φc st.store
   out : OutRepr c.σ st
@@ -650,15 +657,22 @@ def EvalBoolSimGoal : Prop :=
       (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
         st (.bool b) sp r sret m0)
 
-/-- **The M4 `EvalE.bool` gate.** Composes `blockA_k` (prologue + dispatch →
-`ArmEntryK` at the bool arm), `blockC_bool` (arm + `value_bool` → epilogue entry),
-and `blockD_v` at `.bool b` (epilogue → return). -/
-theorem evalBoolSim : EvalBoolSimGoal := by
-  intro g N A SL φf φc st d a b sp r sret aEnv aExpr m0 _hEvalE
+/-- **The PINNED M4 `EvalE.bool` gate** (wave 47e, `LeafExitPin`): as
+`evalBoolSim` but with the exit memory pinned (`LeafMemPin`), transported by
+`blockD_v`'s `Q`. -/
+theorem evalBoolSimP
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (a : Addr) (b : Bool)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) :
+    Triple
+      (EvalBoolEntry g N A SL φf φc st d a b sp r sret aEnv aExpr m0)
+      (fun c => EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st (.bool b) sp r sret m0 c ∧ LeafMemPin SL sp sret m0 c.σ.mem) := by
   intro c hc
   -- === block A: prologue + dispatch → ArmEntryK (via blockA_k) ===
   have hkm0 : read32 m0 aExpr.toNat = some 2 := hc.mem ▸ exprRepr_bool_kind hc.expr
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, hpresM⟩ :=
     blockA_k g N A SL φf φc st (.bool b) 2 (0x80003420#64) Value_boolLoaded
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
@@ -701,14 +715,23 @@ theorem evalBoolSim : EvalBoolSimGoal := by
       hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
       hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
       hc.spill_defined⟩, rfl⟩
-  -- === block C: arm (lw a1,8(a2); jal value_bool; j) → PreEpilogueV (.bool b) ===
-  obtain ⟨c2, hs2, mpre, hPre⟩ :=
+  -- === block C: arm (lw a1,8(a2); jal value_bool; j) → PreEpilogueV (.bool b) + pin ===
+  obtain ⟨c2, hs2, mpre, hPre, hPin⟩ :=
     blockC_bool g N A SL φf φc st b sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0
-      hc.sret_vboolcode_disjoint c1 ⟨ment, hArm⟩
-  -- === block D: epilogue → EvalExit (.bool b) ===
-  obtain ⟨c3, hs3, hExit, _⟩ :=
-    blockD_v g N A SL φf φc st (.bool b) sp r sret v8 v9 v18 c.σ.sailOutput m0 (fun _ => True)
-      c2 ⟨mpre, hPre, trivial⟩
-  exact ⟨c3, (hs1.trans hs2).trans hs3, hExit⟩
+      hc.sret_vboolcode_disjoint c1 ⟨ment, hArm, hpresM⟩
+  -- === block D: epilogue → EvalExit (.bool b) (the pin rides `Q`) ===
+  obtain ⟨c3, hs3, hExit, hQ⟩ :=
+    blockD_v g N A SL φf φc st (.bool b) sp r sret v8 v9 v18 c.σ.sailOutput m0
+      (LeafMemPin SL sp sret m0) c2 ⟨mpre, hPre, hPin⟩
+  exact ⟨c3, (hs1.trans hs2).trans hs3, hExit, hQ⟩
+
+/-- **The M4 `EvalE.bool` gate** — the pin-forgetting weakening of
+`evalBoolSimP`. -/
+theorem evalBoolSim : EvalBoolSimGoal := by
+  intro g N A SL φf φc st d a b sp r sret aEnv aExpr m0 _hEvalE
+  intro c hc
+  obtain ⟨c', hs, hExit, _⟩ :=
+    evalBoolSimP g N A SL φf φc st d a b sp r sret aEnv aExpr m0 c hc
+  exact ⟨c', hs, hExit⟩
 
 end Vsa.Sim

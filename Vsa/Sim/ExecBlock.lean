@@ -227,7 +227,7 @@ theorem armExec_rec
         StmtRepr mcall aStmtSub.toNat sSub ∧
         StoreRepr mcall N A φf φc st.store ∧
         (∀ m' : Mem,
-          (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → mcall[k]? = m'[k]?) →
+          (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → mcall[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
         -- callee-saved regs (excl s0/s1/s2/s3/sp) still read the arm frame `garm`
         (∀ R : Register, AbiPreservedNoise R →
@@ -341,11 +341,10 @@ theorem armExec_rec
       stmt := by rw [hmem1e]; exact hstmtSub
       store := by rw [hmem1e]; exact hstore
       store_survives := by
+        -- wave 47e: identical WIDENED footprint parent/child (same `SL`).
         intro m' hag
         refine hstoreSurv m' (fun k hk1 => ?_)
-        have hk1' : ¬ (SL.lo ≤ k ∧ k < (sp - 176#64).toNat) := by
-          rw [hspsub]; intro ⟨ha, hb⟩; exact hk1 ⟨ha, by omega⟩
-        have := hag k hk1'
+        have := hag k hk1
         rwa [hmem1e] at this
       out := by
         show Vsa.Machine.output σ1 = st.out

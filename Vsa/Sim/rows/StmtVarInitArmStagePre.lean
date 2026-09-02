@@ -70,7 +70,7 @@ theorem blockB_stmtVarInit_stagePre
         (aStmt.toNat + 24 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat) ∧
         Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧
         (∀ m' : Mem,
-          (∀ k, ¬ (SL.lo ≤ k ∧ k < (sp.toNat - 176) + 1088) →
+          (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) →
             ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
             ment[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
@@ -300,12 +300,10 @@ theorem blockB_stmtVarInit_stagePre
   · exact hExprChild
   -- StoreRepr ment
   · exact hstore
-  -- store_survives over [SL.lo, jsp)
+  -- store_survives (wave 47e: WIDENED `[SL.lo, SL.hi)` footprint end-to-end)
   · intro m' hag
     refine hStoreSurvJ m' (fun k hk1 hk2 => ?_)
-    apply hag k
-    · rw [hjspN]; exact hk1
-    · exact hk2
+    exact hag k hk1 hk2
   -- aOperand % 8 = 0
   · exact hopAl
   -- 0x80000000 ≤ aOperand
@@ -381,7 +379,7 @@ def StmtVarInitArmDispatch
         (aStmt.toNat + 24 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat) ∧
         Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧
         (∀ m' : Mem,
-          (∀ k, ¬ (SL.lo ≤ k ∧ k < (sp.toNat - 176) + 1088) →
+          (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) →
             ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
             ment[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧

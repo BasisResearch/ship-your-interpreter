@@ -89,7 +89,7 @@ def MidArmRightMarshal
   -- store/expr/value survival + spills at cL.σ.mem:
   StoreRepr cL.σ.mem N A φf1 φc1 st'.store ∧
   (∀ m' : Mem,
-    (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
       cL.σ.mem[k]? = m'[k]?) →
     StoreRepr m' N A φf1 φc1 st'.store) ∧
   (∀ m : Mem,
@@ -221,7 +221,7 @@ theorem midArmField_of_IH
         ExprRepr mcall aLOp.toNat l ∧
         StoreRepr mcall N A φf φc st.store ∧
         (∀ m' : Mem,
-          (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+          (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
             mcall[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧

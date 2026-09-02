@@ -182,9 +182,10 @@ structure ExecDispatchEntry
   stmt : StmtRepr c.σ.mem aStmt.toNat s
   /-- The whole spec store is represented. -/
   store : StoreRepr c.σ.mem N A φf φc st.store
-  /-- `StoreRepr` survives any memory change confined to `[SL.lo, spD)`. -/
+  /-- `StoreRepr` survives any memory change confined to `[SL.lo, SL.hi)`
+  (wave 47e `EntryStackSurv` footprint). -/
   store_survives : ∀ m' : Mem,
-    (∀ k, ¬ (SL.lo ≤ k ∧ k < spD.toNat) → c.σ.mem[k]? = m'[k]?) →
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
     StoreRepr m' N A φf φc st.store
   /-- Console output correspondence. -/
   out : OutRepr c.σ st
@@ -253,9 +254,10 @@ structure ExecWhileArmEntry
   stmt : StmtRepr c.σ.mem aStmt.toNat s
   /-- The whole spec store is represented. -/
   store : StoreRepr c.σ.mem N A φf φc st.store
-  /-- `StoreRepr` survives any memory change confined to `[SL.lo, spD)`. -/
+  /-- `StoreRepr` survives any memory change confined to `[SL.lo, SL.hi)`
+  (wave 47e `EntryStackSurv` footprint). -/
   store_survives : ∀ m' : Mem,
-    (∀ k, ¬ (SL.lo ≤ k ∧ k < spD.toNat) → c.σ.mem[k]? = m'[k]?) →
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
     StoreRepr m' N A φf φc st.store
   /-- Console output correspondence. -/
   out : OutRepr c.σ st

@@ -290,7 +290,7 @@ theorem execEntry_of_jTailRedispatch
         StmtRepr mcall aStmt.toNat s ∧
         StoreRepr mcall N A φf φc st.store ∧
         (∀ m' : Mem,
-          (∀ k, ¬ (SL.lo ≤ k ∧ k < spD.toNat) → mcall[k]? = m'[k]?) →
+          (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → mcall[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
         aStmt.toNat % 8 = 0 ∧
         0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000 ∧
@@ -379,7 +379,7 @@ def ExecStmtTailPreBundle (s : Stmt) (c' : Config) (st : SpecSt) (d : Nat)
     StmtRepr mcall aStmt.toNat s ∧
     StoreRepr mcall N A φf φc st.store ∧
     (∀ m' : Mem,
-      (∀ k, ¬ (SL.lo ≤ k ∧ k < spD.toNat) → mcall[k]? = m'[k]?) →
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → mcall[k]? = m'[k]?) →
       StoreRepr m' N A φf φc st.store) ∧
     aStmt.toNat % 8 = 0 ∧
     0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000 ∧

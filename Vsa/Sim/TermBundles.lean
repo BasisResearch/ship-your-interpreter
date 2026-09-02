@@ -393,6 +393,9 @@ theorem bin_add_cell_ofBundle (G : TermGuards)
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : SpecSt) (el er : Expr) (a b : Int)
     (sp r sret aExpr : BitVec 64) (m0 : Mem)
+    -- ITEM ZERO B1 (threaded wave 47e): the post-LEFT store-bodies residual
+    -- `BinIntCellResid` gained.
+    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hCell : ∃ (aLOp aROp Wl : BitVec 64),
       Vsa.Sim.BinArmExtras g N A SL .add el er sp r sret aExpr aLOp aROp m0 ∧
       (∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
@@ -407,7 +410,7 @@ theorem bin_add_cell_ofBundle (G : TermGuards)
           (Register.x18 == R) = false → (Register.x2 == R) = false →
           gpre R = g R))) :
     Vsa.Sim.BinIntCellResid .add Vsa.Sim.AddResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 :=
-  ⟨(G.storeSize st' st'').1, (G.storeSize st' st'').2, hCell⟩
+  ⟨(G.storeSize st' st'').1, (G.storeSize st' st'').2, hSB, hCell⟩
 
 #print axioms eval_int_row_ofBundle
 #print axioms bin_add_cell_ofBundle

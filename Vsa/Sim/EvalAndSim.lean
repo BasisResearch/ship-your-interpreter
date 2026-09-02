@@ -287,7 +287,7 @@ theorem blockB_logical
     exact (hAgSpill k (by omega)).symm
   -- StoreRepr survival for mcall (compose the entry survival with the spill-window peel)
   have hStoreSurvMcall : ∀ m' : Mem,
-      (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
         mcall[k]? = m'[k]?) → StoreRepr m' N A φf φc st.store := by
     intro m' hag
     refine hstoreSurv m' (fun k hk1 hk2 => ?_)
@@ -1357,7 +1357,7 @@ theorem evalAndSim : EvalAndSimGoal := by
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- === block A: prologue + dispatch → widened ArmEntryK @0x8000355c ===
   have hkm0 : read32 m0 aExpr.toNat = some 7 := exprRepr_logical_kind (hc.mem ▸ hc.expr)
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
     blockA_k g N A SL φf φc st (.logical .and el er) 7 (0x8000355c#64) LogicalArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)

@@ -647,6 +647,10 @@ import Vsa.Sim.rows.FnSfvwrite_r
 import Vsa.Sim.rows.TransportSfvwrite_r
 import Vsa.Sim.rows.FnSfvwriteFold
 import Vsa.Sim.rows.AssemblySkeleton
+import Vsa.Sim.rows.Field_hInt
+import Vsa.Sim.rows.Field_hNull
+import Vsa.Sim.rows.Field_hBool
+import Vsa.Sim.rows.Field_hStr
 import Vsa.Sim.RepackTac
 import Vsa.Sim.rows.ErrSegCrt0
 import Vsa.Sim.rows.ErrSegMain

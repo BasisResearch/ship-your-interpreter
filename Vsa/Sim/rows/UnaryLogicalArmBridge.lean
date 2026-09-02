@@ -122,7 +122,7 @@ theorem blockA_unaryArm
   have hkm0 : read32 m0 aExpr.toNat = some 8 := by
     cases (hc.mem ▸ hc.expr) with | unary hk _ _ _ => exact hk
   -- === block A: prologue + dispatch → widened ArmEntryK @0x800035e0 ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
     blockA_k g N A SL φf φc st (.unary op esub) 8 (0x800035e0#64) UnaryArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
@@ -278,7 +278,7 @@ theorem blockA_logicalArm
   have hkm0 : read32 m0 aExpr.toNat = some 7 := by
     cases (hc.mem ▸ hc.expr) with | logical hk _ _ _ _ _ => exact hk
   -- === block A: prologue + dispatch → widened ArmEntryK @0x8000355c ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
     blockA_k g N A SL φf φc st (.logical op el er) 7 (0x8000355c#64) LogicalArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)

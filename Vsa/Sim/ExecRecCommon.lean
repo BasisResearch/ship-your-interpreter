@@ -130,7 +130,7 @@ theorem armTail_rec_es
         ExprRepr mcall aOperand.toNat esub ∧
         StoreRepr mcall N A φf φc st.store ∧
         (∀ m' : Mem,
-          (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → mcall[k]? = m'[k]?) →
+          (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → mcall[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
         -- callee-saved regs (excl s0/s1/s2/s3/sp) still read the arm frame `garm`
         (∀ R : Register, AbiPreservedNoise R →
@@ -245,13 +245,13 @@ theorem armTail_rec_es
       expr := by rw [hmem1e]; exact hsubexpr
       store := by rw [hmem1e]; exact hstore
       store_survives := by
+        -- wave 47e: the child's WIDENED footprint = the parent's (same `SL`);
+        -- the sub-sret window sits inside `[SL.lo, SL.hi)`, so it is absorbed.
         intro m' hag
         refine hstoreSurv m' (fun k hk1 => ?_)
-        have hk1' : ¬ (SL.lo ≤ k ∧ k < (sp - 176#64).toNat) := by
-          rw [hspsub]; intro ⟨ha, hb⟩; exact hk1 ⟨ha, by omega⟩
         have hk2' : ¬ (subsret.toNat ≤ k ∧ k < subsret.toNat + 24) := by
           intro ⟨ha, hb⟩; exact hk1 ⟨by omega, by omega⟩
-        have := hag k hk1' hk2'
+        have := hag k hk1 hk2'
         rwa [hmem1e] at this
       out := by
         show Vsa.Machine.output σ1 = st.out
@@ -411,7 +411,7 @@ theorem execExprGlue
       IntSlotPinned ment)
     -- the store-window survival (as in `ExecEntry.store_survives`):
     (hstoreSurv : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
-      ∀ m' : Mem, (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ment[k]? = m'[k]?) →
+      ∀ m' : Mem, (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ment[k]? = m'[k]?) →
         StoreRepr m' N A φf φc st.store)
     -- operand-node geometry:
     (hopAl : aOperand.toNat % 8 = 0)
@@ -659,7 +659,7 @@ theorem execExprSimC
     (hslotP : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       IntSlotPinned ment)
     (hstoreSurv : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
-      ∀ m' : Mem, (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ment[k]? = m'[k]?) →
+      ∀ m' : Mem, (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ment[k]? = m'[k]?) →
         StoreRepr m' N A φf φc st.store)
     (hopAl : aOperand.toNat % 8 = 0)
     (hopLo : 0x80000000 ≤ aOperand.toNat) (hopHi : aOperand.toNat + 16 ≤ 0x100000000)

@@ -568,7 +568,7 @@ theorem execBlockA
   have hstackOK := he.stackOK
   obtain ⟨vmi, hmi⟩ := he.minstret
   have hmem := he.mem; have hcode := he.code; have hstmt := he.stmt
-  have hstore := he.store; have hstoreSurv := he.store_survives; have hout := he.out
+  have hstore := he.store; have hstoreSurv := he.store_survives_sp; have hout := he.out
   have hframe := he.frame; have hcodeStk := he.code_stack_disjoint
   have hstkRam := he.stack_ram; have hstkWin := he.stack_win
   have hstmtStk := he.stmt_stack_disjoint; have hstmtAl := he.stmt_align

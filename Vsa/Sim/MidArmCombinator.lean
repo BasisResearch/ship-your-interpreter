@@ -95,7 +95,7 @@ theorem binaryR_midStagePre
     -- StoreRepr / ExprRepr / Value_intLoaded / IntSlotPinned survival at cL.σ.mem:
     (hstoreCL : StoreRepr cL.σ.mem N A φf1 φc1 st'.store)
     (hstoreSurvCL : ∀ m' : Mem,
-      (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
         cL.σ.mem[k]? = m'[k]?) →
       StoreRepr m' N A φf1 φc1 st'.store)
     (hexprSurvCL : ∀ m : Mem,
@@ -361,12 +361,14 @@ theorem binaryR_midStagePre
   have hstore2 : StoreRepr mcall2 N A φf1 φc1 st'.store :=
     hstoreSurvCL mcall2 (fun k hk1 hk2 => hAgMcall2 k (fun ⟨ha, hb⟩ => hk1 ⟨ha, by omega⟩))
   have hstoreSurv2 : ∀ m' : Mem,
-      (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) →
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) →
         ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) → mcall2[k]? = m'[k]?) →
       StoreRepr m' N A φf1 φc1 st'.store := by
     intro m' hag
     refine hstoreSurvCL m' (fun k hk1 hk2 => ?_)
-    rw [hAgMcall2 k hk1]; exact hag k hk1 hk2
+    have hk1' : ¬ (SL.lo ≤ k ∧ k < sp.toNat) := fun hcon =>
+      hk1 ⟨hcon.1, Nat.lt_of_lt_of_le hcon.2 hspSLhi⟩
+    rw [hAgMcall2 k hk1']; exact hag k hk1 hk2
   -- `ExprRepr mcall2 aROp er`.  The right operand node `[aROp, aROp+16)` may live
   -- INSIDE the stack window (`sp-1088 ≤ aROp`), so we cannot use `hAgMcall2` (which
   -- needs disjointness from all of `[SL.lo, sp)`).  Instead: `mcall2` differs from
@@ -479,7 +481,7 @@ theorem binaryR_midStage1
     (hpop : ∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, cL.σ.mem[a]? = some b))
     (hstoreCL : StoreRepr cL.σ.mem N A φf1 φc1 st'.store)
     (hstoreSurvCL : ∀ m' : Mem,
-      (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
         cL.σ.mem[k]? = m'[k]?) →
       StoreRepr m' N A φf1 φc1 st'.store)
     (hexprSurvCL : ∀ m : Mem,

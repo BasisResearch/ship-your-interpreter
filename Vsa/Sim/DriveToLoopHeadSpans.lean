@@ -160,6 +160,10 @@ structure SegEntryFields (cH : Config) where
   depth_budget : (0 : Nat) + dLeft = Vsa.While.maxCallDepth
   /-- the arena budget. -/
   arena_budget : A.lo + aLeft ≤ A.hi
+  /-- **ITEM ZERO (falsity #12, shape 3), threaded wave 47e**: the `interp_run`
+  image is pinned in `m0` (the `SeqSpanGround` feed; the discharger pins these
+  bytes anyway — `InterpInit.interpInitStoreRepr_of_drive`'s amended premise). -/
+  run_code : Vsa.Sim.Code.Interp_runLoaded m0
 
 /-- **The spill bridge landing.**  What `driveSpillBridge` delivers from the
 `Loaded` config: the spill body ≫ `jal setjmp` bridge run to the setjmp entry
@@ -260,7 +264,8 @@ theorem driveToLoopHead_of_spans
   -- compose the four runs (the middle Steps share the same underlying config).
   have hSteps : Steps c cB :=
     (((s1steps.trans s2steps).trans sAsteps).trans sBsteps)
-  refine ⟨cB, F.g, F.N, F.A, F.SL, F.φf, F.φc, F.dLeft, F.aLeft, F.m0, hSteps, ?_⟩
+  refine ⟨cB, F.g, F.N, F.A, F.SL, F.φf, F.φc, F.dLeft, F.aLeft, F.m0, hSteps,
+    F.run_code, ?_⟩
   have hpcH' : cB.σ.regs.get? Register.PC = some (BitVec.ofNat 64 interpLoopHeadPC) := by
     rw [sBpc]; rfl
   exact
@@ -312,7 +317,32 @@ theorem driveToLoopHead_interpRunLayout
         GoodState cH.σ → cH.tick < 2 → SegEntryFields cH) :
     DriveToLoopHead interpRunLayout := by
   intro p c hL
-  exact driveToLoopHead_of_spans hSpill hSplice hLoopA hLoopB hFields p c hL
+  -- re-run the span composition (as `driveToLoopHead_of_spans`), emitting the
+  -- amended drive's `Interp_runLoaded m0` conjunct from `SegEntryFields.run_code`.
+  obtain ⟨c1, spNew, s1steps, s1pc, s1ra, s1sp, s1good, s1tick, _s1mi⟩ := hSpill p c hL
+  obtain ⟨σ2, i2, u2, s2steps, s2tick, s2good, s2pc, s2a0, s2sp, s2mi⟩ :=
+    hSplice c1 spNew s1pc s1ra s1sp s1good s1tick
+  obtain ⟨cA, sAsteps, sApc, sAgood, sAtick, sAmi⟩ :=
+    hLoopA ⟨σ2, i2, u2⟩ s2pc s2good s2tick s2mi
+  obtain ⟨cB, sBsteps, sBpc, sBgood, sBtick, sBmi⟩ :=
+    hLoopB cA sApc sAgood sAtick sAmi
+  have F := hFields cB sBpc sBgood sBtick
+  have hSteps : Steps c cB :=
+    (((s1steps.trans s2steps).trans sAsteps).trans sBsteps)
+  refine ⟨cB, F.g, F.N, F.A, F.SL, F.φf, F.φc, F.dLeft, F.aLeft, F.m0, hSteps,
+    F.run_code, ?_⟩
+  have hpcH' : cB.σ.regs.get? Register.PC = some (BitVec.ofNat 64 interpLoopHeadPC) := by
+    rw [sBpc]; rfl
+  exact
+    { good := sBgood
+      tick := sBtick
+      pc := hpcH'
+      store := F.mem ▸ F.store
+      out := F.out
+      mem := F.mem
+      frame := F.frame
+      depth_budget := F.depth_budget
+      arena_budget := F.arena_budget }
 
 #print axioms driveToLoopHead_interpRunLayout
 

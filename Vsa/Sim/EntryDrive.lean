@@ -88,6 +88,9 @@ def DriveToLoopHead (L : Layout) : Prop :=
       (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
       (dLeft aLeft : Nat) (m0 : Mem),
       Steps c cH ∧
+      -- ITEM ZERO (falsity #12, shape 3; threaded wave 47e): the drive also
+      -- certifies the `interp_run` image in `m0`.
+      Vsa.Sim.Code.Interp_runLoaded m0 ∧
       SegEntry g N A SL φf φc initSt 0 dLeft aLeft interpLoopHeadPC m0 cH
 
 /-! ## §2. Consumer 1 — the term-arm entry (`InterpInitStoreRepr`) -/
@@ -104,8 +107,8 @@ theorem interpInitStoreRepr_of_driveToLoopHead
     ∀ p, InterpInitStoreRepr L p := by
   apply interpInitStoreRepr_of_drive L
   intro p c hL
-  obtain ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, hSeg⟩ := hDrive p c hL
-  refine ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, ?_⟩
+  obtain ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, hImg, hSeg⟩ := hDrive p c hL
+  refine ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, hImg, ?_⟩
   -- `initSt = { store := storeAfterAssert, out := initSt.out }` by `initStore_eq_initSt`.
   have hst : ({ store := storeAfterAssert, out := initSt.out } : SpecSt) = initSt := by
     rw [initStore_eq_initSt]
@@ -138,7 +141,7 @@ theorem divEntryDrive_of_driveToLoopHead
       Reflect cH 0 p) :
     DivCorrClose.DivEntryDrive Reflect L := by
   intro p c hL
-  obtain ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, hSeg⟩ := hDrive p c hL
+  obtain ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, _hImg, hSeg⟩ := hDrive p c hL
   obtain ⟨k, hStepsN⟩ := hSteps.toN
   refine ⟨cH, k, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hStepsN, hSeg, ?_⟩
   exact hRefl0 p c cH hL ⟨g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, hSeg⟩

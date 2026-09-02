@@ -223,18 +223,21 @@ structure EvalEntry
   arm that dereferences the environment; for `.int` it is carried through
   unchanged. -/
   store : StoreRepr c.σ.mem N A φf φc st.store
-  /-- **`StoreRepr` survives any memory change confined to the stack window
-  `[SL.lo, sp)` ∪ the sret buffer `[sret, sret+24)`.** This is the abstraction of
-  the arena/AST-disjointness footprint reasoning (the represented frames/closures
-  and their name/value strings live in the arena and AST regions, both disjoint
-  from the C stack scribble and the caller's result buffer). For `.int` the only
-  memory changes are the four prologue spills (in `[SL.lo, sp)`) and `value_int`'s
-  sret write (in `[sret, sret+24)`), so the exit store re-representation is
-  discharged by feeding this the `AgreeP` witness for the walk's net memory delta.
-  (v2 field: added by the block-C/D assembly, where `StoreRepr` must be threaded
-  across `value_int`; the honest footprint form of `storeRepr_agreeP`.) -/
+  /-- **`StoreRepr` survives any memory change confined to the FULL stack region
+  `[SL.lo, SL.hi)` ∪ the sret buffer `[sret, sret+24)`.** This is the abstraction
+  of the arena/AST-disjointness footprint reasoning (the represented
+  frames/closures and their name/value strings live in the arena and AST regions,
+  both disjoint from the C stack and the caller's result buffer).
+  **WAVE 47e (`EntryStackSurv`) AMENDMENT**: footprint widened from `[SL.lo, sp)`
+  to `[SL.lo, SL.hi)` — the recursive motive's `EvalExitD` survival clause is
+  fixed at `stackFoot SL = [SL.lo, SL.hi)`, and the caller strip `[sp, SL.hi)`
+  was covered by NOTHING (machine-checked verdict:
+  `experiments/fleet/obstructions/B1_reseat_footprint_verdict.lean`).  The old
+  `sp`-window form is recovered by `EvalEntry.store_survives_sp` (one mono
+  lemma); construction sites supply the wider fact (the store footprint is
+  disjoint from the WHOLE stack region, not just the scribbled prefix). -/
   store_survives : ∀ m' : Mem,
-    (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
       c.σ.mem[k]? = m'[k]?) →
     StoreRepr m' N A φf φc st.store
   /-- Console output correspondence. -/
@@ -306,6 +309,25 @@ structure EvalEntry
   --   the recursive `eval_expr` calls: the EX_BINARY/EX_CALL arms reload it).
   -- TODO(alloc): an `AInv`/arena-budget field (`MallocContract`) for arms that
   --   allocate (EX_FN closure, EX_CALL frame). `.int` allocates nothing.
+
+/-- **The `sp`-window form of `store_survives`** (the pre-amendment field, ONE
+mono lemma): `[SL.lo, sp) ⊆ [SL.lo, SL.hi)` by `stackOK`, so an agreement
+witness outside the small window a fortiori feeds the widened field.  Use sites
+that thread the survival into an `sp`-window interface (the `blockA_k` pre
+tower and its clones) consume THIS, never re-derive. -/
+theorem EvalEntry.store_survives_sp
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : St} {d : Nat} {a : Addr} {e : Expr}
+    {sp r sret aEnv aExpr : BitVec 64} {m0 : Mem} {c : Config}
+    (hc : EvalEntry g N A SL φf φc st d a e sp r sret aEnv aExpr m0 c) :
+    ∀ m' : Mem,
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+        c.σ.mem[k]? = m'[k]?) →
+      StoreRepr m' N A φf φc st.store :=
+  fun m' h => hc.store_survives m'
+    (fun k hk hr => h k
+      (fun hcon => hk ⟨hcon.1, Nat.lt_of_lt_of_le hcon.2 hc.stackOK.2.1⟩) hr)
 
 /-! ## `EvalExit` — the machine postcondition at the return PC
 

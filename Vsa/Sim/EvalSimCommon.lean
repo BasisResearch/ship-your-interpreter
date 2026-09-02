@@ -51,6 +51,99 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
+/-! ## `MemExtends` — presence monotonicity -/
+
+/-- Every address populated in `m0` is still populated in `m`. All real machine
+memory deltas are `writeMap4/8` chains (inserts), so every verified walk
+preserves this; it is the fact `EvalExit` forgets and recursive callers need
+(the post-call `ld`s of the unconstrained sub-result padding bytes). -/
+def MemExtends (m0 m : Mem) : Prop :=
+  ∀ (a : Nat) (b : BitVec 8), m0[a]? = some b → ∃ b', m[a]? = some b'
+
+theorem MemExtends.refl (m : Mem) : MemExtends m m := fun _ b h => ⟨b, h⟩
+
+/-- A `writeMap8` (an 8-byte insert) preserves presence: nothing is deleted, and
+the 8 written bytes are present. -/
+theorem memExtends_writeMap8 (mem : Mem) (a8 : Nat) (d : BitVec (8 * 8)) :
+    MemExtends mem (writeMap8 mem a8 d) := by
+  intro k b hk
+  by_cases hin : a8 ≤ k ∧ k < a8 + 8
+  · obtain ⟨hlo, hhi⟩ := hin
+    rcases (show k = a8 ∨ k = a8 + 1 ∨ k = a8 + 2 ∨ k = a8 + 3 ∨ k = a8 + 4 ∨
+        k = a8 + 5 ∨ k = a8 + 6 ∨ k = a8 + 7 from by omega)
+      with h | h | h | h | h | h | h | h
+    · exact ⟨_, by rw [show k = a8 + 0 from by omega]; exact getElem_writeMap8_0 mem a8 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap8_1 mem a8 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap8_2 mem a8 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap8_3 mem a8 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap8_4 mem a8 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap8_5 mem a8 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap8_6 mem a8 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap8_7 mem a8 d⟩
+  · exact ⟨b, by rw [getElem_writeMap8_disjoint mem a8 k d (by omega)]; exact hk⟩
+
+/-- A `writeMap4` (a 4-byte insert) preserves presence. -/
+theorem memExtends_writeMap4 (mem : Mem) (a4 : Nat) (d : BitVec (8 * 4)) :
+    MemExtends mem (writeMap4 mem a4 d) := by
+  intro k b hk
+  by_cases hin : a4 ≤ k ∧ k < a4 + 4
+  · obtain ⟨hlo, hhi⟩ := hin
+    rcases (show k = a4 ∨ k = a4 + 1 ∨ k = a4 + 2 ∨ k = a4 + 3 from by omega)
+      with h | h | h | h
+    · exact ⟨_, by rw [show k = a4 + 0 from by omega]; exact getElem_writeMap4_0 mem a4 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap4_1 mem a4 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap4_2 mem a4 d⟩
+    · exact ⟨_, by rw [h]; exact getElem_writeMap4_3 mem a4 d⟩
+  · exact ⟨b, by rw [getElem_writeMap4_disjoint mem a4 k d (by omega)]; exact hk⟩
+
+theorem MemExtends.trans {m0 m1 m2 : Mem}
+    (h1 : MemExtends m0 m1) (h2 : MemExtends m1 m2) : MemExtends m0 m2 := by
+  intro a b h
+  obtain ⟨b', hb'⟩ := h1 a b h
+  exact h2 a b' hb'
+
+-- (relocated block ends; wave 47e)
+
+/-- **Narrow a WIDENED (`[SL.lo, SL.hi)`) store-survival witness to the
+`sp`-window form** (the pre-amendment interface shape) — the ONE mono step every
+use site threading an amended `store_survives` field into an `sp`-window slot
+(the `blockA_k` pre tower and its clones) goes through.  Wave 47e
+(`EntryStackSurv`). -/
+theorem storeSurvSp {N : NativeAddrs} {A : Arena} {SL : StackLayout}
+    {φf φc : Vsa.While.Addr → Nat} {S : Vsa.While.Store}
+    {sp sret : BitVec 64} {m : Mem}
+    (hsphi : sp.toNat ≤ SL.hi)
+    (h : ∀ m' : Mem,
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+        m[k]? = m'[k]?) →
+      StoreRepr m' N A φf φc S) :
+    ∀ m' : Mem,
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+        m[k]? = m'[k]?) →
+      StoreRepr m' N A φf φc S :=
+  fun m' hm' => h m' (fun k hk hr =>
+    hm' k (fun hcon => hk ⟨hcon.1, Nat.lt_of_lt_of_le hcon.2 hsphi⟩) hr)
+
+/-! ## `LeafMemPin` — the leaf exit memory pinned to its write chain (wave 47e)
+
+The two facts a LEAF walk's exit memory satisfies but `EvalExit` forgets
+(`LeafExitPin` of the re-seat verdict,
+`experiments/fleet/obstructions/B1_reseat_footprint_verdict.lean`): the whole
+delta from the entry `m0` is the four prologue spills (in `[SL.lo, sp)`) plus
+the `value_*` sret write — a presence-preserving `writeMap` chain confined to
+`[SL.lo, sp) ∪ [sret, sret+24)`, with NO arena drift.  Threaded through the
+leaf `blockC_*` posts and carried across the epilogue by `blockD_v`'s `Q`
+parameter (memory-pure). -/
+structure LeafMemPin (SL : StackLayout) (sp sret : BitVec 64) (m0 : Mem)
+    (m : Mem) : Prop where
+  /-- Presence monotonicity: the leaf writes only insert. -/
+  pres : MemExtends m0 m
+  /-- The pin: outside `[SL.lo, sp) ∪ [sret, sret+24)` the memory IS `m0` —
+  in particular there is no arena drift (`EvalExit.memFrame` carves the arena
+  out; a leaf never touches it). -/
+  agree : ∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat) →
+    ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) → m[k]? = m0[k]?
+
 /-! ## Address arithmetic for the frame + spill windows (value-independent) -/
 
 /-- `addi sp,sp,-1088`: `sp + sext 0xbc0 = sp - 1088`. -/
@@ -212,7 +305,7 @@ def ArmEntryK
   g Register.x2 = some sp ∧
   StoreRepr ment N A φf φc st.store ∧
   (∀ m' : Mem,
-    (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
       ment[k]? = m'[k]?) →
     StoreRepr m' N A φf φc st.store) ∧
   (∀ R : Register, AbiPreservedNoise R →
@@ -790,7 +883,9 @@ theorem armTail_v
         ValueRepr c'.σ.mem N φc sret.toNat v ∧
         c'.σ.sailOutput = out0 ∧
         (∀ k : Nat, ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) → mc[k]? = c'.σ.mem[k]?) ∧
-        (∀ R : Register, NotWrittenV R → c'.σ.regs.get? R = gc R)) :
+        (∀ R : Register, NotWrittenV R → c'.σ.regs.get? R = gc R) ∧
+        -- wave 47e (`LeafExitPin`): callee presence monotonicity
+        MemExtends mc c'.σ.mem) :
     Triple
       (fun c => ∃ ment,
         GoodState c.σ ∧ c.tick < 2 ∧
@@ -811,7 +906,7 @@ theorem armTail_v
         g Register.x2 = some sp ∧
         StoreRepr ment N A φf φc st.store ∧
         (∀ m' : Mem,
-          (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+          (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
             ment[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
         (∀ R : Register, AbiPreservedNoise R →
@@ -823,14 +918,17 @@ theorem armTail_v
         SL.lo + 1088 ≤ sp.toNat ∧
         1088 ≤ sp.toNat ∧ sp.toNat ≤ 0x100000000 ∧ 0x80000000 ≤ sp.toNat ∧
         tohostAddr + 16 + 1088 ≤ sp.toNat ∧ sp.toNat % 8 = 0 ∧
-        r.toNat % 4 = 0)
-      (fun c => ∃ mpre, PreEpilogueV g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpre c) := by
+        r.toNat % 4 = 0 ∧
+        -- wave 47e (`LeafExitPin`): arm-entry presence over the entry `m0`
+        MemExtends m0 ment)
+      (fun c => ∃ mpre, PreEpilogueV g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpre c ∧
+        LeafMemPin SL sp sret m0 mpre) := by
   intro c hpre
   obtain ⟨ment, hG, htick, hpc, ha0, hs1, hsp, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
     houtStr, hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretStk, hsretEvalCode, hSLloSp,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hraAl⟩ := hpre
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hraAl, hpresM⟩ := hpre
   -- ============ armPC: jal <callee> → PC := calleeEntry, x1 := calleeLink ============
   obtain ⟨σ1, i1, hs1', hi1, hG1, hmem1, hobs1⟩ :=
     hjalSite c.σ c.tick c.steps vmi hG hpc hmi (hmem ▸ hcode) htick
@@ -848,7 +946,7 @@ theorem armTail_v
   have hviCode1 : calleeLoaded σ1.mem := by rw [hmem1e]; exact hviCode
   have hout1 : σ1.sailOutput = out0 := by rw [hobs1.out, sailOutput_sigmaPost_jal]; exact hout
   -- ============ callee (value_* strengthened spec) ============
-  obtain ⟨c2, hs2, hG2, hpc2, ha0_2, hlink2, ⟨vmi2, hmi2⟩, htick2, hval2, hout2, hmemframe2, hframe2⟩ :=
+  obtain ⟨c2, hs2, hG2, hpc2, ha0_2, hlink2, ⟨vmi2, hmi2⟩, htick2, hval2, hout2, hmemframe2, hframe2, hpres2⟩ :=
     hcallee (fun R => σ1.regs.get? R) ⟨σ1, i1, c.steps + 1⟩ ment
       hG1 hviCode1 hmem1e hpc1 ha0_1 hlink1 ⟨vmi1, hmi1⟩ hi1 hout1 (fun R _ => rfl)
   have hstep2 : Steps ⟨σ1, i1, c.steps + 1⟩ c2 := hs2
@@ -889,13 +987,17 @@ theorem armTail_v
   have hsp_3 : c3.regs.get? Register.x2 = some (sp-1088#64) := obs_jr_other' hobs3 Register.x2 (by decide) hsp_2
   obtain ⟨vmi3, hmi3⟩ := obs_jr_minstret hobs3
   have hout3 : c3.sailOutput = out0 := by rw [hobs3.out, sailOutput_sigmaPost_jump_x0]; exact hout2
-  -- assemble PreEpilogueV at `v`
-  refine ⟨⟨c3, i3', c2.steps + 1⟩, ?_, c3.mem, hG3, hi3, hpc3, hs1_3, hsp_3, ⟨_, hmi3⟩, hout3, houtStr,
+  -- assemble PreEpilogueV at `v` + the wave-47e `LeafMemPin`
+  refine ⟨⟨c3, i3', c2.steps + 1⟩, ?_, c3.mem, ⟨hG3, hi3, hpc3, hs1_3, hsp_3, ⟨_, hmi3⟩, hout3, houtStr,
     rfl, hmem3e ▸ hcode2, hmem3e ▸ hval2, hmem3e ▸ hstore2,
     ?_,  -- the g-frame at the epilogue
     hmem3e ▸ hslotRa2, hmem3e ▸ hslotS02, hmem3e ▸ hslotS12, hmem3e ▸ hslotS22,
     hgx8, hgx9, hgx18, hgx2, ?_,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hraAl⟩
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hraAl⟩,
+    { pres := by rw [hmem3e]; exact hpresM.trans hpres2
+      agree := fun k hk hsr => by
+        rw [hmem3e]
+        exact (hmemframe2 k hsr).symm.trans (hmemframe_m0 k hk) }⟩
   · -- the composed run: step1(jal) ; callee steps ; step3(j)
     exact (Steps.single hstep1).trans (hstep2.trans (Steps.single hstep3))
   · -- the epilogue g-frame: callee-saved (excl x8/x9/x18/x2) preserved across the tail.

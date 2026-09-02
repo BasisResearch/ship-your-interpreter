@@ -118,7 +118,7 @@ theorem blockB_stmtExpr_stagePre
         -- carve-out; `sret := aInterp` since x9 = s1 = aInterp at the jal).  A named
         -- premise the M6 layout supplies, mirroring `EvalEntry.store_survives`.
         (∀ m' : Mem,
-          (∀ k, ¬ (SL.lo ≤ k ∧ k < (sp.toNat - 176) + 1088) →
+          (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) →
             ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
             ment[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
@@ -351,14 +351,10 @@ theorem blockB_stmtExpr_stagePre
   · exact hExprChild
   -- StoreRepr ment
   · exact hstore
-  -- store_survives over [SL.lo, jsp) (the named premise, rewritten to jsp form)
+  -- store_survives (wave 47e: WIDENED `[SL.lo, SL.hi)` footprint end-to-end)
   · intro m' hag
     refine hStoreSurvJ m' (fun k hk1 hk2 => ?_)
-    apply hag k
-    · -- goal is over the bundle window `(sp-176+1088).toNat`; hk1 is the reduced form
-      rw [hjspN]; exact hk1
-    · -- both carve-outs are `[aInterp, aInterp+24)` (sret := aInterp)
-      exact hk2
+    exact hag k hk1 hk2
   -- aOperand % 8 = 0
   · exact hopAl
   -- 0x80000000 ≤ aOperand
@@ -443,7 +439,7 @@ def StmtExprArmDispatch
         (aStmt.toNat + 16 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat) ∧
         Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧
         (∀ m' : Mem,
-          (∀ k, ¬ (SL.lo ≤ k ∧ k < (sp.toNat - 176) + 1088) →
+          (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) →
             ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
             ment[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧

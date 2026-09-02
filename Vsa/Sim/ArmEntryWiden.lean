@@ -71,7 +71,7 @@ theorem armEntry_widen
   intro c hc
   -- reconstruct the case-independent `blockA_k` precondition tower from `EvalEntry`,
   -- with `out0 := c.σ.sailOutput` (so `sailOutput = out0` is `rfl`).
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
     blockA_k g N A SL φf φc st e k armPC calleeLoaded
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       hkle hklt hkind hslot hcallee hcalleeSurv hexprSurv harmAl htableStk

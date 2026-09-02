@@ -157,7 +157,7 @@ theorem evalArmDispatch_of_slot
   intro c'' heq
   subst heq
   -- === block A: prologue + dispatch → widened ArmEntryK @armPC ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
     blockA_k g N A SL φf φc st e k armPC UnaryArmCallee
       sp r0 sret aEnv aExpr m0 c''.σ.sailOutput
       hkle hklt

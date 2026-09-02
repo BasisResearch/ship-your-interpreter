@@ -467,13 +467,16 @@ theorem blockB_binary
           · left; omega) hviSlot
   -- `StoreRepr mcall1 st.store` + its survival, from the entry survival clause
   have hstore1 : StoreRepr mcall1 N A φf φc st.store :=
-    hstoreSurv mcall1 (fun k hk1 _ => hAgMcall1 k hk1)
+    hstoreSurv mcall1 (fun k hk1 _ => hAgMcall1 k (fun hcon =>
+      hk1 ⟨hcon.1, Nat.lt_of_lt_of_le hcon.2 hBE.spSLhi⟩))
   have hstoreSurv1 : ∀ m' : Mem,
-      (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
         mcall1[k]? = m'[k]?) → StoreRepr m' N A φf φc st.store := by
     intro m' hag
     refine hstoreSurv m' (fun k hk1 hk2 => ?_)
-    rw [hAgMcall1 k hk1]; exact hag k hk1 hk2
+    have hk1' : ¬ (SL.lo ≤ k ∧ k < sp.toNat) := fun hcon =>
+      hk1 ⟨hcon.1, Nat.lt_of_lt_of_le hcon.2 hBE.spSLhi⟩
+    rw [hAgMcall1 k hk1']; exact hag k hk1 hk2
   -- `ExprRepr mcall1 aLOp el`
   have hspSLhi := hBE.spSLhi
   have hsproom := hBE.sproom
@@ -802,7 +805,7 @@ theorem blockB_binary
   have hstore2 : StoreRepr mcall2 N A φf1 φc1 st'.store :=
     hstoreSurv1' mcall2 (fun k hk => hAgMcall2 k (fun ⟨ha, hb⟩ => hk ⟨ha, by omega⟩))
   have hstoreSurv2 : ∀ m' : Mem,
-      (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) →
+      (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) →
         ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) → mcall2[k]? = m'[k]?) →
       StoreRepr m' N A φf1 φc1 st'.store := by
     intro m' hag
@@ -811,7 +814,7 @@ theorem blockB_binary
     have hsretInSL := hBE.sret_inSL
     refine hstoreSurv1' m' (fun k hk => ?_)
     rw [hAgMcall2 k (fun ⟨ha, hb⟩ => hk ⟨ha, by omega⟩)]
-    exact hag k (fun ⟨ha, hb⟩ => hk ⟨ha, by omega⟩)
+    exact hag k hk
       (fun ⟨ha, hb⟩ => hk ⟨by omega, by omega⟩)
   -- `ExprRepr mcall2 aROp er`
   have hexprR2 : ExprRepr mcall2 aROp.toNat er := by

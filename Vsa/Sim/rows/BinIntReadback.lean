@@ -157,6 +157,7 @@ theorem binIntCellResid_add_ofStaged
     (aLOp aROp Wl : BitVec 64)
     (hSF : st'.store.frames.size = st''.store.frames.size)
     (hSC : st'.store.closures.size = st''.store.closures.size)
+    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hX : BinArmExtras g N A SL .add el er sp r sret aExpr aLOp aROp m0)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -171,7 +172,7 @@ theorem binIntCellResid_add_ofStaged
         (Register.x18 == R) = false → (Register.x2 == R) = false →
         gpre R = g R)) :
     BinIntCellResid .add AddResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, aLOp, aROp, Wl, hX, ?_⟩
+  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
   intro gpre v8 v9 v18 v19
   obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
   refine ⟨fun c' hTSR => addResid_of_armPostGeomV (hResid c' hTSR),
@@ -211,6 +212,7 @@ theorem binIntCellResid_sub_ofStaged
     (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
     (hSF : st'.store.frames.size = st''.store.frames.size)
     (hSC : st'.store.closures.size = st''.store.closures.size)
+    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hX : BinArmExtras g N A SL .sub el er sp r sret aExpr aLOp aROp m0)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -224,7 +226,7 @@ theorem binIntCellResid_sub_ofStaged
         (Register.x8 == R) = false → (Register.x9 == R) = false →
         (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
     BinIntCellResid .sub SubResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, aLOp, aROp, Wl, hX, ?_⟩
+  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
   intro gpre v8 v9 v18 v19
   obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
   exact ⟨fun c' hTSR => subResid_of_armPostGeomV (hResid c' hTSR), hg8, hg9, hg18, hg2, hg19, habi⟩
@@ -237,6 +239,7 @@ theorem binIntCellResid_lt_ofStaged
     (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
     (hSF : st'.store.frames.size = st''.store.frames.size)
     (hSC : st'.store.closures.size = st''.store.closures.size)
+    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hX : BinArmExtras g N A SL .lt el er sp r sret aExpr aLOp aROp m0)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -250,7 +253,7 @@ theorem binIntCellResid_lt_ofStaged
         (Register.x8 == R) = false → (Register.x9 == R) = false →
         (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
     BinIntCellResid .lt LtResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, aLOp, aROp, Wl, hX, ?_⟩
+  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
   intro gpre v8 v9 v18 v19
   obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
   exact ⟨fun c' hTSR => ltResid_of_armPostGeomV (hResid c' hTSR), hg8, hg9, hg18, hg2, hg19, habi⟩
@@ -263,6 +266,7 @@ theorem binIntCellResid_le_ofStaged
     (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
     (hSF : st'.store.frames.size = st''.store.frames.size)
     (hSC : st'.store.closures.size = st''.store.closures.size)
+    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hX : BinArmExtras g N A SL .le el er sp r sret aExpr aLOp aROp m0)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -276,7 +280,7 @@ theorem binIntCellResid_le_ofStaged
         (Register.x8 == R) = false → (Register.x9 == R) = false →
         (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
     BinIntCellResid .le LeResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, aLOp, aROp, Wl, hX, ?_⟩
+  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
   intro gpre v8 v9 v18 v19
   obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
   exact ⟨fun c' hTSR => leResid_of_armPostGeomV (hResid c' hTSR), hg8, hg9, hg18, hg2, hg19, habi⟩
@@ -289,6 +293,7 @@ theorem binIntCellResid_gt_ofStaged
     (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
     (hSF : st'.store.frames.size = st''.store.frames.size)
     (hSC : st'.store.closures.size = st''.store.closures.size)
+    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hX : BinArmExtras g N A SL .gt el er sp r sret aExpr aLOp aROp m0)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -302,7 +307,7 @@ theorem binIntCellResid_gt_ofStaged
         (Register.x8 == R) = false → (Register.x9 == R) = false →
         (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
     BinIntCellResid .gt GtResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, aLOp, aROp, Wl, hX, ?_⟩
+  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
   intro gpre v8 v9 v18 v19
   obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
   exact ⟨fun c' hTSR => gtResid_of_armPostGeomV (hResid c' hTSR), hg8, hg9, hg18, hg2, hg19, habi⟩
@@ -315,6 +320,7 @@ theorem binIntCellResid_ge_ofStaged
     (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
     (hSF : st'.store.frames.size = st''.store.frames.size)
     (hSC : st'.store.closures.size = st''.store.closures.size)
+    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hX : BinArmExtras g N A SL .ge el er sp r sret aExpr aLOp aROp m0)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -328,7 +334,7 @@ theorem binIntCellResid_ge_ofStaged
         (Register.x8 == R) = false → (Register.x9 == R) = false →
         (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
     BinIntCellResid .ge GeResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, aLOp, aROp, Wl, hX, ?_⟩
+  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
   intro gpre v8 v9 v18 v19
   obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
   exact ⟨fun c' hTSR => geResid_of_armPostGeomV (hResid c' hTSR), hg8, hg9, hg18, hg2, hg19, habi⟩
@@ -342,6 +348,7 @@ theorem binIntCellResid_mul_ofStaged
     (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
     (hSF : st'.store.frames.size = st''.store.frames.size)
     (hSC : st'.store.closures.size = st''.store.closures.size)
+    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hX : BinArmExtras g N A SL .mul el er sp r sret aExpr aLOp aROp m0)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -356,7 +363,7 @@ theorem binIntCellResid_mul_ofStaged
         (Register.x8 == R) = false → (Register.x9 == R) = false →
         (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
     BinIntCellResid .mul MulResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, aLOp, aROp, Wl, hX, ?_⟩
+  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
   intro gpre v8 v9 v18 v19
   obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
   refine ⟨fun c' hTSR => ?_, hg8, hg9, hg18, hg2, hg19, habi⟩
@@ -372,6 +379,7 @@ theorem binIntCellResid_div_ofStaged
     (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
     (hSF : st'.store.frames.size = st''.store.frames.size)
     (hSC : st'.store.closures.size = st''.store.closures.size)
+    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hX : BinArmExtras g N A SL .div el er sp r sret aExpr aLOp aROp m0)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -386,7 +394,7 @@ theorem binIntCellResid_div_ofStaged
         (Register.x8 == R) = false → (Register.x9 == R) = false →
         (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
     BinIntCellResid .div DivResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, aLOp, aROp, Wl, hX, ?_⟩
+  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
   intro gpre v8 v9 v18 v19
   obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
   refine ⟨fun c' hTSR => ?_, hg8, hg9, hg18, hg2, hg19, habi⟩
@@ -402,6 +410,7 @@ theorem binIntCellResid_mod_ofStaged
     (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
     (hSF : st'.store.frames.size = st''.store.frames.size)
     (hSC : st'.store.closures.size = st''.store.closures.size)
+    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
     (hX : BinArmExtras g N A SL .mod el er sp r sret aExpr aLOp aROp m0)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
       (∀ c' : Vsa.Machine.Config,
@@ -417,7 +426,7 @@ theorem binIntCellResid_mod_ofStaged
         (Register.x8 == R) = false → (Register.x9 == R) = false →
         (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
     BinIntCellResid .mod ModResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, aLOp, aROp, Wl, hX, ?_⟩
+  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
   intro gpre v8 v9 v18 v19
   obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
   refine ⟨fun c' hTSR => ?_, hg8, hg9, hg18, hg2, hg19, habi⟩

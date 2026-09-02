@@ -73,56 +73,8 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-/-! ## `MemExtends` — presence monotonicity -/
-
-/-- Every address populated in `m0` is still populated in `m`. All real machine
-memory deltas are `writeMap4/8` chains (inserts), so every verified walk
-preserves this; it is the fact `EvalExit` forgets and recursive callers need
-(the post-call `ld`s of the unconstrained sub-result padding bytes). -/
-def MemExtends (m0 m : Mem) : Prop :=
-  ∀ (a : Nat) (b : BitVec 8), m0[a]? = some b → ∃ b', m[a]? = some b'
-
-theorem MemExtends.refl (m : Mem) : MemExtends m m := fun _ b h => ⟨b, h⟩
-
-/-- A `writeMap8` (an 8-byte insert) preserves presence: nothing is deleted, and
-the 8 written bytes are present. -/
-theorem memExtends_writeMap8 (mem : Mem) (a8 : Nat) (d : BitVec (8 * 8)) :
-    MemExtends mem (writeMap8 mem a8 d) := by
-  intro k b hk
-  by_cases hin : a8 ≤ k ∧ k < a8 + 8
-  · obtain ⟨hlo, hhi⟩ := hin
-    rcases (show k = a8 ∨ k = a8 + 1 ∨ k = a8 + 2 ∨ k = a8 + 3 ∨ k = a8 + 4 ∨
-        k = a8 + 5 ∨ k = a8 + 6 ∨ k = a8 + 7 from by omega)
-      with h | h | h | h | h | h | h | h
-    · exact ⟨_, by rw [show k = a8 + 0 from by omega]; exact getElem_writeMap8_0 mem a8 d⟩
-    · exact ⟨_, by rw [h]; exact getElem_writeMap8_1 mem a8 d⟩
-    · exact ⟨_, by rw [h]; exact getElem_writeMap8_2 mem a8 d⟩
-    · exact ⟨_, by rw [h]; exact getElem_writeMap8_3 mem a8 d⟩
-    · exact ⟨_, by rw [h]; exact getElem_writeMap8_4 mem a8 d⟩
-    · exact ⟨_, by rw [h]; exact getElem_writeMap8_5 mem a8 d⟩
-    · exact ⟨_, by rw [h]; exact getElem_writeMap8_6 mem a8 d⟩
-    · exact ⟨_, by rw [h]; exact getElem_writeMap8_7 mem a8 d⟩
-  · exact ⟨b, by rw [getElem_writeMap8_disjoint mem a8 k d (by omega)]; exact hk⟩
-
-/-- A `writeMap4` (a 4-byte insert) preserves presence. -/
-theorem memExtends_writeMap4 (mem : Mem) (a4 : Nat) (d : BitVec (8 * 4)) :
-    MemExtends mem (writeMap4 mem a4 d) := by
-  intro k b hk
-  by_cases hin : a4 ≤ k ∧ k < a4 + 4
-  · obtain ⟨hlo, hhi⟩ := hin
-    rcases (show k = a4 ∨ k = a4 + 1 ∨ k = a4 + 2 ∨ k = a4 + 3 from by omega)
-      with h | h | h | h
-    · exact ⟨_, by rw [show k = a4 + 0 from by omega]; exact getElem_writeMap4_0 mem a4 d⟩
-    · exact ⟨_, by rw [h]; exact getElem_writeMap4_1 mem a4 d⟩
-    · exact ⟨_, by rw [h]; exact getElem_writeMap4_2 mem a4 d⟩
-    · exact ⟨_, by rw [h]; exact getElem_writeMap4_3 mem a4 d⟩
-  · exact ⟨b, by rw [getElem_writeMap4_disjoint mem a4 k d (by omega)]; exact hk⟩
-
-theorem MemExtends.trans {m0 m1 m2 : Mem}
-    (h1 : MemExtends m0 m1) (h2 : MemExtends m1 m2) : MemExtends m0 m2 := by
-  intro a b h
-  obtain ⟨b', hb'⟩ := h1 a b h
-  exact h2 a b' hb'
+-- (`MemExtends` + presence lemmas RELOCATED to `EvalSimCommon.lean`, wave 47e —
+--  the leaf blockC files need them below `EvalRecCommon` in the import DAG.)
 
 /-! ## `EvalExitD` — the presence/survival-widened exit -/
 
@@ -265,7 +217,7 @@ theorem armTail_rec
         ExprRepr mcall aOperand.toNat esub ∧
         StoreRepr mcall N A φf φc st.store ∧
         (∀ m' : Mem,
-          (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+          (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
             mcall[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
@@ -361,13 +313,13 @@ theorem armTail_rec
       expr := by rw [hmem1e]; exact hsubexpr
       store := by rw [hmem1e]; exact hstore
       store_survives := by
+        -- wave 47e: the child's WIDENED footprint = the parent's (same `SL`);
+        -- the sub-sret window sits inside `[SL.lo, SL.hi)`, so it is absorbed.
         intro m' hag
         refine hstoreSurv m' (fun k hk1 _ => ?_)
-        have hk1' : ¬ (SL.lo ≤ k ∧ k < (sp - 1088#64).toNat) := by
-          rw [hspsub]; intro ⟨ha, hb⟩; exact hk1 ⟨ha, by omega⟩
         have hk2' : ¬ (subsret.toNat ≤ k ∧ k < subsret.toNat + 24) := by
           intro ⟨ha, hb⟩; exact hk1 ⟨by omega, by omega⟩
-        have := hag k hk1' hk2'
+        have := hag k hk1 hk2'
         rwa [hmem1e] at this
       out := by
         show Vsa.Machine.output σ1 = st.out

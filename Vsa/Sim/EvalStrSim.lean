@@ -217,7 +217,9 @@ theorem value_str_spec_full (g : (R : Register) → Option (RegisterType R)) (bu
         ValueRepr c.σ.mem N φc buf.toNat (.str s) ∧
         c.σ.sailOutput = out0 ∧
         (∀ k : Nat, ¬ (buf.toNat ≤ k ∧ k < buf.toNat + 24) → m0[k]? = c.σ.mem[k]?) ∧
-        (∀ R : Register, NotWrittenV R → c.σ.regs.get? R = g R)) := by
+        (∀ R : Register, NotWrittenV R → c.σ.regs.get? R = g R) ∧
+        -- wave 47e (`LeafExitPin`): presence monotonicity of the two buffer writes
+        MemExtends m0 c.σ.mem) := by
   intro c hpre
   obtain ⟨hG, hloaded, hmem, hpc, ha0, ha1, hra, ⟨vmi, hmi⟩, htick, hcstr, hreg, hrettgt, hout, hframe⟩ := hpre
   have hpay := str_pay_addr buf hreg.hi
@@ -297,7 +299,7 @@ theorem value_str_spec_full (g : (R : Register) → Option (RegisterType R)) (bu
     obs_jr_minstret hobs4, hi4, ?_, hout4.trans hout, ?_,
     fun R hR => (frame_jr_v hobs4 R hR).trans
       ((frame_store_v hobs3 R hR).trans ((frame_store_v hobs2 R hR).trans
-        ((frame_alu_v hobs1 R hR).trans (hframe R hR))))⟩
+        ((frame_alu_v hobs1 R hR).trans (hframe R hR)))), ?_⟩
   · -- ValueRepr (.str s): tag=3, payload=pay≠0, CString survives
     show ValueRepr σ4.mem N φc buf.toNat (.str s)
     obtain ⟨cs, hcstr0, hlen⟩ := hcstr
@@ -316,6 +318,10 @@ theorem value_str_spec_full (g : (R : Register) → Option (RegisterType R)) (bu
     intro k hk
     rw [hmem4eq, getElem_writeMap4_disjoint _ _ _ _ (by omega),
         getElem_writeMap8_disjoint _ _ _ _ (by omega), hmem]
+  · -- presence: the two buffer writes are inserts over `m0 = c.σ.mem`
+    show MemExtends m0 σ4.mem
+    rw [hmem4eq, ← hmem]
+    exact (memExtends_writeMap8 _ _ _).trans (memExtends_writeMap4 _ _ _)
 
 /-! ## `blockC_str` — the `EX_STR` arm (`ld a1,8(a2); jal value_str; j`)
 
@@ -346,15 +352,18 @@ theorem blockC_str
     Triple
       (fun c => ∃ ment,
         ArmEntryK g N A SL φf φc st (0x80003414#64) Value_strLoaded (.str s)
-          sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c)
-      (fun c => ∃ mpre, PreEpilogueV g N A SL φf φc st (.str s) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+          sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
+        MemExtends m0 ment)
+      (fun c => ∃ mpre, PreEpilogueV g N A SL φf φc st (.str s) sp r sret v8 v9 v18 out0 m0 mpre c ∧
+        LeafMemPin SL sp sret m0 mpre) := by
   intro c hc
-  obtain ⟨ment, hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
+  obtain ⟨ment, ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
     hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl, _hx11, _hx8, _hx18⟩ := hc
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLlo, hSLwin, hSLloSp, hraAl, _hx11, _hx8, _hx18⟩,
+    hpresM⟩ := hc
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hpayaddr : (aExpr + sign_extend (m := 64) (0x008#12)).toNat = aExpr.toNat + 8 :=
     expr_pay_addr aExpr hexprHi
@@ -439,7 +448,7 @@ theorem blockC_str
         (∀ R : Register, NotWrittenV R → σ2.regs.get? R = (fun R => σ2.regs.get? R) R)) := by
     refine ⟨hG2, hviCode2, hmem2e, hpc2, ha0_2, hx11_2, hlink2, ⟨vmi2, hmi2⟩, hi2,
       (by rw [hpayVnat]; exact hpcstr), hStrRegion, hrettgt, hout2, fun R _ => rfl⟩
-  obtain ⟨c3, hs3, hG3, hpc3, ha0_3, hlink3, hmi3, htick3, hval3, hout3, hmemframe3, hframe3⟩ :=
+  obtain ⟨c3, hs3, hG3, hpc3, ha0_3, hlink3, hmi3, htick3, hval3, hout3, hmemframe3, hframe3, hMemExt3⟩ :=
     value_str_spec_full (fun R => σ2.regs.get? R) sret payV (0x8000341c#64) s N φc ment out0
       ⟨σ2, i2, c.steps + 1 + 1⟩ hcallpre
   have hpc3' : c3.σ.regs.get? Register.PC = some (0x8000341c#64) := by
@@ -480,12 +489,16 @@ theorem blockC_str
   obtain ⟨vmi4, hmi4⟩ := obs_jr_minstret hobs4
   have hout4 : c4.sailOutput = out0 := by rw [hobs4.out, sailOutput_sigmaPost_jump_x0]; exact hout3
   -- assemble PreEpilogueV at `.str s`
-  refine ⟨⟨c4, i4', c3.steps + 1⟩, ?_, c4.mem, hG4, hi4, hpc4, hs1_4, hsp_4, ⟨_, hmi4⟩, hout4, houtStr,
+  refine ⟨⟨c4, i4', c3.steps + 1⟩, ?_, c4.mem, ⟨hG4, hi4, hpc4, hs1_4, hsp_4, ⟨_, hmi4⟩, hout4, houtStr,
     rfl, hmem4e ▸ hcode3, hmem4e ▸ hval3, hmem4e ▸ hstore3,
     ?_,
     hmem4e ▸ hslotRa3, hmem4e ▸ hslotS03, hmem4e ▸ hslotS13, hmem4e ▸ hslotS23,
     hgx8, hgx9, hgx18, hgx2, ?_,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hraAl⟩
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hraAl⟩,
+    { pres := by rw [hmem4e]; exact hpresM.trans hMemExt3
+      agree := fun k hk hsr => by
+        rw [hmem4e]
+        exact (hmemframe3 k hsr).symm.trans (hmemframe_m0 k hk) }⟩
   · -- the composed run: step1(ld) ; step2(jal) ; value_str steps ; step4(j)
     exact (Steps.single hstep1).trans ((Steps.single hstep2).trans
       (hstep3.trans (Steps.single hstep4)))
@@ -575,7 +588,7 @@ structure EvalStrEntry
   expr : ExprRepr c.σ.mem aExpr.toNat (.str s)
   store : StoreRepr c.σ.mem N A φf φc st.store
   store_survives : ∀ m' : Mem,
-    (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
       c.σ.mem[k]? = m'[k]?) →
     StoreRepr m' N A φf φc st.store
   out : OutRepr c.σ st
@@ -629,16 +642,24 @@ def EvalStrSimGoal : Prop :=
 
 /-- **The M4 `EvalE.str` gate.** Composes `blockA_k` (prologue + dispatch →
 `ArmEntryK` at the str arm), `blockC_str` (arm + `value_str` → epilogue entry),
-and `blockD_v` at `.str s` (epilogue → return). -/
-theorem evalStrSim : EvalStrSimGoal := by
-  intro g N A SL φf φc st d a s sp r sret aEnv aExpr m0 _hEvalE
+and `blockD_v` at `.str s` (epilogue → return).  Wave 47e: PINNED form
+(`LeafMemPin` rides `blockD_v`'s `Q`). -/
+theorem evalStrSimP
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (a : Addr) (s : String)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) :
+    Triple
+      (EvalStrEntry g N A SL φf φc st d a s sp r sret aEnv aExpr m0)
+      (fun c => EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st (.str s) sp r sret m0 c ∧ LeafMemPin SL sp sret m0 c.σ.mem) := by
   intro c hc
   -- ExprRepr survival needs the payload pointer `p`; obtain it up front (on m0).
   have hexpr_m0 : ExprRepr m0 aExpr.toNat (.str s) := hc.mem ▸ hc.expr
   obtain ⟨p, hk32, hp64, hpcstr⟩ := exprRepr_str_pay64 hexpr_m0
   -- === block A: prologue + dispatch → ArmEntryK (via blockA_k) ===
   have hkm0 : read32 m0 aExpr.toNat = some 1 := exprRepr_str_kind hexpr_m0
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, hpresM⟩ :=
     blockA_k g N A SL φf φc st (.str s) 1 (0x80003414#64) Value_strLoaded
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
@@ -683,16 +704,25 @@ theorem evalStrSim : EvalStrSimGoal := by
       hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
       hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
       hc.spill_defined⟩, rfl⟩
-  -- === block C: arm (ld a1,8(a2); jal value_str; j) → PreEpilogueV .str s ===
-  obtain ⟨c2, hs2, mpre, hPre⟩ :=
+  -- === block C: arm (ld a1,8(a2); jal value_str; j) → PreEpilogueV .str s + pin ===
+  obtain ⟨c2, hs2, mpre, hPre, hPin⟩ :=
     blockC_str g N A SL φf φc st s sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0
       hc.sret_vstrcode_disjoint hc.expr_stack_disjoint
       (fun p' hp' => hc.str_sret_disjoint p' (hc.mem.symm ▸ hp'))
-      c1 ⟨ment, hArm⟩
-  -- === block D: epilogue → EvalExit .str s ===
-  obtain ⟨c3, hs3, hExit, _⟩ :=
-    blockD_v g N A SL φf φc st (.str s) sp r sret v8 v9 v18 c.σ.sailOutput m0 (fun _ => True)
-      c2 ⟨mpre, hPre, trivial⟩
-  exact ⟨c3, (hs1.trans hs2).trans hs3, hExit⟩
+      c1 ⟨ment, hArm, hpresM⟩
+  -- === block D: epilogue → EvalExit .str s (the pin rides `Q`) ===
+  obtain ⟨c3, hs3, hExit, hQ⟩ :=
+    blockD_v g N A SL φf φc st (.str s) sp r sret v8 v9 v18 c.σ.sailOutput m0
+      (LeafMemPin SL sp sret m0) c2 ⟨mpre, hPre, hPin⟩
+  exact ⟨c3, (hs1.trans hs2).trans hs3, hExit, hQ⟩
+
+/-- **The M4 `EvalE.str` gate** — the pin-forgetting weakening of
+`evalStrSimP`. -/
+theorem evalStrSim : EvalStrSimGoal := by
+  intro g N A SL φf φc st d a s sp r sret aEnv aExpr m0 _hEvalE
+  intro c hc
+  obtain ⟨c', hs, hExit, _⟩ :=
+    evalStrSimP g N A SL φf φc st d a s sp r sret aEnv aExpr m0 c hc
+  exact ⟨c', hs, hExit⟩
 
 end Vsa.Sim

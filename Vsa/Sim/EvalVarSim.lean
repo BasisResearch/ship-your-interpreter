@@ -1514,7 +1514,7 @@ structure EvalVarEntry
   expr : ExprRepr c.σ.mem aExpr.toNat (.var x)
   store : StoreRepr c.σ.mem N A φf φc st.store
   store_survives : ∀ m' : Mem,
-    (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
       c.σ.mem[k]? = m'[k]?) →
     StoreRepr m' N A φf φc st.store
   out : OutRepr c.σ st
@@ -1583,7 +1583,7 @@ theorem evalVarSim : EvalVarSimGoal := by
   have hvarStk : p + x.length < SL.lo ∨ sp.toNat ≤ p :=
     hc.var_stack_disjoint p (hc.mem.symm ▸ hp64)
   -- === block A: prologue + dispatch → ArmEntryK (via blockA_k) ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
     blockA_k g N A SL φf φc st (.var x) 4 (0x80003434#64) Env_getLoaded
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
