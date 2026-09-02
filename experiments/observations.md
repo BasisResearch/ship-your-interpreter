@@ -5258,3 +5258,38 @@ it, still stop and report instead.
   rung; adding the field WITHOUT it would introduce an unverified premise (a possible new
   falsity — the census's whole guard). Until it exists, CURE 1 (entry-carry + relight)
   cannot land: it requires BOTH closures dropped, and frame_pop cannot be.
+
+## 2026-09-02 framepop-ram-totality-is-a-false-premise (wave 48j — SEVENTH RUNG, Law 4 STOP)
+- missing: a VERIFIED supplier for `frame_pop`'s presence field `∀a∈[sp-1120,sp),
+  ∃b, m0[a]?=some b`. Wave 48j's plan was to back it by a "RAM-totality supplier"
+  from the zero-init-RAM model (unmapped ⇒ read 0). MACHINE-REFUTED (Law 4): the
+  premise conflates TWO distinct facts. The model read IS total — `readByte`
+  (`Sail/ConcurrencyInterfaceV1.lean:218-222`) returns `(map.get? a).getD 0`, so an
+  unmapped byte reads as `0` and a load never fails on presence. BUT `frame_pop` (and
+  every BlockMem load lemma, e.g. `exec_lbu_bm`'s `h0 : σ.mem[a]?=some b0`,
+  `vmem_read_data_one:650`) demands HASHMAP presence `m0[a]?=some b`. For the callee's
+  OWN unwritten entry frame `[sp-1120,sp)` those bytes are genuinely absent from the
+  map (never ELF-loaded, not yet written) ⇒ `m0[a]?=none`. `.getD 0` totality supplies
+  a READ VALUE, never MAP PRESENCE. A supplier `∀a,∃b,m0[a]?=some b` is OUTRIGHT FALSE
+  (instantiate a=0 on any map missing 0), so it cannot be a verified `EvalEntry` field —
+  adding it injects a new falsity (the census's guard). GoodState carries NO memory
+  invariant at all (registers only, GoodState.lean:36-73); EvalEntry carries only
+  representation + disjointness + survival facts, never raw stack-window presence.
+- workaround: NONE (STOP, Law 4 — this is the 7th rung beyond frame_pop's presence
+  supplier; per the wave-48j STOP RULE I did not open an 8th wave). Landed the verdict
+  file only.
+- cost: any agent re-attempting the "RAM-totality backs frame_pop" move pays a dead
+  end. Machine-checked evidence: `experiments/fleet/obstructions/FramePopRamTotalityVerdict48j.lean`
+  (`readByte_total_on_empty` + `map_presence_not_total` +
+  `ramTotality_is_not_a_map_presence_supplier`, all axiom-clean). Census UNMOVED 6/58.
+- proposal: the presence-vs-value gap is STRUCTURAL, not a missing supplier. The honest
+  fix is one of: (a) reformulate the load-abstraction layer (BlockMem `exec_*_bm`,
+  MemFacts, `vmem_read_data_one`) to consume the TOTAL read `(m[a]?).getD 0` instead of
+  `m[a]?=some b`, so a load from an unwritten byte yields value `0` WITHOUT a presence
+  premise — then `frame_pop` is deleted, not supplied (the dead sub-result bytes just
+  read as 0, which is all the consumer needs); or (b) constrain the entry so the
+  right-call spill window IS written before it is read (a sim-internal re-spill ordering
+  fact, not an entry field). Both are DIFFERENT DECOMPOSITIONS of the int/eq/unary
+  cluster than the 48f→48j entry-field ladder — a COORDINATOR decision, not an 8th wave.
+  The int/eq/unary cluster (17 fields) stays gated on this; five waves (48e→48j) with
+  census unmoved is the signal the cluster wants (a), the total-read load layer.

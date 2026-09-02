@@ -498,3 +498,46 @@ remains false as stated (frame_pop unprovable), so NO false lemma entered the tr
 FIELDS RELIT: 0. Census UNCHANGED 6/58 ({FOUND:6, NOT_FOUND:52}, verified). CURE 3 shrinks
 the false surface (drops the x13_pres ∀-closure class) but relights nothing alone, exactly
 as 48f/48g predicted for a single cure.
+
+---
+## Wave 48j — frame_pop RAM-totality supplier is a FALSE PREMISE (7th rung, Law 4 STOP)
+
+Starting from HEAD 1bb2b71 (48i landed CURE 3, frame_pop re-route machine-refuted,
+census 6/58). Task: prove a RAM-totality supplier for frame_pop's stack-window
+map-presence `∀a∈[sp-1120,sp), ∃b, m0[a]?=some b`, backed by zero-init-RAM; then
+drop frame_pop, Cure C entry-carry, relight 17.
+
+### VERDICT — the totality supplier is FALSE (STOP RULE fired: 7th rung)
+
+The wave-48j premise ("zero-init RAM ⇒ map-presence") is MACHINE-REFUTED. Root:
+`readByte` (Sail/ConcurrencyInterfaceV1.lean:218-222) reads unmapped addresses as `0`
+via `(map.get? a).getD 0` — the model READ is total. But `frame_pop` (and every
+BlockMem load lemma / `vmem_read_data_one:650`) demands HASHMAP presence
+`m0[a]?=some b`, which is genuinely `none` for the callee's own unwritten entry frame.
+`.getD 0` totality supplies a VALUE, never map PRESENCE. GoodState carries NO memory
+invariant (registers only); EvalEntry carries only repr/disjointness/survival, never
+raw stack-window presence. A supplier `∀a,∃b,m0[a]?=some b` is outright false
+(a=0 on any map missing 0), so it cannot be a verified EvalEntry field — it would
+inject a new falsity (the census guard).
+
+Machine-checked, axiom-clean ⊆ {propext,Classical.choice,Quot.sound}:
+`experiments/fleet/obstructions/FramePopRamTotalityVerdict48j.lean` — `readByte_total_on_empty`
+(FACT 1: read total), `map_presence_not_total` (FACT 2: presence not total),
+`ramTotality_is_not_a_map_presence_supplier` (VERDICT: the two are distinct facts).
+
+TOTALITY SUPPLIER PROVED: NO (it is a false premise). frame_pop DISCHARGED: NO.
+FIELDS RELIT: 0 (Cure C not reached — needs frame_pop dropped, which is impossible via
+this route). INVERSION: X2_Field_hIAdd STILL proves `field_hIAdd_refuted` (axiom-clean) —
+no false lemma entered the tree. Census UNMOVED 6/58 (`field_census.py -j4` =
+{FOUND:6, NOT_FOUND:52}). check_discipline OK (9 rules). NO Vsa/ file modified.
+
+### 7TH RUNG — COORDINATOR DECISION (not an 8th wave)
+
+Five waves (48e→48j) with census unmoved. The int/eq/unary cluster (17 fields) is
+gated on a STRUCTURAL presence-vs-value gap, not a missing supplier. Honest fixes
+(both DIFFERENT decompositions than the 48f→48j entry-field ladder — coordinator's
+call): (a) reformulate the load-abstraction layer (BlockMem `exec_*_bm`, MemFacts,
+`vmem_read_data_one`) to consume the TOTAL read `(m[a]?).getD 0` instead of
+`m[a]?=some b`, so frame_pop is DELETED not supplied (dead bytes read as 0); or
+(b) a sim-internal re-spill ordering fact ensuring the right-call spill window is
+written before read. Full analysis: observations.md `framepop-ram-totality-is-a-false-premise`.
