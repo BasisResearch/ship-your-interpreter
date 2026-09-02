@@ -1,0 +1,18 @@
+{
+  "field": "hVarShort",
+  "manual": false,
+  "candidates": [
+    {
+      "name": "llm:cstr_payload_agree[0]",
+      "smt": "(and (= (select mp_def (+ mp_p 0)) (select m_def (+ m_p 0))) (= (select mp_val (+ mp_p 0)) (select m_val (+ m_p 0))))"
+    },
+    {
+      "name": "llm:cstr_payload_agree[1]",
+      "smt": "(and (= (select mp_def (+ mp_p 1)) (select m_def (+ m_p 1))) (= (select mp_val (+ mp_p 1)) (select m_val (+ m_p 1))))"
+    },
+    {
+      "name": "llm:cstr_payload_agree[2]",
+      "smt": "(and (= (select mp_def (+ mp_p 2)) (select m_def (+ m_p 2))) (= (select mp_val (+ mp_p 2)) (select m_val (+ m_p 2))))"
+    }
+  ]
+}
