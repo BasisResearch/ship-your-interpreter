@@ -747,3 +747,23 @@ validation, like the ELF emulator harness).
 **v1 regression check → PASS**
 
 **Acceptance-v2 → PASS**
+
+## statement_fuzz.py run
+
+- `InvGen_io_fflush_r.IoFflushRInvCandidate` (file io_fflush_r.lean) → **UNDECIDABLE** — ['<struct fields undiscoverable>']
+
+## statement_fuzz.py run
+
+- `InvGen_io_fflush_r.IoFflushRInvCandidate` → **SURVIVED** (descent depth 2: no adversary builder refuted a nested conjunct)
+
+## statement_fuzz.py run
+
+- `NovelResidA` → **SURVIVED** (descent depth 2: no adversary builder refuted a nested conjunct)
+
+## statement_fuzz.py run
+
+- `NovelResidB` → **SURVIVED** (descent depth 2: no adversary builder refuted a nested conjunct)
+
+## statement_fuzz.py run
+
+- `NovelResidC` → **SURVIVED** (descent depth 2: no adversary builder refuted a nested conjunct)

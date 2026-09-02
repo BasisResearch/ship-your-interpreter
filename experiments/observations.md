@@ -4919,3 +4919,22 @@ it, still stop and report instead.
   post-call mcall's MemExtends/presence as a field (thread `_hpresM` from
   blockB), NOT ∀-mcall. `python3 scripts/statement_fuzz.py --acceptance-v2`
   will flip the live-head verdict to SURVIVED once done.
+
+## 2026-09-02 fuzzer-v2-overfit (coordinator uncontaminated test)
+- missing: GENERALIZATION in statement_fuzz --descend. The adversary builders
+  key on the historical term forms, not the guard-shape semantics: novel
+  probes with the same disease (agree-off-window → in-window demand) at fresh
+  windows/demands/shapes ALL return SURVIVED, including two provably-false
+  ones (experiments/fuzz-battery/NovelProbe.lean: NovelResidA/C false,
+  NovelResidB true). v2's acceptance was contaminated (trained and tested on
+  the same statements). v2 = regression guard for the 2 known instances ONLY.
+- workaround: none needed yet — the hand-prover + Lean-refutation path remains
+  the authority; v2 still catches recurrences of the two known forms.
+- cost: false confidence if --descend SURVIVED is read as "no nested falsity".
+  Verdicts from --descend must be read as "no KNOWN-pattern falsity".
+- proposal: (a) v2.1: generic builder — detect any hyp `∀k, G k → m0[k]? =
+  mq[k]?`, COMPUTE the uncovered address set from G, build the adversary
+  generically; (b) the REAL fix is the SMT layer (countermodel search needs
+  no builders — this is why the Z3 push is right): its acceptance MUST
+  include experiments/fuzz-battery/NovelProbe.lean (uncontaminated: A,C →
+  countermodel found + Lean-replayed; B → no model / valid-in-fragment).

@@ -360,3 +360,12 @@ the window (where the agree-hyp says nothing).
   pass on the mined Prop whenever it mentions `mcall`/`MemExtends`; a descent
   REFUTED that the struct-witness pass called SURVIVED WINS (records the
   contradiction), closing the ∀-mcall blind spot in the built-in CTI step.
+
+> COORDINATOR ADDENDUM (SMT-layer acceptance, after the fuzzer-v2 overfit
+> finding): your acceptance battery MUST additionally include the
+> UNCONTAMINATED probes in experiments/fuzz-battery/NovelProbe.lean —
+> NovelResidA and NovelResidC must yield countermodels (Lean-replayed green);
+> NovelResidB must NOT be refuted. These were built AFTER all tooling from
+> fresh parameters; passing them is evidence of generalization, unlike the
+> history battery (which is trained-on-test). Any future validator claims
+> generality ONLY via this battery or a fresh equivalent.

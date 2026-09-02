@@ -380,3 +380,13 @@ cure 1's def change forces skeleton+dispatcher+11 rows+10 sims regen). Landing a
 and the 48f-proposed ground field is not known-true. Returned the machine-checked obstruction
 instead of a broken/unsound half-landing. FIELDS FOUND: 0 new (census unchanged, honest).
 NO Vsa/ file modified this pass.
+
+---
+## Wave 48h — interlock SESSION 1 (CURE A: x13 output rung)
+
+Executing observations.md `bin-cures-interlock-atomic-wave` proposal step (A):
+`EvalEntry.x13_defined` field + thread x13 σ1..σ19 in blockA_k + emit as blockA_k
+3rd output + update all callers' output-tower destructure + the doubled
+`EvalArmHeadExtras` re-thread. Green only at end of session. Log per step.
+
+### Step 0 — grounding the actual tree state
