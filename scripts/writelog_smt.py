@@ -77,33 +77,63 @@ def writemap8_arrays(pre_def, pre_val, addr_term, data_syms, out_def, out_val):
 
 # ---- the write-log of the brk/cont register-only leaf ----------------------
 # five 8-byte spills at sp-8, sp-16, sp-24, sp-32, sp-40 (program order).
+# HAND list (the original probe transcription); kept so `--extracted` can be
+# validated to REPRODUCE it byte-for-byte.
 SPILL_OFFSETS = [8, 16, 24, 32, 40]
 
-def build(mode):
+def extracted_stores(tag="brkCont"):
+    """MECHANICALLY read the arm's write-log off block-reflection via
+    scripts/wlog_extract.py (`#eval wlogM` in experiments/smt/WlogExtract.lean).
+    Returns a list of (addr_smt_term, width, lowest_offset_below_sp).  This
+    REPLACES the hand SPILL_OFFSETS: the store list is now the provable `wlogM`
+    output, not a transcription."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import wlog_extract as WX
+    r = WX.extract_wlog(tag, with_data=False)
+    out = []
+    for s in r["stores"]:
+        raw = s["raw"]
+        # offset below sp (positive) for the window fact; only sp-based stores.
+        below = -raw["dstOff"] if raw["dstReg"] == 2 else None
+        out.append((s["addr"], s["width"], below))
+    return out
+
+def build(mode, extracted=False):
     """mode = 'validate' (assert goal-negation; UNSAT=proof) or one of the
-    controls that deliberately break the obligation (SAT expected)."""
+    controls that deliberately break the obligation (SAT expected).
+    extracted=True pulls the write-log MECHANICALLY from wlog_extract (wlogM)
+    instead of the hand SPILL_OFFSETS list."""
+    if extracted:
+        stores = extracted_stores()
+        addrs = [a for (a, w, below) in stores]
+        widths = [w for (a, w, below) in stores]
+        max_below = max(b for (a, w, b) in stores if b is not None)
+    else:
+        stores = [(f"(- sp {off})", 8, off) for off in SPILL_OFFSETS]
+        addrs = [a for (a, w, below) in stores]
+        widths = [8] * len(stores)
+        max_below = max(SPILL_OFFSETS)
     L = ["(set-logic ALL)", "(set-option :timeout 60000)"]
     # entry memory m0
     L += decls_mem("m0")
     # symbolic sp, SL.lo, and spill data bytes (data irrelevant to a frame goal)
     L += ["(declare-fun sp () Int)", "(declare-fun sllo () Int)"]
-    for s in range(5):
+    for s in range(len(stores)):
         for j in range(8):
             L.append(f"(declare-fun d{s}_{j} () (_ BitVec 8))")
     # layout side facts the recursor supplies (ExecArmEntryK / StackLayout):
-    #   176 ≤ sp,  SL.lo ≤ sp-40  (all spills inside [SL.lo, sp)),  sp ≥ 0.
+    #   176 ≤ sp,  SL.lo ≤ sp-(deepest spill)  (all spills inside [SL.lo, sp)).
     L.append("(assert (<= 176 sp))")
     if mode == "ctrl_window":
         # BREAK the window fact: let SL.lo sit ABOVE the lowest spill so a spill
-        # at sp-40 is OUTSIDE [SL.lo, sp) -> agree must fail there. (SAT expected)
+        # is OUTSIDE [SL.lo, sp) -> agree must fail there. (SAT expected)
         L.append("(assert (= sllo (- sp 8)))")   # window too narrow: only covers sp-8..
     else:
-        L.append("(assert (<= sllo (- sp 40)))")  # honest: window covers all spills
+        L.append(f"(assert (<= sllo (- sp {max_below})))")  # window covers all spills
 
-    # fold the write-log: m = writeMap8^5(m0) at sp-8,-16,-24,-32,-40
+    # fold the write-log: m = writeMap8^k(m0) at the extracted/hand addresses
     cur_def, cur_val = "m0_def", "m0_val"
-    for s, off in enumerate(SPILL_OFFSETS):
-        addr = f"(- sp {off})"
+    for s, addr in enumerate(addrs):
         data = [f"d{s}_{j}" for j in range(8)]
         od, ov = f"m{s+1}_def", f"m{s+1}_val"
         L += writemap8_arrays(cur_def, cur_val, addr, data, od, ov)
@@ -150,7 +180,15 @@ def run(q):
     return verdict, dt, out
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--extracted", action="store_true",
+                    help="pull the write-log MECHANICALLY from wlog_extract (wlogM) "
+                         "instead of the hand SPILL_OFFSETS list")
+    args = ap.parse_args()
     os.makedirs(OUTDIR, exist_ok=True)
+    src = "wlogM-extracted" if args.extracted else "hand-transcribed"
+    print(f"# write-log source: {src}")
     print(f"{'field':16} {'mode':12} {'expect':8} {'verdict':10} {'time_s':7}")
     print("-" * 60)
     cases = [
@@ -163,11 +201,13 @@ def main():
     ]
     rows = []
     for field, mode, expect in cases:
-        q = build(mode)
-        fn = os.path.join(OUTDIR, f"q_{field}_{mode}.smt2")
+        q = build(mode, extracted=args.extracted)
+        sfx = "_ext" if args.extracted else ""
+        fn = os.path.join(OUTDIR, f"q_{field}_{mode}{sfx}.smt2")
         open(fn, "w").write(q)
         v, dt, out = run(q)
-        print(f"{field:16} {mode:12} {expect:8} {v:10} {dt:6.2f}")
+        ok = "OK" if v.startswith(expect.lower()) else "MISMATCH"
+        print(f"{field:16} {mode:12} {expect:8} {v:10} {dt:6.2f}  {ok}")
         rows.append((field, mode, expect, v, dt))
     return rows
 
