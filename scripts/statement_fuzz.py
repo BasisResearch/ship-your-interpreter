@@ -754,6 +754,785 @@ def _file_outer_types(body, prop):
     return types
 
 
+# ==========================================================================
+# v2.1: THE UNCOVERED-ADDRESS SEMANTIC RULE (replaces the 2-row pattern table)
+# ==========================================================================
+#
+# v2's ADVERSARY_BUILDERS was a 2-row lookup keyed on the HISTORICAL term forms
+# (the `SL.lo ≤ a ∧ a < sp.toNat` window, the `mcall`/`m0` names, the exact
+# `∃b, mcall[a]? = some b` conclusion).  Novel probes with the SAME disease at
+# fresh windows/demands/shapes slipped past every row (experiments/fuzz-battery/
+# NovelProbe.lean).  v2.1 replaces pattern-matching with THE SEMANTIC RULE both
+# rows instantiated:
+#
+#   A nested conjunct `∀ mq, (agree constraints on mq vs m0) → demand(mq)` is
+#   FALSE exactly when some address DEMANDED of `mq` is NOT COVERED by the union
+#   of the agree-constraint address sets.  At an uncovered address the guard
+#   imposes nothing, so `mq` is free there; an adversary `mq` that differs from
+#   `m0` at that one address satisfies every guard yet breaks the demand.
+#
+# Everything is analyzed STRUCTURALLY — guards are parsed into ℕ-interval sets,
+# demands into (address, kind), coverage is interval arithmetic, and the emitted
+# Lean probe's agree-proof is discharged by the guard SHAPE (the machine-checked
+# part).  No name/form matching anywhere.
+
+# ---- interval-set algebra over ℕ (upper bound None = +∞) ------------------
+
+class IntervalSet:
+    """A finite union of half-open ℕ-intervals [lo, hi) (hi=None ⇒ +∞)."""
+    def __init__(self, ivs=None):
+        self.ivs = _normalize(ivs or [])
+
+    def union(self, other):
+        return IntervalSet(self.ivs + other.ivs)
+
+    def complement(self):
+        # complement within ℕ
+        out, cur = [], 0
+        for lo, hi in self.ivs:
+            if lo > cur:
+                out.append((cur, lo))
+            cur = INF if hi is None else max(cur, hi)
+            if cur is INF:
+                return IntervalSet(out)
+        out.append((cur, None))
+        return IntervalSet(out)
+
+    def contains(self, a):
+        return any(lo <= a and (hi is None or a < hi) for lo, hi in self.ivs)
+
+    def sample_uncovered(self, bound=1 << 24):
+        """Return a small ℕ NOT in the set, or None if the set covers ℕ."""
+        comp = self.complement()
+        for lo, hi in comp.ivs:
+            if hi is None or lo < hi:
+                return lo
+        return None
+
+    def sample_covered(self):
+        for lo, hi in self.ivs:
+            if hi is None or lo < hi:
+                return lo
+        return None
+
+    def __repr__(self):
+        return "∪".join(f"[{lo},{'∞' if hi is None else hi})" for lo, hi in self.ivs) or "∅"
+
+
+INF = float("inf")
+
+
+def _normalize(ivs):
+    ivs = [(lo, hi) for (lo, hi) in ivs if hi is None or lo < hi]
+    ivs.sort(key=lambda p: (p[0], INF if p[1] is None else p[1]))
+    out = []
+    for lo, hi in ivs:
+        if out and (out[-1][1] is None or lo <= out[-1][1]):
+            plo, phi = out[-1]
+            out[-1] = (plo, None if (phi is None or hi is None) else max(phi, hi))
+        else:
+            out.append((lo, hi))
+    return out
+
+
+# ---- numeric literal parsing (0x…, plain) ---------------------------------
+
+def _num(s):
+    s = s.strip()
+    try:
+        return int(s, 0)
+    except ValueError:
+        return None
+
+
+# ---- GUARD → IntervalSet (structural) -------------------------------------
+#
+# A guard `G k` is the antecedent of an agree-hyp, over the bound var `v` (the
+# name of the ∀-bound address).  We recognise the atoms
+#   v < D        →  [0, D)
+#   v ≤ D        →  [0, D+1)
+#   C ≤ v        →  [C, ∞)
+#   C < v        →  [C+1, ∞)
+#   C ≤ v ∧ v < D→  [C, D)         (and any ∧ of the above = intersection)
+# and `¬ (…)` = complement.  Anything with a non-literal bound is UNSUPPORTED
+# (returns None) — that is the SMT layer's territory, reported honestly.
+
+_CMP = re.compile(r"([0-9a-zA-Zx_]+)\s*(≤|<)\s*([0-9a-zA-Zx_]+)")
+
+
+def _atom_set(atom, var):
+    """One comparison atom → IntervalSet over ℕ, or None if non-literal."""
+    atom = atom.strip().strip("()").strip()
+    m = _CMP.fullmatch(" ".join(atom.split()))
+    if not m:
+        return None
+    l, op, r = m.group(1), m.group(2), m.group(3)
+    if l == var:
+        d = _num(r)
+        if d is None:
+            return None
+        # v < D → [0,D) ; v ≤ D → [0,D+1)
+        return IntervalSet([(0, d if op == "<" else d + 1)])
+    if r == var:
+        c = _num(l)
+        if c is None:
+            return None
+        # C ≤ v → [C,∞) ; C < v → [C+1,∞)
+        return IntervalSet([(c if op == "≤" else c + 1, None)])
+    return None
+
+
+def guard_to_set(guard, var):
+    """Parse a guard expression `G v` into the IntervalSet of {v | G v}, or
+    None if it contains a non-literal / unsupported atom (SMT territory)."""
+    g = " ".join(guard.split())
+    neg = False
+    # strip a single leading ¬ (…)
+    m = re.fullmatch(r"¬\s*\((.*)\)", g)
+    if m:
+        neg, g = True, m.group(1)
+    # strip a redundant outer paren wrapping the whole (positive) guard
+    while re.fullmatch(r"\((.*)\)", g) and _split_top(g[1:-1], "∧") and \
+            all(ch not in g[1:g.rfind(")")] for ch in "→"):
+        inner = g[1:-1]
+        # only strip if the parens are balanced across the whole span
+        depth = 0; balanced = True
+        for i, ch in enumerate(inner):
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth < 0:
+                    balanced = False; break
+        if balanced and depth == 0:
+            g = inner
+        else:
+            break
+    # split on ∧ at top level (our atoms have no nested parens with ∧)
+    atoms = _split_top(g, "∧")
+    acc = IntervalSet([(0, None)])   # ℕ
+    for at in atoms:
+        s = _atom_set(at, var)
+        if s is None:
+            return None
+        acc = _intersect(acc, s)
+    return acc.complement() if neg else acc
+
+
+def _intersect(a, b):
+    out = []
+    for l1, h1 in a.ivs:
+        for l2, h2 in b.ivs:
+            lo = max(l1, l2)
+            hi = h1 if h2 is None else (h2 if h1 is None else min(h1, h2))
+            if hi is None or lo < hi:
+                out.append((lo, hi))
+    return IntervalSet(out)
+
+
+def _split_top(s, sep):
+    out, depth, cur = [], 0, ""
+    for ch in s:
+        if ch in "(⟨":
+            depth += 1
+        elif ch in ")⟩":
+            depth -= 1
+        if ch == sep and depth == 0:
+            out.append(cur); cur = ""
+        else:
+            cur += ch
+    out.append(cur)
+    return [p for p in (x.strip() for x in out) if p]
+
+
+# ---- structural extraction of a nested `∀ mq, guards → demand` conjunct ----
+
+class NestedConjunct:
+    """Extracted, name-agnostic view of a nested memory conjunct.
+      mq       : the inner ∀-bound Mem variable name
+      m0       : the reference Mem (the RHS of the agree-hyps)
+      guards   : list of (var, IntervalSet) — the agree-constraint sets
+      pop      : IntervalSet where m0 is KNOWN populated (outer population hyp),
+                 or None
+      demand   : ('value'|'present'|'agree'|'extends', addr_or_None, value_or_None)
+      dvar     : the demand's own ∀-bound address var (interval-quantified) or None
+      drange   : IntervalSet the demand var ranges over (if interval-quantified)
+    """
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+
+
+def extract_nested(body, m0name="m0"):
+    """Structurally locate a nested conjunct `∀ <mq> : Mem, (∀ k, G k → <mq>[k]?
+    = m0[k]?)+ → <demand>` in the unfolded Prop body, returning a NestedConjunct
+    or None.  Guards are ANY `∀ k, G → agree` hyps (negated/positive windows,
+    conjunctions, MULTIPLE hyps → union).  The demand is parsed from the tail."""
+    txt = " ".join(body.split())
+    # find the inner Mem quantifier
+    mm = re.search(r"∀\s*(\w+)\s*:\s*Mem\s*,", txt)
+    if not mm:
+        # accept the ExtHashMap spelling too (hermetic novel probes)
+        mm = re.search(r"∀\s*(\w+)\s*:\s*ExtHashMap\s+Nat\s+\(?BitVec\s*8\)?\s*,", txt)
+    if not mm:
+        return None
+    mq = mm.group(1)
+    prefix = txt[:mm.start()]     # outer binders + m0-premises before the inner ∀
+    rest = txt[mm.end():]
+    # OUTER m0-facts, structurally: single-point pins `m0[LIT]? = some V` and
+    # population windows `∀ k, G k → m0[k]? = some V`.  These constrain the m0 we
+    # must supply; the adversary must honor them (so it corrupts mq, not these).
+    m0pts = []   # (addr:int, value_lean_str)
+    m0pop = []   # (IntervalSet, value_lean_str)
+    prefix_da = _deascribe_index(prefix)
+    # value spelling: `some V` or `some (V : T)` — capture up to the next `→`/`)`
+    # at paren-depth 0.
+    SOMEVAL = r"some\s*(\([^)]*\)|[\w#]+)"
+    # population windows FIRST (so their inner `m0[k]?=someV` isn't mis-read as a
+    # single-point pin).
+    for pm in re.finditer(r"∀\s*(\w+)(?:\s*:\s*Nat)?\s*,\s*(.*?)\s*→\s*\w+\[\1\]\?"
+                          r"\s*=\s*" + SOMEVAL, prefix_da):
+        s = guard_to_set(pm.group(2), pm.group(1))
+        if s is not None:
+            m0pop.append((s, _deascribe_val(pm.group(3))))
+    for pm in re.finditer(r"\w+\[(\w+)\]\?\s*=\s*" + SOMEVAL, prefix_da):
+        addr = _num(pm.group(1))
+        if addr is not None:
+            m0pts.append((addr, _deascribe_val(pm.group(2))))
+    # collect the leading agree-hyps `(∀ <v>, G <v> → <mq>[<v>]? = m0[<v>]?)`
+    guards = []
+    while True:
+        hm = re.match(r"\s*\(∀\s*(\w+)(?:\s*:\s*Nat)?\s*,\s*(.*?)\s*→\s*"
+                      + re.escape(mq) + r"\[\1\]\?\s*=\s*(\w+)\[\1\]\?\s*\)\s*→",
+                      rest)
+        # also accept reversed equality m0[k]? = mq[k]?
+        if not hm:
+            hm = re.match(r"\s*\(∀\s*(\w+)(?:\s*:\s*Nat)?\s*,\s*(.*?)\s*→\s*"
+                          r"(\w+)\[\1\]\?\s*=\s*" + re.escape(mq) + r"\[\1\]\?\s*\)\s*→",
+                          rest)
+        if not hm:
+            break
+        v, g, ref = hm.group(1), hm.group(2), hm.group(3)
+        s = guard_to_set(g, v)
+        if s is None:
+            return NestedConjunct(mq=mq, m0=ref, guards=None, pop=None,
+                                  demand=None, dvar=None, drange=None,
+                                  unsupported=g)
+        guards.append((v, s))
+        m0name = ref
+        rest = rest[hm.end():]
+    if not guards:
+        return None
+    # the demand is what remains
+    demand, dvar, drange = _parse_demand(rest, mq, m0name)
+    return NestedConjunct(mq=mq, m0=m0name, guards=guards, pop=m0pop,
+                          m0pts=m0pts, demand=demand, dvar=dvar, drange=drange,
+                          unsupported=None)
+
+
+def _deascribe_val(v):
+    """Strip a `: T` ascription from a value literal (`0x2a : BitVec 8` → the
+    Lean spelling `(0x2a : BitVec 8)` is fine to keep; we normalize to a
+    self-contained ascribed literal so it elaborates in application position)."""
+    v = v.strip()
+    # strip a balanced surrounding paren so `(0x2a : BitVec 8)` → `0x2a : BitVec 8`
+    if v.startswith("(") and v.endswith(")"):
+        v = v[1:-1].strip()
+    lit = v.split(":")[0].strip() if ":" in v else v
+    return f"({lit} : BitVec 8)"
+
+
+def _parse_demand(rest, mq, m0):
+    """Parse the conclusion tail into (kind, addr, value/dvar).  Handles:
+      MemExtends m0 mq                       → ('extends', None, None)
+      ∀ a, R a → <atom about mq[a]?>         → interval-quantified demand
+      <atom about mq[literal]?>              → literal demand
+    where <atom> ∈ { mq[a]? = some V ; ∃ b, mq[a]? = some b ; mq[a]? = m0[a]? }.
+    """
+    r = rest.strip()
+    if re.search(r"MemExtends\s+" + re.escape(m0) + r"\s+" + re.escape(mq), r):
+        return ("extends", None, None), None, None
+    # interval-quantified demand: `∀ a, <range> → <atom>` or `∀ a (h: range), atom`
+    qm = re.match(r"∀\s*(\w+)(?:\s*:\s*Nat)?\s*,\s*(.*)$", r)
+    dvar, drange = None, None
+    atom_txt = r
+    if qm:
+        dvar = qm.group(1)
+        tail = qm.group(2)
+        am = re.match(r"(.*?)\s*→\s*(.*)$", tail)
+        if am:
+            drange = guard_to_set(am.group(1), dvar)
+            atom_txt = am.group(2)
+        else:
+            atom_txt = tail
+    return (*_classify_atom(atom_txt, mq, m0, dvar),), dvar, drange
+
+
+def _deascribe_index(atom):
+    """Rewrite `foo[(0x90000 : Nat)]?` → `foo[0x90000]?` so the index is a bare
+    literal/var (strip type ascriptions and surrounding parens inside `[…]`)."""
+    def repl(m):
+        inner = m.group(1).strip()
+        # drop a `: T` ascription
+        inner = re.split(r"\s*:\s*", inner)[0].strip()
+        inner = inner.strip("()").strip()
+        return "[" + inner + "]?"
+    return re.sub(r"\[\s*(.*?)\s*\]\?", repl, atom)
+
+
+def _classify_atom(atom, mq, m0, dvar):
+    """(kind, addr, value) for the innermost demand atom."""
+    atom = _deascribe_index(atom.strip().rstrip(")").strip())
+    # ∃ b, mq[a]? = some b   → presence
+    pm = re.search(r"∃\s*\w+[^,]*,\s*" + re.escape(mq) + r"\[(\w+)\]\?\s*=\s*some", atom)
+    if pm:
+        return ("present", pm.group(1), None)
+    # mq[a]? = m0[a]?  → agree-demand
+    am = re.search(re.escape(mq) + r"\[(\w+)\]\?\s*=\s*" + re.escape(m0) + r"\[\1\]\?", atom)
+    if am:
+        return ("agree", am.group(1), None)
+    am2 = re.search(re.escape(m0) + r"\[(\w+)\]\?\s*=\s*" + re.escape(mq) + r"\[\1\]\?", atom)
+    if am2:
+        return ("agree", am2.group(1), None)
+    # mq[a]? = some V   → value
+    vm = re.search(re.escape(mq) + r"\[(\w+|0x[0-9a-fA-F]+|\d+)\]\?\s*=\s*some\s*\(?([^)]*)\)?", atom)
+    if vm:
+        return ("value", vm.group(1), vm.group(2).strip())
+    return ("unknown", None, None)
+
+
+# ---- the RULE: solve for an uncovered demand address ----------------------
+
+def solve_uncovered(nc):
+    """Given a NestedConjunct, decide whether the demand is FALSIFIABLE (an
+    uncovered demand address exists) and, if so, return a solution dict.  Pure
+    interval arithmetic — no Lean, no term forms."""
+    if nc is None or nc.guards is None or nc.demand is None:
+        return None
+    kind, addr, val = nc.demand
+    if kind == "unknown":
+        return None
+    cover = IntervalSet([])
+    for _, s in nc.guards:
+        cover = cover.union(s)
+    # MemExtends m0 mq demands EVERY populated m0 address survive in mq.  The
+    # witness is any m0-populated address (a pinned point or a population window)
+    # that is UNCOVERED — mq erases it, breaking presence.  If no such address,
+    # the extends is sound (agree-on-cover ⊇ populated ⇒ survives).
+    if kind == "extends":
+        pts = getattr(nc, "m0pts", []) or []
+        pop = getattr(nc, "pop", []) or []
+        for (pa, _) in pts:
+            if not cover.contains(pa):
+                return dict(a=pa, kind="extends", val=None, cover=cover,
+                            quantified=False)
+        for s, _ in pop:
+            gap = _diff(s, cover)
+            a = gap.sample_covered() if gap.ivs else None
+            if a is not None:
+                return dict(a=a, kind="extends", val=None, cover=cover,
+                            quantified=False)
+        return None
+    # coverage of the demand: for a literal addr, is it in `cover`?  For an
+    # interval-quantified demand (dvar ranges over `drange`), is there a point
+    # of `drange` outside `cover`?
+    if nc.dvar and nc.drange is not None:
+        # demand address ranges over drange; adversary picks any drange-point
+        # not covered.
+        witness_range = _diff(nc.drange, cover)
+        a = witness_range.sample_covered() if witness_range.ivs else None
+        if a is None:
+            return None  # every demanded address is covered → SOUND
+        return dict(a=a, kind=kind, val=val, cover=cover, quantified=True)
+    else:
+        a = _num(addr) if addr else None
+        if a is None:
+            return None
+        if cover.contains(a):
+            return None  # demand address is covered → SOUND
+        return dict(a=a, kind=kind, val=val, cover=cover, quantified=False)
+
+
+def _diff(a, b):
+    return _intersect(a, b.complement())
+
+
+# ---- adversary emission: build mq = m0 corrupted at the uncovered address --
+#
+# The adversary and the agree-proof are emitted from the SOLUTION, not from any
+# term form.  m0 is a `crange`-style constant map on the union of populated
+# windows (so any population premise is met); mq is m0 with the demand address
+# either ERASED (presence/value/extends demand: m0 has it, mq lacks it) or
+# INSERTED (agree demand where m0 lacks it: mq gains it) so `mq[a]? ≠ m0[a]?`.
+
+CRANGE_DEFS = r"""
+private def crange : Nat → Mem
+  | 0 => (∅ : Mem)
+  | n+1 => (crange n).insert n (0x1 : BitVec 8)
+private theorem crange_get : ∀ N k, k < N → (crange N)[k]? = some (0x1 : BitVec 8) := by
+  intro N; induction N with
+  | zero => intro k hk; exact absurd hk (by omega)
+  | succ n ih => intro k hk; simp only [crange, Std.ExtHashMap.getElem?_insert]
+                 by_cases he : n = k
+                 · subst he; simp
+                 · rw [if_neg (by simp [beq_iff_eq]; omega)]; exact ih k (by omega)
+private theorem crange_none : ∀ N k, N ≤ k → (crange N)[k]? = none := by
+  intro N; induction N with
+  | zero => intro k hk; simp [crange]
+  | succ n ih => intro k hk; simp only [crange, Std.ExtHashMap.getElem?_insert]
+                 rw [if_neg (by simp [beq_iff_eq]; omega)]; exact ih k (by omega)
+"""
+
+
+def emit_semantic_probe(head, prop, sig, app, nc, sol, outer_types):
+    """Build a `¬ prop` probe from the uncovered-address SOLUTION.
+
+    The reference m0 is `crange POP` (constant 1 on [0,POP)) with an INSERT for
+    every outer point-fact `m0[Aᵢ]? = some Vᵢ`, so every outer m0-premise
+    (single-point AND population-window) is met by construction.  The adversary
+    mq corrupts m0 at exactly the uncovered demand address `a`:
+      * if m0 HAS a byte at `a` (a<POP or a is a pinned point) → mq ERASES it
+        ⇒ mq[a]?=none while the demand wants it present/equal ⇒ False;
+      * if m0 LACKS `a` → mq INSERTS a value there ⇒ mq[a]?=some.. while the
+        demand `mq[a]?=m0[a]?` wants none ⇒ False.
+    Every agree-proof is discharged from the guard SHAPE: for each guard the
+    corrupted address is proven OUTSIDE its set by `omega`, so the corruption is
+    invisible to the constraints.
+    """
+    a = sol["a"]; kind = sol["kind"]; cover = sol["cover"]
+    pts = list(getattr(nc, "m0pts", []) or [])
+    pop = list(getattr(nc, "pop", []) or [])
+    # POP = top of every population window; crange fills [0,POP) UNIFORMLY with
+    # `some 1`, meeting every `∀k<C, m0[k]?=some 1` premise (POP ≥ C).  We choose
+    # POP to EXCLUDE the demand address `a` when possible, so that whether m0 is
+    # populated at `a` is under our control (crange populates exactly [0,POP)).
+    bounds = [0]
+    for s, _ in pop:
+        for lo, hi in s.ivs:
+            if hi is not None:
+                bounds.append(hi)
+    POP = max(bounds)
+    # m0's population at `a` is EXACTLY: pinned, or a<POP (crange fills [0,POP)).
+    pinned = next((v for (pa, v) in pts if pa == a), None)
+    a_populated = (pinned is not None) or (a < POP)
+    # m0 spelling: crange POP with the pinned points inserted on top.
+    m0core = f"(crange {POP})"
+    for (pa, v) in pts:
+        m0core = f"({m0core}.insert {pa} {v})"
+    m0w = m0core
+    # value/lemma for m0[a]?
+    if pinned is not None:
+        m0a_val = pinned
+        m0a = f"(by simp [Std.ExtHashMap.getElem?_insert, Std.ExtHashMap.getElem?_erase] : {m0w}[{a}]? = some {pinned})"
+    elif a_populated:
+        m0a_val = "(0x1 : BitVec 8)"
+        # a<POP, not pinned: crange_get gives some 1, inserts at other addrs invisible
+        m0a = _m0_lookup_lemma(m0w, POP, a, pts, populated=True)
+    else:
+        m0a_val = None
+        m0a = _m0_lookup_lemma(m0w, POP, a, pts, populated=False)
+    # adversary: erase if m0 has a byte at a, else insert a fresh one.
+    if a_populated or pinned is not None:
+        mqw = f"({m0w}.erase {a})"
+        mqa = f"(by simp [Std.ExtHashMap.getElem?_erase] : {mqw}[{a}]? = none)"
+        differ = "erase"
+    else:
+        mqw = f"({m0w}.insert {a} (0x2 : BitVec 8))"
+        mqa = f"(by simp [Std.ExtHashMap.getElem?_insert] : {mqw}[{a}]? = some (0x2 : BitVec 8))"
+        differ = "insert"
+
+    getlemma = ("Std.ExtHashMap.getElem?_erase" if differ == "erase"
+                else "Std.ExtHashMap.getElem?_insert")
+    # one agree-premise proof: `∀ k, G k → <eq at k>`.  For every k∈G, k≠a, so
+    # the single corruption at a is invisible.  The `k≠a` fact is `omega` from
+    # the guard (¬-windows are push_neg'd first).
+    ag_arg = (f"(by intro k hk; simp only [{getlemma}]; "
+              f"rw [if_neg (by first"
+              f" | (revert hk; simp only [not_and, not_lt, not_le]; intro hk; simp only [beq_iff_eq]; omega)"
+              f" | (simp only [beq_iff_eq]; omega))])")
+    # population-premise discharger for outer `∀k<C, m0[k]?=some V` hyps.
+    pop_args = []
+    for s, v in pop:
+        pop_args.append(f"(fun k hk => {_m0_lookup_lemma_k(m0w, POP, pts)})")
+    # single-point outer facts are discharged directly.
+    pt_args = []
+    for (pa, v) in pts:
+        pt_args.append(f"(by simp [Std.ExtHashMap.getElem?_insert, Std.ExtHashMap.getElem?_erase])")
+    # demand application: interval-quantified demands feed `a` + a range proof.
+    if sol["quantified"]:
+        dem_app = ("{A} (by first | omega | (constructor <;> omega)"
+                   " | (refine ⟨?_, ?_, ?_⟩ <;> omega)"
+                   " | (exact ⟨by omega, by omega⟩)"
+                   " | (exact ⟨by omega, by omega, by omega⟩))").format(A=a)
+    else:
+        dem_app = ""
+
+    n_guards = len(nc.guards)
+    # outer non-mem ghost binders, synthesized from their types.
+    ghosts = []
+    for ty in outer_types:
+        t = ty.strip()
+        if t.endswith("Mem") or "ExtHashMap" in t:
+            continue
+        ghosts.append(_paren(synth_witness(ty) or "0"))
+
+    # refuter for each demand kind, given `hbad : <demand at (m0w,mqw,a)>`.
+    if kind == "present":
+        refuter = (f"obtain ⟨bb, hbb⟩ := hbad\n"
+                   f"     rw [{mqa}] at hbb; exact absurd hbb (by simp)")
+    elif kind == "extends":
+        vv = m0a_val or "(0x1 : BitVec 8)"
+        refuter = (f"obtain ⟨bb, hbb⟩ := hbad {a} {vv} {m0a}\n"
+                   f"     rw [{mqa}] at hbb; exact absurd hbb (by simp)")
+    elif kind == "value":
+        refuter = (f"rw [{mqa}] at hbad; exact absurd hbad (by simp)")
+    else:  # agree: hbad : mq[a]? = m0[a]?
+        refuter = (f"rw [{mqa}, {m0a}] at hbad; exact absurd hbad (by simp)")
+
+    # The outer application order is fixed by the telescope: ghost binders (that
+    # appear before m0) then m0, then all m0-premises (points+population), then
+    # mq, then agree-premises, then demand.  Since ghosts may sit before OR after
+    # m0, we cascade over the split of `ghosts` into (before-m0, after-m0).
+    alts = []
+    for split in range(len(ghosts) + 1):
+        pre = " ".join(ghosts[:split])
+        post = " ".join(ghosts[split:])
+        prem = " ".join(pt_args + pop_args)   # m0-premises, in source-ish order
+        ags = " ".join([ag_arg] * n_guards)
+        call = " ".join(x for x in [pre, m0w, post, prem, mqw, ags, dem_app]
+                        if x and x.strip())
+        alt = (f"  | (intro Hp\n"
+               f"     have hbad := Hp {call}\n"
+               f"     {refuter})")
+        alts.append(alt)
+    cascade = "  first\n" + "\n".join(alts)
+    return (f"{head}\n\n{CRANGE_DEFS}\nnamespace VsaFuzzSem\n"
+            f"set_option maxHeartbeats 1000000 in\n"
+            f"theorem probe {sig}: ¬ {prop}{app} := by\n{cascade}\n\n"
+            f"#print axioms probe\nend VsaFuzzSem\n")
+
+
+def _m0_lookup_lemma(m0w, POP, a, pts, populated):
+    """Prove `m0w[a]? = some 1` (populated, a<POP, a not pinned) or `= none`
+    (a≥POP, not pinned) — the inserted pinned points are all at addresses ≠ a."""
+    tgt = "some (0x1 : BitVec 8)" if populated else "none"
+    base = f"crange_get {POP} {a} (by omega)" if populated else f"crange_none {POP} {a} (by omega)"
+    if not pts:
+        return f"(by have h := {base}; simpa using h : {m0w}[{a}]? = {tgt})"
+    # strip the pinned inserts (all at ≠ a) then apply the crange lemma.
+    return (f"(by simp only [Std.ExtHashMap.getElem?_insert, "
+            f"Std.ExtHashMap.getElem?_erase]; "
+            f"first | exact {base} | (rw [{base}]) : {m0w}[{a}]? = {tgt})")
+
+
+def _m0_lookup_lemma_k(m0w, POP, pts):
+    """A term proving `m0w[k]? = some 1` for a bound `k` with `hk : k < C ≤ POP`
+    (used inside a population-premise λ)."""
+    if not pts:
+        return f"crange_get {POP} k (by omega)"
+    # pinned inserts are at fixed literals; for a generic k they may or may not
+    # collide.  Fall back to a simp that peels them then applies crange_get.
+    return (f"(by simp only [Std.ExtHashMap.getElem?_insert, "
+            f"Std.ExtHashMap.getElem?_erase]; "
+            f"first | exact crange_get {POP} k (by omega)"
+            f" | (rw [crange_get {POP} k (by omega)]) | rfl)")
+
+
+def fuzz_semantic(path_or_imp, prop, is_file, is_layout, unfold, log,
+                  body_override=None):
+    """v2.1 driver: unfold the Prop, structurally extract the nested conjunct,
+    apply THE RULE (solve for an uncovered demand address), and if one exists
+    emit + machine-check the adversary probe.  SURVIVED ⟺ every demanded address
+    is covered by the agree-constraint union (sound), or the guard shape is
+    outside the address-map fragment (SMT territory)."""
+    # get the unfolded body text
+    if body_override is not None:
+        body_txt = body_override
+        head = path_or_imp  # module text
+    elif is_file:
+        head = open(path_or_imp).read()
+        body_txt = _extract_def_body(head, prop)
+    else:
+        _, _, body_txt = discover_telescope(path_or_imp, prop, is_layout, unfold)
+        head = f"import {path_or_imp}\n\n{PREAMBLE}\n{WITNESS_DEFS}"
+    if not body_txt:
+        line = f"- `{prop}` → **UNDECIDABLE** — body not discoverable (v2.1)"
+        print(line); log.write(line + "\n"); log.flush(); return "UNDECIDABLE"
+
+    nc = extract_nested(body_txt)
+    if nc is not None and getattr(nc, "unsupported", None):
+        line = (f"- `{prop}` → **SURVIVED** (v2.1: guard `{nc.unsupported}` "
+                f"outside address-map fragment → SMT territory)")
+        print(line); log.write(line + "\n"); log.flush(); return "SURVIVED"
+    sol = solve_uncovered(nc)
+    if sol is None:
+        line = (f"- `{prop}` → **SURVIVED** (v2.1: every demanded address is "
+                f"covered by the agree-constraint union — sound)")
+        print(line); log.write(line + "\n"); log.flush(); return "SURVIVED"
+
+    sig = "(L : Layout) " if is_layout else ""
+    app = " L" if is_layout else ""
+    outer_types = (_file_outer_types(head, prop) if is_file
+                   else (discover_telescope(path_or_imp, prop, is_layout, unfold)[0] or []))
+    if body_override is not None:
+        outer_types = _outer_types_from_text(body_txt)
+    src = emit_semantic_probe(head, prop, sig, app, nc, sol, outer_types)
+    rc, out = run_lean(src)
+    verdict, detail = classify(rc, out)
+    if verdict in ("REFUTED", "REFUTED-DIRTY"):
+        line = (f"- `{prop}` → **{verdict}** (v2.1 uncovered-addr rule: demand "
+                f"@{hex(sol['a'])} ∉ cover {sol['cover']}) — {detail}")
+    else:
+        # the rule found an uncovered address but the emitted proof did not
+        # close — report honestly (do NOT claim survival).
+        line = (f"- `{prop}` → **UNDECIDABLE** (v2.1 found uncovered demand "
+                f"@{hex(sol['a'])} but probe did not close) — {detail}")
+        verdict = "UNDECIDABLE"
+    print(line); log.write(line + "\n"); log.flush()
+    return verdict
+
+
+def _extract_def_body(text, prop):
+    short = prop.split(".")[-1]
+    m = re.search(rf"def\s+{re.escape(short)}\b[^:]*:\s*Prop\s*:=([\s\S]*?)"
+                  r"(?:\n(?:def|theorem|end|namespace|/-)|\Z)", text)
+    return m.group(1).strip() if m else ""
+
+
+def _outer_types_from_text(body):
+    if "∀" not in body:
+        return []
+    pre = body[body.index("∀"):]
+    pre = pre.split(",", 1)[0] if "," in pre else pre
+    types = []
+    for gm in re.finditer(r"\(([^()]+?):([^()]+?)\)", pre):
+        for _ in gm.group(1).split():
+            types.append(gm.group(2).strip())
+    return types
+
+
+# ==========================================================================
+# THE PROBE SELF-GENERATOR (--gen-battery N)
+# ==========================================================================
+#
+# Sample the space of nested-memory conjuncts with GROUND TRUTH KNOWN BY
+# CONSTRUCTION, emit N probe PAIRS (one true, one false), and score the v2.1
+# rule against a FRESH sample every run (so it cannot be trained on).  The
+# generator draws: random guard sets (1..2 windows, positive OR negated forms),
+# random demand addresses (deliberately inside/outside coverage), and random
+# demand kinds (presence / value / extends / agree).  For each we KNOW whether
+# the demanded address is covered ⇒ whether the conjunct is TRUE or FALSE.
+
+def _hexlit(n):
+    return f"0x{n:x}"
+
+
+def _rand_windows(rnd):
+    """Return (guard_lean_list, cover:IntervalSet).  1..2 windows, each positive
+    `C≤k ∧ k<D` or negated `¬(C≤k ∧ k<D)`; the guard's constrained set is the
+    positive interval or its complement."""
+    guards, cover = [], IntervalSet([])
+    for _ in range(rnd.randint(1, 2)):
+        lo = rnd.randrange(0, 0x40000)
+        span = rnd.choice([0x10, 0x100, 0x1000, 0x8000])
+        hi = lo + span
+        neg = rnd.random() < 0.5
+        if neg:
+            g = f"¬ ({_hexlit(lo)} ≤ k ∧ k < {_hexlit(hi)})"
+            s = IntervalSet([(0, lo), (hi, None)])
+        else:
+            g = f"({_hexlit(lo)} ≤ k ∧ k < {_hexlit(hi)})"
+            # sometimes phrase as a single bound
+            if rnd.random() < 0.3 and lo == 0:
+                g = f"k < {_hexlit(hi)}"
+            s = IntervalSet([(lo, hi)])
+        guards.append(g)
+        cover = cover.union(s)
+    return guards, cover
+
+
+def _gen_case(rnd, want_false):
+    """Construct one hermetic Prop + ground truth.  `want_false=True` places the
+    demand OUTSIDE the coverage (false); else inside (true)."""
+    guards, cover = _rand_windows(rnd)
+    kind = rnd.choice(["present", "value", "agree", "extends"])
+    # pick demand address inside/outside coverage as requested.
+    if want_false:
+        a = cover.sample_uncovered()
+        if a is None:               # coverage = ℕ; force a gap by re-rolling
+            return _gen_case(rnd, want_false)
+    else:
+        a = cover.sample_covered()
+        if a is None:
+            return _gen_case(rnd, want_false)
+    # build the agree-hyps (mq agrees with m0 off/on the windows)
+    hyps = "".join(
+        f"      (∀ k, {g} → m0[k]? = mq[k]?) →\n" for g in guards)
+    # For present/value/extends the demand references m0's byte at `a`, so we add
+    # an outer point-fact so m0 HAS it (else the conjunct is vacuously true and
+    # 'false' cases wouldn't be false).  For 'agree' the demand compares mq to m0
+    # directly (no outer pin needed).
+    val = _hexlit(rnd.choice([0x2a, 0x7, 0xff, 0x1]))
+    outer_pin = ""
+    if kind in ("value", "present", "extends"):
+        outer_pin = f"    m0[({_hexlit(a)} : Nat)]? = some ({val} : BitVec 8) →\n"
+    if kind == "value":
+        concl = f"      mq[({_hexlit(a)} : Nat)]? = some ({val} : BitVec 8)"
+    elif kind == "present":
+        concl = f"      (∃ b, mq[({_hexlit(a)} : Nat)]? = some b)"
+    elif kind == "extends":
+        concl = f"      MemExtends m0 mq"
+    else:  # agree — demand equality at the literal `a`
+        concl = f"      mq[({_hexlit(a)} : Nat)]? = m0[({_hexlit(a)} : Nat)]?"
+    prop = (f"∀ (m0 : Mem),\n{outer_pin}"
+            f"    ∀ mq : Mem,\n{hyps}{concl}")
+    # GROUND TRUTH: false iff the demand address is uncovered.
+    truth = not want_false   # want_false ⇒ truth False
+    return prop, truth, kind, a, cover
+
+
+def gen_battery(n, log, seed=None):
+    """Emit N fresh probe pairs, run the v2.1 rule on each, and score.  Perfect
+    score (false⇒REFUTED green, true⇒SURVIVED) is the acceptance — un-trainable
+    because the sample is drawn fresh per run."""
+    import random
+    rnd = random.Random(seed)
+    log.write(f"\n### --gen-battery {n} (fresh sample, seed={seed})\n\n")
+    correct, total = 0, 0
+    for i in range(n):
+        for want_false in (True, False):
+            prop, truth, kind, a, cover = _gen_case(rnd, want_false)
+            defname = f"GenProbe{i}_{'F' if want_false else 'T'}"
+            body = (f"import Vsa.Sim.EvalSimCommon\n"
+                    f"open Vsa Vsa.Sim Vsa.MemRepr Vsa.Alloc\n"
+                    f"open Std (ExtHashMap)\n\n"
+                    f"def {defname} : Prop :=\n{prop}\n")
+            # run the v2.1 rule as a hermetic module
+            nc = extract_nested(_extract_def_body(body, defname))
+            sol = solve_uncovered(nc)
+            predicted_false = sol is not None
+            if predicted_false:
+                src = emit_semantic_probe(body, defname, "", "", nc, sol,
+                                          _outer_types_from_text(prop))
+                rc, out = run_lean(src)
+                v, _ = classify(rc, out)
+                got_refuted = v in ("REFUTED", "REFUTED-DIRTY")
+            else:
+                got_refuted = False
+            # scoring: false case must REFUTE (green), true case must NOT.
+            ok = (got_refuted == (not truth)) and (predicted_false == (not truth))
+            correct += ok; total += 1
+            tag = ("REFUTED" if got_refuted else
+                   ("SURVIVED" if not predicted_false else "PRED-FALSE-NOPROOF"))
+            mark = "OK" if ok else "MISS"
+            line = (f"- {defname} [{kind}] truth={'T' if truth else 'F'} "
+                    f"demand@{_hexlit(a)} cover={cover} → {tag} [{mark}]")
+            print(line); log.write(line + "\n"); log.flush()
+    summary = f"\n**gen-battery: {correct}/{total} correct → " \
+              f"{'PASS' if correct == total else 'FAIL'}**\n"
+    print(summary.strip()); log.write(summary); log.flush()
+    return correct == total
+
+
 # --------------------------------------------------------------------------
 # v2 acceptance
 # --------------------------------------------------------------------------
@@ -956,16 +1735,50 @@ def main():
     ap.add_argument("--struct", dest="struct",
                     help="ghost struct name; synthesize a lethal constructor "
                          "witness from its field types (round-2 fix)")
+    ap.add_argument("--semantic", action="store_true",
+                    help="v2.1 UNCOVERED-ADDRESS RULE (replaces --descend's "
+                         "pattern table): structurally extract constraint sets + "
+                         "demand addresses, solve for an uncovered demand, build "
+                         "the adversary generically")
+    ap.add_argument("--gen-battery", dest="gen_battery", type=int, default=None,
+                    metavar="N",
+                    help="self-generate N fresh probe PAIRS with ground truth "
+                         "known by construction and score the v2.1 rule (perfect "
+                         "score = un-trainable acceptance)")
+    ap.add_argument("--seed", type=int, default=None,
+                    help="RNG seed for --gen-battery (default: fresh entropy)")
     args = ap.parse_args()
 
     os.makedirs(LOGDIR, exist_ok=True)
     with open(LOG, "a") as log:
         log.write("\n## statement_fuzz.py run\n\n")
+        if args.gen_battery is not None:
+            sys.exit(0 if gen_battery(args.gen_battery, log, args.seed) else 1)
         if args.acceptance_v2:
             sys.exit(0 if acceptance_v2(log) else 1)
         if args.acceptance:
             sys.exit(0 if acceptance(log) else 1)
+        if args.semantic:
+            if args.file:
+                if not args.prop:
+                    ap.error("--semantic --file needs --prop")
+                fuzz_semantic(args.file, args.prop, True, args.layout,
+                              args.unfold, log)
+            else:
+                if not (args.imp and args.prop):
+                    ap.error("--semantic needs --import and --prop (or --file)")
+                fuzz_semantic(args.imp, args.prop, False, args.layout,
+                              args.unfold, log)
+            return
         if args.descend is not None:
+            # v2.1: --descend now routes THROUGH the semantic rule first; the old
+            # 2-row pattern table remains only as the acceptance-v2 baseline.
+            tgt = args.file or args.imp
+            if tgt and args.prop:
+                v = fuzz_semantic(tgt, args.prop, bool(args.file), args.layout,
+                                  args.unfold, log)
+                if v != "UNDECIDABLE":
+                    return
             if args.file:
                 if not args.prop:
                     ap.error("--descend --file needs --prop")

@@ -427,3 +427,56 @@ the window (where the agree-hyp says nothing).
 > fresh parameters; passing them is evidence of generalization, unlike the
 > history battery (which is trained-on-test). Any future validator claims
 > generality ONLY via this battery or a fresh equivalent.
+
+## Fuzzer v2.1: semantic rule (replaces the descent pattern table)
+
+v2's `ADVERSARY_BUILDERS` was a 2-row lookup keyed on the HISTORICAL term forms
+(the `SL.lo ≤ a ∧ a < sp.toNat` window, the `mcall`/`m0` names, the exact
+`∃b, mcall[a]?=some b` conclusion). It was OVERFIT: novel probes with the same
+disease at fresh windows/demands/shapes slipped past every row (proven —
+experiments/fuzz-battery/NovelProbe.lean, observations `fuzzer-v2-overfit`).
+v2.1 replaces the table with **THE SEMANTIC RULE both rows instantiated**, run
+via `--semantic` (and `--descend`, which now routes THROUGH it first).
+
+- **The uncovered-address rule.** For each nested conjunct `∀ mq, (agree
+  constraints) → demand(mq)`, extracted STRUCTURALLY from the elaborated body:
+  (a) the **constraint set** = union over every agree-hyp `∀k, G k → m0[k]?=mq[k]?`
+  of `{k | G k}`, where each guard `G` is parsed into a ℕ-**IntervalSet**
+  (`v<D`→[0,D); `C≤v`→[C,∞); `C≤v∧v<D`→[C,D); `¬(…)`→complement; conjunction
+  →intersection; multiple hyps →union) — negated/positive/multi-window all
+  handled by the SAME algebra, no name/form matching; (b) the **demand
+  addresses** = occurrences of `mq[a]?` in the conclusion (literal `a`,
+  interval-quantified `∀a, R a → …`, or `MemExtends m0 mq` = every populated m0
+  address), with the demand KIND (presence `∃b,·=some b` / value `·=some V` /
+  agree `·=m0[a]?` / extends); (c) **solve**: interval arithmetic finds a
+  demanded address NOT in the constraint union; (d) if found → the conjunct is
+  FALSE, and the adversary `mq = m0` corrupted at exactly that address (ERASE if
+  m0 has the byte there, INSERT if not) satisfies every guard yet breaks the
+  demand. The `¬P` probe is machine-checked by `lake env lean`; the agree-proofs
+  are discharged from the guard SHAPE (for each guard, `omega` proves the
+  corrupted address is outside its set, so the corruption is invisible). m0 is a
+  `crange`-style constant map (`Vsa/Sim`-free, in-probe) that meets every outer
+  population premise by construction. SURVIVED ⟺ every demanded address is
+  covered (sound) — a POSITIVE coverage verdict, not "no pattern matched".
+- **The probe self-generator (`--gen-battery N`).** Samples the space (1–2
+  windows, positive OR negated forms, single-bound variants; demand addresses
+  deliberately inside/outside coverage; demand kinds presence/value/agree/
+  extends) and emits N probe PAIRS with ground truth KNOWN BY CONSTRUCTION
+  (false ⟺ demand address uncovered). The rule scores against a FRESH sample
+  every run (seedable via `--seed`, else fresh entropy) — un-trainable, unlike
+  the history battery. `--gen-battery 20` = 40/40 on repeated fresh samples.
+- **Acceptance (all hard, all passing).** (a) NovelProbe A,C → REFUTED
+  (Lean-replayed, axioms ⊆ {propext,Classical.choice,Quot.sound}), B → SURVIVED;
+  (b) `--gen-battery 20` → 40/40 on fresh samples; (c) `--acceptance-v2` no
+  regression (v1 3/3+3/3, PreMemExt/PrePresence still REFUTED, current survivors
+  SURVIVED, live NegResid still detected); (d) the pre-48f forms still refuted.
+- **What remains outside the space (SMT territory).** The rule owns the
+  LITERAL-bound address-map fragment. Guards with SYMBOLIC bounds (`SL.lo`,
+  `sp.toNat` — outer-quantified, non-literal) are reported honestly as
+  `SURVIVED (guard outside address-map fragment → SMT territory)`; these are the
+  pre-48f live forms, still refuted by the retained builder-instantiation path
+  under `--acceptance-v2`, and are the countermodel-search layer's job (no
+  builder needed — negation-SAT + Lean replay). Non-address-map demand shapes
+  (ValueRepr/CString agreement, reg-liveness over Config) are likewise SMT
+  territory: the semantic rule is the address-map decision procedure, the SMT
+  layer is the general one.

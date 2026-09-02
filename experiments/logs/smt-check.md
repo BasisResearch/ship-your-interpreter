@@ -211,3 +211,35 @@
 
 ## smt_check.py run
 
+
+## smt_check.py run
+
+
+## smt_check.py acceptance run
+
+- `SmtAcc.HeadroomBad` → **REFUTED-REPLAYED** — (axiom-free) | model {SL_hi=0, sp=#xffffffffffffffff), SL_lo=18446744073709548352, sp_n=18446744073709551615}
+- `SmtAcc.McallMemExt` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0}
+- `SmtAcc.McallPresence` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=16715942433050673624, SL_lo=0, sp=#xe7faf513f7dd41d8)}
+- `SmtAcc.BinArmMemExt` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=18446744073709551615, SL_lo=0, sp=#xffffffffffffffff)}
+- `IoWriteMined.IoWriteInvCandidate` → **VALID-IN-FRAGMENT**
+- `SmtAcc.BudgetLadderOk` → **VALID-IN-FRAGMENT**
+- `SmtAcc.CurMemExt` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat)
+- `SmtAcc.AmdHeadroom` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat)
+
+### Acceptance verdicts
+- a_headroom: REFUTED-REPLAYED
+- b_memext: REFUTED-REPLAYED
+- b_presence: REFUTED-REPLAYED
+- c_binarm: REFUTED-REPLAYED
+- d_io_write_loop.lean: VALID-IN-FRAGMENT
+- d_budget: VALID-IN-FRAGMENT
+- e_memext: VALID-IN-FRAGMENT
+- e_headroom: VALID-IN-FRAGMENT
+- REFUTED-REPLAYED count (need ≥2): 4
+
+**Acceptance → PASS** (replayed 4/4, need ≥2)
+
+## smt_check.py run
+
+  (encoder: lean)
+- `NovelResidA` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplay.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {base=#x75346575757572ba), base_n=8445486756382732986} [enc:lean]

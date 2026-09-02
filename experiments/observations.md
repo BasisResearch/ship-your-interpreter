@@ -4994,3 +4994,36 @@ it, still stop and report instead.
 - proposal: encoder v2 = Lean-side dump_smt_lib tactic; hard acceptance =
   history battery + NovelProbe + a --gen-battery fresh sample (once v2.1's
   generator lands). No generality claims except via uncontaminated tests.
+
+## 2026-09-02 fuzzer-v21-semantic-rule (statement_fuzz --semantic/--gen-battery)
+- missing: (was) a GENERALIZATION of --descend. v2's ADVERSARY_BUILDERS keyed on
+  historical term forms → overfit (fuzzer-v2-overfit). Now LANDED: the
+  uncovered-address SEMANTIC RULE (scripts/statement_fuzz.py, --semantic).
+  Guards→ℕ-IntervalSet algebra (pos/neg/multi-window, ∧=∩, hyps=∪), demands→
+  (addr,kind∈{presence,value,agree,extends}), coverage=interval arithmetic;
+  adversary = m0 corrupted at the uncovered demand address (erase/insert),
+  agree-proofs discharged from guard shape by omega, m0=in-probe `crange`
+  constant map. No name/form matching. Plus --gen-battery N: self-generates N
+  probe PAIRS with ground truth by construction, un-trainable (fresh sample/run).
+- workaround: NONE — the 2-row table is replaced by the rule for the literal
+  fragment; the OLD builders are retained ONLY as the --acceptance-v2 baseline
+  (pre-48f symbolic-window forms).
+- cost: none new. Acceptance ALL green: NovelProbe A/C REFUTED axiom-clean +
+  B SURVIVED; --gen-battery 20 = 40/40 on fresh seeds; --acceptance-v2 no
+  regression; pre-48f still refuted.
+- proposal: BOUNDARY — the rule owns the LITERAL address-map fragment. Guards
+  with SYMBOLIC outer bounds (SL.lo, sp.toNat) are reported SURVIVED-as-SMT-
+  territory (honest, positive) and remain the countermodel-search layer's job;
+  the pre-48f live forms are those. The SMT layer subsumes both by pinning outer
+  binders + negation-SAT; until it lands the retained builders cover the 2 known
+  live symbolic forms. Non-address-map demands (ValueRepr/CString/reg-liveness)
+  = SMT territory too.
+
+## 2026-09-02 v21-fresh-probe-verdict (coordinator post-landing check)
+- v2.1 semantic rule VERIFIED on a genuinely-fresh 3-window agree-demand
+  probe (fuzz-battery/FreshTriWin.lean, written after v2.1 landed): analysis
+  found the uncovered address correctly; probe-emitter lacks the agree-kind
+  demand template → honest UNDECIDABLE (sorryAx surfaced, never silent).
+  True twin SURVIVED. Backlog: agree-demand refuter template (small).
+  Standing rule: each validation round uses a FRESH hand probe; used
+  batteries are spent as evidence of generality.
