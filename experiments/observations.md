@@ -5187,3 +5187,18 @@ it, still stop and report instead.
 - DISPATCH CONSEQUENCE: sort supplier fields by Repr-recursion. Non-recursive
   leaf readbacks → SMT-UNSAT-prove + transcribe (new cheap channel). Recursive
   → prover with the Lean stack. Harness: experiments/smt/bounded/gen_probe.py.
+
+## 2026-09-02 houdini-ih-selector-viable (in-house, Z3-oracle-only)
+- in-house Houdini (NO Spacer; Z3 as oracle only) REDISCOVERED cstring_agreeP
+  BLIND on the bounded .str readback VC: 10 zoo+CTI candidates → maximal
+  inductive subset = payload-window byte-agreement [p,p+len] through NUL =
+  cstring_agreeP content (ReprSurvival.lean:150), ~20 oracle calls <1.5s,
+  Z3-confirmed UNSAT. scripts/houdini_ih.py, experiments/smt/HOUDINI-IH.md.
+- BOUNDARY (honest): Houdini SELECTS from a candidate pool, does not invent —
+  power = candidate vocabulary (the preservation-lemma zoo, ample). Bounded cut
+  needs a priority rule preferring the GENERALISING invariant (tail-equality)
+  over a bound-local one. Viable as an IH-SELECTOR for leaf memory-arithmetic
+  supplier fields; the recursive-Repr bulk needs the recursion-as-tree
+  structure (Z3 closes leaves, Houdini strengthens each node).
+- PIPELINE (design-time, nothing enters proof): mine/CTI → Houdini+Z3 select →
+  named survivor → LLM transcribes to the Lean lemma it matched.
