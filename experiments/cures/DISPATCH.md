@@ -1,36 +1,36 @@
-# CEGIS sweep dispatch triage (synthesized from sealed suites)
+# CEGIS sweep dispatch triage
 
-Sealed 2026-09-02. int-cell/unary fields = 48h live interlock (excluded).
+Sealed 2026-09-02 @c9e1453. int-cell/unary fields excluded (48h live interlock). Verdict parsed from each file's marker line; authoritative detail is per-file.
 
 | field/cluster | class | survivors |
 |---|---|---|
-| hArgsCons | INTERLOCK | 0 |
-| hArgsNil | INTERLOCK | 0 |
-| hAssign | INTERLOCK | 0 |
-| hCall | INTERLOCK | 0 |
-| hCallAssertOk | INTERLOCK | 0 |
-| hCallPrint | INTERLOCK | 0 |
-| hCallPrintln | INTERLOCK | 0 |
-| hInitStore | INTERLOCK | 0 |
-| hSBlock | INTERLOCK | 0 |
-| hSExpr | INTERLOCK | 0 |
-| hSForStart | INTERLOCK | 0 |
-| hSIfFalse | INTERLOCK | 0 |
-| hSIfNone | INTERLOCK | 0 |
-| hSIfTrue | INTERLOCK | 0 |
-| hSRet | INTERLOCK | 0 |
-| hSRetNull | INTERLOCK | 0 |
-| hSVarInit | INTERLOCK | 0 |
-| hSVarNull | INTERLOCK | 0 |
-| hSWhileBreak | INTERLOCK | 0 |
-| hSWhileFalse | INTERLOCK | 0 |
-| hSeqConsAbrupt | INTERLOCK | 0 |
-| hSeqConsNormal | INTERLOCK | 0 |
-| hSeqNil | INTERLOCK | 0 |
-| hVar | INTERLOCK | 0 |
+| hArgsCons | NO-CURE-SEMANTIC-GAP | 0 |
+| hArgsNil | NO-CURE-SEMANTIC-GAP | 0 |
+| hAssign | NO-CURE-SEMANTIC-GAP | 0 |
+| hCall | NO-CURE-SEMANTIC-GAP | 0 |
+| hCallAssertOk | NO-CURE-SEMANTIC-GAP | 0 |
+| hCallPrint | NO-CURE-SEMANTIC-GAP | 0 |
+| hCallPrintln | NO-CURE-SEMANTIC-GAP | 0 |
+| hInitStore | NO-CURE-SEMANTIC-GAP | 0 |
+| hSBlock | NO-CURE-SEMANTIC-GAP | 0 |
+| hSExpr | NO-CURE-SEMANTIC-GAP | 0 |
+| hSForStart | NO-CURE-SEMANTIC-GAP | 0 |
+| hSIfFalse | NO-CURE-SEMANTIC-GAP | 0 |
+| hSIfNone | NO-CURE-SEMANTIC-GAP | 0 |
+| hSIfTrue | NO-CURE-SEMANTIC-GAP | 0 |
+| hSRet | NO-CURE-SEMANTIC-GAP | 0 |
+| hSRetNull | NO-CURE-SEMANTIC-GAP | 0 |
+| hSVarInit | NO-CURE-SEMANTIC-GAP | 0 |
+| hSVarNull | NO-CURE-SEMANTIC-GAP | 0 |
+| hSWhileBreak | NO-CURE-SEMANTIC-GAP | 0 |
+| hSWhileFalse | NO-CURE-SEMANTIC-GAP | 0 |
+| hSeqConsAbrupt | NO-CURE-SEMANTIC-GAP | 0 |
+| hSeqConsNormal | NO-CURE-SEMANTIC-GAP | 0 |
+| hSeqNil | NO-CURE-SEMANTIC-GAP | 0 |
+| hVar | NO-CURE-SEMANTIC-GAP | 0 |
 | io-native-print | PROVE-DIRECTLY | 0 |
 | singletons | PROVE-DIRECTLY | 0 |
+| str-cell-divov | PROVE-DIRECTLY | 0 |
 | crux | PROVE-DIRECTLY-HARD | 0 |
-| str-cell-divov | PROVE-DIRECTLY-HARD | 0 |
 
-**Class counts:** {'PROVE-DIRECTLY-HARD': 2, 'INTERLOCK': 24, 'PROVE-DIRECTLY': 2}
+**Class counts:** {'PROVE-DIRECTLY-HARD': 1, 'NO-CURE-SEMANTIC-GAP': 24, 'PROVE-DIRECTLY': 3}
