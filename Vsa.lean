@@ -474,6 +474,7 @@ import Vsa.Sim.rows.StringifyStrdupTail
 import Vsa.Sim.rows.StringifyBridge
 import Vsa.Sim.rows.StrConcatHeap
 import Vsa.Sim.rows.ExecCaseGeom
+import Vsa.Sim.rows.ExecLeafD
 import Vsa.Sim.rows.ExecRouting
 import Vsa.Sim.rows.ExecRecRows
 import Vsa.Sim.rows.ExecIHWiden

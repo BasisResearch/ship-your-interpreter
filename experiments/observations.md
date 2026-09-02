@@ -4652,3 +4652,22 @@ it, still stop and report instead.
 - proposal: when the M6 supplier wave lands, fill the extras `ground` fields
   through `child_node`/`child_at`; exec rows also need the eval-side
   `KindTablePins` half from `kindTablePins_of_bytes` (NOT in `ExecGround`).
+
+## 2026-09-02 exec-leaf-record-fill-gated-on-X3 (Wave 0 0a, wave 48a)
+- missing: hSBrk/hSCont are NOT record-fills post-`ExecEntry.ground`-insertion,
+  contra `design/singletons.md` §S-exec-leaf. `execGround_caseGeom_brk/_cont`
+  supply only slot+table halves of `ExecCaseGeom`; the `ExecLeafWiden` conjunct
+  is X3 (block re-land). Machine-checked: the plain unpinned `ExecLeafWiden` is
+  NOT `ExecEntry`-derivable (`ExecExit.memFrame` forgets in-`[SL.lo,sp)`
+  presence). Probe: /tmp/w0probe/Probe.lean.
+- workaround: NONE for the flip. Landed the SAFE half — the exec twin of the
+  47e eval-leaf payoff (`Vsa/Sim/rows/ExecLeafD.lean`): `ExecLeafMemPin`,
+  `ExecExitPinned`, `ExecLeafWidenP`, `execLeafWidenP_of_entry` (PROVED from the
+  entry alone at `PhiExtends.refl`, axiom-clean), `execExitD_of_pinnedExecExit`.
+- cost: the flip now needs ONE bounded block re-land — `execBrkSim`/`execContSim`
+  concluding the pin (facts exist: `ExecBrkCont.lean:726` `hmemframe6`, `:495`
+  `hmem7e`; only `pres` = MemExtends needs the spill-presence chain threaded) +
+  moving brk/cont `ExecCaseGeom`/`execBrkSimD`/`execContSimD` to the pinned
+  family (mirroring `evalIntSimD` using `LeafWidenP`).
+- proposal: dispatch that re-land as the exec-leaf task; `field_hSBrk`/`_hSCont`
+  are then one-liners off `execLeafWidenP_of_entry` + `execGround_caseGeom_*`.

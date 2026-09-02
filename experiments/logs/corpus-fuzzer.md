@@ -110,3 +110,10 @@ validation, like the ELF emulator harness).
 ## statement_fuzz.py run
 
 - `ErrArmResid` (file fuzz_errarm.lean) → **SURVIVED** — 'VsaFuzzFileProbe.refuted' depends on axioms: [sorryAx] (ghost witness ⟨(by decide), (by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+
+## statement_fuzz.py run
+
+- `Vsa.Sim.ExecLeafMemPin SL sp m0 m` → **UNDECIDABLE** — telescope not discoverable
