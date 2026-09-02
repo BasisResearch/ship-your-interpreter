@@ -66,8 +66,8 @@ toward a false statement, which has been the dominant historical cost
 | `statement_fuzz.py` | pre-proof refutation by witness. v1: outer-telescope lethal witnesses. `--descend`: nested conjuncts (2-row builder table = regression guard for known forms). `--semantic` (v2.1): the uncovered-address interval algebra — general over the literal address-map fragment, verified on fresh probes | v2.1 analysis is general; the probe-EMITTER lacks the agree-demand template (honest UNDECIDABLE). Symbolic bounds → SMT territory |
 | `--gen-battery N` | fresh sampled probe pairs with ground truth by construction — the uncontaminated acceptance that can't be trained on | any FIXED battery is spent once used in development (proven twice) |
 | `smt_check.py` | Z3 countermodel search (`--refute`, model replayed through Lean — Lean remains the authority), validity (`--validate`), inhabitation (`--inhabit`); encoder v2 = the `dump_smt_lib` export tactic (`experiments/smt/DumpSmtLib.lean`) walking the elaborated Expr | search layer general; REPLAY generator template-bound (loud ENCODING-GAP on novel shapes — flagged witness + ~5-line hand refutation is the operating mode). Opaque predicates (ValueRepr/CString/GoodState/…) uninterpreted → REFUTED-MODULO-OPAQUE never auto-replayed |
-| `smt_check.py --joint` (in flight) | INTERLOCK validation: joint inhabitation of a whole structure + producer⇒statement + statement⇒consumer queries — the 48e/48g composition failures as machine checks | in-fragment only; opaque demands → UNKNOWN-OPAQUE |
-| `cegis_cure.py` (in flight) | candidate AMENDED statements for a false/blocked Resid: enumerate the cure-template space (entry-conditioning, quantifier repair, guard repair, redundancy deletion, oracle re-homing), filter by elaboration/Z3/traces/descent | acceptance = rediscover the landed 47i/48f cures from history |
+| `smt_check.py --joint` | INTERLOCK validation: joint inhabitation of a whole structure + producer⇒statement + statement⇒consumer queries — the 48e/48g composition failures as machine checks | landed; all 4 history failure modes detected at intended verdicts. Fixtures cover the encodable fragment only; opaque geometry → MODULO-OPAQUE, never silent. Prospective test = live use in the interlock sessions |
+| `cegis_cure.py` | candidate AMENDED statements for a false/blocked Resid: enumerate the cure-template space (entry-conditioning, quantifier repair, guard repair, redundancy deletion, oracle re-homing), filter by elaboration/Z3/`--joint`/descent | landed; history acceptance rank-1 on the 47i/48f/48g cures but CONTAMINATED (the tool read the docs describing them). Clean validation is prospective: seal ranked suites for un-cured clusters before their wave lands. Only `REFUTED-REPLAYED` drops a candidate; opaque/encoding verdicts defer |
 | Batteries | `experiments/fuzz-battery/` (NovelProbe, FreshTriWin, FreshValDemand) | spent-vs-fresh discipline: generality claims only via probes the tool never saw |
 
 ## 4. Invariant generation (mining pipeline)
@@ -122,6 +122,13 @@ claim needs a static call-graph proof or all-kind driver coverage.
 - **Overnight rule**: `caffeinate -ims`, and it needs AC power. It does NOT
   hold on battery. macOS Maintenance Sleep killed agent streams until this was
   found.
+- **The cure-wave protocol** (waves 47e–48g taught it, the validation stack
+  now runs it). A blocked field means a false statement. The prep step runs
+  `cegis_cure.py` to generate ranked amended statements, filters them through
+  `smt_check.py --joint` for the interlock traps, seals the surviving suite,
+  and only then opens a writer session to transcribe the top candidate and
+  relight. Discovery moves out of the proving session, where it used to turn
+  one wave into a ladder.
 - **Adversarial everything**: statements are validated by refutation attempts
   (the fleet proved the record itself uninhabitable, which was falsity #12);
   tools are validated by batteries they couldn't train on (two overfit claims
