@@ -67,7 +67,7 @@ toward a false statement, which has been the dominant historical cost
 | `--gen-battery N` | fresh sampled probe pairs with ground truth by construction — the uncontaminated acceptance that can't be trained on | any FIXED battery is spent once used in development (proven twice) |
 | `smt_check.py` | Z3 countermodel search (`--refute`, model replayed through Lean — Lean remains the authority), validity (`--validate`), inhabitation (`--inhabit`); encoder v2 = the `dump_smt_lib` export tactic (`experiments/smt/DumpSmtLib.lean`) walking the elaborated Expr | search layer general; REPLAY generator template-bound (loud ENCODING-GAP on novel shapes — flagged witness + ~5-line hand refutation is the operating mode). Opaque predicates (ValueRepr/CString/GoodState/…) uninterpreted → REFUTED-MODULO-OPAQUE never auto-replayed |
 | `smt_check.py --joint` | INTERLOCK validation: joint inhabitation of a whole structure + producer⇒statement + statement⇒consumer queries — the 48e/48g composition failures as machine checks | landed; all 4 history failure modes detected at intended verdicts. Fixtures cover the encodable fragment only; opaque geometry → MODULO-OPAQUE, never silent. Prospective test = live use in the interlock sessions |
-| `cegis_cure.py` | candidate AMENDED statements for a false/blocked Resid: enumerate the cure-template space (entry-conditioning, quantifier repair, guard repair, redundancy deletion, oracle re-homing), filter by elaboration/Z3/`--joint`/descent | landed; history acceptance rank-1 on the 47i/48f/48g cures but CONTAMINATED (the tool read the docs describing them). Clean validation is prospective: seal ranked suites for un-cured clusters before their wave lands. Only `REFUTED-REPLAYED` drops a candidate; opaque/encoding verdicts defer |
+| `cegis_cure.py` | candidate AMENDED statements for a false/blocked Resid: enumerate the cure-template space (entry-conditioning, quantifier repair, guard repair, redundancy deletion, oracle re-homing), filter by elaboration/Z3/`--joint`/descent | landed; history acceptance rank-1 on the 47i/48f/48g cures, and GENUINE under `--blind` ablation (statement + machine-checked obstruction only, docs excluded — the ghost the refutation witness degenerates names the repair template). Intra-candidate ranking on symbolic-window forms stays a template+edit-cost heuristic; prospective sealed suites are the strongest test. Only `REFUTED-REPLAYED` drops a candidate |
 | Batteries | `experiments/fuzz-battery/` (NovelProbe, FreshTriWin, FreshValDemand) | spent-vs-fresh discipline: generality claims only via probes the tool never saw |
 
 ## 4. Invariant generation (mining pipeline)
@@ -132,7 +132,8 @@ claim needs a static call-graph proof or all-kind driver coverage.
 - **Adversarial everything**: statements are validated by refutation attempts
   (the fleet proved the record itself uninhabitable, which was falsity #12);
   tools are validated by batteries they couldn't train on (two overfit claims
-  caught this way); cures are validated jointly rather than per-statement (the
+  caught this way) and by ablation (CEGIS's history acceptance held with the
+  answer-bearing docs stripped); cures are validated jointly rather than per-statement (the
   48e interlock lesson). Law 4 stands: a blocked step returns a machine-checked
   obstruction, never a workaround.
 
