@@ -78,6 +78,85 @@ def readI64_eq(m, a, sym):
     # all 8 defined AND the unsigned combine equals 'usym' (a fresh unsigned Int)
     return "(and " + read64_defined(m,a) + f" (= {read64_val(m,a)} {sym}))"
 
+# ---- WRITE-LOG EMITTER (the machine effect, NOT an abstract copy hyp) -------
+#
+# The arm's computed write-log is Vsa/Sim/BlockMem.lean `wlogM : List WEntry`,
+# WEntry = (addr : Nat, width ∈ {1,2,4,8}, value : BitVec 64).  `writeLog` folds
+# `applyW` left-to-right: each entry stores `width` little-endian bytes of
+# `value` at `addr..addr+width`.  Here we emit the SAME fold as a chain of SMT
+# Array `store`s taking the source memory `src` to the destination `dst`, so the
+# destination memory is DERIVED from the effect the arm actually performs rather
+# than assumed via a hand copy-hypothesis.  This needs NO external Sail toolchain
+# — the write-log is a first-order list the seg/#derive_case outcome already
+# computes (BlockMem.wlogM), so a caller passes it in directly.
+#
+# A write-log entry addr/value may be a CONCRETE int or a SYMBOL string (for a
+# copied byte whose value is `m[srcAddr+j]`, the value term is a byte read from
+# src).  We keep both the `def` (definedness) and `val` (BV8) arrays in lockstep.
+
+def _le_bytes(width, value_term):
+    """The `width` little-endian BV8 byte terms of an Int-or-symbol value term.
+    Returns list of SMT (BV 8) expressions, low byte first."""
+    out = []
+    for j in range(width):
+        # ((value >> 8j) & 0xff) as BV8.  value_term is an Int SMT term.
+        out.append(f"((_ int2bv 8) (mod (div {value_term} {1 << (8*j)}) 256))")
+    return out
+
+def wlog_stores(src, dst, log):
+    """Emit `dst = writeLog src log` as chained Array stores.
+
+    log : list of (addr_term, width, value_term); addr/value are SMT Int terms
+    (concrete literals or declared symbols).  A special value_term of the form
+    ("copy", src_addr_term) means: store the *byte* read from src at src_addr
+    (used for memcpy-style struct copies where the stored value is a live src
+    byte, not a literal).  Returns a list of assert strings binding dst_def /
+    dst_val as `store` chains over src_def / src_val."""
+    def_expr = f"{src}_def"
+    val_expr = f"{src}_val"
+    for (addr, width, value) in log:
+        if isinstance(value, tuple) and value[0] == "copy":
+            # single-byte copy of src[value[1]]
+            sa = value[1]
+            def_expr = f"(store {def_expr} {addr} (select {src}_def {sa}))"
+            val_expr = f"(store {val_expr} {addr} (select {src}_val {sa}))"
+        else:
+            bytes_le = _le_bytes(width, str(value))
+            for j, bv in enumerate(bytes_le):
+                a = f"(+ {addr} {j})"
+                def_expr = f"(store {def_expr} {a} true)"
+                val_expr = f"(store {val_expr} {a} {bv})"
+    return [f"(assert (= {dst}_def {def_expr}))",
+            f"(assert (= {dst}_val {val_expr}))"]
+
+def wlog_readback_facts(src_base, dst_base, nbytes, drop=None):
+    """The select-store CONSEQUENCES of a struct-copy write-log: dst byte j reads
+    back to src byte j.  Each is Z3-trivial (`select (store a k v) k = v`) given
+    the store chain from `wlog_stores`; we emit them so the value-reconstruction
+    (readI64/read32) does not have to walk the whole store chain symbolically
+    (which is nonlinear for the 8-byte int payload and returns UNKNOWN).  These
+    are NOT extra hypotheses — they are derivable facts of the emitted effect."""
+    out = []
+    for j in range(nbytes):
+        if drop is not None and j == drop:
+            continue
+        out.append(f"(assert (= (select {dst_base[0]}_def (+ {dst_base[1]} {j})) "
+                   f"(select {src_base[0]}_def (+ {src_base[1]} {j}))))")
+        out.append(f"(assert (= (select {dst_base[0]}_val (+ {dst_base[1]} {j})) "
+                   f"(select {src_base[0]}_val (+ {src_base[1]} {j}))))")
+    return out
+
+def copy_wlog(src_base, dst_base, nbytes, drop=None):
+    """The 24-byte struct-copy write-log: for each j, store dst_base+j <- src[src_base+j].
+    This is the memcpy the ValueRepr copy arm performs, expressed as a write-log.
+    `drop` skips one byte (the deliberately-false twin)."""
+    log = []
+    for j in range(nbytes):
+        if drop is not None and j == drop:
+            continue
+        log.append((f"(+ {dst_base} {j})", 1, ("copy", f"(+ {src_base} {j})")))
+    return log
+
 # ---- copy hypothesis: 24 struct bytes copied dst<-src ----------------------
 def copy24(src, dst, drop=None):
     conj=[]
