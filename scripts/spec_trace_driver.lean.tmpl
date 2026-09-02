@@ -1,0 +1,196 @@
+/-
+# General spec-side trace driver (ANALYSIS ONLY, gap-1a of the invariant-gen plan)
+
+Executable mirror of the WHILE relation (`Vsa/While/Semantics.lean` is a
+relational big-step `Prop`, not executable, so we carry an executable
+interpreter here) over the REAL `Vsa.While` AST.  Imports the genuine
+`kindOfStmt`/`Stmt`/`Expr`, so the emitted stmt-kind tags are the spec ground
+truth; expr-kind tags follow the C `ExprKind` enum
+(`int0 str1 bool2 null3 var4 assign5 binary6 logical7 unary8 call9 fn10`).
+
+Per eval/exec STEP it dumps a structured event:
+
+    SPEC ev=<i> k=<kind> ek=<isExpr?1:0> depth=<d> store=<frames> vtag=<t> vint=<n>
+
+where `vtag` is the value-repr kind of the value the step produced (for eval
+steps: 0 null / 1 bool / 2 int / 3 str / 4 closure / 5 native) and `vint` is the
+integer payload when the value is an int (else 0).  These are exactly the
+`gprGet a0 = reprOf(value)` conjuncts stage-3 relational mining pairs against the
+machine-side boxed-payload probe.
+
+The `PROG` placeholder is filled by scripts/invgen.py with the transpiled
+program (scripts/wl_to_lean.py output).  Nothing here enters a proof.
+
+Run:  lake env lean <this-file>   (from repo root)
+-/
+import Vsa.While.Ast
+import Vsa.Sim.ExecDispatch
+
+open Vsa.While
+open Vsa.Sim (kindOfStmt)
+
+namespace SpecTraceGen
+
+-- @@PROG@@  (scripts/invgen.py substitutes the transpiled `def prog : Program`)
+
+/-- Runtime value for the driver (mirror of the spec `Value`; closures/natives
+kept opaque — we only need their repr TAG for the relational conjunct). -/
+inductive V where
+  | int (n : Int) | bool (b : Bool) | str (s : String) | null
+  | closure (params : List String) (body : List Stmt) (name : Option String)
+  | native (nm : String)
+  deriving Inhabited
+
+/-- value-repr tag (matches the machine boxed-kind byte order the probe reads). -/
+def vtag : V → Nat
+  | .null => 0 | .bool _ => 1 | .int _ => 2 | .str _ => 3
+  | .closure .. => 4 | .native _ => 5
+
+def vint : V → Int | .int n => n | _ => 0
+
+/-- expr-kind tag (C ExprKind order). -/
+def kindOfExpr : Expr → Nat
+  | .int _ => 0 | .str _ => 1 | .bool _ => 2 | .null => 3 | .var _ => 4
+  | .assign .. => 5 | .binary .. => 6 | .logical .. => 7 | .unary .. => 8
+  | .call .. => 9 | .fn .. => 10
+
+abbrev Env := List (String × V)
+def lookupV (env : Env) (x : String) : V := (env.find? (·.1 == x)).map (·.2) |>.getD .null
+def setV (env : Env) (x : String) (v : V) : Env :=
+  if env.any (·.1 == x) then env.map (fun p => if p.1 == x then (x, v) else p)
+  else (x, v) :: env
+def truthy : V → Bool | .int n => n != 0 | .bool b => b | .null => false | _ => true
+
+/-- The event log: (evIndex, kind, isExpr, depth, storeFrames, vtag, vint). -/
+structure TraceSt where
+  env : Env
+  frames : Nat
+  depth : Nat
+  ev : Nat := 0
+  log : List (Nat × Nat × Nat × Nat × Nat × Nat × Int) := []
+  deriving Inhabited
+
+inductive Status where | normal | brk | cont | ret (v : V) deriving Inhabited
+
+def emitE (t : TraceSt) (e : Expr) (v : V) : TraceSt :=
+  { t with ev := t.ev + 1
+           log := t.log ++ [(t.ev, kindOfExpr e, 1, t.depth, t.frames, vtag v, vint v)] }
+def emitS (t : TraceSt) (s : Stmt) : TraceSt :=
+  { t with ev := t.ev + 1
+           log := t.log ++ [(t.ev, kindOfStmt s, 0, t.depth, t.frames, 0, 0)] }
+
+mutual
+/-- Executable eval that ALSO logs one event per expr node (post-order value). -/
+partial def evalE (t : TraceSt) : Expr → TraceSt × V
+  | .int n => let v := V.int n; (emitE t (.int n) v, v)
+  | .str s => let v := V.str s; (emitE t (.str s) v, v)
+  | .bool b => let v := V.bool b; (emitE t (.bool b) v, v)
+  | .null => (emitE t .null .null, .null)
+  | .var x => let v := lookupV t.env x; (emitE t (.var x) v, v)
+  | .assign x e =>
+      let (t1, v) := evalE t e
+      let t2 := { t1 with env := setV t1.env x v }
+      (emitE t2 (.assign x e) v, v)
+  | .binary op l r =>
+      let (t1, a) := evalE t l
+      let (t2, b) := evalE t1 r
+      let v := (match a, b with
+        | .int x, .int y =>
+          match op with
+          | .add => .int (x + y) | .sub => .int (x - y) | .mul => .int (x * y)
+          | .div => .int (if y == 0 then 0 else x / y) | .mod => .int (if y == 0 then 0 else x % y)
+          | .eq => .bool (x == y) | .ne => .bool (x != y) | .lt => .bool (x < y)
+          | .le => .bool (x <= y) | .gt => .bool (x > y) | .ge => .bool (x >= y)
+        | .str x, .str y => match op with
+          | .add => .str (x ++ y) | .eq => .bool (x == y) | .ne => .bool (x != y) | _ => .null
+        | _, _ => .null)
+      (emitE t2 (.binary op l r) v, v)
+  | .logical op l r =>
+      let (t1, a) := evalE t l
+      let (t2, v) := (match op with
+        | .and => if truthy a then evalE t1 r else (t1, V.bool false)
+        | .or  => if truthy a then (t1, V.bool true) else evalE t1 r)
+      (emitE t2 (.logical op l r) v, v)
+  | .unary op e =>
+      let (t1, a) := evalE t e
+      let v := (match op, a with | .neg, .int n => .int (-n) | .not, x => .bool (!truthy x) | _,_ => .null)
+      (emitE t1 (.unary op e) v, v)
+  | .fn nm ps body => let v := V.closure ps body nm; (emitE t (.fn nm ps body) v, v)
+  | .call f args =>
+      let (t1, fv) := evalE t f
+      let (t2, _) := evalArgs t1 args
+      -- call effect is opaque in the driver; the event + repr tag is what mining needs.
+      let v := (match fv with | .native _ => .null | _ => .null)
+      (emitE t2 (.call f args) v, v)
+
+partial def evalArgs (t : TraceSt) : List Expr → TraceSt × List V
+  | [] => (t, [])
+  | a :: rest => let (t1, v) := evalE t a; let (t2, vs) := evalArgs t1 rest; (t2, v :: vs)
+end
+
+mutual
+partial def execS (t : TraceSt) (s : Stmt) : TraceSt × Status :=
+  let t := emitS t s
+  match s with
+  | .expr e => let (t1, _) := evalE t e; (t1, .normal)
+  | .varDecl x init =>
+      let (t1, v) := (match init with | some e => evalE t e | none => (t, V.null))
+      ({ t1 with env := setV t1.env x v }, .normal)
+  | .ret e =>
+      let (t1, v) := (match e with | some ex => evalE t ex | none => (t, V.null))
+      (t1, .ret v)
+  | .brk => (t, .brk)
+  | .cont => (t, .cont)
+  | .block ss =>
+      let t0 := { t with frames := t.frames + 1, depth := t.depth + 1 }
+      let (t1, st) := execList t0 ss
+      ({ t1 with depth := t.depth }, st)
+  | .ifStmt c thn els =>
+      let (t1, cv) := evalE t c
+      if truthy cv then execS t1 thn
+      else match els with | some e => execS t1 e | none => (t1, .normal)
+  | .whileStmt c body => execWhile t c body 100000
+  | .forStmt init c step body =>
+      let (t1, _) := (match init with | some s => execS t s | none => (t, Status.normal))
+      execFor t1 c step body 100000
+
+partial def execList (t : TraceSt) : List Stmt → TraceSt × Status
+  | [] => (t, .normal)
+  | s :: rest =>
+      let (t1, st) := execS t s
+      match st with | .normal => execList t1 rest | _ => (t1, st)
+
+partial def execWhile (t : TraceSt) (c : Expr) (body : Stmt) : Nat → TraceSt × Status
+  | 0 => (t, .normal)
+  | fuel + 1 =>
+      let (t1, cv) := evalE t c
+      if truthy cv then
+        let (t2, st) := execS t1 body
+        match st with
+        | .brk => (t2, .normal) | .ret v => (t2, .ret v)
+        | _ => execWhile t2 c body fuel
+      else (t1, .normal)
+
+partial def execFor (t : TraceSt) (c : Option Expr) (step : Option Expr) (body : Stmt) : Nat → TraceSt × Status
+  | 0 => (t, .normal)
+  | fuel + 1 =>
+      let (t1, go) := (match c with | some ce => evalE t ce | none => (t, V.bool true))
+      if truthy go then
+        let (t2, st) := execS t1 body
+        match st with
+        | .brk => (t2, .normal) | .ret v => (t2, .ret v)
+        | _ => let (t3, _) := (match step with | some se => evalE t2 se | none => (t2, V.null))
+               execFor t3 c step body fuel
+      else (t1, .normal)
+end
+
+def run : TraceSt := (execList { env := [], frames := 0, depth := 0 } prog).1
+
+def dump : String :=
+  String.join (run.log.map (fun (i,k,ek,d,f,vt,vi) =>
+    s!"SPEC ev={i} k={k} ek={ek} depth={d} store={f} vtag={vt} vint={vi}\n"))
+
+#eval IO.print dump
+#eval IO.println s!"SPEC-EVENTS {run.log.length}"
+
+end SpecTraceGen

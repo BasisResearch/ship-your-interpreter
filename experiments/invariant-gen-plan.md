@@ -219,3 +219,80 @@ axiom-free. Artifact: `experiments/invariants/exec_brkcont_relational.md`.
 - The `#eval` spec driver is a hand-transcribed AST + a subset interpreter, not
   a `.wl` parser feeding the full relational semantics; a general driver must
   parse the same `.wl` the machine runs and cover all stmt/expr forms.
+
+## Validation round 4 (2026-09-02) — GENERAL DRIVER + BATCH ACROSS ALL 97 CASES
+
+Gaps 2 (relational generality) and 3 (orchestration) closed; batch-run over the
+full corpus with ZERO LLM calls.  New tools: `scripts/wl_to_lean.py` (a `.wl`→
+real-`Vsa.While`-AST transpiler — the While layer has NO Lean parser, so this
+supplies the AST the machine also runs), `scripts/spec_trace_driver.lean.tmpl`
+(a GENERAL executable spec-trace driver over the real `kindOfStmt`/`Expr`/`Value`,
+replacing round-3's hand-transcribed brkcont mirror; dumps event-index / stmt+
+expr kind / depth / store size / value-repr per step), an upgraded
+`scripts/mine_relational.py` (gap-1b PER-SEAM ORDINAL alignment — Nth machine
+dispatch of kind K ↔ Nth spec event of kind K, a real per-event key not tag
+histograms; gap-1c value-repr scaffolding), and `scripts/invgen.py` (the
+one-command orchestrator + `--batch <cluster|all>`, with a self-fuzz CTI step).
+
+**Gap-1a — general driver: PASS.** The transpiler round-trips all 10 corpus `.wl`
+programs into terms that elaborate against the real AST; the driver `#eval`s them
+(while.wl → 2425 events, arithmetic → 112, scope → 103, strings → 52).  The
+brk(7)/cont(8) counts reproduce the round-3 pilot exactly (50 cont), confirming
+the general driver subsumes the hand-written one.
+
+**Gap-1b — multi-seam ordinal alignment: PASS, STRONGER than round 3.** On
+while.wl the machine dispatch trace (636 events @ exec 0x80004014) vs the spec
+trace agree machine==spec on ALL SEVEN stmt kinds (expr 195, block 174, ifStmt
+201, whileStmt 6, varDecl 9, brk 1, cont 50) — not just the 3 discriminating
+tags of the pilot.  On arithmetic.wl the EVAL side (dispatch 0x80003164, node
+kind@[a2]) agrees on all 8 expr kinds present (int 39, binary 21, var 12, call
+12, logical/bool/str/unary 4).  The mined conjunct `read32[node] &&& 0xff =
+kindOf{Stmt,Expr} node` is the genuine `stmtRepr_kind`/`ExprRepr` kind bridge,
+found field-for-field before writing it.
+
+**Gap-1c — value-repr: SCAFFOLDED, honestly gated.** The driver emits `vtag`/
+`vint` per eval step, but the machine value-readback probe at the DISPATCH PC
+reads the node's operand field, not the boxed result (that is a0 at the ARM
+EXIT).  Probing value-repr at dispatch produces spurious mismatches, so it is
+DISABLED and recorded (observations.md `value-repr-needs-arm-exit-probe`): the
+kind bridge is the solid mined fact; value-repr needs one extra arm-exit trace
+PC per arm (mechanical, not wired this batch).
+
+**Gap 2/3 — orchestration + BATCH: PASS.** `invgen.py --batch all` ran all 97
+cases in one loop (ELFs built to SCRATCH names via the auto-found xpack cross-gcc,
+tracked `c/while-riscv-htif.elf` restored after each; one emulator build + one
+machine trace per PROBE-SET, cached — the 36 loop-arm cases share ONE trace).
+Per-case artifacts `experiments/invariants/<case>.{md,lean}` + `BATCH-REPORT.md`.
+The CTI loop is BUILT INTO the generator: every relational candidate is emitted
+as an inhabitable hermetic ghost struct (`KindBridge` + the mined tag pairing +
+a perturbed mutant) and auto-fuzzed in the same pass (`statement_fuzz.py --file
+--struct` witness synthesis, `--no-fuzz` to skip); verdicts are fuzz-qualified.
+Coverage: **54 candidate-mined+SURVIVED** (loop-arm 36, env-seam 13, loop 2,
+leaf-slot/str-seam/value-box-tail 1 each — every one carrying a machine==spec
+kind bridge; every mined candidate SURVIVED its fuzz, every mutant REFUTED
+axiom-free), **17 mining-silent-needs-LLM** (io-* machine loops with no wired
+kind seam), **26 no-trace-path** (error-jal-seam 19 + straight-span 6 + oracle 1
+— no spec seam by construction).
+
+**Contradiction shortlist: EMPTY (no pre-proof falsity this run).** No mined fact
+contradicted a design-pass shape — the kind bridges all AGREE with the landed
+`kindOfStmt`/`kindOfExpr`, which is the correct, expected outcome (these fields
+are already proven-shaped).  The 13 env-seam call cases show an informational
+KIND-COUNT DIVERGENCE (machine > spec on ret/binary) that is a DRIVER LIMITATION
+(the driver evaluates `.call` opaquely, not descending into callee bodies), NOT a
+machine falsity — the miner correctly refuses to flag it as a contradiction
+(observations.md `spec-driver-call-opacity`).  The value-repr contradiction
+channel (the highest-value falsity-catcher) awaits the arm-exit probe.
+
+**Pro offload: NOT PRACTICABLE this run.** The Pro is DERP-only (LAN down); the
+machine trace depends on the 167 MB warm-`.lake` COW emulator + the `/tmp/rl-trace`
+and `/tmp/wl-test` state, none of which `rbuild.sh` syncs (it excludes `.lake`).
+Syncing the emulator over DERP would dwarf the ~13 s/probe-set local cost.  Ran
+locally, reniced (+10), ≤2 lean processes; graceful fallback as specified.
+
+**What remains (honest).**  (1) value-repr arm-exit probe (one PC/arm) → the
+`gprGet a0 = reprOf value` conjunct + its contradiction channel.  (2) driver call
+descent (frame push + closure body under a depth counter) → the env-seam callee
+conjuncts and the crux `hCallClosure` depth/budget relations (the falsity-#13
+class).  (3) io-* machine-loop mining (per-case loop-head kind probe).  (4)
+stage-5 LLM seeding remains the only non-mechanical stage, unexercised by design.

@@ -117,10 +117,15 @@ def patch_main(main_path, probe_body):
     if not pat.search(src):
         # fall back: match a bare `def tracedLoop` block up to `pure 0`.
         pat = re.compile(r"def tracedLoop.*?\n  pure 0", re.S)
-    new = pat.sub(probe_body, src)
-    if new == src:
+    if not pat.search(src):
         sys.exit("gen_trace: could not find tracedLoop block to patch")
+    new = pat.sub(lambda _: probe_body, src)
+    if new == src:
+        # identical probe already in place — no rebuild needed, not an error.
+        print("[gen_trace] probe unchanged (reusing built emulator)")
+        return False
     open(main_path, "w").write(new)
+    return True
 
 
 def parse_trace_line(line):
@@ -141,7 +146,9 @@ def main():
     ap.add_argument("--regs", help="comma reg list (abi names); default from case table")
     ap.add_argument("--mem", action="append", default=[],
                     help="mem window reg:off:nbytes (word-dumped), repeatable")
-    ap.add_argument("--wl", required=True, help=".wl program to trace")
+    ap.add_argument("--wl", help=".wl program to trace (baked into a fresh ELF)")
+    ap.add_argument("--elf", help="use a PREBUILT ELF (skip the make step); "
+                    "for reusing one ELF across probe-sets / cases sharing a path")
     ap.add_argument("--out", required=True, help="output JSONL path")
     ap.add_argument("--emulator", default="/tmp/rl-trace/lean_emulator")
     ap.add_argument("--wl-test", default="/tmp/wl-test")
@@ -170,28 +177,50 @@ def main():
     if not os.path.exists(main_path):
         sys.exit(f"gen_trace: emulator copy not found: {main_path}")
     probe = build_probe(pcs, regs, mems)
-    patch_main(main_path, probe)
-    print(f"[gen_trace] patched probe: pcs={[hex(p) for p in pcs]} "
-          f"regs={regnames} mems={args.mem}")
+    changed = patch_main(main_path, probe)
+    if changed:
+        print(f"[gen_trace] patched probe: pcs={[hex(p) for p in pcs]} "
+              f"regs={regnames} mems={args.mem}")
+    # a probe that did not change the source needs no rebuild.
+    if not changed:
+        args.no_build = True
 
-    # 2. build the test ELF (HTIF) from the .wl program in the /tmp copy
-    wl = os.path.abspath(args.wl)
-    elf = os.path.join(args.wl_test, "while-riscv-htif.elf")
-    subprocess.run(["make", "-C", args.wl_test, "clean"],
-                   capture_output=True)
-    r = subprocess.run(
-        ["make", "-C", args.wl_test, "riscv-htif", f"HTIF_SCRIPT={wl}"],
-        capture_output=True, text=True)
-    if not os.path.exists(elf):
-        sys.exit(f"gen_trace: ELF build failed:\n{r.stdout}\n{r.stderr}")
-    print(f"[gen_trace] built test ELF from {os.path.basename(wl)}")
+    # 2. obtain the test ELF.  --elf reuses a PREBUILT scratch ELF (probe-set
+    # sharing / no cross-gcc needed); otherwise build one from the .wl program.
+    # NEVER clobber the tracked c/while-riscv-htif.elf: builds go to the wl-test
+    # scratch name and the caller (invgen.py) restores the tracked copy.
+    if args.elf:
+        elf = os.path.abspath(args.elf)
+        if not os.path.exists(elf):
+            sys.exit(f"gen_trace: prebuilt ELF not found: {elf}")
+        print(f"[gen_trace] using prebuilt ELF {os.path.basename(elf)}")
+    else:
+        if not args.wl:
+            sys.exit("gen_trace: need --wl (build) or --elf (prebuilt)")
+        wl = os.path.abspath(args.wl)
+        elf = os.path.join(args.wl_test, "while-riscv-htif.elf")
+        subprocess.run(["make", "-C", args.wl_test, "clean"],
+                       capture_output=True)
+        r = subprocess.run(
+            ["make", "-C", args.wl_test, "riscv-htif", f"HTIF_SCRIPT={wl}"],
+            capture_output=True, text=True)
+        if not os.path.exists(elf):
+            sys.exit(f"gen_trace: ELF build failed:\n{r.stdout}\n{r.stderr}")
+        print(f"[gen_trace] built test ELF from {os.path.basename(wl)}")
 
-    # 3. build the emulator (once per probe-set)
+    # 3. build the emulator (once per probe-set).  Retry once — a transient
+    # lake lock / racing build (the ≤2-lean-process rule) can spuriously fail.
     binp = os.path.join(args.emulator, ".lake/build/bin/lean_riscv_emulator")
     if not args.no_build:
         print("[gen_trace] building emulator (lake build)...")
-        r = subprocess.run(["lake", "build"], cwd=args.emulator,
-                           capture_output=True, text=True)
+        for attempt in range(2):
+            r = subprocess.run(["lake", "build"], cwd=args.emulator,
+                               capture_output=True, text=True)
+            if r.returncode == 0:
+                break
+            if attempt == 0:
+                print("[gen_trace] build hiccup, retrying once...")
+                subprocess.run(["sleep", "2"])
         if r.returncode != 0:
             sys.exit(f"gen_trace: emulator build failed:\n{r.stdout[-2000:]}\n"
                      f"{r.stderr[-2000:]}")

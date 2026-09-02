@@ -117,3 +117,459 @@ validation, like the ELF emulator harness).
 ## statement_fuzz.py run
 
 - `Vsa.Sim.ExecLeafMemPin SL sp m0 m` → **UNDECIDABLE** — telescope not discoverable
+
+## statement_fuzz.py run
+
+- `ExecBrkBridge.brkArmMined` (file exec_brk_bridge.lean) → **SURVIVED** — 'VsaFuzzFileProbe.probe' depends on axioms: [sorryAx]
+
+## statement_fuzz.py run
+
+- `ExecBrkBridge.brkArmMutant` (file exec_brk_bridge.lean) → **SURVIVED** — 'VsaFuzzFileProbe.probe' depends on axioms: [sorryAx]
+
+## statement_fuzz.py run
+
+- `ExecBrkBridge.brkArmMined` (file exec_brk_bridge.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `ExecBrkBridge.brkArmMutant` (file exec_brk_bridge.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hIAdd.mined` (file hIAdd.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hIAdd.mutant` (file hIAdd.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hAndFalse.mined` (file hAndFalse.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hAndFalse.mutant` (file hAndFalse.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hAndTrue.mined` (file hAndTrue.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hAndTrue.mutant` (file hAndTrue.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hArgsCons.mined` (file hArgsCons.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hArgsCons.mutant` (file hArgsCons.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hArgsNil.mined` (file hArgsNil.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hArgsNil.mutant` (file hArgsNil.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hAssign.mined` (file hAssign.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hAssign.mutant` (file hAssign.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hCall.mined` (file hCall.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hCall.mutant` (file hCall.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hCallAssertOk.mined` (file hCallAssertOk.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hCallAssertOk.mutant` (file hCallAssertOk.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hCallClosure.mined` (file hCallClosure.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hCallClosure.mutant` (file hCallClosure.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hCallPrint.mined` (file hCallPrint.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hCallPrint.mutant` (file hCallPrint.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hCallPrintln.mined` (file hCallPrintln.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hCallPrintln.mutant` (file hCallPrintln.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hDivOv.mined` (file hDivOv.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hDivOv.mutant` (file hDivOv.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hEpilogueSpill.mined` (file hEpilogueSpill.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hEpilogueSpill.mutant` (file hEpilogueSpill.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hEq.mined` (file hEq.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hEq.mutant` (file hEq.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hFn.mined` (file hFn.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hFn.mutant` (file hFn.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hIAdd.mined` (file hIAdd.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hIAdd.mutant` (file hIAdd.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hIDiv.mined` (file hIDiv.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hIDiv.mutant` (file hIDiv.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hIGe.mined` (file hIGe.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hIGe.mutant` (file hIGe.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hIGt.mined` (file hIGt.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hIGt.mutant` (file hIGt.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hILe.mined` (file hILe.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hILe.mutant` (file hILe.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hILt.mined` (file hILt.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hILt.mutant` (file hILt.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hIMod.mined` (file hIMod.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hIMod.mutant` (file hIMod.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hIMul.mined` (file hIMul.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hIMul.mutant` (file hIMul.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hISub.mined` (file hISub.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hISub.mutant` (file hISub.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hInitStore.mined` (file hInitStore.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hInitStore.mutant` (file hInitStore.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hNe.mined` (file hNe.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hNe.mutant` (file hNe.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hNeg.mined` (file hNeg.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hNeg.mutant` (file hNeg.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hNot.mined` (file hNot.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hNot.mutant` (file hNot.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hOrFalse.mined` (file hOrFalse.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hOrFalse.mutant` (file hOrFalse.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hOrTrue.mined` (file hOrTrue.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hOrTrue.mutant` (file hOrTrue.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSBlock.mined` (file hSBlock.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSBlock.mutant` (file hSBlock.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSBrk.mined` (file hSBrk.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSBrk.mutant` (file hSBrk.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSCont.mined` (file hSCont.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSCont.mutant` (file hSCont.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSExpr.mined` (file hSExpr.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSExpr.mutant` (file hSExpr.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSForStart.mined` (file hSForStart.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSForStart.mutant` (file hSForStart.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSIfFalse.mined` (file hSIfFalse.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSIfFalse.mutant` (file hSIfFalse.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSIfNone.mined` (file hSIfNone.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSIfNone.mutant` (file hSIfNone.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSIfTrue.mined` (file hSIfTrue.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSIfTrue.mutant` (file hSIfTrue.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSRet.mined` (file hSRet.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSRet.mutant` (file hSRet.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSRetNull.mined` (file hSRetNull.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSRetNull.mutant` (file hSRetNull.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSVarInit.mined` (file hSVarInit.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSVarInit.mutant` (file hSVarInit.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSVarNull.mined` (file hSVarNull.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSVarNull.mutant` (file hSVarNull.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSWhileBreak.mined` (file hSWhileBreak.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSWhileBreak.mutant` (file hSWhileBreak.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSWhileFalse.mined` (file hSWhileFalse.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSWhileFalse.mutant` (file hSWhileFalse.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSeqConsAbrupt.mined` (file hSeqConsAbrupt.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSeqConsAbrupt.mutant` (file hSeqConsAbrupt.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSeqConsNormal.mined` (file hSeqConsNormal.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSeqConsNormal.mutant` (file hSeqConsNormal.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSeqNil.mined` (file hSeqNil.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hSeqNil.mutant` (file hSeqNil.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hStr.mined` (file hStr.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hStr.mutant` (file hStr.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hStrAddL.mined` (file hStrAddL.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hStrAddL.mutant` (file hStrAddL.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hStrAddR.mined` (file hStrAddR.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hStrAddR.mutant` (file hStrAddR.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hStrGe.mined` (file hStrGe.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hStrGe.mutant` (file hStrGe.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hStrGt.mined` (file hStrGt.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hStrGt.mutant` (file hStrGt.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hStrLe.mined` (file hStrLe.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hStrLe.mutant` (file hStrLe.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hStrLt.mined` (file hStrLt.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hStrLt.mutant` (file hStrLt.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hVar.mined` (file hVar.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hVar.mutant` (file hVar.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
