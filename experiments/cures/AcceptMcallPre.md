@@ -23,6 +23,7 @@ def AcceptMcallPre …: Prop :=
 Per-filter evidence:
 - **syntactic**: PASS — elaborates
 - **smt**: PASS — Z3 SAT but replay sorry'd (spurious SAT, symbolic window; kept)
+- **semantic**: PASS — semantic rule: every demand address covered (or SMT territory)
 
 Relights: EntryStackSurv/47e class — the store-survival + agree conduits widen to the full stack window; children absorbed.
 
@@ -44,6 +45,7 @@ def AcceptMcallPre …: Prop :=
 Per-filter evidence:
 - **syntactic**: PASS — elaborates
 - **smt**: PASS — Z3 SAT but replay sorry'd (spurious SAT, symbolic window; kept)
+- **semantic**: PASS — semantic rule: every demand address covered (or SMT territory)
 
 Relights: McallPop class — the 6 unary/logical Resid + NegResid/NotResid presence conjuncts; SubEvalReturn buffer-write supplies the footprint presence.
 

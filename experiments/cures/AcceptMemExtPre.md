@@ -21,6 +21,7 @@ def AcceptMemExtPre …: Prop :=
 Per-filter evidence:
 - **syntactic**: PASS — elaborates
 - **smt**: PASS — Z3 SAT modulo opaque symbol (not machine-checked; kept)
+- **semantic**: PASS — semantic rule: every demand address covered (or SMT territory)
 
 Relights: 48f class — `blockA_k`/`blockA_binaryArm` `_hpresM` output supplies it; zero downstream churn (consumers take the struct as a hypothesis).
 
@@ -41,6 +42,7 @@ def AcceptMemExtPre …: Prop :=
 Per-filter evidence:
 - **syntactic**: PASS — elaborates
 - **smt**: PASS — Z3 SAT modulo opaque symbol (not machine-checked; kept)
+- **semantic**: PASS — semantic rule: every demand address covered (or SMT territory)
 
 Relights: EntryStackSurv/47e class — the store-survival + agree conduits widen to the full stack window; children absorbed.
 

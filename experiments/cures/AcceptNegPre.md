@@ -22,6 +22,7 @@ def AcceptNegPre …: Prop :=
 Per-filter evidence:
 - **syntactic**: PASS — elaborates
 - **smt**: PASS — Z3: negation UNSAT (no countermodel in fragment)
+- **semantic**: PASS — semantic rule: every demand address covered (or SMT territory)
 
 Relights: B2/47i class — value-path sims relight verbatim; row dispatcher threads the entry hyp at each cell site (mechanical).
 

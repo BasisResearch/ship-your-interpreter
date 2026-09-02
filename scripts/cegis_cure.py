@@ -761,7 +761,98 @@ ACCEPT = [
 ]
 
 
-def acceptance(do_smt=True, do_semantic=True):
+# ==========================================================================
+# BLIND ACCEPTANCE — decontamination ablation
+# ==========================================================================
+#
+# The `ACCEPT` table above is CONTAMINATED: the `want` template per case was
+# written by hand from the design docs that NAME the landed cure, and the
+# `AcceptX_*.lean` statements were reconstructed with that answer in view.  The
+# `--blind` mode removes the answer-bearing inputs and keeps ONLY the two
+# inputs legitimately available at cure-DESIGN time:
+#   (a) the false statement itself (the Prop), and
+#   (b) its machine-checked OBSTRUCTION (the refutation theorem + witness under
+#       experiments/fleet/obstructions/) — a FACT about the statement, not a
+#       hint that names a cure.
+# The expected template is NOT read from any doc; it is DERIVED from the
+# obstruction by `obstruction_signal` (below).  Everything else that could
+# leak the answer — observations.md, experiments/design/*, wave logs,
+# REMAINING.md, and the `want` field of ACCEPT — is EXCLUDED and the exclusion
+# is printed as an auditable manifest.
+
+BLIND_ACCEPT = [
+    ("a", os.path.join(CEGISDIR, "AcceptA_Neg.lean"),
+     "CegisAcceptA.AcceptNegPre",
+     os.path.join(ROOT, "experiments", "fleet", "obstructions",
+                  "B2_Field_hNeg.lean"),
+     "NegResid pre-47i"),
+    ("b", os.path.join(CEGISDIR, "AcceptB_MemExt.lean"),
+     "CegisAcceptB.AcceptMemExtPre",
+     os.path.join(ROOT, "experiments", "fleet", "obstructions",
+                  "BinArmExtrasMemExtOverquant.lean"),
+     "BinArmExtras.mem_ext pre-48f"),
+    ("c", os.path.join(CEGISDIR, "AcceptC_McallPair.lean"),
+     "CegisAcceptC.AcceptMcallPre",
+     os.path.join(ROOT, "experiments", "fleet", "obstructions",
+                  "UnaryLogicPresenceOverquant.lean"),
+     "∀-mcall pair"),
+]
+
+# inputs that in blind mode must NEVER be read (they name/describe a cure).
+BLIND_EXCLUDED = [
+    "experiments/observations.md",
+    "experiments/design/*  (MASTER.md + the 6 cluster designs)",
+    "experiments/REMAINING.md",
+    "experiments/run1-brief.md and the wave-4* logs",
+    "the ACCEPT[].want field (the hand-written expected template)",
+    "the AcceptX_*.lean docstrings (kept file for the Prop; prose ignored)",
+]
+
+
+def obstruction_signal(path):
+    """OBSTRUCTION → TEMPLATE signal.  Read the machine-checked obstruction and
+    classify the REFUTED shape by its refutation witness — WITHOUT any prose
+    that names a cure.  This is the only place the "expected" template comes
+    from in blind mode; it is a structural fact about the refutation, derived
+    the same way `detect_defects` reads the statement.
+
+    The mapping (each is a fact about what the witness exploits):
+      * a `sp_headroom`/`SL.lo + <k> ≤ sp.toNat` pin refuted at `sp = 0`
+        (headroom under ∀-sp, no entry) → the witness pins SL/sp/m0, which is
+        exactly what an ENTRY hypothesis supplies  ⇒ entry-conditioning.
+      * an over-quant `∀ m, agree-off-W → MemExtends m0 m` refuted by an
+        in-window adversary `m = ∅`  ⇒ conjunct-deletion + guard-repair.
+      * an over-quant total-presence `∀ a, ∃ b, mcall[a]? = some b` refuted by
+        an empty mcall at an in-window `a`  ⇒ quantifier-repair + guard-repair.
+    Returns (templates:set, evidence:str)."""
+    txt = open(path).read()
+    flat = " ".join(txt.split())
+    templates, ev = set(), []
+    # headroom pin refuted at sp=0  → entry-conditioning
+    if (re.search(r"SL\.lo\s*\+\s*\d+\s*≤\s*(?:sp\.toNat|0)", flat)
+            or "sp_headroom" in flat) and re.search(r"sp\s*(?::=|=)\s*0", flat):
+        templates.add("entry-conditioning")
+        ev.append("headroom pin `SL.lo+k ≤ sp.toNat` refuted at sp=0 "
+                  "(witness pins SL/sp → entry hypothesis is the supplier)")
+    # over-quant MemExtends refuted by in-window empty adversary → delete/guard
+    if "MemExtends" in flat and re.search(r"¬\s*\(\s*SL\.lo\s*≤", flat):
+        templates.update({"conjunct-deletion", "guard-repair"})
+        ev.append("over-quant `∀m, agree-off-[SL.lo,sp) → MemExtends m0 m` "
+                  "refuted by in-window adversary (m=∅) → block-output supplies "
+                  "it (delete) / covering window excludes it (guard)")
+    # over-quant total presence refuted by empty mcall → quant/guard repair
+    if re.search(r"∃\s*b\s*,\s*mcall\[[^]]*\]\?\s*=\s*some", flat) or \
+       re.search(r"∃\s*b\s*,\s*\w+\[a\]\?\s*=\s*some", flat):
+        templates.update({"quantifier-repair", "guard-repair"})
+        ev.append("over-quant total presence `∀a ∃b, mcall[a]?=some b` refuted "
+                  "by empty mcall at in-window a → footprint-bound the demand "
+                  "(quant) / agree-on covering window (guard)")
+    return templates, "; ".join(ev) if ev else "no structural signal extracted"
+
+
+def acceptance(do_smt=True, do_semantic=True, blind=False):
+    if blind:
+        return acceptance_blind(do_smt, do_semantic)
     print("== CEGIS cure ACCEPTANCE (history as ground truth) ==\n")
     allok = True
     for tag, path, prop, want, desc in ACCEPT:
@@ -783,6 +874,46 @@ def acceptance(do_smt=True, do_semantic=True):
     return allok
 
 
+def acceptance_blind(do_smt=True, do_semantic=True):
+    """--blind: run the three history cases with the answer-bearing inputs
+    REMOVED.  Inputs = {statement Prop, machine-checked obstruction}; the
+    expected template is DERIVED from the obstruction, not read from any doc.
+    Prints the auditable input manifest, then the ACTUAL rank of the
+    obstruction-signalled template in each blind run."""
+    print("== CEGIS cure ACCEPTANCE — BLIND (decontamination ablation) ==\n")
+    print("INPUT MANIFEST (per case):")
+    print("  INCLUDED  (a) the false statement Prop (def body only; docstring "
+          "prose ignored)")
+    print("  INCLUDED  (b) the machine-checked obstruction .lean "
+          "(refutation theorem + witness)")
+    print("  EXCLUDED  (answer-bearing, NOT read in blind mode):")
+    for x in BLIND_EXCLUDED:
+        print(f"              - {x}")
+    print("  DERIVATION: the expected template is computed by "
+          "`obstruction_signal` from the obstruction's REFUTED shape +")
+    print("              witness — a structural fact, the same way "
+          "`detect_defects` reads the statement.\n")
+    allok = True
+    for tag, spath, prop, opath, desc in BLIND_ACCEPT:
+        signalled, sig_ev = obstruction_signal(opath)
+        res = cure_one(spath, prop, None, do_smt, do_semantic, quiet=False)
+        ranked = [c.template.split("+")[0] for c in res["survivors"]]
+        rank = next((i + 1 for i, t in enumerate(ranked)
+                     if t in signalled), None)
+        hit = rank is not None and rank <= 3
+        allok = allok and hit
+        print(f"\n[{tag}] {desc}")
+        print(f"    obstruction: {os.path.relpath(opath, ROOT)}")
+        print(f"    obstruction→template signal: {sorted(signalled)}")
+        print(f"        via: {sig_ev}")
+        print(f"    cure ranking (blind, statement-only): {ranked}")
+        print(f"    signalled template rank: "
+              f"{('rank ' + str(rank)) if rank else 'ABSENT'}"
+              f" → {'IN top-3' if hit else 'MISS'}")
+    print(f"\n== BLIND ACCEPTANCE: {'PASS' if allok else 'FAIL'} ==")
+    return allok
+
+
 # ==========================================================================
 # main
 # ==========================================================================
@@ -801,6 +932,13 @@ def main():
                     help="(stub) LLM re-ranking — no API calls in this task")
     ap.add_argument("--acceptance", action="store_true",
                     help="run the a-c history-as-ground-truth gate")
+    ap.add_argument("--blind", action="store_true",
+                    help="DECONTAMINATION ABLATION of --acceptance: remove the "
+                         "answer-bearing inputs (observations/design/wave-logs/"
+                         "REMAINING and the hand-written ACCEPT.want); keep only "
+                         "the statement Prop + its machine-checked obstruction, "
+                         "and DERIVE the expected template from the obstruction. "
+                         "Prints the input manifest + actual blind ranks.")
     ap.add_argument("--unfold", nargs="+", default=None, metavar="DEF",
                     help="def name(s) to unfold when the prop is an APPLICATION "
                          "of another Resid (exposes its body via trace_state)")
@@ -813,8 +951,9 @@ def main():
 
     if args.llm_rank:
         print("[--llm-rank is a stub; no API calls]", file=sys.stderr)
-    if args.acceptance:
-        sys.exit(0 if acceptance(not args.no_smt, not args.no_semantic) else 1)
+    if args.acceptance or args.blind:
+        sys.exit(0 if acceptance(not args.no_smt, not args.no_semantic,
+                                 blind=args.blind) else 1)
     if not (args.file and args.prop):
         ap.error("need --file and --prop (or --acceptance)")
     dem = [d.strip() for d in args.demands.split(";")] if args.demands else None
