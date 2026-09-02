@@ -89,3 +89,20 @@ on it. Work outward, dependency-ordered, `lake env lean -o` per file (never
 and the total read total. This rewrite makes the abstraction layer match the
 model it abstracts. It is the root fix the five-wave ladder was working around;
 expect it to also simplify unrelated presence-threading elsewhere.
+
+## Aside — the recursive-Repr residual (for the autoprove/Houdini track, not this rewrite)
+
+StoreRepr/CString survival closes fully at design level via base/step
+decomposition; it does NOT need Lean induction to be *discovered*, only
+*applied*:
+1. Houdini/LLM finds the (possibly strengthened) survival IH — the one hard
+   bit — proposing until Z3-UNSAT, fuzz-validated to hold at runtime.
+2. Decompose structural induction into base (`P(nil)`) + step
+   (`(∀children c, P c) → P node`, IH as hypothesis). Mechanical, follows the
+   datatype constructors.
+3. Z3 discharges base and step SEPARATELY — each is non-recursive/QF once the
+   IH is a hypothesis.
+4. Lean `induction x with | nil => <cert> | cons h ih => <cert using ih>` chains
+   them — a one-liner; the kernel applies the schema and checks.
+The residual creative core is only step 1 (finding the strengthening); 2-4 are
+mechanical. Fold into scripts/autoprove.py's recursive branch.
