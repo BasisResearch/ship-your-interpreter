@@ -4938,3 +4938,9 @@ it, still stop and report instead.
   no builders — this is why the Z3 push is right): its acceptance MUST
   include experiments/fuzz-battery/NovelProbe.lean (uncontaminated: A,C →
   countermodel found + Lean-replayed; B → no model / valid-in-fragment).
+
+## 2026-09-02 io-flush-loops-dead-on-ELF (invgen io machine-loop pass)
+- missing: the flush/drain LOOP invariants that SEEDS-io S1 (`_fflush_r`/`__sflush_r`) posits as MINABLE — they are not, because the loop bodies are DEAD CODE on the proof ELF. stdout is unbuffered (main.c setvbuf _IONBF ⇒ `_flags`=0x10009, `_p`=`_bf._base`, `_w`=0 at every flush), so the drain `while(p<end)` at 0x8000ebf0/0x8000ec10 (the jalr→_swrite) NEVER iterates: the buffer is always empty at flush time.
+- workaround: seeded S1 as the DEGENERATE-DRAIN instance (written=0, out unchanged, end=base) — a real SURVIVED fact, plus the mined FILE-field T1 constants. Also mined S2 (io_swbuf_r single-byte put, 6 calls, cursor+1) and S4 (io_sbprintf synthetic FILE, concrete fields) outright. 4 targets (io_putc_r/io_fputc_r/io_fwrite_r top-level io_fflush) are UNREACHABLE — 0 events on every print driver.
+- cost: the S1 candidates cannot carry a nontrivial loop stride until/unless a BUFFERED-stdout ELF is added to the corpus; the interesting drain arithmetic (S1's `written=(p-base)`, out=out0++bytes[base,p)) is unexercised. For the real proof this is fine — the interp only ever hits the unbuffered path, so the degenerate invariant is the true postcondition. Flagging in case a future consumer expects a mined per-iteration drain stride and finds only the k=0 instance.
+- who: invgen io machine-loop pass (wave 45). Candidate .lean files: experiments/invariants/io_{fflush_r,sflush_r,swbuf_r,sbprintf,vfprintf_r,fputs_r}.lean — all elaborate axiom-clean + statement_fuzz --descend SURVIVED.

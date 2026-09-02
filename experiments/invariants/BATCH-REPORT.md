@@ -1,10 +1,31 @@
 # invgen batch report
 
-Cases: 97.  Verdict classes:
+Cases: 97.  Verdict classes (after the wave-45 io machine-loop pass, 2026-09-02):
 
-- **candidate-mined+SURVIVED**: 54
-- **no-trace-path**: 26
-- **mining-silent-needs-LLM**: 17
+- **candidate-mined+SURVIVED**: 56  (54 + io_swbuf_r, io_sbprintf)
+- **proposed-from-seed+SURVIVED**: 4  (io_fflush_r, io_sflush_r, io_vfprintf_r, io_fputs_r — S1/S3/S5 seeds instantiated with mined constants)
+- **landed-skip**: 7  (io_write, io_write_r, io_swrite, io_snprintf, io_svfprintf_r, io_sfvwrite_r, io_value_print — invariant already proven; SEEDS-io triage)
+- **no-trace-path / unreachable**: 30  (26 error/straight + io_putc_r, io_fputc_r, io_fwrite_r, io_fflush — dead code on this ELF's print path)
+- **mining-silent-needs-LLM**: 0  (CLOSED — the 17 io cases were silent only because invgen wired no machine-loop probe; wired via gen_trace T1-T5 this pass)
+
+## io machine-loop pass delta (mining-silent-needs-LLM: 17 → 0)
+
+The 17 io cases were silent ONLY because invgen wired no machine-loop probe;
+the relational kind-seam path (its only wired path) never applied.  This pass
+wired gen_trace.py T1-T5 probes for each PC, drove the whole print chain
+(println/print multi-char + println(int) forcing the snprintf→vfprintf→
+sbprintf→flush→swrite path), segmented, and mined.  Resolution:
+  - 7 landed-skip (already-proven invariants; no mining needed)
+  - 6 reachable + SURVIVED (2 mined-outright: io_swbuf_r S2, io_sbprintf S4;
+    4 proposed-from-seed with mined constants: io_fflush_r/io_sflush_r S1,
+    io_vfprintf_r S3, io_fputs_r S5)
+  - 4 UNREACHABLE (io_putc_r/io_fputc_r/io_fwrite_r/io_fflush — dead on every
+    print driver; interp uses unbuffered _fflush_r→__sflush_r→_swrite directly)
+KEY FINDING: stdout is unbuffered (main.c setvbuf _IONBF) so the flush/drain
+loops (S1) FALL THROUGH with empty buffer — the mined invariant is the
+degenerate-drain instance (written=0, out unchanged, _flags=0x10009 pinned),
+which is a real SURVIVED fact, not a loop stride.  Candidate .lean files
+elaborate axiom-clean and pass statement_fuzz --descend.
 
 ## Contradiction shortlist (mined facts vs design-pass statement shape)
 
@@ -14,8 +35,8 @@ Cases: 97.  Verdict classes:
 
 - **env-seam**: candidate-mined+SURVIVED×13
 - **error-jal-seam**: no-trace-path×19
-- **io-fold**: mining-silent-needs-LLM×1
-- **io-loop-fold**: mining-silent-needs-LLM×16
+- **io-fold**: landed-skip×1
+- **io-loop-fold**: landed-skip×6, candidate-mined+SURVIVED×2, proposed-from-seed+SURVIVED×4, unreachable×4
 - **leaf-slot**: candidate-mined+SURVIVED×1
 - **loop**: candidate-mined+SURVIVED×2
 - **loop-arm**: candidate-mined+SURVIVED×36
@@ -58,23 +79,23 @@ Cases: 97.  Verdict classes:
 - `err_80003f58` [error-jal-seam] → no-trace-path — error-jal-seam: no spec seam / machine loop not wired
 - `err_80003fac` [error-jal-seam] → no-trace-path — error-jal-seam: no spec seam / machine loop not wired
 - `err_80003fdc` [error-jal-seam] → no-trace-path — error-jal-seam: no spec seam / machine loop not wired
-- `io_value_print` [io-fold] → mining-silent-needs-LLM
-- `io_fflush` [io-loop-fold] → mining-silent-needs-LLM
-- `io_fflush_r` [io-loop-fold] → mining-silent-needs-LLM
-- `io_fputc_r` [io-loop-fold] → mining-silent-needs-LLM
-- `io_fputs_r` [io-loop-fold] → mining-silent-needs-LLM
-- `io_fwrite_r` [io-loop-fold] → mining-silent-needs-LLM
-- `io_putc_r` [io-loop-fold] → mining-silent-needs-LLM
-- `io_sbprintf` [io-loop-fold] → mining-silent-needs-LLM
-- `io_sflush_r` [io-loop-fold] → mining-silent-needs-LLM
-- `io_sfvwrite_r` [io-loop-fold] → mining-silent-needs-LLM
-- `io_snprintf` [io-loop-fold] → mining-silent-needs-LLM
-- `io_svfprintf_r` [io-loop-fold] → mining-silent-needs-LLM
-- `io_swbuf_r` [io-loop-fold] → mining-silent-needs-LLM
-- `io_swrite` [io-loop-fold] → mining-silent-needs-LLM
-- `io_vfprintf_r` [io-loop-fold] → mining-silent-needs-LLM
-- `io_write` [io-loop-fold] → mining-silent-needs-LLM
-- `io_write_r` [io-loop-fold] → mining-silent-needs-LLM
+- `io_value_print` [io-fold] → landed-skip
+- `io_fflush` [io-loop-fold] → unreachable
+- `io_fflush_r` [io-loop-fold] → proposed-from-seed+SURVIVED (S1)
+- `io_fputc_r` [io-loop-fold] → unreachable
+- `io_fputs_r` [io-loop-fold] → proposed-from-seed+SURVIVED (S5)
+- `io_fwrite_r` [io-loop-fold] → unreachable
+- `io_putc_r` [io-loop-fold] → unreachable
+- `io_sbprintf` [io-loop-fold] → candidate-mined+SURVIVED (S4)
+- `io_sflush_r` [io-loop-fold] → proposed-from-seed+SURVIVED (S1)
+- `io_sfvwrite_r` [io-loop-fold] → landed-skip
+- `io_snprintf` [io-loop-fold] → landed-skip
+- `io_svfprintf_r` [io-loop-fold] → landed-skip
+- `io_swbuf_r` [io-loop-fold] → candidate-mined+SURVIVED (S2)
+- `io_swrite` [io-loop-fold] → landed-skip
+- `io_vfprintf_r` [io-loop-fold] → proposed-from-seed+SURVIVED (S3)
+- `io_write` [io-loop-fold] → landed-skip
+- `io_write_r` [io-loop-fold] → landed-skip
 - `hSCont` [leaf-slot] → candidate-mined+SURVIVED
 - `hEpilogueSpill` [loop] → candidate-mined+SURVIVED
 - `hSBrk` [loop] → candidate-mined+SURVIVED

@@ -4,3 +4,7 @@
 - target field: `TermResidualsCore.hCallPrint / hCallPrintln / hCallAssertOk (native rows) via rows/ValuePrintContract's three contracts`
 - verdict: **mining-silent-needs-LLM**
 
+
+## invgen machine-loop pass (wave 45, 2026-09-02)
+
+- verdict: **proposed-from-seed+SURVIVED — S1 degenerate-drain + _w:=0 exit reset; 7 calls, drain jalr never hit (empty buf)**

@@ -767,3 +767,23 @@ validation, like the ELF emulator harness).
 ## statement_fuzz.py run
 
 - `NovelResidC` → **SURVIVED** (descent depth 2: no adversary builder refuted a nested conjunct)
+
+## statement_fuzz.py run
+
+- `InvGen_io_sflush_r.IoSflushRInvCandidate` → **SURVIVED** (descent depth 2: no adversary builder refuted a nested conjunct)
+
+## statement_fuzz.py run
+
+- `InvGen_io_sbprintf.IoSbprintfInvCandidate` → **SURVIVED** (descent depth 2: no adversary builder refuted a nested conjunct)
+
+## statement_fuzz.py run
+
+- `InvGen_io_vfprintf_r.IoVfprintfRInvCandidate` → **SURVIVED** (descent depth 2: no adversary builder refuted a nested conjunct)
+
+## statement_fuzz.py run
+
+- `InvGen_io_swbuf_r.IoSwbufRInvCandidate` → **SURVIVED** (descent depth 2: no adversary builder refuted a nested conjunct)
+
+## statement_fuzz.py run
+
+- `InvGen_io_fputs_r.IoFputsRInvCandidate` → **SURVIVED** (descent depth 2: no adversary builder refuted a nested conjunct)
