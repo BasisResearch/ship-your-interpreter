@@ -278,7 +278,7 @@ theorem blockB_stmtVarInit_stagePre
   refine ⟨gpre, N, A, SL, φf, φc, (0x800040ec#64), (0x800040f0#64), (0x1ff078#21),
     (sp - 176#64) + 1088#64, r, aInterp, (sp - 176#64) + sign_extend (m := 64) (0x068#12),
     aInterp, aExprChild, v8, v9, v18, out0, ment, ?_, ?_, ?_, ?_,
-    hG5, hi5, hpc5, hx10_5, ?_, hx11_val, hx12_5, hx2jsp, ⟨vmi5, hmi5⟩, hout5, ?_,
+    hG5, hi5, hpc5, hx10_5, ?_, hx11_val, ⟨_, hx13_val⟩, hx12_5, hx2jsp, ⟨vmi5, hmi5⟩, hout5, ?_,
     hmem5e, ?_, hEvCode, hViInt, hViSlot, hNbsJ, ?_, ?_, ?_, ?_, hframe5, ⟨hg8, hg18⟩,
     ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   -- hjaltgt

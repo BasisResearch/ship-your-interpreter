@@ -477,6 +477,9 @@ theorem blockC_orFalse
     have := obs_alu_pc hobs12
     rwa [show BitVec.addInt (0x80003994#64) 4 = (0x80003998#64 : BitVec 64) from by decide] at this
   have ha0_12 : σ12.regs.get? Register.x10 = some (0#64) := obs_alu_other' hobs12 Register.x10 (by decide) ha0T1
+  have hx13_12 : σ12.regs.get? Register.x13 = some
+      (sign_extend (m := 64) ((((((((eb7.append eb6).append eb5).append eb4).append eb3).append eb2).append eb1).append eb0) : BitVec (8 * 8))) :=
+    obs_alu_rd hobs12 (by decide) (by decide) (by decide) (by decide) (by decide)
   have hs1_12 : σ12.regs.get? Register.x9 = some sret := obs_alu_other' hobs12 Register.x9 (by decide) hs1_T
   have hsp_12 : σ12.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other' hobs12 Register.x2 (by decide) hsp_T
   have hx8_12 : σ12.regs.get? Register.x8 = some aExpr := obs_alu_other' hobs12 Register.x8 (by decide) hx8_T
@@ -498,6 +501,7 @@ theorem blockC_orFalse
   have hs1_13 : σ13.regs.get? Register.x9 = some sret := obs_branch_taken_other' hobs13 Register.x9 (by decide) hs1_12
   have hsp_13 : σ13.regs.get? Register.x2 = some (sp - 1088#64) := obs_branch_taken_other' hobs13 Register.x2 (by decide) hsp_12
   have hx8_13 : σ13.regs.get? Register.x8 = some aExpr := obs_branch_taken_other' hobs13 Register.x8 (by decide) hx8_12
+  have hx13_13 := obs_branch_taken_other' hobs13 Register.x13 (by decide) hx13_12
   have hx18_13 : σ13.regs.get? Register.x18 = some aEnv := obs_branch_taken_other' hobs13 Register.x18 (by decide) hx18_12
   obtain ⟨vmi13, hmi13⟩ := obs_branch_taken_minstret hobs13
   have hout13 : σ13.sailOutput = out0 := by rw [hobs13.out, sailOutput_sigmaPost_branch_taken]; exact hout12
@@ -557,6 +561,7 @@ theorem blockC_orFalse
   have hs1τ1 : τ1.regs.get? Register.x9 = some sret := obs_alu_other hoτ1 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1_13
   have hspτ1 : τ1.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other hoτ1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp_13
   have hx8τ1 : τ1.regs.get? Register.x8 = some aExpr := obs_alu_other hoτ1 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8_13
+  have hx13τ1 := obs_alu_other hoτ1 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13_13
   have hx18τ1 : τ1.regs.get? Register.x18 = some aEnv := obs_alu_other hoτ1 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18_13
   obtain ⟨vmiτ1, hmiτ1⟩ := obs_alu_minstret hoτ1
   have houtτ1 : τ1.sailOutput = out0 := by rw [hoτ1.out, sailOutput_sigmaPost_alu]; exact hout13
@@ -580,6 +585,7 @@ theorem blockC_orFalse
   have hs1τ2 : τ2.regs.get? Register.x9 = some sret := obs_alu_other hoτ2 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1τ1
   have hspτ2 : τ2.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other hoτ2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hspτ1
   have hx8τ2 : τ2.regs.get? Register.x8 = some aExpr := obs_alu_other hoτ2 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8τ1
+  have hx13τ2 := obs_alu_other hoτ2 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13τ1
   have hx18τ2 : τ2.regs.get? Register.x18 = some aEnv := obs_alu_other hoτ2 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18τ1
   obtain ⟨vmiτ2, hmiτ2⟩ := obs_alu_minstret hoτ2
   have houtτ2 : τ2.sailOutput = out0 := by rw [hoτ2.out, sailOutput_sigmaPost_alu]; exact houtτ1
@@ -600,6 +606,7 @@ theorem blockC_orFalse
   have hs1τ3 : τ3.regs.get? Register.x9 = some sret := obs_alu_other hoτ3 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1τ2
   have hspτ3 : τ3.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other hoτ3 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hspτ2
   have hgR3_8 : τ3.regs.get? Register.x8 = some aExpr := obs_alu_other hoτ3 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8τ2
+  have hx13τ3 := obs_alu_other hoτ3 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13τ2
   have hgR3_18 : τ3.regs.get? Register.x18 = some aEnv := obs_alu_other hoτ3 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18τ2
   obtain ⟨vmiτ3, hmiτ3⟩ := obs_alu_minstret hoτ3
   have houtτ3 : τ3.sailOutput = out0 := by rw [hoτ3.out, sailOutput_sigmaPost_alu]; exact houtτ2
@@ -799,7 +806,7 @@ theorem blockC_orFalse
         site_80003a0c_lg σ i u (0x80003a0c#64) vmi hGσ hpcσ hmiσ hcodeσ rfl hiσ)
       hIHr
       ⟨τ3, j3, cT.steps + 1 + 1 + 1 + 1 + 1⟩
-      ⟨hGτ3, hj3, hpcτ3, ha0τ3, hs1τ3, hx11τ3, hx12τ3, hspτ3, ⟨vmiτ3, hmiτ3⟩,
+      ⟨hGτ3, hj3, hpcτ3, ha0τ3, hs1τ3, hx11τ3, ⟨_, hx13τ3⟩, hx12τ3, hspτ3, ⟨vmiτ3, hmiτ3⟩,
         houtτ3, houtStr, hmemτ3e, hcode_m3, hViInt_m3, hViSlot_m3, hNbs_m3, hGroundM3R, hExprM3, hstoreM3, hstoreSurvM3,
         (fun R _ => rfl), ⟨⟨aExpr, hgR3_8⟩, ⟨aEnv, hgR3_18⟩⟩,
         hslotRaM3, hslotS0M3, hslotS1M3, hslotS2M3,
@@ -1298,7 +1305,7 @@ theorem evalOrFalseSim : EvalOrFalseSimGoal := by
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- === block A: prologue + dispatch → widened ArmEntryK @0x8000355c ===
   have hkm0 : read32 m0 aExpr.toNat = some 7 := exprRepr_logical_kind (hc.mem ▸ hc.expr)
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, _hpresM, _hx13⟩ :=
     blockA_k g N A SL φf φc st (.logical .or el er) 7 (0x8000355c#64) LogicalArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
@@ -1321,7 +1328,7 @@ theorem evalOrFalseSim : EvalOrFalseSimGoal := by
         hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
         hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
-        hc.spill_defined⟩, rfl⟩
+        ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.x13_defined⟩⟩, rfl⟩
   have hArmCopy := hArm
   obtain ⟨_hAG, _hAtick, hApc, _hAa0, _hAs1, _hAa2, _hAsp, _hAra, _hAmi, _hAout,
     _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxAl, _hAxLo, _hAxHi, _hAxWin,

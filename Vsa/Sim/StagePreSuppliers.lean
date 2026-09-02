@@ -72,6 +72,7 @@ theorem blockB_unary_stagePre
         ArmEntryK gouter N A SL φf φc st (0x800035e0#64) UnaryArmCallee (.unary op esub)
           sp r sret aExpr aIn v8 v9 v18 out0 m0 ment c ∧
         c.σ.regs.get? Register.x11 = some aIn ∧
+        (∃ w, c.σ.regs.get? Register.x13 = some w) ∧          -- a3 defined (wave 48h CURE A)
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
         (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
         read64 ment (aExpr.toNat + 16) = some aOperand.toNat ∧
@@ -99,7 +100,7 @@ theorem blockB_unary_stagePre
         Expr.bodiesBound Vsa.While.perCallBudget esub = true ∧
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 2 c (fun c' => JalPreBundle esub c' st d env) := by
-  obtain ⟨ment, hArm, hx11, hgframe, hg8, hg18, hpay, hsubexpr, hground, hexprHi24,
+  obtain ⟨ment, hArm, hx11, ⟨wx13, hx13⟩, hgframe, hg8, hg18, hpay, hsubexpr, hground, hexprHi24,
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -142,6 +143,7 @@ theorem blockB_unary_stagePre
   have ha0_1 : σ1.regs.get? Register.x10 = some sret := obs_alu_other' hobs1 Register.x10 (by decide) ha0
   have hs1_1 : σ1.regs.get? Register.x9 = some sret := obs_alu_other' hobs1 Register.x9 (by decide) hs1
   have hx11_1 : σ1.regs.get? Register.x11 = some aIn := obs_alu_other' hobs1 Register.x11 (by decide) hx11
+  have hx13_1 : σ1.regs.get? Register.x13 = some wx13 := obs_alu_other' hobs1 Register.x13 (by decide) hx13
   have hsp_1 : σ1.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other' hobs1 Register.x2 (by decide) hsp
   obtain ⟨vmi1, hmi1⟩ := obs_alu_minstret hobs1
   have hout1 : σ1.sailOutput = out0 := by
@@ -161,6 +163,7 @@ theorem blockB_unary_stagePre
     obs_alu_rd hobs2 (by decide) (by decide) (by decide) (by decide) (by decide)
   have hs1_2 : σ2.regs.get? Register.x9 = some sret := obs_alu_other' hobs2 Register.x9 (by decide) hs1_1
   have hx11_2 : σ2.regs.get? Register.x11 = some aIn := obs_alu_other' hobs2 Register.x11 (by decide) hx11_1
+  have hx13_2 : σ2.regs.get? Register.x13 = some wx13 := obs_alu_other' hobs2 Register.x13 (by decide) hx13_1
   have hx12_2 : σ2.regs.get? Register.x12 = some aOperand := obs_alu_other' hobs2 Register.x12 (by decide) hx12_1
   have hsp_2 : σ2.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other' hobs2 Register.x2 (by decide) hsp_1
   obtain ⟨vmi2, hmi2⟩ := obs_alu_minstret hobs2
@@ -204,7 +207,7 @@ theorem blockB_unary_stagePre
             rw [show ((0x800035e8#64 : BitVec 64) + sign_extend (m := 64) (0x1ffb7c#21))
               = (0x80003164#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
             decide) hiσ),
-      hG2, hi2, hpc2, hx10_2, hs1_2, hx11_2, hx12_2, hsp_2, ⟨vmi2, hmi2⟩, hout2, houtStr,
+      hG2, hi2, hpc2, hx10_2, hs1_2, hx11_2, ⟨wx13, hx13_2⟩, hx12_2, hsp_2, ⟨vmi2, hmi2⟩, hout2, houtStr,
       hmem2e, hcode, hviInt, hviSlot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframeB, ⟨hg8, hg18⟩,
       hslotRa, hslotS0, hslotS1, hslotS2,
       hopAl, hopLo, hopHi, hopWin, hopStk,
@@ -390,6 +393,7 @@ theorem blockB_binary_leftStagePre
     have := obs_store_pc_val hobs4
     rwa [show BitVec.addInt (0x800034f4#64) 4 = (0x800034f8#64 : BitVec 64) from by decide] at this
   have ha0_4 := obs_store_other_val' hobs4 Register.x10 (by decide) ha0_3
+  have hx13_4 := obs_store_other_val' hobs4 Register.x13 (by decide) hx13_3
   have hs1_4 := obs_store_other_val' hobs4 Register.x9 (by decide) hs1_3
   have hx11_4 := obs_store_other_val' hobs4 Register.x11 (by decide) hx11_3
   have hx12_4 := obs_store_other_val' hobs4 Register.x12 (by decide) hx12_3
@@ -501,7 +505,7 @@ theorem blockB_binary_leftStagePre
       (by decide),
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_800034f8_ee σ i u (0x800034f8#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
-      hG4, hi4, hpc4, ha0_4, hs1_4, hx11_4, hx12_4, hsp_4, ⟨vmi4, hmi4⟩,
+      hG4, hi4, hpc4, ha0_4, hs1_4, hx11_4, ⟨_, hx13_4⟩, hx12_4, hsp_4, ⟨vmi4, hmi4⟩,
       hout4, houtStr, hmem4e, hcodemcall1, hviInt1, hviSlot1, hnbs1, hGroundL, hexprL1, hstore1, hstoreSurv1,
       hframe4, ⟨hg8, hg18⟩,
       hslotRa1, hslotS01, hslotS11, hslotS21,

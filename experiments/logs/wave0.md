@@ -390,3 +390,67 @@ Executing observations.md `bin-cures-interlock-atomic-wave` proposal step (A):
 `EvalArmHeadExtras` re-thread. Green only at end of session. Log per step.
 
 ### Step 0 — grounding the actual tree state
+
+### LANDED (48h SESSION 1) + green-state
+
+CURE A (the x13 output rung) LANDED, whole tree green + axiom-clean + discipline OK.
+`EvalEntry.x13_defined : ∃ v, x13 = some v` field added (`InterpEntry.lean`);
+`blockA_k` now threads x13 σ1..σ19 (mirrors the `ha1_*` a1 chain, x13 caller-save
+untouched across the prologue+dispatch) and emits it as its 3rd output
+`∃ ment v8 v9 v18 v13, ArmEntryK … ∧ MemExtends m0 ment ∧ x13 = some v13`.
+
+The recorded "18 callers + doubled EvalArmHeadExtras" was, machine-measured, a
+~35-file cascade (the transitive closure of a mandatory `EvalEntry` field): 21
+initial edits + the child-entry/blockB cascade. All GREEN:
+- blockA_k output-tower destructures updated at ALL sites (leaf sims null/bool/str/int4,
+  neg3/not, and/or/logical3/4, var, ArmEntryWiden, the arm-dispatch combinator, the
+  4 gen/bridge rows).
+- `EvalEntry.x13_defined` supplied at every EvalEntry construction site: leaf entry
+  structs (EvalStr/Bool/Null/VarEntry each gained the field), TermRouting (3), EvalVarRow,
+  blockA_ee.
+- x13 threaded into the recursive-child combinators' preconditions + child-`EvalEntry`
+  constructions: `armTail_rec` (EvalRecCommon), `evalEntry_of_jalPrefix` (ArmSegSplit),
+  `armTail_rec_es` (ExecRecCommon, x13 from `mv a3,s3`), `execEvalEntry_of_jalPrefix`
+  + `ExecJalPreBundle` (ArmSegSplitExecEval).
+- x13 threaded to every `armTail_rec`/blockB_* SUPPLY site: blockB_unary + its callers
+  (neg3/not), blockB_binary LEFT+RIGHT (EvalBinSim, incl. the `ld a3` RIGHT reload τ2→τ7),
+  blockB_logical (and/logical3/logical4 RIGHT via the σ12→τ3 reload chain), MidArmFieldIH/
+  MidArmFieldWire/MidArmCombinator, StagePreSuppliers{,2}, the 6 `*ArmStagePre` rows,
+  Assign/CallArmStagePre, and `blockA_unaryArm`'s output (UnaryLogicalArmBridge) +
+  EvalChildFieldCombinator (blockA_logicalArm already emitted x13).
+- Discipline: UnaryLogicalArmBridge hit R7 (∃-count 8→9 from the added x13 conjunct on
+  the landed arm-head towers) — auditable `allow(R7-conj-tower-def)` added with the
+  named-structure-refactor-is-a-later-task justification.
+
+Verification (Law 5, `lake env lean` only; `lake build` is watchdog-killed): full
+topological olean re-sweep of all 310 modules affected by the `EvalEntry`/`blockA_k`
+change (incl. the `Vsa` root) — ALL GREEN except the PRE-EXISTING broken orphan
+`EvalCallClosure` (4 identical errors at clean HEAD, NOT in Vsa.lean, irrelevant to the
+image/census). `check_all --skip-build`: a4 discipline OK (9 rules), b grep gate OK
+(1256 files), c axiom audit OK (913/913 ⊆ {propext,Classical.choice,Quot.sound}).
+Census UNCHANGED 6/58 (`field_census.py -j4` = {FOUND:6, NOT_FOUND:52}) — session 1 is
+pure plumbing; NO field relights until x13_pres is discharged (session 2).
+
+### SESSION 2 PICKUP POINT (recipe steps (0)+(B) start; (C) after)
+
+x13 is now AVAILABLE end-to-end (blockA_k 3rd output + `EvalEntry.x13_defined` +
+threaded through every arm/child path). Session 2 = recipe step (B) + the frame_pop
+re-route (step (0)):
+1. **CURE 3 finish (x13_pres discharge)**: in `blockA_binaryArm` (BinArmBridge) and the
+   `EvalArmHeadExtras` combinator (ArmDispatchCombinator), DISCHARGE `BinArmExtras.x13_pres`
+   / `EvalArmHeadExtras.x13_pres` from the now-available blockA_k `_hx13` output (the sims
+   currently still IGNORE it: the blockA_k destructures re-underscore `_v13`/`_hx13` in
+   the non-unary/logical arm files — those are the discharge sites), then DROP the
+   `x13_pres` closure field from BOTH extras structs. Cone: BinArmBridge + ArmDispatchCombinator
+   + the 11 `binRow_*` + 10 `eval*Sim` that carry `BinArmExtras`/`EvalArmHeadExtras`.
+2. **CURE 2 (frame_pop) via SubEvalReturn re-route** (recipe step (0), preferred — NO new
+   ground field): discharge `BinArmExtras.frame_pop` from `SubEvalReturn`'s buffer-write
+   presence (EvalRecCommon.lean:~173, the sub-`value_int` 24-byte write populates the dead
+   sub-result bytes), NOT an unverified `EvalGround.frame_present` m0-totality field. DROP
+   the `frame_pop` closure.
+3. **CURE 1 (entry-carry) + relight** (recipe step (C)): after (1)+(2) drop both closures,
+   `BinIntCellResid`/`BinEqCellResid` (BinDispatchRow) become derivable from `EvalEntry` +
+   the residual geometry — add the `EvalEntry`-carry, restate the 6 unary resids ∃-structured,
+   regen `AssemblySkeleton` + TermAssembly, then the 17 int/eq/unary/logic fields relight
+   (census 6→23). INVERSION check: the X2 refutations (`X2_Field_hIAdd` etc.,
+   `BinCuresInterlock48g`) must then FAIL to prove (the cells become TRUE as stated).

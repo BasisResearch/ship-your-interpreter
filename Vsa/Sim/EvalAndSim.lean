@@ -257,6 +257,7 @@ theorem blockB_logical
     obs_store_other' hobs3 Register.x10 (by decide) hx10_2
   have hs1_3 : σ3.regs.get? Register.x9 = some sret := obs_store_other' hobs3 Register.x9 (by decide) hs1_2
   have hx11_3 : σ3.regs.get? Register.x11 = some aIn := obs_store_other' hobs3 Register.x11 (by decide) hx11_2
+  have hx13_3 : σ3.regs.get? Register.x13 = some aEnv3 := obs_store_other' hobs3 Register.x13 (by decide) hx13_2
   have hx12_3 : σ3.regs.get? Register.x12 = some aLeft := obs_store_other' hobs3 Register.x12 (by decide) hx12_2
   have hsp_3 : σ3.regs.get? Register.x2 = some (sp - 1088#64) := obs_store_other' hobs3 Register.x2 (by decide) hsp_2
   obtain ⟨vmi3, hmi3⟩ := obs_store_minstret hobs3
@@ -373,7 +374,7 @@ theorem blockB_logical
         site_80003568_lg σ i u (0x80003568#64) vmi hGσ hpcσ hmiσ hcodeσ rfl hiσ)
       hIH
       ⟨σ3, i3, c.steps + 1 + 1 + 1⟩
-      ⟨hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, hx12_3, hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr,
+      ⟨hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, ⟨_, hx13_3⟩, hx12_3, hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr,
         hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hGroundChildL, hExprMcall, hStoreMcall, hStoreSurvMcall,
         hframeB, ⟨hg8, hg18⟩,
         hslotRaMcall, hslotS0Mcall, hslotS1Mcall, hslotS2Mcall,
@@ -1414,7 +1415,7 @@ theorem evalAndSim : EvalAndSimGoal := by
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- === block A: prologue + dispatch → widened ArmEntryK @0x8000355c ===
   have hkm0 : read32 m0 aExpr.toNat = some 7 := exprRepr_logical_kind (hc.mem ▸ hc.expr)
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, _hpresM, _hx13⟩ :=
     blockA_k g N A SL φf φc st (.logical .and el er) 7 (0x8000355c#64) LogicalArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
@@ -1437,7 +1438,7 @@ theorem evalAndSim : EvalAndSimGoal := by
         hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
         hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
-        hc.spill_defined⟩, rfl⟩
+        ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.x13_defined⟩⟩, rfl⟩
   have hArmCopy := hArm
   obtain ⟨_hAG, _hAtick, hApc, _hAa0, _hAs1, _hAa2, _hAsp, _hAra, _hAmi, _hAout,
     _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxAl, _hAxLo, _hAxHi, _hAxWin,

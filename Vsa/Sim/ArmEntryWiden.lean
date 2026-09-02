@@ -71,7 +71,7 @@ theorem armEntry_widen
   intro c hc
   -- reconstruct the case-independent `blockA_k` precondition tower from `EvalEntry`,
   -- with `out0 := c.σ.sailOutput` (so `sailOutput = out0` is `rfl`).
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, _hpresM, _hx13⟩ :=
     blockA_k g N A SL φf φc st e k armPC calleeLoaded
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       hkle hklt hkind hslot hcallee hcalleeSurv hexprSurv harmAl htableStk
@@ -80,7 +80,7 @@ theorem armEntry_widen
         hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
         hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
-        hc.spill_defined⟩, rfl⟩
+        ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.x13_defined⟩⟩, rfl⟩
   exact ⟨c1, hs1, c.σ.sailOutput, ment, v8, v9, v18, hArm⟩
 
 #print axioms armEntry_widen

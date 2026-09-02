@@ -325,7 +325,7 @@ theorem blockB_stmtExpr_stagePre
   refine ⟨gpre, N, A, SL, φf, φc, (0x80004180#64), (0x80004184#64), (0x1fefe4#21),
     (sp - 176#64) + 1088#64, r, aInterp, (sp - 176#64) + sign_extend (m := 64) (0x010#12),
     aInterp, aExprChild, v8, v9, v18, out0, ment, ?_, ?_, ?_, ?_,
-    hG4, hi4, hpc4, hx10_4, ?_, hx11_val, hx12_4, hx2jsp, ⟨vmi4, hmi4⟩, hout4, ?_,
+    hG4, hi4, hpc4, hx10_4, ?_, hx11_val, ⟨_, hx13_4⟩, hx12_4, hx2jsp, ⟨vmi4, hmi4⟩, hout4, ?_,
     hmem4e, ?_, hEvCode, hViInt, hViSlot, hNbsJ, ?_, ?_, ?_, ?_, hframe4, ⟨hg8, hg18⟩,
     ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   -- hjaltgt : callPC + sext jalImm = evalExprEntry

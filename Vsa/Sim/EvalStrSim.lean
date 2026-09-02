@@ -624,6 +624,8 @@ structure EvalStrEntry
   table_stack_disjoint : (0x80019f58 : Nat) + 8 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58 + 4
   spill_defined : (∃ v, c.σ.regs.get? Register.x8 = some v) ∧
     (∃ v, c.σ.regs.get? Register.x9 = some v) ∧ (∃ v, c.σ.regs.get? Register.x18 = some v)
+  /-- wave 48h (CURE A): `a3`(x13) defined at entry — feeds `blockA_k`'s x13 output. -/
+  x13_defined : ∃ v, c.σ.regs.get? Register.x13 = some v
 
 /-- **The `EvalE.str` simulation goal.** -/
 def EvalStrSimGoal : Prop :=
@@ -656,7 +658,7 @@ theorem evalStrSimP
   obtain ⟨p, hk32, hp64, hpcstr⟩ := exprRepr_str_pay64 hexpr_m0
   -- === block A: prologue + dispatch → ArmEntryK (via blockA_k) ===
   have hkm0 : read32 m0 aExpr.toNat = some 1 := exprRepr_str_kind hexpr_m0
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, hpresM⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, hpresM, _hx13⟩ :=
     blockA_k g N A SL φf φc st (.str s) 1 (0x80003414#64) Value_strLoaded
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
@@ -700,7 +702,7 @@ theorem evalStrSimP
       hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
       hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
       hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
-      hc.spill_defined⟩, rfl⟩
+      ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.x13_defined⟩⟩, rfl⟩
   -- === block C: arm (ld a1,8(a2); jal value_str; j) → PreEpilogueV .str s + pin ===
   obtain ⟨c2, hs2, mpre, hPre, hPin⟩ :=
     blockC_str g N A SL φf φc st s sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0

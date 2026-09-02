@@ -603,6 +603,15 @@ structure EvalEntry
   value. (v1→v2 field.) -/
   spill_defined : (∃ v, c.σ.regs.get? Register.x8 = some v) ∧
     (∃ v, c.σ.regs.get? Register.x9 = some v) ∧ (∃ v, c.σ.regs.get? Register.x18 = some v)
+  /-- **`a3`(x13) is defined at entry.** `x13`/`a3` is a caller-save temp NOT
+  written across the prologue+dispatch span `0x80003164→0x800034e8`; the binary
+  arm (`blockB_binary`, `EvalBinSim.lean`) reads it at arm entry as the env arg
+  and SPILLS it (`sd a3,0(sp)`) for the RIGHT sub-call. `blockA_k` threads it
+  through untouched and emits `∃w, c'.x13 = some w` as its 3rd output, which the
+  binary/unary arm bridges consume to discharge `BinArmExtras.x13_pres` /
+  `EvalArmHeadExtras.x13_pres` (CURE A of the bin/eq interlock wave, wave 48h).
+  `GoodState` pins control registers but not GPRs, so this is stated here. -/
+  x13_defined : ∃ v, c.σ.regs.get? Register.x13 = some v
   -- TODO(call): a `call_depth` field relation `read32 m (interp+8) = some d`
   --   and the `interp*` split from `env` (a1 is `interp*`; env is a separate
   --   arg the C source passes — re-derive which machine reg holds the env for

@@ -316,21 +316,27 @@ theorem blockA_k
         (0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000) ∧ tohostAddr + 16 ≤ SL.lo ∧
         ((∃ v, c.σ.regs.get? Register.x8 = some v) ∧
           (∃ v, c.σ.regs.get? Register.x9 = some v) ∧
-          (∃ v, c.σ.regs.get? Register.x18 = some v)))
+          (∃ v, c.σ.regs.get? Register.x18 = some v) ∧
+          (∃ v, c.σ.regs.get? Register.x13 = some v)))
         ∧ c.σ.sailOutput = out0)
-      (fun c => ∃ ment v8 v9 v18,
+      (fun c => ∃ ment v8 v9 v18 v13,
         ArmEntryK g N A SL φf φc st armPC calleeLoaded e sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
         -- wave 47e (`LeafExitPin`): the arm-entry memory is the four prologue
         -- spills over `m0` — presence-preserving.  Surfaced so the leaf
         -- `blockC_*` can pin their exit memory (`LeafMemPin`).
-        MemExtends m0 ment) := by
+        MemExtends m0 ment ∧
+        -- wave 48h (CURE A): `a3`(x13) is defined at the arm-entry dispatch
+        -- target (threaded untouched through the prologue+dispatch), so the
+        -- binary/unary arm bridge can discharge `x13_pres` without an entry
+        -- ∀-closure.  x13 is a caller-save temp never written in this span.
+        c.σ.regs.get? Register.x13 = some v13) := by
   intro c hpre'
   obtain ⟨hpre, hout0⟩ := hpre'
   obtain ⟨hG, htick, hpc, ha0, ha1, ha2, hra, hraAl, hspReg, hstackOK, ⟨vmi, hmi⟩,
     hmem, hcode, hexpr, hstore, hstoreSurv, hout, hframe,
     hcodeStk, hexprStk, hexprAl, hexprRam, hexprWin,
     hsretAl, hsretRam, hsretWin, hsretVi, hsretStk, hsretEvalCode, hstkRam, hstkWin,
-    ⟨⟨v8, h8_0⟩, ⟨v9, h9_0⟩, ⟨v18, h18_0⟩⟩⟩ := hpre
+    ⟨⟨v8, h8_0⟩, ⟨v9, h9_0⟩, ⟨v18, h18_0⟩, ⟨v13, h13_0⟩⟩⟩ := hpre
   have hviCode : calleeLoaded c.σ.mem := hmem ▸ hcallee
   have hintSlot : KindSlotPinned k armPC c.σ.mem := hmem ▸ hslot
   have hload0 : Eval_exprLoaded c.σ.mem := hcode
@@ -974,13 +980,35 @@ theorem blockA_k
   have ha1_17 : σ17.regs.get? Register.x11 = some aEnv := obs_alu_other' hobs17 Register.x11 (by decide) ha1_16
   have ha1_18 : σ18.regs.get? Register.x11 = some aEnv := obs_alu_other' hobs18 Register.x11 (by decide) ha1_17
   have ha1_19 : σ19.regs.get? Register.x11 = some aEnv := obs_jr_other' hobs19 Register.x11 (by decide) ha1_18
+  -- wave 48h (CURE A): x13 = a3 is NEVER written across the prologue+dispatch span
+  -- (a caller-save temp), so thread the entry `h13_0` untouched to σ19, mirroring
+  -- the `ha1_*` (x11) chain step-for-step.
+  have hx13_1 : σ1.regs.get? Register.x13 = some v13 := obs_alu_other' hobs1 Register.x13 (by decide) h13_0
+  have hx13_2 : σ2.regs.get? Register.x13 = some v13 := obs_alu_other' hobs2 Register.x13 (by decide) hx13_1
+  have hx13_3 : σ3.regs.get? Register.x13 = some v13 := obs_store_other_val' hobs3 Register.x13 (by decide) hx13_2
+  have hx13_4 : σ4.regs.get? Register.x13 = some v13 := obs_store_other_val' hobs4 Register.x13 (by decide) hx13_3
+  have hx13_5 : σ5.regs.get? Register.x13 = some v13 := obs_store_other_val' hobs5 Register.x13 (by decide) hx13_4
+  have hx13_6 : σ6.regs.get? Register.x13 = some v13 := obs_store_other_val' hobs6 Register.x13 (by decide) hx13_5
+  have hx13_7 : σ7.regs.get? Register.x13 = some v13 := obs_alu_other' hobs7 Register.x13 (by decide) hx13_6
+  have hx13_8 : σ8.regs.get? Register.x13 = some v13 := obs_alu_other' hobs8 Register.x13 (by decide) hx13_7
+  have hx13_9 : σ9.regs.get? Register.x13 = some v13 := obs_alu_other' hobs9 Register.x13 (by decide) hx13_8
+  have hx13_10 : σ10.regs.get? Register.x13 = some v13 := obs_branch_nottaken_other' hobs10 Register.x13 (by decide) hx13_9
+  have hx13_11 : σ11.regs.get? Register.x13 = some v13 := obs_alu_other' hobs11 Register.x13 (by decide) hx13_10
+  have hx13_12 : σ12.regs.get? Register.x13 = some v13 := obs_alu_other' hobs12 Register.x13 (by decide) hx13_11
+  have hx13_13 : σ13.regs.get? Register.x13 = some v13 := obs_alu_other' hobs13 Register.x13 (by decide) hx13_12
+  have hx13_14 : σ14.regs.get? Register.x13 = some v13 := obs_alu_other' hobs14 Register.x13 (by decide) hx13_13
+  have hx13_15 : σ15.regs.get? Register.x13 = some v13 := obs_alu_other' hobs15 Register.x13 (by decide) hx13_14
+  have hx13_16 : σ16.regs.get? Register.x13 = some v13 := obs_alu_other' hobs16 Register.x13 (by decide) hx13_15
+  have hx13_17 : σ17.regs.get? Register.x13 = some v13 := obs_alu_other' hobs17 Register.x13 (by decide) hx13_16
+  have hx13_18 : σ18.regs.get? Register.x13 = some v13 := obs_alu_other' hobs18 Register.x13 (by decide) hx13_17
+  have hx13_19 : σ19.regs.get? Register.x13 = some v13 := obs_jr_other' hobs19 Register.x13 (by decide) hx13_18
   -- presence: the arm-entry memory is the 4-spill `writeMap8` chain over `m0`
   have hpresM : MemExtends m0 σ6.mem := by
     rw [hmem6e, hmem5e, hmem4e, hmem3e, ← hmem]
     exact (((memExtends_writeMap8 _ _ _).trans (memExtends_writeMap8 _ _ _)).trans
       (memExtends_writeMap8 _ _ _)).trans (memExtends_writeMap8 _ _ _)
   -- assemble the full 19-step run + ArmEntryK
-  refine ⟨⟨σ19, i19, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1⟩, ?_, σ6.mem, v8, v9, v18, ⟨hG19, hi19, hpc19, ha0_19, hx9_19, ha2_19, hsp_19, hra_19,
+  refine ⟨⟨σ19, i19, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1⟩, ?_, σ6.mem, v8, v9, v18, v13, ⟨hG19, hi19, hpc19, ha0_19, hx9_19, ha2_19, hsp_19, hra_19,
     ⟨_, hmi19⟩, hout19, hmem19e, hmem19e ▸ hload6, hmem19e ▸ hvi6, hmem19e ▸ hexpr6,
     houtStr,
     hexprAl, hexprRam.1, hexprRam.2, hexprWin,
@@ -989,7 +1017,7 @@ theorem blockA_k
     hgx8, hgx9, hgx18, hgx2, hmem19e ▸ hstore6, hmem19e ▸ hstoreSurv6, hframeArm,
     hsretAl, hsretRam.1, hsretRam.2, hsretWin, hsretVi, hsretStk, hsretEvalCode,
     hsp1088, ?_, ?_, ?_, ?_, hstkRam.1, hstkWin, ?_, hraAl, ha1_19, hx8_19, hx18_19⟩,
-    hpresM⟩
+    hpresM, hx13_19⟩
   · exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
       ((Steps.single hstep4).trans ((Steps.single hstep5).trans ((Steps.single hstep6).trans
       ((Steps.single hstep7).trans ((Steps.single hstep8).trans ((Steps.single hstep9).trans
@@ -1022,9 +1050,9 @@ theorem blockA_ee
     Triple
       (fun c => EvalEntry g N A SL φf φc st d a (.int n) sp r sret aEnv aExpr m0 c
         ∧ c.σ.sailOutput = out0)
-      (fun c => ∃ ment v8 v9 v18,
+      (fun c => ∃ ment v8 v9 v18 v13,
         ArmEntry g N A SL φf φc st n sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
-        MemExtends m0 ment) := by
+        MemExtends m0 ment ∧ c.σ.regs.get? Register.x13 = some v13) := by
   intro c hpre'
   obtain ⟨he, hout0⟩ := hpre'
   -- the int kind tag + payload reads (in `m0`), for `hkind`/`hexprSurv`
@@ -1073,7 +1101,7 @@ theorem blockA_ee
     he.frame, he.code_stack_disjoint, he.expr_stack_disjoint, he.expr_align, he.expr_ram,
     he.expr_win, he.sret_align, he.sret_ram, he.sret_win, he.sret_vicode_disjoint_int,
     he.sret_stack_disjoint, he.sret_evalcode_disjoint, he.stack_ram, he.stack_win,
-    he.spill_defined⟩, hout0⟩
+    ⟨he.spill_defined.1, he.spill_defined.2.1, he.spill_defined.2.2, he.x13_defined⟩⟩, hout0⟩
 
 
 end Vsa.Sim

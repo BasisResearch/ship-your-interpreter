@@ -82,6 +82,7 @@ def MidArmLeftJalBundle (l er : Expr) (c' : Config) (st st' : Vsa.While.St)
      c'.σ.regs.get? Register.x10 = some subsret ∧
      c'.σ.regs.get? Register.x9 = some sret ∧
      c'.σ.regs.get? Register.x11 = some aIn ∧
+     (∃ w, c'.σ.regs.get? Register.x13 = some w) ∧          -- a3 defined (wave 48h CURE A)
      c'.σ.regs.get? Register.x12 = some aLOp ∧
      c'.σ.regs.get? Register.x2 = some (sp - 1088#64) ∧
      (∃ w, c'.σ.regs.get? Register.minstret = some w) ∧

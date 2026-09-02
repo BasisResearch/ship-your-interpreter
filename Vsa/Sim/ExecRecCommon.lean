@@ -116,6 +116,7 @@ theorem armTail_rec_es
         c.σ.regs.get? Register.PC = some callPC ∧
         c.σ.regs.get? Register.x10 = some subsret ∧          -- a0 = sub-sret
         c.σ.regs.get? Register.x11 = some aInterp ∧          -- a1 = interp*
+        (∃ w, c.σ.regs.get? Register.x13 = some w) ∧          -- a3 defined (wave 48h CURE A)
         c.σ.regs.get? Register.x12 = some aOperand ∧         -- a2 = operand node
         c.σ.regs.get? Register.x18 = some aRet ∧             -- s2 = retslot (survives)
         c.σ.regs.get? Register.x2 = some (sp - 176#64) ∧     -- sp lowered
@@ -185,7 +186,7 @@ theorem armTail_rec_es
         st' vsub sp r aRet subsret retPC
         r v8 v9 v18 v19 mcall mcall) := by
   intro c hpre
-  obtain ⟨hG, htick, hpc, ha0, hx11, hx12, hs2, hsp, ⟨wx8, hwx8⟩, ⟨wx9, hwx9⟩, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
+  obtain ⟨hG, htick, hpc, ha0, hx11, ⟨wx13, hx13⟩, hx12, hs2, hsp, ⟨wx8, hwx8⟩, ⟨wx9, hwx9⟩, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
     hcodeS, hcode, hviCode, hslot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframe,
     hgx8, hgx9, hgx18, hgx19, hgx2,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
@@ -212,6 +213,7 @@ theorem armTail_rec_es
     rwa [hlink] at this
   have ha0_1 : σ1.regs.get? Register.x10 = some subsret := obs_jalT_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
   have hx11_1 : σ1.regs.get? Register.x11 = some aInterp := obs_jalT_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11
+  have hx13_1 : σ1.regs.get? Register.x13 = some wx13 := obs_jalT_other hobs1 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13
   have hx12_1 : σ1.regs.get? Register.x12 = some aOperand := obs_jalT_other hobs1 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12
   have hsp_1 : σ1.regs.get? Register.x2 = some (sp - 176#64) := obs_jalT_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp
   have hs2_1 : σ1.regs.get? Register.x18 = some aRet := obs_jalT_other hobs1 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs2
@@ -296,7 +298,8 @@ theorem armTail_rec_es
         rcases htableStk with h | h
         · left; exact h
         · right; rw [hspsub]; omega
-      spill_defined := ⟨⟨wx8, hx8_1⟩, ⟨wx9, hx9_1⟩, ⟨aRet, hs2_1⟩⟩ }
+      spill_defined := ⟨⟨wx8, hx8_1⟩, ⟨wx9, hx9_1⟩, ⟨aRet, hs2_1⟩⟩
+      x13_defined := ⟨wx13, hx13_1⟩ }
   -- ============ the sub-call (the induction hypothesis) ============
   obtain ⟨c2, hs2', hExit, hpres, φf', φc', hpf', hpc', hsurvSL⟩ :=
     hIH (fun R => σ1.regs.get? R) N A SL φf φc (sp - 176#64) retPC subsret aInterp aOperand mcall
@@ -544,6 +547,11 @@ theorem execExprGlue
   have hx8_3 : σ3.regs.get? Register.x8 = some aStmt := obs_alu_other' hobs3 Register.x8 (by decide) hx8_2
   have hx18_3 : σ3.regs.get? Register.x18 = some aRet := obs_alu_other' hobs3 Register.x18 (by decide) hx18_2
   have hx12_3 : σ3.regs.get? Register.x12 = some aOperand := obs_alu_other' hobs3 Register.x12 (by decide) hx12_2
+  -- wave 48h (CURE A): `mv a3,s3` sets x13 := aEnv at σ3.
+  have hx13_3 : σ3.regs.get? Register.x13 = some aEnv := by
+    have := obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
+    rwa [show (aEnv + sign_extend (m := 64) (0x000#12)) = aEnv from by
+      apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_add]; simp only [show (sign_extend (m := 64) (0x000#12) : BitVec 64).toNat = 0 from by decide]; have := aEnv.isLt; omega] at this
   have hx10_3 : σ3.regs.get? Register.x10 = some ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) := obs_alu_other' hobs3 Register.x10 (by decide) hx10_2
   have hra_3 : σ3.regs.get? Register.x1 = some r := obs_alu_other' hobs3 Register.x1 (by decide) hra_2
   obtain ⟨vmi3, hmi3⟩ := obs_alu_minstret hobs3
@@ -566,6 +574,7 @@ theorem execExprGlue
   have hx8_4 : σ4.regs.get? Register.x8 = some aStmt := obs_alu_other' hobs4 Register.x8 (by decide) hx8_3
   have hx18_4 : σ4.regs.get? Register.x18 = some aRet := obs_alu_other' hobs4 Register.x18 (by decide) hx18_3
   have hx12_4 : σ4.regs.get? Register.x12 = some aOperand := obs_alu_other' hobs4 Register.x12 (by decide) hx12_3
+  have hx13_4 : σ4.regs.get? Register.x13 = some aEnv := obs_alu_other' hobs4 Register.x13 (by decide) hx13_3
   have hx10_4 : σ4.regs.get? Register.x10 = some ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) := obs_alu_other' hobs4 Register.x10 (by decide) hx10_3
   have hx9_4 : σ4.regs.get? Register.x9 = some aInterp := obs_alu_other' hobs4 Register.x9 (by decide) hx9_3
   obtain ⟨vmi4, hmi4⟩ := obs_alu_minstret hobs4
@@ -612,7 +621,7 @@ theorem execExprGlue
         site_80004180_es σ i u (0x80004180#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ)
       hIH
       ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩
-      ⟨hG4, hi4, hpc4, hx10_4, hx11_4, hx12_4, hx18_4, hsp_4,
+      ⟨hG4, hi4, hpc4, hx10_4, hx11_4, ⟨aEnv, hx13_4⟩, hx12_4, hx18_4, hsp_4,
         ⟨aStmt, hx8_4⟩, ⟨aInterp, hx9_4⟩, ⟨vmi4, hmi4⟩, hout4, houtStr,
         hmem4e, (hmem4e ▸ hcode4), (hmem4e ▸ hevalM), (hmem4e ▸ hviM), (hmem4e ▸ hslotPM), (hmem4e ▸ hnbsM),
         (hmem4e ▸ hgroundM), (hmem4e ▸ hsubexprM), (hmem4e ▸ hstore),

@@ -207,6 +207,7 @@ theorem armTail_rec
         c.σ.regs.get? Register.x10 = some subsret ∧          -- a0 = sub-sret
         c.σ.regs.get? Register.x9 = some sret ∧              -- s1 = outer sret
         c.σ.regs.get? Register.x11 = some aIn ∧              -- a1 = interp*
+        (∃ w, c.σ.regs.get? Register.x13 = some w) ∧          -- a3 defined (wave 48h CURE A)
         c.σ.regs.get? Register.x12 = some aOperand ∧         -- a2 = operand node
         c.σ.regs.get? Register.x2 = some (sp - 1088#64) ∧    -- sp lowered
         (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
@@ -257,7 +258,7 @@ theorem armTail_rec
       (SubEvalReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
         st' vsub sp r sret subsret retPC v8 v9 v18 mcall) := by
   intro c hpre
-  obtain ⟨hG, htick, hpc, ha0, hs1, hx11, hx12, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
+  obtain ⟨hG, htick, hpc, ha0, hs1, hx11, ⟨wx13, hx13⟩, hx12, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
     hcode, hviCode, hslot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframe, ⟨⟨w8, hw8⟩, ⟨w18, hw18⟩⟩,
     hslotRa, hslotS0, hslotS1, hslotS2,
     hopAl, hopLo, hopHi, hopWin, hopStk,
@@ -284,6 +285,7 @@ theorem armTail_rec
   have ha0_1 : σ1.regs.get? Register.x10 = some subsret := obs_jalT_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
   have hs1_1 : σ1.regs.get? Register.x9 = some sret := obs_jalT_other hobs1 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1
   have hx11_1 : σ1.regs.get? Register.x11 = some aIn := obs_jalT_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11
+  have hx13_1 : σ1.regs.get? Register.x13 = some wx13 := obs_jalT_other hobs1 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13
   have hx12_1 : σ1.regs.get? Register.x12 = some aOperand := obs_jalT_other hobs1 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12
   have hsp_1 : σ1.regs.get? Register.x2 = some (sp - 1088#64) := obs_jalT_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp
   have hx8_1 : σ1.regs.get? Register.x8 = some w8 := by
@@ -366,7 +368,8 @@ theorem armTail_rec
         rcases htableStk with h | h
         · left; exact h
         · right; rw [hspsub]; omega
-      spill_defined := ⟨⟨w8, hx8_1⟩, ⟨sret, hs1_1⟩, ⟨w18, hx18_1⟩⟩ }
+      spill_defined := ⟨⟨w8, hx8_1⟩, ⟨sret, hs1_1⟩, ⟨w18, hx18_1⟩⟩
+      x13_defined := ⟨wx13, hx13_1⟩ }
   -- ============ the sub-call (the induction hypothesis) ============
   obtain ⟨c2, hs2, hExit, hpres, φf', φc', hpf', hpc', hsurvSL⟩ :=
     hIH (fun R => σ1.regs.get? R) N A SL φf φc (sp - 1088#64) retPC subsret aIn aOperand mcall

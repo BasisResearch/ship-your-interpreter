@@ -162,7 +162,7 @@ theorem evalArmDispatch_of_slot
   intro c'' heq
   subst heq
   -- === block A: prologue + dispatch → widened ArmEntryK @armPC ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, _hpresM, _hx13⟩ :=
     blockA_k g N A SL φf φc st e k armPC UnaryArmCallee
       sp r0 sret aEnv aExpr m0 c''.σ.sailOutput
       hkle hklt
@@ -186,7 +186,7 @@ theorem evalArmDispatch_of_slot
         hE.frame, hE.code_stack_disjoint, hE.expr_stack_disjoint, hE.expr_align, hE.expr_ram,
         hE.expr_win, hE.sret_align, hE.sret_ram, hE.sret_win, hE.sret_vicode_disjoint_int,
         hE.sret_stack_disjoint, hE.sret_evalcode_disjoint, hE.stack_ram, hE.stack_win,
-        hE.spill_defined⟩, rfl⟩
+        ⟨hE.spill_defined.1, hE.spill_defined.2.1, hE.spill_defined.2.2, hE.x13_defined⟩⟩, rfl⟩
   -- Destructure a COPY of the widened `ArmEntryK` (keep `hArm` intact for output).
   have hArmCopy := hArm
   obtain ⟨_hAG, _hAtick, _hApc, _hAa0, _hAs1, _hAa2, _hAsp, _hAra, _hAmi, _hAout,

@@ -197,7 +197,7 @@ theorem blockA_binaryArm
     have := hc.mem ▸ hc.expr
     cases this with | binary hk _ _ _ _ _ => exact hk
   -- === block A: prologue + dispatch → widened ArmEntryK @0x800034e8 ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, hpresM⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, hpresM, _hx13⟩ :=
     blockA_k g N A SL φf φc st (.binary op el er) 6 (0x800034e8#64) UnaryArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
@@ -221,7 +221,7 @@ theorem blockA_binaryArm
         hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
         hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
-        hc.spill_defined⟩, rfl⟩
+        ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.x13_defined⟩⟩, rfl⟩
   -- Destructure a COPY of the widened `ArmEntryK` (keep `hArm` intact for output).
   have hArmCopy := hArm
   obtain ⟨_hAG, _hAtick, _hApc, _hAa0, _hAs1, _hAa2, _hAsp, _hAra, _hAmi, _hAout,

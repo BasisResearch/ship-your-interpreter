@@ -339,6 +339,8 @@ structure EvalNullEntry
   table_stack_disjoint : (0x80019f58 : Nat) + 16 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58 + 12
   spill_defined : (∃ v, c.σ.regs.get? Register.x8 = some v) ∧
     (∃ v, c.σ.regs.get? Register.x9 = some v) ∧ (∃ v, c.σ.regs.get? Register.x18 = some v)
+  /-- wave 48h (CURE A): `a3`(x13) defined at entry — feeds `blockA_k`'s x13 output. -/
+  x13_defined : ∃ v, c.σ.regs.get? Register.x13 = some v
 
 /-- The `EX_NULL` kind tag `read32 = some 3`, from `ExprRepr … .null`. -/
 theorem exprRepr_null_kind {m : Mem} {a : Nat} (h : ExprRepr m a .null) :
@@ -373,7 +375,7 @@ theorem evalNullSimP
   intro c hc
   -- === block A: prologue + dispatch → ArmEntryK (via blockA_k) ===
   have hkm0 : read32 m0 aExpr.toNat = some 3 := hc.mem ▸ exprRepr_null_kind (hc.mem ▸ hc.expr)
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, hpresM⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, hpresM, _hx13⟩ :=
     blockA_k g N A SL φf φc st .null 3 (0x8000342c#64) Value_nullLoaded
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
@@ -400,7 +402,7 @@ theorem evalNullSimP
       hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
       hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
       hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
-      hc.spill_defined⟩, rfl⟩
+      ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.x13_defined⟩⟩, rfl⟩
   -- === block C: arm (jal value_null; j) → PreEpilogueV .null + pin ===
   obtain ⟨c2, hs2, mpre, hPre, hPin⟩ :=
     blockC_null g N A SL φf φc st sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0

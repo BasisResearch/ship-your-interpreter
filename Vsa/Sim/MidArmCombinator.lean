@@ -228,6 +228,9 @@ theorem binaryR_midStagePre
     have := obs_alu_pc hoτ2
     rwa [show BitVec.addInt (0x80003500#64) 4 = (0x80003504#64 : BitVec 64) from by decide] at this
   have hx12τ2 : τ2.regs.get? Register.x12 = some aROp := obs_alu_other hoτ2 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12τ1
+  have hx13τ2 : τ2.regs.get? Register.x13 = some
+      (sign_extend (m := 64) ((((((((eb7.append eb6).append eb5).append eb4).append eb3).append eb2).append eb1).append eb0) : BitVec (8 * 8))) :=
+    obs_alu_rd hoτ2 (by decide) (by decide) (by decide) (by decide) (by decide)
   have hs1τ2 : τ2.regs.get? Register.x9 = some sret := obs_alu_other hoτ2 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1τ1
   have hx18τ2 : τ2.regs.get? Register.x18 = some aEnv := obs_alu_other hoτ2 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18τ1
   have hspτ2 : τ2.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other hoτ2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hspτ1
@@ -251,6 +254,7 @@ theorem binaryR_midStagePre
       (sign_extend (m := 64) ((((wb3.append wb2).append wb1).append wb0) : BitVec (8*4))) :=
     obs_alu_rd hoτ3 (by decide) (by decide) (by decide) (by decide) (by decide)
   have hx12τ3 : τ3.regs.get? Register.x12 = some aROp := obs_alu_other hoτ3 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12τ2
+  have hx13τ3 := obs_alu_other hoτ3 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13τ2
   have hs1τ3 : τ3.regs.get? Register.x9 = some sret := obs_alu_other hoτ3 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1τ2
   have hx18τ3 : τ3.regs.get? Register.x18 = some aEnv := obs_alu_other hoτ3 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18τ2
   have hspτ3 : τ3.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other hoτ3 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hspτ2
@@ -269,6 +273,7 @@ theorem binaryR_midStagePre
   have ha0τ4 : τ4.regs.get? Register.x10 = some ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) :=
     obs_alu_rd hoτ4 (by decide) (by decide) (by decide) (by decide) (by decide)
   have hx12τ4 : τ4.regs.get? Register.x12 = some aROp := obs_alu_other hoτ4 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12τ3
+  have hx13τ4 := obs_alu_other hoτ4 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13τ3
   have hs1τ4 : τ4.regs.get? Register.x9 = some sret := obs_alu_other hoτ4 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1τ3
   have hx16τ4 : τ4.regs.get? Register.x16 = some
       (sign_extend (m := 64) ((((wb3.append wb2).append wb1).append wb0) : BitVec (8*4))) :=
@@ -296,6 +301,7 @@ theorem binaryR_midStagePre
   have ha0τ5 : τ5.regs.get? Register.x10 = some ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) :=
     obs_alu_other hoτ5 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0τ4
   have hx12τ5 : τ5.regs.get? Register.x12 = some aROp := obs_alu_other hoτ5 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12τ4
+  have hx13τ5 := obs_alu_other hoτ5 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13τ4
   have hs1τ5 : τ5.regs.get? Register.x9 = some sret := obs_alu_other hoτ5 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1τ4
   have hx16τ5 : τ5.regs.get? Register.x16 = some
       (sign_extend (m := 64) ((((wb3.append wb2).append wb1).append wb0) : BitVec (8*4))) :=
@@ -323,6 +329,7 @@ theorem binaryR_midStagePre
     obs_alu_other hoτ6 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0τ5
   have hx11τ6 : τ6.regs.get? Register.x11 = some aEnv := obs_alu_other hoτ6 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11τ5
   have hx12τ6 : τ6.regs.get? Register.x12 = some aROp := obs_alu_other hoτ6 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12τ5
+  have hx13τ6 := obs_alu_other hoτ6 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13τ5
   have hs1τ6 : τ6.regs.get? Register.x9 = some sret := obs_alu_other hoτ6 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1τ5
   have hx16τ6 : τ6.regs.get? Register.x16 = some
       (sign_extend (m := 64) ((((wb3.append wb2).append wb1).append wb0) : BitVec (8*4))) :=
@@ -348,6 +355,7 @@ theorem binaryR_midStagePre
   have ha0τ7 := obs_store_other_val hoτ7 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0τ6
   have hx11τ7 := obs_store_other_val hoτ7 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11τ6
   have hx12τ7 := obs_store_other_val hoτ7 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12τ6
+  have hx13τ7 := obs_store_other_val hoτ7 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13τ6
   have hs1τ7 := obs_store_other_val hoτ7 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1τ6
   have hspτ7 := obs_store_other_val hoτ7 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hspτ6
   obtain ⟨vmiτ7, hmiτ7⟩ := obs_store_minstret_val hoτ7
@@ -455,7 +463,7 @@ theorem binaryR_midStagePre
       (by decide),
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_80003518_ee σ i u (0x80003518#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
-      hGτ7, hj7, hpcτ7, ha0τ7, hs1τ7, hx11τ7, hx12τ7, hspτ7, ⟨vmiτ7, hmiτ7⟩,
+      hGτ7, hj7, hpcτ7, ha0τ7, hs1τ7, hx11τ7, ⟨_, hx13τ7⟩, hx12τ7, hspτ7, ⟨vmiτ7, hmiτ7⟩,
       houtτ7, houtStrL, hmemτ7e, hcodeτ7, hviInt2, hviSlot2, hnbs2, hGroundR2, hexprR2, hstore2, hstoreSurv2,
       (fun R hR => rfl), ⟨⟨aExpr, hgR7_8⟩, ⟨aEnv, hgR7_18⟩⟩,
       hslotRa2, hslotS02, hslotS12, hslotS22,

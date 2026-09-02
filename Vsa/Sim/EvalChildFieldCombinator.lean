@@ -177,13 +177,13 @@ theorem unaryE_field_of_extras
   refine evalChildField_of_blockA_stage (k := 2) (by omega)
     (blockA_unaryArm g N A SL φf φc st d env op e sp r0 sret aEnv aExpr aOperand m0 hX)
     (fun c' hMid => ?_) c hEntry
-  obtain ⟨v8, v9, v18, ment, hArm, hx11, hgframe, hg8, hg18,
+  obtain ⟨v8, v9, v18, ment, hArm, hx11, hx13, hgframe, hg8, hg18,
     hpayL, hexprL, hground, hexprHi24, hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam, hcodeStk, hviStk, htableStk,
     harenaStk, harenaCode⟩ := hMid
   exact blockB_unary_stagePre g (fun R => c'.σ.regs.get? R) N A SL φf φc st d env op e
     sp r0 sret aExpr aEnv aOperand v8 v9 v18 c'.σ.sailOutput m0 c'
-    ⟨ment, hArm, hx11, hgframe, hg8, hg18, hpayL, hexprL, hground, hexprHi24,
+    ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpayL, hexprL, hground, hexprHi24,
       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
       hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
       -- ITEM ZERO B1: the operand's child budget, DERIVED from the entry's fields.

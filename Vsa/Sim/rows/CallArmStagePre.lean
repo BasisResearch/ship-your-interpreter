@@ -356,6 +356,7 @@ theorem blockB_call_stagePre
     obs_store_other' hobs3 Register.x10 (by decide) hx10_2
   have hs1_3 : σ3.regs.get? Register.x9 = some sret := obs_store_other' hobs3 Register.x9 (by decide) hs1_2
   have hx11_3 : σ3.regs.get? Register.x11 = some aIn := obs_store_other' hobs3 Register.x11 (by decide) hx11_2
+  have hx13_3 : σ3.regs.get? Register.x13 = some aEnv3 := obs_store_other' hobs3 Register.x13 (by decide) hx13_2
   have hx12_3 : σ3.regs.get? Register.x12 = some aClo := obs_store_other' hobs3 Register.x12 (by decide) hx12_2
   have hsp_3 : σ3.regs.get? Register.x2 = some (sp - 1088#64) := obs_store_other' hobs3 Register.x2 (by decide) hsp_2
   obtain ⟨vmi3, hmi3⟩ := obs_store_minstret hobs3
@@ -447,7 +448,7 @@ theorem blockB_call_stagePre
       (by decide),
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_800031bc_cf σ i u (0x800031bc#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
-      hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, hx12_3, hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr,
+      hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, ⟨_, hx13_3⟩, hx12_3, hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr,
       hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hGroundMcall, hExprMcall, hStoreMcall, hStoreSurvMcall,
       hframeB, ⟨hg8, hg18⟩,
       hslotRaMcall, hslotS0Mcall, hslotS1Mcall, hslotS2Mcall,

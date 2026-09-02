@@ -97,6 +97,7 @@ theorem landedN_eentryC_of_jalPrefix
         c.σ.regs.get? Register.x10 = some subsret ∧
         c.σ.regs.get? Register.x9 = some sret ∧
         c.σ.regs.get? Register.x11 = some aIn ∧
+        (∃ w, c.σ.regs.get? Register.x13 = some w) ∧          -- a3 defined (wave 48h CURE A)
         c.σ.regs.get? Register.x12 = some aOperand ∧
         c.σ.regs.get? Register.x2 = some (sp - 1088#64) ∧
         (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
@@ -198,6 +199,7 @@ def JalPreBundle (e : Expr) (c' : Config) (st : Vsa.While.St) (d : Nat)
     c'.σ.regs.get? Register.x10 = some subsret ∧
     c'.σ.regs.get? Register.x9 = some sret ∧
     c'.σ.regs.get? Register.x11 = some aIn ∧
+    (∃ w, c'.σ.regs.get? Register.x13 = some w) ∧          -- a3 defined (wave 48h CURE A)
     c'.σ.regs.get? Register.x12 = some aOperand ∧
     c'.σ.regs.get? Register.x2 = some (sp - 1088#64) ∧
     (∃ w, c'.σ.regs.get? Register.minstret = some w) ∧

@@ -1546,6 +1546,8 @@ structure EvalVarEntry
   table_stack_disjoint : (0x80019f58 : Nat) + 20 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58 + 16
   spill_defined : (∃ w, c.σ.regs.get? Register.x8 = some w) ∧
     (∃ w, c.σ.regs.get? Register.x9 = some w) ∧ (∃ w, c.σ.regs.get? Register.x18 = some w)
+  /-- wave 48h (CURE A): `a3`(x13) defined at entry — feeds `blockA_k`'s x13 output. -/
+  x13_defined : ∃ w, c.σ.regs.get? Register.x13 = some w
   /-- **The `env_get` FOUND-case contract** (honest hypothesis).  From the var arm's
   dispatch entry (`ArmEntryK` at `0x80003434`) the argument-setup + `env_get` call
   reaches `VarPostCall` at the link return `0x80003444` (found ⇒ `a0=1`, result buffer
@@ -1583,7 +1585,7 @@ theorem evalVarSim : EvalVarSimGoal := by
   have hvarStk : p + x.length < SL.lo ∨ sp.toNat ≤ p :=
     hc.var_stack_disjoint p (hc.mem.symm ▸ hp64)
   -- === block A: prologue + dispatch → ArmEntryK (via blockA_k) ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, _hpresM⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, _hpresM, _hx13⟩ :=
     blockA_k g N A SL φf φc st (.var x) 4 (0x80003434#64) Env_getLoaded
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
@@ -1622,7 +1624,7 @@ theorem evalVarSim : EvalVarSimGoal := by
       hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
       hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
       hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
-      hc.spill_defined⟩, rfl⟩
+      ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.x13_defined⟩⟩, rfl⟩
   -- === env_get found-case (honest hypothesis): ArmEntryK → VarPostCall ===
   obtain ⟨c2, hs2, mpc, v8', v9', v18', hPC⟩ :=
     hc.env_get_found c1 ⟨ment, v8, v9, v18, hArm⟩

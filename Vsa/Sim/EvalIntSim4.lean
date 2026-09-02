@@ -265,7 +265,7 @@ theorem evalIntSimP
         st (.int n) sp r sret m0 c ∧ LeafMemPin SL sp sret m0 c.σ.mem) := by
   intro c hc
   -- run block A (out0 := the entry console output; the `sailOutput = out0` premise is `rfl`)
-  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm, hpresM⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, hpresM, _hx13⟩ :=
     blockA_ee g N A SL φf φc st d a n sp r sret aEnv aExpr m0 c.σ.sailOutput c ⟨hc, rfl⟩
   -- run block C
   obtain ⟨c2, hs2, mpre, hPre, hPin⟩ :=
