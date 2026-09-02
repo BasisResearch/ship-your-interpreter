@@ -51,10 +51,6 @@ hSIfFalse	hole	`hSIfFalse`/`exec_ifFalse_row`.  Supplier: `IfFalseResid` (else-b
 hSBlock	hole	`hSBlock`/`exec_block_row`.  Supplier: `BlockResid` = `allocFrame` + seq exit-sim.
 hSForStart	hole	`hSForStart`/`exec_forStart_row`.  Supplier: `ForStartResid` = `allocFrame` + init/for-loop exit-sim (`TermGuards.forMeasure`).
 hSWhileBreak	hole	`hSWhileBreak`/`exec_whileBreak_row`.  Supplier: `WhileResid` (shared with whileRet/whileLoop; `TermGuards.whileMeasure`, `execWhileIH_of_resid`).
-hFlCondFalse	hole	**GAP** — `hFlCondFalse` (`ForLoop.condFalse`).  Supplier: the for-loop condition-false exit arm (`TermGuards.forMeasure` shape).
-hFlBodyBreak	hole	**GAP** — `hFlBodyBreak` (`ForLoop.bodyBreak`).  Supplier: for-loop body-break arm.
-hFlBodyRet	hole	**GAP** — `hFlBodyRet` (`ForLoop.bodyRet`).  Supplier: for-loop body-ret arm.
-hFlLoop	hole	**GAP** — `hFlLoop` (`ForLoop.loop`).  Supplier: for-loop back-edge (`TermGuards.forMeasure`, `execForStepOf`/`loopFromBody`).
 hSeqNil	hole	**GAP** — `hSeqNil` (`ExecSeq.nil`).  Supplier: `execSeqNil` seg-identity (`ExecSimCommon.execSeqNil`, essentially LANDED — a `_row` wrap is trivial).
 hSeqConsNormal	hole	**GAP** — `hSeqConsNormal` (`ExecSeq.consNormal`).  Supplier: `execSeqLoop` back-edge (`TermGuards.seqMeasure`).
 hSeqConsAbrupt	hole	**GAP** — `hSeqConsAbrupt` (`ExecSeq.consAbrupt`).  Supplier: `execSeqLoop` abrupt-exit arm (`TermGuards.seqMeasure`).

@@ -4318,3 +4318,73 @@ it, still stop and report instead.
   seeding case from `Expr.bodiesBound`), then delete the threaded premises by
   deriving at the recursor rows (they hold the EvalE derivations + entry
   invariant).
+
+## 2026-09-01 b3-bincell-resids-refutable (ITEM ZERO sandbox audit)
+- missing: derivation/entry conditioning in `BinIntCellResid`/`BinEqCellResid`
+  (rows/BinDispatchRow.lean), the eval-side twins the B5 obstruction note asked
+  to audit.  CONFIRMED same falsity class, two independent ways: (a) the
+  size-stability conjuncts `st'.store.frames.size = st''.store.frames.size`
+  are asserted for ∀-quantified UNRELATED `st' st''` (refute with 0-frame vs
+  1-frame states — no memory witness needed); (b) `BinArmExtras.sproom :
+  SL.lo + 4352 ≤ sp.toNat` and `slot6 : KindSlotPinned 6 … m0` are ∃-invariant
+  entry-side conjuncts refuted at `sp = 0` / `m0 = ∅`.  So Skel
+  `hIAdd…hIGe`/`hEq`/`hNe` (11 fields) are ALL refutable as stated.
+- workaround: NONE applied — fields classified (needs shape 1 + the two
+  `EvalE` derivations as hypotheses); amendment DESIGNED but not landed (the
+  `eval_binary_row` dispatcher consumes the residual at ~12 cell sites; the
+  row has `a`/`a_1`/`hc` in scope at every site, so threading is mechanical).
+- cost: any fleet worker dispatched at B3/B4 before the amendment lands will
+  re-derive the refutations.
+- proposal: amend `BinIntCellResid`/`BinEqCellResid` exactly like the B2
+  Resids (leading `EvalEntry` + derivation hypotheses), regen the dispatcher.
+
+## 2026-09-01 seq-motive-multi-pair-census (ITEM ZERO sandbox)
+- missing: nothing — a CORRECTION of fleet B6's amendment proposal
+  (`seq-motive-independent-pq-no-code` proposed pinning
+  `p = execSeqLoopPC / q = execSeqContPC` as "the only instantiation consumers
+  use"; the coordinator design doc's Phase D repeats it).  Machine-grep
+  census: landed consumers instantiate `mExecSeq` at THREE distinct PC pairs —
+  `(0x8000448c, 0x80004514)` interp_run loop (EntryHalts/TermEntry/EntrySeams),
+  `(0x80003354, 0x80003378)` closure-body loop (rows/CallClosureRow),
+  `(0x800041a4, 0x8000409c)` block-arm loop (BlockGeom seam).  Pinning would
+  break EntryHalts + the crux.
+- workaround: n/a — the landed amendment keeps `∀ p q` and guards the motive
+  with the table-driven `SeqSpanGround p q m0` (`seqLoopImage` maps exactly
+  the three pairs to `Interp_runLoaded`/`Eval_exprLoaded`/`Exec_stmtLoaded`),
+  the `mCall`/`EntryImage` wave-40 precedent.
+- cost: none; recorded so nobody re-lands the pin.
+- proposal: extending the proof to a new statement-loop copy = one
+  `seqLoopImage` table line.
+
+## 2026-09-01 code-free-segentry-args-call-spans (ITEM ZERO sandbox audit)
+- missing: the `SeqSpanGround` ground-table idiom for the OTHER fixed-PC
+  `SegEntry → SegExit` motives: `mEvalArgs` (evalArgsLoopPC→evalArgsContPC)
+  and `mCall` (callDispatchPC→callJoinPC) still have code-free `SegEntry`
+  entries — a supplier of `ArgsNilResid`/`ArgsConsResid`/the native call rows
+  cannot derive a machine step from the hypothesis set (the same B6
+  obstruction, at fixed PCs; mCall's wave-40 `EntryImage` guard pins a SPILL
+  image, not code bytes).  Not refutable (Triples are vacuous without an
+  entry witness), so lower priority than falsity #12, but the discharge
+  campaign will hit it.
+- workaround: NONE (out of ITEM-ZERO scope; the three named shapes only).
+- cost: the args/call span suppliers will stall exactly like fleet B6 did.
+- proposal: add table entries mapping (evalArgsLoopPC, evalArgsContPC) and
+  (callDispatchPC, callJoinPC) ↦ `Eval_exprLoaded` and guard
+  `mEvalArgs`/`mCall` with the same `SeqSpanGround` shape.
+
+## 2026-09-01 sandbox-external-resync-stomp (ITEM ZERO sandbox, incident)
+- missing: isolation of validation sandboxes from the main-repo sync/harvest
+  machinery.  /tmp/vsa-itemzero-sandbox was re-synced FROM main at ~20:26-20:33
+  while the ITEM-ZERO agent was mid-validation: all Vsa source amendments
+  reverted, observations entries lost, olean tree replaced with main's —
+  AFTER the full downstream sweep had validated the amendment green (133
+  modules) but BEFORE the refutation-failure battery completed.  Untracked
+  files (logs, evidence) survived.
+- workaround: the complete amendment was reconstructed as a deterministic
+  replay bundle (/tmp/itemzero-apply, mirrored in the clone at
+  experiments/itemzero-apply) with the sweep log as validation evidence.
+- cost: the post-amendment refutation-failure battery run was voided (its
+  results were against main's reverted environment); ~30 min of regen CPU.
+- proposal: sandboxes get a sentinel file the sync respects, or syncs use
+  rsync --exclude per an agreed manifest; validation agents should snapshot
+  their diffs OUTSIDE the clone at each landing (now done).

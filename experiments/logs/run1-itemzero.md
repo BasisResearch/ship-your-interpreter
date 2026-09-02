@@ -94,3 +94,39 @@ axiom probe over 24 key amended theorems: all ⊆ {propext, Classical.choice,
 Quot.sound}; `lake env lean Vsa.lean` loads clean; check_discipline OK
 (9 rules). observations.md gains `store-bodies-eval-preservation` (the ONE
 genuinely missing general fact — threaded as named residuals for now).
+
+## Wave 47b — ITEM ZERO replay-bundle application to main (2026-09-02)
+Bundle: /tmp/itemzero-apply (sandbox-validated). Base: 298ea7d clean.
+- Patches 01-08: ALL asserts fail on `old` text — diagnosed as ALREADY LANDED
+  by wave 47a (298ea7d includes the composed ITEM ZERO + B1 amendment; its own
+  run1-itemzero.md log describes it). Verified semantically: every `new`
+  string of every patch (incl. the PAIRS/SECTIONS forms of 06/07/08) is
+  verbatim present in the current tree; deletions confirmed (ForResid def
+  gone, hFl* GAP fields gone from TermResidualsCore, rows wired). Zero
+  partial writes (all patch scripts write only after all asserts).
+- Step 9 gen_assembly_skeleton.py --no-verify: .lean already at 58 holes
+  (idempotent); TSV had 4 stale hFl rows — regen dropped them (only diff).
+- Step 10/11 topo regen: SKIPPED — no .lean source changed this session;
+  spot-check: key oleans all newer than sources.
+- Step 12 battery (all serial, one lean process):
+  * B1_leaves_obstructions.lean FAILS (4 errors: `∅` witness lands in BitVec
+    slot after binder shift — the refutations no longer state);
+  * B2_Field_{hNeg,hNot,hAndTrue,hAndFalse,hOrTrue,hOrFalse}.lean ALL FAIL
+    (hNeg 4 errors, siblings 1 each);
+  * B5ExecArmObstructions.lean FAILS (11 errors, incl. termResidualsCore_false
+    dead — the record is no longer machine-refutable);
+  * B6LoopSeqObstruction.lean FAILS (motive-shape obstruction no longer states).
+  * experiments/fleet/AmendedGroundEvidence.lean (from bundle) GREEN,
+    4/4 witness-closure lemmas axiom-clean;
+  * experiments/fleet/AxiomProbe.lean GREEN, 12/12 probes axioms ⊆
+    {propext, Classical.choice, Quot.sound}.
+- Step 13 field_census.py -j4: {'NOT_FOUND': 58} — 58 rows, zero TYPE_ERROR;
+  field-census.tsv re-baselined (63→58 rows: 4 hFl + extension-only hErrFam).
+- Step 14 check_all.sh: hSeqNil_row/hFlLoop_row comments corrected; added
+  hFlCondFalse_row/hFlBodyBreak_row/hFlBodyRet_row, "execIH_of_exitSim'"
+  (quoted — primed name), TermSimAssembly.seqSpanGround_of; all 6 verified
+  resolving axiom-clean via `import Vsa` probe.
+- Step 15: 4 lost observations entries re-appended (b3-bincell-resids-
+  refutable, seq-motive-multi-pair-census, code-free-segentry-args-call-spans,
+  sandbox-external-resync-stomp).
+- check_discipline: OK (9 rules).
