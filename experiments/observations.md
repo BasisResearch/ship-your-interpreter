@@ -4866,3 +4866,40 @@ it, still stop and report instead.
   dispatch span 0x80003164→0x800034e8 provably never writes a3) — supplies `x13_pres`.
   With BOTH + the B2 carry, all 11 int/eq cells + the 6 unary/logic residuals' presence
   conjuncts relight. Each is a genuine statement/widening change, one bounded pass each.
+
+## 2026-09-02 bin-cures-interlock-atomic-wave (wave 48g — the three cures do not decompose)
+- missing: an ATOMIC landing of all three int/eq cures. Deep cone tracing shows they
+  interlock and none is a standalone bounded gate:
+  (1) x13 is LOAD-BEARING — `blockB_binary` reads a3 at arm entry and SPILLS it
+  (`sd a3,0(sp)` → `writeMap8 ma (sp-1088) (sdData_val aEnvReg)`, EvalBinSim.lean~424,
+  the env arg to the RIGHT sub-call), so `BinArmExtras.x13_pres` is NOT droppable; its
+  honest form is `blockA_k` emitting `∃w, c'.x13=some w`, which changes blockA_k's output
+  ∃-tower → all 18 blockA_k callers + the DOUBLED `EvalArmHeadExtras` combinator
+  (ArmDispatchCombinator.lean:108/216) re-thread, AND needs a new `EvalEntry.x13_defined`
+  field (blockA_k's pre-tower is reconstructed from EvalEntry fields, ArmEntryWiden.lean:75
+  confirms EvalEntry carries no x13). (2) `frame_pop`'s presence is over the POST-sub-call
+  memory `mcall` (SubEvalReturn, EvalNegSim2.lean:120/blockC_neg), NOT entry `m0` — the dead
+  sub-result bytes are populated by the sub-`value_int` 24-byte buffer write, so the honest
+  discharge is INSIDE the sim cone (SubEvalReturn), not a bounded `EvalGround` field; the
+  ground-field alternative (48f proposal) needs an UNVERIFIED top-level `m0`-totality supplier
+  on `[SL.lo,sp)` = a possible NEW falsity (the census's whole guard). (3) cure 1 (entry-carry)
+  is a def change to BinIntCellResid/BinEqCellResid that forces skeleton regen + TermAssembly +
+  dispatcher + 11 rows + 10 sims; alone it relights 0 (slot6/frame_pop/x13_pres still
+  unprovable without 2+3). EvalGround appears in ~40 files (every survive_stack/child_*/
+  transport_offstack + construction site carries any new field).
+- workaround: NONE (STOP, Law 4). Landing any ONE cure relights 0 fields; the whole is a
+  ~30-file broken-tree window with an unverified ground dependency, not a bounded lean-process
+  gate. Machine-checked evidence: `experiments/fleet/obstructions/BinCuresInterlock48g.lean`
+  (`field_hIAdd_still_refuted` axiom-clean — the int/eq cell is STILL false as stated, so no
+  false lemma entered the tree; census honest 6/58).
+- cost: any agent attempting a partial landing pays a broken tree (the output-tower change
+  cascades through all binary consumers) OR an unsound ground field (cure-2 m0-totality).
+- proposal: land as ONE wave in strict order with the tree GREEN only at the end: (0) verify
+  `m0`-totality on `[SL.lo,sp)` from the M6 image OR re-route frame_pop's discharge through
+  SubEvalReturn's buffer-write presence (preferred — no new ground field); (A) `EvalEntry.x13_defined`
+  + thread x13 σ1..σ19 in blockA_k (mirror the ha1_* a1 chain) + emit as blockA_k 3rd output +
+  update all 18 callers' output-tower destructure; (B) discharge frame_pop/x13_pres in
+  blockA_binaryArm + EvalArmHeadExtras from (0)/(A), DROP both closures from BOTH extras
+  structs, re-thread the 11 rows + 10 sims; (C) entry-carry on BinIntCellResid/BinEqCellResid,
+  skeleton regen, relight 17. Estimated ≥2-3 bounded sessions or one long coordinated worktree
+  pass; NOT a single-lean-process gate.

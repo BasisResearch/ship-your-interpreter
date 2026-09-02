@@ -297,3 +297,86 @@ entry/EvalGround-derivable. These are the TWO genuine rungs blocking the whole i
 cone. Per Law 4 + brief ("genuine NEW rung = machine-check + land + STOP; do not
 improvise a 5th cure"), STOPPING here with the analysis rather than fabricating an
 entry field or a widening in this bounded pass.
+
+---
+## Wave 48g — LANDING the three cures (entry-carry + frame-ground + x13 widening)
+
+Reading complete. HEAD d7a5c91 (census 6/58). BinArmBridge compiles axiom-clean.
+Confirmed architecture:
+- `BinIntCellResid`/`BinEqCellResid` (BinDispatchRow.lean:719/749) pack a whole
+  `BinArmExtras` under ∀-m0 with NO entry ⇒ X2-refuted (slot6 at m0=∅). Skeleton
+  holes SkelHIAdd..SkelHNe (AssemblySkeleton.lean:81-122) mirror these + TermAssembly
+  fields hIAdd..hNe (lines 111-147).
+- `BinArmExtras` (BinArmBridge.lean:65) still carries `slot6`/`frame_pop`/`x13_pres`
+  + geometry. mem_ext ALREADY dropped (48f). frame_pop = dead-byte presence on
+  [sp-1120,sp); x13_pres = a3 liveness closure over c1.
+- `blockA_k` (EvalIntSim2.lean:273) threads x8/x9/x18/x11 through σ1..σ19 but NOT x13.
+- `EvalGround` (InterpEntry.lean:384) has table/ast/arena/sret but NO frame-window presence.
+
+### PLAN (3 cures, dependency order)
+- CURE 3 (x13): add `x13_defined` field to EvalEntry; thread hx13_1..19 in blockA_k;
+  emit `∃w, c'.x13=some w` as blockA_k 3rd output; discharge BinArmExtras.x13_pres in
+  blockA_binaryArm from it (DROP the x13_pres closure field).
+- CURE 2 (frame-ground): add `frame_present` field to EvalGround (m0 populated on the
+  dead-byte footprint [sret_sub+4,+8)∪[+16,+24)); discharge BinArmExtras.frame_pop
+  from it in blockA_binaryArm (DROP frame_pop closure).
+- CURE 1 (entry-carry): make BinArmExtras derivable from EvalEntry — after cures 2/3
+  drop the two closures, the remaining slot6/sproom/geometry are ALL EvalEntry fields.
+  Add `entry`-carry to BinIntCellResid/BinEqCellResid + restate 6 unary resids ∃-structured.
+- Then: regen skeleton, cone regen, inversion (refutations must FAIL), relight 17, census.
+
+### DEEP CONE MAP (machine-grounded, before any edit) — the three cures are ONE interlocked wave, not three bounded gates
+
+Traced every consumer/producer of the three fields. Findings:
+
+1. **x13 is LOAD-BEARING, not droppable.** `blockB_binary` (EvalBinSim.lean:363→424)
+   reads x13 at arm entry as `aEnvReg` and STORES it via `sd a3,0(sp)` →
+   `mcall1 := writeMap8 ma (sp-1088) (sdData_val aEnvReg)` — the env arg spilled for
+   the RIGHT sub-call. So `x13_pres` cannot be dropped; the machine genuinely reads a3.
+   Its honest cure = blockA_k emits `∃w, c'.x13=some w`. blockA_k threads x8/x9/x18/x11
+   through σ1..σ19 (EvalIntSim2.lean:940-976) but NOT x13; adding it changes blockA_k's
+   OUTPUT ∃-tower → all binary consumers re-thread. blockA_k has 18 callers.
+
+2. **frame_pop honest cure (EvalGround.frame_present) is NOT known-TRUE at top level.**
+   The dead bytes `[sp-944+4,+8)∪[sp-944+16,+24)` ⊆ scribble window `[SL.lo,sp)`.
+   Whether the pinned entry `m0` is TOTAL on `[SL.lo,sp)` is a top-level M6-image fact
+   NOT currently supplied (EntryGround/EntryGroundKit carry table/ast/arena/sret, not
+   stack-window totality). Adding the field without the M6 supplier = a new unverified
+   premise (would risk a new falsity — the exact thing the census guards). EvalGround
+   appears in ~40 files; every construction site + survive_stack/transport_offstack/
+   child_* transport must carry the new field.
+
+3. **BinArmExtras is DUPLICATED as EvalArmHeadExtras** (ArmDispatchCombinator.lean:108,
+   its own x13_pres closure @216) with its own combinator consuming the ∃-tower. Both
+   must change. Plus 11 binRow_* + 10 eval*Sim (~700 lines each, positional ∃-tower
+   destructures) + TermRouting + ArmDispatchInstancesEval.
+
+**VERDICT (Law 4, matches 48e/48f):** the three cures interlock into ONE
+ITEM-ZERO-scale wave spanning ~30 files (blockA_k output-tower + 18 callers;
+EvalGround field + ~40 transport/construction sites incl. an UNVERIFIED top-level
+totality supplier; the doubled BinArmExtras/EvalArmHeadExtras cone; skeleton regen +
+17 fields). It cannot be landed green in one bounded lean-process pass without a
+broken-tree window, and cure 2's ground field is not currently known-true. Landing any
+one cure alone relights 0 fields (all 3 are jointly required per the load-bearing x13
++ the frame presence + the entry-carry). Per Law 4 I return the machine-checked
+obstruction rather than a broken half-landing or an unverified ground field.
+
+### LANDED (48g) + VERDICT
+
+LANDED (green, axioms ⊆ {propext,Classical.choice,Quot.sound}):
+- `experiments/fleet/obstructions/BinCuresInterlock48g.lean` — `field_hIAdd_still_refuted`:
+  the int/eq cell is STILL false as stated (BinIntCellResid packs BinArmExtras.slot6, a
+  static jump-table pin refutable at m0=∅). Confirms cure 1 alone is inert and NO false
+  lemma entered the tree. Axiom-clean.
+- observations.md: `bin-cures-interlock-atomic-wave` entry (the atomic-wave verdict + the
+  ordered ≥2-3-session landing recipe, incl. the frame_pop-via-SubEvalReturn re-route that
+  avoids an unverified m0-totality ground field).
+
+VERDICT (Law 4): the three cures INTERLOCK into one atomic ~30-file wave (x13 load-bearing →
+blockA_k output-tower change → 18 callers + doubled EvalArmHeadExtras; frame_pop's honest
+source is the sub-call buffer write, NOT an entry m0-totality field which would be unverified;
+cure 1's def change forces skeleton+dispatcher+11 rows+10 sims regen). Landing any ONE relights
+0 fields. Cannot be landed green in one bounded lean-process pass without a broken-tree window,
+and the 48f-proposed ground field is not known-true. Returned the machine-checked obstruction
+instead of a broken/unsound half-landing. FIELDS FOUND: 0 new (census unchanged, honest).
+NO Vsa/ file modified this pass.
