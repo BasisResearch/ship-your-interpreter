@@ -304,3 +304,59 @@ descent (frame push + closure body under a depth counter) → the env-seam calle
 conjuncts and the crux `hCallClosure` depth/budget relations (the falsity-#13
 class).  (3) io-* machine-loop mining (per-case loop-head kind probe).  (4)
 stage-5 LLM seeding remains the only non-mechanical stage, unexercised by design.
+
+> COORDINATOR NOTE for the SMT-layer builder (read before designing the
+> encoder): PREFER a Lean-side `dump_smt_lib` EXPORT TACTIC over a Python
+> source-parser as the encoder core. Rationale: it walks the ELABORATED goal
+> Expr (real semantics, no re-parse drift), can whnf/unfold reducible window
+> predicates (agree-off-W/MemExtends/StackOK) to arithmetic form before
+> emitting, and leaves genuinely-semantic predicates (ValueRepr/CString/
+> GoodState) as uninterpreted symbols — the opaque boundary becomes a
+> principled unfolding policy instead of a hand-list. It PROVES NOTHING
+> (pure exporter writing SMT-LIB to a file; the goal is then admitted/failed
+> normally) so Law 2 is untouched; metaprogram precedents: RepackTac.lean,
+> ChainFactsTac.lean. The .lean tactic file may live under experiments/
+> (elaborated via `lake env lean`, never wired into Vsa.lean). Python side
+> then shrinks to: invoke probe → run z3 → replay countermodels via the
+> statement_fuzz witness idiom. The ENCODING-GAP verdict class stays (a
+> replay failure still indicates an export bug).
+
+## Fuzzer v2: descent
+
+`statement_fuzz.py --descend [depth]` (default 2) adds NESTED-QUANTIFIER
+WITNESS DESCENT — the gap that let the ∀-mcall over-quant class pass `--file`
+fuzzing while the hand-provers refuted it (experiments/fleet/obstructions/
+UnaryLogic{MemExt,Presence}Overquant.lean, BinArmExtras{MemExt,FramePop}*.lean,
+X2_Field_hIAdd.lean). v1 only instantiated the OUTER telescope; it was blind to
+conjuncts of shape `∀ mcall, (mcall agrees with m0 off [SL.lo,sp)) → <presence/
+extends demand>`, which are refuted by an `mcall` that differs from `m0` INSIDE
+the window (where the agree-hyp says nothing).
+
+- **Mechanism.** After outer-telescope instantiation, descent projects into the
+  goal body's ∧-tree (a `first|` cascade over projection paths × ∀-arities, so
+  no statement's shape is hard-coded), instantiates the nested conjunct's own
+  telescope ADVERSARIALLY, and emits a `¬P` probe machine-checked by
+  `lake env lean` (REFUTED ⟺ axioms ⊆ {propext, Classical.choice, Quot.sound}).
+- **Adversary-builder table (2 entries), pattern→builder, extensible.** Each
+  matches a conclusion shape and supplies the lethal inner witness + a
+  conclusion-refuter (the hand files ARE the parameterized templates):
+  * `memext` — `MemExtends m0 mcall`: m0 has a byte at 0∈W, adversary `mcall=∅`
+    erases it (UnaryLogicMemExt / BinArmExtrasMemExt).
+  * `presence` — `∃b, mcall[a]?=some b` on a window ⊆[SL.lo,sp): adversary `∅`,
+    a=0 in-window (sp=1120 ⇒ sp-1120=0); covers both the two-disjunct presence
+    conjunct (UnaryLogicPresence) and the single-window frame_pop
+    (BinArmExtrasFramePop). More shapes (`MemExtends _ demand`→∅, byte-presence
+    at addrs→erase, reg-liveness→config with reg absent) drop in as table rows.
+- **Acceptance-v2 (`--acceptance-v2`, hard gate).** (a) REFUTES the pre-48f
+  over-quant conjuncts reconstructed hermetically (PreMemExt/PrePresence,
+  mirroring d7a5c91^ BinArmExtras.mem_ext + 17773c4^ TermRouting ∀-mcall pair);
+  (b) does NOT refute the current guarded survivors (CurMemExt/CurPresence,
+  agree-on-ALL ⇒ demand, the 48f/48g cure shape); (c) v1 acceptance unchanged
+  (no regression). PLUS a non-gating LIVE probe that re-reads HEAD's real
+  `TermRouting.NegResid` mem_ext conjunct: currently REFUTED (the raw ∀-mcall
+  pair is still on main — wave 48f only dropped the BinArmExtras copy; see
+  experiments/observations.md 2026-09-02 fuzzer-descend-live-negresid).
+- **Wired into invgen autofuzz.** `invgen.autofuzz` runs a SECOND `--descend`
+  pass on the mined Prop whenever it mentions `mcall`/`MemExtends`; a descent
+  REFUTED that the struct-witness pass called SURVIVED WINS (records the
+  contradiction), closing the ∀-mcall blind spot in the built-in CTI step.

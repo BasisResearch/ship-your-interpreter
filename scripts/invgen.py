@@ -260,22 +260,39 @@ def emit_lean_candidate(case, meta, plan, rel_out, verdict):
 def autofuzz(case, lean):
     """CTI step built INTO the generator: fuzz the emitted candidate.  The mined
     pairing must SURVIVE (inhabited/self-consistent); the mutant must be REFUTED
-    by witness.  Returns (mined_verdict, mutant_verdict) or (None, None)."""
+    by witness.  Returns (mined_verdict, mutant_verdict) or (None, None).
+
+    v2: a SECOND pass runs `statement_fuzz --descend` on the mined Prop — the
+    nested-quantifier witness descent that catches the ∀-mcall over-quant class
+    (`∀ mcall, agree-off-window → MemExtends/presence`) which the struct-witness
+    pass is blind to.  A descent REFUTED on `mined` is a falsity the struct pass
+    missed; it is folded into `mined`'s verdict as REFUTED so `run_case` records
+    the contradiction (same gate as a struct refutation)."""
     if not lean or not os.path.exists(lean):
         return None, None
-    def run(prop):
-        r = subprocess.run(
-            ["python3", os.path.join(HERE, "statement_fuzz.py"),
-             "--file", lean, "--prop", f"InvGen_{case}.{prop}",
-             "--struct", f"InvGen_{case}.{STRUCT}"],
-            capture_output=True, text=True, timeout=400)
+    def run(prop, descend=False):
+        cmd = ["python3", os.path.join(HERE, "statement_fuzz.py"),
+               "--file", lean, "--prop", f"InvGen_{case}.{prop}"]
+        cmd += (["--descend"] if descend
+                else ["--struct", f"InvGen_{case}.{STRUCT}"])
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=400)
         m = re.search(r"→ \*\*([A-Z-]+)\*\*", r.stdout)
         return m.group(1) if m else "UNDECIDABLE"
     # only emit the mutant/mined if the candidate actually defines them
     body = open(lean).read()
     if "def mined" not in body:
         return None, None
-    return run("mined"), run("mutant")
+    mined_v, mutant_v = run("mined"), run("mutant")
+    # descent CTI: only worth running when the mined Prop actually contains a
+    # nested ∀-mcall / agree-off-window conjunct (else descent has no builder to
+    # bite and just SURVIVES).  If descent REFUTES a candidate the struct pass
+    # called SURVIVED, the descent verdict WINS (it found deeper falsity).
+    if "mcall" in body or "MemExtends" in body:
+        dv = run("mined", descend=True)
+        if dv in ("REFUTED", "REFUTED-DIRTY") and mined_v not in (
+                "REFUTED", "REFUTED-DIRTY"):
+            mined_v = dv
+    return mined_v, mutant_v
 
 
 def run_case(case, meta, elf_cache, spec_cache, trace_cache=None, skip_fuzz=False):

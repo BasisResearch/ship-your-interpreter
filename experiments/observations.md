@@ -4903,3 +4903,19 @@ it, still stop and report instead.
   structs, re-thread the 11 rows + 10 sims; (C) entry-carry on BinIntCellResid/BinEqCellResid,
   skeleton regen, relight 17. Estimated ≥2-3 bounded sessions or one long coordinated worktree
   pass; NOT a single-lean-process gate.
+
+## 2026-09-02 fuzzer-descend-live-negresid (statement_fuzz --descend, tool task)
+- missing: the `--descend` nested-quantifier mode independently machine-refutes
+  HEAD's `Vsa.Sim.rows.TermRouting.NegResid` `mem_ext` conjunct
+  (`∀ mcall, agree-off-[SL.lo,sp) → MemExtends m0 mcall`) — the SAME falsity as
+  experiments/fleet/obstructions/UnaryLogicMemExtOverquant.lean. The raw ∀-mcall
+  pair is byte-identical to 17773c4^ (pre-48e); wave 48f only dropped the
+  BinArmExtras copy, not the TermRouting NegResid/NotResid/OrTrue/… copies.
+- workaround: NONE (analysis-only; the descent probe reports it, does not gate).
+- cost: the 6 unary/logical Resid in TermRouting.lean are STILL false as stated;
+  any hand-prover instantiating them will refute (the obstruction files already
+  did). Whoever lands eval_neg_row/eval_not_row/… will hit this.
+- proposal: apply the wave-48f cure to TermRouting — carry the ONE structured
+  post-call mcall's MemExtends/presence as a field (thread `_hpresM` from
+  blockB), NOT ∀-mcall. `python3 scripts/statement_fuzz.py --acceptance-v2`
+  will flip the live-head verdict to SURVIVED once done.

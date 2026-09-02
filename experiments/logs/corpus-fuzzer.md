@@ -573,3 +573,177 @@ validation, like the ELF emulator harness).
 ## statement_fuzz.py run
 
 - `InvGen_hVar.mutant` (file hVar.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_cruxRelations.minedRecur` (file crux_relations.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_cruxRelations.minedNest` (file crux_relations.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_cruxRelations.budgetMutant` (file crux_relations.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_cruxRelations.minedLadder` (file crux_relations.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_cruxRelations.constMutant` (file crux_relations.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_cruxRelations.minedFrameGrowth` (file crux_relations.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_cruxRelations.frameMutant` (file crux_relations.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide)⟩)
+
+> COORDINATOR GUIDANCE (fuzzer v2 descent, in answer to your design question):
+> Your fallback mechanism is correct BUT split the verdicts — do not report a
+> plain SURVIVED when the outer guard was undischargeable:
+> 1. REFUTED — full-statement descent went through (outer witnesses + guard
+>    discharged + nested adversary + concl refuted). The gold verdict.
+> 2. CONJUNCT-REFUTED-ISOLATED — when outer hyps (EvalEntry etc.) cannot be
+>    discharged at chosen witnesses: extract the nested ∀-conjunct AS A
+>    STANDALONE Prop (outer ghosts parameterized at adversary values) and
+>    refute THAT. Not a whole-statement falsity (the entry hyp may constrain
+>    the ghosts), but exactly the 48b/48f early-warning pattern — the isolated
+>    frame_pop refutation predicted the real blocker. Report it as a WARNING
+>    verdict for prover attention, never silently.
+> 3. SURVIVED — descent RAN and adversaries failed.
+> 4. SURVIVED-OUTER-GUARDED — descent could NOT run (guard undischargeable);
+>    explicitly says "nested body untested at depth ≥2". Distinct from 3.
+> Acceptance-v2 note: the pre-48f targets are UNGUARDED (that's why hand
+> refutation worked) — they must land in verdict 1. The current amended ones
+> should land in 3 or 4, and a 4 is fine there (entry-guarded is the design).
+
+## statement_fuzz.py run
+
+- `VsaAcceptV2.PreMemExt` → **SURVIVED** (descent depth 2: no adversary builder refuted a nested conjunct)
+
+## statement_fuzz.py run
+
+
+### Acceptance-v2 run (nested-quantifier descent)
+
+**Must REFUTE (pre-48f over-quantified conjuncts):**
+- `PreMemExt` → **REFUTED** (builder=memext)
+- `PrePresence` → **REFUTED** (builder=presence)
+
+**Must SURVIVE (post-48f/48g guarded survivors):**
+- `CurMemExt` → **SURVIVED**
+- `CurPresence` → **SURVIVED**
+
+**Live HEAD `TermRouting.NegResid` mcall-pair probe:** SURVIVED (guarded at HEAD)
+
+### Acceptance run (hermetic 2865529→main amendment model)
+
+**Must REFUTE (pre-amendment holes):**
+- `PreNeg` → **REFUTED** — (axiom-free)
+- `PreAndFalse` → **REFUTED** — (axiom-free)
+- `PreOrTrue` → **REFUTED** — (axiom-free)
+
+**Must SURVIVE (amended fields):**
+- `AmdNeg` → **SURVIVED** (naive witness rejected → survives) — 'VsaFuzzAcceptance.refute_AmdNeg' depends on axioms: [sorryAx]
+- `AmdAndFalse` → **SURVIVED** (naive witness rejected → survives) — 'VsaFuzzAcceptance.refute_AmdAndFalse' depends on axioms: [sorryAx]
+- `AmdOrTrue` → **SURVIVED** (naive witness rejected → survives) — 'VsaFuzzAcceptance.refute_AmdOrTrue' depends on axioms: [sorryAx]
+
+**Acceptance: refuted 3/3 pre (need ≥3), survived 3/3 amended → PASS**
+
+**v1 regression check → PASS**
+
+**Acceptance-v2 → PASS**
+
+## statement_fuzz.py run
+
+
+### Acceptance-v2 run (nested-quantifier descent)
+
+**Must REFUTE (pre-48f over-quantified conjuncts):**
+- `PreMemExt` → **REFUTED** (builder=memext)
+- `PrePresence` → **REFUTED** (builder=presence)
+
+**Must SURVIVE (post-48f/48g guarded survivors):**
+- `CurMemExt` → **SURVIVED**
+- `CurPresence` → **SURVIVED**
+
+**Live HEAD `TermRouting.NegResid` mcall-pair probe:** REFUTED (live falsity: raw ∀-mcall still present)
+
+### Acceptance run (hermetic 2865529→main amendment model)
+
+**Must REFUTE (pre-amendment holes):**
+- `PreNeg` → **REFUTED** — (axiom-free)
+- `PreAndFalse` → **REFUTED** — (axiom-free)
+- `PreOrTrue` → **REFUTED** — (axiom-free)
+
+**Must SURVIVE (amended fields):**
+- `AmdNeg` → **SURVIVED** (naive witness rejected → survives) — 'VsaFuzzAcceptance.refute_AmdNeg' depends on axioms: [sorryAx]
+- `AmdAndFalse` → **SURVIVED** (naive witness rejected → survives) — 'VsaFuzzAcceptance.refute_AmdAndFalse' depends on axioms: [sorryAx]
+- `AmdOrTrue` → **SURVIVED** (naive witness rejected → survives) — 'VsaFuzzAcceptance.refute_AmdOrTrue' depends on axioms: [sorryAx]
+
+**Acceptance: refuted 3/3 pre (need ≥3), survived 3/3 amended → PASS**
+
+**v1 regression check → PASS**
+
+**Acceptance-v2 → PASS**
+
+## statement_fuzz.py run
+
+- `InvGen_hIAdd.mined` (file hIAdd.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_hIAdd.mutant` (file hIAdd.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_synthMcall.mined` (file inv_mcall.lean) → **SURVIVED** — 'VsaFuzzFileProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_synthMcall.mutant` (file inv_mcall.lean) → **SURVIVED** — 'VsaFuzzFileProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `InvGen_synthMcall.mined` → **REFUTED** (descent/memext, depth 2) — axioms=Classical.choice, Quot.sound, propext
+
+## statement_fuzz.py run
+
+- `VsaAcceptV2.PreMemExt` → **REFUTED** (descent/memext, depth 2) — axioms=Classical.choice, Quot.sound, propext
+
+## statement_fuzz.py run
+
+
+### Acceptance-v2 run (nested-quantifier descent)
+
+**Must REFUTE (pre-48f over-quantified conjuncts):**
+- `PreMemExt` → **REFUTED** (builder=memext)
+- `PrePresence` → **REFUTED** (builder=presence)
+
+**Must SURVIVE (post-48f/48g guarded survivors):**
+- `CurMemExt` → **SURVIVED**
+- `CurPresence` → **SURVIVED**
+
+**Live HEAD `TermRouting.NegResid` mcall-pair probe:** REFUTED (live falsity: raw ∀-mcall still present)
+
+### Acceptance run (hermetic 2865529→main amendment model)
+
+**Must REFUTE (pre-amendment holes):**
+- `PreNeg` → **REFUTED** — (axiom-free)
+- `PreAndFalse` → **REFUTED** — (axiom-free)
+- `PreOrTrue` → **REFUTED** — (axiom-free)
+
+**Must SURVIVE (amended fields):**
+- `AmdNeg` → **SURVIVED** (naive witness rejected → survives) — 'VsaFuzzAcceptance.refute_AmdNeg' depends on axioms: [sorryAx]
+- `AmdAndFalse` → **SURVIVED** (naive witness rejected → survives) — 'VsaFuzzAcceptance.refute_AmdAndFalse' depends on axioms: [sorryAx]
+- `AmdOrTrue` → **SURVIVED** (naive witness rejected → survives) — 'VsaFuzzAcceptance.refute_AmdOrTrue' depends on axioms: [sorryAx]
+
+**Acceptance: refuted 3/3 pre (need ≥3), survived 3/3 amended → PASS**
+
+**v1 regression check → PASS**
+
+**Acceptance-v2 → PASS**
