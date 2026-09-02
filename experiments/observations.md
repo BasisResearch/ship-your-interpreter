@@ -4944,3 +4944,40 @@ it, still stop and report instead.
 - workaround: seeded S1 as the DEGENERATE-DRAIN instance (written=0, out unchanged, end=base) — a real SURVIVED fact, plus the mined FILE-field T1 constants. Also mined S2 (io_swbuf_r single-byte put, 6 calls, cursor+1) and S4 (io_sbprintf synthetic FILE, concrete fields) outright. 4 targets (io_putc_r/io_fputc_r/io_fwrite_r top-level io_fflush) are UNREACHABLE — 0 events on every print driver.
 - cost: the S1 candidates cannot carry a nontrivial loop stride until/unless a BUFFERED-stdout ELF is added to the corpus; the interesting drain arithmetic (S1's `written=(p-base)`, out=out0++bytes[base,p)) is unexercised. For the real proof this is fine — the interp only ever hits the unbuffered path, so the degenerate invariant is the true postcondition. Flagging in case a future consumer expects a mined per-iteration drain stride and finds only the k=0 instance.
 - who: invgen io machine-loop pass (wave 45). Candidate .lean files: experiments/invariants/io_{fflush_r,sflush_r,swbuf_r,sbprintf,vfprintf_r,fputs_r}.lean — all elaborate axiom-clean + statement_fuzz --descend SURVIVED.
+
+## 2026-09-02 smt-refute-canonical-replay (smt_check.py SMT layer)
+- missing: no general "Z3 model → verbatim Lean witness" transport for the
+  over-quant Mem-window fragment. Z3's countermodels legitimately use
+  2^64-scale BitVec values (ANY in-window point refutes the shape), and the
+  raw agree-off-window arithmetic proof at those numbers is unwieldy in Lean.
+- workaround: `scripts/smt_check.py --refute` uses Z3 only to CERTIFY the class
+  is refutable (negation SAT); the auto-generated `¬P` Lean replay instantiates
+  the CANONICAL small witness of the same class (window [lo,lo+16), one lethal
+  byte at A=lo, m=∅ deletes it), model-guided only for `lo`. All 4 acceptance
+  refutations (headroom / ∀-mcall MemExtends / presence / BinArmExtras.mem_ext)
+  replay green + axiom-clean this way.
+- cost: the replay certificate is class-canonical, not a faithful transcription
+  of Z3's exact model. Sound for REFUTED-REPLAYED (a machine-checked ¬P is a ¬P
+  regardless of which witness), but a consumer wanting the EXACT Z3 witness must
+  read the printed model, not the probe. Opaque-constrained models are correctly
+  NOT replayed (REFUTED-MODULO-OPAQUE).
+- proposal: a `bv2int`-aware small-model extractor (Z3 `(minimize)` / soft
+  bounds) that returns a genuinely small model when one exists, so the replay
+  can transcribe verbatim; only fall back to canonical-witness when the class
+  is inherently large-scale. Not built (acceptance passes without it).
+
+## 2026-09-02 trace-unreachability-is-not-proof (coordinator refutation)
+- missing: a reachability-verdict standard. The io miner marked 4 cases
+  unreachable from ITS drivers; print(null) empirically refutes io_fwrite_r
+  (null arm → fwrite → _fwrite_r, "nullnull" in the model), and the exit
+  flush chain runs _fflush_r degenerately on EVERY program. Trace absence is
+  driver-coverage-relative, never a proof of deadness.
+- workaround: BATCH-REPORT verdicts corrected in place.
+- cost: had REMAINING.md struck those suppliers, hCallPrint's null route
+  would have hit a missing supplier at proof time.
+- proposal: closing any supplier as dead requires (a) static call-graph
+  unreachability from the live entries (disasm caller grep — cheap), or
+  (b) driver coverage over ALL value kinds + exit paths. Add a
+  full-kind driver (all 6 kinds + assert + error) to the standing t5 corpus
+  as the reachability floor. putc_r/fputc_r remain dead-candidates pending
+  the static check.

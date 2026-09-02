@@ -85,3 +85,119 @@
 
 - `SmtAcc.HeadroomBad` → **REFUTED-REPLAYED** — (axiom-free) | model {SL_hi=0, sp=#xffffffffffffffff), SL_lo=18446744073709548352, sp_n=18446744073709551615}
 - `SmtAcc.McallMemExt` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0}
+- `SmtAcc.McallPresence` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=16715942433050673624, SL_lo=0, sp=#xe7faf513f7dd41d8)}
+- `SmtAcc.BinArmMemExt` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=18446744073709551615, SL_lo=0, sp=#xffffffffffffffff)}
+- `IoWriteMined.IoWriteInvCandidate` → **ENCODE-FAIL** (def body not found)
+- `SmtAcc.BudgetLadderOk` → **VALID-IN-FRAGMENT**
+- `SmtAcc.CurMemExt` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat)
+- `SmtAcc.AmdHeadroom` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat)
+
+### Acceptance verdicts
+- a_headroom: REFUTED-REPLAYED
+- b_memext: REFUTED-REPLAYED
+- b_presence: REFUTED-REPLAYED
+- c_binarm: REFUTED-REPLAYED
+- d_io_write_loop.lean: ENCODE-FAIL
+- d_budget: VALID-IN-FRAGMENT
+- e_memext: VALID-IN-FRAGMENT
+- e_headroom: VALID-IN-FRAGMENT
+- REFUTED-REPLAYED count (need ≥2): 4
+
+**Acceptance → FAIL** (replayed 4/4, need ≥2)
+
+## smt_check.py run
+
+
+## smt_check.py acceptance run
+
+- `SmtAcc.HeadroomBad` → **REFUTED-REPLAYED** — (axiom-free) | model {SL_hi=0, sp=#xffffffffffffffff), SL_lo=18446744073709548352, sp_n=18446744073709551615}
+- `SmtAcc.McallMemExt` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0}
+- `SmtAcc.McallPresence` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=16715942433050673624, SL_lo=0, sp=#xe7faf513f7dd41d8)}
+- `SmtAcc.BinArmMemExt` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=18446744073709551615, SL_lo=0, sp=#xffffffffffffffff)}
+- `IoWriteMined.IoWriteInvCandidate` → **VALID-IN-FRAGMENT**
+- `SmtAcc.BudgetLadderOk` → **VALID-IN-FRAGMENT**
+- `SmtAcc.CurMemExt` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat)
+- `SmtAcc.AmdHeadroom` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat)
+
+### Acceptance verdicts
+- a_headroom: REFUTED-REPLAYED
+- b_memext: REFUTED-REPLAYED
+- b_presence: REFUTED-REPLAYED
+- c_binarm: REFUTED-REPLAYED
+- d_io_write_loop.lean: VALID-IN-FRAGMENT
+- d_budget: VALID-IN-FRAGMENT
+- e_memext: VALID-IN-FRAGMENT
+- e_headroom: VALID-IN-FRAGMENT
+- REFUTED-REPLAYED count (need ≥2): 4
+
+**Acceptance → PASS** (replayed 4/4, need ≥2)
+
+## smt_check.py run
+
+
+## smt_check.py acceptance run
+
+- `SmtAcc.HeadroomBad` → **REFUTED-REPLAYED** — (axiom-free) | model {SL_hi=0, sp=#xffffffffffffffff), SL_lo=18446744073709548352, sp_n=18446744073709551615}
+- `SmtAcc.McallMemExt` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0}
+- `SmtAcc.McallPresence` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=16715942433050673624, SL_lo=0, sp=#xe7faf513f7dd41d8)}
+- `SmtAcc.BinArmMemExt` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=18446744073709551615, SL_lo=0, sp=#xffffffffffffffff)}
+- `IoWriteMined.IoWriteInvCandidate` → **VALID-IN-FRAGMENT**
+- `SmtAcc.BudgetLadderOk` → **VALID-IN-FRAGMENT**
+- `SmtAcc.CurMemExt` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat)
+- `SmtAcc.AmdHeadroom` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat)
+
+### Acceptance verdicts
+- a_headroom: REFUTED-REPLAYED
+- b_memext: REFUTED-REPLAYED
+- b_presence: REFUTED-REPLAYED
+- c_binarm: REFUTED-REPLAYED
+- d_io_write_loop.lean: VALID-IN-FRAGMENT
+- d_budget: VALID-IN-FRAGMENT
+- e_memext: VALID-IN-FRAGMENT
+- e_headroom: VALID-IN-FRAGMENT
+- REFUTED-REPLAYED count (need ≥2): 4
+
+**Acceptance → PASS** (replayed 4/4, need ≥2)
+
+## smt_check.py run
+
+
+## smt_check.py acceptance run
+
+- `SmtAcc.HeadroomBad` → **REFUTED-REPLAYED** — (axiom-free) | model {SL_hi=0, sp=#xffffffffffffffff), SL_lo=18446744073709548352, sp_n=18446744073709551615}
+- `SmtAcc.McallMemExt` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0}
+- `SmtAcc.McallPresence` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=16715942433050673624, SL_lo=0, sp=#xe7faf513f7dd41d8)}
+- `SmtAcc.BinArmMemExt` → **REFUTED-REPLAYED** — axioms=Classical.choice, Quot.sound, propext | model {SL_hi=0, sp_n=18446744073709551615, SL_lo=0, sp=#xffffffffffffffff)}
+- `IoWriteMined.IoWriteInvCandidate` → **VALID-IN-FRAGMENT**
+- `SmtAcc.BudgetLadderOk` → **VALID-IN-FRAGMENT**
+- `SmtAcc.CurMemExt` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat)
+- `SmtAcc.AmdHeadroom` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat)
+
+### Acceptance verdicts
+- a_headroom: REFUTED-REPLAYED
+- b_memext: REFUTED-REPLAYED
+- b_presence: REFUTED-REPLAYED
+- c_binarm: REFUTED-REPLAYED
+- d_io_write_loop.lean: VALID-IN-FRAGMENT
+- d_budget: VALID-IN-FRAGMENT
+- e_memext: VALID-IN-FRAGMENT
+- e_headroom: VALID-IN-FRAGMENT
+- REFUTED-REPLAYED count (need ≥2): 4
+
+**Acceptance → PASS** (replayed 4/4, need ≥2)
+
+## smt_check.py run
+
+- `SmtAcc.HeadroomBad` → **REFUTED-REPLAYED** — (axiom-free) | model {SL_hi=0, sp=#xffffffffffffffff), SL_lo=18446744073709548352, sp_n=18446744073709551615}
+
+## smt_check.py run
+
+- `SmtAcc.AmdHeadroom` → **VALID-IN-FRAGMENT**
+
+## smt_check.py run
+
+- `SmtAcc.BudgetLadderOk` → **NON-VACUOUS** — witness {consumed=2752, d=2, perLevel=295, budget=6258, base=2162}
+
+## smt_check.py run
+
+- `SmtAcc.CurMemExt` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat)

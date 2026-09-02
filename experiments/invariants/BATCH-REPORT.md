@@ -80,11 +80,11 @@ elaborate axiom-clean and pass statement_fuzz --descend.
 - `err_80003fac` [error-jal-seam] → no-trace-path — error-jal-seam: no spec seam / machine loop not wired
 - `err_80003fdc` [error-jal-seam] → no-trace-path — error-jal-seam: no spec seam / machine loop not wired
 - `io_value_print` [io-fold] → landed-skip
-- `io_fflush` [io-loop-fold] → unreachable
+- `io_fflush` [CAVEAT 2026-09-02: exit-path runs the flush chain DEGENERATELY on every program — 0 loop-events ≠ dead; degenerate-arm coverage required] [io-loop-fold] → unreachable
 - `io_fflush_r` [io-loop-fold] → proposed-from-seed+SURVIVED (S1)
 - `io_fputc_r` [io-loop-fold] → unreachable
 - `io_fputs_r` [io-loop-fold] → proposed-from-seed+SURVIVED (S5)
-- `io_fwrite_r` [io-loop-fold] → unreachable
+- `io_fwrite_r` [VERDICT CORRECTED 2026-09-02: REACHABLE — print(null) drives value_print null-arm → fwrite → _fwrite_r, empirically confirmed ("nullnull" in model); prior unreachable = driver gap] [io-loop-fold] → unreachable
 - `io_putc_r` [io-loop-fold] → unreachable
 - `io_sbprintf` [io-loop-fold] → candidate-mined+SURVIVED (S4)
 - `io_sflush_r` [io-loop-fold] → proposed-from-seed+SURVIVED (S1)

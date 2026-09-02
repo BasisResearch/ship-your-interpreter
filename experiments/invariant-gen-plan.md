@@ -305,6 +305,64 @@ conjuncts and the crux `hCallClosure` depth/budget relations (the falsity-#13
 class).  (3) io-* machine-loop mining (per-case loop-head kind probe).  (4)
 stage-5 LLM seeding remains the only non-mechanical stage, unexercised by design.
 
+## SMT layer
+
+`scripts/smt_check.py` — a Lean→SMT-LIB encoder + Z3 driver for the falsity
+FRAGMENT the historical amendments live in (companion to `statement_fuzz.py`;
+ANALYSIS ONLY, nothing enters a proof).  Where the fuzzer instantiates a FIXED
+bank of historically-lethal witnesses and lets Lean `decide`, this tool hands
+the statement's arithmetic + window/quantifier structure to Z3, which SEARCHES
+for a countermodel (or proves none in-fragment).  Z3 discharges the nested
+∀-over-`Mem` conjuncts natively (arrays + a definedness map) — the ∀-mcall
+class the fuzzer needed a hand-written adversary for is found AUTOMATICALLY.
+
+**Three modes.**
+- `--refute`  negate the encoded statement, ask Z3 for a model.  SAT ⇒ emit the
+  countermodel AND auto-generate a Lean replay probe (`¬P` with concrete
+  witnesses substituted, the `statement_fuzz` probe idiom), run `lake env lean`.
+  Verdict **REFUTED-REPLAYED** only if the probe is green + axiom-clean ⊆
+  {propext, Classical.choice, Quot.sound}.  SAT-but-replay-fails ⇒
+  **ENCODING-GAP** (reported loudly — a translator bug).  A model that
+  constrains an OPAQUE (uninterpreted) symbol ⇒ **REFUTED-MODULO-OPAQUE**, NOT
+  auto-replayed.
+- `--validate` UNSAT of the negation ⇒ **VALID-IN-FRAGMENT** (advisory green);
+  timeout/unknown ⇒ **UNKNOWN**.
+- `--inhabit`  SAT of the hypothesis conjunction ⇒ **NON-VACUOUS**, model = witness.
+
+**Encoding (small + honest).**  `BitVec 64/32/8`→SMT BV (+ an Int `.toNat`
+mirror pinned `0 ≤ v`); `Nat`/`Int`→Int (Nat carries `≥ 0`); `Mem`
+(`ExtHashMap Nat BV8`)→`(defined : Array Int Bool, val : Array Int (BV 8))` with
+`m[a]? = some b ↦ def a ∧ val a = b`; `MemExtends m0 m ↦ ∀a, def0 a → def a`;
+`StackOK SL sp k ↦ lo+k≤sp ∧ sp≤hi ∧ sp%16=0`; window `¬(lo≤a ∧ a<sp)` verbatim;
+Nat subtraction encoded TRUNCATED (`ite (≥) (-) 0`) so VALIDATE stays sound;
+applied ghost STRUCTURES (e.g. mined `WInvMined`) unfolded into their `mk`
+field-conjunction via `#check @S.mk` (so record invariants become SMT
+constraints).  **OPAQUE** heads (`ValueRepr`/`ExprRepr`/`CString`/`GoodState`/
+`Repr`/`Loaded`/`InterpSim`/`FoundSt`/`Approx`/`StoreRepr`/`frameRepr`) →
+uninterpreted predicates; any model touching one ⇒ MODULO-OPAQUE (never
+auto-replayed — sound for search, not a machine-checked refutation).
+
+**Acceptance (`--acceptance`, hard gate, PASS 2026-09-02).**  On the
+git-history forms: (a) the pre-amendment TermAssembly headroom-pin field class
+(2865529), (b) the ∀-mcall pair — MemExtends + presence (17773c4^), (c)
+`BinArmExtras.mem_ext` (d7a5c91^) — `--refute` finds countermodels
+AUTOMATICALLY (no hand-tuned adversary) and **all four replay green +
+axiom-clean in Lean** (≥2 required).  (d) the mined `WInv` (io_write_loop.lean)
+and a falsity-#13 budget-ladder candidate → `--validate` returns
+VALID-IN-FRAGMENT.  (e) the current HEAD amended forms (agree-on-ALL-addresses
+MemExtends; `StackOK`-guarded headroom) are NOT REFUTED-REPLAYED (Z3 proves
+their negation UNSAT).  Log: `experiments/logs/smt-check.md`; last replay probe
+dumped to `experiments/logs/smt-last-replay.lean`.
+
+**Design note (Z3-model → canonical replay).**  Z3's countermodels often use
+2^64-scale BitVec values (any point in the window refutes the over-quant shape);
+the replay does not transcribe those verbatim — it instantiates the CANONICAL
+small witness of the SAME class (window `[lo, lo+16)`, one lethal byte at `A=lo`
+that the deleting `m=∅` destroys), model-guided only for `lo`.  Z3's job is to
+CERTIFY the class is refutable (negation SAT); the replay is the machine-checked
+certificate.  This is model-guided, not per-statement hand-tuning.  What is
+GENUINELY opaque (uninterpreted) is reported as MODULO-OPAQUE and left unreplayed.
+
 > COORDINATOR NOTE for the SMT-layer builder (read before designing the
 > encoder): PREFER a Lean-side `dump_smt_lib` EXPORT TACTIC over a Python
 > source-parser as the encoder core. Rationale: it walks the ELABORATED goal
