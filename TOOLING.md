@@ -1,19 +1,21 @@
 # The tooling & abstraction stack
 
-How this proof stays subexponential: every layer below turns a class of
+This proof stays subexponential because every layer below turns a class of
 hand-proofs into a generator run, a combinator application, or a validation
-query. History shows the effort curve bends exactly where these layers exist
-(measured repeatedly — see `experiments/observations.md`, the append-only
-ledger of every missing-abstraction observation and its resolution).
+query. The effort curve bends exactly where these layers exist, measured
+repeatedly in `experiments/observations.md`, the append-only ledger of every
+missing-abstraction observation and how it resolved.
 
-The enforcement is mechanical, not advisory: `scripts/check_all.sh` stage a4
-(`check_discipline.py` + `discipline_rules.tsv`) fails files that hand-roll
-what a layer provides. `CLAUDE.md` is the contract; this file is the map.
+Enforcement is mechanical. `scripts/check_all.sh` stage a4
+(`check_discipline.py` + `discipline_rules.tsv`) fails any file that hand-rolls
+what a layer already provides. `CLAUDE.md` is the contract; this file is the
+map.
 
 ## 1. The Lean abstraction stack (proof-side)
 
-Layered bottom-up; each generation subsumed the per-instance cost of the one
-below. Reuse by name — run `scripts/abs_inventory.sh` before any proof work.
+The stack is layered bottom-up, and each generation subsumed the per-instance
+cost of the one below it. Reuse by name: run `scripts/abs_inventory.sh` before
+any proof work.
 
 | Layer | What it kills | Key names |
 |---|---|---|
@@ -28,16 +30,16 @@ below. Reuse by name — run `scripts/abs_inventory.sh` before any proof work.
 | Entry grounding | per-site ground literals | `EvalGround`/`ExecGround`/`NBSPins`/`EntryImage` + generated pin tables (`EntryGround.lean`, `rows/Layout*TableGen.lean`) |
 | HTIF | console/exit semantics | `htif_store_putchar/exit`, `mem_write_value_tohost_*` (`Htif.lean`, `HtifLift.lean`), `try_step_tohost_*` |
 
-Non-negotiable elaboration laws (the "fast-reflection rules", enforced by
-experience and gate rules): reflect on the first-order write-log, never whnf
-Sail state; one small `decide` per fact; emit terms, not tactic scripts; never
-raise `maxHeartbeats` — a timeout means the construction is wrong.
+The elaboration laws below are non-negotiable, enforced by experience and by
+gate rules. Reflect on the first-order write-log, never whnf Sail state. One
+small `decide` per fact. Emit terms, not tactic scripts. Never raise
+`maxHeartbeats`: a timeout means the construction is wrong.
 
 ## 2. Generators (`scripts/`)
 
-All self-verifying (`lake env lean` + sorryAx grep, hard-error on failure).
-Grep for the target artifact before generating — the tree has repeatedly been
-ahead of the plans.
+Every generator is self-verifying (`lake env lean` + a sorryAx grep, hard-error
+on failure). Grep for the target artifact before you generate, since the tree
+has repeatedly run ahead of the plans.
 
 | Tool | Emits |
 |---|---|
@@ -52,10 +54,11 @@ ahead of the plans.
 
 ## 3. The validation stack (design-time; NOTHING here enters a proof)
 
-The deliverable's purity is triple-gated (`check_all` stages b/c: banned-
-tactic scan + `#print axioms` ⊆ {propext, Classical.choice, Quot.sound}).
-These tools exist so no session is ever again spent proving toward a false
-statement — the dominant historical cost (falsities #1–#16).
+The deliverable's purity is triple-gated (`check_all` stages b/c: the
+banned-tactic scan plus `#print axioms` ⊆ {propext, Classical.choice,
+Quot.sound}). These tools exist so no session is ever again spent proving
+toward a false statement, which has been the dominant historical cost
+(falsities #1–#16).
 
 | Tool | Question it answers | Status/limits (honest) |
 |---|---|---|
@@ -69,11 +72,11 @@ statement — the dominant historical cost (falsities #1–#16).
 
 ## 4. Invariant generation (mining pipeline)
 
-Validated end-to-end (plan + 4 validation rounds:
-`experiments/invariant-gen-plan.md`). Flagship measurements: the complete
-`WInv` loop invariant mined from one 6-second model run; falsity #13's
-budget ladder refound from depth traces alone; the hand fold is 873 lines,
-the mined-invariant residual obligation is 3 sub-goals / 4 lines (omega/rfl).
+The pipeline is validated end-to-end, over a plan plus four validation rounds
+(`experiments/invariant-gen-plan.md`). Two flagship measurements: the complete
+`WInv` loop invariant mined from one 6-second model run, and falsity #13's
+budget ladder refound from depth traces alone. The hand fold is 873 lines; the
+mined-invariant residual obligation is 3 sub-goals over 4 lines (omega/rfl).
 
 | Stage | Tool |
 |---|---|
@@ -84,50 +87,51 @@ the mined-invariant residual obligation is 3 sub-goals / 4 lines (omega/rfl).
 | Orchestrate | `invgen.py --case/--batch` — one command per case; auto-fuzz (candidate + mutant) built in |
 | Ladder miners | `mine_stack_ladder.py`, `mine_crux_ladder.py` — recursion depth/budget relations (crux inputs validated: every mined relation matched the design) |
 
-Corpus: `gen_corpus.py` → `experiments/corpus/` (97 cases, CFG+calls+cluster
-per case, INDEX.md). Candidates land in `experiments/invariants/`
-(+ `SEEDS-io.md`, `BATCH-REPORT.md`, `crux-relations.md`).
+The corpus comes from `gen_corpus.py` → `experiments/corpus/` (97 cases, one
+CFG+calls+cluster per case, INDEX.md). Candidates land in
+`experiments/invariants/` (with `SEEDS-io.md`, `BATCH-REPORT.md`,
+`crux-relations.md`).
 
 ## 5. The empirical harness
 
-`riscv-lean/lean_emulator` runs ELFs in the EXACT proof model (~10 s).
-Recipe (the "t5" harness): craft `.wl` → build in a **/tmp COPY of `c/`**
-(NEVER build in `c/`; the proof ELF is the object — sha256
-`b146c6ed…d0f0`, verify after any session) → run → compare output/exit.
-It retracted one false "falsity" (stdout buffering — `setvbuf` is main's
-first statement), confirmed the io contracts, String-order direction,
-div-overflow wrap, and refuted a wrong dead-code claim (`print(null)`
-reaches `fwrite`). Standing rule: trace absence is driver-relative —
-deadness claims need static call-graph proof or all-kind driver coverage.
+`riscv-lean/lean_emulator` runs ELFs in the EXACT proof model (~10 s). The
+recipe (the "t5" harness): craft a `.wl`, build it in a **/tmp COPY of `c/`**
+(NEVER build in `c/`; the proof ELF is the object under study, sha256
+`b146c6ed…d0f0`, verify after any session), run, then compare output and exit.
+It retracted one false "falsity" (stdout buffering, where `setvbuf` is main's
+first statement), confirmed the io contracts, the String-order direction and the
+div-overflow wrap, and refuted a wrong dead-code claim (`print(null)` does
+reach `fwrite`). Standing rule: trace absence is driver-relative, so a deadness
+claim needs a static call-graph proof or all-kind driver coverage.
 
 ## 6. Process machinery
 
 - **The scoreboard**: `experiments/field-census.tsv` (via `field_census.py`)
-  — the only trustworthy progress metric. The map: `experiments/REMAINING.md`
-  (reconciled 2026-09-02). Plans are historical the moment they lag the tree;
+  is the only trustworthy progress metric. The map is `experiments/REMAINING.md`
+  (reconciled 2026-09-02). Plans go historical the moment they lag the tree, so
   reconcile-first is a standing brief preamble.
-- **Fleet protocol**: workers in APFS COW clones (`cp -Rc`, warm oleans),
-  NEW files only, staged returns, coordinator wires and gates; per-landing
-  incremental logs (`experiments/logs/`) are the stall-recovery seeds.
-  Bounded single-mandate tasks with commit-at-green beat monoliths (~9/9 vs
-  0/2 measured).
+- **Fleet protocol**: workers run in APFS COW clones (`cp -Rc`, warm oleans),
+  touch NEW files only, and return staged; the coordinator wires and gates.
+  Per-landing incremental logs (`experiments/logs/`) are the stall-recovery
+  seeds. Bounded single-mandate tasks with commit-at-green beat monoliths,
+  measured at ~9/9 against 0/2.
 - **Gates**: `check_all.sh` (discipline + purity scan + axiom audit of the
-  battery theorems); `rbuild.sh` offloads full builds to the remote box.
-  Never `lake build` locally in the proof tree, never LSP (both auto-killed
-  by the coordinator's build-guard); `lake env lean <file> [-o olean]` only.
-- **Overnight rule**: `caffeinate -ims` (AC power required — it does NOT
-  hold on battery); macOS Maintenance Sleep killed agent streams until this
-  was found.
+  battery theorems); `rbuild.sh` offloads full builds to the remote box. Never
+  `lake build` locally in the proof tree, never LSP (the coordinator's
+  build-guard auto-kills both); `lake env lean <file> [-o olean]` only.
+- **Overnight rule**: `caffeinate -ims`, and it needs AC power. It does NOT
+  hold on battery. macOS Maintenance Sleep killed agent streams until this was
+  found.
 - **Adversarial everything**: statements are validated by refutation attempts
-  (the fleet found the record itself uninhabitable — falsity #12); tools are
-  validated by batteries they couldn't train on (two overfit claims caught
-  this way); cures are validated jointly, not per-statement (the 48e
-  interlock lesson). Law 4: a blocked step returns a machine-checked
+  (the fleet proved the record itself uninhabitable, which was falsity #12);
+  tools are validated by batteries they couldn't train on (two overfit claims
+  caught this way); cures are validated jointly rather than per-statement (the
+  48e interlock lesson). Law 4 stands: a blocked step returns a machine-checked
   obstruction, never a workaround.
 
 ## 7. Where things stand
 
-See `experiments/REMAINING.md` (authoritative), `experiments/design/MASTER.md`
-(the 31-task execution plan), and the wave logs under `experiments/logs/`.
-The commit history (waves 41–48+) narrates each layer landing with its
-measurements.
+`experiments/REMAINING.md` is authoritative. `experiments/design/MASTER.md`
+holds the 31-task execution plan, and the wave logs live under
+`experiments/logs/`. The commit history (waves 41–48+) narrates each layer
+landing with its measurements.
