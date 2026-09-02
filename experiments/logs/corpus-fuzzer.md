@@ -1172,3 +1172,86 @@ validation, like the ELF emulator harness).
 ## statement_fuzz.py run
 
 - `CegisAcceptC.CegisCand` → **SURVIVED** (v2.1: guard `(SL.lo ≤ a ∧ a < SL.hi)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `CegisAcceptA.CegisCand` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisAcceptB.CegisCand` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisAcceptB.CegisCand` → **SURVIVED** (v2.1: guard `(SL.lo ≤ a ∧ a < SL.hi)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `CegisAcceptC.CegisCand` → **SURVIVED** (v2.1: guard `¬ (SL.lo ≤ a ∧ a < sp.toNat)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `CegisAcceptC.CegisCand` → **SURVIVED** (v2.1: guard `(SL.lo ≤ a ∧ a < SL.hi)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `Vsa.Sim.TermAssembly.Skel.SkelHSWhileBreak` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+
+## statement_fuzz.py run
+
+- `Vsa.Sim.TermAssembly.Skel.SkelHSExpr` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `Vsa.Sim.TermAssembly.Skel.SkelHAssign` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisAcceptA.CegisCand` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisAcceptB.CegisCand` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisAcceptB.CegisCand` → **SURVIVED** (v2.1: guard `(SL.lo ≤ a ∧ a < SL.hi)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `Vsa.Sim.TermAssembly.Skel.SkelHSExpr` → **UNDECIDABLE** — telescope not discoverable
+
+## statement_fuzz.py run
+
+- `CegisAcceptC.CegisCand` → **SURVIVED** (v2.1: guard `¬ (SL.lo ≤ a ∧ a < sp.toNat)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `CegisAcceptC.CegisCand` → **SURVIVED** (v2.1: guard `(SL.lo ≤ a ∧ a < SL.hi)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `CegisAcceptA.CegisCand` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisAcceptB.CegisCand` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)
+
+## statement_fuzz.py run
+
+- `CegisAcceptB.CegisCand` → **SURVIVED** (v2.1: guard `(SL.lo ≤ a ∧ a < SL.hi)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `CegisAcceptC.CegisCand` → **SURVIVED** (v2.1: guard `¬ (SL.lo ≤ a ∧ a < sp.toNat)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `CegisAcceptC.CegisCand` → **SURVIVED** (v2.1: guard `(SL.lo ≤ a ∧ a < SL.hi)` outside address-map fragment → SMT territory)
+
+## statement_fuzz.py run
+
+- `Vsa.Sim.Rows.ForStartResid` → **SURVIVED** (v2.1: every demanded address is covered by the agree-constraint union — sound)

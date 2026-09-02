@@ -1,6 +1,26 @@
 import Vsa.Sim.rows.AssemblySkeleton
 
 /-!
+# Field `hNeg` — **STALE, DOES NOT ELABORATE** (was: fleet B2-unary-logic obstruction)
+
+**DO NOT TRUST THIS FILE'S VERDICT.**  Re-checked 2026-09-02: it calls
+`SkelHNeg` in the PRE-entry-carry shape (`⟨0,0,0⟩` where the ghost
+`g : (R : Register) → Option (RegisterType R)` is expected, and two hypotheses
+where three are needed), so Lean fills the mismatch with `sorryAx` and
+`field_hNeg_refuted` reports `[propext, sorryAx, Classical.choice, Quot.sound]`.
+Nothing in the build catches this: `experiments/fleet/obstructions/` is outside
+`Vsa/`, so `lake build` never compiles it and `check_all`'s grep gate never
+scans it.
+
+The refutation it claims is also DEAD on the merits.  `NegResid`
+(`Vsa/Sim/rows/TermRouting.lean`) now takes `EvalEntry g N A SL … → …` as a
+leading hypothesis, so the route below (instantiate `sp := 0#64` and contradict
+`NegExtras.sp_headroom`) is unavailable: `sp` and `SL` are no longer free.
+`hNeg` is NOT_FOUND in the census, which means only that `exact?` finds no
+one-term discharge, NOT that it is false.
+
+Original text follows, for the record.
+
 # Field `hNeg` — MACHINE-CHECKED OBSTRUCTION (fleet B2-unary-logic)
 
 The skeleton hole `SkelHNeg L := ∀ st esub, NegResid st esub` is **refutable**,

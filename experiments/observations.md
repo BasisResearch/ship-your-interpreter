@@ -5373,8 +5373,25 @@ it, still stop and report instead.
   change to `rows/BinDispatchRow.lean` + the six unary/logic resid defs, NOT a
   load-layer change; the value paths relight verbatim.  It is a coordinator
   decision and a separate wave.
-- note: `experiments/fleet/obstructions/B2_Field_hNeg.lean` no longer elaborates
-  cleanly — but for an UNRELATED, PRE-EXISTING reason: it builds `NativeAddrs`
-  and `StackLayout` with anonymous constructors that are now short of fields
-  (arity drift since it was written), so Lean fills them with `sorryAx`.  Nothing
-  in wave 48k touched those structures; the artifact needs re-pinning.
+- CORRECTION (same session, after checking rather than guessing): the "17" are
+  NOT one class.  Only the ELEVEN int/eq fields are refuted; the SIX unary/logic
+  fields (`hNeg hNot hAndTrue hAndFalse hOrTrue hOrFalse`) are merely NOT_FOUND,
+  which means only that `exact?` finds no ONE-TERM discharge.
+  `Vsa/Sim/rows/TermRouting.lean`'s `NegResid` (and the five siblings) ALREADY
+  take `EvalEntry g N A SL … → …` as a leading hypothesis, so the B2 refutation
+  route (`NegExtras.sp_headroom` at `sp := 0#64`) is DEAD: you can no longer hand
+  the resid an arbitrary `sp`/`SL`, you must first produce an entry that pins
+  them.  The B2-carry amendment landed for the unary/logic family at some earlier
+  wave; it is still missing ONLY for `BinIntCellResid` (the 11 int/eq cells),
+  which has no entry hypothesis and is why `X2_Field_hIAdd` still refutes.
+- STALE ARTIFACT: `experiments/fleet/obstructions/B2_Field_hNeg.lean` no longer
+  elaborates cleanly, and NOT because of wave 48k — the file and `NegResid`'s
+  signature are byte-identical at `HEAD~1`.  It calls `SkelHNeg` in the
+  PRE-entry-carry shape: `⟨0,0,0⟩` where the ghost `g : (R : Register) → Option
+  (RegisterType R)` is expected, and two hypotheses where three are needed
+  (no `EvalEntry`).  Lean fills the mismatch with `sorryAx`, so the file REPORTS
+  a refutation it no longer proves.  Nothing in the build catches this:
+  `experiments/fleet/obstructions/` is outside `Vsa/`, so `lake build` never
+  compiles it and `check_all`'s grep gate (which scans `Vsa/` only) never sees
+  it.  Treat every obstruction artifact's verdict as valid ONLY when re-run;
+  `X2_Field_hIAdd.lean` was re-run this session and is genuinely clean.

@@ -142,8 +142,16 @@ no entry hypothesis, and its ∃-body still demands `BinArmExtras.slot6`
 (a static jump-table pin) and `gx19_pres`.  At `m0 := ∅` the cell is false
 regardless of `frame_pop`; deleting a field only weakens the ∃-body.
 
-The 17 fields want the **B2-carry amendment** (already named in that artifact):
-add `entry : EvalEntry …` as a hypothesis field to `BinIntCellResid` and the six
-unary/logic resids, so `slot6`/`sproom`/`gx19_pres` become preconditions the
-entry supplies.  That is a statement change to `rows/BinDispatchRow.lean` and the
-resid defs — a different wave, and a coordinator decision.
+CORRECTION (checked, same session): the 17 are NOT one class.
+
+* The **11 int/eq** fields are genuinely refuted, and want the **B2-carry
+  amendment**: add `entry : EvalEntry …` as a hypothesis field to
+  `BinIntCellResid` so `slot6`/`sproom`/`gx19_pres` become preconditions the
+  entry supplies.  A statement change to `rows/BinDispatchRow.lean`, a different
+  wave, and a coordinator decision.
+* The **6 unary/logic** fields already HAVE that carry: `NegResid` and its five
+  siblings in `rows/TermRouting.lean` take `EvalEntry g N A SL … → …` as a
+  leading hypothesis.  They are NOT refuted; NOT_FOUND means only that `exact?`
+  finds no one-term discharge.  `B2_Field_hNeg.lean` claims otherwise but no
+  longer elaborates (it calls `SkelHNeg` in the pre-entry-carry shape and Lean
+  fills the gap with `sorryAx`); it is marked stale in-file.

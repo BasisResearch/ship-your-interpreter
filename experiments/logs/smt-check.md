@@ -1321,3 +1321,108 @@
 - (d) PASS
 
 **Joint acceptance → PASS**
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptA.CegisCand` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat) [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_lo=0, SL_hi=0, sp=#xffffffffffffffff), sp_n=18446744073709551615, op_True=false)} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_hi=0, op_True=false), sp=#xffeffffffff7fffb), SL_lo=0, sp_n=18442240474081656827} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptA.CegisCand` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat) [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_lo=0, SL_hi=0, sp=#xffffffffffffffff), sp_n=18446744073709551615, op_True=false)} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_hi=0, op_True=false), sp=#xffeffffffff7fffb), SL_lo=0, sp_n=18442240474081656827} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptA.CegisCand` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat) [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_lo=0, SL_hi=0, sp=#xffffffffffffffff), sp_n=18446744073709551615, op_True=false)} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptB.CegisCand` → **REFUTED-MODULO-OPAQUE** — model touches opaque ['True']; not auto-replayed | model {SL_hi=0, op_True=false), sp=#xffeffffffff7fffb), SL_lo=0, sp_n=18442240474081656827} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+  (encoder: lean)
+- `CegisAcceptC.CegisCand` → **ENCODING-GAP** — Z3 SAT but Lean replay FAILED — translator bug: 'SmtReplayProbe.refuted' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound] | model {SL_hi=0, sp_n=18446744073709551615, sp=#xffffffffffffffff), SL_lo=0} [enc:lean]
+
+## smt_check.py run
+
+- `InvGen_crux.minedRecur` → **UNKNOWN-OPAQUE** (all 1 conjuncts opaque/unencodable; opaque=[])
+
+## smt_check.py run
+
+- `InvGen_cruxRelations.minedRecur` → **UNKNOWN-OPAQUE** (all 2 conjuncts opaque/unencodable; opaque=[])
+
+## smt_check.py run
+
+- `InvGen_cruxRelations.minedLadder` → **ENCODE-GAP** (unencodable atom; hyps=[] concl=None)
+
+## smt_check.py run
+
+  (dump path unavailable for Vsa.Sim.ExprResid: dump-error: /Users/kirancodes/Documents/code/verified-semantic-abstraction/experiments/logs/tmpxuozgd9y.lean:479:119: error(lean.unknownIdentifier): Unknown constant `Vsa.Sim.ExprResid` — falling back to Python encoder)
+- `Vsa.Sim.ExprResid` → **ENCODE-GAP** (unencodable atom; hyps=[None] concl=None)
+
+## smt_check.py run
+
+  (dump path unavailable for Vsa.Sim.Rows.VarLeafResid: dump-encode-gap — falling back to Python encoder)
+- `Vsa.Sim.Rows.VarLeafResid` → **ENCODE-GAP** (unencodable atom; hyps=[None] concl=None)
+
+## smt_check.py run
+
+- `SExprField` → **ENCODE-GAP** (unencodable atom; hyps=[] concl=None)
+
+## smt_check.py run
+
+- `SRetField` → **ENCODE-GAP** (unencodable atom; hyps=[] concl=None)
