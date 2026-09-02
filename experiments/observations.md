@@ -5172,3 +5172,18 @@ it, still stop and report instead.
   rather than stopping opaque); keep the recursive-Repr cones (CString/StoreRepr/
   ExprRepr) as opaque (Lean-stack territory). A fast VALIDATE-SAT there is a
   useful signal that a stated leaf obligation is missing a payload/frame hyp.
+
+## 2026-09-02 smt-bounded-proves-nonrecursive-supplier (probe, corrects earlier)
+- CORRECTION to `smt-cannot-prove-supplier-fields`: that "validate=ENCODE-GAP"
+  was the OPAQUE STOP-POLICY, not a real limit. Definition-encoded (datatypes +
+  define-fun-rec + QF_ABV Mem), Z3 PROVES the non-recursive supplier stratum:
+  ValueRepr .null/.bool/.int readback → negation UNSAT at k=1,2,3, ~20ms; the
+  UNSAT corresponds to read32_copy/readLE_copy (the lemmas the Lean proof uses)
+  ⇒ replayable, LLM transcribes ~2 lines.
+- The inductive wall is SHARP and mechanistic: .str (CString) → SAT at all k;
+  bounded unrolling never closes it because the missing piece is the inductive
+  HYPOTHESIS (add cstring_agreeP ⇒ UNSAT 0.01s), not more depth. Recursive-Repr
+  cones stay Lean-stack territory.
+- DISPATCH CONSEQUENCE: sort supplier fields by Repr-recursion. Non-recursive
+  leaf readbacks → SMT-UNSAT-prove + transcribe (new cheap channel). Recursive
+  → prover with the Lean stack. Harness: experiments/smt/bounded/gen_probe.py.
