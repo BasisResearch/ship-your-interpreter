@@ -91,7 +91,89 @@ theorem field_hStr_of_payload (hG : StrPayloadGeom) :
     · exact Or.inl (by omega)
     · exact Or.inr (by omega)
 
+/-! ## Wave 47g — the `StrPayloadGeom` supplier VERDICT (Law 4)
+
+The task was to thread the payload region facts "from where they exist".
+Machine-checked survey result: THEY EXIST NOWHERE ON MAIN.
+
+* `ExprRepr.str` (`Vsa/MemRepr.lean`) carries only `read32`(kind) +
+  `read64`(payload ptr) + `CString` — no region facts, and `p = 0` is not
+  even excluded (`CString m 0 s` is satisfiable).
+* `StoreRepr` (`Vsa/RuntimeRepr.lean`) pins `A.contains` for FRAMES and
+  CLOSURES only — the AST is parsed before `interp_run` and is not a store
+  object; no `A.contains` fact mentions AST nodes or their string payloads.
+* `ProgramRepr`/`StmtArrayRepr` are pure pointer-chase relations;
+  `Layout.atInterpRun` (`Vsa/Refinement.lean`) is fully abstract.
+
+So `StrPayloadGeom` is NOT derivable from a bare `EvalEntry`: nothing
+constrains where the literal's cstring bytes sit relative to `SL`/`sp`/`sret`.
+Per Law 4, the gap is pinned below as ONE named premise on the ExprRepr/
+AST-region side — `EvalEntryStrAstRegion`, the `.str`-root projection of the
+observation's proposed `ast_region` `EvalEntry` amendment — and the discharge
+of `field_hStr` FROM that premise is machine-checked
+(`field_hStr_of_astRegion`), so the future amendment wave only has to supply
+the premise (entry field + hereditary `ExprNodesIn` transport), not redo any
+geometry. -/
+
+/-- **The `.str` node's payload lives in an AST region `[lo, hi)`** with a
+nonzero pointer: the ExprRepr-side region fact `ExprRepr.str` lacks.  This is
+the `.str` case of the (future) hereditary `ExprNodesIn` AST-arena invariant —
+observation `strleafgeom-payload-ast-region` proposal.  Named-field structure
+(gate shape); `lo`/`hi` are parameters (a `Prop` structure cannot carry data
+fields). -/
+structure StrPayloadIn (m : Mem) (lo hi a : Nat) (s : String) : Prop where
+  payload : ∀ p : Nat, read64 m (a + 8) = some p →
+    p ≠ 0 ∧ lo ≤ p ∧ p + s.length < hi
+
+/-- **THE named premise** (Law 4; supplies `StrPayloadGeom`, hence `hStr`).
+Every `EvalEntry` at a `.str` node comes with an AST region containing the
+payload cstring, disjoint from the WHOLE stack region `[SL.lo, SL.hi)` and
+from the sret buffer.  This is exactly the `.str` projection of the proposed
+`ast_region` `EvalEntry` field: the whole-stack form (not `[SL.lo, sp)`) is
+the transport-closed one — a child entry's `sp - 1088` scribble and its
+in-stack `subsret` are both absorbed by it, so the amendment threads ONE fact,
+not per-entry literals.  Supplied at the top by the parse-arena layout (M6);
+nothing on main pins it — see the verdict block above. -/
+def EvalEntryStrAstRegion : Prop :=
+  ∀ (st : SpecSt) (s : String) (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (d : Nat) (env : Addr) (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) (c : Config),
+    Vsa.Sim.EvalEntry g N A SL φf φc st d env (.str s) sp r sret aEnv aExpr m0 c →
+    ∃ lo hi,
+      StrPayloadIn c.σ.mem lo hi aExpr.toNat s ∧
+      (hi ≤ SL.lo ∨ SL.hi ≤ lo) ∧
+      (hi ≤ sret.toNat ∨ sret.toNat + 24 ≤ lo)
+
+/-- The AST-region premise supplies the payload geometry: region-vs-stack
+gives the `SL.lo`/`sp` disjunction (`sp ≤ SL.hi` from the entry's `stackOK`),
+region-vs-sret gives the sret disjunction, `StrPayloadIn` gives `p ≠ 0`. -/
+theorem strPayloadGeom_of_astRegion (hA : EvalEntryStrAstRegion) :
+    StrPayloadGeom := by
+  intro st s g N A SL φf φc d env sp r sret aEnv aExpr m0 c hc
+  obtain ⟨lo, hi, hin, hstk, hsret⟩ :=
+    hA st s g N A SL φf φc d env sp r sret aEnv aExpr m0 c hc
+  obtain ⟨-, hsphi, -⟩ := hc.stackOK
+  refine ⟨fun p hp => ?_, fun p hp => ?_⟩
+  · obtain ⟨-, hplo, hphi⟩ := hin.payload p hp
+    rcases hstk with h | h
+    · exact Or.inl (by omega)
+    · exact Or.inr (by omega)
+  · obtain ⟨hnz, hplo, hphi⟩ := hin.payload p hp
+    refine ⟨hnz, ?_⟩
+    rcases hsret with h | h
+    · exact Or.inr (by omega)
+    · exact Or.inl (by omega)
+
+/-- **`hStr` discharged FROM the named AST-region premise** — the whole
+residual is now `EvalEntryStrAstRegion` alone; the future `ast_region`
+amendment plugs in here with zero geometry rework. -/
+theorem field_hStr_of_astRegion (hA : EvalEntryStrAstRegion) :
+    ∀ (st : SpecSt) (s : String), StrLeafResid st s :=
+  field_hStr_of_payload (strPayloadGeom_of_astRegion hA)
+
 end Vsa.Sim.Rows
 
 #print axioms Vsa.Sim.Rows.field_hStr_of_geom
 #print axioms Vsa.Sim.Rows.field_hStr_of_payload
+#print axioms Vsa.Sim.Rows.strPayloadGeom_of_astRegion
+#print axioms Vsa.Sim.Rows.field_hStr_of_astRegion

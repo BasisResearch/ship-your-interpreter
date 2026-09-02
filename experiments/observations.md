@@ -4572,3 +4572,26 @@ it, still stop and report instead.
   with `ExprRepr`-determinism (`read64` pins `p` uniquely) turning the
   per-node facts into projections. Same amendment shape as wave 47f's
   `nbs_pins` (entry field + child transport via stack-confined writes).
+
+## 2026-09-02 strpayloadgeom-supplier-verdict (wave 47g, bounded StrPayloadGeom-supplier task)
+- missing: same gap as `strleafgeom-payload-ast-region` — RE-SURVEYED for a
+  supplier and machine-checked NONE EXISTS on main: `ExprRepr.str`
+  (`Vsa/MemRepr.lean`) = `read32`+`read64`+`CString` only (`p = 0` not even
+  excluded); `StoreRepr` `A.contains` covers frames/closures ONLY (the AST is
+  not a store object); `ProgramRepr`/`StmtArrayRepr` are pure pointer-chase;
+  `Layout.atInterpRun` (`Vsa/Refinement.lean`) is fully abstract. No
+  `A.contains`/region fact anywhere mentions AST nodes or string payloads.
+- workaround: NONE (Law 4). Landed the gap as ONE named premise
+  `EvalEntryStrAstRegion` + named-field `StrPayloadIn` (`rows/Field_hStr.lean`)
+  — the `.str`-root projection of the proposed `ast_region` `EvalEntry` field,
+  stated in the TRANSPORT-CLOSED whole-stack form (`hi ≤ SL.lo ∨ SL.hi ≤ lo`),
+  so child entries (`sp - 1088` scribble, in-stack `subsret`) are absorbed —
+  and machine-checked `field_hStr_of_astRegion : EvalEntryStrAstRegion →
+  ∀ st s, StrLeafResid st s` (green, axiom-clean).
+- cost: `hStr` stays NOT_FOUND (census 3/58); the amendment wave inherits zero
+  geometry rework — it must supply ONLY the premise (entry field + hereditary
+  `ExprNodesIn` mirror of `ExprRepr` with memory-agreement transport + the
+  4 child-entry construction sites + the ~35-file conduit threading, the 47f
+  `nbs_pins` shape; top-level supply is a parse-arena/Layout fact, M6).
+- proposal: unchanged from `strleafgeom-payload-ast-region`; the interface is
+  now LANDED, so the amendment's target statement is pinned in code.

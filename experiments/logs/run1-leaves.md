@@ -135,3 +135,38 @@
 - All new/edited theorems axiom-clean ⊆ {propext, Classical.choice,
   Quot.sound}; check_discipline OK (9 rules); TSV rows hNull/hBool flipped to
   done, hStr note updated.
+
+## Wave 47g — StrPayloadGeom supplier: Law-4 VERDICT, named premise landed (2026-09-02)
+
+- **Task**: build the `StrPayloadGeom` supplier from the ExprRepr/AST-arena
+  side and flip `hStr` (brief expected 4 FOUND).
+- **Survey verdict (the Law-4 branch)**: the payload region facts exist
+  NOWHERE on main.  `ExprRepr.str` = `read32`+`read64`+`CString` only —
+  no region facts, `p = 0` not even excluded (`CStr m 0 s` satisfiable);
+  `StoreRepr`'s `A.contains`/alignment facts cover frames+closures ONLY (the
+  AST is parsed before `interp_run`, not a store object); `ProgramRepr`/
+  `StmtArrayRepr` are pure pointer-chase relations; `Layout.atInterpRun` is
+  fully abstract.  So `StrPayloadGeom` is not derivable from a bare
+  `EvalEntry` — nothing relates the literal's cstring bytes to `SL`/`sp`/`sret`.
+- **Landed** (`rows/Field_hStr.lean`, green 1.2s, axiom-clean):
+  - `StrPayloadIn m lo hi a s` — named-field structure: the `.str` payload
+    pointer is nonzero and its bytes lie in the AST region `[lo, hi)`.
+  - `EvalEntryStrAstRegion` — THE named premise: every `.str` `EvalEntry`
+    comes with an AST region containing the payload, disjoint from the WHOLE
+    stack region and the sret buffer.  Whole-stack form deliberately: it is
+    transport-closed (child `sp - 1088` scribble and in-stack `subsret` both
+    absorbed), so the future `ast_region` amendment threads ONE fact.
+  - `strPayloadGeom_of_astRegion` + `field_hStr_of_astRegion` — the discharge
+    of `hStr` FROM the premise is machine-checked (`sp ≤ SL.hi` via
+    `stackOK`, omega on the region literals).  The amendment wave inherits
+    zero geometry rework; its residual scope: hereditary `ExprNodesIn`
+    mirror of `ExprRepr` + transport, 4 child-entry construction sites
+    (`EvalRecCommon`/`ExecRecCommon`/`ArmSegSplit{,ExecEval}`), the ~35-file
+    conduit threading (47f `nbs_pins` shape), top-level supply = parse-arena
+    Layout fact (M6).
+- Oleans regenerated (`Field_hStr` + root `Vsa`); check_discipline OK
+  (9 rules); census: `hStr` stays NOT_FOUND — **3/58 FOUND** (the brief's
+  "expect 4" elided the amendment-wave scope, third overcount in a row).
+- Observation appended: `strpayloadgeom-supplier-verdict`; TSV
+  `assembly_skeleton.tsv` hStr note updated (residual = exactly the ONE
+  named premise).
