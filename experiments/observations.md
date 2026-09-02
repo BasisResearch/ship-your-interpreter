@@ -4388,3 +4388,58 @@ it, still stop and report instead.
 - proposal: sandboxes get a sentinel file the sync respects, or syncs use
   rsync --exclude per an agreed manifest; validation agents should snapshot
   their diffs OUTSIDE the clone at each landing (now done).
+
+## 2026-09-01 fn-summary-posts-lack-callee-saved-keeps (run1 io lane, /tmp/vsa-io-lane)
+- missing: the landed whole-function summary posts (`WriteFnPost`/`WriteRFnPost`/
+  `SwFnPost`, rows/Fn*Fold.lean) preserve only `ra/sp/gp/s0` — no `s1..s11`.
+  Every io-DAG caller holds s-regs live across its callee seam
+  (`__sfvwrite_r` keeps s1-s6 across `jalr fp->_write` = `__swrite`;
+  `__sflush_r` keeps s0-s3; `_fputs_r`/`_fwrite_r` keep s0-s3 across
+  `__sfvwrite_r`), so the landed summaries are unconsumable at those seams.
+- workaround: NONE taken — amending the three pilots (the Law-3 move):
+  ONE new ghost `sv : SRegs` (named-field s1..s11 bundle, def in
+  SegToTripleFramed.lean beside `segRowFramed` + `sKeepL : SRegs → GRegs`),
+  `sregs : GHolds c.σ (sKeepL g.sv)` field in each Pre/Post, keep lists
+  extended `++ sKeepL g.sv` (keysG stays a literal → FrameOK still ONE decide).
+  Template scripts/genfn_templates/counted_loop_fold.lean.tmpl updated to
+  match so future gen_fn --fold output carries the keeps.
+- cost: ~1 session-hour re-threading 3 fold files + olean regen; every fold
+  landed WITHOUT the keeps would have paid a re-land later (caught at the
+  first real consumer, before any io fold was stated).
+- proposal: gen_fn fold emission should ALWAYS emit the full callee-saved
+  keep set (ra/sp/gp/s0 + sKeepL) in summary posts — ABI preservation is what
+  makes a summary spliceable; a post without it is a dead end.
+
+## 2026-09-01 gen-transport-monolithic-obtain-explodes (run1 io lane)
+- missing: gen_transport.py emitted the whole-module transport as ONE
+  `obtain ⟨h0, …, h1243⟩ := h` over the full byte-conjunction — on the first
+  big module (`__sfvwrite_r`, 311 instrs / 1244 bytes) elaboration blows past
+  18 minutes (the pilots were ≤136 bytes, where the quadratic anonymous-
+  constructor destructure was invisible).
+- workaround: none used — generator restructured to PER-CHUNK transports
+  (`<fn>Chunk<i>_of_agree_lo`, 64-wide obtain each, matching gen_code_lemmas'
+  own chunking) + a top combiner; each lemma is pilot-sized again.
+- cost: ~25 min of wall-clock discovery + 3 killed lean processes.
+- proposal: applied directly in scripts/gen_transport.py (chunked emission is
+  now the only mode); keep per-lemma elab budget in mind for EVERY generator
+  that scales with function size — chunk at the same 16-instr boundary
+  gen_code_lemmas uses.
+
+## 2026-09-02 chainfacts-inblock-store-then-load-whnf-bomb (run1 io lane, main)
+- missing: an in-block store-then-load transport for `ChainFacts` pins goals.
+  When a block stores BEFORE it loads (`__sfvwrite_r` `dec8F`: 4 spills then
+  `ld s1,0(s4)`), the `ld`'s `MemFacts` memory is the `stepMemM`-threaded
+  store tower; `show LPins8 (<base image>) …` forces `isDefEq` between the
+  `writeMap8` tower and the named base image — whnf of two abstract
+  `ExtHashMap.insert` towers → elaborator STACK OVERFLOW (no error location;
+  the in-block twin of the seg-frame-facts cross-block deep recursion).
+- workaround: none — landing `pin8_peel_sd` (peel ONE disjoint 8-byte store
+  image off a `Pin8`, `getElem_writeMap8_disjoint` per byte) beside
+  `lpins8_of_pin8` in rows/FnSfvwriteFold.lean; goal shape: `show LPins8 _
+  (<clean addr>) …` (memory stays a metavar — never respelled), `rw` the addr
+  lemma, `lpins8_of_pin8`, peel outermost-store-first, close on the base image.
+- cost: the io-lane session died here (stack overflow with no location, file
+  left mid-flight); ~1h diagnosis by truncation bisect.
+- proposal: promote `pin8_peel_sd` to WriteLogNF/ValueSpec beside
+  `getElem_writeMap8_disjoint` when a second consumer appears; chain_facts doc
+  should warn that pins goals after in-block stores are TOWER goals.

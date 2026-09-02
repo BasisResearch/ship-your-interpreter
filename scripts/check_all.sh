@@ -164,6 +164,9 @@ THEOREMS=(
   Vsa.Sim.write_summary
   Vsa.Sim.write_r_summary
   Vsa.Sim.swrite_summary
+  Vsa.Sim.lockAcquire_summary
+  Vsa.Sim.lockRelease_summary
+  Vsa.Sim.sfvwrite_unbuf_summary
   # strlen family (StrlenSpec / StrlenSpecU)
   Vsa.Sim.strlen_spec
   Vsa.Sim.strlen_full_spec

@@ -213,4 +213,33 @@ theorem segRowFramed (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)
 
 #print axioms segRowFramed
 
+/-! ## The callee-saved `s1..s11` keep bundle
+
+Every whole-function summary must preserve the FULL ABI callee-saved set — a
+post without it is unconsumable at any real call seam where the caller holds
+s-regs live (observation `fn-summary-posts-lack-callee-saved-keeps`).  `SRegs`
+bundles the eleven values ONCE; `sKeepL` is the keep list every fold appends
+to its per-arm keeps (`keysG` stays a literal, so `FrameOK` is still ONE
+kernel `decide` per row, and `GHolds σ (keep ++ sKeepL v)` still whnfs to the
+pin nest — the trailing component IS `GHolds σ (sKeepL v)`). -/
+
+/-- The callee-saved `s1..s11` entry values (`x9`, `x18..x27`), bundled. -/
+structure SRegs where
+  s1 : BitVec 64
+  s2 : BitVec 64
+  s3 : BitVec 64
+  s4 : BitVec 64
+  s5 : BitVec 64
+  s6 : BitVec 64
+  s7 : BitVec 64
+  s8 : BitVec 64
+  s9 : BitVec 64
+  s10 : BitVec 64
+  s11 : BitVec 64
+
+/-- The `s1..s11` keep list (concrete keys — `FrameOK`/`KeysOK` still decide). -/
+def sKeepL (v : SRegs) : GRegs :=
+  [(9, v.s1), (18, v.s2), (19, v.s3), (20, v.s4), (21, v.s5), (22, v.s6),
+   (23, v.s7), (24, v.s8), (25, v.s9), (26, v.s10), (27, v.s11)]
+
 end Vsa.Sim

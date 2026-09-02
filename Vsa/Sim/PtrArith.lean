@@ -54,6 +54,10 @@ theorem sext_fc0_toNat : (sign_extend (m := 64) (0xfc0#12) : BitVec 64).toNat = 
 
 /-- `(v + sext imm).toNat = v.toNat + k` for a non-negative immediate worth `k`,
 under no-wrap.  (Positive `(sext imm).toNat = k` facts close by `decide`.) -/
+theorem sext_fa0_toNat : (sign_extend (m := 64) (0xfa0#12) : BitVec 64).toNat = 2^64 - 96 := by
+  show ((0xfa0#12).signExtend 64).toNat = _
+  rw [BitVec.toNat_signExtend]; simp only [BitVec.msb]; decide
+
 theorem ptr_addoff (v : BitVec 64) (imm : BitVec 12) (k : Nat)
     (himm : (sign_extend (m := 64) imm : BitVec 64).toNat = k)
     (hnw : v.toNat + k < 2^64) :
@@ -100,6 +104,10 @@ theorem sp_dec48_restore (vsp : BitVec 64) :
 
 theorem sp_dec64_restore (vsp : BitVec 64) :
     (vsp + sign_extend (m := 64) (0xfc0#12)) + sign_extend (m := 64) (0x040#12) = vsp :=
+  add_cancel_pair _ _ _ (by apply BitVec.eq_of_toNat_eq; decide)
+
+theorem sp_dec96_restore (vsp : BitVec 64) :
+    (vsp + sign_extend (m := 64) (0xfa0#12)) + sign_extend (m := 64) (0x060#12) = vsp :=
   add_cancel_pair _ _ _ (by apply BitVec.eq_of_toNat_eq; decide)
 
 end Vsa.Sim

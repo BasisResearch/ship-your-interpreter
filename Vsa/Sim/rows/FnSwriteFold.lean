@@ -62,6 +62,8 @@ structure SWG where
   ra0 : BitVec 64
   sp0 : BitVec 64
   s00 : BitVec 64
+  /-- the callee-saved `s1..s11` entry values (preserved by the summary). -/
+  sv : SRegs
   fl0 : BitVec 8
   fl1 : BitVec 8
   fd0 : BitVec 8
@@ -481,7 +483,7 @@ spill — `_write_r` returns FOR `__swrite`), same `sp0` (frame popped), memory
 the two-store image `swM2`. -/
 def swWRG (g : SWG) : WRG :=
   { reent := g.cookie, fd := swFd g, buf := g.buf, len := g.len,
-    ra0 := g.ra0, sp0 := g.sp0, s00 := g.s00,
+    ra0 := g.ra0, sp0 := g.sp0, s00 := g.s00, sv := g.sv,
     bytes := g.bytes, m0 := swM2 g, out0 := g.out0 }
 
 theorem swWRG_ok (g : SWG) (hg : SWGOk g) : WRGOk (swWRG g) :=
@@ -655,6 +657,7 @@ structure SwAtTail (g : SWG) (c : Config) : Prop where
   sp : gprGet c.σ 2 = some (swSpE g)
   gp : gprGet c.σ 3 = some wrGpVal
   s0 : gprGet c.σ 8 = some g.s00
+  sregs : GHolds c.σ (sKeepL g.sv)
   out : c.σ.sailOutput = g.out0
   pw : c.σ.regs.get? Register.htif_payload_writes = some (0#4)
   th : ∃ v, c.σ.regs.get? Register.htif_tohost = some v
@@ -678,6 +681,7 @@ structure SwFnPre (g : SWG) (c : Config) : Prop where
   sp : gprGet c.σ 2 = some g.sp0
   gp : gprGet c.σ 3 = some wrGpVal
   s0 : gprGet c.σ 8 = some g.s00
+  sregs : GHolds c.σ (sKeepL g.sv)
   out : c.σ.sailOutput = g.out0
   pw : c.σ.regs.get? Register.htif_payload_writes = some (0#4)
   th : ∃ v, c.σ.regs.get? Register.htif_tohost = some v
@@ -696,9 +700,11 @@ def SwFnPost (g : SWG) : Config → Prop := WriteRFnPost (swWRG g)
 theorem swEntryArm (g : SWG) (hg : SWGOk g) :
     Triple (fun c => PCAt 0x8000efd4#64 c ∧ SwFnPre g c) (SwAtTail g) := by
   have T := segRowFramed swriteXefd4FSeg (swEntryL g) [[g.fl0, g.fl1]]
-    0x8000efd4#64 g.m0 [(3, wrGpVal), (8, g.s00)] g.out0 (0#4)
+    0x8000efd4#64 g.m0 ([(3, wrGpVal), (8, g.s00)] ++ sKeepL g.sv) g.out0 (0#4)
     (by show ChainOK 0x8000efd4#64 [11, 2, 13, 1, 12, 10] swriteXefd4FSeg; decide)
-    (by show FrameOK [3, 8] swriteXefd4FSeg; decide)
+    (by show FrameOK [3, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+          swriteXefd4FSeg
+        decide)
   intro c hc
   obtain ⟨hpc, hp⟩ := hc
   obtain ⟨c1, hs1, h1⟩ := T c
@@ -706,11 +712,11 @@ theorem swEntryArm (g : SWG) (hg : SWGOk g) :
         ⟨hp.a1, hp.sp, hp.a3, hp.ra, hp.a2, hp.a0, trivial⟩,
         by show KeysOK [11, 2, 13, 1, 12, 10]; decide,
         by rw [hp.mem]; exact swEntry_facts g hg hg.codeS, hp.tick⟩
-      keep := ⟨hp.gp, hp.s0, trivial⟩
+      keep := ⟨hp.gp, hp.s0, hp.sregs⟩
       out := hp.out
       pw := hp.pw
       th := hp.th }
-  obtain ⟨hkgp, hks0, -⟩ := h1.keep
+  obtain ⟨hkgp, hks0, hsk⟩ := h1.keep
   refine ⟨c1, hs1, ?_⟩
   exact
     { good := h1.good
@@ -738,6 +744,7 @@ theorem swEntryArm (g : SWG) (hg : SWGOk g) :
       sp := gholds_lookup (v := swSpE g) _ h1.regs (by rfl)
       gp := hkgp
       s0 := hks0
+      sregs := hsk
       out := h1.out
       pw := h1.pw
       th := h1.th }
@@ -750,20 +757,22 @@ theorem swTailArm (g : SWG) (hg : SWGOk g) :
     Triple (SwAtTail g)
       (fun c => PCAt 0x800104fc#64 c ∧ WriteRFnPre (swWRG g) c) := by
   have T := segRowFramed swriteXeff8Seg (swTailL g) (swTailLds g)
-    0x8000eff8#64 (swM1 g) [(3, wrGpVal), (8, g.s00)] g.out0 (0#4)
+    0x8000eff8#64 (swM1 g) ([(3, wrGpVal), (8, g.s00)] ++ sKeepL g.sv) g.out0 (0#4)
     (by show ChainOK 0x8000eff8#64 [2, 15, 14, 6, 17, 16] swriteXeff8Seg; decide)
-    (by show FrameOK [3, 8] swriteXeff8Seg; decide)
+    (by show FrameOK [3, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+          swriteXeff8Seg
+        decide)
   intro c hA
   obtain ⟨c1, hs1, h1⟩ := T c
     { seg := ⟨hA.good, hA.mem, hA.pc, hA.minstret,
         ⟨hA.sp, hA.a5, hA.a4, hA.t1, hA.a7, hA.a6, trivial⟩,
         by show KeysOK [2, 15, 14, 6, 17, 16]; decide,
         by rw [hA.mem]; exact swTail_facts g hg (swM1_codeS g hg), hA.tick⟩
-      keep := ⟨hA.gp, hA.s0, trivial⟩
+      keep := ⟨hA.gp, hA.s0, hA.sregs⟩
       out := hA.out
       pw := hA.pw
       th := hA.th }
-  obtain ⟨hkgp, hks0, -⟩ := h1.keep
+  obtain ⟨hkgp, hks0, hsk⟩ := h1.keep
   refine ⟨c1, hs1, ?_, ?_⟩
   · show c1.σ.regs.get? Register.PC = some 0x800104fc#64
     rw [h1.pc]
@@ -797,6 +806,7 @@ theorem swTailArm (g : SWG) (hg : SWGOk g) :
           rwa [sw_sp_restore g] at h
         gp := hkgp
         s0 := hks0
+        sregs := hsk
         out := h1.out
         pw := h1.pw
         th := h1.th }

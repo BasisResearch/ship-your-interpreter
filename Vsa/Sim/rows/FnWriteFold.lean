@@ -57,6 +57,8 @@ structure WG where
   sp0 : BitVec 64
   gp0 : BitVec 64
   s00 : BitVec 64
+  /-- the callee-saved `s1..s11` entry values (preserved by the summary). -/
+  sv : SRegs
   bytes : List (BitVec 8)
   m0 : Std.ExtHashMap Nat (BitVec 8)
   out0 : Array String
@@ -236,6 +238,7 @@ structure WInv (g : WG) (k : Nat) (c : Config) : Prop where
   sp : gprGet c.σ 2 = some g.sp0
   gp : gprGet c.σ 3 = some g.gp0
   s0 : gprGet c.σ 8 = some g.s00
+  sregs : GHolds c.σ (sKeepL g.sv)
   out : c.σ.sailOutput = pushBytes g.out0 (g.bytes.take k)
   pw : c.σ.regs.get? Register.htif_payload_writes = some (0#4)
   th : ∃ v, c.σ.regs.get? Register.htif_tohost = some v
@@ -257,6 +260,7 @@ structure WAtBne (g : WG) (k' : Nat) (c : Config) : Prop where
   sp : gprGet c.σ 2 = some g.sp0
   gp : gprGet c.σ 3 = some g.gp0
   s0 : gprGet c.σ 8 = some g.s00
+  sregs : GHolds c.σ (sKeepL g.sv)
   out : c.σ.sailOutput = pushBytes g.out0 (g.bytes.take k')
   pw : c.σ.regs.get? Register.htif_payload_writes = some (0#4)
   th : ∃ v, c.σ.regs.get? Register.htif_tohost = some v
@@ -273,6 +277,7 @@ structure WAtExit (g : WG) (c : Config) : Prop where
   sp : gprGet c.σ 2 = some g.sp0
   gp : gprGet c.σ 3 = some g.gp0
   s0 : gprGet c.σ 8 = some g.s00
+  sregs : GHolds c.σ (sKeepL g.sv)
   out : c.σ.sailOutput = pushBytes g.out0 g.bytes
   pw : c.σ.regs.get? Register.htif_payload_writes = some (0#4)
   th : ∃ v, c.σ.regs.get? Register.htif_tohost = some v
@@ -292,6 +297,7 @@ structure WriteFnPre (g : WG) (c : Config) : Prop where
   sp : gprGet c.σ 2 = some g.sp0
   gp : gprGet c.σ 3 = some g.gp0
   s0 : gprGet c.σ 8 = some g.s00
+  sregs : GHolds c.σ (sKeepL g.sv)
   out : c.σ.sailOutput = g.out0
   pw : c.σ.regs.get? Register.htif_payload_writes = some (0#4)
   th : ∃ v, c.σ.regs.get? Register.htif_tohost = some v
@@ -309,6 +315,7 @@ structure WriteFnPost (g : WG) (c : Config) : Prop where
   sp : gprGet c.σ 2 = some g.sp0
   gp : gprGet c.σ 3 = some g.gp0
   s0 : gprGet c.σ 8 = some g.s00
+  sregs : GHolds c.σ (sKeepL g.sv)
   out : c.σ.sailOutput = pushBytes g.out0 g.bytes
   pw : c.σ.regs.get? Register.htif_payload_writes = some (0#4)
   th : ∃ v, c.σ.regs.get? Register.htif_tohost = some v
@@ -363,6 +370,44 @@ theorem succ_lt_of_ptr_ne {g : WG} (hg : WGOk g) {k : Nat} (hk : k < g.bytes.len
     rw [add_ofNat_succ, hkk, ptr_eq_end hg] at hne
     exact absurd rfl hne
 
+/-- Transport the `s1..s11` keep bundle across the putchar seam's register
+frame clause (`stepObs_tohost_putchar`'s 10-diseq `hframe`). -/
+theorem sregs_putchar_frame (v : SRegs) {σ2 σ1 : MState}
+    (hfr : ∀ R : Register,
+      (Register.PC == R) = false → (Register.minstret == R) = false →
+      (Register.minstret_increment == R) = false → (Register.nextPC == R) = false →
+      (Register.htif_cmd_write == R) = false →
+      (Register.htif_payload_writes == R) = false →
+      (Register.htif_tohost == R) = false →
+      (Register.mip == R) = false → (Register.mtime == R) = false →
+      (Register.mcycle == R) = false →
+      σ2.regs.get? R = σ1.regs.get? R)
+    (h : GHolds σ1 (sKeepL v)) : GHolds σ2 (sKeepL v) := by
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, -⟩ := h
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, trivial⟩
+  · exact (hfr Register.x9 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans h1
+  · exact (hfr Register.x18 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans h2
+  · exact (hfr Register.x19 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans h3
+  · exact (hfr Register.x20 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans h4
+  · exact (hfr Register.x21 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans h5
+  · exact (hfr Register.x22 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans h6
+  · exact (hfr Register.x23 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans h7
+  · exact (hfr Register.x24 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans h8
+  · exact (hfr Register.x25 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans h9
+  · exact (hfr Register.x26 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans h10
+  · exact (hfr Register.x27 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans h11
+
 /-! ## Arm Triples -/
 
 /-- Entry, `len = 0` route: the beqz TAKEN arm jumps straight to the exit
@@ -371,21 +416,23 @@ theorem wEntryTaken (g : WG) (hg : WGOk g) (hz : g.len = 0#64) :
     Triple (fun c => PCAt 0x8000003c#64 c ∧ WriteFnPre g c) (WAtExit g) := by
   have T1 := segRowFramed writeX003cTSeg (writeX003cTL g.len) []
     0x8000003c#64 g.m0
-    [(1, g.ra0), (2, g.sp0), (3, g.gp0), (8, g.s00)]
+    ([(1, g.ra0), (2, g.sp0), (3, g.gp0), (8, g.s00)] ++ sKeepL g.sv)
     g.out0 (0#4)
     (by show ChainOK 0x8000003c#64 [12] writeX003cTSeg; decide)
-    (by show FrameOK [1, 2, 3, 8] writeX003cTSeg; decide)
+    (by show FrameOK [1, 2, 3, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+          writeX003cTSeg
+        decide)
   intro c hc
   obtain ⟨hpc, hp⟩ := hc
   obtain ⟨c1, hs1, h1⟩ := T1 c
     { seg := ⟨hp.good, hp.mem, hpc, hp.minstret, ⟨hp.a2, trivial⟩,
         by show KeysOK [12]; decide,
         by rw [hp.mem]; exact writeX003cT_facts g hg.code hz [], hp.tick⟩
-      keep := ⟨hp.ra, hp.sp, hp.gp, hp.s0, trivial⟩
+      keep := ⟨hp.ra, hp.sp, hp.gp, hp.s0, hp.sregs⟩
       out := hp.out
       pw := hp.pw
       th := hp.th }
-  obtain ⟨hkra, hksp, hkgp, hks0, -⟩ := h1.keep
+  obtain ⟨hkra, hksp, hkgp, hks0, hsk⟩ := h1.keep
   refine ⟨c1, hs1, ?_⟩
   exact
     { good := h1.good
@@ -398,6 +445,7 @@ theorem wEntryTaken (g : WG) (hg : WGOk g) (hz : g.len = 0#64) :
       sp := hksp
       gp := hkgp
       s0 := hks0
+      sregs := hsk
       out := by rw [h1.out, bytes_nil_of_len_zero hg hz]; rfl
       pw := h1.pw
       th := h1.th }
@@ -409,34 +457,38 @@ theorem wEntryFall (g : WG) (hg : WGOk g) (hz : g.len ≠ 0#64) :
       (fun c => WInv g 0 c) := by
   have T1 := segRowFramed writeX003cFSeg (writeX003cFL g.len) []
     0x8000003c#64 g.m0
-    [(11, g.buf), (1, g.ra0), (2, g.sp0), (3, g.gp0), (8, g.s00)]
+    ([(11, g.buf), (1, g.ra0), (2, g.sp0), (3, g.gp0), (8, g.s00)] ++ sKeepL g.sv)
     g.out0 (0#4)
     (by show ChainOK 0x8000003c#64 [12] writeX003cFSeg; decide)
-    (by show FrameOK [11, 1, 2, 3, 8] writeX003cFSeg; decide)
+    (by show FrameOK [11, 1, 2, 3, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+          writeX003cFSeg
+        decide)
   have T2 := segRowFramed writeX0040Seg (writeX0040L g.buf g.len) []
     0x80000040#64 g.m0
-    [(1, g.ra0), (2, g.sp0), (3, g.gp0), (8, g.s00)]
+    ([(1, g.ra0), (2, g.sp0), (3, g.gp0), (8, g.s00)] ++ sKeepL g.sv)
     g.out0 (0#4)
     (by show ChainOK 0x80000040#64 [11, 12] writeX0040Seg; decide)
-    (by show FrameOK [1, 2, 3, 8] writeX0040Seg; decide)
+    (by show FrameOK [1, 2, 3, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+          writeX0040Seg
+        decide)
   intro c hc
   obtain ⟨hpc, hp⟩ := hc
   obtain ⟨c1, hs1, h1⟩ := T1 c
     { seg := ⟨hp.good, hp.mem, hpc, hp.minstret, ⟨hp.a2, trivial⟩,
         by show KeysOK [12]; decide,
         by rw [hp.mem]; exact writeX003cF_facts g hg.code hz [], hp.tick⟩
-      keep := ⟨hp.a1, hp.ra, hp.sp, hp.gp, hp.s0, trivial⟩
+      keep := ⟨hp.a1, hp.ra, hp.sp, hp.gp, hp.s0, hp.sregs⟩
       out := hp.out
       pw := hp.pw
       th := hp.th }
   have hmem1 : c1.σ.mem = g.m0 := by rw [h1.mem]; rfl
-  obtain ⟨hka1, hkra, hksp, hkgp, hks0, -⟩ := h1.keep
+  obtain ⟨hka1, hkra, hksp, hkgp, hks0, hsk1⟩ := h1.keep
   obtain ⟨c2, hs2, h2⟩ := T2 c1
     { seg := ⟨h1.good, hmem1, by rw [h1.pc]; rfl, h1.minstret,
         ⟨hka1, gholds_lookup (v := g.len) _ h1.regs (by rfl), trivial⟩,
         by show KeysOK [11, 12]; decide,
         by rw [hmem1]; exact writeX0040_facts g hg.code [], h1.tick⟩
-      keep := ⟨hkra, hksp, hkgp, hks0, trivial⟩
+      keep := ⟨hkra, hksp, hkgp, hks0, hsk1⟩
       out := h1.out
       pw := h1.pw
       th := h1.th }
@@ -464,6 +516,7 @@ theorem wEntryFall (g : WG) (hg : WGOk g) (hz : g.len ≠ 0#64) :
       sp := by obtain ⟨-, h, -⟩ := h2.keep; exact h
       gp := by obtain ⟨-, -, h, -⟩ := h2.keep; exact h
       s0 := by obtain ⟨-, -, -, h, -⟩ := h2.keep; exact h
+      sregs := by obtain ⟨-, -, -, -, h⟩ := h2.keep; exact h
       out := h2.out
       pw := h2.pw
       th := h2.th }
@@ -478,15 +531,18 @@ theorem wIter (g : WG) (hg : WGOk g) (k : Nat) :
   have T1 := segRowFramed writeX004cSeg
     (writeX004cL (g.buf + BitVec.ofNat 64 k) writeCmd) [[g.bytes[k]'hk]]
     0x8000004c#64 g.m0
-    [(13, g.buf + g.len), (12, g.len), (1, g.ra0), (2, g.sp0), (3, g.gp0), (8, g.s00)]
+    ([(13, g.buf + g.len), (12, g.len), (1, g.ra0), (2, g.sp0), (3, g.gp0), (8, g.s00)]
+      ++ sKeepL g.sv)
     (pushBytes g.out0 (g.bytes.take k)) (0#4)
     (by show ChainOK 0x8000004c#64 [11, 14] writeX004cSeg; decide)
-    (by show FrameOK [13, 12, 1, 2, 3, 8] writeX004cSeg; decide)
+    (by show FrameOK [13, 12, 1, 2, 3, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+          writeX004cSeg
+        decide)
   obtain ⟨c1, hs1, h1⟩ := T1 c
     { seg := ⟨hI.good, hI.mem, hI.pc, hI.minstret, ⟨hI.a1, hI.a4, trivial⟩,
         by show KeysOK [11, 14]; decide,
         by rw [hI.mem]; exact writeX004c_facts g hg hg.code k hk, hI.tick⟩
-      keep := ⟨hI.a3, hI.a2, hI.ra, hI.sp, hI.gp, hI.s0, trivial⟩
+      keep := ⟨hI.a3, hI.a2, hI.ra, hI.sp, hI.gp, hI.s0, hI.sregs⟩
       out := hI.out
       pw := hI.pw
       th := hI.th }
@@ -501,7 +557,7 @@ theorem wIter (g : WG) (hg : WGOk g) (k : Nat) :
   have ha4 : gprGet c1.σ 14 = some writeCmd := gholds_lookup _ h1.regs (by rfl)
   obtain ⟨vm1, hmi1⟩ := h1.minstret
   obtain ⟨thv1, hth1⟩ := h1.th
-  obtain ⟨hka3, hka2, hkra, hksp, hkgp, hks0, -⟩ := h1.keep
+  obtain ⟨hka3, hka2, hkra, hksp, hkgp, hks0, hsk⟩ := h1.keep
   have hcode1 : Vsa.Sim.Code._writeLoaded c1.σ.mem := by rw [hmem1]; exact hg.code
   obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.Code._write_at_8000005c hcode1
   obtain ⟨σ2, i2, hstep, hi2, hG2, hmem2, hout2, hpc2, hmi2, hpw2, hth2, hframe2⟩ :=
@@ -584,6 +640,7 @@ theorem wIter (g : WG) (hg : WGOk g) (k : Nat) :
           hfr Register.x8 (by decide) (by decide) (by decide) (by decide)
             (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
         exact hks0
+      sregs := sregs_putchar_frame g.sv hfr hsk
       out := by rw [hout2, h1.out, pushBytes_take_succ g.bytes k hk]; rfl
       pw := hpw2
       th := hth2 }
@@ -595,21 +652,24 @@ theorem wBackT (g : WG) (hg : WGOk g) (k' : Nat) (hlt : k' < g.bytes.length) :
   have T := segRowFramed writeX0060TSeg
     (writeX0060TL (g.buf + BitVec.ofNat 64 k') (g.buf + g.len)) []
     0x80000060#64 g.m0
-    [(14, writeCmd), (12, g.len), (1, g.ra0), (2, g.sp0), (3, g.gp0), (8, g.s00)]
+    ([(14, writeCmd), (12, g.len), (1, g.ra0), (2, g.sp0), (3, g.gp0), (8, g.s00)]
+      ++ sKeepL g.sv)
     (pushBytes g.out0 (g.bytes.take k')) (0#4)
     (by show ChainOK 0x80000060#64 [11, 13] writeX0060TSeg; decide)
-    (by show FrameOK [14, 12, 1, 2, 3, 8] writeX0060TSeg; decide)
+    (by show FrameOK [14, 12, 1, 2, 3, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+          writeX0060TSeg
+        decide)
   intro c hB
   obtain ⟨c1, hs1, h1⟩ := T c
     { seg := ⟨hB.good, hB.mem, hB.pc, hB.minstret, ⟨hB.a1, hB.a3, trivial⟩,
         by show KeysOK [11, 13]; decide,
         by rw [hB.mem]; exact writeX0060T_facts g hg.code _ _ (ptr_ne_end hg hlt) [],
         hB.tick⟩
-      keep := ⟨hB.a4, hB.a2, hB.ra, hB.sp, hB.gp, hB.s0, trivial⟩
+      keep := ⟨hB.a4, hB.a2, hB.ra, hB.sp, hB.gp, hB.s0, hB.sregs⟩
       out := hB.out
       pw := hB.pw
       th := hB.th }
-  obtain ⟨hka4, hka2, hkra, hksp, hkgp, hks0, -⟩ := h1.keep
+  obtain ⟨hka4, hka2, hkra, hksp, hkgp, hks0, hsk⟩ := h1.keep
   refine ⟨c1, hs1, ?_⟩
   exact
     { klt := hlt
@@ -626,6 +686,7 @@ theorem wBackT (g : WG) (hg : WGOk g) (k' : Nat) (hlt : k' < g.bytes.length) :
       sp := hksp
       gp := hkgp
       s0 := hks0
+      sregs := hsk
       out := h1.out
       pw := h1.pw
       th := h1.th }
@@ -637,21 +698,23 @@ theorem wBackF (g : WG) (hg : WGOk g) :
   have T := segRowFramed writeX0060FSeg
     (writeX0060FL (g.buf + BitVec.ofNat 64 g.bytes.length) (g.buf + g.len)) []
     0x80000060#64 g.m0
-    [(12, g.len), (1, g.ra0), (2, g.sp0), (3, g.gp0), (8, g.s00)]
+    ([(12, g.len), (1, g.ra0), (2, g.sp0), (3, g.gp0), (8, g.s00)] ++ sKeepL g.sv)
     (pushBytes g.out0 (g.bytes.take g.bytes.length)) (0#4)
     (by show ChainOK 0x80000060#64 [11, 13] writeX0060FSeg; decide)
-    (by show FrameOK [12, 1, 2, 3, 8] writeX0060FSeg; decide)
+    (by show FrameOK [12, 1, 2, 3, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+          writeX0060FSeg
+        decide)
   intro c hB
   obtain ⟨c1, hs1, h1⟩ := T c
     { seg := ⟨hB.good, hB.mem, hB.pc, hB.minstret, ⟨hB.a1, hB.a3, trivial⟩,
         by show KeysOK [11, 13]; decide,
         by rw [hB.mem]; exact writeX0060F_facts g hg.code _ _ (ptr_eq_end hg) [],
         hB.tick⟩
-      keep := ⟨hB.a2, hB.ra, hB.sp, hB.gp, hB.s0, trivial⟩
+      keep := ⟨hB.a2, hB.ra, hB.sp, hB.gp, hB.s0, hB.sregs⟩
       out := hB.out
       pw := hB.pw
       th := hB.th }
-  obtain ⟨hka2, hkra, hksp, hkgp, hks0, -⟩ := h1.keep
+  obtain ⟨hka2, hkra, hksp, hkgp, hks0, hsk⟩ := h1.keep
   refine ⟨c1, hs1, ?_⟩
   exact
     { good := h1.good
@@ -664,6 +727,7 @@ theorem wBackF (g : WG) (hg : WGOk g) :
       sp := hksp
       gp := hkgp
       s0 := hks0
+      sregs := hsk
       out := by rw [h1.out, List.take_length]
       pw := h1.pw
       th := h1.th }
@@ -673,20 +737,22 @@ theorem wExit (g : WG) (hg : WGOk g) :
     Triple (WAtExit g) (WriteFnPost g) := by
   have T := segRowFramed writeExitJrSeg (writeExitJrL g.len g.ra0) []
     0x80000064#64 g.m0
-    [(2, g.sp0), (3, g.gp0), (8, g.s00)]
+    ([(2, g.sp0), (3, g.gp0), (8, g.s00)] ++ sKeepL g.sv)
     (pushBytes g.out0 g.bytes) (0#4)
     (by show ChainOK 0x80000064#64 [12, 1] writeExitJrSeg; decide)
-    (by show FrameOK [2, 3, 8] writeExitJrSeg; decide)
+    (by show FrameOK [2, 3, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+          writeExitJrSeg
+        decide)
   intro c hE
   obtain ⟨c1, hs1, h1⟩ := T c
     { seg := ⟨hE.good, hE.mem, hE.pc, hE.minstret, ⟨hE.a2, hE.ra, trivial⟩,
         by show KeysOK [12, 1]; decide,
         by rw [hE.mem]; exact writeExitJr_facts g hg hg.code [], hE.tick⟩
-      keep := ⟨hE.sp, hE.gp, hE.s0, trivial⟩
+      keep := ⟨hE.sp, hE.gp, hE.s0, hE.sregs⟩
       out := hE.out
       pw := hE.pw
       th := hE.th }
-  obtain ⟨hksp, hkgp, hks0, -⟩ := h1.keep
+  obtain ⟨hksp, hkgp, hks0, hsk⟩ := h1.keep
   refine ⟨c1, hs1, ?_⟩
   exact
     { good := h1.good
@@ -708,6 +774,7 @@ theorem wExit (g : WG) (hg : WGOk g) :
       sp := hksp
       gp := hkgp
       s0 := hks0
+      sregs := hsk
       out := h1.out
       pw := h1.pw
       th := h1.th }

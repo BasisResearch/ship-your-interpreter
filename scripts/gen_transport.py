@@ -102,45 +102,38 @@ def emit(name, insts):
     L.append("")
     L.append("namespace Vsa.Sim.Code")
     L.append("")
+    # --- per-chunk transports (64-wide obtains; the monolithic whole-module
+    # obtain explodes elaboration on big modules — observation
+    # gen-transport-monolithic-obtain-explodes) ---
+    for gi, ca in enumerate(chunk_addrs):
+        L.append(f"theorem {stripped}Chunk{gi}_of_agree_lo "
+                 "{m1 m0 : Std.ExtHashMap Nat (BitVec 8)}")
+        L.append("    (hlo : ∀ j : Nat, j < tohostAddr → m1[j]? = m0[j]?)")
+        L.append(f"    (h : Vsa.Sim.Code.{f}Chunk{gi} m0) : "
+                 f"Vsa.Sim.Code.{f}Chunk{gi} m1 := by")
+        L.append("  obtain ⟨" + ", ".join(f"h{k}" for k in range(len(ca)))
+                 + "⟩ := h")
+        lines = ["  exact ⟨(hlo 0x%08x (by decide)).trans h0," % ca[0]]
+        for k, a in enumerate(ca[1:-1], start=1):
+            lines.append(f"    (hlo 0x{a:08x} (by decide)).trans h{k},")
+        lines.append(f"    (hlo 0x{ca[-1]:08x} (by decide)).trans "
+                     f"h{len(ca) - 1}⟩")
+        L += lines
+        L.append("")
     L.append(f"/-- Transport `{F}Loaded` across a memory that agrees below "
              "`tohostAddr`")
     L.append(f"(all `{name}` code bytes sit below the HTIF window). -/")
     L.append(f"theorem {lemma} {{m1 m0 : Std.ExtHashMap Nat (BitVec 8)}}")
     L.append("    (hlo : ∀ j : Nat, j < tohostAddr → m1[j]? = m0[j]?)")
     L.append(f"    (h : {pred} m0) : {pred} m1 := by")
-
-    # destructure: one flat ⟨h0..⟩ for a single chunk, else one nested ⟨…⟩
-    # per chunk (the right-nested ∧ of chunks flattens in the anon pattern).
-    i = 0
-    groups = []
-    for ca in chunk_addrs:
-        groups.append("⟨" + ", ".join(f"h{i + k}" for k in range(len(ca))) + "⟩")
-        i += len(ca)
-    pat = groups[0] if len(groups) == 1 else "⟨" + ", ".join(groups) + "⟩"
-    L.append(f"  obtain {pat} := h")
-
-    # rebuild, per byte: (hlo 0xADDR (by decide)).trans h<i>
-    i = 0
-    body = []
-    for gi, ca in enumerate(chunk_addrs):
-        lines = []
-        for k, a in enumerate(ca):
-            lines.append(f"(hlo 0x{a:08x} (by decide)).trans h{i + k}")
-        i += len(ca)
-        body.append(lines)
-    if len(body) == 1:
-        lines = ["  exact ⟨" + body[0][0] + ","]
-        lines += ["    " + b + "," for b in body[0][1:-1]]
-        lines += ["    " + body[0][-1] + "⟩"]
+    if len(chunk_addrs) == 1:
+        L.append(f"  exact {stripped}Chunk0_of_agree_lo hlo h")
     else:
-        lines = ["  exact ⟨⟨" + body[0][0] + ","]
-        for gi, grp in enumerate(body):
-            if gi > 0:
-                lines.append("    ⟨" + grp[0] + ",")
-            lines += ["    " + b + "," for b in grp[1:-1]]
-            close = "⟩⟩" if gi == len(body) - 1 else "⟩,"
-            lines.append("    " + grp[-1] + close)
-    L += lines
+        L.append("  obtain ⟨" + ", ".join(
+            f"hc{gi}" for gi in range(len(chunk_addrs))) + "⟩ := h")
+        L.append("  exact ⟨" + ", ".join(
+            f"{stripped}Chunk{gi}_of_agree_lo hlo hc{gi}"
+            for gi in range(len(chunk_addrs))) + "⟩")
     L.append("")
     L.append(f"#print axioms {lemma}")
     L.append("")

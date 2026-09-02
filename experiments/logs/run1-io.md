@@ -59,3 +59,41 @@ recipe.
 - Support: Code/__retarget_lock_{acquire,release}_recursive.lean (gen_code_lemmas),
   rows/FnRetarget_lock_{acquire,release}_recursive.lean (gen_fn, self-verified).
   All oleans built.
+
+### 2026-09-02 HARVEST: previous io-lane clone work landed in MAIN
+- /tmp/vsa-io-lane (base 2865529) held the SRegs amendment + lock stubs +
+  the __sfvwrite_r partial (gen arms/Code/transport green, fold MID-FLIGHT)
+  but main had only the LOG entries.  Copied all 17 files, regenerated
+  oleans serially: PtrArith 1.5s, SegToTripleFramed +SRegs/sKeepL, lock
+  stubs 1.5s, FnWriteFold 1.6s / FnWriteRFold 2.8s / FnSwriteFold 5.6s
+  (all amended, axioms clean), Code/__sfvwrite_r 2.3s,
+  rows/FnSfvwrite_r 3.6s, rows/TransportSfvwrite_r 2.5s.
+
+### 2026-09-02 LANDED: __sfvwrite_r UNBUFFERED arm — sfvwrite_unbuf_summary
+- Vsa/Sim/rows/FnSfvwriteFold.lean (2782 lines) GREEN 6.6s, axioms exactly
+  {propext, Classical.choice, Quot.sound}.  `sfvwrite_unbuf_summary (g) :
+  FnSummary 0x8000de8c (SfvFnPre g) (SfvFnPost g)` — the io-DAG crux:
+  15-arm Triple.seq chain (14 segRowFramed arms + the `jalr fp->_write`
+  INDIRECT seam via stepObs_jalr/decode_000780e7/rX_bits_x15, first jalr
+  fn-seam in a fold) splicing the landed P3 `swrite_summary` at the
+  ghost bundle `sfvSWG g` (ra0 := 0x8000df20, m0 := sfvM1, sv := sfvLiveSV).
+  Post: a0 = 0, s-regs restored (full sKeepL), mem = sfvM3 (8 spills +
+  callee footprint + resid slot zeroed), out = pushBytes out0 bytes.
+- TWO elaborator/kernel pathologies fixed on the way (both logged in
+  observations.md at the moment of noticing):
+  1. chainfacts-inblock-store-then-load-whnf-bomb: dec8F's `ld` after 4
+     spills gets a stepMemM TOWER pins goal; the mid-flight `show LPins8
+     (sfvM1a g)` was a silent STACK OVERFLOW (this is where the previous
+     session died).  Fix: `pin8_peel_sd` (peel one disjoint sd image off a
+     Pin8) + `show LPins8 _ (addr)` keeping the memory a metavar.
+  2. Kernel deep recursion in the `sfvM3_spill_pin8 … rfl` hsplit args
+     (list-append defeq at a non-boundary split delta-unfolds the image
+     towers) — replaced all 8 `rfl`s with `simp only [sfvLog1, sfvLog2,
+     sfvE_*, List.cons_append, List.nil_append]`.  Same class for no-store
+     arm mem posts: `writeLog X [] = <image>` rfl head-congruence-unfolds
+     both towers — added per-seg `*_log_nil` lemmas + `writeLog_nil`
+     (the P2 wrBeqArm idiom, now MANDATORY for every no-store arm).
+- Fold anatomy: 14 ChainFacts lemmas (landed by the previous session,
+  2 repaired), 13 named-field join structures, sHiKeepL partial keep
+  bundle (spilled s1..s6 leave sKeepL piecewise), 4 code-image transports
+  (sfvM1a/M1/MC/M3), sailOutput_sigmaPost_jalr (rfl).

@@ -134,8 +134,14 @@ def _branch_target(ins):
     return None
 
 
-def build_cfg(fn, entry, di, extents):
-    """Extract the function body and partition into classified basic blocks."""
+def build_cfg(fn, entry, di, extents, route=None):
+    """Extract the function body and partition into classified basic blocks.
+
+    `route` (dict pc -> 'T'|'F'|'TF') is the RESOLVED-PATH mode for functions
+    over budget: only blocks reachable from the entry under the pinned branch
+    polarities are emitted (a branch pinned 'T' keeps only its taken twin,
+    'F' only the fall twin, 'TF' both — an unrolled two-visit head).  Budgets
+    are then enforced on the PRUNED subgraph."""
     start, end = extents[fn]
     if entry != start:
         raise SystemExit(f"--entry 0x{entry:x} != disasm start of {fn} "
@@ -145,16 +151,17 @@ def build_cfg(fn, entry, di, extents):
     while a in di and (end is None or a < end):
         body.append(di[a])
         a += 4
-    if len(body) > MAX_INSTRS:
-        raise SystemExit(
-            f"{fn}: {len(body)} instrs > {MAX_INSTRS} — refuse without a "
-            f"--pin path restriction (pin the guarding branch conditions)")
-    nbr = sum(1 for i in body if i.is_branch)
-    if nbr > MAX_BRANCHES:
-        conds = [f"0x{i.addr:x}:{i.mnem} {i.ops}" for i in body if i.is_branch]
-        raise SystemExit(
-            f"{fn}: {nbr} branches > {MAX_BRANCHES} — refuse without --pin. "
-            f"The branch conditions needing pins:\n  " + "\n  ".join(conds))
+    if route is None:
+        if len(body) > MAX_INSTRS:
+            raise SystemExit(
+                f"{fn}: {len(body)} instrs > {MAX_INSTRS} — refuse without a "
+                f"--route path restriction (pin the branch polarities)")
+        nbr = sum(1 for i in body if i.is_branch)
+        if nbr > MAX_BRANCHES:
+            conds = [f"0x{i.addr:x}:{i.mnem} {i.ops}" for i in body if i.is_branch]
+            raise SystemExit(
+                f"{fn}: {nbr} branches > {MAX_BRANCHES} — refuse without --route. "
+                f"The branch conditions needing pins:\n  " + "\n  ".join(conds))
 
     inside = {i.addr for i in body}
     # leaders: entry + in-fn branch/jump targets + successor of any terminator
@@ -167,7 +174,8 @@ def build_cfg(fn, entry, di, extents):
                 leaders.add(t)
             if i.is_branch:
                 leaders.add(i.addr + 4)
-        elif i.mnem in ("jal",) or _is_tohost_store(i) or i.mnem in ("jr", "ret"):
+        elif i.mnem in ("jal", "jalr") or _is_tohost_store(i) \
+                or i.mnem in ("jr", "ret"):
             leaders.add(i.addr + 4)
     leaders = {l for l in leaders if l in inside}
 
@@ -200,7 +208,14 @@ def build_cfg(fn, entry, di, extents):
             cur.callee_pc = (i.addr + lib.sext(lib._jal_imm(i.word), 21)) % 2**64
             cur.succs = [i.addr + 4]
             cur = None
-        elif i.mnem in ("jr", "ret", "jalr"):
+        elif i.mnem == "jalr":
+            # indirect CALL (rd=ra; objdump prints the rd=x0 form as jr/ret):
+            # park AT the jalr — the fold takes the step explicitly
+            # (stepObs_jalr) and splices the pinned target's summary.
+            cur.term, cur.kind = i, "jalrcall"
+            cur.succs = [i.addr + 4]
+            cur = None
+        elif i.mnem in ("jr", "ret"):
             cur.term, cur.kind = i, "ret"
             cur = None
         elif _is_tohost_store(i):
@@ -218,6 +233,41 @@ def build_cfg(fn, entry, di, extents):
             if s in blocks and s <= b.term_addr:
                 blocks[s].is_loop_head = True
                 blocks[s].back_edge_from = b.start
+    if route is not None:
+        # resolved-path pruning: walk from the entry under the polarity pins
+        for pc in route:
+            if pc not in {b.term_addr for b in blocks.values() if b.kind == "br"}:
+                raise SystemExit(f"--route: 0x{pc:x} is not a branch terminator")
+        keep, pols, work = set(), {}, [entry]
+        while work:
+            a = work.pop()
+            if a in keep or a not in blocks:
+                continue
+            keep.add(a)
+            b = blocks[a]
+            if b.kind == "br":
+                pin = route.get(b.term_addr)
+                if pin is None:
+                    raise SystemExit(
+                        f"--route: unpinned branch 0x{b.term_addr:x} reachable "
+                        f"({b.term.mnem} {b.term.ops}) — pin it T, F or TF")
+                pols[b.start] = pin
+                if "T" in pin:
+                    work.append(b.succs[0])
+                if "F" in pin:
+                    work.append(b.succs[1])
+            else:
+                work.extend(b.succs)
+        pruned = [blocks[a] for a in sorted(keep)]
+        ni = sum(len(b.instrs) + (1 if b.term else 0) for b in pruned)
+        if ni > MAX_INSTRS:
+            raise SystemExit(f"--route: pruned path {ni} instrs > {MAX_INSTRS}")
+        nbr = sum(1 for b in pruned if b.kind == "br")
+        if nbr > MAX_BRANCHES:
+            raise SystemExit(f"--route: pruned path {nbr} branches > {MAX_BRANCHES}")
+        for b in pruned:
+            b.route_pols = pols.get(b.start)
+        return body, pruned
     return body, [blocks[a] for a in sorted(blocks)]
 
 
@@ -342,6 +392,11 @@ def synth_arm(fn, b, pol=None):
         # `FnSummary.callSplice` — NOT the old bridgeOfSeg Shape-D row, so no
         # WrChainAvoidAbi restriction applies to the prefix body.
         a["terminator"], a["taken"], a["span_end"] = "fallthrough", None, b.term_addr
+    elif b.kind == "jalrcall":
+        # park AT the jalr (indirect call SEAM): the fold takes the step
+        # explicitly (stepObs_jalr, target pinned from the loaded image) and
+        # splices the target summary — same park shape as jal/tohost.
+        a["terminator"], a["taken"], a["span_end"] = "fallthrough", None, b.term_addr
     elif b.kind == "tohost":
         # park AT the sd: straight-line body ending just before it
         a["terminator"], a["taken"], a["span_end"] = "fallthrough", None, b.term_addr
@@ -356,14 +411,14 @@ def synth_arm(fn, b, pol=None):
     return a
 
 
-def emit_fn(fn, entry, out_path, verify=True):
+def emit_fn(fn, entry, out_path, verify=True, route=None):
     di = lib.parse_disasm()
     idx = lib.DecodeIndex()
     extents = function_extents()
     if fn not in extents:
         raise SystemExit(f"function {fn!r} not in disasm")
-    body, blocks = build_cfg(fn, entry, di, extents)
-    loop = classify_loop(blocks)
+    body, blocks = build_cfg(fn, entry, di, extents, route=route)
+    loop = classify_loop(blocks) if route is None else None
 
     E = lib.Emitter()
     E(f"import Vsa.Sim.DeriveCaseRow")
@@ -394,7 +449,12 @@ def emit_fn(fn, entry, out_path, verify=True):
 
     emitted = []
     for b in blocks:
-        pols = [True, False] if b.kind == "br" else [None]
+        if b.kind == "br":
+            rp = getattr(b, "route_pols", None)
+            pols = [True, False] if rp in (None, "TF") else \
+                ([True] if rp == "T" else [False])
+        else:
+            pols = [None]
         for pol in pols:
             a = synth_arm(fn, b, pol)
             if a["terminator"] == "jr":
@@ -427,11 +487,12 @@ def emit_fn(fn, entry, out_path, verify=True):
     # row, proofs all decide/rfl); the plan's "~12 lines/block" is kept as the
     # no-expanded-terms invariant, enforced by construction (genseg emits only
     # one-decide rows), not by line count.
-    budget = 40 + 36 * len(emitted) + len(body) + 12
+    nbody = sum(len(b.instrs) + (1 if b.term else 0) for b in blocks)
+    budget = 40 + 36 * len(emitted) + nbody + 12
     nlines = text.count("\n") + 1
     if nlines > budget:
         raise SystemExit(f"emitted {nlines} lines > budget {budget} "
-                         f"(40 + 18·{len(emitted)} arms + {len(body)} instrs "
+                         f"(40 + 18·{len(emitted)} arms + {nbody} instrs "
                          f"+ 12) — expanded terms must live in the kernel")
 
     with open(out_path, "w") as f:
@@ -548,6 +609,10 @@ def main():
     p.add_argument("--entry", required=True)
     p.add_argument("-o", "--out")
     p.add_argument("--pin", action="append", default=[])
+    p.add_argument("--route", default=None,
+                   help="resolved-path mode: comma list of PC:T|F|TF branch "
+                        "polarity pins, e.g. 0x80006230:F,0x8000625c:TF — "
+                        "emit only the blocks reachable under the pins")
     p.add_argument("--fold", action="store_true",
                    help="also emit the whole-function fold (recognised loop "
                         "template only) to rows/Fn<X>Fold.lean")
@@ -556,10 +621,18 @@ def main():
                    help="print the CFG classification and exit")
     args = p.parse_args()
     entry = lib.hexint(args.entry)
+    route = None
+    if args.route:
+        route = {}
+        for part in args.route.split(","):
+            pc, pol = part.split(":")
+            if pol not in ("T", "F", "TF"):
+                raise SystemExit(f"--route: bad polarity {pol!r} (T|F|TF)")
+            route[lib.hexint(pc)] = pol
     if args.cfg_only:
         di = lib.parse_disasm()
-        body, blocks = build_cfg(args.fn, entry, di, function_extents())
-        loop = classify_loop(blocks)
+        body, blocks = build_cfg(args.fn, entry, di, function_extents(), route=route)
+        loop = classify_loop(blocks) if route is None else None
         for b in blocks:
             print(b)
         if loop:
@@ -570,7 +643,8 @@ def main():
     base = re.sub(r"[^A-Za-z0-9_]", "_", args.fn).lstrip("_")
     out = args.out or os.path.join(
         ROOT, "Vsa", "Sim", "rows", f"Fn{base[0].upper()}{base[1:]}.lean")
-    blocks, loop = emit_fn(args.fn, entry, out, verify=not args.no_verify)
+    blocks, loop = emit_fn(args.fn, entry, out, verify=not args.no_verify,
+                           route=route)
     if args.fold:
         if not loop:
             raise SystemExit(

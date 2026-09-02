@@ -66,6 +66,8 @@ structure WRG where
   ra0 : BitVec 64
   sp0 : BitVec 64
   s00 : BitVec 64
+  /-- the callee-saved `s1..s11` entry values (preserved by the summary). -/
+  sv : SRegs
   bytes : List (BitVec 8)
   m0 : Std.ExtHashMap Nat (BitVec 8)
   out0 : Array String
@@ -373,7 +375,7 @@ theorem wrM1_pins (g : WRG) (hg : WRGOk g) :
 (= `reent`, set by `mv s0,a0`), memory the entry-block image `wrM1`. -/
 def wrWG1 (g : WRG) : WG :=
   { buf := g.buf, len := g.len, ra0 := 0x80010524#64,
-    sp0 := wrSpE g, gp0 := wrGpVal, s00 := g.reent,
+    sp0 := wrSpE g, gp0 := wrGpVal, s00 := g.reent, sv := g.sv,
     bytes := g.bytes, m0 := wrM1 g, out0 := g.out0 }
 
 theorem wrWG1_ok (g : WRG) (hg : WRGOk g) : WGOk (wrWG1 g) :=
@@ -635,6 +637,7 @@ structure WRAtJal (g : WRG) (c : Config) : Prop where
   sp : gprGet c.σ 2 = some (wrSpE g)
   gp : gprGet c.σ 3 = some wrGpVal
   s0 : gprGet c.σ 8 = some g.reent
+  sregs : GHolds c.σ (sKeepL g.sv)
   out : c.σ.sailOutput = g.out0
   pw : c.σ.regs.get? Register.htif_payload_writes = some (0#4)
   th : ∃ v, c.σ.regs.get? Register.htif_tohost = some v
@@ -650,6 +653,7 @@ structure WRAtEpi (g : WRG) (c : Config) : Prop where
   a0 : gprGet c.σ 10 = some g.len
   sp : gprGet c.σ 2 = some (wrSpE g)
   gp : gprGet c.σ 3 = some wrGpVal
+  sregs : GHolds c.σ (sKeepL g.sv)
   out : c.σ.sailOutput = pushBytes g.out0 g.bytes
   pw : c.σ.regs.get? Register.htif_payload_writes = some (0#4)
   th : ∃ v, c.σ.regs.get? Register.htif_tohost = some v
@@ -673,6 +677,7 @@ structure WriteRFnPre (g : WRG) (c : Config) : Prop where
   sp : gprGet c.σ 2 = some g.sp0
   gp : gprGet c.σ 3 = some wrGpVal
   s0 : gprGet c.σ 8 = some g.s00
+  sregs : GHolds c.σ (sKeepL g.sv)
   out : c.σ.sailOutput = g.out0
   pw : c.σ.regs.get? Register.htif_payload_writes = some (0#4)
   th : ∃ v, c.σ.regs.get? Register.htif_tohost = some v
@@ -692,6 +697,7 @@ structure WriteRFnPost (g : WRG) (c : Config) : Prop where
   sp : gprGet c.σ 2 = some g.sp0
   gp : gprGet c.σ 3 = some wrGpVal
   s0 : gprGet c.σ 8 = some g.s00
+  sregs : GHolds c.σ (sKeepL g.sv)
   out : c.σ.sailOutput = pushBytes g.out0 g.bytes
   pw : c.σ.regs.get? Register.htif_payload_writes = some (0#4)
   th : ∃ v, c.σ.regs.get? Register.htif_tohost = some v
@@ -702,9 +708,10 @@ structure WriteRFnPost (g : WRG) (c : Config) : Prop where
 theorem wrEntryArm (g : WRG) (hg : WRGOk g) :
     Triple (fun c => PCAt 0x800104fc#64 c ∧ WriteRFnPre g c) (WRAtJal g) := by
   have T := segRowFramed write_rX04fcSeg (wrEntryL g) []
-    0x800104fc#64 g.m0 [] g.out0 (0#4)
+    0x800104fc#64 g.m0 (sKeepL g.sv) g.out0 (0#4)
     (by show ChainOK 0x800104fc#64 [11, 2, 8, 12, 10, 13, 1, 3] write_rX04fcSeg; decide)
-    (by show FrameOK [] write_rX04fcSeg; decide)
+    (by show FrameOK [9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27] write_rX04fcSeg
+        decide)
   intro c hc
   obtain ⟨hpc, hp⟩ := hc
   obtain ⟨c1, hs1, h1⟩ := T c
@@ -712,7 +719,7 @@ theorem wrEntryArm (g : WRG) (hg : WRGOk g) :
         ⟨hp.a1, hp.sp, hp.s0, hp.a2, hp.a0, hp.a3, hp.ra, hp.gp, trivial⟩,
         by show KeysOK [11, 2, 8, 12, 10, 13, 1, 3]; decide,
         by rw [hp.mem]; exact wrEntry_facts g hg hg.codeR [], hp.tick⟩
-      keep := trivial
+      keep := hp.sregs
       out := hp.out
       pw := hp.pw
       th := hp.th }
@@ -737,6 +744,7 @@ theorem wrEntryArm (g : WRG) (hg : WRGOk g) :
         have h := gholds_lookup (n := 8)
           (v := g.reent + sign_extend (m := 64) (0x000#12)) _ h1.regs (by rfl)
         rwa [addi0_env] at h
+      sregs := h1.keep
       out := h1.out
       pw := h1.pw
       th := h1.th }
@@ -793,6 +801,31 @@ theorem wrJalArm (g : WRG) (hg : WRGOk g) :
           (by decide) (by decide) (by decide) (by decide) (by decide) hA.gp
         s0 := obs_jal_other_env hobs Register.x8 (by decide) (by decide) (by decide)
           (by decide) (by decide) (by decide) (by decide) (by decide) hA.s0
+        sregs := by
+          obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, -⟩ := hA.sregs
+          exact ⟨obs_jal_other_env hobs Register.x9 (by decide) (by decide) (by decide)
+              (by decide) (by decide) (by decide) (by decide) (by decide) h1,
+            obs_jal_other_env hobs Register.x18 (by decide) (by decide) (by decide)
+              (by decide) (by decide) (by decide) (by decide) (by decide) h2,
+            obs_jal_other_env hobs Register.x19 (by decide) (by decide) (by decide)
+              (by decide) (by decide) (by decide) (by decide) (by decide) h3,
+            obs_jal_other_env hobs Register.x20 (by decide) (by decide) (by decide)
+              (by decide) (by decide) (by decide) (by decide) (by decide) h4,
+            obs_jal_other_env hobs Register.x21 (by decide) (by decide) (by decide)
+              (by decide) (by decide) (by decide) (by decide) (by decide) h5,
+            obs_jal_other_env hobs Register.x22 (by decide) (by decide) (by decide)
+              (by decide) (by decide) (by decide) (by decide) (by decide) h6,
+            obs_jal_other_env hobs Register.x23 (by decide) (by decide) (by decide)
+              (by decide) (by decide) (by decide) (by decide) (by decide) h7,
+            obs_jal_other_env hobs Register.x24 (by decide) (by decide) (by decide)
+              (by decide) (by decide) (by decide) (by decide) (by decide) h8,
+            obs_jal_other_env hobs Register.x25 (by decide) (by decide) (by decide)
+              (by decide) (by decide) (by decide) (by decide) (by decide) h9,
+            obs_jal_other_env hobs Register.x26 (by decide) (by decide) (by decide)
+              (by decide) (by decide) (by decide) (by decide) (by decide) h10,
+            obs_jal_other_env hobs Register.x27 (by decide) (by decide) (by decide)
+              (by decide) (by decide) (by decide) (by decide) (by decide) h11,
+            trivial⟩
         out := hobs.2.trans ((sailOutput_sigmaPost_jal c.σ (0x80010520#64) vm1
           (0x1efb1c#21) Register.x1 (BitVec.addInt (0x80010520#64) 4)).trans hA.out)
         pw := obs_jal_other_env hobs Register.htif_payload_writes (by decide) (by decide)
@@ -808,21 +841,23 @@ theorem wrBeqArm (g : WRG) (hg : WRGOk g) :
     Triple (WriteFnPost (wrWG1 g)) (WRAtEpi g) := by
   have T := segRowFramed write_rX0524FSeg (write_rX0524FL g.len) []
     0x80010524#64 (wrM1 g)
-    [(2, wrSpE g), (3, wrGpVal)]
+    ([(2, wrSpE g), (3, wrGpVal)] ++ sKeepL g.sv)
     (pushBytes g.out0 g.bytes) (0#4)
     (by show ChainOK 0x80010524#64 [10] write_rX0524FSeg; decide)
-    (by show FrameOK [2, 3] write_rX0524FSeg; decide)
+    (by show FrameOK [2, 3, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+          write_rX0524FSeg
+        decide)
   intro c hP
   obtain ⟨c1, hs1, h1⟩ := T c
     { seg := ⟨hP.good, hP.mem, hP.pc, hP.minstret, ⟨hP.a0, trivial⟩,
         by show KeysOK [10]; decide,
         by rw [show c.σ.mem = wrM1 g from hP.mem];
            exact wrBeqF_facts g hg (wrM1 g) (wrM1_codeR g hg) [], hP.tick⟩
-      keep := ⟨hP.sp, hP.gp, trivial⟩
+      keep := ⟨hP.sp, hP.gp, hP.sregs⟩
       out := hP.out
       pw := hP.pw
       th := hP.th }
-  obtain ⟨hksp, hkgp, -⟩ := h1.keep
+  obtain ⟨hksp, hkgp, hsk⟩ := h1.keep
   refine ⟨c1, hs1, ?_⟩
   exact
     { good := h1.good
@@ -833,6 +868,7 @@ theorem wrBeqArm (g : WRG) (hg : WRGOk g) :
       a0 := gholds_lookup (v := g.len) _ h1.regs (by rfl)
       sp := hksp
       gp := hkgp
+      sregs := hsk
       out := h1.out
       pw := h1.pw
       th := h1.th }
@@ -844,21 +880,23 @@ theorem wrEpiArm (g : WRG) (hg : WRGOk g) :
   have T := segRowFramed write_rX052cSeg (write_rX052cL (wrSpE g))
     [wrRaBytes g, wrS0Bytes g]
     0x8001052c#64 (wrM1 g)
-    [(10, g.len), (3, wrGpVal)]
+    ([(10, g.len), (3, wrGpVal)] ++ sKeepL g.sv)
     (pushBytes g.out0 g.bytes) (0#4)
     (by show ChainOK 0x8001052c#64 [2] write_rX052cSeg; decide)
-    (by show FrameOK [10, 3] write_rX052cSeg; decide)
+    (by show FrameOK [10, 3, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+          write_rX052cSeg
+        decide)
   intro c hE
   obtain ⟨c1, hs1, h1⟩ := T c
     { seg := ⟨hE.good, hE.mem, hE.pc, hE.minstret, ⟨hE.sp, trivial⟩,
         by show KeysOK [2]; decide,
         by rw [show c.σ.mem = wrM1 g from hE.mem]; exact wrEpi_facts g hg (wrM1_codeR g hg),
         hE.tick⟩
-      keep := ⟨hE.a0, hE.gp, trivial⟩
+      keep := ⟨hE.a0, hE.gp, hE.sregs⟩
       out := hE.out
       pw := hE.pw
       th := hE.th }
-  obtain ⟨hka0, hkgp, -⟩ := h1.keep
+  obtain ⟨hka0, hkgp, hsk⟩ := h1.keep
   refine ⟨c1, hs1, ?_⟩
   exact
     { good := h1.good
@@ -884,6 +922,7 @@ theorem wrEpiArm (g : WRG) (hg : WRGOk g) :
         have h := gholds_lookup (n := 8)
           (v := bytesVal MKind.ld (wrS0Bytes g)) _ h1.regs (by rfl)
         rwa [wr_s0Bytes_val g] at h
+      sregs := hsk
       out := h1.out
       pw := h1.pw
       th := h1.th }
