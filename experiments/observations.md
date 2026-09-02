@@ -4981,3 +4981,16 @@ it, still stop and report instead.
   full-kind driver (all 6 kinds + assert + error) to the standing t5 corpus
   as the reachability floor. putc_r/fputc_r remain dead-candidates pending
   the static check.
+
+## 2026-09-02 smt-encoder-novelty-gap (coordinator uncontaminated test)
+- missing: novel-form coverage in smt_check.py's Python encoder. History
+  battery: full PASS (auto countermodels, 4 Lean replays). Uncontaminated
+  battery (fuzz-battery/NovelProbe.lean): RecursionError on A/B, ENCODE-GAP
+  on C — LOUD failures (safe, unlike v2's silent SURVIVED) but the
+  generalization claim is unvalidated. The Python statement-parser is the
+  bottleneck; the dump_smt_lib export-tactic route (elaborated-Expr walking,
+  coordinator note in invariant-gen-plan) is the structural fix.
+- cost: none silent; ENCODE-GAP/crash verdicts cannot be mistaken for green.
+- proposal: encoder v2 = Lean-side dump_smt_lib tactic; hard acceptance =
+  history battery + NovelProbe + a --gen-battery fresh sample (once v2.1's
+  generator lands). No generality claims except via uncontaminated tests.

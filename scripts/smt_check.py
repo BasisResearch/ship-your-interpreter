@@ -1081,7 +1081,8 @@ def acceptance(log):
     d_ok = True
     for pth, prop in d_paths:
         if os.path.exists(pth):
-            v = validate("d_" + os.path.basename(pth), open(pth).read() and pth, prop)
+            v, _ = smt_check("validate", pth, prop, log)
+            results["d_" + os.path.basename(pth)] = v
             d_ok = d_ok and (v == "VALID-IN-FRAGMENT")
     # a hermetic budget-ladder candidate (falsity-#13 cured form: consumed ≤ budget)
     d_budget = r"""namespace SmtAcc

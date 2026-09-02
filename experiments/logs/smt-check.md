@@ -201,3 +201,13 @@
 ## smt_check.py run
 
 - `SmtAcc.CurMemExt` → **NOT-REFUTED / VALID-IN-FRAGMENT** (unsat)
+
+## smt_check.py run
+
+
+## smt_check.py run
+
+- `NovelResidC` → **ENCODE-GAP** (unencodable atom; hyps=[None] concl=None)
+
+## smt_check.py run
+
