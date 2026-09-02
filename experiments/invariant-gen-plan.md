@@ -95,3 +95,127 @@ is the research-y piece — bounded by starting relational-lite (single-seam
 cases). Stage 5 is prompt engineering over existing artifacts. The
 acceptance test on history (crux depth-trace refinding falsity #13) decides
 how much to trust it before pointing it at unproven cases.
+
+## Validation round 2 (2026-09-02) — END-TO-END on real cases
+
+Artifacts: `scripts/mine_stack_ladder.py`, `scripts/mine_loop_inv.py`,
+`experiments/invariants/io_write_{loop,fuzz,skeleton}.lean`. Trace hook edited
+in `/tmp/rl-trace` (probe list only); test ELF `rec_fib.elf` built in
+`/tmp/wl-test`. All Lean axiom-clean (⊆ {propext, Classical.choice, Quot.sound}).
+
+**Exp 1 — MINING acceptance on history (falsity #13): PASS.** Traced `fib(4)`
+at eval_expr entry 0x80003164 probing sp; 82 entries, reconstructed call
+nesting to depth 14 from the sp stack discipline. Miner recovered BOTH machine
+frame constants — 1088 (`evalFrame`) and 176 (`execFrame`), matching
+`StackNeed.lean` exactly — and the demand ladder `consumed(d) = d·perLevel +
+base`. **The constant budget 2176 is exceeded at depth 2 (demand 2208 > 2176)**
+— falsity #13's exact class boundary, refound from traces alone. The technique
+would have caught #13 before the proof stalled.
+
+**Exp 2 — full loop on an io case: PASS.** Traced the `_write` byte loop (head
+0x8000004c, the landed P1 fold's loop) on t5.elf; 13 visits / 5 call-instance
+segments. Segmented mining (segment on a3=end constant) recovered the complete
+`WInv`: guard `a1<a3`, stride `a1'=a1+1`, entry relation `a3 = a1_entry + a2`,
+per-call constants a2/a3/a4, and the GLOBAL putchar-cmd word a4=0x0101…000.
+Expressed as `WInvMined` (8-field structure, WInv idiom) → **fuzzer SURVIVED**
+(candidate provably self-consistent, axiom-clean).
+
+**Obligation size measurement.** `loopFromBody` collapses the whole loop to
+ONE per-iteration body obligation (`write_body_step`). Its arithmetic core =
+**3 sub-goals, 4 proof lines, all omega/rfl** (skeleton closes GREEN). The
+whole-loop total-correctness fold, exit, and measure recursion are produced by
+the combinator — the prover writes none of it. Residual for the REAL
+instantiation = only the 5-instruction machine back-edge run (0x4c..0x60) via
+`bblock_sound_bt` + the tohost SEAM, both already-landed abstractions. Contrast:
+the hand-written `FnWriteFold.lean` fold is 873 lines. **"Small obligation"
+claim CONFIRMED: mining + fuzz + loopFromBody reduce a 873-line fold to a
+~4-line arithmetic residual plus a drop-in back-edge lemma.**
+
+**Exp 3 — fuzzer robustness (CTI loop live): PASS.** Three mutations of the
+mined invariant, each REFUTED axiom-free by witness (`io_write_fuzz.lean`):
+(1) DROP the `a1<a3` guard field → refuted by k=len witness (cursor at end);
+(2) WIDEN the measure constant to `len-k+1` → refuted by k=0,len=3 witness;
+(3) SWAP the bound to `a3<a1` → refuted by the same witness. The CTI loop
+(candidate → witness → repair) is demonstrated end-to-end.
+
+### Plan corrections
+
+- **Fuzzer entry-point gap (real).** `statement_fuzz.py` returned UNDECIDABLE on
+  the hermetic candidate: (a) `experiments/` is not on the Lean lib roots so
+  `--import experiments.invariants.…` doesn't resolve, and (b) the binder-type→
+  witness table has no entry for a case-specific ghost struct (`WG`). The
+  robust path used here — emit the `¬mutant` probes as axiom-clean theorems
+  directly (the fuzzer's OWN acceptance idiom) — worked for all 4. FIX before
+  stage 6 scale-out: teach `statement_fuzz.py` to (i) accept a `--file <path>`
+  hermetic module and (ii) synthesize witnesses for the candidate's own ghost
+  struct by reading its field types (constructor `⟨…⟩` from the per-field
+  table), not only the repo's fixed Layout telescope.
+- **Miner interleaving (minor).** The naive two-point slope fit was polluted by
+  the interleaved exec_stmt (176) frames between eval (1088) levels; least-
+  squares over all depths + the delta histogram cleanly separates the two frame
+  constants. gen `mine.py` T3 should histogram strides, not diff endpoints.
+- Otherwise the pipeline shape holds: T1–T4 mining suffices for the io loop
+  (stage-1 claim confirmed), and `loopFromBody` delivers the promised residual
+  collapse. Relational (stage 4) untested this round — still the open risk.
+
+## Validation round 3 (2026-09-02) — PRODUCTIONIZED + RELATIONAL PILOT
+
+Stages 1-3 productionized as generic scripts/ tools; the stage-4 relational
+core risk retired on the brk/cont exec arms.
+
+**Productionized tool list.**
+- `scripts/gen_trace.py` — case-id (+ `--pc`/`--regs`/`--mem` or built-in CASES
+  table) → rewrites the `tracedLoop` probe in the COW emulator copy
+  (`/tmp/rl-trace`, patches **LeanRiscv.lean** not Main.lean), builds the test
+  ELF from a `.wl` program in `/tmp/wl-test`, builds the emulator once per
+  probe-set, runs, emits structured JSONL. Mem windows read via
+  `Sail.ConcurrencyInterfaceV1.PreSail.readByte` (byte-dumped, miner assembles
+  the LE word). Multi-PC probes supported.
+- `scripts/segment.py` — call-instance segmentation on a per-call-constant key
+  (sp by default; `--stride` for cursor-restart io loops). Library + CLI.
+- `scripts/mine.py` — tiered T1–T5 mining, corpus-vocabulary–scoped
+  (`--case` reads "regs written on slice" from the corpus card). **Round-2
+  corrections folded in:** (1) T3 STRIDE HISTOGRAMMING — the whole-trace sp
+  |Δ| histogram cleanly separates evalFrame **1088** (35×) and execFrame
+  **176**, where the naive endpoint slope smeared them; verified on the fib
+  ladder. (2) case vocabulary. Subsumes both hand miners: recovers the io
+  `WInv` (guard `a1<a3`, stride `a1'=a1+1`, entry `a3=a1+len`, global cmd word)
+  and the falsity-#13 frame ladder.
+- `scripts/mine_relational.py` — stage-4 machine×spec pairing.
+- `experiments/spec_trace_brkcont.lean` — `#eval` spec-side driver (executable
+  mirror of the WHILE relation over the pilot subset; imports the REAL
+  `kindOfStmt`/`Stmt`), dumps `(kindOfStmt, frames, depth)` per exec-step.
+- `statement_fuzz.py` **round-2 correction 1 APPLIED**: `--file <path>` hermetic
+  mode (elaborates a module directly, no experiments/ lib-root import needed) +
+  `--struct` field-type witness synthesis (parses `#check @S.mk`, builds the
+  `⟨…⟩` constructor witness, checks INHABITEDNESS = self-consistency). Both
+  gaps the round-2 UNDECIDABLE hit are closed.
+
+**RELATIONAL PILOT VERDICT: PASS (mined facts MATCH the landed bridge shape).**
+Machine trace @ dispatch `0x80004014` (probing `s0`=aStmt + `read32[aStmt]`)
+× spec `kindOfStmt` trace on `while.wl`, aligned by kind tag:
+brk(7) machine 1 = spec 1 = arm-entry 1; cont(8) 50 = 50 = 50; if(3) 201 = 201.
+The two mined conjuncts —
+`read32 m aStmt = some (kindOfStmt s)` and `StmtSlotPinned {7,8} {execArmBrk,
+execArmCont} m` — are **field-for-field** the LANDED bridge: `stmtRepr_kind`
+(`ExecDispatch.lean:84`) and `StmtTablePins.slot7/.slot8` (`ExecEntry.lean:202-203`,
+def at `:178` = `stmtJumpTableBase + sext slotWord = armPC`). Mining found the
+true statement shape before writing it. CTI loop live: hermetic candidate
+`exec_brk_bridge.lean` SURVIVES (inhabited), mutant (slot mis-tagged) REFUTED
+axiom-free. Artifact: `experiments/invariants/exec_brkcont_relational.md`.
+
+**What remains untested.**
+- Relational mining on the HARDER classes: stage-3 Approx/store bridges (leaf/
+  binop widening posts — `gprGet a0 = reprOf value`, φ-frame counts) and the
+  stage-4 crux `hCallClosure` depth/budget relations. The pilot was
+  relational-LITE (single seam, discriminating integer tag; alignment by tag +
+  count, not a full event-index zip). A multi-seam case (env-seam `hCall`,
+  `hSVarInit`) needs a real per-event alignment key, not tag-histogram matching.
+- Value-repr conjuncts (`reg ↔ reprOf(spec value)`) need the spec driver to
+  emit the actual `Value`/its repr, and the machine probe to dump the boxed
+  pointer + read back the payload — deeper than the integer kind tag mined here.
+- Stage-5 LLM seeding is unexercised (structured-candidate synthesis from the
+  invariant zoo); the pilot hand-wrote the ghost struct the LLM would propose.
+- The `#eval` spec driver is a hand-transcribed AST + a subset interpreter, not
+  a `.wl` parser feeding the full relational semantics; a general driver must
+  parse the same `.wl` the machine runs and cover all stmt/expr forms.

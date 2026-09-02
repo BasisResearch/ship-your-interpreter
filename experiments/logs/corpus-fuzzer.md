@@ -34,3 +34,79 @@ validation, like the ELF emulator harness).
   correct — the sp=0 witness no longer bites.
 
 (runs appended below)
+
+## statement_fuzz.py run
+
+- `IoWriteMined.IoWriteInvCandidate` → **UNDECIDABLE** — telescope not discoverable
+
+## statement_fuzz.py run
+
+- `ExecBrkBridge.brkArmMutant` (file exec_brk_bridge.lean) → **UNDECIDABLE** — ['<struct fields undiscoverable>']
+
+## statement_fuzz.py run
+
+- `ExecBrkBridge.brkArmMined` (file exec_brk_bridge.lean) → **UNDECIDABLE** — ['<struct fields undiscoverable>']
+
+## statement_fuzz.py run
+
+- `ExecBrkBridge.brkArmMined` (file exec_brk_bridge.lean) → **SURVIVED** — candidate inhabited (self-consistent) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `ExecBrkBridge.brkArmMutant` (file exec_brk_bridge.lean) → **REFUTED** — (axiom-free) (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+
+### Acceptance run (hermetic 2865529→main amendment model)
+
+**Must REFUTE (pre-amendment holes):**
+- `PreNeg` → **REFUTED** — (axiom-free)
+- `PreAndFalse` → **REFUTED** — (axiom-free)
+- `PreOrTrue` → **REFUTED** — (axiom-free)
+
+**Must SURVIVE (amended fields):**
+- `AmdNeg` → **SURVIVED** (naive witness rejected → survives) — 'VsaFuzzAcceptance.refute_AmdNeg' depends on axioms: [sorryAx]
+- `AmdAndFalse` → **SURVIVED** (naive witness rejected → survives) — 'VsaFuzzAcceptance.refute_AmdAndFalse' depends on axioms: [sorryAx]
+- `AmdOrTrue` → **SURVIVED** (naive witness rejected → survives) — 'VsaFuzzAcceptance.refute_AmdOrTrue' depends on axioms: [sorryAx]
+
+**Acceptance: refuted 3/3 pre (need ≥3), survived 3/3 amended → PASS**
+
+## statement_fuzz.py run
+
+
+## statement_fuzz.py run
+
+- `Probe` (file fuzz_probe.lean) → **SURVIVED** — 'VsaFuzzFileProbe.refuted' depends on axioms: [sorryAx] (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `BadProbe` (file fuzz_false.lean) → **SURVIVED** — 'VsaFuzzFileProbe.refuted' depends on axioms: [sorryAx] (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `StmtDispatchResidAmended` (file fuzz_execarm.lean) → **SURVIVED** — 'VsaFuzzFileProbe.refuted' depends on axioms: [sorryAx] (ghost witness ⟨(by decide), (by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `LeafResidAmended` (file fuzz_leaf.lean) → **SURVIVED** — 'VsaFuzzFileProbe.refuted' depends on axioms: [sorryAx] (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `WInvStructured` (file fuzz_io.lean) → **SURVIVED** — 'VsaFuzzFileProbe.refuted' depends on axioms: [sorryAx] (ghost witness ⟨(by decide), (by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `ErrSeamResid` (file fuzz_errseam.lean) → **SURVIVED** — 'VsaFuzzFileProbe.refuted' depends on axioms: [sorryAx] (ghost witness ⟨(by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `VParmArmResid` (file fuzz_vparm.lean) → **SURVIVED** — 'VsaFuzzFileProbe.refuted' depends on axioms: [sorryAx] (ghost witness ⟨(by decide), (by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `FnResid` (file fuzz_fn.lean) → **SURVIVED** — 'VsaFuzzFileProbe.refuted' depends on axioms: [sorryAx] (ghost witness ⟨(by decide), (by decide), (by decide)⟩)
+
+## statement_fuzz.py run
+
+- `ErrArmResid` (file fuzz_errarm.lean) → **SURVIVED** — 'VsaFuzzFileProbe.refuted' depends on axioms: [sorryAx] (ghost witness ⟨(by decide), (by decide), (by decide)⟩)

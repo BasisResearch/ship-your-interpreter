@@ -195,6 +195,113 @@ def synth_witness(ty):
 
 
 # --------------------------------------------------------------------------
+# round-2 correction 1: --file hermetic mode + ghost-struct witness synthesis
+# --------------------------------------------------------------------------
+
+def discover_struct_fields(struct, prelude):
+    """Print a ghost struct's constructor with `#check @<struct>.mk` and parse
+    it.  A `structure … : Prop where` constructor prints as
+
+        @S.mk : ∀ {p₁ : T₁} …, F₁ → F₂ → … → S p₁ …
+
+    where the `{pᵢ}` are the structure PARAMETERS (data, index-like) and the
+    arrow chain `F₁ → … → Fₙ` are the Prop FIELDS.  We return
+    ([(pname, ptype)], [field_prop, …]) — the params drive data witnesses, the
+    fields are discharged by `by decide`.  Returns (None, None) on failure."""
+    src = (f"{prelude}\n\nset_option pp.fullNames false in\n"
+           f"#check @{struct}.mk\n")
+    rc, out = run_lean(src)
+    m = re.search(rf"{struct.split('.')[-1]}\.mk\s*:\s*(.+)", out, re.S)
+    if not m:
+        return None, None
+    sig = " ".join(m.group(1).split())
+    # implicit/explicit params before the field arrows
+    params = []
+    for gm in re.finditer(r"[{(]([^{}():]+):([^{}()]+)[})]", sig):
+        for nm in gm.group(1).split():
+            params.append((nm, gm.group(2).strip()))
+    # field props = the `A → B → … → <struct applied>` arrow chain.  Cut off the
+    # binder prefix (up to the last `,` that ends the ∀) then split on `→`.
+    tail = sig.split(",", 1)[1] if "," in sig else sig
+    # drop the final `→ S …` conclusion
+    parts = [p.strip() for p in tail.split("→")]
+    fields = parts[:-1] if len(parts) >= 2 else []
+    return params, fields
+
+
+def synth_struct_witness(struct, prelude):
+    """Build a `⟨w1, …, wn⟩` constructor witness: data params from the
+    type→witness table (lethal 0/false), Prop fields discharged by `by decide`.
+    Returns (witness_str, missing)."""
+    params, fields = discover_struct_fields(struct, prelude)
+    if params is None:
+        return None, ["<struct fields undiscoverable>"]
+    ws, missing = [], []
+    # NOTE: parameters are usually IMPLICIT ({…}) and inferred from the Prop
+    # being probed, so we supply witnesses ONLY for the explicit fields.  If the
+    # probe already fixes the params (via the applied Prop), Lean infers them.
+    for f in fields:
+        ws.append("(by decide)")   # Prop field: lethal iff false at the params
+    return "⟨" + ", ".join(ws) + "⟩", missing
+
+
+def fuzz_file(path, prop, struct, log):
+    """--file mode: elaborate a hermetic module directly (no lib-root import
+    needed), then refute `prop`.  If `struct` is given, synthesize a lethal
+    constructor witness for that ghost struct from its field types."""
+    body = open(path).read()
+    detail = ""
+    if struct:
+        witness, missing = synth_struct_witness(struct, body)
+        if witness is None:
+            line = f"- `{prop}` (file {os.path.basename(path)}) → **UNDECIDABLE** — {missing}"
+            print(line); log.write(line + "\n"); log.flush()
+            return "UNDECIDABLE"
+        detail = f" (ghost witness {witness})"
+        # A concrete ghost-struct candidate is an ENTRY fact the proof assumes.
+        # Consistency check: is it INHABITED?  If the constructor witness
+        # `⟨by decide,…⟩ : prop` type-checks, the candidate is self-consistent
+        # → SURVIVED.  Otherwise refute a field: prove `¬ prop` by destructuring
+        # and hitting the false conjunct with `by decide` → REFUTED.
+        probe = (f"{body}\n\nnamespace VsaFuzzFileProbe\n"
+                 f"set_option maxHeartbeats 1000000 in\n"
+                 f"theorem consistent : {prop} := {witness}\n"
+                 f"#print axioms consistent\nend VsaFuzzFileProbe\n")
+        rc, out = run_lean(probe)
+        if rc == 0 and ("does not depend on any axioms" in out
+                        or re.search(r"depends on axioms: \[[^\]]*\]", out)):
+            m = re.search(r"depends on axioms: \[([^\]]*)\]", out)
+            ax = {a.strip() for a in (m.group(1).split(",") if m else []) if a.strip()}
+            v = ("SURVIVED" if ax <= AX_OK else "SURVIVED-DIRTY")
+            d = "candidate inhabited (self-consistent)"
+        else:
+            # not inhabited at these params — try to prove ¬prop (refuted CTI)
+            refute = (f"{body}\n\nnamespace VsaFuzzFileProbe\n"
+                      f"set_option maxHeartbeats 1000000 in\n"
+                      f"theorem refuted : ¬ {prop} := by\n"
+                      f"  intro H; obtain ⟨{', '.join('f'+str(i) for i in range(witness.count(',')+1))}⟩ := H\n"
+                      f"  first\n"
+                      + "\n".join(f"  | exact absurd f{i} (by decide)"
+                                  for i in range(witness.count(',') + 1)) + "\n"
+                      f"#print axioms refuted\nend VsaFuzzFileProbe\n")
+            rc2, out2 = run_lean(refute)
+            v, d = classify(rc2, out2)
+        line = f"- `{prop}` (file {os.path.basename(path)}) → **{v}** — {d}{detail}"
+        print(line); log.write(line + "\n"); log.flush()
+        return v
+    else:
+        probe = (f"{body}\n\nnamespace VsaFuzzFileProbe\n"
+                 f"theorem probe : ¬ {prop} := by\n"
+                 f"  intro H\n  exact absurd H (by decide)\n"
+                 f"#print axioms probe\nend VsaFuzzFileProbe\n")
+        rc, out = run_lean(probe)
+        verdict, d = classify(rc, out)
+        line = f"- `{prop}` (file {os.path.basename(path)}) → **{verdict}** — {d}{detail}"
+        print(line); log.write(line + "\n"); log.flush()
+        return verdict
+
+
+# --------------------------------------------------------------------------
 # probe
 # --------------------------------------------------------------------------
 
@@ -377,6 +484,12 @@ def main():
                     help="extra def(s) to unfold to expose the telescope "
                          "(e.g. the *Resid the Skel* aliases)")
     ap.add_argument("--acceptance", action="store_true")
+    ap.add_argument("--file", dest="file",
+                    help="hermetic .lean module path (round-2 fix): elaborate "
+                         "directly, no experiments/ lib-root import needed")
+    ap.add_argument("--struct", dest="struct",
+                    help="ghost struct name; synthesize a lethal constructor "
+                         "witness from its field types (round-2 fix)")
     args = ap.parse_args()
 
     os.makedirs(LOGDIR, exist_ok=True)
@@ -384,8 +497,13 @@ def main():
         log.write("\n## statement_fuzz.py run\n\n")
         if args.acceptance:
             sys.exit(0 if acceptance(log) else 1)
+        if args.file:
+            if not args.prop:
+                ap.error("--file needs --prop")
+            fuzz_file(args.file, args.prop, args.struct, log)
+            return
         if not (args.imp and args.prop):
-            ap.error("need --import and --prop (or --acceptance)")
+            ap.error("need --import and --prop (or --file, or --acceptance)")
         fuzz_one(args.imp, args.prop, args.layout, args.unfold, log)
 
 
