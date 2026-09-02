@@ -99,19 +99,9 @@ structure EvalArmHeadExtras
   tableStk0 : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58
   arenaStk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
   arenaCode : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
-  /-- Machine-liveness of `a3`(x13) at the arm entry: the dispatch span
-  `0x80003164 → armPC` never writes `a3` (only `a4`/`a5` + the spills), so any
-  config reached there with the arm-entry frame + PC has a live `x13`.  A
-  caller-save temp NOT covered by `blockA_k`'s (callee-saved) frame — the ONE
-  register-liveness residual a `blockA_k` widening (tracking `x13` across
-  dispatch) would discharge.  Identical to `BinArmExtras.x13_pres`. -/
-  x13_pres : ∀ c1 : Vsa.Machine.Config,
-    (∀ R : Register, AbiPreservedNoise R →
-      (Register.x8 == R) = false → (Register.x9 == R) = false →
-      (Register.x18 == R) = false → (Register.x2 == R) = false →
-      c1.σ.regs.get? R = g R) →
-    c1.σ.regs.get? Register.PC = some armPC →
-    ∃ w, c1.σ.regs.get? Register.x13 = some w
+  -- WAVE 48i (CURE 3): the `x13_pres` machine-liveness ∀-closure was DROPPED — it
+  -- is now DISCHARGED intrinsically by `blockA_k`'s 3rd output (`c1.regs x13 = some
+  -- v13`, the CURE-A x13 σ1..σ19 thread).  Identical drop to `BinArmExtras.x13_pres`.
 
 /-! ## `evalArmDispatch_of_slot` — the parametric Group-A combinator
 
@@ -162,7 +152,7 @@ theorem evalArmDispatch_of_slot
   intro c'' heq
   subst heq
   -- === block A: prologue + dispatch → widened ArmEntryK @armPC ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, _hpresM, _hx13⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, v13, hArm, _hpresM, hx13out⟩ :=
     blockA_k g N A SL φf φc st e k armPC UnaryArmCallee
       sp r0 sret aEnv aExpr m0 c''.σ.sailOutput
       hkle hklt
@@ -212,12 +202,13 @@ theorem evalArmDispatch_of_slot
   -- extras' PARENT-window bundle).
   have hGroundMent : EvalGround ment SL A sp sret aChild.toNat ce :=
     hX.ground.transport_offstack hX.tableStk0 hX.spSLhi hMentM0
-  -- `x13` liveness at the reached arm entry (the named closure).
-  obtain ⟨aEnv3, hx13c1⟩ := hX.x13_pres c1 hArmFrame _hApc
+  -- WAVE 48i (CURE 3): `x13` liveness at the reached arm entry is now the
+  -- blockA_k 3rd output `hx13out` (CURE A), DISCHARGING the dropped `x13_pres` closure.
+  have hx13c1 : c1.σ.regs.get? Register.x13 = some v13 := hx13out
   -- Realign the ArmEntryK `out0` to the reached `c1.σ.sailOutput`.
   have hArm' : ArmEntryK g N A SL φf φc st armPC UnaryArmCallee e
       sp r0 sret aExpr aEnv v8 v9 v18 c1.σ.sailOutput m0 ment c1 := _hAout.symm ▸ hArm
-  exact ⟨c1, hs1, (fun R => c1.σ.regs.get? R), aEnv, aChild, aEnv3, v8, v9, v18, ment,
+  exact ⟨c1, hs1, (fun R => c1.σ.regs.get? R), aEnv, aChild, v13, v8, v9, v18, ment,
     hArm', hAEx11, hx13c1, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩,
     hpayMent, hchildSurvMent, hGroundMent, hX.node_hi,
     hX.child_align, hX.child_lo, hX.child_hi, hX.child_win, hX.child_stk,

@@ -131,19 +131,9 @@ structure BinArmExtras
   -- callee-saved register that `blockA_k`'s frame ties `c1.regs x19 = g x19` to).
   -- `EvalEntry.spill_defined` only covers `s0`/`s1`/`s2`, so `x19` is threaded here. =====
   gx19_pres : ∃ w, g Register.x19 = some w
-  -- ===== machine-liveness of `a3`(x13) at the arm entry: the dispatch span
-  -- `0x80003164 → 0x800034e8` never writes `a3` (it uses only `a4`/`a5` + the spills),
-  -- so any config reached there with the arm-entry frame + PC has a live `x13`.  A
-  -- caller-save temp NOT covered by `blockA_k`'s (callee-saved) frame — the ONE
-  -- register-liveness residual a `blockA_k` widening (tracking `x13` across dispatch)
-  -- would discharge; threaded here as an M6-liveness closure. =====
-  x13_pres : ∀ c1 : Vsa.Machine.Config,
-    (∀ R : Register, AbiPreservedNoise R →
-      (Register.x8 == R) = false → (Register.x9 == R) = false →
-      (Register.x18 == R) = false → (Register.x2 == R) = false →
-      c1.σ.regs.get? R = g R) →
-    c1.σ.regs.get? Register.PC = some (0x800034e8#64) →
-    ∃ w, c1.σ.regs.get? Register.x13 = some w
+  -- WAVE 48i (CURE 3): the `x13_pres` machine-liveness ∀-closure was DROPPED — it is
+  -- now DISCHARGED intrinsically by `blockA_k`'s 3rd output (`c1.regs x13 = some v13`,
+  -- the CURE-A x13 σ1..σ19 thread), so `blockA_binaryArm` no longer needs the closure.
   -- WAVE 48f: the `mem_ext : ∀m … → MemExtends m0 m` closure was DROPPED — it is
   -- over-quantified and machine-REFUTED as stated
   -- (`experiments/fleet/obstructions/BinArmExtrasMemExtOverquant.lean`), AND it is
@@ -197,7 +187,7 @@ theorem blockA_binaryArm
     have := hc.mem ▸ hc.expr
     cases this with | binary hk _ _ _ _ _ => exact hk
   -- === block A: prologue + dispatch → widened ArmEntryK @0x800034e8 ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, hpresM, _hx13⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, v13, hArm, hpresM, hx13out⟩ :=
     blockA_k g N A SL φf φc st (.binary op el er) 6 (0x800034e8#64) UnaryArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
@@ -292,14 +282,15 @@ theorem blockA_binaryArm
     rw [hArmFrame Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide)]
     exact hgx19
   -- `x13` (a3, a caller-save temp) is NOT preserved/exposed by `blockA_k`'s frame.
-  -- Its arm-entry presence is threaded as `hX.x13_pres` (a machine-liveness residual:
-  -- the dispatch span `0x80003164→0x800034e8` never writes `a3`).  Bound as `aEnvReg`.
-  obtain ⟨aEnvReg, hx13c1⟩ := hX.x13_pres c1 hArmFrame _hApc
+  -- WAVE 48i (CURE 3): its arm-entry presence is now the blockA_k 3rd output
+  -- `hx13out : c1.regs x13 = some v13` (CURE A threaded x13 σ1..σ19), DISCHARGING
+  -- what the dropped `x13_pres` ∀-closure used to supply.  Bound as `aEnvReg := v13`.
+  have hx13c1 : c1.σ.regs.get? Register.x13 = some v13 := hx13out
   -- Realign the ArmEntryK `out0` from the passed `c.σ.sailOutput` to the goal's
   -- `c1.σ.sailOutput` (equal by the blockA_k output invariant `_hAout`).
   have hArm' : ArmEntryK g N A SL φf φc st (0x800034e8#64) UnaryArmCallee (.binary op el er)
       sp r sret aExpr aEnv v8 v9 v18 c1.σ.sailOutput m0 ment c1 := _hAout.symm ▸ hArm
-  refine ⟨c1, hs1, (fun R => c1.σ.regs.get? R), aEnvReg, v8, v9, v18, v19, ment, hArm', hBE,
+  refine ⟨c1, hs1, (fun R => c1.σ.regs.get? R), v13, v8, v9, v18, v19, ment, hArm', hBE,
     hAEx11, hx13c1, hx19c1, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩, hAEx8, hAEx18,
     hx19c1, hpayLment, hlReprMent, hpayRment, hrReprMent, hMentPop, hMemExt,
     (hc.mem ▸ hc.ground).transport_offstack hc.table_stack_disjoint hX.spSLhi hMentM0⟩

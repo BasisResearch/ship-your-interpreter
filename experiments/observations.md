@@ -5219,3 +5219,42 @@ it, still stop and report instead.
 - GENERALISATION KEY (mechanical, in autoprove step 1): read the write-log off
   wlogM of the reflected block via a DumpSmtLib-style extractor, not hand-listed
   per arm. Same array-store fold.
+
+## 2026-09-02 framepop-precall-not-subevalreturn (wave 48i — the recorded re-route is infeasible)
+- missing: a discharge of `BinArmExtras.frame_pop` (+ the 6 unary/logic `∀mcall`
+  presence closures) WITHOUT a new entry-`m0` frame-presence field. Session-2 recipe
+  step (0) proposed "re-route through SubEvalReturn's buffer-write presence (the sub-
+  `value_int` 24-byte write populates the dead sub-result bytes)". MACHINE-GROUNDED
+  INFEASIBLE (Law 4): frame_pop's windowed presence on `[sp-1120,sp)` is over the
+  memory BEFORE the sub-`jal`, whereas SubEvalReturn is the state AFTER it returns.
+  (1) unary/neg: `evalNegSim` (EvalNegSim3.lean:143-148) carries the `∀mcall` closure
+  as a Triple PRECONDITION over the pre-recursive-call memory, fed to `blockC_neg` as
+  `hStackPop` over `mcall` (pre-`jal`). A post-call fact cannot supply pre-call presence.
+  (2) binary: `blockA_binaryArm` emits the presence over `ment` (arm-entry, pre-dispatch,
+  BinArmBridge.lean:188); `blockB_binary` (EvalBinSim.lean:612 `hPopCL`) transports it
+  forward through 2 spill inserts + the LEFT SubEvalReturn's `MemExtends mcall1 cL.mem`.
+  `MemExtends` PRESERVES presence, never CREATES it, so `cL.mem`'s `[sp-1120,sp)` presence
+  reduces to `ment`'s ⇒ to `m0`'s. DECISIVE: `hslotpeel2` (EvalBinSim.lean:900-914) reads
+  the RIGHT call's own spill window `[sp-1120,sp-1088)` out of `cL.mem` BEFORE the right
+  prologue writes it (the intermediate re-spill code) — those bytes are NEITHER the LEFT
+  sub-result buffer (subsret=sp-968) NOR the env-arg slot (sp-1088), so the "sub-value_int
+  buffer write" covers only a STRICT SUBSET. The right-spill bytes' presence is a pure
+  entry-`m0` fact.
+- workaround: NONE for frame_pop (STOP per Law 4). DID land CURE 3 (x13_pres) fully:
+  `blockA_k`'s CURE-A 3rd output (`c1.regs x13 = some v13`) DISCHARGES the `x13_pres`
+  closure in both `blockA_binaryArm` (BinArmBridge) and `evalArmDispatch_of_slot`
+  (ArmDispatchCombinator); the `x13_pres` field DROPPED from BOTH `BinArmExtras` and
+  `EvalArmHeadExtras`. Green + axiom-clean, discipline OK, check_all c 913/913.
+- cost: any agent re-attempting the SubEvalReturn re-route pays a dead end — the
+  presence quantifies over pre-call memory, structurally out of a post-call bridge's
+  reach; `framePopProbe_false` (BinArmExtrasFramePopNewRung.lean) is the standing
+  refutation. Landing CURE 3 alone relights 0 fields: the int/eq/unary residuals still
+  carry the (false) frame_pop `∀mcall` closure, so `BinIntCellResid`/the 6 unary resids
+  stay refuted (X2_Field_hIAdd still proves `field_hIAdd_refuted`, axiom-clean).
+- proposal: frame_pop's honest cure is the 48f-proposed NEW entry-ground frame-presence
+  field `∀a∈[sp-1120,sp), ∃b, m0[a]?=some b` (or the tighter dead-byte footprint),
+  supplied by a VERIFIED top-level M6-image totality fact on the caller's `[SL.lo,sp)`
+  scribble region — NOT a sim-internal re-route. That verified supplier is the missing
+  rung; adding the field WITHOUT it would introduce an unverified premise (a possible new
+  falsity — the census's whole guard). Until it exists, CURE 1 (entry-carry + relight)
+  cannot land: it requires BOTH closures dropped, and frame_pop cannot be.

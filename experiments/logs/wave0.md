@@ -454,3 +454,47 @@ re-route (step (0)):
    regen `AssemblySkeleton` + TermAssembly, then the 17 int/eq/unary/logic fields relight
    (census 6→23). INVERSION check: the X2 refutations (`X2_Field_hIAdd` etc.,
    `BinCuresInterlock48g`) must then FAIL to prove (the cells become TRUE as stated).
+
+---
+## Wave 48i — interlock SESSION 2 (x13_pres + frame_pop discharge, entry-carry, relight)
+
+Starting from HEAD 0defcd4 (48h landed CURE A, census 6/58 verified {FOUND:6, NOT_FOUND:52}).
+Recipe (from 48h SESSION 2 PICKUP): step (0)+(B) x13_pres+frame_pop discharge & closure-drop;
+(C) bin entry-carry + skeleton regen + relight 17; inversion check on X2 refutations.
+
+### Step 0 — grounding target files
+
+### LANDED (48i SESSION 2) + VERDICT
+
+CURE 3 (x13_pres discharge) LANDED, whole affected cone (49 modules) + Vsa root green,
+axiom-clean ⊆ {propext,Classical.choice,Quot.sound}, discipline OK (9 rules), check_all
+--skip-build: a4 OK, b OK (1256 files), c 913/913 audited.
+
+- `blockA_binaryArm` (BinArmBridge): the blockA_k 3rd output `hx13out : c1.regs x13 =
+  some v13` (CURE A) now DISCHARGES what the `x13_pres` ∀-closure supplied; `aEnvReg := v13`.
+- `evalArmDispatch_of_slot` (ArmDispatchCombinator): identical discharge from `hx13out`.
+- `BinArmExtras.x13_pres` AND `EvalArmHeadExtras.x13_pres` fields DROPPED (never constructed
+  anywhere — pure residual hypotheses; only the two combinators projected them, both fixed).
+
+MACHINE-CHECKED OBSTRUCTION (Law 4 STOP) — CURE 2 (frame_pop) via the recorded
+SubEvalReturn re-route is INFEASIBLE. frame_pop's windowed presence on `[sp-1120,sp)` is
+over PRE-sub-call memory (a Triple precondition in evalNegSim:143-148 / the arm-entry
+`ment` in blockA_binaryArm output), whereas SubEvalReturn is the POST-call state — a
+post-call fact cannot supply pre-call presence (MemExtends preserves, never creates it).
+DECISIVE: blockB_binary (EvalBinSim.lean:900-914 hslotpeel2) reads the RIGHT call's own
+spill window `[sp-1120,sp-1088)` out of cL.mem BEFORE the right prologue writes it — NOT a
+sub-result buffer, NOT the env slot, so the "sub-value_int buffer write" covers a strict
+SUBSET; those bytes are a pure entry-`m0` fact. Full analysis: observations.md
+`framepop-precall-not-subevalreturn`; standing refutation `framePopProbe_false`
+(BinArmExtrasFramePopNewRung.lean).
+
+CURE 1 (entry-carry + relight) NOT reached: it needs BOTH closures dropped, and frame_pop
+cannot be via the recorded re-route. Its honest cure = the 48f NEW entry-ground
+frame-presence field backed by a VERIFIED M6 `[SL.lo,sp)` totality supplier (adding it
+unverified = a possible new falsity, the census guard). Named as the residual rung.
+
+INVERSION: X2_Field_hIAdd STILL proves `field_hIAdd_refuted` (axiom-clean) — BinIntCellResid
+remains false as stated (frame_pop unprovable), so NO false lemma entered the tree.
+FIELDS RELIT: 0. Census UNCHANGED 6/58 ({FOUND:6, NOT_FOUND:52}, verified). CURE 3 shrinks
+the false surface (drops the x13_pres ∀-closure class) but relights nothing alone, exactly
+as 48f/48g predicted for a single cure.
