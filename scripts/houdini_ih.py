@@ -305,14 +305,28 @@ def print_rows(rows):
         print(f"{r['field']:16} {r['verdict']:16} {r['z3confirmed']:3} "
               f"{r['time']:6.3f}  {r['detail'][:60]}")
 
+def storerepr_main():
+    """Run the StoreRepr-survival Houdini probe (the recursive-Repr-cone twin of
+    the .str pilot).  Delegates to experiments/smt/bounded/gen_storerepr.py, which
+    encodes StoreRepr→FrameRepr→{ValueRepr,CString,φf-parent} bounded and runs the
+    SAME maximal-consistent/minimal-sufficient Houdini loop.  Ground truth:
+    Vsa/Sim/ReprSurvival.lean storeRepr_agreeP (frameRepr_agreeP ∘ valueRepr_agreeP
+    ∘ cstring_agreeP + verbatim φf_inj/arena)."""
+    import gen_storerepr as S
+    S.main()
+
 def main():
     ap = argparse.ArgumentParser(description="Houdini IH-selector / bounded-VC triage.")
     ap.add_argument("--field", help="one SkelName (e.g. hVar, ValueRepr.null)")
     ap.add_argument("--batch", help="comma-list of fields OR 'all-supplier'")
     ap.add_argument("--pilot", action="store_true",
                     help="run the original .str Houdini pilot (default if no field/batch)")
+    ap.add_argument("--storerepr", action="store_true",
+                    help="run the StoreRepr-survival recursive-cone Houdini probe")
     args = ap.parse_args()
 
+    if args.storerepr:
+        return storerepr_main()
     if args.field:
         r = run_field(args.field)
         print_rows([r]); return [r]
