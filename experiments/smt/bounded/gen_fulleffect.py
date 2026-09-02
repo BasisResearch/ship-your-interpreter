@@ -172,6 +172,15 @@ def encode_given_subresult(kind="int", control=False):
         # cut) — this is the given-sub-result's CString survival, an IH fact.
         L.append("(assert (= exitMem_p subMem_p))")
         L.append("(assert (= cstr_tail_exitMem cstr_tail_subMem))")
+        # BOUNDED payload cut (mirrors gen_noframe.encode_str_finitize, W=3): the
+        # payload chars at [p, p+W) live OUTSIDE the 24-byte struct buffer, so the
+        # frame-agree loop above never pins them.  The IH's CString survival gives
+        # byte-agreement over the bounded prefix; without it Z3 leaves the payload
+        # free and finds a spurious countermodel (the branch reads SAT).  With it
+        # the str branch is a proved UNSAT, same status as the non-str kinds.
+        for i in range(W):
+            L.append(f"(assert (= (select exitMem_def (+ exitMem_p {i})) (select subMem_def (+ subMem_p {i}))))")
+            L.append(f"(assert (= (select exitMem_val (+ exitMem_p {i})) (select subMem_val (+ subMem_p {i}))))")
     # NEGATED exit: ValueRepr exitMem N φc' subsret vsub
     L.append(f"(assert (not {G.valuerepr('exitMem', 'subsret', base, W)}))")
     return L

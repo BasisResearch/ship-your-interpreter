@@ -30,8 +30,8 @@ that must be **SAT** (non-vacuity: the fragment can still refute). A row is
 | **A1** | COMPOSITION-DEFER: reg+PC outcome | all 14 frame arms (pilots hSBrk/hSExpr) | `gen_fulleffect.encode_reg_pc_out` (runGM/endPCM as BV64 lets) | **UNSAT** / SAT(corrupt a0) | fixed-width **BitVec64** registers/PC |
 | **A2** | COMPOSITION-DEFER: HTIF/console output | same | `gen_fulleffect.encode_htif_out` (putchar-count) | **UNSAT** / SAT(phantom putchar) | none (finite Int counter) |
 | **A3** | COMPOSITION-DEFER: memory frame | same | `autoprove.encode_execleaf_frame` (wlogM-extracted stores) | **FRAME-PROVED** (agree UNSAT ∧ pres UNSAT ∧ ctrl_window SAT) | **uninterpreted-linear** window reads |
-| **A4** | COMPOSITION-DEFER: given-sub-result (recursor IH) | recursive arms (hSExpr) | `gen_fulleffect.encode_given_subresult` | null/bool/int **UNSAT** / SAT; **str SAT** → see A4′ | IH-as-hypothesis (uninterpreted callee) |
-| **A4′** | └ .str CString wall (the lone A SAT) | hSExpr str-subresult | `gen_noframe.encode_str_finitize(with_payload)` | without payload agree **SAT**; **WITH bounded `[p,p+3)` agree UNSAT** | **bound-k CString prefix (W=3)** + uninterpreted-tail cut |
+| **A4** | COMPOSITION-DEFER: given-sub-result (recursor IH) | recursive arms (hSExpr) | `gen_fulleffect.encode_given_subresult` | null/bool/int/**str all UNSAT** / SAT | IH-as-hypothesis (uninterpreted callee) + **CString `[p,p+3)` + tail cut** (str) |
+| **A4′** | └ .str CString wall (finitized in-place) | hSExpr str-subresult | `gen_fulleffect.encode_given_subresult` (str) + `gen_noframe.encode_str_finitize` | without payload agree **SAT**; **WITH bounded `[p,p+3)` agree UNSAT** | **bound-k CString prefix (W=3)** + uninterpreted-tail cut |
 | **B1** | PC-hop (segIdentity) | hSeqNil, hArgsNil | `gen_noframe.encode_pchop` (BV64 PC + mem-identity) | **UNSAT** / SAT(phantom +4 hop) | fixed-width **BitVec64** PCs |
 | **B2a** | recursive call-splice | hCall, hCallClosure, hSeqConsNormal, hSeqConsAbrupt | `gen_noframe.encode_callsplice` (uninterp callee + suffix frame-agree) | null/bool/int/**str all UNSAT** / SAT | IH-hypothesis + **CString `[p,p+3)` + tail cut** (str) |
 | **B2b** | args-loop accumulator | hArgsCons | `gen_noframe.encode_argsloop` (k disjoint arg buffers) | k=1,2,3 **UNSAT** / SAT | **concrete 32-apart bases** (kills nonlinear disjointness), per-arg int witness |
@@ -52,10 +52,13 @@ finitized to a definite verdict, and WHICH finitization is recorded:
    countermodel (**SAT**). Finitization = **bound the char prefix at W=3** + assert
    the opaque tail equal (`cstr_tail` cut) + the bounded byte-agreement `[p,p+W)`.
    Verified: `gen_noframe.py --demo-str-finitize` flips **SAT → UNSAT** in 6ms.
-   This is the SAME cut `BOUNDED-PROBE.md` identified; the `gen_fulleffect.py`
-   given-sub-result str case does NOT yet carry it (it stops at the struct + tail
-   agreement), which is exactly why its str branch reads SAT. Adopting the payload
-   line closes it — demonstrated here without editing the sibling file.
+   This is the SAME cut `BOUNDED-PROBE.md` identified. The `gen_fulleffect.py`
+   given-sub-result str case now CARRIES it (the payload chars live outside the
+   24-byte struct, so the frame-agree loop never pinned them; adding the bounded
+   `[p,p+W)` byte-agreement flips its str branch from SAT to **UNSAT (proved)**).
+   Confirmed: `gen_fulleffect.py --field hSExpr` now reports `vsub=str : neg =
+   Z3-UNSAT (proved) control(drop byte) = sat` — every A-branch UNSAT, controls
+   still SAT (faithful, non-vacuous).
 
 2. **Nested StoreRepr `read` chain nonlinearity** (C). Naive: reconstructing
    `read32/read64` as `Σ byte·256^j` (Int) over ~7 chained pointer reads made Z3
