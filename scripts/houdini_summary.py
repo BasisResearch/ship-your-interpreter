@@ -112,6 +112,10 @@ FOOTPRINT_POSTS = {
              "(assert (bvult QA #x0000000080018be0))\n"),
 }
 
+# `eval_expr`'s entry: the region whose arms box a `Value` at the caller's a0,
+# and so the only region on which `valuerepr_tag` says anything.
+EVAL_REGION = "0x80003164"
+
 # The residual POST conjuncts (negated), over `state_exit` / `s0`.
 POSTS = {
     # `StoreRepr` survival on the low side: memory strictly below the stack
@@ -865,7 +869,14 @@ def main():
         def is_fragment(f):
             """Does this span start somewhere other than its function's entry?
 
-            `spans.tsv` carries both, so this needs no extra solving.  The sp
+            `spans.tsv` carries both, so this needs no extra solving, and it is
+            deliberately spans.tsv ONLY -- never a fact another post computes.
+            The posts run in parallel, so marking a span from the sp verdict
+            made the storerepr/valuerepr_tag answers depend on which finished
+            first.  hInitStore, which starts at its entry but stops at the
+            interpreter's loop head, is therefore checked for real rather than
+            skipped, which is the better answer anyway: its storerepr is VALID.
+            The old sp
             check below catches the other shape -- a span that starts at the
             entry but stops before the epilogue (hInitStore, which ends at the
             interpreter's loop head) -- via the delta the sp post already
@@ -876,6 +887,13 @@ def main():
             v = bool(r) and r.get("entry") != r.get("region_lo")
             frag_cache[f] = v
             return v
+
+        def in_eval(f):
+            """Is this span inside `eval_expr`, the one function that boxes a
+            `Value` at the caller's a0?  `EVAL_REGION` is its entry, the same
+            address `armDispatch` repoints the eval arms to."""
+            r = spans.get(f)
+            return bool(r) and r.get("region_lo") == EVAL_REGION
         wsets = {f: load_writes(os.path.join(d, "writes", f + ".tsv")) for f in deps}
         pre = pre_block(d)
         tasks = [(f, pk) for f in sorted(deps) if not only or f in only
@@ -912,6 +930,13 @@ def main():
             # entry, or one whose sp does not come back to its entry value.
             if pk in ("storerepr", "valuerepr_tag") and is_fragment(f):
                 return (f, pk, "N/A(fragment)")
+            # `valuerepr_tag` says the four bytes at the pointer the caller
+            # passed in a0 are a `ValueKind`.  Only `eval_expr` boxes a Value
+            # there.  `exec_stmt` returns a status and `interp_run` takes the
+            # PROGRAM in a0, so on those spans the post reads four unrelated
+            # bytes and "refutes" -- hInitStore is refuted exactly this way.
+            if pk == "valuerepr_tag" and not in_eval(f):
+                return (f, pk, "N/A(not-an-eval-arm)")
             txt = head.replace("; @@POST@@", POSTS[pk]) + "\n(check-sat)\n"
             v = z3(txt, timeout)
             if v == "sat" and pk == "sp":
@@ -931,8 +956,6 @@ def main():
                                f"#x0000000000000002) #x{delta:016x}))))")
                     if z3(head.replace("; @@POST@@", shifted) + "\n(check-sat)\n",
                           timeout) == "unsat":
-                        if delta:
-                            frag_cache[f] = True
                         return (f, pk, f"VALID[sp+0x{delta:x}]")
             return (f, pk, {"unsat": "VALID", "sat": "REFUTED"}.get(v, "UNKNOWN"))
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
