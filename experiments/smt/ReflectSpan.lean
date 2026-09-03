@@ -511,6 +511,51 @@ partial def reflectExact (img : Nat → Option (BitVec 8)) (hi fuel : Nat)
   | Term.jalr _ => return (S1, [])
   | Term.sys    => return (S1, [])
 
+/-- DAG reflection: thread a state VARIABLE (not the full term) and accumulate
+`let`-bindings, so shared states are emitted once — branch arms merge at the join
+via `ite` over bound vars (no tail duplication), collapsing the exponential blowup
+to linear size.  Returns `(exitVar, nextK, binds, summaries)`. -/
+partial def reflectExactD (img : Nat → Option (BitVec 8)) (hi fuel : Nat) (pc : Nat)
+    (sv : String) (k : Nat) (binds sums : List String) :
+    String × Nat × List String × List String := Id.run do
+  if fuel == 0 then return (sv, k, binds, sums)
+  let mut cur : List MInstr := []
+  let mut p := pc
+  while p < hi && !(isTerm (wordAt img p)) do
+    cur := cur ++ [mkLine (BitVec.ofNat 64 p) (wordAt img p)]
+    p := p + 4
+  let v := s!"s{k}"
+  let binds := binds ++ [s!"({v} {blockState sv cur})"]
+  let k := k + 1
+  if p ≥ hi then return (v, k, binds, sums)
+  let w := wordAt img p
+  match decodeTerm p w with
+  | Term.branch tgt =>
+    if tgt ≤ pc then
+      let lv := s!"s{k}"
+      return (lv, k+1, binds ++ [s!"({lv} (loop_{tgt} {v}))"], (s!"loop_{tgt}" :: sums).eraseDups)
+    else
+      -- structured if: fallthrough [p+4,tgt) is the then-block; join at tgt
+      let (thenV, k1, b1, s1) := reflectExactD img tgt (fuel-1) (p+4) v k binds sums
+      let mv := s!"s{k1}"
+      let b2 := b1 ++ [s!"({mv} (ite {branchCondSt v w} {v} {thenV}))"]
+      reflectExactD img hi (fuel-1) tgt mv (k1+1) b2 s1
+  | Term.jal rd tgt =>
+    if tgt ≤ pc then
+      let lv := s!"s{k}"
+      return (lv, k+1, binds ++ [s!"({lv} (loop_{tgt} {v}))"], (s!"loop_{tgt}" :: sums).eraseDups)
+    else if rd == 1 then
+      let cv := s!"s{k}"
+      reflectExactD img hi (fuel-1) (p+4) cv (k+1)
+        (binds ++ [s!"({cv} (callee_{tgt} {v}))"]) ((s!"callee_{tgt}" :: sums).eraseDups)
+    else reflectExactD img hi (fuel-1) tgt v k binds sums
+  | Term.jalr _ => return (v, k, binds, sums)
+  | Term.sys    => return (v, k, binds, sums)
+
+/-- Wrap a DAG's exit var + bindings into nested `let`s (a shared term). -/
+def wrapLets (binds : List String) (body : String) : String :=
+  binds.foldr (fun b acc => s!"(let ({b}) {acc})") body
+
 /-- Exact axioms: `callee_t(S) = <callee body reflection>(S)`; loops via
 define-fun-rec `loop_t(S) = ite(loopcond, S, loop_t(body))`.  All exact — the
 body reflection defines every register + memory effect. -/
@@ -524,20 +569,21 @@ partial def emitExactAxioms (img : Nat → Option (BitVec 8))
       let visited := s :: visited
       if s.startsWith "callee_" then
         let t := (s.drop 7).toNat!
-        let (body, subs) := reflectExact img (findRet img t) 200 t "S"
-        let ax := s!"(assert (forall ((S MState)) (= ({s} S) {body})))"
+        let (ev, _, binds, subs) := reflectExactD img (findRet img t) 200 t "S" 0 [] []
+        let ax := s!"(assert (forall ((S MState)) (= ({s} S) {wrapLets binds ev})))"
         emitExactAxioms img (subs ++ rest) visited (acc ++ [ax])
       else if s.startsWith "loop_" then
         let t := (s.drop 5).toNat!
-        let (body, subs) := reflectExact img (findBackEdge img t) 200 t "S"
-        let ax := s!"(assert (forall ((S MState)) (= ({s} S) (ite (loopcond_{t} S) S ({s} {body})))))"
+        let (ev, _, binds, subs) := reflectExactD img (findBackEdge img t) 200 t "S" 0 [] []
+        let ax := s!"(assert (forall ((S MState)) (= ({s} S) (ite (loopcond_{t} S) S ({s} {wrapLets binds ev})))))"
         emitExactAxioms img (subs ++ rest) visited (acc ++ [ax])
       else emitExactAxioms img rest visited acc
 
 /-- Assemble the complete EXACT reflected Steps SMT for span `[lo,hi)`. -/
 def reflectExactSmt (lo hi : Nat) : IO String := do
   let img ← loadElf elfPath
-  let (exitS, summaries) := reflectExact img hi 200 lo "s0"
+  let (ev, _, binds, summaries) := reflectExactD img hi 200 lo "s0" 0 [] []
+  let exitS := wrapLets binds ev
   let (axs, visited) := emitExactAxioms img summaries [] []
   let sumDecls := String.intercalate "\n" (visited.flatMap (fun s =>
     let f := s!"(declare-fun {s} (MState) MState)"
