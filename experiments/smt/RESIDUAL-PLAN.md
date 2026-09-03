@@ -135,13 +135,17 @@ across it, and it boxes nothing, so there is no `ValueRepr` tag at `sret`;
 `hInitStore` is the main-init image, not an arm.
 
 **48 of 52 are `UNKNOWN(summary-clause)`, and that is one fact away.** Some
-summary the span applies does not carry `stack_or_arena` — 62 of 201 do not.
-Those are the loops and callees that store through a *data-dependent pointer*.
-Nothing in the machine text establishes that such a pointer lands in the arena;
-that is the heap-well-formedness invariant, which the Lean arms carry as
-`StoreRepr`/`Arena.contains`. It is not a solver limit and not a missing
-invariant to mine — it is an entry fact to encode, and it is the single thing
-standing between this campaign and a verdict on the whole footprint family.
+summary the span applies does not carry `stack_or_arena` — 62 of 201 do not, and
+**60 of those have a countermodel**, not a timeout (`drop-reasons.json`; exactly
+one clause in the whole campaign was dropped for solver timeout). The witness is
+in `bmc/OBSTRUCTION.md`: the offending store's base register is a pointer read
+out of memory, nothing in the machine text constrains where it points, and the
+solver duly puts it outside both regions. That is the heap-well-formedness fact,
+which the Lean arms carry as `StoreRepr`/`Arena.contains` — a pointer reachable
+from a represented store points into the arena. It is not a solver limit and not
+a loop invariant waiting to be mined: it is an entry fact to encode, and it is
+the single thing standing between this campaign and a verdict on the whole
+footprint family.
 
 The faithfulness/coverage trade is worth stating plainly. With arm-entry spans
 and the prologue's facts asserted by hand, 12 spans come back VALID on code
