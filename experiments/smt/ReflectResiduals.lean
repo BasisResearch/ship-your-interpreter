@@ -58,17 +58,30 @@ def residualSpans : List (String × Nat × Nat) := [
   ("hEpilogueSpill", 0x800033ec, 0x80003408), ("hInitStore", 0x80004764, 0x800047a0),
   ("hFn2", 0x800033c4, 0x80003408) ]
 
+/-- Splice: the reflected-Steps SMT for a residual's span + a Post-conjunct
+validity query.  `postNeg` is the NEGATED post (SAT ⇒ refutable, UNSAT ⇒ valid,
+unknown ⇒ needs invariant).  The default is the FRAME conjunct every residual
+carries — memory below the stack frame is preserved — but any Post encoded over
+`(mm state_exit)` / `(select (rr state_exit) n)` splices the same way. -/
+def spliceResidualSmt (lo hi : Nat) (postNeg : String) : IO String := do
+  let base ← reflectExactSmt lo hi
+  return s!"{base}\n; ---- Pre ∧ ¬Post validity query (Pre trivial here; Post = frame conjunct) ----\n{postNeg}\n(check-sat)\n"
+
+/-- The frame-conjunct negation: some address `A` below the stack frame differs
+between entry and exit memory (should be UNSAT — the frame is preserved). -/
+def frameNeg : String :=
+  "(declare-const A Int)\n(assert (< A (- (select (rr s0) 2) 1000000)))\n(assert (not (= (select (mm state_exit) A) (select (mm s0) A))))"
+
 end Vsa.ReflectResiduals
 
 open Vsa.ReflectResiduals Vsa.ReflectSpan in
-run_cmd Lean.Elab.Command.liftTermElabM do
-  let img ← loadElf elfPath
-  let mut ok := 0
-  let mut fail := 0
-  for (nm, lo, hi) in residualSpans do
-    let (ev, _, binds, sums) := reflectExactD img hi 200 lo "s0" 0 [] []
-    let sz := (wrapLets binds ev).length
-    if sz > 0 && sz < 5000000 then ok := ok + 1
-      else fail := fail + 1
-    Lean.logInfo m!"{nm}: {binds.length}blk {sums.length}sum {sz}ch"
-  Lean.logInfo m!"ENCODABLE: {ok}/{ok+fail} residual spans reflect gap-free + DAG-sized"
+/-- `#splice_all "<dir>"` — write a per-residual validity SMT (reflected Steps +
+frame Post) for every residual; a Python driver runs Z3 (unknown ok on loops). -/
+elab "#splice_all " pathStx:str : command => do
+  Lean.Elab.Command.liftTermElabM do
+    let dir := pathStx.getString
+    IO.FS.createDirAll dir
+    for (nm, lo, hi) in residualSpans do
+      let smt ← spliceResidualSmt lo hi frameNeg
+      IO.FS.writeFile s!"{dir}/{nm}.smt2" smt
+    Lean.logInfo m!"#splice_all → {dir} ({residualSpans.length} residual validity queries)"
