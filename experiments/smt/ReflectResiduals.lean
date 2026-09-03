@@ -232,18 +232,39 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
       -- DERIVED rather than assumed, exactly as `blockA_k` derives it in the
       -- proof.  Starting at the arm instead leaves those unconstrained, and the
       -- solver duly puts the result store inside the code image.
-      let (bmcEntry, kindPin) :=
+      let (bmcEntry, kindReg) :=
         match armDispatch img elo with
-        | some (fe, reg, k) =>
-          (fe, s!"; the arm is selected by the pinned AST kind (`ExprRepr`/`StmtRepr`)\n(assert (= (ld4 (mm s0) {stR "s0" reg}) {bvN k}))\n")
-        | none => (elo, "")
+        | some (fe, reg, k) => (fe, some (reg, k))
+        | none => (elo, none)
       let (rlo, rhi) := funcRange starts codeLo codeHi bmcEntry
-      let (ev, binds, sums, complete, used, writes) := reflectBmc img rlo rhi bmcEntry [ehi] rounds "s0"
+      let (ev, binds, sums, complete, used, writes, dispG) := reflectBmc img rlo rhi bmcEntry [ehi] rounds "s0"
+      -- The kind pin, PLUS which dispatch guard it makes true.  The encoder
+      -- already resolved the jump table statically (that is how it knows the
+      -- arms), so stating the selected guard here is the same ground fact as the
+      -- rodata pins — just at the point of use.  Leaving it to the solver means
+      -- re-deriving the dispatch through the prologue's store chain, which it
+      -- does not do, so an arm the pin EXCLUDES still looks reachable and the
+      -- span has to discharge invariants belonging to it.
+      let kindPin :=
+        match kindReg with
+        | none => ""
+        | some (reg, _) =>
+          s!"; the arm is selected by the pinned AST kind (`ExprRepr`/`StmtRepr`)\n(assert (= (ld4 (mm s0) {stR "s0" reg}) {bvN (kindIndex img elo)}))\n"
+      -- The guard selection has to come AFTER the binding chain: it names guard
+      -- variables, and SMT-LIB wants them declared first.
+      let dispPin :=
+        match kindReg with
+        | none => ""
+        | some _ =>
+          let sel : List String := dispG.map (fun (p : Nat × String) =>
+            if p.1 == elo then s!"(assert {p.2})" else s!"(assert (not {p.2}))")
+          "; and therefore which dispatch guard holds\n"
+            ++ String.intercalate "\n" sel ++ "\n"
       let decls2 := bindsToDecls binds
       allSums := (allSums ++ sums).eraseDups
       let decls := summaryDecls sums
       IO.FS.writeFile s!"{dir}/queries/{nm}.smt2"
-        s!"{smtPreamble}\n{decls}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule #x0000000000010000 SL_lo) (bvult SL_lo SL_hi) (bvult SL_hi #x0000000100000000) (bvule #x0000000000010000 A_lo) (bvult A_lo A_hi) (bvult A_hi #x0000000100000000) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi)) (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) (bvsub SL_hi #x0000000000001100))))\n(declare-const s0 MState)\n{kindPin}{decls2}\n; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {ev})\n(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
+        s!"{smtPreamble}\n{decls}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule #x0000000000010000 SL_lo) (bvult SL_lo SL_hi) (bvult SL_hi #x0000000100000000) (bvule #x0000000000010000 A_lo) (bvult A_lo A_hi) (bvult A_hi #x0000000100000000) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi)) (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) (bvsub SL_hi #x0000000000001100))))\n(declare-const s0 MState)\n{kindPin}{decls2}\n{dispPin}; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {ev})\n(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
       IO.FS.writeFile s!"{dir}/writes/{nm}.tsv"
         ("guard\twidth\taddr\n" ++ String.intercalate "\n"
           (writes.map (fun (g, a, w) => s!"{g}\t{w}\t{a}")) ++ "\n")
@@ -292,7 +313,7 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
           assumedSyms := assumedSyms ++ [sym]
           continue
       let mk : Nat → Nat → Nat → List Nat → IO (String × List String) := fun rlo rhi entry stops => do
-        let (ev, binds, subs, complete, _, writes) := reflectBmc img rlo rhi entry stops rounds "S0"
+        let (ev, binds, subs, complete, _, writes, _) := reflectBmc img rlo rhi entry stops rounds "S0"
         let declsB := (bindsToDecls binds).replace s!"({sym} " s!"({sym}_ih "
         let decls := summaryDecls ((allSums ++ subs).eraseDups ++ [s!"{sym}_ih"])
         IO.FS.writeFile s!"{dir}/obligations/{sym}.smt2"

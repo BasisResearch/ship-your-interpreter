@@ -53,6 +53,11 @@
 (assert (bvule #x0000000000100000 SL_lo))
 (assert (bvult SL_hi #x0000000100000000))
 (assert (bvult A_hi #x0000000100000000))
+; and the layout invariant itself.  A query needs it for the same reason a
+; summary obligation does: without it the solver picks a seventeen-byte arena,
+; `A_hi - 32` underflows, and every `Arena.contains` hypothesis goes vacuous —
+; which is exactly what produced fifteen spurious refutations.
+(assert (INV s0))
 ; `EvalEntry.sret_ram` / `sret_align` / `sret_stack_disjoint`: the caller's
 ; 24-byte return buffer, passed in a0, is a real RAM address, 8-aligned, and
 ; either below the stack window or above `sp`.  The arm STORES the boxed

@@ -5535,3 +5535,26 @@ it, still stop and report instead.
   the span earlier, or state the precondition and hold it to proved inductive AND
   discharged.  And SLICE: a check about one state does not need the other 149
   summaries the span drags in.
+
+## 2026-09-03 bv-region-bounds-wrap (residual campaign, footprint posts)
+- missing: a region bound stated as `base + size <= HI` in a BITVECTOR encoding
+  is satisfiable by WRAPAROUND, and the solver takes it every time.  Three
+  separate refutations in one campaign turned out to be this and nothing else:
+  `Arena.contains` as `base + 32 <= A_hi` (model: base = 0xff..e1, base+32 = 1);
+  the stack bound as `sp + frame <= SL_hi` (model: stack at the top of the
+  address space, a spill wrapped into the code image); and the residual queries
+  not asserting the layout invariant at all, so the solver picked a SEVENTEEN-BYTE
+  arena (A_lo = 1, A_hi = 0x12), `A_hi - 32` underflowed, and every containment
+  hypothesis went vacuous.  That last one alone produced FIFTEEN spurious
+  refutations.
+- workaround: NONE — state a region bound by SUBTRACTION on the constant side
+  (`base <= HI - size`), never addition on the variable side, and assert the
+  layout invariant in the queries as well as the obligations.
+- cost: each looked like a genuine finding about the interpreter until the
+  countermodel was read.  A refutation is a strong claim and this encoding will
+  manufacture them; read the model before believing one.
+- proposal: a lint over the clause/post templates that rejects `bvadd` on the
+  left of a `bvule`/`bvult` against a region bound, the same way the discipline
+  gate rejects a hand-rolled site battery.  The templates are a fixed, small set
+  in `scripts/houdini_summary.py`, so the check is cheap and would have caught
+  all three.

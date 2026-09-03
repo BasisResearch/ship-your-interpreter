@@ -358,6 +358,11 @@ def entryPinsSmt (img : Nat → Option (BitVec 8)) : String := Id.run do
     "(assert (bvule #x0000000000100000 SL_lo))",
     "(assert (bvult SL_hi #x0000000100000000))",
     "(assert (bvult A_hi #x0000000100000000))",
+    "; and the layout invariant itself.  A query needs it for the same reason a",
+    "; summary obligation does: without it the solver picks a seventeen-byte arena,",
+    "; `A_hi - 32` underflows, and every `Arena.contains` hypothesis goes vacuous —",
+    "; which is exactly what produced fifteen spurious refutations.",
+    "(assert (INV s0))",
     "; `EvalEntry.sret_ram` / `sret_align` / `sret_stack_disjoint`: the caller's",
     "; 24-byte return buffer, passed in a0, is a real RAM address, 8-aligned, and",
     "; either below the stack window or above `sp`.  The arm STORES the boxed",
@@ -406,6 +411,12 @@ def armDispatch (img : Nat → Option (BitVec 8)) (armPC : Nat) : Option (Nat ×
         if k < arms.length && arms[k]! == armPC then return some (entry, reg, k)
     | none => pure ()
   return none
+
+/-- The kind index a jump-table arm corresponds to (0 if it is not an arm). -/
+def kindIndex (img : Nat → Option (BitVec 8)) (armPC : Nat) : Nat :=
+  match armDispatch img armPC with
+  | some (_, _, k) => k
+  | none => 0
 
 /-- Emit the fold/unfold axiom for every summary symbol, recursively.  A
 `callee_<t>` axiom is the callee's OWN `reflectStepsMulti` (recursion bottoms out
@@ -624,6 +635,12 @@ def blockState (S : String) (instrs : List MInstr) : String := Id.run do
       | none => pure ()
   let regsArr := changed.eraseDups.foldl (fun ra n => s!"(store {ra} {bvN n} {rf n})") s!"(rr {S})"
   return s!"(mst {mem} {regsArr})"
+
+/-- The PC of the terminator that ends the block starting at `pc`. -/
+def termPC (img : Nat → Option (BitVec 8)) (hi : Nat) (stops : List Nat) (pc : Nat) : Nat := Id.run do
+  let mut p := pc
+  while p < hi && !(stops.contains p) && !(isTerm (wordAt img p)) do p := p + 4
+  return p
 
 /-- The block-start successors of the block at `pc` (control-flow only, no state).
 Used for the reachability pass that turns a loop into a `loop_<header>` summary. -/
@@ -1064,6 +1081,12 @@ structure Arrival where
   /-- The loop headers whose `loop_<h>` summary this arrival has already
   absorbed, so a header is summarised ONCE per path, not once per iteration. -/
   done : List Nat := []
+  /-- If this arrival came off a ground jump table, the arm it selects.  The
+  emitter uses it to say WHICH guard the pinned AST kind makes true, instead of
+  leaving the solver to re-derive the dispatch through the prologue's store
+  chain — which it does not do, so an arm the pin excludes still looks
+  reachable. -/
+  arm : Option Nat := none
   deriving Repr, Inhabited
 
 /-- Merge arrivals at the same PC: guard = disjunction, state = `ite` chain
@@ -1158,13 +1181,14 @@ and every guard is `let`-bound, so the term stays linear in
 def bmcRound (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat) (front : List Arrival)
     (seen : List Nat) (k : Nat) (binds : List String) (sums : List String) :
     List Arrival × List (String × String) × Nat × List String × List String
-      × List (String × String × Nat) := Id.run do
+      × List (String × String × Nat) × List (Nat × String) := Id.run do
   let mut k := k
   let mut binds := binds
   let mut sums := sums
   let mut next : List Arrival := []
   let mut exits : List (String × String) := []
   let mut writes : List (String × String × Nat) := []
+  let mut dispGuards : List (Nat × String) := []
   for (pc, as) in groupByPc front do
     let (g0, st0) := mergeArrivals as
     let carried := (as.flatMap (·.done)).eraseDups
@@ -1201,13 +1225,17 @@ def bmcRound (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat) 
       let gvq := s!"g{k}q"
       binds := binds ++ [s!"({gvq} {gq})"]
       k := k + 1
-      next := next ++ [{ pc := q, guard := gvq, state := bv, done := carried }]
+      -- a successor of a ground dispatch is tagged with the arm it selects
+      let isDisp := (dispatchArms img (termPC img hi stops pc)).isSome
+      next := next ++ [{ pc := q, guard := gvq, state := bv, done := carried,
+                         arm := if isDisp then some q else none }]
+      if isDisp then dispGuards := dispGuards ++ [(q, gvq)]
     for (gq, sq) in exs do
       let gvq := s!"g{k}x"
       binds := binds ++ [s!"({gvq} {gq})"]
       k := k + 1
       exits := exits ++ [(gvq, sq)]
-  return (next, exits, k, binds, sums, writes)
+  return (next, exits, k, binds, sums, writes, dispGuards)
 
 /-- Per-round frontier PCs — the diagnostic for "why did this span not complete". -/
 def bmcTrace (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : List Nat) (rounds : Nat) : List (List Nat) := Id.run do
@@ -1221,7 +1249,7 @@ def bmcTrace (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : List
     if front.isEmpty then break
     let pcs := (front.map (·.pc)).eraseDups
     out := out ++ [pcs]
-    let (f', _, k', b', s', _) := bmcRound img lo hi stops front seen k binds sums
+    let (f', _, k', b', s', _, _) := bmcRound img lo hi stops front seen k binds sums
     seen := (seen ++ pcs).eraseDups
     front := f'; k := k'; binds := b'; sums := s'
   return out
@@ -1230,7 +1258,8 @@ def bmcTrace (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : List
 term, the `let` bindings, the summary symbols, whether the frontier emptied
 (`complete`), and the number of rounds used. -/
 def reflectBmc (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : List Nat) (rounds : Nat) (s0 : String) :
-    String × List String × List String × Bool × Nat × List (String × String × Nat) := Id.run do
+    String × List String × List String × Bool × Nat × List (String × String × Nat)
+      × List (Nat × String) := Id.run do
   let mut front : List Arrival := [{ pc := entry, guard := "true", state := s0 }]
   let mut exits : List (String × String) := []
   let mut binds : List String := []
@@ -1239,13 +1268,15 @@ def reflectBmc (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : Li
   let mut used := 0
   let mut seen : List Nat := []
   let mut writes : List (String × String × Nat) := []
+  let mut dispGuards : List (Nat × String) := []
   for r in List.range rounds do
     if front.isEmpty then break
     let pcs := (front.map (·.pc)).eraseDups
-    let (f', e', k', b', s', w') := bmcRound img lo hi stops front seen k binds sums
+    let (f', e', k', b', s', w', dg) := bmcRound img lo hi stops front seen k binds sums
     seen := (seen ++ pcs).eraseDups
     front := f'; exits := exits ++ e'; k := k'; binds := b'; sums := s'
     writes := writes ++ w'
+    dispGuards := dispGuards ++ dg
     used := r + 1
   -- the exit state: the guarded merge of every exit arrival
   let exitTerm :=
@@ -1253,7 +1284,7 @@ def reflectBmc (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : Li
     | [] => s0
     | _ => (exits.dropLast).foldr (fun (g, st) acc => s!"(ite {g} {st} {acc})")
              (exits.getLast!).2
-  return (exitTerm, binds, sums, front.isEmpty, used, writes)
+  return (exitTerm, binds, sums, front.isEmpty, used, writes, dispGuards)
 
 /-- Emit the binding chain as TOP-LEVEL `declare-const` + equational `assert`
 instead of nested `let`s.

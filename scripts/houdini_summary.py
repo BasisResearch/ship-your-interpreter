@@ -289,6 +289,16 @@ def slice_to(text, target, extra=()):
             bind[m.group(1)] = (i, m.group(2))
             order.append(m.group(1))
     roots = [target] + [e for e in extra if e]
+    # Any generated variable a PLAIN assertion mentions is a root too.  The kind
+    # pin says which dispatch guard holds by naming those guards directly; slicing
+    # their bindings away leaves the assertion referring to an undeclared
+    # constant, the file fails to parse, and the check reads as a failure.
+    for l in lines:
+        if BIND_RE.match(l) or DECL_RE.match(l) or not l.startswith("(assert "):
+            continue
+        for w in re.findall(r"[A-Za-z][A-Za-z0-9_]*", l):
+            if w in bind:
+                roots.append(w)
     if not any(r in bind for r in roots):
         return text
     need, work = set(), list(roots)
@@ -385,6 +395,18 @@ def hits_QA(writes):
     for g, w, a in writes:
         ds.append(f"(and {g} (bvule {a} QA) (bvult QA (bvadd {a} #x{w:016x})))")
     return "(assert (or false " + " ".join(ds) + "))\n" if ds else "(assert false)\n"
+
+
+def write_roots(writes):
+    """Every variable the write set mentions — the roots a footprint check needs.
+
+    The check never looks at `state_exit`: it is about the guards and addresses
+    of the stores, so slicing to those roots drops the whole tail of the span."""
+    out = set()
+    for g, _, a in writes:
+        out.add(g)
+        out.update(re.findall(r"[A-Za-z][A-Za-z0-9_]*", a))
+    return out
 
 
 def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=True,
@@ -684,13 +706,21 @@ def main():
         def run(t):
             f, pk = t
             if pk in FOOTPRINT_POSTS:
-                base = qs[f].replace("; @@ASSUME@@", assume_block(qs[f], cset)) \
-                            .replace("; @@POST@@", "")
+                # slice to what the footprint actually reads: the store guards and
+                # addresses.  A function-entry span carries ~150 summaries and its
+                # whole exit merge, none of which a footprint check looks at.
+                wr = wsets.get(f, [])
+                roots = sorted(write_roots(wr))
+                sl = qs[f]
+                for r in roots[:1]:
+                    sl = slice_to(qs[f], r, extra=roots[1:])
+                base = sl.replace("; @@ASSUME@@", assume_block(sl, cset)) \
+                         .replace("; @@POST@@", "")
                 bad = iv_discharge(qs[f], cset, timeout, pre)
                 if bad:
                     return (f, pk, "UNKNOWN(iv-undischarged:" + bad + ")")
                 return (f, pk, footprint_check(base, FOOTPRINT_POSTS[pk],
-                                               wsets.get(f, []), applied_of(qs[f]),
+                                               wr, applied_of(sl),
                                                cset, timeout, pre=pre))
             txt = qs[f].replace("; @@ASSUME@@", pre + "\n" + assume_block(qs[f], cset)) \
                        .replace("; @@POST@@", POSTS[pk]) + "\n(check-sat)\n"

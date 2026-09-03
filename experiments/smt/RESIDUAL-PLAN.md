@@ -115,58 +115,50 @@ solver timeout rather than a genuine countermodel).
 
 ## Where the 52 stand
 
-`bmc/verdicts.tsv`. Of the summaries, 192/201 carry `sp_restore`/`ra_restore`/
-`inv_pres`, 189 `s1_restore`, 181 `s0_restore`, 133 `above_sp`, and **200 of 201
-carry `stack_or_arena`** — the clause the footprint composition needs.
+`bmc/verdicts.tsv`. Seven clauses, mined to a fixpoint in ~55 s over 201
+summaries: `inv_pres`/`sp_restore`/`ra_restore` 192, `s1_restore` 189,
+`s0_restore` 181, `above_sp` 133, and **`stack_or_arena` 200 of 201**.
 
-Three entry facts got it there, and `bmc/OBSTRUCTION.md` has the detail.
-`StoreRepr`/`Arena.contains` is the hypothesis every residual already carries
-(`EvalEntry.store`), so encoding it is faithful rather than a shortcut; it is
-instantiated at each of the 481 pointer-based store sites out of 10054, and any
-verdict resting on it is tagged with the count. The two `Value.native`
-dispatches are the `NativePrintSpec` callee contracts. `above_sp` is the ABI fact
-that a callee writes below its entry `sp`, mined rather than assumed. Two of the
-three needed a countermodel to state correctly: containment is `base <= A_hi -
-32`, never `base + 32 <= A_hi`, which wraparound satisfies; and `INV` has to
-bound the frame ABOVE `sp` too, or plain `sd rX, 0x418(sp)` spills escape.
+On the footprint posts: **9 VALID, 9 REFUTED, 34 UNKNOWN**. Valid are `hArgsNil`,
+`hEpilogueSpill`, `hInitStore`, `hSExpr`, `hSRet`, `hSRetNull` and the three
+`hSeq*`.
 
-**No footprint refutations, on any span.** An earlier configuration reported ten;
-every one was an artifact of starting the span at the ARM rather than the
-function entry, which leaves what the prologue established unconstrained —
-`s1 = sret` above all, since every arm stores the boxed result through it.
-Starting at the function entry with the AST kind pinned derives those facts, the
-same move `blockA_k` makes in the proof, and they vanish. The two REFUTED that
-survive are the posts being wrong for those spans, not the spans:
-`hEpilogueSpill` is a frame fragment, so `sp` moves across it and it boxes
-nothing; `hInitStore` is the main-init image, not an arm.
+Three entry facts got `stack_or_arena` from 128 to 200, and `bmc/OBSTRUCTION.md`
+has the detail. `StoreRepr`/`Arena.contains` is the hypothesis every residual
+already carries (`EvalEntry.store`), so encoding it is faithful rather than a
+shortcut; it is instantiated at each of the 481 pointer-based store sites out of
+10054, and verdicts resting on it are tagged with the count. The two
+`Value.native` dispatches are the `NativePrintSpec` callee contracts. `above_sp`
+is the ABI fact that a callee writes below its entry `sp`, mined rather than
+assumed.
 
-**Nothing in the campaign says a residual is false.** 2 are VALID, 33
-`UNKNOWN(iv-undischarged)`, 17 `UNKNOWN(footprint)`.
+**Every refutation traces to a missing clause, not to a fault in an arm.** The
+nine escaping stores are all `sd _, 8(sp)` — `sp`-relative, and safe as long as
+everything applied before them preserves `sp`. Nine summaries do not carry
+`sp_restore`, five of them on `hSBlock`'s path, and with `sp` free after one of
+those the model puts it above `SL_hi`. Establishing `sp_restore` for those loops
+closes the class.
 
-The 33 are no longer a budget wall. Slicing the discharge query to the state its
-invariant is about takes it from 547 KB and 150 summaries to 40 KB and 1, and a
-check that did not return at 400 s now returns in 1-16 s. The answer is `sat`,
-so the invariant does not discharge as posed, and the countermodel says why: the
-arrival is reached under a guard the solver has not resolved from the pinned AST
-kind, so an arm the pin excludes still looks reachable. Resolving the dispatch
-inside a sliced query is the next step, and applying the same slice to the post
-queries is what clears the 17 footprint timeouts.
+**Three refutations along the way were NOT real, and all three had the same
+shape.** A region bound stated with an addition on the side the solver controls
+is satisfiable by wraparound: `base + 32 <= A_hi` with `base + 32 = 1`;
+`sp + frame <= SL_hi` with the stack at the top of the address space. And the
+residual queries never asserted the layout invariant, only the obligations did,
+so the solver picked a seventeen-byte arena, `A_hi - 32` underflowed, and every
+containment hypothesis went vacuous — fifteen spurious refutations from that one
+omission. Each was found by reading a countermodel rather than trusting a
+verdict, and the rule that falls out is to state a region bound by subtraction on
+the constant side, never addition on the variable one.
 
-**One summary and one mechanism are left.** `loop_0x800031dc`, the
-argument-marshalling loop, writes `sp + 240 + 24n` and needs `n < 35`. The
-invariant that bounds it is `a6 < a5 <= 32` — the `bne` back-edge with `a6 = 0`
-on entry, and `MAX_ARGS` from `c/src/interp.c:251`. It is stated as an
-`IV_INVARIANT`, which the driver holds to both obligations at once: proved
-inductive at the summary's recursive occurrence, and discharged at every
-application site. Three refinements got the discharge from a
-400 s timeout to a definite answer in seconds, and all three stay: it runs under
-the arrival's OWN guard rather than unconditionally; an arrival whose guard is
-UNSAT is skipped, since a span that cannot reach a loop has no invariant of it to
-establish; and the invariant is stated with SIGNED comparisons, because every
-comparison the machine makes here is signed (`blt a4,a5` at 0x800031c8 IS the
-`MAX_ARGS` check, `bge zero,a5` at 0x800031d8 skips an empty loop, `bne a6,a5` at
-0x80003250 closes it), and an unsigned reading lets `a5` be `0x8000000000000000`,
-which passes the signed check and blows the bound.
+**The 34 UNKNOWN are the args-loop invariant, and resolving the AST-kind dispatch
+closed most of what they were.** `loop_0x800031dc` writes `sp + 240 + 24n` and
+needs `n < 35`; the invariant is `0 <= a6 < a5 <= 32` — the `bne` at 0x80003250
+and `MAX_ARGS` at `c/src/interp.c:251` — stated SIGNED, because every comparison
+the machine makes there is signed. The driver holds it to being proved inductive
+at the summary's recursive occurrence AND discharged at every application site.
+With the encoder now stating which dispatch guard the pinned kind makes true,
+`hVar`, `hIAdd` and `hNeg` discharge instantly: the loop sits on an arm their
+kind excludes. What is left is the call class, where it is genuinely reachable.
 
 ## The pipeline, per residual
 
