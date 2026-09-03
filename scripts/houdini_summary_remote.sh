@@ -15,6 +15,9 @@
 #   * run z3 4.15.4 (~/bin/z3), not brew's 5.1.0 — 5.1.0 returns `unknown`
 #     where 4.15.4 proves `unsat`, and the miner silently drops any clause it
 #     can't close, so every verdict comes back UNKNOWN.
+#   * extra args are passed through to the driver.  To skip mining and re-check
+#     verdicts off an existing clauses.json, that is `--phase check` -- a BARE
+#     `check` is silently ignored by the arg parser and you get both phases.
 #   * -j must not exceed the core count by much: z3 calls are CPU-bound, and a
 #     mining check that runs past --timeout wall-clock returns `unknown` and its
 #     clause is dropped. ~ncores is the sweet spot, NOT 2x.

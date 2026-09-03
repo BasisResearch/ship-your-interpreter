@@ -479,7 +479,7 @@ def iv_discharge(text, cset, timeout, pre, writes=None):
     return None
 
 
-def cut_discharge(sl, cset, pre, gq, goal, timeout, tries=4):
+def cut_discharge(sl, cset, pre, gq, goal, timeout, tries=4, cap=120):
     """Retry a discharge with the state chain cut at a block state.
 
     Walks candidate cut points latest-first: a later cut drops more of the
@@ -489,14 +489,19 @@ def cut_discharge(sl, cset, pre, gq, goal, timeout, tries=4):
     cands = re.findall(r"^\(declare-const (m\d+) MState\)$", sl, re.M)
     base = (sl.replace("; @@ASSUME@@", assume_block(sl, cset))
               .replace("; @@POST@@", "") + "\n" + pre + "\n")
+    # A cut that WORKS is fast -- the whole point is that it takes the query
+    # from ~600 lines to ~180 -- so giving each attempt the full budget only
+    # buys waiting.  Cap it, or a site that will never discharge costs
+    # `2 * tries * timeout` on its own.
+    budget = min(timeout, cap)
     for c in list(reversed(cands))[:tries]:
-        if z3(base + f"(assert (not (INV {c})))\n(check-sat)\n", timeout) != "unsat":
+        if z3(base + f"(assert (not (INV {c})))\n(check-sat)\n", budget) != "unsat":
             continue                      # INV not established here: unusable
         cut = re.sub(rf"^\(assert \(= {c} .*\)\)$", f"(assert (INV {c}))",
                      sl, flags=re.M)
         cb = (cut.replace("; @@ASSUME@@", assume_block(cut, cset))
                  .replace("; @@POST@@", "") + "\n" + pre + "\n")
-        if z3(cb + gq + goal, timeout) == "unsat":
+        if z3(cb + gq + goal, budget) == "unsat":
             return True
     return False
 
