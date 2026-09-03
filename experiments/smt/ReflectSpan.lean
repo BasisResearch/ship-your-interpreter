@@ -1129,6 +1129,11 @@ passes to `funcStarts`, named here because `neverReturns` needs `funcRange` and
 def codeLo : Nat := 0x80000000
 def codeHi : Nat := 0x80018be0
 
+/-- Is `w` a `ret`, i.e. `jalr x0, 0(x1)`? -/
+def isRet (w : BitVec 32) : Bool :=
+  opcode w == 0x67 && ((w >>> 7) &&& 0x1f).toNat == 0
+    && ((w >>> 15) &&& 0x1f).toNat == 1 && (w >>> 20).toNat == 0
+
 /-- **Does the function entered at `f` NEVER return to its caller?**
 
 The encoder models `jal ra, f` as `callee_f : MState → MState`, an uninterpreted
@@ -1281,7 +1286,7 @@ branch condition, a computed-goto target and a call's argument all read the
 block's exit state, and inlining that term into each of (say) thirteen dispatch
 guards is what turns a 200-byte block into a megabyte. -/
 def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
-    (fstarts noret : List Nat) (pc : Nat) (g sv bv : String) (k : Nat) :
+    (fstarts noret : List Nat) (retExit : Bool) (pc : Nat) (g sv bv : String) (k : Nat) :
     String × List (Nat × String) × List (String × String) × List String
       × List String × Nat × List (String × Nat) × List (String × Nat) := Id.run do
   -- straight-line run to the terminator
@@ -1346,7 +1351,18 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       let st' := s!"({sym} {st})"
       if inR (p+4) then return (st', [(p+4, g)], [], [sym], ibinds, k, wr, [])
       else return (st', [], [(g, bv)], [sym], ibinds, k, wr, [])
-    else if rs1 == 1 then return (st, [], [(g, bv)], [], ibinds, k, wr, [])          -- ret: EXIT
+    else if rs1 == 1 then
+      -- `ret`.  An EXIT ARRIVAL only when the span's declared stop is this
+      -- return -- the whole-arm convention, stop = the instruction after the
+      -- `ret`.  When the stop is an INTERNAL pc the return is a path that
+      -- leaves the span WITHOUT ever reaching it, and merging its state into
+      -- `state_exit` describes a state the machine is not in at the exit:
+      -- `hInitStore` stops at `interp_run`'s loop head, and two of its three
+      -- "arrivals" were returns whose epilogue had already put `sp` back, so
+      -- all three of its register/memory posts were refuted by a state that
+      -- never occurs there.  Record it as an excluded path instead.
+      if retExit then return (st, [], [(g, bv)], [], ibinds, k, wr, [])
+      else return (st, [], [], [], ibinds, k, wr, [(g, p)])
     else match dispatchArms img p with
     | some arms =>
       -- ground jump table: one guarded successor per arm, over the BOUND state.
@@ -1369,7 +1385,7 @@ collect the new frontier + the exits.  Every merged state, every block outcome
 and every guard is `let`-bound, so the term stays linear in
 (rounds × distinct PCs). -/
 def bmcRound (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
-    (fstarts noret : List Nat) (front : List Arrival)
+    (fstarts noret : List Nat) (retExit : Bool) (front : List Arrival)
     (seen : List Nat) (k : Nat) (binds : List String) (sums : List String) :
     List Arrival × List (String × String) × Nat × List String × List String
       × List (String × String × Nat) × List (Nat × String) × List (String × Nat) := Id.run do
@@ -1416,7 +1432,7 @@ def bmcRound (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
     binds := binds ++ [s!"({gv} {g0})", s!"({sv} {st0})"]
     k := k + 1
     let (st1, succs, exs, ss, ibinds, k', wr, hl) :=
-      stepBlock img lo hi stops fstarts noret pc gv sv bv k
+      stepBlock img lo hi stops fstarts noret retExit pc gv sv bv k
     k := k'
     binds := binds ++ ibinds ++ [s!"({bv} {st1})"]
     sums := (sums ++ ss).eraseDups
@@ -1440,7 +1456,7 @@ def bmcRound (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
 
 /-- Per-round frontier PCs — the diagnostic for "why did this span not complete". -/
 def bmcTrace (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : List Nat)
-    (fstarts noret : List Nat) (rounds : Nat) : List (List Nat) := Id.run do
+    (fstarts noret : List Nat) (retExit : Bool) (rounds : Nat) : List (List Nat) := Id.run do
   let mut front : List Arrival := [{ pc := entry, guard := "true", state := "s0" }]
   let mut binds : List String := []
   let mut sums : List String := []
@@ -1452,7 +1468,7 @@ def bmcTrace (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : List
     let pcs := (front.map (·.pc)).eraseDups
     out := out ++ [pcs]
     let (f', _, k', b', s', _, _, _) :=
-      bmcRound img lo hi stops fstarts noret front seen k binds sums
+      bmcRound img lo hi stops fstarts noret retExit front seen k binds sums
     seen := (seen ++ pcs).eraseDups
     front := f'; k := k'; binds := b'; sums := s'
   return out
@@ -1461,9 +1477,9 @@ def bmcTrace (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : List
 term, the `let` bindings, the summary symbols, whether the frontier emptied
 (`complete`), and the number of rounds used. -/
 def reflectBmc (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : List Nat)
-    (fstarts noret : List Nat) (rounds : Nat) (s0 : String) :
+    (fstarts noret : List Nat) (retExit : Bool) (rounds : Nat) (s0 : String) :
     String × List String × List String × Bool × Nat × List (String × String × Nat)
-      × List (Nat × String) × List (String × Nat) := Id.run do
+      × List (Nat × String) × List (String × Nat) × String := Id.run do
   let mut front : List Arrival := [{ pc := entry, guard := "true", state := s0 }]
   let mut exits : List (String × String) := []
   let mut binds : List String := []
@@ -1478,7 +1494,7 @@ def reflectBmc (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : Li
     if front.isEmpty then break
     let pcs := (front.map (·.pc)).eraseDups
     let (f', e', k', b', s', w', dg, hl) :=
-      bmcRound img lo hi stops fstarts noret front seen k binds sums
+      bmcRound img lo hi stops fstarts noret retExit front seen k binds sums
     seen := (seen ++ pcs).eraseDups
     front := f'; exits := exits ++ e'; k := k'; binds := b'; sums := s'
     writes := writes ++ w'
@@ -1495,7 +1511,23 @@ def reflectBmc (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : Li
     | [] => s0
     | _ => (exits.dropLast).foldr (fun (g, st) acc => s!"(ite {g} {st} {acc})")
              (exits.getLast!).2
-  return (exitTerm, binds, sums, front.isEmpty, used, writes, dispGuards, halts)
+  -- The EXIT GUARD DISJUNCTION.  The merge above is an `ite` chain, so an `s0`
+  -- for which NO exit guard holds falls through to the last arrival's state --
+  -- a state the machine is not in on that input.  That is harmless when the
+  -- answer is `unsat` (it only adds states) but it is a source of spurious
+  -- `sat`, i.e. of REFUTED verdicts that mean nothing: `hInitStore` is refuted
+  -- on all three register/memory posts exactly this way, its fall-through state
+  -- still carrying the pre-prologue `sp` while `interp_run` lowers it by 176.
+  -- Asserting the disjunction restricts the query to inputs that REACH the exit
+  -- PC, which is the residual's own scope -- paths that halt instead are
+  -- recorded in `halts` and answered by the error-site seam.
+  let exitGuard :=
+    match exits with
+    | [] => "true"
+    | [(g, _)] => g
+    | _ => "(or " ++ String.intercalate " " (exits.map (fun (g, _) => g)) ++ ")"
+  return (exitTerm, binds, sums, front.isEmpty, used, writes, dispGuards, halts,
+          exitGuard)
 
 /-- Emit the binding chain as TOP-LEVEL `declare-const` + equational `assert`
 instead of nested `let`s.

@@ -116,7 +116,15 @@ FOOTPRINT_POSTS = {
 POSTS = {
     # `StoreRepr` survival on the low side: memory strictly below the stack
     # window is preserved.  Stated without subtraction so it cannot wrap.
+    # Below the stack AND outside the arena.  `INV` permits the arena to sit
+    # BELOW the stack window (`(or (bvult A_hi SL_lo) (bvugt A_lo SL_hi))`), so
+    # without the arena exclusion an ordinary heap write refutes this -- which
+    # is what "refuted" hInitStore, whose whole job is to initialise the store.
+    # `StoreRepr` survival is a claim about memory outside BOTH regions; the
+    # footprint route (`outside_stack_arena`) always said so, and this direct
+    # memory-equality route is the cross-check on it, so it must say so too.
     "storerepr": "(assert (bvult QA SL_lo))\n"
+                 "(assert (or (bvult QA A_lo) (bvuge QA A_hi)))\n"
                  "(assert (not (= (select (mm state_exit) QA) (select (mm s0) QA))))",
     # sp discipline: the arm returns with sp restored (FALSE by design for a
     # prologue/epilogue FRAGMENT span, which is exactly what it should report)

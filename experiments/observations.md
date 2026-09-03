@@ -5781,3 +5781,39 @@ it, still stop and report instead.
 - proposal: the general rule is that a post belongs to a span SHAPE. Worth
   carrying into the Lean layer: `hFn`'s residual is about a tail, so its
   statement should quantify the tail's own entry state, not the arm's.
+
+## 2026-09-03 smt-exit-arrival-is-not-leaving-the-span (bmc encoder)
+- missing: the encoder had ONE notion of "exit": any way the path left the span
+  (a `ret`, a branch out of the region, an unlisted computed goto) became an
+  exit arrival and was merged into `state_exit`. For a whole-arm span, where
+  the declared stop is the instruction after the `ret`, those coincide. For a
+  span that stops at an INTERNAL pc they do not. `hInitStore` stops at
+  `interp_run`'s loop head, and two of its three "arrivals" were returns from
+  `interp_run` whose epilogue had already added 176 back to `sp` -- so all three
+  of its register/memory posts were refuted by a state the machine is never in
+  at that pc.
+- workaround: NONE. `stepBlock` takes `retExit`, computed per span as
+  `isRet (wordAt img (stop - 4))`: a return is an arrival only when the span's
+  declared stop IS that return. Otherwise it is an excluded path, recorded in
+  `halts/<field>.tsv` beside the noreturn ones.
+- cost: three false refutations on one field, each of which reads like a defect
+  in the interpreter's initialisation. With the fix `hInitStore` proves
+  `sp_exit = sp_entry - 176`, exactly `interp_run`'s frame.
+- proposal: landed. Related and also landed: the exit merge is an `ite` chain,
+  so an input no guard covers fell through to the LAST arrival; the query now
+  asserts the exit-guard disjunction, restricting it to inputs that reach the
+  exit pc, which is the residual's own scope.
+
+## 2026-09-03 smt-storerepr-post-forgot-the-arena (Houdini driver)
+- missing: the `storerepr` post said "memory strictly below `SL_lo` is
+  preserved" and never excluded the ARENA. `INV` permits the arena to sit below
+  the stack window (`(or (bvult A_hi SL_lo) (bvugt A_lo SL_hi))`), so an
+  ordinary heap write refutes it. That is what "refuted" `hInitStore`, whose
+  whole job is to initialise the store.
+- workaround: NONE. The post now excludes the arena, matching what the
+  footprint route (`outside_stack_arena`) always said. The two routes are meant
+  to be a cross-check on each other, so they have to state the same property.
+- cost: one false refutation, and 49 fields reporting UNKNOWN on a post that was
+  strictly harder than intended.
+- proposal: landed. General shape: when two routes check "the same" property,
+  diff their statements -- a disagreement is a bug in one of them.

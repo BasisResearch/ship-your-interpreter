@@ -252,7 +252,12 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
         | some (fe, reg, k) => (fe, some (reg, k))
         | none => (elo, none)
       let (rlo, rhi) := funcRange starts codeLo codeHi bmcEntry
-      let (ev, binds, sums, complete, used, writes, dispG, halts) := reflectBmc img rlo rhi bmcEntry [ehi] starts noret rounds "s0"
+      -- Is the span's stop the RETURN, or an internal pc?  The whole-arm
+      -- convention puts the stop one instruction after the `ret`; a span that
+      -- stops inside the function (hInitStore, at `interp_run`'s loop head)
+      -- must not treat a return as an arrival at its exit.
+      let retExit := isRet (wordAt img (ehi - 4))
+      let (ev, binds, sums, complete, used, writes, dispG, halts, exitG) := reflectBmc img rlo rhi bmcEntry [ehi] starts noret retExit rounds "s0"
       -- The kind pin, PLUS which dispatch guard it makes true.  The encoder
       -- already resolved the jump table statically (that is how it knows the
       -- arms), so stating the selected guard here is the same ground fact as the
@@ -286,7 +291,7 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
         noExit := noExit ++ [s!"{nm}\t0x{String.ofList (Nat.toDigits 16 bmcEntry)}\t0x{String.ofList (Nat.toDigits 16 ehi)}\t{halts.length}"]
       else
       IO.FS.writeFile s!"{dir}/queries/{nm}.smt2"
-        s!"{smtPreamble}\n{decls}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule #x0000000000010000 SL_lo) (bvult SL_lo SL_hi) (bvult SL_hi #x0000000100000000) (bvule #x0000000000010000 A_lo) (bvult A_lo A_hi) (bvult A_hi #x0000000100000000) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi)) (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) (bvsub SL_hi #x0000000000001100))))\n(declare-const s0 MState)\n{kindPin}{decls2}\n{dispPin}; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {ev})\n(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
+        s!"{smtPreamble}\n{decls}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule #x0000000000010000 SL_lo) (bvult SL_lo SL_hi) (bvult SL_hi #x0000000100000000) (bvule #x0000000000010000 A_lo) (bvult A_lo A_hi) (bvult A_hi #x0000000100000000) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi)) (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) (bvsub SL_hi #x0000000000001100))))\n(declare-const s0 MState)\n{kindPin}{decls2}\n{dispPin}; only inputs that REACH the exit PC: without this the `ite` merge\n; falls through to the last arrival for an input no guard covers, and the\n; resulting state is one the machine is never in -- spurious REFUTED.\n(assert {exitG})\n; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {ev})\n(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
       IO.FS.writeFile s!"{dir}/writes/{nm}.tsv"
         ("guard\twidth\taddr\n" ++ String.intercalate "\n"
           (writes.map (fun (g, a, w) => s!"{g}\t{w}\t{a}")) ++ "\n")
@@ -343,7 +348,7 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
           assumedSyms := assumedSyms ++ [sym]
           continue
       let mk : Nat → Nat → Nat → List Nat → IO (String × List String) := fun rlo rhi entry stops => do
-        let (ev, binds, subs, complete, _, writes, _, _) := reflectBmc img rlo rhi entry stops starts noret rounds "S0"
+        let (ev, binds, subs, complete, _, writes, _, _, _) := reflectBmc img rlo rhi entry stops starts noret true rounds "S0"
         let declsB := (bindsToDecls binds).replace s!"({sym} " s!"({sym}_ih "
         let decls := summaryDecls ((allSums ++ subs).eraseDups ++ [s!"{sym}_ih"])
         IO.FS.writeFile s!"{dir}/obligations/{sym}.smt2"
@@ -391,7 +396,7 @@ elab "#bmc_trace " loStx:num hiStx:num stopStx:num rStx:num : command => do
     let starts := funcStarts img 0x80000000 0x80018be0
     let (rlo, rhi) := funcRange starts 0x80000000 0x80018be0 loStx.getNat
     let noret := noReturnTargets img starts
-    let tr := bmcTrace img rlo rhi loStx.getNat [stopStx.getNat] starts noret rStx.getNat
+    let tr := bmcTrace img rlo rhi loStx.getNat [stopStx.getNat] starts noret true rStx.getNat
     let mut i : Nat := 0
     for f in tr do
       let pcs := f.map (fun q => String.ofList (Nat.toDigits 16 q))
