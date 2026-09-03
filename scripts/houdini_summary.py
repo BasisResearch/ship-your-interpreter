@@ -442,10 +442,46 @@ def iv_discharge(text, cset, timeout, pre, writes=None):
         # whose kind is pinned to one arm carries the others with an UNSAT guard.
         if g and z3(head + gq + "(check-sat)\n", timeout) == "unsat":
             continue
-        if z3(head + gq + "(assert (not " + iv[0].format(S=arg) + "))\n"
-              "(check-sat)\n", timeout) != "unsat":
-            return f"{f}@{arg}"
+        goal = "(assert (not " + iv[0].format(S=arg) + "))\n(check-sat)\n"
+        if z3(head + gq + goal, timeout) == "unsat":
+            continue
+        # CUT AND RETRY.  Sliced from eval_expr's entry this is ~600 lines and
+        # 127 states, and z3 answers nothing in 170s -- not the discharge, not
+        # even plain reachability.  Cutting the chain at a block state upstream
+        # of the argument, leaving it constrained by `INV` alone, takes it to
+        # ~180 lines and a few seconds.
+        #
+        # The cut is a WEAKENING, so `unsat` after it still proves the goal --
+        # but only if `INV` really does hold at the cut, which is why it is
+        # PROVED from the uncut slice first rather than assumed.  With that
+        # proof in hand the cut hypotheses are implied by the real ones, and
+        # the discharge transfers.
+        if cut_discharge(sl, cset, pre, gq, goal, timeout):
+            continue
+        return f"{f}@{arg}"
     return None
+
+
+def cut_discharge(sl, cset, pre, gq, goal, timeout, tries=4):
+    """Retry a discharge with the state chain cut at a block state.
+
+    Walks candidate cut points latest-first: a later cut drops more of the
+    chain and gives a smaller query, an earlier one keeps more context.  Each
+    candidate must have `INV` PROVED at it from the uncut slice before it is
+    used, so this never assumes the invariant it needs."""
+    cands = re.findall(r"^\(declare-const (m\d+) MState\)$", sl, re.M)
+    base = (sl.replace("; @@ASSUME@@", assume_block(sl, cset))
+              .replace("; @@POST@@", "") + "\n" + pre + "\n")
+    for c in list(reversed(cands))[:tries]:
+        if z3(base + f"(assert (not (INV {c})))\n(check-sat)\n", timeout) != "unsat":
+            continue                      # INV not established here: unusable
+        cut = re.sub(rf"^\(assert \(= {c} .*\)\)$", f"(assert (INV {c}))",
+                     sl, flags=re.M)
+        cb = (cut.replace("; @@ASSUME@@", assume_block(cut, cset))
+                 .replace("; @@POST@@", "") + "\n" + pre + "\n")
+        if z3(cb + gq + goal, timeout) == "unsat":
+            return True
+    return False
 
 
 def load_writes(path):

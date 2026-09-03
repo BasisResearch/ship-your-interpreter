@@ -5817,3 +5817,40 @@ it, still stop and report instead.
   strictly harder than intended.
 - proposal: landed. General shape: when two routes check "the same" property,
   diff their statements -- a disagreement is a bug in one of them.
+
+## 2026-09-03 smt-call-summary-applied-before-ra-write (bmc encoder)
+- missing: `jal ra, t` writes the return address BEFORE control reaches the
+  callee, and the summary obligation reflects the callee from its ENTRY, where
+  `ra` already holds it. The encoder applied `callee_t` to the PRE-`jal` state,
+  handing the summary the caller's stale `ra`. `ra_restore` (`ra_out = ra_in`)
+  then faithfully preserved the wrong value, so after any call the model's `ra`
+  is the caller's old one where the machine's is `p + 4`. Any spill of `ra`, or
+  a `ret` through it, is answered off that state.
+- workaround: NONE. `stepBlock` now writes `ra := p + 4` into the state before
+  applying the summary, for direct (`jal ra`) and indirect (`jalr ra`) calls
+  alike. A tail `j t` correctly does NOT write `ra` and is unchanged.
+- cost: every call site in every span -- 193 in `hVar`'s query alone, and all 52
+  queries changed. Every verdict emitted before this fix is invalidated.
+- proposal: landed. The general shape: a summary's argument must be the state
+  the obligation's ENTRY assumes, not the state one instruction earlier.
+
+## 2026-09-03 smt-bmc-path-never-checked-modelled (bmc encoder)
+- missing: `modelled`/`rawRegVal` were added to catch `mkLine`'s
+  `addi x0, x0, 0` fallback for words outside `decodeM`'s coverage, but they
+  were only ever wired into the PC-threaded REFERENCE encoder (`machineSmt`).
+  The BMC path -- the one that emits the actual residual queries -- ran every
+  straight-line word through `mkLine` unguarded, so an unmodelled word was a
+  silent NOP: the register it should set keeps its old value, and any branch or
+  store reading it is answered off a state the machine is never in.
+- workaround: NONE. The straight-line run is now SPLIT at every unmodelled
+  word: `rawRegVal` supplies exact semantics where it has them, and anything
+  else becomes a named opaque `unmodelled_step`, which over-approximates
+  instead of lying.
+- cost: two words, both `sltiu`, at `0x80003618` and `0x80003770` in eval_expr.
+  MEASUREMENT NOTE: a first count said 6892 across all 52 regions and was
+  WRONG -- it counted terminators, which never reach `mkLine` because
+  `blockBinds` stops at `isTerm` and `decodeTerm` handles them. Excluding
+  terminators the true figure is 2. Count what the code actually feeds the
+  function, not what the region contains.
+- proposal: landed. A repair added to one encoder path and not the other is not
+  a repair; `modelled` should have been unusable from outside the check.

@@ -1289,13 +1289,52 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
     (fstarts noret : List Nat) (retExit : Bool) (pc : Nat) (g sv bv : String) (k : Nat) :
     String × List (Nat × String) × List (String × String) × List String
       × List String × Nat × List (String × Nat) × List (String × Nat) := Id.run do
-  -- straight-line run to the terminator
+  -- Straight-line run to the terminator.
+  --
+  -- `mkLine` falls back to `addi x0, x0, 0` for a word it does not decode, so a
+  -- word outside `decodeM`'s coverage would be a SILENT NOP: the register it
+  -- should set keeps its old value, and any branch or store reading that
+  -- register is then answered off a state the machine is never in.  So the run
+  -- is SPLIT at every unmodelled word.  Two words in the image need this, both
+  -- `sltiu` (`0x80003618` and `0x80003770`, in eval_expr); `rawRegVal` gives
+  -- their exact semantics, and anything it does not cover becomes a named
+  -- opaque step instead, which over-approximates rather than lying.
+  --
+  -- Terminators never reach here (the loop stops at `isTerm`); they are decoded
+  -- by `decodeTerm` below.
   let mut cur : List MInstr := []
   let mut p := pc
-  while p < hi && !(stops.contains p) && !(isTerm (wordAt img p)) do
-    cur := cur ++ [mkLine (BitVec.ofNat 64 p) (wordAt img p)]
-    p := p + 4
-  let (st, k, ibinds, wr) := blockBinds sv cur k
+  let mut st := sv
+  let mut k := k
+  let mut ibinds : List String := []
+  let mut wr : List (String × Nat) := []
+  let mut brk := false
+  while !brk && p < hi && !(stops.contains p) && !(isTerm (wordAt img p)) do
+    let w := wordAt img p
+    if modelled p w then
+      cur := cur ++ [mkLine (BitVec.ofNat 64 p) w]
+      p := p + 4
+    else
+      -- flush what has accumulated, then apply this word's own semantics
+      let (st', k', ib', wr') := blockBinds st cur k
+      st := st'; k := k'; ibinds := ibinds ++ ib'; wr := wr ++ wr'; cur := []
+      match rawRegVal st w with
+      | some (rd, e) =>
+        let nv := s!"m{k}"
+        ibinds := ibinds ++ [s!"(declare-const {nv} MState)",
+          s!"(assert (= {nv} (mst (mm {st}) (store (rr {st}) {bvN rd} {e}))))"]
+        st := nv; k := k + 1
+      | none =>
+        let nv := s!"m{k}"
+        ibinds := ibinds ++ [s!"(declare-const {nv} MState)",
+          s!"(assert (= {nv} (unmodelled_step {st})))"]
+        st := nv; k := k + 1
+      p := p + 4
+  let (stF, kF, ibF, wrF) := blockBinds st cur k
+  st := stF
+  k := kF
+  ibinds := ibinds ++ ibF
+  wr := wr ++ wrF
   -- off the region, or arrived at the span's declared exit PC: EXIT
   if p ≥ hi || stops.contains p then return (st, [], [(g, bv)], [], ibinds, k, wr, [])
   let w := wordAt img p
@@ -1328,8 +1367,18 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       return (st, [], [], [], ibinds, k, wr, [(g, p)])
     if rd == 1 then
       -- CALL (whatever the direction): the callee's summary, then the next PC.
+      --
+      -- `ra := p + 4` FIRST.  `jal ra, t` writes the return address before
+      -- control reaches the callee, and the summary obligation reflects the
+      -- callee from its ENTRY, where `ra` already holds it.  Applying the
+      -- summary to the pre-`jal` state hands it the caller's stale `ra`, and
+      -- `ra_restore` (`ra_out = ra_in`) then faithfully preserves the wrong
+      -- value -- so the model's `ra` after the call is the caller's old one
+      -- where the machine's is `p + 4`.  Any spill of `ra`, or a `ret` through
+      -- it, is answered off that.
       let sym := s!"callee_{tgt}"
-      let st' := s!"({sym} {st})"
+      let stRa := s!"(mst (mm {st}) (store (rr {st}) {bvN 1} {bvN (p+4)}))"
+      let st' := s!"({sym} {stRa})"
       if inR (p+4) then return (st', [(p+4, g)], [], [sym], ibinds, k, wr, [])
       else return (st', [], [(g, bv)], [sym], ibinds, k, wr, [])
     else if inR tgt && fstarts.contains tgt && tgt != lo then
@@ -1347,8 +1396,10 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
   | Term.jalr rd rs1 =>
     if rd == 1 then
       -- indirect CALL through a register: one named opaque summary per site.
+      -- `ra := p + 4` first, for the same reason as the direct call above.
       let sym := s!"icall_{p}"
-      let st' := s!"({sym} {st})"
+      let stRa := s!"(mst (mm {st}) (store (rr {st}) {bvN 1} {bvN (p+4)}))"
+      let st' := s!"({sym} {stRa})"
       if inR (p+4) then return (st', [(p+4, g)], [], [sym], ibinds, k, wr, [])
       else return (st', [], [(g, bv)], [sym], ibinds, k, wr, [])
     else if rs1 == 1 then
@@ -1608,6 +1659,11 @@ def smtPreamble : String := "(set-logic ALL)
 ; bit-blastable.
 ; ---------------------------------------------------------------------------
 (declare-datatypes () ((MState (mst (mm (Array (_ BitVec 64) (_ BitVec 8))) (rr (Array (_ BitVec 64) (_ BitVec 64)))))))
+; A word outside `decodeM`'s coverage that `rawRegVal` also does not give exact
+; semantics for.  Uninterpreted, so it OVER-approximates: a post proved through
+; it holds whatever the instruction does.  The alternative -- `mkLine`'s
+; `addi x0, x0, 0` fallback -- is a silent lie.
+(declare-fun unmodelled_step (MState) MState)
 (define-fun ld1 ((m (Array (_ BitVec 64) (_ BitVec 8))) (a (_ BitVec 64))) (_ BitVec 64) ((_ zero_extend 56) (select m a)))
 (define-fun ld2 ((m (Array (_ BitVec 64) (_ BitVec 8))) (a (_ BitVec 64))) (_ BitVec 64) ((_ zero_extend 48) (concat (select m (bvadd a #x0000000000000001)) (select m a))))
 (define-fun ld4 ((m (Array (_ BitVec 64) (_ BitVec 8))) (a (_ BitVec 64))) (_ BitVec 64) ((_ zero_extend 32) (concat (select m (bvadd a #x0000000000000003)) (select m (bvadd a #x0000000000000002)) (select m (bvadd a #x0000000000000001)) (select m a))))
