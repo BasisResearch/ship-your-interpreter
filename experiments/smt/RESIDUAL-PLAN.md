@@ -4,7 +4,7 @@ Every residual is a Hoare triple `∀ c, Pre c → ∃ c', Steps c c' ∧ Post c
 
 ## Where we are
 
-The reflection engine is done. `ReflectSpan.lean` reflects `Steps` exactly over an `MState` datatype of memory plus registers, with no approximation left anywhere. Every instruction models exactly, immediates read off the full word, shifts go through the bitvector theory, `lui`/`auipc` corrected. Branches become `ite`, calls and loops become `MState → MState` summaries built from their own body reflection, and loops land as `define-fun-rec`. The `let`-shared DAG is what makes this usable. A seq-loop span that blew up to 1.3 GB as a duplicated tree shrinks to 86 KB once the states are shared.
+The reflection engine is done. `ReflectSpan.lean` reflects `Steps` exactly over an `MState` datatype of memory plus registers, with no approximation left anywhere. Every instruction models exactly, immediates read off the full word, shifts go through the bitvector theory, `lui`/`auipc` corrected. Branches become `ite`, calls and loops become `MState → MState` summaries built from their own body reflection, and loops land as `define-fun-rec`. States thread through `let` bindings, so the term stays a linear DAG.
 
 Encodability is done too. `ReflectResiduals.lean` maps all 52 residuals to their spans, and every one reflects gap-free and DAG-sized. No residual carries an `ENCODE-GAP`.
 
@@ -14,7 +14,7 @@ Three things remain. The fuller `Post` conjuncts, `ValueRepr`/`StoreRepr` surviv
 
 ## Non-straight-line spans
 
-The 1.3 GB blowup taught us how control flow has to be reflected. A branch inlined its continuation into both arms and every callee inlined its body into an axiom, so a branchy loop span doubled at every fork. Two changes make it linear.
+Control flow reflects with sharing, so the term stays linear in the block count. Two mechanisms do it.
 
 *Join-point merging.* A forward branch reconverges at its post-dominator. Reflect each arm only as far as that join, bind the two states to a `let`, and continue once from an `ite` over them. Term size then tracks the block count, not the branch depth.
 
