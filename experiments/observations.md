@@ -5600,3 +5600,99 @@ it, still stop and report instead.
   removes two vacuity hazards), thread the budget only after `ArmEntryK`
   (`Vsa/Sim/EvalSimCommon.lean:262-310`, destructured POSITIONALLY at 62 sites)
   is a named-field structure — law 6.
+
+## 2026-09-03 smt-entry-headroom-off-by-one-frame (SMT footprint diagnosis, exec_stmt arm residuals)
+- missing: the SMT campaign's entry PRE (`entryPinsSmt`, `experiments/smt/ReflectSpan.lean:346`)
+  states the low-side stack headroom with the SAME constant `INV` uses
+  (`SL_lo + 4352 ≤ sp(s0)`, `bvN 4352`).  `INV` is the guard on EVERY mined
+  summary clause (`sp_restore`, `stack_or_arena`, `inv_pres`, `above_sp` —
+  `guard()` in `scripts/houdini_summary.py`), and those clauses are instantiated
+  at states AFTER the span's own prologue has lowered `sp` (exec_stmt
+  `addi sp,sp,-176`; eval_expr `-1088`).  With the two constants EQUAL,
+  `INV(post-prologue state)` fails by exactly the frame, so every clause at
+  every post-prologue site is vacuous and `sp` after a call is unconstrained.
+  Machine-checked countermodel (z3 4.15.4, hSBlock store `g165` at `sp(i172)+8`):
+  `SL_lo = 0x80018e7c`, `sp(s0) = 0x80019fea` (i.e. `SL_lo + 0x116e`, inside the
+  0xb0-wide band `[SL_lo+0x1100, SL_lo+0x11b0)`), `sp(i172) = 0x15502100`,
+  `QA = 0x15502108` — genuinely outside both regions, no wraparound
+  (stack 1.5 GB, arena non-degenerate, both < 2^32).
+- workaround: NONE applied (diagnosis only; the encoder files are off-limits for
+  this task).  Adding the single assertion
+  `(assert (bvule (bvadd SL_lo #x00000000000011b0) (select (rr s0) #x2)))`
+  to the query flips all nine `UNKNOWN(footprint)` exec_stmt arm residuals
+  (hSBlock hSForStart hSIfTrue hSIfFalse hSIfNone hSVarInit hSVarNull
+  hSWhileBreak hSWhileFalse) from `unknown@180s` to `unsat` in 3.7–34.1 s, on
+  both footprint posts, with no regression on the three already-VALID ones
+  (hSExpr/hSRet/hSRetNull).
+- cost: 36 of 52 residual fields currently report `UNKNOWN(footprint)`.  The nine
+  in this witness set are all this cause; the remaining 27 are eval_expr-frame
+  spans with the same shape and are very likely the same cause.  Without the fix
+  the footprint column of the campaign is uninformative, and each investigation
+  costs a 180 s non-answer per field.
+- proposal: in `entryPinsSmt`'s `layout` list, emit the low-side headroom as the
+  constant the Lean entry actually carries, `bvN 7408`, instead of `bvN 4352`:
+  `Vsa/Sim/ExecEntry.lean:367` `stackBudget : StackOK SL sp (s.stackNeed +
+  (maxCallDepth - d) * perCallBudget + 1088)` with `Stmt.stackNeed >= execFrame =
+  176`, `perCallBudget = 6144`, `maxCallDepth = 1000` gives
+  `SL.lo + 176 + 6144 + 1088 = SL.lo + 7408 <= sp` for every `d < 1000` (same for
+  `EvalEntry`, whose frame is 1088).  One constant covers both frame sizes and is
+  strictly weaker than the entry field, so it is sound.  Head-to-head on
+  hSIfTrue's whole-store-set query (sequential, z3 4.15.4): 4352 (today)
+  unknown@180s, 4528 unsat 38.8s, 5440 unsat 133.5s, 7408 unsat 38.3s — the
+  constant's effect on runtime is solver search only; on the per-store sliced
+  query all three close in under 1s.
+  Secondary: even fixed, the hSIf* fields take 33-39s, over the campaign's
+  default 20s timeout — run phase 2 at `--timeout 60`, or make
+  `footprint_check` step 2 test the store set one store at a time instead of as
+  one disjunction (measured: hSIfNone 39 stores, all unsat, 35.4s total / 4.5s
+  max — and a failing store is NAMED with a countermodel instead of timing out).
+
+## 2026-09-03 smt-noreturn-callee-model (bmc encoder, residual plan item 5)
+- missing: the encoder had no model for a callee that NEVER RETURNS. `jal ra, f`
+  was uniformly encoded as `callee_f`, an uninterpreted `MState -> MState`
+  applied at the return address, which presumes a return. For `exit` there is
+  no return: it has no epilogue, so `sp_restore` is correctly refuted for it,
+  and every `sp`-relative store the encoder then reflected at the fictitious
+  return address had an unconstrained `sp`. On the `EX_FN` arm that address is
+  `0x80003e54`, mid-spill of a different arm, which is exactly the `hFn` code
+  refutation.
+- workaround: NONE. Fixed: `neverReturns` (CFG walk from the entry, with
+  interprocedural call/tail edges, every unknown resolving to "may return") +
+  `noReturnTargets`; `stepBlock` ENDS the path at a transfer to one, recording
+  the halt guard rather than dropping it silently. 4 of 167 `jal ra` targets are
+  noreturn: `exit`, `_exit`, `abort`, `0x80014df4`.
+- cost: the four exit-family summaries left the campaign entirely
+  (`callee_exit` alone appeared on 35 of 52 spans), and every span's verdict is
+  now "valid on the paths reaching the exit PC", with `halts/<field>.tsv` naming
+  the excluded ones. Those paths are the error-site seam's obligation
+  (`Vsa/Sim/ErrorSiteJal.lean`), not a frame post's.
+- proposal: landed. The general shape worth keeping: a summary is only sound
+  where a return exists to summarise.
+
+## 2026-09-03 smt-no-exit-answers-entry-state (bmc encoder)
+- missing: `reflectBmc` returned the ENTRY state as the exit term for a span
+  with zero exit arrivals (`match exits with | [] => s0`), so the post was
+  discharged against the entry state and came back VALID. A false VALID, and
+  silent. `hInitStore` hits it the moment the noreturn fix lands: its span IS
+  `exit`, so it has 0 exits and 2 halts.
+- workaround: NONE. The emitter now detects `ev == s0`, refuses to write the
+  query, and records the field in `no-exit.tsv`.
+- cost: one field (`hInitStore`) is now correctly unanswered rather than
+  incorrectly VALID; its span needs re-basing off `exit`.
+- proposal: landed.
+
+## 2026-09-03 smt-funcstarts-prologue-filter-reverted (bmc encoder)
+- missing: nothing — this records a WRONG diagnosis, so the next person does not
+  repeat it. `funcRange(exit) = [0x80004764, 0x80004790)` was read as evidence
+  that `0x80004790` is a phantom entry from a data word decoding as `jal ra`,
+  and a `looksLikePrologue` filter (`addi sp,sp,-N` as the first word) was added
+  to drop such targets. `0x80004790` is newlib's `malloc`
+  (`addi a1,a0,0; ld a0,1120(gp); j _malloc_r`), a real frameless tail-call
+  thunk. The region was right; the defect was the noreturn model above.
+- workaround: NONE, reverted. The filter dropped 103 of 167 real targets,
+  `eval_expr` among them (its first word is `lw a4,0(a2)`, prologue second),
+  merging its region into its predecessor's.
+- cost: two waves of encoder churn chasing a non-problem.
+- proposal: the loaded text ends below the rodata jump tables at `0x80019f58`,
+  so within `[codeLo, codeHi)` there is no data to decode as a phantom at all.
+  Take a region anomaly as a question, not as evidence for a named cause.

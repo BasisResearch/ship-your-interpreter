@@ -49,10 +49,36 @@ echo "== ship campaign ($(du -sh "$STAGE" | cut -f1)) + script to $PRO (tar via 
 tar czf /tmp/bmc-campaign.tgz -C "$STAGE" .
 scp -q /tmp/bmc-campaign.tgz "$PRO:/tmp/bmc-campaign.tgz"
 scp -q scripts/houdini_summary.py "$PRO:$RDIR/scripts/"
+# REFUSE to clobber a live run.  A campaign takes HOURS, and a `pgrep` that
+# comes back empty is not proof it died — one did here, while the job was in
+# fact still mining, and the untar below then swapped the queries out from under
+# it.  Check for the process itself and stop rather than corrupt the run.
+if ssh "$PRO" "pgrep -f houdini_summary.py > /dev/null" 2>/dev/null; then
+  echo "ERROR: a Houdini campaign is ALREADY RUNNING on $PRO." >&2
+  echo "  Watch it:  ssh $PRO 'tail -f /tmp/houdini.log'" >&2
+  echo "  Or kill it: ssh $PRO 'pkill -f houdini_summary.py; pkill -x z3'" >&2
+  exit 1
+fi
 ssh "$PRO" "cd $RDIR && rm -rf experiments/smt/bmc && mkdir -p experiments/smt/bmc && tar xzf /tmp/bmc-campaign.tgz -C experiments/smt/bmc"
 
 echo "== run Houdini on $PRO at -j$JOBS --timeout $TIMEOUT with z3 4.15.4 (${*:-both phases})"
-ssh "$PRO" "cd $RDIR && zsh -lic 'export PATH=\$HOME/bin:\$PATH; z3 --version; time python3 scripts/houdini_summary.py experiments/smt/bmc -j$JOBS --timeout $TIMEOUT ${*:-}'"
+# nohup + setsid on the REMOTE side: a campaign runs for tens of minutes, and a
+# foreground ssh hands the job a SIGHUP the moment the link drops (the Pro
+# dozing off Wi-Fi is enough).  That is how the previous run died after mining
+# without ever writing verdicts.tsv.  Detach it, then poll the log.
+ssh "$PRO" "cd $RDIR && rm -f /tmp/houdini.log /tmp/houdini.done && nohup zsh -lc 'export PATH=\$HOME/bin:\$PATH; z3 --version; time python3 scripts/houdini_summary.py experiments/smt/bmc -j$JOBS --timeout $TIMEOUT ${*:-}; echo \$? > /tmp/houdini.done' > /tmp/houdini.log 2>&1 < /dev/null & sleep 1"
+sleep 5
+if ! ssh "$PRO" "pgrep -f houdini_summary.py > /dev/null" 2>/dev/null; then
+  echo "ERROR: the remote job did not start. Remote log:" >&2
+  ssh "$PRO" "cat /tmp/houdini.log" >&2
+  exit 1
+fi
+echo "== detached and confirmed running; polling (tail /tmp/houdini.log on the Pro to watch)"
+while ! ssh -o ConnectTimeout=10 "$PRO" "test -f /tmp/houdini.done" 2>/dev/null; do
+  sleep 60
+  ssh -o ConnectTimeout=10 "$PRO" "tail -1 /tmp/houdini.log" 2>/dev/null || echo "  (link down, retrying)"
+done
+ssh "$PRO" "cat /tmp/houdini.log" | tail -20
 
 ssh "$PRO" "cat $RDIR/experiments/smt/bmc/verdicts.tsv" > /tmp/bmc-remote-verdicts.tsv 2>/dev/null || true
 echo "== verdicts → /tmp/bmc-remote-verdicts.tsv"

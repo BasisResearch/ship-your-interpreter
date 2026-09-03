@@ -441,9 +441,32 @@ def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=Tru
         if z3(sq, timeout) != "unsat":
             return "UNKNOWN(cond-not-outside)"
     # 2. can a direct write land on it?
-    v = z3(head + hits_QA(writes) + "(check-sat)\n", timeout)
+    #
+    # Aggregate first: one query whose assertion is the disjunction over every
+    # store.  That closes in well under a second on the spans where nothing is
+    # near QA, so it stays the fast path.
     tag = f"[StoreRepr@{nheap}]" if nheap else ""
-    return {"unsat": "VALID" + tag, "sat": "REFUTED"}.get(v, "UNKNOWN(footprint)")
+    v = z3(head + hits_QA(writes) + "(check-sat)\n", min(timeout, 15))
+    if v in ("unsat", "sat"):
+        return {"unsat": "VALID" + tag, "sat": "REFUTED"}[v]
+    # PER-STORE fallback.  The disjunction makes the solver carry all ~39 stores'
+    # guard chains at once, and it times out without saying anything; asked one
+    # store at a time each closes in a few seconds, and a failure comes back
+    # NAMED with a countermodel instead of as a non-answer.  Measured on
+    # hSIfNone: 39 stores, 35.4s total, 4.5s worst, versus unknown at 180s.
+    stores = [(g, w, a) for g, w, a in writes if w != 0]
+    unknown = []
+    for g, w, a in stores:
+        one = (f"(assert (and {g} (bvule {a} QA) "
+               f"(bvult QA (bvadd {a} #x{w:016x}))))\n(check-sat)\n")
+        r = z3(head + one, timeout)
+        if r == "sat":
+            return f"REFUTED(store:{a[:40]})"
+        if r != "unsat":
+            unknown.append(a[:24])
+    if unknown:
+        return "UNKNOWN(footprint:" + ",".join(unknown[:3]) + ")"
+    return "VALID" + tag
 
 
 def dedup_addrs(writes, cap=40, reads_only=False):
@@ -530,12 +553,28 @@ IH_SUMMARIES = {
 # query reaching them.
 NATIVE_ICALLS = {
     "icall_2147498484",    # 0x800039f4 — the native dispatch inside `eval_expr`
-    "icall_2147501956",    # 0x80004784 — the native dispatch in the interp driver
 }
+# 0x80004784 is NOT a native dispatch.  It sits inside `exit` (newlib): the word
+# at `gp+1184` is an atexit-style hook, indirect-called on the way to `_exit`.
+# Assuming a full clause set for an arbitrary function pointer there would be
+# assuming something about code the campaign has never looked at, so it stays
+# OPAQUE — no obligation, empty clause set, and any verdict resting on it says so.
 
 
-def mine(d, syms, timeout, jobs, rounds):
+def mine(d, syms, timeout, jobs, rounds, warm=False):
+    # `warm` starts the fixpoint from the clause set already on disk rather than
+    # from all-clauses.  It cannot wrongly KEEP a clause — every survivor is
+    # re-checked — but it will not RECOVER one an earlier run dropped, so after an
+    # ENCODER change it under-reports and a cold run is needed to see the gain.
+    # Use it while iterating on a fix, cold for the run whose numbers get
+    # committed.
     cset = {f: list(CLAUSE_IDS) for f in syms}
+    wp = os.path.join(d, "clauses.json")
+    if warm and os.path.exists(wp):
+        stored = json.load(open(wp))
+        for f in syms:
+            if f in stored:
+                cset[f] = list(stored[f])
     reasons = {}
     # A summary with no obligation file is OPAQUE by construction (an indirect
     # call through a register, an unlisted computed goto): there is no body to
@@ -703,6 +742,10 @@ def main():
     d = sys.argv[1]
     timeout, jobs, rounds, phase = 20, 8, 8, "both"
     ks = [8, 24, 64, 160]
+    # Iterating on an ENCODER defect does not need the whole campaign.  Every
+    # defect found so far was diagnosed on one summary or one residual; the full
+    # pass is for producing the committed artefact, not for the fix loop.
+    only, only_sum, warm = None, None, False
     a = sys.argv[2:]
     for i, x in enumerate(a):
         if x == "--timeout": timeout = int(a[i + 1])
@@ -710,6 +753,9 @@ def main():
         elif x == "--rounds": rounds = int(a[i + 1])
         elif x == "--phase": phase = a[i + 1]
         elif x == "--ks": ks = [int(z) for z in a[i + 1].split(",")]
+        elif x == "--only": only = set(a[i + 1].split(","))
+        elif x == "--only-summary": only_sum = set(a[i + 1].split(","))
+        elif x == "--warm": warm = True
 
     if phase == "bounded":
         print(f"== bounded refutation search (k ladder {ks})")
@@ -727,7 +773,9 @@ def main():
     if phase in ("mine", "both"):
         print(f"== phase 1: Houdini over {len(syms)} summaries x {len(CLAUSE_IDS)} clauses")
         t0 = time.time()
-        cset, fix, reasons = mine(d, syms, timeout, jobs, rounds)
+        if only_sum:
+            syms = [f for f in syms if f in only_sum]
+        cset, fix, reasons = mine(d, syms, timeout, jobs, rounds, warm=warm)
         json.dump(reasons, open(os.path.join(d, "drop-reasons.json"), "w"), indent=1)
         json.dump(cset, open(csetpath, "w"), indent=1)
         surv = Counter(c for v in cset.values() for c in v)
@@ -742,7 +790,8 @@ def main():
         qs = {f: open(os.path.join(d, "queries", f + ".smt2")).read() for f in deps}
         wsets = {f: load_writes(os.path.join(d, "writes", f + ".tsv")) for f in deps}
         pre = pre_block(d)
-        tasks = [(f, pk) for f in sorted(deps) for pk in list(POSTS) + list(FOOTPRINT_POSTS)]
+        tasks = [(f, pk) for f in sorted(deps) if not only or f in only
+                 for pk in list(POSTS) + list(FOOTPRINT_POSTS)]
         def run(t):
             f, pk = t
             if pk in FOOTPRINT_POSTS:

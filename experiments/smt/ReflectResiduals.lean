@@ -217,12 +217,18 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
     IO.FS.createDirAll s!"{dir}/queries"
     IO.FS.createDirAll s!"{dir}/obligations"
     IO.FS.createDirAll s!"{dir}/writes"
+    IO.FS.createDirAll s!"{dir}/halts"
     let img ← loadElf elfPath
     let codeLo := 0x80000000
     let codeHi := 0x80018be0
     let starts := funcStarts img codeLo codeHi
+    -- the `jal ra` targets that never come back (the exit / _exit / abort
+    -- family): a call to one ENDS the path instead of applying a `callee_`
+    -- summary, because there is no return for a summary to describe.
+    let noret := noReturnTargets img starts
     let mut rows : List String := []
     let mut deps : List String := []
+    let mut noExit : List String := []
     let mut allSums : List String := []
     for (nm, elo, ehi) in residualSpans do
       -- If the span's entry is a jump-table ARM, start at the FUNCTION entry with
@@ -237,7 +243,7 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
         | some (fe, reg, k) => (fe, some (reg, k))
         | none => (elo, none)
       let (rlo, rhi) := funcRange starts codeLo codeHi bmcEntry
-      let (ev, binds, sums, complete, used, writes, dispG) := reflectBmc img rlo rhi bmcEntry [ehi] rounds "s0"
+      let (ev, binds, sums, complete, used, writes, dispG, halts) := reflectBmc img rlo rhi bmcEntry [ehi] starts noret rounds "s0"
       -- The kind pin, PLUS which dispatch guard it makes true.  The encoder
       -- already resolved the jump table statically (that is how it knows the
       -- arms), so stating the selected guard here is the same ground fact as the
@@ -263,12 +269,27 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
       let decls2 := bindsToDecls binds
       allSums := (allSums ++ sums).eraseDups
       let decls := summaryDecls sums
+      -- NO-EXIT: `reflectBmc` returns the entry name unchanged when the span has
+      -- no exit arrival at all (every path halts, or the stop PC is unreachable).
+      -- Writing the query anyway would ask the post about the ENTRY state and
+      -- report VALID.  Record the field and skip it instead.
+      if ev == "s0" then
+        noExit := noExit ++ [s!"{nm}\t0x{String.ofList (Nat.toDigits 16 bmcEntry)}\t0x{String.ofList (Nat.toDigits 16 ehi)}\t{halts.length}"]
+      else
       IO.FS.writeFile s!"{dir}/queries/{nm}.smt2"
         s!"{smtPreamble}\n{decls}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule #x0000000000010000 SL_lo) (bvult SL_lo SL_hi) (bvult SL_hi #x0000000100000000) (bvule #x0000000000010000 A_lo) (bvult A_lo A_hi) (bvult A_hi #x0000000100000000) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi)) (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) (bvsub SL_hi #x0000000000001100))))\n(declare-const s0 MState)\n{kindPin}{decls2}\n{dispPin}; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {ev})\n(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
       IO.FS.writeFile s!"{dir}/writes/{nm}.tsv"
         ("guard\twidth\taddr\n" ++ String.intercalate "\n"
           (writes.map (fun (g, a, w) => s!"{g}\t{w}\t{a}")) ++ "\n")
-      rows := rows ++ [s!"{nm}\t0x{String.ofList (Nat.toDigits 16 rlo)}\t0x{String.ofList (Nat.toDigits 16 rhi)}\t0x{String.ofList (Nat.toDigits 16 bmcEntry)}\t0x{String.ofList (Nat.toDigits 16 ehi)}\t{used}\t{complete}\t{decls2.length}\t{sums.length}"]
+      -- The paths EXCLUDED from the exit merge because they transfer to a
+      -- function that never returns.  A verdict on this span is a verdict on
+      -- the paths that reach the exit PC; these ones halt instead, and are the
+      -- error-site seam's obligation (`Vsa/Sim/ErrorSiteJal.lean`), not a frame
+      -- post's.  Named here so the verdict can be qualified rather than bare.
+      IO.FS.writeFile s!"{dir}/halts/{nm}.tsv"
+        ("guard\tsite\n" ++ String.intercalate "\n"
+          (halts.map (fun (g, a) => s!"{g}\t0x{String.ofList (Nat.toDigits 16 a)}")) ++ "\n")
+      rows := rows ++ [s!"{nm}\t0x{String.ofList (Nat.toDigits 16 rlo)}\t0x{String.ofList (Nat.toDigits 16 rhi)}\t0x{String.ofList (Nat.toDigits 16 bmcEntry)}\t0x{String.ofList (Nat.toDigits 16 ehi)}\t{used}\t{complete}\t{decls2.length}\t{sums.length}\t{halts.length}"]
       deps := deps ++ [s!"{nm}\t{String.intercalate "," sums}"]
     -- Summary obligations, over the SAME encoder.
     --   `callee_t` — symbolically execute the callee's own function;
@@ -313,7 +334,7 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
           assumedSyms := assumedSyms ++ [sym]
           continue
       let mk : Nat → Nat → Nat → List Nat → IO (String × List String) := fun rlo rhi entry stops => do
-        let (ev, binds, subs, complete, _, writes, _) := reflectBmc img rlo rhi entry stops rounds "S0"
+        let (ev, binds, subs, complete, _, writes, _, _) := reflectBmc img rlo rhi entry stops starts noret rounds "S0"
         let declsB := (bindsToDecls binds).replace s!"({sym} " s!"({sym}_ih "
         let decls := summaryDecls ((allSums ++ subs).eraseDups ++ [s!"{sym}_ih"])
         IO.FS.writeFile s!"{dir}/obligations/{sym}.smt2"
@@ -338,12 +359,15 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
     IO.FS.writeFile s!"{dir}/opaque.tsv" ("summary\n" ++ String.intercalate "\n" opaqueSyms ++ "\n")
     IO.FS.writeFile s!"{dir}/assumed.tsv"
       ("summary\trole\n" ++ String.intercalate "\n"
-        (assumedSyms.map (fun a => s!"{a}\tcallee contract outside the interpreter's own code")) ++ "\n")
+        (assumedSyms.map (fun a => s!"{a}\tcallee contract outside the interpreter's own code")) ++ "\n"
+        ++ "d < maxCallDepth\tentry stack budget: the 7408 headroom pin needs the closure depth guard; ExecEntry has no depth field\n")
     IO.FS.writeFile s!"{dir}/pre.smt2" (entryPinsSmt img ++ "\n")
     IO.FS.writeFile s!"{dir}/summary-deps.tsv"
       ("summary\tdeps\n" ++ String.intercalate "\n" symDeps ++ "\n")
+    IO.FS.writeFile s!"{dir}/no-exit.tsv"
+      ("field\tentry\tstop\thalts\n" ++ String.intercalate "\n" noExit ++ "\n")
     IO.FS.writeFile s!"{dir}/spans.tsv"
-      ("field\tregion_lo\tregion_hi\tentry\tstop\trounds\tcomplete\tterm_bytes\tsummaries\n"
+      ("field\tregion_lo\tregion_hi\tentry\tstop\trounds\tcomplete\tterm_bytes\tsummaries\thalts\n"
         ++ String.intercalate "\n" rows ++ "\n")
     IO.FS.writeFile s!"{dir}/summaries.tsv" ("summary\n" ++ String.intercalate "\n" done.reverse ++ "\n")
     IO.FS.writeFile s!"{dir}/query-summaries.tsv" ("field\tsummaries\n" ++ String.intercalate "\n" deps ++ "\n")
@@ -357,7 +381,8 @@ elab "#bmc_trace " loStx:num hiStx:num stopStx:num rStx:num : command => do
     let img ← loadElf elfPath
     let starts := funcStarts img 0x80000000 0x80018be0
     let (rlo, rhi) := funcRange starts 0x80000000 0x80018be0 loStx.getNat
-    let tr := bmcTrace img rlo rhi loStx.getNat [stopStx.getNat] rStx.getNat
+    let noret := noReturnTargets img starts
+    let tr := bmcTrace img rlo rhi loStx.getNat [stopStx.getNat] starts noret rStx.getNat
     let mut i : Nat := 0
     for f in tr do
       let pcs := f.map (fun q => String.ofList (Nat.toDigits 16 q))
