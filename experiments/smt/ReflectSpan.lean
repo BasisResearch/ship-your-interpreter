@@ -346,8 +346,9 @@ term and the symbolic register map.  Branches become exact `ite`s over
 a `loop_` summary; `ret`/`hi` end the path.  `fuel` bounds path length (cycles go
 through `loop_` summaries, so forward recursion terminates). -/
 partial def reflectPath (img : Nat → Option (BitVec 8)) (regs : List Nat) (hi fuel : Nat)
-    (pc : Nat) (mem : String) (rf : Nat → String) : String × List String := Id.run do
-  if fuel == 0 then return (mem, [])
+    (pc : Nat) (mem : String) (rf : Nat → String) :
+    String × (Nat → String) × List String := Id.run do
+  if fuel == 0 then return (mem, rf, [])
   -- accumulate a straight-line block until a terminator or hi
   let mut cur : List MInstr := []
   let mut p := pc
@@ -356,27 +357,36 @@ partial def reflectPath (img : Nat → Option (BitVec 8)) (regs : List Nat) (hi 
     p := p + 4
   let mem1 := appendBlockLog regs mem cur
   let rf1 := symRun mem rf cur
-  if p ≥ hi then return (mem1, [])
+  if p ≥ hi then return (mem1, rf1, [])
   let w := wordAt img p
   match decodeTerm p w with
   | Term.branch tgt =>
     if tgt ≤ pc then
-      let s := s!"loop_{tgt}"; return (s!"({s} {mem1})", [s])
+      let s := s!"loop_{tgt}"
+      return (s!"({s}_m {mem1})", (fun n => s!"({s}_r{n} {mem1})"), [s])
     else
-      let (tk, s1) := reflectPath img regs hi (fuel-1) tgt mem1 rf1
-      let (fl, s2) := reflectPath img regs hi (fuel-1) (p+4) mem1 rf1
-      return (s!"(ite {branchCondSym rf1 w} {tk} {fl})", (s1 ++ s2).eraseDups)
+      let (tk, tkr, s1) := reflectPath img regs hi (fuel-1) tgt mem1 rf1
+      let (fl, flr, s2) := reflectPath img regs hi (fuel-1) (p+4) mem1 rf1
+      let cond := branchCondSym rf1 w
+      return (s!"(ite {cond} {tk} {fl})",
+              (fun n => s!"(ite {cond} {tkr n} {flr n})"), (s1 ++ s2).eraseDups)
   | Term.jal rd tgt =>
     if tgt ≤ pc then
-      let s := s!"loop_{tgt}"; return (s!"({s} {mem1})", [s])
+      let s := s!"loop_{tgt}"
+      return (s!"({s}_m {mem1})", (fun n => s!"({s}_r{n} {mem1})"), [s])
     else if rd == 1 then
+      -- call: callee summary maps (mem,args) → mem'; a0 return = callee_ret; other
+      -- caller-saved clobbered, callee-saved preserved.
       let s := s!"callee_{tgt}"
-      let (rest, s2) := reflectPath img regs hi (fuel-1) (p+4) s!"({s} {mem1})" (clobber tgt rf1)
-      return (rest, (s :: s2).eraseDups)
+      let saved : List Nat := [2,3,4,8,9,18,19,20,21,22,23,24,25,26,27]
+      let rf2 : Nat → String := fun n =>
+        if n == 10 then s!"({s}_ret {mem1})" else if saved.contains n then rf1 n
+        else s!"({s}_c{n} {mem1})"
+      reflectPath img regs hi (fuel-1) (p+4) s!"({s}_m {mem1})" rf2
     else
       reflectPath img regs hi (fuel-1) tgt mem1 rf1     -- plain jump
-  | Term.jalr _ => return (mem1, [])                     -- ret
-  | Term.sys    => return (mem1, [])
+  | Term.jalr _ => return (mem1, rf1, [])               -- ret
+  | Term.sys    => return (mem1, rf1, [])
 
 /-- Assemble the COMPLETE reflected `Steps` SMT for span `[lo,hi)`: register
 decls, the entry memory, every callee summary's fold/unfold axiom (recursively
@@ -385,7 +395,7 @@ write-log.  A well-formed SMT-LIB2 preamble Z3 consumes; the residual's own
 pre/post conjuncts are appended by the caller to form the validity query. -/
 def reflectFullSmt (regs : List Nat) (lo hi : Nat) : IO String := do
   let img ← loadElf elfPath
-  let (memExit, summaries) := reflectPath img regs hi 200 lo "mem" (fun n => regName n)
+  let (memExit, _, summaries) := reflectPath img regs hi 200 lo "mem" (fun n => regName n)
   let (axs, visited) := emitAxioms img regs summaries [] []
   let decls := String.intercalate "\n" (regs.map (fun r => s!"(declare-fun {regName r} () Int)"))
   -- ALL summary symbols declared first (any body may reference a later one);
@@ -401,6 +411,149 @@ def reflectFullSmt (regs : List Nat) (lo hi : Nat) : IO String := do
   let helpers := "(declare-fun loadw ((Array Int (_ BitVec 8)) Int) Int)\n(declare-fun loadb ((Array Int (_ BitVec 8)) Int) Int)\n(declare-fun bvor_i (Int Int) Int)\n(declare-fun bvand_i (Int Int) Int)\n(declare-fun bvxor_i (Int Int) Int)"
   return s!"(set-logic ALL)\n; === reflected Steps for span [{lo},{hi}) ===\n{decls}\n(declare-fun mem () (Array Int (_ BitVec 8)))\n{helpers}\n{sumDecls}\n{axBlock}\n(define-fun mem_exit () (Array Int (_ BitVec 8)) {memExit})\n"
 
+-- ==========================================================================
+-- EXACT state-threaded reflection.  Machine state = one datatype
+--   MState = (mm : Array Int BV8, rr : Array Int Int).
+-- Every register outcome comes from the callee's OWN reflection (no ABI
+-- approximation); loads read the actual memory array (exact byte assembly).
+-- ==========================================================================
+
+/-- reg `n` of state term `S`. -/
+def stR (S : String) (n : Nat) : String := s!"(select (rr {S}) {n})"
+
+/-- Store the low-`w` bytes of Int value `v` at Int address `a` into a mem term. -/
+def storeBytes (mem a v : String) (w : Nat) : String := Id.run do
+  let mut m := mem
+  for j in List.range w do
+    m := s!"(store {m} (+ {a} {j}) ((_ int2bv 8) (mod (div {v} {Nat.pow 256 j}) 256)))"
+  return m
+
+/-- rd's new symbolic Int value for a register-producing instruction (over the
+current reg map `rf` and mem term `mem`); `none` for stores/control. -/
+def regValExact (rf : Nat → String) (mem : String) (i : MInstr) : Option String :=
+  match i.kind with
+  | .addi | .addiw => some s!"(+ {rf i.rs1} {imm12 i.imm})"
+  | .add  | .addw  => some s!"(+ {rf i.rs1} {rf i.rs2})"
+  | .sub  | .subw  => some s!"(- {rf i.rs1} {rf i.rs2})"
+  | .lui  => some s!"{imm12 i.imm * 4096}"
+  | .slli => some s!"(* {rf i.rs1} {Nat.pow 2 i.imm.toNat})"
+  | .srli => some s!"(div {rf i.rs1} {Nat.pow 2 i.imm.toNat})"
+  | .slti => some s!"(ite (< {rf i.rs1} {imm12 i.imm}) 1 0)"
+  | .slt  => some s!"(ite (< {rf i.rs1} {rf i.rs2}) 1 0)"
+  | .or   => some s!"(bvor_i {rf i.rs1} {rf i.rs2})"
+  | .and  => some s!"(bvand_i {rf i.rs1} {rf i.rs2})"
+  | .xor  => some s!"(bvxor_i {rf i.rs1} {rf i.rs2})"
+  | .ld   => some s!"(ld8 {mem} (+ {rf i.rs1} {imm12 i.imm}))"
+  | .lw | .lwu => some s!"(ld4 {mem} (+ {rf i.rs1} {imm12 i.imm}))"
+  | .lbu  => some s!"(ld1 {mem} (+ {rf i.rs1} {imm12 i.imm}))"
+  | _     => none
+
+/-- Exact execution of a straight-line block over state term `S` → new state
+term.  Stores update `mm`; register writes update `rr`; both exact. -/
+def blockState (S : String) (instrs : List MInstr) : String := Id.run do
+  let mut mem := s!"(mm {S})"
+  let mut rf : Nat → String := fun n => stR S n
+  let mut changed : List Nat := []
+  for i in instrs do
+    match i.kind with
+    | .sd => mem := storeBytes mem s!"(+ {rf i.rs1} {imm12 i.imm})" (rf i.rs2) 8
+    | .sw => mem := storeBytes mem s!"(+ {rf i.rs1} {imm12 i.imm})" (rf i.rs2) 4
+    | .sh => mem := storeBytes mem s!"(+ {rf i.rs1} {imm12 i.imm})" (rf i.rs2) 2
+    | .sb => mem := storeBytes mem s!"(+ {rf i.rs1} {imm12 i.imm})" (rf i.rs2) 1
+    | _ =>
+      match regValExact rf mem i with
+      | some v => if i.rd != 0 then do
+                    let old := rf; rf := (fun n => if n == i.rd then v else old n)
+                    changed := i.rd :: changed
+      | none => pure ()
+  let regsArr := changed.eraseDups.foldl (fun ra n => s!"(store {ra} {n} {rf n})") s!"(rr {S})"
+  return s!"(mst {mem} {regsArr})"
+
+/-- Branch condition over state `S` (exact register comparison). -/
+def branchCondSt (S : String) (w : BitVec 32) : String :=
+  let f3 := ((w >>> 12) &&& 7).toNat
+  let a := stR S (((w >>> 15) &&& 0x1f).toNat)
+  let b := stR S (((w >>> 20) &&& 0x1f).toNat)
+  match f3 with
+  | 0 => s!"(= {a} {b})" | 1 => s!"(not (= {a} {b}))"
+  | 4 => s!"(< {a} {b})" | 5 => s!"(>= {a} {b})"
+  | 6 => s!"(< {a} {b})" | _ => s!"(>= {a} {b})"
+
+/-- EXACT path reflection threading the whole `MState`.  Branches → `ite` on the
+exact condition; calls/loops → `State→State` summary (its axiom is the callee/
+loop body's OWN reflection — no ABI); ret/hi end.  Returns `(exitStateTerm,
+summaries)`. -/
+partial def reflectExact (img : Nat → Option (BitVec 8)) (hi fuel : Nat)
+    (pc : Nat) (S : String) : String × List String := Id.run do
+  if fuel == 0 then return (S, [])
+  let mut cur : List MInstr := []
+  let mut p := pc
+  while p < hi && !(isTerm (wordAt img p)) do
+    cur := cur ++ [mkLine (BitVec.ofNat 64 p) (wordAt img p)]
+    p := p + 4
+  let S1 := blockState S cur
+  if p ≥ hi then return (S1, [])
+  let w := wordAt img p
+  match decodeTerm p w with
+  | Term.branch tgt =>
+    if tgt ≤ pc then let s := s!"loop_{tgt}"; return (s!"({s} {S1})", [s])
+    else
+      let (tk, s1) := reflectExact img hi (fuel-1) tgt S1
+      let (fl, s2) := reflectExact img hi (fuel-1) (p+4) S1
+      return (s!"(ite {branchCondSt S1 w} {tk} {fl})", (s1 ++ s2).eraseDups)
+  | Term.jal rd tgt =>
+    if tgt ≤ pc then let s := s!"loop_{tgt}"; return (s!"({s} {S1})", [s])
+    else if rd == 1 then
+      let s := s!"callee_{tgt}"
+      let (rest, s2) := reflectExact img hi (fuel-1) (p+4) s!"({s} {S1})"
+      return (rest, (s :: s2).eraseDups)
+    else reflectExact img hi (fuel-1) tgt S1
+  | Term.jalr _ => return (S1, [])
+  | Term.sys    => return (S1, [])
+
+/-- Exact axioms: `callee_t(S) = <callee body reflection>(S)`; loops via
+define-fun-rec `loop_t(S) = ite(loopcond, S, loop_t(body))`.  All exact — the
+body reflection defines every register + memory effect. -/
+partial def emitExactAxioms (img : Nat → Option (BitVec 8))
+    (worklist visited acc : List String) : List String × List String := Id.run do
+  match worklist with
+  | [] => (acc, visited)
+  | s :: rest =>
+    if visited.contains s then emitExactAxioms img rest visited acc
+    else
+      let visited := s :: visited
+      if s.startsWith "callee_" then
+        let t := (s.drop 7).toNat!
+        let (body, subs) := reflectExact img (findRet img t) 200 t "S"
+        let ax := s!"(assert (forall ((S MState)) (= ({s} S) {body})))"
+        emitExactAxioms img (subs ++ rest) visited (acc ++ [ax])
+      else if s.startsWith "loop_" then
+        let t := (s.drop 5).toNat!
+        let (body, subs) := reflectExact img (findBackEdge img t) 200 t "S"
+        let ax := s!"(assert (forall ((S MState)) (= ({s} S) (ite (loopcond_{t} S) S ({s} {body})))))"
+        emitExactAxioms img (subs ++ rest) visited (acc ++ [ax])
+      else emitExactAxioms img rest visited acc
+
+/-- Assemble the complete EXACT reflected Steps SMT for span `[lo,hi)`. -/
+def reflectExactSmt (lo hi : Nat) : IO String := do
+  let img ← loadElf elfPath
+  let (exitS, summaries) := reflectExact img hi 200 lo "s0"
+  let (axs, visited) := emitExactAxioms img summaries [] []
+  let sumDecls := String.intercalate "\n" (visited.flatMap (fun s =>
+    let f := s!"(declare-fun {s} (MState) MState)"
+    if s.startsWith "loop_" then [f, s!"(declare-fun loopcond_{s.drop 5} (MState) Bool)"] else [f]))
+  let preamble := "(set-logic ALL)
+(declare-datatypes () ((MState (mst (mm (Array Int (_ BitVec 8))) (rr (Array Int Int))))))
+(define-fun ld1 ((m (Array Int (_ BitVec 8))) (a Int)) Int (bv2int (select m a)))
+(define-fun ld4 ((m (Array Int (_ BitVec 8))) (a Int)) Int (+ (bv2int (select m a)) (* 256 (bv2int (select m (+ a 1)))) (* 65536 (bv2int (select m (+ a 2)))) (* 16777216 (bv2int (select m (+ a 3))))))
+(define-fun ld8 ((m (Array Int (_ BitVec 8))) (a Int)) Int (+ (ld4 m a) (* 4294967296 (ld4 m (+ a 4)))))
+(declare-fun bvor_i (Int Int) Int)
+(declare-fun bvand_i (Int Int) Int)
+(declare-fun bvxor_i (Int Int) Int)
+(declare-const s0 MState)"
+  let axBlock := String.intercalate "\n" axs
+  return s!"{preamble}\n{sumDecls}\n{axBlock}\n(define-fun state_exit () MState {exitS})\n(define-fun mem_exit () (Array Int (_ BitVec 8)) (mm state_exit))\n"
+
 end Vsa.ReflectSpan
 
 open Vsa.ReflectSpan in
@@ -410,6 +563,14 @@ elab "#reflect_full " pathStx:str loStx:num hiStx:num : command => do
     let smt ← reflectFullSmt [2,1,8,9,18,19,15,16,14,13,11,12,10,5,6,7] loStx.getNat hiStx.getNat
     IO.FS.writeFile pathStx.getString smt
     Lean.logInfo m!"#reflect_full → {pathStx.getString} ({smt.length} bytes)"
+
+open Vsa.ReflectSpan in
+/-- `#reflect_exact "<path>" <lo> <hi>` — write the EXACT state-threaded Steps SMT. -/
+elab "#reflect_exact " pathStx:str loStx:num hiStx:num : command => do
+  Lean.Elab.Command.liftTermElabM do
+    let smt ← reflectExactSmt loStx.getNat hiStx.getNat
+    IO.FS.writeFile pathStx.getString smt
+    Lean.logInfo m!"#reflect_exact → {pathStx.getString} ({smt.length} bytes)"
 
 open Vsa.ReflectSpan in
 elab "#reflect_span " loStx:num hiStx:num : command => do
