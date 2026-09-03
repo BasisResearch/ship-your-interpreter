@@ -135,7 +135,11 @@ def isTerm (w : BitVec 32) : Bool :=
 inductive Term where
   | branch (target : Nat)      -- conditional; fallthrough OR target
   | jal    (rd target : Nat)   -- call (rd=1) or plain jump
-  | jalr   (rd rs1 : Nat)      -- indirect: CALL rd=1 / RET rd=0∧rs1=ra / computed goto
+  | jalr   (rd rs1 : Nat) (imm : Int)
+      -- indirect: CALL rd=1 / RET rd=0 ∧ rs1=ra ∧ imm=0 / computed goto.
+      -- The IMMEDIATE is part of the target (`jr 12(a3)`, the duff-device jump
+      -- at 0x80006b38, is a real instruction in this image): dropping it makes
+      -- the encoder's target expression `a3` where the machine goes to `a3+12`.
   | sys                        -- ecall/ebreak
   deriving Repr
 
@@ -156,7 +160,10 @@ def decodeTerm (pc : Nat) (w : BitVec 32) : Term :=
              + (((w>>>8) &&& 0xf).toNat)*2
     let imm := if bit 31 == 1 then Int.ofNat imm - (Nat.pow 2 13) else Int.ofNat imm
     Term.branch ((Int.ofNat pc + imm).toNat)
-  else if op == 0x67 then Term.jalr rd (((w >>> 15) &&& 0x1f).toNat)
+  else if op == 0x67 then
+    let u := ((w >>> 20) &&& 0xfff).toNat
+    Term.jalr rd (((w >>> 15) &&& 0x1f).toNat)
+      (if u ≥ 2048 then (u : Int) - 4096 else (u : Int))
   else Term.sys
 
 /-- Split `[lo,hi)` into maximal straight-line blocks, each ending at a
@@ -272,7 +279,7 @@ def reflectStepsMulti (img : Nat → Option (BitVec 8)) (regs : List Nat) (lo hi
       else if rd == 1 then
         let s := s!"callee_{target}"; summaries := s :: summaries; cur := s!"({s} {cur})"
       -- plain forward jump (rd=0): straight fallthrough of the log, no seam effect
-    | some (Term.jalr _ _) => pure ()         -- indirect call/ret: caller resumes
+    | some (Term.jalr _ _ _) => pure ()         -- indirect call/ret: caller resumes
     | some (Term.branch target) =>
       let s := s!"branch_{target}"; summaries := s :: summaries; cur := s!"({s} {cur})"
     | _ => pure ()
@@ -548,7 +555,7 @@ partial def reflectPath (img : Nat → Option (BitVec 8)) (regs : List Nat) (hi 
       reflectPath img regs hi (fuel-1) (p+4) s!"({s}_m {mem1})" rf2
     else
       reflectPath img regs hi (fuel-1) tgt mem1 rf1     -- plain jump
-  | Term.jalr _ _ => return (mem1, rf1, [])             -- ret
+  | Term.jalr _ _ _ => return (mem1, rf1, [])             -- ret
   | Term.sys    => return (mem1, rf1, [])
 
 /-- Assemble the COMPLETE reflected `Steps` SMT for span `[lo,hi)`: register
@@ -685,9 +692,9 @@ def blockSuccs (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat
   | Term.jal rd tgt =>
     if rd == 1 then (if inR (p+4) then [p+4] else [])
     else if inR tgt then [tgt] else []
-  | Term.jalr rd rs1 =>
+  | Term.jalr rd rs1 im =>
     if rd == 1 then (if inR (p+4) then [p+4] else [])
-    else if rs1 == 1 then []
+    else if rs1 == 1 && im == 0 then []
     else match dispatchArms img p with
          | some arms => arms.filter inR
          | none => []
@@ -828,7 +835,7 @@ partial def reflectExact (img : Nat → Option (BitVec 8)) (hi fuel : Nat)
       return (rest, (s :: s2).eraseDups)
     else if tgt ≤ pc then let s := s!"loop_{tgt}"; return (s!"({s} {S1})", [s])
     else reflectExact img hi (fuel-1) tgt S1
-  | Term.jalr _ _ => return (S1, [])
+  | Term.jalr _ _ _ => return (S1, [])
   | Term.sys    => return (S1, [])
 
 /-- DAG reflection: thread a state VARIABLE (not the full term) and accumulate
@@ -870,7 +877,7 @@ partial def reflectExactD (img : Nat → Option (BitVec 8)) (hi fuel : Nat) (pc 
       let lv := s!"s{k}"
       return (lv, k+1, binds ++ [s!"({lv} (loop_{tgt} {v}))"], (s!"loop_{tgt}" :: sums).eraseDups)
     else reflectExactD img hi (fuel-1) tgt v k binds sums
-  | Term.jalr rd rs1 =>
+  | Term.jalr rd rs1 _ =>
     if rd == 1 then
       -- indirect CALL through a register (a native function pointer): the target
       -- is not statically known, so ONE named opaque summary per site.
@@ -1002,7 +1009,7 @@ def stepArm (img : Nat → Option (BitVec 8)) (lo hi : Nat) (S : String) (p : Na
       let st := s!"({sym} {S})"
       let r1 := if rd == 0 then s!"(rr {st})" else s!"(store (rr {st}) {bvN rd} {bvN (p+4)})"
       return (s!"(mst (mm {st}) (store {r1} {bvN pcIdx} {bvN (p+4)}))", [sym], true)
-  | Term.jalr rd rs1 =>
+  | Term.jalr rd rs1 _ =>
     -- EXACT: the target is the computed value with bit 0 cleared.  `ret`
     -- (rd=0, rs1=ra) and the AST-kind computed gotos are the SAME rule here.
     let v := s!"(bvadd {stR S rs1} {bv64 (immI w)})"
@@ -1210,11 +1217,11 @@ partial def neverReturns (img : Nat → Option (BitVec 8)) (fstarts : List Nat)
       else
         if !(inR tgt) then return false
         work := tgt :: work
-    | Term.jalr rd rs1 =>
+    | Term.jalr rd rs1 im =>
       if rd == 1 then
         if !(inR (p+4)) then return false
         work := (p+4) :: work
-      else if rs1 == 1 then return false               -- a `ret`: it RETURNS
+      else if rs1 == 1 && im == 0 then return false    -- a `ret`: it RETURNS
       else match dispatchArms img p with
         | some arms =>
           if arms.any (fun a => !(inR a)) then return false
@@ -1407,7 +1414,7 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       return (s!"({sym} {st})", [], [(g, bv)], [sym], ibinds, k, wr, [])
     else if inR tgt then return (st, [(tgt, g)], [], [], ibinds, k, wr, [])
     else return (st, [], [(g, bv)], [], ibinds, k, wr, [])
-  | Term.jalr rd rs1 =>
+  | Term.jalr rd rs1 im =>
     if rd == 1 then
       -- indirect CALL through a register: one named opaque summary per site.
       -- `ra := p + 4` first, for the same reason as the direct call above.
@@ -1419,7 +1426,7 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       let st' := s!"({sym} {ra})"
       if inR (p+4) then return (st', [(p+4, g)], [], [sym], ib, k2, wr, [])
       else return (st', [], [(g, bv)], [sym], ib, k2, wr, [])
-    else if rs1 == 1 then
+    else if rs1 == 1 && im == 0 then
       -- `ret`.  An EXIT ARRIVAL only when the span's declared stop is this
       -- return -- the whole-arm convention, stop = the instruction after the
       -- `ret`.  When the stop is an INTERNAL pc the return is a path that
@@ -1434,7 +1441,10 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
     else match dispatchArms img p with
     | some arms =>
       -- ground jump table: one guarded successor per arm, over the BOUND state.
-      let tgtE := stR bv rs1
+      -- The target is `rs1 + imm` with bit 0 cleared, NOT `rs1`: `jr 12(a3)`
+      -- exists in this image, and a target expression that drops the immediate
+      -- answers the dispatch off an address the machine never jumps to.
+      let tgtE := s!"(bvand (bvadd {stR bv rs1} {bv64 im}) {bv64 (-2)})"
       let mut succs : List (Nat × String) := []
       let mut exits : List (String × String) := []
       for a in arms do
@@ -1501,6 +1511,16 @@ def bmcRound (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       for q in qs do
         next := next ++ [{ pc := q, guard := gv, state := sv, done := pc :: carried }]
       if leaves then exits := exits ++ [(gv, sv)]
+      -- A loop with NO exit edge and no region-leaving body block contributes no
+      -- successor and no exit, so without this the path would simply VANISH --
+      -- the same silent-drop shape as answering a span with no exit arrival off
+      -- its entry state.  It is a real outcome (the CFG says control never
+      -- leaves the cycle), so record it as a halt, which is what a verdict then
+      -- has to qualify itself with.  Every such loop in this image is an error
+      -- chain: `neverReturns` cannot see that `runtime_error` longjmps, so the
+      -- fallthrough after `jal ra, runtime_error` is modelled as live and closes
+      -- a cycle with the next error site's argument setup.
+      if qs.isEmpty && !leaves then halts := halts ++ [(gv, pc)]
     else
     let gv := s!"g{k}"; let sv := s!"m{k}"; let bv := s!"b{k}"
     binds := binds ++ [s!"({gv} {g0})", s!"({sv} {st0})"]

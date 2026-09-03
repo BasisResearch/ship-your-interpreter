@@ -62,14 +62,30 @@ point and the earlier ones still gate.
 ### Phase 0 — the trace (the only new machinery)
 
 `traceLoop` in `riscv-lean/lean_emulator/LeanRiscv.lean`, beside `my_main`.
-Replicates `loop ()` (`LeanRV64DExecutable/Step.lean:472`) but reads `PC` and
-the register file between `try_step` calls and writes one TSV row per retired
-instruction. Nothing in the generated Sail code changes.
+Replicates `loop ()` but reads `PC` and the register file between `try_step`
+calls. Nothing in the generated Sail code changes.
 
-Cost: the register file is 32 words per step and a program retires millions, so
-gate it. `--trace-pcs <file>` records only steps whose PC is in a given set —
-the span entry/exit PCs, the call sites and the store sites, which is what the
-checks below read. Everything else advances silently.
+Anchors, all checked:
+
+| need | symbol |
+|---|---|
+| step one instruction | `try_step (step_no : Nat) (exit_wait : Bool) : SailM Bool` — `LeanRV64DExecutable/Step.lean:398` |
+| the loop to copy | `loop (_ : Unit) : SailM Nat` — same file, `:472` |
+| read a GPR | `rX (app_0 : regno) : SailM (BitVec 64)` — `LeanRV64DExecutable/Regs.lean:615` |
+| emit a row | `print_effect (str : String)` — `Sail/ConcurrencyInterfaceV1.lean:292` |
+| where it lands | `sailOutput : Array String` — same file, `:107` |
+
+**`SailM` is a pure state monad — no `IO` inside.** `runElf64` only gets the
+state back at the end (`main.run initialState`), so the trace cannot be written
+to a file as it goes. It rides the model's own output channel instead: emit each
+row via `print_effect` with a `#T\t` prefix, then in `runElf64` partition
+`s.sailOutput` on that prefix — rows to the trace file, everything else to
+stdout as the program's real output. No new state, no change to the model.
+
+That accumulates in memory, which is the reason for the PC filter rather than a
+nicety: `--trace-pcs <file>` records only steps whose PC is in a given set (the
+span entry/exit PCs, the call sites, the store sites — all the checks below
+read). A full trace of every retired instruction would not fit.
 
 Output: `<prog>.trace.tsv`, columns `step pc x0..x31`.
 

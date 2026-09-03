@@ -242,6 +242,7 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
     let mut rows : List String := []
     let mut deps : List String := []
     let mut noExit : List String := []
+    let mut stopOutside : List String := []
     let mut allSums : List String := []
     for (nm, elo, ehi) in residualSpans do
       -- If the span's entry is a jump-table ARM, start at the FUNCTION entry with
@@ -260,7 +261,22 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
       -- convention puts the stop one instruction after the `ret`; a span that
       -- stops inside the function (hInitStore, at `interp_run`'s loop head)
       -- must not treat a return as an arrival at its exit.
-      let retExit := isRet (wordAt img (ehi - 4))
+      --
+      -- A stop OUTSIDE the span's own region can never be an arrival at all
+      -- (`stepBlock` only tests `stops` at PCs it walks through), so the span's
+      -- exit is the function's RETURN and nothing else.  Reading `isRet` at
+      -- `ehi - 4` there is reading a word in a DIFFERENT function: the twelve
+      -- `exec_stmt` arms declare `0x800043ec` (`interp_run`), so their
+      -- `retExit` was decided by `interp_init`'s `ret` at `0x800043e8` and came
+      -- out true by luck.  Had that word not been a `ret`, all twelve spans
+      -- would have had zero exit arrivals -- defect 2 of DIFFTEST-PLAN's table,
+      -- one word away.  Decide it structurally instead, and record the
+      -- mis-declared stops so they are visible rather than latent.
+      let stopInRegion := rlo ≤ ehi && ehi < rhi
+      let retExit := if stopInRegion then isRet (wordAt img (ehi - 4)) else true
+      if !stopInRegion then
+        stopOutside := stopOutside ++
+          [s!"{nm}\t0x{String.ofList (Nat.toDigits 16 ehi)}\t0x{String.ofList (Nat.toDigits 16 rlo)}\t0x{String.ofList (Nat.toDigits 16 rhi)}"]
       let (ev, binds, sums, complete, used, writes, dispG, halts, exitG) := reflectBmc img rlo rhi bmcEntry [ehi] starts noret retExit rounds "s0"
       -- The kind pin, PLUS which dispatch guard it makes true.  The encoder
       -- already resolved the jump table statically (that is how it knows the
@@ -395,6 +411,8 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
     IO.FS.writeFile s!"{dir}/pre.smt2" (entryPinsSmt img ++ "\n")
     IO.FS.writeFile s!"{dir}/summary-deps.tsv"
       ("summary\tdeps\n" ++ String.intercalate "\n" symDeps ++ "\n")
+    IO.FS.writeFile s!"{dir}/stop-outside.tsv"
+      ("field\tstop\tregion_lo\tregion_hi\n" ++ String.intercalate "\n" stopOutside ++ "\n")
     IO.FS.writeFile s!"{dir}/no-exit.tsv"
       ("field\tentry\tstop\thalts\n" ++ String.intercalate "\n" noExit ++ "\n")
     IO.FS.writeFile s!"{dir}/spans.tsv"
