@@ -428,23 +428,41 @@ def storeBytes (mem a v : String) (w : Nat) : String := Id.run do
     m := s!"(store {m} (+ {a} {j}) ((_ int2bv 8) (mod (div {v} {Nat.pow 256 j}) 256)))"
   return m
 
+/-- Signed U-type value (bits 31..12 << 12), from the full word. -/
+def uimm (i : MInstr) : Int :=
+  let u := (i.word &&& 0xfffff000).toNat
+  if u ≥ 2147483648 then (u : Int) - 4294967296 else (u : Int)
+
+/-- Shift amount = word bits 25..20 (6-bit for RV64 register-immediate shifts). -/
+def shamt (i : MInstr) : Nat := ((i.word >>> 20) &&& 0x3f).toNat
+
 /-- rd's new symbolic Int value for a register-producing instruction (over the
-current reg map `rf` and mem term `mem`); `none` for stores/control. -/
+current reg map `rf` and mem term `mem`); `none` for stores/control.  EXACT for
+every register-producing MKind (immediates from the full word; shifts via BV). -/
 def regValExact (rf : Nat → String) (mem : String) (i : MInstr) : Option String :=
   match i.kind with
   | .addi | .addiw => some s!"(+ {rf i.rs1} {imm12 i.imm})"
   | .add  | .addw  => some s!"(+ {rf i.rs1} {rf i.rs2})"
   | .sub  | .subw  => some s!"(- {rf i.rs1} {rf i.rs2})"
-  | .lui  => some s!"{imm12 i.imm * 4096}"
-  | .slli => some s!"(* {rf i.rs1} {Nat.pow 2 i.imm.toNat})"
-  | .srli => some s!"(div {rf i.rs1} {Nat.pow 2 i.imm.toNat})"
+  | .lui  => some s!"{uimm i}"
+  | .auipc => some s!"(+ {i.pc.toNat} {uimm i})"
   | .slti => some s!"(ite (< {rf i.rs1} {imm12 i.imm}) 1 0)"
   | .slt  => some s!"(ite (< {rf i.rs1} {rf i.rs2}) 1 0)"
   | .or   => some s!"(bvor_i {rf i.rs1} {rf i.rs2})"
   | .and  => some s!"(bvand_i {rf i.rs1} {rf i.rs2})"
   | .xor  => some s!"(bvxor_i {rf i.rs1} {rf i.rs2})"
+  | .andi => some s!"(bvand_i {rf i.rs1} {imm12 i.imm})"
+  | .ori  => some s!"(bvor_i {rf i.rs1} {imm12 i.imm})"
+  | .xori => some s!"(bvxor_i {rf i.rs1} {imm12 i.imm})"
+  | .slli | .slliw => some s!"(shl_i {rf i.rs1} {shamt i})"
+  | .srli | .srliw => some s!"(lshr_i {rf i.rs1} {shamt i})"
+  | .srai | .sraiw => some s!"(ashr_i {rf i.rs1} {shamt i})"
+  | .sll  | .sllw  => some s!"(shl_i {rf i.rs1} {rf i.rs2})"
+  | .srl  | .srlw  => some s!"(lshr_i {rf i.rs1} {rf i.rs2})"
+  | .sraw          => some s!"(ashr_i {rf i.rs1} {rf i.rs2})"
   | .ld   => some s!"(ld8 {mem} (+ {rf i.rs1} {imm12 i.imm}))"
   | .lw | .lwu => some s!"(ld4 {mem} (+ {rf i.rs1} {imm12 i.imm}))"
+  | .lh | .lhu => some s!"(ld2 {mem} (+ {rf i.rs1} {imm12 i.imm}))"
   | .lbu  => some s!"(ld1 {mem} (+ {rf i.rs1} {imm12 i.imm}))"
   | _     => none
 
@@ -592,7 +610,11 @@ def reflectExactSmt (lo hi : Nat) : IO String := do
 (declare-datatypes () ((MState (mst (mm (Array Int (_ BitVec 8))) (rr (Array Int Int))))))
 (define-fun ld1 ((m (Array Int (_ BitVec 8))) (a Int)) Int (bv2int (select m a)))
 (define-fun ld4 ((m (Array Int (_ BitVec 8))) (a Int)) Int (+ (bv2int (select m a)) (* 256 (bv2int (select m (+ a 1)))) (* 65536 (bv2int (select m (+ a 2)))) (* 16777216 (bv2int (select m (+ a 3))))))
+(define-fun ld2 ((m (Array Int (_ BitVec 8))) (a Int)) Int (+ (bv2int (select m a)) (* 256 (bv2int (select m (+ a 1))))))
 (define-fun ld8 ((m (Array Int (_ BitVec 8))) (a Int)) Int (+ (ld4 m a) (* 4294967296 (ld4 m (+ a 4)))))
+(define-fun shl_i ((a Int) (b Int)) Int (bv2int (bvshl ((_ int2bv 64) a) ((_ int2bv 64) b))))
+(define-fun lshr_i ((a Int) (b Int)) Int (bv2int (bvlshr ((_ int2bv 64) a) ((_ int2bv 64) b))))
+(define-fun ashr_i ((a Int) (b Int)) Int (bv2int (bvashr ((_ int2bv 64) a) ((_ int2bv 64) b))))
 (define-fun bvor_i ((a Int) (b Int)) Int (bv2int (bvor ((_ int2bv 64) a) ((_ int2bv 64) b))))
 (define-fun bvand_i ((a Int) (b Int)) Int (bv2int (bvand ((_ int2bv 64) a) ((_ int2bv 64) b))))
 (define-fun bvxor_i ((a Int) (b Int)) Int (bv2int (bvxor ((_ int2bv 64) a) ((_ int2bv 64) b))))
