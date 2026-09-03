@@ -191,6 +191,17 @@ def z3(text, timeout):
     p = subprocess.run(["z3", "-smt2", "-in", f"-T:{timeout}"], input=Z3_OPTS + text,
                        capture_output=True, text=True)
     o = (p.stdout + p.stderr).strip()
+    # A MALFORMED query is not an undecided one.  z3 prints `(error ...)` for an
+    # unknown constant or a duplicate declaration and then carries on, so the
+    # answer that follows is about a DIFFERENT problem than the one intended --
+    # and folding that into "unknown" makes the miner silently drop the clause.
+    # An encoder bug then looks exactly like a hard query.  This is how a state
+    # name collision emptied all eleven loop clause sets and read as timeouts.
+    if "(error" in o:
+        sys.stderr.write("z3 ERROR (malformed query, NOT a verdict):\n  "
+                         + "\n  ".join(l for l in o.splitlines()
+                                       if l.startswith("(error"))[:600] + "\n")
+        return "error"
     if o.startswith("unsat"):
         return "unsat"
     if o.startswith("sat"):
@@ -304,7 +315,13 @@ IV_INVARIANTS = {
 }
 
 
-GEN_VAR = re.compile(r"^(?:g\d+[qx]?|[mbis]\d+)$")
+# Every prefix the encoder generates: `g` guards, `m` merge/arrival states, `b`
+# arrival snapshots, `i` per-instruction states, `s` reference-encoder states,
+# `ra` the return-address write before a call, `u` an unmodelled-word step.
+# A prefix missing HERE is not a slicing near-miss: `slice_to` drops the
+# declaration while the term still references it, and z3 answers a query about
+# an unknown constant.
+GEN_VAR = re.compile(r"^(?:g\d+[qx]?|ra\d+|u\d+|[mbis]\d+)$")
 DECL_RE = re.compile(r"^\(declare-const (\S+) (?:Bool|MState)\)$")
 BIND_RE = re.compile(r"^\(assert \(= (\S+) (.*)\)\)$")
 
@@ -430,7 +447,7 @@ def iv_discharge(text, cset, timeout, pre, writes=None):
         # `ld8` reads eight.
         alive = set(re.findall(r"^\(declare-const (\S+) ", sl, re.M))
         rd = [a for a in dedup_addrs(writes, cap=64, reads_only=True)
-              if all(v in alive or not re.match(r"^[imbs]\d+$", v)
+              if all(v in alive or not GEN_VAR.match(v)
                      for v in re.findall(r"[A-Za-z]\w*", a))]
         ab = (assume_block(sl, cset) + "\n"
               + assume_block(sl, cset, addrs=rd, byteexp=True, decl=False))

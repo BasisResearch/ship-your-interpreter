@@ -1320,14 +1320,13 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       st := st'; k := k'; ibinds := ibinds ++ ib'; wr := wr ++ wr'; cur := []
       match rawRegVal st w with
       | some (rd, e) =>
-        let nv := s!"m{k}"
-        ibinds := ibinds ++ [s!"(declare-const {nv} MState)",
-          s!"(assert (= {nv} (mst (mm {st}) (store (rr {st}) {bvN rd} {e}))))"]
+        let nv := s!"u{k}"
+        ibinds := ibinds ++
+          [s!"({nv} (mst (mm {st}) (store (rr {st}) {bvN rd} {e})))"]
         st := nv; k := k + 1
       | none =>
-        let nv := s!"m{k}"
-        ibinds := ibinds ++ [s!"(declare-const {nv} MState)",
-          s!"(assert (= {nv} (unmodelled_step {st})))"]
+        let nv := s!"u{k}"
+        ibinds := ibinds ++ [s!"({nv} (unmodelled_step {st}))"]
         st := nv; k := k + 1
       p := p + 4
   let (stF, kF, ibF, wrF) := blockBinds st cur k
@@ -1376,11 +1375,20 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       -- value -- so the model's `ra` after the call is the caller's old one
       -- where the machine's is `p + 4`.  Any spill of `ra`, or a `ret` through
       -- it, is answered off that.
+      -- BIND the ra-write to a name; do not inline it as the summary's
+      -- argument.  The driver finds application sites with a regex whose
+      -- argument is a bare identifier, and `slice_to`/`guard_of`/`write_roots`
+      -- all key on identifiers too, so an inlined `(mst (mm i23) (store ...))`
+      -- matches nothing and EVERY clause instantiation silently disappears --
+      -- which empties the clause sets rather than failing loudly.
       let sym := s!"callee_{tgt}"
-      let stRa := s!"(mst (mm {st}) (store (rr {st}) {bvN 1} {bvN (p+4)}))"
-      let st' := s!"({sym} {stRa})"
-      if inR (p+4) then return (st', [(p+4, g)], [], [sym], ibinds, k, wr, [])
-      else return (st', [], [(g, bv)], [sym], ibinds, k, wr, [])
+      let ra := s!"ra{k}"
+      let ib := ibinds ++
+        [s!"({ra} (mst (mm {st}) (store (rr {st}) {bvN 1} {bvN (p+4)})))"]
+      let k2 := k + 1
+      let st' := s!"({sym} {ra})"
+      if inR (p+4) then return (st', [(p+4, g)], [], [sym], ib, k2, wr, [])
+      else return (st', [], [(g, bv)], [sym], ib, k2, wr, [])
     else if inR tgt && fstarts.contains tgt && tgt != lo then
       -- TAIL CALL.  A `j` whose target is a FUNCTION ENTRY is not intra-function
       -- control flow: it transfers to a fresh frame that returns to OUR caller,
@@ -1398,10 +1406,13 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       -- indirect CALL through a register: one named opaque summary per site.
       -- `ra := p + 4` first, for the same reason as the direct call above.
       let sym := s!"icall_{p}"
-      let stRa := s!"(mst (mm {st}) (store (rr {st}) {bvN 1} {bvN (p+4)}))"
-      let st' := s!"({sym} {stRa})"
-      if inR (p+4) then return (st', [(p+4, g)], [], [sym], ibinds, k, wr, [])
-      else return (st', [], [(g, bv)], [sym], ibinds, k, wr, [])
+      let ra := s!"ra{k}"
+      let ib := ibinds ++
+        [s!"({ra} (mst (mm {st}) (store (rr {st}) {bvN 1} {bvN (p+4)})))"]
+      let k2 := k + 1
+      let st' := s!"({sym} {ra})"
+      if inR (p+4) then return (st', [(p+4, g)], [], [sym], ib, k2, wr, [])
+      else return (st', [], [(g, bv)], [sym], ib, k2, wr, [])
     else if rs1 == 1 then
       -- `ret`.  An EXIT ARRIVAL only when the span's declared stop is this
       -- return -- the whole-arm convention, stop = the instruction after the

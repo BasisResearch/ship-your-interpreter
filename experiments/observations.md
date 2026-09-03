@@ -5854,3 +5854,32 @@ it, still stop and report instead.
   function, not what the region contains.
 - proposal: landed. A repair added to one encoder path and not the other is not
   a repair; `modelled` should have been unusable from outside the check.
+
+## 2026-09-03 smt-malformed-query-read-as-unknown (Houdini driver)
+- missing: `z3()` folded `(error ...)` into `"unknown"`. z3 prints an error for
+  an unknown constant or a duplicate declaration and then CARRIES ON, so the
+  `sat`/`unsat` that follows is about a different problem than the one intended
+  -- and the miner drops any clause it cannot close, so an ENCODER BUG looks
+  exactly like a hard query. Landing the `ra` fix emptied all eleven loop clause
+  sets and it read as 161 timeouts in a 3-second phase 1, which is not a
+  plausible timeout at all.
+- workaround: NONE. `z3()` returns `"error"` and writes the error lines to
+  stderr. A malformed query is now loud.
+- cost: two full campaign runs spent reading a state-name collision as a
+  solver-hardness result.
+- proposal: landed. Any wrapper that maps a tool's ERROR onto its
+  DON'T-KNOW value will hide exactly the bugs that matter most.
+
+## 2026-09-03 smt-generated-var-prefixes-are-a-closed-set (bmc encoder + driver)
+- missing: `slice_to` keeps a declaration only for names matching `GEN_VAR`,
+  which listed the prefixes `g/m/b/i/s`. Two new state prefixes (`ra` for the
+  return-address write before a call, `u` for an unmodelled-word step) were not
+  in it, so slicing dropped their declarations while the terms still referenced
+  them -- 76 queries asking about unknown constants.
+- workaround: NONE. `GEN_VAR` extended, and `iv_discharge`'s separate
+  `^[imbs]\d+$` liveness test now uses `GEN_VAR` instead of a second,
+  independently-stale copy of the same list.
+- cost: one campaign run.
+- proposal: landed. The encoder's generated-name prefixes are a contract with
+  the driver; there were two copies of that list and both were wrong. One
+  regex, referenced everywhere.
