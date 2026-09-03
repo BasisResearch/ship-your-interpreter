@@ -198,6 +198,45 @@ def reflectStepsMulti (img : Nat → Option (BitVec 8)) (regs : List Nat) (lo hi
     | _ => pure ()
   return (cur, summaries.eraseDups)
 
+/-- Find a callee's exit: scan from `entry` for the first `ret` (`jalr x0`,
+i.e. JALR with rd=0), bounded by `maxLen` words. -/
+def findRet (img : Nat → Option (BitVec 8)) (entry : Nat) (maxLen : Nat := 4096) : Nat := Id.run do
+  let mut pc := entry
+  let mut n := 0
+  while n < maxLen do
+    let w := wordAt img pc
+    if opcode w == 0x67 && ((w >>> 7) &&& 0x1f).toNat == 0 then return pc + 4
+    pc := pc + 4; n := n + 1
+  return pc
+
+/-- Emit the fold/unfold axiom for every summary symbol, recursively.  A
+`callee_<t>` axiom is the callee's OWN `reflectStepsMulti` (recursion bottoms out
+at leaves); a symbol seen again is genuinely RECURSIVE ⇒ left as an uninterpreted
+`Array→Array` function (its own unfold axiom, define-fun-rec style — Z3's
+datatype recursion).  `loop_/branch_` summaries are declared and flagged as
+needing the mined invariant.  Returns the axiom block + the still-open
+(loop/recursive) summaries. -/
+partial def emitAxioms (img : Nat → Option (BitVec 8)) (regs : List Nat)
+    (worklist : List String) (visited : List String) (acc : List String) :
+    List String × List String := Id.run do
+  match worklist with
+  | [] => (acc, visited)
+  | s :: rest =>
+    if visited.contains s then emitAxioms img regs rest visited acc
+    else
+      let visited := s :: visited
+      let decl := s!"(declare-fun {s} ((Array Int (_ BitVec 8))) (Array Int (_ BitVec 8)))"
+      if s.startsWith "callee_" then
+        let t := (s.drop 7).toNat!
+        let exit := findRet img t
+        let (body, subs) := reflectStepsMulti img regs t exit
+        -- axiom: ∀ mem, s(mem) = body[mem]   (body is over the symbol `mem`)
+        let ax := s!"{decl}\n(assert (forall ((mem (Array Int (_ BitVec 8)))) (= ({s} mem) {body})))"
+        emitAxioms img regs (subs ++ rest) visited (acc ++ [ax])
+      else
+        -- loop_/branch_: invariant-bearing summary; declared, axiom = mined invariant
+        emitAxioms img regs rest visited (acc ++ [s!"{decl}  ; NEEDS-INVARIANT"])
+
 end Vsa.ReflectSpan
 
 open Vsa.ReflectSpan in
