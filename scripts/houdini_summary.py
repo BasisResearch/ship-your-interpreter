@@ -206,7 +206,7 @@ def heap_hyp(writes):
     block and the number of sites it covers."""
     out, n = [], 0
     for g, w, a in writes:
-        if SP_BASE.match(a):
+        if w == 0 or SP_BASE.match(a):
             continue
         # the base is `(bvadd BASE OFF)`; assume the BASE is a represented object
         # in the arena with room for its 32-byte record (`Arena.contains _ 32`)
@@ -390,9 +390,12 @@ def load_writes(path):
 
 
 def hits_QA(writes):
-    """`QA` lands inside one of the span's own stores."""
+    """`QA` lands inside one of the span's own stores.  Width 0 marks a READ
+    address, which is an instantiation site rather than part of the footprint."""
     ds = []
     for g, w, a in writes:
+        if w == 0:
+            continue
         ds.append(f"(and {g} (bvule {a} QA) (bvult QA (bvadd {a} #x{w:016x})))")
     return "(assert (or false " + " ".join(ds) + "))\n" if ds else "(assert false)\n"
 
@@ -437,11 +440,17 @@ def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=Tru
     return {"unsat": "VALID" + tag, "sat": "REFUTED"}.get(v, "UNKNOWN(footprint)")
 
 
-def dedup_addrs(writes, cap=24):
-    """The distinct store addresses of a span, capped: instantiating a memory
-    clause at each one is what lets a spill-then-reload across a call resolve."""
+def dedup_addrs(writes, cap=40, reads_only=False):
+    """The distinct addresses a span touches — stores AND loads, capped.
+
+    Instantiating a memory clause at each is what lets a spill-then-reload across
+    a call resolve: the spill's address is written over the pre-call state and the
+    reload's over the post-call one, and instantiation is syntactic, so both have
+    to be present."""
     out = []
-    for _, _, a in writes:
+    for _, w, a in writes:
+        if reads_only and w != 0:
+            continue
         if a not in out:
             out.append(a)
         if len(out) >= cap:
@@ -457,7 +466,7 @@ def applied_of(text):
 MEM_CLAUSES = ("stack_or_arena", "above_sp")
 
 
-def assume_block(text, cset, self_sym=None, addrs=()):
+def assume_block(text, cset, self_sym=None, addrs=(), byteexp=True, decl=True):
     """Ground clause instances at every application site the TEXT actually has.
 
     `text` is the obligation/query body; the encoder names each intermediate state
@@ -469,7 +478,7 @@ def assume_block(text, cset, self_sym=None, addrs=()):
     cannot justify a read-back: the args loop spills its counter to `16(sp)`,
     calls `eval_expr`, and reloads it, and with the clause only at `QA` the solver
     is free to say the reload returned something else."""
-    out = [QA_DECL.rstrip()]
+    out = [QA_DECL.rstrip()] if decl else []
     seen = set()
     sites = []
     for m in APP_RE.finditer(text):
@@ -481,11 +490,16 @@ def assume_block(text, cset, self_sym=None, addrs=()):
         sites.append((base, name, arg))
         for c in cset.get(base, []):
             out.append(CLAUSE_TEXT[c].format(f=name, S=arg))
+    # per BYTE, not per address.  Every link in a spill-then-reload chain was
+    # provable except the last, and the reason was exactly this: `ld8` reads eight
+    # bytes, and a clause instantiated at the base address covers one.
     for a in addrs:
-        for base, name, arg in sites:
-            for c in cset.get(base, []):
-                if c in MEM_CLAUSES:
-                    out.append(CLAUSE_TEXT[c].format(f=name, S=arg).replace("QA", a))
+        for j in range(8 if byteexp else 1):
+            aj = a if j == 0 else f"(bvadd {a} #x{j:016x})"
+            for base, name, arg in sites:
+                for c in cset.get(base, []):
+                    if c in MEM_CLAUSES:
+                        out.append(CLAUSE_TEXT[c].format(f=name, S=arg).replace("QA", aj))
     return "\n".join(out)
 
 
@@ -581,10 +595,29 @@ def mine(d, syms, timeout, jobs, rounds):
                     # conclusion
                     iv = IV_INVARIANTS[f][0]
                     for m in re.finditer(re.escape(f) + r"_ih\s+([A-Za-z][A-Za-z0-9_]*)\)", body):
-                        q = (b2 + "\n(assert (INV S0))\n(assert (not "
-                             + iv.format(S=m.group(1)) + "))\n(check-sat)\n")
+                        arg = m.group(1)
+                        # UNDER the back-edge guard.  The step is `a6+1 < a5`, and
+                        # what rules out `a6+1 = a5` is precisely the `bne` that
+                        # takes the back edge; without it the invariant is not
+                        # inductive and should not be.
+                        bg = guard_of(body, f + "_ih", arg)
+                        # sliced, like the discharge: per-byte instantiation makes
+                        # the assume block large, and the step only needs the
+                        # chain feeding the back-edge state
+                        slb = slice_to(body, arg, extra=(bg,))
+                        wrb = wsets.get(f, [])
+                        ab = (assume_block(slb, cset, self_sym=f,
+                                            addrs=dedup_addrs(wrb), byteexp=False)
+                              + "\n" + assume_block(slb, cset, self_sym=f,
+                                            addrs=dedup_addrs(wrb, reads_only=True),
+                                            byteexp=True, decl=False))
+                        q = (slb.replace("; @@ASSUME@@", ab + "\n" + iv_assume(f))
+                                .replace("; @@GOAL@@", "")
+                             + "\n(assert (INV S0))\n"
+                             + (f"(assert {bg})\n" if bg else "")
+                             + "(assert (not " + iv.format(S=arg) + "))\n(check-sat)\n")
                         if z3(q, timeout) != "unsat":
-                            return (f, c, "IV-NOT-INDUCTIVE@" + m.group(1))
+                            return (f, c, "IV-NOT-INDUCTIVE@" + arg)
                 cond = ("(assert (INV S0))\n" + OUTSIDE if c == "stack_or_arena" else
                         "(assert (INV S0))\n"
                         f"(assert (bvuge QA (select (rr S0) {_SP})))\n"

@@ -723,10 +723,13 @@ instruction's state makes the block linear — every term references only the
 previous instruction's variable. -/
 def blockBinds (S : String) (instrs : List MInstr) (k : Nat) :
     String × Nat × List String × List (String × Nat) := Id.run do
+  -- the returned address list is WRITES followed by READS; both are instantiation
+  -- sites for the frame clauses, and only the writes are a footprint
   let mut cur := S
   let mut k := k
   let mut binds : List String := []
   let mut writes : List (String × Nat) := []
+  let mut reads : List (String × Nat) := []
   for i in instrs do
     -- the store FOOTPRINT, recorded as address + width.  Frame, `StoreRepr`
     -- survival and code preservation are all "this address was not written", and
@@ -737,11 +740,21 @@ def blockBinds (S : String) (instrs : List MInstr) (k : Nat) :
       | .sd => 8 | .sw => 4 | .sh => 2 | .sb => 1 | _ => 0
     if w != 0 then
       writes := writes ++ [(s!"(bvadd {stR cur i.rs1} {bv64 (imm12 i.imm)})", w)]
+    -- LOAD addresses are recorded too.  A frame clause instantiated only at the
+    -- write addresses cannot justify a spill-then-reload across a call: the
+    -- reload's address is the same location but written over the POST-call state
+    -- variable, and clause instantiation is syntactic.
+    let r : Nat := match i.kind with
+      | .ld => 8 | .lw | .lwu => 4 | .lh | .lhu => 2 | .lbu => 1 | _ => 0
+    if r != 0 then
+      -- width 0 marks an address as a READ: an instantiation site, not a
+      -- footprint entry.  The footprint check keeps only the positive widths.
+      reads := reads ++ [(s!"(bvadd {stR cur i.rs1} {bv64 (imm12 i.imm)})", 0)]
     let nxt := s!"i{k}"
     binds := binds ++ [s!"({nxt} {blockState cur [i]})"]
     cur := nxt
     k := k + 1
-  return (cur, k, binds, writes)
+  return (cur, k, binds, writes ++ reads)
 
 /-- Branch condition over state `S` (exact register comparison). -/
 def branchCondSt (S : String) (w : BitVec 32) : String :=
@@ -1197,7 +1210,14 @@ def bmcRound (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat) 
     -- then continue only along the successors that can no longer reach `pc` —
     -- exactly the loop's EXIT edges.  That is what lets a loop-bearing span
     -- COMPLETE: the post-loop code is reflected, not dropped.
-    if seen.contains pc && !(carried.contains pc) then
+    -- A re-arrival is a LOOP header only if the block can get back to itself.
+    -- Several arms jump to a function's shared EPILOGUE, so it is re-arrived at
+    -- too — but it is a JOIN, not a cycle, and summarising it is wrong twice
+    -- over: the epilogue deliberately does `addi sp,sp,N`, so `sp_restore` is
+    -- refuted for it, and every span whose stores follow the join then has an
+    -- unconstrained `sp`.  A join is merged and reflected, like any other block.
+    if seen.contains pc && !(carried.contains pc)
+       && (blockSuccs img lo hi stops pc).any (fun q => canReach img lo hi stops q pc) then
       -- RE-ARRIVAL: a loop back-edge closing on `pc`.  `loop_<pc>` over-approximates
       -- the state at ANY of the loop's exit points, so control resumes at EVERY
       -- exit edge of the whole natural loop (not just this block's), and at the
