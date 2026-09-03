@@ -160,6 +160,33 @@ def splitBlocks (img : Nat → Option (BitVec 8)) (lo hi : Nat) :
   if !cur.isEmpty then out := out ++ [(cur, none, hi)]
   return out
 
+/-- Resolve register `n`'s outcome value (from `runGM`) to a symbolic SMT term:
+`(+ x<r> off)` against a probe base, else the literal.  `none` if `n` is not in
+the outcome (unchanged from entry ⇒ its own symbol). -/
+def symRegVal (regs : List Nat) (out : GRegs) (n : Nat) : String :=
+  match out.find? (fun p => p.1 == n) with
+  | none => regName n
+  | some (_, v) =>
+    match resolveAddr regs v.toNat with
+    | some (r, off) => s!"(+ {regName r} {off})"
+    | none => toString v.toNat
+
+/-- Decode a branch's exit condition at the block end into an SMT Bool over the
+block's register outcome.  funct3: beq=0 bne=1 blt=4 bge=5 bltu=6 bgeu=7. -/
+def branchCond (regs : List Nat) (out : GRegs) (w : BitVec 32) : String :=
+  let f3 := ((w >>> 12) &&& 7).toNat
+  let rs1 := ((w >>> 15) &&& 0x1f).toNat
+  let rs2 := ((w >>> 20) &&& 0x1f).toNat
+  let a := symRegVal regs out rs1
+  let b := symRegVal regs out rs2
+  match f3 with
+  | 0 => s!"(= {a} {b})"
+  | 1 => s!"(not (= {a} {b}))"
+  | 4 => s!"(< {a} {b})"
+  | 5 => s!"(>= {a} {b})"
+  | 6 => s!"(< {a} {b})"
+  | _ => s!"(>= {a} {b})"
+
 /-- Append a straight-line block's write-log stores onto the SMT memory term. -/
 def appendBlockLog (regs : List Nat) (mem0 : String) (instrs : List MInstr) : String := Id.run do
   let entry : GRegs := regs.map (fun n => (n, BitVec.ofNat 64 (baseOf n)))
