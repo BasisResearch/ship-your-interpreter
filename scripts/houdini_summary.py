@@ -720,16 +720,22 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
         path = os.path.join(d, "obligations", f + ".smt2")
         if f in IH_SUMMARIES or f in NATIVE_ICALLS or f in emitter_assumed:
             assumed.append(f)          # keep the clause set, do not mine
-            if f in IH_SUMMARIES:
-                # ...except `above_sp`, which is FALSE for these.  It says
-                # nothing at or above the entry `sp` and outside the arena is
-                # touched -- but eval_expr's whole job is to write the result
-                # Value into the sret buffer the CALLER passed, which lives in
-                # the caller's frame, i.e. at or above the callee's entry `sp`,
-                # and in the stack rather than the arena.  `pre.smt2` permits
-                # exactly that layout.  Assuming it would be assuming something
-                # false; dropping it only weakens what can be proved.
-                cset[f] = [c for c in cset[f] if c != "above_sp"]
+            # ...except `above_sp`, which is FALSE for a great many of these and
+            # verified for NONE of them.  It says nothing at or above the entry
+            # `sp` and outside the arena is touched -- but every callee that
+            # writes through a CALLER-PASSED POINTER breaks it, because that
+            # pointer lives in the caller's frame, at or above the callee's
+            # entry `sp`, and in the stack rather than the arena.  `pre.smt2`
+            # permits exactly that layout.  The assumed set is full of them:
+            # memcpy, strcpy, snprintf, setjmp, and the whole
+            # value_int/value_bool/value_str/value_null family, which box a
+            # Value into the sret buffer the caller supplies -- plus eval_expr
+            # and exec_stmt as the recursor IHs.
+            #
+            # A MINED clause set is checked by construction.  These were checked
+            # by nobody.  Dropping the clause only weakens what can be proved;
+            # assuming it proves things that are not true.
+            cset[f] = [c for c in cset[f] if c != "above_sp"]
         elif os.path.exists(path):
             bodies[f] = open(path).read()
         else:
@@ -959,20 +965,24 @@ def main():
         vac_cache = {}
         vac_lock = threading.Lock()
 
-        def vacuous(f, head, timeout):
-            """Do this query's assumptions contradict each other?
+        def consistency(f, head, timeout):
+            """Are this query's assumptions satisfiable?
 
-            Checked ONCE per field and memoised: it is the same question for all
-            five posts.  A `sat` here is what makes a VALID mean anything."""
+            `unsat` means they contradict each other and every post is proved
+            trivially.  `sat` is what makes a VALID mean anything.  `unknown` is
+            neither, and is carried into the verdict rather than hidden: a
+            VALID over assumptions nobody has shown to be consistent is exactly
+            the shape of the 26 vacuous fields.
+
+            Checked ONCE per field and memoised -- it is the same question for
+            all five posts."""
             with vac_lock:
                 if f in vac_cache:
                     return vac_cache[f]
             v = z3(head.replace("; @@POST@@", "") + "\n(check-sat)\n", timeout)
-            # only a PROVED inconsistency counts; `unknown` is not a verdict
-            r = (v == "unsat")
             with vac_lock:
-                vac_cache[f] = r
-            return r
+                vac_cache[f] = v
+            return v
 
         def in_eval(f):
             """Is this span inside `eval_expr`, the one function that boxes a
@@ -986,6 +996,25 @@ def main():
                  for pk in list(POSTS) + list(FOOTPRINT_POSTS)]
         def run(t):
             f, pk = t
+            # The encoder records whether the BMC frontier EMPTIED within the
+            # round bound.  If it did not, the reflected term covers only part of
+            # the span and a post proved over it says nothing about the rest.
+            # The column was emitted and never read.
+            if spans.get(f, {}).get("complete") == "false":
+                return (f, pk, "INCOMPLETE(frontier-not-empty)")
+            # VACUITY GATE, before EITHER route.  `unsat` of PRE + clauses + exit
+            # guard, with no post at all, means the assumptions contradict each
+            # other -- and a query with contradictory assumptions proves EVERY
+            # post.  Reporting that as VALID is the worst failure this driver can
+            # have, because it is indistinguishable from a real result: 26 of 52
+            # queries were in exactly this state (an over-eager dispatch pin
+            # negating a nested dispatch's arms, and two spans whose declared
+            # exit is unreachable) and all 26 reported VALID on all five posts.
+            vhead = qs[f].replace("; @@ASSUME@@",
+                                  pre + "\n" + assume_block(qs[f], cset))
+            vac = consistency(f, vhead, timeout)
+            if vac == "unsat":
+                return (f, pk, "VACUOUS(assumptions-inconsistent)")
             if pk in FOOTPRINT_POSTS:
                 # slice to what the footprint actually reads: the store guards and
                 # addresses.  A function-entry span carries ~150 summaries and its
@@ -1000,26 +1029,12 @@ def main():
                 bad = iv_discharge(qs[f], cset, timeout, pre, wr)
                 if bad:
                     return (f, pk, "UNKNOWN(iv-undischarged:" + bad + ")")
-                return (f, pk, footprint_check(base, FOOTPRINT_POSTS[pk],
-                                               wr, applied_of(sl),
-                                               cset, timeout, pre=pre))
-            # The encoder records whether the BMC frontier EMPTIED within the
-            # round bound.  If it did not, the reflected term covers only part
-            # of the span and a post proved over it says nothing about the rest.
-            # The column was emitted and never read.
-            if spans.get(f, {}).get("complete") == "false":
-                return (f, pk, "INCOMPLETE(frontier-not-empty)")
-            head = qs[f].replace("; @@ASSUME@@", pre + "\n" + assume_block(qs[f], cset))
-            # VACUITY GATE.  `unsat` of PRE + clauses + exit guard, with no post
-            # at all, means the assumptions contradict each other -- and a query
-            # with contradictory assumptions proves EVERY post.  Reporting that
-            # as VALID is the worst failure this driver can have, because it is
-            # indistinguishable from a real result.  26 of 52 queries were in
-            # exactly this state (an over-eager dispatch pin negating a nested
-            # dispatch's arms, and two spans whose declared exit is unreachable),
-            # and all 26 reported VALID on all five posts.
-            if vacuous(f, head, timeout):
-                return (f, pk, "VACUOUS(assumptions-inconsistent)")
+                fv = footprint_check(base, FOOTPRINT_POSTS[pk], wr,
+                                     applied_of(sl), cset, timeout, pre=pre)
+                if fv.startswith("VALID") and vac != "sat":
+                    fv += "(consistency-unproved)"
+                return (f, pk, fv)
+            head = vhead
             # `storerepr` and `valuerepr_tag` are stated over the pointer the
             # CALLER passed in a0 at the span's entry.  That is only the result
             # buffer for a span entered at its function's entry: a FRAGMENT
@@ -1059,7 +1074,10 @@ def main():
                     if z3(head.replace("; @@POST@@", shifted) + "\n(check-sat)\n",
                           timeout) == "unsat":
                         return (f, pk, f"VALID[sp+0x{delta:x}]")
-            return (f, pk, {"unsat": "VALID", "sat": "REFUTED"}.get(v, "UNKNOWN"))
+            ok = {"unsat": "VALID", "sat": "REFUTED"}.get(v, "UNKNOWN")
+            if ok == "VALID" and vac != "sat":
+                ok = "VALID(consistency-unproved)"
+            return (f, pk, ok)
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
             res = list(ex.map(run, tasks))
         table = {}

@@ -5942,3 +5942,21 @@ it, still stop and report instead.
 - proposal: an assumed clause set needs the same scrutiny as a mined one. The
   mined ones are checked by construction; the assumed ones were checked by
   nobody.
+
+## 2026-09-03 smt-above-sp-assumed-for-every-pointer-writing-callee (driver)
+- missing: EXTENDS the eval_expr entry above. `above_sp` is assumed, not mined,
+  for all 27 emitter-assumed callees as well as the two IH summaries -- and it
+  is false for every callee that writes through a CALLER-PASSED POINTER, since
+  that pointer is in the caller's frame, at or above the callee's entry `sp`,
+  and in the stack rather than the arena. The assumed list contains `memcpy`,
+  `strcpy`, `snprintf`, `setjmp`, `stringify` and the whole
+  `value_int`/`value_bool`/`value_str`/`value_null` family, every one of which
+  writes its result through the caller's pointer.
+- workaround: NONE. `above_sp` is now dropped for ALL assumed summaries. Mined
+  summaries keep it when Houdini proves it.
+- cost: not yet quantified. It weakens every verdict that leaned on it, which is
+  the correct direction; the previous state proved things from a false premise.
+- proposal: landed. The rule worth keeping: a clause set that is ASSUMED rather
+  than mined must be justified per-summary, because "assumed" is indistinguishable
+  from "true" downstream. A mined set is checked by construction; an assumed one
+  is checked by whoever wrote the list, i.e. by nobody.
