@@ -172,6 +172,46 @@ def pre_block(d):
 #
 # Failing 3 is reported, never assumed: a summary without the clause means the
 # check cannot conclude, not that it passes.
+# ---------------------------------------------------------- StoreRepr / Arena
+# The remaining footprint gap is the ~5% of stores whose base register is a
+# POINTER READ OUT OF MEMORY rather than `sp` (481 of 10054 across the campaign).
+# Nothing in the machine text says where such a pointer points, which is exactly
+# why `stack_or_arena` was refuted for 60 summaries.
+#
+# In the Lean development that fact is not derived either: it is a HYPOTHESIS
+# every residual carries.  `EvalEntry.store : StoreRepr c.σ.mem N A φf φc
+# st.store`, and `StoreRepr.frames_arena`/`closures_arena` give
+# `Arena.contains (φf fa) 32` — every represented object lies in the arena.  So
+# assuming it here is faithful to the statement being checked, not a shortcut
+# around it; what the check still has to establish is that the OFFSET from such a
+# base stays inside the object, which is the part the machine text does decide.
+#
+# Every instance is emitted under this banner and counted, so a verdict that
+# rests on it says how many sites it rested on.
+SP_BASE = re.compile(r"^\(bvadd \(select \(rr \w+\) #x0000000000000002\) ")
+
+
+def heap_hyp(writes):
+    """`Arena.contains` for every store whose base is not `sp`.  Returns the SMT
+    block and the number of sites it covers."""
+    out, n = [], 0
+    for g, w, a in writes:
+        if SP_BASE.match(a):
+            continue
+        # the base is `(bvadd BASE OFF)`; assume the BASE is a represented object
+        # in the arena with room for its 32-byte record (`Arena.contains _ 32`)
+        m = re.match(r"^\(bvadd (\(select \(rr \w+\) #x[0-9a-f]+\)) ", a)
+        base = m.group(1) if m else a
+        # stated WITHOUT `bvadd` on the left: `base + 32 <= A_hi` is satisfiable
+        # by wraparound, and the solver duly takes it (base = 0xff..e1, A_hi
+        # large, base+32 = 1).  `base <= A_hi - 32` has no such escape.
+        out.append(f"(assert (=> {g} (and (bvule A_lo {base}) "
+                   f"(bvule {base} (bvsub A_hi #x0000000000000020)))))")
+        n += 1
+    return ("; StoreRepr / Arena.contains (EvalEntry.store) at "
+            f"{n} pointer-based store site(s)\n" + "\n".join(out) + "\n", n)
+
+
 def load_writes(path):
     if not os.path.exists(path):
         return None
@@ -192,12 +232,13 @@ def hits_QA(writes):
     return "(assert (or false " + " ".join(ds) + "))\n" if ds else "(assert false)\n"
 
 
-def footprint_check(base, cond, writes, applied, cset, timeout, pre=""):
+def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=True):
     """The three-part check.  Returns "VALID" / "REFUTED" / "UNKNOWN(...)"."""
     missing = sorted({f for f in applied if "stack_or_arena" not in cset.get(f, [])})
     if missing:
         return "UNKNOWN(summary-clause:" + ",".join(m[:22] for m in missing) + ")"
-    head = base + "\n" + pre + "\n"
+    hh, nheap = heap_hyp(writes) if heap else ("", 0)
+    head = base + "\n" + pre + "\n" + hh
     if "(declare-const QA " not in head:
         head += QA_DECL
     head += cond
@@ -208,7 +249,8 @@ def footprint_check(base, cond, writes, applied, cset, timeout, pre=""):
         return "UNKNOWN(cond-not-outside)"
     # 2. can a direct write land on it?
     v = z3(head + hits_QA(writes) + "(check-sat)\n", timeout)
-    return {"unsat": "VALID", "sat": "REFUTED"}.get(v, "UNKNOWN(footprint)")
+    tag = f"[StoreRepr@{nheap}]" if nheap else ""
+    return {"unsat": "VALID" + tag, "sat": "REFUTED"}.get(v, "UNKNOWN(footprint)")
 
 
 def applied_of(text):
@@ -247,6 +289,18 @@ IH_SUMMARIES = {
     "callee_2147500000",   # 0x80003fe0 exec_stmt — the `mExecS`/`mExecSeq` hypothesis
 }
 
+# The two indirect calls through a register are the `Value.native` dispatches —
+# `print` / `println` / `assert`.  There is no body to unfold (the target is a
+# function pointer out of the store), and the Lean development does not derive
+# them either: they are the native callee contracts (`NativePrintSpec`, the
+# `hCallPrint`/`hCallPrintln`/`hCallAssertOk` suppliers).  So they are ASSUMED
+# contracts, listed as such, not silently-empty clause sets that poison every
+# query reaching them.
+NATIVE_ICALLS = {
+    "icall_2147498484",    # 0x800039f4 — the native dispatch inside `eval_expr`
+    "icall_2147501956",    # 0x80004784 — the native dispatch in the interp driver
+}
+
 
 def mine(d, syms, timeout, jobs, rounds):
     cset = {f: list(CLAUSE_IDS) for f in syms}
@@ -264,7 +318,7 @@ def mine(d, syms, timeout, jobs, rounds):
     assumed = []
     for f in list(syms):
         path = os.path.join(d, "obligations", f + ".smt2")
-        if f in IH_SUMMARIES or f in emitter_assumed:
+        if f in IH_SUMMARIES or f in NATIVE_ICALLS or f in emitter_assumed:
             assumed.append(f)          # keep the full clause set, do not mine
         elif os.path.exists(path):
             bodies[f] = open(path).read()
@@ -275,6 +329,8 @@ def mine(d, syms, timeout, jobs, rounds):
         for f in assumed:
             role = ("recursor IH (EvalIH / mExecSeq), carried by the residual"
                     if f in IH_SUMMARIES else
+                    "native callee contract (NativePrintSpec: print/println/assert)"
+                    if f in NATIVE_ICALLS else
                     "callee contract outside the interpreter's own code")
             fh.write(f + "\t" + role + "\n")
     syms = [f for f in syms if f in bodies]
@@ -297,11 +353,23 @@ def mine(d, syms, timeout, jobs, rounds):
             return cset, True, reasons
         def run(t):
             f, c = t
+            body = bodies[f]
+            if c == "stack_or_arena":
+                # FOOTPRINT route: BV arithmetic over the emitted store set, with
+                # the `StoreRepr`/`Arena.contains` entry hypothesis at the
+                # pointer-based sites.  Asking the array theory for this instead
+                # bit-blasts and refutes on wraparound.
+                b2 = body.replace("; @@ASSUME@@", assume_block(body, cset, self_sym=f)) \
+                         .replace("; @@GOAL@@", "")
+                v = footprint_check(b2, "(assert (INV S0))\n" + OUTSIDE,
+                                    wsets.get(f, []), applied_of(body), cset, timeout)
+                return (f, c, "unsat" if v.startswith("VALID") else
+                              "sat" if v == "REFUTED" else v)
             # assume ONLY the summaries this obligation's body actually applies —
-            # dumping all 143 summaries' clause sets into every query buries the
+            # dumping every summary's clause set into every query buries the
             # solver in quantifiers that can never fire.
-            txt = bodies[f].replace("; @@ASSUME@@", assume_block(bodies[f], cset, self_sym=f)) \
-                           .replace("; @@GOAL@@", NEG[c]) + "\n(check-sat)\n"
+            txt = body.replace("; @@ASSUME@@", assume_block(body, cset, self_sym=f)) \
+                      .replace("; @@GOAL@@", NEG[c]) + "\n(check-sat)\n"
             return (f, c, z3(txt, timeout))
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
             res = list(ex.map(run, tasks))

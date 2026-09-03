@@ -9,6 +9,7 @@ callee_2147494928	callee contract outside the interpreter's own code
 callee_2147496292	recursor IH (EvalIH / mExecSeq), carried by the residual
 callee_2147493932	callee contract outside the interpreter's own code
 callee_2147493980	callee contract outside the interpreter's own code
+icall_2147498484	native callee contract (NativePrintSpec: print/println/assert)
 callee_2147495872	callee contract outside the interpreter's own code
 callee_2147501632	callee contract outside the interpreter's own code
 callee_2147511968	callee contract outside the interpreter's own code
@@ -29,3 +30,4 @@ callee_2147494140	callee contract outside the interpreter's own code
 callee_2147508960	callee contract outside the interpreter's own code
 callee_2147512488	callee contract outside the interpreter's own code
 callee_2147484032	callee contract outside the interpreter's own code
+icall_2147501956	native callee contract (NativePrintSpec: print/println/assert)

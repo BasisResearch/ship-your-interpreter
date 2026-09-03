@@ -5501,10 +5501,18 @@ it, still stop and report instead.
   DERIVE them: a residual whose span entry is a jump-table arm now starts at the
   FUNCTION entry with the AST kind pinned, so `s1 = sret`, the lowered `sp` and
   the callee-saved spills come out of the prologue exactly as `blockA_k` gets
-  them.  All ten refutations disappeared.  (b) STILL OPEN and now isolated: 62 of
-  201 summaries lack `stack_or_arena` because they store through a
-  data-dependent pointer, and nothing in the machine text says such a pointer
-  lands in the arena.  That is `StoreRepr`/`Arena.contains`, an entry fact, and
-  it is the ONE thing between this campaign and a verdict on the whole footprint
-  family — 48 of 52 residuals are `UNKNOWN(summary-clause)` for exactly this
-  reason.  The encoder should grow it beside `entryPinsSmt`, not per query.
+  them.  All ten refutations disappeared.  (b) RESOLVED TOO — `StoreRepr`/`Arena.contains` is now
+  encoded (`heap_hyp`), instantiated at each of the 481 pointer-based store sites
+  out of 10054, and tagged into every verdict that rests on it.  It is the entry
+  HYPOTHESIS the residual already carries (`EvalEntry.store`), so assuming it is
+  faithful.  Two gotchas: state containment as `base <= A_hi - 32`, never
+  `base + 32 <= A_hi` (wraparound satisfies the latter and the solver takes it);
+  and `INV` must bound the frame ABOVE `sp` too, or plain `sd rX, 0x418(sp)`
+  spills escape.  `stack_or_arena` went 128 -> 195 -> 200 of 201.
+  (c) WHAT IS LEFT is a different fact and one summary: `loop_0x800031dc`, the
+  argument-marshalling loop, stores at `sp + 240 + 24n` and nothing bounds `n`.
+  That is the ARGUMENT-INDEX bound (arity geometry + `TermGuards.argsMeasure`),
+  a bound on an induction variable, which the clause bank cannot express — every
+  candidate there relates an entry state to an exit state.  It alone blocks 33 of
+  the 52 queries.  Adding an induction-variable-bound clause family is the next
+  concrete extension.
