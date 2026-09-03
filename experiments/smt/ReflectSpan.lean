@@ -225,19 +225,42 @@ partial def emitAxioms (img : Nat → Option (BitVec 8)) (regs : List Nat)
     if visited.contains s then emitAxioms img regs rest visited acc
     else
       let visited := s :: visited
-      let decl := s!"(declare-fun {s} ((Array Int (_ BitVec 8))) (Array Int (_ BitVec 8)))"
       if s.startsWith "callee_" then
         let t := (s.drop 7).toNat!
         let exit := findRet img t
         let (body, subs) := reflectStepsMulti img regs t exit
-        -- axiom: ∀ mem, s(mem) = body[mem]   (body is over the symbol `mem`)
-        let ax := s!"{decl}\n(assert (forall ((mem (Array Int (_ BitVec 8)))) (= ({s} mem) {body})))"
+        -- axiom: ∀ mem, s(mem) = body[mem]   (declarations emitted separately)
+        let ax := s!"(assert (forall ((mem (Array Int (_ BitVec 8)))) (= ({s} mem) {body})))"
         emitAxioms img regs (subs ++ rest) visited (acc ++ [ax])
       else
-        -- loop_/branch_: invariant-bearing summary; declared, axiom = mined invariant
-        emitAxioms img regs rest visited (acc ++ [s!"{decl}  ; NEEDS-INVARIANT"])
+        -- loop_/branch_: invariant-bearing summary; no fold axiom (mined separately)
+        emitAxioms img regs rest visited acc
+
+/-- Assemble the COMPLETE reflected `Steps` SMT for span `[lo,hi)`: register
+decls, the entry memory, every callee summary's fold/unfold axiom (recursively
+closed), the loop/branch summary declarations, and `mem_exit` = the composed
+write-log.  A well-formed SMT-LIB2 preamble Z3 consumes; the residual's own
+pre/post conjuncts are appended by the caller to form the validity query. -/
+def reflectFullSmt (regs : List Nat) (lo hi : Nat) : IO String := do
+  let img ← loadElf elfPath
+  let (memExit, summaries) := reflectStepsMulti img regs lo hi
+  let (axs, visited) := emitAxioms img regs summaries [] []
+  let decls := String.intercalate "\n" (regs.map (fun r => s!"(declare-fun {regName r} () Int)"))
+  -- ALL summary symbols declared first (any body may reference a later one)
+  let sumDecls := String.intercalate "\n" (visited.map (fun s =>
+    s!"(declare-fun {s} ((Array Int (_ BitVec 8))) (Array Int (_ BitVec 8)))"))
+  let axBlock := String.intercalate "\n" axs
+  return s!"(set-logic ALL)\n; === reflected Steps for span [{lo},{hi}) ===\n{decls}\n(declare-fun mem () (Array Int (_ BitVec 8)))\n{sumDecls}\n{axBlock}\n(define-fun mem_exit () (Array Int (_ BitVec 8)) {memExit})\n"
 
 end Vsa.ReflectSpan
+
+open Vsa.ReflectSpan in
+/-- `#reflect_full "<path>" <lo> <hi>` — write the complete reflected Steps SMT. -/
+elab "#reflect_full " pathStx:str loStx:num hiStx:num : command => do
+  Lean.Elab.Command.liftTermElabM do
+    let smt ← reflectFullSmt [2,1,8,9,18,19,15,16,14,13,11,12,10,5,6,7] loStx.getNat hiStx.getNat
+    IO.FS.writeFile pathStx.getString smt
+    Lean.logInfo m!"#reflect_full → {pathStx.getString} ({smt.length} bytes)"
 
 open Vsa.ReflectSpan in
 elab "#reflect_span " loStx:num hiStx:num : command => do
