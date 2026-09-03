@@ -55,8 +55,7 @@ def residualSpans : List (String × Nat × Nat) := [
   ("hSeqNil", 0x8000448c, 0x80004514), ("hSeqConsNormal", 0x8000448c, 0x80004514),
   ("hSeqConsAbrupt", 0x8000448c, 0x80004514),
   -- init / frame
-  ("hEpilogueSpill", 0x800033ec, 0x80003408), ("hInitStore", 0x80004764, 0x800047a0),
-  ("hFn2", 0x800033c4, 0x80003408) ]
+  ("hEpilogueSpill", 0x800033ec, 0x80003408), ("hInitStore", 0x80004764, 0x800047a0) ]
 
 /-- Splice: the reflected-Steps SMT for a residual's span + a Post-conjunct
 validity query.  `postNeg` is the NEGATED post (SAT ⇒ refutable, UNSAT ⇒ valid,

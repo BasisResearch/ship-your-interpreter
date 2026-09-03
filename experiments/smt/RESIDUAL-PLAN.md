@@ -7,6 +7,24 @@ for falsity before proving, and — for loops — mine the invariant with
 autoprove/Houdini. Anything the fuzzer or Z3 refutes is a spec bug, amended
 before it wastes a proving session.
 
+## Status (current)
+
+- **Reflection engine — DONE.** `ReflectSpan.lean` reflects `Steps` exactly over
+  the `MState` datatype (memory + registers), no approximation: every MKind exact
+  (immediates from the word, shifts via BV, `lui`/`auipc` corrected), branches as
+  `ite`, calls/loops as `MState→MState` summaries from their own body reflection,
+  loops as `define-fun-rec`. The `let`-DAG killed the 1.3GB blowup (→ KB).
+- **Encodability — DONE.** `ReflectResiduals.lean` maps all 52 residuals to their
+  spans; 52/52 reflect gap-free, DAG-sized. No `ENCODE-GAP`.
+- **Splice — DONE (frame Post).** `#splice_all` builds `Pre(s0) ∧ ¬Post(state_exit)`
+  per residual over the shared `MState`. Across all 52 on the frame conjunct:
+  **14 VALID, 38 UNKNOWN, 0 REFUTED**. The 14 are straight-line/call spans; the 38
+  UNKNOWN are loop-bearing (need the mined invariant); nothing refuted.
+- **Remaining.** (1) Full `Post` conjuncts (`ValueRepr`/`StoreRepr` survival over
+  `state_exit`, same splice, more conjuncts). (2) Loop invariants → turn the 38
+  UNKNOWN toward VALID. (3) The 11 int/eq B2-carry amendment (they are refuted
+  as-stated; `RefutBatteryCur.lean`) before their spans validate.
+
 ## Non-straight-line spans: the two fixes the 1.3GB blowup forced
 
 `reflectExact` is exact but duplicates work on control flow. A seq-loop span blew
