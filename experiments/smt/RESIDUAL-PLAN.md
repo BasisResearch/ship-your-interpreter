@@ -115,36 +115,40 @@ solver timeout rather than a genuine countermodel).
 
 ## Where the 52 stand
 
-`bmc/verdicts.tsv`, five post conjuncts. Of the summaries, 190/202 carry
-`sp_restore`/`ra_restore`/`inv_pres`, 187 `s1_restore`, 178 `s0_restore`, and
+`bmc/verdicts.tsv`, five post conjuncts. Of the summaries, 189/201 carry
+`sp_restore`/`ra_restore`/`inv_pres`, 186 `s1_restore`, 178 `s0_restore`, and
 **139 carry `stack_or_arena`** — the clause the footprint composition needs.
 
-The residual verdicts are dominated by one cause, and it is not a solver limit:
+**No footprint refutations.** Code preservation and `StoreRepr` survival are
+VALID for `hEpilogueSpill` and the three `hSeq*`, and REFUTED for none. An
+earlier configuration reported ten refutations; every one was an artifact of
+starting the span at the ARM rather than the function entry, which leaves what
+the prologue established unconstrained — `s1 = sret` above all, since every arm
+stores the boxed result through it, so the solver happily put that store inside
+the code image. Starting at the function entry with the AST kind pinned derives
+those facts instead, and they vanish. That is the same move `blockA_k` makes in
+the proof, and it is why the ground table now records the FUNCTION entry.
 
-* **39 of 52 are `UNKNOWN(summary-clause)`** — some summary the span applies does
-  not carry `stack_or_arena`. Those are the loops and callees that store through
-  a *data-dependent pointer*. Nothing in the code establishes that such a pointer
-  lands in the arena; that is the heap-well-formedness invariant, which the Lean
-  arms carry as `StoreRepr`/`Arena.contains`, not something the machine text
-  entails on its own.
-* **8–10 are REFUTED** — `hAndTrue`/`hAndFalse`/`hOrTrue`/`hOrFalse`/`hNeg`/
-  `hNot`/`hVar` and the three `hSeq*`. Every one is a span that starts
-  MID-function and reloads a callee-saved register or `sp` from a frame slot the
-  span itself never wrote. With the slot's content unconstrained, a restored `sp`
-  can be anything and a spill lands wherever the model likes. This is the ABI
-  frame content — `FrameMeta.abiFrame_of_wrChain` in the proof — and it is the
-  next thing to encode, not a bug in the arm.
-* **3 are VALID** on code preservation and `StoreRepr` survival: `hArgsNil`,
-  `hEpilogueSpill`, `hSExpr`.
+The two remaining REFUTED are the posts being wrong for those spans, not the
+spans being wrong: `hEpilogueSpill` is a frame fragment, so of course `sp` moves
+across it, and it boxes nothing, so there is no `ValueRepr` tag at `sret`;
+`hInitStore` is the main-init image, not an arm.
 
-So the remaining work is two NAMED entry facts, both of which the Lean statements
-already carry, and neither of which is a solver problem:
+**48 of 52 are `UNKNOWN(summary-clause)`, and that is one fact away.** Some
+summary the span applies does not carry `stack_or_arena` — 62 of 201 do not.
+Those are the loops and callees that store through a *data-dependent pointer*.
+Nothing in the machine text establishes that such a pointer lands in the arena;
+that is the heap-well-formedness invariant, which the Lean arms carry as
+`StoreRepr`/`Arena.contains`. It is not a solver limit and not a missing
+invariant to mine — it is an entry fact to encode, and it is the single thing
+standing between this campaign and a verdict on the whole footprint family.
 
-1. **the ABI frame** — the arm's frame slots hold the caller's saved registers
-   (`FrameMeta`), which turns the 8–10 REFUTED into decidable queries;
-2. **heap well-formedness** — a pointer read out of a represented store points
-   into the arena (`StoreRepr`/`Arena.contains`), which turns
-   `UNKNOWN(summary-clause)` into `stack_or_arena` for the pointer-storing loops.
+The faithfulness/coverage trade is worth stating plainly. With arm-entry spans
+and the prologue's facts asserted by hand, 12 spans come back VALID on code
+preservation; with function-entry spans they are derived, the refutations
+disappear, and 4 do — because the prologue drags in ten times the summaries
+(152 for `hIAdd` against 13), so more of them hit the same `stack_or_arena` gap.
+The second number is the honest one.
 
 ## The pipeline, per residual
 

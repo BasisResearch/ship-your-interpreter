@@ -357,7 +357,19 @@ def entryPinsSmt (img : Nat → Option (BitVec 8)) : String := Id.run do
     "; address space and wraps a spill into the code image)",
     "(assert (bvule #x0000000000100000 SL_lo))",
     "(assert (bvult SL_hi #x0000000100000000))",
-    "(assert (bvult A_hi #x0000000100000000))" ]
+    "(assert (bvult A_hi #x0000000100000000))",
+    "; `EvalEntry.sret_ram` / `sret_align` / `sret_stack_disjoint`: the caller's",
+    "; 24-byte return buffer, passed in a0, is a real RAM address, 8-aligned, and",
+    "; either below the stack window or above `sp`.  The arm STORES the boxed",
+    "; result through it, so without this the store address is unconstrained and",
+    "; the model puts it in the code image.",
+    s!"(assert (bvule #x0000000080000000 {stR "s0" 10}))",
+    s!"(assert (bvule (bvadd {stR "s0" 10} #x0000000000000018) #x0000000100000000))",
+    s!"(assert (= (bvand {stR "s0" 10} #x0000000000000007) #x0000000000000000))",
+    s!"(assert (or (bvule (bvadd {stR "s0" 10} #x0000000000000018) SL_lo) (bvule {stR "s0" 2} {stR "s0" 10})))",
+    "; and the buffer is disjoint from the code image (`sret_vicode_disjoint`,",
+    "; widened to the whole loaded text)",
+    s!"(assert (or (bvule (bvadd {stR "s0" 10} #x0000000000000018) #x0000000080000000) (bvule #x0000000080018be0 {stR "s0" 10})))" ]
   return String.intercalate "\n" (out ++ layout)
 
 /-- Read a 32-bit little-endian SIGNED word (the jump-table entries are
@@ -372,6 +384,28 @@ def dispatchArms (img : Nat → Option (BitVec 8)) (p : Nat) : Option (List Nat)
   | none => none
   | some (_, base, n) =>
     some ((List.range n).map (fun k => ((base : Int) + sword32 img (base + 4 * k)).toNat))
+
+/-- A jump-table arm's DISPATCH SITE: the function whose prologue reaches it, the
+argument register holding the AST node, and the arm's kind index.
+
+Starting an arm residual's span at the arm PC leaves everything the prologue
+established unconstrained — `s1 = sret` (the caller's return buffer, which every
+arm STORES the boxed result through), the lowered `sp`, and the spilled
+callee-saved registers.  The proof does not assume those either: `blockA_k` runs
+the prologue.  So the span starts at the FUNCTION entry with the kind word
+pinned, and the dispatch derives the arm. -/
+def armDispatch (img : Nat → Option (BitVec 8)) (armPC : Nat) : Option (Nat × Nat × Nat) := Id.run do
+  -- (function entry, AST-node argument register, kind index)
+  let tables : List (Nat × Nat × Nat × Nat) :=
+    [ (0x800031ac, 0x80003164, 12, 10)      -- eval_expr: node in a2
+    , (0x80004030, 0x80003fe0, 11, 9) ]     -- exec_stmt: node in a1
+  for (disp, entry, reg, n) in tables do
+    match dispatchArms img disp with
+    | some arms =>
+      for k in List.range n do
+        if k < arms.length && arms[k]! == armPC then return some (entry, reg, k)
+    | none => pure ()
+  return none
 
 /-- Emit the fold/unfold axiom for every summary symbol, recursively.  A
 `callee_<t>` axiom is the callee's OWN `reflectStepsMulti` (recursion bottoms out

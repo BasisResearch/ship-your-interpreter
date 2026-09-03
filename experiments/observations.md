@@ -5497,10 +5497,14 @@ it, still stop and report instead.
 - workaround: NONE — reported as the two named entry facts they are.
 - cost: none yet; the point is that the next work is ENCODING two facts the Lean
   statements already carry, not more solver tuning.
-- proposal: encode (a) `FrameMeta.abiFrame_of_wrChain` — the arm's frame slots
-  hold the caller's saved registers — and (b) `StoreRepr`/`Arena.contains` — a
-  pointer read out of a represented store points into the arena.  (a) makes the
-  8-10 REFUTED decidable; (b) is what lets the pointer-storing loops carry
-  `stack_or_arena`, which unblocks the 39.  Both are `EvalEntry` content, so the
-  encoder should grow a `#emit_entry_facts` beside `entryPinsSmt` rather than
-  each query hand-rolling them.
+- proposal: (a) RESOLVED in this session — do not assert the prologue's facts,
+  DERIVE them: a residual whose span entry is a jump-table arm now starts at the
+  FUNCTION entry with the AST kind pinned, so `s1 = sret`, the lowered `sp` and
+  the callee-saved spills come out of the prologue exactly as `blockA_k` gets
+  them.  All ten refutations disappeared.  (b) STILL OPEN and now isolated: 62 of
+  201 summaries lack `stack_or_arena` because they store through a
+  data-dependent pointer, and nothing in the machine text says such a pointer
+  lands in the arena.  That is `StoreRepr`/`Arena.contains`, an entry fact, and
+  it is the ONE thing between this campaign and a verdict on the whole footprint
+  family — 48 of 52 residuals are `UNKNOWN(summary-clause)` for exactly this
+  reason.  The encoder should grow it beside `entryPinsSmt`, not per query.

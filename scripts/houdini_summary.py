@@ -197,7 +197,10 @@ def footprint_check(base, cond, writes, applied, cset, timeout, pre=""):
     missing = sorted({f for f in applied if "stack_or_arena" not in cset.get(f, [])})
     if missing:
         return "UNKNOWN(summary-clause:" + ",".join(m[:22] for m in missing) + ")"
-    head = base + "\n" + pre + "\n(declare-const QA (_ BitVec 64))\n" + cond
+    head = base + "\n" + pre + "\n"
+    if "(declare-const QA " not in head:
+        head += QA_DECL
+    head += cond
     # 1. does the condition imply "outside stack and arena"?
     side = head + "(assert (not (and (or (bvult QA SL_lo) (bvuge QA SL_hi)) "
     side += "(or (bvult QA A_lo) (bvuge QA A_hi)))))\n(check-sat)\n"
@@ -406,7 +409,8 @@ def main():
         def run(t):
             f, pk = t
             if pk in FOOTPRINT_POSTS:
-                base = qs[f].replace("; @@ASSUME@@", "").replace("; @@POST@@", "")
+                base = qs[f].replace("; @@ASSUME@@", assume_block(qs[f], cset)) \
+                            .replace("; @@POST@@", "")
                 return (f, pk, footprint_check(base, FOOTPRINT_POSTS[pk],
                                                wsets.get(f, []), applied_of(qs[f]),
                                                cset, timeout, pre=pre))

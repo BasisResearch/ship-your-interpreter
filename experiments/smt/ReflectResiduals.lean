@@ -225,17 +225,29 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
     let mut deps : List String := []
     let mut allSums : List String := []
     for (nm, elo, ehi) in residualSpans do
-      let (rlo, rhi) := funcRange starts codeLo codeHi elo
-      let (ev, binds, sums, complete, used, writes) := reflectBmc img rlo rhi elo [ehi] rounds "s0"
+      -- If the span's entry is a jump-table ARM, start at the FUNCTION entry with
+      -- the AST kind pinned and let the dispatch derive the arm.  Everything the
+      -- prologue establishes — `s1 = sret` (which every arm stores the boxed
+      -- result through), the lowered `sp`, the callee-saved spills — is then
+      -- DERIVED rather than assumed, exactly as `blockA_k` derives it in the
+      -- proof.  Starting at the arm instead leaves those unconstrained, and the
+      -- solver duly puts the result store inside the code image.
+      let (bmcEntry, kindPin) :=
+        match armDispatch img elo with
+        | some (fe, reg, k) =>
+          (fe, s!"; the arm is selected by the pinned AST kind (`ExprRepr`/`StmtRepr`)\n(assert (= (ld4 (mm s0) {stR "s0" reg}) {bvN k}))\n")
+        | none => (elo, "")
+      let (rlo, rhi) := funcRange starts codeLo codeHi bmcEntry
+      let (ev, binds, sums, complete, used, writes) := reflectBmc img rlo rhi bmcEntry [ehi] rounds "s0"
       let decls2 := bindsToDecls binds
       allSums := (allSums ++ sums).eraseDups
       let decls := summaryDecls sums
       IO.FS.writeFile s!"{dir}/queries/{nm}.smt2"
-        s!"{smtPreamble}\n{decls}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) SL_hi) (bvult SL_lo SL_hi) (bvult A_lo A_hi) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi))))\n(declare-const s0 MState)\n{decls2}\n; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {ev})\n(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
+        s!"{smtPreamble}\n{decls}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) SL_hi) (bvult SL_lo SL_hi) (bvult A_lo A_hi) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi))))\n(declare-const s0 MState)\n{kindPin}{decls2}\n; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {ev})\n(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
       IO.FS.writeFile s!"{dir}/writes/{nm}.tsv"
         ("guard\twidth\taddr\n" ++ String.intercalate "\n"
           (writes.map (fun (g, a, w) => s!"{g}\t{w}\t{a}")) ++ "\n")
-      rows := rows ++ [s!"{nm}\t0x{String.ofList (Nat.toDigits 16 rlo)}\t0x{String.ofList (Nat.toDigits 16 rhi)}\t0x{String.ofList (Nat.toDigits 16 elo)}\t0x{String.ofList (Nat.toDigits 16 ehi)}\t{used}\t{complete}\t{decls2.length}\t{sums.length}"]
+      rows := rows ++ [s!"{nm}\t0x{String.ofList (Nat.toDigits 16 rlo)}\t0x{String.ofList (Nat.toDigits 16 rhi)}\t0x{String.ofList (Nat.toDigits 16 bmcEntry)}\t0x{String.ofList (Nat.toDigits 16 ehi)}\t{used}\t{complete}\t{decls2.length}\t{sums.length}"]
       deps := deps ++ [s!"{nm}\t{String.intercalate "," sums}"]
     -- Summary obligations, over the SAME encoder.
     --   `callee_t` — symbolically execute the callee's own function;

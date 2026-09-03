@@ -53,3 +53,15 @@
 (assert (bvule #x0000000000100000 SL_lo))
 (assert (bvult SL_hi #x0000000100000000))
 (assert (bvult A_hi #x0000000100000000))
+; `EvalEntry.sret_ram` / `sret_align` / `sret_stack_disjoint`: the caller's
+; 24-byte return buffer, passed in a0, is a real RAM address, 8-aligned, and
+; either below the stack window or above `sp`.  The arm STORES the boxed
+; result through it, so without this the store address is unconstrained and
+; the model puts it in the code image.
+(assert (bvule #x0000000080000000 (select (rr s0) #x000000000000000a)))
+(assert (bvule (bvadd (select (rr s0) #x000000000000000a) #x0000000000000018) #x0000000100000000))
+(assert (= (bvand (select (rr s0) #x000000000000000a) #x0000000000000007) #x0000000000000000))
+(assert (or (bvule (bvadd (select (rr s0) #x000000000000000a) #x0000000000000018) SL_lo) (bvule (select (rr s0) #x0000000000000002) (select (rr s0) #x000000000000000a))))
+; and the buffer is disjoint from the code image (`sret_vicode_disjoint`,
+; widened to the whole loaded text)
+(assert (or (bvule (bvadd (select (rr s0) #x000000000000000a) #x0000000000000018) #x0000000080000000) (bvule #x0000000080018be0 (select (rr s0) #x000000000000000a))))
