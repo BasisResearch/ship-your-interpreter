@@ -205,7 +205,7 @@ def heap_hyp(writes):
     """`Arena.contains` for every store whose base is not `sp`.  Returns the SMT
     block and the number of sites it covers."""
     out, n = [], 0
-    for g, w, a in writes:
+    for g, w, a in (writes or []):
         if w == 0 or SP_BASE.match(a):
             continue
         # the base is `(bvadd BASE OFF)`; assume the BASE is a represented object
@@ -393,7 +393,7 @@ def hits_QA(writes):
     """`QA` lands inside one of the span's own stores.  Width 0 marks a READ
     address, which is an instantiation site rather than part of the footprint."""
     ds = []
-    for g, w, a in writes:
+    for g, w, a in (writes or []):
         if w == 0:
             continue
         ds.append(f"(and {g} (bvule {a} QA) (bvult QA (bvadd {a} #x{w:016x})))")
@@ -406,7 +406,7 @@ def write_roots(writes):
     The check never looks at `state_exit`: it is about the guards and addresses
     of the stores, so slicing to those roots drops the whole tail of the span."""
     out = set()
-    for g, _, a in writes:
+    for g, _, a in (writes or []):
         out.add(g)
         out.update(re.findall(r"[A-Za-z][A-Za-z0-9_]*", a))
     return out
@@ -414,6 +414,12 @@ def write_roots(writes):
 
 def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=True,
                     clause="stack_or_arena", side=True):
+    # A MISSING footprint is not an empty one.  `hits_QA([])` is `(assert false)`,
+    # which is unsat, which reads as VALID — so a campaign emitted without write
+    # sets (`#emit_campaign` leaves `writes/` empty; only `#emit_bmc` fills it)
+    # would silently mark every footprint post valid.  Absent means UNKNOWN.
+    if writes is None:
+        return "UNKNOWN(no-footprint-recorded)"
     """The three-part check.  Returns "VALID" / "REFUTED" / "UNKNOWN(...)".
 
     `clause` is the summary clause the composition goes through, and `side` says
@@ -441,6 +447,7 @@ def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=Tru
 
 
 def dedup_addrs(writes, cap=40, reads_only=False):
+    writes = writes or []
     """The distinct addresses a span touches — stores AND loads, capped.
 
     Instantiating a memory clause at each is what lets a spill-then-reload across
@@ -569,7 +576,7 @@ def mine(d, syms, timeout, jobs, rounds):
             parts = l.split("\t")
             deps[parts[0]] = {x for x in (parts[1].split(",") if len(parts) > 1 else []) if x}
     stale = set(syms)
-    wsets = {f: (load_writes(os.path.join(d, "writes", f + ".tsv")) or []) for f in syms}
+    wsets = {f: load_writes(os.path.join(d, "writes", f + ".tsv")) for f in syms}
     stale &= set(syms)
     for rnd in range(rounds):
         tasks = [(f, c) for f in syms if f in stale for c in cset[f]]
@@ -733,7 +740,7 @@ def main():
     if phase in ("check", "both"):
         print(f"== phase 2: {len(deps)} residual queries x {len(POSTS)} post conjuncts")
         qs = {f: open(os.path.join(d, "queries", f + ".smt2")).read() for f in deps}
-        wsets = {f: (load_writes(os.path.join(d, "writes", f + ".tsv")) or []) for f in deps}
+        wsets = {f: load_writes(os.path.join(d, "writes", f + ".tsv")) for f in deps}
         pre = pre_block(d)
         tasks = [(f, pk) for f in sorted(deps) for pk in list(POSTS) + list(FOOTPRINT_POSTS)]
         def run(t):
