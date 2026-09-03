@@ -97,6 +97,107 @@ def reflectStepsSmt (lo hi : Nat) (regs : List Nat) : IO String := do
   let decls := String.intercalate "\n" (regs.map (fun r => s!"(declare-fun {regName r} () Int)"))
   return s!"; Steps reflection of span [{lo},{hi})\n{decls}\n(declare-fun mem () (Array Int (_ BitVec 8)))\n(define-fun mem_exit () (Array Int (_ BitVec 8)) {cur})\n"
 
+-- ==========================================================================
+-- Multi-block reflection: split a span at control-flow terminators and compose
+-- straight-line write-logs across the seams (the SMT analogue of FnSummary.seq /
+-- callSplice / tailJump).  Terminators are read from the RAW opcode (RISC-V):
+--   BRANCH = 0x63, JAL = 0x6f, JALR = 0x67, SYSTEM/ECALL = 0x73.
+-- ==========================================================================
+
+/-- Low 7-bit opcode of a word. -/
+def opcode (w : BitVec 32) : Nat := (w &&& 0x7f).toNat
+
+/-- Is this word a control-flow terminator (branch / jump / call / return)? -/
+def isTerm (w : BitVec 32) : Bool :=
+  let op := opcode w
+  op == 0x63 || op == 0x6f || op == 0x67 || op == 0x73
+
+/-- A terminator's class + target (for JAL/BRANCH the target is PC-relative). -/
+inductive Term where
+  | branch (target : Nat)      -- conditional; fallthrough OR target
+  | jal    (rd target : Nat)   -- call (rd=1) or plain jump
+  | jalr   (rd : Nat)          -- indirect (call rd=1 / ret rd=0 via ra)
+  | sys                        -- ecall/ebreak
+  deriving Repr
+
+/-- Decode the terminator at `pc` (word `w`), computing PC-relative targets. -/
+def decodeTerm (pc : Nat) (w : BitVec 32) : Term :=
+  let op := opcode w
+  let bit (i : Nat) : Nat := ((w >>> i) &&& 1).toNat
+  let rd := ((w >>> 7) &&& 0x1f).toNat
+  if op == 0x6f then
+    -- JAL imm[20|10:1|11|19:12]
+    let imm := (bit 31)*(Nat.pow 2 20) + (((w>>>12) &&& 0xff).toNat)*(Nat.pow 2 12)
+             + (bit 20)*(Nat.pow 2 11) + (((w>>>21) &&& 0x3ff).toNat)*2
+    let imm := if bit 31 == 1 then Int.ofNat imm - (Nat.pow 2 21) else Int.ofNat imm
+    Term.jal rd ((Int.ofNat pc + imm).toNat)
+  else if op == 0x63 then
+    -- BRANCH imm[12|10:5|4:1|11]
+    let imm := (bit 31)*(Nat.pow 2 12) + (bit 7)*(Nat.pow 2 11) + (((w>>>25) &&& 0x3f).toNat)*(Nat.pow 2 5)
+             + (((w>>>8) &&& 0xf).toNat)*2
+    let imm := if bit 31 == 1 then Int.ofNat imm - (Nat.pow 2 13) else Int.ofNat imm
+    Term.branch ((Int.ofNat pc + imm).toNat)
+  else if op == 0x67 then Term.jalr rd
+  else Term.sys
+
+/-- Split `[lo,hi)` into maximal straight-line blocks, each ending at a
+terminator (or at `hi`).  Returns `(blockInstrs, terminator?, blockEndPC)`. -/
+def splitBlocks (img : Nat → Option (BitVec 8)) (lo hi : Nat) :
+    List (List MInstr × Option Term × Nat) := Id.run do
+  let mut out := []
+  let mut cur : List MInstr := []
+  let mut blkStart := lo
+  let mut pc := lo
+  while pc < hi do
+    let w := wordAt img pc
+    if isTerm w then
+      out := out ++ [(cur, some (decodeTerm pc w), pc)]
+      cur := []
+      blkStart := pc + 4
+    else
+      cur := cur ++ [mkLine (BitVec.ofNat 64 pc) w]
+    pc := pc + 4
+  if !cur.isEmpty then out := out ++ [(cur, none, hi)]
+  return out
+
+/-- Append a straight-line block's write-log stores onto the SMT memory term. -/
+def appendBlockLog (regs : List Nat) (mem0 : String) (instrs : List MInstr) : String := Id.run do
+  let entry : GRegs := regs.map (fun n => (n, BitVec.ofNat 64 (baseOf n)))
+  let log := wlogM instrs entry []
+  let mut cur := mem0
+  for (a, w, d) in log do
+    let addr : String := match resolveAddr regs a with
+      | some (r, off) => s!"(+ {regName r} {off})"
+      | none => toString a
+    for j in List.range w do
+      cur := s!"(store {cur} (+ {addr} {j}) ((_ extract {8*j+7} {8*j}) (_ bv{d.toNat} 64)))"
+  return cur
+
+/-- Multi-block `Steps` encoding of `[lo,hi)`: compose each straight-line block's
+write-log, splicing a callee/loop SUMMARY function at each seam (the SMT analogue
+of `FnSummary.callSplice`/`tailJump`).  Returns `(memExitTerm, summarySymbols)`;
+each summary symbol `S : Array→Array` is declared and gets its fold/unfold axiom
+from the callee's own reflection (calls) or the mined loop invariant (loops). -/
+def reflectStepsMulti (img : Nat → Option (BitVec 8)) (regs : List Nat) (lo hi : Nat) :
+    String × List String := Id.run do
+  let blocks := splitBlocks img lo hi
+  let mut cur := "mem"
+  let mut summaries : List String := []
+  for (instrs, term?, endPC) in blocks do
+    cur := appendBlockLog regs cur instrs
+    match term? with
+    | some (Term.jal rd target) =>
+      if target < endPC then
+        let s := s!"loop_{target}"; summaries := s :: summaries; cur := s!"({s} {cur})"
+      else if rd == 1 then
+        let s := s!"callee_{target}"; summaries := s :: summaries; cur := s!"({s} {cur})"
+      -- plain forward jump (rd=0): straight fallthrough of the log, no seam effect
+    | some (Term.jalr _) => pure ()           -- indirect call/ret: caller resumes
+    | some (Term.branch target) =>
+      let s := s!"branch_{target}"; summaries := s :: summaries; cur := s!"({s} {cur})"
+    | _ => pure ()
+  return (cur, summaries.eraseDups)
+
 end Vsa.ReflectSpan
 
 open Vsa.ReflectSpan in
