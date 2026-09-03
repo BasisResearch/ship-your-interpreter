@@ -319,7 +319,7 @@ addresses this resolves to are exactly the proof's `evalArm*`/`execArm*`
 constants.  A `jalr x0` at a PC NOT listed here is reflected as a named opaque
 per-site summary rather than silently ending the path. -/
 def dispatchSites : List (Nat × Nat × Nat) :=
-  [ (0x800031ac, 0x80019f58, 10)     -- eval_expr: 10 `Expr` kind arms
+  [ (0x800031ac, 0x80019f58, 11)     -- eval_expr: 11 `Expr` kind arms
   , (0x80003558, 0x80019f84, 13)     -- the binary/logical operator sub-dispatch
                                      --   (`binOpTok` 11…23 → 13 table entries,
                                      --   the table running up to the `Stmt` one)
@@ -425,15 +425,21 @@ the prologue.  So the span starts at the FUNCTION entry with the kind word
 pinned, and the dispatch derives the arm. -/
 def armDispatch (img : Nat → Option (BitVec 8)) (armPC : Nat) : Option (Nat × Nat × Nat) := Id.run do
   -- (function entry, AST-node argument register, kind index)
-  let tables : List (Nat × Nat × Nat × Nat) :=
-    [ (0x800031ac, 0x80003164, 12, 10)      -- eval_expr: node in a2
-    , (0x80004030, 0x80003fe0, 11, 9) ]     -- exec_stmt: node in a1
-  for (disp, entry, reg, n) in tables do
-    match dispatchArms img disp with
-    | some arms =>
+  -- The arm COUNT comes from `dispatchSites`, never from a second copy here.
+  -- It was duplicated, and both copies said eval_expr has 10 arms where the
+  -- `Expr` type and the ELF's table both have 11 -- so `EX_FN` (arm 10, at
+  -- 0x800033c4) was not recognised as an arm at all, and `hFn` was reflected
+  -- from the middle of the function with no kind pin.
+  let tables : List (Nat × Nat × Nat) :=
+    [ (0x800031ac, 0x80003164, 12)      -- eval_expr: node in a2
+    , (0x80004030, 0x80003fe0, 11) ]    -- exec_stmt: node in a1
+  for (disp, entry, reg) in tables do
+    let n := (dispatchSites.find? (fun t => t.1 == disp)).map (fun t => t.2.2)
+    match dispatchArms img disp, n with
+    | some arms, some n =>
       for k in List.range n do
         if k < arms.length && arms[k]! == armPC then return some (entry, reg, k)
-    | none => pure ()
+    | _, _ => pure ()
   return none
 
 /-- The kind index a jump-table arm corresponds to (0 if it is not an arm). -/
@@ -1450,14 +1456,14 @@ def bmcRound (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
     (fstarts noret : List Nat) (retExit : Bool) (front : List Arrival)
     (seen : List Nat) (k : Nat) (binds : List String) (sums : List String) :
     List Arrival × List (String × String) × Nat × List String × List String
-      × List (String × String × Nat) × List (Nat × String) × List (String × Nat) := Id.run do
+      × List (String × String × Nat) × List (Nat × Nat × String) × List (String × Nat) := Id.run do
   let mut k := k
   let mut binds := binds
   let mut sums := sums
   let mut next : List Arrival := []
   let mut exits : List (String × String) := []
   let mut writes : List (String × String × Nat) := []
-  let mut dispGuards : List (Nat × String) := []
+  let mut dispGuards : List (Nat × Nat × String) := []
   let mut halts : List (String × Nat) := []
   for (pc, as) in groupByPc front do
     let (g0, st0) := mergeArrivals as
@@ -1482,9 +1488,15 @@ def bmcRound (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       -- post-loop code is reflected, which is what a back-edge cut throws away.
       let lsum := s!"loop_{pc}"
       sums := (lsum :: sums).eraseDups
-      let gv := s!"g{k}"; let sv := s!"m{k}"
-      binds := binds ++ [s!"({gv} {g0})", s!"({sv} ({lsum} {st0}))"]
-      k := k + 1
+      -- BIND the merged arrival state before applying the summary.  With
+      -- several arrivals `mergeArrivals` returns an `(ite ...)` term, and
+      -- `(loop_X (ite g a b))` is invisible to the driver's application regex,
+      -- whose argument must be a bare identifier -- so the clause set is never
+      -- instantiated there and `footprint_check` skips those writes entirely.
+      let gv := s!"g{k}"; let mv := s!"m{k}"; let sv := s!"m{k+1}"
+      binds := binds ++ [s!"({gv} {g0})", s!"({mv} {st0})",
+                         s!"({sv} ({lsum} {mv}))"]
+      k := k + 2
       let (qs, leaves) := loopExits img lo hi stops pc
       for q in qs do
         next := next ++ [{ pc := q, guard := gv, state := sv, done := pc :: carried }]
@@ -1508,7 +1520,15 @@ def bmcRound (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       let isDisp := (dispatchArms img (termPC img hi stops pc)).isSome
       next := next ++ [{ pc := q, guard := gvq, state := bv, done := carried,
                          arm := if isDisp then some q else none }]
-      if isDisp then dispGuards := dispGuards ++ [(q, gvq)]
+      -- Tag the guard with the DISPATCH SITE, not just the arm it selects.
+      -- eval_expr nests a second ground dispatch (the operator table at
+      -- 0x80003558), and pinning an eval arm must say nothing about which
+      -- OPERATOR arm runs -- negating those too asserts that no operator arm is
+      -- taken while the exit guard demands a path through one, which is a
+      -- contradiction, and a query with contradictory assumptions reports VALID
+      -- on every post.
+      if isDisp then
+        dispGuards := dispGuards ++ [(termPC img hi stops pc, q, gvq)]
     for (gq, sq) in exs do
       let gvq := s!"g{k}x"
       binds := binds ++ [s!"({gvq} {gq})"]
@@ -1541,7 +1561,7 @@ term, the `let` bindings, the summary symbols, whether the frontier emptied
 def reflectBmc (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : List Nat)
     (fstarts noret : List Nat) (retExit : Bool) (rounds : Nat) (s0 : String) :
     String × List String × List String × Bool × Nat × List (String × String × Nat)
-      × List (Nat × String) × List (String × Nat) × String := Id.run do
+      × List (Nat × Nat × String) × List (String × Nat) × String := Id.run do
   let mut front : List Arrival := [{ pc := entry, guard := "true", state := s0 }]
   let mut exits : List (String × String) := []
   let mut binds : List String := []
@@ -1550,7 +1570,7 @@ def reflectBmc (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : Li
   let mut used := 0
   let mut seen : List Nat := []
   let mut writes : List (String × String × Nat) := []
-  let mut dispGuards : List (Nat × String) := []
+  let mut dispGuards : List (Nat × Nat × String) := []
   let mut halts : List (String × Nat) := []
   for r in List.range rounds do
     if front.isEmpty then break

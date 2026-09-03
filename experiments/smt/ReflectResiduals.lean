@@ -36,7 +36,11 @@ def residualSpans : List (String × Nat × Nat) := [
   -- div arithmetic → the div sub-arm
   ("hDivCorr", 0x800034e8, 0x800037c0), ("hDivOv", 0x800034e8, 0x800037c0),
   -- unary / logical
-  ("hNeg", 0x800035e0, 0x80003628), ("hNot", 0x800035e0, 0x80003628),
+  -- The unary arm ENDS at 0x80003624 with `jal x0, 0x800033ec`, handing off to
+  -- the shared epilogue; 0x80003628 (`addi x15,x10,-3`) is the next arm's code
+  -- and is never reached from here.  Demanding it as the exit made these two
+  -- queries' assumptions contradictory, so every post came back VALID.
+  ("hNeg", 0x800035e0, 0x800033ec), ("hNot", 0x800035e0, 0x800033ec),
   ("hAndTrue", 0x8000355c, 0x800035e0), ("hAndFalse", 0x8000355c, 0x800035e0),
   ("hOrTrue", 0x8000355c, 0x800035e0), ("hOrFalse", 0x8000355c, 0x800035e0),
   -- call / composition
@@ -276,10 +280,23 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
         match kindReg with
         | none => ""
         | some _ =>
-          let sel : List String := dispG.map (fun (p : Nat × String) =>
-            if p.1 == elo then s!"(assert {p.2})" else s!"(assert (not {p.2}))")
-          "; and therefore which dispatch guard holds\n"
-            ++ String.intercalate "\n" sel ++ "\n"
+          -- Pin ONLY the dispatch site whose arms include this residual's arm.
+          -- Every other ground dispatch on the path -- eval_expr nests the
+          -- operator table at 0x80003558 -- must be left free: asserting that
+          -- none of ITS arms is taken, while the exit guard demands a path
+          -- through one, makes the assumptions contradictory, and a query with
+          -- contradictory assumptions reports VALID on every post.
+          match dispG.find? (fun (t : Nat × Nat × String) => t.2.1 == elo) with
+          | none => ""
+          | some (site, _, _) =>
+            let sel : List String :=
+              (dispG.filter (fun (t : Nat × Nat × String) => t.1 == site)).map
+                (fun (t : Nat × Nat × String) =>
+                  if t.2.1 == elo then s!"(assert {t.2.2})"
+                  else s!"(assert (not {t.2.2}))")
+            "; and therefore which arm of THIS dispatch is taken (other ground\n"
+              ++ "; dispatches on the path are left free)\n"
+              ++ String.intercalate "\n" sel ++ "\n"
       let decls2 := bindsToDecls binds
       allSums := (allSums ++ sums).eraseDups
       let decls := summaryDecls sums

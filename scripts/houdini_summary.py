@@ -26,7 +26,7 @@ Usage:
   python3 scripts/houdini_summary.py <campaign-dir> [--timeout S] [-jN]
      [--rounds N] [--phase mine|check|both]
 """
-import os, re, sys, subprocess, concurrent.futures, json, time, csv
+import os, re, sys, subprocess, concurrent.futures, json, time, csv, threading
 from collections import Counter
 
 # ---------------------------------------------------------------- clause bank
@@ -719,7 +719,17 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
     for f in list(syms):
         path = os.path.join(d, "obligations", f + ".smt2")
         if f in IH_SUMMARIES or f in NATIVE_ICALLS or f in emitter_assumed:
-            assumed.append(f)          # keep the full clause set, do not mine
+            assumed.append(f)          # keep the clause set, do not mine
+            if f in IH_SUMMARIES:
+                # ...except `above_sp`, which is FALSE for these.  It says
+                # nothing at or above the entry `sp` and outside the arena is
+                # touched -- but eval_expr's whole job is to write the result
+                # Value into the sret buffer the CALLER passed, which lives in
+                # the caller's frame, i.e. at or above the callee's entry `sp`,
+                # and in the stack rather than the arena.  `pre.smt2` permits
+                # exactly that layout.  Assuming it would be assuming something
+                # false; dropping it only weakens what can be proved.
+                cset[f] = [c for c in cset[f] if c != "above_sp"]
         elif os.path.exists(path):
             bodies[f] = open(path).read()
         else:
@@ -946,6 +956,24 @@ def main():
             frag_cache[f] = v
             return v
 
+        vac_cache = {}
+        vac_lock = threading.Lock()
+
+        def vacuous(f, head, timeout):
+            """Do this query's assumptions contradict each other?
+
+            Checked ONCE per field and memoised: it is the same question for all
+            five posts.  A `sat` here is what makes a VALID mean anything."""
+            with vac_lock:
+                if f in vac_cache:
+                    return vac_cache[f]
+            v = z3(head.replace("; @@POST@@", "") + "\n(check-sat)\n", timeout)
+            # only a PROVED inconsistency counts; `unknown` is not a verdict
+            r = (v == "unsat")
+            with vac_lock:
+                vac_cache[f] = r
+            return r
+
         def in_eval(f):
             """Is this span inside `eval_expr`, the one function that boxes a
             `Value` at the caller's a0?  `EVAL_REGION` is its entry, the same
@@ -975,7 +1003,23 @@ def main():
                 return (f, pk, footprint_check(base, FOOTPRINT_POSTS[pk],
                                                wr, applied_of(sl),
                                                cset, timeout, pre=pre))
+            # The encoder records whether the BMC frontier EMPTIED within the
+            # round bound.  If it did not, the reflected term covers only part
+            # of the span and a post proved over it says nothing about the rest.
+            # The column was emitted and never read.
+            if spans.get(f, {}).get("complete") == "false":
+                return (f, pk, "INCOMPLETE(frontier-not-empty)")
             head = qs[f].replace("; @@ASSUME@@", pre + "\n" + assume_block(qs[f], cset))
+            # VACUITY GATE.  `unsat` of PRE + clauses + exit guard, with no post
+            # at all, means the assumptions contradict each other -- and a query
+            # with contradictory assumptions proves EVERY post.  Reporting that
+            # as VALID is the worst failure this driver can have, because it is
+            # indistinguishable from a real result.  26 of 52 queries were in
+            # exactly this state (an over-eager dispatch pin negating a nested
+            # dispatch's arms, and two spans whose declared exit is unreachable),
+            # and all 26 reported VALID on all five posts.
+            if vacuous(f, head, timeout):
+                return (f, pk, "VACUOUS(assumptions-inconsistent)")
             # `storerepr` and `valuerepr_tag` are stated over the pointer the
             # CALLER passed in a0 at the span's entry.  That is only the result
             # buffer for a span entered at its function's entry: a FRAGMENT

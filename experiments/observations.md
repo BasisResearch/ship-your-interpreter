@@ -5883,3 +5883,62 @@ it, still stop and report instead.
 - proposal: landed. The encoder's generated-name prefixes are a contract with
   the driver; there were two copies of that list and both were wrong. One
   regex, referenced everywhere.
+
+## 2026-09-03 smt-26-of-52-queries-were-VACUOUS (bmc encoder + driver)
+- missing: there was NO VACUITY CHECK anywhere. 26 of the 52 residual queries
+  had contradictory assumptions, so every post was proved trivially and all 26
+  reported VALID on all five posts. Confirmed directly: PRE + clauses + exit
+  guard, with no post at all, is UNSAT for exactly those 26.
+  Two independent causes:
+  (a) `dispPin` negated EVERY ground-dispatch guard whose arm differs from the
+      residual's. eval_expr nests a second dispatch (the operator table at
+      0x80003558), so pinning an eval arm asserted that NO operator arm is
+      taken, while the exit guard demands a path through one.
+  (b) `hNeg`/`hNot` declared the exit 0x80003628, which is the next arm's code.
+      The unary arm ends at 0x80003624 with `jal x0, 0x800033ec`, so that exit
+      is never reached.
+- workaround: NONE. `dispPin` now pins only the dispatch SITE whose arms include
+  this residual's arm and leaves every other dispatch free; the unary spans stop
+  at 0x800033ec; and the driver has a VACUITY GATE that reports
+  `VACUOUS(assumptions-inconsistent)` instead of VALID.
+- cost: every VALID on those 26 fields, in every campaign this session, was
+  meaningless -- including the set committed at 6246de2.
+- proposal: landed. A verdict layer that cannot distinguish "proved" from
+  "assumed false" has no value at all. The vacuity check is one z3 call per
+  field, memoised across the five posts.
+
+## 2026-09-03 smt-duplicated-arm-counts-and-invisible-applications (bmc encoder)
+- missing: three more copies of the "second stale copy of a list" defect.
+  (a) The eval jump table's arm count was written twice, in `dispatchSites` and
+      again in `armDispatch`, and BOTH said 10 where `Expr` and the ELF table
+      both have 11 -- so `EX_FN` (arm 10, 0x800033c4) was not recognised as an
+      arm, and `hFn` was reflected from mid-function with no kind pin. I had
+      previously mis-read that as `hFn` being a "shared allocation tail".
+      `armDispatch` now derives the count from `dispatchSites`.
+  (b) The loop summary was applied to `mergeArrivals`' `(ite ...)` term, so 220
+      applications across 49 files were invisible to the driver's application
+      regex and their writes were skipped by `footprint_check` entirely. The
+      merge is now bound to a name first. Same root cause as the `ra` inlining.
+  (c) The `complete` column -- whether the BMC frontier emptied -- was emitted
+      and never read. Now gates the verdict.
+- workaround: NONE, all fixed.
+- cost: unknown-but-nonzero silent under-checking on every loop-bearing span.
+- proposal: landed. Every count and every generated-name prefix must have ONE
+  definition that the other reader derives from.
+
+## 2026-09-03 smt-above-sp-assumed-but-false-for-the-IH (Houdini driver)
+- missing: summaries in `IH_SUMMARIES` keep the FULL clause set unmined, and
+  that included `above_sp`: "nothing at or above the entry `sp` and outside the
+  arena is touched". eval_expr's whole job is to write the result Value into the
+  sret buffer the CALLER passed, which lives in the caller's frame -- at or
+  above the callee's entry `sp`, and in the stack rather than the arena.
+  `pre.smt2` permits exactly that layout. So the assumption is false.
+- workaround: NONE. `above_sp` is dropped for the IH summaries; the register and
+  invariant clauses, which the Lean `EvalIH` does carry, are kept. Dropping only
+  weakens what can be proved, where assuming a falsehood proves anything.
+- cost: not yet quantified -- z3 leaves the clause undecided at 180s on
+  eval_expr's own obligation, so this rests on the layout argument, not a
+  countermodel. Flagged rather than claimed.
+- proposal: an assumed clause set needs the same scrutiny as a mined one. The
+  mined ones are checked by construction; the assumed ones were checked by
+  nobody.
