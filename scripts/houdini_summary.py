@@ -26,7 +26,7 @@ Usage:
   python3 scripts/houdini_summary.py <campaign-dir> [--timeout S] [-jN]
      [--rounds N] [--phase mine|check|both]
 """
-import os, re, sys, subprocess, concurrent.futures, json, time
+import os, re, sys, subprocess, concurrent.futures, json, time, csv
 from collections import Counter
 
 # ---------------------------------------------------------------- clause bank
@@ -146,7 +146,36 @@ Z3_OPTS = """(set-option :smt.mbqi false)
 """
 
 
+_DC = re.compile(r"^\(declare-const (\S+) (Bool|MState)\)$")
+_BD = re.compile(r"^\(assert \(= (\S+) (.*)\)\)$")
+
+
+def defunise(text):
+    """`(declare-const X S)` immediately followed by `(assert (= X t))` becomes
+    `(define-fun X () S t)`.
+
+    The equational form makes every one of the ~600 state bindings an ARRAY
+    EQUALITY atom, and z3's `solve-eqs` eliminates only about a third of them;
+    the rest reach the array decision procedure and are answered with
+    extensionality axioms (`array-ax2` 809154, `array-ext-ax` 8984 in 60s on
+    one call-arm query).  As macros they are substituted and hash-consed and
+    never become atoms at all.  Measured on two call-arm queries: 138s -> 10s
+    and 107.5s -> 7.8s, and it applies to every query in the campaign.
+
+    Runs here, inside `z3`, rather than at emit time because `slice_to` and
+    `guard_of` key on the declare+assert form and must see it first."""
+    lines = text.split("\n")
+    out = list(lines)
+    for i in range(len(lines) - 1):
+        d, b = _DC.match(lines[i]), _BD.match(lines[i + 1])
+        if d and b and d.group(1) == b.group(1):
+            out[i] = f"(define-fun {d.group(1)} () {d.group(2)} {b.group(2)})"
+            out[i + 1] = None
+    return "\n".join(l for l in out if l is not None)
+
+
 def z3(text, timeout):
+    text = defunise(text)
     p = subprocess.run(["z3", "-smt2", "-in", f"-T:{timeout}"], input=Z3_OPTS + text,
                        capture_output=True, text=True)
     o = (p.stdout + p.stderr).strip()
@@ -346,7 +375,21 @@ def guard_of(text, sym, arg):
     return None
 
 
-def iv_discharge(text, cset, timeout, pre):
+def sp_delta(head, timeout):
+    """`sp_exit - sp_entry` read off one countermodel, or None.
+
+    Only a candidate: the caller must still PROVE the shifted equality holds on
+    every path before reporting it."""
+    q = (head.replace("; @@POST@@", "") + "\n(check-sat)\n"
+         "(get-value ((bvsub (select (rr state_exit) #x0000000000000002) "
+         "(select (rr s0) #x0000000000000002))))\n")
+    p = subprocess.run(["z3", "-smt2", "-in", f"-T:{timeout}"],
+                       input=Z3_OPTS + defunise(q), capture_output=True, text=True)
+    m = re.search(r"#x([0-9a-f]{16})\)\s*\)\s*$", p.stdout.strip())
+    return int(m.group(1), 16) if m else None
+
+
+def iv_discharge(text, cset, timeout, pre, writes=None):
     """Every application of an IV-carrying summary must PROVE the invariant at
     its argument.  Returns None if all discharge, else the failing site.
 
@@ -363,7 +406,23 @@ def iv_discharge(text, cset, timeout, pre):
         # invariant to establish, and `for (i = 0; i < argc; i++)` with argc = 0
         # is exactly that case.  The emitter binds the guard immediately before
         # the summary application it guards.
-        head = (sl.replace("; @@ASSUME@@", assume_block(sl, cset))
+        # Per-ADDRESS and per-BYTE, exactly as the mining path does.  This was
+        # the ONLY `assume_block` caller that left the memory clauses standing
+        # at the free constant `QA`, and with them there a spill-then-reload
+        # across a call is unconstrained: the args loop spills a5/a6 to
+        # 24(sp)/16(sp), calls eval_expr, reloads them, and the solver is free
+        # to say the reload returned something else -- it does, a6 = -3 and
+        # a5 = 2^63-1, refuting `0 <= a6 < a5 <= 32` in 0.1s.  Instantiating
+        # `sp_restore` + `above_sp` at the two reload addresses over all eight
+        # bytes closes it in 2.8s.  One byte at the base address is not enough:
+        # `ld8` reads eight.
+        alive = set(re.findall(r"^\(declare-const (\S+) ", sl, re.M))
+        rd = [a for a in dedup_addrs(writes, cap=64, reads_only=True)
+              if all(v in alive or not re.match(r"^[imbs]\d+$", v)
+                     for v in re.findall(r"[A-Za-z]\w*", a))]
+        ab = (assume_block(sl, cset) + "\n"
+              + assume_block(sl, cset, addrs=rd, byteexp=True, decl=False))
+        head = (sl.replace("; @@ASSUME@@", ab)
                   .replace("; @@POST@@", "") + "\n" + pre + "\n")
         gq = (f"(assert {g})\n" if g else "")
         # an arrival the span cannot reach has no invariant to establish.  A
@@ -788,6 +847,27 @@ def main():
     if phase in ("check", "both"):
         print(f"== phase 2: {len(deps)} residual queries x {len(POSTS)} post conjuncts")
         qs = {f: open(os.path.join(d, "queries", f + ".smt2")).read() for f in deps}
+        spans = {}
+        sp_path = os.path.join(d, "spans.tsv")
+        if os.path.exists(sp_path):
+            rdr = list(csv.DictReader(open(sp_path), delimiter="\t"))
+            spans = {r["field"]: r for r in rdr}
+        frag_cache = {}
+
+        def is_fragment(f):
+            """Does this span start somewhere other than its function's entry?
+
+            `spans.tsv` carries both, so this needs no extra solving.  The sp
+            check below catches the other shape -- a span that starts at the
+            entry but stops before the epilogue (hInitStore, which ends at the
+            interpreter's loop head) -- via the delta the sp post already
+            computed."""
+            if f in frag_cache:
+                return frag_cache[f]
+            r = spans.get(f)
+            v = bool(r) and r.get("entry") != r.get("region_lo")
+            frag_cache[f] = v
+            return v
         wsets = {f: load_writes(os.path.join(d, "writes", f + ".tsv")) for f in deps}
         pre = pre_block(d)
         tasks = [(f, pk) for f in sorted(deps) if not only or f in only
@@ -805,15 +885,47 @@ def main():
                     sl = slice_to(qs[f], r, extra=roots[1:])
                 base = sl.replace("; @@ASSUME@@", assume_block(sl, cset)) \
                          .replace("; @@POST@@", "")
-                bad = iv_discharge(qs[f], cset, timeout, pre)
+                bad = iv_discharge(qs[f], cset, timeout, pre, wr)
                 if bad:
                     return (f, pk, "UNKNOWN(iv-undischarged:" + bad + ")")
                 return (f, pk, footprint_check(base, FOOTPRINT_POSTS[pk],
                                                wr, applied_of(sl),
                                                cset, timeout, pre=pre))
-            txt = qs[f].replace("; @@ASSUME@@", pre + "\n" + assume_block(qs[f], cset)) \
-                       .replace("; @@POST@@", POSTS[pk]) + "\n(check-sat)\n"
+            head = qs[f].replace("; @@ASSUME@@", pre + "\n" + assume_block(qs[f], cset))
+            # `storerepr` and `valuerepr_tag` are stated over the pointer the
+            # CALLER passed in a0 at the span's entry.  That is only the result
+            # buffer for a span entered at its function's entry: a FRAGMENT
+            # starts mid-arm, where a0 holds whatever the code is using it for.
+            # On hFn -- the shared closure-allocation tail -- a0 at entry is 16,
+            # the malloc size, so the post reads four bytes at address 16 and is
+            # duly "refuted".  That is the post mis-fired, not a defect, and
+            # reporting it as REFUTED sends the reader after a bug that is not
+            # there.  A fragment is a span that does not start at its function's
+            # entry, or one whose sp does not come back to its entry value.
+            if pk in ("storerepr", "valuerepr_tag") and is_fragment(f):
+                return (f, pk, "N/A(fragment)")
+            txt = head.replace("; @@POST@@", POSTS[pk]) + "\n(check-sat)\n"
             v = z3(txt, timeout)
+            if v == "sat" and pk == "sp":
+                # A span that does not start at its function's entry begins
+                # AFTER the prologue lowered sp, so "sp is restored to its
+                # entry value" is the wrong statement for it -- the epilogue
+                # raises sp by the frame and the span legitimately ends one
+                # frame HIGHER.  Report what it does establish: read the delta
+                # off the countermodel, then PROVE sp_exit = sp_entry + delta.
+                # (hFn and hEpilogueSpill, delta = 0x440 = eval_expr's frame,
+                # both unsat.)  A span that really loses sp fails this too and
+                # is still reported REFUTED.
+                delta = sp_delta(head, timeout)
+                if delta is not None:
+                    shifted = ("(assert (not (= (select (rr state_exit) "
+                               "#x0000000000000002) (bvadd (select (rr s0) "
+                               f"#x0000000000000002) #x{delta:016x}))))")
+                    if z3(head.replace("; @@POST@@", shifted) + "\n(check-sat)\n",
+                          timeout) == "unsat":
+                        if delta:
+                            frag_cache[f] = True
+                        return (f, pk, f"VALID[sp+0x{delta:x}]")
             return (f, pk, {"unsat": "VALID", "sat": "REFUTED"}.get(v, "UNKNOWN"))
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
             res = list(ex.map(run, tasks))

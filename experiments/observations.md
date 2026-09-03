@@ -5696,3 +5696,88 @@ it, still stop and report instead.
 - proposal: the loaded text ends below the rodata jump tables at `0x80019f58`,
   so within `[codeLo, codeHi)` there is no data to decode as a phantom at all.
   Take a region anomaly as a question, not as evidence for a named cause.
+
+## 2026-09-03 smt-iv-discharge-callclass (bmc campaign, loop_0x800031dc @ the 6 call-class residuals)
+- missing: THREE things, all machine-confirmed on `/private/tmp/dst/bmc`
+  (`hCall`/`hCallClosure`/`hArgsCons`/`hCallPrint`/`hCallPrintln`/`hCallAssertOk`
+  — one byte-identical query, kind pin 9, `(loop_2147496412 b557)` at line 2000).
+  The invariant `0 <= a6 < a5 <= 32` is TRUE and DISCHARGES (z3 4.15.4 `unsat`,
+  3.6 s) once all three are fixed; the `UNKNOWN(iv-undischarged)` verdict is not
+  a false invariant.
+  (1) ENTRY FACT: `pre.smt2`'s stack budget is ONE frame
+  (`SL_lo + 0x1100 <= sp@s0`), but the arm applies its summaries AFTER its own
+  prologue lowered `sp` by 1088 (`0x440`), so `INV` — the guard on EVERY summary
+  clause — is FALSE at the recursive call `jal ra,0x80003164` @0x80003220.
+  Countermodel: `SL_lo=0xa0003695`, `sp@s0=0xa0004ad4` (headroom 0x143f, passes
+  `pre`), `sp@i408=0xa0004694` (headroom 0xfff < 0x1100), `(INV i408)=false`,
+  every memory clause vacuous, callee free to clobber `16(sp)`/`24(sp)`. Same
+  class as Falsity #13 (constant stack budget vs recursion).
+  (2) DRIVER: `iv_discharge` is the ONLY `assume_block` caller that omits
+  `addrs=`/`byteexp=True`, so `above_sp` is instantiated at the free `QA` alone
+  and the `sd a6,16(sp)` / `ld a6,16(sp)` and `sd a5,24(sp)` / `ld a5,24(sp)`
+  spill-reload pair across the call is unconstrained. Refuted in 0.1 s:
+  pre-call mem `sp+16 = 0`, `sp+24 = 4`; post-call reload `a6 = -3`,
+  `a5 = 0x7fffffffffffffff`. Ablation: 1-byte instantiation also `sat` (`ld8`
+  reads 8), `above_sp` alone `sat` (needs `sp_restore` to match the address).
+  (3) SCALE: the query sliced from `eval_expr`'s entry is 127 `mst` states /
+  28 eight-byte store blocks; z3 does not answer even plain reachability in
+  170 s (60 s stats: `array-ax2` 809154, `bv-bit2core` 12956422,
+  `mk-bool-var` 15866964).
+- workaround: NONE applied — diagnosis only, no repo file edited.
+- cost: 6 of 52 residuals report `UNKNOWN(iv-undischarged)` on a discharge that
+  is provable in seconds; the entry-fact gap (1) will bite EVERY residual whose
+  span makes a nested call, not only these six.
+- proposal: (1) emit the span's own frame into the budget —
+  `(assert (bvule (bvadd SL_lo #x1540) (select (rr s0) #x2)))`, i.e.
+  `0x1100 + <prologue's addi sp,sp,-N>`, the encoder already knows N;
+  (2) pass `addrs=dedup_addrs(writes, reads_only=True)` + `byteexp=True` to the
+  second `assume_block` in `iv_discharge` (signature gains `writes`);
+  (3) two cheap, separately-validated cures for the scale wall —
+  (3a) CUT: discharge from the loop's pre-header, havocking the state at the cut
+  with only `INV` assumed and leaving guards below the cut free; sound in the
+  validity direction (weakening) AND in the unreachability direction, 170 s
+  timeout -> 3.6 s;
+  (3b) emit each state binding as `(define-fun X () MState t)` instead of
+  `(declare-const X MState)` + `(assert (= X t))`. The equational form makes
+  every state an ARRAY EQUALITY atom that `solve-eqs` mostly fails to eliminate
+  (236 of ~600), so they reach the array decision procedure and are answered
+  with extensionality axioms. Measured 138 s -> 10 s and 107 s -> 7.8 s on the
+  same two queries; this one is free and applies to EVERY query in the campaign.
+
+## 2026-09-03 smt-driver-array-equality-atoms (Houdini driver, call-arm residuals)
+- missing: the emitted state chain binds every intermediate state as
+  `(declare-const X MState)` + `(assert (= X t))`, which makes each of ~600
+  bindings an ARRAY EQUALITY atom. z3's `solve-eqs` eliminates about a third;
+  the rest reach the array decision procedure and are answered with
+  extensionality axioms (`array-ax2` 809154, `array-ext-ax` 8984 in 60s on one
+  call-arm query). The queries were not hard, they were mis-shaped.
+- workaround: NONE. `defunise` in `scripts/houdini_summary.py` rewrites the
+  pair to `(define-fun X () MState t)` inside `z3()`, so the bindings are
+  substituted and hash-consed and never become atoms. It runs there rather than
+  at emit time because `slice_to`/`guard_of` key on the declare+assert form.
+- cost: measured 138s -> 10s and 107.5s -> 7.8s on two call-arm queries, and it
+  applies to every query in the campaign. A dropped clause is what a mining
+  timeout looks like, so this is also a SOUNDNESS-of-reporting issue, not only
+  speed: `loop_0x800031dc` is the one summary in the campaign that failed to
+  mine `stack_or_arena`, and that single missing clause blocks 54 verdicts.
+- proposal: landed. `(set-option :smt.array.extensional false)` and a
+  simplify/solve-eqs/bit-blast pipeline were both tried and gave no gain.
+
+## 2026-09-03 smt-posts-misfire-on-fragment-spans (Houdini driver)
+- missing: `storerepr`, `sp` and `valuerepr_tag` are stated over a WHOLE-ARM
+  span -- sp comes back to its entry value, and a0 at entry is the result
+  buffer the caller passed. Six spans are fragments and satisfy neither.
+  `hFn` is the shared closure-allocation tail: it starts at `0x800033c4`
+  (`addi a0,x0,16`, the malloc size) and ends after the epilogue's
+  `addi sp,sp,1088`, so `sp_exit = sp_entry + 1088` and `a0@entry` is 16.
+  Both posts "refute", and neither refutation means anything.
+- workaround: NONE. The driver now proves the SHIFTED sp equality
+  (`VALID[sp+0x440]` for hFn and hEpilogueSpill, read off one countermodel then
+  proved) and reports `N/A(fragment)` for the two entry-a0 posts.
+- cost: a wave was spent chasing hFn's `code` refutation, which WAS real (the
+  noreturn defect), before noticing the sibling refutations on the same span
+  were not. A REFUTED that is not a refutation costs a reader a full
+  investigation each time.
+- proposal: the general rule is that a post belongs to a span SHAPE. Worth
+  carrying into the Lean layer: `hFn`'s residual is about a tail, so its
+  statement should quantify the tail's own entry state, not the arm's.

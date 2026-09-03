@@ -60,7 +60,16 @@ def residualSpans : List (String × Nat × Nat) := [
   ("hSeqNil", 0x8000448c, 0x80004514), ("hSeqConsNormal", 0x8000448c, 0x80004514),
   ("hSeqConsAbrupt", 0x8000448c, 0x80004514),
   -- init / frame
-  ("hEpilogueSpill", 0x800033ec, 0x80003408), ("hInitStore", 0x80004764, 0x800047a0) ]
+  ("hEpilogueSpill", 0x800033ec, 0x80003408),
+  -- `hInitStore` is `InterpInitStoreRepr` (`Vsa/Sim/EntrySeams.lean:182`): the
+  -- drive from a `Loaded` config to `SegEntry` at `interpLoopHeadPC`.  That is
+  -- `interp_run`'s prologue, `0x800043ec` (the `interp_run` symbol) through
+  -- `0x8000448c` (`EntryHalts.lean:117`'s `interpLoopHeadPC`, which is also
+  -- where the three `hSeq*` spans are entered).  It was mapped to
+  -- `(0x80004764, 0x800047a0)` -- `exit` -- which is a different function
+  -- entirely; with the noreturn model that span has NO exit arrival at all and
+  -- is caught by the no-exit guard rather than answered against the entry state.
+  ("hInitStore", 0x800043ec, 0x8000448c) ]
 
 /-- Splice: the reflected-Steps SMT for a residual's span + a Post-conjunct
 validity query.  `postNeg` is the NEGATED post (SAT ⇒ refutable, UNSAT ⇒ valid,
