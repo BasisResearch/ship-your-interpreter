@@ -5509,26 +5509,29 @@ it, still stop and report instead.
   `base + 32 <= A_hi` (wraparound satisfies the latter and the solver takes it);
   and `INV` must bound the frame ABOVE `sp` too, or plain `sd rX, 0x418(sp)`
   spills escape.  `stack_or_arena` went 128 -> 195 -> 200 of 201.
-  (c) WHAT IS LEFT is one summary and one MECHANISM.  `loop_0x800031dc` (the
-  argument-marshalling loop) writes `sp + 240 + 24n` and the 1088-byte frame
-  needs `n < 35`.  Both halves of the bounding invariant are real and ENCODED —
-  `a6 < a5` from the `bne` back-edge at 0x80003250, `a5 <= 32` from MAX_ARGS
-  (`c/src/interp.c:251`) — and the driver holds an `IV_INVARIANT` to both
-  obligations at once: PROVED INDUCTIVE at the summary's own recursive
-  occurrence, and DISCHARGED at every application site in a residual query,
-  never merely assumed.  It fails the inductive step for a precise reason: the
-  counter is spilled to `16(sp)`, the recursive `eval_expr` runs, and the reload
-  reads a POST-CALL MERGE state, while the frame clause is ground-instantiated at
-  the callee application and does not propagate through the merge.
-  Instantiating the memory clauses at every store address was not enough.  Two
-  mechanisms fix it: propagate the frame clauses through merge states (or name
-  the post-call state so a clause attaches to it directly), and SLICE the
-  discharge query to the path reaching the loop header — a function-entry span
-  carries ~150 summaries and the discharge does not return at 400s.  All 50
-  remaining UNKNOWN verdicts are that budget, not a missing fact; the campaign
-  refutes no residual.
-  GENERAL LESSON worth keeping: a summary obligation starts at its header with
-  the entry state FREE, so any fact the caller established beforehand is
-  invisible there.  That is the same shape as the `s1 = sret` problem the
-  residual spans hit, and the same two cures apply — start the span earlier, or
-  state the precondition and hold it to being proved inductive AND discharged.
+  (c) SLICING LANDED, and it turned the wall into an answer.  `slice_to` walks
+  BACKWARD from the state a check is about over the top-level binding chain: the
+  args-loop invariant discharge went from 547 KB / 150 summaries / no answer at
+  400s to 40 KB / 1 summary / 1-16s.  Three refinements came with it and all
+  matter: discharge under the arrival's OWN guard (`guard_of` — the emitter binds
+  it immediately before the application it guards); SKIP an arrival whose guard is
+  UNSAT (a span that cannot reach a loop has no invariant of it to establish); and
+  state the invariant with SIGNED comparisons — every comparison the machine makes
+  at that loop is signed (`blt a4,a5` at 0x800031c8 IS the MAX_ARGS check,
+  `bge zero,a5` at 0x800031d8, `bne a6,a5` at 0x80003250), and an unsigned reading
+  lets a5 be 0x8000000000000000, which passes the signed check and blows the
+  bound.
+  WHAT IS LEFT is one mechanism, not a budget: the discharge answers `sat`, and
+  the countermodel says the arrival is reached under a guard the solver has not
+  resolved from the pinned AST kind, so an arm the pin EXCLUDES still looks
+  reachable.  The kind pin and the jump-table rodata pins are both present; the
+  slice does not carry them through to the dispatch guard.  Resolving the dispatch
+  inside a sliced query closes the 33 `iv-undischarged`; applying the same slice
+  to the post queries clears the 17 footprint timeouts.  No residual is refuted
+  anywhere in the campaign.
+  GENERAL LESSON worth keeping: a summary obligation starts at its header with the
+  entry state FREE, so any fact the caller established beforehand is invisible.
+  Same shape as the `s1 = sret` problem the residual spans hit, same cures — start
+  the span earlier, or state the precondition and hold it to proved inductive AND
+  discharged.  And SLICE: a check about one state does not need the other 149
+  summaries the span drags in.
