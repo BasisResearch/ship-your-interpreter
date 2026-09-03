@@ -30,8 +30,25 @@
 (assert (= (ld4 (mm s0) #x0000000080019fd0) #x00000000fffea168))
 (assert (= (ld4 (mm s0) #x0000000080019fd4) #x00000000fffea0e0))
 (assert (= (ld4 (mm s0) #x0000000080019fd8) #x00000000fffea100))
-; EvalEntry.stackBudget / stackOK: sp sits inside the stack with headroom
-(assert (bvule (bvadd SL_lo #x0000000000001100) (select (rr s0) #x0000000000000002)))
+; EvalEntry.stackBudget / stackOK: sp sits inside the stack with headroom.
+; 7408, NOT 4352 (= INV's own constant).  Every mined summary clause is
+; guarded by `INV`, and `INV` is instantiated at states AFTER the span's
+; prologue has lowered sp (by 176 in exec_stmt, 1088 in eval_expr).  With
+; the entry pin EQUAL to INV's constant, INV fails at exactly those states
+; by exactly the frame, so every clause is vacuous and sp after a call is
+; unconstrained -- which is what left nine hS* footprint posts unprovable
+; (the solver put the result store outside the stack/arena).
+;
+; 7408 = 176 + 6144 + 1088 is what `ExecEntry.stackBudget` carries:
+;   StackOK SL sp (s.stackNeed + (maxCallDepth - d) * perCallBudget + 1088)
+; with `s.stackNeed >= 176` (execFrame) and `perCallBudget = 6144`.
+; ASSUMED, and recorded in `assumed.tsv`: `d < maxCallDepth`.  At d = 1000
+; the `(maxCallDepth - d)` term is 0 (Nat subtraction) and the budget
+; collapses to `stackNeed + 1088`, which does not reach 7408.  ExecEntry has
+; no depth-bound field, so this does not follow from the entry record alone;
+; it is the interpreter's own closure depth guard (`Call.closure` caps
+; d < 1000), discharged at the call site, not here.
+(assert (bvule (bvadd SL_lo #x0000000000001cf0) (select (rr s0) #x0000000000000002)))
 (assert (bvule (select (rr s0) #x0000000000000002) SL_hi))
 ; the arm's own frame lies ABOVE sp and inside the stack too: the span starts
 ; after the prologue has lowered sp, so its spills are at sp+k for k < frame,

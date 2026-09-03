@@ -115,50 +115,91 @@ solver timeout rather than a genuine countermodel).
 
 ## Where the 52 stand
 
-`bmc/verdicts.tsv`. Seven clauses, mined to a fixpoint in ~55 s over 201
-summaries: `inv_pres`/`sp_restore`/`ra_restore` 192, `s1_restore` 189,
-`s0_restore` 181, `above_sp` 133, and **`stack_or_arena` 200 of 201**.
+`bmc/verdicts.tsv`, regenerated from the current reflector. Seven clauses mined
+to a fixpoint in under four minutes over 53 summaries, and **every summary now
+carries `stack_or_arena`** — including `loop_0x800031dc`, the args loop, which
+was the last one missing it.
 
-On the footprint posts: **9 VALID, 9 REFUTED, 34 UNKNOWN**. Valid are `hArgsNil`,
-`hEpilogueSpill`, `hInitStore`, `hSExpr`, `hSRet`, `hSRetNull` and the three
-`hSeq*`.
+**Across 52 fields and five posts there is not one REFUTED.**
 
-Three entry facts got `stack_or_arena` from 128 to 200, and `bmc/OBSTRUCTION.md`
-has the detail. `StoreRepr`/`Arena.contains` is the hypothesis every residual
-already carries (`EvalEntry.store`), so encoding it is faithful rather than a
-shortcut; it is instantiated at each of the 481 pointer-based store sites out of
-10054, and verdicts resting on it are tagged with the count. The two
-`Value.native` dispatches are the `NativePrintSpec` callee contracts. `above_sp`
-is the ABI fact that a callee writes below its entry `sp`, mined rather than
-assumed.
+| post | VALID | UNKNOWN | N/A |
+|---|---|---|---|
+| `code` | 46 | 6 | — |
+| `outside_stack_arena` | 46 | 6 | — |
+| `sp` | 42 | 10 | — |
+| `storerepr` | 32 | 15 | 5 |
+| `valuerepr_tag` | 26 | 8 | 18 |
 
-**Every refutation traces to a missing clause, not to a fault in an arm.** The
-nine escaping stores are all `sd _, 8(sp)` — `sp`-relative, and safe as long as
-everything applied before them preserves `sp`. Nine summaries do not carry
-`sp_restore`, five of them on `hSBlock`'s path, and with `sp` free after one of
-those the model puts it above `SL_hi`. Establishing `sp_restore` for those loops
-closes the class.
+What is left is 12 verdicts blocked on the args-loop invariant at its recursive
+occurrence (the six call-class fields, which share one byte-identical query) and
+33 plain solver timeouts. The `UNKNOWN(summary-clause)` class, 54 verdicts at its
+peak, is empty.
 
-**Three refutations along the way were NOT real, and all three had the same
-shape.** A region bound stated with an addition on the side the solver controls
-is satisfiable by wraparound: `base + 32 <= A_hi` with `base + 32 = 1`;
-`sp + frame <= SL_hi` with the stack at the top of the address space. And the
-residual queries never asserted the layout invariant, only the obligations did,
-so the solver picked a seventeen-byte arena, `A_hi - 32` underflowed, and every
-containment hypothesis went vacuous — fifteen spurious refutations from that one
-omission. Each was found by reading a countermodel rather than trusting a
-verdict, and the rule that falls out is to state a region bound by subtraction on
-the constant side, never addition on the variable one.
+`N/A` is not a weaker VALID, it is a post that does not describe the span. Six
+spans are fragments: `hFn` is the shared closure-allocation tail, entered at
+`0x800033c4` with `a0` holding 16 (the malloc size) and left after the epilogue's
+`addi sp,sp,1088`, so "sp is restored" and "a0 points at a boxed Value" are both
+about a different span than the one being checked. Those report the shifted
+equality that IS proved — `VALID[sp+0x440]` — rather than a refutation.
+`valuerepr_tag` is further restricted to `eval_expr`'s region, the only one that
+boxes a `Value` at the caller's `a0`.
 
-**The 34 UNKNOWN are the args-loop invariant, and resolving the AST-kind dispatch
-closed most of what they were.** `loop_0x800031dc` writes `sp + 240 + 24n` and
-needs `n < 35`; the invariant is `0 <= a6 < a5 <= 32` — the `bne` at 0x80003250
-and `MAX_ARGS` at `c/src/interp.c:251` — stated SIGNED, because every comparison
-the machine makes there is signed. The driver holds it to being proved inductive
-at the summary's recursive occurrence AND discharged at every application site.
-With the encoder now stating which dispatch guard the pinned kind makes true,
-`hVar`, `hIAdd` and `hNeg` discharge instantly: the loop sits on an arm their
-kind excludes. What is left is the call class, where it is genuinely reachable.
+## What was wrong with the encoder, and how it was found
+
+Every one of the nine footprint refutations this document previously reported was
+an artefact. Each was found by reading a countermodel, never by trusting a
+verdict, and each is recorded in `experiments/observations.md`.
+
+* **A callee that never returns was summarised as a returning map.** `jal ra,
+  exit` became `callee_exit` applied at a return address that is never reached.
+  `sp_restore` is correctly refuted for `exit` — it has no epilogue — so every
+  `sp`-relative store the encoder then reflected had a free `sp`. On the `.fn`
+  arm that address is `0x80003e54`, mid-spill of a different arm: the `hFn` code
+  refutation. `neverReturns` walks the CFG with interprocedural call and tail
+  edges, every unknown resolving to "may return", and finds four of 167 targets.
+* **The entry headroom pin used `INV`'s own constant.** Every clause is guarded
+  by `INV` and instantiated after the prologue lowered `sp`, where `INV` then
+  failed by exactly the frame — so every clause was vacuous. That is the nine
+  `hS*` failures. Pinned at 7408, what `ExecEntry.stackBudget` carries; the step
+  needs `d < maxCallDepth`, which `ExecEntry` has no field for, so it is recorded
+  in `assumed.tsv` rather than passed off as derived.
+* **`ret` counted as an exit arrival anywhere.** "Exit" meant "left the span",
+  which coincides with "reached the stop" only when the stop is the return.
+  `hInitStore` stops at `interp_run`'s loop head, and two of its three arrivals
+  were returns whose epilogue had already restored `sp`.
+* **A span with no exit arrival answered the post about its ENTRY state**, and
+  the `ite` merge fell through to the last arrival for inputs no guard covered.
+  Both are silent sources of wrong verdicts; the first is a false VALID.
+* **`storerepr` never excluded the arena**, which `INV` permits below the stack,
+  so a heap write refuted the field whose job is to initialise the store.
+* **The state chain was emitted as array-equality atoms.** `defunise` makes them
+  macros: 138s to 10s. Not only speed — the miner drops any clause it cannot
+  close in `--timeout`, which is why the args loop appeared to lack
+  `stack_or_arena` when the clause was true all along.
+
+A `funcStarts` prologue filter added earlier was **reverted**: `0x80004790` is
+newlib's `malloc` tail-calling `_malloc_r(_impure_ptr, n)`, a real frameless
+entry, so `exit`'s region was right and the filter dropped 103 of 167 real
+entries — `eval_expr` among them — to fix a problem that did not exist.
+
+## What these verdicts do and do not say
+
+All five posts are frame properties or close to it. `code`,
+`outside_stack_arena` and `sp` say nothing was clobbered; `storerepr` is
+preservation. Only `valuerepr_tag` has functional content, and it is the weakest
+form: the kind word is *a* valid `ValueKind`, not the right one.
+
+That ceiling is structural. The summaries are uninterpreted `MState → MState`
+characterised by frame clauses, so `callee_eval_expr` has no clause saying what
+it COMPUTES, and frame properties are exactly the ones that survive
+summarisation. Getting "the `.add` arm leaves `Value.int (a+b)` at the sret
+buffer" needs a value clause tying an IH summary's result to the spec's `eval` —
+which the Lean recursor IH supplies and this layer can only assume and compose.
+The leaf arithmetic arms are where that pays first, since the arm does the
+arithmetic in registers and needs the callees only for operands. Frame is a
+prerequisite rather than a detour: a value post is stated AT an address, so
+without the frame it is refutable for reasons that have nothing to do with the
+arithmetic.
 
 ## The pipeline, per residual
 

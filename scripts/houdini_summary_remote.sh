@@ -66,7 +66,7 @@ echo "== run Houdini on $PRO at -j$JOBS --timeout $TIMEOUT with z3 4.15.4 (${*:-
 # foreground ssh hands the job a SIGHUP the moment the link drops (the Pro
 # dozing off Wi-Fi is enough).  That is how the previous run died after mining
 # without ever writing verdicts.tsv.  Detach it, then poll the log.
-ssh "$PRO" "cd $RDIR && rm -f /tmp/houdini.log /tmp/houdini.done && nohup zsh -lc 'export PATH=\$HOME/bin:\$PATH; z3 --version; time python3 scripts/houdini_summary.py experiments/smt/bmc -j$JOBS --timeout $TIMEOUT ${*:-}; echo \$? > /tmp/houdini.done' > /tmp/houdini.log 2>&1 < /dev/null & sleep 1"
+ssh "$PRO" "cd $RDIR && rm -f /tmp/houdini.log /tmp/houdini.done && nohup zsh -lc 'export PATH=\$HOME/bin:\$PATH; z3 --version; time python3 -u scripts/houdini_summary.py experiments/smt/bmc -j$JOBS --timeout $TIMEOUT ${*:-}; echo \$? > /tmp/houdini.done' > /tmp/houdini.log 2>&1 < /dev/null & sleep 1"
 sleep 5
 if ! ssh "$PRO" "pgrep -f houdini_summary.py > /dev/null" 2>/dev/null; then
   echo "ERROR: the remote job did not start. Remote log:" >&2
