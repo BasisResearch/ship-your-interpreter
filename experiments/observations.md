@@ -5509,19 +5509,26 @@ it, still stop and report instead.
   `base + 32 <= A_hi` (wraparound satisfies the latter and the solver takes it);
   and `INV` must bound the frame ABOVE `sp` too, or plain `sd rX, 0x418(sp)`
   spills escape.  `stack_or_arena` went 128 -> 195 -> 200 of 201.
-  (c) WHAT IS LEFT is one summary and an INDUCTION-VARIABLE invariant.
-  `loop_0x800031dc` (the argument-marshalling loop) stores at `sp + 240 + 24n`
-  and the 1088-byte frame needs `n < 35`.  The bound exists in the source —
-  `MAX_ARGS 32`, checked at `c/src/interp.c:251` before the loop — and encoding
-  it as a named precondition is NOT sufficient: it bounds the COUNT `a5` while
-  the address is built from the COUNTER `a6`.  What closes it is `a6 <= a5` at
-  the header, which the clause bank cannot express because every candidate there
-  relates a summary's ENTRY state to its EXIT state, and this is a bound on a
-  variable carried around the back-edge.  It alone blocks 33 of the 52 queries.
-  Adding an induction-variable clause family, parameterised over (register,
-  bound expression) and mined the same assume-guarantee way, is the next
-  concrete extension.  General lesson: a summary obligation starts at its header
-  with the entry state FREE, so any fact the caller established before it is
-  invisible; that is the same shape as the `s1 = sret` problem the residual
-  spans hit, and the same two cures apply (start earlier, or state the
-  precondition with its provenance).
+  (c) WHAT IS LEFT is one summary and one MECHANISM.  `loop_0x800031dc` (the
+  argument-marshalling loop) writes `sp + 240 + 24n` and the 1088-byte frame
+  needs `n < 35`.  Both halves of the bounding invariant are real and ENCODED —
+  `a6 < a5` from the `bne` back-edge at 0x80003250, `a5 <= 32` from MAX_ARGS
+  (`c/src/interp.c:251`) — and the driver holds an `IV_INVARIANT` to both
+  obligations at once: PROVED INDUCTIVE at the summary's own recursive
+  occurrence, and DISCHARGED at every application site in a residual query,
+  never merely assumed.  It fails the inductive step for a precise reason: the
+  counter is spilled to `16(sp)`, the recursive `eval_expr` runs, and the reload
+  reads a POST-CALL MERGE state, while the frame clause is ground-instantiated at
+  the callee application and does not propagate through the merge.
+  Instantiating the memory clauses at every store address was not enough.  Two
+  mechanisms fix it: propagate the frame clauses through merge states (or name
+  the post-call state so a clause attaches to it directly), and SLICE the
+  discharge query to the path reaching the loop header — a function-entry span
+  carries ~150 summaries and the discharge does not return at 400s.  All 50
+  remaining UNKNOWN verdicts are that budget, not a missing fact; the campaign
+  refutes no residual.
+  GENERAL LESSON worth keeping: a summary obligation starts at its header with
+  the entry state FREE, so any fact the caller established beforehand is
+  invisible there.  That is the same shape as the `s1 = sret` problem the
+  residual spans hit, and the same two cures apply — start the span earlier, or
+  state the precondition and hold it to being proved inductive AND discharged.

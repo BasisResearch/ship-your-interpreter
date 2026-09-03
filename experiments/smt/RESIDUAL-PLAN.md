@@ -115,57 +115,49 @@ solver timeout rather than a genuine countermodel).
 
 ## Where the 52 stand
 
-`bmc/verdicts.tsv`, five post conjuncts. Of the summaries, 192/201 carry
-`sp_restore`/`ra_restore`/`inv_pres`, 189 `s1_restore`, 181 `s0_restore`, and
-**200 of 201 carry `stack_or_arena`** — the clause the footprint composition
-needs.
+`bmc/verdicts.tsv`. Of the summaries, 192/201 carry `sp_restore`/`ra_restore`/
+`inv_pres`, 189 `s1_restore`, 181 `s0_restore`, 133 `above_sp`, and **200 of 201
+carry `stack_or_arena`** — the clause the footprint composition needs.
 
-**`StoreRepr`/`Arena.contains` is encoded.** It is the entry hypothesis every
-residual carries (`EvalEntry.store`), so assuming it is faithful to the statement
-being checked rather than a shortcut around it; what the check still has to
-establish is that the offset from such a base stays inside the object, which the
-machine text does decide. `heap_hyp` instantiates it at each of the 481
-pointer-based store sites out of 10054, and any verdict resting on it is tagged
-`VALID[StoreRepr@n]` with the site count. Two things had to be right for it to
-land: the containment bound is `base ≤ A_hi − 32`, since `base + 32 ≤ A_hi` is
-satisfiable by wraparound and the solver takes it; and `INV` has to bound the
-frame ABOVE `sp` as well as below, or ordinary `sd rX, 0x418(sp)` spills escape
-the stack window. That took the clause from 128 summaries to 195, and the two
-register-indirect calls (the `Value.native` dispatches for `print`/`println`/
-`assert`, `NativePrintSpec` in the proof) took it to 200 once classified as the
-callee contracts they are rather than left as empty clause sets.
+Three entry facts got it there, and `bmc/OBSTRUCTION.md` has the detail.
+`StoreRepr`/`Arena.contains` is the hypothesis every residual already carries
+(`EvalEntry.store`), so encoding it is faithful rather than a shortcut; it is
+instantiated at each of the 481 pointer-based store sites out of 10054, and any
+verdict resting on it is tagged with the count. The two `Value.native`
+dispatches are the `NativePrintSpec` callee contracts. `above_sp` is the ABI fact
+that a callee writes below its entry `sp`, mined rather than assumed. Two of the
+three needed a countermodel to state correctly: containment is `base <= A_hi -
+32`, never `base + 32 <= A_hi`, which wraparound satisfies; and `INV` has to
+bound the frame ABOVE `sp` too, or plain `sd rX, 0x418(sp)` spills escape.
 
-**No footprint refutations.** An earlier configuration reported ten; every one
-was an artifact of starting the span at the ARM rather than the function entry,
-which leaves what the prologue established unconstrained — `s1 = sret` above all,
-since every arm stores the boxed result through it, so the solver put that store
-inside the code image. Starting at the function entry with the AST kind pinned
-derives those facts instead, the same move `blockA_k` makes in the proof, and
-they vanish. The two REFUTED that survive are the posts being wrong for those
-spans, not the spans: `hEpilogueSpill` is a frame fragment, so `sp` moves across
-it and it boxes nothing; `hInitStore` is the main-init image, not an arm.
+**No footprint refutations, on any span.** An earlier configuration reported ten;
+every one was an artifact of starting the span at the ARM rather than the
+function entry, which leaves what the prologue established unconstrained —
+`s1 = sret` above all, since every arm stores the boxed result through it.
+Starting at the function entry with the AST kind pinned derives those facts, the
+same move `blockA_k` makes in the proof, and they vanish. The two REFUTED that
+survive are the posts being wrong for those spans, not the spans:
+`hEpilogueSpill` is a frame fragment, so `sp` moves across it and it boxes
+nothing; `hInitStore` is the main-init image, not an arm.
 
-**One induction-variable invariant is left, and it is 33 of the 52.**
-`loop_0x800031dc`, the argument-marshalling loop in the EX_CALL arm, is the sole
-summary without `stack_or_arena` and the sole `summary-clause` blocker for 33
-queries. Its seventh store lands at `sp + 240 + 24n`, slot `n` of the
-outgoing-argument array, and the 1088-byte frame needs `n < 35`.
+**The 50 remaining UNKNOWNs are solver budget, not missing facts.** 33 are
+`UNKNOWN(iv-undischarged)` and 17 `UNKNOWN(footprint)`, and both are timeouts on
+the function-entry spans: the args-loop invariant discharge does not return at
+400 s. Nothing in the campaign says a residual is false.
 
-The bound is in the source, and encoding it was not enough. `MAX_ARGS` is 32 and
-`c/src/interp.c:251` checks `argc > MAX_ARGS` before the loop; it is encoded as a
-named precondition with its provenance, and every residual query discharges it
-for real, since those spans start at `eval_expr`'s entry. It still does not
-close the gap, because it bounds the COUNT while the store address is built from
-the COUNTER. What closes it is `a6 <= a5` at the header, established as `a6 = 0`
-on entry and preserved across the `bne` back-edge. The clause bank cannot express
-that: every candidate there relates a summary's entry state to its exit state,
-and this is a bound on a variable carried around the back-edge. An
-induction-variable clause family, parameterised over (register, bound
-expression) and mined the same assume-guarantee way, is the concrete next
-extension. The witness and the disassembled block are in `bmc/OBSTRUCTION.md`.
-
-A further 17 verdicts are `UNKNOWN(footprint)`, which is the solver timing out on
-the function-entry spans rather than a missing fact. Those want a budget.
+**One summary and one mechanism are left.** `loop_0x800031dc`, the
+argument-marshalling loop, writes `sp + 240 + 24n` and needs `n < 35`. The
+invariant that bounds it is `a6 < a5 <= 32` — the `bne` back-edge with `a6 = 0`
+on entry, and `MAX_ARGS` from `c/src/interp.c:251`. It is stated as an
+`IV_INVARIANT`, which the driver holds to both obligations at once: proved
+inductive at the summary's recursive occurrence, and discharged at every
+application site. It fails the inductive step for a precise reason. The counter
+is spilled to `16(sp)`, `eval_expr` runs, and the counter is reloaded, but the
+reload reads a post-call MERGE state; the frame clause is ground-instantiated at
+the callee application and does not propagate through the merge. Instantiating
+the memory clauses at every store address was not enough. Propagating them
+through merge states is the next step, and slicing the discharge query to the
+path reaching the loop header is what brings the 400 s back under budget.
 
 ## The pipeline, per residual
 

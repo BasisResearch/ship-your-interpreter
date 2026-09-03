@@ -66,6 +66,13 @@ CLAUSES = [
     ("stack_or_arena", guard("(=> (and (or (bvult QA SL_lo) (bvuge QA SL_hi)) "
                              "(or (bvult QA A_lo) (bvuge QA A_hi))) "
                              "(= (select (mm ({f} {S})) QA) (select (mm {S}) QA)))")),
+    # the ABI fact: a callee writes its OWN frame, below its entry `sp`, plus the
+    # heap.  Nothing at or above the entry `sp` and outside the arena is touched,
+    # so the caller's spill slots survive the call.  True of functions, false of a
+    # loop inside a frame (whose stores are at `sp + k`), and Houdini sorts them.
+    ("above_sp", guard(f"(=> (and (bvuge QA (select (rr {{S}}) {_SP})) "
+                       "(or (bvult QA A_lo) (bvuge QA A_hi))) "
+                       "(= (select (mm ({f} {S})) QA) (select (mm {S}) QA)))")),
 ]
 
 _G = "(assert (INV S0))\n"
@@ -78,6 +85,9 @@ NEG = {
     "stack_or_arena": _G + "(assert (or (bvult QA SL_lo) (bvuge QA SL_hi)))\n"
                            "(assert (or (bvult QA A_lo) (bvuge QA A_hi)))\n"
                            "(assert (not (= (select (mm fbody) QA) (select (mm S0) QA))))",
+    "above_sp": _G + f"(assert (bvuge QA (select (rr S0) {_SP})))\n"
+                     "(assert (or (bvult QA A_lo) (bvuge QA A_hi)))\n"
+                     "(assert (not (= (select (mm fbody) QA) (select (mm S0) QA))))",
 }
 
 APP_RE = re.compile(r"\((callee_\d+|loop_\d+|icall_\d+|idisp_\d+)(_ih)?\s+([A-Za-z][A-Za-z0-9_]*)\)")
@@ -213,36 +223,61 @@ def heap_hyp(writes):
 
 
 # --------------------------------------------------------- summary preconditions
-# A summary's obligation starts at its header with the entry state free, so any
-# fact the CALLER established before entering it is invisible there.  Where such
-# a fact is what makes the clause true, it is stated here as an explicit named
-# precondition, with the source line that establishes it and the site that
-# discharges it.  A residual query reaching the summary discharges it for real:
-# the queries start at the function entry, so the check is inside the span.
+# A summary's obligation starts at its header with the entry state FREE, so any
+# fact the caller established before entering it is invisible there.  That is the
+# same shape as the `s1 = sret` problem the residual spans hit, and it has the
+# same two cures: start the span earlier, or state the precondition.
 #
-# Each entry is (SMT assertion over the obligation's entry state S0, provenance).
-PRECONDITIONS = {
-    # `loop_0x800031dc` is the argument-marshalling loop of the EX_CALL arm.  It
-    # writes slot `n` of the outgoing-argument array at `sp + 240 + 24n`, and the
-    # frame is 1088 bytes, so it needs `n < 35`.  The bound is `MAX_ARGS`:
+# Stating one is only honest if it is both PROVED INDUCTIVE and DISCHARGED:
+#
+#   * inductive — the obligation additionally checks `IV(S0) -> IV(body-once)`
+#     at the summary's own recursive occurrence, so assuming it at the header is
+#     assuming something the loop preserves;
+#   * discharged — every residual query that APPLIES the summary must prove
+#     `IV(arg)` at the application site.  The queries start at the function
+#     entry, so the guard that establishes it is inside the span.
+#
+# A summary whose IV a query cannot discharge is reported, never waved through.
+IV_INVARIANTS = {
+    # `loop_0x800031dc`, the argument-marshalling loop of the EX_CALL arm, writes
+    # slot `n` of the outgoing-argument array at `sp + 240 + 24n`; the 1088-byte
+    # frame needs `n < 35`.  Two facts give it:
     #
-    #     c/src/interp.c:8    #define MAX_ARGS 32
-    #     c/src/interp.c:251  if (argc > MAX_ARGS) runtime_error(...);
-    #     c/src/interp.c:253  Value args[MAX_ARGS];
+    #   a6 < a5   the counter is below the count (a6 = 0 on entry, a6++ each
+    #             iteration, `bne a6,a5` at 0x80003250 closes the loop)
+    #   a5 <= 32  MAX_ARGS — c/src/interp.c:8 `#define MAX_ARGS 32`, checked at
+    #             c/src/interp.c:251 `if (argc > MAX_ARGS) runtime_error(...)`
+    #             and at c/src/interp.c:253 `Value args[MAX_ARGS]`
     #
-    # The check is emitted BEFORE the loop header, so the loop's own obligation
-    # cannot see it; every residual query can, since those start at `eval_expr`'s
-    # entry.  The count is spilled at `24(sp)` and reloaded each iteration.
+    # a5 = x15, a6 = x16.
     "loop_2147496412": (
-        "(assert (bvule (ld8 (mm S0) (bvadd (select (rr S0) #x0000000000000002) "
-        "#x0000000000000018)) #x0000000000000020))",
-        "MAX_ARGS: c/src/interp.c:251 `if (argc > MAX_ARGS) runtime_error(...)`, "
-        "checked before the loop header, discharged inside every residual span. "
-        "NECESSARY BUT NOT SUFFICIENT on its own: it bounds the COUNT, and the "
-        "store address is built from the COUNTER, so it only bites alongside the "
-        "induction-variable invariant `a6 <= count` that the clause bank cannot "
-        "yet express."),
+        "(and (bvult (select (rr {S}) #x0000000000000010) "
+        "(select (rr {S}) #x000000000000000f)) "
+        "(bvule (select (rr {S}) #x000000000000000f) #x0000000000000020))",
+        "counter < count (0x80003250 `bne a6,a5`) and count <= MAX_ARGS "
+        "(c/src/interp.c:251)"),
 }
+
+
+def iv_assume(f, state="S0"):
+    """The summary's own invariant, at a named state."""
+    iv = IV_INVARIANTS.get(f)
+    return f"; IV: {iv[1]}\n(assert {iv[0].format(S=state)})\n" if iv else ""
+
+
+def iv_discharge(text, cset, timeout, base, pre):
+    """Every application of an IV-carrying summary must PROVE the invariant at
+    its argument.  Returns None if all discharge, else the failing site."""
+    for m in APP_RE.finditer(text):
+        f, arg = m.group(1), m.group(3)
+        iv = IV_INVARIANTS.get(f)
+        if iv is None:
+            continue
+        q = (base + "\n" + pre + "\n(assert (not " + iv[0].format(S=arg) + "))\n"
+             "(check-sat)\n")
+        if z3(q, timeout) != "unsat":
+            return f"{f}@{arg}"
+    return None
 
 
 def load_writes(path):
@@ -265,9 +300,15 @@ def hits_QA(writes):
     return "(assert (or false " + " ".join(ds) + "))\n" if ds else "(assert false)\n"
 
 
-def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=True):
-    """The three-part check.  Returns "VALID" / "REFUTED" / "UNKNOWN(...)"."""
-    missing = sorted({f for f in applied if "stack_or_arena" not in cset.get(f, [])})
+def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=True,
+                    clause="stack_or_arena", side=True):
+    """The three-part check.  Returns "VALID" / "REFUTED" / "UNKNOWN(...)".
+
+    `clause` is the summary clause the composition goes through, and `side` says
+    whether the address condition must be shown to imply "outside the stack and
+    the arena" (true for the region posts, false for `above_sp`, whose addresses
+    are deliberately inside the stack)."""
+    missing = sorted({f for f in applied if clause not in cset.get(f, [])})
     if missing:
         return "UNKNOWN(summary-clause:" + ",".join(m[:22] for m in missing) + ")"
     hh, nheap = heap_hyp(writes) if heap else ("", 0)
@@ -276,14 +317,27 @@ def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=Tru
         head += QA_DECL
     head += cond
     # 1. does the condition imply "outside stack and arena"?
-    side = head + "(assert (not (and (or (bvult QA SL_lo) (bvuge QA SL_hi)) "
-    side += "(or (bvult QA A_lo) (bvuge QA A_hi)))))\n(check-sat)\n"
-    if z3(side, timeout) != "unsat":
-        return "UNKNOWN(cond-not-outside)"
+    if side:
+        sq = head + "(assert (not (and (or (bvult QA SL_lo) (bvuge QA SL_hi)) "
+        sq += "(or (bvult QA A_lo) (bvuge QA A_hi)))))\n(check-sat)\n"
+        if z3(sq, timeout) != "unsat":
+            return "UNKNOWN(cond-not-outside)"
     # 2. can a direct write land on it?
     v = z3(head + hits_QA(writes) + "(check-sat)\n", timeout)
     tag = f"[StoreRepr@{nheap}]" if nheap else ""
     return {"unsat": "VALID" + tag, "sat": "REFUTED"}.get(v, "UNKNOWN(footprint)")
+
+
+def dedup_addrs(writes, cap=24):
+    """The distinct store addresses of a span, capped: instantiating a memory
+    clause at each one is what lets a spill-then-reload across a call resolve."""
+    out = []
+    for _, _, a in writes:
+        if a not in out:
+            out.append(a)
+        if len(out) >= cap:
+            break
+    return out
 
 
 def applied_of(text):
@@ -291,23 +345,38 @@ def applied_of(text):
     return {m[0] for m in APP_RE.findall(text)}
 
 
-def assume_block(text, cset, self_sym=None):
+MEM_CLAUSES = ("stack_or_arena", "above_sp")
+
+
+def assume_block(text, cset, self_sym=None, addrs=()):
     """Ground clause instances at every application site the TEXT actually has.
 
     `text` is the obligation/query body; the encoder names each intermediate state
     at the top level, so `(callee_X i57)` tells us both the summary and the exact
-    state to instantiate at.  A summary applied nowhere contributes nothing."""
+    state to instantiate at.  A summary applied nowhere contributes nothing.
+
+    The memory clauses are additionally instantiated at every ADDRESS the span
+    stores to, not only at `QA`.  Without that they constrain a single address and
+    cannot justify a read-back: the args loop spills its counter to `16(sp)`,
+    calls `eval_expr`, and reloads it, and with the clause only at `QA` the solver
+    is free to say the reload returned something else."""
     out = [QA_DECL.rstrip()]
     seen = set()
+    sites = []
     for m in APP_RE.finditer(text):
         base, ih, arg = m.group(1), m.group(2), m.group(3)
         name = base + (ih or "")
-        key = (name, arg)
-        if key in seen:
+        if (name, arg) in seen:
             continue
-        seen.add(key)
+        seen.add((name, arg))
+        sites.append((base, name, arg))
         for c in cset.get(base, []):
             out.append(CLAUSE_TEXT[c].format(f=name, S=arg))
+    for a in addrs:
+        for base, name, arg in sites:
+            for c in cset.get(base, []):
+                if c in MEM_CLAUSES:
+                    out.append(CLAUSE_TEXT[c].format(f=name, S=arg).replace("QA", a))
     return "\n".join(out)
 
 
@@ -387,18 +456,33 @@ def mine(d, syms, timeout, jobs, rounds):
         def run(t):
             f, c = t
             body = bodies[f]
-            if c == "stack_or_arena":
+            if c in ("stack_or_arena", "above_sp"):
                 # FOOTPRINT route: BV arithmetic over the emitted store set, with
                 # the `StoreRepr`/`Arena.contains` entry hypothesis at the
                 # pointer-based sites.  Asking the array theory for this instead
                 # bit-blasts and refutes on wraparound.
-                pc = PRECONDITIONS.get(f)
+                addrs = dedup_addrs(wsets.get(f, []))
                 b2 = body.replace("; @@ASSUME@@",
-                                  assume_block(body, cset, self_sym=f)
-                                  + ("\n; precondition: " + pc[1] + "\n" + pc[0] if pc else "")) \
+                                  assume_block(body, cset, self_sym=f, addrs=addrs)
+                                  + "\n" + iv_assume(f)) \
                          .replace("; @@GOAL@@", "")
-                v = footprint_check(b2, "(assert (INV S0))\n" + OUTSIDE,
-                                    wsets.get(f, []), applied_of(body), cset, timeout)
+                if f in IV_INVARIANTS:
+                    # the IV is assumed at the header, so it must be PRESERVED at
+                    # the recursive occurrence, or assuming it is assuming the
+                    # conclusion
+                    iv = IV_INVARIANTS[f][0]
+                    for m in re.finditer(re.escape(f) + r"_ih\s+([A-Za-z][A-Za-z0-9_]*)\)", body):
+                        q = (b2 + "\n(assert (INV S0))\n(assert (not "
+                             + iv.format(S=m.group(1)) + "))\n(check-sat)\n")
+                        if z3(q, timeout) != "unsat":
+                            return (f, c, "IV-NOT-INDUCTIVE@" + m.group(1))
+                cond = ("(assert (INV S0))\n" + OUTSIDE if c == "stack_or_arena" else
+                        "(assert (INV S0))\n"
+                        f"(assert (bvuge QA (select (rr S0) {_SP})))\n"
+                        "(assert (or (bvult QA A_lo) (bvuge QA A_hi)))\n")
+                v = footprint_check(b2, cond, wsets.get(f, []), applied_of(body),
+                                    cset, timeout, clause=c,
+                                    side=(c == "stack_or_arena"))
                 return (f, c, "unsat" if v.startswith("VALID") else
                               "sat" if v == "REFUTED" else v)
             # assume ONLY the summaries this obligation's body actually applies —
@@ -515,6 +599,9 @@ def main():
             if pk in FOOTPRINT_POSTS:
                 base = qs[f].replace("; @@ASSUME@@", assume_block(qs[f], cset)) \
                             .replace("; @@POST@@", "")
+                bad = iv_discharge(qs[f], cset, timeout, base, pre)
+                if bad:
+                    return (f, pk, "UNKNOWN(iv-undischarged:" + bad + ")")
                 return (f, pk, footprint_check(base, FOOTPRINT_POSTS[pk],
                                                wsets.get(f, []), applied_of(qs[f]),
                                                cset, timeout, pre=pre))

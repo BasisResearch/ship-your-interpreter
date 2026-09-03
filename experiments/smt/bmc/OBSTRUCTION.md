@@ -1,61 +1,77 @@
-# What is left, machine-checked
+# What is left
+
+## The clause set
 
 `stack_or_arena` — "every store this summary makes lands in the stack window or
-the heap arena" — is the clause the whole footprint family composes through. It
-survives for **200 of 201 summaries**.
+the heap arena" — is the clause the footprint family composes through. It
+survives for **200 of 201 summaries**, after three things were encoded:
 
-## The one summary that fails, and why
+* **`StoreRepr` / `Arena.contains`**, the entry hypothesis every residual carries
+  (`EvalEntry.store`), instantiated at each of the 481 pointer-based store sites
+  out of 10054 (`heap_hyp`). Verdicts resting on it are tagged
+  `VALID[StoreRepr@n]` with the site count. 128 → 195.
+* **The `Value.native` dispatches** (`print`/`println`/`assert`) as the callee
+  contracts they are — `NativePrintSpec` in the proof — rather than empty clause
+  sets poisoning every query that reaches them. 195 → 200.
+* **`above_sp`**, the ABI fact that a callee writes below its entry `sp`, so the
+  caller's spill slots survive a call. Mined, not assumed: true of 133
+  summaries, correctly false of a loop inside a frame whose stores are at
+  `sp + k`.
 
-`loop_0x800031dc` is the argument-marshalling loop of `eval_expr`'s EX_CALL arm.
-Seven stores; six are fine. The seventh:
+Two of those needed a countermodel to get right. Containment must be
+`base <= A_hi - 32`, since `base + 32 <= A_hi` is satisfiable by wraparound and
+the solver takes it. And `INV` must bound the frame ABOVE `sp` as well as below,
+or an ordinary `sd rX, 0x418(sp)` spill escapes the stack window.
 
-    (bvadd (select (rr i23) #x000000000000000e) #xfffffffffffffd00)     ; sd _, -768(a4)
+## The one summary that fails
 
-Read the block and that is `sp + 240 + 24n`, slot `n` of the outgoing-argument
-array. The frame is 1088 bytes, so it needs `n < 35`:
+`loop_0x800031dc`, the argument-marshalling loop of the EX_CALL arm. It writes
+slot `n` of the outgoing-argument array at `sp + 240 + 24n`, and the 1088-byte
+frame needs `n < 35`:
 
     800031dc  ld    a2,16(s0)        ; the args list        <- loop header
     800031e0  addiw a1,a6,0          ; n, the counter
-    800031e4  slli  a4,a6,3
-    800031ec  slli  a4,a1,1
-    800031f0  add   a4,a4,a1         ; 3n
     800031f8  slli  a4,a4,3          ; 24n
     80003200  addi  a5,a4,976
     80003204  addi  a4,sp,32
     80003208  add   a4,a5,a4         ; sp + 1008 + 24n
-    ...
+    80003214  sd    a6,16(sp)        ; spill the counter
+    80003220  jal   ra,0x80003164    ; eval_expr (recursive)
+    8000322c  ld    a6,16(sp)        ; reload it
     80003234  sd    a2,-768(a4)      ; sp + 240 + 24n       <- the escaping store
-    8000323c  addi  a6,a6,1          ; n++
-    80003250  bne   a6,a5,0x800031dc ; a5 = the argument count
+    8000323c  addi  a6,a6,1
+    80003250  bne   a6,a5,0x800031dc
 
-## The bound exists in the source, and it is still not enough
+The invariant that bounds it is `a6 < a5 <= 32`, and both halves are real:
+`a6 < a5` from the `bne` back-edge with `a6 = 0` on entry, and `a5 <= 32` from
+`MAX_ARGS` (`c/src/interp.c:8`, checked at line 251, sized at line 253). It is
+stated as an `IV_INVARIANT`, which the driver holds to both obligations at once:
+PROVED INDUCTIVE at the summary's own recursive occurrence, and DISCHARGED at
+every application site in a residual query.
 
-    c/src/interp.c:8    #define MAX_ARGS 32
-    c/src/interp.c:251  if (argc > MAX_ARGS) runtime_error(in, e->line, "too many arguments (max 32)", 0, 0);
-    c/src/interp.c:253  Value args[MAX_ARGS];
+It fails the inductive step, and the reason is exact. The counter is spilled to
+`16(sp)`, the recursive `eval_expr` runs, and the counter is reloaded — but the
+reload reads a post-call MERGE state. The frame clause is ground-instantiated at
+the callee application, not propagated through the merge, so the solver is free
+to say the reload returned something else. Instantiating the memory clauses at
+every store address (`dedup_addrs`) was not enough; the merge is the gap.
 
-That check is emitted BEFORE the loop header, so the loop's own obligation cannot
-see it (every residual query can, since those start at `eval_expr`'s entry). It
-is encoded as a named precondition in `scripts/houdini_summary.py`
-(`PRECONDITIONS`), and it does not close the gap on its own: it bounds the COUNT
-`a5`, while the store address is built from the COUNTER `a6`.
+## What the verdicts are limited by
 
-What closes it is the induction-variable invariant `a6 <= a5` at the header,
-established as `a6 = 0` on entry and preserved by `a6 <= a5` plus the `bne`
-back-edge. The clause bank cannot express it: every candidate there is a relation
-between a summary's entry and exit state, and this is a bound on a variable
-carried around the back-edge. Adding an induction-variable clause family,
-parameterised over (register, bound expression) and mined the same
-assume-guarantee way, is the concrete next extension.
+Of the 52: 2 VALID, 33 `UNKNOWN(iv-undischarged)`, 17 `UNKNOWN(footprint)`.
 
-## What it costs
+Both UNKNOWN classes are **solver budget, not missing facts**. The IV discharge
+on a function-entry span does not return at 400 s, and the footprint queries time
+out on the same spans. Neither is a refutation: nothing in the campaign says the
+residuals are false, and the footprint family has zero refutations.
 
-That single summary is the sole `summary-clause` blocker for **33 of the 52**
-residual queries (`verdicts.tsv`). A further 17 are `UNKNOWN(footprint)`, the
-solver timing out on the function-entry spans rather than a missing fact; those
-want a budget.
+## The two next steps, in order
 
-The ledger for the footprint family: encoding exact and complete (52/52 spans),
-`StoreRepr`/`Arena.contains` encoded and instantiated at all 481 pointer-based
-store sites, 200/201 summaries carrying the clause, and one induction-variable
-invariant between here and a verdict on the class.
+1. **Propagate the frame clauses through merge states.** A read after a call
+   reads an `ite` over arrival states, and the ground instances only reach the
+   callee application. Instantiating at merge points, or naming the post-call
+   state so the clause attaches to it directly, closes the args-loop IV.
+2. **Shrink the discharge query.** A function-entry span carries ~150 summaries
+   because the prologue drags them in; the IV discharge only needs the path to
+   the loop header. Slicing the query to that path is what brings 400 s back
+   under budget.
