@@ -209,6 +209,21 @@ def findRet (img : Nat → Option (BitVec 8)) (entry : Nat) (maxLen : Nat := 409
     pc := pc + 4; n := n + 1
   return pc
 
+/-- Find a loop's back-edge: from head `t`, the first terminator whose target is
+`≤ t` (the branch/jump that closes the loop).  Returns that terminator's PC. -/
+def findBackEdge (img : Nat → Option (BitVec 8)) (t : Nat) (maxLen : Nat := 4096) : Nat := Id.run do
+  let mut pc := t + 4
+  let mut n := 0
+  while n < maxLen do
+    let w := wordAt img pc
+    if isTerm w then
+      match decodeTerm pc w with
+      | Term.jal _ tgt => if tgt ≤ t then return pc
+      | Term.branch tgt => if tgt ≤ t then return pc
+      | _ => pure ()
+    pc := pc + 4; n := n + 1
+  return pc
+
 /-- Emit the fold/unfold axiom for every summary symbol, recursively.  A
 `callee_<t>` axiom is the callee's OWN `reflectStepsMulti` (recursion bottoms out
 at leaves); a symbol seen again is genuinely RECURSIVE ⇒ left as an uninterpreted
@@ -232,8 +247,18 @@ partial def emitAxioms (img : Nat → Option (BitVec 8)) (regs : List Nat)
         -- axiom: ∀ mem, s(mem) = body[mem]   (declarations emitted separately)
         let ax := s!"(assert (forall ((mem (Array Int (_ BitVec 8)))) (= ({s} mem) {body})))"
         emitAxioms img regs (subs ++ rest) visited (acc ++ [ax])
+      else if s.startsWith "loop_" then
+        -- loop: recursive memory effect.  body = [t, back-edge); one iteration's
+        -- write-log, then recurse until the exit test `loopcond_t` holds.  This is
+        -- the faithful define-fun-rec (Z3 datatype recursion); the mined invariant
+        -- is a DECIDABILITY aid, not part of the (gap-free) encoding.
+        let t := (s.drop 5).toNat!
+        let back := findBackEdge img t
+        let (body, subs) := reflectStepsMulti img regs t back
+        let ax := s!"(assert (forall ((mem (Array Int (_ BitVec 8)))) (= ({s} mem) (ite (loopcond_{t} mem) mem ({s} {body})))))"
+        emitAxioms img regs (subs ++ rest) visited (acc ++ [ax])
       else
-        -- loop_/branch_: invariant-bearing summary; no fold axiom (mined separately)
+        -- branch: two-way join; the mem-effect is one arm's write-log or the other
         emitAxioms img regs rest visited acc
 
 /-- Assemble the COMPLETE reflected `Steps` SMT for span `[lo,hi)`: register
@@ -246,9 +271,13 @@ def reflectFullSmt (regs : List Nat) (lo hi : Nat) : IO String := do
   let (memExit, summaries) := reflectStepsMulti img regs lo hi
   let (axs, visited) := emitAxioms img regs summaries [] []
   let decls := String.intercalate "\n" (regs.map (fun r => s!"(declare-fun {regName r} () Int)"))
-  -- ALL summary symbols declared first (any body may reference a later one)
-  let sumDecls := String.intercalate "\n" (visited.map (fun s =>
-    s!"(declare-fun {s} ((Array Int (_ BitVec 8))) (Array Int (_ BitVec 8)))"))
+  -- ALL summary symbols declared first (any body may reference a later one);
+  -- each loop_<t> also needs its exit-test predicate loopcond_<t>.
+  let sumDecls := String.intercalate "\n" (visited.flatMap (fun s =>
+    let f := s!"(declare-fun {s} ((Array Int (_ BitVec 8))) (Array Int (_ BitVec 8)))"
+    if s.startsWith "loop_" then
+      [f, s!"(declare-fun loopcond_{s.drop 5} ((Array Int (_ BitVec 8))) Bool)"]
+    else [f]))
   let axBlock := String.intercalate "\n" axs
   return s!"(set-logic ALL)\n; === reflected Steps for span [{lo},{hi}) ===\n{decls}\n(declare-fun mem () (Array Int (_ BitVec 8)))\n{sumDecls}\n{axBlock}\n(define-fun mem_exit () (Array Int (_ BitVec 8)) {memExit})\n"
 
