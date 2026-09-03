@@ -126,6 +126,9 @@ def emit_int_row(A, r):
     A(f"    (hEvalE : EvalE st d env (.binary .{op} el er) st'' ({val}))")
     A("    (hSizeF : st'.store.frames.size = st''.store.frames.size)")
     A("    (hSizeC : st'.store.closures.size = st''.store.closures.size)")
+    A("    -- ITEM ZERO B1: the post-LEFT store-bodies invariant (threaded to")
+    A("    -- `blockA_binaryArm_budgeted` / the sim core's RIGHT budget).")
+    A("    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)")
     A("    (hPost : ∀ (gpre : (R : Register) → Option (RegisterType R))")
     A("        (v8 v9 v18 v19 : BitVec 64),")
     A("      (∀ c' : Vsa.Machine.Config,")
@@ -144,8 +147,9 @@ def emit_int_row(A, r):
     A(f"        st'' ({val}) sp r sret m0) := by")
     A("  intro c hc")
     A("  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,")
-    A("    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩ :=")
-    A(f"    blockA_binaryArm g N A SL φf φc st d env .{op} el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc")
+    A("    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,")
+    A("    hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=")
+    A(f"    blockA_binaryArm_budgeted g N A SL φf φc st st' d env .{op} el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc")
     A(VLSURV)
     A("  obtain ⟨hResid, hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩ := hPost gpre' v8' v9' v18' v19'")
     A("  obtain ⟨c2, hs2, hExit⟩ :=")
@@ -153,7 +157,8 @@ def emit_int_row(A, r):
     A("      sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0")
     A(f"      {r['guard_args']}hIHl hIHr hEvalE hSizeF hSizeC")
     A("      c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,")
-    A("        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt, hResid,")
+    A("        hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,")
+    A("        hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,")
     A("        hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩")
     A("  exact ⟨c2, hs1.trans hs2, hExit⟩")
     A("")
@@ -173,6 +178,9 @@ def emit_eq_row(A, op, val, link, jalPC, jImm, simD):
     A(f"    (hEvalE : EvalE st d env (.binary .{op} el er) st'' ({val}))")
     A("    (hSizeF : st'.store.frames.size = st''.store.frames.size)")
     A("    (hSizeC : st'.store.closures.size = st''.store.closures.size)")
+    A("    -- ITEM ZERO B1: the post-LEFT store-bodies invariant (threaded to")
+    A("    -- `blockA_binaryArm_budgeted` / the sim core's RIGHT budget).")
+    A("    (hstoreBodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)")
     A("    (hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),")
     A("      ValueRepr mm N φ (sp.toNat - 968) vl →")
     A("      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →")
@@ -191,14 +199,16 @@ def emit_eq_row(A, op, val, link, jalPC, jImm, simD):
     A(f"        st'' ({val}) sp r sret m0) := by")
     A("  intro c hc")
     A("  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,")
-    A("    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩ :=")
-    A(f"    blockA_binaryArm g N A SL φf φc st d env .{op} el er sp r sret aEnv aExpr aLOp aROp m0 hX c hc")
+    A("    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,")
+    A("    hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=")
+    A(f"    blockA_binaryArm_budgeted g N A SL φf φc st st' d env .{op} el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc")
     A("  obtain ⟨c2, hs2, hExit⟩ :=")
     A(f"    {simD} g gpre' g N A SL φf φc st st' st'' d env el er vl vr")
     A("      sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' w19 c1.σ.sailOutput m0")
     A("      hIHl hIHr hEvalE hSizeF hSizeC hVlSurv (hResid gpre' v8' v9' v18' v19')")
     A("      c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,")
-    A("        hpayL, hexprL, hpayR, hexprR, hMentPop, hMemExt⟩")
+    A("        hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,")
+    A("        hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩")
     A("  exact ⟨c2, hs1.trans hs2, hExit⟩")
     A("")
 
@@ -247,6 +257,9 @@ def BinIntCellResid
     (sp r sret aExpr : BitVec 64) (m0 : Mem) : Prop :=
   st'.store.frames.size = st''.store.frames.size ∧
   st'.store.closures.size = st''.store.closures.size ∧
+  -- ITEM ZERO B1: the post-LEFT store-bodies invariant (spec-side
+  -- preservation residual for the RIGHT sub-call's budget).
+  Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget ∧
   ∃ (aLOp aROp Wl : BitVec 64),
     BinArmExtras g N A SL opTok el er sp r sret aExpr aLOp aROp m0 ∧
     (∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
@@ -271,6 +284,9 @@ def BinEqCellResid
     (sp r sret aExpr : BitVec 64) (m0 : Mem) : Prop :=
   st'.store.frames.size = st''.store.frames.size ∧
   st'.store.closures.size = st''.store.closures.size ∧
+  -- ITEM ZERO B1: the post-LEFT store-bodies invariant (spec-side
+  -- preservation residual for the RIGHT sub-call's budget).
+  Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget ∧
   ∃ (aLOp aROp w19 : BitVec 64),
     BinArmExtras g N A SL opTok el er sp r sret aExpr aLOp aROp m0 ∧
     (∀ (φ : Addr → Nat) (mm mm' : Mem),
@@ -285,39 +301,64 @@ def BinEqCellResid
       Vsa.Sim.EqResid op gpre g N A SL φf φc st' st'' sp r sret aExpr v8 v9 v18 v19 w19 vl vr
         link jalPC jImm c2.σ.sailOutput m0 c2)
 
+/-- **Entry-guarded int cell** — the wave-49 B2-carry.
+
+The BARE `∀ …, BinIntCellResid …` statement is FALSE: at `m0 := ∅` the `∃`-body's
+`BinArmExtras.slot6` demands the EX_BINARY jump-table word `KindSlotPinned 6
+0x800034e8 m0`, which the empty memory does not carry — 11 kernel refutations in
+`experiments/fleet/obstructions/RefutBatteryCur.lean`.  The cure is the one the 6
+unary/logic siblings (`NegResid`/`NotResid`/`AndTrueResid`/…) already use: carry
+the arm's `EvalEntry`, whose `ground.table.slot6` supplies EXACTLY the missing pin
+(`CureValidationCur.evalEntry_supplies_slot6`), and which is itself uninhabited at
+`∅` (`evalEntry_empty_false`), so the countermodel that killed the bare form is
+gone.  `guard` is the per-op side condition — `fun _ _ => True` for every op but
+`div`, whose overflow guard `¬(a = -2^63 ∧ b = -1)` routes the wrap arm to
+`hDivOv`. -/
+def BinIntCell
+    (opTok : BinOp)
+    (Resid : ((R : Register) → Option (RegisterType R)) → NativeAddrs → Arena →
+      StackLayout → BitVec 64 → BitVec 64 → BitVec 64 → BitVec 64 → BitVec 64 →
+      Vsa.Machine.Config → Prop)
+    (guard : Int → Int → Prop) : Prop :=
+  ∀ (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (a b : Int),
+    guard a b →
+    ∀ (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) (c : Vsa.Machine.Config),
+      EvalEntry g N A SL φf φc st d env (.binary opTok el er) sp r sret aEnv aExpr m0 c →
+      BinIntCellResid opTok Resid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+
+/-- **Entry-guarded eq/ne cell** — the same wave-49 B2-carry for the two
+`BinEqCellResid` cells (`experiments/fleet/obstructions/RefutBatteryCur.lean`
+refutes both bare forms at `m0 := ∅`; see `BinIntCell`). -/
+def BinEqCell
+    (op : Vsa.Sim.EqNeOp) (opTok : BinOp) (link jalPC : BitVec 64) (jImm : BitVec 21) : Prop :=
+  ∀ (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (vl vr : Value)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) (c : Vsa.Machine.Config),
+    EvalEntry g N A SL φf φc st d env (.binary opTok el er) sp r sret aEnv aExpr m0 c →
+    BinEqCellResid op opTok link jalPC jImm g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0
+
 /-- **`eval_binary_row`** — the `hBinary` dispatcher shell (see the section doc). -/
 theorem eval_binary_row
-    (hIAdd : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .add Vsa.Sim.AddResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hISub : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .sub Vsa.Sim.SubResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hIMul : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .mul Vsa.Sim.MulResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hIDiv : ∀ g N A SL φf φc st st' st'' el er a b, ¬(a = -2^63 ∧ b = -1) →
-        ∀ sp r sret aExpr m0,
-        BinIntCellResid .div Vsa.Sim.DivResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hIMod : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .mod Vsa.Sim.ModResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hILt : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .lt Vsa.Sim.LtResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hILe : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .le Vsa.Sim.LeResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hIGt : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .gt Vsa.Sim.GtResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hIGe : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .ge Vsa.Sim.GeResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hEq : ∀ g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0,
-        BinEqCellResid .eq .eq (0x80003720#64) (0x8000371c#64) (0x1ff140#21)
-          g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0)
-    (hNe : ∀ g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0,
-        BinEqCellResid .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21)
-          g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0)
+    (hIAdd : BinIntCell .add Vsa.Sim.AddResid (fun _ _ => True))
+    (hISub : BinIntCell .sub Vsa.Sim.SubResid (fun _ _ => True))
+    (hIMul : BinIntCell .mul Vsa.Sim.MulResid (fun _ _ => True))
+    (hIDiv : BinIntCell .div Vsa.Sim.DivResid (fun a b => ¬(a = -2^63 ∧ b = -1)))
+    (hIMod : BinIntCell .mod Vsa.Sim.ModResid (fun _ _ => True))
+    (hILt : BinIntCell .lt Vsa.Sim.LtResid (fun _ _ => True))
+    (hILe : BinIntCell .le Vsa.Sim.LeResid (fun _ _ => True))
+    (hIGt : BinIntCell .gt Vsa.Sim.GtResid (fun _ _ => True))
+    (hIGe : BinIntCell .ge Vsa.Sim.GeResid (fun _ _ => True))
+    (hEq : BinEqCell .eq .eq (0x80003720#64) (0x8000371c#64) (0x1ff140#21))
+    (hNe : BinEqCell .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21))
     (hStrAddL : ∀ st d env el er st'' (sl : String) (rv : Value),
         EvalIH st d env (.binary .add el er) st''
-          (.str ((Value.str sl).display st''.store ++ rv.display st''.store)))
+          (.str ((Value.str sl).catDisplay st''.store ++ rv.catDisplay st''.store)))
     (hStrAddR : ∀ st d env el er st'' (lv : Value) (sr : String),
         EvalIH st d env (.binary .add el er) st''
-          (.str (lv.display st''.store ++ (Value.str sr).display st''.store)))
+          (.str (lv.catDisplay st''.store ++ (Value.str sr).catDisplay st''.store)))
     (hStrLt : ∀ st d env el er st'' (sl sr : String),
         EvalIH st d env (.binary .lt el er) st'' (.bool (sl < sr)))
     (hStrLe : ∀ st d env el er st'' (sl sr : String),
@@ -358,35 +399,35 @@ theorem eval_binary_row
       simp only [binOpSem] at hsem; cases hsem; exact hStrAddR st d env el er st'' (.native ff) sr
     | .int a, .int b, hsem =>
       simp only [binOpSem] at hsem; cases hsem
-      intro g N A SL φf φc sp r sret aEnv aExpr m0
-      obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
-        hIAdd g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+      intro g N A SL φf φc sp r sret aEnv aExpr m0 c hc
+      obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
+        hIAdd g N A SL φf φc st st' st'' d env el er a b trivial sp r sret aEnv aExpr m0 c hc
       exact binRow_add g N A SL φf φc st st' st'' d env el er a b
         sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
         (EvalE.binary st d env .add el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
-        hSF hSC hP
+        hSF hSC hSB hP c hc
   | sub =>
     match lv, rv, hsem with
     | .int a, .int b, hsem =>
       simp only [binOpSem] at hsem; cases hsem
-      intro g N A SL φf φc sp r sret aEnv aExpr m0
-      obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
-        hISub g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+      intro g N A SL φf φc sp r sret aEnv aExpr m0 c hc
+      obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
+        hISub g N A SL φf φc st st' st'' d env el er a b trivial sp r sret aEnv aExpr m0 c hc
       exact binRow_sub g N A SL φf φc st st' st'' d env el er a b
         sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
         (EvalE.binary st d env .sub el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
-        hSF hSC hP
+        hSF hSC hSB hP c hc
   | mul =>
     match lv, rv, hsem with
     | .int a, .int b, hsem =>
       simp only [binOpSem] at hsem; cases hsem
-      intro g N A SL φf φc sp r sret aEnv aExpr m0
-      obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
-        hIMul g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+      intro g N A SL φf φc sp r sret aEnv aExpr m0 c hc
+      obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
+        hIMul g N A SL φf φc st st' st'' d env el er a b trivial sp r sret aEnv aExpr m0 c hc
       exact binRow_mul g N A SL φf φc st st' st'' d env el er a b
         sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
         (EvalE.binary st d env .mul el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
-        hSF hSC hP
+        hSF hSC hSB hP c hc
   | div =>
     match lv, rv, hsem with
     | .int a, .int b, hsem =>
@@ -394,17 +435,17 @@ theorem eval_binary_row
       by_cases hb0 : b = 0
       · subst hb0; simp at hsem
       · rw [if_neg (by simpa using hb0)] at hsem; cases hsem
-        intro g N A SL φf φc sp r sret aEnv aExpr m0
+        intro g N A SL φf φc sp r sret aEnv aExpr m0 c hc
         by_cases hov : (a = -2^63 ∧ b = -1)
         · obtain ⟨ha, hbm⟩ := hov; subst ha; subst hbm
-          exact hDivOv st d env el er st'' g N A SL φf φc sp r sret aEnv aExpr m0
-        · obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
-            hIDiv g N A SL φf φc st st' st'' el er a b hov sp r sret aExpr m0
+          exact hDivOv st d env el er st'' g N A SL φf φc sp r sret aEnv aExpr m0 c hc
+        · obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
+            hIDiv g N A SL φf φc st st' st'' d env el er a b hov sp r sret aEnv aExpr m0 c hc
           exact binRow_div g N A SL φf φc st st' st'' d env el er a b
             sp r sret aEnv aExpr aLOp aROp Wl m0 hb0 hov hX ihL' ihR'
             (EvalE.binary st d env .div el er st' st'' (.int a) (.int b) _ hEl hEr
               (by simp [binOpSem, hb0]))
-            hSF hSC hP
+            hSF hSC hSB hP c hc
   | mod =>
     match lv, rv, hsem with
     | .int a, .int b, hsem =>
@@ -412,84 +453,84 @@ theorem eval_binary_row
       by_cases hb0 : b = 0
       · subst hb0; simp at hsem
       · rw [if_neg (by simpa using hb0)] at hsem; cases hsem
-        intro g N A SL φf φc sp r sret aEnv aExpr m0
-        obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
-          hIMod g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+        intro g N A SL φf φc sp r sret aEnv aExpr m0 c hc
+        obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
+          hIMod g N A SL φf φc st st' st'' d env el er a b trivial sp r sret aEnv aExpr m0 c hc
         exact binRow_mod g N A SL φf φc st st' st'' d env el er a b
           sp r sret aEnv aExpr aLOp aROp Wl m0 hb0 hX ihL' ihR'
           (EvalE.binary st d env .mod el er st' st'' (.int a) (.int b) _ hEl hEr
             (by simp [binOpSem, hb0]))
-          hSF hSC hP
+          hSF hSC hSB hP c hc
   | lt =>
     match lv, rv, hsem with
     | .str sl, .str sr, hsem =>
       simp only [binOpSem] at hsem; cases hsem; exact hStrLt st d env el er st'' sl sr
     | .int a, .int b, hsem =>
       simp only [binOpSem] at hsem; cases hsem
-      intro g N A SL φf φc sp r sret aEnv aExpr m0
-      obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
-        hILt g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+      intro g N A SL φf φc sp r sret aEnv aExpr m0 c hc
+      obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
+        hILt g N A SL φf φc st st' st'' d env el er a b trivial sp r sret aEnv aExpr m0 c hc
       exact binRow_lt g N A SL φf φc st st' st'' d env el er a b
         sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
         (EvalE.binary st d env .lt el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
-        hSF hSC hP
+        hSF hSC hSB hP c hc
   | le =>
     match lv, rv, hsem with
     | .str sl, .str sr, hsem =>
       simp only [binOpSem] at hsem; cases hsem; exact hStrLe st d env el er st'' sl sr
     | .int a, .int b, hsem =>
       simp only [binOpSem] at hsem; cases hsem
-      intro g N A SL φf φc sp r sret aEnv aExpr m0
-      obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
-        hILe g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+      intro g N A SL φf φc sp r sret aEnv aExpr m0 c hc
+      obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
+        hILe g N A SL φf φc st st' st'' d env el er a b trivial sp r sret aEnv aExpr m0 c hc
       exact binRow_le g N A SL φf φc st st' st'' d env el er a b
         sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
         (EvalE.binary st d env .le el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
-        hSF hSC hP
+        hSF hSC hSB hP c hc
   | gt =>
     match lv, rv, hsem with
     | .str sl, .str sr, hsem =>
       simp only [binOpSem] at hsem; cases hsem; exact hStrGt st d env el er st'' sl sr
     | .int a, .int b, hsem =>
       simp only [binOpSem] at hsem; cases hsem
-      intro g N A SL φf φc sp r sret aEnv aExpr m0
-      obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
-        hIGt g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+      intro g N A SL φf φc sp r sret aEnv aExpr m0 c hc
+      obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
+        hIGt g N A SL φf φc st st' st'' d env el er a b trivial sp r sret aEnv aExpr m0 c hc
       exact binRow_gt g N A SL φf φc st st' st'' d env el er a b
         sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
         (EvalE.binary st d env .gt el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
-        hSF hSC hP
+        hSF hSC hSB hP c hc
   | ge =>
     match lv, rv, hsem with
     | .str sl, .str sr, hsem =>
       simp only [binOpSem] at hsem; cases hsem; exact hStrGe st d env el er st'' sl sr
     | .int a, .int b, hsem =>
       simp only [binOpSem] at hsem; cases hsem
-      intro g N A SL φf φc sp r sret aEnv aExpr m0
-      obtain ⟨hSF, hSC, aLOp, aROp, Wl, hX, hP⟩ :=
-        hIGe g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+      intro g N A SL φf φc sp r sret aEnv aExpr m0 c hc
+      obtain ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, hP⟩ :=
+        hIGe g N A SL φf φc st st' st'' d env el er a b trivial sp r sret aEnv aExpr m0 c hc
       exact binRow_ge g N A SL φf φc st st' st'' d env el er a b
         sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
         (EvalE.binary st d env .ge el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
-        hSF hSC hP
+        hSF hSC hSB hP c hc
   | eq =>
     simp only [binOpSem] at hsem; cases hsem
-    intro g N A SL φf φc sp r sret aEnv aExpr m0
-    obtain ⟨hSF, hSC, aLOp, aROp, w19, hX, hVl, hRes⟩ :=
-      hEq g N A SL φf φc st st' st'' el er lv rv sp r sret aExpr m0
+    intro g N A SL φf φc sp r sret aEnv aExpr m0 c hc
+    obtain ⟨hSF, hSC, hSB, aLOp, aROp, w19, hX, hVl, hRes⟩ :=
+      hEq g N A SL φf φc st st' st'' d env el er lv rv sp r sret aEnv aExpr m0 c hc
     exact binRow_eq g N A SL φf φc st st' st'' d env el er lv rv
       sp r sret aEnv aExpr aLOp aROp w19 m0 hX ihL' ihR'
       (EvalE.binary st d env .eq el er st' st'' lv rv _ hEl hEr (by simp [binOpSem]))
-      hSF hSC hVl hRes
+      hSF hSC hSB hVl hRes c hc
   | ne =>
     simp only [binOpSem] at hsem; cases hsem
-    intro g N A SL φf φc sp r sret aEnv aExpr m0
-    obtain ⟨hSF, hSC, aLOp, aROp, w19, hX, hVl, hRes⟩ :=
-      hNe g N A SL φf φc st st' st'' el er lv rv sp r sret aExpr m0
+    intro g N A SL φf φc sp r sret aEnv aExpr m0 c hc
+    obtain ⟨hSF, hSC, hSB, aLOp, aROp, w19, hX, hVl, hRes⟩ :=
+      hNe g N A SL φf φc st st' st'' d env el er lv rv sp r sret aEnv aExpr m0 c hc
     exact binRow_ne g N A SL φf φc st st' st'' d env el er lv rv
       sp r sret aEnv aExpr aLOp aROp w19 m0 hX ihL' ihR'
       (EvalE.binary st d env .ne el er st' st'' lv rv _ hEl hEr (by simp [binOpSem]))
-      hSF hSC hVl hRes
+      hSF hSC hSB hVl hRes c hc
 '''
 
 if __name__ == "__main__":

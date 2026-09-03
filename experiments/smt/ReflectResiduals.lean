@@ -71,6 +71,17 @@ between entry and exit memory (should be UNSAT — the frame is preserved). -/
 def frameNeg : String :=
   "(declare-const A Int)\n(assert (< A (- (select (rr s0) 2) 1000000)))\n(assert (not (= (select (mm state_exit) A) (select (mm s0) A))))"
 
+/-- The GLOBAL summary closure: every `callee_`/`loop_` summary any of the 52
+residual spans reaches, transitively.  Each is characterised once by the mined
+clause set, then reused by every query that mentions it. -/
+def globalSummaries : IO (List String) := do
+  let img ← loadElf elfPath
+  let mut acc : List String := []
+  for (_, lo, hi) in residualSpans do
+    let (_, _, _, sums) := reflectExactD img hi 200 lo "s0" 0 [] []
+    acc := summaryClosure img sums acc
+  return acc
+
 end Vsa.ReflectResiduals
 
 open Vsa.ReflectResiduals Vsa.ReflectSpan in
@@ -84,3 +95,35 @@ elab "#splice_all " pathStx:str : command => do
       let smt ← spliceResidualSmt lo hi frameNeg
       IO.FS.writeFile s!"{dir}/{nm}.smt2" smt
     Lean.logInfo m!"#splice_all → {dir} ({residualSpans.length} residual validity queries)"
+
+
+open Vsa.ReflectResiduals Vsa.ReflectSpan in
+/-- `#emit_campaign "<dir>"` — write the whole lemma-mode campaign:
+
+* `<dir>/obligations/<sym>.smt2` — one per summary in the global closure: the
+  one-step body under the `<sym>_ih` induction hypothesis, with `; @@ASSUME@@`
+  and `; @@GOAL@@` injection points;
+* `<dir>/queries/<field>.smt2` — one per residual: the span's exit-state DAG
+  with summaries left uninterpreted, with `; @@ASSUME@@` and `; @@POST@@`;
+* `<dir>/summaries.tsv`, `<dir>/query-summaries.tsv` — which summaries exist and
+  which each query depends on (the driver only assumes the relevant ones).
+
+The Houdini driver (`scripts/houdini_summary.py`) fills the injection points and
+runs Z3.  Nothing here proves anything; run via `lake env lean`. -/
+elab "#emit_campaign " pathStx:str : command => do
+  Lean.Elab.Command.liftTermElabM do
+    let dir := pathStx.getString
+    IO.FS.createDirAll s!"{dir}/obligations"
+    IO.FS.createDirAll s!"{dir}/queries"
+    let img ← loadElf elfPath
+    let syms ← globalSummaries
+    for sym in syms do
+      IO.FS.writeFile s!"{dir}/obligations/{sym}.smt2" (summaryObligationSmt img syms sym)
+    let mut rows : List String := []
+    for (nm, lo, hi) in residualSpans do
+      let (txt, deps) ← lemmaModeSmt lo hi
+      IO.FS.writeFile s!"{dir}/queries/{nm}.smt2" txt
+      rows := rows ++ [s!"{nm}\t{String.intercalate "," deps}"]
+    IO.FS.writeFile s!"{dir}/summaries.tsv" ("summary\n" ++ String.intercalate "\n" syms ++ "\n")
+    IO.FS.writeFile s!"{dir}/query-summaries.tsv" ("field\tsummaries\n" ++ String.intercalate "\n" rows ++ "\n")
+    Lean.logInfo m!"#emit_campaign → {dir} ({syms.length} summaries, {residualSpans.length} queries)"

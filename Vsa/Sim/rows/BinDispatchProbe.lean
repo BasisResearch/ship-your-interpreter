@@ -15,31 +15,17 @@ hypotheses of its declared types produces a term ASCRIBED to the verbatim
 `hBinary` premise shape.  The ascription forces Lean to check that
 `eval_binary_row`'s conclusion is DEFINITIONALLY the recursor's `hBinary` slot. -/
 theorem binary_row_fills_hBinary
-    (hIAdd : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .add AddResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hISub : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .sub SubResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hIMul : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .mul MulResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hIDiv : ∀ g N A SL φf φc st st' st'' el er a b, ¬(a = -2^63 ∧ b = -1) →
-        ∀ sp r sret aExpr m0,
-        BinIntCellResid .div DivResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hIMod : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .mod ModResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hILt : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .lt LtResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hILe : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .le LeResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hIGt : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .gt GtResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hIGe : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .ge GeResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hEq : ∀ g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0,
-        BinEqCellResid .eq .eq (0x80003720#64) (0x8000371c#64) (0x1ff140#21)
-          g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0)
-    (hNe : ∀ g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0,
-        BinEqCellResid .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21)
-          g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0)
+    (hIAdd : BinIntCell .add AddResid (fun _ _ => True))
+    (hISub : BinIntCell .sub SubResid (fun _ _ => True))
+    (hIMul : BinIntCell .mul MulResid (fun _ _ => True))
+    (hIDiv : BinIntCell .div DivResid (fun a b => ¬(a = -2^63 ∧ b = -1)))
+    (hIMod : BinIntCell .mod ModResid (fun _ _ => True))
+    (hILt : BinIntCell .lt LtResid (fun _ _ => True))
+    (hILe : BinIntCell .le LeResid (fun _ _ => True))
+    (hIGt : BinIntCell .gt GtResid (fun _ _ => True))
+    (hIGe : BinIntCell .ge GeResid (fun _ _ => True))
+    (hEq : BinEqCell .eq .eq (0x80003720#64) (0x8000371c#64) (0x1ff140#21))
+    (hNe : BinEqCell .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21))
     (hStrAddL : ∀ st d env el er st'' (sl : String) (rv : Value),
         EvalIH st d env (.binary .add el er) st'' (.str ((Value.str sl).catDisplay st''.store ++ rv.catDisplay st''.store)))
     (hStrAddR : ∀ st d env el er st'' (lv : Value) (sr : String),

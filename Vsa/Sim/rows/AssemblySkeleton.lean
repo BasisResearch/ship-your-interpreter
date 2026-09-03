@@ -79,47 +79,47 @@ abbrev SkelHAssign (L : Layout) : Prop :=
 
 /-- HOLE `hIAdd` — `hBinary` add int-cell. -/
 abbrev SkelHIAdd (L : Layout) : Prop :=
-  ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0, BinIntCellResid .add Vsa.Sim.AddResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  BinIntCell .add Vsa.Sim.AddResid (fun _ _ => True)
 
 /-- HOLE `hISub` — `hBinary` sub int-cell. -/
 abbrev SkelHISub (L : Layout) : Prop :=
-  ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0, BinIntCellResid .sub Vsa.Sim.SubResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  BinIntCell .sub Vsa.Sim.SubResid (fun _ _ => True)
 
 /-- HOLE `hIMul` — `hBinary` mul int-cell. -/
 abbrev SkelHIMul (L : Layout) : Prop :=
-  ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0, BinIntCellResid .mul Vsa.Sim.MulResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  BinIntCell .mul Vsa.Sim.MulResid (fun _ _ => True)
 
 /-- HOLE `hIDiv` — `hBinary` div int-cell (non-overflow arm; the `¬(a=-2^63 ∧ b=-1)` guard is the `TermGuards.binNoOvf` side-condition). -/
 abbrev SkelHIDiv (L : Layout) : Prop :=
-  ∀ g N A SL φf φc st st' st'' el er a b, ¬(a = -2^63 ∧ b = -1) → ∀ sp r sret aExpr m0, BinIntCellResid .div Vsa.Sim.DivResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  BinIntCell .div Vsa.Sim.DivResid (fun a b => ¬(a = -2^63 ∧ b = -1))
 
 /-- HOLE `hIMod` — `hBinary` mod int-cell. -/
 abbrev SkelHIMod (L : Layout) : Prop :=
-  ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0, BinIntCellResid .mod Vsa.Sim.ModResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  BinIntCell .mod Vsa.Sim.ModResid (fun _ _ => True)
 
 /-- HOLE `hILt` — `hBinary` lt int-cell. -/
 abbrev SkelHILt (L : Layout) : Prop :=
-  ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0, BinIntCellResid .lt Vsa.Sim.LtResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  BinIntCell .lt Vsa.Sim.LtResid (fun _ _ => True)
 
 /-- HOLE `hILe` — `hBinary` le int-cell. -/
 abbrev SkelHILe (L : Layout) : Prop :=
-  ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0, BinIntCellResid .le Vsa.Sim.LeResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  BinIntCell .le Vsa.Sim.LeResid (fun _ _ => True)
 
 /-- HOLE `hIGt` — `hBinary` gt int-cell. -/
 abbrev SkelHIGt (L : Layout) : Prop :=
-  ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0, BinIntCellResid .gt Vsa.Sim.GtResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  BinIntCell .gt Vsa.Sim.GtResid (fun _ _ => True)
 
 /-- HOLE `hIGe` — `hBinary` ge int-cell. -/
 abbrev SkelHIGe (L : Layout) : Prop :=
-  ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0, BinIntCellResid .ge Vsa.Sim.GeResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  BinIntCell .ge Vsa.Sim.GeResid (fun _ _ => True)
 
 /-- HOLE `hEq` — `hBinary` eq cell. -/
 abbrev SkelHEq (L : Layout) : Prop :=
-  ∀ g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0, BinEqCellResid .eq .eq (0x80003720#64) (0x8000371c#64) (0x1ff140#21) g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0
+  BinEqCell .eq .eq (0x80003720#64) (0x8000371c#64) (0x1ff140#21)
 
 /-- HOLE `hNe` — `hBinary` ne cell. -/
 abbrev SkelHNe (L : Layout) : Prop :=
-  ∀ g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0, BinEqCellResid .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21) g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0
+  BinEqCell .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21)
 
 /-- HOLE `hStrAddL` — `hBinary` str `+` (left-str) cell. -/
 abbrev SkelHStrAddL (L : Layout) : Prop :=

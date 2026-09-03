@@ -107,45 +107,38 @@ structure TermResidualsCore (L : Layout) where
       OPEN) store-set arm.  No `evalAssignSim` exists yet; whole arm is this oracle. -/
   hAssign : ∀ st d env x e st' v store'', AssignResid st d env x e st' v store''
   -- ===== BinDispatchRow.lean — eval_binary_row's 19 cell/str/div residuals =====
-  /-- `hBinary` add int-cell.  Supplier: `AddResid` value-path (`EvalAddRow`, block-reflected). -/
-  hIAdd : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-      BinIntCellResid .add Vsa.Sim.AddResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  /-- `hBinary` add int-cell.  Supplier: `AddResid` value-path (`EvalAddRow`, block-reflected).
+      **Wave-49 B2-carry**: the 9 int cells and the 2 eq/ne cells are stated as
+      `BinIntCell`/`BinEqCell` — the bare `∀ …, BinIntCellResid …` form is FALSE at
+      `m0 := ∅` (11 kernel refutations in
+      `experiments/fleet/obstructions/RefutBatteryCur.lean`; the `∃`-body wants
+      `KindSlotPinned 6`, absent from `∅`).  Carrying the arm's `EvalEntry` supplies
+      exactly that pin (`CureValidationCur.evalEntry_supplies_slot6`) and makes the
+      `∅` witness uninhabited, matching the 6 unary/logic siblings. -/
+  hIAdd : BinIntCell .add Vsa.Sim.AddResid (fun _ _ => True)
   /-- `hBinary` sub int-cell.  Supplier: `SubResid` (`EvalSubRow`). -/
-  hISub : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-      BinIntCellResid .sub Vsa.Sim.SubResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  hISub : BinIntCell .sub Vsa.Sim.SubResid (fun _ _ => True)
   /-- `hBinary` mul int-cell.  Supplier: `MulResid` (`EvalMulRow`, `__muldi3` seam). -/
-  hIMul : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-      BinIntCellResid .mul Vsa.Sim.MulResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  hIMul : BinIntCell .mul Vsa.Sim.MulResid (fun _ _ => True)
   /-- `hBinary` div int-cell (non-overflow arm; the `¬(a=-2^63 ∧ b=-1)` guard is the
       `TermGuards.binNoOvf` side-condition).  Supplier: `DivResid` (`EvalDivRow`,
       `__divdi3` seam via `TermCallees.divdi3`). -/
-  hIDiv : ∀ g N A SL φf φc st st' st'' el er a b, ¬(a = -2^63 ∧ b = -1) →
-      ∀ sp r sret aExpr m0,
-      BinIntCellResid .div Vsa.Sim.DivResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  hIDiv : BinIntCell .div Vsa.Sim.DivResid (fun a b => ¬(a = -2^63 ∧ b = -1))
   /-- `hBinary` mod int-cell.  Supplier: `ModResid` (`EvalModRow`, div-parity). -/
-  hIMod : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-      BinIntCellResid .mod Vsa.Sim.ModResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  hIMod : BinIntCell .mod Vsa.Sim.ModResid (fun _ _ => True)
   /-- `hBinary` lt int-cell.  Supplier: `LtResid` (`EvalLtRow`). -/
-  hILt : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-      BinIntCellResid .lt Vsa.Sim.LtResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  hILt : BinIntCell .lt Vsa.Sim.LtResid (fun _ _ => True)
   /-- `hBinary` le int-cell.  Supplier: `LeResid` (`EvalLeRow`). -/
-  hILe : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-      BinIntCellResid .le Vsa.Sim.LeResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  hILe : BinIntCell .le Vsa.Sim.LeResid (fun _ _ => True)
   /-- `hBinary` gt int-cell.  Supplier: `GtResid` (`EvalGtRow`). -/
-  hIGt : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-      BinIntCellResid .gt Vsa.Sim.GtResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  hIGt : BinIntCell .gt Vsa.Sim.GtResid (fun _ _ => True)
   /-- `hBinary` ge int-cell.  Supplier: `GeResid` (`EvalGeRow`, xori clone). -/
-  hIGe : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-      BinIntCellResid .ge Vsa.Sim.GeResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0
+  hIGe : BinIntCell .ge Vsa.Sim.GeResid (fun _ _ => True)
   /-- `hBinary` eq cell.  Supplier: `EqResid` via `value_equal_spec_full`
       (`TermCallees.valueEqual`, LANDED) + `EvalEqNeRow`. -/
-  hEq : ∀ g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0,
-      BinEqCellResid .eq .eq (0x80003720#64) (0x8000371c#64) (0x1ff140#21)
-        g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0
+  hEq : BinEqCell .eq .eq (0x80003720#64) (0x8000371c#64) (0x1ff140#21)
   /-- `hBinary` ne cell.  Supplier: `EqResid` (`EvalEqNeRow`). -/
-  hNe : ∀ g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0,
-      BinEqCellResid .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21)
-        g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0
+  hNe : BinEqCell .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21)
   /-- `hBinary` str `+` (left-str) cell.  Supplier: `StrConcatCellResid`
       (`TermGuards.strConcat`, blocked on the stringify spec). -/
   hStrAddL : ∀ st d env el er st'' (sl : String) (rv : Value),

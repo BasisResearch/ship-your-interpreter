@@ -279,7 +279,7 @@ def findBackEdge (img : Nat → Option (BitVec 8)) (t : Nat) (maxLen : Nat := 40
     let w := wordAt img pc
     if isTerm w then
       match decodeTerm pc w with
-      | Term.jal _ tgt => if tgt ≤ t then return pc
+      | Term.jal rd tgt => if rd != 1 && tgt ≤ t then return pc
       | Term.branch tgt => if tgt ≤ t then return pc
       | _ => pure ()
     pc := pc + 4; n := n + 1
@@ -371,7 +371,7 @@ partial def reflectPath (img : Nat → Option (BitVec 8)) (regs : List Nat) (hi 
       return (s!"(ite {cond} {tk} {fl})",
               (fun n => s!"(ite {cond} {tkr n} {flr n})"), (s1 ++ s2).eraseDups)
   | Term.jal rd tgt =>
-    if tgt ≤ pc then
+    if rd != 1 && tgt ≤ pc then
       let s := s!"loop_{tgt}"
       return (s!"({s}_m {mem1})", (fun n => s!"({s}_r{n} {mem1})"), [s])
     else if rd == 1 then
@@ -520,11 +520,14 @@ partial def reflectExact (img : Nat → Option (BitVec 8)) (hi fuel : Nat)
       let (fl, s2) := reflectExact img hi (fuel-1) (p+4) S1
       return (s!"(ite {branchCondSt S1 w} {tk} {fl})", (s1 ++ s2).eraseDups)
   | Term.jal rd tgt =>
-    if tgt ≤ pc then let s := s!"loop_{tgt}"; return (s!"({s} {S1})", [s])
-    else if rd == 1 then
+    -- rd = x1 is a CALL whatever the direction (a backward `jal ra` is a call to
+    -- an earlier-defined function, NOT a loop back-edge); only `j` (rd = x0)
+    -- closes a loop.
+    if rd == 1 then
       let s := s!"callee_{tgt}"
       let (rest, s2) := reflectExact img hi (fuel-1) (p+4) s!"({s} {S1})"
       return (rest, (s :: s2).eraseDups)
+    else if tgt ≤ pc then let s := s!"loop_{tgt}"; return (s!"({s} {S1})", [s])
     else reflectExact img hi (fuel-1) tgt S1
   | Term.jalr _ => return (S1, [])
   | Term.sys    => return (S1, [])
@@ -559,13 +562,14 @@ partial def reflectExactD (img : Nat → Option (BitVec 8)) (hi fuel : Nat) (pc 
       let b2 := b1 ++ [s!"({mv} (ite {branchCondSt v w} {v} {thenV}))"]
       reflectExactD img hi (fuel-1) tgt mv (k1+1) b2 s1
   | Term.jal rd tgt =>
-    if tgt ≤ pc then
-      let lv := s!"s{k}"
-      return (lv, k+1, binds ++ [s!"({lv} (loop_{tgt} {v}))"], (s!"loop_{tgt}" :: sums).eraseDups)
-    else if rd == 1 then
+    -- rd = x1 is a CALL whatever the direction (see `reflectExact`).
+    if rd == 1 then
       let cv := s!"s{k}"
       reflectExactD img hi (fuel-1) (p+4) cv (k+1)
         (binds ++ [s!"({cv} (callee_{tgt} {v}))"]) ((s!"callee_{tgt}" :: sums).eraseDups)
+    else if tgt ≤ pc then
+      let lv := s!"s{k}"
+      return (lv, k+1, binds ++ [s!"({lv} (loop_{tgt} {v}))"], (s!"loop_{tgt}" :: sums).eraseDups)
     else reflectExactD img hi (fuel-1) tgt v k binds sums
   | Term.jalr _ => return (v, k, binds, sums)
   | Term.sys    => return (v, k, binds, sums)
@@ -596,6 +600,97 @@ partial def emitExactAxioms (img : Nat → Option (BitVec 8))
         let ax := s!"(assert (forall ((S MState)) (= ({s} S) (ite (loopcond_{t} S) S ({s} {wrapLets binds ev})))))"
         emitExactAxioms img (subs ++ rest) visited (acc ++ [ax])
       else emitExactAxioms img rest visited acc
+
+-- ==========================================================================
+-- SUMMARY-LEMMA LAYER (assume-guarantee).  A `callee_`/`loop_` summary's full
+-- definition is exact but undecidable for Z3 once the recursion is real.  The
+-- decidable substitute is a per-summary CLAUSE SET (`sp` restored, memory below
+-- the frame preserved, callee-saved registers restored, …) established ONCE per
+-- summary by ONE-STEP unfolding under the induction hypothesis that every
+-- summary — including a recursive occurrence of the summary itself, renamed
+-- `<sym>_ih` — already satisfies the set.  A Houdini fixpoint over the clause
+-- set (drop what fails, retry) is the "invariant mining" step; the surviving
+-- set is then ASSERTED (instead of the definitions) in the per-residual
+-- validity query.  Asserting lemmas is WEAKER than asserting definitions, so an
+-- UNSAT under lemmas is an UNSAT under definitions — the mode is sound.
+-- ==========================================================================
+
+/-- The shared SMT preamble (state datatype + load/bitwise helpers). -/
+def smtPreamble : String := "(set-logic ALL)
+(declare-datatypes () ((MState (mst (mm (Array Int (_ BitVec 8))) (rr (Array Int Int))))))
+(define-fun ld1 ((m (Array Int (_ BitVec 8))) (a Int)) Int (bv2int (select m a)))
+(define-fun ld4 ((m (Array Int (_ BitVec 8))) (a Int)) Int (+ (bv2int (select m a)) (* 256 (bv2int (select m (+ a 1)))) (* 65536 (bv2int (select m (+ a 2)))) (* 16777216 (bv2int (select m (+ a 3))))))
+(define-fun ld2 ((m (Array Int (_ BitVec 8))) (a Int)) Int (+ (bv2int (select m a)) (* 256 (bv2int (select m (+ a 1))))))
+(define-fun ld8 ((m (Array Int (_ BitVec 8))) (a Int)) Int (+ (ld4 m a) (* 4294967296 (ld4 m (+ a 4)))))
+(define-fun shl_i ((a Int) (b Int)) Int (bv2int (bvshl ((_ int2bv 64) a) ((_ int2bv 64) b))))
+(define-fun lshr_i ((a Int) (b Int)) Int (bv2int (bvlshr ((_ int2bv 64) a) ((_ int2bv 64) b))))
+(define-fun ashr_i ((a Int) (b Int)) Int (bv2int (bvashr ((_ int2bv 64) a) ((_ int2bv 64) b))))
+(define-fun bvor_i ((a Int) (b Int)) Int (bv2int (bvor ((_ int2bv 64) a) ((_ int2bv 64) b))))
+(define-fun bvand_i ((a Int) (b Int)) Int (bv2int (bvand ((_ int2bv 64) a) ((_ int2bv 64) b))))
+(define-fun bvxor_i ((a Int) (b Int)) Int (bv2int (bvxor ((_ int2bv 64) a) ((_ int2bv 64) b))))"
+
+/-- Declarations for a summary symbol (plus its `loopcond` when it is a loop). -/
+def summaryDecls (syms : List String) : String :=
+  String.intercalate "\n" (syms.flatMap (fun s =>
+    let f := s!"(declare-fun {s} (MState) MState)"
+    if s.startsWith "loop_" then [f, s!"(declare-fun loopcond_{s.drop 5} (MState) Bool)"] else [f]))
+
+/-- The immediate summaries a summary's own body refers to (one unfold step). -/
+def summaryDeps (img : Nat → Option (BitVec 8)) (sym : String) : List String :=
+  if sym.startsWith "callee_" then
+    let t := (sym.drop 7).toNat!
+    let (_, _, _, subs) := reflectExactD img (findRet img t) 200 t "S" 0 [] []
+    subs
+  else if sym.startsWith "loop_" then
+    let t := (sym.drop 5).toNat!
+    let (_, _, _, subs) := reflectExactD img (findBackEdge img t) 200 t "S" 0 [] []
+    sym :: subs
+  else []
+
+/-- Transitive closure of the summary symbols reachable from a worklist. -/
+partial def summaryClosure (img : Nat → Option (BitVec 8))
+    (worklist visited : List String) : List String :=
+  match worklist with
+  | [] => visited
+  | s :: rest =>
+    if visited.contains s then summaryClosure img rest visited
+    else summaryClosure img (summaryDeps img s ++ rest) (s :: visited)
+
+/-- A summary's ONE-STEP body over state var `sv`, with self-references renamed
+to `<sym>_ih` — the assume-guarantee induction hypothesis. -/
+def summaryBody (img : Nat → Option (BitVec 8)) (sym sv : String) : String :=
+  let rename (b : String) : String := b.replace s!"({sym} " s!"({sym}_ih "
+  if sym.startsWith "callee_" then
+    let t := (sym.drop 7).toNat!
+    let (ev, _, binds, _) := reflectExactD img (findRet img t) 200 t sv 0 [] []
+    rename (wrapLets binds ev)
+  else if sym.startsWith "loop_" then
+    let t := (sym.drop 5).toNat!
+    let (ev, _, binds, _) := reflectExactD img (findBackEdge img t) 200 t sv 0 [] []
+    s!"(ite (loopcond_{t} {sv}) {sv} ({sym}_ih {rename (wrapLets binds ev)}))"
+  else sv
+
+/-- The per-summary OBLIGATION file: preamble, every summary declared (plus the
+`<sym>_ih` self-hypothesis symbol), and the one-step body as `fbody` over the
+fresh entry state `S0`.  The Houdini driver appends the assumed clause set and
+the negated goal, then runs Z3 (UNSAT ⇒ the clause is inductive for `sym`). -/
+def summaryObligationSmt (img : Nat → Option (BitVec 8))
+    (allSyms : List String) (sym : String) : String :=
+  let decls := summaryDecls (allSyms ++ [s!"{sym}_ih"])
+  let body := summaryBody img sym "S0"
+  s!"{smtPreamble}\n{decls}\n(declare-const SL_lo Int)\n(declare-const SL_hi Int)\n(declare-const A_lo Int)\n(declare-const A_hi Int)\n(declare-const S0 MState)\n(define-fun fbody () MState {body})\n; clause set for every summary; `{sym}` itself is supplied as `{sym}_ih`\n; @@ASSUME@@\n; negated clause under test, over S0 / fbody\n; @@GOAL@@\n"
+
+/-- The per-residual query in LEMMA MODE: the span's exit-state DAG, with the
+summaries left UNINTERPRETED (their clause set is appended by the driver in
+place of the defining axioms).  Sound: lemmas are weaker than definitions. -/
+def lemmaModeSmt (lo hi : Nat) : IO (String × List String) := do
+  let img ← loadElf elfPath
+  let (ev, _, binds, summaries) := reflectExactD img hi 200 lo "s0" 0 [] []
+  let exitS := wrapLets binds ev
+  let syms := summaryClosure img summaries []
+  let decls := summaryDecls syms
+  let txt := s!"{smtPreamble}\n{decls}\n(declare-const SL_lo Int)\n(declare-const SL_hi Int)\n(declare-const A_lo Int)\n(declare-const A_hi Int)\n(declare-const s0 MState)\n; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {exitS})\n(define-fun mem_exit () (Array Int (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
+  return (txt, syms)
 
 /-- Assemble the complete EXACT reflected Steps SMT for span `[lo,hi)`. -/
 def reflectExactSmt (lo hi : Nat) : IO String := do

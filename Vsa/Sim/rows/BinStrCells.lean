@@ -176,31 +176,17 @@ instantiations) + `StrConcatCellResid` (its two projections).  The nine int
 providers + eq/ne + div-overflow slots thread through verbatim.  This does NOT alter
 `eval_binary_row`; it merely feeds it, factoring 6 loose slots into 2 named ones. -/
 theorem eval_binary_row_str_closed
-    (hIAdd : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .add Vsa.Sim.AddResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hISub : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .sub Vsa.Sim.SubResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hIMul : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .mul Vsa.Sim.MulResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hIDiv : ∀ g N A SL φf φc st st' st'' el er a b, ¬(a = -2^63 ∧ b = -1) →
-        ∀ sp r sret aExpr m0,
-        BinIntCellResid .div Vsa.Sim.DivResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hIMod : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .mod Vsa.Sim.ModResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hILt : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .lt Vsa.Sim.LtResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hILe : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .le Vsa.Sim.LeResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hIGt : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .gt Vsa.Sim.GtResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hIGe : ∀ g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0,
-        BinIntCellResid .ge Vsa.Sim.GeResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0)
-    (hEq : ∀ g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0,
-        BinEqCellResid .eq .eq (0x80003720#64) (0x8000371c#64) (0x1ff140#21)
-          g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0)
-    (hNe : ∀ g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0,
-        BinEqCellResid .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21)
-          g N A SL φf φc st st' st'' el er vl vr sp r sret aExpr m0)
+    (hIAdd : BinIntCell .add Vsa.Sim.AddResid (fun _ _ => True))
+    (hISub : BinIntCell .sub Vsa.Sim.SubResid (fun _ _ => True))
+    (hIMul : BinIntCell .mul Vsa.Sim.MulResid (fun _ _ => True))
+    (hIDiv : BinIntCell .div Vsa.Sim.DivResid (fun a b => ¬(a = -2^63 ∧ b = -1)))
+    (hIMod : BinIntCell .mod Vsa.Sim.ModResid (fun _ _ => True))
+    (hILt : BinIntCell .lt Vsa.Sim.LtResid (fun _ _ => True))
+    (hILe : BinIntCell .le Vsa.Sim.LeResid (fun _ _ => True))
+    (hIGt : BinIntCell .gt Vsa.Sim.GtResid (fun _ _ => True))
+    (hIGe : BinIntCell .ge Vsa.Sim.GeResid (fun _ _ => True))
+    (hEq : BinEqCell .eq .eq (0x80003720#64) (0x8000371c#64) (0x1ff140#21))
+    (hNe : BinEqCell .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21))
     -- the TWO shared str residuals (the 6 loose slots, factored):
     (hStrCmpLt : StrCmpCellResid .lt (fun sl sr => sl < sr))
     (hStrCmpLe : StrCmpCellResid .le (fun sl sr => sl < sr || sl == sr))

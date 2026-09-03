@@ -1426,3 +1426,30 @@
 ## smt_check.py run
 
 - `SRetField` → **ENCODE-GAP** (unencodable atom; hyps=[] concl=None)
+
+## smt_check.py run
+
+  (dump path unavailable for Probe_hSExpr: dump-encode-gap — falling back to Python encoder)
+- `Probe_hSExpr` → **ENCODE-GAP** (unencodable atom; hyps=[] concl=None)
+
+## smt_check.py run
+
+  (dump path unavailable for Probe_hIAdd: dump-encode-gap — falling back to Python encoder)
+- `Probe_hIAdd` → **ENCODE-GAP** (unencodable atom; hyps=[] concl=None)
+
+## smt_check.py run
+
+  (dump path unavailable for Probe_hCall: dump-encode-gap — falling back to Python encoder)
+- `Probe_hCall` → **ENCODE-GAP** (unencodable atom; hyps=[] concl=None)
+
+## smt_check.py run
+
+- `Probe_hSExpr` → **ENCODE-GAP** (unencodable atom; hyps=[] concl=None)
+
+## smt_check.py run
+
+- `Probe_hIAdd` → **ENCODE-GAP** (unencodable atom; hyps=[] concl=None)
+
+## smt_check.py run
+
+- `Probe_hCall` → **ENCODE-GAP** (unencodable atom; hyps=[] concl=None)

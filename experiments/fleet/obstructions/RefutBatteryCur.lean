@@ -21,6 +21,15 @@ term the kernel checks.  The cure for every one of these is identical — carry
 `sproom`, `gx19_pres`); the 6 unary/logic siblings (`NegResid` …) already carry
 it and are therefore NOT in this battery (their `∅`-instantiation is vacuously
 true, not false).
+
+**WAVE 49 — the cure LANDED.**  The 11 `TermResidualsCore` fields are no longer
+stated in the bare form refuted below: they are `Vsa.Sim.BinIntCell` /
+`Vsa.Sim.BinEqCell`, which carry the arm's `EvalEntry`.  The theorems here stay
+as the historical record — each still proves exactly what it says, namely that
+the BARE statement is false, which is why the amendment was needed.  The landed
+shape's slot-verify + its vacuity at this very `∅` witness are in
+`experiments/fleet/obstructions/B2CarryLanded.lean`, and `#sweep_refute` now
+reports REFUTED=0 over all 58 fields (was 11).
 -/
 
 def witSt : Vsa.While.St := ⟨⟨#[], #[]⟩, ""⟩
