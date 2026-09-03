@@ -40,6 +40,14 @@ recursively closes the callee/loop summaries.
   `(not (= (select mem_exit A) (select (mm s0) A)))` for `A` below the spill
   frame is UNSAT. Reflect `Steps` exactly → Z3 checks validity, end to end, for
   straight-line spans.
+* **all 52 encodable**: `ReflectResiduals.lean` maps every open residual to its
+  concrete span (`KindTablePins` eval arms, exec_stmt dispatch statement arms,
+  `seqLoopImage` seq loops) — 53/53 reflect exactly, gap-free, DAG-sized (largest
+  15KB, no blowup). Rests on complete MKind coverage (every instruction exact:
+  immediates from the word, shifts via BV, U-type corrected) + the let-DAG.
+* **per-residual validity**: frame preservation on the reflected UNARY arm
+  `Steps` is UNSAT (proved) — the end-to-end pipeline (reflect a real residual's
+  span → Z3 proves a Post conjunct) works, not just the prologue.
 
 ## Remaining
 
