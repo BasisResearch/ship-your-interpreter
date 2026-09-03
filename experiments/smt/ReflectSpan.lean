@@ -160,6 +160,40 @@ def splitBlocks (img : Nat → Option (BitVec 8)) (lo hi : Nat) :
   if !cur.isEmpty then out := out ++ [(cur, none, hi)]
   return out
 
+/-- Signed value of a 12-bit immediate. -/
+def imm12 (i : BitVec 12) : Int :=
+  if i.toNat ≥ 2048 then (i.toNat : Int) - 4096 else (i.toNat : Int)
+
+/-- Symbolic register execution: fold each instruction's REGISTER effect into a
+map `reg → SMT Int term`, over a symbolic entry map and memory term.  Covers the
+arithmetic/logical MKinds exactly; loads become a `loadw`/`loadb` term over the
+memory array (faithful to the read address); an unmodelled kind leaves `rd` as a
+fresh uninterpreted term (flagged).  This is the register twin of `wlogM`. -/
+def symStep (regs : Nat → String) (mem : String) (i : MInstr) : Nat → String :=
+  let nv : Option String := match i.kind with
+    | .addi  => some s!"(+ {regs i.rs1} {imm12 i.imm})"
+    | .add   => some s!"(+ {regs i.rs1} {regs i.rs2})"
+    | .sub   => some s!"(- {regs i.rs1} {regs i.rs2})"
+    | .addiw => some s!"(+ {regs i.rs1} {imm12 i.imm})"
+    | .addw  => some s!"(+ {regs i.rs1} {regs i.rs2})"
+    | .subw  => some s!"(- {regs i.rs1} {regs i.rs2})"
+    | .or    => some s!"(bvor_i {regs i.rs1} {regs i.rs2})"
+    | .and   => some s!"(bvand_i {regs i.rs1} {regs i.rs2})"
+    | .xor   => some s!"(bvxor_i {regs i.rs1} {regs i.rs2})"
+    | .lui   => some s!"{imm12 i.imm * 4096}"
+    | .slti  => some s!"(ite (< {regs i.rs1} {imm12 i.imm}) 1 0)"
+    | .slt   => some s!"(ite (< {regs i.rs1} {regs i.rs2}) 1 0)"
+    | .ld    => some s!"(loadw {mem} (+ {regs i.rs1} {imm12 i.imm}))"
+    | .lw    => some s!"(loadw {mem} (+ {regs i.rs1} {imm12 i.imm}))"
+    | .lwu   => some s!"(loadw {mem} (+ {regs i.rs1} {imm12 i.imm}))"
+    | .lbu   => some s!"(loadb {mem} (+ {regs i.rs1} {imm12 i.imm}))"
+    | _      => none
+  fun n => if n == i.rd && i.rd != 0 then (nv.getD (regs n)) else regs n
+
+/-- Fold `symStep` over a block; the store instructions do not change registers. -/
+def symRun (mem : String) (entry : Nat → String) (is : List MInstr) : Nat → String :=
+  is.foldl (fun regs i => symStep regs mem i) entry
+
 /-- Resolve register `n`'s outcome value (from `runGM`) to a symbolic SMT term:
 `(+ x<r> off)` against a probe base, else the literal.  `none` if `n` is not in
 the outcome (unchanged from entry ⇒ its own symbol). -/
