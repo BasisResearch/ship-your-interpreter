@@ -547,9 +547,9 @@ def reflectExactSmt (lo hi : Nat) : IO String := do
 (define-fun ld1 ((m (Array Int (_ BitVec 8))) (a Int)) Int (bv2int (select m a)))
 (define-fun ld4 ((m (Array Int (_ BitVec 8))) (a Int)) Int (+ (bv2int (select m a)) (* 256 (bv2int (select m (+ a 1)))) (* 65536 (bv2int (select m (+ a 2)))) (* 16777216 (bv2int (select m (+ a 3))))))
 (define-fun ld8 ((m (Array Int (_ BitVec 8))) (a Int)) Int (+ (ld4 m a) (* 4294967296 (ld4 m (+ a 4)))))
-(declare-fun bvor_i (Int Int) Int)
-(declare-fun bvand_i (Int Int) Int)
-(declare-fun bvxor_i (Int Int) Int)
+(define-fun bvor_i ((a Int) (b Int)) Int (bv2int (bvor ((_ int2bv 64) a) ((_ int2bv 64) b))))
+(define-fun bvand_i ((a Int) (b Int)) Int (bv2int (bvand ((_ int2bv 64) a) ((_ int2bv 64) b))))
+(define-fun bvxor_i ((a Int) (b Int)) Int (bv2int (bvxor ((_ int2bv 64) a) ((_ int2bv 64) b))))
 (declare-const s0 MState)"
   let axBlock := String.intercalate "\n" axs
   return s!"{preamble}\n{sumDecls}\n{axBlock}\n(define-fun state_exit () MState {exitS})\n(define-fun mem_exit () (Array Int (_ BitVec 8)) (mm state_exit))\n"
