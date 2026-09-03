@@ -5558,3 +5558,45 @@ it, still stop and report instead.
   gate rejects a hand-rolled site battery.  The templates are a fixed, small set
   in `scripts/houdini_summary.py`, so the check is cheap and would have caught
   all three.
+
+## 2026-09-03 alloc-nonnull-forall-ghost (residual campaign, OOM branch)
+- missing: `MallocContract.nonNull_of_bounded` (`Vsa/Alloc.lean:185-197`) is the
+  field that collapses `spec`'s NULL-on-exhaustion disjunct and makes the
+  `beqz a0` OOM guard unconditionally not-taken — it is what closes the `exit(1)`
+  abort path for the `.fn` closure arm (consumed via `AllocBuildEntry`,
+  `rows/AllocClosureInhab.lean:63-66`).  As stated it quantifies `∀ σ exts n`
+  with NOTHING tying `σ` to a post-malloc state, so inhabiting it requires ruling
+  out `x10 = 0 ∧ AInv σ exts` at EVERY state.  `x10` is caller-saved scratch and
+  `AInv` is a heap invariant that has no business mentioning it, so for any sane
+  `AInv` there are states where both hold.  That is the ∀-GHOST shape of falsity
+  #12, and it makes every theorem downstream of the closure arm VACUOUS rather
+  than false — `#print axioms` stays clean and the sweep stays green, which is
+  precisely why it survived.
+  `Vsa/Sim/EnvNewSpec.lean:505-511` prunes the same NULL with a second, different
+  shape (`∀ c', AInv c'.σ exts → x10 = 0 → False`), which is the SAME ∀-ghost
+  hazard written out longhand.  `Vsa/Sim/ReallocSpec.lean` `ReallocOps` has only
+  `grow`/`null` and no collapse field at all, so `env_define`'s grow path
+  (`c/src/env.c:29-33`, which `exit(1)`s) has a genuinely open abort branch.
+  Three shapes for one phenomenon; law 3 says factor before the third.
+- workaround: NONE.  Found while asking whether the arm triples need an
+  outcome-logic split for the OOM path; they do not, but this is why the current
+  pruning does not actually hold.
+- cost: unquantified until an inhabitant is attempted — which is the point: a
+  hypothesis nobody constructs is never forced to be inhabitable, so the vacuity
+  is invisible to `check_all`, to `#sweep_refute` (the field sits in hypothesis
+  position, so the sweep reports NOT-REFUTED), and to the axiom audit.
+- proposal: give the premise a capacity antecedent it can actually earn —
+  `ArenaRoom A exts n := arenaUsed exts + n + chunkOverhead ≤ A.hi - A.lo` over
+  an `arenaUsed` that charges per-block overhead — and route all three sites
+  through ONE named `prune` lemma
+  (`disjunction + ArenaRoom + n ≤ maxReq ⟹ success disjunct`).  The caller side
+  is the heap dual of `stackBudget`, but it CANNOT be a syntactic measure the way
+  `Stmt.stackNeed` is: the interpreter frees nothing except the two concat
+  operands (`c/src/interp.c:121-122`), so a loop body's heap need is a SUM over
+  iterations, and `s = s + "a"` in a loop has no static `maxReq` either.  It has
+  to be a carried ghost budget (`live`/`aLeft`), which
+  `Vsa/Sim/InductionScaffold.lean:173-175` already anticipated as
+  `arena_budget`.  Sequence it: contract premise + `prune` first (1 file each,
+  removes two vacuity hazards), thread the budget only after `ArmEntryK`
+  (`Vsa/Sim/EvalSimCommon.lean:262-310`, destructured POSITIONALLY at 62 sites)
+  is a named-field structure — law 6.
