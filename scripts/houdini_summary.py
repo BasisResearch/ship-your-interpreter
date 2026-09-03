@@ -107,6 +107,15 @@ POSTS = {
 }
 
 
+def unroll(k):
+    """`state_exit` as `mstep` applied `k` times to `s0` — the BOUNDED encoding."""
+    t = "s0"
+    for _ in range(k):
+        t = f"(mstep {t})"
+    return (f"(define-fun state_exit () MState {t})\n"
+            "(define-fun mem_exit () (Array Int (_ BitVec 8)) (mm state_exit))")
+
+
 def z3(text, timeout):
     p = subprocess.run(["z3", "-smt2", "-in", f"-T:{timeout}"], input=text,
                        capture_output=True, text=True)
@@ -131,9 +140,35 @@ def assume_block(cset, syms, self_sym=None):
 def mine(d, syms, timeout, jobs, rounds):
     cset = {f: list(CLAUSE_IDS) for f in syms}
     reasons = {}
-    bodies = {f: open(os.path.join(d, "obligations", f + ".smt2")).read() for f in syms}
+    # A summary with no obligation file is OPAQUE by construction (an indirect
+    # call through a register, an unlisted computed goto): there is no body to
+    # unfold, so no clause can ever be established for it.  Its clause set is
+    # emptied here rather than assumed — an assumed-but-unproved clause would be
+    # an axiom smuggled into every query that mentions it.
+    bodies = {}
+    for f in list(syms):
+        path = os.path.join(d, "obligations", f + ".smt2")
+        if os.path.exists(path):
+            bodies[f] = open(path).read()
+        else:
+            cset[f] = []
+    syms = [f for f in syms if f in bodies]
+    # a summary only needs re-checking when one of the summaries its own body
+    # applies (including itself, via `<f>_ih`) has lost a clause since last round
+    deps = {f: set() for f in syms}
+    dpath = os.path.join(d, "summary-deps.tsv")
+    if os.path.exists(dpath):
+        for l in open(dpath).read().splitlines()[1:]:
+            if not l.strip(): continue
+            parts = l.split("\t")
+            deps[parts[0]] = {x for x in (parts[1].split(",") if len(parts) > 1 else []) if x}
+    stale = set(syms)
+    stale &= set(syms)
     for rnd in range(rounds):
-        tasks = [(f, c) for f in syms for c in cset[f]]
+        tasks = [(f, c) for f in syms if f in stale for c in cset[f]]
+        if not tasks:
+            print(f"  round {rnd}: fixpoint (nothing stale)")
+            return cset, True, reasons
         def run(t):
             f, c = t
             txt = bodies[f].replace("; @@ASSUME@@", assume_block(cset, syms, self_sym=f)) \
@@ -145,24 +180,75 @@ def mine(d, syms, timeout, jobs, rounds):
         if not dropped:
             print(f"  round {rnd}: fixpoint (nothing dropped)")
             return cset, True, reasons
+        weakened = set()
         for f, c, v in dropped:
             if c in cset[f]:
                 cset[f].remove(c)
+                weakened.add(f)
             reasons[f + "/" + c] = v
+        stale = {f for f in syms if deps[f] & weakened}
         why = Counter(v for _, _, v in dropped)
-        print(f"  round {rnd}: dropped {len(dropped)} clause(s)  {dict(why)}")
+        print(f"  round {rnd}: checked {len(tasks)}, dropped {len(dropped)} {dict(why)}, "
+              f"{len(stale)} summaries stale")
     return cset, False, reasons
+
+
+def bounded(d, timeout, jobs, ks):
+    """Bounded refutation search: run each residual's span for `k` exact machine
+    steps and demand it REACHED its exit PC, then negate the post.
+
+      sat   ⇒ a GENUINE countermodel (the run finished inside k steps, so the
+              unrolling is exact on it) — the statement is false as posed;
+      unsat ⇒ no countermodel within k steps (bounded validity, reported as such);
+      unknown ⇒ the bound is out of the solver's reach at this k.
+    """
+    qdir = os.path.join(d, "bounded")
+    fields = sorted(f[:-5] for f in os.listdir(qdir) if f.endswith(".smt2"))
+    out = {}
+    for k in ks:
+        tasks = [(f, pk) for f in fields for pk in POSTS
+                 if out.get((f, pk)) in (None, "UNKNOWN")]
+        if not tasks:
+            break
+        print(f"  k={k}: {len(tasks)} queries")
+        def run(t):
+            f, pk = t
+            txt = (open(os.path.join(qdir, f + ".smt2")).read()
+                   .replace("; @@ASSUME@@", "")
+                   .replace("; @@EXIT@@", unroll(k))
+                   .replace("; @@POST@@", POSTS[pk]) + "\n(check-sat)\n")
+            v = z3(txt, timeout)
+            return (f, pk, {"unsat": f"BOUNDED-VALID(k={k})",
+                            "sat": "REFUTED"}.get(v, "UNKNOWN"))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
+            for f, pk, v in ex.map(run, tasks):
+                out[(f, pk)] = v
+        print("   ", dict(Counter(v for v in out.values())))
+    path = os.path.join(d, "bounded-verdicts.tsv")
+    keys = list(POSTS)
+    with open(path, "w") as fh:
+        fh.write("field\t" + "\t".join(keys) + "\n")
+        for f in fields:
+            fh.write(f + "\t" + "\t".join(out.get((f, k), "UNKNOWN") for k in keys) + "\n")
+    print("wrote", path)
 
 
 def main():
     d = sys.argv[1]
     timeout, jobs, rounds, phase = 20, 8, 8, "both"
+    ks = [8, 24, 64, 160]
     a = sys.argv[2:]
     for i, x in enumerate(a):
         if x == "--timeout": timeout = int(a[i + 1])
         elif x.startswith("-j"): jobs = int(x[2:])
         elif x == "--rounds": rounds = int(a[i + 1])
         elif x == "--phase": phase = a[i + 1]
+        elif x == "--ks": ks = [int(z) for z in a[i + 1].split(",")]
+
+    if phase == "bounded":
+        print(f"== bounded refutation search (k ladder {ks})")
+        bounded(d, timeout, jobs, ks)
+        return
 
     syms = [l.strip() for l in open(os.path.join(d, "summaries.tsv")).read().splitlines()[1:] if l.strip()]
     deps = {}

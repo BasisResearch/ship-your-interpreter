@@ -44,13 +44,18 @@ def residualSpans : List (String × Nat × Nat) := [
   ("hArgsCons", 0x800031b0, 0x80003360), ("hArgsNil", 0x800031b0, 0x800031b4),
   ("hCallPrint", 0x800031b0, 0x80003360), ("hCallPrintln", 0x800031b0, 0x80003360),
   ("hCallAssertOk", 0x800031b0, 0x80003360), ("hFn", 0x800033c4, 0x80003408),
-  -- statement arms (exec_stmt dispatch 0x80004014)
-  ("hSExpr", 0x80004014, 0x800041a4), ("hSBlock", 0x80004014, 0x800041a4),
-  ("hSIfTrue", 0x80004014, 0x800041a4), ("hSIfFalse", 0x80004014, 0x800041a4),
-  ("hSIfNone", 0x80004014, 0x800041a4), ("hSRet", 0x80004014, 0x800041a4),
-  ("hSRetNull", 0x80004014, 0x800041a4), ("hSVarInit", 0x80004014, 0x800041a4),
-  ("hSVarNull", 0x80004014, 0x800041a4), ("hSWhileBreak", 0x80004014, 0x800041a4),
-  ("hSWhileFalse", 0x80004014, 0x800041a4), ("hSForStart", 0x80004014, 0x800041a4),
+  -- statement arms.  Each residual is about ONE `exec_stmt` arm, so its span is
+  -- that arm's own `[execArm*, exec_stmt end)` — NOT the shared dispatch header
+  -- `[0x80004014, …)`, which ends at the computed goto `jalr x0, 0(a5)` after
+  -- seven instructions and reflects a stub (the old spans' "VALID" frame verdicts
+  -- were verdicts about that stub).  The arm PCs are the ELF jump table's, and
+  -- coincide with the proof's `Vsa.Sim.execArm*` constants.
+  ("hSExpr", 0x80004170, 0x800043ec), ("hSBlock", 0x8000418c, 0x800043ec),
+  ("hSIfTrue", 0x800041e8, 0x800043ec), ("hSIfFalse", 0x800041e8, 0x800043ec),
+  ("hSIfNone", 0x800041e8, 0x800043ec), ("hSRet", 0x80004120, 0x800043ec),
+  ("hSRetNull", 0x80004120, 0x800043ec), ("hSVarInit", 0x800040d8, 0x800043ec),
+  ("hSVarNull", 0x800040d8, 0x800043ec), ("hSWhileBreak", 0x8000403c, 0x800043ec),
+  ("hSWhileFalse", 0x8000403c, 0x800043ec), ("hSForStart", 0x80004234, 0x800043ec),
   -- seq loops (seqLoopImage)
   ("hSeqNil", 0x8000448c, 0x80004514), ("hSeqConsNormal", 0x8000448c, 0x80004514),
   ("hSeqConsAbrupt", 0x8000448c, 0x80004514),
@@ -125,5 +130,155 @@ elab "#emit_campaign " pathStx:str : command => do
       IO.FS.writeFile s!"{dir}/queries/{nm}.smt2" txt
       rows := rows ++ [s!"{nm}\t{String.intercalate "," deps}"]
     IO.FS.writeFile s!"{dir}/summaries.tsv" ("summary\n" ++ String.intercalate "\n" syms ++ "\n")
+    -- per-summary immediate dependencies: the driver only re-checks a summary
+    -- when one of the summaries its body applies has lost a clause.
+    let depRows := syms.map (fun s => s!"{s}\t{String.intercalate "," (summaryDeps img s)}")
+    IO.FS.writeFile s!"{dir}/summary-deps.tsv" ("summary\tdeps\n" ++ String.intercalate "\n" depRows ++ "\n")
     IO.FS.writeFile s!"{dir}/query-summaries.tsv" ("field\tsummaries\n" ++ String.intercalate "\n" rows ++ "\n")
     Lean.logInfo m!"#emit_campaign → {dir} ({syms.length} summaries, {residualSpans.length} queries)"
+
+
+open Vsa.ReflectResiduals Vsa.ReflectSpan in
+/-- `#emit_machine "<dir>" <lo> <hi>` — the PC-THREADED campaign over the code
+region `[lo,hi)`: one shared `mstep`/`mrun` pair and one query per residual.
+
+* `<dir>/machine.smt2` — preamble + summary declarations + `mstep` + `mrun`;
+* `<dir>/obligations/mrun.smt2` — the one-step `mrun` obligation under `mrun_ih`;
+* `<dir>/queries/<field>.smt2` — `pc s0 = <entry>`, `STOP = <exit>`,
+  `state_exit = (mrun s0)`, with `; @@ASSUME@@` / `; @@POST@@`;
+* `<dir>/summaries.tsv`, `<dir>/unmodelled.tsv` — the out-of-region callee
+  summaries, and every PC whose register effect is over-approximated.
+
+Every residual whose span lies in `[lo,hi)` reflects with NO control-flow
+analysis: computed gotos, shared epilogues, multi-exit loops and the
+`eval_expr`↔`exec_stmt` recursion are all just PC values. -/
+elab "#emit_machine " pathStx:str loStx:num hiStx:num : command => do
+  Lean.Elab.Command.liftTermElabM do
+    let dir := pathStx.getString
+    let lo := loStx.getNat
+    let hi := hiStx.getNat
+    IO.FS.createDirAll s!"{dir}/obligations"
+    IO.FS.createDirAll s!"{dir}/queries"
+    IO.FS.createDirAll s!"{dir}/bounded"
+    let img ← loadElf elfPath
+    let (machine, sums, bad) := machineSmt img lo hi
+    let decls := summaryDecls sums
+    let unmodelledDecls := "(declare-fun unmodelled_step (MState) MState)"
+    let pre := s!"{smtPreamble}\n{decls}\n{unmodelledDecls}\n(declare-const SL_lo Int)\n(declare-const SL_hi Int)\n(declare-const A_lo Int)\n(declare-const A_hi Int)\n{machine}"
+    IO.FS.writeFile s!"{dir}/machine.smt2" (pre ++ "\n")
+    -- the `mrun` induction obligation: `mrun` itself is NOT axiomatised here;
+    -- the recursive occurrence is the free `mrun_ih`.
+    let preNoRun := s!"{smtPreamble}\n{decls}\n{unmodelledDecls}\n(declare-const SL_lo Int)\n(declare-const SL_hi Int)\n(declare-const A_lo Int)\n(declare-const A_hi Int)\n(declare-const STOP Int)\n(declare-fun mrun_ih (MState) MState)"
+    let stepOnly := (machine.splitOn "\n(declare-const STOP Int)").headD machine
+    IO.FS.writeFile s!"{dir}/obligations/mrun.smt2"
+      s!"{preNoRun}\n{stepOnly}\n(declare-const S0 MState)\n(define-fun fbody () MState {machineRunBody lo hi "S0"})\n; @@ASSUME@@\n; @@GOAL@@\n"
+    let mut rows : List String := []
+    for (nm, elo, ehi) in residualSpans do
+      if lo ≤ elo && elo < hi then
+        IO.FS.writeFile s!"{dir}/queries/{nm}.smt2"
+          s!"{pre}\n(declare-const s0 MState)\n(assert (= {stPC "s0"} {elo}))\n(assert (= STOP {ehi}))\n; @@ASSUME@@\n(define-fun state_exit () MState (mrun s0))\n(define-fun mem_exit () (Array Int (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
+        -- BOUNDED companion: `mstep` unrolled `k` times with an explicit
+        -- "the span actually finished" conjunct.  A SAT model here is a GENUINE
+        -- countermodel (the run reached `STOP` inside `k` steps, so the unrolling
+        -- is exact on it); an UNSAT is bounded validity, reported as such.
+        IO.FS.writeFile s!"{dir}/bounded/{nm}.smt2"
+          s!"{pre}\n(declare-const s0 MState)\n(assert (= {stPC "s0"} {elo}))\n(assert (= STOP {ehi}))\n; @@ASSUME@@\n; @@EXIT@@\n(assert (= {stPC "state_exit"} {ehi}))\n; @@POST@@\n"
+        rows := rows ++ [s!"{nm}\tmrun"]
+    IO.FS.writeFile s!"{dir}/summaries.tsv" ("summary\nmrun\n")
+    IO.FS.writeFile s!"{dir}/summary-deps.tsv" ("summary\tdeps\nmrun\tmrun\n")
+    IO.FS.writeFile s!"{dir}/query-summaries.tsv" ("field\tsummaries\n" ++ String.intercalate "\n" rows ++ "\n")
+    IO.FS.writeFile s!"{dir}/unmodelled.tsv"
+      ("pc\n" ++ String.intercalate "\n" (bad.map toString) ++ "\n")
+    Lean.logInfo m!"#emit_machine [{lo},{hi}) → {dir}: {(hi-lo)/4} instrs, {sums.length} out-of-region callee summaries, {bad.length} unmodelled PCs, {rows.length} queries"
+
+
+open Vsa.ReflectResiduals Vsa.ReflectSpan in
+/-- `#emit_bmc "<dir>" <rounds>` — the BOUNDED-SYMBOLIC-EXECUTION campaign.
+
+Per residual: the span's REGION is its enclosing function (bounded by the image's
+`jal ra` target set), the STOP is the residual's declared exit PC, and the
+frontier is merged by PC every round.  Writes
+
+* `<dir>/queries/<field>.smt2` — `state_exit` as the guarded merge of every exit
+  arrival, with `; @@ASSUME@@` / `; @@POST@@` for the driver;
+* `<dir>/obligations/<sym>.smt2` — one per callee/loop/opaque summary reached;
+* `<dir>/spans.tsv` — per residual: region, stop, rounds used, whether the
+  frontier EMPTIED (`complete`, so the encoding is exact for this span), term
+  size and summary count.  A residual is only ever reported VALID when its span
+  is complete; otherwise its verdict is a BOUNDED one. -/
+elab "#emit_bmc " pathStx:str roundsStx:num : command => do
+  Lean.Elab.Command.liftTermElabM do
+    let dir := pathStx.getString
+    let rounds := roundsStx.getNat
+    IO.FS.createDirAll s!"{dir}/queries"
+    IO.FS.createDirAll s!"{dir}/obligations"
+    let img ← loadElf elfPath
+    let codeLo := 0x80000000
+    let codeHi := 0x80018be0
+    let starts := funcStarts img codeLo codeHi
+    let mut rows : List String := []
+    let mut deps : List String := []
+    let mut allSums : List String := []
+    for (nm, elo, ehi) in residualSpans do
+      let (rlo, rhi) := funcRange starts codeLo codeHi elo
+      let (ev, binds, sums, complete, used) := reflectBmc img rlo rhi elo [ehi] rounds "s0"
+      let body := wrapLets binds ev
+      allSums := (allSums ++ sums).eraseDups
+      let decls := summaryDecls sums
+      IO.FS.writeFile s!"{dir}/queries/{nm}.smt2"
+        s!"{smtPreamble}\n{decls}\n(declare-const SL_lo Int)\n(declare-const SL_hi Int)\n(declare-const A_lo Int)\n(declare-const A_hi Int)\n(declare-const s0 MState)\n; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {body})\n(define-fun mem_exit () (Array Int (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
+      rows := rows ++ [s!"{nm}\t0x{String.ofList (Nat.toDigits 16 rlo)}\t0x{String.ofList (Nat.toDigits 16 rhi)}\t0x{String.ofList (Nat.toDigits 16 elo)}\t0x{String.ofList (Nat.toDigits 16 ehi)}\t{used}\t{complete}\t{body.length}\t{sums.length}"]
+      deps := deps ++ [s!"{nm}\t{String.intercalate "," sums}"]
+    -- Summary obligations, over the SAME encoder.
+    --   `callee_t` — symbolically execute the callee's own function;
+    --   `loop_h`   — symbolically execute the loop from its header, stopping at
+    --               the loop's exit edges, so the term IS the one-step body
+    --               (a re-arrival at `h` becomes `loop_h_ih`, the IH);
+    --   `icall_`/`idisp_` — opaque by construction (an indirect call through a
+    --               register / an unlisted computed goto): NO obligation exists,
+    --               so they are listed in `opaque.tsv` and their clauses can only
+    --               ever be assumed, never established.
+    let mut opaqueSyms : List String := []
+    let mut symDeps : List String := []
+    for sym in allSums do
+      let mk : Nat → Nat → Nat → List Nat → IO String := fun rlo rhi entry stops => do
+        let (ev, binds, subs, complete, _) := reflectBmc img rlo rhi entry stops rounds "S0"
+        let body := (wrapLets binds ev).replace s!"({sym} " s!"({sym}_ih "
+        let decls := summaryDecls ((allSums ++ subs).eraseDups ++ [s!"{sym}_ih"])
+        IO.FS.writeFile s!"{dir}/obligations/{sym}.smt2"
+          s!"{smtPreamble}\n{decls}\n(declare-const SL_lo Int)\n(declare-const SL_hi Int)\n(declare-const A_lo Int)\n(declare-const A_hi Int)\n(declare-const S0 MState)\n; complete={complete}\n(define-fun fbody () MState {body})\n; clause set for every summary; `{sym}` itself is supplied as `{sym}_ih`\n; @@ASSUME@@\n; negated clause under test, over S0 / fbody\n; @@GOAL@@\n"
+        return s!"{sym}\t{String.intercalate "," ((sym :: subs).eraseDups)}"
+      if sym.startsWith "callee_" then
+        let t := (sym.drop 7).toNat!
+        let (rlo, rhi) := funcRange starts codeLo codeHi t
+        symDeps := symDeps ++ [← mk rlo rhi t []]
+      else if sym.startsWith "loop_" then
+        let h := (sym.drop 5).toNat!
+        let (rlo, rhi) := funcRange starts codeLo codeHi h
+        let (qs, _) := loopExits img rlo rhi [] h
+        symDeps := symDeps ++ [← mk rlo rhi h qs]
+      else opaqueSyms := opaqueSyms ++ [sym]
+    IO.FS.writeFile s!"{dir}/opaque.tsv" ("summary\n" ++ String.intercalate "\n" opaqueSyms ++ "\n")
+    IO.FS.writeFile s!"{dir}/summary-deps.tsv"
+      ("summary\tdeps\n" ++ String.intercalate "\n" symDeps ++ "\n")
+    IO.FS.writeFile s!"{dir}/spans.tsv"
+      ("field\tregion_lo\tregion_hi\tentry\tstop\trounds\tcomplete\tterm_bytes\tsummaries\n"
+        ++ String.intercalate "\n" rows ++ "\n")
+    IO.FS.writeFile s!"{dir}/summaries.tsv" ("summary\n" ++ String.intercalate "\n" allSums ++ "\n")
+    IO.FS.writeFile s!"{dir}/query-summaries.tsv" ("field\tsummaries\n" ++ String.intercalate "\n" deps ++ "\n")
+    let nComplete := (rows.filter (fun r => (r.splitOn "\t").getD 6 "" == "true")).length
+    Lean.logInfo m!"#emit_bmc → {dir}: {residualSpans.length} spans, {nComplete} COMPLETE at {rounds} rounds, {allSums.length} summaries"
+
+
+open Vsa.ReflectResiduals Vsa.ReflectSpan in
+elab "#bmc_trace " loStx:num hiStx:num stopStx:num rStx:num : command => do
+  Lean.Elab.Command.liftTermElabM do
+    let img ← loadElf elfPath
+    let starts := funcStarts img 0x80000000 0x80018be0
+    let (rlo, rhi) := funcRange starts 0x80000000 0x80018be0 loStx.getNat
+    let tr := bmcTrace img rlo rhi loStx.getNat [stopStx.getNat] rStx.getNat
+    let mut i : Nat := 0
+    for f in tr do
+      let pcs := f.map (fun q => String.ofList (Nat.toDigits 16 q))
+      Lean.logInfo s!"round {i}: {f.length} pcs {pcs}"
+      i := i + 1

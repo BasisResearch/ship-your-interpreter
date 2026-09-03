@@ -116,7 +116,7 @@ def isTerm (w : BitVec 32) : Bool :=
 inductive Term where
   | branch (target : Nat)      -- conditional; fallthrough OR target
   | jal    (rd target : Nat)   -- call (rd=1) or plain jump
-  | jalr   (rd : Nat)          -- indirect (call rd=1 / ret rd=0 via ra)
+  | jalr   (rd rs1 : Nat)      -- indirect: CALL rd=1 / RET rd=0∧rs1=ra / computed goto
   | sys                        -- ecall/ebreak
   deriving Repr
 
@@ -137,7 +137,7 @@ def decodeTerm (pc : Nat) (w : BitVec 32) : Term :=
              + (((w>>>8) &&& 0xf).toNat)*2
     let imm := if bit 31 == 1 then Int.ofNat imm - (Nat.pow 2 13) else Int.ofNat imm
     Term.branch ((Int.ofNat pc + imm).toNat)
-  else if op == 0x67 then Term.jalr rd
+  else if op == 0x67 then Term.jalr rd (((w >>> 15) &&& 0x1f).toNat)
   else Term.sys
 
 /-- Split `[lo,hi)` into maximal straight-line blocks, each ending at a
@@ -253,20 +253,24 @@ def reflectStepsMulti (img : Nat → Option (BitVec 8)) (regs : List Nat) (lo hi
       else if rd == 1 then
         let s := s!"callee_{target}"; summaries := s :: summaries; cur := s!"({s} {cur})"
       -- plain forward jump (rd=0): straight fallthrough of the log, no seam effect
-    | some (Term.jalr _) => pure ()           -- indirect call/ret: caller resumes
+    | some (Term.jalr _ _) => pure ()         -- indirect call/ret: caller resumes
     | some (Term.branch target) =>
       let s := s!"branch_{target}"; summaries := s :: summaries; cur := s!"({s} {cur})"
     | _ => pure ()
   return (cur, summaries.eraseDups)
 
-/-- Find a callee's exit: scan from `entry` for the first `ret` (`jalr x0`,
-i.e. JALR with rd=0), bounded by `maxLen` words. -/
+/-- Find a callee's exit: scan from `entry` for the first `ret` — `jalr x0, 0(ra)`,
+i.e. JALR with rd = x0 AND rs1 = x1.  A `jalr x0, 0(rN)` for any other `rN` is a
+COMPUTED GOTO (the interpreter's AST-kind jump tables dispatch that way at
+`0x800031ac` / `0x80004030`); stopping there truncates the callee at its
+dispatch header.  Bounded by `maxLen` words. -/
 def findRet (img : Nat → Option (BitVec 8)) (entry : Nat) (maxLen : Nat := 4096) : Nat := Id.run do
   let mut pc := entry
   let mut n := 0
   while n < maxLen do
     let w := wordAt img pc
-    if opcode w == 0x67 && ((w >>> 7) &&& 0x1f).toNat == 0 then return pc + 4
+    if opcode w == 0x67 && ((w >>> 7) &&& 0x1f).toNat == 0
+        && ((w >>> 15) &&& 0x1f).toNat == 1 then return pc + 4
     pc := pc + 4; n := n + 1
   return pc
 
@@ -284,6 +288,36 @@ def findBackEdge (img : Nat → Option (BitVec 8)) (t : Nat) (maxLen : Nat := 40
       | _ => pure ()
     pc := pc + 4; n := n + 1
   return pc
+
+/-- **Ground indirect-dispatch sites** — `(jalr PC, jump-table base, arm count)`.
+
+The interpreter dispatches on an AST kind through a rodata table of 32-bit
+self-relative offsets: `arm k = base + (int32) table[k]`.  Both tables are the
+PINNED ones the proof fixes (`Vsa.Sim.KindTablePins` at `0x80019f58`,
+`StmtTablePins` at `0x80019fb8`, supplied by
+`Vsa.Sim.Rows.{kind,stmt}TablePins_of_bytes` from the loaded image), and the arm
+addresses this resolves to are exactly the proof's `evalArm*`/`execArm*`
+constants.  A `jalr x0` at a PC NOT listed here is reflected as a named opaque
+per-site summary rather than silently ending the path. -/
+def dispatchSites : List (Nat × Nat × Nat) :=
+  [ (0x800031ac, 0x80019f58, 10)     -- eval_expr: 10 `Expr` kind arms
+  , (0x80003558, 0x80019f84, 13)     -- the binary/logical operator sub-dispatch
+                                     --   (`binOpTok` 11…23 → 13 table entries,
+                                     --   the table running up to the `Stmt` one)
+  , (0x80004030, 0x80019fb8, 9) ]    -- exec_stmt: 9 `Stmt` kind arms
+
+/-- Read a 32-bit little-endian SIGNED word (the jump-table entries are
+self-relative offsets). -/
+def sword32 (img : Nat → Option (BitVec 8)) (va : Nat) : Int :=
+  let w := (wordAt img va).toNat
+  if w ≥ 2147483648 then (w : Int) - 4294967296 else (w : Int)
+
+/-- The arm targets of the dispatch at `p`, read out of the ELF's jump table. -/
+def dispatchArms (img : Nat → Option (BitVec 8)) (p : Nat) : Option (List Nat) :=
+  match dispatchSites.find? (fun (q, _, _) => q == p) with
+  | none => none
+  | some (_, base, n) =>
+    some ((List.range n).map (fun k => ((base : Int) + sword32 img (base + 4 * k)).toNat))
 
 /-- Emit the fold/unfold axiom for every summary symbol, recursively.  A
 `callee_<t>` axiom is the callee's OWN `reflectStepsMulti` (recursion bottoms out
@@ -385,7 +419,7 @@ partial def reflectPath (img : Nat → Option (BitVec 8)) (regs : List Nat) (hi 
       reflectPath img regs hi (fuel-1) (p+4) s!"({s}_m {mem1})" rf2
     else
       reflectPath img regs hi (fuel-1) tgt mem1 rf1     -- plain jump
-  | Term.jalr _ => return (mem1, rf1, [])               -- ret
+  | Term.jalr _ _ => return (mem1, rf1, [])             -- ret
   | Term.sys    => return (mem1, rf1, [])
 
 /-- Assemble the COMPLETE reflected `Steps` SMT for span `[lo,hi)`: register
@@ -487,6 +521,77 @@ def blockState (S : String) (instrs : List MInstr) : String := Id.run do
   let regsArr := changed.eraseDups.foldl (fun ra n => s!"(store {ra} {n} {rf n})") s!"(rr {S})"
   return s!"(mst {mem} {regsArr})"
 
+/-- The block-start successors of the block at `pc` (control-flow only, no state).
+Used for the reachability pass that turns a loop into a `loop_<header>` summary. -/
+def blockSuccs (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat) (pc : Nat) : List Nat := Id.run do
+  let mut p := pc
+  while p < hi && !(stops.contains p) && !(isTerm (wordAt img p)) do p := p + 4
+  if p ≥ hi || stops.contains p then return []
+  let w := wordAt img p
+  let inR := fun (q : Nat) => lo ≤ q && q < hi && !(stops.contains q)
+  match decodeTerm p w with
+  | Term.branch tgt => (if inR tgt then [tgt] else []) ++ (if inR (p+4) then [p+4] else [])
+  | Term.jal rd tgt =>
+    if rd == 1 then (if inR (p+4) then [p+4] else [])
+    else if inR tgt then [tgt] else []
+  | Term.jalr rd rs1 =>
+    if rd == 1 then (if inR (p+4) then [p+4] else [])
+    else if rs1 == 1 then []
+    else match dispatchArms img p with
+         | some arms => arms.filter inR
+         | none => []
+  | Term.sys => if inR (p+4) then [p+4] else []
+
+/-- Every block start reachable from `src` (bounded by `fuel` blocks). -/
+partial def reachFrom (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
+    (work seen : List Nat) (fuel : Nat) : List Nat :=
+  match fuel, work with
+  | 0, _ => seen
+  | _, [] => seen
+  | f+1, q :: rest =>
+    if seen.contains q then reachFrom img lo hi stops rest seen f
+    else reachFrom img lo hi stops (blockSuccs img lo hi stops q ++ rest) (q :: seen) f
+
+/-- Can control get from `src` back to `h`?  This is what distinguishes a loop's
+BODY edges from its EXIT edges: after `loop_<h>` has run the loop to completion,
+the exit continuation is exactly the successors that can no longer reach `h`. -/
+def canReach (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat) (src h : Nat) : Bool :=
+  (reachFrom img lo hi stops [src] [] 4000).contains h
+
+/-- The natural loop of header `h`: every block reachable from `h` that can get
+back to `h`. -/
+def loopBody (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat) (h : Nat) : List Nat :=
+  (reachFrom img lo hi stops [h] [] 4000).filter (fun b => canReach img lo hi stops b h)
+
+/-- Where a loop can go when it is done: every successor of a body block that can
+no longer reach the header (the loop's EXIT edges), plus a flag for "some body
+block leaves the region outright" (a `ret` inside the loop). -/
+def loopExits (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat) (h : Nat) : List Nat × Bool :=
+  let body := loopBody img lo hi stops h
+  let qs := (body.flatMap (blockSuccs img lo hi stops)).eraseDups.filter
+    (fun q => !(canReach img lo hi stops q h))
+  let leaves := body.any (fun b => (blockSuccs img lo hi stops b).isEmpty)
+  (qs, leaves)
+
+/-- Per-INSTRUCTION `let`-bound block execution.  `blockState` builds one term
+per block, which is quadratic in practice: every load in the block references the
+whole accumulated memory term, and every register read inlines the expression
+that produced it, so a ten-instruction block with a dependent chain is already
+kilobytes and a forty-round frontier is tens of megabytes.  Binding each
+instruction's state makes the block linear — every term references only the
+previous instruction's variable. -/
+def blockBinds (S : String) (instrs : List MInstr) (k : Nat) :
+    String × Nat × List String := Id.run do
+  let mut cur := S
+  let mut k := k
+  let mut binds : List String := []
+  for i in instrs do
+    let nxt := s!"i{k}"
+    binds := binds ++ [s!"({nxt} {blockState cur [i]})"]
+    cur := nxt
+    k := k + 1
+  return (cur, k, binds)
+
 /-- Branch condition over state `S` (exact register comparison). -/
 def branchCondSt (S : String) (w : BitVec 32) : String :=
   let f3 := ((w >>> 12) &&& 7).toNat
@@ -529,7 +634,7 @@ partial def reflectExact (img : Nat → Option (BitVec 8)) (hi fuel : Nat)
       return (rest, (s :: s2).eraseDups)
     else if tgt ≤ pc then let s := s!"loop_{tgt}"; return (s!"({s} {S1})", [s])
     else reflectExact img hi (fuel-1) tgt S1
-  | Term.jalr _ => return (S1, [])
+  | Term.jalr _ _ => return (S1, [])
   | Term.sys    => return (S1, [])
 
 /-- DAG reflection: thread a state VARIABLE (not the full term) and accumulate
@@ -571,8 +676,446 @@ partial def reflectExactD (img : Nat → Option (BitVec 8)) (hi fuel : Nat) (pc 
       let lv := s!"s{k}"
       return (lv, k+1, binds ++ [s!"({lv} (loop_{tgt} {v}))"], (s!"loop_{tgt}" :: sums).eraseDups)
     else reflectExactD img hi (fuel-1) tgt v k binds sums
-  | Term.jalr _ => return (v, k, binds, sums)
+  | Term.jalr rd rs1 =>
+    if rd == 1 then
+      -- indirect CALL through a register (a native function pointer): the target
+      -- is not statically known, so ONE named opaque summary per site.
+      let cv := s!"s{k}"
+      return (cv, k+1, binds ++ [s!"({cv} (icall_{p} {v}))"], (s!"icall_{p}" :: sums).eraseDups)
+    else if rs1 == 1 then (v, k, binds, sums)                     -- ret
+    else match dispatchArms img p with
+    | some arms =>
+      -- ground jump-table dispatch: reflect EVERY arm from the dispatch state and
+      -- select on the computed target (which the pinned table forces to be one of
+      -- them).  The arms' `let`-bindings are pure, so binding them all is free.
+      let mut bs := binds; let mut kk := k; let mut ss := sums
+      let mut exits : List (Nat × String) := []
+      for a in arms do
+        let (ev, k', b', s') := reflectExactD img hi (fuel-1) a v kk bs ss
+        bs := b'; kk := k'; ss := s'; exits := exits ++ [(a, ev)]
+      let mut acc := v
+      for (a, ev) in exits.reverse do
+        let nv := s!"s{kk}"
+        bs := bs ++ [s!"({nv} (ite (= {stR v rs1} {a}) {ev} {acc}))"]
+        acc := nv; kk := kk + 1
+      return (acc, kk, bs, ss)
+    | none =>
+      -- an unlisted computed goto: named opaque summary, NOT a silent path end.
+      let dv := s!"s{k}"
+      return (dv, k+1, binds ++ [s!"({dv} (idisp_{p} {v}))"], (s!"idisp_{p}" :: sums).eraseDups)
   | Term.sys    => return (v, k, binds, sums)
+
+-- ==========================================================================
+-- PC-THREADED MACHINE REFLECTION — the ground truth.
+--
+-- The block-DAG reflector above is an optimisation that only reflects the
+-- STRUCTURED cases exactly: it needs a forward branch to reconverge, a `jal ra`
+-- to return, a backward edge to be a real loop back-edge, and it drops whatever
+-- follows a loop.  Real compiled code breaks all four (a shared epilogue reached
+-- by a backward `j`, a multi-exit loop, a computed goto).
+--
+-- `Steps` is just the reflexive-transitive closure of ONE step, so reflect ONE
+-- step exactly and close it recursively.  The PC lives in `rr` at index 32 (not
+-- a machine register), and `mstep` is a flat `ite` over every PC in the region —
+-- so a computed goto, a backward `j`, a multi-exit loop and an irreducible
+-- region all reflect with NO control-flow analysis at all: `mstep` dispatches on
+-- whatever PC value the instruction produced.  Size is linear in the region.
+--
+-- An instruction whose `MKind` the value reflector does not model becomes a
+-- NAMED per-site uninterpreted `unmodelled_<pc>` result rather than a silent
+-- no-op — an over-approximation (sound for validity: proving the post against
+-- every possible value proves it against the real one), and a reported one.
+-- ==========================================================================
+
+/-- The PC slot in `rr` (32 is past the 32 machine registers). -/
+def pcIdx : Nat := 32
+
+/-- The PC of state term `S`. -/
+def stPC (S : String) : String := stR S pcIdx
+
+/-- Sign-extended I-type immediate (bits 31..20) of a raw word. -/
+def immI (w : BitVec 32) : Int :=
+  let u := ((w >>> 20) &&& 0xfff).toNat
+  if u ≥ 2048 then (u : Int) - 4096 else (u : Int)
+
+/-- Register-producing encodings the proof's `decodeM` table does not carry.
+
+Over this image that is exactly the UNSIGNED set-less-than pair — `sltiu`
+(op `0x13`, funct3 `3`) and `sltu` (op `0x33`, funct3 `3`, funct7 `0`) — 30 sites,
+2 of them inside `eval_expr` (`sltiu a1, a0, 1`, the `x == 0` test).  Modelling
+them here rather than falling back to the opaque successor makes the whole
+region's register effect EXACT.  Unsigned comparison goes through the bitvector
+theory, like every other unsigned operation in this file. -/
+def rawRegVal (S : String) (w : BitVec 32) : Option (Nat × String) :=
+  let op := opcode w
+  let f3 := ((w >>> 12) &&& 7).toNat
+  let f7 := ((w >>> 25) &&& 0x7f).toNat
+  let rd := ((w >>> 7) &&& 0x1f).toNat
+  let rs1 := ((w >>> 15) &&& 0x1f).toNat
+  let rs2 := ((w >>> 20) &&& 0x1f).toNat
+  let bv (t : String) : String := s!"((_ int2bv 64) {t})"
+  if op == 0x13 && f3 == 3 then
+    some (rd, s!"(ite (bvult {bv (stR S rs1)} {bv (toString (immI w))}) 1 0)")
+  else if op == 0x33 && f3 == 3 && f7 == 0 then
+    some (rd, s!"(ite (bvult {bv (stR S rs1)} {bv (stR S rs2)}) 1 0)")
+  else none
+
+/-- Is this word's effect modelled EXACTLY?
+
+Two ways it can fail, and both must be caught: `decodeM` may not recognise the
+word at all (`mkLine` then falls back to `addi x0, x0, 0` — a silent NOP, which
+would be an unsound "the machine did nothing" claim), or the kind may decode but
+have no `regValExact` value (`mul`/`div`/…).  Either way the site becomes the
+shared opaque `unmodelled_step`, which is an over-approximation: proving the post
+against EVERY possible successor state proves it against the real one. -/
+def modelled (p : Nat) (w : BitVec 32) : Bool :=
+  match decodeM w with
+  | none => false
+  | some _ =>
+    let i := mkLine (BitVec.ofNat 64 p) w
+    match i.kind with
+    | .sd | .sw | .sh | .sb => true
+    | _ => (regValExact (fun n => s!"r{n}") "m" i).isSome || i.rd == 0
+
+/-- ONE instruction's EXACT effect on the whole state, PC included.  Returns the
+new state term, the summary symbols it introduces, and whether it was modelled.
+A `jal ra` leaving `[lo,hi)` applies that callee's summary and lands at `p+4`. -/
+def stepArm (img : Nat → Option (BitVec 8)) (lo hi : Nat) (S : String) (p : Nat) :
+    String × List String × Bool := Id.run do
+  let w := wordAt img p
+  let setPC (st : String) (v : String) : String :=
+    s!"(mst (mm {st}) (store (rr {st}) {pcIdx} {v}))"
+  if !(isTerm w) then
+    let base := blockState S [mkLine (BitVec.ofNat 64 p) w]
+    if modelled p w then return (setPC base s!"{p+4}", [], true)
+    else match rawRegVal S w with
+    | some (rd, v) =>
+      let regs := if rd == 0 then s!"(rr {S})" else s!"(store (rr {S}) {rd} {v})"
+      return (s!"(mst (mm {S}) (store {regs} {pcIdx} {p+4}))", [], true)
+    | none =>
+      -- unmodelled: the SHARED opaque successor (the state carries the PC, so
+      -- distinct sites can still behave distinctly).  Over-approximate, sound.
+      return (s!"(unmodelled_step {S})", [], false)
+  match decodeTerm p w with
+  | Term.branch tgt =>
+    return (setPC S s!"(ite {branchCondSt S w} {tgt} {p+4})", [], true)
+  | Term.jal rd tgt =>
+    if lo ≤ tgt && tgt < hi then
+      let r1 := if rd == 0 then s!"(rr {S})" else s!"(store (rr {S}) {rd} {p+4})"
+      return (s!"(mst (mm {S}) (store {r1} {pcIdx} {tgt}))", [], true)
+    else
+      -- out-of-region call: the callee's summary, then land after the call site
+      let sym := s!"callee_{tgt}"
+      let st := s!"({sym} {S})"
+      let r1 := if rd == 0 then s!"(rr {st})" else s!"(store (rr {st}) {rd} {p+4})"
+      return (s!"(mst (mm {st}) (store {r1} {pcIdx} {p+4}))", [sym], true)
+  | Term.jalr rd rs1 =>
+    -- EXACT: the target is the computed value with bit 0 cleared.  `ret`
+    -- (rd=0, rs1=ra) and the AST-kind computed gotos are the SAME rule here.
+    let v := s!"(+ {stR S rs1} {immI w})"
+    let tgt := s!"(- {v} (mod {v} 2))"
+    let r1 := if rd == 0 then s!"(rr {S})" else s!"(store (rr {S}) {rd} {p+4})"
+    return (s!"(mst (mm {S}) (store {r1} {pcIdx} {tgt}))", [], true)
+  | Term.sys => return (setPC S s!"{p+4}", [], true)
+
+/-- Dispatch on the PC by BALANCED BINARY SEARCH rather than a linear `ite`
+chain: a region of `n` instructions gives depth `log2 n` instead of `n`, which
+keeps the SMT parser off its recursion limit and gives Z3 a term it can resolve
+in `log n` case splits once the PC is known. -/
+partial def balancedDispatch (arms : List (Nat × String)) : String :=
+  match arms with
+  | [] => "S"
+  | [(q, t)] => s!"(ite (= {stPC "S"} {q}) {t} S)"
+  | _ =>
+    let n := arms.length / 2
+    let lo := arms.take n
+    let hi := arms.drop n
+    match hi.head? with
+    | none => "S"
+    | some (mid, _) =>
+      s!"(ite (< {stPC "S"} {mid}) {balancedDispatch lo} {balancedDispatch hi})"
+
+/-- The whole region as `mstep` (one exact machine step) + `mrun` (its closure).
+Returns the SMT text, the summary symbols, and the unmodelled PCs. -/
+def machineSmt (img : Nat → Option (BitVec 8)) (lo hi : Nat) :
+    String × List String × List Nat := Id.run do
+  let mut arms : List (Nat × String) := []
+  let mut sums : List String := []
+  let mut bad : List Nat := []
+  let mut p := lo
+  while p < hi do
+    let (t, s, ok) := stepArm img lo hi "S" p
+    arms := arms ++ [(p, t)]
+    sums := (sums ++ s).eraseDups
+    if !ok then bad := bad ++ [p]
+    p := p + 4
+  let body := balancedDispatch arms
+  -- `mstep` is DECLARED with a defining `forall` axiom, not `define-fun`:
+  -- SMT-LIB `define-fun` is a MACRO, so `(mstep (mstep … s0))` would inline the
+  -- whole 10 MB body once per unrolling level before any simplification.  As an
+  -- axiom it is instantiated lazily, and the balanced PC dispatch then collapses
+  -- in `log n` splits per level because the PC at that level is concrete.
+  let stepDef := s!"(declare-fun mstep (MState) MState)\n(assert (forall ((S MState)) (! (= (mstep S) {body}) :pattern ((mstep S)))))"
+  -- `mrun` runs until control leaves the region OR reaches the query's own exit
+  -- PC (`STOP`, a per-query constant), so ONE shared step/closure serves every
+  -- residual, including the ones whose span ends mid-function.
+  let inRegion := s!"(and (<= {lo} {stPC "S"}) (< {stPC "S"} {hi}) (not (= {stPC "S"} STOP)))"
+  let runDecl := "(declare-const STOP Int)\n(declare-fun mrun (MState) MState)"
+  let runAx := s!"(assert (forall ((S MState)) (= (mrun S) (ite {inRegion} (mrun (mstep S)) S))))"
+  return (s!"{stepDef}\n{runDecl}\n{runAx}", sums, bad)
+
+/-- The `mrun` one-step body under the induction hypothesis `mrun_ih` — the
+Houdini obligation's `fbody`. -/
+def machineRunBody (lo hi : Nat) (S : String) : String :=
+  s!"(ite (and (<= {lo} {stPC S}) (< {stPC S} {hi}) (not (= {stPC S} STOP))) (mrun_ih (mstep {S})) {S})"
+
+-- ==========================================================================
+-- BOUNDED SYMBOLIC EXECUTION WITH STATE MERGING (`reflectBmc`).
+--
+-- The straight-line DAG reflector needs a forward branch to reconverge, a
+-- backward edge to be a real loop back-edge, and it drops whatever follows a
+-- loop; real compiled code breaks all three (a shared epilogue reached by a
+-- backward `j`, a multi-exit loop, a computed goto).  The PC-threaded `mstep`
+-- machine below has none of those limits but hands Z3 a 25 000-arm dispatch it
+-- cannot even take ONE step through.
+--
+-- This is the encoder that has neither problem: symbolic execution with the PC
+-- CONCRETE (so every dispatch is resolved here, in Lean, for free), a guard term
+-- per arrival, and a MERGE of all arrivals at the same PC in the same round.
+-- Merging is what keeps it linear: the frontier can never exceed the number of
+-- distinct PCs, so a diamond does not double and a loop does not branch — it
+-- simply re-arrives at its header, which is one more round.
+--
+--   * loops           — unrolled `rounds` times, each iteration one round;
+--   * computed gotos  — resolved against the ground jump tables;
+--   * shared epilogue — just another PC that several arrivals merge at;
+--   * calls           — `callee_<t>` summary, one round, no inlining;
+--   * post-loop code  — nothing special: it is where the loop's exit arrives.
+--
+-- `complete = true` means the frontier emptied inside the bound, so the encoding
+-- is EXACT for this span.  `complete = false` means arrivals were still live —
+-- the result is then a BOUNDED one and is reported as such, never as validity.
+-- ==========================================================================
+
+/-- Every `jal ra` target in the image — the set of function entry points.  Used
+to bound a span's REGION by its enclosing function, so bounded symbolic execution
+follows backward jumps to a shared epilogue (still inside the function) but stops
+at a `ret` or any transfer out of it. -/
+def funcStarts (img : Nat → Option (BitVec 8)) (lo hi : Nat) : List Nat := Id.run do
+  let mut out : List Nat := []
+  let mut p := lo
+  while p < hi do
+    let w := wordAt img p
+    if opcode w == 0x6f then
+      match decodeTerm p w with
+      | Term.jal rd tgt => if rd == 1 && !(out.contains tgt) then out := tgt :: out
+      | _ => pure ()
+    p := p + 4
+  return out
+
+/-- The enclosing function of `p`: the largest entry ≤ `p` and the smallest > `p`
+(or the code bound). -/
+def funcRange (starts : List Nat) (codeLo codeHi p : Nat) : Nat × Nat :=
+  let below := starts.filter (fun q => q ≤ p)
+  let above := starts.filter (fun q => q > p)
+  let lo := below.foldl (fun a q => if q > a then q else a) codeLo
+  let hi := above.foldl (fun a q => if q < a then q else a) codeHi
+  (lo, hi)
+
+/-- One live arrival: a concrete PC, the SMT Bool guard under which control is
+here, and the SMT `MState` term at that point. -/
+structure Arrival where
+  pc : Nat
+  guard : String
+  state : String
+  /-- The loop headers whose `loop_<h>` summary this arrival has already
+  absorbed, so a header is summarised ONCE per path, not once per iteration. -/
+  done : List Nat := []
+  deriving Repr, Inhabited
+
+/-- Merge arrivals at the same PC: guard = disjunction, state = `ite` chain
+selected by the individual guards (exactly one holds on a real execution). -/
+def mergeArrivals (as : List Arrival) : String × String :=
+  match as with
+  | [] => ("false", "S")
+  | [a] => (a.guard, a.state)
+  | _ :: _ =>
+    let g := "(or " ++ String.intercalate " " (as.map (·.guard)) ++ ")"
+    let st := (as.dropLast).foldr (fun x acc => s!"(ite {x.guard} {x.state} {acc})")
+      (as.getLast!).state
+    (g, st)
+
+/-- Group a frontier by PC, preserving first-seen PC order. -/
+def groupByPc (as : List Arrival) : List (Nat × List Arrival) := Id.run do
+  let mut out : List (Nat × List Arrival) := []
+  for a in as do
+    if out.any (fun (q, _) => q == a.pc) then
+      out := out.map (fun (q, l) => if q == a.pc then (q, l ++ [a]) else (q, l))
+    else out := out ++ [(a.pc, [a])]
+  return out
+
+/-- The block starting at `pc`: its straight-line effect (the term to bind to
+`bv`), then its successors and exits expressed OVER `bv`.
+
+Taking the bound variable as a parameter is what keeps the encoding linear: a
+branch condition, a computed-goto target and a call's argument all read the
+block's exit state, and inlining that term into each of (say) thirteen dispatch
+guards is what turns a 200-byte block into a megabyte. -/
+def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat) (pc : Nat)
+    (g sv bv : String) (k : Nat) :
+    String × List (Nat × String) × List (String × String) × List String
+      × List String × Nat := Id.run do
+  -- straight-line run to the terminator
+  let mut cur : List MInstr := []
+  let mut p := pc
+  while p < hi && !(stops.contains p) && !(isTerm (wordAt img p)) do
+    cur := cur ++ [mkLine (BitVec.ofNat 64 p) (wordAt img p)]
+    p := p + 4
+  let (st, k, ibinds) := blockBinds sv cur k
+  -- off the region, or arrived at the span's declared exit PC: EXIT
+  if p ≥ hi || stops.contains p then return (st, [], [(g, bv)], [], ibinds, k)
+  let w := wordAt img p
+  let inR := fun (q : Nat) => lo ≤ q && q < hi && !(stops.contains q)
+  match decodeTerm p w with
+  | Term.branch tgt =>
+    let c := branchCondSt bv w
+    let t := s!"(and {g} {c})"
+    let f := s!"(and {g} (not {c}))"
+    let succs := (if inR tgt then [(tgt, t)] else []) ++ (if inR (p+4) then [(p+4, f)] else [])
+    let exits := (if inR tgt then [] else [(t, bv)]) ++ (if inR (p+4) then [] else [(f, bv)])
+    return (st, succs, exits, [], ibinds, k)
+  | Term.jal rd tgt =>
+    if rd == 1 then
+      -- CALL (whatever the direction): the callee's summary, then the next PC.
+      let sym := s!"callee_{tgt}"
+      let st' := s!"({sym} {st})"
+      if inR (p+4) then return (st', [(p+4, g)], [], [sym], ibinds, k)
+      else return (st', [], [(g, bv)], [sym], ibinds, k)
+    else if inR tgt then return (st, [(tgt, g)], [], [], ibinds, k)
+    else return (st, [], [(g, bv)], [], ibinds, k)
+  | Term.jalr rd rs1 =>
+    if rd == 1 then
+      -- indirect CALL through a register: one named opaque summary per site.
+      let sym := s!"icall_{p}"
+      let st' := s!"({sym} {st})"
+      if inR (p+4) then return (st', [(p+4, g)], [], [sym], ibinds, k)
+      else return (st', [], [(g, bv)], [sym], ibinds, k)
+    else if rs1 == 1 then return (st, [], [(g, bv)], [], ibinds, k)          -- ret: EXIT
+    else match dispatchArms img p with
+    | some arms =>
+      -- ground jump table: one guarded successor per arm, over the BOUND state.
+      let tgtE := stR bv rs1
+      let mut succs : List (Nat × String) := []
+      let mut exits : List (String × String) := []
+      for a in arms do
+        let ga := s!"(and {g} (= {tgtE} {a}))"
+        if inR a then succs := succs ++ [(a, ga)] else exits := exits ++ [(ga, bv)]
+      return (st, succs, exits, [], ibinds, k)
+    | none =>
+      -- an unlisted computed goto: an opaque per-site summary, then EXIT.
+      let sym := s!"idisp_{p}"
+      return (s!"({sym} {st})", [], [(g, bv)], [sym], ibinds, k)
+  | Term.sys =>
+    if inR (p+4) then return (st, [(p+4, g)], [], [], ibinds, k) else return (st, [], [(g, bv)], [], ibinds, k)
+
+/-- One BMC round: merge the frontier by PC, run each merged arrival's block, and
+collect the new frontier + the exits.  Every merged state, every block outcome
+and every guard is `let`-bound, so the term stays linear in
+(rounds × distinct PCs). -/
+def bmcRound (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat) (front : List Arrival)
+    (seen : List Nat) (k : Nat) (binds : List String) (sums : List String) :
+    List Arrival × List (String × String) × Nat × List String × List String := Id.run do
+  let mut k := k
+  let mut binds := binds
+  let mut sums := sums
+  let mut next : List Arrival := []
+  let mut exits : List (String × String) := []
+  for (pc, as) in groupByPc front do
+    let (g0, st0) := mergeArrivals as
+    let carried := (as.flatMap (·.done)).eraseDups
+    -- RE-ARRIVAL at an already-processed PC = a loop back-edge closing on `pc`.
+    -- Apply the `loop_<pc>` summary ONCE (it means "run the loop to completion"),
+    -- then continue only along the successors that can no longer reach `pc` —
+    -- exactly the loop's EXIT edges.  That is what lets a loop-bearing span
+    -- COMPLETE: the post-loop code is reflected, not dropped.
+    if seen.contains pc && !(carried.contains pc) then
+      -- RE-ARRIVAL: a loop back-edge closing on `pc`.  `loop_<pc>` over-approximates
+      -- the state at ANY of the loop's exit points, so control resumes at EVERY
+      -- exit edge of the whole natural loop (not just this block's), and at the
+      -- region exit when some body block `ret`s.  Nothing is dropped — the
+      -- post-loop code is reflected, which is what a back-edge cut throws away.
+      let lsum := s!"loop_{pc}"
+      sums := (lsum :: sums).eraseDups
+      let gv := s!"g{k}"; let sv := s!"s{k}"
+      binds := binds ++ [s!"({gv} {g0})", s!"({sv} ({lsum} {st0}))"]
+      k := k + 1
+      let (qs, leaves) := loopExits img lo hi stops pc
+      for q in qs do
+        next := next ++ [{ pc := q, guard := gv, state := sv, done := pc :: carried }]
+      if leaves then exits := exits ++ [(gv, sv)]
+    else
+    let gv := s!"g{k}"; let sv := s!"s{k}"; let bv := s!"b{k}"
+    binds := binds ++ [s!"({gv} {g0})", s!"({sv} {st0})"]
+    k := k + 1
+    let (st1, succs, exs, ss, ibinds, k') := stepBlock img lo hi stops pc gv sv bv k
+    k := k'
+    binds := binds ++ ibinds ++ [s!"({bv} {st1})"]
+    sums := (sums ++ ss).eraseDups
+    for (q, gq) in succs do
+      let gvq := s!"g{k}q"
+      binds := binds ++ [s!"({gvq} {gq})"]
+      k := k + 1
+      next := next ++ [{ pc := q, guard := gvq, state := bv, done := carried }]
+    for (gq, sq) in exs do
+      let gvq := s!"g{k}x"
+      binds := binds ++ [s!"({gvq} {gq})"]
+      k := k + 1
+      exits := exits ++ [(gvq, sq)]
+  return (next, exits, k, binds, sums)
+
+/-- Per-round frontier PCs — the diagnostic for "why did this span not complete". -/
+def bmcTrace (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : List Nat) (rounds : Nat) : List (List Nat) := Id.run do
+  let mut front : List Arrival := [{ pc := entry, guard := "true", state := "s0" }]
+  let mut binds : List String := []
+  let mut sums : List String := []
+  let mut k := 0
+  let mut out : List (List Nat) := []
+  let mut seen : List Nat := []
+  for _ in List.range rounds do
+    if front.isEmpty then break
+    let pcs := (front.map (·.pc)).eraseDups
+    out := out ++ [pcs]
+    let (f', _, k', b', s') := bmcRound img lo hi stops front seen k binds sums
+    seen := (seen ++ pcs).eraseDups
+    front := f'; k := k'; binds := b'; sums := s'
+  return out
+
+/-- Bounded symbolic execution of `[lo,hi)` from `lo`.  Returns the exit-state
+term, the `let` bindings, the summary symbols, whether the frontier emptied
+(`complete`), and the number of rounds used. -/
+def reflectBmc (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : List Nat) (rounds : Nat) (s0 : String) :
+    String × List String × List String × Bool × Nat := Id.run do
+  let mut front : List Arrival := [{ pc := entry, guard := "true", state := s0 }]
+  let mut exits : List (String × String) := []
+  let mut binds : List String := []
+  let mut sums : List String := []
+  let mut k := 0
+  let mut used := 0
+  let mut seen : List Nat := []
+  for r in List.range rounds do
+    if front.isEmpty then break
+    let pcs := (front.map (·.pc)).eraseDups
+    let (f', e', k', b', s') := bmcRound img lo hi stops front seen k binds sums
+    seen := (seen ++ pcs).eraseDups
+    front := f'; exits := exits ++ e'; k := k'; binds := b'; sums := s'
+    used := r + 1
+  -- the exit state: the guarded merge of every exit arrival
+  let exitTerm :=
+    match exits with
+    | [] => s0
+    | _ => (exits.dropLast).foldr (fun (g, st) acc => s!"(ite {g} {st} {acc})")
+             (exits.getLast!).2
+  return (exitTerm, binds, sums, front.isEmpty, used)
 
 /-- Wrap a DAG's exit var + bindings into nested `let`s (a shared term). -/
 def wrapLets (binds : List String) (body : String) : String :=
@@ -645,7 +1188,7 @@ def summaryDeps (img : Nat → Option (BitVec 8)) (sym : String) : List String :
     let t := (sym.drop 5).toNat!
     let (_, _, _, subs) := reflectExactD img (findBackEdge img t) 200 t "S" 0 [] []
     sym :: subs
-  else []
+  else []   -- `icall_`/`idisp_`: opaque by construction, no body to unfold
 
 /-- Transitive closure of the summary symbols reachable from a worklist. -/
 partial def summaryClosure (img : Nat → Option (BitVec 8))
