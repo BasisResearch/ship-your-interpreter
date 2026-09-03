@@ -322,6 +322,62 @@ partial def emitAxioms (img : Nat → Option (BitVec 8)) (regs : List Nat)
         -- branch: two-way join; the mem-effect is one arm's write-log or the other
         emitAxioms img regs rest visited acc
 
+/-- Branch condition over a SYMBOLIC register map (threaded state), not the
+concrete `runGM`.  Exact for register-carried operands. -/
+def branchCondSym (rf : Nat → String) (w : BitVec 32) : String :=
+  let f3 := ((w >>> 12) &&& 7).toNat
+  let a := rf (((w >>> 15) &&& 0x1f).toNat)
+  let b := rf (((w >>> 20) &&& 0x1f).toNat)
+  match f3 with
+  | 0 => s!"(= {a} {b})" | 1 => s!"(not (= {a} {b}))"
+  | 4 => s!"(< {a} {b})" | 5 => s!"(>= {a} {b})"
+  | 6 => s!"(< {a} {b})" | _ => s!"(>= {a} {b})"
+
+/-- Clobber caller-saved registers across a call (ABI: a0 = return value symbol,
+ra/t*/a* fresh).  Callee-saved (sp, s0-s11, gp, tp) preserved. -/
+def clobber (target : Nat) (rf : Nat → String) : Nat → String :=
+  let saved : List Nat := [2, 3, 4, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+  fun n => if n == 10 then s!"(callret_{target} {n})" else if saved.contains n then rf n
+           else s!"clob_{target}_{n}"
+
+/-- Path-aware reflection: follow the CFG from `pc`, threading BOTH the memory
+term and the symbolic register map.  Branches become exact `ite`s over
+`branchCondSym`; calls apply a callee summary + ABI clobber; loops/backedges emit
+a `loop_` summary; `ret`/`hi` end the path.  `fuel` bounds path length (cycles go
+through `loop_` summaries, so forward recursion terminates). -/
+partial def reflectPath (img : Nat → Option (BitVec 8)) (regs : List Nat) (hi fuel : Nat)
+    (pc : Nat) (mem : String) (rf : Nat → String) : String × List String := Id.run do
+  if fuel == 0 then return (mem, [])
+  -- accumulate a straight-line block until a terminator or hi
+  let mut cur : List MInstr := []
+  let mut p := pc
+  while p < hi && !(isTerm (wordAt img p)) do
+    cur := cur ++ [mkLine (BitVec.ofNat 64 p) (wordAt img p)]
+    p := p + 4
+  let mem1 := appendBlockLog regs mem cur
+  let rf1 := symRun mem rf cur
+  if p ≥ hi then return (mem1, [])
+  let w := wordAt img p
+  match decodeTerm p w with
+  | Term.branch tgt =>
+    if tgt ≤ pc then
+      let s := s!"loop_{tgt}"; return (s!"({s} {mem1})", [s])
+    else
+      let (tk, s1) := reflectPath img regs hi (fuel-1) tgt mem1 rf1
+      let (fl, s2) := reflectPath img regs hi (fuel-1) (p+4) mem1 rf1
+      return (s!"(ite {branchCondSym rf1 w} {tk} {fl})", (s1 ++ s2).eraseDups)
+  | Term.jal rd tgt =>
+    if tgt ≤ pc then
+      let s := s!"loop_{tgt}"; return (s!"({s} {mem1})", [s])
+    else if rd == 1 then
+      let s := s!"callee_{tgt}"
+      let (rest, s2) := reflectPath img regs hi (fuel-1) (p+4) s!"({s} {mem1})" (clobber tgt rf1)
+      return (rest, (s :: s2).eraseDups)
+    else
+      reflectPath img regs hi (fuel-1) tgt mem1 rf1     -- plain jump
+  | Term.jalr _ => return (mem1, [])                     -- ret
+  | Term.sys    => return (mem1, [])
+
 /-- Assemble the COMPLETE reflected `Steps` SMT for span `[lo,hi)`: register
 decls, the entry memory, every callee summary's fold/unfold axiom (recursively
 closed), the loop/branch summary declarations, and `mem_exit` = the composed
@@ -329,7 +385,7 @@ write-log.  A well-formed SMT-LIB2 preamble Z3 consumes; the residual's own
 pre/post conjuncts are appended by the caller to form the validity query. -/
 def reflectFullSmt (regs : List Nat) (lo hi : Nat) : IO String := do
   let img ← loadElf elfPath
-  let (memExit, summaries) := reflectStepsMulti img regs lo hi
+  let (memExit, summaries) := reflectPath img regs hi 200 lo "mem" (fun n => regName n)
   let (axs, visited) := emitAxioms img regs summaries [] []
   let decls := String.intercalate "\n" (regs.map (fun r => s!"(declare-fun {regName r} () Int)"))
   -- ALL summary symbols declared first (any body may reference a later one);
@@ -340,7 +396,10 @@ def reflectFullSmt (regs : List Nat) (lo hi : Nat) : IO String := do
       [f, s!"(declare-fun loopcond_{s.drop 5} ((Array Int (_ BitVec 8))) Bool)"]
     else [f]))
   let axBlock := String.intercalate "\n" axs
-  return s!"(set-logic ALL)\n; === reflected Steps for span [{lo},{hi}) ===\n{decls}\n(declare-fun mem () (Array Int (_ BitVec 8)))\n{sumDecls}\n{axBlock}\n(define-fun mem_exit () (Array Int (_ BitVec 8)) {memExit})\n"
+  -- load / bitwise / ABI-clobber helpers as uninterpreted functions (consistent
+  -- reads; exact address arithmetic is in the terms themselves)
+  let helpers := "(declare-fun loadw ((Array Int (_ BitVec 8)) Int) Int)\n(declare-fun loadb ((Array Int (_ BitVec 8)) Int) Int)\n(declare-fun bvor_i (Int Int) Int)\n(declare-fun bvand_i (Int Int) Int)\n(declare-fun bvxor_i (Int Int) Int)"
+  return s!"(set-logic ALL)\n; === reflected Steps for span [{lo},{hi}) ===\n{decls}\n(declare-fun mem () (Array Int (_ BitVec 8)))\n{helpers}\n{sumDecls}\n{axBlock}\n(define-fun mem_exit () (Array Int (_ BitVec 8)) {memExit})\n"
 
 end Vsa.ReflectSpan
 
