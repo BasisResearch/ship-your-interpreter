@@ -119,6 +119,7 @@ elab "#emit_campaign " pathStx:str : command => do
   Lean.Elab.Command.liftTermElabM do
     let dir := pathStx.getString
     IO.FS.createDirAll s!"{dir}/obligations"
+    IO.FS.createDirAll s!"{dir}/writes"
     IO.FS.createDirAll s!"{dir}/queries"
     let img ← loadElf elfPath
     let syms ← globalSummaries
@@ -133,6 +134,7 @@ elab "#emit_campaign " pathStx:str : command => do
     -- per-summary immediate dependencies: the driver only re-checks a summary
     -- when one of the summaries its body applies has lost a clause.
     let depRows := syms.map (fun s => s!"{s}\t{String.intercalate "," (summaryDeps img s)}")
+    IO.FS.writeFile s!"{dir}/pre.smt2" (entryPinsSmt img ++ "\n")
     IO.FS.writeFile s!"{dir}/summary-deps.tsv" ("summary\tdeps\n" ++ String.intercalate "\n" depRows ++ "\n")
     IO.FS.writeFile s!"{dir}/query-summaries.tsv" ("field\tsummaries\n" ++ String.intercalate "\n" rows ++ "\n")
     Lean.logInfo m!"#emit_campaign → {dir} ({syms.length} summaries, {residualSpans.length} queries)"
@@ -158,17 +160,18 @@ elab "#emit_machine " pathStx:str loStx:num hiStx:num : command => do
     let lo := loStx.getNat
     let hi := hiStx.getNat
     IO.FS.createDirAll s!"{dir}/obligations"
+    IO.FS.createDirAll s!"{dir}/writes"
     IO.FS.createDirAll s!"{dir}/queries"
     IO.FS.createDirAll s!"{dir}/bounded"
     let img ← loadElf elfPath
     let (machine, sums, bad) := machineSmt img lo hi
     let decls := summaryDecls sums
     let unmodelledDecls := "(declare-fun unmodelled_step (MState) MState)"
-    let pre := s!"{smtPreamble}\n{decls}\n{unmodelledDecls}\n(declare-const SL_lo Int)\n(declare-const SL_hi Int)\n(declare-const A_lo Int)\n(declare-const A_hi Int)\n{machine}"
+    let pre := s!"{smtPreamble}\n{decls}\n{unmodelledDecls}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) SL_hi) (bvult SL_lo SL_hi) (bvult A_lo A_hi) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi))))\n{machine}"
     IO.FS.writeFile s!"{dir}/machine.smt2" (pre ++ "\n")
     -- the `mrun` induction obligation: `mrun` itself is NOT axiomatised here;
     -- the recursive occurrence is the free `mrun_ih`.
-    let preNoRun := s!"{smtPreamble}\n{decls}\n{unmodelledDecls}\n(declare-const SL_lo Int)\n(declare-const SL_hi Int)\n(declare-const A_lo Int)\n(declare-const A_hi Int)\n(declare-const STOP Int)\n(declare-fun mrun_ih (MState) MState)"
+    let preNoRun := s!"{smtPreamble}\n{decls}\n{unmodelledDecls}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) SL_hi) (bvult SL_lo SL_hi) (bvult A_lo A_hi) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi))))\n(declare-const STOP (_ BitVec 64))\n(declare-fun mrun_ih (MState) MState)"
     let stepOnly := (machine.splitOn "\n(declare-const STOP Int)").headD machine
     IO.FS.writeFile s!"{dir}/obligations/mrun.smt2"
       s!"{preNoRun}\n{stepOnly}\n(declare-const S0 MState)\n(define-fun fbody () MState {machineRunBody lo hi "S0"})\n; @@ASSUME@@\n; @@GOAL@@\n"
@@ -176,15 +179,16 @@ elab "#emit_machine " pathStx:str loStx:num hiStx:num : command => do
     for (nm, elo, ehi) in residualSpans do
       if lo ≤ elo && elo < hi then
         IO.FS.writeFile s!"{dir}/queries/{nm}.smt2"
-          s!"{pre}\n(declare-const s0 MState)\n(assert (= {stPC "s0"} {elo}))\n(assert (= STOP {ehi}))\n; @@ASSUME@@\n(define-fun state_exit () MState (mrun s0))\n(define-fun mem_exit () (Array Int (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
+          s!"{pre}\n(declare-const s0 MState)\n(assert (= {stPC "s0"} {bvN elo}))\n(assert (= STOP {bvN ehi}))\n; @@ASSUME@@\n(define-fun state_exit () MState (mrun s0))\n(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
         -- BOUNDED companion: `mstep` unrolled `k` times with an explicit
         -- "the span actually finished" conjunct.  A SAT model here is a GENUINE
         -- countermodel (the run reached `STOP` inside `k` steps, so the unrolling
         -- is exact on it); an UNSAT is bounded validity, reported as such.
         IO.FS.writeFile s!"{dir}/bounded/{nm}.smt2"
-          s!"{pre}\n(declare-const s0 MState)\n(assert (= {stPC "s0"} {elo}))\n(assert (= STOP {ehi}))\n; @@ASSUME@@\n; @@EXIT@@\n(assert (= {stPC "state_exit"} {ehi}))\n; @@POST@@\n"
-        rows := rows ++ [s!"{nm}\tmrun"]
+          s!"{pre}\n(declare-const s0 MState)\n(assert (= {stPC "s0"} {bvN elo}))\n(assert (= STOP {bvN ehi}))\n; @@ASSUME@@\n; @@EXIT@@\n(assert (= {stPC "state_exit"} {bvN ehi}))\n; @@POST@@\n"
+      rows := rows ++ [s!"{nm}\tmrun"]
     IO.FS.writeFile s!"{dir}/summaries.tsv" ("summary\nmrun\n")
+    IO.FS.writeFile s!"{dir}/pre.smt2" (entryPinsSmt img ++ "\n")
     IO.FS.writeFile s!"{dir}/summary-deps.tsv" ("summary\tdeps\nmrun\tmrun\n")
     IO.FS.writeFile s!"{dir}/query-summaries.tsv" ("field\tsummaries\n" ++ String.intercalate "\n" rows ++ "\n")
     IO.FS.writeFile s!"{dir}/unmodelled.tsv"
@@ -212,6 +216,7 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
     let rounds := roundsStx.getNat
     IO.FS.createDirAll s!"{dir}/queries"
     IO.FS.createDirAll s!"{dir}/obligations"
+    IO.FS.createDirAll s!"{dir}/writes"
     let img ← loadElf elfPath
     let codeLo := 0x80000000
     let codeHi := 0x80018be0
@@ -221,13 +226,16 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
     let mut allSums : List String := []
     for (nm, elo, ehi) in residualSpans do
       let (rlo, rhi) := funcRange starts codeLo codeHi elo
-      let (ev, binds, sums, complete, used) := reflectBmc img rlo rhi elo [ehi] rounds "s0"
-      let body := wrapLets binds ev
+      let (ev, binds, sums, complete, used, writes) := reflectBmc img rlo rhi elo [ehi] rounds "s0"
+      let decls2 := bindsToDecls binds
       allSums := (allSums ++ sums).eraseDups
       let decls := summaryDecls sums
       IO.FS.writeFile s!"{dir}/queries/{nm}.smt2"
-        s!"{smtPreamble}\n{decls}\n(declare-const SL_lo Int)\n(declare-const SL_hi Int)\n(declare-const A_lo Int)\n(declare-const A_hi Int)\n(declare-const s0 MState)\n; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {body})\n(define-fun mem_exit () (Array Int (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
-      rows := rows ++ [s!"{nm}\t0x{String.ofList (Nat.toDigits 16 rlo)}\t0x{String.ofList (Nat.toDigits 16 rhi)}\t0x{String.ofList (Nat.toDigits 16 elo)}\t0x{String.ofList (Nat.toDigits 16 ehi)}\t{used}\t{complete}\t{body.length}\t{sums.length}"]
+        s!"{smtPreamble}\n{decls}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) SL_hi) (bvult SL_lo SL_hi) (bvult A_lo A_hi) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi))))\n(declare-const s0 MState)\n{decls2}\n; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {ev})\n(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
+      IO.FS.writeFile s!"{dir}/writes/{nm}.tsv"
+        ("guard\twidth\taddr\n" ++ String.intercalate "\n"
+          (writes.map (fun (g, a, w) => s!"{g}\t{w}\t{a}")) ++ "\n")
+      rows := rows ++ [s!"{nm}\t0x{String.ofList (Nat.toDigits 16 rlo)}\t0x{String.ofList (Nat.toDigits 16 rhi)}\t0x{String.ofList (Nat.toDigits 16 elo)}\t0x{String.ofList (Nat.toDigits 16 ehi)}\t{used}\t{complete}\t{decls2.length}\t{sums.length}"]
       deps := deps ++ [s!"{nm}\t{String.intercalate "," sums}"]
     -- Summary obligations, over the SAME encoder.
     --   `callee_t` — symbolically execute the callee's own function;
@@ -238,36 +246,76 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
     --               register / an unlisted computed goto): NO obligation exists,
     --               so they are listed in `opaque.tsv` and their clauses can only
     --               ever be assumed, never established.
+    -- A summary's own body reaches further summaries, so the obligation set is a
+    -- FIXPOINT, not one pass over the residuals' summaries: iterate until nothing
+    -- new is discovered, or the campaign silently assumes clauses for symbols it
+    -- never generated an obligation for.
     let mut opaqueSyms : List String := []
     let mut symDeps : List String := []
-    for sym in allSums do
-      let mk : Nat → Nat → Nat → List Nat → IO String := fun rlo rhi entry stops => do
-        let (ev, binds, subs, complete, _) := reflectBmc img rlo rhi entry stops rounds "S0"
-        let body := (wrapLets binds ev).replace s!"({sym} " s!"({sym}_ih "
+    -- The campaign's scope is the INTERPRETER's own code, and no further.  A
+    -- summary whose body lies outside the residual spans' own functions is a
+    -- CALLEE CONTRACT — `value_int`, `value_bool`, `strcmp`, `malloc`, … — and
+    -- the Lean development does not re-derive those either: they are landed
+    -- specs (`TermCallees.valueInt`/`strcmp`/`divdi3`/`envGet`) or named open
+    -- premises (`envDefine`/`malloc`/`realloc`).  Mining them would drag in the
+    -- whole C runtime; they are ASSUMED, listed in `assumed.tsv`, and every
+    -- verdict that rests on one says so.
+    let armRegions := (residualSpans.map (fun (_, elo, _) =>
+      funcRange starts codeLo codeHi elo)).eraseDups
+    let inArm := fun (q : Nat) => armRegions.any (fun (a, b) => a ≤ q && q < b)
+    let mut worklist := allSums
+    let mut done : List String := []
+    let mut assumedSyms : List String := []
+    while !worklist.isEmpty do
+      let sym := worklist.head!
+      worklist := worklist.tail!
+      if done.contains sym then continue
+      done := sym :: done
+      let tgt : Option Nat :=
+        if sym.startsWith "callee_" then some (sym.drop 7).toNat!
+        else if sym.startsWith "loop_" then some (sym.drop 5).toNat!
+        else none
+      if let some t := tgt then
+        if !(inArm t) then
+          assumedSyms := assumedSyms ++ [sym]
+          continue
+      let mk : Nat → Nat → Nat → List Nat → IO (String × List String) := fun rlo rhi entry stops => do
+        let (ev, binds, subs, complete, _, writes) := reflectBmc img rlo rhi entry stops rounds "S0"
+        let declsB := (bindsToDecls binds).replace s!"({sym} " s!"({sym}_ih "
         let decls := summaryDecls ((allSums ++ subs).eraseDups ++ [s!"{sym}_ih"])
         IO.FS.writeFile s!"{dir}/obligations/{sym}.smt2"
-          s!"{smtPreamble}\n{decls}\n(declare-const SL_lo Int)\n(declare-const SL_hi Int)\n(declare-const A_lo Int)\n(declare-const A_hi Int)\n(declare-const S0 MState)\n; complete={complete}\n(define-fun fbody () MState {body})\n; clause set for every summary; `{sym}` itself is supplied as `{sym}_ih`\n; @@ASSUME@@\n; negated clause under test, over S0 / fbody\n; @@GOAL@@\n"
-        return s!"{sym}\t{String.intercalate "," ((sym :: subs).eraseDups)}"
+          s!"{smtPreamble}\n{decls}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) SL_hi) (bvult SL_lo SL_hi) (bvult A_lo A_hi) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi))))\n(declare-const S0 MState)\n{declsB}\n; complete={complete}\n(define-fun fbody () MState {ev})\n; clause set for every summary; `{sym}` itself is supplied as `{sym}_ih`\n; @@ASSUME@@\n; negated clause under test, over S0 / fbody\n; @@GOAL@@\n"
+        IO.FS.writeFile s!"{dir}/writes/{sym}.tsv"
+          ("guard\twidth\taddr\n" ++ String.intercalate "\n"
+            ((writes.map (fun (g, a, w) => s!"{g}\t{w}\t{a}")).map
+              (fun r => r.replace s!"({sym} " s!"({sym}_ih ")) ++ "\n")
+        return (s!"{sym}\t{String.intercalate "," ((sym :: subs).eraseDups)}", subs)
       if sym.startsWith "callee_" then
         let t := (sym.drop 7).toNat!
         let (rlo, rhi) := funcRange starts codeLo codeHi t
-        symDeps := symDeps ++ [← mk rlo rhi t []]
+        let (row, subs) ← mk rlo rhi t []
+        symDeps := symDeps ++ [row]; worklist := worklist ++ subs
       else if sym.startsWith "loop_" then
         let h := (sym.drop 5).toNat!
         let (rlo, rhi) := funcRange starts codeLo codeHi h
         let (qs, _) := loopExits img rlo rhi [] h
-        symDeps := symDeps ++ [← mk rlo rhi h qs]
+        let (row, subs) ← mk rlo rhi h qs
+        symDeps := symDeps ++ [row]; worklist := worklist ++ subs
       else opaqueSyms := opaqueSyms ++ [sym]
     IO.FS.writeFile s!"{dir}/opaque.tsv" ("summary\n" ++ String.intercalate "\n" opaqueSyms ++ "\n")
+    IO.FS.writeFile s!"{dir}/assumed.tsv"
+      ("summary\trole\n" ++ String.intercalate "\n"
+        (assumedSyms.map (fun a => s!"{a}\tcallee contract outside the interpreter's own code")) ++ "\n")
+    IO.FS.writeFile s!"{dir}/pre.smt2" (entryPinsSmt img ++ "\n")
     IO.FS.writeFile s!"{dir}/summary-deps.tsv"
       ("summary\tdeps\n" ++ String.intercalate "\n" symDeps ++ "\n")
     IO.FS.writeFile s!"{dir}/spans.tsv"
       ("field\tregion_lo\tregion_hi\tentry\tstop\trounds\tcomplete\tterm_bytes\tsummaries\n"
         ++ String.intercalate "\n" rows ++ "\n")
-    IO.FS.writeFile s!"{dir}/summaries.tsv" ("summary\n" ++ String.intercalate "\n" allSums ++ "\n")
+    IO.FS.writeFile s!"{dir}/summaries.tsv" ("summary\n" ++ String.intercalate "\n" done.reverse ++ "\n")
     IO.FS.writeFile s!"{dir}/query-summaries.tsv" ("field\tsummaries\n" ++ String.intercalate "\n" deps ++ "\n")
     let nComplete := (rows.filter (fun r => (r.splitOn "\t").getD 6 "" == "true")).length
-    Lean.logInfo m!"#emit_bmc → {dir}: {residualSpans.length} spans, {nComplete} COMPLETE at {rounds} rounds, {allSums.length} summaries"
+    Lean.logInfo m!"#emit_bmc → {dir}: {residualSpans.length} spans, {nComplete} COMPLETE at {rounds} rounds, {done.length} summaries: {done.length - assumedSyms.length - opaqueSyms.length} mined, {assumedSyms.length} assumed contracts, {opaqueSyms.length} opaque"
 
 
 open Vsa.ReflectResiduals Vsa.ReflectSpan in

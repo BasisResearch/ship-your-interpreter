@@ -5453,3 +5453,54 @@ it, still stop and report instead.
   skeleton.py` already gets from its own `--verify`, generalised to all
   generators.  Any generator whose output no longer matches is either stale
   (fix it) or the file is hand-owned (drop the GENERATED banner).
+
+## 2026-09-03 steps-encoding-is-solver-shaped (RESIDUAL-PLAN order 3-4)
+- missing: the residual campaign had no way to get a VERDICT out of Z3 on a span
+  containing a call or a loop.  Every configuration timed out, and the reason was
+  never the problem size — it was four separate encoding choices, each of which
+  had to be measured before the next became visible.  MBQI, relevancy, arith
+  solver and macro_finder made NO difference (identical timeouts); what did:
+  (1) `smt.qi.max_instances` turned a 25s timeout into a 6.2s `unknown` at exactly
+  10001 instantiations, which is how the matching loop got NAMED — the frame
+  clauses' inner `∀A` had no usable trigger; (2) `bv-bit2core` was 19350 because
+  registers were `Int` and memory `Array Int (BitVec 8)` bridged by
+  `int2bv`/`bv2int` — that also silently dropped 64-bit wraparound and modelled
+  `addiw`/`addw`/`subw` as their 64-bit siblings; (3) `let` bindings hide the
+  intermediate states, so a summary clause can only be `∀S` and the solver has to
+  guess instances; (4) even quantifier-free, bit-blasting a 64-bit-addressed byte
+  array hit 3.8M bv2core and 3.2 GB.
+- workaround: NONE — all four fixed at the source.  Pure BV64 state; the binding
+  chain emitted as top-level `declare-const` + equational `assert` (NOT
+  `define-fun`, which macro-expands) so every state is nameable and clauses
+  ground-instantiate at the actual application sites; and for the frame /
+  `StoreRepr`-survival / code-preservation family the array theory is dropped
+  entirely in favour of the emitted STORE FOOTPRINT, which the encoder already
+  knows.  Houdini went from 45+ minutes of timeouts to an 18-second fixpoint over
+  202 summaries.
+- cost: paid once.  Every earlier "the loop classes need an invariant" verdict was
+  a verdict about the encoding, not about the arm.
+- proposal: the rule worth keeping is that a footprint property should never be
+  posed as an array-equality query when the emitter knows the write set — "was
+  this address written" is address arithmetic.  Same shape as the load layer's
+  TOTAL-read discipline: do not ask the solver for something the emitter can
+  state.
+
+## 2026-09-03 frame-needs-entry-facts-not-solver (RESIDUAL-PLAN order 3-4)
+- missing: with the encoding fixed, 39 of 52 residual queries come back
+  `UNKNOWN(summary-clause)` and 8-10 come back REFUTED, and NEITHER is a solver
+  limit.  The UNKNOWNs are summaries that store through a data-dependent pointer:
+  nothing in the machine text says such a pointer lands in the arena, so
+  `stack_or_arena` is genuinely not derivable from the code.  The REFUTED ones
+  are all spans starting MID-function that reload `sp` or a callee-saved register
+  from a frame slot the span never wrote — with the slot unconstrained a restored
+  `sp` can be anything.
+- workaround: NONE — reported as the two named entry facts they are.
+- cost: none yet; the point is that the next work is ENCODING two facts the Lean
+  statements already carry, not more solver tuning.
+- proposal: encode (a) `FrameMeta.abiFrame_of_wrChain` — the arm's frame slots
+  hold the caller's saved registers — and (b) `StoreRepr`/`Arena.contains` — a
+  pointer read out of a represented store points into the arena.  (a) makes the
+  8-10 REFUTED decidable; (b) is what lets the pointer-storing loops carry
+  `stack_or_arena`, which unblocks the 39.  Both are `EvalEntry` content, so the
+  encoder should grow a `#emit_entry_facts` beside `entryPinsSmt` rather than
+  each query hand-rolling them.

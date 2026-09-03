@@ -26,7 +26,7 @@ Usage:
   python3 scripts/houdini_summary.py <campaign-dir> [--timeout S] [-jN]
      [--rounds N] [--phase mine|check|both]
 """
-import os, re, sys, subprocess, concurrent.futures, json, time
+import os, sys, subprocess, concurrent.futures, json, time
 from collections import Counter
 
 # ---------------------------------------------------------------- clause bank
@@ -40,81 +40,82 @@ from collections import Counter
 # summary, and is mined like any other — if it does not survive, that is the
 # machine-checked statement that the stack budget is not a step-local fact.
 def guard(body):
-    """A clause about `({f} {S})`, guarded by the layout invariant at `{S}`.
+    return "(assert (forall ((S MState)) (=> (INV S) " + body + ")))"
 
-    Stated GROUND, at a named state, not `∀S`.  Since the encoder now names every
-    intermediate state at the top level, the driver can instantiate each clause at
-    exactly the states the term applies that summary to — so the whole query is
-    quantifier-free QF_ABV (decidable, bit-blastable) instead of a quantified
-    problem whose instantiation profile ran to the 10000 cap without deciding."""
-    return "(assert (=> (INV {S}) " + body + "))"
-
-
-QA_DECL = "(declare-const QA (_ BitVec 64))\n"
-
-_SP = "#x0000000000000002"
-_RA = "#x0000000000000001"
-_S0 = "#x0000000000000008"
-_S1 = "#x0000000000000009"
 
 CLAUSES = [
-    ("inv_pres", guard("(INV ({f} {S}))")),
-    ("sp_restore", guard(f"(= (select (rr ({{f}} {{S}})) {_SP}) (select (rr {{S}}) {_SP}))")),
-    ("ra_restore", guard(f"(= (select (rr ({{f}} {{S}})) {_RA}) (select (rr {{S}}) {_RA}))")),
-    ("s0_restore", guard(f"(= (select (rr ({{f}} {{S}})) {_S0}) (select (rr {{S}}) {_S0}))")),
-    ("s1_restore", guard(f"(= (select (rr ({{f}} {{S}})) {_S1}) (select (rr {{S}}) {_S1}))")),
-    ("stack_or_arena", guard("(=> (and (or (bvult QA SL_lo) (bvuge QA SL_hi)) "
-                             "(or (bvult QA A_lo) (bvuge QA A_hi))) "
-                             "(= (select (mm ({f} {S})) QA) (select (mm {S}) QA)))")),
+    ("inv_pres", guard("(INV ({f} S))")),
+    ("sp_restore", guard("(= (select (rr ({f} S)) 2) (select (rr S) 2))")),
+    ("ra_restore", guard("(= (select (rr ({f} S)) 1) (select (rr S) 1))")),
+    ("s0_restore", guard("(= (select (rr ({f} S)) 8) (select (rr S) 8))")),
+    ("s1_restore", guard("(= (select (rr ({f} S)) 9) (select (rr S) 9))")),
+    ("frame_1088", guard("(forall ((A Int)) (=> (< A (- (select (rr S) 2) 1088)) "
+                         "(= (select (mm ({f} S)) A) (select (mm S) A))))")),
+    ("frame_4096", guard("(forall ((A Int)) (=> (< A (- (select (rr S) 2) 4096)) "
+                         "(= (select (mm ({f} S)) A) (select (mm S) A))))")),
+    ("below_sl", guard("(forall ((A Int)) (=> (< A SL_lo) "
+                       "(= (select (mm ({f} S)) A) (select (mm S) A))))")),
+    ("above_sl", guard("(forall ((A Int)) (=> (>= A SL_hi) (=> (or (< A A_lo) (>= A A_hi)) "
+                       "(= (select (mm ({f} S)) A) (select (mm S) A)))))")),
+    ("stack_or_arena", guard("(forall ((X Int)) (=> (and (or (< X SL_lo) (>= X SL_hi)) "
+                             "(or (< X A_lo) (>= X A_hi))) "
+                             "(= (select (mm ({f} S)) X) (select (mm S) X))))")),
 ]
 
+# The negated clause, stated about the ONE-STEP body `fbody` at entry `S0`, with
+# the guard's antecedent ASSUMED (the clause is `INV S0 -> C`).
 _G = "(assert (INV S0))\n"
 NEG = {
     "inv_pres": _G + "(assert (not (INV fbody)))",
-    "sp_restore": _G + f"(assert (not (= (select (rr fbody) {_SP}) (select (rr S0) {_SP}))))",
-    "ra_restore": _G + f"(assert (not (= (select (rr fbody) {_RA}) (select (rr S0) {_RA}))))",
-    "s0_restore": _G + f"(assert (not (= (select (rr fbody) {_S0}) (select (rr S0) {_S0}))))",
-    "s1_restore": _G + f"(assert (not (= (select (rr fbody) {_S1}) (select (rr S0) {_S1}))))",
-    "stack_or_arena": _G + "(assert (or (bvult QA SL_lo) (bvuge QA SL_hi)))\n"
-                           "(assert (or (bvult QA A_lo) (bvuge QA A_hi)))\n"
-                           "(assert (not (= (select (mm fbody) QA) (select (mm S0) QA))))",
+    "sp_restore": _G + "(assert (not (= (select (rr fbody) 2) (select (rr S0) 2))))",
+    "ra_restore": _G + "(assert (not (= (select (rr fbody) 1) (select (rr S0) 1))))",
+    "s0_restore": _G + "(assert (not (= (select (rr fbody) 8) (select (rr S0) 8))))",
+    "s1_restore": _G + "(assert (not (= (select (rr fbody) 9) (select (rr S0) 9))))",
+    "frame_1088": _G + "(declare-const A Int)\n(assert (< A (- (select (rr S0) 2) 1088)))\n"
+                       "(assert (not (= (select (mm fbody) A) (select (mm S0) A))))",
+    "frame_4096": _G + "(declare-const A Int)\n(assert (< A (- (select (rr S0) 2) 4096)))\n"
+                       "(assert (not (= (select (mm fbody) A) (select (mm S0) A))))",
+    "below_sl": _G + "(declare-const A Int)\n(assert (< A SL_lo))\n"
+                     "(assert (not (= (select (mm fbody) A) (select (mm S0) A))))",
+    "above_sl": _G + "(declare-const A Int)\n(assert (>= A SL_hi))\n"
+                     "(assert (or (< A A_lo) (>= A A_hi)))\n"
+                     "(assert (not (= (select (mm fbody) A) (select (mm S0) A))))",
+    "stack_or_arena": _G + "(declare-const X Int)\n(assert (or (< X SL_lo) (>= X SL_hi)))\n"
+                           "(assert (or (< X A_lo) (>= X A_hi)))\n"
+                           "(assert (not (= (select (mm fbody) X) (select (mm S0) X))))",
 }
-
-APP_RE = re.compile(r"\((callee_\d+|loop_\d+|icall_\d+|idisp_\d+)(_ih)?\s+([A-Za-z][A-Za-z0-9_]*)\)")
 
 CLAUSE_TEXT = dict(CLAUSES)
 CLAUSE_IDS = [c for c, _ in CLAUSES]
 
-OUTSIDE = ("(assert (or (bvult QA SL_lo) (bvuge QA SL_hi)))\n"
-           "(assert (or (bvult QA A_lo) (bvuge QA A_hi)))\n")
-
-
-# The POSTS that are FOOTPRINT properties — "this address was not written" —
-# checked over the emitted store set rather than the array theory.  The value is
-# the address condition; `footprint_check` first proves it implies "outside the
-# stack window and the arena", then that no store can land there.
-FOOTPRINT_POSTS = {
-    # `StoreRepr` survival: every frame/closure/`ValueRepr`/`CString` read that
-    # lives outside the stack and the arena reads the same byte at exit.
-    "outside_stack_arena": OUTSIDE,
-    # `InterpCodeLoaded` survival: the code image is never written.
-    "code": ("(assert (bvule #x0000000080000000 QA))\n"
-             "(assert (bvult QA #x0000000080018be0))\n"),
-}
-
 # The residual POST conjuncts (negated), over `state_exit` / `s0`.
 POSTS = {
-    # `StoreRepr` survival on the low side: memory strictly below the stack
-    # window is preserved.  Stated without subtraction so it cannot wrap.
-    "storerepr": "(assert (bvult QA SL_lo))\n"
-                 "(assert (not (= (select (mm state_exit) QA) (select (mm s0) QA))))",
+    # frame: memory below the arm's own stack frame is preserved
+    "frame": "(declare-const A Int)\n(assert (< A (- (select (rr s0) 2) 1000000)))\n"
+             "(assert (not (= (select (mm state_exit) A) (select (mm s0) A))))",
+    # StoreRepr survival: memory OUTSIDE the stack window is preserved, so every
+    # FrameRepr/ClosureRepr/ValueRepr read in the arena reads the same byte.
+    "storerepr": "(declare-const A Int)\n(assert (< A SL_lo))\n"
+                 "(assert (< SL_lo (- (select (rr s0) 2) 1000000)))\n"
+                 "(assert (not (= (select (mm state_exit) A) (select (mm s0) A))))",
     # sp discipline: the arm returns with sp restored (FALSE by design for a
     # prologue/epilogue FRAGMENT span, which is exactly what it should report)
-    "sp": "(assert (not (= (select (rr state_exit) #x0000000000000002) (select (rr s0) #x0000000000000002))))",
+    "sp": "(assert (not (= (select (rr state_exit) 2) (select (rr s0) 2))))",
+    # the code image is never written — `InterpCodeLoaded` survives the arm
+    "code": "(declare-const X Int)\n(assert (<= 2147483648 X))\n(assert (< X 2147584992))\n"
+            "(assert (not (= (select (mm state_exit) X) (select (mm s0) X))))",
     # `ValueRepr`'s tag conjunct at the sret buffer the caller passed in a0:
     # whatever the arm boxes, the kind word it leaves is a real `ValueKind`
-    "valuerepr_tag": "(assert (not (and (bvule #x0000000000000000 (ld4 (mm state_exit) (select (rr s0) #x000000000000000a))) "
-                     "(bvule (ld4 (mm state_exit) (select (rr s0) #x000000000000000a)) #x0000000000000005))))",
+    "valuerepr_tag": "(assert (not (and (<= 0 (ld4 (mm state_exit) (select (rr s0) 10))) "
+                     "(<= (ld4 (mm state_exit) (select (rr s0) 10)) 5))))",
+    # the honest whole-machine frame: every write lands in the stack window or the
+    # heap arena, so EVERY `StoreRepr`/`ValueRepr`/`CString` read outside both
+    # reads the same byte at exit as at entry (the `EvalEntry` survival clause).
+    "outside_stack_arena":
+        "(declare-const X Int)\n(assert (or (< X SL_lo) (>= X SL_hi)))\n"
+        "(assert (or (< X A_lo) (>= X A_hi)))\n"
+        "(assert (<= SL_lo (select (rr s0) 2)))\n(assert (<= (select (rr s0) 2) SL_hi))\n"
+        "(assert (not (= (select (mm state_exit) X) (select (mm s0) X))))",
 }
 
 
@@ -127,17 +128,10 @@ def unroll(k):
             "(define-fun mem_exit () (Array Int (_ BitVec 8)) (mm state_exit))")
 
 
-# E-matching only, with an instantiation cap.  MBQI has nothing to chew on here
-# (the quantified sort is a memory/register datatype), and without the cap a
-# matching loop runs the full timeout instead of reporting `unknown` in seconds.
-Z3_OPTS = """(set-option :smt.mbqi false)
-(set-option :smt.ematching true)
-(set-option :smt.qi.max_instances 10000)
-"""
-
-
 def z3(text, timeout):
-    p = subprocess.run(["z3", "-smt2", "-in", f"-T:{timeout}"], input=Z3_OPTS + text,
+    with open(f'/tmp/dst/kdawg/{str(hash(text))[:10]}.smt', 'w') as f:
+        f.write(text)
+    p = subprocess.run(["z3", "-smt2", "-in", f"-T:{timeout}"], input="(set-option :smt.mbqi false)\n(set-option :smt.ematching true)\n(set-option :smt.qi.profile true)\n(set-option :smt.qi.profile_freq 100)\n" + text,
                        capture_output=True, text=True)
     o = (p.stdout + p.stderr).strip()
     if o.startswith("unsat"):
@@ -156,89 +150,23 @@ def pre_block(d):
     return open(p).read() if os.path.exists(p) else ""
 
 
-# ---------------------------------------------------------------- footprint
-# Frame, `StoreRepr` survival and code preservation are all "this address was
-# not written".  The encoder knows every store address, so that is BV ARITHMETIC
-# over a few hundred addresses rather than array reasoning over the chain of
-# `store`s — which bit-blasts to millions of `bv-bit2core` axioms and decides
-# nothing.  A check has three parts, and all three must pass:
-#
-#   1. the property's address condition IMPLIES "outside the stack window and
-#      outside the heap arena" (Z3, side condition);
-#   2. no DIRECT write of the span can land on such an address (Z3, over the
-#      emitted footprint);
-#   3. every SUMMARY the span applies carries `stack_or_arena` — its own writes
-#      are confined the same way (checked here, from the mined clause sets).
-#
-# Failing 3 is reported, never assumed: a summary without the clause means the
-# check cannot conclude, not that it passes.
-def load_writes(path):
-    if not os.path.exists(path):
-        return None
+def assume_block(cset, syms, self_sym=None):
+    """Clause assertions for every summary; `self_sym` is renamed to `<f>_ih`."""
     out = []
-    for line in open(path).read().splitlines()[1:]:
-        if not line.strip():
-            continue
-        g, w, a = line.split("\t", 2)
-        out.append((g, int(w), a))
-    return out
-
-
-def hits_QA(writes):
-    """`QA` lands inside one of the span's own stores."""
-    ds = []
-    for g, w, a in writes:
-        ds.append(f"(and {g} (bvule {a} QA) (bvult QA (bvadd {a} #x{w:016x})))")
-    return "(assert (or false " + " ".join(ds) + "))\n" if ds else "(assert false)\n"
-
-
-def footprint_check(base, cond, writes, applied, cset, timeout, pre=""):
-    """The three-part check.  Returns "VALID" / "REFUTED" / "UNKNOWN(...)"."""
-    missing = sorted({f for f in applied if "stack_or_arena" not in cset.get(f, [])})
-    if missing:
-        return "UNKNOWN(summary-clause:" + ",".join(m[:22] for m in missing) + ")"
-    head = base + "\n" + pre + "\n(declare-const QA (_ BitVec 64))\n" + cond
-    # 1. does the condition imply "outside stack and arena"?
-    side = head + "(assert (not (and (or (bvult QA SL_lo) (bvuge QA SL_hi)) "
-    side += "(or (bvult QA A_lo) (bvuge QA A_hi)))))\n(check-sat)\n"
-    if z3(side, timeout) != "unsat":
-        return "UNKNOWN(cond-not-outside)"
-    # 2. can a direct write land on it?
-    v = z3(head + hits_QA(writes) + "(check-sat)\n", timeout)
-    return {"unsat": "VALID", "sat": "REFUTED"}.get(v, "UNKNOWN(footprint)")
-
-
-def applied_of(text):
-    """The summary symbols this text actually applies (self `_ih` collapsed)."""
-    return {m[0] for m in APP_RE.findall(text)}
-
-
-def assume_block(text, cset, self_sym=None):
-    """Ground clause instances at every application site the TEXT actually has.
-
-    `text` is the obligation/query body; the encoder names each intermediate state
-    at the top level, so `(callee_X i57)` tells us both the summary and the exact
-    state to instantiate at.  A summary applied nowhere contributes nothing."""
-    out = [QA_DECL.rstrip()]
-    seen = set()
-    for m in APP_RE.finditer(text):
-        base, ih, arg = m.group(1), m.group(2), m.group(3)
-        name = base + (ih or "")
-        key = (name, arg)
-        if key in seen:
-            continue
-        seen.add(key)
-        for c in cset.get(base, []):
-            out.append(CLAUSE_TEXT[c].format(f=name, S=arg))
+    for f in syms:
+        name = f + "_ih" if f == self_sym else f
+        for c in cset.get(f, []):
+            out.append(CLAUSE_TEXT[c].format(f=name))
     return "\n".join(out)
 
 
 # The RECURSIVE interpreter entries.  `eval_expr` and `exec_stmt` call each other
 # and themselves, so their summaries are the whole interpreter — and the Lean
 # residual does not prove anything about them either: it CARRIES them, as the
-# recursor's `EvalIH`/`mExecSeq` induction hypotheses.  Mining them would ask the
-# solver to redo the induction the recursor already did, so they are named
-# ASSUMED premises, and every verdict resting on one says so.
+# recursor's `EvalIH`/`mExecSeq` induction hypotheses.  Mining them would be
+# asking the solver to redo the induction the recursor already did, so they are
+# named ASSUMED premises here, listed in `assumed.tsv`, exactly matching the
+# hypotheses the residual's statement takes.
 IH_SUMMARIES = {
     "callee_2147496292",   # 0x80003164 eval_expr — the `EvalIH` hypothesis
     "callee_2147500000",   # 0x80003fe0 exec_stmt — the `mExecS`/`mExecSeq` hypothesis
@@ -253,27 +181,20 @@ def mine(d, syms, timeout, jobs, rounds):
     # unfold, so no clause can ever be established for it.  Its clause set is
     # emptied here rather than assumed — an assumed-but-unproved clause would be
     # an axiom smuggled into every query that mentions it.
-    emitter_assumed = set()
-    ap = os.path.join(d, "assumed.tsv")
-    if os.path.exists(ap):
-        emitter_assumed = {l.split("\t")[0] for l in open(ap).read().splitlines()[1:] if l.strip()}
     bodies = {}
     assumed = []
     for f in list(syms):
         path = os.path.join(d, "obligations", f + ".smt2")
-        if f in IH_SUMMARIES or f in emitter_assumed:
+        if f in IH_SUMMARIES:
             assumed.append(f)          # keep the full clause set, do not mine
         elif os.path.exists(path):
             bodies[f] = open(path).read()
         else:
             cset[f] = []
-    with open(os.path.join(d, "assumed-final.tsv"), "w") as fh:
+    with open(os.path.join(d, "assumed.tsv"), "w") as fh:
         fh.write("summary\trole\n")
         for f in assumed:
-            role = ("recursor IH (EvalIH / mExecSeq), carried by the residual"
-                    if f in IH_SUMMARIES else
-                    "callee contract outside the interpreter's own code")
-            fh.write(f + "\t" + role + "\n")
+            fh.write(f + "\trecursor IH (EvalIH / mExecSeq), carried by the residual\n")
     syms = [f for f in syms if f in bodies]
     # a summary only needs re-checking when one of the summaries its own body
     # applies (including itself, via `<f>_ih`) has lost a clause since last round
@@ -285,7 +206,6 @@ def mine(d, syms, timeout, jobs, rounds):
             parts = l.split("\t")
             deps[parts[0]] = {x for x in (parts[1].split(",") if len(parts) > 1 else []) if x}
     stale = set(syms)
-    wsets = {f: (load_writes(os.path.join(d, "writes", f + ".tsv")) or []) for f in syms}
     stale &= set(syms)
     for rnd in range(rounds):
         tasks = [(f, c) for f in syms if f in stale for c in cset[f]]
@@ -297,9 +217,13 @@ def mine(d, syms, timeout, jobs, rounds):
             # assume ONLY the summaries this obligation's body actually applies —
             # dumping all 143 summaries' clause sets into every query buries the
             # solver in quantifiers that can never fire.
-            txt = bodies[f].replace("; @@ASSUME@@", assume_block(bodies[f], cset, self_sym=f)) \
+            rel = sorted(deps[f] | {f}) if deps[f] else [f]
+            txt = bodies[f].replace("; @@ASSUME@@", assume_block(cset, rel, self_sym=f)) \
                            .replace("; @@GOAL@@", NEG[c]) + "\n(check-sat)\n"
-            return (f, c, z3(txt, timeout))
+            print("calling z3")
+            res = (f, c, z3(txt, timeout))
+            print(f'z3 call finished, {res}')
+            return res
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
             res = list(ex.map(run, tasks))
         dropped = [(f, c, v) for f, c, v in res if v != "unsat"]
@@ -400,17 +324,11 @@ def main():
     if phase in ("check", "both"):
         print(f"== phase 2: {len(deps)} residual queries x {len(POSTS)} post conjuncts")
         qs = {f: open(os.path.join(d, "queries", f + ".smt2")).read() for f in deps}
-        wsets = {f: (load_writes(os.path.join(d, "writes", f + ".tsv")) or []) for f in deps}
         pre = pre_block(d)
-        tasks = [(f, pk) for f in sorted(deps) for pk in list(POSTS) + list(FOOTPRINT_POSTS)]
+        tasks = [(f, pk) for f in sorted(deps) for pk in POSTS]
         def run(t):
             f, pk = t
-            if pk in FOOTPRINT_POSTS:
-                base = qs[f].replace("; @@ASSUME@@", "").replace("; @@POST@@", "")
-                return (f, pk, footprint_check(base, FOOTPRINT_POSTS[pk],
-                                               wsets.get(f, []), applied_of(qs[f]),
-                                               cset, timeout, pre=pre))
-            txt = qs[f].replace("; @@ASSUME@@", pre + "\n" + assume_block(qs[f], cset)) \
+            txt = qs[f].replace("; @@ASSUME@@", pre + "\n" + assume_block(cset, deps[f])) \
                        .replace("; @@POST@@", POSTS[pk]) + "\n(check-sat)\n"
             v = z3(txt, timeout)
             return (f, pk, {"unsat": "VALID", "sat": "REFUTED"}.get(v, "UNKNOWN"))
@@ -420,13 +338,13 @@ def main():
         for f, pk, v in res:
             table.setdefault(f, {})[pk] = v
         out = os.path.join(d, "verdicts.tsv")
-        keys = list(POSTS) + list(FOOTPRINT_POSTS)
+        keys = list(POSTS)
         with open(out, "w") as fh:
             fh.write("field\t" + "\t".join(keys) + "\n")
             for f in sorted(table):
-                fh.write(f + "\t" + "\t".join(table[f].get(k, "UNKNOWN") for k in keys) + "\n")
+                fh.write(f + "\t" + "\t".join(table[f][k] for k in keys) + "\n")
         for k in keys:
-            print(f"  {k}: {dict(Counter(table[f].get(k, 'UNKNOWN').split('(')[0] for f in table))}")
+            print(f"  {k}: {dict(Counter(table[f][k] for f in table))}")
         print("wrote", out)
 
 
