@@ -5509,10 +5509,19 @@ it, still stop and report instead.
   `base + 32 <= A_hi` (wraparound satisfies the latter and the solver takes it);
   and `INV` must bound the frame ABOVE `sp` too, or plain `sd rX, 0x418(sp)`
   spills escape.  `stack_or_arena` went 128 -> 195 -> 200 of 201.
-  (c) WHAT IS LEFT is a different fact and one summary: `loop_0x800031dc`, the
-  argument-marshalling loop, stores at `sp + 240 + 24n` and nothing bounds `n`.
-  That is the ARGUMENT-INDEX bound (arity geometry + `TermGuards.argsMeasure`),
-  a bound on an induction variable, which the clause bank cannot express — every
-  candidate there relates an entry state to an exit state.  It alone blocks 33 of
-  the 52 queries.  Adding an induction-variable-bound clause family is the next
-  concrete extension.
+  (c) WHAT IS LEFT is one summary and an INDUCTION-VARIABLE invariant.
+  `loop_0x800031dc` (the argument-marshalling loop) stores at `sp + 240 + 24n`
+  and the 1088-byte frame needs `n < 35`.  The bound exists in the source —
+  `MAX_ARGS 32`, checked at `c/src/interp.c:251` before the loop — and encoding
+  it as a named precondition is NOT sufficient: it bounds the COUNT `a5` while
+  the address is built from the COUNTER `a6`.  What closes it is `a6 <= a5` at
+  the header, which the clause bank cannot express because every candidate there
+  relates a summary's ENTRY state to its EXIT state, and this is a bound on a
+  variable carried around the back-edge.  It alone blocks 33 of the 52 queries.
+  Adding an induction-variable clause family, parameterised over (register,
+  bound expression) and mined the same assume-guarantee way, is the next
+  concrete extension.  General lesson: a summary obligation starts at its header
+  with the entry state FREE, so any fact the caller established before it is
+  invisible; that is the same shape as the `s1 = sret` problem the residual
+  spans hit, and the same two cures apply (start earlier, or state the
+  precondition with its provenance).

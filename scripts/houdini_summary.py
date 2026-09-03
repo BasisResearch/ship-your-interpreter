@@ -212,6 +212,39 @@ def heap_hyp(writes):
             f"{n} pointer-based store site(s)\n" + "\n".join(out) + "\n", n)
 
 
+# --------------------------------------------------------- summary preconditions
+# A summary's obligation starts at its header with the entry state free, so any
+# fact the CALLER established before entering it is invisible there.  Where such
+# a fact is what makes the clause true, it is stated here as an explicit named
+# precondition, with the source line that establishes it and the site that
+# discharges it.  A residual query reaching the summary discharges it for real:
+# the queries start at the function entry, so the check is inside the span.
+#
+# Each entry is (SMT assertion over the obligation's entry state S0, provenance).
+PRECONDITIONS = {
+    # `loop_0x800031dc` is the argument-marshalling loop of the EX_CALL arm.  It
+    # writes slot `n` of the outgoing-argument array at `sp + 240 + 24n`, and the
+    # frame is 1088 bytes, so it needs `n < 35`.  The bound is `MAX_ARGS`:
+    #
+    #     c/src/interp.c:8    #define MAX_ARGS 32
+    #     c/src/interp.c:251  if (argc > MAX_ARGS) runtime_error(...);
+    #     c/src/interp.c:253  Value args[MAX_ARGS];
+    #
+    # The check is emitted BEFORE the loop header, so the loop's own obligation
+    # cannot see it; every residual query can, since those start at `eval_expr`'s
+    # entry.  The count is spilled at `24(sp)` and reloaded each iteration.
+    "loop_2147496412": (
+        "(assert (bvule (ld8 (mm S0) (bvadd (select (rr S0) #x0000000000000002) "
+        "#x0000000000000018)) #x0000000000000020))",
+        "MAX_ARGS: c/src/interp.c:251 `if (argc > MAX_ARGS) runtime_error(...)`, "
+        "checked before the loop header, discharged inside every residual span. "
+        "NECESSARY BUT NOT SUFFICIENT on its own: it bounds the COUNT, and the "
+        "store address is built from the COUNTER, so it only bites alongside the "
+        "induction-variable invariant `a6 <= count` that the clause bank cannot "
+        "yet express."),
+}
+
+
 def load_writes(path):
     if not os.path.exists(path):
         return None
@@ -359,7 +392,10 @@ def mine(d, syms, timeout, jobs, rounds):
                 # the `StoreRepr`/`Arena.contains` entry hypothesis at the
                 # pointer-based sites.  Asking the array theory for this instead
                 # bit-blasts and refutes on wraparound.
-                b2 = body.replace("; @@ASSUME@@", assume_block(body, cset, self_sym=f)) \
+                pc = PRECONDITIONS.get(f)
+                b2 = body.replace("; @@ASSUME@@",
+                                  assume_block(body, cset, self_sym=f)
+                                  + ("\n; precondition: " + pc[1] + "\n" + pc[0] if pc else "")) \
                          .replace("; @@GOAL@@", "")
                 v = footprint_check(b2, "(assert (INV S0))\n" + OUTSIDE,
                                     wsets.get(f, []), applied_of(body), cset, timeout)

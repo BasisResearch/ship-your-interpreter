@@ -145,17 +145,24 @@ they vanish. The two REFUTED that survive are the posts being wrong for those
 spans, not the spans: `hEpilogueSpill` is a frame fragment, so `sp` moves across
 it and it boxes nothing; `hInitStore` is the main-init image, not an arm.
 
-**One loop bound is left, and it is 33 of the 52.** `loop_0x800031dc`, the
-argument-marshalling loop in the EX_CALL arm, is the sole summary without
-`stack_or_arena` and the sole `summary-clause` blocker for 33 queries. Its
-seventh store lands at `sp + 240 + 24n`, slot `n` of the outgoing-argument array,
-and nothing in the encoding bounds `n`. That is the argument-index bound: the
-args loop runs at most as many times as the callee has parameters, and the frame
-reserves a slot per parameter. In the proof it comes from the call arm's arity
-geometry with `TermGuards.argsMeasure`. It does not fit the clause bank as it
-stands, because every candidate there is a relation between entry and exit state
-and this one is a bound on an induction variable. The witness and the
-disassembled block are in `bmc/OBSTRUCTION.md`.
+**One induction-variable invariant is left, and it is 33 of the 52.**
+`loop_0x800031dc`, the argument-marshalling loop in the EX_CALL arm, is the sole
+summary without `stack_or_arena` and the sole `summary-clause` blocker for 33
+queries. Its seventh store lands at `sp + 240 + 24n`, slot `n` of the
+outgoing-argument array, and the 1088-byte frame needs `n < 35`.
+
+The bound is in the source, and encoding it was not enough. `MAX_ARGS` is 32 and
+`c/src/interp.c:251` checks `argc > MAX_ARGS` before the loop; it is encoded as a
+named precondition with its provenance, and every residual query discharges it
+for real, since those spans start at `eval_expr`'s entry. It still does not
+close the gap, because it bounds the COUNT while the store address is built from
+the COUNTER. What closes it is `a6 <= a5` at the header, established as `a6 = 0`
+on entry and preserved across the `bne` back-edge. The clause bank cannot express
+that: every candidate there relates a summary's entry state to its exit state,
+and this is a bound on a variable carried around the back-edge. An
+induction-variable clause family, parameterised over (register, bound
+expression) and mined the same assume-guarantee way, is the concrete next
+extension. The witness and the disassembled block are in `bmc/OBSTRUCTION.md`.
 
 A further 17 verdicts are `UNKNOWN(footprint)`, which is the solver timing out on
 the function-entry spans rather than a missing fact. Those want a budget.
