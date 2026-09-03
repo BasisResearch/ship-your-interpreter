@@ -140,10 +140,17 @@ survive are the posts being wrong for those spans, not the spans:
 `hEpilogueSpill` is a frame fragment, so `sp` moves across it and it boxes
 nothing; `hInitStore` is the main-init image, not an arm.
 
-**The 50 remaining UNKNOWNs are solver budget, not missing facts.** 33 are
-`UNKNOWN(iv-undischarged)` and 17 `UNKNOWN(footprint)`, and both are timeouts on
-the function-entry spans: the args-loop invariant discharge does not return at
-400 s. Nothing in the campaign says a residual is false.
+**Nothing in the campaign says a residual is false.** 2 are VALID, 33
+`UNKNOWN(iv-undischarged)`, 17 `UNKNOWN(footprint)`.
+
+The 33 are no longer a budget wall. Slicing the discharge query to the state its
+invariant is about takes it from 547 KB and 150 summaries to 40 KB and 1, and a
+check that did not return at 400 s now returns in 1-16 s. The answer is `sat`,
+so the invariant does not discharge as posed, and the countermodel says why: the
+arrival is reached under a guard the solver has not resolved from the pinned AST
+kind, so an arm the pin excludes still looks reachable. Resolving the dispatch
+inside a sliced query is the next step, and applying the same slice to the post
+queries is what clears the 17 footprint timeouts.
 
 **One summary and one mechanism are left.** `loop_0x800031dc`, the
 argument-marshalling loop, writes `sp + 240 + 24n` and needs `n < 35`. The
@@ -151,13 +158,15 @@ invariant that bounds it is `a6 < a5 <= 32` — the `bne` back-edge with `a6 = 0
 on entry, and `MAX_ARGS` from `c/src/interp.c:251`. It is stated as an
 `IV_INVARIANT`, which the driver holds to both obligations at once: proved
 inductive at the summary's recursive occurrence, and discharged at every
-application site. It fails the inductive step for a precise reason. The counter
-is spilled to `16(sp)`, `eval_expr` runs, and the counter is reloaded, but the
-reload reads a post-call MERGE state; the frame clause is ground-instantiated at
-the callee application and does not propagate through the merge. Instantiating
-the memory clauses at every store address was not enough. Propagating them
-through merge states is the next step, and slicing the discharge query to the
-path reaching the loop header is what brings the 400 s back under budget.
+application site. Three refinements got the discharge from a
+400 s timeout to a definite answer in seconds, and all three stay: it runs under
+the arrival's OWN guard rather than unconditionally; an arrival whose guard is
+UNSAT is skipped, since a span that cannot reach a loop has no invariant of it to
+establish; and the invariant is stated with SIGNED comparisons, because every
+comparison the machine makes here is signed (`blt a4,a5` at 0x800031c8 IS the
+`MAX_ARGS` check, `bge zero,a5` at 0x800031d8 skips an empty loop, `bne a6,a5` at
+0x80003250 closes it), and an unsigned reading lets `a5` be `0x8000000000000000`,
+which passes the signed check and blows the bound.
 
 ## The pipeline, per residual
 

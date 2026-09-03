@@ -251,12 +251,67 @@ IV_INVARIANTS = {
     #
     # a5 = x15, a6 = x16.
     "loop_2147496412": (
-        "(and (bvult (select (rr {S}) #x0000000000000010) "
+        "(and (bvsle #x0000000000000000 (select (rr {S}) #x0000000000000010)) "
+        "(bvslt (select (rr {S}) #x0000000000000010) "
         "(select (rr {S}) #x000000000000000f)) "
-        "(bvule (select (rr {S}) #x000000000000000f) #x0000000000000020))",
-        "counter < count (0x80003250 `bne a6,a5`) and count <= MAX_ARGS "
-        "(c/src/interp.c:251)"),
+        "(bvsle (select (rr {S}) #x000000000000000f) #x0000000000000020))",
+        "0 <= a6 < a5 <= 32.  Every comparison the machine makes here is SIGNED "
+        "(`blt a4,a5` at 0x800031c8 is the MAX_ARGS check, `bge zero,a5` at "
+        "0x800031d8 skips an empty loop, `bne a6,a5` at 0x80003250 closes it), so "
+        "the invariant is too: an unsigned reading lets a5 be 0x8000..0, which "
+        "passes the signed check and blows the unsigned bound"),
 }
+
+
+GEN_VAR = re.compile(r"^(?:g\d+[qx]?|[mbis]\d+)$")
+DECL_RE = re.compile(r"^\(declare-const (\S+) (?:Bool|MState)\)$")
+BIND_RE = re.compile(r"^\(assert \(= (\S+) (.*)\)\)$")
+
+
+def slice_to(text, target, extra=()):
+    """The part of a query that `target` actually depends on.
+
+    The encoder emits the state chain as top-level `declare-const` + equational
+    `assert`, in order, so a backward walk from one state variable keeps only the
+    bindings that feed it.  A function-entry span carries ~150 summaries because
+    the prologue drags them in, and an invariant-discharge query at the loop
+    header needs none of what happens after it: slicing is what brings a check
+    that does not return in 400 s back under budget."""
+    lines = text.split("\n")
+    bind, decl, order = {}, {}, []
+    for i, l in enumerate(lines):
+        m = DECL_RE.match(l)
+        if m and GEN_VAR.match(m.group(1)):
+            decl[m.group(1)] = i
+            continue
+        m = BIND_RE.match(l)
+        if m and GEN_VAR.match(m.group(1)):
+            bind[m.group(1)] = (i, m.group(2))
+            order.append(m.group(1))
+    roots = [target] + [e for e in extra if e]
+    if not any(r in bind for r in roots):
+        return text
+    need, work = set(), list(roots)
+    while work:
+        v = work.pop()
+        if v in need or v not in bind:
+            continue
+        need.add(v)
+        for w in re.findall(r"[A-Za-z][A-Za-z0-9_]*", bind[v][1]):
+            if w in bind and w not in need:
+                work.append(w)
+    drop = set()
+    for v in bind:
+        if v not in need:
+            drop.add(bind[v][0])
+            if v in decl:
+                drop.add(decl[v])
+    # `state_exit`/`mem_exit` name the span's OUTCOME, which a header-invariant
+    # discharge does not need and which references guards the slice just dropped.
+    for i, l in enumerate(lines):
+        if l.startswith("(define-fun state_exit ") or l.startswith("(define-fun mem_exit "):
+            drop.add(i)
+    return "\n".join(l for i, l in enumerate(lines) if i not in drop)
 
 
 def iv_assume(f, state="S0"):
@@ -265,17 +320,49 @@ def iv_assume(f, state="S0"):
     return f"; IV: {iv[1]}\n(assert {iv[0].format(S=state)})\n" if iv else ""
 
 
-def iv_discharge(text, cset, timeout, base, pre):
+def guard_of(text, sym, arg):
+    """The guard the encoder bound immediately before applying `sym` to `arg`.
+
+    `bmcRound` emits a merged arrival as the pair `(gK …)`, `(mK (loop_h …))`, so
+    the guard is the binding one line above the application."""
+    lines = text.split("\n")
+    pat = re.compile(r"^\(assert \(= (\S+) \(" + re.escape(sym) + r" " + re.escape(arg) + r"\)\)\)$")
+    for i, l in enumerate(lines):
+        if pat.match(l):
+            for j in range(i - 1, max(-1, i - 4), -1):
+                m = BIND_RE.match(lines[j])
+                if m and m.group(1).startswith("g"):
+                    return m.group(1)
+    return None
+
+
+def iv_discharge(text, cset, timeout, pre):
     """Every application of an IV-carrying summary must PROVE the invariant at
-    its argument.  Returns None if all discharge, else the failing site."""
+    its argument.  Returns None if all discharge, else the failing site.
+
+    The query is SLICED to the argument first, and the clause block is then built
+    from the slice, so it only instantiates at sites the slice still contains."""
     for m in APP_RE.finditer(text):
         f, arg = m.group(1), m.group(3)
         iv = IV_INVARIANTS.get(f)
         if iv is None:
             continue
-        q = (base + "\n" + pre + "\n(assert (not " + iv[0].format(S=arg) + "))\n"
-             "(check-sat)\n")
-        if z3(q, timeout) != "unsat":
+        g = guard_of(text, f, arg)
+        sl = slice_to(text, arg, extra=(g,))
+        # under the arrival's OWN guard: a loop that control never enters has no
+        # invariant to establish, and `for (i = 0; i < argc; i++)` with argc = 0
+        # is exactly that case.  The emitter binds the guard immediately before
+        # the summary application it guards.
+        head = (sl.replace("; @@ASSUME@@", assume_block(sl, cset))
+                  .replace("; @@POST@@", "") + "\n" + pre + "\n")
+        gq = (f"(assert {g})\n" if g else "")
+        # an arrival the span cannot reach has no invariant to establish.  A
+        # function-entry span explores every arm of the AST dispatch, so a query
+        # whose kind is pinned to one arm carries the others with an UNSAT guard.
+        if g and z3(head + gq + "(check-sat)\n", timeout) == "unsat":
+            continue
+        if z3(head + gq + "(assert (not " + iv[0].format(S=arg) + "))\n"
+              "(check-sat)\n", timeout) != "unsat":
             return f"{f}@{arg}"
     return None
 
@@ -599,7 +686,7 @@ def main():
             if pk in FOOTPRINT_POSTS:
                 base = qs[f].replace("; @@ASSUME@@", assume_block(qs[f], cset)) \
                             .replace("; @@POST@@", "")
-                bad = iv_discharge(qs[f], cset, timeout, base, pre)
+                bad = iv_discharge(qs[f], cset, timeout, pre)
                 if bad:
                     return (f, pk, "UNKNOWN(iv-undischarged:" + bad + ")")
                 return (f, pk, footprint_check(base, FOOTPRINT_POSTS[pk],

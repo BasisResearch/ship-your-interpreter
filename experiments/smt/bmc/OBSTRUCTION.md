@@ -58,20 +58,36 @@ every store address (`dedup_addrs`) was not enough; the merge is the gap.
 
 ## What the verdicts are limited by
 
-Of the 52: 2 VALID, 33 `UNKNOWN(iv-undischarged)`, 17 `UNKNOWN(footprint)`.
+Of the 52: 2 VALID, 33 `UNKNOWN(iv-undischarged)`, 17 `UNKNOWN(footprint)`. No
+residual is refuted, and the footprint family has zero refutations on any span.
 
-Both UNKNOWN classes are **solver budget, not missing facts**. The IV discharge
-on a function-entry span does not return at 400 s, and the footprint queries time
-out on the same spans. Neither is a refutation: nothing in the campaign says the
-residuals are false, and the footprint family has zero refutations.
+The 33 are no longer a budget wall. Slicing the discharge query to the state the
+invariant is about (`slice_to`) takes it from 547 KB and 150 summaries to 40 KB
+and 1, and a check that did not return in 400 s now returns in 1-16 s. The answer
+it returns is `sat`, so the invariant genuinely does not discharge as posed, and
+the countermodel says why: the arrival is reached under a guard the solver has not
+resolved from the pinned AST kind, so an arm the pin excludes still looks
+reachable. Three refinements were needed to get an answer this sharp, and all
+three stay:
 
-## The two next steps, in order
+* the discharge runs under the arrival's OWN guard (`guard_of`), not
+  unconditionally — the emitter binds the guard immediately before the
+  application it guards;
+* an arrival whose guard is UNSAT is skipped, since a span that cannot reach a
+  loop has no invariant of it to establish;
+* the invariant is stated with SIGNED comparisons, because every comparison the
+  machine makes here is signed (`blt a4,a5` at 0x800031c8, `bge zero,a5` at
+  0x800031d8, `bne a6,a5` at 0x80003250). An unsigned reading lets `a5` be
+  `0x8000000000000000`, which passes the signed check and blows the bound.
 
-1. **Propagate the frame clauses through merge states.** A read after a call
-   reads an `ite` over arrival states, and the ground instances only reach the
-   callee application. Instantiating at merge points, or naming the post-call
-   state so the clause attaches to it directly, closes the args-loop IV.
-2. **Shrink the discharge query.** A function-entry span carries ~150 summaries
-   because the prologue drags them in; the IV discharge only needs the path to
-   the loop header. Slicing the query to that path is what brings 400 s back
-   under budget.
+The 17 `UNKNOWN(footprint)` remain solver budget on the function-entry spans.
+
+## The next step
+
+Resolve the AST-kind dispatch inside a sliced query. The kind pin and the
+jump-table rodata pins are both present, but in the slice the solver does not
+carry them through to the dispatch guard, so a query pinned to one arm still has
+to discharge invariants belonging to the others. Slicing on the guard's own
+dependency chain, or asserting the resolved arm target directly at the dispatch,
+is what closes it. The footprint timeouts want the same slice applied to the
+post queries, which is mechanical once this lands.
