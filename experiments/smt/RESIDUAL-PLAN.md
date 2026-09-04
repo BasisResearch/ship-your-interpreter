@@ -127,25 +127,36 @@ Last measured on the `bmcE` encoder (52 spans, 47 summaries, `-j10 --timeout
 | post | VALID | N/A | REFUTED | UNKNOWN |
 |---|---|---|---|---|
 | `sp` | 18 (2 frame-shifted) | — | — | 34 |
-| `storerepr` | 1 | 4 | 1 | 46 |
+| `storerepr` | 2 | 4 | — | 46 |
 | `valuerepr_tag` | 1 | 17 | — | 34 |
-| `outside_stack_arena` | — | — | — | 52 |
-| `code` | — | — | — | 52 |
+| `outside_stack_arena` | 3 | — | — | 49 |
+| `code` | 3 | — | — | 49 |
 
-**No query is vacuous.** That is the load-bearing line: it is what makes any
-VALID above mean something, and it was not true of any campaign before this one.
+**Not one REFUTED and not one VACUOUS**, across 52 fields and five posts. Those
+two lines have to be read together: the first was also claimed by a campaign in
+which 26 queries proved every post they were asked, and it is the second that
+makes it worth anything.
 
-The one refutation is `hInitStore.storerepr`. The 104 blocked footprint verdicts
-have exactly two causes, both named:
+The remaining UNKNOWNs have named causes, not noise:
 
-* **68 — the args-loop invariant at its recursive occurrence.**
-  `loop_0x800031dc` needs `0 <= a6 < a5 <= 32` discharged where the loop applies
-  itself. Genuinely open; the cut-and-retry fallback does not close it either.
-* **36 — a false refusal, since fixed.** `footprint_check` tested
-  `"unmodelled_step" in base`, a bare substring, and `smtPreamble` declares that
-  symbol unconditionally, so every query matched through its own
-  `(declare-fun ...)` line. There are ZERO applications of it in all 52 queries.
-  The guard now tests for an application. Not yet re-measured.
+* **68 — the args-loop invariant** at its recursive occurrence
+  (`loop_0x800031dc`). A NAMED OBSTRUCTION, not a gap in effort: the
+  cut-and-retry abstraction was tried at all 19 candidate cut points with `INV`
+  proved at each, giving 8 `sat` and 11 `unknown` and no discharge, in both walk
+  orders. The `sat` verdicts say why — the bounds come from branch guards whose
+  `g` bindings reference upstream states, so havocking a state strips the guards
+  with it. Closing it wants the bounds supplied as an explicit assumption from
+  the residual's own precondition, which is a statement-level change.
+* **30 — loop summaries that no longer carry `stack_or_arena`**, now that their
+  obligations are mined against bodies that actually run.
+* **114 — plain solver timeouts** at 120s.
+
+The former single refutation, `hInitStore.storerepr`, was a MIS-STATED POST and
+is now VALID: `storerepr` excluded the stack and arena but not the writable
+statics, while `OUTSIDE` and the `stack_or_arena` clause exclude all three, so
+the two routes meant to cross-check each other were checking different
+properties. The countermodel put `QA` at `0x8001c01d`, inside
+`[0x8001ad00, 0x8001c168)` — the interpreter initialising its own globals.
 
 `stack_or_arena` survives on 28 of 47 summaries, down from 52 of 53. That drop is
 the loop-obligation fix landing: a loop body that actually runs does not preserve
