@@ -547,6 +547,8 @@
 (assert (= b180 i186))
 (declare-const g187x Bool)
 (assert (= g187x g180))
+; residual-specific premises from the Lean constructor
+(assert (= (ld8 (mm s0) (bvadd (select (rr s0) #x000000000000000b) #x0000000000000008)) #x0000000000000000))
 ; only inputs that REACH the exit PC: without this the `ite` merge
 ; falls through to the last arrival for an input no guard covers, and the
 ; resulting state is one the machine is never in -- spurious REFUTED.

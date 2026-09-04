@@ -1704,7 +1704,8 @@ block, which fails only if a cycle survives the loop cut. -/
 def reflectBmcTopo (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : List Nat)
     (fstarts noret : List Nat) (retExit : Bool) (_rounds : Nat) (s0 : String) :
     String × List String × List String × Bool × Nat × List (String × String × Nat)
-      × List (Nat × Nat × String) × List (String × Nat) × String := Id.run do
+      × List (Nat × Nat × String) × List (String × Nat) × String
+      × List (Nat × String × String) := Id.run do
   -- THE ENTRY IS NEVER SUMMARISED, even when it is a loop header.  A loop
   -- obligation is emitted with `entry = h`, and summarising `h` on its first
   -- arrival makes `fbody` just `loop_h_ih S0`: the body is never reflected and
@@ -1760,6 +1761,9 @@ def reflectBmcTopo (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops 
   let mut writes : List (String × String × Nat) := []
   let mut dispGuards : List (Nat × Nat × String) := []
   let mut halts : List (String × Nat) := []
+  -- One guarded, merged state at each reflected block entry.  Residual-specific
+  -- premises use these checkpoints instead of unstable generated binding names.
+  let mut checkpoints : List (Nat × String × String) := []
   let mut backAs : List Arrival := []
   let mut k := 0
   for pc in order do
@@ -1771,6 +1775,7 @@ def reflectBmcTopo (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops 
       sums := (lsum :: sums).eraseDups
       let gv := s!"g{k}"; let mv := s!"m{k}"; let sv := s!"m{k+1}"
       binds := binds ++ [s!"({gv} {g0})", s!"({mv} {st0})", s!"({sv} ({lsum} {mv}))"]
+      checkpoints := checkpoints ++ [(pc, gv, mv)]
       k := k + 2
       -- WHICH exit edge the loop took.  A summarised loop hands the same arrival
       -- guard `gv` to every one of its exits, so two exits downstream of the
@@ -1810,6 +1815,7 @@ def reflectBmcTopo (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops 
     else
     let gv := s!"g{k}"; let sv := s!"m{k}"; let bv := s!"b{k}"
     binds := binds ++ [s!"({gv} {g0})", s!"({sv} {st0})"]
+    checkpoints := checkpoints ++ [(pc, gv, sv)]
     k := k + 1
     let (st1, succs, exs, ss, ibinds, k', wr, hl) :=
       stepBlock img lo hi stops fstarts noret retExit pc gv sv bv k
@@ -1869,7 +1875,7 @@ def reflectBmcTopo (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops 
     | [(g, _)] => g
     | _ => "(or " ++ String.intercalate " " (exits.map (fun (g, _) => g)) ++ ")"
   return (exitTerm, binds, sums, complete, order.length, writes, dispGuards, halts,
-          exitGuard)
+          exitGuard, checkpoints)
 
 /-- Per-round frontier PCs — the diagnostic for "why did this span not complete". -/
 def bmcTrace (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : List Nat)

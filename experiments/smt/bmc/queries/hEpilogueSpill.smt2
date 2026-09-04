@@ -53,6 +53,7 @@
 (assert (= b0 i6))
 (declare-const g7x Bool)
 (assert (= g7x g0))
+; residual-specific premises from the Lean constructor
 ; only inputs that REACH the exit PC: without this the `ite` merge
 ; falls through to the last arrival for an input no guard covers, and the
 ; resulting state is one the machine is never in -- spurious REFUTED.

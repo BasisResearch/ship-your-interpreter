@@ -3025,6 +3025,7 @@
 (assert (not g43q))
 (assert g44q)
 (assert (not g45q))
+; residual-specific premises from the Lean constructor
 ; only inputs that REACH the exit PC: without this the `ite` merge
 ; falls through to the last arrival for an input no guard covers, and the
 ; resulting state is one the machine is never in -- spurious REFUTED.

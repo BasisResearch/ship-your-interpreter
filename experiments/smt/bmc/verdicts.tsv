@@ -1,53 +1,64 @@
-field	storerepr	sp	valuerepr_tag	outside_stack_arena	code
-hAndFalse	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hAndTrue	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hArgsCons	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@10](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@10](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hArgsNil	VALID(consistency-unproved)	UNKNOWN	UNKNOWN	VALID[StoreRepr@8](consistency-unproved)	VALID[StoreRepr@8](consistency-unproved)
-hAssign	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@11](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@11](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hCall	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@10](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@10](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hCallAssertOk	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@10](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@10](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hCallClosure	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@10](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@10](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hCallPrint	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@10](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@10](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hCallPrintln	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@10](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@10](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hDivCorr	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hDivOv	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hEpilogueSpill	N/A(fragment)	VALID[sp+0x440]	N/A(fragment)	VALID	VALID
-hEq	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hFn	UNKNOWN	VALID(consistency-unproved)	VALID(consistency-unproved)	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hIAdd	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hIDiv	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hIGe	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hIGt	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hILe	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hILt	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hIMod	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hIMul	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hISub	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hInitStore	VALID	VALID[sp+0xffffffffffffff50]	N/A(not-an-eval-arm)	VALID[StoreRepr@1]	VALID[StoreRepr@1]
-hNe	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hNeg	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hNot	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hOrFalse	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hOrTrue	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hSBlock	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)
-hSExpr	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)
-hSForStart	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)
-hSIfFalse	UNKNOWN	VALID	N/A(not-an-eval-arm)	VALID[StoreRepr@3]	VALID[StoreRepr@3]
-hSIfNone	UNKNOWN	VALID	N/A(not-an-eval-arm)	VALID[StoreRepr@3]	VALID[StoreRepr@3]
-hSIfTrue	UNKNOWN	VALID	N/A(not-an-eval-arm)	VALID[StoreRepr@3]	VALID[StoreRepr@3]
-hSRet	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)
-hSRetNull	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)
-hSVarInit	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)
-hSVarNull	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)
-hSWhileBreak	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)
-hSWhileFalse	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)
-hSeqConsAbrupt	N/A(fragment)	VALID	N/A(fragment)	VALID	VALID
-hSeqConsNormal	N/A(fragment)	VALID	N/A(fragment)	VALID	VALID
-hSeqNil	N/A(fragment)	VALID	N/A(fragment)	VALID	VALID
-hStrAddL	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hStrAddR	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hStrGe	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hStrGt	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hStrLe	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hStrLt	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@14](consistency-unproved)[modulo argsLoopBoundAcrossCall]
-hVar	UNKNOWN	UNKNOWN	UNKNOWN	VALID[StoreRepr@11](consistency-unproved)[modulo argsLoopBoundAcrossCall]	VALID[StoreRepr@11](consistency-unproved)[modulo argsLoopBoundAcrossCall]
+field	storerepr	sp	valuerepr_tag	outside_stack_arena	code	residual_relation
+hAndFalse	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hAndTrue	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hArgsCons	N/A(fragment)	VALID	N/A(fragment)	VALID	VALID	N/A
+hArgsNil	N/A(fragment)	VALID	N/A(fragment)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hAssign	VALID(consistency-unproved)	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hBool	VALID(consistency-unproved)	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hCall	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hCallAssertOk	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hCallClosure	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hCallPrint	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hCallPrintln	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hDivOv	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hEpilogueSpill	N/A(fragment)	VALID[sp+0x440]	N/A(fragment)	VALID	VALID	N/A
+hEq	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hFn	UNKNOWN	VALID(consistency-unproved)	VALID(consistency-unproved)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hIAdd	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hIDiv	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hIGe	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hIGt	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hILe	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hILt	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hIMod	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hIMul	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hISub	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hInitStore	VALID	VALID[sp+0xffffffffffffff50]	N/A(not-an-eval-arm)	VALID[StoreRepr@1]	VALID[StoreRepr@1]	N/A
+hInt	VALID(consistency-unproved)	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hNe	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hNeg	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hNot	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hNull	VALID(consistency-unproved)	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hOrFalse	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hOrTrue	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hSBlock	UNKNOWN	VALID	N/A(not-an-eval-arm)	VALID[StoreRepr@3]	VALID[StoreRepr@3]	N/A
+hSBrk	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)	N/A
+hSCont	UNKNOWN	VALID	N/A(not-an-eval-arm)	VALID[StoreRepr@3]	VALID[StoreRepr@3]	N/A
+hSExpr	UNKNOWN	VALID	N/A(not-an-eval-arm)	VALID[StoreRepr@3]	VALID[StoreRepr@3]	N/A
+hSForStart	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)	N/A
+hSIfFalse	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)	N/A
+hSIfNone	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)	N/A
+hSIfTrue	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)	N/A
+hSRet	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)	N/A
+hSRetNull	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)	N/A
+hSVarInit	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)	N/A
+hSVarNull	UNKNOWN	VALID	N/A(not-an-eval-arm)	VALID[StoreRepr@3]	VALID[StoreRepr@3]	N/A
+hSWhileBreak	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)	N/A
+hSWhileFalse	UNKNOWN	VALID(consistency-unproved)	N/A(not-an-eval-arm)	VALID[StoreRepr@3](consistency-unproved)	VALID[StoreRepr@3](consistency-unproved)	N/A
+hSeqConsAbrupt__block	N/A(fragment)	VALID	N/A(fragment)	VALID	VALID	N/A
+hSeqConsAbrupt__closure	N/A(fragment)	VALID	N/A(fragment)	VALID	VALID	N/A
+hSeqConsAbrupt__interp	N/A(fragment)	VALID	N/A(fragment)	VALID	VALID	N/A
+hSeqConsNormal__block	N/A(fragment)	VALID	N/A(fragment)	VALID	VALID	N/A
+hSeqConsNormal__closure	N/A(fragment)	VALID	N/A(fragment)	VALID	VALID	N/A
+hSeqConsNormal__interp	N/A(fragment)	VALID	N/A(fragment)	VALID	VALID	N/A
+hSeqNil__block	N/A(fragment)	VALID	N/A(fragment)	VALID	VALID	N/A
+hSeqNil__closure	N/A(fragment)	VALID	N/A(fragment)	VALID	VALID	N/A
+hSeqNil__interp	N/A(fragment)	VALID	N/A(fragment)	VALID	VALID	N/A
+hStr	VALID(consistency-unproved)	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN
+hStrAddL	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hStrAddR	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hStrGe	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hStrGt	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hStrLe	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hStrLt	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A
+hVar	UNKNOWN	UNKNOWN	UNKNOWN	UNKNOWN(summary-clause:loop_2147496412)	UNKNOWN(summary-clause:loop_2147496412)	N/A

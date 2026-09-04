@@ -3066,6 +3066,10 @@
 (assert g43q)
 (assert (not g44q))
 (assert (not g45q))
+; residual-specific premises from the Lean constructor
+(assert (= (ld4 (mm s0) (bvadd (select (rr s0) #x000000000000000c) #x0000000000000008)) #x0000000000000010))
+(assert g124)
+(assert (bvule (ld4 (mm m124) (bvadd (select (rr m124) #x0000000000000002) #x0000000000000090)) #x0000000000000005))
 ; only inputs that REACH the exit PC: without this the `ite` merge
 ; falls through to the last arrival for an input no guard covers, and the
 ; resulting state is one the machine is never in -- spurious REFUTED.

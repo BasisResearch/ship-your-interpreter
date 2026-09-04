@@ -1,0 +1,6 @@
+field	dimension	reason
+hSeqNil	semantic-sequence-shape	machine instances do not encode Reflect/SegEntry/SegExit for []
+hSeqConsNormal	recursive-stitching	machine instances do not encode the head ExecIH plus tail ExecIH back-edge
+hSeqConsAbrupt	recursive-stitching	machine instances do not encode the head ExecIH plus abrupt-status premise
+hDivCorr	global-liveness	DivCorrFamily quantifies over every Loaded configuration and an existential correspondence
+hErrFam	composite-error-family	ErrFamily combines shared error state with 43 site obligations
