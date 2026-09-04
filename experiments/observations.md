@@ -6225,3 +6225,29 @@ it, still stop and report instead.
   and let those 68 report UNKNOWN, which is less informative but carries no
   risk of being read as support. I did not choose between them: it is a call
   about what the campaign is FOR, and that belongs to whoever owns the plan.
+
+## 2026-09-04 args-loop: the induction is DONE; the gap is the per-iteration step
+- CORRECTION to my own framing, which said the premise needs "an induction over
+  eval_expr's run". It does not: `Vsa/Sim/EvalArgs.lean` already proves
+  `evalArgsLoop`, by induction on the argument LIST (the measure -- `EvalArgs`
+  is mutually inductive with `EvalE`/`Call`, so the derivation cannot be
+  inducted on directly), concluding `Triple (SegEntry ...) (SegExit ...)`.
+- it is parametric in two hypotheses, and the first is where the content lives:
+  `hstep : ∀ φf φc st e es st' stFin v m0, EvalArgsStep g N A SL φf φc st d env
+  e es dLeft aLeft p m0 st' stFin v` -- described in the file as "the residual
+  (the machine loop-body glue + the recursive `eval_expr`)". `hnil` is the
+  empty-list continuation hop.
+- so the campaign's `argsLoopBoundAcrossCall` is NOT a missing induction and NOT
+  an independent lemma someone could prove on the side. Its content sits inside
+  `EvalArgsStep`, which is the open per-iteration residual. That is the same
+  conclusion the dependency analysis reached
+  (`smt-args-loop-premise-is-not-independent`), now confirmed against the actual
+  theorem rather than inferred from the proof-route table.
+- practical consequence for whoever picks this up: do NOT write a fresh
+  induction over the loop, and do not try to discharge the premise standalone.
+  The loop's induction is finished and waiting on `EvalArgsStep`; closing that
+  residual closes the premise with it, and the campaign entry
+  (`IV_PREMISE` in `scripts/houdini_summary.py`) becomes a one-line deletion.
+- the statement in `Vsa/Sim/ArgsLoopSpillResid.lean` remains useful as the
+  precise frame property to check `EvalArgsStep` against -- one activation,
+  `Triple`-shaped, claiming only the two spill slots `sp+24`/`sp+16`.
