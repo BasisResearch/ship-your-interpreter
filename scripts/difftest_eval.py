@@ -293,6 +293,6 @@ class Ev:
                         self.env.pop(p, None)
                     else:
                         self.env[p] = old
-        if h.startswith(("callee_", "loop_", "icall_", "idisp_")) or h == "unmodelled_step":
+        if h.startswith(("callee_", "loop_", "loopexit_", "icall_", "idisp_")) or h == "unmodelled_step":
             return self.oracle(h, self.ev(t[1]), self.cur_bind)
         raise EvalError(f"unsupported operator {h}")

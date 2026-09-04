@@ -1085,7 +1085,9 @@ class Oracle:
         return MA(d, mem.base, mem.unknown)
 
     def _state_at(self, row, mem):
-        return St(mem, RA(tuple(self.tr.regs_at(row))))
+        # The encoder reserves rr[32] for the control PC.  Summary results use
+        # it to select one loop exit, so concrete oracle states must carry it.
+        return St(mem, RA(tuple(self.tr.regs_at(row)) + (self.tr.pc[row],)))
 
     def _pick(self, cands, arg, sym, binding, use_ra):
         """The candidate whose register file is the one the encoder hands over."""
@@ -1106,6 +1108,20 @@ class Oracle:
             return self._resolve(sym, arg, binding, cands, f"call to {tgt:#x}")
         if sym.startswith("icall_"):
             return self._resolve(sym, arg, binding, self.icalls, "indirect call")
+        if sym.startswith("loopexit_"):
+            # the PC the loop actually left at: the encoder's per-loop exit
+            # selector, answered from the trace
+            h = int(sym[len("loopexit_"):])
+            cands = self.loops.get(h, [])
+            if not cands:
+                self.tainted.add(binding)
+                return 0
+            row, ret, diff = self._pick(cands, arg, sym, binding, False)
+            if diff:
+                self.tainted.add(binding)
+                return 0
+            p = self.tr.pc[ret]
+            return p if (self.lo <= ret < self.hi) else 0
         if sym.startswith("loop_"):
             h = int(sym[len("loop_"):])
             return self._resolve(sym, arg, binding, self.loops.get(h, []),
@@ -1161,6 +1177,27 @@ def entry_memory(tr, img, lo, hi):
     return MA({}, base, set())
 
 
+def exit_guard_shape(q, a):
+    """Is this plain assertion the exit-guard disjunction?
+
+    The emitter writes `(assert {exitG})` immediately after the binding chain,
+    and `exitG` is either an `or` of guarded terms or one guarded term.  Everything
+    else the query asserts is a PIN — the AST-kind word and which arm of the
+    dispatch it selects — and a pin is a precondition of the span, not a claim
+    about it."""
+    def mentions_guard(t):
+        if isinstance(t, str):
+            return t.startswith("g") and t in q.binds
+        return isinstance(t, list) and any(mentions_guard(x) for x in t)
+
+    if isinstance(a, list) and a and a[0] == "or" \
+            and all(mentions_guard(x) for x in a[1:]):
+        return list(a[1:])
+    if mentions_guard(a):
+        return [a]
+    return None
+
+
 def ite_chain(q):
     """`state_exit`'s guarded merge as [(guard, state), …], ALL arms.
 
@@ -1176,11 +1213,8 @@ def ite_chain(q):
     out.append(t)
     gs = None
     for a in reversed(q.plain):
-        if isinstance(a, list) and a and a[0] == "or" and all(isinstance(x, str) for x in a[1:]):
-            gs = list(a[1:])
-            break
-        if isinstance(a, str) and a in q.binds:
-            gs = [a]
+        if exit_guard_shape(q, a) is not None:
+            gs = exit_guard_shape(q, a)
             break
     if gs is None or len(gs) != len(out):
         # fall back to the guards the term itself carries; the fallthrough is
@@ -1198,10 +1232,28 @@ def phase3b_instance(q, tr, img, sp, lo, hi, d0, exits_of, exit_row):
 
     Returns (findings, chain footprint, summaries resolved, emitted footprint)."""
     mem = entry_memory(tr, img, lo, hi)
-    s0 = St(mem, RA(tuple(tr.regs_at(lo))))
+    s0 = St(mem, RA(tuple(tr.regs_at(lo)) + (tr.pc[lo],)))
     orc = Oracle(tr, img, lo, hi, d0, exits_of)
     ev = Ev(q, s0, orc)
     out = []
+    # IS THIS EXECUTION IN THE SPAN'S SCOPE AT ALL?
+    #
+    # The residual is selected by the query's PINS — the AST kind word and the
+    # dispatch arm it makes true — not by reaching the arm's address.  Those are
+    # different things: `exec_stmt`'s `if` arm reaches into the `block` arm's
+    # code, so an `if` statement passes through 0x8000418c at the span's own
+    # depth while the kind word says 3 and `hSBlock` pins 2.  Filtering on the
+    # address instead of on the pins put fifty out-of-scope executions into the
+    # comparison, where the encoder is under no obligation to agree with
+    # anything.
+    for a in q.plain:
+        if exit_guard_shape(q, a) is not None:
+            continue
+        try:
+            if not ev.ev(a) and not (term_deps(q, a) & orc.tainted):
+                return None, [], 0, set(), []
+        except EvalError:
+            return None, [], 0, set(), []
     arms = ite_chain(q)
     live, undet = [], 0
     for g, st in arms:
@@ -1244,7 +1296,8 @@ def phase3b_instance(q, tr, img, sp, lo, hi, d0, exits_of, exit_row):
             out.append(("EXIT-AMBIGUOUS", sp["field"],
                         f"[{tr.name}@{tr.step[lo]}] {len(live)} exit guards are true at "
                         f"once AND the arms disagree; the `ite` merge silently takes the "
-                        f"first, so the exit state depends on emission order"))
+                        f"first, so the exit state depends on emission order; guards="
+                        + ",".join(str(g) for g, _ in live)))
     chosen = live[0][1]
     if term_deps(q, chosen) & orc.tainted:
         out.append(("EXIT-TAINTED", sp["field"],
@@ -1394,6 +1447,8 @@ def phase3b(traces, img, enc_dir, bmc_dir, per_span=8, only=None, counts=None):
                                                               d0, exits_of, j)
                 except (EvalError, RecursionError) as e:
                     fs, fp, nres, dep, cov = [("EVAL", f, f"[{tr.name}@{tr.step[i]}] {e}")], [], 0, set(), []
+                if fs is None:      # out of the span's scope: not an instance
+                    continue
                 done += 1
                 findings += fs
                 mfp = machine_footprint(tr, i, j + 1, d0, cov)
