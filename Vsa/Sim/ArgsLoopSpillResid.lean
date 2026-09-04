@@ -86,29 +86,52 @@ def a5SpillSlot (sp : Nat) : Nat := sp + 24
 /-- The caller-frame slot holding the spilled counter `a6`. -/
 def a6SpillSlot (sp : Nat) : Nat := sp + 16
 
-/-- **THE RESIDUAL.**  Any machine run that starts where the args loop makes its
-recursive call leaves the caller's two spill slots untouched.
+/-!
+## RETRACTED: the obvious statement is FALSE, and here is the counterexample
 
-`c` is the configuration at `0x80003220` with the loop's entry stack pointer in
-`x2`; `c'` is any configuration the machine can reach from it.  The claim is
-per-byte over the eight bytes of each slot, matching how the model reads them
-(`readByte` is `getD 0`, so a byte-level equality is what a load consumes).
+`argsLoopSpillPreserved`, as first written here, quantified over an ARBITRARY
+configuration `c'` reachable from the call site and claimed both slots are
+preserved.  That is false, and the machine says so directly.  Disassembling the
+loop body `0x800031dc .. 0x80003250`:
 
-This is DELIBERATELY stated over an arbitrary reachable `c'` rather than over
-`eval_expr`'s return specifically: the loop reloads after the call returns, and
-any intermediate state reached during the call is also covered, which is what
-makes the property an induction over the run rather than a fact about one exit.
+    0x800031fc  sd x15,24(x2)      spill a5
+    0x80003214  sd x16,16(x2)      spill a6
+    0x80003220  jal ra, eval_expr  the recursive call
+    0x8000322c  ld x16,16(x2)      reload a6
+    0x80003230  ld x15,24(x2)      reload a5
+    0x80003250  bne x16,x15, 0x800031dc   BACK EDGE
 
-Proving it discharges `argsLoopBoundAcrossCall` and promotes the campaign's 68
-`VALID[modulo ...]` verdicts to unqualified.  NO PROOF IS PROVIDED HERE — this
-is the statement, named so the gap is visible rather than implicit. -/
-def argsLoopSpillPreserved : Prop :=
-  ∀ (c c' : Config) (sp : Nat),
-    c.σ.regs.get? Register.x2 = some (BitVec.ofNat 64 sp) →
-    c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 0x80003220) →
-    Steps c c' →
-    ∀ k, k < 8 →
-      (c'.σ.mem[a5SpillSlot sp + k]? = c.σ.mem[a5SpillSlot sp + k]?
-       ∧ c'.σ.mem[a6SpillSlot sp + k]? = c.σ.mem[a6SpillSlot sp + k]?)
+**Both spills are inside the loop body.**  So a `c'` in the second iteration,
+after `0x80003214` has run again, has a DIFFERENT byte at `sp + 16`: `a6` was
+incremented.  Reachability from the call site therefore includes states where
+the slot is legitimately rewritten, and the universally quantified claim is
+refuted by the program's own control flow.
+
+(The `a5` slot happens to survive, because the count is loop-invariant and the
+re-spill writes the same value.  That is a coincidence of this loop, not a
+property worth stating.)
+
+## What the statement has to say instead, and why it is not written here
+
+The preservation must be bounded to ONE callee activation — from the call at
+`0x80003220` to its matching return at `0x80003224`, with no intervening pass
+through the loop header.  Expressing "the matching return" is the whole
+difficulty: `Steps` is a reflexive-transitive closure with no notion of the
+first arrival, and `eval_expr` is recursive, so a later configuration with the
+same PC and the same `sp` may belong to a different activation.
+
+Getting that right means either a step-indexed formulation (`StepsN`, with the
+callee's run bounded) or a callee-contract shape of the kind
+`Vsa.Alloc.MallocContract` uses, where the run is characterised by its entry and
+exit rather than by reachability.  Both are real design decisions about the
+proof layer, and this file will not guess at one: two attempts have already been
+retracted here, a tautology and then this falsity, both from reaching for
+something shaped like the premise without checking it against the machine.
+
+What this file now carries is what is CHECKED: the addresses, the guards that
+establish the bound, the counterexample above, and the five measured-dead SMT
+routes.  `IV_PREMISE` in `scripts/houdini_summary.py` remains the operative
+record that 68 verdicts rest on the unproved premise.
+-/
 
 end Vsa.Sim
