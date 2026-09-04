@@ -6033,3 +6033,21 @@ it, still stop and report instead.
   differing states make the query CONTRADICTORY and the existing vacuity gate
   catches it. (c) is the smallest honest change: it converts a silent wrong answer
   into a visible vacuous one.
+
+## 2026-09-04 smt-storerepr-forgot-the-writable-statics (Houdini driver)
+- missing: SECOND instance of the same defect. `storerepr` excludes the stack and
+  the arena but NOT the writable-static region, while `OUTSIDE` (the footprint
+  route) and the `stack_or_arena` clause both exclude all three. So the two
+  routes that are meant to cross-check each other were checking different
+  properties, and the direct route refuted what the footprint route permits.
+  `hInitStore` is the case -- its whole job is to initialise the interpreter's
+  globals. Countermodel: QA = 0x8001c01d, inside
+  [G_lo, G_hi) = [0x8001ad00, 0x8001c168), writing 0x00 -> 0x40.
+- workaround: NONE. The exclusion added; `hInitStore.storerepr` goes REFUTED ->
+  VALID (unsat), and it was the only refutation in the campaign.
+- cost: one false refutation, and it survived the FIRST time this exact defect
+  was found and fixed (the arena exclusion, 2026-09-03) because that fix was
+  applied to the instance and not to the class.
+- proposal: when two routes check "the same" property, their statements must be
+  derived from one definition, not written twice. The region list belongs in a
+  single constant that both `OUTSIDE` and `POSTS["storerepr"]` consume.

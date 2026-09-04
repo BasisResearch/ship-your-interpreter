@@ -139,8 +139,17 @@ POSTS = {
     # `StoreRepr` survival is a claim about memory outside BOTH regions; the
     # footprint route (`outside_stack_arena`) always said so, and this direct
     # memory-equality route is the cross-check on it, so it must say so too.
+    # Below the stack, outside the arena, AND outside the writable statics.
+    # The last exclusion was missing while `OUTSIDE` and the `stack_or_arena`
+    # clause both had it, so this route refuted what the footprint route
+    # permits.  `hInitStore` is the case: its whole job is to initialise the
+    # interpreter's globals, and the countermodel put QA at 0x8001c01d, inside
+    # [G_lo, G_hi) = [0x8001ad00, 0x8001c168), writing 0x00 -> 0x40.  Two routes
+    # that check "the same" property have to state the same property; that was
+    # already the lesson when this post forgot the ARENA.
     "storerepr": "(assert (bvult QA SL_lo))\n"
                  "(assert (or (bvult QA A_lo) (bvuge QA A_hi)))\n"
+                 "(assert (or (bvult QA G_lo) (bvuge QA G_hi)))\n"
                  "(assert (not (= (select (mm state_exit) QA) (select (mm s0) QA))))",
     # sp discipline: the arm returns with sp restored (FALSE by design for a
     # prologue/epilogue FRAGMENT span, which is exactly what it should report)
