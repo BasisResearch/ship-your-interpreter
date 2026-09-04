@@ -6194,3 +6194,34 @@ it, still stop and report instead.
 - blocked behind it: the campaign artefacts cannot be regenerated until the gate
   emits, because a campaign whose encoder the gate has not checked is exactly
   what this session spent the night learning not to trust.
+
+## 2026-09-04 smt-args-loop-premise-is-not-independent (METHODOLOGY, important)
+- the finding: `argsLoopBoundAcrossCall` -- the premise 68 campaign verdicts now
+  rest on -- CANNOT be discharged independently of the residuals it is used to
+  help validate. Its Lean statement (`Vsa/Sim/ArgsLoopSpillResid.lean`,
+  `argsLoopSpillPreserved`) is a frame property of one `eval_expr` activation.
+  The repo's prescribed route for a callee frame post is
+  `FrameMeta.memFrame_of_chain`, whose hypothesis is
+  `σ'.mem = memChain bs σ.mem L lds` -- a REFLECTED CHAIN for eval_expr's whole
+  run. `eval_expr` is recursive, so that chain needs the recursor IH, and the
+  recursor IH is itself one of the residuals the campaign is checking.
+- so the dependency is: premise -> eval_expr chain -> recursor IH -> residuals,
+  and the campaign cites the premise while checking those same residuals. Taken
+  as JUSTIFICATION that is circular. Taken as BOOKKEEPING it is fine and
+  arguably the right shape -- the premise is not an extra assumption beyond the
+  residuals, it is a consequence of the same work -- but the two readings are
+  very different and the verdicts do not currently distinguish them.
+- what this does NOT undermine: the 50 unqualified VALIDs, which cite no
+  premise, and the differential tester's evidence, which is empirical and does
+  not go through the clause layer at all.
+- what it DOES mean: `VALID[modulo argsLoopBoundAcrossCall]` should be read as
+  "valid once eval_expr's own frame is established", i.e. as deferred to the
+  same body of work, not as valid modulo an independent side condition. A
+  reader who takes the 68 as independently-supported is being misled by the
+  notation.
+- proposal: either (a) tag premise-bearing verdicts distinctly from
+  contract-bearing ones in `verdicts.tsv`, since a callee CONTRACT (malloc,
+  strcmp) really is independent while this one is not; or (b) drop the premise
+  and let those 68 report UNKNOWN, which is less informative but carries no
+  risk of being read as support. I did not choose between them: it is a call
+  about what the campaign is FOR, and that belongs to whoever owns the plan.
