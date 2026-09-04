@@ -5960,3 +5960,55 @@ it, still stop and report instead.
   than mined must be justified per-summary, because "assumed" is indistinguishable
   from "true" downstream. A mined set is checked by construction; an assumed one
   is checked by whoever wrote the list, i.e. by nobody.
+
+## 2026-09-03 encoder-has-no-positive-evidence (difftest, DIFFTEST-PLAN phases 0-4)
+- missing: the BMC encoder had never been checked against anything. Every defect
+  in it had been found by someone READING it, and two campaigns reported "zero
+  refutations" while defects 8 and 10 of `DIFFTEST-PLAN.md`'s table were live.
+  There was no way to distinguish "the encoder is right" from "nobody has looked
+  at that part yet".
+- workaround: NONE. Built the differential test: `scripts/difftest.sh` runs the
+  encoder's own step semantics, span declarations and summary clause sets against
+  the proof model (`riscv-lean/lean_emulator`, now with a `--trace-all` traced
+  loop) on 104 real programs. It found EIGHT defects on its first pass, five of
+  them invisible in the verdicts. `experiments/smt/DIFFTEST-FINDINGS.md`.
+- cost: none ongoing — `VSA_DIFFTEST=1 scripts/check_all.sh` is stage d, ~3 min.
+- proposal: landed. The rule worth keeping, and it generalises past this encoder:
+  ANY tool that produces verdicts about a machine can be run against that machine
+  on real inputs, and until it has been, its verdicts measure the attention it has
+  received rather than its correctness.
+
+## 2026-09-03 vacuity-is-invisible-without-an-arm-conditioned-reachability-check (difftest phase 1)
+- missing: a span whose declared stop its own ARM cannot reach makes the query's
+  assumptions contradictory, so every post is proved. The campaign's vacuity gate
+  catches it only once the query has been built and only if Z3 gets to `unsat`
+  inside the per-field budget -- at `--timeout 20` under load it comes back
+  `unknown` and the field reads as a hard query rather than a broken one.
+- workaround: NONE. Phase 1 now walks each span IN THE FRAME AND THROUGH THE ARM
+  the residual is about, and reports a stop no execution of that arm reaches. Five
+  fields (`hAssign`, `hAndTrue/False`, `hOrTrue/False`) were in exactly that state;
+  it is a dictionary over a trace and takes no solver at all.
+- cost: the first version of phase 1 walked from the span's ENTRY, so ANOTHER
+  arm's path to the stop made the span look reachable, and it reported all 52 as
+  sound. A reachability check that is not conditioned on the same thing the query
+  pins is not checking the query.
+- proposal: landed. General shape: when a query is conditioned (a kind pin, a
+  dispatch guard), every check of that query's PREMISES must be conditioned the
+  same way, or it is answering about a different program.
+
+## 2026-09-03 concurrent-sessions-share-one-working-tree (coordination)
+- missing: nothing technical; recording a hazard. A second Claude session was
+  editing `scripts/houdini_summary.py` and `experiments/smt/DIFFTEST-PLAN.md` in
+  THIS working tree and committing with `git commit -a`, which swept this
+  session's uncommitted work into its commits under its own messages (54da5ac,
+  9d9da71). Nothing was lost, but for ~40 minutes a campaign `--phase check` here
+  was running against `experiments/smt/bmc` queries the other session had
+  regenerated from a different `ReflectResiduals.lean`, and reported five
+  `VACUOUS` fields that a re-run on the current tree reports as `UNKNOWN`.
+- workaround: re-ran the affected checks and confirmed against the current tree.
+- cost: one wrong diagnosis chased for ~40 minutes.
+- proposal: a campaign artefact directory should record the encoder revision it
+  was emitted from (`git rev-parse HEAD` + a hash of `ReflectSpan.lean` and
+  `ReflectResiduals.lean`) in `<dir>/provenance.txt`, and the driver should refuse
+  to run against artefacts whose provenance does not match the tree. That turns a
+  silent stale-artefact reading into a refusal.

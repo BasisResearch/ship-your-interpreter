@@ -76,18 +76,41 @@ Anchors, all checked:
 | where it lands | `sailOutput : Array String` — same file, `:107` |
 
 **`SailM` is a pure state monad — no `IO` inside.** `runElf64` only gets the
-state back at the end (`main.run initialState`), so the trace cannot be written
-to a file as it goes. It rides the model's own output channel instead: emit each
-row via `print_effect` with a `#T\t` prefix, then in `runElf64` partition
-`s.sailOutput` on that prefix — rows to the trace file, everything else to
-stdout as the program's real output. No new state, no change to the model.
+state back at the end (`main.run initialState`), so a row cannot be written to a
+file as it is produced. Two ways out, and the second is the one that was built:
 
-That accumulates in memory, which is the reason for the PC filter rather than a
-nicety: `--trace-pcs <file>` records only steps whose PC is in a given set (the
-span entry/exit PCs, the call sites, the store sites — all the checks below
-read). A full trace of every retired instruction would not fit.
+* ride the model's own output channel — `print_effect` each row into
+  `sailOutput` and partition it in `runElf64`. Correct, but `sailOutput` is an
+  `Array String` held in the state, so the whole trace is resident before
+  anything is printed, and the PC filter becomes load-bearing rather than an
+  optimisation.
+* `dbg_trace`, which is an `@[extern]` write to stderr and streams. Nothing is
+  retained, so a FULL trace of every retired instruction is affordable and the
+  PC filter goes back to being an optimisation.
 
-Output: `<prog>.trace.tsv`, columns `step pc x0..x31`.
+MEASURED, on `c/tests/while.wl`: `--trace-all` is **382,731 rows, 93 MB, 13 s**,
+and the whole 104-program corpus traces in a few minutes. So the size argument
+against a full trace does not survive contact with the machine, and the phases
+get every instruction rather than a chosen set of PCs — which is what lets phase
+3 check the encoder's step semantics at 6170 distinct PCs instead of at the
+span endpoints. `--trace-pcs <file>` is kept for programs large enough to need
+it.
+
+Output (stderr, tab-separated, one row per traced step):
+
+```
+T <step> <pc> <npc> <x1> … <x31> [<mk> <addr> <pre> <post>]
+```
+
+`npc` is the PC after the step, so control flow is checkable without decoding;
+`x0` is omitted (wired to zero). When the instruction has a memory operand,
+`mk` is `L<width>`/`S<width>`, `addr` the effective address, and `pre`/`post`
+the eight bytes there before and after the step. Those two extra fields are what
+make phase 3 decidable rather than approximate: a load's entry value and a
+store's landing place are exactly the observations that pin the encoder's term
+to ground, so the comparison is a rewrite (`(simplify ok)`) and not a
+satisfiability question. Without them the same check ran twelve minutes on one
+chunk at 400 MB and answered nothing.
 
 Standing rule: build test ELFs in a **/tmp copy of `c/`**, never in `c/`. The
 proof ELF is the object under study; its sha256 begins `b146c6ed…` and is

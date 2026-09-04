@@ -2,25 +2,32 @@
 
 `DIFFTEST-PLAN.md` is the design; this is the result of the first run of it.
 The plan predicted it "would have found nine of ten" of the defects that had been
-found by reading. It found **six new ones** on its first pass, four of which
-were invisible in the verdicts, and one of which made every loop clause in the
-campaign vacuous.
+found by reading. It found **eight new ones**, five of which were invisible in
+the verdicts, one of which made every loop clause in the campaign vacuous, and
+one of which made five of the 52 queries prove every post they were asked.
 
 Reproduce with `scripts/difftest.sh`. Corpus: `c/tests/*.wl` (the ones that fit)
 + `c/difftests/*.wl` + whatever `scripts/wl_fuzz.py` generates.
 
 ## The measurements
 
+104 programs: `c/tests` + `c/difftests` (hand-written, one per arm the first pass
+showed uncovered) + 90 from `scripts/wl_fuzz.py`.
+
 | phase | scale | result |
 |---|---|---|
-| 1 span existence | 14 traces, 52 spans, 2611 eval / 783 exec / 106 seq instances | 52/52 entered, 52/52 reach an encoder-recognised exit |
-| 1 dispatch | 3 ground jump tables, 33 arms | every observed computed goto lands on a declared arm; 31/33 arms taken |
-| 2 clause witness | 37 summaries, 20223 real `(pre, post)` pairs | 0 refutations after the fixes below; 5 before |
-| 3 step semantics | 6170 distinct PCs, 101146 sampled executions, 90264 state checks | 0 disagreements after the fixes below; 2 before |
+| 1 span existence | 104 traces, 52 spans | 52/52 entered, 52/52 reach an encoder-recognised exit **from their own arm** |
+| 1 dispatch | 3 ground jump tables, 33 arms | every observed computed goto lands on a declared arm; 31/33 arms taken (the 2 are structurally unreachable, below) |
+| 2 clause witness | 38 summaries, **43723** real `(pre, post)` pairs | 0 refutations after the fixes below; 5 clause families before |
+| 3 step semantics | 6170 distinct PCs, **323598** state checks over 104 programs | 0 disagreements after the fixes below; 2 before |
 
-Phase 3's 90264 checks are the whole executed image: every `alu` form's effect on
-all 31 registers, every store's landing place and its neighbours, and every
-branch condition, evaluated against the proof model on real operands.
+Phase 3's checks are the whole executed image: every `alu` form's effect on all
+31 registers, every store's landing place and the words on either side of it, and
+every branch condition, evaluated against the proof model on real operands. The
+comparison is a REWRITE, not a solver query — the trace supplies the operand
+bytes, so the encoder's term is ground and `(simplify ok)` decides it. The same
+check phrased as satisfiability over a byte array ran twelve minutes on one chunk
+at 400 MB and answered nothing.
 
 ## Defects found
 
@@ -106,7 +113,51 @@ Fix: `Term.jalr` carries the immediate; the dispatch target expression is
 `(bvand (bvadd rs1 imm) ~1)`; `isRet`/`neverReturns`/`blockSuccs` require
 `imm = 0` for a return.
 
-### 7. A driver bug the loop fix exposed (would have read as a failed check)
+### 7. Five queries proved every post they were asked (unsound)
+
+`hAssign`, `hAndTrue`, `hAndFalse`, `hOrTrue`, `hOrFalse` declared stops their
+own arm cannot reach. The logical arm ends at `0x800035dc` with
+`j 0x800033ec`; the declared stop `0x800035e0` is the UNARY arm's first
+instruction. `hVar` and `hAssign` declared `0x80003480` and `0x80003560`, the
+second instruction of the next arm and of the logical arm — both arms actually
+end at eval_expr's SECOND epilogue, `0x80003448`.
+
+This is the defect the table already documents for `hNeg`/`hNot` ("the unary arm
+ENDS at 0x80003624 … 0x80003628 is the next arm's code and is never reached from
+here"), never applied to the other five. The consequence is worse than a wrong
+answer: the query's dispatch pin says the logical arm is taken and its exit guard
+demands a path to the unary arm's code, so the assumptions are contradictory and
+every post is proved. Before the campaign's vacuity gate existed they read as
+five VALID fields.
+
+Measured both ways, independently: phase 1 says the arm runs 13 times over the
+corpus and arrives 0 times; `(check-sat)` on the query's own binding chain plus
+its exit guard and dispatch pin says `unsat` in 0.2 s. Fixed — `hAndTrue`/
+`hAndFalse`/`hOrTrue`/`hOrFalse` → `0x800033ec`, `hVar`/`hAssign` → `0x80003448`
+— after which all five are `UNKNOWN` (a real verdict) rather than vacuous.
+
+### 8. Phase 1 could not see defect 7 (a hole in this test, found by this test)
+
+The first phase-1 walked from the span's ENTRY, which for an arm residual is the
+function entry, so *any* arm's path to the declared stop made the span look
+reachable — `hAssign`'s stop is reachable, just not from `hAssign`'s arm. The
+verdict is only ever about the arm the query pins, so the walk is now conditioned
+on it: outcomes are counted over the instances that pass through the residual's
+own arm. That is what turned defect 7 from an SMT-visible curiosity into a
+one-line finding with no solver at all.
+
+The same change surfaced a scope fact nothing else states, reported as a note
+rather than a failure: the 21 binary-operator residuals declare the stop
+`0x800037c0`, which is INSIDE the `%` sub-arm (`mv a0,s3` just before
+`jal __moddi3`), so 113 of 707 real executions of that arm reach it; the six
+`EX_CALL` residuals declare `0x80003360`, inside the argument loop, reached by 14
+of 79. Those verdicts are about the arriving executions only. The Lean statement
+(`BinIntCell` → `BinIntCellResid`, which is about `TwoSubReturn`) suggests the
+operator dispatch at `0x80003558` is the intended end, but that is a
+statement-level decision and is left declared as it is, now with the number
+attached.
+
+### 9. A driver bug the loop fix exposed (would have read as a failed check)
 
 With loop obligations no longer vacuous, `fbody` became a guarded merge, and
 `slice_to` dropped bindings that the surviving `(define-fun fbody …)` still
@@ -127,6 +178,20 @@ dependencies the slice removed, the way it already dropped `state_exit`/`mem_exi
   operator, so no well-formed AST reaches them. A finding about the corpus only
   in the sense the plan means: "spans that no program can reach are a finding in
   themselves".
+
+## The gate
+
+`scripts/difftest.sh` runs the whole thing — emit the encoder's answers, build
+and trace the corpus, phases 1-3 — and exits non-zero on any disagreement.
+`VSA_DIFFTEST=1 scripts/check_all.sh` runs it as stage d. It is the gate to run
+after ANY change to `experiments/smt/ReflectSpan.lean` or `ReflectResiduals.lean`.
+
+FINDINGS fail the gate; NOTES do not. A finding is something wrong under any
+reading (a span with no reachable exit, a dispatch the encoder mis-resolved, a
+step that disagrees with the machine, a clause refuted on a real pair). A note is
+a scope fact the campaign cannot state for itself: how much of an arm's real
+behaviour a verdict covers, which arms no program reaches, which computed gotos
+are left opaque, which stops are declared outside their own region.
 
 ## What this still does not do
 

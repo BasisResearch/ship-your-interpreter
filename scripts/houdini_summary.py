@@ -221,6 +221,35 @@ def z3(text, timeout):
     return "unknown"
 
 
+def check_provenance(d):
+    """Refuse to answer about artefacts a DIFFERENT encoder emitted.
+
+    A campaign directory is read back long after it was written, and a second
+    session regenerating it from another checkout of `ReflectSpan.lean` /
+    `ReflectResiduals.lean` is not hypothetical — it happened, and a `--phase
+    check` run reported five fields VACUOUS that the tree they were re-emitted
+    from reports UNKNOWN.  `#emit_bmc` copies its sources into `<dir>/src/`;
+    this compares them BYTE FOR BYTE with the tree, so a stale directory is a
+    refusal rather than a verdict.  Bytes, not a hash: a hash has to be
+    recomputed identically on this side, and that is one more thing that drifts.
+    """
+    src = os.path.join(d, "src")
+    if not os.path.isdir(src):
+        sys.stderr.write(f"houdini: {d} has no src/ provenance; re-emit with "
+                         f"`#emit_bmc` before trusting these verdicts\n")
+        return
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    stale = [nm for nm in ("ReflectSpan.lean", "ReflectResiduals.lean")
+             if os.path.exists(os.path.join(src, nm))
+             and open(os.path.join(src, nm), "rb").read()
+             != open(os.path.join(root, "experiments", "smt", nm), "rb").read()]
+    if stale:
+        sys.exit(f"houdini: {d} was emitted from a DIFFERENT {', '.join(stale)} "
+                 f"than the tree has.  Re-emit (`#emit_bmc \"{d}\" 60`) and re-mine; "
+                 f"answering against these artefacts would be a verdict about "
+                 f"another program.")
+
+
 def pre_block(d):
     """The residual's PRE, as encoded by Lean (`pre.smt2`): the jump-table rodata
     pins + the stack/arena layout facts `EvalEntry` carries.  Injected into the
@@ -968,6 +997,7 @@ def main():
         bounded(d, timeout, jobs, ks)
         return
 
+    check_provenance(d)
     syms = [l.strip() for l in open(os.path.join(d, "summaries.tsv")).read().splitlines()[1:] if l.strip()]
     deps = {}
     for l in open(os.path.join(d, "query-summaries.tsv")).read().splitlines()[1:]:

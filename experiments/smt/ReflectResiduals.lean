@@ -162,6 +162,21 @@ elab "#emit_campaign " pathStx:str : command => do
     -- per-summary immediate dependencies: the driver only re-checks a summary
     -- when one of the summaries its body applies has lost a clause.
     let depRows := syms.map (fun s => s!"{s}\t{String.intercalate "," (summaryDeps img s)}")
+    -- PROVENANCE.  A campaign directory is read back by a driver that has no way
+    -- to tell which encoder emitted it, and a second session regenerating this
+    -- same directory from a different `ReflectResiduals.lean` is not a
+    -- hypothetical: it happened, and a `--phase check` run here reported five
+    -- fields VACUOUS that the current tree reports UNKNOWN.  Stamp the sources
+    -- so the driver can refuse rather than answer about a different program.
+    -- The sources are COPIED rather than hashed: a hash has to be recomputed
+    -- identically on the reading side, and a reimplementation of `String.hash`
+    -- in the driver is one more thing that can silently drift.  Bytes compare.
+    IO.FS.createDirAll s!"{dir}/src"
+    for nm in ["ReflectSpan.lean", "ReflectResiduals.lean"] do
+      IO.FS.writeBinFile s!"{dir}/src/{nm}" (← IO.FS.readBinFile s!"experiments/smt/{nm}")
+    let elfBytes ← IO.FS.readBinFile elfPath
+    IO.FS.writeFile s!"{dir}/provenance.txt"
+      s!"emitter sources are copied verbatim to {dir}/src/; the driver compares bytes\nelf\t{elfPath}\nelf_bytes\t{elfBytes.size}\n"
     IO.FS.writeFile s!"{dir}/pre.smt2" (entryPinsSmt img ++ "\n")
     IO.FS.writeFile s!"{dir}/summary-deps.tsv" ("summary\tdeps\n" ++ String.intercalate "\n" depRows ++ "\n")
     IO.FS.writeFile s!"{dir}/query-summaries.tsv" ("field\tsummaries\n" ++ String.intercalate "\n" rows ++ "\n")
@@ -216,6 +231,21 @@ elab "#emit_machine " pathStx:str loStx:num hiStx:num : command => do
           s!"{pre}\n(declare-const s0 MState)\n(assert (= {stPC "s0"} {bvN elo}))\n(assert (= STOP {bvN ehi}))\n; @@ASSUME@@\n; @@EXIT@@\n(assert (= {stPC "state_exit"} {bvN ehi}))\n; @@POST@@\n"
       rows := rows ++ [s!"{nm}\tmrun"]
     IO.FS.writeFile s!"{dir}/summaries.tsv" ("summary\nmrun\n")
+    -- PROVENANCE.  A campaign directory is read back by a driver that has no way
+    -- to tell which encoder emitted it, and a second session regenerating this
+    -- same directory from a different `ReflectResiduals.lean` is not a
+    -- hypothetical: it happened, and a `--phase check` run here reported five
+    -- fields VACUOUS that the current tree reports UNKNOWN.  Stamp the sources
+    -- so the driver can refuse rather than answer about a different program.
+    -- The sources are COPIED rather than hashed: a hash has to be recomputed
+    -- identically on the reading side, and a reimplementation of `String.hash`
+    -- in the driver is one more thing that can silently drift.  Bytes compare.
+    IO.FS.createDirAll s!"{dir}/src"
+    for nm in ["ReflectSpan.lean", "ReflectResiduals.lean"] do
+      IO.FS.writeBinFile s!"{dir}/src/{nm}" (← IO.FS.readBinFile s!"experiments/smt/{nm}")
+    let elfBytes ← IO.FS.readBinFile elfPath
+    IO.FS.writeFile s!"{dir}/provenance.txt"
+      s!"emitter sources are copied verbatim to {dir}/src/; the driver compares bytes\nelf\t{elfPath}\nelf_bytes\t{elfBytes.size}\n"
     IO.FS.writeFile s!"{dir}/pre.smt2" (entryPinsSmt img ++ "\n")
     IO.FS.writeFile s!"{dir}/summary-deps.tsv" ("summary\tdeps\nmrun\tmrun\n")
     IO.FS.writeFile s!"{dir}/query-summaries.tsv" ("field\tsummaries\n" ++ String.intercalate "\n" rows ++ "\n")
@@ -441,6 +471,21 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
       ("summary\trole\n" ++ String.intercalate "\n"
         (assumedSyms.map (fun a => s!"{a}\tcallee contract outside the interpreter's own code")) ++ "\n"
         ++ "d < maxCallDepth\tentry stack budget: the 7408 headroom pin needs the closure depth guard; ExecEntry has no depth field\n")
+    -- PROVENANCE.  A campaign directory is read back by a driver that has no way
+    -- to tell which encoder emitted it, and a second session regenerating this
+    -- same directory from a different `ReflectResiduals.lean` is not a
+    -- hypothetical: it happened, and a `--phase check` run here reported five
+    -- fields VACUOUS that the current tree reports UNKNOWN.  Stamp the sources
+    -- so the driver can refuse rather than answer about a different program.
+    -- The sources are COPIED rather than hashed: a hash has to be recomputed
+    -- identically on the reading side, and a reimplementation of `String.hash`
+    -- in the driver is one more thing that can silently drift.  Bytes compare.
+    IO.FS.createDirAll s!"{dir}/src"
+    for nm in ["ReflectSpan.lean", "ReflectResiduals.lean"] do
+      IO.FS.writeBinFile s!"{dir}/src/{nm}" (← IO.FS.readBinFile s!"experiments/smt/{nm}")
+    let elfBytes ← IO.FS.readBinFile elfPath
+    IO.FS.writeFile s!"{dir}/provenance.txt"
+      s!"emitter sources are copied verbatim to {dir}/src/; the driver compares bytes\nelf\t{elfPath}\nelf_bytes\t{elfBytes.size}\n"
     IO.FS.writeFile s!"{dir}/pre.smt2" (entryPinsSmt img ++ "\n")
     IO.FS.writeFile s!"{dir}/summary-deps.tsv"
       ("summary\tdeps\n" ++ String.intercalate "\n" symDeps ++ "\n")
