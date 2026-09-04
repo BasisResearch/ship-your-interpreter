@@ -308,8 +308,21 @@ def heap_hyp(writes):
         # stated WITHOUT `bvadd` on the left: `base + 32 <= A_hi` is satisfiable
         # by wraparound, and the solver duly takes it (base = 0xff..e1, A_hi
         # large, base+32 = 1).  `base <= A_hi - 32` has no such escape.
-        out.append(f"(assert (=> {g} (and (bvule A_lo {base}) "
-                   f"(bvule {base} (bvsub A_hi #x0000000000000020)))))")
+        # DISJUNCTIVE, because the entry pin is.  `entryPinsSmt` states the
+        # sret fact honestly as `a0 + 24 <= SL_lo \/ sp <= a0`, and asserting
+        # only the arena branch is asserting one side of somebody else's
+        # disjunction: measured over the campaign's write sets, 1722 of 26825
+        # stores are pointer-based and their bases are `s2` = the env (830),
+        # `s1` = the caller's sret buffer (711), `a4` (108), `a0` (72) -- the
+        # sret buffer is in the CALLER'S FRAME, not the arena.  The vacuity gate
+        # cannot see it either, since the arena branch is satisfiable on its own.
+        # Stating the disjunction keeps the footprint check working (an address
+        # outside BOTH windows is still unreachable by these stores) and is
+        # strictly weaker, so it can only lose VALIDs, never manufacture one.
+        out.append(f"(assert (=> {g} (or (and (bvule A_lo {base}) "
+                   f"(bvule {base} (bvsub A_hi #x0000000000000020))) "
+                   f"(and (bvule SL_lo {base}) "
+                   f"(bvule {base} (bvsub SL_hi #x0000000000000020))))))")
         n += 1
     return ("; StoreRepr / Arena.contains (EvalEntry.store) at "
             f"{n} pointer-based store site(s)\n" + "\n".join(out) + "\n", n)
@@ -579,7 +592,11 @@ def hits_QA(writes):
     for g, w, a in (writes or []):
         if w == 0:
             continue
-        ds.append(f"(and {g} (bvule {a} QA) (bvult QA (bvadd {a} #x{w:016x})))")
+        # `QA - a <u w`, NOT `a <=u QA < a + w`.  The second form is false when
+        # `a + w` wraps, so the aggregate comes back unsat and the post reads
+        # VALID over a store the check never considered.  `heap_hyp` fixed
+        # exactly this shape and this one did not get the same treatment.
+        ds.append(f"(and {g} (bvult (bvsub QA {a}) #x{w:016x}))")
     return "(assert (or false " + " ".join(ds) + "))\n" if ds else "(assert false)\n"
 
 
@@ -597,6 +614,15 @@ def write_roots(writes):
 
 def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=True,
                     clause="stack_or_arena", side=True):
+    # AN OPAQUE STEP IS NOT A STORE-FREE STEP.  This route composes "no direct
+    # store hits QA" with "every applied summary carries the memory clause", and
+    # `applied_of` only sees `callee_`/`loop_`/`icall_`/`idisp_` (APP_RE).
+    # `unmodelled_step` is an unconstrained memory transformer that neither leg
+    # covers, so a span containing one would report VALID over a step that can
+    # write anywhere.  Zero occurrences in this image, which is exactly why it
+    # has to be a refusal rather than a silence.
+    if "unmodelled_step" in base:
+        return "UNKNOWN(opaque-step:unmodelled_step)"
     # A MISSING footprint is not an empty one.  `hits_QA([])` is `(assert false)`,
     # which is unsat, which reads as VALID — so a campaign emitted without write
     # sets (`#emit_campaign` leaves `writes/` empty; only `#emit_bmc` fills it)
@@ -646,8 +672,8 @@ def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=Tru
     stores = [(g, w, a) for g, w, a in writes if w != 0]
     unknown = []
     for g, w, a in stores:
-        one = (f"(assert (and {g} (bvule {a} QA) "
-               f"(bvult QA (bvadd {a} #x{w:016x}))))\n(check-sat)\n")
+        one = (f"(assert (and {g} (bvult (bvsub QA {a}) "
+               f"#x{w:016x})))\n(check-sat)\n")
         r = z3(head + one, per)
         if r == "sat":
             return f"REFUTED(store:{a[:40]})"
@@ -812,7 +838,20 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
                 if c in cset[f]:
                     cset[f].remove(c)
         elif os.path.exists(path):
-            bodies[f] = open(path).read()
+            body = open(path).read()
+            # THE SAME GATE THE QUERIES GET.  An obligation whose frontier did
+            # not empty drops paths from `fbody`, so a clause can be mined that
+            # is false on the dropped ones and then ASSUMED in every query that
+            # applies the summary.  The emitter writes the flag as a comment and
+            # nothing read it.  All 25 are complete today; `--rounds` and the
+            # emit bound are arguments, and nothing caught that.
+            if "; complete=false" in body:
+                sys.exit(f"houdini: obligation {f} is INCOMPLETE (the BMC frontier "
+                         f"did not empty within the emit bound), so its `fbody` is "
+                         f"missing paths and any clause mined from it would be "
+                         f"assumed on paths it was never checked against.  Re-emit "
+                         f"with more rounds.")
+            bodies[f] = body
         else:
             cset[f] = []
     with open(os.path.join(d, "assumed-final.tsv"), "w") as fh:

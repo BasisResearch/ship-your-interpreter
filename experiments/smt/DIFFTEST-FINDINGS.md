@@ -179,6 +179,74 @@ dependencies the slice removed, the way it already dropped `state_exit`/`mem_exi
   in the sense the plan means: "spans that no program can reach are a finding in
   themselves".
 
+### 10. `state_exit` is the wrong arrival's state when the exit guards overlap
+
+The plan's phase 3 proper — drive the encoder's own binding chain with a real
+entry state, pin every summary from its observed `(pre, post)` pair, and compare
+`state_exit` against the machine — agrees on **259 of 309 span executions**, on
+all 31 registers and on the entire store footprint. Every one of the other 50 is
+the same defect.
+
+`reflectBmc` folds the exit arrivals into `ite g1 s1 (ite g2 s2 … sN)`. That is
+only the exit state if the guards are pairwise disjoint, and they are not: an
+arrival at the exit PC is produced in every BMC round some block reaches it, and
+the guards are the arrival guards, which under ABSTRACTED summaries are
+simultaneously satisfiable. Measured on `hSBlock` at `dt_block@71886`:
+
+* seven exit guards are true at once;
+* six of the seven select a state **the machine is never in** at any point of
+  that execution;
+* the seventh, `b604`, matches the machine exactly on all 31 registers;
+* the `ite` takes the first, `b425`, so `state_exit` disagrees with the machine
+  on eleven registers (`x5` = `0x7f7f7f7f7f7f7fff`, which is `strlen`'s
+  has-zero-byte constant, so the selected state is from a path through the
+  string code the machine never entered).
+
+Same shape on `hSIfTrue/False/None` (7 arms), `hSWhileBreak/False`, `hSForStart`
+(2), and `hSeqNil/ConsNormal/ConsAbrupt` (3). A post proved about `state_exit`
+on these spans is a post about whichever arrival the emitter listed first.
+
+NOT FIXED, and deliberately so — the three candidate cures are a design decision:
+make the guards disjoint by construction (which needs path information the merge
+exists to discard); emit disjointness as its own obligation and qualify the
+verdict when it fails; or replace the `ite` with `(=> g_i (= state_exit s_i))`
+per arrival, which turns a silent wrong answer into a VACUOUS one the existing
+gate already catches. The third is the smallest honest change and would take the
+affected spans' verdicts to vacuous rather than to VALID.
+
+### 11-14. Four gaps in the checking layer
+
+Found by an independent audit of the driver, all fixed:
+
+* **`complete` was gated for queries and never for obligations.** The emitter
+  writes `; complete=false` into an obligation whose frontier did not empty and
+  `mine()` never read it, so a clause could be mined from a body missing paths
+  and then ASSUMED in every query that applies the summary. All 25 are complete
+  today; `--rounds` and the emit bound are arguments and nothing caught that.
+  Now a refusal.
+* **`unmodelled_step` was invisible to the footprint route.** That route composes
+  "no direct store hits `QA`" with "every applied summary carries
+  `stack_or_arena`", and `applied_of` only matches
+  `callee_`/`loop_`/`icall_`/`idisp_`. An opaque step is an unconstrained memory
+  transformer neither leg covers, so a span containing one would report VALID
+  over a step that can write anywhere. Zero occurrences in this image, which is
+  why it had to become a refusal rather than stay a silence.
+* **`heap_hyp` collapsed a disjunctive entry pin to one side.** For every store
+  whose base is not `sp` it asserted `A_lo <= base <= A_hi - 32`. Measured over
+  the campaign's write sets, 1722 of 26825 stores are pointer-based, and the
+  bases are `s2` (the env, 830), `s1` (the caller's SRET BUFFER, 711), `a4`
+  (108), `a0` (72). `entryPinsSmt` states the sret fact honestly as a disjunction
+  (`a0 + 24 <= SL_lo` or `sp <= a0`) and `heap_hyp` silently took the arena
+  branch, so an `outside_stack_arena` verdict on an eval arm held only on that
+  branch. The vacuity gate cannot see it, because the arena branch is satisfiable
+  on its own. Now stated as the disjunction "in the arena or in the stack
+  window", which is strictly weaker and keeps the footprint check working.
+* **`hits_QA` had the wraparound hole its neighbour's comment warns about.**
+  `(bvule a QA) /\ (bvult QA (bvadd a w))` is false when `a + w` wraps, so the
+  aggregate returns unsat and the post reads VALID. Constrained bases cannot
+  wrap today, and `heap_hyp` had been given exactly this treatment three lines
+  earlier while this one had not. Now `QA - a <u w`, which has no escape.
+
 ## The gate
 
 `scripts/difftest.sh` runs the whole thing — emit the encoder's answers, build

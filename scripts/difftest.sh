@@ -10,6 +10,7 @@
 #   phase 1  do the declared spans exist?  (span reachability, dispatch arms)
 #   phase 2  do the summary clauses hold on real (pre, post) pairs?
 #   phase 3  does the encoder's step semantics agree with the machine?
+#   phase 3b does `state_exit` agree with the machine, and the write footprint?
 #
 # Exits non-zero on any disagreement.  With no `.wl` arguments it uses the
 # standing corpus (`c/tests` + `c/difftests`).
@@ -25,6 +26,7 @@ cd "$ROOT"
 OUT=/tmp/difftest
 MINE=0
 PER_PC=24
+PER_SPAN=6
 JOBS=""
 WLS=()
 while [ $# -gt 0 ]; do
@@ -32,6 +34,7 @@ while [ $# -gt 0 ]; do
     --out) OUT="$2"; shift 2;;
     --mine) MINE=1; shift;;
     --per-pc) PER_PC="$2"; shift 2;;
+    --per-span) PER_SPAN="$2"; shift 2;;
     --jobs) JOBS="--jobs $2"; shift 2;;
     -h|--help) sed -n '2,20p' "$0"; exit 0;;
     *) WLS+=("$1"); shift;;
@@ -117,6 +120,8 @@ python3 scripts/difftest.py phase2 --traces "$OUT/traces" --enc "$OUT/enc" \
   --bmc "$OUT/bmc" --out "$OUT/clause-witness.tsv" || rc=1
 python3 scripts/difftest.py phase3 --traces "$OUT/traces" --enc "$OUT/enc" \
   --per-pc "$PER_PC" --chunk 400 $JOBS --out "$OUT/phase3.tsv" || rc=1
+python3 scripts/difftest.py phase3b --traces "$OUT/traces" --enc "$OUT/enc" \
+  --bmc "$OUT/bmc" --per-span "$PER_SPAN" --out "$OUT/phase3b.tsv" || rc=1
 
 if [ $rc = 0 ]; then echo "[difftest] OK — the encoder agrees with the machine"
 else echo "[difftest] FAILED — see $OUT/{phase1,clause-witness,phase3}.tsv"; fi

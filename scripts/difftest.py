@@ -997,6 +997,430 @@ def phase3(traces, img, enc_dir, per_pc=24, chunk=800, jobs=None):
     return findings, len(samples), nchecked, len(occ), notes
 
 
+# -------------------------------------------------------------- phase 3 (span)
+#
+# The plan's phase 3, as it states it: take the entry state from the trace,
+# assert it as `s0`, pin every summary application from its observed
+# `(pre, post)` pair, read the exit register file out of `state_exit`, and
+# compare against the trace at the stop.  Plus the write-log comparison the same
+# section asks for: an address the encoder records and the machine never writes,
+# or the reverse, is a footprint bug, and the footprint posts are where most of
+# the VALIDs live.
+#
+# Everything is ground once `s0` and the summaries are pinned, so there is
+# nothing to solve; `difftest_eval` evaluates the encoder's own emitted term
+# directly, which additionally lets every intermediate state be checked and a
+# disagreement named at the binding where it first appears.
+
+from difftest_eval import Query, Ev, RA, MA, St, EvalError, M64 as _M64
+
+
+class Oracle:
+    """Resolves the encoder's uninterpreted symbols from one real execution.
+
+    CONTENT-ADDRESSED, not sequential.  `state_exit` is a guarded merge, so
+    deciding which guard is true forces evaluation of states on paths the machine
+    did NOT take, and those paths apply summaries at states that never occurred.
+    A cursor walked through the trace in order would hand them somebody else's
+    observation and the answer would be fiction.  So an application of
+    `callee_T` is matched to the call to `T` whose register file EQUALS the state
+    the encoder hands it, and if none does the result is marked TAINTED.
+
+    Taint is the honest reading of the plan's own construction.  Pinning
+    `(callee_X pre) = post` from observed pairs leaves the callee unconstrained
+    everywhere else, so a guard that depends on an unobserved application is
+    undetermined rather than false, and a `get-value` through Z3 would have had
+    exactly the same gap with no way to see it.  Here it is visible: a guard is
+    only believed when nothing tainted feeds it."""
+
+    def __init__(self, tr, img, lo, hi, d0, exits_of):
+        self.tr, self.img, self.d0 = tr, img, d0
+        self.lo, self.hi = lo, hi
+        self.exits_of = exits_of
+        self.tainted = set()      # bindings whose value is not determined by the trace
+        self.problems = []
+        self.resolved = []
+        self.calls = {}           # target -> [(row, ret_row, regs_with_ra)]
+        self.icalls = []
+        self.loops = {}           # header -> [(row, exit_row, regs)]
+        self._index()
+
+    def _index(self):
+        tr, d = self.tr, self.tr.depth
+        for k in range(self.lo, self.hi):
+            if d[k] != self.d0:
+                continue
+            p = tr.pc[k]
+            ins = decode(p, self.img.word(p))
+            if is_call(ins):
+                j = k + 1
+                while j < tr.n and d[j] > self.d0:
+                    j += 1
+                if j >= tr.n:
+                    continue
+                regs = list(tr.regs_at(k))
+                regs[1] = (p + 4) & M64          # the encoder's `ra{k}` bind
+                key = tuple(regs)
+                if ins.kind == "jal":
+                    self.calls.setdefault(ins.target, []).append((k, j, key))
+                else:
+                    self.icalls.append((k, j, key))
+            if p in self.exits_of:
+                ex = self.exits_of[p]
+                j = k + 1
+                while j < self.hi and not (d[j] == self.d0 and tr.pc[j] in ex):
+                    j += 1
+                self.loops.setdefault(p, []).append(
+                    (k, min(j, self.hi - 1), tuple(tr.regs_at(k))))
+
+    def _apply_stores(self, mem, a, b):
+        """The machine's writes over `(a, b]`, applied to `mem`.  A callee's
+        memory effect is not modelled here, it is observed."""
+        d = dict(mem.d)
+        for k in range(a + 1, b + 1):
+            if self.tr.mk[k] == MK_STORE:
+                post, addr, w = self.tr.mpost[k], self.tr.maddr[k], self.tr.mw[k]
+                for j in range(w):
+                    d[(addr + j) & M64] = (post >> (8 * j)) & 0xFF
+        return MA(d, mem.base, mem.unknown)
+
+    def _state_at(self, row, mem):
+        return St(mem, RA(tuple(self.tr.regs_at(row))))
+
+    def _pick(self, cands, arg, sym, binding, use_ra):
+        """The candidate whose register file is the one the encoder hands over."""
+        want = tuple(arg.regs.sel(r) for r in range(32))
+        best, bestd = None, None
+        for (row, ret, key) in cands:
+            diff = [r for r in range(1, 32) if key[r] != want[r]]
+            if not diff:
+                return (row, ret, [])
+            if bestd is None or len(diff) < len(bestd):
+                best, bestd = (row, ret), diff
+        return (best[0], best[1], bestd) if best else (None, None, None)
+
+    def __call__(self, sym, arg, binding):
+        if sym.startswith("callee_"):
+            tgt = int(sym[len("callee_"):])
+            cands = self.calls.get(tgt, [])
+            return self._resolve(sym, arg, binding, cands, f"call to {tgt:#x}")
+        if sym.startswith("icall_"):
+            return self._resolve(sym, arg, binding, self.icalls, "indirect call")
+        if sym.startswith("loop_"):
+            h = int(sym[len("loop_"):])
+            return self._resolve(sym, arg, binding, self.loops.get(h, []),
+                                 f"loop header {h:#x}")
+        # an unlisted computed goto or an unmodelled word: nothing to match
+        self.tainted.add(binding)
+        return arg
+
+    def _resolve(self, sym, arg, binding, cands, what):
+        if not cands:
+            self.tainted.add(binding)
+            self.problems.append(("SUMMARY-NOSITE", binding,
+                                  f"{sym}: no {what} in this instance"))
+            return arg
+        row, ret, diff = self._pick(cands, arg, sym, binding, True)
+        if diff:
+            self.tainted.add(binding)
+            self.problems.append(("SUMMARY-ARG", binding,
+                f"{sym} applied to a state no {what} in this instance is in; "
+                f"nearest is step {self.tr.step[row]}, differing in "
+                + ", ".join(f"x{r}" for r in diff[:6])
+                + (f" (+{len(diff)-6})" if len(diff) > 6 else "")))
+            return self._state_at(ret, self._apply_stores(arg.mem, row, ret))
+        self.resolved.append((sym, row, ret))
+        return self._state_at(ret, self._apply_stores(arg.mem, row, ret))
+
+
+def entry_memory(tr, img, lo, hi):
+    """The machine's memory at row `lo`, over the addresses this instance reads.
+
+    Built from the trace's own observations: the first time the instance touches
+    an address, the `pre` bytes ARE the entry value, unless the instance has
+    already written it.  Anything never touched falls back to the ELF image, and
+    an address neither knows is recorded as unknown rather than defaulted to
+    zero — a zero default would let a load of uninitialised memory agree with the
+    encoder by accident."""
+    known, written = {}, set()
+    for k in range(lo, hi):
+        if tr.mk[k] == MK_NONE:
+            continue
+        a, pre, w = tr.maddr[k], tr.mpre[k], tr.mw[k]
+        for j in range(8):
+            addr = (a + j) & _M64
+            if addr not in written and addr not in known:
+                known[addr] = (pre >> (8 * j)) & 0xFF
+        if tr.mk[k] == MK_STORE:
+            for j in range(w):
+                written.add((a + j) & _M64)
+    def base(addr):
+        if addr in known:
+            return known[addr]
+        return img.byte(addr) if img.mapped(addr) else None
+    return MA({}, base, set())
+
+
+def ite_chain(q):
+    """`state_exit`'s guarded merge as [(guard, state), …], ALL arms.
+
+    `reflectBmc` folds the exits into `ite g1 s1 (ite g2 s2 … sN)`, so the LAST
+    arrival's guard is not in the term — it is the fallthrough.  Its guard is in
+    the exit-guard assertion the emitter writes after the chain
+    (`(assert (or g1 … gN))`), and without it a span with a single exit looks
+    like a span with no true guard at all."""
+    t, out = q.state_exit, []
+    while isinstance(t, list) and t and t[0] == "ite":
+        out.append(t[2])
+        t = t[3]
+    out.append(t)
+    gs = None
+    for a in reversed(q.plain):
+        if isinstance(a, list) and a and a[0] == "or" and all(isinstance(x, str) for x in a[1:]):
+            gs = list(a[1:])
+            break
+        if isinstance(a, str) and a in q.binds:
+            gs = [a]
+            break
+    if gs is None or len(gs) != len(out):
+        # fall back to the guards the term itself carries; the fallthrough is
+        # then unguarded, which is what the term literally says
+        t, gs = q.state_exit, []
+        while isinstance(t, list) and t and t[0] == "ite":
+            gs.append(t[1])
+            t = t[3]
+        gs.append("true")
+    return list(zip(gs, out))
+
+
+def phase3b_instance(q, tr, img, sp, lo, hi, d0, exits_of, exit_row):
+    """One span instance, driven end to end.
+
+    Returns (findings, chain footprint, summaries resolved, emitted footprint)."""
+    mem = entry_memory(tr, img, lo, hi)
+    s0 = St(mem, RA(tuple(tr.regs_at(lo))))
+    orc = Oracle(tr, img, lo, hi, d0, exits_of)
+    ev = Ev(q, s0, orc)
+    out = []
+    arms = ite_chain(q)
+    live, undet = [], 0
+    for g, st in arms:
+        try:
+            v = ev.ev(g)
+        except EvalError as e:
+            out.append(("EVAL", sp["field"], f"guard: {e}"))
+            return out, [], 0, set(), []
+        # a guard fed by an unobserved summary application is UNDETERMINED, not
+        # false: the trace pins a summary only where it was applied for real
+        if term_deps(q, g) & orc.tainted:
+            undet += 1
+            continue
+        if v:
+            live.append((g, st))
+    if not live:
+        if undet == 0:
+            out.append(("EXIT-UNCOVERED", sp["field"],
+                        f"[{tr.name}@{tr.step[lo]}] no exit guard of the merge is true "
+                        f"for a real execution, and none is undetermined; `state_exit` "
+                        f"falls through to the last arrival, a state the machine is "
+                        f"not in"))
+        else:
+            out.append(("EXIT-UNDETERMINED", sp["field"],
+                        f"[{tr.name}@{tr.step[lo]}] no exit guard is determinedly true "
+                        f"({undet} of {len(arms)} depend on a summary application this "
+                        f"execution never made)"))
+        return out, [], len(orc.resolved), set(), []
+    if len(live) > 1:
+        # ambiguity only matters if the arms disagree: several arrivals at the
+        # same exit PC with the same state is a merge, not a race
+        rs = []
+        for _, st in live:
+            try:
+                v = ev.ev(st)
+                rs.append(tuple(v.regs.sel(r) for r in range(32)))
+            except EvalError:
+                rs.append(None)
+        if len({r for r in rs if r is not None}) > 1:
+            out.append(("EXIT-AMBIGUOUS", sp["field"],
+                        f"[{tr.name}@{tr.step[lo]}] {len(live)} exit guards are true at "
+                        f"once AND the arms disagree; the `ite` merge silently takes the "
+                        f"first, so the exit state depends on emission order"))
+    chosen = live[0][1]
+    if term_deps(q, chosen) & orc.tainted:
+        out.append(("EXIT-TAINTED", sp["field"],
+                    f"[{tr.name}@{tr.step[lo]}] the selected exit state is fed by a "
+                    f"summary application this execution never made: "
+                    + "; ".join(m for _, _, m in orc.problems[:2])))
+        return out, [], len(orc.resolved), set(), []
+    try:
+        exit_st = ev.ev(chosen)
+    except EvalError as e:
+        out.append(("EVAL", sp["field"], str(e)))
+        return out, [], len(orc.resolved), set(), []
+    bad = []
+    for r in range(1, 32):
+        want, got = tr.reg(exit_row, r), exit_st.regs.sel(r)
+        if want != got:
+            bad.append(f"x{r}: encoder {got:#x} machine {want:#x}")
+    if bad:
+        out.append(("EXIT-REGS", sp["field"],
+                    f"[{tr.name}@{tr.step[lo]}] state_exit disagrees with the machine "
+                    f"at {tr.pc[exit_row]:#x}: " + "; ".join(bad[:6])
+                    + (f" (+{len(bad)-6} more)" if len(bad) > 6 else "")))
+    if mem.unknown:
+        out.append(("MEM-UNKNOWN", sp["field"],
+                    f"[{tr.name}@{tr.step[lo]}] the term read {len(mem.unknown)} byte(s) "
+                    f"the trace and the image both leave undefined "
+                    f"(first {sorted(mem.unknown)[0]:#x})"))
+    # the chain's own stores, restricted to the path that was actually taken
+    dep = term_deps(q, chosen)
+    fp = sorted({a for a, b_ in ev.writes if b_ in dep or b_ is None})
+    covered = [(r, x) for _, r, x in orc.resolved]
+    return out, fp, len(orc.resolved), dep, covered
+
+
+def term_deps(q, t, acc=None):
+    """Every binding a term transitively depends on."""
+    acc = set() if acc is None else acc
+    stack = [t]
+    while stack:
+        x = stack.pop()
+        if isinstance(x, str):
+            if x in q.binds and x not in acc:
+                acc.add(x)
+                stack.append(q.binds[x])
+        elif isinstance(x, list):
+            stack.extend(x)
+    return acc
+
+
+def machine_footprint(tr, lo, hi, d0, covered=()):
+    """Every byte the SPAN ITSELF writes.
+
+    Stores at the span's own depth, minus the rows a summary covers.  A CALLEE's
+    stores are at a deeper depth and drop out on their own, but a LOOP summary's
+    body runs at the span's depth and its stores belong to the summary, not to
+    the chain: `loop_0x800031dc` is the argument-marshalling loop, and its 24
+    spilled bytes are exactly the ones the encoder was accused of missing."""
+    skip = set()
+    for (a, b) in covered:
+        skip.update(range(a, b + 1))
+    out = set()
+    for k in range(lo, hi):
+        if k in skip:
+            continue
+        if tr.depth[k] == d0 and tr.mk[k] == MK_STORE:
+            for j in range(tr.mw[k]):
+                out.add((tr.maddr[k] + j) & M64)
+    return out
+
+
+def emitted_footprint(q, ev, wr_rows):
+    """`<bmc>/writes/<field>.tsv` evaluated on this execution: the addresses the
+    encoder RECORDS as its store footprint, which is the table the campaign's
+    frame, StoreRepr and code-preservation posts are all decided against."""
+    from difftest_eval import parse_all
+    out, skipped = set(), 0
+    for r in wr_rows:
+        g, w, a = r.get("guard", ""), r.get("width", "0"), r.get("addr", "")
+        if not a or not w.isdigit() or int(w) == 0:
+            continue
+        try:
+            if g and g in q.binds and not ev.ev(g):
+                continue
+            base = ev.ev(parse_all(a)[0] if a.startswith("(") else a)
+        except Exception:
+            skipped += 1
+            continue
+        for j in range(int(w)):
+            out.add((base + j) & M64)
+    return out, skipped
+
+
+def phase3b(traces, img, enc_dir, bmc_dir, per_span=8, only=None, counts=None):
+    spans = read_tsv(os.path.join(bmc_dir, "spans.tsv"))
+    arms = {a["field"]: a for a in read_tsv(os.path.join(enc_dir, "armdispatch.tsv"))}
+    loops = read_tsv(os.path.join(enc_dir, "loops.tsv"))
+    exits_of = {int(r["header"], 16): {int(x, 16) for x in r["exits"].split(",") if x}
+                for r in loops}
+    noret = {int(r["target"], 16) for r in read_tsv(os.path.join(enc_dir, "noreturn.tsv"))}
+    fstarts = {int(r["entry"], 16) for r in read_tsv(os.path.join(enc_dir, "funcstarts.tsv"))}
+    dsites = read_tsv(os.path.join(enc_dir, "dispatchsites.tsv"))
+    arms_at = {int(r["site"], 16): [int(x, 16) for x in r["arms"].split(",")] for r in dsites}
+    findings, rows = [], []
+    for sp in spans:
+        f = sp["field"]
+        if only and f not in only:
+            continue
+        qp = os.path.join(bmc_dir, "queries", f + ".smt2")
+        if not os.path.exists(qp):
+            findings.append(("NO-QUERY", f, "the encoder wrote no query for this span"))
+            continue
+        a = arms[f]
+        entry, stop = int(sp["entry"], 16), int(sp["stop"], 16)
+        rlo, rhi = int(a["region_lo"], 16), int(a["region_hi"], 16)
+        arm, ret_exit = int(a["arm"], 16), a["ret_exit"].lower() == "true"
+        if counts is not None and counts.get(f, 0) >= per_span:
+            continue
+        q = Query(open(qp).read())
+        wr_rows = read_tsv(os.path.join(bmc_dir, "writes", f + ".tsv")) \
+            if os.path.exists(os.path.join(bmc_dir, "writes", f + ".tsv")) else []
+        done = counts.get(f, 0) if counts is not None else 0
+        fp_ok = fp_bad = 0
+        for tr in traces:
+            if done >= per_span:
+                break
+            for i in range(tr.n):
+                if done >= per_span:
+                    break
+                if tr.pc[i] != entry:
+                    continue
+                d0 = tr.depth[i]
+                kind, j, _ = walk_span(tr, img, i, d0, rlo, rhi, stop, ret_exit,
+                                       noret, fstarts, arms_at)
+                if kind not in EXIT_KINDS:
+                    continue
+                if arm != entry:
+                    k, on = i, False
+                    while k <= j:
+                        if tr.depth[k] == d0 and tr.pc[k] == arm:
+                            on = True
+                            break
+                        k += 1
+                    if not on:
+                        continue
+                try:
+                    fs, fp, nres, dep, cov = phase3b_instance(q, tr, img, sp, i, j + 1,
+                                                              d0, exits_of, j)
+                except (EvalError, RecursionError) as e:
+                    fs, fp, nres, dep, cov = [("EVAL", f, f"[{tr.name}@{tr.step[i]}] {e}")], [], 0, set(), []
+                done += 1
+                findings += fs
+                mfp = machine_footprint(tr, i, j + 1, d0, cov)
+                efp = set(fp)
+                # a footprint is only comparable when the exit state was
+                # determined; a tainted path has no path to compare
+                extra, missing = (sorted(efp - mfp), sorted(mfp - efp)) if dep else ([], [])
+                if extra or missing:
+                    fp_bad += 1
+                    findings.append(("FOOTPRINT", f,
+                        f"[{tr.name}@{tr.step[i]}] the chain's stores differ from the "
+                        f"machine's: {len(extra)} address(es) the encoder writes and the "
+                        f"machine does not"
+                        + (f" (first {extra[0]:#x})" if extra else "")
+                        + f", {len(missing)} the machine writes and the encoder does not"
+                        + (f" (first {missing[0]:#x})" if missing else "")))
+                else:
+                    fp_ok += 1
+                rows.append(dict(field=f, trace=tr.name, step=tr.step[i], exit=kind,
+                                 summaries=nres, enc_writes=len(efp),
+                                 machine_writes=len(mfp),
+                                 agree="yes" if not fs else "no"))
+        if counts is not None:
+            counts[f] = done
+    return findings, rows
+
+
 # ------------------------------------------------------------------- commands
 def cmd_corpus(a):
     build_corpus(a.wl, a.out, workdir=a.workdir)
@@ -1171,6 +1595,48 @@ def cmd_phase3(a):
     return 1 if findings else 0
 
 
+def cmd_phase3b(a):
+    img = Image(PROOF_ELF)
+    only = set(a.only.split(",")) if a.only else None
+    allf, allr, counts = [], [], {}
+    for names in trace_batches(a.traces, a.batch):
+        trs = load_traces(a.traces, img, names)
+        fs, rs = phase3b(trs, img, a.enc, a.bmc, per_span=a.per_span, only=only,
+                         counts=counts)
+        allf += fs
+        allr += rs
+        if counts and min(counts.values()) >= a.per_span and \
+                len(counts) == len(read_tsv(os.path.join(a.bmc, "spans.tsv"))):
+            break
+    for sp in read_tsv(os.path.join(a.bmc, "spans.tsv")):
+        if (only is None or sp["field"] in only) and not counts.get(sp["field"]):
+            allf.append(("NO-INSTANCE", sp["field"],
+                         "no trace runs this span's arm through to an exit"))
+    if a.out:
+        cols = ["field", "trace", "step", "exit", "summaries", "enc_writes",
+                "machine_writes", "agree"]
+        with open(a.out, "w") as fh:
+            fh.write("\t".join(cols) + "\n")
+            for r in allr:
+                fh.write("\t".join(str(r[c]) for c in cols) + "\n")
+        with open(a.out + ".findings", "w") as fh:
+            fh.write("kind\twhere\tdetail\n")
+            for k, w, d in allf:
+                fh.write(f"{k}\t{w}\t{d}\n")
+    nf = len({r["field"] for r in allr})
+    ok = sum(1 for r in allr if r["agree"] == "yes")
+    print(f"[phase3b] {nf} spans, {len(allr)} span instances driven end to end, "
+          f"{ok} agree with the machine on every register of state_exit and on the "
+          f"whole store footprint")
+    seen = set()
+    for k, w, d in allf:
+        if (k, w) in seen:
+            continue
+        seen.add((k, w))
+        print(f"  {k:18s} {w:16s} {d}")
+    return 1 if allf else 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1195,6 +1661,16 @@ def main():
     p.add_argument("--enc", required=True)
     p.add_argument("--limit", type=int, default=3)
     p.set_defaults(fn=cmd_explain)
+
+    p = sub.add_parser("phase3b")
+    p.add_argument("--traces", required=True)
+    p.add_argument("--enc", required=True)
+    p.add_argument("--bmc", default=BMC_DIR)
+    p.add_argument("--batch", type=int, default=8)
+    p.add_argument("--per-span", type=int, default=8)
+    p.add_argument("--only")
+    p.add_argument("--out")
+    p.set_defaults(fn=cmd_phase3b)
 
     p = sub.add_parser("phase3")
     p.add_argument("--traces", required=True)

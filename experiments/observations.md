@@ -6012,3 +6012,24 @@ it, still stop and report instead.
   `ReflectResiduals.lean`) in `<dir>/provenance.txt`, and the driver should refuse
   to run against artefacts whose provenance does not match the tree. That turns a
   silent stale-artefact reading into a refusal.
+
+## 2026-09-03 exit-merge-guards-are-not-disjoint (difftest phase 3, span level)
+- missing: `reflectBmc` folds the exit arrivals into `ite g1 s1 (ite g2 s2 … sN)`,
+  which is the exit state only if the guards are pairwise disjoint. They are not.
+  An arrival at the exit PC is produced in every round some block reaches it, and
+  under ABSTRACTED summaries several arrival guards are satisfiable at once.
+  MEASURED on hSBlock at dt_block@71886: seven exit guards true, six selecting a
+  state the machine is never in, one (`b604`) matching the machine exactly on all
+  31 registers, and the `ite` taking the first. Same on hSIf*/hSWhile*/hSForStart/
+  hSeq*: 50 of 309 span executions.
+- workaround: NONE. Detected and reported (`difftest.py` phase3b, EXIT-AMBIGUOUS +
+  EXIT-REGS); not fixed, because the cure is a design decision.
+- cost: a post proved about `state_exit` on those spans is a post about whichever
+  arrival the emitter happened to list first. 259 of 309 executions are unaffected.
+- proposal: three candidates. (a) make the guards disjoint by construction, which
+  needs path information the merge exists to discard; (b) emit disjointness as its
+  own obligation and qualify the verdict when it fails; (c) replace the `ite` with
+  `(assert (=> g_i (= state_exit s_i)))` per arrival, so several true guards with
+  differing states make the query CONTRADICTORY and the existing vacuity gate
+  catches it. (c) is the smallest honest change: it converts a silent wrong answer
+  into a visible vacuous one.
