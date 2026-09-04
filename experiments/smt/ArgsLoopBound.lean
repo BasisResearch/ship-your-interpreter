@@ -49,56 +49,58 @@ and ground forms.  Two measured facts explain all five:
 
 Induction over the loop is what the proof layer can do and the solver cannot.
 
-## The statement
+## The statement — AND WHY IT IS NOT HERE
 
-`Vsa.Machine.Steps` is the machine step relation the residuals are stated over.
-`argsLoopSpill`/`argsLoopReload` name the four slots above, relative to the
-loop's entry `sp`.  The premise is a preservation property of ONE iteration:
-enter the body with the bound and the spills agreeing with the registers, and
-whatever the recursive call does, the reloads bring the bound back.
+A first draft of this file stated the premise as: given the bound, given the
+spills agreeing with the registers, and given that the intervening run preserves
+those two slots, the reloaded values satisfy the bound.
 
-The obligation is deliberately stated over an ARBITRARY intervening run rather
-than over `eval_expr` specifically: what it needs is that the callee does not
-write the caller's two spill slots, which is `above_sp` restricted to those two
-addresses, and `eval_expr`'s own frame lies below them.  That restriction is
-true where the unrestricted `above_sp` is false (the sret buffer the callee
-writes is a DIFFERENT address at or above `sp`), which is why the clause bank
-cannot supply it and this premise must.
+**That is a tautology.**  With `memOut slot = memIn slot` and `memIn slot = a5`,
+the conclusion reduces to the hypothesis.  It assumes exactly the hard part —
+that the callee does not write the caller's spill slots — and then proves the
+part that needs no proof.  Shipping it would have been the same vacuity this
+campaign spent a night finding in its own queries, in a file whose purpose is to
+record an obstruction honestly.
+
+The load-bearing content is the PRESERVATION itself:
+
+    every machine run of `eval_expr` from the state at `0x80003220`
+    leaves memory at `sp + 24` and `sp + 16` unchanged,
+    where `sp` is the args loop's entry stack pointer
+
+and that cannot be stated abstractly without becoming an assumption again.  It
+has to be said over `Vsa.Machine.Steps`, the relation the residuals themselves
+are stated over, with `sp` tied to the loop's entry state — which means it
+belongs in `Vsa/Sim/` beside the other named residuals (the `hInitSome_resid`
+shape), not in a standalone file under `experiments/`.
+
+So this file deliberately stops short of a definition.  What it carries is the
+address arithmetic, the provenance, and the five measured-dead routes, so that
+whoever writes the real statement does not re-derive them.  `IV_PREMISE` in
+`scripts/houdini_summary.py` remains the operative record that 68 verdicts rest
+on it.
+
+## The addresses, which are the reusable part
+
+* args loop entry `0x800031dc`, recursive call `jal ra, eval_expr` at
+  `0x80003220`
+* spills: `sd a5,24(sp)` at `0x800031fc`, `sd a6,16(sp)` at `0x80003214`
+* reloads: `ld a6,16(sp)` at `0x8000322c`, `ld a5,24(sp)` at `0x80003230`
+* the bound's guards: `blt a4,a5` at `0x800031c8` (MAX_ARGS), `bge zero,a5` at
+  `0x800031d8` (empty loop), `bne a6,a5` at `0x80003250` (loop close)
 -/
 
 namespace Vsa.Smt.ArgsLoopBound
 
 /-- The two caller-frame slots the args loop spills `a5`/`a6` into, relative to
 the loop's entry `sp`.  `sd a5,24(sp)` at `0x800031fc`, `sd a6,16(sp)` at
-`0x80003214`. -/
+`0x80003214`.  These are the addresses the preservation obligation is about. -/
 def a5Slot (sp : Nat) : Nat := sp + 24
 def a6Slot (sp : Nat) : Nat := sp + 16
 
-/-- `0 ≤s a6 < a5 ≤s 32`, signed, over the two register values. -/
+/-- `0 <=s a6 < a5 <=s 32`, signed, over the two register values.  Signed
+because every comparison the machine makes here is: an unsigned reading lets
+`a5` be `0x8000..0`, which passes the signed check and blows the bound. -/
 def Bound (a5 a6 : Int) : Prop := 0 ≤ a6 ∧ a6 < a5 ∧ a5 ≤ 32
-
-/-- **THE PREMISE.**  If the bound holds on entry to one iteration of
-`loop_0x800031dc`, and the two spill slots agree with the registers there, then
-for any run that preserves memory at those two slots, the bound holds again at
-the reload.
-
-`preserves` is the only thing asked of the intervening call, and it is strictly
-weaker than `above_sp`: it constrains two addresses, not every address at or
-above `sp`.  That is what makes it TRUE of `eval_expr`, whose result write goes
-to the caller-passed sret buffer — a different address in the same region, which
-is exactly why the unrestricted clause is false and this one is not.
-
-Proving this discharges `argsLoopBoundAcrossCall` and promotes 68 campaign
-verdicts from `VALID[modulo ...]` to unqualified. -/
-def argsLoopBoundAcrossCall : Prop :=
-  ∀ (sp : Nat) (a5 a6 : Int) (memIn memOut : Nat → Int),
-    Bound a5 a6 →
-    memIn (a5Slot sp) = a5 →
-    memIn (a6Slot sp) = a6 →
-    -- the intervening run preserves the caller's two spill slots
-    (memOut (a5Slot sp) = memIn (a5Slot sp)) →
-    (memOut (a6Slot sp) = memIn (a6Slot sp)) →
-    -- so the reloaded values still satisfy it, and the counter may advance once
-    Bound (memOut (a5Slot sp)) (memOut (a6Slot sp))
 
 end Vsa.Smt.ArgsLoopBound
