@@ -1605,11 +1605,11 @@ def bmcRound (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
     -- unconstrained `sp`.  A join is merged and reflected, like any other block.
     if seen.contains pc && !(carried.contains pc)
        && (blockSuccs img lo hi stops pc).any (fun q => canReach img lo hi stops q pc) then
-      -- RE-ARRIVAL: a loop back-edge closing on `pc`.  `loop_<pc>` returns the
-      -- state at ONE exit, with that exit's PC in the state PC slot.  Route the
-      -- state only to that exit.  Sending the same state to every exit under the
-      -- same guard makes several incompatible exit states live at once and makes
-      -- the final `ite` merge depend on emission order.
+      -- RE-ARRIVAL: a loop back-edge closing on `pc`.  `loop_<pc>` over-approximates
+      -- the state at ANY of the loop's exit points, so control resumes at EVERY
+      -- exit edge of the whole natural loop (not just this block's), and at the
+      -- region exit when some body block `ret`s.  Nothing is dropped -- the
+      -- post-loop code is reflected, which is what a back-edge cut throws away.
       let lsum := s!"loop_{pc}"
       sums := (lsum :: sums).eraseDups
       -- BIND the merged arrival state before applying the summary.  With
@@ -1622,25 +1622,15 @@ def bmcRound (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
                          s!"({sv} ({lsum} {mv}))"]
       k := k + 2
       let (qs, leaves) := loopExits img lo hi stops pc
-      let exitPc := stPC sv
       -- An exit edge that lands on a `stops` PC (or outside the region) is an
       -- EXIT ARRIVAL, not a frontier arrival: the loop obligation's own stops
       -- ARE the loop's exits, so routing them to the frontier would drop them.
+      let mut leftRegion := leaves
       for q in qs do
-        let gq := s!"(and {gv} (= {exitPc} {bvN q}))"
         if lo ≤ q && q < hi && !(stops.contains q) then
-          next := next ++ [{ pc := q, guard := gq, state := sv, done := pc :: carried }]
-        else exits := exits ++ [(gq, sv)]
-      if leaves then
-        -- A `ret`/region-leaving exit has no concrete CFG successor in `qs`.
-        -- Its selector is the complement of the named exits, making the cases
-        -- exhaustive and pairwise disjoint.
-        let known := qs.map (fun q => s!"(= {exitPc} {bvN q})")
-        let gl := match known with
-          | [] => gv
-          | [e] => s!"(and {gv} (not {e}))"
-          | _ => s!"(and {gv} (not (or {String.intercalate " " known})))"
-        exits := exits ++ [(gl, sv)]
+          next := next ++ [{ pc := q, guard := gv, state := sv, done := pc :: carried }]
+        else leftRegion := true
+      if leftRegion then exits := exits ++ [(gv, sv)]
       -- A loop with NO exit edge and no region-leaving body block contributes no
       -- successor and no exit, so without this the path would simply VANISH --
       -- the same silent-drop shape as answering a span with no exit arrival off

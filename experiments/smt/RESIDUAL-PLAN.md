@@ -121,21 +121,28 @@ had contradictory assumptions and proved every post they were asked, and the
 loop clause sets they leaned on were mined against loop bodies that never run.
 The numbers below are what the encoder says once neither is true.
 
-Last measured on the `bmcE` encoder (52 spans, 47 summaries, `-j10 --timeout
-120`, z3 4.15.4):
+Regenerated from the tracked emit, whose `src/` provenance MATCHES the encoder
+at this commit (52 spans, 47 summaries, `-j10 --timeout 120`, z3 4.15.4):
 
 | post | VALID | N/A | REFUTED | UNKNOWN |
 |---|---|---|---|---|
-| `sp` | 18 (2 frame-shifted) | — | — | 34 |
+| `sp` | 18 | — | — | 34 |
+| `outside_stack_arena` | 18 | — | — | 34 |
+| `code` | 18 | — | — | 34 |
 | `storerepr` | 2 | 4 | — | 46 |
 | `valuerepr_tag` | 1 | 17 | — | 34 |
-| `outside_stack_arena` | 3 | — | — | 49 |
-| `code` | 3 | — | — | 49 |
 
-**Not one REFUTED and not one VACUOUS**, across 52 fields and five posts. Those
-two lines have to be read together: the first was also claimed by a campaign in
-which 26 queries proved every post they were asked, and it is the second that
-makes it worth anything.
+**Not one REFUTED and not one VACUOUS.** Those only mean something together: the
+first was also true of a campaign in which 26 queries proved every post they were
+asked, and it is the second that makes it worth anything.
+
+And for the first time the encoder has POSITIVE evidence behind it, not just an
+absence of known defects. `scripts/difftest.sh` on this encoder reports OK over
+104 programs: 6170 distinct PCs, 90264 state checks, and **309 span instances
+driven end to end, every one agreeing with the machine on every register of
+`state_exit` and on the whole store footprint**. One accepted divergence, named
+in `DIFFTEST-FINDINGS.md`: 664 stores to the HTIF mailbox, which the proof model
+consumes as device commands and the encoder's byte array keeps.
 
 The remaining UNKNOWNs have named causes, not noise:
 

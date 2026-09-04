@@ -5,7 +5,8 @@
   "ra_restore",
   "s0_restore",
   "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
  ],
  "loop_2147499500": [
   "inv_pres",
@@ -13,21 +14,8 @@
   "ra_restore",
   "s0_restore",
   "s1_restore",
-  "stack_or_arena"
- ],
- "loop_2147496788": [
-  "inv_pres",
-  "sp_restore",
-  "s1_restore",
-  "stack_or_arena"
- ],
- "loop_2147498996": [
-  "inv_pres",
-  "sp_restore",
-  "ra_restore",
-  "s0_restore",
-  "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
  ],
  "loop_2147499648": [
   "inv_pres",
@@ -35,13 +23,26 @@
   "ra_restore",
   "s0_restore",
   "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
  ],
- "loop_2147496724": [
+ "loop_2147498996": [
   "inv_pres",
   "sp_restore",
+  "ra_restore",
+  "s0_restore",
   "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
+ ],
+ "loop_2147496788": [
+  "inv_pres",
+  "sp_restore",
+  "ra_restore",
+  "s0_restore",
+  "s1_restore",
+  "stack_or_arena",
+  "above_sp"
  ],
  "loop_2147499676": [
   "inv_pres",
@@ -49,7 +50,17 @@
   "ra_restore",
   "s0_restore",
   "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
+ ],
+ "loop_2147496724": [
+  "inv_pres",
+  "sp_restore",
+  "ra_restore",
+  "s0_restore",
+  "s1_restore",
+  "stack_or_arena",
+  "above_sp"
  ],
  "loop_2147499836": [
   "inv_pres",
@@ -57,7 +68,8 @@
   "ra_restore",
   "s0_restore",
   "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
  ],
  "loop_2147499104": [
   "inv_pres",
@@ -65,15 +77,8 @@
   "ra_restore",
   "s0_restore",
   "s1_restore",
-  "stack_or_arena"
- ],
- "loop_2147499428": [
-  "inv_pres",
-  "sp_restore",
-  "ra_restore",
-  "s0_restore",
-  "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
  ],
  "loop_2147499028": [
   "inv_pres",
@@ -81,7 +86,8 @@
   "ra_restore",
   "s0_restore",
   "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
  ],
  "loop_2147499868": [
   "inv_pres",
@@ -89,7 +95,8 @@
   "ra_restore",
   "s0_restore",
   "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
  ],
  "loop_2147499136": [
   "inv_pres",
@@ -97,23 +104,28 @@
   "ra_restore",
   "s0_restore",
   "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
  ],
- "loop_2147496412": [
-  "inv_pres",
-  "sp_restore",
-  "s0_restore",
-  "s1_restore"
- ],
- "callee_2147495336": [
+ "loop_2147499428": [
   "inv_pres",
   "sp_restore",
   "ra_restore",
   "s0_restore",
   "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
  ],
- "callee_2147494344": [
+ "loop_2147496412": [
+  "inv_pres",
+  "sp_restore",
+  "ra_restore",
+  "s0_restore",
+  "s1_restore",
+  "stack_or_arena",
+  "above_sp"
+ ],
+ "callee_2147495336": [
   "inv_pres",
   "sp_restore",
   "ra_restore",
@@ -201,6 +213,22 @@
   "s1_restore",
   "stack_or_arena"
  ],
+ "callee_2147494344": [
+  "inv_pres",
+  "sp_restore",
+  "ra_restore",
+  "s0_restore",
+  "s1_restore",
+  "stack_or_arena"
+ ],
+ "icall_2147498484": [
+  "inv_pres",
+  "sp_restore",
+  "ra_restore",
+  "s0_restore",
+  "s1_restore",
+  "stack_or_arena"
+ ],
  "callee_2147493980": [
   "inv_pres",
   "sp_restore",
@@ -208,7 +236,7 @@
   "s1_restore",
   "stack_or_arena"
  ],
- "icall_2147498484": [
+ "callee_2147494396": [
   "inv_pres",
   "sp_restore",
   "ra_restore",
@@ -240,7 +268,7 @@
   "s1_restore",
   "stack_or_arena"
  ],
- "callee_2147511536": [
+ "callee_2147494492": [
   "inv_pres",
   "sp_restore",
   "ra_restore",
@@ -262,23 +290,7 @@
   "s1_restore",
   "stack_or_arena"
  ],
- "callee_2147507268": [
-  "inv_pres",
-  "sp_restore",
-  "ra_restore",
-  "s0_restore",
-  "s1_restore",
-  "stack_or_arena"
- ],
- "callee_2147494396": [
-  "inv_pres",
-  "sp_restore",
-  "ra_restore",
-  "s0_restore",
-  "s1_restore",
-  "stack_or_arena"
- ],
- "callee_2147494492": [
+ "callee_2147511536": [
   "inv_pres",
   "sp_restore",
   "ra_restore",
@@ -287,14 +299,6 @@
   "stack_or_arena"
  ],
  "callee_2147511240": [
-  "inv_pres",
-  "sp_restore",
-  "ra_restore",
-  "s0_restore",
-  "s1_restore",
-  "stack_or_arena"
- ],
- "callee_2147500000": [
   "inv_pres",
   "sp_restore",
   "ra_restore",
@@ -321,65 +325,57 @@
  "loop_2147500652": [
   "inv_pres",
   "sp_restore",
+  "ra_restore",
   "s0_restore",
   "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
  ],
  "loop_2147500452": [
   "inv_pres",
   "sp_restore",
+  "ra_restore",
   "s0_restore",
   "s1_restore",
-  "stack_or_arena"
- ],
- "loop_2147500712": [
-  "inv_pres",
-  "sp_restore",
-  "s0_restore",
-  "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
  ],
  "loop_2147500092": [
   "inv_pres",
   "sp_restore",
+  "ra_restore",
   "s0_restore",
   "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
  ],
  "loop_2147500060": [
   "inv_pres",
   "sp_restore",
+  "ra_restore",
+  "s0_restore",
   "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
  ],
- "loop_2147501304": [
+ "callee_2147500000": [
   "inv_pres",
   "sp_restore",
-  "stack_or_arena"
- ],
- "loop_2147501208": [
-  "inv_pres",
-  "sp_restore",
+  "ra_restore",
+  "s0_restore",
+  "s1_restore",
   "stack_or_arena"
  ],
  "loop_2147501196": [
   "inv_pres",
   "sp_restore",
-  "stack_or_arena"
- ],
- "loop_2147501144": [
-  "inv_pres",
-  "sp_restore",
-  "stack_or_arena"
- ],
- "callee_2147494140": [
-  "inv_pres",
-  "sp_restore",
+  "ra_restore",
   "s0_restore",
   "s1_restore",
-  "stack_or_arena"
+  "stack_or_arena",
+  "above_sp"
  ],
- "callee_2147508960": [
+ "callee_2147507268": [
   "inv_pres",
   "sp_restore",
   "ra_restore",
