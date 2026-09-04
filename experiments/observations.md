@@ -6134,15 +6134,34 @@ it, still stop and report instead.
      PRE-topological-fix encoder, where re-reflection had inflated the slice.
      That fix already bought the size win, and the discharge still does not
      close, so the two are independent.
-  What is left is a genuinely hard query, not a badly-shaped one: the invariant
+  * the clause-bank formulation, which the characterisation above named as the
+    ONLY remaining avenue -- also dead, measured. The bound cannot transport in
+    registers (x15/x16 are caller-saved, which is precisely why the code spills
+    them), so the carrying fact has to be a memory clause. `above_sp` is that
+    fact, and it is false as stated for callees that write through a
+    caller-passed pointer. The refinement that is both true and sufficient is
+    `above_sp` MINUS the 16-byte sret buffer at the callee's `a0`. Tried both
+    ways: quantified over `QA` at all 7 callee applications -> `unknown` in 29s
+    (faster than the 150s baseline, so it is being used, but not enough); and as
+    280 GROUND per-byte instances at the 5 relevance-selected reload slots, the
+    same shape `assume_block` uses for mined clauses, on an 898-line query ->
+    `unknown` at 180s.
+  So five distinct routes are now measured dead, and the avenue identified as
+  the last one standing is among them. What is left is a genuinely hard query,
+  not a badly-shaped one: the invariant
   must be carried across a recursive call through spill slots, and every route
   tried either drops the guards that establish it or leaves the solver to
   rediscover the spill/reload connection unaided. The next thing worth trying is
   not another abstraction but a DIFFERENT FORMULATION -- carry the bound as a
   summary CLAUSE on `loop_0x800031dc` itself, mined by Houdini like the others,
   so it is established once inductively rather than re-derived at each
-  application. That is a clause-bank change, and it is the only avenue these
-  measurements leave open.
+  application. That is a clause-bank change -- and it was TRIED, above, in both
+  its quantified and ground forms. It does not close either. This entry no
+  longer proposes a next step inside the SMT layer, because the measurements do
+  not support one: the remaining routes are a Lean-side proof of the transport
+  (the spill/reload across the recursive call, which the proof layer can do by
+  induction where the solver cannot), or accepting these 68 verdicts as
+  permanently UNKNOWN and saying so in the plan.
 - superseded proposal (kept so it is not retried): supply the bounds as an
   EXPLICIT assumption at the loop's argument,
   justified on the Lean side from the residual's own precondition (the arm is
