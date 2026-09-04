@@ -6168,3 +6168,29 @@ it, still stop and report instead.
   entered with a well-formed `Expr.call` whose argument list the AST bounds),
   rather than as something the encoder re-derives. That is a statement-level
   change, not an encoder one, which is why no amount of solver work reaches it.
+
+## 2026-09-04 smt-topo-reflector-misses-a-call-return-checkpoint (bmc encoder, IN-PROGRESS FEATURE)
+- symptom: `scripts/difftest.sh` fails at EMISSION, before any checking, with
+  `hSIfTrue: residual extension condition-truthy names missing checkpoint
+  0x800041fc` (`ReflectResiduals.lean:513`). The gate cannot run at all, so no
+  campaign can be validated and no artefact regenerated.
+- the extension's PC is CORRECT, so the fix is not to change it. `0x800041f8` is
+  `jal x1, 0x80003164` -- a call to `eval_expr`, which is not one of the four
+  noreturn targets -- so `0x800041fc` is its return address and therefore a
+  genuine block entry, exactly what a checkpoint is.
+- where it is NOT: `reflectBmcTopo` records checkpoints at both of its merged
+  block-entry sites (`ReflectSpan.lean:1778` for a loop header, `:1818` for an
+  ordinary block), and the emitter reads that list
+  (`ReflectResiduals.lean:468`). So the machinery is present and the PC is
+  legitimate; what does not happen is `0x800041fc` becoming a merged arrival in
+  the single-visit topological walk for `hSIfTrue`'s span (entry `0x80003fe0`,
+  stop `0x800043ec`). The call-return successor after `jal ra` is the arrival
+  that goes missing.
+- NOT INVESTIGATED FURTHER and NOT EDITED: `ReflectSpan.lean`/`ReflectResiduals.lean`
+  were mid-edit for this very feature when this was found (modified within the
+  half-hour, `residual_posts`/`residual-extensions.tsv`/checkpoints all in
+  flight). Handing over the diagnosis rather than editing a half-written
+  function.
+- blocked behind it: the campaign artefacts cannot be regenerated until the gate
+  emits, because a campaign whose encoder the gate has not checked is exactly
+  what this session spent the night learning not to trust.
