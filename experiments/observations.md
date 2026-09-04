@@ -6071,6 +6071,20 @@ it, still stop and report instead.
   upstream states. Havocking a state strips those definitions with it, so no cut
   point both shrinks the query and keeps the bounds. A `sat` verdict at a cut is
   the machine saying exactly that.
+- HARD, NOT FALSE. Measured 2026-09-04: the discharge at `m297` with the full
+  clause block, per-byte reload instantiation and the arrival guard asserted
+  returns TIMEOUT at 150s -- not `sat`. z3 never produces a countermodel, so
+  nothing here says the invariant fails; it says the solver cannot get to it.
+  Anyone picking this up should not read the 8 `sat` verdicts above as evidence
+  against the invariant: those are verdicts about HAVOCKED abstractions that
+  dropped the guards, not about the real path.
+- CORRECTION to an earlier reading of this: `MAX_ARGS` is NOT a parser
+  invariant that would need importing from the spec. `c/src/interp.c:251`
+  checks `argc > MAX_ARGS` at RUNTIME and calls `runtime_error`, so `a5 <= 32`
+  is established by the arm's own branch guard and is already present in the
+  query. The bound is derivable; what defeats the solver is transporting it
+  ACROSS the recursive call, where `a5`/`a6` cross through spill slots and the
+  connection needs `sp_restore` plus the reload facts composed.
 - proposal: supply the bounds as an EXPLICIT assumption at the loop's argument,
   justified on the Lean side from the residual's own precondition (the arm is
   entered with a well-formed `Expr.call` whose argument list the AST bounds),
