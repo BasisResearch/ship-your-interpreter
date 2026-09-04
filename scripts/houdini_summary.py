@@ -161,6 +161,57 @@ POSTS = {
 }
 
 
+def residual_posts(campaign_dir):
+    """Machine-level postconditions keyed by the Lean residual field.
+
+    These use the named `TwoSubReturn` checkpoint emitted by Lean.  They relate
+    the two represented integer payloads to the value boxed at the residual's
+    exit.  They are obligations, never assumptions.
+    """
+    path = os.path.join(campaign_dir, "residual-extensions.tsv")
+    if not os.path.exists(path):
+        return {}
+    points = {}
+    with open(path, newline="") as fh:
+        for row in csv.DictReader(fh, delimiter="\t"):
+            if row["point"] == "0x8000351c":
+                points.setdefault(row["field"], row["state"])
+    int_ops = {
+        "hIAdd": lambda a, b: f"(bvadd {a} {b})",
+        "hISub": lambda a, b: f"(bvsub {a} {b})",
+        "hIMul": lambda a, b: f"(bvmul {a} {b})",
+        "hIDiv": lambda a, b: f"(bvsdiv {a} {b})",
+        "hIMod": lambda a, b: f"(bvsrem {a} {b})",
+    }
+    comparisons = {
+        "hILt": "bvslt", "hILe": "bvsle",
+        "hIGt": "bvsgt", "hIGe": "bvsge",
+    }
+    out = {}
+    for field, state in points.items():
+        left = f"(ld8 (mm {state}) (bvadd (select (rr {state}) {_SP}) #x0000000000000080))"
+        right = f"(ld8 (mm {state}) (bvadd (select (rr {state}) {_SP}) #x0000000000000098))"
+        target = "(select (rr s0) #x000000000000000a)"
+        kind = f"(ld4 (mm state_exit) {target})"
+        payload = f"(ld8 (mm state_exit) (bvadd {target} #x0000000000000008))"
+        if field in int_ops:
+            expected = int_ops[field](left, right)
+            out[field] = ("(assert (not (and "
+                          f"(= {kind} #x0000000000000002) "
+                          f"(= {payload} {expected}))))")
+        elif field in comparisons:
+            expected = (f"(ite ({comparisons[field]} {left} {right}) "
+                        "#x0000000000000001 #x0000000000000000)")
+            out[field] = ("(assert (not (and "
+                          f"(= {kind} #x0000000000000001) "
+                          f"(= {payload} {expected}))))")
+        elif field == "hDivOv":
+            out[field] = ("(assert (not (and "
+                          f"(= {kind} #x0000000000000002) "
+                          f"(= {payload} #x8000000000000000))))")
+    return out
+
+
 def unroll(k):
     """`state_exit` as `mstep` applied `k` times to `s0` — the BOUNDED encoding."""
     t = "s0"
@@ -353,6 +404,31 @@ def heap_hyp(writes):
 #     entry, so the guard that establishes it is inside the span.
 #
 # A summary whose IV a query cannot discharge is reported, never waved through.
+# A named typed premise, in the repo's idiom for a genuine gap (CLAUDE.md law 2:
+# "a genuine gap is a NAMED typed premise with a doc comment saying what supplies
+# it").  Its ONE entry is the args-loop invariant at the loop's own recursive
+# occurrence, where FIVE distinct SMT routes are measured dead -- havoc-cut (19
+# candidates, both orders), a two-step lemma (18 anchors), a reload-address cap
+# sweep, relevance-selected reload addresses, and the clause-bank formulation in
+# both quantified and ground forms.  The evidence is in observations.md under
+# `smt-args-loop-IV-obstruction`.
+#
+# The invariant is NOT in doubt and is not an axiom about the program: it is the
+# arm's own runtime guard (`if (argc > MAX_ARGS) runtime_error`, interp.c:251).
+# What no solver route establishes is the TRANSPORT of that bound across the
+# recursive `jal ra, eval_expr`, where a5/a6 cross through spill slots.  Two
+# facts, both measured, say why: the guards that establish the bound cannot be
+# weakened (dropping them REFUTES the invariant at 7 cut points), and the query
+# is already minimal (484 lines sliced, still `unknown` at 150s).
+#
+# WHAT SUPPLIES IT: a Lean-side induction over the loop, which is the layer that
+# can do the transport structurally.  Until that lands, a verdict resting on this
+# says so -- it reports VALID[modulo <name>], never a bare VALID, and the premise
+# is listed in `assumed-final.tsv` beside the callee contracts.
+IV_PREMISE = {
+    "loop_2147496412": "argsLoopBoundAcrossCall",
+}
+
 IV_INVARIANTS = {
     # `loop_0x800031dc`, the argument-marshalling loop of the EX_CALL arm, writes
     # slot `n` of the outgoing-argument array at `sp + 240 + 24n`; the 1088-byte
@@ -897,6 +973,14 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
                     if f in NATIVE_ICALLS else
                     "callee contract outside the interpreter's own code")
             fh.write(f + "\t" + role + "\n")
+        # The IV premise is an assumption too, and belongs in the same list --
+        # an assumed clause set that is not written down is an axiom smuggled
+        # into every query that mentions it.
+        for sym, nm in IV_PREMISE.items():
+            fh.write(nm + "\tNAMED PREMISE: the args-loop bound transported "
+                     "across the recursive call in " + sym + "; five SMT routes "
+                     "measured dead (observations.md), supplied by a Lean-side "
+                     "induction over the loop\n")
     syms = [f for f in syms if f in bodies]
     # a summary only needs re-checking when one of the summaries its own body
     # applies (including itself, via `<f>_ih`) has lost a clause since last round
@@ -1161,9 +1245,12 @@ def main():
             r = spans.get(f)
             return bool(r) and r.get("region_lo") == EVAL_REGION
         wsets = {f: load_writes(os.path.join(d, "writes", f + ".tsv")) for f in deps}
+        per_residual_posts = residual_posts(d)
         pre = pre_block(d)
         tasks = [(f, pk) for f in sorted(deps) if not only or f in only
                  for pk in list(POSTS) + list(FOOTPRINT_POSTS)]
+        tasks += [(f, "residual_relation") for f in sorted(per_residual_posts)
+                  if f in deps and (not only or f in only)]
         def run(t):
             f, pk = t
             # The encoder records whether the BMC frontier EMPTIED within the
@@ -1198,11 +1285,19 @@ def main():
                          .replace("; @@POST@@", "")
                 bad = iv_discharge(qs[f], cset, timeout, pre, wr)
                 if bad:
-                    return (f, pk, "UNKNOWN(iv-undischarged:" + bad + ")")
+                    sym = bad.split("@")[0]
+                    if sym not in IV_PREMISE:
+                        return (f, pk, "UNKNOWN(iv-undischarged:" + bad + ")")
+                    # falls through: the verdict is qualified below, not silent
+                    iv_premise = IV_PREMISE[sym]
+                else:
+                    iv_premise = None
                 fv = footprint_check(base, FOOTPRINT_POSTS[pk], wr,
                                      applied_of(sl), cset, timeout, pre=pre)
                 if fv.startswith("VALID") and vac != "sat":
                     fv += "(consistency-unproved)"
+                if fv.startswith("VALID") and iv_premise:
+                    fv += f"[modulo {iv_premise}]"
                 return (f, pk, fv)
             head = vhead
             # `storerepr` and `valuerepr_tag` are stated over the pointer the
@@ -1224,7 +1319,9 @@ def main():
             # bytes and "refutes" -- hInitStore is refuted exactly this way.
             if pk == "valuerepr_tag" and not in_eval(f):
                 return (f, pk, "N/A(not-an-eval-arm)")
-            txt = head.replace("; @@POST@@", POSTS[pk]) + "\n(check-sat)\n"
+            post = (per_residual_posts[f] if pk == "residual_relation"
+                    else POSTS[pk])
+            txt = head.replace("; @@POST@@", post) + "\n(check-sat)\n"
             v = z3(txt, timeout)
             if v == "sat" and pk == "sp":
                 # A span that does not start at its function's entry begins
@@ -1271,13 +1368,13 @@ def main():
         for f, pk, v in res:
             table.setdefault(f, {})[pk] = v
         out = os.path.join(d, "verdicts.tsv")
-        keys = list(POSTS) + list(FOOTPRINT_POSTS)
+        keys = list(POSTS) + list(FOOTPRINT_POSTS) + ["residual_relation"]
         with open(out, "w") as fh:
             fh.write("field\t" + "\t".join(keys) + "\n")
             for f in sorted(table):
-                fh.write(f + "\t" + "\t".join(table[f].get(k, "UNKNOWN") for k in keys) + "\n")
+                fh.write(f + "\t" + "\t".join(table[f].get(k, "N/A") for k in keys) + "\n")
         for k in keys:
-            print(f"  {k}: {dict(Counter(table[f].get(k, 'UNKNOWN').split('(')[0] for f in table))}")
+            print(f"  {k}: {dict(Counter(table[f].get(k, 'N/A').split('(')[0] for f in table))}")
         print("wrote", out)
 
 
