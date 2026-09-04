@@ -7,7 +7,10 @@ callee_2147493880	callee contract outside the interpreter's own code
 callee_2147493868	callee contract outside the interpreter's own code
 callee_2147494928	callee contract outside the interpreter's own code
 callee_2147496292	recursor IH (EvalIH / mExecSeq), carried by the residual
+callee_2147501968	callee contract outside the interpreter's own code
+callee_2147495132	callee contract outside the interpreter's own code
 callee_2147493932	callee contract outside the interpreter's own code
+callee_2147504736	callee contract outside the interpreter's own code
 callee_2147493980	callee contract outside the interpreter's own code
 icall_2147498484	native callee contract (NativePrintSpec: print/println/assert)
 callee_2147495872	callee contract outside the interpreter's own code
@@ -18,16 +21,11 @@ callee_2147501732	callee contract outside the interpreter's own code
 callee_2147501864	callee contract outside the interpreter's own code
 callee_2147507268	callee contract outside the interpreter's own code
 callee_2147494396	callee contract outside the interpreter's own code
-callee_2147501968	callee contract outside the interpreter's own code
 callee_2147494492	callee contract outside the interpreter's own code
-callee_2147504736	callee contract outside the interpreter's own code
 callee_2147511240	callee contract outside the interpreter's own code
 callee_2147500000	recursor IH (EvalIH / mExecSeq), carried by the residual
 callee_2147511748	callee contract outside the interpreter's own code
 callee_2147501980	callee contract outside the interpreter's own code
-callee_2147495132	callee contract outside the interpreter's own code
 callee_2147494140	callee contract outside the interpreter's own code
 callee_2147508960	callee contract outside the interpreter's own code
-callee_2147512488	callee contract outside the interpreter's own code
-callee_2147484032	callee contract outside the interpreter's own code
-icall_2147501956	native callee contract (NativePrintSpec: print/println/assert)
+callee_2147512316	callee contract outside the interpreter's own code

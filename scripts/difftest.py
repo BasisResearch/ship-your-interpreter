@@ -163,7 +163,7 @@ def walk_span(tr, img, i, d0, rlo, rhi, stop, ret_exit, noret, fstarts, arms_at)
     return ("unfinished", n - 1, "")
 
 
-def phase1(traces, img, spans, arms, enc_dir, out_tsv=None):
+def phase1(traces, img, spans, arms, enc_dir):
     armmap = {a["field"]: a for a in arms}
     noret = {int(r["target"], 16) for r in read_tsv(os.path.join(enc_dir, "noreturn.tsv"))}
     fstarts = {int(r["entry"], 16) for r in read_tsv(os.path.join(enc_dir, "funcstarts.tsv"))}
@@ -182,6 +182,7 @@ def phase1(traces, img, spans, arms, enc_dir, out_tsv=None):
             traces=set(), arm_taken=0, detail={})
         for k in EXIT_KINDS + NONEXIT_KINDS + ("unwound",):
             res[sp["field"]][k] = 0
+            res[sp["field"]]["arm_" + k] = 0
     for tr in traces:
         by_pc = {}
         for i in range(tr.n):
@@ -197,26 +198,46 @@ def phase1(traces, img, spans, arms, enc_dir, out_tsv=None):
                 if det:
                     r["detail"].setdefault(det, 0)
                     r["detail"][det] += 1
-                # did this instance go through the arm the residual is about?
-                if r["arm"] != r["entry"]:
+                # Did this instance go through the arm the residual is ABOUT?
+                #
+                # The verdict is only ever about that arm — the query pins the
+                # AST kind and asserts the dispatch guard it selects — so the
+                # outcome has to be counted over those instances alone.  Counted
+                # over all of them, an arm whose declared stop is another arm's
+                # code still looks reached, because some OTHER kind's path goes
+                # there: hAndTrue's stop 0x800035e0 is the unary arm's first
+                # instruction and the logical arm ends at 0x800035dc with
+                # `j 0x800033ec`, so no execution of the logical arm can arrive
+                # at it — and the query's pin + exit guard are contradictory,
+                # which is how the campaign reports it (`VACUOUS`).
+                onarm = r["arm"] == r["entry"]
+                if not onarm:
                     k = i
-                    while k <= j and tr.depth[k] >= tr.depth[i]:
+                    while k <= j:
                         if tr.depth[k] == tr.depth[i] and tr.pc[k] == r["arm"]:
-                            r["arm_taken"] += 1
+                            onarm = True
                             break
                         k += 1
-    rows = list(res.values())
-    if out_tsv:
-        cols = ["field", "entry", "stop", "entries", "arm_taken"] + list(EXIT_KINDS) + \
-               list(NONEXIT_KINDS) + ["unwound", "ret_exit", "enc_halts", "traces"]
-        with open(out_tsv, "w") as f:
-            f.write("\t".join(cols) + "\n")
-            for r in rows:
-                f.write("\t".join(
-                    (hex(r[c]) if c in ("entry", "stop") else
-                     (",".join(sorted(r[c])) if c == "traces" else str(r[c])))
-                    for c in cols) + "\n")
-    return rows
+                if onarm:
+                    r["arm_taken"] += 1
+                    r["arm_" + kind] += 1
+    return list(res.values())
+
+
+def write_phase1(rows, out_tsv):
+    if not out_tsv:
+        return
+    cols = ["field", "entry", "stop", "entries", "arm_taken"] + \
+           ["arm_" + k for k in EXIT_KINDS] + ["arm_" + k for k in NONEXIT_KINDS] + \
+           ["arm_unwound"] + list(EXIT_KINDS) + list(NONEXIT_KINDS) + \
+           ["unwound", "ret_exit", "enc_halts", "traces"]
+    with open(out_tsv, "w") as f:
+        f.write("\t".join(cols) + "\n")
+        for r in rows:
+            f.write("\t".join(
+                (hex(r[c]) if c in ("entry", "stop") else
+                 (",".join(sorted(r[c])) if c == "traces" else str(r[c])))
+                for c in cols) + "\n")
 
 
 def check_dispatch(traces, img, enc_dir):
@@ -245,21 +266,33 @@ def check_dispatch(traces, img, enc_dir):
     return seen, bad, unlisted, arms_at
 
 
-def phase1_findings(rows, seen, bad, unlisted, arms_at):
-    out = []
+def phase1_findings(rows, seen, bad, unlisted, arms_at, recorded_stop_outside=()):
+    """(findings, notes).  A FINDING is something that is wrong under any reading
+    — a span with no reachable exit, a dispatch the encoder mis-resolved.  A NOTE
+    is a scope fact the campaign should state and cannot state for itself: how
+    much of an arm's real behaviour a verdict is about, which arms no program
+    reaches, which computed gotos are left opaque."""
+    out, notes = [], []
     for r in rows:
         f = r["field"]
         if r["entries"] == 0:
-            out.append(("UNCOVERED", f, "no trace enters this span"))
+            notes.append(("UNCOVERED", f, "no trace enters this span"))
             continue
-        arrivals = sum(r[k] for k in EXIT_KINDS)
+        arrivals = sum(r["arm_" + k] for k in EXIT_KINDS)
+        if r["arm_taken"] == 0:
+            notes.append(("ARM-UNSEEN", f,
+                        f"entered {r['entries']}x but never through arm {r['arm']:#x} — "
+                        f"the corpus does not exercise this residual's arm"))
+            continue
         if arrivals == 0:
-            out.append(("NO-EXIT", f,
-                        f"entered {r['entries']}x, NEVER reaches any exit the encoder "
-                        f"recognises (halt={r['halt']} ret_excluded={r['ret_excluded']} "
-                        f"unwound={r['unwound']} unfinished={r['unfinished']})"))
+            out.append(("NO-EXIT-FROM-ARM", f,
+                        f"{r['arm_taken']} instances run the residual's arm {r['arm']:#x} "
+                        f"and NONE reaches an encoder-recognised exit "
+                        f"(halt={r['arm_halt']} ret_excluded={r['arm_ret_excluded']} "
+                        f"unwound={r['arm_unwound']} unfinished={r['arm_unfinished']}); "
+                        f"the declared stop {r['stop']:#x} is not reachable from the arm"))
             continue
-        if not (r["rlo"] <= r["stop"] < r["rhi"]):
+        if not (r["rlo"] <= r["stop"] < r["rhi"]) and f not in recorded_stop_outside:
             out.append(("STOP-OUTSIDE", f,
                         f"declared stop {r['stop']:#x} lies outside the span's own region "
                         f"[{r['rlo']:#x},{r['rhi']:#x}) — it can never be an arrival, and "
@@ -267,28 +300,46 @@ def phase1_findings(rows, seen, bad, unlisted, arms_at):
         if r["ret_exit"] and r["ret"] == 0 and r["ret_excluded"] == 0:
             out.append(("RET-EXIT", f, "encoder says the stop is a return, but no instance "
                                        "exits by `ret`"))
+        if r["arm_at_stop"] == 0 and r["arm"] != r["entry"] and not r["ret_exit"] and \
+                (r["rlo"] <= r["stop"] < r["rhi"]):
+            out.append(("STOP-UNREACHED", f,
+                        f"the arm {r['arm']:#x} runs {r['arm_taken']}x and never reaches "
+                        f"the declared stop {r['stop']:#x} (it exits by "
+                        + ", ".join(f"{k}={r['arm_' + k]}" for k in EXIT_KINDS
+                                    if r["arm_" + k]) + ")"))
+        # The verdict covers the arm executions that ARRIVE; the rest leave the
+        # span some other way and the post says nothing about them.  Reported
+        # with the fraction, because a span answered on a sixth of its arm's real
+        # executions is a narrower claim than its name suggests and nothing else
+        # in the campaign says so.
+        # An instance that was still running when the program halted is not a
+        # path the span misses, so it is out of the denominator.
+        ran = r["arm_taken"] - r["arm_unfinished"]
+        if arrivals and arrivals < ran:
+            notes.append(("STOP-NARROW", f,
+                          f"{arrivals}/{ran} executions of arm {r['arm']:#x} reach an "
+                          f"exit the encoder counts; the other {ran - arrivals} leave by "
+                          + ", ".join(f"{k}={r['arm_' + k]}" for k in NONEXIT_KINDS + ("unwound",)
+                                      if r["arm_" + k] and k != "unfinished")
+                          + " — the verdict is about the arriving ones only"))
         if r["dispatch_out"]:
             out.append(("DISPATCH", f, f"{r['dispatch_out']} instances take a computed goto "
                                        f"the encoder did not resolve: " +
                         "; ".join(f"{k} x{v}" for k, v in r["detail"].items())))
-        if r["arm"] != r["entry"] and r["arm_taken"] == 0:
-            out.append(("ARM-UNSEEN", f,
-                        f"entered {r['entries']}x but never through arm {r['arm']:#x} — "
-                        f"the corpus does not exercise this residual's arm"))
     for name, p, nxt in bad[:20]:
         out.append(("DISPATCH", f"{p:#x}",
                     f"[{name}] jumps to {nxt:#x}, not in the encoder's arm list"))
     for p, tg in sorted(unlisted.items()):
-        out.append(("UNRESOLVED", f"{p:#x}",
-                    f"computed goto the encoder leaves opaque; observed targets "
-                    + ",".join(f"{t:#x}" for t in sorted(tg))))
+        notes.append(("UNRESOLVED", f"{p:#x}",
+                      f"computed goto the encoder leaves opaque; observed targets "
+                      + ",".join(f"{t:#x}" for t in sorted(tg))))
     for p, arms in arms_at.items():
         never = [a for a in arms if a not in seen[p]]
         if never:
-            out.append(("ARMS-UNSEEN", f"{p:#x}",
-                        f"{len(never)}/{len(arms)} declared arms never taken: "
-                        + ",".join(f"{a:#x}" for a in never)))
-    return out
+            notes.append(("ARMS-UNSEEN", f"{p:#x}",
+                          f"{len(never)}/{len(arms)} declared arms never taken: "
+                          + ",".join(f"{a:#x}" for a in never)))
+    return out, notes
 
 
 # --------------------------------------------------------------------- phase 2
@@ -312,6 +363,19 @@ CLAUSE_IDS = ["inv_pres", "sp_restore", "ra_restore", "s0_restore", "s1_restore"
 REG_CLAUSE = {"sp_restore": 2, "ra_restore": 1, "s0_restore": 8, "s1_restore": 9}
 
 
+def read_regions(bmc_dir):
+    """The writable-static region the encoder itself emits (`regions.tsv`), so
+    the concrete verdict for `stack_or_arena` reads the clause the way the
+    campaign now states it."""
+    pth = os.path.join(bmc_dir, "regions.tsv")
+    if not os.path.exists(pth):
+        return None
+    for r in read_tsv(pth):
+        if r["region"] == "writable_static":
+            return int(r["lo"], 16), int(r["hi"], 16)
+    return None
+
+
 class MemMap:
     """The real memory map, from the ELF's own symbols.  `stack_or_arena` and
     `above_sp` quantify over a stack window and an arena that the queries leave
@@ -319,8 +383,9 @@ class MemMap:
     linker script's regions (`c/src/link.ld`) plus the heap span the run actually
     touched."""
 
-    def __init__(self, img, traces=None):
+    def __init__(self, img, traces=None, gregion=None):
         syms = elf_symbols(img)
+        self.g = gregion
         self.stack_top = syms.get("__stack_top", 0x88000000)
         self.heap_end = syms.get("__heap_end", self.stack_top - (8 << 20))
         self.static_end = syms.get("_end", syms.get("__bss_end", 0x8001C168))
@@ -340,6 +405,8 @@ class MemMap:
     def region(self, a):
         if a < 0x80000000:
             return "low"
+        if self.g and self.g[0] <= a < self.g[1]:
+            return "wstatic"
         if a < self.static_end:
             return "static"
         if a < self.heap_hi:
@@ -349,10 +416,41 @@ class MemMap:
         return "high"
 
     def __str__(self):
-        return (f"static [0x80000000,{self.static_end:#x}) heap "
+        return ((f"writable-static [{self.g[0]:#x},{self.g[1]:#x}) " if self.g else "")
+                + f"static [0x80000000,{self.static_end:#x}) heap "
                 f"[{self.heap_lo:#x},{self.heap_hi:#x}) stack "
                 f"[{self.stack_lo:#x},{self.stack_top:#x})"
                 + (f" min sp {self.min_sp:#x}" if self.min_sp else ""))
+
+
+def elf_sections(img):
+    """`name -> (addr, size)` from the ELF section headers."""
+    b = img.raw
+    rd = lambda o, n: int.from_bytes(b[o:o + n], "little")
+    shoff, shentsize, shnum, shstrndx = rd(0x28, 8), rd(0x3A, 2), rd(0x3C, 2), rd(0x3E, 2)
+    stroff = rd(shoff + shstrndx * shentsize + 0x18, 8)
+    out = {}
+    for i in range(shnum):
+        o = shoff + i * shentsize
+        nm = rd(o, 4)
+        end = b.index(b"\0", stroff + nm)
+        out[b[stroff + nm:end].decode()] = (rd(o + 0x10, 8), rd(o + 0x20, 8))
+    return out
+
+
+def mmio_region(img):
+    """The HTIF mailbox (`.tohost`).
+
+    The proof model treats a store here as a DEVICE COMMAND — `enable_htif`
+    consumes the write and the byte array keeps its old value — while the
+    encoder's memory is a plain byte array, so the two disagree on the eight
+    bytes at `tohost` after `_write`'s `sd`.  That is a real difference and it is
+    reported, but it is not a defect in any span: the only stores to it are in
+    `_write` and `exit`, both outside the interpreter's own code, both ASSUMED
+    contracts whose bodies no span reflects.  Excluded from the memory
+    comparison, named here so the exclusion is auditable."""
+    a, n = elf_sections(img).get(".tohost", (0, 0))
+    return (a, a + n)
 
 
 def sym_names(img):
@@ -531,16 +629,10 @@ def eval_clauses(tr, it, writes, mm, is_call_inst):
     return res
 
 
-def phase2(traces, img, enc_dir, bmc_dir, out_tsv=None):
+def phase2_agg(traces, img, enc_dir, bmc_dir, known, agg=None):
     loops = read_tsv(os.path.join(enc_dir, "loops.tsv"))
-    mined = json.load(open(os.path.join(bmc_dir, "clauses.json"))) \
-        if os.path.exists(os.path.join(bmc_dir, "clauses.json")) else {}
-    assumed = {r["summary"] for r in read_tsv(os.path.join(bmc_dir, "assumed.tsv"))
-               if r["summary"].startswith(("callee_", "loop_", "icall_", "idisp_"))}
-    known = {r["summary"] for r in read_tsv(os.path.join(bmc_dir, "summaries.tsv"))
-             if r["summary"]}
-    mm = MemMap(img, traces)
-    agg = {}
+    mm = MemMap(img, traces, gregion=read_regions(bmc_dir))
+    agg = {} if agg is None else agg
     for tr in traces:
         ci, cw = call_instances(tr, img)
         li, lw = loop_instances(tr, img, loops)
@@ -562,6 +654,14 @@ def phase2(traces, img, enc_dir, bmc_dir, out_tsv=None):
                         a["verdicts"][c][1] += 1
                         if not a["verdicts"][c][2]:
                             a["verdicts"][c][2] = f"[{it.trace}@{tr.step[it.pre_row]}] {wit}"
+    return agg, mm
+
+
+def phase2_report(agg, img, bmc_dir, out_tsv=None):
+    mined = json.load(open(os.path.join(bmc_dir, "clauses.json"))) \
+        if os.path.exists(os.path.join(bmc_dir, "clauses.json")) else {}
+    assumed = {r["summary"] for r in read_tsv(os.path.join(bmc_dir, "assumed.tsv"))
+               if r["summary"].startswith(("callee_", "loop_", "icall_", "idisp_"))}
     names = sym_names(img)
     rows = []
     for sym, a in sorted(agg.items()):
@@ -583,7 +683,7 @@ def phase2(traces, img, enc_dir, bmc_dir, out_tsv=None):
             f.write("\t".join(cols) + "\n")
             for r in rows:
                 f.write("\t".join(str(r[c]) for c in cols) + "\n")
-    return rows, mm, agg
+    return rows, mined
 
 
 def phase2_findings(rows, mined):
@@ -710,7 +810,7 @@ def phase3_block(k, pc, tr, i, row):
                           f"of width {tr.mw[i]}, the encoder's step has no memory operand"))
         conj += [f"(= (select (rr {T}) {hexbv(r)}) {hexbv(tr.reg(i + 1, r))})"
                  for r in range(1, 32)]
-        if tr.mk[i] == MK_STORE:
+        if tr.mk[i] == MK_STORE and not (MMIO[0] <= tr.maddr[i] < MMIO[1]):
             a, post = tr.maddr[i], tr.mpost[i]
             conj.append(f"(= (ld8 (mm {T}) {hexbv(a)}) {hexbv(post)})")
             conj.append(f"(= (ld8 (mm {T}) {hexbv(a - 8)}) (ld8 (mm {S}) {hexbv(a - 8)}))")
@@ -735,10 +835,11 @@ def phase3_block(k, pc, tr, i, row):
             flags.append(("jal-link", tr.reg(i + 1, rd) == (pc + 4) & M64,
                           f"x{rd} = {tr.reg(i+1, rd):#x}, expected {(pc+4)&M64:#x}"))
     elif cls == "jalr":
-        rd, rs1 = int(f[0]), int(f[1])
-        flags.append(("jalr-target", npc == (tr.reg(i, rs1) & ~1) & M64,
-                      f"went to {npc:#x}, encoder's target expression is "
-                      f"x{rs1} = {tr.reg(i, rs1):#x}"))
+        rd, rs1, im = int(f[0]), int(f[1]), int(f[2])
+        tgt = (tr.reg(i, rs1) + im) & M64 & ~1
+        flags.append(("jalr-target", npc == tgt,
+                      f"went to {npc:#x}, encoder's target expression gives "
+                      f"x{rs1}({tr.reg(i, rs1):#x}) + {im} & ~1 = {tgt:#x}"))
         if rd:
             flags.append(("jalr-link", tr.reg(i + 1, rd) == (pc + 4) & M64,
                           f"x{rd} = {tr.reg(i+1, rd):#x}, expected {(pc+4)&M64:#x}"))
@@ -746,6 +847,19 @@ def phase3_block(k, pc, tr, i, row):
 
 
 img_word_cache = {}
+MMIO = (0, 0)
+
+
+def dedup_findings(fs):
+    """One line per (kind, place); a defect at a PC is one defect however many
+    executions of it the corpus happens to contain."""
+    seen, out = set(), []
+    for kind, w, d in fs:
+        if (kind, w) in seen:
+            continue
+        seen.add((kind, w))
+        out.append((kind, w, d))
+    return out
 
 
 def phase3_explain(traces, img, enc_dir, pc, limit=3):
@@ -809,12 +923,16 @@ def phase3_explain(traces, img, enc_dir, pc, limit=3):
     return 0
 
 
-def phase3(traces, img, enc_dir, per_pc=24, chunk=800, jobs=None, out_tsv=None):
+def phase3(traces, img, enc_dir, per_pc=24, chunk=800, jobs=None):
     tbl = EncTable(os.path.join(enc_dir, "steps.tsv"))
+    global MMIO
+    MMIO = mmio_region(img)
     preamble = open(os.path.join(enc_dir, "preamble.smt2")).read()
     samples, occ = phase3_samples(traces, tbl, per_pc)
     for pc in occ:
         img_word_cache[pc] = img.word(pc)
+    mmio_hits = sum(1 for tr in traces for i in range(tr.n)
+                    if tr.mk[i] == MK_STORE and MMIO[0] <= tr.maddr[i] < MMIO[1])
     # the encoder's word must be the image's word (a stale table is worse than
     # no table: every verdict below would be about a different program)
     stale = [pc for pc in occ if tbl.get(pc) is None]
@@ -869,12 +987,14 @@ def phase3(traces, img, enc_dir, per_pc=24, chunk=800, jobs=None, out_tsv=None):
         findings.append(("STEP-STATE", f"{pc:#x}",
                          f"[{cls}] encoder's step disagrees with the machine on "
                          f"{len(hits)} sampled execution(s); first [{nm}@{st}] {v} {det}"))
-    if out_tsv:
-        with open(out_tsv, "w") as f:
-            f.write("kind\twhere\tdetail\n")
-            for kind, w, d in findings:
-                f.write(f"{kind}\t{w}\t{d}\n")
-    return findings, len(samples), nchecked, len(occ)
+    notes = []
+    if mmio_hits:
+        notes.append(("MMIO-EXCLUDED", f"{MMIO[0]:#x}..{MMIO[1]:#x}",
+                      f"{mmio_hits} stores to the HTIF mailbox: the model consumes "
+                      f"them as device commands, the encoder's byte array keeps "
+                      f"the value.  Excluded from the memory comparison (see "
+                      f"`mmio_region`); no span reflects those stores."))
+    return findings, len(samples), nchecked, len(occ), notes
 
 
 # ------------------------------------------------------------------- commands
@@ -887,13 +1007,15 @@ def cmd_trace(a):
     print(f"[trace] {a.elf} -> {a.out}")
 
 
+def trace_files(tdir):
+    return [fn for fn in sorted(os.listdir(tdir)) if fn.endswith(".trace.tsv")]
+
+
 def load_traces(tdir, img, names=None):
     trs = []
-    for fn in sorted(os.listdir(tdir)):
-        if not fn.endswith(".trace.tsv"):
-            continue
+    for fn in trace_files(tdir):
         nm = fn[:-len(".trace.tsv")]
-        if names and nm not in names:
+        if names is not None and nm not in names:
             continue
         t = Trace(os.path.join(tdir, fn), name=nm)
         t.compute_depth(img)
@@ -901,36 +1023,114 @@ def load_traces(tdir, img, names=None):
     return trs
 
 
+def trace_batches(tdir, batch):
+    """Trace names in groups of `batch`.
+
+    A whole-program trace of the proof model is ~100 MB of rows and the corpus
+    can be a hundred of them, so the phases run over one group at a time and
+    merge; loading them all at once is a gigabyte of register file."""
+    names = [fn[:-len(".trace.tsv")] for fn in trace_files(tdir)]
+    if not batch or batch >= len(names):
+        return [None]
+    return [names[i:i + batch] for i in range(0, len(names), batch)]
+
+
+def merge_phase1(acc, rows):
+    if acc is None:
+        return {r["field"]: r for r in rows}
+    for r in rows:
+        a = acc[r["field"]]
+        for k, v in r.items():
+            if isinstance(v, int) and k not in ("entry", "stop", "rlo", "rhi", "arm",
+                                                "enc_halts"):
+                a[k] = a.get(k, 0) + v
+            elif k == "traces":
+                a["traces"] = a["traces"] | v
+            elif k == "detail":
+                for dk, dv in v.items():
+                    a["detail"][dk] = a["detail"].get(dk, 0) + dv
+    return acc
+
+
+def merge_phase2(acc, agg):
+    for sym, a in agg.items():
+        b = acc.setdefault(sym, dict(sym=sym, n=0, nopair=0,
+                                     verdicts={c: [0, 0, ""] for c in CLAUSE_IDS}))
+        b["n"] += a["n"]
+        b["nopair"] += a["nopair"]
+        for c in CLAUSE_IDS:
+            b["verdicts"][c][0] += a["verdicts"][c][0]
+            b["verdicts"][c][1] += a["verdicts"][c][1]
+            if not b["verdicts"][c][2]:
+                b["verdicts"][c][2] = a["verdicts"][c][2]
+    return acc
+
+
 def cmd_phase1(a):
     img = Image(PROOF_ELF)
-    trs = load_traces(a.traces, img)
-    spans = read_tsv(os.path.join(BMC_DIR, "spans.tsv"))
+    spans = read_tsv(os.path.join(a.bmc, "spans.tsv"))
     arms = read_tsv(os.path.join(a.enc, "armdispatch.tsv"))
-    rows = phase1(trs, img, spans, arms, a.enc, out_tsv=a.out)
-    seen, bad, unlisted, arms_at = check_dispatch(trs, img, a.enc)
-    findings = phase1_findings(rows, seen, bad, unlisted, arms_at)
+    acc = None
+    seen, bad, unlisted, arms_at = None, [], {}, None
+    ntr = 0
+    for names in trace_batches(a.traces, a.batch):
+        trs = load_traces(a.traces, img, names)
+        ntr += len(trs)
+        acc = merge_phase1(acc, phase1(trs, img, spans, arms, a.enc))
+        sn, bd, un, aa = check_dispatch(trs, img, a.enc)
+        arms_at = aa
+        seen = sn if seen is None else {k: seen[k] | v for k, v in sn.items()}
+        bad += bd
+        for k, v in un.items():
+            unlisted.setdefault(k, set()).update(v)
+    rows = list(acc.values())
+    write_phase1(rows, a.out)
+    trs = []
+    so = os.path.join(a.bmc, "stop-outside.tsv")
+    recorded = {r["field"] for r in read_tsv(so)} if os.path.exists(so) else set()
+    findings, notes = phase1_findings(rows, seen, bad, unlisted, arms_at, recorded)
+    if recorded:
+        print(f"  note: {len(recorded)} spans declare a stop outside their own region; "
+              f"the encoder records them in stop-outside.tsv and decides `retExit` "
+              f"structurally (their exit is the function's return)")
     ncov = sum(1 for r in rows if r["entries"])
     narr = sum(1 for r in rows if sum(r[k] for k in EXIT_KINDS))
-    print(f"[phase1] {len(trs)} traces, {len(rows)} spans, {ncov} entered, "
+    print(f"[phase1] {ntr} traces, {len(rows)} spans, {ncov} entered, "
           f"{narr} reach an encoder-recognised exit")
     for kind, f, msg in findings:
-        print(f"  {kind:12s} {f:16s} {msg}")
-    return 1 if any(k not in ("UNCOVERED", "ARM-UNSEEN", "ARMS-UNSEEN")
-                    for k, _, _ in findings) else 0
+        print(f"  {kind:16s} {f:16s} {msg}")
+    for kind, f, msg in notes:
+        print(f"  note: {kind:12s} {f:16s} {msg}")
+    if a.out:
+        with open(a.out + ".findings", "w") as fh:
+            fh.write("severity\tkind\twhere\tdetail\n")
+            for kind, f, msg in findings:
+                fh.write(f"FINDING\t{kind}\t{f}\t{msg}\n")
+            for kind, f, msg in notes:
+                fh.write(f"note\t{kind}\t{f}\t{msg}\n")
+    return 1 if findings else 0
 
 
 def cmd_phase2(a):
     img = Image(PROOF_ELF)
-    trs = load_traces(a.traces, img)
-    rows, mm, agg = phase2(trs, img, a.enc, a.bmc, out_tsv=a.out)
-    mined = json.load(open(os.path.join(a.bmc, "clauses.json"))) \
-        if os.path.exists(os.path.join(a.bmc, "clauses.json")) else {}
+    known = {r["summary"] for r in read_tsv(os.path.join(a.bmc, "summaries.tsv"))
+             if r["summary"]}
+    agg, mm = {}, None
+    for names in trace_batches(a.traces, a.batch):
+        trs = load_traces(a.traces, img, names)
+        agg, mm = phase2_agg(trs, img, a.enc, a.bmc, known, agg)
+    rows, mined = phase2_report(agg, img, a.bmc, out_tsv=a.out)
     findings = phase2_findings(rows, mined)
     print(f"[phase2] memory map: {mm}")
     print(f"[phase2] {len(agg)} summaries instantiated by the corpus, "
           f"{sum(v['n'] for v in agg.values())} applications")
     for kind, f, msg in findings:
         print(f"  {kind:14s} {f:26s} {msg}")
+    if a.out:
+        with open(a.out + ".findings", "w") as fh:
+            fh.write("severity\tkind\twhere\tdetail\n")
+            for kind, f, msg in findings:
+                fh.write(f"FINDING\t{kind}\t{f}\t{msg}\n")
     return 1 if findings else 0
 
 
@@ -942,11 +1142,28 @@ def cmd_explain(a):
 
 def cmd_phase3(a):
     img = Image(PROOF_ELF)
-    trs = load_traces(a.traces, img)
-    findings, nsamp, nchk, npc = phase3(trs, img, a.enc, per_pc=a.per_pc,
-                                        chunk=a.chunk, jobs=a.jobs, out_tsv=a.out)
+    findings, nsamp, nchk, notes = [], 0, 0, []
+    pcs = set()
+    for names in trace_batches(a.traces, a.batch):
+        trs = load_traces(a.traces, img, names)
+        f, ns, nc, np_, nt = phase3(trs, img, a.enc, per_pc=a.per_pc,
+                                    chunk=a.chunk, jobs=a.jobs)
+        findings += f
+        nsamp += ns
+        nchk += nc
+        notes = nt or notes
+        pcs |= set(phase3_samples(trs, None, 1)[1].keys())
+    findings = dedup_findings(findings)
+    if a.out:
+        with open(a.out, "w") as fh:
+            fh.write("kind\twhere\tdetail\n")
+            for kind, w, d in findings + notes:
+                fh.write(f"{kind}\t{w}\t{d}\n")
+    npc = len(pcs)
     print(f"[phase3] {npc} distinct PCs executed, {nsamp} sampled steps, "
           f"{nchk} state checks")
+    for kind, w, d in notes:
+        print(f"  note: {kind} {w}: {d}")
     for kind, w, d in findings[:60]:
         print(f"  {kind:18s} {w:12s} {d}")
     if len(findings) > 60:
@@ -981,6 +1198,8 @@ def main():
 
     p = sub.add_parser("phase3")
     p.add_argument("--traces", required=True)
+    p.add_argument("--batch", type=int, default=16,
+                   help="traces held in memory at once (0 = all)")
     p.add_argument("--enc", required=True)
     p.add_argument("--per-pc", type=int, default=24)
     p.add_argument("--chunk", type=int, default=800)
@@ -990,6 +1209,8 @@ def main():
 
     p = sub.add_parser("phase2")
     p.add_argument("--traces", required=True)
+    p.add_argument("--batch", type=int, default=16,
+                   help="traces held in memory at once (0 = all)")
     p.add_argument("--enc", required=True)
     p.add_argument("--bmc", default=BMC_DIR)
     p.add_argument("--out")
@@ -997,7 +1218,10 @@ def main():
 
     p = sub.add_parser("phase1")
     p.add_argument("--traces", required=True)
+    p.add_argument("--batch", type=int, default=16,
+                   help="traces held in memory at once (0 = all)")
     p.add_argument("--enc", required=True)
+    p.add_argument("--bmc", default=BMC_DIR)
     p.add_argument("--out")
     p.set_defaults(fn=cmd_phase1)
 

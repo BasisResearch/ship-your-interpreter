@@ -1176,4 +1176,25 @@ PYEOF
 
 rm -f "$AXFILE"
 echo "stage c: OK"
+
+# ------------------------------------------------- (d) encoder differential
+# `experiments/smt/DIFFTEST-PLAN.md` phase 4.  The BMC encoder's verdicts are
+# only worth what the encoder is worth, and nine of the ten defects found in it
+# before this stage existed were invisible in the verdicts.  This runs the
+# encoder's own step semantics, span declarations and summary clause sets
+# against the proof model on real traces.
+#
+# Off by default because it needs the RISC-V cross toolchain to build the corpus
+# ELFs and a few minutes of emulation; `VSA_DIFFTEST=1 scripts/check_all.sh`
+# turns it on, and it is the gate to run after ANY change to
+# `experiments/smt/ReflectSpan.lean` or `ReflectResiduals.lean`.
+if [ "${VSA_DIFFTEST:-0}" = 1 ]; then
+  echo "== stage d: BMC encoder vs the proof model (difftest)"
+  scripts/difftest.sh --out "${VSA_DIFFTEST_OUT:-/tmp/difftest}" \
+    || fail "stage d: the encoder disagrees with the machine (see the report above)"
+  echo "stage d: OK"
+else
+  echo "== stage d: encoder differential SKIPPED (set VSA_DIFFTEST=1)"
+fi
+
 echo "check_all: OK"

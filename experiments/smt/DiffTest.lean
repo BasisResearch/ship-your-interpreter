@@ -24,7 +24,7 @@ re-implementation here would only test itself.
   | `opaque` | `pc word opaque` (over-approximated by `unmodelled_step`) |
   | `branch` | `pc word branch <target> <condition over S>` |
   | `jal` | `pc word jal <rd> <target>` |
-  | `jalr` | `pc word jalr <rd> <rs1> <arms or `-`>` |
+  | `jalr` | `pc word jalr <rd> <rs1> <imm> <arms or `-`>` |
   | `sys` | `pc word sys` |
 
 * `#emit_encoder_facts "<dir>"` → the whole-image classifications a span's
@@ -46,11 +46,11 @@ def stepRow (img : Nat → Option (BitVec 8)) (p : Nat) : String :=
     match decodeTerm p w with
     | .branch tgt => s!"{hx p}\t{hw}\tbranch\t{hx tgt}\t{branchCondSt "S" w}"
     | .jal rd tgt => s!"{hx p}\t{hw}\tjal\t{rd}\t{hx tgt}"
-    | .jalr rd rs1 =>
+    | .jalr rd rs1 im =>
       let arms := match dispatchArms img p with
         | some as => String.intercalate "," (as.map hx)
         | none => "-"
-      s!"{hx p}\t{hw}\tjalr\t{rd}\t{rs1}\t{arms}"
+      s!"{hx p}\t{hw}\tjalr\t{rd}\t{rs1}\t{im}\t{arms}"
     | .sys => s!"{hx p}\t{hw}\tsys"
   else if modelled p w then
     -- for a memory instruction, also the encoder's OWN effective-address
@@ -89,7 +89,7 @@ elab "#emit_step_table " pathStx:str loStx:num hiStx:num : command => do
       rows := rows.push (stepRow img p)
       p := p + 4
     IO.FS.writeFile s!"{dir}/steps.tsv"
-      ("pc\tword\tclass\tf1\tf2\tf3\n" ++ String.intercalate "\n" rows.toList ++ "\n")
+      ("pc\tword\tclass\tf1\tf2\tf3\tf4\n" ++ String.intercalate "\n" rows.toList ++ "\n")
     Lean.logInfo m!"#emit_step_table [{hx lo},{hx hi}) → {dir}/steps.tsv: {rows.size} words"
 
 open Vsa.DiffTest Vsa.ReflectSpan Vsa.ReflectResiduals in

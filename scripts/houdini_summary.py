@@ -63,8 +63,18 @@ CLAUSES = [
     ("ra_restore", guard(f"(= (select (rr ({{f}} {{S}})) {_RA}) (select (rr {{S}}) {_RA}))")),
     ("s0_restore", guard(f"(= (select (rr ({{f}} {{S}})) {_S0}) (select (rr {{S}}) {_S0}))")),
     ("s1_restore", guard(f"(= (select (rr ({{f}} {{S}})) {_S1}) (select (rr {{S}}) {_S1}))")),
+    # `G_lo`/`G_hi` — the image's WRITABLE STATIC region, emitted as ground
+    # constants by `#emit_bmc` (`ReflectSpan.writableRegion`).  Without the
+    # exemption this clause is FALSE of the C runtime and a trace refutes it on
+    # every application: `malloc` writes its free-list head, `fputc` the stream
+    # buffer, anything that can fail writes `errno` -- all in neither window, so
+    # for the windows that do not happen to cover them the clause is a falsity,
+    # and it propagated into the MINED `callee_eval_expr`/`callee_exec_stmt`.
+    # `.text` and `.rodata` sit BELOW this region, so what the clause is used for
+    # -- code and jump-table preservation -- is untouched.
     ("stack_or_arena", guard("(=> (and (or (bvult QA SL_lo) (bvuge QA SL_hi)) "
-                             "(or (bvult QA A_lo) (bvuge QA A_hi))) "
+                             "(or (bvult QA A_lo) (bvuge QA A_hi)) "
+                             "(or (bvult QA G_lo) (bvuge QA G_hi))) "
                              "(= (select (mm ({f} {S})) QA) (select (mm {S}) QA)))")),
     # the ABI fact: a callee writes its OWN frame, below its entry `sp`, plus the
     # heap.  Nothing at or above the entry `sp` and outside the arena is touched,
@@ -84,6 +94,7 @@ NEG = {
     "s1_restore": _G + f"(assert (not (= (select (rr fbody) {_S1}) (select (rr S0) {_S1}))))",
     "stack_or_arena": _G + "(assert (or (bvult QA SL_lo) (bvuge QA SL_hi)))\n"
                            "(assert (or (bvult QA A_lo) (bvuge QA A_hi)))\n"
+                           "(assert (or (bvult QA G_lo) (bvuge QA G_hi)))\n"
                            "(assert (not (= (select (mm fbody) QA) (select (mm S0) QA))))",
     "above_sp": _G + f"(assert (bvuge QA (select (rr S0) {_SP})))\n"
                      "(assert (or (bvult QA A_lo) (bvuge QA A_hi)))\n"
@@ -96,7 +107,8 @@ CLAUSE_TEXT = dict(CLAUSES)
 CLAUSE_IDS = [c for c, _ in CLAUSES]
 
 OUTSIDE = ("(assert (or (bvult QA SL_lo) (bvuge QA SL_hi)))\n"
-           "(assert (or (bvult QA A_lo) (bvuge QA A_hi)))\n")
+           "(assert (or (bvult QA A_lo) (bvuge QA A_hi)))\n"
+           "(assert (or (bvult QA G_lo) (bvuge QA G_hi)))\n")
 
 
 # The POSTS that are FOOTPRINT properties — "this address was not written" —
@@ -324,6 +336,7 @@ IV_INVARIANTS = {
 GEN_VAR = re.compile(r"^(?:g\d+[qx]?|ra\d+|u\d+|[mbis]\d+)$")
 DECL_RE = re.compile(r"^\(declare-const (\S+) (?:Bool|MState)\)$")
 BIND_RE = re.compile(r"^\(assert \(= (\S+) (.*)\)\)$")
+DEFN_RE = re.compile(r"^\(define-fun (\S+) \(\)")
 
 
 def slice_to(text, target, extra=()):
@@ -378,6 +391,18 @@ def slice_to(text, target, extra=()):
     # discharge does not need and which references guards the slice just dropped.
     for i, l in enumerate(lines):
         if l.startswith("(define-fun state_exit ") or l.startswith("(define-fun mem_exit "):
+            drop.add(i)
+    # Any OTHER `define-fun` left standing must not reference a binding the slice
+    # removed, or the file does not parse and the check reads as a failure rather
+    # than as the malformed query it is.  `fbody` is the one that bites: a loop
+    # obligation's exit is a guarded merge of the direct exit and the
+    # post-`loop_ih` one, so it names guards an IV-discharge slice does not keep.
+    for i, l in enumerate(lines):
+        m = DEFN_RE.match(l)
+        if not m or m.group(1) == target or i in drop:
+            continue
+        if any(w in bind and w not in need
+               for w in re.findall(r"[A-Za-z][A-Za-z0-9_]*", l)):
             drop.add(i)
     return "\n".join(l for i, l in enumerate(lines) if i not in drop)
 
@@ -583,12 +608,18 @@ def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=Tru
     # store at a time each closes in a few seconds, and a failure comes back
     # NAMED with a countermodel instead of as a non-answer.  Measured on
     # hSIfNone: 39 stores, 35.4s total, 4.5s worst, versus unknown at 180s.
+    # Per-store budget, capped independently.  A store that resolves at all
+    # resolves fast -- measured on hSIfNone: 39 stores, all unsat, 35.4s TOTAL
+    # and 4.5s worst.  At the full per-post timeout one field's fallback is
+    # `39 * timeout` on its own, which is what made a -j10 --timeout 120 run
+    # take hours with nothing to show.
+    per = min(timeout, 30)
     stores = [(g, w, a) for g, w, a in writes if w != 0]
     unknown = []
     for g, w, a in stores:
         one = (f"(assert (and {g} (bvule {a} QA) "
                f"(bvult QA (bvadd {a} #x{w:016x}))))\n(check-sat)\n")
-        r = z3(head + one, timeout)
+        r = z3(head + one, per)
         if r == "sat":
             return f"REFUTED(store:{a[:40]})"
         if r != "unsat":
@@ -714,6 +745,14 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
     ap = os.path.join(d, "assumed.tsv")
     if os.path.exists(ap):
         emitter_assumed = {l.split("\t")[0] for l in open(ap).read().splitlines()[1:] if l.strip()}
+    emitter_drop = {}
+    dp = os.path.join(d, "clause-drop.tsv")
+    if os.path.exists(dp):
+        for l in open(dp).read().splitlines()[1:]:
+            if not l.strip():
+                continue
+            f, c = l.split("\t")[:2]
+            emitter_drop.setdefault(f, []).append(c)
     bodies = {}
     assumed = []
     for f in list(syms):
@@ -736,6 +775,13 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
             # by nobody.  Dropping the clause only weakens what can be proved;
             # assuming it proves things that are not true.
             cset[f] = [c for c in cset[f] if c != "above_sp"]
+            # ...and whatever else the emitter's structural analysis says the
+            # image itself contradicts (`clause-drop.tsv`; today that is
+            # `ra_restore` for the libgcc division family, which returns through
+            # a register it saved `ra` into and so does NOT preserve `ra`).
+            for c in emitter_drop.get(f, ()):
+                if c in cset[f]:
+                    cset[f].remove(c)
         elif os.path.exists(path):
             bodies[f] = open(path).read()
         else:
@@ -824,8 +870,23 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
             txt = body.replace("; @@ASSUME@@", assume_block(body, cset, self_sym=f)) \
                       .replace("; @@GOAL@@", NEG[c]) + "\n(check-sat)\n"
             return (f, c, z3(txt, timeout))
+        # Print each task AS IT LANDS.  The summary at the end is no use while
+        # a run is in flight: three multi-hour campaigns were waited out blind
+        # because nothing is emitted until all 260 tasks finish.
+        done_n = [0]
+        prog_lock = threading.Lock()
+        t_start = time.time()
+
+        def run_logged(t):
+            r = run(t)
+            with prog_lock:
+                done_n[0] += 1
+                print(f"  [{done_n[0]:3d}/{len(tasks)}] {r[0]}.{r[1]} = {r[2]}"
+                      f"  ({time.time()-t_start:.0f}s)", flush=True)
+            return r
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
-            res = list(ex.map(run, tasks))
+            res = list(ex.map(run_logged, tasks))
         dropped = [(f, c, v) for f, c, v in res if v != "unsat"]
         if not dropped:
             print(f"  round {rnd}: fixpoint (nothing dropped)")
@@ -979,7 +1040,13 @@ def main():
             with vac_lock:
                 if f in vac_cache:
                     return vac_cache[f]
-            v = z3(head.replace("; @@POST@@", "") + "\n(check-sat)\n", timeout)
+            # Capped independently of the post budget.  A consistency check
+            # that has not resolved in a minute is not going to, and the
+            # verdict is tagged `consistency-unproved` either way -- so
+            # spending the full per-post timeout on it just delays every
+            # other task behind it.
+            v = z3(head.replace("; @@POST@@", "") + "\n(check-sat)\n",
+                   min(timeout, 60))
             with vac_lock:
                 vac_cache[f] = v
             return v

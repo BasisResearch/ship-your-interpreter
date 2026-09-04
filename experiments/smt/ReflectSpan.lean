@@ -44,6 +44,44 @@ def loadElf (path : String) : IO (Nat → Option (BitVec 8)) := do
       if v ≤ va && va < v + sz then return some (BitVec.ofNat 8 (bytes.get! (off + (va - v))).toNat)
     return none
 
+/-- The image's WRITABLE static region: the span of the ELF's `SHF_WRITE`
+sections (`.tohost`, `.data`, `.init_array`, `.bss` here).
+
+`stack_or_arena` — "an address outside the stack window and outside the arena is
+unchanged by this summary" — is FALSE of the C runtime, and a real trace says so
+in one pass: `malloc` writes its free-list head, `fputc` writes the stream's
+buffer state, and everything that can fail writes `errno`.  Those live here, in
+neither window, so the clause as stated is refuted on every single application of
+`malloc`/`free`/`fputc`/`env_new`/`env_define`/`value_print`/`stringify` — and,
+through them, of the MINED `callee_eval_expr` and `callee_exec_stmt`.  The
+windows are free constants, so the clause is asserted for windows that do not
+cover these addresses, and every VALID resting on it rested on a falsity.
+
+Naming the region and exempting it makes the clause true again while keeping what
+it is actually used for: `.text` and `.rodata` sit BELOW this region, so code and
+jump-table preservation are unaffected. -/
+def writableRegion (path : String) : IO (Nat × Nat) := do
+  let bytes ← IO.FS.readBinFile path
+  let b : Nat → Nat := fun o => (bytes.get! o).toNat
+  let rd16 : Nat → Nat := fun o => b o + b (o+1) * 256
+  let rd32 : Nat → Nat := fun o => b o + b (o+1) * 256 + b (o+2) * 65536 + b (o+3) * 16777216
+  let rd64 : Nat → Nat := fun o => rd32 o + rd32 (o+4) * 4294967296
+  let shoff := rd64 0x28
+  let shentsize := rd16 0x3a
+  let shnum := rd16 0x3c
+  let mut lo : Nat := 0
+  let mut hi : Nat := 0
+  for i in List.range shnum do
+    let o := shoff + i * shentsize
+    let flags := rd64 (o + 0x08)
+    let addr := rd64 (o + 0x10)
+    let size := rd64 (o + 0x20)
+    -- SHF_WRITE (0x1) ∧ SHF_ALLOC (0x2), and actually placed
+    if flags % 2 == 1 && (flags / 2) % 2 == 1 && addr != 0 then
+      if lo == 0 || addr < lo then lo := addr
+      if addr + size > hi then hi := addr + size
+  return (lo, hi)
+
 /-- Read a 32-bit little-endian word at `va` (0 if unmapped). -/
 def wordAt (img : Nat → Option (BitVec 8)) (va : Nat) : BitVec 32 :=
   let b (i : Nat) : BitVec 32 := ((img (va + i)).getD 0).setWidth 32
@@ -700,6 +738,37 @@ def blockSuccs (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat
          | none => []
   | Term.sys => if inR (p+4) then [p+4] else []
 
+/-- The block-start successors of the block at `pc`, INCLUDING the ones a `stops`
+PC cuts off.
+
+`blockSuccs` treats a stop as unreachable, which is right when asking where
+control can go NEXT inside a span, and wrong when asking where a LOOP leaves to:
+a stop is exactly a place the loop exits at.  A loop obligation is generated with
+`stops = loopExits …`, so with the cut-off version `loopExits` came back EMPTY
+for every one of the 23 loop summaries — the loop's re-arrival then contributed
+no successor and no exit, and `fbody` was the ZERO-ITERATION path alone.  Every
+loop clause was mined against a body that never iterates, which is why
+`s0_restore` survived for `loop_0x80003314`, whose body is `addi s0, s0, 24`. -/
+def blockSuccsE (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat) (pc : Nat) :
+    List Nat := Id.run do
+  let mut p := pc
+  while p < hi && !(stops.contains p) && !(isTerm (wordAt img p)) do p := p + 4
+  if p ≥ hi || stops.contains p then return []
+  let w := wordAt img p
+  let inR := fun (q : Nat) => lo ≤ q && q < hi
+  match decodeTerm p w with
+  | Term.branch tgt => (if inR tgt then [tgt] else []) ++ (if inR (p+4) then [p+4] else [])
+  | Term.jal rd tgt =>
+    if rd == 1 then (if inR (p+4) then [p+4] else [])
+    else if inR tgt then [tgt] else []
+  | Term.jalr rd rs1 im =>
+    if rd == 1 then (if inR (p+4) then [p+4] else [])
+    else if rs1 == 1 && im == 0 then []
+    else match dispatchArms img p with
+         | some arms => arms.filter inR
+         | none => []
+  | Term.sys => if inR (p+4) then [p+4] else []
+
 /-- Every block start reachable from `src` (bounded by `fuel` blocks). -/
 partial def reachFrom (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
     (work seen : List Nat) (fuel : Nat) : List Nat :=
@@ -746,9 +815,11 @@ leaves the region outright" (a `ret` inside the loop). -/
 def loopExits (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat) (h : Nat) :
     List Nat × Bool :=
   let body := loopBody img lo hi stops h
-  let qs := (body.flatMap (blockSuccs img lo hi stops)).eraseDups.filter
+  -- the BODY is the cycle in the span's own CFG (cut at `stops`), but the EXITS
+  -- must see through the cut: `blockSuccsE`, not `blockSuccs`.
+  let qs := (body.flatMap (blockSuccsE img lo hi stops)).eraseDups.filter
     (fun q => !(body.contains q))
-  let leaves := body.any (fun b => (blockSuccs img lo hi stops b).isEmpty)
+  let leaves := body.any (fun b => (blockSuccsE img lo hi stops b).isEmpty)
   (qs, leaves)
 
 /-- Per-INSTRUCTION `let`-bound block execution.  `blockState` builds one term
@@ -1233,6 +1304,49 @@ partial def neverReturns (img : Nat → Option (BitVec 8)) (fstarts : List Nat)
   if steps == 0 then return false                      -- walk did not settle
   return true
 
+/-- **Does `f` return through something other than `ra`?**
+
+`__moddi3` (`0x80004728`) is `mv t0, ra ; jal __hidden___udivdi3 ; mv a0, a1 ;
+jr t0`: it saves the return address in `t0`, CLOBBERS `ra` with the inner call's,
+and returns through `t0`.  So `ra_restore` — assumed for it, and for `__divdi3`
+and the rest of the libgcc division family — is false, which a real trace shows
+on 112 of 112 applications (`x1: 0x800037c8 -> 0x80004738`).
+
+The structural witness is an unresolved `jalr x0, rN` (rN ≠ ra, or ra with a
+non-zero offset) anywhere in the function: either it returns through a saved
+register, or it is a computed goto the encoder cannot follow — and in both cases
+the encoder has no grounds to assume anything about `ra`.  Conservative in the
+right direction: it can only DROP an assumption. -/
+def retsViaSaved (img : Nat → Option (BitVec 8)) (_fstarts : List Nat) (f : Nat) : Bool := Id.run do
+  -- A REACHABILITY walk, not a scan of `funcRange`: `__divdi3` (`0x800046a4`)
+  -- falls through into the division family's shared tail at `0x80004718`, and
+  -- `funcStarts` puts a function boundary in between, so a range scan sees two
+  -- instructions and misses the `jr t0` that actually ends it.
+  let mut seen : List Nat := []
+  let mut work : List Nat := [f]
+  let mut fuel := 2000
+  while !work.isEmpty && fuel > 0 do
+    fuel := fuel - 1
+    let b := work.head!
+    work := work.tail!
+    if seen.contains b then continue
+    seen := b :: seen
+    let mut p := b
+    while p < codeHi && !(isTerm (wordAt img p)) do p := p + 4
+    if p ≥ codeHi then continue
+    match decodeTerm p (wordAt img p) with
+    | Term.branch tgt => work := tgt :: (p+4) :: work
+    | Term.jal rd tgt => if rd == 1 then work := (p+4) :: work else work := tgt :: work
+    | Term.jalr rd rs1 im =>
+      if rd != 0 then work := (p+4) :: work
+      else if rs1 == 1 && im == 0 then pure ()          -- a plain `ret`
+      else match dispatchArms img p with
+        | some arms => work := arms ++ work
+        | none => return true
+    | Term.sys => work := (p+4) :: work
+  if fuel == 0 then return true                         -- walk did not settle
+  return false
+
 /-- Every `jal ra` target in the image that never returns.  Computed ONCE (the
 walk is O(region) per target and `stepBlock` asks at every call site), and
 threaded beside `funcStarts` exactly as the entry set is.
@@ -1508,9 +1622,15 @@ def bmcRound (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
                          s!"({sv} ({lsum} {mv}))"]
       k := k + 2
       let (qs, leaves) := loopExits img lo hi stops pc
+      -- An exit edge that lands on a `stops` PC (or outside the region) is an
+      -- EXIT ARRIVAL, not a frontier arrival: the loop obligation's own stops
+      -- ARE the loop's exits, so routing them to the frontier would drop them.
+      let mut leftRegion := leaves
       for q in qs do
-        next := next ++ [{ pc := q, guard := gv, state := sv, done := pc :: carried }]
-      if leaves then exits := exits ++ [(gv, sv)]
+        if lo ≤ q && q < hi && !(stops.contains q) then
+          next := next ++ [{ pc := q, guard := gv, state := sv, done := pc :: carried }]
+        else leftRegion := true
+      if leftRegion then exits := exits ++ [(gv, sv)]
       -- A loop with NO exit edge and no region-leaving body block contributes no
       -- successor and no exit, so without this the path would simply VANISH --
       -- the same silent-drop shape as answering a span with no exit arrival off

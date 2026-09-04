@@ -21,7 +21,18 @@ namespace Vsa.ReflectResiduals
 /-- residual → (entry PC, exit PC). -/
 def residualSpans : List (String × Nat × Nat) := [
   -- eval arms
-  ("hVar",     0x80003434, 0x80003480), ("hAssign",  0x8000347c, 0x80003560),
+  -- The `var` and `assign` arms do NOT tail into the shared epilogue at
+  -- 0x800033ec: both end at eval_expr's SECOND epilogue, 0x80003448 (`ld a3,
+  -- 240(sp)` … `ret` at 0x80003478) — `var` by falling through the `env_get`
+  -- success test at 0x80003444, `assign` by `bnez a0, 0x80003448` after
+  -- `env_set`.  The declared stops were 0x80003480 and 0x80003560, which are
+  -- the SECOND INSTRUCTION of the next arm and of the logical arm: not
+  -- reachable from these arms at all.  Measured, not guessed — `hAssign`'s arm
+  -- runs 226 times over the difftest corpus and reaches 0x80003560 zero times
+  -- (`scripts/difftest.sh` phase 1), and the query's dispatch pin and exit guard
+  -- are contradictory, so every post came back VALID until the vacuity gate
+  -- landed and then VACUOUS.
+  ("hVar",     0x80003434, 0x80003448), ("hAssign",  0x8000347c, 0x80003448),
   -- int/eq → the EX_BINARY arm (per-op sub-dispatch inside)
   ("hIAdd", 0x800034e8, 0x800037c0), ("hISub", 0x800034e8, 0x800037c0),
   ("hIMul", 0x800034e8, 0x800037c0), ("hIDiv", 0x800034e8, 0x800037c0),
@@ -41,8 +52,12 @@ def residualSpans : List (String × Nat × Nat) := [
   -- and is never reached from here.  Demanding it as the exit made these two
   -- queries' assumptions contradictory, so every post came back VALID.
   ("hNeg", 0x800035e0, 0x800033ec), ("hNot", 0x800035e0, 0x800033ec),
-  ("hAndTrue", 0x8000355c, 0x800035e0), ("hAndFalse", 0x8000355c, 0x800035e0),
-  ("hOrTrue", 0x8000355c, 0x800035e0), ("hOrFalse", 0x8000355c, 0x800035e0),
+  -- Same defect as `hNeg`/`hNot` above, in the same shape and never fixed for
+  -- these four: the logical arm ENDS at 0x800035dc with `j 0x800033ec`, and
+  -- 0x800035e0 is the UNARY arm's first instruction, which no execution of the
+  -- logical arm reaches (13 arm runs, 0 arrivals, over the difftest corpus).
+  ("hAndTrue", 0x8000355c, 0x800033ec), ("hAndFalse", 0x8000355c, 0x800033ec),
+  ("hOrTrue", 0x8000355c, 0x800033ec), ("hOrFalse", 0x8000355c, 0x800033ec),
   -- call / composition
   ("hCall", 0x800031b0, 0x80003360), ("hCallClosure", 0x800031b0, 0x80003360),
   ("hArgsCons", 0x800031b0, 0x80003360), ("hArgsNil", 0x800031b0, 0x800031b4),
@@ -235,6 +250,10 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
     let codeLo := 0x80000000
     let codeHi := 0x80018be0
     let starts := funcStarts img codeLo codeHi
+    -- the image's writable static region, named as ground constants so the
+    -- memory clauses can exempt it (see `writableRegion`).
+    let (gLo, gHi) ← writableRegion elfPath
+    let gDecl := s!"(define-fun G_lo () (_ BitVec 64) {bvN gLo})\n(define-fun G_hi () (_ BitVec 64) {bvN gHi})"
     -- the `jal ra` targets that never come back (the exit / _exit / abort
     -- family): a call to one ENDS the path instead of applying a `callee_`
     -- summary, because there is no return for a summary to describe.
@@ -324,7 +343,7 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
         noExit := noExit ++ [s!"{nm}\t0x{String.ofList (Nat.toDigits 16 bmcEntry)}\t0x{String.ofList (Nat.toDigits 16 ehi)}\t{halts.length}"]
       else
       IO.FS.writeFile s!"{dir}/queries/{nm}.smt2"
-        s!"{smtPreamble}\n{decls}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule #x0000000000010000 SL_lo) (bvult SL_lo SL_hi) (bvult SL_hi #x0000000100000000) (bvule #x0000000000010000 A_lo) (bvult A_lo A_hi) (bvult A_hi #x0000000100000000) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi)) (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) (bvsub SL_hi #x0000000000001100))))\n(declare-const s0 MState)\n{kindPin}{decls2}\n{dispPin}; only inputs that REACH the exit PC: without this the `ite` merge\n; falls through to the last arrival for an input no guard covers, and the\n; resulting state is one the machine is never in -- spurious REFUTED.\n(assert {exitG})\n; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {ev})\n(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
+        s!"{smtPreamble}\n{decls}\n{gDecl}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule #x0000000000010000 SL_lo) (bvult SL_lo SL_hi) (bvult SL_hi #x0000000100000000) (bvule #x0000000000010000 A_lo) (bvult A_lo A_hi) (bvult A_hi #x0000000100000000) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi)) (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) (bvsub SL_hi #x0000000000001100))))\n(declare-const s0 MState)\n{kindPin}{decls2}\n{dispPin}; only inputs that REACH the exit PC: without this the `ite` merge\n; falls through to the last arrival for an input no guard covers, and the\n; resulting state is one the machine is never in -- spurious REFUTED.\n(assert {exitG})\n; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {ev})\n(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
       IO.FS.writeFile s!"{dir}/writes/{nm}.tsv"
         ("guard\twidth\taddr\n" ++ String.intercalate "\n"
           (writes.map (fun (g, a, w) => s!"{g}\t{w}\t{a}")) ++ "\n")
@@ -385,7 +404,7 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
         let declsB := (bindsToDecls binds).replace s!"({sym} " s!"({sym}_ih "
         let decls := summaryDecls ((allSums ++ subs).eraseDups ++ [s!"{sym}_ih"])
         IO.FS.writeFile s!"{dir}/obligations/{sym}.smt2"
-          s!"{smtPreamble}\n{decls}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule #x0000000000010000 SL_lo) (bvult SL_lo SL_hi) (bvult SL_hi #x0000000100000000) (bvule #x0000000000010000 A_lo) (bvult A_lo A_hi) (bvult A_hi #x0000000100000000) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi)) (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) (bvsub SL_hi #x0000000000001100))))\n(declare-const S0 MState)\n{declsB}\n; complete={complete}\n(define-fun fbody () MState {ev})\n; clause set for every summary; `{sym}` itself is supplied as `{sym}_ih`\n; @@ASSUME@@\n; negated clause under test, over S0 / fbody\n; @@GOAL@@\n"
+          s!"{smtPreamble}\n{decls}\n{gDecl}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule #x0000000000010000 SL_lo) (bvult SL_lo SL_hi) (bvult SL_hi #x0000000100000000) (bvule #x0000000000010000 A_lo) (bvult A_lo A_hi) (bvult A_hi #x0000000100000000) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi)) (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) (bvsub SL_hi #x0000000000001100))))\n(declare-const S0 MState)\n{declsB}\n; complete={complete}\n(define-fun fbody () MState {ev})\n; clause set for every summary; `{sym}` itself is supplied as `{sym}_ih`\n; @@ASSUME@@\n; negated clause under test, over S0 / fbody\n; @@GOAL@@\n"
         IO.FS.writeFile s!"{dir}/writes/{sym}.tsv"
           ("guard\twidth\taddr\n" ++ String.intercalate "\n"
             ((writes.map (fun (g, a, w) => s!"{g}\t{w}\t{a}")).map
@@ -404,6 +423,20 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
         symDeps := symDeps ++ [row]; worklist := worklist ++ subs
       else opaqueSyms := opaqueSyms ++ [sym]
     IO.FS.writeFile s!"{dir}/opaque.tsv" ("summary\n" ++ String.intercalate "\n" opaqueSyms ++ "\n")
+    -- Clauses that must NOT be assumed for a given summary, with the structural
+    -- reason.  An assumed contract is checked by nobody, so anything the image
+    -- itself contradicts has to be taken off the table here rather than left to
+    -- be discovered by a countermodel (or not discovered at all).
+    let mut drops : List String := []
+    for sym in assumedSyms do
+      if sym.startsWith "callee_" then
+        let t := (sym.drop 7).toNat!
+        if retsViaSaved img starts t then
+          drops := drops ++ [s!"{sym}\tra_restore\treturns through a saved register / unresolved computed goto, so `ra` is not preserved"]
+    IO.FS.writeFile s!"{dir}/clause-drop.tsv"
+      ("summary\tclause\treason\n" ++ String.intercalate "\n" drops ++ "\n")
+    IO.FS.writeFile s!"{dir}/regions.tsv"
+      s!"region\tlo\thi\nwritable_static\t0x{String.ofList (Nat.toDigits 16 gLo)}\t0x{String.ofList (Nat.toDigits 16 gHi)}\n"
     IO.FS.writeFile s!"{dir}/assumed.tsv"
       ("summary\trole\n" ++ String.intercalate "\n"
         (assumedSyms.map (fun a => s!"{a}\tcallee contract outside the interpreter's own code")) ++ "\n"

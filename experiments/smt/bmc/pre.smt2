@@ -8,6 +8,7 @@
 (assert (= (ld4 (mm s0) #x0000000080019f74) #x00000000fffe9604))
 (assert (= (ld4 (mm s0) #x0000000080019f78) #x00000000fffe9688))
 (assert (= (ld4 (mm s0) #x0000000080019f7c) #x00000000fffe9258))
+(assert (= (ld4 (mm s0) #x0000000080019f80) #x00000000fffe946c))
 (assert (= (ld4 (mm s0) #x0000000080019f84) #x00000000fffe9904))
 (assert (= (ld4 (mm s0) #x0000000080019f88) #x00000000fffe995c))
 (assert (= (ld4 (mm s0) #x0000000080019f8c) #x00000000fffe98b0))
