@@ -22,8 +22,5 @@ callee_2147511536	callee contract outside the interpreter's own code
 callee_2147511240	callee contract outside the interpreter's own code
 callee_2147511748	callee contract outside the interpreter's own code
 callee_2147501980	callee contract outside the interpreter's own code
-callee_2147512316	callee contract outside the interpreter's own code
 callee_2147507268	callee contract outside the interpreter's own code
-callee_2147494140	callee contract outside the interpreter's own code
-callee_2147508960	callee contract outside the interpreter's own code
 d < maxCallDepth	entry stack budget: the 7408 headroom pin needs the closure depth guard; ExecEntry has no depth field

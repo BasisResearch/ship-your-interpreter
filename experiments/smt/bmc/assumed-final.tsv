@@ -25,8 +25,5 @@ callee_2147511240	callee contract outside the interpreter's own code
 callee_2147511748	callee contract outside the interpreter's own code
 callee_2147501980	callee contract outside the interpreter's own code
 callee_2147500000	recursor IH (EvalIH / mExecSeq), carried by the residual
-callee_2147512316	callee contract outside the interpreter's own code
 callee_2147507268	callee contract outside the interpreter's own code
-callee_2147494140	callee contract outside the interpreter's own code
-callee_2147508960	callee contract outside the interpreter's own code
-argsLoopBoundAcrossCall	NAMED PREMISE: the args-loop bound transported across the recursive call in loop_2147496412; five SMT routes measured dead (observations.md), supplied by a Lean-side induction over the loop
+argsLoopBoundAcrossCall	NAMED PREMISE (NOT INDEPENDENT -- deferred to the residuals under test: it is a frame property of one eval_expr activation, and eval_expr's chain needs the recursor IH, which is itself a residual this campaign checks): the args-loop bound transported across the recursive call in loop_2147496412; statement in Vsa/Sim/ArgsLoopSpillResid.lean, five SMT routes measured dead (observations.md)

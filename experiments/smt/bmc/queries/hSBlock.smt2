@@ -1,3 +1,5 @@
+; query=hSBlock residual=hSBlock instance=single capability=machine-only
+; This is not a full encoding of the Lean residual proposition.
 (set-logic ALL)
 ; ---------------------------------------------------------------------------
 ; Machine state, PURELY in the bitvector theory.  Registers and addresses are

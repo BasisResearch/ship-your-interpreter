@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""houdini_summary.py — mine the per-summary clause set, then validate the 52.
+"""houdini_summary.py — mine summary clauses, then check machine projections.
 
 ORCHESTRATOR ONLY.  Every SMT term is produced by Lean (`#emit_campaign` in
 `experiments/smt/ReflectResiduals.lean`); this script never parses Lean source.
@@ -24,7 +24,8 @@ than the definitions, so an UNSAT there is an UNSAT under the definitions.
 
 Usage:
   python3 scripts/houdini_summary.py <campaign-dir> [--timeout S] [-jN]
-     [--rounds N] [--phase mine|check|both]
+     [--rounds N] [--phase mine|check|both|projections]
+     [--only FIELD,...] [--only-post POST,...]
 """
 import os, re, sys, subprocess, concurrent.futures, json, time, csv, threading
 from collections import Counter
@@ -105,6 +106,15 @@ APP_RE = re.compile(r"\((callee_\d+|loop_\d+|icall_\d+|idisp_\d+)(_ih)?\s+([A-Za
 
 CLAUSE_TEXT = dict(CLAUSES)
 CLAUSE_IDS = [c for c, _ in CLAUSES]
+LOOP_INVALID_CLAUSES = {"ra_restore", "s0_restore", "s1_restore", "above_sp"}
+
+
+def sanitize_clause_set(cset):
+    """Remove ABI-callee clauses that are not predicates of intra-function loops."""
+    for sym, clauses in cset.items():
+        if sym.startswith("loop_"):
+            cset[sym] = [c for c in clauses if c not in LOOP_INVALID_CLAUSES]
+    return cset
 
 OUTSIDE = ("(assert (or (bvult QA SL_lo) (bvuge QA SL_hi)))\n"
            "(assert (or (bvult QA A_lo) (bvuge QA A_hi)))\n"
@@ -162,11 +172,11 @@ POSTS = {
 
 
 def residual_posts(campaign_dir):
-    """Machine-level postconditions keyed by the Lean residual field.
+    """Machine-level semantic projections keyed by the Lean residual field.
 
-    These use the named `TwoSubReturn` checkpoint emitted by Lean.  They relate
-    the two represented integer payloads to the value boxed at the residual's
-    exit.  They are obligations, never assumptions.
+    These are obligations, never assumptions.  They check the concrete result
+    component of a residual.  They do not encode its quantified simulation
+    proposition in full.
     """
     path = os.path.join(campaign_dir, "residual-extensions.tsv")
     if not os.path.exists(path):
@@ -174,8 +184,92 @@ def residual_posts(campaign_dir):
     points = {}
     with open(path, newline="") as fh:
         for row in csv.DictReader(fh, delimiter="\t"):
-            if row["point"] == "0x8000351c":
-                points.setdefault(row["field"], row["state"])
+            points.setdefault((row["field"], row["point"]), row["state"])
+
+    def load(state, off, width=8):
+        return (f"(ld{width} (mm {state}) (bvadd "
+                f"(select (rr {state}) {_SP}) #x{off:016x}))")
+
+    def truthy(state, off):
+        kind, value = load(state, off, 4), load(state, off + 8)
+        return (f"(or (and (= {kind} #x0000000000000001) "
+                f"(not (= {value} #x0000000000000000))) "
+                f"(and (= {kind} #x0000000000000002) "
+                f"(not (= {value} #x0000000000000000))) "
+                f"(= {kind} #x0000000000000003) "
+                f"(= {kind} #x0000000000000004) "
+                f"(= {kind} #x0000000000000005))")
+
+    def value_post(kind, payload=None, payload_width=8):
+        target = "(select (rr s0) #x000000000000000a)"
+        clauses = [f"(= (ld4 (mm state_exit) {target}) {kind})"]
+        if payload is not None:
+            clauses.append(
+                f"(= (ld{payload_width} (mm state_exit) "
+                f"(bvadd {target} #x0000000000000008)) {payload})")
+        return "(assert (not (and " + " ".join(clauses) + ")))"
+
+    def status_post(status):
+        return ("(assert (not (= (select (rr state_exit) "
+                "#x000000000000000a) "
+                f"#x{status:016x})))")
+
+    expr = "(select (rr s0) #x000000000000000c)"
+    expr4 = f"(ld4 (mm s0) (bvadd {expr} #x0000000000000008))"
+    expr8 = f"(ld8 (mm s0) (bvadd {expr} #x0000000000000008))"
+    out = {
+        "hInt": value_post("#x0000000000000002", expr8),
+        "hStr": value_post("#x0000000000000003", expr8),
+        "hBool": value_post(
+            "#x0000000000000001",
+            f"(ite (= {expr4} #x0000000000000000) "
+            "#x0000000000000000 #x0000000000000001)", 4),
+        "hNull": value_post("#x0000000000000000", "#x0000000000000000"),
+        # These are deliberately status-only projections.  The trace model can
+        # independently observe a0.  It does not decode StoreRepr or OutRepr.
+        # They correspond to constructors whose result status is fixed.  The
+        # remaining statement constructors (ifTrue/ifFalse/block/forStart)
+        # return a recursive child's status, so a sound projection for them
+        # first needs that child ExecIH contract represented in SMT.
+        "hSExpr": status_post(0),
+        "hSRet": status_post(3),
+        "hSRetNull": status_post(3),
+        "hSVarInit": status_post(0),
+        "hSVarNull": status_post(0),
+        "hSIfNone": status_post(0),
+        "hSWhileFalse": status_post(0),
+        "hSBrk": status_post(1),
+        "hSCont": status_post(2),
+    }
+
+    unary = points.get(("hNeg", "0x800035ec"))
+    if unary:
+        out["hNeg"] = value_post(
+            "#x0000000000000002",
+            f"(bvsub #x0000000000000000 {load(unary, 152)})")
+    unary = points.get(("hNot", "0x800035ec"))
+    if unary:
+        out["hNot"] = value_post(
+            "#x0000000000000001",
+            f"(ite {truthy(unary, 144)} #x0000000000000000 "
+            "#x0000000000000001)", 4)
+
+    out["hAndFalse"] = value_post(
+        "#x0000000000000001", "#x0000000000000000", 4)
+    out["hOrTrue"] = value_post(
+        "#x0000000000000001", "#x0000000000000001", 4)
+    logical_right = {
+        "hAndTrue": ("0x800035b0", 240),
+        "hOrFalse": ("0x80003a10", 144),
+    }
+    for field, (point, offset) in logical_right.items():
+        state = points.get((field, point))
+        if state:
+            out[field] = value_post(
+                "#x0000000000000001",
+                f"(ite {truthy(state, offset)} #x0000000000000001 "
+                "#x0000000000000000)", 4)
+
     int_ops = {
         "hIAdd": lambda a, b: f"(bvadd {a} {b})",
         "hISub": lambda a, b: f"(bvsub {a} {b})",
@@ -187,29 +281,94 @@ def residual_posts(campaign_dir):
         "hILt": "bvslt", "hILe": "bvsle",
         "hIGt": "bvsgt", "hIGe": "bvsge",
     }
-    out = {}
-    for field, state in points.items():
+    binary_points = {
+        field: state
+        for (field, point), state in points.items()
+        if point == "0x8000351c"
+    }
+    for field, state in binary_points.items():
         left = f"(ld8 (mm {state}) (bvadd (select (rr {state}) {_SP}) #x0000000000000080))"
         right = f"(ld8 (mm {state}) (bvadd (select (rr {state}) {_SP}) #x0000000000000098))"
-        target = "(select (rr s0) #x000000000000000a)"
-        kind = f"(ld4 (mm state_exit) {target})"
-        payload = f"(ld8 (mm state_exit) (bvadd {target} #x0000000000000008))"
         if field in int_ops:
             expected = int_ops[field](left, right)
-            out[field] = ("(assert (not (and "
-                          f"(= {kind} #x0000000000000002) "
-                          f"(= {payload} {expected}))))")
+            out[field] = value_post("#x0000000000000002", expected)
         elif field in comparisons:
             expected = (f"(ite ({comparisons[field]} {left} {right}) "
                         "#x0000000000000001 #x0000000000000000)")
-            out[field] = ("(assert (not (and "
-                          f"(= {kind} #x0000000000000001) "
-                          f"(= {payload} {expected}))))")
+            out[field] = value_post("#x0000000000000001", expected, 4)
         elif field == "hDivOv":
-            out[field] = ("(assert (not (and "
-                          f"(= {kind} #x0000000000000002) "
-                          f"(= {payload} #x8000000000000000))))")
+            out[field] = value_post(
+                "#x0000000000000002", "#x8000000000000000")
     return out
+
+
+def residual_pres(campaign_dir):
+    """Machine facts corresponding to semantic premises of projected residuals.
+
+    A successful integer `EvalE.binary` derivation entails that both recursive
+    evaluations returned integer Values.  Without these facts the machine query
+    also contains the interpreter's type-error exits, which are outside the Lean
+    constructor being projected and make the formula both larger and false.
+    """
+    path = os.path.join(campaign_dir, "residual-extensions.tsv")
+    if not os.path.exists(path):
+        return {}
+    points = {}
+    with open(path, newline="") as fh:
+        for row in csv.DictReader(fh, delimiter="\t"):
+            points.setdefault((row["field"], row["point"]), row["state"])
+
+    def load(state, off, width=8):
+        return (f"(ld{width} (mm {state}) (bvadd "
+                f"(select (rr {state}) {_SP}) #x{off:016x}))")
+
+    out = {}
+    int_fields = {
+        "hIAdd", "hISub", "hIMul", "hIDiv", "hIMod",
+        "hILt", "hILe", "hIGt", "hIGe", "hDivOv",
+    }
+    for field in int_fields:
+        state = points.get((field, "0x8000351c"))
+        if not state:
+            continue
+        clauses = [
+            f"(= {load(state, 120, 4)} #x0000000000000002)",
+            f"(= {load(state, 144, 4)} #x0000000000000002)",
+        ]
+        right = load(state, 152)
+        if field in ("hIDiv", "hIMod"):
+            clauses.append(f"(not (= {right} #x0000000000000000))")
+        if field == "hIDiv":
+            left = load(state, 128)
+            clauses.append(
+                f"(not (and (= {left} #x8000000000000000) "
+                f"(= {right} #xffffffffffffffff)))")
+        if field == "hDivOv":
+            left = load(state, 128)
+            clauses.extend([
+                f"(= {left} #x8000000000000000)",
+                f"(= {right} #xffffffffffffffff)",
+            ])
+        out[field] = "\n".join(f"(assert {clause})" for clause in clauses)
+
+    unary = points.get(("hNeg", "0x800035ec"))
+    if unary:
+        out["hNeg"] = (
+            f"(assert (= {load(unary, 144, 4)} #x0000000000000002))")
+    return out
+
+
+def dependency_closure(roots, graph):
+    """Return every summary reachable from the query's direct dependencies."""
+    seen = set()
+    pending = list(roots)
+    while pending:
+        sym = pending.pop()
+        if sym in seen:
+            continue
+        seen.add(sym)
+        pending.extend(graph.get(sym, ()))
+    return seen
 
 
 def unroll(k):
@@ -258,8 +417,9 @@ def defunise(text):
     return "\n".join(l for l in out if l is not None)
 
 
-def z3(text, timeout):
-    text = defunise(text)
+def z3(text, timeout, defunise_bindings=True):
+    if defunise_bindings:
+        text = defunise(text)
     p = subprocess.run(["z3", "-smt2", "-in", f"-T:{timeout}"], input=Z3_OPTS + text,
                        capture_output=True, text=True)
     o = (p.stdout + p.stderr).strip()
@@ -281,6 +441,20 @@ def z3(text, timeout):
     return "unknown"
 
 
+def z3_projection(text, timeout):
+    """Solve a projection, retrying the equivalent raw binding form.
+
+    `defunise` usually removes expensive array-equality atoms.  On small,
+    bitvector-heavy exit cases it can instead force large macro expansion.  A
+    timeout is not a verdict, so retry the original equational form.  Both
+    inputs state the same formula; SAT and UNSAT remain ordinary Z3 verdicts.
+    """
+    verdict = z3(text, timeout)
+    if verdict == "unknown":
+        verdict = z3(text, timeout, defunise_bindings=False)
+    return verdict
+
+
 def check_provenance(d):
     """Refuse to answer about artefacts a DIFFERENT encoder emitted.
 
@@ -295,19 +469,46 @@ def check_provenance(d):
     """
     src = os.path.join(d, "src")
     if not os.path.isdir(src):
-        sys.stderr.write(f"houdini: {d} has no src/ provenance; re-emit with "
-                         f"`#emit_bmc` before trusting these verdicts\n")
-        return
+        sys.exit(f"houdini: {d} has no src/ provenance; re-emit with "
+                 f"`#emit_bmc` before checking it")
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    stale = [nm for nm in ("ReflectSpan.lean", "ReflectResiduals.lean")
-             if os.path.exists(os.path.join(src, nm))
-             and open(os.path.join(src, nm), "rb").read()
-             != open(os.path.join(root, "experiments", "smt", nm), "rb").read()]
+    required = {
+        "ReflectSpan.lean": os.path.join(root, "experiments", "smt", "ReflectSpan.lean"),
+        "ReflectResiduals.lean": os.path.join(root, "experiments", "smt", "ReflectResiduals.lean"),
+        "proof.elf": os.path.join(root, "c", "while-riscv-htif.elf"),
+    }
+    missing = [nm for nm in required if not os.path.isfile(os.path.join(src, nm))]
+    if missing:
+        sys.exit(f"houdini: incomplete provenance in {d}: missing {', '.join(missing)}")
+    stale = [nm for nm, current in required.items()
+             if open(os.path.join(src, nm), "rb").read() != open(current, "rb").read()]
     if stale:
         sys.exit(f"houdini: {d} was emitted from a DIFFERENT {', '.join(stale)} "
                  f"than the tree has.  Re-emit (`#emit_bmc \"{d}\" 60`) and re-mine; "
                  f"answering against these artefacts would be a verdict about "
                  f"another program.")
+
+
+def check_campaign_manifest(d):
+    """Reject stale files and missing capability metadata in a reused directory."""
+    spans_path = os.path.join(d, "spans.tsv")
+    caps_path = os.path.join(d, "query-capabilities.tsv")
+    residual_caps = os.path.join(d, "residual-capabilities.tsv")
+    holes_path = os.path.join(d, "residual-holes.tsv")
+    for path in (spans_path, caps_path, residual_caps, holes_path):
+        if not os.path.isfile(path):
+            sys.exit(f"houdini: campaign manifest is incomplete: missing {path}")
+    spans = list(csv.DictReader(open(spans_path), delimiter="\t"))
+    caps = list(csv.DictReader(open(caps_path), delimiter="\t"))
+    expected = {r["field"] for r in spans}
+    if expected != {r["query"] for r in caps}:
+        sys.exit("houdini: query-capabilities.tsv does not match spans.tsv")
+    actual = {n[:-5] for n in os.listdir(os.path.join(d, "queries"))
+              if n.endswith(".smt2")}
+    if actual != expected:
+        extra, missing = sorted(actual - expected), sorted(expected - actual)
+        sys.exit("houdini: stale/incomplete query directory; re-emit into a fresh path; "
+                 f"extra={extra} missing={missing}")
 
 
 def pre_block(d):
@@ -425,8 +626,19 @@ def heap_hyp(writes):
 # can do the transport structurally.  Until that lands, a verdict resting on this
 # says so -- it reports VALID[modulo <name>], never a bare VALID, and the premise
 # is listed in `assumed-final.tsv` beside the callee contracts.
+# The value is (name, independent?).  `independent` says whether the premise can
+# be discharged WITHOUT the residuals this campaign is checking.  A callee
+# contract (malloc, strcmp) is independent: it is about code the campaign never
+# reflects.  This one is NOT -- `argsLoopBoundAcrossCall` is a frame property of
+# one `eval_expr` activation, its route is `FrameMeta.memFrame_of_chain`, that
+# needs a reflected chain for eval_expr's whole run, eval_expr is recursive, so
+# the chain needs the recursor IH, and the recursor IH is a residual this
+# campaign checks.  Citing it as though it were a side condition would let a
+# reader take 68 verdicts as independently supported when they are deferred to
+# the very body of work under test.  So the verdict says `deferred`, not
+# `modulo`.  See observations.md, smt-args-loop-premise-is-not-independent.
 IV_PREMISE = {
-    "loop_2147496412": "argsLoopBoundAcrossCall",
+    "loop_2147496412": ("argsLoopBoundAcrossCall", False),
 }
 
 IV_INVARIANTS = {
@@ -464,6 +676,9 @@ GEN_VAR = re.compile(r"^(?:g\d+[qx]?|ra\d+|u\d+|[mbis]\d+)$")
 DECL_RE = re.compile(r"^\(declare-const (\S+) (?:Bool|MState)\)$")
 BIND_RE = re.compile(r"^\(assert \(= (\S+) (.*)\)\)$")
 DEFN_RE = re.compile(r"^\(define-fun (\S+) \(\)")
+STATE_EXIT_RE = re.compile(
+    r"^\(define-fun state_exit \(\) MState (.*)\)$")
+EXIT_ITE_RE = re.compile(r"\(ite (g\d+x) (b\d+) ")
 
 
 def slice_to(text, target, extra=()):
@@ -532,6 +747,215 @@ def slice_to(text, target, extra=()):
                for w in re.findall(r"[A-Za-z][A-Za-z0-9_]*", l)):
             drop.add(i)
     return "\n".join(l for i, l in enumerate(lines) if i not in drop)
+
+
+def exit_cases(text):
+    """Return the guarded states in the emitter's ordered exit merge.
+
+    The final state is the merge's else arm; its guard is the final member of
+    the separately emitted reachability disjunction.  Keeping that guard is
+    essential: the else arm is only an exit state when that last arrival is
+    reachable, not a default state for every input missed by earlier arms.
+    """
+    body = None
+    for line in text.splitlines():
+        match = STATE_EXIT_RE.match(line)
+        if match:
+            body = match.group(1)
+            break
+    if body is None:
+        return []
+    pairs = EXIT_ITE_RE.findall(body)
+    tail = re.search(r"\s(b\d+)\)+$", body)
+    if not pairs or tail is None:
+        return []
+    guards = None
+    expected = [guard for guard, _ in pairs]
+    for line in text.splitlines():
+        match = re.match(r"^\(assert \(or ((?:g\d+x ?)+)\)\)$", line)
+        if not match:
+            continue
+        found = match.group(1).split()
+        if found[:len(expected)] == expected and len(found) == len(pairs) + 1:
+            guards = found
+            break
+    if guards is None:
+        return []
+    return list(zip(guards, [state for _, state in pairs] + [tail.group(1)]))
+
+
+def without_exit_merge(text, guards):
+    """Remove the global exit merge and its reachability disjunction.
+
+    A case query supplies one of ``guards`` directly, which both establishes
+    reachability and selects the corresponding arm.  Removing the disjunction
+    before dependency slicing prevents every unrelated exit path becoming a
+    root merely because its guard occurs in that disjunction.
+    """
+    guard_set = set(guards)
+    out = []
+    for line in text.splitlines():
+        if (line.startswith("(define-fun state_exit ") or
+                line.startswith("(define-fun mem_exit ")):
+            continue
+        match = re.match(r"^\(assert \(or ((?:g\d+x ?)+)\)\)$", line)
+        if match and set(match.group(1).split()) == guard_set:
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def projection_case_queries(query, post):
+    """Split a projection over the global exit merge into guarded path cases.
+
+    This is a logical case split, not an abstraction: the emitted query asserts
+    that at least one exit guard holds and defines ``state_exit`` as their
+    ordered merge.  Proving the post for every guarded arm therefore proves the
+    original post.  Each arm is dependency-sliced to its state plus every
+    checkpoint state read by the projection and every emitted premise.
+    """
+    cases = exit_cases(query)
+    if not cases:
+        return []
+    guards = [guard for guard, _ in cases]
+    base = without_exit_merge(query, guards)
+    post_roots = {
+        word for word in re.findall(r"[A-Za-z][A-Za-z0-9_]*", post)
+        if GEN_VAR.match(word)
+    }
+    out = []
+    for guard, state in cases:
+        sliced = slice_to(base, state, extra=sorted(post_roots | {guard}))
+        exit_def = (
+            f"\n(assert {guard})\n"
+            f"(define-fun state_exit () MState {state})\n"
+            "(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) "
+            "(mm state_exit))\n"
+        )
+        sliced = sliced.replace("; @@POST@@", exit_def + "; @@POST@@")
+        out.append((guard, state, sliced))
+    return out
+
+
+def abstract_exit_feasibility(query, guards, timeout):
+    """Over-approximate which exit guards can coexist with emitted guard pins.
+
+    Every non-guard branch condition becomes an independent Boolean atom, with
+    syntactically identical conditions sharing an atom and explicit negations
+    sharing its complement.  This forgets bitvector and array facts, so it can
+    only turn an infeasible concrete path into a feasible abstract one.  Thus an
+    abstract ``unsat`` soundly discharges that case; ``sat`` merely means the
+    concrete, dependency-sliced case still has to be sent to Z3.
+    """
+    guard_defs = {}
+    pins = []
+    for line in query.splitlines():
+        match = re.match(r"^\(assert \(= (g\d+[qx]?) (.*)\)\)$", line)
+        if match:
+            guard_defs[match.group(1)] = match.group(2)
+            continue
+        match = re.match(r"^\(assert (g\d+[qx]?)\)$", line)
+        if match:
+            pins.append(match.group(1))
+            continue
+        match = re.match(r"^\(assert \(not (g\d+[qx]?)\)\)$", line)
+        if match:
+            pins.append(f"(not {match.group(1)})")
+
+    atoms = {}
+    equality_families = {}
+
+    def atom(condition):
+        negated = False
+        core = condition
+        while core.startswith("(not ") and core.endswith(")"):
+            negated = not negated
+            core = core[5:-1]
+        name = atoms.setdefault(core, f"c{len(atoms)}")
+        match = re.match(r"^\(= (.*) (#[xb][0-9a-fA-F]+)\)$", core)
+        if match:
+            equality_families.setdefault(match.group(1), {})[match.group(2)] = name
+        return f"(not {name})" if negated else name
+
+    def abstract(rhs):
+        if rhs == "true" or re.fullmatch(r"g\d+[qx]?", rhs):
+            return rhs
+        match = re.match(r"^\(or ((?:g\d+[qx]? ?)+)\)$", rhs)
+        if match:
+            return f"(or {match.group(1)})"
+        match = re.match(r"^\(and (g\d+[qx]?) (.*)\)$", rhs)
+        if match:
+            return f"(and {match.group(1)} {atom(match.group(2))})"
+        return atom(rhs)
+
+    lines = ["(set-logic QF_UF)"]
+    names = sorted(set(guard_defs) | set(guards))
+    lines.extend(f"(declare-const {name} Bool)" for name in names)
+    equations = [(name, abstract(rhs)) for name, rhs in guard_defs.items()]
+    lines.extend(f"(declare-const {name} Bool)" for name in atoms.values())
+    lines.extend(f"(assert (= {name} {rhs}))" for name, rhs in equations)
+    for values in equality_families.values():
+        names = list(values.values())
+        for i, left in enumerate(names):
+            for right in names[i + 1:]:
+                lines.append(f"(assert (not (and {left} {right})))")
+    lines.extend(f"(assert {pin})" for pin in pins)
+    for guard in guards:
+        lines.extend(("(push)", f"(assert {guard})", "(check-sat)", "(pop)"))
+    process = subprocess.run(
+        ["z3", "-smt2", "-in", f"-T:{max(1, timeout)}"],
+        input="\n".join(lines), capture_output=True, text=True)
+    output = (process.stdout + process.stderr).strip()
+    if "(error" in output:
+        return {guard: "unknown" for guard in guards}
+    answers = [line for line in output.splitlines()
+               if line in ("sat", "unsat", "unknown")]
+    if len(answers) != len(guards):
+        return {guard: "unknown" for guard in guards}
+    return dict(zip(guards, answers))
+
+
+def check_projection_cases(query, post, cset, pre, timeout):
+    """Decide a semantic projection by a sound case split over exit arrivals."""
+    cases = projection_case_queries(query, post)
+    if not cases:
+        return "UNKNOWN(no-exit-case-split)"
+    guards = [guard for guard, _state, _case in cases]
+    abstract = abstract_exit_feasibility(query, guards, min(timeout, 5))
+    concrete = []
+    budget = min(timeout, 20)
+    for guard, _state, case in cases:
+        if abstract.get(guard) == "unsat":
+            continue
+        head = case.replace(
+            "; @@ASSUME@@", pre + "\n" + assume_block(case, cset))
+        verdict = z3_projection(
+            head.replace("; @@POST@@", post) + "\n(check-sat)\n", budget)
+        concrete.append((guard, head, verdict))
+        if verdict == "sat":
+            return f"REFUTED[exit={guard}]"
+    if not concrete:
+        return "VACUOUS(all-exit-guards-infeasible)"
+    unknown = [guard for guard, _head, verdict in concrete
+               if verdict not in ("sat", "unsat")]
+    if unknown:
+        return "UNKNOWN(exit-cases:" + ",".join(unknown) + ")"
+
+    # Every negated-post case is UNSAT.  Establish that at least one case's
+    # assumptions are nevertheless satisfiable before calling the projection
+    # valid; otherwise this would merely prove a contradictory encoding.
+    consistency_unknown = []
+    for guard, head, _verdict in concrete:
+        verdict = z3_projection(
+            head.replace("; @@POST@@", "") + "\n(check-sat)\n", budget)
+        if verdict == "sat":
+            return "VALID"
+        if verdict == "unknown":
+            consistency_unknown.append(guard)
+    if consistency_unknown:
+        return ("UNKNOWN(consistency-cases:" +
+                ",".join(consistency_unknown) + ")")
+    return "VACUOUS(all-exit-cases-inconsistent)"
 
 
 def iv_assume(f, state="S0"):
@@ -921,6 +1345,13 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
     bodies = {}
     assumed = []
     for f in list(syms):
+        # A loop summary is an intra-function control-flow region, not an ABI
+        # call.  It may legitimately leave `ra`, `s0`, and `s1` changed, and it
+        # writes the current function's frame at addresses above its entry sp.
+        # Applying the callee templates to loops produced inductive-looking but
+        # concretely false claims.  Do not offer those templates to Houdini.
+        if f.startswith("loop_"):
+            cset[f] = [c for c in cset[f] if c not in LOOP_INVALID_CLAUSES]
         path = os.path.join(d, "obligations", f + ".smt2")
         if f in IH_SUMMARIES or f in NATIVE_ICALLS or f in emitter_assumed:
             assumed.append(f)          # keep the clause set, do not mine
@@ -976,11 +1407,17 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
         # The IV premise is an assumption too, and belongs in the same list --
         # an assumed clause set that is not written down is an axiom smuggled
         # into every query that mentions it.
-        for sym, nm in IV_PREMISE.items():
-            fh.write(nm + "\tNAMED PREMISE: the args-loop bound transported "
-                     "across the recursive call in " + sym + "; five SMT routes "
-                     "measured dead (observations.md), supplied by a Lean-side "
-                     "induction over the loop\n")
+        for sym, (nm, indep) in IV_PREMISE.items():
+            role = ("NAMED PREMISE (independent side condition)"
+                    if indep else
+                    "NAMED PREMISE (NOT INDEPENDENT -- deferred to the residuals "
+                    "under test: it is a frame property of one eval_expr "
+                    "activation, and eval_expr's chain needs the recursor IH, "
+                    "which is itself a residual this campaign checks)")
+            fh.write(nm + "\t" + role + ": the args-loop bound transported across "
+                     "the recursive call in " + sym + "; statement in "
+                     "Vsa/Sim/ArgsLoopSpillResid.lean, five SMT routes measured "
+                     "dead (observations.md)\n")
     syms = [f for f in syms if f in bodies]
     # a summary only needs re-checking when one of the summaries its own body
     # applies (including itself, via `<f>_ih`) has lost a clause since last round
@@ -1137,7 +1574,7 @@ def main():
     # Iterating on an ENCODER defect does not need the whole campaign.  Every
     # defect found so far was diagnosed on one summary or one residual; the full
     # pass is for producing the committed artefact, not for the fix loop.
-    only, only_sum, warm = None, None, False
+    only, only_sum, only_post, warm = None, None, None, False
     a = sys.argv[2:]
     for i, x in enumerate(a):
         if x == "--timeout": timeout = int(a[i + 1])
@@ -1147,6 +1584,7 @@ def main():
         elif x == "--ks": ks = [int(z) for z in a[i + 1].split(",")]
         elif x == "--only": only = set(a[i + 1].split(","))
         elif x == "--only-summary": only_sum = set(a[i + 1].split(","))
+        elif x == "--only-post": only_post = set(a[i + 1].split(","))
         elif x == "--warm": warm = True
 
     if phase == "bounded":
@@ -1155,12 +1593,28 @@ def main():
         return
 
     check_provenance(d)
+    check_campaign_manifest(d)
+    if phase == "projections":
+        # A separate process exposes the production SMT formulas as the system
+        # under test.  The differential tester does not import this module or
+        # use these formulas as its concrete oracle.
+        print(json.dumps(residual_posts(d), sort_keys=True))
+        return
     syms = [l.strip() for l in open(os.path.join(d, "summaries.tsv")).read().splitlines()[1:] if l.strip()]
     deps = {}
     for l in open(os.path.join(d, "query-summaries.tsv")).read().splitlines()[1:]:
         if not l.strip(): continue
         parts = l.split("\t")
         deps[parts[0]] = [x for x in (parts[1].split(",") if len(parts) > 1 else []) if x]
+    summary_deps = {}
+    deps_path = os.path.join(d, "summary-deps.tsv")
+    if os.path.exists(deps_path):
+        for row in csv.DictReader(open(deps_path), delimiter="\t"):
+            summary_deps[row["summary"]] = {
+                sym for sym in row.get("deps", "").split(",") if sym
+            }
+    closed_deps = {query: dependency_closure(syms_, summary_deps)
+                   for query, syms_ in deps.items()}
 
     csetpath = os.path.join(d, "clauses.json")
     if phase in ("mine", "both"):
@@ -1176,11 +1630,27 @@ def main():
         for f in syms:
             print(f"    {f}: {cset[f]}")
     else:
-        cset = json.load(open(csetpath))
+        cset = sanitize_clause_set(json.load(open(csetpath)))
 
     if phase in ("check", "both"):
         print(f"== phase 2: {len(deps)} residual queries x {len(POSTS)} post conjuncts")
         qs = {f: open(os.path.join(d, "queries", f + ".smt2")).read() for f in deps}
+        query_caps = {r["query"]: r for r in
+                      csv.DictReader(open(os.path.join(d, "query-capabilities.tsv")),
+                                     delimiter="\t")}
+        hole_rows = list(csv.DictReader(open(os.path.join(d, "residual-holes.tsv")),
+                                        delimiter="\t"))
+        holes_by_field = {}
+        for row in hole_rows:
+            holes_by_field.setdefault(row["field"], []).append(row["dimension"])
+        assumed_syms = set(IH_SUMMARIES) | set(NATIVE_ICALLS)
+        ap = os.path.join(d, "assumed.tsv")
+        if os.path.exists(ap):
+            assumed_syms |= {r["summary"] for r in csv.DictReader(open(ap), delimiter="\t")
+                             if r["summary"].startswith(("callee_", "loop_", "icall_", "idisp_"))}
+        op = os.path.join(d, "opaque.tsv")
+        opaque_syms = ({r["summary"] for r in csv.DictReader(open(op), delimiter="\t")}
+                       if os.path.exists(op) else set())
         spans = {}
         sp_path = os.path.join(d, "spans.tsv")
         if os.path.exists(sp_path):
@@ -1246,11 +1716,14 @@ def main():
             return bool(r) and r.get("region_lo") == EVAL_REGION
         wsets = {f: load_writes(os.path.join(d, "writes", f + ".tsv")) for f in deps}
         per_residual_posts = residual_posts(d)
+        per_residual_pres = residual_pres(d)
         pre = pre_block(d)
         tasks = [(f, pk) for f in sorted(deps) if not only or f in only
-                 for pk in list(POSTS) + list(FOOTPRINT_POSTS)]
+                 for pk in list(POSTS) + list(FOOTPRINT_POSTS)
+                 if not only_post or pk in only_post]
         tasks += [(f, "residual_relation") for f in sorted(per_residual_posts)
-                  if f in deps and (not only or f in only)]
+                  if f in deps and (not only or f in only) and
+                  (not only_post or "residual_relation" in only_post)]
         def run(t):
             f, pk = t
             # The encoder records whether the BMC frontier EMPTIED within the
@@ -1259,6 +1732,11 @@ def main():
             # The column was emitted and never read.
             if spans.get(f, {}).get("complete") == "false":
                 return (f, pk, "INCOMPLETE(frontier-not-empty)")
+            if pk == "residual_relation":
+                verdict = check_projection_cases(
+                    qs[f], per_residual_posts[f], cset,
+                    pre + "\n" + per_residual_pres.get(f, ""), timeout)
+                return (f, pk, verdict)
             # VACUITY GATE, before EITHER route.  `unsat` of PRE + clauses + exit
             # guard, with no post at all, means the assumptions contradict each
             # other -- and a query with contradictory assumptions proves EVERY
@@ -1289,15 +1767,19 @@ def main():
                     if sym not in IV_PREMISE:
                         return (f, pk, "UNKNOWN(iv-undischarged:" + bad + ")")
                     # falls through: the verdict is qualified below, not silent
-                    iv_premise = IV_PREMISE[sym]
+                    iv_premise, iv_indep = IV_PREMISE[sym]
                 else:
-                    iv_premise = None
+                    iv_premise, iv_indep = None, True
                 fv = footprint_check(base, FOOTPRINT_POSTS[pk], wr,
                                      applied_of(sl), cset, timeout, pre=pre)
                 if fv.startswith("VALID") and vac != "sat":
                     fv += "(consistency-unproved)"
                 if fv.startswith("VALID") and iv_premise:
-                    fv += f"[modulo {iv_premise}]"
+                    # `deferred` for a premise that is NOT independent of the
+                    # residuals under test; `modulo` only for a genuine side
+                    # condition.
+                    fv += (f"[modulo {iv_premise}]" if iv_indep
+                           else f"[deferred:{iv_premise}]")
                 return (f, pk, fv)
             head = vhead
             # `storerepr` and `valuerepr_tag` are stated over the pointer the
@@ -1356,6 +1838,10 @@ def main():
 
         def run_p2(t):
             r = run(t)
+            if r[2].startswith("VALID"):
+                label = ("VALID-PROJECTION" if r[1] == "residual_relation"
+                         else "VALID-MACHINE")
+                r = (r[0], r[1], label + r[2][len("VALID"):])
             with p2_lock:
                 p2_done[0] += 1
                 print(f"  [{p2_done[0]:3d}/{len(tasks)}] {r[0]}.{r[1]} = {r[2]}"
@@ -1370,9 +1856,17 @@ def main():
         out = os.path.join(d, "verdicts.tsv")
         keys = list(POSTS) + list(FOOTPRINT_POSTS) + ["residual_relation"]
         with open(out, "w") as fh:
-            fh.write("field\t" + "\t".join(keys) + "\n")
+            fh.write("query\tresidual\tinstance\tcapability\tassumed_dependencies\t"
+                     "opaque_dependencies\tunencoded_dimensions\t" +
+                     "\t".join(keys) + "\n")
             for f in sorted(table):
-                fh.write(f + "\t" + "\t".join(table[f].get(k, "N/A") for k in keys) + "\n")
+                cap = query_caps[f]
+                assumed_deps = ",".join(sorted(closed_deps.get(f, set()) & assumed_syms))
+                opaque_deps = ",".join(sorted(closed_deps.get(f, set()) & opaque_syms))
+                unencoded = ",".join(holes_by_field.get(cap["field"], ()))
+                fh.write("\t".join((f, cap["field"], cap["instance"], cap["capability"],
+                                    assumed_deps, opaque_deps, unencoded)) + "\t" +
+                         "\t".join(table[f].get(k, "N/A") for k in keys) + "\n")
         for k in keys:
             print(f"  {k}: {dict(Counter(table[f].get(k, 'N/A').split('(')[0] for f in table))}")
         print("wrote", out)

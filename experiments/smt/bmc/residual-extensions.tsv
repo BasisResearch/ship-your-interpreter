@@ -68,7 +68,6 @@ hOrFalse	hOrFalse	logop-token	entry	true	s0	(= (ld4 (mm s0) (bvadd (select (rr s
 hOrFalse	hOrFalse	left-falsy	0x8000356c	g118	m118	(or (= (ld4 (mm m118) (bvadd (select (rr m118) #x0000000000000002) #x0000000000000078)) #x0000000000000000) (and (= (ld4 (mm m118) (bvadd (select (rr m118) #x0000000000000002) #x0000000000000078)) #x0000000000000001) (= (ld8 (mm m118) (bvadd (select (rr m118) #x0000000000000002) #x0000000000000080)) #x0000000000000000)) (and (= (ld4 (mm m118) (bvadd (select (rr m118) #x0000000000000002) #x0000000000000078)) #x0000000000000002) (= (ld8 (mm m118) (bvadd (select (rr m118) #x0000000000000002) #x0000000000000080)) #x0000000000000000)))
 hOrFalse	hOrFalse	right-value	0x80003a10	g351	m351	(bvule (ld4 (mm m351) (bvadd (select (rr m351) #x0000000000000002) #x0000000000000090)) #x0000000000000005)
 hArgsCons	hArgsCons	index-below-argc	entry	true	s0	(bvslt (select (rr s0) #x0000000000000010) (select (rr s0) #x000000000000000f))
-hArgsNil	hArgsNil	zero-argc	entry	true	s0	(= (select (rr s0) #x000000000000000f) #x0000000000000000)
 hSIfFalse	hSIfFalse	has-else	entry	true	s0	(not (= (ld8 (mm s0) (bvadd (select (rr s0) #x000000000000000b) #x0000000000000018)) #x0000000000000000))
 hSIfNone	hSIfNone	no-else	entry	true	s0	(= (ld8 (mm s0) (bvadd (select (rr s0) #x000000000000000b) #x0000000000000018)) #x0000000000000000)
 hSRet	hSRet	return-expr	entry	true	s0	(not (= (ld8 (mm s0) (bvadd (select (rr s0) #x000000000000000b) #x0000000000000008)) #x0000000000000000))

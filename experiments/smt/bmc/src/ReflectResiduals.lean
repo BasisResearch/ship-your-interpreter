@@ -9,11 +9,9 @@ tables: `KindTablePins` for the eval arms, the exec_stmt dispatch for the
 statement arms, `seqLoopImage` for the seq loops). Residuals sharing an arm map
 to the same span (the per-op sub-dispatch is inside it).
 
-`hDivCorr` and `hErrFam` have no entry here: they are global/composite
-obligations, not local spans.  The three sequence residuals use
-`residualInstances`, which records all three tabled `(p,q)` pairs.  Those
-instances test the machine path only; the recursive `ExecIH` stitching remains
-an explicitly unencoded theorem dimension.
+Global, composite, relational-splice, and sequence-constructor residuals have
+no entry here.  Their former finite spans could not identify the named Lean
+premise, so the capability manifest reports zero machine instances for them.
 
 `#check_residuals` reflects every span with `reflectExactD` and reports blocks /
 summaries / term size — confirming each is encodable (gap-free, DAG-sized) with
@@ -68,13 +66,13 @@ def residualSpans : List (String × Nat × Nat) := [
   -- logical arm reaches (13 arm runs, 0 arrivals, over the difftest corpus).
   ("hAndTrue", 0x8000355c, 0x800033ec), ("hAndFalse", 0x8000355c, 0x800033ec),
   ("hOrTrue", 0x8000355c, 0x800033ec), ("hOrFalse", 0x8000355c, 0x800033ec),
-  -- call / composition
-  ("hCall", 0x800031b0, 0x80003360), ("hCallClosure", 0x800031b0, 0x80003360),
+  -- call / composition.  `hCall` and the call-case residuals are relational
+  -- splices, not identifiable finite spans; they therefore have no machine
+  -- residual instance below.
   -- `EvalArgs` starts after the callee has returned.  Nil is the argc branch;
   -- cons is the loop body, including recursive argument evaluation.
-  ("hArgsCons", 0x800031dc, 0x80003254), ("hArgsNil", 0x800031d8, 0x80003254),
-  ("hCallPrint", 0x800031b0, 0x80003360), ("hCallPrintln", 0x800031b0, 0x80003360),
-  ("hCallAssertOk", 0x800031b0, 0x80003360), ("hFn", 0x800033c4, 0x80003408),
+  ("hArgsCons", 0x800031dc, 0x80003254),
+  ("hFn", 0x800033c4, 0x80003408),
   -- statement arms.  Each residual is about ONE `exec_stmt` arm, so its span is
   -- that arm's own `[execArm*, exec_stmt end)` — NOT the shared dispatch header
   -- `[0x80004014, …)`, which ends at the computed goto `jalr x0, 0(a5)` after
@@ -85,24 +83,12 @@ def residualSpans : List (String × Nat × Nat) := [
   ("hSIfTrue", 0x800041e8, 0x800043ec), ("hSIfFalse", 0x800041e8, 0x800043ec),
   ("hSIfNone", 0x800041e8, 0x800043ec), ("hSRet", 0x80004120, 0x800043ec),
   ("hSRetNull", 0x80004120, 0x800043ec), ("hSVarInit", 0x800040d8, 0x800043ec),
-  ("hSVarNull", 0x800040d8, 0x800043ec), ("hSWhileBreak", 0x8000403c, 0x800043ec),
+  ("hSVarNull", 0x800040d8, 0x800043ec),
   ("hSWhileFalse", 0x8000403c, 0x800043ec), ("hSForStart", 0x80004234, 0x800043ec),
-  ("hSBrk", 0x80004098, 0x800043ec), ("hSCont", 0x800040b8, 0x800043ec),
-  -- init / frame
-  ("hEpilogueSpill", 0x800033ec, 0x80003408),
-  -- `hInitStore` is `InterpInitStoreRepr` (`Vsa/Sim/EntrySeams.lean:182`): the
-  -- drive from a `Loaded` config to `SegEntry` at `interpLoopHeadPC`.  That is
-  -- `interp_run`'s prologue, `0x800043ec` (the `interp_run` symbol) through
-  -- `0x8000448c` (`EntryHalts.lean:117`'s `interpLoopHeadPC`, which is also
-  -- where the three `hSeq*` spans are entered).  It was mapped to
-  -- `(0x80004764, 0x800047a0)` -- `exit` -- which is a different function
-  -- entirely; with the noreturn model that span has NO exit arrival at all and
-  -- is caught by the no-exit guard rather than answered against the entry state.
-  ("hInitStore", 0x800043ec, 0x8000448c) ]
+  ("hSBrk", 0x80004098, 0x800043ec), ("hSCont", 0x800040b8, 0x800043ec) ]
 
-/-- A unique machine instance of a residual.  Sequence residuals quantify over
-all three `seqLoopImage` table entries, so they have three instances each.
-`query` is a filesystem-safe unique key; `field` is the Lean bundle field. -/
+/-- A unique machine instance of a residual.  `query` is a filesystem-safe
+unique key; `field` is the Lean bundle field. -/
 structure ResidualInstance where
   query : String
   field : String
@@ -114,31 +100,62 @@ private def ordinaryInstances : List ResidualInstance :=
   residualSpans.map fun (field, lo, hi) =>
     { query := field, field := field, variant := "single", lo := lo, hi := hi }
 
-private def seqInstances (field : String) : List ResidualInstance :=
-  [ { query := s!"{field}__interp", field := field, variant := "interp_run",
-      lo := 0x8000448c, hi := 0x80004514 },
-    { query := s!"{field}__closure", field := field, variant := "closure_body",
-      lo := 0x80003354, hi := 0x80003378 },
-    { query := s!"{field}__block", field := field, variant := "exec_block",
-      lo := 0x800041a4, hi := 0x8000409c } ]
+def residualInstances : List ResidualInstance := ordinaryInstances
 
-def residualInstances : List ResidualInstance :=
-  ordinaryInstances ++ seqInstances "hSeqNil" ++
-    seqInstances "hSeqConsNormal" ++ seqInstances "hSeqConsAbrupt"
+def residualFields : List String :=
+  ((residualSpans.map fun t => t.1) ++
+    ["hArgsNil", "hCall", "hCallClosure", "hCallPrint", "hCallPrintln",
+     "hCallAssertOk", "hSWhileBreak", "hEpilogueSpill", "hInitStore",
+     "hSeqNil", "hSeqConsNormal", "hSeqConsAbrupt", "hDivCorr",
+     "hErrFam"]).eraseDups
+
+def projectedFields : List String :=
+  [ "hInt", "hStr", "hBool", "hNull", "hNeg", "hNot", "hAndFalse",
+    "hOrTrue", "hAndTrue", "hOrFalse", "hIAdd", "hISub", "hIMul",
+    "hIDiv", "hIMod", "hILt", "hILe", "hIGt", "hIGe", "hDivOv",
+    "hSBrk", "hSCont" ]
+
+def queryCapability (inst : ResidualInstance) : String :=
+  if projectedFields.contains inst.field then "partial-projection" else "machine-only"
 
 /-- The theorem dimensions the executable campaign does not encode.  This is a
 coverage manifest, not an assumption. -/
 def residualHoles : List (String × String × String) :=
-  [ ("hSeqNil", "semantic-sequence-shape",
-      "machine instances do not encode Reflect/SegEntry/SegExit for []"),
+  (residualFields.map fun field =>
+    (field, "full-lean-proposition",
+      "quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded")) ++
+  [ ("hArgsNil", "exact-entry-precondition",
+      "Lean starts at 0x800031dc without the predecessor branch's zero-argc fact"),
+    ("hSeqNil", "no-faithful-machine-instance",
+      "ordinary table iterations are not the zero-step SeqNil residual"),
     ("hSeqConsNormal", "recursive-stitching",
-      "machine instances do not encode the head ExecIH plus tail ExecIH back-edge"),
+      "ordinary table iterations do not identify the normal constructor or its two recursive hypotheses"),
     ("hSeqConsAbrupt", "recursive-stitching",
-      "machine instances do not encode the head ExecIH plus abrupt-status premise"),
+      "normal table iterations do not identify an abrupt head or its constructor-specific exit"),
     ("hDivCorr", "global-liveness",
       "DivCorrFamily quantifies over every Loaded configuration and an existential correspondence"),
     ("hErrFam", "composite-error-family",
-      "ErrFamily combines shared error state with 43 site obligations") ]
+      "ErrFamily combines shared error state with 43 site obligations"),
+    ("hCallPrint", "output-semantics",
+      "MState and the trace oracle do not model the console-output stream"),
+    ("hCallPrintln", "output-semantics",
+      "MState and the trace oracle do not model the console-output stream"),
+    ("hCall", "no-faithful-machine-instance",
+      "the residual relates callee evaluation, argument evaluation, call dispatch, and four shadow states"),
+    ("hCallClosure", "no-faithful-machine-instance",
+      "the former 0x800031b0 to 0x80003360 query was not the Lean 0x80003254 to 0x800033ec closure splice"),
+    ("hCallPrint", "no-faithful-machine-instance",
+      "generic call traces do not identify the print target or output semantics"),
+    ("hCallPrintln", "no-faithful-machine-instance",
+      "generic call traces do not identify the println target or newline output"),
+    ("hCallAssertOk", "no-faithful-machine-instance",
+      "generic call traces do not identify the assert target, arity, truthiness, or success branch"),
+    ("hSWhileBreak", "no-faithful-machine-instance",
+      "false-condition while exits do not witness the break/ret/loop family"),
+    ("hEpilogueSpill", "no-faithful-machine-instance",
+      "the former query covered the eval epilogue, not the interpreter exit restore chain"),
+    ("hInitStore", "no-faithful-machine-instance",
+      "the interpreter prologue does not establish the Lean initial-store representation premise") ]
 
 /-- A residual-specific premise.  `point = none` means function entry; a PC
 means the unique merged state at that reflected block entry. -/
@@ -254,7 +271,6 @@ def residualExtensions : List ResidualExtension :=
       predicate := valueFalsy 120 },
     { field := "hOrFalse", name := "right-value", point := some 0x80003a10,
       predicate := valueKindValid 144 },
-    { field := "hArgsNil", name := "zero-argc", point := none, predicate := regEq 15 0 },
     { field := "hArgsCons", name := "index-below-argc", point := none,
       predicate := fun s => s!"(bvslt (select (rr {s}) {bvN 16}) (select (rr {s}) {bvN 15}))" },
     { field := "hSRet", name := "return-expr", point := none, predicate := ld8Ne 11 8 0 },
@@ -566,7 +582,7 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
         noExit := noExit ++ [s!"{nm}\t0x{String.ofList (Nat.toDigits 16 bmcEntry)}\t0x{String.ofList (Nat.toDigits 16 ehi)}\t{halts.length}"]
       else
       IO.FS.writeFile s!"{dir}/queries/{nm}.smt2"
-        s!"{smtPreamble}\n{decls}\n{gDecl}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule #x0000000000010000 SL_lo) (bvult SL_lo SL_hi) (bvult SL_hi #x0000000100000000) (bvule #x0000000000010000 A_lo) (bvult A_lo A_hi) (bvult A_hi #x0000000100000000) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi)) (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) (bvsub SL_hi #x0000000000001100))))\n(declare-const s0 MState)\n{kindPin}{decls2}\n{dispPin}; residual-specific premises from the Lean constructor\n{extPin}; only inputs that REACH the exit PC: without this the `ite` merge\n; falls through to the last arrival for an input no guard covers, and the\n; resulting state is one the machine is never in -- spurious REFUTED.\n(assert {exitG})\n; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {ev})\n(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
+        s!"; query={nm} residual={field} instance={inst.variant} capability={queryCapability inst}\n; This is not a full encoding of the Lean residual proposition.\n{smtPreamble}\n{decls}\n{gDecl}\n(declare-const SL_lo (_ BitVec 64))\n(declare-const SL_hi (_ BitVec 64))\n(declare-const A_lo (_ BitVec 64))\n(declare-const A_hi (_ BitVec 64))\n(define-fun INV ((S MState)) Bool (and (bvule #x0000000000010000 SL_lo) (bvult SL_lo SL_hi) (bvult SL_hi #x0000000100000000) (bvule #x0000000000010000 A_lo) (bvult A_lo A_hi) (bvult A_hi #x0000000100000000) (or (bvult A_hi SL_lo) (bvugt A_lo SL_hi)) (bvule (bvadd SL_lo #x0000000000001100) (select (rr S) #x0000000000000002)) (bvule (select (rr S) #x0000000000000002) (bvsub SL_hi #x0000000000001100))))\n(declare-const s0 MState)\n{kindPin}{decls2}\n{dispPin}; residual-specific premises from the Lean constructor\n{extPin}; only inputs that REACH the exit PC: without this the `ite` merge\n; falls through to the last arrival for an input no guard covers, and the\n; resulting state is one the machine is never in -- spurious REFUTED.\n(assert {exitG})\n; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {ev})\n(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
       IO.FS.writeFile s!"{dir}/writes/{nm}.tsv"
         ("guard\twidth\taddr\n" ++ String.intercalate "\n"
           (writes.map (fun (g, a, w) => s!"{g}\t{w}\t{a}")) ++ "\n")
@@ -677,6 +693,7 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
     for nm in ["ReflectSpan.lean", "ReflectResiduals.lean"] do
       IO.FS.writeBinFile s!"{dir}/src/{nm}" (← IO.FS.readBinFile s!"experiments/smt/{nm}")
     let elfBytes ← IO.FS.readBinFile elfPath
+    IO.FS.writeBinFile s!"{dir}/src/proof.elf" elfBytes
     IO.FS.writeFile s!"{dir}/provenance.txt"
       s!"emitter sources are copied verbatim to {dir}/src/; the driver compares bytes\nelf\t{elfPath}\nelf_bytes\t{elfBytes.size}\n"
     IO.FS.writeFile s!"{dir}/pre.smt2" (entryPinsSmt img ++ "\n")
@@ -698,6 +715,16 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
       ("field\tdimension\treason\n" ++ String.intercalate "\n"
         (residualHoles.map fun (field, dimension, reason) =>
           s!"{field}\t{dimension}\t{reason}") ++ "\n")
+    IO.FS.writeFile s!"{dir}/query-capabilities.tsv"
+      ("query\tfield\tinstance\tcapability\n" ++ String.intercalate "\n"
+        (residualInstances.map fun inst =>
+          s!"{inst.query}\t{inst.field}\t{inst.variant}\t{queryCapability inst}") ++ "\n")
+    IO.FS.writeFile s!"{dir}/residual-capabilities.tsv"
+      ("field\tmachine_instances\tsemantic_projection\tfull_residual\n" ++
+        String.intercalate "\n" (residualFields.map fun field =>
+          let count := (residualInstances.filter fun inst => inst.field == field).length
+          let projection := if projectedFields.contains field then "yes" else "no"
+          s!"{field}\t{count}\t{projection}\tno") ++ "\n")
     let nComplete := (rows.filter (fun r => (r.splitOn "\t").getD 9 "" == "true")).length
     Lean.logInfo m!"#emit_bmc → {dir}: {residualInstances.length} machine instances, {nComplete} COMPLETE at {rounds} rounds, {done.length} summaries: {done.length - assumedSyms.length - opaqueSyms.length} mined, {assumedSyms.length} assumed contracts, {opaqueSyms.length} opaque"
 

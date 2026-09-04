@@ -1,6 +1,76 @@
 field	dimension	reason
-hSeqNil	semantic-sequence-shape	machine instances do not encode Reflect/SegEntry/SegExit for []
-hSeqConsNormal	recursive-stitching	machine instances do not encode the head ExecIH plus tail ExecIH back-edge
-hSeqConsAbrupt	recursive-stitching	machine instances do not encode the head ExecIH plus abrupt-status premise
+hInt	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hStr	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hBool	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hNull	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hVar	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hAssign	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hIAdd	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hISub	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hIMul	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hIDiv	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hIMod	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hILt	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hILe	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hIGt	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hIGe	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hEq	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hNe	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hStrAddL	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hStrAddR	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hStrGe	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hStrGt	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hStrLe	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hStrLt	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hDivOv	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hNeg	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hNot	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hAndTrue	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hAndFalse	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hOrTrue	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hOrFalse	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hArgsCons	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hFn	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSExpr	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSBlock	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSIfTrue	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSIfFalse	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSIfNone	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSRet	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSRetNull	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSVarInit	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSVarNull	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSWhileFalse	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSForStart	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSBrk	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSCont	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hArgsNil	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hCall	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hCallClosure	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hCallPrint	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hCallPrintln	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hCallAssertOk	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSWhileBreak	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hEpilogueSpill	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hInitStore	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSeqNil	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSeqConsNormal	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hSeqConsAbrupt	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hDivCorr	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hErrFam	full-lean-proposition	quantified Triple, representation predicates, ghost state, and recursive hypotheses are not encoded
+hArgsNil	exact-entry-precondition	Lean starts at 0x800031dc without the predecessor branch's zero-argc fact
+hSeqNil	no-faithful-machine-instance	ordinary table iterations are not the zero-step SeqNil residual
+hSeqConsNormal	recursive-stitching	ordinary table iterations do not identify the normal constructor or its two recursive hypotheses
+hSeqConsAbrupt	recursive-stitching	normal table iterations do not identify an abrupt head or its constructor-specific exit
 hDivCorr	global-liveness	DivCorrFamily quantifies over every Loaded configuration and an existential correspondence
 hErrFam	composite-error-family	ErrFamily combines shared error state with 43 site obligations
+hCallPrint	output-semantics	MState and the trace oracle do not model the console-output stream
+hCallPrintln	output-semantics	MState and the trace oracle do not model the console-output stream
+hCall	no-faithful-machine-instance	the residual relates callee evaluation, argument evaluation, call dispatch, and four shadow states
+hCallClosure	no-faithful-machine-instance	the former 0x800031b0 to 0x80003360 query was not the Lean 0x80003254 to 0x800033ec closure splice
+hCallPrint	no-faithful-machine-instance	generic call traces do not identify the print target or output semantics
+hCallPrintln	no-faithful-machine-instance	generic call traces do not identify the println target or newline output
+hCallAssertOk	no-faithful-machine-instance	generic call traces do not identify the assert target, arity, truthiness, or success branch
+hSWhileBreak	no-faithful-machine-instance	false-condition while exits do not witness the break/ret/loop family
+hEpilogueSpill	no-faithful-machine-instance	the former query covered the eval epilogue, not the interpreter exit restore chain
+hInitStore	no-faithful-machine-instance	the interpreter prologue does not establish the Lean initial-store representation premise

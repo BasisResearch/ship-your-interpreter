@@ -1,3 +1,0 @@
-guard	width	addr
-g0	0	(bvadd (select (rr m0) #x0000000000000016) #x0000000000000000)
-g0	0	(bvadd (select (rr i2) #x000000000000000f) #x0000000000000010)
