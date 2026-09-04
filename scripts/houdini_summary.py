@@ -621,7 +621,13 @@ def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=Tru
     # covers, so a span containing one would report VALID over a step that can
     # write anywhere.  Zero occurrences in this image, which is exactly why it
     # has to be a refusal rather than a silence.
-    if "unmodelled_step" in base:
+    #
+    # Test for an APPLICATION, not the name.  `unmodelled_step` is declared
+    # unconditionally in `smtPreamble`, so a bare substring test matches every
+    # query through its `(declare-fun ...)` line and refuses all of them: 36
+    # footprint verdicts were returned as opaque steps over a symbol that is
+    # declared and never applied (measured: 0 applications across all 52).
+    if re.search(r"\(unmodelled_step\s", base):
         return "UNKNOWN(opaque-step:unmodelled_step)"
     # A MISSING footprint is not an empty one.  `hits_QA([])` is `(assert false)`,
     # which is unsat, which reads as VALID — so a campaign emitted without write
@@ -1214,8 +1220,25 @@ def main():
             if ok == "VALID" and vac != "sat":
                 ok = "VALID(consistency-unproved)"
             return (f, pk, ok)
+
+        # Print each residual verdict AS IT LANDS.  The progress wrapper added
+        # earlier attached to the MINING executor only, so phase 1 printed 275
+        # lines while phase 2 ran silently for over an hour and looked wedged --
+        # it was not, it just had nothing to say.  Both phases now report.
+        p2_done = [0]
+        p2_lock = threading.Lock()
+        p2_t0 = time.time()
+
+        def run_p2(t):
+            r = run(t)
+            with p2_lock:
+                p2_done[0] += 1
+                print(f"  [{p2_done[0]:3d}/{len(tasks)}] {r[0]}.{r[1]} = {r[2]}"
+                      f"  ({time.time()-p2_t0:.0f}s)", flush=True)
+            return r
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
-            res = list(ex.map(run, tasks))
+            res = list(ex.map(run_p2, tasks))
         table = {}
         for f, pk, v in res:
             table.setdefault(f, {})[pk] = v

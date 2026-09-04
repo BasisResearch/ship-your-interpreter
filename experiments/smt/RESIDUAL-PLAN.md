@@ -115,34 +115,69 @@ solver timeout rather than a genuine countermodel).
 
 ## Where the 52 stand
 
-`bmc/verdicts.tsv`, regenerated from the current reflector. Seven clauses mined
-to a fixpoint in under four minutes over 53 summaries, and **every summary now
-carries `stack_or_arena`** — including `loop_0x800031dc`, the args loop, which
-was the last one missing it.
+**Retracted and restated.** This section previously reported 46/46 VALID on the
+footprint posts and "not one REFUTED". Both were artefacts. 26 of the 52 queries
+had contradictory assumptions and proved every post they were asked, and the
+loop clause sets they leaned on were mined against loop bodies that never run.
+The numbers below are what the encoder says once neither is true.
 
-**Across 52 fields and five posts there is not one REFUTED.**
+Last measured on the `bmcE` encoder (52 spans, 47 summaries, `-j10 --timeout
+120`, z3 4.15.4):
 
-| post | VALID | UNKNOWN | N/A |
-|---|---|---|---|
-| `code` | 46 | 6 | — |
-| `outside_stack_arena` | 46 | 6 | — |
-| `sp` | 42 | 10 | — |
-| `storerepr` | 32 | 15 | 5 |
-| `valuerepr_tag` | 26 | 8 | 18 |
+| post | VALID | N/A | REFUTED | UNKNOWN |
+|---|---|---|---|---|
+| `sp` | 18 (2 frame-shifted) | — | — | 34 |
+| `storerepr` | 1 | 4 | 1 | 46 |
+| `valuerepr_tag` | 1 | 17 | — | 34 |
+| `outside_stack_arena` | — | — | — | 52 |
+| `code` | — | — | — | 52 |
 
-What is left is 12 verdicts blocked on the args-loop invariant at its recursive
-occurrence (the six call-class fields, which share one byte-identical query) and
-33 plain solver timeouts. The `UNKNOWN(summary-clause)` class, 54 verdicts at its
-peak, is empty.
+**No query is vacuous.** That is the load-bearing line: it is what makes any
+VALID above mean something, and it was not true of any campaign before this one.
 
-`N/A` is not a weaker VALID, it is a post that does not describe the span. Six
-spans are fragments: `hFn` is the shared closure-allocation tail, entered at
-`0x800033c4` with `a0` holding 16 (the malloc size) and left after the epilogue's
-`addi sp,sp,1088`, so "sp is restored" and "a0 points at a boxed Value" are both
-about a different span than the one being checked. Those report the shifted
-equality that IS proved — `VALID[sp+0x440]` — rather than a refutation.
-`valuerepr_tag` is further restricted to `eval_expr`'s region, the only one that
-boxes a `Value` at the caller's `a0`.
+The one refutation is `hInitStore.storerepr`. The 104 blocked footprint verdicts
+have exactly two causes, both named:
+
+* **68 — the args-loop invariant at its recursive occurrence.**
+  `loop_0x800031dc` needs `0 <= a6 < a5 <= 32` discharged where the loop applies
+  itself. Genuinely open; the cut-and-retry fallback does not close it either.
+* **36 — a false refusal, since fixed.** `footprint_check` tested
+  `"unmodelled_step" in base`, a bare substring, and `smtPreamble` declares that
+  symbol unconditionally, so every query matched through its own
+  `(declare-fun ...)` line. There are ZERO applications of it in all 52 queries.
+  The guard now tests for an application. Not yet re-measured.
+
+`stack_or_arena` survives on 28 of 47 summaries, down from 52 of 53. That drop is
+the loop-obligation fix landing: a loop body that actually runs does not preserve
+the clause, and the earlier survival rate was measuring a body that never
+executed.
+
+### On regenerating this table
+
+The encoder is under active repair and these artefacts are per-encoder. Five
+campaigns were run in one night and four were superseded mid-flight by a fix to
+`ReflectSpan.lean`. The driver's provenance guard (a `src/` copy in the campaign
+directory, compared against the tree) is what catches that, and it should be
+believed: a verdict against a different encoder is a verdict about another
+program. Regenerate once the encoder settles, not while it is being fixed.
+
+## The evidence the verdicts rest on
+
+The campaign cannot validate itself. Every clause it mines is proved against the
+encoder's own model of a callee, so an encoder defect is invisible to it, and the
+assumed clause sets are checked by nobody. Ten defects were found by reading the
+encoder, nine of which never showed up in a verdict.
+
+`DIFFTEST-PLAN.md` and `DIFFTEST-FINDINGS.md` are the answer to that, and they
+are now the primary assurance layer: 104 programs traced through the proof model,
+43,723 real `(pre, post)` clause pairs, 323,598 state checks over 6,170 distinct
+PCs. It found eight further defects, including loop obligations that were vacuous
+past the first iteration and `ra_restore` assumed for `__moddi3`/`__divdi3`,
+which return through `t0` and were refuted on 112 of 112 real applications.
+
+`scripts/difftest.sh` is the gate, and `VSA_DIFFTEST=1 scripts/check_all.sh` runs
+it as stage d. **Run it after any change to `ReflectSpan.lean` or
+`ReflectResiduals.lean`, before believing a campaign's verdicts.**
 
 ## What was wrong with the encoder, and how it was found
 
