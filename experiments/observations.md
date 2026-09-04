@@ -6119,10 +6119,30 @@ it, still stop and report instead.
     says the query cannot answer anything, not that the invariant is hard.
   * `dedup_addrs` cap sweep -- one `sat` at cap=4, `unknown` at 0/2/8/18.
   * relevance-selected reload addresses -- `unknown`.
-  The one datum that has ever produced `unsat` is the earlier agent's hand-built
-  cut keeping blocks 148/260/391/557 with 2 addresses, at 3.6s, on a DIFFERENT
-  (pre-topological-fix) encoder. Reproducing that on the current encoder, and
-  finding what its slice contains that these do not, is the next concrete step.
+  * reproducing the hand-built cut (havoc + RE-SLICE, guards left free) -- the
+    query does not shrink: 618 lines at every candidate against 484 uncut, and
+    7 of the candidates now return `sat`.
+- THE CHARACTERISATION, which is what all of the above is worth. Two facts,
+  measured, that together say why every abstraction attempt failed:
+  1. **The guards are necessary.** Leave them free and the invariant is
+     REFUTED (`sat`) at 7 of the cut points -- correctly, since the bounds
+     `0 <= a6` and `a5 <= 32` live in them. So no abstraction that weakens the
+     guards can work, which rules out the whole havoc-cut family.
+  2. **Size is not the problem.** With the guards kept, the sliced query is 484
+     lines and z3 returns `unknown` at 150s. The earlier hand-built cut's
+     dramatic reduction (595 -> 178 lines, unsat in 3.6s) was against the
+     PRE-topological-fix encoder, where re-reflection had inflated the slice.
+     That fix already bought the size win, and the discharge still does not
+     close, so the two are independent.
+  What is left is a genuinely hard query, not a badly-shaped one: the invariant
+  must be carried across a recursive call through spill slots, and every route
+  tried either drops the guards that establish it or leaves the solver to
+  rediscover the spill/reload connection unaided. The next thing worth trying is
+  not another abstraction but a DIFFERENT FORMULATION -- carry the bound as a
+  summary CLAUSE on `loop_0x800031dc` itself, mined by Houdini like the others,
+  so it is established once inductively rather than re-derived at each
+  application. That is a clause-bank change, and it is the only avenue these
+  measurements leave open.
 - superseded proposal (kept so it is not retried): supply the bounds as an
   EXPLICIT assumption at the loop's argument,
   justified on the Lean side from the residual's own precondition (the arm is
