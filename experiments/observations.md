@@ -6102,11 +6102,27 @@ it, still stop and report instead.
   the reloaded `a5`/`a6` are free. The earlier successful discharge (2.8s) used
   exactly TWO addresses: the `a5`/`a6` spill slots, `24(sp)` and `16(sp)`.
   `dedup_addrs` returns a cap-ordered prefix that does not contain them.
-- so the fix is address SELECTION, not budget: instantiate the memory clauses at
-  the slots the INVARIANT's own registers reload from (derivable -- the
-  invariant names x15/x16, and the slice has the `sd`/`ld` pair for each),
-  instead of the first N addresses the write set happens to list. The query is
-  only 484 lines sliced; this was never a scale problem.
+- relevance selection was the obvious fix and it DOES NOT WORK. Implemented and
+  measured: extract the addresses the invariant's own registers reload from by
+  matching `(store (rr _) <reg> (ld8 (mm _) ADDR))` in the slice, which finds 5
+  (x15 from sp+0x100/0x88/0xa0, x16 from sp+0xf0/0x0), instantiate the memory
+  clauses at exactly those. Result: `unknown` at 150s on a 940-line query. Not
+  `unsat`. So the cap sweep's sensitivity is real but "pick the right addresses"
+  is not sufficient, and the earlier claim that this reduced the obstruction to
+  a mechanical fix was WRONG.
+- STATE OF THE ATTACK, so none of it is repeated:
+  * havoc-cut abstraction, 19 candidates, both walk orders -- 8 sat, 11 unknown,
+    0 discharges. Structural reason recorded above.
+  * two-step lemma (prove the invariant at an upstream anchor, then use it), 18
+    anchors -- `unknown` at every one INCLUDING `m0`, the entry, where the
+    invariant is trivially FALSE and should answer instantly. That result alone
+    says the query cannot answer anything, not that the invariant is hard.
+  * `dedup_addrs` cap sweep -- one `sat` at cap=4, `unknown` at 0/2/8/18.
+  * relevance-selected reload addresses -- `unknown`.
+  The one datum that has ever produced `unsat` is the earlier agent's hand-built
+  cut keeping blocks 148/260/391/557 with 2 addresses, at 3.6s, on a DIFFERENT
+  (pre-topological-fix) encoder. Reproducing that on the current encoder, and
+  finding what its slice contains that these do not, is the next concrete step.
 - superseded proposal (kept so it is not retried): supply the bounds as an
   EXPLICIT assumption at the loop's argument,
   justified on the Lean side from the residual's own precondition (the arm is
