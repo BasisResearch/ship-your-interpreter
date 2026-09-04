@@ -6085,7 +6085,30 @@ it, still stop and report instead.
   query. The bound is derivable; what defeats the solver is transporting it
   ACROSS the recursive call, where `a5`/`a6` cross through spill slots and the
   connection needs `sp_restore` plus the reload facts composed.
-- proposal: supply the bounds as an EXPLICIT assumption at the loop's argument,
+- THE ACTIONABLE LEAD (measured 2026-09-04). The discharge turns on WHICH reload
+  addresses are instantiated, not how many, and the current selection is wrong.
+  Sweeping `dedup_addrs`' cap on hDivOv's `@m297`, everything else fixed:
+
+  | cap | addrs | query | result |
+  |---|---|---|---|
+  | 0 | 0 | 618 lines | unknown @90s |
+  | 2 | 1 | 716 | unknown @90s |
+  | 4 | 3 | 828 | **sat @79s** |
+  | 8 | 4 | 884 | unknown @90s |
+  | 18 | 11 | 1276 | unknown @90s |
+
+  A `sat` at cap=4 says those 3 addresses are not merely insufficient, they let
+  the solver build a countermodel -- the spill/reload connection is absent, so
+  the reloaded `a5`/`a6` are free. The earlier successful discharge (2.8s) used
+  exactly TWO addresses: the `a5`/`a6` spill slots, `24(sp)` and `16(sp)`.
+  `dedup_addrs` returns a cap-ordered prefix that does not contain them.
+- so the fix is address SELECTION, not budget: instantiate the memory clauses at
+  the slots the INVARIANT's own registers reload from (derivable -- the
+  invariant names x15/x16, and the slice has the `sd`/`ld` pair for each),
+  instead of the first N addresses the write set happens to list. The query is
+  only 484 lines sliced; this was never a scale problem.
+- superseded proposal (kept so it is not retried): supply the bounds as an
+  EXPLICIT assumption at the loop's argument,
   justified on the Lean side from the residual's own precondition (the arm is
   entered with a well-formed `Expr.call` whose argument list the AST bounds),
   rather than as something the encoder re-derives. That is a statement-level
