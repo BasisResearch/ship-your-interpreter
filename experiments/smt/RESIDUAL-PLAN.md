@@ -121,63 +121,46 @@ had contradictory assumptions and proved every post they were asked, and the
 loop clause sets they leaned on were mined against loop bodies that never run.
 The numbers below are what the encoder says once neither is true.
 
-Regenerated from the tracked emit, whose `src/` provenance MATCHES the encoder
-at this commit (52 spans, 47 summaries, `-j10 --timeout 120`, z3 4.15.4):
+Regenerated against an encoder the GATE VALIDATED FIRST, which is the part that
+makes the rest of the table worth reading. `scripts/difftest.sh --mine` reports
+OK: 58 spans, 273 span instances driven end to end, every one agreeing with the
+machine on every register of `state_exit` and on the whole store footprint, over
+62 summaries and 22438 applications, 91426 state checks.
 
-| post | VALID | N/A | REFUTED | UNKNOWN |
-|---|---|---|---|---|
-| `sp` | 18 | — | — | 34 |
-| `outside_stack_arena` | 18 | — | — | 34 |
-| `code` | 18 | — | — | 34 |
-| `storerepr` | 2 | 4 | — | 46 |
-| `valuerepr_tag` | 1 | 17 | — | 34 |
+The encoder now splits each residual into per-instance rows, so this is 63
+instances and 378 verdicts:
 
-**Not one REFUTED and not one VACUOUS.** Those only mean something together: the
-first was also true of a campaign in which 26 queries proved every post they were
-asked, and it is the second that makes it worth anything.
+| post | VALID | N/A | UNKNOWN |
+|---|---|---|---|
+| `sp` | 28 | — | 35 |
+| `outside_stack_arena` | 26 | — | 37 |
+| `code` | 26 | — | 37 |
+| `storerepr` | 6 | 12 | 45 |
+| `valuerepr_tag` | 1 | 27 | 35 |
+| `residual_relation` | — | 43 | 20 |
 
-And for the first time the encoder has POSITIVE evidence behind it, not just an
-absence of known defects. `scripts/difftest.sh` on this encoder reports OK over
-104 programs: 6170 distinct PCs, 90264 state checks, and **309 span instances
-driven end to end, every one agreeing with the machine on every register of
-`state_exit` and on the whole store footprint**. One accepted divergence, named
-in `DIFFTEST-FINDINGS.md`: 664 stores to the HTIF mailbox, which the proof model
-consumes as device commands and the encoder's byte array keeps.
+**No REFUTED and no VACUOUS.** 87 VALID, of which **50 are UNQUALIFIED** — the
+rest carry `(consistency-unproved)`, meaning z3 could not prove that field's
+assumptions consistent inside the budget, so the VALID is qualified rather than
+clean. Only the unqualified 50 are a plain result, and the artefacts say which
+those are rather than leaving it to prose.
 
-The remaining UNKNOWNs have named causes, not noise:
+### A trap this section was itself caught by
 
-* **68 — the args-loop invariant** at its recursive occurrence
-  (`loop_0x800031dc`). A NAMED OBSTRUCTION, not a gap in effort: the
-  cut-and-retry abstraction was tried at all 19 candidate cut points with `INV`
-  proved at each, giving 8 `sat` and 11 `unknown` and no discharge, in both walk
-  orders. The `sat` verdicts say why — the bounds come from branch guards whose
-  `g` bindings reference upstream states, so havocking a state strips the guards
-  with it. Closing it wants the bounds supplied as an explicit assumption from
-  the residual's own precondition, which is a statement-level change.
-* **30 — loop summaries that no longer carry `stack_or_arena`**, now that their
-  obligations are mined against bodies that actually run.
-* **114 — plain solver timeouts** at 120s.
-
-The former single refutation, `hInitStore.storerepr`, was a MIS-STATED POST and
-is now VALID: `storerepr` excluded the stack and arena but not the writable
-statics, while `OUTSIDE` and the `stack_or_arena` clause exclude all three, so
-the two routes meant to cross-check each other were checking different
-properties. The countermodel put `QA` at `0x8001c01d`, inside
-`[0x8001ad00, 0x8001c168)` — the interpreter initialising its own globals.
-
-`stack_or_arena` survives on 28 of 47 summaries, down from 52 of 53. That drop is
-the loop-obligation fix landing: a loop body that actually runs does not preserve
-the clause, and the earlier survival rate was measuring a body that never
-executed.
+`difftest.sh` reuses `experiments/smt/bmc/clauses.json` unless given `--mine`.
+Run without it against a stale clause set, the gate reports CLAUSE-FALSE for
+clauses the CURRENT encoder correctly refutes — 20 findings across 8 loops, all
+of them an artefact of the input rather than a defect in the encoder. **Always
+`--mine` when the encoder has changed.** The same shape as the provenance guard:
+a checker fed the wrong thing gives confident wrong answers.
 
 ### On regenerating this table
 
-The encoder is under active repair and these artefacts are per-encoder. Five
-campaigns were run in one night and four were superseded mid-flight by a fix to
-`ReflectSpan.lean`. The driver's provenance guard (a `src/` copy in the campaign
-directory, compared against the tree) is what catches that, and it should be
-believed: a verdict against a different encoder is a verdict about another
-program. Regenerate once the encoder settles, not while it is being fixed.
+The artefacts carry their own `src/` copy of the two encoder sources, and the
+driver refuses to answer when it does not match the tree. Believe that guard.
+Five campaigns in one night were superseded mid-flight by an encoder edit, and
+the only reason none of their numbers were published as current is that the
+guard caught it. When `src/` and the tree disagree, re-emit; do not assume.
 
 ## The evidence the verdicts rest on
 
