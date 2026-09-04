@@ -549,7 +549,19 @@ def iv_discharge(text, cset, timeout, pre, writes=None):
         # PROVED from the uncut slice first rather than assumed.  With that
         # proof in hand the cut hypotheses are implied by the real ones, and
         # the discharge transfers.
-        if cut_discharge(sl, cset, pre, gq, goal, timeout):
+        # MEASURED DEAD for the only invariant this campaign carries, so it is
+        # off by default: on hDivOv's `loop_0x800031dc@m297`, all NINETEEN cut
+        # candidates were tried with `INV` PROVED at each -- 8 came back `sat`
+        # and 11 `unknown`, none discharged.  A `sat` says the cut is not merely
+        # too weak but drops facts the invariant needs, and that is the whole
+        # story: the bounds `0 <= a6` and `a5 <= 32` come from BRANCH GUARDS
+        # (`blt a4,a5`, `bge zero,a5`, `a6 := 0`), whose `g` bindings reference
+        # upstream states, so havocking a state strips the guards' definitions
+        # along with it.  No cut point both shrinks the query and keeps the
+        # bounds.  Left in, behind a flag, because the mechanism is sound where
+        # the needed facts are re-derivable from `INV` alone.
+        if os.environ.get("HOUDINI_CUT") == "1" and \
+                cut_discharge(sl, cset, pre, gq, goal, timeout):
             continue
         return f"{f}@{arg}"
     return None
@@ -570,7 +582,14 @@ def cut_discharge(sl, cset, pre, gq, goal, timeout, tries=4, cap=120):
     # buys waiting.  Cap it, or a site that will never discharge costs
     # `2 * tries * timeout` on its own.
     budget = min(timeout, cap)
-    for c in list(reversed(cands))[:tries]:
+    # EARLIEST first, not latest.  Havocking a state drops everything upstream
+    # of it, so a LATE cut is the aggressive one -- and for this invariant the
+    # facts that establish `0 <= a6 < a5 <= 32` (the `blt`/`bge` bounds checks
+    # and `a6 := 0`) all sit UPSTREAM of the loop.  Cutting late threw exactly
+    # those away: `INV` was provable at the two latest candidates in ~1s and the
+    # discharge then failed for want of the bounds.  An early cut keeps them and
+    # still drops the long prefix that makes the query unanswerable.
+    for c in cands[:tries]:
         if z3(base + f"(assert (not (INV {c})))\n(check-sat)\n", budget) != "unsat":
             continue                      # INV not established here: unusable
         cut = re.sub(rf"^\(assert \(= {c} .*\)\)$", f"(assert (INV {c}))",

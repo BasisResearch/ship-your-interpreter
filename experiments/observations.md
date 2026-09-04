@@ -6051,3 +6051,28 @@ it, still stop and report instead.
 - proposal: when two routes check "the same" property, their statements must be
   derived from one definition, not written twice. The region list belongs in a
   single constant that both `OUTSIDE` and `POSTS["storerepr"]` consume.
+
+## 2026-09-04 smt-args-loop-IV-obstruction (bmc campaign, NAMED OBSTRUCTION)
+- missing: a way to discharge `0 <= a6 < a5 <= 32` for `loop_0x800031dc` (the
+  argument loop in eval_expr's EX_CALL arm) at its RECURSIVE occurrence. This is
+  the single remaining blocker for all 104 footprint verdicts; every other cause
+  is closed.
+- the invariant is NOT in doubt: it is the `bne` at 0x80003250 and `MAX_ARGS` at
+  `c/src/interp.c:251`, stated signed because every comparison the machine makes
+  there is signed. What is missing is a way to hand the solver the bounds at the
+  recursive occurrence without re-deriving them through the whole prefix.
+- workaround: NONE, and one was tried and MEASURED DEAD. `cut_discharge` havocs a
+  block state, proves `INV` at it first (so the weakening is sound), and retries.
+  On hDivOv's `@m297`, all 19 candidates were tried with `INV` proved at each:
+  8 `sat`, 11 `unknown`, 0 discharges. Both walk orders were tried; direction is
+  not the issue.
+- WHY it cannot work, which is the useful part: the bounds come from BRANCH
+  GUARDS (`blt a4,a5`, `bge zero,a5`, `a6 := 0`) whose `g` bindings reference
+  upstream states. Havocking a state strips those definitions with it, so no cut
+  point both shrinks the query and keeps the bounds. A `sat` verdict at a cut is
+  the machine saying exactly that.
+- proposal: supply the bounds as an EXPLICIT assumption at the loop's argument,
+  justified on the Lean side from the residual's own precondition (the arm is
+  entered with a well-formed `Expr.call` whose argument list the AST bounds),
+  rather than as something the encoder re-derives. That is a statement-level
+  change, not an encoder one, which is why no amount of solver work reaches it.
