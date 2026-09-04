@@ -2,3 +2,4 @@ summary	clause	reason
 callee_2147493980	ra_restore	returns through a saved register / unresolved computed goto, so `ra` is not preserved
 callee_2147501732	ra_restore	returns through a saved register / unresolved computed goto, so `ra` is not preserved
 callee_2147501864	ra_restore	returns through a saved register / unresolved computed goto, so `ra` is not preserved
+callee_2147494140	ra_restore	returns through a saved register / unresolved computed goto, so `ra` is not preserved

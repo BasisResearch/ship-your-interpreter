@@ -1,2 +1,4 @@
 guard	width	addr
-
+g0	8	(bvadd (select (rr i7) #x0000000000000002) #x0000000000000000)
+g0	0	(bvadd (select (rr m0) #x0000000000000010) #x0000000000000008)
+g0	0	(bvadd (select (rr i4) #x000000000000000f) #x0000000000000000)

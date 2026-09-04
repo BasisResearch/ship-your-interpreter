@@ -1,0 +1,2 @@
+guard	width	addr
+g0	0	(bvadd (select (rr m0) #x0000000000000002) #x0000000000000040)

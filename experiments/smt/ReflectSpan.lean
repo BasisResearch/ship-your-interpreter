@@ -1705,8 +1705,18 @@ def reflectBmcTopo (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops 
     (fstarts noret : List Nat) (retExit : Bool) (_rounds : Nat) (s0 : String) :
     String × List String × List String × Bool × Nat × List (String × String × Nat)
       × List (Nat × Nat × String) × List (String × Nat) × String := Id.run do
+  -- THE ENTRY IS NEVER SUMMARISED, even when it is a loop header.  A loop
+  -- obligation is emitted with `entry = h`, and summarising `h` on its first
+  -- arrival makes `fbody` just `loop_h_ih S0`: the body is never reflected and
+  -- the induction reads "if the IH has the clause then the body has it", which
+  -- is vacuous for every clause.  Caught the moment it landed -- phase 2
+  -- refuted `ra_restore` and `above_sp` on 66 of 68 real applications of
+  -- `loop_0x800031dc`, clauses the round-based reflector's mining had correctly
+  -- dropped.  So the entry's own block is reflected, its body explored, and the
+  -- BACK ARRIVAL is where `loop_h` applies, which is what the round-based
+  -- reflector got out of only summarising an already-`seen` PC.
   let isHdr := fun (p : Nat) =>
-    (blockSuccs img lo hi stops p).any (fun q => canReach img lo hi stops q p)
+    p != entry && (blockSuccs img lo hi stops p).any (fun q => canReach img lo hi stops q p)
   let dsucc := fun (p : Nat) =>
     (if isHdr p then (loopExits img lo hi stops p).1
      else blockSuccs img lo hi stops p).eraseDups
@@ -1750,6 +1760,7 @@ def reflectBmcTopo (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops 
   let mut writes : List (String × String × Nat) := []
   let mut dispGuards : List (Nat × Nat × String) := []
   let mut halts : List (String × Nat) := []
+  let mut backAs : List Arrival := []
   let mut k := 0
   for pc in order do
     let as := ((pending.find? (fun t => t.1 == pc)).map (·.2)).getD []
@@ -1779,7 +1790,8 @@ def reflectBmcTopo (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops 
           binds := binds ++ [s!"({gvq} (and {gv} (= ({lsel} {mv}) {bvN q})))"]
           k := k + 1
           let a : Arrival := { pc := q, guard := gvq, state := sv }
-          pending := (pending.filter (fun t => t.1 != q))
+          if q == entry then backAs := backAs ++ [a]
+          else pending := (pending.filter (fun t => t.1 != q))
             ++ [(q, (((pending.find? (fun t => t.1 == q)).map (·.2)).getD []) ++ [a])]
         else
           left := true
@@ -1813,7 +1825,8 @@ def reflectBmcTopo (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops 
       let isDisp := (dispatchArms img (termPC img hi stops pc)).isSome
       let a : Arrival := { pc := q, guard := gvq, state := bv,
                            arm := if isDisp then some q else none }
-      pending := (pending.filter (fun t => t.1 != q))
+      if q == entry then backAs := backAs ++ [a]
+      else pending := (pending.filter (fun t => t.1 != q))
         ++ [(q, (((pending.find? (fun t => t.1 == q)).map (·.2)).getD []) ++ [a])]
       if isDisp then
         dispGuards := dispGuards ++ [(termPC img hi stops pc, q, gvq)]
@@ -1822,6 +1835,29 @@ def reflectBmcTopo (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops 
       binds := binds ++ [s!"({gvq} {gq})"]
       k := k + 1
       exits := exits ++ [(gvq, sq)]
+  -- the BACK EDGE: control returned to the entry, so the entry is a loop header
+  -- and `loop_<entry>` is what runs it to completion.  Its exits are routed
+  -- exactly as any other summarised loop's are.
+  if !backAs.isEmpty then
+    let lsum := s!"loop_{entry}"
+    let lsel := s!"loopexit_{entry}"
+    sums := (lsum :: sums).eraseDups
+    let (g0, st0) := mergeArrivals backAs
+    let gv := s!"g{k}"; let mv := s!"m{k}"; let sv := s!"m{k+1}"
+    binds := binds ++ [s!"({gv} {g0})", s!"({mv} {st0})", s!"({sv} ({lsum} {mv}))"]
+    k := k + 2
+    let (qs, leaves) := loopExits img lo hi stops entry
+    for q in qs do
+      let gvq := s!"g{k}x"
+      binds := binds ++ [s!"({gvq} (and {gv} (= ({lsel} {mv}) {bvN q})))"]
+      k := k + 1
+      exits := exits ++ [(gvq, sv)]
+    if leaves then
+      let gvq := s!"g{k}x"
+      binds := binds ++ [s!"({gvq} (and {gv} (= ({lsel} {mv}) {bvN 0})))"]
+      k := k + 1
+      exits := exits ++ [(gvq, sv)]
+    if qs.isEmpty && !leaves then halts := halts ++ [(gv, entry)]
   let exitTerm :=
     match exits with
     | [] => s0

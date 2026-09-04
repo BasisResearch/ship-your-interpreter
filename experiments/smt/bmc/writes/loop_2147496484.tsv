@@ -1,0 +1,11 @@
+guard	width	addr
+g0	8	(bvadd (select (rr i4) #x000000000000000e) #xfffffffffffffd00)
+g0	8	(bvadd (select (rr i8) #x000000000000000e) #xfffffffffffffd08)
+g0	8	(bvadd (select (rr i10) #x000000000000000e) #xfffffffffffffd10)
+g0	0	(bvadd (select (rr m0) #x0000000000000002) #x0000000000000040)
+g0	0	(bvadd (select (rr i1) #x0000000000000002) #x0000000000000000)
+g0	0	(bvadd (select (rr i2) #x0000000000000002) #x0000000000000010)
+g0	0	(bvadd (select (rr i3) #x0000000000000002) #x0000000000000018)
+g0	0	(bvadd (select (rr i5) #x0000000000000002) #x0000000000000048)
+g0	0	(bvadd (select (rr i7) #x0000000000000002) #x0000000000000008)
+g0	0	(bvadd (select (rr i9) #x0000000000000002) #x0000000000000050)
