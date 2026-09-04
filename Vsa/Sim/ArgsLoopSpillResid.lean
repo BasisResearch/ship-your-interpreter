@@ -1,4 +1,6 @@
-import Vsa.Machine
+import Vsa.Triple
+import Vsa.MemRepr
+import Vsa.Sim.InterpEntry
 
 /-!
 # `argsLoopSpillPreserved` — the BMC campaign's one undischarged premise
@@ -76,6 +78,8 @@ callee's run, and the solver cannot.
 namespace Vsa.Sim
 
 open Vsa.Machine
+open Vsa.Logic
+open Vsa.MemRepr
 open LeanRV64DExecutable
 open Register
 
@@ -87,51 +91,79 @@ def a5SpillSlot (sp : Nat) : Nat := sp + 24
 def a6SpillSlot (sp : Nat) : Nat := sp + 16
 
 /-!
-## RETRACTED: the obvious statement is FALSE, and here is the counterexample
+## Two retractions, and the shape that works
 
-`argsLoopSpillPreserved`, as first written here, quantified over an ARBITRARY
-configuration `c'` reachable from the call site and claimed both slots are
-preserved.  That is false, and the machine says so directly.  Disassembling the
-loop body `0x800031dc .. 0x80003250`:
+**First attempt, a TAUTOLOGY.**  It assumed the run preserves the two slots and
+concluded the reloaded values satisfy the bound.  The conclusion reduces to the
+hypothesis: it assumed the hard part.
+
+**Second attempt, FALSE.**  It quantified over an arbitrary configuration
+reachable from the call site.  The machine refutes that, because BOTH spills are
+inside the loop body:
 
     0x800031fc  sd x15,24(x2)      spill a5
     0x80003214  sd x16,16(x2)      spill a6
-    0x80003220  jal ra, eval_expr  the recursive call
+    0x80003220  jal ra, eval_expr
     0x8000322c  ld x16,16(x2)      reload a6
     0x80003230  ld x15,24(x2)      reload a5
-    0x80003250  bne x16,x15, 0x800031dc   BACK EDGE
+    0x80003250  bne x16,x15, 0x800031dc    BACK EDGE
 
-**Both spills are inside the loop body.**  So a `c'` in the second iteration,
-after `0x80003214` has run again, has a DIFFERENT byte at `sp + 16`: `a6` was
-incremented.  Reachability from the call site therefore includes states where
-the slot is legitimately rewritten, and the universally quantified claim is
-refuted by the program's own control flow.
+A `c'` in the second iteration, past `0x80003214`, has a different byte at
+`sp + 16`: `a6` was incremented.  (`a5`'s slot survives only because the count
+is loop-invariant — a coincidence of this loop, not a property.)
 
-(The `a5` slot happens to survive, because the count is loop-invariant and the
-re-spill writes the same value.  That is a coincidence of this loop, not a
-property worth stating.)
+**What both attempts got wrong** is the same thing: preservation has to be
+bounded to ONE callee activation, and `Steps` — a reflexive-transitive closure —
+cannot say "the matching return" on its own.
 
-## What the statement has to say instead, and why it is not written here
+**The shape that works is already in the repo.**  `Vsa.Alloc.MallocContract.spec`
+is a `Triple`, and `Triple P Q := ∀ c, P c → ∃ c', Steps c c' ∧ Q c'`.  The
+existential names the return state of THIS call, so an activation is
+characterised by its entry and exit rather than by reachability — exactly the
+missing piece.  Its frame conjunct is the model to copy:
 
-The preservation must be bounded to ONE callee activation — from the call at
-`0x80003220` to its matching return at `0x80003224`, with no intervening pass
-through the loop header.  Expressing "the matching return" is the whole
-difficulty: `Steps` is a reflexive-transitive closure with no notion of the
-first arrival, and `eval_expr` is recursive, so a later configuration with the
-same PC and the same `sp` may belong to a different activation.
+    ∀ a, ¬ privFoot a → ¬ (SL.lo ≤ a ∧ a < sp.toNat) → c.σ.mem[a]? = m0[a]?
 
-Getting that right means either a step-indexed formulation (`StepsN`, with the
-callee's run bounded) or a callee-contract shape of the kind
-`Vsa.Alloc.MallocContract` uses, where the run is characterised by its entry and
-exit rather than by reachability.  Both are real design decisions about the
-proof layer, and this file will not guess at one: two attempts have already been
-retracted here, a tautology and then this falsity, both from reaching for
-something shaped like the premise without checking it against the machine.
-
-What this file now carries is what is CHECKED: the addresses, the guards that
-establish the bound, the counterexample above, and the five measured-dead SMT
-routes.  `IV_PREMISE` in `scripts/houdini_summary.py` remains the operative
-record that 68 verdicts rest on the unproved premise.
+"untouched outside the private footprint and outside the stack strictly BELOW
+the entry `sp`".  The callee's own frame lives below entry `sp` and may change;
+everything at or above it is preserved.  The args loop's spill slots are at
+`sp + 16` and `sp + 24`, above `eval_expr`'s entry `sp`, so they fall in the
+preserved half — which is precisely why the restricted claim is true where the
+unrestricted `above_sp` clause is false.  `above_sp` fails only on the sret
+buffer the callee writes, and that is a different address from these two.
 -/
+
+/-- **THE RESIDUAL**, in the `MallocContract.spec` shape.
+
+One activation of `eval_expr`, entered with return address `r` and stack pointer
+`sp`, returns to `r` with `sp` restored and leaves the caller's two argument-loop
+spill slots byte-for-byte unchanged.
+
+The `Triple` is what bounds this to a SINGLE activation: its existential is the
+return state of this call, so nothing here quantifies over reachability and the
+second-iteration counterexample above cannot arise.
+
+Only the two slots are claimed, not the whole region at or above `sp`.  That
+restriction is the point: the unrestricted claim (`above_sp`) is FALSE of
+`eval_expr`, which writes its result into the caller-passed sret buffer, and the
+campaign correctly refutes it.  These two addresses are not that buffer.
+
+Proving this discharges `argsLoopBoundAcrossCall` (`IV_PREMISE` in
+`scripts/houdini_summary.py`) and promotes 68 campaign verdicts from
+`VALID[modulo ...]` to unqualified.  STATEMENT ONLY — no proof term here. -/
+def argsLoopSpillPreserved : Prop :=
+  ∀ (sp r : BitVec 64) (m0 : Mem),
+    Triple
+      (fun c =>
+        c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 evalExprEntry) ∧
+        c.σ.regs.get? Register.x1 = some r ∧
+        c.σ.regs.get? Register.x2 = some sp ∧
+        c.σ.mem = m0)
+      (fun c =>
+        c.σ.regs.get? Register.PC = some r ∧
+        c.σ.regs.get? Register.x2 = some sp ∧
+        ∀ k, k < 8 →
+          c.σ.mem[a5SpillSlot sp.toNat + k]? = m0[a5SpillSlot sp.toNat + k]?
+          ∧ c.σ.mem[a6SpillSlot sp.toNat + k]? = m0[a6SpillSlot sp.toNat + k]?)
 
 end Vsa.Sim
