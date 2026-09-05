@@ -636,6 +636,9 @@ theorem blockC_ge
     exact hpresvb k bb (by rw [hmemτ38e]; exact hbb)
   have hMemExt_fin : MemExtends m0 τ40.mem :=
     (hMemExt.trans hMemExt_c_5).trans hMemExt_5_40
+  have hWords_fin : ValueWordsTotal τ40.mem sret.toNat :=
+    ValueWordsTotal.mono (hMemExt_c_5.trans hMemExt_5_40)
+      (valueWordsTotal_of_populated hFullPop sret.toNat)
   have hAgTop_m5 : AgreeP (fun k => sp.toNat - 32 ≤ k ∧ k < sp.toNat) c.σ.mem m5 := by
     intro k hk
     show c.σ.mem[k]? = (writeMap8 m4 (sp.toNat - 832) (D5))[k]?
@@ -716,7 +719,7 @@ theorem blockC_ge
     hLadderSteps.trans <| (Steps.single hstepτ38).trans <|
     hsvb.trans <| (Steps.single hstepτ39).trans (Steps.single hstepτ40)
   refine ⟨⟨τ40, j40, cvb.steps + 1 + 1⟩, hchain, τ40.mem, φfm, φcm, φf', φc', hpfm, hpcm, hpf', hpc',
-    ⟨?_, hMemExt_fin, hSurvSL_fin⟩⟩
+    ⟨?_, hMemExt_fin, hWords_fin, hSurvSL_fin⟩⟩
   refine ⟨hGτ40, hj40, hpc_fin, hs1_fin, hsp_fin, ⟨vmifin, hmifin⟩,
     hout_fin, houtStr, rfl, hcode_fin, (by rw [hmemτ40e]; exact hvalfinal),
     hstore_fin, hframeG,
@@ -862,7 +865,7 @@ theorem evalGeSim : EvalGeSimGoal := by
   obtain ⟨c4, hs4, hExitDe⟩ :=
     blockD_v_rec g N A SL φfe φce st'' (.bool (a ≥ b)) sp r sret v8 v9 v18 c2.σ.sailOutput m0
       c3 ⟨mpre, hPreD⟩
-  obtain ⟨hExitE, hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
+  obtain ⟨hExitE, hMemExt, hWords, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
   have hmono := evalE_store_mono _hEvalE
   have hleF' : st.store.frames.size ≤ st'.store.frames.size := hSizeF ▸ hmono.1
   have hleC' : st.store.closures.size ≤ st'.store.closures.size := hSizeC ▸ hmono.2
@@ -871,7 +874,7 @@ theorem evalGeSim : EvalGeSimGoal := by
   have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
       st'' (.bool (a ≥ b)) sp r sret m0 c4 :=
     evalExit_of_phiExtends hpfF hpcF hExitE hmono.1 hmono.2
-  exact ⟨c4, ((hs2.trans hs3).trans hs4), hExit, hMemExt,
+  exact ⟨c4, ((hs2.trans hs3).trans hs4), hExit, hMemExt, hWords,
     φf', φc', hpfF.trans (PhiExtends.mono hmono.1 hpf'),
     hpcF.trans (PhiExtends.mono hmono.2 hpc'), hSurv⟩
 

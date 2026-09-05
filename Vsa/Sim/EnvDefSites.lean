@@ -1,4 +1,5 @@
 import Vsa.Sim.ValueSites
+import Vsa.Sim.DecodeTable.Batch11Part15
 import Vsa.Sim.DecodeTable.Batch01Part01
 import Vsa.Sim.DecodeTable.Batch01Part08
 import Vsa.Sim.DecodeTable.Batch01Part15
@@ -836,6 +837,38 @@ theorem site_80002ab4_ed
       (rX_bits_x18 _ v18 hx18₂) (wX_bits_x11 _ (v18 + sign_extend (m := 64) (0x000#12))))
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
+
+/-- Site 0x80002ab8 (`jal strcmp`): link x1 := 0x80002abc and jump to 0x80006ea0. -/
+theorem site_80002ab8_ed
+    (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret : BitVec 64)
+    (hG : GoodState σ) (hpc : σ.regs.get? Register.PC = some pc)
+    (hminstret : σ.regs.get? Register.minstret = some vminstret)
+    (hmem : Env_defineLoaded σ.mem)
+    (hpcv : pc = (0x80002ab8#64 : BitVec 64))
+    (htgt : (pc + sign_extend (m := 64) (0x0043e8#21)).toNat % 4 = 0)
+    (hi : i < 2) :
+    ∃ (σ' : MState) (i' : Nat),
+      Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧
+      σ'.mem = σ.mem ∧
+      ReadsLikePost σ'
+        (sigmaPost_jal σ pc vminstret (0x0043e8#21) Register.x1
+          (BitVec.addInt pc 4)) := by
+  subst hpcv
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := env_define_at_80002ab8 hmem
+  refine stepObs_jal σ i u (0x80002ab8#64) vminstret (0x3e8040ef#32)
+    (0x0043e8#21) (regidx.Regidx 0x01#5) Register.x1
+    (BitVec.addInt (0x80002ab8#64) 4)
+    (0xef#8) (0x40#8) (0x80#8) (0x3e#8)
+    hG hpc hminstret hb0 hb1 hb2 hb3
+    (by decide) (by decide) (by decide)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide)
+    (Vsa.Sim.DecodeTable.decode_3e8040ef (afterPrelude σ)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
+      (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
+    htgt (by decide) (by decide) (by decide) (by decide) (by decide) ?_ hi
+  exact wX_bits_x1 _ (BitVec.addInt (0x80002ab8#64) 4)
 
 /-- Site 0x80002ac0 (`ld`): x15 := sext(mem[x20+0x010]) (8B). -/
 theorem site_80002ac0_ed

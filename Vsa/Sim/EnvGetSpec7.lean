@@ -933,7 +933,7 @@ theorem env_get_found_uncond
       s56 s48 s40 s32 s24 s16 s8
   -- run the verified HIT tail 0x80002c70 → ret
   obtain ⟨c', m', hsT, hG, htick, hpc, ha0, hra, hsp', hx8, hx9, hx18, hx19, hx20, hx21,
-    hmem', hcode', hvr, _, _⟩ :=
+    hmem', hcode', hvr, _, _, _, _, _⟩ :=
     env_get_hit_tail g env out (sp0 - 64#64) r r0 r8 r9 r18 r19 r20 r21 i pv w0 w1 w2 f N φf φc m9 c70 hi hSt70
   exact ⟨c', m', (hsP.trans hs60).trans hsT, hG, htick, hpc, ha0, hra, hsp',
     hx8, hx9, hx18, hx19, hx20, hx21, hmem', hcode', hvr⟩

@@ -145,11 +145,12 @@ theorem execIfTrueSim
           ExecArmEntryK g N A SL φf φc st execArmIf sp r aInterp aStmt aEnv aRet
             v8 v9 v18 v19 out0 m0 ment cfg)
         (fun cfg => ∃ (φfE φcE : Addr → Nat) (aThen : BitVec 64)
-            (ment : Mem) (v8 v9 v18 v19 : BitVec 64),
+            (ment : Mem) (v8 v9 v18 v19 liveRA : BitVec 64) (outE : Array String),
           PhiExtends φf φfE st'.store.frames.size ∧
           PhiExtends φc φcE st'.store.closures.size ∧
+          EnvValid st' env ∧
           ExecDispatchReady g N A SL φfE φcE st' t sp r aInterp aThen aEnv aRet
-            v8 v9 v18 v19 out0 m0 ment cfg)) :
+            v8 v9 v18 v19 outE m0 ment cfg (liveRA := liveRA))) :
     ExecIfTrueSimGoal g N A SL φf φc st st'' d env c t e status
       sp r aInterp aStmt aEnv aRet m0 out0 := by
   intro cfg hpre
@@ -168,10 +169,12 @@ theorem execIfTrueSim
   obtain ⟨cA, hstepsA, hArmExists⟩ := hBlockA cfg ⟨he, hout0⟩
   -- ===== glue: cond eval + value_truthy (truthy) + ld s0,16(s0) + j → ExecDispatchReady =====
   obtain ⟨cG, hstepsG, hGlueOut⟩ := hGlue hIH cA hArmExists
-  obtain ⟨φfE, φcE, aThen, ment, v8, v9, v18, v19, hpfE, hpcE, hReady⟩ := hGlueOut
+  obtain ⟨φfE, φcE, aThen, ment, v8, v9, v18, v19, liveRA, outE,
+    hpfE, hpcE, henvE, hReady⟩ := hGlueOut
   -- ===== consume the branch ExecDispatchIH → ExecExitD (then-branch runs in-frame) =====
   obtain ⟨cD, hstepsD, hExitD⟩ :=
-    hBranchIH g N A SL φfE φcE sp r aInterp aThen aEnv aRet v8 v9 v18 v19 out0 m0 ment cG hReady
+    hBranchIH henvE g N A SL φfE φcE sp r aInterp aThen aEnv aRet v8 v9 v18 v19 outE m0 ment
+      cG ⟨liveRA, hReady⟩
   -- The branch's `ExecExitD` yields the goal `ExecExit` VERBATIM (same `m0` frame
   -- baseline, same `sp r aRet`, same `st''`/`status`) except its `store`/`retval`
   -- clauses are stated at the branch-run maps `φfE/φcE`, re-based to `φf/φc` by `hmaps`.
@@ -231,11 +234,12 @@ theorem execIfFalseSim
           ExecArmEntryK g N A SL φf φc st execArmIf sp r aInterp aStmt aEnv aRet
             v8 v9 v18 v19 out0 m0 ment cfg)
         (fun cfg => ∃ (φfE φcE : Addr → Nat) (aElse : BitVec 64)
-            (ment : Mem) (v8 v9 v18 v19 : BitVec 64),
+            (ment : Mem) (v8 v9 v18 v19 liveRA : BitVec 64) (outE : Array String),
           PhiExtends φf φfE st'.store.frames.size ∧
           PhiExtends φc φcE st'.store.closures.size ∧
+          EnvValid st' env ∧
           ExecDispatchReady g N A SL φfE φcE st' e sp r aInterp aElse aEnv aRet
-            v8 v9 v18 v19 out0 m0 ment cfg)) :
+            v8 v9 v18 v19 outE m0 ment cfg (liveRA := liveRA))) :
     ExecIfFalseSimGoal g N A SL φf φc st st'' d env c t e status
       sp r aInterp aStmt aEnv aRet m0 out0 := by
   intro cfg hpre
@@ -252,10 +256,12 @@ theorem execIfFalseSim
   obtain ⟨cA, hstepsA, hArmExists⟩ := hBlockA cfg ⟨he, hout0⟩
   -- ===== glue: cond eval + value_truthy (falsy) + ld s0,24(s0) + bnez → ExecDispatchReady =====
   obtain ⟨cG, hstepsG, hGlueOut⟩ := hGlue hIH cA hArmExists
-  obtain ⟨φfE, φcE, aElse, ment, v8, v9, v18, v19, hpfE, hpcE, hReady⟩ := hGlueOut
+  obtain ⟨φfE, φcE, aElse, ment, v8, v9, v18, v19, liveRA, outE,
+    hpfE, hpcE, henvE, hReady⟩ := hGlueOut
   -- ===== consume the branch ExecDispatchIH → ExecExitD (else-branch runs in-frame) =====
   obtain ⟨cD, hstepsD, hExitD⟩ :=
-    hBranchIH g N A SL φfE φcE sp r aInterp aElse aEnv aRet v8 v9 v18 v19 out0 m0 ment cG hReady
+    hBranchIH henvE g N A SL φfE φcE sp r aInterp aElse aEnv aRet v8 v9 v18 v19 outE m0 ment
+      cG ⟨liveRA, hReady⟩
   exact ⟨cD, hstepsA.trans (hstepsG.trans hstepsD), hmaps φfE φcE cD hpfE hpcE hExitD.1⟩
 
 end Vsa.Sim

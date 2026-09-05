@@ -185,8 +185,8 @@ theorem blockA_binaryArm
     have := hc.mem ▸ hc.expr
     cases this with | binary hk _ _ _ _ _ => exact hk
   -- === block A: prologue + dispatch → widened ArmEntryK @0x800034e8 ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, v13, hArm, hpresM, hx13out⟩ :=
-    blockA_k g N A SL φf φc st (.binary op el er) 6 (0x800034e8#64) UnaryArmCallee
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, hpresM, hx13out⟩ :=
+    blockA_k g N A SL φf φc st env (.binary op el er) 6 (0x800034e8#64) UnaryArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
       hkm0
@@ -209,7 +209,7 @@ theorem blockA_binaryArm
         hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
         hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
-        ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.x13_defined⟩⟩, rfl⟩
+        ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩
   -- Destructure a COPY of the widened `ArmEntryK` (keep `hArm` intact for output).
   have hArmCopy := hArm
   obtain ⟨_hAG, _hAtick, _hApc, _hAa0, _hAs1, _hAa2, _hAsp, _hAra, _hAmi, _hAout,
@@ -279,12 +279,14 @@ theorem blockA_binaryArm
   -- WAVE 48i (CURE 3): its arm-entry presence is now the blockA_k 3rd output
   -- `hx13out : c1.regs x13 = some v13` (CURE A threaded x13 σ1..σ19), DISCHARGING
   -- what the dropped `x13_pres` ∀-closure used to supply.  Bound as `aEnvReg := v13`.
-  have hx13c1 : c1.σ.regs.get? Register.x13 = some v13 := hx13out
+  have hx13c1 : c1.σ.regs.get? Register.x13 =
+      some (BitVec.ofNat 64 (φf env)) := hx13out
   -- Realign the ArmEntryK `out0` from the passed `c.σ.sailOutput` to the goal's
   -- `c1.σ.sailOutput` (equal by the blockA_k output invariant `_hAout`).
   have hArm' : ArmEntryK g N A SL φf φc st (0x800034e8#64) UnaryArmCallee (.binary op el er)
       sp r sret aExpr aEnv v8 v9 v18 c1.σ.sailOutput m0 ment c1 := _hAout.symm ▸ hArm
-  refine ⟨c1, hs1, (fun R => c1.σ.regs.get? R), v13, v8, v9, v18, v19, ment, hArm', hBE,
+  refine ⟨c1, hs1, (fun R => c1.σ.regs.get? R), BitVec.ofNat 64 (φf env),
+    v8, v9, v18, v19, ment, hArm', hBE,
     hAEx11, hx13c1, hx19c1, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩, hAEx8, hAEx18,
     hx19c1, hpayLment, hlReprMent, hpayRment, hrReprMent, hMemExt,
     (hc.mem ▸ hc.ground).transport_offstack hc.table_stack_disjoint hX.spSLhi hMentM0⟩

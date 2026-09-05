@@ -49,7 +49,7 @@ theorem finish_env_define_spill
       c'.σ.regs.get? Register.x19 = some countv ∧
       c'.σ.regs.get? Register.minstret = some vmi' ∧
       GoodState c'.σ ∧ Env_defineLoaded c'.σ.mem ∧ StrcmpLoaded c'.σ.mem ∧
-      c'.tick < 2 := by
+      c'.σ.mem = writeMap8 c.σ.mem addr (sdData_val value) ∧ c'.tick < 2 := by
   have hpc' := obs_store_pc hobs
   rw [hnext] at hpc'
   have hcarry' := prologueCarry_store hobs hcarry
@@ -67,6 +67,6 @@ theorem finish_env_define_spill
     rw [hmem]
     exact hstrloadedWrite
   exact ⟨⟨σ', i', c.steps + 1⟩, vmi', hstep, hpc', hcarry', hcount', hmi',
-    hG', hloaded', hstrloaded', htick'⟩
+    hG', hloaded', hstrloaded', hmem, htick'⟩
 
 end Vsa.Sim

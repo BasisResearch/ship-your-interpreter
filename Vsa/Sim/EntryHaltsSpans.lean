@@ -238,7 +238,7 @@ theorem entryEpilogueSpan_of
   obtain ⟨c', hsteps, hG', htick', hpc', hx10', hout''⟩ :=
     restoreRetChain_run out (0#64) spv s0b s1b s2b s3b s4b s6b s5b c
       hG htick hpc hs5 hsp hout' hcf
-  refine ⟨c', hsteps, ?_, hG', htick', ?_, ?_⟩
+  refine ⟨c', hsteps, ?_, hG', htick', ?_, ?_, hout''⟩
   · -- ExitTailChain0 at ra0 = interpRetLinkPC; interpRetLinkPC = 0x800045ec.
     exact hchain
   · rw [show (BitVec.ofNat 64 interpRetLinkPC : BitVec 64) = (0x800045ec#64 : BitVec 64)
@@ -254,23 +254,10 @@ decode, and the store-init representation seam (`ProgramRepr → StoreRepr initS
 The `setjmp` contract is REUSED verbatim; the store-init seam is genuinely the
 interpreter's own `env_new` startup path, surfaced as the named `StoreInitSeam`. -/
 
-/-- The store-init representation seam: from `Loaded L p c` (the C AST for `p` laid
-out in `c.σ.mem`), the initial spec store `initSt.store` is represented in the
-machine at the loop head — the single global frame with the three natives, as the
-interpreter's startup `env_new` establishes it.  This is the ONE genuinely-open
-representation fact of the prologue (the AST/heap-init store seam). -/
+/-- The route-correct entry seam.  Empty programs bypass the loop head and land
+at the normal epilogue; nonempty programs establish the loop-head `SegEntry`. -/
 def StoreInitSeam (L : Layout) (p : Program) : Prop :=
-  ∀ c : Config, Loaded L p c →
-    ∃ (c1 : Config)
-      (g : (R : Register) → Option (RegisterType R))
-      (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-      (dLeft aLeft : Nat) (m0 : Mem),
-      Steps c c1 ∧
-      -- ITEM ZERO (falsity #12, shape 3): also certify the `interp_run` image in
-      -- `m0` (the `SeqSpanGround` feed for the guarded `mExecSeq`; the span
-      -- discharger pins these bytes anyway).
-      Vsa.Sim.Code.Interp_runLoaded m0 ∧
-      SegEntry g N A SL φf φc initSt 0 dLeft aLeft interpLoopHeadPC m0 c1
+  EntryRouteSpan L p
 
 /-- **`EntryPrologueSpan` discharged** (conditional on `StoreInitSeam`).  The
 prologue-span decode (spill + `jal setjmp` first-return + `bnez` not taken + loop
@@ -281,9 +268,8 @@ for the ghosts the seam picks.  Here the whole prologue drive is bundled into
 the first-return `a0 = 0` splice INSIDE that drive. -/
 theorem entryPrologueSpan_of
     (L : Layout) (hseam : ∀ p, StoreInitSeam L p) :
-    ∀ p, EntryPrologueSpan L p := by
-  intro p c hL
-  exact hseam p c hL
+    ∀ p, EntryRouteSpan L p := by
+  exact hseam
 
 /-! ## §4. `hEntryHalts_closed` — modulo the two honest residuals -/
 
@@ -299,6 +285,7 @@ theorem hEntryHalts_closed
     (hframe : ∀ (g : (R : Register) → Option (RegisterType R))
         (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
         (st' : SpecSt) (m0 : Mem) (out : String),
+        g Register.x21 = some (0#64 : BitVec 64) →
         EpilogueFrame g N A SL φf φc st' m0 out) :
     ∀ (p : Program) (c : Config) (out : String) (st' : SpecSt)
       (t : ExecSeq initSt 0 0 p st' Status.normal),
@@ -306,8 +293,9 @@ theorem hEntryHalts_closed
       mExecSeq initSt 0 0 p st' Status.normal t →
       Halts c out 0 :=
   hEntryHalts_of L (entryPrologueSpan_of L hseam)
-    (fun g N A SL φf φc st' m0 out =>
-      entryEpilogueSpan_of g N A SL φf φc st' m0 out (hframe g N A SL φf φc st' m0 out))
+    (fun g N A SL φf φc st' m0 out hLatch =>
+      entryEpilogueSpan_of g N A SL φf φc st' m0 out
+        (hframe g N A SL φf φc st' m0 out hLatch))
 
 #print axioms hEntryHalts_closed
 

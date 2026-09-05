@@ -293,6 +293,7 @@ theorem loopHeadDispatch_span
       ChainFacts cH.σ.mem cH.σ.mem (loopHeadDispatchL sp s0) [] loopHeadDispatchSeg)
     -- the geometry SegEntry cannot supply (stated at the exec_stmt-entry memory mE):
     (hGeom : LoopHeadDispatchGeom g N A SL φf φc st sp aStmt s mE)
+    (henvValid : EnvValid st env)
     -- WAVE 47i: the root exec entry-ground bundle (M6 supply point —
     -- `stmtTablePins_of_bytes` from the `Loaded L` image + the parse-arena
     -- Layout fact; threaded as a premise beside the Geom supplier).
@@ -317,6 +318,7 @@ theorem loopHeadDispatch_span
           cE.σ.regs.get? Register.x10 = some aInterp ∧
           cE.σ.regs.get? Register.x11 = some aStmt ∧
           cE.σ.regs.get? Register.x12 = some aEnv ∧
+          aEnv = BitVec.ofNat 64 (φf env) ∧
           cE.σ.regs.get? Register.x13 = some aRet ∧
           cE.σ.regs.get? Register.x2 = some sp ∧
           GoodState cE.σ ∧ cE.tick < 2 ∧
@@ -327,7 +329,9 @@ theorem loopHeadDispatch_span
           (∃ v, cE.σ.regs.get? Register.x8 = some v) ∧
           (∃ v, cE.σ.regs.get? Register.x9 = some v) ∧
           (∃ v, cE.σ.regs.get? Register.x18 = some v) ∧
-          (∃ v, cE.σ.regs.get? Register.x19 = some v)) :
+          (∃ v, cE.σ.regs.get? Register.x19 = some v) ∧
+          (∃ v, cE.σ.regs.get? Register.x20 = some v) ∧
+          (∃ v, cE.σ.regs.get? Register.x21 = some v)) :
     ∃ (cE : Config),
       Steps cH cE ∧
       ExecEntry g N A SL φf φc st 0 env s sp (0x80004478#64) aInterp aStmt aEnv aRet mE cE := by
@@ -345,15 +349,16 @@ theorem loopHeadDispatch_span
   obtain ⟨c460, hstep460, hpc460, hG460, htick460, hmi460, _hframe460⟩ :=
     hValueNullSplice c458 hpc458 hG458 htick458 hmi458
   -- 3. arg-setup ≫ jal exec_stmt → 0x80003fe0.
-  obtain ⟨cE, hstepE, hpcE, hraE, ha0E, ha1E, ha2E, ha3E, hspE, hGE, htickE, hmemE,
-          hmiE, hframeE, houtE, hx8E, hx9E, hx18E, hx19E⟩ :=
+  obtain ⟨cE, hstepE, hpcE, hraE, ha0E, ha1E, ha2E, henvPtrE, ha3E, hspE, hGE, htickE, hmemE,
+          hmiE, hframeE, houtE, hx8E, hx9E, hx18E, hx19E, hx20E, hx21E⟩ :=
     hArgSetup c460 hpc460 hG460 htick460 hmi460
   -- compose the three runs.
   refine ⟨cE, Steps.trans (Steps.trans hstep458 hstep460) hstepE, ?_⟩
   -- marshal the ExecEntry structure.
   refine
     { good := hGE, tick := htickE, pc := hpcE
-      a0 := ha0E, a1 := ha1E, a2 := ha2E, a3 := ha3E, ra := hraE
+      a0 := ha0E, a1 := ha1E, a2 := ha2E, envPtr := henvPtrE,
+      a3 := ha3E, ra := hraE
       ra_align := by decide
       spReg := hspE
       stackOK := hGeom.stackOK
@@ -365,6 +370,7 @@ theorem loopHeadDispatch_span
       code := hmemE ▸ hGeom.code
       stmt := hmemE ▸ hGeom.stmt
       store := hmemE ▸ hGeom.store
+      env_valid := henvValid
       store_survives := ?_
       out := houtE
       frame := hframeE
@@ -376,6 +382,7 @@ theorem loopHeadDispatch_span
       stmt_ram := hGeom.stmt_ram
       stmt_win := hGeom.stmt_win
       spill_defined := ⟨hx8E, hx9E, hx18E, hx19E⟩
+      envset_defined := ⟨hx20E, hx21E⟩
       ground := by rw [hmemE]; exact hGround }
   · -- store survival: the callee sees `mem = mE`; a change confined to `[SL.lo, sp)`
     -- keeps the store representable, discharged by the geometry's `store_survives`.

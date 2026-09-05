@@ -9,9 +9,9 @@ DO NOT hand-edit — regenerate.
 One theorem per concrete Layout constant (`Vsa/Sim/LayoutInstance.lean`),
 equating the Lean definition with the symbol value read from the fixed binary at
 generation time.  A drift between the ELF and the hand-typed constants makes
-this file fail to elaborate.  `ground_atInterpRun` additionally pins the SHAPE
-of the concrete refinement `Layout`'s program-point predicate — the entry PC and
-the `(a0, a1)` AST-array ABI — against the `interp_run` symbol address.
+this file fail to elaborate.  `ground_atInterpRun` additionally pins the corrected
+four-argument ABI and post-startup representation boundary against the
+`interp_run` symbol address.
 
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
 -/
@@ -52,14 +52,11 @@ theorem ground_spEntry : spEntry = 0x88000000 := rfl
 /-- The HTIF `tohost` cell = `0x8001ad00` (ELF symbol table). -/
 theorem ground_tohostAddr : Vsa.Sim.tohostAddr = 0x8001ad00 := rfl
 
-/-- **The concrete refinement `Layout`'s program-point shape**, pinned to the
-`interp_run` symbol: `interpRunLayout.atInterpRun c a n` is exactly
-"PC = `0x800043ec`, `a0` = the AST-array base `a`, `a1` = the length `n`". -/
+/-- **The concrete refinement boundary**, including the correct four-argument
+ABI and the post-startup runtime representation. -/
 theorem ground_atInterpRun (c : Config) (a n : Nat) :
     interpRunLayout.atInterpRun c a n ↔
-      (c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 0x800043ec) ∧
-       c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 a) ∧
-       c.σ.regs.get? Register.x11 = some (BitVec.ofNat 64 n)) :=
+      InterpRunReady c a n :=
   Iff.rfl
 
 #print axioms ground_interpRunEntry

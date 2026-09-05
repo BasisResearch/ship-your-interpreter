@@ -117,6 +117,9 @@ theorem blockB_stmtExpr_stagePre
         -- eval-side code facts above; NOT derivable from `ExecGround`).
         EvalGround ment SL A (sp - 176#64)
           ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) aExprChild.toNat e ∧
+        ValueWordsTotal ment
+          ((sp - 176#64) + sign_extend (m := 64) (0x010#12)).toNat ∧
+        aEnv = BitVec.ofNat 64 (φf env) ∧
         -- the wide-window `StoreRepr` survival over `[SL.lo, esp+1088)` (esp = sp-176)
         -- and the sret ghost buffer `[aInterp, aInterp+24)` (the bundle's `sret`
         -- carve-out; `sret := aInterp` since x9 = s1 = aInterp at the jal).  A named
@@ -152,6 +155,8 @@ theorem blockB_stmtExpr_stagePre
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
         (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        (∃ w, gpre Register.x19 = some w) ∧ (∃ w, gpre Register.x20 = some w) ∧
+        (∃ w, gpre Register.x21 = some w) ∧
         -- ITEM ZERO B1: the child expression's budget at the statement
         -- frame `sp - 176`, `.fn`-bodies bound, store-bodies invariant.
         StackOK SL (sp - 176#64)
@@ -160,11 +165,11 @@ theorem blockB_stmtExpr_stagePre
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 4 c (fun c' => ExecJalPreBundle e c' st d env) := by
   obtain ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
-    hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hStoreSurvJ,
+    hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
     hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre,
     hSLlo, hSLhiRam, hSLwin,
     hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
-    hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
+    hgframe, hg8, hg18, hg19, hg20, hg21, hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
   -- unpack ExecArmEntryK
   obtain ⟨hG, htick, hpc, hs0, hs1, hs3, hs2, hsp, hra, ⟨vmi, hmi⟩,
     hout, houtStr, hmem, hcode, hstore,
@@ -325,8 +330,9 @@ theorem blockB_stmtExpr_stagePre
   refine ⟨gpre, N, A, SL, φf, φc, (0x80004180#64), (0x80004184#64), (0x1fefe4#21),
     (sp - 176#64) + 1088#64, r, aInterp, (sp - 176#64) + sign_extend (m := 64) (0x010#12),
     aInterp, aExprChild, v8, v9, v18, out0, ment, ?_, ?_, ?_, ?_,
-    hG4, hi4, hpc4, hx10_4, ?_, hx11_val, ⟨_, hx13_4⟩, hx12_4, hx2jsp, ⟨vmi4, hmi4⟩, hout4, ?_,
-    hmem4e, ?_, hEvCode, hViInt, hViSlot, hNbsJ, ?_, ?_, ?_, ?_, hframe4, ⟨hg8, hg18⟩,
+    hG4, hi4, hpc4, hx10_4, ?_, hx11_val, (by rw [← henvPtr]; exact hx13_4), hx12_4, hx2jsp, ⟨vmi4, hmi4⟩, hout4, ?_,
+    hmem4e, ?_, hEvCode, hViInt, hViSlot, hNbsJ, ?_, hWordsJ, ?_, ?_, ?_, hframe4,
+    ⟨hg8, hg18, hg19, hg20, hg21⟩,
     ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   -- hjaltgt : callPC + sext jalImm = evalExprEntry
   · apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide
@@ -448,6 +454,9 @@ def StmtExprArmDispatch
         -- eval-side code facts above; NOT derivable from `ExecGround`).
         EvalGround ment SL A (sp - 176#64)
           ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) aExprChild.toNat e ∧
+        ValueWordsTotal ment
+          ((sp - 176#64) + sign_extend (m := 64) (0x010#12)).toNat ∧
+        aEnv = BitVec.ofNat 64 (φf env) ∧
         (∀ m' : Mem,
           (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) →
             ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
@@ -467,6 +476,8 @@ def StmtExprArmDispatch
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         (∀ R : Register, AbiPreservedNoise R → c'.σ.regs.get? R = gpre R) ∧
         (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        (∃ w, gpre Register.x19 = some w) ∧ (∃ w, gpre Register.x20 = some w) ∧
+        (∃ w, gpre Register.x21 = some w) ∧
         -- ITEM ZERO B1: the child expression's budget at the statement
         -- frame `sp - 176`, `.fn`-bodies bound, store-bodies invariant.
         StackOK SL (sp - 176#64)
@@ -505,19 +516,19 @@ theorem stmtExpr_field_of_dispatch
     obtain ⟨c1, hsteps1, hMid⟩ :=
       hDisp g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 hEntry c rfl
     obtain ⟨gpre, aExprChild, v8, v9, v18, v19, ment, hArm, hpay, hExprChild,
-      hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hStoreSurvJ,
+      hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
       hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
-      hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩ := hMid
+      hgframe, hg8, hg18, hg19, hg20, hg21, hstackBudget, hexprBodies, hstoreBodies⟩ := hMid
     -- the arm-head cut stages the sub-call at `c1`
     have hcut : LandedN 4 c1 (fun c' => ExecJalPreBundle e c' st d env) :=
       blockB_stmtExpr_stagePre g gpre N A SL φf φc st d env e
         sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1
         ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
-         hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hStoreSurvJ,
+         hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
          hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
          hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
-         hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩
+         hgframe, hg8, hg18, hg19, hg20, hg21, hstackBudget, hexprBodies, hstoreBodies⟩
     -- compose the dispatch prefix (a `Steps`) with the counted cut
     obtain ⟨n1, hn1⟩ := hsteps1.toN
     obtain ⟨m2, c2, hm2, hs2, hpb⟩ := hcut

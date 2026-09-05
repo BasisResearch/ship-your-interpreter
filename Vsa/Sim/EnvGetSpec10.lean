@@ -140,7 +140,7 @@ theorem env_get_found_framed
       (fun pv hpv => hgeom9 pv hpv iHit hHit.ilt) s56 s48 s40 s32 s24 s16 s8
   -- run the verified HIT tail, KEEPING its out-buffer memory frame `hframe'`.
   obtain ⟨c', m', hsT, hG, htick, hpc, ha0, hra, hsp', hx8, hx9, hx18, hx19, hx20, hx21,
-    hmem', hcode', hvr, hframe', _hsoutT⟩ :=
+    hmem', hcode', hvr, _hw0, _hw1, _hw2, hframe', _hsoutT⟩ :=
     env_get_hit_tail (cHit.σ.regs.get?) env out (sp0 - 64#64) r r0 r8 r9 r18 r19 r20 r21 iHit pv w0 w1 w2
       f N φf φc m9 cHit hHit.ilt hHitTail
   refine ⟨c', m', iHit, hHit.ilt, (hsP.trans hsHit).trans hsT, hG, htick, hpc, ha0, hra, hsp',

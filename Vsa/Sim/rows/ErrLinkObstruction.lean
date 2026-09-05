@@ -18,10 +18,10 @@ pick any config not so parked (e.g. `tick := 2`).  The `genseg`/arm machinery
 produces a `Triple SitePre (JalErrPre …)` = the *implication* `∀ c, SitePre c → …`,
 a DIFFERENT shape, so no seg/arm/bridge could inhabit the bare universal.
 
-`jalErrPre_forall_false` below is the machine-checked refutation (Law 4).  It
-drove the corrected residual now emitted by `scripts/gen_m5_error_routing.py`:
-the route KEEPS each premise's spec-derivation context and demands the
-`SitePre`-conditioned reachability
+`jalErrPre_forall_false` below is the machine-checked refutation (Law 4). The
+live `ErrorRouting` surface now asks only executable leaves for conditioned
+reachability; propagation constructors reuse child induction hypotheses, and
+binary failures select a site through `BinaryErrReach`:
 
 ```
 hsite : ∀ c <spec-binders>, <spec-hyps> → ReachJal S.g S.inp S.m0 <pc> <bytes> c

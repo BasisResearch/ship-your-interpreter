@@ -1,23 +1,26 @@
 import Vsa.Sim.rows.CallRows
+import Vsa.Sim.rows.ArgsReturnCopy
+import Vsa.Sim.ArmSegSplitEval
+import Vsa.Sim.rows.CallArmEpilogue
+import Vsa.Sim.rows.NativeArmSplice
+import Vsa.Sim.rows.NativeArmDispatch
+import Vsa.Sim.StackSlotGeom
 
 /-!
 # `CallResidProviders` — reducers for the named residuals of `CallRows`
 
-`CallRows` (step-6c) states the seven call-subsystem case rows CONDITIONAL on
-NAMED residuals (`ArgsConsResid`, `ArgsNilResid`, `CallPrintResid` /
-`NativePrintSpec`, …).  This file supplies the *mechanical* half of each
-residual — the `Triple`/disjunction marshalling proven ONCE — leaving each
-residual collapsed to the single genuine machine-content oracle it was always
-gated on.  Nothing here changes a landed statement; every reducer is a new
-theorem `<resid>_of_<oracle>` producing the exact `CallRows` residual `def`.
+`CallRows` states the call-subsystem cases conditional on named residuals.  This
+file gives those residuals stable provider names while preserving every
+semantic index and ABI fact in the new `EvalArgsEntryI`/`EvalArgsExitI` and
+`CallEntryI`/`CallExitI` boundaries.  The providers remain explicit machine
+oracles; these reducers do not claim to prove the decoded spans.
 
 ## What each reducer does
 
 | residual | reducer | collapses to |
 |---|---|---|
-| `ArgsConsResid` | `argsConsResid_of_oracle` | the per-iteration body oracle `hbody`+`hphi` (fed to `evalArgsStepOf`, `LoopSteps:221`) + the nil loop-close `hnil` — the `EvalArgsStep` **marshalling** is discharged here; the residual is now exactly the ONE-IH arg-body chain decode (`arg-load ≫ jal eval_expr [EvalIH] ≫ 24-byte copy ≫ i++ ≫ bne`), the same `exprRepr_agreeP`-gated oracle the seq shape awaits. |
-| `ArgsNilResid` | `argsNilResid_of_hop` | one named single-hop machine residual `ArgsNilHop` (the empty-list `blez a5`→`0x80003254` fall-through at `0x800031d8`, gated on the `argc = 0` register pin `a5 = 0` that the nil case supplies).  NOT a bare fall-through: the plain `SegEntry@loopPC` carries no `a5` fact, so the hop is a genuine (tiny) decode + guard, isolated here. |
-| `NativePrintSpec` / `NativePrintlnSpec` / `NativeAssertOkSpec` | `nativePrintSpec_of_span` / `nativePrintlnSpec_of_span` / `nativeAssertOkSpec_of_span` | ONE parameterised `NativeDispatchSpan` (the SHARED dispatch decode `0x80003254…` ≫ native arm `0x800039e0…` ≫ `jalr a6` ≫ join `0x800033ec`) applied to a per-callee body contract `NativeBodyContract`.  The dispatch+jalr+join span is proven mechanical ONCE and reused across all three natives — the `jalr a6` is the SAME instruction for print/println/assert (only the resolved `a6 = N.addr f` and the callee body differ). |
+| `ArgsConsResid` | `argsConsResid_of_stages` | decoded head staging, recursive child IH, reflected return/copy block, and exact tail cursor |
+| native call residuals | `native*Spec_of_stages` | strict dispatch, native-body, and machine-proved join stages |
 
 ## Mechanical-duplication finding (native branch)
 
@@ -26,15 +29,12 @@ theorem `<resid>_of_<oracle>` producing the exact `CallRows` residual `def`.
 marshal ≫ `jalr a6` ≫ `0x800039f8` restore ≫ `j 0x800033ec` join).  The only
 per-native difference is (a) the resolved target `a6 = N.addr f`
 (`ValueRepr (.native f)` ghost) and (b) the callee body's store/output effect.
-So the span is factored ONCE as `NativeDispatchSpan` (parameterised by the
-callee's `NativeBodyContract`), and each `Native*Spec` is a one-line instance —
-exactly the shape-level factoring the exponentiation mandate asks for.  This
+So the route is factored as `NativeCallStages`, and each native residual is a one-line instance. This
 mirrors `println = print ≫ fputc('\n')` at the *body* level: `native_println`'s
 body contract is `native_print`'s composed with one trailing HTIF append.
 
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`.  Every leftover is a NAMED typed
-premise (`argsBodyOracle`/`argsPhiGlue`, `ArgsNilHop`, `NativeDispatchSpan`,
-`NativeBodyContract`).
+premise (`ArgsBodyStageProvider`, `NativeCallStages`).
 -/
 
 namespace Vsa.Sim.Rows
@@ -50,204 +50,453 @@ open Vsa.Sim.TermSimAssembly
 
 local notation "SpecSt" => Vsa.While.St
 
-/-! ## Residual 1 — `ArgsConsResid` via the args-loop body oracle
+/-! ## Residual 1 — one argument iteration, split at real machine boundaries -/
 
-`ArgsConsResid st d env` demands, for the fixed `dLeft aLeft m0`, BOTH
-* an `EvalArgsStep` for every suffix/intermediate-state (the per-iteration
-  hypothesis `evalArgsCons` consumes), and
-* the nil loop-close `Triple (SegEntry@loopPC) (SegExit@contPC)`.
+/-- A recursive child-call checkpoint that retains the exact enclosing call
+node in the same witness package as `JalPreCore`.  This prevents the call node,
+stack layout, arena, and pre-call memory from being chosen independently. -/
+def CallChildJalPre
+    (callNode : BitVec 64) (f : Expr) (args : List Expr) (child : Expr)
+    (c : Config) (st : SpecSt) (d : Nat) (env : Addr) : Prop :=
+  ∃ (gpre : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (callPC retPC : BitVec 64) (jalImm : BitVec 21)
+    (sp r sret subsret aIn aOperand : BitVec 64) (v8 v9 v18 : BitVec 64)
+    (out0 : Array String) (mcall : Mem) (lo hi : Nat),
+    JalPreCore child c st d env gpre N A SL φf φc callPC retPC jalImm
+      sp r sret subsret aIn aOperand v8 v9 v18 out0 mcall ∧
+    gpre Register.x8 = some callNode ∧
+    ExprRepr mcall callNode.toNat (.call f args) ∧
+    AstRegionSpec mcall SL A sret.toNat callNode.toNat (.call f args) lo hi
 
-`evalArgsStepOf` (`LoopSteps:221`) produces the `EvalArgsStep` from the two
-mechanical inputs: the machine body oracle `hbody` (the ONE-IH arg-body chain)
-and the φ-alloc upgrade `hphi`.  This reducer threads them, discharging the
-`EvalArgsStep` marshalling and leaving the residual as exactly
-`argsBodyOracle`/`argsPhiGlue`/`hnil` — the genuine machine content. -/
+/-- The state after the recursive `eval_expr` child returns at `0x80003224`.
+The carrier retains the exact enclosing call node and its transported
+`ExprRepr`; these are tied to the same `SubEvalReturn` witnesses. -/
+def ArgsChildReturn
+    (st st' : SpecSt) (d : Nat) (env : Addr)
+    (callNode : BitVec 64) (f : Expr) (args : List Expr)
+    (e : Expr) (v : Value) :
+    Config → Prop :=
+  fun c =>
+    ∃ (gpre : (R : Register) → Option (RegisterType R))
+      (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+      (sp r sret subsret retPC v8 v9 v18 : BitVec 64) (mcall : Mem),
+      StackBounds sp SL ∧
+        SubEvalReturn gpre N A SL φf φc
+          st.store.frames.size st.store.closures.size st' v
+          sp r sret subsret retPC v8 v9 v18 mcall c ∧
+        c.σ.regs.get? Register.x8 = some callNode ∧
+        ExprRepr c.σ.mem callNode.toNat (.call f args) ∧
+        ∃ lo hi, AstRegionSpec c.σ.mem SL A sret.toNat callNode.toNat
+          (.call f args) lo hi
 
-/-- The per-iteration machine body oracle for the arg loop — the ONE genuine
-residual after `evalArgsStepOf` marshalling.  Parametric in the suffix and
-intermediate maps/state, matching `evalArgsStepOf`'s `hbody`. -/
-def ArgsBodyOracle
+/-- A staged `jal eval_expr` plus the semantic child IH reaches the exact
+post-child boundary used by the copy block. -/
+theorem argsChildReturn_of_jalBundle
+    (st st' : SpecSt) (d : Nat) (env : Addr)
+    (callNode : BitVec 64) (f : Expr) (args : List Expr)
+    (e : Expr) (v : Value)
+    (hIH : EvalIH st d env e st' v) :
+    Triple
+      (fun c => CallChildJalPre callNode f args e c st d env)
+      (ArgsChildReturn st st' d env callNode f args e v) := by
+  intro c hc
+  obtain ⟨gpre, N, A, SL, φf, φc, callPC, retPC, jalImm, sp, r, sret,
+    subsret, aIn, aOperand, v8, v9, v18, out0, mcall, lo, hi,
+    hcore, hgpre8, hcallRepr, hcallRegion⟩ := hc
+  obtain ⟨henvValid, hjaltgt, hlink, hretAl, hjalSite, hpre⟩ := hcore
+  have hstackBounds : StackBounds sp SL := by
+    refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> omega
+  obtain ⟨c', hs, hret⟩ :=
+    armTail_rec gpre N A SL φf φc st st' d env e v
+      callPC retPC jalImm sp r sret subsret aIn aOperand v8 v9 v18
+      out0 mcall hjaltgt hlink hretAl henvValid hjalSite hIH c hpre
+  have hretRaw := hret
+  obtain ⟨_hG, _htick, _hpc, _ha0, _hra, _hs1, _hsp, _hmi, _hout,
+    hframe, _hval, _hstore, _hcode, _hslotRa, _hslotS0, _hslotS1,
+    _hslotS2, hmemFrame, _hmemExt⟩ := hretRaw
+  have hx8 : c'.σ.regs.get? Register.x8 = some callNode :=
+    (hframe Register.x8 (by decide)).trans hgpre8
+  have hagree : AgreeP (regionP lo hi) mcall c'.σ.mem := by
+    intro a ha
+    change lo ≤ a ∧ a < hi at ha
+    have hOffLower : ¬ (SL.lo ≤ a ∧ a < sp.toNat - 1088) := by
+      rcases hcallRegion.stack_disjoint with hbelow | habove <;> omega
+    have hOffArena : ¬ (A.lo ≤ a ∧ a < A.hi) := by
+      rcases hcallRegion.arena_disjoint with hbelow | habove <;> omega
+    rcases hmemFrame a hOffLower hOffArena with hsub | heq
+    · exfalso
+      rcases hcallRegion.stack_disjoint with hbelow | habove
+      · omega
+      · have hspHi : sp.toNat ≤ SL.hi := by omega
+        omega
+    · exact heq.symm
+  have hcallRepr' : ExprRepr c'.σ.mem callNode.toNat (.call f args) :=
+    exprRepr_agree_region hagree hcallRegion.nodes hcallRepr
+  have hcallRegion' : AstRegionSpec c'.σ.mem SL A sret.toNat callNode.toNat
+      (.call f args) lo hi :=
+    hcallRegion.transport (fun a hlo hhi => hagree a ⟨hlo, hhi⟩)
+  exact ⟨c', hs, gpre, N, A, SL, φf, φc, sp, r, sret, subsret, retPC,
+    v8, v9, v18, mcall, hstackBounds, hret, hx8, hcallRepr',
+    lo, hi, hcallRegion'⟩
+
+/-- The returned-child carrier exposes the call node's concrete signed C count.
+This is derived from the transported `ExprRepr`, not restated as a stage
+assumption. -/
+theorem ArgsChildReturn.call_count
+    {st st' : SpecSt} {d : Nat} {env : Addr}
+    {callNode : BitVec 64} {f : Expr} {args : List Expr}
+    {e : Expr} {v : Value} {c : Config}
+    (h : ArgsChildReturn st st' d env callNode f args e v c) :
+    read32 c.σ.mem (callNode.toNat + 24) = some args.length ∧
+      args.length < 2 ^ 31 := by
+  obtain ⟨_gpre, _N, _A, _SL, _φf, _φc, _sp, _r, _sret, _subsret,
+    _retPC, _v8, _v9, _v18, _mcall, _hbounds, _hret, _hx8, hrepr,
+    _lo, _hi, _hregion⟩ := h
+  exact ExprRepr.call_count hrepr
+
+/-- Entry to the reflected return/copy block.  Its branch polarity is selected
+by whether another semantic argument remains. -/
+def ArgsCopyReady (es : List Expr) : Config → Prop :=
+  match es with
+  | [] => fun c => ∃ (sp : BitVec 64) (lds : List (List (BitVec 8))) (m : Mem),
+      SegPre argsReturnDoneSeg (argsReturnL sp) lds 0x80003224#64 m c
+  | _ :: _ => fun c => ∃ (sp : BitVec 64) (lds : List (List (BitVec 8))) (m : Mem),
+      SegPre argsReturnMoreSeg (argsReturnL sp) lds 0x80003224#64 m c
+
+/-- Exit from the reflected return/copy block, retaining its computed register
+map and write log for semantic marshalling. -/
+def ArgsCopyDone (es : List Expr) : Config → Prop :=
+  match es with
+  | [] => fun c => ∃ (sp : BitVec 64) (lds : List (List (BitVec 8))) (m : Mem),
+      ArgsReturnPost argsReturnDoneSeg sp 0x80003254#64 lds m c
+  | _ :: _ => fun c => ∃ (sp : BitVec 64) (lds : List (List (BitVec 8))) (m : Mem),
+      ArgsReturnPost argsReturnMoreSeg sp 0x800031dc#64 lds m c
+
+/-- The concrete return/copy/backedge block is fully reflected. -/
+theorem argsReturnCopyRun (es : List Expr) :
+    Triple (ArgsCopyReady es) (ArgsCopyDone es) := by
+  cases es with
+  | nil =>
+      intro c hc
+      obtain ⟨sp, lds, m, hpre⟩ := hc
+      obtain ⟨c', hs, hpost⟩ := argsReturnDoneRow sp lds m c hpre
+      exact ⟨c', hs, sp, lds, m, hpost⟩
+  | cons e es =>
+      intro c hc
+      obtain ⟨sp, lds, m, hpre⟩ := hc
+      obtain ⟨c', hs, hpost⟩ := argsReturnMoreRow sp lds m c hpre
+      exact ⟨c', hs, sp, lds, m, hpost⟩
+
+/-- Strict staged decomposition of one argument iteration.
+
+`head` ends before the recursive call. `toCopy` marshals only the child return
+into the reflected block. `finish` interprets only the reflected block's
+computed state as the next indexed cursor. -/
+structure ArgsBodyStages
+    (st st' : SpecSt) (d : Nat) (env : Addr) (e : Expr) (es : List Expr)
+    (v : Value) (esPrefix : List Expr) (vsPrefix : List Value)
     (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (d : Nat) (env : Addr) (dLeft aLeft : Nat) : Prop :=
-  ∀ (φf φc : Addr → Nat) (st stMid stFin : SpecSt) (e : Expr) (es : List Expr)
-    (v : Value) (m0 : Mem),
-    ∀ cfg : Config,
-      SegEntry g N A SL φf φc st d dLeft aLeft evalArgsLoopPC m0 cfg →
-      ∃ cfg' : Config, Vsa.Machine.Steps cfg cfg' ∧
-        ∃ (φf' φc' : Addr → Nat),
-          PhiExtends φf φf' stMid.store.frames.size ∧
-          PhiExtends φc φc' stMid.store.closures.size ∧
-          (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < SL.hi) → ¬ (A.lo ≤ a ∧ a < A.hi) →
-            cfg'.σ.mem[a]? = m0[a]?) ∧
-          SegEntry g N A SL φf' φc' stMid d dLeft aLeft evalArgsLoopPC cfg'.σ.mem cfg'
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (dLeft aLeft : Nat) (m0 : Mem) : Prop where
+  head : Triple
+    (EvalArgsPrefixEntryI g N A SL φf φc st d env
+      esPrefix (e :: es) vsPrefix dLeft aLeft m0)
+    (fun c => ∃ callNode f,
+      CallChildJalPre callNode f (esPrefix ++ e :: es) e c st d env)
+  toCopy : ∀ callNode f,
+    Triple (ArgsChildReturn st st' d env callNode f (esPrefix ++ e :: es) e v)
+      (ArgsCopyReady es)
+  finish : StoreClosuresBounded st.store →
+    ValuesClosuresBounded st.store.closures.size vsPrefix →
+    Triple (ArgsCopyDone es)
+    (fun c => ∃ (φf' φc' : Addr → Nat),
+      PhiExtends φf φf' st'.store.frames.size ∧
+      PhiExtends φc φc' st'.store.closures.size ∧
+      EvalArgsPrefixEntryI g N A SL φf' φc' st' d env
+        (esPrefix ++ [e]) es (vsPrefix ++ [v]) dLeft aLeft m0 c)
 
-/-- The φ-alloc upgrade (stMid-sized → stFin-sized) for the arg loop — matching
-`evalArgsStepOf`'s `hphi`. -/
-def ArgsPhiGlue
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (d : Nat) (dLeft aLeft : Nat) : Prop :=
-  ∀ (φf φc : Addr → Nat) (stMid stFin : SpecSt),
-    ∀ (φf' φc' : Addr → Nat) (cfg' : Config),
-      PhiExtends φf φf' stMid.store.frames.size →
-      PhiExtends φc φc' stMid.store.closures.size →
-      SegEntry g N A SL φf' φc' stMid d dLeft aLeft evalArgsLoopPC cfg'.σ.mem cfg' →
-      ∃ (φf'' φc'' : Addr → Nat),
-        PhiExtends φf φf'' stFin.store.frames.size ∧
-        PhiExtends φc φc'' stFin.store.closures.size ∧
-        SegEntry g N A SL φf'' φc'' stMid d dLeft aLeft evalArgsLoopPC cfg'.σ.mem cfg'
-
-/-- **Reduce `ArgsConsResid` to the body oracle.**  Discharges the `EvalArgsStep`
-marshalling (`evalArgsStepOf`) and the nil loop-close, leaving the two mechanical
-machine inputs `ArgsBodyOracle`/`ArgsPhiGlue` + the nil hop `hnil` as the sole
-residuals — exactly the `execBlockStep`/seq-loop deferral discipline. -/
-theorem argsConsResid_of_oracle
+/-- Provider for one iteration.  It exposes only strict machine stages, never
+the whole iteration Triple. -/
+def ArgsBodyStageProvider
     (st : SpecSt) (d : Nat) (env : Addr)
-    (hBody : ∀ (g : (R : Register) → Option (RegisterType R))
-        (N : NativeAddrs) (A : Arena) (SL : StackLayout) (dLeft aLeft : Nat),
-        ArgsBodyOracle g N A SL d env dLeft aLeft)
-    (hPhi : ∀ (g : (R : Register) → Option (RegisterType R))
-        (N : NativeAddrs) (A : Arena) (SL : StackLayout) (dLeft aLeft : Nat),
-        ArgsPhiGlue g N A SL d dLeft aLeft)
-    (hNil : ∀ (g : (R : Register) → Option (RegisterType R))
-        (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-        (dLeft aLeft : Nat) (φf φc : Addr → Nat) (st0 : SpecSt) (mm : Mem),
-        Triple
-          (SegEntry g N A SL φf φc st0 d dLeft aLeft evalArgsLoopPC mm)
-          (SegExit g N A SL φf φc st0.store.frames.size st0.store.closures.size st0
-            evalArgsContPC mm)) :
-    ArgsConsResid st d env := by
-  intro g N A SL dLeft aLeft m0
-  refine ⟨?_, ?_⟩
-  · intro φf φc st0 e es st' stFin v mm
-    exact evalArgsStepOf g N A SL φf φc st0 st' stFin d env e es dLeft aLeft
-      evalArgsLoopPC mm v
-      (fun cfg hpre => hBody g N A SL dLeft aLeft φf φc st0 st' stFin e es v mm cfg hpre)
-      (fun φf' φc' cfg' hpf hpc hEntry =>
-        hPhi g N A SL dLeft aLeft φf φc st' stFin φf' φc' cfg' hpf hpc hEntry)
-  · intro φf φc st0 mm
-    exact hNil g N A SL dLeft aLeft φf φc st0 mm
-
-/-! ## Residual 2 — `ArgsNilResid` via the empty-list `blez` hop
-
-`ArgsNilResid` is `Triple (SegEntry@evalArgsLoopPC 0x800031dc)
-(SegEntry@evalArgsContPC 0x80003254)`.  This is NOT a free fall-through: the
-empty-list branch is the `blez a5, 0x80003254` at `0x800031d8` (BEFORE
-`evalArgsLoopPC`), so the hop is justified only under the `a5 = 0` (argc = 0)
-register pin the nil case carries — which the plain `SegEntry@loopPC` does NOT
-expose.  The genuine content is therefore a tiny guarded decode, isolated as the
-named residual `ArgsNilHop`.  This reducer is the identity marshalling: it names
-the hop precisely so the row's residual collapses to it. -/
-
-/-- The empty-list `blez` fall-through hop as a named residual — the ONE genuine
-machine fact `ArgsNilResid` reduces to.  (Reported honestly: this is a decode +
-`argc = 0` guard, NOT a zero-instruction identity — the plain loop-head
-`SegEntry` lacks the `a5` register pin the branch needs.) -/
-def ArgsNilHop (st : SpecSt) (d : Nat) : Prop :=
+    (e : Expr) (es : List Expr) (st' : SpecSt) (v : Value)
+    (hE : EvalE st d env e st' v) : Prop :=
+  mEvalE st d env e st' v hE →
+  ∀ (esPrefix : List Expr) (vsPrefix : List Value),
+    esPrefix.length = vsPrefix.length →
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (dLeft aLeft : Nat) (m0 : Mem),
-    Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft evalArgsLoopPC m0)
-      (SegEntry g N A SL φf φc st d dLeft aLeft evalArgsContPC m0)
+    ArgsBodyStages st st' d env e es v esPrefix vsPrefix
+      g N A SL φf φc dLeft aLeft m0
 
-/-- **Reduce `ArgsNilResid` to the named hop.**  Pure marshalling; the hop
-`ArgsNilHop` is the sole residual. -/
-theorem argsNilResid_of_hop
+/-- Discharge the exact one-iteration oracle from strict stages and the
+reflected return block, then resume the actual tail IH. -/
+theorem argsConsResid_of_stages
     (st : SpecSt) (d : Nat) (env : Addr)
-    (hHop : ArgsNilHop st d) :
-    ArgsNilResid st d env := by
-  intro g N A SL φf φc dLeft aLeft m0
-  exact hHop g N A SL φf φc dLeft aLeft m0
+    (e : Expr) (es : List Expr) (st' st'' : SpecSt)
+    (v : Value) (vs : List Value)
+    (hE : EvalE st d env e st' v)
+    (hArgs : EvalArgs st' d env es st'' vs)
+    (hBody : ArgsBodyStageProvider st d env e es st' v hE) :
+    ArgsConsResid st d env e es st' st'' v vs hE hArgs := by
+  intro hHead hTail esPrefix vsPrefix hlen g N A SL φf φc dLeft aLeft m0
+  obtain ⟨hStage, hToCopy, hFinish⟩ :=
+    hBody hHead esPrefix vsPrefix hlen g N A SL φf φc dLeft aLeft m0
+  intro c hc
+  have hBounds := EvalArgsPrefixEntryI.semanticBounds hc
+  have hChildToCopy : Triple
+      (fun c => ∃ callNode f,
+        CallChildJalPre callNode f (esPrefix ++ e :: es) e c st d env)
+      (ArgsCopyReady es) := by
+    intro c0 hc0
+    obtain ⟨callNode, f, hpre⟩ := hc0
+    obtain ⟨c1, hs1, hret⟩ :=
+      (argsChildReturn_of_jalBundle st st' d env callNode f
+        (esPrefix ++ e :: es) e v hHead) c0 hpre
+    obtain ⟨c2, hs2, hcopy⟩ := hToCopy callNode f c1 hret
+    exact ⟨c2, hs1.trans hs2, hcopy⟩
+  have hOne : Triple
+      (EvalArgsPrefixEntryI g N A SL φf φc st d env
+        esPrefix (e :: es) vsPrefix dLeft aLeft m0)
+      (fun c => ∃ (φf' φc' : Addr → Nat),
+        PhiExtends φf φf' st'.store.frames.size ∧
+        PhiExtends φc φc' st'.store.closures.size ∧
+        EvalArgsPrefixEntryI g N A SL φf' φc' st' d env
+          (esPrefix ++ [e]) es (vsPrefix ++ [v]) dLeft aLeft m0 c) :=
+    Triple.seq hStage <| Triple.seq hChildToCopy <|
+      Triple.seq (argsReturnCopyRun es)
+        (hFinish hBounds.1 hBounds.2)
+  obtain ⟨c1, hs1, φf', φc', hpf, hpc, hc1⟩ := hOne c hc
+  have hlen' : (esPrefix ++ [e]).length = (vsPrefix ++ [v]).length := by
+    simp [hlen]
+  have hrun := hTail (esPrefix ++ [e]) (vsPrefix ++ [v]) hlen'
+    g N A SL φf' φc' dLeft aLeft m0
+  obtain ⟨c2, hs2, hexit⟩ := hrun c1 hc1
+  have hmono := evalE_store_mono hE
+  have hexit' := evalArgsExitI_mono hmono.1 hmono.2
+    (evalArgsExitI_rebase hpf hpc hexit)
+  exact ⟨c2, hs1.trans hs2, by simpa [List.append_assoc] using hexit'⟩
 
-/-! ## Residuals 3+4 — the native branch via ONE shared dispatch span
+/-! ## Native branch via strict dispatch, body, and join stages
 
-`NativePrintSpec` / `NativePrintlnSpec` / `NativeAssertOkSpec` are all
-`Triple (CallEntryP) (CallExitP …)` — the whole native branch.  All three share
+The print/println/assert residuals are all concrete
+`Triple (CallEntryI … fv vs) (CallExitI … v sret)` contracts. All three share
 the dispatch decode (`callDispatchPC 0x80003254` fv-kind → native arm) ≫ the ABI
 marshal (`callNativePC 0x800039e0`) ≫ the **same** indirect `jalr a6` ≫ the
 restore ≫ `j callJoinPC 0x800033ec`.  The per-native difference is only the
 resolved target and the callee's store/output effect.
+-/
 
-`NativeDispatchSpan` captures the shared span parameterised by the callee's
-`NativeBodyContract` (its net effect on `(store, out)`); the three reducers are
-one-line instances at the print / println / assert effect. -/
+/-- Raw result of the finite native dispatch/marshal segment and its indirect
+call.  This names the machine facts used by the final ABI reconstruction. -/
+structure NativeDispatchReached
+    (g : (R : Register) → Option (RegisterType R))
+    (sp s0v argc interp sret target : BitVec 64)
+    (lds : List (List (BitVec 8))) (m0 : Mem) (c : Config) : Prop where
+  good : GoodState c.σ
+  tick : c.tick < 2
+  pc : c.σ.regs.get? Register.PC = some target
+  ra : c.σ.regs.get? Register.x1 = some (0x800039f8#64 : BitVec 64)
+  minstret : ∃ w, c.σ.regs.get? Register.minstret = some w
+  regs : GHolds c.σ (evalBlocks nativeDispatchStageSeg
+    (SegEvalState.init (nativeDispatchStageL sp s0v argc interp sret) lds)).regs
+  mem : c.σ.mem = writeLog m0 (evalBlocks nativeDispatchStageSeg
+    (SegEvalState.init (nativeDispatchStageL sp s0v argc interp sret) lds)).log
+  frame : ∀ R, AbiPreservedNoise R → R ≠ Register.x23 →
+    c.σ.regs.get? R = g R
 
-/-- A native callee's net effect on the spec state, as an abstract post: from the
-native arm entry the callee returns `.null` into the CALL sret and transforms the
-spec state to `stOut` (store unchanged for all three; output grown by
-`printArgs`/`+"\n"`/nothing).  This is the per-callee residual — the actual
-`native_print`/`native_println`/`native_assert` internal run + HTIF appends. -/
-def NativeBodyContract
+/-- Finite native-dispatch geometry.  The machine segment and `jalr` are run by
+`nativeDispatchRun`; fields contain only entry readbacks, code geometry, and
+the reached-state ABI marshal. -/
+structure NativeDispatchGeom
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem) (stOut : SpecSt) : Prop :=
-  Triple
-    (CallEntryP g N A SL φf φc st d dLeft aLeft m0)
-    (CallExitP g N A SL φf φc st.store.frames.size st.store.closures.size stOut m0)
+    (st : SpecSt) (d : Nat) (fv : Value) (vs : List Value)
+    (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem)
+    (fentry : Nat) (s7v interp argsBase scratch : BitVec 64)
+    (Extra : Config → Prop) : Type where
+  s0v : BitVec 64
+  lds : List (List (BitVec 8))
+  entryPins : ∀ c,
+    CallEntryI g N A SL φf φc st d fv vs dLeft aLeft sp sret m0 c →
+    GHolds c.σ (nativeDispatchStageL sp s0v
+      (BitVec.ofNat 64 vs.length) interp sret)
+  facts : ∀ c,
+    CallEntryI g N A SL φf φc st d fv vs dLeft aLeft sp sret m0 c →
+    ChainFacts c.σ.mem c.σ.mem
+      (nativeDispatchStageL sp s0v (BitVec.ofNat 64 vs.length) interp sret)
+      lds nativeDispatchStageSeg
+  keysOut : KeysOK (keysG (evalBlocks nativeDispatchStageSeg
+    (SegEvalState.init
+      (nativeDispatchStageL sp s0v (BitVec.ofNat 64 vs.length) interp sret) lds)).regs)
+  raOut : KeysAvoidRa (evalBlocks nativeDispatchStageSeg
+    (SegEvalState.init
+      (nativeDispatchStageL sp s0v (BitVec.ofNat 64 vs.length) interp sret) lds)).regs
+  pcEq : evalBlocksPC 0x80003254#64
+    (SegEvalState.init
+      (nativeDispatchStageL sp s0v (BitVec.ofNat 64 vs.length) interp sret) lds)
+      nativeDispatchStageSeg = (0x800039f4#64 : BitVec 64)
+  targetPin : ∀ σ,
+    GHolds σ (evalBlocks nativeDispatchStageSeg
+      (SegEvalState.init
+        (nativeDispatchStageL sp s0v (BitVec.ofNat 64 vs.length) interp sret) lds)).regs →
+    σ.regs.get? Register.x16 = some (BitVec.ofNat 64 fentry)
+  loadedOut : Vsa.Sim.Code.Eval_exprLoaded
+    (writeLog m0 (evalBlocks nativeDispatchStageSeg
+      (SegEvalState.init
+        (nativeDispatchStageL sp s0v (BitVec.ofNat 64 vs.length) interp sret) lds)).log)
+  aligned : (BitVec.ofNat 64 fentry : BitVec 64).toNat % 4 = 0
+  land : ValuesClosuresBounded st.store.closures.size vs →
+    ConsoleStream m0 → ∀ c,
+    NativeDispatchReached g sp s0v (BitVec.ofNat 64 vs.length) interp sret
+      (BitVec.ofNat 64 fentry) lds m0 c →
+    NativeBodyPre g N A SL φf φc st vs fentry
+      sp s7v sret interp argsBase scratch m0 c ∧ Extra c
 
-/-- **The shared native dispatch+jalr+join span.**  Parameterised over the callee
-effect `stOut`: given the callee's `NativeBodyContract` (the internal
-`native_*` run), the whole native branch is that same contract — the dispatch
-decode, ABI marshal, `jalr a6`, restore, and join are the SAME machine span for
-every native, so nothing is added on top of the callee's effect at the
-`CallEntryP`/`CallExitP` boundary.  This is the ONE mechanical span reused across
-print/println/assert.
-
-Stated as an implication (`NativeBodyContract → Triple …`) so the span itself is
-the reusable residual: discharging it once (the fv-kind decode + `jalr a6`
-resolution via `ValueRepr (.native f)` + the `0x800039f8→0x800033ec` join)
-closes all three natives modulo their per-callee body contracts. -/
-def NativeDispatchSpan
+/-- Execute the finite native dispatch segment and reconstruct its exact body
+boundary. -/
+theorem nativeDispatchRun
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem) (stOut : SpecSt) : Prop :=
-  NativeBodyContract g N A SL φf φc st d dLeft aLeft m0 stOut →
-  Triple
-    (CallEntryP g N A SL φf φc st d dLeft aLeft m0)
-    (CallExitP g N A SL φf φc st.store.frames.size st.store.closures.size stOut m0)
+    (st : SpecSt) (d : Nat) (fv : Value) (vs : List Value)
+    (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem)
+    (fentry : Nat) (s7v interp argsBase scratch : BitVec 64)
+    (Extra : Config → Prop)
+    (G : NativeDispatchGeom g N A SL φf φc st d fv vs dLeft aLeft sp sret
+      m0 fentry s7v interp argsBase scratch Extra) :
+    Triple
+      (CallEntryI g N A SL φf φc st d fv vs dLeft aLeft sp sret m0)
+      (fun c => NativeBodyPre g N A SL φf φc st vs fentry
+        sp s7v sret interp argsBase scratch m0 c ∧ Extra c) := by
+  intro c hc
+  obtain ⟨vm, hvm⟩ := hc.1.good.minstret
+  have hjal := nativeDispatchJalSeam_of (BitVec.ofNat 64 fentry) sp G.s0v
+    (BitVec.ofNat 64 vs.length) interp sret G.lds m0 G.pcEq G.targetPin
+    G.loadedOut G.aligned
+  obtain ⟨σ2, i2, hs, hi2, hgood2, hpc2, hra2, hmi2, hregs2, hmem2, hframe2⟩ :=
+    nativeDispatchStageBridge c.σ c.tick c.steps vm (BitVec.ofNat 64 fentry)
+      sp G.s0v (BitVec.ofNat 64 vs.length) interp sret G.lds m0
+      hc.1.good hc.1.pc hvm hc.1.mem (G.entryPins c hc) (G.facts c hc) hc.1.tick
+      G.keysOut G.raOut hjal
+  let c2 : Config := ⟨σ2, i2, c.steps + evalBlocksFuel nativeDispatchStageSeg + 1⟩
+  have hconsole0 : ConsoleStream m0 := by
+    rw [← hc.1.mem]
+    exact hc.console
+  refine ⟨c2, hs, G.land hc.valuesBounded hconsole0 c2 ?_⟩
+  exact
+    { good := hgood2
+      tick := hi2
+      pc := hpc2
+      ra := hra2
+      minstret := hmi2
+      regs := hregs2
+      mem := hmem2
+      frame := fun R hR hne =>
+        (hframe2 R (by simp [AbiExceptS7, hR.1, hne])).trans (hc.1.frame R hR) }
 
-/-- **Reduce `NativePrintSpec` to the shared span** at the `print` effect
-(`out ++ printArgs`, store unchanged).  The residual is `NativeDispatchSpan` (the
-shared span) + `NativeBodyContract` (the `native_print` char loop + HTIF
-appends). -/
-theorem nativePrintSpec_of_span
+#print axioms nativeDispatchRun
+
+/-- Exact native-call stages.  `dispatch` is finite readback geometry,
+`body` covers only the selected native implementation, and `nativeJoin`
+discharges the shared restore/join block. -/
+structure NativeCallStages
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem) (vs : List Value)
-    (hSpan : NativeDispatchSpan g N A SL φf φc st d dLeft aLeft m0
-      ⟨st.store, st.out ++ printArgs st.store vs⟩)
-    (hBody : NativeBodyContract g N A SL φf φc st d dLeft aLeft m0
-      ⟨st.store, st.out ++ printArgs st.store vs⟩) :
-    NativePrintSpec g N A SL φf φc st d dLeft aLeft m0 vs :=
-  hSpan hBody
+    (st : SpecSt) (d : Nat) (fv : Value) (vs : List Value)
+    (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem)
+    (stOut : SpecSt) : Type where
+  fentry : Nat
+  s7v : BitVec 64
+  interp : BitVec 64
+  argsBase : BitVec 64
+  scratch : BitVec 64
+  Extra : Config → Prop
+  spGhost : g Register.x2 = some sp
+  s7Ghost : g Register.x23 = some s7v
+  slotLo : 0x80000000 ≤ sp.toNat + 1016
+  slotHi : sp.toNat + 1024 ≤ 0x100000000
+  slotHtif : sp.toNat + 1024 ≤ tohostAddr ∨
+    tohostAddr + 8 ≤ sp.toNat + 1016
+  slotAlign : (sp.toNat + 1016) % 8 = 0
+  dispatch : NativeDispatchGeom g N A SL φf φc st d fv vs
+    dLeft aLeft sp sret m0 fentry s7v interp argsBase scratch Extra
+  body : Triple
+    (fun c => NativeBodyPre g N A SL φf φc st vs fentry
+      sp s7v sret interp argsBase scratch m0 c ∧ Extra c)
+    (NativeBodyPost g N A SL φf φc stOut sp s7v sret m0)
+
+/-- Compose the strict native stages with the machine-proved shared join. -/
+theorem nativeCallSpec_of_stages
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : SpecSt) (d : Nat) (fv : Value) (vs : List Value)
+    (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem) (stOut : SpecSt)
+    (hS : NativeCallStages g N A SL φf φc st d fv vs
+      dLeft aLeft sp sret m0 stOut) :
+    Triple
+      (CallEntryI g N A SL φf φc st d fv vs dLeft aLeft sp sret m0)
+      (CallExitI g N A SL φf φc st.store.frames.size st.store.closures.size
+        stOut .null sret m0) :=
+  nativeArmSplice g N A SL φf φc st.store.frames.size st.store.closures.size
+    stOut sp hS.s7v sret m0 _ _ hS.spGhost hS.s7Ghost hS.slotLo hS.slotHi
+    hS.slotHtif hS.slotAlign
+    (nativeDispatchRun g N A SL φf φc st d fv vs dLeft aLeft sp sret m0
+      hS.fentry hS.s7v hS.interp hS.argsBase hS.scratch hS.Extra hS.dispatch)
+    hS.body
+
+/-- Reduce `NativePrintSpec` to strict native stages at the `print` effect. -/
+theorem nativePrintSpec_of_stages
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (sp sret : BitVec 64)
+    (m0 : Mem) (vs : List Value)
+    (hS : NativeCallStages g N A SL φf φc st d (.native .print) vs
+      dLeft aLeft sp sret m0 ⟨st.store, st.out ++ printArgs st.store vs⟩) :
+    Triple
+      (CallEntryI g N A SL φf φc st d (.native .print) vs
+        dLeft aLeft sp sret m0)
+      (CallExitI g N A SL φf φc st.store.frames.size st.store.closures.size
+        ⟨st.store, st.out ++ printArgs st.store vs⟩ .null sret m0) :=
+  nativeCallSpec_of_stages g N A SL φf φc st d (.native .print) vs
+    dLeft aLeft sp sret m0 _ hS
 
 /-- **Reduce `NativePrintlnSpec` to the shared span** at the `println` effect
 (`out ++ printArgs ++ "\n"`).  The body contract is `print`'s composed with the
 trailing `fputc('\n')` HTIF append. -/
-theorem nativePrintlnSpec_of_span
+theorem nativePrintlnSpec_of_stages
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem) (vs : List Value)
-    (hSpan : NativeDispatchSpan g N A SL φf φc st d dLeft aLeft m0
-      ⟨st.store, st.out ++ printArgs st.store vs ++ "\n"⟩)
-    (hBody : NativeBodyContract g N A SL φf φc st d dLeft aLeft m0
-      ⟨st.store, st.out ++ printArgs st.store vs ++ "\n"⟩) :
-    NativePrintlnSpec g N A SL φf φc st d dLeft aLeft m0 vs :=
-  hSpan hBody
+    (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (sp sret : BitVec 64)
+    (m0 : Mem) (vs : List Value)
+    (hS : NativeCallStages g N A SL φf φc st d (.native .println) vs
+      dLeft aLeft sp sret m0 ⟨st.store, st.out ++ printArgs st.store vs ++ "\n"⟩) :
+    Triple
+      (CallEntryI g N A SL φf φc st d (.native .println) vs
+        dLeft aLeft sp sret m0)
+      (CallExitI g N A SL φf φc st.store.frames.size st.store.closures.size
+        ⟨st.store, st.out ++ printArgs st.store vs ++ "\n"⟩ .null sret m0) :=
+  nativeCallSpec_of_stages g N A SL φf φc st d (.native .println) vs
+    dLeft aLeft sp sret m0 _ hS
 
 /-- **Reduce `NativeAssertOkSpec` to the shared span** at the `assert` effect
 (spec state UNCHANGED — no store or output change).  The body contract is the
 `native_assert` truthy path (`value_truthy` ≫ `value_null`, no append). -/
-theorem nativeAssertOkSpec_of_span
+theorem nativeAssertOkSpec_of_stages
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem)
-    (hSpan : NativeDispatchSpan g N A SL φf φc st d dLeft aLeft m0 st)
-    (hBody : NativeBodyContract g N A SL φf φc st d dLeft aLeft m0 st) :
-    NativeAssertOkSpec g N A SL φf φc st d dLeft aLeft m0 :=
-  hSpan hBody
+    (st : SpecSt) (d : Nat) (vs : List Value) (dLeft aLeft : Nat)
+    (sp sret : BitVec 64) (m0 : Mem)
+    (hS : NativeCallStages g N A SL φf φc st d (.native .assert) vs
+      dLeft aLeft sp sret m0 st) :
+    Triple
+      (CallEntryI g N A SL φf φc st d (.native .assert) vs
+        dLeft aLeft sp sret m0)
+      (CallExitI g N A SL φf φc st.store.frames.size st.store.closures.size
+        st .null sret m0) :=
+  nativeCallSpec_of_stages g N A SL φf φc st d (.native .assert) vs
+    dLeft aLeft sp sret m0 st hS
 
 /-! ## Wiring the reducers into the `CallRows` residual providers
 
@@ -256,85 +505,269 @@ reducer here yields the row conditional on the collapsed oracle instead of the
 composite residual.  These wrappers show the exact substitution (no landed
 statement changes). -/
 
-/-- `eval_callPrint_row` with its `CallPrintResid` supplied by the shared span. -/
-theorem eval_callPrint_row_of_span
-    (hSpan : ∀ (st : SpecSt) (d : Nat) (vs : List Value)
+/-- `eval_callPrint_row` supplied by strict native stages. -/
+theorem eval_callPrint_row_of_stages
+    (hStages : ∀ (st : SpecSt) (d : Nat) (vs : List Value)
         (g : (R : Register) → Option (RegisterType R))
         (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-        (dLeft aLeft : Nat) (m0 : Mem),
-        NativeDispatchSpan g N A SL φf φc st d dLeft aLeft m0
-          ⟨st.store, st.out ++ printArgs st.store vs⟩)
-    (hBody : ∀ (st : SpecSt) (d : Nat) (vs : List Value)
-        (g : (R : Register) → Option (RegisterType R))
-        (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-        (dLeft aLeft : Nat) (m0 : Mem),
-        NativeBodyContract g N A SL φf φc st d dLeft aLeft m0
-          ⟨st.store, st.out ++ printArgs st.store vs⟩) :
+        (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem),
+        NativeCallStages g N A SL φf φc st d (.native .print) vs
+          dLeft aLeft sp sret m0 ⟨st.store, st.out ++ printArgs st.store vs⟩) :
     ∀ (st : SpecSt) (d : Nat) (vs : List Value),
       mCall st d (Value.native NativeFn.print) vs
         { store := st.store, out := st.out +++ printArgs st.store vs } Value.null
         (Call.print st d vs) :=
-  eval_callPrint_row (fun st d vs g N A SL φf φc dLeft aLeft m0 =>
-    nativePrintSpec_of_span g N A SL φf φc st d dLeft aLeft m0 vs
-      (hSpan st d vs g N A SL φf φc dLeft aLeft m0)
-      (hBody st d vs g N A SL φf φc dLeft aLeft m0))
+  eval_callPrint_row (fun st d vs g N A SL φf φc dLeft aLeft sp sret m0 =>
+    nativePrintSpec_of_stages g N A SL φf φc st d dLeft aLeft sp sret m0 vs
+      (hStages st d vs g N A SL φf φc dLeft aLeft sp sret m0))
 
-/-! ## Residual 5 — `CallArmSpec` / `FnArmSpec` (SCOPE-ONLY decode)
+/-- `eval_callPrintln_row` with its indexed residual supplied by the shared span. -/
+theorem eval_callPrintln_row_of_stages
+    (hStages : ∀ (st : SpecSt) (d : Nat) (vs : List Value)
+        (g : (R : Register) → Option (RegisterType R))
+        (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+        (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem),
+        NativeCallStages g N A SL φf φc st d (.native .println) vs
+          dLeft aLeft sp sret m0 ⟨st.store, st.out ++ printArgs st.store vs ++ "\n"⟩) :
+    ∀ (st : SpecSt) (d : Nat) (vs : List Value),
+      mCall st d (Value.native NativeFn.println) vs
+        { store := st.store, out := st.out +++ printArgs st.store vs +++ "\n" } Value.null
+        (Call.println st d vs) :=
+  eval_callPrintln_row (fun st d vs g N A SL φf φc dLeft aLeft sp sret m0 =>
+    nativePrintlnSpec_of_stages g N A SL φf φc st d dLeft aLeft sp sret m0 vs
+      (hStages st d vs g N A SL φf φc dLeft aLeft sp sret m0))
 
-These two are blockC-scale composite arm runs; NOT closed in this pass.  Decode
-+ scope precisely (PC spans, callees, reusable pieces), and expose the ONE
-sub-span reduction that IS mechanical.
+/-- `eval_callAssertOk_row` with its indexed residual supplied by the shared span. -/
+theorem eval_callAssertOk_row_of_stages
+    (hStages : ∀ (st : SpecSt) (d : Nat) (vs : List Value)
+        (g : (R : Register) → Option (RegisterType R))
+        (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+        (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem),
+        NativeCallStages g N A SL φf φc st d (.native .assert) vs
+          dLeft aLeft sp sret m0 st) :
+    ∀ (st : SpecSt) (d : Nat) (vs : List Value) (v m : Value)
+      (hvs : vs = [v] ∨ vs = [v, m]) (htruthy : v.truthy = true),
+      mCall st d (Value.native NativeFn.assert) vs st Value.null
+        (Call.assertOk st d vs v m hvs htruthy) :=
+  eval_callAssertOk_row
+    (fun st d vs _v _m _hvs _htruthy g N A SL φf φc
+        dLeft aLeft sp sret m0 =>
+      nativeAssertOkSpec_of_stages g N A SL φf φc st d vs dLeft aLeft sp sret m0
+        (hStages st d vs g N A SL φf φc dLeft aLeft sp sret m0))
 
-### `FnArmSpec` — the `EX_FN` closure-alloc arm
-* **Span**: jump-table `EX_FN` slot → arm entry ≫ `jal make_closure`/`allocClosure`
-  (the closures-arena allocator, analog of `env_new_spec`) ≫ `VAL_CLOSURE` build
-  (kind 4, payload = closure addr, into the sret buffer) ≫ join `callJoinPC`?
-  NO — `.fn` is a *leaf* arm (own slot), joins the shared `eval_expr` epilogue at
-  `0x800033ec` directly (NOT via the call join).
-* **Callees**: `allocClosure` (fresh ~32-byte `Closure` record; `PhiExtends` on the
-  closures array — the FIRST genuinely non-identity `φc` for an `EvalE` leaf).
-* **Reusable pieces**: `blockA_k`/`ArmEntryK` prologue+dispatch to the arm entry;
-  the shared epilogue `blockD_v` (`EvalSimCommon:304`) for the tail
-  `0x800033ec → EvalExit`.  **GAP**: `blockD_v` proves the exit with an IDENTITY
-  `φc`-extension at `nc = st.store.closures.size`; the fn arm's exit closures
-  array has grown by one (`store'.closures.size = st.store.closures.size + 1`), so
-  the epilogue needs a `φc`-WIDENED `blockD_v` variant (thread a non-identity
-  `PhiExtends φc φc' (st.store.closures.size + 1)` through the memory-pure
-  epilogue).  That widening is the same `EvalRecWiden`-shaped extension `hFn`'s
-  row already carries — so the honest residual is (a) the `allocClosure` callee
-  contract + (b) a φc-widened epilogue, not the whole arm.
+/-! ## Residual 5 — the full `EX_CALL` arm as strict stages
 
-### `CallArmSpec` — the composite `EX_CALL` arm
-* **Span** (`callArmPC 0x800031b0 … 0x800033ec`, from `CallEntry` decode):
-  1. callee `jal eval_expr` on `f` (ra `0x800031c0`) — one `EvalIH` via
-     `armTail_rec` (sret `sp+96`);
-  2. arg loop `0x800031dc … 0x80003250` — `evalArgsLoop` (residuals 1+2 above);
-  3. `fv`-kind dispatch `0x80003254` → native (`0x800039e0`, `jalr a6`) or closure
-     (`0x80003288`) or runtime_error (M5);
-  4. join `callJoinPC 0x800033ec` ≫ shared epilogue `blockD_v` → `EvalExit … v`.
-* **Callees**: `eval_expr` (callee `EvalIH`), the `EvalArgs` loop (per-arg
-  `EvalIH`), the `Call` dispatch (native `callPrint`/`callAssertOk` or the closure
-  crux `callClosureSim`).
-* **Reusable pieces**: `armTail_rec`/`SubEvalReturn` (callee seam), `evalArgsLoop`
-  (arg loop, now marshalled via residuals 1+2), the native reducers
-  (residuals 3+4), `blockD_v` (epilogue — same φc-widening gap as fn, since the
-  closure body may allocate frames/closures).
-* **Status**: composite of already-scoped pieces; its discharge is the
-  join/threading of (1)-(4), gated on the closure crux (`callClosureSim`,
-  env_define-fold + depth) which is OUT OF SCOPE per `CallRows`.
+The old `CallArmGeom.hArm` repeated the entire arm Triple.  The predicates below
+cut it at the callee return, argument-loop exit, call-dispatch exit, and shared
+epilogue entry.  The recursive motives run between those cuts.  Only the local
+ABI marshalling cuts remain as premises.
+-/
 
-The ONE mechanical sub-span both share — the shared epilogue join `0x800033ec →
-EvalExit` — is `blockD_v` modulo the φc-widening noted above.  Landing a
-φc-widened `blockD_v` is the cheapest next step for residual 5; it is a variant of
-the existing `EvalRecWiden`/`evalExitD_of_evalExit_rec` machinery in `CallRows`,
-not new decode.  Deferred here (would touch `EvalSimCommon` conventions; scoped
-only per the partial-credit ordering). -/
+/-- Argument-loop entry after the callee value has returned. -/
+def CallArgsReady
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' : SpecSt) (d : Nat) (env : Addr) (args : List Expr)
+    (dLeft aLeft : Nat) (m0 : Mem) : Config → Prop :=
+  fun c => ∃ (φf' φc' : Addr → Nat) (mArgs : Mem),
+    PhiExtends φf φf' st.store.frames.size ∧
+    PhiExtends φc φc' st.store.closures.size ∧
+    EvalArgsPrefixEntryI g N A SL φf' φc' st' d env
+      [] args [] dLeft aLeft mArgs c
 
-#print axioms argsConsResid_of_oracle
-#print axioms argsNilResid_of_hop
-#print axioms nativePrintSpec_of_span
-#print axioms nativePrintlnSpec_of_span
-#print axioms nativeAssertOkSpec_of_span
-#print axioms eval_callPrint_row_of_span
+/-- Argument-loop exit with the same dynamically selected maps and baseline. -/
+def CallArgsDone
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' : SpecSt) (vs : List Value) : Config → Prop :=
+  fun c => ∃ (φf' φc' : Addr → Nat) (mArgs : Mem),
+    PhiExtends φf φf' st.store.frames.size ∧
+    PhiExtends φc φc' st.store.closures.size ∧
+    EvalArgsExitI g N A SL φf' φc'
+      st'.store.frames.size st'.store.closures.size st'' vs mArgs c
+
+theorem callArgsRun
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' : SpecSt) (d : Nat) (env : Addr) (args : List Expr)
+    (vs : List Value) (dLeft aLeft : Nat) (m0 : Mem)
+    {hArgs : EvalArgs st' d env args st'' vs}
+    (hIH : mEvalArgs st' d env args st'' vs hArgs) :
+    Triple
+      (CallArgsReady g N A SL φf φc st st' d env args dLeft aLeft m0)
+      (CallArgsDone g N A SL φf φc st st' st'' vs) := by
+  intro c hc
+  obtain ⟨φf', φc', mArgs, hpf, hpc, hentry⟩ := hc
+  obtain ⟨c', hs, hexit⟩ :=
+    hIH [] [] rfl g N A SL φf' φc' dLeft aLeft mArgs c hentry
+  exact ⟨c', hs, φf', φc', mArgs, hpf, hpc, by simpa using hexit⟩
+
+/-- Dispatch entry selected after the argument loop. -/
+def CallDispatchReady
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st'' : SpecSt) (d : Nat) (fv : Value) (vs : List Value)
+    (sret : BitVec 64) : Config → Prop :=
+  fun c => ∃ (φf' φc' : Addr → Nat) (dLeft aLeft : Nat)
+      (spCall : BitVec 64) (mCall : Mem),
+    PhiExtends φf φf' st.store.frames.size ∧
+    PhiExtends φc φc' st.store.closures.size ∧
+    EntryImage callDispatchPC g mCall ∧
+    CallEntryI g N A SL φf' φc' st'' d fv vs
+      dLeft aLeft spCall sret mCall c
+
+/-- Dispatch exit, retaining the selected call boundary for the next marshal. -/
+def CallDispatchDone
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st'' st''' : SpecSt) (v : Value) (sret : BitVec 64) : Config → Prop :=
+  fun c => ∃ (φf' φc' : Addr → Nat) (dLeft aLeft : Nat)
+      (spCall : BitVec 64) (mCall : Mem),
+    PhiExtends φf φf' st.store.frames.size ∧
+    PhiExtends φc φc' st.store.closures.size ∧
+    CallExitI g N A SL φf' φc'
+      st''.store.frames.size st''.store.closures.size st''' v sret mCall c
+
+theorem callDispatchRun
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st'' st''' : SpecSt) (d : Nat) (fv : Value) (vs : List Value)
+    (v : Value) (sret : BitVec 64)
+    {hCall : Call st'' d fv vs st''' v}
+    (hIH : mCall st'' d fv vs st''' v hCall) :
+    Triple
+      (CallDispatchReady g N A SL φf φc st st'' d fv vs sret)
+      (CallDispatchDone g N A SL φf φc st st'' st''' v sret) := by
+  intro c hc
+  obtain ⟨φf', φc', dLeft, aLeft, spCall, mCall, hpf, hpc, hImg, hentry⟩ := hc
+  obtain ⟨c', hs, hexit⟩ :=
+    hIH g N A SL φf' φc' dLeft aLeft spCall sret mCall hImg c hentry
+  exact ⟨c', hs, φf', φc', dLeft, aLeft, spCall, mCall,
+    hpf, hpc, hexit⟩
+
+/-- Exact shared-epilogue entry, including the maps selected by recursive
+children and the saved-register words consumed by `blockD_v_phic`. -/
+def CallArmHandoff
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st''' : SpecSt) (v : Value) (sp r sret : BitVec 64) (m0 : Mem) :
+    Config → Prop :=
+  fun c => ∃ (φf' φc' : Addr → Nat) (v8 v9 v18 : BitVec 64)
+      (out0 : Array String) (mpre : Mem),
+    PhiExtends φf φf' st.store.frames.size ∧
+    PhiExtends φc φc' st.store.closures.size ∧
+    st.store.frames.size ≤ st'''.store.frames.size ∧
+    st.store.closures.size ≤ st'''.store.closures.size ∧
+    String.join out0.toList = st'''.out ∧
+    PreEpilogueV g N A SL φf' φc' st''' v
+      sp r sret v8 v9 v18 out0 m0 mpre c
+
+theorem callArmEpilogueRun
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st''' : SpecSt) (v : Value) (sp r sret : BitVec 64) (m0 : Mem) :
+    Triple
+      (CallArmHandoff g N A SL φf φc st st''' v sp r sret m0)
+      (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+        st''' v sp r sret m0) := by
+  intro c hc
+  obtain ⟨φf', φc', v8, v9, v18, out0, mpre,
+    hpf, hpc, hfr, hcl, _hout, hpre⟩ := hc
+  obtain ⟨c', hs, hexit, _⟩ :=
+    blockD_v_phic g N A SL φf φc φf' φc'
+      st.store.frames.size st.store.closures.size st''' v
+      sp r sret v8 v9 v18 out0 m0 (fun _ => True)
+      hpf hpc ⟨hfr, hcl⟩ c ⟨mpre, hpre, trivial⟩
+  exact ⟨c', hs, hexit⟩
+
+/-- Four strict residual cuts for the call arm.  No field restates the whole
+`EvalEntry → EvalExit` goal. -/
+structure CallArmStages
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' st''' : SpecSt) (d : Nat) (env : Addr)
+    (f : Expr) (args : List Expr) (fv : Value) (vs : List Value) (v : Value)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) : Prop where
+  callee : Triple
+    (EvalEntry g N A SL φf φc st d env (.call f args)
+      sp r sret aEnv aExpr m0)
+    (fun c => CallChildJalPre aExpr f args f c st d env)
+  calleeToArgs : Triple (ArgsChildReturn st st' d env aExpr f args f fv)
+    (CallArgsReady g N A SL φf φc st st' d env args
+      (Vsa.While.maxCallDepth - d) (Vsa.While.maxCallDepth - d) m0)
+  argsToCall : Triple
+    (CallArgsDone g N A SL φf φc st st' st'' vs)
+    (CallDispatchReady g N A SL φf φc st st'' d fv vs sret)
+  callToEpilogue : Triple
+    (CallDispatchDone g N A SL φf φc st st'' st''' v sret)
+    (CallArmHandoff g N A SL φf φc st st''' v sp r sret m0)
+
+/-- Full arm composition.  The callee, argument-list, and call motives are
+executed at their real indexed boundaries. -/
+theorem callArmSpec_of_stages
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' st''' : SpecSt) (d : Nat) (env : Addr)
+    (f : Expr) (args : List Expr) (fv : Value) (vs : List Value) (v : Value)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
+    {hArgs : EvalArgs st' d env args st'' vs}
+    {hCall : Call st'' d fv vs st''' v}
+    (hArgsIH : mEvalArgs st' d env args st'' vs hArgs)
+    (hCallIH : mCall st'' d fv vs st''' v hCall)
+    (hS : CallArmStages g N A SL φf φc st st' st'' st''' d env
+      f args fv vs v sp r sret aEnv aExpr m0) :
+    CallArmSpec g N A SL φf φc st st' st'' st''' d env
+      f args fv vs v sp r sret aEnv aExpr m0 := by
+  intro hCallee _hArgs _hCall
+  exact Triple.seq hS.callee <| Triple.seq
+    (argsChildReturn_of_jalBundle st st' d env aExpr f args f fv hCallee) <| Triple.seq
+    hS.calleeToArgs <| Triple.seq
+    (callArgsRun g N A SL φf φc st st' st'' d env args vs
+      (Vsa.While.maxCallDepth - d) (Vsa.While.maxCallDepth - d) m0 hArgsIH) <|
+    Triple.seq hS.argsToCall <| Triple.seq
+    (callDispatchRun g N A SL φf φc st st'' st''' d fv vs v sret hCallIH) <|
+    Triple.seq hS.callToEpilogue
+      (callArmEpilogueRun g N A SL φf φc st st''' v sp r sret m0)
+
+/-- Residual provider consumed by `eval_call_row`. -/
+theorem callResid_of_stages
+    (st st' st'' st''' : SpecSt) (d : Nat) (env : Addr)
+    (f : Expr) (args : List Expr) (fv : Value) (vs : List Value) (v : Value)
+    (hEf : EvalE st d env f st' fv)
+    (hBound : args.length ≤ maxArgs)
+    (hArgs : EvalArgs st' d env args st'' vs)
+    (hCall : Call st'' d fv vs st''' v)
+    (hStages : ∀ (g : (R : Register) → Option (RegisterType R))
+      (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+      (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
+      CallArmStages g N A SL φf φc st st' st'' st''' d env
+        f args fv vs v sp r sret aEnv aExpr m0)
+    (hWiden : ∀ (g : (R : Register) → Option (RegisterType R))
+      (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+      (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
+      EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
+        st''' v sp r sret m0) :
+    CallResid st st' st'' st''' d env f args fv vs v hEf hBound hArgs hCall := by
+  intro hCallee hArgsIH hCallIH g N A SL φf φc sp r sret aEnv aExpr m0
+  exact ⟨callArmSpec_of_stages g N A SL φf φc st st' st'' st''' d env
+      f args fv vs v sp r sret aEnv aExpr m0 hArgsIH hCallIH
+      (hStages g N A SL φf φc sp r sret aEnv aExpr m0),
+    hWiden g N A SL φf φc sp r sret aEnv aExpr m0⟩
+
+#print axioms argsChildReturn_of_jalBundle
+#print axioms argsReturnCopyRun
+#print axioms argsConsResid_of_stages
+#print axioms callArgsRun
+#print axioms callDispatchRun
+#print axioms callArmEpilogueRun
+#print axioms callArmSpec_of_stages
+#print axioms callResid_of_stages
+#print axioms nativeCallSpec_of_stages
+#print axioms nativePrintSpec_of_stages
+#print axioms nativePrintlnSpec_of_stages
+#print axioms nativeAssertOkSpec_of_stages
+#print axioms eval_callPrint_row_of_stages
+#print axioms eval_callPrintln_row_of_stages
+#print axioms eval_callAssertOk_row_of_stages
 
 end Vsa.Sim.Rows

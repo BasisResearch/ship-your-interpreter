@@ -107,6 +107,12 @@ def EEntryC (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) : Prop 
     (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
     EvalEntry g N A SL φf φc st d env e sp r sret aEnv aExpr m0 c
 
+theorem EEntryC.envValid {c : Config} {st : SpecSt} {d : Nat} {env : Addr}
+    {e : Expr} (h : EEntryC c st d env e) : EnvValid st env := by
+  obtain ⟨_g, _N, _A, _SL, _φf, _φc, _sp, _r, _sret, _aEnv, _aExpr,
+    _m0, hEntry⟩ := h
+  exact hEntry.env_valid
+
 /-- **Fresh-call statement entry** (the PRE-amendment `SEntryC` body).  `c` is at
 `exec_stmt`'s entry (`execStmtEntry = 0x80003fe0`) with the node `s` at some
 ghost address `aStmt` — the fresh-`jal` route only. -/
@@ -182,6 +188,7 @@ structure ExecDispatchEntry
   stmt : StmtRepr c.σ.mem aStmt.toNat s
   /-- The whole spec store is represented. -/
   store : StoreRepr c.σ.mem N A φf φc st.store
+  env_valid : EnvValid st env
   /-- `StoreRepr` survives any memory change confined to `[SL.lo, SL.hi)`
   (wave 47e `EntryStackSurv` footprint). -/
   store_survives : ∀ m' : Mem,
@@ -254,6 +261,7 @@ structure ExecWhileArmEntry
   stmt : StmtRepr c.σ.mem aStmt.toNat s
   /-- The whole spec store is represented. -/
   store : StoreRepr c.σ.mem N A φf φc st.store
+  env_valid : EnvValid st env
   /-- `StoreRepr` survives any memory change confined to `[SL.lo, SL.hi)`
   (wave 47e `EntryStackSurv` footprint). -/
   store_survives : ∀ m' : Mem,
@@ -290,6 +298,19 @@ head (`SWhileArmC`).  Producers land one disjunct via `sEntryC_of_fresh` /
 `sEntryC_of_dispatch` / `sEntryC_of_whileArm`; consumers 3-way `rcases`. -/
 def SEntryC (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) : Prop :=
   SFreshC c st d env s ∨ SDispatchC c st d env s ∨ SWhileArmC c st d env s
+
+theorem SEntryC.envValid {c : Config} {st : SpecSt} {d : Nat} {env : Addr}
+    {s : Stmt} (h : SEntryC c st d env s) : EnvValid st env := by
+  rcases h with hFresh | hDispatch | hWhile
+  · obtain ⟨_g, _N, _A, _SL, _φf, _φc, _sp, _r, _aInterp, _aStmt,
+      _aEnv, _aRet, _m0, hEntry⟩ := hFresh
+    exact hEntry.env_valid
+  · obtain ⟨_g, _N, _A, _SL, _φf, _φc, _sp, _aInterp, _aStmt,
+      _aEnv, _aRet, _m0, hEntry⟩ := hDispatch
+    exact hEntry.env_valid
+  · obtain ⟨_g, _N, _A, _SL, _φf, _φc, _sp, _aInterp, _aStmt,
+      _aEnv, _aRet, _m0, hEntry⟩ := hWhile
+    exact hEntry.env_valid
 
 /-- Fresh-call leg intro (the pre-amendment producers' one-line adapter). -/
 theorem sEntryC_of_fresh {c : Config} {st : SpecSt} {d : Nat} {env : Addr}

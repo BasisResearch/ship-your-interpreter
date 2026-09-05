@@ -30,7 +30,7 @@ theorem env_define_move_s4
       c'.σ.regs.get? Register.x19 = some countv ∧
       c'.σ.regs.get? Register.minstret = some vmi' ∧
       GoodState c'.σ ∧ Env_defineLoaded c'.σ.mem ∧ StrcmpLoaded c'.σ.mem ∧
-      c'.tick < 2 := by
+      c'.σ.mem = c.σ.mem ∧ c'.tick < 2 := by
   obtain ⟨σ', i', hstep, htick', hG', hmem', hobs⟩ :=
     site_80002a84_ed c.σ c.tick c.steps (0x80002a84#64) vmi env
       hG hpc hmi hcarry.2.1 hloaded rfl htick

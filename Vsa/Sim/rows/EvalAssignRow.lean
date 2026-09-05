@@ -1,5 +1,6 @@
 import Vsa.Sim.EvalRecCommon
 import Vsa.Sim.TermSimAssembly
+import Vsa.Sim.StoreInvariant
 
 /-!
 # `EvalAssignRow` — the `hAssign` recursor case row (`EvalE.assign`, CONDITIONAL)
@@ -102,6 +103,8 @@ sizes are the ENTRY store's `st.store.frames.size`/`st.store.closures.size`), so
 just feeds the sub-`EvalIH` and returns it — the "row now, arm spec later" precedent. -/
 def AssignArmSpec (st : SpecSt) (d : Nat) (env : Addr) (x : String) (e : Expr)
     (st' : SpecSt) (v : Value) (store'' : Store) : Prop :=
+  EvalE st d env e st' v →
+  st'.store.set? env x v = some store'' →
   EvalIH st d env e st' v →
   EvalIH st d env (Expr.assign x e) ⟨store'', st'.out⟩ v
 
@@ -110,6 +113,22 @@ def AssignArmSpec (st : SpecSt) (d : Nat) (env : Addr) (x : String) (e : Expr)
 def AssignResid (st : SpecSt) (d : Nat) (env : Addr) (x : String) (e : Expr)
     (st' : SpecSt) (v : Value) (store'' : Store) : Prop :=
   AssignArmSpec st d env x e st' v store''
+
+/-- Semantic extension for `hAssign`.  Reachability of the RHS result is the
+induction invariant.  The exact first-match update then follows from `set?`. -/
+structure AssignResidualExtension (st : SpecSt) (d : Nat) (env : Addr)
+    (x : String) (e : Expr) (st' : SpecSt) (v : Value) (store'' : Store) : Prop where
+  machine : AssignResid st d env x e st' v store''
+  store : ReachableStore st'.store →
+    st'.store.set? env x v = some store'' →
+    AssignStoreBridge st'.store store'' env x v
+
+theorem assignResidualExtension_of_machine
+    (st : SpecSt) (d : Nat) (env : Addr) (x : String) (e : Expr)
+    (st' : SpecSt) (v : Value) (store'' : Store)
+    (h : AssignResid st d env x e st' v store'') :
+    AssignResidualExtension st d env x e st' v store'' :=
+  ⟨h, fun hreach hset => hreach.assignBridge hset⟩
 
 /-- Route `hAssign` → the `AssignArmSpec` oracle.  CONDITIONAL (the `eval_var_row`
 precedent): no `evalAssignSim` exists yet, so the whole arm is threaded as the named
@@ -125,7 +144,31 @@ theorem eval_assign_row
         (EvalE.assign st d env x e st' v store'' a a_1) := by
   intro st d env x e st' v store'' a hset ihE
   show Vsa.Sim.EvalIH st d env (.assign x e) ⟨store'', st'.out⟩ v
-  exact hR st d env x e st' v store'' ihE
+  exact hR st d env x e st' v store'' a hset ihE
+
+/-- Assignment row consuming the semantic extension. -/
+theorem eval_assign_row_extended
+    (hR : ∀ st d env x e st' v store'',
+      AssignResidualExtension st d env x e st' v store'') :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (x : String) (e : Expr) (st' : SpecSt)
+      (v : Value) (store'' : Store) (a : EvalE st d env e st' v)
+      (a_1 : st'.store.set? env x v = some store''),
+      mEvalE st d env e st' v a →
+      mEvalE st d env (Expr.assign x e) { store := store'', out := st'.out } v
+        (EvalE.assign st d env x e st' v store'' a a_1) :=
+  eval_assign_row (fun st d env x e st' v store'' =>
+    (hR st d env x e st' v store'').machine)
+
+/-- Regression projection: an assignment residual cannot select an unrelated
+post-store; applying it requires the semantic `set?` result. -/
+theorem assignArmSpec_apply (st : SpecSt) (d : Nat) (env : Addr) (x : String)
+    (e : Expr) (st' : SpecSt) (v : Value) (store'' : Store)
+    (hR : AssignArmSpec st d env x e st' v store'')
+    (a : EvalE st d env e st' v)
+    (hset : st'.store.set? env x v = some store'')
+    (ihE : EvalIH st d env e st' v) :
+    EvalIH st d env (Expr.assign x e) ⟨store'', st'.out⟩ v :=
+  hR a hset ihE
 
 /-- **Slot-verify.** `eval_assign_row` fills the EXACT `hAssign` minor-premise slot of
 `TermCaseBundle.TermCases.hAssign`: the type below is the verbatim premise type; the
@@ -143,4 +186,7 @@ theorem eval_assign_row_fills_hAssign
 end Vsa.Sim.Rows
 
 #print axioms Vsa.Sim.Rows.eval_assign_row
+#print axioms Vsa.Sim.Rows.assignResidualExtension_of_machine
+#print axioms Vsa.Sim.Rows.eval_assign_row_extended
+#print axioms Vsa.Sim.Rows.assignArmSpec_apply
 #print axioms Vsa.Sim.Rows.eval_assign_row_fills_hAssign

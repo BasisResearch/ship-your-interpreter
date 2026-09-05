@@ -65,6 +65,7 @@ mkdir -p "$OUT"
 
 # --------------------------------------------- 2. the encoder's own answers
 echo "[difftest] emitting the encoder's step table + span facts…"
+mkdir -p "$OUT/lean/experiments/smt"
 cat > "$OUT/emit.lean" <<LEAN
 import experiments.smt.DiffTest
 #emit_bmc "$OUT/bmc" 60
@@ -73,10 +74,10 @@ import experiments.smt.DiffTest
 #emit_loop_facts "$OUT/enc" "$OUT/bmc"
 LEAN
 for m in ReflectSpan ReflectResiduals DiffTest; do
-  lake env sh -c "LEAN_PATH=\"\$LEAN_PATH:.\" lean -o experiments/smt/$m.olean experiments/smt/$m.lean" \
+  lake env sh -c "LEAN_PATH=\"$OUT/lean:\$LEAN_PATH:.\" lean -o \"$OUT/lean/experiments/smt/$m.olean\" experiments/smt/$m.lean" \
     || fail "experiments/smt/$m.lean does not elaborate"
 done
-lake env sh -c "LEAN_PATH=\"\$LEAN_PATH:.\" lean $OUT/emit.lean" || fail "emission failed"
+lake env sh -c "LEAN_PATH=\"$OUT/lean:\$LEAN_PATH:.\" lean $OUT/emit.lean" || fail "emission failed"
 
 # The clause sets phase 2 checks against.  Re-mining is a minute of Z3; by
 # default reuse the campaign's own, which is what the verdicts rest on.
@@ -124,5 +125,5 @@ python3 scripts/difftest.py phase3b --traces "$OUT/traces" --enc "$OUT/enc" \
   --bmc "$OUT/bmc" --per-span "$PER_SPAN" --out "$OUT/phase3b.tsv" || rc=1
 
 if [ $rc = 0 ]; then echo "[difftest] OK — the encoder agrees with the machine"
-else echo "[difftest] FAILED — see $OUT/{phase1,clause-witness,phase3}.tsv"; fi
+else echo "[difftest] FAILED — see $OUT/{phase1,clause-witness,phase3,phase3b}.tsv"; fi
 exit $rc

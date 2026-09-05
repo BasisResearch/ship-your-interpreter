@@ -198,8 +198,8 @@ theorem evalNegSim : EvalNegSimGoal := by
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- === block A: prologue + dispatch → widened ArmEntryK @0x800035e0 ===
   have hkm0 : read32 m0 aExpr.toNat = some 8 := exprRepr_unary_kind (hc.mem ▸ hc.expr)
-  obtain ⟨c1, hs1, ment, v8, v9, v18, v13c1, hArm, _hpresM, hx13c1⟩ :=
-    blockA_k g N A SL φf φc st (.unary .neg esub) 8 (0x800035e0#64) UnaryArmCallee
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, _hpresM, hx13c1⟩ :=
+    blockA_k g N A SL φf φc st env (.unary .neg esub) 8 (0x800035e0#64) UnaryArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
       hkm0
@@ -220,7 +220,7 @@ theorem evalNegSim : EvalNegSimGoal := by
         hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
         hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
-        ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.x13_defined⟩⟩, rfl⟩
+        ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩
   -- destructure a COPY of the widened `ArmEntryK` (keeping `hArm` intact for
   -- `blockB_unary`): the last three fields `hAEx11`/`hAEx8`/`hAEx18` are the NEW
   -- call-point register facts; `hArmg8/9/18/2` the entry ghost; `hArmMemM0` the
@@ -294,7 +294,7 @@ theorem evalNegSim : EvalNegSimGoal := by
   obtain ⟨c2, hs2, hSub⟩ :=
     blockB_unary g (fun R => c1.σ.regs.get? R) N A SL φf φc st st' d env .neg esub (.int n)
       sp r sret aExpr aEnv aOperand v8 v9 v18 c.σ.sailOutput m0 hIH
-      c1 ⟨ment, hArm, hx11c1, ⟨v13c1, hx13c1⟩, hgpreframe, ⟨aExpr, hgpre_x8⟩, hgpre18,
+      c1 ⟨ment, hArm, hx11c1, ⟨BitVec.ofNat 64 (φf env), hx13c1⟩, hgpreframe, ⟨aExpr, hgpre_x8⟩, hgpre18,
         hpayMent', hOperandReprMent, hgroundChild, hx.expr24,
         hx.op_align, hx.op_lo, hx.op_hi, hx.op_win, hx.op_stk,
         hx.sp_headroom, hx.sp_SLhi, hx.sp16, hx.SLhi_ram,
@@ -351,12 +351,12 @@ theorem evalNegSim : EvalNegSimGoal := by
       blockD_v_rec g N A SL φfe φce st' (.int (wrap64 (-n))) sp r sret v8 v9 v18 c2.σ.sailOutput m0
         c3 ⟨mpreC, hPreD⟩
     -- transport the widened exit back to the entry maps φf/φc (the goal's maps)
-    obtain ⟨hExitE, hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
+    obtain ⟨hExitE, hMemExt, hWords, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
     have hStoreLe := evalE_store_mono _hEvalE
     have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
         st' (.int (wrap64 (-n))) sp r sret m0 c4 :=
       evalExit_of_phiExtends hpfe hpce hExitE hStoreLe.1 hStoreLe.2
-    exact ⟨c4, ((hs1.trans hs2).trans hs3).trans hs4, hExit, hMemExt,
+    exact ⟨c4, ((hs1.trans hs2).trans hs3).trans hs4, hExit, hMemExt, hWords,
       φf', φc', hpfe.trans (PhiExtends.mono hStoreLe.1 hpf'),
       hpce.trans (PhiExtends.mono hStoreLe.2 hpc'), hSurv⟩
 

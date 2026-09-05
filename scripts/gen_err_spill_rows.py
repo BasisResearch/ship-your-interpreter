@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""gen_err_spill_rows.py — the Family-A error-link emitter.
+"""RETIRED generator for the former Family-A/B constructor collectors.
+
+Do not regenerate the `Err*Rows` or `ErrArmLinks*` modules from this file.
+Trace fuzzing refuted the fixed semantic-constructor-to-PC table. The maintained
+surface is `ErrLeafLinks`, with propagation discharged from child induction
+hypotheses and binary sites selected by `BinaryErrReach`.
 
 Fans `BridgeSegFramed.spillNeg_toJalErr` (the negType model) across the eight
 distinct `jal runtime_error` sites whose spill prefix is a contiguous run of
@@ -537,5 +542,7 @@ def emit_arm_links_b(routes, by_pc, meta):
 
 
 if __name__ == "__main__":
-    main()
-    emit_family_b(parse_disasm_lines(), parse_routes())
+    raise SystemExit(
+        "retired: generated constructor collectors used a refuted fixed-PC table; "
+        "use ErrLeafLinks/BinaryErrReach"
+    )

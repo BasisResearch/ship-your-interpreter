@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""gen_m5_error_routing.py — emit the M5 error-family routing file.
+"""RETIRED generator for the former fixed-PC M5 error-family routing.
+
+Do not regenerate `ErrorRouting.lean` or `ErrorRoutingClasses.lean` from this
+file. Trace fuzzing refuted its premise-to-PC table: propagation constructors
+do not own physical error sites, and binary failures require cause-indexed
+routing. The maintained Lean interface is leaf-only in `ErrorRouting.lean`.
 
 Every one of the 42 `errFamily_of_sites` minor premises (InterpSimBundle.lean)
 has the shape
@@ -460,5 +465,7 @@ def emit_classes():
 
 
 if __name__ == "__main__":
-    emit()
-    emit_classes()
+    raise SystemExit(
+        "retired: fixed premise-to-PC routing was refuted; "
+        "use the leaf-only ErrorRouting interface"
+    )

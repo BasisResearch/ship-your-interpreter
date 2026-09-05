@@ -63,6 +63,7 @@ theorem blockB_logical_stagePre
           sp r sret aExpr aIn v8 v9 v18 out0 m0 ment c ∧
         c.σ.regs.get? Register.x11 = some aIn ∧
         c.σ.regs.get? Register.x13 = some aEnv3 ∧
+        aEnv3 = BitVec.ofNat 64 (φf env) ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
         (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
         read64 ment (aExpr.toNat + 16) = some aLeft.toNat ∧
@@ -92,7 +93,7 @@ theorem blockB_logical_stagePre
         Expr.bodiesBound Vsa.While.perCallBudget el = true ∧
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 3 c (fun c' => JalPreBundle el c' st d env) := by
-  obtain ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hgroundP, hexprHi24,
+  obtain ⟨ment, hArm, hx11, hx13, henvReg, hgframe, hg8, hg18, hpay, hexprSurv, hgroundP, hexprHi24,
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -289,7 +290,7 @@ theorem blockB_logical_stagePre
       (by decide),
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_80003568_lg σ i u (0x80003568#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
-      hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, ⟨_, hx13_3⟩, hx12_3, hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr,
+      hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, henvReg ▸ hx13_3, hx12_3, hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr,
       hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hGroundChildL, hExprMcall, hStoreMcall, hStoreSurvMcall,
       hframeB, ⟨hg8, hg18⟩,
       hslotRaMcall, hslotS0Mcall, hslotS1Mcall, hslotS2Mcall,

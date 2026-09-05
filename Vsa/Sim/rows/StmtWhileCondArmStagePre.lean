@@ -36,6 +36,144 @@ set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000
 set_option linter.unusedVariables false
 
+/-- The exact pre-jal facts for the recursive condition call.  Unlike
+`ExecJalPreBundle`, all representation maps and machine addresses remain
+indexed, so both the legacy existential bundle and the indexed child landing
+can be derived from this one fact. -/
+def ExecWhileCondJalPre
+    (gpre : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (e : Expr) (st : Vsa.While.St) (d : Nat) (env : Addr)
+    (sp r aInterp aCond : BitVec 64) (v8 v9 v18 : BitVec 64)
+    (out0 : Array String) (ment : Mem) (c : Config) : Prop :=
+  GoodState c.σ ∧ c.tick < 2 ∧
+  c.σ.regs.get? Register.PC = some (0x8000404c#64) ∧
+  c.σ.regs.get? Register.x10 =
+    some ((sp - 176#64) + sign_extend (m := 64) (0x050#12)) ∧
+  c.σ.regs.get? Register.x9 = some aInterp ∧
+  c.σ.regs.get? Register.x11 = some aInterp ∧
+  c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) ∧
+  c.σ.regs.get? Register.x12 = some aCond ∧
+  c.σ.regs.get? Register.x2 =
+    some (((sp - 176#64) + 1088#64) - 1088#64) ∧
+  (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
+  c.σ.sailOutput = out0 ∧ String.join out0.toList = st.out ∧
+  c.σ.mem = ment ∧ Exec_stmtLoaded ment ∧ Eval_exprLoaded ment ∧
+  Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment ∧
+  EvalGround ment SL A (((sp - 176#64) + 1088#64) - 1088#64)
+    ((sp - 176#64) + sign_extend (m := 64) (0x050#12)) aCond.toNat e ∧
+  ValueWordsTotal ment
+    ((sp - 176#64) + sign_extend (m := 64) (0x050#12)).toNat ∧
+  ExprRepr ment aCond.toNat e ∧ StoreRepr ment N A φf φc st.store ∧
+  (∀ m' : Mem,
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) →
+      ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
+      ment[k]? = m'[k]?) →
+    StoreRepr m' N A φf φc st.store) ∧
+  (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
+  ((∃ w, gpre Register.x8 = some w) ∧
+    (∃ w, gpre Register.x18 = some w) ∧
+    (∃ w, gpre Register.x19 = some w) ∧
+    (∃ w, gpre Register.x20 = some w) ∧
+    (∃ w, gpre Register.x21 = some w)) ∧
+  aCond.toNat % 8 = 0 ∧ 0x80000000 ≤ aCond.toNat ∧
+  aCond.toNat + 16 ≤ 0x100000000 ∧ tohostAddr + 16 ≤ aCond.toNat ∧
+  (aCond.toNat + 16 ≤ SL.lo ∨
+    ((sp - 176#64) + 1088#64).toNat - 1088 ≤ aCond.toNat) ∧
+  ((sp - 176#64) + sign_extend (m := 64) (0x050#12)).toNat % 8 = 0 ∧
+  ((sp - 176#64) + 1088#64).toNat - 1088 ≤
+    ((sp - 176#64) + sign_extend (m := 64) (0x050#12)).toNat ∧
+  ((sp - 176#64) + sign_extend (m := 64) (0x050#12)).toNat + 24 ≤
+    ((sp - 176#64) + 1088#64).toNat - 32 ∧
+  SL.lo + 3264 ≤ ((sp - 176#64) + 1088#64).toNat ∧
+  ((sp - 176#64) + 1088#64).toNat ≤ SL.hi ∧
+  ((sp - 176#64) + 1088#64).toNat % 16 = 0 ∧
+  0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000 ∧
+  tohostAddr + 16 ≤ SL.lo ∧
+  (((sp - 176#64) + 1088#64).toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
+  ((0x8000282c : Nat) ≤ SL.lo ∨
+    ((sp - 176#64) + 1088#64).toNat ≤ 0x800027ec) ∧
+  ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨
+    ((sp - 176#64) + 1088#64).toNat ≤ 0x80019f58) ∧
+  (A.hi ≤ SL.lo ∨ ((sp - 176#64) + 1088#64).toNat ≤ A.lo) ∧
+  (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
+  StackOK SL (((sp - 176#64) + 1088#64) - 1088#64)
+    (e.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+  Expr.bodiesBound Vsa.While.perCallBudget e = true ∧
+  Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
+
+/-- Exact parent-frame identity at the while condition's `jal eval_expr` site.
+The generic `ExecJalPreBundle` intentionally does not retain these enclosing
+statement registers. -/
+structure ExecWhileCondJalReady
+    (gpre : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (e : Expr) (st : Vsa.While.St) (d : Nat) (env : Addr)
+    (sp aInterp aStmt aEnv aRet aCond : BitVec 64) (ment : Mem)
+    (c : Config) : Prop where
+  env_valid : EnvValid st env
+  /-- One exact precondition.  The indexed and legacy views below are derived
+  from this field rather than stored independently. -/
+  pre : ∃ (r v8 v9 v18 : BitVec 64) (out0 : Array String),
+    ExecWhileCondJalPre gpre N A SL φf φc e st d env sp r aInterp aCond
+      v8 v9 v18 out0 ment c
+  s0 : c.σ.regs.get? Register.x8 = some aStmt
+  s1 : c.σ.regs.get? Register.x9 = some aInterp
+  s2 : c.σ.regs.get? Register.x18 = some aRet
+  s3 : c.σ.regs.get? Register.x19 = some aEnv
+  spReg : c.σ.regs.get? Register.x2 = some (sp - 176#64)
+  mem : c.σ.mem = ment
+
+/-- Fire the exact pending jal without erasing its representation indices. -/
+theorem ExecWhileCondJalReady.child
+    (gpre : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (e : Expr) (st : Vsa.While.St) (d : Nat) (env : Addr)
+    (sp aInterp aStmt aEnv aRet aCond : BitVec 64) (ment : Mem) (c : Config)
+    (h : ExecWhileCondJalReady gpre N A SL φf φc e st d env
+      sp aInterp aStmt aEnv aRet aCond ment c) :
+    LandedN 1 c (fun c' =>
+      EvalEntry (fun R => c'.σ.regs.get? R) N A SL φf φc st d env e
+        (sp - 176#64) (0x80004050#64)
+        ((sp - 176#64) + sign_extend (m := 64) (0x050#12))
+        aInterp aCond ment c' ∧
+      ExecEvalJalFrame gpre aInterp ((sp - 176#64) + 1088#64) c') := by
+  obtain ⟨r, v8, v9, v18, out0, hpre⟩ := h.pre
+  have hchild := execEvalEntry_of_jalPrefix gpre N A SL φf φc st d env e
+    (0x8000404c#64) (0x80004050#64) (0x1ff118#21)
+    ((sp - 176#64) + 1088#64) r aInterp
+    ((sp - 176#64) + sign_extend (m := 64) (0x050#12))
+    aInterp aCond v8 v9 v18 out0 ment c
+    (by apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide)
+    (by apply BitVec.eq_of_toNat_eq; decide) (by decide) h.env_valid
+    (by
+      intro σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ
+      exact site_8000404c_es σ i u (0x8000404c#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ)
+    hpre
+  simpa only [BitVec.add_sub_cancel] using hchild
+
+/-- Forget only the exact indices required by the legacy child-stage API. -/
+theorem ExecWhileCondJalReady.toExecJalPreBundle
+    (gpre : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (e : Expr) (st : Vsa.While.St) (d : Nat) (env : Addr)
+    (sp aInterp aStmt aEnv aRet aCond : BitVec 64) (ment : Mem) (c : Config)
+    (h : ExecWhileCondJalReady gpre N A SL φf φc e st d env
+      sp aInterp aStmt aEnv aRet aCond ment c) :
+    ExecJalPreBundle e c st d env := by
+  obtain ⟨r, v8, v9, v18, out0, hpre⟩ := h.pre
+  exact ⟨gpre, N, A, SL, φf, φc,
+    0x8000404c#64, 0x80004050#64, 0x1ff118#21,
+    (sp - 176#64) + 1088#64, r, aInterp,
+    (sp - 176#64) + sign_extend (m := 64) (0x050#12),
+    aInterp, aCond, v8, v9, v18, out0, ment, h.env_valid,
+    (by apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide),
+    (by apply BitVec.eq_of_toNat_eq; decide), (by decide),
+    (by
+      intro σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ
+      exact site_8000404c_es σ i u (0x8000404c#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
+    hpre⟩
+
 -- discipline: allow(R7-conj-tower-def) the ∃-towers here are the ESTABLISHED landing
 -- bundle `ExecJalPreBundle` + the exec-arm-head entry bundle mirroring the landed
 -- `blockB_stmtExpr_stagePre` `hpre`; consumed through `stmtWhileCond_field_of_dispatch`.
@@ -55,6 +193,7 @@ theorem blockB_stmtWhileCond_stagePre
     (v8 v9 v18 v19 : BitVec 64)
     (out0 : Array String) (m0 ment : Mem)
     (c : Config)
+    (henvValid : EnvValid st env)
     (hpre :
         ExecArmEntryK g N A SL φf φc st (0x8000403c#64)
           sp r aInterp aStmt aEnv aRet v8 v9 v18 v19 out0 m0 ment c ∧
@@ -68,6 +207,9 @@ theorem blockB_stmtWhileCond_stagePre
         -- eval-side code facts above; NOT derivable from `ExecGround`).
         EvalGround ment SL A (sp - 176#64)
           ((sp - 176#64) + sign_extend (m := 64) (0x050#12)) aExprChild.toNat e ∧
+        ValueWordsTotal ment
+          ((sp - 176#64) + sign_extend (m := 64) (0x050#12)).toNat ∧
+        aEnv = BitVec.ofNat 64 (φf env) ∧
         (∀ m' : Mem,
           (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) →
             ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
@@ -88,19 +230,22 @@ theorem blockB_stmtWhileCond_stagePre
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
         (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        (∃ w, gpre Register.x19 = some w) ∧ (∃ w, gpre Register.x20 = some w) ∧
+        (∃ w, gpre Register.x21 = some w) ∧
         -- ITEM ZERO B1: the child expression's budget at the statement
         -- frame `sp - 176`, `.fn`-bodies bound, store-bodies invariant.
         StackOK SL (sp - 176#64)
           (e.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
         Expr.bodiesBound Vsa.While.perCallBudget e = true ∧
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
-    LandedN 4 c (fun c' => ExecJalPreBundle e c' st d env) := by
+    LandedN 4 c (ExecWhileCondJalReady gpre N A SL φf φc e st d env
+      sp aInterp aStmt aEnv aRet aExprChild ment) := by
   obtain ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
-    hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hStoreSurvJ,
+    hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
     hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre,
     hSLlo, hSLhiRam, hSLwin,
     hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
-    hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
+    hgframe, hg8, hg18, hg19, hg20, hg21, hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
   obtain ⟨hG, htick, hpc, hs0, hs1, hs3, hs2, hsp, hra, ⟨vmi, hmi⟩,
     hout, houtStr, hmem, hcode, hstore,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
@@ -241,22 +386,24 @@ theorem blockB_stmtWhileCond_stagePre
   have hx2jsp : σ4.regs.get? Register.x2 = some (((sp - 176#64) + 1088#64) - 1088#64) := by
     rw [hjspcancel]; exact hsp_4
   refine ⟨4, ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩, by omega,
-    StepsN.succ hstep1 (StepsN.succ hstep2 (StepsN.succ hstep3 (StepsN.succ hstep4 (StepsN.zero _)))), ?_⟩
-  refine ⟨gpre, N, A, SL, φf, φc, (0x8000404c#64), (0x80004050#64), (0x1ff118#21),
-    (sp - 176#64) + 1088#64, r, aInterp, (sp - 176#64) + sign_extend (m := 64) (0x050#12),
-    aInterp, aExprChild, v8, v9, v18, out0, ment, ?_, ?_, ?_, ?_,
-    hG4, hi4, hpc4, hx10_4, ?_, hx11_val, ⟨_, hx13_val⟩, hx12_4, hx2jsp, ⟨vmi4, hmi4⟩, hout4, ?_,
-    hmem4e, ?_, hEvCode, hViInt, hViSlot, hNbsJ, ?_, ?_, ?_, ?_, hframe4, ⟨hg8, hg18⟩,
+    StepsN.succ hstep1 (StepsN.succ hstep2 (StepsN.succ hstep3 (StepsN.succ hstep4 (StepsN.zero _)))),
+    { env_valid := henvValid
+      pre := ?_
+      s0 := (hframe4 Register.x8 (by decide)).trans
+        ((hgframe Register.x8 (by decide)).symm.trans hs0)
+      s1 := obs_alu_other' hobs4 Register.x9 (by decide) hs1_3
+      s2 := (hframe4 Register.x18 (by decide)).trans
+        ((hgframe Register.x18 (by decide)).symm.trans hs2)
+      s3 := (hframe4 Register.x19 (by decide)).trans
+        ((hgframe Register.x19 (by decide)).symm.trans hs3)
+      spReg := hsp_4
+      mem := hmem4e }⟩
+  refine ⟨r, v8, v9, v18, out0, ?_⟩
+  refine ⟨
+    hG4, hi4, hpc4, hx10_4, ?_, hx11_val, (by rw [← henvPtr]; exact hx13_val), hx12_4, hx2jsp, ⟨vmi4, hmi4⟩, hout4, ?_,
+    hmem4e, ?_, hEvCode, hViInt, hViSlot, hNbsJ, ?_, hWordsJ, ?_, ?_, ?_, hframe4,
+    ⟨hg8, hg18, hg19, hg20, hg21⟩,
     ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  -- hjaltgt
-  · apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide
-  -- hlink
-  · apply BitVec.eq_of_toNat_eq; decide
-  -- retAl
-  · decide
-  -- hjalSite
-  · intro σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ
-    exact site_8000404c_es σ i u (0x8000404c#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ
   -- x9 = sret := aInterp
   · exact obs_alu_other' hobs4 Register.x9 (by decide) hs1_3
   -- String.join out0.toList = st.out
@@ -350,6 +497,9 @@ def StmtWhileCondArmDispatch
         -- eval-side code facts above; NOT derivable from `ExecGround`).
         EvalGround ment SL A (sp - 176#64)
           ((sp - 176#64) + sign_extend (m := 64) (0x050#12)) aExprChild.toNat cnd ∧
+        ValueWordsTotal ment
+          ((sp - 176#64) + sign_extend (m := 64) (0x050#12)).toNat ∧
+        aEnv = BitVec.ofNat 64 (φf env) ∧
         (∀ m' : Mem,
           (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) →
             ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
@@ -369,6 +519,8 @@ def StmtWhileCondArmDispatch
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         (∀ R : Register, AbiPreservedNoise R → c'.σ.regs.get? R = gpre R) ∧
         (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        (∃ w, gpre Register.x19 = some w) ∧ (∃ w, gpre Register.x20 = some w) ∧
+        (∃ w, gpre Register.x21 = some w) ∧
         -- ITEM ZERO B1: the child expression's budget at the statement
         -- frame `sp - 176`, `.fn`-bodies bound, store-bodies invariant.
         StackOK SL (sp - 176#64)
@@ -410,18 +562,22 @@ theorem stmtWhileCond_field_of_dispatch
     obtain ⟨c1, hsteps1, hMid⟩ :=
       hDisp g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 hEntry c rfl
     obtain ⟨gpre, aExprChild, v8, v9, v18, v19, ment, hArm, hpay, hExprChild,
-      hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hStoreSurvJ,
+      hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
       hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
-      hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩ := hMid
-    have hcut : LandedN 4 c1 (fun c' => ExecJalPreBundle cnd c' st d env) :=
+      hgframe, hg8, hg18, hg19, hg20, hg21, hstackBudget, hexprBodies, hstoreBodies⟩ := hMid
+    have hcutReady : LandedN 4 c1 (ExecWhileCondJalReady gpre N A SL φf φc
+        cnd st d env sp aInterp aStmt aEnv aRet aExprChild ment) :=
       blockB_stmtWhileCond_stagePre g gpre N A SL φf φc st d env cnd
         sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1
+        hEntry.env_valid
         ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
-         hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hStoreSurvJ,
+         hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
          hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
          hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
-         hgframe, hg8, hg18, hstackBudget, hexprBodies, hstoreBodies⟩
+         hgframe, hg8, hg18, hg19, hg20, hg21, hstackBudget, hexprBodies, hstoreBodies⟩
+    have hcut : LandedN 4 c1 (fun c' => ExecJalPreBundle cnd c' st d env) :=
+      LandedN.weaken hcutReady (fun _ hReady => hReady.toExecJalPreBundle)
     obtain ⟨n1, hn1⟩ := hsteps1.toN
     obtain ⟨m2, c2, hm2, hs2, hpb⟩ := hcut
     exact ⟨n1 + m2, c2, by omega, hn1.trans_add hs2, hpb⟩

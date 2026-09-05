@@ -77,6 +77,7 @@ def ExecStmtPreBundle (s : Stmt) (c' : Config) (st : SpecSt) (d : Nat)
     (callPC retPC : BitVec 64) (jalImm : BitVec 21) (hdrm : BitVec 64)
     (sp aInterp aStmt aEnv aRet : BitVec 64)
     (out0 : Array String) (mcall : Mem),
+    EnvValid st env ∧
     ((callPC + sign_extend (m := 64) jalImm) = BitVec.ofNat 64 execStmtEntry) ∧
     ((BitVec.addInt callPC 4) = retPC) ∧ retPC.toNat % 4 = 0 ∧
     (∀ (σ : MState) (i u : Nat) (vmi : BitVec 64),
@@ -90,13 +91,16 @@ def ExecStmtPreBundle (s : Stmt) (c' : Config) (st : SpecSt) (d : Nat)
     c'.σ.regs.get? Register.x10 = some aInterp ∧
     c'.σ.regs.get? Register.x11 = some aStmt ∧
     c'.σ.regs.get? Register.x12 = some aEnv ∧
+    aEnv = BitVec.ofNat 64 (φf env) ∧
     c'.σ.regs.get? Register.x13 = some aRet ∧
     c'.σ.regs.get? Register.x2 = some (sp - hdrm) ∧
     (∃ w, c'.σ.regs.get? Register.minstret = some w) ∧
     ((∃ w, c'.σ.regs.get? Register.x8 = some w) ∧
      (∃ w, c'.σ.regs.get? Register.x9 = some w) ∧
      (∃ w, c'.σ.regs.get? Register.x18 = some w) ∧
-     (∃ w, c'.σ.regs.get? Register.x19 = some w)) ∧
+     (∃ w, c'.σ.regs.get? Register.x19 = some w) ∧
+     (∃ w, c'.σ.regs.get? Register.x20 = some w) ∧
+     (∃ w, c'.σ.regs.get? Register.x21 = some w)) ∧
     c'.σ.sailOutput = out0 ∧
     String.join out0.toList = st.out ∧
     c'.σ.mem = mcall ∧
@@ -131,10 +135,10 @@ theorem landedN_sEntryC_of_preBundle
     (h : ExecStmtPreBundle s c' st d env) :
     LandedN 1 c' (fun c'' => SEntryC c'' st d env s) := by
   obtain ⟨N, A, SL, φf, φc, callPC, retPC, jalImm, hdrm, sp, aInterp, aStmt, aEnv,
-    aRet, out0, mcall, hjaltgt, hlink, hretAl, hjalSite, hrest⟩ := h
+    aRet, out0, mcall, henvValid, hjaltgt, hlink, hretAl, hjalSite, hrest⟩ := h
   have hEE := execEntry_of_jalPrefix N A SL φf φc st d env s
     callPC retPC jalImm hdrm sp aInterp aStmt aEnv aRet out0 mcall c'
-    hjaltgt hlink hretAl hjalSite hrest
+    hjaltgt hlink hretAl henvValid hjalSite hrest
   -- wave 45: the fresh-`jal` route lands the FIRST disjunct of the amended
   -- 3-way `SEntryC` (`sEntryC_of_fresh`).
   exact LandedN.weaken hEE (fun c'' hEntry =>
@@ -411,11 +415,14 @@ theorem flBody_split (cnd : Option Expr) (step : Option Expr) (b : Stmt) (c : Co
 The staging residual supplies the arg-loop control PC and its budgets. -/
 theorem callArgs_split (f : Expr) (args : List Expr) (c : Config) (st st' : SpecSt)
     (d : Nat) (env : Addr) (fv : Value) (argLoopPC dLeft aLeft : Nat) (SL : StackLayout)
-    (hstage : EvalE st d env f st' fv → EEntryC c st d env (.call f args) →
+    (hstage : EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EEntryC c st d env (.call f args) →
       LandedN 1 c (fun c' => SegPreBundle argLoopPC c' st' d dLeft aLeft)) :
-    EvalE st d env f st' fv → EEntryC c st d env (.call f args) →
+    EvalE st d env f st' fv → args.length ≤ maxArgs →
+    EEntryC c st d env (.call f args) →
     LandedN 1 c (fun c' => AEntryC c' st' d env args) :=
-  fun hE hEE => argsChildSplit_of_stage args argLoopPC c st' d dLeft aLeft env SL (hstage hE hEE)
+  fun hE hbound hEE => argsChildSplit_of_stage args argLoopPC c st' d dLeft aLeft env SL
+    (hstage hE hbound hEE)
 
 #print axioms callArgs_split
 
@@ -435,13 +442,16 @@ theorem argsTail_split (e : Expr) (es : List Expr) (c : Config) (st st' : SpecSt
 theorem callC_split (f : Expr) (args : List Expr) (c : Config) (st st' st'' : SpecSt)
     (d : Nat) (env : Addr) (fv : Value) (vs : List Value)
     (calleeBodyPC dLeft aLeft : Nat) (SL : StackLayout)
-    (hstage : EvalE st d env f st' fv → EvalArgs st' d env args st'' vs →
+    (hstage : EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EvalArgs st' d env args st'' vs →
       EEntryC c st d env (.call f args) →
       LandedN 1 c (fun c' => SegPreBundle calleeBodyPC c' st'' d dLeft aLeft)) :
-    EvalE st d env f st' fv → EvalArgs st' d env args st'' vs →
+    EvalE st d env f st' fv → args.length ≤ maxArgs →
+    EvalArgs st' d env args st'' vs →
     EEntryC c st d env (.call f args) →
     LandedN 1 c (fun c' => CEntryC c' st'' d fv vs) :=
-  fun hE hA hEE => calleeChildSplit_of_stage fv vs calleeBodyPC c st'' d dLeft aLeft SL (hstage hE hA hEE)
+  fun hE hbound hA hEE => calleeChildSplit_of_stage fv vs calleeBodyPC c st'' d dLeft aLeft SL
+    (hstage hE hbound hA hEE)
 
 #print axioms callC_split
 
@@ -532,7 +542,8 @@ structure NonEvalChildStages : Prop where
     LandedN 1 c (fun c' => ExecStmtPreBundle b c' st' d env)
   callArgs : ∀ (f : Expr) (args : List Expr) (c : Config) (st st' : SpecSt)
     (d : Nat) (env : Addr) (fv : Value),
-    EvalE st d env f st' fv → EEntryC c st d env (.call f args) →
+    EvalE st d env f st' fv → args.length ≤ maxArgs →
+    EEntryC c st d env (.call f args) →
     ∃ (argLoopPC dLeft aLeft : Nat),
       LandedN 1 c (fun c' => SegPreBundle argLoopPC c' st' d dLeft aLeft)
   argsTail : ∀ (e : Expr) (es : List Expr) (c : Config) (st st' : SpecSt)
@@ -542,7 +553,8 @@ structure NonEvalChildStages : Prop where
       LandedN 1 c (fun c' => SegPreBundle argLoopPC c' st' d dLeft aLeft)
   callC : ∀ (f : Expr) (args : List Expr) (c : Config) (st st' st'' : SpecSt)
     (d : Nat) (env : Addr) (fv : Value) (vs : List Value),
-    EvalE st d env f st' fv → EvalArgs st' d env args st'' vs →
+    EvalE st d env f st' fv → args.length ≤ maxArgs →
+    EvalArgs st' d env args st'' vs →
     EEntryC c st d env (.call f args) →
     ∃ (calleeBodyPC dLeft aLeft : Nat),
       LandedN 1 c (fun c' => SegPreBundle calleeBodyPC c' st'' d dLeft aLeft)
@@ -593,15 +605,17 @@ theorem armResidGap_nonEvalChildFields (S : NonEvalChildStages) :
       LandedN 1 c (fun c' => SEntryC c' st' d env b)) ∧
     (∀ (f : Expr) (args : List Expr) (c : Config) (st st' : SpecSt) (d : Nat) (env : Addr)
       (fv : Value),
-      EvalE st d env f st' fv → EEntryC c st d env (.call f args) →
+      EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EEntryC c st d env (.call f args) →
       LandedN 1 c (fun c' => AEntryC c' st' d env args)) ∧
     (∀ (e : Expr) (es : List Expr) (c : Config) (st st' : SpecSt) (d : Nat) (env : Addr)
       (v : Value),
       EvalE st d env e st' v → AEntryC c st d env (e :: es) →
       LandedN 1 c (fun c' => AEntryC c' st' d env es)) ∧
     (∀ (f : Expr) (args : List Expr) (c : Config) (st st' st'' : SpecSt) (d : Nat) (env : Addr)
-      (fv : Value) (vs : List Value),
-      EvalE st d env f st' fv → EvalArgs st' d env args st'' vs →
+    (fv : Value) (vs : List Value),
+      EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EvalArgs st' d env args st'' vs →
       EEntryC c st d env (.call f args) →
       LandedN 1 c (fun c' => CEntryC c' st'' d fv vs)) ∧
     (∀ (init : Option Stmt) (cnd step : Option Expr) (b : Stmt) (c : Config) (st st' : SpecSt)
@@ -624,18 +638,18 @@ theorem armResidGap_nonEvalChildFields (S : NonEvalChildStages) :
    fun init cnd step b c st d env store' outer =>
      stmtForInit_split init cnd step b c st d env store' outer (S.stmtForInit init cnd step b c st d env store' outer),
    fun cnd step b c st st' d env => flBody_split cnd step b c st st' d env (S.flBody cnd step b c st st' d env),
-   fun f args c st st' d env fv hE hEE => by
-     obtain ⟨argLoopPC, dLeft, aLeft, hst⟩ := S.callArgs f args c st st' d env fv hE hEE
+   fun f args c st st' d env fv hE hbound hEE => by
+     obtain ⟨argLoopPC, dLeft, aLeft, hst⟩ := S.callArgs f args c st st' d env fv hE hbound hEE
      exact callArgs_split f args c st st' d env fv argLoopPC dLeft aLeft ⟨0, 0⟩
-       (fun _ _ => hst) hE hEE,
+       (fun _ _ _ => hst) hE hbound hEE,
    fun e es c st st' d env v hE hAE => by
      obtain ⟨argLoopPC, dLeft, aLeft, hst⟩ := S.argsTail e es c st st' d env v hE hAE
      exact argsTail_split e es c st st' d env v argLoopPC dLeft aLeft ⟨0, 0⟩
        (fun _ _ => hst) hE hAE,
-   fun f args c st st' st'' d env fv vs hE hA hEE => by
-     obtain ⟨calleeBodyPC, dLeft, aLeft, hst⟩ := S.callC f args c st st' st'' d env fv vs hE hA hEE
+   fun f args c st st' st'' d env fv vs hE hbound hA hEE => by
+     obtain ⟨calleeBodyPC, dLeft, aLeft, hst⟩ := S.callC f args c st st' st'' d env fv vs hE hbound hA hEE
      exact callC_split f args c st st' st'' d env fv vs calleeBodyPC dLeft aLeft ⟨0, 0⟩
-       (fun _ _ _ => hst) hE hA hEE,
+       (fun _ _ _ _ => hst) hE hbound hA hEE,
    fun init cnd step b c st st' d env store' outer hAlloc hInit hSE => by
      obtain ⟨forCondPC, dLeft, aLeft, hst⟩ := S.stmtForLoop init cnd step b c st st' d env store' outer hAlloc hInit hSE
      exact stmtForLoop_split init cnd step b c st st' d env store' outer forCondPC dLeft aLeft ⟨0, 0⟩

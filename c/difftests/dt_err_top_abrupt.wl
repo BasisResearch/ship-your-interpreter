@@ -1,0 +1,2 @@
+// DIFFTEST-ERROR: hTopAbrupt
+break;

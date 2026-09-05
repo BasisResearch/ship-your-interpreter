@@ -12,7 +12,7 @@ The stuck-side (`InterpSim.stuck_sim`) obligation quantifies over all loaded
   correspondence `Corr c initSt 0 0 p` (the `divergenceSim` interface).
 * **`ErrFamily L`** — for every loaded `(p, c)`, `BigStepErr p` lands in
   `stuck_sim`'s disjunction at `c` (exactly `stuck_of_bigStepErrFull`'s output).
-  `errFamily_of_sites` builds it from the **42 per-error-site residuals**, each
+  `errFamily_of_sites` builds it from the **44 per-error-site residuals**, each
   ∀-closed over the config — this is where the M5 error bundle is precisely
   pinned.
 
@@ -46,10 +46,12 @@ def ErrFamily (L : Layout) : Prop :=
   ∀ (p : Program) (c : Config), Loaded L p c → BigStepErr p →
     Diverges c ∨ ∃ out e, Halts c out e ∧ e ≠ 0
 
-/-- `ErrFamily` from the 42 per-error-site residuals (the M5 error bundle), each
+/- `ErrFamily` from the 44 per-error-site residuals (the M5 error bundle), each
 ∀-closed over the config `c`.  For each loaded `(p, c)` these are instantiated at
-that `c` and fed to `stuck_of_bigStepErrFull`.  This is where the 42 error-site
+that `c` and fed to `stuck_of_bigStepErrFull`.  This is where the 44 error-site
 residuals are precisely pinned. -/
+/- Obsolete constant-config residual interface.  Retained as source history;
+the indexed replacement below is the elaborated declaration.
 theorem errFamily_of_sites (L : Layout)
     (hVarUndef : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (x : String),
       st.store.get? env x = none → ErrHalts c)
@@ -86,12 +88,17 @@ theorem errFamily_of_sites (L : Layout)
       EvalE st d env e st' v → (∀ n : Int, v ≠ .int n) → ErrHalts c)
     (hCallF : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (f : Expr) (args : List Expr),
       EvalErr st d env f → ErrHalts c → ErrHalts c)
+    (hCallTooMany : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr)
+      (f : Expr) (args : List Expr) (st' : SpecSt) (fv : Value),
+      EvalE st d env f st' fv → maxArgs < args.length → ErrHalts c)
     (hCallArgs : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (f : Expr) (args : List Expr)
       (st' : SpecSt) (fv : Value),
-      EvalE st d env f st' fv → EvalArgsErr st' d env args → ErrHalts c → ErrHalts c)
+      EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EvalArgsErr st' d env args → ErrHalts c → ErrHalts c)
     (hCallC : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (f : Expr) (args : List Expr)
       (st' st'' : SpecSt) (fv : Value) (vs : List Value),
-      EvalE st d env f st' fv → EvalArgs st' d env args st'' vs →
+      EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EvalArgs st' d env args st'' vs →
       CallErr st'' d fv vs → ErrHalts c → ErrHalts c)
     (hArgsHead : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (es : List Expr),
       EvalErr st d env e → ErrHalts c → ErrHalts c)
@@ -100,8 +107,8 @@ theorem errFamily_of_sites (L : Layout)
       EvalE st d env e st' v → EvalArgsErr st' d env es → ErrHalts c → ErrHalts c)
     (hNotCallable : ∀ (c : Config) (st : SpecSt) (d : Nat) (fv : Value) (vs : List Value),
       (∀ a, fv ≠ .closure a) → (∀ f, fv ≠ .native f) → ErrHalts c)
-    -- 43rd site: dangling closure address (`CallErr.badClosure`), config-
-    -- quantified like the other 42; see `ErrorSimFull.errorSim_of_sites`.
+    -- Dangling closure address (`CallErr.badClosure`), config-quantified like
+    -- the other constructor sites; see `ErrorSimFull.errorSim_of_sites`.
     (hBadClosure : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Addr) (vs : List Value),
       st.store.closures[a]? = none → ErrHalts c)
     (hArity : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value),
@@ -188,18 +195,28 @@ theorem errFamily_of_sites (L : Layout)
     (hSeqTail : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt)
       (st' : SpecSt),
       ExecS st d env s st' .normal → ExecSeqErr st' d env ss → ErrHalts c → ErrHalts c)
-    -- The 43rd error route (top-level abrupt → exit 70, `TopAbrupt p`), config-
-    -- and program-quantified like the other 42; see `ErrorSimFull.errorSimFull`.
+    -- The separate top-level abrupt route (`TopAbrupt p` → exit 70), config-
+    -- and program-quantified; see `ErrorSimFull.errorSimFull`.
     (hTopAbrupt : ∀ (p : Program) (c : Config), TopAbrupt p → ErrHalts c) :
     ErrFamily L := by
   intro p c _ herr
   exact stuck_of_bigStepErrFull c p
     (hVarUndef c) (hAssignE c) (hAssignUnbound c) (hBinaryL c) (hBinaryR c) (hBinaryOp c)
-    (hOrL c) (hOrR c) (hAndL c) (hAndR c) (hUnaryE c) (hNegType c) (hCallF c) (hCallArgs c)
+    (hOrL c) (hOrR c) (hAndL c) (hAndR c) (hUnaryE c) (hNegType c) (hCallF c)
+    (hCallTooMany c) (hCallArgs c)
     (hCallC c) (hArgsHead c) (hArgsTail c) (hNotCallable c) (hBadClosure c) (hArity c) (hDepth c) (hBody c)
     (hEscape c) (hAssertFail c) (hAssertArity c) (hExpr c) (hVarInit c) (hBlock c) (hIfCond c)
     (hIfThen c) (hIfElse c) (hWhileCond c) (hWhileBody c) (hWhileLoop c) (hForInit c)
     (hForLoop c) (hRet c) (hFlCond c) (hFlBody c) (hFlStep c) (hFlLoop c) (hSeqHead c)
     (hSeqTail c) (hTopAbrupt p c) herr
+-/
+
+/-- Assemble the unchanged public `ErrFamily` from entry-indexed work selected
+for the actual loaded program/config pair. -/
+theorem errFamily_of_sites (L : Layout)
+    (work : ∀ (p : Program) (c : Config), Loaded L p c →
+      ErrorProgramWork p c) : ErrFamily L := by
+  intro p c hLoaded hErr
+  exact stuck_of_bigStepErrFull_work p c (work p c hLoaded) hErr
 
 end Vsa.Sim.InterpSimBundle

@@ -2,15 +2,16 @@ import Vsa.Sim.InterpInit
 import Vsa.Sim.DivCorrClose
 
 /-!
-# `EntryDrive` — the ONE shared `Loaded → SegEntry@loopHead` drive, feeding BOTH
-the term-arm entry and the divergence entry
+# `EntryDrive` — the shared nonempty `Loaded → SegEntry@loopHead` drive
 
 The entry endgame and the divergence correspondence rest on the SAME machine
-content: the `interp_run` prologue drive from a `Loaded L p c` config to a
+content for nonempty programs: the `interp_run` prologue drive from a
+`Loaded L (s :: ss) c` config to a
 loop-head `SegEntry` (`interpLoopHeadPC = 0x8000448c`) over the initial spec store
 `initSt` (`Vsa/Sim/EntryHalts.lean` + `Vsa/Sim/EntrySeams.lean` for the term arm;
 `Vsa/Sim/DivCorrClose.lean`'s `DivEntryDrive` for divergence).  This file NAMES
-that shared drive ONCE as `DriveToLoopHead L` and shows it supplies both consumers,
+that shared drive once as `DriveToLoopHead L`.  Empty programs use the direct
+normal-exit route,
 so the "shared crux" the brief flags is a single premise, not two.
 
 ## The drive content (spans verified against `experiments/disasm.txt:4463–4503`)
@@ -37,18 +38,17 @@ at the loop head, built by `interp_init` (`Vsa/Sim/InterpInit.lean`'s compositio
 
 ## What this file lands
 
-* **`DriveToLoopHead L`** — the shared drive residual (`Loaded → ∃ cH ghosts,
+* **`DriveToLoopHead L`** — the nonempty drive residual (`Loaded → ∃ cH ghosts,
   Steps c cH ∧ SegEntry@loopHead over initSt`).  The precise, decoded shape both
   entry arms need.
 * **`interpInitStoreRepr_of_driveToLoopHead`** — feeds
   `InterpInit.interpInitStoreRepr_of_drive` (converting the `initSt` store form to
   the `storeAfterAssert` form by `initStore_eq_initSt`), closing
   `InterpInitStoreRepr L` (hence the term-arm entry seam) from `DriveToLoopHead`.
-* **`divEntryDrive_of_driveToLoopHead`** — feeds `DivCorrClose.DivEntryDrive`
-  (`Steps → StepsN` via `Steps.toN`, packing the loop-head reflection), closing the
-  divergence entry from the SAME `DriveToLoopHead` + the loop-head reflection.
+* **`divEntryDriveNonempty_of_driveToLoopHead`** — supplies the nonempty
+  divergence entry (`Steps → StepsN` via `Steps.toN`).
 
-So the two endgame entry seams are UNIFIED: one drive, two consumers.
+The empty route is deliberately not encoded as a loop-head visit.
 
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
 -/
@@ -82,16 +82,18 @@ representation is the off-path `interp_init` build.  It is the SINGLE machine
 residual both the term-arm entry (`InterpInitStoreRepr`) and the divergence entry
 (`DivEntryDrive`) rest on. -/
 def DriveToLoopHead (L : Layout) : Prop :=
-  ∀ (p : Program) (c : Config), Loaded L p c →
+  ∀ (s : Stmt) (ss : List Stmt) (c : Config), Loaded L (s :: ss) c →
     ∃ (cH : Config)
       (g : (R : Register) → Option (RegisterType R))
       (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-      (dLeft aLeft : Nat) (m0 : Mem),
+      (dLeft aLeft : Nat) (sp aRet : BitVec 64) (m0 : Mem),
       Steps c cH ∧
       -- ITEM ZERO (falsity #12, shape 3; threaded wave 47e): the drive also
       -- certifies the `interp_run` image in `m0`.
       Vsa.Sim.Code.Interp_runLoaded m0 ∧
-      SegEntry g N A SL φf φc initSt 0 dLeft aLeft interpLoopHeadPC m0 cH
+      g Register.x21 = some (0#64 : BitVec 64) ∧
+      SegEntry g N A SL φf φc initSt 0 dLeft aLeft interpLoopHeadPC m0 cH ∧
+      ExecSeqEntryI .interpRun g N A SL φf φc initSt 0 0 (s :: ss) sp aRet m0 cH
 
 /-! ## §2. Consumer 1 — the term-arm entry (`InterpInitStoreRepr`) -/
 
@@ -104,19 +106,33 @@ witness IS the one that lemma needs — a `rw` reindex.  Closes the term-arm ent
 seam from `DriveToLoopHead`. -/
 theorem interpInitStoreRepr_of_driveToLoopHead
     (L : Layout) (hDrive : DriveToLoopHead L) :
-    ∀ p, InterpInitStoreRepr L p := by
+    ∀ s ss, InterpInitStoreRepr L (s :: ss) := by
   apply interpInitStoreRepr_of_drive L
-  intro p c hL
-  obtain ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, hImg, hSeg⟩ := hDrive p c hL
-  refine ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, hImg, ?_⟩
+  intro s ss c hL
+  obtain ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, sp, aRet, m0,
+      hSteps, hImg, hLatch, hSeg, hEntryI⟩ :=
+    hDrive s ss c hL
+  refine ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, sp, aRet, m0,
+    hSteps, hImg, hLatch, ?_, hEntryI⟩
   -- `initSt = { store := storeAfterAssert, out := initSt.out }` by `initStore_eq_initSt`.
   have hst : ({ store := storeAfterAssert, out := initSt.out } : SpecSt) = initSt := by
     rw [initStore_eq_initSt]
   rwa [hst]
 
+/-- Package the direct empty-program bypass with the shared loop-head drive.
+The drive is consumed only at nonempty programs; the empty case never claims a
+loop-head visit. -/
+theorem interpInitRouteInputs_of_driveToLoopHead
+    (L : Layout)
+    (hEmpty : EntryEmptySpan L)
+    (hDrive : DriveToLoopHead L) :
+    InterpInitRouteInputs L where
+  empty := hEmpty
+  nonempty s ss := interpInitStoreRepr_of_driveToLoopHead L hDrive s ss
+
 /-! ## §3. Consumer 2 — the divergence entry (`DivEntryDrive`) -/
 
-/-- **`DivCorrClose.DivEntryDrive` from the shared drive.**  The divergence entry
+/- **The nonempty divergence entry from the shared drive.**  The divergence entry
 `divCorr Reflect c initSt 0 0 p` needs `∃ cH k …, StepsN k c cH ∧ SegEntry@loopHead
 over initSt ∧ Reflect cH 0 p`.  `DriveToLoopHead` supplies the `Steps c cH ∧
 SegEntry`; `Steps.toN` converts `Steps` to `StepsN k` for some `k`; the loop-head
@@ -128,26 +144,37 @@ divergence entry from the SAME drive.
 loop-head config reflects "executing `p` in the global scope" — the root case of the
 loop-head reflection the divergence correspondence carries (named, per
 `DivCorrClose`'s `Reflect` abstraction). -/
-theorem divEntryDrive_of_driveToLoopHead
+/-- Divergence-entry drive restricted to nonempty programs.  Empty programs
+take the normal-exit route and require a route-indexed divergence correspondence. -/
+def DivEntryDriveNonempty
+    (Reflect : Config → Addr → List Stmt → Prop) (L : Layout) : Prop :=
+  ∀ (s : Stmt) (ss : List Stmt) (c : Config), Loaded L (s :: ss) c →
+    DivCorrClose.divCorr Reflect c initSt 0 0 (s :: ss)
+
+theorem divEntryDriveNonempty_of_driveToLoopHead
     (Reflect : Config → Addr → List Stmt → Prop)
     (L : Layout) (hDrive : DriveToLoopHead L)
-    (hRefl0 : ∀ (p : Program) (c cH : Config),
-      Loaded L p c →
+    (hRefl0 : ∀ (s : Stmt) (ss : List Stmt) (c cH : Config),
+      Loaded L (s :: ss) c →
       (∃ (g : (R : Register) → Option (RegisterType R))
         (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
         (dLeft aLeft : Nat) (m0 : Mem),
         Steps c cH ∧
         SegEntry g N A SL φf φc initSt 0 dLeft aLeft interpLoopHeadPC m0 cH) →
-      Reflect cH 0 p) :
-    DivCorrClose.DivEntryDrive Reflect L := by
-  intro p c hL
-  obtain ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, _hImg, hSeg⟩ := hDrive p c hL
+      Reflect cH 0 (s :: ss)) :
+    DivEntryDriveNonempty Reflect L := by
+  intro s ss c hL
+  obtain ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, _sp, _aRet, m0,
+      hSteps, _hImg, _hLatch, hSeg, _hEntryI⟩ :=
+    hDrive s ss c hL
   obtain ⟨k, hStepsN⟩ := hSteps.toN
   refine ⟨cH, k, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hStepsN, hSeg, ?_⟩
-  exact hRefl0 p c cH hL ⟨g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, hSeg⟩
+  exact hRefl0 s ss c cH hL
+    ⟨g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, hSeg⟩
 
 #print axioms DriveToLoopHead
 #print axioms interpInitStoreRepr_of_driveToLoopHead
-#print axioms divEntryDrive_of_driveToLoopHead
+#print axioms interpInitRouteInputs_of_driveToLoopHead
+#print axioms divEntryDriveNonempty_of_driveToLoopHead
 
 end Vsa.Sim

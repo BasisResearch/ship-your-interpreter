@@ -21,7 +21,7 @@ exactly as in the three pilot rows.
 
 ## What this batch lands
 
-Ten more of the 42 residuals, prioritising LEAF error nodes (no sub-derivation
+Ten more of the 44 residuals, prioritising LEAF error nodes (no sub-derivation
 to relate — the ∀-closure ends directly in `→ ErrHalts c`):
 
 * EvalErr leaves: `row_hVarUndef` (undefined variable), `row_hAssignUnbound`
@@ -35,7 +35,7 @@ Plus three of the simplest EvalErr/ExecErr *propagation* nodes (one sub-IH,
 also ignored under the constant motive): `row_hUnaryE`, `row_hCallF`,
 `row_hExpr`.
 
-Together with the pilot's three, **13 of the 42** `errorSimFull` minor premises
+Together with the pilot's three, **13 of the 44** `errorSimFull` minor premises
 are now discharged as rows.  The remaining rows follow the identical shape; the
 only genuinely per-row artefact (deferred to L7/L8) is the site's segment
 `Triple` `T` and the reachability link `hsite`, taken here as hypotheses exactly

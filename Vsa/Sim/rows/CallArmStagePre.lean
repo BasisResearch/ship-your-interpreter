@@ -233,8 +233,11 @@ theorem blockB_call_stagePre
           sp r sret aExpr aIn v8 v9 v18 out0 m0 ment c ∧
         c.σ.regs.get? Register.x11 = some aIn ∧
         c.σ.regs.get? Register.x13 = some aEnv3 ∧
+        aEnv3 = BitVec.ofNat 64 (φf env) ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
         (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        (∃ w, gpre Register.x19 = some w) ∧ (∃ w, gpre Register.x20 = some w) ∧
+        (∃ w, gpre Register.x21 = some w) ∧
         read64 ment (aExpr.toNat + 8) = some aClo.toNat ∧
         (∀ m' : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m'[a]?) →
@@ -262,7 +265,8 @@ theorem blockB_call_stagePre
         Expr.bodiesBound Vsa.While.perCallBudget f = true ∧
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 3 c (fun c' => JalPreBundle f c' st d env) := by
-  obtain ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hGroundP, hexprHi16,
+  obtain ⟨ment, hArm, hx11, hx13, henvReg, hgframe, hg8, hg18, hg19, hg20, hg21,
+    hpay, hexprSurv, hGroundP, hexprHi16,
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -448,9 +452,9 @@ theorem blockB_call_stagePre
       (by decide),
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_800031bc_cf σ i u (0x800031bc#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
-      hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, ⟨_, hx13_3⟩, hx12_3, hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr,
+      hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, henvReg ▸ hx13_3, hx12_3, hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr,
       hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hGroundMcall, hExprMcall, hStoreMcall, hStoreSurvMcall,
-      hframeB, ⟨hg8, hg18⟩,
+      hframeB, ⟨hg8, hg18, hg19, hg20, hg21⟩,
       hslotRaMcall, hslotS0Mcall, hslotS1Mcall, hslotS2Mcall,
       hopAl, hopLo, hopHi, hopWin, hopStk,
       (by rw [hsub992]; omega), (by rw [hsub992]; omega), (by rw [hsub992]; omega),
@@ -478,8 +482,11 @@ def CallArmDispatch
           sp r0 sret aExpr aIn v8 v9 v18 c'.σ.sailOutput m0 ment c' ∧
         c'.σ.regs.get? Register.x11 = some aIn ∧
         c'.σ.regs.get? Register.x13 = some aEnv3 ∧
+        aEnv3 = BitVec.ofNat 64 (φf env) ∧
         (∀ R : Register, AbiPreservedNoise R → c'.σ.regs.get? R = gpre R) ∧
         (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        (∃ w, gpre Register.x19 = some w) ∧ (∃ w, gpre Register.x20 = some w) ∧
+        (∃ w, gpre Register.x21 = some w) ∧
         read64 ment (aExpr.toNat + 8) = some aClo.toNat ∧
         (∀ m' : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m'[a]?) →
@@ -514,13 +521,15 @@ theorem callF_field_of_dispatch
   refine evalChildField_of_blockA_stage (k := 3) (by omega)
     (hDisp g N A SL φf φc sp r0 sret aEnv aExpr m0 hEntry)
     (fun c' hMid => ?_) c rfl
-  obtain ⟨gpre, aIn, aClo, aEnv3, v8, v9, v18, ment, hArm, hx11, hx13, hgframe,
-    hg8, hg18, hpay, hexprSurv, hGroundP, hexprHi16, hopAl, hopLo, hopHi, hopWin, hopStk,
+  obtain ⟨gpre, aIn, aClo, aEnv3, v8, v9, v18, ment, hArm, hx11, hx13, henvReg, hgframe,
+    hg8, hg18, hg19, hg20, hg21, hpay, hexprSurv, hGroundP, hexprHi16,
+    hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam, hcodeStk, hviStk, htableStk,
     harenaStk, harenaCode⟩ := hMid
   exact blockB_call_stagePre g gpre N A SL φf φc st d env f args
     sp r0 sret aExpr aIn aClo aEnv3 v8 v9 v18 c'.σ.sailOutput m0 c'
-    ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hexprSurv, hGroundP, hexprHi16,
+    ⟨ment, hArm, hx11, hx13, henvReg, hgframe, hg8, hg18, hg19, hg20, hg21,
+      hpay, hexprSurv, hGroundP, hexprHi16,
       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
       hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
       -- ITEM ZERO B1: the CALLEE child budget, DERIVED from the entry's fields.

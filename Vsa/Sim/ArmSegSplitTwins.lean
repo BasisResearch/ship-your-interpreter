@@ -273,6 +273,7 @@ theorem execEntry_of_jTailRedispatch
     (spD aInterp aStmt aEnv aRet : BitVec 64)
     (out0 : Array String) (mcall : Mem)
     (c : Config)
+    (henvValid : EnvValid st env)
     (hhop : GRegsHopInto execStmtDispatchHead c.σ)
     (hpre :
         GoodState c.σ ∧ c.tick < 2 ∧
@@ -330,6 +331,7 @@ theorem execEntry_of_jTailRedispatch
         stmt := by show StmtRepr σ1.mem aStmt.toNat s; rw [hmem1e]; exact hstmtR
         store := by
           show StoreRepr σ1.mem N A φf φc st.store; rw [hmem1e]; exact hstore
+        env_valid := henvValid
         store_survives := by
           intro m' hag
           refine hstoreSurv m' (fun k hk1 => ?_)
@@ -363,6 +365,7 @@ def ExecStmtTailPreBundle (s : Stmt) (c' : Config) (st : SpecSt) (d : Nat)
   ∃ (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (spD aInterp aStmt aEnv aRet : BitVec 64)
     (out0 : Array String) (mcall : Mem),
+    EnvValid st env ∧
     GRegsHopInto execStmtDispatchHead c'.σ ∧
     GoodState c'.σ ∧ c'.tick < 2 ∧
     c'.σ.regs.get? Register.x8 = some aStmt ∧
@@ -397,9 +400,9 @@ theorem landedN_sDispatchC_of_preBundle
     (h : ExecStmtTailPreBundle s c' st d env) :
     LandedN 1 c' (fun c'' => SDispatchC c'' st d env s) := by
   obtain ⟨N, A, SL, φf, φc, spD, aInterp, aStmt, aEnv, aRet, out0, mcall,
-    hhop, hrest⟩ := h
+    henvValid, hhop, hrest⟩ := h
   have hDE := execEntry_of_jTailRedispatch N A SL φf φc st d env s
-    spD aInterp aStmt aEnv aRet out0 mcall c' hhop hrest
+    spD aInterp aStmt aEnv aRet out0 mcall c' henvValid hhop hrest
   exact LandedN.weaken hDE (fun c'' hEntry =>
     ⟨fun R => c''.σ.regs.get? R, N, A, SL, φf, φc,
       spD, aInterp, aStmt, aEnv, aRet, mcall, hEntry⟩)
@@ -613,11 +616,14 @@ theorem forChildSplit_of_stageB
 from a fallthrough-entered staging (the post-f-eval arg-loop head). -/
 theorem callArgs_splitB (f : Expr) (args : List Expr) (c : Config) (st st' : SpecSt)
     (d : Nat) (env : Addr) (fv : Value) (argLoopPC dLeft aLeft : Nat) (SL : StackLayout)
-    (hstage : EvalE st d env f st' fv → EEntryC c st d env (.call f args) →
+    (hstage : EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EEntryC c st d env (.call f args) →
       LandedN 1 c (fun c' => SegPreBundleB argLoopPC c' st' d dLeft aLeft)) :
-    EvalE st d env f st' fv → EEntryC c st d env (.call f args) →
+    EvalE st d env f st' fv → args.length ≤ maxArgs →
+    EEntryC c st d env (.call f args) →
     LandedN 1 c (fun c' => AEntryC c' st' d env args) :=
-  fun hE hEE => argsChildSplit_of_stageB args argLoopPC c st' d dLeft aLeft env SL (hstage hE hEE)
+  fun hE hbound hEE => argsChildSplit_of_stageB args argLoopPC c st' d dLeft aLeft env SL
+    (hstage hE hbound hEE)
 
 #print axioms callArgs_splitB
 
@@ -636,14 +642,17 @@ theorem argsTail_splitB (e : Expr) (es : List Expr) (c : Config) (st st' : SpecS
 theorem callC_splitB (f : Expr) (args : List Expr) (c : Config) (st st' st'' : SpecSt)
     (d : Nat) (env : Addr) (fv : Value) (vs : List Value)
     (calleeBodyPC dLeft aLeft : Nat) (SL : StackLayout)
-    (hstage : EvalE st d env f st' fv → EvalArgs st' d env args st'' vs →
+    (hstage : EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EvalArgs st' d env args st'' vs →
       EEntryC c st d env (.call f args) →
       LandedN 1 c (fun c' => SegPreBundleB calleeBodyPC c' st'' d dLeft aLeft)) :
-    EvalE st d env f st' fv → EvalArgs st' d env args st'' vs →
+    EvalE st d env f st' fv → args.length ≤ maxArgs →
+    EvalArgs st' d env args st'' vs →
     EEntryC c st d env (.call f args) →
     LandedN 1 c (fun c' => CEntryC c' st'' d fv vs) :=
-  fun hE hA hEE =>
-    calleeChildSplit_of_stageB fv vs calleeBodyPC c st'' d dLeft aLeft SL (hstage hE hA hEE)
+  fun hE hbound hA hEE =>
+    calleeChildSplit_of_stageB fv vs calleeBodyPC c st'' d dLeft aLeft SL
+      (hstage hE hbound hA hEE)
 
 #print axioms callC_splitB
 

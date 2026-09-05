@@ -371,6 +371,10 @@ theorem env_define_append_spec
     (m0 : Std.ExtHashMap Nat (BitVec 8))
     (exts : List (Nat × Nat)) (nMalloc : Nat) (spM rM : BitVec 64)
     (mMalloc : Std.ExtHashMap Nat (BitVec 8)) (hnM : nMalloc ≤ maxReq)
+    (hPrivCodeM : ∀ a, 0x80002a5c ≤ a → a < 0x80002c10 → ¬ M.privFoot a)
+    (hPrivSpillM : ∀ a, spM.toNat ≤ a → a < spM.toNat + 64 → ¬ M.privFoot a)
+    (hCodeStackM : ∀ a, 0x80002a5c ≤ a → a < 0x80002c10 →
+      ¬ (SL.lo ≤ a ∧ a < spM.toNat))
     (rMemcpy dst src : BitVec 64) (nMemcpy : Nat)
     (mMemcpy : Std.ExtHashMap Nat (BitVec 8)) (bs : Nat → BitVec 8)
     (halignC : rMemcpy.toNat % 4 = 0)
@@ -385,35 +389,20 @@ theorem env_define_append_spec
     (bridgeMallocPre : Triple
       (fun c => strlen_post rStrlen nameStr m0 c ∧
         EnvDefFrame SL gpv headroom M.AInv exts spM gm c)
-      (fun c =>
-        GoodState c.σ ∧ c.tick < 2 ∧
-        c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 mallocEntry) ∧
-        c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 nMalloc) ∧
-        c.σ.regs.get? Register.x1 = some rM ∧ rM.toNat % 4 = 0 ∧
-        c.σ.regs.get? Register.x2 = some spM ∧ StackOK SL spM headroom ∧
-        c.σ.regs.get? Register.x3 = some gpv ∧
-        (∀ R, AbiPreserved R = true → c.σ.regs.get? R = gm R) ∧
-        M.AInv c.σ exts ∧ c.σ.mem = mMalloc))
+      (fun c => EnvDefMallocPre M gm exts nMalloc spM rM mMalloc c ∧
+        EnvDefineSpillFrame spM gm c))
     (extsC : List (Nat × Nat)) (spC : BitVec 64)
     (hrouteCbyte : (src.toNat ^^^ dst.toNat) % 8 ≠ 0 ∨ nMemcpy < 8)
     (hAInvStableFootC : ∀ (σa σb : MState),
       σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
       (∀ a : Nat, (a < dst.toNat ∨ dst.toNat + nMemcpy ≤ a) → σa.mem[a]? = σb.mem[a]?) →
       M.AInv σa extsC → M.AInv σb extsC)
+    (hDstArenaC : A.contains dst.toNat nMemcpy)
+    (hArenaStackC : A.hi ≤ spC.toNat ∨ spC.toNat + 64 ≤ A.lo)
+    (hArenaCodeC : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo)
     (bridgeMemcpyPre : Triple
-      (fun c =>
-        GoodState c.σ ∧ c.tick < 2 ∧
-        c.σ.regs.get? Register.PC = some rM ∧
-        c.σ.regs.get? Register.x2 = some spM ∧
-        c.σ.regs.get? Register.x3 = some gpv ∧
-        (∀ R, AbiPreserved R = true → c.σ.regs.get? R = gm R) ∧
-        ((c.σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧ M.AInv c.σ exts) ∨
-         (∃ p, c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 p) ∧
-           p ≠ 0 ∧ p % 16 = 0 ∧ A.contains p nMalloc ∧
-           (∀ e ∈ exts, ExtDisjoint (p, nMalloc) e) ∧
-           M.AInv c.σ ((p, nMalloc) :: exts))) ∧
-        (∀ a, ¬ M.privFoot a → ¬ (SL.lo ≤ a ∧ a < spM.toNat) →
-          c.σ.mem[a]? = mMalloc[a]?))
+      (fun c => EnvDefMallocPost M gm exts nMalloc spM rM mMalloc c ∧
+        EnvDefineSpillFrame spM gm c)
       (fun c => PreDispatch gm rMemcpy dst src nMemcpy mMemcpy bs c ∧
         EnvDefFrame SL gpv headroom M.AInv extsC spC gm c))
     -- the `bridgeStore` residuals, discharged into `bridgeStore_wired`:
@@ -434,8 +423,9 @@ theorem env_define_append_spec
       (AppendedFrameSt SL gpv headroom M.AInv extsC spC gm N φf φc envAddr parent vars x v) Q) :
     Triple P Q :=
   envDefAppendContract M gm namePtr rStrlen nameStr m0 exts nMalloc spM rM mMalloc hnM
+    hPrivCodeM hPrivSpillM hCodeStackM
     rMemcpy dst src nMemcpy mMemcpy bs halignC strlenFramed bridgeStrlenPre bridgeMallocPre
-    extsC spC hrouteCbyte hAInvStableFootC bridgeMemcpyPre
+    extsC spC hrouteCbyte hAInvStableFootC hDstArenaC hArenaStackC hArenaCodeC bridgeMemcpyPre
     (bridgeStore_wired extsC spC gm N φf φc envAddr parent vars x v rMemcpy dst nMemcpy
       mMemcpy bs s4Ptr s5Ptr s1Ptr lds hEnterStore hFrameAppend hCarryStore epilogue)
 

@@ -1548,6 +1548,8 @@ structure EvalVarEntry
     (∃ w, c.σ.regs.get? Register.x9 = some w) ∧ (∃ w, c.σ.regs.get? Register.x18 = some w)
   /-- wave 48h (CURE A): `a3`(x13) defined at entry — feeds `blockA_k`'s x13 output. -/
   x13_defined : ∃ w, c.σ.regs.get? Register.x13 = some w
+  /-- The machine environment pointer is the representation of the semantic frame. -/
+  envReg : c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf a))
   /-- **The `env_get` FOUND-case contract** (honest hypothesis).  From the var arm's
   dispatch entry (`ArmEntryK` at `0x80003434`) the argument-setup + `env_get` call
   reaches `VarPostCall` at the link return `0x80003444` (found ⇒ `a0=1`, result buffer
@@ -1556,7 +1558,8 @@ structure EvalVarEntry
   env_get_found : Triple
     (fun c' => ∃ ment v8 v9 v18,
       ArmEntryK g N A SL φf φc st (0x80003434#64) Env_getLoaded (.var x)
-        sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0 ment c')
+        sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0 ment c' ∧
+      c'.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf a)))
     (fun c' => ∃ mpc v8 v9 v18,
       VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 c.σ.sailOutput m0 mpc c')
 
@@ -1586,7 +1589,7 @@ theorem evalVarSim : EvalVarSimGoal := by
     hc.var_stack_disjoint p (hc.mem.symm ▸ hp64)
   -- === block A: prologue + dispatch → ArmEntryK (via blockA_k) ===
   obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, _hpresM, _hx13⟩ :=
-    blockA_k g N A SL φf φc st (.var x) 4 (0x80003434#64) Env_getLoaded
+    blockA_k g N A SL φf φc st a (.var x) 4 (0x80003434#64) Env_getLoaded
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
       hkm0
@@ -1624,10 +1627,10 @@ theorem evalVarSim : EvalVarSimGoal := by
       hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
       hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
       hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
-      ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.x13_defined⟩⟩, rfl⟩
+      ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩
   -- === env_get found-case (honest hypothesis): ArmEntryK → VarPostCall ===
   obtain ⟨c2, hs2, mpc, v8', v9', v18', hPC⟩ :=
-    hc.env_get_found c1 ⟨ment, v8, v9, v18, hArm⟩
+    hc.env_get_found c1 ⟨ment, v8, v9, v18, hArm, _hx13⟩
   -- === block C: var-arm epilogue → EvalExit ===
   obtain ⟨c3, hs3, hExit⟩ :=
     blockC_var g N A SL φf φc st v sp r sret v8' v9' v18' c.σ.sailOutput m0

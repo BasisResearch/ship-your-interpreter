@@ -2,6 +2,7 @@ import Vsa.Sim.InductionScaffold
 import Vsa.Sim.EvalRecCommon
 import Vsa.Sim.ExecBlock
 import Vsa.Sim.ExecDispatch
+import Vsa.Sim.ExecSeqIndexed
 import Vsa.Sim.CallEntry
 import Vsa.Sim.Code.Interp_run
 
@@ -88,20 +89,239 @@ def mExecS (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (st' : SpecSt)
     (status : Status) (_h : ExecS st d env s st' status) : Prop :=
   ExecIH st d env s st' status
 
-/-- `EvalArgs` motive: the `SegEntry → SegExit` Triple at the decoded arg-loop
-head/continuation (`evalArgsLoopPC`/`evalArgsContPC`). -/
-def mEvalArgs (st : SpecSt) (d : Nat) (env : Addr) (_es : List Expr)
-    (st' : SpecSt) (_vs : List Value) (_h : EvalArgs st d env _es st' _vs) : Prop :=
+/-! ### Route-indexed statement child interface
+
+The existing `mExecS` is retained while constructor rows are migrated.  The
+interface below names the three machine entries a statement child can actually
+have: a fresh call, an in-frame dispatch, and a while-arm loop-back. -/
+
+/-- The live-frame state at the while-arm re-entry (`0x80004034`). -/
+structure ExecWhileArmReady
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : SpecSt) (d : Nat) (env : Addr) (cnd : Expr) (body : Stmt)
+    (bodyStatus : Status)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 ment : Mem)
+    (cfg : Config) (liveRA : BitVec 64 := r) : Prop where
+  good : GoodState cfg.σ
+  tick : cfg.tick < 2
+  pc : cfg.σ.regs.get? Register.PC = some (0x80004034#64)
+  a0 : cfg.σ.regs.get? Register.x10 = some (StatusCode bodyStatus)
+  s0 : cfg.σ.regs.get? Register.x8 = some aStmt
+  s1 : cfg.σ.regs.get? Register.x9 = some aInterp
+  s2 : cfg.σ.regs.get? Register.x18 = some aRet
+  s3 : cfg.σ.regs.get? Register.x19 = some aEnv
+  spReg : cfg.σ.regs.get? Register.x2 = some (sp - 176#64)
+  ra : cfg.σ.regs.get? Register.x1 = some liveRA
+  mem : cfg.σ.mem = ment
+  code : Vsa.Sim.Code.Exec_stmtLoaded ment
+  stmt : StmtRepr ment aStmt.toNat (.whileStmt cnd body)
+  env_addr : φf env = aEnv.toNat
+  store : StoreRepr ment N A φf φc st.store
+  env_valid : EnvValid st env
+  store_survives : ∀ m' : Mem,
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ment[k]? = m'[k]?) →
+    StoreRepr m' N A φf φc st.store
+  out : OutRepr cfg.σ st
+  saved_ra : read64 ment (sp.toNat - 8) = some r.toNat
+  saved_s0 : ∃ v, read64 ment (sp.toNat - 16) = some v.toNat ∧
+    g Register.x8 = some v
+  saved_s1 : ∃ v, read64 ment (sp.toNat - 24) = some v.toNat ∧
+    g Register.x9 = some v
+  saved_s2 : ∃ v, read64 ment (sp.toNat - 32) = some v.toNat ∧
+    g Register.x18 = some v
+  saved_s3 : ∃ v, read64 ment (sp.toNat - 40) = some v.toNat ∧
+    g Register.x19 = some v
+  stack_budget : StackOK SL sp
+    ((Stmt.whileStmt cnd body).stackNeed +
+      (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088)
+  stmt_bodies : Stmt.bodiesBound Vsa.While.perCallBudget (Stmt.whileStmt cnd body) = true
+  store_bodies : Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
+  ground : ExecGround ment SL A sp aRet aStmt.toNat (.whileStmt cnd body)
+  mem_frame : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?
+  frame : ∀ R : Register, AbiPreservedNoise R →
+    (R = Register.x8 ∨ R = Register.x9 ∨ R = Register.x18 ∨
+      R = Register.x19 ∨ R = Register.x2) ∨ cfg.σ.regs.get? R = g R
+  minstret : ∃ v, cfg.σ.regs.get? Register.minstret = some v
+
+/-- While-loop recursive IH at the real in-frame re-entry. -/
+def ExecWhileArmIH
+    (st : SpecSt) (d : Nat) (env : Addr) (cnd : Expr) (body : Stmt)
+    (st' : SpecSt) (status : Status) : Prop :=
+  ∀ (bodyStatus : Status),
+    bodyStatus = .normal ∨ bodyStatus = .cont →
+  ∀ (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 ment : Mem),
+    Triple
+      (fun cfg => ∃ liveRA,
+        ExecWhileArmReady g N A SL φf φc st d env cnd body bodyStatus
+          sp r aInterp aStmt aEnv aRet m0 ment cfg (liveRA := liveRA))
+      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' status sp r aRet m0)
+
+/-- Product interface for all actual statement-child routes. The while-arm leg
+is demanded only for a while statement. -/
+structure ExecSRouteIH
+    (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt)
+    (st' : SpecSt) (status : Status) : Prop where
+  fresh : ExecIH st d env s st' status
+  dispatch : ExecDispatchIH st d env s st' status
+  whileArm : ∀ cnd body, s = .whileStmt cnd body →
+    ExecWhileArmIH st d env cnd body st' status
+
+/-- Faithful auxiliary statement motive.  It is kept separate from the legacy
+fresh-entry motive while existing leaf rows are migrated. -/
+def mExecSRoute (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt)
+    (st' : SpecSt) (status : Status) (_h : ExecS st d env s st' status) : Prop :=
+  ExecSRouteIH st d env s st' status
+
+/-- Output of the auxiliary context-indexed statement induction. -/
+def ExecSRouteFamily : Prop :=
+  ∀ (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt)
+    (st' : SpecSt) (status : Status) (h : ExecS st d env s st' status),
+    mExecSRoute st d env s st' status h
+
+/-! ### Context-indexed `for` boundaries
+
+`ExecInit` omits the enclosing `for` node.  `ForLoop` omits its `init` field.
+Both machine fragments retain the full `Stmt.forStmt` pointer.  The motives
+therefore quantify the missing context instead of erasing it. -/
+
+/-- Machine state after `env_new`, before the optional-init dispatch. -/
+structure ExecInitReady
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : SpecSt) (d : Nat) (outer : Addr)
+    (init : Option Stmt) (cnd step : Option Expr) (body : Stmt)
+    (sp r aInterp aStmt aOuter aRet : BitVec 64) (m0 ment : Mem)
+    (cfg : Config) (liveRA : BitVec 64 := r) : Prop where
+  good : GoodState cfg.σ
+  tick : cfg.tick < 2
+  pc : cfg.σ.regs.get? Register.PC = some (0x8000423c#64)
+  s0 : cfg.σ.regs.get? Register.x8 = some aStmt
+  s1 : cfg.σ.regs.get? Register.x9 = some aInterp
+  s2 : cfg.σ.regs.get? Register.x18 = some aRet
+  a0 : cfg.σ.regs.get? Register.x10 = some aOuter
+  spReg : cfg.σ.regs.get? Register.x2 = some (sp - 176#64)
+  ra : cfg.σ.regs.get? Register.x1 = some liveRA
+  mem : cfg.σ.mem = ment
+  code : Vsa.Sim.Code.Exec_stmtLoaded ment
+  stmt : StmtRepr ment aStmt.toNat (.forStmt init cnd step body)
+  outer_addr : φf outer = aOuter.toNat
+  store : StoreRepr ment N A φf φc st.store
+  out : OutRepr cfg.σ st
+  saved_ra : read64 ment (sp.toNat - 8) = some r.toNat
+  saved_s0 : ∃ v, read64 ment (sp.toNat - 16) = some v.toNat ∧ g Register.x8 = some v
+  saved_s1 : ∃ v, read64 ment (sp.toNat - 24) = some v.toNat ∧ g Register.x9 = some v
+  saved_s2 : ∃ v, read64 ment (sp.toNat - 32) = some v.toNat ∧ g Register.x18 = some v
+  saved_s3 : ∃ v, read64 ment (sp.toNat - 40) = some v.toNat ∧ g Register.x19 = some v
+  stack_budget : StackOK SL sp
+    ((Stmt.forStmt init cnd step body).stackNeed +
+      (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088)
+  stmt_bodies : Stmt.bodiesBound Vsa.While.perCallBudget
+    (.forStmt init cnd step body) = true
+  store_bodies : Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
+  ground : ExecGround ment SL A sp aRet aStmt.toNat (.forStmt init cnd step body)
+  mem_frame : ∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?
+  frame : ∀ R, AbiPreservedNoise R →
+    (R = Register.x8 ∨ R = Register.x9 ∨ R = Register.x18 ∨
+      R = Register.x19 ∨ R = Register.x2) ∨ cfg.σ.regs.get? R = g R
+  minstret : ∃ v, cfg.σ.regs.get? Register.minstret = some v
+
+/-- Real loop-head state at `0x8000426c`. -/
+structure ForLoopReady
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : SpecSt) (d : Nat) (outer : Addr)
+    (init : Option Stmt) (cnd step : Option Expr) (body : Stmt)
+    (sp r aInterp aStmt aOuter aRet : BitVec 64) (m0 ment : Mem)
+    (cfg : Config) (liveRA : BitVec 64 := r) : Prop where
+  good : GoodState cfg.σ
+  tick : cfg.tick < 2
+  pc : cfg.σ.regs.get? Register.PC = some (0x8000426c#64)
+  s0 : cfg.σ.regs.get? Register.x8 = some aStmt
+  s1 : cfg.σ.regs.get? Register.x9 = some aInterp
+  s2 : cfg.σ.regs.get? Register.x18 = some aRet
+  s3 : cfg.σ.regs.get? Register.x19 = some aOuter
+  spReg : cfg.σ.regs.get? Register.x2 = some (sp - 176#64)
+  ra : cfg.σ.regs.get? Register.x1 = some liveRA
+  mem : cfg.σ.mem = ment
+  code : Vsa.Sim.Code.Exec_stmtLoaded ment
+  stmt : StmtRepr ment aStmt.toNat (.forStmt init cnd step body)
+  outer_addr : φf outer = aOuter.toNat
+  store : StoreRepr ment N A φf φc st.store
+  out : OutRepr cfg.σ st
+  saved_ra : read64 ment (sp.toNat - 8) = some r.toNat
+  saved_s0 : ∃ v, read64 ment (sp.toNat - 16) = some v.toNat ∧ g Register.x8 = some v
+  saved_s1 : ∃ v, read64 ment (sp.toNat - 24) = some v.toNat ∧ g Register.x9 = some v
+  saved_s2 : ∃ v, read64 ment (sp.toNat - 32) = some v.toNat ∧ g Register.x18 = some v
+  saved_s3 : ∃ v, read64 ment (sp.toNat - 40) = some v.toNat ∧ g Register.x19 = some v
+  stack_budget : StackOK SL sp
+    ((Stmt.forStmt init cnd step body).stackNeed +
+      (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088)
+  stmt_bodies : Stmt.bodiesBound Vsa.While.perCallBudget
+    (.forStmt init cnd step body) = true
+  store_bodies : Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
+  ground : ExecGround ment SL A sp aRet aStmt.toNat (.forStmt init cnd step body)
+  mem_frame : ∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?
+  frame : ∀ R, AbiPreservedNoise R →
+    (R = Register.x8 ∨ R = Register.x9 ∨ R = Register.x18 ∨
+      R = Register.x19 ∨ R = Register.x2) ∨ cfg.σ.regs.get? R = g R
+  minstret : ∃ v, cfg.σ.regs.get? Register.minstret = some v
+
+def ExecInitCtxIH
+    (st : SpecSt) (d : Nat) (outer : Addr) (init : Option Stmt)
+    (st' : SpecSt) : Prop :=
+  ∀ (cnd step : Option Expr) (body : Stmt)
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sp r aInterp aStmt aOuter aRet : BitVec 64) (m0 ment : Mem),
+    Triple
+      (fun cfg => ∃ liveRA,
+        ExecInitReady g N A SL φf φc st d outer init cnd step body
+          sp r aInterp aStmt aOuter aRet m0 ment cfg (liveRA := liveRA))
+      (fun cfg => ∃ liveRA,
+        ForLoopReady g N A SL φf φc st' d outer init cnd step body
+          sp r aInterp aStmt aOuter aRet m0 cfg.σ.mem cfg (liveRA := liveRA))
+
+def ForLoopCtxIH
+    (st : SpecSt) (d : Nat) (outer : Addr) (cnd step : Option Expr)
+    (body : Stmt) (st' : SpecSt) (status : Status) : Prop :=
+  ∀ (init : Option Stmt)
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sp r aInterp aStmt aOuter aRet : BitVec 64) (m0 ment : Mem),
+    Triple
+      (fun cfg => ∃ liveRA,
+        ForLoopReady g N A SL φf φc st d outer init cnd step body
+          sp r aInterp aStmt aOuter aRet m0 ment cfg (liveRA := liveRA))
+      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' status sp r aRet m0)
+
+/-- `EvalArgs` motive: the recursive indexed argument ABI.
+
+The prefix quantifiers are essential.  A tail derivation runs at the machine's
+current `a6`, not at a fabricated fresh cursor.  The boundary therefore retains
+the already-evaluated expression/value prefixes and returns their concatenation
+with this derivation's values. -/
+def mEvalArgs (st : SpecSt) (d : Nat) (env : Addr) (es : List Expr)
+    (st' : SpecSt) (vs : List Value) (_h : EvalArgs st d env es st' vs) : Prop :=
+  ∀ (esPrefix : List Expr) (vsPrefix : List Value),
+    esPrefix.length = vsPrefix.length →
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (dLeft aLeft : Nat) (m0 : Mem),
     Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft evalArgsLoopPC m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' evalArgsContPC m0)
+      (EvalArgsPrefixEntryI g N A SL φf φc st d env
+        esPrefix es vsPrefix dLeft aLeft m0)
+      (EvalArgsExitI g N A SL φf φc st.store.frames.size
+        st.store.closures.size st' (vsPrefix ++ vs) m0)
 
-/-- `Call` motive: the `SegEntry → SegExit` Triple at the decoded fval-dispatch
-entry / epilogue join (`callDispatchPC`/`callJoinPC`). `Call.closure` is where
-the depth budget (`d < maxCallDepth`) bites.
+/-- `Call` motive: the indexed fval-dispatch ABI.  The entry carries the staged
+callee, argument count, and argument vector.  The exit carries the returned
+`Value` in the caller's sret buffer. `Call.closure` is where the depth budget
+(`d < maxCallDepth`) bites.
 
 **AMENDED (wave 40, ledgers `segentry-no-caller-spill-image` +
 `segentry-spillimage-field-blocked-by-frozen-generic-producer`):** the Triple
@@ -114,15 +334,16 @@ every recursor/`TermCases` reference is fully applied; only the unfolding
 producers (`rows/CallRows` native rows, `rows/CallClosureRow`) intro the
 hypothesis.  The supplier of an `mCall` IH (the eventual `CallArmSpec`
 splice) owns the `0x800031cc` spill and supplies the clause. -/
-def mCall (st : SpecSt) (d : Nat) (_fv : Value) (_vs : List Value)
-    (st' : SpecSt) (_v : Value) (_h : Call st d _fv _vs st' _v) : Prop :=
+def mCall (st : SpecSt) (d : Nat) (fv : Value) (vs : List Value)
+    (st' : SpecSt) (v : Value) (_h : Call st d fv vs st' v) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (m0 : Mem),
+    (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem),
     Scaffold.EntryImage callDispatchPC g m0 →
     Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' callJoinPC m0)
+      (CallEntryI g N A SL φf φc st d fv vs dLeft aLeft sp sret m0)
+      (CallExitI g N A SL φf φc st.store.frames.size
+        st.store.closures.size st' v sret m0)
 
 /-- `ExecInit` motive.
 
@@ -142,9 +363,9 @@ through `hArm` + the `ExecForStep` `hstep` oracle.  So this motive is DEAD recur
 plumbing; setting it to `True` makes BOTH the `.none` and `.some` constructors
 trivially fillable (`ScaffoldRows.{hInitNone_row,hInitSome_row}` = `trivial`) with
 ZERO consumer re-threading (every consumer references it opaquely / as `_`). -/
-def mExecInit (_st : SpecSt) (_d : Nat) (_env : Addr) (_init : Option Stmt)
-    (_st' : SpecSt) (_h : ExecInit _st _d _env _init _st') : Prop :=
-  True
+def mExecInit (st : SpecSt) (d : Nat) (env : Addr) (init : Option Stmt)
+    (st' : SpecSt) (_h : ExecInit st d env init st') : Prop :=
+  ExecInitCtxIH st d env init st'
 
 /-- `ForLoop` motive.
 
@@ -165,10 +386,10 @@ iteration for-loop machine work flows through `execForStartSim`'s
 `True` scaffold motives.  Setting it to `True` makes all four `ForLoop`
 constructors trivially fillable (`ScaffoldRows.hFl*_row`) with zero consumer
 re-threading. -/
-def mForLoop (_st : SpecSt) (_d : Nat) (_env : Addr) (_cnd _step : Option Expr)
-    (_b : Stmt) (_st' : SpecSt) (_status : Status)
-    (_h : ForLoop _st _d _env _cnd _step _b _st' _status) : Prop :=
-  True
+def mForLoop (st : SpecSt) (d : Nat) (env : Addr) (cnd step : Option Expr)
+    (b : Stmt) (st' : SpecSt) (status : Status)
+    (_h : ForLoop st d env cnd step b st' status) : Prop :=
+  ForLoopCtxIH st d env cnd step b st' status
 
 /-- `ForCond` motive.  `True` — dead recursor plumbing; see `mExecInit`.  The
 `.some` case (`ForCond.some`, truthy-cond) mutates the store, so a same-PC span is
@@ -240,7 +461,7 @@ theorem seqSpanGround_of {p q : Nat} {m0 : Mem} {P : Mem → Prop}
 over every tabled loop-copy span.  Named separately so shape-2 consumers
 (`BlockResid`) can thread the recursor's seq sub-IH as a hypothesis without
 mentioning a derivation node. -/
-def SeqSegIH (st : SpecSt) (d : Nat) (st' : SpecSt) : Prop :=
+def SeqLegacyIH (st : SpecSt) (d : Nat) (st' : SpecSt) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (dLeft aLeft : Nat) (p q : Nat) (m0 : Mem),
@@ -249,13 +470,32 @@ def SeqSegIH (st : SpecSt) (d : Nat) (st' : SpecSt) : Prop :=
       (SegEntry g N A SL φf φc st d dLeft aLeft p m0)
       (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st' q m0)
 
-/-- `ExecSeq` motive: `SegEntry → SegExit` skeleton Triple (the statement-list
-loop; `interp_run` and the `block`/closure-body loops consume this), GUARDED by
-the entry-side seq-span ground (see the section doc above).  Definitionally
-`SeqSegIH st d st'`. -/
-def mExecSeq (st : SpecSt) (d : Nat) (_env : Addr) (_ss : List Stmt)
-    (st' : SpecSt) (_status : Status) (_h : ExecSeq st d _env _ss st' _status) : Prop :=
-  SeqSegIH st d st'
+/-- Copy-indexed sequence simulation. Unlike the legacy segment family, this
+retains the scope, remaining list, final status, cursor, and return slot. -/
+def SeqIndexedIH (st : SpecSt) (d : Nat) (env : Addr) (ss : List Stmt)
+    (st' : SpecSt) (status : Status) : Prop :=
+  ∀ (copy : ExecSeqCopy)
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sp aRet : BitVec 64) (m0 : Mem),
+    copy.Supports status →
+    Triple
+      (ExecSeqEntryI copy g N A SL φf φc st d env ss sp aRet m0)
+      (ExecSeqExitI copy g N A SL φf φc st.store.frames.size
+        st.store.closures.size st' status sp aRet m0)
+
+/-- Faithful copy-indexed sequence contract.  The former legacy half quantified
+an arbitrary segment state and admitted an empty suffix at a nonempty loop head;
+it is not part of the semantic induction boundary. -/
+def SeqSegIH (st : SpecSt) (d : Nat) (env : Addr) (ss : List Stmt)
+    (st' : SpecSt) (status : Status) : Prop :=
+  SeqIndexedIH st d env ss st' status
+
+/-- `ExecSeq` motive at the exact physical loop copy, scope, suffix, status ABI,
+and return slot. -/
+def mExecSeq (st : SpecSt) (d : Nat) (env : Addr) (ss : List Stmt)
+    (st' : SpecSt) (status : Status) (_h : ExecSeq st d env ss st' status) : Prop :=
+  SeqSegIH st d env ss st' status
 
 /-! ## §2. The assembled mutual induction — `term_sim_of_cases`
 
@@ -328,7 +568,7 @@ theorem term_sim_of_cases
     (hNot :
       ∀ (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt) (v : Value) (a : EvalE st d env e st' v), mEvalE st d env e st' v a → mEvalE st d env (Expr.unary UnOp.not e) st' (Value.bool !v.truthy) (EvalE.not st d env e st' v a))
     (hCall :
-      ∀ (st : SpecSt) (d : Nat) (env : Addr) (f : Expr) (args : List Expr) (st' st'' st''' : SpecSt) (fv : Value) (vs : List Value) (v : Value) (a : EvalE st d env f st' fv) (a_1 : EvalArgs st' d env args st'' vs) (a_2 : Call st'' d fv vs st''' v), mEvalE st d env f st' fv a → mEvalArgs st' d env args st'' vs a_1 → mCall st'' d fv vs st''' v a_2 → mEvalE st d env (f.call args) st''' v (EvalE.call st d env f args st' st'' st''' fv vs v a a_1 a_2))
+      ∀ (st : SpecSt) (d : Nat) (env : Addr) (f : Expr) (args : List Expr) (st' st'' st''' : SpecSt) (fv : Value) (vs : List Value) (v : Value) (a : EvalE st d env f st' fv) (a_1 : args.length ≤ maxArgs) (a_2 : EvalArgs st' d env args st'' vs) (a_3 : Call st'' d fv vs st''' v), mEvalE st d env f st' fv a → mEvalArgs st' d env args st'' vs a_2 → mCall st'' d fv vs st''' v a_3 → mEvalE st d env (f.call args) st''' v (EvalE.call st d env f args st' st'' st''' fv vs v a a_1 a_2 a_3))
     (hFn :
       ∀ (st : SpecSt) (d : Nat) (env : Addr) (name : Option String) (params : List String) (body : List Stmt) (store' : Store) (a : Addr) (a_1 : st.store.allocClosure { env := env, name := name, params := params, body := body } = (store', a)), mEvalE st d env (Expr.fn name params body) { store := store', out := st.out } (Value.closure a) (EvalE.fn st d env name params body store' a a_1))
     (hArgsNil :

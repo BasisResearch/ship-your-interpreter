@@ -235,6 +235,10 @@ def joinRestored : Nat → Option (Register → Bool)
       match R with
       | .x2 | .x19 | .x21 | .x23 => true
       | _ => false)  -- callJoinPC: sp untouched + the s3/s5/s7 restores
+  | 0x80004514 => some (fun R =>
+      match R with
+      | .x8 | .x9 => false
+      | _ => true)   -- interp_run loop exit: s0/s1 are loop-owned until epilogue
   | _ => none
 
 /-- Homogeneous ghost-frame GPR read — the ghost twin of `BlockPilot.gprGet`:

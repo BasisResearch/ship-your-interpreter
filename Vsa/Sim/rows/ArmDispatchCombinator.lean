@@ -129,8 +129,11 @@ theorem evalArmDispatch_of_slot
           sp r0 sret aExpr aIn v8 v9 v18 c'.σ.sailOutput m0 ment c' ∧
         c'.σ.regs.get? Register.x11 = some aIn ∧
         c'.σ.regs.get? Register.x13 = some aEnv3 ∧
+        aEnv3 = BitVec.ofNat 64 (φf env) ∧
         (∀ R : Register, AbiPreservedNoise R → c'.σ.regs.get? R = gpre R) ∧
         (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        (∃ w, gpre Register.x19 = some w) ∧ (∃ w, gpre Register.x20 = some w) ∧
+        (∃ w, gpre Register.x21 = some w) ∧
         read64 ment (aExpr.toNat + payOff) = some aCh.toNat ∧
         (∀ m' : Mem,
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m'[a]?) →
@@ -152,8 +155,8 @@ theorem evalArmDispatch_of_slot
   intro c'' heq
   subst heq
   -- === block A: prologue + dispatch → widened ArmEntryK @armPC ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, v13, hArm, _hpresM, hx13out⟩ :=
-    blockA_k g N A SL φf φc st e k armPC UnaryArmCallee
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, _hpresM, hx13out⟩ :=
+    blockA_k g N A SL φf φc st env e k armPC UnaryArmCallee
       sp r0 sret aEnv aExpr m0 c''.σ.sailOutput
       hkle hklt
       hkind
@@ -176,7 +179,7 @@ theorem evalArmDispatch_of_slot
         hE.frame, hE.code_stack_disjoint, hE.expr_stack_disjoint, hE.expr_align, hE.expr_ram,
         hE.expr_win, hE.sret_align, hE.sret_ram, hE.sret_win, hE.sret_vicode_disjoint_int,
         hE.sret_stack_disjoint, hE.sret_evalcode_disjoint, hE.stack_ram, hE.stack_win,
-        ⟨hE.spill_defined.1, hE.spill_defined.2.1, hE.spill_defined.2.2, hE.x13_defined⟩⟩, rfl⟩
+        ⟨hE.spill_defined.1, hE.spill_defined.2.1, hE.spill_defined.2.2, hE.envReg⟩⟩, rfl⟩
   -- Destructure a COPY of the widened `ArmEntryK` (keep `hArm` intact for output).
   have hArmCopy := hArm
   obtain ⟨_hAG, _hAtick, _hApc, _hAa0, _hAs1, _hAa2, _hAsp, _hAra, _hAmi, _hAout,
@@ -204,12 +207,25 @@ theorem evalArmDispatch_of_slot
     hX.ground.transport_offstack hX.tableStk0 hX.spSLhi hMentM0
   -- WAVE 48i (CURE 3): `x13` liveness at the reached arm entry is now the
   -- blockA_k 3rd output `hx13out` (CURE A), DISCHARGING the dropped `x13_pres` closure.
-  have hx13c1 : c1.σ.regs.get? Register.x13 = some v13 := hx13out
+  have hx13c1 : c1.σ.regs.get? Register.x13 =
+      some (BitVec.ofNat 64 (φf env)) := hx13out
   -- Realign the ArmEntryK `out0` to the reached `c1.σ.sailOutput`.
   have hArm' : ArmEntryK g N A SL φf φc st armPC UnaryArmCallee e
       sp r0 sret aExpr aEnv v8 v9 v18 c1.σ.sailOutput m0 ment c1 := _hAout.symm ▸ hArm
-  exact ⟨c1, hs1, (fun R => c1.σ.regs.get? R), aEnv, aChild, v13, v8, v9, v18, ment,
-    hArm', hAEx11, hx13c1, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩,
+  obtain ⟨v19, v20, v21, h19, h20, h21⟩ := hE.envset_defined
+  have hg19 : g Register.x19 = some v19 := (hE.frame Register.x19 (by decide)).symm.trans h19
+  have hg20 : g Register.x20 = some v20 := (hE.frame Register.x20 (by decide)).symm.trans h20
+  have hg21 : g Register.x21 = some v21 := (hE.frame Register.x21 (by decide)).symm.trans h21
+  have hc119 : c1.σ.regs.get? Register.x19 = some v19 :=
+    (hArmFrame Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide)).trans hg19
+  have hc120 : c1.σ.regs.get? Register.x20 = some v20 :=
+    (hArmFrame Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide)).trans hg20
+  have hc121 : c1.σ.regs.get? Register.x21 = some v21 :=
+    (hArmFrame Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide)).trans hg21
+  exact ⟨c1, hs1, (fun R => c1.σ.regs.get? R), aEnv, aChild,
+    BitVec.ofNat 64 (φf env), v8, v9, v18, ment,
+    hArm', hAEx11, hx13c1, rfl, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩,
+    ⟨v19, hc119⟩, ⟨v20, hc120⟩, ⟨v21, hc121⟩,
     hpayMent, hchildSurvMent, hGroundMent, hX.node_hi,
     hX.child_align, hX.child_lo, hX.child_hi, hX.child_win, hX.child_stk,
     hX.sproom, hX.spSLhi, hX.sp16, hX.SLhiRam,

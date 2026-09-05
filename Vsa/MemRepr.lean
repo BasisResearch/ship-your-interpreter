@@ -119,6 +119,9 @@ inductive ExprRepr (m : Mem) : Nat → Expr → Prop where
     read64 m (a + 8) = some f → ExprRepr m f ef →
     read64 m (a + 16) = some args →
     read32 m (a + 24) = some argc →
+    -- `argc` is a C `int`.  The evaluator loads it with `lw` and compares it
+    -- with signed `blt`, so represented call nodes exclude negative i32 words.
+    argc < 2 ^ 31 →
     ExprArrayRepr m args argc es →
     ExprRepr m a (.call ef es)
   | fnNamed {a p params paramc body : Nat} {x : String} {ps : List String}
@@ -235,6 +238,29 @@ inductive StmtArrayRepr (m : Mem) : Nat → Nat → List Stmt → Prop where
     StmtArrayRepr m a (n + 1) (s :: ss)
 
 end
+
+/-- The explicit array count is the represented list length.  In particular,
+the signed-count premise on `ExprRepr.call` is also a bound on its semantic
+argument list. -/
+theorem ExprArrayRepr.index_eq_length {m : Mem} {a n : Nat} {es : List Expr}
+    (h : ExprArrayRepr m a n es) : n = es.length := by
+  induction es generalizing a n with
+  | nil => cases h; rfl
+  | cons e es ih =>
+    cases h with
+    | cons hp he ht =>
+      simpa [Nat.succ_eq_add_one] using congrArg Nat.succ (ih ht)
+
+/-- The call node's stored C `int` count is the semantic list length and is
+nonnegative under signed `lw` interpretation. -/
+theorem ExprRepr.call_count {m : Mem} {a : Nat} {f : Expr} {args : List Expr}
+    (h : ExprRepr m a (.call f args)) :
+    read32 m (a + 24) = some args.length ∧ args.length < 2 ^ 31 := by
+  cases h with
+  | call hk hf hef hargs hargc hargcSigned harr =>
+    have hlen := ExprArrayRepr.index_eq_length harr
+    rw [hlen] at hargc hargcSigned
+    exact ⟨hargc, hargcSigned⟩
 
 /-- **A WHILE program represented in machine memory**: an array of `n`
 statement pointers at `a`, exactly the arguments `interp_run` receives. -/

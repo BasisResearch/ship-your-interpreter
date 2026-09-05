@@ -9,9 +9,11 @@ import Vsa.Sim.rows.ScaffoldRows
 import Vsa.Sim.rows.ExecVarInitRow
 import Vsa.Sim.rows.EvalAssignRow
 import Vsa.Sim.rows.ErrorRouting
+import Vsa.Sim.InterpSimFinal
 import Vsa.Sim.rows.SeqForRows
 import Vsa.Sim.EntrySeams
 import Vsa.Sim.DivFamily
+import Vsa.Sim.ExecRouteAssembly
 import Vsa.While.StmtDispatchClose
 
 /-!
@@ -25,18 +27,16 @@ theorem `interpSim_of_residuals` producing `InterpSim L`.
 **THE POINT.**  After this file, the ENTIRE remaining project = discharging the
 fields of `TermResiduals`, each of which is a NAMED typed premise carrying a doc
 comment naming its supplier task.  There is no more assembly to do: `htri` is
-UNCONDITIONAL (`Vsa.While.htri_unconditional`), the error family is closed modulo
-its `ErrShared` + 43 `hsite` reachability residuals (folded into `TermResiduals`),
-the divergence family is the single named `DivCorrFamily` residual (folded in), and
-the entry premise is `hEntryHalts_closed'` modulo `InterpInitStoreRepr`/`EpilogueSpill`
-(folded in).
+UNCONDITIONAL (`Vsa.While.htri_unconditional`), the error family is supplied by
+the faithful leaf/propagation split, the divergence family is supplied by its
+loop-head assembly, and the entry premise is `hEntryHalts_closed'` modulo
+`InterpInitStoreRepr`/`EpilogueSpill` (folded in).
 
 ## Structure
 
-* `TermResiduals` — every row's residual premise (`∀…, <Resid>`), the `hCallClosure`
-  whole-premise crux, the `eval_binary_row` 19 cell/str/div residuals, plus the
-  endgame residuals (`InterpInitStoreRepr`/`EpilogueSpill`/`DivCorrFamily`/`ErrShared`
-  + 43 `hsite`).  Named fields ONLY.
+* `TermResiduals` — every row's residual premise (`∀…, <Resid>`), the
+  `hCallClosure` crux, the `eval_binary_row` cells, and the two aggregate family
+  fields. `EndToEnd` replaces those family fields by `DivWork` and `ErrWork`.
 * `termCases_of_residuals (R) : TermCaseBundle.TermCases` — applies every row.
 * `hterm_of_residuals (R) : <hterm shape>` — `termSimClosed_of_bundle` + `hEntryHalts_closed'`.
 * `hdivFam_of_residuals (R) : DivFamily L` — the `DivCorrFamily` reduction.
@@ -69,12 +69,14 @@ Every field is a NAMED typed premise (R6/R7).  The doc comment names the row/fam
 that CONSUMES it and the supplier task that DISCHARGES it.  This is the entire
 residual surface of the development after the capstone.
 
-The record is split in two: `TermResidualsCore` carries every term/divergence-side
-field; `TermResiduals extends TermResidualsCore` adds the error family `hErrFam`.
-The split lets `Vsa/Sim/EndToEnd.lean` swap `hErrFam` for its link-level residuals
-(`ErrWork`, `rows/ErrFamilyAssembly.lean`) without restating the core fields; every
-`R.hInt`-style consumer below is unchanged (parent projections). -/
-structure TermResidualsCore (L : Layout) where
+The record is split in three. `TermResidualsBase` carries the term-side fields,
+`TermResidualsCore` adds the divergence family, and `TermResiduals` adds the
+error family. This lets `EndToEnd.lean` replace both aggregate family fields by
+their honest supplier records without duplicating the term-side surface. -/
+structure TermResidualsBase (L : Layout) where
+  /-- Exact constructor-local rows for post-prologue dispatch and while-arm
+      re-entry.  The all-derivations route family is derived below. -/
+  hExecRouteCases : Vsa.Sim.ExecRouteCases
   -- ===== TermRouting.lean — the 10 leaf/logical rows =====
   /-- `hInt`/`eval_int_row`.  Supplier: `LeafWiden` int-leaf geometry (`LeafWiden`/`GeomFrom`). -/
   hInt : ∀ st n, IntLeafResid st n
@@ -100,12 +102,13 @@ structure TermResidualsCore (L : Layout) where
   /-- `hVar`/`eval_var_row`.  Supplier: `VarLeafResid` — carries the `env_get_found`
       caller-linkage oracle (dischargeable from `env_get_found_uncond''` once the
       eval-var-arm call bridge lands; the `TermCallees.envGet` contract is LANDED). -/
-  hVar : ∀ st x v, VarLeafResid st x v
+  hVar : ∀ st x v, VarResidualExtension st x v
   -- ===== EvalAssignRow.lean =====
   /-- `hAssign`/`eval_assign_row`.  Supplier: `AssignArmSpec` arm oracle ("row now,
       arm spec later" precedent) — the composed `env_define` (`TermCallees.envDefine`,
       OPEN) store-set arm.  No `evalAssignSim` exists yet; whole arm is this oracle. -/
-  hAssign : ∀ st d env x e st' v store'', AssignResid st d env x e st' v store''
+  hAssign : ∀ st d env x e st' v store'',
+      AssignResidualExtension st d env x e st' v store''
   -- ===== BinDispatchRow.lean — eval_binary_row's 19 cell/str/div residuals =====
   /-- `hBinary` add int-cell.  Supplier: `AddResid` value-path (`EvalAddRow`, block-reflected).
       **Wave-49 B2-carry**: the 9 int cells and the 2 eq/ne cells are stated as
@@ -141,47 +144,38 @@ structure TermResidualsCore (L : Layout) where
   hNe : BinEqCell .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21)
   /-- `hBinary` str `+` (left-str) cell.  Supplier: `StrConcatCellResid`
       (`TermGuards.strConcat`, blocked on the stringify spec). -/
-  hStrAddL : ∀ st d env el er st'' (sl : String) (rv : Value),
-      EvalIH st d env (.binary .add el er) st''
-        (.str ((Value.str sl).catDisplay st''.store ++ rv.catDisplay st''.store))
+  hStrAddL : BinStrAddLCell
   /-- `hBinary` str `+` (right-str) cell.  Supplier: `StrConcatCellResid`. -/
-  hStrAddR : ∀ st d env el er st'' (lv : Value) (sr : String),
-      EvalIH st d env (.binary .add el er) st''
-        (.str (lv.catDisplay st''.store ++ (Value.str sr).catDisplay st''.store))
+  hStrAddR : BinStrAddRCell
   /-- `hBinary` str `<` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`
       (`TermGuards.strCmp`/`strArmProlog`, LANDED slots via `strcmp_full_spec`). -/
-  hStrLt : ∀ st d env el er st'' (sl sr : String),
-      EvalIH st d env (.binary .lt el er) st'' (.bool (sl < sr))
+  hStrLt : BinStrCmpCell .lt (fun sl sr => sl < sr)
   /-- `hBinary` str `≤` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`. -/
-  hStrLe : ∀ st d env el er st'' (sl sr : String),
-      EvalIH st d env (.binary .le el er) st'' (.bool (sl < sr || sl == sr))
+  hStrLe : BinStrCmpCell .le (fun sl sr => sl < sr || sl == sr)
   /-- `hBinary` str `>` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`. -/
-  hStrGt : ∀ st d env el er st'' (sl sr : String),
-      EvalIH st d env (.binary .gt el er) st'' (.bool (sr < sl))
+  hStrGt : BinStrCmpCell .gt (fun sl sr => sr < sl)
   /-- `hBinary` str `≥` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`. -/
-  hStrGe : ∀ st d env el er st'' (sl sr : String),
-      EvalIH st d env (.binary .ge el er) st'' (.bool (sr < sl || sl == sr))
+  hStrGe : BinStrCmpCell .ge (fun sl sr => sr < sl || sl == sr)
   /-- `hBinary` div-overflow arm (`INT64_MIN / -1` wraps).  Supplier:
       `TermGuards.divOvfArm` wrap-semantics div row. -/
-  hDivOv : ∀ st d env el er st'',
-      EvalIH st d env (.binary .div el er) st''
-        (.int (wrap64 ((-2^63 : Int).tdiv (-1))))
+  hDivOv : BinDivOverflowCell
   -- ===== CallRows.lean =====
-  /-- `hArgsNil`/`eval_argsNil_row`.  Supplier: `ArgsNilResid` seg-identity at
-      `evalArgsLoopPC`→`evalArgsContPC`. -/
-  hArgsNil : ∀ st d env, ArgsNilResid st d env
+  -- `hArgsNil` is discharged unconditionally by the exact loaded branch at
+  -- `0x800031d8`; it is no longer a residual field.
   /-- `hArgsCons`/`eval_argsCons_row`.  Supplier: `ArgsConsResid` per-iter body oracle
       + fall-through (`TermGuards.argsMeasure`, `evalArgsStepOf`/`loopFromBody`). -/
-  hArgsCons : ∀ st d env, ArgsConsResid st d env
+  hArgsCons : ∀ st d env e es st' st'' v vs hE hArgs,
+      ArgsConsResid st d env e es st' st'' v vs hE hArgs
   /-- `hCallPrint`/`eval_callPrint_row`.  Supplier: native `print` seg (`NativePrintSpec`). -/
   hCallPrint : ∀ st d vs, CallPrintResid st d vs
   /-- `hCallPrintln`/`eval_callPrintln_row`.  Supplier: native `println` seg. -/
   hCallPrintln : ∀ st d vs, CallPrintlnResid st d vs
   /-- `hCallAssertOk`/`eval_callAssertOk_row`.  Supplier: native `assert` seg. -/
-  hCallAssertOk : ∀ st d, CallAssertOkResid st d
+  hCallAssertOk : ∀ st d vs v m hvs htruthy,
+      CallAssertOkResid st d vs v m hvs htruthy
   /-- `hCall`/`eval_call_row`.  Supplier: `CallResid` = `CallArmSpec` arm + widen. -/
-  hCall : ∀ st st' st'' st''' d env f args fval vs v,
-      CallResid st st' st'' st''' d env f args fval vs v
+  hCall : ∀ st st' st'' st''' d env f args fval vs v hEf hBound hArgs hCall,
+      CallResid st st' st'' st''' d env f args fval vs v hEf hBound hArgs hCall
   /-- `hFn`/`eval_fn_row`.  Supplier: `FnResid` = closure-alloc arm + native-store repr. -/
   hFn : ∀ st d env name params body store' a,
       FnResid st d env name params body store' a
@@ -190,15 +184,10 @@ structure TermResidualsCore (L : Layout) where
       (depth-crux + `env_define` env-fold gated).  Supplied as a WHOLE PREMISE by the
       sibling-owned `rows/CallClosureRow` (`TermGuards.depthCrux` + `TermCallees.envDefine`).
       Typed VERBATIM as the `TermCaseBundle.TermCases.hCallClosure` field. -/
-  hCallClosure :
-    ∀ (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value) (store' : Store)
-      (frame : Addr) (st' : SpecSt) (status : Status) (v : Value)
-      (a_1 : st.store.closures[a]? = some cd) (a_2 : vs.length = cd.params.length)
-      (a_3 : d < maxCallDepth) (a_4 : st.store.allocFrame (some cd.env) = (store', frame))
-      (a_5 : ExecSeq { store := List.foldl (fun s x => match x with | (x, v) => s.define frame x v) store' (cd.params.zip vs), out := st.out } (d + 1) frame cd.body st' status)
-      (a_6 : status = Status.normal ∧ v = Value.null ∨ status = Status.ret v),
-      mExecSeq { store := List.foldl (fun s x => match x with | (x, v) => s.define frame x v) store' (cd.params.zip vs), out := st.out } (d + 1) frame cd.body st' status a_5 →
-      mCall st d (Value.closure a) vs st' v (Call.closure st d a cd vs store' frame st' status v a_1 a_2 a_3 a_4 a_5 a_6)
+  hCallClosure : ∀ st d a cd vs store' frame st' status v
+      hClosure hArity hDepth hAlloc hBody hResult,
+      CallClosureResid st d a cd vs store' frame st' status v
+        hClosure hArity hDepth hAlloc hBody hResult
   -- ===== ExecRecRows.lean / ExecRouting.lean — the exec leaves =====
   /-- `hSExpr`/`exec_expr_row`.  Supplier: `ExprResid` = `execExprSimD` geometry. -/
   hSExpr : ∀ st st' d env e v, ExprResid st st' d env e v
@@ -220,87 +209,249 @@ structure TermResidualsCore (L : Layout) where
   hSVarInit : ∀ st st' d env x e v, VarInitResid st st' d env x e v
   -- ===== ExecDispatchRows.lean — if/while/for/block =====
   /-- `hSIfNone`/`exec_ifNone_row`.  Supplier: `IfNoneResid` = exit-sim geometry. -/
-  hSIfNone : ∀ st st' d env c t v, IfNoneResid st st' d env c t v
+  hSIfNone : ∀ st st' d env c t v hC,
+      IfNoneCaseResid st st' d env c t v hC
   /-- `hSWhileFalse`/`exec_whileFalse_row`.  Supplier: `WhileFalseResid`. -/
-  hSWhileFalse : ∀ st st' d env c b v, WhileFalseResid st st' d env c b v
+  hSWhileFalse : ∀ st st' d env c b v hC,
+      WhileFalseCaseResid st st' d env c b v hC
   /-- `hSIfTrue`/`exec_ifTrue_row`.  Supplier: `IfTrueResid` (branch exit-sim). -/
-  hSIfTrue : ∀ st st' st'' d env c t e v status, IfTrueResid st st' st'' d env c t e v status
+  hSIfTrue : ∀ st st' st'' d env c t e v status hC hB,
+      IfTrueCaseResid st st' st'' d env c t e v status hC hB
   /-- `hSIfFalse`/`exec_ifFalse_row`.  Supplier: `IfFalseResid` (else-branch exit-sim). -/
-  hSIfFalse : ∀ st st' st'' d env c t e v status, IfFalseResid st st' st'' d env c t e v status
+  hSIfFalse : ∀ st st' st'' d env c t e v status hC hB,
+      IfFalseCaseResid st st' st'' d env c t e v status hC hB
   /-- `hSBlock`/`exec_block_row`.  Supplier: `BlockResid` = `allocFrame` + seq exit-sim. -/
-  hSBlock : ∀ st st' d env ss status store' inner, BlockResid st st' d env ss status store' inner
+  hSBlock : ∀ st st' d env ss status store' inner hSeq,
+      BlockCaseResid st st' d env ss status store' inner hSeq
   /-- `hSForStart`/`exec_forStart_row`.  Supplier: `ForStartResid` = `allocFrame` +
       init/for-loop exit-sim (`TermGuards.forMeasure`). -/
-  hSForStart : ∀ st st' st'' d env init cnd step b status store' outer,
-      ForStartResid st st' st'' d env init cnd step b status store' outer
-  /-- `hSWhileBreak`/`exec_whileBreak_row`.  Supplier: `WhileResid` (shared with
-      whileRet/whileLoop; `TermGuards.whileMeasure`, `execWhileIH_of_resid`). -/
-  hSWhileBreak : ∀ st st' d env c b status, WhileResid st st' d env c b status
-  -- ===== ScaffoldRows.lean — the 6 unconditional (`True`-motive) scaffolds =====
-  -- hInit{None,Some}/hFc{None,Some}/hEs{None,Some} are UNCONDITIONAL (the scaffold
-  -- motives are `True`; see the `scaffold-some-motive-unsatisfiable` ledger); NO
-  -- residual field.  The old `.some` GAP fields + `*_resid` defs are DELETED.
+  hSForStart : ∀ st st' st'' d env init cnd step b status store' outer
+      hInit hFor,
+      ForStartCaseResid st st' st'' d env init cnd step b status store' outer
+        hInit hFor
+  /-- Exact `ExecS.whileBreak` residual, indexed by the condition/body
+      derivations and their induction hypotheses. -/
+  hSWhileBreak : ∀ st stC stB d env c b v hC hB,
+      WhileBreakCaseResid st stC stB d env c b v hC hB
+  /-- Exact `ExecS.whileRet` residual. -/
+  hSWhileRet : ∀ st stC stB d env c b v rv hC hB,
+      WhileRetCaseResid st stC stB d env c b v rv hC hB
+  /-- Exact recursive `ExecS.whileLoop` residual. -/
+  hSWhileLoop : ∀ st stC stB stR d env c b v bodyStatus finalStatus
+      hC hB hRest,
+      WhileLoopCaseResid st stC stB stR d env c b v bodyStatus finalStatus
+        hC hB hRest
+  -- ===== Context-indexed for-loop helpers =====
+  hInitNone : ∀ st d env, InitNoneResid st d env
+  hInitSome : ∀ st d env s st' status hS,
+      InitSomeResid st d env s st' status hS
+  hFlCondFalse : ∀ st st' d env c step b v hC hFalse,
+      FlCondFalseResid st st' d env c step b v hC hFalse
+  hFlBodyBreak : ∀ st st' st'' d env cnd step b hCond hBody,
+      FlBodyBreakResid st st' st'' d env cnd step b hCond hBody
+  hFlBodyRet : ∀ st st' st'' d env cnd step b rv hCond hBody,
+      FlBodyRetResid st st' st'' d env cnd step b rv hCond hBody
+  hFlLoop : ∀ st st' st'' st''' st'''' d env cnd step b status status'
+      hCond hBody hContinue hStep hRest,
+      FlLoopResid st st' st'' st''' st'''' d env cnd step b status status'
+        hCond hBody hContinue hStep hRest
 
-  -- ===== The genuine whole-premise gaps (no landed row; typed VERBATIM as the
-  -- TermCases field).  These are the for-loop body/loop cases + the ExecSeq cases,
-  -- which have NO `_row` theorem yet. =====
-  -- ===== ForLoop constructors: NO residual fields (ITEM ZERO / falsity #12,
-  -- shape 3).  `mForLoop` is `True` (ledger
-  -- `forloop-motive-identity-pc-store-mutation`; consumer census in
-  -- `TermSimAssembly.mForLoop`'s doc), so the four `ForLoop` minor premises are
-  -- UNCONDITIONAL rows (`rows/SeqForRows.hFl*_row`).  The old whole-premise
-  -- `hFlCondFalse`/`hFlBodyBreak`/`hFlBodyRet`/`hFlLoop` fields are DELETED
-  -- (scaffold-rows precedent).
+  -- ===== Context-indexed loop and sequence boundaries. =====
+  -- The `ForLoop` fields above retain the exact constructor derivations and
+  -- recursive sub-motives. Sequence constructors are closed from one exact
+  -- per-copy iteration family; the empty case is unconditional.
 
-  /-- **GAP** — `hSeqNil` (`ExecSeq.nil`).  Supplier: `execSeqNil` seg-identity
-      (`ExecSimCommon.execSeqNil`, essentially LANDED — a `_row` wrap is trivial). -/
-  hSeqNil :
-    ∀ (st : SpecSt) (d : Nat) (env : Addr),
-      mExecSeq st d env [] st Status.normal (ExecSeq.nil st d env)
-  /-- **GAP** — `hSeqConsNormal` (`ExecSeq.consNormal`).  Supplier: `execSeqLoop`
-      back-edge (`TermGuards.seqMeasure`). -/
-  hSeqConsNormal :
-    ∀ (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt) (st' st'' : SpecSt)
-      (status : Status) (a : ExecS st d env s st' Status.normal) (a_1 : ExecSeq st' d env ss st'' status),
-      mExecS st d env s st' Status.normal a → mExecSeq st' d env ss st'' status a_1 →
-      mExecSeq st d env (s :: ss) st'' status (ExecSeq.consNormal st d env s ss st' st'' status a a_1)
-  /-- **GAP** — `hSeqConsAbrupt` (`ExecSeq.consAbrupt`).  Supplier: `execSeqLoop`
-      abrupt-exit arm (`TermGuards.seqMeasure`). -/
-  hSeqConsAbrupt :
-    ∀ (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt) (st' : SpecSt)
-      (status : Status) (a : ExecS st d env s st' status) (a_1 : status ≠ Status.normal),
-      mExecS st d env s st' status a →
-      mExecSeq st d env (s :: ss) st' status (ExecSeq.consAbrupt st d env s ss st' status a a_1)
+  hSeqSteps : SeqStepResiduals
 
   -- ===== Endgame residuals (folded into TermResiduals per the task) =====
   /-- **ENTRY (prologue)** — `hEntryHalts` store-init locus.  Supplier: the off-path
       `interp_init` store representation at the `interp_run` loop head
       (`Vsa.Sim.InterpInitStoreRepr`, decoded PC span in its doc). -/
-  hInitStore : ∀ p, Vsa.Sim.InterpInitStoreRepr L p
+  hInitStore : Vsa.Sim.InterpInitRouteInputs L
   /-- **ENTRY (epilogue)** — `hEntryHalts` exit-0 spill seam.  Supplier: the epilogue
       restore-block byte-level spill/frame/image/tail facts
       (`Vsa.Sim.EpilogueSpill`, the `s5=0` latch + restore `ChainFacts`). -/
   hEpilogueSpill : ∀ (g : (R : Register) → Option (RegisterType R))
       (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
       (st' : SpecSt) (m0 : Mem) (out : String),
-      Vsa.Sim.EpilogueSpill g N A SL φf φc st' m0 out
-  /-- **DIVERGENCE** — `hdivFam`.  Supplier: the per-load divergence correspondence
-      (`Vsa.Sim.DivFamily.DivCorrFamily L`), discharged by the M4 `exec_stmt` case
-      Triples' progress-only ("≥1 step, still corresponds") skeleton. -/
+      g Register.x21 = some (0#64 : BitVec 64) →
+      Vsa.Sim.EpilogueSpillInputs g N A SL φf φc st' m0 out
+
+/-- The term-side residuals plus the assembled divergence correspondence. -/
+structure TermResidualsCore (L : Layout) extends TermResidualsBase L where
+  /-- **DIVERGENCE** — `hdivFam`. Supplier:
+      `ApproxArmResidGapAssembly.divCorrFamily_of_armStages`, from the shared
+      entry drive, the normal loop iteration seam, and the 29-field approximate
+      dispatch assembly. -/
   hDivCorr : Vsa.Sim.DivFamily.DivCorrFamily L
 
 /-- The full residual record: the core plus the error family.  `interpSim_of_residuals`
 consumes this; `EndToEnd.lean` builds it from `TermResidualsCore` + the error-side
 link work (`errFamily_ofWork`). -/
 structure TermResiduals (L : Layout) extends TermResidualsCore L where
-  /-- **ERROR** — the M5 error family `ErrFamily L`.  Supplier:
-      `Vsa.Sim.errFamilyClosed L S hsite…`, fed the shared L7/L8 `ErrShared` bundle `S`
-      (`SnprintfContract SC` + `ErrorTailChain HT`, M3/M6 error-path inputs) and the 43
-      per-error-site `hsite` residuals (M4 caller-linkage, `SitePre`-conditioned: the
-      spec-derivation context → `ReachJal … c`, i.e. config `c` RUNS to each
-      `jal runtime_error`; `m5_error_routing.tsv`).  `errFamily_ofShared` below is the
-      one-liner that builds this field from those pieces. -/
+  /-- **ERROR** — the M5 error family `ErrFamily L`. Supplier:
+      `errFamilyClosed`: eleven executable leaf families (the binary family is
+      cause-indexed), bad-closure adequacy, and the direct top-abrupt path.
+      The other 32 premises of `errFamily_of_sites` are propagation constructors
+      and are discharged from their child `ErrHalts` induction hypotheses. -/
   hErrFam : ErrFamily L
+
+/-- Derive all physical statement-entry routes by one mutual recursion.  Each
+recursive statement premise already carries its fresh, dispatch, and while-arm
+components. -/
+theorem execRouteFamily_of_residuals {L : Layout} (R : TermResiduals L) :
+    ExecSRouteFamily := by
+  intro st d env s st' status t
+  let C := R.hExecRouteCases
+  exact execSRoute_of_mutual_cases
+    (hInt := eval_int_row R.hInt)
+    (hStr := eval_str_row R.hStr)
+    (hBool := eval_bool_row R.hBool)
+    (hNull := eval_null_row R.hNull)
+    (hVar := eval_var_row_extended R.hVar)
+    (hAssign := eval_assign_row_extended R.hAssign)
+    (hBinary := Vsa.Sim.eval_binary_row R.hIAdd R.hISub R.hIMul R.hIDiv R.hIMod
+      R.hILt R.hILe R.hIGt R.hIGe R.hEq R.hNe R.hStrAddL R.hStrAddR R.hStrLt
+      R.hStrLe R.hStrGt R.hStrGe R.hDivOv)
+    (hOrTrue := eval_orTrue_row R.hOrTrue)
+    (hOrFalse := eval_orFalse_row R.hOrFalse)
+    (hAndFalse := eval_andFalse_row R.hAndFalse)
+    (hAndTrue := eval_andTrue_row R.hAndTrue)
+    (hNeg := eval_neg_row R.hNeg)
+    (hNot := eval_not_row R.hNot)
+    (hCall := eval_call_row R.hCall)
+    (hFn := eval_fn_row R.hFn)
+    (hArgsNil := eval_argsNil_row)
+    (hArgsCons := eval_argsCons_row R.hArgsCons)
+    (hCallClosure := eval_callClosure_indexed_row R.hCallClosure)
+    (hCallPrint := eval_callPrint_row R.hCallPrint)
+    (hCallPrintln := eval_callPrintln_row R.hCallPrintln)
+    (hCallAssertOk := eval_callAssertOk_row R.hCallAssertOk)
+    (hSExpr := by
+      intro st d env e st' v a hE
+      exact { fresh := exec_expr_row R.hSExpr st d env e st' v a hE
+              dispatch := C.hSExpr st d env e st' v a hE
+              whileArm := by intro c b heq; cases heq })
+    (hSVarInit := by
+      intro st d env x e st' v a hE
+      exact { fresh := exec_varInit_row R.hSVarInit st d env x e st' v a hE
+              dispatch := C.hSVarInit st d env x e st' v a hE
+              whileArm := by intro c b heq; cases heq })
+    (hSVarNull := by
+      intro st d env x
+      exact { fresh := exec_varNull_row R.hSVarNull st d env x
+              dispatch := C.hSVarNull st d env x
+              whileArm := by intro c b heq; cases heq })
+    (hSBlock := by
+      intro st d env ss store' inner st' status a a_1 hSeq
+      exact { fresh := exec_block_row R.hSBlock st d env ss store' inner st' status a a_1 hSeq
+              dispatch := C.hSBlock st d env ss store' inner st' status a a_1 hSeq
+              whileArm := by intro c b heq; cases heq })
+    (hSIfTrue := by
+      intro st d env c t e st' st'' v status a a_1 a_2 hC hB
+      exact { fresh := exec_ifTrue_indexed_row R.hSIfTrue st d env c t e st' st'' v
+                status a a_1 a_2 hC hB.fresh hB.dispatch
+              dispatch := C.hSIfTrue st d env c t e st' st'' v status a a_1 a_2 hC hB
+              whileArm := by intro c b heq; cases heq })
+    (hSIfFalse := by
+      intro st d env c t e st' st'' v status a a_1 a_2 hC hB
+      exact { fresh := exec_ifFalse_indexed_row R.hSIfFalse st d env c t e st' st'' v
+                status a a_1 a_2 hC hB.fresh hB.dispatch
+              dispatch := C.hSIfFalse st d env c t e st' st'' v status a a_1 a_2 hC hB
+              whileArm := by intro c b heq; cases heq })
+    (hSIfNone := by
+      intro st d env c t st' v a a_1 hC
+      exact { fresh := exec_ifNone_row R.hSIfNone st d env c t st' v a a_1 hC
+              dispatch := C.hSIfNone st d env c t st' v a a_1 hC
+              whileArm := by intro c b heq; cases heq })
+    (hSWhileFalse := by
+      intro st d env c b st' v a a_1 hC
+      let hRoutes := C.hSWhileFalse st d env c b st' v a a_1 hC
+      exact { fresh := exec_whileFalse_row R.hSWhileFalse st d env c b st' v a a_1 hC
+              dispatch := hRoutes.1
+              whileArm := by intro c' b' heq; cases heq; exact hRoutes.2 })
+    (hSWhileBreak := by
+      intro st d env c b st' st'' v a a_1 a_2 hC hB
+      let hRoutes := C.hSWhileBreak st d env c b st' st'' v a a_1 a_2 hC hB
+      exact { fresh := exec_whileBreak_row R.hSWhileBreak st d env c b st' st'' v
+                a a_1 a_2 hC hB.fresh
+              dispatch := hRoutes.1
+              whileArm := by intro c' b' heq; cases heq; exact hRoutes.2 })
+    (hSWhileRet := by
+      intro st d env c b st' st'' v rv a a_1 a_2 hC hB
+      let hRoutes := C.hSWhileRet st d env c b st' st'' v rv a a_1 a_2 hC hB
+      exact { fresh := exec_whileRet_row R.hSWhileRet st d env c b st' st'' v rv
+                a a_1 a_2 hC hB.fresh
+              dispatch := hRoutes.1
+              whileArm := by intro c' b' heq; cases heq; exact hRoutes.2 })
+    (hSWhileLoop := by
+      intro st d env c b st' st'' st''' v status status' a a_1 a_2 a_3 a_4
+        hC hB hRest
+      let hRestArm := hRest.whileArm c b rfl
+      let hRoutes := C.hSWhileLoop st d env c b st' st'' st''' v status status'
+        a a_1 a_2 a_3 a_4 hC hB hRest
+      exact { fresh := exec_whileLoop_indexed_row R.hSWhileLoop st d env c b st'
+                st'' st''' v status status' a a_1 a_2 a_3 a_4 hC hB.fresh
+                hRest.fresh hRestArm
+              dispatch := hRoutes.1
+              whileArm := by intro c' b' heq; cases heq; exact hRoutes.2 })
+    (hSForStart := by
+      intro st d env init cnd step b store' outer st' st'' status a a_1 a_2 hInit hFor
+      exact { fresh := exec_forStart_row R.hSForStart st d env init cnd step b store'
+                outer st' st'' status a a_1 a_2 hInit hFor
+              dispatch := C.hSForStart st d env init cnd step b store' outer st' st''
+                status a a_1 a_2 hInit hFor
+              whileArm := by intro c b heq; cases heq })
+    (hSRet := by
+      intro st d env e st' v a hE
+      exact { fresh := exec_ret_row R.hSRet st d env e st' v a hE
+              dispatch := C.hSRet st d env e st' v a hE
+              whileArm := by intro c b heq; cases heq })
+    (hSRetNull := by
+      intro st d env
+      exact { fresh := exec_retNull_row R.hSRetNull st d env
+              dispatch := C.hSRetNull st d env
+              whileArm := by intro c b heq; cases heq })
+    (hSBrk := by
+      intro st d env
+      exact { fresh := exec_brk_row R.hSBrk st d env
+              dispatch := C.hSBrk st d env
+              whileArm := by intro c b heq; cases heq })
+    (hSCont := by
+      intro st d env
+      exact { fresh := exec_cont_row R.hSCont st d env
+              dispatch := C.hSCont st d env
+              whileArm := by intro c b heq; cases heq })
+    (hInitNone := hInitNone_row R.hInitNone)
+    (hInitSome := by
+      intro st d env s st' status a hS
+      exact hInitSome_row R.hInitSome st d env s st' status a hS.fresh)
+    (hFlCondFalse := hFlCondFalse_row R.hFlCondFalse)
+    (hFlBodyBreak := by
+      intro st d env cnd step b st' st'' a a_1 hC hB
+      exact hFlBodyBreak_row R.hFlBodyBreak st d env cnd step b st' st'' a a_1 hC hB.fresh)
+    (hFlBodyRet := by
+      intro st d env cnd step b st' st'' rv a a_1 hC hB
+      exact hFlBodyRet_row R.hFlBodyRet st d env cnd step b st' st'' rv a a_1 hC hB.fresh)
+    (hFlLoop := by
+      intro st d env cnd step b st' st'' st''' st'''' status status'
+        a a_1 a_2 a_3 a_4 hC hB hStep hRest
+      exact hFlLoop_row R.hFlLoop st d env cnd step b st' st'' st''' st''''
+        status status' a a_1 a_2 a_3 a_4 hC hB.fresh hStep hRest)
+    (hFcNone := hFcNone_row)
+    (hFcSome := hFcSome_row)
+    (hEsNone := hEsNone_row)
+    (hEsSome := hEsSome_row)
+    (hSeqNil := hSeqNil_row)
+    (hSeqConsNormal := by
+      intro st d env s ss st' st'' status a a_1 hS hSeq
+      exact hSeqConsNormal_row (seqStepFamily_of_residuals R.hSeqSteps)
+        st d env s ss st' st'' status a a_1 hS.fresh hSeq)
+    (hSeqConsAbrupt := by
+      intro st d env s ss st' status a a_1 hS
+      exact hSeqConsAbrupt_row (seqStepFamily_of_residuals R.hSeqSteps)
+        st d env s ss st' status a a_1 hS.fresh)
+    t
 
 /-! ## The record fill — `termCases_of_residuals`
 
@@ -313,8 +464,8 @@ def termCases_of_residuals {L : Layout} (R : TermResiduals L) :
   hStr := eval_str_row R.hStr
   hBool := eval_bool_row R.hBool
   hNull := eval_null_row R.hNull
-  hVar := eval_var_row R.hVar
-  hAssign := eval_assign_row R.hAssign
+  hVar := eval_var_row_extended R.hVar
+  hAssign := eval_assign_row_extended R.hAssign
   hBinary := Vsa.Sim.eval_binary_row R.hIAdd R.hISub R.hIMul R.hIDiv R.hIMod R.hILt R.hILe
     R.hIGt R.hIGe R.hEq R.hNe R.hStrAddL R.hStrAddR R.hStrLt R.hStrLe R.hStrGt R.hStrGe R.hDivOv
   hOrTrue := eval_orTrue_row R.hOrTrue
@@ -325,9 +476,9 @@ def termCases_of_residuals {L : Layout} (R : TermResiduals L) :
   hNot := eval_not_row R.hNot
   hCall := eval_call_row R.hCall
   hFn := eval_fn_row R.hFn
-  hArgsNil := eval_argsNil_row R.hArgsNil
+  hArgsNil := eval_argsNil_row
   hArgsCons := eval_argsCons_row R.hArgsCons
-  hCallClosure := R.hCallClosure
+  hCallClosure := eval_callClosure_indexed_row R.hCallClosure
   hCallPrint := eval_callPrint_row R.hCallPrint
   hCallPrintln := eval_callPrintln_row R.hCallPrintln
   hCallAssertOk := eval_callAssertOk_row R.hCallAssertOk
@@ -335,31 +486,31 @@ def termCases_of_residuals {L : Layout} (R : TermResiduals L) :
   hSVarInit := exec_varInit_row R.hSVarInit
   hSVarNull := exec_varNull_row R.hSVarNull
   hSBlock := exec_block_row R.hSBlock
-  hSIfTrue := exec_ifTrue_row R.hSIfTrue
-  hSIfFalse := exec_ifFalse_row R.hSIfFalse
+  hSIfTrue := exec_ifTrue_row (execRouteFamily_of_residuals R) R.hSIfTrue
+  hSIfFalse := exec_ifFalse_row (execRouteFamily_of_residuals R) R.hSIfFalse
   hSIfNone := exec_ifNone_row R.hSIfNone
   hSWhileFalse := exec_whileFalse_row R.hSWhileFalse
   hSWhileBreak := exec_whileBreak_row R.hSWhileBreak
-  hSWhileRet := exec_whileRet_row R.hSWhileBreak
-  hSWhileLoop := exec_whileLoop_row R.hSWhileBreak
+  hSWhileRet := exec_whileRet_row R.hSWhileRet
+  hSWhileLoop := exec_whileLoop_row (execRouteFamily_of_residuals R) R.hSWhileLoop
   hSForStart := exec_forStart_row R.hSForStart
   hSRet := exec_ret_row R.hSRet
   hSRetNull := exec_retNull_row R.hSRetNull
   hSBrk := exec_brk_row R.hSBrk
   hSCont := exec_cont_row R.hSCont
-  hInitNone := hInitNone_row
-  hInitSome := hInitSome_row
-  hFlCondFalse := hFlCondFalse_row
-  hFlBodyBreak := hFlBodyBreak_row
-  hFlBodyRet := hFlBodyRet_row
-  hFlLoop := hFlLoop_row
+  hInitNone := hInitNone_row R.hInitNone
+  hInitSome := hInitSome_row R.hInitSome
+  hFlCondFalse := hFlCondFalse_row R.hFlCondFalse
+  hFlBodyBreak := hFlBodyBreak_row R.hFlBodyBreak
+  hFlBodyRet := hFlBodyRet_row R.hFlBodyRet
+  hFlLoop := hFlLoop_row R.hFlLoop
   hFcNone := hFcNone_row
   hFcSome := hFcSome_row
   hEsNone := hEsNone_row
   hEsSome := hEsSome_row
-  hSeqNil := R.hSeqNil
-  hSeqConsNormal := R.hSeqConsNormal
-  hSeqConsAbrupt := R.hSeqConsAbrupt
+  hSeqNil := hSeqNil_row
+  hSeqConsNormal := hSeqConsNormal_row (seqStepFamily_of_residuals R.hSeqSteps)
+  hSeqConsAbrupt := hSeqConsAbrupt_row (seqStepFamily_of_residuals R.hSeqSteps)
 
 /-! ## The term arm — `hterm_of_residuals`
 
@@ -406,15 +557,17 @@ theorem divStep_vacuous :
     Vsa.Sim.DivStep (fun _ _ _ _ _ => False) :=
   ⟨fun _ _ _ _ _ _ _ _ hc => hc.elim, fun _ _ _ _ _ _ _ _ hc => hc.elim⟩
 
-/-! ## `errFamily_ofShared` — build the `hErrFam` field from `ErrShared` + 43 hsites
+/-
+/-! ## Legacy generated error-routing interface (refuted by trace fuzzing)
 
 The one-liner that discharges `TermResiduals.hErrFam`: `errFamilyClosed` fed the
-shared L7/L8 bundle and the 43 per-error-site residuals.  Each routed residual is
+shared L7/L8 bundle and the 44 indexed error premises.  Each routed residual is
 now the CORRECTED `SitePre`-conditioned reachability (`ErrorReach.lean`): the
 premise's spec-derivation context → `ReachJal S … <pc> <bytes> c` (the entry config
 `c` RUNS to the jal), NOT the refuted `∀ c, JalErrPre … c`.  Its argument list IS
 the honest error-side remaining work; recorded here so the supplier of `hErrFam` is
 machine-checked to be exactly `errFamilyClosed`. -/
+/- Obsolete constant-config error-family compatibility theorem.
 theorem errFamily_ofShared (L : Layout) (S : Vsa.Sim.ErrShared)
     (hsite_hVarUndef : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr) (x : String),
       st.store.get? env x = none → ReachJal S.g S.inp S.m0 0x80003b54#64 0xef#8 0xf0#8 0x4f#8 0xa5#8 c)
@@ -564,6 +717,70 @@ theorem errFamily_ofShared (L : Layout) (S : Vsa.Sim.ErrShared)
     hsite_hWhileCond hsite_hWhileBody hsite_hWhileLoop hsite_hForInit hsite_hForLoop
     hsite_hRet hsite_hFlCond hsite_hFlBody hsite_hFlStep hsite_hFlLoop hsite_hSeqHead
     hsite_hSeqTail hsite_hTopAbrupt
+-/
+
+/-! ## `errFamily_ofShared` — the faithful leaf-only error interface
+
+Propagation constructors consume their child `ErrHalts` induction hypothesis
+inside `errFamilyClosed`; they are not residuals and do not name machine PCs.
+The remaining executable work is nine leaf routes plus the cause-indexed binary
+route.  `hBadClosure` is specification-only, and top-level abrupt completion
+uses the direct `interp_run` path rather than a `jal runtime_error` site. -/
+/- Obsolete constant-config error-family compatibility theorem.
+theorem errFamily_ofShared (L : Layout) (S : Vsa.Sim.ErrShared)
+    (hsite_hVarUndef : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr)
+      (x : String), st.store.get? env x = none →
+      ReachJal S.g S.inp S.m0 0x80003fac#64 0xef#8 0xe0#8 0xdf#8 0xdf#8 c)
+    (hsite_hAssignUnbound : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr)
+      (x : String) (e : Expr) (st' : SpecSt) (v : Value),
+      EvalE st d env e st' v → st'.store.set? env x v = none →
+      ReachJal S.g S.inp S.m0 0x800034e4#64 0xef#8 0xf0#8 0x5f#8 0x8c#8 c)
+    (hsite_hBinaryOp : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr)
+      (op : BinOp) (l r : Expr) (st' st'' : SpecSt) (lv rv : Value),
+      EvalE st d env l st' lv → EvalE st' d env r st'' rv →
+      binOpSem st''.store op lv rv = none →
+      BinaryErrReach S.g S.inp S.m0 c st''.store op lv rv)
+    (hsite_hNegType : ∀ (c : Config) (st : SpecSt) (d : Nat) (env : Addr)
+      (e : Expr) (st' : SpecSt) (v : Value), EvalE st d env e st' v →
+      (∀ n : Int, v ≠ .int n) →
+      ReachJal S.g S.inp S.m0 0x80003b9c#64 0xef#8 0xf0#8 0xcf#8 0xa0#8 c)
+    (hsite_hNotCallable : ∀ (c : Config) (st : SpecSt) (d : Nat)
+      (fv : Value) (vs : List Value), (∀ a, fv ≠ .closure a) →
+      (∀ f, fv ≠ .native f) →
+      ReachJal S.g S.inp S.m0 0x80003de8#64 0xef#8 0xe0#8 0x1f#8 0xfc#8 c)
+    (hsite_hBadClosure : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Addr)
+      (vs : List Value), st.store.closures[a]? = none → ErrHalts c)
+    (hsite_hArity : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Addr)
+      (cd : ClosureData) (vs : List Value), st.store.closures[a]? = some cd →
+      vs.length ≠ cd.params.length →
+      ReachJal S.g S.inp S.m0 0x80003da0#64 0xef#8 0xf0#8 0x8f#8 0x80#8 c)
+    (hsite_hDepth : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Addr)
+      (cd : ClosureData) (vs : List Value), st.store.closures[a]? = some cd →
+      vs.length = cd.params.length → ¬ d < maxCallDepth →
+      ReachJal S.g S.inp S.m0 0x80003cc4#64 0xef#8 0xf0#8 0x4f#8 0x8e#8 c)
+    (hsite_hEscape : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Addr)
+      (cd : ClosureData) (vs : List Value) (store' : Store) (frame : Addr)
+      (st' : SpecSt) (status : Status), st.store.closures[a]? = some cd →
+      vs.length = cd.params.length → d < maxCallDepth →
+      st.store.allocFrame (some cd.env) = (store', frame) →
+      ExecSeq ⟨(cd.params.zip vs).foldl (fun s (x, v) => s.define frame x v) store', st.out⟩
+        (d + 1) frame cd.body st' status →
+      (status = .brk ∨ status = .cont) →
+      ReachJal S.g S.inp S.m0 0x80003ce8#64 0xef#8 0xf0#8 0x0f#8 0x8c#8 c)
+    (hsite_hAssertFail : ∀ (c : Config) (st : SpecSt) (d : Nat)
+      (vs : List Value) (v m : Value), (vs = [v] ∨ vs = [v, m]) →
+      v.truthy = false →
+      ReachJal S.g S.inp S.m0 0x80002ebc#64 0xef#8 0xf0#8 0xdf#8 0xee#8 c)
+    (hsite_hAssertArity : ∀ (c : Config) (st : SpecSt) (d : Nat)
+      (vs : List Value), (∀ v, vs ≠ [v]) → (∀ v m, vs ≠ [v, m]) →
+      ReachJal S.g S.inp S.m0 0x80002e90#64 0xef#8 0xf0#8 0x9f#8 0xf1#8 c)
+    (hsite_hTopAbrupt : ∀ (p : Program) (c : Config), InterpRunAbruptPath p c) :
+    ErrFamily L :=
+  Vsa.Sim.errFamilyClosed L S hsite_hVarUndef hsite_hAssignUnbound
+    hsite_hBinaryOp hsite_hNegType hsite_hNotCallable hsite_hBadClosure
+    hsite_hArity hsite_hDepth hsite_hEscape hsite_hAssertFail
+    hsite_hAssertArity hsite_hTopAbrupt
+-/
 
 /-! ## THE ENDGAME COROLLARY — `interpSim_of_residuals`
 
@@ -591,7 +808,6 @@ theorem refinement_of_residuals {L : Layout} (R : TermResiduals L) :
 #print axioms hterm_of_residuals
 #print axioms hdivFam_of_residuals
 #print axioms divStep_vacuous
-#print axioms errFamily_ofShared
 #print axioms interpSim_of_residuals
 
 end Vsa.Sim.TermAssembly

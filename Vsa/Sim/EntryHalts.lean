@@ -32,7 +32,7 @@ genuine `interp_run` span seams around the received `mExecSeq` datum:
 ```
 ── PROLOGUE (EntryPrologueSpan front) ──────────────────────────────────────
 800043ec:  addi sp,sp,-176         -- 176-byte frame
-800043f0:  sd   a0,0(sp)           -- spill the interp* / AST-array base
+800043f0:  sd   a0,0(sp)           -- spill the Interp pointer
 800043f4:  addi a0,a0,16           --   (setjmp buf = interp+16)
 800043f8:  sd   ra,168(sp) … 8000441c: sd a2,16(sp)   -- callee-saved + arg spills
 80004424:  jal  setjmp             -- CALL setjmp  (SETJMP CALLEE SEAM)
@@ -60,7 +60,7 @@ genuine `interp_run` span seams around the received `mExecSeq` datum:
 
 * **`EntryPrologueSpan`** — the `Loaded → SegEntry@loopHead` Triple.  This carries
   the **G-class** `Loaded ↔ SegEntry` unification (from `interpRunLayout.atInterpRun`:
-  PC = `0x800043ec`, `a0`/`a1` = AST base/len; establish `SegEntry` control state,
+  PC = `0x800043ec`, `a0=in`, `a1=stmts`, `a2=count`, `a3=0`; establish `SegEntry` control state,
   the ghost frame, and — the genuine open work — the **store-init representation
   seam**: `ProgramRepr c.σ.mem a n p` ⟹ `StoreRepr … initSt.store` at the loop
   head, i.e. the single global frame with the three natives bound), the **C-class**
@@ -149,16 +149,39 @@ def EntryPrologueSpan (L : Layout) (p : Program) : Prop :=
     ∃ (c1 : Config)
       (g : (R : Register) → Option (RegisterType R))
       (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-      (dLeft aLeft : Nat) (m0 : Mem),
+      (dLeft aLeft : Nat) (sp aRet : BitVec 64) (m0 : Mem),
       Steps c c1 ∧
       -- ITEM ZERO (falsity #12, shape 3): the prologue also certifies the
       -- `interp_run` code image in `m0` — the `SeqSpanGround` feed for the
       -- guarded `mExecSeq` application at `(interpLoopHeadPC, interpNormalExitPC)`.
       -- The discharger pins these bytes anyway (its span decode reads them).
       Vsa.Sim.Code.Interp_runLoaded m0 ∧
+      g Register.x21 = some (0#64 : BitVec 64) ∧
       -- the `∃`-bound ghost bundle is carried out so the SAME ghosts thread the
       -- `mExecSeq` Triple (`hbody`) and the epilogue span (`EntryEpilogueSpan`).
-      SegEntry g N A SL φf φc initSt 0 dLeft aLeft interpLoopHeadPC m0 c1
+      SegEntry g N A SL φf φc initSt 0 dLeft aLeft interpLoopHeadPC m0 c1 ∧
+      ExecSeqEntryI .interpRun g N A SL φf φc initSt 0 0 p sp aRet m0 c1
+
+/-- The empty-program entry route.  `interp_run` tests `n ≤ 0` before entering
+the statement loop, so `[]` reaches the normal epilogue directly and never
+witnesses `SegEntry` at `interpLoopHeadPC`. -/
+def EntryEmptySpan (L : Layout) : Prop :=
+  ∀ (c : Config), Loaded L [] c →
+    ∃ (c1 : Config)
+      (g : (R : Register) → Option (RegisterType R))
+      (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+      (m0 : Mem),
+      Steps c c1 ∧
+      Vsa.Sim.Code.Interp_runLoaded m0 ∧
+      g Register.x21 = some (0#64 : BitVec 64) ∧
+      SegExit g N A SL φf φc initSt.store.frames.size initSt.store.closures.size
+        initSt interpNormalExitPC m0 c1
+
+/-- Entry routing indexed by the program shape.  Empty programs take the
+pre-loop bypass; nonempty programs reach the loop head. -/
+def EntryRouteSpan (L : Layout) : Program → Prop
+  | [] => EntryEmptySpan L
+  | s :: ss => EntryPrologueSpan L (s :: ss)
 
 /-! ## Seam 2 — `EntryEpilogueSpan` (SegExit@exit → interp_run continuation)
 
@@ -185,7 +208,46 @@ def EntryEpilogueSpan
       (fun c => ExitTailChain0 (BitVec.ofNat 64 interpRetLinkPC) out ∧
         GoodState c.σ ∧ c.tick < 2 ∧
         c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 interpRetLinkPC) ∧
-        c.σ.regs.get? Register.x10 = some (0#64 : BitVec 64))
+        c.σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧
+        output c.σ = out)
+
+/-- The indexed top-level sequence exit entails the legacy epilogue carrier.
+At `interp_run`'s pre-epilogue join, `s0`/`s1` are loop-owned; the guarded
+`SegExit.frame` table therefore asks only for the frame registers retained by
+`ExecSeqExitI .interpRun`. -/
+theorem segExit_of_execSeqExitI_interpRun
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st' : SpecSt) (sp aRet : BitVec 64) (m0 : Mem) (c : Config)
+    (h : ExecSeqExitI .interpRun g N A SL φf φc
+      initSt.store.frames.size initSt.store.closures.size
+      st' .normal sp aRet m0 c) :
+    SegExit g N A SL φf φc initSt.store.frames.size initSt.store.closures.size
+      st' interpNormalExitPC m0 c := by
+  refine
+    { good := h.good
+      tick := h.tick
+      pc := h.pc
+      store := h.store
+      out := h.out
+      frame := ?_
+      memFrame := h.mem_frame
+      stackWin := ?_ }
+  · intro R hAbi hrestored
+    have hf := hrestored (fun R => match R with
+      | Register.x8 | Register.x9 => false
+      | _ => true) (by rfl)
+    have h8 : R ≠ Register.x8 := by
+      intro heq
+      subst R
+      simp at hf
+    have h9 : R ≠ Register.x9 := by
+      intro heq
+      subst R
+      simp at hf
+    exact h.frame R ⟨hAbi, h8, h9⟩
+  · intro k hk
+    simp [interpNormalExitPC, Vsa.Sim.Scaffold.stackScratchTop] at hk
 
 /-! ## `hPrologue` assembled from the two spans + the `mExecSeq` datum -/
 
@@ -205,10 +267,11 @@ The composition is `callSeg`-shaped: prologue span (`Steps c c1` to `SegEntry`)
 (`SegExit → continuation`). -/
 theorem hPrologue_of
     (L : Layout)
-    (hPre : ∀ p, EntryPrologueSpan L p)
+    (hPre : ∀ p, EntryRouteSpan L p)
     (hEpi : ∀ (g : (R : Register) → Option (RegisterType R))
         (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
         (st' : SpecSt) (m0 : Mem) (out : String),
+        g Register.x21 = some (0#64 : BitVec 64) →
         EntryEpilogueSpan g N A SL φf φc st' m0 out) :
     ∀ (p : Program) (c : Config) (out : String) (st' : SpecSt)
       (t : ExecSeq initSt 0 0 p st' Status.normal),
@@ -218,27 +281,37 @@ theorem hPrologue_of
         Steps c c1 ∧ ExitTailChain0 ra0 out ∧
         (GoodState c1.σ ∧ c1.tick < 2 ∧
           c1.σ.regs.get? Register.PC = some ra0 ∧
-          c1.σ.regs.get? Register.x10 = some (0#64 : BitVec 64)) := by
+          c1.σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧
+          output c1.σ = out) := by
   intro p c out st' t hL hout hm
-  -- 1. Prologue span: Loaded → SegEntry@loopHead, producing the layout ghosts
-  --    AND the `interp_run` image fact feeding the `mExecSeq` guard (ITEM ZERO).
-  obtain ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hstepsH, hImg, hSeg⟩ := hPre p c hL
-  -- 2. The `mExecSeq` Triple at those ghosts, `p := loopHeadPC`, `q := exitPC`,
-  --    its `SeqSpanGround` guard discharged from the tabled interp_run pair.
-  have hbody :
-      Triple
-        (SegEntry g N A SL φf φc initSt 0 dLeft aLeft interpLoopHeadPC m0)
-        (SegExit g N A SL φf φc initSt.store.frames.size initSt.store.closures.size
-          st' interpNormalExitPC m0) :=
-    hm g N A SL φf φc dLeft aLeft interpLoopHeadPC interpNormalExitPC m0
-      (Vsa.Sim.TermSimAssembly.seqSpanGround_of rfl hImg)
-  -- 3. Epilogue span: SegExit@exit → interp_run continuation (+ the tail residual).
-  have hepi := hEpi g N A SL φf φc st' m0 out hout
-  -- Compose: run the body Triple from cH, then the epilogue Triple.
-  obtain ⟨cE, hstepsE, hSegExit⟩ := hbody cH hSeg
-  obtain ⟨cR, hstepsR, hchain, hgood, htick, hpc, hx10⟩ := hepi cE hSegExit
-  exact ⟨BitVec.ofNat 64 interpRetLinkPC, cR,
-    (hstepsH.trans hstepsE).trans hstepsR, hchain, hgood, htick, hpc, hx10⟩
+  cases p with
+  | nil =>
+    cases t
+    obtain ⟨cE, g, N, A, SL, φf, φc, m0, hstepsE, _hImg, hLatch, hSegExit⟩ :=
+      hPre [] c hL
+    have hepi := hEpi g N A SL φf φc initSt m0 out hLatch hout
+    obtain ⟨cR, hstepsR, hchain, hgood, htick, hpc, hx10, hout'⟩ := hepi cE hSegExit
+    exact ⟨BitVec.ofNat 64 interpRetLinkPC, cR, hstepsE.trans hstepsR,
+      hchain, hgood, htick, hpc, hx10, hout'⟩
+  | cons s ss =>
+    -- Nonempty programs enter the statement loop and use the recursive body.
+    obtain ⟨cH, g, N, A, SL, φf, φc, dLeft, aLeft, sp, aRet, m0,
+      hstepsH, _hImg, hLatch, _hSeg, hEntryI⟩ :=
+      hPre (s :: ss) c hL
+    have hbodyI :
+        Triple
+          (ExecSeqEntryI .interpRun g N A SL φf φc initSt 0 0 (s :: ss) sp aRet m0)
+          (ExecSeqExitI .interpRun g N A SL φf φc
+            initSt.store.frames.size initSt.store.closures.size
+            st' .normal sp aRet m0) :=
+      hm .interpRun g N A SL φf φc sp aRet m0 rfl
+    have hepi := hEpi g N A SL φf φc st' m0 out hLatch hout
+    obtain ⟨cE, hstepsE, hExitI⟩ := hbodyI cH hEntryI
+    have hSegExit := segExit_of_execSeqExitI_interpRun
+      g N A SL φf φc st' sp aRet m0 cE hExitI
+    obtain ⟨cR, hstepsR, hchain, hgood, htick, hpc, hx10, hout'⟩ := hepi cE hSegExit
+    exact ⟨BitVec.ofNat 64 interpRetLinkPC, cR,
+      (hstepsH.trans hstepsE).trans hstepsR, hchain, hgood, htick, hpc, hx10, hout'⟩
 
 /-! ## `hEntryHalts` — the exact `termSimClosed` residual, discharged -/
 
@@ -257,10 +330,11 @@ straight-line span decodes and the `setjmp`/store-init/`ExitTailChain0` typed
 residuals remain. -/
 theorem hEntryHalts_of
     (L : Layout)
-    (hPre : ∀ p, EntryPrologueSpan L p)
+    (hPre : ∀ p, EntryRouteSpan L p)
     (hEpi : ∀ (g : (R : Register) → Option (RegisterType R))
         (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
         (st' : SpecSt) (m0 : Mem) (out : String),
+        g Register.x21 = some (0#64 : BitVec 64) →
         EntryEpilogueSpan g N A SL φf φc st' m0 out) :
     ∀ (p : Program) (c : Config) (out : String) (st' : SpecSt)
       (t : ExecSeq initSt 0 0 p st' Status.normal),

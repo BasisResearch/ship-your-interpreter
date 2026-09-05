@@ -135,8 +135,8 @@ theorem blockA_unaryArm
   have hkm0 : read32 m0 aExpr.toNat = some 8 := by
     cases (hc.mem ▸ hc.expr) with | unary hk _ _ _ => exact hk
   -- === block A: prologue + dispatch → widened ArmEntryK @0x800035e0 ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, v13c1, hArm, _hpresM, hx13c1⟩ :=
-    blockA_k g N A SL φf φc st (.unary op esub) 8 (0x800035e0#64) UnaryArmCallee
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, _hpresM, hx13c1⟩ :=
+    blockA_k g N A SL φf φc st env (.unary op esub) 8 (0x800035e0#64) UnaryArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
       hkm0
@@ -159,7 +159,7 @@ theorem blockA_unaryArm
         hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
         hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
-        ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.x13_defined⟩⟩, rfl⟩
+        ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩
   have hArmCopy := hArm
   obtain ⟨_hAG, _hAtick, _hApc, _hAa0, _hAs1, _hAa2, _hAsp, _hAra, _hAmi, _hAout,
     _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxAl, _hAxLo, _hAxHi, _hAxWin,
@@ -212,7 +212,8 @@ theorem blockA_unaryArm
   -- realign the ArmEntryK `out0` from the entry `c.σ.sailOutput` to the reached `c1.σ.sailOutput`
   have hArm' : ArmEntryK g N A SL φf φc st (0x800035e0#64) UnaryArmCallee (.unary op esub)
       sp r sret aExpr aEnv v8 v9 v18 c1.σ.sailOutput m0 ment c1 := _hAout.symm ▸ hArm
-  refine ⟨c1, hs1, v8, v9, v18, ment, hArm', hAEx11, ⟨v13c1, hx13c1⟩, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩,
+  refine ⟨c1, hs1, v8, v9, v18, ment, hArm', hAEx11,
+    ⟨BitVec.ofNat 64 (φf env), hx13c1⟩, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩,
     hpayMent', hsubReprMent, hgroundChild, hX.expr24,
     hX.op_align, hX.op_lo, hX.op_hi, hX.op_win, hX.op_stk,
     hX.sp_headroom, hX.sp_SLhi, hX.sp16, hX.SLhi_ram,
@@ -315,7 +316,7 @@ theorem blockA_logicalArm
     cases (hc.mem ▸ hc.expr) with | logical hk _ _ _ _ _ => exact hk
   -- === block A: prologue + dispatch → widened ArmEntryK @0x8000355c ===
   obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, _hpresM, _hx13⟩ :=
-    blockA_k g N A SL φf φc st (.logical op el er) 7 (0x8000355c#64) LogicalArmCallee
+    blockA_k g N A SL φf φc st env (.logical op el er) 7 (0x8000355c#64) LogicalArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
       hkm0
@@ -337,7 +338,7 @@ theorem blockA_logicalArm
         hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
         hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
-        ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.x13_defined⟩⟩, rfl⟩
+        ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩
   have hArmCopy := hArm
   obtain ⟨_hAG, _hAtick, hApc, _hAa0, _hAs1, _hAa2, _hAsp, _hAra, _hAmi, _hAout,
     _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxAl, _hAxLo, _hAxHi, _hAxWin,

@@ -1,9 +1,7 @@
 import Vsa.Sim.BridgeSeg
-import Vsa.Sim.ErrorSiteJal
-import Vsa.Sim.rows.ErrorReachInhab
 
 /-!
-# `BridgeSegFramed` — the avoid-set-generic frame core + the two ABI-mutating fronts
+# `BridgeSegFramed` — the avoid-set-generic frame core
 
 `FrameMeta.abiFrame_of_wrChain` (and its consumer `BridgeSeg.bridgeOfSeg`) collapse
 a reflected span's raw register-frame clause
@@ -14,19 +12,15 @@ a reflected span's raw register-frame clause
 
 to the callee-contract shape `∀ R, AbiPreserved R = true → get? R = get? R`, under
 the ONE `decide` datum `WrChainAvoidAbi bs` (no register the span writes is
-callee-saved).  Two open fronts need a span that DOES write callee-saved registers,
-where `WrChainAvoidAbi` legitimately fails:
+callee-saved). The closure-arm dispatch head genuinely writes callee-saved
+registers, so `WrChainAvoidAbi` legitimately fails:
 
-* **(a) the closure-arm dispatch head** `0x80003254..0x800032b8` (`mv s7,a1` at
+* The closure-arm dispatch head `0x80003254..0x800032b8` (`mv s7,a1` at
   `0x80003278`, `mv s5,a4` at `0x80003290` — deliberate callee-saved *reseats*
   before the `jal env_new @0x800032bc`).  `wrChain` here contains `{x21, x23}`,
   both `AbiPreserved`.
-* **(b) the 42 error-branch spill prefixes** — `sd s3..s7` to the stack before the
-  `jal runtime_error`.  These are STORES: they write MEMORY, not the registers
-  `s3..s7`; `wrChain` is EMPTY.  (And `s3..s7 = x19..x23` are exempt in
-  `NotWrittenJmp` regardless.)
 
-## Design verdict (the two consumers differ)
+## Design verdict
 
 The frame machinery's *kernel* (`FrameMeta.abiPreserved_ne`) is already avoid-set
 generic — it proves `(X == R) = false` from `R`, `X` on opposite sides of the SAME
@@ -36,18 +30,12 @@ hardcoding out: ONE generic `wrChain_avoids_frame (P : Register → Bool)` core,
 `AbiPreserved` re-expressed as a THIN instance (the landed path, consumers
 untouched).
 
-* **(b) needs NO framed variant at all** — avoid-set-swap OR spill-tracking are both
-  overkill.  The spill prefix's `wrChain = []`, so the raw seg frame preserves EVERY
-  register for free; the only real obligation is the MEMORY side (`Runtime_errorLoaded`
-  / `LongjmpLoaded` must survive the stack stores), which is the *footprint* frame
-  (`FrameMeta.memFrame_of_chain`, already avoid-set-independent).  See the demo.
-* **(a) genuinely needs spill/delta EXPOSURE, not an avoid-set swap.**  `s5`, `s7`
-  are BOTH written AND callee-saved, so no non-trivial predicate collapse recovers
-  their frame — the frame simply does not hold for them.  The seg ALREADY computes
-  the reseated values in `out.regs` (`GHolds σ' out.regs`); `bridgeOfSegFramed`
-  exposes that directly, and asserts the ABI frame only for the callee-saveds the
-  span does NOT write (`P := fun R => AbiPreserved R && decide (R ∉ writtenCalleeSaved)`,
-  the generic core instantiated at the restricted predicate).
+The closure head genuinely needs spill/delta EXPOSURE, not an avoid-set swap.
+`s5` and `s7` are both written and callee-saved, so no non-trivial predicate
+collapse recovers their frame — the frame simply does not hold for them. The seg
+already computes the reseated values in `out.regs` (`GHolds σ' out.regs`);
+`bridgeOfSegFramed` exposes that directly, and asserts the ABI frame only for the
+callee-saved registers the span does not write.
 
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
 -/
@@ -57,12 +45,8 @@ open Register
 open Vsa.Machine (MState Config Step Steps)
 open Vsa.Logic (Triple)
 open Vsa.Alloc (AbiPreserved)
-open Vsa.Sim.Code (Runtime_errorLoaded LongjmpLoaded)
-open Vsa.While
 
 namespace Vsa.Sim
-
-local notation "SpecSt" => Vsa.While.St
 
 set_option maxHeartbeats 1600000
 set_option maxRecDepth 1000000
@@ -224,149 +208,6 @@ theorem bridgeOfSegFramed (P : Register → Bool)
     exact (habiJal R (hPabi R hR)).trans (hPBody R hR)
 
 #print axioms bridgeOfSegFramed
-
-/-! ## §3. Demo (b) — one error-branch spill prefix, closed end-to-end
-
-The `hNegType` error node's `jal runtime_error @0x800034e4` is preceded by the pure
-stack-spill block
-
-```
-800034d0:  sd s3,1048(sp)      800034dc:  sd s6,1024(sp)
-800034d4:  sd s4,1040(sp)      800034e0:  sd s7,1016(sp)  ── ▷ jal runtime_error
-800034d8:  sd s5,1032(sp)
-```
-
-**Verdict for (b): NO framed variant is needed.**  Every instruction is a `.sd`
-STORE — it writes MEMORY, not the registers `s3..s7`; `wrChain spillSeg = []`.  So
-`segToTriple`'s underlying seg frame preserves EVERY register for free (no
-`WrChainAvoids`/`bridgeOfSegFramed` at all).  The ONLY real obligation is the
-MEMORY side: the post-spill memory `writeLog m0 spillLog` must still satisfy
-`JalErrPre`'s `Runtime_errorLoaded`/`LongjmpLoaded` (code ⊥ stack) — the footprint
-frame, avoid-set-independent.  We carry it as the arm's named `hLoadedPost` datum
-(the arm supplies a config whose post-spill memory keeps the code images loaded;
-the genuine geometric residual, exactly `ErrorReachInhab`'s `hlink` in spirit).
-
-The seg is emitted here (a real `#derive_case` on the actual error-site path),
-`segToTriple`d into `Triple ArmBranchPre (JalErrPre …)`, and fed through
-`negType_hsite_of_armBranch` — so ONE complete `hNegType` error link closes to
-`ErrHalts c`, modulo only the arm-linkage fact (`hlink`) and the loaded-post datum. -/
-
-#derive_case spillNegSeg chain
-  [(0x800034d0#64, 0x41313c23#32),   -- sd s3,1048(sp)
-   (0x800034d4#64, 0x41413823#32),   -- sd s4,1040(sp)
-   (0x800034d8#64, 0x41513423#32),   -- sd s5,1032(sp)
-   (0x800034dc#64, 0x41613023#32),   -- sd s6,1024(sp)
-   (0x800034e0#64, 0x3f713c23#32)]   -- sd s7,1016(sp)
-
-#print axioms spillNegSeg_seg
-
-/-- **The `hNegType` error-branch entry predicate.**  A config parked at the spill
-block entry `0x800034d0` with everything the seg + the runtime_error entry demand:
-the seg's `GoodState`/PC/minstret/`GHolds`/`KeysOK`/`ChainFacts`, the entry memory
-`m0`, `tick < 2`, the ErrorIn pointer in `x10`, its `WinRAM`, the `g` ghost frame
-over `NotWrittenJmp` (all at ENTRY — pure stores preserve them), and the target
-facts over the POST-spill memory `S.m0 = writeLog m0 spillLog`: the code images stay
-loaded (`code ⊥ stack`, the named geometric residual) and the jal byte pins.  The
-end PC lands at the jal `0x800034e4`. -/
-def SpillNegArmPre (S : ErrShared) (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (L : GRegs) (lds : List (List (BitVec 8))) (c : Config) : Prop :=
-  GoodState c.σ ∧ c.σ.mem = m0 ∧
-  c.σ.regs.get? Register.PC = some 0x800034d0#64 ∧
-  (∃ vm, c.σ.regs.get? Register.minstret = some vm) ∧
-  GHolds c.σ L ∧ KeysOK (keysG L) ∧ ChainFacts c.σ.mem c.σ.mem L lds spillNegSeg ∧
-  ChainOK 0x800034d0#64 (keysG L) spillNegSeg ∧
-  c.tick < 2 ∧
-  c.σ.regs.get? Register.x10 = some S.inp ∧ WinRAM (S.inp + 16#64) ∧
-  (∀ R : Register, NotWrittenJmp R → c.σ.regs.get? R = S.g R) ∧
-  S.m0 = writeLog m0 (evalBlocks spillNegSeg (SegEvalState.init L lds)).log ∧
-  Runtime_errorLoaded S.m0 ∧ LongjmpLoaded S.m0 ∧
-  S.m0[(0x800034e4 : Nat)]? = some (0xef : BitVec 8) ∧
-  S.m0[(0x800034e4 + 1 : Nat)]? = some (0xf0 : BitVec 8) ∧
-  S.m0[(0x800034e4 + 2 : Nat)]? = some (0x5f : BitVec 8) ∧
-  S.m0[(0x800034e4 + 3 : Nat)]? = some (0x8c : BitVec 8) ∧
-  (evalBlocksPC 0x800034d0#64 (SegEvalState.init L lds) spillNegSeg)
-    = (0x800034e4 : BitVec 64)
-
-/-- **The spill-prefix seg, marshalled to `JalErrPre`.**  Runs the five `sd` stores
-via `segEval_sound` (the RAW frame clause is what we need here, not the pin-only
-`segToTriple`).  Because the body writes NO register (`wrChain spillNegSeg = []`),
-the frame clause preserves EVERY non-noise register — so `x10 = inp` and the whole
-`NotWrittenJmp` `g`-frame carry from entry to the jal PC for FREE.  The memory side
-is `writeLog m0 spillLog = S.m0`, whose loadedness is the arm's `Runtime_errorLoaded
-S.m0` datum (`code ⊥ stack`, the named residual).  This is exactly the `Triple
-ArmBranchPre (JalErrPre …)` that `negType_hsite_of_armBranch` consumes — and NO
-`bridgeOfSegFramed` is used, precisely because (b) never needed frame tracking. -/
-theorem spillNeg_toJalErr (S : ErrShared) (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (L : GRegs) (lds : List (List (BitVec 8))) :
-    Triple (SpillNegArmPre S m0 L lds)
-      (JalErrPre S.g S.inp S.m0 0x800034e4#64 0xef#8 0xf0#8 0x5f#8 0x8c#8) := by
-  intro c hpre
-  obtain ⟨hG, hmem, hpc, ⟨vm, hmi⟩, hL, hkeys, hfacts, hwf, htick, hx10, hwin, hgframe,
-    hm0eq, hRE, hLJ, hb0, hb1, hb2, hb3, hpcEq⟩ := hpre
-  -- run the spill seg; keep the RAW frame clause `hframe`.
-  obtain ⟨σ', i', hs, hi', hG', hmem', _hout, hpc', ⟨w, hmi'⟩, _hregs, hframe⟩ :=
-    segEval_sound spillNegSeg c.σ c.tick c.steps 0x800034d0#64 vm L lds
-      hG hpc hmi hL hkeys hfacts hwf htick
-  rw [hmem] at hmem'
-  -- `wrChain spillNegSeg = []` (pure stores write no register), so the frame clause
-  -- preserves every non-noise reg — the wrChain guard is vacuous.
-  have hwrNil : wrChain spillNegSeg = [] := by decide
-  have hframe' : ∀ R : Register, (∀ rr ∈ noiseRegs, (rr == R) = false) →
-      σ'.regs.get? R = c.σ.regs.get? R :=
-    fun R hRn => hframe R hRn (fun n hn => by rw [hwrNil] at hn; exact absurd hn (by simp))
-  -- the whole seg run IS the reachability witness (`c` runs to the parked config).
-  refine ⟨⟨σ', i', c.steps + evalBlocksFuel spillNegSeg⟩, hs, ?_⟩
-  -- `NotWrittenJmp R` ⇒ R avoids every noise register (noise = jmp control set).
-  have noiseAvoid : ∀ {R : Register}, NotWrittenJmp R → ∀ rr ∈ noiseRegs, (rr == R) = false := by
-    intro R hR rr hrr
-    simp only [noiseRegs, List.mem_cons, List.not_mem_nil, or_false] at hrr
-    rcases hrr with rfl | rfl | rfl | rfl | rfl | rfl | rfl
-    · exact hR.mi
-    · exact hR.pc
-    · exact hR.npc
-    · exact hR.mii
-    · exact hR.mc
-    · exact hR.mt
-    · exact hR.mip
-  -- assemble `JalErrPre`.
-  refine ⟨hG', ?_, ?_, ?_, ?_, ?_, hwin, ⟨w, hmi'⟩, hi', ?_, ?_, ?_, ?_, ?_⟩
-  · exact hm0eq ▸ hRE
-  · exact hm0eq ▸ hLJ
-  · show σ'.mem = S.m0; rw [hmem', ← hm0eq]
-  · show σ'.regs.get? Register.PC = _; rw [hpc']; exact congrArg some hpcEq
-  · -- x10 = inp: `x10` is not noise; frame preserves it from entry.
-    show σ'.regs.get? Register.x10 = some S.inp
-    rw [hframe' Register.x10 (by decide)]; exact hx10
-  · -- the g ghost frame: each `NotWrittenJmp` R is non-noise, frame-preserved.
-    intro R hR
-    show σ'.regs.get? R = S.g R
-    rw [hframe' R (noiseAvoid hR)]; exact hgframe R hR
-  · show σ'.mem[(0x800034e4 : Nat)]? = _; rw [hmem', ← hm0eq]; exact hb0
-  · show σ'.mem[(0x800034e4 + 1 : Nat)]? = _; rw [hmem', ← hm0eq]; exact hb1
-  · show σ'.mem[(0x800034e4 + 2 : Nat)]? = _; rw [hmem', ← hm0eq]; exact hb2
-  · show σ'.mem[(0x800034e4 + 3 : Nat)]? = _; rw [hmem', ← hm0eq]; exact hb3
-
-#print axioms spillNeg_toJalErr
-
-/-- **ONE complete `hNegType` error link, closed.**  Feeding `spillNeg_toJalErr`'s
-`Triple ArmBranchPre (JalErrPre …)` (the real spill-prefix seg) into
-`negType_hsite_of_armBranch` discharges the whole `hNegType` `errFamily_of_sites`
-premise to `ErrHalts c` — modulo ONLY the arm-linkage `hlink` (that the `negType`
-spec context lands the machine at the spill-block entry `SpillNegArmPre`), the
-genuine M4 residual `ErrorReachInhab` already names.  So the error link is complete
-end-to-end: seg (this file) ≫ jal (`jalStep_to_runtimeError`) ≫ tail
-(`route_hNegType`), with no fabricated frame step. -/
-theorem negType_link_closed (S : ErrShared) (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (L : GRegs) (lds : List (List (BitVec 8)))
-    (hlink : ∀ (c : Config) (st : Vsa.While.St) (d : Nat) (env : Addr) (e : Expr)
-      (st' : Vsa.While.St) (v : Value),
-      EvalE st d env e st' v → (∀ n : Int, v ≠ .int n) → SpillNegArmPre S m0 L lds c) :
-    ∀ (c : Config) (st : Vsa.While.St) (d : Nat) (env : Addr) (e : Expr)
-      (st' : Vsa.While.St) (v : Value),
-      EvalE st d env e st' v → (∀ n : Int, v ≠ .int n) → ErrHalts c :=
-  negType_hsite_of_armBranch S (spillNeg_toJalErr S m0 L lds) hlink
-
-#print axioms negType_link_closed
 
 /-! ## §4. Demo (a) — the closure entryBase callee-saved reseat, via `bridgeOfSegFramed`
 

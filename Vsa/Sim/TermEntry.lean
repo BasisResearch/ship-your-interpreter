@@ -454,7 +454,8 @@ structure ExitTailChain0 (ra0 : BitVec 64) (out : String) : Prop where
     Triple
       (fun c => GoodState c.σ ∧ c.tick < 2 ∧
         c.σ.regs.get? Register.PC = some ra0 ∧
-        c.σ.regs.get? Register.x10 = some (0#64 : BitVec 64))
+        c.σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧
+        output c.σ = out)
       (ExitStorePre0 out)
 
 /-- **The clean-exit tail.**  From the `interp_run` normal-return continuation
@@ -469,7 +470,8 @@ theorem cleanExitTail
     (c : Config)
     (hcont : GoodState c.σ ∧ c.tick < 2 ∧
       c.σ.regs.get? Register.PC = some ra0 ∧
-      c.σ.regs.get? Register.x10 = some (0#64 : BitVec 64)) :
+      c.σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧
+      output c.σ = out) :
     Halts c out 0 := by
   -- 1. interp_run-cont / main / crt0 / exit span → the `_exit` store site.
   obtain ⟨c1, hs1, hpre1⟩ := HT.chain c hcont
@@ -519,7 +521,8 @@ theorem entryHalts (L : Layout)
           Steps c c1 ∧ ExitTailChain0 ra0 out ∧
           (GoodState c1.σ ∧ c1.tick < 2 ∧
             c1.σ.regs.get? Register.PC = some ra0 ∧
-            c1.σ.regs.get? Register.x10 = some (0#64 : BitVec 64))) :
+            c1.σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧
+            output c1.σ = out)) :
     ∀ (p : Program) (c : Config) (out : String) (st' : SpecSt)
       (t : Vsa.While.ExecSeq initSt 0 0 p st' Vsa.While.Status.normal),
       Loaded L p c → st'.out = out →

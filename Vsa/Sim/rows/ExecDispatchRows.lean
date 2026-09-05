@@ -4,6 +4,7 @@ import Vsa.Sim.ExecWhile
 import Vsa.Sim.ExecWhile2
 import Vsa.Sim.ExecBlock2
 import Vsa.Sim.ExecForStart
+import Vsa.Sim.ExecWhileIndexed
 import Vsa.Sim.rows.ExecIHWiden
 import Vsa.Sim.TermSimClose
 
@@ -104,11 +105,20 @@ def IfNoneResid (st st' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : Stmt) (
     Vsa.Sim.ExecEntry g N A SL φf φc st d env (.ifStmt c t none) sp r aInterp aStmt aEnv aRet m0 cfg →
     IfNoneGeom g N A SL φf φc st st' d env c t v sp r aInterp aStmt aEnv aRet m0
 
+/-- Exact `ifNone` constructor boundary. -/
+def IfNoneCaseResid
+    (st st' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : Stmt) (v : Value)
+    (hC : EvalE st d env c st' v) : Prop :=
+  v.truthy = false →
+  mEvalE st d env c st' v hC →
+  IfNoneResid st st' d env c t v
+
 /-- Route `hSIfNone` → `execIH_of_exitSim` over `execIfNoneSim`.  The cond `EvalIH`
 passes to the sim's `hIH` by `rfl`; the falsy hypothesis `a_1` is the sim's own spec
 premise `hSpec`. -/
 theorem exec_ifNone_row
-    (hR : ∀ st st' d env c t v, IfNoneResid st st' d env c t v) :
+    (hR : ∀ st st' d env c t v hC,
+      IfNoneCaseResid st st' d env c t v hC) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : Stmt) (st' : SpecSt) (v : Value)
       (a : EvalE st d env c st' v) (a_1 : v.truthy = false),
       mEvalE st d env c st' v a →
@@ -117,9 +127,11 @@ theorem exec_ifNone_row
   show ExecIH st d env (.ifStmt c t none) st' .normal
   exact execIH_of_exitSim'
     (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
-      (hR st st' d env c t v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
+      (hR st st' d env c t v a a_1 hIH g N A SL φf φc
+        sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
     (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
-      let G := hR st st' d env c t v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE
+      let G := hR st st' d env c t v a a_1 hIH g N A SL φf φc
+        sp r aInterp aStmt aEnv aRet m0 cfg hE
       execIfNoneSim g N A SL φf φc st st' d env c t v sp r aInterp aStmt aEnv aRet m0
         out0 (ExecS.ifNone st d env c t st' v a a_1) hIH G.hslot G.htableStk (G.hGlue out0))
 
@@ -153,9 +165,18 @@ def WhileFalseResid (st st' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stm
     Vsa.Sim.ExecEntry g N A SL φf φc st d env (.whileStmt c b) sp r aInterp aStmt aEnv aRet m0 cfg →
     WhileFalseGeom g N A SL φf φc st st' d env c b v sp r aInterp aStmt aEnv aRet m0
 
+/-- Exact `whileFalse` constructor boundary. -/
+def WhileFalseCaseResid
+    (st st' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt) (v : Value)
+    (hC : EvalE st d env c st' v) : Prop :=
+  v.truthy = false →
+  mEvalE st d env c st' v hC →
+  WhileFalseResid st st' d env c b v
+
 /-- Route `hSWhileFalse` → `execIH_of_exitSim` over `execWhileFalseSim`. -/
 theorem exec_whileFalse_row
-    (hR : ∀ st st' d env c b v, WhileFalseResid st st' d env c b v) :
+    (hR : ∀ st st' d env c b v hC,
+      WhileFalseCaseResid st st' d env c b v hC) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt) (st' : SpecSt) (v : Value)
       (a : EvalE st d env c st' v) (a_1 : v.truthy = false),
       mEvalE st d env c st' v a →
@@ -164,9 +185,11 @@ theorem exec_whileFalse_row
   show ExecIH st d env (.whileStmt c b) st' .normal
   exact execIH_of_exitSim'
     (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
-      (hR st st' d env c b v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
+      (hR st st' d env c b v a a_1 hIH g N A SL φf φc
+        sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
     (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
-      let G := hR st st' d env c b v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE
+      let G := hR st st' d env c b v a a_1 hIH g N A SL φf φc
+        sp r aInterp aStmt aEnv aRet m0 cfg hE
       execWhileFalseSim g N A SL φf φc st st' d env c b v sp r aInterp aStmt aEnv aRet m0
         out0 (ExecS.whileFalse st d env c b st' v a a_1) hIH a_1 G.hslot G.htableStk (G.hGlue out0))
 
@@ -181,7 +204,6 @@ structure IfTrueGeom
     (st st' st'' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : Stmt)
     (e : Option Stmt) (v : Value) (status : Status)
     (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop where
-  hBranch : ExecDispatchIH st' d env t st'' status
   hslot : StmtSlotPinned 3 execArmIf m0
   htableStk : stmtJumpTableBase + 4 * 3 + 4 ≤ SL.lo ∨ sp.toNat ≤ stmtJumpTableBase + 4 * 3
   hmaps : ∀ (φfE φcE : Addr → Nat) (cD : Config),
@@ -197,11 +219,12 @@ structure IfTrueGeom
         ExecArmEntryK g N A SL φf φc st execArmIf sp r aInterp aStmt aEnv aRet
           v8 v9 v18 v19 out0 m0 ment cfg)
       (fun cfg => ∃ (φfE φcE : Addr → Nat) (aThen : BitVec 64)
-          (ment : Mem) (v8 v9 v18 v19 : BitVec 64),
+          (ment : Mem) (v8 v9 v18 v19 liveRA : BitVec 64) (outE : Array String),
         PhiExtends φf φfE st'.store.frames.size ∧
         PhiExtends φc φcE st'.store.closures.size ∧
+        EnvValid st' env ∧
         ExecDispatchReady g N A SL φfE φcE st' t sp r aInterp aThen aEnv aRet
-          v8 v9 v18 v19 out0 m0 ment cfg)
+          v8 v9 v18 v19 outE m0 ment cfg (liveRA := liveRA))
   hW : ExecRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size st'' status sp r aRet m0
 
 /-- The ifTrue residual: `IfTrueGeom` ∀-closed over the ghosts. -/
@@ -213,27 +236,58 @@ def IfTrueResid (st st' st'' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : St
     Vsa.Sim.ExecEntry g N A SL φf φc st d env (.ifStmt c t e) sp r aInterp aStmt aEnv aRet m0 cfg →
     IfTrueGeom g N A SL φf φc st st' st'' d env c t e v status sp r aInterp aStmt aEnv aRet m0
 
+/-- Exact `ifTrue` constructor boundary. -/
+def IfTrueCaseResid
+    (st st' st'' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : Stmt)
+    (e : Option Stmt) (v : Value) (status : Status)
+    (hC : EvalE st d env c st' v) (hB : ExecS st' d env t st'' status) : Prop :=
+  v.truthy = true →
+  mEvalE st d env c st' v hC →
+  mExecS st' d env t st'' status hB →
+  ExecDispatchIH st' d env t st'' status →
+  IfTrueResid st st' st'' d env c t e v status
+
 /-- Route `hSIfTrue` → `execIH_of_exitSim` over `execIfTrueSim`.  The `hGlue` field is
 stated at the per-config `cfg.σ.sailOutput`, matching what `execIfTrueSim` expects
 (its `hGlue` is NOT `out0`-quantified — it fires at the sim's chosen entry output). -/
-theorem exec_ifTrue_row
-    (hR : ∀ st st' st'' d env c t e v status, IfTrueResid st st' st'' d env c t e v status) :
+theorem exec_ifTrue_indexed_row
+    (hR : ∀ st st' st'' d env c t e v status hC hB,
+      IfTrueCaseResid st st' st'' d env c t e v status hC hB) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : Stmt) (e : Option Stmt)
       (st' st'' : SpecSt) (v : Value) (status : Status)
       (a : EvalE st d env c st' v) (a_1 : v.truthy = true) (a_2 : ExecS st' d env t st'' status),
       mEvalE st d env c st' v a →
       mExecS st' d env t st'' status a_2 →
+      ExecDispatchIH st' d env t st'' status →
       mExecS st d env (Stmt.ifStmt c t e) st'' status (ExecS.ifTrue st d env c t e st' st'' v status a a_1 a_2) := by
-  intro st d env c t e st' st'' v status a a_1 a_2 hIH _hBranch
+  intro st d env c t e st' st'' v status a a_1 a_2 hIH hFreshBranch hBranch
   show ExecIH st d env (.ifStmt c t e) st'' status
   exact execIH_of_exitSim'
     (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
-      (hR st st' st'' d env c t e v status g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
+      (hR st st' st'' d env c t e v status a a_2 a_1 hIH hFreshBranch hBranch
+        g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
     (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
-      let G := hR st st' st'' d env c t e v status g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE
+      let G := hR st st' st'' d env c t e v status a a_2 a_1 hIH hFreshBranch hBranch
+        g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE
       execIfTrueSim g N A SL φf φc st st' st'' d env c t e status v
         sp r aInterp aStmt aEnv aRet m0 out0 (ExecS.ifTrue st d env c t e st' st'' v status a a_1 a_2)
-        hIH a_1 G.hBranch G.hslot G.htableStk G.hmaps (G.hGlue out0))
+        hIH a_1 hBranch G.hslot G.htableStk G.hmaps (G.hGlue out0))
+
+theorem exec_ifTrue_row
+    (hRoutes : ExecSRouteFamily)
+    (hR : ∀ st st' st'' d env c t e v status hC hB,
+      IfTrueCaseResid st st' st'' d env c t e v status hC hB) :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : Stmt) (e : Option Stmt)
+      (st' st'' : SpecSt) (v : Value) (status : Status)
+      (a : EvalE st d env c st' v) (a_1 : v.truthy = true)
+      (a_2 : ExecS st' d env t st'' status),
+      mEvalE st d env c st' v a →
+      mExecS st' d env t st'' status a_2 →
+      mExecS st d env (Stmt.ifStmt c t e) st'' status
+        (ExecS.ifTrue st d env c t e st' st'' v status a a_1 a_2) := by
+  intro st d env c t e st' st'' v status a a_1 a_2 hIH hFreshBranch
+  exact exec_ifTrue_indexed_row hR st d env c t e st' st'' v status a a_1 a_2
+    hIH hFreshBranch (hRoutes st' d env t st'' status a_2).dispatch
 
 /-! ## `ifFalse` — symmetric to `ifTrue` (else branch, `bnez` taken) -/
 
@@ -245,7 +299,6 @@ structure IfFalseGeom
     (st st' st'' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t e : Stmt)
     (v : Value) (status : Status)
     (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop where
-  hBranch : ExecDispatchIH st' d env e st'' status
   hslot : StmtSlotPinned 3 execArmIf m0
   htableStk : stmtJumpTableBase + 4 * 3 + 4 ≤ SL.lo ∨ sp.toNat ≤ stmtJumpTableBase + 4 * 3
   hmaps : ∀ (φfE φcE : Addr → Nat) (cD : Config),
@@ -261,11 +314,12 @@ structure IfFalseGeom
         ExecArmEntryK g N A SL φf φc st execArmIf sp r aInterp aStmt aEnv aRet
           v8 v9 v18 v19 out0 m0 ment cfg)
       (fun cfg => ∃ (φfE φcE : Addr → Nat) (aElse : BitVec 64)
-          (ment : Mem) (v8 v9 v18 v19 : BitVec 64),
+          (ment : Mem) (v8 v9 v18 v19 liveRA : BitVec 64) (outE : Array String),
         PhiExtends φf φfE st'.store.frames.size ∧
         PhiExtends φc φcE st'.store.closures.size ∧
+        EnvValid st' env ∧
         ExecDispatchReady g N A SL φfE φcE st' e sp r aInterp aElse aEnv aRet
-          v8 v9 v18 v19 out0 m0 ment cfg)
+          v8 v9 v18 v19 outE m0 ment cfg (liveRA := liveRA))
   hW : ExecRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size st'' status sp r aRet m0
 
 /-- The ifFalse residual: `IfFalseGeom` ∀-closed over the ghosts. -/
@@ -277,25 +331,56 @@ def IfFalseResid (st st' st'' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t e :
     Vsa.Sim.ExecEntry g N A SL φf φc st d env (.ifStmt c t (some e)) sp r aInterp aStmt aEnv aRet m0 cfg →
     IfFalseGeom g N A SL φf φc st st' st'' d env c t e v status sp r aInterp aStmt aEnv aRet m0
 
+/-- Exact `ifFalse` constructor boundary. -/
+def IfFalseCaseResid
+    (st st' st'' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t e : Stmt)
+    (v : Value) (status : Status)
+    (hC : EvalE st d env c st' v) (hB : ExecS st' d env e st'' status) : Prop :=
+  v.truthy = false →
+  mEvalE st d env c st' v hC →
+  mExecS st' d env e st'' status hB →
+  ExecDispatchIH st' d env e st'' status →
+  IfFalseResid st st' st'' d env c t e v status
+
 /-- Route `hSIfFalse` → `execIH_of_exitSim` over `execIfFalseSim`. -/
-theorem exec_ifFalse_row
-    (hR : ∀ st st' st'' d env c t e v status, IfFalseResid st st' st'' d env c t e v status) :
+theorem exec_ifFalse_indexed_row
+    (hR : ∀ st st' st'' d env c t e v status hC hB,
+      IfFalseCaseResid st st' st'' d env c t e v status hC hB) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t e : Stmt)
       (st' st'' : SpecSt) (v : Value) (status : Status)
       (a : EvalE st d env c st' v) (a_1 : v.truthy = false) (a_2 : ExecS st' d env e st'' status),
       mEvalE st d env c st' v a →
       mExecS st' d env e st'' status a_2 →
+      ExecDispatchIH st' d env e st'' status →
       mExecS st d env (Stmt.ifStmt c t (some e)) st'' status (ExecS.ifFalse st d env c t e st' st'' v status a a_1 a_2) := by
-  intro st d env c t e st' st'' v status a a_1 a_2 hIH _hBranch
+  intro st d env c t e st' st'' v status a a_1 a_2 hIH hFreshBranch hBranch
   show ExecIH st d env (.ifStmt c t (some e)) st'' status
   exact execIH_of_exitSim'
     (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
-      (hR st st' st'' d env c t e v status g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
+      (hR st st' st'' d env c t e v status a a_2 a_1 hIH hFreshBranch hBranch
+        g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
     (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
-      let G := hR st st' st'' d env c t e v status g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE
+      let G := hR st st' st'' d env c t e v status a a_2 a_1 hIH hFreshBranch hBranch
+        g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE
       execIfFalseSim g N A SL φf φc st st' st'' d env c t e status v
         sp r aInterp aStmt aEnv aRet m0 out0 (ExecS.ifFalse st d env c t e st' st'' v status a a_1 a_2)
-        hIH a_1 G.hBranch G.hslot G.htableStk G.hmaps (G.hGlue out0))
+        hIH a_1 hBranch G.hslot G.htableStk G.hmaps (G.hGlue out0))
+
+theorem exec_ifFalse_row
+    (hRoutes : ExecSRouteFamily)
+    (hR : ∀ st st' st'' d env c t e v status hC hB,
+      IfFalseCaseResid st st' st'' d env c t e v status hC hB) :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t e : Stmt)
+      (st' st'' : SpecSt) (v : Value) (status : Status)
+      (a : EvalE st d env c st' v) (a_1 : v.truthy = false)
+      (a_2 : ExecS st' d env e st'' status),
+      mEvalE st d env c st' v a →
+      mExecS st' d env e st'' status a_2 →
+      mExecS st d env (Stmt.ifStmt c t (some e)) st'' status
+        (ExecS.ifFalse st d env c t e st' st'' v status a a_1 a_2) := by
+  intro st d env c t e st' st'' v status a a_1 a_2 hIH hFreshBranch
+  exact exec_ifFalse_indexed_row hR st d env c t e st' st'' v status a a_1 a_2
+    hIH hFreshBranch (hRoutes st' d env e st'' status a_2).dispatch
 
 /-! ## `block` — `execBlockSim` (env_new + execSeqLoop + epilogue) -/
 
@@ -332,6 +417,31 @@ structure BlockGeom
         st' status sp r aRet m0)
   hW : ExecRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size st' status sp r aRet m0
 
+/-- Faithful block composition around the indexed physical block-body loop.
+The arm includes `env_new` and loop setup; the epilogue restores the enclosing
+`exec_stmt` frame. -/
+structure BlockIndexedGeom
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' : SpecSt) (d : Nat) (env : Addr) (ss : List Stmt) (status : Status)
+    (store' : Store) (inner : Addr)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop where
+  hArm : Triple
+    (ExecEntry g N A SL φf φc st d env (.block ss)
+      sp r aInterp aStmt aEnv aRet m0)
+    (fun cfg => ∃ (gSeq : (R : Register) → Option (RegisterType R))
+        (φf' φc' : Addr → Nat) (mSeq : Mem),
+      ExecSeqEntryI .blockBody gSeq N A SL φf' φc'
+        ⟨store', st.out⟩ d inner ss (sp - 176#64) aRet mSeq cfg)
+  hEpi : ∀ (gSeq : (R : Register) → Option (RegisterType R))
+      (φf' φc' : Addr → Nat) (mSeq : Mem),
+    Triple
+      (ExecSeqExitI .blockBody gSeq N A SL φf' φc'
+        store'.frames.size store'.closures.size st' status
+        (sp - 176#64) aRet mSeq)
+      (ExecExitD g N A SL φf φc st.store.frames.size
+        st.store.closures.size st' status sp r aRet m0)
+
 /-- The block residual: `BlockGeom` ∀-closed over the ghosts.  `store'`/`inner` come
 from the derivation's `allocFrame`, so they are parameters of the residual. -/
 def BlockResid (st st' : SpecSt) (d : Nat) (env : Addr) (ss : List Stmt) (status : Status)
@@ -342,13 +452,32 @@ def BlockResid (st st' : SpecSt) (d : Nat) (env : Addr) (ss : List Stmt) (status
     Vsa.Sim.ExecEntry g N A SL φf φc st d env (.block ss) sp r aInterp aStmt aEnv aRet m0 cfg →
     -- shape 2 (oracle threading): the recursor's seq sub-IH, handed to the
     -- supplier (the induction's own hypothesis; `SeqSegIH` = the `mExecSeq` body).
-    Vsa.Sim.TermSimAssembly.SeqSegIH { store := store', out := st.out } d st' →
-    BlockGeom g N A SL φf φc st st' d env ss status store' inner sp r aInterp aStmt aEnv aRet m0
+    Vsa.Sim.TermSimAssembly.SeqSegIH { store := store', out := st.out } d inner ss
+      st' status →
+    BlockIndexedGeom g N A SL φf φc st st' d env ss status store' inner
+      sp r aInterp aStmt aEnv aRet m0
+
+/-- Exact block constructor boundary.  Allocation and the indexed sequence IH
+are explicit inputs; the remaining result is only arm/epilogue geometry. -/
+def BlockCaseResid
+    (st st' : SpecSt) (d : Nat) (env : Addr) (ss : List Stmt) (status : Status)
+    (store' : Store) (inner : Addr)
+    (hSeq : ExecSeq { store := store', out := st.out } d inner ss st' status) : Prop :=
+  st.store.allocFrame (some env) = (store', inner) →
+  mExecSeq { store := store', out := st.out } d inner ss st' status hSeq →
+  ∀ (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (cfg : Config),
+    ExecEntry g N A SL φf φc st d env (.block ss)
+      sp r aInterp aStmt aEnv aRet m0 cfg →
+    BlockIndexedGeom g N A SL φf φc st st' d env ss status store' inner
+      sp r aInterp aStmt aEnv aRet m0
 
 /-- Route `hSBlock` → `execIH_of_exitSim` over `execBlockSim`.  The inner `mExecSeq`
 sub-derivation feeds `execSeqLoop` (driven by `hstep`/`hnil`). -/
 theorem exec_block_row
-    (hR : ∀ st st' d env ss status store' inner, BlockResid st st' d env ss status store' inner) :
+    (hR : ∀ st st' d env ss status store' inner hSeq,
+      BlockCaseResid st st' d env ss status store' inner hSeq) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (ss : List Stmt) (store' : Store) (inner : Addr)
       (st' : SpecSt) (status : Status) (a : st.store.allocFrame (some env) = (store', inner))
       (a_1 : ExecSeq { store := store', out := st.out } d inner ss st' status),
@@ -356,15 +485,17 @@ theorem exec_block_row
       mExecS st d env (Stmt.block ss) st' status (ExecS.block st d env ss store' inner st' status a a_1) := by
   intro st d env ss store' inner st' status a a_1 hSeqIH
   show ExecIH st d env (.block ss) st' status
-  exact execIH_of_exitSim'
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
-      (hR st st' d env ss status store' inner g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
-        cfg hE hSeqIH).hW)
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
-      let G := hR st st' d env ss status store' inner g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
-        cfg hE hSeqIH
-      execBlockSim g N A SL φf φc st st' d env ss status store' inner
-        sp r aInterp aStmt aEnv aRet m0 out0 a a_1 G.hstep G.hnil (G.hArm out0) G.hEpi)
+  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hEntry
+  let G := hR st st' d env ss status store' inner a_1 a hSeqIH
+    g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hEntry
+  obtain ⟨cfgS, hsS, gSeq, φf', φc', mSeq, hSeqEntry⟩ := G.hArm cfg hEntry
+  obtain ⟨cfgX, hsX, hSeqExit⟩ :=
+    hSeqIH .blockBody gSeq N A SL φf' φc' (sp - 176#64) aRet mSeq
+      (by trivial) cfgS hSeqEntry
+  obtain ⟨cfgE, hsE, hExit⟩ := G.hEpi gSeq φf' φc' mSeq cfgX hSeqExit
+  exact ⟨cfgE, (hsS.trans hsX).trans hsE, hExit⟩
+
+#print axioms exec_block_row
 
 /-! ## `forStart` — `execForStartSim` (env_new + ExecInit + execForLoopBody) -/
 
@@ -414,15 +545,74 @@ def ForStartResid (st st' st'' : SpecSt) (d : Nat) (env : Addr)
     (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (cfg : Config),
     Vsa.Sim.ExecEntry g N A SL φf φc st d env (.forStmt init cnd step b) sp r aInterp aStmt aEnv aRet m0 cfg →
     -- shape 2 (oracle threading): the recursor's `ForLoop` derivation node
-    -- (`a_2`), handed to the supplier (its `mForLoop` IH is `True`).
+    -- (`a_2`) is retained by the context-indexed loop boundary.
     ForLoop st' d outer cnd step b st'' status →
     ForStartGeom g N A SL φf φc st st' st'' d env init cnd step b status
       store' outer sp r aInterp aStmt aEnv aRet m0
 
+/-- Rebase a widened statement exit from maps chosen for a later store prefix
+to the enclosing statement's entry maps and smaller prefix. -/
+theorem execExitD_rebase
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (φf φc φf' φc' : Addr → Nat) (nf nc nf' nc' : Nat)
+    (st' : SpecSt) (status : Status) (sp r aRet : BitVec 64)
+    (m0 : Mem) (cfg : Config)
+    (hsize : nf ≤ nf' ∧ nc ≤ nc')
+    (hpf : PhiExtends φf φf' nf') (hpc : PhiExtends φc φc' nc')
+    (hExit : ExecExitD g N A SL φf' φc' nf' nc'
+      st' status sp r aRet m0 cfg) :
+    ExecExitD g N A SL φf φc nf nc st' status sp r aRet m0 cfg := by
+  rcases hExit with ⟨hPlain, hMem, φf'', φc'', hpf'', hpc'', hStore⟩
+  refine ⟨?_, hMem, φf'', φc'', ?_, ?_, hStore⟩
+  · exact execExit_extend g N A SL φf φc φf' φc' nf nc nf' nc'
+      st' status sp r aRet m0 m0 cfg
+      (PhiExtends.mono hsize.1 hpf) (PhiExtends.mono hsize.2 hpc) hsize
+      (fun _ _ _ => rfl) hPlain
+  · exact PhiExtends.mono hsize.1 (hpf.trans hpf'')
+  · exact PhiExtends.mono hsize.2 (hpc.trans hpc'')
+
+#print axioms execExitD_rebase
+
+/-- The only constructor-specific machine seam left by the typed `ExecInit` and
+`ForLoop` motives: execute the outer `for` arm through `env_new`, then park at
+the real optional-init boundary. -/
+def ForStartPrefixResid
+    (st st' : SpecSt) (d : Nat) (env : Addr)
+    (init : Option Stmt) (cnd step : Option Expr) (b : Stmt)
+    (store' : Store) (outer : Addr) : Prop :=
+  ∀ (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    Triple
+      (ExecEntry g N A SL φf φc st d env (.forStmt init cnd step b)
+        sp r aInterp aStmt aEnv aRet m0)
+      (fun cfg => ∃ (φf' φc' : Addr → Nat) (ment : Mem) (liveRA : BitVec 64),
+        PhiExtends φf φf' st'.store.frames.size ∧
+        PhiExtends φc φc' st'.store.closures.size ∧
+        ExecInitReady g N A SL φf' φc' ⟨store', st.out⟩ d outer
+          init cnd step b sp r aInterp aStmt (BitVec.ofNat 64 (φf' outer))
+          aRet m0 ment cfg (liveRA := liveRA))
+
+/-- Exact constructor VC reduced to the outer prefix.  The initializer and loop
+are supplied by their typed recursor IHs. -/
+def ForStartCaseResid
+    (st st' st'' : SpecSt) (d : Nat) (env : Addr)
+    (init : Option Stmt) (cnd step : Option Expr) (b : Stmt) (status : Status)
+    (store' : Store) (outer : Addr)
+    (hInit : ExecInit { store := store', out := st.out } d outer init st')
+    (hFor : ForLoop st' d outer cnd step b st'' status) : Prop :=
+  st.store.allocFrame (some env) = (store', outer) →
+  mExecInit { store := store', out := st.out } d outer init st' hInit →
+  mForLoop st' d outer cnd step b st'' status hFor →
+  ForStartPrefixResid st st' d env init cnd step b store' outer
+
 /-- Route `hSForStart` → `execIH_of_exitSim` over `execForStartSim`. -/
 theorem exec_forStart_row
-    (hR : ∀ st st' st'' d env init cnd step b status store' outer,
-      ForStartResid st st' st'' d env init cnd step b status store' outer) :
+    (hR : ∀ st st' st'' d env init cnd step b status store' outer
+      hInit hFor,
+      ForStartCaseResid st st' st'' d env init cnd step b status store' outer
+        hInit hFor) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (init : Option Stmt) (cnd step : Option Expr) (b : Stmt)
       (store' : Store) (outer : Addr) (st' st'' : SpecSt) (status : Status)
       (a : st.store.allocFrame (some env) = (store', outer))
@@ -432,104 +622,153 @@ theorem exec_forStart_row
       mForLoop st' d outer cnd step b st'' status a_2 →
       mExecS st d env (Stmt.forStmt init cnd step b) st'' status
         (ExecS.forStart st d env init cnd step b store' outer st' st'' status a a_1 a_2) := by
-  intro st d env init cnd step b store' outer st' st'' status a a_1 a_2 _hInitIH _hForIH
+  intro st d env init cnd step b store' outer st' st'' status a a_1 a_2 hInitIH hForIH
   show ExecIH st d env (.forStmt init cnd step b) st'' status
-  exact execIH_of_exitSim'
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
-      (hR st st' st'' d env init cnd step b status store' outer
-        g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE a_2).hW)
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
-      let G := hR st st' st'' d env init cnd step b status store' outer
-        g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE a_2
-      execForStartSim g N A SL φf φc st st' st'' d env init cnd step b status store' outer
-        sp r aInterp aStmt aEnv aRet m0 out0 a a_1 a_2 G.hstep G.hForIH (G.hArm out0) G.hEpi)
+  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hEntry
+  obtain ⟨cfgI, hsI, φf', φc', ment, liveRA, hpf, hpc, hReadyI⟩ :=
+    hR st st' st'' d env init cnd step b status store' outer a_1 a_2
+      a hInitIH hForIH
+      g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hEntry
+  obtain ⟨cfgL, hsL, hReadyL⟩ :=
+    hInitIH cnd step b g N A SL φf' φc' sp r aInterp aStmt
+      (BitVec.ofNat 64 (φf' outer)) aRet m0 ment cfgI ⟨liveRA, hReadyI⟩
+  obtain ⟨cfgE, hsE, hExit⟩ :=
+    hForIH init g N A SL φf' φc' sp r aInterp aStmt
+      (BitVec.ofNat 64 (φf' outer)) aRet m0 cfgL.σ.mem cfgL hReadyL
+  have hInitSize : StoreLe store' st'.store := by
+    cases a_1 with
+    | none => exact ⟨Nat.le_refl _, Nat.le_refl _⟩
+    | some =>
+        simpa [StoreLe] using execS_store_mono (by assumption)
+  have hSize : StoreLe st.store st'.store :=
+    (StoreLe.allocFrame a).trans hInitSize
+  exact ⟨cfgE, (hsI.trans hsL).trans hsE,
+    execExitD_rebase g N A SL φf φc φf' φc'
+      st.store.frames.size st.store.closures.size
+      st'.store.frames.size st'.store.closures.size st'' status sp r aRet
+      m0 cfgE hSize hpf hpc hExit⟩
 
-/-! ## `whileBreak` / `whileRet` / `whileLoop` — ONE geom, ONE sim, three rows
+#print axioms exec_forStart_row
 
-`execWhileSim` (`ExecWhile2.lean`) unifies ALL FOUR `whileStmt` constructors into ONE
-`Triple (ExecEntry) (ExecExit)`, dispatching on the `ExecS` derivation, taking the
-per-iteration `ExecWhileStep` oracle `hstep` (the loop-body machine chain — the
-genuine open content per the loop-fanout ledger) and the recursive sub-`while` IH
-`hWhileIH` (the recursor's `mExecS = ExecIH` for the `whileLoop` premise, `.1`-mapped
-`ExecExitD → ExecExit`).  ONE `WhileGeom` + the combinator serve all three recursive/
-exit constructors. -/
+/-! ## `whileBreak` / `whileRet` / `whileLoop` -/
 
-/-- `execWhileSim`'s residual bundle: the `ExecWhileStep` oracle + the recursive
-sub-`while` IH; the widener upgrades the unified `ExecExit`. -/
-structure WhileGeom
+/-- Exact nonrecursive iteration plus the ordinary exit widener. -/
+structure WhileExitCaseGeom
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st st' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt) (status : Status)
+    (st stCond st' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt)
+    (v : Value) (bodyStatus loopStatus : Status)
     (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop where
-  hstep : ∀ (φf₀ φc₀ : Addr → Nat) (stM stMid stFin : SpecSt)
-      (bodyStatus loopStatus : Status) (m00 : Mem) (out00 : Array String),
-      ExecWhileStep g N A SL φf₀ φc₀ stM d env c b sp r aInterp aStmt aEnv aRet m00 out00
-        stMid stFin bodyStatus loopStatus
-  hWhileIH : ∀ (φf' φc' : Addr → Nat) (st'' st''' : SpecSt)
-      (status' : Status) (m0' : Mem) (out0' : Array String),
-      ExecS st'' d env (.whileStmt c b) st''' status' →
-      Triple
-        (fun cfg => ExecEntry g N A SL φf' φc' st'' d env (.whileStmt c b)
-          sp r aInterp aStmt aEnv aRet m0' cfg ∧ cfg.σ.sailOutput = out0')
-        (ExecExit g N A SL φf' φc' st''.store.frames.size st''.store.closures.size
-          st''' status' sp r aRet m0')
-  hW : ExecRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size st' status sp r aRet m0
+  geom : ExecWhileStepGeomI g N A SL φf φc st stCond st' st' d env c b v
+    bodyStatus loopStatus sp r aInterp aStmt aEnv aRet m0
+  widen : ExecRecWiden g N A SL φf φc st.store.frames.size
+    st.store.closures.size st' loopStatus sp r aRet m0
 
-/-- The while-family residual: `WhileGeom` ∀-closed over the ghosts. -/
-def WhileResid (st st' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt) (status : Status) : Prop :=
+/-- Exact continuing iteration.  The recursive IH is applied separately at
+the status-indexed `0x80004034` in-frame boundary. -/
+structure WhileLoopCaseGeom
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st stCond stMid stFin : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt)
+    (v : Value) (bodyStatus finalStatus : Status)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop where
+  geom : ExecWhileStepGeomI g N A SL φf φc st stCond stMid stFin d env c b v
+    bodyStatus finalStatus sp r aInterp aStmt aEnv aRet m0
+
+def WhileBreakCaseResid
+    (st stC stB : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt)
+    (v : Value) (hC : EvalE st d env c stC v)
+    (hB : ExecS stC d env b stB Status.brk) : Prop :=
+  v.truthy = true →
+  mEvalE st d env c stC v hC →
+  mExecS stC d env b stB .brk hB →
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (cfg : Config),
-    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.whileStmt c b) sp r aInterp aStmt aEnv aRet m0 cfg →
-    -- shape 2 (oracle threading): the recursor's `ExecS` derivation of the
-    -- whole `whileStmt` node, handed to the supplier.
-    ExecS st d env (.whileStmt c b) st' status →
-    WhileGeom g N A SL φf φc st st' d env c b status sp r aInterp aStmt aEnv aRet m0
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    WhileExitCaseGeom g N A SL φf φc st stC stB d env c b v .brk .normal
+      sp r aInterp aStmt aEnv aRet m0
 
-/-- Shared while-family dispatcher: given the residual and an `ExecS` derivation of
-`.whileStmt c b`, produce the `ExecIH`.  All three recursive/exit rows are one
-instantiation. -/
-theorem execWhileIH_of_resid
-    {st st' : SpecSt} {d : Nat} {env : Addr} {c : Expr} {b : Stmt} {status : Status}
-    (hExec : ExecS st d env (.whileStmt c b) st' status)
-    (hR : WhileResid st st' d env c b status) :
-    ExecIH st d env (.whileStmt c b) st' status :=
-  execIH_of_exitSim'
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
-      (hR g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE hExec).hW)
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
-      let G := hR g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE hExec
-      execWhileSim g N A SL d env c b sp r aInterp aStmt aEnv aRet G.hstep G.hWhileIH
-        φf φc st st' status m0 out0 hExec)
+def WhileRetCaseResid
+    (st stC stB : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt)
+    (v rv : Value) (hC : EvalE st d env c stC v)
+    (hB : ExecS stC d env b stB (.ret rv)) : Prop :=
+  v.truthy = true →
+  mEvalE st d env c stC v hC →
+  mExecS stC d env b stB (.ret rv) hB →
+  ∀ (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    WhileExitCaseGeom g N A SL φf φc st stC stB d env c b v (.ret rv) (.ret rv)
+      sp r aInterp aStmt aEnv aRet m0
 
-/-- Route `hSWhileBreak` → `execWhileIH_of_resid`. -/
+def WhileLoopCaseResid
+    (st stC stB stR : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt)
+    (v : Value) (bodyStatus finalStatus : Status)
+    (hC : EvalE st d env c stC v)
+    (hB : ExecS stC d env b stB bodyStatus)
+    (hRest : ExecS stB d env (.whileStmt c b) stR finalStatus) : Prop :=
+  v.truthy = true →
+  (bodyStatus = .normal ∨ bodyStatus = .cont) →
+  mEvalE st d env c stC v hC →
+  mExecS stC d env b stB bodyStatus hB →
+  mExecS stB d env (.whileStmt c b) stR finalStatus hRest →
+  ExecWhileArmIH stB d env c b stR finalStatus →
+  ∀ (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    WhileLoopCaseGeom g N A SL φf φc st stC stB stR d env c b v
+      bodyStatus finalStatus sp r aInterp aStmt aEnv aRet m0
+
+/-- Route `hSWhileBreak` through one exact exit iteration. -/
 theorem exec_whileBreak_row
-    (hR : ∀ st st' d env c b status, WhileResid st st' d env c b status) :
+    (hR : ∀ st stC stB d env c b v hC hB,
+      WhileBreakCaseResid st stC stB d env c b v hC hB) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt) (st' st'' : SpecSt) (v : Value)
       (a : EvalE st d env c st' v) (a_1 : v.truthy = true) (a_2 : ExecS st' d env b st'' Status.brk),
       mEvalE st d env c st' v a →
       mExecS st' d env b st'' Status.brk a_2 →
       mExecS st d env (Stmt.whileStmt c b) st'' Status.normal (ExecS.whileBreak st d env c b st' st'' v a a_1 a_2) := by
-  intro st d env c b st' st'' v a a_1 a_2 _hCond _hBody
-  exact execWhileIH_of_resid (ExecS.whileBreak st d env c b st' st'' v a a_1 a_2)
-    (hR st st'' d env c b .normal)
+  intro st d env c b st' st'' v a a_1 a_2 hCond hBody
+  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hEntry
+  let G := hR st st' st'' d env c b v a a_2 a_1 hCond hBody
+    g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  have hstep := execWhileStepI_of_geom g N A SL φf φc st st' st'' st'' d env
+    c b v .brk .normal sp r aInterp aStmt aEnv aRet m0 hCond hBody G.geom
+  obtain ⟨cfgE, hsE, hExit⟩ :=
+    execWhileExitI g N A SL φf φc st st'' d env c b .brk .normal
+      sp r aInterp aStmt aEnv aRet m0 (by rintro (h | h) <;> cases h)
+      hstep cfg hEntry
+  exact ⟨cfgE, hsE, execExitD_of_execExit_rec hExit G.widen⟩
 
 /-- Route `hSWhileRet` → `execWhileIH_of_resid`. -/
 theorem exec_whileRet_row
-    (hR : ∀ st st' d env c b status, WhileResid st st' d env c b status) :
+    (hR : ∀ st stC stB d env c b v rv hC hB,
+      WhileRetCaseResid st stC stB d env c b v rv hC hB) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt) (st' st'' : SpecSt) (v rv : Value)
       (a : EvalE st d env c st' v) (a_1 : v.truthy = true) (a_2 : ExecS st' d env b st'' (Status.ret rv)),
       mEvalE st d env c st' v a →
       mExecS st' d env b st'' (Status.ret rv) a_2 →
       mExecS st d env (Stmt.whileStmt c b) st'' (Status.ret rv) (ExecS.whileRet st d env c b st' st'' v rv a a_1 a_2) := by
-  intro st d env c b st' st'' v rv a a_1 a_2 _hCond _hBody
-  exact execWhileIH_of_resid (ExecS.whileRet st d env c b st' st'' v rv a a_1 a_2)
-    (hR st st'' d env c b (.ret rv))
+  intro st d env c b st' st'' v rv a a_1 a_2 hCond hBody
+  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hEntry
+  let G := hR st st' st'' d env c b v rv a a_2 a_1 hCond hBody
+    g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  have hstep := execWhileStepI_of_geom g N A SL φf φc st st' st'' st'' d env
+    c b v (.ret rv) (.ret rv) sp r aInterp aStmt aEnv aRet m0
+    hCond hBody G.geom
+  obtain ⟨cfgE, hsE, hExit⟩ :=
+    execWhileExitI g N A SL φf φc st st'' d env c b (.ret rv) (.ret rv)
+      sp r aInterp aStmt aEnv aRet m0 (by rintro (h | h) <;> cases h)
+      hstep cfg hEntry
+  exact ⟨cfgE, hsE, execExitD_of_execExit_rec hExit G.widen⟩
 
 /-- Route `hSWhileLoop` → `execWhileIH_of_resid`.  The recursive sub-`while` IH
 (`a_4`'s motive) is carried by `WhileGeom.hWhileIH`. -/
-theorem exec_whileLoop_row
-    (hR : ∀ st st' d env c b status, WhileResid st st' d env c b status) :
+theorem exec_whileLoop_indexed_row
+    (hR : ∀ st stC stB stR d env c b v bodyStatus finalStatus
+      hC hB hRest,
+      WhileLoopCaseResid st stC stB stR d env c b v bodyStatus finalStatus
+        hC hB hRest) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt) (st' st'' st''' : SpecSt) (v : Value)
       (status status' : Status)
       (a : EvalE st d env c st' v) (a_1 : v.truthy = true) (a_2 : ExecS st' d env b st'' status)
@@ -538,12 +777,44 @@ theorem exec_whileLoop_row
       mEvalE st d env c st' v a →
       mExecS st' d env b st'' status a_2 →
       mExecS st'' d env (Stmt.whileStmt c b) st''' status' a_4 →
+      ExecWhileArmIH st'' d env c b st''' status' →
       mExecS st d env (Stmt.whileStmt c b) st''' status'
         (ExecS.whileLoop st d env c b st' st'' st''' v status status' a a_1 a_2 a_3 a_4) := by
-  intro st d env c b st' st'' st''' v status status' a a_1 a_2 a_3 a_4 _hCond _hBody _hRest
-  exact execWhileIH_of_resid
-    (ExecS.whileLoop st d env c b st' st'' st''' v status status' a a_1 a_2 a_3 a_4)
-    (hR st st''' d env c b status')
+  intro st d env c b st' st'' st''' v status status' a a_1 a_2 a_3 a_4
+    hCond hBody hRest hRestArm
+  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hEntry
+  let G := hR st st' st'' st''' d env c b v status status' a a_2 a_4
+    a_1 a_3 hCond hBody hRest hRestArm
+    g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  have hstep := execWhileStepI_of_geom g N A SL φf φc st st' st'' st''' d env
+    c b v status status' sp r aInterp aStmt aEnv aRet m0
+    hCond hBody G.geom
+  exact execWhileLoopI g N A SL φf φc st st' st'' st''' d env c b v
+    status status' sp r aInterp aStmt aEnv aRet m0 a a_2 a_3 a_4
+    hstep hRestArm cfg hEntry
+
+theorem exec_whileLoop_row
+    (hRoutes : ExecSRouteFamily)
+    (hR : ∀ st stC stB stR d env c b v bodyStatus finalStatus
+      hC hB hRest,
+      WhileLoopCaseResid st stC stB stR d env c b v bodyStatus finalStatus
+        hC hB hRest) :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt)
+      (st' st'' st''' : SpecSt) (v : Value) (status status' : Status)
+      (a : EvalE st d env c st' v) (a_1 : v.truthy = true)
+      (a_2 : ExecS st' d env b st'' status)
+      (a_3 : status = Status.normal ∨ status = Status.cont)
+      (a_4 : ExecS st'' d env (Stmt.whileStmt c b) st''' status'),
+      mEvalE st d env c st' v a →
+      mExecS st' d env b st'' status a_2 →
+      mExecS st'' d env (Stmt.whileStmt c b) st''' status' a_4 →
+      mExecS st d env (Stmt.whileStmt c b) st''' status'
+        (ExecS.whileLoop st d env c b st' st'' st''' v status status'
+          a a_1 a_2 a_3 a_4) := by
+  intro st d env c b st' st'' st''' v status status' a a_1 a_2 a_3 a_4
+    hCond hBody hRest
+  exact exec_whileLoop_indexed_row hR st d env c b st' st'' st''' v status status'
+    a a_1 a_2 a_3 a_4 hCond hBody hRest
+    ((hRoutes st'' d env (.whileStmt c b) st''' status' a_4).whileArm c b rfl)
 
 end Vsa.Sim.Rows
-

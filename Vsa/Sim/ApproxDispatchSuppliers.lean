@@ -208,11 +208,13 @@ structure ApproxArmResid
     LandedN 1 c (fun c' => EEntry c' st d env f)
   callArgs : ∀ (c : Config) (st st' : SpecSt) (d : Nat) (env : Addr) (f : Expr)
     (args : List Expr) (fv : Value),
-    EvalE st d env f st' fv → EEntry c st d env (.call f args) →
+    EvalE st d env f st' fv → args.length ≤ maxArgs →
+    EEntry c st d env (.call f args) →
     LandedN 1 c (fun c' => AEntry c' st' d env args)
   callC : ∀ (c : Config) (st st' st'' : SpecSt) (d : Nat) (env : Addr) (f : Expr)
     (args : List Expr) (fv : Value) (vs : List Value),
-    EvalE st d env f st' fv → EvalArgs st' d env args st'' vs →
+    EvalE st d env f st' fv → args.length ≤ maxArgs →
+    EvalArgs st' d env args st'' vs →
     EEntry c st d env (.call f args) →
     LandedN 1 c (fun c' => CEntry c' st'' d fv vs)
   ------------------------------------------------------------------ ArgsApprox

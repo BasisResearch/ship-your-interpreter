@@ -274,6 +274,7 @@ theorem scan_c60_load (g : (R : Register) → Option (RegisterType R))
       c'.σ.regs.get? Register.x1 = some r ∧
       c'.σ.mem = m0 ∧ GoodState c'.σ ∧ c'.tick < 2 ∧
       (∃ v, c'.σ.regs.get? Register.minstret = some v) ∧
+      c'.σ.sailOutput = c.σ.sailOutput ∧
       (∀ R : Register, AbiPreserved R = true → c'.σ.regs.get? R = g R) := by
   obtain ⟨vmi, hmi⟩ := hSt.minstret
   -- cursor address arithmetic
@@ -346,7 +347,8 @@ theorem scan_c60_load (g : (R : Register) → Option (RegisterType R))
   -- minstret defined
   obtain ⟨vmi', hmi'⟩ := obs_alu_minstret hobs
   refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact hstep, hpc', hx10', hx19', hra',
-    by rw [hmem']; exact hSt.mem, hG', hi', ⟨vmi', hmi'⟩, ?_⟩
+    by rw [hmem']; exact hSt.mem, hG', hi', ⟨vmi', hmi'⟩,
+    by rw [hobs.out, sailOutput_sigmaPost_alu], ?_⟩
   -- ghost tie: ALU writes only x10 (∉ AbiPreserved); other AbiPreserved regs preserved
   intro R hR
   have hnws : NotWrittenStrcmp R := notWrittenStrcmp_of_abiPreserved R hR
@@ -430,6 +432,31 @@ From `AtHead` (`ScanSt` at the test PC) with `i = count` (guard failed), the `c5
 This is a SINGLE `site_80002c5c_taken_eg2` step; fully verified here and used to
 discharge the head-exit obligation of the loop assembly. -/
 
+/-- Full machine carrier at the exhausted-frame exit.  Unlike the old
+`ScanExit` miss branch, this retains the state needed to load `env->parent` and
+take the chain backedge. -/
+structure ScanMissSt (g : (R : Register) → Option (RegisterType R))
+    (env name out count pn r sp : BitVec 64)
+    (f : Vsa.While.Frame) (nameStr : String) (N : NativeAddrs)
+    (φf φc : Vsa.While.Addr → Nat) (m0 : Mem) (c : Config) : Prop where
+  good : GoodState c.σ
+  loadedG : Env_getLoaded c.σ.mem
+  loadedS : StrcmpLoaded c.σ.mem
+  mem : c.σ.mem = m0
+  pc : c.σ.regs.get? Register.PC = some (0x80002cc4#64 : BitVec 64)
+  env4 : c.σ.regs.get? Register.x20 = some env
+  name3 : c.σ.regs.get? Register.x19 = some name
+  out5 : c.σ.regs.get? Register.x21 = some out
+  count2 : c.σ.regs.get? Register.x18 = some count
+  ra : c.σ.regs.get? Register.x1 = some r
+  sp2 : c.σ.regs.get? Register.x2 = some sp
+  minstret : ∃ v, c.σ.regs.get? Register.minstret = some v
+  tick : c.tick < 2
+  frame : FrameRepr m0 N φf φc env.toNat f
+  names : ScanNames m0 pn.toNat name nameStr f
+  count_eq : count.toNat = f.vars.length
+  ghost : ∀ R : Register, AbiPreserved R = true → c.σ.regs.get? R = g R
+
 /-- **Head-exit (verified).** From `AtHead` with `i = count` and all scanned names
 differing, one `beq`-taken step lands the scan-exhausted exit `0x80002cc4` with all
 names differing. -/
@@ -443,7 +470,8 @@ theorem scan_head_exit (g : (R : Register) → Option (RegisterType R))
     (hcnt : f.vars.length < 2^64) :
     ∃ c', Steps c c' ∧
       (∀ j, (hj : j < f.vars.length) → f.vars[j].1 ≠ nameStr) ∧
-      c'.σ.regs.get? Register.PC = some (0x80002cc4#64 : BitVec 64) ∧ GoodState c'.σ := by
+      ScanMissSt g env name out count pn r sp f nameStr N φf φc m0 c' ∧
+      c'.σ.sailOutput = c.σ.sailOutput := by
   obtain ⟨vmi, hmi⟩ := hSt.minstret
   have hpc : c.σ.regs.get? Register.PC = some (0x80002c5c#64 : BitVec 64) := hSt.pc
   have hbeq : ((BitVec.ofNat 64 i) == count) = true := by
@@ -461,10 +489,44 @@ theorem scan_head_exit (g : (R : Register) → Option (RegisterType R))
     obs_btaken_pc hobs
   have htgteq : (0x80002c5c#64 : BitVec 64) + sign_extend (m := 64) (0x0068#13)
       = (0x80002cc4#64 : BitVec 64) := by decide
-  refine ⟨⟨σ', i', c.steps + 1⟩, by cases c; exact Steps.single hstep, ?_, ?_, hG'⟩
+  let c' : Config := ⟨σ', i', c.steps + 1⟩
+  have carry : ∀ (R : Register) (w : RegisterType R),
+      (Register.minstret == R) = false → (Register.PC == R) = false →
+      (Register.nextPC == R) = false → (Register.minstret_increment == R) = false →
+      (Register.mcycle == R) = false → (Register.mtime == R) = false →
+      (Register.mip == R) = false → c.σ.regs.get? R = some w → σ'.regs.get? R = some w := by
+    intro R w h1 h2 h4 h5 hmc hmt hmip hR
+    exact obs_btaken_other hobs R hmc hmt hmip h1 h2 h4 h5 hR
+  have hmem0 : σ'.mem = m0 := by rw [hmem']; exact hSt.mem
+  have hpcOut : σ'.regs.get? Register.PC = some (0x80002cc4#64 : BitVec 64) := by
+    rw [hpc', htgteq]
+  obtain ⟨vmi', hmi'⟩ := obs_btaken_minstret hobs
+  refine ⟨c', by cases c; exact Steps.single hstep, ?_, ?_, ?_⟩
   · intro j hj
     exact hfm j hj (by omega)
-  · rw [hpc', htgteq]
+  · refine
+      { good := hG', loadedG := ?_, loadedS := ?_, mem := hmem0, pc := hpcOut,
+        env4 := carry Register.x20 env (by decide) (by decide) (by decide) (by decide)
+          (by decide) (by decide) (by decide) hSt.env4,
+        name3 := carry Register.x19 name (by decide) (by decide) (by decide) (by decide)
+          (by decide) (by decide) (by decide) hSt.name3,
+        out5 := carry Register.x21 out (by decide) (by decide) (by decide) (by decide)
+          (by decide) (by decide) (by decide) hSt.out5,
+        count2 := carry Register.x18 count (by decide) (by decide) (by decide) (by decide)
+          (by decide) (by decide) (by decide) hSt.count2,
+        ra := carry Register.x1 r (by decide) (by decide) (by decide) (by decide)
+          (by decide) (by decide) (by decide) hSt.ra,
+        sp2 := carry Register.x2 sp (by decide) (by decide) (by decide) (by decide)
+          (by decide) (by decide) (by decide) hSt.sp2,
+        minstret := ⟨vmi', hmi'⟩, tick := hi', frame := hSt.frame,
+        names := hSt.names, count_eq := hSt.count_eq, ghost := ?_ }
+    · rw [hmem0]; exact hSt.mem ▸ hSt.loadedG
+    · rw [hmem0]; exact hSt.mem ▸ hSt.loadedS
+    · intro R hR
+      have hn := notWrittenStrcmp_of_abiPreserved R hR
+      rw [sframe_btaken hobs R hn]
+      exact hSt.ghost R hR
+  · rw [hobs.out, sailOutput_sigmaPost_branch_taken]
 
 /-! ## 6. The scan-loop invariant, guard, and the disjunctive-exit triple
 
@@ -495,7 +557,7 @@ def ScanInv (g : (R : Register) → Option (RegisterType R))
       c.σ.regs.get? Register.PC = some (0x80002c70#64 : BitVec 64) ∧ GoodState c.σ) ∨
   -- AtMiss: scan exhausted, all names differ
   ((∀ j, (hj : j < f.vars.length) → f.vars[j].1 ≠ nameStr) ∧
-      c.σ.regs.get? Register.PC = some (0x80002cc4#64 : BitVec 64) ∧ GoodState c.σ)
+      ScanMissSt g env name out count pn r sp f nameStr N φf φc m0 c)
 
 /-- Loop guard: at the test PC with the scan not yet exhausted. -/
 def ScanB (g : (R : Register) → Option (RegisterType R))
@@ -506,12 +568,15 @@ def ScanB (g : (R : Register) → Option (RegisterType R))
       (∀ j, (hj : j < f.vars.length) → j < i → f.vars[j].1 ≠ nameStr) ∧ i < f.vars.length
 
 /-- The disjunctive exit predicate: either the HIT block or the scan-exhausted exit. -/
-def ScanExit (_env : BitVec 64) (f : Vsa.While.Frame) (nameStr : String) (c : Config) : Prop :=
+def ScanExit (g : (R : Register) → Option (RegisterType R))
+    (env name out count pn r sp : BitVec 64) (f : Vsa.While.Frame)
+    (nameStr : String) (N : NativeAddrs) (φf φc : Vsa.While.Addr → Nat)
+    (m0 : Mem) (c : Config) : Prop :=
   (∃ i, ∃ (hi : i < f.vars.length), f.vars[i].1 = nameStr ∧
       (∀ j, (hj : j < f.vars.length) → j < i → f.vars[j].1 ≠ nameStr) ∧
       c.σ.regs.get? Register.PC = some (0x80002c70#64 : BitVec 64) ∧ GoodState c.σ) ∨
   ((∀ j, (hj : j < f.vars.length) → f.vars[j].1 ≠ nameStr) ∧
-      c.σ.regs.get? Register.PC = some (0x80002cc4#64 : BitVec 64) ∧ GoodState c.σ)
+      ScanMissSt g env name out count pn r sp f nameStr N φf φc m0 c)
 
 /-- **`env_get` SCAN-LOOP disjunctive triple (one frame).**  From the scan-loop
 invariant `ScanInv`, the machine reaches the disjunctive exit `ScanExit` (HIT-block
@@ -537,7 +602,7 @@ theorem env_get_scan_spec (g : (R : Register) → Option (RegisterType R))
                 ScanB g env name out count pn r sp f nameStr N φf φc m0 c ∧ ScanMu c = n)
       (fun c => ScanInv g env name out count pn r sp f nameStr N φf φc m0 c ∧ ScanMu c < n)) :
     Triple (ScanInv g env name out count pn r sp f nameStr N φf φc m0)
-           (ScanExit env f nameStr) := by
+           (ScanExit g env name out count pn r sp f nameStr N φf φc m0) := by
   have hloop := Triple.loop
     (I := ScanInv g env name out count pn r sp f nameStr N φf φc m0)
     (B := ScanB g env name out count pn r sp f nameStr N φf φc m0) ScanMu hbody
@@ -553,9 +618,9 @@ theorem env_get_scan_spec (g : (R : Register) → Option (RegisterType R))
     have hile := hSt.ile
     have hnlt : ¬ i < f.vars.length := fun hlt => hnB ⟨i, hSt, hfm, hlt⟩
     have hie : i = f.vars.length := by omega
-    obtain ⟨c', hsteps, hall, hpc', hG'⟩ :=
+    obtain ⟨c', hsteps, hall, hMiss', _hout⟩ :=
       scan_head_exit g env name out count pn r sp i f nameStr N φf φc m0 c hSt hfm hie hcnt
-    exact ⟨c', hsteps, Or.inr ⟨hall, hpc', hG'⟩⟩
+    exact ⟨c', hsteps, Or.inr ⟨hall, hMiss'⟩⟩
   · exact ⟨c, .refl c, Or.inl hHit⟩
   · exact ⟨c, .refl c, Or.inr hMiss⟩
 

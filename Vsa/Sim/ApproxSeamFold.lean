@@ -237,13 +237,15 @@ structure ApproxDispatch : Prop where
   ⇒ 1 step to the arg-list entry `AEntry` at `st'`. -/
   callArgs : ∀ (c : Config) (st st' : SpecSt) (d : Nat) (env : Addr) (f : Expr)
     (args : List Expr) (fv : Value),
-    EvalE st d env f st' fv → EEntry c st d env (.call f args) →
+    EvalE st d env f st' fv → args.length ≤ maxArgs →
+    EEntry c st d env (.call f args) →
     LandedN 1 c (fun c' => AEntry c' st' d env args)
   /-- `EApprox.callC`: `(.call f args)` entry with completed `f`-eval and
   `args`-eval to `st''` ⇒ 1 step to the callee `CEntry` for `(fv, vs)`. -/
   callC : ∀ (c : Config) (st st' st'' : SpecSt) (d : Nat) (env : Addr) (f : Expr)
     (args : List Expr) (fv : Value) (vs : List Value),
-    EvalE st d env f st' fv → EvalArgs st' d env args st'' vs →
+    EvalE st d env f st' fv → args.length ≤ maxArgs →
+    EvalArgs st' d env args st'' vs →
     EEntry c st d env (.call f args) →
     LandedN 1 c (fun c' => CEntry c' st'' d fv vs)
   ------------------------------------------------------------------ ArgsApprox
@@ -485,11 +487,11 @@ theorem allLB (D : ApproxDispatch EEntry AEntry CEntry SEntry FEntry SqEntry) :
       | callF n st d env f args h =>
         exact divg_step (D.callF c st d env f args hE)
           (fun c' hc' => (ih n (by omega)).eLB st d env f h c' hc')
-      | callArgs n st d env f args st' fv hEv h =>
-        exact divg_step (D.callArgs c st st' d env f args fv hEv hE)
+      | callArgs n st d env f args st' fv hEv hbound h =>
+        exact divg_step (D.callArgs c st st' d env f args fv hEv hbound hE)
           (fun c' hc' => (ih n (by omega)).aLB st' d env args h c' hc')
-      | callC n st d env f args st' st'' fv vs hEv hEa h =>
-        exact divg_step (D.callC c st st' st'' d env f args fv vs hEv hEa hE)
+      | callC n st d env f args st' st'' fv vs hEv hbound hEa h =>
+        exact divg_step (D.callC c st st' st'' d env f args fv vs hEv hbound hEa hE)
           (fun c' hc' => (ih n (by omega)).cLB st'' d fv vs h c' hc')
     ------------------------------------------------------------------ ArgsApprox
     · -- ArgsApprox n

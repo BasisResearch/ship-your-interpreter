@@ -190,6 +190,13 @@ theorem valHeader_read64_off16 {P : Nat → Prop} {a : Nat}
     (hhdr : ∀ k, valHeader a k → P k) : ∀ k, k < 8 → P (a + 16 + k) :=
   fun k hk => hhdr _ ⟨by omega, by omega⟩
 
+/-- Exact indirect byte footprint of one semantic value. -/
+def ValuePayloadCovered (P : Nat → Prop) (m : Mem) (a : Nat) : Value → Prop
+  | .str s => ∀ p, read64 m (a + 8) = some p → ∀ k, k ≤ s.length → P (p + k)
+  | .native f => ∀ p, read64 m (a + 8) = some p →
+      ∀ k, k ≤ (nativeName f).length → P (p + k)
+  | _ => True
+
 /-- **`ValueRepr` survives an `AgreeP`** whose footprint `P` covers the 24-byte
 header and every string byte the value dereferences.
 
@@ -202,8 +209,7 @@ header and every string byte the value dereferences.
 theorem valueRepr_agreeP {P : Nat → Prop} {m m' : Mem} (h : AgreeP P m m')
     {N : NativeAddrs} {φc : Addr → Nat} {a : Nat} {v : Value}
     (hhdr : ∀ k, valHeader a k → P k)
-    (hstr : ∀ (p : Nat) (s : String), read64 m (a + 8) = some p →
-      (∀ k, k ≤ s.length → P (p + k)))
+    (hstr : ValuePayloadCovered P m a v)
     (hv : ValueRepr m N φc a v) : ValueRepr m' N φc a v := by
   cases v with
   | null =>
@@ -224,7 +230,7 @@ theorem valueRepr_agreeP {P : Nat → Prop} {m m' : Mem} (h : AgreeP P m m')
     obtain ⟨h0, p, hp, hpne, hcstr⟩ := hv
     refine ⟨by rw [← read32_agreeP h (valHeader_read32 hhdr)]; exact h0,
       p, by rw [← read64_agreeP h (valHeader_read64_off8 hhdr)]; exact hp, hpne, ?_⟩
-    exact cstring_agreeP h hcstr (hstr p s hp)
+    exact cstring_agreeP h hcstr (hstr p hp)
   | closure ca =>
     simp only [ValueRepr] at hv ⊢
     obtain ⟨h0, h8, hne⟩ := hv
@@ -236,7 +242,7 @@ theorem valueRepr_agreeP {P : Nat → Prop} {m m' : Mem} (h : AgreeP P m m')
     refine ⟨by rw [← read32_agreeP h (valHeader_read32 hhdr)]; exact h0,
       ⟨p, by rw [← read64_agreeP h (valHeader_read64_off8 hhdr)]; exact hp, ?_⟩,
       by rw [← read64_agreeP h (valHeader_read64_off16 hhdr)]; exact h16⟩
-    exact cstring_agreeP h hcstr (hstr p _ hp)
+    exact cstring_agreeP h hcstr (hstr p hp)
 
 /-! ## `ClosureRepr` footprint and survival
 
@@ -299,8 +305,7 @@ theorem frameRepr_agreeP {P : Nat → Prop} {m m' : Mem} (h : AgreeP P m m')
     -- inner value strings `[pval, pval + name.length]` for each value slot
     (hvalstr : ∀ pn pv, read64 m (e + 8) = some pn → read64 m (e + 16) = some pv →
       ∀ i, (hi : i < f.vars.length) →
-        ∀ (pval : Nat) (s : String), read64 m (pv + 24 * i + 8) = some pval →
-          (∀ k, k ≤ s.length → P (pval + k)))
+        ValuePayloadCovered P m (pv + 24 * i) f.vars[i].2)
     (hf : FrameRepr m N φf φc e f) : FrameRepr m' N φf φc e f := by
   obtain ⟨hcount, ⟨cap, hcap, hcaple⟩, ⟨pn, pv, hpn, hpv, hbind⟩, hpar⟩ := hf
   refine ⟨?_, ⟨cap, ?_, hcaple⟩, ⟨pn, pv, ?_, ?_, ?_⟩, ?_⟩
@@ -314,7 +319,7 @@ theorem frameRepr_agreeP {P : Nat → Prop} {m m' : Mem} (h : AgreeP P m m')
     refine ⟨⟨qn, ?_, ?_⟩, ?_⟩
     · rw [← read64_agreeP h hnameslot]; exact hqn
     · exact cstring_agreeP h hqnstr (hnames pn pv hpn hpv i hi qn hqn)
-    · exact valueRepr_agreeP h hvalhdr (fun pval s hpval => hvalstr pn pv hpn hpv i hi pval s hpval) hval
+    · exact valueRepr_agreeP h hvalhdr (hvalstr pn pv hpn hpv i hi) hval
   · cases hp : f.parent with
     | none =>
       simp only [hp] at hpar ⊢
@@ -353,8 +358,7 @@ theorem storeRepr_agreeP {P : Nat → Prop} {m m' : Mem} (h : AgreeP P m m')
     (hframevalstr : ∀ fa, (hfa : fa < s.frames.size) →
       ∀ pn pv, read64 m (φf fa + 8) = some pn → read64 m (φf fa + 16) = some pv →
         ∀ i, (hi : i < s.frames[fa].vars.length) →
-          ∀ (pval : Nat) (str : String), read64 m (pv + 24 * i + 8) = some pval →
-            (∀ k, k ≤ str.length → P (pval + k)))
+          ValuePayloadCovered P m (pv + 24 * i) s.frames[fa].vars[i].2)
     (hclohdr : ∀ ca, ca < s.closures.size → ∀ k, closHeader (φc ca) k → P k)
     (hcloexpr : ∀ ca, (hca : ca < s.closures.size) → ∀ q, read64 m (φc ca) = some q →
       ExprRepr m q (.fn s.closures[ca].name s.closures[ca].params s.closures[ca].body) →

@@ -173,6 +173,8 @@ theorem fnArmSpec_of_geom
 
 ```
   AssignArmSpec st d env x e st' v store'' :=
+    EvalE st d env e st' v →
+    st'.store.set? env x v = some store'' →
     EvalIH st d env e st' v → EvalIH st d env (.assign x e) ⟨store'', st'.out⟩ v
 ```
 
@@ -195,6 +197,8 @@ future `evalAssignSim` (entry ≫ `jal eval_expr` ⋈ IH ≫ value-stage ≫ `ja
 discharges it — the assign twin of `evalNegSim`/`evalVarSim`. -/
 def AssignArmMachine (st : SpecSt) (d : Nat) (env : Addr) (x : String) (e : Expr)
     (st' : SpecSt) (v : Value) (store'' : Store) : Prop :=
+  EvalE st d env e st' v →
+  st'.store.set? env x v = some store'' →
   EvalIH st d env e st' v →
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -215,11 +219,12 @@ theorem assignArmSpec_of_machine (st : SpecSt) (d : Nat) (env : Addr) (x : Strin
     (e : Expr) (st' : SpecSt) (v : Value) (store'' : Store)
     (hM : AssignArmMachine st d env x e st' v store'') :
     AssignArmSpec st d env x e st' v store'' := by
-  -- `AssignArmSpec := EvalIH … e → EvalIH … (.assign x e)`.
-  intro hIH
+  -- `AssignArmSpec := EvalE … → set? … = some store'' → EvalIH … e →
+  -- EvalIH … (.assign x e)`.
+  intro hEval hset hIH
   -- `EvalIH … (.assign x e) ⟨store'', st'.out⟩ v` unfolds to the ∀-closed Triple.
   intro g N A SL φf φc sp r sret aEnv aExpr m0
-  exact hM hIH g N A SL φf φc sp r sret aEnv aExpr m0
+  exact hM hEval hset hIH g N A SL φf φc sp r sret aEnv aExpr m0
 
 /-! ## §3. `CallArmSpec` (arity 3) — `callArmSpec_of_geom`
 

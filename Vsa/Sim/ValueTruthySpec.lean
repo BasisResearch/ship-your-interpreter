@@ -1,4 +1,5 @@
 import Vsa.Sim.ValueSpec
+import Vsa.Sim.ReprCopy
 
 /-!
 # `value_truthy_spec` — total-correctness spec for `value_truthy`
@@ -311,6 +312,82 @@ theorem frame_jr_t {σ' σ : MState} {pc vm tgt : BitVec 64}
 
 /-! ## Pre / post -/
 
+/-- Exact memory footprint used by `Value.truthy`: every case reads the kind;
+only bool and int additionally read the scalar payload.  String/native payload
+targets and closure objects are deliberately absent because the helper never
+dereferences them. -/
+def TruthyHeaderRepr (m : Mem) (a : Nat) : Value → Prop
+  | .null => read32 m a = some 0
+  | .bool b => read32 m a = some 1 ∧ read32 m (a + 8) = some (cond b 1 0)
+  | .int n => read32 m a = some 2 ∧ readI64 m (a + 8) = some n
+  | .str _ => read32 m a = some 3
+  | .closure _ => read32 m a = some 4
+  | .native _ => read32 m a = some 5
+
+theorem truthyHeaderRepr_of_valueRepr {m : Mem} {N : NativeAddrs}
+    {φc : Vsa.While.Addr → Nat} {a : Nat} {v : Value}
+    (h : ValueRepr m N φc a v) : TruthyHeaderRepr m a v := by
+  cases v with
+  | null => simpa only [ValueRepr, TruthyHeaderRepr] using h
+  | bool b => simpa only [ValueRepr, TruthyHeaderRepr] using h
+  | int n => simpa only [ValueRepr, TruthyHeaderRepr] using h
+  | str s => simpa only [ValueRepr, TruthyHeaderRepr] using h.1
+  | closure ca => simpa only [ValueRepr, TruthyHeaderRepr] using h.1
+  | native f => simpa only [ValueRepr, TruthyHeaderRepr] using h.1
+
+/-- A total 24-byte struct copy preserves exactly the header bytes inspected by
+`value_truthy`.  No indirect payload target is asserted or needed. -/
+theorem truthyHeaderRepr_copy_total {m m' : Mem} {src dst : Nat} {v : Value}
+    (hcopy : ∀ j, j < 24 →
+      m'[dst + j]? = some ((m[src + j]?).getD 0))
+    (h : TruthyHeaderRepr m src v) : TruthyHeaderRepr m' dst v := by
+  have h0dst : dst = dst + 0 := by omega
+  have h0src : src = src + 0 := by omega
+  cases v with
+  | null =>
+      simp only [TruthyHeaderRepr] at h ⊢
+      rw [h0dst]
+      exact read32_copy_total hcopy (by omega) (by rw [← h0src]; exact h)
+  | bool b =>
+      simp only [TruthyHeaderRepr] at h ⊢
+      obtain ⟨hk, hp⟩ := h
+      have hkind : read32 m' (dst + 0) = some 1 :=
+        read32_copy_total hcopy (by omega) (by rw [← h0src]; exact hk)
+      exact ⟨by simpa using hkind,
+        read32_copy_total hcopy (off := 8) (by omega) hp⟩
+  | int n =>
+      simp only [TruthyHeaderRepr] at h ⊢
+      obtain ⟨hk, hp⟩ := h
+      have hkind : read32 m' (dst + 0) = some 2 :=
+        read32_copy_total hcopy (by omega) (by rw [← h0src]; exact hk)
+      exact ⟨by simpa using hkind,
+        readI64_copy_total hcopy (off := 8) (by omega) hp⟩
+  | str s =>
+      simp only [TruthyHeaderRepr] at h ⊢
+      rw [h0dst]
+      exact read32_copy_total hcopy (by omega) (by rw [← h0src]; exact h)
+  | closure a =>
+      simp only [TruthyHeaderRepr] at h ⊢
+      rw [h0dst]
+      exact read32_copy_total hcopy (by omega) (by rw [← h0src]; exact h)
+  | native f =>
+      simp only [TruthyHeaderRepr] at h ⊢
+      rw [h0dst]
+      exact read32_copy_total hcopy (by omega) (by rw [← h0src]; exact h)
+
+def truthy_header_pre (g : (R : Register) → Option (RegisterType R))
+    (buf r : BitVec 64) (N : NativeAddrs) (φc : Vsa.While.Addr → Nat)
+    (v : Value) (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String)
+    (c : Config) : Prop :=
+  GoodState c.σ ∧ Value_truthyLoaded c.σ.mem ∧ c.σ.mem = m0 ∧
+  c.σ.regs.get? Register.PC = some (0x8000282c#64 : BitVec 64) ∧
+  c.σ.regs.get? Register.x10 = some buf ∧ c.σ.regs.get? Register.x1 = some r ∧
+  (∃ w, c.σ.regs.get? Register.minstret = some w) ∧ c.tick < 2 ∧
+  TruthyHeaderRepr m0 buf.toNat v ∧ TruthyRegion buf ∧
+  (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 ∧
+  c.σ.sailOutput = out0 ∧
+  (∀ R : Register, NotWrittenT R → c.σ.regs.get? R = g R)
+
 def truthy_pre (g : (R : Register) → Option (RegisterType R)) (buf r : BitVec 64)
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (v : Value)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String) (c : Config) : Prop :=
@@ -339,9 +416,9 @@ From `ValueRepr … buf v` (which pins `read32 m0 buf = some (kindTag v)`), extr
 the four kind bytes and package the `x15` value the prefix computes: `x15 =
 sign_extend (b3 ++ b2 ++ b1 ++ b0)` folds to `BitVec.ofNat 64 (kindTag v)`. -/
 
-theorem kind_read32 (m : Mem) (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (a : Nat) (v : Value)
-    (h : ValueRepr m N φc a v) : read32 m a = some (kindTag v) := by
-  cases v <;> simp only [ValueRepr, kindTag] at h ⊢ <;>
+theorem kind_read32 (m : Mem) (a : Nat) (v : Value)
+    (h : TruthyHeaderRepr m a v) : read32 m a = some (kindTag v) := by
+  cases v <;> simp only [TruthyHeaderRepr, kindTag] at h ⊢ <;>
     first
       | exact h
       | exact h.1
@@ -365,7 +442,7 @@ theorem truthy_prefix (g : (R : Register) → Option (RegisterType R)) (buf r : 
     (hpc : c.σ.regs.get? Register.PC = some (0x8000282c#64 : BitVec 64))
     (ha0 : c.σ.regs.get? Register.x10 = some buf) (hra : c.σ.regs.get? Register.x1 = some r)
     (vmi : BitVec 64) (hmi : c.σ.regs.get? Register.minstret = some vmi)
-    (htick : c.tick < 2) (hrepr : ValueRepr m0 N φc buf.toNat v) (hreg : TruthyRegion buf)
+    (htick : c.tick < 2) (hrepr : TruthyHeaderRepr m0 buf.toNat v) (hreg : TruthyRegion buf)
     (hout : c.σ.sailOutput = out0)
     (hframe : ∀ R : Register, NotWrittenT R → c.σ.regs.get? R = g R) :
     ∃ (σ2 : MState) (i2 : Nat),
@@ -377,7 +454,7 @@ theorem truthy_prefix (g : (R : Register) → Option (RegisterType R)) (buf r : 
       (∃ w, σ2.regs.get? Register.minstret = some w) ∧ σ2.sailOutput = out0 ∧
       (∀ R : Register, NotWrittenT R → σ2.regs.get? R = g R) := by
   have htoh : tohostAddr = 0x8001ad00 := rfl
-  have hkind : read32 m0 buf.toNat = some (kindTag v) := kind_read32 m0 N φc buf.toNat v hrepr
+  have hkind : read32 m0 buf.toNat = some (kindTag v) := kind_read32 m0 buf.toNat v hrepr
   obtain ⟨b0, b1, b2, b3, hbb0, hbb1, hbb2, hbb3, hrec⟩ := read32_bytes m0 buf.toNat _ hkind
   have hktlt : kindTag v < 128 := by cases v <;> simp [kindTag]
   have hkalign : buf.toNat % 4 = 0 := by have := hreg.align; omega
@@ -542,10 +619,10 @@ theorem truthy_default_path (g : (R : Register) → Option (RegisterType R)) (bu
 The 6-way case on `v`. Each path: `truthy_prefix`, then the kind-dispatch branch
 ladder (decided by `kindTag v`), the per-kind payload read, and the `ret`; the
 returned `a0` matches `cond (Value.truthy v) 1 0` by the byte/`snez` bridges. -/
-theorem value_truthy_spec (g : (R : Register) → Option (RegisterType R)) (buf r : BitVec 64)
+theorem value_truthy_header_spec (g : (R : Register) → Option (RegisterType R)) (buf r : BitVec 64)
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (v : Value)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String) :
-    Triple (truthy_pre g buf r N φc v m0 out0) (truthy_post g r v m0 out0) := by
+    Triple (truthy_header_pre g buf r N φc v m0 out0) (truthy_post g r v m0 out0) := by
   intro c hpre
   obtain ⟨hG, hloaded, hmem, hpc, ha0, hra, ⟨vmi, hmi⟩, htick, hrepr, hreg, hrettgt, hout, hframe⟩ := hpre
   have htoh : tohostAddr = 0x8001ad00 := rfl
@@ -747,19 +824,28 @@ theorem value_truthy_spec (g : (R : Register) → Option (RegisterType R)) (buf 
       hpc2 ha15_2 ha14_2 ha0_2 hra_2 vmi2 hmi2 hout2 hframe2 (by decide) (by decide)
       (by simp only [kindTag, Value.truthy]; decide)
   | str s =>
-    obtain ⟨htagr, _⟩ := hrepr
     exact truthy_default_path g buf r (Value.str s) m0 out0 c σ2 i2 hloaded0 hrettgt hsteps2 hi2 hG2 hmem2
       hpc2 ha15_2 ha14_2 ha0_2 hra_2 vmi2 hmi2 hout2 hframe2 (by simp [kindTag]) (by simp [kindTag])
       (by simp only [kindTag, Value.truthy]; decide)
   | closure ca =>
-    obtain ⟨htagr, _⟩ := hrepr
     exact truthy_default_path g buf r (Value.closure ca) m0 out0 c σ2 i2 hloaded0 hrettgt hsteps2 hi2 hG2 hmem2
       hpc2 ha15_2 ha14_2 ha0_2 hra_2 vmi2 hmi2 hout2 hframe2 (by simp [kindTag]) (by simp [kindTag])
       (by simp only [kindTag, Value.truthy]; decide)
   | native f =>
-    obtain ⟨htagr, _⟩ := hrepr
     exact truthy_default_path g buf r (Value.native f) m0 out0 c σ2 i2 hloaded0 hrettgt hsteps2 hi2 hG2 hmem2
       hpc2 ha15_2 ha14_2 ha0_2 hra_2 vmi2 hmi2 hout2 hframe2 (by simp [kindTag]) (by simp [kindTag])
       (by simp only [kindTag, Value.truthy]; decide)
+
+/-- Compatibility wrapper for callers that carry the full semantic relation. -/
+theorem value_truthy_spec (g : (R : Register) → Option (RegisterType R))
+    (buf r : BitVec 64) (N : NativeAddrs) (φc : Vsa.While.Addr → Nat)
+    (v : Value) (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String) :
+    Triple (truthy_pre g buf r N φc v m0 out0) (truthy_post g r v m0 out0) := by
+  intro c h
+  apply value_truthy_header_spec g buf r N φc v m0 out0 c
+  rcases h with ⟨hG, hloaded, hmem, hpc, ha0, hra, hmi, htick, hrepr,
+    hreg, hret, hout, hframe⟩
+  exact ⟨hG, hloaded, hmem, hpc, ha0, hra, hmi, htick,
+    truthyHeaderRepr_of_valueRepr hrepr, hreg, hret, hout, hframe⟩
 
 end Vsa.Sim

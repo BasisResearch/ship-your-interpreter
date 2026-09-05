@@ -315,13 +315,18 @@ theorem progressE_succ (hE : ProgressE n) (hA : ProgressArgs n) (hC : ProgressC 
     · exact .unaryE n st d env op e hdiv
   | call f args =>
     rcases evalTri hE st d env f with ⟨st', fv, hf⟩ | herr | hdiv
-    · rcases argsTri hA st' d env args with ⟨st'', vs, hargs⟩ | herr | hdiv
-      · rcases callTri hC st'' d fv vs with ⟨st''', v, hcall⟩ | herr | hdiv
-        · exact absurd ⟨st''', v, .call st d env f args st' st'' st''' fv vs v hf hargs hcall⟩ hnc
-        · exact absurd (.callC st d env f args st' st'' fv vs hf hargs herr) hne
-        · exact .callC n st d env f args st' st'' fv vs hf hargs hdiv
-      · exact absurd (.callArgs st d env f args st' fv hf herr) hne
-      · exact .callArgs n st d env f args st' fv hf hdiv
+    · by_cases hbound : args.length ≤ maxArgs
+      · rcases argsTri hA st' d env args with ⟨st'', vs, hargs⟩ | herr | hdiv
+        · rcases callTri hC st'' d fv vs with ⟨st''', v, hcall⟩ | herr | hdiv
+          · exact absurd
+              ⟨st''', v, .call st d env f args st' st'' st''' fv vs v
+                hf hbound hargs hcall⟩ hnc
+          · exact absurd
+              (.callC st d env f args st' st'' fv vs hf hbound hargs herr) hne
+          · exact .callC n st d env f args st' st'' fv vs hf hbound hargs hdiv
+        · exact absurd (.callArgs st d env f args st' fv hf hbound herr) hne
+        · exact .callArgs n st d env f args st' fv hf hbound hdiv
+      · exact absurd (.callTooMany st d env f args st' fv hf (by omega)) hne
     · exact absurd (.callF st d env f args herr) hne
     · exact .callF n st d env f args hdiv
   | fn name params body =>

@@ -211,7 +211,7 @@ def naEntry (g : (R : Register) → Option (RegisterType R))
 
 /-- Postcondition: at the `ret` target (`retAddr`, bit-0-cleared), the `sret`
 buffer holds `.null` (`ValueRepr … sret .null`), the console output is
-unchanged, and the callee-saved registers + `sp` are restored. -/
+unchanged, and `ra`, the callee-saved registers, and `sp` are restored. -/
 def naExit (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (φc : Addr → Nat)
     (fsp sret retAddr : BitVec 64) (m0 : Mem) (out0 : Array String) (c : Config) : Prop :=
@@ -226,6 +226,9 @@ def naExit (g : (R : Register) → Option (RegisterType R))
     c.σ.mem[a]? = m0[a]?) ∧
   (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
   c.σ.regs.get? Register.x2 = some fsp ∧
+  -- `ra` is caller-saved in the ABI and therefore is not covered by
+  -- `AbiPreservedNoise`; the native function nevertheless restores its link.
+  c.σ.regs.get? Register.x1 = some retAddr ∧
   -- the FULL ABI callee-saved frame (wave-42 amendment, observation
   -- `naexit-lacks-abi-frame-clause`): the epilogue reloads `ra/s0/s1/s2` from
   -- their spills and re-adjusts `sp`; no other callee-saved register is
@@ -238,7 +241,7 @@ theorem naExit_abiFrame {g : (R : Register) → Option (RegisterType R)}
     {m0 : Mem} {out0 : Array String} {c : Config}
     (h : naExit g N φc fsp sret retAddr m0 out0 c) :
     ∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R := by
-  obtain ⟨_, _, _, _, _, _, _, _, hframe⟩ := h; exact hframe
+  obtain ⟨_, _, _, _, _, _, _, _, _, hframe⟩ := h; exact hframe
 
 /-- `AbiPreserved` enumerated: a callee-saved register is one of the fifteen
 `sp/gp/tp/s0–s11`. Lets a whole-run frame clause split the machine-written
@@ -1416,6 +1419,8 @@ theorem nativeAssertInternal
   have hpc_fin : σ33.regs.get? Register.PC = some (BitVec.update (retAddr + sign_extend (m := 64) (0x000#12)) 0 0#1) := by
     have := obs_jr_pc hobs33
     exact this
+  have hx1_fin : σ33.regs.get? Register.x1 = some retAddr :=
+    obs_jr_other' hobs33 Register.x1 (by decide) hx1_32
   have hsp_fin : σ33.regs.get? Register.x2 = some fsp := obs_jr_other' hobs33 Register.x2 (by decide) hsp_32
   have hx8_fin : σ33.regs.get? Register.x8 = some s0v := obs_jr_other' hobs33 Register.x8 (by decide) hx8_32
   have hx9_fin : σ33.regs.get? Register.x9 = some s1v := obs_jr_other' hobs33 Register.x9 (by decide) hx9_32
@@ -1461,7 +1466,7 @@ theorem nativeAssertInternal
   · -- the full Steps chain
     exact (((((((((((((((((((((((((((((((((((Steps.single hstep1).trans (Steps.single hstep2)).trans (Steps.single hstep3)).trans (Steps.single hstep4)).trans (Steps.single hstep5)).trans (Steps.single hstep6)).trans (Steps.single hstep7)).trans (Steps.single hstep8)).trans (Steps.single hstep9)).trans (Steps.single hstep10)).trans (Steps.single hstep11)).trans (Steps.single hstep12)).trans (Steps.single hstep13)).trans (Steps.single hstep14)).trans (Steps.single hstep15)).trans (Steps.single hstep16)).trans (Steps.single hstep17)).trans (Steps.single hstep18)).trans (Steps.single hstep19)).trans (Steps.single hstep20)).trans (Steps.single hstep21)).trans hsT).trans (Steps.single hstep22)).trans (Steps.single hstep23)).trans (Steps.single hstep24)).trans (Steps.single hstep25)).trans (Steps.single hstep26)).trans hsN).trans (Steps.single hstep27)).trans (Steps.single hstep28)).trans (Steps.single hstep29)).trans (Steps.single hstep30)).trans (Steps.single hstep31)).trans (Steps.single hstep32)).trans (Steps.single hstep33))
   · -- naExit
-    refine ⟨hG33, hi33, hpc_fin, ?_, hout_fin, ?_, ⟨_, hmi33⟩, hsp_fin, ?_⟩
+    refine ⟨hG33, hi33, hpc_fin, ?_, hout_fin, ?_, ⟨_, hmi33⟩, hsp_fin, hx1_fin, ?_⟩
     · -- ValueRepr sret .null (from value_null, survives the pure-register epilogue)
       rw [hmem33e]; exact hvalNull
     · -- memory framed outside [fsp-80, fsp+40) ∪ [sret, sret+24):

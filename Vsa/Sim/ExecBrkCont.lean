@@ -116,6 +116,7 @@ theorem loaded_exec_stmt_writeMap8 (mem : Std.ExtHashMap Nat (BitVec 8)) (a8 : N
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · simp only [exec_stmtChunk0] at c0 ⊢; repeat' apply And.intro
     all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
+
   · simp only [exec_stmtChunk1] at c1 ⊢; repeat' apply And.intro
     all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
   · simp only [exec_stmtChunk2] at c2 ⊢; repeat' apply And.intro
@@ -141,6 +142,45 @@ theorem loaded_exec_stmt_writeMap8 (mem : Std.ExtHashMap Nat (BitVec 8)) (a8 : N
   · simp only [exec_stmtChunk12] at c12 ⊢; repeat' apply And.intro
     all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
 
+/-- Transport the generated `exec_stmt` byte pins across pointwise agreement
+on the exact text interval. -/
+theorem loaded_exec_stmt_agree (mem mem' : Std.ExtHashMap Nat (BitVec 8))
+    (hag0 : ∀ k, execStmtEntry ≤ k → k < execStmtEnd → mem'[k]? = mem[k]?)
+    (h : Exec_stmtLoaded mem) : Exec_stmtLoaded mem' := by
+  have hag : ∀ k, 0x80003fe0 ≤ k → k < 0x80004308 →
+      mem'[k]? = mem[k]? := by
+    intro k hlo hhi
+    exact hag0 k (by simpa only [execStmtEntry] using hlo)
+      (by simpa only [execStmtEnd] using hhi)
+  obtain ⟨c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12⟩ := h
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · simp only [exec_stmtChunk0] at c0 ⊢; repeat' apply And.intro
+    all_goals (rw [hag _ (by omega) (by omega)]; simp_all only [])
+  · simp only [exec_stmtChunk1] at c1 ⊢; repeat' apply And.intro
+    all_goals (rw [hag _ (by omega) (by omega)]; simp_all only [])
+  · simp only [exec_stmtChunk2] at c2 ⊢; repeat' apply And.intro
+    all_goals (rw [hag _ (by omega) (by omega)]; simp_all only [])
+  · simp only [exec_stmtChunk3] at c3 ⊢; repeat' apply And.intro
+    all_goals (rw [hag _ (by omega) (by omega)]; simp_all only [])
+  · simp only [exec_stmtChunk4] at c4 ⊢; repeat' apply And.intro
+    all_goals (rw [hag _ (by omega) (by omega)]; simp_all only [])
+  · simp only [exec_stmtChunk5] at c5 ⊢; repeat' apply And.intro
+    all_goals (rw [hag _ (by omega) (by omega)]; simp_all only [])
+  · simp only [exec_stmtChunk6] at c6 ⊢; repeat' apply And.intro
+    all_goals (rw [hag _ (by omega) (by omega)]; simp_all only [])
+  · simp only [exec_stmtChunk7] at c7 ⊢; repeat' apply And.intro
+    all_goals (rw [hag _ (by omega) (by omega)]; simp_all only [])
+  · simp only [exec_stmtChunk8] at c8 ⊢; repeat' apply And.intro
+    all_goals (rw [hag _ (by omega) (by omega)]; simp_all only [])
+  · simp only [exec_stmtChunk9] at c9 ⊢; repeat' apply And.intro
+    all_goals (rw [hag _ (by omega) (by omega)]; simp_all only [])
+  · simp only [exec_stmtChunk10] at c10 ⊢; repeat' apply And.intro
+    all_goals (rw [hag _ (by omega) (by omega)]; simp_all only [])
+  · simp only [exec_stmtChunk11] at c11 ⊢; repeat' apply And.intro
+    all_goals (rw [hag _ (by omega) (by omega)]; simp_all only [])
+  · simp only [exec_stmtChunk12] at c12 ⊢; repeat' apply And.intro
+    all_goals (rw [hag _ (by omega) (by omega)]; simp_all only [])
+
 /-! ## `ExecArmEntryK` — machine state at a per-kind arm entry (dispatch target)
 
 The case-INDEPENDENT half of the `exec_stmt` prologue + jump-table dispatch. It
@@ -157,7 +197,7 @@ def ExecArmEntryK
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (armPC : BitVec 64)
     (sp r aInterp aStmt aEnv aRet : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
-    (m0 ment : Mem) (c : Config) : Prop :=
+    (m0 ment : Mem) (c : Config) (liveRA : BitVec 64 := r) : Prop :=
   GoodState c.σ ∧ c.tick < 2 ∧
   c.σ.regs.get? Register.PC = some armPC ∧
   c.σ.regs.get? Register.x8 = some aStmt ∧            -- s0 = Stmt*  (mv s0,a1)
@@ -165,7 +205,7 @@ def ExecArmEntryK
   c.σ.regs.get? Register.x19 = some aEnv ∧            -- s3 = env     (mv s3,a2)
   c.σ.regs.get? Register.x18 = some aRet ∧            -- s2 = retslot (mv s2,a3)
   c.σ.regs.get? Register.x2 = some (sp - 176#64) ∧    -- sp lowered
-  c.σ.regs.get? Register.x1 = some r ∧               -- ra still = r (also spilled)
+  c.σ.regs.get? Register.x1 = some liveRA ∧          -- live ra; outer r remains spilled
   (∃ v, c.σ.regs.get? Register.minstret = some v) ∧
   c.σ.sailOutput = out0 ∧ String.join out0.toList = st.out ∧
   c.σ.mem = ment ∧ Exec_stmtLoaded ment ∧

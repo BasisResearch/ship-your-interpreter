@@ -92,6 +92,7 @@ theorem evalEntry_of_jalPrefix
     (hjaltgt : (callPC + sign_extend (m := 64) jalImm) = BitVec.ofNat 64 evalExprEntry)
     (hlink : (BitVec.addInt callPC 4) = retPC)
     (hretAl : retPC.toNat % 4 = 0)
+    (henvValid : EnvValid st env)
     (hjalSite : ∀ (σ : MState) (i u : Nat) (vmi : BitVec 64),
       GoodState σ → σ.regs.get? Register.PC = some callPC →
       σ.regs.get? Register.minstret = some vmi → Eval_exprLoaded σ.mem → i < 2 →
@@ -104,13 +105,14 @@ theorem evalEntry_of_jalPrefix
         c.σ.regs.get? Register.x10 = some subsret ∧
         c.σ.regs.get? Register.x9 = some sret ∧
         c.σ.regs.get? Register.x11 = some aIn ∧
-        (∃ w, c.σ.regs.get? Register.x13 = some w) ∧          -- a3 defined (wave 48h CURE A)
+        c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) ∧
         c.σ.regs.get? Register.x12 = some aOperand ∧
         c.σ.regs.get? Register.x2 = some (sp - 1088#64) ∧
         (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
         c.σ.sailOutput = out0 ∧
         String.join out0.toList = st.out ∧
         c.σ.mem = mcall ∧
+        ValueWordsTotal mcall subsret.toNat ∧
         Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
         -- WAVE 47i: the child's entry-ground bundle.
         EvalGround mcall SL A (sp - 1088#64) subsret aOperand.toNat esub ∧
@@ -121,7 +123,9 @@ theorem evalEntry_of_jalPrefix
             mcall[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
-        ((∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w)) ∧
+        ((∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+          (∃ w, gpre Register.x19 = some w) ∧ (∃ w, gpre Register.x20 = some w) ∧
+          (∃ w, gpre Register.x21 = some w)) ∧
         read64 mcall (sp.toNat - 8) = some r.toNat ∧
         read64 mcall (sp.toNat - 16) = some v8.toNat ∧
         read64 mcall (sp.toNat - 24) = some v9.toNat ∧
@@ -150,8 +154,9 @@ theorem evalEntry_of_jalPrefix
     LandedN 1 c (fun c' =>
       EvalEntry (fun R => c'.σ.regs.get? R) N A SL φf φc st d env esub
         (sp - 1088#64) retPC subsret aIn aOperand mcall c') := by
-  obtain ⟨hG, htick, hpc, ha0, hs1, hx11, ⟨wx13, hx13⟩, hx12, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
-    hcode, hviCode, hslot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframe, ⟨⟨w8, hw8⟩, ⟨w18, hw18⟩⟩,
+  obtain ⟨hG, htick, hpc, ha0, hs1, hx11, hx13, hx12, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
+    hsubWords, hcode, hviCode, hslot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframe,
+    ⟨⟨w8, hw8⟩, ⟨w18, hw18⟩, ⟨w19, hw19⟩, ⟨w20, hw20⟩, ⟨w21, hw21⟩⟩,
     hslotRa, hslotS0, hslotS1, hslotS2,
     hopAl, hopLo, hopHi, hopWin, hopStk,
     hssAl, hssLo, hssHi,
@@ -177,7 +182,9 @@ theorem evalEntry_of_jalPrefix
   have ha0_1 : σ1.regs.get? Register.x10 = some subsret := obs_jalT_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
   have hs1_1 : σ1.regs.get? Register.x9 = some sret := obs_jalT_other hobs1 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1
   have hx11_1 : σ1.regs.get? Register.x11 = some aIn := obs_jalT_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11
-  have hx13_1 : σ1.regs.get? Register.x13 = some wx13 := obs_jalT_other hobs1 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13
+  have hx13_1 : σ1.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) :=
+    obs_jalT_other hobs1 Register.x13 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) hx13
   have hx12_1 : σ1.regs.get? Register.x12 = some aOperand := obs_jalT_other hobs1 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12
   have hsp_1 : σ1.regs.get? Register.x2 = some (sp - 1088#64) := obs_jalT_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp
   have hx8_1 : σ1.regs.get? Register.x8 = some w8 := by
@@ -186,6 +193,18 @@ theorem evalEntry_of_jalPrefix
   have hx18_1 : σ1.regs.get? Register.x18 = some w18 := by
     have hc18 : c.σ.regs.get? Register.x18 = some w18 := (hframe Register.x18 (by decide)).trans hw18
     exact obs_jalT_other hobs1 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hc18
+  have hx19_1 : σ1.regs.get? Register.x19 = some w19 := by
+    have hc19 := (hframe Register.x19 (by decide)).trans hw19
+    exact obs_jalT_other hobs1 Register.x19 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) hc19
+  have hx20_1 : σ1.regs.get? Register.x20 = some w20 := by
+    have hc20 := (hframe Register.x20 (by decide)).trans hw20
+    exact obs_jalT_other hobs1 Register.x20 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) hc20
+  have hx21_1 : σ1.regs.get? Register.x21 = some w21 := by
+    have hc21 := (hframe Register.x21 (by decide)).trans hw21
+    exact obs_jalT_other hobs1 Register.x21 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) hc21
   obtain ⟨vmi1, hmi1⟩ := obs_jalT_minstret hobs1
   have hout1 : σ1.sailOutput = out0 := by
     rw [hobs1.out, sailOutput_sigmaPost_jal]; exact hout
@@ -201,6 +220,7 @@ theorem evalEntry_of_jalPrefix
         tick := hi1
         pc := hpc1
         a0 := ha0_1
+        sret_words := by rw [hmem1e]; exact hsubWords
         a1 := hx11_1
         a2 := hx12_1
         ra := hlink1
@@ -215,6 +235,7 @@ theorem evalEntry_of_jalPrefix
         code := by show Eval_exprLoaded σ1.mem; rw [hmem1e]; exact hcode
         expr := by rw [hmem1e]; exact hsubexpr
         store := by rw [hmem1e]; exact hstore
+        env_valid := henvValid
         store_survives := by
           -- wave 47e: identical WIDENED footprint parent/child (same `SL`);
           -- the sub-sret window is inside `[SL.lo, SL.hi)`, so it is absorbed.
@@ -266,7 +287,9 @@ theorem evalEntry_of_jalPrefix
           · left; exact h
           · right; rw [hspsub]; omega
         spill_defined := ⟨⟨w8, hx8_1⟩, ⟨sret, hs1_1⟩, ⟨w18, hx18_1⟩⟩
-        x13_defined := ⟨wx13, hx13_1⟩ }
+        envset_defined := ⟨w19, w20, w21, hx19_1, hx20_1, hx21_1⟩
+        envReg := hx13_1
+        x13_defined := ⟨_, hx13_1⟩ }
 
 #print axioms evalEntry_of_jalPrefix
 

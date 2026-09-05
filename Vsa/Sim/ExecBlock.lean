@@ -197,6 +197,7 @@ theorem armExec_rec
     (hjaltgt : (callPC + sign_extend (m := 64) jalImm) = BitVec.ofNat 64 execStmtEntry)
     (hlink : (BitVec.addInt callPC 4) = retPC)
     (hretAl : retPC.toNat % 4 = 0)
+    (henvValid : EnvValid st envSub)
     -- the per-arm `jal exec_stmt` site step:
     (hjalSite : ∀ (σ : MState) (i u : Nat) (vmi : BitVec 64),
       GoodState σ → σ.regs.get? Register.PC = some callPC →
@@ -213,12 +214,15 @@ theorem armExec_rec
         c.σ.regs.get? Register.x10 = some aInterp ∧          -- a0 = interp*
         c.σ.regs.get? Register.x11 = some aStmtSub ∧         -- a1 = stmts[i]
         c.σ.regs.get? Register.x12 = some aEnvSub ∧          -- a2 = inner env
+        aEnvSub = BitVec.ofNat 64 (φf envSub) ∧
         c.σ.regs.get? Register.x13 = some aRetSub ∧          -- a3 = retslot forwarded
         c.σ.regs.get? Register.x18 = some aRet ∧             -- s2 = outer retslot (survives)
         c.σ.regs.get? Register.x2 = some (sp - 176#64) ∧     -- sp lowered
         (∃ w, c.σ.regs.get? Register.x8 = some w) ∧          -- s0 defined (block node)
         (∃ w, c.σ.regs.get? Register.x9 = some w) ∧          -- s1 defined (interp*)
         (∃ w, c.σ.regs.get? Register.x19 = some w) ∧         -- s3 defined (inner env)
+        (∃ w, c.σ.regs.get? Register.x20 = some w) ∧
+        (∃ w, c.σ.regs.get? Register.x21 = some w) ∧
         (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
         c.σ.sailOutput = out0 ∧
         String.join out0.toList = st.out ∧
@@ -277,8 +281,9 @@ theorem armExec_rec
         st' status sp r aRet aRetSub retPC
         v8 v9 v18 v19 mcall mcall) := by
   intro c hpre
-  obtain ⟨hG, htick, hpc, ha0, hx11, hx12, hx13, hs2, hsp,
-    ⟨wx8, hwx8⟩, ⟨wx9, hwx9⟩, ⟨wx19, hwx19⟩, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
+  obtain ⟨hG, htick, hpc, ha0, hx11, hx12, henvPtr, hx13, hs2, hsp,
+    ⟨wx8, hwx8⟩, ⟨wx9, hwx9⟩, ⟨wx19, hwx19⟩,
+    ⟨wx20, hwx20⟩, ⟨wx21, hwx21⟩, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
     hcodeS, hstmtSub, hstore, hstoreSurv,
     hframe, hgx8, hgx9, hgx18, hgx19, hgx2,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
@@ -320,6 +325,10 @@ theorem armExec_rec
     obs_jalT_other hobs1 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hwx9
   have hx19_1 : σ1.regs.get? Register.x19 = some wx19 :=
     obs_jalT_other hobs1 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hwx19
+  have hx20_1 : σ1.regs.get? Register.x20 = some wx20 :=
+    obs_jalT_other hobs1 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hwx20
+  have hx21_1 : σ1.regs.get? Register.x21 = some wx21 :=
+    obs_jalT_other hobs1 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hwx21
   -- ============ the sub-call's ExecEntry at ⟨σ1, i1, steps+1⟩ ============
   have hEntry : ExecEntry (fun R => σ1.regs.get? R) N A SL φf φc st d envSub sSub
       (sp - 176#64) retPC aInterp aStmtSub aEnvSub aRetSub mcall ⟨σ1, i1, c.steps + 1⟩ :=
@@ -329,6 +338,7 @@ theorem armExec_rec
       a0 := ha0_1
       a1 := hx11_1
       a2 := hx12_1
+      envPtr := henvPtr
       a3 := hx13_1
       ra := hlink1
       ra_align := hretAl
@@ -342,6 +352,7 @@ theorem armExec_rec
       code := by show Exec_stmtLoaded σ1.mem; rw [hmem1e]; exact hcodeS
       stmt := by rw [hmem1e]; exact hstmtSub
       store := by rw [hmem1e]; exact hstore
+      env_valid := henvValid
       store_survives := by
         -- wave 47e: identical WIDENED footprint parent/child (same `SL`).
         intro m' hag
@@ -367,6 +378,7 @@ theorem armExec_rec
       stmt_ram := ⟨hstLo, hstHi⟩
       stmt_win := hstWin
       spill_defined := ⟨⟨wx8, hx8_1⟩, ⟨wx9, hx9_1⟩, ⟨aRet, hs2_1⟩, ⟨wx19, hx19_1⟩⟩
+      envset_defined := ⟨⟨wx20, hx20_1⟩, ⟨wx21, hx21_1⟩⟩
       ground := by rw [hmem1e]; exact hground }
   -- ============ the sub-call (the induction hypothesis) ============
   obtain ⟨c2, hs2', hExitD⟩ :=

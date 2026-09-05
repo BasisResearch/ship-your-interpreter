@@ -105,6 +105,7 @@ theorem intPostToEpilogue
     (hgv18 : g Register.x18 = some v18) (hgv2 : g Register.x2 = some sp)
     -- memory frame vs the entry `m0`
     (hMemExt : MemExtends m0 c.σ.mem)
+    (hWords : ValueWordsTotal c.σ.mem sret.toNat)
     (hmemframe : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ c.σ.mem[a]? = m0[a]?)
     -- geometry the epilogue loads need
@@ -118,7 +119,7 @@ theorem intPostToEpilogue
       PhiExtends φcm' φce nc2 ∧
       PreEpilogueVD g N A SL φfe φce st'' v sp r sret v8 v9 v18 out0 m0 mpre c := by
   refine ⟨c.σ.mem, φfm, φcm, φf', φc',
-    hpfm, hpcm, hpf', hpc', ⟨?_, hMemExt, hSurvSL⟩⟩
+    hpfm, hpcm, hpf', hpc', ⟨?_, hMemExt, hWords, hSurvSL⟩⟩
   exact ⟨hG, htick, hpc, hx9, hx2, hminstret, hout, houtStr, rfl, hcode, hval,
     hstore, hframeG, hslotRa, hslotS0, hslotS1, hslotS2, hgv8, hgv9, hgv18, hgv2,
     hmemframe, hsp1088, hspRam, hspLo, hspHtif, hsp8, hraAl⟩

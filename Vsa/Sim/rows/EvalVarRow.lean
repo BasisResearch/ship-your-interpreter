@@ -1,5 +1,6 @@
 import Vsa.Sim.EvalLeafD
 import Vsa.Sim.TermCaseBundle
+import Vsa.Sim.StoreInvariant
 
 /-!
 # `EvalVarRow` — the `hVar` term-side case row (conditional leaf_bridge)
@@ -54,12 +55,15 @@ local notation "SpecSt" => Vsa.While.St
 (`var_stack_disjoint`, `sret_arena_disjoint`, `env_get_code`,
 `env_get_stack_disjoint`, `var_slot`, `table_stack_disjoint`), the honest
 `env_get`-FOUND-case caller-linkage oracle `env_get_found` (the ONE open `O`-class
-field), and the `LeafWiden` exit widening.  ∀-closed over the layout ghosts AND the
-entry config `c` (the oracle's statement mentions `c.σ.mem`/`c.σ.sailOutput`). -/
+field), and the `LeafWiden` exit widening.  The lookup premise binds `v` to the
+semantic variable lookup before any machine obligation is required.  ∀-closed over
+the layout ghosts AND the entry config `c` (the oracle's statement mentions
+`c.σ.mem`/`c.σ.sailOutput`). -/
 def VarLeafResid (st : SpecSt) (x : String) (v : Value) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (d : Nat) (env : Addr) (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) (c : Config),
+    st.store.get? env x = some v →
     Vsa.Sim.EvalEntry g N A SL φf φc st d env (.var x) sp r sret aEnv aExpr m0 c →
     -- var-name CString disjoint from the live stack frame
     (∀ p : Nat, read64 c.σ.mem (aExpr.toNat + 8) = some p →
@@ -74,10 +78,22 @@ def VarLeafResid (st : SpecSt) (x : String) (v : Value) : Prop :=
     Triple
       (fun c' => ∃ ment v8 v9 v18,
         Vsa.Sim.ArmEntryK g N A SL φf φc st (0x80003434#64) Vsa.Sim.Code.Env_getLoaded (.var x)
-          sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0 ment c')
+          sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0 ment c' ∧
+        c'.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)))
       (fun c' => ∃ mpc v8 v9 v18,
         Vsa.Sim.VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 c.σ.sailOutput m0 mpc c') ∧
     Vsa.Sim.LeafWiden g N A SL φf φc st v sp r sret m0
+
+/-- Semantic extension for `hVar`.  The executable field remains separate.
+The store field is derived from `Store.get?`; it is not a mined candidate. -/
+structure VarResidualExtension (st : SpecSt) (x : String) (v : Value) : Prop where
+  machine : VarLeafResid st x v
+  store : ∀ env, ReachableStore st.store → st.store.get? env x = some v →
+    VarStoreBridge st.store env x v
+
+theorem varResidualExtension_of_machine (st : SpecSt) (x : String) (v : Value)
+    (h : VarLeafResid st x v) : VarResidualExtension st x v :=
+  ⟨h, fun _ hreach hget => hreach.varBridge hget⟩
 
 /-- Route `hVar` → `evalVarSimD`, bridging `EvalEntry → EvalVarEntry`.
 
@@ -93,24 +109,50 @@ theorem eval_var_row (hR : ∀ st x v, VarLeafResid st x v) :
   intro g N A SL φf φc sp r sret aEnv aExpr m0
   intro c hc
   obtain ⟨hvsd, hsad, hegc, hegsd, hvs, htsd, hfound, hW⟩ :=
-    hR st x v g N A SL φf φc d env sp r sret aEnv aExpr m0 c hc
+    hR st x v g N A SL φf φc d env sp r sret aEnv aExpr m0 c hlookup hc
   have hEntry : Vsa.Sim.EvalVarEntry g N A SL φf φc st d env x v sp r sret aEnv aExpr m0 c :=
     { good := hc.good, tick := hc.tick, pc := hc.pc, a0 := hc.a0, a1 := hc.a1, a2 := hc.a2,
       ra := hc.ra, ra_align := hc.ra_align, spReg := hc.spReg, stackOK := hc.stackOK,
       stackBudget := hc.stackBudget, expr_bodies := hc.expr_bodies, store_bodies := hc.store_bodies,
       minstret := hc.minstret, mem := hc.mem, code := hc.code, expr := hc.expr, store := hc.store,
+      env_valid := hc.env_valid,
       store_survives := hc.store_survives, out := hc.out, frame := hc.frame,
       code_stack_disjoint := hc.code_stack_disjoint, expr_stack_disjoint := hc.expr_stack_disjoint,
       expr_align := hc.expr_align, expr_ram := hc.expr_ram, expr_win := hc.expr_win,
       sret_align := hc.sret_align, sret_ram := hc.sret_ram, sret_win := hc.sret_win,
       sret_vicode_disjoint := hc.sret_vicode_disjoint_int, sret_stack_disjoint := hc.sret_stack_disjoint,
       sret_evalcode_disjoint := hc.sret_evalcode_disjoint, stack_ram := hc.stack_ram,
-      stack_win := hc.stack_win, spill_defined := hc.spill_defined, x13_defined := hc.x13_defined,
+      stack_win := hc.stack_win, spill_defined := hc.spill_defined,
+      envset_defined := hc.envset_defined, x13_defined := hc.x13_defined,
+      envReg := hc.envReg,
       var_stack_disjoint := hvsd, sret_arena_disjoint := hsad, env_get_code := hegc,
       env_get_stack_disjoint := hegsd, var_slot := hvs, table_stack_disjoint := htsd,
       env_get_found := hfound }
   exact Vsa.Sim.evalVarSimD g N A SL φf φc st d env x v sp r sret aEnv aExpr m0
     (EvalE.var st d env x v hlookup) hW c hEntry
+
+/-- Variable row consuming the semantic extension. -/
+theorem eval_var_row_extended
+    (hR : ∀ st x v, VarResidualExtension st x v) :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (x : String) (v : Value)
+      (a : st.store.get? env x = some v),
+      mEvalE st d env (Expr.var x) st v (EvalE.var st d env x v a) :=
+  eval_var_row (fun st x v => (hR st x v).machine)
+
+/-- Regression projection: using a variable residual at a concrete entry requires
+the semantic lookup that identifies its result value. -/
+theorem varLeafResid_leafWiden_of_lookup (st : SpecSt) (x : String) (v : Value)
+    (hR : VarLeafResid st x v)
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (d : Nat) (env : Addr) (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) (c : Config)
+    (hlookup : st.store.get? env x = some v)
+    (hc : Vsa.Sim.EvalEntry g N A SL φf φc st d env (.var x)
+      sp r sret aEnv aExpr m0 c) :
+    Vsa.Sim.LeafWiden g N A SL φf φc st v sp r sret m0 := by
+  obtain ⟨_, _, _, _, _, _, _, hW⟩ :=
+    hR g N A SL φf φc d env sp r sret aEnv aExpr m0 c hlookup hc
+  exact hW
 
 /-- **Slot-verify.** `eval_var_row` fills the EXACT `hVar` minor-premise slot of
 `term_sim_of_cases` (`TermCaseBundle.TermCases.hVar`): the type below is the
@@ -124,4 +166,7 @@ theorem eval_var_row_fills_hVar (hR : ∀ st x v, VarLeafResid st x v) :
 end Vsa.Sim.Rows
 
 #print axioms Vsa.Sim.Rows.eval_var_row
+#print axioms Vsa.Sim.Rows.varResidualExtension_of_machine
+#print axioms Vsa.Sim.Rows.eval_var_row_extended
+#print axioms Vsa.Sim.Rows.varLeafResid_leafWiden_of_lookup
 #print axioms Vsa.Sim.Rows.eval_var_row_fills_hVar

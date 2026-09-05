@@ -82,6 +82,18 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
+/-- Exact memory image of the eight env_define prologue spills. -/
+def envDefineSpillMem (m : Mem) (sp : Nat)
+    (ra s0 s1 s2 s3 s4 s5 s6 : BitVec 64) : Mem :=
+  let m1 := writeMap8 m (sp + 24) (sdData_val s3)
+  let m2 := writeMap8 m1 (sp + 32) (sdData_val s2)
+  let m3 := writeMap8 m2 (sp + 16) (sdData_val s4)
+  let m4 := writeMap8 m3 (sp + 8) (sdData_val s5)
+  let m5 := writeMap8 m4 (sp + 56) (sdData_val ra)
+  let m6 := writeMap8 m5 (sp + 48) (sdData_val s0)
+  let m7 := writeMap8 m6 (sp + 40) (sdData_val s1)
+  writeMap8 m7 sp (sdData_val s6)
+
 /-! ## 64-byte frame stride arithmetic
 
 The prologue does `addi sp,sp,-64` (`sext 0xfc0 = -64`) and the epilogue `addi sp,sp,64`

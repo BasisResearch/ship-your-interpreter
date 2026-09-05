@@ -1,6 +1,7 @@
 import Vsa.Sim.rows.CallCruxMarshal2
 import Vsa.Sim.rows.CallClosureBodyEntry
 import Vsa.Sim.EvalNullSim
+import Vsa.Sim.BridgeSegOut
 
 /-!
 # `CallCruxMarshal4` — the value_null handoff splice (wave 43, items 2+3)
@@ -58,6 +59,7 @@ open Vsa.Logic (Triple)
 open Vsa.RuntimeRepr Vsa.MemRepr Vsa.While
 open Vsa.Alloc
 open Vsa.Sim.Code
+open Vsa.Sim.Scaffold
 
 namespace Vsa.Sim
 
@@ -65,73 +67,65 @@ local notation "SpecSt" => Vsa.While.St
 
 set_option linter.unusedVariables false
 
-/-! ## §1. The sailOutput-carrying jal bridge -/
+/-! ## Finite provider for every middle parameter iteration -/
 
-/-- **`JalStepO`** — `BridgeSeg.JalStep` + the sailOutput clause.  The machine
-`jal` writes only `x1`/PC/minstret, so the region `site_*` obs that supplies
-`JalStep` supplies this too; naming it separately keeps the frozen `BridgeSeg`
-untouched (the `segToTripleOut` precedent). -/
-def JalStepO (calleeEntry link : BitVec 64) (σp : MState) (ip up : Nat) : Prop :=
-  ∃ (σ2 : MState) (i2 : Nat),
-    Step ⟨σp, ip, up⟩ ⟨σ2, i2, up + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧
-    σ2.mem = σp.mem ∧
-    σ2.sailOutput = σp.sailOutput ∧
-    σ2.regs.get? Register.PC = some calleeEntry ∧
-    σ2.regs.get? Register.x1 = some link ∧
-    (∃ w, σ2.regs.get? Register.minstret = some w) ∧
-    (∀ (n : Nat), 1 ≤ n → n ≤ 31 → n ≠ 1 →
-      ∀ (w : BitVec 64), gprGet σp n = some w → gprGet σ2 n = some w) ∧
-    (∀ R, AbiPreserved R = true → σ2.regs.get? R = σp.regs.get? R)
+/-- One parameter iteration split at the reflected staging, `env_define`, and
+return-pin boundaries.  No field can restate the carrier-to-carrier route. -/
+structure ClosureFoldStepStages
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf' φc : Addr → Nat)
+    (st : SpecSt) (store' : Store) (cd : ClosureData) (vs : List Value)
+    (frame : Addr) (sp fp clp : BitVec 64) (m0 : Mem)
+    (k : Nat) (hk : k < (cd.params.zip vs).length) : Type where
+  PreDef : Config → Prop
+  PostDef : Config → Prop
+  stage : Triple
+    (callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0 k)
+    PreDef
+  define : EnvDefineCallStages PreDef PostDef
+  pins : ∀ c, PostDef c →
+    FoldDefineReturn N A SL φf' φc st store' cd vs frame sp fp clp m0 k hk c
 
-/-- **`bridgeOfSegOut`** — `bridgeOfSeg` with the sailOutput threaded through
-both the seg body (`segEval_sound` proves it) and the jal step (`JalStepO`).
-Everything else is field-for-field `bridgeOfSeg`. -/
-theorem bridgeOfSegOut (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
-    (σ : MState) (i u : Nat) (pc0 calleeEntry link vm : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (hG : GoodState σ)
-    (hpc : σ.regs.get? Register.PC = some pc0)
-    (hmi : σ.regs.get? Register.minstret = some vm)
-    (hmem : σ.mem = m0)
-    (hL : GHolds σ L)
-    (hkeys : KeysOK (keysG L))
-    (hfacts : ChainFacts σ.mem σ.mem L lds bs)
-    (hi : i < 2)
-    (hwf : ChainOK pc0 (keysG L) bs)
-    (hAvoid : WrChainAvoidAbi bs)
-    (hKeysOut : KeysOK (keysG (evalBlocks bs (SegEvalState.init L lds)).regs))
-    (hRaOut : KeysAvoidRa (evalBlocks bs (SegEvalState.init L lds)).regs)
-    (hjal : ∀ (σ' : MState) (i' u' : Nat),
-      GoodState σ' → i' < 2 →
-      σ'.regs.get? Register.PC = some (evalBlocksPC pc0 (SegEvalState.init L lds) bs) →
-      (∃ w, σ'.regs.get? Register.minstret = some w) →
-      σ'.mem = writeLog m0 (evalBlocks bs (SegEvalState.init L lds)).log →
-      GHolds σ' (evalBlocks bs (SegEvalState.init L lds)).regs →
-      JalStepO calleeEntry link σ' i' u') :
-    ∃ (σ2 : MState) (i2 : Nat),
-      Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + evalBlocksFuel bs + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧
-      σ2.regs.get? Register.PC = some calleeEntry ∧
-      σ2.regs.get? Register.x1 = some link ∧
-      (∃ w, σ2.regs.get? Register.minstret = some w) ∧
-      GHolds σ2 (evalBlocks bs (SegEvalState.init L lds)).regs ∧
-      σ2.mem = writeLog m0 (evalBlocks bs (SegEvalState.init L lds)).log ∧
-      σ2.sailOutput = σ.sailOutput ∧
-      (∀ R, AbiPreserved R = true → σ2.regs.get? R = σ.regs.get? R) := by
-  obtain ⟨σ', i', hs, hi', hG', hmem', hout', hpc', hmi', hregs, hframe⟩ :=
-    segEval_sound bs σ i u pc0 vm L lds hG hpc hmi hL hkeys hfacts hwf hi
-  have habiBody : ∀ R, AbiPreserved R = true → σ'.regs.get? R = σ.regs.get? R :=
-    abiFrame_of_wrChain hAvoid hframe
-  rw [hmem] at hmem'
-  obtain ⟨σ2, i2, hstep2, hi2, hG2, hmem2, hout2, hpc2, hra2, hmi2, hnonra2, habiJal⟩ :=
-    hjal σ' i' (u + evalBlocksFuel bs) hG' hi' hpc' hmi' hmem' hregs
-  refine ⟨σ2, i2, Steps.trans hs (Steps.single hstep2), hi2, hG2, hpc2, hra2, hmi2,
-    ?_, ?_, ?_, ?_⟩
-  · exact gholds_of_jal hnonra2 _ hKeysOut hRaOut hregs
-  · rw [hmem2]; exact hmem'
-  · rw [hout2]; exact hout'
-  · intro R hR; exact (habiJal R hR).trans (habiBody R hR)
+/-- Convert finite per-iteration components into the fold-family interface
+consumed by the entry splice. -/
+theorem closureFoldSeam_of_stages
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf' φc : Addr → Nat}
+    {st : SpecSt} {store' : Store} {cd : ClosureData} {vs : List Value}
+    {frame : Addr} {sp fp clp : BitVec 64} {m0 : Mem}
+    {k : Nat} {hk : k < (cd.params.zip vs).length}
+    (S : ClosureFoldStepStages N A SL φf' φc st store' cd vs frame
+      sp fp clp m0 k hk) :
+    Triple
+      (callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0 k)
+      (callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0
+        (k + 1)) :=
+  callParamFoldSeamStep hk S.stage S.define S.pins
 
-#print axioms bridgeOfSegOut
+#print axioms closureFoldSeam_of_stages
+
+def ClosureFoldStageProvider
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : SpecSt) (store' : Store) (cd : ClosureData) (vs : List Value)
+    (frame : Addr) (sp fp clp : BitVec 64) (m0 : Mem) : Type :=
+  ∀ (φf' : Addr → Nat), PhiExtends φf φf' st.store.frames.size →
+    ∀ k, (hk : k + 1 < (cd.params.zip vs).length) →
+      ClosureFoldStepStages N A SL φf' φc st store' cd vs frame
+        sp fp clp m0 k (Nat.lt_trans (Nat.lt_succ_self k) (by simpa using hk))
+
+theorem closureFoldSeams_of_stages
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : SpecSt} {store' : Store} {cd : ClosureData} {vs : List Value}
+    {frame : Addr} {sp fp clp : BitVec 64} {m0 : Mem}
+    (P : ClosureFoldStageProvider N A SL φf φc st store' cd vs frame
+      sp fp clp m0) :
+    ∀ (φf' : Addr → Nat), PhiExtends φf φf' st.store.frames.size →
+      ∀ k, k + 1 < (cd.params.zip vs).length → Triple
+        (callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0 k)
+        (callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0
+          (k + 1)) := by
+  intro φf' hpe k hk
+  exact closureFoldSeam_of_stages (P φf' hpe k hk)
+
+#print axioms closureFoldSeams_of_stages
 
 /-! ## §2. The enriched body-entry pin list -/
 
@@ -254,6 +248,13 @@ theorem valueNullHandoffSplice
     (hNR : NullRegion (sp + 144#64))
     (hbufStack : SL.lo ≤ sp.toNat + 144 ∧ sp.toNat + 168 ≤ SL.hi)
     (hpe : PhiExtends φf φf' st.store.frames.size)
+    (hne : cd.body ≠ [])
+    (hBodyABI : ∀ (g' : (R : Register) → Option (RegisterType R))
+      (mB : Mem) (c : Config),
+      SegEntry g' N A SL φf' φc (closureBoundSt st store' cd vs frame)
+        (d + 1) (dLeft - 1) (aLeft - 1) callBodyLoopPC mB c →
+      ClosureBodyEntryABI g' N A SL φf' φc
+        (closureBoundSt st store' cd vs frame) (d + 1) frame cd.body sp mB c)
     (hgx2 : g Register.x2 = some sp)
     (hgx9 : g Register.x9 = some sretv)
     (hgx18 : g Register.x18 = some ipv)
@@ -374,27 +375,116 @@ theorem valueNullHandoffSplice
             exact hstage.slot7 i hi
         · -- the amended handoff: the `eval_expr` image at `mB` + the body
           -- SegEntry at callBodyLoopPC (g' := actual regs, by rfl)
-          refine ⟨?_, ?_⟩
-          · -- Eval_exprLoaded σ4.mem: transported across the buffer write
+          have hLoad4 : Vsa.Sim.Code.Eval_exprLoaded σ4.mem := by
             rw [hmem4']
             exact loaded_eval_expr_agreeP c.σ.mem c3.σ.mem
               (fun k hk => hagree k (by
                 rcases hstage.buf_evalcode_disjoint with h | h <;> omega))
               hstage.eval_code
-          refine { good := hG4, tick := hi4, pc := ?_, store := ?_, out := ?_,
-                   mem := rfl, frame := fun R _ => rfl,
-                   depth_budget := hdb, arena_budget := hab }
-          · rw [hpc4]; rfl
-          · show StoreRepr σ4.mem N A φf' φc
-              (closureBoundSt st store' cd vs frame).store
-            rw [hmem4']
-            exact hstage.store_survives c3.σ.mem hagree
-          · exact outRepr_transport (hout4.trans (hout3.trans hout2)) hstage.out)
+          have hSeg4 : SegEntry (fun R => σ4.regs.get? R) N A SL φf' φc
+              (closureBoundSt st store' cd vs frame) (d + 1)
+              (dLeft - 1) (aLeft - 1) callBodyLoopPC σ4.mem ⟨σ4, i4, u4⟩ :=
+            { good := hG4, tick := hi4, pc := by rw [hpc4]; rfl,
+              store := by
+                show StoreRepr σ4.mem N A φf' φc
+                  (closureBoundSt st store' cd vs frame).store
+                rw [hmem4']
+                exact hstage.store_survives c3.σ.mem hagree
+              out := outRepr_transport (hout4.trans (hout3.trans hout2)) hstage.out,
+              mem := rfl, frame := fun R _ => rfl,
+              depth_budget := hdb, arena_budget := hab }
+          rw [show BitVec.ofNat 64 ((g Register.x2).getD 0).toNat = sp by
+            rw [hgx2]; simp]
+          exact closureBodyEntryI_of_abi hne
+            (hBodyABI (fun R => σ4.regs.get? R) σ4.mem ⟨σ4, i4, u4⟩ hSeg4)
+            hLoad4 hSeg4)
       c3 ⟨⟨hG3, rfl, hpc3', hmi3, hGH3,
         (by show KeysOK [2, 9, 18, 21]; decide), hCF3, hi3⟩, rfl⟩
   exact ⟨c4, Steps.trans hs1 (Steps.trans hs2 hs3), hHand⟩
 
 #print axioms valueNullHandoffSplice
+
+/-! ## §4b. The zero-parameter handoff -/
+
+/-- Exact cuts for the zero-parameter route.  The first field only marshals
+the `env_new` post into the reflected return row.  The row itself is executed
+by `noParamsToHandoff_of`; the final field exposes precisely the value-null
+stage consumed by `valueNullHandoffSplice`. -/
+structure ClosureNoParamsStages
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (φf φf' φc : Addr → Nat) (st : SpecSt) (store' : Store)
+    (cd : ClosureData) (vs : List Value) (frame : Addr)
+    (sp sretv ipv clp gs5 gs3 : BitVec 64)
+    (bodyLds : List (List (BitVec 8))) (m0 : Mem)
+    {gpv : BitVec 64} {headroom maxReq : Nat}
+    (M : MallocContract A SL gpv headroom maxReq)
+    (gE : (R : Register) → Option (RegisterType R))
+    (par s0E : BitVec 64) (extsE : List (Nat × Nat))
+    (mEnvNew : Mem) : Type where
+  retA0 : BitVec 64
+  retS6 : BitVec 64
+  retLds : List (List (BitVec 8))
+  retMem : Mem
+  toRow : ∀ c,
+    env_new_post A SL gpv headroom maxReq M gE par (0x800032c0#64) sp s0E
+      extsE N φf φc (some cd.env) mEnvNew c →
+    SegPre callClosureEnvNewRetBypassSeg
+      (callClosureEnvNewRetL sp retA0 retS6) retLds
+      0x800032c0#64 retMem c
+  land : ∀ c,
+    CallClosureEnvNewRetBypassPost sp retA0 retS6 retLds retMem c →
+    ValueNullStage N A SL φf' φc st store' cd vs frame
+      sp sretv ipv clp gs5 gs3 bodyLds m0 c
+
+/-- Execute the zero-parameter return row, then the already finite
+value-null call and body-entry span. -/
+theorem noParamsToHandoff_of
+    (g : (R : Register) → Option (RegisterType R))
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout}
+    {φf φf' φc : Addr → Nat} {st : SpecSt} {store' : Store}
+    {cd : ClosureData} {vs : List Value} {frame : Addr}
+    {d dLeft aLeft : Nat}
+    {sp sretv ipv clp gs5 gs3 : BitVec 64}
+    {bodyLds : List (List (BitVec 8))} {m0 : Mem}
+    {gpv : BitVec 64} {headroom maxReq : Nat}
+    {M : MallocContract A SL gpv headroom maxReq}
+    {gE : (R : Register) → Option (RegisterType R)}
+    {par s0E : BitVec 64} {extsE : List (Nat × Nat)}
+    {mEnvNew : Mem}
+    (S : ClosureNoParamsStages N A SL φf φf' φc st store' cd vs frame
+      sp sretv ipv clp gs5 gs3 bodyLds m0 M gE par s0E extsE mEnvNew)
+    (hspw : sp.toNat + 1088 < 2 ^ 64)
+    (hNR : NullRegion (sp + 144#64))
+    (hbufStack : SL.lo ≤ sp.toNat + 144 ∧ sp.toNat + 168 ≤ SL.hi)
+    (hpe : PhiExtends φf φf' st.store.frames.size)
+    (hne : cd.body ≠ [])
+    (hBodyABI : ∀ (g' : (R : Register) → Option (RegisterType R))
+      (mB : Mem) (c : Config),
+      SegEntry g' N A SL φf' φc (closureBoundSt st store' cd vs frame)
+        (d + 1) (dLeft - 1) (aLeft - 1) callBodyLoopPC mB c →
+      ClosureBodyEntryABI g' N A SL φf' φc
+        (closureBoundSt st store' cd vs frame) (d + 1) frame cd.body sp mB c)
+    (hgx2 : g Register.x2 = some sp)
+    (hgx9 : g Register.x9 = some sretv)
+    (hgx18 : g Register.x18 = some ipv)
+    (hgs5 : g Register.x21 = some gs5)
+    (hgs3 : g Register.x19 = some gs3)
+    (hdb : d + 1 + (dLeft - 1) = maxCallDepth)
+    (hab : A.lo + (aLeft - 1) ≤ A.hi) :
+    Triple
+      (env_new_post A SL gpv headroom maxReq M gE par
+        (0x800032c0#64) sp s0E extsE N φf φc (some cd.env) mEnvNew)
+      (BodyHandoff g N A SL φf φc st store' cd vs frame
+        d dLeft aLeft m0) :=
+  Triple.seq (fun c hc => ⟨c, .refl c, S.toRow c hc⟩) <|
+    Triple.seq
+      (callClosureEnvNewRetBypassRow sp S.retA0 S.retS6 S.retLds S.retMem) <|
+    Triple.seq (fun c hc => ⟨c, .refl c, S.land c hc⟩) <|
+      valueNullHandoffSplice g N A SL φf φf' φc st store' cd vs frame
+        d dLeft aLeft sp sretv ipv clp gs5 gs3 bodyLds m0
+        hspw hNR hbufStack hpe hne hBodyABI hgx2 hgx9 hgx18 hgs5 hgs3 hdb hab
+
+#print axioms noParamsToHandoff_of
 
 /-! ## §5. The LAST-iteration env_define return (the amended `hFoldToHandoff`'s
 machine head)
@@ -576,6 +666,13 @@ theorem foldToHandoff_of
     (hNR : NullRegion (sp + 144#64))
     (hbufStack : SL.lo ≤ sp.toNat + 144 ∧ sp.toNat + 168 ≤ SL.hi)
     (hpe : PhiExtends φf φf' st.store.frames.size)
+    (hne : cd.body ≠ [])
+    (hBodyABI : ∀ (g' : (R : Register) → Option (RegisterType R))
+      (mB : Mem) (c : Config),
+      SegEntry g' N A SL φf' φc (closureBoundSt st store' cd vs frame)
+        (d + 1) (dLeft - 1) (aLeft - 1) callBodyLoopPC mB c →
+      ClosureBodyEntryABI g' N A SL φf' φc
+        (closureBoundSt st store' cd vs frame) (d + 1) frame cd.body sp mB c)
     (hgx2 : g Register.x2 = some sp)
     (hgx9 : g Register.x9 = some sretv)
     (hgx18 : g Register.x18 = some ipv)
@@ -587,21 +684,21 @@ theorem foldToHandoff_of
     (hStage : Triple
       (callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0 k)
       PreDef)
-    (hDefine : Triple PreDef PostDef)
+    (hDefine : EnvDefineCallStages PreDef PostDef)
     (hPins : ∀ c, PostDef c →
       FoldDefineExitReturn N A SL φf' φc st store' cd vs frame
         sp sretv ipv clp gs5 gs3 bodyLds m0 c) :
     Triple
       (callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0 k)
       (BodyHandoff g N A SL φf φc st store' cd vs frame d dLeft aLeft m0) :=
-  Triple.seq hStage (Triple.seq hDefine
+  Triple.seq hStage (Triple.seq (envDefineCall_of_stages hDefine)
     (Triple.seq
       (fun c hc =>
         foldDefineExitReturn_step N A SL φf' φc st store' cd vs frame
           sp sretv ipv clp gs5 gs3 bodyLds m0 c (hPins c hc))
       (valueNullHandoffSplice g N A SL φf φf' φc st store' cd vs frame
         d dLeft aLeft sp sretv ipv clp gs5 gs3 bodyLds m0
-        hspw hNR hbufStack hpe hgx2 hgx9 hgx18 hgs5 hgs3 hdb hab)))
+        hspw hNR hbufStack hpe hne hBodyABI hgx2 hgx9 hgx18 hgs5 hgs3 hdb hab)))
 
 #print axioms foldToHandoff_of
 

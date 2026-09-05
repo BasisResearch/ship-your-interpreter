@@ -1,5 +1,6 @@
 import Vsa.Sim.JmpSites
 import Vsa.Sim.Code.Runtime_error
+import Vsa.Sim.Code.Interp_run
 import Vsa.Sim.ValueSpec
 import Vsa.Sim.ValueTruthySpec
 import Vsa.Sim.Muldi3Spec
@@ -158,6 +159,81 @@ theorem loaded_setjmp_writeMap8 (mem : Std.ExtHashMap Nat (BitVec 8)) (a8 : Nat)
   repeat' apply And.intro
   all_goals (rw [getElem_writeMap8_disjoint _ _ _ _ (by omega)]; simp_all only [])
 
+private theorem interpRunChunk0_of_agree (m m' : Mem)
+    (h : Code.interp_runChunk0 m)
+    (hag : ∀ k, 0x800043ec ≤ k → k < 0x80004588 → m[k]? = m'[k]?) :
+    Code.interp_runChunk0 m' := by
+  simp only [Code.interp_runChunk0] at h ⊢
+  simp_all
+
+private theorem interpRunChunk1_of_agree (m m' : Mem)
+    (h : Code.interp_runChunk1 m)
+    (hag : ∀ k, 0x800043ec ≤ k → k < 0x80004588 → m[k]? = m'[k]?) :
+    Code.interp_runChunk1 m' := by
+  simp only [Code.interp_runChunk1] at h ⊢
+  simp_all
+
+private theorem interpRunChunk2_of_agree (m m' : Mem)
+    (h : Code.interp_runChunk2 m)
+    (hag : ∀ k, 0x800043ec ≤ k → k < 0x80004588 → m[k]? = m'[k]?) :
+    Code.interp_runChunk2 m' := by
+  simp only [Code.interp_runChunk2] at h ⊢
+  simp_all
+
+private theorem interpRunChunk3_of_agree (m m' : Mem)
+    (h : Code.interp_runChunk3 m)
+    (hag : ∀ k, 0x800043ec ≤ k → k < 0x80004588 → m[k]? = m'[k]?) :
+    Code.interp_runChunk3 m' := by
+  simp only [Code.interp_runChunk3] at h ⊢
+  simp_all
+
+private theorem interpRunChunk4_of_agree (m m' : Mem)
+    (h : Code.interp_runChunk4 m)
+    (hag : ∀ k, 0x800043ec ≤ k → k < 0x80004588 → m[k]? = m'[k]?) :
+    Code.interp_runChunk4 m' := by
+  simp only [Code.interp_runChunk4] at h ⊢
+  simp_all
+
+private theorem interpRunChunk5_of_agree (m m' : Mem)
+    (h : Code.interp_runChunk5 m)
+    (hag : ∀ k, 0x800043ec ≤ k → k < 0x80004588 → m[k]? = m'[k]?) :
+    Code.interp_runChunk5 m' := by
+  simp only [Code.interp_runChunk5] at h ⊢
+  simp_all
+
+private theorem interpRunChunk6_of_agree (m m' : Mem)
+    (h : Code.interp_runChunk6 m)
+    (hag : ∀ k, 0x800043ec ≤ k → k < 0x80004588 → m[k]? = m'[k]?) :
+    Code.interp_runChunk6 m' := by
+  simp only [Code.interp_runChunk6] at h ⊢
+  simp_all
+
+/-- Byte agreement over the concrete code interval transports the complete
+`interp_run` image.  Each generated chunk is checked in a separate opaque
+lemma, avoiding one giant conjunction reduction. -/
+theorem loaded_interp_run_of_agree (m m' : Mem)
+    (h : Code.Interp_runLoaded m)
+    (hag : ∀ k, 0x800043ec ≤ k → k < 0x80004588 → m[k]? = m'[k]?) :
+    Code.Interp_runLoaded m' :=
+  ⟨interpRunChunk0_of_agree m m' (Code.interp_run_chunk0 h) hag,
+   interpRunChunk1_of_agree m m' (Code.interp_run_chunk1 h) hag,
+   interpRunChunk2_of_agree m m' (Code.interp_run_chunk2 h) hag,
+   interpRunChunk3_of_agree m m' (Code.interp_run_chunk3 h) hag,
+   interpRunChunk4_of_agree m m' (Code.interp_run_chunk4 h) hag,
+   interpRunChunk5_of_agree m m' (Code.interp_run_chunk5 h) hag,
+   interpRunChunk6_of_agree m m' (Code.interp_run_chunk6 h) hag⟩
+
+/-- The `interp_run` image survives an 8-byte write disjoint from its code. -/
+theorem loaded_interp_run_writeMap8 (mem : Std.ExtHashMap Nat (BitVec 8))
+    (a8 : Nat) (d : BitVec (8 * 8))
+    (hdis : a8 + 8 ≤ 0x800043ec ∨ 0x80004588 ≤ a8)
+    (h : Code.Interp_runLoaded mem) :
+    Code.Interp_runLoaded (writeMap8 mem a8 d) := by
+  apply loaded_interp_run_of_agree mem (writeMap8 mem a8 d) h
+  intro k hklo hkhi
+  rw [getElem_writeMap8_disjoint _ _ _ _ (by
+    rcases hdis with hbefore | hafter <;> omega)]
+
 /-! ## Pointer-offset helpers: `(jb + sext offX).toNat = jb.toNat + X` (no wrap) -/
 
 theorem joff (base : BitVec 64) (off : BitVec 12) (X : Nat)
@@ -192,6 +268,17 @@ abbrev setjmpBuf (m0 : Std.ExtHashMap Nat (BitVec 8)) (jb : BitVec 64)
     (jb.toNat + 96)  (sdData_val s11v))
     (jb.toNat + 104) (sdData_val spv)
 
+/-- A byte outside the 112-byte jump buffer is unchanged by the exact setjmp
+store chain. -/
+theorem setjmpBuf_out (m0 : Std.ExtHashMap Nat (BitVec 8)) (jb : BitVec 64)
+    (ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv : BitVec 64)
+    (k : Nat) (hk : k < jb.toNat ∨ jb.toNat + 112 ≤ k) :
+    (setjmpBuf m0 jb ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv)[k]? =
+      m0[k]? := by
+  unfold setjmpBuf
+  repeat' rw [getElem_writeMap8_disjoint]
+  all_goals omega
+
 /-! ## `WinRAM jb`: the 112-byte buffer window is in usable RAM, above HTIF, aligned,
 and disjoint from the setjmp/longjmp code text. -/
 structure WinRAM (jb : BitVec 64) : Prop where
@@ -204,6 +291,22 @@ structure WinRAM (jb : BitVec 64) : Prop where
   /-- disjoint from longjmp code `[0x8000703c, 0x80007080)`. -/
   code_lj : jb.toNat + 112 ≤ 0x8000703c ∨ 0x80007080 ≤ jb.toNat
 
+/-- The whole `interp_run` image survives the exact `setjmp` buffer chain. -/
+theorem loaded_interp_run_setjmpBuf
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (jb : BitVec 64)
+    (ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv : BitVec 64)
+    (hwin : WinRAM jb) (hload : Code.Interp_runLoaded m0) :
+    Code.Interp_runLoaded
+      (setjmpBuf m0 jb ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv) := by
+  apply loaded_interp_run_of_agree m0 _ hload
+  intro k _ hkhi
+  symm
+  apply setjmpBuf_out
+  left
+  have hw := hwin.win
+  change 0x8001ad00 + 16 ≤ jb.toNat at hw
+  omega
+
 /-! ## `setjmp_spec` -/
 
 /-- `setjmp_pre`: entry at `0x80006ffc` with `a0 = jb` (the buffer address), the 14
@@ -212,8 +315,9 @@ live callee-saved GPRs held in `x1,x8,x9,x18..x27,x2`, code loaded, `mem = m0`,
 `ra0` 4-aligned (so `ret` lands cleanly). -/
 def setjmp_pre (g : (R : Register) → Option (RegisterType R)) (jb : BitVec 64)
     (ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
-  GoodState c.σ ∧ SetjmpLoaded c.σ.mem ∧ c.σ.mem = m0 ∧
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String) (c : Config) : Prop :=
+  GoodState c.σ ∧ SetjmpLoaded c.σ.mem ∧ Code.Interp_runLoaded c.σ.mem ∧ c.σ.mem = m0 ∧
+  c.σ.sailOutput = out0 ∧
   c.σ.regs.get? Register.PC = some (0x80006ffc#64 : BitVec 64) ∧
   c.σ.regs.get? Register.x10 = some jb ∧
   c.σ.regs.get? Register.x1 = some ra0 ∧ ra0.toNat % 4 = 0 ∧
@@ -233,22 +337,25 @@ buffer write chain `setjmpBuf …` (the 14 saved values at `jb+0..jb+104` — th
 load-bearing part), and every register other than `x10`/`PC`/noise framed to `g`. -/
 def setjmp_post (g : (R : Register) → Option (RegisterType R)) (jb : BitVec 64)
     (ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (c : Config) : Prop :=
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String) (c : Config) : Prop :=
   GoodState c.σ ∧ c.tick < 2 ∧
   c.σ.regs.get? Register.PC = some ra0 ∧
   c.σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧
+  c.σ.regs.get? Register.x2 = some spv ∧
   c.σ.mem = setjmpBuf m0 jb ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv ∧
+  Code.Interp_runLoaded c.σ.mem ∧
+  c.σ.sailOutput = out0 ∧
   (∃ v, c.σ.regs.get? Register.minstret = some v) ∧
   (∀ R : Register, NotWrittenJmp R → c.σ.regs.get? R = g R)
 
 /-- **`setjmp` total-correctness spec** (initial zero-return passage). -/
 theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVec 64)
     (ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) :
-    Triple (setjmp_pre g jb ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv m0)
-      (setjmp_post g jb ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv m0) := by
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String) :
+    Triple (setjmp_pre g jb ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv m0 out0)
+      (setjmp_post g jb ra0 s0v s1v s2v s3v s4v s5v s6v s7v s8v s9v s10v s11v spv m0 out0) := by
   intro c hpre
-  obtain ⟨hG, hloaded, hmem, hpc, ha0, hra, hraA, hs0, hs1, hs2, hs3, hs4, hs5, hs6,
+  obtain ⟨hG, hloaded, hrun, hmem, hout0, hpc, ha0, hra, hraA, hs0, hs1, hs2, hs3, hs4, hs5, hs6,
     hs7, hs8, hs9, hs10, hs11, hsp, hWin, ⟨vmi, hmi⟩, htick, hframe⟩ := hpre
   obtain ⟨hlo, hhi, hwin, halgn, hcsj, hclj⟩ := hWin
   have hj0 : (jb + sign_extend (m := 64) (0x000#12)).toNat = jb.toNat + 0 := by
@@ -614,6 +721,7 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
     have := obs_store_pc_val hobs14
     rwa [show BitVec.addInt (0x80007030#64 : BitVec 64) 4 = (0x80007034#64 : BitVec 64) from by decide] at this
   have h_x10_14 := obs_store_other_val' hobs14 Register.x10 (by decide) h_x10_13
+  have h_x2_14 := obs_store_other_val' hobs14 Register.x2 (by decide) h_x2_13
   have h_x1_14 := obs_store_other_val' hobs14 Register.x1 (by decide) h_x1_13
   obtain ⟨vmi14, hmi14⟩ := obs_store_minstret_val hobs14
   have hmc14' : σ14.mem = writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (writeMap8 (m0) (jb.toNat + 0) (sdData_val ra0)) (jb.toNat + 8) (sdData_val s0v)) (jb.toNat + 16) (sdData_val s1v)) (jb.toNat + 24) (sdData_val s2v)) (jb.toNat + 32) (sdData_val s3v)) (jb.toNat + 40) (sdData_val s4v)) (jb.toNat + 48) (sdData_val s5v)) (jb.toNat + 56) (sdData_val s6v)) (jb.toNat + 64) (sdData_val s7v)) (jb.toNat + 72) (sdData_val s8v)) (jb.toNat + 80) (sdData_val s9v)) (jb.toNat + 88) (sdData_val s10v)) (jb.toNat + 96) (sdData_val s11v)) (jb.toNat + 104) (sdData_val spv) := by
@@ -631,6 +739,7 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
     have := obs_alu_rd hobs15 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [show ((0#64) + sign_extend (m := 64) (0x000#12) : BitVec 64) = 0#64 from by apply BitVec.eq_of_toNat_eq; decide] at this
   have hra_15 := obs_alu_other' hobs15 Register.x1 (by decide) h_x1_14
+  have h_x2_15 := obs_alu_other' hobs15 Register.x2 (by decide) h_x2_14
   obtain ⟨vmi15, hmi15⟩ := obs_alu_minstret hobs15
   have hmc15' : σ15.mem = σ14.mem := hmc15
   have hload15 : SetjmpLoaded σ15.mem := hmc15' ▸ hload14
@@ -642,8 +751,29 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
     have := obs_jr_pc hobs16
     rwa [ret_tgt ra0 hraA] at this
   have ha0_16 := obs_jr_other' hobs16 Register.x10 (by decide) ha0_15
+  have h_x2_16 := obs_jr_other' hobs16 Register.x2 (by decide) h_x2_15
   obtain ⟨vmi16, hmi16⟩ := obs_jr_minstret hobs16
   have hmc16' : σ16.mem = σ14.mem := by rw [hmc16, hmc15']
+  have hout16 : σ16.sailOutput = out0 := by
+    calc
+      σ16.sailOutput = σ15.sailOutput := by
+        rw [hobs16.out, sailOutput_sigmaPost_jump_x0]
+      _ = σ14.sailOutput := by rw [hobs15.out, sailOutput_sigmaPost_alu]
+      _ = σ13.sailOutput := by rw [hobs14.out, sailOutput_sigmaPost_store]
+      _ = σ12.sailOutput := by rw [hobs13.out, sailOutput_sigmaPost_store]
+      _ = σ11.sailOutput := by rw [hobs12.out, sailOutput_sigmaPost_store]
+      _ = σ10.sailOutput := by rw [hobs11.out, sailOutput_sigmaPost_store]
+      _ = σ9.sailOutput := by rw [hobs10.out, sailOutput_sigmaPost_store]
+      _ = σ8.sailOutput := by rw [hobs9.out, sailOutput_sigmaPost_store]
+      _ = σ7.sailOutput := by rw [hobs8.out, sailOutput_sigmaPost_store]
+      _ = σ6.sailOutput := by rw [hobs7.out, sailOutput_sigmaPost_store]
+      _ = σ5.sailOutput := by rw [hobs6.out, sailOutput_sigmaPost_store]
+      _ = σ4.sailOutput := by rw [hobs5.out, sailOutput_sigmaPost_store]
+      _ = σ3.sailOutput := by rw [hobs4.out, sailOutput_sigmaPost_store]
+      _ = σ2.sailOutput := by rw [hobs3.out, sailOutput_sigmaPost_store]
+      _ = σ1.sailOutput := by rw [hobs2.out, sailOutput_sigmaPost_store]
+      _ = c.σ.sailOutput := by rw [hobs1.out, sailOutput_sigmaPost_store]
+      _ = out0 := hout0
   refine ⟨⟨σ16, i16, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩, ?_, ?_⟩
   · have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hs_1
     exact Steps.trans (Steps.single hstep1) (Steps.trans (Steps.single hs_2) (Steps.trans (Steps.single hs_3)
@@ -652,8 +782,13 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
       (Steps.trans (Steps.single hs_10) (Steps.trans (Steps.single hs_11) (Steps.trans (Steps.single hs_12)
       (Steps.trans (Steps.single hs_13) (Steps.trans (Steps.single hs_14) (Steps.trans (Steps.single hs_15)
       (Steps.single hs_16)))))))))))))))
-  · refine ⟨hG16, hi16, hpc16, ha0_16, ?_, ⟨vmi16, hmi16⟩, ?_⟩
+  · refine ⟨hG16, hi16, hpc16, ha0_16, h_x2_16, ?_, ?_, hout16,
+      ⟨vmi16, hmi16⟩, ?_⟩
     · rw [hmc16', hmc14']
+    · rw [hmc16', hmc14']
+      exact loaded_interp_run_setjmpBuf m0 jb ra0 s0v s1v s2v s3v s4v s5v
+        s6v s7v s8v s9v s10v s11v spv
+        ⟨hlo, hhi, hwin, halgn, hcsj, hclj⟩ (hmem ▸ hrun)
     · intro R hR
       rw [frame_jr_jmp hobs16 R hR]
       rw [frame_alu_jmp hobs15 R hR.x10 hR]
@@ -672,6 +807,11 @@ theorem setjmp_spec (g : (R : Register) → Option (RegisterType R)) (jb : BitVe
       rw [frame_store_jmp hobs2 R hR]
       rw [frame_store_jmp hobs1 R hR]
       exact hframe R hR
+
+#print axioms loaded_interp_run_of_agree
+#print axioms setjmpBuf_out
+#print axioms loaded_interp_run_setjmpBuf
+#print axioms setjmp_spec
 
 /-! ## longjmp: `read64` → 8 bytes + loaded-value identity
 

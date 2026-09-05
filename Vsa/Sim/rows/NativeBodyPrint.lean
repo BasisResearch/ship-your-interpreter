@@ -1,6 +1,7 @@
 import Vsa.Sim.rows.NativeArmSplice
 import Vsa.Sim.EvalCallPrint
 import Vsa.Sim.EvalSimCommon
+import Vsa.Sim.rows.ValuePrintContract
 
 /-!
 # `NativeBodyPrint` — the print/println body legs of the native splice (wave 42)
@@ -197,9 +198,13 @@ structure NativePrintEntry
   store : StoreRepr m0 N A φf φc sStore
   /-- the console so far. -/
   out : Vsa.Machine.output c.σ = out0
+  /-- The post-CRT stdout state used by every output leaf. -/
+  console : ConsoleStream m0
   /-- the arg vector, one 24-byte `ValueRepr` slot per argument. -/
   args : ∀ i, (hi : i < vs.length) →
     ValueRepr m0 N φc (argsBase.toNat + 24 * i) vs[i]
+  /-- Every closure argument denotes an allocated closure. -/
+  valuesBounded : ValuesClosuresBounded sStore.closures.size vs
   argsBytes : ∀ j : Nat, j < 24 * vs.length → ∃ b, m0[argsBase.toNat + j]? = some b
   region : NativePrintRegion SL fsp sret argsBase
   /-- the `ret` target is 4-aligned. -/
@@ -225,6 +230,8 @@ structure NativeFnOutExit
   sretNull : ValueRepr c.σ.mem N φc sret.toNat .null
   /-- **The output-append contract** — the whole point of the print natives. -/
   out : Vsa.Machine.output c.σ = out0 ++ outApp
+  /-- Output calls restore the stable one-byte stdout state. -/
+  console : ConsoleStream c.σ.mem
   /-- memory framed: everything at/above `fsp` and everything outside the
   stack region is untouched, except the 24-byte sret write.  (The HTIF
   `tohost` store never touches `σ.mem`.) -/
@@ -284,6 +291,185 @@ def NativePrintlnInternal (N : NativeAddrs) (A : Arena) (SL : StackLayout) : Pro
       (NativeFnOutExit g N φc SL fsp sret retAddr
         (printArgs sStore vs ++ "\n") out0 m0)
 
+/-! ## §3a. Constructing `NativePrintInternal` from local machine pieces -/
+
+/-- Exact loop-head invariant after `i ≥ 1` values have been printed.  The
+cursor is the last printed 24-byte Value slot, not one-past-the-end. -/
+structure NativePrintLoopInv
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sStore : Store) (vs : List Value) (out0 : String)
+    (fsp sret argsBase : BitVec 64) (m0 : Mem) (i : Nat) (c : Config) : Prop where
+  good : GoodState c.σ
+  tick : c.tick < 2
+  pc : c.σ.regs.get? Register.PC = some 0x80002f4c#64
+  sp : c.σ.regs.get? Register.x2 = some (fsp - 80#64)
+  cursor : c.σ.regs.get? Register.x8 = some
+    (argsBase + BitVec.ofNat 64 (24 * (i - 1)))
+  index : c.σ.regs.get? Register.x9 = some (BitVec.ofNat 64 i)
+  argc : c.σ.regs.get? Register.x19 = some (BitVec.ofNat 64 vs.length)
+  result : c.σ.regs.get? Register.x20 = some sret
+  minstret : ∃ w, c.σ.regs.get? Register.minstret = some w
+  out : Vsa.Machine.output c.σ = out0 ++ printedPrefix sStore vs i
+  console : ConsoleStream c.σ.mem
+  store : StoreRepr c.σ.mem N A φf φc sStore
+  args : ∀ j, (hj : j < vs.length) →
+    ValueRepr c.σ.mem N φc (argsBase.toNat + 24 * j) vs[j]
+  valuesBounded : ValuesClosuresBounded sStore.closures.size vs
+  region : NativePrintRegion SL fsp sret argsBase
+  frame : ∀ R : Register, AbiPreservedNoise R →
+    (Register.x8 == R) = false → (Register.x9 == R) = false →
+    (Register.x18 == R) = false → (Register.x19 == R) = false →
+    (Register.x20 == R) = false → c.σ.regs.get? R = g R
+
+/-- Local machine pieces for `native_print`.  `empty`, `first`, `next`, and
+`finish` are disjoint concrete regions.  The per-value semantic dependency is
+the dispatch/arm composition in `ValuePrintContract`; separator output is the
+leaf `fputc` contract.  No field states the whole native function. -/
+structure NativePrintComponents (N : NativeAddrs) (A : Arena) (SL : StackLayout) where
+  io : CallIOContracts SL
+  valueDispatch : ∀ φc, ValuePrintDispatch N φc
+  valueArms : ValuePrintArmsContract SL
+  empty : ∀ (g : (R : Register) → Option (RegisterType R)) (φf φc : Addr → Nat)
+      (sStore : Store) (out0 : String)
+      (fsp sret retAddr interp argsBase scratch : BitVec 64) (m0 : Mem),
+    Triple
+      (fun c => NativePrintEntry g N A SL φf φc sStore [] out0 nativePrintPC
+        fsp sret retAddr interp argsBase scratch m0 c ∧ NativePrintExtra c)
+      (NativeFnOutExit g N φc SL fsp sret retAddr "" out0 m0)
+  first : ∀ (g : (R : Register) → Option (RegisterType R)) (φf φc : Addr → Nat)
+      (sStore : Store) (v : Value) (vs : List Value) (out0 : String)
+      (fsp sret retAddr interp argsBase scratch : BitVec 64) (m0 : Mem),
+    Triple
+      (fun c => NativePrintEntry g N A SL φf φc sStore (v :: vs) out0 nativePrintPC
+        fsp sret retAddr interp argsBase scratch m0 c ∧ NativePrintExtra c)
+      (NativePrintLoopInv g N A SL φf φc sStore (v :: vs) out0
+        fsp sret argsBase m0 1)
+  next : ∀ (g : (R : Register) → Option (RegisterType R)) (φf φc : Addr → Nat)
+      (sStore : Store) (vs : List Value) (out0 : String)
+      (fsp sret argsBase : BitVec 64) (m0 : Mem) (i : Nat),
+    1 ≤ i → i < vs.length →
+    Triple
+      (NativePrintLoopInv g N A SL φf φc sStore vs out0 fsp sret argsBase m0 i)
+      (NativePrintLoopInv g N A SL φf φc sStore vs out0 fsp sret argsBase m0 (i + 1))
+  finish : ∀ (g : (R : Register) → Option (RegisterType R)) (φf φc : Addr → Nat)
+      (sStore : Store) (vs : List Value) (out0 : String)
+      (fsp sret retAddr argsBase : BitVec 64) (m0 : Mem),
+    Triple
+      (NativePrintLoopInv g N A SL φf φc sStore vs out0
+        fsp sret argsBase m0 vs.length)
+      (NativeFnOutExit g N φc SL fsp sret retAddr (printArgs sStore vs) out0 m0)
+
+private theorem nativePrintLoopSteps
+    (C : NativePrintComponents N A SL)
+    (g : (R : Register) → Option (RegisterType R)) (φf φc : Addr → Nat)
+    (sStore : Store) (vs : List Value) (out0 : String)
+    (fsp sret argsBase : BitVec 64) (m0 : Mem)
+    (i fuel : Nat) (hi : 1 ≤ i) (hsum : i + fuel = vs.length) :
+    Triple
+      (NativePrintLoopInv g N A SL φf φc sStore vs out0 fsp sret argsBase m0 i)
+      (NativePrintLoopInv g N A SL φf φc sStore vs out0
+        fsp sret argsBase m0 vs.length) := by
+  induction fuel generalizing i with
+  | zero =>
+      have : i = vs.length := by omega
+      subst i
+      exact Triple.rfl
+  | succ fuel ih =>
+      have hlt : i < vs.length := by omega
+      exact Triple.seq (C.next g φf φc sStore vs out0 fsp sret argsBase m0 i hi hlt)
+        (ih (i + 1) (by omega) (by omega))
+
+/-- `NativePrintInternal` is derived from the four local native regions.  The
+nonempty case uses the exact printed-prefix invariant and a finite induction
+over the remaining argument count. -/
+theorem nativePrintInternal_of_components
+    (C : NativePrintComponents N A SL) : NativePrintInternal N A SL := by
+  intro g φf φc sStore vs out0 fsp sret retAddr interp argsBase scratch m0
+  cases vs with
+  | nil =>
+      simpa [printArgs] using
+        C.empty g φf φc sStore out0 fsp sret retAddr interp argsBase scratch m0
+  | cons v vs =>
+      have hlen : 1 + vs.length = (v :: vs).length := by
+        simp only [List.length_cons]
+        omega
+      exact Triple.seq
+        (C.first g φf φc sStore v vs out0 fsp sret retAddr interp argsBase scratch m0)
+        (Triple.seq
+          (nativePrintLoopSteps C g φf φc sStore (v :: vs) out0 fsp sret argsBase m0
+            1 vs.length (by omega) hlen)
+          (C.finish g φf φc sStore (v :: vs) out0 fsp sret retAddr argsBase m0))
+
+#print axioms nativePrintInternal_of_components
+
+/-- Boundary after the reflected `native_println` prologue and its `jal
+native_print`.  The inner print has its own frame and post-prologue memory. -/
+def NativePrintlnPrintEntry
+    (C : NativePrintComponents N A SL)
+    (g : (R : Register) → Option (RegisterType R)) (φf φc : Addr → Nat)
+    (sStore : Store) (vs : List Value) (out0 : String)
+    (fsp interp argsBase scratch : BitVec 64) (c : Config) : Prop :=
+  ∃ (gPrint : (R : Register) → Option (RegisterType R)) (mPrint : Mem),
+    NativePrintEntry gPrint N A SL φf φc sStore vs out0 nativePrintPC
+      (fsp - 48#64) (fsp - 48#64) (0x80002f94#64) interp argsBase scratch mPrint c ∧
+    NativePrintExtra c
+
+/-- Boundary immediately after the nested `native_print` returns. -/
+def NativePrintlnAfterPrint
+    (C : NativePrintComponents N A SL)
+    (g : (R : Register) → Option (RegisterType R)) (φc : Addr → Nat)
+    (sStore : Store) (vs : List Value) (out0 : String) (fsp : BitVec 64)
+    (c : Config) : Prop :=
+  ∃ (gPrint : (R : Register) → Option (RegisterType R)) (mPrint : Mem),
+    NativeFnOutExit gPrint N φc SL (fsp - 48#64) (fsp - 48#64)
+      (0x80002f94#64) (printArgs sStore vs) out0 mPrint c
+
+/-- Local `native_println` wrapper pieces.  `prefix` is the concrete prologue
+through the nested-call entry.  `suffix` is the return-site loads, exact
+`fputc('\n')` leaf, `value_null`, restores, and `ret`.  The nested print is
+derived from `print`, not assumed as a whole-function premise. -/
+structure NativePrintlnComponents (N : NativeAddrs) (A : Arena) (SL : StackLayout) where
+  print : NativePrintComponents N A SL
+  prologue : ∀ (g : (R : Register) → Option (RegisterType R)) (φf φc : Addr → Nat)
+      (sStore : Store) (vs : List Value) (out0 : String)
+      (fsp sret retAddr interp argsBase scratch : BitVec 64) (m0 : Mem),
+    Triple
+      (fun c => NativePrintEntry g N A SL φf φc sStore vs out0 nativePrintlnPC
+        fsp sret retAddr interp argsBase scratch m0 c ∧ NativePrintlnExtra c)
+      (NativePrintlnPrintEntry print g φf φc sStore vs out0
+        fsp interp argsBase scratch)
+  epilogue : ∀ (g : (R : Register) → Option (RegisterType R)) (φf φc : Addr → Nat)
+      (sStore : Store) (vs : List Value) (out0 : String)
+      (fsp sret retAddr interp argsBase scratch : BitVec 64) (m0 : Mem),
+    Triple
+      (NativePrintlnAfterPrint print g φc sStore vs out0 fsp)
+      (NativeFnOutExit g N φc SL fsp sret retAddr
+        (printArgs sStore vs ++ "\n") out0 m0)
+
+/-- Derive the whole println helper from its reflected wrapper and the already
+decomposed print loop. -/
+theorem nativePrintlnInternal_of_components
+    (C : NativePrintlnComponents N A SL) : NativePrintlnInternal N A SL := by
+  intro g φf φc sStore vs out0 fsp sret retAddr interp argsBase scratch m0
+  have hPrint : Triple
+      (NativePrintlnPrintEntry C.print g φf φc sStore vs out0
+        fsp interp argsBase scratch)
+      (NativePrintlnAfterPrint C.print g φc sStore vs out0 fsp) := by
+    intro c hc
+    obtain ⟨gPrint, mPrint, hEntry⟩ := hc
+    obtain ⟨c', hs, hExit⟩ :=
+      nativePrintInternal_of_components C.print gPrint φf φc sStore vs out0
+        (fsp - 48#64) (fsp - 48#64) (0x80002f94#64) interp argsBase scratch
+        mPrint c hEntry
+    exact ⟨c', hs, gPrint, mPrint, hExit⟩
+  exact Triple.seq
+    (C.prologue g φf φc sStore vs out0 fsp sret retAddr interp argsBase scratch m0)
+    (Triple.seq hPrint
+      (C.epilogue g φf φc sStore vs out0 fsp sret retAddr interp argsBase scratch m0))
+
+#print axioms nativePrintlnInternal_of_components
+
 /-! ## §4. The shared marshal — internal run → `NativeBodyPre/Post` boundary
 
 ONE theorem, parametric over the appended output `outApp`, the entry PC, and
@@ -315,7 +501,8 @@ theorem nativeBodyOut
     Triple
       (fun c => NativeBodyPre g N A SL φf φc st vs fentry
           spv s7v sret interp argsBase scratch m0 c ∧ Extra c)
-      (NativeBodyPost g N A SL φf φc ⟨st.store, st.out ++ outApp⟩ spv s7v m0) := by
+      (NativeBodyPost g N A SL φf φc ⟨st.store, st.out ++ outApp⟩
+        spv s7v sret m0) := by
   intro c hc
   obtain ⟨hpre, hextra⟩ := hc
   obtain ⟨vm, hvm⟩ := hpre.minstret
@@ -338,6 +525,8 @@ theorem nativeBodyOut
       store := hpre.store
       out := hpre.out
       args := hpre.args
+      valuesBounded := hpre.valuesBounded
+      console := hpre.console
       argsBytes := hpre.argsBytes
       region := hRG
       rettgt := by decide
@@ -367,6 +556,7 @@ theorem nativeBodyOut
       loaded := ?_
       store := ?_
       out := ?_
+      sretNull := hexit.sretNull
       frame := ?_
       s7slot := ?_
       memFrame := ?_ }
@@ -420,18 +610,19 @@ theorem nativeBodyPrint
     (hsretSlot : sret.toNat + 24 ≤ spv.toNat + 1016 ∨ spv.toNat + 1024 ≤ sret.toNat)
     (hcodeStack : ∀ a : Nat, 0x80003164 ≤ a → a < 0x80003fe0 →
       ¬ (SL.lo ≤ a ∧ a < SL.hi))
-    (hInternal : NativePrintInternal N A SL) :
+    (hComponents : NativePrintComponents N A SL) :
     Triple
       (fun c => NativeBodyPre g N A SL φf φc st vs fentry
           spv s7v sret interp argsBase scratch m0 c ∧ NativePrintExtra c)
       (NativeBodyPost g N A SL φf φc ⟨st.store, st.out ++ printArgs st.store vs⟩
-        spv s7v m0) := by
+        spv s7v sret m0) := by
   subst hfe
   exact nativeBodyOut g N A SL φf φc st vs (printArgs st.store vs) nativePrintPC
     spv s7v sret interp argsBase scratch m0 NativePrintExtra
     hRG hsretSlot hcodeStack
     (fun g_np out0 m0' =>
-      hInternal g_np φf φc st.store vs out0 spv sret (0x800039f8#64)
+      (nativePrintInternal_of_components hComponents) g_np φf φc st.store vs out0
+        spv sret (0x800039f8#64)
         interp argsBase scratch m0')
 
 /-- **The println body leg** from the internal-run residual. -/
@@ -445,18 +636,20 @@ theorem nativeBodyPrintln
     (hsretSlot : sret.toNat + 24 ≤ spv.toNat + 1016 ∨ spv.toNat + 1024 ≤ sret.toNat)
     (hcodeStack : ∀ a : Nat, 0x80003164 ≤ a → a < 0x80003fe0 →
       ¬ (SL.lo ≤ a ∧ a < SL.hi))
-    (hInternal : NativePrintlnInternal N A SL) :
+    (hComponents : NativePrintlnComponents N A SL) :
     Triple
       (fun c => NativeBodyPre g N A SL φf φc st vs fentry
           spv s7v sret interp argsBase scratch m0 c ∧ NativePrintlnExtra c)
       (NativeBodyPost g N A SL φf φc
-        ⟨st.store, st.out ++ (printArgs st.store vs ++ "\n")⟩ spv s7v m0) := by
+        ⟨st.store, st.out ++ (printArgs st.store vs ++ "\n")⟩
+        spv s7v sret m0) := by
   subst hfe
   exact nativeBodyOut g N A SL φf φc st vs (printArgs st.store vs ++ "\n")
     nativePrintlnPC spv s7v sret interp argsBase scratch m0 NativePrintlnExtra
     hRG hsretSlot hcodeStack
     (fun g_np out0 m0' =>
-      hInternal g_np φf φc st.store vs out0 spv sret (0x800039f8#64)
+      (nativePrintlnInternal_of_components hComponents) g_np φf φc st.store vs out0
+        spv sret (0x800039f8#64)
         interp argsBase scratch m0')
 
 /-- **`NativePrintSpec` reduced** to the dispatch leg + the internal-run
@@ -477,16 +670,16 @@ theorem nativePrintSpec_of_internal
     (hsretSlot : sret.toNat + 24 ≤ spv.toNat + 1016 ∨ spv.toNat + 1024 ≤ sret.toNat)
     (hcodeStack : ∀ a : Nat, 0x80003164 ≤ a → a < 0x80003fe0 →
       ¬ (SL.lo ≤ a ∧ a < SL.hi))
-    (hInternal : NativePrintInternal N A SL)
+    (hComponents : NativePrintComponents N A SL)
     (hDispatch : Triple (CallEntryP g N A SL φf φc st d dLeft aLeft m0)
       (fun c => NativeBodyPre g N A SL φf φc st vs fentry
           spv s7v sret interp argsBase scratch m0 c ∧ NativePrintExtra c)) :
     NativePrintSpec g N A SL φf φc st d dLeft aLeft m0 vs :=
-  nativePrintSpec_of_splice g N A SL φf φc st d dLeft aLeft m0 vs spv s7v _
+  nativePrintSpec_of_splice g N A SL φf φc st d dLeft aLeft m0 vs spv s7v sret _
     hgsp hgs7 hslotLo hslotHi hslotHtif hslotAlign hDispatch
     (nativeBodyPrint g N A SL φf φc st vs fentry
       spv s7v sret interp argsBase scratch m0
-      hfe hRG hsretSlot hcodeStack hInternal)
+      hfe hRG hsretSlot hcodeStack hComponents)
 
 /-- **`NativePrintlnSpec` reduced** to the dispatch leg + the internal-run
 residual (the `hCallPrintln` RemainingWork field, one splice away). -/
@@ -506,24 +699,105 @@ theorem nativePrintlnSpec_of_internal
     (hsretSlot : sret.toNat + 24 ≤ spv.toNat + 1016 ∨ spv.toNat + 1024 ≤ sret.toNat)
     (hcodeStack : ∀ a : Nat, 0x80003164 ≤ a → a < 0x80003fe0 →
       ¬ (SL.lo ≤ a ∧ a < SL.hi))
-    (hInternal : NativePrintlnInternal N A SL)
+    (hComponents : NativePrintlnComponents N A SL)
     (hDispatch : Triple (CallEntryP g N A SL φf φc st d dLeft aLeft m0)
       (fun c => NativeBodyPre g N A SL φf φc st vs fentry
           spv s7v sret interp argsBase scratch m0 c ∧ NativePrintlnExtra c)) :
     NativePrintlnSpec g N A SL φf φc st d dLeft aLeft m0 vs := by
-  refine nativePrintlnSpec_of_splice g N A SL φf φc st d dLeft aLeft m0 vs spv s7v _
+  refine nativePrintlnSpec_of_splice g N A SL φf φc st d dLeft aLeft m0 vs spv s7v sret _
     hgsp hgs7 hslotLo hslotHi hslotHtif hslotAlign hDispatch ?_
   have h := nativeBodyPrintln g N A SL φf φc st vs fentry
     spv s7v sret interp argsBase scratch m0
-    hfe hRG hsretSlot hcodeStack hInternal
+    hfe hRG hsretSlot hcodeStack hComponents
   rwa [show st.out ++ (printArgs st.store vs ++ "\n")
       = st.out ++ printArgs st.store vs ++ "\n" from by
     rw [String.append_assoc]] at h
+
+/-! ## Indexed call-boundary assemblies
+
+These variants retain the staged callee, argument vector, result buffer, and
+`.null` result.  They are the forms consumed by `CallPrintResid` and
+`CallPrintlnResid`; the older `Native*Spec` projections intentionally omit
+those facts. -/
+
+theorem nativeCallPrintIndexed_of_internal
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem) (vs : List Value)
+    (fentry : Nat) (spv s7v sret interp argsBase scratch : BitVec 64)
+    (hfe : fentry = nativePrintPC)
+    (hgsp : g Register.x2 = some spv)
+    (hgs7 : g Register.x23 = some s7v)
+    (hslotLo : 0x80000000 ≤ spv.toNat + 1016)
+    (hslotHi : spv.toNat + 1024 ≤ 0x100000000)
+    (hslotHtif : spv.toNat + 1024 ≤ tohostAddr ∨
+      tohostAddr + 8 ≤ spv.toNat + 1016)
+    (hslotAlign : (spv.toNat + 1016) % 8 = 0)
+    (hRG : NativePrintRegion SL spv sret argsBase)
+    (hsretSlot : sret.toNat + 24 ≤ spv.toNat + 1016 ∨
+      spv.toNat + 1024 ≤ sret.toNat)
+    (hcodeStack : ∀ a : Nat, 0x80003164 ≤ a → a < 0x80003fe0 →
+      ¬ (SL.lo ≤ a ∧ a < SL.hi))
+    (hComponents : NativePrintComponents N A SL)
+    (hDispatch : Triple
+      (CallEntryI g N A SL φf φc st d (.native .print) vs
+        dLeft aLeft spv sret m0)
+      (fun c => NativeBodyPre g N A SL φf φc st vs fentry
+          spv s7v sret interp argsBase scratch m0 c ∧ NativePrintExtra c)) :
+    Triple
+      (CallEntryI g N A SL φf φc st d (.native .print) vs
+        dLeft aLeft spv sret m0)
+      (CallExitI g N A SL φf φc st.store.frames.size st.store.closures.size
+        ⟨st.store, st.out ++ printArgs st.store vs⟩ .null sret m0) :=
+  nativeArmSplice g N A SL φf φc st.store.frames.size st.store.closures.size
+    ⟨st.store, st.out ++ printArgs st.store vs⟩ spv s7v sret m0 _ _
+    hgsp hgs7 hslotLo hslotHi hslotHtif hslotAlign hDispatch
+    (nativeBodyPrint g N A SL φf φc st vs fentry
+      spv s7v sret interp argsBase scratch m0 hfe hRG hsretSlot hcodeStack hComponents)
+
+theorem nativeCallPrintlnIndexed_of_internal
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem) (vs : List Value)
+    (fentry : Nat) (spv s7v sret interp argsBase scratch : BitVec 64)
+    (hfe : fentry = nativePrintlnPC)
+    (hgsp : g Register.x2 = some spv)
+    (hgs7 : g Register.x23 = some s7v)
+    (hslotLo : 0x80000000 ≤ spv.toNat + 1016)
+    (hslotHi : spv.toNat + 1024 ≤ 0x100000000)
+    (hslotHtif : spv.toNat + 1024 ≤ tohostAddr ∨
+      tohostAddr + 8 ≤ spv.toNat + 1016)
+    (hslotAlign : (spv.toNat + 1016) % 8 = 0)
+    (hRG : NativePrintRegion SL spv sret argsBase)
+    (hsretSlot : sret.toNat + 24 ≤ spv.toNat + 1016 ∨
+      spv.toNat + 1024 ≤ sret.toNat)
+    (hcodeStack : ∀ a : Nat, 0x80003164 ≤ a → a < 0x80003fe0 →
+      ¬ (SL.lo ≤ a ∧ a < SL.hi))
+    (hComponents : NativePrintlnComponents N A SL)
+    (hDispatch : Triple
+      (CallEntryI g N A SL φf φc st d (.native .println) vs
+        dLeft aLeft spv sret m0)
+      (fun c => NativeBodyPre g N A SL φf φc st vs fentry
+          spv s7v sret interp argsBase scratch m0 c ∧ NativePrintlnExtra c)) :
+    Triple
+      (CallEntryI g N A SL φf φc st d (.native .println) vs
+        dLeft aLeft spv sret m0)
+      (CallExitI g N A SL φf φc st.store.frames.size st.store.closures.size
+        ⟨st.store, st.out ++ printArgs st.store vs ++ "\n"⟩ .null sret m0) := by
+  have h := nativeArmSplice g N A SL φf φc st.store.frames.size
+    st.store.closures.size ⟨st.store, st.out ++ (printArgs st.store vs ++ "\n")⟩
+    spv s7v sret m0 _ _ hgsp hgs7 hslotLo hslotHi hslotHtif hslotAlign hDispatch
+    (nativeBodyPrintln g N A SL φf φc st vs fentry
+      spv s7v sret interp argsBase scratch m0 hfe hRG hsretSlot hcodeStack hComponents)
+  rwa [show st.out ++ (printArgs st.store vs ++ "\n")
+      = st.out ++ printArgs st.store vs ++ "\n" from by rw [String.append_assoc]] at h
 
 #print axioms nativeBodyPrint
 #print axioms nativeBodyPrintln
 #print axioms nativePrintSpec_of_internal
 #print axioms nativePrintlnSpec_of_internal
+#print axioms nativeCallPrintIndexed_of_internal
+#print axioms nativeCallPrintlnIndexed_of_internal
 #print axioms printedPrefix_full
 #print axioms printedPrefix_step
 

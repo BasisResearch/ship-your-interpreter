@@ -33,7 +33,9 @@ theorem env_define_spill_s3
       c'.σ.regs.get? Register.x19 = some savedS3 ∧
       c'.σ.regs.get? Register.minstret = some vmi' ∧
       GoodState c'.σ ∧ Env_defineLoaded c'.σ.mem ∧ StrcmpLoaded c'.σ.mem ∧
-      read32 c'.σ.mem env.toNat = some count ∧ c'.tick < 2 := by
+      read32 c'.σ.mem env.toNat = some count ∧
+      c'.σ.mem = writeMap8 c.σ.mem ((sp - 64#64).toNat + 24) (sdData_val savedS3) ∧
+      c'.tick < 2 := by
   have hsp64 : (64 : Nat) ≤ sp.toNat := hRG.sp_ge
   have hspNat : (sp - 64#64).toNat = sp.toNat - 64 := sp_sub64_toNat sp hsp64
   have haddr : ((sp - 64#64) + sign_extend (m := 64) (0x018#12)).toNat =
@@ -87,6 +89,6 @@ theorem env_define_spill_s3
     rw [hmem'', read32_writeMap8_disjoint _ _ _ _ hheaderDisjoint]
     exact hread
   exact ⟨⟨σ', i', c.steps + 1⟩, vmi', hstep', hpc', hcarry', hs3', hmi',
-    hG', hloaded', hstrloaded', hread', htick'⟩
+    hG', hloaded', hstrloaded', hread', hmem'', htick'⟩
 
 end Vsa.Sim

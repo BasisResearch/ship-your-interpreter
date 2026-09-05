@@ -1,4 +1,5 @@
 import Vsa.Sim.EntryGround
+import Vsa.Sim.AstTransport
 
 /-!
 # `EntryGroundKit` — the child-ground derivation combinators (wave 47i)
@@ -25,6 +26,14 @@ open Vsa.RuntimeRepr Vsa.MemRepr Vsa.While Vsa.Alloc
 
 namespace Vsa.Sim
 
+/-- Any 24-byte slot wholly inside the populated exec stack is readable. -/
+theorem ExecGround.valueWordsTotal {m : Mem} {SL : StackLayout} {A : Arena}
+    {sp aRet : BitVec 64} {aStmt : Nat} {s : Stmt}
+    (h : ExecGround m SL A sp aRet aStmt s)
+    {a : Nat} (hlo : SL.lo ≤ a) (hhi : a + 24 ≤ SL.hi) :
+    ValueWordsTotal m a :=
+  valueWordsTotal_of_interval h.stack_bytes hlo hhi
+
 /-! ## Move 1 — off-stack transport (sret half vacuous) -/
 
 /-- `EvalGround` transports to any memory agreeing with `m0` OFF the scribbled
@@ -44,9 +53,32 @@ theorem ExecGround.transport_offstack {m0 ment : Mem} {SL : StackLayout}
     {A : Arena} {sp aRet : BitVec 64} {aStmt : Nat} {s : Stmt}
     (hg : ExecGround m0 SL A sp aRet aStmt s)
     (hspSL : sp.toNat ≤ SL.hi)
+    (hpop : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
+      ∃ b : BitVec 8, ment[k]? = some b)
     (hmem : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) :
     ExecGround ment SL A sp aRet aStmt s :=
-  hg.survive_stack hspSL (fun k hk _ => (hmem k hk).symm)
+  hg.survive_stack hspSL hpop (fun k hk _ => (hmem k hk).symm)
+
+/-- The enclosing statement representation survives an off-stack memory
+change.  The hereditary region in `ExecGround` supplies the exact footprint;
+no root-only node window is assumed. -/
+theorem ExecGround.stmtRepr_offstack {m0 ment : Mem} {SL : StackLayout}
+    {A : Arena} {sp aRet : BitVec 64} {aStmt : Nat} {s : Stmt}
+    (hg : ExecGround m0 SL A sp aRet aStmt s)
+    (hr : StmtRepr m0 aStmt s)
+    (hsp : sp.toNat ≤ SL.hi)
+    (hmem : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
+      ment[a]? = m0[a]?) :
+    StmtRepr ment aStmt s := by
+  obtain ⟨lo, hi, spec⟩ := hg.ast.region
+  apply stmtRepr_agree_region (hin := spec.nodes) (hr := hr)
+  intro a ha
+  change lo ≤ a ∧ a < hi at ha
+  obtain ⟨haLo, haHi⟩ := ha
+  exact (hmem a (by
+    intro hs
+    obtain ⟨hsLo, hsHi⟩ := hs
+    rcases spec.stack_disjoint with hd | hd <;> omega)).symm
 
 /-! ## Move 2 — in-node read agreement (the AST region is stack-disjoint) -/
 
@@ -148,6 +180,9 @@ theorem ExecGround.child_params {m : Mem} {SL : StackLayout} {A : Arena}
     · left; exact ha
     · right; omega
   arena_code := h.arena_code
+  arena_table := h.arena_table
+  eval_call := h.eval_call.transport (fun _ _ => rfl)
+  stack_bytes := h.stack_bytes
   aret :=
     { align := hret_al
       ram := ⟨by omega, by omega⟩
@@ -158,6 +193,52 @@ theorem ExecGround.child_params {m : Mem} {SL : StackLayout} {A : Arena}
     rcases h.table_stack with ht | ht
     · right; simp only [stmtJumpTableBase] at ht ⊢; omega
     · left; simp only [stmtJumpTableBase] at ht ⊢; omega
+
+/-- Project a child statement while lowering the stack pointer and forwarding
+the parent's existing return slot.  Unlike `child_params`, this is the ABI
+shape used by `while`: the recursive body receives the same `aRet`, which may
+sit above the parent's entry `sp` but remains outside the lowered scribble. -/
+theorem ExecGround.child_sameRet {m : Mem} {SL : StackLayout} {A : Arena}
+    {sp aRet : BitVec 64} {aStmt : Nat} {s : Stmt}
+    (h : ExecGround m SL A sp aRet aStmt s)
+    {sp' : BitVec 64} {aChild : Nat} {schild : Stmt}
+    (hproj : ∀ lo hi, StmtIn m lo hi aStmt s →
+      StmtIn m lo hi aChild schild)
+    (hsp' : sp'.toNat ≤ sp.toNat) :
+    ExecGround m SL A sp' aRet aChild schild where
+  table := h.table
+  table_stack := by
+    rcases h.table_stack with ht | ht
+    · exact Or.inl ht
+    · exact Or.inr (by omega)
+  ast := ⟨by
+    obtain ⟨lo, hi, spec⟩ := h.ast.region
+    exact ⟨lo, hi,
+      { nodes := hproj lo hi spec.nodes
+        lo_ram := spec.lo_ram
+        hi_ram := spec.hi_ram
+        win := spec.win
+        stack_disjoint := spec.stack_disjoint
+        ret_disjoint := spec.ret_disjoint
+        arena_disjoint := spec.arena_disjoint }⟩⟩
+  arena_stack := by
+    rcases h.arena_stack with ha | ha
+    · exact Or.inl ha
+    · exact Or.inr (by omega)
+  arena_code := h.arena_code
+  arena_table := h.arena_table
+  eval_call := h.eval_call.transport (fun _ _ => rfl)
+  stack_bytes := h.stack_bytes
+  aret :=
+    { align := h.aret.align
+      ram := h.aret.ram
+      win := h.aret.win
+      scribble_disjoint := by
+        rcases h.aret.scribble_disjoint with hr | hr
+        · exact Or.inl hr
+        · exact Or.inr (by omega)
+      inSL := h.aret.inSL }
+  aret_table_disjoint := h.aret_table_disjoint
 
 /-! ## The composed child-at combinator (moves 1 + 3) -/
 
@@ -186,6 +267,8 @@ theorem ExecGround.child_at {m0 ment : Mem} {SL : StackLayout} {A : Arena}
     {sp' aRet' : BitVec 64} {aChild : Nat} {schild : Stmt}
     (hproj : ∀ lo hi, StmtIn ment lo hi aStmt s → StmtIn ment lo hi aChild schild)
     (hmem : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?)
+    (hpop : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
+      ∃ b : BitVec 8, ment[k]? = some b)
     (hspSL : sp.toNat ≤ SL.hi)
     (hsp' : sp'.toNat ≤ sp.toNat)
     (hret_al : aRet'.toNat % 8 = 0)
@@ -194,8 +277,53 @@ theorem ExecGround.child_at {m0 ment : Mem} {SL : StackLayout} {A : Arena}
     (hSL_ram : 0x80000000 ≤ SL.lo) (hSL_win : tohostAddr + 16 ≤ SL.lo)
     (hSLhi_ram : SL.hi ≤ 0x100000000) :
     ExecGround ment SL A sp' aRet' aChild schild :=
-  (hg.transport_offstack hspSL hmem).child_params hproj hspSL hsp'
+  (hg.transport_offstack hspSL hpop hmem).child_params hproj hspSL hsp'
     hret_al hret_lo hret_hi hret_scrib hSL_ram hSL_win hSLhi_ram
+
+/-- The expression ground bundle for a while condition.  Its AST witness is a
+projection of the enclosing statement region; all static eval geometry comes
+from `EvalCallSupport`. -/
+theorem ExecGround.whileCond_evalGround {m : Mem} {SL : StackLayout} {A : Arena}
+    {sp aRet spEval sret aStmt aCond : BitVec 64} {cnd : Expr} {body : Stmt}
+    (h : ExecGround m SL A sp aRet aStmt.toNat (.whileStmt cnd body))
+    (hread : read64 m (aStmt.toNat + 8) = some aCond.toNat)
+    (hspEval : spEval.toNat ≤ sp.toNat)
+    (hsret : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi) :
+    EvalGround m SL A spEval sret aCond.toNat cnd := by
+  obtain ⟨_hcode, _hvint, _htruthy, _hint, _hnbs, htable⟩ :=
+    h.eval_call.pins m (fun _ _ => rfl)
+  refine
+    { table := htable
+      ast := ?_
+      arena_stack := ?_
+      arena_code := h.eval_call.arena_code
+      arena_vi := by
+        rcases h.eval_call.arena_vi with hd | hd
+        · exact Or.inl hd
+        · exact Or.inr (by omega)
+      sret_inSL := hsret
+      sret_table_disjoint := ?_ }
+  · obtain ⟨lo, hi, hr⟩ := h.ast.region
+    refine ⟨lo, hi, ?_⟩
+    exact
+      { nodes := hr.nodes.2.1 aCond.toNat hread
+        lo_ram := hr.lo_ram
+        hi_ram := hr.hi_ram
+        win := hr.win
+        stack_disjoint := hr.stack_disjoint
+        sret_disjoint := by
+          rcases hr.stack_disjoint with hd | hd <;> omega
+        arena_disjoint := hr.arena_disjoint }
+  · rcases h.arena_stack with ha | ha
+    · exact Or.inl ha
+    · exact Or.inr (by omega)
+  · rcases h.eval_call.table_stack with ht | ht
+    · right
+      simp only [jumpTableBase] at ht ⊢
+      omega
+    · left
+      simp only [jumpTableBase] at ht ⊢
+      omega
 
 
 /-! ## Named child projections (the `exprIn_unary_child` family — Law 6) -/
@@ -297,7 +425,10 @@ theorem ExecGround.transport_via {m m' : Mem} {SL : StackLayout} {A : Arena}
     (h : ExecGround m SL A sp aRet aStmt s)
     (htab : ∀ a : Nat, stmtJumpTableBase ≤ a → a < stmtJumpTableBase + 36 → m[a]? = m'[a]?)
     (hast : ∀ lo hi, StmtRegionSpec m SL A aRet.toNat aStmt s lo hi →
-      ∀ a : Nat, lo ≤ a → a < hi → m[a]? = m'[a]?) :
+      ∀ a : Nat, lo ≤ a → a < hi → m[a]? = m'[a]?)
+    (heval : ∀ a : Nat, EvalCallFootprint a → m'[a]? = m[a]?)
+    (hpop : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
+      ∃ b : BitVec 8, m'[k]? = some b) :
     ExecGround m' SL A sp aRet aStmt s where
   table := h.table.transport htab
   table_stack := h.table_stack
@@ -306,8 +437,178 @@ theorem ExecGround.transport_via {m m' : Mem} {SL : StackLayout} {A : Arena}
     exact ⟨lo, hi, spec.transport (hast lo hi spec)⟩⟩
   arena_stack := h.arena_stack
   arena_code := h.arena_code
+  arena_table := h.arena_table
+  eval_call := h.eval_call.transport heval
+  stack_bytes := hpop
   aret := h.aret
   aret_table_disjoint := h.aret_table_disjoint
+
+/-- Transport an enclosing statement ground bundle across a recursive eval
+exit.  The eval result window lies in the statement stack, while the statement
+table and AST are disjoint from both the stack and allocation arena. -/
+theorem ExecGround.transport_evalExit {m m' : Mem} {SL : StackLayout} {A : Arena}
+    {sp aRet sret : BitVec 64} {aStmt : Nat} {s : Stmt}
+    (h : ExecGround m SL A sp aRet aStmt s)
+    (hsp : sp.toNat ≤ SL.hi)
+    (hsret : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ sp.toNat)
+    (hpop : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
+      ∃ b : BitVec 8, m'[k]? = some b)
+    (hframe : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
+      ¬ (A.lo ≤ a ∧ a < A.hi) →
+      (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ m'[a]? = m[a]?) :
+    ExecGround m' SL A sp aRet aStmt s := by
+  apply h.transport_via
+  · intro a ha0 ha1
+    have hstk : ¬ (SL.lo ≤ a ∧ a < sp.toNat) := by
+      intro hc
+      rcases h.table_stack with ht | ht <;> omega
+    have harena : ¬ (A.lo ≤ a ∧ a < A.hi) := by
+      intro hc
+      rcases h.arena_table with ht | ht <;> omega
+    rcases hframe a hstk harena with hs | heq
+    · exfalso
+      rcases h.table_stack with ht | ht <;> omega
+    · exact heq.symm
+  · intro lo hi hspec a ha0 ha1
+    have hstk : ¬ (SL.lo ≤ a ∧ a < sp.toNat) := by
+      intro hc
+      rcases hspec.stack_disjoint with hs | hs <;> omega
+    have harena : ¬ (A.lo ≤ a ∧ a < A.hi) := by
+      intro hc
+      rcases hspec.arena_disjoint with hs | hs <;> omega
+    rcases hframe a hstk harena with hs | heq
+    · exfalso
+      rcases hspec.stack_disjoint with hd | hd <;> omega
+    · exact heq.symm
+  · intro a ha
+    have hstk : ¬ (SL.lo ≤ a ∧ a < sp.toNat) := by
+      intro hc
+      rcases ha with he | hv | ht
+      · rcases h.eval_call.code_stack with hd | hd <;> omega
+      · rcases h.eval_call.vi_stack with hd | hd <;> omega
+      · rcases h.eval_call.table_stack with hd | hd <;> omega
+    have harena : ¬ (A.lo ≤ a ∧ a < A.hi) := by
+      intro hc
+      rcases ha with he | hv | ht
+      · rcases h.eval_call.arena_code with hd | hd <;> omega
+      · rcases h.eval_call.arena_vi with hd | hd <;> omega
+      · rcases h.eval_call.arena_table with hd | hd <;> omega
+    rcases hframe a hstk harena with hs | heq
+    · exfalso; omega
+    · exact heq
+  · exact hpop
+
+/-- Transport an enclosing statement ground bundle across a recursive
+statement exit.  The only extra non-frame window is the enclosing retslot,
+already disjoint from the statement table and AST in `ExecGround`. -/
+theorem ExecGround.transport_execExit {m m' : Mem} {SL : StackLayout} {A : Arena}
+    {sp aRet : BitVec 64} {aStmt : Nat} {s : Stmt}
+    (h : ExecGround m SL A sp aRet aStmt s)
+    (hsp : sp.toNat ≤ SL.hi)
+    (hpop : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
+      ∃ b : BitVec 8, m'[k]? = some b)
+    (hframe : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
+      ¬ (A.lo ≤ a ∧ a < A.hi) →
+      (aRet.toNat ≤ a ∧ a < aRet.toNat + 24) ∨ m'[a]? = m[a]?) :
+    ExecGround m' SL A sp aRet aStmt s := by
+  apply h.transport_via
+  · intro a ha0 ha1
+    have hstk : ¬ (SL.lo ≤ a ∧ a < sp.toNat) := by
+      intro hc
+      rcases h.table_stack with ht | ht <;> omega
+    have harena : ¬ (A.lo ≤ a ∧ a < A.hi) := by
+      intro hc
+      rcases h.arena_table with ht | ht <;> omega
+    rcases hframe a hstk harena with hs | heq
+    · exfalso
+      rcases h.aret_table_disjoint with ht | ht <;> omega
+    · exact heq.symm
+  · intro lo hi hspec a ha0 ha1
+    have hstk : ¬ (SL.lo ≤ a ∧ a < sp.toNat) := by
+      intro hc
+      rcases hspec.stack_disjoint with hs | hs <;> omega
+    have harena : ¬ (A.lo ≤ a ∧ a < A.hi) := by
+      intro hc
+      rcases hspec.arena_disjoint with hs | hs <;> omega
+    rcases hframe a hstk harena with hs | heq
+    · exfalso
+      rcases hspec.ret_disjoint with hd | hd <;> omega
+    · exact heq.symm
+  · intro a ha
+    have hstk : ¬ (SL.lo ≤ a ∧ a < sp.toNat) := by
+      intro hc
+      rcases ha with he | hv | ht
+      · rcases h.eval_call.code_stack with hd | hd <;> omega
+      · rcases h.eval_call.vi_stack with hd | hd <;> omega
+      · rcases h.eval_call.table_stack with hd | hd <;> omega
+    have harena : ¬ (A.lo ≤ a ∧ a < A.hi) := by
+      intro hc
+      rcases ha with he | hv | ht
+      · rcases h.eval_call.arena_code with hd | hd <;> omega
+      · rcases h.eval_call.arena_vi with hd | hd <;> omega
+      · rcases h.eval_call.arena_table with hd | hd <;> omega
+    rcases hframe a hstk harena with hs | heq
+    · exfalso
+      have hr := h.aret.inSL
+      rcases ha with he | hv | ht
+      · rcases h.eval_call.code_stack with hd | hd <;> omega
+      · rcases h.eval_call.vi_stack with hd | hd <;> omega
+      · rcases h.eval_call.table_stack with hd | hd <;> omega
+    · exact heq
+  · exact hpop
+
+/-- Transport the enclosing statement representation across a recursive eval
+exit using the hereditary AST region carried by `ExecGround`. -/
+theorem ExecGround.stmtRepr_evalExit {m m' : Mem} {SL : StackLayout} {A : Arena}
+    {sp aRet sret : BitVec 64} {aStmt : Nat} {s : Stmt}
+    (h : ExecGround m SL A sp aRet aStmt s)
+    (hr : StmtRepr m aStmt s)
+    (hsp : sp.toNat ≤ SL.hi)
+    (hsret : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ sp.toNat)
+    (hframe : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
+      ¬ (A.lo ≤ a ∧ a < A.hi) →
+      (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ m'[a]? = m[a]?) :
+    StmtRepr m' aStmt s := by
+  obtain ⟨lo, hi, spec⟩ := h.ast.region
+  apply stmtRepr_agree_region (hin := spec.nodes) (hr := hr)
+  intro a ha
+  change lo ≤ a ∧ a < hi at ha
+  have hstk : ¬ (SL.lo ≤ a ∧ a < sp.toNat) := by
+    intro hc
+    rcases spec.stack_disjoint with hd | hd <;> omega
+  have harena : ¬ (A.lo ≤ a ∧ a < A.hi) := by
+    intro hc
+    rcases spec.arena_disjoint with hd | hd <;> omega
+  rcases hframe a hstk harena with hs | heq
+  · exfalso
+    rcases spec.stack_disjoint with hd | hd <;> omega
+  · exact heq.symm
+
+/-- Transport the enclosing statement representation across a recursive
+statement exit. -/
+theorem ExecGround.stmtRepr_execExit {m m' : Mem} {SL : StackLayout} {A : Arena}
+    {sp aRet : BitVec 64} {aStmt : Nat} {s : Stmt}
+    (h : ExecGround m SL A sp aRet aStmt s)
+    (hr : StmtRepr m aStmt s)
+    (hsp : sp.toNat ≤ SL.hi)
+    (hframe : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
+      ¬ (A.lo ≤ a ∧ a < A.hi) →
+      (aRet.toNat ≤ a ∧ a < aRet.toNat + 24) ∨ m'[a]? = m[a]?) :
+    StmtRepr m' aStmt s := by
+  obtain ⟨lo, hi, spec⟩ := h.ast.region
+  apply stmtRepr_agree_region (hin := spec.nodes) (hr := hr)
+  intro a ha
+  change lo ≤ a ∧ a < hi at ha
+  have hstk : ¬ (SL.lo ≤ a ∧ a < sp.toNat) := by
+    intro hc
+    rcases spec.stack_disjoint with hd | hd <;> omega
+  have harena : ¬ (A.lo ≤ a ∧ a < A.hi) := by
+    intro hc
+    rcases spec.arena_disjoint with hd | hd <;> omega
+  rcases hframe a hstk harena with hs | heq
+  · exfalso
+    rcases spec.ret_disjoint with hd | hd <;> omega
+  · exact heq.symm
 
 
 end Vsa.Sim

@@ -81,10 +81,13 @@ theorem eval_null_row (hR : ∀ st, NullLeafResid st) :
     { good := hc.good, tick := hc.tick, pc := hc.pc, a0 := hc.a0, a1 := hc.a1, a2 := hc.a2,
       ra := hc.ra, ra_align := hc.ra_align, spReg := hc.spReg, stackOK := hc.stackOK,
       stackBudget := hc.stackBudget, expr_bodies := hc.expr_bodies, store_bodies := hc.store_bodies, minstret := hc.minstret, mem := hc.mem,
-      code := hc.code, expr := hc.expr, store := hc.store, store_survives := hc.store_survives, out := hc.out, frame := hc.frame,
+      code := hc.code, expr := hc.expr, store := hc.store, env_valid := hc.env_valid,
+      store_survives := hc.store_survives, out := hc.out, frame := hc.frame,
       code_stack_disjoint := hc.code_stack_disjoint, expr_stack_disjoint := hc.expr_stack_disjoint, expr_align := hc.expr_align, expr_ram := hc.expr_ram, expr_win := hc.expr_win, sret_align := hc.sret_align,
       sret_ram := hc.sret_ram, sret_win := hc.sret_win, sret_vicode_disjoint := hc.sret_vicode_disjoint_int, sret_stack_disjoint := hc.sret_stack_disjoint, sret_evalcode_disjoint := hc.sret_evalcode_disjoint, stack_ram := hc.stack_ram,
-      stack_win := hc.stack_win, spill_defined := hc.spill_defined, x13_defined := hc.x13_defined, sret_vnullcode_disjoint := hvnc, vnullcode_stack_disjoint := hvns, value_null_code := hvnl, null_slot := hns,
+      stack_win := hc.stack_win, spill_defined := hc.spill_defined,
+      envset_defined := hc.envset_defined, x13_defined := hc.x13_defined,
+      envReg := hc.envReg, sret_vnullcode_disjoint := hvnc, vnullcode_stack_disjoint := hvns, value_null_code := hvnl, null_slot := hns,
       table_stack_disjoint := htsd }
   exact Vsa.Sim.evalNullSimD g N A SL φf φc st d env sp r sret aEnv aExpr m0
     (EvalE.null st d env) hW c hEntry
@@ -117,10 +120,13 @@ theorem eval_bool_row (hR : ∀ st b, BoolLeafResid st b) :
     { good := hc.good, tick := hc.tick, pc := hc.pc, a0 := hc.a0, a1 := hc.a1, a2 := hc.a2,
       ra := hc.ra, ra_align := hc.ra_align, spReg := hc.spReg, stackOK := hc.stackOK,
       stackBudget := hc.stackBudget, expr_bodies := hc.expr_bodies, store_bodies := hc.store_bodies, minstret := hc.minstret, mem := hc.mem,
-      code := hc.code, expr := hc.expr, store := hc.store, store_survives := hc.store_survives, out := hc.out, frame := hc.frame,
+      code := hc.code, expr := hc.expr, store := hc.store, env_valid := hc.env_valid,
+      store_survives := hc.store_survives, out := hc.out, frame := hc.frame,
       code_stack_disjoint := hc.code_stack_disjoint, expr_stack_disjoint := hc.expr_stack_disjoint, expr_align := hc.expr_align, expr_ram := hc.expr_ram, expr_win := hc.expr_win, sret_align := hc.sret_align,
       sret_ram := hc.sret_ram, sret_win := hc.sret_win, sret_vicode_disjoint := hc.sret_vicode_disjoint_int, sret_stack_disjoint := hc.sret_stack_disjoint, sret_evalcode_disjoint := hc.sret_evalcode_disjoint, stack_ram := hc.stack_ram,
-      stack_win := hc.stack_win, spill_defined := hc.spill_defined, x13_defined := hc.x13_defined, sret_vboolcode_disjoint := hvbc, vboolcode_stack_disjoint := hvbs, value_bool_code := hvbl, bool_slot := hbs,
+      stack_win := hc.stack_win, spill_defined := hc.spill_defined,
+      envset_defined := hc.envset_defined, x13_defined := hc.x13_defined,
+      envReg := hc.envReg, sret_vboolcode_disjoint := hvbc, vboolcode_stack_disjoint := hvbs, value_bool_code := hvbl, bool_slot := hbs,
       table_stack_disjoint := htsd }
   exact Vsa.Sim.evalBoolSimD g N A SL φf φc st d env b sp r sret aEnv aExpr m0
     (EvalE.bool st d env b) hW c hEntry
@@ -157,42 +163,29 @@ theorem eval_str_row (hR : ∀ st s, StrLeafResid st s) :
     { good := hc.good, tick := hc.tick, pc := hc.pc, a0 := hc.a0, a1 := hc.a1, a2 := hc.a2,
       ra := hc.ra, ra_align := hc.ra_align, spReg := hc.spReg, stackOK := hc.stackOK,
       stackBudget := hc.stackBudget, expr_bodies := hc.expr_bodies, store_bodies := hc.store_bodies, minstret := hc.minstret, mem := hc.mem,
-      code := hc.code, expr := hc.expr, store := hc.store, store_survives := hc.store_survives, out := hc.out, frame := hc.frame,
+      code := hc.code, expr := hc.expr, store := hc.store, env_valid := hc.env_valid,
+      store_survives := hc.store_survives, out := hc.out, frame := hc.frame,
       code_stack_disjoint := hc.code_stack_disjoint, expr_stack_disjoint := hc.expr_stack_disjoint, expr_align := hc.expr_align, expr_ram := hc.expr_ram, expr_win := hc.expr_win, sret_align := hc.sret_align,
       sret_ram := hc.sret_ram, sret_win := hc.sret_win, sret_vicode_disjoint := hc.sret_vicode_disjoint_int, sret_stack_disjoint := hc.sret_stack_disjoint, sret_evalcode_disjoint := hc.sret_evalcode_disjoint, stack_ram := hc.stack_ram,
-      stack_win := hc.stack_win, spill_defined := hc.spill_defined, x13_defined := hc.x13_defined, str_stack_disjoint := hssd, str_sret_disjoint := hsrd, sret_vstrcode_disjoint := hvsc, vstrcode_stack_disjoint := hvss,
+      stack_win := hc.stack_win, spill_defined := hc.spill_defined,
+      envset_defined := hc.envset_defined, x13_defined := hc.x13_defined,
+      envReg := hc.envReg, str_stack_disjoint := hssd, str_sret_disjoint := hsrd, sret_vstrcode_disjoint := hvsc, vstrcode_stack_disjoint := hvss,
       value_str_code := hvsl, str_slot := hsl, table_stack_disjoint := htsd }
   exact Vsa.Sim.evalStrSimD g N A SL φf φc st d env s sp r sret aEnv aExpr m0
     (EvalE.str st d env s) hW c hEntry
 
 /-! ## Recursive rows. -/
 
-/-- The neg-case residual: `NegExtras` + the 47i windowed presence/`mem_ext` pair, keyed to the operand pointer
-witnessed by the entry `ExprRepr`. -/
+/-- The exact negation trace obligation.  The residual is indexed by the
+semantic child derivation and consumes that derivation's `EvalIH`; it no
+longer invents an arbitrary post-call memory from outside-frame agreement. -/
 def NegResid (st : SpecSt) (esub : Expr) : Prop :=
-  ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (d : Nat) (env : Addr) (sp r sret aEnv aExpr aOperand : BitVec 64) (m0 : Mem)
-    (c : Config),
-    Vsa.Sim.EvalEntry g N A SL φf φc st d env (.unary .neg esub) sp r sret aEnv aExpr m0 c →
-    read64 m0 (aExpr.toNat + 16) = some aOperand.toNat →
-    ExprRepr m0 aOperand.toNat esub →
-    Vsa.Sim.NegExtras N A SL st esub sp sret aExpr aOperand m0 ∧
-    -- WAVE 47i (`McallPopTotality` amendment): the old conjunct here demanded
-    -- TOTAL population of every off-stack-agreeing memory — REFUTED for every
-    -- finite `Mem` (`experiments/fleet/obstructions/McallPopTotality.lean`).
-    -- Amended to the honest pair: presence on the actual dead-byte read
-    -- footprint (lowered frame `[sp-1120, sp)` + node line-word
-    -- `[aExpr+4, aExpr+8)`) and presence-monotonicity over `m0` (both M6
-    -- Layout facts, the `BinArmExtras.mem_ext` shape; the `frame_pop`
-    -- presence sibling was DELETED in wave 48k — loads read totally).
-    -- WAVE 48k: the dead-byte presence CLOSURE is GONE (the load layer
-    -- consumes the model's total read; nothing asks for map presence).
-    (∀ mcall : Mem,
-      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-      MemExtends m0 mcall)
+  ∀ (d : Nat) (env : Addr) (st' : SpecSt) (n : Int)
+    (_hE : EvalE st d env esub st' (.int n)),
+    Vsa.Sim.EvalIH st d env esub st' (.int n) →
+    Vsa.Sim.EvalIH st d env (.unary .neg esub) st' (.int (wrap64 (-n)))
 
-/-- Route `hNeg` → `evalNegSim`. -/
+/-- Route `hNeg` into the negation recursor minor premise. -/
 theorem eval_neg_row (hR : ∀ st esub, NegResid st esub) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt) (n : Int)
       (a : EvalE st d env e st' (Value.int n)),
@@ -200,47 +193,17 @@ theorem eval_neg_row (hR : ∀ st esub, NegResid st esub) :
       mEvalE st d env (Expr.unary UnOp.neg e) st' (Value.int (wrap64 (-n)))
         (EvalE.neg st d env e st' n a) := by
   intro st d env esub st' n hE ihE
-  show Vsa.Sim.EvalIH st d env (.unary .neg esub) st' (.int (wrap64 (-n)))
-  intro g N A SL φf φc sp r sret aEnv aExpr m0
-  intro c hc
-  have hexpr : ExprRepr c.σ.mem aExpr.toNat (.unary .neg esub) := hc.expr
-  rw [hc.mem] at hexpr
-  obtain ⟨p, hpay, hpexpr⟩ : ∃ p, read64 m0 (aExpr.toNat + 16) = some p ∧ ExprRepr m0 p esub := by
-    cases hexpr with | unary _ _ hp hpe => exact ⟨_, hp, hpe⟩
-  have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
-  obtain ⟨hNegX, hMemExtRes⟩ :=
-    hR st esub g N A SL φf φc d env sp r sret aEnv aExpr (BitVec.ofNat 64 p) m0 c hc
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
-  exact Vsa.Sim.evalNegSim g N A SL φf φc st st' d env esub n sp r sret aEnv aExpr
-    (BitVec.ofNat 64 p) m0 ihE (EvalE.neg st d env esub st' n hE) c ⟨hc, hNegX, hMemExtRes⟩
+  exact hR st esub d env st' n hE ihE
 
-/-- The not-case residual: `NotSimExtras` + the 47i windowed presence/`mem_ext` pair, keyed to the operand pointer
-witnessed by the entry `ExprRepr` (the operand value `vsub` is spec-level). -/
+/-- The exact logical-not trace obligation, tied to the child state and value
+by its `EvalE` derivation and `EvalIH`. -/
 def NotResid (esub : Expr) (vsub : Value) : Prop :=
-  ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : SpecSt) (d : Nat) (env : Addr)
-    (sp r sret aEnv aExpr aOperand : BitVec 64) (m0 : Mem) (c : Config),
-    Vsa.Sim.EvalEntry g N A SL φf φc st d env (.unary .not esub) sp r sret aEnv aExpr m0 c →
-    read64 m0 (aExpr.toNat + 16) = some aOperand.toNat →
-    ExprRepr m0 aOperand.toNat esub →
-    Vsa.Sim.NotSimExtras N A SL esub vsub sp sret aExpr aOperand m0 ∧
-    -- WAVE 47i (`McallPopTotality` amendment): the old conjunct here demanded
-    -- TOTAL population of every off-stack-agreeing memory — REFUTED for every
-    -- finite `Mem` (`experiments/fleet/obstructions/McallPopTotality.lean`).
-    -- Amended to the honest pair: presence on the actual dead-byte read
-    -- footprint (lowered frame `[sp-1120, sp)` + node line-word
-    -- `[aExpr+4, aExpr+8)`) and presence-monotonicity over `m0` (both M6
-    -- Layout facts, the `BinArmExtras.mem_ext` shape; the `frame_pop`
-    -- presence sibling was DELETED in wave 48k — loads read totally).
-    -- WAVE 48k: the dead-byte presence CLOSURE is GONE (the load layer
-    -- consumes the model's total read; nothing asks for map presence).
-    (∀ mcall : Mem,
-      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-      MemExtends m0 mcall)
+  ∀ (st : SpecSt) (d : Nat) (env : Addr) (st' : SpecSt)
+    (_hE : EvalE st d env esub st' vsub),
+    Vsa.Sim.EvalIH st d env esub st' vsub →
+    Vsa.Sim.EvalIH st d env (.unary .not esub) st' (.bool (!vsub.truthy))
 
-/-- Route `hNot` → `evalNotSim`. -/
+/-- Route `hNot` into the logical-not recursor minor premise. -/
 theorem eval_not_row (hR : ∀ esub vsub, NotResid esub vsub) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt) (v : Value)
       (a : EvalE st d env e st' v),
@@ -248,51 +211,17 @@ theorem eval_not_row (hR : ∀ esub vsub, NotResid esub vsub) :
       mEvalE st d env (Expr.unary UnOp.not e) st' (Value.bool (!v.truthy))
         (EvalE.not st d env e st' v a) := by
   intro st d env esub st' vsub hE ihE
-  show Vsa.Sim.EvalIH st d env (.unary .not esub) st' (.bool (!vsub.truthy))
-  intro g N A SL φf φc sp r sret aEnv aExpr m0
-  intro c hc
-  have hexpr : ExprRepr c.σ.mem aExpr.toNat (.unary .not esub) := hc.expr
-  rw [hc.mem] at hexpr
-  obtain ⟨p, hpay, hpexpr⟩ : ∃ p, read64 m0 (aExpr.toNat + 16) = some p ∧ ExprRepr m0 p esub := by
-    cases hexpr with | unary _ _ hp hpe => exact ⟨_, hp, hpe⟩
-  have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
-  obtain ⟨hNotX, hMemExtRes⟩ :=
-    hR esub vsub g N A SL φf φc st d env sp r sret aEnv aExpr (BitVec.ofNat 64 p) m0 c hc
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
-  exact Vsa.Sim.evalNotSim g N A SL φf φc st st' d env esub vsub sp r sret aEnv aExpr
-    (BitVec.ofNat 64 p) m0 ihE (EvalE.not st d env esub st' vsub hE) c ⟨hc, hNotX, hMemExtRes⟩
+  exact hR esub vsub st d env st' hE ihE
 
-/-- The orTrue-case residual: `OrTrueExtras` + the `aEnv3` x13-survival
-Steps-residual + the 47i windowed presence/`mem_ext` pair, keyed to the LEFT-operand pointer witnessed by the
-entry `ExprRepr` (logical node payload at offset 16). -/
+/-- The exact short-circuit OR trace obligation.  The truthy branch equation
+and left-child derivation are explicit indices of the residual. -/
 def OrTrueResid (el er : Expr) (vl : Value) : Prop :=
-  ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : SpecSt) (d : Nat) (env : Addr)
-    (sp r sret aEnv aExpr aLeft : BitVec 64) (m0 : Mem) (c : Config),
-    Vsa.Sim.EvalEntry g N A SL φf φc st d env (.logical .or el er) sp r sret aEnv aExpr m0 c →
-    read64 m0 (aExpr.toNat + 16) = some aLeft.toNat →
-    ExprRepr m0 aLeft.toNat el →
-    Vsa.Sim.OrTrueExtras N A SL el er vl sp sret aExpr aLeft m0 ∧
-    (∃ aEnv3 : BitVec 64, ∀ cm : Config, Steps c cm →
-      cm.σ.regs.get? Register.PC = some (0x8000355c#64) →
-      cm.σ.regs.get? Register.x13 = some aEnv3) ∧
-    -- WAVE 47i (`McallPopTotality` amendment): the old conjunct here demanded
-    -- TOTAL population of every off-stack-agreeing memory — REFUTED for every
-    -- finite `Mem` (`experiments/fleet/obstructions/McallPopTotality.lean`).
-    -- Amended to the honest pair: presence on the actual dead-byte read
-    -- footprint (lowered frame `[sp-1120, sp)` + node line-word
-    -- `[aExpr+4, aExpr+8)`) and presence-monotonicity over `m0` (both M6
-    -- Layout facts, the `BinArmExtras.mem_ext` shape; the `frame_pop`
-    -- presence sibling was DELETED in wave 48k — loads read totally).
-    -- WAVE 48k: the dead-byte presence CLOSURE is GONE (the load layer
-    -- consumes the model's total read; nothing asks for map presence).
-    (∀ mcall : Mem,
-      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-      MemExtends m0 mcall)
+  ∀ (st : SpecSt) (d : Nat) (env : Addr) (st' : SpecSt)
+    (_hE : EvalE st d env el st' vl) (_hTruthy : vl.truthy = true),
+    Vsa.Sim.EvalIH st d env el st' vl →
+    Vsa.Sim.EvalIH st d env (.logical .or el er) st' (.bool true)
 
-/-- Route `hOrTrue` → `evalOrTrueSim`. -/
+/-- Route `hOrTrue` into the short-circuit OR recursor minor premise. -/
 theorem eval_orTrue_row (hR : ∀ el er vl, OrTrueResid el er vl) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr) (st' : SpecSt) (lv : Value)
       (a : EvalE st d env l st' lv) (a_1 : lv.truthy = true),
@@ -300,53 +229,17 @@ theorem eval_orTrue_row (hR : ∀ el er vl, OrTrueResid el er vl) :
       mEvalE st d env (Expr.logical LogOp.or l r) st' (Value.bool true)
         (EvalE.orTrue st d env l r st' lv a a_1) := by
   intro st d env el er st' vl hE hvl ihE
-  show Vsa.Sim.EvalIH st d env (.logical .or el er) st' (.bool true)
-  intro g N A SL φf φc sp r sret aEnv aExpr m0
-  intro c hc
-  have hexpr : ExprRepr c.σ.mem aExpr.toNat (.logical .or el er) := hc.expr
-  rw [hc.mem] at hexpr
-  obtain ⟨p, hpay, hpexpr⟩ : ∃ p, read64 m0 (aExpr.toNat + 16) = some p ∧ ExprRepr m0 p el := by
-    cases hexpr with | logical _ _ hl hle _ _ => exact ⟨_, hl, hle⟩
-  have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
-  obtain ⟨hX, ⟨aEnv3, hx13⟩, hMemExtRes⟩ :=
-    hR el er vl g N A SL φf φc st d env sp r sret aEnv aExpr
-    (BitVec.ofNat 64 p) m0 c hc
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
-  exact Vsa.Sim.evalOrTrueSim g N A SL φf φc st st' d env el er vl sp r sret aEnv aExpr
-    (BitVec.ofNat 64 p) aEnv3 m0 hvl ihE (EvalE.orTrue st d env el er st' vl hE hvl) c
-    ⟨hc, hX, hx13, hMemExtRes⟩
+  exact hR el er vl st d env st' hE hvl ihE
 
-/-- The andFalse-case residual: `AndFalseExtras` + the `aEnv3` x13-survival
-Steps-residual + the 47i windowed presence/`mem_ext` pair, keyed to the LEFT-operand pointer witnessed by the
-entry `ExprRepr` (logical node payload at offset 16). -/
+/-- The exact short-circuit AND trace obligation.  The falsy branch equation
+and left-child derivation are explicit indices of the residual. -/
 def AndFalseResid (el er : Expr) (vl : Value) : Prop :=
-  ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : SpecSt) (d : Nat) (env : Addr)
-    (sp r sret aEnv aExpr aLeft : BitVec 64) (m0 : Mem) (c : Config),
-    Vsa.Sim.EvalEntry g N A SL φf φc st d env (.logical .and el er) sp r sret aEnv aExpr m0 c →
-    read64 m0 (aExpr.toNat + 16) = some aLeft.toNat →
-    ExprRepr m0 aLeft.toNat el →
-    Vsa.Sim.AndFalseExtras N A SL el er vl sp sret aExpr aLeft m0 ∧
-    (∃ aEnv3 : BitVec 64, ∀ cm : Config, Steps c cm →
-      cm.σ.regs.get? Register.PC = some (0x8000355c#64) →
-      cm.σ.regs.get? Register.x13 = some aEnv3) ∧
-    -- WAVE 47i (`McallPopTotality` amendment): the old conjunct here demanded
-    -- TOTAL population of every off-stack-agreeing memory — REFUTED for every
-    -- finite `Mem` (`experiments/fleet/obstructions/McallPopTotality.lean`).
-    -- Amended to the honest pair: presence on the actual dead-byte read
-    -- footprint (lowered frame `[sp-1120, sp)` + node line-word
-    -- `[aExpr+4, aExpr+8)`) and presence-monotonicity over `m0` (both M6
-    -- Layout facts, the `BinArmExtras.mem_ext` shape; the `frame_pop`
-    -- presence sibling was DELETED in wave 48k — loads read totally).
-    -- WAVE 48k: the dead-byte presence CLOSURE is GONE (the load layer
-    -- consumes the model's total read; nothing asks for map presence).
-    (∀ mcall : Mem,
-      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-      MemExtends m0 mcall)
+  ∀ (st : SpecSt) (d : Nat) (env : Addr) (st' : SpecSt)
+    (_hE : EvalE st d env el st' vl) (_hFalsy : vl.truthy = false),
+    Vsa.Sim.EvalIH st d env el st' vl →
+    Vsa.Sim.EvalIH st d env (.logical .and el er) st' (.bool false)
 
-/-- Route `hAndFalse` → `evalAndSim`. -/
+/-- Route `hAndFalse` into the short-circuit AND recursor minor premise. -/
 theorem eval_andFalse_row (hR : ∀ el er vl, AndFalseResid el er vl) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr) (st' : SpecSt) (lv : Value)
       (a : EvalE st d env l st' lv) (a_1 : lv.truthy = false),
@@ -354,55 +247,20 @@ theorem eval_andFalse_row (hR : ∀ el er vl, AndFalseResid el er vl) :
       mEvalE st d env (Expr.logical LogOp.and l r) st' (Value.bool false)
         (EvalE.andFalse st d env l r st' lv a a_1) := by
   intro st d env el er st' vl hE hvl ihE
-  show Vsa.Sim.EvalIH st d env (.logical .and el er) st' (.bool false)
-  intro g N A SL φf φc sp r sret aEnv aExpr m0
-  intro c hc
-  have hexpr : ExprRepr c.σ.mem aExpr.toNat (.logical .and el er) := hc.expr
-  rw [hc.mem] at hexpr
-  obtain ⟨p, hpay, hpexpr⟩ : ∃ p, read64 m0 (aExpr.toNat + 16) = some p ∧ ExprRepr m0 p el := by
-    cases hexpr with | logical _ _ hl hle _ _ => exact ⟨_, hl, hle⟩
-  have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
-  obtain ⟨hX, ⟨aEnv3, hx13⟩, hMemExtRes⟩ :=
-    hR el er vl g N A SL φf φc st d env sp r sret aEnv aExpr
-    (BitVec.ofNat 64 p) m0 c hc
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
-  exact Vsa.Sim.evalAndSim g N A SL φf φc st st' d env el er vl sp r sret aEnv aExpr
-    (BitVec.ofNat 64 p) aEnv3 m0 hvl ihE (EvalE.andFalse st d env el er st' vl hE hvl) c
-    ⟨hc, hX, hx13, hMemExtRes⟩
+  exact hR el er vl st d env st' hE hvl ihE
 
-/-- The orFalse-case residual: `OrFalseExtras` (two-eval: takes the mid/post spec
-states and BOTH values) + the `aEnv3` x13-survival Steps-residual + the 47i windowed presence/`mem_ext` pair,
-keyed to BOTH operand pointers witnessed by the entry `ExprRepr` (offsets 16/24). -/
+/-- The exact fall-through OR trace obligation.  Its right derivation starts
+at precisely the left derivation's output state, and both `EvalIH` premises
+are tied to those derivations. -/
 def OrFalseResid (st' st'' : SpecSt) (el er : Expr) (vl vr : Value) : Prop :=
-  ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : SpecSt) (d : Nat) (env : Addr)
-    (sp r sret aEnv aExpr aLeft aRight : BitVec 64) (m0 : Mem) (c : Config),
-    Vsa.Sim.EvalEntry g N A SL φf φc st d env (.logical .or el er) sp r sret aEnv aExpr m0 c →
-    read64 m0 (aExpr.toNat + 16) = some aLeft.toNat →
-    ExprRepr m0 aLeft.toNat el →
-    read64 m0 (aExpr.toNat + 24) = some aRight.toNat →
-    ExprRepr m0 aRight.toNat er →
-    Vsa.Sim.OrFalseExtras N A SL st' st'' el er vl vr sp sret aExpr aLeft aRight m0 ∧
-    (∃ aEnv3 : BitVec 64, ∀ cm : Config, Steps c cm →
-      cm.σ.regs.get? Register.PC = some (0x8000355c#64) →
-      cm.σ.regs.get? Register.x13 = some aEnv3) ∧
-    -- WAVE 47i (`McallPopTotality` amendment): the old conjunct here demanded
-    -- TOTAL population of every off-stack-agreeing memory — REFUTED for every
-    -- finite `Mem` (`experiments/fleet/obstructions/McallPopTotality.lean`).
-    -- Amended to the honest pair: presence on the actual dead-byte read
-    -- footprint (lowered frame `[sp-1120, sp)` + node line-word
-    -- `[aExpr+4, aExpr+8)`) and presence-monotonicity over `m0` (both M6
-    -- Layout facts, the `BinArmExtras.mem_ext` shape; the `frame_pop`
-    -- presence sibling was DELETED in wave 48k — loads read totally).
-    -- WAVE 48k: the dead-byte presence CLOSURE is GONE (the load layer
-    -- consumes the model's total read; nothing asks for map presence).
-    (∀ mcall : Mem,
-      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-      MemExtends m0 mcall)
+  ∀ (st : SpecSt) (d : Nat) (env : Addr)
+    (_hEl : EvalE st d env el st' vl) (_hFalsy : vl.truthy = false)
+    (_hEr : EvalE st' d env er st'' vr),
+    Vsa.Sim.EvalIH st d env el st' vl →
+    Vsa.Sim.EvalIH st' d env er st'' vr →
+    Vsa.Sim.EvalIH st d env (.logical .or el er) st'' (.bool vr.truthy)
 
-/-- Route `hOrFalse` → `evalOrFalseSim` (two IH premises). -/
+/-- Route `hOrFalse` into the fall-through OR recursor minor premise. -/
 theorem eval_orFalse_row (hR : ∀ st' st'' el er vl vr, OrFalseResid st' st'' el er vl vr) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr) (st' st'' : SpecSt) (lv rv : Value)
       (a : EvalE st d env l st' lv) (a_1 : lv.truthy = false) (a_2 : EvalE st' d env r st'' rv),
@@ -410,60 +268,20 @@ theorem eval_orFalse_row (hR : ∀ st' st'' el er vl vr, OrFalseResid st' st'' e
       mEvalE st d env (Expr.logical LogOp.or l r) st'' (Value.bool rv.truthy)
         (EvalE.orFalse st d env l r st' st'' lv rv a a_1 a_2) := by
   intro st d env el er st' st'' vl vr hEl hvl hEr ihL ihR
-  show Vsa.Sim.EvalIH st d env (.logical .or el er) st'' (.bool vr.truthy)
-  intro g N A SL φf φc sp r sret aEnv aExpr m0
-  intro c hc
-  have hexpr : ExprRepr c.σ.mem aExpr.toNat (.logical .or el er) := hc.expr
-  rw [hc.mem] at hexpr
-  obtain ⟨p, q, hpay, hpexpr, hqay, hqexpr⟩ :
-      ∃ p q, read64 m0 (aExpr.toNat + 16) = some p ∧ ExprRepr m0 p el ∧
-        read64 m0 (aExpr.toNat + 24) = some q ∧ ExprRepr m0 q er := by
-    cases hexpr with | logical _ _ hl hle hr' hre => exact ⟨_, _, hl, hle, hr', hre⟩
-  have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
-  have hqlt : q < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 24) q hqay
-  obtain ⟨hX, ⟨aEnv3, hx13⟩, hMemExtRes⟩ :=
-    hR st' st'' el er vl vr g N A SL φf φc st d env sp r sret aEnv aExpr
-    (BitVec.ofNat 64 p) (BitVec.ofNat 64 q) m0 c hc
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]; exact hqay)
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]; exact hqexpr)
-  exact Vsa.Sim.evalOrFalseSim g N A SL φf φc st st' st'' d env el er vl vr sp r sret aEnv aExpr
-    (BitVec.ofNat 64 p) (BitVec.ofNat 64 q) aEnv3 m0 hvl ihL ihR
-    (EvalE.orFalse st d env el er st' st'' vl vr hEl hvl hEr) c ⟨hc, hX, hx13, hMemExtRes⟩
+  exact hR st' st'' el er vl vr st d env hEl hvl hEr ihL ihR
 
-/-- The andTrue-case residual: `AndTrueExtras` (two-eval: takes the mid/post spec
-states and BOTH values) + the `aEnv3` x13-survival Steps-residual + the 47i windowed presence/`mem_ext` pair,
-keyed to BOTH operand pointers witnessed by the entry `ExprRepr` (offsets 16/24). -/
+/-- The exact fall-through AND trace obligation.  Its right derivation starts
+at precisely the left derivation's output state, with the truthy branch
+equation explicit. -/
 def AndTrueResid (st' st'' : SpecSt) (el er : Expr) (vl vr : Value) : Prop :=
-  ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : SpecSt) (d : Nat) (env : Addr)
-    (sp r sret aEnv aExpr aLeft aRight : BitVec 64) (m0 : Mem) (c : Config),
-    Vsa.Sim.EvalEntry g N A SL φf φc st d env (.logical .and el er) sp r sret aEnv aExpr m0 c →
-    read64 m0 (aExpr.toNat + 16) = some aLeft.toNat →
-    ExprRepr m0 aLeft.toNat el →
-    read64 m0 (aExpr.toNat + 24) = some aRight.toNat →
-    ExprRepr m0 aRight.toNat er →
-    Vsa.Sim.AndTrueExtras N A SL st' st'' el er vl vr sp sret aExpr aLeft aRight m0 ∧
-    (∃ aEnv3 : BitVec 64, ∀ cm : Config, Steps c cm →
-      cm.σ.regs.get? Register.PC = some (0x8000355c#64) →
-      cm.σ.regs.get? Register.x13 = some aEnv3) ∧
-    -- WAVE 47i (`McallPopTotality` amendment): the old conjunct here demanded
-    -- TOTAL population of every off-stack-agreeing memory — REFUTED for every
-    -- finite `Mem` (`experiments/fleet/obstructions/McallPopTotality.lean`).
-    -- Amended to the honest pair: presence on the actual dead-byte read
-    -- footprint (lowered frame `[sp-1120, sp)` + node line-word
-    -- `[aExpr+4, aExpr+8)`) and presence-monotonicity over `m0` (both M6
-    -- Layout facts, the `BinArmExtras.mem_ext` shape; the `frame_pop`
-    -- presence sibling was DELETED in wave 48k — loads read totally).
-    -- WAVE 48k: the dead-byte presence CLOSURE is GONE (the load layer
-    -- consumes the model's total read; nothing asks for map presence).
-    (∀ mcall : Mem,
-      (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-      MemExtends m0 mcall)
+  ∀ (st : SpecSt) (d : Nat) (env : Addr)
+    (_hEl : EvalE st d env el st' vl) (_hTruthy : vl.truthy = true)
+    (_hEr : EvalE st' d env er st'' vr),
+    Vsa.Sim.EvalIH st d env el st' vl →
+    Vsa.Sim.EvalIH st' d env er st'' vr →
+    Vsa.Sim.EvalIH st d env (.logical .and el er) st'' (.bool vr.truthy)
 
-/-- Route `hAndTrue` → `evalAndTrueSim` (two IH premises). -/
+/-- Route `hAndTrue` into the fall-through AND recursor minor premise. -/
 theorem eval_andTrue_row (hR : ∀ st' st'' el er vl vr, AndTrueResid st' st'' el er vl vr) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr) (st' st'' : SpecSt) (lv rv : Value)
       (a : EvalE st d env l st' lv) (a_1 : lv.truthy = true) (a_2 : EvalE st' d env r st'' rv),
@@ -471,26 +289,63 @@ theorem eval_andTrue_row (hR : ∀ st' st'' el er vl vr, AndTrueResid st' st'' e
       mEvalE st d env (Expr.logical LogOp.and l r) st'' (Value.bool rv.truthy)
         (EvalE.andTrue st d env l r st' st'' lv rv a a_1 a_2) := by
   intro st d env el er st' st'' vl vr hEl hvl hEr ihL ihR
-  show Vsa.Sim.EvalIH st d env (.logical .and el er) st'' (.bool vr.truthy)
-  intro g N A SL φf φc sp r sret aEnv aExpr m0
-  intro c hc
-  have hexpr : ExprRepr c.σ.mem aExpr.toNat (.logical .and el er) := hc.expr
-  rw [hc.mem] at hexpr
-  obtain ⟨p, q, hpay, hpexpr, hqay, hqexpr⟩ :
-      ∃ p q, read64 m0 (aExpr.toNat + 16) = some p ∧ ExprRepr m0 p el ∧
-        read64 m0 (aExpr.toNat + 24) = some q ∧ ExprRepr m0 q er := by
-    cases hexpr with | logical _ _ hl hle hr' hre => exact ⟨_, _, hl, hle, hr', hre⟩
-  have hplt : p < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 16) p hpay
-  have hqlt : q < 2 ^ 64 := Vsa.Sim.read64_lt m0 (aExpr.toNat + 24) q hqay
-  obtain ⟨hX, ⟨aEnv3, hx13⟩, hMemExtRes⟩ :=
-    hR st' st'' el er vl vr g N A SL φf φc st d env sp r sret aEnv aExpr
-    (BitVec.ofNat 64 p) (BitVec.ofNat 64 q) m0 c hc
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpay)
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hplt]; exact hpexpr)
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]; exact hqay)
-    (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]; exact hqexpr)
-  exact Vsa.Sim.evalAndTrueSim g N A SL φf φc st st' st'' d env el er vl vr sp r sret aEnv aExpr
-    (BitVec.ofNat 64 p) (BitVec.ofNat 64 q) aEnv3 m0 hvl ihL ihR
-    (EvalE.andTrue st d env el er st' st'' vl vr hEl hvl hEr) c ⟨hc, hX, hx13, hMemExtRes⟩
+  exact hR st' st'' el er vl vr st d env hEl hvl hEr ihL ihR
+
+/-! ## Residual-interface regressions
+
+These application lemmas pin the repaired interfaces.  Unary residuals can
+only be used with the exact semantic child derivation and its `EvalIH`.
+Fall-through logical residuals additionally require the right derivation to
+start in the left derivation's output state.  There is no freely quantified
+`mcall`, so erasing a byte from an unrelated memory is no longer an instance
+of any of these obligations. -/
+
+theorem negResid_exact_child
+    {st st' : SpecSt} {d : Nat} {env : Addr} {esub : Expr} {n : Int}
+    (hR : NegResid st esub) (hE : EvalE st d env esub st' (.int n))
+    (ihE : Vsa.Sim.EvalIH st d env esub st' (.int n)) :
+    Vsa.Sim.EvalIH st d env (.unary .neg esub) st' (.int (wrap64 (-n))) :=
+  hR d env st' n hE ihE
+
+theorem notResid_exact_child
+    {st st' : SpecSt} {d : Nat} {env : Addr} {esub : Expr} {vsub : Value}
+    (hR : NotResid esub vsub) (hE : EvalE st d env esub st' vsub)
+    (ihE : Vsa.Sim.EvalIH st d env esub st' vsub) :
+    Vsa.Sim.EvalIH st d env (.unary .not esub) st' (.bool (!vsub.truthy)) :=
+  hR st d env st' hE ihE
+
+theorem orTrueResid_exact_branch
+    {st st' : SpecSt} {d : Nat} {env : Addr} {el er : Expr} {vl : Value}
+    (hR : OrTrueResid el er vl) (hE : EvalE st d env el st' vl)
+    (hTruthy : vl.truthy = true) (ihE : Vsa.Sim.EvalIH st d env el st' vl) :
+    Vsa.Sim.EvalIH st d env (.logical .or el er) st' (.bool true) :=
+  hR st d env st' hE hTruthy ihE
+
+theorem andFalseResid_exact_branch
+    {st st' : SpecSt} {d : Nat} {env : Addr} {el er : Expr} {vl : Value}
+    (hR : AndFalseResid el er vl) (hE : EvalE st d env el st' vl)
+    (hFalsy : vl.truthy = false) (ihE : Vsa.Sim.EvalIH st d env el st' vl) :
+    Vsa.Sim.EvalIH st d env (.logical .and el er) st' (.bool false) :=
+  hR st d env st' hE hFalsy ihE
+
+theorem orFalseResid_exact_thread
+    {st st' st'' : SpecSt} {d : Nat} {env : Addr} {el er : Expr} {vl vr : Value}
+    (hR : OrFalseResid st' st'' el er vl vr)
+    (hEl : EvalE st d env el st' vl) (hFalsy : vl.truthy = false)
+    (hEr : EvalE st' d env er st'' vr)
+    (ihL : Vsa.Sim.EvalIH st d env el st' vl)
+    (ihR : Vsa.Sim.EvalIH st' d env er st'' vr) :
+    Vsa.Sim.EvalIH st d env (.logical .or el er) st'' (.bool vr.truthy) :=
+  hR st d env hEl hFalsy hEr ihL ihR
+
+theorem andTrueResid_exact_thread
+    {st st' st'' : SpecSt} {d : Nat} {env : Addr} {el er : Expr} {vl vr : Value}
+    (hR : AndTrueResid st' st'' el er vl vr)
+    (hEl : EvalE st d env el st' vl) (hTruthy : vl.truthy = true)
+    (hEr : EvalE st' d env er st'' vr)
+    (ihL : Vsa.Sim.EvalIH st d env el st' vl)
+    (ihR : Vsa.Sim.EvalIH st' d env er st'' vr) :
+    Vsa.Sim.EvalIH st d env (.logical .and el er) st'' (.bool vr.truthy) :=
+  hR st d env hEl hTruthy hEr ihL ihR
 
 end Vsa.Sim.Rows

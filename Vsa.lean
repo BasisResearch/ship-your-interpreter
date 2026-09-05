@@ -256,6 +256,25 @@ import Vsa.Sim.EnvGetSpec8
 import Vsa.Sim.EnvGetSpec9
 import Vsa.Sim.EnvGetSpec10
 import Vsa.Sim.EnvGetMarshal
+import Vsa.Sim.StoreInvariant
+import Vsa.Sim.EnvGetChain
+import Vsa.Sim.EnvGetPrologueHead
+import Vsa.Sim.EnvGetRecursive
+import Vsa.Sim.EnvSetSites
+import Vsa.Sim.EnvSetPrologueHead
+import Vsa.Sim.EnvSetScanCore
+import Vsa.Sim.EnvSetScanIter
+import Vsa.Sim.EnvSetHit
+import Vsa.Sim.EnvSetReturn
+import Vsa.Sim.StoreSetFootprint
+import Vsa.Sim.EnvSetHitReconstruct
+import Vsa.Sim.EnvSetChain
+import Vsa.Sim.EnvSetRecursive
+import Vsa.Sim.EnvSetScanStart
+import Vsa.Sim.EnvSetComplete
+import Vsa.Sim.EvalValueReturnTail
+import Vsa.Sim.AssignRhsMarshal
+import Vsa.Sim.ValueWordRepr
 import Vsa.Sim.SnprintfSites
 import Vsa.Sim.SnprintfSites2
 import Vsa.Sim.SnprintfSites3
@@ -459,7 +478,6 @@ import Vsa.Sim.rows.TermRouting
 import Vsa.Sim.TermBundles
 import Vsa.Sim.rows.EvalVarRow
 import Vsa.Sim.rows.EvalVarBridge
-import Vsa.Sim.rows.EvalVarBridgeCallee
 import Vsa.Sim.rows.EvalAssignRow
 import Vsa.Sim.rows.ExecVarInitRow
 import Vsa.Sim.rows.BinDispatchRow
@@ -481,7 +499,11 @@ import Vsa.Sim.rows.ExecLeafD
 import Vsa.Sim.rows.ExecRouting
 import Vsa.Sim.rows.ExecRecRows
 import Vsa.Sim.rows.ExecIHWiden
+import Vsa.Sim.ExecWhileIndexed
+import Vsa.Sim.ExecRouteAssembly
 import Vsa.Sim.rows.ExecDispatchRows
+import Vsa.Sim.rows.ExecWhileRouteRows
+import Vsa.Sim.WhileGeomSuppliers
 import Vsa.Sim.rows.ScaffoldRows
 import Vsa.Sim.rows.SeqForRows
 import Vsa.Sim.rows.CallRows
@@ -543,6 +565,7 @@ import Vsa.Sim.ArmSegSplitSqEntry
 import Vsa.Sim.MidArmCombinator
 import Vsa.Sim.StagePreSuppliers2
 import Vsa.Sim.ApproxArmResidGapAssembly
+import Vsa.Sim.DivFamilyAssembly
 import Vsa.Sim.rows.StrdupTailBridges
 import Vsa.Sim.rows.StrcpyContract
 import Vsa.Sim.rows.StrdupEpilogueSeg
@@ -636,6 +659,8 @@ import Vsa.Sim.rows.FlStepArmStagePre
 import Vsa.Sim.rows.StmtForLoopSegPreB
 import Vsa.Sim.rows.ValuePrintArms
 import Vsa.Sim.rows.ValuePrintContract
+import Vsa.Sim.rows.NativePrintFinite
+import Vsa.Sim.ConsoleStream
 -- gen_fn whole-function summary layer (plan a, 2026-09-01)
 import Vsa.Sim.FnSummary
 import Vsa.Sim.SegToTripleFramed
@@ -671,3 +696,4 @@ import Vsa.Sim.EntryGroundKit
 import Vsa.Sim.rows.LayoutStmtTableGen
 import Vsa.Sim.rows.EntryGroundRows
 import Vsa.Sim.rows.ExecLeafPin
+import Vsa.Sim.ReprDelta

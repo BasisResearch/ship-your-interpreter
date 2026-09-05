@@ -228,6 +228,10 @@ structure FoldDefineReturn
   `FrameRepr` + the entry carrier's `StoreRepr`. -/
   advance : StoreDefineAdvance N A φf' φc (foldStore store' cd vs frame k) frame
     ((cd.params.zip vs)[k]'hk).1 ((cd.params.zip vs)[k]'hk).2 c.σ.mem
+  /-- The env_define summary advances the same allocator ledger and global
+  ownership invariant to the `(k+1)` fold store. -/
+  heap : CallFoldHeapOwned A φf' φc
+    (foldStore store' cd vs frame (k + 1)) (sp.toNat + 240) vs c.σ.mem
   out : OutRepr c.σ st
   memFrame : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < SL.hi) → ¬ (A.lo ≤ a ∧ a < A.hi) →
     c.σ.mem[a]? = m0[a]?
@@ -295,7 +299,7 @@ theorem foldDefineReturn_step
       (k + 1) ⟨σ', i', u'⟩
     refine { good := hG', tick := hi', pc := ?_, spReg := ?_, cursor := ?_,
              idx := ?_, bound := ?_, frameReg := ?_, closReg := ?_,
-             minstret := hmi', store := ?_, out := ?_, memFrame := ?_ }
+             minstret := hmi', store := ?_, heap := ?_, out := ?_, memFrame := ?_ }
     · rw [hpc']; rfl
     · rw [← gprGet_x2]; exact gholds_reg hregs (by rfl)
     · rw [← gprGet_x8]; exact gholds_reg hregs (by rfl)
@@ -319,6 +323,8 @@ theorem foldDefineReturn_step
     · show StoreRepr σ'.mem N A φf' φc (foldStore store' cd vs frame (k + 1))
       rw [hmm]
       exact foldStoreAdvance_toStoreRepr hk hp.advance
+    · rw [hmm]
+      exact hp.heap
     · exact outRepr_transport hout hp.out
     · intro a h1 h2
       show σ'.mem[a]? = m0[a]?
@@ -354,14 +360,14 @@ theorem callParamFoldSeamStep
     (hStage : Triple
       (callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0 k)
       PreDef)
-    (hDefine : Triple PreDef PostDef)
+    (hDefine : EnvDefineCallStages PreDef PostDef)
     (hPins : ∀ c, PostDef c →
       FoldDefineReturn N A SL φf' φc st store' cd vs frame sp fp clp m0 k hk c) :
     Triple
       (callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0 k)
       (callParamFoldCarrier N A SL φf' φc st store' cd vs frame sp fp clp m0
         (k + 1)) :=
-  callParamFoldSeam_of hStage hDefine
+  callParamFoldSeam_of hStage (envDefineCall_of_stages hDefine)
     (fun c hc =>
       foldDefineReturn_step N A SL φf' φc st store' cd vs frame sp fp clp m0
         k hk c (hPins c hc))

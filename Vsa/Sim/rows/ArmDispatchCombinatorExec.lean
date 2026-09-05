@@ -175,6 +175,9 @@ theorem execArmDispatch_of_slot
         -- the staged callee's windows.
         EvalGround ment SL A (sp - 176#64)
           ((sp - 176#64) + sign_extend (m := 64) subOff) aCh.toNat ce ∧
+        ValueWordsTotal ment
+          ((sp - 176#64) + sign_extend (m := 64) subOff).toNat ∧
+        aEnv = BitVec.ofNat 64 (φf env) ∧
         (∀ m' : Mem,
           (∀ a, ¬ (SL.lo ≤ a ∧ a < SL.hi) →
             ¬ (aInterp.toNat ≤ a ∧ a < aInterp.toNat + 24) →
@@ -194,6 +197,8 @@ theorem execArmDispatch_of_slot
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
         (∀ R : Register, AbiPreservedNoise R → c'.σ.regs.get? R = gpre R) ∧
         (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        (∃ w, gpre Register.x19 = some w) ∧ (∃ w, gpre Register.x20 = some w) ∧
+        (∃ w, gpre Register.x21 = some w) ∧
         StackOK SL (sp - 176#64)
           (ce.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
         Expr.bodiesBound Vsa.While.perCallBudget ce = true ∧
@@ -208,12 +213,21 @@ theorem execArmDispatch_of_slot
       c'' ⟨hE, rfl⟩
   -- Destructure a COPY of the `ExecArmEntryK` (keep `hArm` intact for output).
   have hArmCopy := hArm
-  obtain ⟨_hAG, _hAtick, _hApc, hAx8, _hAx9, _hAx19, hAx18, _hAsp, _hAra, _hAmi,
+  obtain ⟨_hAG, _hAtick, _hApc, hAx8, _hAx9, hAx19, hAx18, _hAsp, _hAra, _hAmi,
     hAout, _hAoutStr, _hAmem, _hAcode, _hAstore,
     _hAslotRa, _hAslotS0, _hAslotS1, _hAslotS2, _hAslotS3,
-    _hAg8, _hAg9, _hAg18, _hAg19, _hAg2, _hAframe, hArmMemM0,
-    hAsp176, _hAsphi, _hAsplo, _hAspwin, _hAsp8, _hAraAl, _hAMemExt⟩ := hArmCopy
+    _hAg8, _hAg9, _hAg18, _hAg19, _hAg2, hAframe, hArmMemM0,
+    hAsp176, _hAsphi, _hAsplo, _hAspwin, _hAsp8, _hAraAl, hAMemExt⟩ := hArmCopy
   have hMentM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]? := hArmMemM0
+  obtain ⟨⟨w20, hw20⟩, ⟨w21, hw21⟩⟩ := hE.envset_defined
+  have hAx20 : c1.σ.regs.get? Register.x20 = some w20 :=
+    (hAframe Register.x20 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide)).trans
+        ((hE.frame Register.x20 (by decide)).symm.trans hw20)
+  have hAx21 : c1.σ.regs.get? Register.x21 = some w21 :=
+    (hAframe Register.x21 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide)).trans
+        ((hE.frame Register.x21 (by decide)).symm.trans hw21)
   have hAgP : AgreeP (fun a => ¬ (SL.lo ≤ a ∧ a < sp.toNat)) ment m0 := hMentM0
   -- Transport the payload read from `m0` (extras) to the arm-entry `ment`.
   have hpayMent : read64 ment (aStmt.toNat + payOff) = some aChild.toNat := by
@@ -261,6 +275,13 @@ theorem execArmDispatch_of_slot
             rw [h176]; have := sp.isLt; omega]
           omega)
       hsub_lo hsub_hi
+  have hWords0 : ValueWordsTotal m0
+      ((sp - 176#64) + sign_extend (m := 64) subOff).toNat := by
+    rw [← hE.mem]
+    exact hE.ground.valueWordsTotal hsub_lo (by omega)
+  have hWordsMent : ValueWordsTotal ment
+      ((sp - 176#64) + sign_extend (m := 64) subOff).toNat :=
+    ValueWordsTotal.mono hAMemExt hWords0
   -- The wide-window survival at `ment` (compose the extras' `m0`-closure with
   -- the memframe; outside the ENLARGED window is outside the spill window).
   have hWideMent : ∀ m' : Mem,
@@ -278,11 +299,12 @@ theorem execArmDispatch_of_slot
   exact ⟨c1, hs1, (fun R => c1.σ.regs.get? R), aChild, v8, v9, v18, v19, ment,
     hArm', hpayMent, hChildMent,
     hE.stmt_align, hE.stmt_ram.1, hX.node_hi, Or.inr hE.stmt_win,
-    hEvalMent, hViIntMent, hViSlotMent, hNbsMent, hGroundMent, hWideMent,
+    hEvalMent, hViIntMent, hViSlotMent, hNbsMent, hGroundMent, hWordsMent, hE.envPtr, hWideMent,
     hX.child_align, hX.child_lo, hX.child_hi, hX.child_win, hX.child_stk,
     hX.sproom, hX.sp16, hE.stack_ram.1, hE.stack_ram.2, hE.stack_win,
     hX.jspSLhi, hX.codeStkJ, hX.viStkJ, hX.tableStkJ, hX.arenaStkJ, hX.arenaCode,
-    (fun R _ => rfl), ⟨aStmt, hAx8⟩, ⟨aRet, hAx18⟩,
+    (fun R _ => rfl), ⟨aStmt, hAx8⟩, ⟨aRet, hAx18⟩, ⟨aEnv, hAx19⟩,
+    ⟨w20, hAx20⟩, ⟨w21, hAx21⟩,
     hceBudget, hceBodies, hE.store_bodies⟩
 
 #print axioms execArmDispatch_of_slot

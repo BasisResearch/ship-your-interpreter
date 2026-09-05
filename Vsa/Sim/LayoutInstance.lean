@@ -1,5 +1,12 @@
 import Vsa.Sim.GeomFacts
 import Vsa.Sim.ImageDischarge
+import Vsa.Sim.ConsoleStream
+import Vsa.Sim.GoodState
+import Vsa.Sim.JmpSpec
+import Vsa.Sim.Code.Interp_run
+import Vsa.Sim.Code.Setjmp
+import Vsa.Sim.EvalSimCommon
+import Vsa.RuntimeRepr
 import Vsa.Refinement
 
 /-!
@@ -49,8 +56,8 @@ over literals each.
   D-atom `StackDisjoint` (disjointness from the C-stack scribble), not a full
   above-HTIF `ObjGeom`.
 * `interpRunLayout : Vsa.Refine.Layout` — the concrete refinement `Layout` whose
-  `atInterpRun` pins the entry PC `0x800043ec` with the AST-array `(a, n)` ABI
-  arguments in `a0`/`a1`.
+  `atInterpRun` pins the post-startup runtime state and the actual four-argument
+  ABI: `a0=in`, `a1=stmts`, `a2=count`, `a3=0`.
 * the **statics** (`ImageStaticsLoaded`) are ALREADY fully discharged in
   `Vsa/Sim/ImageDischarge.lean`; `LayoutInstance` only re-exports the derivation
   handle (`layoutStaticsLoaded`) so a case can name ONE predicate.
@@ -60,6 +67,7 @@ is `decide`/`omega` over small concrete `Nat`s (fast-elab).
 -/
 
 open Vsa Vsa.Alloc Vsa.Sim
+open Vsa.RuntimeRepr
 open Vsa.Machine (Config)
 open LeanRV64DExecutable
 
@@ -138,19 +146,143 @@ theorem interpRunCodeDisjoint :
     show interpRunCode.1 + interpRunCode.2 ≤ stackSL.lo ∨ spEntry ≤ interpRunCode.1
     left; decide
 
-/-! ## The concrete refinement `Layout`
+/-! ## The concrete refinement boundary -/
 
-The abstract `Vsa.Refine.Layout` pins the interpreter phase's entry program point.
-`interpRunLayout` instantiates it: `atInterpRun c a n` says the machine is parked
-at `interp_run`'s entry PC `0x800043ec` with the AST-array base `a` in `a0` and
-length `n` in `a1` (the C ABI arguments of `interp_run(prog, n)`).  The
-region/geometry content lives in `geomFactsL` above; this record supplies only the
-program-point predicate the refinement quantifies over. -/
+/-- The memory footprint written before `interp_run` reaches its loop head:
+the caller stack plus the 112-byte `jmp_buf` at `interp->on_error`. -/
+def interpRunWriteFootprint (inp : BitVec 64) (k : Nat) : Prop :=
+  (stackSL.lo ≤ k ∧ k < stackSL.hi) ∨
+  (inp.toNat + 16 ≤ k ∧ k < inp.toNat + 128)
+
+/-- The proof-only fields of a valid post-`interp_init`, script-mode
+`interp_run(in, stmts, count, repl_mode)` entry snapshot.  Data witnesses are
+parameters so this remains a `Prop` structure with usable named projections. -/
+structure InterpRunReadyFacts
+    (c : Config) (stmts count : Nat) (inp : BitVec 64)
+    (N : NativeAddrs) (A : Arena) (φf φc : Vsa.While.Addr → Nat)
+    (aLeft : Nat) : Prop where
+  good : GoodState c.σ
+  tick : c.tick < 2
+  pc : c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 interpRunEntry)
+  interp_arg : c.σ.regs.get? Register.x10 = some inp
+  stmts_arg : c.σ.regs.get? Register.x11 = some (BitVec.ofNat 64 stmts)
+  count_arg : c.σ.regs.get? Register.x12 = some (BitVec.ofNat 64 count)
+  /-- The refinement theorem is for file/script semantics, not REPL printing. -/
+  repl_arg : c.σ.regs.get? Register.x13 = some (0#64 : BitVec 64)
+  /-- `main`'s link after `jal interp_run`. -/
+  ra : c.σ.regs.get? Register.x1 = some (0x800045ec#64 : BitVec 64)
+  sp : c.σ.regs.get? Register.x2 = some (BitVec.ofNat 64 spEntry)
+  gp : ∃ v, c.σ.regs.get? Register.x3 = some v
+  s0 : ∃ v, c.σ.regs.get? Register.x8 = some v
+  s1 : ∃ v, c.σ.regs.get? Register.x9 = some v
+  s2 : ∃ v, c.σ.regs.get? Register.x18 = some v
+  s3 : ∃ v, c.σ.regs.get? Register.x19 = some v
+  s4 : ∃ v, c.σ.regs.get? Register.x20 = some v
+  s5 : ∃ v, c.σ.regs.get? Register.x21 = some v
+  s6 : ∃ v, c.σ.regs.get? Register.x22 = some v
+  s7 : ∃ v, c.σ.regs.get? Register.x23 = some v
+  s8 : ∃ v, c.σ.regs.get? Register.x24 = some v
+  s9 : ∃ v, c.σ.regs.get? Register.x25 = some v
+  s10 : ∃ v, c.σ.regs.get? Register.x26 = some v
+  s11 : ∃ v, c.σ.regs.get? Register.x27 = some v
+  run_code : Code.Interp_runLoaded c.σ.mem
+  setjmp_code : Code.SetjmpLoaded c.σ.mem
+  statics : Code.ImageStaticsLoaded c.σ.mem
+  console : ConsoleStream c.σ.mem
+  out : OutRepr c.σ Vsa.While.initSt
+  /-- `Interp.globals` and `Interp.call_depth` after `interp_init`. -/
+  globals : Vsa.MemRepr.read64 c.σ.mem inp.toNat = some (φf 0)
+  call_depth : Vsa.MemRepr.read32 c.σ.mem (inp.toNat + 8) = some 0
+  interp_geom : ObjGeom (inp.toNat, 384) stackSL spEntry
+  setjmp_geom : WinRAM (inp + 16#64)
+  stack_ok : StackOK stackSL (BitVec.ofNat 64 spEntry) (176 + 1088)
+  /-- Sparse machine memory must nevertheless contain every concrete stack byte. -/
+  stack_bytes : ∀ k, stackSL.lo ≤ k → k < stackSL.hi →
+    ∃ b : BitVec 8, c.σ.mem[k]? = some b
+  stmts_align : stmts % 8 = 0
+  stmts_ram : 0x80000000 ≤ stmts ∧ stmts + 8 * count ≤ 0x100000000
+  stmts_win : tohostAddr + 16 ≤ stmts
+  stmts_stack : stmts + 8 * count ≤ stackSL.lo ∨ spEntry ≤ stmts
+  store : StoreRepr c.σ.mem N A φf φc Vsa.While.initSt.store
+  native_addrs : N.print = 0x80002ed4 ∧ N.println = 0x80002f7c ∧
+    N.assert = 0x80002df4
+  /-- The initial store survives the concrete prologue footprint: stack spills
+  and `setjmp`'s 112-byte `jmp_buf` write at `inp + 16`. -/
+  store_survives : ∀ m' : Vsa.MemRepr.Mem,
+    (∀ k, ¬ interpRunWriteFootprint inp k → c.σ.mem[k]? = m'[k]?) →
+    StoreRepr m' N A φf φc Vsa.While.initSt.store
+  arena_budget : A.lo + aLeft ≤ A.hi
+
+/-- Every concrete 24-byte result slot inside the declared stack has all three
+words present.  This is the exact initialization fact recursive value copies use. -/
+theorem InterpRunReadyFacts.valueWordsTotal
+    {c : Config} {stmts count : Nat} {inp : BitVec 64}
+    {N : NativeAddrs} {A : Arena} {φf φc : Vsa.While.Addr → Nat}
+    {aLeft a : Nat}
+    (F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft)
+    (hlo : stackSL.lo ≤ a) (hhi : a + 24 ≤ stackSL.hi) :
+    ValueWordsTotal c.σ.mem a :=
+  valueWordsTotal_of_interval F.stack_bytes hlo hhi
+
+/-- The `interp_run` statement-result slot is `88` bytes above its post-spill
+stack pointer.  Its complete 24-byte value image is present at entry. -/
+theorem InterpRunReadyFacts.interpRetWords
+    {c : Config} {stmts count : Nat} {inp : BitVec 64}
+    {N : NativeAddrs} {A : Arena} {φf φc : Vsa.While.Addr → Nat}
+    {aLeft : Nat}
+    (F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft) :
+    ValueWordsTotal c.σ.mem (spEntry - 176 + 88) := by
+  apply F.valueWordsTotal <;> decide
+
+/-- The top-level interpreter starts in the distinguished allocated global
+environment.  This is derived from `initSt`; it is not an extra runtime
+assumption. -/
+theorem InterpRunReadyFacts.envValid
+    {c : Config} {stmts count : Nat} {inp : BitVec 64}
+    {N : NativeAddrs} {A : Arena} {φf φc : Vsa.While.Addr → Nat}
+    {aLeft : Nat}
+    (_F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft) :
+    EnvValid Vsa.While.initSt 0 :=
+  EnvValid.init
+
+/-- A non-circular, post-startup refinement boundary.  It asserts the concrete
+runtime snapshot from which the decoded `interp_run` prologue can be proved; it
+does not assume a machine execution or `InterpInitStoreRepr`. -/
+def InterpRunReady (c : Config) (stmts count : Nat) : Prop :=
+  ∃ (inp : BitVec 64) (N : NativeAddrs) (A : Arena)
+    (φf φc : Vsa.While.Addr → Nat) (aLeft : Nat),
+    InterpRunReadyFacts c stmts count inp N A φf φc aLeft
+
+/-- The concrete layout uses the actual four-argument RISC-V ABI:
+`a0 = in`, `a1 = stmts`, `a2 = count`, and `a3 = 0` for script mode. -/
 def interpRunLayout : Vsa.Refine.Layout where
-  atInterpRun c a n :=
-    c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 interpRunEntry) ∧
-    c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 a) ∧
-    c.σ.regs.get? Register.x11 = some (BitVec.ofNat 64 n)
+  atInterpRun c a n := InterpRunReady c a n
+
+/-- Expose the concrete ready witness from `Loaded`. -/
+theorem loaded_interpRunReady {p : Vsa.While.Program} {c : Vsa.Machine.Config}
+    (h : Vsa.Refine.Loaded interpRunLayout p c) :
+    ∃ a n, Vsa.MemRepr.ProgramRepr c.σ.mem a n p ∧ InterpRunReady c a n := by
+  exact h
+
+/-- A loaded configuration is a live Sail state, excluding the HTIF-latched
+counterexample admitted by the former three-register boundary. -/
+theorem loaded_goodState {p : Vsa.While.Program} {c : Vsa.Machine.Config}
+    (h : Vsa.Refine.Loaded interpRunLayout p c) : GoodState c.σ := by
+  obtain ⟨_a, _n, _hp, _inp, _N, _A, _φf, _φc, _aLeft, F⟩ := h
+  exact F.good
+
+theorem loaded_tick {p : Vsa.While.Program} {c : Vsa.Machine.Config}
+    (h : Vsa.Refine.Loaded interpRunLayout p c) : c.tick < 2 := by
+  obtain ⟨_a, _n, _hp, _inp, _N, _A, _φf, _φc, _aLeft, F⟩ := h
+  exact F.tick
+
+/-- The concrete refinement boundary is explicitly post-CRT. This projection
+does not pretend that the zero-initialized ELF data already satisfies newlib's
+runtime `FILE` state. -/
+theorem loaded_consoleStream {p : Vsa.While.Program} {c : Vsa.Machine.Config}
+    (h : Vsa.Refine.Loaded interpRunLayout p c) : ConsoleStream c.σ.mem := by
+  obtain ⟨_a, _n, _hp, _inp, _N, _A, _φf, _φc, _aLeft, F⟩ := h
+  exact F.console
 
 /-! ## Statics — reuse `ImageStaticsLoaded`
 

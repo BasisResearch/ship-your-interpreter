@@ -636,6 +636,7 @@ structure EvalBoolEntry
     (∃ v, c.σ.regs.get? Register.x9 = some v) ∧ (∃ v, c.σ.regs.get? Register.x18 = some v)
   /-- wave 48h (CURE A): `a3`(x13) defined at entry — feeds `blockA_k`'s x13 output. -/
   x13_defined : ∃ v, c.σ.regs.get? Register.x13 = some v
+  envReg : c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf a))
 
 /-- The `EX_BOOL` kind tag `read32 = some 2`, from `ExprRepr … (.bool b)`. -/
 theorem exprRepr_bool_kind {m : Mem} {a : Nat} {b : Bool} (h : ExprRepr m a (.bool b)) :
@@ -672,7 +673,7 @@ theorem evalBoolSimP
   -- === block A: prologue + dispatch → ArmEntryK (via blockA_k) ===
   have hkm0 : read32 m0 aExpr.toNat = some 2 := hc.mem ▸ exprRepr_bool_kind hc.expr
   obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, hpresM, _hx13⟩ :=
-    blockA_k g N A SL φf φc st (.bool b) 2 (0x80003420#64) Value_boolLoaded
+    blockA_k g N A SL φf φc st a (.bool b) 2 (0x80003420#64) Value_boolLoaded
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
       hkm0
@@ -713,7 +714,7 @@ theorem evalBoolSimP
       hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
       hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
       hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
-      ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.x13_defined⟩⟩, rfl⟩
+      ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩
   -- === block C: arm (lw a1,8(a2); jal value_bool; j) → PreEpilogueV (.bool b) + pin ===
   obtain ⟨c2, hs2, mpre, hPre, hPin⟩ :=
     blockC_bool g N A SL φf φc st b sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0

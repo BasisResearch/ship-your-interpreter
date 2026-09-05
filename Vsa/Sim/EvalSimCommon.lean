@@ -102,6 +102,114 @@ theorem MemExtends.trans {m0 m1 m2 : Mem}
   obtain ⟨b', hb'⟩ := h1 a b h
   exact h2 a b' hb'
 
+/-- Presence extension preserves the readability of one complete machine
+word.  The value may change because the intervening execution may overwrite
+the word. -/
+theorem read64_total_of_memExtends {m0 m : Mem} {a : Nat}
+    (hExt : MemExtends m0 m)
+    (h : ∃ d : BitVec 64, read64 m0 a = some d.toNat) :
+    ∃ d : BitVec 64, read64 m a = some d.toNat := by
+  obtain ⟨d, hd⟩ := h
+  simp only [read64, readLE, Option.bind_eq_bind, Option.bind_eq_some_iff] at hd
+  obtain ⟨b0, hb0, r0, hr0, _⟩ := hd
+  obtain ⟨b1, hb1, r1, hr1, _⟩ := hr0
+  obtain ⟨b2, hb2, r2, hr2, _⟩ := hr1
+  obtain ⟨b3, hb3, r3, hr3, _⟩ := hr2
+  obtain ⟨b4, hb4, r4, hr4, _⟩ := hr3
+  obtain ⟨b5, hb5, r5, hr5, _⟩ := hr4
+  obtain ⟨b6, hb6, r6, hr6, _⟩ := hr5
+  obtain ⟨b7, hb7, _, _, _⟩ := hr6
+  obtain ⟨b0', hb0'⟩ := hExt a b0 hb0
+  obtain ⟨b1', hb1'⟩ := hExt (a + 1) b1 hb1
+  obtain ⟨b2', hb2'⟩ := hExt (a + 2) b2 hb2
+  obtain ⟨b3', hb3'⟩ := hExt (a + 3) b3 hb3
+  obtain ⟨b4', hb4'⟩ := hExt (a + 4) b4 hb4
+  obtain ⟨b5', hb5'⟩ := hExt (a + 5) b5 hb5
+  obtain ⟨b6', hb6'⟩ := hExt (a + 6) b6 hb6
+  obtain ⟨b7', hb7'⟩ := hExt (a + 7) b7 hb7
+  let d' : BitVec 64 := sign_extend (m := 64)
+    (((((((b7'.append b6').append b5').append b4').append b3').append b2').append b1').append b0')
+  refine ⟨d', ?_⟩
+  simp only [read64, readLE, bind, Option.bind, pure, hb0', hb1', hb2', hb3', hb4', hb5',
+    hb6', hb7', Nat.mul_zero, Nat.add_zero, d']
+  rw [sext_full]
+  apply congrArg some
+  exact (word8_toNat_recon b0' b1' b2' b3' b4' b5' b6' b7').symm
+
+/-- A fully populated byte map makes every machine word readable. -/
+theorem read64_total_of_populated {m : Mem}
+    (hPop : ∀ k : Nat, ∃ b : BitVec 8, m[k]? = some b) (a : Nat) :
+    ∃ d : BitVec 64, read64 m a = some d.toNat := by
+  obtain ⟨b0, hb0⟩ := hPop a
+  obtain ⟨b1, hb1⟩ := hPop (a + 1)
+  obtain ⟨b2, hb2⟩ := hPop (a + 2)
+  obtain ⟨b3, hb3⟩ := hPop (a + 3)
+  obtain ⟨b4, hb4⟩ := hPop (a + 4)
+  obtain ⟨b5, hb5⟩ := hPop (a + 5)
+  obtain ⟨b6, hb6⟩ := hPop (a + 6)
+  obtain ⟨b7, hb7⟩ := hPop (a + 7)
+  let d : BitVec 64 := sign_extend (m := 64)
+    (((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0)
+  refine ⟨d, ?_⟩
+  simp only [read64, readLE, bind, Option.bind, pure, hb0, hb1, hb2, hb3, hb4, hb5,
+    hb6, hb7, Nat.mul_zero, Nat.add_zero, d]
+  rw [sext_full]
+  apply congrArg some
+  exact (word8_toNat_recon b0 b1 b2 b3 b4 b5 b6 b7).symm
+
+/-- A fully populated byte map makes all three words of a `Value` slot readable. -/
+theorem valueWordsTotal_of_populated {m : Mem}
+    (hPop : ∀ k : Nat, ∃ b : BitVec 8, m[k]? = some b) (a : Nat) :
+    ValueWordsTotal m a := by
+  obtain ⟨d0, h0⟩ := read64_total_of_populated hPop a
+  obtain ⟨d1, h1⟩ := read64_total_of_populated hPop (a + 8)
+  obtain ⟨d2, h2⟩ := read64_total_of_populated hPop (a + 16)
+  exact ⟨d0, d1, d2, h0, h1, h2⟩
+
+/-- A populated finite interval suffices for a `Value` slot wholly inside it.
+This is the usable form for sparse machine memories and concrete stack slots. -/
+theorem valueWordsTotal_of_interval {m : Mem} {lo hi a : Nat}
+    (hPop : ∀ k : Nat, lo ≤ k → k < hi → ∃ b : BitVec 8, m[k]? = some b)
+    (hlo : lo ≤ a) (hhi : a + 24 ≤ hi) :
+    ValueWordsTotal m a := by
+  have word (x : Nat) (hxlo : lo ≤ x) (hxhi : x + 8 ≤ hi) :
+      ∃ d : BitVec 64, read64 m x = some d.toNat := by
+    obtain ⟨b0, hb0⟩ := hPop x (by omega) (by omega)
+    obtain ⟨b1, hb1⟩ := hPop (x + 1) (by omega) (by omega)
+    obtain ⟨b2, hb2⟩ := hPop (x + 2) (by omega) (by omega)
+    obtain ⟨b3, hb3⟩ := hPop (x + 3) (by omega) (by omega)
+    obtain ⟨b4, hb4⟩ := hPop (x + 4) (by omega) (by omega)
+    obtain ⟨b5, hb5⟩ := hPop (x + 5) (by omega) (by omega)
+    obtain ⟨b6, hb6⟩ := hPop (x + 6) (by omega) (by omega)
+    obtain ⟨b7, hb7⟩ := hPop (x + 7) (by omega) (by omega)
+    let d : BitVec 64 := sign_extend (m := 64)
+      (((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0)
+    refine ⟨d, ?_⟩
+    simp only [read64, readLE, bind, Option.bind, pure, hb0, hb1, hb2, hb3, hb4, hb5,
+      hb6, hb7, Nat.mul_zero, Nat.add_zero, d]
+    rw [sext_full]
+    apply congrArg some
+    exact (word8_toNat_recon b0 b1 b2 b3 b4 b5 b6 b7).symm
+  obtain ⟨d0, h0⟩ := word a hlo (by omega)
+  obtain ⟨d1, h1⟩ := word (a + 8) (by omega) (by omega)
+  obtain ⟨d2, h2⟩ := word (a + 16) (by omega) (by omega)
+  exact ⟨d0, d1, d2, h0, h1, h2⟩
+
+theorem ValueWordsTotal.mono {m0 m : Mem} {a : Nat}
+    (hExt : MemExtends m0 m) (h : ValueWordsTotal m0 a) :
+    ValueWordsTotal m a := by
+  obtain ⟨d0, d1, d2, h0, h1, h2⟩ := h
+  obtain ⟨d0', h0'⟩ := read64_total_of_memExtends hExt ⟨d0, h0⟩
+  obtain ⟨d1', h1'⟩ := read64_total_of_memExtends hExt ⟨d1, h1⟩
+  obtain ⟨d2', h2'⟩ := read64_total_of_memExtends hExt ⟨d2, h2⟩
+  exact ⟨d0', d1', d2', h0', h1', h2'⟩
+
+theorem ValueWordRepr.of_repr_total
+    {m : Mem} {N : NativeAddrs} {φc : Addr → Nat} {a : Nat} {v : Value}
+    (hr : ValueRepr m N φc a v) (ht : ValueWordsTotal m a) :
+    ValueWordRepr m N φc a v :=
+  ⟨hr, ht⟩
+
 -- (relocated block ends; wave 47e)
 
 /-- **Narrow a WIDENED (`[SL.lo, SL.hi)`) store-survival witness to the

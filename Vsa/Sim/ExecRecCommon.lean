@@ -101,6 +101,7 @@ theorem armTail_rec_es
     (hjaltgt : (callPC + sign_extend (m := 64) jalImm) = BitVec.ofNat 64 evalExprEntry)
     (hlink : (BitVec.addInt callPC 4) = retPC)
     (hretAl : retPC.toNat % 4 = 0)
+    (henvValid : EnvValid st env)
     -- the per-arm `jal eval_expr` site step:
     (hjalSite : ∀ (σ : MState) (i u : Nat) (vmi : BitVec 64),
       GoodState σ → σ.regs.get? Register.PC = some callPC →
@@ -116,16 +117,21 @@ theorem armTail_rec_es
         c.σ.regs.get? Register.PC = some callPC ∧
         c.σ.regs.get? Register.x10 = some subsret ∧          -- a0 = sub-sret
         c.σ.regs.get? Register.x11 = some aInterp ∧          -- a1 = interp*
-        (∃ w, c.σ.regs.get? Register.x13 = some w) ∧          -- a3 defined (wave 48h CURE A)
+        c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) ∧
         c.σ.regs.get? Register.x12 = some aOperand ∧         -- a2 = operand node
         c.σ.regs.get? Register.x18 = some aRet ∧             -- s2 = retslot (survives)
         c.σ.regs.get? Register.x2 = some (sp - 176#64) ∧     -- sp lowered
         (∃ w, c.σ.regs.get? Register.x8 = some w) ∧          -- s0 defined (Stmt*)
         (∃ w, c.σ.regs.get? Register.x9 = some w) ∧          -- s1 defined (interp*)
+        (∃ w19 w20 w21 : BitVec 64,
+          c.σ.regs.get? Register.x19 = some w19 ∧
+          c.σ.regs.get? Register.x20 = some w20 ∧
+          c.σ.regs.get? Register.x21 = some w21) ∧
         (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
         c.σ.sailOutput = out0 ∧
         String.join out0.toList = st.out ∧
         c.σ.mem = mcall ∧
+        ValueWordsTotal mcall subsret.toNat ∧
         Exec_stmtLoaded mcall ∧ Eval_exprLoaded mcall ∧
         Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
         -- WAVE 47i: the child's entry-ground bundle.
@@ -186,8 +192,9 @@ theorem armTail_rec_es
         st' vsub sp r aRet subsret retPC
         r v8 v9 v18 v19 mcall mcall) := by
   intro c hpre
-  obtain ⟨hG, htick, hpc, ha0, hx11, ⟨wx13, hx13⟩, hx12, hs2, hsp, ⟨wx8, hwx8⟩, ⟨wx9, hwx9⟩, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
-    hcodeS, hcode, hviCode, hslot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframe,
+  obtain ⟨hG, htick, hpc, ha0, hx11, hx13, hx12, hs2, hsp, ⟨wx8, hwx8⟩, ⟨wx9, hwx9⟩,
+    ⟨w19, w20, w21, hw19, hw20, hw21⟩, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
+    hsubWords, hcodeS, hcode, hviCode, hslot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframe,
     hgx8, hgx9, hgx18, hgx19, hgx2,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
     hopAl, hopLo, hopHi, hopWin, hopStk,
@@ -213,7 +220,9 @@ theorem armTail_rec_es
     rwa [hlink] at this
   have ha0_1 : σ1.regs.get? Register.x10 = some subsret := obs_jalT_other hobs1 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0
   have hx11_1 : σ1.regs.get? Register.x11 = some aInterp := obs_jalT_other hobs1 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11
-  have hx13_1 : σ1.regs.get? Register.x13 = some wx13 := obs_jalT_other hobs1 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13
+  have hx13_1 : σ1.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) :=
+    obs_jalT_other hobs1 Register.x13 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) hx13
   have hx12_1 : σ1.regs.get? Register.x12 = some aOperand := obs_jalT_other hobs1 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12
   have hsp_1 : σ1.regs.get? Register.x2 = some (sp - 176#64) := obs_jalT_other hobs1 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp
   have hs2_1 : σ1.regs.get? Register.x18 = some aRet := obs_jalT_other hobs1 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs2
@@ -226,6 +235,15 @@ theorem armTail_rec_es
     obs_jalT_other hobs1 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hwx8
   have hx9_1 : σ1.regs.get? Register.x9 = some wx9 :=
     obs_jalT_other hobs1 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hwx9
+  have hx19_1 : σ1.regs.get? Register.x19 = some w19 :=
+    obs_jalT_other hobs1 Register.x19 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) hw19
+  have hx20_1 : σ1.regs.get? Register.x20 = some w20 :=
+    obs_jalT_other hobs1 Register.x20 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) hw20
+  have hx21_1 : σ1.regs.get? Register.x21 = some w21 :=
+    obs_jalT_other hobs1 Register.x21 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide) (by decide) (by decide) hw21
   -- ============ the sub-call's EvalEntry at ⟨σ1, i1, steps+1⟩ ============
   -- The sub-call `aEnv` = aInterp (a1); `sret` = subsret; sp lowered to sp-176.
   have hEntry : EvalEntry (fun R => σ1.regs.get? R) N A SL φf φc st d env esub
@@ -234,6 +252,7 @@ theorem armTail_rec_es
       tick := hi1
       pc := hpc1
       a0 := ha0_1
+      sret_words := by rw [hmem1e]; exact hsubWords
       a1 := hx11_1
       a2 := hx12_1
       ra := hlink1
@@ -248,6 +267,7 @@ theorem armTail_rec_es
       code := by show Eval_exprLoaded σ1.mem; rw [hmem1e]; exact hcode
       expr := by rw [hmem1e]; exact hsubexpr
       store := by rw [hmem1e]; exact hstore
+      env_valid := henvValid
       store_survives := by
         -- wave 47e: the child's WIDENED footprint = the parent's (same `SL`);
         -- the sub-sret window sits inside `[SL.lo, SL.hi)`, so it is absorbed.
@@ -299,9 +319,11 @@ theorem armTail_rec_es
         · left; exact h
         · right; rw [hspsub]; omega
       spill_defined := ⟨⟨wx8, hx8_1⟩, ⟨wx9, hx9_1⟩, ⟨aRet, hs2_1⟩⟩
-      x13_defined := ⟨wx13, hx13_1⟩ }
+      envset_defined := ⟨w19, w20, w21, hx19_1, hx20_1, hx21_1⟩
+      envReg := hx13_1
+      x13_defined := ⟨_, hx13_1⟩ }
   -- ============ the sub-call (the induction hypothesis) ============
-  obtain ⟨c2, hs2', hExit, hpres, φf', φc', hpf', hpc', hsurvSL⟩ :=
+  obtain ⟨c2, hs2', hExit, hpres, _hwords, φf', φc', hpf', hpc', hsurvSL⟩ :=
     hIH (fun R => σ1.regs.get? R) N A SL φf φc (sp - 176#64) retPC subsret aInterp aOperand mcall
       ⟨σ1, i1, c.steps + 1⟩ hEntry
   -- PC back at the link (ret target of an aligned retPC)
@@ -399,6 +421,7 @@ theorem execExprGlue
     (st st' : Vsa.While.St) (d : Nat) (env : Addr) (e : Expr) (v : Value)
     (sp r aInterp aStmt aEnv aRet aOperand : BitVec 64) (m0 : Mem) (out0 : Array String)
     (hIH : EvalIH st d env e st' v)
+    (henvPtr : aEnv = BitVec.ofNat 64 (φf env))
     -- the sub-expression node (`stmt->expr`, `ld a2,8(s0)`):
     (hop : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       read64 ment (aStmt.toNat + 8) = some aOperand.toNat)
@@ -423,6 +446,12 @@ theorem execExprGlue
     (hground : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       EvalGround ment SL A (sp - 176#64)
         ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) aOperand.toNat e)
+    (hsubWords : ∀ ment : Mem,
+      (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
+      ValueWordsTotal ment
+        ((sp - 176#64) + sign_extend (m := 64) (0x010#12)).toNat)
+    (henvsetG : (∃ w20, g Register.x20 = some w20) ∧
+      (∃ w21, g Register.x21 = some w21))
     -- the store-window survival (as in `ExecEntry.store_survives`):
     (hstoreSurv : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       ∀ m' : Mem, (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ment[k]? = m'[k]?) →
@@ -478,6 +507,9 @@ theorem execExprGlue
   have hgroundM : EvalGround ment SL A (sp - 176#64)
       ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) aOperand.toNat e :=
     hground ment hmemframe
+  have hsubWordsM : ValueWordsTotal ment
+      ((sp - 176#64) + sign_extend (m := 64) (0x010#12)).toNat :=
+    hsubWords ment hmemframe
   -- operand-pointer byte reassembly (for the `ld a2,8(s0)`):
   have haddr8 : (aStmt + sign_extend (m := 64) (0x008#12)).toNat = aStmt.toNat + 8 := by
     rw [BitVec.toNat_add]
@@ -552,6 +584,8 @@ theorem execExprGlue
     have := obs_alu_rd hobs3 (by decide) (by decide) (by decide) (by decide) (by decide)
     rwa [show (aEnv + sign_extend (m := 64) (0x000#12)) = aEnv from by
       apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_add]; simp only [show (sign_extend (m := 64) (0x000#12) : BitVec 64).toNat = 0 from by decide]; have := aEnv.isLt; omega] at this
+  have hx19_3 : σ3.regs.get? Register.x19 = some aEnv :=
+    obs_alu_other' hobs3 Register.x19 (by decide) hx19_2
   have hx10_3 : σ3.regs.get? Register.x10 = some ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) := obs_alu_other' hobs3 Register.x10 (by decide) hx10_2
   have hra_3 : σ3.regs.get? Register.x1 = some r := obs_alu_other' hobs3 Register.x1 (by decide) hra_2
   obtain ⟨vmi3, hmi3⟩ := obs_alu_minstret hobs3
@@ -577,6 +611,8 @@ theorem execExprGlue
   have hx13_4 : σ4.regs.get? Register.x13 = some aEnv := obs_alu_other' hobs4 Register.x13 (by decide) hx13_3
   have hx10_4 : σ4.regs.get? Register.x10 = some ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) := obs_alu_other' hobs4 Register.x10 (by decide) hx10_3
   have hx9_4 : σ4.regs.get? Register.x9 = some aInterp := obs_alu_other' hobs4 Register.x9 (by decide) hx9_3
+  have hx19_4 : σ4.regs.get? Register.x19 = some aEnv :=
+    obs_alu_other' hobs4 Register.x19 (by decide) hx19_3
   obtain ⟨vmi4, hmi4⟩ := obs_alu_minstret hobs4
   have hout4 : σ4.sailOutput = out0 := by rw [hobs4.out, sailOutput_sigmaPost_alu]; exact hout3
   have hcode4 : Exec_stmtLoaded σ4.mem := by rw [hmem4e]; exact hcodeS
@@ -605,6 +641,13 @@ theorem execExprGlue
     have h11 : (Register.x11 == R) = false := abi_ne' (by decide) hab
     exact ((a hobs4 h11).trans ((a hobs3 h13).trans ((a hobs2 h10).trans (a hobs1 h12)))).trans
       (hframe R hR' he8 he9 he18 he19 he2)
+  obtain ⟨⟨w20, hgw20⟩, ⟨w21, hgw21⟩⟩ := henvsetG
+  have hx20_4 : σ4.regs.get? Register.x20 = some w20 :=
+    (hframe4 Register.x20 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide)).trans hgw20
+  have hx21_4 : σ4.regs.get? Register.x21 = some w21 :=
+    (hframe4 Register.x21 (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide)).trans hgw21
   -- ============ 0x80004180: armTail_rec_es (jal eval_expr ≫ IH) → SubExecReturn ===
   have hsubval : ((sp - 176#64) + sign_extend (m := 64) (0x010#12)).toNat = sp.toNat - 160 := by
     rw [BitVec.toNat_add, hspsub]
@@ -621,9 +664,11 @@ theorem execExprGlue
         site_80004180_es σ i u (0x80004180#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ)
       hIH
       ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩
-      ⟨hG4, hi4, hpc4, hx10_4, hx11_4, ⟨aEnv, hx13_4⟩, hx12_4, hx18_4, hsp_4,
-        ⟨aStmt, hx8_4⟩, ⟨aInterp, hx9_4⟩, ⟨vmi4, hmi4⟩, hout4, houtStr,
-        hmem4e, (hmem4e ▸ hcode4), (hmem4e ▸ hevalM), (hmem4e ▸ hviM), (hmem4e ▸ hslotPM), (hmem4e ▸ hnbsM),
+      ⟨hG4, hi4, hpc4, hx10_4, hx11_4, henvPtr ▸ hx13_4, hx12_4, hx18_4, hsp_4,
+        ⟨aStmt, hx8_4⟩, ⟨aInterp, hx9_4⟩,
+        ⟨aEnv, w20, w21, hx19_4, hx20_4, hx21_4⟩, ⟨vmi4, hmi4⟩, hout4, houtStr,
+        hmem4e, hsubWordsM,
+        (hmem4e ▸ hcode4), (hmem4e ▸ hevalM), (hmem4e ▸ hviM), (hmem4e ▸ hslotPM), (hmem4e ▸ hnbsM),
         (hmem4e ▸ hgroundM), (hmem4e ▸ hsubexprM), (hmem4e ▸ hstore),
         (hstoreSurv ment hmemframe),
         hframe4, hgx8, hgx9, hgx18, hgx19, hgx2,
@@ -666,6 +711,7 @@ theorem execExprSimC
     (sp r aInterp aStmt aEnv aRet aOperand : BitVec 64) (m0 : Mem) (out0 : Array String)
     (hSpec : ExecS st d env (.expr e) st' .normal)
     (hIH : EvalIH st d env e st' v)
+    (henvPtr : aEnv = BitVec.ofNat 64 (φf env))
     (hslot : StmtSlotPinned 0 execArmExpr m0)
     (htableStk0 : stmtJumpTableBase + 4 * 0 + 4 ≤ SL.lo ∨ sp.toNat ≤ stmtJumpTableBase + 4 * 0)
     -- the `execExprGlue` residuals:
@@ -689,6 +735,12 @@ theorem execExprSimC
     (hground : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       EvalGround ment SL A (sp - 176#64)
         ((sp - 176#64) + sign_extend (m := 64) (0x010#12)) aOperand.toNat e)
+    (hsubWords : ∀ ment : Mem,
+      (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
+      ValueWordsTotal ment
+        ((sp - 176#64) + sign_extend (m := 64) (0x010#12)).toNat)
+    (henvsetG : (∃ w20, g Register.x20 = some w20) ∧
+      (∃ w21, g Register.x21 = some w21))
     (hstoreSurv : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       ∀ m' : Mem, (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ment[k]? = m'[k]?) →
         StoreRepr m' N A φf φc st.store)
@@ -717,7 +769,8 @@ theorem execExprSimC
     hSpec hIH hslot htableStk0
     (fun hIH' =>
       execExprGlue g N A SL φf φc st st' d env e v sp r aInterp aStmt aEnv aRet aOperand m0 out0
-        hIH' hop hsubexpr hstmtAl hstmtLo hstmtHi hstmtWin hevalcode hvicode hslotP hnbsP hground hstoreSurv
+        hIH' henvPtr hop hsubexpr hstmtAl hstmtLo hstmtHi hstmtWin hevalcode hvicode hslotP hnbsP
+        hground hsubWords henvsetG hstoreSurv
         hopAl hopLo hopHi hopWin hopStk hsproom hspSLhi hsp16 hSLlo hSLhi hSLwin
         hcodeStk hviStk htableStk harenaStk harenaCode hexecArenaCode hexecCodeStk
         hstackBudget hexprBodies hstoreBodies)

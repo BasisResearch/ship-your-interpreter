@@ -345,7 +345,7 @@ theorem bridgeStrlenPre_closed (SL : StackLayout) (gpv : BitVec 64) (headroom : 
   intro c hpre
   obtain ⟨hG, hloadedD, hloadedS, hmem, hpc, hx18, ⟨vmi, hmi⟩, htick, hreg, halign8, hcstr,
     hFrame⟩ := hpre
-  obtain ⟨hsp, hstackOK, hgp, hAbi, hAInv, htickF⟩ := hFrame
+  obtain ⟨hsp, hstackOK, hgp, hAbi, hAInv, htickF, hSpills⟩ := hFrame
   have hloadedD' : Env_defineLoaded c.σ.mem := hloadedD
   obtain ⟨σ', i', hsteps, hi', hG', hmem', hpc', hx10', hra', hmi', hx2', hx8', hframe'⟩ :=
     strlenPrefix_run c.σ c.tick c.steps vmi namePtr hG hpc hmi hx18 hloadedD' htick
@@ -362,7 +362,7 @@ theorem bridgeStrlenPre_closed (SL : StackLayout) (gpv : BitVec 64) (headroom : 
     · exact hcstr
     · decide
   · -- EnvDefFrame : sp/StackOK/gp preserved (register frame); AInv survives by stability
-    refine ⟨?_, hstackOK, hgp', ?_, ?_, hi'⟩
+    refine ⟨?_, hstackOK, hgp', ?_, ?_, hi', ?_⟩
     · -- x2 = sp
       rw [hx2']; exact hsp
     · -- ABI callee-saved tie: each AbiPreserved R is either x2 (sp), x8 (s0), or NotWrittenEnv
@@ -382,6 +382,7 @@ theorem bridgeStrlenPre_closed (SL : StackLayout) (gpv : BitVec 64) (headroom : 
       refine hAInvStable c.σ σ' ?_ ?_ hAInv
       · rw [hgp', hgp]
       · intro a; rw [hmem']
+    · exact EnvDefineSpillFrame.of_mem_eq hmem' hSpills
 
 #print axioms bridgeStrlenPre_closed
 
@@ -529,7 +530,7 @@ theorem bridgeMallocPre_closed (SL : StackLayout) (gpv : BitVec 64) (headroom : 
   intro c hpre
   obtain ⟨hpost, hFrame⟩ := hpre
   obtain ⟨hG, hpc, hx10, hra, hmem⟩ := hpost
-  obtain ⟨hsp, hstackOK, hgp, hAbi, hAInv, htick⟩ := hFrame
+  obtain ⟨hsp, hstackOK, hgp, hAbi, hAInv, htick, _hSpills⟩ := hFrame
   obtain ⟨vmi, hmi⟩ : ∃ v, c.σ.regs.get? Register.minstret = some v := hG.minstret
   have hloadedD : Env_defineLoaded c.σ.mem := by rw [hmem]; exact hloaded m0 hstrlenLoaded
   obtain ⟨σ', i', hsteps, hi', hG', hmem', hpc', hx10', hx8', hra', hmi', hframe'⟩ :=

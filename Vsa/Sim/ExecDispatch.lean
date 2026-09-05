@@ -105,7 +105,7 @@ def ExecDispatchReady
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (s' : Stmt)
     (sp r aInterp aStmt' aEnv aRet : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
-    (m0 ment : Mem) (c : Config) : Prop :=
+    (m0 ment : Mem) (c : Config) (liveRA : BitVec 64 := r) : Prop :=
   GoodState c.σ ∧ c.tick < 2 ∧
   c.σ.regs.get? Register.PC = some (0x80004014#64) ∧      -- the dispatch PC (POST-prologue)
   c.σ.regs.get? Register.x8 = some aStmt' ∧               -- s0 = the (re-)dispatch target Stmt*
@@ -115,7 +115,7 @@ def ExecDispatchReady
   c.σ.regs.get? Register.x14 = some (0x80019fb8#64) ∧     -- a4 = jump-table base
   c.σ.regs.get? Register.x16 = some (8#64) ∧              -- a6 = kind bound
   c.σ.regs.get? Register.x2 = some (sp - 176#64) ∧        -- sp lowered
-  c.σ.regs.get? Register.x1 = some r ∧                    -- ra still = r (also spilled)
+  c.σ.regs.get? Register.x1 = some liveRA ∧               -- live ra; outer r remains spilled
   (∃ v, c.σ.regs.get? Register.minstret = some v) ∧
   c.σ.sailOutput = out0 ∧ String.join out0.toList = st.out ∧
   c.σ.mem = ment ∧ Exec_stmtLoaded ment ∧
@@ -608,14 +608,14 @@ theorem execDispatch
     (sp r aInterp aStmt' aEnv aRet : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
     (m0 : Mem) :
     Triple
-      (fun c => ∃ ment,
+      (fun c => ∃ ment liveRA,
         ExecDispatchReady g N A SL φf φc st s' sp r aInterp aStmt' aEnv aRet
-          v8 v9 v18 v19 out0 m0 ment c)
-      (fun c => ∃ (armPC : BitVec 64) (_k : Nat) (ment : Mem),
+          v8 v9 v18 v19 out0 m0 ment c (liveRA := liveRA))
+      (fun c => ∃ (armPC : BitVec 64) (_k : Nat) (ment : Mem) (liveRA : BitVec 64),
         ExecArmEntryK g N A SL φf φc st armPC sp r aInterp aStmt' aEnv aRet
-          v8 v9 v18 v19 out0 m0 ment c) := by
+          v8 v9 v18 v19 out0 m0 ment c (liveRA := liveRA)) := by
   intro c hpre
-  obtain ⟨ment, hG, htick, hpc, hx8, hx9, hx19, hx18, hx14, hx16, hsp, hra, ⟨vmi, hmi⟩,
+  obtain ⟨ment, liveRA, hG, htick, hpc, hx8, hx9, hx19, hx18, hx14, hx16, hsp, hra, ⟨vmi, hmi⟩,
     hout, houtStr, hmem, hcode, hstore, hstmt, hslotRes,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
     hgx8, hgx9, hgx18, hgx19, hgx2, hframeG, hmemframe,
@@ -803,13 +803,13 @@ theorem execDispatch
   have hx19_18 : σ18.regs.get? Register.x19 = some aEnv := obs_alu_other' hobs18 Register.x19 (by decide) hx19_17
   have hx19_19 : σ19.regs.get? Register.x19 = some aEnv := obs_alu_other' hobs19 Register.x19 (by decide) hx19_18
   have hx19_20 : σ20.regs.get? Register.x19 = some aEnv := obs_alu_other' hobs20 Register.x19 (by decide) hx19_19
-  have hra_14 : σ14.regs.get? Register.x1 = some r := obs_alu_other' hobs14 Register.x1 (by decide) hra
-  have hra_15 : σ15.regs.get? Register.x1 = some r := obs_branch_nottaken_other' hobs15 Register.x1 (by decide) hra_14
-  have hra_16 : σ16.regs.get? Register.x1 = some r := obs_alu_other' hobs16 Register.x1 (by decide) hra_15
-  have hra_17 : σ17.regs.get? Register.x1 = some r := obs_alu_other' hobs17 Register.x1 (by decide) hra_16
-  have hra_18 : σ18.regs.get? Register.x1 = some r := obs_alu_other' hobs18 Register.x1 (by decide) hra_17
-  have hra_19 : σ19.regs.get? Register.x1 = some r := obs_alu_other' hobs19 Register.x1 (by decide) hra_18
-  have hra_20 : σ20.regs.get? Register.x1 = some r := obs_alu_other' hobs20 Register.x1 (by decide) hra_19
+  have hra_14 : σ14.regs.get? Register.x1 = some liveRA := obs_alu_other' hobs14 Register.x1 (by decide) hra
+  have hra_15 : σ15.regs.get? Register.x1 = some liveRA := obs_branch_nottaken_other' hobs15 Register.x1 (by decide) hra_14
+  have hra_16 : σ16.regs.get? Register.x1 = some liveRA := obs_alu_other' hobs16 Register.x1 (by decide) hra_15
+  have hra_17 : σ17.regs.get? Register.x1 = some liveRA := obs_alu_other' hobs17 Register.x1 (by decide) hra_16
+  have hra_18 : σ18.regs.get? Register.x1 = some liveRA := obs_alu_other' hobs18 Register.x1 (by decide) hra_17
+  have hra_19 : σ19.regs.get? Register.x1 = some liveRA := obs_alu_other' hobs19 Register.x1 (by decide) hra_18
+  have hra_20 : σ20.regs.get? Register.x1 = some liveRA := obs_alu_other' hobs20 Register.x1 (by decide) hra_19
   -- ============ 0x80004030: jr a5 → PC := armPC ============
   have htgtJr : (BitVec.update (armPC + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by
     rw [ret_tgt armPC harmAl]; exact harmAl
@@ -824,7 +824,7 @@ theorem execDispatch
   have hx18_21 : σ21.regs.get? Register.x18 = some aRet := obs_jr_other' hobs21 Register.x18 (by decide) hx18_20
   have hx19_21 : σ21.regs.get? Register.x19 = some aEnv := obs_jr_other' hobs21 Register.x19 (by decide) hx19_20
   have hsp_21 : σ21.regs.get? Register.x2 = some (sp-176#64) := obs_jr_other' hobs21 Register.x2 (by decide) hsp_20
-  have hra_21 : σ21.regs.get? Register.x1 = some r := obs_jr_other' hobs21 Register.x1 (by decide) hra_20
+  have hra_21 : σ21.regs.get? Register.x1 = some liveRA := obs_jr_other' hobs21 Register.x1 (by decide) hra_20
   obtain ⟨vmi21, hmi21⟩ := obs_jr_minstret hobs21
   -- output invariance across the 8 dispatch steps
   have hout21 : σ21.sailOutput = out0 := by
@@ -869,7 +869,7 @@ theorem execDispatch
         ((brn hobs15).trans (alu hobs14 h15)))))))
     rw [hchain]; exact hframeG R hRcopy he8 he9 he18 he19 he2
   -- assemble ExecArmEntryK
-  refine ⟨⟨σ21, i21, c.steps+1+1+1+1+1+1+1+1⟩, ?_, armPC, k, ment,
+  refine ⟨⟨σ21, i21, c.steps+1+1+1+1+1+1+1+1⟩, ?_, armPC, k, ment, liveRA,
     hG21, hi21, hpc21, hx8_21, hx9_21, hx19_21, hx18_21, hsp_21, hra_21, ⟨_, hmi21⟩,
     hout21, houtStr, hmem21e, hcode, hstore,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
@@ -894,15 +894,17 @@ in the SHARED frame — no second prologue). True `jal exec_stmt` boundaries
 (`block`-loop `armExec_rec`, `interp_run`) instead wrap the whole prologue and use
 the ordinary `ExecIH`; `execPrologue` bridges `ExecEntry → ExecDispatchReady`, so
 one mutual-recursion motive supplies both shapes. -/
-def ExecDispatchIH (st : Vsa.While.St) (_d : Nat) (_env : Addr) (s' : Stmt)
+def ExecDispatchIH (st : Vsa.While.St) (_d : Nat) (env : Addr) (s' : Stmt)
     (st' : Vsa.While.St) (status : Status) : Prop :=
+  EnvValid st env →
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (sp r aInterp aStmt' aEnv aRet : BitVec 64) (v8 v9 v18 v19 : BitVec 64)
     (out0 : Array String) (m0 ment : Mem),
     Triple
-      (ExecDispatchReady g N A SL φf φc st s' sp r aInterp aStmt' aEnv aRet
-        v8 v9 v18 v19 out0 m0 ment)
+      (fun c => ∃ liveRA,
+        ExecDispatchReady g N A SL φf φc st s' sp r aInterp aStmt' aEnv aRet
+          v8 v9 v18 v19 out0 m0 ment c (liveRA := liveRA))
       (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st' status sp r aRet m0)
 

@@ -1043,7 +1043,7 @@ theorem evalOrTrueSim : EvalOrTrueSimGoal := by
   -- === block A: prologue + dispatch → widened ArmEntryK @0x8000355c ===
   have hkm0 : read32 m0 aExpr.toNat = some 7 := exprRepr_logical_or_kind (hc.mem ▸ hc.expr)
   obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, _hpresM, _hx13⟩ :=
-    blockA_k g N A SL φf φc st (.logical .or el er) 7 (0x8000355c#64) LogicalArmCallee
+    blockA_k g N A SL φf φc st env (.logical .or el er) 7 (0x8000355c#64) LogicalArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
       hkm0
@@ -1065,7 +1065,7 @@ theorem evalOrTrueSim : EvalOrTrueSimGoal := by
         hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
         hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
-        ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.x13_defined⟩⟩, rfl⟩
+        ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩
   have hArmCopy := hArm
   obtain ⟨_hAG, _hAtick, hApc, _hAa0, _hAs1, _hAa2, _hAsp, _hAra, _hAmi, _hAout,
     _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxAl, _hAxLo, _hAxHi, _hAxWin,
@@ -1173,12 +1173,12 @@ theorem evalOrTrueSim : EvalOrTrueSimGoal := by
   obtain ⟨c4, hs4, hExitDe⟩ :=
     blockD_v_rec g N A SL φfe φce st' (.bool true) sp r sret v8 v9 v18 c2.σ.sailOutput m0
       c3 ⟨mpreC, hPreD⟩
-  obtain ⟨hExitE, hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
+  obtain ⟨hExitE, hMemExt, hWords, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
   have hStoreLe := evalE_store_mono _hEvalE
   have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
       st' (.bool true) sp r sret m0 c4 :=
     evalExit_of_phiExtends hpfe hpce hExitE hStoreLe.1 hStoreLe.2
-  exact ⟨c4, ((hs1.trans hs2).trans hs3).trans hs4, hExit, hMemExt,
+  exact ⟨c4, ((hs1.trans hs2).trans hs3).trans hs4, hExit, hMemExt, hWords,
     φf', φc', hpfe.trans (PhiExtends.mono hStoreLe.1 hpf'),
     hpce.trans (PhiExtends.mono hStoreLe.2 hpc'), hSurv⟩
 

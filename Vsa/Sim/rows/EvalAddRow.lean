@@ -569,6 +569,9 @@ theorem blockC_add
     exact hpresvi k bb (by rw [hmemτ20e]; exact hbb)
   have hMemExt_fin : MemExtends m0 τ22.mem :=
     (hMemExt.trans hMemExt_c_5).trans hMemExt_5_22
+  have hWords_fin : ValueWordsTotal τ22.mem sret.toNat :=
+    ValueWordsTotal.mono (hMemExt_c_5.trans hMemExt_5_22)
+      (valueWordsTotal_of_populated hFullPop sret.toNat)
   -- the four OUTER spill slots survive (top 32 bytes, disjoint from all writes)
   -- `c.σ.mem ↔ m5` on the top 32 bytes (disjoint from the 5 store windows below sp-40)
   have hAgTop_m5 : AgreeP (fun k => sp.toNat - 32 ≤ k ∧ k < sp.toNat) c.σ.mem m5 := by
@@ -662,7 +665,7 @@ theorem blockC_add
     hLadderSteps.trans <| (Steps.single hstepτ20).trans <|
     hsvi.trans <| (Steps.single hstepτ21).trans (Steps.single hstepτ22)
   refine ⟨⟨τ22, j22, cvi.steps + 1 + 1⟩, hchain, τ22.mem, φfm, φcm, φf', φc', hpfm, hpcm, hpf', hpc',
-    ⟨?_, hMemExt_fin, hSurvSL_fin⟩⟩
+    ⟨?_, hMemExt_fin, hWords_fin, hSurvSL_fin⟩⟩
   refine ⟨hGτ22, hj22, hpc_fin, hs1_fin, hsp_fin, ⟨vmifin, hmifin⟩,
     hout_fin, houtStr, rfl, hcode_fin, (by rw [hmemτ22e]; exact hvalfinal),
     hstore_fin, hframeG,
@@ -862,7 +865,7 @@ theorem evalAddSim : EvalAddSimGoal := by
   obtain ⟨c4, hs4, hExitDe⟩ :=
     blockD_v_rec g N A SL φfe φce st'' (.int (wrap64 (a + b))) sp r sret v8 v9 v18 c2.σ.sailOutput m0
       c3 ⟨mpre, hPreD⟩
-  obtain ⟨hExitE, hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
+  obtain ⟨hExitE, hMemExt, hWords, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
   -- compose the two-phase φ-chain to the OUTER entry maps (size stability lets the
   -- `st'`-sized left leg meet the `st''`-sized right leg).
   have hmono := evalE_store_mono _hEvalE
@@ -873,7 +876,7 @@ theorem evalAddSim : EvalAddSimGoal := by
   have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
       st'' (.int (wrap64 (a + b))) sp r sret m0 c4 :=
     evalExit_of_phiExtends hpfF hpcF hExitE hmono.1 hmono.2
-  exact ⟨c4, ((hs2.trans hs3).trans hs4), hExit, hMemExt,
+  exact ⟨c4, ((hs2.trans hs3).trans hs4), hExit, hMemExt, hWords,
     φf', φc', hpfF.trans (PhiExtends.mono hmono.1 hpf'),
     hpcF.trans (PhiExtends.mono hmono.2 hpc'), hSurv⟩
 

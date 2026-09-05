@@ -232,7 +232,7 @@ theorem scan_iter (g : (R : Register) → Option (RegisterType R))
   have hg_x21 : g Register.x21 = some out := by rw [← hSt.ghost _ (by decide)]; exact hSt.out5
   have hg_x2 : g Register.x2 = some sp := by rw [← hSt.ghost _ (by decide)]; exact hSt.sp2
   -- ============ c60: ld a0,0(s1) → x10 = ofNat q (via scan_c60_load) ============
-  obtain ⟨c2, hstep2, hpc2, hx10_2, hn2, hra2, hmem2, hG2, htick2, hmi2, hghost2⟩ :=
+  obtain ⟨c2, hstep2, hpc2, hx10_2, hn2, hra2, hmem2, hG2, htick2, hmi2, _hout2, hghost2⟩ :=
     scan_c60_load g env name out count pn r sp i f nameStr N φf φc m0 ⟨σ1, i1, c.steps + 1⟩ q hSt60 hilt hq
   have hmem2' : c2.σ.mem = m0 := hmem2
   obtain ⟨vmi2, hmi2'⟩ := hmi2
@@ -499,8 +499,18 @@ def ScanInvE (env name out count pn sp : BitVec 64)
   (∃ i, ∃ (hi : i < f.vars.length), f.vars[i].1 = nameStr ∧
       (∀ j, (hj : j < f.vars.length) → j < i → f.vars[j].1 ≠ nameStr) ∧
       c.σ.regs.get? Register.PC = some (0x80002c70#64 : BitVec 64) ∧ GoodState c.σ) ∨
-  ((∀ j, (hj : j < f.vars.length) → f.vars[j].1 ≠ nameStr) ∧
-      c.σ.regs.get? Register.PC = some (0x80002cc4#64 : BitVec 64) ∧ GoodState c.σ)
+  (∃ g, (∀ j, (hj : j < f.vars.length) → f.vars[j].1 ≠ nameStr) ∧
+      ScanMissSt g env name out count pn (0x80002c6c#64) sp f nameStr N φf φc m0 c)
+
+/-- Existential-ghost exit of the unconditional scan loop. -/
+def ScanExitE (env name out count pn sp : BitVec 64)
+    (f : Vsa.While.Frame) (nameStr : String) (N : NativeAddrs)
+    (φf φc : Vsa.While.Addr → Nat) (m0 : Mem) (c : Config) : Prop :=
+  (∃ i, ∃ (hi : i < f.vars.length), f.vars[i].1 = nameStr ∧
+      (∀ j, (hj : j < f.vars.length) → j < i → f.vars[j].1 ≠ nameStr) ∧
+      c.σ.regs.get? Register.PC = some (0x80002c70#64 : BitVec 64) ∧ GoodState c.σ) ∨
+  (∃ g, (∀ j, (hj : j < f.vars.length) → f.vars[j].1 ≠ nameStr) ∧
+      ScanMissSt g env name out count pn (0x80002c6c#64) sp f nameStr N φf φc m0 c)
 
 /-- Loop guard: still at the test with an unscanned name. -/
 def ScanBE (env name out count pn sp : BitVec 64)
@@ -549,7 +559,7 @@ theorem env_get_scan_spec' (env name out count pn sp : BitVec 64)
     (f : Vsa.While.Frame) (nameStr : String) (N : NativeAddrs) (φf φc : Vsa.While.Addr → Nat)
     (m0 : Mem) :
     Triple (ScanInvE env name out count pn sp f nameStr N φf φc m0)
-           (ScanExit env f nameStr) := by
+           (ScanExitE env name out count pn sp f nameStr N φf φc m0) := by
   have hloop := Triple.loop
     (I := ScanInvE env name out count pn sp f nameStr N φf φc m0)
     (B := ScanBE env name out count pn sp f nameStr N φf φc m0) ScanMu
@@ -562,9 +572,9 @@ theorem env_get_scan_spec' (env name out count pn sp : BitVec 64)
     have hile := hSt.ile
     have hnlt : ¬ i < f.vars.length := fun hlt => hnB ⟨g, i, hSt, hfm, hlt⟩
     have hie : i = f.vars.length := by omega
-    obtain ⟨c', hsteps, hall, hpc', hG'⟩ :=
+    obtain ⟨c', hsteps, hall, hMiss', _hout⟩ :=
       scan_head_exit g env name out count pn (0x80002c6c#64) sp i f nameStr N φf φc m0 c hSt hfm hie hcnt
-    exact ⟨c', hsteps, Or.inr ⟨hall, hpc', hG'⟩⟩
+    exact ⟨c', hsteps, Or.inr ⟨g, hall, hMiss'⟩⟩
   · exact ⟨c, .refl c, Or.inl hHit⟩
   · exact ⟨c, .refl c, Or.inr hMiss⟩
 

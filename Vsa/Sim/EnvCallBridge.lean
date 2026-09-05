@@ -1,5 +1,6 @@
 import Vsa.Sim.StoreSeg
 import Vsa.Sim.EnvDefMarshal
+import Vsa.Sim.StoreInvariant
 
 /-!
 # `EnvCallBridge` — the ONE template for "caller arm parks at a `jal` into
@@ -239,10 +240,120 @@ theorem envSetArmBridge
            (StoreSeg N A SL φf φc (store.define a x v) pc1 st0) :=
   envCallArmBridge hPre hCallee (storeSeg_advance_define hFields)
 
+/-! ## Resolved `env_set` result
+
+`envSetArmBridge` above is only suitable after a caller has already selected the
+frame updated by the parent-chain search.  The following carrier keeps that
+selection explicit and advances to the exact store returned by `Store.set?`.
+-/
+
+/-- Readback for the exact result of a successful parent-chain assignment.
+`target` is the frame selected by `AssignStoreBridge.oneSlot`; it is not assumed
+to be the starting frame. -/
+structure StoreSetAdvance
+    (N : NativeAddrs) (A : Arena) (φf φc : Addr → Nat)
+    (store store' : Store) (start : Addr) (x : String) (v : Value)
+    (bridge : AssignStoreBridge store store' start x v) (target : Addr) (m : Mem) : Prop where
+  target_update : ∃ (frame : Vsa.While.Frame) (oldValue : Value)
+      (beforeVars afterVars : List (String × Value)),
+    store.frames[target]? = some frame ∧
+    frame.vars = beforeVars ++ (x, oldValue) :: afterVars ∧
+    frame.vars.map (replaceBindingValue x v) =
+      beforeVars ++ (x, v) :: afterVars ∧
+    store' = { store with frames := store.frames.modify target fun current =>
+      { current with vars := current.vars.map (replaceBindingValue x v) } }
+  frames : ∀ fa, (h : fa < store'.frames.size) →
+    FrameRepr m N φf φc (φf fa) store'.frames[fa]
+  closures : ∀ ca, (h : ca < store'.closures.size) →
+    ClosureRepr m φf (φc ca) store'.closures[ca]
+  φf_inj : ∀ p q, p < store'.frames.size → q < store'.frames.size →
+    φf p = φf q → p = q
+  φc_inj : ∀ p q, p < store'.closures.size → q < store'.closures.size →
+    φc p = φc q → p = q
+  frames_arena : ∀ fa, fa < store'.frames.size →
+    A.contains (φf fa) 32 ∧ φf fa % 8 = 0
+  closures_arena : ∀ ca, ca < store'.closures.size →
+    A.contains (φc ca) 16 ∧ φc ca % 8 = 0
+
+namespace StoreSetAdvance
+
+theorem toStoreRepr
+    {N : NativeAddrs} {A : Arena} {φf φc : Addr → Nat}
+    {store store' : Store} {start : Addr} {x : String} {v : Value}
+    {bridge : AssignStoreBridge store store' start x v} {target : Addr} {m : Mem}
+    (h : StoreSetAdvance N A φf φc store store' start x v bridge target m) :
+    StoreRepr m N A φf φc store' where
+  frames := h.frames
+  closures := h.closures
+  φf_inj := h.φf_inj
+  φc_inj := h.φc_inj
+  frames_arena := h.frames_arena
+  closures_arena := h.closures_arena
+
+/-- Repackage the semantic one-slot certificate and a represented post-store
+as the exact `StoreSetAdvance` expected by the assignment arm. -/
+theorem exists_of_storeRepr
+    {N : NativeAddrs} {A : Arena} {φf φc : Addr → Nat}
+    {store store' : Store} {start : Addr} {x : String} {v : Value}
+    {bridge : AssignStoreBridge store store' start x v} {m : Mem}
+    (hStore : StoreRepr m N A φf φc store') :
+    ∃ target, StoreSetAdvance N A φf φc store store' start x v bridge target m := by
+  obtain ⟨target, frame, oldValue, beforeVars, afterVars,
+    hframe, hsplit, hupdate, hresult⟩ := bridge.oneSlot
+  refine ⟨target, ?_⟩
+  exact
+    { target_update := ⟨frame, oldValue, beforeVars, afterVars,
+        hframe, hsplit, hupdate, hresult⟩
+      frames := hStore.frames
+      closures := hStore.closures
+      φf_inj := hStore.φf_inj
+      φc_inj := hStore.φc_inj
+      frames_arena := hStore.frames_arena
+      closures_arena := hStore.closures_arena }
+
+end StoreSetAdvance
+
+theorem storeSeg_advance_set
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {MidPost : Config → Prop} {store store' : Store} {start : Addr}
+    {x : String} {v : Value} {bridge : AssignStoreBridge store store' start x v}
+    {pc1 : Nat} {st0 : SpecSt}
+    (hFields : ∀ c, MidPost c →
+      GoodState c.σ ∧ c.tick < 2 ∧
+      c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 pc1) ∧
+      (∃ target, StoreSetAdvance N A φf φc store store' start x v bridge target c.σ.mem) ∧
+      OutRepr c.σ st0) :
+    Ent MidPost (StoreSeg N A SL φf φc store' pc1 st0) := by
+  intro c hc
+  obtain ⟨hG, htick, hpc, ⟨_target, hAdvance⟩, hout⟩ := hFields c hc
+  exact ⟨hG, htick, hpc, hAdvance.toStoreRepr, hout⟩
+
+/-- Sound `env_set` composition.  The output carrier contains the exact
+`Store.set?` result certified by `bridge`, including a parent-frame target. -/
+theorem envSetArmBridgeResolved
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {store store' : Store} {start : Addr} {x : String} {v : Value}
+    {bridge : AssignStoreBridge store store' start x v}
+    {pc0 pc1 : Nat} {st0 : SpecSt} {MidPre MidPost : Config → Prop}
+    (hPre : Triple (StoreSeg N A SL φf φc store pc0 st0) MidPre)
+    (hCallee : Triple MidPre MidPost)
+    (hFields : ∀ c, MidPost c →
+      GoodState c.σ ∧ c.tick < 2 ∧
+      c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 pc1) ∧
+      (∃ target, StoreSetAdvance N A φf φc store store' start x v bridge target c.σ.mem) ∧
+      OutRepr c.σ st0) :
+    Triple (StoreSeg N A SL φf φc store pc0 st0)
+      (StoreSeg N A SL φf φc store' pc1 st0) :=
+  Triple.seq hPre (Triple.rmap (storeSeg_advance_set hFields) hCallee)
+
 #print axioms StoreDefineAdvance.toStoreRepr
 #print axioms storeSeg_advance_define
 #print axioms envCallArmBridge
 #print axioms envDefineArmBridge
 #print axioms envSetArmBridge
+#print axioms StoreSetAdvance.toStoreRepr
+#print axioms StoreSetAdvance.exists_of_storeRepr
+#print axioms storeSeg_advance_set
+#print axioms envSetArmBridgeResolved
 
 end Vsa.Sim

@@ -6,6 +6,7 @@ import Vsa.Sim.StepFrameOut
 import Vsa.Sim.EnvNewSpec
 import Vsa.Sim.EnvGetSpec
 import Vsa.Sim.PinW
+import Vsa.Sim.rows.StoreWF
 
 /-!
 # `nativeArmSplice` — the native dispatch/join wrapper, factored ONCE (wave 41)
@@ -107,6 +108,12 @@ structure NativeBodyPre
   /-- `eval_expr`'s code region (the join `ld`/`j` decode from it). -/
   loaded : Vsa.Sim.Code.Eval_exprLoaded c.σ.mem
   store : StoreRepr c.σ.mem N A φf φc st.store
+  /-- Every semantic closure argument denotes an allocated closure.  This is
+  not implied by `ValueRepr`: an unconstrained `φc` can otherwise represent a
+  dangling closure address. -/
+  valuesBounded : ValuesClosuresBounded st.store.closures.size vs
+  /-- The concrete stdout/newlib state survives the stack-only dispatch. -/
+  console : ConsoleStream c.σ.mem
   /-- `StoreRepr` survival under stack-and-HTIF-confined memory changes (the
   natives write only their frames/buffers — all stack — and, for
   print/println, the HTIF `tohost` window). -/
@@ -141,7 +148,7 @@ spill image still intact. -/
 structure NativeBodyPost
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st' : SpecSt) (spv s7v : BitVec 64) (m0 : Mem)
+    (st' : SpecSt) (spv s7v sret : BitVec 64) (m0 : Mem)
     (c : Config) : Prop where
   good : GoodState c.σ
   tick : c.tick < 2
@@ -152,6 +159,8 @@ structure NativeBodyPost
   loaded : Vsa.Sim.Code.Eval_exprLoaded c.σ.mem
   store : StoreRepr c.σ.mem N A φf φc st'.store
   out : OutRepr c.σ st'
+  /-- Every native call returns `.null` in the caller's result buffer. -/
+  sretNull : ValueRepr c.σ.mem N φc sret.toNat .null
   /-- The ghost frame restored on every callee-saved EXCEPT `s7 = x23`. -/
   frame : ∀ R : Register, AbiPreservedNoise R → R ≠ Register.x23 →
     c.σ.regs.get? R = g R
@@ -187,7 +196,7 @@ unchanged, `PhiExtends.refl`).  Premises: the ghost `sp`/`s7` values and the
 theorem nativeJoin
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (nf nc : Nat) (st' : SpecSt) (spv s7v : BitVec 64) (m0 : Mem)
+    (nf nc : Nat) (st' : SpecSt) (spv s7v sret : BitVec 64) (m0 : Mem)
     (hgsp : g Register.x2 = some spv)
     (hgs7 : g Register.x23 = some s7v)
     (hslotLo : 0x80000000 ≤ spv.toNat + 1016)
@@ -195,8 +204,8 @@ theorem nativeJoin
     (hslotHtif : spv.toNat + 1024 ≤ tohostAddr ∨ tohostAddr + 8 ≤ spv.toNat + 1016)
     (hslotAlign : (spv.toNat + 1016) % 8 = 0) :
     Triple
-      (NativeBodyPost g N A SL φf φc st' spv s7v m0)
-      (CallExitP g N A SL φf φc nf nc st' m0) := by
+      (NativeBodyPost g N A SL φf φc st' spv s7v sret m0)
+      (CallExitI g N A SL φf φc nf nc st' .null sret m0) := by
   intro c hc
   obtain ⟨vm, hvm⟩ := hc.minstret
   have haddr : (spv + sign_extend (m := 64) (0x3f8#12)).toNat = spv.toNat + 1016 :=
@@ -266,6 +275,7 @@ theorem nativeJoin
   -- the exit config
   refine ⟨⟨σ2, i2, c.steps + 1 + 1⟩, Steps.trans (.single hstep1) (.single hstep2), ?_⟩
   have houtEq : σ2.sailOutput = c.σ.sailOutput := sfo2.out.trans sfo1.out
+  refine ⟨?_, φc, PhiExtends.refl _ _, ?_⟩
   refine
     { good := hG2
       tick := hi2
@@ -323,6 +333,8 @@ theorem nativeJoin
     intro k hk
     rw [show stackScratchTop callJoinPC = none from rfl] at hk
     exact absurd hk (by simp)
+  · rw [hmemEq]
+    exact hc.sretNull
 
 /-! ## §3. The splice, factored ONCE
 
@@ -336,7 +348,7 @@ body leg ≫ the (machine-discharged) join.  The native analogue of the closure
 theorem nativeArmSplice
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (nf nc : Nat) (st' : SpecSt) (spv s7v : BitVec 64) (m0 : Mem)
+    (nf nc : Nat) (st' : SpecSt) (spv s7v sret : BitVec 64) (m0 : Mem)
     (P Mid : Config → Prop)
     (hgsp : g Register.x2 = some spv)
     (hgs7 : g Register.x23 = some s7v)
@@ -345,10 +357,10 @@ theorem nativeArmSplice
     (hslotHtif : spv.toNat + 1024 ≤ tohostAddr ∨ tohostAddr + 8 ≤ spv.toNat + 1016)
     (hslotAlign : (spv.toNat + 1016) % 8 = 0)
     (hDispatch : Triple P Mid)
-    (hBody : Triple Mid (NativeBodyPost g N A SL φf φc st' spv s7v m0)) :
-    Triple P (CallExitP g N A SL φf φc nf nc st' m0) :=
+    (hBody : Triple Mid (NativeBodyPost g N A SL φf φc st' spv s7v sret m0)) :
+    Triple P (CallExitI g N A SL φf φc nf nc st' .null sret m0) :=
   Triple.seq hDispatch (Triple.seq hBody
-    (nativeJoin g N A SL φf φc nf nc st' spv s7v m0
+    (nativeJoin g N A SL φf φc nf nc st' spv s7v sret m0
       hgsp hgs7 hslotLo hslotHi hslotHtif hslotAlign))
 
 /-! ## §4. The three native contracts as instantiations
@@ -365,7 +377,7 @@ theorem nativeAssertOkSpec_of_splice
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem)
-    (spv s7v : BitVec 64) (Mid : Config → Prop)
+    (spv s7v sret : BitVec 64) (Mid : Config → Prop)
     (hgsp : g Register.x2 = some spv)
     (hgs7 : g Register.x23 = some s7v)
     (hslotLo : 0x80000000 ≤ spv.toNat + 1016)
@@ -373,10 +385,13 @@ theorem nativeAssertOkSpec_of_splice
     (hslotHtif : spv.toNat + 1024 ≤ tohostAddr ∨ tohostAddr + 8 ≤ spv.toNat + 1016)
     (hslotAlign : (spv.toNat + 1016) % 8 = 0)
     (hDispatch : Triple (CallEntryP g N A SL φf φc st d dLeft aLeft m0) Mid)
-    (hBody : Triple Mid (NativeBodyPost g N A SL φf φc st spv s7v m0)) :
-    NativeAssertOkSpec g N A SL φf φc st d dLeft aLeft m0 :=
-  nativeArmSplice g N A SL φf φc st.store.frames.size st.store.closures.size st
-    spv s7v m0 _ Mid hgsp hgs7 hslotLo hslotHi hslotHtif hslotAlign hDispatch hBody
+    (hBody : Triple Mid (NativeBodyPost g N A SL φf φc st spv s7v sret m0)) :
+    NativeAssertOkSpec g N A SL φf φc st d dLeft aLeft m0 := by
+  intro c hc
+  obtain ⟨c', hs, hpost⟩ := nativeArmSplice g N A SL φf φc
+    st.store.frames.size st.store.closures.size st spv s7v sret m0 _ Mid
+    hgsp hgs7 hslotLo hslotHi hslotHtif hslotAlign hDispatch hBody c hc
+  exact ⟨c', hs, hpost.1⟩
 
 /-- **`NativePrintSpec` from the splice** — `Call.print` grows the output by
 `printArgs st.store vs`, store unchanged. -/
@@ -384,7 +399,7 @@ theorem nativePrintSpec_of_splice
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem) (vs : List Value)
-    (spv s7v : BitVec 64) (Mid : Config → Prop)
+    (spv s7v sret : BitVec 64) (Mid : Config → Prop)
     (hgsp : g Register.x2 = some spv)
     (hgs7 : g Register.x23 = some s7v)
     (hslotLo : 0x80000000 ≤ spv.toNat + 1016)
@@ -393,11 +408,14 @@ theorem nativePrintSpec_of_splice
     (hslotAlign : (spv.toNat + 1016) % 8 = 0)
     (hDispatch : Triple (CallEntryP g N A SL φf φc st d dLeft aLeft m0) Mid)
     (hBody : Triple Mid (NativeBodyPost g N A SL φf φc
-      ⟨st.store, st.out ++ printArgs st.store vs⟩ spv s7v m0)) :
-    NativePrintSpec g N A SL φf φc st d dLeft aLeft m0 vs :=
-  nativeArmSplice g N A SL φf φc st.store.frames.size st.store.closures.size
-    ⟨st.store, st.out ++ printArgs st.store vs⟩
-    spv s7v m0 _ Mid hgsp hgs7 hslotLo hslotHi hslotHtif hslotAlign hDispatch hBody
+      ⟨st.store, st.out ++ printArgs st.store vs⟩ spv s7v sret m0)) :
+    NativePrintSpec g N A SL φf φc st d dLeft aLeft m0 vs := by
+  intro c hc
+  obtain ⟨c', hs, hpost⟩ := nativeArmSplice g N A SL φf φc
+    st.store.frames.size st.store.closures.size
+    ⟨st.store, st.out ++ printArgs st.store vs⟩ spv s7v sret m0 _ Mid
+    hgsp hgs7 hslotLo hslotHi hslotHtif hslotAlign hDispatch hBody c hc
+  exact ⟨c', hs, hpost.1⟩
 
 /-- **`NativePrintlnSpec` from the splice** — `Call.println` = `print` plus the
 trailing `"\n"`. -/
@@ -405,7 +423,7 @@ theorem nativePrintlnSpec_of_splice
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem) (vs : List Value)
-    (spv s7v : BitVec 64) (Mid : Config → Prop)
+    (spv s7v sret : BitVec 64) (Mid : Config → Prop)
     (hgsp : g Register.x2 = some spv)
     (hgs7 : g Register.x23 = some s7v)
     (hslotLo : 0x80000000 ≤ spv.toNat + 1016)
@@ -414,11 +432,14 @@ theorem nativePrintlnSpec_of_splice
     (hslotAlign : (spv.toNat + 1016) % 8 = 0)
     (hDispatch : Triple (CallEntryP g N A SL φf φc st d dLeft aLeft m0) Mid)
     (hBody : Triple Mid (NativeBodyPost g N A SL φf φc
-      ⟨st.store, st.out ++ printArgs st.store vs ++ "\n"⟩ spv s7v m0)) :
-    NativePrintlnSpec g N A SL φf φc st d dLeft aLeft m0 vs :=
-  nativeArmSplice g N A SL φf φc st.store.frames.size st.store.closures.size
-    ⟨st.store, st.out ++ printArgs st.store vs ++ "\n"⟩
-    spv s7v m0 _ Mid hgsp hgs7 hslotLo hslotHi hslotHtif hslotAlign hDispatch hBody
+      ⟨st.store, st.out ++ printArgs st.store vs ++ "\n"⟩ spv s7v sret m0)) :
+    NativePrintlnSpec g N A SL φf φc st d dLeft aLeft m0 vs := by
+  intro c hc
+  obtain ⟨c', hs, hpost⟩ := nativeArmSplice g N A SL φf φc
+    st.store.frames.size st.store.closures.size
+    ⟨st.store, st.out ++ printArgs st.store vs ++ "\n"⟩ spv s7v sret m0 _ Mid
+    hgsp hgs7 hslotLo hslotHi hslotHtif hslotAlign hDispatch hBody c hc
+  exact ⟨c', hs, hpost.1⟩
 
 #print axioms nativeJoin
 #print axioms nativeArmSplice

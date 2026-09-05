@@ -85,6 +85,7 @@ theorem landedN_eentryC_of_jalPrefix
     (hjaltgt : (callPC + sign_extend (m := 64) jalImm) = BitVec.ofNat 64 evalExprEntry)
     (hlink : (BitVec.addInt callPC 4) = retPC)
     (hretAl : retPC.toNat % 4 = 0)
+    (henvValid : EnvValid st env)
     (hjalSite : ∀ (σ : MState) (i u : Nat) (vmi : BitVec 64),
       GoodState σ → σ.regs.get? Register.PC = some callPC →
       σ.regs.get? Register.minstret = some vmi → Eval_exprLoaded σ.mem → i < 2 →
@@ -97,13 +98,14 @@ theorem landedN_eentryC_of_jalPrefix
         c.σ.regs.get? Register.x10 = some subsret ∧
         c.σ.regs.get? Register.x9 = some sret ∧
         c.σ.regs.get? Register.x11 = some aIn ∧
-        (∃ w, c.σ.regs.get? Register.x13 = some w) ∧          -- a3 defined (wave 48h CURE A)
+        c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) ∧
         c.σ.regs.get? Register.x12 = some aOperand ∧
         c.σ.regs.get? Register.x2 = some (sp - 1088#64) ∧
         (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
         c.σ.sailOutput = out0 ∧
         String.join out0.toList = st.out ∧
         c.σ.mem = mcall ∧
+        ValueWordsTotal mcall subsret.toNat ∧
         Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
         -- WAVE 47i: the child's entry-ground bundle.
         EvalGround mcall SL A (sp - 1088#64) subsret aOperand.toNat esub ∧
@@ -114,7 +116,9 @@ theorem landedN_eentryC_of_jalPrefix
             mcall[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
-        ((∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w)) ∧
+        ((∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+          (∃ w, gpre Register.x19 = some w) ∧ (∃ w, gpre Register.x20 = some w) ∧
+          (∃ w, gpre Register.x21 = some w)) ∧
         read64 mcall (sp.toNat - 8) = some r.toNat ∧
         read64 mcall (sp.toNat - 16) = some v8.toNat ∧
         read64 mcall (sp.toNat - 24) = some v9.toNat ∧
@@ -142,7 +146,7 @@ theorem landedN_eentryC_of_jalPrefix
     LandedN 1 c (fun c' => EEntryC c' st d env esub) := by
   have h := evalEntry_of_jalPrefix gpre N A SL φf φc st d env esub
     callPC retPC jalImm sp r sret subsret aIn aOperand v8 v9 v18 out0 mcall c
-    hjaltgt hlink hretAl hjalSite hpre
+    hjaltgt hlink hretAl henvValid hjalSite hpre
   -- weaken the rich `EvalEntry` post into the ∃-ghost `EEntryC` bundle.
   exact LandedN.weaken h (fun c' hEE =>
     ⟨fun R => c'.σ.regs.get? R, N, A, SL, φf, φc,
@@ -179,13 +183,14 @@ span reaches THIS" and `unaryE_split` can feed it straight to the bridge.  The
 concrete arm PCs.  `d`/`env` are carried so the child `EEntryC` inherits the SAME
 depth/env as the parent arm (the operand evaluates in the same frame); the
 pre-bundle itself constrains only the operand `e` and store `st`. -/
-def JalPreBundle (e : Expr) (c' : Config) (st : Vsa.While.St) (d : Nat)
-    (env : Addr) : Prop :=
-  ∃ (gpre : (R : Register) → Option (RegisterType R))
+def JalPreCore (e : Expr) (c' : Config) (st : Vsa.While.St) (d : Nat)
+    (env : Addr)
+    (gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (callPC retPC : BitVec 64) (jalImm : BitVec 21)
     (sp r sret subsret aIn aOperand : BitVec 64) (v8 v9 v18 : BitVec 64)
-    (out0 : Array String) (mcall : Mem),
+    (out0 : Array String) (mcall : Mem) : Prop :=
+    EnvValid st env ∧
     ((callPC + sign_extend (m := 64) jalImm) = BitVec.ofNat 64 evalExprEntry) ∧
     ((BitVec.addInt callPC 4) = retPC) ∧ retPC.toNat % 4 = 0 ∧
     (∀ (σ : MState) (i u : Nat) (vmi : BitVec 64),
@@ -199,13 +204,14 @@ def JalPreBundle (e : Expr) (c' : Config) (st : Vsa.While.St) (d : Nat)
     c'.σ.regs.get? Register.x10 = some subsret ∧
     c'.σ.regs.get? Register.x9 = some sret ∧
     c'.σ.regs.get? Register.x11 = some aIn ∧
-    (∃ w, c'.σ.regs.get? Register.x13 = some w) ∧          -- a3 defined (wave 48h CURE A)
+    c'.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) ∧
     c'.σ.regs.get? Register.x12 = some aOperand ∧
     c'.σ.regs.get? Register.x2 = some (sp - 1088#64) ∧
     (∃ w, c'.σ.regs.get? Register.minstret = some w) ∧
     c'.σ.sailOutput = out0 ∧
     String.join out0.toList = st.out ∧
     c'.σ.mem = mcall ∧
+    ValueWordsTotal mcall subsret.toNat ∧
     Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
     -- WAVE 47i: the child's entry-ground bundle.
     EvalGround mcall SL A (sp - 1088#64) subsret aOperand.toNat e ∧
@@ -216,7 +222,9 @@ def JalPreBundle (e : Expr) (c' : Config) (st : Vsa.While.St) (d : Nat)
         mcall[k]? = m'[k]?) →
       StoreRepr m' N A φf φc st.store) ∧
     (∀ R : Register, AbiPreservedNoise R → c'.σ.regs.get? R = gpre R) ∧
-    ((∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w)) ∧
+    ((∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+      (∃ w, gpre Register.x19 = some w) ∧ (∃ w, gpre Register.x20 = some w) ∧
+      (∃ w, gpre Register.x21 = some w)) ∧
     read64 mcall (sp.toNat - 8) = some r.toNat ∧
     read64 mcall (sp.toNat - 16) = some v8.toNat ∧
     read64 mcall (sp.toNat - 24) = some v9.toNat ∧
@@ -242,6 +250,20 @@ def JalPreBundle (e : Expr) (c' : Config) (st : Vsa.While.St) (d : Nat)
     Expr.bodiesBound Vsa.While.perCallBudget e = true ∧
     Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
 
+/-- The existential package used by generic recursive-expression arm stages.
+`JalPreCore` is exposed separately so a call continuation can retain facts
+about these exact witnesses instead of relating them to a second, unrelated
+existential package. -/
+def JalPreBundle (e : Expr) (c' : Config) (st : Vsa.While.St) (d : Nat)
+    (env : Addr) : Prop :=
+  ∃ (gpre : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (callPC retPC : BitVec 64) (jalImm : BitVec 21)
+    (sp r sret subsret aIn aOperand : BitVec 64) (v8 v9 v18 : BitVec 64)
+    (out0 : Array String) (mcall : Mem),
+    JalPreCore e c' st d env gpre N A SL φf φc callPC retPC jalImm
+      sp r sret subsret aIn aOperand v8 v9 v18 out0 mcall
+
 /-- **The jal pre-bundle drives into `EEntryC`.**  A config at `JalPreBundle e`
 lands (in `≥ 1` step, the `jal`) at `EEntryC e` — pure application of the
 marshalling bridge `landedN_eentryC_of_jalPrefix` after destructuring the bundle.
@@ -252,10 +274,11 @@ theorem landedN_eentryC_of_preBundle
     (h : JalPreBundle e c' st d env) :
     LandedN 1 c' (fun c'' => EEntryC c'' st d env e) := by
   obtain ⟨gpre, N, A, SL, φf, φc, callPC, retPC, jalImm, sp, r, sret, subsret,
-    aIn, aOperand, v8, v9, v18, out0, mcall, hjaltgt, hlink, hretAl, hjalSite, hrest⟩ := h
+    aIn, aOperand, v8, v9, v18, out0, mcall, henvValid, hjaltgt, hlink,
+    hretAl, hjalSite, hrest⟩ := h
   exact landedN_eentryC_of_jalPrefix gpre N A SL φf φc st d env e
     callPC retPC jalImm sp r sret subsret aIn aOperand v8 v9 v18 out0 mcall c'
-    hjaltgt hlink hretAl hjalSite hrest
+    hjaltgt hlink hretAl henvValid hjalSite hrest
 
 #print axioms landedN_eentryC_of_preBundle
 

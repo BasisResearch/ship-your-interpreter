@@ -322,6 +322,61 @@ theorem valueRepr_copy_total {m m' : Mem} {N : NativeAddrs} {φc : Addr → Nat}
         cstring_agreeP (hpay p _ hp) hcstr (fun k hk => ⟨k, hk, rfl⟩)⟩,
       read64_copy_total hcopyT (off := 16) (by omega) h16⟩
 
+/-- Semantic-value-indexed sibling of `valueRepr_copy_total`.  It asks only
+for the indirect payload actually dereferenced by the represented variant. -/
+theorem valueRepr_copy_total_exact {m m' : Mem} {N : NativeAddrs}
+    {φc : Addr → Nat} {srcAddr dstAddr : Nat} {v : Value}
+    (hcopyT : ∀ j, j < 24 →
+      m'[dstAddr + j]? = some ((m[srcAddr + j]?).getD 0))
+    (hpay : ValuePayloadCovered (fun a => m[a]? = m'[a]?) m srcAddr v)
+    (hv : ValueRepr m N φc srcAddr v) : ValueRepr m' N φc dstAddr v := by
+  have h0dst : dstAddr = dstAddr + 0 := by omega
+  have h0src : srcAddr = srcAddr + 0 := by omega
+  cases v with
+  | null =>
+    simp only [ValueRepr] at hv ⊢
+    rw [h0dst]
+    exact read32_copy_total hcopyT (by omega) (by rw [← h0src]; exact hv)
+  | bool b =>
+    simp only [ValueRepr] at hv ⊢
+    constructor
+    · rw [h0dst]
+      exact read32_copy_total hcopyT (by omega) (by rw [← h0src]; exact hv.1)
+    · exact read32_copy_total hcopyT (off := 8) (by omega) hv.2
+  | int n =>
+    simp only [ValueRepr] at hv ⊢
+    constructor
+    · rw [h0dst]
+      exact read32_copy_total hcopyT (by omega) (by rw [← h0src]; exact hv.1)
+    · exact readI64_copy_total hcopyT (off := 8) (by omega) hv.2
+  | str s =>
+    simp only [ValueRepr] at hv ⊢
+    obtain ⟨hk, p, hp, hpne, hcstr⟩ := hv
+    refine ⟨?_, p, read64_copy_total hcopyT (off := 8) (by omega) hp, hpne, ?_⟩
+    · rw [h0dst]
+      exact read32_copy_total hcopyT (by omega) (by rw [← h0src]; exact hk)
+    · exact cstring_agreeP (P := fun a => ∃ k, k ≤ s.length ∧ a = p + k)
+        (fun a ha => by
+        obtain ⟨k, hk, rfl⟩ := ha
+        exact hpay p hp k hk) hcstr (fun k hk => ⟨k, hk, rfl⟩)
+  | closure ca =>
+    simp only [ValueRepr] at hv ⊢
+    refine ⟨?_, read64_copy_total hcopyT (off := 8) (by omega) hv.2.1, hv.2.2⟩
+    rw [h0dst]
+    exact read32_copy_total hcopyT (by omega) (by rw [← h0src]; exact hv.1)
+  | native f =>
+    simp only [ValueRepr] at hv ⊢
+    obtain ⟨hk, ⟨p, hp, hcstr⟩, h16⟩ := hv
+    refine ⟨?_, ⟨p, read64_copy_total hcopyT (off := 8) (by omega) hp, ?_⟩,
+      read64_copy_total hcopyT (off := 16) (by omega) h16⟩
+    · rw [h0dst]
+      exact read32_copy_total hcopyT (by omega) (by rw [← h0src]; exact hk)
+    · exact cstring_agreeP (P := fun a =>
+          ∃ k, k ≤ (nativeName f).length ∧ a = p + k)
+        (fun a ha => by
+          obtain ⟨k, hk, rfl⟩ := ha
+          exact hpay p hp k hk) hcstr (fun k hk => ⟨k, hk, rfl⟩)
+
 /-- **`ValueRepr` TRANSLATION-COPY, TOTAL write-window form.**  The total-read
 sibling of `valueRepr_copy_of_writeWindow`. -/
 theorem valueRepr_copy_total_of_writeWindow {m m' : Mem} {N : NativeAddrs} {φc : Addr → Nat}
@@ -332,6 +387,51 @@ theorem valueRepr_copy_total_of_writeWindow {m m' : Mem} {N : NativeAddrs} {φc 
       ∀ k, k ≤ s.length → (p + k < dstAddr ∨ dstAddr + 24 ≤ p + k))
     (hv : ValueRepr m N φc srcAddr v) : ValueRepr m' N φc dstAddr v := by
   refine valueRepr_copy_total hcopyT ?_ hv
+  intro p s hp a ha
+  obtain ⟨k, hk, rfl⟩ := ha
+  exact (houtside (p + k) (hdisj p s hp k hk)).symm
+
+/-- A total 24-byte machine copy preserves both the semantic value and the
+three complete words subsequently consumed by `ld`. -/
+theorem valueWordRepr_copy_total {m m' : Mem} {N : NativeAddrs} {φc : Addr → Nat}
+    {srcAddr dstAddr : Nat} {v : Value}
+    (hcopyT : ∀ j, j < 24 → m'[dstAddr + j]? = some ((m[srcAddr + j]?).getD 0))
+    (hpay : ∀ (p : Nat) (s : String), read64 m (srcAddr + 8) = some p →
+      AgreeP (fun a => ∃ k, k ≤ s.length ∧ a = p + k) m m')
+    (hv : ValueWordRepr m N φc srcAddr v) :
+    ValueWordRepr m' N φc dstAddr v := by
+  obtain ⟨hrepr, d0, d1, d2, h0, h1, h2⟩ := hv
+  refine ⟨valueRepr_copy_total hcopyT hpay hrepr, d0, d1, d2, ?_, ?_, ?_⟩
+  · simpa only [Nat.add_zero] using read64_copy_total hcopyT (off := 0) (by omega) h0
+  · exact read64_copy_total hcopyT (off := 8) (by omega) h1
+  · exact read64_copy_total hcopyT (off := 16) (by omega) h2
+
+/-- Semantic-value-indexed sibling of `valueWordRepr_copy_total`. -/
+theorem valueWordRepr_copy_total_exact {m m' : Mem} {N : NativeAddrs}
+    {φc : Addr → Nat} {srcAddr dstAddr : Nat} {v : Value}
+    (hcopyT : ∀ j, j < 24 →
+      m'[dstAddr + j]? = some ((m[srcAddr + j]?).getD 0))
+    (hpay : ValuePayloadCovered (fun a => m[a]? = m'[a]?) m srcAddr v)
+    (hv : ValueWordRepr m N φc srcAddr v) :
+    ValueWordRepr m' N φc dstAddr v := by
+  obtain ⟨hrepr, d0, d1, d2, h0, h1, h2⟩ := hv
+  refine ⟨valueRepr_copy_total_exact hcopyT hpay hrepr, d0, d1, d2, ?_, ?_, ?_⟩
+  · simpa only [Nat.add_zero] using
+      read64_copy_total hcopyT (off := 0) (by omega) h0
+  · exact read64_copy_total hcopyT (off := 8) (by omega) h1
+  · exact read64_copy_total hcopyT (off := 16) (by omega) h2
+
+/-- Write-window form of `valueWordRepr_copy_total`. -/
+theorem valueWordRepr_copy_total_of_writeWindow
+    {m m' : Mem} {N : NativeAddrs} {φc : Addr → Nat}
+    {srcAddr dstAddr : Nat} {v : Value}
+    (hcopyT : ∀ j, j < 24 → m'[dstAddr + j]? = some ((m[srcAddr + j]?).getD 0))
+    (houtside : ∀ a, (a < dstAddr ∨ dstAddr + 24 ≤ a) → m'[a]? = m[a]?)
+    (hdisj : ∀ (p : Nat) (s : String), read64 m (srcAddr + 8) = some p →
+      ∀ k, k ≤ s.length → (p + k < dstAddr ∨ dstAddr + 24 ≤ p + k))
+    (hv : ValueWordRepr m N φc srcAddr v) :
+    ValueWordRepr m' N φc dstAddr v := by
+  refine valueWordRepr_copy_total hcopyT ?_ hv
   intro p s hp a ha
   obtain ⟨k, hk, rfl⟩ := ha
   exact (houtside (p + k) (hdisj p s hp k hk)).symm

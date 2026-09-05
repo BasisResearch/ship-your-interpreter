@@ -210,6 +210,7 @@ theorem blockC_eqne
     (hgv18 : g Register.x18 = some v18) (hgv2 : g Register.x2 = some sp)
     (hgx19 : g Register.x19 = some v19) (hw19 : w19 = v19)
     (hMemExt0 : MemExtends m0 mEnt)
+    (hWordsEnt : ValueWordsTotal mEnt sret.toNat)
     (hmemframe0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ mEnt[a]? = m0[a]?)
     (hsretEvalCode : sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat)
@@ -335,6 +336,8 @@ theorem blockC_eqne
     exact (hcmR k hknw).symm.trans (hm' k hk)
   -- MemExtends m0 → cR.σ.mem
   have hMemExtτ0 : MemExtends m0 cR.σ.mem := hMemExt0.trans hMemExtR
+  have hWordsτ0 : ValueWordsTotal cR.σ.mem sret.toNat :=
+    ValueWordsTotal.mono hMemExtR hWordsEnt
   -- memory frame vs m0
   have hmemframeτ0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ cR.σ.mem[a]? = m0[a]? := by
@@ -389,7 +392,8 @@ theorem blockC_eqne
       (by rw [hmemcvb]; exact hslotRaτ0) (by rw [hmemcvb]; exact hslotS0τ0)
       (by rw [hmemcvb]; exact hslotS1τ0) (by rw [hmemcvb]; exact hslotS2τ0)
       hgv8 hgv9 hgv18 hgv2 hgx19 hw19 hframeGτ0
-      (by rw [hmemcvb]; exact hMemExtτ0) (by rw [hmemcvb]; exact hmemframeτ0)
+      (by rw [hmemcvb]; exact hMemExtτ0) (by rw [hmemcvb]; exact hWordsτ0)
+      (by rw [hmemcvb]; exact hmemframeτ0)
       hsretEvalCode hsretStk hsretInSL hSLlo40 hSLlo32
       hsp1088 hspRam hspLo hspHtif hsp8 hraAl
       hldLo hldHiRam hldHtif hldAl
@@ -430,6 +434,7 @@ structure EqNeBoxPre
   hgx19 : g Register.x19 = some v19
   hw19 : w19 = v19
   hMemExt0 : MemExtends m0 mEnt
+  hWordsEnt : ValueWordsTotal mEnt sret.toNat
   hmemframe0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
     (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ mEnt[a]? = m0[a]?
   hsretEvalCode : sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat
@@ -506,7 +511,7 @@ theorem blockC_eq
     hpfm hpcm hpf' hpc' hBox.houtStr hBox.hSurvSL0 hBox.hs3Ent
     hBox.hslotRa0 hBox.hslotS00 hBox.hslotS10 hBox.hslotS20
     hBox.hgv8 hBox.hgv9 hBox.hgv18 hBox.hgv2 hBox.hgx19 hBox.hw19
-    hBox.hMemExt0 hBox.hmemframe0 hBox.hsretEvalCode hBox.hsretStk hBox.hsretInSL
+    hBox.hMemExt0 hBox.hWordsEnt hBox.hmemframe0 hBox.hsretEvalCode hBox.hsretStk hBox.hsretInSL
     hBox.hSLlo40 hBox.hSLlo32 hBox.hSLloSp hBox.hspSLhi hBox.hsp1088 hBox.hspRam
     hBox.hspLo hBox.hspHtif hBox.hsp8 hBox.hraAl hgeo1 hgeo2 hgeo3 hgeo4
 
@@ -552,7 +557,7 @@ theorem blockC_ne
     hpfm hpcm hpf' hpc' hBox.houtStr hBox.hSurvSL0 hBox.hs3Ent
     hBox.hslotRa0 hBox.hslotS00 hBox.hslotS10 hBox.hslotS20
     hBox.hgv8 hBox.hgv9 hBox.hgv18 hBox.hgv2 hBox.hgx19 hBox.hw19
-    hBox.hMemExt0 hBox.hmemframe0 hBox.hsretEvalCode hBox.hsretStk hBox.hsretInSL
+    hBox.hMemExt0 hBox.hWordsEnt hBox.hmemframe0 hBox.hsretEvalCode hBox.hsretStk hBox.hsretInSL
     hBox.hSLlo40 hBox.hSLlo32 hBox.hSLloSp hBox.hspSLhi hBox.hsp1088 hBox.hspRam
     hBox.hspLo hBox.hspHtif hBox.hsp8 hBox.hraAl hgeo1 hgeo2 hgeo3 hgeo4
 
@@ -651,7 +656,7 @@ theorem evalEqNeSim
   obtain ⟨c4, hs4, hExitDe⟩ :=
     blockD_v_rec g N A SL φfe φce st'' resVal sp r sret v8 v9 v18 c2.σ.sailOutput m0
       c3 ⟨mpre, hPre⟩
-  obtain ⟨hExitE, hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
+  obtain ⟨hExitE, hMemExt, hWords, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
   -- store counts only grow (`st.store ≤ st''.store` across both sub-calls).
   have hmono := evalE_store_mono _hEvalE
   have hpfF : PhiExtends φf φfe st.store.frames.size := PhiExtends.mono hmono.1 hpfe
@@ -659,7 +664,7 @@ theorem evalEqNeSim
   have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
       st'' resVal sp r sret m0 c4 :=
     evalExit_of_phiExtends hpfF hpcF hExitE hmono.1 hmono.2
-  exact ⟨c4, ((hs2.trans hs3).trans hs4), hExit, hMemExt,
+  exact ⟨c4, ((hs2.trans hs3).trans hs4), hExit, hMemExt, hWords,
     φf', φc', hpfF.trans (PhiExtends.mono hmono.1 hpf'),
     hpcF.trans (PhiExtends.mono hmono.2 hpc'), hSurv⟩
 

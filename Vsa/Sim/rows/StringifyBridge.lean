@@ -184,13 +184,12 @@ theorem stringifyContract_bool_of_call
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (store : Store) (aVal : Nat) (b : Bool) (m0 : Mem)
-    (rRet : BitVec 64) (Pentry : BitVec 64 → BitVec 64 → Config → Prop)
-    (call : BoolBranchCallResid b rRet Pentry)
-    (entry : ∀ (sp r : BitVec 64), ∃ c, Pentry sp r c) :
+    (call : ∀ (sp r : BitVec 64) (out0 : String),
+      Triple
+        (StringifyEntry g N A SL φf φc store aVal (.bool b) m0 sp r out0)
+        (StringifyExit g N A SL φf φc store (.bool b) m0 sp r out0)) :
     StringifyContract g N A SL φf φc store aVal (.bool b) m0 :=
-  stringifyContract_of_call g N A SL φf φc store aVal (.bool b) m0 rRet Pentry
-    (fun sp r => by rw [stringifyDisplay_bool]; exact call sp r)
-    entry
+  stringifyContract_of_call g N A SL φf φc store aVal (.bool b) m0 call
 
 /-- **`StringifyContract` for `.null`, discharged** (aligned by
 `stringifyDisplay_null`). -/
@@ -198,13 +197,12 @@ theorem stringifyContract_null_of_call
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (store : Store) (aVal : Nat) (m0 : Mem)
-    (rRet : BitVec 64) (Pentry : BitVec 64 → BitVec 64 → Config → Prop)
-    (call : NullBranchCallResid rRet Pentry)
-    (entry : ∀ (sp r : BitVec 64), ∃ c, Pentry sp r c) :
+    (call : ∀ (sp r : BitVec 64) (out0 : String),
+      Triple
+        (StringifyEntry g N A SL φf φc store aVal .null m0 sp r out0)
+        (StringifyExit g N A SL φf φc store .null m0 sp r out0)) :
     StringifyContract g N A SL φf φc store aVal .null m0 :=
-  stringifyContract_of_call g N A SL φf φc store aVal .null m0 rRet Pentry
-    (fun sp r => by rw [stringifyDisplay_null]; exact call sp r)
-    entry
+  stringifyContract_of_call g N A SL φf φc store aVal .null m0 call
 
 /-- **`StringifyContract` for `.native w`, discharged** (aligned by
 `stringifyDisplay_native` — the `catDisplay` nameless form; this is the
@@ -213,13 +211,12 @@ theorem stringifyContract_native_of_call
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (store : Store) (aVal : Nat) (w : NativeFn) (m0 : Mem)
-    (rRet : BitVec 64) (Pentry : BitVec 64 → BitVec 64 → Config → Prop)
-    (call : NativeBranchCallResid rRet Pentry)
-    (entry : ∀ (sp r : BitVec 64), ∃ c, Pentry sp r c) :
+    (call : ∀ (sp r : BitVec 64) (out0 : String),
+      Triple
+        (StringifyEntry g N A SL φf φc store aVal (.native w) m0 sp r out0)
+        (StringifyExit g N A SL φf φc store (.native w) m0 sp r out0)) :
     StringifyContract g N A SL φf φc store aVal (.native w) m0 :=
-  stringifyContract_of_call g N A SL φf φc store aVal (.native w) m0 rRet Pentry
-    (fun sp r => by rw [stringifyDisplay_native]; exact call sp r)
-    entry
+  stringifyContract_of_call g N A SL φf φc store aVal (.native w) m0 call
 
 /-- Bool branch from its two halves: the named arm seam (dispatch ≫ literal
 `strcpy` ≫ `j`-join, landing the tail entry `Ptail`) ≫ the composed tail. -/

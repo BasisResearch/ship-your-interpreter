@@ -98,8 +98,10 @@ NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
 -/
 
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr
-open Vsa.Machine (MState Config)
+open Vsa.Machine (MState Config Steps)
 open LeanRV64DExecutable (Register RegisterType)
+open Vsa.Logic (Triple)
+open Vsa.Alloc
 
 namespace Vsa.Sim
 
@@ -156,7 +158,7 @@ empirically confirmed 2026-09-01). -/
 consistent with `ValueRepr`'s `read32 m a = some (kindTag v)` pin (str case = 3). -/
 theorem stringify_kindTag_str (s : String) : kindTag (.str s) = 3 := rfl
 
-/-! ## `StringifyContract` — the callee post as a named residual
+/-! ## `StringifyContract` — the whole callee run
 
 A `stringify` call is a straight Shape-D callee: `entry@0x80002fc0 ≫ ret` with the
 result `StringifyResult`.  We name the whole-call obligation for a given operand as
@@ -166,16 +168,59 @@ residuals (register/heap image `g N A SL φf φc`, the pre memory `m0`, the oper
 strlen▸malloc▸memcpy, the LANDED framed specs; int = snprintf▸tail; …).  Left
 abstract: the honest surface of the not-yet-assembled heap Triple. -/
 
-/-- The `stringify(v)` callee contract, at the `StringifyResult` post.  For a value
-`v` represented at `aVal` in `m0`, the call returns (in `a0`) a fresh pointer `res`
-with `StringifyResult m' store res v`, over the standard heap/register image.  This
-is the single object the concat cell's two `stringify` calls share. -/
+/-- Exact entry to `stringify` at `0x80002fc0`. -/
+structure StringifyEntry
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (store : Store) (aVal : Nat) (v : Value) (m0 : Mem)
+    (sp r : BitVec 64) (out0 : String) (c : Config) : Prop where
+  good : GoodState c.σ
+  tick : c.tick < 2
+  pc : c.σ.regs.get? Register.PC = some 0x80002fc0#64
+  a0 : c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 aVal)
+  ra : c.σ.regs.get? Register.x1 = some r
+  spReg : c.σ.regs.get? Register.x2 = some sp
+  minstret : ∃ w, c.σ.regs.get? Register.minstret = some w
+  mem : c.σ.mem = m0
+  value : ValueRepr m0 N φc aVal v
+  store : StoreRepr m0 N A φf φc store
+  out : Vsa.Machine.output c.σ = out0
+  stack : StackOK SL sp 112
+  frame : ∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R
+
+/-- Exact successful return from `stringify`.  Output and the interpreter store
+are preserved.  Only stack and arena memory may change. -/
+structure StringifyExit
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (store : Store) (v : Value) (m0 : Mem)
+    (sp r : BitVec 64) (out0 : String) (c : Config) : Prop where
+  good : GoodState c.σ
+  tick : c.tick < 2
+  pc : c.σ.regs.get? Register.PC = some r
+  spReg : c.σ.regs.get? Register.x2 = some sp
+  minstret : ∃ w, c.σ.regs.get? Register.minstret = some w
+  result : ∃ res : Nat,
+    c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 res) ∧
+    StringifyResult c.σ.mem store res v
+  store : StoreRepr c.σ.mem N A φf φc store
+  out : Vsa.Machine.output c.σ = out0
+  frame : ∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R
+  memFrame : ∀ a : Nat,
+    ¬ (SL.lo ≤ a ∧ a < SL.hi) → ¬ (A.lo ≤ a ∧ a < A.hi) →
+    c.σ.mem[a]? = m0[a]?
+
+/-- The `stringify(v)` contract is an actual machine execution from the real
+callee entry to its return.  The former definition merely asserted that some
+unrelated memory contained a result and was therefore vacuous. -/
 def StringifyContract
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (store : Store) (aVal : Nat) (v : Value) (m0 : Mem) : Prop :=
-  ∀ (sp r : BitVec 64),
-    ∃ (res : Nat) (m' : Mem), StringifyResult m' store res v
+  ∀ (sp r : BitVec 64) (out0 : String),
+    Triple
+      (StringifyEntry g N A SL φf φc store aVal v m0 sp r out0)
+      (StringifyExit g N A SL φf φc store v m0 sp r out0)
 
 /-- STR-restricted `stringify` contract: for a `.str s` operand, the result string
 is exactly `s` (the `strdup`), obtained from `StringifyContract` by rewriting the
@@ -185,10 +230,13 @@ theorem stringifyContract_str_result
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
     {store : Store} {aVal : Nat} {s : String} {m0 : Mem}
     (h : StringifyContract g N A SL φf φc store aVal (.str s) m0)
-    (sp r : BitVec 64) :
-    ∃ (res : Nat) (m' : Mem), res ≠ 0 ∧ CString m' res s := by
-  obtain ⟨res, m', hne, hcs⟩ := h sp r
-  exact ⟨res, m', hne, by simpa [stringifyDisplay_str] using hcs⟩
+    (sp r : BitVec 64) (out0 : String) (c : Config)
+    (hc : StringifyEntry g N A SL φf φc store aVal (.str s) m0 sp r out0 c) :
+    ∃ (c' : Config) (res : Nat), Steps c c' ∧ res ≠ 0 ∧
+      CString c'.σ.mem res s := by
+  obtain ⟨c', hs, hexit⟩ := h sp r out0 c hc
+  obtain ⟨res, _ha0, hne, hcs⟩ := hexit.result
+  exact ⟨c', res, hs, hne, by simpa [stringifyDisplay_str] using hcs⟩
 
 /-! ## `stringify_spec_int` — consuming `snprintf_lld_spec`
 
@@ -211,10 +259,13 @@ theorem stringifyContract_int_result
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
     {store : Store} {aVal : Nat} {n : Int} {m0 : Mem}
     (h : StringifyContract g N A SL φf φc store aVal (.int n) m0)
-    (sp r : BitVec 64) :
-    ∃ (res : Nat) (m' : Mem), res ≠ 0 ∧ CString m' res (intToString n) := by
-  obtain ⟨res, m', hne, hcs⟩ := h sp r
-  exact ⟨res, m', hne, by simpa [stringifyDisplay_int] using hcs⟩
+    (sp r : BitVec 64) (out0 : String) (c : Config)
+    (hc : StringifyEntry g N A SL φf φc store aVal (.int n) m0 sp r out0 c) :
+    ∃ (c' : Config) (res : Nat), Steps c c' ∧ res ≠ 0 ∧
+      CString c'.σ.mem res (intToString n) := by
+  obtain ⟨c', hs, hexit⟩ := h sp r out0 c hc
+  obtain ⟨res, _ha0, hne, hcs⟩ := hexit.result
+  exact ⟨c', res, hs, hne, by simpa [stringifyDisplay_int] using hcs⟩
 
 /-! ## The shared strdup tail residual `StringifyStrdupTailResid`
 

@@ -117,6 +117,18 @@ private def mkDepthProof (d : Lean.Expr) : MetaM Lean.Expr := do
   -- `decide (d < 1000)` to `true` for literal `d`, so `Eq.refl true` fits.
   mkAppOptM ``of_decide_eq_true #[propTy, decInst, eqTrue]
 
+/-- Proof that a concrete argument-list literal fits the interpreter's fixed
+call buffer.  Oversized calls are runtime errors and have no `EvalE` proof. -/
+private def mkArgsProof (args : Lean.Expr) : MetaM Lean.Expr := do
+  let elems ← listElems args
+  if elems.length > 32 then
+    throwError "call has {elems.length} arguments (maxArgs = 32)"
+  let len ← mkAppM ``List.length #[args]
+  let propTy ← mkAppM ``LE.le #[len, mkConst ``Vsa.While.maxArgs]
+  let decInst ← synthInstance (← mkAppM ``Decidable #[propTy])
+  let eqTrue ← mkEqRefl (mkConst ``Bool.true)
+  mkAppOptM ``of_decide_eq_true #[propTy, decInst, eqTrue]
+
 /-- Proof of `status = .normal ∨ status = .cont` for a concrete status. -/
 private def normalOrContPrf (s : StatusV) : MetaM Lean.Expr := do
   let sE := statusExpr s
@@ -225,10 +237,11 @@ private partial def dEvalE (st d env e : Lean.Expr) :
     | _ => throwError "bad unary operator"
   | (``Vsa.While.Expr.call, #[f, args]) =>
     let (pf, st1, fv) ← dEvalE st d env f
+    let hargs ← mkArgsProof args
     let (pa, st2, vsE, _) ← dEvalArgs st1 d env args
     let (pc, st3, v) ← dCall st2 d fv vsE
     let prf := mkAppN (mkConst ``Vsa.While.EvalE.call)
-      #[st, d, env, f, args, st1, st2, st3, fv, vsE, v, pf, pa, pc]
+      #[st, d, env, f, args, st1, st2, st3, fv, vsE, v, pf, hargs, pa, pc]
     return (prf, st3, v)
   | (``Vsa.While.Expr.fn, #[name, params, body]) =>
     let (store, out) ← stParts st

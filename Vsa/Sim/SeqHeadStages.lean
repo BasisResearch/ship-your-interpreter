@@ -95,6 +95,7 @@ theorem execEntry_recast_depth
     (h : ExecEntry g N A SL φf φc st 0 env s sp r aInterp aStmt aEnv aRet m0 c) :
     ExecEntry g N A SL φf φc st d env s sp r aInterp aStmt aEnv aRet m0 c :=
   { good := h.good, tick := h.tick, pc := h.pc, a0 := h.a0, a1 := h.a1, a2 := h.a2,
+    envPtr := h.envPtr,
     a3 := h.a3, ra := h.ra, ra_align := h.ra_align, spReg := h.spReg,
     stackOK := h.stackOK,
     -- The source at depth 0 carries the MAXIMUM budget `(maxCallDepth - 0)`;
@@ -108,12 +109,14 @@ theorem execEntry_recast_depth
           (Nat.mul_le_mul_right _ this) _) _) h.stackBudget,
     stmt_bodies := h.stmt_bodies, store_bodies := h.store_bodies,
     minstret := h.minstret, mem := h.mem, code := h.code,
-    stmt := h.stmt, store := h.store, store_survives := h.store_survives,
+    stmt := h.stmt, store := h.store, env_valid := h.env_valid,
+    store_survives := h.store_survives,
     out := h.out, frame := h.frame,
     code_stack_disjoint := h.code_stack_disjoint, stack_ram := h.stack_ram,
     stack_win := h.stack_win, stmt_stack_disjoint := h.stmt_stack_disjoint,
     stmt_align := h.stmt_align, stmt_ram := h.stmt_ram, stmt_win := h.stmt_win,
-    spill_defined := h.spill_defined, ground := h.ground }
+    spill_defined := h.spill_defined, envset_defined := h.envset_defined,
+    ground := h.ground }
 
 #print axioms execEntry_recast_depth
 
@@ -149,6 +152,7 @@ theorem seqHeadStagePre_of_span
           (∃ w, c.σ.regs.get? Register.minstret = some w)) ∧
         -- the geometry + splices `loopHeadDispatch_span` demands:
         LoopHeadDispatchGeom g N A SL φf φc st sp aStmt s mE ∧
+        EnvValid st env ∧
         -- WAVE 47i: the root exec entry-ground bundle (M6 supply point,
         -- beside the Geom supplier).
         ExecGround mE SL A sp aRet aStmt.toNat s ∧
@@ -169,6 +173,7 @@ theorem seqHeadStagePre_of_span
             cE.σ.regs.get? Register.x10 = some aInterp ∧
             cE.σ.regs.get? Register.x11 = some aStmt ∧
             cE.σ.regs.get? Register.x12 = some aEnv ∧
+            aEnv = BitVec.ofNat 64 (φf env) ∧
             cE.σ.regs.get? Register.x13 = some aRet ∧
             cE.σ.regs.get? Register.x2 = some sp ∧
             GoodState cE.σ ∧ cE.tick < 2 ∧
@@ -179,16 +184,20 @@ theorem seqHeadStagePre_of_span
             (∃ v, cE.σ.regs.get? Register.x8 = some v) ∧
             (∃ v, cE.σ.regs.get? Register.x9 = some v) ∧
             (∃ v, cE.σ.regs.get? Register.x18 = some v) ∧
-            (∃ v, cE.σ.regs.get? Register.x19 = some v))) :
+            (∃ v, cE.σ.regs.get? Register.x19 = some v) ∧
+            (∃ v, cE.σ.regs.get? Register.x20 = some v) ∧
+            (∃ v, cE.σ.regs.get? Register.x21 = some v))) :
     SeqHeadStagePre Reflect s ss c st d env := by
   intro hSq
   obtain ⟨g, N, A, SL, φf, φc, sp, s0, aStmt, aEnv, aInterp, aRet, m0, mE,
-    ⟨hGH, htickH, hpcH, hmemH, hspH, hs0H, hmiH⟩, hGeom, hGround, hDispatchFacts,
+    ⟨hGH, htickH, hpcH, hmemH, hspH, hs0H, hmiH⟩, hGeom, henvValid,
+    hGround, hDispatchFacts,
     hValueNullSplice, hArgSetup⟩ := hSpan hSq
   -- run the built span; it lands at `exec_stmt`'s entry carrying `ExecEntry ... 0 ...`
   obtain ⟨cE, hsteps, hEntry⟩ :=
     loopHeadDispatch_span c g N A SL φf φc st env sp s0 aStmt aEnv aInterp aRet s m0 mE
-      hGH htickH hpcH hmemH hspH hs0H hmiH hDispatchFacts hGeom hGround hValueNullSplice hArgSetup
+      hGH htickH hpcH hmemH hspH hs0H hmiH hDispatchFacts hGeom henvValid
+      hGround hValueNullSplice hArgSetup
   -- the landing PC (0x80003fe0) differs from the loop head (0x8000448c) ⇒ ≥ 1 step
   have hpcE : cE.σ.regs.get? Register.PC = some (BitVec.ofNat 64 execStmtEntry) := hEntry.pc
   have hcount : ∃ m, 1 ≤ m ∧ StepsN m c cE :=

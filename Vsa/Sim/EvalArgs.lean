@@ -76,28 +76,6 @@ local notation "SpecSt" => Vsa.While.St
 
 set_option maxHeartbeats 4000000
 
-/-! ## `ArgVecRepr` — the materialised stack Value-array ↔ `vs : List Value`
-
-The `EX_CALL` arg loop writes each evaluated argument `vs[i]` as a 24-byte
-`Value` into the stack Value-array at `base + i*24` (`base = sp+32+208`). This
-predicate says the machine memory `m` represents the whole list `vs` there: the
-`i`-th `Value` of `vs` lives at `base + 24*i`, under the closures map `φc`. -/
-def ArgVecRepr (m : Mem) (N : NativeAddrs) (φc : Addr → Nat)
-    (base : Nat) : List Value → Prop
-  | [] => True
-  | v :: vs => ValueRepr m N φc base v ∧ ArgVecRepr m N φc (base + 24) vs
-
-/-- The empty argument vector is trivially represented. -/
-@[simp] theorem argVecRepr_nil (m : Mem) (N : NativeAddrs) (φc : Addr → Nat)
-    (base : Nat) : ArgVecRepr m N φc base [] := trivial
-
-/-- Prepending: `v :: vs` is represented at `base` iff `v` is at `base` and `vs`
-follows at `base + 24`. -/
-theorem argVecRepr_cons (m : Mem) (N : NativeAddrs) (φc : Addr → Nat)
-    (base : Nat) (v : Value) (vs : List Value)
-    (hv : ValueRepr m N φc base v) (hvs : ArgVecRepr m N φc (base + 24) vs) :
-    ArgVecRepr m N φc base (v :: vs) := ⟨hv, hvs⟩
-
 /-! ## `EvalArgsStep` — one machine loop iteration (the per-argument hypothesis)
 
 From `EvalArgsEntry` at the loop head `p` for a NON-empty remaining list

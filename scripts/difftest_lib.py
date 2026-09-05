@@ -172,7 +172,9 @@ class Trace:
 
     `regs[i*31 + (r-1)]` is register `r` (1..31) BEFORE step `i`; `x0` is zero and
     not stored.  `mk/mw/maddr/mpre/mpost` carry the memory operand when there is
-    one."""
+    one.  New traces also carry an `O` suffix with output chunk counts and the
+    exact byte appended by an HTIF putchar step.  Old traces remain readable but
+    are marked as lacking output observations."""
 
     def __init__(self, path, name=None):
         self.path = path
@@ -181,6 +183,8 @@ class Trace:
         regs = array("Q")
         mk = array("B"); mw = array("B")
         maddr = array("Q"); mpre = array("Q"); mpost = array("Q")
+        out_known = array("B"); out_before = array("Q"); out_after = array("Q")
+        out_byte = array("H")
         self.fuel_out = False
         with open(path, "r") as f:
             for line in f:
@@ -194,19 +198,31 @@ class Trace:
                 npc.append(int(fl[3], 16))
                 for j in range(4, 35):
                     regs.append(int(fl[j], 16))
-                if len(fl) > 35:
+                tail = 35
+                if len(fl) > tail and fl[tail] != "O":
                     tag = fl[35]
                     mk.append(MK_LOAD if tag[0] == "L" else MK_STORE)
                     mw.append(int(tag[1:]))
                     maddr.append(int(fl[36], 16))
                     mpre.append(int(fl[37], 16))
                     mpost.append(int(fl[38], 16))
+                    tail = 39
                 else:
                     mk.append(MK_NONE); mw.append(0)
                     maddr.append(0); mpre.append(0); mpost.append(0)
+                if len(fl) >= tail + 4 and fl[tail] == "O":
+                    out_known.append(1)
+                    out_before.append(int(fl[tail + 1]))
+                    out_after.append(int(fl[tail + 2]))
+                    out_byte.append(int(fl[tail + 3]))
+                else:
+                    out_known.append(0)
+                    out_before.append(0); out_after.append(0); out_byte.append(256)
         self.pc, self.npc, self.step = pc, npc, step
         self.regs = regs
         self.mk, self.mw, self.maddr, self.mpre, self.mpost = mk, mw, maddr, mpre, mpost
+        self.out_known = out_known
+        self.out_before, self.out_after, self.out_byte = out_before, out_after, out_byte
         self.n = len(pc)
         self.depth = None
 

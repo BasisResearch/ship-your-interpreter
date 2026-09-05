@@ -12,7 +12,7 @@ error arm (`BigStepErr p → stuck_sim`) and the divergence arm
 discharges, exposing the exact aggregated M5 residual bundle:
 
 * **error arm** ← `stuck_of_bigStepErrFull` (`ErrorSimFull`), conditional on the
-  42 per-error-site residuals (`hVarUndef`…`hSeqTail`, each "this error node's
+  44 per-error-site residuals (`hVarUndef`…`hSeqTail`, each "this error node's
   compiled code reaches a `jal runtime_error` site ⇒ `Halts c out 70`");
 * **divergence arm** ← `stuck_of_divergenceSim ∘ divergenceSim` (`DivergeSim`),
   conditional on the correspondence `Corr`, the single per-step progress
@@ -35,11 +35,12 @@ open Vsa.Sim
 
 local notation "SpecSt" => Vsa.While.St
 
-/-- **The close skeleton for `stuck_sim`.** For a fixed program `p` and machine
+/- **The close skeleton for `stuck_sim`.** For a fixed program `p` and machine
 config `c`: given the trichotomy obligation, the divergence correspondence +
-per-step residual + entry correspondence, and the 42 error-site residuals, a
+per-step residual + entry correspondence, and the 44 error-site residuals, a
 program with no clean `BigStep` derivation diverges or exits nonzero — exactly
 `InterpSim.stuck_sim`'s per-program conclusion. -/
+/- Obsolete constant-config constructor surface.  Retained as source history.
 theorem stuckSimClosed (p : Program) (c : Config)
     (htri : Trichotomy)
     (Corr : Config → SpecSt → Nat → Addr → List Stmt → Prop)
@@ -80,12 +81,17 @@ theorem stuckSimClosed (p : Program) (c : Config)
       EvalE st d env e st' v → (∀ n : Int, v ≠ .int n) → ErrHalts c)
     (hCallF : ∀ (st : SpecSt) (d : Nat) (env : Addr) (f : Expr) (args : List Expr),
       EvalErr st d env f → ErrHalts c → ErrHalts c)
+    (hCallTooMany : ∀ (st : SpecSt) (d : Nat) (env : Addr) (f : Expr)
+      (args : List Expr) (st' : SpecSt) (fv : Value),
+      EvalE st d env f st' fv → maxArgs < args.length → ErrHalts c)
     (hCallArgs : ∀ (st : SpecSt) (d : Nat) (env : Addr) (f : Expr) (args : List Expr)
       (st' : SpecSt) (fv : Value),
-      EvalE st d env f st' fv → EvalArgsErr st' d env args → ErrHalts c → ErrHalts c)
+      EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EvalArgsErr st' d env args → ErrHalts c → ErrHalts c)
     (hCallC : ∀ (st : SpecSt) (d : Nat) (env : Addr) (f : Expr) (args : List Expr)
       (st' st'' : SpecSt) (fv : Value) (vs : List Value),
-      EvalE st d env f st' fv → EvalArgs st' d env args st'' vs →
+      EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EvalArgs st' d env args st'' vs →
       CallErr st'' d fv vs → ErrHalts c → ErrHalts c)
     (hArgsHead : ∀ (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (es : List Expr),
       EvalErr st d env e → ErrHalts c → ErrHalts c)
@@ -94,7 +100,7 @@ theorem stuckSimClosed (p : Program) (c : Config)
       EvalE st d env e st' v → EvalArgsErr st' d env es → ErrHalts c → ErrHalts c)
     (hNotCallable : ∀ (st : SpecSt) (d : Nat) (fv : Value) (vs : List Value),
       (∀ a, fv ≠ .closure a) → (∀ f, fv ≠ .native f) → ErrHalts c)
-    -- 43rd site: dangling closure address (`CallErr.badClosure`); see
+    -- Dangling closure address (`CallErr.badClosure`); see
     -- `ErrorSimFull.errorSim_of_sites`.
     (hBadClosure : ∀ (st : SpecSt) (d : Nat) (a : Addr) (vs : List Value),
       st.store.closures[a]? = none → ErrHalts c)
@@ -182,9 +188,8 @@ theorem stuckSimClosed (p : Program) (c : Config)
     (hSeqTail : ∀ (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt)
       (st' : SpecSt),
       ExecS st d env s st' .normal → ExecSeqErr st' d env ss → ErrHalts c → ErrHalts c)
-    -- The 43rd error route (top-level abrupt `return`/`break`/`continue` →
-    -- exit 70, `TopAbrupt p`), same exit-70 shape as the other 42 site
-    -- residuals; see `ErrorSimFull.errorSimFull`.
+    -- The separate top-level abrupt `return`/`break`/`continue` route to exit
+    -- 70 (`TopAbrupt p`); see `ErrorSimFull.errorSimFull`.
     (hTopAbrupt : TopAbrupt p → ErrHalts c)
     (hno : ¬ ∃ out, BigStep p out) :
     Diverges c ∨ ∃ out e, Halts c out e ∧ e ≠ 0 :=
@@ -192,10 +197,26 @@ theorem stuckSimClosed (p : Program) (c : Config)
     (fun herr =>
       stuck_of_bigStepErrFull c p
         hVarUndef hAssignE hAssignUnbound hBinaryL hBinaryR hBinaryOp hOrL hOrR hAndL
-        hAndR hUnaryE hNegType hCallF hCallArgs hCallC hArgsHead hArgsTail hNotCallable
+        hAndR hUnaryE hNegType hCallF hCallTooMany hCallArgs hCallC hArgsHead hArgsTail hNotCallable
         hBadClosure hArity hDepth hBody hEscape hAssertFail hAssertArity hExpr hVarInit hBlock hIfCond
         hIfThen hIfElse hWhileCond hWhileBody hWhileLoop hForInit hForLoop hRet hFlCond
         hFlBody hFlStep hFlLoop hSeqHead hSeqTail hTopAbrupt herr)
+    (fun hdiv => stuck_of_divergenceSim Corr hDivStep hentry hdiv)
+    hno
+-/
+
+/-- Close `stuck_sim` using the indexed error work for this exact machine
+entry.  The public conclusion is unchanged. -/
+theorem stuckSimClosed (p : Program) (c : Config)
+    (htri : Trichotomy)
+    (Corr : Config → SpecSt → Nat → Addr → List Stmt → Prop)
+    (hDivStep : DivStep Corr)
+    (hentry : Corr c initSt 0 0 p)
+    (hErrWork : ErrorProgramWork p c)
+    (hno : ¬ ∃ out, BigStep p out) :
+    Diverges c ∨ ∃ out e, Halts c out e ∧ e ≠ 0 :=
+  stuckSim htri
+    (stuck_of_bigStepErrFull_work p c hErrWork)
     (fun hdiv => stuck_of_divergenceSim Corr hDivStep hentry hdiv)
     hno
 

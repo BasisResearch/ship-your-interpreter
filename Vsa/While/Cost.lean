@@ -225,6 +225,7 @@ inductive EvalECost : St → Nat → Addr → Expr → St → Value → Nat → 
       (st' st'' st''' : St) (fv : Value) (vs : List Value) (v : Value)
       (nf na nc : Nat) :
     EvalECost st d env f st' fv nf →
+    args.length ≤ maxArgs →
     EvalArgsCost st' d env args st'' vs na →
     CallCost st'' d fv vs st''' v nc →
     EvalECost st d env (.call f args) st''' v (nf + na + nc)
@@ -532,16 +533,18 @@ private theorem c_not : ∀ st d env e st' v (he : EvalE st d env e st' v),
   obtain ⟨m, hm⟩ := ih
   exact ⟨m, .not _ _ _ _ _ _ _ hm⟩
 private theorem c_call : ∀ st d env f args st' st'' st''' fv vs v
-    (hf : EvalE st d env f st' fv) (ha : EvalArgs st' d env args st'' vs)
+    (hf : EvalE st d env f st' fv) (hargs : args.length ≤ maxArgs)
+    (ha : EvalArgs st' d env args st'' vs)
     (hc : Call st'' d fv vs st''' v),
     M1 st d env f st' fv hf → M2 st' d env args st'' vs ha → M3 st'' d fv vs st''' v hc →
-    M1 st d env (.call f args) st''' v (.call st d env f args st' st'' st''' fv vs v hf ha hc)
+    M1 st d env (.call f args) st''' v
+      (.call st d env f args st' st'' st''' fv vs v hf hargs ha hc)
     := by
-  intro st d env f args st' st'' st''' fv vs v hf ha hc ihf iha ihc
+  intro st d env f args st' st'' st''' fv vs v hf hargs ha hc ihf iha ihc
   obtain ⟨_, hnf⟩ := ihf
   obtain ⟨_, hna⟩ := iha
   obtain ⟨_, hnc⟩ := ihc
-  exact ⟨_, .call _ _ _ _ _ _ _ _ _ _ _ _ _ _ hnf hna hnc⟩
+  exact ⟨_, .call _ _ _ _ _ _ _ _ _ _ _ _ _ _ hnf hargs hna hnc⟩
 private theorem c_fn : ∀ st d env name params body store' a
     (hc : st.store.allocClosure ⟨env, name, params, body⟩ = (store', a)),
     M1 st d env (.fn name params body) ⟨store', st.out⟩ (.closure a) (.fn st d env name params body store' a hc)

@@ -31,6 +31,7 @@ theorem env_define_spill_s1
       c'.σ.regs.get? Register.x19 = some countv ∧
       c'.σ.regs.get? Register.minstret = some vmi' ∧
       GoodState c'.σ ∧ Env_defineLoaded c'.σ.mem ∧ StrcmpLoaded c'.σ.mem ∧
+      c'.σ.mem = writeMap8 c.σ.mem ((sp - 64#64).toNat + 40) (sdData_val v9) ∧
       c'.tick < 2 := by
   have hsp64 : (64 : Nat) ≤ sp.toNat := hRG.sp_ge
   have hspNat : (sp - 64#64).toNat = sp.toNat - 64 := sp_sub64_toNat sp hsp64

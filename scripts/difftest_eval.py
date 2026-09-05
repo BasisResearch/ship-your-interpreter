@@ -16,16 +16,15 @@ the binding where the two first diverge.
 
 What is evaluated is the encoder's own emitted text (`<bmc>/queries/<f>.smt2`),
 so this is not a second model of the machine. It is an interpreter for the small
-closed SMT-LIB fragment the encoder emits, and its own faithfulness is checked
-two ways: `--selfcheck` replays every state it computes against Z3, and the
-lockstep drive means each straight-line state it produces is compared with the
-machine at that instruction anyway.
+closed SMT-LIB fragment the encoder emits.  Its results are checked by the
+lockstep drive: each straight-line state it produces is compared with the
+machine at that instruction.  There is no separate Z3 self-check.
 
 The fragment, in full (anything else raises rather than being guessed at):
   values     `#x…` literals, `true`, `false`
   states     `mst`, `mm`, `rr`
   arrays     `select`, `store`
-  bitvector  bvadd bvsub bvand bvor bvxor bvshl bvlshr bvashr
+  bitvector  bvadd bvsub bvmul bvsdiv bvsrem bvand bvor bvxor bvshl bvlshr bvashr
              bvslt bvsle bvsgt bvsge bvult bvule bvugt bvuge
              `(_ extract h l)`, `(_ zero_extend n)`, `(_ sign_extend n)`, `concat`
   logic      ite and or not = =>
@@ -84,18 +83,23 @@ class MA:
     an address neither knows is UNKNOWN and is recorded rather than defaulted,
     because defaulting it to zero would let a load of uninitialised memory agree
     with the encoder by accident."""
-    __slots__ = ("d", "base", "unknown")
+    __slots__ = ("d", "base", "unknown", "reads")
 
-    def __init__(self, d, base, unknown):
+    def __init__(self, d, base, unknown, reads=None):
         self.d, self.base, self.unknown = d, base, unknown
+        # All store-derived memories from one concrete entry share this set.
+        # It records the finite byte support needed to turn a successful
+        # differential execution into an independently checkable Z3 witness.
+        self.reads = set() if reads is None else reads
 
     def store(self, a, b):
         d = dict(self.d)
         d[a & M64] = b & 0xFF
-        return MA(d, self.base, self.unknown)
+        return MA(d, self.base, self.unknown, self.reads)
 
     def sel(self, a):
         a &= M64
+        self.reads.add(a)
         if a in self.d:
             return self.d[a]
         v = self.base(a)
@@ -105,11 +109,32 @@ class MA:
         return v
 
 
-class St:
-    __slots__ = ("mem", "regs")
+class OA:
+    """Finite output-byte array used by the reflected output projection."""
+    __slots__ = ("d",)
 
-    def __init__(self, mem, regs):
+    def __init__(self, d=None):
+        self.d = {} if d is None else dict(d)
+
+    def store(self, i, b):
+        d = dict(self.d)
+        d[i & M64] = b & 0xFF
+        return OA(d)
+
+    def sel(self, i):
+        return self.d.get(i & M64, 0)
+
+    def __eq__(self, other):
+        return isinstance(other, OA) and self.d == other.d
+
+
+class St:
+    __slots__ = ("mem", "regs", "out", "out_len")
+
+    def __init__(self, mem, regs, out=None, out_len=0):
         self.mem, self.regs = mem, regs
+        self.out = out if out is not None else OA()
+        self.out_len = out_len & M64
 
 
 class EvalError(Exception):
@@ -161,6 +186,120 @@ BIN = {
 def _s(v, w=64):
     m = 1 << (w - 1)
     return (v ^ m) - m
+
+
+def _sdiv(a, b):
+    """SMT-LIB signed division, for nonzero 64-bit operands."""
+    sa, sb = _s(a), _s(b)
+    if sb == 0:
+        return M64 if sa >= 0 else 1
+    q = abs(sa) // abs(sb)
+    return (-q if (sa < 0) != (sb < 0) else q) & M64
+
+
+def _cstring_bytes(mem, ptr):
+    """Independent concrete meaning of the abstract Lean CStr symbols."""
+    out = bytearray()
+    for offset in range(M64 + 1):
+        byte = mem.sel((ptr + offset) & M64)
+        if byte == 0:
+            return bytes(out)
+        out.append(byte)
+    raise EvalError("unterminated C string spans the address space")
+
+
+def _load_le(mem, address, width):
+    return sum(mem.sel((address + i) & M64) << (8 * i)
+               for i in range(width))
+
+
+def _try_load_le(mem, address, width):
+    """Load only bytes known by the trace or explicit array stores."""
+    out = 0
+    for i in range(width):
+        addr = (address + i) & M64
+        byte = mem.sel(addr)
+        if addr not in mem.d and addr in mem.unknown:
+            return None
+        out |= byte << (8 * i)
+    return out
+
+
+def _try_cstring_bytes(mem, ptr):
+    """Decode a concrete C string without treating unknown bytes as zero."""
+    out = bytearray()
+    for offset in range(M64 + 1):
+        addr = (ptr + offset) & M64
+        byte = mem.sel(addr)
+        if addr not in mem.d and addr in mem.unknown:
+            return None
+        if byte == 0:
+            return bytes(out)
+        out.append(byte)
+    return None
+
+
+def _env_lookup_slot(mem, env, name_ptr):
+    """Concrete meaning of the two ground Lean environment symbols."""
+    name = _try_cstring_bytes(mem, name_ptr)
+    if name is None:
+        return None
+    seen = set()
+    while env != 0:
+        if env in seen:
+            return None
+        seen.add(env)
+        count = _try_load_le(mem, env, 4)
+        capacity = _try_load_le(mem, env + 4, 4)
+        names = _try_load_le(mem, env + 8, 8)
+        values = _try_load_le(mem, env + 16, 8)
+        parent = _try_load_le(mem, env + 24, 8)
+        if None in (count, capacity, names, values, parent) \
+                or count > capacity or count > 4096:
+            return None
+        for index in range(count):
+            candidate_ptr = _try_load_le(mem, names + 8 * index, 8)
+            if candidate_ptr is None:
+                return None
+            candidate = _try_cstring_bytes(mem, candidate_ptr)
+            if candidate is None:
+                return None
+            if candidate == name:
+                return (values + 24 * index) & M64
+        env = parent
+    return 0
+
+
+def _value_display_bytes(mem, value_ptr):
+    """Independent executable meaning of Lean `Value.display`."""
+    kind = _load_le(mem, value_ptr, 4)
+    if kind == 0:
+        return b"null"
+    if kind == 1:
+        return b"true" if _load_le(mem, value_ptr + 8, 4) else b"false"
+    if kind == 2:
+        return str(_s(_load_le(mem, value_ptr + 8, 8))).encode("ascii")
+    if kind == 3:
+        return _cstring_bytes(mem, _load_le(mem, value_ptr + 8, 8))
+    if kind == 4:
+        closure = _load_le(mem, value_ptr + 8, 8)
+        fn_expr = _load_le(mem, closure, 8)
+        name_ptr = _load_le(mem, fn_expr + 8, 8)
+        if name_ptr == 0:
+            return b"<fn>"
+        return b"<fn " + _cstring_bytes(mem, name_ptr) + b">"
+    if kind == 5:
+        name_ptr = _load_le(mem, value_ptr + 8, 8)
+        return b"<native fn " + _cstring_bytes(mem, name_ptr) + b">"
+    raise EvalError(f"invalid Value kind {kind}")
+
+
+def _print_args_bytes(mem, args, argc):
+    if argc > 32:
+        raise EvalError(f"argument count {argc} exceeds interpreter maximum")
+    return b" ".join(
+        _value_display_bytes(mem, (args + 24 * index) & M64)
+        for index in range(argc))
 
 
 class Ev:
@@ -250,6 +389,13 @@ class Ev:
         if h == "bvashr":
             a, b = self.ev(t[1]), self.ev(t[2])
             return (_s(a) >> min(b, 63)) & M64
+        if h == "bvsdiv":
+            return _sdiv(self.ev(t[1]), self.ev(t[2]))
+        if h == "bvsrem":
+            a, b = self.ev(t[1]), self.ev(t[2])
+            if b == 0:
+                return a
+            return (_s(a) - _s(_sdiv(a, b)) * _s(b)) & M64
         if h in ("bvslt", "bvsle", "bvsgt", "bvsge"):
             a, b = _s(self.ev(t[1])), _s(self.ev(t[2]))
             return {"bvslt": a < b, "bvsle": a <= b,
@@ -266,11 +412,19 @@ class Ev:
                 w += 8
             return v
         if h == "mst":
-            return St(self.ev(t[1]), self.ev(t[2]))
+            if len(t) == 3:  # legacy generated campaigns
+                return St(self.ev(t[1]), self.ev(t[2]))
+            if len(t) != 5:
+                raise EvalError(f"mst expects 2 or 4 fields, got {len(t)-1}")
+            return St(self.ev(t[1]), self.ev(t[2]), self.ev(t[3]), self.ev(t[4]))
         if h == "mm":
             return self.ev(t[1]).mem
         if h == "rr":
             return self.ev(t[1]).regs
+        if h == "oo":
+            return self.ev(t[1]).out
+        if h == "ol":
+            return self.ev(t[1]).out_len
         if h == "select":
             arr, i = self.ev(t[1]), self.ev(t[2])
             return arr.sel(i)
@@ -279,6 +433,38 @@ class Ev:
             if isinstance(arr, MA):
                 self.writes.append((i & M64, self.cur_bind))
             return arr.store(i, v)
+        if h == "lean_cstring_eq":
+            mem, left, right = self.ev(t[1]), self.ev(t[2]), self.ev(t[3])
+            return _cstring_bytes(mem, left) == _cstring_bytes(mem, right)
+        if h == "lean_cstring_cmp3":
+            mem, left, right = self.ev(t[1]), self.ev(t[2]), self.ev(t[3])
+            left, right = _cstring_bytes(mem, left), _cstring_bytes(mem, right)
+            return ((left > right) - (left < right)) & M64
+        if h in ("lean_env_lookup_found", "lean_env_lookup_slot"):
+            mem, env, name = self.ev(t[1]), self.ev(t[2]), self.ev(t[3])
+            slot = _env_lookup_slot(mem, env, name)
+            if slot is None:
+                raise EvalError("Lean environment lookup reads unknown or malformed bytes")
+            return slot != 0 if h == "lean_env_lookup_found" else slot
+        if h == "lean_print_args_len":
+            mem, args, argc = (self.ev(t[1]), self.ev(t[2]), self.ev(t[3]))
+            return len(_print_args_bytes(mem, args, argc)) & M64
+        if h == "lean_print_args_out":
+            mem, args, argc = (self.ev(t[1]), self.ev(t[2]), self.ev(t[3]))
+            out, out_len = self.ev(t[4]), self.ev(t[5])
+            for offset, byte in enumerate(_print_args_bytes(mem, args, argc)):
+                out = out.store((out_len + offset) & M64, byte)
+            return out
+        if h == "lean_print_args_same":
+            left_mem, right_mem = self.ev(t[1]), self.ev(t[2])
+            args, argc = self.ev(t[3]), self.ev(t[4])
+            return (_print_args_bytes(left_mem, args, argc)
+                    == _print_args_bytes(right_mem, args, argc))
+        if h == "lean_malloc16_rel":
+            # The abstract allocator invariant is not reconstructible from a
+            # byte trace.  It is consumed only by the dedicated closure audit,
+            # which checks the observable result and mutation set separately.
+            raise EvalError("lean_malloc16_rel requires allocator ghost state")
         if h in self.q.macros:
             ps, body = self.q.macros[h]
             args = [self.ev(a) for a in t[1:]]

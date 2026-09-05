@@ -64,10 +64,10 @@ structure NativeAssertExtra (argsBase spv : BitVec 64) (c : Config) : Prop where
 
 /-! ## §2. The (wave-41) residual, DISCHARGED (wave 42)
 
-`naExit` now carries the full ABI callee-saved frame clause (the wave-42
-amendment resolving observation `naexit-lacks-abi-frame-clause`), so the
-framed variant is the landed `nativeAssertInternal` plus the named
-destructurer `naExit_abiFrame`. -/
+`naExit` now carries the restored return link and full ABI callee-saved frame
+clause (the wave-42 amendment resolving observation
+`naexit-lacks-abi-frame-clause`), so the framed variant is the landed
+`nativeAssertInternal` plus the named destructurer `naExit_abiFrame`. -/
 
 /-- The ABI-framed `native_assert` internal run (wave-41's named residual;
 kept as a def so the wave-41 statement trail survives). -/
@@ -134,7 +134,7 @@ theorem nativeBodyAssert
       (fun c => NativeBodyPre g N A SL φf φc st vs fentry
           spv s7v sret interp argsBase scratch m0 c ∧
         NativeAssertExtra argsBase spv c)
-      (NativeBodyPost g N A SL φf φc st spv s7v m0) := by
+      (NativeBodyPost g N A SL φf φc st spv s7v sret m0) := by
   intro c hc
   obtain ⟨hpre, hextra⟩ := hc
   obtain ⟨vm, hvm⟩ := hpre.minstret
@@ -170,7 +170,8 @@ theorem nativeBodyAssert
     nativeAssertInternalAbi_closed N φc (fun R => c.σ.regs.get? R) v spv sret
       (0x800039f8#64) argsBase (BitVec.ofNat 64 vs.length) interp scratch
       s0v s1v s2v c.σ.mem c.σ.sailOutput c hentry
-  obtain ⟨hG', htick', hpc', _hnull, hout', hmemF', ⟨w', hw'⟩, _hsp', _⟩ := hexit
+  obtain ⟨hG', htick', hpc', hnull, hout', hmemF', ⟨w', hw'⟩,
+    _hsp', _hra', _⟩ := hexit
   have hfsp80 : 80 ≤ spv.toNat := by have := hRG.fsp_lo; omega
   -- exit memory agrees with the entry memory outside frame ∪ sret
   -- (both windows sit inside the stack region)
@@ -183,6 +184,7 @@ theorem nativeBodyAssert
       loaded := ?_
       store := ?_
       out := ?_
+      sretNull := hnull
       frame := ?_
       s7slot := ?_
       memFrame := ?_ }
@@ -262,13 +264,66 @@ theorem nativeAssertOkSpec_of_dispatch
           spv s7v sret interp argsBase scratch m0 c ∧
         NativeAssertExtra argsBase spv c)) :
     NativeAssertOkSpec g N A SL φf φc st d dLeft aLeft m0 :=
-  nativeAssertOkSpec_of_splice g N A SL φf φc st d dLeft aLeft m0 spv s7v _
+  nativeAssertOkSpec_of_splice g N A SL φf φc st d dLeft aLeft m0 spv s7v sret _
     hgsp hgs7 hslotLo hslotHi hslotHtif hslotAlign hDispatch
     (nativeBodyAssert g N A SL φf φc st vs v mv fentry
       spv s7v sret interp argsBase scratch s0v s1v s2v m0
       hvs htruthy hfe hg8 hg9 hg18 hRG hargsFrame hargsHi hargsWin hargsAlign
       hframeStack hsretStack hsretSlot hcodeStack)
 
+/-- Indexed assert assembly.  This retains the staged `.assert` value, exact
+argument vector, result buffer, and `.null` result through the native join. -/
+theorem nativeCallAssertOkIndexed_of_dispatch
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : SpecSt) (d : Nat) (dLeft aLeft : Nat) (m0 : Mem)
+    (vs : List Value) (v mv : Value) (fentry : Nat)
+    (spv s7v sret interp argsBase scratch s0v s1v s2v : BitVec 64)
+    (hvs : vs = [v] ∨ vs = [v, mv])
+    (htruthy : v.truthy = true)
+    (hfe : fentry = 0x80002df4)
+    (hgsp : g Register.x2 = some spv)
+    (hgs7 : g Register.x23 = some s7v)
+    (hg8 : g Register.x8 = some s0v)
+    (hg9 : g Register.x9 = some s1v)
+    (hg18 : g Register.x18 = some s2v)
+    (hslotLo : 0x80000000 ≤ spv.toNat + 1016)
+    (hslotHi : spv.toNat + 1024 ≤ 0x100000000)
+    (hslotHtif : spv.toNat + 1024 ≤ tohostAddr ∨
+      tohostAddr + 8 ≤ spv.toNat + 1016)
+    (hslotAlign : (spv.toNat + 1016) % 8 = 0)
+    (hRG : NativeAssertRegion spv sret)
+    (hargsFrame : argsBase.toNat + 24 ≤ spv.toNat - 80 ∨
+      spv.toNat + 40 ≤ argsBase.toNat)
+    (hargsHi : argsBase.toNat + 24 ≤ 0x100000000)
+    (hargsWin : tohostAddr + 8 ≤ argsBase.toNat)
+    (hargsAlign : argsBase.toNat % 8 = 0)
+    (hframeStack : SL.lo ≤ spv.toNat - 80 ∧ spv.toNat + 40 ≤ SL.hi)
+    (hsretStack : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi)
+    (hsretSlot : sret.toNat + 24 ≤ spv.toNat + 1016 ∨
+      spv.toNat + 1024 ≤ sret.toNat)
+    (hcodeStack : ∀ a : Nat, 0x80003164 ≤ a → a < 0x80003fe0 →
+      ¬ (SL.lo ≤ a ∧ a < SL.hi))
+    (hDispatch : Triple
+      (CallEntryI g N A SL φf φc st d (.native .assert) vs
+        dLeft aLeft spv sret m0)
+      (fun c => NativeBodyPre g N A SL φf φc st vs fentry
+          spv s7v sret interp argsBase scratch m0 c ∧
+        NativeAssertExtra argsBase spv c)) :
+    Triple
+      (CallEntryI g N A SL φf φc st d (.native .assert) vs
+        dLeft aLeft spv sret m0)
+      (CallExitI g N A SL φf φc st.store.frames.size st.store.closures.size
+        st .null sret m0) :=
+  nativeArmSplice g N A SL φf φc st.store.frames.size st.store.closures.size
+    st spv s7v sret m0 _ _ hgsp hgs7 hslotLo hslotHi hslotHtif hslotAlign
+    hDispatch
+    (nativeBodyAssert g N A SL φf φc st vs v mv fentry
+      spv s7v sret interp argsBase scratch s0v s1v s2v m0
+      hvs htruthy hfe hg8 hg9 hg18 hRG hargsFrame hargsHi hargsWin hargsAlign
+      hframeStack hsretStack hsretSlot hcodeStack)
+
 #print axioms nativeAssertOkSpec_of_dispatch
+#print axioms nativeCallAssertOkIndexed_of_dispatch
 
 end Vsa.Sim

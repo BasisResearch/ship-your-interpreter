@@ -113,15 +113,24 @@ inductive EvalErr : St → Nat → Addr → Expr → Prop where
   | callF (st : St) (d : Nat) (env : Addr) (f : Expr) (args : List Expr) :
     EvalErr st d env f →
     EvalErr st d env (.call f args)
+  -- leaf: the concrete interpreter checks its fixed argument-buffer bound
+  -- after the callee succeeds and before evaluating any argument
+  | callTooMany (st : St) (d : Nat) (env : Addr) (f : Expr) (args : List Expr)
+      (st' : St) (fv : Value) :
+    EvalE st d env f st' fv →
+    maxArgs < args.length →
+    EvalErr st d env (.call f args)
   | callArgs (st : St) (d : Nat) (env : Addr) (f : Expr) (args : List Expr)
       (st' : St) (fv : Value) :
     EvalE st d env f st' fv →
+    args.length ≤ maxArgs →
     EvalArgsErr st' d env args →
     EvalErr st d env (.call f args)
   -- leaf/propagate: the call itself errors
   | callC (st : St) (d : Nat) (env : Addr) (f : Expr) (args : List Expr)
       (st' st'' : St) (fv : Value) (vs : List Value) :
     EvalE st d env f st' fv →
+    args.length ≤ maxArgs →
     EvalArgs st' d env args st'' vs →
     CallErr st'' d fv vs →
     EvalErr st d env (.call f args)
@@ -389,11 +398,13 @@ inductive EApprox : Nat → St → Nat → Addr → Expr → Prop where
   | callArgs (n : Nat) (st : St) (d : Nat) (env : Addr) (f : Expr)
       (args : List Expr) (st' : St) (fv : Value) :
     EvalE st d env f st' fv →
+    args.length ≤ maxArgs →
     ArgsApprox n st' d env args →
     EApprox (n + 1) st d env (.call f args)
   | callC (n : Nat) (st : St) (d : Nat) (env : Addr) (f : Expr)
       (args : List Expr) (st' st'' : St) (fv : Value) (vs : List Value) :
     EvalE st d env f st' fv →
+    args.length ≤ maxArgs →
     EvalArgs st' d env args st'' vs →
     CApprox n st'' d fv vs →
     EApprox (n + 1) st d env (.call f args)

@@ -568,7 +568,7 @@ theorem blockB_binary
         site_800034f8_ee σ i u (0x800034f8#64) vmi hGσ hpcσ hmiσ hcodeσ rfl hiσ)
       hIHl
       ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩
-      ⟨hG4, hi4, hpc4, ha0_4, hs1_4, hx11_4, ⟨_, hx13_4⟩, hx12_4, hsp_4, ⟨vmi4, hmi4⟩,
+      ⟨hG4, hi4, hpc4, ha0_4, hs1_4, hx11_4, hx13_4, hx12_4, hsp_4, ⟨vmi4, hmi4⟩,
         hout4, houtStr, hmem4e, hcodemcall1, hviInt1, hviSlot1, hnbs1, hGroundL, hexprL1, hstore1, hstoreSurv1,
         hframe4, ⟨hg8, hg18⟩,
         hslotRa1, hslotS01, hslotS11, hslotS21,

@@ -35,6 +35,16 @@ open Vsa.Sim Vsa.ReflectSpan Vsa.ReflectResiduals
 
 namespace Vsa.DiffTest
 
+/-- Exact state update for an instruction handled by `rawRegVal` rather than
+the proof decoder.  Raw instructions change only one GPR, so memory and the
+two output components must be threaded unchanged. -/
+private def rawStepState (rd : Nat) (e : String) : String :=
+  s!"(mst (mm S) (store (rr S) {bvN rd} {e}) (oo S) (ol S))"
+
+example : rawStepState 11 "v" =
+    "(mst (mm S) (store (rr S) #x000000000000000b v) (oo S) (ol S))" := by
+  native_decide
+
 /-- Hex of a Nat, `0x`-prefixed. -/
 def hx (n : Nat) : String := s!"0x{String.ofList (Nat.toDigits 16 n)}"
 
@@ -68,7 +78,7 @@ def stepRow (img : Nat → Option (BitVec 8)) (p : Nat) : String :=
   else
     match rawRegVal "S" w with
     | some (rd, e) =>
-      s!"{hx p}\t{hw}\traw\t{rd}\t(mst (mm S) (store (rr S) {bvN rd} {e}))"
+      s!"{hx p}\t{hw}\traw\t{rd}\t{rawStepState rd e}"
     | none => s!"{hx p}\t{hw}\topaque"
 
 end Vsa.DiffTest

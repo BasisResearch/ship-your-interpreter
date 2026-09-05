@@ -273,7 +273,7 @@ re-derives the int case by instantiating `k := 0`, `armPC := 0x80003408`,
 theorem blockA_k
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : Vsa.While.St) (e : Expr) (k : Nat) (armPC : BitVec 64) (calleeLoaded : Mem → Prop)
+    (st : Vsa.While.St) (a : Addr) (e : Expr) (k : Nat) (armPC : BitVec 64) (calleeLoaded : Mem → Prop)
     (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) (out0 : Array String)
     -- shared entry facts (the case-independent subset of `EvalEntry`):
     (hkle : k ≤ 10) (hklt : k < 128)
@@ -317,9 +317,9 @@ theorem blockA_k
         ((∃ v, c.σ.regs.get? Register.x8 = some v) ∧
           (∃ v, c.σ.regs.get? Register.x9 = some v) ∧
           (∃ v, c.σ.regs.get? Register.x18 = some v) ∧
-          (∃ v, c.σ.regs.get? Register.x13 = some v)))
+          c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf a))))
         ∧ c.σ.sailOutput = out0)
-      (fun c => ∃ ment v8 v9 v18 v13,
+      (fun c => ∃ ment v8 v9 v18, ∃ v13 : BitVec 64,
         ArmEntryK g N A SL φf φc st armPC calleeLoaded e sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
         -- wave 47e (`LeafExitPin`): the arm-entry memory is the four prologue
         -- spills over `m0` — presence-preserving.  Surfaced so the leaf
@@ -329,14 +329,15 @@ theorem blockA_k
         -- target (threaded untouched through the prologue+dispatch), so the
         -- binary/unary arm bridge can discharge `x13_pres` without an entry
         -- ∀-closure.  x13 is a caller-save temp never written in this span.
-        c.σ.regs.get? Register.x13 = some v13) := by
+        c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf a))) := by
   intro c hpre'
   obtain ⟨hpre, hout0⟩ := hpre'
   obtain ⟨hG, htick, hpc, ha0, ha1, ha2, hra, hraAl, hspReg, hstackOK, ⟨vmi, hmi⟩,
     hmem, hcode, hexpr, hstore, hstoreSurv, hout, hframe,
     hcodeStk, hexprStk, hexprAl, hexprRam, hexprWin,
     hsretAl, hsretRam, hsretWin, hsretVi, hsretStk, hsretEvalCode, hstkRam, hstkWin,
-    ⟨⟨v8, h8_0⟩, ⟨v9, h9_0⟩, ⟨v18, h18_0⟩, ⟨v13, h13_0⟩⟩⟩ := hpre
+    ⟨⟨v8, h8_0⟩, ⟨v9, h9_0⟩, ⟨v18, h18_0⟩, h13_0⟩⟩ := hpre
+  let v13 : BitVec 64 := BitVec.ofNat 64 (φf a)
   have hviCode : calleeLoaded c.σ.mem := hmem ▸ hcallee
   have hintSlot : KindSlotPinned k armPC c.σ.mem := hmem ▸ hslot
   have hload0 : Eval_exprLoaded c.σ.mem := hcode
@@ -1050,14 +1051,15 @@ theorem blockA_ee
     Triple
       (fun c => EvalEntry g N A SL φf φc st d a (.int n) sp r sret aEnv aExpr m0 c
         ∧ c.σ.sailOutput = out0)
-      (fun c => ∃ ment v8 v9 v18 v13,
+      (fun c => ∃ ment v8 v9 v18, ∃ v13 : BitVec 64,
         ArmEntry g N A SL φf φc st n sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
-        MemExtends m0 ment ∧ c.σ.regs.get? Register.x13 = some v13) := by
+        MemExtends m0 ment ∧
+        c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf a))) := by
   intro c hpre'
   obtain ⟨he, hout0⟩ := hpre'
   -- the int kind tag + payload reads (in `m0`), for `hkind`/`hexprSurv`
   obtain ⟨hkm0, hpm0⟩ := exprRepr_int_payload (he.mem ▸ he.expr)
-  exact blockA_k g N A SL φf φc st (.int n) 0 (0x80003408#64) Value_intLoaded
+  exact blockA_k g N A SL φf φc st a (.int n) 0 (0x80003408#64) Value_intLoaded
     sp r sret aEnv aExpr m0 out0
     (by omega) (by omega)
     (by simpa using hkm0)
@@ -1101,7 +1103,7 @@ theorem blockA_ee
     he.frame, he.code_stack_disjoint, he.expr_stack_disjoint, he.expr_align, he.expr_ram,
     he.expr_win, he.sret_align, he.sret_ram, he.sret_win, he.sret_vicode_disjoint_int,
     he.sret_stack_disjoint, he.sret_evalcode_disjoint, he.stack_ram, he.stack_win,
-    ⟨he.spill_defined.1, he.spill_defined.2.1, he.spill_defined.2.2, he.x13_defined⟩⟩, hout0⟩
+        ⟨he.spill_defined.1, he.spill_defined.2.1, he.spill_defined.2.2, he.envReg⟩⟩, hout0⟩
 
 
 end Vsa.Sim

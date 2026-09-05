@@ -75,18 +75,12 @@ theorem stringifyContract_int_of_call
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (store : Store) (aVal : Nat) (n : Int) (m0 : Mem)
-    (rRet : BitVec 64) (Pentry : BitVec 64 → BitVec 64 → Config → Prop)
-    (call : IntBranchCallResid n rRet Pentry)
-    (entry : ∀ (sp r : BitVec 64), ∃ c, Pentry sp r c) :
+    (call : ∀ (sp r : BitVec 64) (out0 : String),
+      Triple
+        (StringifyEntry g N A SL φf φc store aVal (.int n) m0 sp r out0)
+        (StringifyExit g N A SL φf φc store (.int n) m0 sp r out0)) :
     StringifyContract g N A SL φf φc store aVal (.int n) m0 :=
-  -- `stringifyContract_of_call` wants `call : ∀ sp r, Triple (Pentry sp r)
-  -- (StrdupTailExit rRet ((Value.int n).display store))`.  `(Value.int n).display
-  -- store = Vsa.While.intToString n` (`stringifyDisplay_int`), so `IntBranchCallResid` IS that
-  -- Triple after the display rewrite.
-  stringifyContract_of_call g N A SL φf φc store aVal (.int n) m0 rRet Pentry
-    (fun sp r => by
-      rw [stringifyDisplay_int]; exact call sp r)
-    entry
+  stringifyContract_of_call g N A SL φf φc store aVal (.int n) m0 call
 
 #print axioms IntBranchCallResid
 #print axioms stringifyContract_int_of_call

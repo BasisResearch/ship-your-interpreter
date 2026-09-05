@@ -553,7 +553,8 @@ def nonEvalChildStages_mk
       LandedN 1 c (fun c' => ExecStmtPreBundle b c' st' d env))
     (callArgs : ∀ (f : Expr) (args : List Expr) (c : Config) (st st' : SpecSt)
       (d : Nat) (env : Addr) (fv : Value),
-      EvalE st d env f st' fv → EEntryC c st d env (.call f args) →
+      EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EEntryC c st d env (.call f args) →
       ∃ (argLoopPC dLeft aLeft : Nat),
         LandedN 1 c (fun c' => SegPreBundle argLoopPC c' st' d dLeft aLeft))
     (argsTail : ∀ (e : Expr) (es : List Expr) (c : Config) (st st' : SpecSt)
@@ -563,7 +564,8 @@ def nonEvalChildStages_mk
         LandedN 1 c (fun c' => SegPreBundle argLoopPC c' st' d dLeft aLeft))
     (callC : ∀ (f : Expr) (args : List Expr) (c : Config) (st st' st'' : SpecSt)
       (d : Nat) (env : Addr) (fv : Value) (vs : List Value),
-      EvalE st d env f st' fv → EvalArgs st' d env args st'' vs →
+      EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EvalArgs st' d env args st'' vs →
       EEntryC c st d env (.call f args) →
       ∃ (calleeBodyPC dLeft aLeft : Nat),
         LandedN 1 c (fun c' => SegPreBundle calleeBodyPC c' st'' d dLeft aLeft))
@@ -615,7 +617,8 @@ def nonEvalChildStages_wave43_wired
       LandedN 1 c (fun c' => ExecStmtPreBundle (.whileStmt cnd b) c' st'' d env))
     (callArgs : ∀ (f : Expr) (args : List Expr) (c : Config) (st st' : SpecSt)
       (d : Nat) (env : Addr) (fv : Value),
-      EvalE st d env f st' fv → EEntryC c st d env (.call f args) →
+      EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EEntryC c st d env (.call f args) →
       ∃ (argLoopPC dLeft aLeft : Nat),
         LandedN 1 c (fun c' => SegPreBundle argLoopPC c' st' d dLeft aLeft))
     (argsTail : ∀ (e : Expr) (es : List Expr) (c : Config) (st st' : SpecSt)
@@ -625,7 +628,8 @@ def nonEvalChildStages_wave43_wired
         LandedN 1 c (fun c' => SegPreBundle argLoopPC c' st' d dLeft aLeft))
     (callC : ∀ (f : Expr) (args : List Expr) (c : Config) (st st' st'' : SpecSt)
       (d : Nat) (env : Addr) (fv : Value) (vs : List Value),
-      EvalE st d env f st' fv → EvalArgs st' d env args st'' vs →
+      EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EvalArgs st' d env args st'' vs →
       EEntryC c st d env (.call f args) →
       ∃ (calleeBodyPC dLeft aLeft : Nat),
         LandedN 1 c (fun c' => SegPreBundle calleeBodyPC c' st'' d dLeft aLeft))

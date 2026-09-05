@@ -514,11 +514,13 @@ private theorem b_not : ∀ st d env e st' v (he : EvalE st d env e st' v),
   obtain ⟨hcb', _⟩ := ih hcb
   exact ⟨hcb', trivial⟩
 private theorem b_call : ∀ st d env f args st' st'' st''' fv vs v
-    (hf : EvalE st d env f st' fv) (ha : EvalArgs st' d env args st'' vs)
+    (hf : EvalE st d env f st' fv) (hargs : args.length ≤ maxArgs)
+    (ha : EvalArgs st' d env args st'' vs)
     (hc : Call st'' d fv vs st''' v),
     P1 st d env f st' fv hf → P2 st' d env args st'' vs ha → P3 st'' d fv vs st''' v hc →
-    P1 st d env (.call f args) st''' v (.call st d env f args st' st'' st''' fv vs v hf ha hc) := by
-  intro st d env f args st' st'' st''' fv vs v hf ha hc ihf iha ihc hcb
+    P1 st d env (.call f args) st''' v
+      (.call st d env f args st' st'' st''' fv vs v hf hargs ha hc) := by
+  intro st d env f args st' st'' st''' fv vs v hf hargs ha hc ihf iha ihc hcb
   obtain ⟨hcbf, _⟩ := ihf hcb
   obtain ⟨hcba, hvs⟩ := iha hcbf
   exact ihc hcba hvs

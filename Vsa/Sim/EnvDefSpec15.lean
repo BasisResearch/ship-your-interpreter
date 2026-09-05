@@ -33,7 +33,7 @@ theorem env_define_frame_alloc
       c'.σ.regs.get? Register.x19 = some savedS3 ∧
       c'.σ.regs.get? Register.minstret = some vmi' ∧
       GoodState c'.σ ∧ Env_defineLoaded c'.σ.mem ∧ StrcmpLoaded c'.σ.mem ∧
-      c'.tick < 2 := by
+      c'.σ.mem = c.σ.mem ∧ c'.tick < 2 := by
   obtain ⟨σ', i', hstep, htick', hG', hmem', hobs⟩ :=
     site_80002a5c_ed c.σ c.tick c.steps (0x80002a5c#64) vmi sp
       hG hpc hmi hentry.1 hloaded rfl htick

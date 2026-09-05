@@ -5,6 +5,7 @@ import Vsa.Triple
 import Vsa.Sim.GoodState
 import Vsa.Sim.Regions
 import Vsa.Sim.Code.Exec_stmt
+import Vsa.Sim.Code.Value_truthy
 import Vsa.Sim.InterpEntry
 
 /-!
@@ -267,6 +268,48 @@ structure RetSlotGeom (SL : StackLayout) (sp aRet : BitVec 64) : Prop where
   scribble_disjoint : aRet.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ aRet.toNat
   inSL : SL.lo ≤ aRet.toNat ∧ aRet.toNat + 24 ≤ SL.hi
 
+/-- The static byte ranges read by `eval_expr` dispatch and its leaf value
+helpers. -/
+def EvalCallFootprint (k : Nat) : Prop :=
+  (0x80003164 ≤ k ∧ k < 0x80003fe0) ∨
+  (0x800027ec ≤ k ∧ k < 0x8000285c) ∨
+  (jumpTableBase ≤ k ∧ k < jumpTableBase + 44)
+
+/-- Static support needed when `exec_stmt` calls `eval_expr`.  The pin closure
+is restricted to the exact static footprint.  The bundle contains no
+expression representation and no recursive semantic hypothesis. -/
+structure EvalCallSupport (m : Mem) (SL : StackLayout) (A : Arena)
+    (sp : BitVec 64) : Prop where
+  pins : ∀ m' : Mem,
+    (∀ k : Nat, EvalCallFootprint k → m'[k]? = m[k]?) →
+      InterpCodeLoaded m' ∧ Value_intLoaded m' ∧ Value_truthyLoaded m' ∧
+      IntSlotPinned m' ∧ NBSPins m' ∧ KindTablePins m'
+  table_stack : jumpTableBase + 44 ≤ SL.lo ∨ SL.hi ≤ jumpTableBase
+  code_stack : SL.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
+  vi_stack : (0x8000285c : Nat) ≤ SL.lo ∨ SL.hi ≤ 0x800027ec
+  arena_code : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
+  arena_vi : A.hi ≤ 0x800027ec ∨ 0x8000285c ≤ A.lo
+  arena_table : A.hi ≤ jumpTableBase ∨ jumpTableBase + 44 ≤ A.lo
+
+/-- Transport the static support across agreement on its exact byte footprint,
+and optionally lower the caller stack pointer. -/
+theorem EvalCallSupport.transport {m m' : Mem} {SL : StackLayout}
+    {A : Arena} {sp sp' : BitVec 64}
+    (h : EvalCallSupport m SL A sp)
+    (hag : ∀ k : Nat, EvalCallFootprint k → m'[k]? = m[k]?) :
+    EvalCallSupport m' SL A sp' where
+  pins := by
+    intro m'' hm''
+    apply h.pins
+    intro k hk
+    exact (hm'' k hk).trans (hag k hk)
+  table_stack := h.table_stack
+  code_stack := h.code_stack
+  vi_stack := h.vi_stack
+  arena_code := h.arena_code
+  arena_vi := h.arena_vi
+  arena_table := h.arena_table
+
 /-- **The complete exec entry-ground bundle** (audit classes N2/N3/N4/N5).
 Inserted as `ExecEntry.ground` (47i). -/
 structure ExecGround (m : Mem) (SL : StackLayout) (A : Arena)
@@ -276,6 +319,11 @@ structure ExecGround (m : Mem) (SL : StackLayout) (A : Arena)
   ast : StmtRegionPins m SL A aRet.toNat aStmt s
   arena_stack : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
   arena_code : A.hi ≤ execStmtEntry ∨ execStmtEnd ≤ A.lo
+  arena_table : A.hi ≤ stmtJumpTableBase ∨ stmtJumpTableBase + 36 ≤ A.lo
+  eval_call : EvalCallSupport m SL A sp
+  /-- Sparse memory nevertheless contains every concrete C-stack byte. -/
+  stack_bytes : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
+    ∃ b : BitVec 8, m[k]? = some b
   aret : RetSlotGeom SL sp aRet
   aret_table_disjoint : aRet.toNat + 24 ≤ stmtJumpTableBase ∨
     stmtJumpTableBase + 36 ≤ aRet.toNat
@@ -287,6 +335,8 @@ theorem ExecGround.survive_stack {m m' : Mem} {SL : StackLayout} {A : Arena}
     {sp aRet : BitVec 64} {aStmt : Nat} {s : Vsa.While.Stmt}
     (h : ExecGround m SL A sp aRet aStmt s)
     (hsp : sp.toNat ≤ SL.hi)
+    (hpop : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
+      ∃ b : BitVec 8, m'[k]? = some b)
     (hag : ∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat) →
       ¬ (aRet.toNat ≤ k ∧ k < aRet.toNat + 24) → m[k]? = m'[k]?) :
     ExecGround m' SL A sp aRet aStmt s where
@@ -305,6 +355,19 @@ theorem ExecGround.survive_stack {m m' : Mem} {SL : StackLayout} {A : Arena}
     · rcases spec.ret_disjoint with hs | hs <;> omega⟩
   arena_stack := h.arena_stack
   arena_code := h.arena_code
+  arena_table := h.arena_table
+  eval_call := h.eval_call.transport (fun k hk => by
+    refine (hag k (fun hstk => ?_) (fun hret => ?_)).symm
+    · rcases hk with hc | hv | ht
+      · rcases h.eval_call.code_stack with hd | hd <;> omega
+      · rcases h.eval_call.vi_stack with hd | hd <;> omega
+      · rcases h.eval_call.table_stack with hd | hd <;> omega
+    · have hr := h.aret.inSL
+      rcases hk with hc | hv | ht
+      · rcases h.eval_call.code_stack with hd | hd <;> omega
+      · rcases h.eval_call.vi_stack with hd | hd <;> omega
+      · rcases h.eval_call.table_stack with hd | hd <;> omega)
+  stack_bytes := hpop
   aret := h.aret
   aret_table_disjoint := h.aret_table_disjoint
 
@@ -348,6 +411,8 @@ structure ExecEntry
   a1 : c.σ.regs.get? Register.x11 = some aStmt
   /-- ABI arg 2: the scope machine address. -/
   a2 : c.σ.regs.get? Register.x12 = some aEnv
+  /-- The scope argument represents the semantic environment index. -/
+  envPtr : aEnv = BitVec.ofNat 64 (φf env)
   /-- ABI arg 3: the `retslot` (`*Value` out for `ret`). -/
   a3 : c.σ.regs.get? Register.x13 = some aRet
   /-- Return address. -/
@@ -382,6 +447,8 @@ structure ExecEntry
   stmt : StmtRepr c.σ.mem aStmt.toNat s
   /-- The whole spec store is represented. -/
   store : StoreRepr c.σ.mem N A φf φc st.store
+  /-- The semantic environment is in the represented frame-map domain. -/
+  env_valid : EnvValid st env
   /-- **`StoreRepr` survives any memory change confined to the FULL stack region
   `[SL.lo, SL.hi)`.** The represented frames/closures and their strings live in
   the arena/AST regions, disjoint from the WHOLE C-stack region. (Mirror of
@@ -420,6 +487,10 @@ structure ExecEntry
     (∃ v, c.σ.regs.get? Register.x9 = some v) ∧
     (∃ v, c.σ.regs.get? Register.x18 = some v) ∧
     (∃ v, c.σ.regs.get? Register.x19 = some v)
+  /-- Callee-saved temporaries used by recursive `env_set` calls are concrete.
+  They cannot be recovered from `GoodState`. -/
+  envset_defined : (∃ v, c.σ.regs.get? Register.x20 = some v) ∧
+    (∃ v, c.σ.regs.get? Register.x21 = some v)
   /-- **The batched exec entry-ground bundle** (wave 47i insertion — audit
   `experiments/entry-needs-audit.md` §C/§D): full stmt jump-table pins +
   whole-table stack disjointness (N2), the hereditary AST region (N3), arena

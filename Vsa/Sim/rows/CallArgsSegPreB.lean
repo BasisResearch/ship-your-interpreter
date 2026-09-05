@@ -141,6 +141,7 @@ by name for the loop-head register pins; do NOT re-derive them. -/
 def CallArgsSetupDispatch (f : Expr) (args : List Expr)
     (st st' : SpecSt) (d : Nat) (env : Addr) (fv : Value) (c : Config) : Prop :=
   EvalE st d env f st' fv →
+  args.length ≤ maxArgs →
   EEntryC c st d env (.call f args) →
   ∃ (N : NativeAddrs) (A : Arena) (φf φc : Addr → Nat) (dLeft aLeft : Nat) (m0 : Mem),
     LandedN 1 c (CallArgsSetupInv N A φf φc st' d dLeft aLeft m0)
@@ -152,14 +153,15 @@ theorem callArgs_field_of_dispatch
     (st st' : SpecSt) (d : Nat) (env : Addr) (fv : Value) (SL : StackLayout)
     (hDisp : CallArgsSetupDispatch f args st st' d env fv c)
     (hE : EvalE st d env f st' fv)
+    (hbound : args.length ≤ maxArgs)
     (hEE : EEntryC c st d env (.call f args)) :
     LandedN 1 c (fun c' => AEntryC c' st' d env args) := by
-  obtain ⟨N, A, φf, φc, dLeft, aLeft, m0, hLanded⟩ := hDisp hE hEE
+  obtain ⟨N, A, φf, φc, dLeft, aLeft, m0, hLanded⟩ := hDisp hE hbound hEE
   exact callArgs_splitB f args c st st' d env fv callArgsLoopPC dLeft aLeft SL
-    (fun _ _ =>
+    (fun _ _ _ =>
       LandedN.weaken hLanded (fun c' hInv =>
         callArgsSegPreB_of_inv N A φf φc st' d dLeft aLeft m0 c' hInv))
-    hE hEE
+    hE hbound hEE
 
 #print axioms callArgs_field_of_dispatch
 

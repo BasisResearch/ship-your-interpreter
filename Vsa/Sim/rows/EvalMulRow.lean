@@ -684,6 +684,10 @@ theorem blockC_mul
         (memExtends_writeMap8 m4 (sp.toNat - 832) D5))
   have hMemExtτ19 : MemExtends m0 τ19.mem := by
     rw [hmemτ19e]; exact hMemExt.trans hMemExt_c_5
+  have hWordsτ19 : ValueWordsTotal τ19.mem sret.toNat := by
+    rw [hmemτ19e]
+    exact ValueWordsTotal.mono hMemExt_c_5
+      (valueWordsTotal_of_populated hFullPop sret.toNat)
   -- memory frame vs m0 at τ19.mem = m5
   have hmemframeτ19 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ τ19.mem[a]? = m0[a]? := by
@@ -752,7 +756,7 @@ theorem blockC_mul
       hcodeτ19 hIntRegion (by decide) hval_bridge
       hpfm hpcm hpf' hpc' houtStr
       hSurvSLτ19 hs3τ19 hslotRaτ19 hslotS0τ19 hslotS1τ19 hslotS2τ19
-      hgv8 hgv9 hgv18 hgv2 hgx19 hw19 hframeGτ19 hMemExtτ19 hmemframeτ19
+      hgv8 hgv9 hgv18 hgv2 hgx19 hw19 hframeGτ19 hMemExtτ19 hWordsτ19 hmemframeτ19
       hsretEvalCode hsretStk hsretInSL hSLlo40 hSLlo32
       hsp1088 hsphiRam hspLoc hspHtifLoc hsp8 hraAl
       g40.lo g40.hi8 g40.ht8 g40.al8
@@ -916,7 +920,7 @@ theorem evalMulSim : EvalMulSimGoal := by
   obtain ⟨c4, hs4, hExitDe⟩ :=
     blockD_v_rec g N A SL φfe φce st'' (.int (wrap64 (a * b))) sp r sret v8 v9 v18 c2.σ.sailOutput m0
       c3 ⟨mpre, hPreD⟩
-  obtain ⟨hExitE, hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
+  obtain ⟨hExitE, hMemExt, hWords, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
   have hmono := evalE_store_mono _hEvalE
   have hleF' : st.store.frames.size ≤ st'.store.frames.size := hSizeF ▸ hmono.1
   have hleC' : st.store.closures.size ≤ st'.store.closures.size := hSizeC ▸ hmono.2
@@ -925,7 +929,7 @@ theorem evalMulSim : EvalMulSimGoal := by
   have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
       st'' (.int (wrap64 (a * b))) sp r sret m0 c4 :=
     evalExit_of_phiExtends hpfF hpcF hExitE hmono.1 hmono.2
-  exact ⟨c4, ((hs2.trans hs3).trans hs4), hExit, hMemExt,
+  exact ⟨c4, ((hs2.trans hs3).trans hs4), hExit, hMemExt, hWords,
     φf', φc', hpfF.trans (PhiExtends.mono hmono.1 hpf'),
     hpcF.trans (PhiExtends.mono hmono.2 hpc'), hSurv⟩
 

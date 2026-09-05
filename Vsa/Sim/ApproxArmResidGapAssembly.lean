@@ -99,8 +99,10 @@ theorem armResidGap_of_stages (Reflect : Config → Addr → List Stmt → Prop)
     logicalR := fun c st st' d env lop l r lv => e4 lop l r c st st' d env lv
     unaryE := fun c st d env op e => e0 op e c st d env
     callF := fun c st d env f args => e6 f args c st d env
-    callArgs := fun c st st' d env f args fv => n6 f args c st st' d env fv
-    callC := fun c st st' st'' d env f args fv vs => n8 f args c st st' st'' d env fv vs
+    callArgs := fun c st st' d env f args fv hE hbound hEE =>
+      n6 f args c st st' d env fv hE hbound hEE
+    callC := fun c st st' st'' d env f args fv vs hE hbound hA hEE =>
+      n8 f args c st st' st'' d env fv vs hE hbound hA hEE
     -- ArgsApprox
     argsHead := fun c st d env e es => e7 e es c st d env
     argsTail := fun c st st' d env e es v => n7 e es c st st' d env v
@@ -153,6 +155,18 @@ theorem divFamily_of_armStages
     Vsa.Sim.InterpSimBundle.DivFamily L :=
   divFamily_of_armResidGap Reflect L hEntry hIter (armResidGap_of_stages Reflect S)
 
+/-- The exact `DivCorrFamily` field consumed by `TermResidualsCore`, from the
+same entry, iteration, and arm-stage evidence. `DivCorrFamily` and `DivFamily`
+have the same definition; this spelling closes the record field directly. -/
+theorem divCorrFamily_of_armStages
+    (Reflect : Config → Addr → List Stmt → Prop) (L : Layout)
+    (hEntry : Vsa.Sim.DivCorrClose.DivEntryDrive Reflect L)
+    (hIter : Vsa.Sim.IterSeamAssembly.IterSeamResid Reflect)
+    (S : ArmStages Reflect) :
+    Vsa.Sim.DivFamily.DivCorrFamily L :=
+  divFamily_of_armStages Reflect L hEntry hIter S
+
 #print axioms divFamily_of_armStages
+#print axioms divCorrFamily_of_armStages
 
 end Vsa.Sim

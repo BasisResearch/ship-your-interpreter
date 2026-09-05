@@ -290,28 +290,37 @@ against the store the composition produced (not a re-derived one); the reindex i
 `rfl`.  This is the honest, store-consuming form: the composition feeds the drive. -/
 theorem interpInitStoreRepr_of_drive
     (L : Layout)
-    (hDrive : ∀ (p : Program) (c : Config), Loaded L p c →
+    (hDrive : ∀ (s : Vsa.While.Stmt) (ss : List Vsa.While.Stmt)
+      (c : Config), Loaded L (s :: ss) c →
       ∃ (c1 : Config)
         (g : (R : Register) → Option (RegisterType R))
         (N : NativeAddrs) (A : Arena) (SL : Vsa.Alloc.StackLayout) (φf φc : Addr → Nat)
-        (dLeft aLeft : Nat) (m0 : Mem),
+        (dLeft aLeft : Nat) (sp aRet : BitVec 64) (m0 : Mem),
         Steps c c1 ∧
         -- ITEM ZERO (falsity #12, shape 3): the drive also certifies the
         -- `interp_run` image in `m0` (the `SeqSpanGround` feed; its
         -- discharger pins these bytes anyway).
         Vsa.Sim.Code.Interp_runLoaded m0 ∧
+        g Register.x21 = some (0#64 : BitVec 64) ∧
         -- the loop-head SegEntry built over the COMPOSED store `storeAfterAssert`:
         SegEntry g N A SL φf φc { store := storeAfterAssert, out := initSt.out }
-          0 dLeft aLeft interpLoopHeadPC m0 c1) :
-    ∀ p, InterpInitStoreRepr L p := by
-  intro p c hL
-  obtain ⟨c1, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, hImg, hSeg⟩ := hDrive p c hL
-  refine ⟨c1, g, N, A, SL, φf, φc, dLeft, aLeft, m0, hSteps, hImg, ?_⟩
+          0 dLeft aLeft interpLoopHeadPC m0 c1 ∧
+        ExecSeqEntryI .interpRun g N A SL φf φc
+          { store := storeAfterAssert, out := initSt.out }
+          0 0 (s :: ss) sp aRet m0 c1) :
+    ∀ s ss, InterpInitStoreRepr L (s :: ss) := by
+  intro s ss c hL
+  obtain ⟨c1, g, N, A, SL, φf, φc, dLeft, aLeft, sp, aRet, m0,
+      hSteps, hImg, hLatch, hSeg, hEntryI⟩ :=
+    hDrive s ss c hL
   -- `initSt = { store := storeAfterAssert, out := initSt.out }` by `initStore_eq_initSt`
   -- (out is "" on both sides), so the SegEntry over the composed store IS the witness.
   have hst : ({ store := storeAfterAssert, out := initSt.out } : SpecSt) = initSt := by
     rw [initStore_eq_initSt]
-  rwa [hst] at hSeg
+  refine ⟨c1, g, N, A, SL, φf, φc, dLeft, aLeft, sp, aRet, m0,
+    hSteps, hImg, hLatch, ?_, ?_⟩
+  · rwa [hst] at hSeg
+  · rwa [hst] at hEntryI
 
 #print axioms initStore_eq_initSt
 #print axioms interpInitStore_compose

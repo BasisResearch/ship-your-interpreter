@@ -58,20 +58,31 @@ motives now `True` every row is `trivial` — the honest init/cond/step work liv
 assembler drops them in by name with no residual field (mirroring the former
 `.none` treatment). -/
 
+def InitNoneResid (st : SpecSt) (d : Nat) (env : Addr) : Prop :=
+  mExecInit st d env none st (ExecInit.none st d env)
+
+def InitSomeResid (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt)
+    (st' : SpecSt) (status : Status) (hS : ExecS st d env s st' status) : Prop :=
+  mExecS st d env s st' status hS →
+  mExecInit st d env (some s) st' (ExecInit.some st d env s st' status hS)
+
 /-- `ExecInit.none` row — discharges `TermCases.hInitNone`. -/
-theorem hInitNone_row :
+theorem hInitNone_row (hR : ∀ st d env, InitNoneResid st d env) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr),
       mExecInit st d env none st (ExecInit.none st d env) := by
-  intro st d env; trivial
+  exact hR
 
 /-- `ExecInit.some` row — discharges `TermCases.hInitSome` (was the unsatisfiable
 `hInitSome_resid`).  The recursor threads the sub-`ExecS` IH as `_`. -/
-theorem hInitSome_row :
+theorem hInitSome_row
+    (hR : ∀ st d env s st' status hS,
+      InitSomeResid st d env s st' status hS) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (st' : SpecSt) (status : Status)
       (a : ExecS st d env s st' status),
       mExecS st d env s st' status a →
       mExecInit st d env (some s) st' (ExecInit.some st d env s st' status a) := by
-  intro st d env s st' status a _hIH; trivial
+  intro st d env s st' status a hIH
+  exact hR st d env s st' status a hIH
 
 /-- `ForCond.none` row — discharges `TermCases.hFcNone`. -/
 theorem hFcNone_row :
@@ -113,7 +124,10 @@ theorem hEsSome_row :
 /-- Slot check: the six rows have EXACTLY the `TermCases` bundle-field types, so a
 bundle assembler drops them in with no adapter.  Type-checking this `example` is
 the machine confirmation. -/
-example :
+example
+    (hInitNone : ∀ st d env, InitNoneResid st d env)
+    (hInitSome : ∀ st d env s st' status hS,
+      InitSomeResid st d env s st' status hS) :
     (∀ (st : SpecSt) (d : Nat) (env : Addr),
         mExecInit st d env none st (ExecInit.none st d env)) ∧
     (∀ (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (st' : SpecSt) (status : Status)
@@ -132,6 +146,7 @@ example :
         (a : EvalE st d env e st' v),
         mEvalE st d env e st' v a →
         mExecStep st d env (some e) st' (ExecStep.some st d env e st' v a)) :=
-  ⟨hInitNone_row, hInitSome_row, hFcNone_row, hFcSome_row, hEsNone_row, hEsSome_row⟩
+  ⟨hInitNone_row hInitNone, hInitSome_row hInitSome,
+    hFcNone_row, hFcSome_row, hEsNone_row, hEsSome_row⟩
 
 end Vsa.Sim.ScaffoldRows

@@ -297,6 +297,11 @@ def binOpSem (s : Store) : BinOp → Value → Value → Option Value
 and runs its body at depth `d + 1`. -/
 def maxCallDepth : Nat := 1000
 
+/-- Maximum number of arguments accepted by the concrete interpreter's fixed
+`Value args[MAX_ARGS]` call buffer.  The check occurs after evaluating the
+callee and before evaluating any argument. -/
+def maxArgs : Nat := 32
+
 mutual
 
 /-- Big-step evaluation of expressions: `EvalE st d env e st' v` means that in
@@ -354,6 +359,7 @@ inductive EvalE : St → Nat → Addr → Expr → St → Value → Prop where
   | call (st : St) (d : Nat) (env : Addr) (f : Expr) (args : List Expr)
       (st' st'' st''' : St) (fv : Value) (vs : List Value) (v : Value) :
     EvalE st d env f st' fv →
+    args.length ≤ maxArgs →
     EvalArgs st' d env args st'' vs →
     Call st'' d fv vs st''' v →
     EvalE st d env (.call f args) st''' v

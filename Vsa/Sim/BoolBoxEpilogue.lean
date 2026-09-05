@@ -108,6 +108,7 @@ theorem boolBoxEpilogue
       (Register.x19 == R) = false → τ0.σ.regs.get? R = g R)
     -- memory frame vs entry m0
     (hMemExt0 : MemExtends m0 τ0.σ.mem)
+    (hWords0 : ValueWordsTotal τ0.σ.mem sret.toNat)
     (hmemframe0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ τ0.σ.mem[a]? = m0[a]?)
     -- geometry the epilogue + s3-restore need
@@ -210,6 +211,8 @@ theorem boolBoxEpilogue
   have hMemExt_0_5 : MemExtends τ0.σ.mem τ5.mem := by
     intro k bb hbb; rw [hmemτ5e]; exact hpresvi k bb hbb
   have hMemExt_fin : MemExtends m0 τ5.mem := hMemExt0.trans hMemExt_0_5
+  have hWords_fin : ValueWordsTotal τ5.mem sret.toNat :=
+    ValueWordsTotal.mono hMemExt_0_5 hWords0
   -- Agreement on the top slots [sp-32, sp): survives value_bool's [sret,+24) write.
   have hAgTop : AgreeP (fun k => sp.toNat - 32 ≤ k ∧ k < sp.toNat) τ0.σ.mem τ5.mem := by
     intro k hk
@@ -271,7 +274,7 @@ theorem boolBoxEpilogue
       hpfm hpcm hpf' hpc' hGτ5 hj5 hpc_fin hs1_fin hsp_fin ⟨vmifin, hmifin⟩
       hout_fin houtStr hcode_fin (by rw [hmemτ5e]; exact hvalfinal) hstore_fin hSurvSL_fin
       hframeG hslotRa_f hslotS0_f hslotS1_f hslotS2_f hgv8 hgv9 hgv18 hgv2
-      hMemExt_fin hmemframe_fin hsp1088 hspRam hspLo hspHtif hsp8 hraAl
+      hMemExt_fin hWords_fin hmemframe_fin hsp1088 hspRam hspLo hspHtif hsp8 hraAl
   exact ⟨mpre, φfm2, φcm2, φfe, φce, ⟨τ5, j5, cvi.steps + 1 + 1⟩, hchain, hp1, hp2, hp3, hp4, hPre⟩
 
 #print axioms boolBoxEpilogue

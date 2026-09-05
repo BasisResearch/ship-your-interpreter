@@ -63,6 +63,9 @@ theorem stringifyStrdupTailContract_viaSpliceFold
     (halignC : rMemcpy.toNat % 4 = 0)
     (extsC : List (Nat × Nat)) (spC : BitVec 64)
     (hrouteCbyte : (src.toNat ^^^ dst.toNat) % 8 ≠ 0 ∨ nMemcpy < 8)
+    (hDstArenaC : A.contains dst.toNat nMemcpy)
+    (hArenaStackC : A.hi ≤ spC.toNat ∨ spC.toNat + 64 ≤ A.lo)
+    (hArenaCodeC : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo)
     (hAInvStableFootC : ∀ (σa σb : MState),
       σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
       (∀ a : Nat, (a < dst.toNat ∨ dst.toNat + nMemcpy ≤ a) → σa.mem[a]? = σb.mem[a]?) →
@@ -115,8 +118,9 @@ theorem stringifyStrdupTailContract_viaSpliceFold
     (.step bridgeStrlenPre strlenFramed
       (.step bridgeMallocPre (M.spec gm exts nMalloc spM rM mMalloc hnM)
         (.step bridgeMemcpyPre
-          (envDefMemcpyFramed SL gpv headroom M.AInv extsC spC (ghostReseatS0 gm dst)
-            rMemcpy dst src nMemcpy mMemcpy bs halignC hrouteCbyte hAInvStableFootC)
+          (envDefMemcpyFramed A SL gpv headroom M.AInv extsC spC (ghostReseatS0 gm dst)
+            rMemcpy dst src nMemcpy mMemcpy bs halignC hrouteCbyte hDstArenaC
+            hArenaStackC hArenaCodeC hAInvStableFootC)
           (.tail bridgeEpilogue))))
 
 #print axioms stringifyStrdupTailContract_viaSpliceFold

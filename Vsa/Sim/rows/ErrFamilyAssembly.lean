@@ -1,12 +1,12 @@
-import Vsa.Sim.rows.ErrArmLinks
-import Vsa.Sim.rows.ErrArmLinksB
+import Vsa.Sim.rows.ErrorRouting
+import Vsa.Sim.IndexedErrorPrototype
 import Vsa.Sim.ExitPathSpans
 import Vsa.Sim.ExitPathSeg
 
 /-!
-# `ErrFamilyAssembly` — `ErrShared` instantiated + the 42 links fed to the family
+# `ErrFamilyAssembly` — shared error tail + faithful leaf routes
 
-Task #54 (wave 39).  Two pieces:
+Two pieces:
 
 **1. `ErrSharedInputs` → `ErrShared`.**  The shared L7/L8 bundle `ErrShared`
 (`rows/ErrorRouting.lean`) demands the `SnprintfContract SC` (M3) and the
@@ -19,13 +19,11 @@ contract, the two open segments, the two landed-segment geometry residuals, and
 the entry-output pinning — and `ErrSharedInputs.toShared` builds the `ErrShared`
 bundle once, at the concrete continuation `ra0 = 0x80004428`.
 
-**2. `errFamily_ofArmLinks`.**  The 42 routed `hsite` residuals of
-`errFamily_of_sites` are ALL discharged by the GENERATED link families
-(`errLinkA_*` — 16 spill-arm premises, `errLinkB_*` — 26 setup-arm premises);
-the two non-`jal` passthroughs (`hBadClosure`/`hTopAbrupt`) remain raw.  This
-theorem performs the 44-slot feed once, so the error family's remaining work is
-`ErrShared` (via `ErrSharedInputs`) + the two collectors' arm-linkage fields +
-the 2 passthroughs — bundled as `ErrWork`, consumed by `Vsa/Sim/EndToEnd.lean`.
+**2. `ErrWork`.** Only executable leaves carry machine reachability. Propagation
+constructors reuse their child `ErrHalts` induction hypotheses, and binary
+failures use the cause-indexed `BinaryErrReach`. `hBadClosure` remains a
+specification adequacy obligation; top-level abrupt execution has its own
+direct `interp_run` path.
 
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
 -/
@@ -33,6 +31,8 @@ NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
 open LeanRV64DExecutable Vsa
 open Vsa.Machine (MState Config Steps output)
 open Vsa.Logic (Triple)
+open Vsa.RuntimeRepr (NativeAddrs Arena)
+open Vsa.Alloc (StackLayout)
 open Vsa.While
 open Register
 
@@ -119,104 +119,74 @@ def ErrSharedInputs.toShared (I : ErrSharedInputs) : ErrShared where
     (interpContSeg_of I.out I.frameIC) I.segMain I.segCrt0
     (exitPrologSeg I.out I.geomEP)
 
-/-! ## 2. The 42 links fed to `errFamily_of_sites` -/
+/-! ## 2. The faithful leaf-only error work
 
-/-- **The error family from the two GENERATED link collectors.**  All 42 routed
-`hsite` slots of `errFamily_of_sites` are discharged by `errLinkA_*` (16
-spill-arm premises) / `errLinkB_*` (26 setup-arm premises); only the two
-non-`jal` passthroughs remain raw.  The error-side remaining work is therefore
-exactly: `S` (via `ErrSharedInputs`), the collectors' arm-linkage fields, and
-the 2 passthroughs. -/
-theorem errFamily_ofArmLinks (Ly : Vsa.Refine.Layout) (S : ErrShared)
-    (m0 : Std.ExtHashMap Nat (BitVec 8)) (Lr : GRegs) (lds : List (List (BitVec 8)))
-    (A : ErrArmLinks S m0 Lr lds) (B : ErrArmLinksB S m0 Lr lds)
-    (hBadClosure : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Vsa.While.Addr)
-      (vs : List Vsa.While.Value), st.store.closures[a]? = none → ErrHalts c)
-    (hTopAbrupt : ∀ (p : Vsa.While.Program) (c : Config),
-      Vsa.While.TopAbrupt p → ErrHalts c) :
-    Vsa.Sim.InterpSimBundle.ErrFamily Ly :=
-  Vsa.Sim.InterpSimBundle.errFamily_of_sites Ly
-    (errLinkA_hVarUndef S m0 Lr lds A)
-    (errLinkB_hAssignE S m0 Lr lds B)
-    (errLinkA_hAssignUnbound S m0 Lr lds A)
-    (errLinkB_hBinaryL S m0 Lr lds B)
-    (errLinkB_hBinaryR S m0 Lr lds B)
-    (errLinkB_hBinaryOp S m0 Lr lds B)
-    (errLinkA_hOrL S m0 Lr lds A)
-    (errLinkA_hOrR S m0 Lr lds A)
-    (errLinkB_hAndL S m0 Lr lds B)
-    (errLinkB_hAndR S m0 Lr lds B)
-    (errLinkA_hUnaryE S m0 Lr lds A)
-    (errLinkA_hNegType S m0 Lr lds A)
-    (errLinkB_hCallF S m0 Lr lds B)
-    (errLinkB_hCallArgs S m0 Lr lds B)
-    (errLinkB_hCallC S m0 Lr lds B)
-    (errLinkA_hArgsHead S m0 Lr lds A)
-    (errLinkA_hArgsTail S m0 Lr lds A)
-    (errLinkB_hNotCallable S m0 Lr lds B)
-    hBadClosure
-    (errLinkB_hArity S m0 Lr lds B)
-    (errLinkB_hDepth S m0 Lr lds B)
-    (errLinkB_hBody S m0 Lr lds B)
-    (errLinkB_hEscape S m0 Lr lds B)
-    (errLinkB_hAssertFail S m0 Lr lds B)
-    (errLinkB_hAssertArity S m0 Lr lds B)
-    (errLinkA_hExpr S m0 Lr lds A)
-    (errLinkB_hVarInit S m0 Lr lds B)
-    (errLinkA_hBlock S m0 Lr lds A)
-    (errLinkB_hIfCond S m0 Lr lds B)
-    (errLinkB_hIfThen S m0 Lr lds B)
-    (errLinkB_hIfElse S m0 Lr lds B)
-    (errLinkA_hWhileCond S m0 Lr lds A)
-    (errLinkA_hWhileBody S m0 Lr lds A)
-    (errLinkB_hWhileLoop S m0 Lr lds B)
-    (errLinkB_hForInit S m0 Lr lds B)
-    (errLinkA_hForLoop S m0 Lr lds A)
-    (errLinkA_hRet S m0 Lr lds A)
-    (errLinkB_hFlCond S m0 Lr lds B)
-    (errLinkB_hFlBody S m0 Lr lds B)
-    (errLinkB_hFlStep S m0 Lr lds B)
-    (errLinkA_hFlLoop S m0 Lr lds A)
-    (errLinkA_hSeqHead S m0 Lr lds A)
-    (errLinkB_hSeqTail S m0 Lr lds B)
-    hTopAbrupt
+Only executable leaf constructors need machine reachability.  Propagation
+constructors reuse their recursive `ErrHalts` result inside `errFamilyClosed`.
+The binary leaf is cause-indexed by `BinaryErrReach`; top-level abrupt
+completion has its own direct `interp_run` path. -/
 
-/-! ## 3. `ErrWork` — the whole error-side residual, one named record -/
-
-/-- **The error-side remaining work.**  Named fields only: the shared-bundle
-inputs `I`, the spill-seg reflection parameters `m0A`/`Lr`/`lds`, the two
-GENERATED arm-linkage collectors (whose fields are the per-premise M4
-`SpillArmPre`/`SetupArmPre` reachability residuals), and the two non-`jal`
-passthroughs. -/
+/- The complete remaining error-side work. -/
+/- Obsolete constant-config work bundle.
 structure ErrWork where
-  /-- The shared-bundle inputs (`SnprintfContract` + exit-tail segments). -/
+  /-- Shared `runtime_error` and exit-tail inputs. -/
   I : ErrSharedInputs
-  /-- The spill/setup seg reflection memory. -/
-  m0A : Std.ExtHashMap Nat (BitVec 8)
-  /-- The spill/setup seg register pin list. -/
-  Lr : GRegs
-  /-- The spill/setup seg load byte-lists. -/
-  lds : List (List (BitVec 8))
-  /-- **OPEN (M4)** — the 16 Family-A (spill-arm) arm-linkage residuals. -/
-  A : ErrArmLinks I.toShared m0A Lr lds
-  /-- **OPEN (M4)** — the 26 Family-B (setup-arm) arm-linkage residuals. -/
-  B : ErrArmLinksB I.toShared m0A Lr lds
-  /-- **OPEN** — the 43rd site: dangling closure address (no `jal` site decoded;
-  `CallErr.badClosure`). -/
-  hBadClosure : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Vsa.While.Addr)
-    (vs : List Vsa.While.Value), st.store.closures[a]? = none → ErrHalts c
-  /-- **OPEN** — the top-level abrupt route (`TopAbrupt p` → exit 70). -/
-  hTopAbrupt : ∀ (p : Vsa.While.Program) (c : Config),
-    Vsa.While.TopAbrupt p → ErrHalts c
+  /-- The ten named executable leaves plus cause-indexed binary failures. -/
+  leaves : ErrLeafLinks I.toShared
+  /-- A dangling closure is impossible for a store created by the executable;
+  it remains a specification-side adequacy obligation. -/
+  hBadClosure : ∀ (c : Config) (st : SpecSt) (d : Nat) (a : Addr)
+    (vs : List Value), st.store.closures[a]? = none → ErrHalts c
+  /-- Direct `interp_run` handling of top-level abrupt status; no error-site
+  `jal` occurs on this path. -/
+  hTopAbrupt : ∀ (p : Program) (c : Config), InterpRunAbruptPath p c
 
-/-- The error family from the one `ErrWork` record. -/
+/-- Assemble the error family from exactly the faithful residual surface. -/
 theorem errFamily_ofWork (Ly : Vsa.Refine.Layout) (W : ErrWork) :
     Vsa.Sim.InterpSimBundle.ErrFamily Ly :=
-  errFamily_ofArmLinks Ly W.I.toShared W.m0A W.Lr W.lds W.A W.B
-    W.hBadClosure W.hTopAbrupt
+  errFamilyClosed_ofLinks Ly W.I.toShared W.leaves W.hBadClosure W.hTopAbrupt
+-/
+
+/-- Indexed error work for one actual loaded program/config pair.  The
+`hCallTooMany` field of `cases` is fixed to the compiled child seam. -/
+structure IndexedErrProgramInputs (p : Program) (c : Config) : Type where
+  I : ErrSharedInputs
+  hEval : ∀ st d env e st' v, EvalE st d env e st' v →
+    EvalIH st d env e st' v
+  hCallee : ∀ st d env f args
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sp r sret aEnv aExpr : BitVec 64),
+    CallCalleeStage I.toShared.g N A SL φf φc st d env f args
+      sp r sret aEnv aExpr I.toShared.m0
+  hGuard : ∀ st st' d env callNode f args fv,
+    CallTooManyStage I.toShared st st' d env callNode f args fv
+  cases : ErrorCasesI I.toShared.g I.toShared.m0
+    (callTooManyCase_indexed I.toShared hEval hCallee hGuard)
+  entry : ErrorProgramEntry I.toShared.g I.toShared.m0 p c
+  topAbrupt : TopAbrupt p → ErrHalts c
+
+def IndexedErrProgramInputs.toWork {p : Program} {c : Config}
+    (W : IndexedErrProgramInputs p c) : ErrorProgramWork p c where
+  g := W.I.toShared.g
+  m0 := W.I.toShared.m0
+  hCallTooMany := callTooManyCase_indexed W.I.toShared W.hEval W.hCallee W.hGuard
+  cases := W.cases
+  entry := W.entry
+  topAbrupt := W.topAbrupt
+
+/-- The complete indexed error work, selected after `Loaded` fixes the actual
+program and machine entry. -/
+structure ErrWork (L : Vsa.Refine.Layout) : Type where
+  program : ∀ (p : Program) (c : Config), Vsa.Refine.Loaded L p c →
+    IndexedErrProgramInputs p c
+
+/-- Assemble the unchanged public error family from indexed work. -/
+theorem errFamily_ofWork (L : Vsa.Refine.Layout) (W : ErrWork L) :
+    Vsa.Sim.InterpSimBundle.ErrFamily L :=
+  Vsa.Sim.InterpSimBundle.errFamily_of_sites L
+    (fun p c hLoaded => (W.program p c hLoaded).toWork)
 
 #print axioms ErrSharedInputs.toShared
-#print axioms errFamily_ofArmLinks
 #print axioms errFamily_ofWork
 
 end Vsa.Sim

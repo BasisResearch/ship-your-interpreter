@@ -643,6 +643,31 @@ def uimm (i : MInstr) : Int :=
 /-- Shift amount = word bits 25..20 (6-bit for RV64 register-immediate shifts). -/
 def shamt (i : MInstr) : Nat := ((i.word >>> 20) &&& 0x3f).toNat
 
+/-- Sign-extended I-type immediate (bits 31..20) of a raw word. -/
+def immI (w : BitVec 32) : Int :=
+  let u := ((w >>> 20) &&& 0xfff).toNat
+  if u ≥ 2048 then (u : Int) - 4096 else (u : Int)
+
+/-- Register-producing encodings omitted by `decodeM`.
+
+`mkLine` deliberately retains the raw word when decoding fails, but fills the
+decoded fields with a dummy `addi x0,x0,0`.  Recover both the destination and
+operands from the raw word here.  Otherwise straight-line reflection silently
+drops `sltu`/`sltiu`; in particular, `value_bool` fails to normalize its payload
+because its leading `snez a1,a1` is `sltu a1,x0,a1`. -/
+def rawUnsignedRegVal (rf : Nat → String) (w : BitVec 32) : Option (Nat × String) :=
+  let op := opcode w
+  let f3 := ((w >>> 12) &&& 7).toNat
+  let f7 := ((w >>> 25) &&& 0x7f).toNat
+  let rd := ((w >>> 7) &&& 0x1f).toNat
+  let rs1 := ((w >>> 15) &&& 0x1f).toNat
+  let rs2 := ((w >>> 20) &&& 0x1f).toNat
+  if op == 0x13 && f3 == 3 then
+    some (rd, s!"(ite (bvult {rf rs1} {bv64 (immI w)}) {bvN 1} {bvN 0})")
+  else if op == 0x33 && f3 == 3 && f7 == 0 then
+    some (rd, s!"(ite (bvult {rf rs1} {rf rs2}) {bvN 1} {bvN 0})")
+  else none
+
 /-- rd's new symbolic Int value for a register-producing instruction (over the
 current reg map `rf` and mem term `mem`); `none` for stores/control.  EXACT for
 every register-producing MKind (immediates from the full word; shifts via BV). -/
@@ -694,22 +719,65 @@ def regValExact (rf : Nat → String) (mem : String) (i : MInstr) : Option Strin
 term.  Stores update `mm`; register writes update `rr`; both exact. -/
 def blockState (S : String) (instrs : List MInstr) : String := Id.run do
   let mut mem := s!"(mm {S})"
+  let mut regs := s!"(rr {S})"
+  let mut out := s!"(oo {S})"
+  let mut outLen := s!"(ol {S})"
   let mut rf : Nat → String := fun n => stR S n
-  let mut changed : List Nat := []
   for i in instrs do
-    match i.kind with
-    | .sd => mem := storeBytes mem s!"(bvadd {rf i.rs1} {bv64 (imm12 i.imm)})" (rf i.rs2) 8
-    | .sw => mem := storeBytes mem s!"(bvadd {rf i.rs1} {bv64 (imm12 i.imm)})" (rf i.rs2) 4
-    | .sh => mem := storeBytes mem s!"(bvadd {rf i.rs1} {bv64 (imm12 i.imm)})" (rf i.rs2) 2
-    | .sb => mem := storeBytes mem s!"(bvadd {rf i.rs1} {bv64 (imm12 i.imm)})" (rf i.rs2) 1
-    | _ =>
-      match regValExact rf mem i with
-      | some v => if i.rd != 0 then do
-                    let old := rf; rf := (fun n => if n == i.rd then v else old n)
-                    changed := i.rd :: changed
-      | none => pure ()
-  let regsArr := changed.eraseDups.foldl (fun ra n => s!"(store {ra} {bvN n} {rf n})") s!"(rr {S})"
-  return s!"(mst {mem} {regsArr})"
+    match rawUnsignedRegVal rf i.word with
+    | some (rd, v) =>
+      if rd != 0 then do
+        let old := rf; rf := (fun n => if n == rd then v else old n)
+        regs := s!"(store {regs} {bvN rd} {v})"
+    | none =>
+      match i.kind with
+      | .sd | .sw | .sh | .sb =>
+        let width : Nat := match i.kind with | .sd => 8 | .sw => 4 | .sh => 2 | _ => 1
+        let addr := s!"(bvadd {rf i.rs1} {bv64 (imm12 i.imm)})"
+        let data := rf i.rs2
+        let device :=
+          if width == 8 then s!"(= {addr} {bvN 0x8001ad00})"
+          else if width == 4 then
+            s!"(or (= {addr} {bvN 0x8001ad00}) (= {addr} {bvN 0x8001ad04}))"
+          else "false"
+        let direct64 := s!"(and (= {addr} {bvN 0x8001ad00}) (= {bvN width} {bvN 8}))"
+        let putchar :=
+          if width == 8 then
+            s!"(and {direct64} (= (bvand {data} {bvN 0xffff000000000000}) {bvN 0x0101000000000000}))"
+          else "false"
+        -- Device 0 is the exit/syscall proxy.  Terminal command 0 is a no-op.
+        -- Neither appends to `sailOutput`; the debug `print_endline` calls in
+        -- the Sail source are pure in the executable model.
+        let silent := s!"(and {direct64} (or (= (bvand {data} {bvN 0xff00000000000000}) {bvN 0}) (= (bvand {data} {bvN 0xffff000000000000}) {bvN 0x0100000000000000})))"
+        let other := s!"(and {device} (not {putchar}) (not {silent}))"
+        let mem0 := mem
+        let regs0 := regs
+        let out0 := out
+        let outLen0 := outLen
+        mem := s!"(ite {device} {mem0} {storeBytes mem0 addr data width})"
+        out := s!"(ite {putchar} (store {out0} {outLen0} ((_ extract 7 0) {data})) (ite {other} (htif_other_oo {mem0} {regs0} {out0} {outLen0} {data} {bvN width}) {out0}))"
+        outLen := s!"(ite {putchar} (bvadd {outLen0} {bvN 1}) (ite {other} (htif_other_ol {mem0} {regs0} {out0} {outLen0} {data} {bvN width}) {outLen0}))"
+      | _ =>
+        match regValExact rf mem i with
+        | some v => if i.rd != 0 then do
+                      let old := rf; rf := (fun n => if n == i.rd then v else old n)
+                      regs := s!"(store {regs} {bvN i.rd} {v})"
+        | none => pure ()
+  return s!"(mst {mem} {regs} {out} {outLen})"
+
+-- `snez a1,a1` at the head of `value_bool`.  The proof decoder intentionally
+-- returns `none` for this word, so these checks exercise the raw-word path.
+example : rawUnsignedRegVal (fun n => s!"r{n}") 0x00b035b3#32 =
+    some (11, "(ite (bvult r0 r11) #x0000000000000001 #x0000000000000000)") := by
+  native_decide
+
+example : rawUnsignedRegVal (fun n => s!"r{n}") 0x00153593#32 =
+    some (11, "(ite (bvult r10 #x0000000000000001) #x0000000000000001 #x0000000000000000)") := by
+  native_decide
+
+example : blockState "S" [mkLine 0x800027f8#64 0x00b035b3#32] ≠
+    "(mst (mm S) (rr S) (oo S) (ol S))" := by
+  native_decide
 
 /-- The PC of the terminator that ends the block starting at `pc`. -/
 def termPC (img : Nat → Option (BitVec 8)) (hi : Nat) (stops : List Nat) (pc : Nat) : Nat := Id.run do
@@ -864,6 +932,16 @@ def blockBinds (S : String) (instrs : List MInstr) (k : Nat) :
     k := k + 1
   return (cur, k, binds, writes ++ reads)
 
+/-- Callees small enough to inline exactly in the bounded residual encoder.
+
+These are not assumptions.  The four boxing helpers are decoded from the
+loaded ELF and passed through the same per-instruction transformer as their
+callers.  `value_truthy` is the exact closed form of its twelve-instruction
+branch tree (and is separately checked against concrete helper calls by the
+differential fuzzer). -/
+def exactValueCallees : List Nat :=
+  [0x800027ec, 0x800027f8, 0x8000280c, 0x8000281c, 0x8000282c]
+
 /-- Branch condition over state `S` (exact register comparison). -/
 def branchCondSt (S : String) (w : BitVec 32) : String :=
   let f3 := ((w >>> 12) &&& 7).toNat
@@ -1005,11 +1083,6 @@ def pcIdx : Nat := 32
 /-- The PC of state term `S`. -/
 def stPC (S : String) : String := stR S pcIdx
 
-/-- Sign-extended I-type immediate (bits 31..20) of a raw word. -/
-def immI (w : BitVec 32) : Int :=
-  let u := ((w >>> 20) &&& 0xfff).toNat
-  if u ≥ 2048 then (u : Int) - 4096 else (u : Int)
-
 /-- Register-producing encodings the proof's `decodeM` table does not carry.
 
 Over this image that is exactly the UNSIGNED set-less-than pair — `sltiu`
@@ -1019,17 +1092,7 @@ them here rather than falling back to the opaque successor makes the whole
 region's register effect EXACT.  Unsigned comparison goes through the bitvector
 theory, like every other unsigned operation in this file. -/
 def rawRegVal (S : String) (w : BitVec 32) : Option (Nat × String) :=
-  let op := opcode w
-  let f3 := ((w >>> 12) &&& 7).toNat
-  let f7 := ((w >>> 25) &&& 0x7f).toNat
-  let rd := ((w >>> 7) &&& 0x1f).toNat
-  let rs1 := ((w >>> 15) &&& 0x1f).toNat
-  let rs2 := ((w >>> 20) &&& 0x1f).toNat
-  if op == 0x13 && f3 == 3 then
-    some (rd, s!"(ite (bvult {stR S rs1} {bv64 (immI w)}) {bvN 1} {bvN 0})")
-  else if op == 0x33 && f3 == 3 && f7 == 0 then
-    some (rd, s!"(ite (bvult {stR S rs1} {stR S rs2}) {bvN 1} {bvN 0})")
-  else none
+  rawUnsignedRegVal (fun n => stR S n) w
 
 /-- Is this word's effect modelled EXACTLY?
 
@@ -1055,14 +1118,14 @@ def stepArm (img : Nat → Option (BitVec 8)) (lo hi : Nat) (S : String) (p : Na
     String × List String × Bool := Id.run do
   let w := wordAt img p
   let setPC (st : String) (v : String) : String :=
-    s!"(mst (mm {st}) (store (rr {st}) {bvN pcIdx} {v}))"
+    s!"(mst (mm {st}) (store (rr {st}) {bvN pcIdx} {v}) (oo {st}) (ol {st}))"
   if !(isTerm w) then
     let base := blockState S [mkLine (BitVec.ofNat 64 p) w]
     if modelled p w then return (setPC base (bvN (p+4)), [], true)
     else match rawRegVal S w with
     | some (rd, v) =>
       let regs := if rd == 0 then s!"(rr {S})" else s!"(store (rr {S}) {bvN rd} {v})"
-      return (s!"(mst (mm {S}) (store {regs} {bvN pcIdx} {bvN (p+4)}))", [], true)
+      return (s!"(mst (mm {S}) (store {regs} {bvN pcIdx} {bvN (p+4)}) (oo {S}) (ol {S}))", [], true)
     | none =>
       -- unmodelled: the SHARED opaque successor (the state carries the PC, so
       -- distinct sites can still behave distinctly).  Over-approximate, sound.
@@ -1073,20 +1136,20 @@ def stepArm (img : Nat → Option (BitVec 8)) (lo hi : Nat) (S : String) (p : Na
   | Term.jal rd tgt =>
     if lo ≤ tgt && tgt < hi then
       let r1 := if rd == 0 then s!"(rr {S})" else s!"(store (rr {S}) {bvN rd} {bvN (p+4)})"
-      return (s!"(mst (mm {S}) (store {r1} {bvN pcIdx} {bvN tgt}))", [], true)
+      return (s!"(mst (mm {S}) (store {r1} {bvN pcIdx} {bvN tgt}) (oo {S}) (ol {S}))", [], true)
     else
       -- out-of-region call: the callee's summary, then land after the call site
       let sym := s!"callee_{tgt}"
       let st := s!"({sym} {S})"
       let r1 := if rd == 0 then s!"(rr {st})" else s!"(store (rr {st}) {bvN rd} {bvN (p+4)})"
-      return (s!"(mst (mm {st}) (store {r1} {bvN pcIdx} {bvN (p+4)}))", [sym], true)
+      return (s!"(mst (mm {st}) (store {r1} {bvN pcIdx} {bvN (p+4)}) (oo {st}) (ol {st}))", [sym], true)
   | Term.jalr rd rs1 _ =>
     -- EXACT: the target is the computed value with bit 0 cleared.  `ret`
     -- (rd=0, rs1=ra) and the AST-kind computed gotos are the SAME rule here.
     let v := s!"(bvadd {stR S rs1} {bv64 (immI w)})"
     let tgt := s!"(bvand {v} {bv64 (-2)})"
     let r1 := if rd == 0 then s!"(rr {S})" else s!"(store (rr {S}) {bvN rd} {bvN (p+4)})"
-    return (s!"(mst (mm {S}) (store {r1} {bvN pcIdx} {tgt}))", [], true)
+    return (s!"(mst (mm {S}) (store {r1} {bvN pcIdx} {tgt}) (oo {S}) (ol {S}))", [], true)
   | Term.sys => return (setPC S (bvN (p+4)), [], true)
 
 /-- Dispatch on the PC by BALANCED BINARY SEARCH rather than a linear `ite`
@@ -1405,17 +1468,63 @@ def groupByPc (as : List Arrival) : List (Nat × List Arrival) := Id.run do
     else out := out ++ [(a.pc, [a])]
   return out
 
+/-- Exact finite transformer for the five value helpers used by the residual
+queries.  The result is `(state, next fresh id, bindings, read/write sites)`.
+
+For the four straight-line boxing helpers, the instructions come from `img` and
+run through `blockBinds`; this is literally the ordinary instruction encoder,
+not a handwritten contract.  `value_truthy` has a small branch tree, whose
+closed form follows the loaded instructions at `0x8000282c..0x80002858`: it
+loads the kind into `a5`, sets `a4` to 1 or 2 along the selected branch, returns
+the bool payload for kind 1, nonzeroness of the int payload for kind 2, and
+nonzeroness of the kind otherwise.  It performs no memory write. -/
+def exactValueCallee (img : Nat → Option (BitVec 8)) (target returnPc : Nat)
+    (S : String) (k : Nat) : Option (String × Nat × List String × List (String × Nat)) :=
+  if target == 0x8000282c then
+    let buf := stR S 10
+    let kind := s!"(ld4s (mm {S}) {buf})"
+    let pay32 := s!"(ld4s (mm {S}) (bvadd {buf} {bvN 8}))"
+    let pay64 := s!"(ld8 (mm {S}) (bvadd {buf} {bvN 8}))"
+    let nzKind := s!"(ite (= {kind} {bvN 0}) {bvN 0} {bvN 1})"
+    let nzPay := s!"(ite (= {pay64} {bvN 0}) {bvN 0} {bvN 1})"
+    let out := s!"(ite (= {kind} {bvN 1}) {pay32} (ite (= {kind} {bvN 2}) {nzPay} {nzKind}))"
+    let a4 := s!"(ite (= {kind} {bvN 1}) {bvN 1} {bvN 2})"
+    let regs := s!"(store (store (store (store (rr {S}) {bvN 15} {kind}) {bvN 14} {a4}) {bvN 10} {out}) {bvN pcIdx} {bvN returnPc})"
+    let nm := s!"i{k}"
+    some (nm, k + 1, [s!"({nm} (mst (mm {S}) {regs} (oo {S}) (ol {S})))"],
+      [(s!"{buf}", 0), (s!"(bvadd {buf} {bvN 8})", 0)])
+  else
+    let stop? :=
+      if target == 0x800027ec then some 0x800027f4
+      else if target == 0x800027f8 then some 0x80002808
+      else if target == 0x8000280c then some 0x80002818
+      else if target == 0x8000281c then some 0x80002828
+      else none
+    match stop? with
+    | none => none
+    | some stop =>
+      let instrs := (List.range ((stop - target) / 4)).map fun n =>
+        let p := target + 4 * n
+        mkLine (BitVec.ofNat 64 p) (wordAt img p)
+      let (body, k', binds, sites) := blockBinds S instrs k
+      let nm := s!"i{k'}"
+      let ret := s!"(mst (mm {body}) (store (rr {body}) {bvN pcIdx} {bvN returnPc}) (oo {body}) (ol {body}))"
+      some (nm, k' + 1, binds ++ [s!"({nm} {ret})"], sites)
+
 /-- The block starting at `pc`: its straight-line effect (the term to bind to
-`bv`), then its successors and exits expressed OVER `bv`.
+`bv`), then its successors and exits expressed OVER `bv`, plus the exact named
+state immediately before its terminator when it has one.
 
 Taking the bound variable as a parameter is what keeps the encoding linear: a
 branch condition, a computed-goto target and a call's argument all read the
 block's exit state, and inlining that term into each of (say) thirteen dispatch
 guards is what turns a 200-byte block into a megabyte. -/
-def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
+def stepBlockWithTermCheckpoint (img : Nat → Option (BitVec 8)) (lo hi : Nat)
+    (stops : List Nat)
     (fstarts noret : List Nat) (retExit : Bool) (pc : Nat) (g sv bv : String) (k : Nat) :
     String × List (Nat × String) × List (String × String) × List String
-      × List String × Nat × List (String × Nat) × List (String × Nat) := Id.run do
+      × List String × Nat × List (String × Nat) × List (String × Nat)
+      × Option (Nat × String) := Id.run do
   -- Straight-line run to the terminator.
   --
   -- `mkLine` falls back to `addi x0, x0, 0` for a word it does not decode, so a
@@ -1449,7 +1558,7 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       | some (rd, e) =>
         let nv := s!"u{k}"
         ibinds := ibinds ++
-          [s!"({nv} (mst (mm {st}) (store (rr {st}) {bvN rd} {e})))"]
+          [s!"({nv} (mst (mm {st}) (store (rr {st}) {bvN rd} {e}) (oo {st}) (ol {st})))"]
         st := nv; k := k + 1
       | none =>
         let nv := s!"u{k}"
@@ -1462,8 +1571,12 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
   ibinds := ibinds ++ ibF
   wr := wr ++ wrF
   -- off the region, or arrived at the span's declared exit PC: EXIT
-  if p ≥ hi || stops.contains p then return (st, [], [(g, bv)], [], ibinds, k, wr, [])
+  if p ≥ hi || stops.contains p then return (st, [], [(g, bv)], [], ibinds, k, wr, [], none)
   let w := wordAt img p
+  -- `st` is the exact, named state immediately before the terminator.  Keep it
+  -- available to callers: a call/branch inside a basic block is a semantic
+  -- boundary even though it is not itself a block entry.
+  let termCheckpoint := some (p, st)
   let inR := fun (q : Nat) => lo ≤ q && q < hi && !(stops.contains q)
   match decodeTerm p w with
   | Term.branch tgt =>
@@ -1472,7 +1585,7 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
     let f := s!"(and {g} (not {c}))"
     let succs := (if inR tgt then [(tgt, t)] else []) ++ (if inR (p+4) then [(p+4, f)] else [])
     let exits := (if inR tgt then [] else [(t, bv)]) ++ (if inR (p+4) then [] else [(f, bv)])
-    return (st, succs, exits, [], ibinds, k, wr, [])
+    return (st, succs, exits, [], ibinds, k, wr, [], termCheckpoint)
   | Term.jal rd tgt =>
     if noret.contains tgt then
       -- TRANSFER TO A FUNCTION THAT NEVER RETURNS (a `jal ra, exit` call, or a
@@ -1490,7 +1603,7 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       -- which is what the Lean development says too: the abort path routes to
       -- `RuntimeErrorAt`/`Halts` through the error-site seam
       -- (`Vsa/Sim/ErrorSiteJal.lean`) and is never asked a frame post.
-      return (st, [], [], [], ibinds, k, wr, [(g, p)])
+      return (st, [], [], [], ibinds, k, wr, [(g, p)], termCheckpoint)
     if rd == 1 then
       -- CALL (whatever the direction): the callee's summary, then the next PC.
       --
@@ -1511,11 +1624,22 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       let sym := s!"callee_{tgt}"
       let ra := s!"ra{k}"
       let ib := ibinds ++
-        [s!"({ra} (mst (mm {st}) (store (rr {st}) {bvN 1} {bvN (p+4)})))"]
+        [s!"({ra} (mst (mm {st}) (store (rr {st}) {bvN 1} {bvN (p+4)}) (oo {st}) (ol {st})))"]
       let k2 := k + 1
-      let st' := s!"({sym} {ra})"
-      if inR (p+4) then return (st', [(p+4, g)], [], [sym], ib, k2, wr, [])
-      else return (st', [], [(g, bv)], [sym], ib, k2, wr, [])
+      match exactValueCallee img tgt (p+4) ra k2 with
+      | some (st', k3, helperBinds, helperSites) =>
+        -- Exact inline helper: no uninterpreted summary and therefore no
+        -- unproved contract.  Its stores/loads join the guarded footprint
+        -- manifest under the caller block's path guard.
+        let allBinds := ib ++ helperBinds
+        let allSites := wr ++ helperSites
+        if inR (p+4) then
+          return (st', [(p+4, g)], [], [], allBinds, k3, allSites, [], termCheckpoint)
+        else return (st', [], [(g, bv)], [], allBinds, k3, allSites, [], termCheckpoint)
+      | none =>
+        let st' := s!"({sym} {ra})"
+        if inR (p+4) then return (st', [(p+4, g)], [], [sym], ib, k2, wr, [], termCheckpoint)
+        else return (st', [], [(g, bv)], [sym], ib, k2, wr, [], termCheckpoint)
     else if inR tgt && fstarts.contains tgt && tgt != lo then
       -- TAIL CALL.  A `j` whose target is a FUNCTION ENTRY is not intra-function
       -- control flow: it transfers to a fresh frame that returns to OUR caller,
@@ -1525,9 +1649,9 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       -- store downstream lands wherever the model likes.  This is the proof's
       -- `FnSummary.tailJump` seam.
       let sym := s!"callee_{tgt}"
-      return (s!"({sym} {st})", [], [(g, bv)], [sym], ibinds, k, wr, [])
-    else if inR tgt then return (st, [(tgt, g)], [], [], ibinds, k, wr, [])
-    else return (st, [], [(g, bv)], [], ibinds, k, wr, [])
+      return (s!"({sym} {st})", [], [(g, bv)], [sym], ibinds, k, wr, [], termCheckpoint)
+    else if inR tgt then return (st, [(tgt, g)], [], [], ibinds, k, wr, [], termCheckpoint)
+    else return (st, [], [(g, bv)], [], ibinds, k, wr, [], termCheckpoint)
   | Term.jalr rd rs1 im =>
     if rd == 1 then
       -- indirect CALL through a register: one named opaque summary per site.
@@ -1535,11 +1659,11 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       let sym := s!"icall_{p}"
       let ra := s!"ra{k}"
       let ib := ibinds ++
-        [s!"({ra} (mst (mm {st}) (store (rr {st}) {bvN 1} {bvN (p+4)})))"]
+        [s!"({ra} (mst (mm {st}) (store (rr {st}) {bvN 1} {bvN (p+4)}) (oo {st}) (ol {st})))"]
       let k2 := k + 1
       let st' := s!"({sym} {ra})"
-      if inR (p+4) then return (st', [(p+4, g)], [], [sym], ib, k2, wr, [])
-      else return (st', [], [(g, bv)], [sym], ib, k2, wr, [])
+      if inR (p+4) then return (st', [(p+4, g)], [], [sym], ib, k2, wr, [], termCheckpoint)
+      else return (st', [], [(g, bv)], [sym], ib, k2, wr, [], termCheckpoint)
     else if rs1 == 1 && im == 0 then
       -- `ret`.  An EXIT ARRIVAL only when the span's declared stop is this
       -- return -- the whole-arm convention, stop = the instruction after the
@@ -1550,8 +1674,8 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       -- "arrivals" were returns whose epilogue had already put `sp` back, so
       -- all three of its register/memory posts were refuted by a state that
       -- never occurs there.  Record it as an excluded path instead.
-      if retExit then return (st, [], [(g, bv)], [], ibinds, k, wr, [])
-      else return (st, [], [], [], ibinds, k, wr, [(g, p)])
+      if retExit then return (st, [], [(g, bv)], [], ibinds, k, wr, [], termCheckpoint)
+      else return (st, [], [], [], ibinds, k, wr, [(g, p)], termCheckpoint)
     else match dispatchArms img p with
     | some arms =>
       -- ground jump table: one guarded successor per arm, over the BOUND state.
@@ -1564,13 +1688,24 @@ def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
       for a in arms do
         let ga := s!"(and {g} (= {tgtE} {bvN a}))"
         if inR a then succs := succs ++ [(a, ga)] else exits := exits ++ [(ga, bv)]
-      return (st, succs, exits, [], ibinds, k, wr, [])
+      return (st, succs, exits, [], ibinds, k, wr, [], termCheckpoint)
     | none =>
       -- an unlisted computed goto: an opaque per-site summary, then EXIT.
       let sym := s!"idisp_{p}"
-      return (s!"({sym} {st})", [], [(g, bv)], [sym], ibinds, k, wr, [])
+      return (s!"({sym} {st})", [], [(g, bv)], [sym], ibinds, k, wr, [], termCheckpoint)
   | Term.sys =>
-    if inR (p+4) then return (st, [(p+4, g)], [], [], ibinds, k, wr, []) else return (st, [], [(g, bv)], [], ibinds, k, wr, [])
+    if inR (p+4) then return (st, [(p+4, g)], [], [], ibinds, k, wr, [], termCheckpoint)
+    else return (st, [], [(g, bv)], [], ibinds, k, wr, [], termCheckpoint)
+
+/-- Compatibility wrapper for callers that do not consume internal terminator
+checkpoints. -/
+def stepBlock (img : Nat → Option (BitVec 8)) (lo hi : Nat) (stops : List Nat)
+    (fstarts noret : List Nat) (retExit : Bool) (pc : Nat) (g sv bv : String) (k : Nat) :
+    String × List (Nat × String) × List (String × String) × List String
+      × List String × Nat × List (String × Nat) × List (String × Nat) :=
+  let (st, succs, exits, sums, binds, k', writes, halts, _) :=
+    stepBlockWithTermCheckpoint img lo hi stops fstarts noret retExit pc g sv bv k
+  (st, succs, exits, sums, binds, k', writes, halts)
 
 /-- One BMC round: merge the frontier by PC, run each merged arrival's block, and
 collect the new frontier + the exits.  Every merged state, every block outcome
@@ -1704,7 +1839,8 @@ block, which fails only if a cycle survives the loop cut. -/
 def reflectBmcTopo (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : List Nat)
     (fstarts noret : List Nat) (retExit : Bool) (_rounds : Nat) (s0 : String) :
     String × List String × List String × Bool × Nat × List (String × String × Nat)
-      × List (Nat × Nat × String) × List (String × Nat) × String := Id.run do
+      × List (Nat × Nat × String) × List (String × Nat) × String
+      × List (Nat × String × String) := Id.run do
   -- THE ENTRY IS NEVER SUMMARISED, even when it is a loop header.  A loop
   -- obligation is emitted with `entry = h`, and summarising `h` on its first
   -- arrival makes `fbody` just `loop_h_ih S0`: the body is never reflected and
@@ -1760,6 +1896,10 @@ def reflectBmcTopo (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops 
   let mut writes : List (String × String × Nat) := []
   let mut dispGuards : List (Nat × Nat × String) := []
   let mut halts : List (String × Nat) := []
+  -- One guarded, merged state at each reflected block entry and one exact state
+  -- immediately before each internal terminator.  Residual-specific premises
+  -- use these checkpoints instead of unstable generated binding names.
+  let mut checkpoints : List (Nat × String × String) := []
   let mut backAs : List Arrival := []
   let mut k := 0
   for pc in order do
@@ -1771,6 +1911,7 @@ def reflectBmcTopo (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops 
       sums := (lsum :: sums).eraseDups
       let gv := s!"g{k}"; let mv := s!"m{k}"; let sv := s!"m{k+1}"
       binds := binds ++ [s!"({gv} {g0})", s!"({mv} {st0})", s!"({sv} ({lsum} {mv}))"]
+      checkpoints := checkpoints ++ [(pc, gv, mv)]
       k := k + 2
       -- WHICH exit edge the loop took.  A summarised loop hands the same arrival
       -- guard `gv` to every one of its exits, so two exits downstream of the
@@ -1810,11 +1951,17 @@ def reflectBmcTopo (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops 
     else
     let gv := s!"g{k}"; let sv := s!"m{k}"; let bv := s!"b{k}"
     binds := binds ++ [s!"({gv} {g0})", s!"({sv} {st0})"]
+    checkpoints := checkpoints ++ [(pc, gv, sv)]
     k := k + 1
-    let (st1, succs, exs, ss, ibinds, k', wr, hl) :=
-      stepBlock img lo hi stops fstarts noret retExit pc gv sv bv k
+    let (st1, succs, exs, ss, ibinds, k', wr, hl, termCheckpoint) :=
+      stepBlockWithTermCheckpoint img lo hi stops fstarts noret retExit pc gv sv bv k
     k := k'
     binds := binds ++ ibinds ++ [s!"({bv} {st1})"]
+    match termCheckpoint with
+    | some (term, termState) =>
+      if !(checkpoints.any (fun t => t.1 == term)) then
+        checkpoints := checkpoints ++ [(term, gv, termState)]
+    | none => pure ()
     sums := (sums ++ ss).eraseDups
     writes := writes ++ wr.map (fun (a, w) => (gv, a, w))
     halts := halts ++ hl
@@ -1869,7 +2016,7 @@ def reflectBmcTopo (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops 
     | [(g, _)] => g
     | _ => "(or " ++ String.intercalate " " (exits.map (fun (g, _) => g)) ++ ")"
   return (exitTerm, binds, sums, complete, order.length, writes, dispGuards, halts,
-          exitGuard)
+          exitGuard, checkpoints)
 
 /-- Per-round frontier PCs — the diagnostic for "why did this span not complete". -/
 def bmcTrace (img : Nat → Option (BitVec 8)) (lo hi entry : Nat) (stops : List Nat)
@@ -2024,12 +2171,22 @@ def smtPreamble : String := "(set-logic ALL)
 ; Every span reflects to a FINITE term, so in pure QF_ABV the whole thing is
 ; bit-blastable.
 ; ---------------------------------------------------------------------------
-(declare-datatypes () ((MState (mst (mm (Array (_ BitVec 64) (_ BitVec 8))) (rr (Array (_ BitVec 64) (_ BitVec 64)))))))
+(declare-datatypes () ((MState (mst
+  (mm (Array (_ BitVec 64) (_ BitVec 8)))
+  (rr (Array (_ BitVec 64) (_ BitVec 64)))
+  (oo (Array (_ BitVec 64) (_ BitVec 8)))
+  (ol (_ BitVec 64))))))
 ; A word outside `decodeM`'s coverage that `rawRegVal` also does not give exact
 ; semantics for.  Uninterpreted, so it OVER-approximates: a post proved through
 ; it holds whatever the instruction does.  The alternative -- `mkLine`'s
 ; `addi x0, x0, 0` fallback -- is a silent lie.
 (declare-fun unmodelled_step (MState) MState)
+; A non-putchar or partial-width HTIF store may change the emulator's buffered
+; diagnostic output through platform state not represented by GPRs/memory.
+; Keep that output unconstrained.  The program's 8-byte putchar command is
+; modelled exactly by `blockState` below.
+(declare-fun htif_other_oo ((Array (_ BitVec 64) (_ BitVec 8)) (Array (_ BitVec 64) (_ BitVec 64)) (Array (_ BitVec 64) (_ BitVec 8)) (_ BitVec 64) (_ BitVec 64) (_ BitVec 64)) (Array (_ BitVec 64) (_ BitVec 8)))
+(declare-fun htif_other_ol ((Array (_ BitVec 64) (_ BitVec 8)) (Array (_ BitVec 64) (_ BitVec 64)) (Array (_ BitVec 64) (_ BitVec 8)) (_ BitVec 64) (_ BitVec 64) (_ BitVec 64)) (_ BitVec 64))
 (define-fun ld1 ((m (Array (_ BitVec 64) (_ BitVec 8))) (a (_ BitVec 64))) (_ BitVec 64) ((_ zero_extend 56) (select m a)))
 (define-fun ld2 ((m (Array (_ BitVec 64) (_ BitVec 8))) (a (_ BitVec 64))) (_ BitVec 64) ((_ zero_extend 48) (concat (select m (bvadd a #x0000000000000001)) (select m a))))
 (define-fun ld4 ((m (Array (_ BitVec 64) (_ BitVec 8))) (a (_ BitVec 64))) (_ BitVec 64) ((_ zero_extend 32) (concat (select m (bvadd a #x0000000000000003)) (select m (bvadd a #x0000000000000002)) (select m (bvadd a #x0000000000000001)) (select m a))))
@@ -2037,7 +2194,54 @@ def smtPreamble : String := "(set-logic ALL)
 (define-fun ld1s ((m (Array (_ BitVec 64) (_ BitVec 8))) (a (_ BitVec 64))) (_ BitVec 64) ((_ sign_extend 56) (select m a)))
 (define-fun ld2s ((m (Array (_ BitVec 64) (_ BitVec 8))) (a (_ BitVec 64))) (_ BitVec 64) ((_ sign_extend 48) (concat (select m (bvadd a #x0000000000000001)) (select m a))))
 (define-fun ld4s ((m (Array (_ BitVec 64) (_ BitVec 8))) (a (_ BitVec 64))) (_ BitVec 64) ((_ sign_extend 32) (concat (select m (bvadd a #x0000000000000003)) (select m (bvadd a #x0000000000000002)) (select m (bvadd a #x0000000000000001)) (select m a))))
-(define-fun w32 ((v (_ BitVec 64))) (_ BitVec 64) ((_ sign_extend 32) ((_ extract 31 0) v)))"
+(define-fun w32 ((v (_ BitVec 64))) (_ BitVec 64) ((_ sign_extend 32) ((_ extract 31 0) v)))
+; Abstract semantic bridge for NUL-terminated strings.  These two functions do
+; not implement strcmp.  Ground callee contracts tie the loaded helper's result
+; to the corresponding Lean CStr equality/order relation at each application.
+; Keeping the strings abstract avoids a false finite bound on their length.
+(declare-fun lean_cstring_eq ((Array (_ BitVec 64) (_ BitVec 8)) (_ BitVec 64) (_ BitVec 64)) Bool)
+(declare-fun lean_cstring_cmp3 ((Array (_ BitVec 64) (_ BitVec 8)) (_ BitVec 64) (_ BitVec 64)) (_ BitVec 64))
+; Abstract Store.get? bridge for the linked-list Env representation.  These
+; symbols are never asserted universally.  The Houdini driver instantiates the
+; proved env_get/env_set contracts at each concrete summary application, and
+; the independent trace checker decodes the Env chain without consulting them.
+(declare-fun lean_env_lookup_found
+  ((Array (_ BitVec 64) (_ BitVec 8)) (_ BitVec 64) (_ BitVec 64)) Bool)
+(declare-fun lean_env_lookup_slot
+  ((Array (_ BitVec 64) (_ BitVec 8)) (_ BitVec 64) (_ BitVec 64)) (_ BitVec 64))
+(define-fun sign3 ((v (_ BitVec 64))) (_ BitVec 64)
+  (ite (bvslt v #x0000000000000000) #xffffffffffffffff
+    (ite (= v #x0000000000000000) #x0000000000000000 #x0000000000000001)))
+; Machine Value representation of Lean Value.equal.  The string case is the
+; abstract CStr bridge above; native equality intentionally reads the function
+; pointer at +16, not the displayed name at +8.
+(define-fun lean_value_equal
+  ((m (Array (_ BitVec 64) (_ BitVec 8))) (a (_ BitVec 64)) (b (_ BitVec 64)))
+  (_ BitVec 64)
+  (ite (not (= (ld4 m a) (ld4 m b))) #x0000000000000000
+    (ite (= (ld4 m a) #x0000000000000000) #x0000000000000001
+    (ite (= (ld4 m a) #x0000000000000001)
+      (ite (= (ld4 m (bvadd a #x0000000000000008))
+              (ld4 m (bvadd b #x0000000000000008)))
+        #x0000000000000001 #x0000000000000000)
+    (ite (= (ld4 m a) #x0000000000000002)
+      (ite (= (ld8 m (bvadd a #x0000000000000008))
+              (ld8 m (bvadd b #x0000000000000008)))
+        #x0000000000000001 #x0000000000000000)
+    (ite (= (ld4 m a) #x0000000000000003)
+      (ite (lean_cstring_eq m
+              (ld8 m (bvadd a #x0000000000000008))
+              (ld8 m (bvadd b #x0000000000000008)))
+        #x0000000000000001 #x0000000000000000)
+    (ite (= (ld4 m a) #x0000000000000004)
+      (ite (= (ld8 m (bvadd a #x0000000000000008))
+              (ld8 m (bvadd b #x0000000000000008)))
+        #x0000000000000001 #x0000000000000000)
+    (ite (= (ld4 m a) #x0000000000000005)
+      (ite (= (ld8 m (bvadd a #x0000000000000010))
+              (ld8 m (bvadd b #x0000000000000010)))
+        #x0000000000000001 #x0000000000000000)
+      #x0000000000000000))))))))"
 
 /-- Declarations for a summary symbol (plus its `loopcond` when it is a loop). -/
 def summaryDecls (syms : List String) : String :=
@@ -2104,7 +2308,7 @@ def lemmaModeSmt (lo hi : Nat) : IO (String × List String) := do
   let exitS := wrapLets binds ev
   let syms := summaryClosure img summaries []
   let decls := summaryDecls syms
-  let txt := s!"{smtPreamble}\n{decls}\n(declare-const SL_lo Int)\n(declare-const SL_hi Int)\n(declare-const A_lo Int)\n(declare-const A_hi Int)\n(declare-const s0 MState)\n; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {exitS})\n(define-fun mem_exit () (Array Int (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
+  let txt := s!"{smtPreamble}\n{decls}\n(declare-const SL_lo Int)\n(declare-const SL_hi Int)\n(declare-const A_lo Int)\n(declare-const A_hi Int)\n(declare-const s0 MState)\n; mined clause set for every summary\n; @@ASSUME@@\n(define-fun state_exit () MState {exitS})\n(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) (mm state_exit))\n; @@POST@@\n"
   return (txt, syms)
 
 /-- Assemble the complete EXACT reflected Steps SMT for span `[lo,hi)`. -/
@@ -2121,21 +2325,9 @@ def reflectExactSmt (lo hi : Nat) : IO String := do
        -- loop's several exits share one guard and the exit merge is ambiguous
        s!"(declare-fun loopexit_{s.drop 5} (MState) (_ BitVec 64))"]
     else [f]))
-  let preamble := "(set-logic ALL)
-(declare-datatypes () ((MState (mst (mm (Array Int (_ BitVec 8))) (rr (Array Int Int))))))
-(define-fun ld1 ((m (Array Int (_ BitVec 8))) (a Int)) Int (bv2int (select m a)))
-(define-fun ld4 ((m (Array Int (_ BitVec 8))) (a Int)) Int (+ (bv2int (select m a)) (* 256 (bv2int (select m (+ a 1)))) (* 65536 (bv2int (select m (+ a 2)))) (* 16777216 (bv2int (select m (+ a 3))))))
-(define-fun ld2 ((m (Array Int (_ BitVec 8))) (a Int)) Int (+ (bv2int (select m a)) (* 256 (bv2int (select m (+ a 1))))))
-(define-fun ld8 ((m (Array Int (_ BitVec 8))) (a Int)) Int (+ (ld4 m a) (* 4294967296 (ld4 m (+ a 4)))))
-(define-fun shl_i ((a Int) (b Int)) Int (bv2int (bvshl ((_ int2bv 64) a) ((_ int2bv 64) b))))
-(define-fun lshr_i ((a Int) (b Int)) Int (bv2int (bvlshr ((_ int2bv 64) a) ((_ int2bv 64) b))))
-(define-fun ashr_i ((a Int) (b Int)) Int (bv2int (bvashr ((_ int2bv 64) a) ((_ int2bv 64) b))))
-(define-fun bvor_i ((a Int) (b Int)) Int (bv2int (bvor ((_ int2bv 64) a) ((_ int2bv 64) b))))
-(define-fun bvand_i ((a Int) (b Int)) Int (bv2int (bvand ((_ int2bv 64) a) ((_ int2bv 64) b))))
-(define-fun bvxor_i ((a Int) (b Int)) Int (bv2int (bvxor ((_ int2bv 64) a) ((_ int2bv 64) b))))
-(declare-const s0 MState)"
+  let preamble := s!"{smtPreamble}\n(declare-const s0 MState)"
   let axBlock := String.intercalate "\n" axs
-  return s!"{preamble}\n{sumDecls}\n{axBlock}\n(define-fun state_exit () MState {exitS})\n(define-fun mem_exit () (Array Int (_ BitVec 8)) (mm state_exit))\n"
+  return s!"{preamble}\n{sumDecls}\n{axBlock}\n(define-fun state_exit () MState {exitS})\n(define-fun mem_exit () (Array (_ BitVec 64) (_ BitVec 8)) (mm state_exit))\n"
 
 end Vsa.ReflectSpan
 

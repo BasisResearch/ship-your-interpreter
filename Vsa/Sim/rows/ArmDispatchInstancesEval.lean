@@ -26,7 +26,7 @@ Axioms ⊆ {propext, Classical.choice, Quot.sound}.
 
 open LeanRV64DExecutable Sail Vsa
 open Register
-open Vsa.Machine (Config)
+open Vsa.Machine (Config Steps)
 open Vsa.Logic
 open Vsa.RuntimeRepr Vsa.MemRepr Vsa.While Vsa.Alloc Vsa.Sim.Code
 
@@ -73,7 +73,7 @@ theorem callArmDispatch_of_resid
   exact evalArmDispatch_of_slot g N A SL φf φc st d env 9 (0x800031b0#64)
     (.call f args) f 8 16 sp r0 sret aEnv aExpr aChild m0 c
     (by omega) (by omega) (by decide) (by omega)
-    (by cases (hE.mem ▸ hE.expr) with | call hk _ _ _ _ _ => exact hk)
+    (by cases (hE.mem ▸ hE.expr) with | call hk _ _ _ _ _ _ => exact hk)
     hX hE
 
 #print axioms callArmDispatch_of_resid

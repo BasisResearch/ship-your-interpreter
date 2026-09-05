@@ -4,6 +4,7 @@ import Vsa.Sim.EnvDefSpec3
 import Vsa.Sim.StrlenSpec
 import Vsa.Sim.MemcpySpec4
 import Vsa.Sim.MemcpySpecFramed
+import Vsa.Sim.rows.EnvDefineEpilogueCore
 
 /-!
 # `EnvDefCompose` — the composed `env_define` contract (Shape-D)
@@ -111,7 +112,16 @@ def EnvDefFrame (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
   c.σ.regs.get? Register.x2 = some sp ∧ StackOK SL sp headroom ∧
   c.σ.regs.get? Register.x3 = some gpv ∧
   (∀ R, AbiPreserved R = true → c.σ.regs.get? R = gm R) ∧
-  AInv c.σ exts ∧ c.tick < 2
+  AInv c.σ exts ∧ c.tick < 2 ∧ EnvDefineSpillFrame sp gm c
+
+/-- The helper-local frame plus the independent outer-register spill image.
+The live helper ghost and the saved caller snapshot are intentionally distinct. -/
+def EnvDefFrameSaved (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
+    (AInv : MState → List (Nat × Nat) → Prop) (exts : List (Nat × Nat))
+    (sp : BitVec 64) (gm saved : (R : Register) → Option (RegisterType R))
+    (c : Config) : Prop :=
+  EnvDefFrame SL gpv headroom AInv exts sp gm c ∧
+  EnvDefineSavedSpillFrame sp saved c
 
 /-! ## Single-call splices — each `prefix ≫ callee ≫ suffix` over one real contract
 
@@ -119,6 +129,35 @@ Each splice is `callSeg pre callee suf` (`DeriveCallSeg.lean`): the caller prefi
 lands the callee's entry predicate, the real callee contract runs, the caller
 suffix consumes the callee's exit.  The two `Triple.seq`s are the whole content of
 the Shape-D algebra; the callee is threaded, never re-proved. -/
+
+def EnvDefMallocPre {A : Arena} {SL : StackLayout} {gpv : BitVec 64}
+    {headroom maxReq : Nat} (M : MallocContract A SL gpv headroom maxReq)
+    (g : (R : Register) → Option (RegisterType R)) (exts : List (Nat × Nat))
+    (n : Nat) (sp r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (c : Config) : Prop :=
+  GoodState c.σ ∧ c.tick < 2 ∧
+  c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 mallocEntry) ∧
+  c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 n) ∧
+  c.σ.regs.get? Register.x1 = some r ∧ r.toNat % 4 = 0 ∧
+  c.σ.regs.get? Register.x2 = some sp ∧ StackOK SL sp headroom ∧
+  c.σ.regs.get? Register.x3 = some gpv ∧
+  (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧
+  M.AInv c.σ exts ∧ c.σ.mem = m0
+
+def EnvDefMallocPost {A : Arena} {SL : StackLayout} {gpv : BitVec 64}
+    {headroom maxReq : Nat} (M : MallocContract A SL gpv headroom maxReq)
+    (g : (R : Register) → Option (RegisterType R)) (exts : List (Nat × Nat))
+    (n : Nat) (sp r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (c : Config) : Prop :=
+  GoodState c.σ ∧ c.tick < 2 ∧ c.σ.regs.get? Register.PC = some r ∧
+  c.σ.regs.get? Register.x2 = some sp ∧ c.σ.regs.get? Register.x3 = some gpv ∧
+  (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R) ∧
+  ((c.σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧ M.AInv c.σ exts) ∨
+   (∃ p, c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 p) ∧
+     p ≠ 0 ∧ p % 16 = 0 ∧ A.contains p n ∧
+     (∀ e ∈ exts, ExtDisjoint (p, n) e) ∧ M.AInv c.σ ((p, n) :: exts))) ∧
+  (∀ a, ¬ M.privFoot a → ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
+    c.σ.mem[a]? = m0[a]?)
 
 /-- **`strlen` call splice** (`0x80002b1c mv a0,s2 ; 0x80002b20 jal strlen`).
 Prefix marshals `name` into `a0` and lands `strlen_pre`; `strlen_spec` runs;
@@ -167,7 +206,7 @@ theorem envDefStrlenFramed (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
       (fun c => strlen_post rStrlen nameStr m0 c ∧
         EnvDefFrame SL gpv headroom AInv exts sp gm c) := by
   intro c ⟨hpre, hFrame⟩
-  obtain ⟨hsp, hstackOK, hgp, hAbi, hAInv, htickF⟩ := hFrame
+  obtain ⟨hsp, hstackOK, hgp, hAbi, hAInv, htickF, hSpills⟩ := hFrame
   -- entry ghost values: gm x2 = sp, gm x3 = gpv (AbiPreserved regs tied to gm at entry)
   have hgm_x2 : gm Register.x2 = some sp := by rw [← hAbi Register.x2 (by decide)]; exact hsp
   have hgm_x3 : gm Register.x3 = some gpv := by rw [← hAbi Register.x3 (by decide)]; exact hgp
@@ -175,7 +214,7 @@ theorem envDefStrlenFramed (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
   have hmem0 : c.σ.mem = m0 := hpre.2.2.1
   obtain ⟨c', hsteps, hpost, hgh', htick'⟩ :=
     strlen_spec_framed namePtr rStrlen nameStr m0 gm c ⟨hpre, hAbi⟩
-  refine ⟨c', hsteps, hpost, ?_, hstackOK, ?_, hgh', ?_, htick'⟩
+  refine ⟨c', hsteps, hpost, ?_, hstackOK, ?_, hgh', ?_, htick', ?_⟩
   · -- x2 = sp: exit ghost gives get? x2 = gm x2 = some sp
     rw [hgh' Register.x2 (by decide)]; exact hgm_x2
   · -- x3 = gpv
@@ -186,6 +225,32 @@ theorem envDefStrlenFramed (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
       rw [hgp, hgh' Register.x3 (by decide), hgm_x3]
     · -- mem agree: both are m0
       intro a; rw [hmem0, hpost.2.2.2.2]
+  · apply EnvDefineSpillFrame.of_mem_eq (c := c) (c' := c')
+      (hpost.2.2.2.2.trans hmem0.symm)
+    exact hSpills
+
+/-- `strlen` preserves the independent outer spill image because it preserves memory. -/
+theorem envDefStrlenFramedSaved (SL : StackLayout) (gpv : BitVec 64)
+    (headroom : Nat) (AInv : MState → List (Nat × Nat) → Prop)
+    (exts : List (Nat × Nat)) (sp : BitVec 64)
+    (gm saved : (R : Register) → Option (RegisterType R))
+    (namePtr rStrlen : BitVec 64) (nameStr : String)
+    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (hAInvStable : ∀ (σa σb : MState),
+      σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
+      (∀ a : Nat, σa.mem[a]? = σb.mem[a]?) → AInv σa exts → AInv σb exts) :
+    Triple
+      (fun c => strlen_pre namePtr rStrlen nameStr m0 c ∧
+        EnvDefFrameSaved SL gpv headroom AInv exts sp gm saved c)
+      (fun c => strlen_post rStrlen nameStr m0 c ∧
+        EnvDefFrameSaved SL gpv headroom AInv exts sp gm saved c) := by
+  intro c ⟨hpre, hframe, hsaved⟩
+  obtain ⟨c', hsteps, hpost, hframe'⟩ :=
+    envDefStrlenFramed SL gpv headroom AInv exts sp gm namePtr rStrlen nameStr m0
+      hAInvStable c ⟨hpre, hframe⟩
+  refine ⟨c', hsteps, hpost, hframe', ?_⟩
+  apply hsaved.of_mem_eq
+  exact hpost.2.2.2.2.trans hpre.2.2.1.symm
 
 /-- **`malloc` call splice** (`0x80002b28 mv a0,s0 ; 0x80002b2c jal malloc`).
 Prefix marshals `len+1` into `a0` and lands `MallocContract.spec`'s entry
@@ -225,6 +290,37 @@ theorem envDefMallocSplice {A : Arena} {SL : StackLayout} {gpv : BitVec 64}
       Q) :
     Triple P Q :=
   callSeg pre (M.spec g exts n sp r m0 hn) suf
+
+/-- The allocator's public-memory frame preserves the exact env_define spill image.
+The only required layout facts say allocator metadata excludes the helper text and
+the 64-byte caller frame, and the helper text is outside the active lower stack. -/
+theorem envDefMallocSpillFrame
+    {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
+    (M : MallocContract A SL gpv headroom maxReq)
+    (g : (R : Register) → Option (RegisterType R))
+    (exts : List (Nat × Nat)) (n : Nat) (sp r : BitVec 64)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (hn : n ≤ maxReq)
+    (hPrivCode : ∀ a, 0x80002a5c ≤ a → a < 0x80002c10 → ¬ M.privFoot a)
+    (hPrivSpill : ∀ a, sp.toNat ≤ a → a < sp.toNat + 64 → ¬ M.privFoot a)
+    (hCodeStack : ∀ a, 0x80002a5c ≤ a → a < 0x80002c10 →
+      ¬ (SL.lo ≤ a ∧ a < sp.toNat)) :
+    Triple
+      (fun c => EnvDefMallocPre M g exts n sp r m0 c ∧ EnvDefineSpillFrame sp g c)
+      (fun c => EnvDefMallocPost M g exts n sp r m0 c ∧ EnvDefineSpillFrame sp g c) := by
+  intro c ⟨hpre, hspills⟩
+  unfold EnvDefMallocPre at hpre
+  obtain ⟨c', hsteps, hpost⟩ := M.spec g exts n sp r m0 hn c hpre
+  rcases hpre with ⟨_, _, _, _, _, _, _, _, _, _, _, hmem0⟩
+  rcases hpost with ⟨hgood, htick, hpc, hsp, hgp, habi, hresult, hpublic⟩
+  refine ⟨c', hsteps, ?_, ?_⟩
+  · exact ⟨hgood, htick, hpc, hsp, hgp, habi, hresult, hpublic⟩
+  exact EnvDefineSpillFrame.of_interval_agree
+    (fun a ha0 ha1 =>
+      (hpublic a (hPrivCode a ha0 ha1) (hCodeStack a ha0 ha1)).trans
+        (congrArg (fun m => m[a]?) hmem0.symm))
+    (fun a ha0 ha1 =>
+      (hpublic a (hPrivSpill a ha0 ha1) (by omega)).trans
+        (congrArg (fun m => m[a]?) hmem0.symm)) hspills
 
 /-- **`memcpy` call splice** (`0x80002b40 jal memcpy`, `memcpy(copy, name, len+1)`).
 Prefix marshals `dst/src/n` and lands `memcpy_spec`'s `PreDispatch`; `memcpy_spec`
@@ -277,13 +373,16 @@ sourced from the malloc post's `ExtDisjoint`, carried in `EnvDefFrame`'s `AInv e
 `AInv` is stable under memory-off-a-disjoint-footprint + gp-agreement.  This is the honest
 footprint-containment reconstruction the task specifies: the writes land only in the extent
 the composition owns. -/
-theorem envDefMemcpyFramed (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
+theorem envDefMemcpyFramed (A : Arena) (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
     (AInv : MState → List (Nat × Nat) → Prop) (exts : List (Nat × Nat))
     (sp : BitVec 64) (gm : (R : Register) → Option (RegisterType R))
     (r dst src : BitVec 64) (n : Nat)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (bs : Nat → BitVec 8)
     (halign : r.toNat % 4 = 0)
     (hroute : (src.toNat ^^^ dst.toNat) % 8 ≠ 0 ∨ n < 8)
+    (hdst : A.contains dst.toNat n)
+    (harenaStack : A.hi ≤ sp.toNat ∨ sp.toNat + 64 ≤ A.lo)
+    (harenaCode : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo)
     -- `AInv` survives memory changes confined to `[dst,dst+n)` (given gp preserved):
     -- the caller owns that footprint (freshly-malloc'd block, disjoint from `exts`).
     (hAInvStableFoot : ∀ (σa σb : MState),
@@ -296,7 +395,7 @@ theorem envDefMemcpyFramed (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
       (fun c => (∃ g', memcpy_bytepath_post g' r dst n m0 bs c) ∧
         EnvDefFrame SL gpv headroom AInv exts sp gm c) := by
   intro c ⟨hpre, hFrame⟩
-  obtain ⟨hsp, hstackOK, hgp, hAbi, hAInv, htickF⟩ := hFrame
+  obtain ⟨hsp, hstackOK, hgp, hAbi, hAInv, htickF, hSpills⟩ := hFrame
   -- entry ghost values: gm x2 = sp, gm x3 = gpv
   have hgm_x2 : gm Register.x2 = some sp := by rw [← hAbi Register.x2 (by decide)]; exact hsp
   have hgm_x3 : gm Register.x3 = some gpv := by rw [← hAbi Register.x3 (by decide)]; exact hgp
@@ -313,7 +412,8 @@ theorem envDefMemcpyFramed (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
   obtain ⟨c', hsteps, hpost, hgh'⟩ :=
     memcpy_spec_framed_byte gm r dst src n m0 bs halign hroute c ⟨hpre, hAbi⟩
   obtain ⟨g', hbp⟩ := hpost
-  refine ⟨c', hsteps, ⟨g', hbp⟩, ?_, hstackOK, ?_, hgh', ?_, hbp.2.2.2.2.2.2.1⟩
+  refine ⟨c', hsteps, ⟨g', hbp⟩, ?_, hstackOK, ?_, hgh', ?_,
+    hbp.2.2.2.2.2.2.1, ?_⟩
   · -- x2 = sp
     rw [hgh' Register.x2 (by decide)]; exact hgm_x2
   · -- x3 = gpv
@@ -325,6 +425,46 @@ theorem envDefMemcpyFramed (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
     · -- mem agree outside footprint: entry = m0 (via meminv.outside), exit = m0 (post.outside)
       intro a ha
       rw [hentry_out a ha, ← memcpy_framed_ainv_stable g' r dst n m0 bs c' hbp a ha]
+  · exact EnvDefineSpillFrame.of_arena_frame A hdst harenaStack harenaCode
+      (fun a ha => by
+        rw [hentry_out a ha,
+          ← memcpy_framed_ainv_stable g' r dst n m0 bs c' hbp a ha]) hSpills
+
+/-- `memcpy` preserves the independent outer spill image when its destination
+is arena-confined and the arena excludes the helper code and spill interval. -/
+theorem envDefMemcpyFramedSaved (A : Arena) (SL : StackLayout)
+    (gpv : BitVec 64) (headroom : Nat)
+    (AInv : MState → List (Nat × Nat) → Prop) (exts : List (Nat × Nat))
+    (sp : BitVec 64) (gm saved : (R : Register) → Option (RegisterType R))
+    (r dst src : BitVec 64) (n : Nat)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (bs : Nat → BitVec 8)
+    (halign : r.toNat % 4 = 0)
+    (hroute : (src.toNat ^^^ dst.toNat) % 8 ≠ 0 ∨ n < 8)
+    (hdst : A.contains dst.toNat n)
+    (harenaStack : A.hi ≤ sp.toNat ∨ sp.toNat + 64 ≤ A.lo)
+    (harenaCode : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo)
+    (hAInvStableFoot : ∀ (σa σb : MState),
+      σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
+      (∀ a : Nat, (a < dst.toNat ∨ dst.toNat + n ≤ a) →
+        σa.mem[a]? = σb.mem[a]?) →
+      AInv σa exts → AInv σb exts) :
+    Triple
+      (fun c => PreDispatch gm r dst src n m0 bs c ∧
+        EnvDefFrameSaved SL gpv headroom AInv exts sp gm saved c)
+      (fun c => (∃ g', memcpy_bytepath_post g' r dst n m0 bs c) ∧
+        EnvDefFrameSaved SL gpv headroom AInv exts sp gm saved c) := by
+  intro c ⟨hpre, hframe, hsaved⟩
+  have hentryOut : ∀ a : Nat, (a < dst.toNat ∨ dst.toNat + n ≤ a) →
+      c.σ.mem[a]? = m0[a]? := fun a ha => hpre.meminv.outside a ha
+  obtain ⟨c', hsteps, hpost, hframe'⟩ :=
+    envDefMemcpyFramed A SL gpv headroom AInv exts sp gm r dst src n m0 bs
+      halign hroute hdst harenaStack harenaCode hAInvStableFoot c ⟨hpre, hframe⟩
+  obtain ⟨g', hbp⟩ := hpost
+  refine ⟨c', hsteps, ⟨g', hbp⟩, hframe', ?_⟩
+  apply hsaved.of_arena_frame A hdst harenaStack harenaCode
+  intro a ha
+  rw [hentryOut a ha,
+    ← memcpy_framed_ainv_stable g' r dst n m0 bs c' hbp a ha]
 
 /-! ## `realloc` splices — over `ReallocOps.grow` (both grow-path calls) -/
 
@@ -364,6 +504,75 @@ theorem envDefReallocValsSplice {A : Arena} {SL : StackLayout} {gpv : BitVec 64}
     Triple P Q :=
   callSeg pre (RO.grow g exts pOld nOld nNew sp r m0 hle hlt hp hmem) suf
 
+/-- A realloc grow preserves the exact env_define spill image.  Both exception
+extents in its public frame are inside the arena, while the arena is disjoint from
+the helper text and caller spill interval. -/
+theorem envDefReallocGrowSpillFrame
+    {A : Arena} {SL : StackLayout} {gpv : BitVec 64}
+    {headroom maxReq : Nat} {AInv : MState → List Extent → Prop}
+    {privFoot : Nat → Prop}
+    (RO : ReallocOps A SL gpv headroom maxReq AInv privFoot)
+    (g : (R : Register) → Option (RegisterType R))
+    (exts : List Extent) (pOld nOld nNew : Nat) (sp r : BitVec 64)
+    (m0 : Vsa.MemRepr.Mem)
+    (hle : nNew ≤ maxReq) (hlt : nOld < nNew) (hp : pOld ≠ 0)
+    (hmem : (pOld, nOld) ∈ exts) (hOldArena : A.contains pOld nOld)
+    (hArenaSpill : A.hi ≤ sp.toNat ∨ sp.toNat + 64 ≤ A.lo)
+    (hArenaCode : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo)
+    (hPrivCode : ∀ a, 0x80002a5c ≤ a → a < 0x80002c10 → ¬ privFoot a)
+    (hPrivSpill : ∀ a, sp.toNat ≤ a → a < sp.toNat + 64 → ¬ privFoot a)
+    (hCodeStack : ∀ a, 0x80002a5c ≤ a → a < 0x80002c10 →
+      ¬ (SL.lo ≤ a ∧ a < sp.toNat)) :
+    Triple
+      (fun c => ReallocPre SL gpv headroom AInv exts pOld nNew sp r m0 g c ∧
+        EnvDefineSpillFrame sp g c)
+      (fun c => (ReallocPost gpv sp r g c ∧
+        ReallocGrowResult A SL privFoot AInv exts pOld nOld nNew sp m0 c.σ) ∧
+        EnvDefineSpillFrame sp g c) := by
+  intro c ⟨hpre, hspills⟩
+  have hmem0 : c.σ.mem = m0 := hpre.2.2.2.2.2.2.2.2.2.2.2.2
+  obtain ⟨c', hsteps, hpost, hresult⟩ :=
+    RO.grow g exts pOld nOld nNew sp r m0 hle hlt hp hmem c hpre
+  refine ⟨c', hsteps, ⟨hpost, hresult⟩, ?_⟩
+  apply EnvDefineSpillFrame.of_interval_agree
+  · intro a ha0 ha1
+    have houtsideOld : a < pOld ∨ pOld + nOld ≤ a := by
+      rcases hOldArena with ⟨hlo, hhi⟩
+      rcases hArenaCode with hbefore | hafter
+      · right; omega
+      · left; omega
+    rcases hresult with hfail | hsuccess
+    · exact (hfail.2.2 a (hPrivCode a ha0 ha1) (hCodeStack a ha0 ha1)
+        (by simp)).trans (congrArg (fun m => m[a]?) hmem0.symm)
+    · obtain ⟨pNew, _, _, _, hNewArena, _, _, _, hpublic⟩ := hsuccess
+      have houtsideNew : a < pNew ∨ pNew + nNew ≤ a := by
+        rcases hNewArena with ⟨hlo, hhi⟩
+        rcases hArenaCode with hbefore | hafter
+        · right; omega
+        · left; omega
+      exact (hpublic a (hPrivCode a ha0 ha1) (hCodeStack a ha0 ha1)
+        (by intro e he; simp only [List.mem_cons] at he; rcases he with rfl | rfl | h <;>
+            simp_all)).trans (congrArg (fun m => m[a]?) hmem0.symm)
+  · intro a ha0 ha1
+    have houtsideOld : a < pOld ∨ pOld + nOld ≤ a := by
+      rcases hOldArena with ⟨hlo, hhi⟩
+      rcases hArenaSpill with hbefore | hafter
+      · right; omega
+      · left; omega
+    rcases hresult with hfail | hsuccess
+    · exact (hfail.2.2 a (hPrivSpill a ha0 ha1) (by omega) (by simp)).trans
+        (congrArg (fun m => m[a]?) hmem0.symm)
+    · obtain ⟨pNew, _, _, _, hNewArena, _, _, _, hpublic⟩ := hsuccess
+      have houtsideNew : a < pNew ∨ pNew + nNew ≤ a := by
+        rcases hNewArena with ⟨hlo, hhi⟩
+        rcases hArenaSpill with hbefore | hafter
+        · right; omega
+        · left; omega
+      exact (hpublic a (hPrivSpill a ha0 ha1) (by omega)
+        (by intro e he; simp only [List.mem_cons] at he; rcases he with rfl | rfl | h <;>
+            simp_all)).trans (congrArg (fun m => m[a]?) hmem0.symm)
+  · exact hspills
+
 /-! ## The APPEND path composed — `strlen ≫ malloc ≫ memcpy ≫ store`
 
 The append path (`0x80002b1c..0x80002b8c`, name absent, `count < cap`) is three
@@ -389,6 +598,10 @@ theorem envDefAppendContract
     -- malloc call data
     (exts : List (Nat × Nat)) (nMalloc : Nat) (spM rM : BitVec 64)
     (mMalloc : Std.ExtHashMap Nat (BitVec 8)) (hnM : nMalloc ≤ maxReq)
+    (hPrivCodeM : ∀ a, 0x80002a5c ≤ a → a < 0x80002c10 → ¬ M.privFoot a)
+    (hPrivSpillM : ∀ a, spM.toNat ≤ a → a < spM.toNat + 64 → ¬ M.privFoot a)
+    (hCodeStackM : ∀ a, 0x80002a5c ≤ a → a < 0x80002c10 →
+      ¬ (SL.lo ≤ a ∧ a < spM.toNat))
     -- memcpy call data (memcpy dispatch ghost = the ABI ghost `gm`; byte route)
     (rMemcpy dst src : BitVec 64) (nMemcpy : Nat)
     (mMemcpy : Std.ExtHashMap Nat (BitVec 8)) (bs : Nat → BitVec 8)
@@ -408,15 +621,8 @@ theorem envDefAppendContract
     (bridgeMallocPre : Triple
       (fun c => strlen_post rStrlen nameStr m0 c ∧
         EnvDefFrame SL gpv headroom M.AInv exts spM gm c)
-      (fun c =>
-        GoodState c.σ ∧ c.tick < 2 ∧
-        c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 mallocEntry) ∧
-        c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 nMalloc) ∧
-        c.σ.regs.get? Register.x1 = some rM ∧ rM.toNat % 4 = 0 ∧
-        c.σ.regs.get? Register.x2 = some spM ∧ StackOK SL spM headroom ∧
-        c.σ.regs.get? Register.x3 = some gpv ∧
-        (∀ R, AbiPreserved R = true → c.σ.regs.get? R = gm R) ∧
-        M.AInv c.σ exts ∧ c.σ.mem = mMalloc))
+      (fun c => EnvDefMallocPre M gm exts nMalloc spM rM mMalloc c ∧
+        EnvDefineSpillFrame spM gm c))
     -- memcpy route (byte path — the C-string copy into the fresh malloc block)
     (extsC : List (Nat × Nat)) (spC : BitVec 64)
     (hrouteCbyte : (src.toNat ^^^ dst.toNat) % 8 ≠ 0 ∨ nMemcpy < 8)
@@ -429,22 +635,14 @@ theorem envDefAppendContract
       σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
       (∀ a : Nat, (a < dst.toNat ∨ dst.toNat + nMemcpy ≤ a) → σa.mem[a]? = σb.mem[a]?) →
       M.AInv σa extsC → M.AInv σb extsC)
+    (hDstArenaC : A.contains dst.toNat nMemcpy)
+    (hArenaStackC : A.hi ≤ spC.toNat ∨ spC.toNat + 64 ≤ A.lo)
+    (hArenaCodeC : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo)
     -- the four machine bridges — malloc-pre and memcpy-pre FRAME-CARRYING; the
     -- memcpy seam now threads `EnvDefFrame` so `bridgeStore` sees `sp`/`gp`/`AInv`.
     (bridgeMemcpyPre : Triple
-      (fun c =>
-        GoodState c.σ ∧ c.tick < 2 ∧
-        c.σ.regs.get? Register.PC = some rM ∧
-        c.σ.regs.get? Register.x2 = some spM ∧
-        c.σ.regs.get? Register.x3 = some gpv ∧
-        (∀ R, AbiPreserved R = true → c.σ.regs.get? R = gm R) ∧
-        ((c.σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧ M.AInv c.σ exts) ∨
-         (∃ p, c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 p) ∧
-           p ≠ 0 ∧ p % 16 = 0 ∧ A.contains p nMalloc ∧
-           (∀ e ∈ exts, ExtDisjoint (p, nMalloc) e) ∧
-           M.AInv c.σ ((p, nMalloc) :: exts))) ∧
-        (∀ a, ¬ M.privFoot a → ¬ (SL.lo ≤ a ∧ a < spM.toNat) →
-          c.σ.mem[a]? = mMalloc[a]?))
+      (fun c => EnvDefMallocPost M gm exts nMalloc spM rM mMalloc c ∧
+        EnvDefineSpillFrame spM gm c)
       (fun c => PreDispatch gm rMemcpy dst src nMemcpy mMemcpy bs c ∧
         EnvDefFrame SL gpv headroom M.AInv extsC spC gm c))
     (bridgeStore : Triple
@@ -453,10 +651,13 @@ theorem envDefAppendContract
     Triple P Q :=
   -- strlen ≫ [malloc ≫ [memcpy(framed) ≫ store]]
   envDefStrlenSplice namePtr rStrlen nameStr m0 strlenFramed bridgeStrlenPre
-    (envDefMallocSplice M gm exts nMalloc spM rM mMalloc hnM bridgeMallocPre
+    (callSeg bridgeMallocPre
+      (envDefMallocSpillFrame M gm exts nMalloc spM rM mMalloc hnM
+        hPrivCodeM hPrivSpillM hCodeStackM)
       (envDefMemcpyFramedSplice gm rMemcpy dst src nMemcpy mMemcpy bs
-        (envDefMemcpyFramed SL gpv headroom M.AInv extsC spC gm rMemcpy dst src nMemcpy
-          mMemcpy bs halignC hrouteCbyte hAInvStableFootC)
+        (envDefMemcpyFramed A SL gpv headroom M.AInv extsC spC gm rMemcpy dst src nMemcpy
+          mMemcpy bs halignC hrouteCbyte hDstArenaC hArenaStackC hArenaCodeC
+          hAInvStableFootC)
         bridgeMemcpyPre bridgeStore))
 
 /-! ## The GROW path composed — `cap' ≫ realloc(names) ≫ realloc(vals) ≫ append-head`
@@ -481,28 +682,51 @@ theorem envDefGrowContract
     (mN : Vsa.MemRepr.Mem)
     (hleN : nNamesNew ≤ maxReq) (hltN : nNamesOld < nNamesNew)
     (hpN : pNamesOld ≠ 0) (hmemN : (pNamesOld, nNamesOld) ∈ extsN)
+    (hOldArenaN : A.contains pNamesOld nNamesOld)
+    (hArenaSpillN : A.hi ≤ spN.toNat ∨ spN.toNat + 64 ≤ A.lo)
+    (hArenaCodeN : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo)
+    (hPrivCodeN : ∀ a, 0x80002a5c ≤ a → a < 0x80002c10 → ¬ privFoot a)
+    (hPrivSpillN : ∀ a, spN.toNat ≤ a → a < spN.toNat + 64 → ¬ privFoot a)
+    (hCodeStackN : ∀ a, 0x80002a5c ≤ a → a < 0x80002c10 →
+      ¬ (SL.lo ≤ a ∧ a < spN.toNat))
     -- realloc(vals): grow (valsOld, cap*24) → newcap*24, over the post-names ledger
     (extsV : List Extent) (pValsOld nValsOld nValsNew : Nat) (spV rV : BitVec 64)
     (mV : Vsa.MemRepr.Mem)
     (hleV : nValsNew ≤ maxReq) (hltV : nValsOld < nValsNew)
     (hpV : pValsOld ≠ 0) (hmemV : (pValsOld, nValsOld) ∈ extsV)
+    (hOldArenaV : A.contains pValsOld nValsOld)
+    (hArenaSpillV : A.hi ≤ spV.toNat ∨ spV.toNat + 64 ≤ A.lo)
+    (hArenaCodeV : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo)
+    (hPrivCodeV : ∀ a, 0x80002a5c ≤ a → a < 0x80002c10 → ¬ privFoot a)
+    (hPrivSpillV : ∀ a, spV.toNat ≤ a → a < spV.toNat + 64 → ¬ privFoot a)
+    (hCodeStackV : ∀ a, 0x80002a5c ≤ a → a < 0x80002c10 →
+      ¬ (SL.lo ≤ a ∧ a < spV.toNat))
     -- the three machine bridges
     (bridgeCapCompute : Triple P
-      (ReallocPre SL gpv headroom AInv extsN pNamesOld nNamesNew spN rN mN gN))
+      (fun c => ReallocPre SL gpv headroom AInv extsN pNamesOld nNamesNew spN rN mN gN c ∧
+        EnvDefineSpillFrame spN gN c))
     (bridgeNamesToVals : Triple
-      (fun c => ReallocPost gpv spN rN gN c ∧
-        ReallocGrowResult A SL privFoot AInv extsN pNamesOld nNamesOld nNamesNew spN mN c.σ)
-      (ReallocPre SL gpv headroom AInv extsV pValsOld nValsNew spV rV mV gV))
+      (fun c => (ReallocPost gpv spN rN gN c ∧
+        ReallocGrowResult A SL privFoot AInv extsN pNamesOld nNamesOld nNamesNew spN mN c.σ) ∧
+        EnvDefineSpillFrame spN gN c)
+      (fun c => ReallocPre SL gpv headroom AInv extsV pValsOld nValsNew spV rV mV gV c ∧
+        EnvDefineSpillFrame spV gV c))
     (bridgeAppendHead : Triple
-      (fun c => ReallocPost gpv spV rV gV c ∧
-        ReallocGrowResult A SL privFoot AInv extsV pValsOld nValsOld nValsNew spV mV c.σ)
+      (fun c => (ReallocPost gpv spV rV gV c ∧
+        ReallocGrowResult A SL privFoot AInv extsV pValsOld nValsOld nValsNew spV mV c.σ) ∧
+        EnvDefineSpillFrame spV gV c)
       Q) :
     Triple P Q :=
   -- realloc(names) ≫ [realloc(vals) ≫ append-head]
-  envDefReallocNamesSplice RO gN extsN pNamesOld nNamesOld nNamesNew spN rN mN
-    hleN hltN hpN hmemN bridgeCapCompute
-    (envDefReallocValsSplice RO gV extsV pValsOld nValsOld nValsNew spV rV mV
-      hleV hltV hpV hmemV bridgeNamesToVals bridgeAppendHead)
+  callSeg bridgeCapCompute
+    (envDefReallocGrowSpillFrame RO gN extsN pNamesOld nNamesOld nNamesNew spN rN mN
+      hleN hltN hpN hmemN hOldArenaN hArenaSpillN hArenaCodeN hPrivCodeN
+      hPrivSpillN hCodeStackN)
+    (callSeg bridgeNamesToVals
+      (envDefReallocGrowSpillFrame RO gV extsV pValsOld nValsOld nValsNew spV rV mV
+        hleV hltV hpV hmemV hOldArenaV hArenaSpillV hArenaCodeV hPrivCodeV
+        hPrivSpillV hCodeStackV)
+      bridgeAppendHead)
 
 /-! ## The top-level `env_define` contract interface
 

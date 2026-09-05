@@ -37,7 +37,7 @@ theorem env_define_count_load
       PrologueCarry c'.σ sp env name pv r v18 v20 v21 v8 v9 v22 ∧
       c'.σ.regs.get? Register.minstret = some vmi' ∧
       GoodState c'.σ ∧ Env_defineLoaded c'.σ.mem ∧ StrcmpLoaded c'.σ.mem ∧
-      c'.tick < 2 := by
+      c'.σ.mem = c.σ.mem ∧ c'.tick < 2 := by
   obtain ⟨b0, b1, b2, b3, hb0, hb1, hb2, hb3, hrec⟩ :=
     read32_bytes_ed c.σ.mem env.toNat count hread
   obtain ⟨σ', i', hstep, htick', hG', hmem', hobs⟩ :=
@@ -65,7 +65,7 @@ theorem env_define_count_load
   have hloaded' : Env_defineLoaded σ'.mem := hmem' ▸ hloaded
   have hstrloaded' : StrcmpLoaded σ'.mem := hmem' ▸ hstrloaded
   exact ⟨⟨σ', i', c.steps + 1⟩, vmi', hstep', hpc', hs3', hcarry', hmi', hG',
-    hloaded', hstrloaded', htick'⟩
+    hloaded', hstrloaded', hmem', htick'⟩
 
 /-- Site `0x80002a68`: spill `s2` at offset 32 while preserving the loaded count. -/
 theorem env_define_spill_s2
@@ -85,6 +85,7 @@ theorem env_define_spill_s2
       c'.σ.regs.get? Register.x19 = some countv ∧
       c'.σ.regs.get? Register.minstret = some vmi' ∧
       GoodState c'.σ ∧ Env_defineLoaded c'.σ.mem ∧ StrcmpLoaded c'.σ.mem ∧
+      c'.σ.mem = writeMap8 c.σ.mem ((sp - 64#64).toNat + 32) (sdData_val v18) ∧
       c'.tick < 2 := by
   have hsp64 : (64 : Nat) ≤ sp.toNat := hRG.sp_ge
   have hspNat : (sp - 64#64).toNat = sp.toNat - 64 := sp_sub64_toNat sp hsp64

@@ -30,9 +30,10 @@ The 50th (and last) minor premise of `term_sim_of_cases`
 machine Triple
 
 ```
-∀ g N A SL φf φc dLeft aLeft m0,
-  Triple (SegEntry … st d dLeft aLeft callDispatchPC m0)
-         (SegExit  … st.store.frames.size st.store.closures.size st' callJoinPC m0)
+∀ g N A SL φf φc dLeft aLeft sp sret m0,
+  EntryImage callDispatchPC g m0 →
+  Triple (CallEntryI … st d (.closure a) vs dLeft aLeft sp sret m0)
+         (CallExitI  … st.store.frames.size st.store.closures.size st' v sret m0)
 ```
 
 and the sub-derivation IH `mExecSeq boundSt (d+1) frame cd.body st' status a_5`
@@ -256,22 +257,37 @@ def BodyHandoff
     BodyGhostTie g g' ∧
     (∀ spv : BitVec 64, g Register.x2 = some spv →
       CallerSpillSlots g spv mB m0) ∧
-    -- ITEM ZERO (falsity #12, shape 3): the entry route also certifies the
-    -- `eval_expr` image in the mid-memory `mB` — the `SeqSpanGround` feed for
-    -- the guarded `mExecSeq` body IH at `(callBodyLoopPC, callBodyRetPC)`.
-    Vsa.Sim.Code.Eval_exprLoaded mB ∧
-    SegEntry g' N A SL φf' φc
-      (closureBoundSt st store' cd vs frame) (d + 1) (dLeft - 1) (aLeft - 1)
-      callBodyLoopPC mB c
+    ExecSeqEntryI .closureBody g' N A SL φf' φc
+      (closureBoundSt st store' cd vs frame) (d + 1) frame cd.body
+      (BitVec.ofNat 64 ((g Register.x2).getD 0).toNat)
+      (BitVec.ofNat 64 ((g Register.x2).getD 0).toNat + 144#64) mB c
+
+/-- Exact indexed body-sequence handoff, used directly by the empty-body route
+and reached through `bodyEntry` on the nonempty route. -/
+def IndexedBodyHandoff
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : SpecSt) (store' : Store) (cd : ClosureData) (vs : List Value)
+    (frame : Addr) (d : Nat) (sp : BitVec 64) (m0 : Mem) (c : Config) : Prop :=
+  ∃ (g' : (R : Register) → Option (RegisterType R)) (φf' : Addr → Nat) (mB : Mem),
+    PhiExtends φf φf' st.store.frames.size ∧
+    (∀ x : Nat, ¬ (SL.lo ≤ x ∧ x < SL.hi) → ¬ (A.lo ≤ x ∧ x < A.hi) →
+      mB[x]? = m0[x]?) ∧
+    BodyGhostTie g g' ∧
+    (∀ spv : BitVec 64, g Register.x2 = some spv →
+      CallerSpillSlots g spv mB m0) ∧
+    ExecSeqEntryI .closureBody g' N A SL φf' φc
+      (closureBoundSt st store' cd vs frame) (d + 1) frame cd.body
+      sp (sp + 144#64) mB c
 
 structure CallClosureGeom
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value)
     (store' : Store) (frame : Addr) (status : Status) (v : Value)
-    (dLeft aLeft : Nat) (m0 : Mem) : Prop where
+    (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem) : Prop where
   /-- **entryBase** (prefix): the closure-arm route from the fval-kind dispatch
-      to the body-loop head — `Triple (SegEntry … st … callDispatchPC m0)
+      to the body-loop head — `Triple (CallEntryI … (.closure a) vs …)
       (BodyHandoff …)`, landing the FULLY BOUND child store at `d + 1` under the
       ∃-bound extended map `φf'` and mid-memory `mB` (stack/arena-framed to
       `m0`).  The closure branch (`kind==4`), arity check (`a_2` gates taken),
@@ -286,7 +302,8 @@ structure CallClosureGeom
   entryBase :
     cd.body ≠ [] →
     Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
+      (CallEntryI g N A SL φf φc st d (.closure a) vs
+        dLeft aLeft sp sret m0)
       (BodyHandoff g N A SL φf φc st store' cd vs frame d dLeft aLeft m0)
   -- (The former `entryFold` field — a per-param `StoreSeg` seam family over an
   -- ARBITRARY `pcf : Nat → Nat` — was DELETED in the wave-37 amendment: the
@@ -311,7 +328,6 @@ structure CallClosureGeom
       `callBodyRetPC`).  Supplied by the status-classification decode ≫ the
       result-copy row ≫ the join marshalling (`rows/CallClosureSplice.lean`). -/
   ret :
-    cd.body ≠ [] →
     -- wave 40: the entry-side spill image (`s7@1016(sp)` = `g x23`, tabled at
     -- `callDispatchPC`) — the ret routes' restore source, supplied by the
     -- amended `mCall` motive (ledger `segentry-no-caller-spill-image`).
@@ -324,12 +340,12 @@ structure CallClosureGeom
       (∀ spv : BitVec 64, g Register.x2 = some spv →
         CallerSpillSlots g spv mB m0) →
       Triple
-        (SegExit g' N A SL φf' φc
+        (ExecSeqExitI .closureBody g' N A SL φf' φc
           (closureBoundSt st store' cd vs frame).store.frames.size
           (closureBoundSt st store' cd vs frame).store.closures.size
-          st' callBodyRetPC mB)
-        (SegExit g N A SL φf φc
-          st.store.frames.size st.store.closures.size st' callJoinPC m0)
+          st' status sp (sp + 144#64) mB)
+        (CallExitI g N A SL φf φc
+          st.store.frames.size st.store.closures.size st' v sret m0)
   /-- **emptyBypass** — the `cd.body = []` machine route: the body-count check
       (`bgtz a5 @0x80003338`) is NOT taken and the machine jumps straight to the
       `.normal` return path (`j 0x80003954`), never visiting
@@ -337,13 +353,12 @@ structure CallClosureGeom
       `st' = boundSt` and `status = .normal` (the row inverts `a_5`), so the
       route is stated at that exit state.  Supplied by the same splice layer as
       `entryBase` up to the check, then the `.normal` return arm. -/
-  emptyBypass :
+  emptyEntry :
     cd.body = [] →
-    st' = closureBoundSt st store' cd vs frame →
     Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
-      (SegExit g N A SL φf φc
-        st.store.frames.size st.store.closures.size st' callJoinPC m0)
+      (CallEntryI g N A SL φf φc st d (.closure a) vs
+        dLeft aLeft sp sret m0)
+      (IndexedBodyHandoff g N A SL φf φc st store' cd vs frame d sp m0)
 
 /-! ## §3. `callClosureSim` — the crux as a size-correct machine Triple
 
@@ -362,7 +377,7 @@ theorem callClosureSim
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value)
     (store' : Store) (frame : Addr) (status : Status) (v : Value)
-    (dLeft aLeft : Nat) (m0 : Mem)
+    (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem)
     -- wave 40: the entry-side spill image (the amended `mCall` hypothesis),
     -- threaded to the `ret` seam (its restore routes read `1016(sp)` off `m0`).
     (hImg : EntryImage callDispatchPC g m0)
@@ -371,64 +386,62 @@ theorem callClosureSim
     (_hDepth : d < maxCallDepth)
     (_hAlloc : st.store.allocFrame (some cd.env) = (store', frame))
     (_hStatus : status = Status.normal ∧ v = Value.null ∨ status = Status.ret v)
-    -- the `ExecSeq.nil` inversion link (the row inverts `a_5`): on the
-    -- empty-body route the exit state IS the bound state.
-    (hNilLink : cd.body = [] → st' = closureBoundSt st store' cd vs frame)
     -- the recursive body IH (the `a_5`/`mExecSeq` motive the recursor supplies),
     -- instantiated at the closure body-loop head / return PCs, universal in the
     -- handoff triple `(g', φf', mB)` — FREE from `mExecSeq`'s own `∀ g φf φc … m0`:
-    (hBodyIH : ∀ (g' : (R : Register) → Option (RegisterType R))
-        (φf' : Addr → Nat) (mB : Mem),
-      Vsa.Sim.TermSimAssembly.SeqSpanGround callBodyLoopPC callBodyRetPC mB →
+    (hBodyIH : ∀ (copy : ExecSeqCopy)
+        (g' : (R : Register) → Option (RegisterType R))
+        (N' : NativeAddrs) (A' : Arena) (SL' : StackLayout)
+        (φf' φc' : Addr → Nat) (sp' aRet' : BitVec 64) (mB : Mem),
+      copy.Supports status →
       Triple
-        (SegEntry g' N A SL φf' φc
-          (closureBoundSt st store' cd vs frame) (d + 1) (dLeft - 1) (aLeft - 1)
-          callBodyLoopPC mB)
-        (SegExit g' N A SL φf' φc
+        (ExecSeqEntryI copy g' N' A' SL' φf' φc'
+          (closureBoundSt st store' cd vs frame) (d + 1) frame cd.body
+          sp' aRet' mB)
+        (ExecSeqExitI copy g' N' A' SL' φf' φc'
           (closureBoundSt st store' cd vs frame).store.frames.size
           (closureBoundSt st store' cd vs frame).store.closures.size
-          st' callBodyRetPC mB))
+          st' status sp' aRet' mB))
     (hGeom : CallClosureGeom g N A SL φf φc st st' d a cd vs store' frame status v
-      dLeft aLeft m0) :
+      dLeft aLeft sp sret m0) :
     Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st'
-        callJoinPC m0) := by
+      (CallEntryI g N A SL φf φc st d (.closure a) vs
+        dLeft aLeft sp sret m0)
+      (CallExitI g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' v sret m0) := by
+  have hsupport : ExecSeqCopy.closureBody.Supports status := by
+    rcases _hStatus with ⟨hs, _⟩ | hs
+    · exact Or.inl hs
+    · exact Or.inr ⟨v, hs⟩
   cases hb : cd.body with
   | nil =>
-    -- the empty-body machine route: dispatch → `.normal` path → join
-    -- (`emptyBypass`'s conclusion is stated at the SAME `st'`).
-    exact hGeom.emptyBypass hb (hNilLink hb)
+    intro c hc
+    obtain ⟨c1, hs1, g', φf', mB, hpe, hfr, htie, hslots, hEntryI⟩ :=
+      hGeom.emptyEntry hb c hc
+    obtain ⟨c2, hs2, hExitI⟩ :=
+      hBodyIH .closureBody g' N A SL φf' φc sp (sp + 144#64) mB
+        hsupport c1 hEntryI
+    obtain ⟨c3, hs3, hExit⟩ :=
+      hGeom.ret hImg g' φf' mB hpe hfr htie hslots c2 hExitI
+    exact ⟨c3, (hs1.trans hs2).trans hs3, hExit⟩
   | cons s ss =>
     have hne : cd.body ≠ [] := by rw [hb]; exact List.cons_ne_nil s ss
-    -- prefix ≫ body-IH ≫ return (DeriveCallSeg.callSeg), the mid-predicates
-    -- carrying the ∃-bound handoff pair through the body IH.
-    refine callSeg (hGeom.entryBase hne)
-      (Mid1 := BodyHandoff g N A SL φf φc st store' cd vs frame d dLeft aLeft m0)
-      (Mid2 := fun c => ∃ (g' : (R : Register) → Option (RegisterType R))
-          (φf' : Addr → Nat) (mB : Mem),
-        PhiExtends φf φf' st.store.frames.size ∧
-        (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < SL.hi) → ¬ (A.lo ≤ a ∧ a < A.hi) →
-          mB[a]? = m0[a]?) ∧
-        BodyGhostTie g g' ∧
-        (∀ spv : BitVec 64, g Register.x2 = some spv →
-          CallerSpillSlots g spv mB m0) ∧
-        SegExit g' N A SL φf' φc
-          (closureBoundSt st store' cd vs frame).store.frames.size
-          (closureBoundSt st store' cd vs frame).store.closures.size
-          st' callBodyRetPC mB c)
-      ?_ ?_
-    · -- body hop: run the IH at the handoff triple (guard fed from the
-      -- handoff's `Eval_exprLoaded mB`), carry its facts across.
-      intro c hc
-      obtain ⟨g', φf', mB, hpe, hfr, htie, hslots, hLoad, hSeg⟩ := hc
-      obtain ⟨c', hsteps, hExit⟩ :=
-        hBodyIH g' φf' mB (Vsa.Sim.TermSimAssembly.seqSpanGround_of rfl hLoad) c hSeg
-      exact ⟨c', hsteps, g', φf', mB, hpe, hfr, htie, hslots, hExit⟩
-    · -- return hop: `ret` at the carried handoff facts.
-      intro c hc
-      obtain ⟨g', φf', mB, hpe, hfr, htie, hslots, hExit⟩ := hc
-      exact hGeom.ret hne hImg g' φf' mB hpe hfr htie hslots c hExit
+    intro c hc
+    obtain ⟨c1, hs1, g', φf', mB, hpe, hfr, htie, hslots, hEntryI⟩ :=
+      hGeom.entryBase hne c hc
+    have hspGhost : g Register.x2 = some sp :=
+      (hc.1.frame Register.x2 (by decide)).symm.trans
+        hc.2.2.2.2.2.2.2.2.1
+    have hspEq : BitVec.ofNat 64 ((g Register.x2).getD 0).toNat = sp := by
+      rw [hspGhost]
+      simp
+    rw [hspEq] at hEntryI
+    obtain ⟨c3, hs3, hExitI⟩ :=
+      hBodyIH .closureBody g' N A SL φf' φc sp (sp + 144#64) mB
+        hsupport c1 hEntryI
+    obtain ⟨c4, hs4, hExit⟩ :=
+      hGeom.ret hImg g' φf' mB hpe hfr htie hslots c3 hExitI
+    exact ⟨c4, (hs1.trans hs3).trans hs4, hExit⟩
 
 /-! ## §4. The params-fold discharged through `storeChainList`
 
@@ -483,14 +496,14 @@ to the `BodyHandoff`, the return marshalling over the handoff pair, and the
 empty-body bypass), ∀-closed over the ghosts.  The depth guard
 `a_3 : d < maxCallDepth` is supplied per-invocation (it is a `Call.closure`
 constructor argument, `TermGuards.depthCrux`-shaped). -/
-def CallClosureResid (st st' : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData)
+def CallClosureGeomResid (st st' : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData)
     (vs : List Value) (store' : Store) (frame : Addr) (status : Status)
     (v : Value) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (m0 : Mem),
+    (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem),
     Vsa.Sim.CallClosureGeom g N A SL φf φc st st' d a cd vs store' frame status v
-      dLeft aLeft m0
+      dLeft aLeft sp sret m0
 
 /-- Route `hCallClosure` → `callClosureSim`.  The body sub-motive
 `mExecSeq … a_5` unfolds to the body Triple; instantiated at
@@ -500,7 +513,7 @@ crux's genuine residual, discharged by the closure-arm decode + `env_new`/
 `env_define` contracts + the return-block reflection. -/
 theorem eval_callClosure_row
     (hR : ∀ st st' d a cd vs store' frame status v,
-      CallClosureResid st st' d a cd vs store' frame status v) :
+      CallClosureGeomResid st st' d a cd vs store' frame status v) :
     ∀ (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value)
       (store' : Store) (frame : Addr) (st' : SpecSt) (status : Status) (v : Value)
       (a_1 : st.store.closures[a]? = some cd)
@@ -520,44 +533,36 @@ theorem eval_callClosure_row
   -- Unfold the `mCall` motive to the machine Triple.
   show ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (m0 : Mem),
+    (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem),
     EntryImage callDispatchPC g m0 →
     Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st'
-        callJoinPC m0)
-  intro g N A SL φf φc dLeft aLeft m0 hImg
-  -- `ExecSeq.nil` inversion: on the empty body the exit state is the bound state.
-  have hNilLink : cd.body = [] → st' = closureBoundSt st store' cd vs frame := by
-    intro hb
-    -- a fresh copy of `a_5` (rewriting `a_5` itself would disturb `hBody`,
-    -- whose type mentions it), transported to the `[]` index and inverted.
-    have h5 : ExecSeq
-        { store := List.foldl (fun s x => match x with | (x, v) => s.define frame x v)
-            store' (cd.params.zip vs), out := st.out }
-        (d + 1) frame [] st' status := hb ▸ a_5
-    cases h5
-    rfl
+      (CallEntryI g N A SL φf φc st d (.closure a) vs
+        dLeft aLeft sp sret m0)
+      (CallExitI g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' v sret m0)
+  intro g N A SL φf φc dLeft aLeft sp sret m0 hImg
   -- The body sub-motive `mExecSeq … a_5` at the closure body-loop/return PCs is
   -- the `hBodyIH` family (definitional unfolding of `mExecSeq`; its universal
   -- `g`/`φf`/`m0` quantifiers are instantiated at the entry route's handoff
   -- triple).
-  have hBodyIH : ∀ (g' : (R : Register) → Option (RegisterType R))
-      (φf' : Addr → Nat) (mB : Mem),
-      Vsa.Sim.TermSimAssembly.SeqSpanGround callBodyLoopPC callBodyRetPC mB →
+  have hBodyIH : ∀ (copy : ExecSeqCopy)
+      (g' : (R : Register) → Option (RegisterType R))
+      (N' : NativeAddrs) (A' : Arena) (SL' : StackLayout)
+      (φf' φc' : Addr → Nat) (sp' aRet' : BitVec 64) (mB : Mem),
+      copy.Supports status →
       Triple
-        (SegEntry g' N A SL φf' φc
-          (closureBoundSt st store' cd vs frame) (d + 1) (dLeft - 1) (aLeft - 1)
-          callBodyLoopPC mB)
-        (SegExit g' N A SL φf' φc
+        (ExecSeqEntryI copy g' N' A' SL' φf' φc'
+          (closureBoundSt st store' cd vs frame) (d + 1) frame cd.body
+          sp' aRet' mB)
+        (ExecSeqExitI copy g' N' A' SL' φf' φc'
           (closureBoundSt st store' cd vs frame).store.frames.size
           (closureBoundSt st store' cd vs frame).store.closures.size
-          st' callBodyRetPC mB) :=
-    fun g' φf' mB hG =>
-      hBody g' N A SL φf' φc (dLeft - 1) (aLeft - 1) callBodyLoopPC callBodyRetPC mB hG
+          st' status sp' aRet' mB) :=
+    hBody
   exact callClosureSim g N A SL φf φc st st' d a cd vs store' frame status v
-    dLeft aLeft m0 hImg a_1 a_2 a_3 a_4 a_6 hNilLink hBodyIH
-    (hR st st' d a cd vs store' frame status v g N A SL φf φc dLeft aLeft m0)
+    dLeft aLeft sp sret m0 hImg a_1 a_2 a_3 a_4 a_6 hBodyIH
+    (hR st st' d a cd vs store' frame status v g N A SL φf φc
+      dLeft aLeft sp sret m0)
 
 /-- **Slot-verify.** `eval_callClosure_row` fills the EXACT `hCallClosure`
 minor-premise slot of `TermCaseBundle.TermCases.hCallClosure`: the type below is
@@ -565,7 +570,7 @@ the VERBATIM premise type; the term type-checks iff the row's conclusion matches
 it. -/
 theorem eval_callClosure_row_fills_hCallClosure
     (hR : ∀ st st' d a cd vs store' frame status v,
-      CallClosureResid st st' d a cd vs store' frame status v) :
+      CallClosureGeomResid st st' d a cd vs store' frame status v) :
     ∀ (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value)
       (store' : Store) (frame : Addr) (st' : SpecSt) (status : Status) (v : Value)
       (a_1 : st.store.closures[a]? = some cd)

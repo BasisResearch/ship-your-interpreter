@@ -163,4 +163,67 @@ theorem mpr {P Q : Config → Prop} (h : PredIso P Q) : ∀ c, Q c → P c := h.
 
 end PredIso
 
+/-! ## 5. Relation-indexed machine refinements -/
+
+universe u v w
+
+/-- Composition through one explicit source-semantic midpoint.  The midpoint
+is an argument, not an existential hidden in the resulting relation. -/
+def RelVia {α : Sort u} {β : Sort v} {γ : Sort w}
+    (mid : β) (R : α → β → Prop) (S : β → γ → Prop)
+    (a : α) (c : γ) : Prop :=
+  R a mid ∧ S mid c
+
+/-- Evidence that one source-semantic result is implemented by one total
+machine triple.  Both halves are retained: consumers cannot use the machine
+run while silently dropping which source relation/result it refines. -/
+structure RTriple {α : Sort u} {β : Sort v}
+    (R : α → β → Prop) (a : α) (b : β)
+    (P Q : Config → Prop) : Prop where
+  semantic : R a b
+  machine : Triple P Q
+
+namespace RTriple
+
+/-- Package already-proved semantic and machine evidence. -/
+theorem pack {α : Sort u} {β : Sort v} {R : α → β → Prop}
+    {a : α} {b : β} {P Q : Config → Prop}
+    (semantic : R a b) (machine : Triple P Q) :
+    RTriple R a b P Q :=
+  ⟨semantic, machine⟩
+
+/-- Consequence changes only the machine predicates; the source evidence is
+preserved verbatim. -/
+theorem conseq {α : Sort u} {β : Sort v} {R : α → β → Prop}
+    {a : α} {b : β} {P P' Q Q' : Config → Prop}
+    (h : RTriple R a b P Q) (pre : Ent P' P) (post : Ent Q Q') :
+    RTriple R a b P' Q' :=
+  ⟨h.semantic, Triple.dimap pre post h.machine⟩
+
+/-- Compose two refinements through the named semantic midpoint `b`.  The
+machine boundary must be connected by the explicit entailment `Q ⊢ₑ P₂`;
+composition neither identifies nor invents carrier predicates. -/
+theorem seq {α : Sort u} {β : Sort v} {γ : Sort w}
+    {R : α → β → Prop} {S : β → γ → Prop}
+    {a : α} {b : β} {c : γ} {P Q P₂ T : Config → Prop}
+    (h₁ : RTriple R a b P Q) (h₂ : RTriple S b c P₂ T)
+    (seam : Ent Q P₂) :
+    RTriple (RelVia b R S) a c P T :=
+  ⟨⟨h₁.semantic, h₂.semantic⟩,
+    Triple.seq h₁.machine (Triple.lmap seam h₂.machine)⟩
+
+/-- Evidence-level form of `seq`.  This is the ergonomic constructor for
+existing proofs whose semantic derivations and machine triples are already
+separate arguments.  The semantic midpoint and machine seam remain explicit. -/
+theorem seqEvidence {α : Sort u} {β : Sort v} {γ : Sort w}
+    {R : α → β → Prop} {S : β → γ → Prop}
+    {a : α} {b : β} {c : γ} {P Q P₂ T : Config → Prop}
+    (semantic₁ : R a b) (semantic₂ : S b c)
+    (machine₁ : Triple P Q) (machine₂ : Triple P₂ T)
+    (seam : Ent Q P₂) :
+    RTriple (RelVia b R S) a c P T :=
+  seq (pack semantic₁ machine₁) (pack semantic₂ machine₂) seam
+
+end RTriple
+
 end Vsa.Logic

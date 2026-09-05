@@ -118,33 +118,23 @@ blockD_v_rec` chain the decoded route describes.  Left abstract here (a NAMED ty
 residual, the honest surface of the not-yet-built str-comparison block-C), consumed
 by all four cmp cells via `bres := <op sign test>`. -/
 def StrCmpCellResid (op : BinOp) (bres : String → String → Bool) : Prop :=
-  ∀ (st : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr)
-    (st'' : Vsa.While.St) (sl sr : String),
-    EvalIH st d env (.binary op el er) st'' (.bool (bres sl sr))
+  BinStrCmpCell op bres
 
 /-- `.lt` string cell (`sl < sr`) — a thin instantiation of `StrCmpCellResid`. -/
 theorem strCmpCell_lt (h : StrCmpCellResid .lt (fun sl sr => sl < sr)) :
-    ∀ st d env el er st'' (sl sr : String),
-      EvalIH st d env (.binary .lt el er) st'' (.bool (sl < sr)) :=
-  fun st d env el er st'' sl sr => h st d env el er st'' sl sr
+    BinStrCmpCell .lt (fun sl sr => sl < sr) := h
 
 /-- `.le` string cell (`sl < sr || sl == sr`) — thin instantiation. -/
 theorem strCmpCell_le (h : StrCmpCellResid .le (fun sl sr => sl < sr || sl == sr)) :
-    ∀ st d env el er st'' (sl sr : String),
-      EvalIH st d env (.binary .le el er) st'' (.bool (sl < sr || sl == sr)) :=
-  fun st d env el er st'' sl sr => h st d env el er st'' sl sr
+    BinStrCmpCell .le (fun sl sr => sl < sr || sl == sr) := h
 
 /-- `.gt` string cell (`sr < sl`) — thin instantiation. -/
 theorem strCmpCell_gt (h : StrCmpCellResid .gt (fun sl sr => sr < sl)) :
-    ∀ st d env el er st'' (sl sr : String),
-      EvalIH st d env (.binary .gt el er) st'' (.bool (sr < sl)) :=
-  fun st d env el er st'' sl sr => h st d env el er st'' sl sr
+    BinStrCmpCell .gt (fun sl sr => sr < sl) := h
 
 /-- `.ge` string cell (`sr < sl || sl == sr`) — thin instantiation. -/
 theorem strCmpCell_ge (h : StrCmpCellResid .ge (fun sl sr => sr < sl || sl == sr)) :
-    ∀ st d env el er st'' (sl sr : String),
-      EvalIH st d env (.binary .ge el er) st'' (.bool (sr < sl || sl == sr)) :=
-  fun st d env el er st'' sl sr => h st d env el er st'' sl sr
+    BinStrCmpCell .ge (fun sl sr => sr < sl || sl == sr) := h
 
 /-! ## The STR-CONCATENATION residual `StrConcatCellResid`
 
@@ -161,12 +151,7 @@ its discharge is the bespoke `stringify`+alloc concat path (see the concat ledge
 Left abstract (a NAMED typed residual, blocked on a `stringify`/`display` framed
 spec). -/
 def StrConcatCellResid : Prop :=
-  (∀ st d env el er st'' (sl : String) (rv : Value),
-      EvalIH st d env (.binary .add el er) st''
-        (.str ((Value.str sl).catDisplay st''.store ++ rv.catDisplay st''.store))) ∧
-  (∀ st d env el er st'' (lv : Value) (sr : String),
-      EvalIH st d env (.binary .add el er) st''
-        (.str (lv.catDisplay st''.store ++ (Value.str sr).catDisplay st''.store)))
+  BinStrAddLCell ∧ BinStrAddRCell
 
 /-! ## `eval_binary_row_str_closed` — the dispatcher, str slots via the 2 shared residuals
 
@@ -193,9 +178,7 @@ theorem eval_binary_row_str_closed
     (hStrCmpGt : StrCmpCellResid .gt (fun sl sr => sr < sl))
     (hStrCmpGe : StrCmpCellResid .ge (fun sl sr => sr < sl || sl == sr))
     (hStrConcat : StrConcatCellResid)
-    (hDivOv : ∀ st d env el er st'',
-        EvalIH st d env (.binary .div el er) st''
-          (.int (wrap64 ((-2^63 : Int).tdiv (-1))))) :
+    (hDivOv : BinDivOverflowCell) :
     ∀ (st : Vsa.While.St) (d : Nat) (env : Addr) (op : BinOp) (l r : Expr)
       (st' st'' : Vsa.While.St) (lv rv v : Value)
       (a : EvalE st d env l st' lv) (a_1 : EvalE st' d env r st'' rv)

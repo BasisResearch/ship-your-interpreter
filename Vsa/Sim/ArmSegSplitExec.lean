@@ -77,6 +77,7 @@ theorem execEntry_of_jalPrefix
     (hjaltgt : (callPC + sign_extend (m := 64) jalImm) = BitVec.ofNat 64 execStmtEntry)
     (hlink : (BitVec.addInt callPC 4) = retPC)
     (hretAl : retPC.toNat % 4 = 0)
+    (henvValid : EnvValid st env)
     (hjalSite : ∀ (σ : MState) (i u : Nat) (vmi : BitVec 64),
       GoodState σ → σ.regs.get? Register.PC = some callPC →
       σ.regs.get? Register.minstret = some vmi → Exec_stmtLoaded σ.mem → i < 2 →
@@ -89,13 +90,16 @@ theorem execEntry_of_jalPrefix
         c.σ.regs.get? Register.x10 = some aInterp ∧
         c.σ.regs.get? Register.x11 = some aStmt ∧
         c.σ.regs.get? Register.x12 = some aEnv ∧
+        aEnv = BitVec.ofNat 64 (φf env) ∧
         c.σ.regs.get? Register.x13 = some aRet ∧
         c.σ.regs.get? Register.x2 = some (sp - hdrm) ∧
         (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
         ((∃ w, c.σ.regs.get? Register.x8 = some w) ∧
          (∃ w, c.σ.regs.get? Register.x9 = some w) ∧
          (∃ w, c.σ.regs.get? Register.x18 = some w) ∧
-         (∃ w, c.σ.regs.get? Register.x19 = some w)) ∧
+         (∃ w, c.σ.regs.get? Register.x19 = some w) ∧
+         (∃ w, c.σ.regs.get? Register.x20 = some w) ∧
+         (∃ w, c.σ.regs.get? Register.x21 = some w)) ∧
         c.σ.sailOutput = out0 ∧
         String.join out0.toList = st.out ∧
         c.σ.mem = mcall ∧
@@ -123,8 +127,9 @@ theorem execEntry_of_jalPrefix
     LandedN 1 c (fun c' =>
       ExecEntry (fun R => c'.σ.regs.get? R) N A SL φf φc st d env s
         (sp - hdrm) retPC aInterp aStmt aEnv aRet mcall c') := by
-  obtain ⟨hG, htick, hpc, ha0, ha1, ha2, ha3, hsp, ⟨vmi, hmi⟩,
-    ⟨⟨w8, hw8⟩, ⟨w9, hw9⟩, ⟨w18, hw18⟩, ⟨w19, hw19⟩⟩,
+  obtain ⟨hG, htick, hpc, ha0, ha1, ha2, henvPtr, ha3, hsp, ⟨vmi, hmi⟩,
+    ⟨⟨w8, hw8⟩, ⟨w9, hw9⟩, ⟨w18, hw18⟩, ⟨w19, hw19⟩,
+      ⟨w20, hw20⟩, ⟨w21, hw21⟩⟩,
     hout, houtStr, hmemc, hcodeS, hstmtR, hstore, hstoreSurv,
     hstAl, hstLo, hstHi, hstWin, hstStk,
     hstackOK, hSLlo, hSLhiRam, hSLwin, hcodeStk,
@@ -152,6 +157,10 @@ theorem execEntry_of_jalPrefix
     obs_jalT_other hobs1 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hw18
   have hx19_1 : σ1.regs.get? Register.x19 = some w19 :=
     obs_jalT_other hobs1 Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hw19
+  have hx20_1 : σ1.regs.get? Register.x20 = some w20 :=
+    obs_jalT_other hobs1 Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hw20
+  have hx21_1 : σ1.regs.get? Register.x21 = some w21 :=
+    obs_jalT_other hobs1 Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hw21
   obtain ⟨vmi1, hmi1⟩ := obs_jalT_minstret hobs1
   have hout1 : σ1.sailOutput = out0 := by
     rw [hobs1.out, sailOutput_sigmaPost_jal]; exact hout
@@ -165,6 +174,7 @@ theorem execEntry_of_jalPrefix
         a0 := ha0_1
         a1 := ha1_1
         a2 := ha2_1
+        envPtr := henvPtr
         a3 := ha3_1
         ra := hlink1
         ra_align := hretAl
@@ -180,6 +190,7 @@ theorem execEntry_of_jalPrefix
           show StmtRepr σ1.mem aStmt.toNat s; rw [hmem1e]; exact hstmtR
         store := by
           show StoreRepr σ1.mem N A φf φc st.store; rw [hmem1e]; exact hstore
+        env_valid := henvValid
         store_survives := by
           intro m' hag
           refine hstoreSurv m' (fun k hk1 => ?_)
@@ -197,6 +208,7 @@ theorem execEntry_of_jalPrefix
         stmt_ram := ⟨hstLo, hstHi⟩
         stmt_win := hstWin
         spill_defined := ⟨⟨w8, hx8_1⟩, ⟨w9, hx9_1⟩, ⟨w18, hx18_1⟩, ⟨w19, hx19_1⟩⟩
+        envset_defined := ⟨⟨w20, hx20_1⟩, ⟨w21, hx21_1⟩⟩
         ground := by rw [hmem1e]; exact hground }
 
 #print axioms execEntry_of_jalPrefix

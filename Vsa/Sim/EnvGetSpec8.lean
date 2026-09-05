@@ -94,7 +94,8 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
           -- c60-entry `ra`; the input `r` (`hSt.ra`) is not read.
           ScanSt g' scanTestPC env name out count pn (0x80002c6c#64) sp (i+1) f nameStr N φf φc m0 c' ∧
           ∀ j, (hj : j < f.vars.length) → j < i + 1 → f.vars[j].1 ≠ nameStr)
-       ∨ HitAt env out sp i f nameStr m0 c') := by
+       ∨ HitAt env out sp i f nameStr m0 c') ∧
+      c'.σ.sailOutput = c.σ.sailOutput := by
   have hcnt : count.toNat = f.vars.length := hSt.count_eq
   have hcntlt : f.vars.length < 2^64 := by rw [← hcnt]; exact count.isLt
   have hloadedG_m0 : Env_getLoaded m0 := hSt.mem ▸ hSt.loadedG
@@ -110,7 +111,7 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
   have hg_x21 : g Register.x21 = some out := by rw [← hSt.ghost _ (by decide)]; exact hSt.out5
   have hg_x2 : g Register.x2 = some sp := by rw [← hSt.ghost _ (by decide)]; exact hSt.sp2
   -- ============ c60: ld a0,0(s1) → x10 = ofNat q (via scan_c60_load) ============
-  obtain ⟨c2, hstep2, hpc2, hx10_2, hn2, hra2, hmem2, hG2, htick2, hmi2, hghost2⟩ :=
+  obtain ⟨c2, hstep2, hpc2, hx10_2, hn2, hra2, hmem2, hG2, htick2, hmi2, hout2, hghost2⟩ :=
     scan_c60_load g env name out count pn r sp i f nameStr N φf φc m0 c q hSt hilt hq
   have hmem2' : c2.σ.mem = m0 := hmem2
   obtain ⟨vmi2, hmi2'⟩ := hmi2
@@ -134,6 +135,9 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
   have hra3 := obs_alu_other' hobs3 Register.x1 (by decide) hra2
   obtain ⟨vmi3, hmi3⟩ := obs_alu_minstret hobs3
   have hmem3' : σ3.mem = m0 := by rw [hmem3]; exact hmem2'
+  have hout3 : σ3.sailOutput = c.σ.sailOutput := by
+    rw [hobs3.out, sailOutput_sigmaPost_alu]
+    exact hout2
   have hghost3 : ∀ R : Register, AbiPreserved R = true → σ3.regs.get? R = g R := by
     intro R hR
     have hnws : NotWrittenStrcmp R := notWrittenStrcmp_of_abiPreserved R hR
@@ -154,6 +158,9 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
   have hx11_4 := obs_jal_other_eg4 hobs4 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11_3
   obtain ⟨vmi4, hmi4⟩ := obs_jal_minstret_eg4 hobs4
   have hmem4' : σ4.mem = m0 := by rw [hmem4]; exact hmem3'
+  have hout4 : σ4.sailOutput = c.σ.sailOutput := by
+    rw [hobs4.out, sailOutput_sigmaPost_jal]
+    exact hout3
   have hloadedS4 : StrcmpLoaded σ4.mem := by rw [hmem4']; exact hloadedS_m0
   have hloadedG4 : Env_getLoaded σ4.mem := by rw [hmem4']; exact hloadedG_m0
   have hghost4 : ∀ R : Register, AbiPreserved R = true → σ4.regs.get? R = g R := by
@@ -180,7 +187,7 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
   obtain ⟨c5, hstepsStr, hStrPost⟩ :=
     strcmp_full_spec g4 (BitVec.ofNat 64 q) name (0x80002c6c#64) (f.vars[i].1) nameStr m0
       σ4.sailOutput ⟨σ4, i4, c2.steps + 1 + 1⟩ hStrPre
-  obtain ⟨hG5, hpc5, hra5, hmem5, _hout5, htick5, hframe5,
+  obtain ⟨hG5, hpc5, hra5, hmem5, hout5raw, htick5, hframe5,
     csa, csb, xres, hCSa, hCSb, hsaEq, hsbEq, hx10_5, hsign5⟩ := hStrPost
   have crecover : ∀ (R : Register) (w : RegisterType R), AbiPreserved R = true →
       g R = some w → c5.σ.regs.get? R = some w := by
@@ -195,6 +202,7 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
   have hidx5 : c5.σ.regs.get? Register.x8 = some (BitVec.ofNat 64 i) := crecover _ _ (by decide) hg_x8
   have hsp5 : c5.σ.regs.get? Register.x2 = some sp := crecover _ _ (by decide) hg_x2
   have hmem5' : c5.σ.mem = m0 := hmem5
+  have hout5 : c5.σ.sailOutput = c.σ.sailOutput := hout5raw.trans hout4
   obtain ⟨vmi5, hmi5⟩ := hG5.minstret
   have hghost5 : ∀ R : Register, AbiPreserved R = true → c5.σ.regs.get? R = g R := by
     intro R hR
@@ -229,8 +237,12 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
     have hsp6 := obs_bnottaken_other' hobs6 Register.x2 (by decide) hsp5
     have hra6 := obs_bnottaken_other' hobs6 Register.x1 (by decide) hra5
     have hmem6' : σ6.mem = m0 := by rw [hmem6]; exact hmem5'
+    have hout6 : σ6.sailOutput = c.σ.sailOutput := by
+      rw [hobs6.out, sailOutput_sigmaPost_branch_nottaken]
+      exact hout5
     refine ⟨⟨σ6, i6, c5.steps + 1⟩, hsteps_pre.trans (Steps.single hstep6),
-      Or.inr ⟨hG6, hmem6', hpc6, he6, hidx6, ho6, hsp6, hra6, obs_bnottaken_minstret hobs6, hi6, hilt, hnameEq, hfm⟩⟩
+      Or.inr ⟨hG6, hmem6', hpc6, he6, hidx6, ho6, hsp6, hra6, obs_bnottaken_minstret hobs6, hi6, hilt, hnameEq, hfm⟩,
+      hout6⟩
   · -- MISS
     have hx0' : ¬ xres = (0 : BitVec 64) := by
       intro h; apply hx0; rw [h]; apply BitVec.eq_of_toNat_eq; decide
@@ -269,6 +281,9 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
     have hsp6 := bcarry6 Register.x2 sp (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hsp5
     obtain ⟨vmi6, hmi6⟩ := obs_btaken_minstret hobs6
     have hmem6' : σ6.mem = m0 := by rw [hmem6]; exact hmem5'
+    have hout6 : σ6.sailOutput = c.σ.sailOutput := by
+      rw [hobs6.out, sailOutput_sigmaPost_branch_taken]
+      exact hout5
     have hghost6 : ∀ R : Register, AbiPreserved R = true → σ6.regs.get? R = g R := by
       intro R hR
       have hnws : NotWrittenStrcmp R := notWrittenStrcmp_of_abiPreserved R hR
@@ -295,6 +310,9 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
     have hsp7 := obs_alu_other' hobs7 Register.x2 (by decide) hsp6
     obtain ⟨vmi7, hmi7⟩ := obs_alu_minstret hobs7
     have hmem7' : σ7.mem = m0 := by rw [hmem7]; exact hmem6'
+    have hout7 : σ7.sailOutput = c.σ.sailOutput := by
+      rw [hobs7.out, sailOutput_sigmaPost_alu]
+      exact hout6
     -- ============ c58: addi s1,s1,8 → names += 8 → c5c@i+1 ============
     obtain ⟨σ8, i8, hs8, hi8, hG8, hmem8, hobs8⟩ :=
       site_80002c58_eg2 σ7 i7 (c5.steps + 1 + 1) (0x80002c58#64) vmi7 (pn + BitVec.ofNat 64 (8 * i))
@@ -322,6 +340,9 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
     have hsp8 := obs_alu_other' hobs8 Register.x2 (by decide) hsp7
     obtain ⟨vmi8, hmi8⟩ := obs_alu_minstret hobs8
     have hmem8' : σ8.mem = m0 := by rw [hmem8]; exact hmem7'
+    have hout8 : σ8.sailOutput = c.σ.sailOutput := by
+      rw [hobs8.out, sailOutput_sigmaPost_alu]
+      exact hout7
     have hSt' : ScanSt (fun R => σ8.regs.get? R) scanTestPC env name out count pn (0x80002c6c#64) sp (i+1)
         f nameStr N φf φc m0 ⟨σ8, i8, c5.steps + 1 + 1 + 1⟩ :=
       { good := hG8, loadedG := by show Env_getLoaded σ8.mem; rw [hmem8']; exact hloadedG_m0,
@@ -333,7 +354,7 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
         ile := by omega, ghost := fun R _ => rfl }
     refine ⟨⟨σ8, i8, c5.steps + 1 + 1 + 1⟩,
       hsteps_pre.trans ((Steps.single hstep6).trans ((Steps.single hstep7).trans (Steps.single hstep8))),
-      Or.inl ⟨fun R => σ8.regs.get? R, hSt', ?_⟩⟩
+      Or.inl ⟨fun R => σ8.regs.get? R, hSt', ?_⟩, hout8⟩
     intro j hj hji
     rcases Nat.lt_or_ge j i with hlt | hge
     · exact hfm j hj hlt
@@ -358,7 +379,8 @@ theorem scan_iter_hit (g : (R : Register) → Option (RegisterType R))
       ((∃ (g' : (R : Register) → Option (RegisterType R)),
           ScanSt g' scanTestPC env name out count pn r sp (i+1) f nameStr N φf φc m0 c' ∧
           ∀ j, (hj : j < f.vars.length) → j < i + 1 → f.vars[j].1 ≠ nameStr)
-       ∨ HitAt env out sp i f nameStr m0 c') := by
+       ∨ HitAt env out sp i f nameStr m0 c') ∧
+      c'.σ.sailOutput = c.σ.sailOutput := by
   have hcnt : count.toNat = f.vars.length := hSt.count_eq
   have hcntlt : f.vars.length < 2^64 := by rw [← hcnt]; exact count.isLt
   obtain ⟨vmi0, hmi0⟩ := hSt.minstret
@@ -405,13 +427,15 @@ theorem scan_iter_hit (g : (R : Register) → Option (RegisterType R))
       cursor1 := hcur1, idx0 := hidx1, ra := hra1, sp2 := hsp1, minstret := ⟨vmi1, hmi1⟩,
       tick := hi1, frame := hSt.frame, names := hSt.names, count_eq := hSt.count_eq, ile := hSt.ile,
       ghost := hghost1 }
-  obtain ⟨c', hsteps60, hdisj⟩ :=
+  obtain ⟨c', hsteps60, hdisj, hout60⟩ :=
     scan_iter_from_c60 g env name out count pn r sp i f nameStr N φf φc m0
       ⟨σ1, i1, c.steps + 1⟩ hSt60 hfm hilt
   -- `scan_iter_from_c60` outputs the next-iteration `ScanSt` with `x1 = 0x80002c6c`
   -- (the strcmp link set by the `c68` jal); `scan_iter_hit`'s `r = 0x80002c6c` (`hr`).
   subst hr
-  exact ⟨c', (Steps.single hstep1).trans hsteps60, hdisj⟩
+  have hout1 : σ1.sailOutput = c.σ.sailOutput := by
+    rw [hobs1.out, sailOutput_sigmaPost_branch_nottaken]
+  exact ⟨c', (Steps.single hstep1).trans hsteps60, hdisj, hout60.trans hout1⟩
 
 /-! ## 3. The register-carrying scan-to-HIT loop (`scan_from_c5c_to_hit`)
 
@@ -431,7 +455,8 @@ theorem scan_from_c5c_to_hit (env name out count pn sp : BitVec 64)
       (∀ j, (hj : j < f.vars.length) → j < i → f.vars[j].1 ≠ nameStr) →
       i ≤ iw → iw - i ≤ fuel →
       ∃ (c' : Config) (iHit : Nat),
-        Steps c c' ∧ HitAt env out sp iHit f nameStr m0 c' := by
+        Steps c c' ∧ HitAt env out sp iHit f nameStr m0 c' ∧
+        c'.σ.sailOutput = c.σ.sailOutput := by
   intro fuel
   induction fuel with
   | zero =>
@@ -439,26 +464,26 @@ theorem scan_from_c5c_to_hit (env name out count pn sp : BitVec 64)
     -- fuel = 0 ⇒ iw - i = 0 ⇒ i = iw (with i ≤ iw); so slot i matches ⇒ this iteration HITs.
     have hie : i = iw := by omega
     have hilt : i < f.vars.length := by omega
-    obtain ⟨c', hsteps, hdisj⟩ :=
+    obtain ⟨c', hsteps, hdisj, hout⟩ :=
       scan_iter_hit g env name out count pn (0x80002c6c#64) sp i f nameStr N φf φc m0 c hSt hfm hilt rfl
     rcases hdisj with ⟨g', hSt', hfm'⟩ | hHit
     · -- MISS at i = iw contradicts the witness `f.vars[iw].1 = nameStr`
       exact absurd hhit (hfm' iw hiw (by omega))
-    · exact ⟨c', i, hsteps, hHit⟩
+    · exact ⟨c', i, hsteps, hHit, hout⟩
   | succ fuel ih =>
     intro g i c hSt hfm hle hfuel
     have hilt : i < f.vars.length := by omega
-    obtain ⟨c', hsteps, hdisj⟩ :=
+    obtain ⟨c', hsteps, hdisj, hout⟩ :=
       scan_iter_hit g env name out count pn (0x80002c6c#64) sp i f nameStr N φf φc m0 c hSt hfm hilt rfl
     rcases hdisj with ⟨g', hSt', hfm'⟩ | hHit
     · -- MISS: slot i differed, so i ≠ iw ⇒ i < iw ⇒ i+1 ≤ iw, fuel decreases
       have hne : i ≠ iw := by
         intro h; exact absurd hhit (hfm' iw hiw (by omega))
       have hlt : i < iw := by omega
-      obtain ⟨c'', iHit, hsteps2, hHit2⟩ :=
+      obtain ⟨c'', iHit, hsteps2, hHit2, hout2⟩ :=
         ih g' (i + 1) c' hSt' hfm' (by omega) (by omega)
-      exact ⟨c'', iHit, hsteps.trans hsteps2, hHit2⟩
-    · exact ⟨c', i, hsteps, hHit⟩
+      exact ⟨c'', iHit, hsteps.trans hsteps2, hHit2, hout2.trans hout⟩
+    · exact ⟨c', i, hsteps, hHit, hout⟩
 
 /-! ## 4. The strengthened FOUND-case entry predicate (`FoundSt`)
 
@@ -677,7 +702,7 @@ theorem env_get_found_uncond'
   -- normalize `0 < f.vars.length` (iw witnesses it)
   have h0lt : 0 < f.vars.length := Nat.lt_of_le_of_lt (Nat.zero_le iw) hFS.iwLt
   -- run the from-c60 first body: HIT (i=0) or MISS (advance to ScanSt@c5c i=1)
-  obtain ⟨c1, hs1, hdisj1⟩ :=
+  obtain ⟨c1, hs1, hdisj1, _hout1⟩ :=
     scan_iter_from_c60 g0 env name out (BitVec.ofNat 64 len) (BitVec.ofNat 64 pn) r0
       (sp0 - 64#64) 0 f nameStr N φf φc m9 c60 hSt60 (by intro j hj hji; omega) h0lt
   -- reach a register-carrying HitAt at the first-match index
@@ -691,7 +716,7 @@ theorem env_get_found_uncond'
         · subst h; exact absurd hFS.iwHit (hfm1 0 h0lt (by omega))
         · omega
       -- continue the loop from ScanSt@c5c at index 1
-      obtain ⟨cHit, iHit, hs2, hHit⟩ :=
+      obtain ⟨cHit, iHit, hs2, hHit, _hout2⟩ :=
         scan_from_c5c_to_hit env name out (BitVec.ofNat 64 len) (BitVec.ofNat 64 pn) (sp0 - 64#64)
           f nameStr N φf φc m9 iw hFS.iwLt hFS.iwHit iw g1 1 c1 hSt1 hfm1 h1le (by omega)
       exact ⟨cHit, iHit, hs1.trans hs2, hHit⟩
@@ -703,7 +728,7 @@ theorem env_get_found_uncond'
       (fun pv hpv => hgeom9 pv hpv iHit hHit.ilt) s56 s48 s40 s32 s24 s16 s8
   -- run the verified HIT tail
   obtain ⟨c', m', hsT, hG, htick, hpc, ha0, hra, hsp', hx8, hx9, hx18, hx19, hx20, hx21,
-    hmem', hcode', hvr, _, _⟩ :=
+    hmem', hcode', hvr, _, _, _, _, _⟩ :=
     env_get_hit_tail (cHit.σ.regs.get?) env out (sp0 - 64#64) r r0 r8 r9 r18 r19 r20 r21 iHit pv w0 w1 w2
       f N φf φc m9 cHit hHit.ilt hHitTail
   exact ⟨c', m', iHit, hHit.ilt, (hsP.trans hsHit).trans hsT, hG, htick, hpc, ha0, hra, hsp',

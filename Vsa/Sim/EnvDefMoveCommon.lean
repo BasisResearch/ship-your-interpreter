@@ -52,7 +52,7 @@ theorem finish_env_define_alu
       c'.σ.regs.get? Register.x19 = some countv ∧
       c'.σ.regs.get? Register.minstret = some vmi' ∧
       GoodState c'.σ ∧ Env_defineLoaded c'.σ.mem ∧ StrcmpLoaded c'.σ.mem ∧
-      c'.tick < 2 := by
+      c'.σ.mem = c.σ.mem ∧ c'.tick < 2 := by
   have hpc' := obs_alu_pc hobs
   rw [hnext] at hpc'
   have hcount' := obs_alu_other hobs Register.x19 (by decide) (by decide)
@@ -61,6 +61,6 @@ theorem finish_env_define_alu
   have hloaded' : Env_defineLoaded σ'.mem := hmem ▸ hloaded
   have hstrloaded' : StrcmpLoaded σ'.mem := hmem ▸ hstrloaded
   exact ⟨⟨σ', i', c.steps + 1⟩, vmi', hstep, hpc', hpost, hcount', hmi',
-    hG', hloaded', hstrloaded', htick'⟩
+    hG', hloaded', hstrloaded', hmem, htick'⟩
 
 end Vsa.Sim

@@ -1,3 +1,4 @@
+import Vsa.Sim.EntryHalts
 import Vsa.Sim.EntryHaltsSpans
 import Vsa.Sim.LayoutInstance
 
@@ -29,7 +30,7 @@ reseats the two seams onto strictly smaller, precisely-named residuals so that
   store `initSt.store` (the single global frame with the three natives) is built by
   `interp_init` (`0x80004308`, called by `main` at `0x800045b4`) — which runs
   BEFORE the `interp_run`-entry `Loaded` config (`interpRunLayout.atInterpRun` pins
-  PC = `0x800043ec`, `a0`/`a1` = AST base/len; NOT the store).  So the store-init
+  the post-startup state and `a0=in`, `a1=stmts`, `a2=count`, `a3=0`).  So the store-init
   representation is genuinely OFF the `interp_run` prologue path; it cannot be
   produced by decoding `[0x800043ec, 0x8000448c)` alone.  We name that exact gap as
   the ONE residual `InterpInitStoreRepr` (its PC span decoded in its doc), and
@@ -130,6 +131,46 @@ def EpilogueSpill
       ChainFacts c.σ.mem c.σ.mem [(21, (0#64 : BitVec 64)), (2, spv)]
         (ldsRestore s0b s1b s2b s3b s4b s6b s5b) restoreChain
 
+/-- Exact inputs not already projected by `SegExit`.  The return latch is tied
+to the shared ghost frame; `SegExit.frame` turns it into the concrete `s5 = 0`
+fact.  Code preservation, the downstream tail, and the restore-slot image stay
+explicit until their respective frame/bridge proofs are supplied. -/
+structure EpilogueSpillInputs
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st' : SpecSt) (m0 : Mem) (out : String) : Prop where
+  run_code : ∀ c : Config,
+    SegExit g N A SL φf φc initSt.store.frames.size initSt.store.closures.size
+        st' interpNormalExitPC m0 c →
+    Interp_runLoaded c.σ.mem
+  tail : ExitTailChain0 (BitVec.ofNat 64 interpRetLinkPC) out
+  restore : ∀ c : Config,
+    SegExit g N A SL φf φc initSt.store.frames.size initSt.store.closures.size
+        st' interpNormalExitPC m0 c →
+    ∃ (spv : BitVec 64) (s0b s1b s2b s3b s4b s6b s5b : List (BitVec 8)),
+      c.σ.regs.get? Register.x2 = some spv ∧
+      ChainFacts c.σ.mem c.σ.mem [(21, (0#64 : BitVec 64)), (2, spv)]
+        (ldsRestore s0b s1b s2b s3b s4b s6b s5b) restoreChain
+
+/-- Assemble the former whole epilogue residual from its route invariant and
+the three remaining explicit bridge inputs. -/
+theorem epilogueSpill_of_inputs
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st' : SpecSt) (m0 : Mem) (out : String)
+    (hLatch : g Register.x21 = some (0#64 : BitVec 64))
+    (I : EpilogueSpillInputs g N A SL φf φc st' m0 out) :
+    EpilogueSpill g N A SL φf φc st' m0 out := by
+  intro c hSeg _hout
+  have hs5 : c.σ.regs.get? Register.x21 = some (0#64 : BitVec 64) := by
+    have hframe := hSeg.frame Register.x21 (by decide) (fun f hf => by
+      simp [interpNormalExitPC, Vsa.Sim.Scaffold.joinRestored] at hf
+      rw [← hf])
+    exact hframe.trans hLatch
+  obtain ⟨spv, s0b, s1b, s2b, s3b, s4b, s6b, s5b, hsp, hcf⟩ := I.restore c hSeg
+  exact ⟨hs5, I.run_code c hSeg, I.tail, spv, s0b, s1b, s2b, s3b, s4b,
+    s6b, s5b, hsp, hcf⟩
+
 /-- **`EpilogueFrame` reduced to `EpilogueSpill`.**  The four control conjuncts of
 `EpilogueFrame` come from `epilogueControl_of_segExit` (projections of `SegExit`);
 the remaining spill/frame/image/tail facts are exactly `EpilogueSpill`.  So the
@@ -149,7 +190,7 @@ theorem epilogueFrame_of_spill
 /-! ## §3. Prologue — the store-init locus is `interp_init`, off the `interp_run` path
 
 `StoreInitSeam` must produce, from `Loaded L p c` (the machine parked at
-`interp_run`'s entry `0x800043ec`, `a0`/`a1` = AST base/len), a `SegEntry` at the
+`interp_run`'s entry `0x800043ec` with its four ABI arguments), a `SegEntry` at the
 statement-loop head `0x8000448c` over `initSt.store` (the single global frame with
 the three natives).  The store is built by `interp_init` (`0x80004308`), which
 `main` calls at `0x800045b4` — a call that has ALREADY RETURNED by the time the
@@ -184,13 +225,31 @@ def InterpInitStoreRepr (L : Layout) (p : Program) : Prop :=
     ∃ (c1 : Config)
       (g : (R : Register) → Option (RegisterType R))
       (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-      (dLeft aLeft : Nat) (m0 : Mem),
+      (dLeft aLeft : Nat) (sp aRet : BitVec 64) (m0 : Mem),
       Steps c c1 ∧
       -- ITEM ZERO (falsity #12, shape 3): also certify the `interp_run` image in
       -- `m0` (the `SeqSpanGround` feed for the guarded `mExecSeq`; the span
       -- discharger pins these bytes anyway).
       Vsa.Sim.Code.Interp_runLoaded m0 ∧
-      SegEntry g N A SL φf φc initSt 0 dLeft aLeft interpLoopHeadPC m0 c1
+      g Register.x21 = some (0#64 : BitVec 64) ∧
+      SegEntry g N A SL φf φc initSt 0 dLeft aLeft interpLoopHeadPC m0 c1 ∧
+      ExecSeqEntryI .interpRun g N A SL φf φc initSt 0 0 p sp aRet m0 c1
+
+/-- Honest program-shape inputs for entry.  The empty case is a direct
+pre-loop bypass; only nonempty programs owe the loop-head store representation. -/
+structure InterpInitRouteInputs (L : Layout) : Prop where
+  empty : EntryEmptySpan L
+  nonempty : ∀ (s : Vsa.While.Stmt) (ss : List Vsa.While.Stmt),
+    InterpInitStoreRepr L (s :: ss)
+
+/-- Build the route-indexed entry span from the two honest program shapes. -/
+theorem entryRouteSpan_of_initInputs
+    (L : Layout) (I : InterpInitRouteInputs L) :
+    ∀ p, EntryRouteSpan L p := by
+  intro p
+  cases p with
+  | nil => exact I.empty
+  | cons s ss => exact I.nonempty s ss
 
 /-- **`StoreInitSeam` reduced to `InterpInitStoreRepr`.**  These two have exactly
 the same shape (the prologue drive to `SegEntry`@loopHead); `InterpInitStoreRepr`
@@ -199,10 +258,9 @@ residual's real gap is the off-path `interp_init` store, not the `interp_run`
 prologue decode.  So `StoreInitSeam` is reseated on the precisely-named
 `InterpInitStoreRepr`. -/
 theorem storeInitSeam_of_initRepr
-    (L : Layout) (hinit : ∀ p, InterpInitStoreRepr L p) :
-    ∀ p, StoreInitSeam L p := by
-  intro p c hL
-  exact hinit p c hL
+    (L : Layout) (hinit : InterpInitRouteInputs L) :
+    ∀ p, StoreInitSeam L p :=
+  entryRouteSpan_of_initInputs L hinit
 
 /-! ## §4. `hEntryHalts_closed'` — reseated on the two tightened residuals -/
 
@@ -222,11 +280,12 @@ to `interp_init`, so `termSimClosed`'s entry premise now rests ONLY on:
   loop head (decoded PC span in its doc). -/
 theorem hEntryHalts_closed'
     (L : Layout)
-    (hinit : ∀ p, InterpInitStoreRepr L p)
+    (hinit : InterpInitRouteInputs L)
     (hspill : ∀ (g : (R : Register) → Option (RegisterType R))
         (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
         (st' : SpecSt) (m0 : Mem) (out : String),
-        EpilogueSpill g N A SL φf φc st' m0 out) :
+        g Register.x21 = some (0#64 : BitVec 64) →
+        EpilogueSpillInputs g N A SL φf φc st' m0 out) :
     ∀ (p : Program) (c : Config) (out : String) (st' : SpecSt)
       (t : ExecSeq initSt 0 0 p st' Status.normal),
       Loaded L p c → st'.out = out →
@@ -234,9 +293,13 @@ theorem hEntryHalts_closed'
       Halts c out 0 :=
   hEntryHalts_closed L
     (storeInitSeam_of_initRepr L hinit)
-    (fun g N A SL φf φc st' m0 out =>
-      epilogueFrame_of_spill g N A SL φf φc st' m0 out (hspill g N A SL φf φc st' m0 out))
+    (fun g N A SL φf φc st' m0 out hLatch =>
+      epilogueFrame_of_spill g N A SL φf φc st' m0 out
+        (epilogueSpill_of_inputs g N A SL φf φc st' m0 out hLatch
+          (hspill g N A SL φf φc st' m0 out hLatch)))
 
 #print axioms hEntryHalts_closed'
+#print axioms epilogueSpill_of_inputs
+#print axioms entryRouteSpan_of_initInputs
 
 end Vsa.Sim

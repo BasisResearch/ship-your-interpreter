@@ -304,6 +304,7 @@ Row format, one per traced step, on stderr, tab-separated:
 
 ```
 T <step> <pc> <npc> <x1> … <x31> [<mk> <addr> <pre> <post>]
+  O <output-chunks-before> <output-chunks-after> <appended-byte-or-256>
 ```
 
 `step` counts EVERY executed instruction (not just traced ones), `pc` is the
@@ -365,15 +366,28 @@ def memOpOf (w : BitVec 32) (regs : Array (BitVec 64)) : Option (Bool × BitVec 
     some (true, base + imm.signExtend 64, wd)
   else none
 
+/-- The byte appended by one HTIF putchar step.  `256` means that this step did
+not append exactly one one-byte output chunk. -/
+def appendedOutputByte (before after : Array String) : Nat :=
+  if after.size != before.size + 1 then 256
+  else
+    match after.back? with
+    | some s =>
+      match s.toList with
+      | [c] => if c.toNat < 256 then c.toNat else 256
+      | _ => 256
+    | none => 256
+
 /-- One traced step's TSV row. -/
 def traceRow (step : Nat) (pc npc : BitVec 64) (regs : Array (BitVec 64))
-    (mem : Option (Bool × BitVec 64 × Nat)) (pre post : BitVec 64) : String :=
+    (mem : Option (Bool × BitVec 64 × Nat)) (pre post : BitVec 64)
+    (outBefore outAfter outByte : Nat) : String :=
   let rs := String.intercalate "\t" ((List.range 31).map (fun i => hx64 (regs.getD (i+1) 0)))
   let m := match mem with
     | none => ""
     | some (st, a, wd) =>
       s!"\t{if st then "S" else "L"}{wd}\t{hx64 a}\t{hx64 pre}\t{hx64 post}"
-  s!"T\t{step}\t{hx64 pc}\t{hx64 npc}\t{rs}{m}"
+  s!"T\t{step}\t{hx64 pc}\t{hx64 npc}\t{rs}{m}\tO\t{outBefore}\t{outAfter}\t{outByte}"
 
 /-- The traced step loop.  `tracePCs` gates the dump; `traceAll` ignores it. -/
 def traceLoop (traceAll : Bool) (tracePCs : Std.HashSet (BitVec 64)) (maxSteps : Nat) :
@@ -393,10 +407,13 @@ def traceLoop (traceAll : Bool) (tracePCs : Std.HashSet (BitVec 64)) (maxSteps :
       let w ← readWord32 pc
       let mo := memOpOf w regs
       let pre ← match mo with | some (_, a, _) => read8 a | none => pure 0
+      let outputBefore := (← get).sailOutput
       let stepped ← try_step step_no true
       let npc ← readReg PC
       let post ← match mo with | some (true, a, _) => read8 a | _ => pure pre
-      dbg_trace (traceRow n pc npc regs mo pre post)
+      let outputAfter := (← get).sailOutput
+      dbg_trace (traceRow n pc npc regs mo pre post outputBefore.size outputAfter.size
+        (appendedOutputByte outputBefore outputAfter))
       if stepped then
         step_no := step_no + 1
         (cycle_count ())

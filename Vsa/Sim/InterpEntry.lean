@@ -90,6 +90,28 @@ set_option maxRecDepth 1000000
 /-- Machine entry PC of `eval_expr`. -/
 def evalExprEntry : Nat := 0x80003164
 
+/-- The semantic environment address names an allocated frame.  This is the
+minimum domain condition under which `StoreRepr` and `φf` may be used to
+transport an environment pointer. -/
+def EnvValid (st : Vsa.While.St) (env : Addr) : Prop :=
+  env < st.store.frames.size
+
+namespace EnvValid
+
+/-- Append-only store growth preserves validity of an existing environment. -/
+theorem mono {st st' : Vsa.While.St} {env : Addr}
+    (h : EnvValid st env)
+    (hframes : st.store.frames.size ≤ st'.store.frames.size) :
+    EnvValid st' env :=
+  Nat.lt_of_lt_of_le h hframes
+
+/-- The distinguished global environment is allocated in `initSt`. -/
+theorem init : EnvValid Vsa.While.initSt 0 := by
+  unfold EnvValid
+  decide
+
+end EnvValid
+
 /-- Register set preserved across `eval_expr` for the ghost frame: the RISC-V
 callee-saved set (`AbiPreserved`) plus the machine-noise registers (PC/nextPC/
 minstret/…). An `abbrev` so `by decide` can synthesize `Decidable` and the frame
@@ -122,6 +144,15 @@ theorem PhiExtends.trans {φ φ' φ'' : Addr → Nat} {n : Nat}
 theorem PhiExtends.mono {φ φ' : Addr → Nat} {n m : Nat} (hnm : n ≤ m)
     (h : PhiExtends φ φ' m) : PhiExtends φ φ' n :=
   fun a ha => h a (Nat.lt_of_lt_of_le ha hnm)
+
+/-- Agreement on the represented frame prefix applies at every valid
+environment index.  This is the only sound way to transport an environment
+pointer through an extension of the frame-address map. -/
+theorem EnvValid.phiExtends {st : Vsa.While.St} {env : Addr}
+    {φ φ' : Addr → Nat} (henv : EnvValid st env)
+    (hφ : PhiExtends φ φ' st.store.frames.size) :
+    φ' env = φ env :=
+  hφ env henv
 
 /-! ## `InterpCodeLoaded` — the reachable-code bundle
 
@@ -453,6 +484,10 @@ structure EvalEntry
   pc : c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 evalExprEntry)
   /-- ABI arg 0: the sret buffer. -/
   a0 : c.σ.regs.get? Register.x10 = some sret
+  /-- All three machine words of the caller-provided result slot are present.
+  Value constructors overwrite only their semantically live fields; compiled
+  callers later copy the complete 24-byte C struct. -/
+  sret_words : ValueWordsTotal c.σ.mem sret.toNat
   /-- ABI arg 1: `interp*` / env machine addr (unused by `.int`). -/
   a1 : c.σ.regs.get? Register.x11 = some aEnv
   /-- ABI arg 2: the `Expr` node address. -/
@@ -496,6 +531,8 @@ structure EvalEntry
   arm that dereferences the environment; for `.int` it is carried through
   unchanged. -/
   store : StoreRepr c.σ.mem N A φf φc st.store
+  /-- The semantic environment is in the represented frame-map domain. -/
+  env_valid : EnvValid st a
   /-- **`StoreRepr` survives any memory change confined to the FULL stack region
   `[SL.lo, SL.hi)` ∪ the sret buffer `[sret, sret+24)`.** This is the abstraction
   of the arena/AST-disjointness footprint reasoning (the represented
@@ -603,6 +640,18 @@ structure EvalEntry
   value. (v1→v2 field.) -/
   spill_defined : (∃ v, c.σ.regs.get? Register.x8 = some v) ∧
     (∃ v, c.σ.regs.get? Register.x9 = some v) ∧ (∃ v, c.σ.regs.get? Register.x18 = some v)
+  /-- The additional callee-saved registers used as `env_set` temporaries are
+  concrete at entry.  They are not implied by `GoodState`; recursive calls
+  must therefore retain their actual values through the ABI frame. -/
+  envset_defined : ∃ v19 v20 v21 : BitVec 64,
+    c.σ.regs.get? Register.x19 = some v19 ∧
+    c.σ.regs.get? Register.x20 = some v20 ∧
+    c.σ.regs.get? Register.x21 = some v21
+  /-- ABI arg 3 is the concrete environment pointer for the semantic frame
+  index `a`.  This is the missing store/environment bridge: without it the
+  variable and assignment arms may run `env_get`/`env_set` on an unrelated
+  machine frame. -/
+  envReg : c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf a))
   /-- **`a3`(x13) is defined at entry.** `x13`/`a3` is a caller-save temp NOT
   written across the prologue+dispatch span `0x80003164→0x800034e8`; the binary
   arm (`blockB_binary`, `EvalBinSim.lean`) reads it at arm entry as the env arg

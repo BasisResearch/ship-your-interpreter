@@ -145,6 +145,9 @@ theorem stringifyStrdupTailContract
     (halignC : rMemcpy.toNat % 4 = 0)
     (extsC : List (Nat × Nat)) (spC : BitVec 64)
     (hrouteCbyte : (src.toNat ^^^ dst.toNat) % 8 ≠ 0 ∨ nMemcpy < 8)
+    (hDstArenaC : A.contains dst.toNat nMemcpy)
+    (hArenaStackC : A.hi ≤ spC.toNat ∨ spC.toNat + 64 ≤ A.lo)
+    (hArenaCodeC : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo)
     (hAInvStableFootC : ∀ (σa σb : MState),
       σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
       (∀ a : Nat, (a < dst.toNat ∨ dst.toNat + nMemcpy ≤ a) → σa.mem[a]? = σb.mem[a]?) →
@@ -200,8 +203,9 @@ theorem stringifyStrdupTailContract
   envDefStrlenSplice bufPtr rStrlen str m0 strlenFramed bridgeStrlenPre
     (envDefMallocSplice M gm exts nMalloc spM rM mMalloc hnM bridgeMallocPre
       (envDefMemcpyFramedSplice (ghostReseatS0 gm dst) rMemcpy dst src nMemcpy mMemcpy bs
-        (envDefMemcpyFramed SL gpv headroom M.AInv extsC spC (ghostReseatS0 gm dst)
-          rMemcpy dst src nMemcpy mMemcpy bs halignC hrouteCbyte hAInvStableFootC)
+        (envDefMemcpyFramed A SL gpv headroom M.AInv extsC spC (ghostReseatS0 gm dst)
+          rMemcpy dst src nMemcpy mMemcpy bs halignC hrouteCbyte hDstArenaC
+          hArenaStackC hArenaCodeC hAInvStableFootC)
         bridgeMemcpyPre bridgeEpilogue))
 
 /-! ## Discharging `StringifyStrdupTailResid` from the composed contract
@@ -255,30 +259,19 @@ tail Triple, read off the result.  This factors `StringifyContract` through the
 strdup tail + a dispatch/branch entry supplier — no `display` residue beyond what
 each branch's buffer already realises. -/
 
-/-- **`StringifyContract` produced** from the whole-call composition.  Given, for
-each `(sp, r)`, a whole-`stringify`-call Triple to `StrdupTailExit rRet
-(v.display store)` (the dispatch ≫ branch ≫ strdup-tail composition of
-`stringifyStrdupTailContract`) and a witnessing entry configuration (the caller
-landing `ValueRepr v` at `aVal`, `mem = m0`), `StringifyContract` holds: run the
-Triple, read `res`/`m'` off the fresh-`CString` exit.  This is the honest surface
-of the assembled `stringify` call — the abstract residual `StringifyContract`
-witnessed by the machine composition. -/
+/-- Package an exact whole-call execution as `StringifyContract`.  Unlike the
+former adapter, this requires the caller's real `StringifyEntry`; it cannot
+manufacture a result by choosing an unrelated configuration and memory. -/
 theorem stringifyContract_of_call
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Vsa.While.Addr → Nat)
     (store : Vsa.While.Store) (aVal : Nat) (v : Value) (m0 : Mem)
-    (rRet : BitVec 64) (Pentry : BitVec 64 → BitVec 64 → Config → Prop)
-    (call : ∀ (sp r : BitVec 64),
-      Triple (Pentry sp r) (StrdupTailExit rRet (v.catDisplay store)))
-    (entry : ∀ (sp r : BitVec 64), ∃ c, Pentry sp r c) :
-    StringifyContract g N A SL φf φc store aVal v m0 := by
-  intro sp r
-  obtain ⟨c, hPc⟩ := entry sp r
-  obtain ⟨c', _hsteps, hexit⟩ := call sp r c hPc
-  -- `StringifyResult`'s body = `StrdupTailExit`'s fresh-CString witness at
-  -- `str = v.display store`; read it off through the ONE named destructurer.
-  obtain ⟨res, hne, hcs'⟩ := hexit.freshCString
-  exact ⟨res, c'.σ.mem, hne, hcs'⟩
+    (call : ∀ (sp r : BitVec 64) (out0 : String),
+      Triple
+        (StringifyEntry g N A SL φf φc store aVal v m0 sp r out0)
+        (StringifyExit g N A SL φf φc store v m0 sp r out0)) :
+    StringifyContract g N A SL φf φc store aVal v m0 :=
+  call
 
 #print axioms ghostReseatS0
 #print axioms ghostReseatS0_x8

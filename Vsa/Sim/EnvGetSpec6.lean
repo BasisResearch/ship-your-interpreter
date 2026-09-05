@@ -246,6 +246,9 @@ theorem env_get_hit_tail
       c'.σ.regs.get? Register.x21 = some r21 ∧
       c'.σ.mem = m' ∧ Env_getLoaded m' ∧
       ValueRepr m' N φc out.toNat (f.vars[i]'hi).2 ∧
+      read64 m' out.toNat = some w0 ∧
+      read64 m' (out.toNat + 8) = some w1 ∧
+      read64 m' (out.toNat + 16) = some w2 ∧
       (∀ a : Nat, ¬ (out.toNat ≤ a ∧ a < out.toNat + 24) → m'[a]? = m0[a]?) ∧
       c'.σ.sailOutput = c.σ.sailOutput := by
   obtain ⟨vmi, hmi⟩ := hSt.minstret
@@ -1022,7 +1025,7 @@ theorem env_get_hit_tail
       rw [show out.toNat + 16 + (j - 16) = out.toNat + j by omega,
           show pv + 24 * i + 16 + (j - 16) = pv + 24 * i + j by omega] at this
       exact this
-  refine ⟨⟨σ21, i21, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1⟩, σ12.mem, hSteps, hG21, hi21, hpc21, ha0_21, hx1_21, hsp_21, hx8_21, hx9_21, hx18_21, hx19_21, hx20_21, hx21_21, hm21e, hm21e ▸ hcode12, ?_, ?_, ?_⟩
+  refine ⟨⟨σ21, i21, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1⟩, σ12.mem, hSteps, hG21, hi21, hpc21, ha0_21, hx1_21, hsp_21, hx8_21, hx9_21, hx18_21, hx19_21, hx20_21, hx21_21, hm21e, hm21e ▸ hcode12, ?_, hout_w0, hout_w1, hout_w2, ?_, ?_⟩
   · -- ValueRepr m' N φc out.toNat (f.vars[i]'hi).2
     refine valueRepr_copy_of_writeWindow (m := m0) (m' := σ12.mem) (srcAddr := pv + 24 * i) (dstAddr := out.toNat) hcopy ?_ ?_ hvr
     · intro a ha; exact houtside a ha
@@ -1102,7 +1105,7 @@ theorem env_get_found_spec
       (∀ a : Nat, ¬ (out.toNat ≤ a ∧ a < out.toNat + 24) → m'[a]? = m0[a]?) := by
   obtain ⟨c1, hs1, hSt⟩ := hreach
   obtain ⟨c', m', hs2, hG, htick, hpc, ha0, hra, hsp', hx8, hx9, hx18, hx19, hx20, hx21,
-    hmem', hcode', hvr, houtside, _hout'⟩ :=
+    hmem', hcode', hvr, _hw0, _hw1, _hw2, houtside, _hout'⟩ :=
     env_get_hit_tail g env out sp r rr r8 r9 r18 r19 r20 r21 i pv w0 w1 w2 f N φf φc m0 c1 hi hSt
   exact ⟨c', m', hs1.trans hs2, hG, htick, hpc, ha0, hra, hsp', hx8, hx9, hx18, hx19, hx20, hx21,
     hmem', hcode', hvr, houtside⟩

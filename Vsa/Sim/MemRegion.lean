@@ -101,7 +101,7 @@ def ExprIn (m : Mem) (lo hi : Nat) : Nat → Expr → Prop
       (∀ p, read64 m (a + 8) = some p → ExprIn m lo hi p f) ∧
       (∀ q, read64 m (a + 16) = some q → ExprsIn m lo hi q args)
   | a, .fn ox ps ss => NodeIn lo hi a ∧
-      (∀ p, read64 m (a + 8) = some p → p ≠ 0 →
+      (∀ p, read64 m (a + 8) = some p →
         ∀ x, ox = some x → StrIn lo hi p x) ∧
       (∀ q, read64 m (a + 16) = some q → ParamsIn m lo hi q ps) ∧
       -- the body pointer holds a block node (`StmtRepr m body (.block ss)`):
@@ -120,8 +120,9 @@ def ExprsIn (m : Mem) (lo hi : Nat) : Nat → List Expr → Prop
 /-- Optional expression stored as a pointer AT `addr` (the `OptExprRepr`
 shape): `some e` ⇒ the pointed tree is in region. -/
 def OptExprIn (m : Mem) (lo hi addr : Nat) : Option Expr → Prop
-  | none => True
-  | some e => ∀ p, read64 m addr = some p → p ≠ 0 → ExprIn m lo hi p e
+  | none => CellIn lo hi addr
+  | some e => CellIn lo hi addr ∧
+      (∀ p, read64 m addr = some p → ExprIn m lo hi p e)
 
 /-- **Every node reachable from the `Stmt` at `a` lives in `[lo, hi)`.** -/
 def StmtIn (m : Mem) (lo hi : Nat) : Nat → Stmt → Prop
@@ -158,8 +159,9 @@ def StmtsIn (m : Mem) (lo hi : Nat) : Nat → List Stmt → Prop
 
 /-- Optional statement stored as a pointer AT `addr`. -/
 def OptStmtIn (m : Mem) (lo hi addr : Nat) : Option Stmt → Prop
-  | none => True
-  | some s => ∀ p, read64 m addr = some p → p ≠ 0 → StmtIn m lo hi p s
+  | none => CellIn lo hi addr
+  | some s => CellIn lo hi addr ∧
+      (∀ p, read64 m addr = some p → StmtIn m lo hi p s)
 
 end
 
@@ -237,9 +239,9 @@ theorem exprIn_agreeP {lo hi : Nat} {m m' : Mem}
         rw [read64_region h (show lo ≤ _ by have := hn.lo_le; omega)
           (show _ + 8 ≤ hi by have := hn.hi_ge; omega)]; exact hq))⟩
   | _, .fn _ ps ss, ⟨hn, hx, hps, hb⟩ =>
-    ⟨hn, fun p hp hpne x hox => hx p (by
+    ⟨hn, fun p hp x hox => hx p (by
         rw [read64_region h (show lo ≤ _ by have := hn.lo_le; omega)
-          (show _ + 8 ≤ hi by have := hn.hi_ge; omega)]; exact hp) hpne x hox,
+          (show _ + 8 ≤ hi by have := hn.hi_ge; omega)]; exact hp) x hox,
       fun q hq => paramsIn_agreeP h (hps q (by
         rw [read64_region h (show lo ≤ _ by have := hn.lo_le; omega)
           (show _ + 8 ≤ hi by have := hn.hi_ge; omega)]; exact hq)),
@@ -264,9 +266,9 @@ theorem optExprIn_agreeP {lo hi addr : Nat} {m m' : Mem}
     (h : AgreeP (regionP lo hi) m m')
     (hlo : lo ≤ addr) (hhi : addr + 8 ≤ hi) :
     ∀ (oe : Option Expr), OptExprIn m lo hi addr oe → OptExprIn m' lo hi addr oe
-  | none, _ => trivial
-  | some e, he => fun p hp hpne =>
-      exprIn_agreeP h e (he p (by rw [read64_region h hlo hhi]; exact hp) hpne)
+  | none, hc => hc
+  | some e, ⟨hc, he⟩ => ⟨hc, fun p hp =>
+      exprIn_agreeP h e (he p (by rw [read64_region h hlo hhi]; exact hp))⟩
 
 theorem stmtIn_agreeP {lo hi : Nat} {m m' : Mem}
     (h : AgreeP (regionP lo hi) m m') :
@@ -326,9 +328,9 @@ theorem optStmtIn_agreeP {lo hi addr : Nat} {m m' : Mem}
     (h : AgreeP (regionP lo hi) m m')
     (hlo : lo ≤ addr) (hhi : addr + 8 ≤ hi) :
     ∀ (os : Option Stmt), OptStmtIn m lo hi addr os → OptStmtIn m' lo hi addr os
-  | none, _ => trivial
-  | some s, hs => fun p hp hpne =>
-      stmtIn_agreeP h s (hs p (by rw [read64_region h hlo hhi]; exact hp) hpne)
+  | none, hc => hc
+  | some s, ⟨hc, hs⟩ => ⟨hc, fun p hp =>
+      stmtIn_agreeP h s (hs p (by rw [read64_region h hlo hhi]; exact hp))⟩
 
 end
 

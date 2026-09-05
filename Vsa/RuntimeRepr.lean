@@ -87,6 +87,48 @@ def ValueRepr (m : Mem) (N : NativeAddrs) (φc : Addr → Nat)
       (∃ p, read64 m (a + 8) = some p ∧ CString m p (nativeName f)) ∧
       read64 m (a + 16) = some (N.addr f)
 
+/-- A semantic value plus the three complete 64-bit words that the compiled
+interpreter copies.  The semantic relation fixes the low tag word; padding in
+the high half of word zero remains unconstrained but must be present. -/
+structure ValueWordRepr (m : Mem) (N : NativeAddrs) (φc : Addr → Nat)
+    (a : Nat) (v : Value) : Prop where
+  repr : ValueRepr m N φc a v
+  raw : ∃ d0 d1 d2 : BitVec 64,
+    read64 m a = some d0.toNat ∧
+    read64 m (a + 8) = some d1.toNat ∧
+    read64 m (a + 16) = some d2.toNat
+
+/-- The three words of a `Value` slot are readable, independently of which
+semantic value it currently contains.  This is the exact initialization
+condition needed before compiled code copies the entire C struct. -/
+def ValueWordsTotal (m : Mem) (a : Nat) : Prop :=
+  ∃ d0 d1 d2 : BitVec 64,
+    read64 m a = some d0.toNat ∧
+    read64 m (a + 8) = some d1.toNat ∧
+    read64 m (a + 16) = some d2.toNat
+
+theorem ValueWordRepr.of_reads
+    {m : Mem} {N : NativeAddrs} {φc : Addr → Nat} {a : Nat} {v : Value}
+    (h : ValueRepr m N φc a v) (d0 d1 d2 : BitVec 64)
+    (h0 : read64 m a = some d0.toNat)
+    (h1 : read64 m (a + 8) = some d1.toNat)
+    (h2 : read64 m (a + 16) = some d2.toNat) :
+    ValueWordRepr m N φc a v :=
+  ⟨h, d0, d1, d2, h0, h1, h2⟩
+
+theorem ValueWordRepr.words
+    {m : Mem} {N : NativeAddrs} {φc : Addr → Nat} {a : Nat} {v : Value}
+    (h : ValueWordRepr m N φc a v) :
+    ∃ d0 d1 d2 : BitVec 64,
+      read64 m a = some d0.toNat ∧ read64 m (a + 8) = some d1.toNat ∧
+      read64 m (a + 16) = some d2.toNat :=
+  h.raw
+
+theorem ValueWordRepr.total
+    {m : Mem} {N : NativeAddrs} {φc : Addr → Nat} {a : Nat} {v : Value}
+    (h : ValueWordRepr m N φc a v) : ValueWordsTotal m a :=
+  h.raw
+
 /-- A 16-byte C `Closure` at address `p` represents spec closure data `cd`.
 `fn_expr` points to the `EX_FN` AST node carrying the same name, params,
 and body; `env` is the captured environment through `φf`. -/

@@ -593,6 +593,10 @@ theorem blockC_div
     intro k bb hk; rw [hmemD]; exact pop_writeLog _ c.σ.mem (fun j => hFullPop j) k
   have hMemExtτ3 : MemExtends m0 τ3.mem := by
     rw [hmemτ3e]; exact hMemExt.trans hMemExt_c_D
+  have hWordsτ3 : ValueWordsTotal τ3.mem sret.toNat := by
+    rw [hmemτ3e]
+    exact ValueWordsTotal.mono hMemExt_c_D
+      (valueWordsTotal_of_populated hFullPop sret.toNat)
   -- memory frame vs m0, at τ3.mem = mA
   have hmemframeτ3 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ τ3.mem[a]? = m0[a]? := by
@@ -648,7 +652,7 @@ theorem blockC_div
       (by rw [hmemτ3e]; exact hcodeA) hIntRegion (by decide) hval_bridge
       hpfm hpcm hpf' hpc' houtStr
       hSurvSLτ3 hs3τ3 hslotRaτ3 hslotS0τ3 hslotS1τ3 hslotS2τ3
-      hgv8 hgv9 hgv18 hgv2 hgx19 hw19 hframeGτ3 hMemExtτ3 hmemframeτ3
+      hgv8 hgv9 hgv18 hgv2 hgx19 hw19 hframeGτ3 hMemExtτ3 hWordsτ3 hmemframeτ3
       hsretEvalCode hsretStk hsretInSL hSLlo40 hSLlo32
       hsp1088 hsphiRam hspLoc hspHtifLoc hsp8 hraAl
       g40.lo g40.hi8 g40.ht8 g40.al8
@@ -813,7 +817,7 @@ theorem evalDivSim : EvalDivSimGoal := by
   obtain ⟨c4, hs4, hExitDe⟩ :=
     blockD_v_rec g N A SL φfe φce st'' (.int (wrap64 (a.tdiv b))) sp r sret v8 v9 v18 c2.σ.sailOutput m0
       c3 ⟨mpre, hPreD⟩
-  obtain ⟨hExitE, hMemExt, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
+  obtain ⟨hExitE, hMemExt, hWords, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
   have hmono := evalE_store_mono _hEvalE
   have hleF' : st.store.frames.size ≤ st'.store.frames.size := hSizeF ▸ hmono.1
   have hleC' : st.store.closures.size ≤ st'.store.closures.size := hSizeC ▸ hmono.2
@@ -822,7 +826,7 @@ theorem evalDivSim : EvalDivSimGoal := by
   have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
       st'' (.int (wrap64 (a.tdiv b))) sp r sret m0 c4 :=
     evalExit_of_phiExtends hpfF hpcF hExitE hmono.1 hmono.2
-  exact ⟨c4, ((hs2.trans hs3).trans hs4), hExit, hMemExt,
+  exact ⟨c4, ((hs2.trans hs3).trans hs4), hExit, hMemExt, hWords,
     φf', φc', hpfF.trans (PhiExtends.mono hmono.1 hpf'),
     hpcF.trans (PhiExtends.mono hmono.2 hpc'), hSurv⟩
 

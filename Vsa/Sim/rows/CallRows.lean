@@ -14,7 +14,7 @@ call-subsystem minor premises with their landed simulation lemmas:
 
 | premise | motive shape | landed sim | gap this file bridges |
 |---|---|---|---|
-| `hArgsNil` | `mEvalArgs` (`SegEntry@loop → SegExit@cont`) | `evalArgsNil` | ENTRY-PC hop `loop→cont` (empty-list `blez`), surfaced as `ArgsNilPrefix` |
+| `hArgsNil` | `mEvalArgs` (`SegEntry@0x31d8 → SegExit@0x3254`) | `evalArgsNil` | exact loaded empty-list branch; unconditional |
 | `hArgsCons` | `mEvalArgs` | `evalArgsCons` | the `hstep`/`hnil` loop residuals (tail sub-motive is unused — the sim recurses over the FULL list) |
 | `hCallPrint` | `mCall` (`SegEntry@dispatch → SegExit@join`) | `callPrint` | `NativePrintSpec` residual, ∀-closed over ghosts |
 | `hCallPrintln` | `mCall` | `callPrintln` | `NativePrintlnSpec` residual |
@@ -86,7 +86,14 @@ threads them into the residual bundle unchanged. -/
 /-- The `hCall` residual bundle: the composite `CallArmSpec` arm run + the
 recursive `EvalExit → EvalExitD` widener, ∀-closed over the ghosts. -/
 def CallResid (st st' st'' st''' : SpecSt) (d : Nat) (env : Addr)
-    (f : Expr) (args : List Expr) (fval : Value) (vs : List Value) (v : Value) : Prop :=
+    (f : Expr) (args : List Expr) (fval : Value) (vs : List Value) (v : Value)
+    (hEf : EvalE st d env f st' fval)
+    (hBound : args.length ≤ maxArgs)
+    (hArgs : EvalArgs st' d env args st'' vs)
+    (hCall : Call st'' d fval vs st''' v) : Prop :=
+  TermSimAssembly.mEvalE st d env f st' fval hEf →
+  TermSimAssembly.mEvalArgs st' d env args st'' vs hArgs →
+  TermSimAssembly.mCall st'' d fval vs st''' v hCall →
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
@@ -174,92 +181,54 @@ local notation "SpecSt" => Vsa.While.St
 
 /-! ### `hArgsNil` -/
 
-/-- The nil-args residual: the empty-list ENTRY-PC hop (`evalArgsLoopPC →
-evalArgsContPC`, the `blez a5` empty-list fall-through) as a prefix `Triple`,
-∀-closed over the ghosts.  `evalArgsNil` itself is the zero-step identity at
-`evalArgsContPC`; the only gap to the `mEvalArgs` motive (entry at
-`evalArgsLoopPC`) is this fall-through hop. -/
-def ArgsNilResid (st : SpecSt) (d : Nat) (_env : Addr) : Prop :=
-  ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (m0 : Mem),
-    Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft evalArgsLoopPC m0)
-      (SegEntry g N A SL φf φc st d dLeft aLeft evalArgsContPC m0)
-
-/-- Route `hArgsNil` → `evalArgsNil`, prepending the empty-list `loop→cont` hop. -/
-theorem eval_argsNil_row (hR : ∀ st d env, ArgsNilResid st d env) :
+/-- Close the exact nil row from the real taken branch. -/
+theorem eval_argsNil_row :
     ∀ (st : SpecSt) (d : Nat) (env : Addr),
       mEvalArgs st d env [] st [] (EvalArgs.nil st d env) := by
   intro st d env
-  show ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (m0 : Mem),
-    Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft evalArgsLoopPC m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st evalArgsContPC m0)
-  intro g N A SL φf φc dLeft aLeft m0
-  intro c hc
-  obtain ⟨c₁, hs₁, hcont⟩ := hR st d env g N A SL φf φc dLeft aLeft m0 c hc
-  obtain ⟨c₂, hs₂, hexit⟩ :=
-    Vsa.Sim.evalArgsNil g N A SL φf φc st d env dLeft aLeft m0
-      (EvalArgs.nil st d env) c₁ hcont
-  exact ⟨c₂, hs₁.trans hs₂, hexit⟩
+  intro esPrefix vsPrefix hlen g N A SL φf φc dLeft aLeft m0
+  exact evalArgsNilPrefix g N A SL φf φc st d env esPrefix vsPrefix hlen
+    dLeft aLeft m0 (EvalArgs.nil st d env)
 
 /-! ### `hArgsCons` -/
 
-/-- The cons-args residual: the per-iteration body oracle (`hstep`, an
-`EvalArgsStep`) + the fall-through (`hnil`), the two residuals `evalArgsCons`
-takes, ∀-closed over the ghosts.  The tail sub-motive `mEvalArgs` is NOT used —
-`evalArgsCons` recurses over the FULL list internally via `evalArgsLoop`. -/
-def ArgsConsResid (_st : SpecSt) (d : Nat) (env : Addr) : Prop :=
-  ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (dLeft aLeft : Nat) (_m0 : Mem),
-    (∀ (φf φc : Addr → Nat) (st0 : SpecSt) (e : Expr) (es : List Expr)
-        (st' stFin : SpecSt) (v : Value) (mm : Mem),
-        EvalArgsStep g N A SL φf φc st0 d env e es dLeft aLeft evalArgsLoopPC mm st' stFin v) ∧
-    (∀ (φf φc : Addr → Nat) (st0 : SpecSt) (mm : Mem),
-        Triple
-          (SegEntry g N A SL φf φc st0 d dLeft aLeft evalArgsLoopPC mm)
-          (SegExit g N A SL φf φc st0.store.frames.size st0.store.closures.size st0
-            evalArgsContPC mm))
+/-- The exact cons-args residual.  Its conclusion is the generalized prefix
+motive, so the tail IH resumes at the actual loop cursor. -/
+def ArgsConsResid (st : SpecSt) (d : Nat) (env : Addr)
+    (e : Expr) (es : List Expr) (st' st'' : SpecSt)
+    (v : Value) (vs : List Value)
+    (hE : EvalE st d env e st' v)
+    (hArgs : EvalArgs st' d env es st'' vs) : Prop :=
+  mEvalE st d env e st' v hE →
+  mEvalArgs st' d env es st'' vs hArgs →
+  mEvalArgs st d env (e :: es) st'' (v :: vs)
+    (EvalArgs.cons st d env e es st' st'' v vs hE hArgs)
 
-/-- Route `hArgsCons` → `evalArgsCons`.  The head `EvalIH` (`mEvalE … a`) and the
-tail `mEvalArgs` (`… a_1`) the recursor hands are consumed only via the `hstep`
-body oracle inside `evalArgsCons` (it recurses over the whole list), so they pass
-through unused here. -/
-theorem eval_argsCons_row (hR : ∀ st d env, ArgsConsResid st d env) :
+/-- Route the exact cons residual to the indexed `mEvalArgs` motive. -/
+theorem eval_argsCons_row
+    (hR : ∀ st d env e es st' st'' v vs hE hArgs,
+      ArgsConsResid st d env e es st' st'' v vs hE hArgs) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (es : List Expr)
       (st' st'' : SpecSt) (v : Value) (vs : List Value)
       (a : EvalE st d env e st' v) (a_1 : EvalArgs st' d env es st'' vs),
       mEvalE st d env e st' v a →
       mEvalArgs st' d env es st'' vs a_1 →
       mEvalArgs st d env (e :: es) st'' (v :: vs) (EvalArgs.cons st d env e es st' st'' v vs a a_1) := by
-  intro st d env e es st' st'' v vs hE hArgs _ihE _ihArgs
-  show ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (m0 : Mem),
-    Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft evalArgsLoopPC m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st'' evalArgsContPC m0)
-  intro g N A SL φf φc dLeft aLeft m0
-  obtain ⟨hstep, hnil⟩ := hR st d env g N A SL dLeft aLeft m0
-  exact Vsa.Sim.evalArgsCons g N A SL d env dLeft aLeft evalArgsLoopPC evalArgsContPC
-    -- `evalArgsContPC` is untabled in the stack-window discipline (wave 38).
-    (by decide)
-    (fun φf φc st0 e es st' stFin v mm => hstep φf φc st0 e es st' stFin v mm)
-    (fun φf φc st0 mm => hnil φf φc st0 mm)
-    φf φc st st'' e es v vs m0 (EvalArgs.cons st d env e es st' st'' v vs hE hArgs)
+  intro st d env e es st' st'' v vs hE hArgs ihE ihArgs
+  exact hR st d env e es st' st'' v vs hE hArgs ihE ihArgs
 
 /-! ### `hCallPrint` / `hCallPrintln` / `hCallAssertOk` (native `mCall` rows) -/
 
-/-- The print residual: `NativePrintSpec`, ∀-closed over the ghosts. -/
+/-- The print residual at the indexed native-call ABI. -/
 def CallPrintResid (st : SpecSt) (d : Nat) (vs : List Value) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (m0 : Mem),
-    Vsa.Sim.NativePrintSpec g N A SL φf φc st d dLeft aLeft m0 vs
+    (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem),
+    Triple
+      (CallEntryI g N A SL φf φc st d (.native .print) vs
+        dLeft aLeft sp sret m0)
+      (CallExitI g N A SL φf φc st.store.frames.size st.store.closures.size
+        ⟨st.store, st.out +++ printArgs st.store vs⟩ .null sret m0)
 
 /-- Route `hCallPrint` → `callPrint`. -/
 theorem eval_callPrint_row (hR : ∀ st d vs, CallPrintResid st d vs) :
@@ -268,26 +237,19 @@ theorem eval_callPrint_row (hR : ∀ st d vs, CallPrintResid st d vs) :
         { store := st.store, out := st.out +++ printArgs st.store vs } Value.null
         (Call.print st d vs) := by
   intro st d vs
-  show ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (m0 : Mem),
-    EntryImage callDispatchPC g m0 →
-    Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size
-        ⟨st.store, st.out +++ printArgs st.store vs⟩ callJoinPC m0)
-  -- The wave-40 spill-image hypothesis is unused on the native routes (they
-  -- never restore from `1016(sp)`).
-  intro g N A SL φf φc dLeft aLeft m0 _hImg
-  exact Vsa.Sim.callPrint g N A SL φf φc st d dLeft aLeft m0 vs
-    (Call.print st d vs) (hR st d vs g N A SL φf φc dLeft aLeft m0)
+  intro g N A SL φf φc dLeft aLeft sp sret m0 _hImg
+  exact hR st d vs g N A SL φf φc dLeft aLeft sp sret m0
 
-/-- The println residual: `NativePrintlnSpec`, ∀-closed over the ghosts. -/
+/-- The println residual at the indexed native-call ABI. -/
 def CallPrintlnResid (st : SpecSt) (d : Nat) (vs : List Value) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (m0 : Mem),
-    Vsa.Sim.NativePrintlnSpec g N A SL φf φc st d dLeft aLeft m0 vs
+    (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem),
+    Triple
+      (CallEntryI g N A SL φf φc st d (.native .println) vs
+        dLeft aLeft sp sret m0)
+      (CallExitI g N A SL φf φc st.store.frames.size st.store.closures.size
+        ⟨st.store, st.out +++ printArgs st.store vs +++ "\n"⟩ .null sret m0)
 
 /-- Route `hCallPrintln` → `callPrintln`. -/
 theorem eval_callPrintln_row (hR : ∀ st d vs, CallPrintlnResid st d vs) :
@@ -296,72 +258,121 @@ theorem eval_callPrintln_row (hR : ∀ st d vs, CallPrintlnResid st d vs) :
         { store := st.store, out := st.out +++ printArgs st.store vs +++ "\n" } Value.null
         (Call.println st d vs) := by
   intro st d vs
-  show ∀ (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (m0 : Mem),
-    EntryImage callDispatchPC g m0 →
-    Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size
-        ⟨st.store, st.out +++ printArgs st.store vs +++ "\n"⟩ callJoinPC m0)
-  intro g N A SL φf φc dLeft aLeft m0 _hImg
-  exact Vsa.Sim.callPrintln g N A SL φf φc st d dLeft aLeft m0 vs
-    (Call.println st d vs) (hR st d vs g N A SL φf φc dLeft aLeft m0)
+  intro g N A SL φf φc dLeft aLeft sp sret m0 _hImg
+  exact hR st d vs g N A SL φf φc dLeft aLeft sp sret m0
 
-/-- The assert-ok residual: `NativeAssertOkSpec`, ∀-closed over the ghosts.
-The truthy/arity guards `vs = [v] ∨ vs = [v,mv]` and `v.truthy = true` are
-supplied per-invocation (they come from the `Call.assertOk` constructor args). -/
-def CallAssertOkResid (st : SpecSt) (d : Nat) : Prop :=
+/-- The assert-ok residual at the indexed native-call ABI.  The constructor's
+arity and truthiness proofs select this path. -/
+def CallAssertOkResid (st : SpecSt) (d : Nat) (vs : List Value)
+    (v m : Value) (hvs : vs = [v] ∨ vs = [v, m]) (htruthy : v.truthy = true) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (m0 : Mem),
-    Vsa.Sim.NativeAssertOkSpec g N A SL φf φc st d dLeft aLeft m0
+    (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem),
+    Triple
+      (CallEntryI g N A SL φf φc st d (.native .assert) vs
+        dLeft aLeft sp sret m0)
+      (CallExitI g N A SL φf φc st.store.frames.size st.store.closures.size
+        st .null sret m0)
 
 /-- Route `hCallAssertOk` → `callAssertOk`. -/
-theorem eval_callAssertOk_row (hR : ∀ st d, CallAssertOkResid st d) :
+theorem eval_callAssertOk_row
+    (hR : ∀ st d vs v m hvs htruthy,
+      CallAssertOkResid st d vs v m hvs htruthy) :
     ∀ (st : SpecSt) (d : Nat) (vs : List Value) (v m : Value)
       (a : vs = [v] ∨ vs = [v, m]) (a_1 : v.truthy = true),
       mCall st d (Value.native NativeFn.assert) vs st Value.null
         (Call.assertOk st d vs v m a a_1) := by
   intro st d vs v m hvs htruthy
-  show ∀ (g : (R : Register) → Option (RegisterType R))
+  intro g N A SL φf φc dLeft aLeft sp sret m0 _hImg
+  exact hR st d vs v m hvs htruthy g N A SL φf φc dLeft aLeft sp sret m0
+
+/-! ### `hCallClosure` -/
+
+/-- The closure-call residual, indexed by the exact semantic constructor and
+its body-sequence induction hypothesis.  Unlike the former bare `mCall` shape,
+the entry names the staged closure and argument vector and the exit names the
+returned value. -/
+def CallClosureResid
+    (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value)
+    (store' : Store) (frame : Addr) (st' : SpecSt) (status : Status) (v : Value)
+    (_hClosure : st.store.closures[a]? = some cd)
+    (_hArity : vs.length = cd.params.length)
+    (_hDepth : d < maxCallDepth)
+    (_hAlloc : st.store.allocFrame (some cd.env) = (store', frame))
+    (hBody : ExecSeq
+      { store := List.foldl (fun s x => match x with
+          | (x, v) => s.define frame x v) store' (cd.params.zip vs), out := st.out }
+      (d + 1) frame cd.body st' status)
+    (_hResult : status = Status.normal ∧ v = Value.null ∨ status = Status.ret v) : Prop :=
+  mExecSeq
+      { store := List.foldl (fun s x => match x with
+          | (x, v) => s.define frame x v) store' (cd.params.zip vs), out := st.out }
+      (d + 1) frame cd.body st' status hBody →
+  ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (dLeft aLeft : Nat) (m0 : Mem),
+    (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem),
     EntryImage callDispatchPC g m0 →
     Triple
-      (SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0)
-      (SegExit g N A SL φf φc st.store.frames.size st.store.closures.size st callJoinPC m0)
-  intro g N A SL φf φc dLeft aLeft m0 _hImg
-  exact Vsa.Sim.callAssertOk g N A SL φf φc st d dLeft aLeft m0 vs v m
-    hvs htruthy (Call.assertOk st d vs v m hvs htruthy)
-    (hR st d g N A SL φf φc dLeft aLeft m0)
+      (CallEntryI g N A SL φf φc st d (.closure a) vs
+        dLeft aLeft sp sret m0)
+      (CallExitI g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' v sret m0)
+
+/-- Route the exact closure constructor to the indexed call motive. -/
+theorem eval_callClosure_indexed_row
+    (hR : ∀ st d a cd vs store' frame st' status v
+      hClosure hArity hDepth hAlloc hBody hResult,
+      CallClosureResid st d a cd vs store' frame st' status v
+        hClosure hArity hDepth hAlloc hBody hResult) :
+    ∀ (st : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData)
+      (vs : List Value) (store' : Store) (frame : Addr) (st' : SpecSt)
+      (status : Status) (v : Value)
+      (hClosure : st.store.closures[a]? = some cd)
+      (hArity : vs.length = cd.params.length)
+      (hDepth : d < maxCallDepth)
+      (hAlloc : st.store.allocFrame (some cd.env) = (store', frame))
+      (hBody : ExecSeq
+        { store := List.foldl (fun s x => match x with
+            | (x, v) => s.define frame x v) store' (cd.params.zip vs), out := st.out }
+        (d + 1) frame cd.body st' status)
+      (hResult : status = Status.normal ∧ v = Value.null ∨ status = Status.ret v),
+      mExecSeq
+          { store := List.foldl (fun s x => match x with
+              | (x, v) => s.define frame x v) store' (cd.params.zip vs), out := st.out }
+          (d + 1) frame cd.body st' status hBody →
+      mCall st d (.closure a) vs st' v
+        (Call.closure st d a cd vs store' frame st' status v
+          hClosure hArity hDepth hAlloc hBody hResult) := by
+  intro st d a cd vs store' frame st' status v hClosure hArity hDepth hAlloc
+    hBody hResult hBodyIH
+  exact hR st d a cd vs store' frame st' status v hClosure hArity hDepth hAlloc
+    hBody hResult hBodyIH
 
 /-! ### `hCall` (composite `EvalIH` row) -/
 
-/-- Route `hCall` → `evalCallSimD`.  The callee `EvalIH` (`mEvalE … a`) passes to
-`hIH_f` by `rfl`; the `EvalArgs`/`Call` SPEC derivations (`a_1`/`a_2`) thread
-directly; the mid sub-motives (`mEvalArgs … ih1`/`mCall … ih2`) are consumed
-inside `CallArmSpec`, so they pass through unused. -/
+/-- Route `hCall` → `evalCallSimD`.  The residual is indexed by all three
+semantic derivations and consumes all three recursive motives. -/
 theorem eval_call_row
-    (hR : ∀ st st' st'' st''' d env f args fval vs v,
-      CallResid st st' st'' st''' d env f args fval vs v) :
+    (hR : ∀ st st' st'' st''' d env f args fval vs v hEf hBound hArgs hCall,
+      CallResid st st' st'' st''' d env f args fval vs v hEf hBound hArgs hCall) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (f : Expr) (args : List Expr)
       (st' st'' st''' : SpecSt) (fv : Value) (vs : List Value) (v : Value)
-      (a : EvalE st d env f st' fv) (a_1 : EvalArgs st' d env args st'' vs)
-      (a_2 : Call st'' d fv vs st''' v),
+      (a : EvalE st d env f st' fv) (hargs : args.length ≤ maxArgs)
+      (a_1 : EvalArgs st' d env args st'' vs) (a_2 : Call st'' d fv vs st''' v),
       mEvalE st d env f st' fv a →
       mEvalArgs st' d env args st'' vs a_1 →
       mCall st'' d fv vs st''' v a_2 →
       mEvalE st d env (f.call args) st''' v
-        (EvalE.call st d env f args st' st'' st''' fv vs v a a_1 a_2) := by
-  intro st d env f args st' st'' st''' fv vs v hEf hEargs hCall ihf _iharg _ihcall
+        (EvalE.call st d env f args st' st'' st''' fv vs v a hargs a_1 a_2) := by
+  intro st d env f args st' st'' st''' fv vs v hEf hargs hEargs hCall ihf iharg ihcall
   show Vsa.Sim.EvalIH st d env (f.call args) st''' v
   intro g N A SL φf φc sp r sret aEnv aExpr m0
   obtain ⟨hArm, hW⟩ := hR st st' st'' st''' d env f args fv vs v
+    hEf hargs hEargs hCall ihf iharg ihcall
     g N A SL φf φc sp r sret aEnv aExpr m0
   exact Vsa.Sim.evalCallSimD g N A SL φf φc st st' st'' st''' d env f args fv vs v
     sp r sret aEnv aExpr m0 ihf hEargs hCall
-    (EvalE.call st d env f args st' st'' st''' fv vs v hEf hEargs hCall) hArm hW
+    (EvalE.call st d env f args st' st'' st''' fv vs v hEf hargs hEargs hCall) hArm hW
 
 /-! ### `hFn` (closure-alloc `EvalIH` row) -/
 
