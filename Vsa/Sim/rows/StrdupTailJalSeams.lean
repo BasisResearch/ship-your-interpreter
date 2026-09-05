@@ -129,16 +129,16 @@ theorem strdupTail_strlen_run
 /-! ## §1b. `bridgeStrlenPre` closed — the frame-carrying strlen prefix wrapper
 
 `stringifyStrdupTailContract`'s `bridgeStrlenPre` premise is
-`Triple P (fun c => strlen_pre bufPtr rStrlen str m0 c ∧ EnvDefFrame …)` with `P`
+`Triple P (fun c => strlen_pre bufPtr rStrlen str m0 c ∧ CalleeFrame …)` with `P`
 caller-supplied.  We name the honest entry predicate `StrdupTailStrlenEntry` (the
-strlen-arg facts at `0x80003044` PLUS the carried `EnvDefFrame` ghosts) and land the
+strlen-arg facts at `0x80003044` PLUS the carried `CalleeFrame` ghosts) and land the
 bridge over `strdupTail_strlen_run` — the EXACT `bridgeStrlenPre_closed` idiom
 (`Vsa/Sim/EnvDefBridges.lean`:334), the `mv;jal` prefix having no stores so the frame
 survives (`GHolds`/ABI-frame carry sp/gp; `AInv` survives mem-and-gp agreement). -/
 
 /-- Strdup-tail strlen entry predicate at `0x80003044`: the `strlen` arg facts
 (`StrlenLoaded`, `StrRegions`, 8-alignment, `CString`, `x9 = bufPtr`) + the carried
-caller-frame (`EnvDefFrame`). -/
+caller-frame (`CalleeFrame`). -/
 def StrdupTailStrlenEntry (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
     (AInv : MState → List (Nat × Nat) → Prop) (exts : List (Nat × Nat))
     (sp : BitVec 64) (gm : (R : Register) → Option (RegisterType R))
@@ -150,11 +150,11 @@ def StrdupTailStrlenEntry (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
   (∃ v, c.σ.regs.get? Register.minstret = some v) ∧ c.tick < 2 ∧
   StrRegions bufPtr str.length ∧ bufPtr.toNat % 8 = 0 ∧
   CString m0 bufPtr.toNat str ∧
-  EnvDefFrame SL gpv headroom AInv exts sp gm c
+  CalleeFrame SL gpv headroom AInv exts sp gm c
 
 /-- **`bridgeStrlenPre` discharged (frame-carrying).**  From `StrdupTailStrlenEntry`,
 the `mv a0,s1 ; jal strlen` prefix lands
-`strlen_pre bufPtr 0x8000304c str m0 ∧ EnvDefFrame …` at the strlen entry.  `hAInvStable`
+`strlen_pre bufPtr 0x8000304c str m0 ∧ CalleeFrame …` at the strlen entry.  `hAInvStable`
 is `AInv`'s stability under (gp-agree ∧ mem-agree) — the `MallocContract`-interface
 property; the prefix stores nothing (mem = m0) and preserves gp, so `AInv` survives. -/
 theorem strdupTailBridgeStrlenPre_closed
@@ -167,7 +167,7 @@ theorem strdupTailBridgeStrlenPre_closed
       (∀ a : Nat, σa.mem[a]? = σb.mem[a]?) → AInv σa exts → AInv σb exts) :
     Triple (StrdupTailStrlenEntry SL gpv headroom AInv exts sp gm bufPtr str m0)
       (fun c => strlen_pre bufPtr (0x8000304c#64 : BitVec 64) str m0 c ∧
-        EnvDefFrame SL gpv headroom AInv exts sp gm c) := by
+        CalleeFrame SL gpv headroom AInv exts sp gm c) := by
   intro c hpre
   obtain ⟨hG, hstrfy, hstrlen, hmem, hpc, hx9, ⟨vmi, hmi⟩, htick, hreg, halign8, hcstr,
     hFrame⟩ := hpre
@@ -201,7 +201,7 @@ theorem strdupTailBridgeStrlenPre_closed
     refine ⟨hG2, ?_, hmemEq, hpc2, hx10, hra2, ⟨w2, hmi2⟩, hi2, hreg, halign8, ?_, by decide⟩
     · rw [hmemEq, ← hmem]; exact hstrlen
     · exact hcstr
-  · -- EnvDefFrame
+  · -- CalleeFrame
     refine ⟨hsp2, hstackOK, hgp2, ?_, ?_, hi2⟩
     · intro R hR; rw [habi2 R (by exact hR)]; exact hAbi R hR
     · -- AInv survives: mem = m0 (unchanged), gp preserved.

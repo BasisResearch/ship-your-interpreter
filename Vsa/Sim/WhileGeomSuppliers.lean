@@ -846,7 +846,7 @@ structure ExecWhileCondCopyReady
 
 /-- Execute the 24-byte condition-result copy and stop at the exact helper
 entry.  Only `TruthyHeaderRepr` crosses the copy. -/
-theorem execWhileCondCopyReady_of_exitKit
+theorem execWhileCondCopyReady_of_exitKit_exact
     (g : (R : Register) → Option (RegisterType R))
     (gCond : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
@@ -860,6 +860,11 @@ theorem execWhileCondCopyReady_of_exitKit
       sp aStmt aRet mCond aBody cfg) :
     ∃ (mCopy : Mem) (cfgCopy : Config),
       Vsa.Machine.Steps cfg cfgCopy ∧
+      mCopy = writeLog cfg.σ.mem
+        (evalBlocks execWhileCondCopySeg
+          (SegEvalState.init
+            (execWhileCondCopyL (sp - 176#64) aStmt aInterp aRet aEnv)
+            (execWhileCondCopyLds cfg.σ.mem (sp - 176#64)))).log ∧
       ExecWhileCondCopyReady gCond N φcBody v (sp - 176#64) aStmt
         aInterp aRet aEnv mCopy cfg.σ.sailOutput cfgCopy := by
   let esp : BitVec 64 := sp - 176#64
@@ -992,7 +997,7 @@ theorem execWhileCondCopyReady_of_exitKit
       some (esp + sign_extend (m := 64) (0x010#12)) := by
     simpa only [gprGet] using
       (gholds_lookup (n := 10) _ hregsCopy (by rfl))
-  refine ⟨mCopy, cfgCopy, hsCopy, ?_⟩
+  refine ⟨mCopy, cfgCopy, hsCopy, rfl, ?_⟩
   refine
     { good := hgoodCopy
       tick := hiCopy
@@ -1017,6 +1022,30 @@ theorem execWhileCondCopyReady_of_exitKit
   · intro R hR
     exact (hframeCopy R hR).trans
       (hKit.frame R (abiPreservedNoise_of_abi hR))
+
+/-- Compatibility projection of the copy theorem, retaining its original
+public result type. -/
+theorem execWhileCondCopyReady_of_exitKit
+    (g : (R : Register) → Option (RegisterType R))
+    (gCond : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (φf φc φfBody φcBody : Addr → Nat)
+    (st stCond : SpecSt) (d : Nat) (env : Addr) (cnd : Expr) (body : Stmt)
+    (v : Value) (sp r aInterp aStmt aEnv aRet aCond : BitVec 64)
+    (m0 mCond : Mem) (aBody : BitVec 64) (cfg : Config)
+    (hCarrier : ExecWhileCondCarrier g N A SL φf φc st d env cnd body
+      sp r aInterp aStmt aEnv aRet m0 gCond aCond mCond)
+    (hKit : ExecWhileCondExitKit gCond N A SL φfBody φcBody stCond v cnd body
+      sp aStmt aRet mCond aBody cfg) :
+    ∃ (mCopy : Mem) (cfgCopy : Config),
+      Vsa.Machine.Steps cfg cfgCopy ∧
+      ExecWhileCondCopyReady gCond N φcBody v (sp - 176#64) aStmt
+        aInterp aRet aEnv mCopy cfg.σ.sailOutput cfgCopy := by
+  obtain ⟨mCopy, cfgCopy, hs, _hmem, hReady⟩ :=
+    execWhileCondCopyReady_of_exitKit_exact g gCond N A SL φf φc φfBody φcBody
+      st stCond d env cnd body v sp r aInterp aStmt aEnv aRet aCond m0 mCond
+      aBody cfg hCarrier hKit
+  exact ⟨mCopy, cfgCopy, hs, hReady⟩
 
 /-- Run the header-only truthiness helper from its exact parked state. -/
 theorem execWhileTruthy_of_copyReady
@@ -1088,5 +1117,7 @@ theorem execWhileCondCopyTruthy_of_exitKit
       aInterp aRet aEnv mCopy cfg.σ.sailOutput cfgCopy hReady htruthy
   exact ⟨mCopy, cfgHead, hsCopy.trans hsHead, hHead⟩
 
+#print axioms execWhileCondCopyReady_of_exitKit_exact
+#print axioms execWhileCondCopyReady_of_exitKit
 
 end Vsa.Sim

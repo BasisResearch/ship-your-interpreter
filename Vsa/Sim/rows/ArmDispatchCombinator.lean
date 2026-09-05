@@ -155,7 +155,7 @@ theorem evalArmDispatch_of_slot
   intro c'' heq
   subst heq
   -- === block A: prologue + dispatch → widened ArmEntryK @armPC ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, _hpresM, hx13out⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, hpresM, hx13out⟩ :=
     blockA_k g N A SL φf φc st env e k armPC UnaryArmCallee
       sp r0 sret aEnv aExpr m0 c''.σ.sailOutput
       hkle hklt
@@ -204,7 +204,8 @@ theorem evalArmDispatch_of_slot
   -- WAVE 47i: the child ground at `ment` (off-stack transport of the
   -- extras' PARENT-window bundle).
   have hGroundMent : EvalGround ment SL A sp sret aChild.toNat ce :=
-    hX.ground.transport_offstack hX.tableStk0 hX.spSLhi hMentM0
+    hX.ground.transport_offstack hX.tableStk0 hX.spSLhi
+      (hX.ground.stack_bytes_extend hpresM) hMentM0
   -- WAVE 48i (CURE 3): `x13` liveness at the reached arm entry is now the
   -- blockA_k 3rd output `hx13out` (CURE A), DISCHARGING the dropped `x13_pres` closure.
   have hx13c1 : c1.σ.regs.get? Register.x13 =

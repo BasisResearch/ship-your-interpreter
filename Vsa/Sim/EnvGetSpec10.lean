@@ -131,7 +131,7 @@ theorem env_get_found_framed
       obtain ⟨cHit, iHit, hs2, hHit⟩ :=
         scan_from_c5c_to_hit env name out (BitVec.ofNat 64 len) (BitVec.ofNat 64 pn) (sp0 - 64#64)
           f nameStr N φf φc m9 iw hFS.iwLt hFS.iwHit iw g1 1 c1 hSt1 hfm1 h1le (by omega)
-      exact ⟨cHit, iHit, hs1.trans hs2, hHit⟩
+      exact ⟨cHit, iHit, hs1.trans hs2, hHit.1⟩
     · exact ⟨c1, 0, hs1, hHit0⟩
   -- repackage AtHit → HitTailSt
   obtain ⟨pv, w0, w1, w2, hHitTail⟩ :=

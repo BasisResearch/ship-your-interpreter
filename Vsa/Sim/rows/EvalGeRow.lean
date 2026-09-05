@@ -771,6 +771,7 @@ def EvalGeSimGoal : Prop :=
     (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (a b : Int)
     (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 Wl : BitVec 64)
     (out0 : Array String) (m0 : Mem),
+    EvalE st d env el st' (.int a) →
     EvalIH st d env el st' (.int a) →
     EvalIH st' d env er st'' (.int b) →
     EvalE st d env (.binary .ge el er) st'' (.bool (a ≥ b)) →
@@ -781,6 +782,7 @@ def EvalGeSimGoal : Prop :=
         ArmEntryK gouter N A SL φf φc st (0x800034e8#64) UnaryArmCallee (.binary .ge el er)
           sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
         BinExtras N A SL el er ment sp sret aExpr aLOp aROp ∧
+        BinaryRecContext gpre φf st env aEnvReg ∧
         c.σ.regs.get? Register.x11 = some aEnv ∧
         c.σ.regs.get? Register.x13 = some aEnvReg ∧
         c.σ.regs.get? Register.x19 = some v19 ∧
@@ -822,9 +824,9 @@ def EvalGeSimGoal : Prop :=
 
 theorem evalGeSim : EvalGeSimGoal := by
   intro gouter gpre g N A SL φf φc st st' st'' d env el er a b
-    sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 Wl out0 m0 hIHl hIHr _hEvalE hSizeF hSizeC
+    sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 Wl out0 m0 hLeft hIHl hIHr _hEvalE hSizeF hSizeC
   intro c hpre
-  obtain ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+  obtain ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
     hpayL, hexprL, hpayR, hexprR, hMemExtM0, hGmt47,
     hstackBudgetL, hexprBodiesL, hstoreBodiesL,
     hstackBudgetR, hexprBodiesR, hstoreBodiesR, hResid,
@@ -846,8 +848,8 @@ theorem evalGeSim : EvalGeSimGoal := by
       rw [← read64_agreeP hAg (fun j hj => ⟨by omega, by omega⟩)]; exact hp
   obtain ⟨c2, hs2, hTS⟩ :=
     blockB_binary gouter gpre N A SL φf φc st st' st'' d env .ge el er (.int a) (.int b)
-      sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hIHl hIHr hVlSurv
-      c ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+      sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hLeft hIHl hIHr hVlSurv
+      c ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExtM0, hGmt47,
         hstackBudgetL, hexprBodiesL, hstoreBodiesL,
         hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩

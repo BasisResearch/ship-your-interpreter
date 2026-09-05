@@ -107,7 +107,8 @@ consistency the M4 recursor supplies (with `penv = φf fa`, the looked-up frame'
 machine address). -/
 theorem envGetFramed_triple
     (st : SpecSt) (x : String) (v : Value)
-    (sp sret aExpr aEnv : BitVec 64) (v8 v9 v18 : BitVec 64) (ment : Mem)
+    (sp sret aExpr aEnv : BitVec 64) (v8 v9 v18 v19 v20 v21 : BitVec 64)
+    (out0 : Array String) (ment : Mem)
     (penv nm : BitVec 64)
     (N : NativeAddrs) (A : Arena) (φf φc : Vsa.While.Addr → Nat)
     (fa : Vsa.While.Addr) (iw : Nat) (len pn : Nat)
@@ -122,12 +123,12 @@ theorem envGetFramed_triple
     (hlen : len = st.store.frames[fa].vars.length)
     (hval : (st.store.frames[fa].vars[iw]).2 = v)
     -- the callee-entry register/geometry residue + heap-vs-stack disjointness
-    (hGeom : ∀ c, EnvGetEntryV st sp sret aExpr aEnv v8 v9 v18 ment penv nm c →
+    (hGeom : ∀ c, EnvGetEntryV st sp sret aExpr aEnv v8 v9 v18 v19 v20 v21 out0 ment penv nm c →
       EnvGetCallerGeom penv nm ((sp - 1088#64) + 0xf0#64) (0x80003444#64) (sp - 1088#64)
         r0 r8 r9 r18 r19 r20 r21 len pn x st.store.frames[fa] ment c)
     (hD : FrameStackDisj penv nm (sp - 1088#64) pn x st.store.frames[fa] ment) :
     Triple
-      (EnvGetEntryV st sp sret aExpr aEnv v8 v9 v18 ment penv nm)
+      (EnvGetEntryV st sp sret aExpr aEnv v8 v9 v18 v19 v20 v21 out0 ment penv nm)
       (EnvGetFramedPost penv r0 r8 r9 r18 r19 r20 r21 N φf φc v sp ment) := by
   intro c hEntry
   have hCG := hGeom c hEntry
@@ -174,7 +175,8 @@ new lemmas plus the two honest caller premises — the `x13=penv` datum being th
 other genuinely caller-supplied field of `VarCallLinkage` (its `.a3`). -/
 theorem varCallLinkage_callee
     (st : SpecSt) (x : String) (v : Value)
-    (sp sret aExpr aEnv : BitVec 64) (v8 v9 v18 : BitVec 64) (ment : Mem)
+    (sp sret aExpr aEnv : BitVec 64) (v8 v9 v18 v19 v20 v21 : BitVec 64)
+    (out0 : Array String) (ment : Mem)
     (penv nm : BitVec 64)
     (N : NativeAddrs) (A : Arena) (φf φc : Vsa.While.Addr → Nat)
     (fa : Vsa.While.Addr) (iw : Nat) (len pn : Nat)
@@ -188,7 +190,7 @@ theorem varCallLinkage_callee
     (hhit : (st.store.frames[fa].vars[iw]).1 = x)
     (hlen : len = st.store.frames[fa].vars.length)
     (hval : (st.store.frames[fa].vars[iw]).2 = v)
-    (hGeom : ∀ c, EnvGetEntryV st sp sret aExpr aEnv v8 v9 v18 ment penv nm c →
+    (hGeom : ∀ c, EnvGetEntryV st sp sret aExpr aEnv v8 v9 v18 v19 v20 v21 out0 ment penv nm c →
       EnvGetCallerGeom penv nm ((sp - 1088#64) + 0xf0#64) (0x80003444#64) (sp - 1088#64)
         r0 r8 r9 r18 r19 r20 r21 len pn x st.store.frames[fa] ment c)
     (hD : FrameStackDisj penv nm (sp - 1088#64) pn x st.store.frames[fa] ment)
@@ -200,12 +202,12 @@ theorem varCallLinkage_callee
         (EnvGetFramedPost penv r0 r8 r9 r18 r19 r20 r21 N φf φc v sp ment)
         (fun c => ∃ mpc, VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpc c))
     (g : (R : Register) → Option (RegisterType R)) (SL : StackLayout)
-    (r : BitVec 64) (out0 : Array String) (m0 : Mem) :
+    (r : BitVec 64) (m0 : Mem) :
     Triple
-      (EnvGetEntryV st sp sret aExpr aEnv v8 v9 v18 ment penv nm)
+      (EnvGetEntryV st sp sret aExpr aEnv v8 v9 v18 v19 v20 v21 out0 ment penv nm)
       (fun c => ∃ mpc, VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpc c) :=
   Triple.seq
-    (envGetFramed_triple st x v sp sret aExpr aEnv v8 v9 v18 ment penv nm N A φf φc
+    (envGetFramed_triple st x v sp sret aExpr aEnv v8 v9 v18 v19 v20 v21 out0 ment penv nm N A φf φc
       fa iw len pn r0 r8 r9 r18 r19 r20 r21 hpenv hSR hfa hiw hbelow hhit hlen hval hGeom hD)
     (VarPostRepack g SL r out0 m0)
 

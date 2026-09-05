@@ -48,6 +48,7 @@ theorem binRow_add
     (sp r sret aEnv aExpr aLOp aROp Wl : BitVec 64)
     (m0 : Mem)
     (hX : BinArmExtras g N A SL .add el er sp r sret aExpr aLOp aROp m0)
+    (hLeft : EvalE st d env el st' (.int a))
     (hIHl : EvalIH st d env el st' (.int a))
     (hIHr : EvalIH st' d env er st'' (.int b))
     (hEvalE : EvalE st d env (.binary .add el er) st'' (.int (wrap64 (a + b))))
@@ -73,7 +74,7 @@ theorem binRow_add
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.int (wrap64 (a + b))) sp r sret m0) := by
   intro c hc
-  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
+  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hRec, hx11, hx13, hx19,
     hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .add el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
@@ -96,8 +97,8 @@ theorem binRow_add
   obtain ⟨c2, hs2, hExit⟩ :=
     evalAddSim g gpre' g N A SL φf φc st st' st'' d env el er a b
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
-      hIHl hIHr hEvalE hSizeF hSizeC
-      c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+      hLeft hIHl hIHr hEvalE hSizeF hSizeC
+      c1 ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
@@ -111,6 +112,7 @@ theorem binRow_sub
     (sp r sret aEnv aExpr aLOp aROp Wl : BitVec 64)
     (m0 : Mem)
     (hX : BinArmExtras g N A SL .sub el er sp r sret aExpr aLOp aROp m0)
+    (hLeft : EvalE st d env el st' (.int a))
     (hIHl : EvalIH st d env el st' (.int a))
     (hIHr : EvalIH st' d env er st'' (.int b))
     (hEvalE : EvalE st d env (.binary .sub el er) st'' (.int (wrap64 (a - b))))
@@ -136,7 +138,7 @@ theorem binRow_sub
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.int (wrap64 (a - b))) sp r sret m0) := by
   intro c hc
-  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
+  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hRec, hx11, hx13, hx19,
     hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .sub el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
@@ -159,8 +161,8 @@ theorem binRow_sub
   obtain ⟨c2, hs2, hExit⟩ :=
     evalSubSim g gpre' g N A SL φf φc st st' st'' d env el er a b
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
-      hIHl hIHr hEvalE hSizeF hSizeC
-      c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+      hLeft hIHl hIHr hEvalE hSizeF hSizeC
+      c1 ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
@@ -174,6 +176,7 @@ theorem binRow_mul
     (sp r sret aEnv aExpr aLOp aROp Wl : BitVec 64)
     (m0 : Mem)
     (hX : BinArmExtras g N A SL .mul el er sp r sret aExpr aLOp aROp m0)
+    (hLeft : EvalE st d env el st' (.int a))
     (hIHl : EvalIH st d env el st' (.int a))
     (hIHr : EvalIH st' d env er st'' (.int b))
     (hEvalE : EvalE st d env (.binary .mul el er) st'' (.int (wrap64 (a * b))))
@@ -199,7 +202,7 @@ theorem binRow_mul
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.int (wrap64 (a * b))) sp r sret m0) := by
   intro c hc
-  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
+  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hRec, hx11, hx13, hx19,
     hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .mul el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
@@ -222,8 +225,8 @@ theorem binRow_mul
   obtain ⟨c2, hs2, hExit⟩ :=
     evalMulSim g gpre' g N A SL φf φc st st' st'' d env el er a b
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
-      hIHl hIHr hEvalE hSizeF hSizeC
-      c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+      hLeft hIHl hIHr hEvalE hSizeF hSizeC
+      c1 ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
@@ -239,6 +242,7 @@ theorem binRow_div
     (hbNe : b ≠ 0)
     (hOv : ¬(a = -2^63 ∧ b = -1))
     (hX : BinArmExtras g N A SL .div el er sp r sret aExpr aLOp aROp m0)
+    (hLeft : EvalE st d env el st' (.int a))
     (hIHl : EvalIH st d env el st' (.int a))
     (hIHr : EvalIH st' d env er st'' (.int b))
     (hEvalE : EvalE st d env (.binary .div el er) st'' (.int (wrap64 (a.tdiv b))))
@@ -264,7 +268,7 @@ theorem binRow_div
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.int (wrap64 (a.tdiv b))) sp r sret m0) := by
   intro c hc
-  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
+  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hRec, hx11, hx13, hx19,
     hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .div el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
@@ -287,8 +291,8 @@ theorem binRow_div
   obtain ⟨c2, hs2, hExit⟩ :=
     evalDivSim g gpre' g N A SL φf φc st st' st'' d env el er a b
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
-      hbNe hOv hIHl hIHr hEvalE hSizeF hSizeC
-      c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+      hbNe hOv hLeft hIHl hIHr hEvalE hSizeF hSizeC
+      c1 ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
@@ -303,6 +307,7 @@ theorem binRow_mod
     (m0 : Mem)
     (hbNe : b ≠ 0)
     (hX : BinArmExtras g N A SL .mod el er sp r sret aExpr aLOp aROp m0)
+    (hLeft : EvalE st d env el st' (.int a))
     (hIHl : EvalIH st d env el st' (.int a))
     (hIHr : EvalIH st' d env er st'' (.int b))
     (hEvalE : EvalE st d env (.binary .mod el er) st'' (.int (wrap64 (a.tmod b))))
@@ -328,7 +333,7 @@ theorem binRow_mod
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.int (wrap64 (a.tmod b))) sp r sret m0) := by
   intro c hc
-  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
+  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hRec, hx11, hx13, hx19,
     hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .mod el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
@@ -351,8 +356,8 @@ theorem binRow_mod
   obtain ⟨c2, hs2, hExit⟩ :=
     evalModSim g gpre' g N A SL φf φc st st' st'' d env el er a b
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
-      hbNe hIHl hIHr hEvalE hSizeF hSizeC
-      c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+      hbNe hLeft hIHl hIHr hEvalE hSizeF hSizeC
+      c1 ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
@@ -366,6 +371,7 @@ theorem binRow_lt
     (sp r sret aEnv aExpr aLOp aROp Wl : BitVec 64)
     (m0 : Mem)
     (hX : BinArmExtras g N A SL .lt el er sp r sret aExpr aLOp aROp m0)
+    (hLeft : EvalE st d env el st' (.int a))
     (hIHl : EvalIH st d env el st' (.int a))
     (hIHr : EvalIH st' d env er st'' (.int b))
     (hEvalE : EvalE st d env (.binary .lt el er) st'' (.bool (a < b)))
@@ -391,7 +397,7 @@ theorem binRow_lt
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.bool (a < b)) sp r sret m0) := by
   intro c hc
-  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
+  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hRec, hx11, hx13, hx19,
     hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .lt el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
@@ -414,8 +420,8 @@ theorem binRow_lt
   obtain ⟨c2, hs2, hExit⟩ :=
     evalLtSim g gpre' g N A SL φf φc st st' st'' d env el er a b
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
-      hIHl hIHr hEvalE hSizeF hSizeC
-      c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+      hLeft hIHl hIHr hEvalE hSizeF hSizeC
+      c1 ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
@@ -429,6 +435,7 @@ theorem binRow_le
     (sp r sret aEnv aExpr aLOp aROp Wl : BitVec 64)
     (m0 : Mem)
     (hX : BinArmExtras g N A SL .le el er sp r sret aExpr aLOp aROp m0)
+    (hLeft : EvalE st d env el st' (.int a))
     (hIHl : EvalIH st d env el st' (.int a))
     (hIHr : EvalIH st' d env er st'' (.int b))
     (hEvalE : EvalE st d env (.binary .le el er) st'' (.bool (a ≤ b)))
@@ -454,7 +461,7 @@ theorem binRow_le
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.bool (a ≤ b)) sp r sret m0) := by
   intro c hc
-  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
+  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hRec, hx11, hx13, hx19,
     hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .le el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
@@ -477,8 +484,8 @@ theorem binRow_le
   obtain ⟨c2, hs2, hExit⟩ :=
     evalLeSim g gpre' g N A SL φf φc st st' st'' d env el er a b
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
-      hIHl hIHr hEvalE hSizeF hSizeC
-      c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+      hLeft hIHl hIHr hEvalE hSizeF hSizeC
+      c1 ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
@@ -492,6 +499,7 @@ theorem binRow_gt
     (sp r sret aEnv aExpr aLOp aROp Wl : BitVec 64)
     (m0 : Mem)
     (hX : BinArmExtras g N A SL .gt el er sp r sret aExpr aLOp aROp m0)
+    (hLeft : EvalE st d env el st' (.int a))
     (hIHl : EvalIH st d env el st' (.int a))
     (hIHr : EvalIH st' d env er st'' (.int b))
     (hEvalE : EvalE st d env (.binary .gt el er) st'' (.bool (a > b)))
@@ -517,7 +525,7 @@ theorem binRow_gt
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.bool (a > b)) sp r sret m0) := by
   intro c hc
-  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
+  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hRec, hx11, hx13, hx19,
     hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .gt el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
@@ -540,8 +548,8 @@ theorem binRow_gt
   obtain ⟨c2, hs2, hExit⟩ :=
     evalGtSim g gpre' g N A SL φf φc st st' st'' d env el er a b
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
-      hIHl hIHr hEvalE hSizeF hSizeC
-      c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+      hLeft hIHl hIHr hEvalE hSizeF hSizeC
+      c1 ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
@@ -555,6 +563,7 @@ theorem binRow_ge
     (sp r sret aEnv aExpr aLOp aROp Wl : BitVec 64)
     (m0 : Mem)
     (hX : BinArmExtras g N A SL .ge el er sp r sret aExpr aLOp aROp m0)
+    (hLeft : EvalE st d env el st' (.int a))
     (hIHl : EvalIH st d env el st' (.int a))
     (hIHr : EvalIH st' d env er st'' (.int b))
     (hEvalE : EvalE st d env (.binary .ge el er) st'' (.bool (a ≥ b)))
@@ -580,7 +589,7 @@ theorem binRow_ge
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.bool (a ≥ b)) sp r sret m0) := by
   intro c hc
-  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
+  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hRec, hx11, hx13, hx19,
     hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .ge el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
@@ -603,8 +612,8 @@ theorem binRow_ge
   obtain ⟨c2, hs2, hExit⟩ :=
     evalGeSim g gpre' g N A SL φf φc st st' st'' d env el er a b
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' Wl c1.σ.sailOutput m0
-      hIHl hIHr hEvalE hSizeF hSizeC
-      c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+      hLeft hIHl hIHr hEvalE hSizeF hSizeC
+      c1 ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
         hgv8, hgv9, hgv18, hgv2, hgvx19, hbridge⟩
@@ -618,6 +627,7 @@ theorem binRow_eq
     (sp r sret aEnv aExpr aLOp aROp w19 : BitVec 64)
     (m0 : Mem)
     (hX : BinArmExtras g N A SL .eq el er sp r sret aExpr aLOp aROp m0)
+    (hLeft : EvalE st d env el st' vl)
     (hIHl : EvalIH st d env el st' vl)
     (hIHr : EvalIH st' d env er st'' vr)
     (hEvalE : EvalE st d env (.binary .eq el er) st'' (.bool (vl.equal vr)))
@@ -643,15 +653,15 @@ theorem binRow_eq
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.bool (vl.equal vr)) sp r sret m0) := by
   intro c hc
-  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
+  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hRec, hx11, hx13, hx19,
     hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .eq el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   obtain ⟨c2, hs2, hExit⟩ :=
     evalEqSimD g gpre' g N A SL φf φc st st' st'' d env el er vl vr
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' w19 c1.σ.sailOutput m0
-      hIHl hIHr hEvalE hSizeF hSizeC hVlSurv (hResid gpre' v8' v9' v18' v19')
-      c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+      hLeft hIHl hIHr hEvalE hSizeF hSizeC hVlSurv (hResid gpre' v8' v9' v18' v19')
+      c1 ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
@@ -664,6 +674,7 @@ theorem binRow_ne
     (sp r sret aEnv aExpr aLOp aROp w19 : BitVec 64)
     (m0 : Mem)
     (hX : BinArmExtras g N A SL .ne el er sp r sret aExpr aLOp aROp m0)
+    (hLeft : EvalE st d env el st' vl)
     (hIHl : EvalIH st d env el st' vl)
     (hIHr : EvalIH st' d env er st'' vr)
     (hEvalE : EvalE st d env (.binary .ne el er) st'' (.bool (!(vl.equal vr))))
@@ -689,15 +700,15 @@ theorem binRow_ne
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.bool (!(vl.equal vr))) sp r sret m0) := by
   intro c hc
-  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hx11, hx13, hx19,
+  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hRec, hx11, hx13, hx19,
     hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
     hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
     blockA_binaryArm_budgeted g N A SL φf φc st st' d env .ne el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
   obtain ⟨c2, hs2, hExit⟩ :=
     evalNeSimD g gpre' g N A SL φf φc st st' st'' d env el er vl vr
       sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' w19 c1.σ.sailOutput m0
-      hIHl hIHr hEvalE hSizeF hSizeC hVlSurv (hResid gpre' v8' v9' v18' v19')
-      c1 ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+      hLeft hIHl hIHr hEvalE hSizeF hSizeC hVlSurv (hResid gpre' v8' v9' v18' v19')
+      c1 ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
         hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
@@ -972,7 +983,7 @@ theorem eval_binary_row
         hIAdd g N A SL φf φc st st' st'' d env el er a b hEl hEr ihL' ihR' trivial
           sp r sret aEnv aExpr m0 c hc
       exact binRow_add g N A SL φf φc st st' st'' d env el er a b
-        sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
+        sp r sret aEnv aExpr aLOp aROp Wl m0 hX hEl ihL' ihR'
         (EvalE.binary st d env .add el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
         hSF hSC hSB hP c hc
   | sub =>
@@ -984,7 +995,7 @@ theorem eval_binary_row
         hISub g N A SL φf φc st st' st'' d env el er a b hEl hEr ihL' ihR' trivial
           sp r sret aEnv aExpr m0 c hc
       exact binRow_sub g N A SL φf φc st st' st'' d env el er a b
-        sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
+        sp r sret aEnv aExpr aLOp aROp Wl m0 hX hEl ihL' ihR'
         (EvalE.binary st d env .sub el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
         hSF hSC hSB hP c hc
   | mul =>
@@ -996,7 +1007,7 @@ theorem eval_binary_row
         hIMul g N A SL φf φc st st' st'' d env el er a b hEl hEr ihL' ihR' trivial
           sp r sret aEnv aExpr m0 c hc
       exact binRow_mul g N A SL φf φc st st' st'' d env el er a b
-        sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
+        sp r sret aEnv aExpr aLOp aROp Wl m0 hX hEl ihL' ihR'
         (EvalE.binary st d env .mul el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
         hSF hSC hSB hP c hc
   | div =>
@@ -1015,7 +1026,7 @@ theorem eval_binary_row
             hIDiv g N A SL φf φc st st' st'' d env el er a b hEl hEr ihL' ihR' hov
               sp r sret aEnv aExpr m0 c hc
           exact binRow_div g N A SL φf φc st st' st'' d env el er a b
-            sp r sret aEnv aExpr aLOp aROp Wl m0 hb0 hov hX ihL' ihR'
+            sp r sret aEnv aExpr aLOp aROp Wl m0 hb0 hov hX hEl ihL' ihR'
             (EvalE.binary st d env .div el er st' st'' (.int a) (.int b) _ hEl hEr
               (by simp [binOpSem, hb0]))
             hSF hSC hSB hP c hc
@@ -1031,7 +1042,7 @@ theorem eval_binary_row
           hIMod g N A SL φf φc st st' st'' d env el er a b hEl hEr ihL' ihR' trivial
             sp r sret aEnv aExpr m0 c hc
         exact binRow_mod g N A SL φf φc st st' st'' d env el er a b
-          sp r sret aEnv aExpr aLOp aROp Wl m0 hb0 hX ihL' ihR'
+          sp r sret aEnv aExpr aLOp aROp Wl m0 hb0 hX hEl ihL' ihR'
           (EvalE.binary st d env .mod el er st' st'' (.int a) (.int b) _ hEl hEr
             (by simp [binOpSem, hb0]))
           hSF hSC hSB hP c hc
@@ -1047,7 +1058,7 @@ theorem eval_binary_row
         hILt g N A SL φf φc st st' st'' d env el er a b hEl hEr ihL' ihR' trivial
           sp r sret aEnv aExpr m0 c hc
       exact binRow_lt g N A SL φf φc st st' st'' d env el er a b
-        sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
+        sp r sret aEnv aExpr aLOp aROp Wl m0 hX hEl ihL' ihR'
         (EvalE.binary st d env .lt el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
         hSF hSC hSB hP c hc
   | le =>
@@ -1062,7 +1073,7 @@ theorem eval_binary_row
         hILe g N A SL φf φc st st' st'' d env el er a b hEl hEr ihL' ihR' trivial
           sp r sret aEnv aExpr m0 c hc
       exact binRow_le g N A SL φf φc st st' st'' d env el er a b
-        sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
+        sp r sret aEnv aExpr aLOp aROp Wl m0 hX hEl ihL' ihR'
         (EvalE.binary st d env .le el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
         hSF hSC hSB hP c hc
   | gt =>
@@ -1077,7 +1088,7 @@ theorem eval_binary_row
         hIGt g N A SL φf φc st st' st'' d env el er a b hEl hEr ihL' ihR' trivial
           sp r sret aEnv aExpr m0 c hc
       exact binRow_gt g N A SL φf φc st st' st'' d env el er a b
-        sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
+        sp r sret aEnv aExpr aLOp aROp Wl m0 hX hEl ihL' ihR'
         (EvalE.binary st d env .gt el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
         hSF hSC hSB hP c hc
   | ge =>
@@ -1092,7 +1103,7 @@ theorem eval_binary_row
         hIGe g N A SL φf φc st st' st'' d env el er a b hEl hEr ihL' ihR' trivial
           sp r sret aEnv aExpr m0 c hc
       exact binRow_ge g N A SL φf φc st st' st'' d env el er a b
-        sp r sret aEnv aExpr aLOp aROp Wl m0 hX ihL' ihR'
+        sp r sret aEnv aExpr aLOp aROp Wl m0 hX hEl ihL' ihR'
         (EvalE.binary st d env .ge el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
         hSF hSC hSB hP c hc
   | eq =>
@@ -1102,7 +1113,7 @@ theorem eval_binary_row
       hEq g N A SL φf φc st st' st'' d env el er lv rv sp r sret aEnv aExpr m0 c
         hEl hEr ihL' ihR' hc
     exact binRow_eq g N A SL φf φc st st' st'' d env el er lv rv
-      sp r sret aEnv aExpr aLOp aROp w19 m0 hX ihL' ihR'
+      sp r sret aEnv aExpr aLOp aROp w19 m0 hX hEl ihL' ihR'
       (EvalE.binary st d env .eq el er st' st'' lv rv _ hEl hEr (by simp [binOpSem]))
       hSF hSC hSB hVl hRes c hc
   | ne =>
@@ -1112,7 +1123,7 @@ theorem eval_binary_row
       hNe g N A SL φf φc st st' st'' d env el er lv rv sp r sret aEnv aExpr m0 c
         hEl hEr ihL' ihR' hc
     exact binRow_ne g N A SL φf φc st st' st'' d env el er lv rv
-      sp r sret aEnv aExpr aLOp aROp w19 m0 hX ihL' ihR'
+      sp r sret aEnv aExpr aLOp aROp w19 m0 hX hEl ihL' ihR'
       (EvalE.binary st d env .ne el er st' st'' lv rv _ hEl hEr (by simp [binOpSem]))
       hSF hSC hSB hVl hRes c hc
 

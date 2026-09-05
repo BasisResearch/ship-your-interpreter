@@ -26,20 +26,13 @@ theorem binary_row_fills_hBinary
     (hIGe : BinIntCell .ge GeResid (fun _ _ => True))
     (hEq : BinEqCell .eq .eq (0x80003720#64) (0x8000371c#64) (0x1ff140#21))
     (hNe : BinEqCell .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21))
-    (hStrAddL : ∀ st d env el er st'' (sl : String) (rv : Value),
-        EvalIH st d env (.binary .add el er) st'' (.str ((Value.str sl).catDisplay st''.store ++ rv.catDisplay st''.store)))
-    (hStrAddR : ∀ st d env el er st'' (lv : Value) (sr : String),
-        EvalIH st d env (.binary .add el er) st'' (.str (lv.catDisplay st''.store ++ (Value.str sr).catDisplay st''.store)))
-    (hStrLt : ∀ st d env el er st'' (sl sr : String),
-        EvalIH st d env (.binary .lt el er) st'' (.bool (sl < sr)))
-    (hStrLe : ∀ st d env el er st'' (sl sr : String),
-        EvalIH st d env (.binary .le el er) st'' (.bool (sl < sr || sl == sr)))
-    (hStrGt : ∀ st d env el er st'' (sl sr : String),
-        EvalIH st d env (.binary .gt el er) st'' (.bool (sr < sl)))
-    (hStrGe : ∀ st d env el er st'' (sl sr : String),
-        EvalIH st d env (.binary .ge el er) st'' (.bool (sr < sl || sl == sr)))
-    (hDivOv : ∀ st d env el er st'',
-        EvalIH st d env (.binary .div el er) st'' (.int (wrap64 ((-2^63 : Int).tdiv (-1))))) :
+    (hStrAddL : BinStrAddLCell)
+    (hStrAddR : BinStrAddRCell)
+    (hStrLt : BinStrCmpCell .lt (fun sl sr => sl < sr))
+    (hStrLe : BinStrCmpCell .le (fun sl sr => sl < sr || sl == sr))
+    (hStrGt : BinStrCmpCell .gt (fun sl sr => sr < sl))
+    (hStrGe : BinStrCmpCell .ge (fun sl sr => sr < sl || sl == sr))
+    (hDivOv : BinDivOverflowCell) :
     (∀ (st : Vsa.While.St) (d : Nat) (env : Addr) (op : BinOp) (l r : Expr) (st' st'' : Vsa.While.St) (lv rv v : Value) (a : EvalE st d env l st' lv) (a_1 : EvalE st' d env r st'' rv) (a_2 : binOpSem st''.store op lv rv = some v), mEvalE st d env l st' lv a → mEvalE st' d env r st'' rv a_1 → mEvalE st d env (Expr.binary op l r) st'' v (EvalE.binary st d env op l r st' st'' lv rv v a a_1 a_2)) :=
   eval_binary_row hIAdd hISub hIMul hIDiv hIMod hILt hILe hIGt hIGe hEq hNe
     hStrAddL hStrAddR hStrLt hStrLe hStrGt hStrGe hDivOv

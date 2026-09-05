@@ -911,6 +911,7 @@ theorem evalEqSimD
     (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (vl vr : Value)
     (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64)
     (out0 : Array String) (m0 : Mem)
+    (hLeft : EvalE st d env el st' vl)
     (hIHl : EvalIH st d env el st' vl) (hIHr : EvalIH st' d env er st'' vr)
     (_hEvalE : EvalE st d env (.binary .eq el er) st'' (.bool (vl.equal vr)))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
@@ -930,6 +931,7 @@ theorem evalEqSimD
         ArmEntryK gouter N A SL φf φc st (0x800034e8#64) UnaryArmCallee (.binary .eq el er)
           sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
         BinExtras N A SL el er ment sp sret aExpr aLOp aROp ∧
+        BinaryRecContext gpre φf st env aEnvReg ∧
         c.σ.regs.get? Register.x11 = some aEnv ∧
         c.σ.regs.get? Register.x13 = some aEnvReg ∧
         c.σ.regs.get? Register.x19 = some v19 ∧
@@ -958,7 +960,7 @@ theorem evalEqSimD
         st'' (.bool (vl.equal vr)) sp r sret m0) :=
   evalEqSim gouter gpre g N A SL φf φc st st' st'' d env el er vl vr
     sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0
-    hIHl hIHr _hEvalE hSizeF hSizeC hVlSurv
+    hLeft hIHl hIHr _hEvalE hSizeF hSizeC hVlSurv
     (fun c2 hTS _hOut2 =>
       eqBlockC_bridge .eq gpre g N A SL φf φc st.store.frames.size st.store.closures.size st' st'' sp r sret aExpr v8 v9 v18 v19 w19 vl vr
         (.bool (vl.equal vr)) (0x80003720#64) (0x8000371c#64) (0x1ff140#21)
@@ -975,6 +977,7 @@ theorem evalNeSimD
     (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (vl vr : Value)
     (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64)
     (out0 : Array String) (m0 : Mem)
+    (hLeft : EvalE st d env el st' vl)
     (hIHl : EvalIH st d env el st' vl) (hIHr : EvalIH st' d env er st'' vr)
     (_hEvalE : EvalE st d env (.binary .ne el er) st'' (.bool (!(vl.equal vr))))
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
@@ -994,6 +997,7 @@ theorem evalNeSimD
         ArmEntryK gouter N A SL φf φc st (0x800034e8#64) UnaryArmCallee (.binary .ne el er)
           sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
         BinExtras N A SL el er ment sp sret aExpr aLOp aROp ∧
+        BinaryRecContext gpre φf st env aEnvReg ∧
         c.σ.regs.get? Register.x11 = some aEnv ∧
         c.σ.regs.get? Register.x13 = some aEnvReg ∧
         c.σ.regs.get? Register.x19 = some v19 ∧
@@ -1022,7 +1026,7 @@ theorem evalNeSimD
         st'' (.bool (!(vl.equal vr))) sp r sret m0) :=
   evalNeSim gouter gpre g N A SL φf φc st st' st'' d env el er vl vr
     sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0
-    hIHl hIHr _hEvalE hSizeF hSizeC hVlSurv
+    hLeft hIHl hIHr _hEvalE hSizeF hSizeC hVlSurv
     (fun c2 hTS _hOut2 =>
       eqBlockC_bridge .ne gpre g N A SL φf φc st.store.frames.size st.store.closures.size st' st'' sp r sret aExpr v8 v9 v18 v19 w19 vl vr
         (.bool (!(vl.equal vr))) (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21)

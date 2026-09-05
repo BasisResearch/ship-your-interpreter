@@ -454,8 +454,8 @@ theorem ve_prefix (g : (R : Register) → Option (RegisterType R)) (bufa bufb r 
       (∀ R : Register, NotWrittenVE R → σ2.regs.get? R = g R) := by
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hloaded0 : Value_equalLoaded m0 := hmem ▸ hloaded
-  have hka : read32 m0 bufa.toNat = some (kindTag va) := kind_read32 m0 N φc bufa.toNat va hra'
-  have hkb : read32 m0 bufb.toNat = some (kindTag vb) := kind_read32 m0 N φc bufb.toNat vb hrb'
+  have hka : read32 m0 bufa.toNat = some (kindTag va) := kind_read32 m0 bufa.toNat va (truthyHeaderRepr_of_valueRepr hra')
+  have hkb : read32 m0 bufb.toNat = some (kindTag vb) := kind_read32 m0 bufb.toNat vb (truthyHeaderRepr_of_valueRepr hrb')
   obtain ⟨a0, a1, a2, a3, ha0b, ha1b, ha2b, ha3b, hareca⟩ := read32_bytes m0 bufa.toNat _ hka
   obtain ⟨c0, c1, c2, c3, hc0b, hc1b, hc2b, hc3b, hrecb⟩ := read32_bytes m0 bufb.toNat _ hkb
   have hkalt : kindTag va < 128 := by cases va <;> simp [kindTag]
@@ -668,8 +668,8 @@ theorem value_equal_spec_null_mismatch
   have hloaded0 : Value_equalLoaded m0 := hmem ▸ hloaded
   have hjt0 : JumpTable m0 := hmem ▸ hjt
   have htoh : tohostAddr = 0x8001ad00 := rfl
-  have hka : read32 m0 bufa.toNat = some (kindTag va) := kind_read32 m0 N φc bufa.toNat va hra'
-  have hkb : read32 m0 bufb.toNat = some (kindTag vb) := kind_read32 m0 N φc bufb.toNat vb hrb'
+  have hka : read32 m0 bufa.toNat = some (kindTag va) := kind_read32 m0 bufa.toNat va (truthyHeaderRepr_of_valueRepr hra')
+  have hkb : read32 m0 bufb.toNat = some (kindTag vb) := kind_read32 m0 bufb.toNat vb (truthyHeaderRepr_of_valueRepr hrb')
   obtain ⟨a0, a1, a2, a3, ha0b, ha1b, ha2b, ha3b, hareca⟩ := read32_bytes m0 bufa.toNat _ hka
   obtain ⟨c0, c1, c2, c3, hc0b, hc1b, hc2b, hc3b, hrecb⟩ := read32_bytes m0 bufb.toNat _ hkb
   have hkalt : kindTag va < 128 := by cases va <;> simp [kindTag]

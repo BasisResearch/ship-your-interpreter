@@ -24,11 +24,12 @@ OUT = "Vsa/Sim/rows/AssemblySkeleton.lean"
 TSV = "experiments/assembly_skeleton.tsv"
 
 
-def parse():
-    lines = open(SRC).read().splitlines()
+def parse(structure: str = "TermResidualsCore"):
+    with open(SRC, encoding="utf-8") as source:
+        lines = source.read().splitlines()
     # structure extent
     start = next(i for i, l in enumerate(lines)
-                 if l.startswith("structure TermResidualsCore"))
+                 if l.startswith(f"structure {structure} "))
     end = next(i for i in range(start + 1, len(lines))
                if lines[i] and not lines[i].startswith(" ")
                and not lines[i].startswith("--"))
@@ -61,6 +62,13 @@ def parse():
             doc = []
             continue
         i += 1
+    parent = re.search(r" extends (\w+) L where$", lines[start])
+    if " extends " in lines[start] and parent is None:
+        raise ValueError(f"unsupported structure inheritance: {lines[start]}")
+    if parent is not None:
+        parent_opens, parent_fields = parse(parent.group(1))
+        opens = list(dict.fromkeys([*parent_opens, *opens]))
+        fields = [*parent_fields, *fields]
     return opens, fields
 
 
@@ -106,11 +114,13 @@ def emit(opens, fields):
     A("  { " + ", ".join(f"{n} := {n}" for n, _, _ in fields) + " }")
     A("")
     A("end Vsa.Sim.TermAssembly.Skel")
-    open(OUT, "w").write("\n".join(L) + "\n")
-    with open(TSV, "w") as f:
+    with open(OUT, "w", encoding="utf-8") as output:
+        output.write("\n".join(L) + "\n")
+    with open(TSV, "w", encoding="utf-8") as f:
         f.write("field\tstatus\tsupplier_note\n")
         for name, _, doc in fields:
-            f.write(f"{name}\thole\t{doc[:220]}\n")
+            note = doc[:220] or "(no supplier note)"
+            f.write(f"{name}\thole\t{note}\n")
     print(f"wrote {OUT} ({len(fields)} holes) + {TSV}")
 
 

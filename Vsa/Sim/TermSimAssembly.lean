@@ -210,12 +210,22 @@ structure ExecInitReady
   stmt : StmtRepr ment aStmt.toNat (.forStmt init cnd step body)
   outer_addr : φf outer = aOuter.toNat
   store : StoreRepr ment N A φf φc st.store
+  env_valid : EnvValid st outer
+  /-- The enclosing entry's store stability, retained across initializer setup. -/
+  store_survives : ∀ m' : Mem,
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ment[k]? = m'[k]?) →
+    StoreRepr m' N A φf φc st.store
+  stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
+  stack_win : tohostAddr + 16 ≤ SL.lo
+  code_stack_disjoint : sp.toNat ≤ execStmtEntry ∨ execStmtEnd ≤ SL.lo
   out : OutRepr cfg.σ st
   saved_ra : read64 ment (sp.toNat - 8) = some r.toNat
   saved_s0 : ∃ v, read64 ment (sp.toNat - 16) = some v.toNat ∧ g Register.x8 = some v
   saved_s1 : ∃ v, read64 ment (sp.toNat - 24) = some v.toNat ∧ g Register.x9 = some v
   saved_s2 : ∃ v, read64 ment (sp.toNat - 32) = some v.toNat ∧ g Register.x18 = some v
   saved_s3 : ∃ v, read64 ment (sp.toNat - 40) = some v.toNat ∧ g Register.x19 = some v
+  x20_defined : ∃ v, cfg.σ.regs.get? Register.x20 = some v
+  x21_defined : ∃ v, cfg.σ.regs.get? Register.x21 = some v
   stack_budget : StackOK SL sp
     ((Stmt.forStmt init cnd step body).stackNeed +
       (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088)
@@ -223,7 +233,9 @@ structure ExecInitReady
     (.forStmt init cnd step body) = true
   store_bodies : Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
   ground : ExecGround ment SL A sp aRet aStmt.toNat (.forStmt init cnd step body)
-  mem_frame : ∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?
+  mem_frame : ∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
+    ¬ (A.lo ≤ a ∧ a < A.hi) →
+    (aRet.toNat ≤ a ∧ a < aRet.toNat + 24) ∨ ment[a]? = m0[a]?
   frame : ∀ R, AbiPreservedNoise R →
     (R = Register.x8 ∨ R = Register.x9 ∨ R = Register.x18 ∨
       R = Register.x19 ∨ R = Register.x2) ∨ cfg.σ.regs.get? R = g R
@@ -251,12 +263,22 @@ structure ForLoopReady
   stmt : StmtRepr ment aStmt.toNat (.forStmt init cnd step body)
   outer_addr : φf outer = aOuter.toNat
   store : StoreRepr ment N A φf φc st.store
+  env_valid : EnvValid st outer
+  /-- Store stability at the selected loop-entry allocation maps. -/
+  store_survives : ∀ m' : Mem,
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ment[k]? = m'[k]?) →
+    StoreRepr m' N A φf φc st.store
+  stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
+  stack_win : tohostAddr + 16 ≤ SL.lo
+  code_stack_disjoint : sp.toNat ≤ execStmtEntry ∨ execStmtEnd ≤ SL.lo
   out : OutRepr cfg.σ st
   saved_ra : read64 ment (sp.toNat - 8) = some r.toNat
   saved_s0 : ∃ v, read64 ment (sp.toNat - 16) = some v.toNat ∧ g Register.x8 = some v
   saved_s1 : ∃ v, read64 ment (sp.toNat - 24) = some v.toNat ∧ g Register.x9 = some v
   saved_s2 : ∃ v, read64 ment (sp.toNat - 32) = some v.toNat ∧ g Register.x18 = some v
   saved_s3 : ∃ v, read64 ment (sp.toNat - 40) = some v.toNat ∧ g Register.x19 = some v
+  x20_defined : ∃ v, cfg.σ.regs.get? Register.x20 = some v
+  x21_defined : ∃ v, cfg.σ.regs.get? Register.x21 = some v
   stack_budget : StackOK SL sp
     ((Stmt.forStmt init cnd step body).stackNeed +
       (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088)
@@ -264,11 +286,38 @@ structure ForLoopReady
     (.forStmt init cnd step body) = true
   store_bodies : Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
   ground : ExecGround ment SL A sp aRet aStmt.toNat (.forStmt init cnd step body)
-  mem_frame : ∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?
+  mem_frame : ∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
+    ¬ (A.lo ≤ a ∧ a < A.hi) →
+    (aRet.toNat ≤ a ∧ a < aRet.toNat + 24) ∨ ment[a]? = m0[a]?
   frame : ∀ R, AbiPreservedNoise R →
     (R = Register.x8 ∨ R = Register.x9 ∨ R = Register.x18 ∨
       R = Register.x19 ∨ R = Register.x2) ∨ cfg.σ.regs.get? R = g R
   minstret : ∃ v, cfg.σ.regs.get? Register.minstret = some v
+
+/-- Initializer continuation at one coherent extension of the entry maps. -/
+structure ExecInitExit
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat) (st : SpecSt) (d : Nat) (outer : Addr)
+    (init : Option Stmt) (cnd step : Option Expr) (body : Stmt)
+    (sp r aInterp aStmt aOuter aRet : BitVec 64) (m0 : Mem)
+    (cfg : Config) (φf' φc' : Addr → Nat) (liveRA : BitVec 64) : Prop where
+  frames : PhiExtends φf φf' nf
+  closures : PhiExtends φc φc' nc
+  ready : ForLoopReady g N A SL φf' φc' st d outer init cnd step body
+    sp r aInterp aStmt aOuter aRet m0 cfg.σ.mem cfg (liveRA := liveRA)
+
+/-- The initializer chooses its post-allocation maps and continuation link. -/
+structure ExecInitExitD
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat) (st : SpecSt) (d : Nat) (outer : Addr)
+    (init : Option Stmt) (cnd step : Option Expr) (body : Stmt)
+    (sp r aInterp aStmt aOuter aRet : BitVec 64) (m0 : Mem)
+    (cfg : Config) : Prop where
+  result : ∃ (φf' φc' : Addr → Nat) (liveRA : BitVec 64),
+    ExecInitExit g N A SL φf φc nf nc st d outer init cnd step body
+      sp r aInterp aStmt aOuter aRet m0 cfg φf' φc' liveRA
 
 def ExecInitCtxIH
     (st : SpecSt) (d : Nat) (outer : Addr) (init : Option Stmt)
@@ -281,9 +330,8 @@ def ExecInitCtxIH
       (fun cfg => ∃ liveRA,
         ExecInitReady g N A SL φf φc st d outer init cnd step body
           sp r aInterp aStmt aOuter aRet m0 ment cfg (liveRA := liveRA))
-      (fun cfg => ∃ liveRA,
-        ForLoopReady g N A SL φf φc st' d outer init cnd step body
-          sp r aInterp aStmt aOuter aRet m0 cfg.σ.mem cfg (liveRA := liveRA))
+      (ExecInitExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' d outer init cnd step body sp r aInterp aStmt aOuter aRet m0)
 
 def ForLoopCtxIH
     (st : SpecSt) (d : Nat) (outer : Addr) (cnd step : Option Expr)

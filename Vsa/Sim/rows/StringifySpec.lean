@@ -326,9 +326,9 @@ cell needs no general `stringify`/`display` formatter, only the str-restricted
 theorem strConcatCellResid_of_heapResid (h : StrConcatHeapResid) :
     StrConcatCellResid := by
   refine ⟨?_, ?_⟩
-  · intro st d env el er st'' sl rv
+  · intro st d env el er _st' st'' sl rv _hL _hR _ihL _ihR
     simpa [stringifyDisplay_str] using h.1 st d env el er st'' sl rv
-  · intro st d env el er st'' lv sr
+  · intro st d env el er _st' st'' lv sr _hNotStr _hL _hR _ihL _ihR
     simpa [stringifyDisplay_str] using h.2 st d env el er st'' lv sr
 
 end Vsa.Sim

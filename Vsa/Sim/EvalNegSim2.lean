@@ -124,7 +124,7 @@ theorem blockC_neg
     (nf nc : Nat)
     (st' : Vsa.While.St) (n : Int)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
-    (esub : Expr) (m0 : Mem) :
+    (esub : Expr) (m0 : Mem) (hsretWords : ValueWordsTotal m0 sret.toNat) :
     Triple
       (fun c => ∃ mcall,
         SubEvalReturn gpre N A SL φf φc nf nc st' (.int n) sp r sret
@@ -243,7 +243,8 @@ theorem blockC_neg
   have hoc3 : c.σ.mem[aExpr.toNat + 8 + 3]? = some ob3 := (hAgOp _ (by omega) (by omega)).trans hob3
   -- kind + payload of the sub-value
   have hvalSub' : ValueRepr c.σ.mem N φcv (sp.toNat - 944) (.int n) := by
-    rwa [hsub944] at hvalSub
+    have hv := hvalSub.repr
+    rwa [hsub944] at hv
   obtain ⟨hkind2, p, hpay64, hpn⟩ := valueRepr_int_pay64 hvalSub'
   obtain ⟨kb0, kb1, kb2, kb3, hkb0, hkb1, hkb2, hkb3, hkbrec⟩ :=
     read32_bytes c.σ.mem (sp.toNat - 944) 2 hkind2
@@ -552,7 +553,7 @@ theorem blockC_neg
   -- assemble the epilogue-entry package `PreEpilogueV` at the extended maps
   ------------------------------------------------------------------------
   refine ⟨⟨σ17, i17, cvi.steps + 1⟩, ?_, σ17.mem, φf', φc', hpf', hpc',
-    ⟨?_, hMemExt_fin, hSurvSL_fin⟩⟩
+    ⟨?_, hMemExt_fin, ValueWordsTotal.mono hMemExt_fin hsretWords, hSurvSL_fin⟩⟩
   · exact hstepSpine.trans ((Steps.single hstep16).trans (hsvi.trans ((Steps.single hstep17))))
   · refine ⟨hG17, hi17, hpc_fin, hs1_fin, hsp_fin, ⟨vmifin, hmifin⟩,
       hout_fin.trans hout0eq, houtStr, rfl, (by rw [hmem17e]; exact hcode_vi),

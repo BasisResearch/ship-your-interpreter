@@ -147,10 +147,11 @@ theorem evalExitD_of_evalExit
     {st' : Vsa.While.St} {v : Value} {sp r sret : BitVec 64} {m0 : Mem} {c : Config}
     (hExit : EvalExit g N A SL φf φc st'.store.frames.size st'.store.closures.size
       st' v sp r sret m0 c)
-    (hW : LeafWiden g N A SL φf φc st' v sp r sret m0) :
+    (hW : LeafWiden g N A SL φf φc st' v sp r sret m0)
+    (hwords : ValueWordsTotal m0 sret.toNat) :
     EvalExitD g N A SL φf φc st'.store.frames.size st'.store.closures.size
       st' v sp r sret m0 c :=
-  evalExitD_of_widen hExit hW
+  evalExitD_of_widen hExit hW hwords
 
 /-- The PINNED-family bridge: a pinned exit + a pinned-family widener give
 `EvalExitD` (record reshape, wave 47e). -/
@@ -159,10 +160,11 @@ theorem evalExitD_of_pinnedExit
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
     {st' : Vsa.While.St} {v : Value} {sp r sret : BitVec 64} {m0 : Mem} {c : Config}
     (hx : EvalExitPinned g N A SL φf φc st' v sp r sret m0 c)
-    (hW : LeafWidenP g N A SL φf φc st' v sp r sret m0) :
+    (hW : LeafWidenP g N A SL φf φc st' v sp r sret m0)
+    (hwords : ValueWordsTotal m0 sret.toNat) :
     EvalExitD g N A SL φf φc st'.store.frames.size st'.store.closures.size
       st' v sp r sret m0 c :=
-  ⟨hx.1, hW.pres c hx, hW.surv c hx⟩
+  ⟨hx.1, hW.pres c hx, ValueWordsTotal.mono (hW.pres c hx) hwords, hW.surv c hx⟩
 
 /-! ## The five leaf `*D` lemmas
 
@@ -186,7 +188,8 @@ theorem evalIntSimD
   intro c hEntry
   obtain ⟨c', hs, hExit, hPin⟩ :=
     evalIntSimP g N A SL φf φc st d a n sp r sret aEnv aExpr m0 c hEntry
-  exact ⟨c', hs, evalExitD_of_pinnedExit ⟨hExit, hPin⟩ hW⟩
+  have hwords : ValueWordsTotal m0 sret.toNat := hEntry.mem ▸ hEntry.sret_words
+  exact ⟨c', hs, evalExitD_of_pinnedExit ⟨hExit, hPin⟩ hW hwords⟩
 
 /-- **`evalNullSimD`** — the `EvalE.null` leaf at `EvalExitD`. -/
 theorem evalNullSimD
@@ -195,7 +198,8 @@ theorem evalNullSimD
     (st : Vsa.While.St) (d : Nat) (a : Addr)
     (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
     (hE : EvalE st d a .null st .null)
-    (hW : LeafWidenP g N A SL φf φc st .null sp r sret m0) :
+    (hW : LeafWidenP g N A SL φf φc st .null sp r sret m0)
+    (hwords : ValueWordsTotal m0 sret.toNat) :
     Triple
       (EvalNullEntry g N A SL φf φc st d a sp r sret aEnv aExpr m0)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
@@ -203,7 +207,7 @@ theorem evalNullSimD
   intro c hEntry
   obtain ⟨c', hs, hExit, hPin⟩ :=
     evalNullSimP g N A SL φf φc st d a sp r sret aEnv aExpr m0 c hEntry
-  exact ⟨c', hs, evalExitD_of_pinnedExit ⟨hExit, hPin⟩ hW⟩
+  exact ⟨c', hs, evalExitD_of_pinnedExit ⟨hExit, hPin⟩ hW hwords⟩
 
 /-- **`evalBoolSimD`** — the `EvalE.bool` leaf at `EvalExitD`. -/
 theorem evalBoolSimD
@@ -212,7 +216,8 @@ theorem evalBoolSimD
     (st : Vsa.While.St) (d : Nat) (a : Addr) (b : Bool)
     (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
     (hE : EvalE st d a (.bool b) st (.bool b))
-    (hW : LeafWidenP g N A SL φf φc st (.bool b) sp r sret m0) :
+    (hW : LeafWidenP g N A SL φf φc st (.bool b) sp r sret m0)
+    (hwords : ValueWordsTotal m0 sret.toNat) :
     Triple
       (EvalBoolEntry g N A SL φf φc st d a b sp r sret aEnv aExpr m0)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
@@ -220,7 +225,7 @@ theorem evalBoolSimD
   intro c hEntry
   obtain ⟨c', hs, hExit, hPin⟩ :=
     evalBoolSimP g N A SL φf φc st d a b sp r sret aEnv aExpr m0 c hEntry
-  exact ⟨c', hs, evalExitD_of_pinnedExit ⟨hExit, hPin⟩ hW⟩
+  exact ⟨c', hs, evalExitD_of_pinnedExit ⟨hExit, hPin⟩ hW hwords⟩
 
 /-- **`evalStrSimD`** — the `EvalE.str` leaf at `EvalExitD`. -/
 theorem evalStrSimD
@@ -229,7 +234,8 @@ theorem evalStrSimD
     (st : Vsa.While.St) (d : Nat) (a : Addr) (s : String)
     (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
     (hE : EvalE st d a (.str s) st (.str s))
-    (hW : LeafWidenP g N A SL φf φc st (.str s) sp r sret m0) :
+    (hW : LeafWidenP g N A SL φf φc st (.str s) sp r sret m0)
+    (hwords : ValueWordsTotal m0 sret.toNat) :
     Triple
       (EvalStrEntry g N A SL φf φc st d a s sp r sret aEnv aExpr m0)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
@@ -237,7 +243,7 @@ theorem evalStrSimD
   intro c hEntry
   obtain ⟨c', hs, hExit, hPin⟩ :=
     evalStrSimP g N A SL φf φc st d a s sp r sret aEnv aExpr m0 c hEntry
-  exact ⟨c', hs, evalExitD_of_pinnedExit ⟨hExit, hPin⟩ hW⟩
+  exact ⟨c', hs, evalExitD_of_pinnedExit ⟨hExit, hPin⟩ hW hwords⟩
 
 /-- **`evalVarSimD`** — the `EvalE.var` leaf at `EvalExitD` (retaining
 `EvalVarEntry`'s explicit `env_get_found` contract, as in `evalVarSim`). -/
@@ -247,7 +253,8 @@ theorem evalVarSimD
     (st : Vsa.While.St) (d : Nat) (a : Addr) (x : String) (v : Value)
     (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
     (hE : EvalE st d a (.var x) st v)
-    (hW : LeafWiden g N A SL φf φc st v sp r sret m0) :
+    (hW : LeafWiden g N A SL φf φc st v sp r sret m0)
+    (hwords : ValueWordsTotal m0 sret.toNat) :
     Triple
       (EvalVarEntry g N A SL φf φc st d a x v sp r sret aEnv aExpr m0)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
@@ -255,6 +262,6 @@ theorem evalVarSimD
   intro c hEntry
   obtain ⟨c', hs, hExit⟩ :=
     evalVarSim g N A SL φf φc st d a x v sp r sret aEnv aExpr m0 hE c hEntry
-  exact ⟨c', hs, evalExitD_of_evalExit hExit hW⟩
+  exact ⟨c', hs, evalExitD_of_evalExit hExit hW hwords⟩
 
 end Vsa.Sim

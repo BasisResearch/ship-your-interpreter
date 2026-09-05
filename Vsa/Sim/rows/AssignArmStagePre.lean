@@ -259,6 +259,7 @@ def AssignRhsCallPre
   (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
   c.σ.sailOutput = out0 ∧ String.join out0.toList = st.out ∧
   c.σ.mem = mcall ∧
+  ValueWordsTotal mcall subsret.toNat ∧
   Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧
   NBSPins mcall ∧
   EvalGround mcall SL A (sp - 1088#64) subsret aOperand.toNat e ∧
@@ -304,6 +305,7 @@ structure AssignRhsCarry
     (out0 : Array String) (mcall : Mem) (c : Config) : Prop where
   call : AssignRhsCallPre gpre N A SL φf φc st d env e
     sp r sret subsret aIn aOperand v8 v9 v18 out0 mcall c
+  envValid : EnvValid st env
   envReg : c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env))
   parentS0 : gpre Register.x8 = some aExpr
   interpS2 : gpre Register.x18 = some aIn
@@ -326,7 +328,7 @@ theorem AssignRhsCarry.toJalPreBundle
     JalPreBundle e c st d env := by
   refine ⟨gpre, N, A, SL, φf, φc, 0x80003488#64, 0x8000348c#64,
     0x1ffcdc#21, sp, r, sret, subsret, aIn, aOperand, v8, v9, v18, out0, mcall,
-    ?_, ?_, ?_, ?_, ?_⟩
+    h.envValid, ?_, ?_, ?_, ?_, ?_⟩
   · apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide
   · apply BitVec.eq_of_toNat_eq; decide
   · decide
@@ -354,6 +356,7 @@ theorem AssignRhsCarry.run
     sp r sret subsret aIn aOperand v8 v9 v18 out0 mcall
     (by apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide)
     (by apply BitVec.eq_of_toNat_eq; decide) (by decide)
+    h.envValid
     (fun σ i u vmi hG hpc hmi hcode hi =>
       site_80003488_as σ i u 0x80003488#64 vmi hG hpc hmi hcode rfl hi)
     hIH c h.call
@@ -375,6 +378,7 @@ theorem blockB_assign_stagePre_carry
     (sp r sret aExpr aIn aRhs aEnv3 : BitVec 64) (v8 v9 v18 : BitVec 64)
     (out0 : Array String) (m0 : Mem)
     (c : Config)
+    (henvValid : EnvValid st env)
     (hpre : ∃ ment,
         ArmEntryK gouter N A SL φf φc st (0x8000347c#64) UnaryArmCallee (.assign x e)
           sp r sret aExpr aIn v8 v9 v18 out0 m0 ment c ∧
@@ -549,6 +553,9 @@ theorem blockB_assign_stagePre_carry
       ((sp - 1088#64) + sign_extend (m := 64) (0x0f0#12)) aRhs.toNat e :=
     hGroundP.child_at (fun _ _ h => h)
       (fun a ha => hAgSpill a (by omega))
+      (hGroundP.stack_bytes_extend (by
+        simpa [hmcalldef] using memExtends_writeMap8 ment (sp.toNat - 1088)
+          (sdData_val aEnv3)))
       htableStk hspSLhi (by rw [hspsubA]; omega)
       (by rw [hsub848]; omega) (by rw [hsub848]; omega)
   have hStoreMcall : StoreRepr mcall N A φf φc st.store := by
@@ -601,9 +608,12 @@ theorem blockB_assign_stagePre_carry
     rw [← hgframe Register.x18 (by decide)]
     exact _hAEx18
   have hParentGroundMent : EvalGround ment SL A sp sret aExpr.toNat (.assign x e) :=
-    hParentGround0.transport_offstack htableStk hspSLhi hmemframe_m0
+    hParentGround0.transport_offstack htableStk hspSLhi hGroundP.stack_bytes hmemframe_m0
   have hParentGroundMcall : EvalGround mcall SL A sp sret aExpr.toNat (.assign x e) :=
     hParentGroundMent.transport_offstack htableStk hspSLhi
+      (hParentGroundMent.stack_bytes_extend (by
+        simpa [hmcalldef] using memExtends_writeMap8 ment (sp.toNat - 1088)
+          (sdData_val aEnv3)))
       (fun a ha => hAgSpill a (by omega))
   obtain ⟨pName, hpNameMent, hcstringMent⟩ :
       ∃ p, read64 ment (aExpr.toNat + 8) = some p ∧ CString ment p x := by
@@ -634,12 +644,15 @@ theorem blockB_assign_stagePre_carry
   -- ============ land at σ3 with the exact assignment RHS carry ============
   refine ⟨3, ⟨σ3, i3, c.steps + 1 + 1 + 1⟩, Nat.le_refl _,
     StepsN.succ hstep1 (StepsN.succ hstep2 (StepsN.succ hstep3 (StepsN.zero _))), ?_⟩
-  · refine ⟨mcall, ⟨?_, henvReg ▸ hx13_3, hgpre8, hgpre18,
+  · refine ⟨mcall, ⟨?_, henvValid,
+      henvReg ▸ hx13_3, hgpre8, hgpre18,
       hspsubA, hspSLhi,
       ⟨by rw [hsub848]; omega, by rw [hsub848]; omega⟩, hParentGroundMcall,
       ⟨pName, hpNameCall, hcstringCall⟩⟩⟩
     exact ⟨hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, henvReg ▸ hx13_3, hx12_3,
-      hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr, hmem3e, hcodeMcall, hviIntMcall,
+      hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr, hmem3e,
+      hGroundMcall.valueWordsTotal (by rw [hsub848]; omega) (by rw [hsub848]; omega),
+      hcodeMcall, hviIntMcall,
       hviSlotMcall, hnbsMcall, hGroundMcall, hExprMcall, hStoreMcall,
       hStoreSurvMcall, hframeB, ⟨hg8, hg18, hg19, hg20, hg21⟩,
       hslotRaMcall, hslotS0Mcall, hslotS1Mcall, hslotS2Mcall,
@@ -658,6 +671,7 @@ theorem blockB_assign_stagePre
     (st : Vsa.While.St) (d : Nat) (env : Addr) (x : String) (e : Expr)
     (sp r sret aExpr aIn aRhs aEnv3 : BitVec 64) (v8 v9 v18 : BitVec 64)
     (out0 : Array String) (m0 : Mem) (c : Config)
+    (henvValid : EnvValid st env)
     (hpre : ∃ ment,
       ArmEntryK gouter N A SL φf φc st (0x8000347c#64) UnaryArmCallee (.assign x e)
         sp r sret aExpr aIn v8 v9 v18 out0 m0 ment c ∧
@@ -690,7 +704,7 @@ theorem blockB_assign_stagePre
     (hParentGround0 : EvalGround m0 SL A sp sret aExpr.toNat (.assign x e)) :
     LandedN 3 c (fun c' => JalPreBundle e c' st d env) := by
   exact (blockB_assign_stagePre_carry gouter gpre N A SL φf φc st d env x e
-    sp r sret aExpr aIn aRhs aEnv3 v8 v9 v18 out0 m0 c hpre hParentGround0).weaken
+    sp r sret aExpr aIn aRhs aEnv3 v8 v9 v18 out0 m0 c henvValid hpre hParentGround0).weaken
       (fun _ h => by obtain ⟨_, hc⟩ := h; exact hc.toJalPreBundle)
 
 /-! ## §3. The `assignE` field composer
@@ -768,6 +782,7 @@ theorem assignE_field_of_dispatch
     harenaStk, harenaCode⟩ := hMid
   exact blockB_assign_stagePre g gpre N A SL φf φc st d env x e
     sp r0 sret aExpr aIn aRhs aEnv3 v8 v9 v18 c'.σ.sailOutput m0 c'
+    hEntry.env_valid
     ⟨ment, hArm, hx11, hx13, henvReg, hgframe, hg8, hg18, hg19, hg20, hg21,
       hpay, hexprSurv, hGroundP, hexprHi24,
       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,

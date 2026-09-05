@@ -97,7 +97,7 @@ theorem blockA_unaryGenArm
   have hkm0 : read32 m0 aExpr.toNat = some 8 := by
     cases (hc.mem ▸ hc.expr) with | unary hk _ _ _ => exact hk
   -- === block A: prologue + dispatch → widened ArmEntryK @0x800035e0#64 ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, _hpresM, _hx13⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, hpresM, hx13exact⟩ :=
     blockA_k g N A SL φf φc st env (.unary op esub) 8 (0x800035e0#64) UnaryArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
@@ -130,6 +130,7 @@ theorem blockA_unaryGenArm
     _hAsretAl, _hAsretLo, _hAsretHi, _hAsretWin, _hAsretVi, _hAsretStk, _hAsretEc,
     _hAsp1088, _hAsphi, _hAsplo, _hAspwin, _hAsp8, _hASLlo, _hASLwin, _hASLloSp, _hAraAl,
     hAEx11, hAEx8, hAEx18⟩ := hArmCopy
+  have hx13c1 : c1.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) := hx13exact
   have hMentM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]? := hArmMemM0
   have hExprMent : ExprRepr ment aExpr.toNat (.unary op esub) :=
     hX.expr_survives ment (fun a ha => (hMentM0 a ha).symm)

@@ -228,6 +228,7 @@ theorem blockB_call_stagePre
     (sp r sret aExpr aIn aClo aEnv3 : BitVec 64) (v8 v9 v18 : BitVec 64)
     (out0 : Array String) (m0 : Mem)
     (c : Config)
+    (henvValid : EnvValid st env)
     (hpre : ∃ ment,
         ArmEntryK gouter N A SL φf φc st (0x800031b0#64) UnaryArmCallee (.call f args)
           sp r sret aExpr aIn v8 v9 v18 out0 m0 ment c ∧
@@ -396,6 +397,9 @@ theorem blockB_call_stagePre
       ((sp - 1088#64) + sign_extend (m := 64) (0x060#12)) aClo.toNat f :=
     hGroundP.child_at (fun _ _ h => h)
       (fun a ha => hAgSpill a (by omega))
+      (hGroundP.stack_bytes_extend (by
+        simpa [hmcalldef] using memExtends_writeMap8 ment (sp.toNat - 1088)
+          (sdData_val aEnv3)))
       htableStk hspSLhi (by rw [hspsubC]; omega)
       (by rw [hsub992]; omega) (by rw [hsub992]; omega)
   have hStoreMcall : StoreRepr mcall N A φf φc st.store := by
@@ -447,13 +451,16 @@ theorem blockB_call_stagePre
   · exact ⟨gpre, N, A, SL, φf, φc, (0x800031bc#64), (0x800031c0#64), (0x1fffa8#21),
       sp, r, sret, ((sp - 1088#64) + sign_extend (m := 64) (0x060#12)), aIn, aClo,
       v8, v9, v18, out0, mcall,
+      henvValid,
       (by apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide),
       (by apply BitVec.eq_of_toNat_eq; decide),
       (by decide),
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_800031bc_cf σ i u (0x800031bc#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
       hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, henvReg ▸ hx13_3, hx12_3, hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr,
-      hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hGroundMcall, hExprMcall, hStoreMcall, hStoreSurvMcall,
+      hmem3e, hGroundMcall.valueWordsTotal
+        (by rw [hsub992]; omega) (by rw [hsub992]; omega),
+      hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hGroundMcall, hExprMcall, hStoreMcall, hStoreSurvMcall,
       hframeB, ⟨hg8, hg18, hg19, hg20, hg21⟩,
       hslotRaMcall, hslotS0Mcall, hslotS1Mcall, hslotS2Mcall,
       hopAl, hopLo, hopHi, hopWin, hopStk,
@@ -528,6 +535,7 @@ theorem callF_field_of_dispatch
     harenaStk, harenaCode⟩ := hMid
   exact blockB_call_stagePre g gpre N A SL φf φc st d env f args
     sp r0 sret aExpr aIn aClo aEnv3 v8 v9 v18 c'.σ.sailOutput m0 c'
+    hEntry.env_valid
     ⟨ment, hArm, hx11, hx13, henvReg, hgframe, hg8, hg18, hg19, hg20, hg21,
       hpay, hexprSurv, hGroundP, hexprHi16,
       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,

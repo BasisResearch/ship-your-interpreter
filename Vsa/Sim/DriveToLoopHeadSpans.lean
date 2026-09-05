@@ -1238,7 +1238,7 @@ def segEntryFields_of_ready
   exact
     { good := hgood, tick := htick,
       pc := by rw [hentryPC]; exact hpc,
-      store := hstore, env_valid := F.envValid,
+      store := hstore,
       out := houtH, mem := rfl, code := hcode,
       cursor := hcursor, head_ground := hhead, store_survives := hsurv,
       stack_ram := by decide,

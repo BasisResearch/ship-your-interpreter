@@ -71,6 +71,11 @@ theorem blockC_andTrue
     (el er : Expr) (m0 : Mem)
     (hvltrue : vl.truthy = true)
     (hIHr : EvalIH st' d env er st'' vr)
+    (henvValid : EnvValid st' env)
+    (henvset : ∃ v19 v20 v21 : BitVec 64,
+      gpre Register.x19 = some v19 ∧ gpre Register.x20 = some v20 ∧
+      gpre Register.x21 = some v21)
+    (henvPrefix : env < nf)
     -- store-size stability (mirrors `blockB_binary`'s `hSizeF`/`hSizeC` residual):
     (hSizeF : st'.store.frames.size = st''.store.frames.size)
     (hSizeC : st'.store.closures.size = st''.store.closures.size)
@@ -82,6 +87,7 @@ theorem blockC_andTrue
         SubEvalReturn gpre N A SL φf φc nf nc st' vl sp r sret
           ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)) (0x8000356c#64)
           v8 v9 v18 mcall c ∧
+        read64 mcall (sp.toNat - 1088) = some (BitVec.ofNat 64 (φf env)).toNat ∧
         gpre Register.x8 = some aExpr ∧
         gpre Register.x18 = some aEnv ∧
         ExprRepr mcall aExpr.toNat (.logical .and el er) ∧
@@ -170,7 +176,7 @@ theorem blockC_andTrue
         PhiExtends φc φce nc ∧
         PreEpilogueVD g N A SL φfe φce st'' (.bool vr.truthy) sp r sret v8 v9 v18 outF m0 mpre c) := by
   intro c hpre
-  obtain ⟨mcall, hSub, hgx8, hgx18, hexpr, hPayRight, hMemExtM0, hgroundP, hexprAl, hexprLo, hexprHi, hexprHi32,
+  obtain ⟨mcall, hSub, hEnvSlotMcall, hgx8, hgx18, hexpr, hPayRight, hMemExtM0, hgroundP, hexprAl, hexprLo, hexprHi, hexprHi32,
     hexprWin, hexprSL, hexprSL32, hexprA, hexprA32, hexprSub,
     hRightSurv, hropAl, hropLo, hropHi, hropWin, hropStk, hPayDisjRight, hVrMapCoh,
     houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretStk, hsretEvalCode, hSretBoolCode,
@@ -192,7 +198,9 @@ theorem blockC_andTrue
     rw [h1088]; have := sp.isLt; omega
   have hsub968 : ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)).toNat = sp.toNat - 968 :=
     spill_addr sp (0x078#12) 968 (by decide) (by omega) hsp1088
-  have hvalSub' : ValueRepr c.σ.mem N φcv (sp.toNat - 968) vl := by rwa [hsub968] at hvalSub
+  have hvalSub' : ValueRepr c.σ.mem N φcv (sp.toNat - 968) vl := by
+    have h := hvalSub.repr
+    rwa [hsub968] at h
   have hBE : LogicalBufExtras N A SL φcv vl sp sret c.σ.mem := hBufExtras φcv hvalSub'
   have hx8 : c.σ.regs.get? Register.x8 = some aExpr := (hframe Register.x8 (by decide)).trans hgx8
   have hx18 : c.σ.regs.get? Register.x18 = some aEnv := (hframe Register.x18 (by decide)).trans hgx18
@@ -457,23 +465,32 @@ theorem blockC_andTrue
   ------------------------------------------------------------------------
   have hspill0Nat : ((sp - 1088#64) + sign_extend (m := 64) (0x000#12)).toNat = sp.toNat - 1088 :=
     spill_addr sp (0x000#12) 1088 (by decide) (by omega) hsp1088
-  obtain ⟨eb0, heb0⟩ := hStackPopM3 (sp.toNat - 1088) (by omega)
-  obtain ⟨eb1, heb1⟩ := hStackPopM3 (sp.toNat - 1088 + 1) (by omega)
-  obtain ⟨eb2, heb2⟩ := hStackPopM3 (sp.toNat - 1088 + 2) (by omega)
-  obtain ⟨eb3, heb3⟩ := hStackPopM3 (sp.toNat - 1088 + 3) (by omega)
-  obtain ⟨eb4, heb4⟩ := hStackPopM3 (sp.toNat - 1088 + 4) (by omega)
-  obtain ⟨eb5, heb5⟩ := hStackPopM3 (sp.toNat - 1088 + 5) (by omega)
-  obtain ⟨eb6, heb6⟩ := hStackPopM3 (sp.toNat - 1088 + 6) (by omega)
-  obtain ⟨eb7, heb7⟩ := hStackPopM3 (sp.toNat - 1088 + 7) (by omega)
+  have hEnvSlotC : read64 c.σ.mem (sp.toNat - 1088) =
+      some (BitVec.ofNat 64 (φf env)).toNat := by
+    rw [← read64_agreeP (P := fun k => sp.toNat - 1088 ≤ k ∧ k < sp.toNat - 1080)
+      (m := mcall) (m' := c.σ.mem) (fun k hk => ?_) (fun k hk => ⟨by omega, by omega⟩)]
+    · exact hEnvSlotMcall
+    · rcases hmemFrame k (by omega) (by rcases harenaStk with h | h <;> omega) with hin | heq
+      · exact absurd hin (by rw [hsub968]; omega)
+      · exact heq.symm
+  have hEnvSlotM3 : read64 m3 (sp.toNat - 1088) =
+      some (BitVec.ofNat 64 (φf env)).toNat := by
+    rw [← read64_agreeP (P := fun k => sp.toNat - 1088 ≤ k ∧ k < sp.toNat - 1080)
+      (m := c.σ.mem) (m' := m3) (fun k hk => (hm3_out k (by omega)).symm)
+      (fun k hk => ⟨by omega, by omega⟩)]
+    exact hEnvSlotC
+  obtain ⟨eb0, eb1, eb2, eb3, eb4, eb5, eb6, eb7,
+      heb0, heb1, heb2, heb3, heb4, heb5, heb6, heb7, hebsext⟩ :=
+    spill_roundtrip_ee m3 (sp.toNat - 1088) (BitVec.ofNat 64 (φf env)) hEnvSlotM3
   obtain ⟨σ12, i12, hs12', hi12, hG12, hmem12, hobs12⟩ :=
     site_80003598_totb cT.σ cT.tick cT.steps (0x80003598#64) vmiT (sp - 1088#64)
       eb0 eb1 eb2 eb3 eb4 eb5 eb6 eb7 hGT hpcT' hmiT hsp_T (hmemT' ▸ hcode_m3) rfl
       (by rw [hspill0Nat]; omega) (by rw [hspill0Nat]; omega)
       (by rw [hspill0Nat, htoh]; right; omega) (by rw [hspill0Nat]; omega)
-      (by rw [hspill0Nat, hmemT']; exact heb0) (by rw [hspill0Nat, hmemT']; exact heb1)
-      (by rw [hspill0Nat, hmemT']; exact heb2) (by rw [hspill0Nat, hmemT']; exact heb3)
-      (by rw [hspill0Nat, hmemT']; exact heb4) (by rw [hspill0Nat, hmemT']; exact heb5)
-      (by rw [hspill0Nat, hmemT']; exact heb6) (by rw [hspill0Nat, hmemT']; exact heb7) htickT
+      (by rw [hspill0Nat, hmemT']; simp [heb0]) (by rw [hspill0Nat, hmemT']; simp [heb1])
+      (by rw [hspill0Nat, hmemT']; simp [heb2]) (by rw [hspill0Nat, hmemT']; simp [heb3])
+      (by rw [hspill0Nat, hmemT']; simp [heb4]) (by rw [hspill0Nat, hmemT']; simp [heb5])
+      (by rw [hspill0Nat, hmemT']; simp [heb6]) (by rw [hspill0Nat, hmemT']; simp [heb7]) htickT
   have hstep12 : Step cT ⟨σ12, i12, cT.steps + 1⟩ := by cases cT; exact hs12'
   have hmem12e : σ12.mem = m3 := by rw [hmem12]; exact hmemT'
   have hpc12 : σ12.regs.get? Register.PC = some (0x8000359c#64) := by
@@ -483,6 +500,8 @@ theorem blockC_andTrue
   have hx13_12 : σ12.regs.get? Register.x13 = some
       (sign_extend (m := 64) ((((((((eb7.append eb6).append eb5).append eb4).append eb3).append eb2).append eb1).append eb0) : BitVec (8 * 8))) :=
     obs_alu_rd hobs12 (by decide) (by decide) (by decide) (by decide) (by decide)
+  have hx13_12' : σ12.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) := by
+    rwa [hebsext] at hx13_12
   have hs1_12 : σ12.regs.get? Register.x9 = some sret := obs_alu_other' hobs12 Register.x9 (by decide) hs1_T
   have hsp_12 : σ12.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other' hobs12 Register.x2 (by decide) hsp_T
   have hx8_12 : σ12.regs.get? Register.x8 = some aExpr := obs_alu_other' hobs12 Register.x8 (by decide) hx8_T
@@ -504,7 +523,7 @@ theorem blockC_andTrue
   have hs1_13 : σ13.regs.get? Register.x9 = some sret := obs_branch_nottaken_other' hobs13 Register.x9 (by decide) hs1_12
   have hsp_13 : σ13.regs.get? Register.x2 = some (sp - 1088#64) := obs_branch_nottaken_other' hobs13 Register.x2 (by decide) hsp_12
   have hx8_13 : σ13.regs.get? Register.x8 = some aExpr := obs_branch_nottaken_other' hobs13 Register.x8 (by decide) hx8_12
-  have hx13_13 := obs_branch_nottaken_other' hobs13 Register.x13 (by decide) hx13_12
+  have hx13_13 := obs_branch_nottaken_other' hobs13 Register.x13 (by decide) hx13_12'
   have hx18_13 : σ13.regs.get? Register.x18 = some aEnv := obs_branch_nottaken_other' hobs13 Register.x18 (by decide) hx18_12
   obtain ⟨vmi13, hmi13⟩ := obs_branch_nottaken_minstret hobs13
   have hout13 : σ13.sailOutput = out0 := by rw [hobs13.out, sailOutput_sigmaPost_branch_nottaken]; exact hout12
@@ -610,6 +629,9 @@ theorem blockC_andTrue
   have hspτ3 : τ3.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other hoτ3 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hspτ2
   have hgR3_8 : τ3.regs.get? Register.x8 = some aExpr := obs_alu_other hoτ3 Register.x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx8τ2
   have hx13τ3 := obs_alu_other hoτ3 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13τ2
+  have hx13τ3' : τ3.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf' env)) := by
+    rw [hpf' env henvPrefix]
+    exact hx13τ3
   have hgR3_18 : τ3.regs.get? Register.x18 = some aEnv := obs_alu_other hoτ3 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18τ2
   obtain ⟨vmiτ3, hmiτ3⟩ := obs_alu_minstret hoτ3
   have houtτ3 : τ3.sailOutput = out0 := by rw [hoτ3.out, sailOutput_sigmaPost_alu]; exact houtτ2
@@ -657,6 +679,7 @@ theorem blockC_andTrue
     rw [e1, e2]
   have hGroundM3P : EvalGround m3 SL A sp sret aExpr.toNat (.logical .and el er) :=
     hgroundP.transport_via hagT47 hagA47
+      (hgroundP.stack_bytes_extend (hMemExt.trans hMEc_m3))
   have hpayRM3 : read64 m3 (aExpr.toNat + 24) = some aRight.toNat := by
     rw [evalGround_ast_read64_agree_via hgroundP hagA47 (off := 24) (by omega)]
     exact hPayRight
@@ -794,6 +817,10 @@ theorem blockC_andTrue
   -- gpre x8/x18 witnesses (for armTail_rec's `spill_defined`)
   have hgpre8 : (∃ w, gpre Register.x8 = some w) := ⟨aExpr, hgx8⟩
   have hgpre18 : (∃ w, gpre Register.x18 = some w) := ⟨aEnv, hgx18⟩
+  obtain ⟨w19, w20, w21, hgpre19, hgpre20, hgpre21⟩ := henvset
+  have hwordsR : ValueWordsTotal m3
+      (((sp - 1088#64) + sign_extend (m := 64) (0x0f0#12)).toNat) :=
+    hGroundM3R.valueWordsTotal hGroundM3R.sret_inSL.1 hGroundM3R.sret_inSL.2
   ------------------------------------------------------------------------
   -- RIGHT recursive call via armTail_rec (subsret = sp-848, retPC = 0x800035b0).
   ------------------------------------------------------------------------
@@ -805,13 +832,18 @@ theorem blockC_andTrue
       (by apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide)
       (by apply BitVec.eq_of_toNat_eq; decide)
       (by decide)
+      henvValid
       (fun σ i u vmi hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_800035ac_lg σ i u (0x800035ac#64) vmi hGσ hpcσ hmiσ hcodeσ rfl hiσ)
       hIHr
       ⟨τ3, j3, cT.steps + 1 + 1 + 1 + 1 + 1⟩
-      ⟨hGτ3, hj3, hpcτ3, ha0τ3, hs1τ3, hx11τ3, ⟨_, hx13τ3⟩, hx12τ3, hspτ3, ⟨vmiτ3, hmiτ3⟩,
-        houtτ3, houtStr, hmemτ3e, hcode_m3, hViInt_m3, hViSlot_m3, hNbs_m3, hGroundM3R, hExprM3, hstoreM3, hstoreSurvM3,
-        (fun R _ => rfl), ⟨⟨aExpr, hgR3_8⟩, ⟨aEnv, hgR3_18⟩⟩,
+      ⟨hGτ3, hj3, hpcτ3, ha0τ3, hs1τ3, hx11τ3, hx13τ3', hx12τ3, hspτ3, ⟨vmiτ3, hmiτ3⟩,
+        houtτ3, houtStr, hmemτ3e, hwordsR, hcode_m3, hViInt_m3, hViSlot_m3, hNbs_m3, hGroundM3R, hExprM3, hstoreM3, hstoreSurvM3,
+        (fun R _ => rfl),
+        ⟨⟨aExpr, hgR3_8⟩, ⟨aEnv, hgR3_18⟩,
+          ⟨w19, (hframeτ3 Register.x19 (by decide)).trans hgpre19⟩,
+          ⟨w20, (hframeτ3 Register.x20 (by decide)).trans hgpre20⟩,
+          ⟨w21, (hframeτ3 Register.x21 (by decide)).trans hgpre21⟩⟩,
         hslotRaM3, hslotS0M3, hslotS1M3, hslotS2M3,
         hropAl, hropLo, hropHi, hropWin, hropStk,
         (by rw [haddr240]; omega), (by rw [haddr240]; omega), (by rw [haddr240]; omega),
@@ -824,7 +856,9 @@ theorem blockC_andTrue
     hslotRaR, hslotS0R, hslotS1R, hslotS2R, hmemFrameR, hMemExtR⟩ := hpostR
   obtain ⟨φf2, φc2, hpf2, hpc2'', hstore2', hstoreSurv2'⟩ := hstoreBundleR
   have hsub848R : ((sp - 1088#64) + sign_extend (m := 64) (0x0f0#12)).toNat = sp.toNat - 848 := haddr240
-  have hvalR848 : ValueRepr cR.σ.mem N φcvR (sp.toNat - 848) vr := by rw [hsub848R] at hvalR; exact hvalR
+  have hvalR848 : ValueRepr cR.σ.mem N φcvR (sp.toNat - 848) vr := by
+    have h := hvalR.repr
+    rwa [hsub848R] at h
   -- Value_truthy / Value_bool loaded at cR.mem (survive the RIGHT sub-call:
   -- code region disjoint from sub-stack ∪ arena; via cR's memFrame against m3).
   have hVtruthyLoaded_cR : Value_truthyLoaded cR.σ.mem := by
@@ -1104,6 +1138,10 @@ theorem blockC_andTrue
             · exact absurd hin2 (by omega)
             · rw [heq2]; exact hMcallM0 a ha hA
         memExt := by rw [hmemρ3e]; exact hMemExtm0cR
+        sretWords := by
+          rw [hmemρ3e]
+          exact ValueWordsTotal.mono hMemExtR
+            (hGroundM3R.valueWordsTotal hgroundP.sret_inSL.1 hgroundP.sret_inSL.2)
         bufLo := by have := hBE.buf_lo; omega
         bufWin := by have := hBE.buf_win; rw [htoh] at this ⊢; omega
         sretAl := hsretAl
@@ -1233,31 +1271,23 @@ structure AndTrueExtras
 
 In the `EvalIH` motive shape with TWO IH premises (LEFT `el`, RIGHT `er`). The
 spec's `andTrue` constructor: `l` truthy, then `r` yields `vr`, producing
-`.bool vr.truthy`. Conditional ONLY on `AndTrueExtras`, `hMcallPop`, and the
-same `x13`-survival residual as `evalAndSim`/`evalOrTrueSim`. -/
+`.bool vr.truthy`. The actual LEFT derivation transports environment validity
+to the RIGHT call; `blockA_k` supplies the canonical environment register. -/
 def EvalAndTrueSimGoal : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (vl vr : Value)
-    (sp r sret aEnv aExpr aLeft aRight aEnv3 : BitVec 64)
+    (sp r sret aEnv aExpr aLeft aRight : BitVec 64)
     (m0 : Mem),
     vl.truthy = true →
+    EvalE st d env el st' vl →
     EvalIH st d env el st' vl →
     EvalIH st' d env er st'' vr →
     EvalE st d env (.logical .and el er) st'' (.bool vr.truthy) →
     Triple
       (fun c =>
         EvalEntry g N A SL φf φc st d env (.logical .and el er) sp r sret aEnv aExpr m0 c ∧
-        AndTrueExtras N A SL st' st'' el er vl vr sp sret aExpr aLeft aRight m0 ∧
-        (∀ cm : Config, Steps c cm →
-          cm.σ.regs.get? Register.PC = some (0x8000355c#64) →
-          cm.σ.regs.get? Register.x13 = some aEnv3) ∧
-        -- WAVE 47i (`McallPopTotality` amendment): windowed frame/node presence
-        -- + `mem_ext`, replacing the refuted totality oracle.
-        -- WAVE 48k: the dead-byte presence CLOSURE is GONE (total reads).
-        (∀ mcall : Mem,
-          (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-          MemExtends m0 mcall))
+        AndTrueExtras N A SL st' st'' el er vl vr sp sret aExpr aLeft aRight m0)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.bool vr.truthy) sp r sret m0)
 
@@ -1269,9 +1299,9 @@ tail: op-dispatch + value_truthy(vl) + beqz-nottaken + RIGHT eval ⋈ `hIHr` +
 `blockC_logTail` → `PreEpilogueVD .bool vr.truthy`), and `blockD_v_rec` (shared
 epilogue → `EvalExitD`). Mirrors `evalOrTrueSim`, with the second IH. -/
 theorem evalAndTrueSim : EvalAndTrueSimGoal := by
-  intro g N A SL φf φc st st' st'' d env el er vl vr sp r sret aEnv aExpr aLeft aRight aEnv3
-    m0 hvltrue hIH hIHr _hEvalE
-  intro c ⟨hc, hx, hx13reach, hMemExtRes⟩
+  intro g N A SL φf φc st st' st'' d env el er vl vr sp r sret aEnv aExpr aLeft aRight
+    m0 hvltrue hEl hIH hIHr _hEvalE
+  intro c ⟨hc, hx⟩
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- === block A: prologue + dispatch → widened ArmEntryK @0x8000355c ===
   have hkm0 : read32 m0 aExpr.toNat = some 7 := exprRepr_logical_kind (hc.mem ▸ hc.expr)
@@ -1308,7 +1338,7 @@ theorem evalAndTrueSim : EvalAndTrueSimGoal := by
     _hAsp1088, _hAsphi, _hAsplo, _hAspwin, _hAsp8, _hASLlo, _hASLwin, _hASLloSp, _hAraAl,
     hAEx11, hAEx8, hAEx18⟩ := hArmCopy
   have hx11c1 : c1.σ.regs.get? Register.x11 = some aEnv := hAEx11
-  have hx13c1 : c1.σ.regs.get? Register.x13 = some aEnv3 := hx13reach c1 hs1 hApc
+  have hx13c1 : c1.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) := _hx13
   have hgpreframe : ∀ R : Register, AbiPreservedNoise R →
       c1.σ.regs.get? R = (fun R => c1.σ.regs.get? R) R := fun R _ => rfl
   have hgpre_x8 : (fun R => c1.σ.regs.get? R) Register.x8 = some aExpr := hAEx8
@@ -1341,13 +1371,14 @@ theorem evalAndTrueSim : EvalAndTrueSimGoal := by
   -- === block B: arm head + LEFT recursive call ⋈ IH → SubEvalReturn @0x8000356c ===
   obtain ⟨c2, hs2, hSub⟩ :=
     blockB_logical g (fun R => c1.σ.regs.get? R) N A SL φf φc st st' d env .and el er vl
-      sp r sret aExpr aEnv aLeft aEnv3 v8 v9 v18 c.σ.sailOutput m0 hIH
+      sp r sret aExpr aEnv aLeft v8 v9 v18 c.σ.sailOutput m0
+      hc.env_valid (hc.envset_defined_frame hbridge) hIH
       c1 ⟨ment, hArm, hx11c1, hx13c1, hgpreframe, ⟨aExpr, hgpre_x8⟩, hgpre18,
         hlptrM',
         (fun m' hag => hx.left_survives m' (fun a ha => (hMentM0 a ha).symm.trans (hag a ha))),
         -- WAVE 47i: the parent ground at the arm entry (ONE kit call).
         ((hc.mem ▸ hc.ground).transport_offstack hc.table_stack_disjoint
-          hx.sp_SLhi hMentM0),
+          hx.sp_SLhi ((hc.mem ▸ hc.ground).stack_bytes_extend _hpresM) hMentM0),
         hx.expr24,
         hx.op_align, hx.op_lo, hx.op_hi, hx.op_win, hx.op_stk,
         hx.sp_headroom, hx.sp_SLhi, hx.sp16, hx.SLhi_ram,
@@ -1364,7 +1395,7 @@ theorem evalAndTrueSim : EvalAndTrueSimGoal := by
             simp only [h1, h2, evalFrame]; omega),
         (Expr.bodiesBound_logical hc.expr_bodies).1,
         hc.store_bodies⟩
-  obtain ⟨mcall, hSubR, hMcallM0stk⟩ := hSub
+  obtain ⟨mcall, hSubR, hEnvSlotMcall, hMemExtM0mc, hMcallM0stk⟩ := hSub
   have hAgM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]? := hMcallM0stk
   have hOutC2 : OutRepr c2.σ st' := hSubR.2.2.2.2.2.2.2.2.1
   have houtStr : String.join c2.σ.sailOutput.toList = st'.out := hOutC2
@@ -1390,7 +1421,6 @@ theorem evalAndTrueSim : EvalAndTrueSimGoal := by
     (hc.mem ▸ hc.nbs_pins : NBSPins m0).transport
       (fun a ha => (hAgM0 a (by have := hx.vicode_stk; omega)).symm)
       (fun a ha => (hAgM0 a (by have := hx.table_stk; omega)).symm)
-  have hMemExtM0mc : MemExtends m0 mcall := hMemExtRes mcall hAgM0
   have hExprMcall : ExprRepr mcall aExpr.toNat (.logical .and el er) :=
     hx.expr_survives mcall (fun a ha => (hAgM0 a ha).symm)
   have hPayRightMcall : read64 mcall (aExpr.toNat + 24) = some aRight.toNat := by
@@ -1427,11 +1457,14 @@ theorem evalAndTrueSim : EvalAndTrueSimGoal := by
     blockC_andTrue (fun R => c1.σ.regs.get? R) g N A SL φf φc st.store.frames.size
       st.store.closures.size st' st'' d env vl vr
       sp r sret aExpr aEnv aRight v8 v9 v18 c2.σ.sailOutput el er m0 hvltrue hIHr
+      (hc.env_valid.mono (evalE_store_mono hEl).1)
+      (hc.envset_defined_frame hbridge)
+      hc.env_valid
       hx.size_frames hx.size_closures ⟨hle1, hle2⟩
-      c2 ⟨mcall, hSubR, hgpre_x8, hAEx18, hExprMcall, hPayRightMcall, hMemExtM0mc,
+      c2 ⟨mcall, hSubR, hEnvSlotMcall, hgpre_x8, hAEx18, hExprMcall, hPayRightMcall, hMemExtM0mc,
         -- WAVE 47i: the parent ground at the pre-call memory (ONE kit call).
         ((hc.mem ▸ hc.ground).transport_offstack hc.table_stack_disjoint
-          hx.sp_SLhi hAgM0),
+          hx.sp_SLhi ((hc.mem ▸ hc.ground).stack_bytes_extend hMemExtM0mc) hAgM0),
         hx.expr_align4, hc.expr_ram.1, hc.expr_ram.2, hx.expr32, hx.expr_win8,
         hc.expr_stack_disjoint, hx.expr32_stk, hx.expr_A, hx.expr_A32, hx.expr_sub,
         hRightSurvMcall, hx.rop_align, hx.rop_lo, hx.rop_hi, hx.rop_win, hx.rop_stk,

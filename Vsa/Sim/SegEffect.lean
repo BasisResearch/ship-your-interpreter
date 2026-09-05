@@ -42,6 +42,17 @@ structure FrameEffect where
 
 namespace FrameEffect
 
+/-- Effects are equal when their three observation predicates are equal. -/
+theorem ext {left right : FrameEffect}
+    (regs : left.regs = right.regs) (mem : left.mem = right.mem)
+    (output : left.output = right.output) : left = right := by
+  cases left
+  cases right
+  cases regs
+  cases mem
+  cases output
+  rfl
+
 /-- The zero-step effect preserves every core observation. -/
 def all : FrameEffect where
   regs := fun _ => True
@@ -72,9 +83,9 @@ theorem refl (effect : FrameEffect) : EffectLe effect effect := by
 theorem trans (h₁ : EffectLe first middle) (h₂ : EffectLe middle last) :
     EffectLe first last := by
   exact
-    ⟨ fun R hR => h₂.regs R (h₁.regs R hR)
-      fun a ha => h₂.mem a (h₁.mem a ha)
-      fun ho => h₂.output (h₁.output ho) ⟩
+    { regs := fun R hR => h₂.regs R (h₁.regs R hR)
+      mem := fun a ha => h₂.mem a (h₁.mem a ha)
+      output := fun ho => h₂.output (h₁.output ho) }
 
 end EffectLe
 
@@ -137,10 +148,10 @@ def branchJoin (left right : SegmentEffect) : SegmentEffect :=
 theorem denote_identity : identity.denote = FrameEffect.all := by
   apply FrameEffect.ext
   · funext R
-    simp [identity, denote, RegisterSelection.Holds]
+    simp [identity, denote, RegisterSelection.Holds, FrameEffect.all]
   · funext a
-    simp [identity, denote]
-  · simp [identity, denote]
+    simp [identity, denote, FrameEffect.all]
+  · simp [identity, denote, FrameEffect.all]
 
 theorem denote_comp (first second : SegmentEffect) :
     (comp first second).denote =

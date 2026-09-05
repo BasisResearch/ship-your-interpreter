@@ -462,11 +462,11 @@ theorem envDefineAppendEntry_of_cap
     obtain ⟨spillLds, himage, _hvalues⟩ := hsaved
     exact ⟨spillLds, himage⟩
   refine ⟨c, Vsa.Machine.Steps.refl c, ?_⟩
-  exact ⟨hpost.1, hloaded, (by rw [hpost.2.1]; exact hstrlen),
+  exact ⟨⟨hpost.1, hloaded, (by rw [hpost.2.1]; exact hstrlen),
     hpost.2.1, hpost.2.2.1, hname, hpost.1.minstret, hpost.2.2.2.2,
     hregions, halign, hcstr,
     hsp, hframe.stack, hframe.gp, hframe.abi, hframe.ainv,
-    hpost.2.2.2.2, hspill, hsaved⟩
+    hpost.2.2.2.2, hspill⟩, hsaved⟩
 
 #print axioms envDefineCapAppendRow
 #print axioms envDefineCapGrowRow

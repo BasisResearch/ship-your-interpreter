@@ -421,6 +421,9 @@ structure EvalGround (m : Mem) (SL : StackLayout) (A : Arena)
   arena_vi : A.hi ≤ 0x800027ec ∨ 0x8000282c ≤ A.lo
   sret_inSL : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi
   sret_table_disjoint : sret.toNat + 24 ≤ 0x80019f58 ∨ 0x80019f58 + 44 ≤ sret.toNat
+  /-- Every concrete stack byte is present, including recursive result slots. -/
+  stack_bytes : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
+    ∃ b : BitVec 8, m[k]? = some b
 
 /-- **`EvalGround` survives any memory change confined to the stack scribble
 `[SL.lo, sp)` ∪ the sret window** — the standard entry→child-entry write
@@ -432,6 +435,8 @@ theorem EvalGround.survive_stack {m m' : Mem} {SL : StackLayout} {A : Arena}
     (h : EvalGround m SL A sp sret aExpr e)
     (htb : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
     (hsp : sp.toNat ≤ SL.hi)
+    (hpop : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
+      ∃ b : BitVec 8, m'[k]? = some b)
     (hag : ∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat) →
       ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) → m[k]? = m'[k]?) :
     EvalGround m' SL A sp sret aExpr e where
@@ -453,6 +458,7 @@ theorem EvalGround.survive_stack {m m' : Mem} {SL : StackLayout} {A : Arena}
   arena_vi := h.arena_vi
   sret_inSL := h.sret_inSL
   sret_table_disjoint := h.sret_table_disjoint
+  stack_bytes := hpop
 
 /-! ## `EvalEntry` — the machine precondition at `eval_expr`'s entry PC
 

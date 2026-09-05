@@ -70,6 +70,7 @@ def MidArmLeftJalBundle (l er : Expr) (c' : Config) (st st' : Vsa.While.St)
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (sp rr sret subsret aIn aLOp aROp aExpr aEnv : BitVec 64) (v8 v9 v18 : BitVec 64)
     (out0 : Array String) (mcall : Mem),
+    EnvValid st env ∧
     -- the right-operand marshalling residual on every SubEvalReturn config:
     (∀ cL : Config,
       SubEvalReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
@@ -82,13 +83,14 @@ def MidArmLeftJalBundle (l er : Expr) (c' : Config) (st st' : Vsa.While.St)
      c'.σ.regs.get? Register.x10 = some subsret ∧
      c'.σ.regs.get? Register.x9 = some sret ∧
      c'.σ.regs.get? Register.x11 = some aIn ∧
-     (∃ w, c'.σ.regs.get? Register.x13 = some w) ∧          -- a3 defined (wave 48h CURE A)
+     c'.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) ∧
      c'.σ.regs.get? Register.x12 = some aLOp ∧
      c'.σ.regs.get? Register.x2 = some (sp - 1088#64) ∧
      (∃ w, c'.σ.regs.get? Register.minstret = some w) ∧
      c'.σ.sailOutput = out0 ∧
      String.join out0.toList = st.out ∧
      c'.σ.mem = mcall ∧
+     ValueWordsTotal mcall subsret.toNat ∧
      Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
      -- WAVE 47i: the LEFT child's entry-ground bundle (the amended
      -- `armTail_rec` pre).
@@ -100,7 +102,9 @@ def MidArmLeftJalBundle (l er : Expr) (c' : Config) (st st' : Vsa.While.St)
          mcall[k]? = m'[k]?) →
        StoreRepr m' N A φf φc st.store) ∧
      (∀ R : Register, AbiPreservedNoise R → c'.σ.regs.get? R = gpre R) ∧
-     ((∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w)) ∧
+     ((∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+       (∃ w, gpre Register.x19 = some w) ∧ (∃ w, gpre Register.x20 = some w) ∧
+       (∃ w, gpre Register.x21 = some w)) ∧
      read64 mcall (sp.toNat - 8) = some rr.toNat ∧
      read64 mcall (sp.toNat - 16) = some v8.toNat ∧
      read64 mcall (sp.toNat - 24) = some v9.toNat ∧
@@ -138,9 +142,10 @@ theorem jalPreBundle_of_midArmBundle
     (h : MidArmLeftJalBundle l er c' st st' d env lv) :
     LandedN 1 c' (fun c'' => JalPreBundle er c'' st' d env) := by
   obtain ⟨gpre, N, A, SL, φf, φc, sp, rr, sret, subsret, aIn, aLOp, aROp, aExpr, aEnv,
-    v8, v9, v18, out0, mcall, hMarshalAll, hpre⟩ := h
+    v8, v9, v18, out0, mcall, henvValid, hMarshalAll, hpre⟩ := h
   exact midArmField_of_IH gpre N A SL φf φc st st' d env l er lv
     sp rr sret subsret aIn aLOp aROp aExpr aEnv v8 v9 v18 out0 mcall c'
+    henvValid
     (by apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide)
     (by apply BitVec.eq_of_toNat_eq; decide)
     (by decide)

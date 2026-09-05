@@ -553,7 +553,7 @@ def nonEvalChildStages_mk
       LandedN 1 c (fun c' => ExecStmtPreBundle b c' st' d env))
     (callArgs : ∀ (f : Expr) (args : List Expr) (c : Config) (st st' : SpecSt)
       (d : Nat) (env : Addr) (fv : Value),
-      EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EvalE st d env f st' fv → args.length ≤ Vsa.While.maxArgs →
       EEntryC c st d env (.call f args) →
       ∃ (argLoopPC dLeft aLeft : Nat),
         LandedN 1 c (fun c' => SegPreBundle argLoopPC c' st' d dLeft aLeft))
@@ -564,7 +564,7 @@ def nonEvalChildStages_mk
         LandedN 1 c (fun c' => SegPreBundle argLoopPC c' st' d dLeft aLeft))
     (callC : ∀ (f : Expr) (args : List Expr) (c : Config) (st st' st'' : SpecSt)
       (d : Nat) (env : Addr) (fv : Value) (vs : List Value),
-      EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EvalE st d env f st' fv → args.length ≤ Vsa.While.maxArgs →
       EvalArgs st' d env args st'' vs →
       EEntryC c st d env (.call f args) →
       ∃ (calleeBodyPC dLeft aLeft : Nat),
@@ -584,8 +584,17 @@ def nonEvalChildStages_mk
       ∃ (forCondPC dLeft aLeft : Nat),
         LandedN 1 c (fun c' => SegPreBundle forCondPC c' st''' d dLeft aLeft)) :
     NonEvalChildStages :=
-  { stmtIfThen, stmtIfElse, stmtWhileBody, stmtWhileLoop, stmtForInit, flBody,
-    callArgs, argsTail, callC, stmtForLoop, flLoop }
+  { stmtIfThen := stmtIfThen
+    stmtIfElse := stmtIfElse
+    stmtWhileBody := stmtWhileBody
+    stmtWhileLoop := stmtWhileLoop
+    stmtForInit := stmtForInit
+    flBody := flBody
+    callArgs := callArgs
+    argsTail := argsTail
+    callC := callC
+    stmtForLoop := stmtForLoop
+    flLoop := flLoop }
 
 /-- **`NonEvalChildStages` with the 3 wave-43 jal-`exec_stmt` staging fields wired.**
 `stmtWhileBody`/`stmtForInit`/`flBody` are supplied by their `*_field_of_dispatch`
@@ -617,7 +626,7 @@ def nonEvalChildStages_wave43_wired
       LandedN 1 c (fun c' => ExecStmtPreBundle (.whileStmt cnd b) c' st'' d env))
     (callArgs : ∀ (f : Expr) (args : List Expr) (c : Config) (st st' : SpecSt)
       (d : Nat) (env : Addr) (fv : Value),
-      EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EvalE st d env f st' fv → args.length ≤ Vsa.While.maxArgs →
       EEntryC c st d env (.call f args) →
       ∃ (argLoopPC dLeft aLeft : Nat),
         LandedN 1 c (fun c' => SegPreBundle argLoopPC c' st' d dLeft aLeft))
@@ -628,7 +637,7 @@ def nonEvalChildStages_wave43_wired
         LandedN 1 c (fun c' => SegPreBundle argLoopPC c' st' d dLeft aLeft))
     (callC : ∀ (f : Expr) (args : List Expr) (c : Config) (st st' st'' : SpecSt)
       (d : Nat) (env : Addr) (fv : Value) (vs : List Value),
-      EvalE st d env f st' fv → args.length ≤ maxArgs →
+      EvalE st d env f st' fv → args.length ≤ Vsa.While.maxArgs →
       EvalArgs st' d env args st'' vs →
       EEntryC c st d env (.call f args) →
       ∃ (calleeBodyPC dLeft aLeft : Nat),

@@ -557,7 +557,6 @@ theorem divStep_vacuous :
     Vsa.Sim.DivStep (fun _ _ _ _ _ => False) :=
   ⟨fun _ _ _ _ _ _ _ _ hc => hc.elim, fun _ _ _ _ _ _ _ _ hc => hc.elim⟩
 
-/-
 /-! ## Legacy generated error-routing interface (refuted by trace fuzzing)
 
 The one-liner that discharges `TermResiduals.hErrFam`: `errFamilyClosed` fed the

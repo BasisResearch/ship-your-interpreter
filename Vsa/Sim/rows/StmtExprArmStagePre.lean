@@ -101,6 +101,7 @@ theorem blockB_stmtExpr_stagePre
     (v8 v9 v18 v19 : BitVec 64)
     (out0 : Array String) (m0 ment : Mem)
     (c : Config)
+    (henvValid : EnvValid st env)
     (hpre :
         ExecArmEntryK g N A SL φf φc st (0x80004170#64)
           sp r aInterp aStmt aEnv aRet v8 v9 v18 v19 out0 m0 ment c ∧
@@ -329,8 +330,8 @@ theorem blockB_stmtExpr_stagePre
     StepsN.succ hstep1 (StepsN.succ hstep2 (StepsN.succ hstep3 (StepsN.succ hstep4 (StepsN.zero _)))), ?_⟩
   refine ⟨gpre, N, A, SL, φf, φc, (0x80004180#64), (0x80004184#64), (0x1fefe4#21),
     (sp - 176#64) + 1088#64, r, aInterp, (sp - 176#64) + sign_extend (m := 64) (0x010#12),
-    aInterp, aExprChild, v8, v9, v18, out0, ment, ?_, ?_, ?_, ?_,
-    hG4, hi4, hpc4, hx10_4, ?_, hx11_val, (by rw [← henvPtr]; exact hx13_4), hx12_4, hx2jsp, ⟨vmi4, hmi4⟩, hout4, ?_,
+    aInterp, aExprChild, v8, v9, v18, out0, ment, henvValid, ?_, ?_, ?_, ?_,
+    hG4, hi4, hpc4, hx10_4, ?_, hx11_val, (by rw [← henvPtr]; exact hx13_val), hx12_4, hx2jsp, ⟨vmi4, hmi4⟩, hout4, ?_,
     hmem4e, ?_, hEvCode, hViInt, hViSlot, hNbsJ, ?_, hWordsJ, ?_, ?_, ?_, hframe4,
     ⟨hg8, hg18, hg19, hg20, hg21⟩,
     ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -523,7 +524,7 @@ theorem stmtExpr_field_of_dispatch
     -- the arm-head cut stages the sub-call at `c1`
     have hcut : LandedN 4 c1 (fun c' => ExecJalPreBundle e c' st d env) :=
       blockB_stmtExpr_stagePre g gpre N A SL φf φc st d env e
-        sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1
+        sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1 hEntry.env_valid
         ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
          hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
          hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,

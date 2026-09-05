@@ -535,7 +535,6 @@ theorem closureBodyEntryI_of_abi
       | nil => exact False.elim (hne hb)
       | cons s ss => simpa [execSeqEntryPC, hb] using hc.pc
     store := hc.store
-    env_valid := ha.envValid
     out := hc.out
     mem := hc.mem
     code := by simpa [hc.mem] using hLoad

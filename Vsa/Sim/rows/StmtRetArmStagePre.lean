@@ -62,6 +62,7 @@ theorem blockB_stmtRet_stagePre
     (v8 v9 v18 v19 : BitVec 64)
     (out0 : Array String) (m0 ment : Mem)
     (c : Config)
+    (henvValid : EnvValid st env)
     (hpre :
         ExecArmEntryK g N A SL φf φc st (0x80004120#64)
           sp r aInterp aStmt aEnv aRet v8 v9 v18 v19 out0 m0 ment c ∧
@@ -288,7 +289,7 @@ theorem blockB_stmtRet_stagePre
       (StepsN.succ hstep5 (StepsN.zero _))))), ?_⟩
   refine ⟨gpre, N, A, SL, φf, φc, (0x80004134#64), (0x80004138#64), (0x1ff030#21),
     (sp - 176#64) + 1088#64, r, aInterp, (sp - 176#64) + sign_extend (m := 64) (0x010#12),
-    aInterp, aExprChild, v8, v9, v18, out0, ment, ?_, ?_, ?_, ?_,
+    aInterp, aExprChild, v8, v9, v18, out0, ment, henvValid, ?_, ?_, ?_, ?_,
     hG5, hi5, hpc5, hx10_5, ?_, hx11_val, (by rw [← henvPtr]; exact hx13_val), hx12_5, hx2jsp, ⟨vmi5, hmi5⟩, hout5, ?_,
     hmem5e, ?_, hEvCode, hViInt, hViSlot, hNbsJ, ?_, hWordsJ, ?_, ?_, ?_, hframe5,
     ⟨hg8, hg18, hg19, hg20, hg21⟩,
@@ -460,7 +461,7 @@ theorem stmtRet_field_of_dispatch
       hgframe, hg8, hg18, hg19, hg20, hg21, hstackBudget, hexprBodies, hstoreBodies⟩ := hMid
     have hcut : LandedN 5 c1 (fun c' => ExecJalPreBundle e c' st d env) :=
       blockB_stmtRet_stagePre g gpre N A SL φf φc st d env e
-        sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1
+        sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1 hEntry.env_valid
         ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
          hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
          hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,

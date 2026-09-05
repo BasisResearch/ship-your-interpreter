@@ -92,6 +92,8 @@ fi
 echo "== stage a3: generated term-case bundle"
 python3 scripts/gen_term_case_bundle.py --check \
   || fail "stage a3: Vsa/Sim/TermCaseBundle.lean is stale"
+python3 scripts/gen_m4_term_row.py --check \
+  || fail "stage a3: Vsa/Sim/rows/TermRouting.lean is stale"
 
 # ------------------------------------------------------------ (b) grep gate
 echo "== stage a4: proof-discipline gate (exponentiating layer mandatory for new files)"

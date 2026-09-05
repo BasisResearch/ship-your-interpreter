@@ -148,7 +148,7 @@ theorem evalEqNeChain_dispatch_of_twoSubReturn
   obtain ⟨lb2, hlb2⟩ := hIn.fullpop (aExpr.toNat + 4 + 2)
   obtain ⟨lb3, hlb3⟩ := hIn.fullpop (aExpr.toNat + 4 + 3)
   have hkindR : read32 c.σ.mem (sp.toNat - 944) = some (kindTag vr) :=
-    kind_read32 c.σ.mem N φcr (sp.toNat - 944) vr hvalR
+    kind_read32 c.σ.mem (sp.toNat - 944) vr (truthyHeaderRepr_of_valueRepr hvalR)
   obtain ⟨rkb0, rkb1, rkb2, rkb3, hrkb0, hrkb1, hrkb2, hrkb3, hrkbrec⟩ :=
     read32_bytes c.σ.mem (sp.toNat - 944) (kindTag vr) hkindR
   have hrk : bytesVal MKind.lw [rkb0, rkb1, rkb2, rkb3]

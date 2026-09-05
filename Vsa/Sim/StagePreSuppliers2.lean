@@ -58,6 +58,10 @@ theorem blockB_logical_stagePre
     (sp r sret aExpr aIn aLeft aEnv3 : BitVec 64) (v8 v9 v18 : BitVec 64)
     (out0 : Array String) (m0 : Mem)
     (c : Config)
+    (henvValid : EnvValid st env)
+    (henvset : ∃ w19 w20 w21 : BitVec 64,
+      gpre Register.x19 = some w19 ∧ gpre Register.x20 = some w20 ∧
+        gpre Register.x21 = some w21)
     (hpre : ∃ ment,
         ArmEntryK gouter N A SL φf φc st (0x8000355c#64) LogicalArmCallee (.logical op el er)
           sp r sret aExpr aIn v8 v9 v18 out0 m0 ment c ∧
@@ -218,6 +222,9 @@ theorem blockB_logical_stagePre
   -- env-spill is inside the scribble).
   have hGroundMc : EvalGround mcall SL A sp sret aExpr.toNat (.logical op el er) :=
     hgroundP.transport_offstack htableStk hspSLhi
+      (hgroundP.stack_bytes_extend (by
+        simpa [hmcalldef] using memExtends_writeMap8 ment (sp.toNat - 1088)
+          (sdData_val aEnv3)))
       (fun a ha => hAgSpill a (by have := hsproom; have := hSLlo; omega))
   have hpayMc : read64 mcall (aExpr.toNat + 16) = some aLeft.toNat := by
     have hag := evalGround_ast_read64_agree hgroundP hspSLhi
@@ -234,6 +241,11 @@ theorem blockB_logical_stagePre
       htableStk hspSLhi (by omega)
       (by rw [hsub968]; have := hsproom; have := hSLlo; omega)
       (by rw [hsub968]; have := hsproom; have := hSLlo; omega)
+  have hwordsChild : ValueWordsTotal mcall
+      (((sp - 1088#64) + sign_extend (m := 64) (0x078#12)).toNat) :=
+    hGroundChildL.valueWordsTotal
+      (by rw [hsub968]; omega)
+      (by rw [hsub968]; omega)
   have hExprMcall : ExprRepr mcall aLeft.toNat el :=
     hexprSurv mcall (fun a ha => (hAgSpill a (by omega)).symm)
   have hStoreMcall : StoreRepr mcall N A φf φc st.store := by
@@ -280,19 +292,21 @@ theorem blockB_logical_stagePre
         (get?_sigmaPost_store _ _ _ _ R hmiR hpcR hnpcR hmiiR)
     rw [f3, f2, f1]; exact hgframe R hR'
   -- ============ land at σ3 (the LEFT jal PC 0x80003568) as `JalPreBundle el` ============
+  obtain ⟨w19, w20, w21, hw19, hw20, hw21⟩ := henvset
   refine ⟨3, ⟨σ3, i3, c.steps + 1 + 1 + 1⟩, Nat.le_refl _,
     StepsN.succ hstep1 (StepsN.succ hstep2 (StepsN.succ hstep3 (StepsN.zero _))), ?_⟩
   · exact ⟨gpre, N, A, SL, φf, φc, (0x80003568#64), (0x8000356c#64), (0x1ffbfc#21),
       sp, r, sret, ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)), aIn, aLeft,
       v8, v9, v18, out0, mcall,
+      henvValid,
       (by apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide),
       (by apply BitVec.eq_of_toNat_eq; decide),
       (by decide),
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_80003568_lg σ i u (0x80003568#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
       hG3, hi3, hpc3, hx10_3, hs1_3, hx11_3, henvReg ▸ hx13_3, hx12_3, hsp_3, ⟨vmi3, hmi3⟩, hout3, houtStr,
-      hmem3e, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hGroundChildL, hExprMcall, hStoreMcall, hStoreSurvMcall,
-      hframeB, ⟨hg8, hg18⟩,
+      hmem3e, hwordsChild, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hGroundChildL, hExprMcall, hStoreMcall, hStoreSurvMcall,
+      hframeB, ⟨hg8, hg18, ⟨w19, hw19⟩, ⟨w20, hw20⟩, ⟨w21, hw21⟩⟩,
       hslotRaMcall, hslotS0Mcall, hslotS1Mcall, hslotS2Mcall,
       hopAl, hopLo, hopHi, hopWin, hopStk,
       (by rw [hsub968]; omega), (by rw [hsub968]; omega), (by rw [hsub968]; omega),

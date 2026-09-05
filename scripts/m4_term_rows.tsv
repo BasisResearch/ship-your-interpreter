@@ -6,10 +6,10 @@
 #   shape   : row body shape — one of
 #               leaf_direct  (entry IS EvalEntry; apply <simD> directly)
 #               leaf_bridge  (bridge EvalEntry → <Entry>; extra <callee> geometry)
-#               rec_unary    (recursive single-operand sim; extract operand ptr)
+#               rec_unary    (recursive single-operand exact-child EvalIH)
 #               rec_not      (rec_unary variant: any operand Value, .bool !truthy)
-#               rec_logical1 (one-IH short-circuit logical; LEFT ptr + aEnv3 x13-resid)
-#               rec_logical2 (two-IH logical; LEFT+RIGHT ptrs + aEnv3 x13-resid)
+#               rec_logical1 (one-IH exact short-circuit branch)
+#               rec_logical2 (two-IH exact threaded logical branch)
 #   simD    : the landed *D / sim lemma to marshal
 #   entry   : the leaf's own entry structure (leaf_bridge only; '-' otherwise)
 #   value   : the Value constructor pattern for the leaf ('-' for rec)
@@ -26,9 +26,9 @@ hInt	int	leaf_direct	evalIntSimD	-	int	direct EvalEntry
 hNull	null	leaf_bridge	evalNullSimD	EvalNullEntry	null	value_null callee geom
 hBool	bool	leaf_bridge	evalBoolSimD	EvalBoolEntry	bool	value_bool callee geom
 hStr	str	leaf_bridge	evalStrSimD	EvalStrEntry	str	value_str callee geom + forall-quantified payload-ptr disjunctions (no CString readback needed)
-hNeg	neg	rec_unary	evalNegSim	-	-	NegExtras+hMcallPop
-hNot	not	rec_not	evalNotSim	-	-	NotSimExtras+hMcallPop
-hOrTrue	orTrue	rec_logical1	evalOrTrueSim	-	-	OrTrueExtras+aEnv3+hMcallPop
-hAndFalse	andFalse	rec_logical1	evalAndSim	-	-	AndFalseExtras+aEnv3+hMcallPop
-hOrFalse	orFalse	rec_logical2	evalOrFalseSim	-	-	OrFalseExtras+aEnv3+hMcallPop
-hAndTrue	andTrue	rec_logical2	evalAndTrueSim	-	-	AndTrueExtras+aEnv3+hMcallPop
+hNeg	neg	rec_unary	evalNegSim	-	-	exact semantic child derivation and EvalIH
+hNot	not	rec_not	evalNotSim	-	-	exact semantic child derivation and EvalIH
+hOrTrue	orTrue	rec_logical1	evalOrTrueSim	-	-	exact left derivation truth branch and EvalIH
+hAndFalse	andFalse	rec_logical1	evalAndSim	-	-	exact left derivation falsy branch and EvalIH
+hOrFalse	orFalse	rec_logical2	evalOrFalseSim	-	-	exact left-to-right derivation threading and both EvalIHs
+hAndTrue	andTrue	rec_logical2	evalAndTrueSim	-	-	exact left-to-right derivation threading and both EvalIHs

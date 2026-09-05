@@ -136,7 +136,8 @@ theorem strCmpCellResid_of (op : BinOp) (bres : String → String → Bool)
     (_hOrder : StrCmpOrderBridge op bres)
     (hChain : StrArmMachineResid op bres) :
     StrCmpCellResid op bres :=
-  fun st d env el er st'' sl sr => hChain st d env el er st'' sl sr
+  fun st d env el er _st' st'' sl sr _hL _hR _ihL _ihR =>
+    hChain st d env el er st'' sl sr
 
 /-! ## The four cell instances, wired to `BinStrCells` -/
 

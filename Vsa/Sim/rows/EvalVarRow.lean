@@ -115,7 +115,6 @@ theorem eval_var_row (hR : ∀ st x v, VarLeafResid st x v) :
       ra := hc.ra, ra_align := hc.ra_align, spReg := hc.spReg, stackOK := hc.stackOK,
       stackBudget := hc.stackBudget, expr_bodies := hc.expr_bodies, store_bodies := hc.store_bodies,
       minstret := hc.minstret, mem := hc.mem, code := hc.code, expr := hc.expr, store := hc.store,
-      env_valid := hc.env_valid,
       store_survives := hc.store_survives, out := hc.out, frame := hc.frame,
       code_stack_disjoint := hc.code_stack_disjoint, expr_stack_disjoint := hc.expr_stack_disjoint,
       expr_align := hc.expr_align, expr_ram := hc.expr_ram, expr_win := hc.expr_win,
@@ -123,13 +122,13 @@ theorem eval_var_row (hR : ∀ st x v, VarLeafResid st x v) :
       sret_vicode_disjoint := hc.sret_vicode_disjoint_int, sret_stack_disjoint := hc.sret_stack_disjoint,
       sret_evalcode_disjoint := hc.sret_evalcode_disjoint, stack_ram := hc.stack_ram,
       stack_win := hc.stack_win, spill_defined := hc.spill_defined,
-      envset_defined := hc.envset_defined, x13_defined := hc.x13_defined,
+      x13_defined := hc.x13_defined,
       envReg := hc.envReg,
       var_stack_disjoint := hvsd, sret_arena_disjoint := hsad, env_get_code := hegc,
       env_get_stack_disjoint := hegsd, var_slot := hvs, table_stack_disjoint := htsd,
       env_get_found := hfound }
   exact Vsa.Sim.evalVarSimD g N A SL φf φc st d env x v sp r sret aEnv aExpr m0
-    (EvalE.var st d env x v hlookup) hW c hEntry
+    (EvalE.var st d env x v hlookup) hW (hc.mem ▸ hc.sret_words) c hEntry
 
 /-- Variable row consuming the semantic extension. -/
 theorem eval_var_row_extended

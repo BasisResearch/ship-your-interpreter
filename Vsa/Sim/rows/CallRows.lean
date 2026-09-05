@@ -70,9 +70,10 @@ theorem evalExitD_of_evalExit_rec
     {nf nc : Nat}
     {st' : Vsa.While.St} {v : Value} {sp r sret : BitVec 64} {m0 : Mem} {c : Config}
     (hExit : EvalExit g N A SL φf φc nf nc st' v sp r sret m0 c)
-    (hW : EvalRecWiden g N A SL φf φc nf nc st' v sp r sret m0) :
+    (hW : EvalRecWiden g N A SL φf φc nf nc st' v sp r sret m0)
+    (hwords : ValueWordsTotal m0 sret.toNat) :
     EvalExitD g N A SL φf φc nf nc st' v sp r sret m0 c :=
-  evalExitD_of_widen hExit hW
+  evalExitD_of_widen hExit hW hwords
 
 /-! ## `hCall` — the composite `EX_CALL` arm re-landed at `EvalExitD`
 
@@ -126,7 +127,7 @@ theorem evalCallSimD
   obtain ⟨c', hs, hExit⟩ :=
     evalCallSim g N A SL φf φc st st' st'' st''' d env f args fval vs v
       sp r sret aEnv aExpr m0 hIH_f hArgs hCall hEval hArm c hEntry
-  exact ⟨c', hs, evalExitD_of_evalExit_rec hExit hW⟩
+  exact ⟨c', hs, evalExitD_of_evalExit_rec hExit hW (hEntry.mem ▸ hEntry.sret_words)⟩
 
 /-! ## `hFn` — the `EX_FN` closure-alloc arm re-landed at `EvalExitD` -/
 
@@ -166,7 +167,7 @@ theorem evalFnSimD
   obtain ⟨c', hs, hExit⟩ :=
     evalFnSim g N A SL φf φc st d env name params body store' a
       sp r sret aEnv aExpr m0 hAlloc hEval hArm c hEntry
-  exact ⟨c', hs, evalExitD_of_evalExit_rec hExit hW⟩
+  exact ⟨c', hs, evalExitD_of_evalExit_rec hExit hW (hEntry.mem ▸ hEntry.sret_words)⟩
 
 end Vsa.Sim
 

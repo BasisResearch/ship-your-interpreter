@@ -173,6 +173,7 @@ structure LogTailPre
   memFrame : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
     (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ c.σ.mem[a]? = m0[a]?
   memExt : MemExtends m0 c.σ.mem
+  sretWords : ValueWordsTotal c.σ.mem sret.toNat
   -- geometry
   bufLo : 0x80000000 + 1024 ≤ sp.toNat
   bufWin : tohostAddr + 16 + 1024 ≤ sp.toNat
@@ -226,7 +227,7 @@ theorem blockC_logTail
     hpb0, hpb1, hpb2, hpb3, hpb4, hpb5, hpb6, hpb7,
     hqb0, hqb1, hqb2, hqb3, hqb4, hqb5, hqb6, hqb7, hpayDisj,
     hstore, hstoreSurv, hslotRa, hslotS0, hslotS1, hslotS2,
-    hgv8, hgv9, hgv18, hgv2, hframe, hmemFrame, hMemExt,
+    hgv8, hgv9, hgv18, hgv2, hframe, hmemFrame, hMemExt, hsretWords,
     hbufLo, hbufWin, hsretAl, hsretLo, hsretHi, hsretWin, hsretStk, hsretBoolCode,
     hsretInSL, hsretEvalCode, hraAl, hspSLhi, hspRam, hsp8, hSLhiRam, hSLlo, hSLwin,
     hspLo, hSLloSp, hTruthyStk, hBoolStk, hcodeStk⟩ := hpre
@@ -703,7 +704,8 @@ theorem blockC_logTail
     refine (Steps.single hstep8).trans (?_)
     refine hsB.trans (?_)
     exact Steps.single hstep10
-  refine ⟨⟨σ10, i10, cB.steps + 1⟩, hSteps, σ10.mem, ?_, hMemExt_fin, ?_⟩
+  refine ⟨⟨σ10, i10, cB.steps + 1⟩, hSteps, σ10.mem, ?_, hMemExt_fin,
+    ValueWordsTotal.mono (hMemExt_c_8.trans hMemExt_8_10) hsretWords, ?_⟩
   · refine ⟨hG10, hi10, hpc_fin, hs1_fin, hsp_fin, ⟨vmifin, hmifin⟩,
       hout_fin, houtStr, rfl, (by rw [hmem10e]; exact hcode_B),
       (by rw [hmem10e]; exact hvaltrue), hstore_fin, hframeG,

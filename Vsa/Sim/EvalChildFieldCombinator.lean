@@ -128,12 +128,13 @@ theorem binaryL_field_of_extras
     (blockA_binaryArm g N A SL φf φc st d env op l r sp r0 sret aEnv aExpr aLOp aROp m0 hX)
     (fun c' hMid => ?_) c hEntry
   -- unpack `blockA_binaryArm`'s POST → feed `blockB_binary_leftStagePre`'s `hpre`
-  obtain ⟨gpre, aEnvReg, v8, v9, v18, v19, ment, hArm, hBE, hx11, hx13, hx19,
+  obtain ⟨gpre, aEnvReg, v8, v9, v18, v19, ment, hArm, hBE, hRec, hx11, hx13, hx19,
     hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v, hpayL, hexprL, hpayR, hexprR,
     hMemExtM0, hGmt47⟩ := hMid
   exact blockB_binary_leftStagePre g gpre N A SL φf φc st d env op l r
     sp r0 sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 c'.σ.sailOutput m0 c'
-    ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v,
+    hRec
+    ⟨ment, hArm, hBE, hx11, hx13, hRec.env_addr, hx19, hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v,
       hpayL, hexprL, hpayR, hexprR, hMemExtM0, hGmt47,
       -- ITEM ZERO B1: the LEFT child budget, DERIVED from the entry's fields.
       hEntry.stackBudget.child (by decide)
@@ -177,12 +178,13 @@ theorem unaryE_field_of_extras
   refine evalChildField_of_blockA_stage (k := 2) (by omega)
     (blockA_unaryArm g N A SL φf φc st d env op e sp r0 sret aEnv aExpr aOperand m0 hX)
     (fun c' hMid => ?_) c hEntry
-  obtain ⟨v8, v9, v18, ment, hArm, hx11, hx13, hgframe, hg8, hg18,
+  obtain ⟨v8, v9, v18, ment, hArm, hx11, hx13, hOuterFrame, hgframe, hg8, hg18,
     hpayL, hexprL, hground, hexprHi24, hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam, hcodeStk, hviStk, htableStk,
     harenaStk, harenaCode⟩ := hMid
   exact blockB_unary_stagePre g (fun R => c'.σ.regs.get? R) N A SL φf φc st d env op e
     sp r0 sret aExpr aEnv aOperand v8 v9 v18 c'.σ.sailOutput m0 c'
+    hEntry.env_valid (hEntry.envset_defined_frame hOuterFrame)
     ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpayL, hexprL, hground, hexprHi24,
       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
       hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -200,20 +202,15 @@ theorem unaryE_field_of_extras
 /-! ## §4. The logical-LEFT field — via `blockA_logicalArm` ≫ `blockB_logical_stagePre` -/
 
 /-- **`LogicalArmGeomProvider`** — the honest `logicalL`-field arm-geometry residual.
-Carries `LogicalArmExtras` AND the `x13`-reach fact (`env` in `a3` survives to the arm
-entry `0x8000355c`), both over the rich entry's own ghosts, at SOME left-operand addr
-`aLeft` and env-slot value `aEnv3`. -/
+The entry's `envReg` field fixes `x13`; only the left-operand geometry remains. -/
 def LogicalArmGeomProvider
     (op : Vsa.While.LogOp) (l r : Expr) (st : Vsa.While.St) (d : Nat) (env : Addr) (c : Config) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (sp r0 sret aEnv aExpr : BitVec 64) (m0 : Mem),
     EvalEntry g N A SL φf φc st d env (.logical op l r) sp r0 sret aEnv aExpr m0 c →
-    ∃ (aLeft aEnv3 : BitVec 64),
-      LogicalArmExtras N A SL op l r sp sret aExpr aLeft m0 ∧
-      (∀ cm : Config, Steps c cm →
-        cm.σ.regs.get? Register.PC = some (0x8000355c#64) →
-        cm.σ.regs.get? Register.x13 = some aEnv3)
+    ∃ aLeft : BitVec 64,
+      LogicalArmExtras N A SL op l r sp sret aExpr aLeft m0
 
 /-- **The `EvalChildStages.logicalL` field, machine-composed.**  From
 `EEntryC (.logical op l r)` plus the op-independent arm geometry
@@ -227,17 +224,20 @@ theorem logicalL_field_of_extras
     (hEE : EEntryC c st d env (.logical op l r)) :
     LandedN 1 c (fun c' => JalPreBundle l c' st d env) := by
   obtain ⟨g, N, A, SL, φf, φc, sp, r0, sret, aEnv, aExpr, m0, hEntry⟩ := hEE
-  obtain ⟨aLeft, aEnv3, hX, hReach⟩ := hGeom g N A SL φf φc sp r0 sret aEnv aExpr m0 hEntry
+  obtain ⟨aLeft, hX⟩ := hGeom g N A SL φf φc sp r0 sret aEnv aExpr m0 hEntry
   refine evalChildField_of_blockA_stage (k := 3) (by omega)
-    (blockA_logicalArm g N A SL φf φc st d env op l r sp r0 sret aEnv aExpr aLeft aEnv3 m0 hX)
-    (fun c' hMid => ?_) c ⟨hEntry, hReach⟩
-  obtain ⟨v8, v9, v18, ment, hArm, hx11, hx13, hgframe, hg8, hg18,
+    (blockA_logicalArm_exact g N A SL φf φc st d env op l r
+      sp r0 sret aEnv aExpr aLeft m0 hX)
+    (fun c' hMid => ?_) c hEntry
+  obtain ⟨v8, v9, v18, ment, hArm, hx11, hx13, hOuterFrame, hgframe, hg8, hg18,
     hpayL, hexprSurvL, hgroundP, hexprHi24, hopAl, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam, hcodeStk, hviStk, htableStk,
     harenaStk, harenaCode⟩ := hMid
   exact blockB_logical_stagePre g (fun R => c'.σ.regs.get? R) N A SL φf φc st d env op l r
-    sp r0 sret aExpr aEnv aLeft aEnv3 v8 v9 v18 c'.σ.sailOutput m0 c'
-    ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpayL, hexprSurvL, hgroundP, hexprHi24,
+    sp r0 sret aExpr aEnv aLeft (BitVec.ofNat 64 (φf env))
+      v8 v9 v18 c'.σ.sailOutput m0 c'
+    hEntry.env_valid (hEntry.envset_defined_frame hOuterFrame)
+    ⟨ment, hArm, hx11, hx13, rfl, hgframe, hg8, hg18, hpayL, hexprSurvL, hgroundP, hexprHi24,
       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
       hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
       -- ITEM ZERO B1: the LEFT child budget, DERIVED from the entry's fields.

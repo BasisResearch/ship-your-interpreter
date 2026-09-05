@@ -35,7 +35,6 @@ blockA_*Arm BRIDGE DESCRIPTION FORMAT (.toml)
   callee      = "UnaryArmCallee"      # the calleeLoaded Mem→Prop predicate name
   node_pat    = ".unary op esub"      # the Expr constructor pattern (bound below)
   node_binders= "(op : UnOp) (esub : Expr)"   # its bound variables
-  x13_reach   = false                 # true = thread the x13-reach residual (logical)
   imports     = ["Vsa.Sim.StagePreSuppliers", ...]
   doc         = "One-line summary."
 
@@ -48,7 +47,6 @@ blockA_*Arm BRIDGE DESCRIPTION FORMAT (.toml)
   …'''
 
   [triple]                            # the Triple pre/post (verbatim)
-  extra_hyps = ""                     # extra Triple preconditions (logical: x13-reach ∀)
   post       = '''(fun c => ∃ (v8 v9 v18 : BitVec 64) (ment : Mem), …)'''
 
   [proof]                             # the per-arm proof fragments
@@ -79,7 +77,6 @@ def norm(d):
     a["callee"] = d["callee"]
     a["node_pat"] = d["node_pat"]
     a["node_binders"] = d["node_binders"]
-    a["x13_reach"] = bool(d.get("x13_reach", False))
     imports = d.get("imports", [])
     if isinstance(imports, str):
         imports = [x.strip() for x in imports.split(",") if x.strip()]
@@ -203,8 +200,8 @@ def emit(a):
     E(f"  have hkm0 : read32 m0 aExpr.toNat = some {tagS} := by")
     E(f"    cases (hc.mem ▸ hc.expr) with | {a['kind_read']}")
     E(f"  -- === block A: prologue + dispatch → widened ArmEntryK @{armS} ===")
-    E(f"  obtain ⟨c1, hs1, ment, v8, v9, v18, hArm⟩ :=")
-    E(f"    blockA_k g N A SL φf φc st ({a['node_pat']}) {tagS} ({armS}) {a['callee']}")
+    E(f"  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, hpresM, hx13exact⟩ :=")
+    E(f"    blockA_k g N A SL φf φc st env ({a['node_pat']}) {tagS} ({armS}) {a['callee']}")
     E(f"      sp r sret aEnv aExpr m0 c.σ.sailOutput")
     E(f"      (by omega) (by omega)")
     E(f"      hkm0")
@@ -217,12 +214,11 @@ def emit(a):
     E(f"      c ⟨⟨hc.good, hc.tick, hc.pc, hc.a0, hc.a1, hc.a2, hc.ra, hc.ra_align, hc.spReg,")
     E(f"        hc.stackOK, hc.minstret, hc.mem, hc.code, hc.expr, hc.store, hc.store_survives, hc.out,")
     E(f"        hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,")
-    E(f"        hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,")
+    E(f"        hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,")
     E(f"        hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,")
-    E(f"        hc.spill_defined⟩, rfl⟩")
+    E(f"        ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩")
     E.block(DESTRUCTURE_BLOCK)
-    if a["x13_reach"]:
-        E(f"  have hx13c1 : c1.σ.regs.get? Register.x13 = some aEnv3 := hx13reachC c1 hs1 hApc")
+    E(f"  have hx13c1 : c1.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) := hx13exact")
     E.block(TRANSPORT_BLOCK.format(node_pat=a["node_pat"],
                                    operand_addr=a["operand_addr"]))
     if a["extra_haves"].strip():
@@ -295,7 +291,7 @@ def main():
     E.write(out)
     print(f"wrote {out}")
     print(f"  arm={a['name']} tag={a['tag']} armPC=0x{a['armPC']:08x} "
-          f"callee={a['callee']} x13_reach={a['x13_reach']}")
+          f"callee={a['callee']}")
     if args.verify:
         verify(out, a["name"])
     return 0

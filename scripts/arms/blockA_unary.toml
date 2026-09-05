@@ -5,7 +5,6 @@ armPC = 0x800035e0
 callee = "UnaryArmCallee"
 node_pat = ".unary op esub"
 node_binders = "(op : UnOp) (esub : Expr)"
-x13_reach = false
 doc = "The EX_UNARY arm entry bridge (regenerated twin of the hand blockA_unaryArm, tag 8)."
 
 [extras]
@@ -29,8 +28,8 @@ body = '''  slot8 : KindSlotPinned 8 (0x800035e0#64) m0
   sp16 : sp.toNat % 16 = 0
   SLhi_ram : SL.hi ≤ 0x100000000
   code_stk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
-  vicode_stk : (0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c
-  table_stk : (0x80019f7c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58
+  vicode_stk : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec
+  table_stk : (0x80019f84 : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58
   arena_stk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
   arena_code : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo'''
 
@@ -58,21 +57,24 @@ post = '''      (fun c => ∃ (v8 v9 v18 : BitVec 64) (ment : Mem),
         SL.lo + 3264 ≤ sp.toNat ∧ sp.toNat ≤ SL.hi ∧ sp.toNat % 16 = 0 ∧
         SL.hi ≤ 0x100000000 ∧
         (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
-        ((0x8000281c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000280c) ∧
-        ((0x80019f58 : Nat) + 4 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo))'''
 
 [proof]
 slot_field = "slot8"
 kind_read = "unary hk _ _ _ => exact hk"
-callee_loaded_arg = "⟨hc.mem ▸ hc.value_int_code, hc.mem ▸ hc.int_slot⟩"
+callee_loaded_arg = "⟨hc.mem ▸ hc.value_int_code, hc.mem ▸ hc.int_slot, hc.mem ▸ hc.nbs_pins⟩"
 callee_surv = '''(fun mem a8 dd hlo hhi hcl => by
-        obtain ⟨hvi, hsl⟩ := hcl
+        obtain ⟨hvi, hsl, hnb⟩ := hcl
         refine ⟨loaded_int_writeMap8 mem a8 dd (by
-          have := hc.vicode_stack_disjoint; omega) hvi, ?_⟩
-        exact intSlot_writeMap8 mem a8 dd (by
-          have := hc.table_stack_disjoint; simp only [jumpTableBase]; omega) hsl)'''
+          have := hc.vicode_stack_disjoint; omega) hvi, ?_, ?_⟩
+        · exact intSlot_writeMap8 mem a8 dd (by
+            have := hc.table_stack_disjoint; simp only [jumpTableBase]; omega) hsl
+        · exact nbsPins_writeMap8 mem a8 dd
+            (by have := hc.vicode_stack_disjoint; omega)
+            (by have := hc.table_stack_disjoint; omega) hnb)'''
 operand_addr = "aOperand"
 armentryk_realign = '''ArmEntryK g N A SL φf φc st (0x800035e0#64) UnaryArmCallee (.unary op esub)
       sp r sret aExpr aEnv v8 v9 v18 c1.σ.sailOutput m0 ment c1'''

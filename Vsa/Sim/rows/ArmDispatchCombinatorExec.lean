@@ -267,7 +267,8 @@ theorem execArmDispatch_of_slot
     have := hX.jspSLhi; have := hX.sproom; omega
   have hGroundMent : EvalGround ment SL A (sp - 176#64)
       ((sp - 176#64) + sign_extend (m := 64) subOff) aChild.toNat ce :=
-    (hX.ground.transport_offstack htbP hspSLP hMentM0).child_params
+    (hX.ground.transport_offstack htbP hspSLP
+      (hX.ground.stack_bytes_extend hAMemExt) hMentM0).child_params
       (fun _ _ h => h) htbP hspSLP
       (by rw [show (sp - 176#64).toNat = sp.toNat - 176 from by
             rw [BitVec.toNat_sub]

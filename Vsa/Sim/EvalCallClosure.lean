@@ -148,11 +148,11 @@ a 24-byte `memcpy`; no recursion, no callee alloc). -/
 def ClosureRetSpec
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st' : SpecSt) (status : Status) (m0 : Mem) : Prop :=
-  ∀ (φf' φc' : Addr → Nat) (m0' : Mem),
+    (nf nc : Nat) (st' : SpecSt) (status : Status) (m0 : Mem) : Prop :=
+  ∀ (φf' φc' : Addr → Nat) (nf' nc' : Nat) (m0' : Mem),
     Triple
-      (SegExit g N A SL φf' φc' st' callBodyRetPC m0')
-      (CallExitP g N A SL φf φc st' m0)
+      (SegExit g N A SL φf' φc' nf' nc' st' callBodyRetPC m0')
+      (CallExitP g N A SL φf φc nf nc st' m0)
 
 /-! ## `callClosureSim` — the `Call.closure` crux as a machine Triple
 
@@ -181,14 +181,18 @@ theorem callClosureSim
         (SegEntry g N A SL φf φc
           (closureBoundSt st store' cd vs frame) (d + 1) (dLeft - 1) (aLeft - 1)
           callBodyLoopPC m0)
-        (SegExit g N A SL φf φc st' callBodyRetPC m0))
+        (SegExit g N A SL φf φc
+          (closureBoundStore store' cd vs frame).frames.size
+          (closureBoundStore store' cd vs frame).closures.size st' callBodyRetPC m0))
     -- the two straight-line seam residuals:
     (hEntry : ClosureEntrySpec g N A SL φf φc st d a cd vs store' frame dLeft aLeft m0)
-    (hRet : ClosureRetSpec g N A SL φf φc st' status m0) :
+    (hRet : ClosureRetSpec g N A SL φf φc st.store.frames.size
+      st.store.closures.size st' status m0) :
     Triple
       (CallEntryP g N A SL φf φc st d dLeft aLeft m0)
-      (CallExitP g N A SL φf φc st' m0) :=
+      (CallExitP g N A SL φf φc st.store.frames.size st.store.closures.size st' m0) :=
   -- prefix ≫ body ≫ return
-  Triple.seq (Triple.seq (hEntry φf φc m0) hBodyIH) (hRet φf φc m0)
+  Triple.seq (Triple.seq (hEntry φf φc m0) hBodyIH)
+    (hRet φf φc _ _ m0)
 
 end Vsa.Sim

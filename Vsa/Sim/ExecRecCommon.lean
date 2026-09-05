@@ -422,6 +422,7 @@ theorem execExprGlue
     (sp r aInterp aStmt aEnv aRet aOperand : BitVec 64) (m0 : Mem) (out0 : Array String)
     (hIH : EvalIH st d env e st' v)
     (henvPtr : aEnv = BitVec.ofNat 64 (φf env))
+    (henvValid : EnvValid st env)
     -- the sub-expression node (`stmt->expr`, `ld a2,8(s0)`):
     (hop : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       read64 ment (aStmt.toNat + 8) = some aOperand.toNat)
@@ -660,6 +661,7 @@ theorem execExprGlue
       (by apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide)
       (by apply BitVec.eq_of_toNat_eq; decide)
       (by decide)
+      henvValid
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_80004180_es σ i u (0x80004180#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ)
       hIH
@@ -712,6 +714,7 @@ theorem execExprSimC
     (hSpec : ExecS st d env (.expr e) st' .normal)
     (hIH : EvalIH st d env e st' v)
     (henvPtr : aEnv = BitVec.ofNat 64 (φf env))
+    (henvValid : EnvValid st env)
     (hslot : StmtSlotPinned 0 execArmExpr m0)
     (htableStk0 : stmtJumpTableBase + 4 * 0 + 4 ≤ SL.lo ∨ sp.toNat ≤ stmtJumpTableBase + 4 * 0)
     -- the `execExprGlue` residuals:
@@ -769,7 +772,7 @@ theorem execExprSimC
     hSpec hIH hslot htableStk0
     (fun hIH' =>
       execExprGlue g N A SL φf φc st st' d env e v sp r aInterp aStmt aEnv aRet aOperand m0 out0
-        hIH' henvPtr hop hsubexpr hstmtAl hstmtLo hstmtHi hstmtWin hevalcode hvicode hslotP hnbsP
+        hIH' henvPtr henvValid hop hsubexpr hstmtAl hstmtLo hstmtHi hstmtWin hevalcode hvicode hslotP hnbsP
         hground hsubWords henvsetG hstoreSurv
         hopAl hopLo hopHi hopWin hopStk hsproom hspSLhi hsp16 hSLlo hSLhi hSLwin
         hcodeStk hviStk htableStk harenaStk harenaCode hexecArenaCode hexecCodeStk

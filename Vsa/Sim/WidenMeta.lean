@@ -129,9 +129,11 @@ theorem evalExitD_of_widen
     {m0 : Mem} {c : Config}
     (hExit : EvalExit g N A SL φf φc nf nc st' v sp r sret m0 c)
     (hW : Widen (EvalExit g N A SL φf φc nf nc st' v sp r sret m0)
-      N A φf φc nf nc st' m0 (stackFoot SL)) :
+      N A φf φc nf nc st' m0 (stackFoot SL))
+    (hwords : ValueWordsTotal m0 sret.toNat) :
     EvalExitD g N A SL φf φc nf nc st' v sp r sret m0 c :=
-  ⟨hExit, hW.pres c hExit, hW.surv c hExit⟩
+  ⟨hExit, hW.pres c hExit, ValueWordsTotal.mono (hW.pres c hExit) hwords,
+    hW.surv c hExit⟩
 
 /-- **`execExitD_of_widen`** — the `ExecExit → ExecExitD` family bridge. -/
 theorem execExitD_of_widen

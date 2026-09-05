@@ -239,8 +239,16 @@ theorem frameRepr_outsideSpill
     (hA : AgreeP (OutsideSpill sp0) m0 m9)
     (hD : FrameStackDisj env name sp0 pn nameStr f m0)
     (hF : FrameRepr m0 N φf φc env.toNat f) :
-    FrameRepr m9 N φf φc env.toNat f :=
-  frameRepr_agreeP hA hD.hdr hD.slots hD.names hD.valstr hF
+    FrameRepr m9 N φf φc env.toNat f := by
+  apply frameRepr_agreeP hA hD.hdr hD.slots hD.names _ hF
+  intro pn' pv hpn hpv i hi
+  cases f.vars[i].2 with
+  | str s =>
+      exact fun p hp k hk => hD.valstr pn' pv hpn hpv i hi p s hp k hk
+  | native fn =>
+      exact fun p hp k hk =>
+        hD.valstr pn' pv hpn hpv i hi p (nativeName fn) hp k hk
+  | _ => trivial
 
 /-- The per-value-slot read facts in `FoundSt` survive the prologue spills. -/
 theorem foundPvVals_agreeP

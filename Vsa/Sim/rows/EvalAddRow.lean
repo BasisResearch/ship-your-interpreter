@@ -752,6 +752,7 @@ def EvalAddSimGoal : Prop :=
     (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (a b : Int)
     (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 Wl : BitVec 64)
     (out0 : Array String) (m0 : Mem),
+    EvalE st d env el st' (.int a) →
     EvalIH st d env el st' (.int a) →
     EvalIH st' d env er st'' (.int b) →
     EvalE st d env (.binary .add el er) st'' (.int (wrap64 (a + b))) →
@@ -767,6 +768,7 @@ def EvalAddSimGoal : Prop :=
         ArmEntryK gouter N A SL φf φc st (0x800034e8#64) UnaryArmCallee (.binary .add el er)
           sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
         BinExtras N A SL el er ment sp sret aExpr aLOp aROp ∧
+        BinaryRecContext gpre φf st env aEnvReg ∧
         c.σ.regs.get? Register.x11 = some aEnv ∧
         c.σ.regs.get? Register.x13 = some aEnvReg ∧
         c.σ.regs.get? Register.x19 = some v19 ∧
@@ -813,9 +815,9 @@ def EvalAddSimGoal : Prop :=
 `blockB_binary ≫ blockC_add ≫ blockD_v_rec` in the `EvalIH` motive shape. -/
 theorem evalAddSim : EvalAddSimGoal := by
   intro gouter gpre g N A SL φf φc st st' st'' d env el er a b
-    sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 Wl out0 m0 hIHl hIHr _hEvalE hSizeF hSizeC
+    sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 Wl out0 m0 hLeft hIHl hIHr _hEvalE hSizeF hSizeC
   intro c hpre
-  obtain ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+  obtain ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
     hpayL, hexprL, hpayR, hexprR, hMemExtM0, hGmt47,
     hstackBudgetL, hexprBodiesL, hstoreBodiesL,
     hstackBudgetR, hexprBodiesR, hstoreBodiesR, hResid,
@@ -842,8 +844,8 @@ theorem evalAddSim : EvalAddSimGoal := by
   -- === block B: two-operand head + IHs → TwoSubReturn @0x8000351c ===
   obtain ⟨c2, hs2, hTS⟩ :=
     blockB_binary gouter gpre N A SL φf φc st st' st'' d env .add el er (.int a) (.int b)
-      sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hIHl hIHr hVlSurv
-      c ⟨ment, hArm, hBE, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+      sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hLeft hIHl hIHr hVlSurv
+      c ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExtM0, hGmt47,
         hstackBudgetL, hexprBodiesL, hstoreBodiesL,
         hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩

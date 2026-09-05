@@ -1,4 +1,5 @@
 import Vsa.Sim.BridgeSegFramed
+import Vsa.Sim.rows.ErrorRouting
 
 /-!
 # `ErrSpillCore` — the seg-GENERIC spill-prefix→jal bridge (Family A)

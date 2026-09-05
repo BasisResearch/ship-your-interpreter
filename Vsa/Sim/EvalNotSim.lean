@@ -189,7 +189,7 @@ theorem blockC_not
     (nf nc : Nat)
     (st' : Vsa.While.St) (vsub : Value)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
-    (esub : Expr) (m0 : Mem) :
+    (esub : Expr) (m0 : Mem) (hsretWords : ValueWordsTotal m0 sret.toNat) :
     Triple
       (fun c => ∃ mcall,
         SubEvalReturn gpre N A SL φf φc nf nc st' vsub sp r sret
@@ -264,7 +264,9 @@ theorem blockC_not
   have hsub944 : ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)).toNat = sp.toNat - 944 :=
     spill_addr sp (0x090#12) 944 (by decide) (by omega) hsp1088
   -- the sub-value at subsret = sp-944 at c.σ.mem (φcv-extended)
-  have hvalSub' : ValueRepr c.σ.mem N φcv (sp.toNat - 944) vsub := by rwa [hsub944] at hvalSub
+  have hvalSub' : ValueRepr c.σ.mem N φcv (sp.toNat - 944) vsub := by
+    have hv := hvalSub.repr
+    rwa [hsub944] at hv
   -- the NOT-tail buffer geometry, instantiated at φcv
   have hNE : NotExtras N A SL φcv vsub sp sret c.σ.mem := hNotExtras φcv hvalSub'
   -- === derive machine facts ===
@@ -952,7 +954,7 @@ theorem blockC_not
             ((Steps.single hstep13).trans ((Steps.single hstep14).trans ((Steps.single hstep15).trans
               (hsB.trans (Steps.single hstep17))))))))))))))))
   refine ⟨⟨σ17, i17, cB.steps + 1⟩, hSteps, σ17.mem, φf', φc', hpf', hpc',
-    ⟨?_, hMemExt_fin, hSurvSL_fin⟩⟩
+    ⟨?_, hMemExt_fin, ValueWordsTotal.mono hMemExt_fin hsretWords, hSurvSL_fin⟩⟩
   refine ⟨hG17, hi17, hpc_fin, hs1_fin, hsp_fin, ⟨vmifin, hmifin⟩,
     hout_fin, houtStr, ?_,
     (by rw [hmem17e]; exact hcode_B), (by rw [hmem17e]; exact hvalfinal), hstore_fin, hframeG,
@@ -1158,15 +1160,17 @@ theorem evalNotSim : EvalNotSimGoal := by
       ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aOperand.toNat esub :=
     (hc.mem ▸ hc.ground).child_at
       (fun lo hi hin => exprIn_unary_child hin aOperand.toNat hpayMent')
-      hMentM0 hc.table_stack_disjoint hx.sp_SLhi
+      hMentM0 ((hc.mem ▸ hc.ground).stack_bytes_extend _hpresM)
+      hc.table_stack_disjoint hx.sp_SLhi
       (by omega)
       (by rw [hsubsretN]; have := hx.sp_headroom; have := hc.stack_ram.1; omega)
       (by rw [hsubsretN]; omega)
   -- === block B: arm head + recursive call ⋈ IH → SubEvalReturn @0x800035ec ===
   obtain ⟨c2, hs2, hSub⟩ :=
     blockB_unary g (fun R => c1.σ.regs.get? R) N A SL φf φc st st' d env .not esub vsub
-      sp r sret aExpr aEnv aOperand v8 v9 v18 c.σ.sailOutput m0 hIH
-      c1 ⟨ment, hArm, hx11c1, ⟨BitVec.ofNat 64 (φf env), hx13c1⟩, hgpreframe, ⟨aExpr, hgpre_x8⟩, hgpre18,
+      sp r sret aExpr aEnv aOperand v8 v9 v18 c.σ.sailOutput m0
+      hc.env_valid (hc.envset_defined_frame hbridge) hIH
+      c1 ⟨ment, hArm, hx11c1, hx13c1, hgpreframe, ⟨aExpr, hgpre_x8⟩, hgpre18,
         hpayMent', hOperandReprMent, hgroundChild, hx.expr24,
         hx.op_align, hx.op_lo, hx.op_hi, hx.op_win, hx.op_stk,
         hx.sp_headroom, hx.sp_SLhi, hx.sp16, hx.SLhi_ram,
@@ -1208,6 +1212,7 @@ theorem evalNotSim : EvalNotSimGoal := by
   obtain ⟨c3, hs3, mpreC, φfe, φce, hpfe, hpce, hPreD⟩ :=
     blockC_not (fun R => c1.σ.regs.get? R) g N A SL φf φc st.store.frames.size
       st.store.closures.size st' vsub sp r sret aExpr v8 v9 v18 c2.σ.sailOutput esub m0
+      (hc.mem ▸ hc.sret_words)
       c2 ⟨mcall, hSubR, hgpre_x8, hExprMcall, hMemExtM0mc,
         hx.expr_align4, hc.expr_ram.1, hc.expr_ram.2, hx.expr_win8,
         hc.expr_stack_disjoint, hx.expr_A, hx.expr_sub,

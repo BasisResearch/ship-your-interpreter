@@ -62,6 +62,7 @@ theorem blockB_flCond_stagePre
     (v8 v9 v18 v19 : BitVec 64)
     (out0 : Array String) (m0 ment : Mem)
     (c : Config)
+    (henvValid : EnvValid st env)
     (hpre :
         ExecArmEntryK g N A SL φf φc st (0x8000426c#64)
           sp r aInterp aStmt aEnv aRet v8 v9 v18 v19 out0 m0 ment c ∧
@@ -286,7 +287,7 @@ theorem blockB_flCond_stagePre
       (StepsN.succ hstep5 (StepsN.zero _))))), ?_⟩
   refine ⟨gpre, N, A, SL, φf, φc, (0x80004280#64), (0x80004284#64), (0x1feee4#21),
     (sp - 176#64) + 1088#64, r, aInterp, (sp - 176#64) + sign_extend (m := 64) (0x068#12),
-    aInterp, aExprChild, v8, v9, v18, out0, ment, ?_, ?_, ?_, ?_,
+    aInterp, aExprChild, v8, v9, v18, out0, ment, henvValid, ?_, ?_, ?_, ?_,
     hG5, hi5, hpc5, hx10_5, ?_, hx11_val, (by rw [← henvPtr]; exact hx13_val), hx12_5, hx2jsp, ⟨vmi5, hmi5⟩, hout5, ?_,
     hmem5e, ?_, hEvCode, hViInt, hViSlot, hNbsJ, ?_, hWordsJ, ?_, ?_, ?_, hframe5,
     ⟨hg8, hg18, hg19, hg20, hg21⟩,
@@ -384,6 +385,7 @@ def FlCondArmDispatch
       (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
       (sp r aInterp aStmt aEnv aRet aExprChild : BitVec 64)
       (v8 v9 v18 v19 : BitVec 64) (m0 ment : Mem),
+      EnvValid st env ∧
       ExecArmEntryK g N A SL φf φc st (0x8000426c#64)
         sp r aInterp aStmt aEnv aRet v8 v9 v18 v19 c'.σ.sailOutput m0 ment c' ∧
       read64 ment (aStmt.toNat + 16) = some aExprChild.toNat ∧
@@ -437,7 +439,7 @@ theorem flCond_field_of_dispatch
   refine flCond_split' cc step b c st d env (fun hFE => ?_)
   obtain ⟨c1, hsteps1, hMid⟩ := hDisp hFE c rfl
   obtain ⟨g, gpre, N, A, SL, φf, φc, sp, r, aInterp, aStmt, aEnv, aRet, aExprChild,
-    v8, v9, v18, v19, m0, ment, hArm, hpay, hExprChild,
+    v8, v9, v18, v19, m0, ment, henvValid, hArm, hpay, hExprChild,
     hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
     hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
     hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
@@ -445,6 +447,7 @@ theorem flCond_field_of_dispatch
   have hcut : LandedN 5 c1 (fun c' => ExecJalPreBundle cc c' st d env) :=
     blockB_flCond_stagePre g gpre N A SL φf φc st d env cc
       sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1
+      henvValid
       ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
        hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
        hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,

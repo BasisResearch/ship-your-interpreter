@@ -26,6 +26,51 @@ open Vsa.RuntimeRepr Vsa.MemRepr Vsa.While Vsa.Alloc
 
 namespace Vsa.Sim
 
+open LeanRV64DExecutable
+
+/-- Every address in the stack interval has a stored byte. -/
+def StackBytesPresent (m : Mem) (SL : StackLayout) : Prop :=
+  ∀ k : Nat, SL.lo ≤ k → k < SL.hi → ∃ b : BitVec 8, m[k]? = some b
+
+/-- The unary/binary arm frame retains the extra registers used by `env_set`. -/
+theorem EvalEntry.envset_defined_frame
+    {g g' : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : Vsa.While.St} {d env : Nat} {e : Expr}
+    {sp r sret aEnv aExpr : BitVec 64} {m0 : Mem} {cfg : Vsa.Machine.Config}
+    (h : EvalEntry g N A SL φf φc st d env e sp r sret aEnv aExpr m0 cfg)
+    (hframe : ∀ R : Register, AbiPreservedNoise R →
+      (Register.x8 == R) = false → (Register.x9 == R) = false →
+      (Register.x18 == R) = false → (Register.x2 == R) = false → g' R = g R) :
+    ∃ v19 v20 v21 : BitVec 64,
+      g' Register.x19 = some v19 ∧ g' Register.x20 = some v20 ∧
+      g' Register.x21 = some v21 := by
+  obtain ⟨v19, v20, v21, h19, h20, h21⟩ := h.envset_defined
+  refine ⟨v19, v20, v21, ?_, ?_, ?_⟩
+  · exact (hframe Register.x19 (by decide) (by decide) (by decide) (by decide) (by decide)).trans
+      ((h.frame Register.x19 (by decide)).symm.trans h19)
+  · exact (hframe Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide)).trans
+      ((h.frame Register.x20 (by decide)).symm.trans h20)
+  · exact (hframe Register.x21 (by decide) (by decide) (by decide) (by decide) (by decide)).trans
+      ((h.frame Register.x21 (by decide)).symm.trans h21)
+
+/-- Any 24-byte slot wholly inside the populated eval stack is readable. -/
+theorem EvalGround.valueWordsTotal {m : Mem} {SL : StackLayout} {A : Arena}
+    {sp sret : BitVec 64} {aExpr : Nat} {e : Expr}
+    (h : EvalGround m SL A sp sret aExpr e)
+    {a : Nat} (hlo : SL.lo ≤ a) (hhi : a + 24 ≤ SL.hi) :
+    ValueWordsTotal m a :=
+  valueWordsTotal_of_interval h.stack_bytes hlo hhi
+
+/-- Domain extension preserves the entry's populated stack. -/
+theorem EvalGround.stack_bytes_extend {m m' : Mem} {SL : StackLayout} {A : Arena}
+    {sp sret : BitVec 64} {aExpr : Nat} {e : Expr}
+    (h : EvalGround m SL A sp sret aExpr e) (hext : MemExtends m m') :
+    StackBytesPresent m' SL := by
+  intro k hlo hhi
+  obtain ⟨b, hb⟩ := h.stack_bytes k hlo hhi
+  exact hext k b hb
+
 /-- Any 24-byte slot wholly inside the populated exec stack is readable. -/
 theorem ExecGround.valueWordsTotal {m : Mem} {SL : StackLayout} {A : Arena}
     {sp aRet : BitVec 64} {aStmt : Nat} {s : Stmt}
@@ -45,16 +90,16 @@ theorem EvalGround.transport_offstack {m0 ment : Mem} {SL : StackLayout}
     (hg : EvalGround m0 SL A sp sret aExpr e)
     (htb : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
     (hspSL : sp.toNat ≤ SL.hi)
+    (hpop : StackBytesPresent ment SL)
     (hmem : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) :
     EvalGround ment SL A sp sret aExpr e :=
-  hg.survive_stack htb hspSL (fun k hk _ => (hmem k hk).symm)
+  hg.survive_stack htb hspSL hpop (fun k hk _ => (hmem k hk).symm)
 
 theorem ExecGround.transport_offstack {m0 ment : Mem} {SL : StackLayout}
     {A : Arena} {sp aRet : BitVec 64} {aStmt : Nat} {s : Stmt}
     (hg : ExecGround m0 SL A sp aRet aStmt s)
     (hspSL : sp.toNat ≤ SL.hi)
-    (hpop : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
-      ∃ b : BitVec 8, ment[k]? = some b)
+    (hpop : StackBytesPresent ment SL)
     (hmem : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) :
     ExecGround ment SL A sp aRet aStmt s :=
   hg.survive_stack hspSL hpop (fun k hk _ => (hmem k hk).symm)
@@ -130,6 +175,7 @@ theorem EvalGround.child_params {m : Mem} {SL : StackLayout} {A : Arena}
     (hsub_lo : SL.lo ≤ subsret.toNat) (hsub_hi : subsret.toNat + 24 ≤ sp.toNat) :
     EvalGround m SL A sp' subsret aChild echild where
   table := h.table
+  stack_bytes := h.stack_bytes
   ast := ⟨by
     obtain ⟨lo, hi, spec⟩ := h.ast.region
     refine ⟨lo, hi, ⟨hproj lo hi spec.nodes, spec.lo_ram, spec.hi_ram, spec.win,
@@ -253,12 +299,13 @@ theorem EvalGround.child_at {m0 ment : Mem} {SL : StackLayout} {A : Arena}
     {sp' subsret : BitVec 64} {aChild : Nat} {echild : Expr}
     (hproj : ∀ lo hi, ExprIn ment lo hi aExpr e → ExprIn ment lo hi aChild echild)
     (hmem : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?)
+    (hpop : StackBytesPresent ment SL)
     (htb : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58)
     (hspSL : sp.toNat ≤ SL.hi)
     (hsp' : sp'.toNat ≤ sp.toNat)
     (hsub_lo : SL.lo ≤ subsret.toNat) (hsub_hi : subsret.toNat + 24 ≤ sp.toNat) :
     EvalGround ment SL A sp' subsret aChild echild :=
-  (hg.transport_offstack htb hspSL hmem).child_params hproj htb hspSL hsp'
+  (hg.transport_offstack htb hspSL hpop hmem).child_params hproj htb hspSL hsp'
     hsub_lo hsub_hi
 
 theorem ExecGround.child_at {m0 ment : Mem} {SL : StackLayout} {A : Arena}
@@ -267,8 +314,7 @@ theorem ExecGround.child_at {m0 ment : Mem} {SL : StackLayout} {A : Arena}
     {sp' aRet' : BitVec 64} {aChild : Nat} {schild : Stmt}
     (hproj : ∀ lo hi, StmtIn ment lo hi aStmt s → StmtIn ment lo hi aChild schild)
     (hmem : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?)
-    (hpop : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
-      ∃ b : BitVec 8, ment[k]? = some b)
+    (hpop : StackBytesPresent ment SL)
     (hspSL : sp.toNat ≤ SL.hi)
     (hsp' : sp'.toNat ≤ sp.toNat)
     (hret_al : aRet'.toNat % 8 = 0)
@@ -294,6 +340,7 @@ theorem ExecGround.whileCond_evalGround {m : Mem} {SL : StackLayout} {A : Arena}
     h.eval_call.pins m (fun _ _ => rfl)
   refine
     { table := htable
+      stack_bytes := h.stack_bytes
       ast := ?_
       arena_stack := ?_
       arena_code := h.eval_call.arena_code
@@ -365,6 +412,7 @@ theorem EvalGround.child_node {m : Mem} {SL : StackLayout} {A : Arena}
     (hproj : ∀ lo hi, ExprIn m lo hi aExpr e → ExprIn m lo hi aChild echild) :
     EvalGround m SL A sp sret aChild echild where
   table := h.table
+  stack_bytes := h.stack_bytes
   ast := ⟨by
     obtain ⟨lo, hi, spec⟩ := h.ast.region
     exact ⟨lo, hi, ⟨hproj lo hi spec.nodes, spec.lo_ram, spec.hi_ram, spec.win,
@@ -408,9 +456,11 @@ theorem EvalGround.transport_via {m m' : Mem} {SL : StackLayout} {A : Arena}
     (h : EvalGround m SL A sp sret aExpr e)
     (htab : ∀ a : Nat, jumpTableBase ≤ a → a < jumpTableBase + 44 → m[a]? = m'[a]?)
     (hast : ∀ lo hi, AstRegionSpec m SL A sret.toNat aExpr e lo hi →
-      ∀ a : Nat, lo ≤ a → a < hi → m[a]? = m'[a]?) :
+      ∀ a : Nat, lo ≤ a → a < hi → m[a]? = m'[a]?)
+    (hpop : StackBytesPresent m' SL) :
     EvalGround m' SL A sp sret aExpr e where
   table := h.table.transport htab
+  stack_bytes := hpop
   ast := ⟨by
     obtain ⟨lo, hi, spec⟩ := h.ast.region
     exact ⟨lo, hi, spec.transport (hast lo hi spec)⟩⟩
@@ -427,8 +477,7 @@ theorem ExecGround.transport_via {m m' : Mem} {SL : StackLayout} {A : Arena}
     (hast : ∀ lo hi, StmtRegionSpec m SL A aRet.toNat aStmt s lo hi →
       ∀ a : Nat, lo ≤ a → a < hi → m[a]? = m'[a]?)
     (heval : ∀ a : Nat, EvalCallFootprint a → m'[a]? = m[a]?)
-    (hpop : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
-      ∃ b : BitVec 8, m'[k]? = some b) :
+    (hpop : StackBytesPresent m' SL) :
     ExecGround m' SL A sp aRet aStmt s where
   table := h.table.transport htab
   table_stack := h.table_stack
@@ -451,8 +500,7 @@ theorem ExecGround.transport_evalExit {m m' : Mem} {SL : StackLayout} {A : Arena
     (h : ExecGround m SL A sp aRet aStmt s)
     (hsp : sp.toNat ≤ SL.hi)
     (hsret : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ sp.toNat)
-    (hpop : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
-      ∃ b : BitVec 8, m'[k]? = some b)
+    (hpop : StackBytesPresent m' SL)
     (hframe : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
       ¬ (A.lo ≤ a ∧ a < A.hi) →
       (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ m'[a]? = m[a]?) :
@@ -505,8 +553,7 @@ theorem ExecGround.transport_execExit {m m' : Mem} {SL : StackLayout} {A : Arena
     {sp aRet : BitVec 64} {aStmt : Nat} {s : Stmt}
     (h : ExecGround m SL A sp aRet aStmt s)
     (hsp : sp.toNat ≤ SL.hi)
-    (hpop : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
-      ∃ b : BitVec 8, m'[k]? = some b)
+    (hpop : StackBytesPresent m' SL)
     (hframe : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
       ¬ (A.lo ≤ a ∧ a < A.hi) →
       (aRet.toNat ≤ a ∧ a < aRet.toNat + 24) ∨ m'[a]? = m[a]?) :

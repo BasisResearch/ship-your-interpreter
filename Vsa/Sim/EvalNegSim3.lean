@@ -286,15 +286,17 @@ theorem evalNegSim : EvalNegSimGoal := by
       ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aOperand.toNat esub :=
     (hc.mem ▸ hc.ground).child_at
       (fun lo hi hin => exprIn_unary_child hin aOperand.toNat hpayMent')
-      hMentM0 hc.table_stack_disjoint hx.sp_SLhi
+      hMentM0 ((hc.mem ▸ hc.ground).stack_bytes_extend _hpresM)
+      hc.table_stack_disjoint hx.sp_SLhi
       (by omega)
       (by rw [hsubsretN]; have := hx.sp_headroom; have := hc.stack_ram.1; omega)
       (by rw [hsubsretN]; omega)
   -- === block B: arm head + recursive call ⋈ IH → SubEvalReturn @0x800035ec ===
   obtain ⟨c2, hs2, hSub⟩ :=
     blockB_unary g (fun R => c1.σ.regs.get? R) N A SL φf φc st st' d env .neg esub (.int n)
-      sp r sret aExpr aEnv aOperand v8 v9 v18 c.σ.sailOutput m0 hIH
-      c1 ⟨ment, hArm, hx11c1, ⟨BitVec.ofNat 64 (φf env), hx13c1⟩, hgpreframe, ⟨aExpr, hgpre_x8⟩, hgpre18,
+      sp r sret aExpr aEnv aOperand v8 v9 v18 c.σ.sailOutput m0
+      hc.env_valid (hc.envset_defined_frame hbridge) hIH
+      c1 ⟨ment, hArm, hx11c1, hx13c1, hgpreframe, ⟨aExpr, hgpre_x8⟩, hgpre18,
         hpayMent', hOperandReprMent, hgroundChild, hx.expr24,
         hx.op_align, hx.op_lo, hx.op_hi, hx.op_win, hx.op_stk,
         hx.sp_headroom, hx.sp_SLhi, hx.sp16, hx.SLhi_ram,
@@ -335,6 +337,7 @@ theorem evalNegSim : EvalNegSimGoal := by
     blockC_neg (fun R => c1.σ.regs.get? R) g N A SL φf φc
       st.store.frames.size st.store.closures.size
       st' n sp r sret aExpr v8 v9 v18 c2.σ.sailOutput esub m0
+      (hc.mem ▸ hc.sret_words)
       c2 ⟨mcall, hSubR, hgpre_x8, hExprMcall, hMemExtM0mc,
         hx.expr_align4, hc.expr_ram.1, hc.expr_ram.2, hx.expr_win8,
         hc.expr_stack_disjoint, hx.expr_A, hx.expr_sub,

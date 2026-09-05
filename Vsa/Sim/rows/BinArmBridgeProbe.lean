@@ -47,6 +47,7 @@ theorem binArm_add_entry_connects
     (sp r sret aEnv aExpr aLOp aROp : BitVec 64)
     (m0 : Mem)
     (hX : BinArmExtras g N A SL .add el er sp r sret aExpr aLOp aROp m0)
+    (hLeft : EvalE st d env el st' (.int a))
     (hIHl : EvalIH st d env el st' (.int a))
     (hIHr : EvalIH st' d env er st'' (.int b))
     (hVlSurv : ∀ (φ : Addr → Nat) (m m' : Mem),
@@ -72,7 +73,7 @@ theorem binArm_add_entry_connects
   obtain ⟨c1, hs1, gpre, aEnvReg, v8, v9, v18, v19, ment, hEntryB⟩ := hA c hc
   obtain ⟨c2, hs2, hTS⟩ :=
     blockB_binary g gpre N A SL φf φc st st' st'' d env .add el er (.int a) (.int b)
-      sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 c1.σ.sailOutput m0 hIHl hIHr hVlSurv
+      sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 c1.σ.sailOutput m0 hLeft hIHl hIHr hVlSurv
       c1 ⟨ment, hEntryB⟩
   exact ⟨c2, hs1.trans hs2, gpre, v8, v9, v18, hTS⟩
 

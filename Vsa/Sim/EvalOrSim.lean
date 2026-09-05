@@ -80,7 +80,7 @@ theorem blockC_orTrue
     (nf nc : Nat)
     (st' : Vsa.While.St) (vl : Value)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
-    (el er : Expr) (m0 : Mem)
+    (el er : Expr) (m0 : Mem) (hsretWords : ValueWordsTotal m0 sret.toNat)
     (hvltrue : vl.truthy = true) :
     Triple
       (fun c => ∃ mcall,
@@ -153,7 +153,9 @@ theorem blockC_orTrue
     rw [h1088]; have := sp.isLt; omega
   have hsub968 : ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)).toNat = sp.toNat - 968 :=
     spill_addr sp (0x078#12) 968 (by decide) (by omega) hsp1088
-  have hvalSub' : ValueRepr c.σ.mem N φcv (sp.toNat - 968) vl := by rwa [hsub968] at hvalSub
+  have hvalSub' : ValueRepr c.σ.mem N φcv (sp.toNat - 968) vl := by
+    have h := hvalSub.repr
+    rwa [hsub968] at h
   have hBE : LogicalBufExtras N A SL φcv vl sp sret c.σ.mem := hBufExtras φcv hvalSub'
   have hx8 : c.σ.regs.get? Register.x8 = some aExpr := (hframe Register.x8 (by decide)).trans hgx8
   have hop8 : (aExpr + sign_extend (m := 64) (0x008#12)).toNat = aExpr.toNat + 8 := by
@@ -919,7 +921,7 @@ theorem blockC_orTrue
     refine hsB.trans (?_)
     exact Steps.single hstep18
   refine ⟨⟨σ18, i18, cB.steps + 1⟩, hSteps, σ18.mem, φf', φc', hpf', hpc',
-    ⟨?_, hMemExt_fin, hSurvSL_fin⟩⟩
+    ⟨?_, hMemExt_fin, ValueWordsTotal.mono hMemExt_fin hsretWords, hSurvSL_fin⟩⟩
   refine ⟨hG18, hi18, hpc_fin, hs1_fin, hsp_fin, ⟨vmifin, hmifin⟩,
     hout_fin, houtStr, ?_,
     (by rw [hmem18e]; exact hcode_B), (by rw [hmem18e]; exact hvaltrue), hstore_fin, hframeG,
@@ -1003,7 +1005,7 @@ def EvalOrTrueSimGoal : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (vl : Value)
-    (sp r sret aEnv aExpr aLeft aEnv3 : BitVec 64)
+    (sp r sret aEnv aExpr aLeft : BitVec 64)
     (m0 : Mem),
     vl.truthy = true →
     EvalIH st d env el st' vl →
@@ -1011,16 +1013,7 @@ def EvalOrTrueSimGoal : Prop :=
     Triple
       (fun c =>
         EvalEntry g N A SL φf φc st d env (.logical .or el er) sp r sret aEnv aExpr m0 c ∧
-        OrTrueExtras N A SL el er vl sp sret aExpr aLeft m0 ∧
-        (∀ cm : Config, Steps c cm →
-          cm.σ.regs.get? Register.PC = some (0x8000355c#64) →
-          cm.σ.regs.get? Register.x13 = some aEnv3) ∧
-        -- WAVE 47i (`McallPopTotality` amendment): windowed frame/node presence
-        -- + `mem_ext`, replacing the refuted totality oracle.
-        -- WAVE 48k: the dead-byte presence CLOSURE is GONE (total reads).
-        (∀ mcall : Mem,
-          (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-          MemExtends m0 mcall))
+        OrTrueExtras N A SL el er vl sp sret aExpr aLeft m0)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st' (.bool true) sp r sret m0)
 
@@ -1036,9 +1029,9 @@ theorem exprRepr_logical_or_kind {m : Mem} {a : Nat} {el er : Expr}
 `PreEpilogueVD .bool true`), and `blockD_v_rec` (shared epilogue → `EvalExitD`).
 Mirrors `evalAndSim`. -/
 theorem evalOrTrueSim : EvalOrTrueSimGoal := by
-  intro g N A SL φf φc st st' d env el er vl sp r sret aEnv aExpr aLeft aEnv3
+  intro g N A SL φf φc st st' d env el er vl sp r sret aEnv aExpr aLeft
     m0 hvltrue hIH _hEvalE
-  intro c ⟨hc, hx, hx13reach, hMemExtRes⟩
+  intro c ⟨hc, hx⟩
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- === block A: prologue + dispatch → widened ArmEntryK @0x8000355c ===
   have hkm0 : read32 m0 aExpr.toNat = some 7 := exprRepr_logical_or_kind (hc.mem ▸ hc.expr)
@@ -1075,7 +1068,7 @@ theorem evalOrTrueSim : EvalOrTrueSimGoal := by
     _hAsp1088, _hAsphi, _hAsplo, _hAspwin, _hAsp8, _hASLlo, _hASLwin, _hASLloSp, _hAraAl,
     hAEx11, hAEx8, hAEx18⟩ := hArmCopy
   have hx11c1 : c1.σ.regs.get? Register.x11 = some aEnv := hAEx11
-  have hx13c1 : c1.σ.regs.get? Register.x13 = some aEnv3 := hx13reach c1 hs1 hApc
+  have hx13c1 : c1.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) := _hx13
   have hgpreframe : ∀ R : Register, AbiPreservedNoise R →
       c1.σ.regs.get? R = (fun R => c1.σ.regs.get? R) R := fun R _ => rfl
   have hgpre_x8 : (fun R => c1.σ.regs.get? R) Register.x8 = some aExpr := hAEx8
@@ -1108,13 +1101,14 @@ theorem evalOrTrueSim : EvalOrTrueSimGoal := by
   -- === block B: arm head + LEFT recursive call ⋈ IH → SubEvalReturn @0x8000356c ===
   obtain ⟨c2, hs2, hSub⟩ :=
     blockB_logical g (fun R => c1.σ.regs.get? R) N A SL φf φc st st' d env .or el er vl
-      sp r sret aExpr aEnv aLeft aEnv3 v8 v9 v18 c.σ.sailOutput m0 hIH
+      sp r sret aExpr aEnv aLeft v8 v9 v18 c.σ.sailOutput m0
+      hc.env_valid (hc.envset_defined_frame hbridge) hIH
       c1 ⟨ment, hArm, hx11c1, hx13c1, hgpreframe, ⟨aExpr, hgpre_x8⟩, hgpre18,
         hlptrM',
         (fun m' hag => hx.left_survives m' (fun a ha => (hMentM0 a ha).symm.trans (hag a ha))),
         -- WAVE 47i: the parent ground at the arm entry (ONE kit call).
         ((hc.mem ▸ hc.ground).transport_offstack hc.table_stack_disjoint
-          hx.sp_SLhi hMentM0),
+          hx.sp_SLhi ((hc.mem ▸ hc.ground).stack_bytes_extend _hpresM) hMentM0),
         hx.expr24,
         hx.op_align, hx.op_lo, hx.op_hi, hx.op_win, hx.op_stk,
         hx.sp_headroom, hx.sp_SLhi, hx.sp16, hx.SLhi_ram,
@@ -1131,7 +1125,7 @@ theorem evalOrTrueSim : EvalOrTrueSimGoal := by
             simp only [h1, h2, evalFrame]; omega),
         (Expr.bodiesBound_logical hc.expr_bodies).1,
         hc.store_bodies⟩
-  obtain ⟨mcall, hSubR, hMcallM0stk⟩ := hSub
+  obtain ⟨mcall, hSubR, _hEnvSlot, hMemExtM0mc, hMcallM0stk⟩ := hSub
   have hAgM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]? := hMcallM0stk
   have hOutC2 : OutRepr c2.σ st' := hSubR.2.2.2.2.2.2.2.2.1
   have houtStr : String.join c2.σ.sailOutput.toList = st'.out := hOutC2
@@ -1143,7 +1137,6 @@ theorem evalOrTrueSim : EvalOrTrueSimGoal := by
       (fun a ha => (hAgM0 a (by have := hx.boolcode_stk; omega)).symm) hx.bool_loaded
   have hMcallM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       mcall[a]? = m0[a]? := fun a ha _ => hAgM0 a ha
-  have hMemExtM0mc : MemExtends m0 mcall := hMemExtRes mcall hAgM0
   have hExprMcall : ExprRepr mcall aExpr.toNat (.logical .or el er) :=
     hx.expr_survives mcall (fun a ha => (hAgM0 a ha).symm)
   have hBufExtras : ∀ φc' : Addr → Nat, ValueRepr c2.σ.mem N φc' (sp.toNat - 968) vl →
@@ -1156,7 +1149,7 @@ theorem evalOrTrueSim : EvalOrTrueSimGoal := by
   obtain ⟨c3, hs3, mpreC, φfe, φce, hpfe, hpce, hPreD⟩ :=
     blockC_orTrue (fun R => c1.σ.regs.get? R) g N A SL φf φc st.store.frames.size
       st.store.closures.size st' vl sp r sret aExpr v8 v9 v18
-      c2.σ.sailOutput el er m0 hvltrue
+      c2.σ.sailOutput el er m0 (hc.mem ▸ hc.sret_words) hvltrue
       c2 ⟨mcall, hSubR, hgpre_x8, hExprMcall, hMemExtM0mc,
         hx.expr_align4, hc.expr_ram.1, hc.expr_ram.2, hx.expr_win8,
         hc.expr_stack_disjoint, hx.expr_A, hx.expr_sub,

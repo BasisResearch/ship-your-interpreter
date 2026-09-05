@@ -1,4 +1,5 @@
 field	status	supplier_note
+hExecRouteCases	hole	Exact constructor-local rows for post-prologue dispatch and while-arm re-entry.  The all-derivations route family is derived below.
 hInt	hole	`hInt`/`eval_int_row`.  Supplier: `LeafWiden` int-leaf geometry (`LeafWiden`/`GeomFrom`).
 hNull	hole	`hNull`/`eval_null_row`.  Supplier: null-slot geometry + `LeafWiden` (`NullSlotPinned`).
 hBool	hole	`hBool`/`eval_bool_row`.  Supplier: bool-region geometry + `LeafWiden`.
@@ -29,7 +30,6 @@ hStrLe	hole	`hBinary` str `≤` cell.  Supplier: `StrCmpOrderBridge`/`StrArmProl
 hStrGt	hole	`hBinary` str `>` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`.
 hStrGe	hole	`hBinary` str `≥` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`.
 hDivOv	hole	`hBinary` div-overflow arm (`INT64_MIN / -1` wraps).  Supplier: `TermGuards.divOvfArm` wrap-semantics div row.
-hArgsNil	hole	`hArgsNil`/`eval_argsNil_row`.  Supplier: `ArgsNilResid` seg-identity at `evalArgsLoopPC`→`evalArgsContPC`.
 hArgsCons	hole	`hArgsCons`/`eval_argsCons_row`.  Supplier: `ArgsConsResid` per-iter body oracle + fall-through (`TermGuards.argsMeasure`, `evalArgsStepOf`/`loopFromBody`).
 hCallPrint	hole	`hCallPrint`/`eval_callPrint_row`.  Supplier: native `print` seg (`NativePrintSpec`).
 hCallPrintln	hole	`hCallPrintln`/`eval_callPrintln_row`.  Supplier: native `println` seg.
@@ -50,10 +50,16 @@ hSIfTrue	hole	`hSIfTrue`/`exec_ifTrue_row`.  Supplier: `IfTrueResid` (branch exi
 hSIfFalse	hole	`hSIfFalse`/`exec_ifFalse_row`.  Supplier: `IfFalseResid` (else-branch exit-sim).
 hSBlock	hole	`hSBlock`/`exec_block_row`.  Supplier: `BlockResid` = `allocFrame` + seq exit-sim.
 hSForStart	hole	`hSForStart`/`exec_forStart_row`.  Supplier: `ForStartResid` = `allocFrame` + init/for-loop exit-sim (`TermGuards.forMeasure`).
-hSWhileBreak	hole	`hSWhileBreak`/`exec_whileBreak_row`.  Supplier: `WhileResid` (shared with whileRet/whileLoop; `TermGuards.whileMeasure`, `execWhileIH_of_resid`).
-hSeqNil	hole	**GAP** — `hSeqNil` (`ExecSeq.nil`).  Supplier: `execSeqNil` seg-identity (`ExecSimCommon.execSeqNil`, essentially LANDED — a `_row` wrap is trivial).
-hSeqConsNormal	hole	**GAP** — `hSeqConsNormal` (`ExecSeq.consNormal`).  Supplier: `execSeqLoop` back-edge (`TermGuards.seqMeasure`).
-hSeqConsAbrupt	hole	**GAP** — `hSeqConsAbrupt` (`ExecSeq.consAbrupt`).  Supplier: `execSeqLoop` abrupt-exit arm (`TermGuards.seqMeasure`).
+hSWhileBreak	hole	Exact `ExecS.whileBreak` residual, indexed by the condition/body derivations and their induction hypotheses.
+hSWhileRet	hole	Exact `ExecS.whileRet` residual.
+hSWhileLoop	hole	Exact recursive `ExecS.whileLoop` residual.
+hInitNone	hole	(no supplier note)
+hInitSome	hole	(no supplier note)
+hFlCondFalse	hole	(no supplier note)
+hFlBodyBreak	hole	(no supplier note)
+hFlBodyRet	hole	(no supplier note)
+hFlLoop	hole	(no supplier note)
+hSeqSteps	hole	(no supplier note)
 hInitStore	hole	**ENTRY (prologue)** — `hEntryHalts` store-init locus.  Supplier: the off-path `interp_init` store representation at the `interp_run` loop head (`Vsa.Sim.InterpInitStoreRepr`, decoded PC span in its doc).
 hEpilogueSpill	hole	**ENTRY (epilogue)** — `hEntryHalts` exit-0 spill seam.  Supplier: the epilogue restore-block byte-level spill/frame/image/tail facts (`Vsa.Sim.EpilogueSpill`, the `s5=0` latch + restore `ChainFacts`).
-hDivCorr	hole	**DIVERGENCE** — `hdivFam`.  Supplier: the per-load divergence correspondence (`Vsa.Sim.DivFamily.DivCorrFamily L`), discharged by the M4 `exec_stmt` case Triples' progress-only ("≥1 step, still corresponds") skeleton.
+hDivCorr	hole	**DIVERGENCE** — `hdivFam`. Supplier: `ApproxArmResidGapAssembly.divCorrFamily_of_armStages`, from the shared entry drive, the normal loop iteration seam, and the 29-field approximate dispatch assembly.

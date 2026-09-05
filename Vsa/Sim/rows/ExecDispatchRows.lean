@@ -588,8 +588,8 @@ def ForStartPrefixResid
       (ExecEntry g N A SL φf φc st d env (.forStmt init cnd step b)
         sp r aInterp aStmt aEnv aRet m0)
       (fun cfg => ∃ (φf' φc' : Addr → Nat) (ment : Mem) (liveRA : BitVec 64),
-        PhiExtends φf φf' st'.store.frames.size ∧
-        PhiExtends φc φc' st'.store.closures.size ∧
+        PhiExtends φf φf' st.store.frames.size ∧
+        PhiExtends φc φc' st.store.closures.size ∧
         ExecInitReady g N A SL φf' φc' ⟨store', st.out⟩ d outer
           init cnd step b sp r aInterp aStmt (BitVec.ofNat 64 (φf' outer))
           aRet m0 ment cfg (liveRA := liveRA))
@@ -629,12 +629,14 @@ theorem exec_forStart_row
     hR st st' st'' d env init cnd step b status store' outer a_1 a_2
       a hInitIH hForIH
       g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hEntry
-  obtain ⟨cfgL, hsL, hReadyL⟩ :=
+  obtain ⟨cfgL, hsL, hDone⟩ :=
     hInitIH cnd step b g N A SL φf' φc' sp r aInterp aStmt
       (BitVec.ofNat 64 (φf' outer)) aRet m0 ment cfgI ⟨liveRA, hReadyI⟩
+  obtain ⟨φf'', φc'', liveRA', hInitDone⟩ := hDone.result
   obtain ⟨cfgE, hsE, hExit⟩ :=
-    hForIH init g N A SL φf' φc' sp r aInterp aStmt
-      (BitVec.ofNat 64 (φf' outer)) aRet m0 cfgL.σ.mem cfgL hReadyL
+    hForIH init g N A SL φf'' φc'' sp r aInterp aStmt
+      (BitVec.ofNat 64 (φf' outer)) aRet m0 cfgL.σ.mem cfgL
+      ⟨liveRA', hInitDone.ready⟩
   have hInitSize : StoreLe store' st'.store := by
     cases a_1 with
     | none => exact ⟨Nat.le_refl _, Nat.le_refl _⟩
@@ -642,11 +644,18 @@ theorem exec_forStart_row
         simpa [StoreLe] using execS_store_mono (by assumption)
   have hSize : StoreLe st.store st'.store :=
     (StoreLe.allocFrame a).trans hInitSize
+  have hAllocSize : StoreLe st.store store' := StoreLe.allocFrame a
+  have hpf'' : PhiExtends φf φf'' st.store.frames.size :=
+    hpf.trans
+      (PhiExtends.mono hAllocSize.1 hInitDone.frames)
+  have hpc'' : PhiExtends φc φc'' st.store.closures.size :=
+    hpc.trans
+      (PhiExtends.mono hAllocSize.2 hInitDone.closures)
   exact ⟨cfgE, (hsI.trans hsL).trans hsE,
-    execExitD_rebase g N A SL φf φc φf' φc'
+    execExitD_rebaseMaps g N A SL φf φc φf'' φc''
       st.store.frames.size st.store.closures.size
       st'.store.frames.size st'.store.closures.size st'' status sp r aRet
-      m0 cfgE hSize hpf hpc hExit⟩
+      m0 cfgE hSize hpf'' hpc'' hExit⟩
 
 #print axioms exec_forStart_row
 

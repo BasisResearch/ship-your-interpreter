@@ -1,5 +1,5 @@
 import Vsa.Sim.rows.StringifySpec
-import Vsa.Sim.EnvDefCompose
+import Vsa.Sim.CalleeFrame
 
 -- discipline: allow(R7-conj-tower-def) The only NEW post here is `StrdupTailExit`
 -- (one `∃ res`), consumed exclusively through its named destructurer
@@ -66,7 +66,7 @@ malloc-staging value (`old`) to the malloc result `dst` (deliberate: s0 carries 
 across the memcpy call for the epilogue's `mv a0,s0`).  The malloc frame is threaded
 under the entry ghost `gm` (s0 = gm x8 = old); the memcpy frame must therefore be
 threaded under the RESEATED ghost `gm[x8 := dst]`.  `AbiPreserved x8 = true`, so
-`EnvDefFrame.hAbi` genuinely pins s0 — a single `gm` cannot honour both entries
+`CalleeFrame.abi` genuinely pins s0 — a single `gm` cannot honour both entries
 (machine-checked in `strdupMemcpy_frame_obstruction`, `StrdupTailContractClose.lean`).
 This is the amendment the ledger's `strdup-memcpy-s0-reseat-frameghost` entry proposed. -/
 
@@ -145,9 +145,6 @@ theorem stringifyStrdupTailContract
     (halignC : rMemcpy.toNat % 4 = 0)
     (extsC : List (Nat × Nat)) (spC : BitVec 64)
     (hrouteCbyte : (src.toNat ^^^ dst.toNat) % 8 ≠ 0 ∨ nMemcpy < 8)
-    (hDstArenaC : A.contains dst.toNat nMemcpy)
-    (hArenaStackC : A.hi ≤ spC.toNat ∨ spC.toNat + 64 ≤ A.lo)
-    (hArenaCodeC : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo)
     (hAInvStableFootC : ∀ (σa σb : MState),
       σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
       (∀ a : Nat, (a < dst.toNat ∨ dst.toNat + nMemcpy ≤ a) → σa.mem[a]? = σb.mem[a]?) →
@@ -155,16 +152,16 @@ theorem stringifyStrdupTailContract
     -- strlen preserves the carried frame (its missing preservation clause, named)
     (strlenFramed : Triple
       (fun c => strlen_pre bufPtr rStrlen str m0 c ∧
-        EnvDefFrame SL gpv headroom M.AInv exts spM gm c)
+        CalleeFrame SL gpv headroom M.AInv exts spM gm c)
       (fun c => strlen_post rStrlen str m0 c ∧
-        EnvDefFrame SL gpv headroom M.AInv exts spM gm c))
+        CalleeFrame SL gpv headroom M.AInv exts spM gm c))
     -- the four machine bridges
     (bridgeStrlenPre : Triple P
       (fun c => strlen_pre bufPtr rStrlen str m0 c ∧
-        EnvDefFrame SL gpv headroom M.AInv exts spM gm c))
+        CalleeFrame SL gpv headroom M.AInv exts spM gm c))
     (bridgeMallocPre : Triple
       (fun c => strlen_post rStrlen str m0 c ∧
-        EnvDefFrame SL gpv headroom M.AInv exts spM gm c)
+        CalleeFrame SL gpv headroom M.AInv exts spM gm c)
       (fun c =>
         GoodState c.σ ∧ c.tick < 2 ∧
         c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 mallocEntry) ∧
@@ -189,23 +186,22 @@ theorem stringifyStrdupTailContract
         (∀ a, ¬ M.privFoot a → ¬ (SL.lo ≤ a ∧ a < spM.toNat) →
           c.σ.mem[a]? = mMalloc[a]?))
       (fun c => PreDispatch (ghostReseatS0 gm dst) rMemcpy dst src nMemcpy mMemcpy bs c ∧
-        EnvDefFrame SL gpv headroom M.AInv extsC spC (ghostReseatS0 gm dst) c))
+        CalleeFrame SL gpv headroom M.AInv extsC spC (ghostReseatS0 gm dst) c))
     -- the return epilogue: reads back the fresh block's CString from the copied
     -- bytes (memcpy copied `len+1` bytes incl. NUL → `CString m' dst str`), lands
     -- `mv a0,s0 ; ret` at `rRet`.  The frame is threaded under the RESEATED ghost
     -- `gm[x8 := dst]` (the `mv s0,a0` reseated s0 to `dst`; see `ghostReseatS0`).
     (bridgeEpilogue : Triple
       (fun c => (∃ g', memcpy_bytepath_post g' rMemcpy dst nMemcpy mMemcpy bs c) ∧
-        EnvDefFrame SL gpv headroom M.AInv extsC spC (ghostReseatS0 gm dst) c)
+        CalleeFrame SL gpv headroom M.AInv extsC spC (ghostReseatS0 gm dst) c)
       (StrdupTailExit rRet str)) :
     Triple P (StrdupTailExit rRet str) :=
   -- strlen ≫ [malloc ≫ [memcpy(framed) ≫ epilogue]]
   envDefStrlenSplice bufPtr rStrlen str m0 strlenFramed bridgeStrlenPre
     (envDefMallocSplice M gm exts nMalloc spM rM mMalloc hnM bridgeMallocPre
       (envDefMemcpyFramedSplice (ghostReseatS0 gm dst) rMemcpy dst src nMemcpy mMemcpy bs
-        (envDefMemcpyFramed A SL gpv headroom M.AInv extsC spC (ghostReseatS0 gm dst)
-          rMemcpy dst src nMemcpy mMemcpy bs halignC hrouteCbyte hDstArenaC
-          hArenaStackC hArenaCodeC hAInvStableFootC)
+        (calleeFrameMemcpy SL gpv headroom M.AInv extsC spC (ghostReseatS0 gm dst)
+          rMemcpy dst src nMemcpy mMemcpy bs halignC hrouteCbyte hAInvStableFootC)
         bridgeMemcpyPre bridgeEpilogue))
 
 /-! ## Discharging `StringifyStrdupTailResid` from the composed contract

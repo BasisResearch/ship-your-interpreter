@@ -87,6 +87,12 @@ theorem binaryR_midStagePre
     (hx8L : cL.σ.regs.get? Register.x8 = some aExpr)
     (hx18L : cL.σ.regs.get? Register.x18 = some aEnv)
     (hgx8v : gpre Register.x8 = some aExpr) (hgx18v : gpre Register.x18 = some aEnv)
+    (henvValid : EnvValid st' env)
+    (henvRead : read64 cL.σ.mem (sp.toNat - 1088) =
+      some (BitVec.ofNat 64 (φf1 env)).toNat)
+    (henvset : ∃ w19 w20 w21 : BitVec 64,
+      gpre Register.x19 = some w19 ∧ gpre Register.x20 = some w20 ∧
+        gpre Register.x21 = some w21)
     (hcodeL : Eval_exprLoaded cL.σ.mem)
     -- the transported right-operand pointer + node bytes present:
     (hnode : read64 cL.σ.mem (aExpr.toNat + 24) = some aROp.toNat)
@@ -168,22 +174,10 @@ theorem binaryR_midStagePre
   -- present bytes for the reads (env @sp-1088, lw @sp-968, s3 @sp-960)
   -- WAVE 48k: the arm's dead reloads are named AS their own total reads
   -- (`bytesT1`), so their `site_*_totb` byte obligations close by `rfl`.
-  let eb0 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088)
-  have heb0 : (cL.σ.mem[sp.toNat - 1088]?).getD 0 = eb0 := rfl
-  let eb1 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088 + 1)
-  have heb1 : (cL.σ.mem[sp.toNat - 1088 + 1]?).getD 0 = eb1 := rfl
-  let eb2 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088 + 2)
-  have heb2 : (cL.σ.mem[sp.toNat - 1088 + 2]?).getD 0 = eb2 := rfl
-  let eb3 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088 + 3)
-  have heb3 : (cL.σ.mem[sp.toNat - 1088 + 3]?).getD 0 = eb3 := rfl
-  let eb4 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088 + 4)
-  have heb4 : (cL.σ.mem[sp.toNat - 1088 + 4]?).getD 0 = eb4 := rfl
-  let eb5 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088 + 5)
-  have heb5 : (cL.σ.mem[sp.toNat - 1088 + 5]?).getD 0 = eb5 := rfl
-  let eb6 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088 + 6)
-  have heb6 : (cL.σ.mem[sp.toNat - 1088 + 6]?).getD 0 = eb6 := rfl
-  let eb7 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 1088 + 7)
-  have heb7 : (cL.σ.mem[sp.toNat - 1088 + 7]?).getD 0 = eb7 := rfl
+  obtain ⟨eb0, eb1, eb2, eb3, eb4, eb5, eb6, eb7,
+    heb0, heb1, heb2, heb3, heb4, heb5, heb6, heb7, hebsext⟩ :=
+    spill_roundtrip_ee cL.σ.mem (sp.toNat - 1088)
+      (BitVec.ofNat 64 (φf1 env)) henvRead
   let wb0 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 968)
   have hwb0 : (cL.σ.mem[sp.toNat - 968]?).getD 0 = wb0 := rfl
   let wb1 : BitVec 8 := bytesT1 cL.σ.mem (sp.toNat - 968 + 1)
@@ -251,6 +245,8 @@ theorem binaryR_midStagePre
   have hx13τ2 : τ2.regs.get? Register.x13 = some
       (sign_extend (m := 64) ((((((((eb7.append eb6).append eb5).append eb4).append eb3).append eb2).append eb1).append eb0) : BitVec (8 * 8))) :=
     obs_alu_rd hoτ2 (by decide) (by decide) (by decide) (by decide) (by decide)
+  have hx13τ2' : τ2.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf1 env)) := by
+    rwa [hebsext] at hx13τ2
   have hs1τ2 : τ2.regs.get? Register.x9 = some sret := obs_alu_other hoτ2 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1τ1
   have hx18τ2 : τ2.regs.get? Register.x18 = some aEnv := obs_alu_other hoτ2 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18τ1
   have hspτ2 : τ2.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other hoτ2 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hspτ1
@@ -274,7 +270,7 @@ theorem binaryR_midStagePre
       (sign_extend (m := 64) ((((wb3.append wb2).append wb1).append wb0) : BitVec (8*4))) :=
     obs_alu_rd hoτ3 (by decide) (by decide) (by decide) (by decide) (by decide)
   have hx12τ3 : τ3.regs.get? Register.x12 = some aROp := obs_alu_other hoτ3 Register.x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx12τ2
-  have hx13τ3 := obs_alu_other hoτ3 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13τ2
+  have hx13τ3 := obs_alu_other hoτ3 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13τ2'
   have hs1τ3 : τ3.regs.get? Register.x9 = some sret := obs_alu_other hoτ3 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1τ2
   have hx18τ3 : τ3.regs.get? Register.x18 = some aEnv := obs_alu_other hoτ3 Register.x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx18τ2
   have hspτ3 : τ3.regs.get? Register.x2 = some (sp - 1088#64) := obs_alu_other hoτ3 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hspτ2
@@ -345,6 +341,9 @@ theorem binaryR_midStagePre
   have hpcτ6 : τ6.regs.get? Register.PC = some (0x80003514#64) := by
     have := obs_alu_pc hoτ6
     rwa [show BitVec.addInt (0x80003510#64) 4 = (0x80003514#64 : BitVec 64) from by decide] at this
+  have hx19τ6 : τ6.regs.get? Register.x19 = some
+      (sign_extend (m := 64) ((((((((sb7.append sb6).append sb5).append sb4).append sb3).append sb2).append sb1).append sb0) : BitVec (8 * 8))) :=
+    obs_alu_rd hoτ6 (by decide) (by decide) (by decide) (by decide) (by decide)
   have ha0τ6 : τ6.regs.get? Register.x10 = some ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) :=
     obs_alu_other hoτ6 Register.x10 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) ha0τ5
   have hx11τ6 : τ6.regs.get? Register.x11 = some aEnv := obs_alu_other hoτ6 Register.x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx11τ5
@@ -378,6 +377,8 @@ theorem binaryR_midStagePre
   have hx13τ7 := obs_store_other_val hoτ7 Register.x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hx13τ6
   have hs1τ7 := obs_store_other_val hoτ7 Register.x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hs1τ6
   have hspτ7 := obs_store_other_val hoτ7 Register.x2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) hspτ6
+  have hx19τ7 := obs_store_other_val hoτ7 Register.x19 (by decide) (by decide)
+    (by decide) (by decide) (by decide) (by decide) (by decide) hx19τ6
   obtain ⟨vmiτ7, hmiτ7⟩ := obs_store_minstret_val hoτ7
   have houtτ7 : τ7.sailOutput = cL.σ.sailOutput := by rw [hoτ7.out, sailOutput_sigmaPost_store]; exact houtτ6
   have hcodeτ7 : Eval_exprLoaded mcall2 :=
@@ -420,6 +421,8 @@ theorem binaryR_midStagePre
   have hGroundR2 : EvalGround mcall2 SL A (sp - 1088#64)
       ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aROp.toNat er :=
     hGroundR_CL.child_at (fun _ _ h => h) (fun a ha => (hAgMcall2 a ha).symm)
+      (hGroundR_CL.stack_bytes_extend (memExtends_writeMap8 cL.σ.mem
+        (sp.toNat - 1088) _))
       htableStk hspSLhi (by rw [hspsub]; omega)
       (by rw [haddr144']; omega) (by rw [haddr144']; omega)
   -- `Value_intLoaded` / `IntSlotPinned` for mcall2
@@ -471,6 +474,7 @@ theorem binaryR_midStagePre
   have hgR7_18 : τ7.regs.get? Register.x18 = some aEnv :=
     (hframeτ7_excl Register.x18 (by decide) (by decide)).trans hgx18v
   -- ============ land at τ7 (the RIGHT jal PC 0x80003518) as `JalPreBundle er` ============
+  obtain ⟨_w19, w20, w21, _hw19, hw20, hw21⟩ := henvset
   refine ⟨7, ⟨τ7, j7, cL.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩, Nat.le_refl _,
     StepsN.succ hstepτ1 (StepsN.succ hstepτ2 (StepsN.succ hstepτ3 (StepsN.succ hstepτ4
       (StepsN.succ hstepτ5 (StepsN.succ hstepτ6 (StepsN.succ hstepτ7 (StepsN.zero _))))))), ?_⟩
@@ -478,14 +482,20 @@ theorem binaryR_midStagePre
       (0x80003518#64), (0x8000351c#64), (0x1ffc4c#21),
       sp, r, sret, ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)), aEnv, aROp,
       v8, v9, v18, cL.σ.sailOutput, mcall2,
+      henvValid,
       (by apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide),
       (by apply BitVec.eq_of_toNat_eq; decide),
       (by decide),
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_80003518_ee σ i u (0x80003518#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
-      hGτ7, hj7, hpcτ7, ha0τ7, hs1τ7, hx11τ7, ⟨_, hx13τ7⟩, hx12τ7, hspτ7, ⟨vmiτ7, hmiτ7⟩,
-      houtτ7, houtStrL, hmemτ7e, hcodeτ7, hviInt2, hviSlot2, hnbs2, hGroundR2, hexprR2, hstore2, hstoreSurv2,
-      (fun R hR => rfl), ⟨⟨aExpr, hgR7_8⟩, ⟨aEnv, hgR7_18⟩⟩,
+      hGτ7, hj7, hpcτ7, ha0τ7, hs1τ7, hx11τ7, hx13τ7, hx12τ7, hspτ7, ⟨vmiτ7, hmiτ7⟩,
+      houtτ7, houtStrL, hmemτ7e,
+      hGroundR2.valueWordsTotal (by rw [haddr144']; omega) (by rw [haddr144']; omega),
+      hcodeτ7, hviInt2, hviSlot2, hnbs2, hGroundR2, hexprR2, hstore2, hstoreSurv2,
+      (fun R hR => rfl), ⟨⟨aExpr, hgR7_8⟩, ⟨aEnv, hgR7_18⟩,
+        ⟨_, hx19τ7⟩,
+        ⟨w20, (hframeτ7_excl Register.x20 (by decide) (by decide)).trans hw20⟩,
+        ⟨w21, (hframeτ7_excl Register.x21 (by decide) (by decide)).trans hw21⟩⟩,
       hslotRa2, hslotS02, hslotS12, hslotS22,
       hrop_align, hrop_ram.1, hrop_ram.2, hrop_win, hrop_stk,
       (by rw [haddr144']; omega), (by rw [haddr144']; omega), (by rw [haddr144']; omega),
@@ -518,6 +528,12 @@ theorem binaryR_midStage1
     (hx8L : cL.σ.regs.get? Register.x8 = some aExpr)
     (hx18L : cL.σ.regs.get? Register.x18 = some aEnv)
     (hgx8v : gpre Register.x8 = some aExpr) (hgx18v : gpre Register.x18 = some aEnv)
+    (henvValid : EnvValid st' env)
+    (henvRead : read64 cL.σ.mem (sp.toNat - 1088) =
+      some (BitVec.ofNat 64 (φf1 env)).toNat)
+    (henvset : ∃ w19 w20 w21 : BitVec 64,
+      gpre Register.x19 = some w19 ∧ gpre Register.x20 = some w20 ∧
+        gpre Register.x21 = some w21)
     (hcodeL : Eval_exprLoaded cL.σ.mem)
     (hnode : read64 cL.σ.mem (aExpr.toNat + 24) = some aROp.toNat)
     (hstoreCL : StoreRepr cL.σ.mem N A φf1 φc1 st'.store)
@@ -564,6 +580,7 @@ theorem binaryR_midStage1
   LandedN.weakenCount (by omega : 1 ≤ 7)
     (binaryR_midStagePre gpre N A SL φf1 φc1 st' d env er sp r sret aExpr aEnv aROp
       v8 v9 v18 cL hGL htickL hpcL hs1L hspL hmiL houtStrL hframeL hx8L hx18L hgx8v hgx18v
+      henvValid henvRead henvset
       hcodeL hnode hstoreCL hstoreSurvCL hexprSurvCL hviCL hviSlotCL hnbsCL hslotRaL hslotS0L
       hslotS1L hslotS2L hnode_hi hnode_lo hnode_align hnode_win hrop_align hrop_ram hrop_win
       hrop_stk hrop_stkfull hsp1088 hsproom hspSLhi hsp16 hsphi hSLlo hSLhiRam hSLwin

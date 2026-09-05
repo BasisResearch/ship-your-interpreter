@@ -810,7 +810,8 @@ theorem sflush_sp_restore (sp : BitVec 64) :
   unfold sflushSpE
   rw [show sign_extend (m := 64) (0xfd0#12) = 0xffffffffffffffd0#64 by decide,
     show sign_extend (m := 64) (0x030#12) = 48#64 by decide]
-  bv_decide
+  rw [BitVec.add_assoc]
+  exact BitVec.add_zero sp
 
 theorem sflushConsoleSuffix_pc (g : SflushG) (hg : SflushGOk g) :
     evalBlocksPC 0x8000ed0c#64

@@ -6,7 +6,7 @@ import Vsa.Sim.EvalAndSim
 /-!
 # `blockA_logicalGenArm` — GENERATED arm dispatch bridge (scripts/gen_arm_bridge.py)
 
-The EX_LOGICAL arm entry bridge (regenerated twin of the hand blockA_logicalArm, tag 7, x13-reach threaded).
+The EX_LOGICAL arm entry bridge with x13 fixed by EvalEntry.envReg.
 
 The op-independent prologue+dispatch multiplier `EvalEntry .logical op el er → blockB_logicalGen_stagePre`'s entry bundle: run `blockA_k` at `(tag 7, 0x8000355c#64, LogicalArmCallee)`, destructure the widened `ArmEntryK`, transport the operand pointer(s) `m0→ment`, repackage the stagePre `hpre`.  GENERALIZED from the hand `blockA_unaryArm`/`blockA_logicalArm` twins by `gen_arm_bridge.py`.
 
@@ -73,20 +73,17 @@ theorem blockA_logicalGenArm
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (d : Nat) (env : Addr) (op : LogOp) (el er : Expr)
-    (sp r sret aEnv aExpr aLeft aEnv3 : BitVec 64)
+    (sp r sret aEnv aExpr aLeft : BitVec 64)
     (m0 : Mem)
     (hX : LogicalArmExtrasGen N A SL op el er sp sret aExpr aLeft m0) :
     Triple
       (fun c =>
-        EvalEntry g N A SL φf φc st d env (.logical op el er) sp r sret aEnv aExpr m0 c ∧
-        (∀ cm : Config, Steps c cm →
-          cm.σ.regs.get? Register.PC = some (0x8000355c#64) →
-          cm.σ.regs.get? Register.x13 = some aEnv3))
+        EvalEntry g N A SL φf φc st d env (.logical op el er) sp r sret aEnv aExpr m0 c)
       (fun c => ∃ (v8 v9 v18 : BitVec 64) (ment : Mem),
         ArmEntryK g N A SL φf φc st (0x8000355c#64) LogicalArmCallee (.logical op el er)
           sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0 ment c ∧
         c.σ.regs.get? Register.x11 = some aEnv ∧
-        c.σ.regs.get? Register.x13 = some aEnv3 ∧
+        c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = (fun R => c.σ.regs.get? R) R) ∧
         (∃ w, (fun R => c.σ.regs.get? R) Register.x8 = some w) ∧
         (∃ w, (fun R => c.σ.regs.get? R) Register.x18 = some w) ∧
@@ -106,12 +103,12 @@ theorem blockA_logicalGenArm
         ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
         (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
         (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo)) := by
-  intro c ⟨hc, hx13reachC⟩
+  intro c hc
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hkm0 : read32 m0 aExpr.toNat = some 7 := by
     cases (hc.mem ▸ hc.expr) with | logical hk _ _ _ _ _ => exact hk
   -- === block A: prologue + dispatch → widened ArmEntryK @0x8000355c#64 ===
-  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, _hpresM, _hx13⟩ :=
+  obtain ⟨c1, hs1, ment, v8, v9, v18, _v13, hArm, hpresM, hx13exact⟩ :=
     blockA_k g N A SL φf φc st env (.logical op el er) 7 (0x8000355c#64) LogicalArmCallee
       sp r sret aEnv aExpr m0 c.σ.sailOutput
       (by omega) (by omega)
@@ -143,7 +140,7 @@ theorem blockA_logicalGenArm
     _hAsretAl, _hAsretLo, _hAsretHi, _hAsretWin, _hAsretVi, _hAsretStk, _hAsretEc,
     _hAsp1088, _hAsphi, _hAsplo, _hAspwin, _hAsp8, _hASLlo, _hASLwin, _hASLloSp, _hAraAl,
     hAEx11, hAEx8, hAEx18⟩ := hArmCopy
-  have hx13c1 : c1.σ.regs.get? Register.x13 = some aEnv3 := hx13reachC c1 hs1 hApc
+  have hx13c1 : c1.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) := hx13exact
   have hMentM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]? := hArmMemM0
   have hExprMent : ExprRepr ment aExpr.toNat (.logical op el er) :=
     hX.expr_survives ment (fun a ha => (hMentM0 a ha).symm)

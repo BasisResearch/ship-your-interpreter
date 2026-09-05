@@ -83,6 +83,12 @@ def MidArmRightMarshal
   cL.σ.regs.get? Register.x8 = some aExpr ∧
   cL.σ.regs.get? Register.x18 = some aEnv ∧
   gpre Register.x8 = some aExpr ∧ gpre Register.x18 = some aEnv ∧
+  EnvValid st' env ∧
+  read64 cL.σ.mem (sp.toNat - 1088) =
+    some (BitVec.ofNat 64 (φf1 env)).toNat ∧
+  (∃ w19 w20 w21 : BitVec 64,
+    gpre Register.x19 = some w19 ∧ gpre Register.x20 = some w20 ∧
+      gpre Register.x21 = some w21) ∧
   -- transported right-operand node (wave 48k: the frame-population conjunct is
   -- gone — the arm's dead reloads are total reads):
   read64 cL.σ.mem (aExpr.toNat + 24) = some aROp.toNat ∧
@@ -150,6 +156,7 @@ theorem midStage1_of_marshal
             sp r sret aExpr aEnv aROp v8 v9 v18 cL) :
     LandedN 1 cL (fun c' => JalPreBundle er c' st' d env) := by
   obtain ⟨hpcL, hs1L, hspL, houtStrL, hframeL, hx8L, hx18L, hgx8v, hgx18v,
+    henvValid, henvRead, henvset,
     hnode, hstoreCL, hstoreSurvCL, hexprSurvCL, hviCL, hviSlotCL, hnbsCL,
     hslotRaL, hslotS0L, hslotS1L, hslotS2L,
     hnode_hi, hnode_lo, hnode_align, hnode_win, hrop_align, hrop_ram, hrop_win,
@@ -158,6 +165,7 @@ theorem midStage1_of_marshal
     hstackBudgetR, hexprBodiesR, hstoreBodiesR, hGroundR_CL⟩ := hM
   exact binaryR_midStage1 gpre N A SL φf1 φc1 st' d env er sp r sret aExpr aEnv aROp
     v8 v9 v18 cL hGL htickL hpcL hs1L hspL hmiL houtStrL hframeL hx8L hx18L hgx8v hgx18v
+    henvValid henvRead henvset
     hcodeL hnode hstoreCL hstoreSurvCL hexprSurvCL hviCL hviSlotCL hnbsCL hslotRaL hslotS0L
     hslotS1L hslotS2L hnode_hi hnode_lo hnode_align hnode_win hrop_align hrop_ram hrop_win
     hrop_stk hrop_stkfull hsp1088 hsproom hspSLhi hsp16 hsphi hSLlo hSLhiRam hSLwin
@@ -190,6 +198,7 @@ theorem midArmField_of_IH
     (st st' : Vsa.While.St) (d : Nat) (env : Addr) (l r : Expr) (vsub : Value)
     (sp rr sret subsret aIn aLOp aROp aExpr aEnv : BitVec 64) (v8 v9 v18 : BitVec 64)
     (out0 : Array String) (mcall : Mem) (c : Config)
+    (henvValid : EnvValid st env)
     -- `armTail_rec` fixed-target facts (the LEFT jal at 0x800034f8, retPC 0x800034fc):
     (hjaltgt : ((0x800034f8#64 : BitVec 64) + sign_extend (m := 64) (0x1ffc6c#21))
       = BitVec.ofNat 64 evalExprEntry)
@@ -216,13 +225,14 @@ theorem midArmField_of_IH
         c.σ.regs.get? Register.x10 = some subsret ∧
         c.σ.regs.get? Register.x9 = some sret ∧
         c.σ.regs.get? Register.x11 = some aIn ∧
-        (∃ w, c.σ.regs.get? Register.x13 = some w) ∧          -- a3 defined (wave 48h CURE A)
+        c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) ∧
         c.σ.regs.get? Register.x12 = some aLOp ∧
         c.σ.regs.get? Register.x2 = some (sp - 1088#64) ∧
         (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
         c.σ.sailOutput = out0 ∧
         String.join out0.toList = st.out ∧
         c.σ.mem = mcall ∧
+        ValueWordsTotal mcall subsret.toNat ∧
         Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
         -- WAVE 47i: the LEFT child's entry-ground bundle (the amended
         -- `armTail_rec` pre).
@@ -234,7 +244,9 @@ theorem midArmField_of_IH
             mcall[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
-        ((∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w)) ∧
+        ((∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+          (∃ w, gpre Register.x19 = some w) ∧ (∃ w, gpre Register.x20 = some w) ∧
+          (∃ w, gpre Register.x21 = some w)) ∧
         read64 mcall (sp.toNat - 8) = some rr.toNat ∧
         read64 mcall (sp.toNat - 16) = some v8.toNat ∧
         read64 mcall (sp.toNat - 24) = some v9.toNat ∧
@@ -265,7 +277,7 @@ theorem midArmField_of_IH
   have hTriple := armTail_rec gpre N A SL φf φc st st' d env l vsub
     (0x800034f8#64) (0x800034fc#64) (0x1ffc6c#21)
     sp rr sret subsret aIn aLOp v8 v9 v18 out0 mcall
-    hjaltgt hlink hretAl hjalSite hIH
+    hjaltgt hlink hretAl henvValid hjalSite hIH
   obtain ⟨cL, hsL, hSER⟩ := hTriple c hpre
   -- the SubEvalReturn config `cL` supplies GoodState/tick/minstret/code + the marshal.
   -- Keep `hSER` intact for `hMarshalAll`; project the shared facts from a copy.

@@ -68,6 +68,10 @@ theorem blockB_unary_stagePre
     (sp r sret aExpr aIn aOperand : BitVec 64) (v8 v9 v18 : BitVec 64)
     (out0 : Array String) (m0 : Mem)
     (c : Config)
+    (henvValid : EnvValid st env)
+    (henvset : ∃ w19 w20 w21 : BitVec 64,
+      gpre Register.x19 = some w19 ∧ gpre Register.x20 = some w20 ∧
+      gpre Register.x21 = some w21)
     (hpre : ∃ ment,
         ArmEntryK gouter N A SL φf φc st (0x800035e0#64) UnaryArmCallee (.unary op esub)
           sp r sret aExpr aIn v8 v9 v18 out0 m0 ment c ∧
@@ -199,7 +203,7 @@ theorem blockB_unary_stagePre
   · -- the JalPreBundle at σ2: exactly the bundle `blockB_unary` fed to `armTail_rec`.
     exact ⟨gpre, N, A, SL, φf, φc, (0x800035e8#64), (0x800035ec#64), (0x1ffb7c#21),
       sp, r, sret, ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)), aIn, aOperand,
-      v8, v9, v18, out0, ment,
+      v8, v9, v18, out0, ment, henvValid,
       (by apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide),
       (by apply BitVec.eq_of_toNat_eq; decide),
       (by decide),
@@ -210,7 +214,11 @@ theorem blockB_unary_stagePre
               = (0x80003164#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
             decide) hiσ),
       hG2, hi2, hpc2, hx10_2, hs1_2, hx11_2, hx13_2, hx12_2, hsp_2, ⟨vmi2, hmi2⟩, hout2, houtStr,
-      hmem2e, hcode, hviInt, hviSlot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframeB, ⟨hg8, hg18⟩,
+      hmem2e, hground.valueWordsTotal
+        (by rw [hsub944]; omega) (by rw [hsub944]; omega),
+      hcode, hviInt, hviSlot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframeB,
+      (by obtain ⟨w19, w20, w21, h19, h20, h21⟩ := henvset
+          exact ⟨hg8, hg18, ⟨w19, h19⟩, ⟨w20, h20⟩, ⟨w21, h21⟩⟩),
       hslotRa, hslotS0, hslotS1, hslotS2,
       hopAl, hopLo, hopHi, hopWin, hopStk,
       (by rw [hsub944]; omega), (by rw [hsub944]; omega), (by rw [hsub944]; omega),
@@ -243,6 +251,7 @@ theorem blockB_binary_leftStagePre
     (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 : BitVec 64)
     (out0 : Array String) (m0 : Mem)
     (c : Config)
+    (hRec : BinaryRecContext gpre φf st env aEnvReg)
     (hpre : ∃ ment,
         ArmEntryK gouter N A SL φf φc st (0x800034e8#64) UnaryArmCallee (.binary op el er)
           sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
@@ -484,6 +493,9 @@ theorem blockB_binary_leftStagePre
   -- WAVE 47i: the LEFT child's entry-ground bundle at `mcall1` (kit moves 1+2+3).
   have hGroundM1 : EvalGround mcall1 SL A sp sret aExpr.toNat (.binary op el er) :=
     hGmt47.transport_offstack hBE.tableStk hBE.spSLhi
+      (hGmt47.stack_bytes_extend
+        ((memExtends_writeMap8 ment (sp.toNat - 40) (sdData_val v19)).trans
+          (memExtends_writeMap8 ma (sp.toNat - 1088) (sdData_val aEnvReg))))
       (fun a ha => (hAgMcall1 a ha).symm)
   have hpayL1 : read64 mcall1 (aExpr.toNat + 16) = some aLOp.toNat := by
     rw [evalGround_ast_read64_agree hGmt47 hBE.spSLhi
@@ -501,15 +513,18 @@ theorem blockB_binary_leftStagePre
     ?_⟩
   · exact ⟨gpre, N, A, SL, φf, φc, (0x800034f8#64), (0x800034fc#64), (0x1ffc6c#21),
       sp, r, sret, ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)), aEnv, aLOp,
-      v8, v9, v18, out0, mcall1,
+      v8, v9, v18, out0, mcall1, hRec.env_valid,
       (by apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide),
       (by apply BitVec.eq_of_toNat_eq; decide),
       (by decide),
       (fun σ i u vmiσ hGσ hpcσ hmiσ hcodeσ hiσ =>
         site_800034f8_ee σ i u (0x800034f8#64) vmiσ hGσ hpcσ hmiσ hcodeσ rfl hiσ),
       hG4, hi4, hpc4, ha0_4, hs1_4, hx11_4, henvReg ▸ hx13_4, hx12_4, hsp_4, ⟨vmi4, hmi4⟩,
-      hout4, houtStr, hmem4e, hcodemcall1, hviInt1, hviSlot1, hnbs1, hGroundL, hexprL1, hstore1, hstoreSurv1,
-      hframe4, ⟨hg8, hg18⟩,
+      hout4, houtStr, hmem4e, hGroundL.valueWordsTotal
+        (by rw [hsub968]; have := hBE.sproom; omega)
+        (by rw [hsub968]; have := hBE.sproom; have := hBE.spSLhi; omega),
+      hcodemcall1, hviInt1, hviSlot1, hnbs1, hGroundL, hexprL1, hstore1, hstoreSurv1,
+      hframe4, ⟨hg8, hg18, ⟨v19, hgx19v⟩, hRec.x20_defined, hRec.x21_defined⟩,
       hslotRa1, hslotS01, hslotS11, hslotS21,
       hBE.lop_align, hBE.lop_ram.1, hBE.lop_ram.2, hBE.lop_win, hBE.lop_stk,
       (by rw [hsub968]; omega), (by rw [hsub968]; omega), (by rw [hsub968]; omega),
