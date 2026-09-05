@@ -38,7 +38,7 @@ core segment spec with everything mechanical filled in:
 
 The value-annotation slots (`rd_val` rewrites like `li31_val`/`dec1_fwd`,
 guard derivations, store-key lemmas) are exactly the residue that
-scripts/README-segments.md documents as hand-written; the draft carries the
+gen_segment.py requires as explicit proof inputs; the draft carries the
 raw machine-level value expression for each write in an informational
 `"raw_val"` key (ignored by gen_segment.py) so filling `rd_val`/`rw` is a
 lookup, not a re-derivation.

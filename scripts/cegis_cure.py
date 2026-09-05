@@ -37,13 +37,13 @@ FILTERS, in cost order (cheapest first, drop on first refutation):
      REFUTABLE validate verdict) DROPS the candidate, keeping the countermodel.
   3. SEMANTIC/DESCENT — `statement_fuzz.py --semantic`; a REFUTED nested conjunct
      DROPS the candidate (the uncovered-address rule, address-map fragment).
-  4. TRACE CONSISTENCY — if a mined candidate exists under experiments/invariants/
+  4. TRACE CONSISTENCY — if a mined Lean candidate exists under experiments/invariants/
      for this field, prefer/cross-check (advisory; not a hard drop).
 
 SURVIVORS RANKED: minimal-edit first, new-premises penalized.  `--llm-rank` is a
 stub (no API calls here).
 
-OUTPUT: experiments/cures/<field>.md — top-k candidates with per-filter evidence
+OUTPUT: <temporary directory>/vsa-cures/<field>.md — candidate reports
 and which landed assets each would relight.
 
 ACCEPTANCE (`--acceptance`, hard, history-as-ground-truth): run against the
@@ -68,7 +68,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 LOGDIR = os.path.join(ROOT, "experiments", "logs")
-CURESDIR = os.path.join(ROOT, "experiments", "cures")
+CURESDIR = os.path.join(tempfile.gettempdir(), "vsa-cures")
 INVDIR = os.path.join(ROOT, "experiments", "invariants")
 CEGISDIR = os.path.join(ROOT, "experiments", "cegis")
 FUZZ = os.path.join(HERE, "statement_fuzz.py")
@@ -577,14 +577,12 @@ def filter_joint(cand, demands, timeout_ms=15000):
 
 
 def filter_trace(cand, field):
-    """FILTER 4 (advisory): a mined candidate for this field under
-    experiments/invariants/ — cross-check, don't hard-drop."""
+    """Report whether a mined Lean candidate exists for this field."""
     if not field:
         return None, ""
-    for ext in (".lean", ".md"):
-        p = os.path.join(INVDIR, field + ext)
-        if os.path.exists(p):
-            return True, f"mined artifact present ({os.path.basename(p)})"
+    p = os.path.join(INVDIR, field + ".lean")
+    if os.path.exists(p):
+        return True, f"mined artifact present ({os.path.basename(p)})"
     return None, ""
 
 
@@ -776,8 +774,7 @@ ACCEPT = [
 #       hint that names a cure.
 # The expected template is NOT read from any doc; it is DERIVED from the
 # obstruction by `obstruction_signal` (below).  Everything else that could
-# leak the answer — observations.md, experiments/design/*, wave logs,
-# REMAINING.md, and the `want` field of ACCEPT — is EXCLUDED and the exclusion
+# leak the answer, including the `want` field of ACCEPT, is excluded. The exclusion
 # is printed as an auditable manifest.
 
 BLIND_ACCEPT = [
@@ -800,10 +797,7 @@ BLIND_ACCEPT = [
 
 # inputs that in blind mode must NEVER be read (they name/describe a cure).
 BLIND_EXCLUDED = [
-    "experiments/observations.md",
-    "experiments/design/*  (MASTER.md + the 6 cluster designs)",
-    "experiments/REMAINING.md",
-    "experiments/run1-brief.md and the wave-4* logs",
+    "proof plans and historical experiment reports",
     "the ACCEPT[].want field (the hand-written expected template)",
     "the AcceptX_*.lean docstrings (kept file for the Prop; prose ignored)",
 ]

@@ -3,7 +3,7 @@
 writelog_smt.py — emit an exec-arm's WRITE-LOG as SMT and let Z3 discharge a
 memory-frame SUPPLIER FIELD that the current encoder ENCODE-GAPs.
 
-THESIS (see experiments/smt/WRITELOG-SMT.md): the reason exec-arm supplier
+The reason exec-arm supplier
 fields hit ENCODE-GAP is NOT that the Sail step is unencodable — it is that we
 never emitted the arm's WRITE-LOG as SMT. Block-reflection (Vsa/Sim/BlockMem.lean)
 ALREADY computes each straight-line arm's effect as

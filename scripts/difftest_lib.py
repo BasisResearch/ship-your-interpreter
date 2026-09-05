@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """difftest_lib — shared machinery for differential-testing the BMC encoder.
 
-`experiments/smt/DIFFTEST-PLAN.md`.  The encoder (`experiments/smt/ReflectSpan.lean`
+The encoder (`experiments/smt/ReflectSpan.lean`
 + `ReflectResiduals.lean`) says what the machine does across a span; the emulator
 (`riscv-lean/lean_emulator`, the exact proof model) shows what it actually does.
 This module holds the three things both sides are read through:

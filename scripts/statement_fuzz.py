@@ -62,8 +62,8 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-LOG = os.path.join(ROOT, "experiments", "logs", "corpus-fuzzer.md")
-LOGDIR = os.path.dirname(LOG)
+LOG = os.path.join(tempfile.gettempdir(), "vsa-statement-fuzz.log")
+LOGDIR = os.path.join(ROOT, "experiments", "logs")
 
 AX_OK = {"propext", "Classical.choice", "Quot.sound"}
 

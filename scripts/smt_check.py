@@ -57,7 +57,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 LOGDIR = os.path.join(ROOT, "experiments", "logs")
-LOG = os.path.join(LOGDIR, "smt-check.md")
+LOG = os.path.join(tempfile.gettempdir(), "vsa-smt-check.log")
 AX_OK = {"propext", "Classical.choice", "Quot.sound"}
 W64 = 2 ** 64
 

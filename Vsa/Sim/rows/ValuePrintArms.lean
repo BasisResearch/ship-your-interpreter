@@ -2,37 +2,21 @@ import Vsa.Sim.DeriveCaseRow
 import Vsa.Sim.ChainFactsTac
 
 /-!
-# `ValuePrintArms` — the six `value_print` case arms as `#derive_case` segs (wave 44)
+# Value-print case arms
 
-`value_print` (`0x800028fc … 0x800029ac`) dispatches on the ValueKind through a
-`.rodata` jump table (`jr a5`, base `0x80019f10`) into six straight-line arms,
-each ending in a **`j` tail-call** into a newlib IO function (`fprintf` /
-`fwrite` / `fputs` — value_print does NOT return itself for these arms; the IO
-fn returns to value_print's caller).  So each arm is a `#derive_case` seg ending
-in a `.j` terminator whose concrete target IS the callee entry — `segToTriple`
-parks the run AT that entry with the ABI args pinned, and the three callee
-contracts (`FprintfContract`/`FwriteContract`/`FputsContract`, §Contracts) are
-the genuine machine frontier below this file (no code image / site battery
-exists for any of them yet — named typed premises with doc comments, the
-wave-39 native-observation route).
+`value_print` dispatches through the jump table at `0x80019f10`. Each reflected
+arm ends at an IO callee entry with its ABI arguments pinned. The callee returns
+to `value_print`'s caller. `ValuePrintDispatch` in `ValuePrintContract` specifies
+entry-to-arm dispatch.
 
-Arm map (kind → handler → callee), from the ELF `.rodata` table + disasm:
-* kind 0 `null`    → `0x8000295c` → `j fwrite`  (prints `"null"`)
-* kind 1 `bool`    → `0x80002974` → `j fputs`   (`"true"`/`"false"`, inner `beqz`)
-* kind 2 `int`     → `0x80002990` → `j fprintf` (fmt `0x800192c0`, the `%lld` path)
-* kind 3 `str`     → `0x800029a4` → `j fputs`
-* kind 4 `closure` → `0x80002928` → `j fprintf` (fmt `0x800192c8`, inner `beqz`)
-* kind 5 `native`  → `0x80002948` → `j fprintf` (fmt `0x800192d8`)
+Arm map (kind, handler, callee):
 
-DECODE NOTE (dispatch head, NOT this file): the jump-table span's first
-instruction `lwu a5,0(a0)` (`0x80002908`, word `00056783`) has no `MKind` in the
-SegEval block decoder (`decodeM` LOAD group = lw/ld/lbu only, no `lwu`) — see
-observation `lwu-missing-from-block-decoder`.  The dispatch head therefore stays
-a NAMED residual until `.lwu` lands.  The arms below are all `lwu`-free and land
-now.
-
-NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
-Axioms ⊆ {propext, Classical.choice, Quot.sound}.
+* `null`: `0x8000295c`, `fwrite`.
+* `bool`: `0x80002974`, `fputs`.
+* `int`: `0x80002990`, `fprintf` with the `%lld` format.
+* `str`: `0x800029a4`, `fputs`.
+* `closure`: `0x80002928`, `fprintf`.
+* `native`: `0x80002948`, `fprintf`.
 -/
 
 open LeanRV64DExecutable Vsa
@@ -323,4 +307,3 @@ theorem vpNullArmRow (stream : BitVec 64) (lds : List (List (BitVec 8)))
 #print axioms vpClosureArmRow
 
 end Vsa.Sim
-

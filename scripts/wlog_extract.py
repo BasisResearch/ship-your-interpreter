@@ -2,9 +2,7 @@
 """
 wlog_extract.py — MECHANICALLY read an exec-arm's write-log off block-reflection.
 
-This closes the gap WRITELOG-SMT.md named as "the next step, not a barrier": the
-write-log SMT probe (scripts/writelog_smt.py) HAND-transcribed the brk/cont arm's
-five spill stores. Here we EVALUATE `wlogM`/`runGM` (Vsa/Sim/BlockMem.lean) via
+Evaluate `wlogM`/`runGM` (Vsa/Sim/BlockMem.lean) via
 `experiments/smt/WlogExtract.lean` (`#eval`, read-only `lake env lean`) and parse
 the result into the SYMBOLIC store list that `gen_probe.wlog_stores` consumes.
 

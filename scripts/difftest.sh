@@ -3,7 +3,7 @@
 #
 #   scripts/difftest.sh [--out DIR] [--mine] [--per-pc N] [--jobs N] [wl ...]
 #
-# `experiments/smt/DIFFTEST-PLAN.md`.  Builds one traceable ELF per `.wl`
+# Builds one traceable ELF per `.wl`
 # program (padded to the proof script's length so the code image is the proof
 # ELF's, byte for byte), runs each under the emulator's traced loop, then:
 #

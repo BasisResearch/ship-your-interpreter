@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """difftest_eval — evaluate the encoder's emitted term on a real execution.
 
-`experiments/smt/DIFFTEST-PLAN.md` phase 3, as the plan states it:
+Each comparison uses the observed execution:
 
     1. take the entry state from the trace, assert it as `s0`;
     2. pin every summary application from its observed `(pre, post)` pair;

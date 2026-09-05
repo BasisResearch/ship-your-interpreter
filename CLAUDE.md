@@ -29,7 +29,7 @@ Before ANY proof work: run `scripts/abs_inventory.sh` and reuse by name.
 | Load / byte-read obligation | TOTAL reads (`bytesT{1,2,4,8}`, `exec_*_tot`/`_totv`, `LPins*` as total-read equalities, `site_*_tot`/`_totb` from `gen_sites.py`) — the model's `readByte` is `getD 0`, so NEVER demand `m[a]? = some b` for a byte a proof does not already own; if the VALUE matters, thread the write fact (`valueRepr_copy_total`) |
 | NEW post/entry predicate | named-field `structure ... : Prop where` (model: `FoundSt`/`GeomFacts`/`FrameCalc`) — NEVER an anonymous ∃/∧ tower |
 | Consuming a LANDED ∃/∧ tower | write ONE named destructuring lemma beside the tower's def and consume through it — never `.2.2.2.2` positional chains |
-| Entry-side ground fact (jump-table pin / AST-node/string region / arena/result-slot geometry) | `EvalGround`/`ExecGround` (`EntryGround.lean`; region layer `MemRegion.lean`, repr transport `AstTransport.lean`, generated pins `Layout*TableGen`) — NEVER per-site literals; the need audit is `experiments/entry-needs-audit.md` |
+| Entry-side ground fact (jump-table pin / AST-node/string region / arena/result-slot geometry) | `EvalGround`/`ExecGround` (`EntryGround.lean`; region layer `MemRegion.lean`, repr transport `AstTransport.lean`, generated pins `Layout*TableGen`) |
 
 ## Laws
 
@@ -43,18 +43,15 @@ Before ANY proof work: run `scripts/abs_inventory.sh` and reuse by name.
 3. If work feels duplicated/mechanical, STOP and report it — that is a signal
    an abstraction is missing. Build the abstraction (or name it precisely),
    then instantiate. Two similar proofs = factor before writing the third.
-3b. THE MOMENT you notice a missing general fact ("no lemma for X, the
-   practical way around is Y"), append an entry to
-   `experiments/observations.md` (format at its top) BEFORE proceeding with
-   any workaround. Entries on disk survive session/agent death; final reports
-   don't. Noting a workaround there does not sanction it — the other laws
-   still apply.
+3b. Record missing facts and machine-checked obstructions in
+   `experiments/smt/PROOF_CLOSURE_PLAN.md` before continuing. Name the affected
+   declaration, its missing supplier, and the evidence.
 4. If a plan step is infeasible, return the machine-checked obstruction, not a
    workaround (precedent: the `Trichotomy` spec bug was FOUND as a falsity
    proof, then fixed by amendment — `Vsa/While/StmtDispatch.lean`).
-5. Verify with `lake env lean <file>` only; never `lake build`, never LSP
-   tools (they spawn racing builds). Axioms of every new theorem ⊆
-   {propext, Classical.choice, Quot.sound}.
+5. Use the private incremental build in `TOOLING.md`, with one compiler at a
+   time. Never `lake build` locally or use LSP tools. Keep outputs outside the
+   repository. Axioms of every new theorem ⊆ {propext, Classical.choice, Quot.sound}.
 6. Complexity must be HIDDEN by shape, not navigated by hand. If you find
    yourself counting conjuncts (`h.2.2.2.2…`), tracking positional indices, or
    re-deriving where a fact sits inside a tower, STOP: the statement wants a
@@ -72,3 +69,15 @@ Before ANY proof work: run `scripts/abs_inventory.sh` and reuse by name.
   as proofs are re-seated on the layer. Never add new files to it casually.
 - New abstraction landed? Add it to the table above and, if bypassable by
   hand, add a rule that catches the hand version.
+
+## Documentation
+
+- State the current design, commands, and proof obligations. Omit discussion
+  history, prior drafts, and caveats answering objections absent from the text.
+- Keep proof status in `experiments/smt/PROOF_CLOSURE_PLAN.md`. Link to it
+  instead of maintaining parallel progress lists.
+- Keep usage instructions in `README.md`, `TOOLING.md`, and this file.
+  Write generated reports outside the repository. Use Git for completed
+  session history.
+- Remove superseded prompts and unused backups after checking consumers.
+  Preserve tool inputs, proof premises, provenance, and unresolved obligations.

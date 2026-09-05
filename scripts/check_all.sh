@@ -394,7 +394,7 @@ THEOREMS=(
   Vsa.Sim.errorSim_of_sites                         # ErrorSimFull (M5 FULL error-sim assembly — the six-relation widening of errorSim_execSeq. Applies @ExecSeqErr.rec with all six error motives = constant ErrHalts c := ∃out, Halts c out 70 (the recursor node + every sub-IH ignored, error-side analog of the term_sim_of_cases motives), taking all 42 error-constructor minor premises as explicit per-error-site residuals (EvalErr 15 + EvalArgsErr 2 + CallErr 7 + ExecErr 12 + ForLoopErr 4 + ExecSeqErr 2). Recursive error nodes (ExecSeqErr.tail/CallErr.body/EvalErr-ExecErr-ForLoopErr propagation) additionally receive the sub-node ErrHalts c as a recursor-supplied IH. Type-checks iff the six constant motives compose through every constructor of the mutual family. Concludes: an arbitrary ExecSeqErr node → ErrHalts c)
   Vsa.Sim.errorSimFull                              # ErrorSimFull (M5: full error simulation, program level — errorSim_of_sites specialized to BigStepErr p = ExecSeqErr initSt 0 0 p, yielding exists out, Halts c out 70. CONDITIONAL only on the 42 per-error-site residuals)
   Vsa.Sim.stuck_of_bigStepErrFull                  # ErrorSimFull (M5 to stuck_sim: composes errorSimFull with stuck_of_halts_70 to discharge stuck_sim Diverges-or-nonzero-halt error disjunct, for the FULL six-relation error judgment. CONDITIONAL on the 42 per-error-site residuals)
-  # exponentiation abstraction stack, Wave A/B (experiments/exponentiation-plan.md)
+  # Shared proof abstraction stack.
   Vsa.Sim.geomFacts_of_layout                      # GeomFacts (L0: Layout → one GeomFacts record; every case projects its geometry residual O(1) — the M6 interface)
   Vsa.Sim.LayoutInstance.layoutGeomPredL           # LayoutInstance (M6: LayoutGeomPred for the concrete binary — interpRunCode [0x800043ec,0x80004588) / stackSL [0x87800000,0x88000000) / spEntry 0x88000000; three atoms by decide/omega on literals)
   Vsa.Sim.LayoutInstance.geomFactsL                # LayoutInstance (M6: the concrete GeomFacts — geomFacts_of_layout layoutGeomPredL; discharges the geometry residual of the final close, every Layer-4 case projects off it)
@@ -1175,11 +1175,8 @@ rm -f "$AXFILE"
 echo "stage c: OK"
 
 # ------------------------------------------------- (d) encoder differential
-# `experiments/smt/DIFFTEST-PLAN.md` phase 4.  The BMC encoder's verdicts are
-# only worth what the encoder is worth, and nine of the ten defects found in it
-# before this stage existed were invisible in the verdicts.  This runs the
-# encoder's own step semantics, span declarations and summary clause sets
-# against the proof model on real traces.
+# Compare encoder step semantics, span declarations and summary clauses
+# against traces from the proof model.
 #
 # Off by default because it needs the RISC-V cross toolchain to build the corpus
 # ELFs and a few minutes of emulation; `VSA_DIFFTEST=1 scripts/check_all.sh`

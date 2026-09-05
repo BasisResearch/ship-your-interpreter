@@ -43,6 +43,5 @@ for g in Vsa/Sim/rows/*Gen.lean; do
 done
 echo "### ALL #derive_case seg names in the repo — grep this list BEFORE writing any new seg (name AND span):"
 git grep -h '^#derive_case' -- 'Vsa/**/*.lean' 2>/dev/null | awk '{print "#   " $2}' | sort -u
-echo "# fast-elab rules: memory/fast-reflection-rules.md (7 laws) — every abstraction file obeys them."
 echo "# MANDATORY task-shape->tool table + discipline laws: CLAUDE.md (gate-enforced, check_all stage a4)."
-echo "# missing-general-fact observations channel: experiments/observations.md (append at the moment of noticing)."
+echo "# Record missing facts and obstructions in experiments/smt/PROOF_CLOSURE_PLAN.md."

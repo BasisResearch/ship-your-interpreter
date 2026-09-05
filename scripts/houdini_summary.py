@@ -1724,38 +1724,11 @@ def heap_hyp(writes):
 #     entry, so the guard that establishes it is inside the span.
 #
 # A summary whose IV a query cannot discharge is reported, never waved through.
-# A named typed premise, in the repo's idiom for a genuine gap (CLAUDE.md law 2:
-# "a genuine gap is a NAMED typed premise with a doc comment saying what supplies
-# it").  Its ONE entry is the args-loop invariant at the loop's own recursive
-# occurrence, where FIVE distinct SMT routes are measured dead -- havoc-cut (19
-# candidates, both orders), a two-step lemma (18 anchors), a reload-address cap
-# sweep, relevance-selected reload addresses, and the clause-bank formulation in
-# both quantified and ground forms.  The evidence is in observations.md under
-# `smt-args-loop-IV-obstruction`.
-#
-# The invariant is NOT in doubt and is not an axiom about the program: it is the
-# arm's own runtime guard (`if (argc > MAX_ARGS) runtime_error`, interp.c:251).
-# What no solver route establishes is the TRANSPORT of that bound across the
-# recursive `jal ra, eval_expr`, where a5/a6 cross through spill slots.  Two
-# facts, both measured, say why: the guards that establish the bound cannot be
-# weakened (dropping them REFUTES the invariant at 7 cut points), and the query
-# is already minimal (484 lines sliced, still `unknown` at 150s).
-#
-# WHAT SUPPLIES IT: a Lean-side induction over the loop, which is the layer that
-# can do the transport structurally.  Until that lands, a verdict resting on this
-# says so -- it reports VALID[modulo <name>], never a bare VALID, and the premise
-# is listed in `assumed-final.tsv` beside the callee contracts.
-# The value is (name, independent?).  `independent` says whether the premise can
-# be discharged WITHOUT the residuals this campaign is checking.  A callee
-# contract (malloc, strcmp) is independent: it is about code the campaign never
-# reflects.  This one is NOT -- `argsLoopBoundAcrossCall` is a frame property of
-# one `eval_expr` activation, its route is `FrameMeta.memFrame_of_chain`, that
-# needs a reflected chain for eval_expr's whole run, eval_expr is recursive, so
-# the chain needs the recursor IH, and the recursor IH is a residual this
-# campaign checks.  Citing it as though it were a side condition would let a
-# reader take 68 verdicts as independently supported when they are deferred to
-# the very body of work under test.  So the verdict says `deferred`, not
-# `modulo`.  See observations.md, smt-args-loop-premise-is-not-independent.
+# Entries map summaries to (premise name, independence from checked residuals).
+# argsLoopBoundAcrossCall transports the argument bound across recursive
+# eval_expr calls through spill slots. Its Lean supplier depends on the open
+# EvalArgsStep residual. Verdicts using it are deferred until that supplier
+# closes; assumed-final.tsv records the dependency.
 IV_PREMISE = {
     "loop_2147496412": ("argsLoopBoundAcrossCall", False),
 }
@@ -3274,8 +3247,7 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
                     "which is itself a residual this campaign checks)")
             fh.write(nm + "\t" + role + ": the args-loop bound transported across "
                      "the recursive call in " + sym + "; statement in "
-                     "Vsa/Sim/ArgsLoopSpillResid.lean, five SMT routes measured "
-                     "dead (observations.md)\n")
+                     "Vsa/Sim/ArgsLoopSpillResid.lean\n")
         for sym in sorted(OUTPUT_SEMANTIC_SUMMARIES):
             fh.write(
                 sym + "\tNAMED OUTPUT SEMANTIC PREMISE: exact output-only "
@@ -3887,10 +3859,7 @@ def main():
                 ok = "VALID(consistency-unproved)"
             return (f, pk, ok)
 
-        # Print each residual verdict AS IT LANDS.  The progress wrapper added
-        # earlier attached to the MINING executor only, so phase 1 printed 275
-        # lines while phase 2 ran silently for over an hour and looked wedged --
-        # it was not, it just had nothing to say.  Both phases now report.
+        # Report each residual verdict as its worker completes.
         p2_done = [0]
         p2_lock = threading.Lock()
         p2_t0 = time.time()

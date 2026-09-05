@@ -448,8 +448,7 @@ class Emitter:
     # NO byte-presence hypothesis: the loaded value IS the total read
     # (`bytesT{1,2,4,8}`).  These emit the same `StepObs` shape as `ld`/`lw`/`lbu`
     # minus the `b*`/`h*` parameters — the sibling every caller that cannot honestly
-    # supply presence over unwritten stack bytes should use (see
-    # `experiments/blockmem-rewrite-plan.md`).
+    # supply presence over unwritten stack bytes should use.
 
     def _load_wide_tot(self, s: Site, nbytes: int) -> str:
         rd, rs1, imm = int(s.fields[0]), int(s.fields[1]), int(s.fields[2], 16)

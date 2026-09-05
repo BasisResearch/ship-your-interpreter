@@ -1,40 +1,16 @@
 #!/usr/bin/env python3
-"""gen_arm_bridge.py — the blockA_*Arm DISPATCH-BRIDGE emitter.
+"""Emit blockA arm-dispatch bridges from TOML descriptions.
 
     python3 scripts/gen_arm_bridge.py <arm.toml> [-o OUT.lean] [--verify]
 
-Compiles a per-arm description into the `blockA_<name>Arm` bridge theorem: the
-op-INDEPENDENT prologue+dispatch multiplier `EvalEntry <node> → the
-blockB_<name>_stagePre entry bundle` (an `ArmEntryK`-post + geometry conjuncts).
+The bridge runs the shared prologue and dispatch from EvalEntry to the
+arm's stage-precondition bundle. Parameters select the tag, arm PC, callee
+predicate, transported operands and output shape. EvalEntry.envReg fixes x13;
+blockA_k preserves that environment pointer at the arm entry.
 
-This GENERALIZES the two hand instances in `rows/UnaryLogicalArmBridge.lean`
-(`blockA_unaryArm` tag-8, `blockA_logicalArm` tag-7).  The wave-34/35 audit
-established the bridges vary ONLY in:
-
-  {tag, armPC, calleeLoaded predicate + its writeMap8-survival proof term,
-   number of operands transported, output-post conjunct shape,
-   whether an x13-reach residual is threaded}.
-
-DESIGN FINDING (see experiments/observations.md
-`blockA-arm-bridge-emitter-scope`): the SHARED scaffold parametrizes cleanly —
-the `blockA_k` invocation, the `ArmEntryK` copy destructure, the single-operand
-`m0→ment` pointer transport, the `out0` realign, and the `refine` skeleton are
-bit-for-bit identical modulo the tag/armPC literals and the callee predicate
-name.  What does NOT parametrize as pure literals — because it is genuinely
-per-arm Lean — is (a) the `calleeLoaded`-survival proof block (unary's inline
-`⟨loaded_int_writeMap8 …, intSlot_writeMap8 …⟩` vs logical's one-line
-`logicalCallee_writeMap8 …`), (b) the geometry-`Extras` field list, and (c) the
-`Extras`-consuming projections in the final `refine`.  These are supplied as
-NAMED verbatim Lean blocks in the TOML (`callee_surv`, `extras_fields`,
-`post_conjuncts`, `refine_tail`).  So the emitter is a template-compiler for the
-invariant 90%, not a mail-merge: the scaffold cannot be gotten wrong by hand
-(the wave-34 board shows it WAS, twice), and the per-arm Lean is quoted once.
-
-SELF-VERIFICATION (MANDATORY, --verify): after writing, run `lake env lean` on
-the emitted file and grep `#print axioms` for `sorryAx`; on elaboration failure
-HARD-ERROR with the Lean output; never leave a broken file staged.
-
-NO `sorry`/`axiom`/`native_decide`/`bv_decide` in the output; no Mathlib.
+The TOML supplies callee_surv, extras_fields, post_conjuncts and refine_tail
+as Lean fragments. The emitter composes these with the shared transport proof.
+Use --verify to elaborate the output and check its axiom report.
 """
 
 import argparse

@@ -1,45 +1,18 @@
 import Vsa.Sim.rows.StringifyStrdupTail
 
 /-!
-# `StringifyBridge` — stringify ↔ `Value.catDisplay`: the literal byte pins,
-the per-kind branch closures, and the whole-`∀ v` contract assembler
+# Stringify contracts for literal values
 
-The concat cell's `∀ v` stringify supplier (`strConcatHeapResid_of_cblock`'s
-`hStringify`) needs `StringifyContract` at EVERY `Value` constructor.  The str
-and int branches are closed (`stringifyContract_of_call` /
-`stringifyContract_int_of_call`); this file closes the remaining spec-side
-surface:
+`AsciiZAt` folds pinned NUL-terminated ASCII bytes into `CString`.
+The literal addresses are `0x80019008` (true), `0x80019010` (false),
+`0x80019018` (null), and `0x80019370` (native function).
 
-* **§1 `AsciiZAt` + `cstring_of_asciiZAt`** — ONE generic fold from a pinned
-  NUL-terminated ASCII byte run to `CString` (the fact every literal branch
-  reads back; factors the four per-literal `CStr.cons` chains into one lemma).
-* **§2 the `.rodata` literal pins** — `BoolNullLitsLoaded` /
-  `NativeFnLitLoaded`, byte-for-byte off the sha-guarded proof ELF
-  (`c/while-riscv-htif.elf`, file offset = VA − `0x80000000` + `0x1000`):
-  `0x80019008 = "true\0"`, `0x80019010 = "false\0"`, `0x80019018 = "null\0"`
-  (the run1-brief pin fix — an older doc had true/false SWAPPED — re-verified
-  2026-09-01 against the raw bytes), `0x80019370 = "<native fn>\0"`.
-* **§3 the literal `CString` facts** — `cstring_true_of` / `cstring_false_of`
-  / `cstring_null_of` / `cstring_nativeFn_of` (what the bool arm's `strcpy`
-  SOURCE and the value-print `fwrite("null")` arm read), plus the null
-  branch's in-place word decomposition `cstring_null_of_wordBytes`
-  (`sw 0x6c6c756e ; sb zero` — `stringify`'s null arm materialises the
-  literal rather than reading `.rodata`).
-* **§4 the bool/null/native branch closures** — `BoolBranchCallResid` /
-  `NullBranchCallResid` / `NativeBranchCallResid` + their
-  `stringifyContract_*_of_call` dischargers through the SHARED strdup tail,
-  mirroring `StringifyIntTail` exactly (each branch's honest residual = ONE
-  named arm-staging seam; the tail is the landed
-  `stringifyStrdupTailContract`).  The NATIVE branch renders the NAMELESS
-  `"<native fn>"` — `Value.catDisplay`, NOT `Value.display` (falsity
-  `stringify-native-name-mismatch`, empirically confirmed on the Sail-model
-  emulator 2026-09-01: `println("x" + println)` prints `x<native fn>`).
-* **§5 `stringifyContract_of_kinds`** — the `∀ v` assembler: six
-  per-constructor suppliers → the exact `hStringify` premise
-  `strConcatHeapResid_of_cblock` consumes.
+The bool, null, and native branch contracts take arm-staging premises and
+compose the shared strdup tail. Native concatenation uses `Value.catDisplay`,
+which renders `"<native fn>"`; `Value.display` includes the function name.
 
-NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
-Axioms ⊆ {propext, Classical.choice, Quot.sound}.
+`stringifyContract_of_kinds` assembles six constructor contracts into the
+universal supplier consumed by `strConcatHeapResid_of_cblock`.
 -/
 
 open LeanRV64DExecutable Vsa
@@ -55,10 +28,8 @@ namespace Vsa.Sim
 
 /-! ## §1 `AsciiZAt` — a pinned NUL-terminated ASCII byte run, folded to `CString`
 
-The single generic reader every literal branch shares: a list of nonzero ASCII
-bytes at `a` followed by a NUL is a `CStr`/`CString` of the corresponding
-codepoint string.  (Factored per Law 3: four hand `CStr.cons` chains — true /
-false / null / `<native fn>` — become one fold + one `decide` each.) -/
+A list of nonzero ASCII bytes at `a`, followed by a NUL, represents the
+corresponding codepoint string as `CStr`/`CString`. -/
 
 /-- The bytes `bs` (each nonzero ASCII) at `a, a+1, …`, then a NUL terminator. -/
 def AsciiZAt (m : Mem) : Nat → List (BitVec 8) → Prop
@@ -92,7 +63,7 @@ fall-through default) or `a1 = 0x80019008` ("true"); `value_print`'s null arm
 `0x80019370`. -/
 
 /-- `"true\0"` @ `0x80019008`, `"false\0"` @ `0x80019010`, `"null\0"` @
-`0x80019018` (ELF-checked; the OLD prose that swapped true/false was wrong). -/
+`0x80019018`. -/
 def BoolNullLitsLoaded (mem : Mem) : Prop :=
   AsciiZAt mem 0x80019008 [0x74, 0x72, 0x75, 0x65] ∧
   AsciiZAt mem 0x80019010 [0x66, 0x61, 0x6c, 0x73, 0x65] ∧

@@ -20,9 +20,10 @@ finite-validation tool. Lean remains the proof authority.
   checks.
 - `scripts/residual_coverage_ledger.py`: evidence accounting.
 
-## Current baseline
+## SMT/fuzzer baseline before the build repair
 
-A fresh source emission currently reports:
+The last recorded emission reported the following. These measurements predate
+the build repair below; full SMT and fuzz campaigns have not been rerun.
 
 - 72 of 72 finite machine instances complete at 60 reflection rounds.
 - 82 summaries: 60 mined, 21 assumed contracts, and 1 explicitly opaque.
@@ -33,20 +34,95 @@ A fresh source emission currently reports:
 - The 63 fields of `TermResidualsBase`, plus `DivWork` and `ErrWork`, remain the
   actual end-to-end construction surface. `hCallTooMany` is tracked separately
   as an indexed error subcase.
-- The newly certified `hSWhileRetBodyReturn` and
+- The certified `hSWhileRetBodyReturn` and
   `hSWhileLoopBodyReturn` effects passed five independent concrete runs.
 - `EnvValid` propagation compiles through `ExecDispatchRows` with only the
   standard project axioms.
-- A correctness audit found that `ExecWhileStepGeomI.cond_env_valid` and
-  `.body_env_valid` were unconditional, underivable for arbitrary invalid
-  environments, and unused. They have been removed. The repaired chain through
-  `ExecDispatchRows` compiles in the private overlay.
-
-The historical count of 23 finite cuts is not a closure count. It must not be
-used to claim that 23 Lean obligations remain. The generated ledger and
-`RemainingWork` type are authoritative.
+- Recursive entries derive environment validity from the reached source state.
 
 ## Completion contract
+
+### Completed work: 2026-09-05
+
+The full Lean source build passes for **1,332/1,332 modules**, including modules
+outside the `Vsa.lean` import closure and `VsaRun.lean`. Proof closure remains
+incomplete. Native executable linking was not tested.
+
+Completed proof additions:
+
+- `ScaffoldRows.field_hInitNone` closes the empty-initializer residual.
+- `ScaffoldRows.field_hInitSome` in `rows/Field_hInitSomeClosed.lean` closes the
+  present-initializer residual using the actual child's `ExecIH`. Its dispatch,
+  child-entry, store-body-bound preservation, and return-ready adapters compile.
+- `StoreBodiesBound.afterExecS` proves preservation across statement execution.
+- `execWhileBodyEntry_of_stage` supplies the while body child entry.
+- `execWhileCondCopyReady_of_exitKit_exact`,
+  `execWhileCondCopy_memExtends`, and its byte-population corollary compile.
+- `callErr_badClosure_impossible` proves the indexed impossible-closure case.
+- `ExecInitMapObstruction.lean` proves the fixed-map injectivity restriction.
+
+Completed interface and build repairs:
+
+- Recursive expression entries carry populated stack/result-slot bytes,
+  environment validity, exact environment addresses, and required saved-register
+  presence. Unary, binary, logical, and call adapters compile against them.
+- Initializer exits select extended allocation maps. Initializer and loop
+  carriers retain parent store-survival and stack/code geometry. Their write
+  footprint includes the stack, arena, and return slot.
+- Logical tails transport result-word population through the concrete memory
+  extension.
+- `CalleeFrame` supplies shared call-frame facts for `strlen`, `memcpy`, and
+  the string-tail proofs.
+- Stale routing records, closure indices, variable-call arguments, logical-arm
+  code geometry, imports, and initializer return proofs are repaired.
+- `FnSflushRSuffix.lean` proves stack restoration with bit-vector identities.
+- Canonical generators/templates match the repaired interfaces. Assembly
+  generation includes inherited fields: 63 base fields plus divergence.
+  Round-trip and inheritance tests cover the generated assembly.
+
+Build evidence:
+
+- Private cache: `/private/tmp/vsa-full-build.sQd0gM`.
+- Manifest: `build-private-manifest.json`; per-module transcripts: `logs/`.
+- The documentation cleanup rebuilt 3 modules after comment-only edits and
+  reused 1,329. Proof tokens were unchanged. A read-only fingerprint check
+  found zero stale or missing modules.
+- The `field_hInitSome` and end-to-end axiom logs contain only `propext`,
+  `Classical.choice`, and `Quot.sound`. No build log reports `sorryAx` or errors.
+- All 15 tooling tests pass. Generator checks, the forbidden-proof-token scan,
+  and `git diff --check` pass. The proof ELF is unchanged; no repository
+  `.olean` files were generated.
+- The build-and-repair campaign lasted about 3 hours 9 minutes, including
+  debugging and retries. A clean full rebuild has not been timed separately.
+
+### Remaining work
+
+- Finish while body-resume and the concrete while residual suppliers. Reuse the
+  compiled body-entry and copy-frame theorems above.
+- Complete sequence/for suppliers and the other residual families below.
+  Reuse both initializer suppliers.
+- Close `EvalArgsStep` with preservation of the argument-loop spill slots
+  `sp+24` and `sp+16`. Reuse `evalArgsLoop`. The SMT premise
+  `argsLoopBoundAcrossCall` depends on this open residual; discharge its Lean
+  supplier before removing the premise.
+- Supply reached `EnvValid st env` in `FlCondArmDispatch`, at the
+  `FlCondArmStagePre.lean` producer.
+- Complete the `fprintf`/`_vfprintf_r` output contracts and their call
+  composition. The `snprintf` contracts cover `_svfprintf_r`. Successful
+  assert composes `value_truthy` and `value_null`.
+- Complete the planned effect/certificate, helper, SMT, fuzzer, and ledger work.
+- Construct `TermResidualsBase`, `DivWork`, `ErrWork`, and
+  `remainingWork_closed`. None of these complete constructors was produced.
+  `endToEnd_refinement` still takes `RemainingWork` as a hypothesis.
+- Resolve the discipline checker findings: 28 deep positional projections,
+  18 existential-count flags, 11 handwritten site-proof flags, and one manual
+  step-chain volume flag.
+- Rerun the full SMT, independent fuzz, coverage, provenance, mutation, and
+  final axiom gates after closure.
+
+Recompute the field census before reporting proof completion counts.
+
+### Required gates
 
 | Item | Required outcome | Evidence required |
 |---|---|---|
@@ -62,6 +138,10 @@ used to claim that 23 Lean obligations remain. The generated ledger and
 | J | Repository hygiene is preserved. | No `sorryAx`, `axiom`, `admit`, `native_decide`, `bv_decide`, recursion-limit workaround, stale artifact, or repository-generated `.olean`. |
 
 ## Abstraction stack
+
+Add these abstractions beside the compiled interfaces and migrate one consumer
+at a time. Each change must close a named residual or remove demonstrated
+duplication. Shared-interface changes follow the incremental-build rules below.
 
 ### 1. Reified segment effects
 
@@ -140,9 +220,8 @@ instead of restating every frame fact.
 Also add `EffectLe`, weakening, and branch join. A branch certificate preserves
 only observations preserved by every reachable branch.
 
-`FramedTriple` is the desired frame triple: its postcondition and frame are
-witnessed by the same endpoint. Do not add a second `FrameTriple` synonym.
-Build the following layer on top instead:
+`FramedTriple` witnesses its postcondition and frame at the same endpoint.
+Add a stability predicate:
 
 ```lean
 def StableUnder (effect : FrameEffect) (P : Config -> Prop) : Prop :=
@@ -315,7 +394,7 @@ Lean effect theorem.
 
 ### Candidate mining
 
-Generate candidates from the contract rather than from a global list:
+Generate candidates from the contract:
 
 - frame equalities are proved facts, not Houdini candidates;
 - mutable registers receive arithmetic and tag templates;
@@ -428,12 +507,13 @@ with the geometric residual, then finish its stage providers.
 
 ## Proof-closing order
 
-1. Finish the current while body dispatch and body-resume construction. Derive
-   validity only at reached seams from `hCarrier.env_valid.afterEvalE hC` and
+1. Reuse `execWhileBodyEntry_of_stage` and finish body-resume construction.
+   Derive validity only at reached seams from `hCarrier.env_valid.afterEvalE hC` and
    `hBodyCarrier.env_valid.afterExecS hB`.
 2. Compile `WhileExitCaseGeom` and `WhileLoopCaseGeom` suppliers.
 3. Extract `ReprDelta` and `RecursiveStepGeom` from the compiled while proof.
-4. Reuse them for `hSeqSteps` and the six for-loop/init fields.
+4. Reuse them for `hSeqSteps` and the remaining for-loop fields. Use the compiled
+   `field_hInitNone` and `field_hInitSome` for the initializer cases.
 5. Land `AllocationBridge`; close block, for-start, function allocation, and
    closure allocation.
 6. Land helper relations and `CallPipeline`; close var, assign, args, calls,
@@ -444,18 +524,67 @@ with the geometric residual, then finish its stage providers.
 9. Construct `DivWork` and `ErrWork` from their indexed supplier records.
 10. Construct `remainingWork_closed` and derive `endToEnd_refinement`.
 11. Run the full Lean, Z3, fuzzer, coverage, provenance, mutation, and hygiene
-    gates from fresh artifacts.
+    gates against frozen current-source fingerprints. Reuse matching Lean
+    objects; emit fresh SMT/fuzzer evidence for this snapshot.
+
+## Mandatory incremental-build rules
+
+1. Extend compiled proofs by default. Reuse existing theorems and add adapters
+   or leaf suppliers. Do not rewrite shared interfaces for convenience.
+2. Before a shared-interface change, record the blocked residual, concrete
+   failure or obstruction, why an adapter is insufficient, and the affected
+   import dependents. The integrator approves and owns the migration. Changes
+   to the final statement or assumptions require explicit user approval.
+3. Preserve `/private/tmp/vsa-full-build.sQd0gM` and its manifest across tasks
+   and workers. All integration builds use `--resume` with this root. Never
+   discard a valid cache or omit `--resume` to resolve an ordinary proof error.
+4. In the proof-edit loop, compile the changed file against fingerprint-checked
+   dependencies, with private objects first in `LEAN_PATH`. Refresh changed
+   dependencies first. Keep speculative outputs separate from the validated
+   cache. Documentation-only changes require no Lean compilation.
+5. At a completed residual, shared-interface migration, or wave checkpoint,
+   run the resumed all-source gate. It recompiles changed modules and their
+   transitive import dependents; matching modules must be skipped. Run one
+   compiler at a time. Do not use the all-source gate after every tactic edit.
+6. Before any unexpectedly broad rebuild, inspect invalidation inputs. The
+   driver fingerprints itself, `lakefile.toml`, `lake-manifest.json`, and
+   `lean-toolchain`; changing any invalidates every module. Avoid incidental
+   edits to these files during proof work. Never bypass a genuine mismatch.
+7. A cold full rebuild requires a recorded reason: missing/corrupt cache,
+   changed toolchain/build configuration, or an explicitly requested clean
+   audit. Obtain user approval for a discretionary cold audit. A routine
+   checkpoint or final closure audit uses matching cached objects.
+8. Record the command, source/dependency fingerprints, built/skipped counts,
+   exit status, log location, and wall time at each integration checkpoint.
+   Separate compiler timing from debugging/retries. Report compiled modules
+   separately from closed residuals. A failed gate reopens its affected scope.
+
+Integration command, from the repository root:
+
+```sh
+python3 scripts/build_private.py \
+  --output-root /private/tmp/vsa-full-build.sQd0gM \
+  --include-executable --resume
+```
+
+The driver enforces source/dependency cache matching. The integrator enforces
+the change-scope and checkpoint rules; workers must report any exception before
+starting a build. If the private cache is lost, record that fact and create one
+replacement root with `mktemp -d`, then retain it for subsequent resumes.
 
 ## Parallel execution
 
 Use at most three workers plus the integrator. Permit only one Lean compiler or
 full Z3/fuzzer campaign at a time. Assign files, not themes, so workers do not
 edit the same module. The integrator owns shared interfaces and serialized
-builds.
+builds under the incremental-build rules above. Workers receive the stable
+interface signatures and cache location with their file assignments. They must
+request shared-interface changes and compiler access from the integrator.
 
 ### Wave 1: infrastructure and current critical path
 
-- Integrator: finish while body dispatch/resume and serialize the Lean gate.
+- Integrator: reuse the compiled body entry, finish while body-resume, and
+  serialise the incremental Lean gate.
 - Worker A: add `SegmentEffect`, effect denotation, `EffectLe`, composition,
   branch join, and stability lemmas.
 - Worker B: add typed certificate types and emission; migrate existing framed
@@ -492,7 +621,8 @@ Gate: every `TermResidualsBase` field has a compiled supplier; `DivWork` and
 
 The integrator alone freezes source hashes and runs:
 
-1. serialized Lean compilation into `/private/tmp`;
+1. serialised resumed Lean compilation into the retained private cache, with
+   source/dependency fingerprints checked for every reused object;
 2. fresh 72-query emission;
 3. full Houdini/Z3 validation;
 4. full independent differential fuzzing;
@@ -512,21 +642,14 @@ items.
 - Exporting arbitrary theorem-name strings as certificates.
 - Increasing recursion limits or adding trust-expanding proof shortcuts.
 
-## Assumptions and questions
-
-- Generated types and manifests override stale comments and historical counts.
-- No authoritative current source groups exactly 23 remaining Lean theorems;
-  the number refers to staged finite cuts.
-- Recursive semantic correctness remains a Lean cut unless a faithful,
-  independently checked finite relation is explicitly emitted.
-- No scope item is waived.
-
 ## Immediate next actions
 
-1. Add and compile the exact while body-dispatch theorem.
-2. Build `bodyResume` from the existing break, return, and loop framed routes.
-3. Package the three while residual suppliers.
-4. Introduce the reified `SegmentEffect`/certificate layer around those proved
+1. Reuse `execWhileBodyEntry_of_stage` and the copy-frame theorems. Build
+   `bodyResume` from the existing break, return, and loop framed routes.
+2. Package the three while residual suppliers and run the resumed Lean gate.
+3. Reconcile the field census with both compiled initializer suppliers. Assign
+   only still-open sequence/for obligations.
+4. Introduce the reified `SegmentEffect`/certificate layer around the proved
    routes.
 5. Make the SMT checker consume the certificate for sound post rewriting and
    make the fuzzer mutation-test the same certificate independently.

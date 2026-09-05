@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """difftest.py — differentially test the BMC encoder against the proof model.
 
-`experiments/smt/DIFFTEST-PLAN.md`.  Subcommands:
+Subcommands:
 
     corpus   build one traceable ELF per `.wl` program (padded, in /tmp)
     trace    run an ELF under the emulator's traced loop

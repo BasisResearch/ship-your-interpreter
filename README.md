@@ -1,23 +1,19 @@
 # Ship your interpreter
 
-Don't verify your interpreter's source. Ship the interpreter *binary*, and
-prove a semantic abstraction of it.
+This Lean 4 project verifies `c/while-riscv-htif.elf`, a WHILE-language
+interpreter compiled to bare-metal RV64 with HTIF I/O. The proof relates an
+inductive big-step semantics of WHILE to the binary's execution in the
+Sail-generated RISC-V model.
 
-The interpreter binary `c/while-riscv-htif.elf` is the source of truth. It is a
-WHILE-language interpreter compiled to bare-metal RV64, doing I/O over HTIF.
-This Lean 4 project gives that binary its semantics through the Sail-generated
-RISC-V ISA model, and proves, CompCert-style, that an inductive big-step
-semantics of WHILE abstracts the machine's behaviour for all programs.
-
-Everything that builds, builds with zero `sorry`s and zero axioms, save the
-`Classical.choice`/`Quot.sound` that classical case analysis pulls in.
-Obligations still being discharged are recorded honestly as `Prop`-valued
-`def`s, never as `sorry`'d theorems.
+The full Lean source build passes. The end-to-end theorem remains conditional
+on the `RemainingWork` record. The
+[proof closure plan](experiments/smt/PROOF_CLOSURE_PLAN.md) records completed
+proofs, remaining obligations, and validation results. Permitted axioms are
+`propext`, `Classical.choice`, and `Quot.sound`.
 
 The tooling that makes this tractable is documented separately in
-[`TOOLING.md`](TOOLING.md): the generator suite, the validation stack
-(fuzzer, SMT, census), the invariant-mining pipeline, and the proof-side
-abstraction layers.
+[`TOOLING.md`](TOOLING.md): proof generators, validation commands, and
+incremental builds.
 
 ## Layout
 
@@ -34,9 +30,9 @@ abstraction layers.
 | `Vsa/MemRepr.lean` | **the inductive memory-representation relation**: when RV64 memory holds the C AST structs (`ast.h`, LP64, little-endian) that represent a deep-embedded program |
 | `Vsa/Refinement.lean` | **the ∀-program refinement theorem** |
 | `Vsa/Triple.lean` | **the Layer 1 program logic**: total-correctness Hoare triples over the ISA relation, model-independent, with step-counting (`TripleN`) for divergence simulation |
-| `Vsa/Sim/` | **the interpreter-binary verification** that discharges `InterpSim` per `PLAN-InterpSim.md`: the generated decode table for every reachable instruction word (`DecodeTable/`, ~500 modules from `experiments/gen_decode_table.py`), per-function code lemmas (`Sim/Code/`), runtime-representation invariants and regions (`Regions`, `ReprSurvival`), Layer-3 specs for the interpreter core (`EvalIntSim`, `EvalBoolSim`, `EvalStrSim`), the runtime (`EnvNewSpec`, `EnvGetSpec`, `EnvDefSpec`), libc (`Memcpy`, `Strcmp`, `Strcpy`, `Snprintf`, `Setjmp`/`Longjmp`), libgcc soft mul/div (`__muldi3`, `__divdi3`, …), the HTIF output path (`HtifLift`), and the Layer-4 induction scaffold |
-| `experiments/` | pre-plan layer-validation probes and their findings (`RESULTS.md`) |
-| `PLAN-InterpSim.md` | the proof plan: layers 0–5, methodology, forbidden tactics |
+| `Vsa/Sim/` | Instruction decoding, runtime representations, function contracts, recursive simulation, and residual suppliers |
+| `experiments/` | Lean proof probes, SMT and fuzz validation, and coverage data |
+| `experiments/smt/PROOF_CLOSURE_PLAN.md` | Current proof status, remaining work, and incremental-build rules |
 
 ## The refinement statement
 
@@ -65,20 +61,23 @@ machine determinism by classical case analysis. This is the composition
 CompCert uses to get behavioural equivalence out of a forward simulation over
 a deterministic target. `InterpSim` stays an explicit hypothesis.
 
-Discharging `InterpSim` is the interpreter-binary verification itself:
-per-function simulation lemmas that relate the compiled code of
-`eval_expr`/`exec_stmt`/`interp_run`, under the ISA relation, to the big-step
-rules, by induction on derivations. Verified-compilation-scale work, cleanly
-isolated. `Vsa/Sim/` is that work, layer by layer (`PLAN-InterpSim.md`).
+The simulation lemmas in `Vsa/Sim/` relate compiled
+`eval_expr`/`exec_stmt`/`interp_run` code to the big-step rules by induction on
+derivations.
 
 ## Building
 
 ```sh
-lake build            # whole development (needs riscv-lean/ built once)
-lake exe vsa_run      # run the embedded ELF under the Lean ISA model
-./c/tests/run_tests.sh host   # the binary's own test suite
+python3 scripts/build_private.py \
+  --output-root /private/tmp/vsa-full-build.sQd0gM \
+  --include-executable --resume
 ```
 
-Requires [Lean 4](https://leanprover.github.io/) v4.29.0 (see
-`lean-toolchain`). Rebuilding the ELF additionally needs a
-`riscv64-unknown-elf` cross toolchain (`make -C c while-riscv-htif.elf`).
+Reuse the private build cache above. On a new checkout, create one external
+directory with `mktemp -d` and retain it for subsequent runs. Dependencies in
+`riscv-lean/` must already be built. This command typechecks all project Lean
+sources, including `VsaRun.lean`.
+
+Use the Lean version in `lean-toolchain`. Follow [CLAUDE.md](CLAUDE.md) for
+proof discipline and [TOOLING.md](TOOLING.md) for focused verification.
+Preserve the proof ELF; build interpreter variants in a temporary copy of `c/`.

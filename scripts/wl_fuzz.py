@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """wl_fuzz.py — random While programs for the encoder differential test.
 
-`experiments/smt/DIFFTEST-PLAN.md`'s corpus section: ten hand-written programs
-exercise the common arms and nothing else, and the gap is a list rather than an
-estimate because phase 1 reports which spans a corpus enters.  This fills the
-list mechanically.
+Generate additional programs to exercise spans reported by differential-test
+coverage.
 
 Two constraints shape the generator.
 

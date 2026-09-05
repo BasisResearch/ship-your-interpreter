@@ -3,10 +3,8 @@
 IN-HOUSE HOUDINI IH-synthesis probe (Z3 as the ONLY solver — pure oracle, no
 Spacer / no CHC engine).
 
-ORIGINAL QUESTION (the `.str` pilot, still the default run): can a blind Houdini
-loop rediscover a Z3-confirmed sufficient IH for the `.str` ValueRepr-copy
-readback obligation, WITHOUT being handed `cstring_agreeP`?  (Answer: yes — see
-experiments/smt/HOUDINI-IH.md.)
+The default run selects candidate invariants for the bounded `.str`
+ValueRepr-copy readback obligation.
 
 GENERALISED (this file): a `--field <SkelName>` / `--batch <list|all-supplier>`
 driver that, per field, runs the bounded-VC + Houdini pipeline and emits ONE of
@@ -204,7 +202,7 @@ FIELD_REGISTRY = {
     "hInitStore":     ("encode-gap:Steps ; SegEntry (interp_init decode)",    "EntrySeams.InterpInitStoreRepr"),
 }
 
-# The DISPATCH.md NO-CURE-SEMANTIC-GAP class + the PROVABLE-DIRECT ValueRepr leaf.
+# Machine-level supplier registry and bounded ValueRepr copy obligations.
 SUPPLIER_BATCH = [
     "hSExpr", "hSRet", "hSBlock", "hArgsNil", "hArgsCons", "hVar", "hAssign",
     "hInitStore", "hCall", "hSVarNull", "hSVarInit", "hSIfNone", "hSIfTrue",
