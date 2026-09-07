@@ -139,7 +139,6 @@ theorem blockC_neg
         -- presence-monotonicity of the pre-call memory over the entry `m0`
         -- (writes are inserts; the `mem_ext` residual, `BinArmExtras` shape).
         MemExtends m0 mcall ∧
-        aExpr.toNat % 4 = 0 ∧
         0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 8 ≤ aExpr.toNat ∧
         -- the caller Expr node is AST memory, disjoint from the sub-call's
@@ -182,7 +181,7 @@ theorem blockC_neg
         PhiExtends φc φce nc ∧
         PreEpilogueVD g N A SL φfe φce st' (.int (wrap64 (-n))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hpre
-  obtain ⟨mcall, hSub, hgx8, hexpr, hMemExtM0, hexprAl, hexprLo, hexprHi, hexprWin,
+  obtain ⟨mcall, hSub, hgx8, hexpr, hMemExtM0, hexprLo, hexprHi, hexprWin,
     hexprSL, hexprA, hexprSub,
     houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
     hraAl, hSLloSp, hSLlo, hSLwin,

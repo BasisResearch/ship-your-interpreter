@@ -13,12 +13,11 @@ of a `#derive_case` segment, leaving exactly the frame-geometry residual: one
 `MemFacts` per `ld`/`sd` plus the seg's data-dependent branch guards.  This file
 closes all of it uniformly:
 
-* `frameBundle_writeLog` — a `FrameBundle` survives the chain's threaded stores
-  (`pop` survives `writeLog`), so a later block's loads read their (still populated)
-  threaded memory with the SAME bundle.
+* `frameBundle_writeLog` — frame geometry survives the chain's threaded stores,
+  so later blocks reuse the bundle over their reached memory.
 * `frame_ld_read` / `frame_sd_auto` — the per-window leaves, offset read off `a.imm`,
   everything else `decide`/`rfl` from the bundle.  `frame_ld_read`'s byte list is the
-  EXPLICIT frame read `[popByte m fb.pop (base+off), …]` — a function of `base`/`off`
+  EXPLICIT frame read `[bytesT1 m (base+off), …]` — a function of `base`/`off`
   only, never of the pin list `L`, so the tactic fills the seg's `lds` element with no
   occurs-check and no `L` reduction (the key to keeping the assembled proof cheap).
   `frame_sd_auto` is bounds-only (works over any threaded memory).
@@ -61,53 +60,9 @@ open Vsa.Logic
 
 namespace Vsa.Sim
 
-/-! ## `pop` survives the chain's threaded stores -/
-
-/-- The frame-memory populated predicate (the `FrameBundle.pop` field). -/
-def Populated (m : Std.ExtHashMap Nat (BitVec 8)) : Prop :=
-  ∀ k : Nat, ∃ w : BitVec 8, m[k]? = some w
-
-/-- `pop` survives one hashmap `insert`. -/
-theorem pop_insert {m : Std.ExtHashMap Nat (BitVec 8)} (a : Nat) (v : BitVec 8)
-    (hpop : Populated m) : Populated (m.insert a v) := by
-  intro k
-  rw [Std.ExtHashMap.getElem?_insert]
-  split
-  · exact ⟨v, rfl⟩
-  · exact hpop k
-
-/-- `pop` survives one write-log entry (`applyW`): every width is a tower of
-`insert`s, and the catch-all leaves `m` unchanged. -/
-theorem pop_applyW (m : Std.ExtHashMap Nat (BitVec 8)) (e : WEntry)
-    (hpop : Populated m) : Populated (applyW m e) := by
-  obtain ⟨a, w, d⟩ := e
-  unfold applyW
-  split
-  · exact pop_insert _ _ hpop
-  · exact pop_insert _ _ (pop_insert _ _ hpop)
-  · unfold writeMap4
-    exact pop_insert _ _ (pop_insert _ _ (pop_insert _ _ (pop_insert _ _ hpop)))
-  · unfold writeMap8
-    exact pop_insert _ _ (pop_insert _ _ (pop_insert _ _ (pop_insert _ _
-      (pop_insert _ _ (pop_insert _ _ (pop_insert _ _ (pop_insert _ _ hpop)))))))
-  · exact hpop
-
-/-- `pop` survives a whole write-log fold. -/
-theorem pop_writeLog (log : List WEntry) (m : Std.ExtHashMap Nat (BitVec 8))
-    (hpop : Populated m) : Populated (writeLog m log) := by
-  induction log generalizing m with
-  | nil => exact hpop
-  | cons e rest ih =>
-    have hstep : writeLog m (e :: rest) = writeLog (applyW m e) rest := by
-      simp only [writeLog, List.foldl_cons]
-    rw [hstep]
-    exact ih (applyW m e) (pop_applyW m e hpop)
-
-/-- A `FrameBundle` propagates across a write-log fold: the geometry (`lo`/`hi`/
-`htif`/`al`, all about `base`) is unchanged and `pop` survives (`pop_writeLog`). -/
+/-- Frame geometry is unchanged by a write-log fold. -/
 theorem frameBundle_writeLog {m : Std.ExtHashMap Nat (BitVec 8)} {base : BitVec 64}
     (log : List WEntry) (fb : FrameBundle m base) : FrameBundle (writeLog m log) base where
-  pop := pop_writeLog log m fb.pop
   lo := fb.lo
   hi := fb.hi
   htif := fb.htif
@@ -132,21 +87,12 @@ theorem frame_ld_auto (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (a : MInst
 with its `Exists.choose` makes the assigned byte list mention the goal's pin list
 `L` (through the choice term), and `L` itself threads those same byte
 metavariables — a spurious occurs-check that would force reducing the whole `L`.
-Instead read the window explicitly with `popByte` (choice on a single `pop` fact):
+Instead read the window explicitly with the total byte reader `bytesT1`:
 the resulting byte list depends only on `base`/`off`, never on `L`, so the leaf
 assigns `?bᵢ := window` with no occurs-check and no `L` reduction. -/
 
-/-- The (choice-picked) byte the populated memory holds at `k`. -/
-noncomputable def popByte (m : Std.ExtHashMap Nat (BitVec 8))
-    (h : ∀ k : Nat, ∃ w : BitVec 8, m[k]? = some w) (k : Nat) : BitVec 8 :=
-  (h k).choose
-
-theorem popByte_spec (m : Std.ExtHashMap Nat (BitVec 8))
-    (h : ∀ k : Nat, ∃ w : BitVec 8, m[k]? = some w) (k : Nat) :
-    m[k]? = some (popByte m h k) := (h k).choose_spec
-
 /-- A `ld` window `MemFacts` whose byte list is the EXPLICIT frame read
-`[popByte m fb.pop (base+off), … , +7]` — a function of `base`/`off` only, never of
+`[bytesT1 m (base+off), … , +7]` — a function of `base`/`off` only, never of
 `L`.  The offset is read off `a.imm`; the tactic supplies `hk`/`hsrc`/`hoff`/`hoff8`
 by `decide`/`rfl`. -/
 theorem frame_ld_read (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (a : MInstr)
@@ -156,19 +102,19 @@ theorem frame_ld_read (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (a : MInst
     (hoff8 : (sign_extend (m := 64) a.imm : BitVec 64).toNat % 8 = 0) :
     MemFacts m L
       (let o := base.toNat + (sign_extend (m := 64) a.imm : BitVec 64).toNat
-       [popByte m fb.pop o, popByte m fb.pop (o + 1), popByte m fb.pop (o + 2),
-        popByte m fb.pop (o + 3), popByte m fb.pop (o + 4), popByte m fb.pop (o + 5),
-        popByte m fb.pop (o + 6), popByte m fb.pop (o + 7)]) a := by
+       [bytesT1 m o, bytesT1 m (o + 1), bytesT1 m (o + 2),
+        bytesT1 m (o + 3), bytesT1 m (o + 4), bytesT1 m (o + 5),
+        bytesT1 m (o + 6), bytesT1 m (o + 7)]) a := by
   have hea : (eaddrM a L).toNat
       = base.toNat + (sign_extend (m := 64) a.imm : BitVec 64).toNat :=
     frame_ea a L base _ hsrc rfl (by omega) fb
   refine memFacts_ld_frame m L a _ _ _ _ _ _ _ _ hk
     (by rw [hea]; have := fb.lo; omega) (by rw [hea]; have := fb.hi; omega)
-    (by rw [hea]; have := fb.htif; right; omega) (by rw [hea]; have := fb.al; omega)
-    (by rw [hea]; exact popByte_spec _ _ _) (by rw [hea]; exact popByte_spec _ _ _)
-    (by rw [hea]; exact popByte_spec _ _ _) (by rw [hea]; exact popByte_spec _ _ _)
-    (by rw [hea]; exact popByte_spec _ _ _) (by rw [hea]; exact popByte_spec _ _ _)
-    (by rw [hea]; exact popByte_spec _ _ _) (by rw [hea]; exact popByte_spec _ _ _)
+    (by rw [hea]; have := fb.htif; right; omega)
+    (by rw [hea]) (by rw [hea])
+    (by rw [hea]) (by rw [hea])
+    (by rw [hea]) (by rw [hea])
+    (by rw [hea]) (by rw [hea])
 
 /-- Every write-log entry a block body emits has width `1`/`2`/`4`/`8` — a `wlogM` entry
 is a `wentryM` of a `sb`/`sh`/`sw`/`sd`, whose width is `widthOfM` of that kind.  Discharges
@@ -322,9 +268,9 @@ theorem frame_ld_read_thru (m0 : Std.ExtHashMap Nat (BitVec 8)) (log : List WEnt
       base.toNat + (sign_extend (m := 64) a.imm : BitVec 64).toNat + 8 ≤ e.1) :
     MemFacts (writeLog m0 log) L
       (let o := base.toNat + (sign_extend (m := 64) a.imm : BitVec 64).toNat
-       [popByte m0 fb.pop o, popByte m0 fb.pop (o + 1), popByte m0 fb.pop (o + 2),
-        popByte m0 fb.pop (o + 3), popByte m0 fb.pop (o + 4), popByte m0 fb.pop (o + 5),
-        popByte m0 fb.pop (o + 6), popByte m0 fb.pop (o + 7)]) a := by
+       [bytesT1 m0 o, bytesT1 m0 (o + 1), bytesT1 m0 (o + 2),
+        bytesT1 m0 (o + 3), bytesT1 m0 (o + 4), bytesT1 m0 (o + 5),
+        bytesT1 m0 (o + 6), bytesT1 m0 (o + 7)]) a := by
   have hea : (eaddrM a L).toNat
       = base.toNat + (sign_extend (m := 64) a.imm : BitVec 64).toNat :=
     frame_ea a L base _ hsrc rfl (by omega) fb
@@ -337,15 +283,15 @@ theorem frame_ld_read_thru (m0 : Std.ExtHashMap Nat (BitVec 8)) (log : List WEnt
       (fun e he => Or.inl (by have := hbelow e he; omega))
   refine memFacts_ld_frame (writeLog m0 log) L a _ _ _ _ _ _ _ _ hk
     (by rw [hea]; have := fb.lo; omega) (by rw [hea]; have := fb.hi; omega)
-    (by rw [hea]; have := fb.htif; right; omega) (by rw [hea]; have := fb.al; omega)
-    (by rw [hea]; exact (thru 0 (by omega)).trans (popByte_spec _ _ _))
-    (by rw [hea]; exact (thru 1 (by omega)).trans (popByte_spec _ _ _))
-    (by rw [hea]; exact (thru 2 (by omega)).trans (popByte_spec _ _ _))
-    (by rw [hea]; exact (thru 3 (by omega)).trans (popByte_spec _ _ _))
-    (by rw [hea]; exact (thru 4 (by omega)).trans (popByte_spec _ _ _))
-    (by rw [hea]; exact (thru 5 (by omega)).trans (popByte_spec _ _ _))
-    (by rw [hea]; exact (thru 6 (by omega)).trans (popByte_spec _ _ _))
-    (by rw [hea]; exact (thru 7 (by omega)).trans (popByte_spec _ _ _))
+    (by rw [hea]; have := fb.htif; right; omega)
+    (by rw [hea]; exact congrArg (fun b => b.getD 0) (thru 0 (by omega)))
+    (by rw [hea]; exact congrArg (fun b => b.getD 0) (thru 1 (by omega)))
+    (by rw [hea]; exact congrArg (fun b => b.getD 0) (thru 2 (by omega)))
+    (by rw [hea]; exact congrArg (fun b => b.getD 0) (thru 3 (by omega)))
+    (by rw [hea]; exact congrArg (fun b => b.getD 0) (thru 4 (by omega)))
+    (by rw [hea]; exact congrArg (fun b => b.getD 0) (thru 5 (by omega)))
+    (by rw [hea]; exact congrArg (fun b => b.getD 0) (thru 6 (by omega)))
+    (by rw [hea]; exact congrArg (fun b => b.getD 0) (thru 7 (by omega)))
 
 /-- A `sd` window `MemFacts` — bounds only, so it holds over ANY memory `m`; only
 the frame `base`'s geometry (`fb`, over `base_mem`) is consumed. -/
@@ -499,7 +445,7 @@ private def sffCloseLeaf (fbE : Term) (g0 : MVarId) : TacticM Bool := do
       -- compared registers resolve to concrete values (a `bne` on int-kind tag pins, or
       -- one register set by an in-block `li`), `rfl` reduces the (bounded) `runGM` pin
       -- tower — the `lookupG` short-circuits at the front before any noncomputable
-      -- `popByte` load byte — and closes it.  The seg's genuine SEMANTIC guard (e.g. the
+      -- `bytesT1` load byte — and closes it.  The seg's genuine SEMANTIC guard (e.g. the
       -- divisor `Wr ≠ 0` `beqz`, a symbolic pin) reduces neither way and is left as a
       -- residual goal for the caller.
       close (← `(tactic| first | rfl | decide))

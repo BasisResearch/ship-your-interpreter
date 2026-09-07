@@ -175,7 +175,7 @@ theorem retB_spec (vsp vcur v8 : BitVec 64) (c : Config)
     site_80007720_rt c.σ c.tick c.steps _ vmi0 vsp _ _ _ _ _ _ _ _
       hG hpc hmi0 hp0.1 hload rfl
       (by rw [hoff0]; omega) (by rw [hoff0]; omega) (Or.inr (by rw [hoff0, htoh]; omega))
-      (by rw [hoff0]; omega) ha0 ha1 ha2 ha3 ha4 ha5 ha6 ha7 htick
+       ha0 ha1 ha2 ha3 ha4 ha5 ha6 ha7 htick
   have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hs1
   have hpc1 : σ1.regs.get? Register.PC = some (0x80007724#64) := by
     have := obs_alu_pc hobs1
@@ -197,7 +197,7 @@ theorem retB_spec (vsp vcur v8 : BitVec 64) (c : Config)
     site_80007724_rt σ1 i1 (c.steps + 1) _ vmi1 (0x8001b798#64) _ _ _ _ _ _ _ _
       hG1 hpc1 hmi1 hp1.2.2.2.2.1 (hmE1 ▸ hload) rfl
       (by rw [hoffloc]; omega) (by rw [hoffloc]; omega) (Or.inr (by rw [hoffloc, htoh]; omega))
-      (by rw [hoffloc]) hb0 hb1' hb2' hb3' hb4 hb5 hb6 hb7 hi1
+       hb0 hb1' hb2' hb3' hb4 hb5 hb6 hb7 hi1
   have hstep2 : Step ⟨σ1, i1, c.steps + 1⟩ ⟨σ2, i2, c.steps + 1 + 1⟩ := hs2
   have hpc2 : σ2.regs.get? Register.PC = some (0x80007728#64) := by
     have := obs_alu_pc hobs2

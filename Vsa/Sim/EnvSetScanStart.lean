@@ -49,7 +49,7 @@ theorem env_set_parent_scan_start
     site_80002d0c_es c.σ c.tick c.steps (0x80002d0c#64) vmi0 env
       cb0 cb1 cb2 cb3 hHead.good hHead.pc hmi0 hHead.env4 hHead.loadedSet rfl
       (by rw [hc40addr]; exact henvLo) (by rw [hc40addr]; omega)
-      (by rw [hc40addr]; right; omega) (by rw [hc40addr]; omega)
+      (by rw [hc40addr]; right; omega)
       (by rw [hc40addr, hHead.mem]; exact hcb0)
       (by rw [hc40addr, hHead.mem]; exact hcb1)
       (by rw [hc40addr, hHead.mem]; exact hcb2)
@@ -106,7 +106,7 @@ theorem env_set_parent_scan_start
       nb0 nb1 nb2 nb3 nb4 nb5 nb6 nb7 hG2 hpc2 hmi2 hx20_2
       (by rw [hmem2']; exact hHead.mem ▸ hHead.loadedSet) rfl
       (by rw [hc48addr]; omega) (by rw [hc48addr]; omega)
-      (by rw [hc48addr]; right; omega) (by rw [hc48addr]; omega)
+      (by rw [hc48addr]; right; omega)
       (by rw [hc48addr, hmem2']; exact hnb0) (by rw [hc48addr, hmem2']; exact hnb1)
       (by rw [hc48addr, hmem2']; exact hnb2) (by rw [hc48addr, hmem2']; exact hnb3)
       (by rw [hc48addr, hmem2']; exact hnb4) (by rw [hc48addr, hmem2']; exact hnb5)
@@ -230,7 +230,7 @@ theorem env_set_parent_empty
     site_80002d0c_es c.σ c.tick c.steps (0x80002d0c#64) vmi0 env
       cb0 cb1 cb2 cb3 hHead.good hHead.pc hmi0 hHead.env4 hHead.loadedSet rfl
       (by rw [hc40addr]; exact henvLo) (by rw [hc40addr]; omega)
-      (by rw [hc40addr]; right; omega) (by rw [hc40addr]; omega)
+      (by rw [hc40addr]; right; omega)
       (by rw [hc40addr, hHead.mem]; exact hcb0)
       (by rw [hc40addr, hHead.mem]; exact hcb1)
       (by rw [hc40addr, hHead.mem]; exact hcb2)

@@ -179,14 +179,14 @@ theorem unaryE_field_of_extras
     (blockA_unaryArm g N A SL φf φc st d env op e sp r0 sret aEnv aExpr aOperand m0 hX)
     (fun c' hMid => ?_) c hEntry
   obtain ⟨v8, v9, v18, ment, hArm, hx11, hx13, hOuterFrame, hgframe, hg8, hg18,
-    hpayL, hexprL, hground, hexprHi24, hopAl, hopLo, hopHi, hopWin, hopStk,
+    hpayL, hexprL, hground, hexprHi24, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam, hcodeStk, hviStk, htableStk,
     harenaStk, harenaCode⟩ := hMid
   exact blockB_unary_stagePre g (fun R => c'.σ.regs.get? R) N A SL φf φc st d env op e
     sp r0 sret aExpr aEnv aOperand v8 v9 v18 c'.σ.sailOutput m0 c'
     hEntry.env_valid (hEntry.envset_defined_frame hOuterFrame)
     ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpayL, hexprL, hground, hexprHi24,
-      hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
+      hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
       hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
       -- ITEM ZERO B1: the operand's child budget, DERIVED from the entry's fields.
       hEntry.stackBudget.child (by decide)
@@ -230,7 +230,7 @@ theorem logicalL_field_of_extras
       sp r0 sret aEnv aExpr aLeft m0 hX)
     (fun c' hMid => ?_) c hEntry
   obtain ⟨v8, v9, v18, ment, hArm, hx11, hx13, hOuterFrame, hgframe, hg8, hg18,
-    hpayL, hexprSurvL, hgroundP, hexprHi24, hopAl, hopLo, hopHi, hopWin, hopStk,
+    hpayL, hexprSurvL, hgroundP, hexprHi24, hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam, hcodeStk, hviStk, htableStk,
     harenaStk, harenaCode⟩ := hMid
   exact blockB_logical_stagePre g (fun R => c'.σ.regs.get? R) N A SL φf φc st d env op l r
@@ -238,7 +238,7 @@ theorem logicalL_field_of_extras
       v8 v9 v18 c'.σ.sailOutput m0 c'
     hEntry.env_valid (hEntry.envset_defined_frame hOuterFrame)
     ⟨ment, hArm, hx11, hx13, rfl, hgframe, hg8, hg18, hpayL, hexprSurvL, hgroundP, hexprHi24,
-      hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
+      hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
       hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
       -- ITEM ZERO B1: the LEFT child budget, DERIVED from the entry's fields.
       hEntry.stackBudget.child (by decide)

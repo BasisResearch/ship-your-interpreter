@@ -1,0 +1,32 @@
+{
+  "alias_output": "\n\n",
+  "boot_steps": 85483,
+  "case_steps": {
+    "alias": 1409,
+    "control": 884
+  },
+  "causal_execution_observed": true,
+  "control_output": "\n",
+  "files": {
+    "AliasMachine.lean": "a14e444069ab469b109633a2c859e42ea46d9256e763561374b6acc98ec31a4a",
+    "README.md": "b0a5b88b6ef01089064f281b5789ad987ce6594ef39310b1f32ba76430eb53ec",
+    "check-receipt.json": "70da46461134891fa08aec240085999fd13fecebbdc04828c87a52c6b418917f",
+    "check_run.py": "3809b9d5807b23220ee3b5ec00d3e775898c1ff6e59c5bfd38e766779e4ea8fd",
+    "compile.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "invocation.txt": "2c257100684c38734477c547333558242a2d271a8737c2d3c870a1067e0d7042",
+    "result.jsonl": "2836c68399648bd572cfb61d8319830462e12fbbf299a1a2b39113cff4785c90",
+    "run.stderr": "9b5abdd2c54053e5bda600e68b1d9213c19f6b77013130366d7ab27ddd6278f6"
+  },
+  "good_state_register_checks_per_case": 31,
+  "initial_runtime_audit_passed": true,
+  "loaded_verified": false,
+  "remaining_unverified": [
+    "full stack byte presence",
+    "ProgramRepr",
+    "store representation/survival",
+    "complete Loaded proof",
+    "full HTIF halt"
+  ],
+  "runtime_checks_per_case": 55,
+  "snapshot_construction": "Common stdout flags16 explicitly pinned to ConsoleStream value 0x200a"
+}

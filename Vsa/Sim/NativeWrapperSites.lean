@@ -1,3 +1,4 @@
+import Vsa.Sim.RamReadPins
 import Vsa.Sim.ValueSites
 import Vsa.Sim.Code.Eval_expr
 import Vsa.Sim.DecodeTable.Batch01Part14
@@ -46,7 +47,6 @@ theorem site_80003254_nw (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (hhiram : (v2 + sign_extend (m := 64) (0x060#12)).toNat + 8 ≤ 0x100000000)
     (hhtif : (v2 + sign_extend (m := 64) (0x060#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x060#12)).toNat)
-    (halign : (v2 + sign_extend (m := 64) (0x060#12)).toNat % 8 = 0)
     (h0 : σ.mem[(v2 + sign_extend (m := 64) (0x060#12)).toNat]? = some b0)
     (h1 : σ.mem[(v2 + sign_extend (m := 64) (0x060#12)).toNat + 1]? = some b1)
     (h2 : σ.mem[(v2 + sign_extend (m := 64) (0x060#12)).toNat + 2]? = some b2)
@@ -74,13 +74,13 @@ theorem site_80003254_nw (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
-    (exec_ld σ (0x80003254#64) (0x060#12) (regidx.Regidx 0x02#5) (regidx.Regidx 0x0e#5)
+    (exec_ld_ram_bytes σ (0x80003254#64) (0x060#12) (regidx.Regidx 0x02#5) (regidx.Regidx 0x0e#5)
       (sigma3_alu σ (0x80003254#64) Register.x14 (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
       v2 b0 b1 b2 b3 b4 b5 b6 b7 hG
       (rX_bits_x2 _ v2
         (by rw [get?_afterNextPC σ (0x80003254#64) _ (by decide) (by decide)]; exact hx2))
       (wX_bits_x14 _ (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
-      hlo hhiram hhtif halign h0 h1 h2 h3 h4 h5 h6 h7)
+      hlo hhiram hhtif h0 h1 h2 h3 h4 h5 h6 h7)
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
@@ -96,7 +96,6 @@ theorem site_80003258_nw (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (hhiram : (v2 + sign_extend (m := 64) (0x068#12)).toNat + 8 ≤ 0x100000000)
     (hhtif : (v2 + sign_extend (m := 64) (0x068#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x068#12)).toNat)
-    (halign : (v2 + sign_extend (m := 64) (0x068#12)).toNat % 8 = 0)
     (h0 : σ.mem[(v2 + sign_extend (m := 64) (0x068#12)).toNat]? = some b0)
     (h1 : σ.mem[(v2 + sign_extend (m := 64) (0x068#12)).toNat + 1]? = some b1)
     (h2 : σ.mem[(v2 + sign_extend (m := 64) (0x068#12)).toNat + 2]? = some b2)
@@ -124,13 +123,13 @@ theorem site_80003258_nw (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
-    (exec_ld σ (0x80003258#64) (0x068#12) (regidx.Regidx 0x02#5) (regidx.Regidx 0x0d#5)
+    (exec_ld_ram_bytes σ (0x80003258#64) (0x068#12) (regidx.Regidx 0x02#5) (regidx.Regidx 0x0d#5)
       (sigma3_alu σ (0x80003258#64) Register.x13 (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
       v2 b0 b1 b2 b3 b4 b5 b6 b7 hG
       (rX_bits_x2 _ v2
         (by rw [get?_afterNextPC σ (0x80003258#64) _ (by decide) (by decide)]; exact hx2))
       (wX_bits_x13 _ (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
-      hlo hhiram hhtif halign h0 h1 h2 h3 h4 h5 h6 h7)
+      hlo hhiram hhtif h0 h1 h2 h3 h4 h5 h6 h7)
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
@@ -146,7 +145,6 @@ theorem site_8000325c_nw (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (hhiram : (v2 + sign_extend (m := 64) (0x070#12)).toNat + 8 ≤ 0x100000000)
     (hhtif : (v2 + sign_extend (m := 64) (0x070#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x070#12)).toNat)
-    (halign : (v2 + sign_extend (m := 64) (0x070#12)).toNat % 8 = 0)
     (h0 : σ.mem[(v2 + sign_extend (m := 64) (0x070#12)).toNat]? = some b0)
     (h1 : σ.mem[(v2 + sign_extend (m := 64) (0x070#12)).toNat + 1]? = some b1)
     (h2 : σ.mem[(v2 + sign_extend (m := 64) (0x070#12)).toNat + 2]? = some b2)
@@ -174,13 +172,13 @@ theorem site_8000325c_nw (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
-    (exec_ld σ (0x8000325c#64) (0x070#12) (regidx.Regidx 0x02#5) (regidx.Regidx 0x10#5)
+    (exec_ld_ram_bytes σ (0x8000325c#64) (0x070#12) (regidx.Regidx 0x02#5) (regidx.Regidx 0x10#5)
       (sigma3_alu σ (0x8000325c#64) Register.x16 (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
       v2 b0 b1 b2 b3 b4 b5 b6 b7 hG
       (rX_bits_x2 _ v2
         (by rw [get?_afterNextPC σ (0x8000325c#64) _ (by decide) (by decide)]; exact hx2))
       (wX_bits_x16 _ (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
-      hlo hhiram hhtif halign h0 h1 h2 h3 h4 h5 h6 h7)
+      hlo hhiram hhtif h0 h1 h2 h3 h4 h5 h6 h7)
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
@@ -196,7 +194,6 @@ theorem site_80003260_nw (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (hhiram : (v8 + sign_extend (m := 64) (0x004#12)).toNat + 4 ≤ 0x100000000)
     (hhtif : (v8 + sign_extend (m := 64) (0x004#12)).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v8 + sign_extend (m := 64) (0x004#12)).toNat)
-    (halign : (v8 + sign_extend (m := 64) (0x004#12)).toNat % 4 = 0)
     (h0 : σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat]? = some b0)
     (h1 : σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat + 1]? = some b1)
     (h2 : σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat + 2]? = some b2)
@@ -220,13 +217,13 @@ theorem site_80003260_nw (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
-    (exec_lw σ (0x80003260#64) (0x004#12) (regidx.Regidx 0x08#5) (regidx.Regidx 0x0b#5)
+    (exec_lw_ram_bytes σ (0x80003260#64) (0x004#12) (regidx.Regidx 0x08#5) (regidx.Regidx 0x0b#5)
       (sigma3_alu σ (0x80003260#64) Register.x11 (sign_extend (m := 64) ((((b3.append b2).append b1).append b0) : BitVec (8 * 4))))
       v8 b0 b1 b2 b3 hG
       (rX_bits_x8 _ v8
         (by rw [get?_afterNextPC σ (0x80003260#64) _ (by decide) (by decide)]; exact hx8))
       (wX_bits_x11 _ (sign_extend (m := 64) ((((b3.append b2).append b1).append b0) : BitVec (8 * 4))))
-      hlo hhiram hhtif halign h0 h1 h2 h3)
+      hlo hhiram hhtif h0 h1 h2 h3)
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
@@ -281,7 +278,6 @@ theorem site_80003268_nw (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (hhiram : (v2 + sign_extend (m := 64) (0x060#12)).toNat + 4 ≤ 0x100000000)
     (hhtif : (v2 + sign_extend (m := 64) (0x060#12)).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x060#12)).toNat)
-    (halign : (v2 + sign_extend (m := 64) (0x060#12)).toNat % 4 = 0)
     (h0 : σ.mem[(v2 + sign_extend (m := 64) (0x060#12)).toNat]? = some b0)
     (h1 : σ.mem[(v2 + sign_extend (m := 64) (0x060#12)).toNat + 1]? = some b1)
     (h2 : σ.mem[(v2 + sign_extend (m := 64) (0x060#12)).toNat + 2]? = some b2)
@@ -305,13 +301,13 @@ theorem site_80003268_nw (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
-    (exec_lw σ (0x80003268#64) (0x060#12) (regidx.Regidx 0x02#5) (regidx.Regidx 0x0e#5)
+    (exec_lw_ram_bytes σ (0x80003268#64) (0x060#12) (regidx.Regidx 0x02#5) (regidx.Regidx 0x0e#5)
       (sigma3_alu σ (0x80003268#64) Register.x14 (sign_extend (m := 64) ((((b3.append b2).append b1).append b0) : BitVec (8 * 4))))
       v2 b0 b1 b2 b3 hG
       (rX_bits_x2 _ v2
         (by rw [get?_afterNextPC σ (0x80003268#64) _ (by decide) (by decide)]; exact hx2))
       (wX_bits_x14 _ (sign_extend (m := 64) ((((b3.append b2).append b1).append b0) : BitVec (8 * 4))))
-      hlo hhiram hhtif halign h0 h1 h2 h3)
+      hlo hhiram hhtif h0 h1 h2 h3)
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
@@ -674,7 +670,6 @@ theorem site_800039f8_nw (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (hhiram : (v2 + sign_extend (m := 64) (0x3f8#12)).toNat + 8 ≤ 0x100000000)
     (hhtif : (v2 + sign_extend (m := 64) (0x3f8#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x3f8#12)).toNat)
-    (halign : (v2 + sign_extend (m := 64) (0x3f8#12)).toNat % 8 = 0)
     (h0 : σ.mem[(v2 + sign_extend (m := 64) (0x3f8#12)).toNat]? = some b0)
     (h1 : σ.mem[(v2 + sign_extend (m := 64) (0x3f8#12)).toNat + 1]? = some b1)
     (h2 : σ.mem[(v2 + sign_extend (m := 64) (0x3f8#12)).toNat + 2]? = some b2)
@@ -702,13 +697,13 @@ theorem site_800039f8_nw (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
-    (exec_ld σ (0x800039f8#64) (0x3f8#12) (regidx.Regidx 0x02#5) (regidx.Regidx 0x17#5)
+    (exec_ld_ram_bytes σ (0x800039f8#64) (0x3f8#12) (regidx.Regidx 0x02#5) (regidx.Regidx 0x17#5)
       (sigma3_alu σ (0x800039f8#64) Register.x23 (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
       v2 b0 b1 b2 b3 b4 b5 b6 b7 hG
       (rX_bits_x2 _ v2
         (by rw [get?_afterNextPC σ (0x800039f8#64) _ (by decide) (by decide)]; exact hx2))
       (wX_bits_x23 _ (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
-      hlo hhiram hhtif halign h0 h1 h2 h3 h4 h5 h6 h7)
+      hlo hhiram hhtif h0 h1 h2 h3 h4 h5 h6 h7)
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 

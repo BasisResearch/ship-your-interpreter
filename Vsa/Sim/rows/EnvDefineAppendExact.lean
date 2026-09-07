@@ -1,3 +1,5 @@
+import Vsa.Sim.RuntimeOwnershipAllocation
+import Vsa.Sim.RuntimeOwnershipSeparation
 import Vsa.Sim.EnvDefBridges4
 import Vsa.Sim.EnvDefBridges3
 import Vsa.Sim.rows.EnvDefineEpilogue
@@ -488,24 +490,21 @@ structure StoreAppendFootprint
   closures : ∀ ca, (hca : ca < store.closures.size) →
     ClosureAppendFootprint m m' env names vals count (φc ca) store.closures[ca]
 
-/-- The global heap-separation invariant supplies the append-specific
-representation footprint. -/
-theorem StoreAppendFootprint.of_heap_owned
+/-- Exact protected footprints supply the unchanged store after append. -/
+theorem StoreAppendFootprint.of_covered
     {m m' : Mem} {N : NativeAddrs} {φf φc : Vsa.While.Addr → Nat}
-    {store : Vsa.While.Store} {target : Vsa.While.Addr}
-    {cap names vals : Nat}
+    {store : Vsa.While.Store} {target : Vsa.While.Addr} {names vals : Nat}
     (ht : target < store.frames.size)
-    (howned : StoreHeapOwned m φf φc exts store)
-    (hcap : read32 m (φf target + 4) = some cap)
-    (hnames : read64 m (φf target + 8) = some names)
-    (hvals : read64 m (φf target + 16) = some vals)
-    (happend : store.frames[target].vars.length < cap)
+    (hframes : ∀ fa, (hf : fa < store.frames.size) → fa ≠ target →
+      FrameFootprintCovered m φf fa store.frames[fa]
+        (AppendOutside (φf target) names vals store.frames[target].vars.length))
+    (hclosures : ∀ ca, (hc : ca < store.closures.size) →
+      ClosureFootprintCovered m φc ca store.closures[ca]
+        (AppendOutside (φf target) names vals store.frames[target].vars.length))
     (hag : AgreeP (AppendUntouched (φf target) names vals
       store.frames[target].vars.length) m m') :
     StoreAppendFootprint m m' N φf φc store target (φf target) names vals
       store.frames[target].vars.length := by
-  obtain ⟨hframes, hclosures⟩ :=
-    howned.appendSeparated target ht cap names vals hcap hnames hvals happend
   refine ⟨?_, ?_⟩
   · intro fa hfa hne
     have h := hframes fa hfa hne
@@ -535,6 +534,51 @@ theorem StoreAppendFootprint.of_heap_owned
     intro a ha
     simpa [AppendOutside, AppendUntouched] using h.ast q hq a ha
     exact hexpr
+
+/-- The global heap-separation invariant supplies the append-specific
+representation footprint. -/
+theorem StoreAppendFootprint.of_heap_owned
+    {m m' : Mem} {N : NativeAddrs} {φf φc : Vsa.While.Addr → Nat}
+    {store : Vsa.While.Store} {target : Vsa.While.Addr}
+    {cap names vals : Nat}
+    (ht : target < store.frames.size)
+    (howned : StoreHeapOwned m φf φc exts store)
+    (hcap : read32 m (φf target + 4) = some cap)
+    (hnames : read64 m (φf target + 8) = some names)
+    (hvals : read64 m (φf target + 16) = some vals)
+    (happend : store.frames[target].vars.length < cap)
+    (hag : AgreeP (AppendUntouched (φf target) names vals
+      store.frames[target].vars.length) m m') :
+    StoreAppendFootprint m m' N φf φc store target (φf target) names vals
+      store.frames[target].vars.length := by
+  obtain ⟨hframes, hclosures⟩ :=
+    howned.appendSeparated target ht cap names vals hcap hnames hvals happend
+  exact StoreAppendFootprint.of_covered ht hframes hclosures hag
+
+/-- Allocation roles and immutable sharing supply the existing append consumer. -/
+theorem StoreAppendFootprint.of_runtime_owned
+    {m m' : Mem} {N : NativeAddrs} {φf φc : Vsa.While.Addr → Nat}
+    {A : Arena} {exts : List Extent} {alloc : RuntimeOwnership.Allocations}
+    {shared readable writes : Nat → Prop}
+    {store : Vsa.While.Store} {target : Vsa.While.Addr}
+    {cap names vals : Nat}
+    (ht : target < store.frames.size)
+    (howned : RuntimeOwnership.HeapOwned A exts m φf φc alloc
+      shared readable writes store)
+    (hcap : read32 m (φf target + 4) = some cap)
+    (hnames : read64 m (φf target + 8) = some names)
+    (hvals : read64 m (φf target + 16) = some vals)
+    (happend : store.frames[target].vars.length < cap)
+    (hag : AgreeP (AppendUntouched (φf target) names vals
+      store.frames[target].vars.length) m m') :
+    StoreAppendFootprint m m' N φf φc store target (φf target) names vals
+      store.frames[target].vars.length := by
+  obtain ⟨hframes, hclosures⟩ := howned.store.appendSeparated howned.ledger
+    howned.immutable target ht cap names vals hcap hnames hvals happend
+  exact StoreAppendFootprint.of_covered ht hframes hclosures hag
+
+#print axioms StoreAppendFootprint.of_covered
+#print axioms StoreAppendFootprint.of_runtime_owned
 
 /-- Lift the reconstructed target append to the whole semantic store. -/
 theorem storeDefineAdvance_of_append

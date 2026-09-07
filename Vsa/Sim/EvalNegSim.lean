@@ -1,3 +1,4 @@
+import Vsa.Sim.RamReadPins
 import Vsa.Sim.EvalRecCommon
 import Vsa.Sim.EntryGroundKit
 import Vsa.Sim.DecodeTable.Batch05Part16
@@ -72,7 +73,6 @@ theorem site_800035e0_ee
     (hhiram : (vexpr + sign_extend (m := 64) (0x010#12)).toNat + 8 ≤ 0x100000000)
     (hhtif : (vexpr + sign_extend (m := 64) (0x010#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (vexpr + sign_extend (m := 64) (0x010#12)).toNat)
-    (halign : (vexpr + sign_extend (m := 64) (0x010#12)).toNat % 8 = 0)
     (h0 : σ.mem[(vexpr + sign_extend (m := 64) (0x010#12)).toNat]? = some b0)
     (h1 : σ.mem[(vexpr + sign_extend (m := 64) (0x010#12)).toNat + 1]? = some b1)
     (h2 : σ.mem[(vexpr + sign_extend (m := 64) (0x010#12)).toNat + 2]? = some b2)
@@ -103,7 +103,7 @@ theorem site_800035e0_ee
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
-    (exec_ld σ (0x800035e0#64) (0x010#12) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x0c#5)
+    (exec_ld_ram_bytes σ (0x800035e0#64) (0x010#12) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x0c#5)
       (sigma3_alu σ (0x800035e0#64) Register.x12
         (sign_extend (m := 64)
           ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0)
@@ -112,7 +112,7 @@ theorem site_800035e0_ee
       (wX_bits_x12 _ (sign_extend (m := 64)
         ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0)
           : BitVec (8 * 8))))
-      hlo hhiram hhtif halign h0 h1 h2 h3 h4 h5 h6 h7)
+      hlo hhiram hhtif h0 h1 h2 h3 h4 h5 h6 h7)
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
@@ -191,6 +191,11 @@ The dispatch must carry through the spills everything the ARM (not just one
 `Value_intLoaded` AND the `EX_INT` jump-table slot (`IntSlotPinned` — the
 operand may be an int literal), and the `neg` tail itself calls `value_int`.
 This is the `calleeLoaded` instantiation for `blockA_k` at this arm. -/
+/-- Memory evidence for the reached unary call, relative to its parent entry. -/
+structure UnaryCallMemory (m0 mcall : Mem) (SL : StackLayout) (sp : BitVec 64) : Prop where
+  outside : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?
+  presence : MemExtends m0 mcall
+
 /-- Wave 47f (`GeomFrom`): the recursive-arm callee bundle also carries the
 null/bool/str pins so child `EvalEntry.nbs_pins` can be filled. -/
 def UnaryArmCallee (m : Mem) : Prop := Value_intLoaded m ∧ IntSlotPinned m ∧ NBSPins m
@@ -205,7 +210,8 @@ the operand node's `ExprRepr` + geometry, the extra 1088-byte stack headroom,
 and the arena/code/table disjointness facts. Output: `SubEvalReturn` at the
 link PC `0x800035ec` with sub-result buffer `(sp - 1088) + 144`, plus the
 memory frame of the pre-call memory against the case entry memory `m0`. -/
-theorem blockB_unary
+theorem blockB_unary_with
+    {Extra : EvalExtra}
     (gouter gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' : Vsa.While.St) (d : Nat) (env : Addr) (op : UnOp) (esub : Expr) (vsub : Value)
@@ -215,7 +221,7 @@ theorem blockB_unary
     (henvset : ∃ v19 v20 v21 : BitVec 64,
       gpre Register.x19 = some v19 ∧ gpre Register.x20 = some v20 ∧
       gpre Register.x21 = some v21)
-    (hIH : EvalIH st d env esub st' vsub) :
+    (hIH : EvalIHWith Extra st d env esub st' vsub) :
     Triple
       (fun c => ∃ ment,
         ArmEntryK gouter N A SL φf φc st (0x800035e0#64) UnaryArmCallee (.unary op esub)
@@ -232,7 +238,6 @@ theorem blockB_unary
         EvalGround ment SL A (sp - 1088#64)
           ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aOperand.toNat esub ∧
         aExpr.toNat + 24 ≤ 0x100000000 ∧
-        aOperand.toNat % 8 = 0 ∧
         0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aOperand.toNat ∧
         (aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat) ∧
@@ -249,21 +254,24 @@ theorem blockB_unary
         StackOK SL (sp - 1088#64)
           (esub.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
         Expr.bodiesBound Vsa.While.perCallBudget esub = true ∧
-        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget)
-      (fun c => ∃ mcall,
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget ∧
+        MemExtends m0 ment)
+      (ReturnedWith (fun c => ∃ mcall,
         SubEvalReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
           st' vsub sp r sret
           ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) (0x800035ec#64)
           v8 v9 v18 mcall c ∧
-        (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?)) := by
+        UnaryCallMemory m0 mcall SL sp)
+        (Extra N A SL φf φc
+          ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)).toNat)) := by
   intro c hpre
   obtain ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hsubexpr, hground, hexprHi24,
-    hopAl, hopLo, hopHi, hopWin, hopStk,
+    hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
-    hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
+    hstackBudget, hexprBodies, hstoreBodies, hmemExt⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
-    hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
+    hexpr, houtStr, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
@@ -286,7 +294,7 @@ theorem blockB_unary
     site_800035e0_ee c.σ c.tick c.steps (0x800035e0#64) vmi aExpr pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7
       hG hpc hmi ha2 (hmem ▸ hcode) rfl
       (by rw [haddr16]; omega) (by rw [haddr16]; omega)
-      (by rw [haddr16, htoh]; right; omega) (by rw [haddr16]; omega)
+      (by rw [haddr16, htoh]; right; omega)
       (by rw [haddr16, hmem]; exact hp0) (by rw [haddr16, hmem]; exact hp1)
       (by rw [haddr16, hmem]; exact hp2) (by rw [haddr16, hmem]; exact hp3)
       (by rw [haddr16, hmem]; exact hp4) (by rw [haddr16, hmem]; exact hp5)
@@ -357,7 +365,7 @@ theorem blockB_unary
   have hwords := hground.valueWordsTotal hground.sret_inSL.1 hground.sret_inSL.2
   obtain ⟨w19, w20, w21, hg19, hg20, hg21⟩ := henvset
   obtain ⟨c3, hs3, hpost⟩ :=
-    armTail_rec gpre N A SL φf φc st st' d env esub vsub
+    armTail_rec_with gpre N A SL φf φc st st' d env esub vsub
       (0x800035e8#64) (0x800035ec#64) (0x1ffb7c#21)
       sp r sret ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aIn aOperand v8 v9 v18
       out0 ment
@@ -377,12 +385,32 @@ theorem blockB_unary
         hmem2e, hwords, hcode, hviInt, hviSlot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframeB,
         ⟨hg8, hg18, ⟨w19, hg19⟩, ⟨w20, hg20⟩, ⟨w21, hg21⟩⟩,
         hslotRa, hslotS0, hslotS1, hslotS2,
-        hopAl, hopLo, hopHi, hopWin, hopStk,
+        hopLo, hopHi, hopWin, hopStk,
         (by rw [hsub944]; omega), (by rw [hsub944]; omega), (by rw [hsub944]; omega),
         hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin,
         hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
         hstackBudget, hexprBodies, hstoreBodies⟩
   exact ⟨c3, (Steps.single hstep1).trans ((Steps.single hstep2).trans hs3),
-    ment, hpost, hmemframe_m0⟩
+    ⟨⟨ment, hpost.result, ⟨hmemframe_m0, hmemExt⟩⟩, hpost.extra⟩⟩
+
+/-- Ordinary unary caller projection, retaining the actual memory evidence. -/
+def blockB_unary
+    (gouter gpre : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' : Vsa.While.St) (d : Nat) (env : Addr) (op : UnOp) (esub : Expr) (vsub : Value)
+    (sp r sret aExpr aIn aOperand : BitVec 64) (v8 v9 v18 : BitVec 64)
+    (out0 : Array String) (m0 : Mem)
+    (henvValid : EnvValid st env)
+    (henvset : ∃ v19 v20 v21 : BitVec 64,
+      gpre Register.x19 = some v19 ∧ gpre Register.x20 = some v20 ∧
+      gpre Register.x21 = some v21)
+    (hIH : EvalIH st d env esub st' vsub) :=
+  ReturnedWith.forget
+    (blockB_unary_with gouter gpre N A SL φf φc st st' d env op esub vsub
+      sp r sret aExpr aIn aOperand v8 v9 v18 out0 m0 henvValid henvset
+      (EvalIH.withTrue hIH))
+
+#print axioms blockB_unary_with
+#print axioms blockB_unary
 
 end Vsa.Sim

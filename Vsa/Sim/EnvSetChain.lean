@@ -107,7 +107,6 @@ theorem env_set_parent_step
       b0 b1 b2 b3 b4 b5 b6 b7 hMiss.good hMiss.pc hmi hMiss.env4 hMiss.loadedSet rfl
       (by rw [hadd]; omega) (by rw [hadd]; omega)
       (by rw [hadd]; rcases henvWin with h | h <;> omega)
-      (by rw [hadd]; omega)
       (by rw [hadd, hMiss.mem]; exact hb0) (by rw [hadd, hMiss.mem]; exact hb1)
       (by rw [hadd, hMiss.mem]; exact hb2) (by rw [hadd, hMiss.mem]; exact hb3)
       (by rw [hadd, hMiss.mem]; exact hb4) (by rw [hadd, hMiss.mem]; exact hb5)

@@ -96,9 +96,8 @@ def ExecStepGeom
   -- the block node holds `stmts` base @ +8 and `count` @ +16
   read64 m0 (aStmt.toNat + 8) = some aStmtsBase.toNat ∧
   read32 m0 (aStmt.toNat + 16) = some count ∧
-  -- the current statement pointer `stmts[i]` @ base + 8*i, and its 8-alignment
+  -- the current statement pointer `stmts[i]` @ base + 8*i
   read64 m0 (aStmtsBase.toNat + 8 * icount) = some aStmtSub.toNat ∧
-  aStmtSub.toNat % 8 = 0 ∧
   0x80000000 ≤ aStmtSub.toNat ∧ aStmtSub.toNat + 16 ≤ 0x100000000 ∧
   tohostAddr + 16 ≤ aStmtSub.toNat ∧
   (aStmtSub.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aStmtSub.toNat) ∧
@@ -134,7 +133,6 @@ def ExecStepGeom
   (∀ m' : Mem, (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → m0[k]? = m'[k]?) →
     StoreRepr m' N A φf φc st.store) ∧
   -- the block-node geometry (for the `ld`/`lw` reads of stmts base / count):
-  aStmt.toNat % 8 = 0 ∧
   0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 24 ≤ 0x100000000 ∧
   tohostAddr + 16 ≤ aStmt.toNat ∧
   (aStmt.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ aStmt.toNat) ∧
@@ -143,7 +141,6 @@ def ExecStepGeom
   0x80000000 ≤ aStmtsBase.toNat + 8 * icount ∧
   aStmtsBase.toNat + 8 * icount + 8 ≤ 0x100000000 ∧
   (aStmtsBase.toNat + 8 * icount + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aStmtsBase.toNat + 8 * icount) ∧
-  (aStmtsBase.toNat + 8 * icount) % 8 = 0 ∧
   -- stack geometry (recursion headroom + alignment) + spill-slot i @ sp-168:
   SL.lo + 2352 ≤ sp.toNat ∧ sp.toNat ≤ SL.hi ∧ sp.toNat % 16 = 0 ∧
   sp.toNat ≤ 0x100000000 ∧

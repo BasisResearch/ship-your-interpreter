@@ -232,7 +232,6 @@ theorem tr_ssprint_entry1 (g : (R : Register) → Option (RegisterType R))
     site_8000e908_sr c.σ c.tick c.steps _ vmi q _ _ _ _ _ _ _ _
       hgood hpc hmi ha2 hload rfl
       (by rw [hq16]; omega) (by rw [hq16]; omega) (Or.inr (by rw [hq16]; omega))
-      (by rw [hq16]; omega)
       hpinR.1 hpinR.2.1 hpinR.2.2.1 hpinR.2.2.2.1 hpinR.2.2.2.2.1 hpinR.2.2.2.2.2.1
       hpinR.2.2.2.2.2.2.1 hpinR.2.2.2.2.2.2.2 htick
   have hpc1 : σ1.regs.get? Register.PC = some (0x8000e90c#64 : BitVec 64) := by
@@ -397,7 +396,6 @@ theorem tr_ssprint_entry1 (g : (R : Register) → Option (RegisterType R))
       _ _ _ _ _ _ _ _
       hG10 hpc10 hmi10 hp10.2.2.2.2.2.2.2.1 hload10 rfl
       (by rw [hq0]; omega) (by rw [hq0]; omega) (Or.inr (by rw [hq0]; omega))
-      (by rw [hq0]; omega)
       hpinV.1 hpinV.2.1 hpinV.2.2.1 hpinV.2.2.2.1 hpinV.2.2.2.2.1 hpinV.2.2.2.2.2.1
       hpinV.2.2.2.2.2.2.1 hpinV.2.2.2.2.2.2.2 hi10
   have hpc11 : σ11.regs.get? Register.PC = some (0x8000e934#64 : BitVec 64) := by
@@ -574,7 +572,6 @@ theorem tr_ssprint_iter_1v (g : (R : Register) → Option (RegisterType R))
     site_8000e950_sr c.σ c.tick c.steps _ vmi q _ _ _ _
       hgood hpc hmi hp0.1 hload rfl
       (by rw [hq8]; omega) (by rw [hq8]; omega) (Or.inr (by rw [hq8]; omega))
-      (by rw [hq8]; omega)
       hpinC.1 hpinC.2.1 hpinC.2.2.1 hpinC.2.2.2 htick
   have hpc1 : σ1.regs.get? Register.PC = some (0x8000e954#64 : BitVec 64) := by
     have := obs_alu_pc hobs1
@@ -651,7 +648,6 @@ theorem tr_ssprint_iter_1v (g : (R : Register) → Option (RegisterType R))
     site_8000e964_sr σ5 i5 (c.steps + 1 + 1 + 1 + 1 + 1) _ vmi5 viov _ _ _ _ _ _ _ _
       hG5 hpc5 hmi5 hp5.2.2.2.1 hload5 rfl
       (by rw [hv8]; omega) (by rw [hv8]; omega) (Or.inr (by rw [hv8]; omega))
-      (by rw [hv8]; omega)
       hpinL1.1 hpinL1.2.1 hpinL1.2.2.1 hpinL1.2.2.2.1 hpinL1.2.2.2.2.1 hpinL1.2.2.2.2.2.1
       hpinL1.2.2.2.2.2.2.1 hpinL1.2.2.2.2.2.2.2 hi5
   have hpc6 : σ6.regs.get? Register.PC = some (0x8000e968#64 : BitVec 64) := by
@@ -688,7 +684,6 @@ theorem tr_ssprint_iter_1v (g : (R : Register) → Option (RegisterType R))
     site_8000e96c_sr σ7 i7 (c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1) _ vmi7 viov _ _ _ _ _ _ _ _
       hG7 hpc7 hmi7 hp7.2.2.2.2.1 hload7 rfl
       (by rw [hv0]; omega) (by rw [hv0]; omega) (Or.inr (by rw [hv0]; omega))
-      (by rw [hv0]; omega)
       hpinB1.1 hpinB1.2.1 hpinB1.2.2.1 hpinB1.2.2.2.1 hpinB1.2.2.2.2.1 hpinB1.2.2.2.2.2.1
       hpinB1.2.2.2.2.2.2.1 hpinB1.2.2.2.2.2.2.2 hi7
   have hpc8 : σ8.regs.get? Register.PC = some (0x8000e970#64 : BitVec 64) := by
@@ -840,7 +835,6 @@ theorem tr_ssprint_iter_1v (g : (R : Register) → Option (RegisterType R))
     site_8000e984_sr σ13 i13 (c1.steps + 1) _ vmi13 q _ _ _ _ _ _ _ _
       hG13 hpc13 hmi13 hp15.1 hload13 rfl
       (by rw [hq16]; omega) (by rw [hq16]; omega) (Or.inr (by rw [hq16]; omega))
-      (by rw [hq16]; omega)
       hpinR2.1 hpinR2.2.1 hpinR2.2.2.1 hpinR2.2.2.2.1 hpinR2.2.2.2.2.1 hpinR2.2.2.2.2.2.1
       hpinR2.2.2.2.2.2.2.1 hpinR2.2.2.2.2.2.2.2 hi13
   have hpc14 : σ14.regs.get? Register.PC = some (0x8000e988#64 : BitVec 64) := by
@@ -1089,7 +1083,6 @@ theorem tr_ssprint_tail1 (g : (R : Register) → Option (RegisterType R))
     site_8000e99c_sr c.σ c.tick c.steps _ vmi (vsp - 64#64) _ _ _ _ _ _ _ _
       hgood hpc hmi hp0.1 hload rfl
       (by rw [ha16]; omega) (by rw [ha16]; omega) (Or.inr (by rw [ha16]; omega))
-      (by rw [ha16]; omega)
       hpin1.1 hpin1.2.1 hpin1.2.2.1 hpin1.2.2.2.1 hpin1.2.2.2.2.1 hpin1.2.2.2.2.2.1
       hpin1.2.2.2.2.2.2.1 hpin1.2.2.2.2.2.2.2 htick
   have hpc1 : σ1.regs.get? Register.PC = some (0x8000e9a0#64 : BitVec 64) := by
@@ -1109,7 +1102,6 @@ theorem tr_ssprint_tail1 (g : (R : Register) → Option (RegisterType R))
     site_8000e9a0_sr σ1 i1 (c.steps + 1) _ vmi1 (vsp - 64#64) _ _ _ _ _ _ _ _
       hG1 hpc1 hmi1 hp1.2.1 hload1 rfl
       (by rw [ha32]; omega) (by rw [ha32]; omega) (Or.inr (by rw [ha32]; omega))
-      (by rw [ha32]; omega)
       hpin2.1 hpin2.2.1 hpin2.2.2.1 hpin2.2.2.2.1 hpin2.2.2.2.2.1 hpin2.2.2.2.2.2.1
       hpin2.2.2.2.2.2.2.1 hpin2.2.2.2.2.2.2.2 hi1
   have hpc2 : σ2.regs.get? Register.PC = some (0x8000e9a4#64 : BitVec 64) := by
@@ -1129,7 +1121,6 @@ theorem tr_ssprint_tail1 (g : (R : Register) → Option (RegisterType R))
     site_8000e9a4_sr σ2 i2 (c.steps + 1 + 1) _ vmi2 (vsp - 64#64) _ _ _ _ _ _ _ _
       hG2 hpc2 hmi2 hp2.2.2.1 hload2 rfl
       (by rw [ha40]; omega) (by rw [ha40]; omega) (Or.inr (by rw [ha40]; omega))
-      (by rw [ha40]; omega)
       hpin3.1 hpin3.2.1 hpin3.2.2.1 hpin3.2.2.2.1 hpin3.2.2.2.2.1 hpin3.2.2.2.2.2.1
       hpin3.2.2.2.2.2.2.1 hpin3.2.2.2.2.2.2.2 hi2
   have hpc3 : σ3.regs.get? Register.PC = some (0x8000e9a8#64 : BitVec 64) := by
@@ -1149,7 +1140,6 @@ theorem tr_ssprint_tail1 (g : (R : Register) → Option (RegisterType R))
     site_8000e9a8_sr σ3 i3 (c.steps + 1 + 1 + 1) _ vmi3 (vsp - 64#64) _ _ _ _ _ _ _ _
       hG3 hpc3 hmi3 hp3.2.2.2.1 hload3 rfl
       (by rw [ha48]; omega) (by rw [ha48]; omega) (Or.inr (by rw [ha48]; omega))
-      (by rw [ha48]; omega)
       hpin4.1 hpin4.2.1 hpin4.2.2.1 hpin4.2.2.2.1 hpin4.2.2.2.2.1 hpin4.2.2.2.2.2.1
       hpin4.2.2.2.2.2.2.1 hpin4.2.2.2.2.2.2.2 hi3
   have hpc4 : σ4.regs.get? Register.PC = some (0x8000e9ac#64 : BitVec 64) := by
@@ -1169,7 +1159,6 @@ theorem tr_ssprint_tail1 (g : (R : Register) → Option (RegisterType R))
     site_8000e9ac_sr σ4 i4 (c.steps + 1 + 1 + 1 + 1) _ vmi4 (vsp - 64#64) _ _ _ _ _ _ _ _
       hG4 hpc4 hmi4 hp4.2.2.2.2.1 hload4 rfl
       (by rw [ha56]; omega) (by rw [ha56]; omega) (Or.inr (by rw [ha56]; omega))
-      (by rw [ha56]; omega)
       hpin5.1 hpin5.2.1 hpin5.2.2.1 hpin5.2.2.2.1 hpin5.2.2.2.2.1 hpin5.2.2.2.2.2.1
       hpin5.2.2.2.2.2.2.1 hpin5.2.2.2.2.2.2.2 hi4
   have hpc5 : σ5.regs.get? Register.PC = some (0x8000e9b0#64 : BitVec 64) := by
@@ -1189,7 +1178,6 @@ theorem tr_ssprint_tail1 (g : (R : Register) → Option (RegisterType R))
     site_8000e9b0_sr σ5 i5 (c.steps + 1 + 1 + 1 + 1 + 1) _ vmi5 (vsp - 64#64) _ _ _ _ _ _ _ _
       hG5 hpc5 hmi5 hp5.2.2.2.2.2.1 hload5 rfl
       (by rw [ha8]; omega) (by rw [ha8]; omega) (Or.inr (by rw [ha8]; omega))
-      (by rw [ha8]; omega)
       hpin6.1 hpin6.2.1 hpin6.2.2.1 hpin6.2.2.2.1 hpin6.2.2.2.2.1 hpin6.2.2.2.2.2.1
       hpin6.2.2.2.2.2.2.1 hpin6.2.2.2.2.2.2.2 hi5
   have hpc6 : σ6.regs.get? Register.PC = some (0x8000e9b4#64 : BitVec 64) := by
@@ -1261,7 +1249,6 @@ theorem tr_ssprint_tail1 (g : (R : Register) → Option (RegisterType R))
       (vsp - 64#64) _ _ _ _ _ _ _ _
       hG9 hpc9 hmi9 hp9.2.2.2.2.2.2.2.1 hload9 rfl
       (by rw [ha24]; omega) (by rw [ha24]; omega) (Or.inr (by rw [ha24]; omega))
-      (by rw [ha24]; omega)
       hpin10.1 hpin10.2.1 hpin10.2.2.1 hpin10.2.2.2.1 hpin10.2.2.2.2.1 hpin10.2.2.2.2.2.1
       hpin10.2.2.2.2.2.2.1 hpin10.2.2.2.2.2.2.2 hi9
   have hpc10 : σ10.regs.get? Register.PC = some (0x8000e9c4#64 : BitVec 64) := by

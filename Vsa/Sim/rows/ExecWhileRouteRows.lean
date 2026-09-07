@@ -106,15 +106,13 @@ theorem execWhileCondCopy_facts_of_stack
     change ((0x80000000 ≤ (esp + sign_extend (m := 64) (0x050#12)).toNat ∧
       (esp + sign_extend (m := 64) (0x050#12)).toNat + 8 ≤ 0x100000000 ∧
       ((esp + sign_extend (m := 64) (0x050#12)).toNat + 8 ≤ tohostAddr ∨
-        tohostAddr + 8 ≤ (esp + sign_extend (m := 64) (0x050#12)).toNat) ∧
-      (esp + sign_extend (m := 64) (0x050#12)).toNat % 8 = 0) ∧
+        tohostAddr + 8 ≤ (esp + sign_extend (m := 64) (0x050#12)).toNat)) ∧
       LPins8 m (esp + sign_extend (m := 64) (0x050#12)).toNat
         (execWhileWordLds m (esp.toNat + 80)))
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · rw [ha80]; omega
     · rw [ha80]; omega
     · right; rw [ha80]; omega
-    · rw [ha80]; omega
     · rw [ha80]
       simp only [execWhileCondCopyLds, execWhileWordLds, LPins8,
         List.getD_cons_zero, List.getD_cons_succ, List.getD_nil]
@@ -123,15 +121,13 @@ theorem execWhileCondCopy_facts_of_stack
     change ((0x80000000 ≤ (esp + sign_extend (m := 64) (0x058#12)).toNat ∧
       (esp + sign_extend (m := 64) (0x058#12)).toNat + 8 ≤ 0x100000000 ∧
       ((esp + sign_extend (m := 64) (0x058#12)).toNat + 8 ≤ tohostAddr ∨
-        tohostAddr + 8 ≤ (esp + sign_extend (m := 64) (0x058#12)).toNat) ∧
-      (esp + sign_extend (m := 64) (0x058#12)).toNat % 8 = 0) ∧
+        tohostAddr + 8 ≤ (esp + sign_extend (m := 64) (0x058#12)).toNat)) ∧
       LPins8 m (esp + sign_extend (m := 64) (0x058#12)).toNat
         (execWhileWordLds m (esp.toNat + 88)))
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · rw [ha88]; omega
     · rw [ha88]; omega
     · right; rw [ha88]; omega
-    · rw [ha88]; omega
     · rw [ha88]
       simp only [execWhileCondCopyLds, execWhileWordLds, LPins8,
         List.getD_cons_zero, List.getD_cons_succ, List.getD_nil]
@@ -140,15 +136,13 @@ theorem execWhileCondCopy_facts_of_stack
     change ((0x80000000 ≤ (esp + sign_extend (m := 64) (0x060#12)).toNat ∧
       (esp + sign_extend (m := 64) (0x060#12)).toNat + 8 ≤ 0x100000000 ∧
       ((esp + sign_extend (m := 64) (0x060#12)).toNat + 8 ≤ tohostAddr ∨
-        tohostAddr + 8 ≤ (esp + sign_extend (m := 64) (0x060#12)).toNat) ∧
-      (esp + sign_extend (m := 64) (0x060#12)).toNat % 8 = 0) ∧
+        tohostAddr + 8 ≤ (esp + sign_extend (m := 64) (0x060#12)).toNat)) ∧
       LPins8 m (esp + sign_extend (m := 64) (0x060#12)).toNat
         (execWhileWordLds m (esp.toNat + 96)))
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · rw [ha96]; omega
     · rw [ha96]; omega
     · right; rw [ha96]; omega
-    · rw [ha96]; omega
     · rw [ha96]
       simp only [execWhileCondCopyLds, execWhileWordLds, LPins8,
         List.getD_cons_zero, List.getD_cons_succ, List.getD_nil]

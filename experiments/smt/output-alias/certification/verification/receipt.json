@@ -1,0 +1,149 @@
+{
+  "artifacts_sha256": {
+    "FinalAudit.lean": "ce3866b8cc3d2b2982afc3ad8de7ec305c52bece070f3cffb0cdc20f08a49a59",
+    "axioms.log": "12a05aa8b52c3fdefa8b1c5fb1386a0b7caea33e8b53ec4925a9121be1ea8349",
+    "composition-receipt.json": "8389823c2fdd4e358483b44f6af1a0700a6b2d5cbe619e5438e3f90a48c9b10f",
+    "discipline.log": "b8bdee658426f8952e1171093c7ee0060e61740e1f8db8b033de50cb00a0b559",
+    "integration-manifest.json": "c09e44105ff307af0af961a8b4f33c98b9aafce51d90345697254659edcdfba5",
+    "integration.log": "c954336a562fc3d3a511b03d17baba74a7418646c712f0721f8827a236c1a0c1",
+    "package-receipt.json": "316baf7c302c36fee5862c21bafe4baf9c20d2af3ce7069c5b6ee9a8fa09def2",
+    "proof-token-audit.json": "b8284cb33fb5b4c901888910d5ff97a4eb1767824d8eff7f5cc0a8ca1eb75e3d",
+    "unit-build-manifest.json": "e7a7bc87ace137f698b1455dd0b21c3e87eed25665f5f86dae52a9a0dd069cb9",
+    "unit-recheck.log": "e646c562d9e7fa66ead5959b3e8bdb0c9dd905e54fe9c0c83ba06c412336cc6c"
+  },
+  "axiom_audit": {
+    "command": "lake env sh -c 'LEAN_PATH=\"$1${LEAN_PATH:+:$LEAN_PATH}\" lean \"$2\"' final-audit /private/tmp/vsa-full-build.sQd0gM /private/tmp/vsa-alias-loaded/FinalAudit.lean",
+    "declarations": {
+      "Vsa.Sim.EndToEnd.endToEnd_refinement": [
+        "Classical.choice",
+        "Quot.sound",
+        "propext"
+      ],
+      "Vsa.Sim.OutputAliasLoaded.snapshot_halts_twoLF": [
+        "Classical.choice",
+        "Quot.sound",
+        "propext"
+      ],
+      "Vsa.Sim.OutputAliasLoaded.snapshot_loaded": [
+        "Classical.choice",
+        "Quot.sound",
+        "propext"
+      ],
+      "Vsa.Sim.OutputAliasLoaded.snapshot_not_behavioralCorrespondence": [
+        "Classical.choice",
+        "Quot.sound",
+        "propext"
+      ],
+      "Vsa.Sim.OutputAliasLoaded.snapshot_not_interpSim": [
+        "Classical.choice",
+        "Quot.sound",
+        "propext"
+      ],
+      "Vsa.Sim.OutputAliasLoaded.snapshot_not_remainingWork": [
+        "Classical.choice",
+        "Quot.sound",
+        "propext"
+      ],
+      "Vsa.While.LoadedOutputAlias.program_bigStep": [
+        "Classical.choice",
+        "Quot.sound",
+        "propext"
+      ]
+    },
+    "verified_process_exit_code": 0
+  },
+  "boundary": "previously approved physical correction; no additional ownership or resource assumption applied",
+  "certificate_units": 285,
+  "dense_machine_steps": 1860,
+  "discipline": {
+    "counts": {
+      "R1": 11,
+      "R5": 1,
+      "R6": 28,
+      "R7": 18
+    },
+    "new_output_alias_findings": 0,
+    "status": "FAIL_existing_findings"
+  },
+  "elf_sha256": "b146c6edb76ea9a0f0f30be381f8176ed2de9717e1ae9b37feff4b2b9ca1d0f0",
+  "final_halted_transition": 1,
+  "full_smt_fuzzer_coverage_gate": "not rerun; current goal contradicted by Lean refutation",
+  "generation_tools_sha256": {
+    "build_certificates.py": "94e5378975d2afb7ebfb2b20163188398aa9111144f64ee323a4792c1329ec24",
+    "compose_trace.py": "4ebba1e63786341df83166205e717007c20b1953219a0ade773087746356fb28",
+    "generate_certificates.py": "fcb1574220a9a03cb5afaf92b1256b7a5335b423a9020a6f467eb45520cbe48f",
+    "package_certificates.py": "553bd5700291f86b8b95396791fda14d37c0a84f91ac4418acaca00d9276cb2d",
+    "package_composition.py": "9e47bc3d42235c4f0379b22b89b2d59ed7d5b82780bc69916db60b639e1f42f9"
+  },
+  "generator_roundtrip_sha256": "a4cf92a53351d235f94f606ab901e60347299d07683e496139ce41d4e42e3bf7",
+  "integration": {
+    "all_module_fingerprints_current": true,
+    "built": 18,
+    "cache": "/private/tmp/vsa-full-build.sQd0gM",
+    "command": "python3 scripts/build_private.py --output-root /private/tmp/vsa-full-build.sQd0gM --include-executable --resume",
+    "context_fingerprint": "5743b36fb0f7e65a6d54a4dc7f69009e2bf8747748f18c7c06d6d0d7f1fdda44",
+    "missing_objects": [],
+    "modules": 1403,
+    "reused": 1385,
+    "scope": "all Vsa Lean source modules plus VsaRun; native executable linking not tested",
+    "seconds": {
+      "real": 916.51,
+      "sys": 15.35,
+      "user": 930.94
+    },
+    "stale_objects": [],
+    "verified_process_exit_code": 0
+  },
+  "new_proof_token_findings": [],
+  "next_boundary_proposal": "experiments/smt/AST_OWNERSHIP_PROPOSAL.md (unapproved)",
+  "proof_sources_sha256": {
+    "Vsa/Sim/OutputAliasCalls.lean": "6698165214dcfa5da9e525d9bb03c83be75687b5df78394ee7a2f4ba6838ed93",
+    "Vsa/Sim/OutputAliasDecode.lean": "03daf2a39c8f46c9399e50848af743e3d07fad1e3914517f6a89b07a78f9be70",
+    "Vsa/Sim/OutputAliasLoaded.lean": "1c0c604ef66f8b3d25b12d7522268041bb148ae37574a2d3b5cc5b686dc8730d",
+    "Vsa/Sim/OutputAliasMemory.lean": "2d4f0c3bd920aeab6e2b9f9b74522d3edeef110a0dea5512017d2873ba481e5a",
+    "Vsa/Sim/OutputAliasPhysical.lean": "d17a9061049d699eb35fd134c1434fa126c0b452d6face037780a011d37907d1",
+    "Vsa/Sim/OutputAliasPrefix.lean": "199b24801a947993a136ff347c36a461f50413491085e209d44d0043cc83d9ef",
+    "Vsa/Sim/OutputAliasProgram.lean": "12afe5ce9a7bb88f8b342b2ce90b40e1db2b0f2b9ff70ceb623ac7b69796bae4",
+    "Vsa/Sim/OutputAliasProgramRepr.lean": "d72c30ac0e104f4a3898a698c780715e3f9265dea9738f5796f28aa08eeb927c",
+    "Vsa/Sim/OutputAliasPutchar.lean": "1a7506b419f1a5837d11ec618df6742c64a2ca3dbea4bdd3ecd7b9fbd81dac8f",
+    "Vsa/Sim/OutputAliasRefutation.lean": "0c2c992c10b3ed55ec833a7b9437b7fe1df0a38cff6b74c1b9373a4bfea801eb",
+    "Vsa/Sim/OutputAliasRun.lean": "d40b4d0f7533728703a81fb920b4bd3864fd41199067b1ac24b699efbfceeddf",
+    "Vsa/Sim/OutputAliasRun/Data.lean": "f7ee2db79e5387595c4d460858e8ff451b56750f2277fded64cb698ce8474e9b",
+    "Vsa/Sim/OutputAliasRun/Groups.lean": "205daad1cb8d6334a8ede47c47577ffd9dc5f522049433ac5ba9511b67e27ced",
+    "Vsa/Sim/OutputAliasRun/Part00.lean": "15ea873cbfd02f83aef31be1f533c8e87f0c5daab8a4b8e0d7a3079c2407dbca",
+    "Vsa/Sim/OutputAliasRun/Part01.lean": "aa8d39fc64b57098c6025daed685936bf59165703fe3d4a1da75160c009853e9",
+    "Vsa/Sim/OutputAliasRun/Part02.lean": "1ca5de12d218a49c100f0ed8f76947aea8a56b9c982b793237efeb089e7e0fa0",
+    "Vsa/Sim/OutputAliasRun/Part03.lean": "40bb84f04bcc1bf7ee51ec934fd0353b79dcadd5006df92dfb229059a43a9a01",
+    "Vsa/Sim/OutputAliasRun/Part04.lean": "fd94d35bbc8c20053e3328e2335015591b3aa8fa348d287ad88782b3aee766f4",
+    "Vsa/Sim/OutputAliasRun/Part05.lean": "b8bacd0310a6cc6db76c60ec134f69e6802c383efd2c72b5b2f55360c6737147",
+    "Vsa/Sim/OutputAliasRun/Part06.lean": "57de3dfc6560505bd95b37061753b372fe05e7775ba00c5b20d3dde1223a286d",
+    "Vsa/Sim/OutputAliasRun/Part07.lean": "54c63abf8c631cb5879b5233107c976d15d84c2e70b1a8387f6b2842d455c9af",
+    "Vsa/Sim/OutputAliasRun/Part08.lean": "e382f8a6d5e6c6e268116ba7da54ae09f602239625d726c1ca6fdd506ac7b6b8",
+    "Vsa/Sim/OutputAliasRun/Part09.lean": "55a513faff6b29b0528260cf77f7296a7fd73ec5a4b86fd4e9eefece47e747f2",
+    "Vsa/Sim/OutputAliasRun/Part10.lean": "73b92209e5f9a02811683ef9b20185b58de0a3d76edbfa051feef93c406f37a6",
+    "Vsa/Sim/OutputAliasRun/Part11.lean": "0815bc8580f27dd43c039070897950fc6c603638fb6d8cf9ce546153c29a8c89",
+    "Vsa/Sim/OutputAliasRun/Part12.lean": "6b5d07182a84af6e2fd92e057e6e00f470f9013ac8f0772ba9dafed3d384af45",
+    "Vsa/Sim/OutputAliasRun/Part13.lean": "2eb8cfd73d72ce9ce49855e26d2015a48e9f2cdf76b380e99a34e7b51f13786b",
+    "Vsa/Sim/OutputAliasRun/Part14.lean": "08ecc84787f23d177f1b47a093d70f751f52557fde43f06f1f68d9403d9c7632",
+    "Vsa/Sim/OutputAliasSnapshot.lean": "fd4ae24ddb652671d116a10bda3d30bfee2fb978a48daf480366f3b785e09b26",
+    "Vsa/Sim/OutputAliasStore.lean": "57b2b37e9342e7a489e40df1247f9e9c9df9db05b96ed96d5b636b9c5fb8a0e1",
+    "Vsa/Sim/OutputAliasTrace.lean": "0fa85c9272367d2b4f83ffeb1c37855dbea1d3b0fb767f77b8b35c69f63f8ecd",
+    "Vsa/Sim/OutputAliasTraceAlu.lean": "1b3e3a086309a11d5a6539b3b15ce5eb9c7f0e8c8615e518694938324328ff05",
+    "Vsa/Sim/OutputAliasTraceCheck.lean": "f96f0036e282d8cc768597a4d378cbf4a2be8c3e66e0b75ca964b7936e7d4692",
+    "Vsa/Sim/OutputAliasTraceHalt.lean": "e8e4b14906e79dbdd3e2742300080e49d5bad21c341cbd7482c89bd0862cad31",
+    "Vsa/Sim/WriteLogRead.lean": "3ef68880644e27a8f9d105ab1a27ab59d2b9b2a11b30527095f47b24b1844a93"
+  },
+  "recorded_utc": "2026-09-06T05:09:16.302756+00:00",
+  "refutation_template_sha256": "acba9181cdbeed45e033dd840c30bd57f53f12ff3727851191c30407e64ccd40",
+  "remainingWork_constructor": "refuted by snapshot_not_remainingWork",
+  "requested_proof_closure_completed": false,
+  "result": "current_refinement_refuted",
+  "schema": "vsa-output-alias-refutation-v1",
+  "trace_inputs_sha256": {
+    "/private/tmp/vsa-alias-loaded/full-trace/result.jsonl": "50a39fdd7adb205482ab2561c0d997a3256558f1765c7ee3bde79adc63c8b851",
+    "/private/tmp/vsa-alias-loaded/trace-segments.json": "562f7b36b59266f63ef00fdf5ab36e391470388db1a8df4a8a88c27f33675042",
+    "experiments/smt/output-alias/snapshot-replay/FullTrace.lean": "faa8049db3f2d92fea91e3c21f0d9bfc08b053108d1a6a954e08527f305fb7fb",
+    "experiments/smt/output-alias/snapshot-replay/partition_trace.py": "c499f8914bbb149707655ff3bdcc68ca2ef15e244c81b6407479efdfe2b187c6",
+    "experiments/smt/output-alias/snapshot-replay/trace-check.json": "403bde02299fc388adfb270a15bc5b3f55c156f7a658af6ddc6637f27a8cb858"
+  }
+}

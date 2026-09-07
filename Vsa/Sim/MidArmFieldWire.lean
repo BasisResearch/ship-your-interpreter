@@ -109,7 +109,6 @@ def MidArmLeftJalBundle (l er : Expr) (c' : Config) (st st' : Vsa.While.St)
      read64 mcall (sp.toNat - 16) = some v8.toNat ∧
      read64 mcall (sp.toNat - 24) = some v9.toNat ∧
      read64 mcall (sp.toNat - 32) = some v18.toNat ∧
-     aLOp.toNat % 8 = 0 ∧
      0x80000000 ≤ aLOp.toNat ∧ aLOp.toNat + 16 ≤ 0x100000000 ∧
      tohostAddr + 16 ≤ aLOp.toNat ∧
      (aLOp.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aLOp.toNat) ∧

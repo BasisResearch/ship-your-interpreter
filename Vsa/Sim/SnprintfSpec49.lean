@@ -145,7 +145,7 @@ theorem printToSsprintNN_spec
   -- === 0x8000782c: ld a2,240(sp) — the running cursor ===
   obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
     site_8000782c_pv c.σ c.tick (c.steps) (0x8000782c#64) vmi0 vsp ((sdData_val vcur).extractLsb' 0 8) ((sdData_val vcur).extractLsb' 8 8) ((sdData_val vcur).extractLsb' 16 8) ((sdData_val vcur).extractLsb' 24 8) ((sdData_val vcur).extractLsb' 32 8) ((sdData_val vcur).extractLsb' 40 8) ((sdData_val vcur).extractLsb' 48 8) ((sdData_val vcur).extractLsb' 56 8)
-      hG hpc hmi0 hx2_0 hload0 rfl (by rw [hoff240]; omega) (by rw [hoff240]; omega) (Or.inr (by rw [hoff240]; omega)) (by rw [hoff240]; omega) hr0 hr1 hr2 hr3 hr4 hr5 hr6 hr7 htick
+      hG hpc hmi0 hx2_0 hload0 rfl (by rw [hoff240]; omega) (by rw [hoff240]; omega) (Or.inr (by rw [hoff240]; omega))  hr0 hr1 hr2 hr3 hr4 hr5 hr6 hr7 htick
   have hstep1 : Step c ⟨σ1, i1, c.steps+1⟩ := by cases c; exact hs1
   have hpc1 : σ1.regs.get? Register.PC = some (0x80007830#64) := by
     have := obs_alu_pc hobs1
@@ -629,7 +629,7 @@ theorem printToSsprintNN_spec
   -- === 0x800078c4: lw a5,232(sp) — the iov count ===
   obtain ⟨σ13, i13, hs13, hi13, hG13, hmem13, hobs13⟩ :=
     site_800078c4_pv σ12 i12 (c.steps+1+1+1+1+1+1+1+1+1+1+1+1) (0x800078c4#64) vmi12 vsp (vcnt.extractLsb' 0 8) (vcnt.extractLsb' 8 8) (vcnt.extractLsb' 16 8) (vcnt.extractLsb' 24 8)
-      hG12 hpc12 hmi12 hx2_12 hload12 rfl (by rw [hoff232]; omega) (by rw [hoff232]; omega) (Or.inr (by rw [hoff232]; omega)) (by rw [hoff232]; omega) hcnt0_12 hcnt1_12 hcnt2_12 hcnt3_12 hi12
+      hG12 hpc12 hmi12 hx2_12 hload12 rfl (by rw [hoff232]; omega) (by rw [hoff232]; omega) (Or.inr (by rw [hoff232]; omega))  hcnt0_12 hcnt1_12 hcnt2_12 hcnt3_12 hi12
   have hstep13 : Step ⟨σ12,i12,c.steps+1+1+1+1+1+1+1+1+1+1+1+1⟩ ⟨σ13,i13,c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1⟩ := hs13
   have hpc13 : σ13.regs.get? Register.PC = some (0x800078c8#64) := by
     have := obs_alu_pc hobs13

@@ -739,7 +739,7 @@ theorem sfvDe8cF_facts (g : SFVG) (hg : SFVGOk g)
   chain_facts hcode with "Vsa.Sim.Code.__sfvwrite_r_at_"
   · -- ld a5,16(a2)
     have ht : tohostAddr = 0x8001ad00 := rfl
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (g.uio + sign_extend (m := 64) (0x010#12)).toNat
       rw [sfv_residAddr g hg]
       have ht : tohostAddr = 0x8001ad00 := rfl
@@ -755,10 +755,6 @@ theorem sfvDe8cF_facts (g : SFVG) (hg : SFVGOk g)
       right
       have ht : tohostAddr = 0x8001ad00 := rfl
       have := hg.sp_htif; have := hg.uio_above
-      omega
-    · show (g.uio + sign_extend (m := 64) (0x010#12)).toNat % 8 = 0
-      rw [sfv_residAddr g hg]
-      have := hg.uio_align
       omega
     · show LPins8 g.m0 (g.uio + sign_extend (m := 64) (0x010#12)).toNat (bytes8 g.len)
       rw [sfv_residAddr g hg]
@@ -781,7 +777,7 @@ theorem sfvDe94F_facts (g : SFVG) (hg : SFVGOk g)
     have hs48 := sfv_slotAddr g hg (0x030#12) 48 (by decide) (by omega)
     have hs40 := sfv_slotAddr g hg (0x028#12) 40 (by decide) (by omega)
     have hs88 := sfv_slotAddr g hg (0x058#12) 88 (by decide) (by omega)
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_, ?_⟩
     · show 0x80000000 ≤ (g.fp + sign_extend (m := 64) (0x010#12)).toNat
       rw [sfv_flAddr g hg]
       have := hg.fp_htif
@@ -795,10 +791,6 @@ theorem sfvDe94F_facts (g : SFVG) (hg : SFVGOk g)
       rw [sfv_flAddr g hg]
       right
       have := hg.fp_htif
-      omega
-    · show (g.fp + sign_extend (m := 64) (0x010#12)).toNat % 2 = 0
-      rw [sfv_flAddr g hg]
-      have := hg.fp_align
       omega
     · show (g.m0[(g.fp + sign_extend (m := 64) (0x010#12)).toNat]?).getD 0 = g.fl0
       rw [sfv_flAddr g hg]
@@ -882,7 +874,7 @@ theorem sfvDec0F_facts (g : SFVG) (hg : SFVGOk g)
   chain_facts hcode with "Vsa.Sim.Code.__sfvwrite_r_at_"
   · -- ld a5,24(a1)
     have ht : tohostAddr = 0x8001ad00 := rfl
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (g.fp + sign_extend (m := 64) (0x018#12)).toNat
       rw [sfv_baseAddr g hg]
       have := hg.fp_htif
@@ -896,10 +888,6 @@ theorem sfvDec0F_facts (g : SFVG) (hg : SFVGOk g)
       rw [sfv_baseAddr g hg]
       right
       have := hg.fp_htif
-      omega
-    · show (g.fp + sign_extend (m := 64) (0x018#12)).toNat % 8 = 0
-      rw [sfv_baseAddr g hg]
-      have := hg.fp_align
       omega
     · show LPins8 (sfvM1a g) (g.fp + sign_extend (m := 64) (0x018#12)).toNat
         (bytes8 g.base)
@@ -983,7 +971,7 @@ theorem sfvDec8F_facts (g : SFVG) (hg : SFVGOk g)
     have hs64 := sfv_slotAddr g hg (0x040#12) 64 (by decide) (by omega)
     have hs56 := sfv_slotAddr g hg (0x038#12) 56 (by decide) (by omega)
     have hs32 := sfv_slotAddr g hg (0x020#12) 32 (by decide) (by omega)
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (g.uio + sign_extend (m := 64) (0x000#12)).toNat
       rw [sfv_uioAddr g hg]
       have := hg.sp_htif; have := hg.uio_above
@@ -997,10 +985,6 @@ theorem sfvDec8F_facts (g : SFVG) (hg : SFVGOk g)
       rw [sfv_uioAddr g hg]
       right
       have := hg.sp_htif; have := hg.uio_above
-      omega
-    · show (g.uio + sign_extend (m := 64) (0x000#12)).toNat % 8 = 0
-      rw [sfv_uioAddr g hg]
-      have := hg.uio_align
       omega
     · -- pins over the 4-spill store TOWER: memory stays a metavar (`_`),
       -- peel outermost store first (`pin8_peel_sd`) — NEVER `show` it back
@@ -1055,7 +1039,7 @@ theorem sfvE0bc_facts (g : SFVG) (hg : SFVGOk g)
   chain_facts hcode with "Vsa.Sim.Code.__sfvwrite_r_at_"
   · -- ld s3,0(s1)
     have ht : tohostAddr = 0x8001ad00 := rfl
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (g.iovp + sign_extend (m := 64) (0x000#12)).toNat
       rw [sfv_iovBaseAddr g hg]
       have := hg.sp_htif; have := hg.iov_above
@@ -1070,10 +1054,6 @@ theorem sfvE0bc_facts (g : SFVG) (hg : SFVGOk g)
       right
       have := hg.sp_htif; have := hg.iov_above
       omega
-    · show (g.iovp + sign_extend (m := 64) (0x000#12)).toNat % 8 = 0
-      rw [sfv_iovBaseAddr g hg]
-      have := hg.iov_align
-      omega
     · show LPins8 (sfvM1 g) (g.iovp + sign_extend (m := 64) (0x000#12)).toNat
         (bytes8 g.buf)
       rw [sfv_iovBaseAddr g hg]
@@ -1083,7 +1063,7 @@ theorem sfvE0bc_facts (g : SFVG) (hg : SFVGOk g)
       omega
   · -- ld s2,8(s1)
     have ht : tohostAddr = 0x8001ad00 := rfl
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (g.iovp + sign_extend (m := 64) (0x008#12)).toNat
       rw [sfv_iovLenAddr g hg]
       have := hg.sp_htif; have := hg.iov_above
@@ -1097,10 +1077,6 @@ theorem sfvE0bc_facts (g : SFVG) (hg : SFVGOk g)
       rw [sfv_iovLenAddr g hg]
       right
       have := hg.sp_htif; have := hg.iov_above
-      omega
-    · show (g.iovp + sign_extend (m := 64) (0x008#12)).toNat % 8 = 0
-      rw [sfv_iovLenAddr g hg]
-      have := hg.iov_align
       omega
     · show LPins8 (sfvM1 g) (g.iovp + sign_extend (m := 64) (0x008#12)).toNat
         (bytes8 g.len)
@@ -1142,7 +1118,7 @@ theorem sfvDf10_facts (g : SFVG) (hg : SFVGOk g)
   chain_facts hcode with "Vsa.Sim.Code.__sfvwrite_r_at_"
   · -- ld a5,64(s0)
     have ht : tohostAddr = 0x8001ad00 := rfl
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (g.fp + sign_extend (m := 64) (0x040#12)).toNat
       rw [sfv_wvecAddr g hg]
       have := hg.fp_htif
@@ -1157,10 +1133,6 @@ theorem sfvDf10_facts (g : SFVG) (hg : SFVGOk g)
       right
       have := hg.fp_htif
       omega
-    · show (g.fp + sign_extend (m := 64) (0x040#12)).toNat % 8 = 0
-      rw [sfv_wvecAddr g hg]
-      have := hg.fp_align
-      omega
     · show LPins8 (sfvM1 g) (g.fp + sign_extend (m := 64) (0x040#12)).toNat
         (bytes8 0x8000efd4#64)
       rw [sfv_wvecAddr g hg]
@@ -1170,7 +1142,7 @@ theorem sfvDf10_facts (g : SFVG) (hg : SFVGOk g)
       omega
   · -- ld a1,48(s0)
     have ht : tohostAddr = 0x8001ad00 := rfl
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (g.fp + sign_extend (m := 64) (0x030#12)).toNat
       rw [sfv_cookieAddr g hg]
       have := hg.fp_htif
@@ -1184,10 +1156,6 @@ theorem sfvDf10_facts (g : SFVG) (hg : SFVGOk g)
       rw [sfv_cookieAddr g hg]
       right
       have := hg.fp_htif
-      omega
-    · show (g.fp + sign_extend (m := 64) (0x030#12)).toNat % 8 = 0
-      rw [sfv_cookieAddr g hg]
-      have := hg.fp_align
       omega
     · show LPins8 (sfvM1 g) (g.fp + sign_extend (m := 64) (0x030#12)).toNat
         (bytes8 g.fp)
@@ -1220,7 +1188,7 @@ theorem sfvDf24F_facts (g : SFVG) (hg : SFVGOk g)
   chain_facts hcode with "Vsa.Sim.Code.__sfvwrite_r_at_"
   · -- ld a5,16(s4) — the resid, read back off the callee image
     have ht : tohostAddr = 0x8001ad00 := rfl
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (g.uio + sign_extend (m := 64) (0x010#12)).toNat
       rw [sfv_residAddr g hg]
       have := hg.sp_htif; have := hg.uio_above
@@ -1234,10 +1202,6 @@ theorem sfvDf24F_facts (g : SFVG) (hg : SFVGOk g)
       rw [sfv_residAddr g hg]
       right
       have := hg.sp_htif; have := hg.uio_above
-      omega
-    · show (g.uio + sign_extend (m := 64) (0x010#12)).toNat % 8 = 0
-      rw [sfv_residAddr g hg]
-      have := hg.uio_align
       omega
     · show LPins8 (sfvMC g) (g.uio + sign_extend (m := 64) (0x010#12)).toNat
         (bytes8 g.len)
@@ -1277,7 +1241,7 @@ theorem sfvDf3c_facts (g : SFVG) (hg : SFVGOk g)
     have hs64 := sfv_slotAddr g hg (0x040#12) 64 (by decide) (by omega)
     have hs56 := sfv_slotAddr g hg (0x038#12) 56 (by decide) (by omega)
     have hs32 := sfv_slotAddr g hg (0x020#12) 32 (by decide) (by omega)
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (sfvSpE g + sign_extend (m := 64) (0x048#12)).toNat
       rw [hs72]; have := hg.sp_htif; omega
     · show (sfvSpE g + sign_extend (m := 64) (0x048#12)).toNat + 8 ≤ 0x100000000
@@ -1285,8 +1249,6 @@ theorem sfvDf3c_facts (g : SFVG) (hg : SFVGOk g)
     · show (sfvSpE g + sign_extend (m := 64) (0x048#12)).toNat + 8 ≤ tohostAddr
         ∨ tohostAddr + 8 ≤ (sfvSpE g + sign_extend (m := 64) (0x048#12)).toNat
       rw [hs72]; right; have := hg.sp_htif; omega
-    · show (sfvSpE g + sign_extend (m := 64) (0x048#12)).toNat % 8 = 0
-      rw [hs72]; have := hg.sp_align; omega
     · show LPins8 (sfvM3 g) (sfvSpE g + sign_extend (m := 64) (0x048#12)).toNat
         (bytes8 g.sv.s1)
       refine lpins8_of_pin8 (sfvM3_spill_pin8 g hg
@@ -1308,7 +1270,7 @@ theorem sfvDf3c_facts (g : SFVG) (hg : SFVGOk g)
     have hs64 := sfv_slotAddr g hg (0x040#12) 64 (by decide) (by omega)
     have hs56 := sfv_slotAddr g hg (0x038#12) 56 (by decide) (by omega)
     have hs32 := sfv_slotAddr g hg (0x020#12) 32 (by decide) (by omega)
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (sfvSpE g + sign_extend (m := 64) (0x040#12)).toNat
       rw [hs64]; have := hg.sp_htif; omega
     · show (sfvSpE g + sign_extend (m := 64) (0x040#12)).toNat + 8 ≤ 0x100000000
@@ -1316,8 +1278,6 @@ theorem sfvDf3c_facts (g : SFVG) (hg : SFVGOk g)
     · show (sfvSpE g + sign_extend (m := 64) (0x040#12)).toNat + 8 ≤ tohostAddr
         ∨ tohostAddr + 8 ≤ (sfvSpE g + sign_extend (m := 64) (0x040#12)).toNat
       rw [hs64]; right; have := hg.sp_htif; omega
-    · show (sfvSpE g + sign_extend (m := 64) (0x040#12)).toNat % 8 = 0
-      rw [hs64]; have := hg.sp_align; omega
     · show LPins8 (sfvM3 g) (sfvSpE g + sign_extend (m := 64) (0x040#12)).toNat
         (bytes8 g.sv.s2)
       refine lpins8_of_pin8 (sfvM3_spill_pin8 g hg
@@ -1338,7 +1298,7 @@ theorem sfvDf3c_facts (g : SFVG) (hg : SFVGOk g)
     have hs64 := sfv_slotAddr g hg (0x040#12) 64 (by decide) (by omega)
     have hs56 := sfv_slotAddr g hg (0x038#12) 56 (by decide) (by omega)
     have hs32 := sfv_slotAddr g hg (0x020#12) 32 (by decide) (by omega)
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (sfvSpE g + sign_extend (m := 64) (0x038#12)).toNat
       rw [hs56]; have := hg.sp_htif; omega
     · show (sfvSpE g + sign_extend (m := 64) (0x038#12)).toNat + 8 ≤ 0x100000000
@@ -1346,8 +1306,6 @@ theorem sfvDf3c_facts (g : SFVG) (hg : SFVGOk g)
     · show (sfvSpE g + sign_extend (m := 64) (0x038#12)).toNat + 8 ≤ tohostAddr
         ∨ tohostAddr + 8 ≤ (sfvSpE g + sign_extend (m := 64) (0x038#12)).toNat
       rw [hs56]; right; have := hg.sp_htif; omega
-    · show (sfvSpE g + sign_extend (m := 64) (0x038#12)).toNat % 8 = 0
-      rw [hs56]; have := hg.sp_align; omega
     · show LPins8 (sfvM3 g) (sfvSpE g + sign_extend (m := 64) (0x038#12)).toNat
         (bytes8 g.sv.s3)
       refine lpins8_of_pin8 (sfvM3_spill_pin8 g hg
@@ -1368,7 +1326,7 @@ theorem sfvDf3c_facts (g : SFVG) (hg : SFVGOk g)
     have hs64 := sfv_slotAddr g hg (0x040#12) 64 (by decide) (by omega)
     have hs56 := sfv_slotAddr g hg (0x038#12) 56 (by decide) (by omega)
     have hs32 := sfv_slotAddr g hg (0x020#12) 32 (by decide) (by omega)
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (sfvSpE g + sign_extend (m := 64) (0x020#12)).toNat
       rw [hs32]; have := hg.sp_htif; omega
     · show (sfvSpE g + sign_extend (m := 64) (0x020#12)).toNat + 8 ≤ 0x100000000
@@ -1376,8 +1334,6 @@ theorem sfvDf3c_facts (g : SFVG) (hg : SFVGOk g)
     · show (sfvSpE g + sign_extend (m := 64) (0x020#12)).toNat + 8 ≤ tohostAddr
         ∨ tohostAddr + 8 ≤ (sfvSpE g + sign_extend (m := 64) (0x020#12)).toNat
       rw [hs32]; right; have := hg.sp_htif; omega
-    · show (sfvSpE g + sign_extend (m := 64) (0x020#12)).toNat % 8 = 0
-      rw [hs32]; have := hg.sp_align; omega
     · show LPins8 (sfvM3 g) (sfvSpE g + sign_extend (m := 64) (0x020#12)).toNat
         (bytes8 g.sv.s6)
       refine lpins8_of_pin8 (sfvM3_spill_pin8 g hg
@@ -1404,7 +1360,7 @@ theorem sfvDf50_facts (g : SFVG) (hg : SFVGOk g)
     have hs64 := sfv_slotAddr g hg (0x040#12) 64 (by decide) (by omega)
     have hs56 := sfv_slotAddr g hg (0x038#12) 56 (by decide) (by omega)
     have hs32 := sfv_slotAddr g hg (0x020#12) 32 (by decide) (by omega)
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (sfvSpE g + sign_extend (m := 64) (0x058#12)).toNat
       rw [hs88]; have := hg.sp_htif; omega
     · show (sfvSpE g + sign_extend (m := 64) (0x058#12)).toNat + 8 ≤ 0x100000000
@@ -1412,8 +1368,6 @@ theorem sfvDf50_facts (g : SFVG) (hg : SFVGOk g)
     · show (sfvSpE g + sign_extend (m := 64) (0x058#12)).toNat + 8 ≤ tohostAddr
         ∨ tohostAddr + 8 ≤ (sfvSpE g + sign_extend (m := 64) (0x058#12)).toNat
       rw [hs88]; right; have := hg.sp_htif; omega
-    · show (sfvSpE g + sign_extend (m := 64) (0x058#12)).toNat % 8 = 0
-      rw [hs88]; have := hg.sp_align; omega
     · show LPins8 (sfvM3 g) (sfvSpE g + sign_extend (m := 64) (0x058#12)).toNat
         (bytes8 g.ra0)
       refine lpins8_of_pin8 (sfvM3_spill_pin8 g hg
@@ -1435,7 +1389,7 @@ theorem sfvDf50_facts (g : SFVG) (hg : SFVGOk g)
     have hs64 := sfv_slotAddr g hg (0x040#12) 64 (by decide) (by omega)
     have hs56 := sfv_slotAddr g hg (0x038#12) 56 (by decide) (by omega)
     have hs32 := sfv_slotAddr g hg (0x020#12) 32 (by decide) (by omega)
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (sfvSpE g + sign_extend (m := 64) (0x050#12)).toNat
       rw [hs80]; have := hg.sp_htif; omega
     · show (sfvSpE g + sign_extend (m := 64) (0x050#12)).toNat + 8 ≤ 0x100000000
@@ -1443,8 +1397,6 @@ theorem sfvDf50_facts (g : SFVG) (hg : SFVGOk g)
     · show (sfvSpE g + sign_extend (m := 64) (0x050#12)).toNat + 8 ≤ tohostAddr
         ∨ tohostAddr + 8 ≤ (sfvSpE g + sign_extend (m := 64) (0x050#12)).toNat
       rw [hs80]; right; have := hg.sp_htif; omega
-    · show (sfvSpE g + sign_extend (m := 64) (0x050#12)).toNat % 8 = 0
-      rw [hs80]; have := hg.sp_align; omega
     · show LPins8 (sfvM3 g) (sfvSpE g + sign_extend (m := 64) (0x050#12)).toNat
         (bytes8 g.s00)
       refine lpins8_of_pin8 (sfvM3_spill_pin8 g hg []
@@ -1466,7 +1418,7 @@ theorem sfvDf50_facts (g : SFVG) (hg : SFVGOk g)
     have hs64 := sfv_slotAddr g hg (0x040#12) 64 (by decide) (by omega)
     have hs56 := sfv_slotAddr g hg (0x038#12) 56 (by decide) (by omega)
     have hs32 := sfv_slotAddr g hg (0x020#12) 32 (by decide) (by omega)
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (sfvSpE g + sign_extend (m := 64) (0x030#12)).toNat
       rw [hs48]; have := hg.sp_htif; omega
     · show (sfvSpE g + sign_extend (m := 64) (0x030#12)).toNat + 8 ≤ 0x100000000
@@ -1474,8 +1426,6 @@ theorem sfvDf50_facts (g : SFVG) (hg : SFVGOk g)
     · show (sfvSpE g + sign_extend (m := 64) (0x030#12)).toNat + 8 ≤ tohostAddr
         ∨ tohostAddr + 8 ≤ (sfvSpE g + sign_extend (m := 64) (0x030#12)).toNat
       rw [hs48]; right; have := hg.sp_htif; omega
-    · show (sfvSpE g + sign_extend (m := 64) (0x030#12)).toNat % 8 = 0
-      rw [hs48]; have := hg.sp_align; omega
     · show LPins8 (sfvM3 g) (sfvSpE g + sign_extend (m := 64) (0x030#12)).toNat
         (bytes8 g.sv.s4)
       refine lpins8_of_pin8 (sfvM3_spill_pin8 g hg [sfvE_s0 g]
@@ -1496,7 +1446,7 @@ theorem sfvDf50_facts (g : SFVG) (hg : SFVGOk g)
     have hs64 := sfv_slotAddr g hg (0x040#12) 64 (by decide) (by omega)
     have hs56 := sfv_slotAddr g hg (0x038#12) 56 (by decide) (by omega)
     have hs32 := sfv_slotAddr g hg (0x020#12) 32 (by decide) (by omega)
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (sfvSpE g + sign_extend (m := 64) (0x028#12)).toNat
       rw [hs40]; have := hg.sp_htif; omega
     · show (sfvSpE g + sign_extend (m := 64) (0x028#12)).toNat + 8 ≤ 0x100000000
@@ -1504,8 +1454,6 @@ theorem sfvDf50_facts (g : SFVG) (hg : SFVGOk g)
     · show (sfvSpE g + sign_extend (m := 64) (0x028#12)).toNat + 8 ≤ tohostAddr
         ∨ tohostAddr + 8 ≤ (sfvSpE g + sign_extend (m := 64) (0x028#12)).toNat
       rw [hs40]; right; have := hg.sp_htif; omega
-    · show (sfvSpE g + sign_extend (m := 64) (0x028#12)).toNat % 8 = 0
-      rw [hs40]; have := hg.sp_align; omega
     · show LPins8 (sfvM3 g) (sfvSpE g + sign_extend (m := 64) (0x028#12)).toNat
         (bytes8 g.sv.s5)
       refine lpins8_of_pin8 (sfvM3_spill_pin8 g hg [sfvE_s0 g, sfvE_s4 g]

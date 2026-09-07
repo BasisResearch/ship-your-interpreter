@@ -222,4 +222,16 @@ theorem StoreBodiesBound.afterExecS {P : Nat} {st st' : St} {d : Nat}
 
 #print axioms StoreBodiesBound.afterExecS
 
+/-- Evaluating an expression preserves closure-body bounds through the
+expression-statement case of the existing execution theorem. -/
+theorem StoreBodiesBound.afterEvalE {P : Nat} {st st' : St} {d : Nat}
+    {env : Addr} {e : Expr} {v : Value}
+    (hEval : EvalE st d env e st' v)
+    (hExpr : e.bodiesBound P = true)
+    (hStore : StoreBodiesBound st.store P) :
+    StoreBodiesBound st'.store P :=
+  StoreBodiesBound.afterExecS (.expr st d env e st' v hEval) hExpr hStore
+
+#print axioms StoreBodiesBound.afterEvalE
+
 end Vsa.While

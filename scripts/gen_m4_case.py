@@ -143,15 +143,14 @@ theorem {row['payload_site']}
     (hhiram : (vexpr + sign_extend (m := 64) (0x008#12)).toNat + {nbytes} ≤ 0x100000000)
     (hhtif : (vexpr + sign_extend (m := 64) (0x008#12)).toNat + {nbytes} ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (vexpr + sign_extend (m := 64) (0x008#12)).toNat)
-    (halign : (vexpr + sign_extend (m := 64) (0x008#12)).toNat % {nbytes} = 0)
 {pins} (hi : i < 2) :
     ∃ (σ' : MState) (i' : Nat),
       Vsa.Machine.Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧ σ'.mem = σ.mem ∧
       ReadsLikePost σ'
         (sigmaPost_alu σ pc vminstret Register.x11
           (sign_extend (m := 64) ((({append_chain}) : BitVec (8 * {nbytes}))))) := by
-  -- PER-CASE: mirror site_80003408_ee (`ld`, exec_ld) / site_80003420_ee (`lw`,
-  -- exec_lw): subst hpcv; obtain byte pins from `eval_expr_at_{pc[2:]}`; apply
+  -- PER-CASE: mirror site_80003408_ee (`ld`, exec_ld_ramv) / site_80003420_ee (`lw`,
+  -- exec_lw_ramv): subst hpcv; obtain byte pins from `eval_expr_at_{pc[2:]}`; apply
   -- stepObs_alu with decode_{word[2:]} and bytes {b[0]} {b[1]} {b[2]} {b[3]}.
   sorry
 """
@@ -313,7 +312,7 @@ theorem {row['blockC']}
         j_site = f"site_{row['j_pc'][2:]}_ee"
         return head + f"""  intro c hc
   obtain ⟨ment, hG, htick, hpc, ha0, hs1, ha2, hsp, hra, hmiEx, hout, hmem, hcode, hviCode,
-    hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
+    hexpr, houtStr, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
@@ -444,7 +443,6 @@ structure {row['entry_struct']}
   frame : ∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R
   code_stack_disjoint : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
   expr_stack_disjoint : aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
-  expr_align : aExpr.toNat % 8 = 0
   expr_ram : 0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000
   expr_win : tohostAddr + 16 ≤ aExpr.toNat
   sret_align : sret.toNat % 8 = 0
@@ -548,7 +546,7 @@ theorem {row['theorem']} : {row['goal_def']} := by
       (by have := hc.table_stack_disjoint; simp only [jumpTableBase]; omega)
       c ⟨⟨hc.good, hc.tick, hc.pc, hc.a0, hc.a1, hc.a2, hc.ra, hc.ra_align, hc.spReg,
       hc.stackOK, hc.minstret, hc.mem, hc.code, hc.expr, hc.store, hc.store_survives, hc.out,
-      hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
+      hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_ram,
       hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
       hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
       hc.spill_defined⟩, rfl⟩

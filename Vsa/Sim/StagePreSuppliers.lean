@@ -85,7 +85,6 @@ theorem blockB_unary_stagePre
         EvalGround ment SL A (sp - 1088#64)
           ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aOperand.toNat esub ∧
         aExpr.toNat + 24 ≤ 0x100000000 ∧
-        aOperand.toNat % 8 = 0 ∧
         0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aOperand.toNat ∧
         (aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat) ∧
@@ -105,12 +104,12 @@ theorem blockB_unary_stagePre
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 2 c (fun c' => JalPreBundle esub c' st d env) := by
   obtain ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hsubexpr, hground, hexprHi24,
-    hopAl, hopLo, hopHi, hopWin, hopStk,
+    hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
     hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
-    hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
+    hexpr, houtStr, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
@@ -131,7 +130,7 @@ theorem blockB_unary_stagePre
     site_800035e0_ee c.σ c.tick c.steps (0x800035e0#64) vmi aExpr pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7
       hG hpc hmi ha2 (hmem ▸ hcode) rfl
       (by rw [haddr16]; omega) (by rw [haddr16]; omega)
-      (by rw [haddr16, htoh]; right; omega) (by rw [haddr16]; omega)
+      (by rw [haddr16, htoh]; right; omega)
       (by rw [haddr16, hmem]; exact hp0) (by rw [haddr16, hmem]; exact hp1)
       (by rw [haddr16, hmem]; exact hp2) (by rw [haddr16, hmem]; exact hp3)
       (by rw [haddr16, hmem]; exact hp4) (by rw [haddr16, hmem]; exact hp5)
@@ -220,7 +219,7 @@ theorem blockB_unary_stagePre
       (by obtain ⟨w19, w20, w21, h19, h20, h21⟩ := henvset
           exact ⟨hg8, hg18, ⟨w19, h19⟩, ⟨w20, h20⟩, ⟨w21, h21⟩⟩),
       hslotRa, hslotS0, hslotS1, hslotS2,
-      hopAl, hopLo, hopHi, hopWin, hopStk,
+      hopLo, hopHi, hopWin, hopStk,
       (by rw [hsub944]; omega), (by rw [hsub944]; omega), (by rw [hsub944]; omega),
       hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin,
       hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -284,7 +283,7 @@ theorem blockB_binary_leftStagePre
     hpayL, hexprL, hpayR, hexprR, hMemExtM0, hGmt47,
     hstackBudgetL, hexprBodiesL, hstoreBodiesL⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
-    hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
+    hexpr, houtStr, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
@@ -317,7 +316,7 @@ theorem blockB_binary_leftStagePre
     site_800034e8_ee c.σ c.tick c.steps (0x800034e8#64) vmi aExpr lp0 lp1 lp2 lp3 lp4 lp5 lp6 lp7
       hG hpc hmi ha2 (hmem ▸ hcode) rfl
       (by rw [haddr16]; omega) (by rw [haddr16]; omega)
-      (by rw [haddr16, htoh]; right; omega) (by rw [haddr16]; omega)
+      (by rw [haddr16, htoh]; right; omega)
       (by rw [haddr16, hmem]; exact hlp0) (by rw [haddr16, hmem]; exact hlp1)
       (by rw [haddr16, hmem]; exact hlp2) (by rw [haddr16, hmem]; exact hlp3)
       (by rw [haddr16, hmem]; exact hlp4) (by rw [haddr16, hmem]; exact hlp5)
@@ -499,7 +498,7 @@ theorem blockB_binary_leftStagePre
       (fun a ha => (hAgMcall1 a ha).symm)
   have hpayL1 : read64 mcall1 (aExpr.toNat + 16) = some aLOp.toNat := by
     rw [evalGround_ast_read64_agree hGmt47 hBE.spSLhi
-      (fun a ha => (hAgMcall1 a ha).symm) (off := 16) (by omega)]
+      (fun a ha => (hAgMcall1 a ha).symm) (off := 16) (by simp [exprReadFields])]
     exact hpayL
   have hGroundL : EvalGround mcall1 SL A (sp - 1088#64)
       ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)) aLOp.toNat el :=
@@ -526,7 +525,7 @@ theorem blockB_binary_leftStagePre
       hcodemcall1, hviInt1, hviSlot1, hnbs1, hGroundL, hexprL1, hstore1, hstoreSurv1,
       hframe4, ⟨hg8, hg18, ⟨v19, hgx19v⟩, hRec.x20_defined, hRec.x21_defined⟩,
       hslotRa1, hslotS01, hslotS11, hslotS21,
-      hBE.lop_align, hBE.lop_ram.1, hBE.lop_ram.2, hBE.lop_win, hBE.lop_stk,
+      hBE.lop_ram.1, hBE.lop_ram.2, hBE.lop_win, hBE.lop_stk,
       (by rw [hsub968]; omega), (by rw [hsub968]; omega), (by rw [hsub968]; omega),
       (by omega), hBE.spSLhi, hBE.sp16, (by omega), hSLlo, hBE.SLhiRam, hSLwin,
       hBE.codeStk, hBE.viStk, hBE.tableStk, hBE.arenaStk, hBE.arenaCode,

@@ -522,7 +522,7 @@ theorem swEntry_facts (g : SWG) (hg : SWGOk g)
     ChainFacts g.m0 g.m0 (swEntryL g) [[g.fl0, g.fl1]] swriteXefd4FSeg := by
   chain_facts hcode with "Vsa.Sim.Code.__swrite_at_"
   · -- lh a5,16(a1)
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_, ?_⟩
     · show 0x80000000 ≤ (g.fp + sign_extend (m := 64) (0x010#12)).toNat
       rw [sw_flAddr g hg]
       have ht : tohostAddr = 0x8001ad00 := rfl
@@ -537,10 +537,6 @@ theorem swEntry_facts (g : SWG) (hg : SWGOk g)
       rw [sw_flAddr g hg]
       right
       have := hg.fp_htif
-      omega
-    · show (g.fp + sign_extend (m := 64) (0x010#12)).toNat % 2 = 0
-      rw [sw_flAddr g hg]
-      have := hg.fp_align
       omega
     · show (g.m0[(g.fp + sign_extend (m := 64) (0x010#12)).toNat]?).getD 0 = g.fl0
       rw [sw_flAddr g hg]
@@ -576,7 +572,7 @@ theorem swTail_facts (g : SWG) (hg : SWGOk g)
     ChainFacts (swM1 g) (swM1 g) (swTailL g) (swTailLds g) swriteXeff8Seg := by
   chain_facts hcodeS with "Vsa.Sim.Code.__swrite_at_"
   · -- ld ra,40(sp)
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (swSpE g + sign_extend (m := 64) (0x028#12)).toNat
       rw [sw_slot_ra_addr g hg]
       have ht : tohostAddr = 0x8001ad00 := rfl
@@ -596,15 +592,9 @@ theorem swTail_facts (g : SWG) (hg : SWGOk g)
       right
       have := hg.sp_htif
       omega
-    · show (swSpE g + sign_extend (m := 64) (0x028#12)).toNat % 8 = 0
-      rw [sw_slot_ra_addr g hg]
-      have ht : tohostAddr = 0x8001ad00 := rfl
-      have := hg.sp_htif
-      have := hg.sp_align
-      omega
     · exact swM1_ra_pins g
   · -- lh a1,18(a4)
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_, ?_⟩
     · show 0x80000000 ≤ (g.fp + sign_extend (m := 64) (0x012#12)).toNat
       rw [sw_fdAddr g hg]
       have ht : tohostAddr = 0x8001ad00 := rfl
@@ -619,10 +609,6 @@ theorem swTail_facts (g : SWG) (hg : SWGOk g)
       rw [sw_fdAddr g hg]
       right
       have := hg.fp_htif
-      omega
-    · show (g.fp + sign_extend (m := 64) (0x012#12)).toNat % 2 = 0
-      rw [sw_fdAddr g hg]
-      have := hg.fp_align
       omega
     · exact lpin_of_present (swM1_fd_pin0 g hg)
     · exact lpin_of_present (swM1_fd_pin1 g hg)

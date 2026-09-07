@@ -40,18 +40,18 @@ def negLoadStoreBlk : BBlock :=
     term := none }
 
 /-- Bundled load side-conditions (8-byte): RAM bounds + HTIF-disjoint window +
-alignment + the byte pins. Defeq to the `MemFacts` load leaf `⟨⟨lo,hi,win,al⟩,
+the byte pins. Defeq to the `MemFacts` load leaf `⟨⟨lo,hi,win⟩,
 pins⟩` that `bblock_sound_bt` consumes, so a block proof discharges it with
 `exact`. Collapses each load's 5-hypothesis battery to one. -/
 def LdOK8 (m : Std.ExtHashMap Nat (BitVec 8)) (ea : BitVec 64) (bs : List (BitVec 8)) : Prop :=
   (0x80000000 ≤ ea.toNat ∧ ea.toNat + 8 ≤ 0x100000000 ∧
-    (ea.toNat + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ ea.toNat) ∧ ea.toNat % 8 = 0) ∧
+    (ea.toNat + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ ea.toNat)) ∧
   LPins8 m ea.toNat bs
 
 /-- Bundled load side-conditions (4-byte), cf. `LdOK8`. -/
 def LdOK4 (m : Std.ExtHashMap Nat (BitVec 8)) (ea : BitVec 64) (bs : List (BitVec 8)) : Prop :=
   (0x80000000 ≤ ea.toNat ∧ ea.toNat + 4 ≤ 0x100000000 ∧
-    (ea.toNat + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ ea.toNat) ∧ ea.toNat % 4 = 0) ∧
+    (ea.toNat + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ ea.toNat)) ∧
   LPins4 m ea.toNat bs
 
 /-- Bundled store side-conditions (8-byte): RAM bounds + above-HTIF window +

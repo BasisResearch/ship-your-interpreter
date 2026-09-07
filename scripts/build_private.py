@@ -4,8 +4,10 @@
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -221,29 +223,38 @@ def compile_module(repo: Path, output_root: Path, module: Module) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     log.parent.mkdir(parents=True, exist_ok=True)
     shell = 'LEAN_PATH="$1${LEAN_PATH:+:$LEAN_PATH}" lean -o "$2" "$3"'
-    result = subprocess.run(
-        [
-            "lake",
-            "env",
-            "sh",
-            "-c",
-            shell,
-            "build-private",
-            str(output_root),
-            str(output),
-            str(module.source),
-        ],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    transcript = result.stdout + result.stderr
-    log.write_text(transcript, encoding="utf-8")
-    if result.returncode != 0:
-        raise BuildError(f"Lean failed for {module.source}; see {log}")
-    if "sorryAx" in transcript:
-        raise BuildError(f"sorryAx reported for {module.source}; see {log}")
+    with tempfile.TemporaryDirectory(
+        prefix=f".{output.stem}-", dir=output.parent
+    ) as staging:
+        staged = Path(staging) / output.name
+        result = subprocess.run(
+            [
+                "lake",
+                "env",
+                "sh",
+                "-c",
+                shell,
+                "build-private",
+                str(output_root),
+                str(staged),
+                str(module.source),
+            ],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        transcript = result.stdout + result.stderr
+        log.write_text(transcript, encoding="utf-8")
+        if result.returncode != 0:
+            raise BuildError(f"Lean failed for {module.source}; see {log}")
+        if "sorryAx" in transcript or re.search(
+            r"declaration uses [`'](?:sorry|admit)[`']", transcript
+        ):
+            raise BuildError(f"unsafe proof reported for {module.source}; see {log}")
+        if not staged.is_file():
+            raise BuildError(f"Lean produced no object for {module.source}; see {log}")
+        staged.replace(output)
 
 
 def build(
@@ -266,6 +277,7 @@ def build(
     prior = load_manifest(manifest_path) if resume else {}
     fingerprints = module_fingerprints(repo, order, input_context(repo))
     completed: dict[str, str] = {}
+    retained = dict(prior)
     for index, module in enumerate(order, start=1):
         fingerprint = fingerprints[module.name]
         if (
@@ -277,9 +289,14 @@ def build(
             print(f"[{index}/{len(order)}] skip {module.source}", flush=True)
             continue
         print(f"[{index}/{len(order)}] build {module.source}", flush=True)
+        # Invalidate before installing an object. An interruption between object
+        # installation and fingerprint publication must not reuse the old hash.
+        retained.pop(module.name, None)
+        write_manifest(manifest_path, retained)
         compile_module(repo, output_root, module)
         completed[module.name] = fingerprint
-        write_manifest(manifest_path, completed)
+        retained[module.name] = fingerprint
+        write_manifest(manifest_path, retained)
     write_manifest(manifest_path, completed)
 
 

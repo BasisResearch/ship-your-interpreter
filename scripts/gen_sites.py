@@ -20,11 +20,11 @@ Classes (registers are decimal x-register numbers, immediates hex):
     subw     rd rs1 rs2            # RTYPEW SUBW
     branch_taken    bop rs1 rs2 imm13   # bop in BEQ/BNE/BLT/BGE/BLTU/BGEU
     branch_nottaken bop rs1 rs2 imm13
-    ld  rd rs1 imm12               # 8-byte load  (exec_ld)
+    ld  rd rs1 imm12               # 8-byte RAM load (exec_ld_ram_bytes)
     ld_tot  rd rs1 imm12           # 8-byte load, TOTAL: value = bytesT8, no byte hyps
     lw_tot  rd rs1 imm12           # 4-byte load, TOTAL: value = bytesT4, no byte hyps
     lbu_tot rd rs1 imm12           # 1-byte load, TOTAL: value = bytesT1, no byte hyps
-    lw  rd rs1 imm12               # 4-byte load  (exec_lw)
+    lw  rd rs1 imm12               # 4-byte RAM load (exec_lw_ram_bytes)
     lbu rd rs1 imm12               # 1-byte load  (exec_lbu_gen)
     sd  rs2 rs1 imm12              # 8-byte store (exec_sd_val / writeMap8)
     sw  rs2 rs1 imm12              # 4-byte store (exec_sw / writeMap4)
@@ -381,7 +381,6 @@ class Emitter:
             f"    (hhiram : {ea}.toNat + {nbytes} ≤ 0x100000000)\n"
             f"    (hhtif : {ea}.toNat + {nbytes} ≤ tohostAddr\n"
             f"      ∨ tohostAddr + 8 ≤ {ea}.toNat)\n"
-            f"    (halign : {ea}.toNat % {nbytes} = 0)\n"
             f"{byte_hyps}   "  # trailing spaces so ` (hi : i < 2)` lines up
         )
         instr = (f"instruction.LOAD (0x{imm:03x}#12, {regidx(rs1)}, "
@@ -389,13 +388,13 @@ class Emitter:
         hs = " ".join(f"h{k}" for k in range(nbytes))
         bs = " ".join(f"b{k}" for k in range(nbytes))
         exec_proof = (
-            f"    (exec_{mn} σ (0x{s.addr:08x}#64) (0x{imm:03x}#12) ({regidx(rs1)}) "
+            f"    (exec_{mn}_ram_bytes σ (0x{s.addr:08x}#64) (0x{imm:03x}#12) ({regidx(rs1)}) "
             f"({regidx(rd)})\n"
             f"      (sigma3_alu σ (0x{s.addr:08x}#64) Register.x{rd} {value})\n"
             f"      v{rs1} {bs} hG\n"
             f"      {rx_read(rs1, s.addr)}\n"
             f"      (wX_bits_x{rd} _ {value})\n"
-            f"      hlo hhiram hhtif halign {hs})")
+            f"      hlo hhiram hhtif {hs})")
         head = self.head(
             self.site_name(s.addr), s.addr,
             f"`{mn} x{rd},0x{imm:x}(x{rs1})`.", [rs1], extra_params,
@@ -463,18 +462,18 @@ class Emitter:
             f"    (hhiram : {ea}.toNat + {nbytes} ≤ 0x100000000)\n"
             f"    (hhtif : {ea}.toNat + {nbytes} ≤ tohostAddr\n"
             f"      ∨ tohostAddr + 8 ≤ {ea}.toNat)\n"
-            f"    (halign : {ea}.toNat % {nbytes} = 0)\n   "
+            "   "
         )
         instr = (f"instruction.LOAD (0x{imm:03x}#12, {regidx(rs1)}, "
                  f"{regidx(rd)}, false, {nbytes})")
         exec_proof = (
-            f"    (exec_{mn}_tot σ (0x{s.addr:08x}#64) (0x{imm:03x}#12) ({regidx(rs1)}) "
+            f"    (exec_{mn}_ram σ (0x{s.addr:08x}#64) (0x{imm:03x}#12) ({regidx(rs1)}) "
             f"({regidx(rd)})\n"
             f"      (sigma3_alu σ (0x{s.addr:08x}#64) Register.x{rd} {value})\n"
             f"      v{rs1} hG\n"
             f"      {rx_read(rs1, s.addr)}\n"
             f"      (wX_bits_x{rd} _ {value})\n"
-            f"      hlo hhiram hhtif halign)")
+            f"      hlo hhiram hhtif)")
         head = self.head(
             self.site_name(s.addr), s.addr,
             f"`{mn} x{rd},0x{imm:x}(x{rs1})` — TOTAL (no byte-presence hypothesis).",
@@ -548,20 +547,19 @@ class Emitter:
             f"    (hhiram : {ea}.toNat + {nbytes} ≤ 0x100000000)\n"
             f"    (hhtif : {ea}.toNat + {nbytes} ≤ tohostAddr\n"
             f"      ∨ tohostAddr + 8 ≤ {ea}.toNat)\n"
-            f"    (halign : {ea}.toNat % {nbytes} = 0)\n"
             f"{byte_hyps}   ")
         instr = (f"instruction.LOAD (0x{imm:03x}#12, {regidx(rs1)}, "
                  f"{regidx(rd)}, false, {nbytes})")
         hs = ", ".join(f"h{k}" for k in range(nbytes))
         exec_proof = (
-            f"    (exec_{mn}_totv σ (0x{s.addr:08x}#64) (0x{imm:03x}#12) ({regidx(rs1)}) "
+            f"    (exec_{mn}_ramv σ (0x{s.addr:08x}#64) (0x{imm:03x}#12) ({regidx(rs1)}) "
             f"({regidx(rd)})\n"
             f"      (sigma3_alu σ (0x{s.addr:08x}#64) Register.x{rd} {value})\n"
             f"      v{rs1} {value} hG\n"
             f"      {rx_read(rs1, s.addr)}\n"
             f"      (by simp only [bytesT{nbytes}, {hs}])\n"
             f"      (wX_bits_x{rd} _ {value})\n"
-            f"      hlo hhiram hhtif halign)")
+            f"      hlo hhiram hhtif)")
         head = self.head(
             self.site_name(s.addr), s.addr,
             f"`{mn} x{rd},0x{imm:x}(x{rs1})` — TOTAL-READ byte hypotheses.", [rs1],
@@ -806,6 +804,8 @@ def main() -> int:
     ap.add_argument("--suffix", default="",
                     help="suffix appended to every site theorem name, e.g. _gen")
     ap.add_argument("--namespace", default="Vsa.Sim")
+    ap.add_argument("--default-limits", action="store_true",
+                    help="retain Lean's default elaboration limits")
     ap.add_argument("--index", type=Path, default=DEFAULT_INDEX,
                     help="decode_index.tsv (word -> DecodeTable module)")
     args = ap.parse_args()
@@ -828,6 +828,8 @@ def main() -> int:
         decode_imports.add(index[key])
 
     imports = ["Vsa.Sim.ValueSites"]
+    if any(s.cls in {"ld", "lw", "ld_tot", "lw_tot", "ld_totb", "lw_totb"} for s in sites):
+        imports.append("Vsa.Sim.RamReadPins")
     if any(s.cls.endswith("_tot") or s.cls.endswith("_totb") for s in sites):
         imports.append("Vsa.Sim.ExecLoadTotal")
     if any(s.cls in NEEDS_STRCPY_SITES for s in sites):
@@ -840,6 +842,9 @@ def main() -> int:
     for s in sites:
         theorems.append(getattr(em, CLASS_EMITTERS[s.cls])(s))
 
+    limits = "" if args.default_limits else (
+        "set_option maxHeartbeats 8000000\nset_option maxRecDepth 1000000"
+    )
     out = []
     out.append("\n".join(f"import {m}" for m in imports))
     out.append(f"""
@@ -854,8 +859,7 @@ open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState Config Step Steps)
 
-set_option maxHeartbeats 8000000
-set_option maxRecDepth 1000000
+{limits}
 
 -- discipline: allow(R5-stepobs-volume) a per-site battery is one `stepObs_` per
 -- site BY CONSTRUCTION; this file is machine-emitted from a TSV, not a

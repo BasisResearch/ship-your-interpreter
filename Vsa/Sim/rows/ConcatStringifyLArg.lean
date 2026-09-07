@@ -41,39 +41,39 @@ def concatStringifyLArgL (sp s5v : BitVec 64) : GRegs := [(2, sp), (21, s5v)]
 
 The `concatStringifyLArg` body ends in `jal stringify` (a CALL — deliberately outside `TKind`).  The straight-line body run + the ABI callee-saved frame are FREE via `bridgeOfSeg`; the ONLY region-specific input is the jal seam's `JalStep` (the callee entry obs, packaged by `jalStep_of_obs` from the region's `site_80003a40_*` lemma).  That seam is threaded as a NAMED residual `hjalSeam` — it is NOT fabricated here (a hand `site_*` would trip the discipline gate).  The row shape mirrors `EnvDefSeg.capComputeSeg_run`. -/
 
-/-- **`concatStringifyLArgBridge`** — the `concatStringifyLArg` body ≫ `jal stringify` bridge, via `bridgeOfSeg`.  The seg run + ABI frame are FREE; `hfacts` (the memory chain-facts, one `chain_facts` call at the caller) and `hjalSeam` (the call-seam `JalStep` off the callee `site_*` obs) are the only region-specific residuals.  Conclusion: parked at the callee entry `0x80002fc0#64` with link `0x80003a44#64`, memory = the seg write-log, ABI frame preserved. -/
+/-- **`concatStringifyLArgBridge`** — the `concatStringifyLArg` body ≫ `jal stringify` bridge, via `bridgeOfSeg`.  The seg run + ABI frame are FREE; `hfacts` (the memory chain-facts, one `chain_facts` call at the caller) and `hjalSeam` (the call-seam `JalStep` off the callee `site_*` obs) are the only region-specific residuals.  `lds` is the parametric load-readback list (a body `ld/lw/lb` reads `lds.getD i 0#8`, NOT a zero-pin — instantiate downstream, e.g. at a singleton, like the segToTriple rows).  Conclusion: parked at the callee entry `0x80002fc0#64` with link `0x80003a44#64`, memory = the seg write-log, ABI frame preserved. -/
 theorem concatStringifyLArgBridge
     (σ : MState) (i u : Nat) (vminstret : BitVec 64) (sp : BitVec 64) (s5v : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (lds : List (List (BitVec 8)))
     (hG : GoodState σ)
     (hpc : σ.regs.get? Register.PC = some (0x80003a20#64 : BitVec 64))
     (hminstret : σ.regs.get? Register.minstret = some vminstret)
     (hmem : σ.mem = m0)
     (hL : GHolds σ (concatStringifyLArgL sp s5v))
-    (hfacts : ChainFacts σ.mem σ.mem (concatStringifyLArgL sp s5v) [] concatStringifyLArgSeg)
+    (hfacts : ChainFacts σ.mem σ.mem (concatStringifyLArgL sp s5v) lds concatStringifyLArgSeg)
     (hi : i < 2)
     -- output-regs key hygiene: the keys are value-free, but they mention the
     -- pins as values, so they stall `decide` under the pin binders; the
     -- caller closes each with ONE `decide` (see observations `keys-decides-per-seg`).
-    (hKeysOut : KeysOK (keysG (evalBlocks concatStringifyLArgSeg (SegEvalState.init (concatStringifyLArgL sp s5v) [])).regs))
-    (hRaOut : KeysAvoidRa (evalBlocks concatStringifyLArgSeg (SegEvalState.init (concatStringifyLArgL sp s5v) [])).regs)
+    (hKeysOut : KeysOK (keysG (evalBlocks concatStringifyLArgSeg (SegEvalState.init (concatStringifyLArgL sp s5v) lds)).regs))
+    (hRaOut : KeysAvoidRa (evalBlocks concatStringifyLArgSeg (SegEvalState.init (concatStringifyLArgL sp s5v) lds)).regs)
     (hjalSeam : ∀ (σ' : MState) (i' u' : Nat),
       GoodState σ' → i' < 2 →
       σ'.regs.get? Register.PC = some
-        (evalBlocksPC 0x80003a20#64 (SegEvalState.init (concatStringifyLArgL sp s5v) []) concatStringifyLArgSeg) →
+        (evalBlocksPC 0x80003a20#64 (SegEvalState.init (concatStringifyLArgL sp s5v) lds) concatStringifyLArgSeg) →
       (∃ w, σ'.regs.get? Register.minstret = some w) →
-      σ'.mem = writeLog m0 (evalBlocks concatStringifyLArgSeg (SegEvalState.init (concatStringifyLArgL sp s5v) [])).log →
-      GHolds σ' (evalBlocks concatStringifyLArgSeg (SegEvalState.init (concatStringifyLArgL sp s5v) [])).regs →
+      σ'.mem = writeLog m0 (evalBlocks concatStringifyLArgSeg (SegEvalState.init (concatStringifyLArgL sp s5v) lds)).log →
+      GHolds σ' (evalBlocks concatStringifyLArgSeg (SegEvalState.init (concatStringifyLArgL sp s5v) lds)).regs →
       JalStep 0x80002fc0#64 0x80003a44#64 σ' i' u') :
     ∃ (σ2 : MState) (i2 : Nat),
       Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + evalBlocksFuel concatStringifyLArgSeg + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧
       σ2.regs.get? Register.PC = some (0x80002fc0#64 : BitVec 64) ∧
       σ2.regs.get? Register.x1 = some (0x80003a44#64 : BitVec 64) ∧
       (∃ w, σ2.regs.get? Register.minstret = some w) ∧
-      GHolds σ2 (evalBlocks concatStringifyLArgSeg (SegEvalState.init (concatStringifyLArgL sp s5v) [])).regs ∧
-      σ2.mem = writeLog m0 (evalBlocks concatStringifyLArgSeg (SegEvalState.init (concatStringifyLArgL sp s5v) [])).log ∧
+      GHolds σ2 (evalBlocks concatStringifyLArgSeg (SegEvalState.init (concatStringifyLArgL sp s5v) lds)).regs ∧
+      σ2.mem = writeLog m0 (evalBlocks concatStringifyLArgSeg (SegEvalState.init (concatStringifyLArgL sp s5v) lds)).log ∧
       (∀ R, Vsa.Alloc.AbiPreserved R = true → σ2.regs.get? R = σ.regs.get? R) := by
-  apply bridgeOfSeg concatStringifyLArgSeg (concatStringifyLArgL sp s5v) []
+  apply bridgeOfSeg concatStringifyLArgSeg (concatStringifyLArgL sp s5v) lds
     σ i u (0x80003a20#64) (0x80002fc0#64) (0x80003a44#64) vminstret m0
     hG hpc hminstret hmem hL
     (by have h : keysG (concatStringifyLArgL sp s5v) = [2, 21] := rfl

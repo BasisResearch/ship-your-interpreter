@@ -53,16 +53,16 @@ theorem ImageGeom.stackBounds {N : Vsa.RuntimeRepr.NativeAddrs} {A : Vsa.Runtime
 theorem imageGeom_of_addResid
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : Vsa.RuntimeRepr.NativeAddrs} {A : Vsa.RuntimeRepr.Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
-    (h : AddResid gpre N A SL sp r sret aExpr Wl c') :
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
+    (h : AddResid gpre N A SL sp r sret aExpr c') :
     ImageGeom N A SL :=
   ⟨⟨h.SLlo, h.SLhiRam⟩, h.SLwin⟩
 
 theorem addResid_stackBounds
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : Vsa.RuntimeRepr.NativeAddrs} {A : Vsa.RuntimeRepr.Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
-    (h : AddResid gpre N A SL sp r sret aExpr Wl c') :
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
+    (h : AddResid gpre N A SL sp r sret aExpr c') :
     StackBounds sp SL :=
   (imageGeom_of_addResid h).stackBounds sp h.SLloSp h.sp8 h.sphiRam
 

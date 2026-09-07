@@ -237,7 +237,7 @@ theorem nativeJoin
       (s7v.extractLsb' 48 8) (s7v.extractLsb' 56 8)
       hc.good hc.pc hvm hx2 hc.loaded rfl
       (by rw [haddr]; omega) (by rw [haddr]; omega)
-      (by rw [haddr]; omega) (by rw [haddr]; exact hslotAlign)
+      (by rw [haddr]; omega)
       h0 h1 h2 h3 h4 h5 h6 h7 hc.tick
   have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hs1
   -- the ld's value reassembles to the ghost s7v

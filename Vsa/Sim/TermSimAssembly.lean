@@ -112,11 +112,16 @@ structure ExecWhileArmReady
   s2 : cfg.σ.regs.get? Register.x18 = some aRet
   s3 : cfg.σ.regs.get? Register.x19 = some aEnv
   spReg : cfg.σ.regs.get? Register.x2 = some (sp - 176#64)
+  parentSp : g Register.x2 = some sp
   ra : cfg.σ.regs.get? Register.x1 = some liveRA
   mem : cfg.σ.mem = ment
   code : Vsa.Sim.Code.Exec_stmtLoaded ment
+  code_stack_disjoint : sp.toNat ≤ execStmtEntry ∨ execStmtEnd ≤ SL.lo
+  stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
+  stack_win : tohostAddr + 16 ≤ SL.lo
+  ra_align : r.toNat % 4 = 0
   stmt : StmtRepr ment aStmt.toNat (.whileStmt cnd body)
-  env_addr : φf env = aEnv.toNat
+  env_addr : aEnv = BitVec.ofNat 64 (φf env)
   store : StoreRepr ment N A φf φc st.store
   env_valid : EnvValid st env
   store_survives : ∀ m' : Mem,
@@ -137,8 +142,13 @@ structure ExecWhileArmReady
       (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088)
   stmt_bodies : Stmt.bodiesBound Vsa.While.perCallBudget (Stmt.whileStmt cnd body) = true
   store_bodies : Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget
+  envset_defined : (∃ v, cfg.σ.regs.get? Register.x20 = some v) ∧
+    (∃ v, cfg.σ.regs.get? Register.x21 = some v)
   ground : ExecGround ment SL A sp aRet aStmt.toNat (.whileStmt cnd body)
-  mem_frame : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?
+  mem_frame : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
+    ¬ (A.lo ≤ a ∧ a < A.hi) →
+    (aRet.toNat ≤ a ∧ a < aRet.toNat + 24) ∨ ment[a]? = m0[a]?
+  mem_extends : MemExtends m0 ment
   frame : ∀ R : Register, AbiPreservedNoise R →
     (R = Register.x8 ∨ R = Register.x9 ∨ R = Register.x18 ∨
       R = Register.x19 ∨ R = Register.x2) ∨ cfg.σ.regs.get? R = g R

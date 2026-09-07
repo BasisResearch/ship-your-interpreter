@@ -32,9 +32,8 @@ trying a `first | …` cascade over projection paths for the decidable conjunct.
 Lean machine-checks the result; axiom-clean ⊆ {propext,Classical.choice,
 Quot.sound} ⇒ **REFUTED-BY-WITNESS**.  If a leading hypothesis is an
 *unsatisfiable-at-the-witness entry pin* (e.g. `EvalEntry … sp …` with sp=0),
-`H` cannot be applied and the statement is reported **SURVIVED** — which is
-exactly the post-amendment behaviour (the amendment threads the entry linkage
-so the ghosts are pinned and the old witness no longer bites).
+`H` cannot be applied. The probe is **INCONCLUSIVE**; failed proof search
+does not establish that the statement holds.
 
 Arithmetic side-conditions that `decide` cannot close are shelled to `z3`
 when `which z3` succeeds, else listed **UNDECIDABLE**.
@@ -43,7 +42,7 @@ when `which z3` succeeds, else listed **UNDECIDABLE**.
   field shape (a bare `sp_headroom` conclusion, no entry pin) and the amended
   shape (same conclusion guarded by a `StackOK` entry pin, false at sp=0), for
   ≥3 field families, and confirms the fuzzer REFUTES every pre-amendment one
-  and SURVIVES every amended one.  This mirrors the real 2865529→main record
+  and proves every amended one.  This mirrors the real 2865529→main record
   amendment (the `EvalEntry.stackOK`/`stackBudget` pin) without depending on
   the drifting real `Skel*` names.
 
@@ -59,11 +58,12 @@ import re
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 LOG = os.path.join(tempfile.gettempdir(), "vsa-statement-fuzz.log")
-LOGDIR = os.path.join(ROOT, "experiments", "logs")
+LOGDIR = os.path.join(tempfile.gettempdir(), "vsa-statement-fuzz")
 
 AX_OK = {"propext", "Classical.choice", "Quot.sound"}
 
@@ -128,17 +128,41 @@ PROJECTIONS = [
 # telescope discovery
 # --------------------------------------------------------------------------
 
+def checked_backend():
+    """Require current source fingerprints before using Vsa proof artifacts."""
+    if __package__:
+        from .check_validation import verify_backend
+    else:
+        from check_validation import verify_backend
+    backend = os.environ.get("VSA_PRIVATE_BUILD")
+    if not backend:
+        raise ValueError("set VSA_PRIVATE_BUILD to a fingerprint-current private build")
+    verify_backend(Path(ROOT), Path(backend))
+    return backend
+
+
 def run_lean(src, timeout=600):
+    try:
+        backend = checked_backend()
+    except Exception as error:
+        return 2, f"BACKEND-INVALID: {error}"
+    os.makedirs(LOGDIR, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", suffix=".lean", dir=LOGDIR,
                                      delete=False) as f:
         f.write(src)
         path = f.name
     try:
-        r = subprocess.run(["lake", "env", "lean", path], cwd=ROOT,
+        r = subprocess.run(["lake", "env", "sh", "-c",
+                            'LEAN_PATH="$1${LEAN_PATH:+:$LEAN_PATH}" lean "$2"',
+                            "validation-probe",
+                            backend, path], cwd=ROOT,
                            capture_output=True, text=True, timeout=timeout)
+        checked_backend()
         return r.returncode, r.stdout + r.stderr
     except subprocess.TimeoutExpired:
         return 124, "TIMEOUT"
+    except Exception as error:
+        return 2, f"BACKEND-INVALID: {error}"
     finally:
         try:
             os.unlink(path)
@@ -155,6 +179,8 @@ def discover_telescope(imp, prop, is_layout, unfold):
            f"example {sig}: {prop}{app} → True := by\n"
            f"  intro H\n  {unf}\n  trace_state\n  trivial\n")
     rc, out = run_lean(src)
+    if rc != 0:
+        return None, None, out[-400:]
     m = re.search(r"H :\s*(.+?)\n⊢", out, re.S)
     if not m:
         return None, None, out[-400:]
@@ -211,6 +237,8 @@ def discover_struct_fields(struct, prelude):
     src = (f"{prelude}\n\nset_option pp.fullNames false in\n"
            f"#check @{struct}.mk\n")
     rc, out = run_lean(src)
+    if rc != 0:
+        return None, None
     m = re.search(rf"{struct.split('.')[-1]}\.mk\s*:\s*(.+)", out, re.S)
     if not m:
         return None, None
@@ -261,23 +289,21 @@ def fuzz_file(path, prop, struct, log):
         # A concrete ghost-struct candidate is an ENTRY fact the proof assumes.
         # Consistency check: is it INHABITED?  If the constructor witness
         # `⟨by decide,…⟩ : prop` type-checks, the candidate is self-consistent
-        # → SURVIVED.  Otherwise refute a field: prove `¬ prop` by destructuring
+        # → a checked inhabitance result.  Otherwise refute a field: prove `¬ prop` by destructuring
         # and hitting the false conjunct with `by decide` → REFUTED.
         probe = (f"{body}\n\nnamespace VsaFuzzFileProbe\n"
-                 f"set_option maxHeartbeats 1000000 in\n"
+
                  f"theorem consistent : {prop} := {witness}\n"
                  f"#print axioms consistent\nend VsaFuzzFileProbe\n")
         rc, out = run_lean(probe)
-        if rc == 0 and ("does not depend on any axioms" in out
-                        or re.search(r"depends on axioms: \[[^\]]*\]", out)):
-            m = re.search(r"depends on axioms: \[([^\]]*)\]", out)
-            ax = {a.strip() for a in (m.group(1).split(",") if m else []) if a.strip()}
-            v = ("SURVIVED" if ax <= AX_OK else "SURVIVED-DIRTY")
+        checked, _ = classify(rc, out, "VsaFuzzFileProbe.consistent")
+        if checked == "REFUTED":
+            v = "INHABITED"
             d = "candidate inhabited (self-consistent)"
         else:
             # not inhabited at these params — try to prove ¬prop (refuted CTI)
             refute = (f"{body}\n\nnamespace VsaFuzzFileProbe\n"
-                      f"set_option maxHeartbeats 1000000 in\n"
+
                       f"theorem refuted : ¬ {prop} := by\n"
                       f"  intro H; obtain ⟨{', '.join('f'+str(i) for i in range(witness.count(',')+1))}⟩ := H\n"
                       f"  first\n"
@@ -285,7 +311,7 @@ def fuzz_file(path, prop, struct, log):
                                   for i in range(witness.count(',') + 1)) + "\n"
                       f"#print axioms refuted\nend VsaFuzzFileProbe\n")
             rc2, out2 = run_lean(refute)
-            v, d = classify(rc2, out2)
+            v, d = classify(rc2, out2, "VsaFuzzFileProbe.refuted")
         line = f"- `{prop}` (file {os.path.basename(path)}) → **{v}** — {d}{detail}"
         print(line); log.write(line + "\n"); log.flush()
         return v
@@ -295,7 +321,7 @@ def fuzz_file(path, prop, struct, log):
                  f"  intro H\n  exact absurd H (by decide)\n"
                  f"#print axioms probe\nend VsaFuzzFileProbe\n")
         rc, out = run_lean(probe)
-        verdict, d = classify(rc, out)
+        verdict, d = classify(rc, out, "VsaFuzzFileProbe.probe")
         line = f"- `{prop}` (file {os.path.basename(path)}) → **{verdict}** — {d}{detail}"
         print(line); log.write(line + "\n"); log.flush()
         return verdict
@@ -315,30 +341,32 @@ def make_probe(imp, prop, is_layout, unfold, witnesses, extra_hyps):
                     f"exact absurd {proj} (by decide))")
     cascade = "  first\n" + "\n".join(alts)
     return (f"import {imp}\n\n{PREAMBLE}\n{WITNESS_DEFS}\n"
-            f"namespace VsaFuzzProbe\nset_option maxHeartbeats 1000000 in\n"
+            f"namespace VsaFuzzProbe\n"
             f"theorem probe {sig}: ¬ {prop}{app} := by\n{cascade}\n\n"
             f"#print axioms probe\nend VsaFuzzProbe\n")
 
 
-def classify(rc, out):
+def classify(rc, out, theorem="VsaFuzzProbe.probe"):
+    """Require the exact requested theorem's successful, clean axiom report.
+
+    Failure to construct a counterexample is inconclusive, never survival.
+    """
     if rc == 124:
-        return "TIMEOUT", "600s"
+        return "TIMEOUT", "Lean process timed out"
     if rc != 0:
-        return "SURVIVED", out.strip().splitlines()[-1] if out.strip() else "?"
-    # a `sorryAx` means the refutation did NOT go through (decide failed / a
-    # goal was left) → the statement SURVIVED this witness, not refuted.
+        return "INCONCLUSIVE", out.strip().splitlines()[-1] if out.strip() else "Lean failed"
     if "sorryAx" in out:
-        return "SURVIVED", "sorry inserted (refutation incomplete)"
-    m = re.search(r"depends on axioms: \[([^\]]*)\]", out)
-    if m:
-        ax = {a.strip() for a in m.group(1).split(",") if a.strip()}
-        if "sorryAx" in ax:
-            return "SURVIVED", "sorry inserted"
-        return ("REFUTED" if ax <= AX_OK else "REFUTED-DIRTY"), \
-               "axioms=" + ", ".join(sorted(ax))
-    if "does not depend on any axioms" in out:
-        return "REFUTED", "(axiom-free)"
-    return "SURVIVED", "no probe applied"
+        return "INCONCLUSIVE", "incomplete proof contains sorryAx"
+    reports = re.findall(
+        rf"'{re.escape(theorem)}' (?:depends on axioms:\s*\[([^\]]*)\]|(does not depend on any axioms))",
+        out,
+    )
+    if len(reports) != 1:
+        return "INCONCLUSIVE", f"expected exactly one axiom report for {theorem}"
+    ax = {a.strip() for a in reports[0][0].split(",") if a.strip()}
+    if not ax <= AX_OK:
+        return "INCONCLUSIVE", "disallowed axioms=" + ", ".join(sorted(ax - AX_OK))
+    return "REFUTED", "axioms=" + ", ".join(sorted(ax))
 
 
 def fuzz_one(imp, prop, is_layout, unfold, log):
@@ -355,7 +383,7 @@ def fuzz_one(imp, prop, is_layout, unfold, log):
         witnesses.append(w or "_")
     # supply dischargeable hyps we know how to build (payload read + repr);
     # the ENTRY pin (EvalEntry/StackOK), if present, is NOT dischargeable at
-    # the witness → probe fails → SURVIVED (the amendment worked).
+    # the witness. Failure to construct a proof remains inconclusive.
     extra = ["fuzzMem_payL", "fuzzMem_nullL"] if n_hyps >= 2 else []
     src = make_probe(imp, prop, is_layout, unfold, witnesses, extra)
     rc, out = run_lean(src)
@@ -381,7 +409,7 @@ namespace VsaFuzzAcceptance
 families (neg / andFalse / orTrue shapes) each as a PRE-amendment Prop (bare
 `sp_headroom` conclusion, no entry pin) and an AMENDED Prop (same conclusion
 guarded by a `StackOK` entry pin, unsatisfiable at sp=0).  The fuzzer must
-REFUTE the pre versions and SURVIVE the amended ones. -/
+REFUTE the pre versions and PROVE the amended ones. -/
 
 -- The lethal conclusion shape shared by the family: a stack-headroom pin.
 def headroomBad (SL : StackLayout) (sp : BitVec 64) : Prop := SL.lo + 3264 ≤ sp.toNat
@@ -398,7 +426,7 @@ def AmdAndFalse: Prop := ∀ (SL : StackLayout) (sp : BitVec 64), StackOK SL sp 
 def AmdOrTrue  : Prop := ∀ (SL : StackLayout) (sp : BitVec 64), StackOK SL sp 3264 → headroomBad SL sp
 
 -- The amended ones are in fact TRUE (StackOK.1 IS headroomBad) — proving this
--- shows the fuzzer's SURVIVE verdict on them is correct, not a false negative.
+-- supplies positive proofs for the amended statements.
 theorem AmdNeg_true : AmdNeg := fun _ _ h => h.1
 theorem AmdAndFalse_true : AmdAndFalse := fun _ _ h => h.1
 theorem AmdOrTrue_true : AmdOrTrue := fun _ _ h => h.1
@@ -430,46 +458,37 @@ def acceptance(log):
                f"  exact absurd h (by decide)\n"
                f"#print axioms refute_{defname}\nend VsaFuzzAcceptance\n")
         rc, out = run_lean(src)
-        return classify(rc, out)
+        return classify(rc, out, f"VsaFuzzAcceptance.refute_{defname}")
 
     def refute_guarded(defname):
-        # try the SAME naive witness on the amended (guarded) Prop: it must NOT
-        # refute, because H now takes a StackOK hyp that is FALSE at sp=0 (so
-        # the naive `by decide : StackOK ⟨0,0⟩ 0 3264` cannot be built → the
-        # attempted refutation sorries/errs → SURVIVED).
-        src = (base +
-               f"theorem refute_{defname} : ¬ {defname} := by\n"
-               f"  intro H\n"
-               f"  have h := H ⟨0,0⟩ (0#64) (by simp only [StackOK]; decide)\n"
-               f"  simp only [{defname}, headroomBad] at h\n"
-               f"  exact absurd h (by decide)\n"
-               f"#print axioms refute_{defname}\nend VsaFuzzAcceptance\n")
+        src = base + f"#print axioms {defname}_true\nend VsaFuzzAcceptance\n"
         rc, out = run_lean(src)
-        return classify(rc, out)
+        verdict, detail = classify(rc, out, f"VsaFuzzAcceptance.{defname}_true")
+        return ("PROVED" if verdict == "REFUTED" else verdict), detail
 
     print("== ACCEPTANCE: pre-amendment must REFUTE ==")
     log.write("**Must REFUTE (pre-amendment holes):**\n")
     refuted = 0
     for fam in families:
         v, d = refute("Pre" + fam)
-        ok = v in ("REFUTED", "REFUTED-DIRTY")
+        ok = v in ("REFUTED",)
         refuted += ok
         line = f"- `Pre{fam}` → **{v}** — {d}"
         print(line); log.write(line + "\n")
 
-    print("== ACCEPTANCE: amended must SURVIVE ==")
-    log.write("\n**Must SURVIVE (amended fields):**\n")
+    print("== ACCEPTANCE: amended must be PROVED ==")
+    log.write("\n**Must PROVE (amended fields):**\n")
     survived = 0
     for fam in families:
         v, d = refute_guarded("Amd" + fam)
-        ok = v not in ("REFUTED", "REFUTED-DIRTY")
+        ok = v == "PROVED"
         survived += ok
-        line = f"- `Amd{fam}` → **{v}** (naive witness rejected → survives) — {d}"
+        line = f"- `Amd{fam}` → **{v}** (positive theorem checked) — {d}"
         print(line); log.write(line + "\n")
 
     ok = refuted >= 3 and survived == len(families)
     summary = (f"\n**Acceptance: refuted {refuted}/3 pre (need ≥3), "
-               f"survived {survived}/3 amended → "
+               f"proved {survived}/3 amended → "
                f"{'PASS' if ok else 'FAIL'}**\n")
     print(summary.strip()); log.write(summary); log.flush()
     return ok
@@ -665,7 +684,7 @@ def descend_probe(imp_or_body, prop, is_file, is_layout, unfold, depth,
             alts.append(alt)
     cascade = "  first\n" + "\n".join(alts)
     return (f"{head}\n\nnamespace VsaFuzzDescend\n"
-            f"set_option maxHeartbeats 1000000 in\n"
+
             f"theorem probe {sig}: ¬ {prop}{app} := by\n{cascade}\n\n"
             f"#print axioms probe\nend VsaFuzzDescend\n")
 
@@ -720,18 +739,18 @@ def fuzz_descend(path_or_imp, prop, is_file, is_layout, unfold, depth, log,
         src = descend_probe(body if is_file else path_or_imp, prop, is_file,
                             is_layout, unfold, depth, builder)
         rc, out = run_lean(src)
-        verdict, detail = classify(rc, out)
-        if verdict in ("REFUTED", "REFUTED-DIRTY"):
+        verdict, detail = classify(rc, out, "VsaFuzzDescend.probe")
+        if verdict in ("REFUTED",):
             line = (f"- `{prop}`{'' if is_file else ''} → **{verdict}** "
                     f"(descent/{builder['name']}, depth {depth}) — {detail}")
             print(line); log.write(line + "\n"); log.flush()
             return verdict
     # no builder bit → the nested conjuncts are guard-pinned (amended) or the
-    # statement has no over-quantified ∀-mcall conjunct → SURVIVED under descent.
-    line = (f"- `{prop}` → **SURVIVED** (descent depth {depth}: "
+    # statement has no recognized over-quantified conjunct; descent is inconclusive.
+    line = (f"- `{prop}` → **INCONCLUSIVE** (descent depth {depth}: "
             f"no adversary builder refuted a nested conjunct)")
     print(line); log.write(line + "\n"); log.flush()
-    return "SURVIVED"
+    return "INCONCLUSIVE"
 
 
 def _file_outer_types(body, prop):
@@ -1306,7 +1325,7 @@ def emit_semantic_probe(head, prop, sig, app, nc, sol, outer_types):
         alts.append(alt)
     cascade = "  first\n" + "\n".join(alts)
     return (f"{head}\n\n{CRANGE_DEFS}\nnamespace VsaFuzzSem\n"
-            f"set_option maxHeartbeats 1000000 in\n"
+
             f"theorem probe {sig}: ¬ {prop}{app} := by\n{cascade}\n\n"
             f"#print axioms probe\nend VsaFuzzSem\n")
 
@@ -1341,9 +1360,8 @@ def fuzz_semantic(path_or_imp, prop, is_file, is_layout, unfold, log,
                   body_override=None):
     """v2.1 driver: unfold the Prop, structurally extract the nested conjunct,
     apply THE RULE (solve for an uncovered demand address), and if one exists
-    emit + machine-check the adversary probe.  SURVIVED ⟺ every demanded address
-    is covered by the agree-constraint union (sound), or the guard shape is
-    outside the address-map fragment (SMT territory)."""
+    emit and check the adversary probe. Coverage is reported only within the
+    extracted address-map fragment. Unsupported shapes are undecidable."""
     # get the unfolded body text
     if body_override is not None:
         body_txt = body_override
@@ -1359,15 +1377,15 @@ def fuzz_semantic(path_or_imp, prop, is_file, is_layout, unfold, log,
         print(line); log.write(line + "\n"); log.flush(); return "UNDECIDABLE"
 
     nc = extract_nested(body_txt)
-    if nc is not None and getattr(nc, "unsupported", None):
-        line = (f"- `{prop}` → **SURVIVED** (v2.1: guard `{nc.unsupported}` "
+    if nc is None or getattr(nc, "unsupported", None):
+        line = (f"- `{prop}` → **UNDECIDABLE** (v2.1: guard `{getattr(nc, 'unsupported', 'unrecognized')}` "
                 f"outside address-map fragment → SMT territory)")
-        print(line); log.write(line + "\n"); log.flush(); return "SURVIVED"
+        print(line); log.write(line + "\n"); log.flush(); return "UNDECIDABLE"
     sol = solve_uncovered(nc)
     if sol is None:
-        line = (f"- `{prop}` → **SURVIVED** (v2.1: every demanded address is "
-                f"covered by the agree-constraint union — sound)")
-        print(line); log.write(line + "\n"); log.flush(); return "SURVIVED"
+        line = (f"- `{prop}` → **SURVIVED-IN-FRAGMENT** (v2.1: every demanded address is "
+                f"covered by the extracted agree-constraint union)")
+        print(line); log.write(line + "\n"); log.flush(); return "SURVIVED-IN-FRAGMENT"
 
     sig = "(L : Layout) " if is_layout else ""
     app = " L" if is_layout else ""
@@ -1377,8 +1395,8 @@ def fuzz_semantic(path_or_imp, prop, is_file, is_layout, unfold, log,
         outer_types = _outer_types_from_text(body_txt)
     src = emit_semantic_probe(head, prop, sig, app, nc, sol, outer_types)
     rc, out = run_lean(src)
-    verdict, detail = classify(rc, out)
-    if verdict in ("REFUTED", "REFUTED-DIRTY"):
+    verdict, detail = classify(rc, out, "VsaFuzzSem.probe")
+    if verdict in ("REFUTED",):
         line = (f"- `{prop}` → **{verdict}** (v2.1 uncovered-addr rule: demand "
                 f"@{hex(sol['a'])} ∉ cover {sol['cover']}) — {detail}")
     else:
@@ -1491,10 +1509,13 @@ def _gen_case(rnd, want_false):
 
 
 def gen_battery(n, log, seed=None):
-    """Emit N fresh probe pairs, run the v2.1 rule on each, and score.  Perfect
-    score (false⇒REFUTED green, true⇒SURVIVED) is the acceptance — un-trainable
-    because the sample is drawn fresh per run."""
+    """Check generated negative witnesses and positive fragment classifications.
+
+    This measures the address-map classifier, not full theorem validity.
+    """
     import random
+    if n <= 0:
+        raise ValueError("gen-battery requires a positive case count")
     rnd = random.Random(seed)
     log.write(f"\n### --gen-battery {n} (fresh sample, seed={seed})\n\n")
     correct, total = 0, 0
@@ -1508,21 +1529,22 @@ def gen_battery(n, log, seed=None):
                     f"def {defname} : Prop :=\n{prop}\n")
             # run the v2.1 rule as a hermetic module
             nc = extract_nested(_extract_def_body(body, defname))
-            sol = solve_uncovered(nc)
+            supported = nc is not None and not getattr(nc, "unsupported", None)
+            sol = solve_uncovered(nc) if supported else None
             predicted_false = sol is not None
             if predicted_false:
                 src = emit_semantic_probe(body, defname, "", "", nc, sol,
                                           _outer_types_from_text(prop))
                 rc, out = run_lean(src)
-                v, _ = classify(rc, out)
-                got_refuted = v in ("REFUTED", "REFUTED-DIRTY")
+                v, _ = classify(rc, out, "VsaFuzzSem.probe")
+                got_refuted = v in ("REFUTED",)
             else:
                 got_refuted = False
             # scoring: false case must REFUTE (green), true case must NOT.
-            ok = (got_refuted == (not truth)) and (predicted_false == (not truth))
+            ok = supported and (got_refuted == (not truth)) and (predicted_false == (not truth))
             correct += ok; total += 1
             tag = ("REFUTED" if got_refuted else
-                   ("SURVIVED" if not predicted_false else "PRED-FALSE-NOPROOF"))
+                   ("COVERED-IN-FRAGMENT" if supported and not predicted_false else "INCONCLUSIVE"))
             mark = "OK" if ok else "MISS"
             line = (f"- {defname} [{kind}] truth={'T' if truth else 'F'} "
                     f"demand@{_hexlit(a)} cover={cover} → {tag} [{mark}]")
@@ -1622,27 +1644,27 @@ end VsaAcceptV2
             src = descend_probe(body, f"VsaAcceptV2.{prop}", True, False,
                                 "", 2, builder)
             rc, out = run_lean(src)
-            v, d = classify(rc, out)
-            if v in ("REFUTED", "REFUTED-DIRTY"):
+            v, d = classify(rc, out, "VsaFuzzDescend.probe")
+            if v in ("REFUTED",):
                 return v, d, builder["name"]
-        return "SURVIVED", "no builder bit", None
+        return "INCONCLUSIVE", "no builder produced a checked refutation", None
 
     # (a) pre-amendment MUST refute
     log.write("**Must REFUTE (pre-48f over-quantified conjuncts):**\n")
     ra, _, ba = descend_hermetic(pre_memext, "PreMemExt")
     rb, _, bb = descend_hermetic(pre_presence, "PrePresence")
     for nm, v, b in [("PreMemExt", ra, ba), ("PrePresence", rb, bb)]:
-        good = v in ("REFUTED", "REFUTED-DIRTY")
+        good = v in ("REFUTED",)
         ok = ok and good
         log.write(f"- `{nm}` → **{v}** (builder={b})\n")
         print(f"[v2 refute-pre] {nm} → {v} (builder={b})")
 
     # (b) current HEAD MUST survive
-    log.write("\n**Must SURVIVE (post-48f/48g guarded survivors):**\n")
-    sa, _, _ = descend_hermetic(cur_memext, "CurMemExt")
-    sb, _, _ = descend_hermetic(cur_presence, "CurPresence")
-    for nm, v in [("CurMemExt", sa), ("CurPresence", sb)]:
-        good = v not in ("REFUTED", "REFUTED-DIRTY")
+    log.write("\n**Must PROVE (post-48f/48g guarded statements):**\n")
+    for nm, body in [("CurMemExt", cur_memext), ("CurPresence", cur_presence)]:
+        rc, out = run_lean(body + f"\n#print axioms VsaAcceptV2.{nm}_true\n")
+        v, _ = classify(rc, out, f"VsaAcceptV2.{nm}_true")
+        good = v == "REFUTED"
         ok = ok and good
         log.write(f"- `{nm}` → **{v}**\n")
         print(f"[v2 survive-current] {nm} → {v}")
@@ -1705,11 +1727,20 @@ def _live_negresid_verdict(descend_hermetic):
         src = descend_probe(body, "VsaAcceptV2Live.LiveMemExt", True, False,
                             "", 2, builder)
         rc, out = run_lean(src)
-        vv, _ = classify(rc, out)
+        vv, _ = classify(rc, out, "VsaFuzzDescend.probe")
         return ("REFUTED (live falsity: raw ∀-mcall still present)"
-                if vv in ("REFUTED", "REFUTED-DIRTY")
-                else "SURVIVED (guarded at HEAD)")
+                if vv in ("REFUTED",)
+                else "INCONCLUSIVE (live probe did not close)")
     return "N/A"
+
+
+def verdict_exit_status(verdict):
+    """A missed or unsupported probe cannot make a validation command pass."""
+    if verdict == "REFUTED":
+        return 1
+    if verdict in {"INHABITED", "SURVIVED-IN-FRAGMENT"}:
+        return 0
+    return 2
 
 
 def main():
@@ -1723,7 +1754,7 @@ def main():
     ap.add_argument("--acceptance", action="store_true")
     ap.add_argument("--acceptance-v2", dest="acceptance_v2", action="store_true",
                     help="hard gate for --descend: refute pre-48f over-quant "
-                         "conjuncts, survive current guarded ones, v1 no-regress")
+                         "conjuncts, prove current guarded ones, v1 regression check")
     ap.add_argument("--descend", nargs="?", const=2, type=int, default=None,
                     metavar="DEPTH",
                     help="nested-quantifier witness descent (default depth 2): "
@@ -1743,8 +1774,7 @@ def main():
     ap.add_argument("--gen-battery", dest="gen_battery", type=int, default=None,
                     metavar="N",
                     help="self-generate N fresh probe PAIRS with ground truth "
-                         "known by construction and score the v2.1 rule (perfect "
-                         "score = un-trainable acceptance)")
+                         "known by construction and score the extracted fragment")
     ap.add_argument("--seed", type=int, default=None,
                     help="RNG seed for --gen-battery (default: fresh entropy)")
     args = ap.parse_args()
@@ -1762,14 +1792,14 @@ def main():
             if args.file:
                 if not args.prop:
                     ap.error("--semantic --file needs --prop")
-                fuzz_semantic(args.file, args.prop, True, args.layout,
-                              args.unfold, log)
+                verdict = fuzz_semantic(args.file, args.prop, True, args.layout,
+                                        args.unfold, log)
             else:
                 if not (args.imp and args.prop):
                     ap.error("--semantic needs --import and --prop (or --file)")
-                fuzz_semantic(args.imp, args.prop, False, args.layout,
-                              args.unfold, log)
-            return
+                verdict = fuzz_semantic(args.imp, args.prop, False, args.layout,
+                                        args.unfold, log)
+            return verdict_exit_status(verdict)
         if args.descend is not None:
             # v2.1: --descend now routes THROUGH the semantic rule first; the old
             # 2-row pattern table remains only as the acceptance-v2 baseline.
@@ -1778,27 +1808,26 @@ def main():
                 v = fuzz_semantic(tgt, args.prop, bool(args.file), args.layout,
                                   args.unfold, log)
                 if v != "UNDECIDABLE":
-                    return
+                    return verdict_exit_status(v)
             if args.file:
                 if not args.prop:
                     ap.error("--descend --file needs --prop")
-                fuzz_descend(args.file, args.prop, True, args.layout,
-                             args.unfold, args.descend, log, args.struct)
+                verdict = fuzz_descend(args.file, args.prop, True, args.layout,
+                                       args.unfold, args.descend, log, args.struct)
             else:
                 if not (args.imp and args.prop):
                     ap.error("--descend needs --import and --prop (or --file)")
-                fuzz_descend(args.imp, args.prop, False, args.layout,
-                             args.unfold, args.descend, log)
-            return
+                verdict = fuzz_descend(args.imp, args.prop, False, args.layout,
+                                       args.unfold, args.descend, log)
+            return verdict_exit_status(verdict)
         if args.file:
             if not args.prop:
                 ap.error("--file needs --prop")
-            fuzz_file(args.file, args.prop, args.struct, log)
-            return
+            return verdict_exit_status(fuzz_file(args.file, args.prop, args.struct, log))
         if not (args.imp and args.prop):
             ap.error("need --import and --prop (or --file, or --acceptance)")
-        fuzz_one(args.imp, args.prop, args.layout, args.unfold, log)
+        return verdict_exit_status(fuzz_one(args.imp, args.prop, args.layout, args.unfold, log))
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

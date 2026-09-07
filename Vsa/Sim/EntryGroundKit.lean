@@ -1,5 +1,7 @@
 import Vsa.Sim.EntryGround
 import Vsa.Sim.AstTransport
+import Vsa.MemReprReadFields
+import Vsa.Sim.MemRegionWithin
 
 /-!
 # `EntryGroundKit` — the child-ground derivation combinators (wave 47i)
@@ -116,7 +118,7 @@ theorem ExecGround.stmtRepr_offstack {m0 ment : Mem} {SL : StackLayout}
       ment[a]? = m0[a]?) :
     StmtRepr ment aStmt s := by
   obtain ⟨lo, hi, spec⟩ := hg.ast.region
-  apply stmtRepr_agree_region (hin := spec.nodes) (hr := hr)
+  refine ((stmtReprWithin_of_region hr spec.nodes).transport ?_).erase
   intro a ha
   change lo ≤ a ∧ a < hi at ha
   obtain ⟨haLo, haHi⟩ := ha
@@ -125,37 +127,47 @@ theorem ExecGround.stmtRepr_offstack {m0 ment : Mem} {SL : StackLayout}
     obtain ⟨hsLo, hsHi⟩ := hs
     rcases spec.stack_disjoint with hd | hd <;> omega)).symm
 
+/-- Legacy region ground supplies payload exclusion independently of tag bounds. -/
+theorem ExecGround.node_above_htif {m : Mem} {SL : StackLayout}
+    {A : Arena} {sp aRet : BitVec 64} {aStmt : Nat} {s : Stmt}
+    (h : ExecGround m SL A sp aRet aStmt s) : tohostAddr + 16 ≤ aStmt := by
+  obtain ⟨lo, hi, region⟩ := h.ast.region
+  exact Nat.le_trans region.win (stmtIn_node region.nodes).lo_le
+
 /-! ## Move 2 — in-node read agreement (the AST region is stack-disjoint) -/
 
-/-- Any 8-byte read INSIDE the root node slot (`off + 8 ≤ 40`, the `NodeIn`
-window) agrees between the entry memory and any off-stack-agreeing memory. -/
+/-- A represented eight-byte expression field survives off-stack agreement. -/
 theorem evalGround_ast_read64_agree {m0 ment : Mem} {SL : StackLayout}
     {A : Arena} {sp sret : BitVec 64} {aExpr : Nat} {e : Expr}
     (hg : EvalGround m0 SL A sp sret aExpr e)
     (hspSL : sp.toNat ≤ SL.hi)
     (hmem : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?)
-    {off : Nat} (hoff : off + 8 ≤ 40) :
+    {off : Nat} (hoff : ReadField.word64 off ∈ exprReadFields e) :
     read64 ment (aExpr + off) = read64 m0 (aExpr + off) := by
   obtain ⟨lo, hi, spec⟩ := hg.ast.region
-  have hnode := exprIn_node spec.nodes
-  refine read64_agreeP (P := fun k => lo ≤ k ∧ k < hi) (fun k hk => ?_)
-    (fun k hk => ⟨by have := hnode.lo_le; omega, by have := hnode.hi_ge; omega⟩)
+  have hc : Covers (regionP lo hi) (aExpr + off) 8 :=
+    (exprIn_node spec.nodes).covers (exprReadFields.bounded e _ hoff)
+  apply hc.read64_eq
+  intro k hk
   refine hmem k (fun hcon => ?_)
+  change lo ≤ k ∧ k < hi at hk
   rcases spec.stack_disjoint with hs | hs <;> omega
 
-/-- The exec twin: an 8-byte read inside the root `Stmt` node slot. -/
+/-- A represented eight-byte statement field survives off-stack agreement. -/
 theorem execGround_ast_read64_agree {m0 ment : Mem} {SL : StackLayout}
     {A : Arena} {sp aRet : BitVec 64} {aStmt : Nat} {s : Stmt}
     (hg : ExecGround m0 SL A sp aRet aStmt s)
     (hspSL : sp.toNat ≤ SL.hi)
     (hmem : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?)
-    {off : Nat} (hoff : off + 8 ≤ 40) :
+    {off : Nat} (hoff : ReadField.word64 off ∈ stmtReadFields s) :
     read64 ment (aStmt + off) = read64 m0 (aStmt + off) := by
   obtain ⟨lo, hi, spec⟩ := hg.ast.region
-  have hnode := stmtIn_node spec.nodes
-  refine read64_agreeP (P := fun k => lo ≤ k ∧ k < hi) (fun k hk => ?_)
-    (fun k hk => ⟨by have := hnode.lo_le; omega, by have := hnode.hi_ge; omega⟩)
+  have hc : Covers (regionP lo hi) (aStmt + off) 8 :=
+    (stmtIn_node spec.nodes).covers (stmtReadFields.bounded s _ hoff)
+  apply hc.read64_eq
+  intro k hk
   refine hmem k (fun hcon => ?_)
+  change lo ≤ k ∧ k < hi at hk
   rcases spec.stack_disjoint with hs | hs <;> omega
 
 /-! ## Move 3 — parameter conversion (same memory) -/
@@ -175,6 +187,7 @@ theorem EvalGround.child_params {m : Mem} {SL : StackLayout} {A : Arena}
     (hsub_lo : SL.lo ≤ subsret.toNat) (hsub_hi : subsret.toNat + 24 ≤ sp.toNat) :
     EvalGround m SL A sp' subsret aChild echild where
   table := h.table
+  eval_call := h.eval_call.transport (fun _ _ => rfl)
   stack_bytes := h.stack_bytes
   ast := ⟨by
     obtain ⟨lo, hi, spec⟩ := h.ast.region
@@ -339,7 +352,8 @@ theorem ExecGround.whileCond_evalGround {m : Mem} {SL : StackLayout} {A : Arena}
   obtain ⟨_hcode, _hvint, _htruthy, _hint, _hnbs, htable⟩ :=
     h.eval_call.pins m (fun _ _ => rfl)
   refine
-    { table := htable
+    { eval_call := h.eval_call.transport (fun _ _ => rfl)
+      table := htable
       stack_bytes := h.stack_bytes
       ast := ?_
       arena_stack := ?_
@@ -412,6 +426,7 @@ theorem EvalGround.child_node {m : Mem} {SL : StackLayout} {A : Arena}
     (hproj : ∀ lo hi, ExprIn m lo hi aExpr e → ExprIn m lo hi aChild echild) :
     EvalGround m SL A sp sret aChild echild where
   table := h.table
+  eval_call := h.eval_call
   stack_bytes := h.stack_bytes
   ast := ⟨by
     obtain ⟨lo, hi, spec⟩ := h.ast.region
@@ -428,20 +443,18 @@ theorem stmtIn_expr_child {m : Mem} {lo hi a : Nat} {e : Expr}
     ∀ p, read64 m (a + 8) = some p → ExprIn m lo hi p e := h.2
 
 
-/-- The window-wise variant of `evalGround_ast_read64_agree`: any in-node read
-agrees along a per-region agreement closure (the `transport_via` shape). -/
+/-- A represented expression field agrees along a per-region memory frame. -/
 theorem evalGround_ast_read64_agree_via {m m' : Mem} {SL : StackLayout}
     {A : Arena} {sp sret : BitVec 64} {aExpr : Nat} {e : Expr}
     (hg : EvalGround m SL A sp sret aExpr e)
     (hag : ∀ lo hi, AstRegionSpec m SL A sret.toNat aExpr e lo hi →
       ∀ a : Nat, lo ≤ a → a < hi → m[a]? = m'[a]?)
-    {off : Nat} (hoff : off + 8 ≤ 40) :
+    {off : Nat} (hoff : ReadField.word64 off ∈ exprReadFields e) :
     read64 m' (aExpr + off) = read64 m (aExpr + off) := by
   obtain ⟨lo, hi, spec⟩ := hg.ast.region
-  have hnode := exprIn_node spec.nodes
-  exact (read64_agreeP (P := fun k => lo ≤ k ∧ k < hi)
-    (fun k hk => hag lo hi spec k hk.1 hk.2)
-    (fun k hk => ⟨by have := hnode.lo_le; omega, by have := hnode.hi_ge; omega⟩)).symm
+  have hc : Covers (regionP lo hi) (aExpr + off) 8 :=
+    (exprIn_node spec.nodes).covers (exprReadFields.bounded e _ hoff)
+  exact (hc.read64_eq (fun k hk => hag lo hi spec k hk.1 hk.2)).symm
 
 /-! ## The raw window-wise transport (arbitrary memory hops)
 
@@ -457,8 +470,10 @@ theorem EvalGround.transport_via {m m' : Mem} {SL : StackLayout} {A : Arena}
     (htab : ∀ a : Nat, jumpTableBase ≤ a → a < jumpTableBase + 44 → m[a]? = m'[a]?)
     (hast : ∀ lo hi, AstRegionSpec m SL A sret.toNat aExpr e lo hi →
       ∀ a : Nat, lo ≤ a → a < hi → m[a]? = m'[a]?)
+    (hcall : EvalCallSupport m' SL A sp)
     (hpop : StackBytesPresent m' SL) :
     EvalGround m' SL A sp sret aExpr e where
+  eval_call := hcall
   table := h.table.transport htab
   stack_bytes := hpop
   ast := ⟨by
@@ -529,20 +544,9 @@ theorem ExecGround.transport_evalExit {m m' : Mem} {SL : StackLayout} {A : Arena
       rcases hspec.stack_disjoint with hd | hd <;> omega
     · exact heq.symm
   · intro a ha
-    have hstk : ¬ (SL.lo ≤ a ∧ a < sp.toNat) := by
-      intro hc
-      rcases ha with he | hv | ht
-      · rcases h.eval_call.code_stack with hd | hd <;> omega
-      · rcases h.eval_call.vi_stack with hd | hd <;> omega
-      · rcases h.eval_call.table_stack with hd | hd <;> omega
-    have harena : ¬ (A.lo ≤ a ∧ a < A.hi) := by
-      intro hc
-      rcases ha with he | hv | ht
-      · rcases h.eval_call.arena_code with hd | hd <;> omega
-      · rcases h.eval_call.arena_vi with hd | hd <;> omega
-      · rcases h.eval_call.arena_table with hd | hd <;> omega
-    rcases hframe a hstk harena with hs | heq
-    · exfalso; omega
+    have hs := h.eval_call.outsideStack ha
+    rcases hframe a (by omega) (h.eval_call.outsideArena ha) with hrange | heq
+    · exact False.elim (hs (by omega))
     · exact heq
   · exact hpop
 
@@ -582,25 +586,10 @@ theorem ExecGround.transport_execExit {m m' : Mem} {SL : StackLayout} {A : Arena
       rcases hspec.ret_disjoint with hd | hd <;> omega
     · exact heq.symm
   · intro a ha
-    have hstk : ¬ (SL.lo ≤ a ∧ a < sp.toNat) := by
-      intro hc
-      rcases ha with he | hv | ht
-      · rcases h.eval_call.code_stack with hd | hd <;> omega
-      · rcases h.eval_call.vi_stack with hd | hd <;> omega
-      · rcases h.eval_call.table_stack with hd | hd <;> omega
-    have harena : ¬ (A.lo ≤ a ∧ a < A.hi) := by
-      intro hc
-      rcases ha with he | hv | ht
-      · rcases h.eval_call.arena_code with hd | hd <;> omega
-      · rcases h.eval_call.arena_vi with hd | hd <;> omega
-      · rcases h.eval_call.arena_table with hd | hd <;> omega
-    rcases hframe a hstk harena with hs | heq
-    · exfalso
-      have hr := h.aret.inSL
-      rcases ha with he | hv | ht
-      · rcases h.eval_call.code_stack with hd | hd <;> omega
-      · rcases h.eval_call.vi_stack with hd | hd <;> omega
-      · rcases h.eval_call.table_stack with hd | hd <;> omega
+    have hs := h.eval_call.outsideStack ha
+    have hr := h.aret.inSL
+    rcases hframe a (by omega) (h.eval_call.outsideArena ha) with hrange | heq
+    · exact False.elim (hs (by omega))
     · exact heq
   · exact hpop
 
@@ -617,7 +606,7 @@ theorem ExecGround.stmtRepr_evalExit {m m' : Mem} {SL : StackLayout} {A : Arena}
       (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ m'[a]? = m[a]?) :
     StmtRepr m' aStmt s := by
   obtain ⟨lo, hi, spec⟩ := h.ast.region
-  apply stmtRepr_agree_region (hin := spec.nodes) (hr := hr)
+  refine ((stmtReprWithin_of_region hr spec.nodes).transport ?_).erase
   intro a ha
   change lo ≤ a ∧ a < hi at ha
   have hstk : ¬ (SL.lo ≤ a ∧ a < sp.toNat) := by
@@ -643,7 +632,7 @@ theorem ExecGround.stmtRepr_execExit {m m' : Mem} {SL : StackLayout} {A : Arena}
       (aRet.toNat ≤ a ∧ a < aRet.toNat + 24) ∨ m'[a]? = m[a]?) :
     StmtRepr m' aStmt s := by
   obtain ⟨lo, hi, spec⟩ := h.ast.region
-  apply stmtRepr_agree_region (hin := spec.nodes) (hr := hr)
+  refine ((stmtReprWithin_of_region hr spec.nodes).transport ?_).erase
   intro a ha
   change lo ≤ a ∧ a < hi at ha
   have hstk : ¬ (SL.lo ≤ a ∧ a < sp.toNat) := by

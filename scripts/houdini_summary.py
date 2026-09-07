@@ -17,18 +17,38 @@ The mining is a Houdini fixpoint over a candidate clause set C(sym):
       otherwise => drop c from C(sym)
   until nothing was dropped.
 
-Surviving clauses are inductive under assume-guarantee, so they hold of the real
-summaries (induction on the execution).  Phase 2 then runs each residual query
-with the surviving clauses asserted in place of the defining axioms — weaker
-than the definitions, so an UNSAT there is an UNSAT under the definitions.
+Surviving clauses remain conditional on injected helper contracts. Phase 2
+checks emitted machine projections under those assumptions. It does not check
+the full Lean entry/post contract, including recursive ownership/readability.
+Every verdict row reports that full-contract status explicitly.
+Default exit status reports diagnostic completion. Use --require-valid to fail
+unless all applicable selected checks have unqualified valid projection results.
+This flag does not establish the full Lean contract.
 
 Usage:
   python3 scripts/houdini_summary.py <campaign-dir> [--timeout S] [-jN]
      [--rounds N] [--phase mine|check|both|projections]
      [--only FIELD,...] [--only-post POST,...] [--verdict-out PATH]
+     [--segment-authority TRUSTED_LEAN_EXPORT_DIR]
+     [--require-valid]
 """
 import os, re, sys, subprocess, concurrent.futures, json, time, csv, threading
+import io
 from collections import Counter
+from pathlib import Path
+
+if __package__:
+    from .verdict_receipts import VerdictRun, atomic_text
+    from .segment_certificates import (
+        CertificateError, SegmentCertificate, load_segment_certificates,
+        keyed, read_table, sha256, validate_sources,
+    )
+else:
+    from verdict_receipts import VerdictRun, atomic_text
+    from segment_certificates import (
+        CertificateError, SegmentCertificate, load_segment_certificates,
+        keyed, read_table, sha256, validate_sources,
+    )
 
 # ---------------------------------------------------------------- clause bank
 # Each clause is (id, text-template).  `{f}` is the summary symbol.  Every
@@ -194,9 +214,8 @@ POSTS = {
                      "(bvule (ld4 (mm state_exit) (select (rr s0) #x000000000000000a)) #x0000000000000005))))",
 }
 
-# These posts are discharged only by exact Lean-emitted certificate rows. They
-# never enter an SMT query. Extending this registry requires a typed certificate
-# in ReflectResiduals.lean; arbitrary campaign text is rejected.
+# Legacy declaration inventory only. These three-string records carry no
+# checked proposition/descriptor binding and cannot discharge a post.
 LEAN_POST_CERTIFICATES = {
     ("hCallAssertOk", "abi_frame_x1"):
         "Vsa.Sim.nativeAssertInternalAbi_closed",
@@ -211,7 +230,7 @@ LEAN_POSTS = tuple(sorted({post for _, post in LEAN_POST_CERTIFICATES}))
 
 
 def validate_lean_certificate_rows(rows):
-    """Validate exact Lean-emitted certificate identities."""
+    """Validate declaration metadata without granting proof authority."""
     found = {}
     for row in rows:
         key = (row.get("residual", ""), row.get("post", ""))
@@ -246,14 +265,40 @@ def load_lean_certificates(directory):
             f"houdini: malformed Lean certificate manifest: {err}") from err
 
 
-def label_projection_verdict(post, verdict):
-    """Attach solver provenance without relabelling Lean certificates."""
+def declared_lean_post_verdict(complete, consistency_check):
+    """Apply ordinary failure gates; string declarations never prove a post."""
+    if complete != "true":
+        return "INCOMPLETE(frontier-not-empty)"
+    if consistency_check() == "unsat":
+        return "VACUOUS(assumptions-inconsistent)"
+    return "UNKNOWN(untyped-lean-certificate)"
+
+
+def label_projection_verdict(post, verdict, assumed_dependencies=()):
+    """Attach solver provenance, rejecting unsupported Lean-valid labels."""
     if verdict.startswith("VALID[Lean:"):
-        return verdict
+        return "UNKNOWN(untyped-lean-certificate)"
     if not verdict.startswith("VALID"):
         return verdict
+    if "consistency-unproved" in verdict:
+        return "UNKNOWN" + verdict[len("VALID"):]
     label = "VALID-PROJECTION" if post == "residual_relation" else "VALID-MACHINE"
+    if assumed_dependencies or any(marker in verdict for marker in (
+            "candidate-suffix", "[dependencies:", "[modulo ", "[deferred:",
+            "[StoreRepr@")):
+        label = label.replace("VALID", "CONDITIONAL")
     return label + verdict[len("VALID"):]
+
+
+def qualify_projection_dependencies(verdict: str, dependencies: str) -> str:
+    """Retain consistency and suffix restrictions when naming dependencies.
+
+    >>> qualify_projection_dependencies("VALID[candidate-suffix]", "callee")
+    'VALID[candidate-suffix][dependencies:callee]'
+    """
+    if verdict.startswith("VALID"):
+        return f"{verdict}[dependencies:{dependencies}]"
+    return verdict
 
 
 def require_helper_trace_consistency(residual, verdict):
@@ -266,7 +311,7 @@ def require_helper_trace_consistency(residual, verdict):
 
 
 def native_assert_machine_post():
-    """The five SMT-proved native_assert observables; ABI frame is excluded."""
+    """The five encoded native_assert observables; ABI frame remains uncovered."""
     sret = "(select (rr s0) #x000000000000000a)"
     clauses = [
         f"(= (ld4 (mm state_exit) {sret}) #x0000000000000000)",
@@ -1500,11 +1545,30 @@ def defunise(text):
     return "\n".join(l for l in out if l is not None)
 
 
+def solver_answer(result: subprocess.CompletedProcess[str]) -> str:
+    """Accept exactly one clean solver answer, never a partial failed process."""
+    output = result.stdout.strip()
+    if result.returncode != 0 or result.stderr.strip() or "(error" in output:
+        return "error"
+    if output in {"sat", "unsat", "unknown"}:
+        return output
+    if output in {"timeout", "unknown\ntimeout"}:
+        return "unknown"
+    return "error"
+
+
 def z3(text, timeout, defunise_bindings=True):
     if defunise_bindings:
         text = defunise(text)
-    p = subprocess.run(["z3", "-smt2", "-in", f"-T:{timeout}"], input=Z3_OPTS + text,
-                       capture_output=True, text=True)
+    try:
+        p = subprocess.run(
+            ["z3", "-smt2", "-in", f"-T:{timeout}"], input=Z3_OPTS + text,
+            capture_output=True, text=True, timeout=timeout + 5)
+    except subprocess.TimeoutExpired:
+        # A wall-clock timeout bounds a stuck solver even if its own timer fails.
+        return "unknown"
+    except OSError as error:
+        raise SystemExit(f"houdini: cannot launch Z3: {error}") from error
     o = (p.stdout + p.stderr).strip()
     # A MALFORMED query is not an undecided one.  z3 prints `(error ...)` for an
     # unknown constant or a duplicate declaration and then carries on, so the
@@ -1517,11 +1581,7 @@ def z3(text, timeout, defunise_bindings=True):
                          + "\n  ".join(l for l in o.splitlines()
                                        if l.startswith("(error"))[:600] + "\n")
         return "error"
-    if o.startswith("unsat"):
-        return "unsat"
-    if o.startswith("sat"):
-        return "sat"
-    return "unknown"
+    return solver_answer(p)
 
 
 def z3_projection(text, timeout):
@@ -1555,6 +1615,13 @@ def check_provenance(d):
         sys.exit(f"houdini: {d} has no src/ provenance; re-emit with "
                  f"`#emit_bmc` before checking it")
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # Freshness covers the full logical/model dependency inventory even when
+    # there are no typed segment certificates. This grants no proof authority.
+    try:
+        manifest = Path(d) / "source-provenance.tsv"
+        validate_sources(Path(d), Path(root), manifest.name, sha256(manifest))
+    except (OSError, CertificateError) as error:
+        raise SystemExit(f"houdini: stale/incomplete source provenance: {error}") from error
     required = {
         "ReflectSpan.lean": os.path.join(root, "experiments", "smt", "ReflectSpan.lean"),
         "ReflectResiduals.lean": os.path.join(root, "experiments", "smt", "ReflectResiduals.lean"),
@@ -1566,7 +1633,7 @@ def check_provenance(d):
     if missing:
         sys.exit(f"houdini: incomplete provenance in {d}: missing {', '.join(missing)}")
     stale = [nm for nm, current in required.items()
-             if open(os.path.join(src, nm), "rb").read() != open(current, "rb").read()]
+             if (Path(src) / nm).read_bytes() != Path(current).read_bytes()]
     if stale:
         sys.exit(f"houdini: {d} was emitted from a DIFFERENT {', '.join(stale)} "
                  f"than the tree has.  Re-emit (`#emit_bmc \"{d}\" 60`) and re-mine; "
@@ -1591,8 +1658,10 @@ def check_campaign_manifest(d):
         "0x800046a4": ("__divdi3", "bvsdiv(a0,a1)"),
         "0x80004728": ("__moddi3", "bvsrem(a0,a1)"),
     }
-    functional = {row["target"]: row for row in
-                  csv.DictReader(open(functional_path), delimiter="\t")}
+    try:
+        functional = keyed(read_table(Path(functional_path)), "target")
+    except (OSError, CertificateError) as error:
+        raise SystemExit(f"houdini: malformed functional helper manifest: {error}") from error
     if set(functional) != set(expected_functional):
         sys.exit("houdini: functional-callees.tsv has the wrong helper set")
     for target, (name, result) in expected_functional.items():
@@ -1600,11 +1669,26 @@ def check_campaign_manifest(d):
         if row.get("name") != name or row.get("mode") != "ground-functional-post" \
                 or row.get("result") != result or row.get("memory") != "read-only":
             sys.exit(f"houdini: malformed arithmetic helper contract for {target}")
-    spans = list(csv.DictReader(open(spans_path), delimiter="\t"))
-    caps = list(csv.DictReader(open(caps_path), delimiter="\t"))
-    expected = {r["field"] for r in spans}
-    if expected != {r["query"] for r in caps}:
+    try:
+        spans = keyed(read_table(Path(spans_path)), "field")
+        caps = keyed(read_table(Path(caps_path)), "query")
+        dependencies = keyed(read_table(Path(d) / "query-summaries.tsv"), "query")
+    except (OSError, CertificateError) as error:
+        raise SystemExit(f"houdini: malformed query manifest: {error}") from error
+    expected = set(spans)
+    if expected != set(caps) or expected != set(dependencies):
         sys.exit("houdini: query-capabilities.tsv does not match spans.tsv")
+    for query, span in spans.items():
+        capability = caps[query]
+        if (span.get("residual") != capability.get("field")
+                or span.get("instance") != capability.get("instance")
+                or not capability.get("field") or not capability.get("instance")
+                or capability.get("capability") not in {
+                    "machine-only", "partial-projection", "indexed-error-projection",
+                    "machine-boundary"}):
+            sys.exit(f"houdini: mismatched query capability identity: {query}")
+        if span.get("complete") not in {"true", "false"}:
+            sys.exit(f"houdini: missing/malformed completeness: {query}")
     actual = {n[:-5] for n in os.listdir(os.path.join(d, "queries"))
               if n.endswith(".smt2")}
     if actual != expected:
@@ -1619,7 +1703,10 @@ def pre_block(d):
     residual QUERIES only — a summary's clause set has to hold at any entry
     state, so its obligation gets the clause set and nothing else."""
     p = os.path.join(d, "pre.smt2")
-    return open(p).read() if os.path.exists(p) else ""
+    if not os.path.exists(p):
+        return ""
+    with open(p) as stream:
+        return stream.read()
 
 
 def projection_pre_block(d, query):
@@ -1773,42 +1860,32 @@ STATE_EXIT_RE = re.compile(
 EXIT_ITE_RE = re.compile(r"\(ite (g\d+x) (b\d+) ")
 
 _EFFECT_FRAME_THEOREM = "Vsa.Sim.FrameGuarantee.refl"
-_ABI_ROUTE_FRAME_THEOREM = "Vsa.Sim.execWhileLoopRouteRow_framed"
 _EFFECT_ZERO_STEP_QUERIES = {
     "hCallArgsToCall", "hCallCallToEpilogue",
-}
-_EFFECT_ABI_ROUTE_QUERIES = {
-    "hSWhileRetBodyReturn": "hSWhileRet",
-    "hSWhileLoopBodyReturn": "hSWhileLoop",
 }
 
 
 def certified_effect_frames(effect):
-    """Return only components certified by an exact query/theorem pair.
+    """Return only components authorized by validated typed descriptors or zero-step certificates.
 
     Dynamic-effect inventory values are deliberately not negative facts.
     In particular, ``unsupported-dynamic`` never authorizes pruning.
     """
     if not effect:
         return set()
+    certificate = effect.get("_certificate")
+    if isinstance(certificate, SegmentCertificate):
+        return {"abi-registers", "memory", "output"} if certificate.matches_effect(effect) else set()
     query = effect.get("query")
-    if query in _EFFECT_ZERO_STEP_QUERIES:
-        theorem = _EFFECT_FRAME_THEOREM
-        field = "hCall"
-    elif query in _EFFECT_ABI_ROUTE_QUERIES:
-        theorem = _ABI_ROUTE_FRAME_THEOREM
-        field = _EFFECT_ABI_ROUTE_QUERIES[query]
-    else:
+    if query not in _EFFECT_ZERO_STEP_QUERIES:
         return set()
-    if effect.get("field") != field or effect.get("theorem") != theorem or \
+    theorem = _EFFECT_FRAME_THEOREM
+    if effect.get("field") != "hCall" or effect.get("theorem") != theorem or \
             effect.get("provenance") != f"Lean:{theorem}":
         return set()
     framed = set()
     if effect.get("register_writes") == "none":
         framed.add("registers")
-    elif theorem == _ABI_ROUTE_FRAME_THEOREM and \
-            effect.get("register_writes") == "preserves-abi":
-        framed.add("abi-registers")
     if effect.get("direct_memory_writes") == "none" and \
             effect.get("direct_write_rows") == "0":
         framed.add("memory")
@@ -1817,7 +1894,7 @@ def certified_effect_frames(effect):
     return framed
 
 
-def load_query_effects(campaign_dir):
+def load_query_effects(campaign_dir, segment_authority=None):
     """Load effect rows for optional, certificate-gated optimizations.
 
     Invalid or duplicate rows fail closed to no semantic pruning.  The
@@ -1827,11 +1904,15 @@ def load_query_effects(campaign_dir):
     if not os.path.isfile(path):
         return {}
     rows = {}
-    for row in csv.DictReader(open(path), delimiter="\t"):
-        query = row.get("query", "")
-        if not query or query in rows:
-            return {}
-        rows[query] = row
+    with open(path) as stream:
+        for row in csv.DictReader(stream, delimiter="\t"):
+            query = row.get("query", "")
+            if not query or query in rows:
+                return {}
+            rows[query] = row
+    certificates = load_segment_certificates(campaign_dir, authority_dir=segment_authority)
+    for query, certificate in certificates.items():
+        rows[query]["_certificate"] = certificate
     return rows
 
 
@@ -2385,15 +2466,19 @@ def abstract_exit_feasibility(query, guards, timeout):
     lines.extend(f"(assert {pin})" for pin in pins)
     for guard in guards:
         lines.extend(("(push)", f"(assert {guard})", "(check-sat)", "(pop)"))
-    process = subprocess.run(
-        ["z3", "-smt2", "-in", f"-T:{max(1, timeout)}"],
-        input="\n".join(lines), capture_output=True, text=True)
-    output = (process.stdout + process.stderr).strip()
-    if "(error" in output:
+    try:
+        process = subprocess.run(
+            ["z3", "-smt2", "-in", f"-T:{max(1, timeout)}"],
+            input="\n".join(lines), capture_output=True, text=True,
+            timeout=max(1, timeout) + 5)
+    except (OSError, subprocess.TimeoutExpired):
         return {guard: "unknown" for guard in guards}
-    answers = [line for line in output.splitlines()
-               if line in ("sat", "unsat", "unknown")]
-    if len(answers) != len(guards):
+    output = (process.stdout + process.stderr).strip()
+    if process.returncode != 0 or process.stderr.strip() or "(error" in output:
+        return {guard: "unknown" for guard in guards}
+    answers = output.splitlines()
+    if (len(answers) != len(guards)
+            or any(line not in ("sat", "unsat", "unknown") for line in answers)):
         return {guard: "unknown" for guard in guards}
     return dict(zip(guards, answers))
 
@@ -2444,6 +2529,8 @@ def check_projection_cases(query, post, cset, pre, timeout, premises="",
                 head.replace("; @@POST@@", goal) + "\n(check-sat)\n", budget))
         if "sat" in answers:
             return "sat"
+        if "error" in answers:
+            return "error"
         if all(answer == "unsat" for answer in answers):
             return "unsat"
         undecided = ",".join(str(index + 1) for index, answer in enumerate(answers)
@@ -2497,13 +2584,15 @@ def check_projection_cases(query, post, cset, pre, timeout, premises="",
                     else "VALID[trace-pinned-consistency]")
         if pinned == "unsat":
             return "UNKNOWN(trace-pins-inconsistent)"
+        if pinned == "error":
+            return "UNKNOWN(trace-pins-error)"
         consistency = z3_projection(
             head.replace("; @@POST@@", "") + "\n(check-sat)\n", min(timeout, 20))
         if consistency == "sat":
             return "VALID[candidate-suffix]" if suffix else "VALID"
-        if consistency == "unknown":
-            return "UNKNOWN(consistency-single-exit)"
-        return "VACUOUS(single-exit-inconsistent)"
+        if consistency == "unsat":
+            return "VACUOUS(single-exit-inconsistent)"
+        return f"UNKNOWN(consistency-single-exit:{consistency})"
     guards = [guard for guard, _state, _case, _post in cases]
     abstract = ({guard: "sat" for guard in guards} if suffix or internal_cases else
                 abstract_exit_feasibility(query, guards, min(timeout, 5)))
@@ -2543,6 +2632,8 @@ def check_projection_cases(query, post, cset, pre, timeout, premises="",
             return "VALID[trace-pinned-consistency]"
         if pinned == "unsat":
             return "UNKNOWN(trace-pins-inconsistent)"
+        if pinned == "error":
+            return "UNKNOWN(trace-pins-error)"
 
     # Every negated-post case is UNSAT.  Establish that at least one case's
     # assumptions are nevertheless satisfiable before calling the projection
@@ -2553,7 +2644,7 @@ def check_projection_cases(query, post, cset, pre, timeout, premises="",
             head.replace("; @@POST@@", "") + "\n(check-sat)\n", budget)
         if verdict == "sat":
             return "VALID[candidate-suffix]" if suffix else "VALID"
-        if verdict == "unknown":
+        if verdict != "unsat":
             consistency_unknown.append(guard)
     if consistency_unknown:
         return ("UNKNOWN(consistency-cases:" +
@@ -2591,8 +2682,14 @@ def sp_delta(head, timeout):
     q = (head.replace("; @@POST@@", "") + "\n(check-sat)\n"
          "(get-value ((bvsub (select (rr state_exit) #x0000000000000002) "
          "(select (rr s0) #x0000000000000002))))\n")
-    p = subprocess.run(["z3", "-smt2", "-in", f"-T:{timeout}"],
-                       input=Z3_OPTS + defunise(q), capture_output=True, text=True)
+    try:
+        p = subprocess.run(["z3", "-smt2", "-in", f"-T:{timeout}"],
+                           input=Z3_OPTS + defunise(q), capture_output=True,
+                           text=True, timeout=timeout + 5)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if p.returncode != 0 or p.stderr.strip() or "(error" in p.stdout:
+        return None
     m = re.search(r"#x([0-9a-f]{16})\)\s*\)\s*$", p.stdout.strip())
     return int(m.group(1), 16) if m else None
 
@@ -2784,7 +2881,10 @@ def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=Tru
     if side:
         sq = head + "(assert (not (and (or (bvult QA SL_lo) (bvuge QA SL_hi)) "
         sq += "(or (bvult QA A_lo) (bvuge QA A_hi)))))\n(check-sat)\n"
-        if z3(sq, timeout) != "unsat":
+        side_verdict = z3(sq, timeout)
+        if side_verdict == "error":
+            return "error"
+        if side_verdict != "unsat":
             return "UNKNOWN(cond-not-outside)"
     # 2. can a direct write land on it?
     #
@@ -2793,6 +2893,8 @@ def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=Tru
     # near QA, so it stays the fast path.
     tag = f"[StoreRepr@{nheap}]" if nheap else ""
     v = z3(head + hits_QA(writes) + "(check-sat)\n", min(timeout, 15))
+    if v == "error":
+        return "error"
     if v in ("unsat", "sat"):
         return {"unsat": "VALID" + tag, "sat": "REFUTED"}[v]
     # PER-STORE fallback.  The disjunction makes the solver carry all ~39 stores'
@@ -2812,6 +2914,8 @@ def footprint_check(base, cond, writes, applied, cset, timeout, pre="", heap=Tru
         one = (f"(assert (and {g} (bvult (bvsub QA {a}) "
                f"#x{w:016x})))\n(check-sat)\n")
         r = z3(head + one, per)
+        if r == "error":
+            return "error"
         if r == "sat":
             return f"REFUTED(store:{a[:40]})"
         if r != "unsat":
@@ -2843,6 +2947,27 @@ def dedup_addrs(writes, cap=40, reads_only=False):
 def applied_of(text):
     """The summary symbols this text actually applies (self `_ih` collapsed)."""
     return {m[0] for m in APP_RE.findall(text)}
+
+
+def injected_contract_summaries() -> set[str]:
+    """Every helper family whose facts are injected independently of mining."""
+    return (set(ARITH_FUNCTIONAL_CALLEES) | set(SEMANTIC_FUNCTIONAL_CALLEES)
+            | set(OUTPUT_SEMANTIC_SUMMARIES) | {MALLOC16_CALLEE})
+
+
+def actual_dependency_closures(
+        directory: str | Path, queries: dict[str, list[str]],
+        graph: dict[str, set[str]]) -> dict[str, set[str]]:
+    """Dependency metadata may add edges; it cannot hide applied assumptions."""
+    graph = {name: set(dependencies) for name, dependencies in graph.items()}
+    for path in (Path(directory) / "obligations").glob("*.smt2"):
+        graph.setdefault(path.stem, set()).update(applied_of(path.read_text()))
+    return {
+        name: dependency_closure(
+            set(dependencies) | applied_of(
+                (Path(directory) / "queries" / f"{name}.smt2").read_text()), graph)
+        for name, dependencies in queries.items()
+    }
 
 
 MEM_CLAUSES = ("stack_or_arena", "above_sp")
@@ -3210,16 +3335,18 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
                 if c in cset[f]:
                     cset[f].remove(c)
         elif os.path.exists(path):
-            body = open(path).read()
+            with open(path) as stream:
+                body = stream.read()
             # THE SAME GATE THE QUERIES GET.  An obligation whose frontier did
             # not empty drops paths from `fbody`, so a clause can be mined that
             # is false on the dropped ones and then ASSUMED in every query that
             # applies the summary.  The emitter writes the flag as a comment and
             # nothing read it.  All 25 are complete today; `--rounds` and the
             # emit bound are arguments, and nothing caught that.
-            if "; complete=false" in body:
+            completion = re.findall(r"^;\s*complete=(\S+)\s*$", body, re.MULTILINE)
+            if completion != ["true"]:
                 sys.exit(f"houdini: obligation {f} is INCOMPLETE (the BMC frontier "
-                         f"did not empty within the emit bound), so its `fbody` is "
+                         f"is not certified complete), so its `fbody` is "
                          f"missing paths and any clause mined from it would be "
                          f"assumed on paths it was never checked against.  Re-emit "
                          f"with more rounds.")
@@ -3253,13 +3380,19 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
                 sym + "\tNAMED OUTPUT SEMANTIC PREMISE: exact output-only "
                 "ValuePrint/NativePrint relation; memory footprint is not "
                 "assumed and machine discharge remains explicit\n")
+        for sym in sorted(injected_contract_summaries() - set(OUTPUT_SEMANTIC_SUMMARIES)):
+            fh.write(sym + "\tNAMED HELPER PREMISE: injected functional/semantic "
+                     "contract; its full precondition and machine discharge "
+                     "are not validated by this campaign\n")
     syms = [f for f in syms if f in bodies]
     # a summary only needs re-checking when one of the summaries its own body
     # applies (including itself, via `<f>_ih`) has lost a clause since last round
     deps = {f: set() for f in syms}
     dpath = os.path.join(d, "summary-deps.tsv")
     if os.path.exists(dpath):
-        for l in open(dpath).read().splitlines()[1:]:
+        with open(dpath) as stream:
+            dependency_rows = stream.read().splitlines()[1:]
+        for l in dependency_rows:
             if not l.strip(): continue
             parts = l.split("\t")
             deps[parts[0]] = {x for x in (parts[1].split(",") if len(parts) > 1 else []) if x}
@@ -3269,8 +3402,13 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
     for rnd in range(rounds):
         tasks = [(f, c) for f in syms if f in stale for c in cset[f]]
         if not tasks:
-            print(f"  round {rnd}: fixpoint (nothing stale)")
-            return cset, True, reasons
+            # The dependency inventory is an optimization, not proof authority.
+            # Recheck all survivors before accepting its empty stale frontier.
+            stale = set(syms)
+            tasks = [(f, c) for f in syms for c in cset[f]]
+            if not tasks:
+                print(f"  round {rnd}: fixpoint (no non-assumed clauses remain)")
+                return cset, True, reasons
         def run(t):
             f, c = t
             body = bodies[f]
@@ -3311,7 +3449,10 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
                              + "\n(assert (INV S0))\n"
                              + (f"(assert {bg})\n" if bg else "")
                              + "(assert (not " + iv.format(S=arg) + "))\n(check-sat)\n")
-                        if z3(q, timeout) != "unsat":
+                        iv_verdict = z3(q, timeout)
+                        if iv_verdict == "error":
+                            return (f, c, "error")
+                        if iv_verdict != "unsat":
                             return (f, c, "IV-NOT-INDUCTIVE@" + arg)
                 cond = ("(assert (INV S0))\n" + OUTSIDE if c == "stack_or_arena" else
                         "(assert (INV S0))\n"
@@ -3345,9 +3486,16 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
             res = list(ex.map(run_logged, tasks))
+        errors = [(f, c) for f, c, verdict in res if verdict == "error"]
+        if errors:
+            raise SystemExit(f"houdini: solver errors invalidate mining: {errors}")
         dropped = [(f, c, v) for f, c, v in res if v != "unsat"]
         if not dropped:
-            print(f"  round {rnd}: fixpoint (nothing dropped)")
+            if stale != set(syms):
+                print(f"  round {rnd}: local stability; validating all survivors next")
+                stale = set(syms)
+                continue
+            print(f"  round {rnd}: fixpoint (all surviving clauses checked)")
             return cset, True, reasons
         weakened = set()
         for f, c, v in dropped:
@@ -3362,21 +3510,66 @@ def mine(d, syms, timeout, jobs, rounds, warm=False):
     return cset, False, reasons
 
 
-def bounded(d, timeout, jobs, ks):
-    """Bounded refutation search: run each residual's span for `k` exact machine
-    steps and demand it REACHED its exit PC, then negate the post.
+def prepare_clause_set(d, syms, timeout, jobs, rounds, phase, warm=False,
+                       only_summary=None):
+    """Obtain converged clauses; saved files and scoped runs are not authority.
 
-      sat   ⇒ a GENUINE countermodel (the run finished inside k steps, so the
-              unrolling is exact on it) — the statement is false as posed;
-      unsat ⇒ no countermodel within k steps (bounded validity, reported as such);
-      unknown ⇒ the bound is out of the solver's reach at this k.
+    A check-only invocation always revalidates the complete summary inventory.
+    No receipt inside a mutable campaign can bypass the solver validation.
     """
+    if phase not in {"mine", "both", "check"}:
+        raise SystemExit(f"houdini: unsupported phase {phase}")
+    if only_summary and phase != "mine":
+        raise SystemExit("houdini: --only-summary is exploratory; use --phase mine, "
+                         "then full-scope --phase check")
+    if only_summary and not set(only_summary) <= set(syms):
+        raise SystemExit("houdini: --only-summary names unknown summaries")
+    csetpath = os.path.join(d, "clauses.json")
+    if phase == "check" and not os.path.isfile(csetpath):
+        raise SystemExit("houdini: --phase check needs clauses.json for full warm revalidation")
+    selected = [sym for sym in syms if not only_summary or sym in only_summary]
+    mode = "full warm revalidation" if phase == "check" else "Houdini"
+    print(f"== phase 1: {mode} over {len(selected)}/{len(syms)} summaries "
+          f"x {len(CLAUSE_IDS)} clauses")
+    started = time.time()
+    cset, fix, reasons = mine(d, selected, timeout, jobs, rounds,
+                              warm=(warm or phase == "check"))
+    # Save progress for a later warm retry, even when the budget was exhausted.
+    for name, value in (("drop-reasons.json", reasons), ("clauses.json", cset)):
+        destination = os.path.join(d, name)
+        temporary = destination + ".tmp"
+        with open(temporary, "w") as stream:
+            json.dump(value, stream, indent=1)
+        os.replace(temporary, destination)
+    survivors = Counter(clause for values in cset.values() for clause in values)
+    print(f"  fixpoint={fix} scope={len(selected)}/{len(syms)} "
+          f"({time.time()-started:.0f}s) surviving: {dict(survivors)}")
+    for sym in selected:
+        print(f"    {sym}: {cset[sym]}")
+    if not fix:
+        raise SystemExit("houdini: mining did not converge; exploratory clauses saved. "
+                         "No residual checks authorized. Resume with --phase mine --warm "
+                         "and a larger --rounds budget.")
+    return cset
+
+
+def bounded(d, timeout, jobs, ks):
+    """Report satisfiability of bounded SMT encodings, not Lean counterexamples.
+
+    SAT supplies a model of the emitted formula. UNSAT excludes models of that
+    formula at this bound. Neither result establishes the full Lean contract
+    or supplies a checked execution from a Loaded state.
+    """
+    if not ks or any(type(k) is not int or k <= 0 for k in ks):
+        raise SystemExit("houdini: bounded search needs positive, nonempty bounds")
     qdir = os.path.join(d, "bounded")
-    fields = sorted(f[:-5] for f in os.listdir(qdir) if f.endswith(".smt2"))
+    fields = sorted(path.stem for path in Path(qdir).glob("*.smt2") if path.is_file())
+    if not fields:
+        raise SystemExit("houdini: bounded query inventory is empty")
     out = {}
     for k in ks:
         tasks = [(f, pk) for f in fields for pk in POSTS
-                 if out.get((f, pk)) in (None, "UNKNOWN")]
+                 if not out.get((f, pk), "").startswith("BOUNDED-ENCODING-SAT(")]
         if not tasks:
             break
         print(f"  k={k}: {len(tasks)} queries")
@@ -3387,8 +3580,8 @@ def bounded(d, timeout, jobs, ks):
                    .replace("; @@EXIT@@", unroll(k))
                    .replace("; @@POST@@", POSTS[pk]) + "\n(check-sat)\n")
             v = z3(txt, timeout)
-            return (f, pk, {"unsat": f"BOUNDED-VALID(k={k})",
-                            "sat": "REFUTED"}.get(v, "UNKNOWN"))
+            status = {"unsat": "UNSAT", "sat": "SAT", "error": "ERROR"}.get(v, "UNKNOWN")
+            return (f, pk, f"BOUNDED-ENCODING-{status}(k={k})")
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
             for f, pk, v in ex.map(run, tasks):
                 out[(f, pk)] = v
@@ -3396,10 +3589,41 @@ def bounded(d, timeout, jobs, ks):
     path = os.path.join(d, "bounded-verdicts.tsv")
     keys = list(POSTS)
     with open(path, "w") as fh:
-        fh.write("field\t" + "\t".join(keys) + "\n")
+        fh.write("field\tfull_contract_status\t" + "\t".join(keys) + "\n")
         for f in fields:
-            fh.write(f + "\t" + "\t".join(out.get((f, k), "UNKNOWN") for k in keys) + "\n")
+            fh.write(f + "\tNOT-CHECKED\t" + "\t".join(out.get((f, k), "UNKNOWN") for k in keys) + "\n")
     print("wrote", path)
+
+
+def validation_failures(tasks: list[tuple[str, str]],
+                        results: list[tuple[str, str, str]]) -> list[str]:
+    """Reject missing checks, conditional claims, and vacuous selection scopes.
+
+    N/A is allowed only alongside a real valid check for the same query.
+
+    >>> validation_failures([("q", "sp")], [("q", "sp", "VALID-MACHINE")])
+    []
+    >>> validation_failures([("q", "sp")], [("q", "sp", "CONDITIONAL-MACHINE")])
+    ['q.sp: CONDITIONAL-MACHINE']
+    """
+    if not tasks:
+        return ["no checks selected"]
+    expected = set(tasks)
+    if len(expected) != len(tasks):
+        return ["duplicate selected checks"]
+    actual = [(query, post) for query, post, _ in results]
+    if len(actual) != len(set(actual)) or set(actual) != expected:
+        return ["result inventory differs from selected checks"]
+    valid = {"VALID", "VALID-MACHINE", "VALID-PROJECTION"}
+    not_applicable = {"N/A", "N/A(fragment)", "N/A(not-an-eval-arm)"}
+    failures = [f"{query}.{post}: {value or 'empty result'}"
+                for query, post, value in results
+                if value not in valid | not_applicable]
+    for query in sorted({query for query, _ in tasks}):
+        values = [value for name, _, value in results if name == query]
+        if all(value in not_applicable for value in values):
+            failures.append(f"{query}: no applicable checks")
+    return failures
 
 
 def main():
@@ -3411,19 +3635,26 @@ def main():
     # pass is for producing the committed artefact, not for the fix loop.
     only, only_sum, only_post, warm = None, None, None, False
     verdict_out, consistency_pins_dir = None, None
+    segment_authority = None
+    require_valid = False
     a = sys.argv[2:]
     for i, x in enumerate(a):
         if x == "--timeout": timeout = int(a[i + 1])
         elif x.startswith("-j"): jobs = int(x[2:])
         elif x == "--rounds": rounds = int(a[i + 1])
         elif x == "--phase": phase = a[i + 1]
-        elif x == "--ks": ks = [int(z) for z in a[i + 1].split(",")]
+        elif x == "--ks": ks = [int(z) for z in a[i + 1].split(",")] if a[i + 1] else []
         elif x == "--only": only = set(a[i + 1].split(","))
         elif x == "--only-summary": only_sum = set(a[i + 1].split(","))
         elif x == "--only-post": only_post = set(a[i + 1].split(","))
         elif x == "--verdict-out": verdict_out = a[i + 1]
         elif x == "--consistency-pins": consistency_pins_dir = a[i + 1]
+        elif x == "--segment-authority": segment_authority = a[i + 1]
         elif x == "--warm": warm = True
+        elif x == "--require-valid": require_valid = True
+
+    if require_valid and phase not in {"check", "both"}:
+        raise SystemExit("houdini: --require-valid requires --phase check or both")
 
     if phase == "artifact-selfcheck":
         assert verdict_output_path("/tmp/c", None, None) == \
@@ -3460,7 +3691,7 @@ def main():
                 raise AssertionError("malformed Lean certificate was accepted")
         assert label_projection_verdict(
             "abi_frame_x1", "VALID[Lean:Vsa.Sim.nativeAssertInternalAbi_closed]") == \
-            "VALID[Lean:Vsa.Sim.nativeAssertInternalAbi_closed]"
+            "UNKNOWN(untyped-lean-certificate)"
         assert label_projection_verdict("sp", "VALID") == "VALID-MACHINE"
         machine_goals = projection_post_goals(native_assert_machine_post())
         assert len(machine_goals) == 5
@@ -3540,11 +3771,10 @@ def main():
             unsupported_effect,
             query="hSWhileLoopBodyReturn", field="hSWhileLoop",
             register_writes="preserves-abi", direct_memory_writes="none",
-            theorem=_ABI_ROUTE_FRAME_THEOREM,
-            provenance=f"Lean:{_ABI_ROUTE_FRAME_THEOREM}",
+            theorem="unvalidated.theorem",
+            provenance="Lean:unvalidated.theorem",
             output="preserved")
-        assert certified_effect_frames(abi_route_effect) == {
-            "abi-registers", "memory", "output"}
+        assert certified_effect_frames(abi_route_effect) == set()
         filtered_pins = consistency_pins_for_query(
             direct_slice,
             "(assert (= (select (rr s0) #x00) #x00))\n"
@@ -3553,13 +3783,18 @@ def main():
         print("[selfcheck] scoped artifacts, projection splitting, and Lean certificates: ok")
         return
 
-    if phase == "bounded":
-        print(f"== bounded refutation search (k ladder {ks})")
-        bounded(d, timeout, jobs, ks)
-        return
-
+    receipt_run = None
+    if phase in {"check", "both", "mine"}:
+        receipt_run = VerdictRun.begin(
+            Path(verdict_output_path(d, only, only_post, verdict_out)), Path(d),
+            Path(consistency_pins_dir) if consistency_pins_dir else None,
+            Path(segment_authority) if segment_authority else None)
     check_provenance(d)
     check_campaign_manifest(d)
+    if phase == "bounded":
+        print(f"== bounded encoding search (k ladder {ks}; full contract NOT-CHECKED)")
+        bounded(d, timeout, jobs, ks)
+        return
     if phase == "projections":
         # A separate process exposes the production SMT formulas as the system
         # under test.  The differential tester does not import this module or
@@ -3584,39 +3819,27 @@ def main():
             summary_deps[row["summary"]] = {
                 sym for sym in row.get("deps", "").split(",") if sym
             }
-    closed_deps = {query: dependency_closure(syms_, summary_deps)
-                   for query, syms_ in deps.items()}
+    closed_deps = actual_dependency_closures(d, deps, summary_deps)
 
-    csetpath = os.path.join(d, "clauses.json")
-    if phase in ("mine", "both"):
-        print(f"== phase 1: Houdini over {len(syms)} summaries x {len(CLAUSE_IDS)} clauses")
-        t0 = time.time()
-        if only_sum:
-            syms = [f for f in syms if f in only_sum]
-        cset, fix, reasons = mine(d, syms, timeout, jobs, rounds, warm=warm)
-        json.dump(reasons, open(os.path.join(d, "drop-reasons.json"), "w"), indent=1)
-        json.dump(cset, open(csetpath, "w"), indent=1)
-        surv = Counter(c for v in cset.values() for c in v)
-        print(f"  fixpoint={fix}  ({time.time()-t0:.0f}s)  surviving: {dict(surv)}")
-        for f in syms:
-            print(f"    {f}: {cset[f]}")
-    else:
-        cset = sanitize_clause_set(json.load(open(csetpath)))
+    cset = prepare_clause_set(d, syms, timeout, jobs, rounds, phase,
+                              warm=warm, only_summary=only_sum)
 
     if phase in ("check", "both"):
+        assert receipt_run is not None
+        checked_inputs = receipt_run.inputs()
         print(f"== phase 2: {len(deps)} residual queries x {len(POSTS)} post conjuncts")
         qs = {f: open(os.path.join(d, "queries", f + ".smt2")).read() for f in deps}
         query_caps = {r["query"]: r for r in
                       csv.DictReader(open(os.path.join(d, "query-capabilities.tsv")),
                                      delimiter="\t")}
-        query_effects = load_query_effects(d)
+        query_effects = load_query_effects(d, segment_authority)
         hole_rows = list(csv.DictReader(open(os.path.join(d, "residual-holes.tsv")),
                                         delimiter="\t"))
         holes_by_field = {}
         for row in hole_rows:
             holes_by_field.setdefault(row["field"], []).append(row["dimension"])
         assumed_syms = (set(IH_SUMMARIES) | set(NATIVE_ICALLS)
-                        | set(OUTPUT_SEMANTIC_SUMMARIES))
+                        | injected_contract_summaries())
         ap = os.path.join(d, "assumed.tsv")
         if os.path.exists(ap):
             assumed_syms |= {r["summary"] for r in csv.DictReader(open(ap), delimiter="\t")
@@ -3698,8 +3921,6 @@ def main():
         if missing_certificate_queries:
             sys.exit("houdini: Lean certificate residual has no emitted query: " +
                      ", ".join(sorted(missing_certificate_queries)))
-        pre = pre_block(d)
-
         def selected(f):
             return (not only or f in only
                     or query_caps.get(f, {}).get("field") in only)
@@ -3713,23 +3934,39 @@ def main():
         tasks += [(f, post) for f, post in sorted(lean_certificates)
                   if f in deps and selected(f) and
                   (not only_post or post in only_post)]
+        selectable = set(deps) | {row["field"] for row in query_caps.values()}
+        available_posts = set(POSTS) | set(FOOTPRINT_POSTS) | {"residual_relation"} | set(LEAN_POSTS)
+        if only and not only <= selectable:
+            raise SystemExit("houdini: unknown residual selection: " +
+                             ", ".join(sorted(only - selectable)))
+        if only_post and not only_post <= available_posts:
+            raise SystemExit("houdini: unknown post selection: " +
+                             ", ".join(sorted(only_post - available_posts)))
+        if not tasks:
+            raise SystemExit("houdini: no residual checks selected; no verdict emitted")
         def run(t):
             f, pk = t
+            qpre = projection_pre_block(d, f)
             certificate = lean_certificates.get((f, pk))
             if certificate is not None:
-                return (f, pk, f"VALID[Lean:{certificate}]")
+                def declaration_consistency():
+                    head = qs[f].replace("; @@ASSUME@@",
+                                         qpre + "\n" + assume_block(qs[f], cset))
+                    return consistency(f, head, timeout)
+                return (f, pk, declared_lean_post_verdict(
+                    spans.get(f, {}).get("complete"), declaration_consistency))
             # The encoder records whether the BMC frontier EMPTIED within the
             # round bound.  If it did not, the reflected term covers only part of
             # the span and a post proved over it says nothing about the rest.
             # The column was emitted and never read.
-            if spans.get(f, {}).get("complete") == "false":
+            if spans.get(f, {}).get("complete") != "true":
                 return (f, pk, "INCOMPLETE(frontier-not-empty)")
             if pk == "residual_relation":
                 premise = per_residual_pres.get(f, "")
                 verdict = check_projection_cases(
                     qs[f], per_residual_posts[f],
                     {} if f in SUMMARY_FREE_RESIDUAL_PROJECTIONS else cset,
-                    projection_pre_block(d, f), timeout, premise,
+                    qpre, timeout, premise,
                     per_residual_suffix.get(f),
                     (open(os.path.join(consistency_pins_dir, f + ".smt2")).read()
                      if consistency_pins_dir and os.path.exists(
@@ -3750,7 +3987,8 @@ def main():
                     "hCallCallToEpilogue": "OutRepr,StoreRepr,ValueRepr",
                 }
                 if f in projection_dependencies and verdict.startswith("VALID"):
-                    verdict = f"VALID[{projection_dependencies[f]}]"
+                    verdict = qualify_projection_dependencies(
+                        verdict, projection_dependencies[f])
                 verdict = require_helper_trace_consistency(
                     query_caps[f]["field"], verdict)
                 return (f, pk, verdict)
@@ -3763,7 +4001,7 @@ def main():
             # negating a nested dispatch's arms, and two spans whose declared
             # exit is unreachable) and all 26 reported VALID on all five posts.
             vhead = qs[f].replace("; @@ASSUME@@",
-                                  pre + "\n" + assume_block(qs[f], cset))
+                                  qpre + "\n" + assume_block(qs[f], cset))
             vac = consistency(f, vhead, timeout)
             if vac == "unsat":
                 return (f, pk, "VACUOUS(assumptions-inconsistent)")
@@ -3792,7 +4030,7 @@ def main():
                     sl = slice_to(qs[f], r, extra=roots[1:])
                 base = sl.replace("; @@ASSUME@@", assume_block(sl, cset)) \
                          .replace("; @@POST@@", "")
-                bad = iv_discharge(qs[f], cset, timeout, pre, wr)
+                bad = iv_discharge(qs[f], cset, timeout, qpre, wr)
                 if bad:
                     sym = bad.split("@")[0]
                     if sym not in IV_PREMISE:
@@ -3802,7 +4040,7 @@ def main():
                 else:
                     iv_premise, iv_indep = None, True
                 fv = footprint_check(base, FOOTPRINT_POSTS[pk], wr,
-                                     applied_of(sl), cset, timeout, pre=pre)
+                                     applied_of(sl), cset, timeout, pre=qpre)
                 if fv.startswith("VALID") and vac != "sat":
                     fv += "(consistency-unproved)"
                 if fv.startswith("VALID") and iv_premise:
@@ -3853,7 +4091,10 @@ def main():
                                f"#x0000000000000002) #x{delta:016x}))))")
                     if z3(head.replace("; @@POST@@", shifted) + "\n(check-sat)\n",
                           timeout) == "unsat":
-                        return (f, pk, f"VALID[sp+0x{delta:x}]")
+                        verdict = f"VALID[sp+0x{delta:x}]"
+                        if vac != "sat":
+                            verdict += "(consistency-unproved)"
+                        return (f, pk, verdict)
             ok = {"unsat": "VALID", "sat": "REFUTED"}.get(v, "UNKNOWN")
             if ok == "VALID" and vac != "sat":
                 ok = "VALID(consistency-unproved)"
@@ -3866,7 +4107,8 @@ def main():
 
         def run_p2(t):
             r = run(t)
-            r = (r[0], r[1], label_projection_verdict(r[1], r[2]))
+            r = (r[0], r[1], label_projection_verdict(
+                r[1], r[2], closed_deps.get(r[0], set()) & assumed_syms))
             with p2_lock:
                 p2_done[0] += 1
                 print(f"  [{p2_done[0]:3d}/{len(tasks)}] {r[0]}.{r[1]} = {r[2]}"
@@ -3881,9 +4123,9 @@ def main():
         out = verdict_output_path(d, only, only_post, verdict_out)
         keys = list(POSTS) + list(FOOTPRINT_POSTS) + ["residual_relation"] + \
             list(LEAN_POSTS)
-        with open(out, "w") as fh:
+        with io.StringIO() as fh:
             fh.write("query\tresidual\tinstance\tcapability\tassumed_dependencies\t"
-                     "opaque_dependencies\tunencoded_dimensions\t" +
+                     "opaque_dependencies\tunencoded_dimensions\tfull_contract_status\t" +
                      "\t".join(keys) + "\n")
             for f in sorted(table):
                 cap = query_caps[f]
@@ -3891,11 +4133,32 @@ def main():
                 opaque_deps = ",".join(sorted(closed_deps.get(f, set()) & opaque_syms))
                 unencoded = ",".join(holes_by_field.get(cap["field"], ()))
                 fh.write("\t".join((f, cap["field"], cap["instance"], cap["capability"],
-                                    assumed_deps, opaque_deps, unencoded)) + "\t" +
+                                    assumed_deps, opaque_deps, unencoded,
+                                    "NOT-CHECKED")) + "\t" +
                          "\t".join(table[f].get(k, "N/A") for k in keys) + "\n")
+            verdict_text = fh.getvalue()
+        # A completed TSV is useful for diagnosis even if the final freshness
+        # check fails. Only its receipt permits consumers to use it as evidence.
+        atomic_text(Path(out), verdict_text)
         for k in keys:
             print(f"  {k}: {dict(Counter(table[f].get(k, 'N/A').split('(')[0] for f in table))}")
         print("wrote", out)
+        check_provenance(d)
+        failures = validation_failures(tasks, res) if require_valid else []
+        receipt_run.complete({
+            "phase": phase, "timeout": timeout, "jobs": jobs, "rounds": rounds,
+            "only": sorted(only) if only is not None else None,
+            "only_post": sorted(only_post) if only_post is not None else None,
+            "only_summary": sorted(only_sum) if only_sum is not None else None,
+            "warm": warm, "argv": sys.argv[1:],
+            "require_valid": require_valid,
+            "strict_gate": ("failed" if failures else "passed") if require_valid
+                           else "not-requested",
+        }, tasks, checked_inputs)
+        if failures:
+            raise SystemExit("houdini: selected projection validation failed "
+                             "(full contract NOT-CHECKED):\n  " +
+                             "\n  ".join(failures))
 
 
 if __name__ == "__main__":

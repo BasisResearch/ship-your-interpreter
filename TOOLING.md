@@ -52,6 +52,31 @@ and the generator's source for its schema. Preserve TSV, TOML, JSON and
 template inputs for retained generators. Complete draft proof obligations
 before adding generated modules to `Vsa/`.
 
+`genseg.py` and `gen_sites.py` accept `--default-limits` to omit elaboration
+limit overrides. The initial null-call proofs use that mode:
+
+```sh
+python3 -B scripts/genseg.py scripts/arms/initialValueNullCall.toml \
+  --default-limits -o Vsa/Sim/rows/InitialValueNullCall.lean
+python3 -B scripts/gen_sites.py scripts/initial_null_sites.tsv \
+  --code-loaded Vsa.Sim.Code.Interp_runLoaded --suffix _initialNull \
+  --default-limits -o Vsa/Sim/InitialNullSites.lean
+python3 -B scripts/gen_sites.py scripts/initial_exec_sites.tsv \
+  --code-loaded Vsa.Sim.Code.Interp_runLoaded --suffix _initialExec \
+  --default-limits -o Vsa/Sim/InitialExecSites.lean
+python3 -B scripts/gen_fixed_image.py \
+  --projection Value_null --projection Exec_stmt --projection Eval_expr \
+  --projection Value_int --projection Value_bool --projection Value_str \
+  --projection Value_truthy --projection __muldi3 --projection __divdi3 \
+  --projection __umoddi3 --projection __hidden___udivdi3 \
+  --projection __moddi3 --check
+```
+
+Use `gen_transport.py value_int --exact-range` to regenerate
+`rows/TransportValue_intRange.lean`. This mode requires agreement only on the
+callee's code interval. `--stdout` emits without writing; compile through the
+private backend, not the generator's direct `--check` mode.
+
 ## Validation
 
 | Task | Tool |
@@ -65,6 +90,44 @@ before adding generated modules to `Vsa/`.
 | Summary mining and residual queries | `houdini_summary.py` |
 | Trace, semantic and effect checks | `difftest.py`, `difftest.sh` |
 | Typed evidence accounting | `residual_coverage_ledger.py` |
+
+The default `check_validation.py` gate imports every compiled module and
+inventories inherited residual fields before running boundary regressions.
+Run supplier search separately:
+
+```sh
+python3 -B scripts/field_census.py \
+  --backend /private/tmp/vsa-full-build.sQd0gM --output /private/tmp/vsa-census
+```
+
+Use `--inventory-only` for field enumeration or repeat `--field NAME` for a
+subset. Probes run serially. `FOUND` requires a checked proof and standard
+axioms. `NO_MATCH` is inconclusive. Reports retain source and backend hashes;
+supplier search does not construct the final residual record.
+
+For a development check of a known supplier, use a persistent private overlay:
+
+```sh
+python3 -B -m scripts.proof_slice \
+  --backend /private/tmp/vsa-full-build.sQd0gM \
+  --output /private/tmp/vsa-proof-work \
+  --module Vsa.Sim.IntegerCellSuppliers \
+  --field hIAdd --supplier Vsa.Sim.ScaffoldRows.field_hIAdd \
+  --audit Vsa.Sim.ScaffoldRows.field_hIAdd --plan-only
+```
+
+Remove `--plan-only` to run. The preview lists required builds and cache reuse.
+Repeated runs reuse fingerprint-matching objects in the overlay. The original
+backend is read-only. Use `--module` and `--audit` repeatedly for a declaration
+audit without a field check. `--field` requires `--supplier`; Lean checks that
+term against the actual inherited field type through the census elaborator.
+
+Each successful run writes a separate receipt containing source/dependency
+fingerprints, object hashes, timings, exact axiom reports, and the field-check
+result. Failed runs retain diagnostics without a success receipt. A slice
+checks only its selected dependency closure. The complete-library census,
+resumed integration build, and checkpoint regression gates remain required.
+Run with exclusive compiler access, as specified above.
 
 The statement checker and fuzzer write `vsa-smt-check.log` and
 `vsa-statement-fuzz.log` under the system temporary directory.

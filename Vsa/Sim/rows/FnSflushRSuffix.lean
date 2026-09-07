@@ -213,15 +213,13 @@ theorem sflushEd4c_mem_facts (m : Mem) (sp s1 : BitVec 64)
     ((sflushSpE sp + sign_extend (m := 64) (0x018#12)).toNat + 8 ≤
         tohostAddr ∨
       tohostAddr + 8 ≤
-        (sflushSpE sp + sign_extend (m := 64) (0x018#12)).toNat) ∧
-    (sflushSpE sp + sign_extend (m := 64) (0x018#12)).toNat % 8 = 0) ∧ _
+        (sflushSpE sp + sign_extend (m := 64) (0x018#12)).toNat)) ∧ _
   refine ⟨?_, hp⟩
   rw [ha]
   have ht : tohostAddr = 0x8001ad00 := rfl
   have := hs.htif
   have := hs.hi
-  have := hs.align
-  exact ⟨by omega, by omega, by right; omega, by omega⟩
+  exact ⟨by omega, by omega, by right; omega⟩
 
 theorem sflushEd4c_prog_facts (mc m : Mem) (sp s1 : BitVec 64)
     (rest : List (List (BitVec 8)))
@@ -319,15 +317,13 @@ theorem sflushEd50_mem_facts (m : Mem) (sp s1 s2 : BitVec 64)
     ((sflushSpE sp + sign_extend (m := 64) (0x010#12)).toNat + 8 ≤
         tohostAddr ∨
       tohostAddr + 8 ≤
-        (sflushSpE sp + sign_extend (m := 64) (0x010#12)).toNat) ∧
-    (sflushSpE sp + sign_extend (m := 64) (0x010#12)).toNat % 8 = 0) ∧ _
+        (sflushSpE sp + sign_extend (m := 64) (0x010#12)).toNat)) ∧ _
   refine ⟨?_, hp⟩
   rw [ha]
   have ht : tohostAddr = 0x8001ad00 := rfl
   have := hs.htif
   have := hs.hi
-  have := hs.align
-  exact ⟨by omega, by omega, by right; omega, by omega⟩
+  exact ⟨by omega, by omega, by right; omega⟩
 
 theorem sflushEd50_prog_facts (mc m : Mem) (sp s1 s2 : BitVec 64)
     (rest : List (List (BitVec 8)))
@@ -516,14 +512,12 @@ theorem sflush_stack_load_range (sp : BitVec 64) (hs : SflushStackOK sp)
     0x80000000 ≤ (sflushSpE sp + BitVec.ofNat 64 off).toNat ∧
     (sflushSpE sp + BitVec.ofNat 64 off).toNat + 8 ≤ 0x100000000 ∧
     ((sflushSpE sp + BitVec.ofNat 64 off).toNat + 8 ≤ tohostAddr ∨
-      tohostAddr + 8 ≤ (sflushSpE sp + BitVec.ofNat 64 off).toNat) ∧
-    (sflushSpE sp + BitVec.ofNat 64 off).toNat % 8 = 0 := by
+      tohostAddr + 8 ≤ (sflushSpE sp + BitVec.ofNat 64 off).toNat) := by
   rw [sflush_slot_toNat sp hs off hi (by omega)]
   have ht : tohostAddr = 0x8001ad00 := rfl
   have := hs.htif
   have := hs.hi
-  have := hs.align
-  exact ⟨by omega, by omega, by right; omega, by omega⟩
+  exact ⟨by omega, by omega, by right; omega⟩
 
 theorem sflushEc9c_mem_ra (m : Mem) (sp ra s1 s2 : BitVec 64)
     (hs : SflushStackOK sp)
@@ -540,8 +534,7 @@ theorem sflushEc9c_mem_ra (m : Mem) (sp ra s1 s2 : BitVec 64)
     ((sflushSpE sp + sign_extend (m := 64) (0x028#12)).toNat + 8 ≤
         tohostAddr ∨
       tohostAddr + 8 ≤
-        (sflushSpE sp + sign_extend (m := 64) (0x028#12)).toNat) ∧
-    (sflushSpE sp + sign_extend (m := 64) (0x028#12)).toNat % 8 = 0) ∧ _
+        (sflushSpE sp + sign_extend (m := 64) (0x028#12)).toNat)) ∧ _
   rw [show sign_extend (m := 64) (0x028#12) = (40#64) by decide]
   exact ⟨sflush_stack_load_range sp hs 40 (by decide) (by decide) (by decide), hp⟩
 
@@ -560,8 +553,7 @@ theorem sflushEc9c_mem_s0 (m : Mem) (sp ra s0 s1 s2 : BitVec 64)
     ((sflushSpE sp + sign_extend (m := 64) (0x020#12)).toNat + 8 ≤
         tohostAddr ∨
       tohostAddr + 8 ≤
-        (sflushSpE sp + sign_extend (m := 64) (0x020#12)).toNat) ∧
-    (sflushSpE sp + sign_extend (m := 64) (0x020#12)).toNat % 8 = 0) ∧ _
+        (sflushSpE sp + sign_extend (m := 64) (0x020#12)).toNat)) ∧ _
   rw [show sign_extend (m := 64) (0x020#12) = (32#64) by decide]
   exact ⟨sflush_stack_load_range sp hs 32 (by decide) (by decide) (by decide), hp⟩
 
@@ -580,8 +572,7 @@ theorem sflushEc9c_mem_s3 (m : Mem) (sp ra s0 s1 s2 s3 : BitVec 64)
     ((sflushSpE sp + sign_extend (m := 64) (0x008#12)).toNat + 8 ≤
         tohostAddr ∨
       tohostAddr + 8 ≤
-        (sflushSpE sp + sign_extend (m := 64) (0x008#12)).toNat) ∧
-    (sflushSpE sp + sign_extend (m := 64) (0x008#12)).toNat % 8 = 0) ∧ _
+        (sflushSpE sp + sign_extend (m := 64) (0x008#12)).toNat)) ∧ _
   rw [show sign_extend (m := 64) (0x008#12) = (8#64) by decide]
   exact ⟨sflush_stack_load_range sp hs 8 (by decide) (by decide) (by decide), hp⟩
 

@@ -58,45 +58,43 @@ theorem evalSubChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 64
     (a_hi : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ 0x100000000)
     (a_ht : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v8 + sign_extend (m := 64) (0x008#12)).toNat)
-    (a_al : (v8 + sign_extend (m := 64) (0x008#12)).toNat % 4 = 0)
-    (a_p0 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat]? = some (0x0c#8))
-    (a_p1 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 1]? = some (0x00#8))
-    (a_p2 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 2]? = some (0x00#8))
-    (a_p3 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 3]? = some (0x00#8))
+    (a_p0 : (σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat]?).getD 0 = (0x0c#8))
+    (a_p1 : (σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 1]?).getD 0 = (0x00#8))
+    (a_p2 : (σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 2]?).getD 0 = (0x00#8))
+    (a_p3 : (σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 3]?).getD 0 = (0x00#8))
     -- block1 load2 @ v8 + 0x004 (4-byte)
     (b_lo : 0x80000000 ≤ (v8 + sign_extend (m := 64) (0x004#12)).toNat)
     (b_hi : (v8 + sign_extend (m := 64) (0x004#12)).toNat + 4 ≤ 0x100000000)
     (b_ht : (v8 + sign_extend (m := 64) (0x004#12)).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v8 + sign_extend (m := 64) (0x004#12)).toNat)
-    (b_al : (v8 + sign_extend (m := 64) (0x004#12)).toNat % 4 = 0)
-    (b_p0 : σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat]? = some b0)
-    (b_p1 : σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat + 1]? = some b1)
-    (b_p2 : σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat + 2]? = some b2)
-    (b_p3 : σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat + 3]? = some b3)
+    (b_p0 : (σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat]?).getD 0 = b0)
+    (b_p1 : (σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat + 1]?).getD 0 = b1)
+    (b_p2 : (σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat + 2]?).getD 0 = b2)
+    (b_p3 : (σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat + 3]?).getD 0 = b3)
     -- block1 load3 @ v2 + 0x090 (4-byte)
     (c_lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x090#12)).toNat)
     (c_hi : (v2 + sign_extend (m := 64) (0x090#12)).toNat + 4 ≤ 0x100000000)
     (c_ht : (v2 + sign_extend (m := 64) (0x090#12)).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x090#12)).toNat)
     (c_al : (v2 + sign_extend (m := 64) (0x090#12)).toNat % 4 = 0)
-    (c_p0 : σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat]? = some c0)
-    (c_p1 : σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 1]? = some c1)
-    (c_p2 : σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 2]? = some c2)
-    (c_p3 : σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 3]? = some c3)
+    (c_p0 : (σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat]?).getD 0 = c0)
+    (c_p1 : (σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 1]?).getD 0 = c1)
+    (c_p2 : (σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 2]?).getD 0 = c2)
+    (c_p3 : (σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 3]?).getD 0 = c3)
     -- block1 load4 @ v2 + 0x098 (8-byte)
     (d_lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x098#12)).toNat)
     (d_hi : (v2 + sign_extend (m := 64) (0x098#12)).toNat + 8 ≤ 0x100000000)
     (d_ht : (v2 + sign_extend (m := 64) (0x098#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x098#12)).toNat)
     (d_al : (v2 + sign_extend (m := 64) (0x098#12)).toNat % 8 = 0)
-    (d_p0 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat]? = some d0)
-    (d_p1 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 1]? = some d1)
-    (d_p2 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 2]? = some d2)
-    (d_p3 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 3]? = some d3)
-    (d_p4 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 4]? = some d4)
-    (d_p5 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 5]? = some d5)
-    (d_p6 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 6]? = some d6)
-    (d_p7 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 7]? = some d7)
+    (d_p0 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat]?).getD 0 = d0)
+    (d_p1 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 1]?).getD 0 = d1)
+    (d_p2 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 2]?).getD 0 = d2)
+    (d_p3 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 3]?).getD 0 = d3)
+    (d_p4 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 4]?).getD 0 = d4)
+    (d_p5 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 5]?).getD 0 = d5)
+    (d_p6 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 6]?).getD 0 = d6)
+    (d_p7 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 7]?).getD 0 = d7)
     -- block2 op-table slot @ opTableBase+40 (the .le jump-table slot)
     (hSlot : SubSlotPinned σ.mem)
     -- block2 kind-reload @ v2 + 0x000 (8-byte)
@@ -105,14 +103,14 @@ theorem evalSubChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 64
     (e_ht : (v2 + sign_extend (m := 64) (0x000#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x000#12)).toNat)
     (e_al : (v2 + sign_extend (m := 64) (0x000#12)).toNat % 8 = 0)
-    (e_p0 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat]? = some k0)
-    (e_p1 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 1]? = some k1)
-    (e_p2 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 2]? = some k2)
-    (e_p3 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 3]? = some k3)
-    (e_p4 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 4]? = some k4)
-    (e_p5 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 5]? = some k5)
-    (e_p6 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 6]? = some k6)
-    (e_p7 : σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 7]? = some k7)
+    (e_p0 : (σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat]?).getD 0 = k0)
+    (e_p1 : (σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 1]?).getD 0 = k1)
+    (e_p2 : (σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 2]?).getD 0 = k2)
+    (e_p3 : (σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 3]?).getD 0 = k3)
+    (e_p4 : (σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 4]?).getD 0 = k4)
+    (e_p5 : (σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 5]?).getD 0 = k5)
+    (e_p6 : (σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 6]?).getD 0 = k6)
+    (e_p7 : (σ.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 7]?).getD 0 = k7)
     (hi : i < 2) :
     ∃ (σ' : MState) (i' : Nat),
       Steps ⟨σ, i, u⟩ ⟨σ', i', u + 16⟩ ∧ i' < 2 ∧ GoodState σ' ∧
@@ -140,10 +138,10 @@ theorem evalSubChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 64
       (by
         -- BBlockFacts: block1 four load MemFacts + bltu guard (block_facts handles pins)
         block_facts hmem with "Vsa.Sim.Code.eval_expr_at_"
-        · exact ⟨⟨a_lo, a_hi, a_ht, a_al⟩, lpin_of_present a_p0, lpin_of_present a_p1, lpin_of_present a_p2, lpin_of_present a_p3⟩
-        · exact ⟨⟨b_lo, b_hi, b_ht, b_al⟩, lpin_of_present b_p0, lpin_of_present b_p1, lpin_of_present b_p2, lpin_of_present b_p3⟩
-        · exact ⟨⟨c_lo, c_hi, c_ht, c_al⟩, lpin_of_present c_p0, lpin_of_present c_p1, lpin_of_present c_p2, lpin_of_present c_p3⟩
-        · exact ⟨⟨d_lo, d_hi, d_ht, d_al⟩, lpin_of_present d_p0, lpin_of_present d_p1, lpin_of_present d_p2, lpin_of_present d_p3, lpin_of_present d_p4, lpin_of_present d_p5, lpin_of_present d_p6, lpin_of_present d_p7⟩
+        · exact ⟨⟨a_lo, a_hi, a_ht⟩, a_p0, a_p1, a_p2, a_p3⟩
+        · exact ⟨⟨b_lo, b_hi, b_ht⟩, b_p0, b_p1, b_p2, b_p3⟩
+        · exact ⟨⟨c_lo, c_hi, c_ht⟩, c_p0, c_p1, c_p2, c_p3⟩
+        · exact ⟨⟨d_lo, d_hi, d_ht⟩, d_p0, d_p1, d_p2, d_p3, d_p4, d_p5, d_p6, d_p7⟩
         -- bltu = false.  Compound two SHALLOW reductions: `show` peels the 6-instr
         -- `runGM` wrapper to the clean structural operand forms (li 12 / addiw over
         -- the op-token load), then `decide` evaluates the concrete arithmetic.
@@ -240,11 +238,11 @@ theorem evalSubChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 64
   have hx19_2 : σ2.regs.get? Register.x19 = some Wl :=
     (hframe2 Register.x19 (by decide) (by decide)).trans hx19_1
   -- slot pins + kind pins rephrased over σ2.mem (= σ.mem).
-  have hSlot2 : σ2.mem[(0x80019f88#64 : BitVec 64).toNat]? = some (0x5c#8) ∧
-      σ2.mem[(0x80019f88#64 : BitVec 64).toNat + 1]? = some (0x99#8) ∧
-      σ2.mem[(0x80019f88#64 : BitVec 64).toNat + 2]? = some (0xfe#8) ∧
-      σ2.mem[(0x80019f88#64 : BitVec 64).toNat + 3]? = some (0xff#8) := by
-    rw [hmem2e]; exact ⟨sp0, sp1, sp2, sp3⟩
+  have hSlot2 : (σ2.mem[(0x80019f88#64 : BitVec 64).toNat]?).getD 0 = (0x5c#8) ∧
+      (σ2.mem[(0x80019f88#64 : BitVec 64).toNat + 1]?).getD 0 = (0x99#8) ∧
+      (σ2.mem[(0x80019f88#64 : BitVec 64).toNat + 2]?).getD 0 = (0xfe#8) ∧
+      (σ2.mem[(0x80019f88#64 : BitVec 64).toNat + 3]?).getD 0 = (0xff#8) := by
+    rw [hmem2e]; exact ⟨lpin_of_present sp0, lpin_of_present sp1, lpin_of_present sp2, lpin_of_present sp3⟩
   -- Slot-load bounds at the LITERAL address (the block's address `srcVal 15 L + 0`
   -- carries free `v2`, so `decide` must see the literal — isDefEq peels the wrapper).
   have sLo : 0x80000000 ≤ (0x80019f88#64 : BitVec 64).toNat := by decide
@@ -252,14 +250,14 @@ theorem evalSubChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 64
   have sHt : (0x80019f88#64 : BitVec 64).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (0x80019f88#64 : BitVec 64).toNat := by decide
   have sAl : (0x80019f88#64 : BitVec 64).toNat % 4 = 0 := by decide
-  have hKind2 : σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat]? = some k0 ∧
-      σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 1]? = some k1 ∧
-      σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 2]? = some k2 ∧
-      σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 3]? = some k3 ∧
-      σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 4]? = some k4 ∧
-      σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 5]? = some k5 ∧
-      σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 6]? = some k6 ∧
-      σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 7]? = some k7 := by
+  have hKind2 : (σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat]?).getD 0 = k0 ∧
+      (σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 1]?).getD 0 = k1 ∧
+      (σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 2]?).getD 0 = k2 ∧
+      (σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 3]?).getD 0 = k3 ∧
+      (σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 4]?).getD 0 = k4 ∧
+      (σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 5]?).getD 0 = k5 ∧
+      (σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 6]?).getD 0 = k6 ∧
+      (σ2.mem[(v2 + sign_extend (m := 64) (0x000#12)).toNat + 7]?).getD 0 = k7 := by
     rw [hmem2e]; exact ⟨e_p0, e_p1, e_p2, e_p3, e_p4, e_p5, e_p6, e_p7⟩
   -- ── Block 2b (lw/ld/add + jr@0x3558) → 0x80003888 ─────────────────────────
   obtain ⟨σ3, i3, hsteps3, hi3, hG3, hmem3, hout3, hpc3, hmi3, hGH3, hframe3⟩ :=
@@ -272,12 +270,12 @@ theorem evalSubChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : BitVec 64
         block_facts (hmem2e ▸ hmem : Vsa.Sim.Code.Eval_exprLoaded σ2.mem)
           with "Vsa.Sim.Code.eval_expr_at_"
         -- slot lw @ 0x80019f84 (input-relative address, shallow):
-        · exact ⟨⟨sLo, sHi, sHt, sAl⟩,
-            lpin_of_present hSlot2.1, lpin_of_present hSlot2.2.1, lpin_of_present hSlot2.2.2.1, lpin_of_present hSlot2.2.2.2⟩
+        · exact ⟨⟨sLo, sHi, sHt⟩,
+            hSlot2.1, hSlot2.2.1, hSlot2.2.2.1, hSlot2.2.2.2⟩
         -- kind ld @ v2+0:
-        · exact ⟨⟨e_lo, e_hi, e_ht, e_al⟩,
-            lpin_of_present hKind2.1, lpin_of_present hKind2.2.1, lpin_of_present hKind2.2.2.1, lpin_of_present hKind2.2.2.2.1,
-            lpin_of_present hKind2.2.2.2.2.1, lpin_of_present hKind2.2.2.2.2.2.1, lpin_of_present hKind2.2.2.2.2.2.2.1, lpin_of_present hKind2.2.2.2.2.2.2.2⟩
+        · exact ⟨⟨e_lo, e_hi, e_ht⟩,
+            hKind2.1, hKind2.2.1, hKind2.2.2.1, hKind2.2.2.2.1,
+            hKind2.2.2.2.2.1, hKind2.2.2.2.2.2.1, hKind2.2.2.2.2.2.2.1, hKind2.2.2.2.2.2.2.2⟩
         -- jr target aligned: peel B2b (3 instrs) to the clean form, then decide.
         · show (BitVec.update ((bytesVal MKind.lw [0x5c#8, 0x99#8, 0xfe#8, 0xff#8]
               + 0x80019f84#64) + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
@@ -397,66 +395,66 @@ theorem evalSubArm_run (σ : MState) (i u : Nat) (vm v2 sret Wl Wr : BitVec 64)
     (la_ht : (v2 + sign_extend (m := 64) (0x078#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x078#12)).toNat)
     (la_al : (v2 + sign_extend (m := 64) (0x078#12)).toNat % 8 = 0)
-    (la_p0 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat]? = some a0)
-    (la_p1 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 1]? = some a1)
-    (la_p2 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 2]? = some a2)
-    (la_p3 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 3]? = some a3)
-    (la_p4 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 4]? = some a4)
-    (la_p5 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 5]? = some a5)
-    (la_p6 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 6]? = some a6)
-    (la_p7 : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 7]? = some a7)
+    (la_p0 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat]?).getD 0 = a0)
+    (la_p1 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 1]?).getD 0 = a1)
+    (la_p2 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 2]?).getD 0 = a2)
+    (la_p3 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 3]?).getD 0 = a3)
+    (la_p4 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 4]?).getD 0 = a4)
+    (la_p5 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 5]?).getD 0 = a5)
+    (la_p6 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 6]?).getD 0 = a6)
+    (la_p7 : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 7]?).getD 0 = a7)
     (lb_lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x088#12)).toNat)
     (lb_hi : (v2 + sign_extend (m := 64) (0x088#12)).toNat + 8 ≤ 0x100000000)
     (lb_ht : (v2 + sign_extend (m := 64) (0x088#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x088#12)).toNat)
     (lb_al : (v2 + sign_extend (m := 64) (0x088#12)).toNat % 8 = 0)
-    (lb_p0 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat]? = some b0)
-    (lb_p1 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 1]? = some b1)
-    (lb_p2 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 2]? = some b2)
-    (lb_p3 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 3]? = some b3)
-    (lb_p4 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 4]? = some b4)
-    (lb_p5 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 5]? = some b5)
-    (lb_p6 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 6]? = some b6)
-    (lb_p7 : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 7]? = some b7)
+    (lb_p0 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat]?).getD 0 = b0)
+    (lb_p1 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 1]?).getD 0 = b1)
+    (lb_p2 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 2]?).getD 0 = b2)
+    (lb_p3 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 3]?).getD 0 = b3)
+    (lb_p4 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 4]?).getD 0 = b4)
+    (lb_p5 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 5]?).getD 0 = b5)
+    (lb_p6 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 6]?).getD 0 = b6)
+    (lb_p7 : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 7]?).getD 0 = b7)
     (lc_lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x090#12)).toNat)
     (lc_hi : (v2 + sign_extend (m := 64) (0x090#12)).toNat + 8 ≤ 0x100000000)
     (lc_ht : (v2 + sign_extend (m := 64) (0x090#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x090#12)).toNat)
     (lc_al : (v2 + sign_extend (m := 64) (0x090#12)).toNat % 8 = 0)
-    (lc_p0 : σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat]? = some c0)
-    (lc_p1 : σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 1]? = some c1)
-    (lc_p2 : σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 2]? = some c2)
-    (lc_p3 : σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 3]? = some c3)
-    (lc_p4 : σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 4]? = some c4)
-    (lc_p5 : σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 5]? = some c5)
-    (lc_p6 : σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 6]? = some c6)
-    (lc_p7 : σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 7]? = some c7)
+    (lc_p0 : (σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat]?).getD 0 = c0)
+    (lc_p1 : (σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 1]?).getD 0 = c1)
+    (lc_p2 : (σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 2]?).getD 0 = c2)
+    (lc_p3 : (σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 3]?).getD 0 = c3)
+    (lc_p4 : (σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 4]?).getD 0 = c4)
+    (lc_p5 : (σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 5]?).getD 0 = c5)
+    (lc_p6 : (σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 6]?).getD 0 = c6)
+    (lc_p7 : (σ.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 7]?).getD 0 = c7)
     (ld_lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x098#12)).toNat)
     (ld_hi : (v2 + sign_extend (m := 64) (0x098#12)).toNat + 8 ≤ 0x100000000)
     (ld_ht : (v2 + sign_extend (m := 64) (0x098#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x098#12)).toNat)
     (ld_al : (v2 + sign_extend (m := 64) (0x098#12)).toNat % 8 = 0)
-    (ld_p0 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat]? = some d0)
-    (ld_p1 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 1]? = some d1)
-    (ld_p2 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 2]? = some d2)
-    (ld_p3 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 3]? = some d3)
-    (ld_p4 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 4]? = some d4)
-    (ld_p5 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 5]? = some d5)
-    (ld_p6 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 6]? = some d6)
-    (ld_p7 : σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 7]? = some d7)
+    (ld_p0 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat]?).getD 0 = d0)
+    (ld_p1 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 1]?).getD 0 = d1)
+    (ld_p2 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 2]?).getD 0 = d2)
+    (ld_p3 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 3]?).getD 0 = d3)
+    (ld_p4 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 4]?).getD 0 = d4)
+    (ld_p5 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 5]?).getD 0 = d5)
+    (ld_p6 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 6]?).getD 0 = d6)
+    (ld_p7 : (σ.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 7]?).getD 0 = d7)
     (le_lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x0a0#12)).toNat)
     (le_hi : (v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 8 ≤ 0x100000000)
     (le_ht : (v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v2 + sign_extend (m := 64) (0x0a0#12)).toNat)
     (le_al : (v2 + sign_extend (m := 64) (0x0a0#12)).toNat % 8 = 0)
-    (le_p0 : σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat]? = some e0)
-    (le_p1 : σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 1]? = some e1)
-    (le_p2 : σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 2]? = some e2)
-    (le_p3 : σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 3]? = some e3)
-    (le_p4 : σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 4]? = some e4)
-    (le_p5 : σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 5]? = some e5)
-    (le_p6 : σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 6]? = some e6)
-    (le_p7 : σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 7]? = some e7)
+    (le_p0 : (σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat]?).getD 0 = e0)
+    (le_p1 : (σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 1]?).getD 0 = e1)
+    (le_p2 : (σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 2]?).getD 0 = e2)
+    (le_p3 : (σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 3]?).getD 0 = e3)
+    (le_p4 : (σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 4]?).getD 0 = e4)
+    (le_p5 : (σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 5]?).getD 0 = e5)
+    (le_p6 : (σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 6]?).getD 0 = e6)
+    (le_p7 : (σ.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 7]?).getD 0 = e7)
     (t0lo : 0x80000000 ≤ (v2 + sign_extend (m := 64) (0x0f0#12)).toNat)
     (t0hi : (v2 + sign_extend (m := 64) (0x0f0#12)).toNat + 8 ≤ 0x100000000)
     (t0win : tohostAddr + 16 ≤ (v2 + sign_extend (m := 64) (0x0f0#12)).toNat)
@@ -494,23 +492,23 @@ theorem evalSubArm_run (σ : MState) (i u : Nat) (vm v2 sret Wl Wr : BitVec 64)
     fun m A dd hdis hc => loaded_eval_expr_agreeP m (writeMap8 m A dd)
       (fun a _ha => (getElem_writeMap8_disjoint m A a dd (by rcases hdis with h | h <;> omega)).symm) hc
   -- S1 dead-load pins over σ.mem
-  have hLA : σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat]? = some a0 ∧
-      σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 1]? = some a1 ∧
-      σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 2]? = some a2 ∧
-      σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 3]? = some a3 ∧
-      σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 4]? = some a4 ∧
-      σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 5]? = some a5 ∧
-      σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 6]? = some a6 ∧
-      σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 7]? = some a7 :=
+  have hLA : (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat]?).getD 0 = a0 ∧
+      (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 1]?).getD 0 = a1 ∧
+      (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 2]?).getD 0 = a2 ∧
+      (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 3]?).getD 0 = a3 ∧
+      (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 4]?).getD 0 = a4 ∧
+      (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 5]?).getD 0 = a5 ∧
+      (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 6]?).getD 0 = a6 ∧
+      (σ.mem[(v2 + sign_extend (m := 64) (0x078#12)).toNat + 7]?).getD 0 = a7 :=
     ⟨la_p0, la_p1, la_p2, la_p3, la_p4, la_p5, la_p6, la_p7⟩
-  have hLB : σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat]? = some b0 ∧
-      σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 1]? = some b1 ∧
-      σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 2]? = some b2 ∧
-      σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 3]? = some b3 ∧
-      σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 4]? = some b4 ∧
-      σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 5]? = some b5 ∧
-      σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 6]? = some b6 ∧
-      σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 7]? = some b7 :=
+  have hLB : (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat]?).getD 0 = b0 ∧
+      (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 1]?).getD 0 = b1 ∧
+      (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 2]?).getD 0 = b2 ∧
+      (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 3]?).getD 0 = b3 ∧
+      (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 4]?).getD 0 = b4 ∧
+      (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 5]?).getD 0 = b5 ∧
+      (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 6]?).getD 0 = b6 ∧
+      (σ.mem[(v2 + sign_extend (m := 64) (0x088#12)).toNat + 7]?).getD 0 = b7 :=
     ⟨lb_p0, lb_p1, lb_p2, lb_p3, lb_p4, lb_p5, lb_p6, lb_p7⟩
   -- ── S1: ld/ld/li/sd/sd + bne NOT taken → 0x800038f8 ─────────────────────────
   obtain ⟨σ1, i1, hsteps1, hi1, hG1, hmem1, hout1, hpc1, hmi1, hGH1, hframe1⟩ :=
@@ -521,12 +519,12 @@ theorem evalSubArm_run (σ : MState) (i u : Nat) (vm v2 sret Wl Wr : BitVec 64)
       (show KeysOK [2, 16] by decide)
       (by
         block_facts hmem with "Vsa.Sim.Code.eval_expr_at_"
-        · exact ⟨⟨la_lo, la_hi, la_ht, la_al⟩,
-            lpin_of_present hLA.1, lpin_of_present hLA.2.1, lpin_of_present hLA.2.2.1, lpin_of_present hLA.2.2.2.1,
-            lpin_of_present hLA.2.2.2.2.1, lpin_of_present hLA.2.2.2.2.2.1, lpin_of_present hLA.2.2.2.2.2.2.1, lpin_of_present hLA.2.2.2.2.2.2.2⟩
-        · exact ⟨⟨lb_lo, lb_hi, lb_ht, lb_al⟩,
-            lpin_of_present hLB.1, lpin_of_present hLB.2.1, lpin_of_present hLB.2.2.1, lpin_of_present hLB.2.2.2.1,
-            lpin_of_present hLB.2.2.2.2.1, lpin_of_present hLB.2.2.2.2.2.1, lpin_of_present hLB.2.2.2.2.2.2.1, lpin_of_present hLB.2.2.2.2.2.2.2⟩
+        · exact ⟨⟨la_lo, la_hi, la_ht⟩,
+            hLA.1, hLA.2.1, hLA.2.2.1, hLA.2.2.2.1,
+            hLA.2.2.2.2.1, hLA.2.2.2.2.2.1, hLA.2.2.2.2.2.2.1, hLA.2.2.2.2.2.2.2⟩
+        · exact ⟨⟨lb_lo, lb_hi, lb_ht⟩,
+            hLB.1, hLB.2.1, hLB.2.2.1, hLB.2.2.2.1,
+            hLB.2.2.2.2.1, hLB.2.2.2.2.2.1, hLB.2.2.2.2.2.2.1, hLB.2.2.2.2.2.2.2⟩
         · exact ⟨t0lo, t0hi, t0win, t0al⟩
         · exact ⟨t2lo, t2hi, t2win, t2al⟩
         · show guardB bop.BNE (2#64)
@@ -555,20 +553,20 @@ theorem evalSubArm_run (σ : MState) (i u : Nat) (vm v2 sret Wl Wr : BitVec 64)
   have hcode1 : Vsa.Sim.Code.Eval_exprLoaded σ1.mem := by
     rw [hmem1W]; exact pushCode _ _ _ hc100 (pushCode _ _ _ hcf0 hmem)
   have hbridge : ∀ k : Nat, k < (v2 + sign_extend (m := 64) (0x0f0#12)).toNat →
-      σ1.mem[k]? = σ.mem[k]? := by
+      (σ1.mem[k]?).getD 0 = (σ.mem[k]?).getD 0 := by
     intro k hk
     rw [hmem1W,
       getElem_writeMap8_disjoint (writeMap8 σ.mem (v2 + sign_extend (m := 64) (0x0f0#12)).toNat D1)
         (v2 + sign_extend (m := 64) (0x100#12)).toNat k D2 (Or.inl (by rw [hnf0] at hk; rw [hn100]; omega)),
       getElem_writeMap8_disjoint σ.mem (v2 + sign_extend (m := 64) (0x0f0#12)).toNat k D1 (Or.inl hk)]
-  have hLC : σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat]? = some c0 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 1]? = some c1 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 2]? = some c2 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 3]? = some c3 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 4]? = some c4 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 5]? = some c5 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 6]? = some c6 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 7]? = some c7 :=
+  have hLC : (σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat]?).getD 0 = c0 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 1]?).getD 0 = c1 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 2]?).getD 0 = c2 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 3]?).getD 0 = c3 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 4]?).getD 0 = c4 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 5]?).getD 0 = c5 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 6]?).getD 0 = c6 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x090#12)).toNat + 7]?).getD 0 = c7 :=
     ⟨(hbridge _ (by rw [hn90, hnf0]; omega)).trans lc_p0,
      (hbridge _ (by rw [hn90, hnf0]; omega)).trans lc_p1,
      (hbridge _ (by rw [hn90, hnf0]; omega)).trans lc_p2,
@@ -577,14 +575,14 @@ theorem evalSubArm_run (σ : MState) (i u : Nat) (vm v2 sret Wl Wr : BitVec 64)
      (hbridge _ (by rw [hn90, hnf0]; omega)).trans lc_p5,
      (hbridge _ (by rw [hn90, hnf0]; omega)).trans lc_p6,
      (hbridge _ (by rw [hn90, hnf0]; omega)).trans lc_p7⟩
-  have hLD : σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat]? = some d0 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 1]? = some d1 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 2]? = some d2 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 3]? = some d3 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 4]? = some d4 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 5]? = some d5 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 6]? = some d6 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 7]? = some d7 :=
+  have hLD : (σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat]?).getD 0 = d0 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 1]?).getD 0 = d1 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 2]?).getD 0 = d2 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 3]?).getD 0 = d3 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 4]?).getD 0 = d4 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 5]?).getD 0 = d5 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 6]?).getD 0 = d6 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x098#12)).toNat + 7]?).getD 0 = d7 :=
     ⟨(hbridge _ (by rw [hn98, hnf0]; omega)).trans ld_p0,
      (hbridge _ (by rw [hn98, hnf0]; omega)).trans ld_p1,
      (hbridge _ (by rw [hn98, hnf0]; omega)).trans ld_p2,
@@ -593,14 +591,14 @@ theorem evalSubArm_run (σ : MState) (i u : Nat) (vm v2 sret Wl Wr : BitVec 64)
      (hbridge _ (by rw [hn98, hnf0]; omega)).trans ld_p5,
      (hbridge _ (by rw [hn98, hnf0]; omega)).trans ld_p6,
      (hbridge _ (by rw [hn98, hnf0]; omega)).trans ld_p7⟩
-  have hLE : σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat]? = some e0 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 1]? = some e1 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 2]? = some e2 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 3]? = some e3 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 4]? = some e4 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 5]? = some e5 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 6]? = some e6 ∧
-      σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 7]? = some e7 :=
+  have hLE : (σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat]?).getD 0 = e0 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 1]?).getD 0 = e1 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 2]?).getD 0 = e2 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 3]?).getD 0 = e3 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 4]?).getD 0 = e4 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 5]?).getD 0 = e5 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 6]?).getD 0 = e6 ∧
+      (σ1.mem[(v2 + sign_extend (m := 64) (0x0a0#12)).toNat + 7]?).getD 0 = e7 :=
     ⟨(hbridge _ (by rw [hna0, hnf0]; omega)).trans le_p0,
      (hbridge _ (by rw [hna0, hnf0]; omega)).trans le_p1,
      (hbridge _ (by rw [hna0, hnf0]; omega)).trans le_p2,
@@ -619,15 +617,15 @@ theorem evalSubArm_run (σ : MState) (i u : Nat) (vm v2 sret Wl Wr : BitVec 64)
       (show KeysOK [2, 10, 16] by decide)
       (by
         block_facts hcode1 with "Vsa.Sim.Code.eval_expr_at_"
-        · exact ⟨⟨lc_lo, lc_hi, lc_ht, lc_al⟩,
-            lpin_of_present hLC.1, lpin_of_present hLC.2.1, lpin_of_present hLC.2.2.1, lpin_of_present hLC.2.2.2.1,
-            lpin_of_present hLC.2.2.2.2.1, lpin_of_present hLC.2.2.2.2.2.1, lpin_of_present hLC.2.2.2.2.2.2.1, lpin_of_present hLC.2.2.2.2.2.2.2⟩
-        · exact ⟨⟨ld_lo, ld_hi, ld_ht, ld_al⟩,
-            lpin_of_present hLD.1, lpin_of_present hLD.2.1, lpin_of_present hLD.2.2.1, lpin_of_present hLD.2.2.2.1,
-            lpin_of_present hLD.2.2.2.2.1, lpin_of_present hLD.2.2.2.2.2.1, lpin_of_present hLD.2.2.2.2.2.2.1, lpin_of_present hLD.2.2.2.2.2.2.2⟩
-        · exact ⟨⟨le_lo, le_hi, le_ht, le_al⟩,
-            lpin_of_present hLE.1, lpin_of_present hLE.2.1, lpin_of_present hLE.2.2.1, lpin_of_present hLE.2.2.2.1,
-            lpin_of_present hLE.2.2.2.2.1, lpin_of_present hLE.2.2.2.2.2.1, lpin_of_present hLE.2.2.2.2.2.2.1, lpin_of_present hLE.2.2.2.2.2.2.2⟩
+        · exact ⟨⟨lc_lo, lc_hi, lc_ht⟩,
+            hLC.1, hLC.2.1, hLC.2.2.1, hLC.2.2.2.1,
+            hLC.2.2.2.2.1, hLC.2.2.2.2.2.1, hLC.2.2.2.2.2.2.1, hLC.2.2.2.2.2.2.2⟩
+        · exact ⟨⟨ld_lo, ld_hi, ld_ht⟩,
+            hLD.1, hLD.2.1, hLD.2.2.1, hLD.2.2.2.1,
+            hLD.2.2.2.2.1, hLD.2.2.2.2.2.1, hLD.2.2.2.2.2.2.1, hLD.2.2.2.2.2.2.2⟩
+        · exact ⟨⟨le_lo, le_hi, le_ht⟩,
+            hLE.1, hLE.2.1, hLE.2.2.1, hLE.2.2.2.1,
+            hLE.2.2.2.2.1, hLE.2.2.2.2.2.1, hLE.2.2.2.2.2.2.1, hLE.2.2.2.2.2.2.2⟩
         · exact ⟨t0lo, t0hi, t0win, t0al⟩
         · exact ⟨t1lo, t1hi, t1win, t1al⟩
         · exact ⟨t2lo, t2hi, t2win, t2al⟩

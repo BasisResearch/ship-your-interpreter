@@ -220,7 +220,7 @@ theorem blockC_null
         LeafMemPin SL sp sret m0 mpre) := by
   intro c hc
   obtain ⟨ment, ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, hmiEx, hout, hmem, hcode, hviCode,
-    hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
+    hexpr, houtStr, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
@@ -315,7 +315,6 @@ structure EvalNullEntry
   frame : ∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R
   code_stack_disjoint : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
   expr_stack_disjoint : aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
-  expr_align : aExpr.toNat % 8 = 0
   expr_ram : 0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000
   expr_win : tohostAddr + 16 ≤ aExpr.toNat
   sret_align : sret.toNat % 8 = 0
@@ -400,7 +399,7 @@ theorem evalNullSimP
       (by have := hc.table_stack_disjoint; simp only [jumpTableBase]; omega)
       c ⟨⟨hc.good, hc.tick, hc.pc, hc.a0, hc.a1, hc.a2, hc.ra, hc.ra_align, hc.spReg,
       hc.stackOK, hc.minstret, hc.mem, hc.code, hc.expr, hc.store, hc.store_survives, hc.out,
-      hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
+      hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_ram,
       hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
       hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
       ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩

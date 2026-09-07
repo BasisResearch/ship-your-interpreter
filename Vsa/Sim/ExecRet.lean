@@ -241,7 +241,7 @@ theorem execRetSim
     site_80004138_es cG.σ cG.tick cG.steps (0x80004138#64) vmiG (sp - 176#64)
       a30 a31 a32 a33 a34 a35 a36 a37 hGG hpcG' hmiG hspG hcodeG rfl
       (by rw [hr16]; omega) (by rw [hr16]; omega)
-      (by rw [hr16, htoh]; right; omega) (by rw [hr16]; exact hsub_al)
+      (by rw [hr16, htoh]; right; omega)
       (by rw [hr16]; exact ha30) (by rw [hr16]; exact ha31) (by rw [hr16]; exact ha32)
       (by rw [hr16]; exact ha33) (by rw [hr16]; exact ha34) (by rw [hr16]; exact ha35)
       (by rw [hr16]; exact ha36) (by rw [hr16]; exact ha37) htickG
@@ -270,7 +270,7 @@ theorem execRetSim
     site_8000413c_es σ1 i1 (cG.steps + 1) (0x8000413c#64) vmi1 (sp - 176#64)
       a40' a41' a42' a43' a44' a45' a46' a47' hG1 hpc1 hmi1 hsp_1 hcode1 rfl
       (by rw [hr24]; omega) (by rw [hr24]; omega)
-      (by rw [hr24, htoh]; right; omega) (by rw [hr24]; exact hsub_al8)
+      (by rw [hr24, htoh]; right; omega)
       (by rw [hr24]; exact hb40) (by rw [hr24]; exact hb41) (by rw [hr24]; exact hb42)
       (by rw [hr24]; exact hb43) (by rw [hr24]; exact hb44) (by rw [hr24]; exact hb45)
       (by rw [hr24]; exact hb46) (by rw [hr24]; exact hb47) hi1
@@ -299,7 +299,7 @@ theorem execRetSim
     site_80004140_es σ2 i2 (cG.steps + 1 + 1) (0x80004140#64) vmi2 (sp - 176#64)
       a50' a51' a52' a53' a54' a55' a56' a57' hG2 hpc2 hmi2 hsp_2 hcode2 rfl
       (by rw [hr32]; omega) (by rw [hr32]; omega)
-      (by rw [hr32, htoh]; right; omega) (by rw [hr32]; exact hsub_al16)
+      (by rw [hr32, htoh]; right; omega)
       (by rw [hr32]; exact hc50) (by rw [hr32]; exact hc51) (by rw [hr32]; exact hc52)
       (by rw [hr32]; exact hc53) (by rw [hr32]; exact hc54) (by rw [hr32]; exact hc55)
       (by rw [hr32]; exact hc56) (by rw [hr32]; exact hc57) hi2
@@ -466,7 +466,7 @@ theorem execRetSim
   obtain ⟨σ7, i7, hstep7', hi7, hG7, hmem7, hobs7⟩ :=
     site_80004150_es σ6 i6 (cG.steps + 1 + 1 + 1 + 1 + 1 + 1) (0x80004150#64) vmi6 (sp - 176#64)
       ra0 ra1 ra2 ra3 ra4 ra5 ra6 ra7 hG6 hpc6 hmi6 hsp_6 hcode6 rfl
-      (by rw [haRa]; omega) (by rw [haRa]; omega) (by rw [haRa, htoh]; right; omega) (by rw [haRa]; omega)
+      (by rw [haRa]; omega) (by rw [haRa]; omega) (by rw [haRa, htoh]; right; omega)
       (by rw [haRa]; exact hra0) (by rw [haRa]; exact hra1) (by rw [haRa]; exact hra2)
       (by rw [haRa]; exact hra3) (by rw [haRa]; exact hra4) (by rw [haRa]; exact hra5)
       (by rw [haRa]; exact hra6) (by rw [haRa]; exact hra7) hi6
@@ -483,7 +483,7 @@ theorem execRetSim
   obtain ⟨σ8, i8, hstep8', hi8, hG8, hmem8, hobs8⟩ :=
     site_80004154_es σ7 i7 (cG.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1) (0x80004154#64) vmi7 (sp - 176#64)
       t00 t01 t02 t03 t04 t05 t06 t07 hG7 hpc7 hmi7 hsp_7 hcode7 rfl
-      (by rw [haS0]; omega) (by rw [haS0]; omega) (by rw [haS0, htoh]; right; omega) (by rw [haS0]; omega)
+      (by rw [haS0]; omega) (by rw [haS0]; omega) (by rw [haS0, htoh]; right; omega)
       (by rw [haS0, hmem7e]; exact ht00) (by rw [haS0, hmem7e]; exact ht01) (by rw [haS0, hmem7e]; exact ht02)
       (by rw [haS0, hmem7e]; exact ht03) (by rw [haS0, hmem7e]; exact ht04) (by rw [haS0, hmem7e]; exact ht05)
       (by rw [haS0, hmem7e]; exact ht06) (by rw [haS0, hmem7e]; exact ht07) hi7
@@ -501,7 +501,7 @@ theorem execRetSim
   obtain ⟨σ9, i9, hstep9', hi9, hG9, hmem9, hobs9⟩ :=
     site_80004158_es σ8 i8 (cG.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) (0x80004158#64) vmi8 (sp - 176#64)
       t10 t11 t12 t13 t14 t15 t16 t17 hG8 hpc8 hmi8 hsp_8 hcode8 rfl
-      (by rw [haS1]; omega) (by rw [haS1]; omega) (by rw [haS1, htoh]; right; omega) (by rw [haS1]; omega)
+      (by rw [haS1]; omega) (by rw [haS1]; omega) (by rw [haS1, htoh]; right; omega)
       (by rw [haS1, hmem8e]; exact ht10) (by rw [haS1, hmem8e]; exact ht11) (by rw [haS1, hmem8e]; exact ht12)
       (by rw [haS1, hmem8e]; exact ht13) (by rw [haS1, hmem8e]; exact ht14) (by rw [haS1, hmem8e]; exact ht15)
       (by rw [haS1, hmem8e]; exact ht16) (by rw [haS1, hmem8e]; exact ht17) hi8
@@ -520,7 +520,7 @@ theorem execRetSim
   obtain ⟨σ10, i10, hstep10', hi10, hG10, hmem10, hobs10⟩ :=
     site_8000415c_es σ9 i9 (cG.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) (0x8000415c#64) vmi9 (sp - 176#64)
       t20 t21 t22 t23 t24 t25 t26 t27 hG9 hpc9 hmi9 hsp_9 hcode9 rfl
-      (by rw [haS2]; omega) (by rw [haS2]; omega) (by rw [haS2, htoh]; right; omega) (by rw [haS2]; omega)
+      (by rw [haS2]; omega) (by rw [haS2]; omega) (by rw [haS2, htoh]; right; omega)
       (by rw [haS2, hmem9e]; exact ht20) (by rw [haS2, hmem9e]; exact ht21) (by rw [haS2, hmem9e]; exact ht22)
       (by rw [haS2, hmem9e]; exact ht23) (by rw [haS2, hmem9e]; exact ht24) (by rw [haS2, hmem9e]; exact ht25)
       (by rw [haS2, hmem9e]; exact ht26) (by rw [haS2, hmem9e]; exact ht27) hi9
@@ -540,7 +540,7 @@ theorem execRetSim
   obtain ⟨σ11, i11, hstep11', hi11, hG11, hmem11, hobs11⟩ :=
     site_80004160_es σ10 i10 (cG.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) (0x80004160#64) vmi10 (sp - 176#64)
       t30 t31 t32 t33 t34 t35 t36 t37 hG10 hpc10 hmi10 hsp_10 hcode10 rfl
-      (by rw [haS3]; omega) (by rw [haS3]; omega) (by rw [haS3, htoh]; right; omega) (by rw [haS3]; omega)
+      (by rw [haS3]; omega) (by rw [haS3]; omega) (by rw [haS3, htoh]; right; omega)
       (by rw [haS3, hmem10e]; exact ht30) (by rw [haS3, hmem10e]; exact ht31) (by rw [haS3, hmem10e]; exact ht32)
       (by rw [haS3, hmem10e]; exact ht33) (by rw [haS3, hmem10e]; exact ht34) (by rw [haS3, hmem10e]; exact ht35)
       (by rw [haS3, hmem10e]; exact ht36) (by rw [haS3, hmem10e]; exact ht37) hi10

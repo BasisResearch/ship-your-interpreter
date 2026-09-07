@@ -1,6 +1,7 @@
 import Vsa.Sim.ExecSimCommon
 import Vsa.Sim.ExecBlock
 import Vsa.While.Cost
+import Vsa.Sim.RecursiveStepGeom
 
 namespace Vsa.Sim
 
@@ -63,17 +64,43 @@ def ExecSeqStepPostI
     (st st' stFin : SpecSt) (d : Nat) (env : Addr) (ss : List Stmt)
     (sp aRet : BitVec 64) (m0 : Mem) (status : Status)
     (cfg : Config) : Prop :=
-  (status = .normal ∧
-    ∃ phiF' phiC',
-      PhiExtends phiF phiF' stFin.store.frames.size ∧
-      PhiExtends phiC phiC' stFin.store.closures.size ∧
+  RecursiveStepPost (status = .normal)
+    (fun cfg => ∃ phiF' phiC',
+      PhiExtends phiF phiF' st.store.frames.size ∧
+      PhiExtends phiC phiC' st.store.closures.size ∧
       ExecSeqEntryI copy g N A SL phiF' phiC' st' d env ss sp aRet cfg.σ.mem cfg ∧
       (∀ a, ¬ (SL.lo ≤ a ∧ a < SL.hi) →
         ¬ (A.lo ≤ a ∧ a < A.hi) → cfg.σ.mem[a]? = m0[a]?) ∧
-      ExecSeqStackFrame copy SL sp m0 cfg.σ.mem) ∨
-  (status ≠ .normal ∧
-    ExecSeqExitI copy g N A SL phiF phiC st.store.frames.size
-      st.store.closures.size st' status sp aRet m0 cfg)
+      ExecSeqStackFrame copy SL sp m0 cfg.σ.mem)
+    (ExecSeqExitI copy g N A SL phiF phiC st.store.frames.size
+      st.store.closures.size st' status sp aRet m0) cfg
+
+/-- A final normal route supplies the empty recursive entry with its chosen maps. -/
+theorem execSeqNormalStepPostI_nil_of_exit
+    {copy : ExecSeqCopy}
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st st' stFin : SpecSt} {d : Nat} {env : Addr}
+    {sp aRet : BitVec 64} {m0 : Mem} {cfg : Config}
+    (h : ExecSeqExitI copy g N A SL φf φc st.store.frames.size
+      st.store.closures.size st' .normal sp aRet m0 cfg) :
+    ExecSeqStepPostI copy g N A SL φf φc st st' stFin d env []
+      sp aRet m0 .normal cfg := by
+  obtain ⟨φf', φc', hpf, hpc, hstore⟩ := h.store
+  refine Or.inl ⟨rfl, φf', φc', hpf, hpc, ?_, h.mem_frame, h.stack_frame⟩
+  exact
+    { good := h.good
+      tick := h.tick
+      pc := by cases copy <;> exact h.pc
+      store := hstore
+      out := h.out
+      mem := rfl
+      ready := fun hne => (hne rfl).elim
+      empty_status := fun _ => h.status_abi
+      frame := h.frame
+      minstret := h.minstret }
+
+#print axioms execSeqNormalStepPostI_nil_of_exit
 
 /-- One physical sequence-loop iteration.  This is the finite machine seam
 needed by the two `ExecSeq.cons` constructors. -/
@@ -93,36 +120,39 @@ def ExecSeqStepI
     (ExecSeqStepPostI copy g N A SL φf φc st st' stFin d env ss
       sp aRet m0 status)
 
-/-- The genuinely machine-specific part of one sequence iteration. The
-recursive `exec_stmt` call is not an oracle here: `dispatch` lands at its exact
-entry, and `resume` starts at its exact typed exit. -/
-structure ExecSeqStepGeomI
+/-- Actual machine arguments selected by sequence dispatch. -/
+structure ExecSeqChildIndex where
+  gExec : (R : Register) → Option (RegisterType R)
+  aInterp : BitVec 64
+  aStmt : BitVec 64
+  aEnv : BitVec 64
+  mCall : Mem
+
+/-- Dispatch establishes a carrier retained across the actual child IH. -/
+def ExecSeqStepGeomI
     (copy : ExecSeqCopy)
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (φf φc : Addr → Nat)
     (st : SpecSt) (d : Nat) (env : Addr) (s : Stmt) (ss : List Stmt)
     (sp aRet : BitVec 64) (m0 : Mem)
-    (st' stFin : SpecSt) (status : Status) : Prop where
-  childFrame : match copy with
-    | .closureBody => ClosureBodyFrameGeom A SL sp aRet
-    | _ => True
-  dispatch : Triple
-    (ExecSeqEntryI copy g N A SL φf φc st d env (s :: ss) sp aRet m0)
-    (fun cfg => ∃ (gExec : (R : Register) → Option (RegisterType R))
-        (aInterp aStmt aEnv : BitVec 64) (mCall : Mem),
-      ExecEntry gExec N A SL φf φc st d env s sp
-        (BitVec.ofNat 64 (execSeqChildRetPC copy))
-        aInterp aStmt aEnv aRet mCall cfg)
-  resume : ∀ (gExec : (R : Register) → Option (RegisterType R))
-      (aInterp aStmt aEnv : BitVec 64) (mCall : Mem),
-    copy.Supports status →
-    Triple
-      (fun c =>
-        ExecExitD gExec N A SL φf φc st.store.frames.size
+    (st' stFin : SpecSt) (status : Status) : Prop :=
+  ∃ Carrier : ExecSeqChildIndex → Prop,
+    ExecS st d env s st' status → copy.Supports status →
+    ChildBoundary ExecSeqChildIndex Carrier
+      (fun index cfg =>
+        (match copy with
+          | .closureBody => ClosureBodyFrameGeom A SL sp aRet
+          | _ => True) ∧
+        ExecEntry index.gExec N A SL φf φc st d env s sp
+          (BitVec.ofNat 64 (execSeqChildRetPC copy))
+          index.aInterp index.aStmt index.aEnv aRet index.mCall cfg)
+      (fun index c =>
+        ExecExitD index.gExec N A SL φf φc st.store.frames.size
           st.store.closures.size st' status sp
-          (BitVec.ofNat 64 (execSeqChildRetPC copy)) aRet mCall c ∧
-        ExecSeqStackFrame copy SL sp mCall c.σ.mem)
+          (BitVec.ofNat 64 (execSeqChildRetPC copy)) aRet index.mCall c ∧
+        ExecSeqStackFrame copy SL sp index.mCall c.σ.mem)
+      (ExecSeqEntryI copy g N A SL φf φc st d env (s :: ss) sp aRet m0)
       (ExecSeqStepPostI copy g N A SL φf φc st st' stFin d env ss
         sp aRet m0 status)
 
@@ -137,23 +167,21 @@ theorem execSeqStepI_of_geom
       st' stFin status) :
     ExecSeqStepI copy g N A SL φf φc st d env s ss sp aRet m0
       st' stFin status (ExecIH st d env s st' status) := by
-  intro _hS hIH hsupport cfg hentry
-  obtain ⟨cfgE, hsE, gExec, aInterp, aStmt, aEnv, mCall, hExecEntry⟩ :=
-    G.dispatch cfg hentry
+  intro hS hIH hsupport
+  obtain ⟨Carrier, hboundary⟩ := G
+  apply (hboundary hS hsupport).run
+  intro index cfgE hentry
   obtain ⟨cfgX, hsX, hExecExit⟩ :=
-    hIH gExec N A SL φf φc sp
+    hIH index.gExec N A SL φf φc sp
       (BitVec.ofNat 64 (execSeqChildRetPC copy))
-      aInterp aStmt aEnv aRet mCall cfgE hExecEntry
-  have hChildFrame : ExecSeqStackFrame copy SL sp mCall cfgX.σ.mem := by
+      index.aInterp index.aStmt index.aEnv aRet index.mCall cfgE hentry.2
+  have hChildFrame : ExecSeqStackFrame copy SL sp index.mCall cfgX.σ.mem := by
     cases copy with
     | interpRun => trivial
     | blockBody => trivial
     | closureBody =>
-        exact closureBodyStackFrame_of_execExitD G.childFrame hExecExit
-  obtain ⟨cfgR, hsR, hpost⟩ :=
-    G.resume gExec aInterp aStmt aEnv mCall hsupport cfgX
-      ⟨hExecExit, hChildFrame⟩
-  exact ⟨cfgR, (hsE.trans hsX).trans hsR, hpost⟩
+        exact closureBodyStackFrame_of_execExitD hentry.1 hExecExit
+  exact ⟨cfgX, hsX, hExecExit, hChildFrame⟩
 
 #print axioms execSeqStepI_of_geom
 
@@ -218,11 +246,7 @@ theorem execSeqConsAbruptI
       (ExecSeqEntryI copy g N A SL φf φc st d env (s :: ss) sp aRet m0)
       (ExecSeqExitI copy g N A SL φf φc st.store.frames.size
         st.store.closures.size st' status sp aRet m0) := by
-  intro cfg hentry
-  obtain ⟨cfg', hs, hpost⟩ := hstep hS hHead hsupport cfg hentry
-  rcases hpost with ⟨heq, _⟩ | ⟨_, hexit⟩
-  · exact absurd heq hne
-  · exact ⟨cfg', hs, hexit⟩
+  exact RecursiveStepGeom.terminal ⟨hstep hS hHead hsupport⟩ hne
 
 #print axioms execSeqConsAbruptI
 
@@ -236,7 +260,7 @@ theorem execSeqExitI_extend
     (st' : SpecSt) (status : Status) (sp aRet : BitVec 64)
     (m0 mNow : Mem) (cfg : Config)
     (hmf : nf ≤ nf') (hmc : nc ≤ nc')
-    (hpf : PhiExtends φf φf' nf') (hpc : PhiExtends φc φc' nc')
+    (hpf : PhiExtends φf φf' nf) (hpc : PhiExtends φc φc' nc)
     (hmem : ∀ a, ¬ (SL.lo ≤ a ∧ a < SL.hi) →
       ¬ (A.lo ≤ a ∧ a < A.hi) → mNow[a]? = m0[a]?)
     (hstack : ExecSeqStackFrame copy SL sp m0 mNow)
@@ -250,12 +274,12 @@ theorem execSeqExitI_extend
       tick := hexit.tick
       pc := hexit.pc
       status_abi := hexit.status_abi
-      store := ⟨φf'', φc'', PhiExtends.mono hmf (hpf.trans hpf''),
-        PhiExtends.mono hmc (hpc.trans hpc''), hstore⟩
+      store := ⟨φf'', φc'', hpf.trans (PhiExtends.mono hmf hpf''),
+        hpc.trans (PhiExtends.mono hmc hpc''), hstore⟩
       out := hexit.out
       retval := fun v hv => by
         obtain ⟨φc'', hp'', hrepr⟩ := hexit.retval v hv
-        exact ⟨φc'', PhiExtends.mono hmc (hpc.trans hp''), hrepr⟩
+        exact ⟨φc'', hpc.trans (PhiExtends.mono hmc hp''), hrepr⟩
       mem_frame := fun a hs ha => by
         rw [hexit.mem_frame a hs ha]
         exact hmem a hs ha
@@ -286,19 +310,17 @@ theorem execSeqConsNormalI
       (ExecSeqExitI copy g N A SL φf φc st.store.frames.size
         st.store.closures.size stFin status sp aRet m0) := by
   intro cfg hentry
-  obtain ⟨cfg1, hs1, hpost⟩ :=
-    hstep hS hHead (execSeqCopy_supports_normal copy) cfg hentry
-  rcases hpost with ⟨_, φf', φc', hpf, hpc, hentry', hmem, hstack⟩ | ⟨hne, _⟩
-  · obtain ⟨cfg2, hs2, hexit⟩ := hTail φf' φc' cfg1.σ.mem cfg1 hentry'
-    have hSle := execS_store_mono hS
-    refine ⟨cfg2, hs1.trans hs2, ?_⟩
-    exact execSeqExitI_extend copy g N A SL φf φc φf' φc'
-      st.store.frames.size st.store.closures.size
-      stMid.store.frames.size stMid.store.closures.size
-      stFin status sp aRet m0 cfg1.σ.mem cfg2
-      hSle.1 hSle.2 (PhiExtends.mono hTailStore.1 hpf)
-      (PhiExtends.mono hTailStore.2 hpc) hmem hstack hexit
-  · exact absurd rfl hne
+  obtain ⟨cfg1, hs1, φf', φc', hpf, hpc, hentry', hmem, hstack⟩ :=
+    RecursiveStepGeom.continuing
+      ⟨hstep hS hHead (execSeqCopy_supports_normal copy)⟩ rfl cfg hentry
+  obtain ⟨cfg2, hs2, hexit⟩ := hTail φf' φc' cfg1.σ.mem cfg1 hentry'
+  have hSle := execS_store_mono hS
+  refine ⟨cfg2, hs1.trans hs2, ?_⟩
+  exact execSeqExitI_extend copy g N A SL φf φc φf' φc'
+    st.store.frames.size st.store.closures.size
+    stMid.store.frames.size stMid.store.closures.size
+    stFin status sp aRet m0 cfg1.σ.mem cfg2
+    hSle.1 hSle.2 hpf hpc hmem hstack hexit
 
 #print axioms execSeqConsNormalI
 
@@ -333,31 +355,15 @@ theorem execSeqLoopI
       intro φf φc st st' status m0 hsupport hseq
       cases hseq with
       | consNormal _ _ _ _ _ stMid _ _ hS hTail =>
-          intro cfg hentry
-          obtain ⟨cfg1, hs1, hpost⟩ :=
-            hstep φf φc st s ss stMid st' .normal m0 hS (hHead st stMid s .normal hS)
-              (execSeqCopy_supports_normal copy) cfg hentry
-          rcases hpost with ⟨_, φf', φc', hpf, hpc, hentry', hmem, hstack⟩ | ⟨hne, _⟩
-          · obtain ⟨cfg2, hs2, hexit⟩ :=
-              ih φf' φc' stMid st' status cfg1.σ.mem hsupport hTail cfg1 hentry'
-            have hSle := execS_store_mono hS
-            have hTle := execSeq_store_mono hTail
-            refine ⟨cfg2, hs1.trans hs2, ?_⟩
-            exact execSeqExitI_extend copy g N A SL φf φc φf' φc'
-              st.store.frames.size st.store.closures.size
-              stMid.store.frames.size stMid.store.closures.size
-              st' status sp aRet m0 cfg1.σ.mem cfg2
-              hSle.1 hSle.2 (PhiExtends.mono hTle.1 hpf)
-              (PhiExtends.mono hTle.2 hpc) hmem hstack hexit
-          · exact absurd rfl hne
+          exact execSeqConsNormalI copy g N A SL φf φc st stMid st' d env s ss
+            status sp aRet m0 (HeadIH st s stMid .normal) hS
+            (hHead st stMid s .normal hS) (execSeq_store_mono hTail)
+            (hstep φf φc st s ss stMid st' .normal m0)
+            (fun φf' φc' mNow => ih φf' φc' stMid st' status mNow hsupport hTail)
       | consAbrupt _ _ _ _ _ _ _ hS hne =>
-          intro cfg hentry
-          obtain ⟨cfg1, hs1, hpost⟩ :=
-            hstep φf φc st s ss st' st' status m0 hS
-              (hHead st st' s status hS) hsupport cfg hentry
-          rcases hpost with ⟨heq, _⟩ | ⟨_, hexit⟩
-          · exact absurd heq hne
-          · exact ⟨cfg1, hs1, hexit⟩
+          exact execSeqConsAbruptI copy g N A SL φf φc st st' d env s ss status
+            sp aRet m0 (HeadIH st s st' status) hS (hHead st st' s status hS)
+            hne hsupport (hstep φf φc st s ss st' st' status m0)
 
 #print axioms execSeqLoopI
 

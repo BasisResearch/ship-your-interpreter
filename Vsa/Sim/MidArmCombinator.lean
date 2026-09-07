@@ -69,7 +69,7 @@ the carried node/geometry facts that the left span established over `cL.σ.mem`:
 * `hstoreSurv` — `st'.store` re-represents under the same survival window;
 * `hviCL` / `hviSlotCL` — `Value_intLoaded` / `IntSlotPinned` at `cL.σ.mem`;
 * `hslot*` — the four OUTER spill slots at `[sp-32, sp)`;
-* geometry (`BinExtras`-shaped disjointness / alignment / RAM / windows). -/
+* geometry (`BinExtras`-shaped disjointness / RAM / windows). -/
 theorem binaryR_midStagePre
     (gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf1 φc1 : Addr → Nat)
@@ -114,9 +114,7 @@ theorem binaryR_midStagePre
     -- geometry (BinExtras-shaped):
     (hnode_hi : aExpr.toNat + 32 ≤ 0x100000000)
     (hnode_lo : 0x80000000 ≤ aExpr.toNat)
-    (hnode_align : aExpr.toNat % 8 = 0)
     (hnode_win : tohostAddr + 32 ≤ aExpr.toNat)
-    (hrop_align : aROp.toNat % 8 = 0)
     (hrop_ram : 0x80000000 ≤ aROp.toNat ∧ aROp.toNat + 16 ≤ 0x100000000)
     (hrop_win : tohostAddr + 16 ≤ aROp.toNat)
     (hrop_stk : aROp.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aROp.toNat)
@@ -207,7 +205,7 @@ theorem binaryR_midStagePre
     site_800034fc_totb cL.σ cL.tick cL.steps (0x800034fc#64) vmiL aExpr rp0 rp1 rp2 rp3 rp4 rp5 rp6 rp7
       hGL hpcL hmiLw hx8L hcodeL rfl
       (by rw [hoff24_s0]; omega) (by rw [hoff24_s0]; omega)
-      (by rw [hoff24_s0, htoh]; right; omega) (by rw [hoff24_s0]; omega)
+      (by rw [hoff24_s0, htoh]; right; omega)
       (by rw [hoff24_s0]; try (first | exact hrp0 | exact lpin_of_present hrp0)) (by rw [hoff24_s0]; try (first | exact hrp1 | exact lpin_of_present hrp1))
       (by rw [hoff24_s0]; try (first | exact hrp2 | exact lpin_of_present hrp2)) (by rw [hoff24_s0]; try (first | exact hrp3 | exact lpin_of_present hrp3))
       (by rw [hoff24_s0]; try (first | exact hrp4 | exact lpin_of_present hrp4)) (by rw [hoff24_s0]; try (first | exact hrp5 | exact lpin_of_present hrp5))
@@ -231,7 +229,7 @@ theorem binaryR_midStagePre
     site_80003500_totb τ1 j1 (cL.steps + 1) (0x80003500#64) vmiτ1 (sp - 1088#64)
       eb0 eb1 eb2 eb3 eb4 eb5 eb6 eb7 hGτ1 hpcτ1 hmiτ1 hspτ1 hcodeτ1 rfl
       (by rw [haddr0']; omega) (by rw [haddr0']; omega)
-      (by rw [haddr0', htoh]; right; omega) (by rw [haddr0']; omega)
+      (by rw [haddr0', htoh]; right; omega)
       (by rw [haddr0', hmemτ1e]; try (first | exact heb0 | exact lpin_of_present heb0)) (by rw [haddr0', hmemτ1e]; try (first | exact heb1 | exact lpin_of_present heb1))
       (by rw [haddr0', hmemτ1e]; try (first | exact heb2 | exact lpin_of_present heb2)) (by rw [haddr0', hmemτ1e]; try (first | exact heb3 | exact lpin_of_present heb3))
       (by rw [haddr0', hmemτ1e]; try (first | exact heb4 | exact lpin_of_present heb4)) (by rw [haddr0', hmemτ1e]; try (first | exact heb5 | exact lpin_of_present heb5))
@@ -258,7 +256,7 @@ theorem binaryR_midStagePre
     site_80003504_totb τ2 j2 (cL.steps + 1 + 1) (0x80003504#64) vmiτ2 (sp - 1088#64)
       wb0 wb1 wb2 wb3 hGτ2 hpcτ2 hmiτ2 hspτ2 hcodeτ2 rfl
       (by rw [haddr120]; omega) (by rw [haddr120]; omega)
-      (by rw [haddr120, htoh]; right; omega) (by rw [haddr120]; omega)
+      (by rw [haddr120, htoh]; right; omega)
       (by rw [haddr120, hmemτ2e]; try (first | exact hwb0 | exact lpin_of_present hwb0)) (by rw [haddr120, hmemτ2e]; try (first | exact hwb1 | exact lpin_of_present hwb1))
       (by rw [haddr120, hmemτ2e]; try (first | exact hwb2 | exact lpin_of_present hwb2)) (by rw [haddr120, hmemτ2e]; try (first | exact hwb3 | exact lpin_of_present hwb3)) hj2
   have hstepτ3 : Step ⟨τ2, j2, cL.steps + 1 + 1⟩ ⟨τ3, j3, cL.steps + 1 + 1 + 1⟩ := ht3'
@@ -331,7 +329,7 @@ theorem binaryR_midStagePre
     site_80003510_totb τ5 j5 (cL.steps + 1 + 1 + 1 + 1 + 1) (0x80003510#64) vmiτ5 (sp - 1088#64)
       sb0 sb1 sb2 sb3 sb4 sb5 sb6 sb7 hGτ5 hpcτ5 hmiτ5 hspτ5 hcodeτ5 rfl
       (by rw [haddr128]; omega) (by rw [haddr128]; omega)
-      (by rw [haddr128, htoh]; right; omega) (by rw [haddr128]; omega)
+      (by rw [haddr128, htoh]; right; omega)
       (by rw [haddr128, hmemτ5e]; try (first | exact hsb0 | exact lpin_of_present hsb0)) (by rw [haddr128, hmemτ5e]; try (first | exact hsb1 | exact lpin_of_present hsb1))
       (by rw [haddr128, hmemτ5e]; try (first | exact hsb2 | exact lpin_of_present hsb2)) (by rw [haddr128, hmemτ5e]; try (first | exact hsb3 | exact lpin_of_present hsb3))
       (by rw [haddr128, hmemτ5e]; try (first | exact hsb4 | exact lpin_of_present hsb4)) (by rw [haddr128, hmemτ5e]; try (first | exact hsb5 | exact lpin_of_present hsb5))
@@ -497,7 +495,7 @@ theorem binaryR_midStagePre
         ⟨w20, (hframeτ7_excl Register.x20 (by decide) (by decide)).trans hw20⟩,
         ⟨w21, (hframeτ7_excl Register.x21 (by decide) (by decide)).trans hw21⟩⟩,
       hslotRa2, hslotS02, hslotS12, hslotS22,
-      hrop_align, hrop_ram.1, hrop_ram.2, hrop_win, hrop_stk,
+      hrop_ram.1, hrop_ram.2, hrop_win, hrop_stk,
       (by rw [haddr144']; omega), (by rw [haddr144']; omega), (by rw [haddr144']; omega),
       (by omega), hspSLhi, hsp16, (by omega), hSLlo, hSLhiRam, hSLwin,
       hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -552,9 +550,7 @@ theorem binaryR_midStage1
     (hslotS2L : read64 cL.σ.mem (sp.toNat - 32) = some v18.toNat)
     (hnode_hi : aExpr.toNat + 32 ≤ 0x100000000)
     (hnode_lo : 0x80000000 ≤ aExpr.toNat)
-    (hnode_align : aExpr.toNat % 8 = 0)
     (hnode_win : tohostAddr + 32 ≤ aExpr.toNat)
-    (hrop_align : aROp.toNat % 8 = 0)
     (hrop_ram : 0x80000000 ≤ aROp.toNat ∧ aROp.toNat + 16 ≤ 0x100000000)
     (hrop_win : tohostAddr + 16 ≤ aROp.toNat)
     (hrop_stk : aROp.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aROp.toNat)
@@ -582,7 +578,7 @@ theorem binaryR_midStage1
       v8 v9 v18 cL hGL htickL hpcL hs1L hspL hmiL houtStrL hframeL hx8L hx18L hgx8v hgx18v
       henvValid henvRead henvset
       hcodeL hnode hstoreCL hstoreSurvCL hexprSurvCL hviCL hviSlotCL hnbsCL hslotRaL hslotS0L
-      hslotS1L hslotS2L hnode_hi hnode_lo hnode_align hnode_win hrop_align hrop_ram hrop_win
+      hslotS1L hslotS2L hnode_hi hnode_lo hnode_win hrop_ram hrop_win
       hrop_stk hrop_stkfull hsp1088 hsproom hspSLhi hsp16 hsphi hSLlo hSLhiRam hSLwin
       hcodeStk hviStk htableStk harenaStk harenaCode
       hstackBudgetR hexprBodiesR hstoreBodiesR hGroundR_CL)

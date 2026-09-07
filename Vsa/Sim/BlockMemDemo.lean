@@ -141,7 +141,7 @@ theorem ssputs_prologue_block (σ : MState) (i u : Nat)
         -- only the three stack-store windows + the `lw` bounds/pins remain.
         block_facts hmem with "Vsa.Sim.Code.__ssputs_r_at_"
         · exact ⟨h40lo, h40hi, h40win, h40al⟩
-        · exact ⟨⟨hclo, hchi, hcht, hcal⟩, lpin_of_present hc0, lpin_of_present hc1,
+        · exact ⟨⟨hclo, hchi, hcht⟩, lpin_of_present hc0, lpin_of_present hc1,
             lpin_of_present hc2, lpin_of_present hc3⟩
         · exact ⟨h48lo, h48hi, h48win, h48al⟩
         · exact ⟨h56lo, h56hi, h56win, h56al⟩)

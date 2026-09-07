@@ -38,39 +38,39 @@ def loopHeadArgSetupL (sp s1 : BitVec 64) : GRegs := [(2, sp), (9, s1)]
 
 The `loopHeadArgSetup` body ends in `jal exec_stmt` (a CALL — deliberately outside `TKind`).  The straight-line body run + the ABI callee-saved frame are FREE via `bridgeOfSeg`; the ONLY region-specific input is the jal seam's `JalStep` (the callee entry obs, packaged by `jalStep_of_obs` from the region's `site_80004474_*` lemma).  That seam is threaded as a NAMED residual `hjalSeam` — it is NOT fabricated here (a hand `site_*` would trip the discipline gate).  The row shape mirrors `EnvDefSeg.capComputeSeg_run`. -/
 
-/-- **`loopHeadArgSetupBridge`** — the `loopHeadArgSetup` body ≫ `jal exec_stmt` bridge, via `bridgeOfSeg`.  The seg run + ABI frame are FREE; `hfacts` (the memory chain-facts, one `chain_facts` call at the caller) and `hjalSeam` (the call-seam `JalStep` off the callee `site_*` obs) are the only region-specific residuals.  Conclusion: parked at the callee entry `0x80003fe0#64` with link `0x80004478#64`, memory = the seg write-log, ABI frame preserved. -/
+/-- **`loopHeadArgSetupBridge`** — the `loopHeadArgSetup` body ≫ `jal exec_stmt` bridge, via `bridgeOfSeg`.  The seg run + ABI frame are FREE; `hfacts` (the memory chain-facts, one `chain_facts` call at the caller) and `hjalSeam` (the call-seam `JalStep` off the callee `site_*` obs) are the only region-specific residuals.  `lds` is the parametric load-readback list (a body `ld/lw/lb` reads `lds.getD i 0#8`, NOT a zero-pin — instantiate downstream, e.g. at a singleton, like the segToTriple rows).  Conclusion: parked at the callee entry `0x80003fe0#64` with link `0x80004478#64`, memory = the seg write-log, ABI frame preserved. -/
 theorem loopHeadArgSetupBridge
     (σ : MState) (i u : Nat) (vminstret : BitVec 64) (sp : BitVec 64) (s1 : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (lds : List (List (BitVec 8)))
     (hG : GoodState σ)
     (hpc : σ.regs.get? Register.PC = some (0x80004460#64 : BitVec 64))
     (hminstret : σ.regs.get? Register.minstret = some vminstret)
     (hmem : σ.mem = m0)
     (hL : GHolds σ (loopHeadArgSetupL sp s1))
-    (hfacts : ChainFacts σ.mem σ.mem (loopHeadArgSetupL sp s1) [] loopHeadArgSetupSeg)
+    (hfacts : ChainFacts σ.mem σ.mem (loopHeadArgSetupL sp s1) lds loopHeadArgSetupSeg)
     (hi : i < 2)
     -- output-regs key hygiene: the keys are value-free, but they mention the
     -- pins as values, so they stall `decide` under the pin binders; the
     -- caller closes each with ONE `decide` (see observations `keys-decides-per-seg`).
-    (hKeysOut : KeysOK (keysG (evalBlocks loopHeadArgSetupSeg (SegEvalState.init (loopHeadArgSetupL sp s1) [])).regs))
-    (hRaOut : KeysAvoidRa (evalBlocks loopHeadArgSetupSeg (SegEvalState.init (loopHeadArgSetupL sp s1) [])).regs)
+    (hKeysOut : KeysOK (keysG (evalBlocks loopHeadArgSetupSeg (SegEvalState.init (loopHeadArgSetupL sp s1) lds)).regs))
+    (hRaOut : KeysAvoidRa (evalBlocks loopHeadArgSetupSeg (SegEvalState.init (loopHeadArgSetupL sp s1) lds)).regs)
     (hjalSeam : ∀ (σ' : MState) (i' u' : Nat),
       GoodState σ' → i' < 2 →
       σ'.regs.get? Register.PC = some
-        (evalBlocksPC 0x80004460#64 (SegEvalState.init (loopHeadArgSetupL sp s1) []) loopHeadArgSetupSeg) →
+        (evalBlocksPC 0x80004460#64 (SegEvalState.init (loopHeadArgSetupL sp s1) lds) loopHeadArgSetupSeg) →
       (∃ w, σ'.regs.get? Register.minstret = some w) →
-      σ'.mem = writeLog m0 (evalBlocks loopHeadArgSetupSeg (SegEvalState.init (loopHeadArgSetupL sp s1) [])).log →
-      GHolds σ' (evalBlocks loopHeadArgSetupSeg (SegEvalState.init (loopHeadArgSetupL sp s1) [])).regs →
+      σ'.mem = writeLog m0 (evalBlocks loopHeadArgSetupSeg (SegEvalState.init (loopHeadArgSetupL sp s1) lds)).log →
+      GHolds σ' (evalBlocks loopHeadArgSetupSeg (SegEvalState.init (loopHeadArgSetupL sp s1) lds)).regs →
       JalStep 0x80003fe0#64 0x80004478#64 σ' i' u') :
     ∃ (σ2 : MState) (i2 : Nat),
       Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + evalBlocksFuel loopHeadArgSetupSeg + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧
       σ2.regs.get? Register.PC = some (0x80003fe0#64 : BitVec 64) ∧
       σ2.regs.get? Register.x1 = some (0x80004478#64 : BitVec 64) ∧
       (∃ w, σ2.regs.get? Register.minstret = some w) ∧
-      GHolds σ2 (evalBlocks loopHeadArgSetupSeg (SegEvalState.init (loopHeadArgSetupL sp s1) [])).regs ∧
-      σ2.mem = writeLog m0 (evalBlocks loopHeadArgSetupSeg (SegEvalState.init (loopHeadArgSetupL sp s1) [])).log ∧
+      GHolds σ2 (evalBlocks loopHeadArgSetupSeg (SegEvalState.init (loopHeadArgSetupL sp s1) lds)).regs ∧
+      σ2.mem = writeLog m0 (evalBlocks loopHeadArgSetupSeg (SegEvalState.init (loopHeadArgSetupL sp s1) lds)).log ∧
       (∀ R, Vsa.Alloc.AbiPreserved R = true → σ2.regs.get? R = σ.regs.get? R) := by
-  apply bridgeOfSeg loopHeadArgSetupSeg (loopHeadArgSetupL sp s1) []
+  apply bridgeOfSeg loopHeadArgSetupSeg (loopHeadArgSetupL sp s1) lds
     σ i u (0x80004460#64) (0x80003fe0#64) (0x80004478#64) vminstret m0
     hG hpc hminstret hmem hL
     (by have h : keysG (loopHeadArgSetupL sp s1) = [2, 9] := rfl

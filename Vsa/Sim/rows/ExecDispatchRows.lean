@@ -135,27 +135,33 @@ theorem exec_ifNone_row
       execIfNoneSim g N A SL φf φc st st' d env c t v sp r aInterp aStmt aEnv aRet m0
         out0 (ExecS.ifNone st d env c t st' v a a_1) hIH G.hslot G.htableStk (G.hGlue out0))
 
-/-! ## `whileFalse` — `execWhileFalseSim`'s twin at the `whileStmt` arm (kind 4) -/
+/-! ## `whileFalse` — condition dispatch and reached normal return -/
 
-/-- `execWhileFalseSim`'s residual bundle: as `IfNoneGeom` but at `execArmWhile`
-(kind 4, `0x8000403c`, sret buffer `sp'+80`, `SubExecReturn @ 0x80004090`). -/
+/-- The two finite boundaries surrounding the actual condition IH. -/
 structure WhileFalseGeom
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt) (v : Value)
     (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop where
-  hslot : StmtSlotPinned 4 execArmWhile m0
-  htableStk : stmtJumpTableBase + 4 * 4 + 4 ≤ SL.lo ∨ sp.toNat ≤ stmtJumpTableBase + 4 * 4
-  hGlue : ∀ out0 : Array String,
-    EvalIH st d env c st' v →
-      Triple
-        (fun cfg => ∃ ment v8 v9 v18 v19,
-          ExecArmEntryK g N A SL φf φc st execArmWhile sp r aInterp aStmt aEnv aRet
-            v8 v9 v18 v19 out0 m0 ment cfg)
-        (fun cfg => ∃ subsret v1 v8 v9 v18 v19 mcall,
-          SubExecReturn g N A SL φf φc st.store.frames.size st.store.closures.size st' v
-            sp r aRet subsret (0x80004090#64) v1 v8 v9 v18 v19 m0 mcall cfg)
-  hW : ExecRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size st' .normal sp r aRet m0
+  condDispatch : Triple
+    (ExecEntry g N A SL φf φc st d env (.whileStmt c b)
+      sp r aInterp aStmt aEnv aRet m0)
+    (fun cfg => ∃ (gCond : (R : Register) → Option (RegisterType R))
+        (aCond : BitVec 64) (mCond : Mem),
+      ExecWhileCondCarrier g N A SL φf φc st d env c b
+        sp r aInterp aStmt aEnv aRet m0 gCond aCond mCond ∧
+      EvalEntry gCond N A SL φf φc st d env c
+        (sp - 176#64) 0x80004050#64 (sp - 96#64) aInterp aCond mCond cfg)
+  condResume : ∀ (gCond : (R : Register) → Option (RegisterType R))
+      (aCond : BitVec 64) (mCond : Mem),
+    ExecWhileCondCarrier g N A SL φf φc st d env c b
+      sp r aInterp aStmt aEnv aRet m0 gCond aCond mCond →
+    Triple
+      (EvalExitD gCond N A SL φf φc st.store.frames.size
+        st.store.closures.size st' v (sp - 176#64)
+        0x80004050#64 (sp - 96#64) mCond)
+      (ExecExitD g N A SL φf φc st.store.frames.size
+        st.store.closures.size st' .normal sp r aRet m0)
 
 /-- The whileFalse residual: `WhileFalseGeom` ∀-closed over the ghosts. -/
 def WhileFalseResid (st st' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (b : Stmt) (v : Value) : Prop :=
@@ -173,7 +179,7 @@ def WhileFalseCaseResid
   mEvalE st d env c st' v hC →
   WhileFalseResid st st' d env c b v
 
-/-- Route `hSWhileFalse` → `execIH_of_exitSim` over `execWhileFalseSim`. -/
+/-- Apply the condition IH and resume at its actual widened exit. -/
 theorem exec_whileFalse_row
     (hR : ∀ st st' d env c b v hC,
       WhileFalseCaseResid st st' d env c b v hC) :
@@ -183,15 +189,17 @@ theorem exec_whileFalse_row
       mExecS st d env (Stmt.whileStmt c b) st' Status.normal (ExecS.whileFalse st d env c b st' v a a_1) := by
   intro st d env c b st' v a a_1 hIH
   show ExecIH st d env (.whileStmt c b) st' .normal
-  exact execIH_of_exitSim'
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
-      (hR st st' d env c b v a a_1 hIH g N A SL φf φc
-        sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
-      let G := hR st st' d env c b v a a_1 hIH g N A SL φf φc
-        sp r aInterp aStmt aEnv aRet m0 cfg hE
-      execWhileFalseSim g N A SL φf φc st st' d env c b v sp r aInterp aStmt aEnv aRet m0
-        out0 (ExecS.whileFalse st d env c b st' v a a_1) hIH a_1 G.hslot G.htableStk (G.hGlue out0))
+  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hEntry
+  let G := hR st st' d env c b v a a_1 hIH
+    g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hEntry
+  obtain ⟨cfgC, hsC, gCond, aCond, mCond, hCarrier, hCondEntry⟩ :=
+    G.condDispatch cfg hEntry
+  obtain ⟨cfgCX, hsCX, hCondExit⟩ :=
+    hIH gCond N A SL φf φc (sp - 176#64) 0x80004050#64
+      (sp - 96#64) aInterp aCond mCond cfgC hCondEntry
+  obtain ⟨cfgD, hsD, hExit⟩ :=
+    G.condResume gCond aCond mCond hCarrier cfgCX hCondExit
+  exact ⟨cfgD, hsC.trans (hsCX.trans hsD), hExit⟩
 
 /-! ## `ifTrue` — `execIfTrueSim` (re-dispatch; carries the branch `ExecDispatchIH`) -/
 
@@ -661,7 +669,7 @@ theorem exec_forStart_row
 
 /-! ## `whileBreak` / `whileRet` / `whileLoop` -/
 
-/-- Exact nonrecursive iteration plus the ordinary exit widener. -/
+/-- Exact nonrecursive iteration with a widened exit at its reached endpoint. -/
 structure WhileExitCaseGeom
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -670,8 +678,6 @@ structure WhileExitCaseGeom
     (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop where
   geom : ExecWhileStepGeomI g N A SL φf φc st stCond st' st' d env c b v
     bodyStatus loopStatus sp r aInterp aStmt aEnv aRet m0
-  widen : ExecRecWiden g N A SL φf φc st.store.frames.size
-    st.store.closures.size st' loopStatus sp r aRet m0
 
 /-- Exact continuing iteration.  The recursive IH is applied separately at
 the status-indexed `0x80004034` in-frame boundary. -/
@@ -747,7 +753,7 @@ theorem exec_whileBreak_row
     execWhileExitI g N A SL φf φc st st'' d env c b .brk .normal
       sp r aInterp aStmt aEnv aRet m0 (by rintro (h | h) <;> cases h)
       hstep cfg hEntry
-  exact ⟨cfgE, hsE, execExitD_of_execExit_rec hExit G.widen⟩
+  exact ⟨cfgE, hsE, hExit⟩
 
 /-- Route `hSWhileRet` → `execWhileIH_of_resid`. -/
 theorem exec_whileRet_row
@@ -769,7 +775,7 @@ theorem exec_whileRet_row
     execWhileExitI g N A SL φf φc st st'' d env c b (.ret rv) (.ret rv)
       sp r aInterp aStmt aEnv aRet m0 (by rintro (h | h) <;> cases h)
       hstep cfg hEntry
-  exact ⟨cfgE, hsE, execExitD_of_execExit_rec hExit G.widen⟩
+  exact ⟨cfgE, hsE, hExit⟩
 
 /-- Route `hSWhileLoop` → `execWhileIH_of_resid`.  The recursive sub-`while` IH
 (`a_4`'s motive) is carried by `WhileGeom.hWhileIH`. -/

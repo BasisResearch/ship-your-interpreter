@@ -31,6 +31,27 @@ TIMEOUT="${TIMEOUT:-30}"
 Z3_EXPECT="${Z3_EXPECT:-4.15.4}"          # asserted on the Pro before launching
 mt() { stat -f %m "$1" 2>/dev/null || echo 0; }
 
+# The legacy transport cannot establish typed-certificate authority or the
+# complete source snapshot. Reject that path before remote writes or launch.
+refuse_typed_campaign() {
+  cat >&2 <<'UNSUPPORTED'
+houdini_summary_remote: typed certificate authority transport is unsupported.
+Use the local driver with --segment-authority DIR and an independent export
+from the fingerprint-checked Lean build. Legacy campaigns remain supported.
+UNSUPPORTED
+  exit 2
+}
+has_typed_certificates() {
+  [ -f "$STAGE/segment-certificates.tsv" ] &&
+    awk 'NR > 1 && NF {found=1} END {exit !found}' "$STAGE/segment-certificates.tsv"
+}
+for argument in "$@"; do
+  case "$argument" in
+    --segment-authority|--segment-authority=*) refuse_typed_campaign;;
+  esac
+done
+if has_typed_certificates; then refuse_typed_campaign; fi
+
 # REBUILD the oleans in dependency order rather than telling the caller to.
 # The emit runs `lake env lean` over the OLEANS, and nothing in Lean checks an
 # olean against its own source, so a stale `ReflectSpan.olean` emits a campaign
@@ -70,12 +91,13 @@ if [ "$(mt "$STAGE/query-summaries.tsv")" -lt "$(mt experiments/smt/ReflectResid
 else
   echo "== emit: reusing up-to-date campaign at $STAGE"
 fi
+if has_typed_certificates; then refuse_typed_campaign; fi
 echo "== campaign: $(($(wc -l < "$STAGE/summaries.tsv")-1)) summaries, $(ls "$STAGE/queries" | wc -l | tr -d ' ') queries"
 
 echo "== ship campaign ($(du -sh "$STAGE" | cut -f1)) + script to $PRO (tar via scp)"
 tar czf /tmp/bmc-campaign.tgz -C "$STAGE" .
 scp -q /tmp/bmc-campaign.tgz "$PRO:/tmp/bmc-campaign.tgz"
-scp -q scripts/houdini_summary.py "$PRO:$RDIR/scripts/"
+scp -q scripts/houdini_summary.py scripts/segment_certificates.py scripts/verdict_receipts.py "$PRO:$RDIR/scripts/"
 # The driver refuses to answer when the campaign's `src/` provenance copy does
 # not match the tree's ReflectSpan/ReflectResiduals -- rightly, since a verdict
 # against a different encoder is a verdict about another program.  The Pro's
@@ -117,7 +139,7 @@ echo "== run Houdini on $PRO at -j$JOBS --timeout $TIMEOUT with $z3v (${*:-both 
 # foreground ssh hands the job a SIGHUP the moment the link drops (the Pro
 # dozing off Wi-Fi is enough).  That is how the previous run died after mining
 # without ever writing verdicts.tsv.  Detach it, then poll the log.
-ssh "$PRO" "cd $RDIR && rm -f /tmp/houdini.log /tmp/houdini.done && nohup zsh -lc 'export PATH=\$HOME/bin:\$PATH; z3 --version; time python3 -u scripts/houdini_summary.py experiments/smt/bmc -j$JOBS --timeout $TIMEOUT ${*:-}; echo \$? > /tmp/houdini.done' > /tmp/houdini.log 2>&1 < /dev/null & sleep 1"
+ssh "$PRO" "cd $RDIR && rm -f /tmp/houdini.log /tmp/houdini.done && nohup zsh -lc 'export PATH=\$HOME/bin:\$PATH; z3 --version; time python3 -u scripts/houdini_summary.py experiments/smt/bmc --require-valid -j$JOBS --timeout $TIMEOUT ${*:-}; echo \$? > /tmp/houdini.done' > /tmp/houdini.log 2>&1 < /dev/null & sleep 1"
 sleep 5
 if ! ssh "$PRO" "pgrep -f houdini_summary.py > /dev/null" 2>/dev/null; then
   echo "ERROR: the remote job did not start. Remote log:" >&2

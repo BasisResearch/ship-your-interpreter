@@ -45,7 +45,6 @@ structure UnaryArmExtrasGen
   operand_repr : ExprRepr m0 aOperand.toNat esub
   expr24 : aExpr.toNat + 24 ≤ 0x100000000
   expr24_stk : aExpr.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
-  op_align : aOperand.toNat % 8 = 0
   op_lo : 0x80000000 ≤ aOperand.toNat
   op_hi : aOperand.toNat + 16 ≤ 0x100000000
   op_win : tohostAddr + 16 ≤ aOperand.toNat
@@ -81,7 +80,6 @@ theorem blockA_unaryGenArm
         read64 ment (aExpr.toNat + 16) = some aOperand.toNat ∧
         ExprRepr ment aOperand.toNat esub ∧
         aExpr.toNat + 24 ≤ 0x100000000 ∧
-        aOperand.toNat % 8 = 0 ∧
         0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aOperand.toNat ∧
         (aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat) ∧
@@ -118,13 +116,13 @@ theorem blockA_unaryGenArm
       (by have := hX.table_stk; simp only [jumpTableBase]; omega)
       c ⟨⟨hc.good, hc.tick, hc.pc, hc.a0, hc.a1, hc.a2, hc.ra, hc.ra_align, hc.spReg,
         hc.stackOK, hc.minstret, hc.mem, hc.code, hc.expr, hc.store, hc.store_survives, hc.out,
-        hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
+        hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_ram,
         hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
         ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩
   have hArmCopy := hArm
   obtain ⟨_hAG, _hAtick, hApc, _hAa0, _hAs1, _hAa2, _hAsp, _hAra, _hAmi, _hAout,
-    _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxAl, _hAxLo, _hAxHi, _hAxWin,
+    _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxLo, _hAxHi, _hAxWin,
     _hAslotRa, _hAslotS0, _hAslotS1, _hAslotS2, hArmMemM0,
     _hArmg8, _hArmg9, _hArmg18, _hArmg2, _hAstore, _hAstoreSurv, hArmFrame,
     _hAsretAl, _hAsretLo, _hAsretHi, _hAsretWin, _hAsretVi, _hAsretStk, _hAsretEc,
@@ -157,7 +155,7 @@ theorem blockA_unaryGenArm
       sp r sret aExpr aEnv v8 v9 v18 c1.σ.sailOutput m0 ment c1 := _hAout.symm ▸ hArm
   refine ⟨c1, hs1, v8, v9, v18, ment, hArm', hAEx11, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩,
     hpayMent', hsubReprMent, hX.expr24,
-    hX.op_align, hX.op_lo, hX.op_hi, hX.op_win, hX.op_stk,
+    hX.op_lo, hX.op_hi, hX.op_win, hX.op_stk,
     hX.sp_headroom, hX.sp_SLhi, hX.sp16, hX.SLhi_ram,
     hX.code_stk, hX.vicode_stk, (by have := hX.table_stk; omega),
     hX.arena_stk, hX.arena_code⟩

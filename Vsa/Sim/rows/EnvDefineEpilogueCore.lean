@@ -284,8 +284,8 @@ private theorem envDefineMemFactsLd
     rw [hsrc, BitVec.toNat_add, himm, Nat.mod_eq_of_lt (by omega)]
   unfold MemFacts
   rw [hk]
-  exact ⟨⟨by rw [hea]; omega, by rw [hea]; omega, by rw [hea]; right; omega,
-      by rw [hea]; omega⟩, by rw [hea]; exact hpins⟩
+  exact ⟨⟨by rw [hea]; omega, by rw [hea]; omega, by rw [hea]; right; omega⟩,
+    by rw [hea]; exact hpins⟩
 
 theorem EnvDefineSpillImage.chainFacts {sp : BitVec 64} {c : Config}
     {lds : List (List (BitVec 8))} (h : EnvDefineSpillImage sp c lds) :

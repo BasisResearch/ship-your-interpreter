@@ -33,41 +33,22 @@ namespace Vsa.Sim
 
 /-! ## Shape 1 — expr-relative load (`aExpr + n`)
 
-Site signature: `site_8000351c_ee` (`Vsa/Sim/AddTailSites.lean:160`) takes four separate
-preconditions over `(v8 + sign_extend (m := 64) (0x008#12)).toNat`:
-`hlo`/`hhiram`/`hhtif`/`halign`. The `.gt` row (`rows/EvalGtRow.lean:176-182`) supplies them as
-`(by rw [hop8]; omega)`, `(by rw [hop8]; omega)`, `(by rw [hop8, htoh]; right; omega)`,
-`(by rw [hop8]; omega)` — where
-`hop8 : (aExpr + sign_extend (0x008#12)).toNat = aExpr.toNat + 8`
-(`EvalGtRow:103`) and the frame facts are
-`hexprAl : aExpr.toNat % 4 = 0`, `hexprLo : 0x80000000 ≤ aExpr.toNat`,
-`hexprHi : aExpr.toNat + 16 ≤ 0x100000000`, `hexprWin : tohostAddr + 8 ≤ aExpr.toNat`
-(`EvalGtRow:50-52`, destructured at `:83-85`).
+The offset equation keeps the geometry in the exact address form used by LOAD sites.
+AST reads require RAM bounds and HTIF exclusion; natural alignment is unnecessary. -/
 
-We state the conclusion in the RAW `(aExpr + sign_extend imm).toNat` form (taking the offset
-equation `hoff` as `SpillSafe.spill_load_safe4` does with `haddr`), concluding the four-way
-conjunction so a caller can
-`obtain ⟨hlo, hhi, hhtif, halign⟩ := expr_load_safe4 … hop8 hexprAl hexprLo hexprHi hexprWin (by decide)`
-and pass the four fields to the site. `hoff` fixes both the address value AND the register
-expression, so the conjuncts match the site's argument types verbatim. -/
-
-/-- The four preconditions of a 4-byte expr-relative LOAD (`lw`) at `aExpr.toNat + n`
-(`n ∈ {4, 8}`), derived once from the frame bounds + the ground offset facts. The htif
-disjunct is `Or.inr` (`tohostAddr + 8 ≤ addr`) because these addresses are HIGH (≥ aExpr ≥
-tohost+8). Matches `site_*_ee`'s `hlo`/`hhiram`/`hhtif`/`halign` after `rw [hoff]`. -/
+/-- RAM bounds and HTIF exclusion for a 4-byte expr-relative LOAD. -/
 theorem expr_load_safe4 (aExpr _eAddr : BitVec 64) (imm : BitVec 12) (n : Nat)
     (hoff : (aExpr + sign_extend (m := 64) imm).toNat = aExpr.toNat + n)
-    (hexprAl : aExpr.toNat % 4 = 0) (hexprLo : 0x80000000 ≤ aExpr.toNat)
+    (hexprLo : 0x80000000 ≤ aExpr.toNat)
     (hexprHi : aExpr.toNat + 16 ≤ 0x100000000) (hexprWin : tohostAddr + 8 ≤ aExpr.toNat)
-    (hn : n + 4 ≤ 16) (hn4 : n % 4 = 0) :
+    (hn : n + 4 ≤ 16) :
     0x80000000 ≤ (aExpr + sign_extend (m := 64) imm).toNat ∧
     (aExpr + sign_extend (m := 64) imm).toNat + 4 ≤ 0x100000000 ∧
     ((aExpr + sign_extend (m := 64) imm).toNat + 4 ≤ tohostAddr ∨
-      tohostAddr + 8 ≤ (aExpr + sign_extend (m := 64) imm).toNat) ∧
-    (aExpr + sign_extend (m := 64) imm).toNat % 4 = 0 := by
+      tohostAddr + 8 ≤ (aExpr + sign_extend (m := 64) imm).toNat) := by
   have htoh : tohostAddr = 0x8001ad00 := rfl
   rw [hoff]
-  refine ⟨by omega, by omega, Or.inr (by omega), by omega⟩
+  exact ⟨by omega, by omega, Or.inr (by omega)⟩
 
 /-! ## Shape 2 — low-address slot / constant-string (CS) site
 

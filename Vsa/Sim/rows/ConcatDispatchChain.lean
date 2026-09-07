@@ -64,7 +64,6 @@ theorem evalConcatDispatchChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl 
     (a_hi : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ 0x100000000)
     (a_ht : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v8 + sign_extend (m := 64) (0x008#12)).toNat)
-    (a_al : (v8 + sign_extend (m := 64) (0x008#12)).toNat % 4 = 0)
     (a_p0 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat]? = some (0x0b#8))
     (a_p1 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 1]? = some (0x00#8))
     (a_p2 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 2]? = some (0x00#8))
@@ -74,7 +73,6 @@ theorem evalConcatDispatchChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl 
     (b_hi : (v8 + sign_extend (m := 64) (0x004#12)).toNat + 4 ≤ 0x100000000)
     (b_ht : (v8 + sign_extend (m := 64) (0x004#12)).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v8 + sign_extend (m := 64) (0x004#12)).toNat)
-    (b_al : (v8 + sign_extend (m := 64) (0x004#12)).toNat % 4 = 0)
     (b_p0 : σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat]? = some b0)
     (b_p1 : σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat + 1]? = some b1)
     (b_p2 : σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat + 2]? = some b2)
@@ -146,10 +144,10 @@ theorem evalConcatDispatchChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl 
       (by
         -- BBlockFacts: block1 four load MemFacts + bltu guard (block_facts handles pins)
         block_facts hmem with "Vsa.Sim.Code.eval_expr_at_"
-        · exact ⟨⟨a_lo, a_hi, a_ht, a_al⟩, lpin_of_present a_p0, lpin_of_present a_p1, lpin_of_present a_p2, lpin_of_present a_p3⟩
-        · exact ⟨⟨b_lo, b_hi, b_ht, b_al⟩, lpin_of_present b_p0, lpin_of_present b_p1, lpin_of_present b_p2, lpin_of_present b_p3⟩
-        · exact ⟨⟨c_lo, c_hi, c_ht, c_al⟩, lpin_of_present c_p0, lpin_of_present c_p1, lpin_of_present c_p2, lpin_of_present c_p3⟩
-        · exact ⟨⟨d_lo, d_hi, d_ht, d_al⟩, lpin_of_present d_p0, lpin_of_present d_p1, lpin_of_present d_p2, lpin_of_present d_p3, lpin_of_present d_p4, lpin_of_present d_p5, lpin_of_present d_p6, lpin_of_present d_p7⟩
+        · exact ⟨⟨a_lo, a_hi, a_ht⟩, lpin_of_present a_p0, lpin_of_present a_p1, lpin_of_present a_p2, lpin_of_present a_p3⟩
+        · exact ⟨⟨b_lo, b_hi, b_ht⟩, lpin_of_present b_p0, lpin_of_present b_p1, lpin_of_present b_p2, lpin_of_present b_p3⟩
+        · exact ⟨⟨c_lo, c_hi, c_ht⟩, lpin_of_present c_p0, lpin_of_present c_p1, lpin_of_present c_p2, lpin_of_present c_p3⟩
+        · exact ⟨⟨d_lo, d_hi, d_ht⟩, lpin_of_present d_p0, lpin_of_present d_p1, lpin_of_present d_p2, lpin_of_present d_p3, lpin_of_present d_p4, lpin_of_present d_p5, lpin_of_present d_p6, lpin_of_present d_p7⟩
         -- bltu = false.  Compound two SHALLOW reductions: `show` peels the 6-instr
         -- `runGM` wrapper to the clean structural operand forms (li 12 / addiw over
         -- the op-token load), then `decide` evaluates the concrete arithmetic.
@@ -278,13 +276,13 @@ theorem evalConcatDispatchChain_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl 
         block_facts (hmem2e ▸ hmem : Vsa.Sim.Code.Eval_exprLoaded σ2.mem)
           with "Vsa.Sim.Code.eval_expr_at_"
         -- slot lw @ 0x80019f84 (input-relative address, shallow):
-        · exact ⟨⟨sLo, sHi, sHt, sAl⟩,
+        · exact ⟨⟨sLo, sHi, sHt⟩,
             lpin_of_present hSlot2.1, lpin_of_present hSlot2.2.1, lpin_of_present hSlot2.2.2.1, lpin_of_present hSlot2.2.2.2⟩
         -- kind ld @ v2+0.  `hKind2` is a LOCAL block_facts pin-bundle (8 byte pins for
         -- one `ld` MemFact), destructured inline into the `block_facts` obligation
         -- exactly as in the grandfathered `evalAddChain_run` this chain is the
         -- κ-parametrized twin of — not a landed post/entry tower.
-        · exact ⟨⟨e_lo, e_hi, e_ht, e_al⟩,
+        · exact ⟨⟨e_lo, e_hi, e_ht⟩,
             lpin_of_present hKind2.1, lpin_of_present hKind2.2.1, lpin_of_present hKind2.2.2.1, lpin_of_present hKind2.2.2.2.1,
             -- discipline: allow(R6-anon-projection-tower) local block_facts ld pin-bundle
             lpin_of_present hKind2.2.2.2.2.1, lpin_of_present hKind2.2.2.2.2.2.1, lpin_of_present hKind2.2.2.2.2.2.2.1, lpin_of_present hKind2.2.2.2.2.2.2.2⟩
@@ -377,7 +375,6 @@ theorem evalConcatDispatch_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : Bit
     (a_hi : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ 0x100000000)
     (a_ht : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v8 + sign_extend (m := 64) (0x008#12)).toNat)
-    (a_al : (v8 + sign_extend (m := 64) (0x008#12)).toNat % 4 = 0)
     (a_p0 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat]? = some (0x0b#8))
     (a_p1 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 1]? = some (0x00#8))
     (a_p2 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 2]? = some (0x00#8))
@@ -386,7 +383,6 @@ theorem evalConcatDispatch_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : Bit
     (b_hi : (v8 + sign_extend (m := 64) (0x004#12)).toNat + 4 ≤ 0x100000000)
     (b_ht : (v8 + sign_extend (m := 64) (0x004#12)).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v8 + sign_extend (m := 64) (0x004#12)).toNat)
-    (b_al : (v8 + sign_extend (m := 64) (0x004#12)).toNat % 4 = 0)
     (b_p0 : σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat]? = some b0)
     (b_p1 : σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat + 1]? = some b1)
     (b_p2 : σ.mem[(v8 + sign_extend (m := 64) (0x004#12)).toNat + 2]? = some b2)
@@ -442,8 +438,8 @@ theorem evalConcatDispatch_run (σ : MState) (i u : Nat) (vm v2 v8 sret Wl : Bit
     evalConcatDispatchChain_run σ i u vm v2 v8 sret Wl (3#64)
       b0 b1 b2 b3 c0 c1 c2 c3 d0 d1 d2 d3 d4 d5 d6 d7 k0 k1 k2 k3 k4 k5 k6 k7
       hG hpc hmi hx2 hx8 hx9 hx19 hmem hc hk
-      a_lo a_hi a_ht a_al a_p0 a_p1 a_p2 a_p3
-      b_lo b_hi b_ht b_al b_p0 b_p1 b_p2 b_p3
+      a_lo a_hi a_ht  a_p0 a_p1 a_p2 a_p3
+      b_lo b_hi b_ht  b_p0 b_p1 b_p2 b_p3
       c_lo c_hi c_ht c_al c_p0 c_p1 c_p2 c_p3
       d_lo d_hi d_ht d_al d_p0 d_p1 d_p2 d_p3 d_p4 d_p5 d_p6 d_p7
       hSlot e_lo e_hi e_ht e_al e_p0 e_p1 e_p2 e_p3 e_p4 e_p5 e_p6 e_p7 hi

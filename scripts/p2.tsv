@@ -1,0 +1,5 @@
+# Recovered from Vsa/Sim/SnprintfSitesPrint2.lean; only declarations reproduced by gen_sites.
+80007cd4	410e073b	subw	14	28	16
+80007cd8	76e040e3	branch_nottaken	BLT	0	14	0f60
+80007cdc	0a714703	lbu	14	2	0a7
+80007ce0	b60712e3	branch_nottaken	BNE	14	0	1b64

@@ -1,0 +1,15 @@
+Working directory: /Users/kirancodes/Documents/code/verified-semantic-abstraction
+Root authorized the common stdout flags16=0x200a snapshot construction.
+Private dependencies: /private/tmp/vsa-full-build.sQd0gM
+Root reported 1368 current source/dependency fingerprints before this slot.
+
+lake env sh -c 'LEAN_PATH="/private/tmp/vsa-full-build.sQd0gM${LEAN_PATH:+:$LEAN_PATH}" lean -R /private/tmp /private/tmp/vsa-output-alias-machine/boundary-pinned/AliasMachine.lean' > /private/tmp/vsa-output-alias-machine/boundary-pinned/compile.log 2>&1
+
+lake env sh -c 'LEAN_PATH="/private/tmp/vsa-full-build.sQd0gM${LEAN_PATH:+:$LEAN_PATH}" lean -R /private/tmp --run /private/tmp/vsa-output-alias-machine/boundary-pinned/AliasMachine.lean 2000000' > /private/tmp/vsa-output-alias-machine/boundary-pinned/result.jsonl 2> /private/tmp/vsa-output-alias-machine/boundary-pinned/run.stderr
+
+Compile exit0 (empty log). Execution exit0; tool session9975 completed.
+Stderr: TODO: cancel_reservation
+
+python3 /private/tmp/vsa-output-alias-machine/boundary-pinned/check_run.py --repo /Users/kirancodes/Documents/code/verified-semantic-abstraction --results /private/tmp/vsa-output-alias-machine/boundary-pinned/result.jsonl > /private/tmp/vsa-output-alias-machine/boundary-pinned/check-receipt.json
+
+Checker exit0. Loaded proof remains unverified.

@@ -337,7 +337,7 @@ theorem scan_c60_load (g : (R : Register) → Option (RegisterType R))
   obtain ⟨σ', i', hstep, hi', hG', hmem', hobs⟩ :=
     site_80002d2c_es c.σ c.tick c.steps (0x80002d2c#64) vmi (pn + BitVec.ofNat 64 (8 * i))
       b0 b1 b2 b3 b4 b5 b6 b7 hSt.good hSt.pc hmi hSt.cursor1 hSt.loadedG rfl
-      hlo hhiram hhtif halign d0 d1 d2 d3 d4 d5 d6 d7 hSt.tick
+      hlo hhiram hhtif  d0 d1 d2 d3 d4 d5 d6 d7 hSt.tick
   -- the loaded value = ofNat q
   have hval : (sign_extend (m := 64)
       ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0)

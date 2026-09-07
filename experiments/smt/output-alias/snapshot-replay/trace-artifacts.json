@@ -1,0 +1,10 @@
+{
+  "trusted": false,
+  "files": {
+    "/private/tmp/vsa-alias-loaded/full-trace/result.jsonl": "50a39fdd7adb205482ab2561c0d997a3256558f1765c7ee3bde79adc63c8b851",
+    "/private/tmp/vsa-alias-loaded/trace-segments.json": "562f7b36b59266f63ef00fdf5ab36e391470388db1a8df4a8a88c27f33675042",
+    "experiments/smt/output-alias/snapshot-replay/FullTrace.lean": "faa8049db3f2d92fea91e3c21f0d9bfc08b053108d1a6a954e08527f305fb7fb",
+    "experiments/smt/output-alias/snapshot-replay/partition_trace.py": "c499f8914bbb149707655ff3bdcc68ca2ef15e244c81b6407479efdfe2b187c6",
+    "experiments/smt/output-alias/snapshot-replay/trace-check.json": "403bde02299fc388adfb270a15bc5b3f55c156f7a658af6ddc6637f27a8cb858"
+  }
+}

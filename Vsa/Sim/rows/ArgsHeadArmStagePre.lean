@@ -108,28 +108,28 @@ obs) are the only region-specific residuals.  Modelled on `loopHeadArgSetupBridg
 theorem argsHeadBodyBridge
     (σ : MState) (i u : Nat) (vminstret : BitVec 64)
     (sp s0 a6 a5 s2 a3 : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (lds : List (List (BitVec 8)))
     (hG : GoodState σ)
     (hpc : σ.regs.get? Register.PC = some (0x800031dc#64 : BitVec 64))
     (hminstret : σ.regs.get? Register.minstret = some vminstret)
     (hmem : σ.mem = m0)
     (hL : GHolds σ (argsHeadBodyL sp s0 a6 a5 s2 a3))
-    (hfacts : ChainFacts σ.mem σ.mem (argsHeadBodyL sp s0 a6 a5 s2 a3) [] argsHeadBodySeg)
+    (hfacts : ChainFacts σ.mem σ.mem (argsHeadBodyL sp s0 a6 a5 s2 a3) lds argsHeadBodySeg)
     (hi : i < 2)
     (hKeysOut : KeysOK (keysG (evalBlocks argsHeadBodySeg
-      (SegEvalState.init (argsHeadBodyL sp s0 a6 a5 s2 a3) [])).regs))
+      (SegEvalState.init (argsHeadBodyL sp s0 a6 a5 s2 a3) lds)).regs))
     (hRaOut : KeysAvoidRa (evalBlocks argsHeadBodySeg
-      (SegEvalState.init (argsHeadBodyL sp s0 a6 a5 s2 a3) [])).regs)
+      (SegEvalState.init (argsHeadBodyL sp s0 a6 a5 s2 a3) lds)).regs)
     (hjalSeam : ∀ (σ' : MState) (i' u' : Nat),
       GoodState σ' → i' < 2 →
       σ'.regs.get? Register.PC = some
-        (evalBlocksPC 0x800031dc#64 (SegEvalState.init (argsHeadBodyL sp s0 a6 a5 s2 a3) [])
+        (evalBlocksPC 0x800031dc#64 (SegEvalState.init (argsHeadBodyL sp s0 a6 a5 s2 a3) lds)
           argsHeadBodySeg) →
       (∃ w, σ'.regs.get? Register.minstret = some w) →
       σ'.mem = writeLog m0 (evalBlocks argsHeadBodySeg
-        (SegEvalState.init (argsHeadBodyL sp s0 a6 a5 s2 a3) [])).log →
+        (SegEvalState.init (argsHeadBodyL sp s0 a6 a5 s2 a3) lds)).log →
       GHolds σ' (evalBlocks argsHeadBodySeg
-        (SegEvalState.init (argsHeadBodyL sp s0 a6 a5 s2 a3) [])).regs →
+        (SegEvalState.init (argsHeadBodyL sp s0 a6 a5 s2 a3) lds)).regs →
       JalStep 0x80003164#64 0x80003224#64 σ' i' u') :
     ∃ (σ2 : MState) (i2 : Nat),
       Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + evalBlocksFuel argsHeadBodySeg + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧
@@ -137,11 +137,11 @@ theorem argsHeadBodyBridge
       σ2.regs.get? Register.x1 = some (0x80003224#64 : BitVec 64) ∧
       (∃ w, σ2.regs.get? Register.minstret = some w) ∧
       GHolds σ2 (evalBlocks argsHeadBodySeg
-        (SegEvalState.init (argsHeadBodyL sp s0 a6 a5 s2 a3) [])).regs ∧
+        (SegEvalState.init (argsHeadBodyL sp s0 a6 a5 s2 a3) lds)).regs ∧
       σ2.mem = writeLog m0 (evalBlocks argsHeadBodySeg
-        (SegEvalState.init (argsHeadBodyL sp s0 a6 a5 s2 a3) [])).log ∧
+        (SegEvalState.init (argsHeadBodyL sp s0 a6 a5 s2 a3) lds)).log ∧
       (∀ R, Vsa.Alloc.AbiPreserved R = true → σ2.regs.get? R = σ.regs.get? R) := by
-  apply bridgeOfSeg argsHeadBodySeg (argsHeadBodyL sp s0 a6 a5 s2 a3) []
+  apply bridgeOfSeg argsHeadBodySeg (argsHeadBodyL sp s0 a6 a5 s2 a3) lds
     σ i u (0x800031dc#64) (0x80003164#64) (0x80003224#64) vminstret m0
     hG hpc hminstret hmem hL
     (by have h : keysG (argsHeadBodyL sp s0 a6 a5 s2 a3) = [2, 8, 16, 15, 18, 13] := rfl

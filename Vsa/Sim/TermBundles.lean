@@ -51,7 +51,7 @@ free for the 33 recursive premises.
 | `hNull` | `eval_null_row` | `TermShared.geom` (G) |
 | `hVar` | `eval_var_row` | `TermShared.geom`; `TermCallees.envGet` (C, `env_get_found_framed`) |
 | `hAssign` | *(gap)* | `TermShared.geom`; `TermCallees.envDefine` (OPEN) |
-| `hBinary` | `eval_binary_row` | `TermShared.geom`; div/mod seam `TermCallees.divdi3`; eq/ne `TermCallees.valueEqual`; `TermGuards.storeSize`/`binNoOvf`/`divOvfArm`; str cells `TermGuards.strCmp`/`strConcat`/`strArmProlog` |
+| `hBinary` | `eval_binary_row` | `TermShared.geom`; div/mod seam `TermCallees.divdi3`; eq/ne `TermCallees.valueEqual`; `TermGuards.binNoOvf`/`divOvfArm`; str cells `TermGuards.strCmp`/`strConcat`/`strArmProlog` |
 | `hOrTrue`/`hOrFalse`/`hAndFalse`/`hAndTrue` | logical rows | `TermShared.geom` (G, I) |
 | `hNeg`/`hNot` | `eval_neg_row`/`eval_not_row` | `TermShared.geom` (G, I) |
 | `hCall` | `evalCallSim` | `TermShared.geom` (G, I) — 3 sub-motives free |
@@ -260,14 +260,6 @@ structure TermGuards where
   divOvfArm : ∀ (st : SpecSt) (d : Nat) (env : Addr) (el er : Expr) (st'' : SpecSt),
       Vsa.Sim.EvalIH st d env (.binary .div el er) st''
         (.int (wrap64 ((-2^63 : Int).tdiv (-1))))
-  /-- **storeSize** — the `φ`-monotonicity fact `frames.size`/`closures.size` are
-      stable across a sub-evaluation (`st'` → `st''`).  Consumed by EVERY
-      `BinIntCellResid`/`BinEqCellResid` cell of `eval_binary_row` (its first two
-      conjuncts).  Supplied by a general depth-indexed store-size lemma (noted in
-      every binary goal).  Stated as the pair the cell residuals open on. -/
-  storeSize : ∀ (st' st'' : SpecSt),
-      st'.store.frames.size = st''.store.frames.size ∧
-      st'.store.closures.size = st''.store.closures.size
   /-- **strCmp** — the str comparison-order boxing bridges, at EXACTLY the four
       `binOpSem` closures (NOT `∀ op bres`, which is FALSE for arbitrary `bres` — the
       boxed sign test only agrees with the source order for the four real comparison
@@ -383,37 +375,24 @@ theorem eval_int_row_ofBundle
       mEvalE st d env (Expr.int n) st (Value.int n) (EvalE.int st d env n) :=
   Vsa.Sim.Rows.eval_int_row hLeaf
 
-/-- A binary int-cell (`add`) re-expressed so its two store-size-stability conjuncts
-are drawn from `TermGuards.storeSize` instead of being re-proved inline.  `G`
-takes the bundle; the cell's geometry residual `hGeom` is the remaining `∃ aLOp aROp Wl`
-witness (the `BinArmExtras` slot).  This shows a binary cell CONSUMES the bundle field
-`G.storeSize` rather than carrying store-size inline. -/
-theorem bin_add_cell_ofBundle (G : TermGuards)
+/-- The add cell supplies reached post-dispatch geometry. Its consumer derives
+binary entry facts and source-store bounds. -/
+theorem bin_add_cell_ofGeometry
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : SpecSt) (el er : Expr) (a b : Int)
     (sp r sret aExpr : BitVec 64) (m0 : Mem)
-    -- ITEM ZERO B1 (threaded wave 47e): the post-LEFT store-bodies residual
-    -- `BinIntCellResid` gained.
-    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
-    (hCell : ∃ (aLOp aROp Wl : BitVec 64),
-      Vsa.Sim.BinArmExtras g N A SL .add el er sp r sret aExpr aLOp aROp m0 ∧
-      (∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
-        (∀ c' : Vsa.Machine.Config,
+    (hCell : (∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
+        Vsa.Sim.BinaryArmFrame g gpre sp aExpr v8 v9 v18 v19 →
+        ∀ c' : Vsa.Machine.Config,
           Vsa.Sim.TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
             st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
-          Vsa.Sim.AddResid gpre N A SL sp r sret aExpr Wl c') ∧
-        g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
-        g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧ g Register.x19 = some v19 ∧
-        (∀ R : Register, Vsa.Sim.AbiPreservedNoise R →
-          (Register.x8 == R) = false → (Register.x9 == R) = false →
-          (Register.x18 == R) = false → (Register.x2 == R) = false →
-          gpre R = g R))) :
+          Vsa.Sim.AddResid gpre N A SL sp r sret aExpr c')) :
     Vsa.Sim.BinIntCellResid .add Vsa.Sim.AddResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 :=
-  ⟨(G.storeSize st' st'').1, (G.storeSize st' st'').2, hSB, hCell⟩
+  hCell
 
 #print axioms eval_int_row_ofBundle
-#print axioms bin_add_cell_ofBundle
+#print axioms bin_add_cell_ofGeometry
 
 /-! ## Probe 4c — the four retyped `TermGuards.strCmp*` fields instantiate verbatim
 

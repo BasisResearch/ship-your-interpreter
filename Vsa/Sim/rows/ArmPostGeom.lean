@@ -9,27 +9,12 @@ import Vsa.Sim.rows.EvalDivRow
 import Vsa.Sim.rows.EvalModRow
 
 /-!
-# `ArmPostGeom` — the shared post-`TwoSubReturn` binary residual (step-1 alias)
+# Shared binary result geometry
 
-The ten binary `Eval<Op>SimGoal` theorems each carry a per-op residual structure
-(`AddResid`/`SubResid`/`GtResid`/…) describing the machine config `c'` reached
-after both operand sub-calls return (the `TwoSubReturn` landing).  As MEASURED
-against the landed sources, `AddResid` and `SubResid` are byte-identical modulo
-exactly TWO fields:
-
-* `opTok` — the operator token read at `aExpr+8` (`11` for `.add`, `12` for `.sub`);
-* `slot`  — the operator jump-table slot pin (`AddSlotPinned` / `SubSlotPinned`).
-
-Every remaining field is a function of `(gpre,N,A,SL,sp,r,sret,aExpr,Wl,c')` alone.
-`ArmPostGeom` factors that shared tail into ONE structure parameterised by the two
-per-op data (`opTok : Nat`, `slotDef : Mem → Prop`).  The per-op residual is then a
-DEF-alias (`AddResid = ArmPostGeom 11 AddSlotPinned`, up to the thin reassociation
-adapters below), collapsing the shared geometry list.
-
-This is a pure interface layer: the adapters are field projections and injections only;
-no landed proof is touched, and the per-op `Eval<Op>SimGoal` statements are unchanged.
-
-NO `sorry`/`axiom`/`native_decide`/`bv_decide`.
+`ArmPostGeom` and `ArmPostGeomV` collect operator, code, result-slot, and frame
+geometry used by integer tails. Their adapters convert the per-operator
+residual records. Operand loads are supplied by `BinaryReturnData` at the
+actual recursive return.
 -/
 
 open LeanRV64DExecutable
@@ -45,15 +30,10 @@ structure ArmPostGeom
     (gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (opTok : Nat) (slotDef : Mem → Prop)
-    (sp r sret aExpr : BitVec 64) (Wl : BitVec 64) (c' : Vsa.Machine.Config) : Prop where
+    (sp r sret aExpr : BitVec 64) (c' : Vsa.Machine.Config) : Prop where
   gx8 : gpre Register.x8 = some aExpr
   opTokRead : read32 c'.σ.mem (aExpr.toNat + 8) = some opTok
   slot : slotDef c'.σ.mem
-  fullpop : ∀ k : Nat, ∃ w : BitVec 8, c'.σ.mem[k]? = some w
-  x19 : c'.σ.regs.get? Register.x19 = some Wl
-  wlbuf : read64 c'.σ.mem (sp.toNat - 960) = some Wl.toNat
-  kindresp : read64 c'.σ.mem (sp.toNat - 1088) = some (2#64 : BitVec 64).toNat
-  exprAl : aExpr.toNat % 4 = 0
   exprLo : 0x80000000 ≤ aExpr.toNat
   exprHi : aExpr.toNat + 16 ≤ 0x100000000
   exprWin : tohostAddr + 8 ≤ aExpr.toNat
@@ -84,10 +64,10 @@ structure ArmPostGeom
 theorem armPostGeom_of_addResid
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
-    (h : AddResid gpre N A SL sp r sret aExpr Wl c') :
-    ArmPostGeom gpre N A SL 11 AddSlotPinned sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTok, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
+    (h : AddResid gpre N A SL sp r sret aExpr c') :
+    ArmPostGeom gpre N A SL 11 AddSlotPinned sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTok, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vint, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -95,10 +75,10 @@ theorem armPostGeom_of_addResid
 theorem addResid_of_armPostGeom
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
-    (h : ArmPostGeom gpre N A SL 11 AddSlotPinned sp r sret aExpr Wl c') :
-    AddResid gpre N A SL sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTokRead, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
+    (h : ArmPostGeom gpre N A SL 11 AddSlotPinned sp r sret aExpr c') :
+    AddResid gpre N A SL sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTokRead, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vint, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -108,10 +88,10 @@ theorem addResid_of_armPostGeom
 theorem armPostGeom_of_subResid
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
-    (h : SubResid gpre N A SL sp r sret aExpr Wl c') :
-    ArmPostGeom gpre N A SL 12 SubSlotPinned sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTok, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
+    (h : SubResid gpre N A SL sp r sret aExpr c') :
+    ArmPostGeom gpre N A SL 12 SubSlotPinned sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTok, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vint, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -119,10 +99,10 @@ theorem armPostGeom_of_subResid
 theorem subResid_of_armPostGeom
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
-    (h : ArmPostGeom gpre N A SL 12 SubSlotPinned sp r sret aExpr Wl c') :
-    SubResid gpre N A SL sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTokRead, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
+    (h : ArmPostGeom gpre N A SL 12 SubSlotPinned sp r sret aExpr c') :
+    SubResid gpre N A SL sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTokRead, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vint, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -159,15 +139,10 @@ structure ArmPostGeomV
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (opTok : Nat) (slotDef : Mem → Prop)
     (valLoaded : Mem → Prop) (viLo viHi : Nat) (tblOff : Nat)
-    (sp r sret aExpr : BitVec 64) (Wl : BitVec 64) (c' : Vsa.Machine.Config) : Prop where
+    (sp r sret aExpr : BitVec 64) (c' : Vsa.Machine.Config) : Prop where
   gx8 : gpre Register.x8 = some aExpr
   opTokRead : read32 c'.σ.mem (aExpr.toNat + 8) = some opTok
   slot : slotDef c'.σ.mem
-  fullpop : ∀ k : Nat, ∃ w : BitVec 8, c'.σ.mem[k]? = some w
-  x19 : c'.σ.regs.get? Register.x19 = some Wl
-  wlbuf : read64 c'.σ.mem (sp.toNat - 960) = some Wl.toNat
-  kindresp : read64 c'.σ.mem (sp.toNat - 1088) = some (2#64 : BitVec 64).toNat
-  exprAl : aExpr.toNat % 4 = 0
   exprLo : 0x80000000 ≤ aExpr.toNat
   exprHi : aExpr.toNat + 16 ≤ 0x100000000
   exprWin : tohostAddr + 8 ≤ aExpr.toNat
@@ -199,11 +174,11 @@ theorem armPostGeomV_of_armPostGeom
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
     {opTok : Nat} {slotDef : Mem → Prop}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
-    (h : ArmPostGeom gpre N A SL opTok slotDef sp r sret aExpr Wl c') :
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
+    (h : ArmPostGeom gpre N A SL opTok slotDef sp r sret aExpr c') :
     ArmPostGeomV gpre N A SL opTok slotDef Value_intLoaded 0x8000280c 0x8000281c 4
-      sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTokRead, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+      sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTokRead, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vint, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -216,11 +191,11 @@ bool-value instance of `ArmPostGeomV`.  Clean isos (no op-specific extras). -/
 theorem armPostGeomV_of_ltResid
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
-    (h : LtResid gpre N A SL sp r sret aExpr Wl c') :
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
+    (h : LtResid gpre N A SL sp r sret aExpr c') :
     ArmPostGeomV gpre N A SL 20 LtSlotPinned Value_boolLoaded 0x800027f8 0x8000280c 4
-      sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTok, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+      sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTok, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vbool, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -228,11 +203,11 @@ theorem armPostGeomV_of_ltResid
 theorem ltResid_of_armPostGeomV
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
     (h : ArmPostGeomV gpre N A SL 20 LtSlotPinned Value_boolLoaded 0x800027f8 0x8000280c 4
-      sp r sret aExpr Wl c') :
-    LtResid gpre N A SL sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTokRead, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+      sp r sret aExpr c') :
+    LtResid gpre N A SL sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTokRead, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vloaded, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -240,11 +215,11 @@ theorem ltResid_of_armPostGeomV
 theorem armPostGeomV_of_leResid
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
-    (h : LeResid gpre N A SL sp r sret aExpr Wl c') :
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
+    (h : LeResid gpre N A SL sp r sret aExpr c') :
     ArmPostGeomV gpre N A SL 21 LeSlotPinned Value_boolLoaded 0x800027f8 0x8000280c 4
-      sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTok, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+      sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTok, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vbool, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -252,11 +227,11 @@ theorem armPostGeomV_of_leResid
 theorem leResid_of_armPostGeomV
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
     (h : ArmPostGeomV gpre N A SL 21 LeSlotPinned Value_boolLoaded 0x800027f8 0x8000280c 4
-      sp r sret aExpr Wl c') :
-    LeResid gpre N A SL sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTokRead, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+      sp r sret aExpr c') :
+    LeResid gpre N A SL sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTokRead, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vloaded, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -264,11 +239,11 @@ theorem leResid_of_armPostGeomV
 theorem armPostGeomV_of_gtResid
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
-    (h : GtResid gpre N A SL sp r sret aExpr Wl c') :
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
+    (h : GtResid gpre N A SL sp r sret aExpr c') :
     ArmPostGeomV gpre N A SL 22 GtSlotPinned Value_boolLoaded 0x800027f8 0x8000280c 4
-      sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTok, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+      sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTok, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vbool, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -276,11 +251,11 @@ theorem armPostGeomV_of_gtResid
 theorem gtResid_of_armPostGeomV
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
     (h : ArmPostGeomV gpre N A SL 22 GtSlotPinned Value_boolLoaded 0x800027f8 0x8000280c 4
-      sp r sret aExpr Wl c') :
-    GtResid gpre N A SL sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTokRead, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+      sp r sret aExpr c') :
+    GtResid gpre N A SL sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTokRead, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vloaded, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -288,11 +263,11 @@ theorem gtResid_of_armPostGeomV
 theorem armPostGeomV_of_geResid
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
-    (h : GeResid gpre N A SL sp r sret aExpr Wl c') :
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
+    (h : GeResid gpre N A SL sp r sret aExpr c') :
     ArmPostGeomV gpre N A SL 23 GeSlotPinned Value_boolLoaded 0x800027f8 0x8000280c 4
-      sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTok, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+      sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTok, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vbool, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -300,11 +275,11 @@ theorem armPostGeomV_of_geResid
 theorem geResid_of_armPostGeomV
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
     (h : ArmPostGeomV gpre N A SL 23 GeSlotPinned Value_boolLoaded 0x800027f8 0x8000280c 4
-      sp r sret aExpr Wl c') :
-    GeResid gpre N A SL sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTokRead, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+      sp r sret aExpr c') :
+    GeResid gpre N A SL sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTokRead, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vloaded, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -320,11 +295,11 @@ reconstructs the residual from `ArmPostGeomV` + those extras threaded explicitly
 theorem armPostGeomV_of_mulResid
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
-    (h : MulResid gpre N A SL sp r sret aExpr Wl c') :
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
+    (h : MulResid gpre N A SL sp r sret aExpr c') :
     ArmPostGeomV gpre N A SL 13 MulSlotPinned Value_intLoaded 0x8000280c 0x8000281c 12
-      sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTok, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+      sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTok, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vint, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -332,13 +307,13 @@ theorem armPostGeomV_of_mulResid
 theorem mulResid_of_armPostGeomV
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
     (h : ArmPostGeomV gpre N A SL 13 MulSlotPinned Value_intLoaded 0x8000280c 0x8000281c 12
-      sp r sret aExpr Wl c')
+      sp r sret aExpr c')
     (muldi3 : Vsa.Sim.Code.__muldi3Loaded c'.σ.mem)
     (muldiStk : sp.toNat ≤ 0x80004640 ∨ 0x80004664 ≤ SL.lo) :
-    MulResid gpre N A SL sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTokRead, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+    MulResid gpre N A SL sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTokRead, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vloaded, muldi3, muldiStk, h.codeStk, h.viStk, h.tableStk, h.sretInSL,
    h.SLloSp, h.SLlo, h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -346,11 +321,11 @@ theorem mulResid_of_armPostGeomV
 theorem armPostGeomV_of_divResid
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
-    (h : DivResid gpre N A SL sp r sret aExpr Wl c') :
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
+    (h : DivResid gpre N A SL sp r sret aExpr c') :
     ArmPostGeomV gpre N A SL 14 DivSlotPinned Value_intLoaded 0x8000280c 0x8000281c 20
-      sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTok, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+      sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTok, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vint, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -358,15 +333,15 @@ theorem armPostGeomV_of_divResid
 theorem divResid_of_armPostGeomV
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
     (h : ArmPostGeomV gpre N A SL 14 DivSlotPinned Value_intLoaded 0x8000280c 0x8000281c 20
-      sp r sret aExpr Wl c')
+      sp r sret aExpr c')
     (divdi3 : Vsa.Sim.Code.__divdi3Loaded c'.σ.mem)
     (umoddi3 : Vsa.Sim.Code.__umoddi3Loaded c'.σ.mem)
     (udivdi3 : __hidden___udivdi3Loaded c'.σ.mem)
     (divStk : sp.toNat ≤ 0x800046a4 ∨ 0x80004728 ≤ SL.lo) :
-    DivResid gpre N A SL sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTokRead, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+    DivResid gpre N A SL sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTokRead, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vloaded, divdi3, umoddi3, udivdi3, divStk, h.codeStk, h.viStk,
    h.tableStk, h.sretInSL, h.SLloSp, h.SLlo, h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -374,11 +349,11 @@ theorem divResid_of_armPostGeomV
 theorem armPostGeomV_of_modResid
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
-    (h : ModResid gpre N A SL sp r sret aExpr Wl c') :
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
+    (h : ModResid gpre N A SL sp r sret aExpr c') :
     ArmPostGeomV gpre N A SL 15 (SlotPinned 0x80019f94#64 0x00#8 0x98#8 0xfe#8 0xff#8)
-      Value_intLoaded 0x8000280c 0x8000281c 20 sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTok, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+      Value_intLoaded 0x8000280c 0x8000281c 20 sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTok, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vint, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
@@ -386,32 +361,27 @@ theorem armPostGeomV_of_modResid
 theorem modResid_of_armPostGeomV
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
     (h : ArmPostGeomV gpre N A SL 15 (SlotPinned 0x80019f94#64 0x00#8 0x98#8 0xfe#8 0xff#8)
-      Value_intLoaded 0x8000280c 0x8000281c 20 sp r sret aExpr Wl c')
+      Value_intLoaded 0x8000280c 0x8000281c 20 sp r sret aExpr c')
     (moddi3 : Vsa.Sim.Code.__moddi3Loaded c'.σ.mem)
     (udivdi3 : __hidden___udivdi3Loaded c'.σ.mem)
     (modStk : sp.toNat ≤ 0x800046ac ∨ 0x80004764 ≤ SL.lo) :
-    ModResid gpre N A SL sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTokRead, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+    ModResid gpre N A SL sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTokRead, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vloaded, moddi3, udivdi3, modStk, h.codeStk, h.viStk, h.tableStk,
    h.sretInSL, h.SLloSp, h.SLlo, h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
 
 /-!
-## `EqResid` — RESISTS the `ArmPostGeom(V)` shape (documented, no adapter)
+## Equality tail geometry
 
-`EqResid` (in `Vsa/Sim/rows/EvalEqNeFront.lean`) is NOT a per-config geometry
-`structure` sharing the `ArmPostGeom` fields — it is a `def` `∃ Wl, EqNeDispatchInput
-∧ … ∧ ∀ cD lds, op.DispatchPost … → ∃ φ…, EqFrontDataNoRepr ∧ EqNeBoxPre`.  It carries
-the eq/ne front's dispatch-run / `DispatchPost` / `PhiExtends` / operand-`ValueRepr`
-obligations, NOT the ~30-conjunct disjointness/alignment/RAM/window tower.  That shared
-geometry lives DOWNSTREAM of `EqResid`, inside its `EqNeBoxPre` tail (which is where an
-`ArmPostGeomV`/`ImageGeom` collapse would eventually land) — there is no
-`ArmPostGeom`-shaped core here to alias.  So eq/ne is (correctly) already off the
-inline-geometry list; no adapter is written for it, and forcing one would fabricate a
-false correspondence.  If/when `EqNeBoxPre` is itself refactored onto `ImageGeom`, the
-collapse happens there, not via an `EqResid` adapter. -/
+`EqResid` has named dispatch, payload-coverage, and reached-tail fields.
+`EqTailData` selects a common map for both operands and the resulting store,
+with extension at the row-entry counts. Its `EqNeBoxPre` field still needs
+geometry suppliers. The integer `ArmPostGeomV` adapters above do not supply
+that equality execution or its common-map representations.
+-/
 
 #print axioms armPostGeomV_of_armPostGeom
 #print axioms armPostGeomV_of_ltResid

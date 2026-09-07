@@ -1,0 +1,9 @@
+Working directory: /Users/kirancodes/Documents/code/verified-semantic-abstraction
+
+Compile (exit 0):
+lake env sh -c 'LEAN_PATH=/private/tmp/vsa-while-carrier-check:/private/tmp/vsa-full-build.sQd0gM:$LEAN_PATH lean -R /private/tmp/vsa-alias-loaded /private/tmp/vsa-alias-loaded/SnapshotReplay.lean' > /private/tmp/vsa-alias-loaded/replay/compile.log 2>&1
+
+Run (exit 0):
+lake env sh -c 'LEAN_PATH=/private/tmp/vsa-while-carrier-check:/private/tmp/vsa-full-build.sQd0gM:$LEAN_PATH lean -R /private/tmp/vsa-alias-loaded --run /private/tmp/vsa-alias-loaded/SnapshotReplay.lean 20000' > /private/tmp/vsa-alias-loaded/replay/result.jsonl 2> /private/tmp/vsa-alias-loaded/replay/run.stderr
+
+Observed: interpreter return at step 1409, a0 0, output LF LF. Actual HTIF halt at step 1861, exit 0, output LF LF. No boot. Starts physicalState of finite image/snapshotWords memory, tick/steps 0. Dense snapshotMem not evaluated. This is executable evidence for sparse memory; dense/sparse stepOnce transfer remains unproved.

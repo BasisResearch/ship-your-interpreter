@@ -1,94 +1,290 @@
 #!/usr/bin/env python3
-"""field_census.py — mechanically ask, for every `TermResidualsCore` field,
-"does any landed theorem discharge this field's statement outright?"
+"""Find checked suppliers for every inherited residual field.
 
-For each field it emits a probe `example (L : Layout) : <type> := by exact?`
-(mirroring TermAssembly.lean's opens) and runs `lake env lean` on it.
-Outcomes: FOUND (exact? prints `Try this` — a one-term discharge EXISTS),
-NOT_FOUND, TYPE_ERROR (extraction/context bug — fix here), TIMEOUT.
-
-Writes experiments/field-census.tsv. Baseline 2026-09-01: 63/63 NOT_FOUND —
-zero one-term discharges; every field needs marshalling (the t6 skeleton's
-holes). RE-RUN after each RUN-1 lane merge: fields flipping to FOUND is the
-trustworthy assembly burn-down metric (doc-comment status markers are not).
-
-Usage: python3 scripts/field_census.py [-jN] (default -j4; be polite to
-concurrently running agent lanes).
+Uses the complete current private backend. A search miss does not establish
+that no supplier exists. Exit 0 means every requested field has a checked
+supplier (or inventory-only succeeded); final theorem assembly is separate.
+Exit 1 means open fields. Exit 2 means invalid or incomplete probe evidence.
 """
-import re, os, sys, subprocess, concurrent.futures
+
+import argparse
+import json
+import os
+import re
+import signal
+import subprocess
+import tempfile
 from collections import Counter
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PROBEDIR = '/tmp/field_probes'
-HEADER = '''import Vsa
-open LeanRV64DExecutable Sail Vsa
-open Register
-open Vsa.Machine (MState Config Halts Diverges)
-open Vsa.Logic (Triple)
-open Vsa.RuntimeRepr Vsa.MemRepr Vsa.While Vsa.Alloc
-open Vsa.Refine (Layout Loaded InterpSim)
-open Vsa.Sim.Rows
-open Vsa.Sim.ScaffoldRows
-open Vsa.Sim.TermSimAssembly
-open Vsa.Sim.InterpSimBundle (DivFamily ErrFamily)
-open Vsa.Sim
-local notation "SpecSt" => Vsa.While.St
+try:
+    from scripts import build_private, check_validation
+except ModuleNotFoundError:
+    import build_private
+    import check_validation
 
-'''
+ROOT = Path(__file__).resolve().parents[1]
+SUPPORT = ROOT / "scripts/templates/FieldCensus.lean"
+STRUCTURE = "Vsa.Sim.TermAssembly.TermResiduals"
+LAYOUT = "Vsa.Sim.LayoutInstance.interpRunLayout"
+TIMEOUT_SECONDS = 240
+ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 
-def extract_fields():
-    s = open(os.path.join(ROOT, 'Vsa/Sim/TermAssembly.lean')).read()
-    i = s.index('structure TermResidualsCore')
-    # structure body ends at the next column-0 construct
-    j = re.search(r'\n(?:/--|/-!|structure |theorem |def |abbrev |end )', s[i+10:])
-    body = s[i:i+10+j.start()] if j else s[i:]
-    pat = re.compile(r'^  (h\w+) :(.*?)(?=^  /--|^  h\w+ :|\Z)', re.S | re.M)
-    out = []
-    for m in pat.finditer(body):
-        ty = re.sub(r'--[^\n]*', '', m.group(2)).strip()
-        out.append((m.group(1), ty))
-    return out
 
-def run_probe(name):
+@dataclass(frozen=True)
+class Field:
+    name: str
+    projection: str
+
+
+@dataclass(frozen=True)
+class LeanResult:
+    returncode: int | None
+    output: str
+
+
+@dataclass(frozen=True)
+class ProbeResult:
+    field: str
+    verdict: str
+    detail: str
+
+
+def lean_identifier(value: str) -> str:
+    if not value or not all(
+        part.rstrip("'").isidentifier() for part in value.split(".")
+    ):
+        raise argparse.ArgumentTypeError("expected a qualified Lean identifier")
+    return value
+
+
+def records(output: str, marker: str) -> list[dict]:
+    result = []
+    for line in output.splitlines():
+        if marker in line:
+            item = json.loads(line.split(marker, 1)[1].strip())
+            if not isinstance(item, dict):
+                raise ValueError("invalid census record")
+            result.append(item)
+    return result
+
+
+def unsafe_diagnostics(output: str) -> bool:
+    """Reject incomplete proofs independently of the compiler exit status."""
+    return "sorryAx" in output or bool(
+        re.search(r"declaration uses [`'](?:sorry|admit)[`']", output)
+    )
+
+
+def extract_fields(result: LeanResult, object_exists: bool) -> list[Field]:
+    if (
+        result.returncode != 0
+        or not object_exists
+        or unsafe_diagnostics(result.output)
+        or re.search(r"^.*?error:", result.output, re.MULTILINE)
+    ):
+        raise ValueError("compiled field inventory failed; inspect Inventory.log")
+    fields = []
+    for item in records(result.output, "VSA_CENSUS_FIELD "):
+        if set(item) != {"field", "projection"}:
+            raise ValueError("invalid field inventory record")
+        if not all(isinstance(value, str) for value in item.values()):
+            raise ValueError("non-text field inventory record")
+        try:
+            fields.append(
+                Field(
+                    lean_identifier(item["field"]), lean_identifier(item["projection"])
+                )
+            )
+        except argparse.ArgumentTypeError as error:
+            raise ValueError("invalid identifier in field inventory") from error
+    if not fields or len({field.name for field in fields}) != len(fields):
+        raise ValueError("empty or duplicated compiled field inventory")
+    return fields
+
+
+def classify(field: Field, result: LeanResult, object_exists: bool) -> ProbeResult:
+    if result.returncode is None:
+        return ProbeResult(field.name, "TIMEOUT", "compiler process group terminated")
+    invalid = ProbeResult(
+        field.name, "INVALID_EVIDENCE", "inspect the complete probe log"
+    )
+    if unsafe_diagnostics(result.output):
+        return invalid
     try:
-        r = subprocess.run(['lake', 'env', 'lean', f'{PROBEDIR}/{name}.lean'],
-                           capture_output=True, text=True, timeout=240, cwd=ROOT)
-        out = r.stdout + r.stderr
-        if 'Try this' in out:
-            t = re.search(r'Try this:.*?exact ([^\n]*)', out)
-            return (name, 'FOUND', t.group(1)[:100] if t else '')
-        if 'could not close the goal' in out:
-            return (name, 'NOT_FOUND', '')
-        if 'error' in out:
-            return (name, 'TYPE_ERROR', out.split('error', 1)[1][:100].replace('\n', ' '))
-        return (name, 'UNKNOWN', out[:80])
-    except subprocess.TimeoutExpired:
-        return (name, 'TIMEOUT', '')
+        found = records(result.output, "VSA_CENSUS_RESULT ")
+    except ValueError:
+        return invalid
+    errors = re.findall(r"^.*?error: (.*)$", result.output, re.MULTILINE)
+    if result.returncode == 0 and object_exists and len(found) == 1 and not errors:
+        item = found[0]
+        axioms = item.get("axioms")
+        if (
+            set(item) == {"field", "status", "axioms"}
+            and item["field"] == field.name
+            and item["status"] == "FOUND"
+            and isinstance(axioms, list)
+            and all(
+                isinstance(axiom, str) and axiom in ALLOWED_AXIOMS for axiom in axioms
+            )
+        ):
+            return ProbeResult(field.name, "FOUND", ", ".join(axioms))
+    if (
+        result.returncode == 1
+        and not found
+        and errors
+        and all(
+            error.startswith("`exact?` could not close the goal.") for error in errors
+        )
+    ):
+        return ProbeResult(
+            field.name, "NO_MATCH", "search inconclusive; no supplier certified"
+        )
+    return invalid
 
-def main():
-    jobs = 4
-    for a in sys.argv[1:]:
-        if a.startswith('-j'):
-            jobs = int(a[2:])
-    fields = extract_fields()
-    os.makedirs(PROBEDIR, exist_ok=True)
-    for name, ty in fields:
-        with open(f'{PROBEDIR}/{name}.lean', 'w') as f:
-            f.write(HEADER)
-            f.write(f'-- field probe: TermResidualsCore.{name}\n')
-            f.write(f'example (L : Layout) : {ty} := by exact?\n')
-    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
-        results = sorted(ex.map(run_probe, [n for n, _ in fields]))
-    tsv = os.path.join(ROOT, 'experiments/field-census.tsv')
-    with open(tsv, 'w') as f:
-        f.write('field\texact_probe\tdetail\n')
-        for n, st, d in results:
-            f.write(f'{n}\t{st}\t{d}\n')
-    c = Counter(st for _, st, _ in results)
-    print(dict(c))
-    if c.get('TYPE_ERROR', 0):
-        print('TYPE_ERROR rows are extraction bugs in THIS script — fix extract_fields().')
-        sys.exit(1)
 
-if __name__ == '__main__':
-    main()
+def run_lean(repo: Path, backend: Path, source: Path) -> LeanResult:
+    output = source.with_suffix(".olean")
+    output.unlink(missing_ok=True)
+    shell = 'LEAN_PATH="$1${LEAN_PATH:+:$LEAN_PATH}" exec lean -R "$2" -o "$3" "$4"'
+    command = [
+        "lake",
+        "env",
+        "sh",
+        "-c",
+        shell,
+        "field-census",
+        str(backend),
+        str(source.parent),
+        str(output),
+        str(source),
+    ]
+    with subprocess.Popen(
+        command,
+        cwd=repo,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=True,
+    ) as process:
+        try:
+            transcript, _ = process.communicate(timeout=TIMEOUT_SECONDS)
+            status = process.returncode
+        except BaseException as error:
+            # Capture failure or cancellation must not leave a detached compiler.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                # The process group may exit between the timeout and signal.
+                pass
+            transcript, _ = process.communicate()
+            if not isinstance(error, subprocess.TimeoutExpired):
+                source.with_suffix(".log").write_text(transcript)
+                raise
+            status = None
+    source.with_suffix(".log").write_text(transcript)
+    return LeanResult(status, transcript)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--backend", required=True, type=Path)
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--structure", default=STRUCTURE, type=lean_identifier)
+    parser.add_argument("--layout", default=LAYOUT, type=lean_identifier)
+    parser.add_argument("--field", action="append", default=[], type=lean_identifier)
+    parser.add_argument("--inventory-only", action="store_true")
+    args = parser.parse_args(argv)
+    try:
+        backend = args.backend.resolve()
+        check_validation.verify_backend(ROOT, backend)
+        manifest = backend / build_private.MANIFEST_NAME
+        fingerprint = build_private.hash_file(manifest)
+        destination = build_private.validate_output_root(ROOT, args.output)
+        destination.mkdir(parents=True, exist_ok=True)
+        run_dir = Path(tempfile.mkdtemp(prefix="run-", dir=destination))
+        print(f"Run directory: {run_dir}", flush=True)
+        driver_fingerprint = build_private.hash_file(Path(__file__))
+        support_fingerprint = build_private.hash_file(SUPPORT)
+        modules = build_private.discover_modules(ROOT, include_executable=True)
+        imports = "\n".join(f"import {name}" for name in sorted(modules))
+        header = imports + "\n" + SUPPORT.read_text() + "\n"
+        inventory = run_dir / "Inventory.lean"
+        inventory.write_text(header + f"census_fields {args.structure}\n")
+        fields = extract_fields(
+            run_lean(ROOT, backend, inventory),
+            inventory.with_suffix(".olean").is_file(),
+        )
+        missing = set(args.field) - {field.name for field in fields}
+        if missing:
+            raise ValueError(f"unknown fields: {', '.join(sorted(missing))}")
+        chosen = [
+            field for field in fields if not args.field or field.name in args.field
+        ]
+        results = []
+        if not args.inventory_only:
+            for field in chosen:
+                source = run_dir / f"{field.name}.lean"
+                source.write_text(
+                    header
+                    + f"census_probe {args.structure} {field.name} at {args.layout}\n"
+                )
+                result = classify(
+                    field,
+                    run_lean(ROOT, backend, source),
+                    source.with_suffix(".olean").is_file(),
+                )
+                results.append(result)
+                print(f"{field.name}: {result.verdict}", flush=True)
+        check_validation.verify_backend(ROOT, backend)
+        if build_private.hash_file(manifest) != fingerprint:
+            raise ValueError("backend changed during census")
+        if (
+            build_private.hash_file(Path(__file__)) != driver_fingerprint
+            or build_private.hash_file(SUPPORT) != support_fingerprint
+        ):
+            raise ValueError("census tooling changed during run")
+        report = {
+            "driver_sha256": driver_fingerprint,
+            "support_sha256": support_fingerprint,
+            "artifacts_sha256": {
+                path.name: build_private.hash_file(path)
+                for path in sorted(run_dir.iterdir())
+                if path.is_file()
+            },
+            "structure": args.structure,
+            "layout": args.layout,
+            "backend_manifest_sha256": fingerprint,
+            "module_count": len(modules),
+            "inventory": [asdict(field) for field in fields],
+            "selected": [field.name for field in chosen],
+            "inventory_only": args.inventory_only,
+            "results": [asdict(result) for result in results],
+            "run_directory": str(run_dir),
+        }
+        (run_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+        with (run_dir / "fields.tsv").open("w") as stream:
+            stream.write("field\tprojection\tverdict\tdetail\n")
+            by_field = {result.field: result for result in results}
+            for field in chosen:
+                result = by_field.get(
+                    field.name, ProbeResult(field.name, "INVENTORIED", "not probed")
+                )
+                stream.write(
+                    f"{field.name}\t{field.projection}\t{result.verdict}\t{result.detail}\n"
+                )
+        print(
+            f"Inventory: {len(fields)} fields; results: {dict(Counter(r.verdict for r in results))}"
+        )
+        print(f"Evidence: {run_dir / 'report.json'}")
+        if any(result.verdict not in {"FOUND", "NO_MATCH"} for result in results):
+            return 2
+        return int(any(result.verdict == "NO_MATCH" for result in results))
+    except (build_private.BuildError, OSError, ValueError) as error:
+        print(f"field census failed: {error}")
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

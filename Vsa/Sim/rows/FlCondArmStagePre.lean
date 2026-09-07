@@ -68,7 +68,6 @@ theorem blockB_flCond_stagePre
           sp r aInterp aStmt aEnv aRet v8 v9 v18 v19 out0 m0 ment c ∧
         read64 ment (aStmt.toNat + 16) = some aExprChild.toNat ∧
         ExprRepr ment aExprChild.toNat e ∧
-        aStmt.toNat % 8 = 0 ∧
         0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 24 ≤ 0x100000000 ∧
         (aStmt.toNat + 24 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat) ∧
         Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment ∧
@@ -84,7 +83,6 @@ theorem blockB_flCond_stagePre
             ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
             ment[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
-        aExprChild.toNat % 8 = 0 ∧
         0x80000000 ≤ aExprChild.toNat ∧ aExprChild.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aExprChild.toNat ∧
         (aExprChild.toNat + 16 ≤ SL.lo ∨ (sp.toNat - 176) ≤ aExprChild.toNat) ∧
@@ -109,9 +107,9 @@ theorem blockB_flCond_stagePre
         Expr.bodiesBound Vsa.While.perCallBudget e = true ∧
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 5 c (fun c' => ExecJalPreBundle e c' st d env) := by
-  obtain ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
+  obtain ⟨hArm, hpay, hExprChild, hstmtLo, hstmtRam, hstmtWin,
     hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
-    hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre,
+    hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre,
     hSLlo, hSLhiRam, hSLwin,
     hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
     hgframe, hg8, hg18, hg19, hg20, hg21, hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
@@ -152,7 +150,7 @@ theorem blockB_flCond_stagePre
       (by rw [haddr16]; omega) (by rw [haddr16]; omega)
       (by rw [haddr16, htoh]; rcases hstmtWin with h | h
           · left; rw [htoh] at h; omega
-          · right; rw [htoh] at h; omega) (by rw [haddr16]; omega)
+          · right; rw [htoh] at h; omega)
       (by rw [haddr16, hmem]; exact hp0) (by rw [haddr16, hmem]; exact hp1)
       (by rw [haddr16, hmem]; exact hp2) (by rw [haddr16, hmem]; exact hp3)
       (by rw [haddr16, hmem]; exact hp4) (by rw [haddr16, hmem]; exact hp5)
@@ -291,7 +289,7 @@ theorem blockB_flCond_stagePre
     hG5, hi5, hpc5, hx10_5, ?_, hx11_val, (by rw [← henvPtr]; exact hx13_val), hx12_5, hx2jsp, ⟨vmi5, hmi5⟩, hout5, ?_,
     hmem5e, ?_, hEvCode, hViInt, hViSlot, hNbsJ, ?_, hWordsJ, ?_, ?_, ?_, hframe5,
     ⟨hg8, hg18, hg19, hg20, hg21⟩,
-    ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   -- hjaltgt
   · apply BitVec.eq_of_toNat_eq; simp only [evalExprEntry]; decide
   -- hlink
@@ -317,8 +315,6 @@ theorem blockB_flCond_stagePre
   · intro m' hag
     refine hStoreSurvJ m' (fun k hk1 hk2 => ?_)
     exact hag k hk1 hk2
-  -- aOperand % 8 = 0
-  · exact hopAl
   -- 0x80000000 ≤ aOperand
   · exact hopLo
   -- aOperand + 16 ≤ 0x100000000
@@ -390,7 +386,6 @@ def FlCondArmDispatch
         sp r aInterp aStmt aEnv aRet v8 v9 v18 v19 c'.σ.sailOutput m0 ment c' ∧
       read64 ment (aStmt.toNat + 16) = some aExprChild.toNat ∧
       ExprRepr ment aExprChild.toNat cc ∧
-      aStmt.toNat % 8 = 0 ∧
       0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 24 ≤ 0x100000000 ∧
       (aStmt.toNat + 24 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat) ∧
       Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment ∧
@@ -406,7 +401,6 @@ def FlCondArmDispatch
           ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
           ment[k]? = m'[k]?) →
         StoreRepr m' N A φf φc st.store) ∧
-      aExprChild.toNat % 8 = 0 ∧
       0x80000000 ≤ aExprChild.toNat ∧ aExprChild.toNat + 16 ≤ 0x100000000 ∧
       tohostAddr + 16 ≤ aExprChild.toNat ∧
       (aExprChild.toNat + 16 ≤ SL.lo ∨ (sp.toNat - 176) ≤ aExprChild.toNat) ∧
@@ -440,17 +434,17 @@ theorem flCond_field_of_dispatch
   obtain ⟨c1, hsteps1, hMid⟩ := hDisp hFE c rfl
   obtain ⟨g, gpre, N, A, SL, φf, φc, sp, r, aInterp, aStmt, aEnv, aRet, aExprChild,
     v8, v9, v18, v19, m0, ment, henvValid, hArm, hpay, hExprChild,
-    hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
-    hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
+    hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
+    hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
     hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
     hgframe, hg8, hg18, hg19, hg20, hg21, hstackBudget, hexprBodies, hstoreBodies⟩ := hMid
   have hcut : LandedN 5 c1 (fun c' => ExecJalPreBundle cc c' st d env) :=
     blockB_flCond_stagePre g gpre N A SL φf φc st d env cc
       sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1
       henvValid
-      ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
+      ⟨hArm, hpay, hExprChild, hstmtLo, hstmtRam, hstmtWin,
        hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
-       hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
+       hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
        hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
        hgframe, hg8, hg18, hg19, hg20, hg21, hstackBudget, hexprBodies, hstoreBodies⟩
   obtain ⟨n1, hn1⟩ := hsteps1.toN

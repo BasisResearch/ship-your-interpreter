@@ -18,7 +18,6 @@ body = '''  slot8 : KindSlotPinned 8 (0x800035e0#64) m0
   operand_repr : ExprRepr m0 aOperand.toNat esub
   expr24 : aExpr.toNat + 24 ≤ 0x100000000
   expr24_stk : aExpr.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
-  op_align : aOperand.toNat % 8 = 0
   op_lo : 0x80000000 ≤ aOperand.toNat
   op_hi : aOperand.toNat + 16 ≤ 0x100000000
   op_win : tohostAddr + 16 ≤ aOperand.toNat
@@ -50,7 +49,6 @@ post = '''      (fun c => ∃ (v8 v9 v18 : BitVec 64) (ment : Mem),
         read64 ment (aExpr.toNat + 16) = some aOperand.toNat ∧
         ExprRepr ment aOperand.toNat esub ∧
         aExpr.toNat + 24 ≤ 0x100000000 ∧
-        aOperand.toNat % 8 = 0 ∧
         0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aOperand.toNat ∧
         (aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat) ∧
@@ -87,7 +85,7 @@ extra_haves = '''  obtain ⟨p, hk8m, hopTok, hpayMent, hsubReprMent⟩ : ∃ p,
   subst hpeq'''
 refine_head = "refine ⟨c1, hs1, v8, v9, v18, ment, hArm', hAEx11, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩,"
 refine_tail = '''hpayMent', hsubReprMent, hX.expr24,
-    hX.op_align, hX.op_lo, hX.op_hi, hX.op_win, hX.op_stk,
+    hX.op_lo, hX.op_hi, hX.op_win, hX.op_stk,
     hX.sp_headroom, hX.sp_SLhi, hX.sp16, hX.SLhi_ram,
     hX.code_stk, hX.vicode_stk, (by have := hX.table_stk; omega),
     hX.arena_stk, hX.arena_code⟩'''

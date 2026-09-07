@@ -537,12 +537,14 @@ theorem closureBodyEntryI_of_abi
     store := hc.store
     out := hc.out
     mem := hc.mem
-    code := by simpa [hc.mem] using hLoad
-    cursor := ha.cursor
-    head_ground := ha.headGround
-    store_survives := ha.storeSurvives
-    stack_ram := ha.stackRam
-    stack_win := ha.stackWin
+    ready := fun _ =>
+      { env_valid := ha.envValid
+        code := by simpa [hc.mem] using hLoad
+        cursor := ha.cursor
+        head_ground := ha.headGround
+        store_survives := ha.storeSurvives
+        stack_ram := ha.stackRam
+        stack_win := ha.stackWin }
     empty_status := fun hb => False.elim (hne hb)
     frame := fun R hR => hc.frame R hR.1
     minstret := ha.minstret }

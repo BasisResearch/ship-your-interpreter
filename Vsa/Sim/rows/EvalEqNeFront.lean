@@ -3,6 +3,7 @@ import Vsa.Sim.EqNeReprReadback
 import Vsa.Sim.EqNeDispatchStrong
 import Vsa.Sim.EqNeDispatchInput
 import Vsa.Sim.ValueEqualSpec4
+import Vsa.Sim.CoherentReturn
 
 /-!
 # `EvalEqNeFront` — the eq/ne front closure (task 3)
@@ -350,8 +351,9 @@ theorem eqDispatch_bufa_repr_lds (base : BitVec 64) (m0 : Mem)
     (lds : List (List (BitVec 8))) (hsp : base.toNat + 4096 ≤ 2 ^ 64)
     {N : NativeAddrs} {φc : Addr → Nat} {vl : Value}
     (hpins : EqNeSrcPins base lds m0)
-    (hpaydisj : ∀ (p : Nat) (s : String), read64 m0 ((base + 0x78#64).toNat + 8) = some p →
-      ∀ k, k ≤ s.length → (p + k < base.toNat + 32 ∨ base.toNat + 88 ≤ p + k))
+    (hpaydisj : ValuePayloadCovered
+      (fun k => k < base.toNat + 32 ∨ base.toNat + 88 ≤ k)
+      m0 (base + 0x78#64).toNat vl)
     (hvl : ValueRepr m0 N φc (base + 0x78#64).toNat vl) :
     ValueRepr
       (writeLog m0 (evalBlocks eqDispatch (SegEvalState.init (eqDispL base) lds)).log)
@@ -366,8 +368,9 @@ theorem eqDispatch_bufb_repr_lds (base : BitVec 64) (m0 : Mem)
     (lds : List (List (BitVec 8))) (hsp : base.toNat + 4096 ≤ 2 ^ 64)
     {N : NativeAddrs} {φc : Addr → Nat} {vr : Value}
     (hpins : EqNeSrcPins base lds m0)
-    (hpaydisj : ∀ (p : Nat) (s : String), read64 m0 ((base + 0x90#64).toNat + 8) = some p →
-      ∀ k, k ≤ s.length → (p + k < base.toNat + 32 ∨ base.toNat + 88 ≤ p + k))
+    (hpaydisj : ValuePayloadCovered
+      (fun k => k < base.toNat + 32 ∨ base.toNat + 88 ≤ k)
+      m0 (base + 0x90#64).toNat vr)
     (hvr : ValueRepr m0 N φc (base + 0x90#64).toNat vr) :
     ValueRepr
       (writeLog m0 (evalBlocks eqDispatch (SegEvalState.init (eqDispL base) lds)).log)
@@ -382,8 +385,9 @@ theorem neDispatch_bufa_repr_lds (base : BitVec 64) (m0 : Mem)
     (lds : List (List (BitVec 8))) (hsp : base.toNat + 4096 ≤ 2 ^ 64)
     {N : NativeAddrs} {φc : Addr → Nat} {vl : Value}
     (hpins : EqNeSrcPins base lds m0)
-    (hpaydisj : ∀ (p : Nat) (s : String), read64 m0 ((base + 0x78#64).toNat + 8) = some p →
-      ∀ k, k ≤ s.length → (p + k < base.toNat + 32 ∨ base.toNat + 88 ≤ p + k))
+    (hpaydisj : ValuePayloadCovered
+      (fun k => k < base.toNat + 32 ∨ base.toNat + 88 ≤ k)
+      m0 (base + 0x78#64).toNat vl)
     (hvl : ValueRepr m0 N φc (base + 0x78#64).toNat vl) :
     ValueRepr
       (writeLog m0 (evalBlocks neDispatch (SegEvalState.init (eqDispL base) lds)).log)
@@ -398,8 +402,9 @@ theorem neDispatch_bufb_repr_lds (base : BitVec 64) (m0 : Mem)
     (lds : List (List (BitVec 8))) (hsp : base.toNat + 4096 ≤ 2 ^ 64)
     {N : NativeAddrs} {φc : Addr → Nat} {vr : Value}
     (hpins : EqNeSrcPins base lds m0)
-    (hpaydisj : ∀ (p : Nat) (s : String), read64 m0 ((base + 0x90#64).toNat + 8) = some p →
-      ∀ k, k ≤ s.length → (p + k < base.toNat + 32 ∨ base.toNat + 88 ≤ p + k))
+    (hpaydisj : ValuePayloadCovered
+      (fun k => k < base.toNat + 32 ∨ base.toNat + 88 ≤ k)
+      m0 (base + 0x90#64).toNat vr)
     (hvr : ValueRepr m0 N φc (base + 0x90#64).toNat vr) :
     ValueRepr
       (writeLog m0 (evalBlocks neDispatch (SegEvalState.init (eqDispL base) lds)).log)
@@ -592,8 +597,7 @@ structure EqFrontData
   hRegB : VERegion (fbase + 0x20#64)
   hReprA : ValueRepr mA N φc (fbase + 0x40#64).toNat vl
   hReprB : ValueRepr mA N φc (fbase + 0x20#64).toNat vr
-  hφc : ∀ (a b : Vsa.While.Addr), φc a = φc b → a = b
-  hN : ∀ (f h : NativeFn), N.addr f = N.addr h → f = h
+  hIdentity : ValueEqualityIdentity N φc vl vr
   hraln4 : link.toNat % 4 = 0
   -- the `str`-path witness (consumed only when both operands are strings)
   hstrwit : ∀ sa sb, vl = .str sa → vr = .str sb →
@@ -639,8 +643,8 @@ theorem blockC_eqne_front
         (fun _ _ _ => rfl), hData.hout, hData.htick, hData.hG⟩
   -- === value_equal_spec_full: ve_pre → ve_str_post ===
   obtain ⟨cV, hStepsV, hVePost⟩ :=
-    value_equal_spec_full (fun R => cP.σ.regs.get? R) (fbase + 0x40#64) (fbase + 0x20#64)
-      link fbase N φc vl vr mA out0 cP hData.hφc hData.hN hVePre hx2P hData.hStrc hData.hMask
+    value_equal_spec_full_identity (fun R => cP.σ.regs.get? R) (fbase + 0x40#64) (fbase + 0x20#64)
+      link fbase N φc vl vr mA out0 cP hData.hIdentity hVePre hx2P hData.hStrc hData.hMask
       hData.hraln4 hData.hstrwit
   -- === veReturnBridge: ve_str_post → VeReturn ===
   -- the eval-frame collapse of the value_equal-entry snapshot (= identity at cP):
@@ -714,8 +718,7 @@ structure EqFrontDataNoRepr
   hMask : MaskPinned mA
   hRegA : VERegion (fbase + 0x40#64)
   hRegB : VERegion (fbase + 0x20#64)
-  hφc : ∀ (a b : Vsa.While.Addr), φc a = φc b → a = b
-  hN : ∀ (f h : NativeFn), N.addr f = N.addr h → f = h
+  hIdentity : ValueEqualityIdentity N φc vl vr
   hraln4 : link.toNat % 4 = 0
   hstrwit : ∀ sa sb, vl = .str sa → vr = .str sb →
     ∃ (pa' pb' : Nat) (csa csb : List Char),
@@ -752,10 +755,12 @@ theorem eqFrontData_of_readback
       (evalBlocks (match op with | .eq => eqDispatch | .ne => neDispatch)
         (SegEvalState.init (eqDispL fbase) lds)).log)
     (hpins : EqNeSrcPins fbase lds m0)
-    (hpaydisjA : ∀ (p : Nat) (s : String), read64 m0 ((fbase + 0x78#64).toNat + 8) = some p →
-      ∀ k, k ≤ s.length → (p + k < fbase.toNat + 32 ∨ fbase.toNat + 88 ≤ p + k))
-    (hpaydisjB : ∀ (p : Nat) (s : String), read64 m0 ((fbase + 0x90#64).toNat + 8) = some p →
-      ∀ k, k ≤ s.length → (p + k < fbase.toNat + 32 ∨ fbase.toNat + 88 ≤ p + k))
+    (hpaydisjA : ValuePayloadCovered
+      (fun k => k < fbase.toNat + 32 ∨ fbase.toNat + 88 ≤ k)
+      m0 (fbase + 0x78#64).toNat vl)
+    (hpaydisjB : ValuePayloadCovered
+      (fun k => k < fbase.toNat + 32 ∨ fbase.toNat + 88 ≤ k)
+      m0 (fbase + 0x90#64).toNat vr)
     (hSrcA : ValueRepr m0 N φc (fbase + 0x78#64).toNat vl)
     (hSrcB : ValueRepr m0 N φc (fbase + 0x90#64).toNat vr)
     (hNoRepr : EqFrontDataNoRepr g N φc fbase sret vl vr link jalPC jImm cD.σ.mem out0 cD) :
@@ -778,50 +783,76 @@ theorem eqFrontData_of_readback
       hJT := hNoRepr.hJT, hEE := hNoRepr.hEE, hStrc := hNoRepr.hStrc, hMask := hNoRepr.hMask
       hRegA := hNoRepr.hRegA, hRegB := hNoRepr.hRegB
       hReprA := hNoRepr.hmemD ▸ hReprA, hReprB := hNoRepr.hmemD ▸ hReprB
-      hφc := hNoRepr.hφc, hN := hNoRepr.hN, hraln4 := hNoRepr.hraln4, hstrwit := hNoRepr.hstrwit
+      hIdentity := hNoRepr.hIdentity, hraln4 := hNoRepr.hraln4, hstrwit := hNoRepr.hstrwit
       hgx1 := hNoRepr.hgx1, hsnapEval := hNoRepr.hsnapEval, hMemExtRet := hNoRepr.hMemExtRet }
 
 #print axioms eqFrontData_of_readback
 
-/-! ## `EqResid` — raw per-config front residual (model `DivResid`)
+/-- Equality's reached tail uses one map for both operands and the store.
+The recursive return supplies these representations; dispatch supplies the
+copied operands, and the existing helper and boxing rows supply execution. -/
+structure EqTailData
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (phiF phiC resultF resultC : Addr → Nat) (nf nc : Nat)
+    (stFinal : Vsa.While.St)
+    (sp r sret : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64)
+    (vl vr : Value) (link jalPC : BitVec 64) (jImm : BitVec 21)
+    (out0 : Array String) (m0 : Mem) (c2 cD : Config) : Prop where
+  returned : ReturnRepr N A phiF phiC resultF resultC nf nc stFinal.store
+    [(((sp - 1088#64) + 0x78#64).toNat, vl), (((sp - 1088#64) + 0x90#64).toNat, vr)]
+    (fun _ _ _ => True) (fun k => SL.lo ≤ k ∧ k < SL.hi) c2.σ.mem
+  front : EqFrontDataNoRepr g N resultC (sp - 1088#64) sret vl vr link jalPC jImm
+    cD.σ.mem out0 cD
+  box : EqNeBoxPre g N A SL resultF resultC stFinal sp r sret v8 v9 v18 v19 w19
+    out0 m0 cD.σ.mem
 
-Div-parity: `EqResid` no longer supplies the two operand `ValueRepr`s on the
-post-dispatch memory as caller data.  Its post-dispatch tail supplies `EqFrontDataNoRepr`
-(everything BUT the reprs) + the SOURCE reprs on `c2.σ.mem` + payload disjointness; the
-front DERIVES the operand reprs via `eqFrontData_of_readback` from the `EqNeSrcPins` that
-route (a) exposes on the dispatch post.  The dispatch-run `Steps c2 cD` is built by
-`evalEqNeChain_dispatch_of_twoSubReturn` inside `eqBlockC_bridge`; it is not assumed. -/
-def EqResid
+/-- Shared equality/inequality tail supplier. Project the selected return maps
+only after the coherent recursive result and dispatch endpoint have been fixed. -/
+theorem EqTailData.of_return
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout}
+    {phiF phiC resultF resultC : Addr → Nat} {nf nc : Nat} {stFinal : Vsa.While.St}
+    {sp r sret : BitVec 64} {v8 v9 v18 v19 w19 : BitVec 64}
+    {vl vr : Value} {link jalPC : BitVec 64} {jImm : BitVec 21}
+    {out0 : Array String} {m0 : Mem} {c2 cD : Config}
+    {Owned : (Addr → Nat) → (Addr → Nat) → Mem → Prop}
+    (returned : ReturnRepr N A phiF phiC resultF resultC nf nc stFinal.store
+      [(((sp - 1088#64) + 0x78#64).toNat, vl), (((sp - 1088#64) + 0x90#64).toNat, vr)]
+      Owned (fun k => SL.lo ≤ k ∧ k < SL.hi) c2.σ.mem)
+    (front : EqFrontDataNoRepr g N resultC (sp - 1088#64) sret vl vr link jalPC jImm
+      cD.σ.mem out0 cD)
+    (box : EqNeBoxPre g N A SL resultF resultC stFinal sp r sret v8 v9 v18 v19 w19
+      out0 m0 cD.σ.mem) :
+    EqTailData g N A SL phiF phiC resultF resultC nf nc stFinal
+      sp r sret v8 v9 v18 v19 w19 vl vr link jalPC jImm out0 m0 c2 cD where
+  returned := returned.withOwnership True.intro
+  front := front
+  box := box
+
+/-- Equality dispatch and the reached tail. Agreement sizes refer to the row
+entry. A fresh closure may use a newly selected address outside that prefix. -/
+structure EqResid
     (op : EqNeOp)
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st' st'' : Vsa.While.St)
+    (nf nc : Nat) (st' st'' : Vsa.While.St)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64)
     (vl vr : Value) (link jalPC : BitVec 64) (jImm : BitVec 21)
-    (out0 : Array String) (m0 : Mem) (c2 : Config) : Prop :=
-  ∃ Wl : BitVec 64,
-    EqNeDispatchInput op gpre SL sp aExpr Wl vl c2 ∧
-    (sp - 1088#64).toNat + 4096 ≤ 2 ^ 64 ∧
-    (∀ (p : Nat) (s : String),
-      read64 c2.σ.mem (((sp - 1088#64) + 0x78#64).toNat + 8) = some p →
-      ∀ k, k ≤ s.length →
-        (p + k < (sp - 1088#64).toNat + 32 ∨ (sp - 1088#64).toNat + 88 ≤ p + k)) ∧
-    (∀ (p : Nat) (s : String),
-      read64 c2.σ.mem (((sp - 1088#64) + 0x90#64).toNat + 8) = some p →
-      ∀ k, k ≤ s.length →
-        (p + k < (sp - 1088#64).toNat + 32 ∨ (sp - 1088#64).toNat + 88 ≤ p + k)) ∧
-    ValueRepr c2.σ.mem N φc ((sp - 1088#64) + 0x78#64).toNat vl ∧
-    ValueRepr c2.σ.mem N φc ((sp - 1088#64) + 0x90#64).toNat vr ∧
-    ∀ (cD : Config) (lds : List (List (BitVec 8))),
-      op.DispatchPost (sp - 1088#64) lds c2.σ.mem c2.σ.sailOutput
-        (fun R => c2.σ.regs.get? R) cD →
-      ∃ (φfm φcm φf' φc' : Addr → Nat),
-        PhiExtends φf φfm st'.store.frames.size ∧
-        PhiExtends φc φcm st'.store.closures.size ∧
-        PhiExtends φfm φf' st''.store.frames.size ∧
-        PhiExtends φcm φc' st''.store.closures.size ∧
-        EqFrontDataNoRepr g N φc (sp - 1088#64) sret vl vr link jalPC jImm cD.σ.mem out0 cD ∧
-        EqNeBoxPre g N A SL φf' φc' st'' sp r sret v8 v9 v18 v19 w19 out0 m0 cD.σ.mem
+    (out0 : Array String) (m0 : Mem) (c2 : Config) : Prop where
+  dispatch : EqNeDispatchInput op gpre SL sp aExpr c2
+  base : (sp - 1088#64).toNat + 4096 ≤ 2 ^ 64
+  leftPayload : ValuePayloadCovered
+    (fun k => k < (sp - 1088#64).toNat + 32 ∨ (sp - 1088#64).toNat + 88 ≤ k)
+    c2.σ.mem ((sp - 1088#64) + 0x78#64).toNat vl
+  rightPayload : ValuePayloadCovered
+    (fun k => k < (sp - 1088#64).toNat + 32 ∨ (sp - 1088#64).toNat + 88 ≤ k)
+    c2.σ.mem ((sp - 1088#64) + 0x90#64).toNat vr
+  tail : ∀ (cD : Config) (lds : List (List (BitVec 8))),
+    op.DispatchPost (sp - 1088#64) lds c2.σ.mem c2.σ.sailOutput
+      (fun R => c2.σ.regs.get? R) cD →
+    ∃ resultF resultC, EqTailData g N A SL φf φc resultF resultC nf nc st''
+      sp r sret v8 v9 v18 v19 w19 vl vr link jalPC jImm out0 m0 c2 cD
 
 /-- **`eqBlockC_bridge`** — build the `hblockC` obligation for the shared `blockC_eq`/
 `blockC_ne` selector `blockCsel` from a `TwoSubReturn` config plus its `EqResid`, via
@@ -837,11 +868,12 @@ theorem eqBlockC_bridge
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64)
     (vl vr : Value) (resVal : Value) (link jalPC : BitVec 64) (jImm : BitVec 21)
     (out0 : Array String) (m0 : Mem) (c2 : Config)
-    (hSizeF : st'.store.frames.size = st''.store.frames.size)
-    (hSizeC : st'.store.closures.size = st''.store.closures.size)
+    (hEntryLeft : nf ≤ st'.store.frames.size ∧ nc ≤ st'.store.closures.size)
+    (hEntryFinal : nf ≤ st''.store.frames.size ∧ nc ≤ st''.store.closures.size)
     (hOut0 : c2.σ.sailOutput = out0)
     (hTS : TwoSubReturn gpre N A SL φf φc nf nc st' st'' vl vr
       sp r sret v8 v9 v18 m0 c2)
+    (hLoads : BinaryReturnLoads sp c2)
     (blockCsel : ∀ (φfa φca φfma φcma φf'a φc'a : Addr → Nat)
       (mEnt : Mem) (cR : Config),
       PhiExtends φfa φfma st'.store.frames.size → PhiExtends φca φcma st'.store.closures.size →
@@ -855,44 +887,40 @@ theorem eqBlockC_bridge
         PhiExtends φfm' φfe st''.store.frames.size ∧
         PhiExtends φcm' φce st''.store.closures.size ∧
         PreEpilogueVD g N A SL φfe φce st'' resVal sp r sret v8 v9 v18 out0 m0 mpre cfin)
-    (hResid : EqResid op gpre g N A SL φf φc st' st''
+    (hResid : EqResid op gpre g N A SL φf φc nf nc st' st''
       sp r sret aExpr v8 v9 v18 v19 w19 vl vr link jalPC jImm out0 m0 c2) :
     ∃ (c3 : Config) (mpre : Mem) (φfe φce : Addr → Nat),
       Steps c2 c3 ∧
-      PhiExtends φf φfe st''.store.frames.size ∧
-      PhiExtends φc φce st''.store.closures.size ∧
+      PhiExtends φf φfe nf ∧
+      PhiExtends φc φce nc ∧
       PreEpilogueVD g N A SL φfe φce st'' resVal sp r sret v8 v9 v18 c2.σ.sailOutput m0 mpre c3 := by
-  obtain ⟨Wl, hDispatch, hbase, hpaydisjA, hpaydisjB, hSrcA, hSrcB, hTail⟩ := hResid
   obtain ⟨cD, lds, hStepsD, hDispatchPost⟩ :=
     evalEqNeChain_dispatch_of_twoSubReturn op gpre
-      N A SL φf φc nf nc st' st'' vl vr sp r sret aExpr v8 v9 v18 Wl m0 c2 hTS hDispatch
-  obtain ⟨φfm, φcm, φf', φc', hpfm, hpcm, hpf', hpc', hNoRepr, hBox⟩ :=
-    hTail cD lds hDispatchPost
-  -- reassemble the full `EqFrontData` via the readback (reprs DERIVED, not supplied):
-  -- the post-dispatch memory tower + the six source `LPins8` (route (a)) come out of
-  -- `op.DispatchPost` per-branch (byte-identical projection either way).
-  have hFront : EqFrontData g N φc (sp - 1088#64) sret vl vr link jalPC jImm cD.σ.mem out0 cD := by
-    cases op with
-    | eq =>
-      exact eqFrontData_of_readback .eq g N φc (sp - 1088#64) sret vl vr link jalPC jImm
-        c2.σ.mem out0 cD lds hbase hDispatchPost.2.1 hDispatchPost.2.2.2.2.2.2.2.2.2
-        hpaydisjA hpaydisjB hSrcA hSrcB hNoRepr
-    | ne =>
-      exact eqFrontData_of_readback .ne g N φc (sp - 1088#64) sret vl vr link jalPC jImm
-        c2.σ.mem out0 cD lds hbase hDispatchPost.2.1 hDispatchPost.2.2.2.2.2.2.2.2.2
-        hpaydisjA hpaydisjB hSrcA hSrcB hNoRepr
-  -- front: dispatch-run c2 → cD, then blockC_eqne_front → VeReturn at cR
+      N A SL φf φc nf nc st' st'' vl vr sp r sret aExpr v8 v9 v18 m0 c2 hTS hLoads hResid.dispatch
+  obtain ⟨resultF, resultC, hTail⟩ := hResid.tail cD lds hDispatchPost
+  have hReadback := hDispatchPost.readback
+  have hFront : EqFrontData g N resultC (sp - 1088#64) sret vl vr link jalPC jImm
+      cD.σ.mem out0 cD :=
+    eqFrontData_of_readback op g N resultC (sp - 1088#64) sret vl vr link jalPC jImm
+      c2.σ.mem out0 cD lds hResid.base hReadback.memory hReadback.pins
+      hResid.leftPayload hResid.rightPayload
+      (hTail.returned.values _ _ (by simp)) (hTail.returned.values _ _ (by simp)) hTail.front
   obtain ⟨cR, hStepsFront, hVeReturn⟩ :=
-    blockC_eqne_front g N φc (sp - 1088#64) sret vl vr link jalPC jImm cD.σ.mem out0 cD hFront
-  -- box: blockCsel VeReturn + EqNeBoxPre → PreEpilogueVD
+    blockC_eqne_front g N resultC (sp - 1088#64) sret vl vr link jalPC jImm
+      cD.σ.mem out0 cD hFront
   obtain ⟨mpre, φfm', φcm', φfe, φce, cfin, hStepsBox, hp1, hp2, hp3, hp4, hPre⟩ :=
-    blockCsel φf φc φfm φcm φf' φc' cD.σ.mem cR hpfm hpcm hpf' hpc' hVeReturn hBox
+    blockCsel resultF resultC resultF resultC resultF resultC cD.σ.mem cR
+      (PhiExtends.refl _ _) (PhiExtends.refl _ _)
+      (PhiExtends.refl _ _) (PhiExtends.refl _ _) hVeReturn hTail.box
   refine ⟨cfin, mpre, φfe, φce, (hStepsD.trans hStepsFront).trans hStepsBox, ?_, ?_, ?_⟩
-  · exact (hSizeF ▸ hp1).trans hp3
-  · exact (hSizeC ▸ hp2).trans hp4
+  · exact hTail.returned.frames.trans
+      ((PhiExtends.mono hEntryLeft.1 hp1).trans (PhiExtends.mono hEntryFinal.1 hp3))
+  · exact hTail.returned.closures.trans
+      ((PhiExtends.mono hEntryLeft.2 hp2).trans (PhiExtends.mono hEntryFinal.2 hp4))
   · rw [hOut0]; exact hPre
 
 #print axioms eqBlockC_bridge
+#print axioms EqTailData.of_return
 
 /-! ## Reseated `evalEqSim` / `evalNeSim` (div-parity)
 
@@ -914,8 +942,6 @@ theorem evalEqSimD
     (hLeft : EvalE st d env el st' vl)
     (hIHl : EvalIH st d env el st' vl) (hIHr : EvalIH st' d env er st'' vr)
     (_hEvalE : EvalE st d env (.binary .eq el er) st'' (.bool (vl.equal vr)))
-    (hSizeF : st'.store.frames.size = st''.store.frames.size)
-    (hSizeC : st'.store.closures.size = st''.store.closures.size)
     (hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) vl →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -924,7 +950,7 @@ theorem evalEqSimD
     (hResid : ∀ c2 : Vsa.Machine.Config,
       TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
         st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
-      EqResid .eq gpre g N A SL φf φc st' st'' sp r sret aExpr v8 v9 v18 v19 w19 vl vr
+      EqResid .eq gpre g N A SL φf φc st.store.frames.size st.store.closures.size st' st'' sp r sret aExpr v8 v9 v18 v19 w19 vl vr
         (0x80003720#64) (0x8000371c#64) (0x1ff140#21) c2.σ.sailOutput m0 c2) :
     Triple
       (fun c => ∃ ment,
@@ -960,11 +986,11 @@ theorem evalEqSimD
         st'' (.bool (vl.equal vr)) sp r sret m0) :=
   evalEqSim gouter gpre g N A SL φf φc st st' st'' d env el er vl vr
     sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0
-    hLeft hIHl hIHr _hEvalE hSizeF hSizeC hVlSurv
-    (fun c2 hTS _hOut2 =>
+    hLeft hIHl hIHr _hEvalE hVlSurv
+    (fun c2 hTS hLoads _hOut2 =>
       eqBlockC_bridge .eq gpre g N A SL φf φc st.store.frames.size st.store.closures.size st' st'' sp r sret aExpr v8 v9 v18 v19 w19 vl vr
         (.bool (vl.equal vr)) (0x80003720#64) (0x8000371c#64) (0x1ff140#21)
-        c2.σ.sailOutput m0 c2 hSizeF hSizeC rfl hTS
+        c2.σ.sailOutput m0 c2 (evalE_store_mono hLeft) (evalE_store_mono _hEvalE) rfl hTS hLoads
         (fun φfa φca φfma φcma φf'a φc'a mEnt cR hp1 hp2 hp3 hp4 hVe hBox =>
           blockC_eq g N A SL φfa φca φfma φcma φf'a φc'a st' st''
             sp r sret v8 v9 v18 v19 w19 vl vr c2.σ.sailOutput m0 mEnt cR hp1 hp2 hp3 hp4 hVe hBox)
@@ -980,8 +1006,6 @@ theorem evalNeSimD
     (hLeft : EvalE st d env el st' vl)
     (hIHl : EvalIH st d env el st' vl) (hIHr : EvalIH st' d env er st'' vr)
     (_hEvalE : EvalE st d env (.binary .ne el er) st'' (.bool (!(vl.equal vr))))
-    (hSizeF : st'.store.frames.size = st''.store.frames.size)
-    (hSizeC : st'.store.closures.size = st''.store.closures.size)
     (hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) vl →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -990,7 +1014,7 @@ theorem evalNeSimD
     (hResid : ∀ c2 : Vsa.Machine.Config,
       TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
         st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
-      EqResid .ne gpre g N A SL φf φc st' st'' sp r sret aExpr v8 v9 v18 v19 w19 vl vr
+      EqResid .ne gpre g N A SL φf φc st.store.frames.size st.store.closures.size st' st'' sp r sret aExpr v8 v9 v18 v19 w19 vl vr
         (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21) c2.σ.sailOutput m0 c2) :
     Triple
       (fun c => ∃ ment,
@@ -1026,11 +1050,11 @@ theorem evalNeSimD
         st'' (.bool (!(vl.equal vr))) sp r sret m0) :=
   evalNeSim gouter gpre g N A SL φf φc st st' st'' d env el er vl vr
     sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0
-    hLeft hIHl hIHr _hEvalE hSizeF hSizeC hVlSurv
-    (fun c2 hTS _hOut2 =>
+    hLeft hIHl hIHr _hEvalE hVlSurv
+    (fun c2 hTS hLoads _hOut2 =>
       eqBlockC_bridge .ne gpre g N A SL φf φc st.store.frames.size st.store.closures.size st' st'' sp r sret aExpr v8 v9 v18 v19 w19 vl vr
         (.bool (!(vl.equal vr))) (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21)
-        c2.σ.sailOutput m0 c2 hSizeF hSizeC rfl hTS
+        c2.σ.sailOutput m0 c2 (evalE_store_mono hLeft) (evalE_store_mono _hEvalE) rfl hTS hLoads
         (fun φfa φca φfma φcma φf'a φc'a mEnt cR hp1 hp2 hp3 hp4 hVe hBox =>
           blockC_ne g N A SL φfa φca φfma φcma φf'a φc'a st' st''
             sp r sret v8 v9 v18 v19 w19 vl vr c2.σ.sailOutput m0 mEnt cR hp1 hp2 hp3 hp4 hVe hBox)

@@ -94,7 +94,6 @@ structure ExecArmHeadExtras
       ¬ (aInterp.toNat ≤ a ∧ a < aInterp.toNat + 24) →
       m0[a]? = m'[a]?) →
     StoreRepr m' N A φf φc st.store
-  child_align : aChild.toNat % 8 = 0
   child_lo : 0x80000000 ≤ aChild.toNat
   child_hi : aChild.toNat + 16 ≤ 0x100000000
   child_win : tohostAddr + 16 ≤ aChild.toNat
@@ -167,7 +166,6 @@ theorem execArmDispatch_of_slot
           sp r aInterp aStmt aEnv aRet v8 v9 v18 v19 c'.σ.sailOutput m0 ment c' ∧
         read64 ment (aStmt.toNat + payOff) = some aCh.toNat ∧
         ExprRepr ment aCh.toNat ce ∧
-        aStmt.toNat % 8 = 0 ∧
         0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + nodeHi ≤ 0x100000000 ∧
         (aStmt.toNat + nodeHi ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat) ∧
         Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment ∧
@@ -183,7 +181,6 @@ theorem execArmDispatch_of_slot
             ¬ (aInterp.toNat ≤ a ∧ a < aInterp.toNat + 24) →
             ment[a]? = m'[a]?) →
           StoreRepr m' N A φf φc st.store) ∧
-        aCh.toNat % 8 = 0 ∧
         0x80000000 ≤ aCh.toNat ∧ aCh.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aCh.toNat ∧
         (aCh.toNat + 16 ≤ SL.lo ∨ (sp.toNat - 176) ≤ aCh.toNat) ∧
@@ -299,9 +296,9 @@ theorem execArmDispatch_of_slot
     hAout.symm ▸ hArm
   exact ⟨c1, hs1, (fun R => c1.σ.regs.get? R), aChild, v8, v9, v18, v19, ment,
     hArm', hpayMent, hChildMent,
-    hE.stmt_align, hE.stmt_ram.1, hX.node_hi, Or.inr hE.stmt_win,
+    hE.stmt_ram.1, hX.node_hi, Or.inr hE.ground.node_above_htif,
     hEvalMent, hViIntMent, hViSlotMent, hNbsMent, hGroundMent, hWordsMent, hE.envPtr, hWideMent,
-    hX.child_align, hX.child_lo, hX.child_hi, hX.child_win, hX.child_stk,
+    hX.child_lo, hX.child_hi, hX.child_win, hX.child_stk,
     hX.sproom, hX.sp16, hE.stack_ram.1, hE.stack_ram.2, hE.stack_win,
     hX.jspSLhi, hX.codeStkJ, hX.viStkJ, hX.tableStkJ, hX.arenaStkJ, hX.arenaCode,
     (fun R _ => rfl), ⟨aStmt, hAx8⟩, ⟨aRet, hAx18⟩, ⟨aEnv, hAx19⟩,

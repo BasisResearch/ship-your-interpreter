@@ -12,7 +12,7 @@ hOrFalse	hole	`hOrFalse`/`eval_orFalse_row`.  Supplier: logical fall-through geo
 hAndTrue	hole	`hAndTrue`/`eval_andTrue_row`.  Supplier: logical fall-through geometry.
 hVar	hole	`hVar`/`eval_var_row`.  Supplier: `VarLeafResid` — carries the `env_get_found` caller-linkage oracle (dischargeable from `env_get_found_uncond''` once the eval-var-arm call bridge lands; the `TermCallees.envGet` contract
 hAssign	hole	`hAssign`/`eval_assign_row`.  Supplier: `AssignArmSpec` arm oracle ("row now, arm spec later" precedent) — the composed `env_define` (`TermCallees.envDefine`, OPEN) store-set arm.  No `evalAssignSim` exists yet; whole ar
-hIAdd	hole	`hBinary` add int-cell.  Supplier: `AddResid` value-path (`EvalAddRow`, block-reflected). **Wave-49 B2-carry**: the 9 int cells and the 2 eq/ne cells are stated as `BinIntCell`/`BinEqCell` — the bare `∀ …, BinIntCellResi
+hIAdd	hole	Integer-add tail supplier. The generated row derives binary entry facts from `EvalEntry`; reached operator, code, and result geometry remain.
 hISub	hole	`hBinary` sub int-cell.  Supplier: `SubResid` (`EvalSubRow`).
 hIMul	hole	`hBinary` mul int-cell.  Supplier: `MulResid` (`EvalMulRow`, `__muldi3` seam).
 hIDiv	hole	`hBinary` div int-cell (non-overflow arm; the `¬(a=-2^63 ∧ b=-1)` guard is the `TermGuards.binNoOvf` side-condition).  Supplier: `DivResid` (`EvalDivRow`, `__divdi3` seam via `TermCallees.divdi3`).

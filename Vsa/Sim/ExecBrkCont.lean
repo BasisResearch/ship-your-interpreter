@@ -358,7 +358,7 @@ theorem execBlockDQ
   obtain ⟨σ1, i1, hstep1', hi1, hG1, hmem1, hobs1⟩ :=
     site_8000409c_es c.σ c.tick c.steps (0x8000409c#64) vmi (sp-176#64) ra0 ra1 ra2 ra3 ra4 ra5 ra6 ra7
       hG hpc hmi hsp (hmem ▸ hcode) rfl
-      (by rw [haRa]; omega) (by rw [haRa]; omega) (by rw [haRa, htoh]; right; omega) (by rw [haRa]; omega)
+      (by rw [haRa]; omega) (by rw [haRa]; omega) (by rw [haRa, htoh]; right; omega)
       (by rw [haRa, hmem]; exact hra0) (by rw [haRa, hmem]; exact hra1) (by rw [haRa, hmem]; exact hra2)
       (by rw [haRa, hmem]; exact hra3) (by rw [haRa, hmem]; exact hra4) (by rw [haRa, hmem]; exact hra5)
       (by rw [haRa, hmem]; exact hra6) (by rw [haRa, hmem]; exact hra7) htick
@@ -376,7 +376,7 @@ theorem execBlockDQ
   obtain ⟨σ2, i2, hstep2', hi2, hG2, hmem2, hobs2⟩ :=
     site_800040a0_es σ1 i1 (c.steps + 1) (0x800040a0#64) vmi1 (sp-176#64) s00 s01 s02 s03 s04 s05 s06 s07
       hG1 hpc1 hmi1 hsp_1 hcode1 rfl
-      (by rw [haS0]; omega) (by rw [haS0]; omega) (by rw [haS0, htoh]; right; omega) (by rw [haS0]; omega)
+      (by rw [haS0]; omega) (by rw [haS0]; omega) (by rw [haS0, htoh]; right; omega)
       (by rw [haS0, hmem1e]; exact hs00) (by rw [haS0, hmem1e]; exact hs01) (by rw [haS0, hmem1e]; exact hs02)
       (by rw [haS0, hmem1e]; exact hs03) (by rw [haS0, hmem1e]; exact hs04) (by rw [haS0, hmem1e]; exact hs05)
       (by rw [haS0, hmem1e]; exact hs06) (by rw [haS0, hmem1e]; exact hs07) hi1
@@ -395,7 +395,7 @@ theorem execBlockDQ
   obtain ⟨σ3, i3, hstep3', hi3, hG3, hmem3, hobs3⟩ :=
     site_800040a4_es σ2 i2 (c.steps + 1 + 1) (0x800040a4#64) vmi2 (sp-176#64) s10 s11 s12 s13 s14 s15 s16 s17
       hG2 hpc2 hmi2 hsp_2 hcode2 rfl
-      (by rw [haS1]; omega) (by rw [haS1]; omega) (by rw [haS1, htoh]; right; omega) (by rw [haS1]; omega)
+      (by rw [haS1]; omega) (by rw [haS1]; omega) (by rw [haS1, htoh]; right; omega)
       (by rw [haS1, hmem2e]; exact hs10) (by rw [haS1, hmem2e]; exact hs11) (by rw [haS1, hmem2e]; exact hs12)
       (by rw [haS1, hmem2e]; exact hs13) (by rw [haS1, hmem2e]; exact hs14) (by rw [haS1, hmem2e]; exact hs15)
       (by rw [haS1, hmem2e]; exact hs16) (by rw [haS1, hmem2e]; exact hs17) hi2
@@ -415,7 +415,7 @@ theorem execBlockDQ
   obtain ⟨σ4, i4, hstep4', hi4, hG4, hmem4, hobs4⟩ :=
     site_800040a8_es σ3 i3 (c.steps + 1 + 1 + 1) (0x800040a8#64) vmi3 (sp-176#64) s20 s21 s22 s23 s24 s25 s26 s27
       hG3 hpc3 hmi3 hsp_3 hcode3 rfl
-      (by rw [haS2]; omega) (by rw [haS2]; omega) (by rw [haS2, htoh]; right; omega) (by rw [haS2]; omega)
+      (by rw [haS2]; omega) (by rw [haS2]; omega) (by rw [haS2, htoh]; right; omega)
       (by rw [haS2, hmem3e]; exact hs20) (by rw [haS2, hmem3e]; exact hs21) (by rw [haS2, hmem3e]; exact hs22)
       (by rw [haS2, hmem3e]; exact hs23) (by rw [haS2, hmem3e]; exact hs24) (by rw [haS2, hmem3e]; exact hs25)
       (by rw [haS2, hmem3e]; exact hs26) (by rw [haS2, hmem3e]; exact hs27) hi3
@@ -436,7 +436,7 @@ theorem execBlockDQ
   obtain ⟨σ5, i5, hstep5', hi5, hG5, hmem5, hobs5⟩ :=
     site_800040ac_es σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x800040ac#64) vmi4 (sp-176#64) s30 s31 s32 s33 s34 s35 s36 s37
       hG4 hpc4 hmi4 hsp_4 hcode4 rfl
-      (by rw [haS3]; omega) (by rw [haS3]; omega) (by rw [haS3, htoh]; right; omega) (by rw [haS3]; omega)
+      (by rw [haS3]; omega) (by rw [haS3]; omega) (by rw [haS3, htoh]; right; omega)
       (by rw [haS3, hmem4e]; exact hs30) (by rw [haS3, hmem4e]; exact hs31) (by rw [haS3, hmem4e]; exact hs32)
       (by rw [haS3, hmem4e]; exact hs33) (by rw [haS3, hmem4e]; exact hs34) (by rw [haS3, hmem4e]; exact hs35)
       (by rw [haS3, hmem4e]; exact hs36) (by rw [haS3, hmem4e]; exact hs37) hi4
@@ -675,7 +675,7 @@ theorem execBlockA
   have hstore := he.store; have hstoreSurv := he.store_survives_sp; have hout := he.out
   have hframe := he.frame; have hcodeStk := he.code_stack_disjoint
   have hstkRam := he.stack_ram; have hstkWin := he.stack_win
-  have hstmtStk := he.stmt_stack_disjoint; have hstmtAl := he.stmt_align
+  have hstmtStk := he.stmt_stack_disjoint
   have hstmtRam := he.stmt_ram; have hstmtWin := he.stmt_win
   obtain ⟨⟨v8, h8_0⟩, ⟨v9, h9_0⟩, ⟨v18, h18_0⟩, ⟨v19, h19_0⟩⟩ := he.spill_defined
   have hload0 : Exec_stmtLoaded c.σ.mem := hcode
@@ -866,7 +866,9 @@ theorem execBlockA
         getElem_writeMap8_disjoint _ _ _ _ (by have := hstmtStk; omega)]; exact hkb3
   have hhtif_e : (aStmt + sign_extend (m := 64) (0x000#12)).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (aStmt + sign_extend (m := 64) (0x000#12)).toNat := by
-    right; rw [haddr0, htoh]; have := hstmtWin; rw [htoh] at this; omega
+    rw [haddr0]; rcases hstmtWin with h | h
+    · exact Or.inl h
+    · right; omega
   -- ============ 0x80003ff8: mv s0,a1 → x8 := aStmt ============
   obtain ⟨σ7, i7, hs7, hi7, hG7, hmem7, hobs7⟩ :=
     site_80003ff8_es σ6 i6 (c.steps+1+1+1+1+1+1) (0x80003ff8#64) vmi6 aStmt hG6 hpc6 hmi6 ha1_6 (hmem6e ▸ hload6) rfl hi6
@@ -972,7 +974,6 @@ theorem execBlockA
     site_80004014_es σ13 i13 (c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1) (0x80004014#64) vmi13 aStmt hkb0v hkb1v hkb2v hkb3v
       hG13 hpc13 hmi13 hx8_13 (hmem13e ▸ hload6) rfl
       (by rw [haddr0]; have := hstmtRam.1; omega) (by rw [haddr0]; have := hstmtRam.2; omega) hhtif_e
-      (by rw [haddr0]; omega)
       (by rw [haddr0, hmem13e]; exact hkb0') (by rw [haddr0, hmem13e]; exact hkb1')
       (by rw [haddr0, hmem13e]; exact hkb2') (by rw [haddr0, hmem13e]; exact hkb3') hi13
   have hstep14 : Step ⟨σ13, i13, _⟩ ⟨σ14, i14, _⟩ := hs14
@@ -1011,7 +1012,6 @@ theorem execBlockA
     site_8000401c_es σ15 i15 (c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1) (0x8000401c#64) vmi15 aStmt hkb0v hkb1v hkb2v hkb3v
       hG15 hpc15 hmi15 hx8_15 (hmem15e ▸ hload6) rfl
       (by rw [haddr0]; have := hstmtRam.1; omega) (by rw [haddr0]; have := hstmtRam.2; omega) hhtif_e
-      (by rw [haddr0]; omega)
       (by rw [haddr0, hmem15e]; exact hkb0') (by rw [haddr0, hmem15e]; exact hkb1')
       (by rw [haddr0, hmem15e]; exact hkb2') (by rw [haddr0, hmem15e]; exact hkb3') hi15
   have hstep16 : Step ⟨σ15, i15, _⟩ ⟨σ16, i16, _⟩ := hs16
@@ -1083,7 +1083,7 @@ theorem execBlockA
     site_80004028_es σ18 i18 (c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1) (0x80004028#64) vmi18 (BitVec.ofNat 64 (stmtJumpTableBase + 4 * k))
       sb0 sb1 sb2 sb3 hG18 hpc18 hmi18 hx15_18 (hmem18e ▸ hload6) rfl
       (by rw [haddrT]; simp only [stmtJumpTableBase]; omega) (by rw [haddrT]; simp only [stmtJumpTableBase]; omega)
-      (by rw [haddrT]; left; simp only [stmtJumpTableBase]; rw [htoh]; omega) (by rw [haddrT]; simp only [stmtJumpTableBase]; omega)
+      (by rw [haddrT]; left; simp only [stmtJumpTableBase]; rw [htoh]; omega)
       (by rw [haddrT]; simpa using hsb0) (by rw [haddrT]; simpa using hsb1)
       (by rw [haddrT]; simpa using hsb2) (by rw [haddrT]; simpa using hsb3) hi18
   have hstep19 : Step ⟨σ18, i18, _⟩ ⟨σ19, i19, _⟩ := hs19
@@ -1449,7 +1449,7 @@ theorem execContSim
   obtain ⟨σ1, i1, hstep1', hi1, hG1, hmem1, hobs1⟩ :=
     site_800040b8_es cA.σ cA.tick cA.steps (0x800040b8#64) vmiA (sp-176#64) ra0 ra1 ra2 ra3 ra4 ra5 ra6 ra7
       hGA hpcA' hmiA hspA (hmemA.symm ▸ hcodeA) rfl
-      (by rw [haRa]; omega) (by rw [haRa]; omega) (by rw [haRa, htoh]; right; omega) (by rw [haRa]; omega)
+      (by rw [haRa]; omega) (by rw [haRa]; omega) (by rw [haRa, htoh]; right; omega)
       (by rw [haRa, hmemA]; exact hra0) (by rw [haRa, hmemA]; exact hra1) (by rw [haRa, hmemA]; exact hra2)
       (by rw [haRa, hmemA]; exact hra3) (by rw [haRa, hmemA]; exact hra4) (by rw [haRa, hmemA]; exact hra5)
       (by rw [haRa, hmemA]; exact hra6) (by rw [haRa, hmemA]; exact hra7) htickA
@@ -1466,7 +1466,7 @@ theorem execContSim
   obtain ⟨σ2, i2, hstep2', hi2, hG2, hmem2, hobs2⟩ :=
     site_800040bc_es σ1 i1 (cA.steps + 1) (0x800040bc#64) vmi1 (sp-176#64) s00 s01 s02 s03 s04 s05 s06 s07
       hG1 hpc1 hmi1 hsp_1 hcode1 rfl
-      (by rw [haS0]; omega) (by rw [haS0]; omega) (by rw [haS0, htoh]; right; omega) (by rw [haS0]; omega)
+      (by rw [haS0]; omega) (by rw [haS0]; omega) (by rw [haS0, htoh]; right; omega)
       (by rw [haS0, hmem1e]; exact hs00) (by rw [haS0, hmem1e]; exact hs01) (by rw [haS0, hmem1e]; exact hs02)
       (by rw [haS0, hmem1e]; exact hs03) (by rw [haS0, hmem1e]; exact hs04) (by rw [haS0, hmem1e]; exact hs05)
       (by rw [haS0, hmem1e]; exact hs06) (by rw [haS0, hmem1e]; exact hs07) hi1
@@ -1484,7 +1484,7 @@ theorem execContSim
   obtain ⟨σ3, i3, hstep3', hi3, hG3, hmem3, hobs3⟩ :=
     site_800040c0_es σ2 i2 (cA.steps + 1 + 1) (0x800040c0#64) vmi2 (sp-176#64) s10 s11 s12 s13 s14 s15 s16 s17
       hG2 hpc2 hmi2 hsp_2 hcode2 rfl
-      (by rw [haS1]; omega) (by rw [haS1]; omega) (by rw [haS1, htoh]; right; omega) (by rw [haS1]; omega)
+      (by rw [haS1]; omega) (by rw [haS1]; omega) (by rw [haS1, htoh]; right; omega)
       (by rw [haS1, hmem2e]; exact hs10) (by rw [haS1, hmem2e]; exact hs11) (by rw [haS1, hmem2e]; exact hs12)
       (by rw [haS1, hmem2e]; exact hs13) (by rw [haS1, hmem2e]; exact hs14) (by rw [haS1, hmem2e]; exact hs15)
       (by rw [haS1, hmem2e]; exact hs16) (by rw [haS1, hmem2e]; exact hs17) hi2
@@ -1503,7 +1503,7 @@ theorem execContSim
   obtain ⟨σ4, i4, hstep4', hi4, hG4, hmem4, hobs4⟩ :=
     site_800040c4_es σ3 i3 (cA.steps + 1 + 1 + 1) (0x800040c4#64) vmi3 (sp-176#64) s20 s21 s22 s23 s24 s25 s26 s27
       hG3 hpc3 hmi3 hsp_3 hcode3 rfl
-      (by rw [haS2]; omega) (by rw [haS2]; omega) (by rw [haS2, htoh]; right; omega) (by rw [haS2]; omega)
+      (by rw [haS2]; omega) (by rw [haS2]; omega) (by rw [haS2, htoh]; right; omega)
       (by rw [haS2, hmem3e]; exact hs20) (by rw [haS2, hmem3e]; exact hs21) (by rw [haS2, hmem3e]; exact hs22)
       (by rw [haS2, hmem3e]; exact hs23) (by rw [haS2, hmem3e]; exact hs24) (by rw [haS2, hmem3e]; exact hs25)
       (by rw [haS2, hmem3e]; exact hs26) (by rw [haS2, hmem3e]; exact hs27) hi3
@@ -1523,7 +1523,7 @@ theorem execContSim
   obtain ⟨σ5, i5, hstep5', hi5, hG5, hmem5, hobs5⟩ :=
     site_800040c8_es σ4 i4 (cA.steps + 1 + 1 + 1 + 1) (0x800040c8#64) vmi4 (sp-176#64) s30 s31 s32 s33 s34 s35 s36 s37
       hG4 hpc4 hmi4 hsp_4 hcode4 rfl
-      (by rw [haS3]; omega) (by rw [haS3]; omega) (by rw [haS3, htoh]; right; omega) (by rw [haS3]; omega)
+      (by rw [haS3]; omega) (by rw [haS3]; omega) (by rw [haS3, htoh]; right; omega)
       (by rw [haS3, hmem4e]; exact hs30) (by rw [haS3, hmem4e]; exact hs31) (by rw [haS3, hmem4e]; exact hs32)
       (by rw [haS3, hmem4e]; exact hs33) (by rw [haS3, hmem4e]; exact hs34) (by rw [haS3, hmem4e]; exact hs35)
       (by rw [haS3, hmem4e]; exact hs36) (by rw [haS3, hmem4e]; exact hs37) hi4

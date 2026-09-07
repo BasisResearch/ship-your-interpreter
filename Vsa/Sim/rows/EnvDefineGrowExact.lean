@@ -99,7 +99,7 @@ private theorem appendHeadMemFactsLd
     (hal : base % 8 = 0) (hp : LPins8 m base bs) : MemFacts m L bs a := by
   unfold MemFacts
   rw [hk, hea]
-  exact ⟨⟨hlo, hhi, hht, hal⟩, hp⟩
+  exact ⟨⟨hlo, hhi, hht⟩, hp⟩
 
 private theorem appendHeadMemFactsSd
     {m : Mem} {L : GRegs} {a : MInstr} {bs : List (BitVec 8)}

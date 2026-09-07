@@ -77,7 +77,6 @@ structure EvalArmHeadExtras
   /-- The consumed node span is disjoint from the stack window (transports the
   payload read `m0 → ment`). -/
   node_stk : aExpr.toNat + nodeHi ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
-  child_align : aChild.toNat % 8 = 0
   child_lo : 0x80000000 ≤ aChild.toNat
   child_hi : aChild.toNat + 16 ≤ 0x100000000
   child_win : tohostAddr + 16 ≤ aChild.toNat
@@ -141,7 +140,6 @@ theorem evalArmDispatch_of_slot
         -- WAVE 47i: the child's entry-ground bundle at the arm memory.
         EvalGround ment SL A sp sret aCh.toNat ce ∧
         aExpr.toNat + nodeHi ≤ 0x100000000 ∧
-        aCh.toNat % 8 = 0 ∧
         0x80000000 ≤ aCh.toNat ∧ aCh.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aCh.toNat ∧
         (aCh.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aCh.toNat) ∧
@@ -176,14 +174,14 @@ theorem evalArmDispatch_of_slot
       hX.tableStk
       c'' ⟨⟨hE.good, hE.tick, hE.pc, hE.a0, hE.a1, hE.a2, hE.ra, hE.ra_align, hE.spReg,
         hE.stackOK, hE.minstret, hE.mem, hE.code, hE.expr, hE.store, hE.store_survives, hE.out,
-        hE.frame, hE.code_stack_disjoint, hE.expr_stack_disjoint, hE.expr_align, hE.expr_ram,
+        hE.frame, hE.code_stack_disjoint, hE.expr_stack_disjoint, hE.expr_ram,
         hE.expr_win, hE.sret_align, hE.sret_ram, hE.sret_win, hE.sret_vicode_disjoint_int,
         hE.sret_stack_disjoint, hE.sret_evalcode_disjoint, hE.stack_ram, hE.stack_win,
         ⟨hE.spill_defined.1, hE.spill_defined.2.1, hE.spill_defined.2.2, hE.envReg⟩⟩, rfl⟩
   -- Destructure a COPY of the widened `ArmEntryK` (keep `hArm` intact for output).
   have hArmCopy := hArm
   obtain ⟨_hAG, _hAtick, _hApc, _hAa0, _hAs1, _hAa2, _hAsp, _hAra, _hAmi, _hAout,
-    _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxAl, _hAxLo, _hAxHi, _hAxWin,
+    _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxLo, _hAxHi, _hAxWin,
     _hAslotRa, _hAslotS0, _hAslotS1, _hAslotS2, hArmMemM0,
     _hArmg8, _hArmg9, _hArmg18, _hArmg2, _hAstore, _hAstoreSurv, hArmFrame,
     _hAsretAl, _hAsretLo, _hAsretHi, _hAsretWin, _hAsretVi, _hAsretStk, _hAsretEc,
@@ -228,7 +226,7 @@ theorem evalArmDispatch_of_slot
     hArm', hAEx11, hx13c1, rfl, (fun R _ => rfl), ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩,
     ⟨v19, hc119⟩, ⟨v20, hc120⟩, ⟨v21, hc121⟩,
     hpayMent, hchildSurvMent, hGroundMent, hX.node_hi,
-    hX.child_align, hX.child_lo, hX.child_hi, hX.child_win, hX.child_stk,
+    hX.child_lo, hX.child_hi, hX.child_win, hX.child_stk,
     hX.sproom, hX.spSLhi, hX.sp16, hX.SLhiRam,
     hX.codeStk, hX.viStk, hX.tableStk0, hX.arenaStk, hX.arenaCode⟩
 

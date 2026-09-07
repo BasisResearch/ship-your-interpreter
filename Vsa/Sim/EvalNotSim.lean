@@ -1,3 +1,4 @@
+import Vsa.Sim.ValuePayloadCoverage
 import Vsa.Sim.EvalNegSim
 import Vsa.Sim.EvalNegSim2
 import Vsa.Sim.EvalNegSim3
@@ -48,14 +49,13 @@ Machine path for `.not` (`experiments/pctrace.md` + objdump):
 
 `blockC_not` reproduces the whole tail (`SubEvalReturn @0x800035ec` with the
 `beq` NOT taken → `PreEpilogueVD` at value `.bool (!vsub.truthy)`), threading the
-24-byte `Value` copy into the truthy arg buffer (`valueRepr_copy_of_writeWindow`),
-`value_truthy_spec` (strengthened with output invariance), the `seqz` bridge, and
+24-byte header copy into the truthy arg buffer (`truthyHeaderRepr_copy_total`),
+`value_truthy_header_spec`, the `seqz` bridge, and
 `value_bool_spec_full`. `evalNotSim` then composes `blockA_k ≫ blockB_unary ≫
 blockC_not ≫ blockD_v_rec` in the `EvalIH` motive shape, mirroring `evalNegSim`.
 
 Conditional (like `evalNegSim`) ONLY on the `NegExtras` geometry (reused verbatim
-where the fields fit, plus the NOT-tail-specific buffer geometry `NotExtras`) and
-`hMcallPop` (M6 Layout).
+where the fields fit, plus the NOT-tail-specific buffer geometry `NotExtras`).
 
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`.
 -/
@@ -161,25 +161,12 @@ theorem sdData_sext_bytes (b0 b1 b2 b3 b4 b5 b6 b7 : BitVec 8) :
      simp only [BitVec.extractLsb', BitVec.toNat_ofNat, Nat.shiftRight_eq_div_pow]
      rw [word8_toNat_recon]; omega)
 
-/-! ## `NotExtras` — the NOT-tail buffer geometry (beyond `NegExtras`)
+/-! ## `NotExtras` — reached truthiness-buffer facts -/
 
-The truthy arg buffer lives at `sp - 1024` (`sp'+64`). It must be a valid 24-byte
-`Value` region (RAM, 8-aligned, above HTIF), disjoint from the two callees' code,
-the arena, and — for the `valueRepr_copy_of_writeWindow` — the operand value's
-string/native payload pointer (which lives in the arena, disjoint from the C
-stack). These are the NOT-analogue of `blockC_neg`'s error-store geometry. -/
-structure NotExtras
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φc' : Addr → Nat)
-    (vsub : Value) (sp sret : BitVec 64) (m : Mem) : Prop where
-  -- the truthy arg buffer `[sp-1024, sp-1000)` region facts
+/-- Geometry of the temporary header passed to the truthiness helper. -/
+structure NotExtras (sp : BitVec 64) : Prop where
   buf_lo : 0x80000000 + 1024 ≤ sp.toNat
   buf_win : tohostAddr + 16 + 1024 ≤ sp.toNat
-  -- the operand value's string/native payload (pointer read at subsret+8) lives
-  -- disjoint from the truthy arg buffer window `[sp-1024, sp-1000)`. Its target is
-  -- in the arena (heap), disjoint from the C stack; a full M6 Layout supplies it.
-  pay_disj : ∀ (p : Nat) (s : String),
-    ValueRepr m N φc' (sp.toNat - 944) vsub → read64 m (sp.toNat - 944 + 8) = some p →
-    ∀ k, k ≤ s.length → (p + k < sp.toNat - 1024 ∨ sp.toNat - 1024 + 24 ≤ p + k)
 
 /-! ## `blockC_not` — the post-call `not` tail -/
 
@@ -202,7 +189,6 @@ theorem blockC_not
         -- reloads use the presence-free `site_*_tot` siblings.
         -- presence-monotonicity over the entry `m0` (`mem_ext` residual).
         MemExtends m0 mcall ∧
-        aExpr.toNat % 4 = 0 ∧
         0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 8 ≤ aExpr.toNat ∧
         (aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat) ∧
@@ -217,8 +203,7 @@ theorem blockC_not
         SL.lo + 1088 ≤ sp.toNat ∧ 0x80000000 ≤ SL.lo ∧ tohostAddr + 16 ≤ SL.lo ∧
         c.σ.sailOutput = out0 ∧
         Value_truthyLoaded mcall ∧ Value_boolLoaded mcall ∧
-        (∀ φc' : Addr → Nat, ValueRepr c.σ.mem N φc' (sp.toNat - 944) vsub →
-          NotExtras N A SL φc' vsub sp sret c.σ.mem) ∧
+        NotExtras sp ∧
         -- value_truthy code `[0x8000282c, 0x8000285c)` disjoint from the stack
         (sp.toNat ≤ 0x8000282c ∨ 0x8000285c ≤ SL.lo) ∧
         -- value_bool code `[0x800027f8, 0x8000280c)` disjoint from the stack
@@ -244,7 +229,7 @@ theorem blockC_not
         PhiExtends φc φce nc ∧
         PreEpilogueVD g N A SL φfe φce st' (.bool (!vsub.truthy)) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hpre
-  obtain ⟨mcall, hSub, hgx8, hexpr, hMemExtM0, hexprAl, hexprLo, hexprHi, hexprWin,
+  obtain ⟨mcall, hSub, hgx8, hexpr, hMemExtM0, hexprLo, hexprHi, hexprWin,
     hexprSL, hexprA, hexprSub,
     houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretStk, hsretEvalCode,
     hraAl, hSLloSp, hSLlo, hSLwin,
@@ -267,8 +252,7 @@ theorem blockC_not
   have hvalSub' : ValueRepr c.σ.mem N φcv (sp.toNat - 944) vsub := by
     have hv := hvalSub.repr
     rwa [hsub944] at hv
-  -- the NOT-tail buffer geometry, instantiated at φcv
-  have hNE : NotExtras N A SL φcv vsub sp sret c.σ.mem := hNotExtras φcv hvalSub'
+  have hNE := hNotExtras
   -- === derive machine facts ===
   -- x8 = aExpr (callee-saved survives the sub-call)
   have hx8 : c.σ.regs.get? Register.x8 = some aExpr := (hframe Register.x8 (by decide)).trans hgx8
@@ -333,7 +317,7 @@ theorem blockC_not
     site_800035ec_totb c.σ c.tick c.steps (0x800035ec#64) vmi aExpr
       ob0 ob1 ob2 ob3 hG hpc hmi hx8 hcode rfl
       (by rw [hop8]; omega) (by rw [hop8]; omega)
-      (by rw [hop8, htoh]; right; omega) (by rw [hop8]; omega)
+      (by rw [hop8, htoh]; right; omega)
       (by rw [hop8]; try (first | exact hoc0 | exact lpin_of_present hoc0)) (by rw [hop8]; try (first | exact hoc1 | exact lpin_of_present hoc1))
       (by rw [hop8]; try (first | exact hoc2 | exact lpin_of_present hoc2)) (by rw [hop8]; try (first | exact hoc3 | exact lpin_of_present hoc3)) htick
   have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hs1'
@@ -372,7 +356,7 @@ theorem blockC_not
     site_800035f4_tot σ2 i2 (c.steps + 1 + 1) (0x800035f4#64) vmi2 (sp - 1088#64)
       hG2 hpc2 hmi2 hsp_2 hcode2 rfl
       (by rw [haddr144]; omega) (by rw [haddr144]; omega)
-      (by rw [haddr144, htoh]; right; omega) (by rw [haddr144]; omega) hi2
+      (by rw [haddr144, htoh]; right; omega)  hi2
   have hstep3 : Step ⟨σ2, i2, c.steps + 1 + 1⟩ ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ := hs3'
   have hmem3e : σ3.mem = c.σ.mem := by rw [hmem3]; exact hmem2e
   have hpc3 : σ3.regs.get? Register.PC = some (0x800035f8#64) := by
@@ -408,7 +392,7 @@ theorem blockC_not
     site_800035fc_tot σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x800035fc#64) vmi4 (sp - 1088#64)
       hG4 hpc4 hmi4 hsp_4 hcode4 rfl
       (by rw [haddr152]; omega) (by rw [haddr152]; omega)
-      (by rw [haddr152, htoh]; right; omega) (by rw [haddr152]; omega) hi4
+      (by rw [haddr152, htoh]; right; omega)  hi4
   have hstep5 : Step ⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩ ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩ := hs5'
   have hmem5e : σ5.mem = c.σ.mem := by rw [hmem5]; exact hmem4e
   have hpc5 : σ5.regs.get? Register.PC = some (0x80003600#64) := by
@@ -428,7 +412,7 @@ theorem blockC_not
     site_80003600_tot σ5 i5 (c.steps + 1 + 1 + 1 + 1 + 1) (0x80003600#64) vmi5 (sp - 1088#64)
       hG5 hpc5 hmi5 hsp_5 hcode5 rfl
       (by rw [haddr160]; omega) (by rw [haddr160]; omega)
-      (by rw [haddr160, htoh]; right; omega) (by rw [haddr160]; omega) hi5
+      (by rw [haddr160, htoh]; right; omega)  hi5
   have hstep6 : Step ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩ ⟨σ6, i6, c.steps + 1 + 1 + 1 + 1 + 1 + 1⟩ := hs6'
   have hmem6e : σ6.mem = c.σ.mem := by rw [hmem6]; exact hmem5e
   have hpc6 : σ6.regs.get? Register.PC = some (0x80003604#64) := by
@@ -634,10 +618,8 @@ theorem blockC_not
         show sp.toNat-944+22 = sp.toNat-928+6 from by omega]
     · rw [show sp.toNat-1024+23 = sp.toNat-1008+7 from by omega, getElem_writeMap8_7, eQ7,
         show sp.toNat-944+23 = sp.toNat-928+7 from by omega]
-  have hbufRepr : ValueRepr m3 N φcv (sp.toNat - 1024) vsub :=
-    valueRepr_copy_total_of_writeWindow (srcAddr := sp.toNat - 944) (dstAddr := sp.toNat - 1024)
-      hm3_copy hm3_out
-      (fun p s hp k hk => hNE.pay_disj p s hvalSub' hp k hk) hvalSub'
+  have hbufRepr : TruthyHeaderRepr m3 (sp.toNat - 1024) vsub :=
+    truthyHeaderRepr_copy_total hm3_copy (truthyHeaderRepr_of_valueRepr hvalSub')
   ------------------------------------------------------------------------
   -- 0x80003614: jal value_truthy → PC := value_truthy entry, ra := 0x80003618
   ------------------------------------------------------------------------
@@ -697,15 +679,16 @@ theorem blockC_not
      by rw [hbufNat]; omega, by rw [hbufNat, htoh]; have := hNE.buf_win; rw [htoh] at this; omega⟩
   -- the return-target alignment `(0x80003618 masked lsb).toNat % 4 = 0`
   have hrettgt_t : (BitVec.update ((0x80003618#64 : BitVec 64) + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by decide
-  -- ValueRepr at the buffer (buf address `sp-1024`) — rebase hbufRepr onto (sp-1024#64).toNat
-  have hbufRepr' : ValueRepr m3 N φcv (sp - 1024#64).toNat vsub := by rw [hbufNat]; exact hbufRepr
+  -- Rebase the copied truthiness header onto the actual buffer address.
+  have hbufRepr' : TruthyHeaderRepr m3 (sp - 1024#64).toNat vsub := by
+    rw [hbufNat]; exact hbufRepr
   -- x10 at σ11 = sp-1024#64
   have hx10_11' : σ11.regs.get? Register.x10 = some (sp - 1024#64) := by rw [hx10_11, hbuftag]
   ------------------------------------------------------------------------
-  -- the value_truthy callee (via value_truthy_spec), buf = sp-1024, ra = 0x80003618
+  -- the value_truthy callee (via value_truthy_header_spec), buf = sp-1024, ra = 0x80003618
   ------------------------------------------------------------------------
   obtain ⟨cT, hsT, hGT, hpcT, ha0T, hraT, ⟨vmiT, hmiT⟩, htickT, hmemT, houtT, hframeT⟩ :=
-    value_truthy_spec (fun R => σ11.regs.get? R) (sp - 1024#64) (0x80003618#64) N φcv vsub m3 out0
+    value_truthy_header_spec (fun R => σ11.regs.get? R) (sp - 1024#64) (0x80003618#64) N φcv vsub m3 out0
       ⟨σ11, i11, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩
       ⟨hG11, hmem11e ▸ hVtruthy_m3, hmem11e, hpc11, hx10_11', hlink11, ⟨vmi11, hmi11⟩, hi11,
         hbufRepr', hTruthyReg, hrettgt_t, hout11, fun R _ => rfl⟩
@@ -870,7 +853,7 @@ theorem blockC_not
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → σ17.mem[k]? = m'[k]?) →
       StoreRepr m' N A φf' φc' st'.store :=
     fun m' hm' => hstoreSurv' m' (fun k hk => (hSL17 k hk).trans (hm' k hk))
-  -- the MemExtends m0 σ17.mem (mcall fully populated ⇒ all writes only ADD)
+  -- Actual pre-call presence extends through the subsequent writes.
   have hMemExt_m0_c : MemExtends m0 c.σ.mem := hMemExtM0.trans hMemExt
   have hMemExt_c_15 : MemExtends c.σ.mem σ15.mem := by
     rw [hmem15e]
@@ -984,44 +967,16 @@ The `.not` analogue of `NegExtras` (`EvalNegSim3.lean`): the same operand-node
 `ExprRepr`+geometry, the +1088 recursive headroom, the arena/code/table
 disjunctions and the `EX_UNARY` slot pin — with `.not` for the AST subtree — PLUS
 the two extra callee-code pins (`value_truthy`/`value_bool`) and their
-disjunctions and the buffer/payload geometry that `blockC_not` needs. These are
+disjunctions. These are
 the residual-#1 program-structure facts an `EvalEntry` widening / M6 Layout would
 supply; a future `blockA_k` widening + full stack-layout derivation discharges
 them (exactly as for `evalNegSim`). -/
 structure NotSimExtras
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (esub : Expr) (vsub : Value)
+    (esub : Expr)
     (sp sret aExpr aOperand : BitVec 64)
-    (m0 : Mem) : Prop where
-  -- ===== shared with NegExtras (EX_UNARY arm head geometry) =====
-  slot8 : KindSlotPinned 8 (0x800035e0#64) m0
-  expr_survives : ∀ m' : Mem,
-    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → m0[a]? = m'[a]?) →
-    ExprRepr m' aExpr.toNat (.unary .not esub)
-  pay : read64 m0 (aExpr.toNat + 16) = some aOperand.toNat
-  operand_repr : ExprRepr m0 aOperand.toNat esub
-  expr24 : aExpr.toNat + 24 ≤ 0x100000000
-  expr24_stk : aExpr.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
-  op_align : aOperand.toNat % 8 = 0
-  op_lo : 0x80000000 ≤ aOperand.toNat
-  op_hi : aOperand.toNat + 16 ≤ 0x100000000
-  op_win : tohostAddr + 16 ≤ aOperand.toNat
-  op_stk : aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat
-  sp_headroom : SL.lo + 3264 ≤ sp.toNat
-  sp_SLhi : sp.toNat ≤ SL.hi
-  sp16 : sp.toNat % 16 = 0
-  SLhi_ram : SL.hi ≤ 0x100000000
-  code_stk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
-  vicode_stk : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec
-  table_stk : (0x80019f84 : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58
-  arena_stk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
-  arena_code : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
-  -- ===== blockC_not extras (op-token geometry) =====
-  expr_align4 : aExpr.toNat % 4 = 0
-  expr_win8 : tohostAddr + 8 ≤ aExpr.toNat
-  expr_A : aExpr.toNat + 16 ≤ A.lo ∨ A.hi ≤ aExpr.toNat
-  expr_sub : aExpr.toNat + 16 ≤ sp.toNat - 944 ∨ sp.toNat - 944 + 24 ≤ aExpr.toNat
-  sret_inSL : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi
+    (m0 : Mem) : Prop extends
+      UnaryExtras .not N A SL esub sp sret aExpr aOperand m0 where
   -- ===== NOT-tail: the two extra callee-code pins + their disjunctions =====
   truthy_loaded : Value_truthyLoaded m0
   bool_loaded : Value_boolLoaded m0
@@ -1030,19 +985,37 @@ structure NotSimExtras
   sret_boolcode : sret.toNat + 24 ≤ 0x800027f8 ∨ 0x8000280c ≤ sret.toNat
   truthy_arena : A.hi ≤ 0x8000282c ∨ 0x8000285c ≤ A.lo
   bool_arena : A.hi ≤ 0x800027f8 ∨ 0x8000280c ≤ A.lo
-  -- ===== NOT-tail: the operand-value string payload is disjoint from the buffer =====
-  -- The operand value's payload pointer (read at the sub-result buffer `sp-944+8`,
-  -- in ANY post-sub-call memory representing `vsub` there) points at a heap string
-  -- disjoint from the truthy arg buffer `[sp-1024, sp-1000)` (stack vs heap; M6). -/
-  pay_disj : ∀ (m : Mem) (φc' : Addr → Nat) (p : Nat) (s : String),
-    ValueRepr m N φc' (sp.toNat - 944) vsub → read64 m (sp.toNat - 944 + 8) = some p →
-    ∀ k, k ≤ s.length → (p + k < sp.toNat - 1024 ∨ sp.toNat - 1024 + 24 ≤ p + k)
+/-- The retained static support supplies the logical-not callees. -/
+theorem EvalEntry.notExtras
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {phiF phiC : Addr → Nat}
+    {st : Vsa.While.St} {d env : Nat} {esub : Expr}
+    {sp r sret aEnv aExpr : BitVec 64} {m0 : Mem} {c : Config}
+    (h : EvalEntry g N A SL phiF phiC st d env (.unary .not esub)
+      sp r sret aEnv aExpr m0 c) :
+    ∃ aOperand, NotSimExtras N A SL esub sp sret aExpr aOperand m0 := by
+  obtain ⟨aOperand, hu⟩ := h.unaryExtras
+  have hg : EvalGround m0 SL A sp sret aExpr.toNat (.unary .not esub) :=
+    h.mem ▸ h.ground
+  obtain ⟨_, _, ht, _, hnbs, _⟩ := hg.eval_call.pins m0 (fun _ _ => rfl)
+  have hsp := hu.sp_SLhi
+  refine ⟨aOperand,
+    { toUnaryExtras := hu
+      truthy_loaded := ht
+      bool_loaded := hnbs.bool_code
+      truthy_stk := by have := hg.eval_call.vi_stack; omega
+      boolcode_stk := by have := hg.eval_call.vi_stack; omega
+      sret_boolcode := by have := h.sret_vicode_disjoint; omega
+      truthy_arena := by have := hg.eval_call.arena_vi; omega
+      bool_arena := by have := hg.eval_call.arena_vi; omega }⟩
+
+#print axioms EvalEntry.notExtras
 
 /-! ## `EvalNotSimGoal` — the `EvalE.not` projection of the simulation
 
 In the `EvalIH` motive shape (`EvalEntry → EvalExitD`), mirroring `EvalNegSimGoal`.
-Conditional ONLY on `NotSimExtras` (the recursive-case program-structure facts) and
-`hMcallPop` (M6 Layout: the pre-call memory is fully populated). -/
+The ordinary child `EvalIH` supplies the returned value header.
+`NotSimExtras` supplies entry geometry and code pins. -/
 def EvalNotSimGoal : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -1054,13 +1027,7 @@ def EvalNotSimGoal : Prop :=
     Triple
       (fun c =>
         EvalEntry g N A SL φf φc st d env (.unary .not esub) sp r sret aEnv aExpr m0 c ∧
-        NotSimExtras N A SL esub vsub sp sret aExpr aOperand m0 ∧
-        -- WAVE 48k: the dead-byte presence CLOSURE is GONE — those bytes are
-        -- read totally, so nothing downstream asks for them to be mapped.
-        -- Only the `mem_ext` (presence-monotonicity) residual remains.
-        (∀ mcall : Mem,
-          (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]?) →
-          MemExtends m0 mcall))
+        NotSimExtras N A SL esub sp sret aExpr aOperand m0)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st' (.bool (!vsub.truthy)) sp r sret m0)
 
@@ -1078,7 +1045,7 @@ except for the block-C call (the `not` tail) and the produced value. -/
 theorem evalNotSim : EvalNotSimGoal := by
   intro g N A SL φf φc st st' d env esub vsub sp r sret aEnv aExpr aOperand
     m0 hIH _hEvalE
-  intro c ⟨hc, hx, hMemExtRes⟩
+  intro c ⟨hc, hx⟩
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- === block A: prologue + dispatch → widened ArmEntryK @0x800035e0 ===
   have hkm0 : read32 m0 aExpr.toNat = some 8 := exprRepr_not_kind (hc.mem ▸ hc.expr)
@@ -1101,13 +1068,13 @@ theorem evalNotSim : EvalNotSimGoal := by
       (by have := hx.table_stk; simp only [jumpTableBase]; omega)
       c ⟨⟨hc.good, hc.tick, hc.pc, hc.a0, hc.a1, hc.a2, hc.ra, hc.ra_align, hc.spReg,
         hc.stackOK, hc.minstret, hc.mem, hc.code, hc.expr, hc.store, hc.store_survives, hc.out,
-        hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
+        hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_ram,
         hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
         ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩
   have hArmCopy := hArm
   obtain ⟨_hAG, _hAtick, _hApc, _hAa0, _hAs1, _hAa2, _hAsp, _hAra, _hAmi, _hAout,
-    _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxAl, _hAxLo, _hAxHi, _hAxWin,
+    _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxLo, _hAxHi, _hAxWin,
     _hAslotRa, _hAslotS0, _hAslotS1, _hAslotS2, hArmMemM0,
     hArmg8, hArmg9, hArmg18, hArmg2, _hAstore, _hAstoreSurv, hArmFrame,
     _hAsretAl, _hAsretLo, _hAsretHi, _hAsretWin, _hAsretVi, _hAsretStk, _hAsretEc,
@@ -1172,7 +1139,7 @@ theorem evalNotSim : EvalNotSimGoal := by
       hc.env_valid (hc.envset_defined_frame hbridge) hIH
       c1 ⟨ment, hArm, hx11c1, hx13c1, hgpreframe, ⟨aExpr, hgpre_x8⟩, hgpre18,
         hpayMent', hOperandReprMent, hgroundChild, hx.expr24,
-        hx.op_align, hx.op_lo, hx.op_hi, hx.op_win, hx.op_stk,
+        hx.op_lo, hx.op_hi, hx.op_win, hx.op_stk,
         hx.sp_headroom, hx.sp_SLhi, hx.sp16, hx.SLhi_ram,
         hx.code_stk, hx.vicode_stk, (by have := hx.table_stk; omega), hx.arena_stk, hx.arena_code,
         -- ITEM ZERO B1: the operand's child budget, DERIVED from the entry's
@@ -1184,9 +1151,9 @@ theorem evalNotSim : EvalNotSimGoal := by
             have h2 : ((1088#64 : BitVec 64)).toNat = 1088 := by decide
             simp only [h1, h2, evalFrame]; omega),
         Expr.bodiesBound_unary hc.expr_bodies,
-        hc.store_bodies⟩
-  obtain ⟨mcall, hSubR, hMcallM0stk⟩ := hSub
-  have hAgM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]? := hMcallM0stk
+        hc.store_bodies, _hpresM⟩
+  obtain ⟨mcall, hSubR, hCallMemory⟩ := hSub
+  have hAgM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → mcall[a]? = m0[a]? := hCallMemory.outside
   have hOutC2 : OutRepr c2.σ st' := hSubR.2.2.2.2.2.2.2.2.1
   have houtStr : String.join c2.σ.sailOutput.toList = st'.out := hOutC2
   -- transport the two callee-code pins from `m0` to `mcall`
@@ -1198,23 +1165,19 @@ theorem evalNotSim : EvalNotSimGoal := by
       (fun a ha => (hAgM0 a (by have := hx.boolcode_stk; omega)).symm) hx.bool_loaded
   have hMcallM0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       mcall[a]? = m0[a]? := fun a ha _ => hAgM0 a ha
-  have hMemExtM0mc : MemExtends m0 mcall := hMemExtRes mcall hAgM0
+  have hMemExtM0mc : MemExtends m0 mcall := hCallMemory.presence
   have hExprMcall : ExprRepr mcall aExpr.toNat (.unary .not esub) :=
     hx.expr_survives mcall (fun a ha => (hAgM0 a ha).symm)
-  -- the NotExtras (buffer geometry) at any φc' — payload disjointness transported to c2.σ.mem
-  have hNotExtras : ∀ φc' : Addr → Nat, ValueRepr c2.σ.mem N φc' (sp.toNat - 944) vsub →
-      NotExtras N A SL φc' vsub sp sret c2.σ.mem := by
-    intro φc' hvr
-    exact ⟨(by have := hx.op_lo; have := hx.sp_headroom; omega),
-      (by have := hx.sp_headroom; omega),
-      (fun p s hvr' hp k hk => hx.pay_disj c2.σ.mem φc' p s hvr' hp k hk)⟩
+  have hNotExtras : NotExtras sp :=
+    ⟨(by have := hx.op_lo; have := hx.sp_headroom; omega),
+      (by have := hx.sp_headroom; omega)⟩
   -- === block C: post-call not tail → PreEpilogueVD .bool(!truthy) @0x800033ec ===
   obtain ⟨c3, hs3, mpreC, φfe, φce, hpfe, hpce, hPreD⟩ :=
     blockC_not (fun R => c1.σ.regs.get? R) g N A SL φf φc st.store.frames.size
       st.store.closures.size st' vsub sp r sret aExpr v8 v9 v18 c2.σ.sailOutput esub m0
       (hc.mem ▸ hc.sret_words)
       c2 ⟨mcall, hSubR, hgpre_x8, hExprMcall, hMemExtM0mc,
-        hx.expr_align4, hc.expr_ram.1, hc.expr_ram.2, hx.expr_win8,
+        hc.expr_ram.1, hc.expr_ram.2, hx.expr_win8,
         hc.expr_stack_disjoint, hx.expr_A, hx.expr_sub,
         houtStr, hc.sret_align, hc.sret_ram.1, hc.sret_ram.2, hc.sret_win,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint,
@@ -1237,5 +1200,28 @@ theorem evalNotSim : EvalNotSimGoal := by
   exact ⟨c4, ((hs1.trans hs2).trans hs3).trans hs4, hExit, hMemExt, hWords,
     φf', φc', hpfe.trans (PhiExtends.mono hStoreLe.1 hpf'),
     hpce.trans (PhiExtends.mono hStoreLe.2 hpc'), hSurv⟩
+
+/-- Logical-not of a null child uses the ordinary recursive contract. Its
+unused payload word imposes no restriction on memory or aliasing. -/
+theorem evalNotSim_null
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' : Vsa.While.St) (d env : Nat) (esub : Expr)
+    (sp r sret aEnv aExpr aOperand : BitVec 64) (m0 : Mem)
+    (hIH : EvalIH st d env esub st' .null)
+    (hE : EvalE st d env esub st' .null) :
+    Triple
+      (fun c =>
+        EvalEntry g N A SL φf φc st d env (.unary .not esub)
+          sp r sret aEnv aExpr m0 c ∧
+        NotSimExtras N A SL esub sp sret aExpr aOperand m0)
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' (.bool true) sp r sret m0) :=
+  evalNotSim g N A SL φf φc st st' d env esub .null sp r sret aEnv aExpr
+    aOperand m0 hIH (.not st d env esub st' .null hE)
+
+#print axioms blockC_not
+#print axioms evalNotSim
+#print axioms evalNotSim_null
 
 end Vsa.Sim

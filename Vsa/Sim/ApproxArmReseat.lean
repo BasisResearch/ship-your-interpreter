@@ -204,11 +204,10 @@ structure ExecDispatchEntry
   stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
   stack_win : tohostAddr + 16 ≤ SL.lo
   /-- The `Stmt` node is disjoint from the stack scribble. -/
-  stmt_stack_disjoint : aStmt.toNat + 16 ≤ SL.lo ∨ spD.toNat ≤ aStmt.toNat
-  /-- The `Stmt` node is an 8-aligned 16-byte slot in RAM above HTIF. -/
-  stmt_align : aStmt.toNat % 8 = 0
-  stmt_ram : 0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000
-  stmt_win : tohostAddr + 16 ≤ aStmt.toNat
+  stmt_stack_disjoint : aStmt.toNat + 4 ≤ SL.lo ∨ spD.toNat ≤ aStmt.toNat
+  /-- The four-byte statement tag lies in RAM outside HTIF. -/
+  stmt_ram : 0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 4 ≤ 0x100000000
+  stmt_win : aStmt.toNat + 4 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat
 
 /-- **Dispatch-head entry, existentially bundled** — the second `SEntryC`
 disjunct (the wave-44 amendment plan's landing shape, moved upstream wave 45). -/
@@ -277,11 +276,10 @@ structure ExecWhileArmEntry
   stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
   stack_win : tohostAddr + 16 ≤ SL.lo
   /-- The `Stmt` node is disjoint from the stack scribble. -/
-  stmt_stack_disjoint : aStmt.toNat + 16 ≤ SL.lo ∨ spD.toNat ≤ aStmt.toNat
-  /-- The `Stmt` node is an 8-aligned 16-byte slot in RAM above HTIF. -/
-  stmt_align : aStmt.toNat % 8 = 0
-  stmt_ram : 0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000
-  stmt_win : tohostAddr + 16 ≤ aStmt.toNat
+  stmt_stack_disjoint : aStmt.toNat + 4 ≤ SL.lo ∨ spD.toNat ≤ aStmt.toNat
+  /-- The four-byte statement tag lies in RAM outside HTIF. -/
+  stmt_ram : 0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 4 ≤ 0x100000000
+  stmt_win : aStmt.toNat + 4 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat
 
 /-- **While-arm-head entry, existentially bundled** — the third `SEntryC`
 disjunct (`viaWhileArm`). -/

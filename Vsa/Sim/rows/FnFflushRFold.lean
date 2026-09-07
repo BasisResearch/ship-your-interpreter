@@ -1,3 +1,4 @@
+import Vsa.Sim.WordLoadData
 import Vsa.Sim.rows.FnFflushR
 import Vsa.Sim.rows.FnLockStubsFold
 import Vsa.Sim.rows.FnSflushRSuffix
@@ -255,7 +256,7 @@ theorem fflushEe10_prog_facts (g : FflushG) (hg : FflushGOk g) :
   · exact Vsa.Sim.Code._fflush_r_at_8000ee18 hg.codeF_after
   · exact Vsa.Sim.DecodeTable.decode_0b05a703
   · have hc := sflushCallbackM_console (fflushSG g) (fflushSG_ok g hg)
-    refine ⟨⟨by decide, by decide, by decide, by decide⟩, ?_⟩
+    refine ⟨⟨by decide, by decide, by decide⟩, ?_⟩
     exact fflush_lpins4_zero hc.lockMode
   apply progFactsM_cons
   · exact Vsa.Sim.Code._fflush_r_at_8000ee1c hg.codeF_after
@@ -273,7 +274,7 @@ theorem fflushEe10_facts (g : FflushG) (hg : FflushGOk g) :
   · refine ⟨fflush_store0_range g.sp hg.stack, ?_⟩
     exact fflush_lpins8_of_pin (fflushAfter_slot0_pin g hg)
   · have hc := sflushCallbackM_console (fflushSG g) (fflushSG_ok g hg)
-    refine ⟨⟨by decide, by decide, by decide, by decide⟩, ?_⟩
+    refine ⟨⟨by decide, by decide, by decide⟩, ?_⟩
     exact fflush_lpins4_zero hc.lockMode
   · change guardB bop.BNE
       (bytesVal MKind.lw [0#8, 0#8, 0#8, 0#8] &&&
@@ -372,8 +373,7 @@ theorem fflushEddc_facts (g : FflushG) (hg : FflushGOk g) :
   chain_facts hg.codeF with "Vsa.Sim.Code._fflush_r_at_"
   · have ha : eaddrM (mkLine 0x8000eddc#64 0x04853783#32)
         (fflushL1 g) = BitVec.ofNat 64 (consoleReent + 72) := rfl
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
-    · rw [ha]; decide
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · rw [ha]; decide
     · rw [ha]; decide
     · rw [ha]; decide
@@ -408,8 +408,7 @@ theorem fflushEde4_facts (g : FflushG) (hg : FflushGOk g) :
   chain_facts hg.codeF with "Vsa.Sim.Code._fflush_r_at_"
   · have ha : eaddrM (mkLine 0x8000ede4#64 0x01059683#32)
         (fflushL2 g) = BitVec.ofNat 64 (consoleStdout + 16) := rfl
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_, ?_⟩
-    · rw [ha]; decide
+    refine ⟨⟨?_, ?_, ?_⟩, ?_, ?_⟩
     · rw [ha]; decide
     · rw [ha]; decide
     · rw [ha]; decide
@@ -477,8 +476,7 @@ theorem fflushEdf0_facts (g : FflushG) (hg : FflushGOk g) :
   chain_facts hg.codeF with "Vsa.Sim.Code._fflush_r_at_"
   · have ha : eaddrM (mkLine 0x8000edf0#64 0x0b05a783#32)
         (fflushL3 g) = BitVec.ofNat 64 (consoleStdout + 176) := rfl
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
-    · rw [ha]; decide
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · rw [ha]; decide
     · rw [ha]; decide
     · rw [ha]; decide
@@ -3126,16 +3124,8 @@ theorem fflushRelease_slot24_read64 (g : FflushG) (hg : FflushGOk g) :
 
 theorem fflush_load64_eq_of_read64 {m : Mem} {a : Nat} {v : BitVec 64}
     (h : read64 m a = some v.toNat) :
-    (sign_extend (m := 64) (bytesT8 m a : BitVec (8 * 8)) : BitVec 64) = v := by
-  obtain ⟨b0, b1, b2, b3, b4, b5, b6, b7,
-    e0, e1, e2, e3, e4, e5, e6, e7, hv⟩ := read64_bytes m a v.toNat h
-  rw [show (bytesT8 m a : BitVec (8 * 8)) =
-      (((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) by
-    simp only [bytesT8, e0, e1, e2, e3, e4, e5, e6, e7, Option.getD_some]]
-  rw [sext_full]
-  apply BitVec.eq_of_toNat_eq
-  rw [word8_toNat_recon]
-  exact hv
+    (sign_extend (m := 64) (bytesT8 m a : BitVec (8 * 8)) : BitVec 64) = v :=
+  load64_eq_of_read64 h
 
 theorem fflushEe68_ld_site (σ : MState) (i u : Nat) (pc : BitVec 64)
     (vminstret vsp : BitVec 64)

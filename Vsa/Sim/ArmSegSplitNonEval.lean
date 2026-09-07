@@ -110,7 +110,6 @@ def ExecStmtPreBundle (s : Stmt) (c' : Config) (st : SpecSt) (d : Nat)
     (∀ m' : Mem,
       (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → mcall[k]? = m'[k]?) →
       StoreRepr m' N A φf φc st.store) ∧
-    aStmt.toNat % 8 = 0 ∧
     0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000 ∧
     tohostAddr + 16 ≤ aStmt.toNat ∧
     (aStmt.toNat + 16 ≤ SL.lo ∨ (sp - hdrm).toNat ≤ aStmt.toNat) ∧

@@ -355,11 +355,10 @@ theorem envDefineMissCapDispatch
           rw [himm]
           have h4 : env.toNat + 4 < 2^64 := by omega
           exact Nat.mod_eq_of_lt h4
-        refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+        refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
         · rw [hea]; exact hfieldLo
         · rw [hea]; exact hfieldHi
         · rw [hea]; exact hfieldHtif
-        · rw [hea]; exact hfieldAlign
         · rw [hmem, hea]
           exact hpins
       · simp only [envDefineCapAppendSeg, evalBlocks, evalBlock, SegEvalState.init]
@@ -400,11 +399,10 @@ theorem envDefineMissCapDispatch
           rw [himm]
           have h4 : env.toNat + 4 < 2^64 := by omega
           exact Nat.mod_eq_of_lt h4
-        refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+        refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
         · rw [hea]; exact hfieldLo
         · rw [hea]; exact hfieldHi
         · rw [hea]; exact hfieldHtif
-        · rw [hea]; exact hfieldAlign
         · rw [hmem, hea]
           exact hpins
       · simp only [envDefineCapGrowSeg, evalBlocks, evalBlock, SegEvalState.init]

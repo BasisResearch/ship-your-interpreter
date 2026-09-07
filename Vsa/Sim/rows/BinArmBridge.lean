@@ -84,14 +84,12 @@ structure BinArmExtras
   -- transport the two pointer reads from `m0` to the arm-entry `ment`).
   expr32_stk : aExpr.toNat + 32 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
   -- ===== LEFT-operand geometry (BinExtras.lop_*) =====
-  lop_align : aLOp.toNat % 8 = 0
   lop_ram : 0x80000000 ≤ aLOp.toNat ∧ aLOp.toNat + 16 ≤ 0x100000000
   lop_win : tohostAddr + 16 ≤ aLOp.toNat
   lop_stk : aLOp.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aLOp.toNat
   lexpr_surv : ∀ m : Mem,
     (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → m0[k]? = m[k]?) → ExprRepr m aLOp.toNat el
   -- ===== RIGHT-operand geometry (BinExtras.rop_*) =====
-  rop_align : aROp.toNat % 8 = 0
   rop_ram : 0x80000000 ≤ aROp.toNat ∧ aROp.toNat + 16 ≤ 0x100000000
   rop_win : tohostAddr + 16 ≤ aROp.toNat
   rop_stk : aROp.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aROp.toNat
@@ -105,7 +103,7 @@ structure BinArmExtras
   node_stk : aExpr.toNat + 32 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
   node_arena : aExpr.toNat + 32 ≤ A.lo ∨ A.hi ≤ aExpr.toNat
   -- ===== deep recursive headroom + alignment + bounds (BinExtras) =====
-  sproom : SL.lo + 4352 ≤ sp.toNat
+  sproom : SL.lo + 3264 ≤ sp.toNat
   spSLhi : sp.toNat ≤ SL.hi
   sp16 : sp.toNat % 16 = 0
   SLhiRam : SL.hi ≤ 0x100000000
@@ -207,14 +205,14 @@ theorem blockA_binaryArm
       (by have := hX.tableStk; simp only [jumpTableBase]; omega)
       c ⟨⟨hc.good, hc.tick, hc.pc, hc.a0, hc.a1, hc.a2, hc.ra, hc.ra_align, hc.spReg,
         hc.stackOK, hc.minstret, hc.mem, hc.code, hc.expr, hc.store, hc.store_survives, hc.out,
-        hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
+        hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_ram,
         hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
         ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩
   -- Destructure a COPY of the widened `ArmEntryK` (keep `hArm` intact for output).
   have hArmCopy := hArm
   obtain ⟨_hAG, _hAtick, _hApc, _hAa0, _hAs1, _hAa2, _hAsp, _hAra, _hAmi, _hAout,
-    _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxAl, _hAxLo, _hAxHi, _hAxWin,
+    _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxLo, _hAxHi, _hAxWin,
     _hAslotRa, _hAslotS0, _hAslotS1, _hAslotS2, hArmMemM0,
     _hArmg8, _hArmg9, _hArmg18, _hArmg2, _hAstore, _hAstoreSurv, hArmFrame,
     _hAsretAl, _hAsretLo, _hAsretHi, _hAsretWin, _hAsretVi, _hAsretStk, _hAsretEc,
@@ -251,11 +249,11 @@ theorem blockA_binaryArm
   -- Now `hlReprMent : ExprRepr ment aLOp.toNat el` and likewise for `er`.
   -- Assemble the `BinExtras` record from the `BinArmExtras` geometry.
   have hBE : BinExtras N A SL el er ment sp sret aExpr aLOp aROp :=
-    { lop_align := hX.lop_align, lop_ram := hX.lop_ram, lop_win := hX.lop_win,
+    { lop_ram := hX.lop_ram, lop_win := hX.lop_win,
       lop_stk := hX.lop_stk
       lexpr_surv := fun m hm => hX.lexpr_surv m (fun k hk =>
         (hMentM0 k (by have := hX.spSLhi; omega)).symm.trans (hm k hk))
-      rop_align := hX.rop_align, rop_ram := hX.rop_ram, rop_win := hX.rop_win,
+      rop_ram := hX.rop_ram, rop_win := hX.rop_win,
       rop_stk := hX.rop_stk, rop_stkfull := hX.rop_stkfull, rop_arena := hX.rop_arena
       rexpr_surv := fun m hm => hX.rexpr_surv m (fun k hk hk' =>
         (hMentM0 k (by have := hX.spSLhi; omega)).symm.trans (hm k hk hk'))

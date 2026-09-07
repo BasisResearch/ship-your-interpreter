@@ -1,3 +1,4 @@
+import Vsa.Sim.RamReadPins
 import Vsa.Sim.StagePreSuppliers2
 import Vsa.Sim.EvalChildFieldCombinator
 import Vsa.Sim.DecodeTable.Batch05Part16
@@ -98,7 +99,6 @@ theorem site_8000347c_as (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (hhiram : (v12 + sign_extend (m := 64) (0x010#12)).toNat + 8 ≤ 0x100000000)
     (hhtif : (v12 + sign_extend (m := 64) (0x010#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v12 + sign_extend (m := 64) (0x010#12)).toNat)
-    (halign : (v12 + sign_extend (m := 64) (0x010#12)).toNat % 8 = 0)
     (h0 : σ.mem[(v12 + sign_extend (m := 64) (0x010#12)).toNat]? = some b0)
     (h1 : σ.mem[(v12 + sign_extend (m := 64) (0x010#12)).toNat + 1]? = some b1)
     (h2 : σ.mem[(v12 + sign_extend (m := 64) (0x010#12)).toNat + 2]? = some b2)
@@ -126,13 +126,13 @@ theorem site_8000347c_as (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
-    (exec_ld σ (0x8000347c#64) (0x010#12) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x0c#5)
+    (exec_ld_ram_bytes σ (0x8000347c#64) (0x010#12) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x0c#5)
       (sigma3_alu σ (0x8000347c#64) Register.x12 (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
       v12 b0 b1 b2 b3 b4 b5 b6 b7 hG
       (rX_bits_x12 _ v12
         (by rw [get?_afterNextPC σ (0x8000347c#64) _ (by decide) (by decide)]; exact hx12))
       (wX_bits_x12 _ (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
-      hlo hhiram hhtif halign h0 h1 h2 h3 h4 h5 h6 h7)
+      hlo hhiram hhtif h0 h1 h2 h3 h4 h5 h6 h7)
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
@@ -276,7 +276,7 @@ def AssignRhsCallPre
   read64 mcall (sp.toNat - 16) = some v8.toNat ∧
   read64 mcall (sp.toNat - 24) = some v9.toNat ∧
   read64 mcall (sp.toNat - 32) = some v18.toNat ∧
-  aOperand.toNat % 8 = 0 ∧ 0x80000000 ≤ aOperand.toNat ∧
+  0x80000000 ≤ aOperand.toNat ∧
   aOperand.toNat + 16 ≤ 0x100000000 ∧ tohostAddr + 16 ≤ aOperand.toNat ∧
   (aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat) ∧
   subsret.toNat % 8 = 0 ∧ sp.toNat - 1088 ≤ subsret.toNat ∧
@@ -398,7 +398,7 @@ theorem blockB_assign_stagePre_carry
         -- `exprIn_assign_child`; re-cut below to the child windows).
         EvalGround ment SL A sp sret aRhs.toNat e ∧
         aExpr.toNat + 24 ≤ 0x100000000 ∧
-        aRhs.toNat % 8 = 0 ∧
+
         0x80000000 ≤ aRhs.toNat ∧ aRhs.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aRhs.toNat ∧
         (aRhs.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aRhs.toNat) ∧
@@ -423,12 +423,12 @@ theorem blockB_assign_stagePre_carry
         v8 v9 v18 out0 mcall c') := by
   obtain ⟨ment, hArm, hx11, hx13, henvReg, hgframe, hg8, hg18, hg19, hg20, hg21,
     hpay, hexprSurv, hGroundP, hexprHi24,
-    hopAl, hopLo, hopHi, hopWin, hopStk,
+    hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
     hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
-    hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
+    hexpr, houtStr, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
@@ -453,7 +453,7 @@ theorem blockB_assign_stagePre_carry
     site_8000347c_as c.σ c.tick c.steps (0x8000347c#64) vmi aExpr pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7
       hG hpc hmi ha2 (hmem ▸ hcode) rfl
       (by rw [haddr16]; omega) (by rw [haddr16]; omega)
-      (by rw [haddr16, htoh]; right; omega) (by rw [haddr16]; omega)
+      (by rw [haddr16, htoh]; right; omega)
       (by rw [haddr16, hmem]; exact hp0) (by rw [haddr16, hmem]; exact hp1)
       (by rw [haddr16, hmem]; exact hp2) (by rw [haddr16, hmem]; exact hp3)
       (by rw [haddr16, hmem]; exact hp4) (by rw [haddr16, hmem]; exact hp5)
@@ -656,7 +656,7 @@ theorem blockB_assign_stagePre_carry
       hviSlotMcall, hnbsMcall, hGroundMcall, hExprMcall, hStoreMcall,
       hStoreSurvMcall, hframeB, ⟨hg8, hg18, hg19, hg20, hg21⟩,
       hslotRaMcall, hslotS0Mcall, hslotS1Mcall, hslotS2Mcall,
-      hopAl, hopLo, hopHi, hopWin, hopStk,
+      hopLo, hopHi, hopWin, hopStk,
       (by rw [hsub848]; omega), (by rw [hsub848]; omega), (by rw [hsub848]; omega),
       hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin,
       hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -686,7 +686,7 @@ theorem blockB_assign_stagePre
       (∀ m' : Mem, (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m'[a]?) →
         ExprRepr m' aRhs.toNat e) ∧
       EvalGround ment SL A sp sret aRhs.toNat e ∧
-      aExpr.toNat + 24 ≤ 0x100000000 ∧ aRhs.toNat % 8 = 0 ∧
+      aExpr.toNat + 24 ≤ 0x100000000 ∧
       0x80000000 ≤ aRhs.toNat ∧ aRhs.toNat + 16 ≤ 0x100000000 ∧
       tohostAddr + 16 ≤ aRhs.toNat ∧
       (aRhs.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aRhs.toNat) ∧
@@ -749,7 +749,7 @@ def AssignArmDispatch
         -- `exprIn_assign_child`; re-cut below to the child windows).
         EvalGround ment SL A sp sret aRhs.toNat e ∧
         aExpr.toNat + 24 ≤ 0x100000000 ∧
-        aRhs.toNat % 8 = 0 ∧
+
         0x80000000 ≤ aRhs.toNat ∧ aRhs.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aRhs.toNat ∧
         (aRhs.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aRhs.toNat) ∧
@@ -777,7 +777,7 @@ theorem assignE_field_of_dispatch
     (fun c' hMid => ?_) c rfl
   obtain ⟨gpre, aIn, aRhs, aEnv3, v8, v9, v18, ment, hArm, hx11, hx13, henvReg, hgframe,
     hg8, hg18, hg19, hg20, hg21, hpay, hexprSurv, hGroundP, hexprHi24,
-    hopAl, hopLo, hopHi, hopWin, hopStk,
+    hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam, hcodeStk, hviStk, htableStk,
     harenaStk, harenaCode⟩ := hMid
   exact blockB_assign_stagePre g gpre N A SL φf φc st d env x e
@@ -785,7 +785,7 @@ theorem assignE_field_of_dispatch
     hEntry.env_valid
     ⟨ment, hArm, hx11, hx13, henvReg, hgframe, hg8, hg18, hg19, hg20, hg21,
       hpay, hexprSurv, hGroundP, hexprHi24,
-      hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
+      hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
       hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
       -- ITEM ZERO B1: the RHS child budget, DERIVED from the entry's fields.
       hEntry.stackBudget.child (by decide)

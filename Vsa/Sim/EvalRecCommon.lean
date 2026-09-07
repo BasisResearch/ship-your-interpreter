@@ -1,4 +1,5 @@
 import Vsa.Sim.EvalSimCommon
+import Vsa.Sim.CoherentReturn
 
 /-!
 # Layer 4 — M4 RECURSIVE-case common machinery: the IH-application glue
@@ -122,6 +123,66 @@ def EvalIH (st : Vsa.While.St) (d : Nat) (env : Addr) (e : Expr)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st' v sp r sret m0)
 
+/-- A reached result and an additional fact about that same configuration. -/
+structure ReturnedWith (Result Extra : Config → Prop) (c : Config) : Prop where
+  result : Result c
+  extra : Extra c
+
+/-- Forget extra result evidence without changing the execution witness. -/
+theorem ReturnedWith.forget {Pre Result Extra : Config → Prop}
+    (h : Triple Pre (ReturnedWith Result Extra)) : Triple Pre Result :=
+  h.conseq (fun _ hp => hp) (fun _ hp => hp.result)
+
+/-- Extra child-return facts may depend on the representation world actually
+chosen at the call, including its native table, arena, and entry maps. -/
+abbrev EvalExtra := NativeAddrs → Arena → StackLayout →
+  (Addr → Nat) → (Addr → Nat) → Nat → Config → Prop
+
+/-- A child simulation retaining a selected fact at its actual returned state. -/
+structure EvalIHWith (Extra : EvalExtra)
+    (st : Vsa.While.St) (d : Nat) (env : Addr) (e : Expr)
+    (st' : Vsa.While.St) (v : Value) : Prop where
+  run : ∀ (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
+    Triple
+      (EvalEntry g N A SL φf φc st d env e sp r sret aEnv aExpr m0)
+      (ReturnedWith
+        (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+          st' v sp r sret m0)
+        (Extra N A SL φf φc sret.toNat))
+
+/-- Project the ordinary recursive contract from the same child execution. -/
+theorem EvalIHWith.forget {Extra : EvalExtra}
+    {st st' : Vsa.While.St} {d env : Nat} {e : Expr} {v : Value}
+    (h : EvalIHWith Extra st d env e st' v) : EvalIH st d env e st' v := by
+  intro g N A SL φf φc sp r sret aEnv aExpr m0
+  exact ReturnedWith.forget (h.run g N A SL φf φc sp r sret aEnv aExpr m0)
+
+/-- Ordinary callers need no additional child-result fact. -/
+theorem EvalIH.withTrue {st st' : Vsa.While.St} {d env : Nat} {e : Expr} {v : Value}
+    (h : EvalIH st d env e st' v) :
+    EvalIHWith (fun _ _ _ _ _ _ _ => True) st d env e st' v where
+  run := fun g N A SL φf φc sp r sret aEnv aExpr m0 =>
+    (h g N A SL φf φc sp r sret aEnv aExpr m0).conseq
+      (fun _ hp => hp) (fun _ hp => ⟨hp, True.intro⟩)
+
+/-- Payload coverage for the actual child value, outside the caller's stack.
+Runtime ownership supplies this through `ValueOwned.covered`; it is not a law
+about arbitrary memories representing the same semantic value. -/
+abbrev EvalPayloadIH (st : Vsa.While.St) (d env : Nat) (e : Expr)
+    (st' : Vsa.While.St) (v : Value) : Prop :=
+  EvalIHWith (fun _ _ SL _ _ a c =>
+    ValuePayloadCovered (fun k => ¬ (SL.lo ≤ k ∧ k < SL.hi)) c.σ.mem a v)
+    st d env e st' v
+
+/-- Null has no indirect payload. Retain the ordinary child execution unchanged. -/
+theorem EvalPayloadIH.of_null {st st' : Vsa.While.St} {d env : Nat} {e : Expr}
+    (h : EvalIH st d env e st' .null) : EvalPayloadIH st d env e st' .null where
+  run := fun g N A SL φf φc sp r sret aEnv aExpr m0 =>
+    (h g N A SL φf φc sp r sret aEnv aExpr m0).conseq
+      (fun _ hp => hp) (fun _ hp => ⟨hp, True.intro⟩)
+
 /-! ## `SubEvalReturn` — the post-sub-call machine state -/
 
 /-- What a recursive arm knows at the instruction after its `jal eval_expr`
@@ -181,7 +242,8 @@ PC (`callPC`), with the sub-call's arguments already in place
 lands at `eval_expr`'s entry with link `retPC = callPC + 4`; the sub-call's
 `EvalEntry` is assembled from the arm state, the IH is applied, and its
 `EvalExitD` is repackaged into `SubEvalReturn`. -/
-theorem armTail_rec
+theorem armTail_rec_with
+    {Extra : EvalExtra}
     (gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' : Vsa.While.St) (d : Nat) (env : Addr) (esub : Expr) (vsub : Value)
@@ -201,7 +263,7 @@ theorem armTail_rec
         Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧ σ'.mem = σ.mem ∧
         ReadsLikePost σ' (sigmaPost_jal σ callPC vmi jalImm Register.x1 (BitVec.addInt callPC 4)))
     -- the induction hypothesis for the sub-derivation:
-    (hIH : EvalIH st d env esub st' vsub) :
+    (hIH : EvalIHWith Extra st d env esub st' vsub) :
     Triple
       (fun c =>
         GoodState c.σ ∧ c.tick < 2 ∧
@@ -237,7 +299,6 @@ theorem armTail_rec
         read64 mcall (sp.toNat - 24) = some v9.toNat ∧
         read64 mcall (sp.toNat - 32) = some v18.toNat ∧
         -- operand-node geometry (the sub-call's `aExpr`):
-        aOperand.toNat % 8 = 0 ∧
         0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aOperand.toNat ∧
         (aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat) ∧
@@ -260,14 +321,16 @@ theorem armTail_rec
           (esub.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
         Expr.bodiesBound Vsa.While.perCallBudget esub = true ∧
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget)
-      (SubEvalReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
-        st' vsub sp r sret subsret retPC v8 v9 v18 mcall) := by
+      (ReturnedWith
+        (SubEvalReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+          st' vsub sp r sret subsret retPC v8 v9 v18 mcall)
+        (Extra N A SL φf φc subsret.toNat)) := by
   intro c hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, hx11, hx13, hx12, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
     hsubWords, hcode, hviCode, hslot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframe,
     ⟨⟨w8, hw8⟩, ⟨w18, hw18⟩, ⟨w19, hw19⟩, ⟨w20, hw20⟩, ⟨w21, hw21⟩⟩,
     hslotRa, hslotS0, hslotS1, hslotS2,
-    hopAl, hopLo, hopHi, hopWin, hopStk,
+    hopLo, hopHi, hopWin, hopStk,
     hssAl, hssLo, hssHi,
     hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -364,7 +427,6 @@ theorem armTail_rec
         rcases hopStk with h | h
         · left; exact h
         · right; rw [hspsub]; omega
-      expr_align := hopAl
       expr_ram := ⟨hopLo, hopHi⟩
       expr_win := hopWin
       sret_align := hssAl
@@ -398,9 +460,10 @@ theorem armTail_rec
       envReg := hx13_1
       x13_defined := ⟨_, hx13_1⟩ }
   -- ============ the sub-call (the induction hypothesis) ============
-  obtain ⟨c2, hs2, hExit, hpres, hwords, φf', φc', hpf', hpc', hsurvSL⟩ :=
-    hIH (fun R => σ1.regs.get? R) N A SL φf φc (sp - 1088#64) retPC subsret aIn aOperand mcall
+  obtain ⟨c2, hs2, hReturned⟩ :=
+    hIH.run (fun R => σ1.regs.get? R) N A SL φf φc (sp - 1088#64) retPC subsret aIn aOperand mcall
       ⟨σ1, i1, c.steps + 1⟩ hEntry
+  obtain ⟨hExit, hpres, hwords, φf', φc', hpf', hpc', hsurvSL⟩ := hReturned.result
   -- PC back at the link (ret target of an aligned retPC)
   have hpcRet : c2.σ.regs.get? Register.PC = some retPC := by
     rw [hExit.pc, ret_tgt retPC hretAl]
@@ -459,13 +522,40 @@ theorem armTail_rec
     · exact absurd hin (by rcases hcodeStk with h | h <;> omega)
     · exact heq.symm
   -- assemble SubEvalReturn
-  refine ⟨c2, (Steps.single hstep1).trans hs2,
-    hExit.good, hExit.tick, hpcRet, hExit.a0, hExit.ra, hs1_2, hExit.spReg, hExit.minstret,
+  refine ⟨c2, (Steps.single hstep1).trans hs2, ?_, hReturned.extra⟩
+  exact ⟨hExit.good, hExit.tick, hpcRet, hExit.a0, hExit.ra, hs1_2, hExit.spReg, hExit.minstret,
     hExit.out, hframe2,
     (by obtain ⟨φcr, hpcr, hrepr⟩ := hExit.result
         exact ⟨φcr, hpcr, ValueWordRepr.of_repr_total hrepr hwords⟩),
     ⟨φf', φc', hpf', hpc', hsurvSL c2.σ.mem (fun _ _ => rfl), hsurvSL⟩,
     hcode2, hslotRa2, hslotS02, hslotS12, hslotS22, hmemFrame2, hpres⟩
+
+/-- Ordinary child-call projection of the proof that retains extra facts. -/
+def armTail_rec
+    (gpre : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' : Vsa.While.St) (d : Nat) (env : Addr) (esub : Expr) (vsub : Value)
+    (callPC retPC : BitVec 64) (jalImm : BitVec 21)
+    (sp r sret subsret aIn aOperand : BitVec 64) (v8 v9 v18 : BitVec 64)
+    (out0 : Array String) (mcall : Mem)
+    -- target arithmetic, fixed by the arm (`decide`-able concretely):
+    (hjaltgt : (callPC + sign_extend (m := 64) jalImm) = BitVec.ofNat 64 evalExprEntry)
+    (hlink : (BitVec.addInt callPC 4) = retPC)
+    (hretAl : retPC.toNat % 4 = 0)
+    (henvValid : EnvValid st env)
+    -- the per-arm `jal eval_expr` site step:
+    (hjalSite : ∀ (σ : MState) (i u : Nat) (vmi : BitVec 64),
+      GoodState σ → σ.regs.get? Register.PC = some callPC →
+      σ.regs.get? Register.minstret = some vmi → Eval_exprLoaded σ.mem → i < 2 →
+      ∃ (σ' : MState) (i' : Nat),
+        Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧ σ'.mem = σ.mem ∧
+        ReadsLikePost σ' (sigmaPost_jal σ callPC vmi jalImm Register.x1 (BitVec.addInt callPC 4)))
+    -- the induction hypothesis for the sub-derivation:
+    (hIH : EvalIH st d env esub st' vsub) :=
+  ReturnedWith.forget
+    (armTail_rec_with gpre N A SL φf φc st st' d env esub vsub
+      callPC retPC jalImm sp r sret subsret aIn aOperand v8 v9 v18 out0 mcall
+      hjaltgt hlink hretAl henvValid hjalSite (EvalIH.withTrue hIH))
 
 /-! ## `PreEpilogueVD` — the epilogue-entry state widened for the recursive exit
 
@@ -490,12 +580,60 @@ def PreEpilogueVD
     (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → mpre[k]? = m'[k]?) →
     StoreRepr m' N A φf φc st.store)
 
+/-- Memory facts retained together through the shared epilogue. -/
+structure EpilogueReturnMemory
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (v : Value) (sret : BitVec 64) (m0 : Mem)
+    (Owned : (Addr → Nat) → (Addr → Nat) → Mem → Prop) (m : Mem) : Prop where
+  presence : MemExtends m0 m
+  words : ValueWordsTotal m sret.toNat
+  returned : ReturnRepr N A φf φc φf φc st.store.frames.size st.store.closures.size
+    st.store [(sret.toNat, v)] Owned (fun k => SL.lo ≤ k ∧ k < SL.hi) m
+
+/-- The actual producer supplies ownership at the maps used by the epilogue. -/
+structure PreEpilogueOwned
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (v : Value)
+    (sp r sret v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem)
+    (Owned : (Addr → Nat) → (Addr → Nat) → Mem → Prop) (c : Config) : Prop where
+  reached : ∃ mpre,
+    PreEpilogueVD g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpre c ∧
+    Owned φf φc mpre
+
+/-- Preserve the selected maps, including fresh closures, on the actual return. -/
+theorem blockD_v_rec_coherent
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (v : Value)
+    (sp r sret v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem)
+    (Owned : (Addr → Nat) → (Addr → Nat) → Mem → Prop) :
+    Triple (PreEpilogueOwned g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 Owned)
+      (ReturnedWith
+        (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+          st v sp r sret m0)
+        (fun c => ReturnRepr N A φf φc φf φc st.store.frames.size st.store.closures.size
+          st.store [(sret.toNat, v)] Owned (fun k => SL.lo ≤ k ∧ k < SL.hi) c.σ.mem)) := by
+  intro c hpre
+  obtain ⟨mpre, ⟨hPre, hMemExt, hWords, hSurv⟩, hOwned⟩ := hpre.reached
+  have hData : EpilogueReturnMemory N A SL φf φc st v sret m0 Owned mpre := by
+    refine ⟨hMemExt, hWords, PhiExtends.refl _ _, PhiExtends.refl _ _, ?_, hOwned, hSurv⟩
+    intro a w haw
+    have heq : (a, w) = (sret.toNat, v) := List.mem_singleton.mp haw
+    cases heq
+    exact hPre.value
+  obtain ⟨c', hs, hExit, hData'⟩ :=
+    blockD_v g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0
+      (EpilogueReturnMemory N A SL φf φc st v sret m0 Owned) c ⟨mpre, hPre, hData⟩
+  exact ⟨c', hs,
+    ⟨hExit, hData'.presence, hData'.words, φf, φc,
+      hData'.returned.frames, hData'.returned.closures, hData'.returned.survives⟩,
+    hData'.returned⟩
+
 /-! ## `blockD_v_rec` — the shared epilogue producing `EvalExitD`
 
-`PreEpilogueVD … v → EvalExitD … v`. Reuses `blockD_v` with the carried predicate
-`Q m := MemExtends m0 m ∧ [SL.lo,SL.hi)-survival at m` (memory-pure epilogue ⇒
-`Q mpre → Q (exit mem)`), then repackages `EvalExit ∧ Q c.σ.mem` into the
-`EvalExitD` triple (`MemExtends m0 c.σ.mem` + the identity-`φ` survival witness). -/
+Projects `blockD_v_rec_coherent` at the same execution endpoint. Ordinary
+callers use `Owned := True`; the stronger post retains the common maps. -/
 theorem blockD_v_rec
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -505,15 +643,16 @@ theorem blockD_v_rec
       (fun c => ∃ mpre, PreEpilogueVD g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpre c)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st v sp r sret m0) := by
-  intro c hpre
-  obtain ⟨mpre, hPre, hMemExt, hWords, hSurv⟩ := hpre
-  obtain ⟨c', hs, hExit, hMemExt', hWords', hSurv'⟩ :=
-    blockD_v g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0
-      (fun m => MemExtends m0 m ∧ ValueWordsTotal m sret.toNat ∧
-        (∀ m' : Mem, (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → m[k]? = m'[k]?) →
-          StoreRepr m' N A φf φc st.store))
-      c ⟨mpre, hPre, hMemExt, hWords, hSurv⟩
-  exact ⟨c', hs, hExit,
-    hMemExt', hWords', φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, hSurv'⟩
+  apply ReturnedWith.forget
+  apply (blockD_v_rec_coherent g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0
+    (fun _ _ _ => True)).conseq
+  · intro c hpre
+    obtain ⟨mpre, hp⟩ := hpre
+    exact ⟨mpre, hp, True.intro⟩
+  · exact fun _ h => h
+
+#print axioms PreEpilogueV.value
+#print axioms blockD_v_rec_coherent
+#print axioms blockD_v_rec
 
 end Vsa.Sim

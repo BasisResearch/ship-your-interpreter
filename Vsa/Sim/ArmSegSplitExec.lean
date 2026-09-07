@@ -26,7 +26,7 @@ differences that shape the premise bundle:
   `spill_defined` (FOUR spills: s0/s1/s2/s3, not three).
 * **Must be premises of the arm-head bundle**: the child-frame GEOMETRY at the
   lowered `sp` — `stackOK` for the lowered sp with `176 + 1088` headroom (statement
-  frame + one eval frame), the child `Stmt` node's `StmtRepr`/alignment/RAM/
+  frame + one eval frame), the child `Stmt` node's `StmtRepr`/RAM/
   disjointness at `aStmt`, `StoreRepr` + its survival clause (NO sret carve-out —
   `ExecEntry.store_survives` frames only `[SL.lo, sp)`), and the `exec_stmt`
   code-region disjointness re-checked against the lowered `sp`.
@@ -109,7 +109,6 @@ theorem execEntry_of_jalPrefix
         (∀ m' : Mem,
           (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → mcall[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
-        aStmt.toNat % 8 = 0 ∧
         0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aStmt.toNat ∧
         (aStmt.toNat + 16 ≤ SL.lo ∨ (sp - hdrm).toNat ≤ aStmt.toNat) ∧
@@ -131,7 +130,7 @@ theorem execEntry_of_jalPrefix
     ⟨⟨w8, hw8⟩, ⟨w9, hw9⟩, ⟨w18, hw18⟩, ⟨w19, hw19⟩,
       ⟨w20, hw20⟩, ⟨w21, hw21⟩⟩,
     hout, houtStr, hmemc, hcodeS, hstmtR, hstore, hstoreSurv,
-    hstAl, hstLo, hstHi, hstWin, hstStk,
+    hstLo, hstHi, hstWin, hstStk,
     hstackOK, hSLlo, hSLhiRam, hSLwin, hcodeStk,
     hstackBudget, hstmtBodies, hstoreBodies, hground⟩ := hpre
   -- ============ callPC: jal exec_stmt → PC := execStmtEntry, x1 := retPC ============
@@ -203,10 +202,9 @@ theorem execEntry_of_jalPrefix
         code_stack_disjoint := hcodeStk
         stack_ram := ⟨hSLlo, hSLhiRam⟩
         stack_win := hSLwin
-        stmt_stack_disjoint := hstStk
-        stmt_align := hstAl
-        stmt_ram := ⟨hstLo, hstHi⟩
-        stmt_win := hstWin
+        stmt_stack_disjoint := by rcases hstStk with h | h <;> omega
+        stmt_ram := ⟨hstLo, by omega⟩
+        stmt_win := Or.inr hstWin
         spill_defined := ⟨⟨w8, hx8_1⟩, ⟨w9, hx9_1⟩, ⟨w18, hx18_1⟩, ⟨w19, hx19_1⟩⟩
         envset_defined := ⟨⟨w20, hx20_1⟩, ⟨w21, hx21_1⟩⟩
         ground := by rw [hmem1e]; exact hground }

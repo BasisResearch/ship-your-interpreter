@@ -497,7 +497,7 @@ theorem snprintfPreCall_spec
   -- === 0x80005c6c: ld s1,1120(gp) — s1 := *_impure_ptr = 0x8001b538 ===
   obtain ⟨σ11, i11, hs11, hi11, hG11, hmem11, hobs11⟩ :=
     site_80005c6c_wp σ10 i10 (c.steps + 10) _ vmi10 (0x8001b510#64) (0x38#8) (0xb5#8) (0x01#8) (0x80#8) (0x00#8) (0x00#8) (0x00#8) (0x00#8)
-      hG10 hpc10 hmi10 hp10.2.2.2.1 hsl10 rfl (by rw [hoffimp]; omega) (by rw [hoffimp]; omega) (by rw [hoffimp, htoh]; omega) (by rw [hoffimp]) (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp0) (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp1) (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp2) (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp3) (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp4) (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp5) (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp6) (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp7) hi10
+      hG10 hpc10 hmi10 hp10.2.2.2.1 hsl10 rfl (by rw [hoffimp]; omega) (by rw [hoffimp]; omega) (by rw [hoffimp, htoh]; omega)  (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp0) (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp1) (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp2) (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp3) (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp4) (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp5) (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp6) (by rw [hoffimp]; exact (hag10 _ (by omega)).trans himp7) hi10
   have hstep11 : Step ⟨σ10, i10, c.steps + 10⟩ ⟨σ11, i11, c.steps + 11⟩ := hs11
   have hpc11 : σ11.regs.get? Register.PC = some (0x80005c70#64) := by
     have := obs_alu_pc hobs11

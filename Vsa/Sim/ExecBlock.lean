@@ -247,7 +247,6 @@ theorem armExec_rec
         read64 mcall (sp.toNat - 32) = some v18.toNat ∧
         read64 mcall (sp.toNat - 40) = some v19.toNat ∧
         -- sub-statement node geometry (the sub-call's `aStmt`):
-        aStmtSub.toNat % 8 = 0 ∧
         0x80000000 ≤ aStmtSub.toNat ∧ aStmtSub.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aStmtSub.toNat ∧
         (aStmtSub.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aStmtSub.toNat) ∧
@@ -287,7 +286,7 @@ theorem armExec_rec
     hcodeS, hstmtSub, hstore, hstoreSurv,
     hframe, hgx8, hgx9, hgx18, hgx19, hgx2,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
-    hstAl, hstLo, hstHi, hstWin, hstStk,
+    hstLo, hstHi, hstWin, hstStk,
     hrsAl, hrsLo, hrsHi, hrsWin, hrsStk,
     hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin, hraAl,
     harenaStk, hexecCodeStk, hexecArenaCode,
@@ -372,11 +371,10 @@ theorem armExec_rec
       stack_win := hSLwin
       stmt_stack_disjoint := by
         rcases hstStk with h | h
-        · left; exact h
+        · left; omega
         · right; rw [hspsub]; omega
-      stmt_align := hstAl
-      stmt_ram := ⟨hstLo, hstHi⟩
-      stmt_win := hstWin
+      stmt_ram := ⟨hstLo, by omega⟩
+      stmt_win := Or.inr hstWin
       spill_defined := ⟨⟨wx8, hx8_1⟩, ⟨wx9, hx9_1⟩, ⟨aRet, hs2_1⟩, ⟨wx19, hx19_1⟩⟩
       envset_defined := ⟨⟨wx20, hx20_1⟩, ⟨wx21, hx21_1⟩⟩
       ground := by rw [hmem1e]; exact hground }

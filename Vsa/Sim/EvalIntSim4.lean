@@ -55,7 +55,7 @@ theorem blockC_ee
         LeafMemPin SL sp sret m0 mpre) := by
   intro c hpre
   obtain ⟨ment, ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hvicode, hexpr,
-    houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
+    houtStr, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
@@ -76,7 +76,7 @@ theorem blockC_ee
     site_80003408_ee c.σ c.tick c.steps (0x80003408#64) vmi aExpr pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7
       hG hpc hmi ha2 (hmem ▸ hcode) rfl
       (by rw [hpayaddr]; omega) (by rw [hpayaddr]; omega)
-      (by rw [hpayaddr, htoh]; right; omega) (by rw [hpayaddr]; omega)
+      (by rw [hpayaddr, htoh]; right; omega)
       (by rw [hpayaddr, hmem]; exact hpb0) (by rw [hpayaddr, hmem]; exact hpb1)
       (by rw [hpayaddr, hmem]; exact hpb2) (by rw [hpayaddr, hmem]; exact hpb3)
       (by rw [hpayaddr, hmem]; exact hpb4) (by rw [hpayaddr, hmem]; exact hpb5)

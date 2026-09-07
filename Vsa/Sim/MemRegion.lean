@@ -15,7 +15,7 @@ This module defines the ONE hereditary predicate those facts project from:
 
 * `ExprIn m lo hi a e` / `StmtIn m lo hi a s` — every node of the tree rooted
   at machine address `a`, every array cell, and every string payload lies in
-  `[lo, hi)`, 8-aligned.  Defined by STRUCTURAL recursion on the AST (the
+  `[lo, hi)`.  Defined by STRUCTURAL recursion on the AST (the
   `bodiesBound` recursion shape), with all memory reads CONDITIONAL
   (`∀ p, read64 m … = some p → …`), so:
   - child extraction is DIRECT (apply the clause to the `ExprRepr`-witnessed
@@ -33,7 +33,7 @@ This module defines the ONE hereditary predicate those facts project from:
   (`rows/Field_hStr.lean`) is in `EntryGround.lean` (needs the entry layer).
 
 Region facts are PURE ARITHMETIC (`NodeIn`/`CellIn`/`StrIn` mention no
-memory), so consumers get their disjointness/alignment conjuncts by `omega`
+memory), so consumers get their disjointness conjuncts by `omega`
 from the bundle bounds; only the tree-walk itself touches `m`.
 
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
@@ -45,17 +45,15 @@ namespace Vsa.Sim
 
 /-- A 40-byte AST node slot (`sizeof(Expr) = sizeof(Stmt) = 40`, `ast.h`
 LP64: kind@0, line@4, union@8 with the widest arm `fn`/`for` ending at 40)
-inside `[lo, hi)`, 8-aligned. -/
+inside `[lo, hi)`. -/
 structure NodeIn (lo hi a : Nat) : Prop where
   lo_le : lo ≤ a
   hi_ge : a + 40 ≤ hi
-  align : a % 8 = 0
 
-/-- An 8-byte pointer-array cell inside `[lo, hi)`, 8-aligned. -/
+/-- An 8-byte pointer-array cell inside `[lo, hi)`. -/
 structure CellIn (lo hi a : Nat) : Prop where
   lo_le : lo ≤ a
   hi_ge : a + 8 ≤ hi
-  align : a % 8 = 0
 
 /-- A NUL-terminated string payload of `s` at `p` inside `[lo, hi)`:
 nonzero pointer, all `s.length` bytes AND the NUL inside the region. -/

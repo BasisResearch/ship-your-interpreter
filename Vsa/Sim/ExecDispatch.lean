@@ -148,10 +148,9 @@ def ExecDispatchReady
   176 ≤ sp.toNat ∧ sp.toNat ≤ 0x100000000 ∧ 0x80000000 ≤ sp.toNat ∧
   tohostAddr + 16 + 176 ≤ sp.toNat ∧ sp.toNat % 8 = 0 ∧ r.toNat % 4 = 0 ∧
   -- target-node geometry (so the `lw`/`lwu a5,0(s0)` kind loads survive)
-  (aStmt'.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aStmt'.toNat) ∧
-  aStmt'.toNat % 8 = 0 ∧
-  (0x80000000 ≤ aStmt'.toNat ∧ aStmt'.toNat + 16 ≤ 0x100000000) ∧
-  tohostAddr + 16 ≤ aStmt'.toNat ∧
+  (aStmt'.toNat + 4 ≤ SL.lo ∨ sp.toNat ≤ aStmt'.toNat) ∧
+  (0x80000000 ≤ aStmt'.toNat ∧ aStmt'.toNat + 4 ≤ 0x100000000) ∧
+  (aStmt'.toNat + 4 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt'.toNat) ∧
   -- wave 48c: arm-entry PRESENCE over the entry `m0` (mirrors `ExecArmEntryK`;
   -- `ment` = `m0` + the prologue spills, all `writeMap8` inserts). Threaded so
   -- `execDispatch` can hand `MemExtends m0 ment` to the produced `ExecArmEntryK`.
@@ -170,7 +169,7 @@ callers — `block`-loop `armExec_rec`, `interp_run` — where the AST/slot geom
 known):
 * `hfpDisj` — the `Stmt` node's AST footprint is disjoint from the stack window
   `[SL.lo, sp)`, so the full `StmtRepr` transports across the prologue spills
-  (via `stmtRepr_agreeP`). `ExecEntry` only pins the 16-byte tag node as
+  (via `stmtRepr_agreeP`). `ExecEntry` only pins the four-byte tag as
   stack-disjoint; the deep footprint disjointness is the caller's obligation.
 * `hslotResIn` — the jump table resolves the dispatched kind `kindOfStmt s` to some
   4-aligned, stack-disjoint arm PC (the `StmtSlotPinned` the dispatch's `lw a5,0(a5)`
@@ -202,7 +201,7 @@ theorem execPrologue
   have hstore := he.store; have hstoreSurv := he.store_survives_sp; have hout := he.out
   have hframe := he.frame; have hcodeStk := he.code_stack_disjoint
   have hstkRam := he.stack_ram; have hstkWin := he.stack_win
-  have hstmtStk := he.stmt_stack_disjoint; have hstmtAl := he.stmt_align
+  have hstmtStk := he.stmt_stack_disjoint
   have hstmtRam := he.stmt_ram; have hstmtWin := he.stmt_win
   obtain ⟨⟨v8, h8_0⟩, ⟨v9, h9_0⟩, ⟨v18, h18_0⟩, ⟨v19, h19_0⟩⟩ := he.spill_defined
   have hload0 : Exec_stmtLoaded c.σ.mem := hcode
@@ -579,7 +578,7 @@ theorem execPrologue
     hmem13e ▸ hstmt13, hmem13e ▸ hslotRes,
     hmem13e ▸ hslotRa, hmem13e ▸ hslotS0, hmem13e ▸ hslotS1, hmem13e ▸ hslotS2, hmem13e ▸ hslotS3,
     hgx8, hgx9, hgx18, hgx19, hgx2, hframe13, hmem13e ▸ hmemframe6,
-    hsp176, ?_, ?_, ?_, ?_, hraAl, ?_, hstmtAl, hstmtRam, hstmtWin, hMemExt6⟩
+    hsp176, ?_, ?_, ?_, ?_, hraAl, ?_, hstmtRam, hstmtWin, hMemExt6⟩
   · exact (Steps.single hstep1).trans ((Steps.single hstep2).trans ((Steps.single hstep3).trans
       ((Steps.single hstep4).trans ((Steps.single hstep5).trans ((Steps.single hstep6).trans
       ((Steps.single hstep7).trans ((Steps.single hstep8).trans ((Steps.single hstep9).trans
@@ -619,7 +618,7 @@ theorem execDispatch
     hout, houtStr, hmem, hcode, hstore, hstmt, hslotRes,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
     hgx8, hgx9, hgx18, hgx19, hgx2, hframeG, hmemframe,
-    hsp176, hsphi, hsplo, hspwin, hsp8, hraAl, hstmtStk, hstmtAl, hstmtRam, hstmtWin, hMemExt⟩ := hpre
+    hsp176, hsphi, hsplo, hspwin, hsp8, hraAl, hstmtStk, hstmtRam, hstmtWin, hMemExt⟩ := hpre
   -- derive the dispatched kind + slot pin
   have hkle : kindOfStmt s' ≤ 8 := kindOfStmt_le s'
   have hklt : kindOfStmt s' < 128 := by omega
@@ -632,13 +631,14 @@ theorem execDispatch
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hhtif_e : (aStmt' + sign_extend (m := 64) (0x000#12)).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (aStmt' + sign_extend (m := 64) (0x000#12)).toNat := by
-    right; rw [haddr0, htoh]; have := hstmtWin; rw [htoh] at this; omega
+    rw [haddr0]; rcases hstmtWin with h | h
+    · exact Or.inl h
+    · right; omega
   -- ============ 0x80004014: lw a5,0(s0) → x15 := ofNat k (kind) ============
   obtain ⟨σ14, i14, hs14, hi14, hG14, hmem14, hobs14⟩ :=
     site_80004014_es c.σ c.tick c.steps (0x80004014#64) vmi aStmt' hkb0v hkb1v hkb2v hkb3v
       hG (by rw [hpc]) hmi hx8 (by rw [hmem]; exact hcode) rfl
       (by rw [haddr0]; have := hstmtRam.1; omega) (by rw [haddr0]; have := hstmtRam.2; omega) hhtif_e
-      (by rw [haddr0]; omega)
       (by rw [haddr0, hmem]; exact hkb0) (by rw [haddr0, hmem]; exact hkb1)
       (by rw [haddr0, hmem]; exact hkb2) (by rw [haddr0, hmem]; exact hkb3) htick
   have hstep14 : Step c ⟨σ14, i14, c.steps + 1⟩ := by cases c; exact hs14
@@ -677,7 +677,6 @@ theorem execDispatch
     site_8000401c_es σ15 i15 (c.steps+1+1) (0x8000401c#64) vmi15 aStmt' hkb0v hkb1v hkb2v hkb3v
       hG15 hpc15 hmi15 hx8_15 (hmem15e ▸ (hmem ▸ hcode)) rfl
       (by rw [haddr0]; have := hstmtRam.1; omega) (by rw [haddr0]; have := hstmtRam.2; omega) hhtif_e
-      (by rw [haddr0]; omega)
       (by rw [haddr0, hmem15e]; exact hkb0) (by rw [haddr0, hmem15e]; exact hkb1)
       (by rw [haddr0, hmem15e]; exact hkb2) (by rw [haddr0, hmem15e]; exact hkb3) hi15
   have hstep16 : Step ⟨σ15, i15, c.steps+1+1⟩ ⟨σ16, i16, c.steps+1+1+1⟩ := hs16
@@ -752,7 +751,7 @@ theorem execDispatch
     site_80004028_es σ18 i18 (c.steps+1+1+1+1+1) (0x80004028#64) vmi18 (BitVec.ofNat 64 (stmtJumpTableBase + 4 * k))
       sb0 sb1 sb2 sb3 hG18 hpc18 hmi18 hx15_18 (hmem18e ▸ (hmem ▸ hcode)) rfl
       (by rw [haddrT]; simp only [stmtJumpTableBase]; omega) (by rw [haddrT]; simp only [stmtJumpTableBase]; omega)
-      (by rw [haddrT]; left; simp only [stmtJumpTableBase]; rw [htoh]; omega) (by rw [haddrT]; simp only [stmtJumpTableBase]; omega)
+      (by rw [haddrT]; left; simp only [stmtJumpTableBase]; rw [htoh]; omega)
       (by rw [haddrT]; simpa using hsb0) (by rw [haddrT]; simpa using hsb1)
       (by rw [haddrT]; simpa using hsb2) (by rw [haddrT]; simpa using hsb3) hi18
   have hstep19 : Step ⟨σ18, i18, c.steps+1+1+1+1+1⟩ ⟨σ19, i19, c.steps+1+1+1+1+1+1⟩ := hs19

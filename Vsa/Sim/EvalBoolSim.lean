@@ -1,3 +1,4 @@
+import Vsa.Sim.RamReadPins
 import Vsa.Sim.EvalNullSim
 import Vsa.Sim.EvalRecCommon
 import Vsa.Sim.DecodeTable.Batch16Part04
@@ -64,7 +65,6 @@ theorem site_80003420_ee
     (hhiram : (vexpr + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ 0x100000000)
     (hhtif : (vexpr + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (vexpr + sign_extend (m := 64) (0x008#12)).toNat)
-    (halign : (vexpr + sign_extend (m := 64) (0x008#12)).toNat % 4 = 0)
     (h0 : σ.mem[(vexpr + sign_extend (m := 64) (0x008#12)).toNat]? = some b0)
     (h1 : σ.mem[(vexpr + sign_extend (m := 64) (0x008#12)).toNat + 1]? = some b1)
     (h2 : σ.mem[(vexpr + sign_extend (m := 64) (0x008#12)).toNat + 2]? = some b2)
@@ -87,12 +87,12 @@ theorem site_80003420_ee
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
-    (exec_lw σ (0x80003420#64) (0x008#12) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x0b#5)
+    (exec_lw_ram_bytes σ (0x80003420#64) (0x008#12) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x0b#5)
       (sigma3_alu σ (0x80003420#64) Register.x11
         (sign_extend (m := 64) ((((b3.append b2).append b1).append b0) : BitVec (8 * 4))))
       vexpr b0 b1 b2 b3 hG (rX_bits_x12 _ vexpr hx12₂)
       (wX_bits_x11 _ (sign_extend (m := 64) ((((b3.append b2).append b1).append b0) : BitVec (8 * 4))))
-      hlo hhiram hhtif halign h0 h1 h2 h3)
+      hlo hhiram hhtif h0 h1 h2 h3)
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
@@ -365,7 +365,7 @@ theorem blockC_bool
         LeafMemPin SL sp sret m0 mpre) := by
   intro c hc
   obtain ⟨ment, ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, hmiEx, hout, hmem, hcode, hviCode,
-    hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
+    hexpr, houtStr, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
@@ -399,7 +399,7 @@ theorem blockC_bool
     site_80003420_ee c.σ c.tick c.steps (0x80003420#64) vmi aExpr pb0 pb1 pb2 pb3
       hG hpc hmi ha2 (hmem ▸ hcode) rfl
       (by rw [hpayaddr]; omega) (by rw [hpayaddr]; omega)
-      (by rw [hpayaddr, htoh]; right; omega) (by rw [hpayaddr]; omega)
+      (by rw [hpayaddr, htoh]; right; omega)
       (by rw [hpayaddr, hmem]; exact hpb0) (by rw [hpayaddr, hmem]; exact hpb1)
       (by rw [hpayaddr, hmem]; exact hpb2) (by rw [hpayaddr, hmem]; exact hpb3) htick
   have hmem1e : σ1.mem = ment := by rw [hmem1]; exact hmem
@@ -610,7 +610,6 @@ structure EvalBoolEntry
   frame : ∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R
   code_stack_disjoint : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
   expr_stack_disjoint : aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
-  expr_align : aExpr.toNat % 8 = 0
   expr_ram : 0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000
   expr_win : tohostAddr + 16 ≤ aExpr.toNat
   sret_align : sret.toNat % 8 = 0
@@ -711,7 +710,7 @@ theorem evalBoolSimP
       (by have := hc.table_stack_disjoint; simp only [jumpTableBase]; omega)
       c ⟨⟨hc.good, hc.tick, hc.pc, hc.a0, hc.a1, hc.a2, hc.ra, hc.ra_align, hc.spReg,
       hc.stackOK, hc.minstret, hc.mem, hc.code, hc.expr, hc.store, hc.store_survives, hc.out,
-      hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
+      hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_ram,
       hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
       hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
       ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩

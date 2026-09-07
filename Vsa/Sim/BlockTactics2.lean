@@ -107,12 +107,12 @@ macro "st_ok" haddr:term : tactic =>
         | (rw [$haddr:term]; omega))
 
 /-- Discharge an `LdOK8 m ea bs` from `haddr : ea.toNat = k` and the eight byte
-pins `[p0,…,p7]` (each `m[k+i]? = some bᵢ`). The RAM/window/alignment tuple goes
+pins `[p0,…,p7]` (each `m[k+i]? = some bᵢ`). The RAM/window tuple goes
 by `omega`; each pin rewrites `ea.toNat` by `haddr` and closes by the supplied
 proof. -/
 macro "ld_ok8" haddr:term:max " [" ps:term,* "]" : tactic =>
   `(tactic|
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
+    refine ⟨⟨?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
       first
         | (rw [show tohostAddr = (0x8001ad00 : Nat) from rfl, $haddr:term]; omega)
         | (rw [$haddr:term]; omega)
@@ -129,7 +129,7 @@ to need the refuted `frame_pop` presence), the supplied fact as-is, and the
 supplied PRESENCE fact lifted through `lpin_of_present`. -/
 macro "ld_ok4" haddr:term:max " [" ps:term,* "]" : tactic =>
   `(tactic|
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_⟩ <;>
+    refine ⟨⟨?_, ?_, ?_⟩, ?_, ?_, ?_, ?_⟩ <;>
       first
         | (rw [show tohostAddr = (0x8001ad00 : Nat) from rfl, $haddr:term]; omega)
         | (rw [$haddr:term]; omega)

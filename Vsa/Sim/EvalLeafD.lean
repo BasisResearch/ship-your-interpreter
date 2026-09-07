@@ -2,6 +2,7 @@ import Vsa.Sim.EvalVarSim
 import Vsa.Sim.EvalBoolSim
 import Vsa.Sim.EvalRecCommon
 import Vsa.Sim.WidenMeta
+import Vsa.Sim.EvalReturn
 
 /-!
 # Layer 4 — M4 leaf `EvalE` cases re-landed at `EvalExitD` (the shape-gap discharge)
@@ -166,6 +167,38 @@ theorem evalExitD_of_pinnedExit
       st' v sp r sret m0 c :=
   ⟨hx.1, hW.pres c hx, ValueWordsTotal.mono (hW.pres c hx) hwords, hW.surv c hx⟩
 
+/-- Shared leaf supplier. Preserve the pinned simulation's actual endpoint and
+select one result/store map there. The closure bound excludes fresh allocation. -/
+theorem pinnedLeafReturn
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {phiF phiC : Addr → Nat}
+    {st : Vsa.While.St} {v : Value} {sp r sret : BitVec 64} {m0 : Mem}
+    {Pre : Config → Prop}
+    (run : Triple Pre (EvalExitPinned g N A SL phiF phiC st v sp r sret m0))
+    (widen : LeafWidenP g N A SL phiF phiC st v sp r sret m0)
+    (words : ∀ c, Pre c → ValueWordsTotal m0 sret.toNat)
+    (bounded : ValueClosuresBounded st.store.closures.size v) :
+    Triple Pre (EvalReturn g N A SL phiF phiC st.store.frames.size
+      st.store.closures.size st v sp r sret m0 (fun _ _ _ => True)) := by
+  intro c hc
+  obtain ⟨after, steps, hp⟩ := run c hc
+  exact ⟨after, steps,
+    (evalExitD_of_pinnedExit hp widen (words c hc)).coherent_of_bounded bounded⟩
+
+/-- Compatibility projection of the shared supplier used by existing rows. -/
+theorem pinnedLeafExitD
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {phiF phiC : Addr → Nat}
+    {st : Vsa.While.St} {v : Value} {sp r sret : BitVec 64} {m0 : Mem}
+    {Pre : Config → Prop}
+    (run : Triple Pre (EvalExitPinned g N A SL phiF phiC st v sp r sret m0))
+    (widen : LeafWidenP g N A SL phiF phiC st v sp r sret m0)
+    (words : ∀ c, Pre c → ValueWordsTotal m0 sret.toNat)
+    (bounded : ValueClosuresBounded st.store.closures.size v) :
+    Triple Pre (EvalExitD g N A SL phiF phiC st.store.frames.size
+      st.store.closures.size st v sp r sret m0) :=
+  (pinnedLeafReturn run widen words bounded).conseq (fun _ hp => hp) (fun _ hp => hp.exit)
+
 /-! ## The five leaf `*D` lemmas
 
 Each composes the existing leaf simulation Triple (`evalIntSim`/…) with
@@ -184,12 +217,9 @@ theorem evalIntSimD
     Triple
       (EvalEntry g N A SL φf φc st d a (.int n) sp r sret aEnv aExpr m0)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
-        st (.int n) sp r sret m0) := by
-  intro c hEntry
-  obtain ⟨c', hs, hExit, hPin⟩ :=
-    evalIntSimP g N A SL φf φc st d a n sp r sret aEnv aExpr m0 c hEntry
-  have hwords : ValueWordsTotal m0 sret.toNat := hEntry.mem ▸ hEntry.sret_words
-  exact ⟨c', hs, evalExitD_of_pinnedExit ⟨hExit, hPin⟩ hW hwords⟩
+        st (.int n) sp r sret m0) :=
+  pinnedLeafExitD (evalIntSimP g N A SL φf φc st d a n sp r sret aEnv aExpr m0)
+    hW (fun _ he => he.mem ▸ he.sret_words) True.intro
 
 /-- **`evalNullSimD`** — the `EvalE.null` leaf at `EvalExitD`. -/
 theorem evalNullSimD
@@ -203,11 +233,9 @@ theorem evalNullSimD
     Triple
       (EvalNullEntry g N A SL φf φc st d a sp r sret aEnv aExpr m0)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
-        st .null sp r sret m0) := by
-  intro c hEntry
-  obtain ⟨c', hs, hExit, hPin⟩ :=
-    evalNullSimP g N A SL φf φc st d a sp r sret aEnv aExpr m0 c hEntry
-  exact ⟨c', hs, evalExitD_of_pinnedExit ⟨hExit, hPin⟩ hW hwords⟩
+        st .null sp r sret m0) :=
+  pinnedLeafExitD (evalNullSimP g N A SL φf φc st d a sp r sret aEnv aExpr m0)
+    hW (fun _ _ => hwords) True.intro
 
 /-- **`evalBoolSimD`** — the `EvalE.bool` leaf at `EvalExitD`. -/
 theorem evalBoolSimD
@@ -221,11 +249,9 @@ theorem evalBoolSimD
     Triple
       (EvalBoolEntry g N A SL φf φc st d a b sp r sret aEnv aExpr m0)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
-        st (.bool b) sp r sret m0) := by
-  intro c hEntry
-  obtain ⟨c', hs, hExit, hPin⟩ :=
-    evalBoolSimP g N A SL φf φc st d a b sp r sret aEnv aExpr m0 c hEntry
-  exact ⟨c', hs, evalExitD_of_pinnedExit ⟨hExit, hPin⟩ hW hwords⟩
+        st (.bool b) sp r sret m0) :=
+  pinnedLeafExitD (evalBoolSimP g N A SL φf φc st d a b sp r sret aEnv aExpr m0)
+    hW (fun _ _ => hwords) True.intro
 
 /-- **`evalStrSimD`** — the `EvalE.str` leaf at `EvalExitD`. -/
 theorem evalStrSimD
@@ -239,11 +265,9 @@ theorem evalStrSimD
     Triple
       (EvalStrEntry g N A SL φf φc st d a s sp r sret aEnv aExpr m0)
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
-        st (.str s) sp r sret m0) := by
-  intro c hEntry
-  obtain ⟨c', hs, hExit, hPin⟩ :=
-    evalStrSimP g N A SL φf φc st d a s sp r sret aEnv aExpr m0 c hEntry
-  exact ⟨c', hs, evalExitD_of_pinnedExit ⟨hExit, hPin⟩ hW hwords⟩
+        st (.str s) sp r sret m0) :=
+  pinnedLeafExitD (evalStrSimP g N A SL φf φc st d a s sp r sret aEnv aExpr m0)
+    hW (fun _ _ => hwords) True.intro
 
 /-- **`evalVarSimD`** — the `EvalE.var` leaf at `EvalExitD` (retaining
 `EvalVarEntry`'s explicit `env_get_found` contract, as in `evalVarSim`). -/
@@ -263,5 +287,8 @@ theorem evalVarSimD
   obtain ⟨c', hs, hExit⟩ :=
     evalVarSim g N A SL φf φc st d a x v sp r sret aEnv aExpr m0 hE c hEntry
   exact ⟨c', hs, evalExitD_of_evalExit hExit hW hwords⟩
+
+#print axioms pinnedLeafReturn
+#print axioms pinnedLeafExitD
 
 end Vsa.Sim

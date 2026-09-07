@@ -1,0 +1,9 @@
+# Recovered from Vsa/Sim/SnprintfSitesFast2.lean; only declarations reproduced by gen_sites.
+80008ea4	0a714f03	lbu	30	2	0a7
+80008ea8	00100813	alu_addi	16	0	001
+80008eac	00000f93	alu_addi	31	0	000
+80008eb0	00100b13	alu_addi	22	0	001
+80008eb4	15b10d13	alu_addi	26	2	15b
+80008eb8	a70ff06f	j	1ff270
+80007ce4	416a0a3b	subw	20	20	22
+80007ce8	bd405ae3	branch_taken	BGE	0	20	1bd4

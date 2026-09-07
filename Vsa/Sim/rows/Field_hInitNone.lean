@@ -75,7 +75,6 @@ private theorem initNoneBypass_facts
       have hn := hr.nodes.1
       have hlo := hn.lo_le
       have hhi := hn.hi_ge
-      have halign := hn.align
       have hloRam := hr.lo_ram
       have hhiRam := hr.hi_ram
       have hwin := hr.win
@@ -96,11 +95,9 @@ private theorem initNoneBypass_facts
       rw [show (mkLine 0x8000423c#64 0x00843583#32).kind = MKind.ld from rfl, hea]
       change
         (0x80000000 ≤ aStmt.toNat + 8 ∧ aStmt.toNat + 8 + 8 ≤ 0x100000000 ∧
-          (aStmt.toNat + 8 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aStmt.toNat + 8) ∧
-          (aStmt.toNat + 8) % 8 = 0) ∧
+          (aStmt.toNat + 8 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aStmt.toNat + 8)) ∧
         LPins8 ment (aStmt.toNat + 8) []
-      refine ⟨⟨by omega, by omega, Or.inr (by omega), ?_⟩, ?_⟩
-      · omega
+      refine ⟨⟨by omega, by omega, Or.inr (by omega)⟩, ?_⟩
       exact read64_zero_lpins ment (aStmt.toNat + 8) hread
     · exact initNoneBypass_guard aStmt aOuter
 

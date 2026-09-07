@@ -293,7 +293,6 @@ theorem execEntry_of_jTailRedispatch
         (∀ m' : Mem,
           (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → mcall[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
-        aStmt.toNat % 8 = 0 ∧
         0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aStmt.toNat ∧
         (aStmt.toNat + 16 ≤ SL.lo ∨ spD.toNat ≤ aStmt.toNat) ∧
@@ -305,7 +304,7 @@ theorem execEntry_of_jTailRedispatch
         spD aInterp aStmt aEnv aRet mcall c') := by
   obtain ⟨hG, htick, hs0, hs1, hs2, hs3, ha6, ha4, hsp,
     hout, houtStr, hmemc, hcodeS, hstmtR, hstore, hstoreSurv,
-    hstAl, hstLo, hstHi, hstWin, hstStk, hstackOK,
+    hstLo, hstHi, hstWin, hstStk, hstackOK,
     hSLlo, hSLhiRam, hSLwin, hcodeStk⟩ := hpre
   obtain ⟨σ1, i1, hs1', hi1, hG1, hmem1, hpc1, hmi1, hout1, hfr1⟩ :=
     hhop c.tick c.steps htick
@@ -344,10 +343,9 @@ theorem execEntry_of_jTailRedispatch
         code_stack_disjoint := hcodeStk
         stack_ram := ⟨hSLlo, hSLhiRam⟩
         stack_win := hSLwin
-        stmt_stack_disjoint := hstStk
-        stmt_align := hstAl
-        stmt_ram := ⟨hstLo, hstHi⟩
-        stmt_win := hstWin }
+        stmt_stack_disjoint := by rcases hstStk with h | h <;> omega
+        stmt_ram := ⟨hstLo, by omega⟩
+        stmt_win := Or.inr hstWin }
 
 #print axioms execEntry_of_jTailRedispatch
 
@@ -384,7 +382,6 @@ def ExecStmtTailPreBundle (s : Stmt) (c' : Config) (st : SpecSt) (d : Nat)
     (∀ m' : Mem,
       (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → mcall[k]? = m'[k]?) →
       StoreRepr m' N A φf φc st.store) ∧
-    aStmt.toNat % 8 = 0 ∧
     0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000 ∧
     tohostAddr + 16 ≤ aStmt.toNat ∧
     (aStmt.toNat + 16 ≤ SL.lo ∨ spD.toNat ≤ aStmt.toNat) ∧

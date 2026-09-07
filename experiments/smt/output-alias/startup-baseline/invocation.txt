@@ -1,0 +1,16 @@
+Working directory: /Users/kirancodes/Documents/code/verified-semantic-abstraction
+Validated private dependencies: /private/tmp/vsa-full-build.sQd0gM
+Root reported 1368 current module fingerprints before this bounded slot.
+
+lake env sh -c 'LEAN_PATH="/private/tmp/vsa-full-build.sQd0gM${LEAN_PATH:+:$LEAN_PATH}" lean -R /private/tmp /private/tmp/vsa-output-alias-machine/AliasMachine.lean' > /private/tmp/vsa-output-alias-machine/compile.log 2>&1
+
+lake env sh -c 'LEAN_PATH="/private/tmp/vsa-full-build.sQd0gM${LEAN_PATH:+:$LEAN_PATH}" lean -R /private/tmp --run /private/tmp/vsa-output-alias-machine/AliasMachine.lean 2000000' > /private/tmp/vsa-output-alias-machine/result.jsonl 2> /private/tmp/vsa-output-alias-machine/run.stderr
+
+Compile exit: 0; empty compile log.
+Execution exit: 0; tool session 84485 completed.
+Stderr: TODO: cancel_reservation
+
+python3 /private/tmp/vsa-output-alias-machine/check_run.py --repo /Users/kirancodes/Documents/code/verified-semantic-abstraction --results /private/tmp/vsa-output-alias-machine/result.jsonl
+
+Checker exit: 1. Initial runtime flags check fails (actual 0x000a, required 0x200a).
+No initial-state fixup or rerun after observing this discrepancy.

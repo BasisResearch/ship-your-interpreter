@@ -2,6 +2,7 @@ import Vsa.Sim.ExecWhile2
 import Vsa.Sim.InterpEntry
 import Vsa.Sim.TermSimAssembly
 import Vsa.Sim.TripleCat
+import Vsa.Sim.RecursiveStepGeom
 
 namespace Vsa.Sim
 
@@ -72,18 +73,17 @@ def ExecWhileStepPostI
     (bodyStatus loopStatus : Status)
     (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem)
     (cfg : Config) : Prop :=
-  ((bodyStatus = .normal ∨ bodyStatus = .cont) ∧
-    ∃ (φf' φc' : Addr → Nat) (ment : Mem) (liveRA : BitVec 64),
+  RecursiveStepPost (bodyStatus = .normal ∨ bodyStatus = .cont)
+    (fun cfg => ∃ (φf' φc' : Addr → Nat) (ment : Mem) (liveRA : BitVec 64),
       -- Composition starts at the original entry maps.  A body allocation may
       -- choose fresh images beyond the original prefix, so agreement cannot be
       -- demanded through the larger post-state size.
       PhiExtends φf φf' st.store.frames.size ∧
       PhiExtends φc φc' st.store.closures.size ∧
       ExecWhileArmReady g N A SL φf' φc' stMid d env cnd body bodyStatus
-        sp r aInterp aStmt aEnv aRet m0 ment cfg (liveRA := liveRA)) ∨
-  (¬ (bodyStatus = .normal ∨ bodyStatus = .cont) ∧
-    ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
-      stMid loopStatus sp r aRet m0 cfg)
+        sp r aInterp aStmt aEnv aRet m0 ment cfg (liveRA := liveRA))
+    (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+      stMid loopStatus sp r aRet m0) cfg
 
 /-- One exact physical `while` iteration.  Its recursive boundary is the
 status-indexed in-frame state above. -/
@@ -115,6 +115,7 @@ structure ExecWhileCondCarrier
   s2 : gCond Register.x18 = some aRet
   s3 : gCond Register.x19 = some aEnv
   spReg : gCond Register.x2 = some (sp - 176#64)
+  parentSp : g Register.x2 = some sp
   code : Vsa.Sim.Code.Exec_stmtLoaded mCond
   code_stack_disjoint : sp.toNat ≤ execStmtEntry ∨ execStmtEnd ≤ SL.lo
   stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
@@ -147,6 +148,7 @@ structure ExecWhileCondCarrier
   ground : ExecGround mCond SL A sp aRet aStmt.toNat (.whileStmt cnd body)
   mem_frame : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
     mCond[a]? = m0[a]?
+  mem_extends : MemExtends m0 mCond
   frame : ∀ R : Register, AbiPreservedNoise R →
     (R = Register.x8 ∨ R = Register.x9 ∨ R = Register.x18 ∨
       R = Register.x19 ∨ R = Register.x2) ∨ gCond R = g R
@@ -166,6 +168,7 @@ structure ExecWhileBodyCarrier
   s2 : gBody Register.x18 = some aRet
   s3 : gBody Register.x19 = some aEnv
   spReg : gBody Register.x2 = some (sp - 176#64)
+  parentSp : g Register.x2 = some sp
   code : Vsa.Sim.Code.Exec_stmtLoaded mBody
   code_stack_disjoint : sp.toNat ≤ execStmtEntry ∨ execStmtEnd ≤ SL.lo
   stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
@@ -199,6 +202,7 @@ structure ExecWhileBodyCarrier
   ground : ExecGround mBody SL A sp aRet aStmt.toNat (.whileStmt cnd body)
   mem_frame : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
     ¬ (A.lo ≤ a ∧ a < A.hi) → mBody[a]? = m0[a]?
+  mem_extends : MemExtends m0 mBody
   frame : ∀ R : Register, AbiPreservedNoise R →
     (R = Register.x8 ∨ R = Register.x9 ∨ R = Register.x18 ∨
       R = Register.x19 ∨ R = Register.x2) ∨ gBody R = g R
@@ -311,13 +315,9 @@ theorem execWhileExitI
     Triple
       (ExecEntry g N A SL φf φc st d env (.whileStmt cnd body)
         sp r aInterp aStmt aEnv aRet m0)
-      (ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st' loopStatus sp r aRet m0) := by
-  intro cfg hentry
-  obtain ⟨cfg', hs, hpost⟩ := hstep cfg hentry
-  rcases hpost with ⟨hcontinue, _⟩ | ⟨_, hexit'⟩
-  · exact absurd hcontinue hexit
-  · exact ⟨cfg', hs, hexit'⟩
+  exact RecursiveStepGeom.terminal ⟨hstep⟩ hexit
 
 /-- Rebase a widened exit from maps selected after one iteration. -/
 theorem execExitD_rebaseMaps
@@ -376,22 +376,18 @@ theorem execWhileLoopI
     (S := fun st0 st1 =>
       ExecS st0 d env (.whileStmt cnd body) st1 finalStatus)
     (b := stMid) (c := stFin)
-    hIteration hRest hstep ?_ (Ent.refl _)).machine
-  intro cfgM hpost
-  rcases hpost with
-    ⟨_, φf', φc', ment, liveRA, hpf, hpc, hready⟩ | ⟨hstop, _⟩
-  · obtain ⟨cfgF, hsF, hexit⟩ :=
-      hRestIH bodyStatus hContinue g N A SL φf' φc'
-        sp r aInterp aStmt aEnv aRet m0 ment cfgM ⟨liveRA, hready⟩
-    have hEntryMid : st.store.frames.size ≤ stMid.store.frames.size ∧
-        st.store.closures.size ≤ stMid.store.closures.size :=
-      ⟨Nat.le_trans (evalE_store_mono hCond).1 (execS_store_mono hBody).1,
-       Nat.le_trans (evalE_store_mono hCond).2 (execS_store_mono hBody).2⟩
-    exact ⟨cfgF, hsF, execExitD_rebaseMaps g N A SL φf φc φf' φc'
-      st.store.frames.size st.store.closures.size
-      stMid.store.frames.size stMid.store.closures.size
-      stFin finalStatus sp r aRet m0 cfgF hEntryMid hpf hpc hexit⟩
-  · exact absurd hContinue hstop
+    hIteration hRest (RecursiveStepGeom.continuing ⟨hstep⟩ hContinue)
+    ?_ (Ent.refl _)).machine
+  intro cfgM hready
+  obtain ⟨φf', φc', ment, liveRA, hpf, hpc, hready⟩ := hready
+  obtain ⟨cfgF, hsF, hexit⟩ :=
+    hRestIH bodyStatus hContinue g N A SL φf' φc'
+      sp r aInterp aStmt aEnv aRet m0 ment cfgM ⟨liveRA, hready⟩
+  have hEntryMid := (evalE_store_mono hCond).trans (execS_store_mono hBody)
+  exact ⟨cfgF, hsF, execExitD_rebaseMaps g N A SL φf φc φf' φc'
+    st.store.frames.size st.store.closures.size
+    stMid.store.frames.size stMid.store.closures.size
+    stFin finalStatus sp r aRet m0 cfgF hEntryMid hpf hpc hexit⟩
 
 #print axioms execWhileExitI
 #print axioms execExitD_rebaseMaps

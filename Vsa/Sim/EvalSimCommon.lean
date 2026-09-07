@@ -385,7 +385,6 @@ def ArmEntryK
   c.σ.mem = ment ∧ Eval_exprLoaded ment ∧ calleeLoaded ment ∧
   ExprRepr ment aExpr.toNat e ∧
   String.join out0.toList = st.out ∧
-  aExpr.toNat % 8 = 0 ∧
   0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
   tohostAddr + 16 ≤ aExpr.toNat ∧
   read64 ment (sp.toNat - 8) = some r.toNat ∧    -- [sp-8]   = ra
@@ -479,6 +478,19 @@ def PreEpilogueV
   tohostAddr + 16 + 1088 ≤ sp.toNat ∧ sp.toNat % 8 = 0 ∧
   r.toNat % 4 = 0
 
+/-- The epilogue entry represents the result at its selected closure map. -/
+theorem PreEpilogueV.value
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : Vsa.While.St} {v : Value}
+    {sp r sret v8 v9 v18 : BitVec 64} {out0 : Array String}
+    {m0 mpre : Mem} {c : Config}
+    (h : PreEpilogueV g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpre c) :
+    ValueRepr mpre N φc sret.toNat v := by
+  obtain ⟨_good, _tick, _pc, _sret, _sp, _minstret, _out, _outStr,
+    _memory, _code, hvalue, _rest⟩ := h
+  exact hvalue
+
 /-! ## `blockD_v` — the shared epilogue, generalized over the produced `Value`
 
 `PreEpilogueV … v → EvalExit … v`. The seven epilogue instructions never inspect
@@ -524,7 +536,7 @@ theorem blockD_v
   obtain ⟨σ1, i1, hstep1', hi1, hG1, hmem1, hobs1⟩ :=
     site_800033ec_ee c.σ c.tick c.steps (0x800033ec#64) vmi (sp-1088#64) ra0 ra1 ra2 ra3 ra4 ra5 ra6 ra7
       hG hpc hmi hsp (hmem ▸ hcode) rfl
-      (by rw [haRa]; omega) (by rw [haRa]; omega) (by rw [haRa, htoh]; right; omega) (by rw [haRa]; omega)
+      (by rw [haRa]; omega) (by rw [haRa]; omega) (by rw [haRa, htoh]; right; omega)
       (by rw [haRa, hmem]; exact hra0) (by rw [haRa, hmem]; exact hra1) (by rw [haRa, hmem]; exact hra2)
       (by rw [haRa, hmem]; exact hra3) (by rw [haRa, hmem]; exact hra4) (by rw [haRa, hmem]; exact hra5)
       (by rw [haRa, hmem]; exact hra6) (by rw [haRa, hmem]; exact hra7) htick
@@ -542,7 +554,7 @@ theorem blockD_v
   obtain ⟨σ2, i2, hstep2', hi2, hG2, hmem2, hobs2⟩ :=
     site_800033f0_ee σ1 i1 (c.steps + 1) (0x800033f0#64) vmi1 (sp-1088#64) s00 s01 s02 s03 s04 s05 s06 s07
       hG1 hpc1 hmi1 hsp_1 hcode1 rfl
-      (by rw [haS0]; omega) (by rw [haS0]; omega) (by rw [haS0, htoh]; right; omega) (by rw [haS0]; omega)
+      (by rw [haS0]; omega) (by rw [haS0]; omega) (by rw [haS0, htoh]; right; omega)
       (by rw [haS0, hmem1e]; exact hs00) (by rw [haS0, hmem1e]; exact hs01) (by rw [haS0, hmem1e]; exact hs02)
       (by rw [haS0, hmem1e]; exact hs03) (by rw [haS0, hmem1e]; exact hs04) (by rw [haS0, hmem1e]; exact hs05)
       (by rw [haS0, hmem1e]; exact hs06) (by rw [haS0, hmem1e]; exact hs07) hi1
@@ -561,7 +573,7 @@ theorem blockD_v
   obtain ⟨σ3, i3, hstep3', hi3, hG3, hmem3, hobs3⟩ :=
     site_800033f4_ee σ2 i2 (c.steps + 1 + 1) (0x800033f4#64) vmi2 (sp-1088#64) s20 s21 s22 s23 s24 s25 s26 s27
       hG2 hpc2 hmi2 hsp_2 hcode2 rfl
-      (by rw [haS2]; omega) (by rw [haS2]; omega) (by rw [haS2, htoh]; right; omega) (by rw [haS2]; omega)
+      (by rw [haS2]; omega) (by rw [haS2]; omega) (by rw [haS2, htoh]; right; omega)
       (by rw [haS2, hmem2e]; exact hs20) (by rw [haS2, hmem2e]; exact hs21) (by rw [haS2, hmem2e]; exact hs22)
       (by rw [haS2, hmem2e]; exact hs23) (by rw [haS2, hmem2e]; exact hs24) (by rw [haS2, hmem2e]; exact hs25)
       (by rw [haS2, hmem2e]; exact hs26) (by rw [haS2, hmem2e]; exact hs27) hi2
@@ -597,7 +609,7 @@ theorem blockD_v
   obtain ⟨σ5, i5, hstep5', hi5, hG5, hmem5, hobs5⟩ :=
     site_800033fc_ee σ4 i4 (c.steps + 1 + 1 + 1 + 1) (0x800033fc#64) vmi4 (sp-1088#64) s10 s11 s12 s13 s14 s15 s16 s17
       hG4 hpc4 hmi4 hsp_4 hcode4 rfl
-      (by rw [haS1]; omega) (by rw [haS1]; omega) (by rw [haS1, htoh]; right; omega) (by rw [haS1]; omega)
+      (by rw [haS1]; omega) (by rw [haS1]; omega) (by rw [haS1, htoh]; right; omega)
       (by rw [haS1, hmem4e]; exact hs10) (by rw [haS1, hmem4e]; exact hs11) (by rw [haS1, hmem4e]; exact hs12)
       (by rw [haS1, hmem4e]; exact hs13) (by rw [haS1, hmem4e]; exact hs14) (by rw [haS1, hmem4e]; exact hs15)
       (by rw [haS1, hmem4e]; exact hs16) (by rw [haS1, hmem4e]; exact hs17) hi4

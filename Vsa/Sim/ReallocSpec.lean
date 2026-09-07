@@ -1,4 +1,5 @@
 import Vsa.Sim.EnvDefSpec2
+import Vsa.Sim.HeapOwnershipGeometry
 
 /-!
 # `ReallocSpec` — corrected allocator-operation interface
@@ -13,8 +14,6 @@ open LeanRV64DExecutable Vsa
 open Vsa.Machine Vsa.Logic Vsa.RuntimeRepr Vsa.Sim Vsa.Alloc
 
 namespace Vsa.Sim
-
-abbrev Extent := Nat × Nat
 
 /-- A public-memory frame. Bytes in allocator-private memory, the active stack,
 or an explicitly listed extent may change. -/

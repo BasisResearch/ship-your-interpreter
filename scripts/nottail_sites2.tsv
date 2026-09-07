@@ -1,0 +1,12 @@
+# Recovered from Vsa/Sim/NotTailSites.lean; preserve non-generated declarations separately.
+800035f8	3af70a63	branch_nottaken	BEQ	14	15	03b4
+800035fc	09813703	ld	14	2	098
+80003600	0a013783	ld	15	2	0a0
+80003604	04010513	alu_addi	10	2	040
+80003608	04d13023	sd	13	2	040
+8000360c	04e13423	sd	14	2	048
+80003610	04f13823	sd	15	2	050
+80003614	a18ff0ef	jal	1	1ff218
+8000361c	00048513	alu_addi	10	9	000
+80003620	9d8ff0ef	jal	1	1ff1d8
+80003624	dc9ff06f	j	1ffdc8

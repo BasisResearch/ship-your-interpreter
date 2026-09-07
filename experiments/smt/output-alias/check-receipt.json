@@ -1,0 +1,8 @@
+{
+  "alias_output_delta": "\n\n",
+  "control_output_delta": "\n",
+  "elf_sha256": "b146c6edb76ea9a0f0f30be381f8176ed2de9717e1ae9b37feff4b2b9ca1d0f0",
+  "execution_check": "passed",
+  "harness_sha256": "a14e444069ab469b109633a2c859e42ea46d9256e763561374b6acc98ec31a4a",
+  "loaded_verified": false
+}

@@ -47,7 +47,7 @@ theorem ground_stackSL :
     stackSL = { lo := 0x87800000, hi := 0x88000000 } := rfl
 
 /-- The entry stack pointer `__stack_top` = `0x88000000`. -/
-theorem ground_spEntry : spEntry = 0x88000000 := rfl
+theorem ground_spEntry : spEntry = 0x87fffd00 := rfl
 
 /-- The HTIF `tohost` cell = `0x8001ad00` (ELF symbol table). -/
 theorem ground_tohostAddr : Vsa.Sim.tohostAddr = 0x8001ad00 := rfl

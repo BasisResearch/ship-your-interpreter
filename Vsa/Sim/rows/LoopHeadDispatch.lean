@@ -64,7 +64,7 @@ loop head has NO way to assert:
   NOT a premise;
 * the C-stack layout (`StackOK SL sp (176+1088)`, `stack_ram`, `stack_win`,
   `code_stack_disjoint`) — a `main`-prologue fact, off the loop head;
-* the `Stmt` node geometry (`StmtRepr`, `stmt_stack_disjoint`, `stmt_align`,
+* the `Stmt` node geometry (`StmtRepr`, `stmt_stack_disjoint`,
   `stmt_ram`, `stmt_win`) — a fact of WHICH statement the cursor points at, exactly
   the content `Reflect cH env (s :: ss)` would carry if it were computational (it is
   NOT — a bare section variable);
@@ -147,25 +147,25 @@ that `LoopHeadDispatchPost` does not expose (identical to why
 `DriveToLoopHeadSpans.hLoopA_of_row` goes through `segToTriple`).  Landing: parked at
 `0x80004458`, control good, tick-bounded, a `minstret` witness. -/
 theorem loopHeadDispatchLanded
-    (sp s0 : BitVec 64) (m0 : Mem) (cH : Config)
-    (hpre : SegPre loopHeadDispatchSeg (loopHeadDispatchL sp s0) [] 0x8000448c#64 m0 cH) :
+    (sp s0 : BitVec 64) (m0 : Mem) (cH : Config) {lds : List (List (BitVec 8))}
+    (hpre : SegPre loopHeadDispatchSeg (loopHeadDispatchL sp s0) lds 0x8000448c#64 m0 cH) :
     ∃ (c458 : Config),
       Steps cH c458 ∧
       c458.σ.regs.get? Register.PC = some (0x80004458#64 : BitVec 64) ∧
       GoodState c458.σ ∧ c458.tick < 2 ∧
       (∃ w, c458.σ.regs.get? Register.minstret = some w) := by
   have hT :
-      Triple (SegPre loopHeadDispatchSeg (loopHeadDispatchL sp s0) [] 0x8000448c#64 m0)
+      Triple (SegPre loopHeadDispatchSeg (loopHeadDispatchL sp s0) lds 0x8000448c#64 m0)
         (fun c => c.σ.regs.get? Register.PC = some (0x80004458#64 : BitVec 64) ∧
           GoodState c.σ ∧ c.tick < 2 ∧
           (∃ w, c.σ.regs.get? Register.minstret = some w)) := by
-    apply segToTriple loopHeadDispatchSeg (loopHeadDispatchL sp s0) [] 0x8000448c#64 m0 _
+    apply segToTriple loopHeadDispatchSeg (loopHeadDispatchL sp s0) lds 0x8000448c#64 m0 _
       (by have h : keysG (loopHeadDispatchL sp s0) = [2, 8] := rfl
           rw [h]; show ChainOK 0x8000448c#64 [2, 8] loopHeadDispatchSeg; decide)
     intro σ' i' u' hG' hi' _hmem' hpc' hmi' _hregs
     refine ⟨?_, hG', hi', hmi'⟩
     rw [hpc']
-    show some (evalBlocksPC 0x8000448c#64 (SegEvalState.init (loopHeadDispatchL sp s0) []) loopHeadDispatchSeg)
+    show some (evalBlocksPC 0x8000448c#64 (SegEvalState.init (loopHeadDispatchL sp s0) lds) loopHeadDispatchSeg)
       = some 0x80004458#64
     rfl
   obtain ⟨c458, hsteps, hpc, hG, htick, hmi⟩ := hT cH hpre
@@ -213,11 +213,9 @@ structure LoopHeadDispatchGeom
   stmt : StmtRepr mE aStmt.toNat s
   /-- **supplier: the AST-region layout** — the `Stmt` node is disjoint from the
   C-stack scribble `[SL.lo, sp)`. -/
-  stmt_stack_disjoint : aStmt.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aStmt.toNat
-  /-- **supplier: AST allocation alignment** (nodes are 8-aligned 16-byte slots). -/
-  stmt_align : aStmt.toNat % 8 = 0
-  stmt_ram : 0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000
-  stmt_win : tohostAddr + 16 ≤ aStmt.toNat
+  stmt_stack_disjoint : aStmt.toNat + 4 ≤ SL.lo ∨ sp.toNat ≤ aStmt.toNat
+  stmt_ram : 0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 4 ≤ 0x100000000
+  stmt_win : aStmt.toNat + 4 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat
   /-- **supplier: the loop-head SegEntry's `store` transported to `mE`.**  The store
   is represented in `mE` for the entry state `st` — the frames/closures live in the
   arena/AST, disjoint from the stack/retslot scribble value_null + arg-setup made,
@@ -278,7 +276,7 @@ theorem loopHeadDispatch_span
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : SpecSt) (env : Addr) (sp s0 aStmt aEnv aInterp aRet : BitVec 64)
-    (s : Stmt) (m0 mE : Mem)
+    (s : Stmt) (m0 mE : Mem) {lds : List (List (BitVec 8))}
     -- loop-head control state (from `SegEntry cH`):
     (hGH : GoodState cH.σ) (htickH : cH.tick < 2)
     (hpcH : cH.σ.regs.get? Register.PC = some (0x8000448c#64 : BitVec 64))
@@ -290,7 +288,7 @@ theorem loopHeadDispatch_span
     -- over the loaded loop-head code at 0x8000448c — a load-time fact, exactly like
     -- `DriveToLoopHeadSpans.SegEntryData.facts`):
     (hDispatchFacts :
-      ChainFacts cH.σ.mem cH.σ.mem (loopHeadDispatchL sp s0) [] loopHeadDispatchSeg)
+      ChainFacts cH.σ.mem cH.σ.mem (loopHeadDispatchL sp s0) lds loopHeadDispatchSeg)
     -- the geometry SegEntry cannot supply (stated at the exec_stmt-entry memory mE):
     (hGeom : LoopHeadDispatchGeom g N A SL φf φc st sp aStmt s mE)
     (henvValid : EnvValid st env)
@@ -337,7 +335,7 @@ theorem loopHeadDispatch_span
       ExecEntry g N A SL φf φc st 0 env s sp (0x80004478#64) aInterp aStmt aEnv aRet mE cE := by
   -- 1. dispatch head → 0x80004458 (the br seg, via the richer landing).
   obtain ⟨vmH, hmiH'⟩ := hmiH
-  have hDpre : SegPre loopHeadDispatchSeg (loopHeadDispatchL sp s0) [] 0x8000448c#64 m0 cH := by
+  have hDpre : SegPre loopHeadDispatchSeg (loopHeadDispatchL sp s0) lds 0x8000448c#64 m0 cH := by
     refine ⟨hGH, hmemH, hpcH, ⟨vmH, hmiH'⟩, ?_, ?_, ?_, htickH⟩
     · exact ⟨hspH, hs0H, trivial⟩
     · have h : keysG (loopHeadDispatchL sp s0) = [2, 8] := rfl
@@ -378,7 +376,6 @@ theorem loopHeadDispatch_span
       stack_ram := hGeom.stack_ram
       stack_win := hGeom.stack_win
       stmt_stack_disjoint := hGeom.stmt_stack_disjoint
-      stmt_align := hGeom.stmt_align
       stmt_ram := hGeom.stmt_ram
       stmt_win := hGeom.stmt_win
       spill_defined := ⟨hx8E, hx9E, hx18E, hx19E⟩

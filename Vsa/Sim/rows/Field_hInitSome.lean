@@ -124,7 +124,6 @@ theorem initSomeDispatch_facts
           have hn := hr.nodes.1
           have hlo := hn.lo_le
           have hhi := hn.hi_ge
-          have halign := hn.align
           have hloRam := hr.lo_ram
           have hhiRam := hr.hi_ram
           have hwin := hr.win
@@ -144,10 +143,9 @@ theorem initSomeDispatch_facts
           change
             (0x80000000 ≤ aStmt.toNat + 8 ∧ aStmt.toNat + 8 + 8 ≤ 0x100000000 ∧
               (aStmt.toNat + 8 + 8 ≤ tohostAddr ∨
-                tohostAddr + 8 ≤ aStmt.toNat + 8) ∧
-              (aStmt.toNat + 8) % 8 = 0) ∧
+                tohostAddr + 8 ≤ aStmt.toNat + 8)) ∧
             LPins8 ment (aStmt.toNat + 8) bs
-          refine ⟨⟨by omega, by omega, Or.inr (by omega), by omega⟩, ?_⟩
+          refine ⟨⟨by omega, by omega, Or.inr (by omega)⟩, ?_⟩
           exact ⟨lpin_of_present hb0, lpin_of_present hb1,
             lpin_of_present hb2, lpin_of_present hb3,
             lpin_of_present hb4, lpin_of_present hb5,

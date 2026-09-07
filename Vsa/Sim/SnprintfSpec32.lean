@@ -386,7 +386,7 @@ theorem svfProF_spec
   have hpinw := Pin4_writeMap4 (c.σ.mem) (vsp.toNat + 180) (swData (0x25#64))
   obtain ⟨σ20, i20, hs20, hi20, hG20, hmem20, hobs20⟩ :=
     site_8000774c_pr σ19 i19 (c.steps + 19) _ vmi19 vsp _ _ _ _
-      hG19 hpc19 hmi19 hp19.2.2.2.2.2.2.1 ((hmem19.trans hmem18) ▸ hslB) rfl (by rw [hoffb4]; omega) (by rw [hoffb4]; omega) (by rw [hoffb4, htoh]; omega) (by rw [hoffb4]; omega) (by rw [hoffb4, hmE19]; exact hpinw.1) (by rw [hoffb4, hmE19]; exact hpinw.2.1) (by rw [hoffb4, hmE19]; exact hpinw.2.2.1) (by rw [hoffb4, hmE19]; exact hpinw.2.2.2) hi19
+      hG19 hpc19 hmi19 hp19.2.2.2.2.2.2.1 ((hmem19.trans hmem18) ▸ hslB) rfl (by rw [hoffb4]; omega) (by rw [hoffb4]; omega) (by rw [hoffb4, htoh]; omega)  (by rw [hoffb4, hmE19]; exact hpinw.1) (by rw [hoffb4, hmE19]; exact hpinw.2.1) (by rw [hoffb4, hmE19]; exact hpinw.2.2.1) (by rw [hoffb4, hmE19]; exact hpinw.2.2.2) hi19
   have hstep20 : Step ⟨σ19, i19, c.steps + 19⟩ ⟨σ20, i20, c.steps + 20⟩ := hs20
   have hpc20 : σ20.regs.get? Register.PC = some (0x80007750#64) := by
     have := obs_alu_pc hobs20

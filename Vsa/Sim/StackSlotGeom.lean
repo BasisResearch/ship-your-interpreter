@@ -286,21 +286,19 @@ theorem slotWindows {sp : BitVec 64} {SL : StackLayout} (hSB : StackBounds sp SL
 /-- The bundle of `aExpr`-relative bounds (from the row precondition) needed for
 the two operand-fetch sites `aExpr+8` (op token) and `aExpr+4` (left-operand ptr). -/
 structure ExprBounds (aExpr : BitVec 64) : Prop where
-  al : aExpr.toNat % 4 = 0
   lo : 0x80000000 ≤ aExpr.toNat
   hi : aExpr.toNat + 16 ≤ 0x100000000
   win : tohostAddr + 8 ≤ aExpr.toNat
 
-/-- The four geometry facts for a 4-byte read at `aExpr.toNat + off`, `off ≤ 12`,
-`off % 4 = 0`.  Omega runs against the tiny `ExprBounds` context only. -/
+/-- The three geometry facts for a 4-byte read at `aExpr.toNat + off`, `off ≤ 12`.
+Omega runs against the tiny `ExprBounds` context only. -/
 theorem exprGeom4 {aExpr : BitVec 64} (hEB : ExprBounds aExpr)
-    (off : Nat) (hoff : off ≤ 12) (hoal : off % 4 = 0) :
+    (off : Nat) (hoff : off ≤ 12) :
     (0x80000000 ≤ aExpr.toNat + off)
     ∧ (aExpr.toNat + off + 4 ≤ 0x100000000)
-    ∧ (aExpr.toNat + off + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aExpr.toNat + off)
-    ∧ ((aExpr.toNat + off) % 4 = 0) := by
-  obtain ⟨hal, hlo, hhi, hwin⟩ := hEB
+    ∧ (aExpr.toNat + off + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aExpr.toNat + off) := by
+  obtain ⟨hlo, hhi, hwin⟩ := hEB
   have htoh : tohostAddr = 0x8001ad00 := rfl
-  exact ⟨by omega, by omega, Or.inr (by omega), by omega⟩
+  exact ⟨by omega, by omega, Or.inr (by omega)⟩
 
 end Vsa.Sim

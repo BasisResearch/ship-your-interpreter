@@ -207,11 +207,10 @@ theorem envDefineScanCallRead64
       (envDefineScanCallL cursor name) [bs] envDefineScanCallSeg := by
     chain_facts hloaded with "Vsa.Sim.Code.env_define_at_"
     unfold MemFacts
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · rw [hea]; exact hlo
     · rw [hea]; exact hhi
     · rw [hea]; exact hhtif
-    · rw [hea]; exact halign
     · rw [hea]; exact hpins
   have hL : GHolds c.σ (envDefineScanCallL cursor name) := by
     exact ⟨by simpa [gprGet] using hcursor,

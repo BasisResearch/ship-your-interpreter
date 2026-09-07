@@ -116,8 +116,8 @@ structure LogTailPre
   code : Eval_exprLoaded c.σ.mem
   truthyLoaded : Value_truthyLoaded c.σ.mem
   boolLoaded : Value_boolLoaded c.σ.mem
-  -- the RIGHT value is represented at `sretR` (extended `φc`)
-  vrepr : ValueRepr c.σ.mem N φc sretR.toNat rv
+  -- The RIGHT header contains exactly the bytes read by truthiness.
+  header : TruthyHeaderRepr c.σ.mem sretR.toNat rv
   -- The 24 source bytes at the RIGHT buffer `sretR` (which the `a3/a4/a5` words
   -- sign-extend), as TOTAL READS (wave 48k) so `sd a3/a4/a5,64/72/80(sp)`
   -- byte-copies `rv` to sp-1024 without demanding the dead padding bytes be
@@ -146,10 +146,6 @@ structure LogTailPre
   bQ5 : (c.σ.mem[sretR.toNat + 16 + 5]?).getD 0 = qb5
   bQ6 : (c.σ.mem[sretR.toNat + 16 + 6]?).getD 0 = qb6
   bQ7 : (c.σ.mem[sretR.toNat + 16 + 7]?).getD 0 = qb7
-  -- the payload-disjointness for the copy (mirrors LogicalBufExtras.pay_disj)
-  payDisj : ∀ (p : Nat) (s : String),
-    read64 c.σ.mem (sretR.toNat + 8) = some p →
-    ∀ k, k ≤ s.length → (p + k < sp.toNat - 1024 ∨ sp.toNat - 1024 + 24 ≤ p + k)
   -- store re-represented + survival on [SL.lo, SL.hi)
   store : StoreRepr c.σ.mem N A φf φc st''.store
   storeSurv : ∀ m' : Mem,
@@ -222,10 +218,10 @@ theorem blockC_logTail
         PreEpilogueVD g N A SL φf φc st'' (.bool rv.truthy) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hpre
   obtain ⟨hG, htick, hpc, hs1, hsp, ha3, ha4, ha5, ⟨vmi, hmi⟩, hout, houtStr, hcode,
-    hVtruthyC, hVboolC, hvrepr,
+    hVtruthyC, hVboolC, hheader,
     hkb0, hkb1, hkb2, hkb3, hkb4, hkb5, hkb6, hkb7,
     hpb0, hpb1, hpb2, hpb3, hpb4, hpb5, hpb6, hpb7,
-    hqb0, hqb1, hqb2, hqb3, hqb4, hqb5, hqb6, hqb7, hpayDisj,
+    hqb0, hqb1, hqb2, hqb3, hqb4, hqb5, hqb6, hqb7,
     hstore, hstoreSurv, hslotRa, hslotS0, hslotS1, hslotS2,
     hgv8, hgv9, hgv18, hgv2, hframe, hmemFrame, hMemExt, hsretWords,
     hbufLo, hbufWin, hsretAl, hsretLo, hsretHi, hsretWin, hsretStk, hsretBoolCode,
@@ -342,16 +338,8 @@ theorem blockC_logTail
   have hcode4 : Eval_exprLoaded σ4.mem := by rw [hmem4e]; exact hcode_m3
   have hx10_4' : σ4.regs.get? Register.x10 = some ((sp - 1088#64) + sign_extend (m := 64) (0x040#12)) := hx10_4
   ------------------------------------------------------------------------
-  -- the copied 24-byte buffer represents `rv`: ValueRepr m3 (sp-1024) rv.
+  -- The copied header preserves the bytes read by truthiness.
   ------------------------------------------------------------------------
-  have hm3_out : ∀ a, (a < sp.toNat - 1024 ∨ sp.toNat - 1024 + 24 ≤ a) → m3[a]? = c.σ.mem[a]? := by
-    intro a ha
-    show (writeMap8 m2 (sp.toNat-1008) (sdData_val qv))[a]? = c.σ.mem[a]?
-    rw [getElem_writeMap8_disjoint m2 (sp.toNat-1008) a (sdData_val qv) (by omega)]
-    show (writeMap8 m1 (sp.toNat-1016) (sdData_val pv))[a]? = c.σ.mem[a]?
-    rw [getElem_writeMap8_disjoint m1 (sp.toNat-1016) a (sdData_val pv) (by omega)]
-    show (writeMap8 c.σ.mem (sp.toNat-1024) (sdData_val kv))[a]? = c.σ.mem[a]?
-    rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat-1024) a (sdData_val kv) (by omega)]
   -- the m3 window byte-copies the sretR buffer (mirrors orTrue's hm3_copy)
   obtain ⟨eK0, eK1, eK2, eK3, eK4, eK5, eK6, eK7⟩ := sdData_sext_bytes kb0 kb1 kb2 kb3 kb4 kb5 kb6 kb7
   obtain ⟨eP0, eP1, eP2, eP3, eP4, eP5, eP6, eP7⟩ := sdData_sext_bytes pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7
@@ -417,11 +405,8 @@ theorem blockC_logTail
         show sretR.toNat+22 = sretR.toNat+16+6 from by omega]; exact congrArg some hqb6.symm
     · rw [show sp.toNat-1024+23 = sp.toNat-1008+7 from by omega, getElem_writeMap8_7, eQ7,
         show sretR.toNat+23 = sretR.toNat+16+7 from by omega]; exact congrArg some hqb7.symm
-  -- ValueRepr m3 (sp-1024) rv
-  have hbufRepr : ValueRepr m3 N φc (sp.toNat - 1024) rv :=
-    valueRepr_copy_total_of_writeWindow (srcAddr := sretR.toNat) (dstAddr := sp.toNat - 1024)
-      hm3_copy hm3_out
-      (fun p s hp k hk => hpayDisj p s hp k hk) hvrepr
+  have hbufRepr : TruthyHeaderRepr m3 (sp.toNat - 1024) rv :=
+    truthyHeaderRepr_copy_total hm3_copy hheader
   -- value_truthy / value_bool code loaded at m3
   have hVtruthy_m3 : Value_truthyLoaded m3 :=
     loaded_truthy_writeMap8 m2 (sp.toNat - 1008) (sdData_val qv) (by rcases hTruthyStk with h | h <;> omega)
@@ -444,7 +429,7 @@ theorem blockC_logTail
     ⟨by rw [hbufNat]; omega, by rw [hbufNat]; omega,
      by rw [hbufNat]; omega, by rw [hbufNat, htoh]; omega⟩
   have hrettgt_t : (BitVec.update ((0x800035d0#64 : BitVec 64) + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by decide
-  have hbufRepr' : ValueRepr m3 N φc (sp - 1024#64).toNat rv := by rw [hbufNat]; exact hbufRepr
+  have hbufRepr' : TruthyHeaderRepr m3 (sp - 1024#64).toNat rv := by rw [hbufNat]; exact hbufRepr
   have hx10_4'' : σ4.regs.get? Register.x10 = some (sp - 1024#64) := by rw [hx10_4', hbuftag]
   ------------------------------------------------------------------------
   -- 0x800035cc: jal value_truthy → PC := value_truthy entry, ra := 0x800035d0
@@ -469,10 +454,10 @@ theorem blockC_logTail
   have hout5 : σ5.sailOutput = out0 := by rw [hobs5.out, sailOutput_sigmaPost_jal]; exact hout4
   have hVbool_5 : Value_boolLoaded σ5.mem := by rw [hmem5e]; exact hVbool_m3
   ------------------------------------------------------------------------
-  -- value_truthy(rv) via value_truthy_spec, buf = sp-1024, ra = 0x800035d0
+  -- value_truthy(rv) via value_truthy_header_spec, buf = sp-1024, ra = 0x800035d0
   ------------------------------------------------------------------------
   obtain ⟨cT, hsT, hpostT⟩ :=
-    value_truthy_spec (fun R => σ5.regs.get? R) (sp - 1024#64) (0x800035d0#64) N φc rv m3 out0
+    value_truthy_header_spec (fun R => σ5.regs.get? R) (sp - 1024#64) (0x800035d0#64) N φc rv m3 out0
       ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩
       ⟨hG5, hmem5e ▸ hVtruthy_m3, hmem5e, hpc5, hx10_5, hlink5, ⟨vmi5, hmi5⟩, hi5,
         hbufRepr', hTruthyReg, hrettgt_t, hout5, fun R _ => rfl⟩

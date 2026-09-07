@@ -198,7 +198,7 @@ theorem svfProH_spec
   -- === 0x800077b4: lw a5,0(a5) — table offset -0x11bc8 ===
   obtain ⟨σ8, i8, hs8, hi8, hG8, hmem8, hobs8⟩ :=
     site_800077b4_pr σ7 i7 (c.steps + 7) _ vmi7 (0x8001a22c#64) _ _ _ _
-      hG7 hpc7 hmi7 hp7.1 (hmE7 ▸ hsl0) rfl (by rw [hofftb]; omega) (by rw [hofftb]; omega) (by rw [hofftb, htoh]; omega) (by rw [hofftb]) (by rw [hofftb, hmE7]; exact htb0) (by rw [hofftb, hmE7]; exact htb1) (by rw [hofftb, hmE7]; exact htb2) (by rw [hofftb, hmE7]; exact htb3) hi7
+      hG7 hpc7 hmi7 hp7.1 (hmE7 ▸ hsl0) rfl (by rw [hofftb]; omega) (by rw [hofftb]; omega) (by rw [hofftb, htoh]; omega)  (by rw [hofftb, hmE7]; exact htb0) (by rw [hofftb, hmE7]; exact htb1) (by rw [hofftb, hmE7]; exact htb2) (by rw [hofftb, hmE7]; exact htb3) hi7
   have hstep8 : Step ⟨σ7, i7, c.steps + 7⟩ ⟨σ8, i8, c.steps + 8⟩ := hs8
   have hpc8 : σ8.regs.get? Register.PC = some (0x800077b8#64) := by
     have := obs_alu_pc hobs8

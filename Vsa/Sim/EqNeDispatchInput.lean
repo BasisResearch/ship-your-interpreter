@@ -49,23 +49,52 @@ def DispatchPost (op : EqNeOp) (base : BitVec 64)
   | .eq => EqDispatchPostS base lds m0 out0 gpre c
   | .ne => NeDispatchPostS base lds m0 out0 gpre c
 
+/-- The memory and source-load facts used to reconstruct the copied operands. -/
+structure DispatchReadback (op : EqNeOp) (base : BitVec 64)
+    (lds : List (List (BitVec 8))) (m0 : Mem) (c : Config) : Prop where
+  memory : c.σ.mem = writeLog m0
+    (evalBlocks (match op with | .eq => eqDispatch | .ne => neDispatch)
+      (SegEvalState.init (eqDispL base) lds)).log
+  pins : EqNeSrcPins base lds m0
+
+/-- Destructure either landed dispatch post once, behind named fields. -/
+theorem DispatchPost.readback {op : EqNeOp} {base : BitVec 64}
+    {lds : List (List (BitVec 8))} {m0 : Mem} {out0 : Array String}
+    {gpre : (R : Register) → Option (RegisterType R)} {c : Config}
+    (h : DispatchPost op base lds m0 out0 gpre c) :
+    DispatchReadback op base lds m0 c := by
+  cases op <;>
+    obtain ⟨_, hmem, _, _, _, _, _, _, _, hpins⟩ := h <;>
+    exact ⟨hmem, hpins⟩
+
 end EqNeOp
 
 /-- Raw facts not supplied by `TwoSubReturn`.  They contain data and geometry only;
 the dispatch execution is derived by `evalEqNeChain_dispatch_of_twoSubReturn`. -/
 structure EqNeDispatchInput
     (op : EqNeOp) (gpre : (R : Register) → Option (RegisterType R))
-    (SL : StackLayout) (sp aExpr Wl : BitVec 64) (vl : Value) (c : Config) : Prop where
+    (SL : StackLayout) (sp aExpr : BitVec 64) (c : Config) : Prop where
   gx8 : gpre Register.x8 = some aExpr
   opTok : read32 c.σ.mem (aExpr.toNat + 8) = some op.token
   slot : op.slotPinned c.σ.mem
-  fullpop : ∀ k : Nat, ∃ w : BitVec 8, c.σ.mem[k]? = some w
-  x19 : c.σ.regs.get? Register.x19 = some Wl
-  kindResp :
-    read64 c.σ.mem (sp.toNat - 1088) =
-      some (BitVec.ofNat 64 (kindTag vl)).toNat
   expr : ExprBounds aExpr
   stack : StackBounds sp SL
+
+/-- The actual left value tag identifies the kind respilled by the binary head. -/
+theorem BinaryReturnLoads.kind_readback {sp : BitVec 64} {c : Config}
+    {N : NativeAddrs} {φ : Addr → Nat} {v : Value}
+    (h : BinaryReturnLoads sp c)
+    (hv : ValueRepr c.σ.mem N φ (sp.toNat - 968) v) :
+    read64 c.σ.mem (sp.toNat - 1088) = some (BitVec.ofNat 64 (kindTag v)).toNat := by
+  have hk := kind_read32 c.σ.mem (sp.toNat - 968) v (truthyHeaderRepr_of_valueRepr hv)
+  have hnat : (BitVec.ofNat 32 (kindTag v)).toNat = kindTag v := by cases v <;> rfl
+  have hword : bytesT4 c.σ.mem (sp.toNat - 968) = BitVec.ofNat 32 (kindTag v) :=
+    bytesT4_of_read32 (hnat.symm ▸ hk)
+  have hext : sign_extend (m := 64) (BitVec.ofNat 32 (kindTag v)) =
+      BitVec.ofNat 64 (kindTag v) := by cases v <;> rfl
+  rw [h.kind_spill, hword, hext]
+
+#print axioms BinaryReturnLoads.kind_readback
 
 /-- Run the shared entry linkage and the selected eq/ne reflected dispatch from a
 `TwoSubReturn` state.  Operand kind tags are recovered from `ValueRepr`; no integer
@@ -76,11 +105,12 @@ theorem evalEqNeChain_dispatch_of_twoSubReturn
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat)
     (st' st'' : Vsa.While.St) (vl vr : Value)
-    (sp r sret aExpr : BitVec 64) (v8 v9 v18 Wl : BitVec 64)
+    (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64)
     (m0 : Mem) (c : Config)
     (hTS : TwoSubReturn gpre N A SL φf φc nf nc st' st'' vl vr
       sp r sret v8 v9 v18 m0 c)
-    (hIn : EqNeDispatchInput op gpre SL sp aExpr Wl vl c) :
+    (hLoads : BinaryReturnLoads sp c)
+    (hIn : EqNeDispatchInput op gpre SL sp aExpr c) :
     ∃ (cD : Config) (lds : List (List (BitVec 8))),
       Steps c cD ∧
       op.DispatchPost (sp - 1088#64) lds c.σ.mem c.σ.sailOutput
@@ -89,7 +119,10 @@ theorem evalEqNeChain_dispatch_of_twoSubReturn
     _hs3, hstoreBundle, hcode, _hslotRa, _hslotS0, _hslotS1, _hslotS2,
     _hMemExt, _hmemframe⟩ := hTS
   obtain ⟨_φfm, _φcm, _hpfm, _hpcm, ⟨φcr, _hpcr, hvalR⟩,
-    _hvalL, _hstoreTail⟩ := hstoreBundle
+    ⟨φcl, hvalL⟩, _hstoreTail⟩ := hstoreBundle
+  let Wl : BitVec 64 := bytesT8 c.σ.mem (sp.toNat - 960)
+  have hX19 : c.σ.regs.get? Register.x19 = some Wl := hLoads.payload_register
+  have hKindResp := hLoads.kind_readback hvalL
   have hx8 : c.σ.regs.get? Register.x8 = some aExpr :=
     (hframe Register.x8 (by decide) (by decide)).trans hIn.gx8
   have hAr : SpArith sp SL := spArith hIn.stack
@@ -100,8 +133,8 @@ theorem evalEqNeChain_dispatch_of_twoSubReturn
     rw [h1088]
     have := sp.isLt
     omega
-  have gExpr8 := exprGeom4 hIn.expr 8 (by decide) (by decide)
-  have gExpr4 := exprGeom4 hIn.expr 4 (by decide) (by decide)
+  have gExpr8 := exprGeom4 hIn.expr 8 (by decide)
+  have gExpr4 := exprGeom4 hIn.expr 4 (by decide)
   have g944 := slotGeom8 hIn.stack 944 (by decide) (by decide) (by decide)
   have g936 := slotGeom8 hIn.stack 936 (by decide) (by decide) (by decide)
   have g1088 := slotGeom8 hIn.stack 1088 (by decide) (by decide) (by decide)
@@ -143,10 +176,14 @@ theorem evalEqNeChain_dispatch_of_twoSubReturn
   have htok :
       bytesVal MKind.lw [tb0, tb1, tb2, tb3] = BitVec.ofNat 64 op.token :=
     sext_kind tb0 tb1 tb2 tb3 op.token (by cases op <;> decide) htbrec
-  obtain ⟨lb0, hlb0⟩ := hIn.fullpop (aExpr.toNat + 4)
-  obtain ⟨lb1, hlb1⟩ := hIn.fullpop (aExpr.toNat + 4 + 1)
-  obtain ⟨lb2, hlb2⟩ := hIn.fullpop (aExpr.toNat + 4 + 2)
-  obtain ⟨lb3, hlb3⟩ := hIn.fullpop (aExpr.toNat + 4 + 3)
+  let lb0 := bytesT1 c.σ.mem (aExpr.toNat + 4)
+  have hlb0 : bytesT1 c.σ.mem (aExpr.toNat + 4) = lb0 := rfl
+  let lb1 := bytesT1 c.σ.mem (aExpr.toNat + 4 + 1)
+  have hlb1 : bytesT1 c.σ.mem (aExpr.toNat + 4 + 1) = lb1 := rfl
+  let lb2 := bytesT1 c.σ.mem (aExpr.toNat + 4 + 2)
+  have hlb2 : bytesT1 c.σ.mem (aExpr.toNat + 4 + 2) = lb2 := rfl
+  let lb3 := bytesT1 c.σ.mem (aExpr.toNat + 4 + 3)
+  have hlb3 : bytesT1 c.σ.mem (aExpr.toNat + 4 + 3) = lb3 := rfl
   have hkindR : read32 c.σ.mem (sp.toNat - 944) = some (kindTag vr) :=
     kind_read32 c.σ.mem (sp.toNat - 944) vr (truthyHeaderRepr_of_valueRepr hvalR)
   obtain ⟨rkb0, rkb1, rkb2, rkb3, hrkb0, hrkb1, hrkb2, hrkb3, hrkbrec⟩ :=
@@ -155,18 +192,26 @@ theorem evalEqNeChain_dispatch_of_twoSubReturn
       = BitVec.ofNat 64 (kindTag vr) :=
     sext_kind rkb0 rkb1 rkb2 rkb3 (kindTag vr)
       (by cases vr <;> simp [kindTag]) hrkbrec
-  obtain ⟨dp0, hdp0⟩ := hIn.fullpop (sp.toNat - 936)
-  obtain ⟨dp1, hdp1⟩ := hIn.fullpop (sp.toNat - 936 + 1)
-  obtain ⟨dp2, hdp2⟩ := hIn.fullpop (sp.toNat - 936 + 2)
-  obtain ⟨dp3, hdp3⟩ := hIn.fullpop (sp.toNat - 936 + 3)
-  obtain ⟨dp4, hdp4⟩ := hIn.fullpop (sp.toNat - 936 + 4)
-  obtain ⟨dp5, hdp5⟩ := hIn.fullpop (sp.toNat - 936 + 5)
-  obtain ⟨dp6, hdp6⟩ := hIn.fullpop (sp.toNat - 936 + 6)
-  obtain ⟨dp7, hdp7⟩ := hIn.fullpop (sp.toNat - 936 + 7)
+  let dp0 := bytesT1 c.σ.mem (sp.toNat - 936)
+  have hdp0 : bytesT1 c.σ.mem (sp.toNat - 936) = dp0 := rfl
+  let dp1 := bytesT1 c.σ.mem (sp.toNat - 936 + 1)
+  have hdp1 : bytesT1 c.σ.mem (sp.toNat - 936 + 1) = dp1 := rfl
+  let dp2 := bytesT1 c.σ.mem (sp.toNat - 936 + 2)
+  have hdp2 : bytesT1 c.σ.mem (sp.toNat - 936 + 2) = dp2 := rfl
+  let dp3 := bytesT1 c.σ.mem (sp.toNat - 936 + 3)
+  have hdp3 : bytesT1 c.σ.mem (sp.toNat - 936 + 3) = dp3 := rfl
+  let dp4 := bytesT1 c.σ.mem (sp.toNat - 936 + 4)
+  have hdp4 : bytesT1 c.σ.mem (sp.toNat - 936 + 4) = dp4 := rfl
+  let dp5 := bytesT1 c.σ.mem (sp.toNat - 936 + 5)
+  have hdp5 : bytesT1 c.σ.mem (sp.toNat - 936 + 5) = dp5 := rfl
+  let dp6 := bytesT1 c.σ.mem (sp.toNat - 936 + 6)
+  have hdp6 : bytesT1 c.σ.mem (sp.toNat - 936 + 6) = dp6 := rfl
+  let dp7 := bytesT1 c.σ.mem (sp.toNat - 936 + 7)
+  have hdp7 : bytesT1 c.σ.mem (sp.toNat - 936 + 7) = dp7 := rfl
   obtain ⟨kb0, kb1, kb2, kb3, kb4, kb5, kb6, kb7,
     hkb0, hkb1, hkb2, hkb3, hkb4, hkb5, hkb6, hkb7, hkbrec⟩ :=
     read64_bytes c.σ.mem (sp.toNat - 1088)
-      (BitVec.ofNat 64 (kindTag vl)).toNat hIn.kindResp
+      (BitVec.ofNat 64 (kindTag vl)).toNat hKindResp
   have hlk : bytesVal MKind.ld [kb0, kb1, kb2, kb3, kb4, kb5, kb6, kb7]
       = BitVec.ofNat 64 (kindTag vl) := by
     apply BitVec.eq_of_toNat_eq
@@ -175,7 +220,7 @@ theorem evalEqNeChain_dispatch_of_twoSubReturn
         : BitVec (8 * 8))).toNat = _
     rw [sext_full, word8_toNat_recon, hkbrec]
   have hfb : FrameBundle c.σ.mem (sp - 1088#64) :=
-    ⟨hIn.fullpop, hspsub ▸ (frameBaseGeom hIn.stack).1,
+    ⟨hspsub ▸ (frameBaseGeom hIn.stack).1,
       hspsub ▸ (frameBaseGeom hIn.stack).2.1,
       hspsub ▸ (frameBaseGeom hIn.stack).2.2.1,
       hspsub ▸ (frameBaseGeom hIn.stack).2.2.2⟩
@@ -190,37 +235,35 @@ theorem evalEqNeChain_dispatch_of_twoSubReturn
           (BitVec.ofNat 64 (kindTag vr)) (BitVec.ofNat 64 (kindTag vl))
           tb0 tb1 tb2 tb3 lb0 lb1 lb2 lb3 rkb0 rkb1 rkb2 rkb3
           dp0 dp1 dp2 dp3 dp4 dp5 dp6 dp7 kb0 kb1 kb2 kb3 kb4 kb5 kb6 kb7
-          0x60#8 0x97#8 0xfe#8 0xff#8 hG hpc hmi hsp hx8 hs1 hIn.x19 hcode
+          0x60#8 0x97#8 0xfe#8 0xff#8 hG hpc hmi hsp hx8 hs1 hX19 hcode
           htok' hrk hlk
           (by rw [hop8]; exact gExpr8.1)
           (by rw [hop8]; exact gExpr8.2.1)
-          (by rw [hop8]; exact gExpr8.2.2.1)
-          (by rw [hop8]; exact gExpr8.2.2.2)
-          (by rw [hop8]; exact htb0) (by rw [hop8]; exact htb1)
-          (by rw [hop8]; exact htb2) (by rw [hop8]; exact htb3)
+          (by rw [hop8]; exact gExpr8.2.2)
+          (by rw [hop8]; exact lpin_of_present htb0) (by rw [hop8]; exact lpin_of_present htb1)
+          (by rw [hop8]; exact lpin_of_present htb2) (by rw [hop8]; exact lpin_of_present htb3)
           (by rw [hline4]; exact gExpr4.1)
           (by rw [hline4]; exact gExpr4.2.1)
-          (by rw [hline4]; exact gExpr4.2.2.1)
-          (by rw [hline4]; exact gExpr4.2.2.2)
-          (by rw [hline4]; exact hlb0) (by rw [hline4]; exact hlb1)
-          (by rw [hline4]; exact hlb2) (by rw [hline4]; exact hlb3)
+          (by rw [hline4]; exact gExpr4.2.2)
+          (by simpa only [hline4] using hlb0) (by simpa only [hline4] using hlb1)
+          (by simpa only [hline4] using hlb2) (by simpa only [hline4] using hlb3)
           (by rw [haddr944]; exact g944.lo) (by rw [haddr944]; exact g944.hi4)
           (by rw [haddr944]; exact g944.ht4) (by rw [haddr944]; exact g944.al4)
-          (by rw [haddr944]; exact hrkb0) (by rw [haddr944]; exact hrkb1)
-          (by rw [haddr944]; exact hrkb2) (by rw [haddr944]; exact hrkb3)
+          (by rw [haddr944]; exact lpin_of_present hrkb0) (by rw [haddr944]; exact lpin_of_present hrkb1)
+          (by rw [haddr944]; exact lpin_of_present hrkb2) (by rw [haddr944]; exact lpin_of_present hrkb3)
           (by rw [haddr936]; exact g936.lo) (by rw [haddr936]; exact g936.hi8)
           (by rw [haddr936]; exact g936.ht8) (by rw [haddr936]; exact g936.al8)
-          (by rw [haddr936]; exact hdp0) (by rw [haddr936]; exact hdp1)
-          (by rw [haddr936]; exact hdp2) (by rw [haddr936]; exact hdp3)
-          (by rw [haddr936]; exact hdp4) (by rw [haddr936]; exact hdp5)
-          (by rw [haddr936]; exact hdp6) (by rw [haddr936]; exact hdp7)
+          (by simpa only [haddr936] using hdp0) (by simpa only [haddr936] using hdp1)
+          (by simpa only [haddr936] using hdp2) (by simpa only [haddr936] using hdp3)
+          (by simpa only [haddr936] using hdp4) (by simpa only [haddr936] using hdp5)
+          (by simpa only [haddr936] using hdp6) (by simpa only [haddr936] using hdp7)
           hSlot rfl rfl rfl rfl
           (by rw [haddr0]; exact g1088.lo) (by rw [haddr0]; exact g1088.hi8)
           (by rw [haddr0]; exact g1088.ht8) (by rw [haddr0]; exact g1088.al8)
-          (by rw [haddr0]; exact hkb0) (by rw [haddr0]; exact hkb1)
-          (by rw [haddr0]; exact hkb2) (by rw [haddr0]; exact hkb3)
-          (by rw [haddr0]; exact hkb4) (by rw [haddr0]; exact hkb5)
-          (by rw [haddr0]; exact hkb6) (by rw [haddr0]; exact hkb7)
+          (by rw [haddr0]; exact lpin_of_present hkb0) (by rw [haddr0]; exact lpin_of_present hkb1)
+          (by rw [haddr0]; exact lpin_of_present hkb2) (by rw [haddr0]; exact lpin_of_present hkb3)
+          (by rw [haddr0]; exact lpin_of_present hkb4) (by rw [haddr0]; exact lpin_of_present hkb5)
+          (by rw [haddr0]; exact lpin_of_present hkb6) (by rw [haddr0]; exact lpin_of_present hkb7)
           htick hfb)
   | ne =>
       have hSlot := hIn.slot
@@ -232,37 +275,35 @@ theorem evalEqNeChain_dispatch_of_twoSubReturn
           (BitVec.ofNat 64 (kindTag vr)) (BitVec.ofNat 64 (kindTag vl))
           tb0 tb1 tb2 tb3 lb0 lb1 lb2 lb3 rkb0 rkb1 rkb2 rkb3
           dp0 dp1 dp2 dp3 dp4 dp5 dp6 dp7 kb0 kb1 kb2 kb3 kb4 kb5 kb6 kb7
-          0xb0#8 0x97#8 0xfe#8 0xff#8 hG hpc hmi hsp hx8 hs1 hIn.x19 hcode
+          0xb0#8 0x97#8 0xfe#8 0xff#8 hG hpc hmi hsp hx8 hs1 hX19 hcode
           htok' hrk hlk
           (by rw [hop8]; exact gExpr8.1)
           (by rw [hop8]; exact gExpr8.2.1)
-          (by rw [hop8]; exact gExpr8.2.2.1)
-          (by rw [hop8]; exact gExpr8.2.2.2)
-          (by rw [hop8]; exact htb0) (by rw [hop8]; exact htb1)
-          (by rw [hop8]; exact htb2) (by rw [hop8]; exact htb3)
+          (by rw [hop8]; exact gExpr8.2.2)
+          (by rw [hop8]; exact lpin_of_present htb0) (by rw [hop8]; exact lpin_of_present htb1)
+          (by rw [hop8]; exact lpin_of_present htb2) (by rw [hop8]; exact lpin_of_present htb3)
           (by rw [hline4]; exact gExpr4.1)
           (by rw [hline4]; exact gExpr4.2.1)
-          (by rw [hline4]; exact gExpr4.2.2.1)
-          (by rw [hline4]; exact gExpr4.2.2.2)
-          (by rw [hline4]; exact hlb0) (by rw [hline4]; exact hlb1)
-          (by rw [hline4]; exact hlb2) (by rw [hline4]; exact hlb3)
+          (by rw [hline4]; exact gExpr4.2.2)
+          (by simpa only [hline4] using hlb0) (by simpa only [hline4] using hlb1)
+          (by simpa only [hline4] using hlb2) (by simpa only [hline4] using hlb3)
           (by rw [haddr944]; exact g944.lo) (by rw [haddr944]; exact g944.hi4)
           (by rw [haddr944]; exact g944.ht4) (by rw [haddr944]; exact g944.al4)
-          (by rw [haddr944]; exact hrkb0) (by rw [haddr944]; exact hrkb1)
-          (by rw [haddr944]; exact hrkb2) (by rw [haddr944]; exact hrkb3)
+          (by rw [haddr944]; exact lpin_of_present hrkb0) (by rw [haddr944]; exact lpin_of_present hrkb1)
+          (by rw [haddr944]; exact lpin_of_present hrkb2) (by rw [haddr944]; exact lpin_of_present hrkb3)
           (by rw [haddr936]; exact g936.lo) (by rw [haddr936]; exact g936.hi8)
           (by rw [haddr936]; exact g936.ht8) (by rw [haddr936]; exact g936.al8)
-          (by rw [haddr936]; exact hdp0) (by rw [haddr936]; exact hdp1)
-          (by rw [haddr936]; exact hdp2) (by rw [haddr936]; exact hdp3)
-          (by rw [haddr936]; exact hdp4) (by rw [haddr936]; exact hdp5)
-          (by rw [haddr936]; exact hdp6) (by rw [haddr936]; exact hdp7)
+          (by simpa only [haddr936] using hdp0) (by simpa only [haddr936] using hdp1)
+          (by simpa only [haddr936] using hdp2) (by simpa only [haddr936] using hdp3)
+          (by simpa only [haddr936] using hdp4) (by simpa only [haddr936] using hdp5)
+          (by simpa only [haddr936] using hdp6) (by simpa only [haddr936] using hdp7)
           hSlot rfl rfl rfl rfl
           (by rw [haddr0]; exact g1088.lo) (by rw [haddr0]; exact g1088.hi8)
           (by rw [haddr0]; exact g1088.ht8) (by rw [haddr0]; exact g1088.al8)
-          (by rw [haddr0]; exact hkb0) (by rw [haddr0]; exact hkb1)
-          (by rw [haddr0]; exact hkb2) (by rw [haddr0]; exact hkb3)
-          (by rw [haddr0]; exact hkb4) (by rw [haddr0]; exact hkb5)
-          (by rw [haddr0]; exact hkb6) (by rw [haddr0]; exact hkb7)
+          (by rw [haddr0]; exact lpin_of_present hkb0) (by rw [haddr0]; exact lpin_of_present hkb1)
+          (by rw [haddr0]; exact lpin_of_present hkb2) (by rw [haddr0]; exact lpin_of_present hkb3)
+          (by rw [haddr0]; exact lpin_of_present hkb4) (by rw [haddr0]; exact lpin_of_present hkb5)
+          (by rw [haddr0]; exact lpin_of_present hkb6) (by rw [haddr0]; exact lpin_of_present hkb7)
           htick hfb)
 
 #print axioms evalEqNeChain_dispatch_of_twoSubReturn

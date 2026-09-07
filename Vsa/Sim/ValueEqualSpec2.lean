@@ -1,6 +1,7 @@
 import Vsa.Sim.ValueEqualSpec
 import Vsa.Sim.ValueEqualSites2
 import Vsa.Sim.ObsAvoid
+import Vsa.Sim.ValueEqualityIdentity
 
 /-!
 # Layer 3 — total-correctness spec for `value_equal`, part 2 (payload variants + merge)
@@ -470,7 +471,7 @@ theorem ve_native_handler (g : (R : Register) → Option (RegisterType R)) (bufa
 Cases on `(va, vb)`. Mismatched kinds and both-`null` reuse
 `value_equal_spec_null_mismatch`; the four payload same-kind cases run
 `ve_prefix → ve_dispatch → ve_{bool,int,native}_handler` with the matching bridge.
-Closure/native pointer identity is bridged by the injectivity hypotheses `hφc`/`hN`.
+Closure/native pointer identity is bridged only for the two compared operands.
 The `str`-`str` case is supplied via `ve_str_handler` (in the str section below); every
 other case is discharged here. -/
 /-- Run `ve_prefix → ve_dispatch` from the entry precondition, landing at `handlerAddr va`
@@ -506,12 +507,11 @@ theorem ve_to_handler
       hstepsp hip hGp hmemp houtp hloaded0 hjt0 hpcp hx15p' ha0p ha1p hrap vmip hmip hframep
   exact ⟨σd, idd, hstepsd, hidd, hGd, hmemd, houtd, hpcd, ha0d, ha1d, hrad, hmid, hframed⟩
 
-theorem value_equal_spec_nonstr
+theorem value_equal_spec_nonstr_identity
     (g : (R : Register) → Option (RegisterType R)) (bufa bufb r : BitVec 64)
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (va vb : Value)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
-    (hφc : ∀ (a b : Vsa.While.Addr), φc a = φc b → a = b)
-    (hN : ∀ (f h : NativeFn), N.addr f = N.addr h → f = h)
+    (hIdentity : ValueEqualityIdentity N φc va vb)
     (hnotstr : ∀ sa sb, ¬ (va = .str sa ∧ vb = .str sb)) :
     Triple (ve_pre g bufa bufb r N φc va vb m0 o) (ve_post g r va vb m0 o) := by
   -- If kinds mismatch, use the mismatch theorem directly.
@@ -581,7 +581,7 @@ theorem value_equal_spec_nonstr
       rw [ha0_2,
         ptr_eq_bridge φc ca1 ca2 (φc ca1) (φc ca2) rfl rfl
           (read64_lt m0 (bufa.toNat + 8) _ hpb1) (read64_lt m0 (bufb.toNat + 8) _ hpb2)
-          (hφc ca1 ca2)]
+          (hIdentity.closure ca1 ca2 rfl rfl)]
       rfl
     all_goals (exfalso; simp [kindTag] at hkeq)
   | native f1 =>
@@ -600,8 +600,20 @@ theorem value_equal_spec_nonstr
       rw [ha0_2,
         ptr_eq_bridge N.addr f1 f2 (N.addr f1) (N.addr f2) rfl rfl
           (read64_lt m0 (bufa.toNat + 16) _ hpb1) (read64_lt m0 (bufb.toNat + 16) _ hpb2)
-          (hN f1 f2)]
+          (hIdentity.native f1 f2 rfl rfl)]
       rfl
     all_goals (exfalso; simp [kindTag] at hkeq)
+
+/-- Legacy global-injectivity interface, derived from the operand-local proof. -/
+theorem value_equal_spec_nonstr
+    (g : (R : Register) → Option (RegisterType R)) (bufa bufb r : BitVec 64)
+    (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (va vb : Value)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
+    (hφc : ∀ (a b : Vsa.While.Addr), φc a = φc b → a = b)
+    (hN : ∀ (f h : NativeFn), N.addr f = N.addr h → f = h)
+    (hnotstr : ∀ sa sb, ¬ (va = .str sa ∧ vb = .str sb)) :
+    Triple (ve_pre g bufa bufb r N φc va vb m0 o) (ve_post g r va vb m0 o) :=
+  value_equal_spec_nonstr_identity g bufa bufb r N φc va vb m0 o
+    (ValueEqualityIdentity.of_injective hφc hN) hnotstr
 
 end Vsa.Sim

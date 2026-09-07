@@ -75,7 +75,7 @@ theorem retC_spec (vsp vcur va0 : BitVec 64) (c : Config)
     site_80007960_rt c.σ c.tick c.steps _ vmi0 vsp _ _ _ _ _ _ _ _
       hG hpc hmi0 hp0.2.1 hload rfl
       (by rw [hoff0]; omega) (by rw [hoff0]; omega) (Or.inr (by rw [hoff0]; omega))
-      (by rw [hoff0]; omega) ha0 ha1 ha2 ha3 ha4 ha5 ha6 ha7 htick
+       ha0 ha1 ha2 ha3 ha4 ha5 ha6 ha7 htick
   have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hs1
   have hpc1 : σ1.regs.get? Register.PC = some (0x80007964#64) := by
     have := obs_alu_pc hobs1

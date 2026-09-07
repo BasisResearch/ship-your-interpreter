@@ -166,7 +166,7 @@ theorem boolBoxEpilogue
     ldS3 cvi.σ cvi.tick cvi.steps ldPC vmivi (sp - 1088#64)
       s3b0 s3b1 s3b2 s3b3 s3b4 s3b5 s3b6 s3b7 hGvi hpcvi' hmivi hsp_vi hcode_vi rfl
       (by rw [hldPCeq]; exact hldLo) (by rw [hldPCeq]; exact hldHiRam)
-      (by rw [hldPCeq]; exact hldHtif) (by rw [hldPCeq]; exact hldAl)
+      (by rw [hldPCeq]; exact hldHtif)
       (by rw [hldPCeq]; exact hs3b0) (by rw [hldPCeq]; exact hs3b1)
       (by rw [hldPCeq]; exact hs3b2) (by rw [hldPCeq]; exact hs3b3)
       (by rw [hldPCeq]; exact hs3b4) (by rw [hldPCeq]; exact hs3b5)

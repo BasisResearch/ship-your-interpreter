@@ -1,0 +1,27 @@
+{
+  "alias_output": "\n\n",
+  "boot_steps": 85483,
+  "case_steps": {
+    "alias": 1416,
+    "control": 891
+  },
+  "causal_execution_observed": true,
+  "checks_per_case": 47,
+  "control_output": "\n",
+  "files": {
+    "AliasMachine.lean": "ff00a96b54c722a0ed4d5bee55c4e883a71a792df426ade4e84d0d228d37ca80",
+    "check_run.py": "af5f639b13c7fbffb75c464be70f0dcab54d4a5bab4b9b1f908a3cc48e419570",
+    "compile.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "invocation.txt": "36b37fcd3c6b5cc51c973817a03df694367fac16b50ec8a1e3bf1c96ef99edf7",
+    "result.jsonl": "1b70676c033d1b0a4d2835d51550413bff0f87feedc4c2b862cdf983c938d06e",
+    "run.stderr": "9b5abdd2c54053e5bda600e68b1d9213c19f6b77013130366d7ab27ddd6278f6"
+  },
+  "initial_runtime_audit_passed": false,
+  "initial_runtime_mismatch": {
+    "actual": "0x000a",
+    "address": "0x8001bb30",
+    "required": "0x200a",
+    "width": 2
+  },
+  "loaded_verified": false
+}

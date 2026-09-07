@@ -12,6 +12,22 @@ open Vsa Vsa.While
 
 namespace Vsa.Sim
 
+/-- A closure reference bound on a spec value: if `v` is `.closure ca`, then
+`ca < size`.  (Every other variant carries no closure index.) -/
+def ValueClosuresBounded (size : Nat) : Value → Prop
+  | .closure ca => ca < size
+  | _ => True
+
+/-- **`StoreClosuresBounded s`** — every closure address stored in any frame
+binding of `s` is `< s.closures.size` (it was returned by an earlier
+`allocClosure`).  This is the well-formedness invariant that makes the closures
+map monotone on the store's *own* references, so a `PhiExtends`-widening of `φc`
+leaves `StoreRepr` intact.  Named-field structure per CLAUDE.md. -/
+structure StoreClosuresBounded (s : Store) : Prop where
+  bounded : ∀ fa, (h : fa < s.frames.size) →
+    ∀ i, (hi : i < s.frames[fa].vars.length) →
+      ValueClosuresBounded s.closures.size (s.frames[fa].vars[i].2)
+
 /-- No frame contains two bindings with the same name. -/
 def FrameNamesUnique (vars : List (String × Value)) : Prop :=
   (vars.map Prod.fst).Nodup

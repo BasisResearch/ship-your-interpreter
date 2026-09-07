@@ -93,7 +93,6 @@ theorem evalOrPrefix_run (σ : MState) (i u : Nat)
     (o_hi : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ 0x100000000)
     (o_ht : (v8 + sign_extend (m := 64) (0x008#12)).toNat + 4 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v8 + sign_extend (m := 64) (0x008#12)).toNat)
-    (o_al : (v8 + sign_extend (m := 64) (0x008#12)).toNat % 4 = 0)
     (o_p0 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat]? = some (0x19#8))
     (o_p1 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 1]? = some (0x00#8))
     (o_p2 : σ.mem[(v8 + sign_extend (m := 64) (0x008#12)).toNat + 2]? = some (0x00#8))
@@ -191,9 +190,9 @@ theorem evalOrPrefix_run (σ : MState) (i u : Nat)
       (show KeysOK [8, 2] by decide)
       (by
         block_facts hmem with "Vsa.Sim.Code.eval_expr_at_"
-        · exact ⟨⟨o_lo, o_hi, o_ht, o_al⟩, lpin_of_present o_p0,
+        · exact ⟨⟨o_lo, o_hi, o_ht⟩, lpin_of_present o_p0,
             lpin_of_present o_p1, lpin_of_present o_p2, lpin_of_present o_p3⟩
-        · exact ⟨⟨hK_lo, hK_hi, hK_ht, hK_al⟩,
+        · exact ⟨⟨hK_lo, hK_hi, hK_ht⟩,
             hK_p0, hK_p1, hK_p2, hK_p3, hK_p4, hK_p5, hK_p6, hK_p7⟩
         · show guardB bop.BEQ (bytesVal MKind.lw [0x19#8, 0x00#8, 0x00#8, 0x00#8])
             ((0#64 : BitVec 64) + sign_extend (m := 64) (0x019#12)) = true
@@ -240,10 +239,10 @@ theorem evalOrPrefix_run (σ : MState) (i u : Nat)
       (by
         block_facts (hmem1e ▸ hmem : Vsa.Sim.Code.Eval_exprLoaded σ1.mem)
           with "Vsa.Sim.Code.eval_expr_at_"
-        · exact ⟨⟨hP_lo, hP_hi, hP_ht, hP_al⟩,
+        · exact ⟨⟨hP_lo, hP_hi, hP_ht⟩,
             hP1.1, hP1.2.1, hP1.2.2.1, hP1.2.2.2.1,
             hP1.2.2.2.2.1, hP1.2.2.2.2.2.1, hP1.2.2.2.2.2.2.1, hP1.2.2.2.2.2.2.2⟩
-        · exact ⟨⟨hQ_lo, hQ_hi, hQ_ht, hQ_al⟩,
+        · exact ⟨⟨hQ_lo, hQ_hi, hQ_ht⟩,
             hQ1.1, hQ1.2.1, hQ1.2.2.1, hQ1.2.2.2.1,
             hQ1.2.2.2.2.1, hQ1.2.2.2.2.2.1, hQ1.2.2.2.2.2.2.1, hQ1.2.2.2.2.2.2.2⟩
         · exact ⟨s0lo, s0hi, s0win, s0al⟩

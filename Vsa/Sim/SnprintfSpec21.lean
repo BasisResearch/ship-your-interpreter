@@ -113,7 +113,7 @@ theorem retA_spec (vsp vs5 v3 v8 v9 : BitVec 64) (c : Config)
     site_80007918_rt σ1 i1 (c.steps + 1) _ vmi1 vsp _ _ _ _ _ _ _ _
       hG1 hpc1 hmi1 hp1.1 hload1 rfl
       (by rw [hoff32]; omega) (by rw [hoff32]; omega) (Or.inr (by rw [hoff32]; omega))
-      (by rw [hoff32]; omega) h0 h1 h2 h3 h4 h5 h6 h7 hi1
+       h0 h1 h2 h3 h4 h5 h6 h7 hi1
   have hstep2 : Step ⟨σ1, i1, c.steps + 1⟩ ⟨σ2, i2, c.steps + 1 + 1⟩ := hs2
   have hpc2 : σ2.regs.get? Register.PC = some (0x8000791c#64) := by
     have := obs_alu_pc hobs2

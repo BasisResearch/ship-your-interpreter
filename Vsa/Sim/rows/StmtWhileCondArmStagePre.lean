@@ -76,7 +76,7 @@ def ExecWhileCondJalPre
     (∃ w, gpre Register.x19 = some w) ∧
     (∃ w, gpre Register.x20 = some w) ∧
     (∃ w, gpre Register.x21 = some w)) ∧
-  aCond.toNat % 8 = 0 ∧ 0x80000000 ≤ aCond.toNat ∧
+  0x80000000 ≤ aCond.toNat ∧
   aCond.toNat + 16 ≤ 0x100000000 ∧ tohostAddr + 16 ≤ aCond.toNat ∧
   (aCond.toNat + 16 ≤ SL.lo ∨
     ((sp - 176#64) + 1088#64).toNat - 1088 ≤ aCond.toNat) ∧
@@ -199,7 +199,6 @@ theorem blockB_stmtWhileCond_stagePre
           sp r aInterp aStmt aEnv aRet v8 v9 v18 v19 out0 m0 ment c ∧
         read64 ment (aStmt.toNat + 8) = some aExprChild.toNat ∧
         ExprRepr ment aExprChild.toNat e ∧
-        aStmt.toNat % 8 = 0 ∧
         0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000 ∧
         (aStmt.toNat + 16 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat) ∧
         Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment ∧
@@ -215,7 +214,6 @@ theorem blockB_stmtWhileCond_stagePre
             ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
             ment[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
-        aExprChild.toNat % 8 = 0 ∧
         0x80000000 ≤ aExprChild.toNat ∧ aExprChild.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aExprChild.toNat ∧
         (aExprChild.toNat + 16 ≤ SL.lo ∨ (sp.toNat - 176) ≤ aExprChild.toNat) ∧
@@ -240,9 +238,9 @@ theorem blockB_stmtWhileCond_stagePre
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 4 c (ExecWhileCondJalReady gpre N A SL φf φc e st d env
       sp aInterp aStmt aEnv aRet aExprChild ment) := by
-  obtain ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
+  obtain ⟨hArm, hpay, hExprChild, hstmtLo, hstmtRam, hstmtWin,
     hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
-    hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre,
+    hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre,
     hSLlo, hSLhiRam, hSLwin,
     hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
     hgframe, hg8, hg18, hg19, hg20, hg21, hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
@@ -276,7 +274,7 @@ theorem blockB_stmtWhileCond_stagePre
       (by rw [haddr8]; omega) (by rw [haddr8]; omega)
       (by rw [haddr8, htoh]; rcases hstmtWin with h | h
           · left; rw [htoh] at h; omega
-          · right; rw [htoh] at h; omega) (by rw [haddr8]; omega)
+          · right; rw [htoh] at h; omega)
       (by rw [haddr8, hmem]; exact hp0) (by rw [haddr8, hmem]; exact hp1)
       (by rw [haddr8, hmem]; exact hp2) (by rw [haddr8, hmem]; exact hp3)
       (by rw [haddr8, hmem]; exact hp4) (by rw [haddr8, hmem]; exact hp5)
@@ -403,7 +401,7 @@ theorem blockB_stmtWhileCond_stagePre
     hG4, hi4, hpc4, hx10_4, ?_, hx11_val, (by rw [← henvPtr]; exact hx13_val), hx12_4, hx2jsp, ⟨vmi4, hmi4⟩, hout4, ?_,
     hmem4e, ?_, hEvCode, hViInt, hViSlot, hNbsJ, ?_, hWordsJ, ?_, ?_, ?_, hframe4,
     ⟨hg8, hg18, hg19, hg20, hg21⟩,
-    ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   -- x9 = sret := aInterp
   · exact obs_alu_other' hobs4 Register.x9 (by decide) hs1_3
   -- String.join out0.toList = st.out
@@ -420,8 +418,6 @@ theorem blockB_stmtWhileCond_stagePre
   · intro m' hag
     refine hStoreSurvJ m' (fun k hk1 hk2 => ?_)
     exact hag k hk1 hk2
-  -- aOperand % 8 = 0
-  · exact hopAl
   -- 0x80000000 ≤ aOperand
   · exact hopLo
   -- aOperand + 16 ≤ 0x100000000
@@ -489,7 +485,6 @@ def StmtWhileCondArmDispatch
           sp r aInterp aStmt aEnv aRet v8 v9 v18 v19 c'.σ.sailOutput m0 ment c' ∧
         read64 ment (aStmt.toNat + 8) = some aExprChild.toNat ∧
         ExprRepr ment aExprChild.toNat cnd ∧
-        aStmt.toNat % 8 = 0 ∧
         0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000 ∧
         (aStmt.toNat + 16 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat) ∧
         Eval_exprLoaded ment ∧ Value_intLoaded ment ∧ IntSlotPinned ment ∧ NBSPins ment ∧
@@ -505,7 +500,6 @@ def StmtWhileCondArmDispatch
             ¬ (aInterp.toNat ≤ k ∧ k < aInterp.toNat + 24) →
             ment[k]? = m'[k]?) →
           StoreRepr m' N A φf φc st.store) ∧
-        aExprChild.toNat % 8 = 0 ∧
         0x80000000 ≤ aExprChild.toNat ∧ aExprChild.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aExprChild.toNat ∧
         (aExprChild.toNat + 16 ≤ SL.lo ∨ (sp.toNat - 176) ≤ aExprChild.toNat) ∧
@@ -562,8 +556,8 @@ theorem stmtWhileCond_field_of_dispatch
     obtain ⟨c1, hsteps1, hMid⟩ :=
       hDisp g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 hEntry c rfl
     obtain ⟨gpre, aExprChild, v8, v9, v18, v19, ment, hArm, hpay, hExprChild,
-      hstmtAl, hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
-      hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
+      hstmtLo, hstmtRam, hstmtWin, hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
+      hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
       hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
       hgframe, hg8, hg18, hg19, hg20, hg21, hstackBudget, hexprBodies, hstoreBodies⟩ := hMid
     have hcutReady : LandedN 4 c1 (ExecWhileCondJalReady gpre N A SL φf φc
@@ -571,9 +565,9 @@ theorem stmtWhileCond_field_of_dispatch
       blockB_stmtWhileCond_stagePre g gpre N A SL φf φc st d env cnd
         sp r aInterp aStmt aEnv aRet aExprChild v8 v9 v18 v19 c1.σ.sailOutput m0 ment c1
         hEntry.env_valid
-        ⟨hArm, hpay, hExprChild, hstmtAl, hstmtLo, hstmtRam, hstmtWin,
+        ⟨hArm, hpay, hExprChild, hstmtLo, hstmtRam, hstmtWin,
          hEvCode, hViInt, hViSlot, hNbsJ, hGroundJ, hWordsJ, henvPtr, hStoreSurvJ,
-         hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
+         hopLo, hopHi, hopWin, hopStk, hsproom, hsp16pre, hSLlo, hSLhiRam, hSLwin,
          hjspSLhi, hcodeStkJ, htableStkJ1, htableStkJ2, harenaStkJ, harenaCode,
          hgframe, hg8, hg18, hg19, hg20, hg21, hstackBudget, hexprBodies, hstoreBodies⟩
     have hcut : LandedN 4 c1 (fun c' => ExecJalPreBundle cnd c' st d env) :=

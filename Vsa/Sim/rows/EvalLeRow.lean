@@ -38,7 +38,7 @@ theorem blockC_le
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat)
     (st' st'' : Vsa.While.St) (a b : Int)
-    (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 Wl : BitVec 64) (out0 : Array String)
+    (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
     (m0 : Mem) :
     Triple
       (fun c =>
@@ -46,11 +46,7 @@ theorem blockC_le
         gpre Register.x8 = some aExpr ∧
         read32 c.σ.mem (aExpr.toNat + 8) = some 21 ∧      -- op token = binOpTok .le
         LeSlotPinned c.σ.mem ∧
-        (∀ k : Nat, ∃ w : BitVec 8, c.σ.mem[k]? = some w) ∧
-        c.σ.regs.get? Register.x19 = some Wl ∧
-        read64 c.σ.mem (sp.toNat - 960) = some Wl.toNat ∧
-        read64 c.σ.mem (sp.toNat - 1088) = some (2#64 : BitVec 64).toNat ∧
-        aExpr.toNat % 4 = 0 ∧
+        BinaryReturnData SL sp sret c ∧
         0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 8 ≤ aExpr.toNat ∧
         (aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat) ∧
@@ -83,8 +79,8 @@ theorem blockC_le
         PhiExtends φcm φce st'.store.closures.size ∧
         PreEpilogueVD g N A SL φfe φce st'' (.bool (a ≤ b)) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hpre
-  obtain ⟨hTS, hgx8, hopTok, hSlot, hFullPop, hX19, hWlBuf, hKindResp,
-    hexprAl, hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq,
+  obtain ⟨hTS, hgx8, hopTok, hSlot, hReadData,
+    hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode, hraAl,
     hVbool, hcodeStk, hviStk, hTableStk, hsretInSL,
     hSLloSp, hSLlo, hSLwin, hsphiRam, hsp8, hSLhiRam, hspSLhi,
@@ -115,10 +111,14 @@ theorem blockC_le
     rw [hv]; have := aExpr.isLt; rw [Nat.mod_eq_of_lt (by omega)]
   obtain ⟨ob0, ob1, ob2, ob3, hob0, hob1, hob2, hob3, hobrec⟩ :=
     read32_bytes c.σ.mem (aExpr.toNat + 8) 21 hopTok
-  obtain ⟨lb0, hlb0⟩ := hFullPop (aExpr.toNat + 4)
-  obtain ⟨lb1, hlb1⟩ := hFullPop (aExpr.toNat + 4 + 1)
-  obtain ⟨lb2, hlb2⟩ := hFullPop (aExpr.toNat + 4 + 2)
-  obtain ⟨lb3, hlb3⟩ := hFullPop (aExpr.toNat + 4 + 3)
+  let lb0 := bytesT1 c.σ.mem (aExpr.toNat + 4)
+  have hlb0 : bytesT1 c.σ.mem (aExpr.toNat + 4) = lb0 := rfl
+  let lb1 := bytesT1 c.σ.mem (aExpr.toNat + 4 + 1)
+  have hlb1 : bytesT1 c.σ.mem (aExpr.toNat + 4 + 1) = lb1 := rfl
+  let lb2 := bytesT1 c.σ.mem (aExpr.toNat + 4 + 2)
+  have hlb2 : bytesT1 c.σ.mem (aExpr.toNat + 4 + 2) = lb2 := rfl
+  let lb3 := bytesT1 c.σ.mem (aExpr.toNat + 4 + 3)
+  have hlb3 : bytesT1 c.σ.mem (aExpr.toNat + 4 + 3) = lb3 := rfl
   have hvalR' : ValueRepr c.σ.mem N φcr (sp.toNat - 944) (.int b) := hvalR
   obtain ⟨hkindR, pR, hpayR64, hpRb⟩ := valueRepr_int_pay64 hvalR'
   obtain ⟨rkb0, rkb1, rkb2, rkb3, hrkb0, hrkb1, hrkb2, hrkb3, hrkbrec⟩ :=
@@ -134,16 +134,11 @@ theorem blockC_le
   have hWr_toInt : Wr.toInt = b := by
     have hpe : Wr = BitVec.ofNat 64 pR := by rw [← hWrNat]; exact (ofNat_toNat_self64 Wr).symm
     rw [hpe]; exact hpRb
-  have hvalL' : ValueRepr c.σ.mem N φcl (sp.toNat - 968) (.int a) := hvalL
-  obtain ⟨hkindL, pL, hpayL64, hpLa⟩ := valueRepr_int_pay64 hvalL'
-  have hpayL64' : read64 c.σ.mem (sp.toNat - 960) = some pL := by
-    have e : sp.toNat - 968 + 8 = sp.toNat - 960 := by omega
-    rw [e] at hpayL64; exact hpayL64
-  have hWlNat : Wl.toNat = pL := by
-    have := hWlBuf.symm.trans hpayL64'; exact Option.some.inj this
-  have hWl_toInt : Wl.toInt = a := by
-    have hpe : Wl = BitVec.ofNat 64 pL := by rw [← hWlNat]; exact (ofNat_toNat_self64 Wl).symm
-    rw [hpe]; exact hpLa
+  have hIntLoads := hReadData.toBinaryReturnLoads.int_readback (by omega) hvalL
+  let Wl : BitVec 64 := bytesT8 c.σ.mem (sp.toNat - 960)
+  have hX19 : c.σ.regs.get? Register.x19 = some Wl := hIntLoads.payload_register
+  have hKindResp := hIntLoads.kind_spill
+  have hWl_toInt : Wl.toInt = a := hIntLoads.int_value
   have hopVal : (sign_extend (m := 64) ((((ob3.append ob2).append ob1).append ob0) : BitVec (8*4)))
       = (21#64 : BitVec 64) := by
     rw [sext_word_small _ 21 (by decide) (by rw [word_toNat_recon]; exact hobrec)]
@@ -208,34 +203,34 @@ theorem blockC_le
       kb0 kb1 kb2 kb3 kb4 kb5 kb6 kb7
       hG hpc hmi hsp hx8c hs1 hX19 hcode hRkindVal hkVal
       (by rw [hop8]; omega) (by rw [hop8]; omega)
-      (by rw [hop8, htoh]; right; omega) (by rw [hop8]; omega)
-      (by rw [hop8]; exact hob0') (by rw [hop8]; exact hob1')
-      (by rw [hop8]; exact hob2') (by rw [hop8]; exact hob3')
+      (by rw [hop8, htoh]; right; omega)
+      (by rw [hop8]; exact lpin_of_present hob0') (by rw [hop8]; exact lpin_of_present hob1')
+      (by rw [hop8]; exact lpin_of_present hob2') (by rw [hop8]; exact lpin_of_present hob3')
       (by rw [hline4]; omega) (by rw [hline4]; omega)
-      (by rw [hline4, htoh]; right; omega) (by rw [hline4]; omega)
-      (by rw [hline4]; exact hlb0) (by rw [hline4]; exact hlb1)
-      (by rw [hline4]; exact hlb2) (by rw [hline4]; exact hlb3)
+      (by rw [hline4, htoh]; right; omega)
+      (by simpa only [hline4] using hlb0) (by simpa only [hline4] using hlb1)
+      (by simpa only [hline4] using hlb2) (by simpa only [hline4] using hlb3)
       (by rw [haddr144]; omega) (by rw [haddr144]; omega)
       (by rw [haddr144, htoh]; right; omega) (by rw [haddr144]; omega)
-      (by rw [haddr144]; exact hrkb0) (by rw [haddr144]; exact hrkb1)
-      (by rw [haddr144]; exact hrkb2) (by rw [haddr144]; exact hrkb3)
+      (by rw [haddr144]; exact lpin_of_present hrkb0) (by rw [haddr144]; exact lpin_of_present hrkb1)
+      (by rw [haddr144]; exact lpin_of_present hrkb2) (by rw [haddr144]; exact lpin_of_present hrkb3)
       (by rw [haddr152]; omega) (by rw [haddr152]; omega)
       (by rw [haddr152, htoh]; right; omega) (by rw [haddr152]; omega)
-      (by rw [haddr152, show sp.toNat - 936 = sp.toNat - 944 + 8 from by omega]; exact hrpb0)
-      (by rw [haddr152, show sp.toNat - 936 + 1 = sp.toNat - 944 + 8 + 1 from by omega]; exact hrpb1)
-      (by rw [haddr152, show sp.toNat - 936 + 2 = sp.toNat - 944 + 8 + 2 from by omega]; exact hrpb2)
-      (by rw [haddr152, show sp.toNat - 936 + 3 = sp.toNat - 944 + 8 + 3 from by omega]; exact hrpb3)
-      (by rw [haddr152, show sp.toNat - 936 + 4 = sp.toNat - 944 + 8 + 4 from by omega]; exact hrpb4)
-      (by rw [haddr152, show sp.toNat - 936 + 5 = sp.toNat - 944 + 8 + 5 from by omega]; exact hrpb5)
-      (by rw [haddr152, show sp.toNat - 936 + 6 = sp.toNat - 944 + 8 + 6 from by omega]; exact hrpb6)
-      (by rw [haddr152, show sp.toNat - 936 + 7 = sp.toNat - 944 + 8 + 7 from by omega]; exact hrpb7)
+      (by rw [haddr152, show sp.toNat - 936 = sp.toNat - 944 + 8 from by omega]; exact lpin_of_present hrpb0)
+      (by rw [haddr152, show sp.toNat - 936 + 1 = sp.toNat - 944 + 8 + 1 from by omega]; exact lpin_of_present hrpb1)
+      (by rw [haddr152, show sp.toNat - 936 + 2 = sp.toNat - 944 + 8 + 2 from by omega]; exact lpin_of_present hrpb2)
+      (by rw [haddr152, show sp.toNat - 936 + 3 = sp.toNat - 944 + 8 + 3 from by omega]; exact lpin_of_present hrpb3)
+      (by rw [haddr152, show sp.toNat - 936 + 4 = sp.toNat - 944 + 8 + 4 from by omega]; exact lpin_of_present hrpb4)
+      (by rw [haddr152, show sp.toNat - 936 + 5 = sp.toNat - 944 + 8 + 5 from by omega]; exact lpin_of_present hrpb5)
+      (by rw [haddr152, show sp.toNat - 936 + 6 = sp.toNat - 944 + 8 + 6 from by omega]; exact lpin_of_present hrpb6)
+      (by rw [haddr152, show sp.toNat - 936 + 7 = sp.toNat - 944 + 8 + 7 from by omega]; exact lpin_of_present hrpb7)
       hSlot
       (by rw [haddr0]; omega) (by rw [haddr0]; omega)
       (by rw [haddr0, htoh]; right; omega) (by rw [haddr0]; omega)
-      (by rw [haddr0]; exact hkb0) (by rw [haddr0]; exact hkb1)
-      (by rw [haddr0]; exact hkb2) (by rw [haddr0]; exact hkb3)
-      (by rw [haddr0]; exact hkb4) (by rw [haddr0]; exact hkb5)
-      (by rw [haddr0]; exact hkb6) (by rw [haddr0]; exact hkb7)
+      (by rw [haddr0]; exact lpin_of_present hkb0) (by rw [haddr0]; exact lpin_of_present hkb1)
+      (by rw [haddr0]; exact lpin_of_present hkb2) (by rw [haddr0]; exact lpin_of_present hkb3)
+      (by rw [haddr0]; exact lpin_of_present hkb4) (by rw [haddr0]; exact lpin_of_present hkb5)
+      (by rw [haddr0]; exact lpin_of_present hkb6) (by rw [haddr0]; exact lpin_of_present hkb7)
       htick
   obtain ⟨vmC0, hmiC0⟩ := hmiC0ex
   have hcodeC0 : Vsa.Sim.Code.Eval_exprLoaded sC0.mem := by rw [hmemC0eq]; exact hcode
@@ -247,31 +242,55 @@ theorem blockC_le
   obtain ⟨vmAB, hmiAB⟩ := hmiABex
   have hmemAB_c : sAB.mem = c.σ.mem := hmemABeq.trans hmemC0eq
   have hcodeAB : Vsa.Sim.Code.Eval_exprLoaded sAB.mem := by rw [hmemAB_c]; exact hcode
-  -- C dead-load / slot bytes (all abstract, drawn from full-population)
-  obtain ⟨cs0, hcs0⟩ := hFullPop ((0x80019fe8#64 : BitVec 64).toNat)
-  obtain ⟨cs1, hcs1⟩ := hFullPop ((0x80019fe8#64 : BitVec 64).toNat + 1)
-  obtain ⟨cs2, hcs2⟩ := hFullPop ((0x80019fe8#64 : BitVec 64).toNat + 2)
-  obtain ⟨cs3, hcs3⟩ := hFullPop ((0x80019fe8#64 : BitVec 64).toNat + 3)
-  obtain ⟨cs4, hcs4⟩ := hFullPop ((0x80019fe8#64 : BitVec 64).toNat + 4)
-  obtain ⟨cs5, hcs5⟩ := hFullPop ((0x80019fe8#64 : BitVec 64).toNat + 5)
-  obtain ⟨cs6, hcs6⟩ := hFullPop ((0x80019fe8#64 : BitVec 64).toNat + 6)
-  obtain ⟨cs7, hcs7⟩ := hFullPop ((0x80019fe8#64 : BitVec 64).toNat + 7)
-  obtain ⟨ca0, hca0⟩ := hFullPop (sp.toNat - 968)
-  obtain ⟨ca1, hca1⟩ := hFullPop (sp.toNat - 968 + 1)
-  obtain ⟨ca2, hca2⟩ := hFullPop (sp.toNat - 968 + 2)
-  obtain ⟨ca3, hca3⟩ := hFullPop (sp.toNat - 968 + 3)
-  obtain ⟨ca4, hca4⟩ := hFullPop (sp.toNat - 968 + 4)
-  obtain ⟨ca5, hca5⟩ := hFullPop (sp.toNat - 968 + 5)
-  obtain ⟨ca6, hca6⟩ := hFullPop (sp.toNat - 968 + 6)
-  obtain ⟨ca7, hca7⟩ := hFullPop (sp.toNat - 968 + 7)
-  obtain ⟨cbb0, hcb0⟩ := hFullPop (sp.toNat - 952)
-  obtain ⟨cbb1, hcb1⟩ := hFullPop (sp.toNat - 952 + 1)
-  obtain ⟨cbb2, hcb2⟩ := hFullPop (sp.toNat - 952 + 2)
-  obtain ⟨cbb3, hcb3⟩ := hFullPop (sp.toNat - 952 + 3)
-  obtain ⟨cbb4, hcb4⟩ := hFullPop (sp.toNat - 952 + 4)
-  obtain ⟨cbb5, hcb5⟩ := hFullPop (sp.toNat - 952 + 5)
-  obtain ⟨cbb6, hcb6⟩ := hFullPop (sp.toNat - 952 + 6)
-  obtain ⟨cbb7, hcb7⟩ := hFullPop (sp.toNat - 952 + 7)
+  -- C dead-load / slot bytes (total reads from the reached memory)
+  let cs0 := bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat)
+  have hcs0 : bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat) = cs0 := rfl
+  let cs1 := bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat + 1)
+  have hcs1 : bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat + 1) = cs1 := rfl
+  let cs2 := bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat + 2)
+  have hcs2 : bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat + 2) = cs2 := rfl
+  let cs3 := bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat + 3)
+  have hcs3 : bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat + 3) = cs3 := rfl
+  let cs4 := bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat + 4)
+  have hcs4 : bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat + 4) = cs4 := rfl
+  let cs5 := bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat + 5)
+  have hcs5 : bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat + 5) = cs5 := rfl
+  let cs6 := bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat + 6)
+  have hcs6 : bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat + 6) = cs6 := rfl
+  let cs7 := bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat + 7)
+  have hcs7 : bytesT1 c.σ.mem ((0x80019fe8#64 : BitVec 64).toNat + 7) = cs7 := rfl
+  let ca0 := bytesT1 c.σ.mem (sp.toNat - 968)
+  have hca0 : bytesT1 c.σ.mem (sp.toNat - 968) = ca0 := rfl
+  let ca1 := bytesT1 c.σ.mem (sp.toNat - 968 + 1)
+  have hca1 : bytesT1 c.σ.mem (sp.toNat - 968 + 1) = ca1 := rfl
+  let ca2 := bytesT1 c.σ.mem (sp.toNat - 968 + 2)
+  have hca2 : bytesT1 c.σ.mem (sp.toNat - 968 + 2) = ca2 := rfl
+  let ca3 := bytesT1 c.σ.mem (sp.toNat - 968 + 3)
+  have hca3 : bytesT1 c.σ.mem (sp.toNat - 968 + 3) = ca3 := rfl
+  let ca4 := bytesT1 c.σ.mem (sp.toNat - 968 + 4)
+  have hca4 : bytesT1 c.σ.mem (sp.toNat - 968 + 4) = ca4 := rfl
+  let ca5 := bytesT1 c.σ.mem (sp.toNat - 968 + 5)
+  have hca5 : bytesT1 c.σ.mem (sp.toNat - 968 + 5) = ca5 := rfl
+  let ca6 := bytesT1 c.σ.mem (sp.toNat - 968 + 6)
+  have hca6 : bytesT1 c.σ.mem (sp.toNat - 968 + 6) = ca6 := rfl
+  let ca7 := bytesT1 c.σ.mem (sp.toNat - 968 + 7)
+  have hca7 : bytesT1 c.σ.mem (sp.toNat - 968 + 7) = ca7 := rfl
+  let cbb0 := bytesT1 c.σ.mem (sp.toNat - 952)
+  have hcb0 : bytesT1 c.σ.mem (sp.toNat - 952) = cbb0 := rfl
+  let cbb1 := bytesT1 c.σ.mem (sp.toNat - 952 + 1)
+  have hcb1 : bytesT1 c.σ.mem (sp.toNat - 952 + 1) = cbb1 := rfl
+  let cbb2 := bytesT1 c.σ.mem (sp.toNat - 952 + 2)
+  have hcb2 : bytesT1 c.σ.mem (sp.toNat - 952 + 2) = cbb2 := rfl
+  let cbb3 := bytesT1 c.σ.mem (sp.toNat - 952 + 3)
+  have hcb3 : bytesT1 c.σ.mem (sp.toNat - 952 + 3) = cbb3 := rfl
+  let cbb4 := bytesT1 c.σ.mem (sp.toNat - 952 + 4)
+  have hcb4 : bytesT1 c.σ.mem (sp.toNat - 952 + 4) = cbb4 := rfl
+  let cbb5 := bytesT1 c.σ.mem (sp.toNat - 952 + 5)
+  have hcb5 : bytesT1 c.σ.mem (sp.toNat - 952 + 5) = cbb5 := rfl
+  let cbb6 := bytesT1 c.σ.mem (sp.toNat - 952 + 6)
+  have hcb6 : bytesT1 c.σ.mem (sp.toNat - 952 + 6) = cbb6 := rfl
+  let cbb7 := bytesT1 c.σ.mem (sp.toNat - 952 + 7)
+  have hcb7 : bytesT1 c.σ.mem (sp.toNat - 952 + 7) = cbb7 := rfl
   -- ── C 0x8000364c → 0x8000367c (store block) ────────────────────────────────
   obtain ⟨sC, iC, D1, D2, hStepsC, hiC, hGC, hmemC, hpcC, hx2C, hx10C, hx12C, hx16C,
       hx9C, hx17C, hx19C, houtC, hmiCex, hframeCf⟩ :=
@@ -279,22 +298,22 @@ theorem blockC_le
       cs0 cs1 cs2 cs3 cs4 cs5 cs6 cs7 ca0 ca1 ca2 ca3 ca4 ca5 ca6 ca7
       cbb0 cbb1 cbb2 cbb3 cbb4 cbb5 cbb6 cbb7
       hGAB hpcAB hmiAB hx15AB hx2AB hx16AB hx9AB hx10AB hx12AB hx17AB hx19AB hcodeAB
-      (by rw [hmemAB_c]; exact hcs0) (by rw [hmemAB_c]; exact hcs1)
-      (by rw [hmemAB_c]; exact hcs2) (by rw [hmemAB_c]; exact hcs3)
-      (by rw [hmemAB_c]; exact hcs4) (by rw [hmemAB_c]; exact hcs5)
-      (by rw [hmemAB_c]; exact hcs6) (by rw [hmemAB_c]; exact hcs7)
+      (by simpa only [hmemAB_c] using hcs0) (by simpa only [hmemAB_c] using hcs1)
+      (by simpa only [hmemAB_c] using hcs2) (by simpa only [hmemAB_c] using hcs3)
+      (by simpa only [hmemAB_c] using hcs4) (by simpa only [hmemAB_c] using hcs5)
+      (by simpa only [hmemAB_c] using hcs6) (by simpa only [hmemAB_c] using hcs7)
       (by rw [haddr120]; omega) (by rw [haddr120]; omega)
       (by rw [haddr120, htoh]; right; omega) (by rw [haddr120]; omega)
-      (by rw [haddr120, hmemAB_c]; exact hca0) (by rw [haddr120, hmemAB_c]; exact hca1)
-      (by rw [haddr120, hmemAB_c]; exact hca2) (by rw [haddr120, hmemAB_c]; exact hca3)
-      (by rw [haddr120, hmemAB_c]; exact hca4) (by rw [haddr120, hmemAB_c]; exact hca5)
-      (by rw [haddr120, hmemAB_c]; exact hca6) (by rw [haddr120, hmemAB_c]; exact hca7)
+      (by simpa only [haddr120, hmemAB_c] using hca0) (by simpa only [haddr120, hmemAB_c] using hca1)
+      (by simpa only [haddr120, hmemAB_c] using hca2) (by simpa only [haddr120, hmemAB_c] using hca3)
+      (by simpa only [haddr120, hmemAB_c] using hca4) (by simpa only [haddr120, hmemAB_c] using hca5)
+      (by simpa only [haddr120, hmemAB_c] using hca6) (by simpa only [haddr120, hmemAB_c] using hca7)
       (by rw [haddr136]; omega) (by rw [haddr136]; omega)
       (by rw [haddr136, htoh]; right; omega) (by rw [haddr136]; omega)
-      (by rw [haddr136, hmemAB_c]; exact hcb0) (by rw [haddr136, hmemAB_c]; exact hcb1)
-      (by rw [haddr136, hmemAB_c]; exact hcb2) (by rw [haddr136, hmemAB_c]; exact hcb3)
-      (by rw [haddr136, hmemAB_c]; exact hcb4) (by rw [haddr136, hmemAB_c]; exact hcb5)
-      (by rw [haddr136, hmemAB_c]; exact hcb6) (by rw [haddr136, hmemAB_c]; exact hcb7)
+      (by simpa only [haddr136, hmemAB_c] using hcb0) (by simpa only [haddr136, hmemAB_c] using hcb1)
+      (by simpa only [haddr136, hmemAB_c] using hcb2) (by simpa only [haddr136, hmemAB_c] using hcb3)
+      (by simpa only [haddr136, hmemAB_c] using hcb4) (by simpa only [haddr136, hmemAB_c] using hcb5)
+      (by simpa only [haddr136, hmemAB_c] using hcb6) (by simpa only [haddr136, hmemAB_c] using hcb7)
       (by rw [haddr240]; omega) (by rw [haddr240]; omega)
       (by rw [haddr240, htoh]; omega) (by rw [haddr240]; omega)
       (by rw [haddr256]; omega) (by rw [haddr256]; omega)
@@ -325,30 +344,54 @@ theorem blockC_le
     show (writeMap8 c.σ.mem (sp.toNat - 848) D1)[k]? = _
     rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat - 848) k D1 (by omega)]
   -- D load bytes @ sp-944/936/928 (abstract, re-read spilled operands)
-  obtain ⟨da0, hda0⟩ := hFullPop (sp.toNat - 944)
-  obtain ⟨da1, hda1⟩ := hFullPop (sp.toNat - 944 + 1)
-  obtain ⟨da2, hda2⟩ := hFullPop (sp.toNat - 944 + 2)
-  obtain ⟨da3, hda3⟩ := hFullPop (sp.toNat - 944 + 3)
-  obtain ⟨da4, hda4⟩ := hFullPop (sp.toNat - 944 + 4)
-  obtain ⟨da5, hda5⟩ := hFullPop (sp.toNat - 944 + 5)
-  obtain ⟨da6, hda6⟩ := hFullPop (sp.toNat - 944 + 6)
-  obtain ⟨da7, hda7⟩ := hFullPop (sp.toNat - 944 + 7)
-  obtain ⟨dbb0, hdb0⟩ := hFullPop (sp.toNat - 936)
-  obtain ⟨dbb1, hdb1⟩ := hFullPop (sp.toNat - 936 + 1)
-  obtain ⟨dbb2, hdb2⟩ := hFullPop (sp.toNat - 936 + 2)
-  obtain ⟨dbb3, hdb3⟩ := hFullPop (sp.toNat - 936 + 3)
-  obtain ⟨dbb4, hdb4⟩ := hFullPop (sp.toNat - 936 + 4)
-  obtain ⟨dbb5, hdb5⟩ := hFullPop (sp.toNat - 936 + 5)
-  obtain ⟨dbb6, hdb6⟩ := hFullPop (sp.toNat - 936 + 6)
-  obtain ⟨dbb7, hdb7⟩ := hFullPop (sp.toNat - 936 + 7)
-  obtain ⟨dc0, hdc0⟩ := hFullPop (sp.toNat - 928)
-  obtain ⟨dc1, hdc1⟩ := hFullPop (sp.toNat - 928 + 1)
-  obtain ⟨dc2, hdc2⟩ := hFullPop (sp.toNat - 928 + 2)
-  obtain ⟨dc3, hdc3⟩ := hFullPop (sp.toNat - 928 + 3)
-  obtain ⟨dc4, hdc4⟩ := hFullPop (sp.toNat - 928 + 4)
-  obtain ⟨dc5, hdc5⟩ := hFullPop (sp.toNat - 928 + 5)
-  obtain ⟨dc6, hdc6⟩ := hFullPop (sp.toNat - 928 + 6)
-  obtain ⟨dc7, hdc7⟩ := hFullPop (sp.toNat - 928 + 7)
+  let da0 := bytesT1 c.σ.mem (sp.toNat - 944)
+  have hda0 : bytesT1 c.σ.mem (sp.toNat - 944) = da0 := rfl
+  let da1 := bytesT1 c.σ.mem (sp.toNat - 944 + 1)
+  have hda1 : bytesT1 c.σ.mem (sp.toNat - 944 + 1) = da1 := rfl
+  let da2 := bytesT1 c.σ.mem (sp.toNat - 944 + 2)
+  have hda2 : bytesT1 c.σ.mem (sp.toNat - 944 + 2) = da2 := rfl
+  let da3 := bytesT1 c.σ.mem (sp.toNat - 944 + 3)
+  have hda3 : bytesT1 c.σ.mem (sp.toNat - 944 + 3) = da3 := rfl
+  let da4 := bytesT1 c.σ.mem (sp.toNat - 944 + 4)
+  have hda4 : bytesT1 c.σ.mem (sp.toNat - 944 + 4) = da4 := rfl
+  let da5 := bytesT1 c.σ.mem (sp.toNat - 944 + 5)
+  have hda5 : bytesT1 c.σ.mem (sp.toNat - 944 + 5) = da5 := rfl
+  let da6 := bytesT1 c.σ.mem (sp.toNat - 944 + 6)
+  have hda6 : bytesT1 c.σ.mem (sp.toNat - 944 + 6) = da6 := rfl
+  let da7 := bytesT1 c.σ.mem (sp.toNat - 944 + 7)
+  have hda7 : bytesT1 c.σ.mem (sp.toNat - 944 + 7) = da7 := rfl
+  let dbb0 := bytesT1 c.σ.mem (sp.toNat - 936)
+  have hdb0 : bytesT1 c.σ.mem (sp.toNat - 936) = dbb0 := rfl
+  let dbb1 := bytesT1 c.σ.mem (sp.toNat - 936 + 1)
+  have hdb1 : bytesT1 c.σ.mem (sp.toNat - 936 + 1) = dbb1 := rfl
+  let dbb2 := bytesT1 c.σ.mem (sp.toNat - 936 + 2)
+  have hdb2 : bytesT1 c.σ.mem (sp.toNat - 936 + 2) = dbb2 := rfl
+  let dbb3 := bytesT1 c.σ.mem (sp.toNat - 936 + 3)
+  have hdb3 : bytesT1 c.σ.mem (sp.toNat - 936 + 3) = dbb3 := rfl
+  let dbb4 := bytesT1 c.σ.mem (sp.toNat - 936 + 4)
+  have hdb4 : bytesT1 c.σ.mem (sp.toNat - 936 + 4) = dbb4 := rfl
+  let dbb5 := bytesT1 c.σ.mem (sp.toNat - 936 + 5)
+  have hdb5 : bytesT1 c.σ.mem (sp.toNat - 936 + 5) = dbb5 := rfl
+  let dbb6 := bytesT1 c.σ.mem (sp.toNat - 936 + 6)
+  have hdb6 : bytesT1 c.σ.mem (sp.toNat - 936 + 6) = dbb6 := rfl
+  let dbb7 := bytesT1 c.σ.mem (sp.toNat - 936 + 7)
+  have hdb7 : bytesT1 c.σ.mem (sp.toNat - 936 + 7) = dbb7 := rfl
+  let dc0 := bytesT1 c.σ.mem (sp.toNat - 928)
+  have hdc0 : bytesT1 c.σ.mem (sp.toNat - 928) = dc0 := rfl
+  let dc1 := bytesT1 c.σ.mem (sp.toNat - 928 + 1)
+  have hdc1 : bytesT1 c.σ.mem (sp.toNat - 928 + 1) = dc1 := rfl
+  let dc2 := bytesT1 c.σ.mem (sp.toNat - 928 + 2)
+  have hdc2 : bytesT1 c.σ.mem (sp.toNat - 928 + 2) = dc2 := rfl
+  let dc3 := bytesT1 c.σ.mem (sp.toNat - 928 + 3)
+  have hdc3 : bytesT1 c.σ.mem (sp.toNat - 928 + 3) = dc3 := rfl
+  let dc4 := bytesT1 c.σ.mem (sp.toNat - 928 + 4)
+  have hdc4 : bytesT1 c.σ.mem (sp.toNat - 928 + 4) = dc4 := rfl
+  let dc5 := bytesT1 c.σ.mem (sp.toNat - 928 + 5)
+  have hdc5 : bytesT1 c.σ.mem (sp.toNat - 928 + 5) = dc5 := rfl
+  let dc6 := bytesT1 c.σ.mem (sp.toNat - 928 + 6)
+  have hdc6 : bytesT1 c.σ.mem (sp.toNat - 928 + 6) = dc6 := rfl
+  let dc7 := bytesT1 c.σ.mem (sp.toNat - 928 + 7)
+  have hdc7 : bytesT1 c.σ.mem (sp.toNat - 928 + 7) = dc7 := rfl
   -- ── D 0x8000367c → 0x80003698 (store block) ────────────────────────────────
   obtain ⟨sD, iD, D3, D4, D5, hStepsD, hiD, hGD, hmemD, hpcD, hx2D,
       hx9D, hx12D, hx17D, hx19D, houtD, hmiDex, hframeDf⟩ :=
@@ -358,34 +401,34 @@ theorem blockC_le
       hGC hpcC hmiC hx2C hx10C hx16C hx9C hx12C hx17C hx19C hcodeC
       (by rw [haddr144]; omega) (by rw [haddr144]; omega)
       (by rw [haddr144, htoh]; right; omega) (by rw [haddr144]; omega)
-      (by rw [haddr144, hAgD (sp.toNat - 944) (by omega)]; exact hda0)
-      (by rw [haddr144, hAgD (sp.toNat - 944 + 1) (by omega)]; exact hda1)
-      (by rw [haddr144, hAgD (sp.toNat - 944 + 2) (by omega)]; exact hda2)
-      (by rw [haddr144, hAgD (sp.toNat - 944 + 3) (by omega)]; exact hda3)
-      (by rw [haddr144, hAgD (sp.toNat - 944 + 4) (by omega)]; exact hda4)
-      (by rw [haddr144, hAgD (sp.toNat - 944 + 5) (by omega)]; exact hda5)
-      (by rw [haddr144, hAgD (sp.toNat - 944 + 6) (by omega)]; exact hda6)
-      (by rw [haddr144, hAgD (sp.toNat - 944 + 7) (by omega)]; exact hda7)
+      (by simpa only [haddr144, hAgD (sp.toNat - 944) (by omega)] using hda0)
+      (by simpa only [haddr144, hAgD (sp.toNat - 944 + 1) (by omega)] using hda1)
+      (by simpa only [haddr144, hAgD (sp.toNat - 944 + 2) (by omega)] using hda2)
+      (by simpa only [haddr144, hAgD (sp.toNat - 944 + 3) (by omega)] using hda3)
+      (by simpa only [haddr144, hAgD (sp.toNat - 944 + 4) (by omega)] using hda4)
+      (by simpa only [haddr144, hAgD (sp.toNat - 944 + 5) (by omega)] using hda5)
+      (by simpa only [haddr144, hAgD (sp.toNat - 944 + 6) (by omega)] using hda6)
+      (by simpa only [haddr144, hAgD (sp.toNat - 944 + 7) (by omega)] using hda7)
       (by rw [haddr152]; omega) (by rw [haddr152]; omega)
       (by rw [haddr152, htoh]; right; omega) (by rw [haddr152]; omega)
-      (by rw [haddr152, hAgD (sp.toNat - 936) (by omega)]; exact hdb0)
-      (by rw [haddr152, hAgD (sp.toNat - 936 + 1) (by omega)]; exact hdb1)
-      (by rw [haddr152, hAgD (sp.toNat - 936 + 2) (by omega)]; exact hdb2)
-      (by rw [haddr152, hAgD (sp.toNat - 936 + 3) (by omega)]; exact hdb3)
-      (by rw [haddr152, hAgD (sp.toNat - 936 + 4) (by omega)]; exact hdb4)
-      (by rw [haddr152, hAgD (sp.toNat - 936 + 5) (by omega)]; exact hdb5)
-      (by rw [haddr152, hAgD (sp.toNat - 936 + 6) (by omega)]; exact hdb6)
-      (by rw [haddr152, hAgD (sp.toNat - 936 + 7) (by omega)]; exact hdb7)
+      (by simpa only [haddr152, hAgD (sp.toNat - 936) (by omega)] using hdb0)
+      (by simpa only [haddr152, hAgD (sp.toNat - 936 + 1) (by omega)] using hdb1)
+      (by simpa only [haddr152, hAgD (sp.toNat - 936 + 2) (by omega)] using hdb2)
+      (by simpa only [haddr152, hAgD (sp.toNat - 936 + 3) (by omega)] using hdb3)
+      (by simpa only [haddr152, hAgD (sp.toNat - 936 + 4) (by omega)] using hdb4)
+      (by simpa only [haddr152, hAgD (sp.toNat - 936 + 5) (by omega)] using hdb5)
+      (by simpa only [haddr152, hAgD (sp.toNat - 936 + 6) (by omega)] using hdb6)
+      (by simpa only [haddr152, hAgD (sp.toNat - 936 + 7) (by omega)] using hdb7)
       (by rw [haddr160]; omega) (by rw [haddr160]; omega)
       (by rw [haddr160, htoh]; right; omega) (by rw [haddr160]; omega)
-      (by rw [haddr160, hAgD (sp.toNat - 928) (by omega)]; exact hdc0)
-      (by rw [haddr160, hAgD (sp.toNat - 928 + 1) (by omega)]; exact hdc1)
-      (by rw [haddr160, hAgD (sp.toNat - 928 + 2) (by omega)]; exact hdc2)
-      (by rw [haddr160, hAgD (sp.toNat - 928 + 3) (by omega)]; exact hdc3)
-      (by rw [haddr160, hAgD (sp.toNat - 928 + 4) (by omega)]; exact hdc4)
-      (by rw [haddr160, hAgD (sp.toNat - 928 + 5) (by omega)]; exact hdc5)
-      (by rw [haddr160, hAgD (sp.toNat - 928 + 6) (by omega)]; exact hdc6)
-      (by rw [haddr160, hAgD (sp.toNat - 928 + 7) (by omega)]; exact hdc7)
+      (by simpa only [haddr160, hAgD (sp.toNat - 928) (by omega)] using hdc0)
+      (by simpa only [haddr160, hAgD (sp.toNat - 928 + 1) (by omega)] using hdc1)
+      (by simpa only [haddr160, hAgD (sp.toNat - 928 + 2) (by omega)] using hdc2)
+      (by simpa only [haddr160, hAgD (sp.toNat - 928 + 3) (by omega)] using hdc3)
+      (by simpa only [haddr160, hAgD (sp.toNat - 928 + 4) (by omega)] using hdc4)
+      (by simpa only [haddr160, hAgD (sp.toNat - 928 + 5) (by omega)] using hdc5)
+      (by simpa only [haddr160, hAgD (sp.toNat - 928 + 6) (by omega)] using hdc6)
+      (by simpa only [haddr160, hAgD (sp.toNat - 928 + 7) (by omega)] using hdc7)
       (by rw [haddr240]; omega) (by rw [haddr240]; omega)
       (by rw [haddr240, htoh]; omega) (by rw [haddr240]; omega)
       (by rw [haddr248]; omega) (by rw [haddr248]; omega)
@@ -532,7 +575,7 @@ theorem blockC_le
     site_80003b04 cvb.σ cvb.tick cvb.steps (0x80003b04#64) vmivb (sp - 1088#64)
       s3b0 s3b1 s3b2 s3b3 s3b4 s3b5 s3b6 s3b7 hGvb hpcvb' hmivb hsp_vb hcode_vb rfl
       (by rw [haddr1048]; omega) (by rw [haddr1048]; omega)
-      (by rw [haddr1048, htoh]; right; omega) (by rw [haddr1048]; omega)
+      (by rw [haddr1048, htoh]; right; omega)
       (by rw [haddr1048]; exact hs3b0) (by rw [haddr1048]; exact hs3b1)
       (by rw [haddr1048]; exact hs3b2) (by rw [haddr1048]; exact hs3b3)
       (by rw [haddr1048]; exact hs3b4) (by rw [haddr1048]; exact hs3b5)
@@ -611,7 +654,7 @@ theorem blockC_le
     (hMemExt.trans hMemExt_c_5).trans hMemExt_5_40
   have hWords_fin : ValueWordsTotal τ36.mem sret.toNat :=
     ValueWordsTotal.mono (hMemExt_c_5.trans hMemExt_5_40)
-      (valueWordsTotal_of_populated hFullPop sret.toNat)
+      hReadData.sret_words
   have hAgTop_m5 : AgreeP (fun k => sp.toNat - 32 ≤ k ∧ k < sp.toNat) c.σ.mem m5 := by
     intro k hk
     show c.σ.mem[k]? = (writeMap8 m4 (sp.toNat - 832) (D5))[k]?
@@ -711,15 +754,10 @@ theorem binOpSem_le_int (s : Store) (a b : Int) :
 structure LeResid
     (gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (sp r sret aExpr : BitVec 64) (Wl : BitVec 64) (c' : Vsa.Machine.Config) : Prop where
+    (sp r sret aExpr : BitVec 64) (c' : Vsa.Machine.Config) : Prop where
   gx8 : gpre Register.x8 = some aExpr
   opTok : read32 c'.σ.mem (aExpr.toNat + 8) = some 21
   slot : LeSlotPinned c'.σ.mem
-  fullpop : ∀ k : Nat, ∃ w : BitVec 8, c'.σ.mem[k]? = some w
-  x19 : c'.σ.regs.get? Register.x19 = some Wl
-  wlbuf : read64 c'.σ.mem (sp.toNat - 960) = some Wl.toNat
-  kindresp : read64 c'.σ.mem (sp.toNat - 1088) = some (2#64 : BitVec 64).toNat
-  exprAl : aExpr.toNat % 4 = 0
   exprLo : 0x80000000 ≤ aExpr.toNat
   exprHi : aExpr.toNat + 16 ≤ 0x100000000
   exprWin : tohostAddr + 8 ≤ aExpr.toNat
@@ -750,14 +788,12 @@ def EvalLeSimGoal : Prop :=
   ∀ (gouter gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (a b : Int)
-    (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 Wl : BitVec 64)
+    (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 : BitVec 64)
     (out0 : Array String) (m0 : Mem),
     EvalE st d env el st' (.int a) →
     EvalIH st d env el st' (.int a) →
     EvalIH st' d env er st'' (.int b) →
     EvalE st d env (.binary .le el er) st'' (.bool (a ≤ b)) →
-    st'.store.frames.size = st''.store.frames.size →
-    st'.store.closures.size = st''.store.closures.size →
     Triple
       (fun c => ∃ ment,
         ArmEntryK gouter N A SL φf φc st (0x800034e8#64) UnaryArmCallee (.binary .le el er)
@@ -793,7 +829,7 @@ def EvalLeSimGoal : Prop :=
         (∀ c' : Vsa.Machine.Config,
           TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
             st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
-          LeResid gpre N A SL sp r sret aExpr Wl c') ∧
+          LeResid gpre N A SL sp r sret aExpr c') ∧
         g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
         g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧ g Register.x19 = some v19 ∧
         (∀ R : Register, AbiPreservedNoise R →
@@ -805,7 +841,7 @@ def EvalLeSimGoal : Prop :=
 
 theorem evalLeSim : EvalLeSimGoal := by
   intro gouter gpre g N A SL φf φc st st' st'' d env el er a b
-    sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 Wl out0 m0 hLeft hIHl hIHr _hEvalE hSizeF hSizeC
+    sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hLeft hIHl hIHr _hEvalE
   intro c hpre
   obtain ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
     hpayL, hexprL, hpayR, hexprR, hMemExtM0, hGmt47,
@@ -827,20 +863,22 @@ theorem evalLeSim : EvalLeSimGoal := by
     · rw [← read32_agreeP hAg (fun j hj => ⟨by omega, by omega⟩)]; exact hk
     · rw [readI64] at hp ⊢
       rw [← read64_agreeP hAg (fun j hj => ⟨by omega, by omega⟩)]; exact hp
-  obtain ⟨c2, hs2, hTS⟩ :=
-    blockB_binary gouter gpre N A SL φf φc st st' st'' d env .le el er (.int a) (.int b)
+  obtain ⟨c2, hs2, hReturned⟩ :=
+    blockB_binary_data gouter gpre N A SL φf φc st st' st'' d env .le el er (.int a) (.int b)
       sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hLeft hIHl hIHr hVlSurv
       c ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExtM0, hGmt47,
         hstackBudgetL, hexprBodiesL, hstoreBodiesL,
         hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩
-  have hR : LeResid gpre N A SL sp r sret aExpr Wl c2 := hResid c2 hTS
+  have hTS := hReturned.result
+  have hData := hReturned.extra
+  have hR : LeResid gpre N A SL sp r sret aExpr c2 := hResid c2 hTS
   have hOutC2 : String.join c2.σ.sailOutput.toList = st''.out := hTS.2.2.2.2.2.2.2.1
   obtain ⟨c3, hs3, mpre, φfm, φcm, φfe, φce, hpfm, hpcm, hpfe, hpce, hPreD⟩ :=
     blockC_le gpre g N A SL φf φc st.store.frames.size st.store.closures.size
-      st' st'' a b sp r sret aExpr v8 v9 v18 v19 Wl c2.σ.sailOutput m0
-      c2 ⟨hTS, hR.gx8, hR.opTok, hR.slot, hR.fullpop, hR.x19, hR.wlbuf, hR.kindresp,
-        hR.exprAl, hR.exprLo, hR.exprHi, hR.exprWin, hR.exprSL, hOutC2, rfl,
+      st' st'' a b sp r sret aExpr v8 v9 v18 v19 c2.σ.sailOutput m0
+      c2 ⟨hTS, hR.gx8, hR.opTok, hR.slot, hData,
+        hR.exprLo, hR.exprHi, hR.exprWin, hR.exprSL, hOutC2, rfl,
         hR.sretAl, hR.sretLo, hR.sretHi, hR.sretWin, hR.sretVi, hR.sretStk, hR.sretEvalCode, hR.raAl,
         hR.vbool, hR.codeStk, hR.viStk, hR.tableStk, hR.sretInSL,
         hR.SLloSp, hR.SLlo, hR.SLwin, hR.sphiRam, hR.sp8, hR.SLhiRam, hR.spSLhi,
@@ -850,8 +888,9 @@ theorem evalLeSim : EvalLeSimGoal := by
       c3 ⟨mpre, hPreD⟩
   obtain ⟨hExitE, hMemExt, hWords, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
   have hmono := evalE_store_mono _hEvalE
-  have hleF' : st.store.frames.size ≤ st'.store.frames.size := hSizeF ▸ hmono.1
-  have hleC' : st.store.closures.size ≤ st'.store.closures.size := hSizeC ▸ hmono.2
+  have hleftMono := evalE_store_mono hLeft
+  have hleF' : st.store.frames.size ≤ st'.store.frames.size := hleftMono.1
+  have hleC' : st.store.closures.size ≤ st'.store.closures.size := hleftMono.2
   have hpfF : PhiExtends φf φfe st.store.frames.size := hpfm.trans (PhiExtends.mono hleF' hpfe)
   have hpcF : PhiExtends φc φce st.store.closures.size := hpcm.trans (PhiExtends.mono hleC' hpce)
   have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size

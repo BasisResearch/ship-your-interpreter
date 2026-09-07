@@ -375,7 +375,7 @@ theorem svfProA_spec
   -- === 0x80007680: ld a4,0(a0) — decimal_point = 0x80019770 ===
   obtain ⟨σ14, i14, hs14, hi14, hG14, hmem14, hobs14⟩ :=
     site_80007680_pr σ13 i13 (c.steps + 13) _ vmi13 (0x8001b898#64) _ _ _ _ _ _ _ _
-      hG13 hpc13 hmi13 hp13.1 hsl13 rfl (by rw [hoffdp]; omega) (by rw [hoffdp]; omega) (by rw [hoffdp, htoh]; omega) (by rw [hoffdp]) (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp0) (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp1) (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp2) (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp3) (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp4) (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp5) (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp6) (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp7) hi13
+      hG13 hpc13 hmi13 hp13.1 hsl13 rfl (by rw [hoffdp]; omega) (by rw [hoffdp]; omega) (by rw [hoffdp, htoh]; omega)  (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp0) (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp1) (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp2) (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp3) (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp4) (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp5) (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp6) (by rw [hoffdp]; exact (hag13 _ (by omega)).trans hdp7) hi13
   have hstep14 : Step ⟨σ13, i13, c.steps + 13⟩ ⟨σ14, i14, c.steps + 14⟩ := hs14
   have hpc14 : σ14.regs.get? Register.PC = some (0x80007684#64) := by
     have := obs_alu_pc hobs14

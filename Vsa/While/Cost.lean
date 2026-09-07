@@ -12,24 +12,19 @@ while producing the very same derivation. The companions mirror the semantics
 constructor-for-constructor; each constructor's cost is *its own* allocation
 bytes plus the sum of its sub-derivations' costs.
 
-The point is to demonstrate that the big-step semantics is rich enough to
-*bound a program's machine-allocation budget ahead of time* from its
-derivation. This budget feeds the M4/M6 arena-budget hypothesis
-(`Vsa/Alloc.lean`'s `MallocContract`, whose `maxReq`/arena bounds it is meant
-to discharge): if `BigStepBudget p out n` holds then `n` bytes of arena
-suffice.
+These relations provide source-level request accounting for completed
+derivations. They do not establish available physical heap capacity or
+allocator success. A machine capacity bridge must separately account for
+chunk headers, alignment, initial allocations, and fragmentation. Divergent
+and failing executions also need finite-prefix accounting.
 
 ## Cost unit and the alignment convention
 
-The unit is **bytes requested per `malloc` call**, and *every* per-`malloc`
-charge is rounded up to a multiple of 16 (`roundUp16`). The allocator
-(`MallocContract`) hands back 16-aligned blocks, so an aligned allocator
-consumes at least the requested size rounded to its granule; charging the
-rounded size here makes the cost an *over*-approximation of what any
-16-granule allocator actually consumes for the same request sequence. (Both
-`envBytes = 32` and `closureBytes = 16` are already multiples of 16, so the
-rounding is the identity there; it only bites on the variable-length string
-and array charges.) The consumer therefore need not re-round.
+The unit is rounded requested bytes. `roundUp16` rounds each modeled charge
+to a multiple of 16. This does not bound physical allocator consumption:
+metadata and minimum chunk sizes can require additional bytes. Array growth
+combines two requests into one charge, so per-allocation overhead must be
+restored by a separate accounting theorem.
 
 ## C allocation sites mirrored (runtime only — lexer/parser out of scope)
 
@@ -45,22 +40,20 @@ and array charges.) The consumer therefore need not re-round.
 The growth policy (`env.c:29-33`): a frame starts `cap = 0`; on the define
 that would overflow, `cap := cap ? 2*cap : 8`, giving the cap sequence
 `8, 16, 32, 64, …`. The realloc requests `8*cap` (names, `char*`) + `24*cap`
-(vals, `Value`) = `32*cap` bytes; the *old* arrays are leaked (no `free`),
-so the cumulative array cost of a frame that reaches `k` bindings is the sum
-of `32*cap` over every cap it ever grew to (`arrayCost` below).
+(vals, `Value`) = `32*cap` bytes. Realloc can reclaim or reuse the old arrays.
+The cumulative request policy sums the full new requests without refunds
+(`arrayCost` below); it does not assert that the old arrays leak.
 
 ## Spec-invisible / data-dependent allocations — findings
 
 * **String literals (`EX_STR`, `interp.c:214`)**: `value_str(e->as.str_val)`
-  takes ownership of the *parser-owned* AST string; there is **no runtime
+  retains the parser-owned AST string pointer; there is **no runtime
   `malloc`**. Correctly charged 0.
 * **`stringify` of an already-`VAL_STR` operand** still `malloc`s a copy
   (`interp.c:85-89`); charged.
-* Every runtime allocation whose size the C computes is a function of
-  spec-visible data (the value being stringified via `Value.display`, the
-  binding name, the frame's current binding count). **No spec-invisible
-  allocation cost was found**: the cost model is exact-up-to-alignment, not a
-  blind over-approximation.
+* The modeled interpreter requests depend on source values and binding
+  counts. Relating these charges to the C capacity policy, bounded string
+  formatting, and libc allocation behavior remains a separate proof.
 * The globals frame and its three native bindings are built by `interp_init`
   *before* `interp_run`; they are the pre-built `initSt` store, not produced
   by any `allocFrame`/`define` in a derivation. Their bytes are the "initial
@@ -90,9 +83,10 @@ def nameCopyCost (x : String) : Nat := roundUp16 (x.length + 1)
 def arrayReallocCost (cap : Nat) : Nat := roundUp16 (32 * cap)
 
 /-- Cumulative names+vals array bytes for a frame that reaches `k` bindings.
-The frame grows through caps `8, 16, 32, …`; each growth to cap `c` leaks the
-old arrays and requests `32*c` bytes. `arrayCost k` sums those requests over
-exactly the caps a `k`-binding frame passes through.
+The frame grows through caps `8, 16, 32, …`; each growth to cap `c` requests
+`32*c` bytes across its two arrays. This cumulative policy gives no credit
+for storage reclaimed by realloc. `arrayCost k` sums the modeled requests
+over the caps a `k`-binding frame passes through.
 
 Implemented by fuel recursion over the cap it is currently at: starting from
 `cap = 0`, as long as the target `k` exceeds the current `cap` we pay for the

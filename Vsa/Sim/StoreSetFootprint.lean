@@ -1,6 +1,8 @@
 import Vsa.Sim.EnvCallBridge
 import Vsa.Sim.ReprSurvival
 import Vsa.Sim.HeapOps
+import Vsa.Sim.RuntimeOwnershipAllocation
+import Vsa.Sim.RuntimeOwnershipSeparation
 
 /-!
 # Exact footprint certificate for `env_set`
@@ -210,6 +212,46 @@ structure StoreSetFootprint
 
 namespace StoreSetFootprint
 
+/-- Covered bytes supply every unchanged frame and closure for an update. -/
+theorem of_covered
+    {m m' : Mem} {N : NativeAddrs} {φf φc : Addr → Nat}
+    {store : Store} {target : Addr} {slot : Nat}
+    (hframes : ∀ fa, (hf : fa < store.frames.size) → fa ≠ target →
+      FrameFootprintCovered m φf fa store.frames[fa] (SetOutside slot))
+    (hclosures : ∀ ca, (hc : ca < store.closures.size) →
+      ClosureFootprintCovered m φc ca store.closures[ca] (SetOutside slot))
+    (hag : AgreeP (OutsideSetSlot slot) m m') :
+    StoreSetFootprint m m' N φf φc store target slot := by
+  refine ⟨hag, ?_, ?_⟩
+  · intro fa hfa hne
+    have h := hframes fa hfa hne
+    exact
+      { header := by
+          intro k hk
+          simpa [OutsideSetSlot, SetOutside] using h.header k hk
+        slots := by
+          intro pn pv hpn hpv i hi
+          simpa [OutsideSetSlot, SetOutside] using h.slots pn pv hpn hpv i hi
+        names := by
+          intro pn pv hpn hpv i hi q hq k hk
+          simpa [OutsideSetSlot, SetOutside] using
+            h.names pn pv hpn hpv i hi q hq k hk
+        valueStrings := by
+          intro pn pv hpn hpv i hi
+          simpa [OutsideSetSlot, SetOutside] using h.values pn pv hpn hpv i hi }
+  · intro ca hca
+    have h := hclosures ca hca
+    refine
+      { header := by
+          intro k hk
+          simpa [OutsideSetSlot, SetOutside] using h.header k hk
+        expr := ?_ }
+    intro q hq hexpr
+    apply exprRepr_agreeP hag
+    · intro a ha
+      simpa [OutsideSetSlot, SetOutside] using h.ast q hq a ha
+    · exact hexpr
+
 /-- The global heap-separation invariant supplies the update-specific target
 shell and all unchanged store footprints. -/
 theorem of_heap_owned
@@ -223,37 +265,37 @@ theorem of_heap_owned
     (howned : StoreHeapOwned m φf φc exts store)
     (hag : AgreeP (OutsideSetSlot slot) m m') :
     StoreSetFootprint m m' N φf φc store target slot := by
-  obtain ⟨htarget, hframes, hclosures⟩ :=
+  obtain ⟨_, hframes, hclosures⟩ :=
     howned.setSeparated target ht hit hhit vals hvals
-  refine ⟨hag, ?_, ?_⟩
-  · intro fa hfa hne
-    have h := hframes fa hfa hne
-    exact
-      { header := by
-          intro k hk
-          simpa [OutsideSetSlot, SetOutside, hslot] using h.header k hk
-        slots := by
-          intro pn pv hpn hpv i hi
-          simpa [OutsideSetSlot, SetOutside, hslot] using h.slots pn pv hpn hpv i hi
-        names := by
-          intro pn pv hpn hpv i hi q hq k hk
-          simpa [OutsideSetSlot, SetOutside, hslot] using
-            h.names pn pv hpn hpv i hi q hq k hk
-        valueStrings := by
-          intro pn pv hpn hpv i hi
-          simpa [OutsideSetSlot, SetOutside, hslot] using h.values pn pv hpn hpv i hi }
-  · intro ca hca
-    have h := hclosures ca hca
-    refine
-      { header := by
-          intro k hk
-          simpa [OutsideSetSlot, SetOutside, hslot] using h.header k hk
-        expr := ?_ }
-    intro q hq hexpr
-    apply exprRepr_agreeP hag
-    · intro a ha
-      simpa [OutsideSetSlot, SetOutside, hslot] using h.ast q hq a ha
-    · exact hexpr
+  subst slot
+  exact of_covered hframes hclosures hag
+
+/-- Covered target bytes supply its unchanged shell around the selected slot. -/
+theorem target_of_covered
+    {m : Mem} {N : NativeAddrs} {φf φc : Addr → Nat}
+    {f : Vsa.While.Frame} {target : Addr} {hit slot : Nat}
+    (h : TargetFrameFootprintCovered m φf target f hit (SetOutside slot)) :
+    TargetFrameOutsideSetSlot m N φf φc (φf target) slot f hit := by
+  exact
+    { header := by
+        intro k hk
+        simpa [OutsideSetSlot, SetOutside] using h.header k hk
+      nameSlots := by
+        intro pn pv hpn hpv i hi k hk
+        simpa [OutsideSetSlot, SetOutside] using
+          h.nameSlots pn pv hpn hpv i hi k hk
+      names := by
+        intro pn pv hpn hpv i hi q hq k hk
+        simpa [OutsideSetSlot, SetOutside] using
+          h.names pn pv hpn hpv i hi q hq k hk
+      otherValueHeaders := by
+        intro pn pv hpn hpv i hi hne k hk
+        simpa [OutsideSetSlot, SetOutside] using
+          h.otherValueHeaders pn pv hpn hpv i hi hne k hk
+      otherValueStrings := by
+        intro pn pv hpn hpv i hi hne
+        simpa [OutsideSetSlot, SetOutside] using
+          h.otherValues pn pv hpn hpv i hi hne }
 
 /-- The target shell certificate is the target component of the same global
 separation invariant. -/
@@ -268,27 +310,49 @@ theorem target_of_heap_owned
     (howned : StoreHeapOwned m φf φc exts store) :
     TargetFrameOutsideSetSlot m N φf φc (φf target) slot
       store.frames[target] hit := by
-  have h := (howned.setSeparated target ht hit hhit vals hvals).1
-  exact
-    { header := by
-        intro k hk
-        simpa [OutsideSetSlot, SetOutside, hslot] using h.header k hk
-      nameSlots := by
-        intro pn pv hpn hpv i hi k hk
-        simpa [OutsideSetSlot, SetOutside, hslot] using
-          h.nameSlots pn pv hpn hpv i hi k hk
-      names := by
-        intro pn pv hpn hpv i hi q hq k hk
-        simpa [OutsideSetSlot, SetOutside, hslot] using
-          h.names pn pv hpn hpv i hi q hq k hk
-      otherValueHeaders := by
-        intro pn pv hpn hpv i hi hne k hk
-        simpa [OutsideSetSlot, SetOutside, hslot] using
-          h.otherValueHeaders pn pv hpn hpv i hi hne k hk
-      otherValueStrings := by
-        intro pn pv hpn hpv i hi hne
-        simpa [OutsideSetSlot, SetOutside, hslot] using
-          h.otherValues pn pv hpn hpv i hi hne }
+  subst slot
+  exact target_of_covered (howned.setSeparated target ht hit hhit vals hvals).1
+
+/-- Runtime allocation roles and immutable sharing derive the update footprint. -/
+theorem of_runtime_owned
+    {m m' : Mem} {N : NativeAddrs} {φf φc : Addr → Nat}
+    {A : Arena} {exts : List Extent} {alloc : RuntimeOwnership.Allocations}
+    {shared readable writes : Nat → Prop} {store : Store} {target : Addr}
+    {hit vals slot : Nat}
+    (ht : target < store.frames.size)
+    (hhit : hit < store.frames[target].vars.length)
+    (hvals : read64 m (φf target + 16) = some vals)
+    (hslot : slot = vals + 24 * hit)
+    (howned : RuntimeOwnership.HeapOwned A exts m φf φc alloc
+      shared readable writes store)
+    (hag : AgreeP (OutsideSetSlot slot) m m') :
+    StoreSetFootprint m m' N φf φc store target slot := by
+  obtain ⟨_, hframes, hclosures⟩ :=
+    howned.store.setSeparated howned.ledger howned.immutable target ht hit hhit vals hvals
+  subst slot
+  exact of_covered hframes hclosures hag
+
+/-- The same runtime ownership supplies the selected frame's unchanged shell. -/
+theorem target_of_runtime_owned
+    {m : Mem} {N : NativeAddrs} {φf φc : Addr → Nat}
+    {A : Arena} {exts : List Extent} {alloc : RuntimeOwnership.Allocations}
+    {shared readable writes : Nat → Prop} {store : Store} {target : Addr}
+    {hit vals slot : Nat}
+    (ht : target < store.frames.size)
+    (hhit : hit < store.frames[target].vars.length)
+    (hvals : read64 m (φf target + 16) = some vals)
+    (hslot : slot = vals + 24 * hit)
+    (howned : RuntimeOwnership.HeapOwned A exts m φf φc alloc
+      shared readable writes store) :
+    TargetFrameOutsideSetSlot m N φf φc (φf target) slot store.frames[target] hit := by
+  subst slot
+  exact target_of_covered
+    (howned.store.setSeparated howned.ledger howned.immutable target ht hit hhit vals hvals).1
+
+#print axioms of_covered
+#print axioms target_of_covered
+#print axioms of_runtime_owned
+#print axioms target_of_runtime_owned
 
 end StoreSetFootprint
 

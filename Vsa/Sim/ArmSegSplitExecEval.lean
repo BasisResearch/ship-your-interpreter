@@ -117,7 +117,6 @@ theorem execEvalEntry_of_jalPrefix
         -- slots — so they are DROPPED from this exec twin, which unblocks the exec
         -- arm: those slot addresses would sit in the caller's frame at `sp+912-8…`,
         -- for which no memory fact exists.  See the module doc.)
-        aOperand.toNat % 8 = 0 ∧
         0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aOperand.toNat ∧
         (aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat) ∧
@@ -143,7 +142,7 @@ theorem execEvalEntry_of_jalPrefix
   obtain ⟨hG, htick, hpc, ha0, hs1, hx11, hx13, hx12, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmemc,
     hcodeExec, hcode, hviCode, hslot, hnbs, hground, hwords, hsubexpr, hstore, hstoreSurv, hframe,
     ⟨⟨w8, hw8⟩, ⟨w18, hw18⟩, ⟨w19, hw19⟩, ⟨w20, hw20⟩, ⟨w21, hw21⟩⟩,
-    hopAl, hopLo, hopHi, hopWin, hopStk,
+    hopLo, hopHi, hopWin, hopStk,
     hssAl, hssLo, hssHi,
     hsproom, hspSLhi, hsp16, hSLlo, hSLhiRam, hSLwin,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -238,7 +237,6 @@ theorem execEvalEntry_of_jalPrefix
           rcases hopStk with h | h
           · left; exact h
           · right; rw [hspsub]; omega
-        expr_align := hopAl
         expr_ram := ⟨hopLo, hopHi⟩
         expr_win := hopWin
         sret_align := hssAl
@@ -349,7 +347,6 @@ def ExecJalPreBundle (e : Expr) (c' : Config) (st : Vsa.While.St) (d : Nat)
       (∃ w, gpre Register.x21 = some w)) ∧
     -- (spill-window read64 premises + `sp ≤ 0x100000000` dropped — dead in the
     -- bridge, see `execEvalEntry_of_jalPrefix`.)
-    aOperand.toNat % 8 = 0 ∧
     0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
     tohostAddr + 16 ≤ aOperand.toNat ∧
     (aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat) ∧

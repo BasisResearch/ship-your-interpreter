@@ -1,0 +1,75 @@
+{
+  "sources": {
+    "Vsa/Sim/OutputAliasCalls.lean": "6698165214dcfa5da9e525d9bb03c83be75687b5df78394ee7a2f4ba6838ed93",
+    "Vsa/Sim/OutputAliasLoaded.lean": "1c0c604ef66f8b3d25b12d7522268041bb148ae37574a2d3b5cc5b686dc8730d",
+    "Vsa/Sim/OutputAliasMemory.lean": "2d4f0c3bd920aeab6e2b9f9b74522d3edeef110a0dea5512017d2873ba481e5a",
+    "Vsa/Sim/OutputAliasPhysical.lean": "d17a9061049d699eb35fd134c1434fa126c0b452d6face037780a011d37907d1",
+    "Vsa/Sim/OutputAliasPrefix.lean": "199b24801a947993a136ff347c36a461f50413491085e209d44d0043cc83d9ef",
+    "Vsa/Sim/OutputAliasProgram.lean": "12afe5ce9a7bb88f8b342b2ce90b40e1db2b0f2b9ff70ceb623ac7b69796bae4",
+    "Vsa/Sim/OutputAliasProgramRepr.lean": "d72c30ac0e104f4a3898a698c780715e3f9265dea9738f5796f28aa08eeb927c",
+    "Vsa/Sim/OutputAliasPutchar.lean": "1a7506b419f1a5837d11ec618df6742c64a2ca3dbea4bdd3ecd7b9fbd81dac8f",
+    "Vsa/Sim/OutputAliasSnapshot.lean": "fd4ae24ddb652671d116a10bda3d30bfee2fb978a48daf480366f3b785e09b26",
+    "Vsa/Sim/OutputAliasStore.lean": "57b2b37e9342e7a489e40df1247f9e9c9df9db05b96ed96d5b636b9c5fb8a0e1",
+    "Vsa/Sim/OutputAliasTrace.lean": "0fa85c9272367d2b4f83ffeb1c37855dbea1d3b0fb767f77b8b35c69f63f8ecd",
+    "Vsa/Sim/WriteLogRead.lean": "3ef68880644e27a8f9d105ab1a27ab59d2b9b2a11b30527095f47b24b1844a93",
+    "experiments/smt/output-alias/LoadedOutputAliasSemantics.lean": "ea6d473b00367ccaace7ffdda7b4bdef733df58da290251953a6635bc4d3b1a6",
+    "experiments/smt/output-alias/LoadedOutputAliasMutation.lean": "f71b58fbf09a43a9f7f2a1462fb9b6269ee8fc54b6bcc4ed6360a4f735780be2"
+  },
+  "build": {
+    "modules": 1380,
+    "built": 2,
+    "reused": 1378,
+    "exit_code": 0,
+    "wall_seconds": 5.17,
+    "cache": "/private/tmp/vsa-full-build.sQd0gM"
+  },
+  "fingerprints": {
+    "modules": 1380,
+    "stale_or_missing": [],
+    "manifest_sha256": "c0ececc1088cb8083a6bda486bf6581f8c07d85809c8250d6f20ca2723c6e35f"
+  },
+  "axioms": [
+    "propext",
+    "Classical.choice",
+    "Quot.sound"
+  ],
+  "logs": {
+    "full_build": {
+      "path": "/private/tmp/vsa-alias-seams-full-build.log",
+      "sha256": "4d82c3105bb81014e4e5a557fd1144565be50c4a3ab2a46dd613b97cfd3651fd"
+    },
+    "axioms": {
+      "path": "/private/tmp/vsa-alias-loaded/current-axioms.log",
+      "sha256": "ffdd0a31761b4b71f051a84e99b73f3e1ef428fa908ac90536bf1c54264ceb65"
+    },
+    "fingerprints": {
+      "path": "/private/tmp/vsa-alias-loaded/fingerprint-check-final.json",
+      "sha256": "9936b9d9534bf3018d39b81bade916177f443698375bfe3737fa549a5901d43f"
+    },
+    "discipline": {
+      "path": "/private/tmp/vsa-alias-seams-discipline.log",
+      "sha256": "b8bdee658426f8952e1171093c7ee0060e61740e1f8db8b033de50cb00a0b559"
+    },
+    "semantics_wrapper": {
+      "path": "/private/tmp/vsa-alias-semantics-current.log",
+      "sha256": "0079432db06d132cacbf1fd531dcdcd4f3c1e8239f5dacf3e664cd7ae3d26780"
+    },
+    "mutation": {
+      "path": "/private/tmp/vsa-alias-mutation-current.log",
+      "sha256": "f0ae27c1abb1a5adab4592dca9de85bd0517f422b763b78402c7df6b4ce00dc0"
+    },
+    "calls_axioms": {
+      "path": "/private/tmp/vsa-full-build.sQd0gM/logs/Vsa_Sim_OutputAliasCalls.log",
+      "sha256": "161ae757eae5524364ebb42c07e74f942e86945df9d3189d863f0e5b164810f1"
+    },
+    "putchar_axioms": {
+      "path": "/private/tmp/vsa-full-build.sQd0gM/logs/Vsa_Sim_OutputAliasPutchar.log",
+      "sha256": "b4a83639a4ace49e8b2c3efb42426ebce3a69e6aae65c8454183fb2c1775d6a8"
+    }
+  },
+  "loaded_proved": true,
+  "dense_snapshot_machine_prefix_steps_proved": 14,
+  "full_machine_trace_proved": false,
+  "refinement_counterexample_proved": false,
+  "remainingWork_closed": false
+}

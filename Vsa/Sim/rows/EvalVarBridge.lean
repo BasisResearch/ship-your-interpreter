@@ -104,11 +104,10 @@ theorem varBridge_prefix
     (hg21 : g Register.x21 = some v21)
     -- the var-name pointer read from the Expr node (`ld a1, 8(a2)` value).
     (hname : read64 ment (aExpr.toNat + 8) = some nm.toNat)
-    -- geometry the `ld a1, 8(a2)` load needs (the name pointer slot in RAM, aligned).
+    -- geometry the `ld a1, 8(a2)` load needs (the name pointer slot in RAM).
     (hnmLo : 0x80000000 ≤ aExpr.toNat + 8)
     (hnmHi : aExpr.toNat + 8 + 8 ≤ 0x100000000)
-    (hnmWin : aExpr.toNat + 8 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aExpr.toNat + 8)
-    (hnmAl : (aExpr.toNat + 8) % 8 = 0) :
+    (hnmWin : aExpr.toNat + 8 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aExpr.toNat + 8) :
     ∃ (c' : Config),
       Steps c c' ∧ GoodState c'.σ ∧ c'.tick < 2 ∧ c'.σ.mem = ment ∧
       c'.σ.regs.get? Register.PC = some (0x80002c10#64) ∧
@@ -126,7 +125,7 @@ theorem varBridge_prefix
       c'.σ.sailOutput = out0 ∧
       (∃ w, c'.σ.regs.get? Register.minstret = some w) := by
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hload, _hcallee,
-    hexpr, houtStr, haExprAl, haExprLo, haExprHi, haExprWin,
+    hexpr, houtStr, haExprLo, haExprHi, haExprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframeReg,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEv,
@@ -154,7 +153,6 @@ theorem varBridge_prefix
       nb0 nb1 nb2 nb3 nb4 nb5 nb6 nb7 hG hpc hmi ha2 (hmem ▸ hload) rfl
       (by rw [hoff8]; omega) (by rw [hoff8]; omega)
       (by rw [hoff8]; exact hnmWin)
-      (by rw [hoff8]; omega)
       (by rw [hoff8, hmem]; exact hnb0) (by rw [hoff8, hmem]; exact hnb1)
       (by rw [hoff8, hmem]; exact hnb2) (by rw [hoff8, hmem]; exact hnb3)
       (by rw [hoff8, hmem]; exact hnb4) (by rw [hoff8, hmem]; exact hnb5)
@@ -304,8 +302,7 @@ theorem varBridge_prefix_triple
     (hg21 : g Register.x21 = some v21)
     (hnmLo : 0x80000000 ≤ aExpr.toNat + 8)
     (hnmHi : aExpr.toNat + 8 + 8 ≤ 0x100000000)
-    (hnmWin : aExpr.toNat + 8 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aExpr.toNat + 8)
-    (hnmAl : (aExpr.toNat + 8) % 8 = 0) :
+    (hnmWin : aExpr.toNat + 8 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aExpr.toNat + 8) :
     Triple
       (fun c => ArmEntryK g N A SL φf φc st (0x80003434#64) Env_getLoaded (.var x)
         sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
@@ -316,7 +313,7 @@ theorem varBridge_prefix_triple
   obtain ⟨c', hs, hG', htick', hmem', hpc', h10, h11, h12, h1, h2, h9, h8, h18,
     h19, h20, h21, hout', hmi⟩ :=
     varBridge_prefix g N A SL φf φc st x sp r sret aExpr aEnv v8 v9 v18 v19 v20 v21
-      out0 m0 ment penv nm c hArm ha3 hg19 hg20 hg21 hname hnmLo hnmHi hnmWin hnmAl
+      out0 m0 ment penv nm c hArm ha3 hg19 hg20 hg21 hname hnmLo hnmHi hnmWin
   exact ⟨c', hs, hG', htick', hmem', hpc', h10, h11, h12, h1, h2, h9, h8, h18,
     h19, h20, h21, hout', hmi⟩
 
@@ -371,7 +368,6 @@ structure VarCallLinkage
   nmLo : 0x80000000 ≤ aExpr.toNat + 8
   nmHi : aExpr.toNat + 8 + 8 ≤ 0x100000000
   nmWin : aExpr.toNat + 8 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aExpr.toNat + 8
-  nmAl : (aExpr.toNat + 8) % 8 = 0
   penv_eq : penv = BitVec.ofNat 64 (φf env)
   g19 : g Register.x19 = some v19
   g20 : g Register.x20 = some v20
@@ -566,7 +562,7 @@ theorem varBridge
   Triple.seq
     (varBridge_prefix_triple g N A SL φf φc st x sp r sret aExpr aEnv
       v8 v9 v18 v19 v20 v21 out0 m0 ment penv nm hL.name hL.g19 hL.g20 hL.g21
-      hL.nmLo hL.nmHi hL.nmWin hL.nmAl)
+      hL.nmLo hL.nmHi hL.nmWin)
     (varBridge_callee g N A SL φf φc st env x v sp r sret aExpr aEnv
       v8 v9 v18 v19 v20 v21 out0 m0 ment penv nm len pn hL)
 

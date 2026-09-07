@@ -586,8 +586,6 @@ theorem evalEqNeSim
     (hIHl : EvalIH st d env el st' vl)
     (hIHr : EvalIH st' d env er st'' vr)
     (_hEvalE : EvalE st d env (.binary op el er) st'' resVal)
-    (hSizeF : st'.store.frames.size = st''.store.frames.size)
-    (hSizeC : st'.store.closures.size = st''.store.closures.size)
     (hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) vl →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -598,11 +596,12 @@ theorem evalEqNeSim
     (hblockC : ∀ c2 : Vsa.Machine.Config,
       TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
         st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
+      BinaryReturnLoads sp c2 →
       String.join c2.σ.sailOutput.toList = st''.out →
       ∃ (c3 : Vsa.Machine.Config) (mpre : Mem) (φfe φce : Addr → Nat),
         Steps c2 c3 ∧
-        PhiExtends φf φfe st''.store.frames.size ∧
-        PhiExtends φc φce st''.store.closures.size ∧
+        PhiExtends φf φfe st.store.frames.size ∧
+        PhiExtends φc φce st.store.closures.size ∧
         PreEpilogueVD g N A SL φfe φce st'' resVal sp r sret v8 v9 v18 c2.σ.sailOutput m0 mpre c3) :
     Triple
       (fun c => ∃ ment,
@@ -644,16 +643,18 @@ theorem evalEqNeSim
     hstackBudgetL, hexprBodiesL, hstoreBodiesL,
     hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩ := hpre
   -- === block B: two-operand head + IHs → TwoSubReturn @0x8000351c ===
-  obtain ⟨c2, hs2, hTS⟩ :=
-    blockB_binary gouter gpre N A SL φf φc st st' st'' d env op el er vl vr
+  obtain ⟨c2, hs2, hReturned⟩ :=
+    blockB_binary_data gouter gpre N A SL φf φc st st' st'' d env op el er vl vr
       sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hLeft hIHl hIHr hVlSurv
       c ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExtM0, hGmt47,
         hstackBudgetL, hexprBodiesL, hstoreBodiesL,
         hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩
+  have hTS := hReturned.result
+  have hLoads := hReturned.extra.toBinaryReturnLoads
   have hOutC2 : String.join c2.σ.sailOutput.toList = st''.out := hTS.2.2.2.2.2.2.2.1
   -- === block C: dispatch + value_equal + box → PreEpilogueVD @0x800033ec ===
-  obtain ⟨c3, mpre, φfe, φce, hs3, hpfe, hpce, hPre⟩ := hblockC c2 hTS hOutC2
+  obtain ⟨c3, mpre, φfe, φce, hs3, hpfe, hpce, hPre⟩ := hblockC c2 hTS hLoads hOutC2
   -- === block D: shared epilogue → EvalExitD ===
   obtain ⟨c4, hs4, hExitDe⟩ :=
     blockD_v_rec g N A SL φfe φce st'' resVal sp r sret v8 v9 v18 c2.σ.sailOutput m0
@@ -661,8 +662,8 @@ theorem evalEqNeSim
   obtain ⟨hExitE, hMemExt, hWords, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
   -- store counts only grow (`st.store ≤ st''.store` across both sub-calls).
   have hmono := evalE_store_mono _hEvalE
-  have hpfF : PhiExtends φf φfe st.store.frames.size := PhiExtends.mono hmono.1 hpfe
-  have hpcF : PhiExtends φc φce st.store.closures.size := PhiExtends.mono hmono.2 hpce
+  have hpfF : PhiExtends φf φfe st.store.frames.size := hpfe
+  have hpcF : PhiExtends φc φce st.store.closures.size := hpce
   have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
       st'' resVal sp r sret m0 c4 :=
     evalExit_of_phiExtends hpfF hpcF hExitE hmono.1 hmono.2
@@ -680,8 +681,6 @@ theorem evalEqSim
     (hLeft : EvalE st d env el st' vl)
     (hIHl : EvalIH st d env el st' vl) (hIHr : EvalIH st' d env er st'' vr)
     (_hEvalE : EvalE st d env (.binary .eq el er) st'' (.bool (vl.equal vr)))
-    (hSizeF : st'.store.frames.size = st''.store.frames.size)
-    (hSizeC : st'.store.closures.size = st''.store.closures.size)
     (hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) vl →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -690,11 +689,12 @@ theorem evalEqSim
     (hblockC : ∀ c2 : Vsa.Machine.Config,
       TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
         st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
+      BinaryReturnLoads sp c2 →
       String.join c2.σ.sailOutput.toList = st''.out →
       ∃ (c3 : Vsa.Machine.Config) (mpre : Mem) (φfe φce : Addr → Nat),
         Steps c2 c3 ∧
-        PhiExtends φf φfe st''.store.frames.size ∧
-        PhiExtends φc φce st''.store.closures.size ∧
+        PhiExtends φf φfe st.store.frames.size ∧
+        PhiExtends φc φce st.store.closures.size ∧
         PreEpilogueVD g N A SL φfe φce st'' (.bool (vl.equal vr)) sp r sret v8 v9 v18 c2.σ.sailOutput m0 mpre c3) :
     Triple
       (fun c => ∃ ment,
@@ -732,7 +732,7 @@ theorem evalEqSim
         st'' (.bool (vl.equal vr)) sp r sret m0) :=
   evalEqNeSim gouter gpre g N A SL φf φc st st' st'' d env el er .eq vl vr (.bool (vl.equal vr))
     sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0
-    hLeft hIHl hIHr _hEvalE hSizeF hSizeC hVlSurv hblockC
+    hLeft hIHl hIHr _hEvalE hVlSurv hblockC
 
 /-- **`evalNeSim`** — the `EvalE.binary .ne` recursive case, result `.bool (!(vl.equal vr))`. -/
 theorem evalNeSim
@@ -744,8 +744,6 @@ theorem evalNeSim
     (hLeft : EvalE st d env el st' vl)
     (hIHl : EvalIH st d env el st' vl) (hIHr : EvalIH st' d env er st'' vr)
     (_hEvalE : EvalE st d env (.binary .ne el er) st'' (.bool (!(vl.equal vr))))
-    (hSizeF : st'.store.frames.size = st''.store.frames.size)
-    (hSizeC : st'.store.closures.size = st''.store.closures.size)
     (hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
       ValueRepr mm N φ (sp.toNat - 968) vl →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
@@ -754,11 +752,12 @@ theorem evalNeSim
     (hblockC : ∀ c2 : Vsa.Machine.Config,
       TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
         st' st'' vl vr sp r sret v8 v9 v18 m0 c2 →
+      BinaryReturnLoads sp c2 →
       String.join c2.σ.sailOutput.toList = st''.out →
       ∃ (c3 : Vsa.Machine.Config) (mpre : Mem) (φfe φce : Addr → Nat),
         Steps c2 c3 ∧
-        PhiExtends φf φfe st''.store.frames.size ∧
-        PhiExtends φc φce st''.store.closures.size ∧
+        PhiExtends φf φfe st.store.frames.size ∧
+        PhiExtends φc φce st.store.closures.size ∧
         PreEpilogueVD g N A SL φfe φce st'' (.bool (!(vl.equal vr))) sp r sret v8 v9 v18 c2.σ.sailOutput m0 mpre c3) :
     Triple
       (fun c => ∃ ment,
@@ -796,7 +795,7 @@ theorem evalNeSim
         st'' (.bool (!(vl.equal vr))) sp r sret m0) :=
   evalEqNeSim gouter gpre g N A SL φf φc st st' st'' d env el er .ne vl vr (.bool (!(vl.equal vr)))
     sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0
-    hLeft hIHl hIHr _hEvalE hSizeF hSizeC hVlSurv hblockC
+    hLeft hIHl hIHr _hEvalE hVlSurv hblockC
 
 #print axioms evalEqSim
 #print axioms evalNeSim

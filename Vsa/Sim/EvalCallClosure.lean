@@ -1,5 +1,6 @@
 import Vsa.Sim.CallEntry
 import Vsa.Sim.TermSimAssembly
+import Vsa.Sim.rows.CallClosureRow
 
 /-!
 # Layer 4 — M4: the `Call.closure` crux (`callClosurePC = 0x80003288`)
@@ -97,16 +98,6 @@ captured environment `cd.env`, with each parameter bound to its argument (the
 `foldl .define` over `cd.params.zip vs`). This is exactly the spec state the body
 `ExecSeq` (and the `mExecSeq` IH) is stated over — we name it once so the three
 seams share a canonical write-log normal form (fast-reflection rule 5). -/
-def closureBoundStore (store' : Store) (cd : ClosureData) (vs : List Value)
-    (frame : Addr) : Store :=
-  List.foldl (fun s x => match x with | (x, v) => s.define frame x v) store'
-    (cd.params.zip vs)
-
-/-- The spec state the closure body runs at: the bound child store, output
-carried from the caller state `st`. -/
-def closureBoundSt (st : SpecSt) (store' : Store) (cd : ClosureData)
-    (vs : List Value) (frame : Addr) : SpecSt :=
-  { store := closureBoundStore store' cd vs frame, out := st.out }
 
 /-! ## The two straight-line seam residuals
 
@@ -154,7 +145,7 @@ def ClosureRetSpec
       (SegExit g N A SL φf' φc' nf' nc' st' callBodyRetPC m0')
       (CallExitP g N A SL φf φc nf nc st' m0)
 
-/-! ## `callClosureSim` — the `Call.closure` crux as a machine Triple
+/-! ## `callClosureSim_of_seams` — closure-call seam composition
 
 Composes the three seams `prefix ≫ body-IH ≫ return` into the `mCall`-shape
 Triple. CONDITIONAL on the two straight-line seam residuals (`ClosureEntrySpec`,
@@ -163,7 +154,7 @@ Triple. CONDITIONAL on the two straight-line seam residuals (`ClosureEntrySpec`,
 premises are threaded: `a_2` (arity) and `a_3` (depth) gate the prefix path,
 `a_4` (allocFrame) fixes `frame`/`store'`, `a_5` (body derivation) is the IH's
 index, `a_6` classifies `status` for the return. -/
-theorem callClosureSim
+theorem callClosureSim_of_seams
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' : SpecSt) (d : Nat) (a : Addr) (cd : ClosureData) (vs : List Value)
@@ -192,7 +183,8 @@ theorem callClosureSim
       (CallEntryP g N A SL φf φc st d dLeft aLeft m0)
       (CallExitP g N A SL φf φc st.store.frames.size st.store.closures.size st' m0) :=
   -- prefix ≫ body ≫ return
-  Triple.seq (Triple.seq (hEntry φf φc m0) hBodyIH)
-    (hRet φf φc _ _ m0)
+  callSeg (hEntry φf φc m0) hBodyIH (hRet φf φc _ _ m0)
+
+#print axioms callClosureSim_of_seams
 
 end Vsa.Sim

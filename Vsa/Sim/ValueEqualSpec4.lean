@@ -318,12 +318,11 @@ touched (`x2 = g x2 = sp`). -/
 
 /-- **`value_equal`, both cases.** From `ve_pre` plus the `str`-path witnesses (needed only
 if both operands are strings) to the stack-window post `ve_str_post`. -/
-theorem value_equal_spec_full
+theorem value_equal_spec_full_identity
     (g : (R : Register) → Option (RegisterType R)) (bufa bufb r sp : BitVec 64)
     (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (va vb : Value)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config)
-    (hφc : ∀ (a b : Vsa.While.Addr), φc a = φc b → a = b)
-    (hN : ∀ (f h : NativeFn), N.addr f = N.addr h → f = h)
+    (hIdentity : ValueEqualityIdentity N φc va vb)
     (hpre : ve_pre g bufa bufb r N φc va vb m0 o c)
     (hsp : c.σ.regs.get? Register.x2 = some sp)
     (hstrc : StrcmpLoaded m0) (hmask : MaskPinned m0) (hraln4 : r.toNat % 4 = 0)
@@ -354,12 +353,36 @@ theorem value_equal_spec_full
         hpre.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2
       have := hframe0 Register.x2 (by decide); rw [hsp] at this; exact this.symm
     obtain ⟨c', hs', hG', hpc', ha0', hra', ⟨w, hmi'⟩, htick', hmem', hout', hframe'⟩ :=
-      value_equal_spec_nonstr g bufa bufb r N φc va vb m0 o hφc hN hnotstr c hpre
+      value_equal_spec_nonstr_identity g bufa bufb r N φc va vb m0 o hIdentity hnotstr c hpre
     -- `x2` is untouched by the non-`str` handlers: `x2 = g x2 = sp`
     have hsp' : c'.σ.regs.get? Register.x2 = some sp := by
       rw [hframe' Register.x2 (by decide), hgx2]
     refine ⟨c', hs', hG', hpc', ha0', hra', hsp', ⟨w, hmi'⟩, htick', hout', ?_,
       fun R hR => hframe' R (notWrittenVE_of_str hR)⟩
     intro a _; rw [hmem']
+
+/-- Legacy global-injectivity interface, derived from the operand-local proof. -/
+theorem value_equal_spec_full
+    (g : (R : Register) → Option (RegisterType R)) (bufa bufb r sp : BitVec 64)
+    (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (va vb : Value)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config)
+    (hφc : ∀ (a b : Vsa.While.Addr), φc a = φc b → a = b)
+    (hN : ∀ (f h : NativeFn), N.addr f = N.addr h → f = h)
+    (hpre : ve_pre g bufa bufb r N φc va vb m0 o c)
+    (hsp : c.σ.regs.get? Register.x2 = some sp)
+    (hstrc : StrcmpLoaded m0) (hmask : MaskPinned m0) (hraln4 : r.toNat % 4 = 0)
+    -- `str`-path witnesses, only consumed when `va = .str sa ∧ vb = .str sb`
+    (hstrwit : ∀ sa sb, va = .str sa → vb = .str sb →
+      ∃ (pa' pb' : Nat) (csa csb : List Char),
+        read64 m0 (bufa.toNat + 8) = some pa' ∧ read64 m0 (bufb.toNat + 8) = some pb' ∧
+        CStr m0 pa' csa ∧ CStr m0 pb' csb ∧ sa = String.ofList csa ∧ sb = String.ofList csb ∧
+        StrcmpRegion (BitVec.ofNat 64 pa') csa.length ∧
+        StrcmpRegion (BitVec.ofNat 64 pb') csb.length ∧
+        StrcmpWRegion (BitVec.ofNat 64 pa') csa.length ∧
+        StrcmpWRegion (BitVec.ofNat 64 pb') csb.length ∧
+        VEStrRegions sp pa' pb' csa.length csb.length) :
+    ∃ c', Steps c c' ∧ ve_str_post g r sp va vb m0 o c' :=
+  value_equal_spec_full_identity g bufa bufb r sp N φc va vb m0 o c
+    (ValueEqualityIdentity.of_injective hφc hN) hpre hsp hstrc hmask hraln4 hstrwit
 
 end Vsa.Sim

@@ -7,6 +7,7 @@ import Vsa.Sim.ValueEqualSpec4
 import Vsa.Sim.rows.NativeBodyAssert
 import Vsa.Sim.rows.ExecWhileRouteRows
 import Vsa.Sim.SegEffect
+import Vsa.Sim.ExecWhileCertificates
 
 #check Vsa.Sim.FrameGuarantee.refl
 #check Vsa.Sim.execWhileLoopRouteRow_framed
@@ -32,6 +33,139 @@ the exact reflector.
 open Vsa.ReflectSpan
 
 namespace Vsa.ReflectResiduals
+
+open Lean (toJson)
+
+/-- Source inventory for certificate provenance. Include the whole proof tree so
+new transitive imports cannot silently escape the provenance boundary. -/
+private partial def certificateLeanSources (dir : System.FilePath) : IO (List String) := do
+  let mut paths := []
+  for entry in ← dir.readDir do
+    if ← entry.path.isDir then
+      if entry.fileName != ".git" && entry.fileName != ".lake" then
+        paths := paths ++ (← certificateLeanSources entry.path)
+    else if entry.path.extension == some "lean" ||
+        entry.fileName == "lakefile.toml" || entry.fileName == "lake-manifest.json" then
+      paths := paths ++ [entry.path.toString]
+  return paths
+
+/-- Hash exact artifact bytes with the system SHA256 implementation. -/
+private def certificateHashes (paths : List String) : IO (List String) := do
+  if paths.isEmpty then return []
+  let result ← IO.Process.output
+    { cmd := "shasum", args := #["-a", "256"] ++ paths.toArray }
+  if result.exitCode != 0 then
+    throw (IO.userError s!"certificate SHA256 failed: {result.stderr}")
+  let lines := (result.stdout.splitOn "\n").filter (· != "")
+  if lines.length != paths.length then
+    throw (IO.userError "certificate SHA256 returned the wrong number of digests")
+  lines.mapM fun line => do
+    let digest := String.ofList (line.toList.take 64)
+    if digest.length != 64 || !digest.toList.all (fun c =>
+        ('0' ≤ c && c ≤ '9') || ('a' ≤ c && c ≤ 'f')) then
+      throw (IO.userError "certificate SHA256 returned a malformed digest")
+    return digest
+
+private def certificateHash (path : String) : IO String := do
+  let hashes ← certificateHashes [path]
+  match hashes with
+  | [hash] => return hash
+  | _ => throw (IO.userError "certificate SHA256 omitted its digest")
+
+private def emitCertificateProvenance (dir : String) : IO String := do
+  let mut proofSources := []
+  for root in ["Vsa", "riscv-lean/lean_emulator", "riscv-lean/Lean_RV64D_executable",
+      "riscv-lean/lean-sail", ".lake/packages/ELFSage", ".lake/packages/Cli"] do
+    proofSources := proofSources ++ (← certificateLeanSources root)
+  let paths := (proofSources ++
+    ["Vsa.lean", "experiments/smt/ReflectSpan.lean", "experiments/smt/ReflectResiduals.lean",
+     "lakefile.toml", "lake-manifest.json", "lean-toolchain", "c/while-riscv-htif.elf"])
+    |>.mergeSort (· ≤ ·)
+  for path in paths do
+    let snapshot : System.FilePath := s!"{dir}/src-tree/{path}"
+    if let some parent := snapshot.parent then IO.FS.createDirAll parent
+    IO.FS.writeBinFile snapshot (← IO.FS.readBinFile path)
+  let hashes ← certificateHashes (paths.map fun path => s!"{dir}/src-tree/{path}")
+  let rows := (paths.zip hashes).map fun (path, hash) =>
+    s!"{path}\tsrc-tree/{path}\t{hash}"
+  let manifest := s!"{dir}/source-provenance.tsv"
+  IO.FS.writeFile manifest ("path\tsnapshot\tsha256\n" ++ String.intercalate "\n" rows ++ "\n")
+  certificateHash manifest
+
+private def certificateAddrJson : Vsa.Sim.AddrExpr → Lean.Json
+  | .literal value => Lean.Json.mkObj [("kind", "literal"), ("value", toJson value)]
+  | .variable index => Lean.Json.mkObj [("kind", "variable"), ("index", toJson index)]
+  | .add base offset => Lean.Json.mkObj
+      [("kind", "add"), ("base", certificateAddrJson base), ("offset", toJson offset)]
+
+private def certificateGuardJson : Vsa.Sim.GuardExpr → Lean.Json
+  | .always => Lean.Json.mkObj [("kind", "always")]
+  | .eq left right => Lean.Json.mkObj
+      [("kind", "eq"), ("left", certificateAddrJson left), ("right", certificateAddrJson right)]
+  | .conj left right => Lean.Json.mkObj
+      [("kind", "and"), ("left", certificateGuardJson left), ("right", certificateGuardJson right)]
+
+private def certificateEffectJson (effect : Vsa.Sim.RegionEffect) : Lean.Json :=
+  let kind := match effect.regs with
+    | .all => "all" | .none => "none" | .abi => "abi" | .explicit _ => "explicit"
+  let gprs := (List.range 32).filter fun n => match effect.regs with
+    | .all => true
+    | .none => false
+    | .abi => Vsa.Alloc.AbiPreserved (Vsa.Sim.gprReg n)
+    | .explicit regs => regs.contains (Vsa.Sim.gprReg n)
+  let writes := effect.writes.map fun region => Lean.Json.mkObj
+    [("base", certificateAddrJson region.base), ("bytes", toJson region.bytes),
+     ("guard", certificateGuardJson region.guard)]
+  Lean.Json.mkObj
+    [("registers", Lean.Json.mkObj [("kind", toJson kind), ("gprs", toJson gprs)]),
+     ("writes", toJson writes), ("output_preserved", toJson effect.outputPreserved)]
+
+/-- Serialize only an exact dependent export. Query names and theorem names never
+select the effect; the effect is projected from the checked certificate. -/
+private def whileCertificateDescriptor
+    (identity : Vsa.Sim.SegmentIdentity)
+    (certificate : Vsa.Sim.WhileBodyReturnExport identity) : List (String × Lean.Json) :=
+  [("query", toJson identity.query), ("field", toJson identity.residual),
+   ("entry", toJson s!"0x{String.ofList (Nat.toDigits 16 identity.entryPC.toNat)}"),
+   ("stop", toJson s!"0x{String.ofList (Nat.toDigits 16 identity.exitPC.toNat)}"),
+   ("stop_policy", toJson (if identity.stopBefore then "before-pc" else "return")),
+   ("effect", certificateEffectJson certificate.effect),
+   ("theorem", "Vsa.Sim.whileBodyReturnCertified"),
+   ("precondition", "Vsa.Sim.WhileBodyReturnArgs.pre"),
+   ("postcondition", "Vsa.Sim.WhileBodyReturnArgs.post")]
+
+private def emitWhileCertificate (dir provenanceHash : String)
+    (identity : Vsa.Sim.SegmentIdentity)
+    (certificate : Vsa.Sim.WhileBodyReturnExport identity) : IO String := do
+  let entry := s!"0x{String.ofList (Nat.toDigits 16 identity.entryPC.toNat)}"
+  let stop := s!"0x{String.ofList (Nat.toDigits 16 identity.exitPC.toNat)}"
+  let stopPolicy := if identity.stopBefore then "before-pc" else "return"
+  let theoremName := "Vsa.Sim.whileBodyReturnCertified"
+  let queryHash ← certificateHash s!"{dir}/queries/{identity.query}.smt2"
+  let relativePath := s!"certificates/{identity.query}.json"
+  let document := Lean.Json.mkObj (whileCertificateDescriptor identity certificate ++
+    [("schema", toJson "vsa.segment-certificate.v1"), ("query_sha256", toJson queryHash),
+     ("provenance_manifest", toJson "source-provenance.tsv"), ("provenance_sha256", toJson provenanceHash)])
+  IO.FS.createDirAll s!"{dir}/certificates"
+  IO.FS.writeFile s!"{dir}/{relativePath}" (document.compress ++ "\n")
+  let digest ← certificateHash s!"{dir}/{relativePath}"
+  return s!"{identity.query}\t{identity.residual}\t{entry}\t{stop}\t{stopPolicy}\t{relativePath}\t{digest}\t{queryHash}\t{theoremName}"
+
+/-- Independent authority receipt. Consumers receive this trusted directory
+explicitly; a campaign cannot nominate its own authority. -/
+elab "#emit_segment_authority " pathStx:str : command => do
+  Lean.Elab.Command.liftTermElabM do
+    let dir := pathStx.getString
+    let provenanceHash ← emitCertificateProvenance dir
+    let contracts := [Vsa.Sim.WhileBodyReturnResidual.returning,
+      Vsa.Sim.WhileBodyReturnResidual.looping].map fun residual =>
+        Lean.Json.mkObj (whileCertificateDescriptor residual.identity
+          (Vsa.Sim.whileBodyReturnExport residual))
+    let receipt := Lean.Json.mkObj
+      [("schema", "vsa.segment-authority.v1"), ("contracts", toJson contracts),
+       ("provenance_manifest", "source-provenance.tsv"), ("provenance_sha256", toJson provenanceHash)]
+    IO.FS.writeFile s!"{dir}/segment-authority.json" (receipt.compress ++ "\n")
+    Lean.logInfo m!"#emit_segment_authority → {dir}: {contracts.length} typed contracts"
 
 /-- A machine-post conjunct discharged by a named, kernel-checked Lean theorem
 rather than by the SMT projection.  The driver accepts only the exact rows it
@@ -310,6 +444,14 @@ def queryCapability (inst : ResidualInstance) : String :=
   else if machineBoundaryProjectionFields.contains inst.field then "machine-boundary"
   else if termProjectedFields.contains inst.field then "partial-projection"
   else "machine-only"
+
+/-- Capability is an inventory classification, never evidence of closure. -/
+def residualCapabilityClass (instances : List ResidualInstance) (field : String) : String :=
+  if instances.any (fun inst => inst.field == field) then "finite-projection"
+  else if field == "hDivCorr" then "non-finite"
+  else if ["hExecRouteCases", "hFlCondFalse", "hFlBodyBreak", "hFlBodyRet",
+      "hFlLoop", "hSeqSteps", "hErrFam"].contains field then "composite-family"
+  else "lean-only"
 
 /-- The proof ELF's complete set of direct `jal runtime_error` instructions.
 This is machine coverage metadata, not an encoding of `ErrFamily`. -/
@@ -1149,6 +1291,7 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
     let mut extensionRows : List String := []
     let mut routeRows : List String := []
     let mut effectRows : List String := []
+    let mut certificateIdentities : List Vsa.Sim.SegmentIdentity := []
     for inst in instances do
       let nm := inst.query
       let field := inst.field
@@ -1324,34 +1467,43 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
       IO.FS.writeFile s!"{dir}/writes/{nm}.tsv"
         ("guard\twidth\taddr\n" ++ String.intercalate "\n"
           (writes.map (fun (g, a, w) => s!"{g}\t{w}\t{a}")) ++ "\n")
-      -- This is a conservative effect ledger, not an SMT/Lean equivalence
-      -- certificate.  The direct-memory column describes only the reflected
-      -- instruction write log above.  Dynamic summary/callee effects remain
-      -- unsupported.  Only a genuine zero-step query gets a Lean frame
-      -- theorem: `FrameGuarantee.refl` proves every register, memory byte, and
-      -- output observation unchanged on that concrete machine seam.
+      -- Frame claims come from a typed certificate for the exact query identity.
+      -- The direct-memory column separately describes the reflected write log.
       let directWriteRows :=
         (writes.filter fun row => row.2.2 != 0).length
       let directMemory :=
         if directWriteRows == 0 then "none" else "guarded-write-log"
-      let whileLoopRouteFrame :=
-        nm == "hSWhileRetBodyReturn" || nm == "hSWhileLoopBodyReturn"
+      let routeIdentity : Vsa.Sim.SegmentIdentity :=
+        ⟨nm, field, BitVec.ofNat 64 bmcEntry, BitVec.ofNat 64 ehi, !retExit⟩
+      let routeCertificate :=
+        if complete && ev != "s0" && sums.isEmpty && directWriteRows == 0 then
+          Vsa.Sim.lookupWhileBodyReturnExport routeIdentity
+        else none
+      if routeCertificate.isSome then
+        certificateIdentities := certificateIdentities ++ [routeIdentity]
       let registerWrites :=
         if inst.zeroStep then "none"
-        else if whileLoopRouteFrame then "preserves-abi"
-        else "unsupported-dynamic"
+        else match routeCertificate with
+          | some cert => match cert.effect.regs with
+            | .all => "none"
+            | .abi => "preserves-abi"
+            | _ => "unsupported-dynamic"
+          | none => "unsupported-dynamic"
       let outputEffect :=
-        if inst.zeroStep || whileLoopRouteFrame then "preserved"
-        else "unsupported-dynamic"
+        if inst.zeroStep then "preserved"
+        else match routeCertificate with
+          | some cert => if cert.effect.outputPreserved then "preserved"
+              else "unsupported-dynamic"
+          | none => "unsupported-dynamic"
       let effectTheorem :=
         if inst.zeroStep then "Vsa.Sim.FrameGuarantee.refl"
-        else if whileLoopRouteFrame then
-          "Vsa.Sim.execWhileLoopRouteRow_framed"
+        else if routeCertificate.isSome then
+          "Vsa.Sim.whileBodyReturnCertified"
         else "-"
       let effectProvenance :=
         if inst.zeroStep then "Lean:Vsa.Sim.FrameGuarantee.refl"
-        else if whileLoopRouteFrame then
-          "Lean:Vsa.Sim.execWhileLoopRouteRow_framed"
+        else if routeCertificate.isSome then
+          "Lean:Vsa.Sim.whileBodyReturnCertified"
         else "Lean-emitted:Vsa.ReflectSpan.reflectBmcTopo"
       effectRows := effectRows ++
         [s!"{nm}\t{field}\t{registerWrites}\t{directMemory}\t{directWriteRows}\t{outputEffect}\t{effectTheorem}\t{effectProvenance}"]
@@ -1469,6 +1621,17 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
       (← IO.FS.readBinFile "Vsa/Sim/SegEffect.lean")
     let elfBytes ← IO.FS.readBinFile elfPath
     IO.FS.writeBinFile s!"{dir}/src/proof.elf" elfBytes
+    let certificateProvenance ← emitCertificateProvenance dir
+    let mut certificateRows := []
+    for identity in certificateIdentities do
+      match Vsa.Sim.lookupWhileBodyReturnExport identity with
+      | some certificate =>
+        certificateRows := certificateRows ++
+          [← emitWhileCertificate dir certificateProvenance identity certificate]
+      | none => throwError "typed segment certificate identity disappeared during emission"
+    IO.FS.writeFile s!"{dir}/segment-certificates.tsv"
+      ("query\tfield\tentry\tstop\tstop_policy\tcertificate_path\tcertificate_sha256\tquery_sha256\ttheorem\n" ++
+        String.intercalate "\n" certificateRows ++ "\n")
     IO.FS.writeFile s!"{dir}/provenance.txt"
       s!"emitter sources are copied verbatim to {dir}/src/; the driver compares bytes\nelf\t{elfPath}\nelf_bytes\t{elfBytes.size}\n"
     IO.FS.writeFile s!"{dir}/pre.smt2" (entryPinsSmt img ++ "\n")
@@ -1525,11 +1688,13 @@ elab "#emit_bmc " pathStx:str roundsStx:num : command => do
       ("query\tfield\tregister_writes\tdirect_memory_writes\tdirect_write_rows\toutput\ttheorem\tprovenance\n" ++
         String.intercalate "\n" effectRows ++ "\n")
     IO.FS.writeFile s!"{dir}/residual-capabilities.tsv"
-      ("field\tmachine_instances\tsemantic_projection\tfull_residual\n" ++
-        String.intercalate "\n" ((instances.map fun inst => inst.field).eraseDups.map fun field =>
+      ("field\tmachine_instances\tsemantic_projection\tfull_residual\tcapability_class\n" ++
+        String.intercalate "\n" ((residualFields ++ machineBoundaryProjectionFields).eraseDups.map fun field =>
           let count := (instances.filter fun inst => inst.field == field).length
-          let projection := if projectedFields.contains field then "yes" else "no"
-          s!"{field}\t{count}\t{projection}\tno") ++ "\n")
+          let projection := if instances.any (fun inst => inst.field == field &&
+            (queryCapability inst == "partial-projection" ||
+              queryCapability inst == "indexed-error-projection")) then "yes" else "no"
+          s!"{field}\t{count}\t{projection}\tno\t{residualCapabilityClass instances field}") ++ "\n")
     IO.FS.writeFile s!"{dir}/error-physical-sites.tsv"
       ("pc\tmachine_cause\tconstructibility\n" ++
         String.intercalate "\n" (errorPhysicalSites.map fun (pc, cause, status) =>

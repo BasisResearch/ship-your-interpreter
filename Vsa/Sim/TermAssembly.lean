@@ -110,14 +110,8 @@ structure TermResidualsBase (L : Layout) where
   hAssign : ∀ st d env x e st' v store'',
       AssignResidualExtension st d env x e st' v store''
   -- ===== BinDispatchRow.lean — eval_binary_row's 19 cell/str/div residuals =====
-  /-- `hBinary` add int-cell.  Supplier: `AddResid` value-path (`EvalAddRow`, block-reflected).
-      **Wave-49 B2-carry**: the 9 int cells and the 2 eq/ne cells are stated as
-      `BinIntCell`/`BinEqCell` — the bare `∀ …, BinIntCellResid …` form is FALSE at
-      `m0 := ∅` (11 kernel refutations in
-      `experiments/fleet/obstructions/RefutBatteryCur.lean`; the `∃`-body wants
-      `KindSlotPinned 6`, absent from `∅`).  Carrying the arm's `EvalEntry` supplies
-      exactly that pin (`CureValidationCur.evalEntry_supplies_slot6`) and makes the
-      `∅` witness uninhabited, matching the 6 unary/logic siblings. -/
+  /-- Integer-add tail supplier. The generated row derives binary entry facts
+      from `EvalEntry`; reached operator, code, and result geometry remain. -/
   hIAdd : BinIntCell .add Vsa.Sim.AddResid (fun _ _ => True)
   /-- `hBinary` sub int-cell.  Supplier: `SubResid` (`EvalSubRow`). -/
   hISub : BinIntCell .sub Vsa.Sim.SubResid (fun _ _ => True)

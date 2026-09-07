@@ -1,3 +1,4 @@
+import Vsa.Sim.ValuePayloadCoverage
 import Vsa.Sim.EqNeDispatchSeg
 import Vsa.Sim.ValueSpec
 import Vsa.Sim.ReprCopy
@@ -25,7 +26,7 @@ The downstream `value_equal` precondition `ve_pre` needs
 source 24 bytes at `sp+0x78`/`sp+0x90` on the entry memory `m0` (each stored word is
 the `.ld` of a source byte list, and `LPins8` — from the block's `ChainFacts` — ties
 that byte list to `m0` at the source slot), so `ValueRepr` re-holds at the buffer via
-the translation-copy lemma `valueRepr_copy` (`ReprCopy.lean`).
+the translation-copy lemma `valueRepr_copy_total_exact` (`ReprCopy.lean`).
 
 `valueRepr_of_reflected_copy` is the reusable core: it serves `bufa` and `bufb` in the
 same call shape, and it serves `ne` for free because the tower is identical.
@@ -253,14 +254,13 @@ theorem valueRepr_of_reflected_copy (hsp : sp.toNat + 4096 ≤ 2 ^ 64)
     {N : NativeAddrs} {φc : Addr → Nat} {srcAddr dstAddr : Nat} {v : Value}
     (hcopy : ∀ j, j < 24 →
       (eqTower sp m0 b0 b1 b2 b3 b4 b5)[dstAddr + j]? = some ((m0[srcAddr + j]?).getD 0))
-    (hpaydisj : ∀ (p : Nat) (s : String), read64 m0 (srcAddr + 8) = some p →
-      ∀ k, k ≤ s.length → (p + k < sp.toNat + 32 ∨ sp.toNat + 88 ≤ p + k))
+    (hpaydisj : ValuePayloadCovered (fun k => k < sp.toNat + 32 ∨ sp.toNat + 88 ≤ k)
+      m0 srcAddr v)
     (hv : ValueRepr m0 N φc srcAddr v) :
     ValueRepr (eqTower sp m0 b0 b1 b2 b3 b4 b5) N φc dstAddr v := by
-  refine valueRepr_copy_total hcopy ?_ hv
-  intro p s hp a ha
-  obtain ⟨k, hk, rfl⟩ := ha
-  exact (eqTower_outside sp m0 b0 b1 b2 b3 b4 b5 hsp (p + k) (hpaydisj p s hp k hk)).symm
+  exact valueRepr_copy_total_exact hcopy
+    (hpaydisj.mono (fun k hk =>
+      (eqTower_outside sp m0 b0 b1 b2 b3 b4 b5 hsp k hk).symm)) hv
 
 end Tower
 
@@ -281,8 +281,8 @@ theorem eqDispatch_bufa_repr (sp : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8
     {N : NativeAddrs} {φc : Addr → Nat} {vl : Value}
     (h0 : LPins8 m0 (sp + 0x78#64).toNat b0) (h1 : LPins8 m0 (sp + 0x80#64).toNat b1)
     (h2 : LPins8 m0 (sp + 0x88#64).toNat b2)
-    (hpaydisj : ∀ (p : Nat) (s : String), read64 m0 ((sp + 0x78#64).toNat + 8) = some p →
-      ∀ k, k ≤ s.length → (p + k < sp.toNat + 32 ∨ sp.toNat + 88 ≤ p + k))
+    (hpaydisj : ValuePayloadCovered (fun k => k < sp.toNat + 32 ∨ sp.toNat + 88 ≤ k)
+      m0 (sp + 0x78#64).toNat vl)
     (hvl : ValueRepr m0 N φc (sp + 0x78#64).toNat vl) :
     ValueRepr
       (writeLog m0 (evalBlocks eqDispatch (SegEvalState.init (eqDispL sp) [b0,b1,b2,b3,b4,b5])).log)
@@ -298,8 +298,8 @@ theorem eqDispatch_bufb_repr (sp : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8
     {N : NativeAddrs} {φc : Addr → Nat} {vr : Value}
     (h3 : LPins8 m0 (sp + 0x90#64).toNat b3) (h4 : LPins8 m0 (sp + 0x98#64).toNat b4)
     (h5 : LPins8 m0 (sp + 0xa0#64).toNat b5)
-    (hpaydisj : ∀ (p : Nat) (s : String), read64 m0 ((sp + 0x90#64).toNat + 8) = some p →
-      ∀ k, k ≤ s.length → (p + k < sp.toNat + 32 ∨ sp.toNat + 88 ≤ p + k))
+    (hpaydisj : ValuePayloadCovered (fun k => k < sp.toNat + 32 ∨ sp.toNat + 88 ≤ k)
+      m0 (sp + 0x90#64).toNat vr)
     (hvr : ValueRepr m0 N φc (sp + 0x90#64).toNat vr) :
     ValueRepr
       (writeLog m0 (evalBlocks eqDispatch (SegEvalState.init (eqDispL sp) [b0,b1,b2,b3,b4,b5])).log)
@@ -315,8 +315,8 @@ theorem neDispatch_bufa_repr (sp : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8
     {N : NativeAddrs} {φc : Addr → Nat} {vl : Value}
     (h0 : LPins8 m0 (sp + 0x78#64).toNat b0) (h1 : LPins8 m0 (sp + 0x80#64).toNat b1)
     (h2 : LPins8 m0 (sp + 0x88#64).toNat b2)
-    (hpaydisj : ∀ (p : Nat) (s : String), read64 m0 ((sp + 0x78#64).toNat + 8) = some p →
-      ∀ k, k ≤ s.length → (p + k < sp.toNat + 32 ∨ sp.toNat + 88 ≤ p + k))
+    (hpaydisj : ValuePayloadCovered (fun k => k < sp.toNat + 32 ∨ sp.toNat + 88 ≤ k)
+      m0 (sp + 0x78#64).toNat vl)
     (hvl : ValueRepr m0 N φc (sp + 0x78#64).toNat vl) :
     ValueRepr
       (writeLog m0 (evalBlocks neDispatch (SegEvalState.init (eqDispL sp) [b0,b1,b2,b3,b4,b5])).log)
@@ -331,8 +331,8 @@ theorem neDispatch_bufb_repr (sp : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8
     {N : NativeAddrs} {φc : Addr → Nat} {vr : Value}
     (h3 : LPins8 m0 (sp + 0x90#64).toNat b3) (h4 : LPins8 m0 (sp + 0x98#64).toNat b4)
     (h5 : LPins8 m0 (sp + 0xa0#64).toNat b5)
-    (hpaydisj : ∀ (p : Nat) (s : String), read64 m0 ((sp + 0x90#64).toNat + 8) = some p →
-      ∀ k, k ≤ s.length → (p + k < sp.toNat + 32 ∨ sp.toNat + 88 ≤ p + k))
+    (hpaydisj : ValuePayloadCovered (fun k => k < sp.toNat + 32 ∨ sp.toNat + 88 ≤ k)
+      m0 (sp + 0x90#64).toNat vr)
     (hvr : ValueRepr m0 N φc (sp + 0x90#64).toNat vr) :
     ValueRepr
       (writeLog m0 (evalBlocks neDispatch (SegEvalState.init (eqDispL sp) [b0,b1,b2,b3,b4,b5])).log)

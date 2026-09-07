@@ -79,9 +79,6 @@ theorem blockC_orFalse
       gpre Register.x19 = some v19 ∧ gpre Register.x20 = some v20 ∧
       gpre Register.x21 = some v21)
     (henvPrefix : env < nf)
-    -- store-size stability (mirrors `blockB_binary`'s `hSizeF`/`hSizeC` residual):
-    (hSizeF : st'.store.frames.size = st''.store.frames.size)
-    (hSizeC : st'.store.closures.size = st''.store.closures.size)
     -- the entry-agreement sizes sit under the RIGHT call's entry state (the LEFT
     -- sub-derivation only grows the store — `evalE_store_mono` at the caller):
     (hnf : nf ≤ st'.store.frames.size ∧ nc ≤ st'.store.closures.size) :
@@ -105,7 +102,6 @@ theorem blockC_orFalse
         -- WAVE 47i: the parent node's entry-ground bundle at the pre-call
         -- memory (the RIGHT child is derived inside via the kit).
         EvalGround mcall SL A sp sret aExpr.toNat (.logical .or el er) ∧
-        aExpr.toNat % 8 = 0 ∧
         0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
         aExpr.toNat + 32 ≤ 0x100000000 ∧
         tohostAddr + 8 ≤ aExpr.toNat ∧
@@ -119,20 +115,9 @@ theorem blockC_orFalse
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
             mcall[a]? = m'[a]?) →
           ExprRepr m' aRight.toNat er) ∧
-        aRight.toNat % 8 = 0 ∧
         0x80000000 ≤ aRight.toNat ∧ aRight.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aRight.toNat ∧
         (aRight.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aRight.toNat) ∧
-        -- RIGHT-value payload disjointness (mirrors `pay_disj`, for the `blockC_logTail` copy):
-        (∀ (mR : Mem) (φ : Addr → Nat) (p : Nat) (s : String),
-          ValueRepr mR N φ (sp.toNat - 944) vr → read64 mR (sp.toNat - 944 + 8) = some p →
-          ∀ k, k ≤ s.length → (p + k < sp.toNat - 1024 ∨ sp.toNat - 1024 + 24 ≤ p + k)) ∧
-        -- RIGHT-value map coherence (the value/store closure maps agree on the
-        -- allocated prefix; ValueRepr transports between them — a `.closure`-only
-        -- residual, trivial for leaf values):
-        (∀ (mR : Mem) (φa φb : Addr → Nat),
-          (∀ i, i < st''.store.closures.size → φa i = φb i) →
-          ValueRepr mR N φa (sp.toNat - 944) vr → ValueRepr mR N φb (sp.toNat - 944) vr) ∧
         String.join out0.toList = st'.out ∧
         sret.toNat % 8 = 0 ∧ 0x80000000 ≤ sret.toNat ∧ sret.toNat + 24 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ sret.toNat ∧
@@ -144,8 +129,7 @@ theorem blockC_orFalse
         c.σ.sailOutput = out0 ∧
         Value_truthyLoaded mcall ∧ Value_boolLoaded mcall ∧
         Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
-        (∀ φc' : Addr → Nat, ValueRepr c.σ.mem N φc' (sp.toNat - 968) vl →
-          LogicalBufExtras N A SL φc' vl sp sret c.σ.mem) ∧
+        LogicalBufExtras sp ∧
         (sp.toNat ≤ 0x8000282c ∨ 0x8000285c ≤ SL.lo) ∧
         (sp.toNat ≤ 0x800027f8 ∨ 0x8000280c ≤ SL.lo) ∧
         (A.hi ≤ 0x8000282c ∨ 0x8000285c ≤ A.lo) ∧
@@ -179,9 +163,9 @@ theorem blockC_orFalse
         PhiExtends φc φce nc ∧
         PreEpilogueVD g N A SL φfe φce st'' (.bool vr.truthy) sp r sret v8 v9 v18 outF m0 mpre c) := by
   intro c hpre
-  obtain ⟨mcall, hSub, hEnvSlotMcall, hgx8, hgx18, hexpr, hPayRight, hMemExtM0, hgroundP, hexprAl, hexprLo, hexprHi, hexprHi32,
+  obtain ⟨mcall, hSub, hEnvSlotMcall, hgx8, hgx18, hexpr, hPayRight, hMemExtM0, hgroundP, hexprLo, hexprHi, hexprHi32,
     hexprWin, hexprSL, hexprSL32, hexprA, hexprA32, hexprSub,
-    hRightSurv, hropAl, hropLo, hropHi, hropWin, hropStk, hPayDisjRight, hVrMapCoh,
+    hRightSurv, hropLo, hropHi, hropWin, hropStk,
     houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretStk, hsretEvalCode, hSretBoolCode,
     hraAl, hSLloSp, hSLlo, hSLwin,
     hout0eq, hVtruthyMcall, hVboolMcall, hViIntMcall, hViSlotMcall, hNbsMcall, hBufExtras,
@@ -204,7 +188,6 @@ theorem blockC_orFalse
   have hvalSub' : ValueRepr c.σ.mem N φcv (sp.toNat - 968) vl := by
     have h := hvalSub.repr
     rwa [hsub968] at h
-  have hBE : LogicalBufExtras N A SL φcv vl sp sret c.σ.mem := hBufExtras φcv hvalSub'
   have hx8 : c.σ.regs.get? Register.x8 = some aExpr := (hframe Register.x8 (by decide)).trans hgx8
   have hx18 : c.σ.regs.get? Register.x18 = some aEnv := (hframe Register.x18 (by decide)).trans hgx18
   have hop8 : (aExpr + sign_extend (m := 64) (0x008#12)).toNat = aExpr.toNat + 8 := by
@@ -317,7 +300,7 @@ theorem blockC_orFalse
       qb0 qb1 qb2 qb3 qb4 qb5 qb6 qb7
       hG hpc hmi hsp hx8 hs1 hx18 hcode
       (by rw [hop8]; omega) (by rw [hop8]; omega)
-      (by rw [hop8, htoh]; right; omega) (by rw [hop8]; omega)
+      (by rw [hop8, htoh]; right; omega)
       (by rw [hop8]; exact hob0') (by rw [hop8]; exact hob1')
       (by rw [hop8]; exact hob2') (by rw [hop8]; exact hob3')
       (by rw [haddr120]; omega) (by rw [haddr120]; omega)
@@ -360,10 +343,8 @@ theorem blockC_orFalse
     rw [show sp.toNat - 1024 + j = (sp - 1088#64).toNat + 0x40 + j from by rw [hspsub]; omega,
       show sp.toNat - 968 + j = (sp - 1088#64).toNat + 0x78 + j from by rw [hspsub]; omega]
     exact hcopyWin j hj
-  have hbufRepr : ValueRepr m3 N φcv (sp.toNat - 1024) vl :=
-    valueRepr_copy_total_of_writeWindow (srcAddr := sp.toNat - 968) (dstAddr := sp.toNat - 1024)
-      hm3_copy hm3_out
-      (fun p s hp k hk => hBE.pay_disj p s hvalSub' hp k hk) hvalSub'
+  have hbufRepr : TruthyHeaderRepr m3 (sp.toNat - 1024) vl :=
+    truthyHeaderRepr_copy_total hm3_copy (truthyHeaderRepr_of_valueRepr hvalSub')
   -- code image survives the buffer scribble.
   have hcode_m3 : Eval_exprLoaded m3 :=
     loaded_eval_expr_agreeP c.σ.mem m3
@@ -434,16 +415,16 @@ theorem blockC_orFalse
     rw [BitVec.toNat_sub]; have h1024 : (1024#64 : BitVec 64).toNat = 1024 := by decide
     rw [h1024]; have := sp.isLt; omega
   have hTruthyReg : TruthyRegion (sp - 1024#64) :=
-    ⟨by rw [hbufNat]; omega, by rw [hbufNat]; have := hBE.buf_lo; omega,
-     by rw [hbufNat]; omega, by rw [hbufNat, htoh]; have := hBE.buf_win; rw [htoh] at this; omega⟩
+    ⟨by rw [hbufNat]; omega, by rw [hbufNat]; have := hBufExtras.buf_lo; omega,
+     by rw [hbufNat]; omega, by rw [hbufNat, htoh]; have := hBufExtras.buf_win; rw [htoh] at this; omega⟩
   have hrettgt_t : (BitVec.update ((0x80003994#64 : BitVec 64) + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 := by decide
-  have hbufRepr' : ValueRepr m3 N φcv (sp - 1024#64).toNat vl := by rw [hbufNat]; exact hbufRepr
+  have hbufRepr' : TruthyHeaderRepr m3 (sp - 1024#64).toNat vl := by rw [hbufNat]; exact hbufRepr
   have hx10_11' : σ11.regs.get? Register.x10 = some (sp - 1024#64) := by rw [hx10_11, hbuftag]
   ------------------------------------------------------------------------
-  -- value_truthy(vl) via value_truthy_spec, buf = sp-1024, ra = 0x80003994
+  -- value_truthy(vl) via value_truthy_header_spec, buf = sp-1024, ra = 0x80003994
   ------------------------------------------------------------------------
   obtain ⟨cT, hsT, hGT, hpcT, ha0T, hraT, ⟨vmiT, hmiT⟩, htickT, hmemT, houtT, hframeT⟩ :=
-    value_truthy_spec (fun R => σ11.regs.get? R) (sp - 1024#64) (0x80003994#64) N φcv vl m3 out0
+    value_truthy_header_spec (fun R => σ11.regs.get? R) (sp - 1024#64) (0x80003994#64) N φcv vl m3 out0
       ⟨σ11, i11, c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1⟩
       ⟨hG11, hmem11e ▸ hVtruthy_m3, hmem11e, hpc11, hx10_11', hlink11, ⟨vmi11, hmi11⟩, hi11,
         hbufRepr', hTruthyReg, hrettgt_t, hout11, fun R _ => rfl⟩
@@ -489,7 +470,7 @@ theorem blockC_orFalse
     site_80003994_totb cT.σ cT.tick cT.steps (0x80003994#64) vmiT (sp - 1088#64)
       eb0 eb1 eb2 eb3 eb4 eb5 eb6 eb7 hGT hpcT' hmiT hsp_T (hmemT' ▸ hcode_m3) rfl
       (by rw [hspill0Nat]; omega) (by rw [hspill0Nat]; omega)
-      (by rw [hspill0Nat, htoh]; right; omega) (by rw [hspill0Nat]; omega)
+      (by rw [hspill0Nat, htoh]; right; omega)
       (by rw [hspill0Nat, hmemT']; simp [heb0]) (by rw [hspill0Nat, hmemT']; simp [heb1])
       (by rw [hspill0Nat, hmemT']; simp [heb2]) (by rw [hspill0Nat, hmemT']; simp [heb3])
       (by rw [hspill0Nat, hmemT']; simp [heb4]) (by rw [hspill0Nat, hmemT']; simp [heb5])
@@ -570,7 +551,7 @@ theorem blockC_orFalse
     site_80003a00_totb σ13 i13 (cT.steps + 1 + 1) (0x80003a00#64) vmi13 aExpr
       rp0 rp1 rp2 rp3 rp4 rp5 rp6 rp7 hG13 hpc13 hmi13 hx8_13 hcode_13 rfl
       (by rw [hoff24_s0]; omega) (by rw [hoff24_s0]; omega)
-      (by rw [hoff24_s0]; right; rw [htoh] at hexprWin ⊢; omega) (by rw [hoff24_s0]; have := hexprAl; omega)
+      (by rw [hoff24_s0]; right; rw [htoh] at hexprWin ⊢; omega)
       (by rw [hoff24_s0, hmem13e]; try (first | exact hr24m3_0 | exact lpin_of_present hr24m3_0)) (by rw [hoff24_s0, hmem13e]; try (first | exact hr24m3_1 | exact lpin_of_present hr24m3_1))
       (by rw [hoff24_s0, hmem13e]; try (first | exact hr24m3_2 | exact lpin_of_present hr24m3_2)) (by rw [hoff24_s0, hmem13e]; try (first | exact hr24m3_3 | exact lpin_of_present hr24m3_3))
       (by rw [hoff24_s0, hmem13e]; try (first | exact hr24m3_4 | exact lpin_of_present hr24m3_4)) (by rw [hoff24_s0, hmem13e]; try (first | exact hr24m3_5 | exact lpin_of_present hr24m3_5))
@@ -680,11 +661,18 @@ theorem blockC_orFalse
         · left; have := hSLloSp; omega
         · right; have := hspSLhi; omega)).symm
     rw [e1, e2]
+  have hCallC : EvalCallSupport c.σ.mem SL A sp :=
+    hgroundP.eval_call.transport_frame
+      (cut := sp.toNat - 1088)
+      (ret := ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)).toNat)
+      (by omega) (by rw [hsub968]; omega) hmemFrame
+  have hCallM3 : EvalCallSupport m3 SL A sp :=
+    hCallC.transport_stack (fun k hk => hm3_out k (by omega))
   have hGroundM3P : EvalGround m3 SL A sp sret aExpr.toNat (.logical .or el er) :=
-    hgroundP.transport_via hagT47 hagA47
+    hgroundP.transport_via hagT47 hagA47 hCallM3
       (hgroundP.stack_bytes_extend (hMemExt.trans hMEc_m3))
   have hpayRM3 : read64 m3 (aExpr.toNat + 24) = some aRight.toNat := by
-    rw [evalGround_ast_read64_agree_via hgroundP hagA47 (off := 24) (by omega)]
+    rw [evalGround_ast_read64_agree_via hgroundP hagA47 (off := 24) (by simp [exprReadFields])]
     exact hPayRight
   have hGroundM3R : EvalGround m3 SL A (sp - 1088#64)
       ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aRight.toNat er :=
@@ -848,7 +836,7 @@ theorem blockC_orFalse
           ⟨w20, (hframeτ3 Register.x20 (by decide)).trans hgpre20⟩,
           ⟨w21, (hframeτ3 Register.x21 (by decide)).trans hgpre21⟩⟩,
         hslotRaM3, hslotS0M3, hslotS1M3, hslotS2M3,
-        hropAl, hropLo, hropHi, hropWin, hropStk,
+        hropLo, hropHi, hropWin, hropStk,
         (by rw [haddr240]; omega), (by rw [haddr240]; omega), (by rw [haddr240]; omega),
         hSLloSp, hspSLhi, hsp16, hsphiRam, hSLlo, hSLhiRam, hSLwin,
         hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -932,7 +920,7 @@ theorem blockC_orFalse
     site_80003a10_totb cR.σ cR.tick cR.steps (0x80003a10#64) vmiR (sp - 1088#64)
       rb0 rb1 rb2 rb3 rb4 rb5 rb6 rb7 hGR hpcR hmiR hspR hcodeR rfl
       (by rw [haddr240']; omega) (by rw [haddr240']; omega)
-      (by rw [haddr240', htoh]; right; omega) (by rw [haddr240']; omega)
+      (by rw [haddr240', htoh]; right; omega)
       (by rw [haddr240']; exact hrb0) (by rw [haddr240']; exact hrb1)
       (by rw [haddr240']; exact hrb2) (by rw [haddr240']; exact hrb3)
       (by rw [haddr240']; exact hrb4) (by rw [haddr240']; exact hrb5)
@@ -955,7 +943,7 @@ theorem blockC_orFalse
     site_80003a14_totb ρ1 k1 (cR.steps + 1) (0x80003a14#64) vmiρ1 (sp - 1088#64)
       sb0 sb1 sb2 sb3 sb4 sb5 sb6 sb7 hGρ1 hpcρ1 hmiρ1 hspρ1 hcodeρ1 rfl
       (by rw [haddr248]; omega) (by rw [haddr248]; omega)
-      (by rw [haddr248, htoh]; right; omega) (by rw [haddr248]; omega)
+      (by rw [haddr248, htoh]; right; omega)
       (by rw [haddr248, hmemρ1e]; exact hsb0) (by rw [haddr248, hmemρ1e]; exact hsb1)
       (by rw [haddr248, hmemρ1e]; exact hsb2) (by rw [haddr248, hmemρ1e]; exact hsb3)
       (by rw [haddr248, hmemρ1e]; exact hsb4) (by rw [haddr248, hmemρ1e]; exact hsb5)
@@ -981,7 +969,7 @@ theorem blockC_orFalse
     site_80003a18_totb ρ2 k2 (cR.steps + 1 + 1) (0x80003a18#64) vmiρ2 (sp - 1088#64)
       tb0 tb1 tb2 tb3 tb4 tb5 tb6 tb7 hGρ2 hpcρ2 hmiρ2 hspρ2 hcodeρ2 rfl
       (by rw [haddr256]; omega) (by rw [haddr256]; omega)
-      (by rw [haddr256, htoh]; right; omega) (by rw [haddr256]; omega)
+      (by rw [haddr256, htoh]; right; omega)
       (by rw [haddr256, hmemρ2e]; exact htb0) (by rw [haddr256, hmemρ2e]; exact htb1)
       (by rw [haddr256, hmemρ2e]; exact htb2) (by rw [haddr256, hmemρ2e]; exact htb3)
       (by rw [haddr256, hmemρ2e]; exact htb4) (by rw [haddr256, hmemρ2e]; exact htb5)
@@ -1041,23 +1029,6 @@ theorem blockC_orFalse
   have hsretRnat : (sp - 944#64 : BitVec 64).toNat = sp.toNat - 944 := by
     rw [BitVec.toNat_sub]; have h944 : (944#64 : BitVec 64).toNat = 944 := by decide
     rw [h944]; have := sp.isLt; omega
-  -- The rv value at sp-944 = (sp-944#64).toNat
-  -- transport the RIGHT value to the STORE map φc2 (agree with φcvR on closures.size)
-  -- both φcvR and φc2 extend the RIGHT-call entry map φc' over st''.closures.size.
-  have hφagree : ∀ i, i < st'.store.closures.size → φcvR i = φc2 i := by
-    intro i hi; rw [hpcvR i hi, hpc2'' i hi]
-  have hφagree' : ∀ i, i < st''.store.closures.size → φcvR i = φc2 i := by
-    intro i hi; exact hφagree i (by have := hSizeC; omega)
-  have hvalRφc2 : ValueRepr cR.σ.mem N φc2 (sp.toNat - 944) vr :=
-    hVrMapCoh cR.σ.mem φcvR φc2 hφagree' hvalR848
-  have hvalRbuf : ValueRepr cR.σ.mem N φc2 (sp - 944#64).toNat vr := by rw [hsretRnat]; exact hvalRφc2
-  -- payload-disjointness for the copy at logTail: rv's payload at sretR+8 vs sp-1024 buffer
-  have hpayDisjR : ∀ (p : Nat) (s : String),
-      read64 cR.σ.mem ((sp - 944#64).toNat + 8) = some p →
-      ∀ k, k ≤ s.length → (p + k < sp.toNat - 1024 ∨ sp.toNat - 1024 + 24 ≤ p + k) := by
-    intro p s hp k hk
-    rw [hsretRnat] at hp
-    exact hPayDisjRight cR.σ.mem φc2 p s hvalRφc2 hp k hk
   ------------------------------------------------------------------------
   -- callee-saved frame from ρ4 back to `g`: ρ4 → gpre (via τ3 = gpre through the
   -- RIGHT sub-call's frame, then the ρ-loads + join `j`), then gpre → g (the bridge).
@@ -1115,7 +1086,7 @@ theorem blockC_orFalse
         code := hcodeρ4
         truthyLoaded := by rw [hmemρ4e]; exact hVtruthyLoaded_cR
         boolLoaded := by rw [hmemρ4e]; exact hVboolLoaded_cR
-        vrepr := by rw [hmemρ4e, hsretRnat]; exact hvalRφc2
+        header := by rw [hmemρ4e, hsretRnat]; exact truthyHeaderRepr_of_valueRepr hvalR848
         bK0 := by rw [hmemρ4e, hsretRnat]; exact hrb0
         bK1 := by rw [hmemρ4e, hsretRnat]; exact hrb1
         bK2 := by rw [hmemρ4e, hsretRnat]; exact hrb2
@@ -1140,10 +1111,6 @@ theorem blockC_orFalse
         bQ5 := by rw [hmemρ4e, hsretRnat, show sp.toNat - 944 + 16 + 5 = sp.toNat - 928 + 5 from by omega]; exact htb5
         bQ6 := by rw [hmemρ4e, hsretRnat, show sp.toNat - 944 + 16 + 6 = sp.toNat - 928 + 6 from by omega]; exact htb6
         bQ7 := by rw [hmemρ4e, hsretRnat, show sp.toNat - 944 + 16 + 7 = sp.toNat - 928 + 7 from by omega]; exact htb7
-        payDisj := by
-          intro p s hp k hk
-          rw [hmemρ4e, hsretRnat] at hp
-          exact hpayDisjR p s (by rw [hsretRnat]; exact hp) k hk
         store := by rw [hmemρ4e]; exact hstore2'
         storeSurv := by
           intro m' hag
@@ -1175,8 +1142,8 @@ theorem blockC_orFalse
           rw [hmemρ4e]
           exact ValueWordsTotal.mono hMemExtR
             (hGroundM3R.valueWordsTotal hgroundP.sret_inSL.1 hgroundP.sret_inSL.2)
-        bufLo := by have := hBE.buf_lo; omega
-        bufWin := by have := hBE.buf_win; rw [htoh] at this ⊢; omega
+        bufLo := by have := hBufExtras.buf_lo; omega
+        bufWin := by have := hBufExtras.buf_win; rw [htoh] at this ⊢; omega
         sretAl := hsretAl
         sretLo := hsretLo
         sretHi := hsretHi
@@ -1225,80 +1192,12 @@ theorem blockC_orFalse
 
 Mirrors `OrTrueExtras` (same arm PC, slot, LEFT-operand geometry) plus the
 RIGHT-operand fields the second eval needs (offset 24, its `ExprRepr`-survival
-and geometry, and the RIGHT-value payload/map residuals for `blockC_logTail`). -/
-structure OrFalseExtras
+and geometry) and preservation of the store-body bound after the left call. -/
+abbrev OrFalseExtras
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (st' st'' : Vsa.While.St)
-    (el er : Expr) (vl vr : Value)
-    (sp sret aExpr aLeft aRight : BitVec 64)
-    (m0 : Mem) : Prop where
-  slot7 : KindSlotPinned 7 (0x8000355c#64) m0
-  expr_survives : ∀ m' : Mem,
-    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → m0[a]? = m'[a]?) →
-    ExprRepr m' aExpr.toNat (.logical .or el er)
-  left_survives : ∀ m' : Mem,
-    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → m0[a]? = m'[a]?) →
-    ExprRepr m' aLeft.toNat el
-  right_survives : ∀ m' : Mem,
-    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) → m0[a]? = m'[a]?) →
-    ExprRepr m' aRight.toNat er
-  pay : read64 m0 (aExpr.toNat + 16) = some aLeft.toNat
-  pay_right : read64 m0 (aExpr.toNat + 24) = some aRight.toNat
-  expr24 : aExpr.toNat + 24 ≤ 0x100000000
-  expr32 : aExpr.toNat + 32 ≤ 0x100000000
-  expr24_stk : aExpr.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
-  expr32_stk : aExpr.toNat + 32 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
-  op_align : aLeft.toNat % 8 = 0
-  op_lo : 0x80000000 ≤ aLeft.toNat
-  op_hi : aLeft.toNat + 16 ≤ 0x100000000
-  op_win : tohostAddr + 16 ≤ aLeft.toNat
-  op_stk : aLeft.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aLeft.toNat
-  rop_align : aRight.toNat % 8 = 0
-  rop_lo : 0x80000000 ≤ aRight.toNat
-  rop_hi : aRight.toNat + 16 ≤ 0x100000000
-  rop_win : tohostAddr + 16 ≤ aRight.toNat
-  rop_stk : aRight.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aRight.toNat
-  sp_headroom : SL.lo + 3264 ≤ sp.toNat
-  sp_SLhi : sp.toNat ≤ SL.hi
-  sp16 : sp.toNat % 16 = 0
-  SLhi_ram : SL.hi ≤ 0x100000000
-  code_stk : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
-  vicode_stk : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec
-  table_stk : (0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ (0x80019f58 : Nat)
-  arena_stk : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
-  arena_code : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
-  arena_vi : A.hi ≤ 0x800027ec ∨ 0x8000282c ≤ A.lo
-  arena_table : A.hi ≤ jumpTableBase ∨ jumpTableBase + 44 ≤ A.lo
-  expr_align4 : aExpr.toNat % 8 = 0
-  expr_win8 : tohostAddr + 8 ≤ aExpr.toNat
-  expr_A : aExpr.toNat + 16 ≤ A.lo ∨ A.hi ≤ aExpr.toNat
-  expr_A32 : aExpr.toNat + 32 ≤ A.lo ∨ A.hi ≤ aExpr.toNat
-  expr_sub : aExpr.toNat + 16 ≤ sp.toNat - 968 ∨ sp.toNat - 968 + 24 ≤ aExpr.toNat
-  sret_inSL : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi
-  truthy_loaded : Value_truthyLoaded m0
-  bool_loaded : Value_boolLoaded m0
-  int_loaded : Value_intLoaded m0
-  intslot : IntSlotPinned m0
-  truthy_stk : sp.toNat ≤ 0x8000282c ∨ 0x8000285c ≤ SL.lo
-  boolcode_stk : sp.toNat ≤ 0x800027f8 ∨ 0x8000280c ≤ SL.lo
-  sret_boolcode : sret.toNat + 24 ≤ 0x800027f8 ∨ 0x8000280c ≤ sret.toNat
-  truthy_arena : A.hi ≤ 0x8000282c ∨ 0x8000285c ≤ A.lo
-  bool_arena : A.hi ≤ 0x800027f8 ∨ 0x8000280c ≤ A.lo
-  pay_disj : ∀ (m : Mem) (φc' : Addr → Nat) (p : Nat) (s : String),
-    ValueRepr m N φc' (sp.toNat - 968) vl → read64 m (sp.toNat - 968 + 8) = some p →
-    ∀ k, k ≤ s.length → (p + k < sp.toNat - 1024 ∨ sp.toNat - 1024 + 24 ≤ p + k)
-  pay_disj_right : ∀ (mR : Mem) (φ : Addr → Nat) (p : Nat) (s : String),
-    ValueRepr mR N φ (sp.toNat - 944) vr → read64 mR (sp.toNat - 944 + 8) = some p →
-    ∀ k, k ≤ s.length → (p + k < sp.toNat - 1024 ∨ sp.toNat - 1024 + 24 ≤ p + k)
-  vr_map_coh : ∀ (mR : Mem) (φa φb : Addr → Nat),
-    (∀ i, i < st''.store.closures.size → φa i = φb i) →
-    ValueRepr mR N φa (sp.toNat - 944) vr → ValueRepr mR N φb (sp.toNat - 944) vr
-  size_frames : st'.store.frames.size = st''.store.frames.size
-  size_closures : st'.store.closures.size = st''.store.closures.size
-  -- ITEM ZERO B1: the post-LEFT store keeps every closure body within the
-  -- per-call budget (supplied by the consuming row from the entry invariant
-  -- via spec-side preservation across the LEFT sub-derivation).
-  store_bodiesR : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget
+    (st' st'' : Vsa.While.St) (el er : Expr) (vl vr : Value)
+    (sp sret aExpr aLeft aRight : BitVec 64) (m0 : Mem) : Prop :=
+  LogicalFallthroughExtras .or N A SL st' st'' el er vl vr sp sret aExpr aLeft aRight m0
 
 /-! ## `EvalOrFalseSimGoal` — the `EvalE.orFalse` (two-eval) projection
 
@@ -1358,13 +1257,13 @@ theorem evalOrFalseSim : EvalOrFalseSimGoal := by
       (by have := hx.table_stk; simp only [jumpTableBase]; omega)
       c ⟨⟨hc.good, hc.tick, hc.pc, hc.a0, hc.a1, hc.a2, hc.ra, hc.ra_align, hc.spReg,
         hc.stackOK, hc.minstret, hc.mem, hc.code, hc.expr, hc.store, hc.store_survives, hc.out,
-        hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
+        hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_ram,
         hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint_int,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
         ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩
   have hArmCopy := hArm
   obtain ⟨_hAG, _hAtick, hApc, _hAa0, _hAs1, _hAa2, _hAsp, _hAra, _hAmi, _hAout,
-    _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxAl, _hAxLo, _hAxHi, _hAxWin,
+    _hAmem, _hAcode, _hAvi, _hAexpr, _hAstr, _hAxLo, _hAxHi, _hAxWin,
     _hAslotRa, _hAslotS0, _hAslotS1, _hAslotS2, hArmMemM0,
     hArmg8, hArmg9, hArmg18, hArmg2, _hAstore, _hAstoreSurv, hArmFrame,
     _hAsretAl, _hAsretLo, _hAsretHi, _hAsretWin, _hAsretVi, _hAsretStk, _hAsretEc,
@@ -1413,7 +1312,7 @@ theorem evalOrFalseSim : EvalOrFalseSimGoal := by
         ((hc.mem ▸ hc.ground).transport_offstack hc.table_stack_disjoint
           hx.sp_SLhi ((hc.mem ▸ hc.ground).stack_bytes_extend _hpresM) hMentM0),
         hx.expr24,
-        hx.op_align, hx.op_lo, hx.op_hi, hx.op_win, hx.op_stk,
+        hx.op_lo, hx.op_hi, hx.op_win, hx.op_stk,
         hx.sp_headroom, hx.sp_SLhi, hx.sp16, hx.SLhi_ram,
         hx.code_stk, hx.vicode_stk, (by have := hx.table_stk; omega),
         hx.arena_stk, hx.arena_code,
@@ -1472,19 +1371,12 @@ theorem evalOrFalseSim : EvalOrFalseSimGoal := by
         mcall[a]? = m'[a]?) → ExprRepr m' aRight.toNat er :=
     fun m' hag => hx.right_survives m'
       (fun a ha1 ha2 => (hAgM0 a ha1).symm.trans (hag a ha1 ha2))
-  have hBufExtras : ∀ φc' : Addr → Nat, ValueRepr c2.σ.mem N φc' (sp.toNat - 968) vl →
-      LogicalBufExtras N A SL φc' vl sp sret c2.σ.mem := by
-    intro φc' hvr
-    exact ⟨(by have := hx.op_lo; have := hx.sp_headroom; omega),
-      (by have := hx.sp_headroom; omega),
-      (fun p s hvr' hp k hk => hx.pay_disj c2.σ.mem φc' p s hvr' hp k hk)⟩
+  have hBufExtras : LogicalBufExtras sp :=
+    ⟨(by have := hx.op_lo; have := hx.sp_headroom; omega),
+      (by have := hx.sp_headroom; omega)⟩
   -- === block C: post-call two-eval tail → PreEpilogueVD .bool vr.truthy @0x800033ec ===
-  -- the entry-agreement sizes `st.store.*.size` sit under the RIGHT call's entry
-  -- state `st'` (store counts only grow; `st.store ≤ st''.store = st'.store` sized).
+  have hleftMono := evalE_store_mono hEl
   have hmono := evalE_store_mono _hEvalE
-  have hnf : st.store.frames.size ≤ st'.store.frames.size ∧
-      st.store.closures.size ≤ st'.store.closures.size :=
-    ⟨hx.size_frames ▸ hmono.1, hx.size_closures ▸ hmono.2⟩
   obtain ⟨c3, hs3, mpreC, φfe, φce, outF, hpfe, hpce, hPreD⟩ :=
     blockC_orFalse (fun R => c1.σ.regs.get? R) g N A SL φf φc
       st.store.frames.size st.store.closures.size st' st'' d env vl vr
@@ -1492,15 +1384,14 @@ theorem evalOrFalseSim : EvalOrFalseSimGoal := by
       (hc.env_valid.mono (evalE_store_mono hEl).1)
       (hc.envset_defined_frame hbridge)
       hc.env_valid
-      hx.size_frames hx.size_closures hnf
+      hleftMono
       c2 ⟨mcall, hSubR, hEnvSlotMcall, hgpre_x8, hAEx18, hExprMcall, hPayRightMcall, hMemExtM0mc,
         -- WAVE 47i: the parent ground at the pre-call memory (ONE kit call).
         ((hc.mem ▸ hc.ground).transport_offstack hc.table_stack_disjoint
           hx.sp_SLhi ((hc.mem ▸ hc.ground).stack_bytes_extend hMemExtM0mc) hAgM0),
-        hx.expr_align4, hc.expr_ram.1, hc.expr_ram.2, hx.expr32, hx.expr_win8,
+        hc.expr_ram.1, hc.expr_ram.2, hx.expr32, hx.expr_win8,
         hc.expr_stack_disjoint, hx.expr32_stk, hx.expr_A, hx.expr_A32, hx.expr_sub,
-        hRightSurvMcall, hx.rop_align, hx.rop_lo, hx.rop_hi, hx.rop_win, hx.rop_stk,
-        hx.pay_disj_right, hx.vr_map_coh,
+        hRightSurvMcall, hx.rop_lo, hx.rop_hi, hx.rop_win, hx.rop_stk,
         houtStr, hc.sret_align, hc.sret_ram.1, hc.sret_ram.2, hc.sret_win,
         hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hx.sret_boolcode,
         hc.ra_align, (by have := hx.sp_headroom; omega), hc.stack_ram.1, hc.stack_win,

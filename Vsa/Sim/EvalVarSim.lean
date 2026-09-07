@@ -1,3 +1,4 @@
+import Vsa.Sim.RamReadPins
 import Vsa.Sim.EvalStrSim
 import Vsa.Sim.EnvGetSpec4
 import Vsa.Sim.DecodeTable.Batch16Part07
@@ -109,7 +110,6 @@ theorem site_80003434_var
     (hhiram : (vexpr + sign_extend (m := 64) (0x008#12)).toNat + 8 ≤ 0x100000000)
     (hhtif : (vexpr + sign_extend (m := 64) (0x008#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (vexpr + sign_extend (m := 64) (0x008#12)).toNat)
-    (halign : (vexpr + sign_extend (m := 64) (0x008#12)).toNat % 8 = 0)
     (h0 : σ.mem[(vexpr + sign_extend (m := 64) (0x008#12)).toNat]? = some b0)
     (h1 : σ.mem[(vexpr + sign_extend (m := 64) (0x008#12)).toNat + 1]? = some b1)
     (h2 : σ.mem[(vexpr + sign_extend (m := 64) (0x008#12)).toNat + 2]? = some b2)
@@ -140,7 +140,7 @@ theorem site_80003434_var
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
-    (exec_ld σ (0x80003434#64) (0x008#12) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x0b#5)
+    (exec_ld_ram_bytes σ (0x80003434#64) (0x008#12) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x0b#5)
       (sigma3_alu σ (0x80003434#64) Register.x11
         (sign_extend (m := 64)
           ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0)
@@ -149,7 +149,7 @@ theorem site_80003434_var
       (wX_bits_x11 _ (sign_extend (m := 64)
         ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0)
           : BitVec (8 * 8))))
-      hlo hhiram hhtif halign h0 h1 h2 h3 h4 h5 h6 h7)
+      hlo hhiram hhtif h0 h1 h2 h3 h4 h5 h6 h7)
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
@@ -1521,7 +1521,6 @@ structure EvalVarEntry
   frame : ∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R
   code_stack_disjoint : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
   expr_stack_disjoint : aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
-  expr_align : aExpr.toNat % 8 = 0
   expr_ram : 0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000
   expr_win : tohostAddr + 16 ≤ aExpr.toNat
   /-- The var-name CString bytes `[p, p + x.length]` (at `p = read64 m0 (aExpr+8)`)
@@ -1624,7 +1623,7 @@ theorem evalVarSim : EvalVarSimGoal := by
       (by have := hc.table_stack_disjoint; simp only [jumpTableBase]; omega)
       c ⟨⟨hc.good, hc.tick, hc.pc, hc.a0, hc.a1, hc.a2, hc.ra, hc.ra_align, hc.spReg,
       hc.stackOK, hc.minstret, hc.mem, hc.code, hc.expr, hc.store, hc.store_survives, hc.out,
-      hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
+      hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_ram,
       hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
       hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
       ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩

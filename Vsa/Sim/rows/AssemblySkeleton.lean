@@ -81,7 +81,7 @@ abbrev SkelHVar (L : Layout) : Prop :=
 abbrev SkelHAssign (L : Layout) : Prop :=
   ∀ st d env x e st' v store'', AssignResidualExtension st d env x e st' v store''
 
-/-- HOLE `hIAdd` — `hBinary` add int-cell. -/
+/-- HOLE `hIAdd` — Integer-add tail supplier. The generated row derives binary entry facts from `EvalEntry`; reached operator, code, and result geometry remain.. -/
 abbrev SkelHIAdd (L : Layout) : Prop :=
   BinIntCell .add Vsa.Sim.AddResid (fun _ _ => True)
 

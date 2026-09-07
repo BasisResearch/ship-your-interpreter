@@ -89,7 +89,7 @@ private partial def cfSolve (h : Term) (prefixStr : String) (g : MVarId) :
     TacticM (List MVarId) := do
   let decodeName (w : Nat) : String := "Vsa.Sim.DecodeTable.decode_" ++ cfHexName w
   let pinName (pc : Nat) : String := prefixStr ++ cfHexName pc
-  let ty ← instantiateMVars (← g.getType)
+  let ty := (← instantiateMVars (← g.getType)).consumeMData
   match ty.getAppFn.constName? with
   | some ``And =>
       let gs ← g.apply (← mkConstWithFreshMVarLevels ``And.intro)

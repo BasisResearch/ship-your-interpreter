@@ -39,16 +39,14 @@ theorem execWhileBodyCall_facts
   change ((0x80000000 ≤ (aStmt + sign_extend (m := 64) (0x010#12)).toNat ∧
     (aStmt + sign_extend (m := 64) (0x010#12)).toNat + 8 ≤ 0x100000000 ∧
     ((aStmt + sign_extend (m := 64) (0x010#12)).toNat + 8 ≤ tohostAddr ∨
-      tohostAddr + 8 ≤ (aStmt + sign_extend (m := 64) (0x010#12)).toNat) ∧
-    (aStmt + sign_extend (m := 64) (0x010#12)).toNat % 8 = 0) ∧
+      tohostAddr + 8 ≤ (aStmt + sign_extend (m := 64) (0x010#12)).toNat)) ∧
     LPins8 m (aStmt + sign_extend (m := 64) (0x010#12)).toNat
       (execWhileWordLds m (aStmt.toNat + 16)))
   rw [haddr]
-  refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+  refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
   · have := region.lo_ram; have := hnode.lo_le; omega
   · have := region.hi_ram; have := hnode.hi_ge; omega
   · right; have := region.win; have := hnode.lo_le; omega
-  · have := hnode.align; omega
   · simp only [execWhileWordLds, LPins8, List.getD_cons_zero,
       List.getD_cons_succ]
     trivial
@@ -229,7 +227,6 @@ theorem execWhileBodyEntry_of_stage
         stack_ram := h.carrier.stack_ram
         stack_win := h.carrier.stack_win
         stmt_stack_disjoint := ?_
-        stmt_align := hnode.align
         stmt_ram := ?_
         stmt_win := ?_
         spill_defined := ⟨⟨_, h8⟩, ⟨_, h9⟩, ⟨_, h18⟩, ⟨_, h19⟩⟩

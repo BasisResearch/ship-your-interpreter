@@ -54,9 +54,14 @@ import subprocess
 import sys
 import tempfile
 
+if __package__:
+    from .statement_fuzz import classify as classify_lean_proof, checked_backend
+else:
+    from statement_fuzz import classify as classify_lean_proof, checked_backend
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-LOGDIR = os.path.join(ROOT, "experiments", "logs")
+LOGDIR = os.path.join(tempfile.gettempdir(), "vsa-smt-check")
 LOG = os.path.join(tempfile.gettempdir(), "vsa-smt-check.log")
 AX_OK = {"propext", "Classical.choice", "Quot.sound"}
 W64 = 2 ** 64
@@ -83,18 +88,29 @@ OPAQUE_HEADS = ("ValueRepr", "ExprRepr", "CString", "GoodState", "Repr",
 # ==========================================================================
 
 def run_lean(src, timeout=600, env=None):
+    try:
+        checked_backend()
+    except Exception as error:
+        return 2, f"BACKEND-INVALID: {error}"
     os.makedirs(LOGDIR, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", suffix=".lean", dir=LOGDIR,
                                      delete=False) as f:
         f.write(src)
         path = f.name
     try:
-        r = subprocess.run(["lake", "env", "lean", path], cwd=ROOT,
+        r = subprocess.run(["lake", "env", "sh", "-c",
+                            'LEAN_PATH="$1${LEAN_PATH:+:$LEAN_PATH}" lean "$2"',
+                            "validation-probe",
+                            os.pathsep.join(filter(None, [os.environ.get("VSA_PRIVATE_BUILD", ""),
+                                (env or {}).get("LEAN_PATH", "")])), path], cwd=ROOT,
                            capture_output=True, text=True, timeout=timeout,
                            env=env)
+        checked_backend()
         return r.returncode, r.stdout + r.stderr
     except subprocess.TimeoutExpired:
         return 124, "TIMEOUT"
+    except Exception as error:
+        return 2, f"BACKEND-INVALID: {error}"
     finally:
         try:
             os.unlink(path)
@@ -103,15 +119,35 @@ def run_lean(src, timeout=600, env=None):
 
 
 def run_z3(smt, timeout_ms=20000):
+    if timeout_ms <= 0:
+        raise ValueError("solver timeout must be positive")
+    os.makedirs(LOGDIR, exist_ok=True)
+    # Request a model only after SAT. A get-model error after UNSAT must not
+    # make it necessary to ignore solver errors or nonzero process status.
+    query = re.sub(r"(?m)^\s*\(get-model\)\s*$", "", smt)
     with tempfile.NamedTemporaryFile("w", suffix=".smt2", dir=LOGDIR,
                                      delete=False) as f:
-        f.write(smt)
+        f.write(query)
         path = f.name
     try:
         r = subprocess.run(["z3", f"-T:{timeout_ms // 1000 + 1}", path],
                            capture_output=True, text=True,
                            timeout=timeout_ms / 1000 + 5)
-        return r.stdout + r.stderr
+        if r.returncode != 0 or r.stderr.strip() or "(error" in r.stdout:
+            return f"SOLVER-ERROR exit={r.returncode}: {r.stdout}{r.stderr}"
+        statuses = re.findall(r"(?m)^(sat|unsat|unknown)\s*$", r.stdout)
+        if len(statuses) != 1:
+            return "SOLVER-ERROR: missing or multiple check-sat results"
+        if statuses[0] == "sat" and query != smt:
+            with open(path, "w") as stream:
+                stream.write(smt)
+            r = subprocess.run(["z3", f"-T:{timeout_ms // 1000 + 1}", path],
+                               capture_output=True, text=True,
+                               timeout=timeout_ms / 1000 + 5)
+            if (r.returncode != 0 or r.stderr.strip() or "(error" in r.stdout
+                    or re.findall(r"(?m)^(sat|unsat|unknown)\s*$", r.stdout) != ["sat"]):
+                return f"SOLVER-ERROR model: {r.stdout}{r.stderr}"
+        return r.stdout
     except FileNotFoundError:
         return "Z3-ABSENT"
     except subprocess.TimeoutExpired:
@@ -132,15 +168,16 @@ def _build_olean(src, olean, log=None):
     if missing/stale.  Returns True on success."""
     if not os.path.exists(src):
         return False
-    if (os.path.exists(olean) and
-            os.path.getmtime(olean) >= os.path.getmtime(src)):
-        return True
     os.makedirs(OLEAN_DIR, exist_ok=True)
     try:
+        checked_backend()
         r = subprocess.run(
-            ["lake", "env", "lean", "-o", olean, "--root", SMT_DIR, src],
+            ["lake", "env", "sh", "-c",
+             'LEAN_PATH="$1${LEAN_PATH:+:$LEAN_PATH}" lean -o "$2" --root "$3" "$4"',
+             "smt-support", os.environ.get("VSA_PRIVATE_BUILD", ""), olean, SMT_DIR, src],
             cwd=ROOT, capture_output=True, text=True, timeout=400)
-    except (subprocess.TimeoutExpired, OSError):
+        checked_backend()
+    except Exception:
         return False
     ok = r.returncode == 0 and os.path.exists(olean)
     if not ok and log:
@@ -836,10 +873,8 @@ def smt_check(mode, path, prop, log, timeout_ms=20000):
     # Scope: the Lean dump is used for --refute, where a spurious SAT cannot
     # yield a false green — the machine-checked Lean replay gates the verdict
     # (SAT-without-replay ⇒ ENCODING-GAP, reported loudly).  --validate's
-    # VALID-IN-FRAGMENT is an advisory SOUNDNESS claim (UNSAT of the negation);
-    # it is left on the Python encoder whose fragment is the one the acceptance
-    # battery certified, so a looser Lean over-approximation cannot silently
-    # weaken a VALID verdict.
+    # VALID-IN-FRAGMENT describes only the Python encoding. Its translation
+    # is not a Lean proof, and acceptance examples do not certify all inputs.
     enc_path = "python"
     ctx = None
     smt_neg = None                 # full SMT text for the negated-statement query
@@ -866,11 +901,19 @@ def smt_check(mode, path, prop, log, timeout_ms=20000):
             smt = build_smt(ctx, hyps)
             out = run_z3(smt, timeout_ms)
             sat = out.strip().startswith("sat")
-            v = "NON-VACUOUS" if sat else ("VACUOUS" if out.strip().startswith("unsat") else "UNKNOWN")
+            v = ("NON-VACUOUS-MODULO-OPAQUE" if ctx.opaque else "NON-VACUOUS") if sat else ("VACUOUS" if out.strip().startswith("unsat") else "UNKNOWN")
             model = parse_model(out) if sat else {}
             line = f"- `{prop}` → **{v}**" + (f" — witness {_short(model)}" if model else "")
             print(line); log.write(line + "\n"); log.flush()
             return v, model
+
+        if mode == "validate":
+            consistency = run_z3(build_smt(ctx, hyps, get_model=False), timeout_ms).strip()
+            if consistency != "sat":
+                verdict = "VACUOUS" if consistency == "unsat" else "UNKNOWN"
+                line = f"- `{prop}` → **{verdict}** (premise consistency: {consistency})"
+                print(line); log.write(line + "\n"); log.flush()
+                return verdict, None
 
         # refute / validate both negate the statement: (∧ hyps) ∧ ¬concl SAT?
         neg = ["(and " + " ".join(hyps) + ")"] if hyps else []
@@ -883,7 +926,7 @@ def smt_check(mode, path, prop, log, timeout_ms=20000):
 
     if mode == "validate":
         if first == "unsat":
-            v = "VALID-IN-FRAGMENT"
+            v = "VALID-MODULO-OPAQUE" if ctx.opaque else "VALID-IN-FRAGMENT"
             note = f" (opaque: {sorted(ctx.opaque)})" if ctx.opaque else ""
         elif first == "sat":
             v = "REFUTABLE"; note = " (negation SAT — not valid)"
@@ -895,7 +938,7 @@ def smt_check(mode, path, prop, log, timeout_ms=20000):
 
     # --refute
     if first != "sat":
-        v = ("VALID-IN-FRAGMENT" if first == "unsat" else "UNKNOWN")
+        v = ("NOT-REFUTED-IN-FRAGMENT" if first == "unsat" else "UNKNOWN")
         line = f"- `{prop}` → **NOT-REFUTED / {v}** ({first}) [enc:{enc_path}]"
         print(line); log.write(line + "\n"); log.flush()
         return v, None
@@ -1097,7 +1140,6 @@ def replay_agree_general(prop, body_text, aw):
     probe = (
         f"{hdr}{rest}\n\nnamespace SmtReplayProbe\nopen Vsa.SmtReplay\n"
         f"private def m0W : Mem := (∅ : Mem).insert {A} ({V}#8)\n"
-        f"set_option maxHeartbeats 2000000 in\n"
         f"theorem refuted : ¬ {prop} := by\n"
         f"  intro H\n"
         f"{pin_line}"
@@ -1133,7 +1175,6 @@ def replay_gapagree(prop, body_text, aw):
         f"{hdr}{rest}\n\nnamespace SmtReplayProbe\nopen Vsa.SmtReplay\n"
         f"private def m0C : Mem := pop (List.range {P}) ({V}#8)\n"
         f"private def mqC : Mem := m0C.insert {A} ({W}#8)\n"
-        f"set_option maxHeartbeats 2000000 in\n"
         f"theorem refuted : ¬ {prop} := by\n"
         f"  intro H\n"
         f"  have hy0 : (∀ k, k < {P} → m0C[k]? = some ({V} : BitVec 8)) := by\n"
@@ -1200,7 +1241,6 @@ def replay_arith(path, prop, binders, chain, body_text, model):
     short = prop.split(".")[-1]
     argstr = " ".join(args)
     probe = (f"{body_text}\n\nnamespace SmtReplayProbe\n"
-             f"set_option maxHeartbeats 1000000 in\n"
              f"theorem refuted : ¬ {prop} := by\n"
              f"  intro H\n"
              f"  have h := H {argstr}\n"
@@ -1261,7 +1301,6 @@ def replay_mem(path, prop, binders, chain, body_text, model, cls):
     probe = (
         f"{hd}{body_text}\n\nnamespace SmtReplayProbe\n"
         f"private def m0W : Mem := (∅ : Mem).insert {A} (0#8)\n"
-        f"set_option maxHeartbeats 1000000 in\n"
         f"theorem refuted : ¬ {prop} := by\n"
         f"  intro H\n"
         f"  have hagree : (∀ a : Nat, ¬ (({lo} : Nat) ≤ a ∧ a < ({HI} : Nat)) "
@@ -1292,19 +1331,8 @@ def _run_replay(probe):
         ensure_support_olean()
         env = _lean_path_env()
     rc, out = run_lean(probe, env=env)
-    if rc != 0:
-        return "GAP", (out.strip().splitlines()[-1] if out.strip() else "?"), probe
-    if "sorryAx" in out:
-        return "GAP", "sorry inserted (replay incomplete)", probe
-    m = re.search(r"depends on axioms: \[([^\]]*)\]", out)
-    if m:
-        ax = {a.strip() for a in m.group(1).split(",") if a.strip()}
-        if ax <= AX_OK:
-            return "REPLAYED", "axioms=" + ", ".join(sorted(ax)), probe
-        return "GAP", "dirty axioms " + ", ".join(sorted(ax)), probe
-    if "does not depend on any axioms" in out:
-        return "REPLAYED", "(axiom-free)", probe
-    return "GAP", "no #print axioms output", probe
+    verdict, detail = classify_lean_proof(rc, out, "SmtReplayProbe.refuted")
+    return ("REPLAYED" if verdict == "REFUTED" else "GAP"), detail, probe
 
 
 # helpers ------------------------------------------------------------------
@@ -1458,7 +1486,7 @@ def joint_inhabit(path, prop, log, timeout_ms=20000):
     smt = build_smt(ctx, hyps + core, get_model=True)
     out = run_z3(smt, timeout_ms)
     first = out.strip().split("\n", 1)[0].strip()
-    n_enc, n_op = len(core), len(opaque)
+    n_enc, n_op = len(core), len(opaque) + sum(h is None for h in enc_hyps) + len(ctx.opaque)
     if first == "sat":
         model = parse_model(out)
         v = "JOINTLY-INHABITABLE" + ("-MODULO-OPAQUE" if n_op else "")
@@ -1480,7 +1508,12 @@ def joint_inhabit(path, prop, log, timeout_ms=20000):
 def _implies_check(ctx, ant_list, cons, log, timeout_ms):
     """UNSAT of (∧ ant) ∧ ¬cons ⇒ the implication HOLDS-IN-FRAGMENT.  Returns
     ('HOLDS'|'FAILS'|'UNKNOWN', model_or_None)."""
-    ants = [a for a in ant_list if a is not None]
+    if None in ant_list or ctx.opaque:
+        return "MODULO-OPAQUE", None
+    ants = list(ant_list)
+    consistency = run_z3(build_smt(ctx, ants, get_model=False), timeout_ms).strip()
+    if consistency != "sat":
+        return ("VACUOUS" if consistency == "unsat" else "UNKNOWN"), None
     neg = (["(and " + " ".join(ants) + ")"] if ants else []) + [f"(not {cons})"]
     smt = build_smt(ctx, neg, get_model=True)
     out = run_z3(smt, timeout_ms)
@@ -1523,13 +1556,13 @@ def producer_check(path, prop, producer_post, log, timeout_ms=20000,
                 line = (f"  - `{_c(f)}` → **PRODUCER-FAILS** — post does NOT "
                         f"supply it; CTI {_short(model or {})}")
             elif rc == "HOLDS":
-                verdicts[f] = "HOLDS"
-                line = f"  - `{_c(f)}` → **HOLDS** (post ⇒ conjunct)"
+                verdicts[f] = "MODULO-OPAQUE" if None in ant or ctx.opaque else "HOLDS"
+                line = f"  - `{_c(f)}` → **{verdicts[f]}** (post ⇒ conjunct)"
             else:
-                verdicts[f] = "UNKNOWN"; line = f"  - `{_c(f)}` → **UNKNOWN**"
+                verdicts[f] = rc; line = f"  - `{_c(f)}` → **{rc}**"
         print(line); log.write(line + "\n")
     log.flush()
-    return ("PRODUCER-FAILS" if "FAILS" in verdicts.values() else "OK"), verdicts
+    return ("APPROX-TRACE" if approx else implication_status(verdicts, "PRODUCER-FAILS")), verdicts
 
 
 def consumer_check(path, prop, demands, log, timeout_ms=20000):
@@ -1542,8 +1575,7 @@ def consumer_check(path, prop, demands, log, timeout_ms=20000):
         v = f"- `{prop}` → **ENCODE-FAIL** (target not found)"
         print(v); log.write(v + "\n"); log.flush(); return "ENCODE-FAIL", {}
     enc_hyps, enc_fields, opaque = _encode_conjuncts(fields, ctx, hyp_texts)
-    ant = [h for h in enc_hyps if h is not None] + \
-          [e for _, e in enc_fields if e is not None]
+    ant = list(enc_hyps) + [e for _, e in enc_fields]
     print(f"== consumer-check `{prop}` =="); log.write(
         f"\n### consumer-check `{prop}`\n")
     verdicts = {}
@@ -1559,13 +1591,19 @@ def consumer_check(path, prop, demands, log, timeout_ms=20000):
                 line = (f"  - demand `{_c(d)}` → **CONSUMER-FAILS** — structure "
                         f"too weak; CTI {_short(model or {})}")
             elif rc == "HOLDS":
-                verdicts[d] = "HOLDS"
-                line = f"  - demand `{_c(d)}` → **SATISFIED** (structure ⇒ demand)"
+                verdicts[d] = "MODULO-OPAQUE" if opaque or None in enc_hyps or ctx.opaque else "HOLDS"
+                line = f"  - demand `{_c(d)}` → **{verdicts[d]}** (structure ⇒ demand)"
             else:
-                verdicts[d] = "UNKNOWN"; line = f"  - demand `{_c(d)}` → **UNKNOWN**"
+                verdicts[d] = rc; line = f"  - demand `{_c(d)}` → **{rc}**"
         print(line); log.write(line + "\n")
     log.flush()
-    return ("CONSUMER-FAILS" if "FAILS" in verdicts.values() else "OK"), verdicts
+    return implication_status(verdicts, "CONSUMER-FAILS"), verdicts
+
+
+def implication_status(verdicts, failure):
+    if "FAILS" in verdicts.values():
+        return failure
+    return "OK" if verdicts and all(v == "HOLDS" for v in verdicts.values()) else "INCOMPLETE"
 
 
 def _c(s):
@@ -1740,6 +1778,9 @@ def acceptance(log):
             v, _ = smt_check("validate", pth, prop, log)
             results["d_" + os.path.basename(pth)] = v
             d_ok = d_ok and (v == "VALID-IN-FRAGMENT")
+        else:
+            d_ok = False
+            results["d_" + os.path.basename(pth)] = "MISSING-FIXTURE"
     # a hermetic budget-ladder candidate (falsity-#13 cured form: consumed ≤ budget)
     d_budget = r"""namespace SmtAcc
 def BudgetLadderOk : Prop :=
@@ -1763,13 +1804,13 @@ end SmtAcc
 
     # gate
     def is_refuted(v):
-        return v in ("REFUTED-REPLAYED", "REFUTED-MODULO-OPAQUE", "REFUTED-Z3-ONLY")
+        return v == "REFUTED-REPLAYED"
     replayed = sum(1 for k in ("a_headroom", "b_memext", "b_presence", "c_binarm")
                    if results.get(k) == "REFUTED-REPLAYED")
     a_ok = is_refuted(va)
     b_ok = is_refuted(vb1) and is_refuted(vb2)
     c_ok = is_refuted(vc)
-    e_ok = (ve1 != "REFUTED-REPLAYED") and (ve2 != "REFUTED-REPLAYED")
+    e_ok = ve1 == "NOT-REFUTED-IN-FRAGMENT" and ve2 == "NOT-REFUTED-IN-FRAGMENT"
 
     log.write("\n### Acceptance verdicts\n")
     for k, v in results.items():
@@ -1839,7 +1880,7 @@ def joint_acceptance(log):
     # -- (d) 48g three-cure recipe: joint SAT + producer HOLDS all + consumer OK
     print("\n== (d) 48g three-cure recipe (sound design) ==")
     rcJ, jm = joint_inhabit(f, "JointFix.TargetD", log)
-    d_sat = rcJ.startswith("JOINTLY-INHABITABLE")
+    d_sat = rcJ == "JOINTLY-INHABITABLE"
     # recipe-consistent producer supplies ALL four conjuncts
     postD = ["SL.lo + 4352 ≤ sp.toNat", "∃ b, m0[slotAddr]? = some b",
              "∀ a : Nat, sp.toNat - 1120 ≤ a → a < sp.toNat → (∃ b, mcall[a]? = some b)",
@@ -1847,8 +1888,8 @@ def joint_acceptance(log):
     rcPD, vpd = producer_check(f, "JointFix.TargetD", postD, log)
     demD = ["∃ w, mcall[x13slot]? = some w"]
     rcCD, vcd = consumer_check(f, "JointFix.TargetD", demD, log)
-    prod_ok = "FAILS" not in vpd.values()
-    cons_ok = "FAILS" not in vcd.values()
+    prod_ok = rcPD == "OK" and bool(vpd) and all(v == "HOLDS" for v in vpd.values())
+    cons_ok = rcCD == "OK" and bool(vcd) and all(v == "HOLDS" for v in vcd.values())
     d_ok = d_sat and prod_ok and cons_ok
     results["d"] = ("PASS" if d_ok else "MISS", rcJ, dict(prod=rcPD, cons=rcCD))
 
@@ -1869,6 +1910,17 @@ def joint_acceptance(log):
 # ==========================================================================
 # main
 # ==========================================================================
+
+def verdict_exit_status(mode, verdict):
+    expected = {
+        "validate": {"VALID-IN-FRAGMENT"},
+        "inhabit": {"NON-VACUOUS"},
+        "refute": {"REFUTED-REPLAYED", "NOT-REFUTED-IN-FRAGMENT"},
+        "joint": {"JOINTLY-INHABITABLE"},
+        "implication": {"OK"},
+    }
+    return 0 if verdict in expected[mode] else 1
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -1896,6 +1948,12 @@ def main():
     ap.add_argument("--prop")
     ap.add_argument("--timeout", type=int, default=20000, help="z3 timeout (ms)")
     args = ap.parse_args()
+    basic_modes = sum((args.refute, args.validate, args.inhabit, args.acceptance, args.joint))
+    joint_queries = bool(args.joint_inhabit or args.producer or args.post or args.prod_traces or args.consumer_check)
+    if basic_modes > 1 or (basic_modes and joint_queries):
+        ap.error("select one validation mode or a set of joint queries")
+    if args.timeout <= 0:
+        ap.error("--timeout must be positive")
 
     os.makedirs(LOGDIR, exist_ok=True)
     with open(LOG, "a") as log:
@@ -1905,25 +1963,30 @@ def main():
         if args.joint:
             sys.exit(0 if joint_acceptance(log) else 1)
         # single joint queries
-        if args.joint_inhabit or args.producer or args.prod_traces \
+        if args.joint_inhabit or args.producer or args.post or args.prod_traces \
                 or args.consumer_check:
             if not (args.file and args.prop):
                 ap.error("joint queries need --file <mod.lean> --prop <Ns.T>")
+            statuses = []
             if args.joint_inhabit:
-                joint_inhabit(args.file, args.prop, log, args.timeout)
+                verdict, _ = joint_inhabit(args.file, args.prop, log, args.timeout)
+                statuses.append(verdict_exit_status("joint", verdict))
             if args.producer or args.post:
                 post = ([p.strip() for p in args.post.split(";")]
                         if args.post else _post_of_module(args.producer, log))
-                producer_check(args.file, args.prop, post, log, args.timeout)
+                verdict, _ = producer_check(args.file, args.prop, post, log, args.timeout)
+                statuses.append(verdict_exit_status("implication", verdict))
             if args.prod_traces:
                 post = _traces_post(args.prod_traces)
-                producer_check(args.file, args.prop, post, log, args.timeout,
-                               approx=True)
+                verdict, _ = producer_check(args.file, args.prop, post, log, args.timeout,
+                                            approx=True)
+                statuses.append(1)  # trace approximations do not validate the producer
             if args.consumer_check:
                 dem = ([d.strip() for d in args.demands.split(";")]
                        if args.demands else _harvest_demands(args.file, args.prop))
-                consumer_check(args.file, args.prop, dem, log, args.timeout)
-            return
+                verdict, _ = consumer_check(args.file, args.prop, dem, log, args.timeout)
+                statuses.append(verdict_exit_status("implication", verdict))
+            return max(statuses, default=1)
         mode = ("refute" if args.refute else "validate" if args.validate
                 else "inhabit" if args.inhabit else None)
         if mode is None:
@@ -1931,8 +1994,9 @@ def main():
                      "--acceptance / --joint")
         if not (args.file and args.prop):
             ap.error(f"--{mode} needs --file <mod.lean> --prop <Ns.P>")
-        smt_check(mode, args.file, args.prop, log, args.timeout)
+        verdict, _ = smt_check(mode, args.file, args.prop, log, args.timeout)
+        return verdict_exit_status(mode, verdict)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

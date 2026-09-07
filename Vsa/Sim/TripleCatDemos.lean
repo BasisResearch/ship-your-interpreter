@@ -103,7 +103,7 @@ theorem bridgeNamesToVals_wired_dimap
 `ArmPostGeom.armPostGeomV_of_ltResid` and `ltResid_of_armPostGeomV` are a landed adapter
 PAIR (`X_of_Y` + `Y_of_X`).  They are exactly the two directions of an iso of predicates.
 `ltResid_armPostGeomV_iso` bundles them into ONE `PredIso`; the parameters
-`(gpre,N,A,SL,sp,r,sret,aExpr,Wl)` are fixed and the predicates range over the config
+`(gpre,N,A,SL,sp,r,sret,aExpr)` are fixed and the predicates range over the config
 `c'`.  `transportLtResid` then re-expresses any `Triple` whose precondition is `LtResid`
 in terms of `ArmPostGeomV` via `PredIso.transportPre` — replacing a hand `Triple.conseq …
 (fun c h => armPostGeomV_of_ltResid h) …`. -/
@@ -112,10 +112,10 @@ in terms of `ArmPostGeomV` via `PredIso.transportPre` — replacing a hand `Trip
 theorem ltResid_armPostGeomV_iso
     (gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (sp r sret aExpr Wl : BitVec 64) :
-    PredIso (fun c' => LtResid gpre N A SL sp r sret aExpr Wl c')
+    (sp r sret aExpr : BitVec 64) :
+    PredIso (fun c' => LtResid gpre N A SL sp r sret aExpr c')
       (fun c' => ArmPostGeomV gpre N A SL 20 LtSlotPinned Value_boolLoaded
-        0x800027f8 0x8000280c 4 sp r sret aExpr Wl c') :=
+        0x800027f8 0x8000280c 4 sp r sret aExpr c') :=
   ⟨fun _ h => armPostGeomV_of_ltResid h, fun _ h => ltResid_of_armPostGeomV h⟩
 
 /-- Transport a `Triple` off `LtResid` onto `ArmPostGeomV` via the iso — one
@@ -123,11 +123,11 @@ theorem ltResid_armPostGeomV_iso
 theorem transportLtResid
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {R : Config → Prop}
-    (t : Triple (fun c' => LtResid gpre N A SL sp r sret aExpr Wl c') R) :
+    {sp r sret aExpr : BitVec 64} {R : Config → Prop}
+    (t : Triple (fun c' => LtResid gpre N A SL sp r sret aExpr c') R) :
     Triple (fun c' => ArmPostGeomV gpre N A SL 20 LtSlotPinned Value_boolLoaded
-        0x800027f8 0x8000280c 4 sp r sret aExpr Wl c') R :=
-  (ltResid_armPostGeomV_iso gpre N A SL sp r sret aExpr Wl).transportPre t
+        0x800027f8 0x8000280c 4 sp r sret aExpr c') R :=
+  (ltResid_armPostGeomV_iso gpre N A SL sp r sret aExpr).transportPre t
 
 #print axioms callSegConseq_dimap
 #print axioms bridgeNamesToVals_wired_dimap

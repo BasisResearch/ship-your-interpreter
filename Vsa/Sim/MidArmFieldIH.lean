@@ -108,8 +108,7 @@ def MidArmRightMarshal
   read64 cL.σ.mem (sp.toNat - 32) = some v18.toNat ∧
   -- BinExtras-shaped right-operand geometry:
   aExpr.toNat + 32 ≤ 0x100000000 ∧ 0x80000000 ≤ aExpr.toNat ∧
-  aExpr.toNat % 8 = 0 ∧ tohostAddr + 32 ≤ aExpr.toNat ∧
-  aROp.toNat % 8 = 0 ∧
+  tohostAddr + 32 ≤ aExpr.toNat ∧
   (0x80000000 ≤ aROp.toNat ∧ aROp.toNat + 16 ≤ 0x100000000) ∧
   tohostAddr + 16 ≤ aROp.toNat ∧
   (aROp.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aROp.toNat) ∧
@@ -159,7 +158,7 @@ theorem midStage1_of_marshal
     henvValid, henvRead, henvset,
     hnode, hstoreCL, hstoreSurvCL, hexprSurvCL, hviCL, hviSlotCL, hnbsCL,
     hslotRaL, hslotS0L, hslotS1L, hslotS2L,
-    hnode_hi, hnode_lo, hnode_align, hnode_win, hrop_align, hrop_ram, hrop_win,
+    hnode_hi, hnode_lo, hnode_win, hrop_ram, hrop_win,
     hrop_stk, hrop_stkfull, hsp1088, hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam,
     hSLwin, hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
     hstackBudgetR, hexprBodiesR, hstoreBodiesR, hGroundR_CL⟩ := hM
@@ -167,7 +166,7 @@ theorem midStage1_of_marshal
     v8 v9 v18 cL hGL htickL hpcL hs1L hspL hmiL houtStrL hframeL hx8L hx18L hgx8v hgx18v
     henvValid henvRead henvset
     hcodeL hnode hstoreCL hstoreSurvCL hexprSurvCL hviCL hviSlotCL hnbsCL hslotRaL hslotS0L
-    hslotS1L hslotS2L hnode_hi hnode_lo hnode_align hnode_win hrop_align hrop_ram hrop_win
+    hslotS1L hslotS2L hnode_hi hnode_lo hnode_win hrop_ram hrop_win
     hrop_stk hrop_stkfull hsp1088 hsproom hspSLhi hsp16 hsphi hSLlo hSLhiRam hSLwin
     hcodeStk hviStk htableStk harenaStk harenaCode
     hstackBudgetR hexprBodiesR hstoreBodiesR hGroundR_CL
@@ -251,7 +250,6 @@ theorem midArmField_of_IH
         read64 mcall (sp.toNat - 16) = some v8.toNat ∧
         read64 mcall (sp.toNat - 24) = some v9.toNat ∧
         read64 mcall (sp.toNat - 32) = some v18.toNat ∧
-        aLOp.toNat % 8 = 0 ∧
         0x80000000 ≤ aLOp.toNat ∧ aLOp.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aLOp.toNat ∧
         (aLOp.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aLOp.toNat) ∧

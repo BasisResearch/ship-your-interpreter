@@ -162,14 +162,13 @@ def ExecSeqCopy.Loaded : ExecSeqCopy → Mem → Prop
   | .closureBody => Vsa.Sim.Code.Eval_exprLoaded
   | .blockBody => Vsa.Sim.Code.Exec_stmtLoaded
 
-/-- Copy-specific status ABI at a semantic sequence exit.  The closure body's
-normal bypass reaches `0x80003954` without establishing `a0 = 0`; its caller
-constructs the null result on that path.  The other exits expose the status in
-`a0`. -/
+/-- Normal interpreter and closure exits precede their callers' result setup.
+Only the other boundaries expose the semantic status in `a0`. -/
 def ExecSeqStatusABI
     (copy : ExecSeqCopy) (status : Status)
     (regs : (R : Register) → Option (RegisterType R)) : Prop :=
   match copy, status with
+  | .interpRun, .normal => True
   | .closureBody, .normal => True
   | _, status => regs Register.x10 = some (StatusCode status)
 
@@ -316,8 +315,25 @@ def ExecSeqCursorRepr
         count < 2^31 ∧
         StmtArrayRepr m (base.toNat + 8 * i) ss.length ss
 
-/-- Faithful, copy-indexed sequence entry. It retains the scope and exact
-remaining statement suffix in the machine predicate. -/
+/-- Facts needed only when the sequence has another child to dispatch. -/
+structure ExecSeqLoopReady
+    (copy : ExecSeqCopy)
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (φf φc : Addr → Nat)
+    (st : St) (d : Nat) (env : Addr) (ss : List Stmt)
+    (sp aRet : BitVec 64) (c : Config) : Prop where
+  env_valid : EnvValid st env
+  code : copy.Loaded c.σ.mem
+  cursor : ExecSeqCursorRepr copy c.σ.mem φf env ss sp aRet c.σ.regs.get?
+  head_ground : ExecSeqHeadGround copy c.σ.mem c.σ.regs.get?
+    SL A φf sp aRet st d env ss
+  store_survives : ∀ m' : Mem,
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
+      StoreRepr m' N A φf φc st.store
+  stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
+  stack_win : tohostAddr + 16 ≤ SL.lo
+
+/-- Copy-indexed sequence entry, with loop geometry only for nonempty suffixes. -/
 structure ExecSeqEntryI
     (copy : ExecSeqCopy)
     (g : (R : Register) → Option (RegisterType R))
@@ -332,15 +348,7 @@ structure ExecSeqEntryI
   store : StoreRepr c.σ.mem N A φf φc st.store
   out : OutRepr c.σ st
   mem : c.σ.mem = m0
-  code : copy.Loaded c.σ.mem
-  cursor : ExecSeqCursorRepr copy c.σ.mem φf env ss sp aRet c.σ.regs.get?
-  head_ground : ExecSeqHeadGround copy c.σ.mem c.σ.regs.get?
-    SL A φf sp aRet st d env ss
-  store_survives : ∀ m' : Mem,
-    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
-      StoreRepr m' N A φf φc st.store
-  stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
-  stack_win : tohostAddr + 16 ≤ SL.lo
+  ready : ss ≠ [] → ExecSeqLoopReady copy N A SL φf φc st d env ss sp aRet c
   /-- Empty suffixes are parked at their semantic exit boundary.  That boundary
   already carries every status fact the copy exposes. -/
   empty_status : ss = [] → ExecSeqStatusABI copy .normal c.σ.regs.get?

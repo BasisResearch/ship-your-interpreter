@@ -114,7 +114,7 @@ theorem execEntry_recast_depth
     out := h.out, frame := h.frame,
     code_stack_disjoint := h.code_stack_disjoint, stack_ram := h.stack_ram,
     stack_win := h.stack_win, stmt_stack_disjoint := h.stmt_stack_disjoint,
-    stmt_align := h.stmt_align, stmt_ram := h.stmt_ram, stmt_win := h.stmt_win,
+    stmt_ram := h.stmt_ram, stmt_win := h.stmt_win,
     spill_defined := h.spill_defined, envset_defined := h.envset_defined,
     ground := h.ground }
 
@@ -142,7 +142,7 @@ theorem seqHeadStagePre_of_span
     (hSpan : SqEntryC Reflect c st d env (s :: ss) →
       ∃ (g : (R : Register) → Option (RegisterType R))
         (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-        (sp s0 aStmt aEnv aInterp aRet : BitVec 64) (m0 mE : Mem),
+        (sp s0 aStmt aEnv aInterp aRet : BitVec 64) (m0 mE : Mem) (lds : List (List (BitVec 8))),
         -- loop-head control/register pins (SegEntry half + the sp/s0 pins it lacks):
         (GoodState c.σ ∧ c.tick < 2 ∧
           c.σ.regs.get? Register.PC = some (0x8000448c#64 : BitVec 64) ∧
@@ -156,7 +156,7 @@ theorem seqHeadStagePre_of_span
         -- WAVE 47i: the root exec entry-ground bundle (M6 supply point,
         -- beside the Geom supplier).
         ExecGround mE SL A sp aRet aStmt.toNat s ∧
-        (ChainFacts c.σ.mem c.σ.mem (loopHeadDispatchL sp s0) [] loopHeadDispatchSeg) ∧
+        (ChainFacts c.σ.mem c.σ.mem (loopHeadDispatchL sp s0) lds loopHeadDispatchSeg) ∧
         (∀ (c458 : Config),
           c458.σ.regs.get? Register.PC = some (0x80004458#64 : BitVec 64) →
           GoodState c458.σ → c458.tick < 2 →
@@ -189,7 +189,7 @@ theorem seqHeadStagePre_of_span
             (∃ v, cE.σ.regs.get? Register.x21 = some v))) :
     SeqHeadStagePre Reflect s ss c st d env := by
   intro hSq
-  obtain ⟨g, N, A, SL, φf, φc, sp, s0, aStmt, aEnv, aInterp, aRet, m0, mE,
+  obtain ⟨g, N, A, SL, φf, φc, sp, s0, aStmt, aEnv, aInterp, aRet, m0, mE, lds,
     ⟨hGH, htickH, hpcH, hmemH, hspH, hs0H, hmiH⟩, hGeom, henvValid,
     hGround, hDispatchFacts,
     hValueNullSplice, hArgSetup⟩ := hSpan hSq

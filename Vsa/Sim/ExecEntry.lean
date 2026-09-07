@@ -268,48 +268,6 @@ structure RetSlotGeom (SL : StackLayout) (sp aRet : BitVec 64) : Prop where
   scribble_disjoint : aRet.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ aRet.toNat
   inSL : SL.lo ≤ aRet.toNat ∧ aRet.toNat + 24 ≤ SL.hi
 
-/-- The static byte ranges read by `eval_expr` dispatch and its leaf value
-helpers. -/
-def EvalCallFootprint (k : Nat) : Prop :=
-  (0x80003164 ≤ k ∧ k < 0x80003fe0) ∨
-  (0x800027ec ≤ k ∧ k < 0x8000285c) ∨
-  (jumpTableBase ≤ k ∧ k < jumpTableBase + 44)
-
-/-- Static support needed when `exec_stmt` calls `eval_expr`.  The pin closure
-is restricted to the exact static footprint.  The bundle contains no
-expression representation and no recursive semantic hypothesis. -/
-structure EvalCallSupport (m : Mem) (SL : StackLayout) (A : Arena)
-    (sp : BitVec 64) : Prop where
-  pins : ∀ m' : Mem,
-    (∀ k : Nat, EvalCallFootprint k → m'[k]? = m[k]?) →
-      InterpCodeLoaded m' ∧ Value_intLoaded m' ∧ Value_truthyLoaded m' ∧
-      IntSlotPinned m' ∧ NBSPins m' ∧ KindTablePins m'
-  table_stack : jumpTableBase + 44 ≤ SL.lo ∨ SL.hi ≤ jumpTableBase
-  code_stack : SL.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
-  vi_stack : (0x8000285c : Nat) ≤ SL.lo ∨ SL.hi ≤ 0x800027ec
-  arena_code : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
-  arena_vi : A.hi ≤ 0x800027ec ∨ 0x8000285c ≤ A.lo
-  arena_table : A.hi ≤ jumpTableBase ∨ jumpTableBase + 44 ≤ A.lo
-
-/-- Transport the static support across agreement on its exact byte footprint,
-and optionally lower the caller stack pointer. -/
-theorem EvalCallSupport.transport {m m' : Mem} {SL : StackLayout}
-    {A : Arena} {sp sp' : BitVec 64}
-    (h : EvalCallSupport m SL A sp)
-    (hag : ∀ k : Nat, EvalCallFootprint k → m'[k]? = m[k]?) :
-    EvalCallSupport m' SL A sp' where
-  pins := by
-    intro m'' hm''
-    apply h.pins
-    intro k hk
-    exact (hm'' k hk).trans (hag k hk)
-  table_stack := h.table_stack
-  code_stack := h.code_stack
-  vi_stack := h.vi_stack
-  arena_code := h.arena_code
-  arena_vi := h.arena_vi
-  arena_table := h.arena_table
-
 /-- **The complete exec entry-ground bundle** (audit classes N2/N3/N4/N5).
 Inserted as `ExecEntry.ground` (47i). -/
 structure ExecGround (m : Mem) (SL : StackLayout) (A : Arena)
@@ -357,16 +315,9 @@ theorem ExecGround.survive_stack {m m' : Mem} {SL : StackLayout} {A : Arena}
   arena_code := h.arena_code
   arena_table := h.arena_table
   eval_call := h.eval_call.transport (fun k hk => by
-    refine (hag k (fun hstk => ?_) (fun hret => ?_)).symm
-    · rcases hk with hc | hv | ht
-      · rcases h.eval_call.code_stack with hd | hd <;> omega
-      · rcases h.eval_call.vi_stack with hd | hd <;> omega
-      · rcases h.eval_call.table_stack with hd | hd <;> omega
-    · have hr := h.aret.inSL
-      rcases hk with hc | hv | ht
-      · rcases h.eval_call.code_stack with hd | hd <;> omega
-      · rcases h.eval_call.vi_stack with hd | hd <;> omega
-      · rcases h.eval_call.table_stack with hd | hd <;> omega)
+    have hs := h.eval_call.outsideStack hk
+    have hr := h.aret.inSL
+    exact (hag k (by omega) (by omega)).symm)
   stack_bytes := hpop
   aret := h.aret
   aret_table_disjoint := h.aret_table_disjoint
@@ -475,12 +426,10 @@ structure ExecEntry
   /-- **The `Stmt` node is disjoint from the stack region.** The dispatch reads
   `read32 aStmt` (the kind, `lw`/`lwu a5,0(s0)`); its bytes survive the prologue
   spills because the AST lives outside `[SL.lo, sp)`. -/
-  stmt_stack_disjoint : aStmt.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aStmt.toNat
-  /-- **The `Stmt` node is an 8-aligned 16-byte slot in RAM above HTIF.** The
-  dispatch's `lw a5,0(s0)`/`lwu a5,0(s0)` (kind, 4-aligned) need these. -/
-  stmt_align : aStmt.toNat % 8 = 0
-  stmt_ram : 0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 16 ≤ 0x100000000
-  stmt_win : tohostAddr + 16 ≤ aStmt.toNat
+  stmt_stack_disjoint : aStmt.toNat + 4 ≤ SL.lo ∨ sp.toNat ≤ aStmt.toNat
+  /-- The statement's dispatch load window lies in RAM. -/
+  stmt_ram : 0x80000000 ≤ aStmt.toNat ∧ aStmt.toNat + 4 ≤ 0x100000000
+  stmt_win : aStmt.toNat + 4 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aStmt.toNat
   /-- The four callee-saved registers spilled by the prologue (`s0`(x8),
   `s1`(x9), `s2`(x18), `s3`(x19)) are defined at entry. -/
   spill_defined : (∃ v, c.σ.regs.get? Register.x8 = some v) ∧

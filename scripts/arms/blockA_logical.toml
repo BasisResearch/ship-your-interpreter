@@ -20,7 +20,6 @@ body = '''  slot7 : KindSlotPinned 7 (0x8000355c#64) m0
   pay : read64 m0 (aExpr.toNat + 16) = some aLeft.toNat
   expr24 : aExpr.toNat + 24 ≤ 0x100000000
   expr24_stk : aExpr.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
-  op_align : aLeft.toNat % 8 = 0
   op_lo : 0x80000000 ≤ aLeft.toNat
   op_hi : aLeft.toNat + 16 ≤ 0x100000000
   op_win : tohostAddr + 16 ≤ aLeft.toNat
@@ -63,7 +62,6 @@ post = '''      (fun c => ∃ (v8 v9 v18 : BitVec 64) (ment : Mem),
           (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m'[a]?) →
           ExprRepr m' aLeft.toNat el) ∧
         aExpr.toNat + 24 ≤ 0x100000000 ∧
-        aLeft.toNat % 8 = 0 ∧
         0x80000000 ≤ aLeft.toNat ∧ aLeft.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aLeft.toNat ∧
         (aLeft.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aLeft.toNat) ∧
@@ -99,7 +97,7 @@ extra_haves = '''  obtain ⟨lp, rp, hk7m, hopTok, hlptrM, hlRM, hrptrM, hrRM⟩
     cases hExprMent with | logical hk htok hl hlp hr hrp => exact ⟨_, _, hk, htok, hl, hlp, hr, hrp⟩'''
 refine_head = "refine ⟨c1, hs1, v8, v9, v18, ment, hArm', hAEx11, hx13c1, (fun R _ => rfl),\n    ⟨aExpr, hAEx8⟩, ⟨aEnv, hAEx18⟩, hpayMent',"
 refine_tail = '''(fun m' hag => hX.left_survives m' (fun a ha => (hMentM0 a ha).symm.trans (hag a ha))),
-    hX.expr24, hX.op_align, hX.op_lo, hX.op_hi, hX.op_win, hX.op_stk,
+    hX.expr24, hX.op_lo, hX.op_hi, hX.op_win, hX.op_stk,
     hX.sp_headroom, hX.sp_SLhi, hX.sp16, hX.SLhi_ram,
     hX.code_stk, hX.vicode_stk, (by have := hX.table_stk; omega),
     hX.arena_stk, hX.arena_code⟩'''

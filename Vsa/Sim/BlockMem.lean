@@ -2,6 +2,7 @@ import Vsa.Sim.BlockPilot
 import Vsa.Sim.ValueSites
 import Vsa.Sim.ObsAvoid
 import Vsa.Sim.ExecLoadTotal
+import Vsa.Sim.RamReadValue
 
 /-!
 # `BlockMem` — proof-by-reflection block lemma for straight-line ALU + LOAD + STORE runs
@@ -885,7 +886,7 @@ theorem bytesT8_of_lpins8 {m : Std.ExtHashMap Nat (BitVec 8)} {ea : Nat} {bs : L
   simp only [bytesT8, h0, h1, h2, h3, h4, h5, h6, h7]
 
 /-- The data-dependent side conditions of one element: RAM bounds / HTIF window
-/ alignment at the *symbolic* effective address, plus (loads) the byte pins on
+/ store alignment at the *symbolic* effective address, plus (loads) the byte pins on
 the threaded memory `m`.  These live here — not in `BlockOKM` — because they
 mention symbolic values. -/
 def MemFacts (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (bs : List (BitVec 8))
@@ -896,18 +897,15 @@ def MemFacts (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (bs : List (BitVec 
   | .xori | .andi | .ori | .slliw | .srliw | .sraiw | .sllw | .srlw | .sraw => True
   | .lw =>
     (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 4 ≤ 0x100000000 ∧
-     ((eaddrM a L).toNat + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat) ∧
-     (eaddrM a L).toNat % 4 = 0) ∧
+     ((eaddrM a L).toNat + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat)) ∧
     LPins4 m (eaddrM a L).toNat bs
   | .lwu =>
     (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 4 ≤ 0x100000000 ∧
-     ((eaddrM a L).toNat + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat) ∧
-     (eaddrM a L).toNat % 4 = 0) ∧
+     ((eaddrM a L).toNat + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat)) ∧
     LPins4 m (eaddrM a L).toNat bs
   | .ld =>
     (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 8 ≤ 0x100000000 ∧
-     ((eaddrM a L).toNat + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat) ∧
-     (eaddrM a L).toNat % 8 = 0) ∧
+     ((eaddrM a L).toNat + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat)) ∧
     LPins8 m (eaddrM a L).toNat bs
   | .lbu =>
     (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 1 ≤ 0x100000000 ∧
@@ -915,14 +913,12 @@ def MemFacts (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (bs : List (BitVec 
     ((m[(eaddrM a L).toNat]?).getD 0 = bs.getD 0 0#8)
   | .lh =>
     (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 2 ≤ 0x100000000 ∧
-     ((eaddrM a L).toNat + 2 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat) ∧
-     (eaddrM a L).toNat % 2 = 0) ∧
+     ((eaddrM a L).toNat + 2 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat)) ∧
     (m[(eaddrM a L).toNat]?).getD 0 = bs.getD 0 0#8 ∧
     (m[(eaddrM a L).toNat + 1]?).getD 0 = bs.getD 1 0#8
   | .lhu =>
     (0x80000000 ≤ (eaddrM a L).toNat ∧ (eaddrM a L).toNat + 2 ≤ 0x100000000 ∧
-     ((eaddrM a L).toNat + 2 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat) ∧
-     (eaddrM a L).toNat % 2 = 0) ∧
+     ((eaddrM a L).toNat + 2 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat)) ∧
     (m[(eaddrM a L).toNat]?).getD 0 = bs.getD 0 0#8 ∧
     (m[(eaddrM a L).toNat + 1]?).getD 0 = bs.getD 1 0#8
   | .sw =>
@@ -1320,7 +1316,7 @@ theorem block_mem_run (is : List MInstr) :
     | lw =>
       obtain ⟨⟨hrd1, hrd31⟩, hs1ok⟩ :=
         (hkok : KindOK dom .lw ard ars1 ars2)
-      obtain ⟨⟨halo, hahiram, hahtif, haalign⟩, hp0, hp1, hp2, hp3⟩ := hextra
+      obtain ⟨⟨halo, hahiram, hahtif⟩, hp0, hp1, hp2, hp3⟩ := hextra
       have hrd31' : ard ≤ 31 := hrd31
       have hrdf := gpr_rd_ok ard (Nat.lt_succ_of_le hrd31') hrd1
       have hsp1 : srcPin σ ars1 (srcVal ars1 L) :=
@@ -1328,13 +1324,13 @@ theorem block_mem_run (is : List MInstr) :
       have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
       have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
         (bytesVal .lw (lds.headD [])) ard hrd1 hrd31
-      have hexec := exec_lw_totv σ apc aimm (gprIdx ars1) (gprIdx ard)
+      have hexec := exec_lw_ramv σ apc aimm (gprIdx ars1) (gprIdx ard)
         (sigma3_alu σ apc (gprReg ard) (gprRT ard (bytesVal .lw (lds.headD []))))
         (srcVal ars1 L) (bytesVal .lw (lds.headD [])) hG hrx1
         (by simp only [bytesVal]
             exact congrArg (fun w : BitVec (8 * 4) => (sign_extend (m := 64) w : BitVec 64))
               (bytesT4_of_lpins4 ⟨hp0, hp1, hp2, hp3⟩))
-        hwx halo hahiram hahtif haalign
+        hwx halo hahiram hahtif
       obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
         stepObs_alu σ i u apc vm aword
           (instruction.LOAD (aimm, gprIdx ars1, gprIdx ard, false, 4))
@@ -1371,7 +1367,7 @@ theorem block_mem_run (is : List MInstr) :
     | lwu =>
       obtain ⟨⟨hrd1, hrd31⟩, hs1ok⟩ :=
         (hkok : KindOK dom .lwu ard ars1 ars2)
-      obtain ⟨⟨halo, hahiram, hahtif, haalign⟩, hp0, hp1, hp2, hp3⟩ := hextra
+      obtain ⟨⟨halo, hahiram, hahtif⟩, hp0, hp1, hp2, hp3⟩ := hextra
       have hrd31' : ard ≤ 31 := hrd31
       have hrdf := gpr_rd_ok ard (Nat.lt_succ_of_le hrd31') hrd1
       have hsp1 : srcPin σ ars1 (srcVal ars1 L) :=
@@ -1379,13 +1375,13 @@ theorem block_mem_run (is : List MInstr) :
       have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
       have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
         (bytesVal .lwu (lds.headD [])) ard hrd1 hrd31
-      have hexec := exec_lwu_totv σ apc aimm (gprIdx ars1) (gprIdx ard)
+      have hexec := exec_lwu_ramv σ apc aimm (gprIdx ars1) (gprIdx ard)
         (sigma3_alu σ apc (gprReg ard) (gprRT ard (bytesVal .lwu (lds.headD []))))
         (srcVal ars1 L) (bytesVal .lwu (lds.headD [])) hG hrx1
         (by simp only [bytesVal]
             exact congrArg (fun w : BitVec (8 * 4) => (zero_extend (m := 64) w : BitVec 64))
               (bytesT4_of_lpins4 ⟨hp0, hp1, hp2, hp3⟩))
-        hwx halo hahiram hahtif haalign
+        hwx halo hahiram hahtif
       obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
         stepObs_alu σ i u apc vm aword
           (instruction.LOAD (aimm, gprIdx ars1, gprIdx ard, true, 4))
@@ -1422,7 +1418,7 @@ theorem block_mem_run (is : List MInstr) :
     | ld =>
       obtain ⟨⟨hrd1, hrd31⟩, hs1ok⟩ :=
         (hkok : KindOK dom .ld ard ars1 ars2)
-      obtain ⟨⟨halo, hahiram, hahtif, haalign⟩, hp0, hp1, hp2, hp3, hp4, hp5, hp6, hp7⟩ := hextra
+      obtain ⟨⟨halo, hahiram, hahtif⟩, hp0, hp1, hp2, hp3, hp4, hp5, hp6, hp7⟩ := hextra
       have hrd31' : ard ≤ 31 := hrd31
       have hrdf := gpr_rd_ok ard (Nat.lt_succ_of_le hrd31') hrd1
       have hsp1 : srcPin σ ars1 (srcVal ars1 L) :=
@@ -1430,13 +1426,13 @@ theorem block_mem_run (is : List MInstr) :
       have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
       have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
         (bytesVal .ld (lds.headD [])) ard hrd1 hrd31
-      have hexec := exec_ld_totv σ apc aimm (gprIdx ars1) (gprIdx ard)
+      have hexec := exec_ld_ramv σ apc aimm (gprIdx ars1) (gprIdx ard)
         (sigma3_alu σ apc (gprReg ard) (gprRT ard (bytesVal .ld (lds.headD []))))
         (srcVal ars1 L) (bytesVal .ld (lds.headD [])) hG hrx1
         (by simp only [bytesVal]
             exact congrArg (fun w : BitVec (8 * 8) => (sign_extend (m := 64) w : BitVec 64))
               (bytesT8_of_lpins8 ⟨hp0, hp1, hp2, hp3, hp4, hp5, hp6, hp7⟩))
-        hwx halo hahiram hahtif haalign
+        hwx halo hahiram hahtif
       obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
         stepObs_alu σ i u apc vm aword
           (instruction.LOAD (aimm, gprIdx ars1, gprIdx ard, false, 8))
@@ -1524,7 +1520,7 @@ theorem block_mem_run (is : List MInstr) :
     | lh =>
       obtain ⟨⟨hrd1, hrd31⟩, hs1ok⟩ :=
         (hkok : KindOK dom .lh ard ars1 ars2)
-      obtain ⟨⟨halo, hahiram, hahtif, haalign2⟩, hp0, hp1⟩ := hextra
+      obtain ⟨⟨halo, hahiram, hahtif⟩, hp0, hp1⟩ := hextra
       have hrd31' : ard ≤ 31 := hrd31
       have hrdf := gpr_rd_ok ard (Nat.lt_succ_of_le hrd31') hrd1
       have hsp1 : srcPin σ ars1 (srcVal ars1 L) :=
@@ -1532,13 +1528,13 @@ theorem block_mem_run (is : List MInstr) :
       have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
       have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
         (bytesVal .lh (lds.headD [])) ard hrd1 hrd31
-      have hexec := exec_lh_totv σ apc aimm (gprIdx ars1) (gprIdx ard)
+      have hexec := exec_lh_ramv σ apc aimm (gprIdx ars1) (gprIdx ard)
         (sigma3_alu σ apc (gprReg ard) (gprRT ard (bytesVal .lh (lds.headD []))))
         (srcVal ars1 L) (bytesVal .lh (lds.headD [])) hG hrx1
         (by simp only [bytesVal]
             exact congrArg (fun w : BitVec (8 * 2) => (sign_extend (m := 64) w : BitVec 64))
               (bytesT2_of_pins hp0 hp1))
-        hwx halo hahiram hahtif haalign2
+        hwx halo hahiram hahtif
       obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
         stepObs_alu σ i u apc vm aword
           (instruction.LOAD (aimm, gprIdx ars1, gprIdx ard, false, 2))
@@ -2756,7 +2752,7 @@ theorem block_mem_run (is : List MInstr) :
     | lhu =>
       obtain ⟨⟨hrd1, hrd31⟩, hs1ok⟩ :=
         (hkok : KindOK dom .lhu ard ars1 ars2)
-      obtain ⟨⟨halo, hahiram, hahtif, haalign2⟩, hp0, hp1⟩ := hextra
+      obtain ⟨⟨halo, hahiram, hahtif⟩, hp0, hp1⟩ := hextra
       have hrd31' : ard ≤ 31 := hrd31
       have hrdf := gpr_rd_ok ard (Nat.lt_succ_of_le hrd31') hrd1
       have hsp1 : srcPin σ ars1 (srcVal ars1 L) :=
@@ -2764,13 +2760,13 @@ theorem block_mem_run (is : List MInstr) :
       have hrx1 := rX_src σ apc ars1 hs1ok.1 (srcVal ars1 L) hsp1
       have hwx := wX_gpr (afterNextPC (afterPrelude σ) apc)
         (bytesVal .lhu (lds.headD [])) ard hrd1 hrd31
-      have hexec := exec_lhu_totv σ apc aimm (gprIdx ars1) (gprIdx ard)
+      have hexec := exec_lhu_ramv σ apc aimm (gprIdx ars1) (gprIdx ard)
         (sigma3_alu σ apc (gprReg ard) (gprRT ard (bytesVal .lhu (lds.headD []))))
         (srcVal ars1 L) (bytesVal .lhu (lds.headD [])) hG hrx1
         (by simp only [bytesVal]
             exact congrArg (fun w : BitVec (8 * 2) => (zero_extend (m := 64) w : BitVec 64))
               (bytesT2_of_pins hp0 hp1))
-        hwx halo hahiram hahtif haalign2
+        hwx halo hahiram hahtif
       obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
         stepObs_alu σ i u apc vm aword
           (instruction.LOAD (aimm, gprIdx ars1, gprIdx ard, true, 2))

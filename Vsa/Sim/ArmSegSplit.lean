@@ -36,7 +36,7 @@ must be carried as premises of the arm-head bundle:
 * **Must be premises of the arm-head bundle** (NOT derivable from a PC-only or
   even a returning-IH-shaped entry): the sub-call GEOMETRY at the *lowered*
   frame — `stackOK` for `sp - 1088` (needs `SL.lo + 3264 ≤ sp`, one extra frame
-  of headroom), the operand node's `ExprRepr`/alignment/RAM/disjointness at the
+  of headroom), the operand node's `ExprRepr`/RAM/disjointness at the
   lowered `sp`, the sub-result buffer geometry, `StoreRepr` + its survival
   clause, and the code/table/arena disjointness re-checked against `sp - 1088`.
   These are exactly the "recursive-case extras" `blockB_unary` takes beyond its
@@ -130,7 +130,6 @@ theorem evalEntry_of_jalPrefix
         read64 mcall (sp.toNat - 16) = some v8.toNat ∧
         read64 mcall (sp.toNat - 24) = some v9.toNat ∧
         read64 mcall (sp.toNat - 32) = some v18.toNat ∧
-        aOperand.toNat % 8 = 0 ∧
         0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aOperand.toNat ∧
         (aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat) ∧
@@ -158,7 +157,7 @@ theorem evalEntry_of_jalPrefix
     hsubWords, hcode, hviCode, hslot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframe,
     ⟨⟨w8, hw8⟩, ⟨w18, hw18⟩, ⟨w19, hw19⟩, ⟨w20, hw20⟩, ⟨w21, hw21⟩⟩,
     hslotRa, hslotS0, hslotS1, hslotS2,
-    hopAl, hopLo, hopHi, hopWin, hopStk,
+    hopLo, hopHi, hopWin, hopStk,
     hssAl, hssLo, hssHi,
     hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -257,7 +256,6 @@ theorem evalEntry_of_jalPrefix
           rcases hopStk with h | h
           · left; exact h
           · right; rw [hspsub]; omega
-        expr_align := hopAl
         expr_ram := ⟨hopLo, hopHi⟩
         expr_win := hopWin
         sret_align := hssAl

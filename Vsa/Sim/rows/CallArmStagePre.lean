@@ -1,3 +1,4 @@
+import Vsa.Sim.RamReadPins
 import Vsa.Sim.StagePreSuppliers2
 import Vsa.Sim.EvalChildFieldCombinator
 import Vsa.Sim.DecodeTable.Batch03Part22
@@ -75,7 +76,6 @@ theorem site_800031b0_cf (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
     (hhiram : (v12 + sign_extend (m := 64) (0x008#12)).toNat + 8 ≤ 0x100000000)
     (hhtif : (v12 + sign_extend (m := 64) (0x008#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (v12 + sign_extend (m := 64) (0x008#12)).toNat)
-    (halign : (v12 + sign_extend (m := 64) (0x008#12)).toNat % 8 = 0)
     (h0 : σ.mem[(v12 + sign_extend (m := 64) (0x008#12)).toNat]? = some b0)
     (h1 : σ.mem[(v12 + sign_extend (m := 64) (0x008#12)).toNat + 1]? = some b1)
     (h2 : σ.mem[(v12 + sign_extend (m := 64) (0x008#12)).toNat + 2]? = some b2)
@@ -103,13 +103,13 @@ theorem site_800031b0_cf (σ : MState) (i u : Nat) (pc : BitVec 64) (vminstret v
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
-    (exec_ld σ (0x800031b0#64) (0x008#12) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x0c#5)
+    (exec_ld_ram_bytes σ (0x800031b0#64) (0x008#12) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x0c#5)
       (sigma3_alu σ (0x800031b0#64) Register.x12 (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
       v12 b0 b1 b2 b3 b4 b5 b6 b7 hG
       (rX_bits_x12 _ v12
         (by rw [get?_afterNextPC σ (0x800031b0#64) _ (by decide) (by decide)]; exact hx12))
       (wX_bits_x12 _ (sign_extend (m := 64) ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0) : BitVec (8 * 8))))
-      hlo hhiram hhtif halign h0 h1 h2 h3 h4 h5 h6 h7)
+      hlo hhiram hhtif h0 h1 h2 h3 h4 h5 h6 h7)
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
@@ -247,7 +247,6 @@ theorem blockB_call_stagePre
         -- windows (re-cut below to the child windows).
         EvalGround ment SL A sp sret aClo.toNat f ∧
         aExpr.toNat + 16 ≤ 0x100000000 ∧
-        aClo.toNat % 8 = 0 ∧
         0x80000000 ≤ aClo.toNat ∧ aClo.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aClo.toNat ∧
         (aClo.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aClo.toNat) ∧
@@ -268,12 +267,12 @@ theorem blockB_call_stagePre
     LandedN 3 c (fun c' => JalPreBundle f c' st d env) := by
   obtain ⟨ment, hArm, hx11, hx13, henvReg, hgframe, hg8, hg18, hg19, hg20, hg21,
     hpay, hexprSurv, hGroundP, hexprHi16,
-    hopAl, hopLo, hopHi, hopWin, hopStk,
+    hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
     hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
-    hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
+    hexpr, houtStr, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
@@ -298,7 +297,7 @@ theorem blockB_call_stagePre
     site_800031b0_cf c.σ c.tick c.steps (0x800031b0#64) vmi aExpr pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7
       hG hpc hmi ha2 (hmem ▸ hcode) rfl
       (by rw [haddr8]; omega) (by rw [haddr8]; omega)
-      (by rw [haddr8, htoh]; right; omega) (by rw [haddr8]; omega)
+      (by rw [haddr8, htoh]; right; omega)
       (by rw [haddr8, hmem]; exact hp0) (by rw [haddr8, hmem]; exact hp1)
       (by rw [haddr8, hmem]; exact hp2) (by rw [haddr8, hmem]; exact hp3)
       (by rw [haddr8, hmem]; exact hp4) (by rw [haddr8, hmem]; exact hp5)
@@ -463,7 +462,7 @@ theorem blockB_call_stagePre
       hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hGroundMcall, hExprMcall, hStoreMcall, hStoreSurvMcall,
       hframeB, ⟨hg8, hg18, hg19, hg20, hg21⟩,
       hslotRaMcall, hslotS0Mcall, hslotS1Mcall, hslotS2Mcall,
-      hopAl, hopLo, hopHi, hopWin, hopStk,
+      hopLo, hopHi, hopWin, hopStk,
       (by rw [hsub992]; omega), (by rw [hsub992]; omega), (by rw [hsub992]; omega),
       hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin,
       hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -502,7 +501,6 @@ def CallArmDispatch
         -- windows (re-cut below to the child windows).
         EvalGround ment SL A sp sret aClo.toNat f ∧
         aExpr.toNat + 16 ≤ 0x100000000 ∧
-        aClo.toNat % 8 = 0 ∧
         0x80000000 ≤ aClo.toNat ∧ aClo.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aClo.toNat ∧
         (aClo.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aClo.toNat) ∧
@@ -530,7 +528,7 @@ theorem callF_field_of_dispatch
     (fun c' hMid => ?_) c rfl
   obtain ⟨gpre, aIn, aClo, aEnv3, v8, v9, v18, ment, hArm, hx11, hx13, henvReg, hgframe,
     hg8, hg18, hg19, hg20, hg21, hpay, hexprSurv, hGroundP, hexprHi16,
-    hopAl, hopLo, hopHi, hopWin, hopStk,
+    hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam, hcodeStk, hviStk, htableStk,
     harenaStk, harenaCode⟩ := hMid
   exact blockB_call_stagePre g gpre N A SL φf φc st d env f args
@@ -538,7 +536,7 @@ theorem callF_field_of_dispatch
     hEntry.env_valid
     ⟨ment, hArm, hx11, hx13, henvReg, hgframe, hg8, hg18, hg19, hg20, hg21,
       hpay, hexprSurv, hGroundP, hexprHi16,
-      hopAl, hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
+      hopLo, hopHi, hopWin, hopStk, hsproom, hspSLhi, hsp16, hSLhiRam,
       hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
       -- ITEM ZERO B1: the CALLEE child budget, DERIVED from the entry's fields.
       hEntry.stackBudget.child (by decide)

@@ -1,0 +1,11 @@
+Working directory: /Users/kirancodes/Documents/code/verified-semantic-abstraction
+
+Compile (exit 0):
+lake env sh -c 'LEAN_PATH=/private/tmp/vsa-while-carrier-check:/private/tmp/vsa-full-build.sQd0gM:$LEAN_PATH lean -R /private/tmp/vsa-alias-loaded /private/tmp/vsa-alias-loaded/SnapshotReplay.lean' > /private/tmp/vsa-alias-loaded/full-trace/compile.log 2>&1
+
+Run (exit 0):
+lake env sh -c 'LEAN_PATH=/private/tmp/vsa-while-carrier-check:/private/tmp/vsa-full-build.sQd0gM:$LEAN_PATH lean -R /private/tmp/vsa-alias-loaded --run /private/tmp/vsa-alias-loaded/SnapshotReplay.lean 20000 --trace' > /private/tmp/vsa-alias-loaded/full-trace/result.jsonl 2> /private/tmp/vsa-alias-loaded/full-trace/run.stderr
+
+Optional full trace is enabled by --trace after the fuel argument. Without --trace, no per-step rows are collected. This is untrusted certificate input, not a Steps/Halted theorem. The dense/sparse execution lift remains unproved.
+
+Prior source and replay remain under /private/tmp/vsa-alias-loaded/replay/.

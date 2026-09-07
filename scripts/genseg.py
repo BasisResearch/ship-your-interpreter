@@ -603,7 +603,7 @@ def emit_jal_row(E, a, end_pc, keys):
     E("")
 
 
-def compile_arm(arm_path, out_path):
+def compile_arm(arm_path, out_path, *, default_limits=False):
     d = lib.load_arm(arm_path)
     a = norm_arm(d)
     di = lib.parse_disasm()
@@ -634,7 +634,7 @@ def compile_arm(arm_path, out_path):
             "open Vsa.Machine (MState Config Step Steps)",
             "open Vsa.Logic (Triple)",
         ],
-        options=["set_option maxHeartbeats 800000",
+        options=[] if default_limits else ["set_option maxHeartbeats 800000",
                  "set_option maxRecDepth 100000"],
         notation_specst=False)
 
@@ -661,6 +661,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("arm", nargs="?", help="arm description (.toml or .tsv)")
     ap.add_argument("-o", "--output", help="output .lean path")
+    ap.add_argument("--default-limits", action="store_true",
+                    help="retain Lean's default elaboration limits")
     ap.add_argument("--spec", action="store_true",
                     help="print the arm-description format spec and exit")
     args = ap.parse_args()
@@ -672,7 +674,7 @@ def main():
         d = lib.load_arm(args.arm)
         name = d["name"]
         out = os.path.join(ROOT, "Vsa/Sim/rows", lib.cap(name) + "Gen.lean")
-    compile_arm(args.arm, out)
+    compile_arm(args.arm, out, default_limits=args.default_limits)
     return 0
 
 

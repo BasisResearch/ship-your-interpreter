@@ -552,7 +552,7 @@ theorem wrEpi_facts (g : WRG) (hg : WRGOk g)
       [wrRaBytes g, wrS0Bytes g] write_rX052cSeg := by
   chain_facts hcode with "Vsa.Sim.Code._write_r_at_"
   · -- ld ra,8(sp)
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (wrSpE g + sign_extend (m := 64) (0x008#12)).toNat
       rw [wr_slot_ra_addr g hg]
       have ht : tohostAddr = 0x8001ad00 := rfl
@@ -569,14 +569,9 @@ theorem wrEpi_facts (g : WRG) (hg : WRGOk g)
       right
       have := hg.sp_htif
       omega
-    · show (wrSpE g + sign_extend (m := 64) (0x008#12)).toNat % 8 = 0
-      rw [wr_slot_ra_addr g hg]
-      have := hg.sp_htif
-      have := hg.sp_align
-      omega
     · exact wrM1_ra_pins g hg
   · -- ld s0,0(sp)
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · show 0x80000000 ≤ (wrSpE g + sign_extend (m := 64) (0x000#12)).toNat
       rw [wr_slot_s0_addr g hg]
       have ht : tohostAddr = 0x8001ad00 := rfl
@@ -592,11 +587,6 @@ theorem wrEpi_facts (g : WRG) (hg : WRGOk g)
       rw [wr_slot_s0_addr g hg]
       right
       have := hg.sp_htif
-      omega
-    · show (wrSpE g + sign_extend (m := 64) (0x000#12)).toNat % 8 = 0
-      rw [wr_slot_s0_addr g hg]
-      have := hg.sp_htif
-      have := hg.sp_align
       omega
     · exact wrM1_s0_pins g hg
   · -- jr: return-target alignment (the reloaded ra0)

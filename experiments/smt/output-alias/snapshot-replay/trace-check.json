@@ -1,0 +1,40 @@
+{
+  "steps": 1861,
+  "integer_loads": 478,
+  "load_bytes": 3028,
+  "absent_load_bytes": 72,
+  "output_changes": [
+    {
+      "steps": 497,
+      "pc": 2147483740,
+      "output_before": "",
+      "output_after": "\n"
+    },
+    {
+      "steps": 1283,
+      "pc": 2147483740,
+      "output_before": "\n",
+      "output_after": "\n\n"
+    }
+  ],
+  "opcodes": {
+    "0x13": 538,
+    "0x23": 270,
+    "0x6f": 120,
+    "0x67": 113,
+    "0x63": 227,
+    "0x3": 478,
+    "0x33": 70,
+    "0x17": 20,
+    "0x1b": 12,
+    "0x37": 6,
+    "0x3b": 7
+  },
+  "gprs_all_present": true,
+  "instruction_bytes_all_present": true,
+  "instruction_lengths_all_32_bits": true,
+  "successor_links_checked": true,
+  "final_output": "\n\n",
+  "exit_code": 0,
+  "trace_is_untrusted": true
+}

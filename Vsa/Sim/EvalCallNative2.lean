@@ -595,7 +595,7 @@ theorem nativeAssertInternal
     site_80002e1c_na σ10 i10 (c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) (0x80002e1c#64) vmi10 argsBase
       ab0 ab1 ab2 ab3 ab4 ab5 ab6 ab7 hG10 hpc10 hmi10 hx13_10 hNA10 rfl
       (by rw [hargsAddr0]; omega) (by rw [hargsAddr0]; omega)
-      (by rw [hargsAddr0, htoh]; right; omega) (by rw [hargsAddr0]; omega)
+      (by rw [hargsAddr0, htoh]; right; omega)
       (by rw [hargsAddr0, hmem10e]; exact hab0) (by rw [hargsAddr0, hmem10e]; exact hab1)
       (by rw [hargsAddr0, hmem10e]; exact hab2) (by rw [hargsAddr0, hmem10e]; exact hab3)
       (by rw [hargsAddr0, hmem10e]; exact hab4) (by rw [hargsAddr0, hmem10e]; exact hab5)
@@ -617,7 +617,7 @@ theorem nativeAssertInternal
     site_80002e20_na σ11 i11 (c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) (0x80002e20#64) vmi11 argsBase
       ab8 ab9 ab10 ab11 ab12 ab13 ab14 ab15 hG11 hpc11 hmi11 hx13_11 hNA11 rfl
       (by rw [hargsAddr8]; omega) (by rw [hargsAddr8]; omega)
-      (by rw [hargsAddr8, htoh]; right; omega) (by rw [hargsAddr8]; omega)
+      (by rw [hargsAddr8, htoh]; right; omega)
       (by rw [hargsAddr8, hmem11e]; exact hab8) (by rw [hargsAddr8, hmem11e]; exact hab9)
       (by rw [hargsAddr8, hmem11e]; exact hab10) (by rw [hargsAddr8, hmem11e]; exact hab11)
       (by rw [hargsAddr8, hmem11e]; exact hab12) (by rw [hargsAddr8, hmem11e]; exact hab13)
@@ -640,7 +640,7 @@ theorem nativeAssertInternal
     site_80002e24_na σ12 i12 (c.steps + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) (0x80002e24#64) vmi12 argsBase
       ab16 ab17 ab18 ab19 ab20 ab21 ab22 ab23 hG12 hpc12 hmi12 hx13_12 hNA12 rfl
       (by rw [hargsAddr16]; omega) (by rw [hargsAddr16]; omega)
-      (by rw [hargsAddr16, htoh]; right; omega) (by rw [hargsAddr16]; omega)
+      (by rw [hargsAddr16, htoh]; right; omega)
       (by rw [hargsAddr16, hmem12e]; exact hab16) (by rw [hargsAddr16, hmem12e]; exact hab17)
       (by rw [hargsAddr16, hmem12e]; exact hab18) (by rw [hargsAddr16, hmem12e]; exact hab19)
       (by rw [hargsAddr16, hmem12e]; exact hab20) (by rw [hargsAddr16, hmem12e]; exact hab21)
@@ -1055,7 +1055,7 @@ theorem nativeAssertInternal
     site_80002e48_na cT.σ cT.tick cT.steps (0x80002e48#64) vmiT (fsp - 80#64)
       rl0 rl1 rl2 rl3 rl4 rl5 rl6 rl7 hGT hpcT' hmiT hsp_T (hmemT' ▸ hNA_T) rfl
       (naStore_safe4 fsp.toNat _ 0 haddr0 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).1 (naStore_safe4 fsp.toNat _ 0 haddr0 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.1
-      (by rw [haddr0, htoh]; right; omega) (naStore_safe4 fsp.toNat _ 0 haddr0 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.2
+      (by rw [haddr0, htoh]; right; omega)
       (by rw [haddr0, hmemT']; exact hrl0) (by rw [haddr0, hmemT']; exact hrl1)
       (by rw [haddr0, hmemT']; exact hrl2) (by rw [haddr0, hmemT']; exact hrl3)
       (by rw [haddr0, hmemT']; exact hrl4) (by rw [haddr0, hmemT']; exact hrl5)
@@ -1077,7 +1077,7 @@ theorem nativeAssertInternal
     site_80002e4c_na σ22 i22 (cT.steps + 1) (0x80002e4c#64) vmi22 (fsp - 80#64)
       rh0 rh1 rh2 rh3 rh4 rh5 rh6 rh7 hG22 hpc22 hmi22 hsp_22 hNA22 rfl
       (naStore_safe4 fsp.toNat _ 8 haddr8 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).1 (naStore_safe4 fsp.toNat _ 8 haddr8 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.1
-      (by rw [haddr8, htoh]; right; omega) (naStore_safe4 fsp.toNat _ 8 haddr8 (by decide) (by decide) hRG.fsp_align hRG.fsp_lo hRG.fsp_hi hRG.fsp_win).2.2.2
+      (by rw [haddr8, htoh]; right; omega)
       (by rw [haddr8, hmem22e]; exact hrh0) (by rw [haddr8, hmem22e]; exact hrh1)
       (by rw [haddr8, hmem22e]; exact hrh2) (by rw [haddr8, hmem22e]; exact hrh3)
       (by rw [haddr8, hmem22e]; exact hrh4) (by rw [haddr8, hmem22e]; exact hrh5)
@@ -1293,7 +1293,7 @@ theorem nativeAssertInternal
     site_80002e5c_na cN.σ cN.tick cN.steps (0x80002e5c#64) vmiN (fsp - 80#64)
       rb0 rb1 rb2 rb3 rb4 rb5 rb6 rb7 hGN hpcN' hmiN hsp_N hNA_N rfl
       (by rw [hep72]; omega) (by rw [hep72]; have := hRG.fsp_hi; omega)
-      (by rw [hep72, htoh]; right; omega) (by rw [hep72]; have := hRG.fsp_align; omega)
+      (by rw [hep72, htoh]; right; omega)
       (by rw [hep72]; exact hrb0) (by rw [hep72]; exact hrb1) (by rw [hep72]; exact hrb2) (by rw [hep72]; exact hrb3)
       (by rw [hep72]; exact hrb4) (by rw [hep72]; exact hrb5) (by rw [hep72]; exact hrb6) (by rw [hep72]; exact hrb7) htickN
   have hstep27 : Step cN ⟨σ27, i27, cN.steps + 1⟩ := by cases cN; exact hs27'
@@ -1327,7 +1327,7 @@ theorem nativeAssertInternal
     site_80002e64_na σ28 i28 (cN.steps + 1 + 1) (0x80002e64#64) vmi28 (fsp - 80#64)
       sb0 sb1 sb2 sb3 sb4 sb5 sb6 sb7 hG28 hpc28 hmi28 hsp_28 hNA28 rfl
       (by rw [hep64]; omega) (by rw [hep64]; have := hRG.fsp_hi; omega)
-      (by rw [hep64, htoh]; right; omega) (by rw [hep64]; have := hRG.fsp_align; omega)
+      (by rw [hep64, htoh]; right; omega)
       (by rw [hep64, hmem28e]; exact hsb0) (by rw [hep64, hmem28e]; exact hsb1) (by rw [hep64, hmem28e]; exact hsb2) (by rw [hep64, hmem28e]; exact hsb3)
       (by rw [hep64, hmem28e]; exact hsb4) (by rw [hep64, hmem28e]; exact hsb5) (by rw [hep64, hmem28e]; exact hsb6) (by rw [hep64, hmem28e]; exact hsb7) hi28
   have hstep29 : Step ⟨σ28, i28, cN.steps + 1 + 1⟩ ⟨σ29, i29, cN.steps + 1 + 1 + 1⟩ := hs29'
@@ -1348,7 +1348,7 @@ theorem nativeAssertInternal
     site_80002e68_na σ29 i29 (cN.steps + 1 + 1 + 1) (0x80002e68#64) vmi29 (fsp - 80#64)
       tb0 tb1 tb2 tb3 tb4 tb5 tb6 tb7 hG29 hpc29 hmi29 hsp_29 hNA29 rfl
       (by rw [hep56]; omega) (by rw [hep56]; have := hRG.fsp_hi; omega)
-      (by rw [hep56, htoh]; right; omega) (by rw [hep56]; have := hRG.fsp_align; omega)
+      (by rw [hep56, htoh]; right; omega)
       (by rw [hep56, hmem29e]; exact htb0) (by rw [hep56, hmem29e]; exact htb1) (by rw [hep56, hmem29e]; exact htb2) (by rw [hep56, hmem29e]; exact htb3)
       (by rw [hep56, hmem29e]; exact htb4) (by rw [hep56, hmem29e]; exact htb5) (by rw [hep56, hmem29e]; exact htb6) (by rw [hep56, hmem29e]; exact htb7) hi29
   have hstep30 : Step ⟨σ29, i29, cN.steps + 1 + 1 + 1⟩ ⟨σ30, i30, cN.steps + 1 + 1 + 1 + 1⟩ := hs30'
@@ -1370,7 +1370,7 @@ theorem nativeAssertInternal
     site_80002e6c_na σ30 i30 (cN.steps + 1 + 1 + 1 + 1) (0x80002e6c#64) vmi30 (fsp - 80#64)
       ub0 ub1 ub2 ub3 ub4 ub5 ub6 ub7 hG30 hpc30 hmi30 hsp_30 hNA30 rfl
       (by rw [hep48]; omega) (by rw [hep48]; have := hRG.fsp_hi; omega)
-      (by rw [hep48, htoh]; right; omega) (by rw [hep48]; have := hRG.fsp_align; omega)
+      (by rw [hep48, htoh]; right; omega)
       (by rw [hep48, hmem30e]; exact hub0) (by rw [hep48, hmem30e]; exact hub1) (by rw [hep48, hmem30e]; exact hub2) (by rw [hep48, hmem30e]; exact hub3)
       (by rw [hep48, hmem30e]; exact hub4) (by rw [hep48, hmem30e]; exact hub5) (by rw [hep48, hmem30e]; exact hub6) (by rw [hep48, hmem30e]; exact hub7) hi30
   have hstep31 : Step ⟨σ30, i30, cN.steps + 1 + 1 + 1 + 1⟩ ⟨σ31, i31, cN.steps + 1 + 1 + 1 + 1 + 1⟩ := hs31'

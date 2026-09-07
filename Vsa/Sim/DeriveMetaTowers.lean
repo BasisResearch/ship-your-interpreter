@@ -29,16 +29,21 @@ open Vsa.RuntimeRepr Vsa.MemRepr Vsa.While Vsa.Alloc
 
 namespace Vsa.Sim
 
-#derive_destructurer ArmEntryK
+#derive_destructurer ArmEntryK fields
+  good tick pc a0 s1 a2 spReg ra minstret out
+  mem code callee expr outStr exprLo exprHi exprWin
+  slotRa slotS0 slotS1 slotS2 memFrame
+  saved8 saved9 saved18 savedSp store storeSurv frame
+  sretAlign sretLo sretHi sretWin sretVi sretStack sretCode
+  spRoom spHi spLo spWin spAlign stackLo stackWin stackRoom retAlign
+  a1 node env
 #derive_destructurer TwoSubReturn
 
 /-! ## Named-field consumers — no positional chains
 
 Before: consumers `obtain ⟨…16/48 idents…⟩ := hTSR` (see the doc header).
-After: `<Def>.destruct … h` yields a `<Def>.Parts` whose fields are named
-`p1 … pN` (the generator's default; pass `fields …` to name them).  A consumer
-extracts a specific conjunct by its field name — reorders of the tower no longer
-shift a positional index. -/
+`ArmEntryK.destruct … h` yields named machine, memory, and saved-register
+facts. `TwoSubReturn` retains the generator's default field names. -/
 
 open Vsa.Machine (Config)
 
@@ -65,7 +70,7 @@ example
       v8 v9 v18 out0 m0 ment c) :
     c.σ.regs.get? Register.PC = some armPC :=
   (ArmEntryK.destruct g N A SL φf φc st armPC calleeLoaded e sp r sret aExpr aEnv
-    v8 v9 v18 out0 m0 ment c h).p3
+    v8 v9 v18 out0 m0 ment c h).pc
 
 #print axioms ArmEntryK.destruct
 #print axioms ArmEntryK.mk'

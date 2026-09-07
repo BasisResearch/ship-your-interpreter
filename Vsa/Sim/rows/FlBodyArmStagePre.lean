@@ -66,28 +66,28 @@ def flBodyBodyL (sp s0 s2 s3 s1 : BitVec 64) : GRegs :=
 theorem flBodyBodyBridge
     (σ : MState) (i u : Nat) (vminstret : BitVec 64)
     (sp s0 s2 s3 s1 : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (lds : List (List (BitVec 8)))
     (hG : GoodState σ)
     (hpc : σ.regs.get? Register.PC = some (0x800042a8#64 : BitVec 64))
     (hminstret : σ.regs.get? Register.minstret = some vminstret)
     (hmem : σ.mem = m0)
     (hL : GHolds σ (flBodyBodyL sp s0 s2 s3 s1))
-    (hfacts : ChainFacts σ.mem σ.mem (flBodyBodyL sp s0 s2 s3 s1) [] flBodyBodySeg)
+    (hfacts : ChainFacts σ.mem σ.mem (flBodyBodyL sp s0 s2 s3 s1) lds flBodyBodySeg)
     (hi : i < 2)
     (hKeysOut : KeysOK (keysG (evalBlocks flBodyBodySeg
-      (SegEvalState.init (flBodyBodyL sp s0 s2 s3 s1) [])).regs))
+      (SegEvalState.init (flBodyBodyL sp s0 s2 s3 s1) lds)).regs))
     (hRaOut : KeysAvoidRa (evalBlocks flBodyBodySeg
-      (SegEvalState.init (flBodyBodyL sp s0 s2 s3 s1) [])).regs)
+      (SegEvalState.init (flBodyBodyL sp s0 s2 s3 s1) lds)).regs)
     (hjalSeam : ∀ (σ' : MState) (i' u' : Nat),
       GoodState σ' → i' < 2 →
       σ'.regs.get? Register.PC = some
-        (evalBlocksPC 0x800042a8#64 (SegEvalState.init (flBodyBodyL sp s0 s2 s3 s1) [])
+        (evalBlocksPC 0x800042a8#64 (SegEvalState.init (flBodyBodyL sp s0 s2 s3 s1) lds)
           flBodyBodySeg) →
       (∃ w, σ'.regs.get? Register.minstret = some w) →
       σ'.mem = writeLog m0 (evalBlocks flBodyBodySeg
-        (SegEvalState.init (flBodyBodyL sp s0 s2 s3 s1) [])).log →
+        (SegEvalState.init (flBodyBodyL sp s0 s2 s3 s1) lds)).log →
       GHolds σ' (evalBlocks flBodyBodySeg
-        (SegEvalState.init (flBodyBodyL sp s0 s2 s3 s1) [])).regs →
+        (SegEvalState.init (flBodyBodyL sp s0 s2 s3 s1) lds)).regs →
       JalStep 0x80003fe0#64 0x800042bc#64 σ' i' u') :
     ∃ (σ2 : MState) (i2 : Nat),
       Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + evalBlocksFuel flBodyBodySeg + 1⟩ ∧ i2 < 2 ∧ GoodState σ2 ∧
@@ -95,11 +95,11 @@ theorem flBodyBodyBridge
       σ2.regs.get? Register.x1 = some (0x800042bc#64 : BitVec 64) ∧
       (∃ w, σ2.regs.get? Register.minstret = some w) ∧
       GHolds σ2 (evalBlocks flBodyBodySeg
-        (SegEvalState.init (flBodyBodyL sp s0 s2 s3 s1) [])).regs ∧
+        (SegEvalState.init (flBodyBodyL sp s0 s2 s3 s1) lds)).regs ∧
       σ2.mem = writeLog m0 (evalBlocks flBodyBodySeg
-        (SegEvalState.init (flBodyBodyL sp s0 s2 s3 s1) [])).log ∧
+        (SegEvalState.init (flBodyBodyL sp s0 s2 s3 s1) lds)).log ∧
       (∀ R, Vsa.Alloc.AbiPreserved R = true → σ2.regs.get? R = σ.regs.get? R) := by
-  apply bridgeOfSeg flBodyBodySeg (flBodyBodyL sp s0 s2 s3 s1) []
+  apply bridgeOfSeg flBodyBodySeg (flBodyBodyL sp s0 s2 s3 s1) lds
     σ i u (0x800042a8#64) (0x80003fe0#64) (0x800042bc#64) vminstret m0
     hG hpc hminstret hmem hL
     (by have h : keysG (flBodyBodyL sp s0 s2 s3 s1) = [2, 8, 18, 19, 9] := rfl

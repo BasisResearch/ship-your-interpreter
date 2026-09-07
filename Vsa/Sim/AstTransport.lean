@@ -290,19 +290,19 @@ theorem stmtFp_region {m : Mem} {lo hi a addr : Nat} {s : Stmt}
       ?_ ?_ ?_ ?_ ?_ ?_ ?_
     all_goals simp only [R1, R2, R3, R4, R5, R6, R7]
     · intro a e k hk hin
-      rcases exprIn_node hin with ⟨hlo, hhi, _⟩
+      rcases exprIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a e k hk hin
-      rcases exprIn_node hin with ⟨hlo, hhi, _⟩
+      rcases exprIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a e k hk hin
-      rcases exprIn_node hin with ⟨hlo, hhi, _⟩
+      rcases exprIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a e k hk hin
-      rcases exprIn_node hin with ⟨hlo, hhi, _⟩
+      rcases exprIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a e k hk hin
-      rcases exprIn_node hin with ⟨hlo, hhi, _⟩
+      rcases exprIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a e str p k hkind hp hk hin
       cases hkind with
@@ -341,14 +341,14 @@ theorem stmtFp_region {m : Mem} {lo hi a addr : Nat} {s : Stmt}
       have hbody := hin.2.2.2 _ hp
       exact ih ⟨hbody.1, hbody.2⟩
     · intro a n e es k hk hin
-      rcases hin.1 with ⟨hlo, hhi, _⟩
+      rcases hin.1 with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a p n addr e es hp he ih hin
       exact ih (hin.2.1 _ hp)
     · intro a n addr e es ht ih hin
       exact ih hin.2.2
     · intro a n x xs k hk hin
-      rcases hin.1 with ⟨hlo, hhi, _⟩
+      rcases hin.1 with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a p n k x xs hp hk hin
       rcases hin.2.1 _ hp with ⟨_, hlo, hhi⟩
@@ -356,19 +356,19 @@ theorem stmtFp_region {m : Mem} {lo hi a addr : Nat} {s : Stmt}
     · intro a n addr x xs ht ih hin
       exact ih hin.2.2
     · intro a s k hk hin
-      rcases stmtIn_node hin with ⟨hlo, hhi, _⟩
+      rcases stmtIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a s k hk hin
-      rcases stmtIn_node hin with ⟨hlo, hhi, _⟩
+      rcases stmtIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a s k hk hin
-      rcases stmtIn_node hin with ⟨hlo, hhi, _⟩
+      rcases stmtIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a s k hk hin
-      rcases stmtIn_node hin with ⟨hlo, hhi, _⟩
+      rcases stmtIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a s k hk hin
-      rcases stmtIn_node hin with ⟨hlo, hhi, _⟩
+      rcases stmtIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a s x p k hkind hp hk hin
       cases hkind
@@ -407,18 +407,18 @@ theorem stmtFp_region {m : Mem} {lo hi a addr : Nat} {s : Stmt}
       exact ih hin.2.2.2.1
     · intro a os k hk hin
       cases os with
-      | none => rcases hin with ⟨hlo, hhi, _⟩; exact ⟨by omega, by omega⟩
-      | some s => rcases hin.1 with ⟨hlo, hhi, _⟩; exact ⟨by omega, by omega⟩
+      | none => rcases hin with ⟨hlo, hhi⟩; exact ⟨by omega, by omega⟩
+      | some s => rcases hin.1 with ⟨hlo, hhi⟩; exact ⟨by omega, by omega⟩
     · intro a p addr s hp hs ih hin
       exact ih (hin.2 _ hp)
     · intro a oe k hk hin
       cases oe with
-      | none => rcases hin with ⟨hlo, hhi, _⟩; exact ⟨by omega, by omega⟩
-      | some e => rcases hin.1 with ⟨hlo, hhi, _⟩; exact ⟨by omega, by omega⟩
+      | none => rcases hin with ⟨hlo, hhi⟩; exact ⟨by omega, by omega⟩
+      | some e => rcases hin.1 with ⟨hlo, hhi⟩; exact ⟨by omega, by omega⟩
     · intro a p addr e hp he ih hin
       exact ih (hin.2 _ hp)
     · intro a n s ss k hk hin
-      rcases hin.1 with ⟨hlo, hhi, _⟩
+      rcases hin.1 with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a p n addr s ss hp hs ih hin
       exact ih (hin.2.1 _ hp)
@@ -444,19 +444,19 @@ theorem exprFp_region {m : Mem} {lo hi a addr : Nat} {e : Expr}
       ?_ ?_ ?_ ?_ ?_ ?_ ?_
     all_goals simp only [R1, R2, R3, R4, R5, R6, R7]
     · intro a e k hk hin
-      rcases exprIn_node hin with ⟨hlo, hhi, _⟩
+      rcases exprIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a e k hk hin
-      rcases exprIn_node hin with ⟨hlo, hhi, _⟩
+      rcases exprIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a e k hk hin
-      rcases exprIn_node hin with ⟨hlo, hhi, _⟩
+      rcases exprIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a e k hk hin
-      rcases exprIn_node hin with ⟨hlo, hhi, _⟩
+      rcases exprIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a e k hk hin
-      rcases exprIn_node hin with ⟨hlo, hhi, _⟩
+      rcases exprIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a e str p k hkind hp hk hin
       cases hkind with
@@ -495,14 +495,14 @@ theorem exprFp_region {m : Mem} {lo hi a addr : Nat} {e : Expr}
       have hbody := hin.2.2.2 _ hp
       exact ih ⟨hbody.1, hbody.2⟩
     · intro a n e es k hk hin
-      rcases hin.1 with ⟨hlo, hhi, _⟩
+      rcases hin.1 with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a p n addr e es hp he ih hin
       exact ih (hin.2.1 _ hp)
     · intro a n addr e es ht ih hin
       exact ih hin.2.2
     · intro a n x xs k hk hin
-      rcases hin.1 with ⟨hlo, hhi, _⟩
+      rcases hin.1 with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a p n k x xs hp hk hin
       rcases hin.2.1 _ hp with ⟨_, hlo, hhi⟩
@@ -510,19 +510,19 @@ theorem exprFp_region {m : Mem} {lo hi a addr : Nat} {e : Expr}
     · intro a n addr x xs ht ih hin
       exact ih hin.2.2
     · intro a s k hk hin
-      rcases stmtIn_node hin with ⟨hlo, hhi, _⟩
+      rcases stmtIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a s k hk hin
-      rcases stmtIn_node hin with ⟨hlo, hhi, _⟩
+      rcases stmtIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a s k hk hin
-      rcases stmtIn_node hin with ⟨hlo, hhi, _⟩
+      rcases stmtIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a s k hk hin
-      rcases stmtIn_node hin with ⟨hlo, hhi, _⟩
+      rcases stmtIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a s k hk hin
-      rcases stmtIn_node hin with ⟨hlo, hhi, _⟩
+      rcases stmtIn_node hin with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a s x p k hkind hp hk hin
       cases hkind
@@ -561,18 +561,18 @@ theorem exprFp_region {m : Mem} {lo hi a addr : Nat} {e : Expr}
       exact ih hin.2.2.2.1
     · intro a os k hk hin
       cases os with
-      | none => rcases hin with ⟨hlo, hhi, _⟩; exact ⟨by omega, by omega⟩
-      | some s => rcases hin.1 with ⟨hlo, hhi, _⟩; exact ⟨by omega, by omega⟩
+      | none => rcases hin with ⟨hlo, hhi⟩; exact ⟨by omega, by omega⟩
+      | some s => rcases hin.1 with ⟨hlo, hhi⟩; exact ⟨by omega, by omega⟩
     · intro a p addr s hp hs ih hin
       exact ih (hin.2 _ hp)
     · intro a oe k hk hin
       cases oe with
-      | none => rcases hin with ⟨hlo, hhi, _⟩; exact ⟨by omega, by omega⟩
-      | some e => rcases hin.1 with ⟨hlo, hhi, _⟩; exact ⟨by omega, by omega⟩
+      | none => rcases hin with ⟨hlo, hhi⟩; exact ⟨by omega, by omega⟩
+      | some e => rcases hin.1 with ⟨hlo, hhi⟩; exact ⟨by omega, by omega⟩
     · intro a p addr e hp he ih hin
       exact ih (hin.2 _ hp)
     · intro a n s ss k hk hin
-      rcases hin.1 with ⟨hlo, hhi, _⟩
+      rcases hin.1 with ⟨hlo, hhi⟩
       exact ⟨by omega, by omega⟩
     · intro a p n addr s ss hp hs ih hin
       exact ih (hin.2.1 _ hp)

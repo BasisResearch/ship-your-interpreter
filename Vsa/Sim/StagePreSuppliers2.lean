@@ -78,7 +78,6 @@ theorem blockB_logical_stagePre
         -- `blockA_logicalArm`).
         EvalGround ment SL A sp sret aExpr.toNat (.logical op el er) ∧
         aExpr.toNat + 24 ≤ 0x100000000 ∧
-        aLeft.toNat % 8 = 0 ∧
         0x80000000 ≤ aLeft.toNat ∧ aLeft.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aLeft.toNat ∧
         (aLeft.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aLeft.toNat) ∧
@@ -98,12 +97,12 @@ theorem blockB_logical_stagePre
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) :
     LandedN 3 c (fun c' => JalPreBundle el c' st d env) := by
   obtain ⟨ment, hArm, hx11, hx13, henvReg, hgframe, hg8, hg18, hpay, hexprSurv, hgroundP, hexprHi24,
-    hopAl, hopLo, hopHi, hopWin, hopStk,
+    hopLo, hopHi, hopWin, hopStk,
     hsproom, hspSLhi, hsp16, hSLhiRam,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
     hstackBudget, hexprBodies, hstoreBodies⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
-    hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
+    hexpr, houtStr, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
@@ -131,7 +130,7 @@ theorem blockB_logical_stagePre
     site_8000355c_lg c.σ c.tick c.steps (0x8000355c#64) vmi aExpr pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7
       hG hpc hmi ha2 (hmem ▸ hcode) rfl
       (by rw [haddr16]; omega) (by rw [haddr16]; omega)
-      (by rw [haddr16, htoh]; right; omega) (by rw [haddr16]; omega)
+      (by rw [haddr16, htoh]; right; omega)
       (by rw [haddr16, hmem]; exact hp0) (by rw [haddr16, hmem]; exact hp1)
       (by rw [haddr16, hmem]; exact hp2) (by rw [haddr16, hmem]; exact hp3)
       (by rw [haddr16, hmem]; exact hp4) (by rw [haddr16, hmem]; exact hp5)
@@ -229,7 +228,7 @@ theorem blockB_logical_stagePre
   have hpayMc : read64 mcall (aExpr.toNat + 16) = some aLeft.toNat := by
     have hag := evalGround_ast_read64_agree hgroundP hspSLhi
       (fun a ha => hAgSpill a (by have := hsproom; have := hSLlo; omega))
-      (off := 16) (by omega)
+      (off := 16) (by simp [exprReadFields])
     rw [hag]; exact hpay
   have hspsubL : (sp - 1088#64).toNat = sp.toNat - 1088 := by
     rw [BitVec.toNat_sub]
@@ -308,7 +307,7 @@ theorem blockB_logical_stagePre
       hmem3e, hwordsChild, hcodeMcall, hviIntMcall, hviSlotMcall, hnbsMcall, hGroundChildL, hExprMcall, hStoreMcall, hStoreSurvMcall,
       hframeB, ⟨hg8, hg18, ⟨w19, hw19⟩, ⟨w20, hw20⟩, ⟨w21, hw21⟩⟩,
       hslotRaMcall, hslotS0Mcall, hslotS1Mcall, hslotS2Mcall,
-      hopAl, hopLo, hopHi, hopWin, hopStk,
+      hopLo, hopHi, hopWin, hopStk,
       (by rw [hsub968]; omega), (by rw [hsub968]; omega), (by rw [hsub968]; omega),
       hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin,
       hcodeStk, hviStk, htableStk, harenaStk, harenaCode,

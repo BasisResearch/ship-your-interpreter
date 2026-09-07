@@ -502,7 +502,7 @@ def filter_smt(cand, timeout_ms=15000):
             pass
     line = next((l for l in out.splitlines() if cand.full_prop() in l), "")
     # ONLY a machine-checked refutation drops.  Everything else keeps.
-    if "REFUTED-REPLAYED" in line:
+    if r.returncode == 0 and "**REFUTED-REPLAYED**" in line:
         model = re.search(r"model (\{[^}]*\})", line)
         return False, f"Z3 countermodel (Lean-replayed) {model.group(1) if model else '(sat)'}"
     if "NOT-REFUTED" in line or "VALID-IN-FRAGMENT" in line:
@@ -535,10 +535,10 @@ def filter_semantic(cand, timeout_ms=15000):
         except OSError:
             pass
     line = next((l for l in out.splitlines() if cand.full_prop() in l), "")
-    if "REFUTED" in line:
+    if r.returncode == 1 and "**REFUTED**" in line:
         return False, "semantic rule: uncovered demand address (adversary found)"
     if "SURVIVED" in line:
-        return True, "semantic rule: every demand address covered (or SMT territory)"
+        return True, "semantic rule: coverage within the extracted fragment only"
     return True, "semantic: undecidable (kept)"
 
 
@@ -646,21 +646,21 @@ def cure_one(path, prop, field, do_smt=True, do_semantic=True, topk=5,
             continue
         if do_smt:
             ok, ev = filter_smt(c)
-            c.filters["smt"] = ("PASS" if ok else "REFUTED", ev)
+            c.filters["smt"] = ("NOT-REJECTED" if ok else "REFUTED", ev)
             if not ok:
                 c.dropped_by = "smt"
                 kills["smt"] += 1
                 continue
         if do_semantic:
             ok, ev = filter_semantic(c)
-            c.filters["semantic"] = ("PASS" if ok else "REFUTED", ev)
+            c.filters["semantic"] = ("NOT-REJECTED" if ok else "REFUTED", ev)
             if not ok:
                 c.dropped_by = "semantic"
                 kills["semantic"] += 1
                 continue
         if demands:                          # FILTER 3b — INTERLOCK
             ok, ev = filter_joint(c, demands)
-            c.filters["joint"] = ("PASS" if ok else "CONSUMER-FAILS", ev)
+            c.filters["joint"] = ("NOT-REJECTED" if ok else "CONSUMER-FAILS", ev)
             if not ok:
                 c.dropped_by = "joint"
                 kills["joint"] += 1

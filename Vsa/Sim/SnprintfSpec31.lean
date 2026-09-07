@@ -306,7 +306,7 @@ theorem svfProE_spec
   have hrb7 : σ11.mem[vsp.toNat + 7]? = some ((sdData_val vfmt).extractLsb' 56 8) := by rw [hmE11]; exact getElem_writeMap8_7 _ _ _
   obtain ⟨σ12, i12, hs12, hi12, hG12, hmem12, hobs12⟩ :=
     site_80007720_rt σ11 i11 (c.steps + 11) _ vmi11 vsp _ _ _ _ _ _ _ _
-      hG11 hpc11 hmi11 hp11.2.2.2.1 hsl11 rfl (by rw [hoff0]; omega) (by rw [hoff0]; omega) (Or.inr (by rw [hoff0, htoh]; omega)) (by rw [hoff0]; omega) (by rw [hoff0]; exact hrb0) (by rw [hoff0]; exact hrb1) (by rw [hoff0]; exact hrb2) (by rw [hoff0]; exact hrb3) (by rw [hoff0]; exact hrb4) (by rw [hoff0]; exact hrb5) (by rw [hoff0]; exact hrb6) (by rw [hoff0]; exact hrb7) hi11
+      hG11 hpc11 hmi11 hp11.2.2.2.1 hsl11 rfl (by rw [hoff0]; omega) (by rw [hoff0]; omega) (Or.inr (by rw [hoff0, htoh]; omega))  (by rw [hoff0]; exact hrb0) (by rw [hoff0]; exact hrb1) (by rw [hoff0]; exact hrb2) (by rw [hoff0]; exact hrb3) (by rw [hoff0]; exact hrb4) (by rw [hoff0]; exact hrb5) (by rw [hoff0]; exact hrb6) (by rw [hoff0]; exact hrb7) hi11
   have hstep12 : Step ⟨σ11, i11, c.steps + 11⟩ ⟨σ12, i12, c.steps + 12⟩ := hs12
   have hpc12 : σ12.regs.get? Register.PC = some (0x80007724#64) := by
     have := obs_alu_pc hobs12
@@ -335,7 +335,7 @@ theorem svfProE_spec
   -- === 0x80007724: ld s4,232(s1) — __global_locale.mbtowc = __ascii_mbtowc ===
   obtain ⟨σ13, i13, hs13, hi13, hG13, hmem13, hobs13⟩ :=
     site_80007724_rt σ12 i12 (c.steps + 12) _ vmi12 (0x8001b798#64) _ _ _ _ _ _ _ _
-      hG12 hpc12 hmi12 hp12.2.2.2.1 hsl12 rfl (by rw [hoffloc]; omega) (by rw [hoffloc]; omega) (Or.inr (by rw [hoffloc, htoh]; omega)) (by rw [hoffloc]) (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn0) (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn1) (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn2) (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn3) (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn4) (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn5) (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn6) (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn7) hi12
+      hG12 hpc12 hmi12 hp12.2.2.2.1 hsl12 rfl (by rw [hoffloc]; omega) (by rw [hoffloc]; omega) (Or.inr (by rw [hoffloc, htoh]; omega))  (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn0) (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn1) (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn2) (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn3) (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn4) (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn5) (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn6) (by rw [hoffloc]; exact (hagA _ (by omega)).trans hfn7) hi12
   have hstep13 : Step ⟨σ12, i12, c.steps + 12⟩ ⟨σ13, i13, c.steps + 13⟩ := hs13
   have hpc13 : σ13.regs.get? Register.PC = some (0x80007728#64) := by
     have := obs_alu_pc hobs13

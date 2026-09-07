@@ -155,7 +155,6 @@ theorem armTail_rec_es
         read64 mcall (sp.toNat - 32) = some v18.toNat ∧
         read64 mcall (sp.toNat - 40) = some v19.toNat ∧
         -- operand-node geometry (the sub-call's `aExpr`):
-        aOperand.toNat % 8 = 0 ∧
         0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aOperand.toNat ∧
         (aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aOperand.toNat) ∧
@@ -197,7 +196,7 @@ theorem armTail_rec_es
     hsubWords, hcodeS, hcode, hviCode, hslot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframe,
     hgx8, hgx9, hgx18, hgx19, hgx2,
     hslotRa, hslotS0, hslotS1, hslotS2, hslotS3,
-    hopAl, hopLo, hopHi, hopWin, hopStk,
+    hopLo, hopHi, hopWin, hopStk,
     hssAl, hssLo, hssHi,
     hsproom, hspSLhi, hsp16, hsphi, hSLlo, hSLhiRam, hSLwin, hraAl,
     hcodeStk, hviStk, htableStk, harenaStk, harenaCode, hexecCodeStk, hexecArenaCode,
@@ -289,7 +288,6 @@ theorem armTail_rec_es
         rcases hopStk with h | h
         · left; exact h
         · right; rw [hspsub]; omega
-      expr_align := hopAl
       expr_ram := ⟨hopLo, hopHi⟩
       expr_win := hopWin
       sret_align := hssAl
@@ -428,9 +426,8 @@ theorem execExprGlue
       read64 ment (aStmt.toNat + 8) = some aOperand.toNat)
     (hsubexpr : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       ExprRepr ment aOperand.toNat e)
-    -- `Stmt` node geometry (8-aligned 16-byte RAM slot above HTIF), for the
+    -- `Stmt` node geometry (16-byte RAM slot above HTIF), for the
     -- `ld a2,8(s0)` load-region checks:
-    (hstmtAl : aStmt.toNat % 8 = 0)
     (hstmtLo : 0x80000000 ≤ aStmt.toNat) (hstmtHi : aStmt.toNat + 16 ≤ 0x100000000)
     (hstmtWin : tohostAddr + 16 ≤ aStmt.toNat)
     -- the code residuals (survive on the stack-window complement):
@@ -458,7 +455,6 @@ theorem execExprGlue
       ∀ m' : Mem, (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ment[k]? = m'[k]?) →
         StoreRepr m' N A φf φc st.store)
     -- operand-node geometry:
-    (hopAl : aOperand.toNat % 8 = 0)
     (hopLo : 0x80000000 ≤ aOperand.toNat) (hopHi : aOperand.toNat + 16 ≤ 0x100000000)
     (hopWin : tohostAddr + 16 ≤ aOperand.toNat)
     (hopStk : aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aOperand.toNat)
@@ -523,7 +519,7 @@ theorem execExprGlue
     site_80004170_es c.σ c.tick c.steps (0x80004170#64) vmi aStmt pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7
       hG hpc hmi hx8 (hmem ▸ hcodeS) rfl
       (by rw [haddr8]; omega) (by rw [haddr8]; omega)
-      (by rw [haddr8, htoh]; right; omega) (by rw [haddr8]; omega)
+      (by rw [haddr8, htoh]; right; omega)
       (by rw [haddr8, hmem]; exact hp0) (by rw [haddr8, hmem]; exact hp1)
       (by rw [haddr8, hmem]; exact hp2) (by rw [haddr8, hmem]; exact hp3)
       (by rw [haddr8, hmem]; exact hp4) (by rw [haddr8, hmem]; exact hp5)
@@ -675,7 +671,7 @@ theorem execExprGlue
         (hstoreSurv ment hmemframe),
         hframe4, hgx8, hgx9, hgx18, hgx19, hgx2,
         (hmem4e ▸ hslotRa), (hmem4e ▸ hslotS0), (hmem4e ▸ hslotS1), (hmem4e ▸ hslotS2), (hmem4e ▸ hslotS3),
-        hopAl, hopLo, hopHi, hopWin, hopStk,
+        hopLo, hopHi, hopWin, hopStk,
         (by rw [hsubval]; omega), (by rw [hsubval]; omega), (by rw [hsubval]; omega),
         hsproom, hspSLhi, hsp16, (by omega), hSLlo, hSLhi, hSLwin, hraAl,
         hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
@@ -722,7 +718,6 @@ theorem execExprSimC
       read64 ment (aStmt.toNat + 8) = some aOperand.toNat)
     (hsubexpr : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       ExprRepr ment aOperand.toNat e)
-    (hstmtAl : aStmt.toNat % 8 = 0)
     (hstmtLo : 0x80000000 ≤ aStmt.toNat) (hstmtHi : aStmt.toNat + 16 ≤ 0x100000000)
     (hstmtWin : tohostAddr + 16 ≤ aStmt.toNat)
     (hevalcode : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
@@ -747,7 +742,6 @@ theorem execExprSimC
     (hstoreSurv : ∀ ment : Mem, (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ment[a]? = m0[a]?) →
       ∀ m' : Mem, (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ment[k]? = m'[k]?) →
         StoreRepr m' N A φf φc st.store)
-    (hopAl : aOperand.toNat % 8 = 0)
     (hopLo : 0x80000000 ≤ aOperand.toNat) (hopHi : aOperand.toNat + 16 ≤ 0x100000000)
     (hopWin : tohostAddr + 16 ≤ aOperand.toNat)
     (hopStk : aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aOperand.toNat)
@@ -772,9 +766,9 @@ theorem execExprSimC
     hSpec hIH hslot htableStk0
     (fun hIH' =>
       execExprGlue g N A SL φf φc st st' d env e v sp r aInterp aStmt aEnv aRet aOperand m0 out0
-        hIH' henvPtr henvValid hop hsubexpr hstmtAl hstmtLo hstmtHi hstmtWin hevalcode hvicode hslotP hnbsP
+        hIH' henvPtr henvValid hop hsubexpr hstmtLo hstmtHi hstmtWin hevalcode hvicode hslotP hnbsP
         hground hsubWords henvsetG hstoreSurv
-        hopAl hopLo hopHi hopWin hopStk hsproom hspSLhi hsp16 hSLlo hSLhi hSLwin
+        hopLo hopHi hopWin hopStk hsproom hspSLhi hsp16 hSLlo hSLhi hSLwin
         hcodeStk hviStk htableStk harenaStk harenaCode hexecArenaCode hexecCodeStk
         hstackBudget hexprBodies hstoreBodies)
 

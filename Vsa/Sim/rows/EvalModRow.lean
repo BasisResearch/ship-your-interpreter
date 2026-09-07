@@ -8,6 +8,7 @@ import Vsa.Sim.LoopStep
 import Vsa.Sim.rows.EvalMulRow
 import Vsa.Sim.rows.IntPostEpilogue
 import Vsa.Sim.BinopTailGen
+import Vsa.Sim.MemPresence
 import Vsa.Sim.rows.EvalDivRow
 
 /-!
@@ -96,7 +97,7 @@ theorem blockC_mod
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat)
     (st' st'' : Vsa.While.St) (a b : Int)
-    (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 Wl : BitVec 64) (out0 : Array String)
+    (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
     (m0 : Mem)
     (hbNe : b ≠ 0) :
     Triple
@@ -105,12 +106,8 @@ theorem blockC_mod
         gpre Register.x8 = some aExpr ∧
         read32 c.σ.mem (aExpr.toNat + 8) = some 15 ∧      -- op token = binOpTok .mod
         SlotPinned 0x80019f94#64 0x00#8 0x98#8 0xfe#8 0xff#8 c.σ.mem ∧
-        (∀ k : Nat, ∃ w : BitVec 8, c.σ.mem[k]? = some w) ∧
-        c.σ.regs.get? Register.x19 = some Wl ∧              -- s3 = LEFT payload word
-        read64 c.σ.mem (sp.toNat - 960) = some Wl.toNat ∧   -- vl payload buffer = Wl
-        read64 c.σ.mem (sp.toNat - 1088) = some (2#64 : BitVec 64).toNat ∧  -- respilled vl.kind
+        BinaryReturnData SL sp sret c ∧
         -- === geometry ===
-        aExpr.toNat % 4 = 0 ∧
         0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 8 ≤ aExpr.toNat ∧
         (aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat) ∧
@@ -147,8 +144,8 @@ theorem blockC_mod
         PhiExtends φcm φce st'.store.closures.size ∧
         PreEpilogueVD g N A SL φfe φce st'' (.int (wrap64 (a.tmod b))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
   intro c hpre
-  obtain ⟨hTS, hgx8, hopTok, hSlot, hFullPop, hX19, hWlBuf, hKindResp,
-    hexprAl, hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq,
+  obtain ⟨hTS, hgx8, hopTok, hSlot, hReadData,
+    hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode, hraAl,
     hVint, hModdi3, hUdivdi3, hmodStk, hcodeStk, hviStk, hTableStk, hsretInSL,
     hSLloSp, hSLlo, hSLwin, hsphiRam, hsp8, hSLhiRam, hspSLhi,
@@ -163,15 +160,15 @@ theorem blockC_mod
   -- Phase-0: scalar sp/SL arithmetic + geometry bundles derived ONCE in small-context
   -- lemmas (`spArith`/`slotGeom8`/`exprGeom4`), not re-omega'd in the row body.
   have hSB : StackBounds sp SL := ⟨hSLloSp, hSLlo, hSLwin, hsp8, hsphiRam⟩
-  have hEB : ExprBounds aExpr := ⟨hexprAl, hexprLo, hexprHi, hexprWin⟩
+  have hEB : ExprBounds aExpr := ⟨hexprLo, hexprHi, hexprWin⟩
   have hAr : SpArith sp SL := spArith hSB
   have hsp1088 : 1088 ≤ sp.toNat := hAr.sp1088
   have hspLoc : 0x80000000 ≤ sp.toNat := hAr.spLo
   have hspHtifLoc : tohostAddr + 16 + 1088 ≤ sp.toNat := hAr.spHtif
   have hSLlo40 : SL.lo ≤ sp.toNat - 40 := hAr.SLlo40
   have hSLlo32 : SL.lo ≤ sp.toNat - 32 := hAr.SLlo32
-  have gExpr8 := exprGeom4 hEB 8 (by decide) (by decide)
-  have gExpr4 := exprGeom4 hEB 4 (by decide) (by decide)
+  have gExpr8 := exprGeom4 hEB 8 (by decide)
+  have gExpr4 := exprGeom4 hEB 4 (by decide)
   have g1088 := slotGeom8 hSB 1088 (by decide) (by decide) (by decide)
   have g944  := slotGeom8 hSB 944  (by decide) (by decide) (by decide)
   have g936  := slotGeom8 hSB 936  (by decide) (by decide) (by decide)
@@ -204,15 +201,11 @@ theorem blockC_mod
     rw [hpe]; exact hpRb
   have hWrNe : (bytesVal MKind.ld [rpb0, rpb1, rpb2, rpb3, rpb4, rpb5, rpb6, rpb7] : BitVec 64) ≠ 0 := by
     intro hz; apply hbNe; rw [← hWr_toInt, hz]; simp
-  have hvalL' : ValueRepr c.σ.mem N φcl (sp.toNat - 968) (.int a) := hvalL
-  obtain ⟨hkindL, pL, hpayL64, hpLa⟩ := valueRepr_int_pay64 hvalL'
-  have hpayL64' : read64 c.σ.mem (sp.toNat - 960) = some pL := by
-    rw [hAr.e968] at hpayL64; exact hpayL64
-  have hWlNat : Wl.toNat = pL := by
-    have := hWlBuf.symm.trans hpayL64'; exact Option.some.inj this
-  have hWl_toInt : Wl.toInt = a := by
-    have hpe : Wl = BitVec.ofNat 64 pL := by rw [← hWlNat]; exact (ofNat_toNat_self64 Wl).symm
-    rw [hpe]; exact hpLa
+  have hIntLoads := hReadData.toBinaryReturnLoads.int_readback (by omega) hvalL
+  let Wl : BitVec 64 := bytesT8 c.σ.mem (sp.toNat - 960)
+  have hX19 : c.σ.regs.get? Register.x19 = some Wl := hIntLoads.payload_register
+  have hKindResp := hIntLoads.kind_spill
+  have hWl_toInt : Wl.toInt = a := hIntLoads.int_value
   -- === op-token bytes (15 = [0x0f,0,0,0]) ===
   obtain ⟨ob0, ob1, ob2, ob3, hob0, hob1, hob2, hob3, hobrec⟩ :=
     read32_bytes c.σ.mem (aExpr.toNat + 8) 15 hopTok
@@ -264,13 +257,17 @@ theorem blockC_mod
       apply BitVec.eq_of_toNat_eq; decide
     rw [hs, BitVec.toNat_add]; have hv : (4#64 : BitVec 64).toNat = 4 := by decide
     rw [hv]; have := aExpr.isLt; rw [Nat.mod_eq_of_lt (by omega)]
-  obtain ⟨lb0, hlb0⟩ := hFullPop (aExpr.toNat + 4)
-  obtain ⟨lb1, hlb1⟩ := hFullPop (aExpr.toNat + 4 + 1)
-  obtain ⟨lb2, hlb2⟩ := hFullPop (aExpr.toNat + 4 + 2)
-  obtain ⟨lb3, hlb3⟩ := hFullPop (aExpr.toNat + 4 + 3)
+  let lb0 := bytesT1 c.σ.mem (aExpr.toNat + 4)
+  have hlb0 : bytesT1 c.σ.mem (aExpr.toNat + 4) = lb0 := rfl
+  let lb1 := bytesT1 c.σ.mem (aExpr.toNat + 4 + 1)
+  have hlb1 : bytesT1 c.σ.mem (aExpr.toNat + 4 + 1) = lb1 := rfl
+  let lb2 := bytesT1 c.σ.mem (aExpr.toNat + 4 + 2)
+  have hlb2 : bytesT1 c.σ.mem (aExpr.toNat + 4 + 2) = lb2 := rfl
+  let lb3 := bytesT1 c.σ.mem (aExpr.toNat + 4 + 3)
+  have hlb3 : bytesT1 c.σ.mem (aExpr.toNat + 4 + 3) = lb3 := rfl
   -- === the FrameBundle at v2 = sp-1088 ===
   have hfb : FrameBundle c.σ.mem (sp - 1088#64) :=
-    ⟨fun k => hFullPop k, hspsub ▸ (frameBaseGeom hSB).1, hspsub ▸ (frameBaseGeom hSB).2.1,
+    ⟨hspsub ▸ (frameBaseGeom hSB).1, hspsub ▸ (frameBaseGeom hSB).2.1,
       hspsub ▸ (frameBaseGeom hSB).2.2.1, hspsub ▸ (frameBaseGeom hSB).2.2.2⟩
   -- ── entry linkage + dispatch: 0x8000351c → 0x800037c4 (ModDispatchPostS) ──────
   have hdisp :=
@@ -280,36 +277,36 @@ theorem blockC_mod
       kb0 kb1 kb2 kb3 kb4 kb5 kb6 kb7
       0x00#8 0x98#8 0xfe#8 0xff#8
       hG hpc hmi hsp hx8c hs1 hX19 hcode hcVal hkVal
-      (by rw [hop8]; first | exact gExpr8.1 | exact gExpr8.2.1 | exact gExpr8.2.2.1 | exact gExpr8.2.2.2) (by rw [hop8]; first | exact gExpr8.1 | exact gExpr8.2.1 | exact gExpr8.2.2.1 | exact gExpr8.2.2.2)
-      (by rw [hop8]; first | exact gExpr8.1 | exact gExpr8.2.1 | exact gExpr8.2.2.1 | exact gExpr8.2.2.2) (by rw [hop8]; first | exact gExpr8.1 | exact gExpr8.2.1 | exact gExpr8.2.2.1 | exact gExpr8.2.2.2)
-      (by rw [hop8]; exact hob0') (by rw [hop8]; exact hob1')
-      (by rw [hop8]; exact hob2') (by rw [hop8]; exact hob3')
-      (by rw [hline4]; first | exact gExpr4.1 | exact gExpr4.2.1 | exact gExpr4.2.2.1 | exact gExpr4.2.2.2) (by rw [hline4]; first | exact gExpr4.1 | exact gExpr4.2.1 | exact gExpr4.2.2.1 | exact gExpr4.2.2.2)
-      (by rw [hline4]; first | exact gExpr4.1 | exact gExpr4.2.1 | exact gExpr4.2.2.1 | exact gExpr4.2.2.2) (by rw [hline4]; first | exact gExpr4.1 | exact gExpr4.2.1 | exact gExpr4.2.2.1 | exact gExpr4.2.2.2)
-      (by rw [hline4]; exact hlb0) (by rw [hline4]; exact hlb1)
-      (by rw [hline4]; exact hlb2) (by rw [hline4]; exact hlb3)
+      (by rw [hop8]; first | exact gExpr8.1 | exact gExpr8.2.1 | exact gExpr8.2.2) (by rw [hop8]; first | exact gExpr8.1 | exact gExpr8.2.1 | exact gExpr8.2.2)
+      (by rw [hop8]; first | exact gExpr8.1 | exact gExpr8.2.1 | exact gExpr8.2.2)
+      (by rw [hop8]; exact lpin_of_present hob0') (by rw [hop8]; exact lpin_of_present hob1')
+      (by rw [hop8]; exact lpin_of_present hob2') (by rw [hop8]; exact lpin_of_present hob3')
+      (by rw [hline4]; first | exact gExpr4.1 | exact gExpr4.2.1 | exact gExpr4.2.2) (by rw [hline4]; first | exact gExpr4.1 | exact gExpr4.2.1 | exact gExpr4.2.2)
+      (by rw [hline4]; first | exact gExpr4.1 | exact gExpr4.2.1 | exact gExpr4.2.2)
+      (by simpa only [hline4] using hlb0) (by simpa only [hline4] using hlb1)
+      (by simpa only [hline4] using hlb2) (by simpa only [hline4] using hlb3)
       (by rw [haddr944]; first | exact g944.lo | exact g944.hi4 | exact g944.hi8 | exact g944.ht4 | exact g944.ht8 | exact g944.win | exact g944.al4 | exact g944.al8) (by rw [haddr944]; first | exact g944.lo | exact g944.hi4 | exact g944.hi8 | exact g944.ht4 | exact g944.ht8 | exact g944.win | exact g944.al4 | exact g944.al8)
       (by rw [haddr944]; first | exact g944.lo | exact g944.hi4 | exact g944.hi8 | exact g944.ht4 | exact g944.ht8 | exact g944.win | exact g944.al4 | exact g944.al8) (by rw [haddr944]; first | exact g944.lo | exact g944.hi4 | exact g944.hi8 | exact g944.ht4 | exact g944.ht8 | exact g944.win | exact g944.al4 | exact g944.al8)
-      (by rw [haddr944]; exact hrkb0) (by rw [haddr944]; exact hrkb1)
-      (by rw [haddr944]; exact hrkb2) (by rw [haddr944]; exact hrkb3)
+      (by rw [haddr944]; exact lpin_of_present hrkb0) (by rw [haddr944]; exact lpin_of_present hrkb1)
+      (by rw [haddr944]; exact lpin_of_present hrkb2) (by rw [haddr944]; exact lpin_of_present hrkb3)
       (by rw [haddr936]; first | exact g936.lo | exact g936.hi4 | exact g936.hi8 | exact g936.ht4 | exact g936.ht8 | exact g936.win | exact g936.al4 | exact g936.al8) (by rw [haddr936]; first | exact g936.lo | exact g936.hi4 | exact g936.hi8 | exact g936.ht4 | exact g936.ht8 | exact g936.win | exact g936.al4 | exact g936.al8)
       (by rw [haddr936]; first | exact g936.lo | exact g936.hi4 | exact g936.hi8 | exact g936.ht4 | exact g936.ht8 | exact g936.win | exact g936.al4 | exact g936.al8) (by rw [haddr936]; first | exact g936.lo | exact g936.hi4 | exact g936.hi8 | exact g936.ht4 | exact g936.ht8 | exact g936.win | exact g936.al4 | exact g936.al8)
-      (by rw [haddr936, hRpb.1]; exact hrpb0)
-      (by rw [haddr936, hRpb.2.1]; exact hrpb1)
-      (by rw [haddr936, hRpb.2.2.1]; exact hrpb2)
-      (by rw [haddr936, hRpb.2.2.2.1]; exact hrpb3)
-      (by rw [haddr936, hRpb.2.2.2.2.1]; exact hrpb4)
-      (by rw [haddr936, hRpb.2.2.2.2.2.1]; exact hrpb5)
-      (by rw [haddr936, hRpb.2.2.2.2.2.2.1]; exact hrpb6)
-      (by rw [haddr936, hRpb.2.2.2.2.2.2.2]; exact hrpb7)
+      (by rw [haddr936, hRpb.1]; exact lpin_of_present hrpb0)
+      (by rw [haddr936, hRpb.2.1]; exact lpin_of_present hrpb1)
+      (by rw [haddr936, hRpb.2.2.1]; exact lpin_of_present hrpb2)
+      (by rw [haddr936, hRpb.2.2.2.1]; exact lpin_of_present hrpb3)
+      (by rw [haddr936, hRpb.2.2.2.2.1]; exact lpin_of_present hrpb4)
+      (by rw [haddr936, hRpb.2.2.2.2.2.1]; exact lpin_of_present hrpb5)
+      (by rw [haddr936, hRpb.2.2.2.2.2.2.1]; exact lpin_of_present hrpb6)
+      (by rw [haddr936, hRpb.2.2.2.2.2.2.2]; exact lpin_of_present hrpb7)
       hSlot
       rfl rfl rfl rfl
       (by rw [haddr0]; first | exact g1088.lo | exact g1088.hi4 | exact g1088.hi8 | exact g1088.ht4 | exact g1088.ht8 | exact g1088.win | exact g1088.al4 | exact g1088.al8) (by rw [haddr0]; first | exact g1088.lo | exact g1088.hi4 | exact g1088.hi8 | exact g1088.ht4 | exact g1088.ht8 | exact g1088.win | exact g1088.al4 | exact g1088.al8)
       (by rw [haddr0]; first | exact g1088.lo | exact g1088.hi4 | exact g1088.hi8 | exact g1088.ht4 | exact g1088.ht8 | exact g1088.win | exact g1088.al4 | exact g1088.al8) (by rw [haddr0]; first | exact g1088.lo | exact g1088.hi4 | exact g1088.hi8 | exact g1088.ht4 | exact g1088.ht8 | exact g1088.win | exact g1088.al4 | exact g1088.al8)
-      (by rw [haddr0]; exact hkb0) (by rw [haddr0]; exact hkb1)
-      (by rw [haddr0]; exact hkb2) (by rw [haddr0]; exact hkb3)
-      (by rw [haddr0]; exact hkb4) (by rw [haddr0]; exact hkb5)
-      (by rw [haddr0]; exact hkb6) (by rw [haddr0]; exact hkb7)
+      (by rw [haddr0]; exact lpin_of_present hkb0) (by rw [haddr0]; exact lpin_of_present hkb1)
+      (by rw [haddr0]; exact lpin_of_present hkb2) (by rw [haddr0]; exact lpin_of_present hkb3)
+      (by rw [haddr0]; exact lpin_of_present hkb4) (by rw [haddr0]; exact lpin_of_present hkb5)
+      (by rw [haddr0]; exact lpin_of_present hkb6) (by rw [haddr0]; exact lpin_of_present hkb7)
       htick hWrNe hfb
   obtain ⟨cD, ldsD, hStepsD, hDDP⟩ := hdisp
   simp only [hout0eq] at hDDP
@@ -478,13 +475,13 @@ theorem blockC_mod
     fun m' hm' => hstoreSurv' m' (fun k hk => (hSLatτ3 k hk).trans (hm' k hk))
   -- MemExtends m0 → τ3.mem
   have hMemExt_c_D : MemExtends c.σ.mem cD.σ.mem := by
-    intro k bb hk; rw [hmemD]; exact pop_writeLog _ c.σ.mem (fun j => hFullPop j) k
+    rw [hmemD]; exact memExtends_writeLog c.σ.mem _
   have hMemExtτ3 : MemExtends m0 τ3.mem := by
     rw [hmemτ3e]; exact hMemExt.trans hMemExt_c_D
   have hWordsτ3 : ValueWordsTotal τ3.mem sret.toNat := by
     rw [hmemτ3e]
     exact ValueWordsTotal.mono hMemExt_c_D
-      (valueWordsTotal_of_populated hFullPop sret.toNat)
+      hReadData.sret_words
   -- memory frame vs m0, at τ3.mem = mA
   have hmemframeτ3 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ τ3.mem[a]? = m0[a]? := by
@@ -555,15 +552,10 @@ theorem blockC_mod
 structure ModResid
     (gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
-    (sp r sret aExpr : BitVec 64) (Wl : BitVec 64) (c' : Vsa.Machine.Config) : Prop where
+    (sp r sret aExpr : BitVec 64) (c' : Vsa.Machine.Config) : Prop where
   gx8 : gpre Register.x8 = some aExpr
   opTok : read32 c'.σ.mem (aExpr.toNat + 8) = some 15
   slot : SlotPinned 0x80019f94#64 0x00#8 0x98#8 0xfe#8 0xff#8 c'.σ.mem
-  fullpop : ∀ k : Nat, ∃ w : BitVec 8, c'.σ.mem[k]? = some w
-  x19 : c'.σ.regs.get? Register.x19 = some Wl
-  wlbuf : read64 c'.σ.mem (sp.toNat - 960) = some Wl.toNat
-  kindresp : read64 c'.σ.mem (sp.toNat - 1088) = some (2#64 : BitVec 64).toNat
-  exprAl : aExpr.toNat % 4 = 0
   exprLo : 0x80000000 ≤ aExpr.toNat
   exprHi : aExpr.toNat + 16 ≤ 0x100000000
   exprWin : tohostAddr + 8 ≤ aExpr.toNat
@@ -598,15 +590,13 @@ def EvalModSimGoal : Prop :=
   ∀ (gouter gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (a b : Int)
-    (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 Wl : BitVec 64)
+    (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 : BitVec 64)
     (out0 : Array String) (m0 : Mem),
     b ≠ 0 →
     EvalE st d env el st' (.int a) →
     EvalIH st d env el st' (.int a) →
     EvalIH st' d env er st'' (.int b) →
     EvalE st d env (.binary .mod el er) st'' (.int (wrap64 (a.tmod b))) →
-    st'.store.frames.size = st''.store.frames.size →
-    st'.store.closures.size = st''.store.closures.size →
     Triple
       (fun c => ∃ ment,
         ArmEntryK gouter N A SL φf φc st (0x800034e8#64) UnaryArmCallee (.binary .mod el er)
@@ -642,7 +632,7 @@ def EvalModSimGoal : Prop :=
         (∀ c' : Vsa.Machine.Config,
           TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
             st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
-          ModResid gpre N A SL sp r sret aExpr Wl c') ∧
+          ModResid gpre N A SL sp r sret aExpr c') ∧
         g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
         g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧ g Register.x19 = some v19 ∧
         (∀ R : Register, AbiPreservedNoise R →
@@ -658,7 +648,7 @@ obligation `b ≠ 0` (value-path; `b = 0` is the M5 error case) is carried into 
 `.mod` has NO overflow guard (`Int.tmod` never overflows). -/
 theorem evalModSim : EvalModSimGoal := by
   intro gouter gpre g N A SL φf φc st st' st'' d env el er a b
-    sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 Wl out0 m0 hbNe hLeft hIHl hIHr _hEvalE hSizeF hSizeC
+    sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hbNe hLeft hIHl hIHr _hEvalE
   intro c hpre
   obtain ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
     hpayL, hexprL, hpayR, hexprR, hMemExtM0, hGmt47,
@@ -681,22 +671,24 @@ theorem evalModSim : EvalModSimGoal := by
     · rw [readI64] at hp ⊢
       rw [← read64_agreeP hAg (fun j hj => ⟨by omega, by omega⟩)]; exact hp
   -- === block B: two-operand head + IHs → TwoSubReturn @0x8000351c ===
-  obtain ⟨c2, hs2, hTS⟩ :=
-    blockB_binary gouter gpre N A SL φf φc st st' st'' d env .mod el er (.int a) (.int b)
+  obtain ⟨c2, hs2, hReturned⟩ :=
+    blockB_binary_data gouter gpre N A SL φf φc st st' st'' d env .mod el er (.int a) (.int b)
       sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hLeft hIHl hIHr hVlSurv
       c ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
         hpayL, hexprL, hpayR, hexprR, hMemExtM0, hGmt47,
         hstackBudgetL, hexprBodiesL, hstoreBodiesL,
         hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩
-  have hR : ModResid gpre N A SL sp r sret aExpr Wl c2 := hResid c2 hTS
+  have hTS := hReturned.result
+  have hData := hReturned.extra
+  have hR : ModResid gpre N A SL sp r sret aExpr c2 := hResid c2 hTS
   have hOutC2 : String.join c2.σ.sailOutput.toList = st''.out := hTS.2.2.2.2.2.2.2.1
   -- === block C: dispatch + __moddi3 tail → PreEpilogueVD @0x800033ec ===
   obtain ⟨c3, hs3, mpre, φfm, φcm, φfe, φce, hpfm, hpcm, hpfe, hpce, hPreD⟩ :=
     blockC_mod gpre g N A SL φf φc st.store.frames.size st.store.closures.size
-      st' st'' a b sp r sret aExpr v8 v9 v18 v19 Wl c2.σ.sailOutput m0
+      st' st'' a b sp r sret aExpr v8 v9 v18 v19 c2.σ.sailOutput m0
       hbNe
-      c2 ⟨hTS, hR.gx8, hR.opTok, hR.slot, hR.fullpop, hR.x19, hR.wlbuf, hR.kindresp,
-        hR.exprAl, hR.exprLo, hR.exprHi, hR.exprWin, hR.exprSL, hOutC2, rfl,
+      c2 ⟨hTS, hR.gx8, hR.opTok, hR.slot, hData,
+        hR.exprLo, hR.exprHi, hR.exprWin, hR.exprSL, hOutC2, rfl,
         hR.sretAl, hR.sretLo, hR.sretHi, hR.sretWin, hR.sretVi, hR.sretStk, hR.sretEvalCode, hR.raAl,
         hR.vint, hR.moddi3, hR.udivdi3, hR.modStk, hR.codeStk, hR.viStk, hR.tableStk, hR.sretInSL,
         hR.SLloSp, hR.SLlo, hR.SLwin, hR.sphiRam, hR.sp8, hR.SLhiRam, hR.spSLhi,
@@ -707,8 +699,9 @@ theorem evalModSim : EvalModSimGoal := by
       c3 ⟨mpre, hPreD⟩
   obtain ⟨hExitE, hMemExt, hWords, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
   have hmono := evalE_store_mono _hEvalE
-  have hleF' : st.store.frames.size ≤ st'.store.frames.size := hSizeF ▸ hmono.1
-  have hleC' : st.store.closures.size ≤ st'.store.closures.size := hSizeC ▸ hmono.2
+  have hleftMono := evalE_store_mono hLeft
+  have hleF' : st.store.frames.size ≤ st'.store.frames.size := hleftMono.1
+  have hleC' : st.store.closures.size ≤ st'.store.closures.size := hleftMono.2
   have hpfF : PhiExtends φf φfe st.store.frames.size := hpfm.trans (PhiExtends.mono hleF' hpfe)
   have hpcF : PhiExtends φc φce st.store.closures.size := hpcm.trans (PhiExtends.mono hleC' hpce)
   have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size

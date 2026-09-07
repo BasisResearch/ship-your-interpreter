@@ -155,7 +155,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_800079b0_rt c.σ c.tick c.steps _ vmi0 vsp _ _ _ _ _ _ _ _
       hG hpc hmi0 hp0.1 hload rfl
       (by rw [hoff240]; omega) (by rw [hoff240]; omega) (Or.inr (by rw [hoff240]; omega))
-      (by rw [hoff240]; omega) ha0 ha1 ha2 ha3 ha4 ha5 ha6 ha7 htick
+       ha0 ha1 ha2 ha3 ha4 ha5 ha6 ha7 htick
   have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hs1
   have hpc1 : σ1.regs.get? Register.PC = some (0x800079b4#64) := by
     have := obs_alu_pc hobs1
@@ -185,7 +185,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_800079bc_rt σ2 i2 (c.steps + 1 + 1) _ vmi2 vsp _ _ _ _ _ _ _ _
       hG2 hpc2 hmi2 hp2.2.1 (hmE2 ▸ hload) rfl
       (by rw [hoff8]; omega) (by rw [hoff8]; omega) (Or.inr (by rw [hoff8]; omega))
-      (by rw [hoff8]; omega) hb0 hb1 hb2 hb3 hb4 hb5 hb6 hb7 hi2
+       hb0 hb1 hb2 hb3 hb4 hb5 hb6 hb7 hi2
   have hstep3 : Step ⟨σ2, i2, c.steps + 1 + 1⟩ ⟨σ3, i3, c.steps + 1 + 1 + 1⟩ := hs3
   have hpc3 : σ3.regs.get? Register.PC = some (0x800079c0#64) := by
     have := obs_alu_pc hobs3
@@ -238,7 +238,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_800079c8_rt σ5 i5 (c.steps + 1 + 1 + 1 + 1 + 1) _ vmi5 vsp _ _ _ _ _ _ _ _
       hG5 hpc5 hmi5 hp5.2.1 (hmE5 ▸ hload) rfl
       (by rw [hoff560]; omega) (by rw [hoff560]; omega) (Or.inr (by rw [hoff560]; omega))
-      (by rw [hoff560]; omega) hc0 hc1 hc2 hc3 hc4 hc5 hc6 hc7 hi5
+       hc0 hc1 hc2 hc3 hc4 hc5 hc6 hc7 hi5
   have hstep6 : Step ⟨σ5, i5, c.steps + 1 + 1 + 1 + 1 + 1⟩
       ⟨σ6, i6, c.steps + 1 + 1 + 1 + 1 + 1 + 1⟩ := hs6
   have hpc6 : σ6.regs.get? Register.PC = some (0x800079cc#64) := by
@@ -258,7 +258,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_800079cc_rt σ6 i6 (c.steps + 6) _ vmi6 vsp _ _ _ _ _ _ _ _
       hG6 hpc6 hmi6 hp6.2.2.1 (hmE6 ▸ hload) rfl
       (by rw [hoff552]; omega) (by rw [hoff552]; omega) (Or.inr (by rw [hoff552]; omega))
-      (by rw [hoff552]; omega) hd0 hd1 hd2 hd3 hd4 hd5 hd6 hd7 hi6
+       hd0 hd1 hd2 hd3 hd4 hd5 hd6 hd7 hi6
   have hstep7 : Step ⟨σ6, i6, c.steps + 6⟩ ⟨σ7, i7, c.steps + 6 + 1⟩ := hs7
   have hpc7 : σ7.regs.get? Register.PC = some (0x800079d0#64) := by
     have := obs_alu_pc hobs7
@@ -277,7 +277,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_800079d0_rt σ7 i7 (c.steps + 6 + 1) _ vmi7 vsp _ _ _ _ _ _ _ _
       hG7 hpc7 hmi7 hp7.2.2.2.1 (hmE7 ▸ hload) rfl
       (by rw [hoff544]; omega) (by rw [hoff544]; omega) (Or.inr (by rw [hoff544]; omega))
-      (by rw [hoff544]; omega) he0 he1 he2 he3 he4 he5 he6 he7 hi7
+       he0 he1 he2 he3 he4 he5 he6 he7 hi7
   have hstep8 : Step ⟨σ7, i7, c.steps + 6 + 1⟩ ⟨σ8, i8, c.steps + 6 + 1 + 1⟩ := hs8
   have hpc8 : σ8.regs.get? Register.PC = some (0x800079d4#64) := by
     have := obs_alu_pc hobs8
@@ -296,7 +296,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_800079d4_rt σ8 i8 (c.steps + 6 + 1 + 1) _ vmi8 vsp _ _ _ _ _ _ _ _
       hG8 hpc8 hmi8 hp8.2.2.2.2.1 (hmE8 ▸ hload) rfl
       (by rw [hoff536]; omega) (by rw [hoff536]; omega) (Or.inr (by rw [hoff536]; omega))
-      (by rw [hoff536]; omega) hf0 hf1 hf2 hf3 hf4 hf5 hf6 hf7 hi8
+       hf0 hf1 hf2 hf3 hf4 hf5 hf6 hf7 hi8
   have hstep9 : Step ⟨σ8, i8, c.steps + 6 + 1 + 1⟩ ⟨σ9, i9, c.steps + 6 + 1 + 1 + 1⟩ := hs9
   have hpc9 : σ9.regs.get? Register.PC = some (0x800079d8#64) := by
     have := obs_alu_pc hobs9
@@ -315,7 +315,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_800079d8_rt σ9 i9 (c.steps + 6 + 1 + 1 + 1) _ vmi9 vsp _ _ _ _ _ _ _ _
       hG9 hpc9 hmi9 hp9.2.2.2.2.2.1 (hmE9 ▸ hload) rfl
       (by rw [hoff520]; omega) (by rw [hoff520]; omega) (Or.inr (by rw [hoff520]; omega))
-      (by rw [hoff520]; omega) hg0 hg1 hg2 hg3 hg4 hg5 hg6 hg7 hi9
+       hg0 hg1 hg2 hg3 hg4 hg5 hg6 hg7 hi9
   have hstep10 : Step ⟨σ9, i9, c.steps + 6 + 1 + 1 + 1⟩
       ⟨σ10, i10, c.steps + 6 + 1 + 1 + 1 + 1⟩ := hs10
   have hpc10 : σ10.regs.get? Register.PC = some (0x800079dc#64) := by
@@ -337,7 +337,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_800079dc_rt σ10 i10 (c.steps + 10) _ vmi10 vsp _ _ _ _ _ _ _ _
       hG10 hpc10 hmi10 hp10.2.2.2.2.2.2.1 (hmE10 ▸ hload) rfl
       (by rw [hoff512]; omega) (by rw [hoff512]; omega) (Or.inr (by rw [hoff512]; omega))
-      (by rw [hoff512]; omega) hh0 hh1 hh2 hh3 hh4 hh5 hh6 hh7 hi10
+       hh0 hh1 hh2 hh3 hh4 hh5 hh6 hh7 hi10
   have hstep11 : Step ⟨σ10, i10, c.steps + 10⟩ ⟨σ11, i11, c.steps + 10 + 1⟩ := hs11
   have hpc11 : σ11.regs.get? Register.PC = some (0x800079e0#64) := by
     have := obs_alu_pc hobs11
@@ -358,7 +358,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_800079e0_rt σ11 i11 (c.steps + 10 + 1) _ vmi11 vsp _ _ _ _ _ _ _ _
       hG11 hpc11 hmi11 hp11.2.2.2.2.2.2.2.1 (hmE11 ▸ hload) rfl
       (by rw [hoff504]; omega) (by rw [hoff504]; omega) (Or.inr (by rw [hoff504]; omega))
-      (by rw [hoff504]; omega) hi0 hi1' hi2' hi3' hi4' hi5' hi6' hi7' hi11
+       hi0 hi1' hi2' hi3' hi4' hi5' hi6' hi7' hi11
   have hstep12 : Step ⟨σ11, i11, c.steps + 10 + 1⟩ ⟨σ12, i12, c.steps + 10 + 1 + 1⟩ := hs12
   have hpc12 : σ12.regs.get? Register.PC = some (0x800079e4#64) := by
     have := obs_alu_pc hobs12
@@ -379,7 +379,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_800079e4_rt σ12 i12 (c.steps + 10 + 1 + 1) _ vmi12 vsp _ _ _ _ _ _ _ _
       hG12 hpc12 hmi12 hp12.2.2.2.2.2.2.2.2.1 (hmE12 ▸ hload) rfl
       (by rw [hoff496]; omega) (by rw [hoff496]; omega) (Or.inr (by rw [hoff496]; omega))
-      (by rw [hoff496]; omega) hj0 hj1 hj2 hj3 hj4 hj5 hj6 hj7 hi12
+       hj0 hj1 hj2 hj3 hj4 hj5 hj6 hj7 hi12
   have hstep13 : Step ⟨σ12, i12, c.steps + 10 + 1 + 1⟩
       ⟨σ13, i13, c.steps + 10 + 1 + 1 + 1⟩ := hs13
   have hpc13 : σ13.regs.get? Register.PC = some (0x800079e8#64) := by
@@ -401,7 +401,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_800079e8_rt σ13 i13 (c.steps + 10 + 1 + 1 + 1) _ vmi13 vsp _ _ _ _ _ _ _ _
       hG13 hpc13 hmi13 hp13.2.2.2.2.2.2.2.2.2.1 (hmE13 ▸ hload) rfl
       (by rw [hoff488]; omega) (by rw [hoff488]; omega) (Or.inr (by rw [hoff488]; omega))
-      (by rw [hoff488]; omega) hk0 hk1 hk2 hk3 hk4 hk5 hk6 hk7 hi13
+       hk0 hk1 hk2 hk3 hk4 hk5 hk6 hk7 hi13
   have hstep14 : Step ⟨σ13, i13, c.steps + 10 + 1 + 1 + 1⟩
       ⟨σ14, i14, c.steps + 10 + 1 + 1 + 1 + 1⟩ := hs14
   have hpc14 : σ14.regs.get? Register.PC = some (0x800079ec#64) := by
@@ -434,7 +434,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_800079f4_rt σ15 i15 (c.steps + 14 + 1) _ vmi15 vsp _ _ _ _ _ _ _ _
       hG15 hpc15 hmi15 hp15.2.2.2.2.2.2.2.2.2.2.1 (hmE15 ▸ hload) rfl
       (by rw [hoff584]; omega) (by rw [hoff584]; omega) (Or.inr (by rw [hoff584]; omega))
-      (by rw [hoff584]; omega) hl0 hl1 hl2 hl3 hl4 hl5 hl6 hl7 hi15
+       hl0 hl1 hl2 hl3 hl4 hl5 hl6 hl7 hi15
   have hstep16 : Step ⟨σ15, i15, c.steps + 14 + 1⟩ ⟨σ16, i16, c.steps + 14 + 1 + 1⟩ := hs16
   have hpc16 : σ16.regs.get? Register.PC = some (0x800079f8#64) := by
     have := obs_alu_pc hobs16
@@ -455,7 +455,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_800079f8_rt σ16 i16 (c.steps + 14 + 1 + 1) _ vmi16 vsp _ _ _ _ _ _ _ _
       hG16 hpc16 hmi16 hp16.2.2.2.2.2.2.2.2.2.2.2.1 (hmE16 ▸ hload) rfl
       (by rw [hoff576]; omega) (by rw [hoff576]; omega) (Or.inr (by rw [hoff576]; omega))
-      (by rw [hoff576]; omega) hm0 hm1 hm2 hm3 hm4 hm5 hm6 hm7 hi16
+       hm0 hm1 hm2 hm3 hm4 hm5 hm6 hm7 hi16
   have hstep17 : Step ⟨σ16, i16, c.steps + 14 + 1 + 1⟩
       ⟨σ17, i17, c.steps + 14 + 1 + 1 + 1⟩ := hs17
   have hpc17 : σ17.regs.get? Register.PC = some (0x800079fc#64) := by
@@ -477,7 +477,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_800079fc_rt σ17 i17 (c.steps + 14 + 1 + 1 + 1) _ vmi17 vsp _ _ _ _ _ _ _ _
       hG17 hpc17 hmi17 hp17.2.2.2.2.2.2.2.2.2.2.2.2.1 (hmE17 ▸ hload) rfl
       (by rw [hoff16]; omega) (by rw [hoff16]; omega) (Or.inr (by rw [hoff16]; omega))
-      (by rw [hoff16]; omega) hn0 hn1 hn2 hn3 hn4 hn5 hn6 hn7 hi17
+       hn0 hn1 hn2 hn3 hn4 hn5 hn6 hn7 hi17
   have hstep18 : Step ⟨σ17, i17, c.steps + 14 + 1 + 1 + 1⟩
       ⟨σ18, i18, c.steps + 14 + 1 + 1 + 1 + 1⟩ := hs18
   have hpc18 : σ18.regs.get? Register.PC = some (0x80007a00#64) := by
@@ -499,7 +499,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_80007a00_rt2 σ18 i18 (c.steps + 18) _ vmi18 vsp _ _ _ _ _ _ _ _
       hG18 hpc18 hmi18 hp18.2.2.2.2.2.2.2.2.2.2.2.2.2.1 (hmE18 ▸ hfp) rfl
       (by rw [hoff568]; omega) (by rw [hoff568]; omega) (Or.inr (by rw [hoff568]; omega))
-      (by rw [hoff568]; omega) ho0 ho1 ho2 ho3 ho4 ho5 ho6 ho7 hi18
+       ho0 ho1 ho2 ho3 ho4 ho5 ho6 ho7 hi18
   have hstep19 : Step ⟨σ18, i18, c.steps + 18⟩ ⟨σ19, i19, c.steps + 18 + 1⟩ := hs19
   have hpc19 : σ19.regs.get? Register.PC = some (0x80007a04#64) := by
     have := obs_alu_pc hobs19
@@ -520,7 +520,7 @@ theorem retD_spec (vsp vstr vra0 vtot vS0o vS1o vS2 vS3 vS4 vS5 vS6o vS7 vS8 vS9
     site_80007a04_rt2 σ19 i19 (c.steps + 18 + 1) _ vmi19 vsp _ _ _ _ _ _ _ _
       hG19 hpc19 hmi19 hp19.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1 (hmE19 ▸ hfp) rfl
       (by rw [hoff528]; omega) (by rw [hoff528]; omega) (Or.inr (by rw [hoff528]; omega))
-      (by rw [hoff528]; omega) hq0 hq1 hq2 hq3 hq4 hq5 hq6 hq7 hi19
+       hq0 hq1 hq2 hq3 hq4 hq5 hq6 hq7 hi19
   have hstep20 : Step ⟨σ19, i19, c.steps + 18 + 1⟩ ⟨σ20, i20, c.steps + 18 + 1 + 1⟩ := hs20
   have hpc20 : σ20.regs.get? Register.PC = some (0x80007a08#64) := by
     have := obs_alu_pc hobs20

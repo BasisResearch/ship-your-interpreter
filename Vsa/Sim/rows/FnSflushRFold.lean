@@ -137,7 +137,7 @@ theorem sflushConsolePrefix_facts
   · -- lh flags
     have ha : ((BitVec.ofNat 64 consoleStdout : BitVec 64) +
         sign_extend (m := 64) (0x010#12)).toNat = consoleStdout + 16 := by decide
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_, ?_⟩
     · change 0x80000000 ≤ ((BitVec.ofNat 64 consoleStdout : BitVec 64) +
         sign_extend (m := 64) (0x010#12)).toNat
       rw [ha]; decide
@@ -149,9 +149,6 @@ theorem sflushConsolePrefix_facts
         tohostAddr + 8 ≤ ((BitVec.ofNat 64 consoleStdout : BitVec 64) +
           sign_extend (m := 64) (0x010#12)).toNat
       rw [ha]; right; decide
-    · change ((BitVec.ofNat 64 consoleStdout : BitVec 64) +
-        sign_extend (m := 64) (0x010#12)).toNat % 2 = 0
-      rw [ha]; decide
     · change (m[((BitVec.ofNat 64 consoleStdout : BitVec 64) +
         sign_extend (m := 64) (0x010#12)).toNat]?).getD 0 = 0x0a#8
       rw [ha]; exact lpin_of_present hc.flag0
@@ -457,11 +454,10 @@ theorem sflushEcb4_facts (mc m : Mem) (sp s0 s1 s2 s3 ra : BitVec 64)
             (sdData_val s2) := rfl
     unfold MemFacts
     rw [hloadAddr]
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · rw [ha]; decide
     · rw [ha]; decide
     · rw [ha]; right; decide
-    · rw [ha]; decide
     · rw [hstoreMem, ha]
       change LPins8 _ _ (flushBytes8 (BitVec.ofNat 64 consoleBuf))
       refine lpins8_writeMap8_disjoint _ _ ?_ (lpins8_consoleBuf hc.base)
@@ -668,7 +664,7 @@ theorem sflushEcc0_facts (mc m : Mem) (sp s0 s1 s2 s3 ra : BitVec 64)
             (sdData_val s1) := rfl
     unfold MemFacts
     rw [hloadAddr, hstoreMem]
-    refine ⟨⟨by decide, by decide, by right; decide, by decide⟩, ?_⟩
+    refine ⟨⟨by decide, by decide, by right; decide⟩, ?_⟩
     change LPins8 _ consoleStdout
       (flushBytes8 (BitVec.ofNat 64 (consoleBuf + 1)))
     refine lpins8_writeMap8_disjoint _ _ ?_ (lpins8_consoleBufNext hc.cursor)
@@ -849,20 +845,18 @@ theorem sflushEcf4_facts (mc m : Mem) (sp s0 s1 s2 s3 ra : BitVec 64)
   · unfold MemFacts
     change (0x80000000 ≤ consoleStdout + 64 ∧
       consoleStdout + 64 + 8 ≤ 0x100000000 ∧
-      (consoleStdout + 64 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ consoleStdout + 64) ∧
-      (consoleStdout + 64) % 8 = 0) ∧
+      (consoleStdout + 64 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ consoleStdout + 64)) ∧
       LPins8 m (consoleStdout + 64)
         [0xd4#8, 0xef#8, 0x00#8, 0x80#8, 0#8, 0#8, 0#8, 0#8]
-    exact ⟨⟨by decide, by decide, by right; decide, by decide⟩,
+    exact ⟨⟨by decide, by decide, by right; decide⟩,
       lpins8_consoleSwrite hc.writer⟩
   · unfold MemFacts
     change (0x80000000 ≤ consoleStdout + 48 ∧
       consoleStdout + 48 + 8 ≤ 0x100000000 ∧
-      (consoleStdout + 48 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ consoleStdout + 48) ∧
-      (consoleStdout + 48) % 8 = 0) ∧
+      (consoleStdout + 48 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ consoleStdout + 48)) ∧
       LPins8 m (consoleStdout + 48)
         [0x20#8, 0xbb#8, 0x01#8, 0x80#8, 0#8, 0#8, 0#8, 0#8]
-    exact ⟨⟨by decide, by decide, by right; decide, by decide⟩,
+    exact ⟨⟨by decide, by decide, by right; decide⟩,
       lpins8_consoleStdout hc.cookie⟩
 
 theorem sflushEcf4_regs_boundary

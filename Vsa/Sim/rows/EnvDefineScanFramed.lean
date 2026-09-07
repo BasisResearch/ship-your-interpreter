@@ -244,11 +244,10 @@ theorem envDefineScanStartFramed
           have hhi := hgeom.hi
           omega
         exact Nat.mod_eq_of_lt h8
-      refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+      refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
       · rw [hea]; exact hgeom.lo
       · rw [hea]; exact hgeom.hi
       · rw [hea]; exact hgeom.htif
-      · rw [hea]; exact hgeom.align
       · rw [hmem, hea]
         exact hpins
   obtain ⟨vmi, hmi⟩ := hG.minstret

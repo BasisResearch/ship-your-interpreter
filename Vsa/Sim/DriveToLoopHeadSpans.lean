@@ -1,3 +1,4 @@
+import Vsa.Sim.MemPresence
 import Vsa.Sim.EntryDrive
 import Vsa.Sim.LayoutInstance
 import Vsa.Sim.JmpSpec
@@ -5,6 +6,7 @@ import Vsa.Sim.SegFrameFactsAuto
 import Vsa.Sim.BridgeSegOut
 import Vsa.Sim.SegEffect
 import Vsa.Sim.WriteLogNF
+import Vsa.Sim.InterpSpillReads
 import Vsa.Sim.rows.DriveSpillGen
 import Vsa.Sim.rows.DriveLoopSetupAGen
 import Vsa.Sim.rows.DriveLoopSetupBGen
@@ -113,7 +115,7 @@ private theorem spillProgFacts_cons {mc m : Mem} {L : GRegs}
 
 private theorem spillProg_4420 {mc m : Mem} {L : GRegs}
     (hcode : Code.Interp_runLoaded mc)
-    (hsp : srcVal 2 L = 0x87ffff50#64) :
+    (hsp : srcVal 2 L = 0x87fffc50#64) :
     ProgFactsM mc m L [] [(mkLine 0x80004420#64 0x00d13423#32)] := by
   apply spillProgFacts_cons (a := mkLine 0x80004420#64 0x00d13423#32)
     (Code.interp_run_at_80004420 hcode)
@@ -125,7 +127,7 @@ private theorem spillProg_4420 {mc m : Mem} {L : GRegs}
 
 private theorem spillProg_441c {mc m : Mem} {L : GRegs}
     (hcode : Code.Interp_runLoaded mc)
-    (hsp : srcVal 2 L = 0x87ffff50#64) :
+    (hsp : srcVal 2 L = 0x87fffc50#64) :
     ProgFactsM mc m L []
       [(mkLine 0x8000441c#64 0x00c13823#32),
        (mkLine 0x80004420#64 0x00d13423#32)] := by
@@ -140,7 +142,7 @@ private theorem spillProg_441c {mc m : Mem} {L : GRegs}
 
 private theorem spillProg_4418 {mc m : Mem} {L : GRegs}
     (hcode : Code.Interp_runLoaded mc)
-    (hsp : srcVal 2 L = 0x87ffff50#64) :
+    (hsp : srcVal 2 L = 0x87fffc50#64) :
     ProgFactsM mc m L []
       [(mkLine 0x80004418#64 0x00b13c23#32),
        (mkLine 0x8000441c#64 0x00c13823#32),
@@ -156,7 +158,7 @@ private theorem spillProg_4418 {mc m : Mem} {L : GRegs}
 
 private theorem spillProg_4414 {mc m : Mem} {L : GRegs}
     (hcode : Code.Interp_runLoaded mc)
-    (hsp : srcVal 2 L = 0x87ffff50#64) :
+    (hsp : srcVal 2 L = 0x87fffc50#64) :
     ProgFactsM mc m L []
       [(mkLine 0x80004414#64 0x07613823#32),
        (mkLine 0x80004418#64 0x00b13c23#32),
@@ -173,7 +175,7 @@ private theorem spillProg_4414 {mc m : Mem} {L : GRegs}
 
 private theorem spillProg_4410 {mc m : Mem} {L : GRegs}
     (hcode : Code.Interp_runLoaded mc)
-    (hsp : srcVal 2 L = 0x87ffff50#64) :
+    (hsp : srcVal 2 L = 0x87fffc50#64) :
     ProgFactsM mc m L []
       [(mkLine 0x80004410#64 0x07513c23#32),
        (mkLine 0x80004414#64 0x07613823#32),
@@ -191,7 +193,7 @@ private theorem spillProg_4410 {mc m : Mem} {L : GRegs}
 
 private theorem spillProg_440c {mc m : Mem} {L : GRegs}
     (hcode : Code.Interp_runLoaded mc)
-    (hsp : srcVal 2 L = 0x87ffff50#64) :
+    (hsp : srcVal 2 L = 0x87fffc50#64) :
     ProgFactsM mc m L []
       [(mkLine 0x8000440c#64 0x09413023#32),
        (mkLine 0x80004410#64 0x07513c23#32),
@@ -210,7 +212,7 @@ private theorem spillProg_440c {mc m : Mem} {L : GRegs}
 
 private theorem spillProg_4408 {mc m : Mem} {L : GRegs}
     (hcode : Code.Interp_runLoaded mc)
-    (hsp : srcVal 2 L = 0x87ffff50#64) :
+    (hsp : srcVal 2 L = 0x87fffc50#64) :
     ProgFactsM mc m L []
       [(mkLine 0x80004408#64 0x09313423#32),
        (mkLine 0x8000440c#64 0x09413023#32),
@@ -230,7 +232,7 @@ private theorem spillProg_4408 {mc m : Mem} {L : GRegs}
 
 private theorem spillProg_4404 {mc m : Mem} {L : GRegs}
     (hcode : Code.Interp_runLoaded mc)
-    (hsp : srcVal 2 L = 0x87ffff50#64) :
+    (hsp : srcVal 2 L = 0x87fffc50#64) :
     ProgFactsM mc m L []
       [(mkLine 0x80004404#64 0x09213823#32),
        (mkLine 0x80004408#64 0x09313423#32),
@@ -251,7 +253,7 @@ private theorem spillProg_4404 {mc m : Mem} {L : GRegs}
 
 private theorem spillProg_4400 {mc m : Mem} {L : GRegs}
     (hcode : Code.Interp_runLoaded mc)
-    (hsp : srcVal 2 L = 0x87ffff50#64) :
+    (hsp : srcVal 2 L = 0x87fffc50#64) :
     ProgFactsM mc m L []
       [(mkLine 0x80004400#64 0x08913c23#32),
        (mkLine 0x80004404#64 0x09213823#32),
@@ -273,7 +275,7 @@ private theorem spillProg_4400 {mc m : Mem} {L : GRegs}
 
 private theorem spillProg_43fc {mc m : Mem} {L : GRegs}
     (hcode : Code.Interp_runLoaded mc)
-    (hsp : srcVal 2 L = 0x87ffff50#64) :
+    (hsp : srcVal 2 L = 0x87fffc50#64) :
     ProgFactsM mc m L []
       [(mkLine 0x800043fc#64 0x0a813023#32),
        (mkLine 0x80004400#64 0x08913c23#32),
@@ -296,7 +298,7 @@ private theorem spillProg_43fc {mc m : Mem} {L : GRegs}
 
 private theorem spillProg_43f8 {mc m : Mem} {L : GRegs}
     (hcode : Code.Interp_runLoaded mc)
-    (hsp : srcVal 2 L = 0x87ffff50#64) :
+    (hsp : srcVal 2 L = 0x87fffc50#64) :
     ProgFactsM mc m L []
       [(mkLine 0x800043f8#64 0x0a113423#32),
        (mkLine 0x800043fc#64 0x0a813023#32),
@@ -320,7 +322,7 @@ private theorem spillProg_43f8 {mc m : Mem} {L : GRegs}
 
 private theorem spillProg_43f4 {mc m : Mem} {L : GRegs}
     (hcode : Code.Interp_runLoaded mc)
-    (hsp : srcVal 2 L = 0x87ffff50#64) :
+    (hsp : srcVal 2 L = 0x87fffc50#64) :
     ProgFactsM mc m L []
       [(mkLine 0x800043f4#64 0x01050513#32),
        (mkLine 0x800043f8#64 0x0a113423#32),
@@ -343,7 +345,7 @@ private theorem spillProg_43f4 {mc m : Mem} {L : GRegs}
 
 private theorem spillProg_43f0 {mc m : Mem} {L : GRegs}
     (hcode : Code.Interp_runLoaded mc)
-    (hsp : srcVal 2 L = 0x87ffff50#64) :
+    (hsp : srcVal 2 L = 0x87fffc50#64) :
     ProgFactsM mc m L []
       [(mkLine 0x800043f0#64 0x00a13023#32),
        (mkLine 0x800043f4#64 0x01050513#32),
@@ -374,7 +376,7 @@ private theorem driveSpill_sp_after_addi
       (stepGM (mkLine 0x800043ec#64 0xf5010113#32)
         (driveSpillL inp (BitVec.ofNat 64 LayoutInstance.spEntry) 0x800045ec#64
           s0 s1 s2 s3 s4 s5 s6 (BitVec.ofNat 64 stmts)
-          (BitVec.ofNat 64 count) 0#64) []) = 0x87ffff50#64 := by
+          (BitVec.ofNat 64 count) 0#64) []) = 0x87fffc50#64 := by
   let a := mkLine 0x800043ec#64 0xf5010113#32
   let L := driveSpillL inp (BitVec.ofNat 64 LayoutInstance.spEntry) 0x800045ec#64
     s0 s1 s2 s3 s4 s5 s6 (BitVec.ofNat 64 stmts) (BitVec.ofNat 64 count) 0#64
@@ -383,7 +385,7 @@ private theorem driveSpill_sp_after_addi
   have hrs1 : a.rs1 = 2 := by rfl
   have himm : a.imm = 0xf50#12 := by rfl
   have hentry : srcVal 2 L = BitVec.ofNat 64 LayoutInstance.spEntry := by rfl
-  change srcVal 2 (stepGM a L []) = 0x87ffff50#64
+  change srcVal 2 (stepGM a L []) = 0x87fffc50#64
   have hstep : srcVal 2 (stepGM a L []) = wvalM a L [] := by
     simp only [stepGM, hk, srcVal, lookupG, hrd, if_pos, Option.getD_some]
   rw [hstep]
@@ -595,11 +597,34 @@ private theorem driveSpill_log_eq
             (BitVec.ofNat 64 count) 0#64) []) [] := by
   rfl
 
-/-- Every reflected spill write is inside the concrete C-stack region. -/
+/-- The spill body only writes inside its newly allocated 176-byte frame. -/
+def interpRunSpillWriteFootprint (k : Nat) : Prop :=
+  LayoutInstance.spEntry - 176 ≤ k ∧ k < LayoutInstance.spEntry
+
+/-- The two write regions of the actual entry prefix. -/
+def interpRunPrefixWriteFootprint (inp : BitVec 64) (k : Nat) : Prop :=
+  interpRunSpillWriteFootprint k ∨
+  (inp.toNat + 16 ≤ k ∧ k < inp.toNat + 128)
+
+theorem interpRunSpillWriteFootprint_stack {k : Nat}
+    (h : interpRunSpillWriteFootprint k) :
+    stackSL.lo ≤ k ∧ k < stackSL.hi := by
+  have hlo : stackSL.lo ≤ LayoutInstance.spEntry - 176 := by decide
+  have hhi : LayoutInstance.spEntry ≤ stackSL.hi := by decide
+  exact ⟨Nat.le_trans hlo h.1, Nat.lt_of_lt_of_le h.2 hhi⟩
+
+theorem interpRunPrefixWriteFootprint_broad {inp : BitVec 64} {k : Nat}
+    (h : interpRunPrefixWriteFootprint inp k) :
+    LayoutInstance.interpRunWriteFootprint inp k := by
+  rcases h with h | h
+  · exact Or.inl (interpRunSpillWriteFootprint_stack h)
+  · exact Or.inr h
+
+/-- Every reflected spill write is inside the new frame. -/
 private theorem driveSpill_writeLog_out
     (m : Mem) (inp : BitVec 64) (stmts count : Nat)
     (s0 s1 s2 s3 s4 s5 s6 : BitVec 64) (k : Nat)
-    (hk : ¬ (stackSL.lo ≤ k ∧ k < stackSL.hi)) :
+    (hk : ¬ interpRunSpillWriteFootprint k) :
     (writeLog m (evalBlocks driveSpillSeg
       (SegEvalState.init
         (driveSpillL inp (BitVec.ofNat 64 LayoutInstance.spEntry) 0x800045ec#64
@@ -613,12 +638,12 @@ private theorem driveSpill_writeLog_out
       0x800045ec#64 s0 s1 s2 s3 s4 s5 s6 (BitVec.ofNat 64 stmts)
         (BitVec.ofNat 64 count) 0#64
     let L' := stepGM (mkLine 0x800043ec#64 0xf5010113#32) L []
-    have G : SpillAddrGeom (0x87ffff50#64 : BitVec 64) := by
+    have G : SpillAddrGeom (0x87fffc50#64 : BitVec 64) := by
       exact { hi := by decide }
-    have h2 : srcVal 2 L' = (0x87ffff50#64 : BitVec 64) := by
+    have h2 : srcVal 2 L' = (0x87fffc50#64 : BitVec 64) := by
       exact driveSpill_sp_after_addi inp stmts count s0 s1 s2 s3 s4 s5 s6
     obtain ⟨a, ha, hkind, haddr⟩ :=
-      wlogM_spill_offsets driveSpillTail L' [] 0x87ffff50#64 G h2
+      wlogM_spill_offsets driveSpillTail L' [] 0x87fffc50#64 G h2
         (by
           intro x hx
           simp only [driveSpillTail, List.mem_cons, List.not_mem_nil, or_false] at hx
@@ -639,17 +664,17 @@ private theorem driveSpill_writeLog_out
         rcases ha with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
           rfl | rfl | rfl | rfl <;> decide)
     have hw := wlogM_widths driveSpillTail L' [] e he
-    have hbase : (0x87ffff50#64 : BitVec 64).toNat = 0x87ffff50 := by decide
-    simp only [LayoutInstance.stackSL] at hk
+    have hbase : (0x87fffc50#64 : BitVec 64).toNat = 0x87fffc50 := by decide
+    simp only [interpRunSpillWriteFootprint, LayoutInstance.spEntry] at hk
     rw [haddr, hbase]
     have hdis (w : Nat) (hw8 : w ≤ 8) :
-        k < 0x87ffff50 + (sign_extend (m := 64) a.imm : BitVec 64).toNat ∨
-          0x87ffff50 + (sign_extend (m := 64) a.imm : BitVec 64).toNat + w ≤ k := by
+        k < 0x87fffc50 + (sign_extend (m := 64) a.imm : BitVec 64).toNat ∨
+          0x87fffc50 + (sign_extend (m := 64) a.imm : BitVec 64).toNat + w ≤ k := by
       by_cases hbefore :
-          k < 0x87ffff50 + (sign_extend (m := 64) a.imm : BitVec 64).toNat
+          k < 0x87fffc50 + (sign_extend (m := 64) a.imm : BitVec 64).toNat
       · exact Or.inl hbefore
       · right
-        have hkhi : 0x88000000 ≤ k := Nat.le_of_not_gt (fun hbelow =>
+        have hkhi : 0x87fffd00 ≤ k := Nat.le_of_not_gt (fun hbelow =>
           hk ⟨by omega, hbelow⟩)
         omega
     rcases hw with hw | hw | hw | hw <;> rw [hw]
@@ -672,16 +697,38 @@ private theorem driveSpill_result_mem_out
   intro k hk
   rw [hmem]
   exact (driveSpill_writeLog_out m inp stmts count
-    s0 s1 s2 s3 s4 s5 s6 k hk).symm
+    s0 s1 s2 s3 s4 s5 s6 k
+      (fun h => hk (interpRunSpillWriteFootprint_stack h))).symm
+
+/-- Named proof facts for the same observed JAL endpoint. -/
+private structure JalPayloadPost (calleeEntry link : BitVec 64)
+    (σp σ2 : MState) (ip up i2 : Nat) : Prop where
+  step : Step ⟨σp, ip, up⟩ ⟨σ2, i2, up + 1⟩
+  tick : i2 < 2
+  good : GoodState σ2
+  mem : σ2.mem = σp.mem
+  output : σ2.sailOutput = σp.sailOutput
+  pc : σ2.regs.get? Register.PC = some calleeEntry
+  ra : σ2.regs.get? Register.x1 = some link
+  minstret : ∃ w, σ2.regs.get? Register.minstret = some w
+  nonra : ∀ (n : Nat), 1 ≤ n → n ≤ 31 → n ≠ 1 →
+    ∀ (w : BitVec 64), gprGet σp n = some w → gprGet σ2 n = some w
+  abi : ∀ R, AbiPreserved R = true → σ2.regs.get? R = σp.regs.get? R
+  payload : σ2.regs.get? Register.htif_payload_writes =
+    σp.regs.get? Register.htif_payload_writes
+
+private def JalStepOPayload (calleeEntry link : BitVec 64)
+    (σp : MState) (ip up : Nat) : Prop :=
+  ∃ (σ2 : MState) (i2 : Nat), JalPayloadPost calleeEntry link σp σ2 ip up i2
 
 /-- Exact output-preserving `jal setjmp` site at `0x80004424`. -/
-theorem site_80004424_interpRunO
+private theorem site_80004424_interpRunOPayload
     (s : MState) (i u : Nat) (vm : BitVec 64)
     (hG : GoodState s)
     (hpc : s.regs.get? Register.PC = some 0x80004424#64)
     (hmi : s.regs.get? Register.minstret = some vm)
     (hcode : Code.Interp_runLoaded s.mem) (hi : i < 2) :
-    JalStepO 0x80006ffc#64 0x80004428#64 s i u := by
+    JalStepOPayload 0x80006ffc#64 0x80004428#64 s i u := by
   obtain ⟨hb0, hb1, hb2, hb3⟩ := Code.interp_run_at_80004424 hcode
   obtain ⟨s', i', hs, hi', hG', hm', hobs⟩ :=
     stepObs_jal s i u 0x80004424#64 vm 0x3d9020ef#32 0x002bd8#21
@@ -696,17 +743,50 @@ theorem site_80004424_interpRunO
         (by rw [get?_afterPrelude s _ (by decide)]; exact hG.mseccfg))
       (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
       (by exact wX_bits_x1 _ (BitVec.addInt 0x80004424#64 4)) hi
-  exact jalStepO_of_obs hs hi' hG' hm' hobs (by
-    apply BitVec.eq_of_toNat_eq
-    decide)
+  obtain ⟨σ2, i2, hs2, hi2, hG2, hm2, hout2, hpc2, hra2, hmi2,
+      hnonra2, habi2⟩ :=
+    jalStepO_of_obs (calleeEntry := 0x80006ffc#64) (link := 0x80004428#64)
+      hs hi' hG' hm' hobs (by
+      apply BitVec.eq_of_toNat_eq
+      decide)
+  have hdest : (⟨σ2, i2, u + 1⟩ : Config) = ⟨s', i', u + 1⟩ :=
+    Step.deterministic hs2 hs
+  cases hdest
+  refine ⟨s', i', {
+    step := hs2, tick := hi2, good := hG2, mem := hm2, output := hout2,
+    pc := hpc2, ra := hra2, minstret := hmi2, nonra := hnonra2,
+    abi := habi2, payload := ?_ }⟩
+  rw [hobs.1 Register.htif_payload_writes (by decide) (by decide) (by decide)]
+  exact get?_sigmaPost_jal s 0x80004424#64 vm 0x002bd8#21 Register.x1
+    (BitVec.addInt 0x80004424#64 4) Register.htif_payload_writes
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+/-- Exact output-preserving `jal setjmp` site at `0x80004424`. -/
+theorem site_80004424_interpRunO
+    (s : MState) (i u : Nat) (vm : BitVec 64)
+    (hG : GoodState s)
+    (hpc : s.regs.get? Register.PC = some 0x80004424#64)
+    (hmi : s.regs.get? Register.minstret = some vm)
+    (hcode : Code.Interp_runLoaded s.mem) (hi : i < 2) :
+    JalStepO 0x80006ffc#64 0x80004428#64 s i u := by
+  obtain ⟨s', i', J⟩ :=
+    site_80004424_interpRunOPayload s i u vm hG hpc hmi hcode hi
+  exact ⟨s', i', J.step, J.tick, J.good, J.mem, J.output, J.pc, J.ra,
+    J.minstret, J.nonra, J.abi⟩
 
 /-- Facts preserved by the spill, setjmp, and branch prefix.  The clean x21
 latch is intentionally absent: loop-setup A establishes it later. -/
 structure ReadyPrefixFacts (inp : BitVec 64) (c0 c1 : Config) : Prop where
-  outside_writes : ∀ k, ¬ LayoutInstance.interpRunWriteFootprint inp k →
+  outside_prefix : ∀ k, ¬ interpRunPrefixWriteFootprint inp k →
     c0.σ.mem[k]? = c1.σ.mem[k]?
+  outside_writes : ∀ k, ¬ LayoutInstance.interpRunWriteFootprint inp k →
+    c0.σ.mem[k]? = c1.σ.mem[k]? :=
+      fun k hk => outside_prefix k
+        (fun h => hk (interpRunPrefixWriteFootprint_broad h))
   output : output c1.σ = output c0.σ
   run_code : Code.Interp_runLoaded c1.σ.mem
+  htif_payload : c1.σ.regs.get? Register.htif_payload_writes = some (0#4)
+  mem_extends : MemExtends c0.σ.mem c1.σ.mem
 
 /-- Concrete setjmp-entry geometry retained by the spill producer. -/
 def SetjmpGeom (c1 : Config) : Prop :=
@@ -747,6 +827,35 @@ def ReadySpillLanded (inp : BitVec 64) (c0 c : Config) : Prop :=
     (∃ w, c1.σ.regs.get? Register.minstret = some w) ∧
     ReadyPrefixFacts inp c0 c1 ∧ SetjmpGeom c1
 
+/-- Named view of the spill landing used by prefix composition. -/
+structure ReadySpillFacts (inp : BitVec 64) (c0 before after : Config)
+    (spNew : BitVec 64) : Prop where
+  run : Steps before after
+  pc : after.σ.regs.get? Register.PC = some (0x80006ffc#64 : BitVec 64)
+  ra : after.σ.regs.get? Register.x1 = some (0x80004428#64 : BitVec 64)
+  sp : after.σ.regs.get? Register.x2 = some spNew
+  input : after.σ.regs.get? Register.x10 = some (inp + 16#64)
+  good : GoodState after.σ
+  tick : after.tick < 2
+  minstret : ∃ w, after.σ.regs.get? Register.minstret = some w
+  preservation : ReadyPrefixFacts inp c0 after
+  geom : SetjmpGeom after
+
+theorem ReadySpillLanded.facts {inp : BitVec 64} {c0 c : Config}
+    (h : ReadySpillLanded inp c0 c) :
+    ∃ after spNew, ReadySpillFacts inp c0 c after spNew := by
+  obtain ⟨after, spNew, run, pc, ra, sp, input, good, tick, minstret, preservation, geom⟩ := h
+  exact ⟨after, spNew, run, pc, ra, sp, input, good, tick, minstret, preservation, geom⟩
+
+/-- Actual spill endpoint with all saved interpreter argument words. -/
+structure ReadySpillSavedFacts (inp : BitVec 64) (stmts count : Nat)
+    (before after : Config) : Prop extends
+    ReadySpillFacts inp before before after 0x87fffc50#64 where
+  saved : InterpSpillReads after.σ.mem inp (BitVec.ofNat 64 stmts)
+    (BitVec.ofNat 64 count) 0#64
+
+  gp : after.σ.regs.get? Register.x3 = some (BitVec.ofNat 64 LayoutInstance.gpEntry)
+
 /-- Exact x2 projection from the reflected spill evaluator. -/
 private theorem driveSpillEval_sp
     (inp : BitVec 64) (stmts count : Nat)
@@ -755,7 +864,7 @@ private theorem driveSpillEval_sp
       (driveSpillL inp (BitVec.ofNat 64 LayoutInstance.spEntry) 0x800045ec#64
         s0 s1 s2 s3 s4 s5 s6 (BitVec.ofNat 64 stmts)
         (BitVec.ofNat 64 count) 0#64) [])).regs =
-      some (0x87ffff50#64 : BitVec 64) := by
+      some (0x87fffc50#64 : BitVec 64) := by
   let L := driveSpillL inp (BitVec.ofNat 64 LayoutInstance.spEntry)
     0x800045ec#64 s0 s1 s2 s3 s4 s5 s6 (BitVec.ofNat 64 stmts)
       (BitVec.ofNat 64 count) 0#64
@@ -773,7 +882,7 @@ private theorem driveSpillEval_sp
     lookupG_stepGM_writer first L [] (by decide) 2 (by rfl)
   rw [hw]
   have hs := driveSpill_sp_after_addi inp stmts count s0 s1 s2 s3 s4 s5 s6
-  have hwval : wvalM first L [] = (0x87ffff50#64 : BitVec 64) := by
+  have hwval : wvalM first L [] = (0x87fffc50#64 : BitVec 64) := by
     simpa only [first, L, srcVal, hw, Option.getD_some] using hs
   exact congrArg some hwval
 
@@ -827,22 +936,32 @@ private theorem driveSpillEval_a0
 
 #print axioms driveSpillEval_a0
 
-/-- Opaque spill-body result, before the `jal setjmp`. -/
-private def SpillBodyLanded (inp : BitVec 64) (stmts count : Nat)
-    (c : Config) : Prop :=
-  ∃ (cB : Config)
-    (s0 s1 s2 s3 s4 s5 s6 : BitVec 64),
-    Steps c cB ∧
-    cB.σ.regs.get? Register.PC = some (0x80004424#64 : BitVec 64) ∧
-    GoodState cB.σ ∧ cB.tick < 2 ∧
-    (∃ w, cB.σ.regs.get? Register.minstret = some w) ∧
-    (∀ k, ¬ (stackSL.lo ≤ k ∧ k < stackSL.hi) →
-      c.σ.mem[k]? = cB.σ.mem[k]?) ∧
-    output cB.σ = output c.σ ∧
-    Code.Interp_runLoaded cB.σ.mem ∧ Code.SetjmpLoaded cB.σ.mem ∧
-    cB.σ.regs.get? Register.x2 = some (0x87ffff50#64 : BitVec 64) ∧
-    cB.σ.regs.get? Register.x10 = some (inp + 16#64) ∧
-    (∀ R, AbiExceptSp R = true → cB.σ.regs.get? R = c.σ.regs.get? R)
+/-- Registers preserved by the actual spill instruction list. -/
+private def driveSpillPayloadKeep (R : Register) : Bool :=
+  AbiExceptSp R || R == Register.htif_payload_writes
+
+/-- The reflected spill body's reached control, frame, and argument words. -/
+private structure SpillBodyFacts (inp : BitVec 64) (stmts count : Nat)
+    (before after : Config) : Prop where
+  run : Steps before after
+  mem_extends : MemExtends before.σ.mem after.σ.mem
+  pc : after.σ.regs.get? Register.PC = some (0x80004424#64 : BitVec 64)
+  good : GoodState after.σ
+  tick : after.tick < 2
+  minstret : ∃ w, after.σ.regs.get? Register.minstret = some w
+  outside : ∀ k, ¬ interpRunSpillWriteFootprint k → before.σ.mem[k]? = after.σ.mem[k]?
+  output : output after.σ = output before.σ
+  code : Code.Interp_runLoaded after.σ.mem
+  setjmp : Code.SetjmpLoaded after.σ.mem
+  sp : after.σ.regs.get? Register.x2 = some (0x87fffc50#64 : BitVec 64)
+  input : after.σ.regs.get? Register.x10 = some (inp + 16#64)
+  abi : ∀ R, AbiExceptSp R = true → after.σ.regs.get? R = before.σ.regs.get? R
+  payload : after.σ.regs.get? Register.htif_payload_writes = some (0#4)
+  saved : InterpSpillReads after.σ.mem inp (BitVec.ofNat 64 stmts)
+    (BitVec.ofNat 64 count) 0#64
+
+private def SpillBodyLanded (inp : BitVec 64) (stmts count : Nat) (c : Config) : Prop :=
+  ∃ after, SpillBodyFacts inp stmts count c after
 
 /-- The exact reflected spill body produces its preservation carrier. -/
 private theorem spillBodyLanded_of_ready
@@ -874,7 +993,7 @@ private theorem spillBodyLanded_of_ready
   have hfacts : ChainFacts c.σ.mem c.σ.mem L [] driveSpillSeg := by
     exact driveSpill_chainFacts F s0 s1 s2 s3 s4 s5 s6
   let selected : GRegs :=
-    [(2, 0x87ffff50#64), (10, inp + 16#64)]
+    [(2, 0x87fffc50#64), (10, inp + 16#64)]
   have hproj : GProjects
       (evalBlocks driveSpillSeg (SegEvalState.init L [])).regs selected := by
     refine ⟨?_, ?_, trivial⟩
@@ -883,114 +1002,105 @@ private theorem spillBodyLanded_of_ready
     · simpa only [L] using
         driveSpillEval_a0 inp stmts count s0 s1 s2 s3 s4 s5 s6
   obtain ⟨cB, S⟩ := segEval_selected_framed driveSpillSeg L []
-    0x800043ec#64 vm (fun k => stackSL.lo ≤ k ∧ k < stackSL.hi)
-    AbiExceptSp selected c F.good F.pc hmi hL hkeys hfacts hwf F.tick
+    0x800043ec#64 vm interpRunSpillWriteFootprint
+    driveSpillPayloadKeep selected c F.good F.pc hmi hL hkeys hfacts hwf F.tick
     (by
       intro k hk
       simpa only [L] using
         (driveSpill_writeLog_out c.σ.mem inp stmts count
           s0 s1 s2 s3 s4 s5 s6 k hk).symm)
     (by decide) (by decide) hproj
+  have hwide : ∀ k, ¬ (stackSL.lo ≤ k ∧ k < stackSL.hi) →
+      c.σ.mem[k]? = cB.σ.mem[k]? :=
+    fun k hk => S.outside k (fun h => hk (interpRunSpillWriteFootprint_stack h))
   have hcode' : Code.Interp_runLoaded cB.σ.mem :=
-    interpRunLoaded_of_stack_frame c.σ.mem cB.σ.mem F.run_code S.outside
+    interpRunLoaded_of_stack_frame c.σ.mem cB.σ.mem F.run_code hwide
   have hsetjmp' : Code.SetjmpLoaded cB.σ.mem :=
-    setjmpLoaded_of_stack_frame c.σ.mem cB.σ.mem F.setjmp_code S.outside
+    setjmpLoaded_of_stack_frame c.σ.mem cB.σ.mem F.setjmp_code hwide
   have hpc4424 : cB.σ.regs.get? Register.PC = some 0x80004424#64 := by
     simpa [L] using S.pc
-  refine ⟨cB, s0, s1, s2, s3, s4, s5, s6,
-    ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · exact S.steps
-  · exact hpc4424
-  · exact S.good
-  · exact S.tick
-  · exact S.minstret
-  · exact S.outside
-  · unfold output
-    exact congrArg (fun a : Array String => String.join a.toList) S.output
-  · exact hcode'
-  · exact hsetjmp'
-  · exact S.selected_regs.1
-  · exact S.selected_regs.2.1
-  · exact S.reg_frame
+  refine ⟨cB, {
+    run := S.steps
+    mem_extends := by rw [S.mem]; exact memExtends_writeLog _ _
+    pc := hpc4424
+    good := S.good
+    tick := S.tick
+    minstret := S.minstret
+    outside := S.outside
+    output := congrArg (fun a : Array String => String.join a.toList) S.output
+    code := hcode'
+    setjmp := hsetjmp'
+    sp := S.selected_regs.1
+    input := S.selected_regs.2.1
+    abi := fun R hR => S.reg_frame R (by simp [driveSpillPayloadKeep, hR])
+    payload := (S.reg_frame Register.htif_payload_writes (by decide)).trans F.htif_payload
+    saved := ?_ }⟩
+  rw [S.mem]
+  change InterpSpillReads (writeLog c.σ.mem (evalBlocks driveSpillSeg
+    (SegEvalState.init (driveSpillL inp 0x87fffd00#64 0x800045ec#64
+      s0 s1 s2 s3 s4 s5 s6 (BitVec.ofNat 64 stmts) (BitVec.ofNat 64 count) 0#64) [])).log)
+    inp (BitVec.ofNat 64 stmts) (BitVec.ofNat 64 count) 0#64
+  rw [driveSpill_log]
+  exact interpSpillLog_reads _ _ _ _ _ _ _ _ _ _ _ _ _
 
 #print axioms spillBodyLanded_of_ready
 
-private def SpillJalLanded (inp : BitVec 64) (stmts count : Nat)
-    (cB : Config) (s0 s1 s2 s3 s4 s5 s6 : BitVec 64) : Prop :=
-  ∃ c1 : Config,
-    Steps cB c1 ∧
-    c1.σ.regs.get? Register.PC = some (0x80006ffc#64 : BitVec 64) ∧
-    c1.σ.regs.get? Register.x1 = some (0x80004428#64 : BitVec 64) ∧
-    c1.σ.regs.get? Register.x2 = some (0x87ffff50#64 : BitVec 64) ∧
-    c1.σ.regs.get? Register.x10 = some (inp + 16#64) ∧
-    GoodState c1.σ ∧ c1.tick < 2 ∧
-    (∃ w, c1.σ.regs.get? Register.minstret = some w) ∧
-    c1.σ.mem = cB.σ.mem ∧ output c1.σ = output cB.σ ∧
-    (∀ R, AbiPreserved R = true → c1.σ.regs.get? R = cB.σ.regs.get? R)
+private structure SpillJalFacts (inp : BitVec 64) (before after : Config) : Prop where
+  run : Steps before after
+  pc : after.σ.regs.get? Register.PC = some (0x80006ffc#64 : BitVec 64)
+  ra : after.σ.regs.get? Register.x1 = some (0x80004428#64 : BitVec 64)
+  sp : after.σ.regs.get? Register.x2 = some (0x87fffc50#64 : BitVec 64)
+  input : after.σ.regs.get? Register.x10 = some (inp + 16#64)
+  good : GoodState after.σ
+  tick : after.tick < 2
+  minstret : ∃ w, after.σ.regs.get? Register.minstret = some w
+  mem : after.σ.mem = before.σ.mem
+  output : output after.σ = output before.σ
+  abi : ∀ R, AbiPreserved R = true → after.σ.regs.get? R = before.σ.regs.get? R
+  payload : after.σ.regs.get? Register.htif_payload_writes = before.σ.regs.get? Register.htif_payload_writes
 
 /-- Opaque exact `jal setjmp` landing from the reflected spill post-state. -/
-private theorem spillJalLanded_of_fields
-    {cB : Config} {inp : BitVec 64} {stmts count : Nat}
-    (s0 s1 s2 s3 s4 s5 s6 : BitVec 64)
+private theorem spillJalFacts_of_fields
+    {cB : Config} {inp : BitVec 64}
     (hpc : cB.σ.regs.get? Register.PC = some (0x80004424#64 : BitVec 64))
     (hG : GoodState cB.σ) (hi : cB.tick < 2)
     (hmi : ∃ w, cB.σ.regs.get? Register.minstret = some w)
     (hcode : Code.Interp_runLoaded cB.σ.mem)
     (hspB : cB.σ.regs.get? Register.x2 =
-      some (0x87ffff50#64 : BitVec 64))
+      some (0x87fffc50#64 : BitVec 64))
     (ha0B : cB.σ.regs.get? Register.x10 = some (inp + 16#64)) :
-    SpillJalLanded inp stmts count cB s0 s1 s2 s3 s4 s5 s6 := by
-  obtain ⟨s', i', hjal, hi', hG', hmem', hout', hpc', hra', hmi',
-      hnonra', habi'⟩ :=
-    site_80004424_interpRunO cB.σ cB.tick cB.steps
+    ∃ c1, SpillJalFacts inp cB c1 := by
+  obtain ⟨s', i', J⟩ :=
+    site_80004424_interpRunOPayload cB.σ cB.tick cB.steps
       (Classical.choose hmi) hG hpc (Classical.choose_spec hmi) hcode hi
-  have hsp' : s'.regs.get? Register.x2 = some (0x87ffff50#64 : BitVec 64) :=
-    hnonra' 2 (by omega) (by omega) (by omega) _ hspB
+  have hsp' : s'.regs.get? Register.x2 = some (0x87fffc50#64 : BitVec 64) :=
+    J.nonra 2 (by omega) (by omega) (by omega) _ hspB
   have ha0' : s'.regs.get? Register.x10 = some (inp + 16#64) :=
-    hnonra' 10 (by omega) (by omega) (by omega) _ ha0B
+    J.nonra 10 (by omega) (by omega) (by omega) _ ha0B
   let c1 : Config := ⟨s', i', cB.steps + 1⟩
-  refine ⟨c1, Steps.single hjal, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simpa [c1] using hpc'
-  · simpa [c1] using hra'
+  refine ⟨c1, Steps.single J.step, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · simpa [c1] using J.pc
+  · simpa [c1] using J.ra
   · simpa [c1] using hsp'
   · simpa [c1] using ha0'
-  · simpa [c1] using hG'
-  · simpa [c1] using hi'
-  · simpa [c1] using hmi'
-  · simpa [c1] using hmem'
+  · simpa [c1] using J.good
+  · simpa [c1] using J.tick
+  · simpa [c1] using J.minstret
+  · simpa [c1] using J.mem
   · unfold output
-    simpa [c1] using congrArg (fun a : Array String => String.join a.toList) hout'
-  · simpa [c1] using habi'
+    simpa [c1] using congrArg (fun a : Array String => String.join a.toList) J.output
+  · simpa [c1] using J.abi
+  · simpa [c1] using J.payload
 
-#print axioms spillJalLanded_of_fields
+#print axioms spillJalFacts_of_fields
 
-private def ReadySpillPost (inp : BitVec 64) (c cB : Config) : Prop :=
-  ∃ c1 : Config,
-    Steps cB c1 ∧
-    c1.σ.regs.get? Register.PC = some (0x80006ffc#64 : BitVec 64) ∧
-    c1.σ.regs.get? Register.x1 = some (0x80004428#64 : BitVec 64) ∧
-    c1.σ.regs.get? Register.x2 = some (0x87ffff50#64 : BitVec 64) ∧
-    c1.σ.regs.get? Register.x10 = some (inp + 16#64) ∧
-    GoodState c1.σ ∧ c1.tick < 2 ∧
-    (∃ w, c1.σ.regs.get? Register.minstret = some w) ∧
-    ReadyPrefixFacts inp c c1 ∧ SetjmpGeom c1
-
-/-- Package preservation and setjmp geometry after the opaque `jal` landing. -/
-private theorem readySpillPost_of_fields
-    {c cB : Config} {stmts count : Nat} {inp : BitVec 64}
+/-- Package the actual spill and JAL with preserved argument words and setjmp geometry. -/
+private theorem readySpillSaved_of_fields
+    {c cB c1 : Config} {stmts count : Nat} {inp : BitVec 64}
     {N : NativeAddrs} {A : Arena} {φf φc : Addr → Nat} {aLeft : Nat}
     (F : LayoutInstance.InterpRunReadyFacts c stmts count inp N A φf φc aLeft)
-    (s0 s1 s2 s3 s4 s5 s6 : BitVec 64)
-    (hstack : ∀ k, ¬ (stackSL.lo ≤ k ∧ k < stackSL.hi) →
-      c.σ.mem[k]? = cB.σ.mem[k]?)
-    (hout : output cB.σ = output c.σ)
-    (hcode : Code.Interp_runLoaded cB.σ.mem)
-    (hsetjmp : Code.SetjmpLoaded cB.σ.mem)
-    (hframe : ∀ R, AbiExceptSp R = true →
-      cB.σ.regs.get? R = c.σ.regs.get? R)
-    (J : SpillJalLanded inp stmts count cB s0 s1 s2 s3 s4 s5 s6) :
-    ReadySpillPost inp c cB := by
-  obtain ⟨c1, hjal, hpc, hra, hsp, ha0, hG, hi, hmi, hmem, houtJ, habi⟩ := J
+    (S : SpillBodyFacts inp stmts count c cB) (J : SpillJalFacts inp cB c1) :
+    ReadySpillSavedFacts inp stmts count c c1 := by
   obtain ⟨t0, ht0⟩ := F.s0
   obtain ⟨t1, ht1⟩ := F.s1
   obtain ⟨t2, ht2⟩ := F.s2
@@ -1012,19 +1122,24 @@ private theorem readySpillPost_of_fields
         unfold AbiExceptSp at hR
         simp only [h, Bool.false_and, Bool.false_eq_true] at hR
       · rfl
-    exact (habi R hAbi).trans (hframe R hR)
+    exact (J.abi R hAbi).trans (S.abi R hR)
   have P : ReadyPrefixFacts inp c c1 := by
-    refine { outside_writes := ?_, output := houtJ.trans hout, run_code := ?_ }
+    refine
+      { outside_prefix := ?_
+        mem_extends := J.mem.symm ▸ S.mem_extends
+        output := J.output.trans S.output
+        run_code := ?_
+        htif_payload := J.payload.trans S.payload }
     · intro k hk
       calc
-        c.σ.mem[k]? = cB.σ.mem[k]? := hstack k (fun hs => hk (Or.inl hs))
-        _ = c1.σ.mem[k]? := (congrArg (fun m : Mem => m[k]?) hmem).symm
-    · exact hmem.symm ▸ hcode
+        c.σ.mem[k]? = cB.σ.mem[k]? := S.outside k (fun hs => hk (Or.inl hs))
+        _ = c1.σ.mem[k]? := (congrArg (fun m : Mem => m[k]?) J.mem).symm
+    · exact J.mem.symm ▸ S.code
   have G : SetjmpGeom c1 := by
     refine ⟨inp + 16#64, t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11,
-      (fun R => c1.σ.regs.get? R), c1.σ.mem, rfl, ?_, P.run_code, ha0, by decide,
+      (fun R => c1.σ.regs.get? R), c1.σ.mem, rfl, ?_, P.run_code, J.input, by decide,
       ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, F.setjmp_geom, ?_⟩
-    · exact hmem.symm ▸ hsetjmp
+    · exact J.mem.symm ▸ S.setjmp
     · exact (hbridge Register.x8 (by decide)).trans ht0
     · exact (hbridge Register.x9 (by decide)).trans ht1
     · exact (hbridge Register.x18 (by decide)).trans ht2
@@ -1039,42 +1154,32 @@ private theorem readySpillPost_of_fields
     · exact (hbridge Register.x27 (by decide)).trans ht11
     · intro R _
       rfl
-  exact ⟨c1, hjal, hpc, hra, hsp, ha0, hG, hi, hmi, P, G⟩
+  exact ⟨⟨S.run.trans J.run, J.pc, J.ra, J.sp, J.input, J.good, J.tick,
+    J.minstret, P, G⟩, J.mem.symm ▸ S.saved,
+    (hbridge Register.x3 (by decide)).trans F.gp⟩
 
-#print axioms readySpillPost_of_fields
-
-private theorem readySpillLanded_of_post {c cB : Config} {inp : BitVec 64}
-    (hbody : Steps c cB) (P : ReadySpillPost inp c cB) :
-    ReadySpillLanded inp c c := by
-  obtain ⟨c1, hjal, hpc, hra, hsp, ha0, hG, hi, hmi, hprefix, hgeom⟩ := P
-  exact ⟨c1, 0x87ffff50#64, hbody.trans hjal, hpc, hra, hsp, ha0,
-    hG, hi, hmi, hprefix, hgeom⟩
-
-/-- The exact `jal setjmp` upgrades the opaque spill-body carrier. -/
-private theorem readySpillLanded_of_body
+/-- The actual reflected spill and JAL retain the four saved argument words. -/
+theorem readySpillSaved_of_ready
     {c : Config} {stmts count : Nat} {inp : BitVec 64}
     {N : NativeAddrs} {A : Arena} {φf φc : Addr → Nat} {aLeft : Nat}
-    (F : LayoutInstance.InterpRunReadyFacts c stmts count inp N A φf φc aLeft)
-    (B : SpillBodyLanded inp stmts count c) : ReadySpillLanded inp c c := by
-  obtain ⟨cB, s0, s1, s2, s3, s4, s5, s6,
-    hbody, hpc, hG, hi, hmi, hstack, hout, hcode, hsetjmp, hsp, ha0, hframe⟩ := B
-  have J : SpillJalLanded inp stmts count cB s0 s1 s2 s3 s4 s5 s6 :=
-    spillJalLanded_of_fields s0 s1 s2 s3 s4 s5 s6 hpc hG hi hmi hcode hsp ha0
-  exact readySpillLanded_of_post hbody
-    (readySpillPost_of_fields F s0 s1 s2 s3 s4 s5 s6
-      hstack hout hcode hsetjmp hframe J)
+    (F : LayoutInstance.InterpRunReadyFacts c stmts count inp N A φf φc aLeft) :
+    ∃ after, ReadySpillSavedFacts inp stmts count c after := by
+  obtain ⟨cB, S⟩ := spillBodyLanded_of_ready F
+  obtain ⟨after, J⟩ := spillJalFacts_of_fields S.pc S.good S.tick S.minstret
+    S.code S.sp S.input
+  exact ⟨after, readySpillSaved_of_fields F S J⟩
 
-#print axioms readySpillLanded_of_body
-
-/-- The exact spill body and its `jal setjmp` produce the preservation-aware
-landing directly from the repaired `interp_run` boundary. -/
+/-- Preserve the original spill interface as a projection of the richer endpoint. -/
 theorem readySpillLanded_of_ready
     {c : Config} {stmts count : Nat} {inp : BitVec 64}
     {N : NativeAddrs} {A : Arena} {φf φc : Addr → Nat} {aLeft : Nat}
     (F : LayoutInstance.InterpRunReadyFacts c stmts count inp N A φf φc aLeft) :
-    ReadySpillLanded inp c c :=
-  readySpillLanded_of_body F (spillBodyLanded_of_ready F)
+    ReadySpillLanded inp c c := by
+  obtain ⟨after, S⟩ := readySpillSaved_of_ready F
+  exact ⟨after, 0x87fffc50#64, S.run, S.pc, S.ra, S.sp, S.input, S.good, S.tick,
+    S.minstret, S.preservation, S.geom⟩
 
+#print axioms readySpillSaved_of_ready
 #print axioms readySpillLanded_of_ready
 
 /-! ## §1. The named off-path seams
@@ -1123,6 +1228,41 @@ def ReadySetjmpSplice (inp : BitVec 64) (c0 c1 : Config)
     GoodState c2.σ ∧ c2.tick < 2 ∧
     (∃ w, c2.σ.regs.get? Register.minstret = some w) ∧
     ReadyPrefixFacts inp c0 c2
+
+/-- Named view of the first-return setjmp landing. -/
+structure ReadySetjmpFacts (inp : BitVec 64) (c0 before after : Config)
+    (spNew : BitVec 64) : Prop where
+  run : Steps before after
+  pc : after.σ.regs.get? Register.PC = some (0x8000442c#64 : BitVec 64)
+  result : after.σ.regs.get? Register.x10 = some (0#64 : BitVec 64)
+  sp : after.σ.regs.get? Register.x2 = some spNew
+  good : GoodState after.σ
+  tick : after.tick < 2
+  minstret : ∃ w, after.σ.regs.get? Register.minstret = some w
+  preservation : ReadyPrefixFacts inp c0 after
+
+theorem ReadySetjmpSplice.facts {inp : BitVec 64} {c0 c1 : Config} {spNew : BitVec 64}
+    (h : ReadySetjmpSplice inp c0 c1 spNew) :
+    ∃ after, ReadySetjmpFacts inp c0 c1 after spNew := by
+  obtain ⟨after, run, pc, result, sp, good, tick, minstret, preservation⟩ := h
+  exact ⟨after, run, pc, result, sp, good, tick, minstret, preservation⟩
+
+/-- Exact setjmp memory frame relative to its actual call entry. -/
+structure ReadySetjmpFramedFacts (inp : BitVec 64) (c0 before after : Config)
+    (spNew : BitVec 64) : Prop extends ReadySetjmpFacts inp c0 before after spNew where
+  outside_buffer : ∀ k, (k < inp.toNat + 16 ∨ inp.toNat + 128 ≤ k) →
+    before.σ.mem[k]? = after.σ.mem[k]?
+
+  gp : after.σ.regs.get? Register.x3 = before.σ.regs.get? Register.x3
+
+/-- Actual first return with the saved interpreter arguments still available. -/
+structure ReadySetjmpSavedFacts (inp : BitVec 64) (stmts count : Nat)
+    (before after : Config) : Prop extends
+    ReadySetjmpFacts inp before before after 0x87fffc50#64 where
+  saved : InterpSpillReads after.σ.mem inp (BitVec.ofNat 64 stmts)
+    (BitVec.ofNat 64 count) 0#64
+
+  gp : after.σ.regs.get? Register.x3 = some (BitVec.ofNat 64 LayoutInstance.gpEntry)
 
 /-- **The loop-setup → `SegEntry` representation seam.**  From the config the loop
 setup lands (parked at `interpLoopHeadPC = 0x8000448c`, `GoodState`, tick-bounded),
@@ -1239,13 +1379,16 @@ def segEntryFields_of_ready
     { good := hgood, tick := htick,
       pc := by rw [hentryPC]; exact hpc,
       store := hstore,
-      out := houtH, mem := rfl, code := hcode,
-      cursor := hcursor, head_ground := hhead, store_survives := hsurv,
-      stack_ram := by decide,
-      stack_win := by
-        show tohostAddr + 16 ≤ (0x87800000 : Nat)
-        rw [tohostAddr_val]
-        decide
+      out := houtH, mem := rfl,
+      ready := fun _ =>
+        { env_valid := EnvValid.init
+          code := hcode
+          cursor := hcursor, head_ground := hhead, store_survives := hsurv
+          stack_ram := by decide
+          stack_win := by
+            show tohostAddr + 16 ≤ (0x87800000 : Nat)
+            rw [tohostAddr_val]
+            decide }
       empty_status := fun hp => absurd hp hne,
       frame := fun _ _ => rfl, minstret := hminstret }
 
@@ -1308,6 +1451,33 @@ def ReadySegLanded (inp : BitVec 64) (c0 c : Config) (endPC : BitVec 64) : Prop 
     GoodState c'.σ ∧ c'.tick < 2 ∧
     (∃ w, c'.σ.regs.get? Register.minstret = some w) ∧
     ReadyLandingFacts inp c0 c'
+
+/-- Named view of a reached setup endpoint. -/
+structure ReadySegFacts (inp : BitVec 64) (c0 before after : Config)
+    (endPC : BitVec 64) : Prop where
+  run : Steps before after
+  pc : after.σ.regs.get? Register.PC = some endPC
+  good : GoodState after.σ
+  tick : after.tick < 2
+  minstret : ∃ w, after.σ.regs.get? Register.minstret = some w
+  preservation : ReadyLandingFacts inp c0 after
+
+/-- Destructure the legacy landing once, at its declaration. -/
+theorem ReadySegLanded.facts {inp : BitVec 64} {c0 before : Config} {endPC : BitVec 64}
+    (h : ReadySegLanded inp c0 before endPC) :
+    ∃ after, ReadySegFacts inp c0 before after endPC := by
+  obtain ⟨after, run, pc, good, tick, minstret, preservation⟩ := h
+  exact ⟨after, run, pc, good, tick, minstret, preservation⟩
+
+/-- Compose an actual preceding run without weakening the preserved facts. -/
+theorem ReadySegLanded.prepend {inp : BitVec 64} {c0 before middle : Config}
+    {endPC : BitVec 64} (h : ReadySegLanded inp c0 middle endPC)
+    (hrun : Steps before middle) : ReadySegLanded inp c0 before endPC := by
+  obtain ⟨after, F⟩ := h.facts
+  exact ⟨after, hrun.trans F.run, F.pc, F.good, F.tick, F.minstret, F.preservation⟩
+
+#print axioms ReadySegLanded.facts
+#print axioms ReadySegLanded.prepend
 
 /-- Nonempty loop-head landing with the concrete loop-B register outputs. -/
 def ReadyLoopHeadLanded (inp : BitVec 64) (c0 c : Config) : Prop :=
@@ -1909,23 +2079,59 @@ theorem hLoopB_of_row
     hT c3 ⟨hG, hd.mem, hpc, hmi, hd.hL, hd.keys, hd.facts, htick⟩
   exact ⟨c', hsteps, hpcE, hG', htickE, hmiE⟩
 
-private theorem driveLoopSetupA_noWrites
-    (m : Mem) (sp : BitVec 64) (lds : List (List (BitVec 8))) :
-    writeLog m (evalBlocks driveLoopSetupASeg
-      (SegEvalState.init (driveLoopSetupAL sp 0#64) lds)).log = m := by
-  rfl
-
-private theorem driveLoopEmpty_noWrites
-    (m : Mem) (sp : BitVec 64) (lds : List (List (BitVec 8))) :
-    writeLog m (evalBlocks driveLoopEmptySeg
-      (SegEvalState.init (driveLoopSetupAL sp 0#64) lds)).log = m := by
-  rfl
-
 private theorem driveLoopSetupB_noWrites
     (m : Mem) (sp gp : BitVec 64) (lds : List (List (BitVec 8))) :
     writeLog m (evalBlocks driveLoopSetupBSeg
       (SegEvalState.init (driveLoopSetupBL sp gp) lds)).log = m := by
   rfl
+
+/-- Exact no-write count-test endpoint, including registers needed by setup-B. -/
+structure ReadySetupRowFacts (inp : BitVec 64) (c0 before after : Config)
+    (sp : BitVec 64) (taken : Bool) : Prop extends
+    ReadySegFacts inp c0 before after
+      (if taken then 0x80004514#64 else 0x80004438#64) where
+  mem : after.σ.mem = before.σ.mem
+  sp : after.σ.regs.get? Register.x2 = some sp
+  gp : after.σ.regs.get? Register.x3 = before.σ.regs.get? Register.x3
+
+/-- Both count-test polarities execute the same reflected no-write body. -/
+theorem hLoopCount_ready_of_data
+    (inp : BitVec 64) (c0 : Config) (taken : Bool)
+    (sp : BitVec 64) (lds : List (List (BitVec 8))) (m0 : Mem)
+    (c2 : Config) (P : ReadyPrefixFacts inp c0 c2)
+    (hpc : c2.σ.regs.get? Register.PC = some (0x8000442c#64 : BitVec 64))
+    (hG : GoodState c2.σ) (htick : c2.tick < 2)
+    (hmi : ∃ w, c2.σ.regs.get? Register.minstret = some w)
+    (D : SegEntryData (if taken then driveLoopEmptySeg else driveLoopSetupASeg)
+      (driveLoopSetupAL sp 0#64) lds m0 c2) :
+    ∃ after, ReadySetupRowFacts inp c0 c2 after sp taken := by
+  obtain ⟨vm, hvm⟩ := hmi
+  let seg := if taken then driveLoopEmptySeg else driveLoopSetupASeg
+  let keep := fun R => R == Register.x3 || R == Register.htif_payload_writes
+  have hwf : ChainOK 0x8000442c#64 (keysG (driveLoopSetupAL sp 0#64)) seg := by
+    change ChainOK 0x8000442c#64 [2, 10] seg
+    cases taken <;> decide
+  obtain ⟨after, S⟩ := segEval_selected_framed seg (driveLoopSetupAL sp 0#64) lds
+    0x8000442c#64 vm (fun _ => False) keep [(2, sp), (21, 0#64)] c2
+    hG hpc hvm D.hL D.keys D.facts hwf htick
+    (by intro k _; cases taken <;> rfl)
+    (by decide) (by cases taken <;> decide)
+    (by cases taken <;> exact ⟨rfl, rfl, trivial⟩)
+  have hmem : after.σ.mem = c2.σ.mem := by
+    rw [S.mem]
+    cases taken <;> rfl
+  have L : ReadyLandingFacts inp c0 after := by
+    refine
+      { outside_prefix := fun k hk => (P.outside_prefix k hk).trans
+          (congrArg (fun m : Mem => m[k]?) hmem.symm)
+        mem_extends := hmem.symm ▸ P.mem_extends
+        output := (congrArg (fun a : Array String => String.join a.toList) S.output).trans P.output
+        run_code := hmem.symm ▸ P.run_code
+        return_latch := S.selected_regs.2.1
+        htif_payload := (S.reg_frame Register.htif_payload_writes (by decide)).trans P.htif_payload }
+  refine ⟨after, ⟨S.steps, ?_, S.good, S.tick, S.minstret, L⟩,
+    hmem, S.selected_regs.1, S.reg_frame Register.x3 (by decide)⟩
+  cases taken <;> exact S.pc
 
 /-- Direct-data form of the setup-A row. -/
 theorem hLoopA_ready_of_data
@@ -1936,36 +2142,11 @@ theorem hLoopA_ready_of_data
     (hG : GoodState c2.σ) (htick : c2.tick < 2)
     (hmi : ∃ w, c2.σ.regs.get? Register.minstret = some w)
     (D : SegEntryData driveLoopSetupASeg (driveLoopSetupAL sp 0#64) lds m0 c2) :
-    ReadySegLanded inp c0 c2 (0x80004438#64) := by
-  obtain ⟨vm, hvm⟩ := hmi
-  obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hregs, _hframe⟩ :=
-    segEval_sound driveLoopSetupASeg c2.σ c2.tick c2.steps 0x8000442c#64 vm
-      (driveLoopSetupAL sp 0#64) lds hG hpc hvm D.hL D.keys D.facts
-      (by
-        have h : keysG (driveLoopSetupAL sp 0#64) = [2, 10] := rfl
-        rw [h]
-        show ChainOK 0x8000442c#64 [2, 10] driveLoopSetupASeg
-        decide) htick
-  let c' : Config := ⟨σ', i', c2.steps + evalBlocksFuel driveLoopSetupASeg⟩
-  have hmem2 : σ'.mem = c2.σ.mem :=
-    hmem'.trans (driveLoopSetupA_noWrites c2.σ.mem sp lds)
-  have hlk : lookupG 21 (evalBlocks driveLoopSetupASeg
-      (SegEvalState.init (driveLoopSetupAL sp 0#64) lds)).regs = some 0#64 := by
-    rfl
-  have hlatch : σ'.regs.get? Register.x21 = some (0#64 : BitVec 64) := by
-    exact gholds_lookup _ hregs hlk
-  refine ⟨c', hsteps, ?_, hG', hi', hmi', ?_⟩
-  · simpa [c'] using hpc'
-  · refine { outside_writes := ?_, output := ?_, run_code := ?_, return_latch := hlatch }
-    · intro k hk
-      exact (P.outside_writes k hk).trans (congrArg (fun m : Mem => m[k]?) hmem2.symm)
-    · unfold output
-      exact (congrArg (fun a : Array String => String.join a.toList) hout').trans P.output
-    · rw [hmem2]
-      exact P.run_code
+    ReadySegLanded inp c0 c2 0x80004438#64 := by
+  obtain ⟨after, S⟩ := hLoopCount_ready_of_data inp c0 false sp lds m0 c2 P hpc hG htick hmi D
+  exact ⟨after, S.run, S.pc, S.good, S.tick, S.minstret, S.preservation⟩
 
-/-- Direct-data taken `blez` row.  The shared setup body establishes x21=0
-before branching to the normal exit. -/
+/-- Direct-data taken count branch through the same reflected producer. -/
 theorem hLoopEmpty_ready_of_data
     (inp : BitVec 64) (c0 : Config)
     (sp : BitVec 64) (lds : List (List (BitVec 8))) (m0 : Mem)
@@ -1974,35 +2155,11 @@ theorem hLoopEmpty_ready_of_data
     (hG : GoodState c2.σ) (htick : c2.tick < 2)
     (hmi : ∃ w, c2.σ.regs.get? Register.minstret = some w)
     (D : SegEntryData driveLoopEmptySeg (driveLoopSetupAL sp 0#64) lds m0 c2) :
-    ReadySegLanded inp c0 c2 (0x80004514#64) := by
-  obtain ⟨vm, hvm⟩ := hmi
-  obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hregs, _hframe⟩ :=
-    segEval_sound driveLoopEmptySeg c2.σ c2.tick c2.steps 0x8000442c#64 vm
-      (driveLoopSetupAL sp 0#64) lds hG hpc hvm D.hL D.keys D.facts
-      (by
-        have h : keysG (driveLoopSetupAL sp 0#64) = [2, 10] := rfl
-        rw [h]
-        show ChainOK 0x8000442c#64 [2, 10] driveLoopEmptySeg
-        decide) htick
-  let cE : Config := ⟨σ', i', c2.steps + evalBlocksFuel driveLoopEmptySeg⟩
-  have hmem2 : σ'.mem = c2.σ.mem :=
-    hmem'.trans (driveLoopEmpty_noWrites c2.σ.mem sp lds)
-  have hlk : lookupG 21 (evalBlocks driveLoopEmptySeg
-      (SegEvalState.init (driveLoopSetupAL sp 0#64) lds)).regs = some 0#64 := by
-    rfl
-  have hlatch : σ'.regs.get? Register.x21 = some (0#64 : BitVec 64) :=
-    gholds_lookup _ hregs hlk
-  refine ⟨cE, hsteps, ?_, hG', hi', hmi', ?_⟩
-  · simpa [cE] using hpc'
-  · refine { outside_writes := ?_, output := ?_, run_code := ?_, return_latch := hlatch }
-    · intro k hk
-      exact (P.outside_writes k hk).trans
-        (congrArg (fun m : Mem => m[k]?) hmem2.symm)
-    · unfold output
-      exact (congrArg (fun a : Array String => String.join a.toList) hout').trans
-        P.output
-    · rw [hmem2]
-      exact P.run_code
+    ReadySegLanded inp c0 c2 0x80004514#64 := by
+  obtain ⟨after, S⟩ := hLoopCount_ready_of_data inp c0 true sp lds m0 c2 P hpc hG htick hmi D
+  exact ⟨after, S.run, S.pc, S.good, S.tick, S.minstret, S.preservation⟩
+
+#print axioms hLoopCount_ready_of_data
 
 /-- Loop-setup A upgrades the prefix carrier to a ready landing.  Its decoded
 `mv s5,a0`, with the first-return `a0 = 0`, establishes the x21 latch. -/
@@ -2023,8 +2180,60 @@ theorem hLoopA_ready_of_row
   exact hLoopA_ready_of_data inp c0 sp lds m0 c2 P hpc hG htick hmi
     (hData c2 hpc hG htick hmi)
 
-/-- Loop-setup B preserves the ready carrier and exposes the concrete stack,
-cursor, and finish registers required at the sequence loop head. -/
+/-- Setup-B retains its exact unchanged memory and reflected register values. -/
+structure ReadySetupBFacts (inp : BitVec 64) (c0 before after : Config)
+    (sp gp : BitVec 64) (lds : List (List (BitVec 8))) : Prop extends
+    ReadySegFacts inp c0 before after 0x8000448c#64 where
+  mem : after.σ.mem = before.σ.mem
+  registers : GHolds after.σ (evalBlocks driveLoopSetupBSeg
+    (SegEvalState.init (driveLoopSetupBL sp gp) lds)).regs
+
+/-- Direct-data setup-B execution with exact register and memory results. -/
+theorem hLoopB_ready_of_data
+    (inp : BitVec 64) (c0 : Config)
+    (sp gp : BitVec 64) (lds : List (List (BitVec 8))) (m0 : Mem)
+    (c3 : Config) (P : ReadyLandingFacts inp c0 c3)
+    (hpc : c3.σ.regs.get? Register.PC = some (0x80004438#64 : BitVec 64))
+    (hG : GoodState c3.σ) (htick : c3.tick < 2)
+    (hmi : ∃ w, c3.σ.regs.get? Register.minstret = some w)
+    (D : SegEntryData driveLoopSetupBSeg (driveLoopSetupBL sp gp) lds m0 c3) :
+    ∃ after, ReadySetupBFacts inp c0 c3 after sp gp lds := by
+  obtain ⟨vm, hvm⟩ := hmi
+  obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hregs, hframe⟩ :=
+    segEval_sound driveLoopSetupBSeg c3.σ c3.tick c3.steps 0x80004438#64 vm
+      (driveLoopSetupBL sp gp) lds hG hpc hvm D.hL D.keys D.facts
+      (by
+        have h : keysG (driveLoopSetupBL sp gp) = [2, 3] := rfl
+        rw [h]
+        show ChainOK 0x80004438#64 [2, 3] driveLoopSetupBSeg
+        decide) htick
+  let cH : Config := ⟨σ', i', c3.steps + evalBlocksFuel driveLoopSetupBSeg⟩
+  have hmem3 : σ'.mem = c3.σ.mem :=
+    hmem'.trans (driveLoopSetupB_noWrites c3.σ.mem sp gp lds)
+  have hlatchEq : σ'.regs.get? Register.x21 = c3.σ.regs.get? Register.x21 :=
+    hframe Register.x21 (by decide) (by decide)
+  have L : ReadyLandingFacts inp c0 cH := by
+    refine
+      { mem_extends := by simpa [cH] using (hmem3.symm ▸ P.mem_extends)
+        outside_prefix := ?_
+        output := ?_
+        run_code := ?_
+        return_latch := hlatchEq.trans P.return_latch
+        htif_payload := by
+          simpa [cH] using
+            (hframe Register.htif_payload_writes (by decide) (by decide)).trans
+              P.htif_payload }
+    · intro k hk
+      simpa [cH] using
+        (P.outside_prefix k hk).trans (congrArg (fun m : Mem => m[k]?) hmem3.symm)
+    · unfold output
+      simpa [cH] using
+        (congrArg (fun a : Array String => String.join a.toList) hout').trans P.output
+    · simpa [cH] using (hmem3.symm ▸ P.run_code)
+  refine ⟨cH, ⟨hsteps, ?_, hG', hi', hmi', L⟩, hmem3, hregs⟩
+  simpa [cH] using hpc'
+
+/-- Legacy setup-B landing projected from the exact direct-data result. -/
 theorem hLoopB_ready_of_row
     (inp : BitVec 64) (c0 : Config)
     (sp gp : BitVec 64) (lds : List (List (BitVec 8))) (m0 : Mem)
@@ -2039,44 +2248,19 @@ theorem hLoopB_ready_of_row
       (∃ w, c3.σ.regs.get? Register.minstret = some w) →
       ReadyLoopHeadLanded inp c0 c3 := by
   intro c3 P hpc hG htick hmi
-  obtain ⟨vm, hvm⟩ := hmi
-  have D := hData c3 hpc hG htick ⟨vm, hvm⟩
-  obtain ⟨σ', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hregs, hframe⟩ :=
-    segEval_sound driveLoopSetupBSeg c3.σ c3.tick c3.steps 0x80004438#64 vm
-      (driveLoopSetupBL sp gp) lds hG hpc hvm D.hL D.keys D.facts
-      (by
-        have h : keysG (driveLoopSetupBL sp gp) = [2, 3] := rfl
-        rw [h]
-        show ChainOK 0x80004438#64 [2, 3] driveLoopSetupBSeg
-        decide) htick
-  let cH : Config := ⟨σ', i', c3.steps + evalBlocksFuel driveLoopSetupBSeg⟩
+  obtain ⟨after, S⟩ := hLoopB_ready_of_data inp c0 sp gp lds m0 c3 P hpc hG htick hmi
+    (hData c3 hpc hG htick hmi)
   let outL := (evalBlocks driveLoopSetupBSeg
     (SegEvalState.init (driveLoopSetupBL sp gp) lds)).regs
   let cursor := (lookupG 8 outL).getD 0#64
   let finish := (lookupG 18 outL).getD 0#64
-  have hmem3 : σ'.mem = c3.σ.mem :=
-    hmem'.trans (driveLoopSetupB_noWrites c3.σ.mem sp gp lds)
-  have hspL : lookupG 2 outL = some sp := by rfl
-  have hcursorL : lookupG 8 outL = some cursor := by rfl
-  have hfinishL : lookupG 18 outL = some finish := by rfl
-  have hspR : σ'.regs.get? Register.x2 = some sp := gholds_lookup _ hregs hspL
-  have hcursorR : σ'.regs.get? Register.x8 = some cursor := gholds_lookup _ hregs hcursorL
-  have hfinishR : σ'.regs.get? Register.x18 = some finish := gholds_lookup _ hregs hfinishL
-  have hlatchEq : σ'.regs.get? Register.x21 = c3.σ.regs.get? Register.x21 :=
-    hframe Register.x21 (by decide) (by decide)
-  have L : ReadyLandingFacts inp c0 cH := by
-    refine { outside_writes := ?_, output := ?_, run_code := ?_, return_latch := hlatchEq.trans P.return_latch }
-    · intro k hk
-      simpa [cH] using
-        (P.outside_writes k hk).trans (congrArg (fun m : Mem => m[k]?) hmem3.symm)
-    · unfold output
-      simpa [cH] using
-        (congrArg (fun a : Array String => String.join a.toList) hout').trans P.output
-    · simpa [cH] using (hmem3.symm ▸ P.run_code)
-  have R : LoopHeadRegs cH sp cursor finish := by
-    exact { sp_reg := by simpa [cH] using hspR, cursor_reg := by simpa [cH] using hcursorR, finish_reg := by simpa [cH] using hfinishR }
-  refine ⟨cH, sp, cursor, finish, hsteps, ?_, hG', hi', hmi', L, R⟩
-  · simpa [cH] using hpc'
+  have R : LoopHeadRegs after sp cursor finish :=
+    ⟨gholds_lookup _ S.registers (show lookupG 2 outL = some sp from rfl),
+     gholds_lookup _ S.registers (show lookupG 8 outL = some cursor from rfl),
+     gholds_lookup _ S.registers (show lookupG 18 outL = some finish from rfl)⟩
+  exact ⟨after, sp, cursor, finish, S.run, S.pc, S.good, S.tick, S.minstret, S.preservation, R⟩
+
+#print axioms hLoopB_ready_of_data
 
 #print axioms hLoopA_of_row
 #print axioms hLoopB_of_row
@@ -2118,8 +2302,34 @@ def BnezFallthrough (spNew : BitVec 64) : Prop :=
       σ2.regs.get? Register.x2 = some spNew ∧
       (∃ w, σ2.regs.get? Register.minstret = some w)
 
+/-- Named proof facts for the actual not-taken branch endpoint. -/
+private structure BnezPayloadPost (spNew : BitVec 64)
+    (σp σ2 : MState) (ip up i2 u2 : Nat) : Prop where
+  steps : Steps ⟨σp, ip, up⟩ ⟨σ2, i2, u2⟩
+  tick : i2 < 2
+  good : GoodState σ2
+  mem : σ2.mem = σp.mem
+  output : σ2.sailOutput = σp.sailOutput
+  pc : σ2.regs.get? Register.PC = some (0x8000442c#64 : BitVec 64)
+  a0 : σ2.regs.get? Register.x10 = some (0#64 : BitVec 64)
+  sp : σ2.regs.get? Register.x2 = some spNew
+  minstret : ∃ w, σ2.regs.get? Register.minstret = some w
+  payload : σ2.regs.get? Register.htif_payload_writes =
+    σp.regs.get? Register.htif_payload_writes
+
+  gp : σ2.regs.get? Register.x3 = σp.regs.get? Register.x3
+
+private def BnezFallthroughPayload (spNew : BitVec 64) : Prop :=
+  ∀ (σ' : MState) (i' u' : Nat),
+    GoodState σ' → Code.Interp_runLoaded σ'.mem → i' < 2 →
+    σ'.regs.get? Register.PC = some (0x80004428#64 : BitVec 64) →
+    σ'.regs.get? Register.x10 = some (0#64 : BitVec 64) →
+    σ'.regs.get? Register.x2 = some spNew →
+    (∃ w, σ'.regs.get? Register.minstret = some w) →
+    ∃ (σ2 : MState) (i2 u2 : Nat), BnezPayloadPost spNew σ' σ2 i' u' i2 u2
+
 /-- The concrete `bnez a0` first-return fallthrough. -/
-theorem bnezFallthrough_of_loaded (spNew : BitVec 64) : BnezFallthrough spNew := by
+private theorem bnezFallthroughPayload_of_loaded (spNew : BitVec 64) : BnezFallthroughPayload spNew := by
   intro σ i u hG hload hi hpc ha0 hsp hmi
   obtain ⟨vm, hvm⟩ := hmi
   obtain ⟨hb0, hb1, hb2, hb3⟩ := Code.interp_run_at_80004428 hload
@@ -2146,12 +2356,29 @@ theorem bnezFallthrough_of_loaded (spNew : BitVec 64) : BnezFallthrough spNew :=
         (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
         (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
       hexec hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
-  refine ⟨σ2, i2, u + 1, Steps.single hs, hi2, hG2, hmem2, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨σ2, i2, u + 1, {
+    steps := Steps.single hs, tick := hi2, good := hG2, mem := hmem2,
+    output := ?_, pc := ?_,
+    a0 := obs_branch_nottaken_other' hobs Register.x10 (by decide) ha0,
+    sp := obs_branch_nottaken_other' hobs Register.x2 (by decide) hsp,
+    minstret := obs_branch_nottaken_minstret hobs, payload := ?_, gp := ?_ }⟩
   · rw [hobs.out]
   · simpa using obs_branch_nottaken_pc hobs
-  · exact obs_branch_nottaken_other' hobs Register.x10 (by decide) ha0
-  · exact obs_branch_nottaken_other' hobs Register.x2 (by decide) hsp
-  · exact obs_branch_nottaken_minstret hobs
+  · rw [hobs.1 Register.htif_payload_writes (by decide) (by decide) (by decide)]
+    exact get?_sigmaPost_branch_nottaken σ 0x80004428#64 vm
+      Register.htif_payload_writes (by decide) (by decide) (by decide) (by decide)
+
+  · rw [hobs.1 Register.x3 (by decide) (by decide) (by decide)]
+    exact get?_sigmaPost_branch_nottaken σ 0x80004428#64 vm
+      Register.x3 (by decide) (by decide) (by decide) (by decide)
+
+/-- Broad branch API, derived from the payload-preserving result. -/
+theorem bnezFallthrough_of_loaded (spNew : BitVec 64) : BnezFallthrough spNew := by
+  intro σ i u hG hload hi hpc ha0 hsp hmi
+  obtain ⟨σ2, i2, u2, B⟩ :=
+    bnezFallthroughPayload_of_loaded spNew σ i u hG hload hi hpc ha0 hsp hmi
+  exact ⟨σ2, i2, u2, B.steps, B.tick, B.good, B.mem, B.output, B.pc,
+    B.a0, B.sp, B.minstret⟩
 
 /-- **`hSplice` discharged by `JmpSpec.setjmp_spec`.**  From the setjmp-buffer
 geometry `SetjmpGeom` at the parked setjmp entry, `setjmp_spec`'s FIRST return
@@ -2198,7 +2425,7 @@ theorem hSplice_of_setjmpSpec
 
 /-- The concrete setjmp spec and decoded not-taken `bnez` preserve the full
 entry prefix carrier. -/
-theorem readySetjmpSplice_of_geom
+theorem readySetjmpFramed_of_geom
     {inp : BitVec 64} {c0 c1 : Config} {spNew : BitVec 64}
     (P : ReadyPrefixFacts inp c0 c1)
     (G : SetjmpGeom c1)
@@ -2208,7 +2435,7 @@ theorem readySetjmpSplice_of_geom
     (hinp : c1.σ.regs.get? Register.x10 = some (inp + 16#64))
     (hinp16 : (inp + 16#64).toNat = inp.toNat + 16)
     (hgood : GoodState c1.σ) (htick : c1.tick < 2) :
-    ReadySetjmpSplice inp c0 c1 spNew := by
+    ∃ c2, ReadySetjmpFramedFacts inp c0 c1 c2 spNew := by
   obtain ⟨jb, s0v, s1v, s2v, s3v, s4v, s5v, s6v, s7v, s8v, s9v, s10v,
       s11v, g, m0, gmem, gloaded, grun, ga0, graA, gs0, gs1, gs2, gs3, gs4,
       gs5, gs6, gs7, gs8, gs9, gs10, gs11, gwin, gframe⟩ := G
@@ -2221,49 +2448,76 @@ theorem readySetjmpSplice_of_geom
         gs3, gs4, gs5, gs6, gs7, gs8, gs9, gs10, gs11, hsp, gwin,
         hgood.minstret, htick, gframe⟩
   obtain ⟨hGR, htickR, hpcR, ha0R, hspR, hmemR, hrunR, houtR, hmiR,
-      _hframeR⟩ := hpostR
-  obtain ⟨σ2, i2, u2, hsteps2, hi2, hG2, hmem2, hout2, hpc2, ha02,
-      hsp2, hmi2⟩ :=
-    bnezFallthrough_of_loaded spNew cR.σ cR.tick cR.steps hGR hrunR htickR
+      hframeR⟩ := hpostR
+  obtain ⟨σ2, i2, u2, B⟩ :=
+    bnezFallthroughPayload_of_loaded spNew cR.σ cR.tick cR.steps hGR hrunR htickR
       hpcR ha0R hspR hmiR
+  have hpayloadR : cR.σ.regs.get? Register.htif_payload_writes = some (0#4) :=
+    (hframeR Register.htif_payload_writes (by decide)).trans
+      ((gframe Register.htif_payload_writes (by decide)).symm.trans P.htif_payload)
   let c2 : Config := ⟨σ2, i2, u2⟩
+  have outside : ∀ k, (k < inp.toNat + 16 ∨ inp.toNat + 128 ≤ k) →
+      c1.σ.mem[k]? = c2.σ.mem[k]? := by
+    intro k hk
+    have hkbuf : k < jb.toNat ∨ jb.toNat + 112 ≤ k := by
+      rw [hjb, hinp16]
+      omega
+    have hbuf := setjmpBuf_out m0 jb 0x80004428#64 s0v s1v s2v s3v s4v
+      s5v s6v s7v s8v s9v s10v s11v spNew k hkbuf
+    calc
+      c1.σ.mem[k]? = m0[k]? := congrArg (fun m : Mem => m[k]?) gmem
+      _ = cR.σ.mem[k]? := hbuf.symm.trans
+        (congrArg (fun m : Mem => m[k]?) hmemR).symm
+      _ = σ2.mem[k]? := (congrArg (fun m : Mem => m[k]?) B.mem).symm
+      _ = c2.σ.mem[k]? := rfl
   have P2 : ReadyPrefixFacts inp c0 c2 := by
-    refine { outside_writes := ?_, output := ?_, run_code := ?_ }
+    refine
+      { mem_extends := P.mem_extends.trans (by
+          change MemExtends c1.σ.mem σ2.mem
+          rw [B.mem, hmemR, gmem]
+          exact memExtends_setjmpBuf m0 jb 0x80004428#64 s0v s1v s2v s3v s4v
+            s5v s6v s7v s8v s9v s10v s11v spNew)
+        outside_prefix := ?_
+        output := ?_
+        run_code := ?_
+        htif_payload := by simpa [c2] using B.payload.trans hpayloadR }
     · intro k hk
-      have hkbuf : k < jb.toNat ∨ jb.toNat + 112 ≤ k := by
-        rw [hjb]
-        by_cases hlo : k < (inp + 16#64).toNat
-        · exact Or.inl hlo
-        · right
-          apply Nat.le_of_not_gt
-          intro hhi
-          apply hk
-          right
-          rw [hinp16] at hlo hhi
-          exact ⟨Nat.le_of_not_gt hlo, hhi⟩
-      have hbuf := setjmpBuf_out m0 jb 0x80004428#64 s0v s1v s2v s3v s4v
-        s5v s6v s7v s8v s9v s10v s11v spNew k hkbuf
-      calc
-        c0.σ.mem[k]? = c1.σ.mem[k]? := P.outside_writes k hk
-        _ = m0[k]? := congrArg (fun m : Mem => m[k]?) gmem
-        _ = cR.σ.mem[k]? := hbuf.symm.trans
-          (congrArg (fun m : Mem => m[k]?) hmemR).symm
-        _ = σ2.mem[k]? := (congrArg (fun m : Mem => m[k]?) hmem2).symm
-        _ = c2.σ.mem[k]? := rfl
+      exact (P.outside_prefix k hk).trans (outside k (by
+        have hn : ¬ (inp.toNat + 16 ≤ k ∧ k < inp.toNat + 128) :=
+          fun hw => hk (Or.inr hw)
+        omega))
     · have hout21 : output c2.σ = output c1.σ := by
         unfold output
         simpa [c2] using congrArg (fun a : Array String => String.join a.toList)
-          (hout2.trans houtR)
+          (B.output.trans houtR)
       exact hout21.trans P.output
-    · simpa [c2] using (hmem2.symm ▸ hrunR)
-  refine ⟨c2, ?_, ?_, ?_, ?_, ?_, ?_, ?_, P2⟩
-  · exact hstepsR.trans hsteps2
-  · simpa [c2] using hpc2
-  · simpa [c2] using ha02
-  · simpa [c2] using hsp2
-  · simpa [c2] using hG2
-  · simpa [c2] using hi2
-  · simpa [c2] using hmi2
+    · simpa [c2] using (B.mem.symm ▸ hrunR)
+  refine ⟨c2, ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, P2⟩, outside, B.gp.trans ((hframeR Register.x3 (by decide)).trans
+    (gframe Register.x3 (by decide)).symm)⟩
+  · exact hstepsR.trans B.steps
+  · simpa [c2] using B.pc
+  · simpa [c2] using B.a0
+  · simpa [c2] using B.sp
+  · simpa [c2] using B.good
+  · simpa [c2] using B.tick
+  · simpa [c2] using B.minstret
+
+/-- Compatibility view of the framed first-return execution. -/
+theorem readySetjmpSplice_of_geom
+    {inp : BitVec 64} {c0 c1 : Config} {spNew : BitVec 64}
+    (P : ReadyPrefixFacts inp c0 c1)
+    (G : SetjmpGeom c1)
+    (hpc : c1.σ.regs.get? Register.PC = some (0x80006ffc#64 : BitVec 64))
+    (hra : c1.σ.regs.get? Register.x1 = some (0x80004428#64 : BitVec 64))
+    (hsp : c1.σ.regs.get? Register.x2 = some spNew)
+    (hinp : c1.σ.regs.get? Register.x10 = some (inp + 16#64))
+    (hinp16 : (inp + 16#64).toNat = inp.toNat + 16)
+    (hgood : GoodState c1.σ) (htick : c1.tick < 2) :
+    ReadySetjmpSplice inp c0 c1 spNew := by
+  obtain ⟨c2, J⟩ := readySetjmpFramed_of_geom P G hpc hra hsp hinp hinp16 hgood htick
+  exact ⟨c2, J.run, J.pc, J.result, J.sp, J.good, J.tick, J.minstret, J.preservation⟩
+
+#print axioms readySetjmpFramed_of_geom
 
 /-- The interpreter object's first field offset does not wrap. -/
 private theorem interpInput_add16_toNat
@@ -2276,6 +2530,39 @@ private theorem interpInput_add16_toNat
   have hram := F.interp_geom.in_ram
   simp only [RSub, ramRegion, ramLo, ramHi] at hram
   rw [Nat.mod_eq_of_lt (by omega)]
+
+/-- The actual spill/setjmp prefix retains every saved interpreter argument. -/
+theorem readySetjmpSaved_of_ready
+    {c : Config} {stmts count : Nat} {inp : BitVec 64}
+    {N : NativeAddrs} {A : Arena} {φf φc : Addr → Nat} {aLeft : Nat}
+    (F : LayoutInstance.InterpRunReadyFacts c stmts count inp N A φf φc aLeft) :
+    ∃ after, ReadySetjmpSavedFacts inp stmts count c after := by
+  obtain ⟨c1, S⟩ := readySpillSaved_of_ready F
+  obtain ⟨after, J⟩ := readySetjmpFramed_of_geom S.preservation S.geom S.pc S.ra S.sp
+    S.input (interpInput_add16_toNat F) S.good S.tick
+  refine ⟨after, { J.toReadySetjmpFacts with run := S.run.trans J.run }, ?_, J.gp.trans S.gp⟩
+  apply S.saved.transport
+  intro k hk
+  apply J.outside_buffer
+  rw [F.interp_local]
+  left
+  change k < 0x87fffe20
+  omega
+
+/-- Actual spill, setjmp first return, and not-taken branch from the live boundary. -/
+theorem readySetjmp_of_ready
+    {c : Config} {stmts count : Nat} {inp : BitVec 64}
+    {N : NativeAddrs} {A : Arena} {φf φc : Addr → Nat} {aLeft : Nat}
+    (F : LayoutInstance.InterpRunReadyFacts c stmts count inp N A φf φc aLeft) :
+    ∃ after spNew, ReadySetjmpFacts inp c c after spNew := by
+  obtain ⟨after, J⟩ := readySetjmpSaved_of_ready F
+  exact ⟨after, 0x87fffc50#64, J.toReadySetjmpFacts⟩
+
+#print axioms readySetjmpSaved_of_ready
+
+#print axioms ReadySpillLanded.facts
+#print axioms ReadySetjmpSplice.facts
+#print axioms readySetjmp_of_ready
 
 /-- Compose the exact spill and setjmp prefix with one concrete setup-A row
 datum.  This is the nonempty `hSetupA` producer consumed by the route-indexed
@@ -2295,17 +2582,13 @@ theorem readySetupA_of_ready
         SegEntryData driveLoopSetupASeg (driveLoopSetupAL sp 0#64)
           lds c2.σ.mem c2) :
     ReadySegLanded inp c c (0x80004438#64) := by
-  obtain ⟨c1, spNew, hspill, hpc1, hra1, hsp1, hinp1, hgood1, htick1,
-      hmi1, P1, G1⟩ := readySpillLanded_of_ready F
-  have hinp16 := interpInput_add16_toNat F
-  obtain ⟨c2, hsplice, hpc2, ha02, hsp2, hgood2, htick2, hmi2, P2⟩ :=
-    readySetjmpSplice_of_geom P1 G1 hpc1 hra1 hsp1 hinp1 hinp16 hgood1 htick1
+  obtain ⟨c2, spNew, J⟩ := readySetjmp_of_ready F
   obtain ⟨lds, D⟩ :=
-    hDataA c2 spNew P2 hpc2 ha02 hsp2 hgood2 htick2 hmi2
+    hDataA c2 spNew J.preservation J.pc J.result J.sp J.good J.tick J.minstret
   obtain ⟨cA, hA, hpcA, hgoodA, htickA, hmiA, LA⟩ :=
-    hLoopA_ready_of_data inp c spNew lds c2.σ.mem c2 P2 hpc2 hgood2
-      htick2 hmi2 D
-  exact ⟨cA, (hspill.trans hsplice).trans hA, hpcA, hgoodA, htickA, hmiA, LA⟩
+    hLoopA_ready_of_data inp c spNew lds c2.σ.mem c2 J.preservation J.pc J.good
+      J.tick J.minstret D
+  exact ⟨cA, J.run.trans hA, hpcA, hgoodA, htickA, hmiA, LA⟩
 
 /-- Compose the same exact prefix with the taken zero-count setup row. -/
 theorem readyEmpty_of_ready
@@ -2323,17 +2606,13 @@ theorem readyEmpty_of_ready
         SegEntryData driveLoopEmptySeg (driveLoopSetupAL sp 0#64)
           lds c2.σ.mem c2) :
     ReadySegLanded inp c c (0x80004514#64) := by
-  obtain ⟨c1, spNew, hspill, hpc1, hra1, hsp1, hinp1, hgood1, htick1,
-      hmi1, P1, G1⟩ := readySpillLanded_of_ready F
-  have hinp16 := interpInput_add16_toNat F
-  obtain ⟨c2, hsplice, hpc2, ha02, hsp2, hgood2, htick2, hmi2, P2⟩ :=
-    readySetjmpSplice_of_geom P1 G1 hpc1 hra1 hsp1 hinp1 hinp16 hgood1 htick1
+  obtain ⟨c2, spNew, J⟩ := readySetjmp_of_ready F
   obtain ⟨lds, D⟩ :=
-    hDataE c2 spNew P2 hpc2 ha02 hsp2 hgood2 htick2 hmi2
+    hDataE c2 spNew J.preservation J.pc J.result J.sp J.good J.tick J.minstret
   obtain ⟨cE, hE, hpcE, hgoodE, htickE, hmiE, LE⟩ :=
-    hLoopEmpty_ready_of_data inp c spNew lds c2.σ.mem c2 P2 hpc2 hgood2
-      htick2 hmi2 D
-  exact ⟨cE, (hspill.trans hsplice).trans hE, hpcE, hgoodE, htickE, hmiE, LE⟩
+    hLoopEmpty_ready_of_data inp c spNew lds c2.σ.mem c2 J.preservation J.pc J.good
+      J.tick J.minstret D
+  exact ⟨cE, J.run.trans hE, hpcE, hgoodE, htickE, hmiE, LE⟩
 
 #print axioms hSplice_of_setjmpSpec
 #print axioms readySetjmpSplice_of_geom

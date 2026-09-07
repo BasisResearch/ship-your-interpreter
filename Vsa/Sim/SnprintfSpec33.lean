@@ -105,7 +105,7 @@ theorem svfProG_spec
   obtain ⟨hb0, hb1, hb2, hb3, hb4, hb5, hb6, hb7⟩ := slot_reload_bytes vsp 0x000 vfmt c.σ.mem hS000
   obtain ⟨σ1, i1, hs1, hi1, hG1, hmem1, hobs1⟩ :=
     site_8000775c_pr c.σ c.tick c.steps _ vmi0 vsp _ _ _ _ _ _ _ _
-      hG hpc hmi0 hp0.1 hsl0 rfl (by rw [hoff0]; omega) (by rw [hoff0]; omega) (Or.inr (by rw [hoff0, htoh]; omega)) (by rw [hoff0]; omega) hb0 hb1 hb2 hb3 hb4 hb5 hb6 hb7 htick
+      hG hpc hmi0 hp0.1 hsl0 rfl (by rw [hoff0]; omega) (by rw [hoff0]; omega) (Or.inr (by rw [hoff0, htoh]; omega))  hb0 hb1 hb2 hb3 hb4 hb5 hb6 hb7 htick
   have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hs1
   have hpc1 : σ1.regs.get? Register.PC = some (0x80007760#64) := by
     have := obs_alu_pc hobs1

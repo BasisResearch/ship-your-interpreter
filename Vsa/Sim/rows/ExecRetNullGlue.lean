@@ -250,7 +250,7 @@ structure NullBridgeSeam
   /-- the `.ret none` `beqz` guard + `ld a2,8(s0)` geometry: `stmt->expr` (the
   8-byte word at `aStmt+8`) is `0` (the NULL `Expr*`) in the ARM-ENTRY memory
   `ment` (any memory agreeing with `m0` outside the stack window `[SL.lo, sp)`, as
-  the prologue leaves the AST region untouched), and the load slot is an aligned
+  the prologue leaves the AST region untouched), and the load slot is a
   RAM word above HTIF.  From `StmtRepr (.ret none)` (carried in `ExecEntry` but
   hidden by `ExecArmEntryK`).  Fixes the `beqz` at `0x80004124` as TAKEN.  Indexed
   by `ment` (not `m0`) because the `ld` reads the current memory; the seam's
@@ -262,7 +262,6 @@ structure NullBridgeSeam
   exprLo : 0x80000000 ≤ aStmt.toNat + 8
   exprHi : aStmt.toNat + 8 + 8 ≤ 0x100000000
   exprWin : aStmt.toNat + 8 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aStmt.toNat + 8
-  exprAl : (aStmt.toNat + 8) % 8 = 0
   /-- the whole `value_null` splice + `SubExecReturnR` assembly, from the machine
   state at the `value_null`-bridge entry (`0x800042f0`, `sp = sp-176`, mem framed
   to `ment`) to the `SubExecReturnR` rejoin at `0x80004138`.  Dischargeable ABOVE
@@ -306,7 +305,7 @@ theorem retNullGluePrefix
     (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem)
     (v8 v9 v18 v19 : BitVec 64) (out0 : Array String) (ment : Mem)
     -- the `.ret none` `beqz` guard: `stmt->expr` (word at `aStmt+8`) is `0`, and
-    -- the load slot is an aligned RAM word above HTIF (from `NullBridgeSeam`).
+    -- the load slot is a RAM word above HTIF (from `NullBridgeSeam`).
     -- Seam-shaped: the value is given for ANY memory framed to `m0` outside
     -- `[SL.lo, sp)`; we apply it to `ment` via `ExecArmEntryK`'s own memframe below,
     -- so the composition consumes `NullBridgeSeam.retNoneExpr` with no re-destructure.
@@ -315,8 +314,7 @@ theorem retNullGluePrefix
       read64 ment (aStmt.toNat + 8) = some 0)
     (hExprLo : 0x80000000 ≤ aStmt.toNat + 8)
     (hExprHi : aStmt.toNat + 8 + 8 ≤ 0x100000000)
-    (hExprWin : aStmt.toNat + 8 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aStmt.toNat + 8)
-    (hExprAl : (aStmt.toNat + 8) % 8 = 0) :
+    (hExprWin : aStmt.toNat + 8 + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ aStmt.toNat + 8) :
     Triple
       (fun c => ExecArmEntryK g N A SL φf φc st execArmRet sp r aInterp aStmt aEnv aRet
         v8 v9 v18 v19 out0 m0 ment c)
@@ -345,7 +343,6 @@ theorem retNullGluePrefix
     site_80004120_es c.σ c.tick c.steps (0x80004120#64) vmi0 aStmt
       e0 e1 e2 e3 e4 e5 e6 e7 hG0 hpc0' hmi0 hx8_0 hcode0' rfl
       (by rw [haddr]; omega) (by rw [haddr]; omega) (by rw [haddr]; exact hExprWin)
-      (by rw [haddr]; exact hExprAl)
       (by rw [haddr]; exact he0) (by rw [haddr]; exact he1) (by rw [haddr]; exact he2)
       (by rw [haddr]; exact he3) (by rw [haddr]; exact he4) (by rw [haddr]; exact he5)
       (by rw [haddr]; exact he6) (by rw [haddr]; exact he7) htick0
@@ -506,7 +503,7 @@ theorem execRetNullGlue_closed
     retNullGluePrefix g N A SL φf φc st d env sp r aInterp aStmt aEnv aRet m0
       v8 v9 v18 v19 out0 ment
       hseam.retNoneExpr
-      hseam.exprLo hseam.exprHi hseam.exprWin hseam.exprAl c hK
+      hseam.exprLo hseam.exprHi hseam.exprWin c hK
   -- splice: RetNullPostBeqz@0x800042f0 → SubExecReturnR@0x80004138
   obtain ⟨cG, hstepsG, hOut⟩ := hseam.splice ment v8 v9 v18 v19 cM hMid
   exact ⟨cG, hstepsM.trans hstepsG, hOut⟩

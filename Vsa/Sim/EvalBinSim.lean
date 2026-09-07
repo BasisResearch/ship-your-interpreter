@@ -1,3 +1,4 @@
+import Vsa.Sim.WordLoadData
 import Vsa.Sim.EvalRecCommon
 import Vsa.Sim.EntryGroundKit
 import Vsa.Sim.EvalNegSim2
@@ -47,8 +48,8 @@ handling threads `mcall1 → mcall2` and the left value's survival across the ri
 call (its buffer `[sp-968, sp-944)` is disjoint from the right call's frame, arena
 and right-sret window).
 
-Mind the recursive stack headroom: two nested sub-frames need
-`SL.lo + 2·1088 + 1088 ≤ sp`; `blockB_binary` carries `SL.lo + 4352 ≤ sp`.
+Both child calls use the same stack pointer sequentially. The shared
+recursive helper requires `SL.lo + 3264 ≤ sp`.
 
 Conditional (like `blockB_unary`) only on geometry residuals bundled as
 `BinExtras` + the pre-call layout facts `hMcallPop`-style.
@@ -173,10 +174,9 @@ two induction hypotheses, `blockB_binary` needs a bundle of pure program-structu
 facts, analogous to `NegExtras` for the unary arm but doubled (two operands) and
 with two extra classes:
 
-* **operand geometry** for BOTH operands (align/RAM/HTIF-window; disjointness of
+* **operand geometry** for BOTH operands (RAM/HTIF-window; disjointness of
   each operand node from the deep stack region);
-* **deep recursive headroom** `SL.lo + 4352 ≤ sp` (TWO nested sub-frames plus the
-  arm's own frame: `1088·3 + 1088` slack), `sp % 16 = 0`;
+* **recursive headroom** `SL.lo + 3264 ≤ sp`, with `sp % 16 = 0`;
 * **AST-vs-stack/arena disjointness** for the RIGHT operand node — it is read
   (`ld a2,24(s0)`) and its `ExprRepr` re-derived AFTER the left call returns, so it
   must survive the left sub-call's stack scribble and any arena allocation;
@@ -193,7 +193,6 @@ structure BinExtras
     (el er : Expr) (ment : Mem)
     (sp sret aExpr aLOp aROp : BitVec 64) : Prop where
   -- LEFT operand geometry
-  lop_align : aLOp.toNat % 8 = 0
   lop_ram : 0x80000000 ≤ aLOp.toNat ∧ aLOp.toNat + 16 ≤ 0x100000000
   lop_win : tohostAddr + 16 ≤ aLOp.toNat
   lop_stk : aLOp.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aLOp.toNat
@@ -203,7 +202,6 @@ structure BinExtras
   lexpr_surv : ∀ m : Mem,
     (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ment[k]? = m[k]?) → ExprRepr m aLOp.toNat el
   -- RIGHT operand geometry
-  rop_align : aROp.toNat % 8 = 0
   rop_ram : 0x80000000 ≤ aROp.toNat ∧ aROp.toNat + 16 ≤ 0x100000000
   rop_win : tohostAddr + 16 ≤ aROp.toNat
   rop_stk : aROp.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aROp.toNat
@@ -222,7 +220,7 @@ structure BinExtras
   node_stk : aExpr.toNat + 32 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
   node_arena : aExpr.toNat + 32 ≤ A.lo ∨ A.hi ≤ aExpr.toNat
   -- deep recursive headroom + alignment + bounds
-  sproom : SL.lo + 4352 ≤ sp.toNat
+  sproom : SL.lo + 3264 ≤ sp.toNat
   spSLhi : sp.toNat ≤ SL.hi
   sp16 : sp.toNat % 16 = 0
   SLhiRam : SL.hi ≤ 0x100000000
@@ -252,7 +250,59 @@ structure BinaryRecContext
 
 /-! ## `blockB_binary` — the reusable TWO-operand recursive head -/
 
-theorem blockB_binary
+/-- Memory facts retained at the actual return from both operand calls. -/
+structure BinaryReturnMemory (SL : StackLayout) (sret : BitVec 64)
+    (c : Config) : Prop where
+  stack_bytes : ∀ k : Nat, SL.lo ≤ k → k < SL.hi →
+    ∃ b : BitVec 8, c.σ.mem[k]? = some b
+  sret_words : ValueWordsTotal c.σ.mem sret.toNat
+
+/-- Operand loads retained at the actual binary dispatch state. -/
+structure BinaryReturnLoads (sp : BitVec 64) (c : Config) : Prop where
+  payload_register : c.σ.regs.get? Register.x19 = some (bytesT8 c.σ.mem (sp.toNat - 960))
+  kind_spill : read64 c.σ.mem (sp.toNat - 1088) =
+    some (sign_extend (m := 64) (bytesT4 c.σ.mem (sp.toNat - 968))).toNat
+
+/-- Memory and operand-load facts about the same reached binary return. -/
+structure BinaryReturnData (SL : StackLayout) (sp sret : BitVec 64) (c : Config)
+    extends BinaryReturnMemory SL sret c, BinaryReturnLoads sp c : Prop where
+
+/-- The integer operand words and loaded registers derived at binary return. -/
+structure BinaryIntLoads (sp : BitVec 64) (a : Int) (c : Config) : Prop where
+  payload_register : c.σ.regs.get? Register.x19 = some (bytesT8 c.σ.mem (sp.toNat - 960))
+  payload_word : read64 c.σ.mem (sp.toNat - 960) =
+    some (bytesT8 c.σ.mem (sp.toNat - 960)).toNat
+  int_value : (bytesT8 c.σ.mem (sp.toNat - 960)).toInt = a
+  kind_spill : read64 c.σ.mem (sp.toNat - 1088) = some (2#64 : BitVec 64).toNat
+
+/-- Integer representation identifies the actual payload and respilled kind. -/
+theorem BinaryReturnLoads.int_readback {sp : BitVec 64} {a : Int} {c : Config}
+    {N : NativeAddrs} {φ : Addr → Nat} (h : BinaryReturnLoads sp c)
+    (hsp : 968 ≤ sp.toNat)
+    (hv : ValueRepr c.σ.mem N φ (sp.toNat - 968) (.int a)) :
+    BinaryIntLoads sp a c := by
+  obtain ⟨hk, p, hp, ha⟩ := valueRepr_int_pay64 hv
+  have haddr : sp.toNat - 968 + 8 = sp.toNat - 960 := by omega
+  rw [haddr] at hp
+  have hnat := bytesT8_toNat_of_read64 hp
+  have hword : bytesT8 c.σ.mem (sp.toNat - 960) = BitVec.ofNat 64 p := by
+    rw [← hnat]
+    exact (ofNat_toNat_self64 _).symm
+  have hkind : bytesT4 c.σ.mem (sp.toNat - 968) = (2#32 : BitVec 32) :=
+    bytesT4_of_read32 hk
+  refine { payload_register := h.payload_register
+           payload_word := ?_
+           int_value := ?_
+           kind_spill := ?_ }
+  · rw [hp, hnat]
+  · rw [hword]
+    exact ha
+  · rw [h.kind_spill, hkind]
+    rfl
+
+#print axioms BinaryReturnLoads.int_readback
+
+theorem blockB_binary_data
     (gouter gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr)
@@ -315,16 +365,17 @@ theorem blockB_binary
           (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
         Expr.bodiesBound Vsa.While.perCallBudget er = true ∧
         Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
-      (fun c =>
-        TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
-          st' st'' vl vr sp r sret v8 v9 v18 m0 c) := by
+      (ReturnedWith
+        (TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+          st' st'' vl vr sp r sret v8 v9 v18 m0)
+        (BinaryReturnData SL sp sret)) := by
   intro c hpre
   obtain ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v,
     hpayL, hexprL, hpayR, hexprR, hMemExtM0, hgroundP,
     hstackBudgetL, hexprBodiesL, hstoreBodiesL,
     hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
-    hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
+    hexpr, houtStr, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
@@ -360,7 +411,7 @@ theorem blockB_binary
     site_800034e8_totb c.σ c.tick c.steps (0x800034e8#64) vmi aExpr lp0 lp1 lp2 lp3 lp4 lp5 lp6 lp7
       hG hpc hmi ha2 (hmem ▸ hcode) rfl
       (by rw [haddr16]; omega) (by rw [haddr16]; omega)
-      (by rw [haddr16, htoh]; right; omega) (by rw [haddr16]; omega)
+      (by rw [haddr16, htoh]; right; omega)
       (by rw [haddr16, hmem]; try (first | exact hlp0 | exact lpin_of_present hlp0)) (by rw [haddr16, hmem]; try (first | exact hlp1 | exact lpin_of_present hlp1))
       (by rw [haddr16, hmem]; try (first | exact hlp2 | exact lpin_of_present hlp2)) (by rw [haddr16, hmem]; try (first | exact hlp3 | exact lpin_of_present hlp3))
       (by rw [haddr16, hmem]; try (first | exact hlp4 | exact lpin_of_present hlp4)) (by rw [haddr16, hmem]; try (first | exact hlp5 | exact lpin_of_present hlp5))
@@ -561,7 +612,7 @@ theorem blockB_binary
       (fun a ha => (hAgMcall1 a ha).symm)
   have hpayL1 : read64 mcall1 (aExpr.toNat + 16) = some aLOp.toNat := by
     rw [evalGround_ast_read64_agree hgroundP hBE.spSLhi
-      (fun a ha => (hAgMcall1 a ha).symm) (off := 16) (by omega)]
+      (fun a ha => (hAgMcall1 a ha).symm) (off := 16) (by simp [exprReadFields])]
     exact hpayL
   have hGroundL : EvalGround mcall1 SL A (sp - 1088#64)
       ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)) aLOp.toNat el :=
@@ -591,7 +642,7 @@ theorem blockB_binary
         hcodemcall1, hviInt1, hviSlot1, hnbs1, hGroundL, hexprL1, hstore1, hstoreSurv1,
         hframe4, ⟨hg8, hg18, ⟨v19, hgx19v⟩, hRec.x20_defined, hRec.x21_defined⟩,
         hslotRa1, hslotS01, hslotS11, hslotS21,
-        hBE.lop_align, hBE.lop_ram.1, hBE.lop_ram.2, hBE.lop_win, hBE.lop_stk,
+        hBE.lop_ram.1, hBE.lop_ram.2, hBE.lop_win, hBE.lop_stk,
         (by rw [hsub968]; omega), (by rw [hsub968]; omega), (by rw [hsub968]; omega),
         (by omega), hBE.spSLhi, hBE.sp16, (by omega), hSLlo, hBE.SLhiRam, hSLwin,
         hBE.codeStk, hBE.viStk, hBE.tableStk, hBE.arenaStk, hBE.arenaCode,
@@ -648,7 +699,7 @@ theorem blockB_binary
     site_800034fc_totb cL.σ cL.tick cL.steps (0x800034fc#64) vmiL aExpr rp0 rp1 rp2 rp3 rp4 rp5 rp6 rp7
       hGL hpcL hmiL hx8L hcodeL rfl
       (by rw [hoff24_s0]; omega) (by rw [hoff24_s0]; omega)
-      (by rw [hoff24_s0, htoh]; right; omega) (by rw [hoff24_s0]; omega)
+      (by rw [hoff24_s0, htoh]; right; omega)
       (by rw [hoff24_s0]; try (first | exact hr24_0 | exact lpin_of_present hr24_0)) (by rw [hoff24_s0]; try (first | exact hr24_1 | exact lpin_of_present hr24_1))
       (by rw [hoff24_s0]; try (first | exact hr24_2 | exact lpin_of_present hr24_2)) (by rw [hoff24_s0]; try (first | exact hr24_3 | exact lpin_of_present hr24_3))
       (by rw [hoff24_s0]; try (first | exact hr24_4 | exact lpin_of_present hr24_4)) (by rw [hoff24_s0]; try (first | exact hr24_5 | exact lpin_of_present hr24_5))
@@ -690,7 +741,7 @@ theorem blockB_binary
       ep0 ep1 ep2 ep3 ep4 ep5 ep6 ep7
       hGτ1 hpcτ1 hmiτ1 hspτ1 hcodeτ1 rfl
       (by rw [haddr0']; omega) (by rw [haddr0']; omega)
-      (by rw [haddr0', htoh]; right; omega) (by rw [haddr0']; omega)
+      (by rw [haddr0', htoh]; right; omega)
       (by rw [haddr0', hmemτ1e]; exact hep0) (by rw [haddr0', hmemτ1e]; exact hep1)
       (by rw [haddr0', hmemτ1e]; exact hep2) (by rw [haddr0', hmemτ1e]; exact hep3)
       (by rw [haddr0', hmemτ1e]; exact hep4) (by rw [haddr0', hmemτ1e]; exact hep5)
@@ -717,7 +768,7 @@ theorem blockB_binary
     site_80003504_tot τ2 j2 (cL.steps + 1 + 1) (0x80003504#64) vmiτ2 (sp - 1088#64)
       hGτ2 hpcτ2 hmiτ2 hspτ2 hcodeτ2 rfl
       (by rw [haddr120]; omega) (by rw [haddr120]; omega)
-      (by rw [haddr120, htoh]; right; omega) (by rw [haddr120]; omega) hj2
+      (by rw [haddr120, htoh]; right; omega)  hj2
   have hstepτ3 : Step ⟨τ2, j2, cL.steps + 1 + 1⟩ ⟨τ3, j3, cL.steps + 1 + 1 + 1⟩ := ht3'
   have hmemτ3e : τ3.mem = cL.σ.mem := by rw [hmemτ3]; exact hmemτ2e
   have hpcτ3 : τ3.regs.get? Register.PC = some (0x80003508#64) := by
@@ -785,7 +836,7 @@ theorem blockB_binary
     site_80003510_tot τ5 j5 (cL.steps + 1 + 1 + 1 + 1 + 1) (0x80003510#64) vmiτ5 (sp - 1088#64)
       hGτ5 hpcτ5 hmiτ5 hspτ5 hcodeτ5 rfl
       (by rw [haddr128]; omega) (by rw [haddr128]; omega)
-      (by rw [haddr128, htoh]; right; omega) (by rw [haddr128]; omega) hj5
+      (by rw [haddr128, htoh]; right; omega)  hj5
   have hstepτ6 : Step ⟨τ5, j5, cL.steps + 1 + 1 + 1 + 1 + 1⟩ ⟨τ6, j6, cL.steps + 1 + 1 + 1 + 1 + 1 + 1⟩ := ht6'
   have hmemτ6e : τ6.mem = cL.σ.mem := by rw [hmemτ6]; exact hmemτ5e
   have hpcτ6 : τ6.regs.get? Register.PC = some (0x80003514#64) := by
@@ -964,11 +1015,24 @@ theorem blockB_binary
   -- WAVE 47i: the RIGHT child's entry-ground bundle — parent ground carried
   -- ACROSS the left sub-call (`transport_via`, per-window agreement chains),
   -- then the kit child conversion.
+  have hCallM1 : EvalCallSupport mcall1 SL A sp :=
+    hgroundP.eval_call.transport_stack (fun k hk =>
+      (hAgMcall1 k (by have := hBE.spSLhi; omega)).symm)
+  have hCallL : EvalCallSupport cL.σ.mem SL A sp :=
+    hCallM1.transport_frame
+      (cut := sp.toNat - 1088)
+      (ret := ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)).toNat)
+      (by have := hBE.spSLhi; omega)
+      (by rw [hsub968]; have := hBE.sproom; have := hBE.spSLhi; omega)
+      hmemFrameL
+  have hCallM2 : EvalCallSupport mcall2 SL A sp :=
+    hCallL.transport_stack (fun k hk =>
+      (hAgMcall2 k (by have := hBE.spSLhi; omega)).symm)
   have hGroundM2 : EvalGround mcall2 SL A sp sret aExpr.toNat (.binary op el er) := by
     have hj : jumpTableBase = 0x80019f58 := rfl
     have hExtend2 : MemExtends cL.σ.mem mcall2 :=
       memExtends_writeMap8 cL.σ.mem (sp.toNat - 1088) _
-    refine hgroundP.transport_via (fun a h1 h2 => ?_) (fun lo hi spec a h1 h2 => ?_)
+    refine hgroundP.transport_via (fun a h1 h2 => ?_) (fun lo hi spec a h1 h2 => ?_) hCallM2
       (hgroundP.stack_bytes_extend
         (hMemExtMent1.trans (hMemExtL.trans hExtend2)))
     · rw [hj] at h1 h2
@@ -1042,7 +1106,7 @@ theorem blockB_binary
         (fun R hR => rfl),
         ⟨⟨aExpr, hgR7_8⟩, ⟨aEnv, hgR7_18⟩, ⟨_, hx19τ7⟩, hgR7_20, hgR7_21⟩,
         hslotRa2, hslotS02, hslotS12, hslotS22,
-        hBE.rop_align, hBE.rop_ram.1, hBE.rop_ram.2, hBE.rop_win, hBE.rop_stk,
+        hBE.rop_ram.1, hBE.rop_ram.2, hBE.rop_win, hBE.rop_stk,
         (by rw [haddr144']; omega), (by rw [haddr144']; omega), (by rw [haddr144']; omega),
         (by omega), hBE.spSLhi, hBE.sp16, (by omega), hSLlo, hBE.SLhiRam, hSLwin,
         hBE.codeStk, hBE.viStk, hBE.tableStk, hBE.arenaStk, hBE.arenaCode,
@@ -1118,29 +1182,131 @@ theorem blockB_binary
       (Steps.single hstep4).trans <| hsL.trans <| (Steps.single hstepτ1).trans <|
       (Steps.single hstepτ2).trans <| (Steps.single hstepτ3).trans <| (Steps.single hstepτ4).trans <|
       (Steps.single hstepτ5).trans <| (Steps.single hstepτ6).trans <| (Steps.single hstepτ7).trans hsR
-  refine ⟨cR, hchain,
-    hGR, htickR, hpcR, hraR, hs1R, hspR, ⟨vmiR, hmiR⟩, houtR, hframeGpre,
-    ⟨v19, hgx19v, hs3spill⟩,
-    ⟨φf1, φc1, hpf1, hpc1',
-      ⟨φcvR, hpcvR, hvalR944⟩, ⟨φcvL, hvalL_R⟩,
-      ⟨φf2, φc2, hpf2, hpc2'', hstore2', hstoreSurv2'⟩⟩,
-    hcodeR, hslotRaR, hslotS0R, hslotS1R, hslotS2R, ?_, ?_⟩
-  · -- MemExtends m0 cR.mem (chain: m0 → ment → mcall1 → cL.mem → mcall2 → cR.mem)
-    exact hMemExtM0.trans (hMemExtMent1.trans (hMemExtL.trans
-      ((memExtends_writeMap8 cL.σ.mem (sp.toNat - 1088) _).trans hMemExtR)))
-  · -- memframe m0 outside [SL.lo, sp) ∪ A: cR.mem = m0 there (chain of frames)
-    intro a hstk harn
-    have e_m0_ment : m0[a]? = ment[a]? := (hmemframe_m0 a hstk).symm
-    have e_ment_mcall1 : ment[a]? = mcall1[a]? := hAgMcall1 a hstk
-    have e_mcall1_cL : mcall1[a]? = cL.σ.mem[a]? := by
-      rcases hmemFrameL a (fun ⟨hlo, hhi⟩ => hstk ⟨hlo, by omega⟩) harn with hin | heq
-      · exact absurd hin (fun ⟨hlo, hhi⟩ => hstk ⟨by omega, by omega⟩)
+  have hReturn : TwoSubReturn gpre N A SL φf φc
+      st.store.frames.size st.store.closures.size st' st'' vl vr
+      sp r sret v8 v9 v18 m0 cR := by
+    refine ⟨    hGR, htickR, hpcR, hraR, hs1R, hspR, ⟨vmiR, hmiR⟩, houtR, hframeGpre,
+      ⟨v19, hgx19v, hs3spill⟩,
+      ⟨φf1, φc1, hpf1, hpc1',
+        ⟨φcvR, hpcvR, hvalR944⟩, ⟨φcvL, hvalL_R⟩,
+        ⟨φf2, φc2, hpf2, hpc2'', hstore2', hstoreSurv2'⟩⟩,
+      hcodeR, hslotRaR, hslotS0R, hslotS1R, hslotS2R, ?_, ?_⟩
+    · -- MemExtends m0 cR.mem (chain: m0 → ment → mcall1 → cL.mem → mcall2 → cR.mem)
+      exact hMemExtM0.trans (hMemExtMent1.trans (hMemExtL.trans
+        ((memExtends_writeMap8 cL.σ.mem (sp.toNat - 1088) _).trans hMemExtR)))
+    · -- memframe m0 outside [SL.lo, sp) ∪ A: cR.mem = m0 there (chain of frames)
+      intro a hstk harn
+      have e_m0_ment : m0[a]? = ment[a]? := (hmemframe_m0 a hstk).symm
+      have e_ment_mcall1 : ment[a]? = mcall1[a]? := hAgMcall1 a hstk
+      have e_mcall1_cL : mcall1[a]? = cL.σ.mem[a]? := by
+        rcases hmemFrameL a (fun ⟨hlo, hhi⟩ => hstk ⟨hlo, by omega⟩) harn with hin | heq
+        · exact absurd hin (fun ⟨hlo, hhi⟩ => hstk ⟨by omega, by omega⟩)
+        · exact heq.symm
+      have e_cL_mcall2 : cL.σ.mem[a]? = mcall2[a]? := hAgMcall2 a hstk
+      have e_mcall2_cR : mcall2[a]? = cR.σ.mem[a]? := by
+        rcases hmemFrameR a (fun ⟨hlo, hhi⟩ => hstk ⟨hlo, by omega⟩) harn with hin | heq
+        · exact absurd hin (by rw [hsub944R]; intro ⟨hlo, hhi⟩; exact hstk ⟨by omega, by omega⟩)
+        · exact heq.symm
+      rw [e_mcall2_cR.symm, e_cL_mcall2.symm, e_mcall1_cL.symm, e_ment_mcall1.symm, e_m0_ment.symm]
+  have hMentFinal : MemExtends ment cR.σ.mem :=
+    hMemExtMent1.trans (hMemExtL.trans
+      ((memExtends_writeMap8 cL.σ.mem (sp.toNat - 1088) _).trans hMemExtR))
+  have hStackBytes := hgroundP.stack_bytes_extend hMentFinal
+  have hMemory : BinaryReturnMemory SL sret cR :=
+    { stack_bytes := hStackBytes
+      sret_words := valueWordsTotal_of_interval hStackBytes
+        hBE.sret_inSL.1 hBE.sret_inSL.2 }
+  have hPayloadLR : bytesT8 cL.σ.mem (sp.toNat - 960) =
+      bytesT8 cR.σ.mem (sp.toNat - 960) :=
+    bytesT8_agree _ (fun j hj => hAgLR _ (by omega)
+      (by rcases hBE.arenaStk with h | h <;> omega) (by omega))
+  have hKindLR : bytesT4 cL.σ.mem (sp.toNat - 968) =
+      bytesT4 cR.σ.mem (sp.toNat - 968) :=
+    bytesT4_agree _ (fun j hj => hAgLR _ (by omega)
+      (by rcases hBE.arenaStk with h | h <;> omega) (by omega))
+  have hPayloadRegister : cR.σ.regs.get? Register.x19 =
+      some (bytesT8 cR.σ.mem (sp.toNat - 960)) := by
+    have h := (hframeR Register.x19 (by decide)).trans hx19τ7
+    rw [hmemτ5e, haddr128, sext_full, hPayloadLR] at h
+    exact h
+  have hKindSaved : read64 mcall2 (sp.toNat - 1088) =
+      some (sign_extend (m := 64) (bytesT4 cL.σ.mem (sp.toNat - 968))).toNat := by
+    dsimp only [mcall2]
+    rw [read64_writeMap8, sdData_toNat, hmemτ2e, haddr120]
+  have hKindSpill : read64 cR.σ.mem (sp.toNat - 1088) =
+      some (sign_extend (m := 64) (bytesT4 cR.σ.mem (sp.toNat - 968))).toNat := by
+    rw [← read64_agreeP (P := fun k => sp.toNat - 1088 ≤ k ∧ k < sp.toNat - 1080)
+      (m := mcall2) (m' := cR.σ.mem) (a := sp.toNat - 1088)
+      (fun k hk => ?_) (fun j hj => ⟨by omega, by omega⟩)]
+    · rw [hKindSaved, hKindLR]
+    · rcases hmemFrameR k (by omega)
+        (by rcases hBE.arenaStk with h | h <;> omega) with hin | heq
+      · rw [hsub944R] at hin
+        omega
       · exact heq.symm
-    have e_cL_mcall2 : cL.σ.mem[a]? = mcall2[a]? := hAgMcall2 a hstk
-    have e_mcall2_cR : mcall2[a]? = cR.σ.mem[a]? := by
-      rcases hmemFrameR a (fun ⟨hlo, hhi⟩ => hstk ⟨hlo, by omega⟩) harn with hin | heq
-      · exact absurd hin (by rw [hsub944R]; intro ⟨hlo, hhi⟩; exact hstk ⟨by omega, by omega⟩)
-      · exact heq.symm
-    rw [e_mcall2_cR.symm, e_cL_mcall2.symm, e_mcall1_cL.symm, e_ment_mcall1.symm, e_m0_ment.symm]
+  have hData : BinaryReturnData SL sp sret cR :=
+    { toBinaryReturnMemory := hMemory
+      payload_register := hPayloadRegister
+      kind_spill := hKindSpill }
+  exact ⟨cR, hchain, ⟨hReturn, hData⟩⟩
+
+/-- Project the reached memory facts from the same binary execution. -/
+def blockB_binary_memory
+    (gouter gpre : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr)
+    (op : BinOp) (el er : Expr) (vl vr : Value)
+    (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 : BitVec 64)
+    (out0 : Array String) (m0 : Mem)
+    (hLeft : EvalE st d env el st' vl)
+    (hIHl : EvalIH st d env el st' vl)
+    (hIHr : EvalIH st' d env er st'' vr)
+    -- LEFT-value survival across the RIGHT sub-call: a layout-level residual (like
+    -- `store_survives`). The left value at `sp-968` keeps its representation under
+    -- any memory change confined to the right sub-call's frame `[SL.lo, sp-1088)`,
+    -- the arena `[A.lo, A.hi)` (the right call may allocate — its new bytes must not
+    -- clobber the left value's own arena payload), or the right sret window
+    -- `[sp-944, sp-920)`. For non-string `vl` (e.g. the `int`-pilot) it is vacuous.
+    (hVlSurv : ∀ (φ : Addr → Nat) (m m' : Mem),
+      ValueRepr m N φ (sp.toNat - 968) vl →
+      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
+        ¬ ((sp.toNat - 944) ≤ k ∧ k < (sp.toNat - 944) + 24) → m[k]? = m'[k]?) →
+      ValueRepr m' N φ (sp.toNat - 968) vl) :=
+  (blockB_binary_data gouter gpre N A SL φf φc st st' st'' d env op el er vl vr
+      sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0
+      hLeft hIHl hIHr hVlSurv).conseq (fun _ hp => hp)
+    (fun c hp => (⟨hp.result, hp.extra.toBinaryReturnMemory⟩ :
+      ReturnedWith _ (BinaryReturnMemory SL sret) c))
+
+/-- Ordinary projection of the same two-operand execution. -/
+def blockB_binary
+    (gouter gpre : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr)
+    (op : BinOp) (el er : Expr) (vl vr : Value)
+    (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 : BitVec 64)
+    (out0 : Array String) (m0 : Mem)
+    (hLeft : EvalE st d env el st' vl)
+    (hIHl : EvalIH st d env el st' vl)
+    (hIHr : EvalIH st' d env er st'' vr)
+    -- LEFT-value survival across the RIGHT sub-call: a layout-level residual (like
+    -- `store_survives`). The left value at `sp-968` keeps its representation under
+    -- any memory change confined to the right sub-call's frame `[SL.lo, sp-1088)`,
+    -- the arena `[A.lo, A.hi)` (the right call may allocate — its new bytes must not
+    -- clobber the left value's own arena payload), or the right sret window
+    -- `[sp-944, sp-920)`. For non-string `vl` (e.g. the `int`-pilot) it is vacuous.
+    (hVlSurv : ∀ (φ : Addr → Nat) (m m' : Mem),
+      ValueRepr m N φ (sp.toNat - 968) vl →
+      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
+        ¬ ((sp.toNat - 944) ≤ k ∧ k < (sp.toNat - 944) + 24) → m[k]? = m'[k]?) →
+      ValueRepr m' N φ (sp.toNat - 968) vl) :=
+  ReturnedWith.forget
+    (blockB_binary_memory gouter gpre N A SL φf φc st st' st'' d env op el er vl vr
+      sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0
+      hLeft hIHl hIHr hVlSurv)
+
+#print axioms blockB_binary_data
+#print axioms blockB_binary_memory
+#print axioms blockB_binary
 
 end Vsa.Sim

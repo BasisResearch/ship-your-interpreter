@@ -32,7 +32,7 @@ case's `SL`/`sp`:
 
 | # | shape                                    | example fields                                   |
 |---|------------------------------------------|--------------------------------------------------|
-| A | `obj.lo % 8 = 0`  (align8)               | `expr_align`, `stmt_align`, `sret_align`         |
+| A | `obj.lo % 8 = 0`  (align8)               | `sret_align`, stack/store alignment         |
 | B | RAM bounds `0x8..0 ≤ lo ∧ hi ≤ 0x1..0`   | `expr_ram`, `stmt_ram`, `sret_ram`, `stack_ram`  |
 | C | above HTIF `tohostAddr+16 ≤ lo`          | `expr_win`, `stmt_win`, `sret_win`, `stack_win`  |
 | D | disjoint from stack `[SL.lo, sp)`        | `expr_stack_disjoint`, `stmt_stack_disjoint`,    |

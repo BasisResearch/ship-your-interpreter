@@ -1,45 +1,13 @@
 import Vsa.Sim.rows.ArmPostGeom
 import Vsa.Sim.rows.BinDispatchRow
 
--- discipline: allow(R7-conj-tower-def) The only ∃ in CODE is the single `Wl`/`aLOp`/`aROp`
--- existential the LANDED `BinIntCellResid` def already commits (re-emitted here to build the
--- cell), plus the `TwoSubReturn` tower this file consumes — which is destructured through the
--- SINGLE named lemma `intOperandsStaged_of_twoSubReturn` (one `obtain`, no positional chains),
--- exactly the R7-compliant pattern modelled on `strOperandsStaged_of_twoSubReturn`. The
--- whole-file ∃ count is inflated by doc-comments QUOTING the landed towers to explain the readback.
-
 /-!
-# `BinIntReadback` — the kind-2 (`.int`) operand readback + the `ArmPostGeomV`-shaped cell consumer
+# Integer operand readback and tail suppliers
 
-The `.int`/`.int` sibling of `BinStrReadback`'s kind-3 (`.str`) readback.  Three deliverables:
-
-1. **`IntOperandsStaged` + `intOperandsStaged_of_twoSubReturn`** — from an `.int a`/`.int b`
-   `TwoSubReturn`, project the two operand kind tags (`read32 = 2`, `Value.int`'s tag per
-   `RuntimeRepr.lean:81`) and the two payload WORDS (the signed 64-bit values `a`/`b` via
-   `readI64 (box+8)`).  `ValueRepr … (.int n)` IS `read32 = some 2 ∧ readI64 (a+8) = some n`
-   (`RuntimeRepr.lean:81`); the readback is that definitional unfold, mirroring the str sibling.
-
-2. **`boolOperandsStaged` — NOT NEEDED (verified, skipped honestly).**  The eq/ne cells consume
-   operands VALUE-GENERICALLY, not per-kind: `EqResid` (`rows/EvalEqNeFront.lean:794`) carries the
-   operand `ValueRepr c2.σ.mem N φc … vl` / `… vr` for ARBITRARY `vl vr : Value`, and the dispatch
-   (`EqNeDispatchInput.kindResp`, `EqNeDispatchInput.lean`) pins `read64 (sp-1088) = kindTag vl`
-   through the GENERIC `kindTag` — no `.bool` payload projection.  Its own doc: "Operand kind tags
-   are recovered from `ValueRepr`; no integer specialization remains."  There is no `.bool`-operand
-   binary cell anywhere (comparison ops yield `.bool` RESULTS from `.int`/`.str` operands; the
-   operand kinds a binary arm reads are only `.int` and `.str`).  So no bool operand staging is
-   consumed — a `boolOperandsStaged` would have no consumer.  Skipped per CLAUDE.md law 4.
-
-3. **The consumer demo** — `binIntCellResid_add_ofStaged`: the `.add` cell's `BinIntCellResid`
-   residual reduces to exactly (i) `storeSize` stability, (ii) a `BinArmExtras` witness, and (iii)
-   an `ArmPostGeomV`-shaped provider that, from any `TwoSubReturn`, yields the `AddResid` post as
-   the `ArmPostGeomV 11 AddSlotPinned Value_intLoaded … 4` instance (via the reverse iso
-   `addResid_of_armPostGeomV` landed below).  MEASURED: `AddResid` (`rows/EvalAddRow.lean:688`)
-   carries NO operand-box readback — every field is a result-config geometry/register/alignment
-   fact, i.e. exactly the `ArmPostGeom(V)` tower.  So the cell closes modulo the `ArmPostGeomV`
-   instance + `TermGuards.storeSize` + the `BinArmExtras` slot — the target shape for all 9 int
-   cells (they differ only in `opTok`/`slotDef`/`valLoaded`/`viLo/viHi`/`tblOff` per `ArmPostGeomV`).
-
-NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
+`IntOperandsStaged` exposes represented integer tags and payloads after both
+children return. The nine staged adapters supply the remaining operator-tail
+geometry. Binary entry facts are derived by `EvalEntry.binaryExtras` in the
+generated rows.
 -/
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Vsa
@@ -123,60 +91,37 @@ op-specific extras).  Mirrors `ltResid_of_armPostGeomV`. -/
 theorem addResid_of_armPostGeomV
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
     (h : ArmPostGeomV gpre N A SL 11 AddSlotPinned Value_intLoaded 0x8000280c 0x8000281c 4
-      sp r sret aExpr Wl c') :
-    AddResid gpre N A SL sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTokRead, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+      sp r sret aExpr c') :
+    AddResid gpre N A SL sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTokRead, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vloaded, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
 
 #print axioms addResid_of_armPostGeomV
 
-/-! ## The consumer demo: the `.add` int cell closes modulo `ArmPostGeomV` + `storeSize`
+/-! ## Integer cell from staged geometry
 
-`binIntCellResid_add_ofStaged` builds `BinIntCellResid .add AddResid` from EXACTLY:
-
-* the two store-size-stability conjuncts (`hSF`/`hSC`) — supplied by `TermGuards.storeSize`;
-* a `BinArmExtras` witness (`hX`) + the `∃ aLOp aROp Wl` staging registers — the geometry slot;
-* an `ArmPostGeomV`-shaped provider `hGeom`: from any `TwoSubReturn` (whose operands the readback
-  `intOperandsStaged_of_twoSubReturn` stages), an `ArmPostGeomV 11 AddSlotPinned …` instance for
-  the result config `c'`, reassembled into `AddResid` by the reverse iso above.
-
-This is the target shape: the operand-box content is handled by the readback (the `TwoSubReturn`
-already carries the `.int` operands; the readback makes their tags/words load-bearing), and the
-`AddResid` production reduces to the `ArmPostGeomV` result geometry + `storeSize`.  No hidden gaps:
-`hGeom` is the named `ArmPostGeomV` residual (the `TermShared.geom`/`M6 EvalCaseGeom` widening),
-`hX` the `BinArmExtras` slot, `hSF`/`hSC` the `TermGuards.storeSize` pair. -/
+`ArmPostGeomV` supplies the reached result geometry and register frame.
+The dispatcher derives source-store facts from the actual left execution. -/
 theorem binIntCellResid_add_ofStaged
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : Vsa.While.St) (el er : Expr) (a b : Int)
     (sp r sret aExpr : BitVec 64) (m0 : Mem)
-    (aLOp aROp Wl : BitVec 64)
-    (hSF : st'.store.frames.size = st''.store.frames.size)
-    (hSC : st'.store.closures.size = st''.store.closures.size)
-    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
-    (hX : BinArmExtras g N A SL .add el er sp r sret aExpr aLOp aROp m0)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
-      (∀ c' : Vsa.Machine.Config,
+      BinaryArmFrame g gpre sp aExpr v8 v9 v18 v19 →
+      ∀ c' : Vsa.Machine.Config,
         TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
           st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
         ArmPostGeomV gpre N A SL 11 AddSlotPinned Value_intLoaded 0x8000280c 0x8000281c 4
-          sp r sret aExpr Wl c') ∧
-      g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
-      g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧ g Register.x19 = some v19 ∧
-      (∀ R : Register, AbiPreservedNoise R →
-        (Register.x8 == R) = false → (Register.x9 == R) = false →
-        (Register.x18 == R) = false → (Register.x2 == R) = false →
-        gpre R = g R)) :
+          sp r sret aExpr c') :
     BinIntCellResid .add AddResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
-  intro gpre v8 v9 v18 v19
-  obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
-  refine ⟨fun c' hTSR => addResid_of_armPostGeomV (hResid c' hTSR),
-    hg8, hg9, hg18, hg2, hg19, habi⟩
+  intro gpre v8 v9 v18 v19 hFrame
+  have hResid := hGeom gpre v8 v9 v18 v19 hFrame
+  exact fun c' hTSR => addResid_of_armPostGeomV (hResid c' hTSR)
 
 #print axioms binIntCellResid_add_ofStaged
 
@@ -193,151 +138,106 @@ landed just below (mirror of `addResid_of_armPostGeomV`). -/
 theorem subResid_of_armPostGeomV
     {gpre : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
-    {sp r sret aExpr Wl : BitVec 64} {c' : Vsa.Machine.Config}
+    {sp r sret aExpr : BitVec 64} {c' : Vsa.Machine.Config}
     (h : ArmPostGeomV gpre N A SL 12 SubSlotPinned Value_intLoaded 0x8000280c 0x8000281c 4
-      sp r sret aExpr Wl c') :
-    SubResid gpre N A SL sp r sret aExpr Wl c' :=
-  ⟨h.gx8, h.opTokRead, h.slot, h.fullpop, h.x19, h.wlbuf, h.kindresp, h.exprAl, h.exprLo, h.exprHi,
+      sp r sret aExpr c') :
+    SubResid gpre N A SL sp r sret aExpr c' :=
+  ⟨h.gx8, h.opTokRead, h.slot, h.exprLo, h.exprHi,
    h.exprWin, h.exprSL, h.sretAl, h.sretLo, h.sretHi, h.sretWin, h.sretVi, h.sretStk,
    h.sretEvalCode, h.raAl, h.vloaded, h.codeStk, h.viStk, h.tableStk, h.sretInSL, h.SLloSp, h.SLlo,
    h.SLwin, h.sphiRam, h.sp8, h.SLhiRam, h.spSLhi⟩
 
 #print axioms subResid_of_armPostGeomV
 
-/-- `.sub` cell — `ArmPostGeomV 12 SubSlotPinned` instance + `storeSize`. -/
+/-- `.sub` cell — `ArmPostGeomV 12 SubSlotPinned` instance. -/
 theorem binIntCellResid_sub_ofStaged
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : Vsa.While.St) (el er : Expr) (a b : Int)
-    (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
-    (hSF : st'.store.frames.size = st''.store.frames.size)
-    (hSC : st'.store.closures.size = st''.store.closures.size)
-    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
-    (hX : BinArmExtras g N A SL .sub el er sp r sret aExpr aLOp aROp m0)
+    (sp r sret aExpr : BitVec 64) (m0 : Mem)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
-      (∀ c' : Vsa.Machine.Config,
+      BinaryArmFrame g gpre sp aExpr v8 v9 v18 v19 →
+      ∀ c' : Vsa.Machine.Config,
         TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
           st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
         ArmPostGeomV gpre N A SL 12 SubSlotPinned Value_intLoaded 0x8000280c 0x8000281c 4
-          sp r sret aExpr Wl c') ∧
-      g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
-      g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧ g Register.x19 = some v19 ∧
-      (∀ R : Register, AbiPreservedNoise R →
-        (Register.x8 == R) = false → (Register.x9 == R) = false →
-        (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
+          sp r sret aExpr c') :
     BinIntCellResid .sub SubResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
-  intro gpre v8 v9 v18 v19
-  obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
-  exact ⟨fun c' hTSR => subResid_of_armPostGeomV (hResid c' hTSR), hg8, hg9, hg18, hg2, hg19, habi⟩
+  intro gpre v8 v9 v18 v19 hFrame
+  have hResid := hGeom gpre v8 v9 v18 v19 hFrame
+  exact fun c' hTSR => subResid_of_armPostGeomV (hResid c' hTSR)
 
 /-- `.lt` cell — `ArmPostGeomV 20 LtSlotPinned Value_boolLoaded [0x800027f8,0x8000280c) 4`. -/
 theorem binIntCellResid_lt_ofStaged
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : Vsa.While.St) (el er : Expr) (a b : Int)
-    (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
-    (hSF : st'.store.frames.size = st''.store.frames.size)
-    (hSC : st'.store.closures.size = st''.store.closures.size)
-    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
-    (hX : BinArmExtras g N A SL .lt el er sp r sret aExpr aLOp aROp m0)
+    (sp r sret aExpr : BitVec 64) (m0 : Mem)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
-      (∀ c' : Vsa.Machine.Config,
+      BinaryArmFrame g gpre sp aExpr v8 v9 v18 v19 →
+      ∀ c' : Vsa.Machine.Config,
         TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
           st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
         ArmPostGeomV gpre N A SL 20 LtSlotPinned Value_boolLoaded 0x800027f8 0x8000280c 4
-          sp r sret aExpr Wl c') ∧
-      g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
-      g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧ g Register.x19 = some v19 ∧
-      (∀ R : Register, AbiPreservedNoise R →
-        (Register.x8 == R) = false → (Register.x9 == R) = false →
-        (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
+          sp r sret aExpr c') :
     BinIntCellResid .lt LtResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
-  intro gpre v8 v9 v18 v19
-  obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
-  exact ⟨fun c' hTSR => ltResid_of_armPostGeomV (hResid c' hTSR), hg8, hg9, hg18, hg2, hg19, habi⟩
+  intro gpre v8 v9 v18 v19 hFrame
+  have hResid := hGeom gpre v8 v9 v18 v19 hFrame
+  exact fun c' hTSR => ltResid_of_armPostGeomV (hResid c' hTSR)
 
 /-- `.le` cell — `ArmPostGeomV 21 LeSlotPinned Value_boolLoaded [0x800027f8,0x8000280c) 4`. -/
 theorem binIntCellResid_le_ofStaged
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : Vsa.While.St) (el er : Expr) (a b : Int)
-    (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
-    (hSF : st'.store.frames.size = st''.store.frames.size)
-    (hSC : st'.store.closures.size = st''.store.closures.size)
-    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
-    (hX : BinArmExtras g N A SL .le el er sp r sret aExpr aLOp aROp m0)
+    (sp r sret aExpr : BitVec 64) (m0 : Mem)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
-      (∀ c' : Vsa.Machine.Config,
+      BinaryArmFrame g gpre sp aExpr v8 v9 v18 v19 →
+      ∀ c' : Vsa.Machine.Config,
         TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
           st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
         ArmPostGeomV gpre N A SL 21 LeSlotPinned Value_boolLoaded 0x800027f8 0x8000280c 4
-          sp r sret aExpr Wl c') ∧
-      g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
-      g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧ g Register.x19 = some v19 ∧
-      (∀ R : Register, AbiPreservedNoise R →
-        (Register.x8 == R) = false → (Register.x9 == R) = false →
-        (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
+          sp r sret aExpr c') :
     BinIntCellResid .le LeResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
-  intro gpre v8 v9 v18 v19
-  obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
-  exact ⟨fun c' hTSR => leResid_of_armPostGeomV (hResid c' hTSR), hg8, hg9, hg18, hg2, hg19, habi⟩
+  intro gpre v8 v9 v18 v19 hFrame
+  have hResid := hGeom gpre v8 v9 v18 v19 hFrame
+  exact fun c' hTSR => leResid_of_armPostGeomV (hResid c' hTSR)
 
 /-- `.gt` cell — `ArmPostGeomV 22 GtSlotPinned Value_boolLoaded [0x800027f8,0x8000280c) 4`. -/
 theorem binIntCellResid_gt_ofStaged
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : Vsa.While.St) (el er : Expr) (a b : Int)
-    (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
-    (hSF : st'.store.frames.size = st''.store.frames.size)
-    (hSC : st'.store.closures.size = st''.store.closures.size)
-    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
-    (hX : BinArmExtras g N A SL .gt el er sp r sret aExpr aLOp aROp m0)
+    (sp r sret aExpr : BitVec 64) (m0 : Mem)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
-      (∀ c' : Vsa.Machine.Config,
+      BinaryArmFrame g gpre sp aExpr v8 v9 v18 v19 →
+      ∀ c' : Vsa.Machine.Config,
         TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
           st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
         ArmPostGeomV gpre N A SL 22 GtSlotPinned Value_boolLoaded 0x800027f8 0x8000280c 4
-          sp r sret aExpr Wl c') ∧
-      g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
-      g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧ g Register.x19 = some v19 ∧
-      (∀ R : Register, AbiPreservedNoise R →
-        (Register.x8 == R) = false → (Register.x9 == R) = false →
-        (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
+          sp r sret aExpr c') :
     BinIntCellResid .gt GtResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
-  intro gpre v8 v9 v18 v19
-  obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
-  exact ⟨fun c' hTSR => gtResid_of_armPostGeomV (hResid c' hTSR), hg8, hg9, hg18, hg2, hg19, habi⟩
+  intro gpre v8 v9 v18 v19 hFrame
+  have hResid := hGeom gpre v8 v9 v18 v19 hFrame
+  exact fun c' hTSR => gtResid_of_armPostGeomV (hResid c' hTSR)
 
 /-- `.ge` cell — `ArmPostGeomV 23 GeSlotPinned Value_boolLoaded [0x800027f8,0x8000280c) 4`. -/
 theorem binIntCellResid_ge_ofStaged
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : Vsa.While.St) (el er : Expr) (a b : Int)
-    (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
-    (hSF : st'.store.frames.size = st''.store.frames.size)
-    (hSC : st'.store.closures.size = st''.store.closures.size)
-    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
-    (hX : BinArmExtras g N A SL .ge el er sp r sret aExpr aLOp aROp m0)
+    (sp r sret aExpr : BitVec 64) (m0 : Mem)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
-      (∀ c' : Vsa.Machine.Config,
+      BinaryArmFrame g gpre sp aExpr v8 v9 v18 v19 →
+      ∀ c' : Vsa.Machine.Config,
         TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
           st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
         ArmPostGeomV gpre N A SL 23 GeSlotPinned Value_boolLoaded 0x800027f8 0x8000280c 4
-          sp r sret aExpr Wl c') ∧
-      g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
-      g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧ g Register.x19 = some v19 ∧
-      (∀ R : Register, AbiPreservedNoise R →
-        (Register.x8 == R) = false → (Register.x9 == R) = false →
-        (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
+          sp r sret aExpr c') :
     BinIntCellResid .ge GeResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
-  intro gpre v8 v9 v18 v19
-  obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
-  exact ⟨fun c' hTSR => geResid_of_armPostGeomV (hResid c' hTSR), hg8, hg9, hg18, hg2, hg19, habi⟩
+  intro gpre v8 v9 v18 v19 hFrame
+  have hResid := hGeom gpre v8 v9 v18 v19 hFrame
+  exact fun c' hTSR => geResid_of_armPostGeomV (hResid c' hTSR)
 
 /-- `.mul` cell — `ArmPostGeomV 13 MulSlotPinned Value_intLoaded … 12` + the `__muldi3Loaded` +
 `muldiStk` libgcc extras threaded (per-`c'`) into the reverse iso. -/
@@ -345,28 +245,19 @@ theorem binIntCellResid_mul_ofStaged
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : Vsa.While.St) (el er : Expr) (a b : Int)
-    (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
-    (hSF : st'.store.frames.size = st''.store.frames.size)
-    (hSC : st'.store.closures.size = st''.store.closures.size)
-    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
-    (hX : BinArmExtras g N A SL .mul el er sp r sret aExpr aLOp aROp m0)
+    (sp r sret aExpr : BitVec 64) (m0 : Mem)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
-      (∀ c' : Vsa.Machine.Config,
+      BinaryArmFrame g gpre sp aExpr v8 v9 v18 v19 →
+      ∀ c' : Vsa.Machine.Config,
         TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
           st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
         ArmPostGeomV gpre N A SL 13 MulSlotPinned Value_intLoaded 0x8000280c 0x8000281c 12
-          sp r sret aExpr Wl c' ∧ __muldi3Loaded c'.σ.mem ∧
-          (sp.toNat ≤ 0x80004640 ∨ 0x80004664 ≤ SL.lo)) ∧
-      g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
-      g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧ g Register.x19 = some v19 ∧
-      (∀ R : Register, AbiPreservedNoise R →
-        (Register.x8 == R) = false → (Register.x9 == R) = false →
-        (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
+          sp r sret aExpr c' ∧ __muldi3Loaded c'.σ.mem ∧
+          (sp.toNat ≤ 0x80004640 ∨ 0x80004664 ≤ SL.lo)) :
     BinIntCellResid .mul MulResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
-  intro gpre v8 v9 v18 v19
-  obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
-  refine ⟨fun c' hTSR => ?_, hg8, hg9, hg18, hg2, hg19, habi⟩
+  intro gpre v8 v9 v18 v19 hFrame
+  have hResid := hGeom gpre v8 v9 v18 v19 hFrame
+  intro c' hTSR
   obtain ⟨hG, hmuldi3, hmuldiStk⟩ := hResid c' hTSR
   exact mulResid_of_armPostGeomV hG hmuldi3 hmuldiStk
 
@@ -376,28 +267,19 @@ theorem binIntCellResid_div_ofStaged
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : Vsa.While.St) (el er : Expr) (a b : Int)
-    (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
-    (hSF : st'.store.frames.size = st''.store.frames.size)
-    (hSC : st'.store.closures.size = st''.store.closures.size)
-    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
-    (hX : BinArmExtras g N A SL .div el er sp r sret aExpr aLOp aROp m0)
+    (sp r sret aExpr : BitVec 64) (m0 : Mem)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
-      (∀ c' : Vsa.Machine.Config,
+      BinaryArmFrame g gpre sp aExpr v8 v9 v18 v19 →
+      ∀ c' : Vsa.Machine.Config,
         TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
           st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
         ArmPostGeomV gpre N A SL 14 DivSlotPinned Value_intLoaded 0x8000280c 0x8000281c 20
-          sp r sret aExpr Wl c' ∧ __divdi3Loaded c'.σ.mem ∧ __umoddi3Loaded c'.σ.mem ∧
-          __hidden___udivdi3Loaded c'.σ.mem ∧ (sp.toNat ≤ 0x800046a4 ∨ 0x80004728 ≤ SL.lo)) ∧
-      g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
-      g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧ g Register.x19 = some v19 ∧
-      (∀ R : Register, AbiPreservedNoise R →
-        (Register.x8 == R) = false → (Register.x9 == R) = false →
-        (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
+          sp r sret aExpr c' ∧ __divdi3Loaded c'.σ.mem ∧ __umoddi3Loaded c'.σ.mem ∧
+          __hidden___udivdi3Loaded c'.σ.mem ∧ (sp.toNat ≤ 0x800046a4 ∨ 0x80004728 ≤ SL.lo)) :
     BinIntCellResid .div DivResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
-  intro gpre v8 v9 v18 v19
-  obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
-  refine ⟨fun c' hTSR => ?_, hg8, hg9, hg18, hg2, hg19, habi⟩
+  intro gpre v8 v9 v18 v19 hFrame
+  have hResid := hGeom gpre v8 v9 v18 v19 hFrame
+  intro c' hTSR
   obtain ⟨hG, hdivdi3, humoddi3, hudivdi3, hdivStk⟩ := hResid c' hTSR
   exact divResid_of_armPostGeomV hG hdivdi3 humoddi3 hudivdi3 hdivStk
 
@@ -407,29 +289,20 @@ theorem binIntCellResid_mod_ofStaged
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : Vsa.While.St) (el er : Expr) (a b : Int)
-    (sp r sret aExpr : BitVec 64) (m0 : Mem) (aLOp aROp Wl : BitVec 64)
-    (hSF : st'.store.frames.size = st''.store.frames.size)
-    (hSC : st'.store.closures.size = st''.store.closures.size)
-    (hSB : Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
-    (hX : BinArmExtras g N A SL .mod el er sp r sret aExpr aLOp aROp m0)
+    (sp r sret aExpr : BitVec 64) (m0 : Mem)
     (hGeom : ∀ (gpre : (R : Register) → Option (RegisterType R)) (v8 v9 v18 v19 : BitVec 64),
-      (∀ c' : Vsa.Machine.Config,
+      BinaryArmFrame g gpre sp aExpr v8 v9 v18 v19 →
+      ∀ c' : Vsa.Machine.Config,
         TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
           st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
         ArmPostGeomV gpre N A SL 15 (SlotPinned 0x80019f94#64 0x00#8 0x98#8 0xfe#8 0xff#8)
-          Value_intLoaded 0x8000280c 0x8000281c 20 sp r sret aExpr Wl c' ∧
+          Value_intLoaded 0x8000280c 0x8000281c 20 sp r sret aExpr c' ∧
           __moddi3Loaded c'.σ.mem ∧ __hidden___udivdi3Loaded c'.σ.mem ∧
-          (sp.toNat ≤ 0x800046ac ∨ 0x80004764 ≤ SL.lo)) ∧
-      g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
-      g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧ g Register.x19 = some v19 ∧
-      (∀ R : Register, AbiPreservedNoise R →
-        (Register.x8 == R) = false → (Register.x9 == R) = false →
-        (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R)) :
+          (sp.toNat ≤ 0x800046ac ∨ 0x80004764 ≤ SL.lo)) :
     BinIntCellResid .mod ModResid g N A SL φf φc st st' st'' el er a b sp r sret aExpr m0 := by
-  refine ⟨hSF, hSC, hSB, aLOp, aROp, Wl, hX, ?_⟩
-  intro gpre v8 v9 v18 v19
-  obtain ⟨hResid, hg8, hg9, hg18, hg2, hg19, habi⟩ := hGeom gpre v8 v9 v18 v19
-  refine ⟨fun c' hTSR => ?_, hg8, hg9, hg18, hg2, hg19, habi⟩
+  intro gpre v8 v9 v18 v19 hFrame
+  have hResid := hGeom gpre v8 v9 v18 v19 hFrame
+  intro c' hTSR
   obtain ⟨hG, hmoddi3, hudivdi3, hmodStk⟩ := hResid c' hTSR
   exact modResid_of_armPostGeomV hG hmoddi3 hudivdi3 hmodStk
 

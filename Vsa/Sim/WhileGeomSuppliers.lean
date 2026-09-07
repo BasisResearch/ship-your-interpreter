@@ -82,18 +82,18 @@ theorem execWhileCondArmStage_of_resid
   obtain ⟨cA, hsA, hMid⟩ :=
     hDisp g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 hEntry cfg rfl
   obtain ⟨gpre, aCond, v8, v9, v18, v19, ment, hArm, hpay, hExpr,
-    hstmtAl, hstmtLo, hstmtHi, hstmtWin, hEvalCode, hViCode, hViSlot,
+    hstmtLo, hstmtHi, hstmtWin, hEvalCode, hViCode, hViSlot,
     hNbs, hEvalGround, hWords, henvPtr, hStoreSurv,
-    hcondAl, hcondLo, hcondHi, hcondWin, hcondStk, hsproom, hsp16,
+    hcondLo, hcondHi, hcondWin, hcondStk, hsproom, hsp16,
     hSLlo, hSLhi, hSLwin, hjspHi, hcodeStkJ, htableStkJ1,
     htableStkJ2, harenaStkJ, harenaCode, hgpre, hg8, hg18, hg19,
     hg20, hg21, hcondBudget, hcondBodies, hstoreBodies⟩ := hMid
   have hReady := blockB_stmtWhileCond_stagePre g gpre N A SL φf φc
     st d env cnd sp r aInterp aStmt aEnv aRet aCond v8 v9 v18 v19
     cA.σ.sailOutput m0 ment cA hEntry.env_valid
-    ⟨hArm, hpay, hExpr, hstmtAl, hstmtLo, hstmtHi, hstmtWin,
+    ⟨hArm, hpay, hExpr, hstmtLo, hstmtHi, hstmtWin,
       hEvalCode, hViCode, hViSlot, hNbs, hEvalGround, hWords, henvPtr,
-      hStoreSurv, hcondAl, hcondLo, hcondHi, hcondWin, hcondStk,
+      hStoreSurv, hcondLo, hcondHi, hcondWin, hcondStk,
       hsproom, hsp16, hSLlo, hSLhi, hSLwin, hjspHi, hcodeStkJ,
       htableStkJ1, htableStkJ2, harenaStkJ, harenaCode, hgpre,
       hg8, hg18, hg19, hg20, hg21, hcondBudget, hcondBodies,
@@ -122,6 +122,7 @@ structure ExecWhileCondMemKit
   ground : ExecGround ment SL A sp aRet aStmt.toNat (.whileStmt cnd body)
   mem_frame : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) →
     ment[a]? = m0[a]?
+  mem_extends : MemExtends m0 ment
 
 /-- Saved enclosing-frame words and their original register meanings. -/
 structure ExecWhileCondSpillKit
@@ -205,7 +206,8 @@ theorem execWhileCondMemKit_of_stage
         intro m' hag
         exact hStage.store_survives m' (fun k hk _ => hag k hk)
       ground := hGroundMent
-      mem_frame := hMemFrame }
+      mem_frame := hMemFrame
+      mem_extends := hMemExt }
 
 #print axioms execWhileCondMemKit_of_stage
 
@@ -430,6 +432,7 @@ theorem execWhileCondCarrier_of_kit
       s3 := hFrame.s3.trans hKit.frame.gpre_s3
       spReg := by
         simpa only [BitVec.add_sub_cancel] using hFrame.spReg
+      parentSp := (hEntry.frame Register.x2 (by decide)).symm.trans hEntry.spReg
       code := hKit.mem.code
       code_stack_disjoint := hEntry.code_stack_disjoint
       stack_ram := hEntry.stack_ram
@@ -461,6 +464,7 @@ theorem execWhileCondCarrier_of_kit
           exact (hEntry.frame Register.x21 (by decide)).symm.trans hv21
       ground := hKit.mem.ground
       mem_frame := hKit.mem.mem_frame
+      mem_extends := hKit.mem.mem_extends
       frame := by
         intro R hR
         by_cases h8 : R = Register.x8
@@ -621,7 +625,7 @@ structure ExecWhileCondExitKit
 
 /-- Recover the parent AST, body child, static code, and truthiness header from
 the widened condition exit. -/
-theorem execWhileCondExitKit_of_exit
+theorem execWhileCondExitKit_at_exit
     (g : (R : Register) → Option (RegisterType R))
     (gCond : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -630,20 +634,19 @@ theorem execWhileCondExitKit_of_exit
     (sp r aInterp aStmt aEnv aRet aCond : BitVec 64)
     (m0 mCond : Mem)
     (hCarrier : ExecWhileCondCarrier g N A SL φf φc st d env cnd body
-      sp r aInterp aStmt aEnv aRet m0 gCond aCond mCond) :
-    Triple
-      (EvalExitD gCond N A SL φf φc st.store.frames.size
+      sp r aInterp aStmt aEnv aRet m0 gCond aCond mCond)
+    (cfg : Config)
+    (hExitD : EvalExitD gCond N A SL φf φc st.store.frames.size
         st.store.closures.size stCond v (sp - 176#64)
-        0x80004050#64 (sp - 96#64) mCond)
-      (fun cfg => ∃ (φfBody φcBody : Addr → Nat) (aBody : BitVec 64),
+        0x80004050#64 (sp - 96#64) mCond cfg) :
+    ∃ (φfBody φcBody : Addr → Nat) (aBody : BitVec 64),
         PhiExtends φf φfBody st.store.frames.size ∧
         PhiExtends φc φcBody st.store.closures.size ∧
         (∀ m' : Mem,
           (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → cfg.σ.mem[k]? = m'[k]?) →
           StoreRepr m' N A φfBody φcBody stCond.store) ∧
         ExecWhileCondExitKit gCond N A SL φfBody φcBody stCond v cnd body
-          sp aStmt aRet mCond aBody cfg) := by
-  intro cfg hExitD
+          sp aStmt aRet mCond aBody cfg := by
   rcases hExitD with ⟨hExit, hExt, _hWords, φfBody, φcBody,
     hφfBody, hφcBody, hStoreSurv⟩
   have h176 : (176#64 : BitVec 64).toNat = 176 := by decide
@@ -709,7 +712,7 @@ theorem execWhileCondExitKit_of_exit
       ((sp - 176#64).toNat + 80) v := by
     rw [← hsretSrc]
     exact truthyHeaderRepr_of_valueRepr hValue
-  exact ⟨cfg, Vsa.Machine.Steps.refl cfg, φfBody, φcBody, aBody,
+  exact ⟨φfBody, φcBody, aBody,
     hφfBody, hφcBody, hStoreSurv,
     { ground := hGround
       good := hExit.good
@@ -724,6 +727,36 @@ theorem execWhileCondExitKit_of_exit
       stack_bytes := hPop
       frame := hExit.frame
       out := hExit.out }⟩
+
+
+/-- Zero-step compatibility triple for the pointwise condition-exit kit. -/
+theorem execWhileCondExitKit_of_exit
+    (g : (R : Register) → Option (RegisterType R))
+    (gCond : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st stCond : SpecSt) (d : Nat) (env : Addr)
+    (cnd : Expr) (body : Stmt) (v : Value)
+    (sp r aInterp aStmt aEnv aRet aCond : BitVec 64)
+    (m0 mCond : Mem)
+    (hCarrier : ExecWhileCondCarrier g N A SL φf φc st d env cnd body
+      sp r aInterp aStmt aEnv aRet m0 gCond aCond mCond) :
+    Triple
+      (EvalExitD gCond N A SL φf φc st.store.frames.size
+        st.store.closures.size stCond v (sp - 176#64)
+        0x80004050#64 (sp - 96#64) mCond)
+      (fun cfg => ∃ (φfBody φcBody : Addr → Nat) (aBody : BitVec 64),
+        PhiExtends φf φfBody st.store.frames.size ∧
+        PhiExtends φc φcBody st.store.closures.size ∧
+        (∀ m' : Mem,
+          (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → cfg.σ.mem[k]? = m'[k]?) →
+          StoreRepr m' N A φfBody φcBody stCond.store) ∧
+        ExecWhileCondExitKit gCond N A SL φfBody φcBody stCond v cnd body
+          sp aStmt aRet mCond aBody cfg) := by
+  intro cfg hExitD
+  obtain ⟨phiF, phiC, aBody, hF, hC, hStore, hKit⟩ :=
+    execWhileCondExitKit_at_exit g gCond N A SL φf φc st stCond d env
+      cnd body v sp r aInterp aStmt aEnv aRet aCond m0 mCond hCarrier cfg hExitD
+  exact ⟨cfg, Vsa.Machine.Steps.refl cfg, phiF, phiC, aBody, hF, hC, hStore, hKit⟩
 
 #print axioms execWhileCondExitKit_of_exit
 
@@ -807,11 +840,8 @@ theorem execWhileCondCopy_evalCall_agree
     ∀ k, EvalCallFootprint k → mCopy[k]? = m[k]? := by
   intro k hk
   apply hframe k
-  intro hdst
-  rcases hk with hcode | hvi | htable
-  · rcases hSupport.code_stack with hd | hd <;> omega
-  · rcases hSupport.vi_stack with hd | hd <;> omega
-  · rcases hSupport.table_stack with hd | hd <;> omega
+  have hs := hSupport.outsideStack hk
+  omega
 
 private theorem abiPreservedNoise_of_abi {R : Register}
     (hR : AbiPreserved R = true) : AbiPreservedNoise R := by

@@ -82,28 +82,28 @@ link `0x80003a6c`, memory = the seg write-log, `s2 = s3 = a0v` exposed, and the 
 frame for every callee-saved EXCEPT `s2`/`s3`. -/
 theorem concatStringifyRArgBridge
     (σ : MState) (i u : Nat) (vminstret : BitVec 64) (sp a0v : BitVec 64)
-    (m0 : Std.ExtHashMap Nat (BitVec 8))
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (lds : List (List (BitVec 8)))
     (hG : GoodState σ)
     (hpc : σ.regs.get? Register.PC = some (0x80003a44#64 : BitVec 64))
     (hminstret : σ.regs.get? Register.minstret = some vminstret)
     (hmem : σ.mem = m0)
     (hL : GHolds σ (concatStringifyRArgL sp a0v))
-    (hfacts : ChainFacts σ.mem σ.mem (concatStringifyRArgL sp a0v) [] concatStringifyRArgSeg)
+    (hfacts : ChainFacts σ.mem σ.mem (concatStringifyRArgL sp a0v) lds concatStringifyRArgSeg)
     (hi : i < 2)
     (hKeysOut : KeysOK (keysG (evalBlocks concatStringifyRArgSeg
-      (SegEvalState.init (concatStringifyRArgL sp a0v) [])).regs))
+      (SegEvalState.init (concatStringifyRArgL sp a0v) lds)).regs))
     (hRaOut : KeysAvoidRa (evalBlocks concatStringifyRArgSeg
-      (SegEvalState.init (concatStringifyRArgL sp a0v) [])).regs)
+      (SegEvalState.init (concatStringifyRArgL sp a0v) lds)).regs)
     (hjalSeam : ∀ (σ' : MState) (i' u' : Nat),
       GoodState σ' → i' < 2 →
       σ'.regs.get? Register.PC = some
-        (evalBlocksPC 0x80003a44#64 (SegEvalState.init (concatStringifyRArgL sp a0v) [])
+        (evalBlocksPC 0x80003a44#64 (SegEvalState.init (concatStringifyRArgL sp a0v) lds)
           concatStringifyRArgSeg) →
       (∃ w, σ'.regs.get? Register.minstret = some w) →
       σ'.mem = writeLog m0 (evalBlocks concatStringifyRArgSeg
-        (SegEvalState.init (concatStringifyRArgL sp a0v) [])).log →
+        (SegEvalState.init (concatStringifyRArgL sp a0v) lds)).log →
       GHolds σ' (evalBlocks concatStringifyRArgSeg
-        (SegEvalState.init (concatStringifyRArgL sp a0v) [])).regs →
+        (SegEvalState.init (concatStringifyRArgL sp a0v) lds)).regs →
       JalStep 0x80002fc0#64 0x80003a6c#64 σ' i' u') :
     ∃ (σ2 : MState) (i2 : Nat),
       Steps ⟨σ, i, u⟩ ⟨σ2, i2, u + evalBlocksFuel concatStringifyRArgSeg + 1⟩ ∧ i2 < 2 ∧
@@ -114,9 +114,9 @@ theorem concatStringifyRArgBridge
       -- the whole reseated register bundle, EXPOSED (carries the new `s2 = s3 = a0v`
       -- as deltas the seg computed — read off via `gholds_lookup` by any consumer):
       GHolds σ2 (evalBlocks concatStringifyRArgSeg
-        (SegEvalState.init (concatStringifyRArgL sp a0v) [])).regs ∧
+        (SegEvalState.init (concatStringifyRArgL sp a0v) lds)).regs ∧
       σ2.mem = writeLog m0 (evalBlocks concatStringifyRArgSeg
-        (SegEvalState.init (concatStringifyRArgL sp a0v) [])).log ∧
+        (SegEvalState.init (concatStringifyRArgL sp a0v) lds)).log ∧
       -- the ABI frame for every callee-saved EXCEPT the reseated `s2`/`s3`:
       (∀ R, AbiExceptS2S3 R = true → σ2.regs.get? R = σ.regs.get? R) := by
   have hkeys : KeysOK (keysG (concatStringifyRArgL sp a0v)) := by
@@ -131,7 +131,7 @@ theorem concatStringifyRArgBridge
     unfold AbiExceptS2S3 at hR
     exact (Bool.and_eq_true .. |>.mp ((Bool.and_eq_true .. |>.mp hR).1)).1
   obtain ⟨σ2, i2, hsteps, hi2, hG2, hpc2, hra2, hmi2, hregs2, hmem2, hframe2⟩ :=
-    bridgeOfSegFramed AbiExceptS2S3 concatStringifyRArgSeg (concatStringifyRArgL sp a0v) []
+    bridgeOfSegFramed AbiExceptS2S3 concatStringifyRArgSeg (concatStringifyRArgL sp a0v) lds
       σ i u 0x80003a44#64 0x80002fc0#64 0x80003a6c#64 vminstret m0
       hG hpc hminstret hmem hL hkeys hfacts hi hwf
       hnoiseP hAvoidP hKeysOut hRaOut hPabi hjalSeam

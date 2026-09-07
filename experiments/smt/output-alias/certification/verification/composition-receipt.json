@@ -1,0 +1,66 @@
+{
+  "status": "packaged_unchecked",
+  "proof_bodies_preserved": true,
+  "body_sha256": {
+    "AliasTraceGroup001.lean": "27c5dc2575b892cc8f81b68ec3cb54da146bb2b38b5218c7ff18609a088ed6bc",
+    "AliasTraceGroup002.lean": "99043cbd42045fd9d5303558e471864a4dc02b8ec083a2b611689094312375c1",
+    "AliasTraceGroup003.lean": "c888a807ff2b3659ff65a7e09ecab496f747c3b9111649cac82e29fe7103091b",
+    "AliasTraceGroup004.lean": "03f27f9a08bab874c11cf398a3a60f10dce76ea80435c00a10a83ed1476fc45f",
+    "AliasTraceGroup005.lean": "2a635d0cafbaef207df56c8fbaad0b13f93f480659b07316f1d387cc371f6b28",
+    "AliasTraceGroup006.lean": "a551d71582364422a0ac14d21e28013b6802a8e4a55623c7ca160309d63a37c6",
+    "AliasTraceGroup007.lean": "fd0d58049399715e5bf46f8d044968399ba8628a2f1399d65e3b924962a359eb",
+    "AliasTraceGroup008.lean": "c710cdfb46c841b37b6c05bcf47c51abcf4d1a0609b00972399dfce224797ddf",
+    "AliasTraceGroup009.lean": "b34ae8a608c664b3de2c7f40659a29f1457450f9cfe1f09547a0049150341e69",
+    "AliasTraceGroup010.lean": "6986344536ea318af37f829eefe1ec0f645a74aaccb1c0d021a204060045667e",
+    "AliasTraceGroup011.lean": "87041ea26bc0dcdc1b134d374b16adee34aee8ec2d914ac6e5b21d48845df4dc",
+    "AliasTraceGroup012.lean": "8d7941b8557526fd2d94c57210aadbbf52d4920cb06ef0805f83a7bc85905696",
+    "AliasTraceGroup013.lean": "ced0c2c0e61a03bd60a026d95824428fbbba4e8375ffeddfe3b0b9c27f6ae464",
+    "AliasTraceGroup014.lean": "fd063382e7e28af4f1debf3848af414c87ad806d2f3beae25549c33045d33d5c",
+    "AliasTraceGroup015.lean": "0b628df94b1e152cb8ae5c1e36336d4cde80f6deebe13c20691c794c95626945",
+    "AliasTraceGroup016.lean": "613a6fb856aa72595bdbecc41895c6b279d53435061d863f10294aedc1fd1fe6",
+    "AliasTraceGroup017.lean": "b4a4c5d3b9f28c745d7554359c6148a1494d97300d653c952a0fd3c414caf57e",
+    "AliasTraceGroup018.lean": "422cebf2e1bc84d68983806e3b2c9fbb0a995876fe7de7304cfe997647a9e0bf",
+    "AliasTraceGroup019.lean": "2ebd3dc6d1fd2c8f95402b475ea004dc03192f138388d7a2ff97e091c1cd99ab",
+    "AliasTraceComplete.lean": "1b9dc7f9bbfa151ba5aafbcd512bb558202a2f2c3064719150be49b851b753d4",
+    "TraceRefutation.lean": "24060b446d76791ed1e4b75b451154ed4852bcaf2e84e96fce184e65ed63cf02",
+    "AliasTraceRefuted.lean": "e95876860fbf426987744fb4c19069fe53d98d4688091e1d70dd3e6b13305e04"
+  },
+  "wrapper_header_changes": {
+    "imports": "consolidated into repository modules",
+    "groups_comments": [
+      "-- discipline: allow(R7-conj-tower-def) Generated independent transition endpoints; each post is the named TraceHolds structure. Existentials bind reached configurations for Steps composition, not anonymous representation towers."
+    ],
+    "proof_body_changes": false,
+    "body_edge_whitespace": "original consolidation strips namespace body edges"
+  },
+  "inputs_sha256": {
+    "AliasTraceGroup001.lean": "b3cbd6605aeeb692865d89c99701d5d10420b6b05dce132b999efc0fda7b51da",
+    "AliasTraceGroup002.lean": "5170d701a9ed379ac76ee0fa7d328a3207dcc7659cd18cf96d7adb7597c3a252",
+    "AliasTraceGroup003.lean": "01caae1ff6c40f2e325adbe0706cf4e1b7457c47c500c9923fda3cfd6cef18f0",
+    "AliasTraceGroup004.lean": "1042e8401b0351afb79c704eed10598e23049e2989f8f0fe581c247a3a0bae4e",
+    "AliasTraceGroup005.lean": "2c0c6f4271cd72f4660c654cf664ad8e01736ce1a2472ae127f4b1fca5598e92",
+    "AliasTraceGroup006.lean": "b1f3b48aa5edae9920267e799756e07fbc64e6b3871ca05fb9fd15a3f7a5e5e5",
+    "AliasTraceGroup007.lean": "8183a709e59848828be2b22c509f5ea740c6668e9bf42f1c245485d97bd1e4d7",
+    "AliasTraceGroup008.lean": "06cdf8bf277bdcaa9e88c8600f7c08e187f97f3961f2f9fa16a4aa858c2dee28",
+    "AliasTraceGroup009.lean": "9a1712e4954f852b9696059e71d15069f90e9463766a2fdf11b6644027b0ed52",
+    "AliasTraceGroup010.lean": "591b9c227cdc33f558cf9a659a19d5b57140a3dc0d0403b1ad7499881e103801",
+    "AliasTraceGroup011.lean": "e8a05c553b1875dd450d81bff39d6f681e69f14040f169059a1b7dc962857f63",
+    "AliasTraceGroup012.lean": "ddbf3eba4b381fe4c952e4fc1a6b88e4d3588a2f92803efac711ce7ee151fcd3",
+    "AliasTraceGroup013.lean": "83e652023d393e8574bac20681e014d1de9d33a09b0b9acb2d19ff442cc0aad7",
+    "AliasTraceGroup014.lean": "f74562b404cae941c56407e5f8b6bcaa342e1f24e8e682954afd857aa3a0801e",
+    "AliasTraceGroup015.lean": "dbc63f81021086e8273bc37528048b482e79452cb95b18f1daf65d000446f091",
+    "AliasTraceGroup016.lean": "ff1a95a19a91f357ac60b94ed730af61c38564e363b1cabca0e5b3d62d6887fc",
+    "AliasTraceGroup017.lean": "64e0103210a019acaecc37412ab852c216ec6518080b6e35dce64b1c104d064f",
+    "AliasTraceGroup018.lean": "07ba28640ff008ae22927b662271cdb2ab6895604abe952c6a56223d14d3820a",
+    "AliasTraceGroup019.lean": "40af6a6772299a79f069f63d1ce93941e2131bd88417e7c891645befe770e7ee",
+    "AliasTraceComplete.lean": "4c6b0d79e5bba1110766d9279f46e2d7b81e9a66fc8b5e7beec257cc0ee68f03",
+    "TraceRefutation.lean": "acba9181cdbeed45e033dd840c30bd57f53f12ff3727851191c30407e64ccd40",
+    "AliasTraceRefuted.lean": "f03580f0f5c7422c97c339bf0ee0bec8865a2eb523bc752663336b59520a6462"
+  },
+  "outputs_sha256": {
+    "Vsa/Sim/OutputAliasRun/Groups.lean": "205daad1cb8d6334a8ede47c47577ffd9dc5f522049433ac5ba9511b67e27ced",
+    "Vsa/Sim/OutputAliasRun.lean": "d40b4d0f7533728703a81fb920b4bd3864fd41199067b1ac24b699efbfceeddf",
+    "Vsa/Sim/OutputAliasRefutation.lean": "0c2c992c10b3ed55ec833a7b9437b7fe1df0a38cff6b74c1b9373a4bfea801eb"
+  },
+  "required_gate": "retained full-source integration build"
+}

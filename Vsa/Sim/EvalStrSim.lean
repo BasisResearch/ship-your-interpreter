@@ -1,3 +1,5 @@
+import Vsa.Sim.EvalRecCommon
+import Vsa.Sim.RamReadPins
 import Vsa.Sim.EvalNullSim
 import Vsa.Sim.DecodeTable.Batch16Part07
 import Vsa.Sim.DecodeTable.Batch14Part13
@@ -76,7 +78,6 @@ theorem site_80003414_ee
     (hhiram : (vexpr + sign_extend (m := 64) (0x008#12)).toNat + 8 ≤ 0x100000000)
     (hhtif : (vexpr + sign_extend (m := 64) (0x008#12)).toNat + 8 ≤ tohostAddr
       ∨ tohostAddr + 8 ≤ (vexpr + sign_extend (m := 64) (0x008#12)).toNat)
-    (halign : (vexpr + sign_extend (m := 64) (0x008#12)).toNat % 8 = 0)
     (h0 : σ.mem[(vexpr + sign_extend (m := 64) (0x008#12)).toNat]? = some b0)
     (h1 : σ.mem[(vexpr + sign_extend (m := 64) (0x008#12)).toNat + 1]? = some b1)
     (h2 : σ.mem[(vexpr + sign_extend (m := 64) (0x008#12)).toNat + 2]? = some b2)
@@ -107,7 +108,7 @@ theorem site_80003414_ee
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
-    (exec_ld σ (0x80003414#64) (0x008#12) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x0b#5)
+    (exec_ld_ram_bytes σ (0x80003414#64) (0x008#12) (regidx.Regidx 0x0c#5) (regidx.Regidx 0x0b#5)
       (sigma3_alu σ (0x80003414#64) Register.x11
         (sign_extend (m := 64)
           ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0)
@@ -116,7 +117,7 @@ theorem site_80003414_ee
       (wX_bits_x11 _ (sign_extend (m := 64)
         ((((((((b7.append b6).append b5).append b4).append b3).append b2).append b1).append b0)
           : BitVec (8 * 8))))
-      hlo hhiram hhtif halign h0 h1 h2 h3 h4 h5 h6 h7)
+      hlo hhiram hhtif h0 h1 h2 h3 h4 h5 h6 h7)
     (by decide) (by decide) (by decide) (by decide) (by decide)
     hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide) hi
 
@@ -197,7 +198,7 @@ register frame, but NOT the console-output invariance or the sret-buffer memory
 frame that `armTail_v` needs. This re-runs the four `value_str` instructions
 (`li a5,3; sd a1,8(a0); sw a5,0(a0); ret`), mirroring `value_null_spec_full`'s
 output/memFrame threading, and adds those two facts to the post. -/
-theorem value_str_spec_full (g : (R : Register) → Option (RegisterType R)) (buf pay r : BitVec 64)
+theorem value_str_spec_full_exact (g : (R : Register) → Option (RegisterType R)) (buf pay r : BitVec 64)
     (s : String) (N : NativeAddrs) (φc : Vsa.While.Addr → Nat)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String) :
     Triple
@@ -210,7 +211,7 @@ theorem value_str_spec_full (g : (R : Register) → Option (RegisterType R)) (bu
         (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0 ∧
         c.σ.sailOutput = out0 ∧
         (∀ R : Register, NotWrittenV R → c.σ.regs.get? R = g R))
-      (fun c => GoodState c.σ ∧
+      (ReturnedWith (fun c => GoodState c.σ ∧
         c.σ.regs.get? Register.PC = some (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1) ∧
         c.σ.regs.get? Register.x10 = some buf ∧ c.σ.regs.get? Register.x1 = some r ∧
         (∃ v, c.σ.regs.get? Register.minstret = some v) ∧ c.tick < 2 ∧
@@ -219,7 +220,8 @@ theorem value_str_spec_full (g : (R : Register) → Option (RegisterType R)) (bu
         (∀ k : Nat, ¬ (buf.toNat ≤ k ∧ k < buf.toNat + 24) → m0[k]? = c.σ.mem[k]?) ∧
         (∀ R : Register, NotWrittenV R → c.σ.regs.get? R = g R) ∧
         -- wave 47e (`LeafExitPin`): presence monotonicity of the two buffer writes
-        MemExtends m0 c.σ.mem) := by
+        MemExtends m0 c.σ.mem)
+        (fun c => read64 c.σ.mem (buf.toNat + 8) = some pay.toNat)) := by
   intro c hpre
   obtain ⟨hG, hloaded, hmem, hpc, ha0, ha1, hra, ⟨vmi, hmi⟩, htick, hcstr, hreg, hrettgt, hout, hframe⟩ := hpre
   have hpay := str_pay_addr buf hreg.hi
@@ -290,10 +292,14 @@ theorem value_str_spec_full (g : (R : Register) → Option (RegisterType R)) (bu
     (((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans (Steps.single hs4)
   have hmem4eq : σ4.mem = writeMap4 (writeMap8 c.σ.mem (buf.toNat + 8) (sdData_val pay)) buf.toNat
       (swData ((0#64) + sign_extend (m := 64) (0x003#12))) := by rw [hmem4, hmem3']
+  have hpointer : read64 σ4.mem (buf.toNat + 8) = some pay.toNat := by
+    rw [hmem4eq, read64_writeMap4_disjoint _ _ _ _ (by omega),
+      read64_writeMap8, sdData_toNat]
   have hout4 : σ4.sailOutput = c.σ.sailOutput := by
     rw [hobs4.out, sailOutput_sigmaPost_jump_x0, hobs3.out, sailOutput_sigmaPost_store,
       hobs2.out, sailOutput_sigmaPost_store, hobs1.out, sailOutput_sigmaPost_alu]
-  refine ⟨⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩, hsteps, hG4, obs_jr_pc hobs4,
+  refine ⟨⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩, hsteps, ?_, hpointer⟩
+  refine ⟨hG4, obs_jr_pc hobs4,
     obs_jr_other' hobs4 Register.x10 (by decide) ha0_3,
     obs_jr_other' hobs4 Register.x1 (by decide) hra_3,
     obs_jr_minstret hobs4, hi4, ?_, hout4.trans hout, ?_,
@@ -306,8 +312,7 @@ theorem value_str_spec_full (g : (R : Register) → Option (RegisterType R)) (bu
     refine ⟨?_, pay.toNat, ?_, hreg.pnz, cs, ?_, hlen⟩
     · show read32 σ4.mem buf.toNat = some 3
       rw [hmem4eq, read32_writeMap4, swData_toNat]; rfl
-    · show read64 σ4.mem (buf.toNat + 8) = some pay.toNat
-      rw [hmem4eq, read64_writeMap4_disjoint _ _ _ _ (by omega), read64_writeMap8, sdData_toNat]
+    · exact hpointer
     · rw [hmem4eq, hmem]
       have hslen : s.length = cs.length := by rw [hlen, String.length_ofList]
       apply cstr_writeMap4_disjoint
@@ -323,6 +328,20 @@ theorem value_str_spec_full (g : (R : Register) → Option (RegisterType R)) (bu
     rw [hmem4eq, ← hmem]
     exact (memExtends_writeMap8 _ _ _).trans (memExtends_writeMap4 _ _ _)
 
+/-- Project the ordinary result from the exact pointer-preserving execution. -/
+def value_str_spec_full (g : (R : Register) → Option (RegisterType R)) (buf pay r : BitVec 64)
+    (s : String) (N : NativeAddrs) (φc : Vsa.While.Addr → Nat)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (out0 : Array String) :=
+  ReturnedWith.forget (value_str_spec_full_exact g buf pay r s N φc m0 out0)
+
+#print axioms value_str_spec_full_exact
+
+/-- The literal's memory frame and its actual copied payload pointer. -/
+structure StrReturnPin (SL : StackLayout) (sp sret aExpr : BitVec 64)
+    (m0 m : Mem) : Prop where
+  memory : LeafMemPin SL sp sret m0 m
+  pointer : read64 m (sret.toNat + 8) = read64 m0 (aExpr.toNat + 8)
+
 /-! ## `blockC_str` — the `EX_STR` arm (`ld a1,8(a2); jal value_str; j`)
 
 `ArmEntryK … 0x80003414 Value_strLoaded (.str s) → PreEpilogueV … (.str s)`.
@@ -332,7 +351,7 @@ with `value_str_spec_full` and the three arm sites with the `EX_STR` ones. The
 string pointer `p` is threaded into `x11`, the sret buffer ends holding
 `ValueRepr (.str s)`, and the spills/store/output survive the callee's sret write
 (disjoint from `[SL.lo, sp)` and the string bytes). -/
-theorem blockC_str
+theorem blockC_str_exact
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (s : String)
@@ -355,10 +374,10 @@ theorem blockC_str
           sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
         MemExtends m0 ment)
       (fun c => ∃ mpre, PreEpilogueV g N A SL φf φc st (.str s) sp r sret v8 v9 v18 out0 m0 mpre c ∧
-        LeafMemPin SL sp sret m0 mpre) := by
+        StrReturnPin SL sp sret aExpr m0 mpre) := by
   intro c hc
   obtain ⟨ment, ⟨hG, htick, hpc, ha0, hs1, ha2, hsp, hra, ⟨vmi, hmi⟩, hout, hmem, hcode, hviCode,
-    hexpr, houtStr, hexprAl, hexprLo, hexprHi, hexprWin,
+    hexpr, houtStr, hexprLo, hexprHi, hexprWin,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemframe_m0,
     hgx8, hgx9, hgx18, hgx2, hstore, hstoreSurv, hframe,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
@@ -396,7 +415,7 @@ theorem blockC_str
     site_80003414_ee c.σ c.tick c.steps (0x80003414#64) vmi aExpr pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7
       hG hpc hmi ha2 (hmem ▸ hcode) rfl
       (by rw [hpayaddr]; omega) (by rw [hpayaddr]; omega)
-      (by rw [hpayaddr, htoh]; right; omega) (by rw [hpayaddr]; omega)
+      (by rw [hpayaddr, htoh]; right; omega)
       (by rw [hpayaddr, hmem]; exact hpb0) (by rw [hpayaddr, hmem]; exact hpb1)
       (by rw [hpayaddr, hmem]; exact hpb2) (by rw [hpayaddr, hmem]; exact hpb3)
       (by rw [hpayaddr, hmem]; exact hpb4) (by rw [hpayaddr, hmem]; exact hpb5)
@@ -448,9 +467,11 @@ theorem blockC_str
         (∀ R : Register, NotWrittenV R → σ2.regs.get? R = (fun R => σ2.regs.get? R) R)) := by
     refine ⟨hG2, hviCode2, hmem2e, hpc2, ha0_2, hx11_2, hlink2, ⟨vmi2, hmi2⟩, hi2,
       (by rw [hpayVnat]; exact hpcstr), hStrRegion, hrettgt, hout2, fun R _ => rfl⟩
-  obtain ⟨c3, hs3, hG3, hpc3, ha0_3, hlink3, hmi3, htick3, hval3, hout3, hmemframe3, hframe3, hMemExt3⟩ :=
-    value_str_spec_full (fun R => σ2.regs.get? R) sret payV (0x8000341c#64) s N φc ment out0
+  obtain ⟨c3, hs3, hReturned⟩ :=
+    value_str_spec_full_exact (fun R => σ2.regs.get? R) sret payV (0x8000341c#64) s N φc ment out0
       ⟨σ2, i2, c.steps + 1 + 1⟩ hcallpre
+  obtain ⟨hG3, hpc3, ha0_3, hlink3, hmi3, htick3, hval3, hout3, hmemframe3, hframe3, hMemExt3⟩ :=
+    hReturned.result
   have hpc3' : c3.σ.regs.get? Register.PC = some (0x8000341c#64) := by
     rw [hpc3, show (BitVec.update ((0x8000341c#64 : BitVec 64) + sign_extend (m := 64) (0x000#12)) 0 0#1) = 0x8000341c#64 from by apply BitVec.eq_of_toNat_eq; decide]
   have hs1_3 : c3.σ.regs.get? Register.x9 = some sret := by
@@ -488,6 +509,8 @@ theorem blockC_str
   have hsp_4 : c4.regs.get? Register.x2 = some (sp-1088#64) := obs_jr_other' hobs4 Register.x2 (by decide) hsp_3
   obtain ⟨vmi4, hmi4⟩ := obs_jr_minstret hobs4
   have hout4 : c4.sailOutput = out0 := by rw [hobs4.out, sailOutput_sigmaPost_jump_x0]; exact hout3
+  have hpointer : read64 c4.mem (sret.toNat + 8) = read64 m0 (aExpr.toNat + 8) := by
+    rw [hmem4e, hReturned.extra, hpayVnat, hp64_m0]
   -- assemble PreEpilogueV at `.str s`
   refine ⟨⟨c4, i4', c3.steps + 1⟩, ?_, c4.mem, ⟨hG4, hi4, hpc4, hs1_4, hsp_4, ⟨_, hmi4⟩, hout4, houtStr,
     rfl, hmem4e ▸ hcode3, hmem4e ▸ hval3, hmem4e ▸ hstore3,
@@ -495,10 +518,12 @@ theorem blockC_str
     hmem4e ▸ hslotRa3, hmem4e ▸ hslotS03, hmem4e ▸ hslotS13, hmem4e ▸ hslotS23,
     hgx8, hgx9, hgx18, hgx2, ?_,
     hsp1088, hsphi, hsplo, hspwin, hsp8, hraAl⟩,
-    { pres := by rw [hmem4e]; exact hpresM.trans hMemExt3
-      agree := fun k hk hsr => by
-        rw [hmem4e]
-        exact (hmemframe3 k hsr).symm.trans (hmemframe_m0 k hk) }⟩
+    { memory :=
+        { pres := by rw [hmem4e]; exact hpresM.trans hMemExt3
+          agree := fun k hk hsr => by
+            rw [hmem4e]
+            exact (hmemframe3 k hsr).symm.trans (hmemframe_m0 k hk) }
+      pointer := hpointer }⟩
   · -- the composed run: step1(ld) ; step2(jal) ; value_str steps ; step4(j)
     exact (Steps.single hstep1).trans ((Steps.single hstep2).trans
       (hstep3.trans (Steps.single hstep4)))
@@ -530,6 +555,30 @@ theorem blockC_str
     by_cases hsr : sret.toNat ≤ a ∧ a < sret.toNat + 24
     · exact Or.inl hsr
     · exact Or.inr ((hmemframe3 a hsr).symm.trans (hmemframe_m0 a ha))
+
+/-- Project the original literal-arm result from the exact pointer pin. -/
+def blockC_str
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (s : String)
+    (sp r sret aExpr aEnv : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem)
+    -- the sret buffer is disjoint from `value_str`'s code `[0x8000281c,0x8000282c)`
+    -- (ArmEntryK carries only the `value_int` code range, so supplied here).
+    (hsret_vstr : sret.toNat + 24 ≤ 0x8000281c ∨ 0x8000282c ≤ sret.toNat)
+    -- `aExpr`'s payload word is outside the stack window (so the pointer read is the
+    -- same in `ment` as in `m0`), plus the string payload region geometry
+    -- (`StrRegion`'s non-buffer facts): the pointer is nonzero and disjoint from the
+    -- sret buffer. Both stated on the ENTRY memory `m0` and transferred to `ment`
+    -- via `hmemframe_m0` inside. Threaded from `EvalStrEntry` (the runtime string
+    -- lives in rodata/heap, not the sret slot).
+    (hexprStk : aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat)
+    (hstr : ∀ p : Nat, read64 m0 (aExpr.toNat + 8) = some p →
+      p ≠ 0 ∧ (sret.toNat + 16 ≤ p ∨ p + s.length < sret.toNat)) :=
+  (blockC_str_exact g N A SL φf φc st s sp r sret aExpr aEnv v8 v9 v18 out0 m0
+    hsret_vstr hexprStk hstr).conseq (fun _ hp => hp)
+      (fun _ ⟨mpre, hpre, hpin⟩ => Exists.intro mpre (And.intro hpre hpin.memory))
+
+#print axioms blockC_str_exact
 
 /-! ## `StrSlotPinned` — the `EX_STR` (tag 1) jump-table slot pin
 
@@ -592,7 +641,6 @@ structure EvalStrEntry
   frame : ∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R
   code_stack_disjoint : sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo
   expr_stack_disjoint : aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
-  expr_align : aExpr.toNat % 8 = 0
   expr_ram : 0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000
   expr_win : tohostAddr + 16 ≤ aExpr.toNat
   /-- The runtime string bytes `[p, p + s.length]` (at the payload pointer
@@ -628,6 +676,36 @@ structure EvalStrEntry
   x13_defined : ∃ v, c.σ.regs.get? Register.x13 = some v
   envReg : c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf a))
 
+/-- Convert the generic entry using the string leaf's supplied geometry. -/
+theorem EvalStrEntry.of_entry
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : Vsa.While.St} {d env : Nat} {s : String}
+    {sp r sret aEnv aExpr : BitVec 64} {m0 : Mem} {c : Config}
+    (hc : EvalEntry g N A SL φf φc st d env (.str s) sp r sret aEnv aExpr m0 c)
+    (hssd : ∀ p, read64 c.σ.mem (aExpr.toNat + 8) = some p →
+      p + s.length < SL.lo ∨ sp.toNat ≤ p)
+    (hsrd : ∀ p, read64 c.σ.mem (aExpr.toNat + 8) = some p →
+      p ≠ 0 ∧ (sret.toNat + 16 ≤ p ∨ p + s.length < sret.toNat))
+    (hvsc : sret.toNat + 24 ≤ 0x8000281c ∨ 0x8000282c ≤ sret.toNat)
+    (hvss : (0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x8000281c)
+    (hvsl : Value_strLoaded c.σ.mem) (hsl : StrSlotPinned c.σ.mem)
+    (htsd : (0x80019f58 : Nat) + 8 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58 + 4) :
+    EvalStrEntry g N A SL φf φc st d env s sp r sret aEnv aExpr m0 c :=
+  { good := hc.good, tick := hc.tick, pc := hc.pc, a0 := hc.a0, a1 := hc.a1, a2 := hc.a2,
+      ra := hc.ra, ra_align := hc.ra_align, spReg := hc.spReg, stackOK := hc.stackOK,
+      stackBudget := hc.stackBudget, expr_bodies := hc.expr_bodies, store_bodies := hc.store_bodies, minstret := hc.minstret, mem := hc.mem,
+      code := hc.code, expr := hc.expr, store := hc.store,
+      store_survives := hc.store_survives, out := hc.out, frame := hc.frame,
+      code_stack_disjoint := hc.code_stack_disjoint, expr_stack_disjoint := hc.expr_stack_disjoint, expr_ram := hc.expr_ram, expr_win := hc.expr_win, sret_align := hc.sret_align,
+      sret_ram := hc.sret_ram, sret_win := hc.sret_win, sret_vicode_disjoint := hc.sret_vicode_disjoint_int, sret_stack_disjoint := hc.sret_stack_disjoint, sret_evalcode_disjoint := hc.sret_evalcode_disjoint, stack_ram := hc.stack_ram,
+      stack_win := hc.stack_win, spill_defined := hc.spill_defined,
+      x13_defined := hc.x13_defined,
+      envReg := hc.envReg, str_stack_disjoint := hssd, str_sret_disjoint := hsrd, sret_vstrcode_disjoint := hvsc, vstrcode_stack_disjoint := hvss,
+      value_str_code := hvsl, str_slot := hsl, table_stack_disjoint := htsd }
+
+#print axioms EvalStrEntry.of_entry
+
 /-- **The `EvalE.str` simulation goal.** -/
 def EvalStrSimGoal : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
@@ -644,7 +722,7 @@ def EvalStrSimGoal : Prop :=
 `ArmEntryK` at the str arm), `blockC_str` (arm + `value_str` → epilogue entry),
 and `blockD_v` at `.str s` (epilogue → return).  Wave 47e: PINNED form
 (`LeafMemPin` rides `blockD_v`'s `Q`). -/
-theorem evalStrSimP
+theorem evalStrSimP_exact
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (d : Nat) (a : Addr) (s : String)
@@ -652,7 +730,7 @@ theorem evalStrSimP
     Triple
       (EvalStrEntry g N A SL φf φc st d a s sp r sret aEnv aExpr m0)
       (fun c => EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
-        st (.str s) sp r sret m0 c ∧ LeafMemPin SL sp sret m0 c.σ.mem) := by
+        st (.str s) sp r sret m0 c ∧ StrReturnPin SL sp sret aExpr m0 c.σ.mem) := by
   intro c hc
   -- ExprRepr survival needs the payload pointer `p`; obtain it up front (on m0).
   have hexpr_m0 : ExprRepr m0 aExpr.toNat (.str s) := hc.mem ▸ hc.expr
@@ -700,21 +778,32 @@ theorem evalStrSimP
       (by have := hc.table_stack_disjoint; simp only [jumpTableBase]; omega)
       c ⟨⟨hc.good, hc.tick, hc.pc, hc.a0, hc.a1, hc.a2, hc.ra, hc.ra_align, hc.spReg,
       hc.stackOK, hc.minstret, hc.mem, hc.code, hc.expr, hc.store, hc.store_survives, hc.out,
-      hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_align, hc.expr_ram,
+      hc.frame, hc.code_stack_disjoint, hc.expr_stack_disjoint, hc.expr_ram,
       hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
       hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
       ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩
   -- === block C: arm (ld a1,8(a2); jal value_str; j) → PreEpilogueV .str s + pin ===
   obtain ⟨c2, hs2, mpre, hPre, hPin⟩ :=
-    blockC_str g N A SL φf φc st s sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0
+    blockC_str_exact g N A SL φf φc st s sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0
       hc.sret_vstrcode_disjoint hc.expr_stack_disjoint
       (fun p' hp' => hc.str_sret_disjoint p' (hc.mem.symm ▸ hp'))
       c1 ⟨ment, hArm, hpresM⟩
   -- === block D: epilogue → EvalExit .str s (the pin rides `Q`) ===
   obtain ⟨c3, hs3, hExit, hQ⟩ :=
     blockD_v g N A SL φf φc st (.str s) sp r sret v8 v9 v18 c.σ.sailOutput m0
-      (LeafMemPin SL sp sret m0) c2 ⟨mpre, hPre, hPin⟩
+      (StrReturnPin SL sp sret aExpr m0) c2 ⟨mpre, hPre, hPin⟩
   exact ⟨c3, (hs1.trans hs2).trans hs3, hExit, hQ⟩
+
+/-- Forget the literal pointer pin while retaining its original memory frame. -/
+def evalStrSimP
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (a : Addr) (s : String)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) :=
+  (evalStrSimP_exact g N A SL φf φc st d a s sp r sret aEnv aExpr m0).conseq
+    (fun _ hp => hp) (fun _ hp => And.intro hp.1 hp.2.memory)
+
+#print axioms evalStrSimP_exact
 
 /-- **The M4 `EvalE.str` gate** — the pin-forgetting weakening of
 `evalStrSimP`. -/

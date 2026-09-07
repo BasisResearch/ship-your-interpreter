@@ -144,7 +144,7 @@ private theorem updateMemFactsLd
     (hal : base % 8 = 0) (hp : LPins8 m base bs) : MemFacts m L bs a := by
   unfold MemFacts
   rw [hk, hea]
-  exact ⟨⟨hlo, hhi, hht, hal⟩, hp⟩
+  exact ⟨⟨hlo, hhi, hht⟩, hp⟩
 
 private theorem updateMemFactsSd
     {m : Mem} {L : GRegs} {a : MInstr} {bs : List (BitVec 8)}
@@ -460,11 +460,6 @@ def EnvDefineUpdateHitPre
       cmp (BitVec.ofNat 64 idx) cursor count env name src sp [] m0 c ∧
     EnvDefineSavedSpillFrame sp saved c
 
-/-- The exact machine update has reached the shared env_define epilogue. -/
-def EnvDefineUpdateMachinePost
-    (env src : BitVec 64) (idx : Nat) (m0 : Mem) (c : Config) : Prop :=
-  ∃ lds, UpdateStoreLivePost env src (BitVec.ofNat 64 idx) lds m0 c
-
 /-- Exact update post with the copied value and outer spill image retained. -/
 def EnvDefineUpdatePost
     (saved : (R : Register) → Option (RegisterType R))
@@ -479,8 +474,30 @@ def EnvDefineUpdatePost
     c.σ.mem = UpdateValueTower m0 dst.toNat
       (lds.getD 1 []) (lds.getD 2 []) (lds.getD 3 [])
 
+/-- The exact update write tower preserves every byte outside its value slot. -/
+theorem EnvDefineUpdatePost.agree_outside
+    {saved : (R : Register) → Option (RegisterType R)}
+    {env src dst sp : BitVec 64} {idx : Nat} {m0 : Mem}
+    {N : NativeAddrs} {φc : Vsa.While.Addr → Nat} {v : Vsa.While.Value} {c : Config}
+    (h : EnvDefineUpdatePost saved env src dst sp idx m0 N φc v c) :
+    AgreeP (SetOutside dst.toNat) m0 c.σ.mem := by
+  obtain ⟨lds, _, _, _, _, hmem⟩ := h
+  intro k hk
+  rw [hmem]
+  exact (updateValueTowerOutside m0 dst.toNat k
+    (lds.getD 1 []) (lds.getD 2 []) (lds.getD 3 []) hk).symm
+
+/-- Exact value-copy evidence retained at the update's epilogue entry. -/
+structure EnvDefineCopiedUpdatePost
+    (saved : (R : Register) → Option (RegisterType R))
+    (env src dst sp : BitVec 64) (idx : Nat) (m0 : Mem)
+    (N : NativeAddrs) (φc : Vsa.While.Addr → Nat) (v : Vsa.While.Value) (c : Config) : Prop where
+  update : EnvDefineUpdatePost saved env src dst sp idx m0 N φc v c
+  copied : ∀ k, k < 24 →
+    c.σ.mem[dst.toNat + k]? = some ((m0[src.toNat + k]?).getD 0)
+
 /-- Compose a reflected scan hit with the exact three-word update block. -/
-theorem envDefineUpdateFromHit
+theorem envDefineUpdateFromHitCopied
     (saved : (R : Register) → Option (RegisterType R))
     (env name src count cursor sp vals dst : BitVec 64) (idx : Nat)
     (m0 : Mem) (N : NativeAddrs) (φc : Vsa.While.Addr → Nat)
@@ -495,7 +512,7 @@ theorem envDefineUpdateFromHit
     (harenaCode : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo) :
     Triple
       (EnvDefineUpdateHitPre saved env name src count cursor sp idx m0)
-      (EnvDefineUpdatePost saved env src dst sp idx m0 N φc v) := by
+      (EnvDefineCopiedUpdatePost saved env src dst sp idx m0 N φc v) := by
   intro c h
   obtain ⟨cmp, hp, _hsaved⟩ := h
   obtain ⟨hgood, hmemRaw, hpc, hregs, htick⟩ := hp
@@ -538,7 +555,34 @@ theorem envDefineUpdateFromHit
     rw [hmemTower, hmem]
     exact updateValueTowerOutside m0 dst.toNat a
       (lds.getD 1 []) (lds.getD 2 []) (lds.getD 3 []) ha
-  exact ⟨c', hs, lds, hp', hrepr, hsaved', hsp', hmemTower⟩
+  refine ⟨c', hs, ⟨lds, hp', hrepr, hsaved', hsp', hmemTower⟩, ?_⟩
+  intro k hk
+  rw [hmemTower]
+  exact updateValueTowerCopy m0 src.toNat dst.toNat
+    (lds.getD 1 []) (lds.getD 2 []) (lds.getD 3 []) hpin0 hpin1 hpin2 k hk
+
+/-- Project the exact copied update to the existing semantic update contract. -/
+theorem envDefineUpdateFromHit
+    (saved : (R : Register) → Option (RegisterType R))
+    (env name src count cursor sp vals dst : BitVec 64) (idx : Nat)
+    (m0 : Mem) (N : NativeAddrs) (φc : Vsa.While.Addr → Nat)
+    (v : Vsa.While.Value) (A : Arena)
+    (hcode : Vsa.Sim.Code.Env_defineLoaded m0)
+    (hword : ValueWordRepr m0 N φc src.toNat v)
+    (hgeom : EnvDefineUpdateGeom env src vals dst idx m0)
+    (hpayload : ValuePayloadCovered
+      (fun a => a < dst.toNat ∨ dst.toNat + 24 ≤ a) m0 src.toNat v)
+    (hdstArena : A.contains dst.toNat 24)
+    (harenaStack : A.hi ≤ sp.toNat ∨ sp.toNat + 64 ≤ A.lo)
+    (harenaCode : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo) :
+    Triple
+      (EnvDefineUpdateHitPre saved env name src count cursor sp idx m0)
+      (EnvDefineUpdatePost saved env src dst sp idx m0 N φc v) := by
+  intro c hpre
+  obtain ⟨after, hsteps, hpost⟩ := envDefineUpdateFromHitCopied saved env name src count
+    cursor sp vals dst idx m0 N φc v A hcode hword hgeom hpayload hdstArena
+    harenaStack harenaCode c hpre
+  exact ⟨after, hsteps, hpost.update⟩
 
 /-- Heap ownership of the staged source value derives the payload separation
 needed by the exact update copy. -/
@@ -615,13 +659,9 @@ theorem envDefineUpdateFrameRepr
           if f.vars.any (·.1 == name) then
             f.vars.map fun p => if p.1 == name then (name, v) else p
           else f.vars ++ [(name, v)] } := by
-  obtain ⟨lds, _hrow, hword, _hsaved, _hsp, hmem⟩ := hp
   have hagree : AgreeP (fun a => a < dst.toNat ∨ dst.toNat + 24 ≤ a)
-      m0 c.σ.mem := by
-    intro a ha
-    rw [hmem]
-    exact (updateValueTowerOutside m0 dst.toNat a
-      (lds.getD 1 []) (lds.getD 2 []) (lds.getD 3 []) ha).symm
+      m0 c.σ.mem := hp.agree_outside
+  obtain ⟨_lds, _hrow, hword, _hsaved, _hsp, _hmem⟩ := hp
   obtain ⟨hcount, ⟨cap, hcap, hcaple⟩,
     ⟨pn, pv, hpn, hpv, hbind⟩, hparent⟩ := hframe
   have hslotEq := hslot pv hpv
@@ -714,6 +754,24 @@ theorem storeDefineAdvance_of_update
   · intro ca hca
     exact hstore.closures_arena ca (by simpa [Vsa.While.Store.define] using hca)
 
+/-- Execute the reflected restore-and-return row once, retaining its exact
+register result and unchanged memory. -/
+theorem EnvDefineUpdatePost.restore
+    {saved : (R : Register) → Option (RegisterType R)}
+    {env src dst sp : BitVec 64} {idx : Nat} {m0 : Mem}
+    {N : NativeAddrs} {phiC : Vsa.While.Addr → Nat} {v : Vsa.While.Value} {c : Config}
+    (hp : EnvDefineUpdatePost saved env src dst sp idx m0 N phiC v c) :
+    ∃ after, Vsa.Machine.Steps c after ∧ EnvDefineEpilogueExactPost sp saved c.σ.mem after := by
+  obtain ⟨_ldsUpdate, hrow, _hword, hsaved, hsp, _hmemTower⟩ := hp
+  obtain ⟨hgood, _hmem, hpc, _hregs, htick⟩ := hrow
+  obtain ⟨lds, hfacts, hvalues⟩ := hsaved.chainFacts
+  have hpre : SegPre envDefineEpilogueSeg (envDefineEpilogueL sp) lds
+      0x80002aec#64 c.σ.mem c :=
+    ⟨hgood, rfl, hpc, hgood.minstret, ⟨hsp, trivial⟩,
+      (by show KeysOK [2]; decide), hfacts, htick⟩
+  obtain ⟨c', hs, hpost⟩ := envDefineEpilogueRow sp lds c.σ.mem c hpre
+  exact ⟨c', hs, envDefineEpilogueExact_of_post sp saved lds c.σ.mem c' hvalues hpost⟩
+
 /-- Execute the shared restore-and-ret tail after the exact hit update while
 retaining the reconstructed semantic frame. -/
 theorem envDefineUpdateEpilogue
@@ -740,14 +798,7 @@ theorem envDefineUpdateEpilogue
   intro c hp
   have hfr := envDefineUpdateFrameRepr saved env src dst sp idx m0 N φf φc
     f name v c hp hframe hidx hmatch huniq hslot hfoot
-  obtain ⟨_ldsUpdate, hrow, _hword, hsaved, hsp, _hmemTower⟩ := hp
-  obtain ⟨lds, hfacts, hvalues⟩ := hsaved.chainFacts
-  have hpre : SegPre envDefineEpilogueSeg (envDefineEpilogueL sp) lds
-      0x80002aec#64 c.σ.mem c :=
-    ⟨hrow.1, rfl, hrow.2.2.1, hrow.1.minstret, ⟨hsp, trivial⟩,
-      (by show KeysOK [2]; decide), hfacts, hrow.2.2.2.2⟩
-  obtain ⟨c', hs, hpost⟩ := envDefineEpilogueRow sp lds c.σ.mem c hpre
-  have hret := envDefineEpilogueExact_of_post sp saved lds c.σ.mem c' hvalues hpost
+  obtain ⟨c', hs, hret⟩ := hp.restore
   have hfr' : FrameRepr c'.σ.mem N φf φc env.toNat
       { f with vars :=
           if f.vars.any (·.1 == name) then
@@ -806,12 +857,7 @@ theorem envDefineUpdateEpilogueAdvance
       otherValueStrings := hshell.otherValueStrings }
   have hnew := envDefineUpdateFrameRepr saved env src dst sp idx m0 N φf φc
     f name v c hp hframe hidx hmatch huniq hslot hframeFoot
-  obtain ⟨lds, hrow, _hword, hsaved, hsp, hmemTower⟩ := hp
-  have hagree : AgreeP (OutsideSetSlot dst.toNat) m0 c.σ.mem := by
-    intro a ha
-    rw [hmemTower]
-    exact (updateValueTowerOutside m0 dst.toNat a
-      (lds.getD 1 []) (lds.getD 2 []) (lds.getD 3 []) ha).symm
+  have hagree : AgreeP (OutsideSetSlot dst.toNat) m0 c.σ.mem := hp.agree_outside
   have hwhole := StoreSetFootprint.of_heap_owned
     (N := N) htarget hidxTarget hpvTarget hslotEq howned hagree
   have hnewTarget : FrameRepr c.σ.mem N φf φc (φf target)
@@ -823,15 +869,7 @@ theorem envDefineUpdateEpilogueAdvance
     exact hnew
   have hadv : StoreDefineAdvance N A φf φc store target name v c.σ.mem :=
     storeDefineAdvance_of_update hstore hget hnewTarget hwhole
-  obtain ⟨epiLds, hepiFacts, hepiValues⟩ := hsaved.chainFacts
-  have hepiPre : SegPre envDefineEpilogueSeg (envDefineEpilogueL sp) epiLds
-      0x80002aec#64 c.σ.mem c :=
-    ⟨hrow.1, rfl, hrow.2.2.1, hrow.1.minstret, ⟨hsp, trivial⟩,
-      (by show KeysOK [2]; decide), hepiFacts, hrow.2.2.2.2⟩
-  obtain ⟨c', hs, hepiPost⟩ :=
-    envDefineEpilogueRow sp epiLds c.σ.mem c hepiPre
-  have hepi := envDefineEpilogueExact_of_post sp saved epiLds c.σ.mem c'
-    hepiValues hepiPost
+  obtain ⟨c', hs, hepi⟩ := hp.restore
   have hframe' : FrameRepr c'.σ.mem N φf φc env.toNat
       { f with vars :=
           if f.vars.any (·.1 == name) then
@@ -898,5 +936,9 @@ theorem envDefineUpdateClosed_of_heap_owned
 #print axioms envDefineUpdateEpilogue
 #print axioms envDefineUpdateEpilogueAdvance
 #print axioms envDefineUpdateClosed_of_heap_owned
+
+
+#print axioms envDefineUpdateFromHitCopied
+#print axioms EnvDefineUpdatePost.restore
 
 end Vsa.Sim

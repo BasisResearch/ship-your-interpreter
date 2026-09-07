@@ -41,16 +41,15 @@ theorem memFacts_ld_frame (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (a : M
     (hlo : 0x80000000 ≤ (eaddrM a L).toNat)
     (hhi : (eaddrM a L).toNat + 8 ≤ 0x100000000)
     (hht : (eaddrM a L).toNat + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (eaddrM a L).toNat)
-    (hal : (eaddrM a L).toNat % 8 = 0)
-    (p0 : m[(eaddrM a L).toNat]? = some b0) (p1 : m[(eaddrM a L).toNat + 1]? = some b1)
-    (p2 : m[(eaddrM a L).toNat + 2]? = some b2) (p3 : m[(eaddrM a L).toNat + 3]? = some b3)
-    (p4 : m[(eaddrM a L).toNat + 4]? = some b4) (p5 : m[(eaddrM a L).toNat + 5]? = some b5)
-    (p6 : m[(eaddrM a L).toNat + 6]? = some b6) (p7 : m[(eaddrM a L).toNat + 7]? = some b7) :
+    (p0 : (m[(eaddrM a L).toNat]?).getD 0 = b0) (p1 : (m[(eaddrM a L).toNat + 1]?).getD 0 = b1)
+    (p2 : (m[(eaddrM a L).toNat + 2]?).getD 0 = b2) (p3 : (m[(eaddrM a L).toNat + 3]?).getD 0 = b3)
+    (p4 : (m[(eaddrM a L).toNat + 4]?).getD 0 = b4) (p5 : (m[(eaddrM a L).toNat + 5]?).getD 0 = b5)
+    (p6 : (m[(eaddrM a L).toNat + 6]?).getD 0 = b6) (p7 : (m[(eaddrM a L).toNat + 7]?).getD 0 = b7) :
     MemFacts m L [b0, b1, b2, b3, b4, b5, b6, b7] a := by
   unfold MemFacts; rw [hk]
-  exact ⟨⟨hlo, hhi, hht, hal⟩, lpin_of_present p0, lpin_of_present p1,
-    lpin_of_present p2, lpin_of_present p3, lpin_of_present p4,
-    lpin_of_present p5, lpin_of_present p6, lpin_of_present p7⟩
+  exact ⟨⟨hlo, hhi, hht⟩, p0, p1,
+    p2, p3, p4,
+    p5, p6, p7⟩
 
 /-- A `sd` `MemFacts` from its window bounds (no pins; the data list is irrelevant). -/
 theorem memFacts_sd_frame (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (a : MInstr)
@@ -66,12 +65,10 @@ theorem memFacts_sd_frame (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (a : M
 
 /-- The frame-geometry bundle: the frame base `base` sits in RAM (`≥ 0x80000000`),
 its whole `[base, base+0x108)` window fits below `2^64` and clears the HTIF window
-(`tohostAddr+16 ≤ base`), the base is 8-aligned, and every address is populated in
-`m`.  Everything a segment's `MemFacts` residual needs, independent of any arm's
+(`tohostAddr+16 ≤ base`), the base is 8-aligned. Loads read `m` totally.  Everything a segment's `MemFacts` residual needs, independent of any arm's
 operand data.  `0x108` covers the binary-op arms' widest slot (`+0x100`, an 8-byte
 store); widen it if a client seg reaches further. -/
 structure FrameBundle (m : Std.ExtHashMap Nat (BitVec 8)) (base : BitVec 64) : Prop where
-  pop  : ∀ k : Nat, ∃ w : BitVec 8, m[k]? = some w
   lo   : 0x80000000 ≤ base.toNat
   hi   : base.toNat + 0x108 ≤ 0x100000000
   htif : tohostAddr + 16 ≤ base.toNat
@@ -91,7 +88,7 @@ theorem frame_ea (a : MInstr) (L : GRegs) (base : BitVec 64) (off : Nat)
 
 /-- **Discharge a `ld` window from the `FrameBundle`.**  Any `base`-relative 8-byte
 load at a small aligned offset gets its `MemFacts` for FREE: the bounds by `omega`
-from the bundle, the byte pins from `pop`.  Returns the read bytes as the load-data
+from the bundle, the byte pins from total reads.  Returns the read bytes as the load-data
 list so the caller can assemble the seg's `lds`.  No `spill_addr`/`read64_bytes`
 ritual, no operand data. -/
 theorem frame_ld (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (a : MInstr)
@@ -102,23 +99,22 @@ theorem frame_ld (m : Std.ExtHashMap Nat (BitVec 8)) (L : GRegs) (a : MInstr)
     ∃ bs : List (BitVec 8), MemFacts m L bs a := by
   have hea : (eaddrM a L).toNat = base.toNat + off :=
     frame_ea a L base off hsrc himm (by omega) fb
-  obtain ⟨b0, hb0⟩ := fb.pop (base.toNat + off)
-  obtain ⟨b1, hb1⟩ := fb.pop (base.toNat + off + 1)
-  obtain ⟨b2, hb2⟩ := fb.pop (base.toNat + off + 2)
-  obtain ⟨b3, hb3⟩ := fb.pop (base.toNat + off + 3)
-  obtain ⟨b4, hb4⟩ := fb.pop (base.toNat + off + 4)
-  obtain ⟨b5, hb5⟩ := fb.pop (base.toNat + off + 5)
-  obtain ⟨b6, hb6⟩ := fb.pop (base.toNat + off + 6)
-  obtain ⟨b7, hb7⟩ := fb.pop (base.toNat + off + 7)
+  let b0 := bytesT1 m (base.toNat + off)
+  let b1 := bytesT1 m (base.toNat + off + 1)
+  let b2 := bytesT1 m (base.toNat + off + 2)
+  let b3 := bytesT1 m (base.toNat + off + 3)
+  let b4 := bytesT1 m (base.toNat + off + 4)
+  let b5 := bytesT1 m (base.toNat + off + 5)
+  let b6 := bytesT1 m (base.toNat + off + 6)
+  let b7 := bytesT1 m (base.toNat + off + 7)
   refine ⟨[b0, b1, b2, b3, b4, b5, b6, b7], ?_⟩
   refine memFacts_ld_frame m L a b0 b1 b2 b3 b4 b5 b6 b7 hk
     (by rw [hea]; have := fb.lo; omega)
     (by rw [hea]; have := fb.hi; omega)
     (by rw [hea]; have := fb.htif; right; omega)
-    (by rw [hea]; have := fb.al; omega)
-    (by rw [hea]; exact hb0) (by rw [hea]; exact hb1) (by rw [hea]; exact hb2)
-    (by rw [hea]; exact hb3) (by rw [hea]; exact hb4) (by rw [hea]; exact hb5)
-    (by rw [hea]; exact hb6) (by rw [hea]; exact hb7)
+    (by rw [hea]) (by rw [hea]) (by rw [hea])
+    (by rw [hea]) (by rw [hea]) (by rw [hea])
+    (by rw [hea]) (by rw [hea])
 
 /-- **Discharge a `sd` window from the `FrameBundle`.**  Any `base`-relative 8-byte
 store at a small aligned offset gets its `MemFacts` for FREE — bounds only, no pins,

@@ -1,0 +1,25 @@
+Vsa.While.LoadedOutputAlias.program_bigStep : Vsa.While.BigStep Vsa.While.LoadedOutputAlias.program "\n"
+Vsa.Sim.OutputAliasLoaded.snapshot_loaded : Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout
+  Vsa.While.LoadedOutputAlias.program Vsa.Sim.OutputAliasLoaded.snapshotConfig
+Vsa.Sim.OutputAliasLoaded.snapshot_halts_twoLF : Vsa.Machine.Halts Vsa.Sim.OutputAliasLoaded.snapshotConfig "\n\n" 0
+Vsa.Sim.OutputAliasLoaded.snapshot_not_interpSim : ¬Vsa.Refine.InterpSim Vsa.Sim.LayoutInstance.interpRunLayout
+Vsa.Sim.OutputAliasLoaded.snapshot_not_remainingWork : ∀
+  (a : Vsa.Sim.EndToEnd.RemainingWork Vsa.Sim.LayoutInstance.interpRunLayout), False
+Vsa.Sim.OutputAliasLoaded.snapshot_not_behavioralCorrespondence : ¬∀ (p : Vsa.While.Program) (c : Vsa.Machine.Config),
+    Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout p c →
+      (∀ (out : String), Vsa.While.BigStep p out ↔ Vsa.Machine.Halts c out 0) ∧
+        (Vsa.Machine.Diverges c → ¬∃ out, Vsa.While.BigStep p out)
+Vsa.Sim.EndToEnd.endToEnd_refinement : ∀ (W : Vsa.Sim.EndToEnd.RemainingWork Vsa.Sim.LayoutInstance.interpRunLayout)
+  (p : Vsa.While.Program) (c : Vsa.Machine.Config),
+  Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout p c →
+    (∀ (out : String), Vsa.While.BigStep p out ↔ Vsa.Machine.Halts c out 0) ∧
+      (Vsa.Machine.Diverges c → ¬∃ out, Vsa.While.BigStep p out)
+'Vsa.While.LoadedOutputAlias.program_bigStep' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Vsa.Sim.OutputAliasLoaded.snapshot_loaded' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Vsa.Sim.OutputAliasLoaded.snapshot_halts_twoLF' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Vsa.Sim.OutputAliasLoaded.snapshot_not_interpSim' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Vsa.Sim.OutputAliasLoaded.snapshot_not_remainingWork' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Vsa.Sim.OutputAliasLoaded.snapshot_not_behavioralCorrespondence' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'Vsa.Sim.EndToEnd.endToEnd_refinement' depends on axioms: [propext, Classical.choice, Quot.sound]

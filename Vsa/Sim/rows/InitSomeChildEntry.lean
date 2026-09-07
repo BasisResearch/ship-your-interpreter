@@ -116,7 +116,6 @@ theorem initSomeChildEntry_of_landing
         rcases region.stack_disjoint with hd | hd
         · left; omega
         · right; omega
-      stmt_align := hnode.align
       stmt_ram := by
         have := region.lo_ram
         have := region.hi_ram

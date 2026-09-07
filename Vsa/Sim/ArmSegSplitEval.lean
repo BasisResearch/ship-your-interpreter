@@ -123,7 +123,6 @@ theorem landedN_eentryC_of_jalPrefix
         read64 mcall (sp.toNat - 16) = some v8.toNat ∧
         read64 mcall (sp.toNat - 24) = some v9.toNat ∧
         read64 mcall (sp.toNat - 32) = some v18.toNat ∧
-        aOperand.toNat % 8 = 0 ∧
         0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
         tohostAddr + 16 ≤ aOperand.toNat ∧
         (aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat) ∧
@@ -229,7 +228,6 @@ def JalPreCore (e : Expr) (c' : Config) (st : Vsa.While.St) (d : Nat)
     read64 mcall (sp.toNat - 16) = some v8.toNat ∧
     read64 mcall (sp.toNat - 24) = some v9.toNat ∧
     read64 mcall (sp.toNat - 32) = some v18.toNat ∧
-    aOperand.toNat % 8 = 0 ∧
     0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
     tohostAddr + 16 ≤ aOperand.toNat ∧
     (aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat) ∧

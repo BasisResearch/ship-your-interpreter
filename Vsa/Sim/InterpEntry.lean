@@ -10,7 +10,9 @@ import Vsa.Sim.Code.Value_int
 import Vsa.Sim.Code.Value_null
 import Vsa.Sim.Code.Value_bool
 import Vsa.Sim.Code.Value_str
+import Vsa.Sim.Code.Value_truthy
 import Vsa.Sim.MemRegion
+import Vsa.Sim.StaticImageSupport
 
 -- discipline: allow(R7-conj-tower-def) file-level ∃ count crossed 8 by the 47i
 -- RELOCATION of the landed `EvalGround`/`KindSlotPinned` layer into the entry's
@@ -409,12 +411,111 @@ theorem AstRegionSpec.transport {m m' : Mem} {SL : StackLayout} {A : Arena}
   sret_disjoint := h.sret_disjoint
   arena_disjoint := h.arena_disjoint
 
+/-- Static bytes retained across recursive evaluator calls. -/
+def EvalCallFootprint (k : Nat) : Prop := StaticImageByte k
+
+/-- Static support needed when `exec_stmt` calls `eval_expr`.  The pin closure
+is restricted to the exact static footprint.  The bundle contains no
+expression representation and no recursive semantic hypothesis. -/
+structure EvalCallSupport (m : Mem) (SL : StackLayout) (A : Arena)
+    (sp : BitVec 64) : Prop where
+  image : StaticImageSupport m SL A
+  pins : ∀ m' : Mem,
+    (∀ k : Nat, EvalCallFootprint k → m'[k]? = m[k]?) →
+      InterpCodeLoaded m' ∧ Value_intLoaded m' ∧ Value_truthyLoaded m' ∧
+      IntSlotPinned m' ∧ NBSPins m' ∧ KindTablePins m'
+
+theorem EvalCallSupport.table_stack {m : Mem} {SL : StackLayout} {A : Arena}
+    {sp : BitVec 64} (h : EvalCallSupport m SL A sp) :
+    jumpTableBase + 44 ≤ SL.lo ∨ SL.hi ≤ jumpTableBase :=
+  (h.image.stack_disjoint (by decide) (by decide)).symm
+
+theorem EvalCallSupport.code_stack {m : Mem} {SL : StackLayout} {A : Arena}
+    {sp : BitVec 64} (h : EvalCallSupport m SL A sp) :
+    SL.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo :=
+  h.image.stack_disjoint (by decide) (by decide)
+
+theorem EvalCallSupport.vi_stack {m : Mem} {SL : StackLayout} {A : Arena}
+    {sp : BitVec 64} (h : EvalCallSupport m SL A sp) :
+    (0x8000285c : Nat) ≤ SL.lo ∨ SL.hi ≤ 0x800027ec :=
+  (h.image.stack_disjoint (by decide) (by decide)).symm
+
+theorem EvalCallSupport.arena_code {m : Mem} {SL : StackLayout} {A : Arena}
+    {sp : BitVec 64} (h : EvalCallSupport m SL A sp) :
+    A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo :=
+  h.image.arena_disjoint (by decide) (by decide)
+
+theorem EvalCallSupport.arena_vi {m : Mem} {SL : StackLayout} {A : Arena}
+    {sp : BitVec 64} (h : EvalCallSupport m SL A sp) :
+    A.hi ≤ 0x800027ec ∨ 0x8000285c ≤ A.lo :=
+  h.image.arena_disjoint (by decide) (by decide)
+
+theorem EvalCallSupport.arena_table {m : Mem} {SL : StackLayout} {A : Arena}
+    {sp : BitVec 64} (h : EvalCallSupport m SL A sp) :
+    A.hi ≤ jumpTableBase ∨ jumpTableBase + 44 ≤ A.lo :=
+  h.image.arena_disjoint (by decide) (by decide)
+
+/-- Transport the static support across agreement on its exact byte footprint,
+and optionally lower the caller stack pointer. -/
+theorem EvalCallSupport.transport {m m' : Mem} {SL : StackLayout}
+    {A : Arena} {sp sp' : BitVec 64}
+    (h : EvalCallSupport m SL A sp)
+    (hag : ∀ k : Nat, EvalCallFootprint k → m'[k]? = m[k]?) :
+    EvalCallSupport m' SL A sp' where
+  image := h.image.transport hag
+  pins := by
+    intro m'' hm''
+    apply h.pins
+    intro k hk
+    exact (hm'' k hk).trans (hag k hk)
+
+/-- Static eval support is outside the whole stack, including all child frames. -/
+theorem EvalCallSupport.outsideStack {m : Mem} {SL : StackLayout} {A : Arena}
+    {sp : BitVec 64} (h : EvalCallSupport m SL A sp)
+    {k : Nat} (hk : EvalCallFootprint k) : ¬ (SL.lo ≤ k ∧ k < SL.hi) :=
+  h.image.outsideStack hk
+
+/-- Static eval support is outside every allocation-arena write. -/
+theorem EvalCallSupport.outsideArena {m : Mem} {SL : StackLayout} {A : Arena}
+    {sp : BitVec 64} (h : EvalCallSupport m SL A sp)
+    {k : Nat} (hk : EvalCallFootprint k) : ¬ (A.lo ≤ k ∧ k < A.hi) :=
+  h.image.outsideArena hk
+
+/-- Preserve the support through the actual frame of stack-confined writes. -/
+theorem EvalCallSupport.transport_stack {m m' : Mem} {SL : StackLayout} {A : Arena}
+    {sp sp' : BitVec 64} (h : EvalCallSupport m SL A sp)
+    (hag : ∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → m'[k]? = m[k]?) :
+    EvalCallSupport m' SL A sp' :=
+  h.transport (fun k hk => hag k (h.outsideStack hk))
+
+/-- The actual recursive exit frame preserves code and table support.
+The result slot and recursive stack window are contained in the whole stack. -/
+theorem EvalCallSupport.transport_frame {m m' : Mem} {SL : StackLayout} {A : Arena}
+    {sp sp' : BitVec 64} {cut ret : Nat} (h : EvalCallSupport m SL A sp)
+    (hcut : cut ≤ SL.hi) (hret : SL.lo ≤ ret ∧ ret + 24 ≤ SL.hi)
+    (hframe : ∀ k, ¬ (SL.lo ≤ k ∧ k < cut) → ¬ (A.lo ≤ k ∧ k < A.hi) →
+      (ret ≤ k ∧ k < ret + 24) ∨ m'[k]? = m[k]?) :
+    EvalCallSupport m' SL A sp' := by
+  apply h.transport
+  intro k hk
+  have hs := h.outsideStack hk
+  rcases hframe k (by omega) (h.outsideArena hk) with hr | he
+  · exact False.elim (hs (by omega))
+  · exact he
+
+#print axioms EvalCallSupport.outsideStack
+#print axioms EvalCallSupport.outsideArena
+#print axioms EvalCallSupport.transport_stack
+#print axioms EvalCallSupport.transport_frame
+
 /-- **The complete eval entry-ground bundle** (audit classes N1/N3/N4/N5).
 Inserted as `EvalEntry.ground` (47i); transported by `survive_stack`; children
 by `ExprIn` projection. -/
 structure EvalGround (m : Mem) (SL : StackLayout) (A : Arena)
     (sp sret : BitVec 64) (aExpr : Nat) (e : Vsa.While.Expr) : Prop where
   table : KindTablePins m
+  /-- Existing static support retained for recursive expression callees. -/
+  eval_call : EvalCallSupport m SL A sp
   ast : AstRegionPins m SL A sret.toNat aExpr e
   arena_stack : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
   arena_code : A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo
@@ -445,6 +546,10 @@ theorem EvalGround.survive_stack {m m' : Mem} {SL : StackLayout} {A : Arena}
     refine hag a (fun hcon => ?_) (fun hcon => ?_)
     · rcases htb with ht | ht <;> omega
     · rcases h.sret_table_disjoint with hs | hs <;> omega)
+  eval_call := h.eval_call.transport (fun k hk => by
+    have hs := h.eval_call.outsideStack hk
+    have hr := h.sret_inSL
+    exact (hag k (by omega) (by omega)).symm)
   ast := ⟨by
     obtain ⟨lo, hi, spec⟩ := h.ast.region
     refine ⟨lo, hi, spec.transport (fun a h1 h2 => ?_)⟩
@@ -571,10 +676,7 @@ structure EvalEntry
   `read32 aExpr` (kind) and `readI64 (aExpr+8)` (payload); both survive the frame
   spills because the AST lives outside `[SL.lo, sp)`. (v1→v2 field.) -/
   expr_stack_disjoint : aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat
-  /-- **The `Expr` node is an 8-aligned 16-byte slot in RAM above HTIF.** The
-  `.int` arm's `lw a4,0(a2)`/`lwu a5,0(a2)` (kind, 4-aligned) and `ld a1,8(a2)`
-  (payload, 8-aligned) need these load-region facts. (v1→v2 field.) -/
-  expr_align : aExpr.toNat % 8 = 0
+  /-- The expression's tag and payload load window lies in RAM. -/
   expr_ram : 0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000
   expr_win : tohostAddr + 16 ≤ aExpr.toNat
   /-- **The sret buffer is a proper 24-byte `Value` slot**, 8-aligned, in RAM,

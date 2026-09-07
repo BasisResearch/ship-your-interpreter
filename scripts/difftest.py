@@ -21,8 +21,11 @@ trace would be of a different program than the encoder reflected.
 """
 import argparse
 import concurrent.futures
+from dataclasses import dataclass
+import hashlib
 import json
 import os
+from pathlib import Path
 import re
 import shutil
 import subprocess
@@ -30,6 +33,10 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+if __package__:
+    from .segment_certificates import CertificateError, SegmentCertificate, load_segment_certificates
+else:
+    from segment_certificates import CertificateError, SegmentCertificate, load_segment_certificates
 from difftest_lib import (ROOT, PROOF_ELF, BMC_DIR, Image, Trace, EncTable, decode,
                           is_call, is_ret, read_tsv, M64, MK_NONE, MK_LOAD, MK_STORE)
 
@@ -37,6 +44,178 @@ EMU = os.path.join(ROOT, "riscv-lean", "lean_emulator", ".lake", "build", "bin",
                    "lean_riscv_emulator")
 REF_SCRIPT = os.path.join(ROOT, "c", "tests", "while.wl")
 CODE_LO, CODE_HI = 0x80000000, 0x80018BE0
+EMULATOR_RECEIPT_SCHEMA = "vsa.emulator-build.v1"
+EMULATOR_BUILD_ARGS = ["--rehash", "--no-cache", "build", "lean_riscv_emulator"]
+# Runtime task-pool setting; this is not a strict OS child-process limit.
+EMULATOR_BUILD_ENV = {"LEAN_NUM_THREADS": "1"}
+
+
+def _file_sha256(path: Path) -> str:
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def emulator_inputs(repo: Path) -> dict[str, str]:
+    """Hash emulator sources and the actual flattened Lake dependency roots."""
+    project = repo / "riscv-lean/lean_emulator"
+    manifest = json.loads((project / "lake-manifest.json").read_text(encoding="utf-8"))
+    roots = {project.resolve()}
+    for package in manifest["packages"]:
+        if package["type"] == "path":
+            root = project / package["dir"]
+        elif package["type"] == "git":
+            root = project / manifest["packagesDir"] / package["name"]
+            if package.get("subDir"):
+                root /= package["subDir"]
+        else:
+            raise ValueError(f"unsupported emulator dependency type: {package['type']}")
+        roots.add(root.resolve())
+    inputs = {"lean-toolchain": _file_sha256(repo / "lean-toolchain")}
+    for root in sorted(roots):
+        if not root.is_dir() or not root.is_relative_to(repo.resolve()):
+            raise ValueError(f"missing or external emulator source root: {root}")
+        for current, directories, files in os.walk(root):
+            directories[:] = [name for name in directories if name not in {".git", ".lake"}]
+            for name in files:
+                path = Path(current) / name
+                if name != ".git":
+                    inputs[path.relative_to(repo.resolve()).as_posix()] = _file_sha256(path)
+    return dict(sorted(inputs.items()))
+
+
+def emulator_toolchain(repo: Path) -> dict[str, dict[str, str]]:
+    """Resolve and hash the actual Lean/Lake executables selected by elan."""
+    result = {}
+    for name in ("lean", "lake"):
+        found = subprocess.run(
+            ["elan", "which", name], cwd=repo / "riscv-lean/lean_emulator",
+            capture_output=True, text=True, check=True,
+        )
+        path = Path(found.stdout.strip()).resolve(strict=True)
+        result[name] = {"path": str(path), "sha256": _file_sha256(path)}
+    return result
+
+
+def build_emulator(repo: Path, receipt: Path, environment: dict[str, str]) -> None:
+    """Build with rehashed Lake inputs and bind the result to a source receipt.
+
+    This command runs a compiler. Callers must serialize it with other builds.
+    A failed build or source/toolchain change never produces a new receipt.
+    """
+    if receipt.resolve().is_relative_to(repo.resolve()):
+        raise ValueError("emulator receipt must be outside the repository")
+    receipt.unlink(missing_ok=True)
+    before = emulator_inputs(repo)
+    toolchain = emulator_toolchain(repo)
+    command = [toolchain["lake"]["path"], *EMULATOR_BUILD_ARGS]
+    clean_environment = {key: value for key, value in environment.items()
+                         if key not in {"LEAN_PATH", "LEAN_SRC_PATH", "LEAN_SYSROOT"}}
+    clean_environment.update(EMULATOR_BUILD_ENV)
+    subprocess.run(command, cwd=repo / "riscv-lean/lean_emulator",
+                   env=clean_environment, check=True)
+    if before != emulator_inputs(repo) or toolchain != emulator_toolchain(repo):
+        raise ValueError("emulator sources/toolchain changed during the build")
+    binary = repo / "riscv-lean/lean_emulator/.lake/build/bin/lean_riscv_emulator"
+    if not binary.is_file() or not os.access(binary, os.X_OK):
+        raise ValueError("emulator build produced no executable")
+    payload = {
+        "schema": EMULATOR_RECEIPT_SCHEMA, "sources": before,
+        "toolchain": toolchain, "command": command, "environment": EMULATOR_BUILD_ENV,
+        "binary": binary.relative_to(repo).as_posix(),
+        "binary_sha256": _file_sha256(binary),
+    }
+    receipt.parent.mkdir(parents=True, exist_ok=True)
+    temporary = receipt.with_suffix(receipt.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(receipt)
+
+
+def verify_emulator_receipt(repo: Path, receipt: Path) -> Path:
+    """Reject source, toolchain, command, or executable drift from the build."""
+    data = json.loads(receipt.read_text(encoding="utf-8"))
+    binary = repo / "riscv-lean/lean_emulator/.lake/build/bin/lean_riscv_emulator"
+    toolchain = emulator_toolchain(repo)
+    expected = {
+        "schema": EMULATOR_RECEIPT_SCHEMA, "sources": emulator_inputs(repo),
+        "toolchain": toolchain,
+        "command": [toolchain["lake"]["path"], *EMULATOR_BUILD_ARGS],
+        "environment": EMULATOR_BUILD_ENV,
+        "binary": binary.relative_to(repo).as_posix(),
+        "binary_sha256": _file_sha256(binary),
+    }
+    if data != expected or not os.access(binary, os.X_OK):
+        raise ValueError("missing or stale emulator build receipt; rebuild the emulator")
+    return binary
+
+
+@dataclass(frozen=True)
+class TraceCompletion:
+    """Observed terminal HTIF command; not a proof of a Loaded execution."""
+
+    rows: int
+    exit_code: int
+
+
+def trace_completion(path: str, img: Image, returncode: int | None = None) -> TraceCompletion:
+    """Reject empty, truncated, failed, or fuel-limited emulator traces.
+
+    Source errors may legitimately exit with a nonzero code. Require their
+    actual terminal HTIF command instead of confusing them with Sail failures.
+    """
+    last = None
+    rows = 0
+    with open(path, encoding="utf-8") as stream:
+        for line in stream:
+            if line.startswith("TRACE-FUEL-OUT"):
+                raise ValueError(f"{path}: emulator exhausted its step budget")
+            if line.startswith("TRACE-RUN-FAILED"):
+                raise ValueError(f"{path}: emulator run did not complete successfully")
+            if line.startswith("Error while running the sail program!"):
+                raise ValueError(f"{path}: emulator reported a Sail error")
+            if line.startswith("T\t"):
+                last = line.rstrip("\n").split("\t")
+                if len(last) < 35:
+                    raise ValueError(f"{path}: malformed trace row")
+                rows += 1
+    if last is None:
+        raise ValueError(f"{path}: no execution rows")
+    if len(last) < 39 or last[35] != "S8":
+        raise ValueError(f"{path}: no terminal 64-bit HTIF store")
+    pc = int(last[2], 16)
+    instruction = decode(pc, img.word(pc))
+    regs = [0] + [int(value, 16) for value in last[4:35]]
+    address = (regs[instruction.rs1] + instruction.imm) & M64
+    tohost = elf_symbols(img).get("tohost")
+    command = regs[instruction.rs2]
+    if (instruction.kind != "sd" or tohost is None or address != tohost
+            or int(last[36], 16) != tohost or command >> 56 != 0
+            or command & 1 == 0):
+        raise ValueError(f"{path}: final row is not an HTIF exit command")
+    exit_code = (command & ((1 << 48) - 1)) >> 1
+    if returncode is not None and returncode != (exit_code & 0xFF):
+        raise ValueError(
+            f"{path}: emulator status {returncode} disagrees with HTIF exit {exit_code}"
+        )
+    return TraceCompletion(rows, exit_code)
+
+
+def validate_corpus_image(proof: Image, image: Image, script: bytes) -> None:
+    """Require the exact requested script and preserve every other loaded byte."""
+    start = elf_symbols(proof).get("_script_start")
+    if start is None:
+        raise ValueError("proof ELF has no _script_start symbol")
+    if [(a, n) for a, _, n in image.segs] != [(a, n) for a, _, n in proof.segs]:
+        raise ValueError("corpus ELF changed the load segments")
+    expected = script + b"\0"
+    if bytes(image.byte(start + i) for i in range(len(expected))) != expected:
+        raise ValueError("corpus ELF does not contain the requested padded script")
+    for (base, poff, size), (_, ioff, _) in zip(proof.segs, image.segs, strict=True):
+        for offset in range(size):
+            address = base + offset
+            if start <= address < start + len(script):
+                continue
+            if proof.raw[poff + offset] != image.raw[ioff + offset]:
+                raise ValueError(f"corpus ELF changed a non-script byte at {address:#x}")
 
 
 def campaign_provenance_files():
@@ -83,48 +262,45 @@ def campaign_provenance_findings(directory):
 def build_corpus(wls, outdir, workdir="/tmp/dt-c", quiet=False):
     """Build one ELF per `.wl`, each padded to the proof script's length, in a
     /tmp copy of `c/`.  Returns [(name, elf_path)]."""
-    ref = open(REF_SCRIPT, "rb").read()
+    names = [os.path.splitext(os.path.basename(wl))[0] for wl in wls]
+    if not names or len(set(names)) != len(names):
+        raise ValueError("corpus needs a nonempty set of distinct program basenames")
+    with open(REF_SCRIPT, "rb") as stream:
+        ref = stream.read()
     reflen = len(ref)
     if not os.path.isdir(workdir):
         parent = os.path.dirname(os.path.abspath(workdir))
         os.makedirs(parent, exist_ok=True)
         subprocess.run(["cp", "-R", os.path.join(ROOT, "c"), workdir], check=True)
     proof = Image(PROOF_ELF)
-    pv, poff, psz = proof.segs[0]
+    _, poff, psz = proof.segs[0]
     pbytes = proof.raw[poff:poff + psz]
     os.makedirs(outdir, exist_ok=True)
     out = []
     for wl in wls:
         name = os.path.splitext(os.path.basename(wl))[0]
-        src = open(wl, "rb").read()
+        with open(wl, "rb") as stream:
+            src = stream.read()
         if len(src) > reflen:
-            print(f"[corpus] SKIP {name}: {len(src)} bytes > {reflen} "
-                  f"(would move .rodata and rewrite .text)")
-            continue
+            raise ValueError(f"{name}: {len(src)} bytes exceeds script capacity {reflen}")
         padded = src + b"\n" * (reflen - len(src))
         pth = os.path.join(workdir, "tests", f"_dt_{name}.wl")
-        open(pth, "wb").write(padded)
+        with open(pth, "wb") as stream:
+            stream.write(padded)
         elf = os.path.join(workdir, "while-riscv-htif.elf")
         if os.path.exists(elf):
             os.remove(elf)
         r = subprocess.run(["make", "-C", workdir, "riscv-htif",
                             f"HTIF_SCRIPT=tests/_dt_{name}.wl"],
                            capture_output=True, text=True)
-        if not os.path.exists(elf):
-            print(f"[corpus] FAIL {name}: {r.stdout[-800:]}{r.stderr[-800:]}")
-            continue
+        if r.returncode != 0 or not os.path.exists(elf):
+            raise RuntimeError(f"corpus build failed for {name}: {r.stdout[-800:]}{r.stderr[-800:]}")
         # the image must be the proof ELF's outside one contiguous script blob
         img = Image(elf)
+        validate_corpus_image(proof, img, padded)
         v, off, sz = img.segs[0]
         b = img.raw[off:off + sz]
-        if (v, sz) != (pv, psz):
-            print(f"[corpus] FAIL {name}: segment moved {v:#x}/{sz} vs {pv:#x}/{psz}")
-            continue
         diff = [k for k in range(sz) if b[k] != pbytes[k]]
-        if diff and (diff[-1] - diff[0]) >= reflen + 1:
-            print(f"[corpus] FAIL {name}: image differs over "
-                  f"{diff[0]:#x}..{diff[-1]:#x} (wider than the script blob)")
-            continue
         dst = os.path.join(outdir, f"{name}.elf")
         shutil.copyfile(elf, dst)
         out.append((name, dst))
@@ -135,6 +311,8 @@ def build_corpus(wls, outdir, workdir="/tmp/dt-c", quiet=False):
 
 
 def run_trace(elf, out, pcs=None, max_steps=None, timeout=1800):
+    if max_steps is not None and max_steps <= 0:
+        raise ValueError("max_steps must be positive")
     cmd = [EMU, elf]
     if pcs:
         cmd += ["--trace-pcs", pcs]
@@ -142,8 +320,15 @@ def run_trace(elf, out, pcs=None, max_steps=None, timeout=1800):
         cmd += ["--trace-all"]
     if max_steps:
         cmd += ["--max-steps", str(max_steps)]
-    with open(out, "w") as fe, open(out + ".stdout", "w") as fo:
-        subprocess.run(cmd, stdout=fo, stderr=fe, timeout=timeout)
+    try:
+        with open(out, "w") as fe, open(out + ".stdout", "w") as fo:
+            result = subprocess.run(cmd, stdout=fo, stderr=fe, timeout=timeout)
+        trace_completion(out, Image(elf), result.returncode)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        # Preserve diagnostic rows, but make later phase-only reuse fail closed.
+        with open(out, "a", encoding="utf-8") as stream:
+            stream.write("\nTRACE-RUN-FAILED\n")
+        raise
     return out
 
 
@@ -737,12 +922,8 @@ def phase2_agg(traces, img, enc_dir, bmc_dir, known, agg=None):
 
 
 def phase2_report(agg, img, bmc_dir, out_tsv=None):
-    mined = json.load(open(os.path.join(bmc_dir, "clauses.json"))) \
-        if os.path.exists(os.path.join(bmc_dir, "clauses.json")) else {}
-    loop_invalid = {"ra_restore", "s0_restore", "s1_restore", "above_sp"}
-    for sym, clauses in mined.items():
-        if sym.startswith("loop_"):
-            mined[sym] = [c for c in clauses if c not in loop_invalid]
+    with open(os.path.join(bmc_dir, "clauses.json"), encoding="utf-8") as stream:
+        mined = json.load(stream)
     assumed = {r["summary"] for r in read_tsv(os.path.join(bmc_dir, "assumed.tsv"))
                if r["summary"].startswith(("callee_", "loop_", "icall_", "idisp_"))}
     names = sym_names(img)
@@ -771,6 +952,8 @@ def phase2_report(agg, img, bmc_dir, out_tsv=None):
 
 def phase2_findings(rows, mined):
     out = []
+    if not any(mined.values()):
+        out.append(("NO-CLAUSES", "phase2", "no claimed summary clauses to check"))
     for r in rows:
         if not r["refuted"]:
             continue
@@ -782,8 +965,13 @@ def phase2_findings(rows, mined):
             out.append(("ASSUMED-FALSE", f"{r['name']}/{r['clause']}",
                         f"ASSUMED contract, refuted on {r['refuted']}/{r['instances']} "
                         f"real pairs: {r['witness']}"))
-    for sym, cs in sorted(mined.items()):
-        pass
+    observed = {(row["summary"], row["clause"]) for row in rows
+                if row["holds"] + row["refuted"] > 0}
+    for sym, clauses in sorted(mined.items()):
+        for clause in clauses:
+            if (sym, clause) not in observed:
+                out.append(("CLAUSE-UNTESTED", f"{sym}/{clause}",
+                            "claimed clause has no concrete completed pair"))
     return out
 
 
@@ -859,6 +1047,8 @@ def _state_term(tr, i):
 
 def phase3_samples(traces, tbl, per_pc):
     """Up to `per_pc` executions of each PC, spread evenly over the corpus."""
+    if per_pc <= 0:
+        raise ValueError("per_pc must be positive")
     occ = {}
     for tr in traces:
         for i in range(tr.n - 1):
@@ -970,7 +1160,8 @@ def phase3_explain(traces, img, enc_dir, pc, limit=3):
     """Re-run one PC's check with every conjunct asked separately, so a
     STEP-STATE finding names the register or the byte that disagrees."""
     tbl = EncTable(os.path.join(enc_dir, "steps.tsv"))
-    preamble = open(os.path.join(enc_dir, "preamble.smt2")).read()
+    with open(os.path.join(enc_dir, "preamble.smt2"), encoding="utf-8") as stream:
+        preamble = stream.read()
     row = tbl.get(pc)
     if row is None:
         print(f"{pc:#x}: not in the step table")
@@ -1032,11 +1223,16 @@ def phase3_explain(traces, img, enc_dir, pc, limit=3):
 
 
 def phase3(traces, img, enc_dir, per_pc=24, chunk=800, jobs=None):
+    if chunk <= 0 or (jobs is not None and jobs <= 0):
+        raise ValueError("chunk and jobs must be positive")
     tbl = EncTable(os.path.join(enc_dir, "steps.tsv"))
     global MMIO
     MMIO = mmio_region(img)
-    preamble = open(os.path.join(enc_dir, "preamble.smt2")).read()
+    with open(os.path.join(enc_dir, "preamble.smt2"), encoding="utf-8") as stream:
+        preamble = stream.read()
     samples, occ = phase3_samples(traces, tbl, per_pc)
+    if not samples:
+        return [("NO-SAMPLES", "phase3", "no executable steps were sampled")], 0, 0, 0, []
     for pc in occ:
         img_word_cache[pc] = img.word(pc)
     mmio_hits = sum(1 for tr in traces for i in range(tr.n)
@@ -1072,10 +1268,13 @@ def phase3(traces, img, enc_dir, per_pc=24, chunk=800, jobs=None):
             body += lines
         for c in cs:
             body.append(f"(simplify {c[5]})")
-        p = subprocess.run([Z3, "-in", "-smt2"], input="\n".join(body),
-                           capture_output=True, text=True, timeout=1800)
-        outs = [l.strip() for l in p.stdout.splitlines() if l.strip()]
-        if len(outs) != len(cs):
+        try:
+            p = subprocess.run([Z3, "-in", "-smt2"], input="\n".join(body),
+                               capture_output=True, text=True, timeout=1800)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            return {c[0]: ("Z3ERR", str(error)[:300]) for c in cs}
+        outs = [line.strip() for line in p.stdout.splitlines() if line.strip()]
+        if p.returncode != 0 or p.stderr.strip() or len(outs) != len(cs):
             return {c[0]: ("Z3ERR", (p.stdout + p.stderr).strip()[:300]) for c in cs}
         return {c[0]: (outs[n], "") for n, c in enumerate(cs)}
 
@@ -1214,19 +1413,14 @@ _EFFECT_COLUMNS = (
 )
 _ZERO_STEP_EFFECT_QUERIES = {"hCallArgsToCall", "hCallCallToEpilogue"}
 _ZERO_STEP_FRAME_THEOREM = "Vsa.Sim.FrameGuarantee.refl"
-_ABI_ROUTE_FRAME_THEOREM = "Vsa.Sim.execWhileLoopRouteRow_framed"
-_ABI_ROUTE_EFFECT_QUERIES = {
-    "hSWhileRetBodyReturn", "hSWhileLoopBodyReturn",
-}
-_ABI_PRESERVED_GPRS = (2, 3, 4, 8, 9, *range(18, 28))
 
 
-def query_effect_manifest(bmc_dir, query_caps):
+def query_effect_manifest(bmc_dir, query_caps, segment_authority=None):
     """Validate the conservative Lean-emitted effect classification.
 
     This ledger is not evidence that the SMT transformer equals Lean.  It
-    certifies only zero-step frames and inventories the reflector's direct
-    memory-write rows.  Dynamic register/output effects remain unsupported.
+    consumes typed segment frames and legacy zero-step frames, and inventories
+    direct memory-write rows. Dynamic effects remain unsupported.
     """
     path = os.path.join(bmc_dir, "query-effects.tsv")
     if not os.path.isfile(path):
@@ -1237,6 +1431,10 @@ def query_effect_manifest(bmc_dir, query_caps):
     if columns != _EFFECT_COLUMNS:
         return {}, [("EFFECT-COLUMNS", "campaign",
                      f"expected {_EFFECT_COLUMNS}, got {columns}")]
+    try:
+        certificates = load_segment_certificates(bmc_dir, authority_dir=segment_authority)
+    except CertificateError as error:
+        return {}, [("EFFECT-CERTIFICATE", "campaign", str(error))]
     rows = read_tsv(path)
     effects, findings = {}, []
     for row in rows:
@@ -1255,7 +1453,7 @@ def query_effect_manifest(bmc_dir, query_caps):
         if row["field"] != query_caps[query].get("field", ""):
             findings.append(("EFFECT-FIELD", query, row["field"]))
         zero = query in _ZERO_STEP_EFFECT_QUERIES
-        abi_route = query in _ABI_ROUTE_EFFECT_QUERIES
+        certificate = certificates.get(query)
         if zero:
             expected_values = {
                 "register_writes": "none",
@@ -1263,13 +1461,9 @@ def query_effect_manifest(bmc_dir, query_caps):
                 "theorem": _ZERO_STEP_FRAME_THEOREM,
                 "provenance": f"Lean:{_ZERO_STEP_FRAME_THEOREM}",
             }
-        elif abi_route:
-            expected_values = {
-                "register_writes": "preserves-abi",
-                "output": "preserved",
-                "theorem": _ABI_ROUTE_FRAME_THEOREM,
-                "provenance": f"Lean:{_ABI_ROUTE_FRAME_THEOREM}",
-            }
+        elif certificate is not None:
+            expected_values = certificate.effect_row()
+            row["_certificate"] = certificate
         else:
             expected_values = {
                 "register_writes": "unsupported-dynamic",
@@ -1323,7 +1517,10 @@ def observed_effect_findings(effect, tr, entry_row, exit_row, machine_footprint)
                              "claimed no writes; changed x" +
                              ",x".join(map(str, changed))))
     elif effect["register_writes"] == "preserves-abi":
-        changed = [reg for reg in _ABI_PRESERVED_GPRS
+        certificate = effect.get("_certificate")
+        if not isinstance(certificate, SegmentCertificate) or not certificate.matches_effect(effect):
+            return [("EFFECT-CERTIFICATE", query, "ABI claim lacks a validated descriptor")]
+        changed = [reg for reg in certificate.preserved_gprs
                    if tr.regs_at(entry_row)[reg] != tr.regs_at(exit_row)[reg]]
         if changed:
             findings.append(("EFFECT-REGISTERS", query,
@@ -1353,7 +1550,8 @@ def _consistency_pin_blocked(findings):
     return any(kind in blocker_kinds or kind.startswith(blocker_prefixes)
                for kind, _where, _detail in findings)
 
-_ASSERT_OK_LEAN_CERTIFICATES = {
+# Metadata inventory only; these records cannot establish a typed post proof.
+_ASSERT_OK_DECLARED_CERTIFICATES = {
     ("hCallAssertOk", "abi_frame_x1"):
         "Vsa.Sim.nativeAssertInternalAbi_closed",
     ("hCallAssertOk", "abi_frame_x8"):
@@ -1363,7 +1561,7 @@ _ASSERT_OK_LEAN_CERTIFICATES = {
     ("hCallAssertOk", "abi_frame_x18"):
         "Vsa.Sim.nativeAssertInternalAbi_closed",
 }
-_ASSERT_OK_CERTIFICATE_MUTATIONS = {
+_ASSERT_OK_ABI_MUTATIONS = {
     "x1": "abi_frame_x1",
     "x8": "abi_frame_x8",
     "x9": "abi_frame_x9",
@@ -1371,11 +1569,12 @@ _ASSERT_OK_CERTIFICATE_MUTATIONS = {
 }
 _ASSERT_OK_MACHINE_MUTATIONS = {
     "null-kind", "null-payload", "x2", "output-array", "output-length",
+    *_ASSERT_OK_ABI_MUTATIONS,
 }
 
 
 def phase3b_lean_certificates(bmc_dir, verdict_paths):
-    """Validate exact certificate identities and Lean-labelled verdict cells."""
+    """Inventory legacy declarations; never return mutation-exclusion authority."""
     capability_path = os.path.join(bmc_dir, "query-capabilities.tsv")
     certificate_path = os.path.join(bmc_dir, "lean-certificates.tsv")
     findings = []
@@ -1383,7 +1582,7 @@ def phase3b_lean_certificates(bmc_dir, verdict_paths):
         return {}, [("CERTIFICATE-MANIFEST", "campaign",
                      "missing query-capabilities.tsv")]
     queries = {row["query"] for row in read_tsv(capability_path)}
-    expected = (_ASSERT_OK_LEAN_CERTIFICATES
+    expected = (_ASSERT_OK_DECLARED_CERTIFICATES
                 if "hCallAssertOk" in queries else {})
     if not os.path.exists(certificate_path):
         if expected:
@@ -1431,12 +1630,13 @@ def phase3b_lean_certificates(bmc_dir, verdict_paths):
                          "no --verdict supplied"))
     for key, theorem in sorted(found.items()):
         query, post = key
-        want = f"VALID[Lean:{theorem}]"
+        findings.append(("CERTIFICATE-UNTYPED", query,
+                         f"{post}: {theorem} is a declaration, not a typed proof"))
         got = verdicts.get(query, {}).get(post, "")
-        if got != want:
+        if got.startswith("VALID[Lean:"):
             findings.append(("CERTIFICATE-VERDICT", query,
-                             f"{post}: expected {want}, got {got or '<missing>'}"))
-    return (found if not findings else {}), findings
+                             f"{post}: unsupported Lean-valid declaration label"))
+    return {}, findings
 
 _STATUS_PROJECTION_FIELDS = {
     # field: (StmtKind, result status, nullable child offset, child is present,
@@ -2930,6 +3130,18 @@ def _assert_ok_post_mutants(s0, exit_state):
     return mutants
 
 
+def audit_assert_post_mutants(s0, exit_state, evaluator, negated_post):
+    """Evaluate every native-assert mutant; declaration metadata excludes none."""
+    killed, survived = [], []
+    try:
+        for name, mutant in _assert_ok_post_mutants(s0, exit_state):
+            evaluator.env["state_exit"] = mutant
+            (killed if evaluator.ev(negated_post) else survived).append(name)
+    finally:
+        evaluator.env["state_exit"] = exit_state
+    return killed, survived
+
+
 def _concrete_layout_witness(stack, allocation):
     """Choose legal concrete SL/A intervals for evaluating an abstract INV.
 
@@ -4196,11 +4408,9 @@ def _selfcheck_campaign_metadata():
 def _selfcheck_effect_manifest():
     """Fail-closed mutations for every effect column and query identity."""
     zero = "hCallArgsToCall"
-    abi_route = "hSWhileLoopBodyReturn"
     dynamic = "hInt"
     caps = {
         zero: {"field": "hCall"},
-        abi_route: {"field": "hSWhileLoop"},
         dynamic: {"field": "hInt"},
     }
     rows = [
@@ -4209,13 +4419,6 @@ def _selfcheck_effect_manifest():
             "direct_memory_writes": "none", "direct_write_rows": "0",
             "output": "preserved", "theorem": _ZERO_STEP_FRAME_THEOREM,
             "provenance": f"Lean:{_ZERO_STEP_FRAME_THEOREM}",
-        },
-        {
-            "query": abi_route, "field": "hSWhileLoop",
-            "register_writes": "preserves-abi",
-            "direct_memory_writes": "none", "direct_write_rows": "0",
-            "output": "preserved", "theorem": _ABI_ROUTE_FRAME_THEOREM,
-            "provenance": f"Lean:{_ABI_ROUTE_FRAME_THEOREM}",
         },
         {
             "query": dynamic, "field": "hInt",
@@ -4239,15 +4442,13 @@ def _selfcheck_effect_manifest():
 
         with open(os.path.join(directory, "writes", zero + ".tsv"), "w") as fh:
             fh.write("guard\twidth\taddr\n")
-        with open(os.path.join(directory, "writes", abi_route + ".tsv"), "w") as fh:
-            fh.write("guard\twidth\taddr\n")
         with open(os.path.join(directory, "writes", dynamic + ".tsv"), "w") as fh:
             fh.write("guard\twidth\taddr\ntrue\t8\t#x0000000000001000\n")
         write_effects(rows)
         effects, findings = query_effect_manifest(directory, caps)
         assert set(effects) == set(caps) and not findings
 
-        for row_index in (0, 1):
+        for row_index in (0,):
             for column in ("register_writes", "direct_memory_writes",
                            "direct_write_rows", "output", "theorem", "provenance"):
                 mutated = [dict(row) for row in rows]
@@ -4827,25 +5028,25 @@ def cmd_selfcheck(_args):
         certificate_mutations = set()
         for name, mutant in _assert_ok_post_mutants(assert_s0, assert_exit):
             ev_assert.env["state_exit"] = mutant
-            if name in _ASSERT_OK_CERTIFICATE_MUTATIONS:
+            if name in _ASSERT_OK_ABI_MUTATIONS:
                 assert not ev_assert.ev(form[0][1]), name
                 certificate_mutations.add(name)
             else:
                 assert ev_assert.ev(form[0][1]), name
                 assert_mutations.add(name)
-        assert assert_mutations == _ASSERT_OK_MACHINE_MUTATIONS
-        assert certificate_mutations == set(_ASSERT_OK_CERTIFICATE_MUTATIONS)
+        assert assert_mutations == _ASSERT_OK_MACHINE_MUTATIONS - set(_ASSERT_OK_ABI_MUTATIONS)
+        assert certificate_mutations == set(_ASSERT_OK_ABI_MUTATIONS)
         with open(os.path.join(assert_dir, "query-capabilities.tsv"), "w") as fh:
             fh.write("query\tfield\tinstance\tcapability\n")
             fh.write("hCallAssertOk\thCallAssertOk\tsingle\tpartial-projection\n")
         with open(os.path.join(assert_dir, "lean-certificates.tsv"), "w") as fh:
             fh.write("residual\tpost\ttheorem\n")
             for (query, post), theorem in sorted(
-                    _ASSERT_OK_LEAN_CERTIFICATES.items()):
+                    _ASSERT_OK_DECLARED_CERTIFICATES.items()):
                 fh.write(f"{query}\t{post}\t{theorem}\n")
         certificate_verdict = os.path.join(assert_dir, "verdicts.tsv")
         certificate_posts = sorted(
-            post for query, post in _ASSERT_OK_LEAN_CERTIFICATES
+            post for query, post in _ASSERT_OK_DECLARED_CERTIFICATES
             if query == "hCallAssertOk")
         with open(certificate_verdict, "w") as fh:
             fh.write("query\t" + "\t".join(certificate_posts) + "\n")
@@ -4854,8 +5055,8 @@ def cmd_selfcheck(_args):
                 for _post in certificate_posts) + "\n")
         certificates, certificate_findings = phase3b_lean_certificates(
             assert_dir, [certificate_verdict])
-        assert certificates == _ASSERT_OK_LEAN_CERTIFICATES
-        assert not certificate_findings
+        assert not certificates
+        assert any(kind == "CERTIFICATE-UNTYPED" for kind, _, _ in certificate_findings)
         with open(certificate_verdict, "w") as fh:
             fh.write("query\t" + "\t".join(certificate_posts) + "\n")
             fh.write("hCallAssertOk\t" + "\t".join(
@@ -5256,7 +5457,7 @@ def cmd_selfcheck(_args):
           f"({premise_mutations} premise mutations; 8 output-loop mutations; "
           "4 closure-output mutations; 2 environment-helper mutations; "
           "2 environment-residual mutations; 82 hCall-family-post mutations; "
-          "5 assert-success machine mutations; 4 exact Lean exclusions; "
+          "5 assert-success mutants killed; 4 uncovered ABI mutants; "
           "161 while-post mutations)")
 
 
@@ -7050,24 +7251,12 @@ def phase3b_instance(q, tr, img, sp, lo, hi, d0, exits_of, exit_row,
             elif residual == "hCallAssertOk" \
                     and projection_audit is not None \
                     and sp["field"] not in projection_audit["fields"]:
-                killed = []
-                excluded = []
-                for name, mutant in _assert_ok_post_mutants(s0, machine_exit):
-                    certificate_post = _ASSERT_OK_CERTIFICATE_MUTATIONS.get(name)
-                    if certificate_post is not None:
-                        theorem = projection_audit["lean_certificates"].get(
-                            (sp["field"], certificate_post))
-                        if theorem is not None:
-                            excluded.append((name, certificate_post, theorem))
-                            continue
-                    ev.env["state_exit"] = mutant
-                    if ev.ev(form[0][1]):
-                        killed.append(name)
-                        projection_audit["assert_mutations"] += 1
-                    else:
-                        out.append(("PROJECTION-ASSERT-MUTANT-SURVIVED",
-                                    sp["field"], name))
-                ev.env["state_exit"] = machine_exit
+                killed, survived = audit_assert_post_mutants(
+                    s0, machine_exit, ev, form[0][1])
+                projection_audit["assert_mutations"] += len(killed)
+                for name in survived:
+                    out.append(("PROJECTION-ASSERT-MUTANT-SURVIVED",
+                                sp["field"], name))
                 found_machine = set(killed)
                 if found_machine != _ASSERT_OK_MACHINE_MUTATIONS:
                     out.append((
@@ -7077,7 +7266,7 @@ def phase3b_instance(q, tr, img, sp, lo, hi, d0, exits_of, exit_row,
                 projection_audit["mutation_summary"][sp["field"]] = {
                     "mutations_expected": len(_ASSERT_OK_MACHINE_MUTATIONS),
                     "mutations_killed": len(killed),
-                    "certificates_excluded": len(excluded),
+                    "certificates_excluded": 0,
                 }
                 for name in killed:
                     projection_audit["mutation_rows"].append({
@@ -7086,14 +7275,6 @@ def phase3b_instance(q, tr, img, sp, lo, hi, d0, exits_of, exit_row,
                         "mutation": name,
                         "provenance": "independent-trace-oracle",
                         "result": "killed",
-                    })
-                for name, post, theorem in excluded:
-                    projection_audit["mutation_rows"].append({
-                        "field": sp["field"],
-                        "post": post,
-                        "mutation": name,
-                        "provenance": theorem,
-                        "result": "excluded-lean-certificate",
                     })
                 projection_audit["fields"].add(sp["field"])
             elif residual == "hArgsCons" and projection_audit is not None \
@@ -7976,12 +8157,31 @@ def error_family_audit(trace_dir, source_dir, routing_path=None, out_tsv=None):
 
 
 # ------------------------------------------------------------------- commands
+def cmd_build_emulator(a):
+    build_emulator(Path(ROOT), Path(a.receipt), dict(os.environ))
+    print(f"[emulator] current executable bound to {a.receipt}")
+
+
+def cmd_verify_emulator(a):
+    verify_emulator_receipt(Path(ROOT), Path(a.receipt))
+
+
 def cmd_corpus(a):
     build_corpus(a.wl, a.out, workdir=a.workdir)
 
 
 def cmd_trace(a):
+    receipt = a.emulator_receipt or os.environ.get("VSA_EMULATOR_RECEIPT")
+    if not receipt:
+        raise ValueError("--emulator-receipt FILE required; run build-emulator --receipt FILE first")
+    verify_emulator_receipt(Path(ROOT), Path(receipt))
     run_trace(a.elf, a.out, pcs=a.trace_pcs, max_steps=a.max_steps)
+    try:
+        verify_emulator_receipt(Path(ROOT), Path(receipt))
+    except (OSError, ValueError, subprocess.SubprocessError):
+        with open(a.out, "a", encoding="utf-8") as stream:
+            stream.write("\nTRACE-RUN-FAILED\n")
+        raise
     print(f"[trace] {a.elf} -> {a.out}")
 
 
@@ -7991,7 +8191,10 @@ def cmd_errors(a):
 
 
 def trace_files(tdir):
-    return [fn for fn in sorted(os.listdir(tdir)) if fn.endswith(".trace.tsv")]
+    files = [fn for fn in sorted(os.listdir(tdir)) if fn.endswith(".trace.tsv")]
+    if not files:
+        raise ValueError(f"{tdir}: no trace files")
+    return files
 
 
 def load_traces(tdir, img, names=None):
@@ -8000,6 +8203,7 @@ def load_traces(tdir, img, names=None):
         nm = fn[:-len(".trace.tsv")]
         if names is not None and nm not in names:
             continue
+        trace_completion(os.path.join(tdir, fn), img)
         t = Trace(os.path.join(tdir, fn), name=nm)
         t.compute_depth(img)
         trs.append(t)
@@ -8156,7 +8360,23 @@ def cmd_phase3(a):
     return 1 if findings else 0
 
 
+def select_span_rows(rows, only):
+    """Resolve every requested query/residual; an empty selection is an error."""
+    names = {row["field"] for row in rows} | {
+        row.get("residual", row["field"]) for row in rows
+    }
+    if only is not None and (not only or only - names):
+        raise ValueError(f"unmatched span selection: {sorted(only - names)}")
+    selected = [row for row in rows if only is None or row["field"] in only
+                or row.get("residual", row["field"]) in only]
+    if not selected:
+        raise ValueError("no selected machine spans")
+    return selected
+
+
 def cmd_phase3b(a):
+    if a.per_span <= 0:
+        raise ValueError("per_span must be positive")
     provenance_findings = campaign_provenance_findings(a.bmc)
     if provenance_findings:
         for kind, where, detail in provenance_findings:
@@ -8166,6 +8386,8 @@ def cmd_phase3b(a):
     global MMIO
     MMIO = mmio_region(img)
     only = set(a.only.split(",")) if a.only else None
+    span_rows = read_tsv(os.path.join(a.bmc, "spans.tsv"))
+    selected_span_rows = select_span_rows(span_rows, only)
     extensions, extension_findings, premise_mutations = residual_extensions(
         a.bmc, only=only)
     production_posts, producer_findings = production_residual_posts(a.bmc)
@@ -8238,7 +8460,8 @@ def cmd_phase3b(a):
             allf.append(("CAPABILITY-MISMATCH", "machine_instances",
                          "query-capabilities.tsv does not identify exactly the emitted spans"))
         allf += query_capability_findings(query_caps)
-        query_effects, effect_findings = query_effect_manifest(a.bmc, query_caps)
+        query_effects, effect_findings = query_effect_manifest(
+            a.bmc, query_caps, a.segment_authority)
         allf += effect_findings
         advertised = {r["field"] for r in residual_caps
                       if r["semantic_projection"] == "yes"}
@@ -8330,12 +8553,6 @@ def cmd_phase3b(a):
         if counts and min(counts.values()) >= a.per_span and \
                 len(counts) == len(read_tsv(os.path.join(a.bmc, "spans.tsv"))):
             break
-    span_rows = read_tsv(os.path.join(a.bmc, "spans.tsv"))
-    selected_span_rows = [
-        sp for sp in span_rows
-        if only is None or sp["field"] in only
-        or sp.get("residual", sp["field"]) in only
-    ]
     for sp in span_rows:
         residual = sp.get("residual", sp["field"])
         if (only is None or sp["field"] in only or residual in only) \
@@ -8434,14 +8651,10 @@ def cmd_phase3b(a):
           f"{call_checked}/{len(call_scope)} concrete relations checked; "
           f"{projection_audit['call_mutations']}/{call_mutation_total} "
           "independent mutants killed")
-    assert_summary = projection_audit["mutation_summary"].get(
-        "hCallAssertOk", {})
     print("  hCallAssertOk native success relation: "
           f"{projection_audit['assert_mutations']}/"
           f"{len(_ASSERT_OK_MACHINE_MUTATIONS)} independent machine mutants "
-          f"killed; {assert_summary.get('certificates_excluded', 0)}/"
-          f"{len(_ASSERT_OK_LEAN_CERTIFICATES)} ABI mutations excluded by exact "
-          "Lean certificates")
+          "killed; no mutation exclusions from untyped declarations")
     while_checked = sum(
         query in projection_audit["fields"] for query in _WHILE_QUERIES)
     print(f"  while condition/body/status cuts: {while_checked}/14 concrete "
@@ -8505,6 +8718,14 @@ def main():
     p = sub.add_parser("selfcheck")
     p.set_defaults(fn=cmd_selfcheck)
 
+    p = sub.add_parser("build-emulator", help="build emulator and write a bound receipt")
+    p.add_argument("--receipt", required=True)
+    p.set_defaults(fn=cmd_build_emulator)
+
+    p = sub.add_parser("verify-emulator", help="verify emulator sources and build receipt")
+    p.add_argument("--receipt", required=True)
+    p.set_defaults(fn=cmd_verify_emulator)
+
     p = sub.add_parser("corpus")
     p.add_argument("wl", nargs="+")
     p.add_argument("--out", required=True)
@@ -8515,6 +8736,7 @@ def main():
     p.add_argument("elf")
     p.add_argument("--out", required=True)
     p.add_argument("--trace-pcs")
+    p.add_argument("--emulator-receipt", help="source-bound build receipt (or VSA_EMULATOR_RECEIPT)")
     p.add_argument("--max-steps", type=int)
     p.set_defaults(fn=cmd_trace)
 
@@ -8533,6 +8755,8 @@ def main():
     p.set_defaults(fn=cmd_explain)
 
     p = sub.add_parser("phase3b")
+    p.add_argument("--segment-authority",
+                   help="independent directory emitted by fingerprint-checked Lean")
     p.add_argument("--traces", required=True)
     p.add_argument("--enc", required=True)
     p.add_argument("--bmc", default=BMC_DIR)
@@ -8542,7 +8766,7 @@ def main():
     p.add_argument("--out")
     p.add_argument(
         "--verdict", action="append", default=[],
-        help="scoped Houdini verdict TSV used to validate Lean certificate posts")
+        help="scoped Houdini verdict TSV audited for unsupported Lean-valid claims")
     p.add_argument(
         "--consistency-pins",
         help="write trace-derived SMT pins for clean instances into this directory")

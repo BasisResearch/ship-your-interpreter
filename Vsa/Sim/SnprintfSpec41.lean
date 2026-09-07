@@ -160,7 +160,7 @@ theorem snprintfPostCall_spec
   -- === 0x80005cdc: ld a5,8(sp) — a5 := the updated cursor d+total ===
   obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=
     site_80005cdc_wp σ3 i3 (c.steps + 3) _ vmi3 (vsp + (592#64)) _ _ _ _ _ _ _ _
-      hG3 hpc3 hmi3 hp3.2.1 hsl3 rfl (by rw [hoff600]; omega) (by rw [hoff600]; omega) (by rw [hoff600, htoh]; omega) (by rw [hoff600]; omega) (by rw [hoff600, hmE3]; exact hcur.1) (by rw [hoff600, hmE3]; exact hcur.2.1) (by rw [hoff600, hmE3]; exact hcur.2.2.1) (by rw [hoff600, hmE3]; exact hcur.2.2.2.1) (by rw [hoff600, hmE3]; exact hcur.2.2.2.2.1) (by rw [hoff600, hmE3]; exact hcur.2.2.2.2.2.1) (by rw [hoff600, hmE3]; exact hcur.2.2.2.2.2.2.1) (by rw [hoff600, hmE3]; exact hcur.2.2.2.2.2.2.2) hi3
+      hG3 hpc3 hmi3 hp3.2.1 hsl3 rfl (by rw [hoff600]; omega) (by rw [hoff600]; omega) (by rw [hoff600, htoh]; omega)  (by rw [hoff600, hmE3]; exact hcur.1) (by rw [hoff600, hmE3]; exact hcur.2.1) (by rw [hoff600, hmE3]; exact hcur.2.2.1) (by rw [hoff600, hmE3]; exact hcur.2.2.2.1) (by rw [hoff600, hmE3]; exact hcur.2.2.2.2.1) (by rw [hoff600, hmE3]; exact hcur.2.2.2.2.2.1) (by rw [hoff600, hmE3]; exact hcur.2.2.2.2.2.2.1) (by rw [hoff600, hmE3]; exact hcur.2.2.2.2.2.2.2) hi3
   have hstep4 : Step ⟨σ3, i3, c.steps + 3⟩ ⟨σ4, i4, c.steps + 4⟩ := hs4
   have hpc4 : σ4.regs.get? Register.PC = some (0x80005ce0#64) := by
     have := obs_alu_pc hobs4
@@ -203,7 +203,7 @@ theorem snprintfPostCall_spec
   -- === 0x80005ce4: ld x8,208(sp) — reload vS0o ===
   obtain ⟨σ6, i6, hs6, hi6, hG6, hmem6, hobs6⟩ :=
     site_80005ce4_wp σ5 i5 (c.steps + 5) _ vmi5 (vsp + (592#64)) _ _ _ _ _ _ _ _
-      hG5 hpc5 hmi5 hp5.2.1 hsl5 rfl (by rw [hoff800]; omega) (by rw [hoff800]; omega) (by rw [hoff800, htoh]; omega) (by rw [hoff800]; omega) hS0d0x.1 hS0d0x.2.1 hS0d0x.2.2.1 hS0d0x.2.2.2.1 hS0d0x.2.2.2.2.1 hS0d0x.2.2.2.2.2.1 hS0d0x.2.2.2.2.2.2.1 hS0d0x.2.2.2.2.2.2.2 hi5
+      hG5 hpc5 hmi5 hp5.2.1 hsl5 rfl (by rw [hoff800]; omega) (by rw [hoff800]; omega) (by rw [hoff800, htoh]; omega)  hS0d0x.1 hS0d0x.2.1 hS0d0x.2.2.1 hS0d0x.2.2.2.1 hS0d0x.2.2.2.2.1 hS0d0x.2.2.2.2.2.1 hS0d0x.2.2.2.2.2.2.1 hS0d0x.2.2.2.2.2.2.2 hi5
   have hstep6 : Step ⟨σ5, i5, c.steps + 5⟩ ⟨σ6, i6, c.steps + 6⟩ := hs6
   have hpc6 : σ6.regs.get? Register.PC = some (0x80005ce8#64) := by
     have := obs_alu_pc hobs6
@@ -221,7 +221,7 @@ theorem snprintfPostCall_spec
   -- === 0x80005ce8: ld x1,216(sp) — reload wra0 ===
   obtain ⟨σ7, i7, hs7, hi7, hG7, hmem7, hobs7⟩ :=
     site_80005ce8_wp σ6 i6 (c.steps + 6) _ vmi6 (vsp + (592#64)) _ _ _ _ _ _ _ _
-      hG6 hpc6 hmi6 hp6.2.2.1 hsl6 rfl (by rw [hoff808]; omega) (by rw [hoff808]; omega) (by rw [hoff808, htoh]; omega) (by rw [hoff808]; omega) hS0d8y.1 hS0d8y.2.1 hS0d8y.2.2.1 hS0d8y.2.2.2.1 hS0d8y.2.2.2.2.1 hS0d8y.2.2.2.2.2.1 hS0d8y.2.2.2.2.2.2.1 hS0d8y.2.2.2.2.2.2.2 hi6
+      hG6 hpc6 hmi6 hp6.2.2.1 hsl6 rfl (by rw [hoff808]; omega) (by rw [hoff808]; omega) (by rw [hoff808, htoh]; omega)  hS0d8y.1 hS0d8y.2.1 hS0d8y.2.2.1 hS0d8y.2.2.2.1 hS0d8y.2.2.2.2.1 hS0d8y.2.2.2.2.2.1 hS0d8y.2.2.2.2.2.2.1 hS0d8y.2.2.2.2.2.2.2 hi6
   have hstep7 : Step ⟨σ6, i6, c.steps + 6⟩ ⟨σ7, i7, c.steps + 7⟩ := hs7
   have hpc7 : σ7.regs.get? Register.PC = some (0x80005cec#64) := by
     have := obs_alu_pc hobs7
@@ -238,7 +238,7 @@ theorem snprintfPostCall_spec
   -- === 0x80005cec: ld x9,200(sp) — reload vS1o ===
   obtain ⟨σ8, i8, hs8, hi8, hG8, hmem8, hobs8⟩ :=
     site_80005cec_wp σ7 i7 (c.steps + 7) _ vmi7 (vsp + (592#64)) _ _ _ _ _ _ _ _
-      hG7 hpc7 hmi7 hp7.2.2.2.1 hsl7 rfl (by rw [hoff792]; omega) (by rw [hoff792]; omega) (by rw [hoff792, htoh]; omega) (by rw [hoff792]; omega) hS0c8z.1 hS0c8z.2.1 hS0c8z.2.2.1 hS0c8z.2.2.2.1 hS0c8z.2.2.2.2.1 hS0c8z.2.2.2.2.2.1 hS0c8z.2.2.2.2.2.2.1 hS0c8z.2.2.2.2.2.2.2 hi7
+      hG7 hpc7 hmi7 hp7.2.2.2.1 hsl7 rfl (by rw [hoff792]; omega) (by rw [hoff792]; omega) (by rw [hoff792, htoh]; omega)  hS0c8z.1 hS0c8z.2.1 hS0c8z.2.2.1 hS0c8z.2.2.2.1 hS0c8z.2.2.2.2.1 hS0c8z.2.2.2.2.2.1 hS0c8z.2.2.2.2.2.2.1 hS0c8z.2.2.2.2.2.2.2 hi7
   have hstep8 : Step ⟨σ7, i7, c.steps + 7⟩ ⟨σ8, i8, c.steps + 8⟩ := hs8
   have hpc8 : σ8.regs.get? Register.PC = some (0x80005cf0#64) := by
     have := obs_alu_pc hobs8

@@ -305,7 +305,6 @@ theorem blockA_k
         (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = g R) ∧
         (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
         (aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat) ∧
-        aExpr.toNat % 8 = 0 ∧
         (0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000) ∧
         tohostAddr + 16 ≤ aExpr.toNat ∧
         sret.toNat % 8 = 0 ∧ (0x80000000 ≤ sret.toNat ∧ sret.toNat + 24 ≤ 0x100000000) ∧
@@ -334,7 +333,7 @@ theorem blockA_k
   obtain ⟨hpre, hout0⟩ := hpre'
   obtain ⟨hG, htick, hpc, ha0, ha1, ha2, hra, hraAl, hspReg, hstackOK, ⟨vmi, hmi⟩,
     hmem, hcode, hexpr, hstore, hstoreSurv, hout, hframe,
-    hcodeStk, hexprStk, hexprAl, hexprRam, hexprWin,
+    hcodeStk, hexprStk, hexprRam, hexprWin,
     hsretAl, hsretRam, hsretWin, hsretVi, hsretStk, hsretEvalCode, hstkRam, hstkWin,
     ⟨⟨v8, h8_0⟩, ⟨v9, h9_0⟩, ⟨v18, h18_0⟩, h13_0⟩⟩ := hpre
   let v13 : BitVec 64 := BitVec.ofNat 64 (φf a)
@@ -357,7 +356,6 @@ theorem blockA_k
       hG hpc164 hmi ha2 hload0 rfl
       (by rw [haddr0]; have := hexprRam.1; omega)
       (by rw [haddr0]; have := hexprRam.2; omega) hhtif_e
-      (by rw [haddr0]; have := hexprAl; omega)
       (by rw [haddr0]; exact hkb0) (by rw [haddr0]; exact hkb1)
       (by rw [haddr0]; exact hkb2) (by rw [haddr0]; exact hkb3) htick
   have hstep1 : Step c ⟨σ1, i1, c.steps + 1⟩ := by cases c; exact hs1
@@ -621,7 +619,6 @@ theorem blockA_k
     site_8000318c_ee σ10 i10 (c.steps+1+1+1+1+1+1+1+1+1+1) (0x8000318c#64) vmi10 aExpr hkb0v hkb1v hkb2v hkb3v
       hG10 hpc10 hmi10 ha2_10 (hmem10e ▸ hload6) rfl
       (by rw [haddr0]; have := hexprRam.1; omega) (by rw [haddr0]; have := hexprRam.2; omega) hhtif_e2
-      (by rw [haddr0]; have := hexprAl; omega)
       (by rw [haddr0, hmem10e]; exact hkb0') (by rw [haddr0, hmem10e]; exact hkb1')
       (by rw [haddr0, hmem10e]; exact hkb2') (by rw [haddr0, hmem10e]; exact hkb3') hi10
   have hstep11 : Step ⟨σ10, i10, _⟩ ⟨σ11, i11, _⟩ := hs11
@@ -748,7 +745,7 @@ theorem blockA_k
     site_800031a4_ee σ16 i16 (c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1) (0x800031a4#64) vmi16 (BitVec.ofNat 64 (jumpTableBase + 4 * k))
       sb0 sb1 sb2 sb3 hG16 hpc16 hmi16 hx15_16 (hmem16e ▸ hload6) rfl
       (by rw [haddrT]; simp only [jumpTableBase]; omega) (by rw [haddrT]; simp only [jumpTableBase]; omega)
-      (by rw [haddrT]; left; simp only [jumpTableBase]; rw [htoh]; omega) (by rw [haddrT]; simp only [jumpTableBase]; omega)
+      (by rw [haddrT]; left; simp only [jumpTableBase]; rw [htoh]; omega)
       (by rw [haddrT]; exact hsb0) (by rw [haddrT]; exact hsb1)
       (by rw [haddrT]; exact hsb2) (by rw [haddrT]; exact hsb3) hi16
   have hstep17 : Step ⟨σ16, i16, _⟩ ⟨σ17, i17, _⟩ := hs17
@@ -1012,7 +1009,7 @@ theorem blockA_k
   refine ⟨⟨σ19, i19, c.steps+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1⟩, ?_, σ6.mem, v8, v9, v18, v13, ⟨hG19, hi19, hpc19, ha0_19, hx9_19, ha2_19, hsp_19, hra_19,
     ⟨_, hmi19⟩, hout19, hmem19e, hmem19e ▸ hload6, hmem19e ▸ hvi6, hmem19e ▸ hexpr6,
     houtStr,
-    hexprAl, hexprRam.1, hexprRam.2, hexprWin,
+    hexprRam.1, hexprRam.2, hexprWin,
     hmem19e ▸ hslotRa, hmem19e ▸ hslotS0, hmem19e ▸ hslotS1, hmem19e ▸ hslotS2,
     hmem19e ▸ hmemframe6,
     hgx8, hgx9, hgx18, hgx2, hmem19e ▸ hstore6, hmem19e ▸ hstoreSurv6, hframeArm,
@@ -1100,7 +1097,7 @@ theorem blockA_ee
     -- feed the shared entry facts (case-independent subset of `EvalEntry`)
     c ⟨⟨he.good, he.tick, he.pc, he.a0, he.a1, he.a2, he.ra, he.ra_align, he.spReg,
     he.stackOK, he.minstret, he.mem, he.code, he.expr, he.store, he.store_survives, he.out,
-    he.frame, he.code_stack_disjoint, he.expr_stack_disjoint, he.expr_align, he.expr_ram,
+    he.frame, he.code_stack_disjoint, he.expr_stack_disjoint, he.expr_ram,
     he.expr_win, he.sret_align, he.sret_ram, he.sret_win, he.sret_vicode_disjoint_int,
     he.sret_stack_disjoint, he.sret_evalcode_disjoint, he.stack_ram, he.stack_win,
         ⟨he.spill_defined.1, he.spill_defined.2.1, he.spill_defined.2.2, he.envReg⟩⟩, hout0⟩

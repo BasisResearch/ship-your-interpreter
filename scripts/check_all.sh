@@ -4,10 +4,9 @@
 # Usage: scripts/check_all.sh [--skip-build]
 #
 # Stages (all must pass; exits nonzero with a message on the first failure):
-#   (a) `lake build`                — the full tree compiles
-#                                     (skipped with --skip-build, e.g. when
-#                                     another process owns the build lock and
-#                                     oleans are known-fresh);
+#   (a) private serial build        — all source modules compile;
+#                                     --skip-build verifies current fingerprints.
+#       initial-state validation    — mandatory actual Sail regressions;
 #   (b) grep gate                   — no `sorry`, no `native_decide`, and no
 #                                     `axiom` declarations anywhere under Vsa/
 #                                     or in Vsa.lean.  Comments/docstrings and
@@ -37,56 +36,18 @@ done
 fail() { echo "check_all: FAIL: $*" >&2; exit 1; }
 
 # ---------------------------------------------------------------- (a) build
+VSA_PRIVATE_BUILD="${VSA_PRIVATE_BUILD:?set VSA_PRIVATE_BUILD to a private build directory}"
 if [ "$SKIP_BUILD" -eq 0 ]; then
-  VSA_LAKE_JOBS="${VSA_LAKE_JOBS:-3}"
-  echo "== stage a: lake build (jobs=$VSA_LAKE_JOBS)"
-  BUILD_LOG=$(mktemp)
-  lake -Kjobs="$VSA_LAKE_JOBS" build 2>&1 | tee "$BUILD_LOG" || fail "stage a: lake build failed"
-  grep -q "Build completed successfully" "$BUILD_LOG" \
-    || fail "stage a: lake build did not complete successfully"
-
-  # -------- stage a2: per-module elab-budget gate (fast-reflection rule 7) --
-  # Parses the per-job durations lake printed for whatever REBUILT in this run
-  # (an edited module always rebuilds in the same run, so regressions are
-  # caught at the commit that introduces them). Ceilings are wall-clock under
-  # parallel load (~2.5-3x isolated `lake env lean`).
-  #   HARD_S : fail the gate  (isolated ~60s+ — a new 30-min-cone file in the making)
-  #   WARN_S : print a warning
-  # Known-heavy modules pending their rewrite wave live in the allowlist file
-  # scripts/elab-budget-allow.txt (one module name per line, comments with #).
-  echo "== stage a2: per-module elab-budget gate"
-  HARD_S="${HARD_S:-180}" WARN_S="${WARN_S:-90}" python3 - "$BUILD_LOG" <<'PYEOF' || fail "stage a2: module(s) over elab budget (raise only with a justification in scripts/elab-budget-allow.txt)"
-import os, re, sys, pathlib
-
-log = pathlib.Path(sys.argv[1]).read_text(errors="replace")
-hard = float(os.environ["HARD_S"]); warn = float(os.environ["WARN_S"])
-allow = set()
-ap = pathlib.Path("scripts/elab-budget-allow.txt")
-if ap.exists():
-    for line in ap.read_text().splitlines():
-        line = line.split("#")[0].strip()
-        if line: allow.add(line)
-
-viol, warned = [], []
-for m in re.finditer(r"Built (\S+) \((\d+(?:\.\d+)?)(m?s)\)", log):
-    mod, val, unit = m.group(1), float(m.group(2)), m.group(3)
-    secs = val / 1000 if unit == "ms" else val
-    if mod in allow: continue
-    if secs >= hard: viol.append((secs, mod))
-    elif secs >= warn: warned.append((secs, mod))
-
-for s, mod in sorted(warned, reverse=True):
-    print(f"  WARN  {s:7.1f}s  {mod}")
-for s, mod in sorted(viol, reverse=True):
-    print(f"  OVER  {s:7.1f}s  {mod}  (hard ceiling {hard:.0f}s)")
-print(f"  gate: {len(viol)} over / {len(warned)} warned "
-      f"(ceilings: hard {hard:.0f}s, warn {warn:.0f}s, parallel-load wall)")
-sys.exit(1 if viol else 0)
-PYEOF
-  rm -f "$BUILD_LOG"
-else
-  echo "== stage a: lake build SKIPPED (--skip-build)"
+  python3 scripts/check_validation.py --backend "$VSA_PRIVATE_BUILD" \
+    --build-backend --verify-backend-only || fail "stage a: private build or elaboration budget failed"
 fi
+python3 scripts/check_validation.py --backend "$VSA_PRIVATE_BUILD" \
+  --verify-backend-only || fail "stage a: stale or incomplete private build"
+
+# Direct initial-state cases are mandatory, including when the build is reused.
+VALIDATION_BASE=$(mktemp -d)
+python3 scripts/check_validation.py --backend "$VSA_PRIVATE_BUILD" \
+  --output "$VALIDATION_BASE/boundary" || fail "initial-state validation failed; see $VALIDATION_BASE"
 
 # ----------------------------------------- stage a3: generated-interface drift
 echo "== stage a3: generated term-case bundle"
@@ -142,7 +103,7 @@ bad = []
 for f in files:
     code = strip_comments_and_strings(f.read_text(encoding="utf-8"))
     for lineno, line in enumerate(code.splitlines(), 1):
-        for tok in ("sorry", "native_decide"):
+        for tok in ("sorry", "native_decide", "bv_decide"):
             if re.search(rf"\b{tok}\b", line):
                 bad.append(f"{f}:{lineno}: forbidden `{tok}`")
         if re.match(r"\s*axiom\b", line):
@@ -486,7 +447,7 @@ THEOREMS=(
   Vsa.Sim.frame_sd                                  # SegFrameFacts (companion for STORE windows: sd MemFacts (bounds only) from the FrameBundle)
   Vsa.Sim.frame_ea                                  # SegFrameFacts (the folded address arithmetic: eaddrM of a base-relative small-offset op = base+off, from the FrameBundle no-wrap bound — the spill_addr step, once)
   Vsa.Sim.frameBundle_writeLog                      # SegFrameFactsAuto (a FrameBundle survives the chain's threaded stores: pop survives writeLog, so a later block's loads read their still-populated threaded memory with the SAME bundle)
-  Vsa.Sim.frame_ld_read                             # SegFrameFactsAuto (a ld window MemFacts whose byte list is the EXPLICIT frame read [popByte m fb.pop (base+off), …] — depends on base/off only, never on L, so the tactic assigns the seg's lds element with no occurs-check and no L reduction)
+  Vsa.Sim.frame_ld_read                             # SegFrameFactsAuto (a ld window MemFacts whose byte list is the EXPLICIT frame read [bytesT1 m (base+off), …] — depends on base/off only, never on L, so the tactic assigns the seg's lds element with no occurs-check and no L reduction)
   Vsa.Sim.frame_sd_auto                             # SegFrameFactsAuto (a sd window MemFacts — bounds only, over ANY threaded memory; offset read off a.imm)
   Vsa.Sim.frame_ld_read_thru                        # SegFrameFactsAuto (CROSS-BLOCK load reader: a threaded-memory (writeLog σ.mem log) ld window read from the UNDERLYING σ.mem (writeLog-free byte terms), pins collapsed to σ.mem by store/load-window disjointness (writeLog_getElem_disjoint); closes div's D2 loads)
   Vsa.Sim.wlogM_store_offsets                       # SegFrameFactsAuto (ABSTRACT THE READ OVER wlogM: every write-log entry of a frame block body has address base+off_st for that store's own offset — proved once by induction, so a use site bounds the store log WITHOUT reducing wlogM)
@@ -1133,20 +1094,22 @@ mv "${AXFILE%.lean}" "$AXFILE"
   for t in "${THEOREMS[@]}"; do echo "#print axioms $t"; done
 } > "$AXFILE"
 
-AXOUT="$(lake env lean "$AXFILE" 2>&1)"
+AXOUT="$(lake env sh -c 'LEAN_PATH="$1${LEAN_PATH:+:$LEAN_PATH}" lean "$2"' check-all "$VSA_PRIVATE_BUILD" "$AXFILE" 2>&1)"
 AXSTATUS=$?
 if [ "$AXSTATUS" -ne 0 ]; then
   echo "$AXOUT" >&2
   fail "stage c: lean failed on $AXFILE (unknown theorem or elaboration error)"
 fi
 
-AX_OUT="$AXOUT" AX_EXPECTED="${#THEOREMS[@]}" python3 - <<'PYEOF' || fail "stage c: axiom audit failed (see above)"
+AX_OUT="$AXOUT" AX_EXPECTED="${#THEOREMS[@]}" AX_NAMES="$(printf '%s\n' "${THEOREMS[@]}")" python3 - <<'PYEOF' || fail "stage c: axiom audit failed (see above)"
 import os, re, sys
 
 allowed = {"propext", "Classical.choice", "Quot.sound"}
 expected = int(os.environ["AX_EXPECTED"])
 out = os.environ["AX_OUT"]
 bad, seen = [], 0
+expected_names = set(os.environ["AX_NAMES"].splitlines())
+seen_names = []
 # Lean wraps long axiom reports across lines (continuations start with
 # whitespace); join them so the bracket regex sees whole reports.
 out = re.sub(r"\n[ \t]+", " ", out)
@@ -1154,6 +1117,7 @@ for line in out.splitlines():
     m = re.search(r"'(.*)' depends on axioms: \[([^\]]*)\]", line)
     if m:
         seen += 1
+        seen_names.append(m.group(1))
         axs = {a.strip() for a in m.group(2).split(",") if a.strip()}
         extra = axs - allowed
         if extra:
@@ -1162,9 +1126,12 @@ for line in out.splitlines():
     m = re.search(r"'(.*)' does not depend on any axioms", line)
     if m:
         seen += 1
+        seen_names.append(m.group(1))
         continue
     if re.search(r"\berror\b", line, re.IGNORECASE):
         bad.append(f"lean error: {line.strip()}")
+if set(seen_names) != expected_names or len(set(seen_names)) != len(seen_names):
+    bad.append("missing, duplicate, or unrelated theorem axiom report")
 if seen != expected:
     bad.append(f"expected {expected} '#print axioms' reports, saw {seen}")
 print(f"stage c: {seen}/{expected} theorems audited, allowed = {sorted(allowed)}")
@@ -1186,11 +1153,12 @@ echo "stage c: OK"
 # `experiments/smt/ReflectSpan.lean` or `ReflectResiduals.lean`.
 if [ "${VSA_DIFFTEST:-0}" = 1 ]; then
   echo "== stage d: BMC encoder vs the proof model (difftest)"
-  scripts/difftest.sh --out "${VSA_DIFFTEST_OUT:-/tmp/difftest}" \
+  [ -n "${VSA_SEGMENT_AUTHORITY:-}" ] || fail "stage d: set VSA_SEGMENT_AUTHORITY"
+  scripts/difftest.sh --out "${VSA_DIFFTEST_OUT:-/tmp/difftest}" --segment-authority "$VSA_SEGMENT_AUTHORITY" \
     || fail "stage d: the encoder disagrees with the machine (see the report above)"
   echo "stage d: OK"
 else
   echo "== stage d: encoder differential SKIPPED (set VSA_DIFFTEST=1)"
 fi
 
-echo "check_all: OK"
+echo "check_all: configured checks passed; full contract NOT-CHECKED"
