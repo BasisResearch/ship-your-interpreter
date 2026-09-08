@@ -319,23 +319,31 @@ replace every per-entry `ainv_stable` field.
   `StoreOwned.pushClosure`: old roles and bytes survive the build's memory through
   `OwnedOff`, the fresh record takes the `closure` role at the new index, captured
   environments stay allocated, and the pushed closure's AST is shared.
-- `AllocBuildEntry.hOld` and `AllocBuildTailFacts.hOld` are UNINHABITABLE as
-  stated, not merely too strong. Each demands `StoreRepr mpre N A φf φc' st.store`
-  for EVERY `mpre` agreeing with the post-malloc memory outside the stack window,
-  the arena and the result slot. The arena is EXCLUDED from that agreement, so
-  `mpre` may differ arbitrarily inside `[A.lo, A.hi)` — and `StoreRepr.frames`
-  reads `FrameRepr` at `φf fa`, which `StoreRepr.frames_arena` places inside the
-  arena. So for any store with at least one frame, perturbing a single frame byte
-  of `mpre` satisfies the hypothesis and refutes the conclusion. Anything built on
-  these bundles is vacuous for a non-empty store, which is the record-uninhabited
-  class. This is a sharpening of the earlier note, which recorded only that they
-  "demand store survival under arbitrary arena changes". Their replacement supplier is
-  `closurePushed_of_mallocReturn` (`AllocLedger.lean`), which derives the old
-  store at the extended closure map from the ACTUAL `malloc` frame plus the build's
-  own writes, then lands `storeRepr_pushClosure`. Remaining: rewire
-  `rows/FnArmSeams.lean` to take `ClosurePushed` instead of the two `hOld` fields.
-  The drafts in `/private/tmp/vsa-indexed-child/` remain unchecked and are
-  superseded by this supplier.
+- `AllocBuildEntry.hOld` and `AllocBuildTailFacts.hOld` were UNINHABITABLE, and
+  are FIXED. Each demanded `StoreRepr mpre …` for EVERY `mpre` agreeing with the
+  post-malloc memory outside the stack window, the arena and the result slot.
+  The arena was excluded from that agreement, so `mpre` could differ arbitrarily
+  inside `[A.lo, A.hi)` — and `StoreRepr.frames` reads `FrameRepr` at `φf fa`,
+  which `StoreRepr.frames_arena` places inside the arena. Perturbing one frame
+  byte satisfied the hypothesis and refuted the conclusion, so anything built on
+  these bundles was vacuous for a non-empty store. `hExprRepr` carried the same
+  defect for the same reason: the `fn` AST node is arena-resident too.
+  The cure is `BuildOff p sret` (`rows/AllocClosureInhab.lean`): the closure
+  build's OWN write window, the fresh 16-byte record and the 24-byte result
+  slot, which are the only bytes it stores to between the post-malloc and
+  post-build memories. `hExprRepr`, `hOld` and `hCodeSurvive` now take agreement
+  off that window, which is both weaker as a premise (so the fields are
+  inhabitable) and true of the actual build; `hMpreFrame` states the same window,
+  which is stronger and is what the reflected write log satisfies. The two
+  consumers are rewired: the second composes through `A.contains p 16`, since a
+  byte outside the arena is outside the fresh block. `allocClosureContract_of`
+  and `storeRepr_pushClosure` audit at `propext`, `Classical.choice`,
+  `Quot.sound`.
+  REMAINING here: the bundles are now inhabitable but still unsupplied. The
+  supplier is `closurePushed_of_mallocReturn` (`AllocLedger.lean`), which needs a
+  bridge from the `fn` arm's own malloc plumbing (`mallocCallSpec`, the pruned
+  `ExitP`) to `MallocReturnAt`; the arm does not route through
+  `mallocReturn_of_parked`.
 - `EnvDefineContract` is proved by `envDefineContract_of_ledgers`
   (`rows/EnvDefineContractSupply.lean`) from the two ledgers per entry,
   `EnvDefineUpdateLedger` and `EnvDefineMissLedger`

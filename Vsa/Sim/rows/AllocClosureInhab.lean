@@ -66,6 +66,20 @@ register images are pinned here.  The malloc-result geometry (`p≠0`, `p%8=0`,
 `A.contains p 16`, freshness vs old closures) and the OLD store at `φc'` /
 `PhiExtends` witness are carried opaquely — they are established inside the malloc
 splice (`hEntry`) and the arm's dispatch, NOT re-derived from the build seg. -/
+/-- **The closure build's own write window**: the fresh 16-byte closure record
+and the 24-byte result slot.  Between the post-malloc memory and the post-build
+memory these are the ONLY bytes the build stores to, so every other byte agrees.
+
+The bundles below previously stated their memory premises as "outside the stack
+window and outside the ARENA", which excluded the arena from the agreement.
+That made `hExprRepr` and `hOld` uninhabitable for a non-empty store: the AST
+node and the store's frames live IN the arena (`StoreRepr.frames_arena`), so a
+memory free to differ anywhere inside it refutes both conclusions.  Stating the
+agreement by the build's actual write window fixes that, and is the stronger,
+true fact. -/
+def BuildOff (p : Nat) (sret : BitVec 64) (a : Nat) : Prop :=
+  ¬ (p ≤ a ∧ a < p + 16) ∧ ¬ (sret.toNat ≤ a ∧ a < sret.toNat + 24)
+
 structure AllocBuildEntry
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc φc' : Addr → Nat)
@@ -96,8 +110,7 @@ structure AllocBuildEntry
   the build's `sd s0,0(a0)` writes `s0 = aExpr`, and `ExprRepr` of it is carried
   (the arm-entry `ExprRepr ment aExpr (.fn …)` surviving to `mpre`). -/
   hExprRepr : ∀ mpre : Mem,
-    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
-      (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ mpre[a]? = mMalloc[a]?) →
+    (∀ a : Nat, BuildOff p sret a → mpre[a]? = mMalloc[a]?) →
     ExprRepr mpre aExpr.toNat (.fn cd.name cd.params cd.body)
   /-- `φf cd.env ≠ 0` (the captured env's frame image is a real address). -/
   hEnvNz : φf cd.env ≠ 0
@@ -107,8 +120,7 @@ structure AllocBuildEntry
   /-- The OLD store represented at `φc'` in the post-build memory `mpre` (frame-
   invariant under the build's disjoint stores + the malloc frame). -/
   hOld : ∀ mpre : Mem,
-    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
-      (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ mpre[a]? = mMalloc[a]?) →
+    (∀ a : Nat, BuildOff p sret a → mpre[a]? = mMalloc[a]?) →
     StoreRepr mpre N A φf φc' st.store
   /-- The malloc'd block `[p,p+16)` is disjoint from the sret box `[sret,sret+24)`
   (needed by `fnArmClosureBuild_reads`; `A.contains p 16` + the sret window). -/
@@ -127,8 +139,7 @@ structure AllocBuildEntry
   /-- `eval_expr` still loaded in the post-build memory `mpre` (the build writes
   only `[p,p+16) ∪ [sret,sret+24)`, disjoint from the code image). -/
   hCodeSurvive : ∀ mpre : Mem,
-    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
-      (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ mpre[a]? = mMalloc[a]?) →
+    (∀ a : Nat, BuildOff p sret a → mpre[a]? = mMalloc[a]?) →
     Eval_exprLoaded mpre
   /-- The build seg's write-log frame: `writeLog mMalloc (build log)` differs from
   `mMalloc` ONLY inside `[p,p+16) ⊆ arena` and `[sret,sret+24)` (the sret window).
@@ -136,9 +147,7 @@ structure AllocBuildEntry
   from the concrete write-log (writes at `p` — in-arena via `harena` — and at
   `sret`/`sret+8`) by `writeMap`-disjointness; carried as a field because the
   disjointness keys off `a ∉ arena` / `a ∉ sret-window`. -/
-  hMpreFrame : ∀ a : Nat,
-    ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
-    (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨
+  hMpreFrame : ∀ a : Nat, BuildOff p sret a →
     (writeLog mMalloc (evalBlocks fnArmClosureBuildSeg
       (SegEvalState.init (fnArmClosureBuildL (BitVec.ofNat 64 p) aExpr
         (BitVec.ofNat 64 (φf cd.env)) sret) [])).log)[a]? = mMalloc[a]?
@@ -251,10 +260,8 @@ theorem allocClosureContract_of
     -- normalize the reads to `p : Nat` and `φf env`.
     rw [hE.hpToNat] at hrd0 hrd8 hrdPay
     -- the mpre-frame relation (build writes ⊆ arena ∪ sret-window), packaged.
-    have hmpreFrame : ∀ a : Nat,
-        ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
-        (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ mpre[a]? = mMalloc[a]? := by
-      intro a ha1 ha2; exact hE.hMpreFrame a ha1 ha2
+    have hmpreFrame : ∀ a : Nat, BuildOff p sret a → mpre[a]? = mMalloc[a]? := by
+      intro a ha; exact hE.hMpreFrame a ha
     -- `ClosureRepr mpre φf p cd` : read64 p = aExpr (the fn Expr node) + ExprRepr;
     -- read64 (p+8) = φf env, nonzero.
     have hExpr : ExprRepr mpre aExpr.toNat (.fn name params body) := hE.hExprRepr mpre hmpreFrame
@@ -339,9 +346,15 @@ theorem allocClosureContract_of
       -- memframe over mpre vs m0 : compose hMpreFrame (mpre vs mMalloc, at addresses
       -- outside stack/arena/sret) with hmemframe (mMalloc vs m0).
       intro aa haStack haArena
-      rcases hE.hMpreFrame aa haStack haArena with hInSret | hEqMalloc
-      · exact Or.inl hInSret
-      · rcases hmemframe aa haStack haArena with hInSret2 | hEqM0
+      -- outside the arena, `aa` is outside the fresh block too (`A.contains p 16`),
+      -- so `BuildOff p sret aa` holds as soon as `aa` misses the result slot.
+      by_cases hSret : sret.toNat ≤ aa ∧ aa < sret.toNat + 24
+      · exact Or.inl hSret
+      · have hOffP : ¬ (p ≤ aa ∧ aa < p + 16) := by
+          obtain ⟨hlo, hhi⟩ := hE.harena
+          intro hin; exact haArena ⟨by omega, by omega⟩
+        have hEqMalloc := hE.hMpreFrame aa ⟨hOffP, hSret⟩
+        rcases hmemframe aa haStack haArena with hInSret2 | hEqM0
         · exact Or.inl hInSret2
         · exact Or.inr (hEqMalloc.trans hEqM0)
 

@@ -159,14 +159,12 @@ structure AllocBuildTailFacts
   hp : φc' st.store.closures.size = p
   /-- The Expr node / OLD store / code survival at the post-build memory. -/
   hExprRepr : ∀ mpre : Mem,
-    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
-      (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ mpre[a]? = mMalloc[a]?) →
+    (∀ a : Nat, BuildOff p sret a → mpre[a]? = mMalloc[a]?) →
     ExprRepr mpre aExpr.toNat (.fn cd.name cd.params cd.body)
   hEnvNz : φf cd.env ≠ 0
   hEnvToNat : (BitVec.ofNat 64 (φf cd.env)).toNat = φf cd.env
   hOld : ∀ mpre : Mem,
-    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
-      (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ mpre[a]? = mMalloc[a]?) →
+    (∀ a : Nat, BuildOff p sret a → mpre[a]? = mMalloc[a]?) →
     StoreRepr mpre N A φf φc' st.store
   hps : p + 16 ≤ sret.toNat ∨ sret.toNat + 24 ≤ p
   hpof : ((BitVec.ofNat 64 p) + 8#64).toNat = (BitVec.ofNat 64 p).toNat + 8
@@ -178,12 +176,9 @@ structure AllocBuildTailFacts
   hkeys : KeysOK (keysG (fnArmClosureBuildL (BitVec.ofNat 64 p) aExpr
     (BitVec.ofNat 64 (φf cd.env)) sret))
   hCodeSurvive : ∀ mpre : Mem,
-    (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
-      (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ mpre[a]? = mMalloc[a]?) →
+    (∀ a : Nat, BuildOff p sret a → mpre[a]? = mMalloc[a]?) →
     Eval_exprLoaded mpre
-  hMpreFrame : ∀ a : Nat,
-    ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
-    (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨
+  hMpreFrame : ∀ a : Nat, BuildOff p sret a →
     (writeLog mMalloc (evalBlocks fnArmClosureBuildSeg
       (SegEvalState.init (fnArmClosureBuildL (BitVec.ofNat 64 p) aExpr
         (BitVec.ofNat 64 (φf cd.env)) sret) [])).log)[a]? = mMalloc[a]?
