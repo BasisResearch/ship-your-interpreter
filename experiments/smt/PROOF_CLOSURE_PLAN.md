@@ -339,10 +339,18 @@ replace every per-entry `ainv_stable` field.
   byte outside the arena is outside the fresh block. `allocClosureContract_of`
   and `storeRepr_pushClosure` audit at `propext`, `Classical.choice`,
   `Quot.sound`.
-  REMAINING here: the bundles are now inhabitable but still unsupplied. The
-  supplier is `closurePushed_of_mallocReturn` (`AllocLedger.lean`), which needs a
-  bridge from the `fn` arm's own malloc plumbing (`mallocCallSpec`, the pruned
-  `ExitP`) to `MallocReturnAt`; the arm does not route through
+  Both repaired fields are now SUPPLIED, not merely inhabitable
+  (`rows/ClosureBuildSupply.lean`): `closureBuildOld_of_owned` gives `hOld` and
+  `closureBuildExpr_of_owned` gives `hExprRepr`, each from `HeapOwned.ownedOff`
+  plus `buildOff_of_allocOff` (the result slot is a caller stack slot, so
+  `AllocOff` refines `BuildOff`). The store side composes
+  `StoreOwned.repr_transport` with `storeRepr_phic_mono`; the AST side is
+  `exprRepr_agreeP` over the shared bytes. All three audit at `propext`,
+  `Classical.choice`, `Quot.sound`, and `buildOff_of_allocOff` is axiom-free.
+  REMAINING here: the bundle's ~28 machine-side fields (registers, spill
+  readbacks, chain facts) are still open, and `closurePushed_of_mallocReturn`
+  needs a bridge from the `fn` arm's own malloc plumbing (`mallocCallSpec`, the
+  pruned `ExitP`) to `MallocReturnAt`, since that arm does not route through
   `mallocReturn_of_parked`.
 - `EnvDefineContract` is proved by `envDefineContract_of_ledgers`
   (`rows/EnvDefineContractSupply.lean`) from the two ledgers per entry,

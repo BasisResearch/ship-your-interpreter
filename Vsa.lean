@@ -644,6 +644,7 @@ import Vsa.Sim.rows.StmtExprArmStagePre
 import Vsa.Sim.rows.FnArmClosureBuild
 import Vsa.Sim.rows.AllocClosureInhab
 import Vsa.Sim.rows.AllocBuildEntrySplice
+import Vsa.Sim.rows.ClosureBuildSupply
 import Vsa.Sim.rows.FnArmSeams
 import Vsa.Sim.rows.FnResidSupply
 import Vsa.Sim.MemcpySpecFramedWord
