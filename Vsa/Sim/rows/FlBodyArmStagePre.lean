@@ -51,7 +51,7 @@ set_option linter.unusedVariables false
 
 /-! ## §1. The for-body-arm body seg `0x800042a8 → 0x800042b4` (straight-line, jal-terminated at 0x800042b8) -/
 #derive_case flBodyBodySeg chain
-  [(0x800042a8#64, 0x02043583#32),  -- ld a1,32(s0)   (for-body stmt node)
+  [(0x800042a8#64, 0x02043583#32),  -- ld a1,32(s0)   (for-body stmt node)  -- discipline: allow(R11-exec-stmtchild-arm) legacy staging field; superseded by forBodyArm (rows/ForLoopArms)
    (0x800042ac#64, 0x00090693#32),  -- mv a3,s2       (a3 := interp*)
    (0x800042b0#64, 0x00098613#32),  -- mv a2,s3       (a2 := env)
    (0x800042b4#64, 0x00048513#32)]  -- mv a0,s1       (a0 := ret)

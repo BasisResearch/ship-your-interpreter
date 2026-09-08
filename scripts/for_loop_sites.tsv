@@ -1,0 +1,7 @@
+# for-loop tail sites of exec_stmt: the body call, the break exit, and the step's loop-back jump.
+# jal/j immediates are the DECODER's unscrambled imm21 values.
+800042b8	d29ff0ef	jal	1	1ffd28
+800042c4	00000513	alu_addi	10	0	000
+800042c8	dd5ff06f	j	1ffdd4
+800042e8	e7dfe0ef	jal	1	1fee7c
+800042ec	f81ff06f	j	1fff80

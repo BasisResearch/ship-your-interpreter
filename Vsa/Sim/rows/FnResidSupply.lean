@@ -5,10 +5,12 @@ import Vsa.Sim.rows.StoreReprPhicRebase
 /-!
 # `FnResidSupply` — supply the `hFn` residual `FnResid` from the `EX_FN` pipeline
 
-`eval_fn_row` (`rows/CallRows`) fills the recursor's `hFn` slot by routing to
-`evalFnSimD` over the named residual `FnResid` (the `FnArmSpec` arm run + the
-`EvalRecWiden` φc-widener).  This file SUPPLIES that residual by assembling the
-whole `EX_FN` arm pipeline landed across wave 33-38:
+`eval_fn_row` (`rows/CallRows`) fills the recursor's `hFn` slot from the named
+residual `FnResid` (the coherent arm contract `FnArmReturn`: entry →
+`EvalReturn` at the trivial ownership).  This file SUPPLIES that residual by
+assembling the whole `EX_FN` arm pipeline landed across wave 33-38 and landing
+the coherent epilogue itself (`armReturn_of_facts` = `blockD_v_return` at the
+widened pair `(φf, φc')`, the fresh index mapped to the allocated block):
 
 ```
   fnArmSeamRun_of_allocClosure  (FnArmSeamReduce)   → FnArmSeamRun
@@ -16,8 +18,8 @@ whole `EX_FN` arm pipeline landed across wave 33-38:
       → fnArmGeom_hArm_offdiag (below)              → FnArmGeom.hArm  (φc → φc')
         ⊕ hpc/hout                                  → FnArmGeom
           ⊕ hfr/hcl (store-size monotonicity, trivial)
-            → fnArmSpec_of_geom (ArmSpecBridge)      → FnArmSpec
-              ⊕ EvalRecWiden                          → FnResid
+            ⊕ EpilogueEntryFacts at mpre (presence, words, survival at (φf, φc'))
+              → armReturn_of_facts (EvalReturn)        → FnArmReturn = FnResid
 ```
 
 ## The ONE genuine open beyond the off-path bundles: the φc-entry rebase
@@ -45,7 +47,11 @@ closure index).  See observations `fnArmGeom-hArm-diagonal-phic-only`.
 * `hpc`/`hout` — the closure-alloc `PhiExtends` + output invariant.
 * `hfr`/`hcl` — store-size monotonicity (frames fixed, closures +1: trivial from
   `allocClosure`, discharged inline by `store_size_of_allocClosure`).
-* `hW` — `EvalRecWiden` at the grown store.
+* `hF` — `EpilogueEntryFacts` at the epilogue entry `mpre`, at the ONE widened
+  pair `(φf, φc')`: presence (`MemExtends m0 mpre`), the complete sret words, and
+  `store'` survival across the stack region.  This replaces the former exit-level
+  map-existential widener `EvalRecWiden`; the arm's build writes only the stack,
+  the fresh block, and the sret, so each field is a write-log fact of the seam.
 
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
 -/
@@ -129,8 +135,8 @@ theorem store_size_of_allocClosure
     exact Nat.le_succ _
 
 /-- **`fnResid_of_pipeline`** — SUPPLY `FnResid` (the `hFn` slot residual) from the
-`EX_FN` pipeline.  Assembles `FnArmSpec` via `fnArmGeom_hArm_offdiag` →
-`FnArmGeom` → `fnArmSpec_of_geom`, then pairs it with the `EvalRecWiden` φc-widener.
+`EX_FN` pipeline.  Runs the arm to the epilogue entry via `fnArmGeom_hArm_offdiag`
+and lands the coherent epilogue there (`armReturn_of_facts`).
 The `allocClosure` result `(store', a)` is fixed by `hAlloc` (so `hfr`/`hcl` are
 `store_size_of_allocClosure`); the remaining inputs are the named residuals in the
 file doc.  This is the closure-side analog of the leaf residual suppliers. -/
@@ -159,21 +165,22 @@ theorem fnResid_of_pipeline
     (hSeam : FnArmSeamRun g N A SL φf φc' st a armPC calleeLoaded name params body store'
       sp r sret aExpr aEnv m0 v8 v9 v18 out0 mpre)
     (hEntryRebase : ∀ mm : Mem, StoreRepr mm N A φf φc st.store → StoreRepr mm N A φf φc' st.store)
-    (hW : EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
-      ⟨store', st.out⟩ (.closure a) sp r sret m0) :
-    Vsa.Sim.FnArmSpec g N A SL φf φc st d env name params body store' a
-      sp r sret aEnv aExpr m0 ∧
-    Vsa.Sim.EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
-      ⟨store', st.out⟩ (.closure a) sp r sret m0 := by
+    -- the epilogue-entry facts at the widened pair `(φf, φc')`: presence, the
+    -- complete result words, and `store'` survival across the stack region.
+    (hF : EpilogueEntryFacts N A SL φf φc' ⟨store', st.out⟩ sret m0 mpre) :
+    Vsa.Sim.FnArmReturn g N A SL φf φc st d env name params body store' a
+      sp r sret aEnv aExpr m0 := by
   have hArm := fnArmGeom_hArm_offdiag g N A SL φf φc φc' st d env a k armPC calleeLoaded
     name params body store' sp r sret aEnv aExpr m0 v8 v9 v18 out0 mpre
     hkle hklt hkind hslot hcallee hcalleeSurv hexprSurv harmAl htableStk hSeam hEntryRebase
-  have hGeom : FnArmGeom g N A SL φf φc φc' st d env name params body store' a
-      sp r sret aEnv aExpr m0 v8 v9 v18 out0 mpre :=
-    { hpc := hpc, hout := hout, hArm := hArm }
-  obtain ⟨hfr, hcl⟩ := store_size_of_allocClosure st ⟨env, name, params, body⟩ store' a hAlloc
-  exact ⟨fnArmSpec_of_geom g N A SL φf φc φc' st d env name params body store' a
-    sp r sret aEnv aExpr m0 v8 v9 v18 out0 mpre hfr hcl hGeom, hW⟩
+  intro _hAlloc
+  -- the arm run to the epilogue entry (at the widened `φc'`), then the coherent
+  -- epilogue at that pair: `armReturn_of_facts` = `blockD_v_return` with
+  -- `PhiExtends.refl` on frames and the closure-alloc extension `hpc`.
+  exact Triple.seq hArm
+    ((armReturn_of_facts g N A SL φf φc φf φc' st.store.frames.size st.store.closures.size
+      ⟨store', st.out⟩ (.closure a) sp r sret v8 v9 v18 out0 m0
+      (PhiExtends.refl _ _) hpc).conseq (fun _ hpre => ⟨mpre, hpre, hF⟩) (fun _ h => h))
 
 /-- **`fnResid_of_pipeline_wf`** — the same `FnResid` supplier, but with the opaque
 `hEntryRebase` premise DISCHARGED from the honest store well-formedness invariant
@@ -210,16 +217,13 @@ theorem fnResid_of_pipeline_wf
       sp r sret aExpr aEnv m0 v8 v9 v18 out0 mpre)
     -- the honest store well-formedness invariant (closures-in-bounds); DISCHARGES hEntryRebase:
     (hWF : StoreClosuresBounded st.store)
-    (hW : EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
-      ⟨store', st.out⟩ (.closure a) sp r sret m0) :
-    Vsa.Sim.FnArmSpec g N A SL φf φc st d env name params body store' a
-      sp r sret aEnv aExpr m0 ∧
-    Vsa.Sim.EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
-      ⟨store', st.out⟩ (.closure a) sp r sret m0 :=
+    (hF : EpilogueEntryFacts N A SL φf φc' ⟨store', st.out⟩ sret m0 mpre) :
+    Vsa.Sim.FnArmReturn g N A SL φf φc st d env name params body store' a
+      sp r sret aEnv aExpr m0 :=
   fnResid_of_pipeline g N A SL φf φc φc' st d env name params body store' a
     sp r sret aEnv aExpr m0 v8 v9 v18 out0 mpre k armPC calleeLoaded
     hAlloc hpc hout hkle hklt hkind hslot hcallee hcalleeSurv hexprSurv harmAl htableStk hSeam
-    (fun _ hsr => storeRepr_phic_mono hWF hpc hsr) hW
+    (fun _ hsr => storeRepr_phic_mono hWF hpc hsr) hF
 
 /-! ## The `FnResid` top-level supplier — premise-free modulo ONE named bundle
 
@@ -274,8 +278,7 @@ structure FnResidBundle
       (jumpTableBase + 4 * kk + 4 ≤ SL.lo ∨ sp.toNat ≤ jumpTableBase + 4 * kk) ∧
       FnArmSeamRun g N A SL φf φc' st a armPC calleeLoaded name params body store'
         sp r sret aExpr aEnv m0 v8 v9 v18 out0 mpre ∧
-      EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
-        ⟨store', st.out⟩ (.closure a) sp r sret m0
+      EpilogueEntryFacts N A SL φf φc' ⟨store', st.out⟩ sret m0 mpre
 
 /-- **`fnResid_from_bundle`** — SUPPLY `FnResid` from the ∀-closed `FnResidBundle`.
 Intros the `FnResid` ghosts, unpacks the per-ghost residuals, and applies
@@ -290,12 +293,12 @@ theorem fnResid_from_bundle
   intro g N A SL φf φc sp r sret aEnv aExpr m0
   obtain ⟨φc', v8, v9, v18, out0, mpre, kk, armPC, calleeLoaded,
     hpc, hout, hkle, hklt, hkind, hslot, hcallee, hcalleeSurv, hexprSurv,
-    harmAl, htableStk, hSeam, hW⟩ :=
+    harmAl, htableStk, hSeam, hF⟩ :=
     B.perGhost g N A SL φf φc sp r sret aEnv aExpr m0
   exact fnResid_of_pipeline_wf g N A SL φf φc φc' st d env name params body store' a
     sp r sret aEnv aExpr m0 v8 v9 v18 out0 mpre kk armPC calleeLoaded
     B.hAlloc hpc hout hkle hklt hkind hslot hcallee hcalleeSurv hexprSurv harmAl htableStk hSeam
-    B.hWF hW
+    B.hWF hF
 
 #print axioms fnArmGeom_hArm_offdiag
 #print axioms store_size_of_allocClosure

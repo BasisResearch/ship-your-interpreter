@@ -88,31 +88,31 @@ theorem hInitSome_row
 theorem hFcNone_row :
     ∀ (st : SpecSt) (d : Nat) (env : Addr),
       mForCond st d env none st (ForCond.none st d env) := by
-  intro st d env; trivial
+  intro st d env; rfl
 
-/-- `ForCond.some` row — discharges `TermCases.hFcSome` (was the unsatisfiable
-`hFcSome_resid`).  The recursor threads the sub-`EvalE` IH as `_`. -/
+/-- `ForCond.some` row — discharges `TermCases.hFcSome`: the motive retains the
+condition's value, truthiness, derivation, and eval IH. -/
 theorem hFcSome_row :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (c : Expr) (st' : SpecSt) (v : Value)
       (a : EvalE st d env c st' v) (a_1 : v.truthy = true),
       mEvalE st d env c st' v a →
       mForCond st d env (some c) st' (ForCond.some st d env c st' v a a_1) := by
-  intro st d env c st' v a a_1 _hIH; trivial
+  intro st d env c st' v a a_1 hIH; exact ⟨v, a_1, a, hIH.forget⟩
 
 /-- `ExecStep.none` row — discharges `TermCases.hEsNone`. -/
 theorem hEsNone_row :
     ∀ (st : SpecSt) (d : Nat) (env : Addr),
       mExecStep st d env none st (ExecStep.none st d env) := by
-  intro st d env; trivial
+  intro st d env; rfl
 
-/-- `ExecStep.some` row — discharges `TermCases.hEsSome` (was the unsatisfiable
-`hEsSome_resid`).  The recursor threads the sub-`EvalE` IH as `_`. -/
+/-- `ExecStep.some` row — discharges `TermCases.hEsSome`: the motive retains the
+step's derivation and eval IH. -/
 theorem hEsSome_row :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt) (v : Value)
       (a : EvalE st d env e st' v),
       mEvalE st d env e st' v a →
       mExecStep st d env (some e) st' (ExecStep.some st d env e st' v a) := by
-  intro st d env e st' v a _hIH; trivial
+  intro st d env e st' v a hIH; exact ⟨v, a, hIH.forget⟩
 
 #print axioms hInitNone_row
 #print axioms hInitSome_row

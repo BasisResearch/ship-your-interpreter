@@ -93,6 +93,28 @@ abbrev LeafWiden
       st' v sp r sret m0)
     N A φf φc st'.store.frames.size st'.store.closures.size st' m0 (stackFoot SL)
 
+/-- The identity-map leaf widener (`ReturnWiden` at the leaf exit): presence plus
+store survival at the ENTRY maps.  The variable leaf copies a frame slot, so its
+result is represented at the entry closures map; this widener lets it return
+coherently (`evalVarSimR`) without a closure bound on the looked-up value. -/
+abbrev LeafReturnWiden
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st' : Vsa.While.St) (v : Value) (sp r sret : BitVec 64) (m0 : Mem) : Prop :=
+  ReturnWiden (EvalExit g N A SL φf φc st'.store.frames.size st'.store.closures.size
+      st' v sp r sret m0)
+    N A SL φf φc st' m0
+
+/-- The identity-map widener is a `LeafWiden` (witnessed at `PhiExtends.refl`). -/
+theorem LeafReturnWiden.toLeafWiden
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st' : Vsa.While.St} {v : Value} {sp r sret : BitVec 64} {m0 : Mem}
+    (h : LeafReturnWiden g N A SL φf φc st' v sp r sret m0) :
+    LeafWiden g N A SL φf φc st' v sp r sret m0 where
+  pres := h.pres
+  surv := fun c hc => ⟨φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, h.surv c hc⟩
+
 /-! ## Wave 47e — the PINNED exit + widener (`LeafExitPin` re-land)
 
 The four leaf sims now conclude the PINNED exit (`Eval*SimP`: `EvalExit ∧
@@ -284,11 +306,106 @@ theorem evalVarSimD
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st v sp r sret m0) := by
   intro c hEntry
-  obtain ⟨c', hs, hExit⟩ :=
+  obtain ⟨c', hs, hExit, _⟩ :=
     evalVarSim g N A SL φf φc st d a x v sp r sret aEnv aExpr m0 hE c hEntry
   exact ⟨c', hs, evalExitD_of_evalExit hExit hW hwords⟩
 
+/-! ## The coherent leaf returns (`EvalReturn`, the `mEvalE` motive shape)
+
+The four pinned leaves return through `pinnedLeafReturn`; the variable leaf
+returns through `evalReturn_of_exit_id` from the identity-map result its arm
+exposes (`evalVarSim`) and the identity-map widener `LeafReturnWiden`. -/
+
+/-- **`evalIntSimR`** — the `EvalE.int` leaf at `EvalReturn`. -/
+theorem evalIntSimR
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (a : Addr) (n : Int)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
+    (hE : EvalE st d a (.int n) st (.int n))
+    (hW : LeafWidenP g N A SL φf φc st (.int n) sp r sret m0) :
+    Triple
+      (EvalEntry g N A SL φf φc st d a (.int n) sp r sret aEnv aExpr m0)
+      (EvalReturn g N A SL φf φc st.store.frames.size st.store.closures.size
+        st (.int n) sp r sret m0 (fun _ _ _ => True)) :=
+  pinnedLeafReturn (evalIntSimP g N A SL φf φc st d a n sp r sret aEnv aExpr m0)
+    hW (fun _ he => he.mem ▸ he.sret_words) True.intro
+
+/-- **`evalNullSimR`** — the `EvalE.null` leaf at `EvalReturn`. -/
+theorem evalNullSimR
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (a : Addr)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
+    (hE : EvalE st d a .null st .null)
+    (hW : LeafWidenP g N A SL φf φc st .null sp r sret m0)
+    (hwords : ValueWordsTotal m0 sret.toNat) :
+    Triple
+      (EvalNullEntry g N A SL φf φc st d a sp r sret aEnv aExpr m0)
+      (EvalReturn g N A SL φf φc st.store.frames.size st.store.closures.size
+        st .null sp r sret m0 (fun _ _ _ => True)) :=
+  pinnedLeafReturn (evalNullSimP g N A SL φf φc st d a sp r sret aEnv aExpr m0)
+    hW (fun _ _ => hwords) True.intro
+
+/-- **`evalBoolSimR`** — the `EvalE.bool` leaf at `EvalReturn`. -/
+theorem evalBoolSimR
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (a : Addr) (b : Bool)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
+    (hE : EvalE st d a (.bool b) st (.bool b))
+    (hW : LeafWidenP g N A SL φf φc st (.bool b) sp r sret m0)
+    (hwords : ValueWordsTotal m0 sret.toNat) :
+    Triple
+      (EvalBoolEntry g N A SL φf φc st d a b sp r sret aEnv aExpr m0)
+      (EvalReturn g N A SL φf φc st.store.frames.size st.store.closures.size
+        st (.bool b) sp r sret m0 (fun _ _ _ => True)) :=
+  pinnedLeafReturn (evalBoolSimP g N A SL φf φc st d a b sp r sret aEnv aExpr m0)
+    hW (fun _ _ => hwords) True.intro
+
+/-- **`evalStrSimR`** — the `EvalE.str` leaf at `EvalReturn`. -/
+theorem evalStrSimR
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (a : Addr) (s : String)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
+    (hE : EvalE st d a (.str s) st (.str s))
+    (hW : LeafWidenP g N A SL φf φc st (.str s) sp r sret m0)
+    (hwords : ValueWordsTotal m0 sret.toNat) :
+    Triple
+      (EvalStrEntry g N A SL φf φc st d a s sp r sret aEnv aExpr m0)
+      (EvalReturn g N A SL φf φc st.store.frames.size st.store.closures.size
+        st (.str s) sp r sret m0 (fun _ _ _ => True)) :=
+  pinnedLeafReturn (evalStrSimP g N A SL φf φc st d a s sp r sret aEnv aExpr m0)
+    hW (fun _ _ => hwords) True.intro
+
+/-- **`evalVarSimR`** — the `EvalE.var` leaf at `EvalReturn`: the arm's exposed
+identity-map result (the copied frame slot) and the identity-map widener select
+the entry maps for both the value and the store. -/
+theorem evalVarSimR
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (a : Addr) (x : String) (v : Value)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
+    (hE : EvalE st d a (.var x) st v)
+    (hW : LeafReturnWiden g N A SL φf φc st v sp r sret m0)
+    (hwords : ValueWordsTotal m0 sret.toNat) :
+    Triple
+      (EvalVarEntry g N A SL φf φc st d a x v sp r sret aEnv aExpr m0)
+      (EvalReturn g N A SL φf φc st.store.frames.size st.store.closures.size
+        st v sp r sret m0 (fun _ _ _ => True)) := by
+  intro c hEntry
+  obtain ⟨c', hs, hExit, hval⟩ :=
+    evalVarSim g N A SL φf φc st d a x v sp r sret aEnv aExpr m0 hE c hEntry
+  exact ⟨c', hs, evalReturn_of_exit_id hExit hval hW hwords⟩
+
 #print axioms pinnedLeafReturn
 #print axioms pinnedLeafExitD
+#print axioms LeafReturnWiden.toLeafWiden
+#print axioms evalIntSimR
+#print axioms evalNullSimR
+#print axioms evalBoolSimR
+#print axioms evalStrSimR
+#print axioms evalVarSimR
 
 end Vsa.Sim

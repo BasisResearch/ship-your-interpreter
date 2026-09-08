@@ -8,6 +8,9 @@ import Vsa.Sim.TermCaseBundle
 # `TermRouting` — mechanical term-side case rows (step-3, GENERATED)
 
 Each `mEvalE`-motive minor premise of `term_sim_of_cases`/`execSeq_sim_of_cases`
+(the coherent `EvalReturnIH TrivialOwned`; the leaves return through the `eval*SimR`
+suppliers, the unary/logical arms' boolean/integer results through
+`EvalIH.coherent_of_bounded`)
 (`TermSimClose.lean`) is `EvalIH …` by definitional unfolding.  A `<case>_row`
 adapter marshals the corresponding landed simulation lemma into that slot.
 
@@ -41,15 +44,14 @@ def IntLeafResid (st : SpecSt) (n : Int) : Prop :=
     Vsa.Sim.EvalEntry g N A SL φf φc st d env (.int n) sp r sret aEnv aExpr m0 c →
     Vsa.Sim.LeafWidenP g N A SL φf φc st (.int n) sp r sret m0
 
-/-- Route `hInt` → `evalIntSimD`. -/
+/-- Route `hInt` → `evalIntSimR`. -/
 theorem eval_int_row (hR : ∀ st n, IntLeafResid st n) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (n : Int),
       mEvalE st d env (Expr.int n) st (Value.int n) (EvalE.int st d env n) := by
   intro st d env n
-  show Vsa.Sim.EvalIH st d env (.int n) st (.int n)
-  intro g N A SL φf φc sp r sret aEnv aExpr m0
+  refine ⟨fun g N A SL φf φc sp r sret aEnv aExpr m0 => ?_⟩
   intro c hc
-  exact Vsa.Sim.evalIntSimD g N A SL φf φc st d env n sp r sret aEnv aExpr m0
+  exact Vsa.Sim.evalIntSimR g N A SL φf φc st d env n sp r sret aEnv aExpr m0
     (EvalE.int st d env n)
     (hR st n g N A SL φf φc d env sp r sret aEnv aExpr m0 c hc) c hc
 
@@ -67,13 +69,12 @@ def NullLeafResid (st : SpecSt) : Prop :=
     ((0x80019f58 : Nat) + 16 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58 + 12) ∧
     Vsa.Sim.LeafWidenP g N A SL φf φc st .null sp r sret m0
 
-/-- Route `hNull` → `evalNullSimD`, bridging `EvalEntry → EvalNullEntry`. -/
+/-- Route `hNull` → `evalNullSimR`, bridging `EvalEntry → EvalNullEntry`. -/
 theorem eval_null_row (hR : ∀ st, NullLeafResid st) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr),
       mEvalE st d env Expr.null st Value.null (EvalE.null st d env) := by
   intro st d env
-  show Vsa.Sim.EvalIH st d env .null st .null
-  intro g N A SL φf φc sp r sret aEnv aExpr m0
+  refine ⟨fun g N A SL φf φc sp r sret aEnv aExpr m0 => ?_⟩
   intro c hc
   obtain ⟨hvnc, hvns, hvnl, hns, htsd, hW⟩ :=
     hR st g N A SL φf φc d env sp r sret aEnv aExpr m0 c hc
@@ -89,7 +90,7 @@ theorem eval_null_row (hR : ∀ st, NullLeafResid st) :
       x13_defined := hc.x13_defined,
       envReg := hc.envReg, sret_vnullcode_disjoint := hvnc, vnullcode_stack_disjoint := hvns, value_null_code := hvnl, null_slot := hns,
       table_stack_disjoint := htsd }
-  exact Vsa.Sim.evalNullSimD g N A SL φf φc st d env sp r sret aEnv aExpr m0
+  exact Vsa.Sim.evalNullSimR g N A SL φf φc st d env sp r sret aEnv aExpr m0
     (EvalE.null st d env) hW (hc.mem ▸ hc.sret_words) c hEntry
 
 /-- The bool-leaf residual: the `LeafWiden` widening + the callee geometry
@@ -106,13 +107,12 @@ def BoolLeafResid (st : SpecSt) (b : Bool) : Prop :=
     ((0x80019f58 : Nat) + 16 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58 + 8) ∧
     Vsa.Sim.LeafWidenP g N A SL φf φc st (.bool b) sp r sret m0
 
-/-- Route `hBool` → `evalBoolSimD`, bridging `EvalEntry → EvalBoolEntry`. -/
+/-- Route `hBool` → `evalBoolSimR`, bridging `EvalEntry → EvalBoolEntry`. -/
 theorem eval_bool_row (hR : ∀ st b, BoolLeafResid st b) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (b : Bool),
       mEvalE st d env (Expr.bool b) st (Value.bool b) (EvalE.bool st d env b) := by
   intro st d env b
-  show Vsa.Sim.EvalIH st d env (.bool b) st (.bool b)
-  intro g N A SL φf φc sp r sret aEnv aExpr m0
+  refine ⟨fun g N A SL φf φc sp r sret aEnv aExpr m0 => ?_⟩
   intro c hc
   obtain ⟨hvbc, hvbs, hvbl, hbs, htsd, hW⟩ :=
     hR st b g N A SL φf φc d env sp r sret aEnv aExpr m0 c hc
@@ -128,7 +128,7 @@ theorem eval_bool_row (hR : ∀ st b, BoolLeafResid st b) :
       x13_defined := hc.x13_defined,
       envReg := hc.envReg, sret_vboolcode_disjoint := hvbc, vboolcode_stack_disjoint := hvbs, value_bool_code := hvbl, bool_slot := hbs,
       table_stack_disjoint := htsd }
-  exact Vsa.Sim.evalBoolSimD g N A SL φf φc st d env b sp r sret aEnv aExpr m0
+  exact Vsa.Sim.evalBoolSimR g N A SL φf φc st d env b sp r sret aEnv aExpr m0
     (EvalE.bool st d env b) hW (hc.mem ▸ hc.sret_words) c hEntry
 
 /-- The str-leaf residual: the `LeafWiden` widening + the callee geometry
@@ -149,18 +149,17 @@ def StrLeafResid (st : SpecSt) (s : String) : Prop :=
     ((0x80019f58 : Nat) + 8 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58 + 4) ∧
     Vsa.Sim.LeafWidenP g N A SL φf φc st (.str s) sp r sret m0
 
-/-- Route `hStr` → `evalStrSimD`, bridging `EvalEntry → EvalStrEntry`. -/
+/-- Route `hStr` → `evalStrSimR`, bridging `EvalEntry → EvalStrEntry`. -/
 theorem eval_str_row (hR : ∀ st s, StrLeafResid st s) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (s : String),
       mEvalE st d env (Expr.str s) st (Value.str s) (EvalE.str st d env s) := by
   intro st d env s
-  show Vsa.Sim.EvalIH st d env (.str s) st (.str s)
-  intro g N A SL φf φc sp r sret aEnv aExpr m0
+  refine ⟨fun g N A SL φf φc sp r sret aEnv aExpr m0 => ?_⟩
   intro c hc
   obtain ⟨hssd, hsrd, hvsc, hvss, hvsl, hsl, htsd, hW⟩ :=
     hR st s g N A SL φf φc d env sp r sret aEnv aExpr m0 c hc
   have hEntry := Vsa.Sim.EvalStrEntry.of_entry hc hssd hsrd hvsc hvss hvsl hsl htsd
-  exact Vsa.Sim.evalStrSimD g N A SL φf φc st d env s sp r sret aEnv aExpr m0
+  exact Vsa.Sim.evalStrSimR g N A SL φf φc st d env s sp r sret aEnv aExpr m0
     (EvalE.str st d env s) hW (hc.mem ▸ hc.sret_words) c hEntry
 
 /-! ## Recursive rows. -/
@@ -182,7 +181,7 @@ theorem eval_neg_row (hR : ∀ st esub, NegResid st esub) :
       mEvalE st d env (Expr.unary UnOp.neg e) st' (Value.int (wrap64 (-n)))
         (EvalE.neg st d env e st' n a) := by
   intro st d env esub st' n hE ihE
-  exact hR st esub d env st' n hE ihE
+  exact (hR st esub d env st' n hE ihE.forget).coherent_of_bounded True.intro
 
 /-- The exact logical-not trace obligation, tied to the child state and value
 by its `EvalE` derivation and `EvalIH`. -/
@@ -200,7 +199,7 @@ theorem eval_not_row (hR : ∀ esub vsub, NotResid esub vsub) :
       mEvalE st d env (Expr.unary UnOp.not e) st' (Value.bool (!v.truthy))
         (EvalE.not st d env e st' v a) := by
   intro st d env esub st' vsub hE ihE
-  exact hR esub vsub st d env st' hE ihE
+  exact (hR esub vsub st d env st' hE ihE.forget).coherent_of_bounded True.intro
 
 /-- The exact short-circuit OR trace obligation.  The truthy branch equation
 and left-child derivation are explicit indices of the residual. -/
@@ -218,7 +217,7 @@ theorem eval_orTrue_row (hR : ∀ el er vl, OrTrueResid el er vl) :
       mEvalE st d env (Expr.logical LogOp.or l r) st' (Value.bool true)
         (EvalE.orTrue st d env l r st' lv a a_1) := by
   intro st d env el er st' vl hE hvl ihE
-  exact hR el er vl st d env st' hE hvl ihE
+  exact (hR el er vl st d env st' hE hvl ihE.forget).coherent_of_bounded True.intro
 
 /-- The exact short-circuit AND trace obligation.  The falsy branch equation
 and left-child derivation are explicit indices of the residual. -/
@@ -236,7 +235,7 @@ theorem eval_andFalse_row (hR : ∀ el er vl, AndFalseResid el er vl) :
       mEvalE st d env (Expr.logical LogOp.and l r) st' (Value.bool false)
         (EvalE.andFalse st d env l r st' lv a a_1) := by
   intro st d env el er st' vl hE hvl ihE
-  exact hR el er vl st d env st' hE hvl ihE
+  exact (hR el er vl st d env st' hE hvl ihE.forget).coherent_of_bounded True.intro
 
 /-- The exact fall-through OR trace obligation.  Its right derivation starts
 at precisely the left derivation's output state, and both `EvalIH` premises
@@ -257,7 +256,8 @@ theorem eval_orFalse_row (hR : ∀ st' st'' el er vl vr, OrFalseResid st' st'' e
       mEvalE st d env (Expr.logical LogOp.or l r) st'' (Value.bool rv.truthy)
         (EvalE.orFalse st d env l r st' st'' lv rv a a_1 a_2) := by
   intro st d env el er st' st'' vl vr hEl hvl hEr ihL ihR
-  exact hR st' st'' el er vl vr st d env hEl hvl hEr ihL ihR
+  exact (hR st' st'' el er vl vr st d env hEl hvl hEr ihL.forget ihR.forget).coherent_of_bounded
+    True.intro
 
 /-- The exact fall-through AND trace obligation.  Its right derivation starts
 at precisely the left derivation's output state, with the truthy branch
@@ -278,7 +278,8 @@ theorem eval_andTrue_row (hR : ∀ st' st'' el er vl vr, AndTrueResid st' st'' e
       mEvalE st d env (Expr.logical LogOp.and l r) st'' (Value.bool rv.truthy)
         (EvalE.andTrue st d env l r st' st'' lv rv a a_1 a_2) := by
   intro st d env el er st' st'' vl vr hEl hvl hEr ihL ihR
-  exact hR st' st'' el er vl vr st d env hEl hvl hEr ihL ihR
+  exact (hR st' st'' el er vl vr st d env hEl hvl hEr ihL.forget ihR.forget).coherent_of_bounded
+    True.intro
 
 /-! ## Residual-interface regressions
 

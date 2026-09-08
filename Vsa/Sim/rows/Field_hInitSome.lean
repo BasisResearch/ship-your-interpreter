@@ -230,6 +230,9 @@ structure InitSomeStage
     (R = Register.x8 ∨ R = Register.x9 ∨ R = Register.x18 ∨
       R = Register.x19 ∨ R = Register.x2) ∨ cfg.σ.regs.get? R = g R
   minstret : ∃ v, cfg.σ.regs.get? Register.minstret = some v
+  parentSp : g Register.x2 = some sp
+  ra_align : r.toNat % 4 = 0
+  mem_extends : MemExtends m0 ment
 
 /-- Execute the present-initializer discriminator to its fallthrough. -/
 theorem initSome_to_stage
@@ -281,7 +284,8 @@ theorem initSome_to_stage
     ?_, ?_, ?_, hinitPtr, h.outer_addr, ?_, h.env_valid, h.store_survives,
     h.stack_ram, h.stack_win, h.code_stack_disjoint, ?_, h.saved_ra,
     h.saved_s0, h.saved_s1, h.saved_s2, h.saved_s3, ?_, ?_, h.stack_budget,
-    h.stmt_bodies, h.store_bodies, h.ground, h.mem_frame, ?_, hmi'⟩
+    h.stmt_bodies, h.store_bodies, h.ground, h.mem_frame, ?_, hmi',
+    h.parentSp, h.ra_align, h.mem_extends⟩
   · exact (hframe Register.x8 (by decide) (by decide)).trans h.s0
   · exact (hframe Register.x9 (by decide) (by decide)).trans h.s1
   · exact (hframe Register.x18 (by decide) (by decide)).trans h.s2

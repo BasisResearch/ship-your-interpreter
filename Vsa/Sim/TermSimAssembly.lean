@@ -1,5 +1,6 @@
 import Vsa.Sim.InductionScaffold
 import Vsa.Sim.EvalRecCommon
+import Vsa.Sim.EvalReturn
 import Vsa.Sim.ExecBlock
 import Vsa.Sim.ExecDispatch
 import Vsa.Sim.ExecSeqIndexed
@@ -19,7 +20,7 @@ induction, taking the per-constructor case Triples as explicit hypotheses.
 
 * **The nine motives** (`§1`) are the honest simulation projections, using the
   *widened* exit predicates the landed recursive cases actually target:
-  - `mEvalE`  = `EvalRecCommon.EvalIH`  (`EvalEntry → EvalExitD`),
+  - `mEvalE`  = `EvalReturnIH TrivialOwned` (`EvalEntry → EvalReturn`; `.forget` = `EvalIH`),
   - `mExecS`  = `ExecBlock.ExecIH`      (`ExecEntry → ExecExitD`),
   - `mEvalArgs`/`mCall`/`mExecInit`/`mForLoop`/`mForCond`/`mExecStep`/`mExecSeq`
     are the `SegEntry → SegExit` Triples (`InductionScaffold` skeletons), at the
@@ -76,12 +77,17 @@ upgraded to `EvalExitD` for the presence/survival facts recursive callers need);
 the other seven use the `InductionScaffold` `SegEntry → SegExit` skeleton
 Triples, at the real decoded PCs where `CallEntry` provides them. -/
 
-/-- `EvalE` motive: the widened simulation IH (`EvalEntry → EvalExitD`). This is
-`EvalRecCommon.EvalIH`, which every recursive `EvalE` case both consumes (for its
-sub-derivations) and produces. -/
+/-- `EvalE` motive: the coherent simulation IH (`EvalEntry → EvalReturn`) at the
+trivial ownership index `TrivialOwned` — the weakest index every landed
+coherent supplier is stated at. `EvalReturn` retains the widened exit
+(`EvalExitD`) together with ONE selected map pair for the result, the store, and
+its survival, so a child that allocates a closure (a `fn` literal, or a call
+returning one) hands its parent a value and store represented at the same maps.
+Consumers that need only the widened exit project it with
+`EvalReturnIH.forget`. -/
 def mEvalE (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt)
     (v : Value) (_h : EvalE st d env e st' v) : Prop :=
-  EvalIH st d env e st' v
+  EvalReturnIH TrivialOwned st d env e st' v
 
 /-- `ExecS` motive: the widened statement IH (`ExecEntry → ExecExitD`), i.e.
 `ExecBlock.ExecIH`. -/
@@ -250,6 +256,12 @@ structure ExecInitReady
     (R = Register.x8 ∨ R = Register.x9 ∨ R = Register.x18 ∨
       R = Register.x19 ∨ R = Register.x2) ∨ cfg.σ.regs.get? R = g R
   minstret : ∃ v, cfg.σ.regs.get? Register.minstret = some v
+  /-- The parent's stack pointer ghost, restored by the shared epilogue. -/
+  parentSp : g Register.x2 = some sp
+  /-- The return address the epilogue jumps to is 4-aligned. -/
+  ra_align : r.toNat % 4 = 0
+  /-- Every byte present at the statement entry is still present. -/
+  mem_extends : MemExtends m0 ment
 
 /-- Real loop-head state at `0x8000426c`. -/
 structure ForLoopReady
@@ -303,6 +315,12 @@ structure ForLoopReady
     (R = Register.x8 ∨ R = Register.x9 ∨ R = Register.x18 ∨
       R = Register.x19 ∨ R = Register.x2) ∨ cfg.σ.regs.get? R = g R
   minstret : ∃ v, cfg.σ.regs.get? Register.minstret = some v
+  /-- The parent's stack pointer ghost, restored by the shared epilogue. -/
+  parentSp : g Register.x2 = some sp
+  /-- The return address the epilogue jumps to is 4-aligned. -/
+  ra_align : r.toNat % 4 = 0
+  /-- Every byte present at the statement entry is still present. -/
+  mem_extends : MemExtends m0 ment
 
 /-- Initializer continuation at one coherent extension of the entry maps. -/
 structure ExecInitExit
@@ -449,21 +467,29 @@ def mForLoop (st : SpecSt) (d : Nat) (env : Addr) (cnd step : Option Expr)
     (_h : ForLoop st d env cnd step b st' status) : Prop :=
   ForLoopCtxIH st d env cnd step b st' status
 
-/-- `ForCond` motive.  `True` — dead recursor plumbing; see `mExecInit`.  The
-`.some` case (`ForCond.some`, truthy-cond) mutates the store, so a same-PC span is
-unsatisfiable; the honest cond work flows through `execForStartSim`'s oracle, not
-this motive.  Fillable by `ScaffoldRows.{hFcNone_row,hFcSome_row}` = `trivial`. -/
-def mForCond (_st : SpecSt) (_d : Nat) (_env : Addr) (_cnd : Option Expr)
-    (_st' : SpecSt) (_h : ForCond _st _d _env _cnd _st') : Prop :=
-  True
+/-- What the for-loop rows learn from a `ForCond` sub-derivation: the identity
+of the state when there is no condition, and the condition's value, truthiness,
+derivation, and widened eval IH when there is one. -/
+def ForCondIH (st : SpecSt) (d : Nat) (env : Addr) : Option Expr → SpecSt → Prop
+  | none, st' => st' = st
+  | some c, st' => ∃ v : Value, v.truthy = true ∧ EvalE st d env c st' v ∧ EvalIH st d env c st' v
 
-/-- `ExecStep` motive.  `True` — dead recursor plumbing; see `mExecInit`.  The
-`.some` case (`ExecStep.some`, step-expr) mutates the store, so a same-PC span is
-unsatisfiable; the honest step work flows through `execForStartSim`'s oracle, not
-this motive.  Fillable by `ScaffoldRows.{hEsNone_row,hEsSome_row}` = `trivial`. -/
-def mExecStep (_st : SpecSt) (_d : Nat) (_env : Addr) (_step : Option Expr)
-    (_st' : SpecSt) (_h : ExecStep _st _d _env _step _st') : Prop :=
-  True
+/-- `ForCond` motive: the condition's eval IH (or the state identity).
+Fillable by `ScaffoldRows.{hFcNone_row,hFcSome_row}`. -/
+def mForCond (st : SpecSt) (d : Nat) (env : Addr) (cnd : Option Expr)
+    (st' : SpecSt) (_h : ForCond st d env cnd st') : Prop :=
+  ForCondIH st d env cnd st'
+
+/-- What the for-loop rows learn from an `ExecStep` sub-derivation. -/
+def ExecStepIH (st : SpecSt) (d : Nat) (env : Addr) : Option Expr → SpecSt → Prop
+  | none, st' => st' = st
+  | some e, st' => ∃ v : Value, EvalE st d env e st' v ∧ EvalIH st d env e st' v
+
+/-- `ExecStep` motive: the step's eval IH (or the state identity).
+Fillable by `ScaffoldRows.{hEsNone_row,hEsSome_row}`. -/
+def mExecStep (st : SpecSt) (d : Nat) (env : Addr) (step : Option Expr)
+    (st' : SpecSt) (_h : ExecStep st d env step st') : Prop :=
+  ExecStepIH st d env step st'
 
 /-! ### The seq-loop span table + ground (ITEM ZERO / falsity #12, shape 3)
 
@@ -568,7 +594,7 @@ the recursor applied to these hypotheses.
 This TYPE-CHECKS iff the nine real motives compose through every constructor of
 the mutual family — it is the kernel-checked assembly of the whole simulation
 induction with real motives (not the `True`-motive plumbing check of
-`InductionScaffold`). It concludes `mEvalE … t = EvalIH …`, the widened
+`InductionScaffold`). It concludes `mEvalE … t = EvalReturnIH TrivialOwned …`, the coherent
 `EvalE`-simulation Triple, for an arbitrary `EvalE` derivation.
 
 Each hypothesis `h<Ctor>` is discharged — conditionally on that case's named
@@ -585,11 +611,12 @@ named landed case theorem. The case ↔ hypothesis mapping (module doc):
 * Call: hCallAssertOk←`callAssertOk`; hCallClosure (crux, env_define-blocked),
   hCallPrint/hCallPrintln (native output-append, template ready) are the open
   minor premises taken as hypotheses.
-* ExecS: hSExpr←`execExprSim`, hSVarInit←`execVarDeclSim`, hSVarNull←
-  `execVarNullSim`, hSBlock←`execBlockSim`, hSIfTrue←`execIfTrueSim`,
-  hSIfFalse←`execIfFalseSim`, hSIfNone←`execIfNoneSim`, hSWhile*←`execWhileSim`,
-  hSForStart←`execForStartSim`, hSRet←`execRetSim`, hSRetNull←`execRetNullSim`,
-  hSBrk←`execBrkSim`, hSCont←`execContSim`.
+* ExecS: hSExpr←`execExprSim`, hSVarInit←`envDefineTail_run` (rows/Field_hSVarInitClosed),
+  hSVarNull←`varNull_run` (rows/Field_hSVarNullClosed), hSBlock←`execBlockSim`,
+  hSIfTrue←`execIfTrueSim`, hSIfFalse←`execIfFalseSim`, hSIfNone←`execIfNoneSim`,
+  hSWhile*←`execWhileSim`, hSForStart←`execForStartSim`, hSRet←`execRetSim`,
+  hSRetNull←`retNull_run` (rows/Field_hSRetNullClosed), hSBrk←`execBrkSim`,
+  hSCont←`execContSim`.
 * ExecSeq: hSeqNil←`execSeqNil`, hSeqConsNormal/hSeqConsAbrupt←`execSeqLoop`
   (the per-iteration rule that consumes these).
 * ForLoop: hFl*←`execForLoopBody`; ForCond/ExecStep/ExecInit (hFc*/hEs*/hInit*)

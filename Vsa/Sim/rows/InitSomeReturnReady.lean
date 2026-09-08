@@ -211,7 +211,10 @@ theorem initSomeReturnReady
             hNextPC, hMinstretIncrement⟩).trans
             ((hc.exit.frame R ⟨habi, hPC, hNextPC, hMinstret,
               hMinstretIncrement, hMcycle, hMtime, hMip⟩).trans hcall)
-      minstret := hgood.minstret }
+      minstret := hgood.minstret
+      parentSp := h.stage.parentSp
+      ra_align := h.stage.ra_align
+      mem_extends := by rw [hmem]; exact h.stage.mem_extends.trans hc.memExtends }
 
 end Vsa.Sim.ScaffoldRows
 

@@ -1,0 +1,5 @@
+# `jal value_truthy` sites of the three condition arms (while 0x8000406c, if 0x80004218,
+# for 0x800042a0).  jal immediates are the decoder's unscrambled imm21 values.
+8000406c	fc0fe0ef	jal	1	1fe7c0
+80004218	e14fe0ef	jal	1	1fe614
+800042a0	d8cfe0ef	jal	1	1fe58c

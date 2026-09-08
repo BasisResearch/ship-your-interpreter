@@ -603,8 +603,8 @@ theorem induction_completed_leaf_cases_check :
     exact evalNullSim g N A SL φf φc st d env sp r sret aEnv aExpr m0
       (EvalE.null st d env)
   · intro st d env x v hget g N A SL φf φc sp r sret aEnv aExpr m0
-    exact evalVarSim g N A SL φf φc st d env x v sp r sret aEnv aExpr m0
-      (EvalE.var st d env x v hget)
+    exact (evalVarSim g N A SL φf φc st d env x v sp r sret aEnv aExpr m0
+      (EvalE.var st d env x v hget)).conseq (fun _ h => h) (fun _ h => h.1)
   all_goals (intros; trivial)
 
 #print axioms induction_completed_leaf_cases_check

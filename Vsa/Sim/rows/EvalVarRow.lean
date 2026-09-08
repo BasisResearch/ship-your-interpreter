@@ -55,7 +55,9 @@ local notation "SpecSt" => Vsa.While.St
 (`var_stack_disjoint`, `sret_arena_disjoint`, `env_get_code`,
 `env_get_stack_disjoint`, `var_slot`, `table_stack_disjoint`), the honest
 `env_get`-FOUND-case caller-linkage oracle `env_get_found` (the ONE open `O`-class
-field), and the `LeafWiden` exit widening.  The lookup premise binds `v` to the
+field), and the identity-map exit widening `LeafReturnWiden` (the copied slot is
+represented at the entry closures map, so the row returns coherently without a
+closure bound on `v`).  The lookup premise binds `v` to the
 semantic variable lookup before any machine obligation is required.  ∀-closed over
 the layout ghosts AND the entry config `c` (the oracle's statement mentions
 `c.σ.mem`/`c.σ.sailOutput`). -/
@@ -82,7 +84,7 @@ def VarLeafResid (st : SpecSt) (x : String) (v : Value) : Prop :=
         c'.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)))
       (fun c' => ∃ mpc v8 v9 v18,
         Vsa.Sim.VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 c.σ.sailOutput m0 mpc c') ∧
-    Vsa.Sim.LeafWiden g N A SL φf φc st v sp r sret m0
+    Vsa.Sim.LeafReturnWiden g N A SL φf φc st v sp r sret m0
 
 /-- Semantic extension for `hVar`.  The executable field remains separate.
 The store field is derived from `Store.get?`; it is not a mined candidate. -/
@@ -95,7 +97,7 @@ theorem varResidualExtension_of_machine (st : SpecSt) (x : String) (v : Value)
     (h : VarLeafResid st x v) : VarResidualExtension st x v :=
   ⟨h, fun _ hreach hget => hreach.varBridge hget⟩
 
-/-- Route `hVar` → `evalVarSimD`, bridging `EvalEntry → EvalVarEntry`.
+/-- Route `hVar` → `evalVarSimR`, bridging `EvalEntry → EvalVarEntry`.
 
 Conditional: the residual `VarLeafResid` threads the `env_get_found` caller-linkage
 oracle (see the header — dischargeable from `env_get_found_uncond''` once the
@@ -105,8 +107,7 @@ theorem eval_var_row (hR : ∀ st x v, VarLeafResid st x v) :
       (a : st.store.get? env x = some v),
       mEvalE st d env (Expr.var x) st v (EvalE.var st d env x v a) := by
   intro st d env x v hlookup
-  show Vsa.Sim.EvalIH st d env (.var x) st v
-  intro g N A SL φf φc sp r sret aEnv aExpr m0
+  refine ⟨fun g N A SL φf φc sp r sret aEnv aExpr m0 => ?_⟩
   intro c hc
   obtain ⟨hvsd, hsad, hegc, hegsd, hvs, htsd, hfound, hW⟩ :=
     hR st x v g N A SL φf φc d env sp r sret aEnv aExpr m0 c hlookup hc
@@ -127,7 +128,7 @@ theorem eval_var_row (hR : ∀ st x v, VarLeafResid st x v) :
       var_stack_disjoint := hvsd, sret_arena_disjoint := hsad, env_get_code := hegc,
       env_get_stack_disjoint := hegsd, var_slot := hvs, table_stack_disjoint := htsd,
       env_get_found := hfound }
-  exact Vsa.Sim.evalVarSimD g N A SL φf φc st d env x v sp r sret aEnv aExpr m0
+  exact Vsa.Sim.evalVarSimR g N A SL φf φc st d env x v sp r sret aEnv aExpr m0
     (EvalE.var st d env x v hlookup) hW (hc.mem ▸ hc.sret_words) c hEntry
 
 /-- Variable row consuming the semantic extension. -/
@@ -148,7 +149,7 @@ theorem varLeafResid_leafWiden_of_lookup (st : SpecSt) (x : String) (v : Value)
     (hlookup : st.store.get? env x = some v)
     (hc : Vsa.Sim.EvalEntry g N A SL φf φc st d env (.var x)
       sp r sret aEnv aExpr m0 c) :
-    Vsa.Sim.LeafWiden g N A SL φf φc st v sp r sret m0 := by
+    Vsa.Sim.LeafReturnWiden g N A SL φf φc st v sp r sret m0 := by
   obtain ⟨_, _, _, _, _, _, _, hW⟩ :=
     hR g N A SL φf φc d env sp r sret aEnv aExpr m0 c hlookup hc
   exact hW

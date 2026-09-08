@@ -199,14 +199,14 @@ def AssignArmMachine (st : SpecSt) (d : Nat) (env : Addr) (x : String) (e : Expr
     (st' : SpecSt) (v : Value) (store'' : Store) : Prop :=
   EvalE st d env e st' v →
   st'.store.set? env x v = some store'' →
-  EvalIH st d env e st' v →
+  EvalReturnIH TrivialOwned st d env e st' v →
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
     Triple
       (EvalEntry g N A SL φf φc st d env (.assign x e) sp r sret aEnv aExpr m0)
-      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
-        ⟨store'', st'.out⟩ v sp r sret m0)
+      (EvalReturn g N A SL φf φc st.store.frames.size st.store.closures.size
+        ⟨store'', st'.out⟩ v sp r sret m0 (fun _ _ _ => True))
 
 /-- **`assignArmSpec_of_machine`** — discharge `AssignArmSpec` from
 `AssignArmMachine`.  `AssignArmSpec`'s conclusion `EvalIH st d env (.assign x e)
@@ -222,9 +222,9 @@ theorem assignArmSpec_of_machine (st : SpecSt) (d : Nat) (env : Addr) (x : Strin
   -- `AssignArmSpec := EvalE … → set? … = some store'' → EvalIH … e →
   -- EvalIH … (.assign x e)`.
   intro hEval hset hIH
-  -- `EvalIH … (.assign x e) ⟨store'', st'.out⟩ v` unfolds to the ∀-closed Triple.
-  intro g N A SL φf φc sp r sret aEnv aExpr m0
-  exact hM hEval hset hIH g N A SL φf φc sp r sret aEnv aExpr m0
+  -- `EvalReturnIH … (.assign x e) ⟨store'', st'.out⟩ v` is the ∀-closed coherent Triple.
+  exact ⟨fun g N A SL φf φc sp r sret aEnv aExpr m0 =>
+    hM hEval hset hIH g N A SL φf φc sp r sret aEnv aExpr m0⟩
 
 /-! ## §3. `CallArmSpec` (arity 3) — `callArmSpec_of_geom`
 

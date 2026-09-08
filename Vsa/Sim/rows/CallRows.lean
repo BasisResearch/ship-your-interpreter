@@ -19,8 +19,8 @@ call-subsystem minor premises with their landed simulation lemmas:
 | `hCallPrint` | `mCall` (`SegEntry@dispatch → SegExit@join`) | `callPrint` | `NativePrintSpec` residual, ∀-closed over ghosts |
 | `hCallPrintln` | `mCall` | `callPrintln` | `NativePrintlnSpec` residual |
 | `hCallAssertOk` | `mCall` | `callAssertOk` | `NativeAssertOkSpec` residual |
-| `hCall` | `mEvalE` (`EvalEntry → EvalExitD`) | `evalCallSim` | `EvalExit → EvalExitD` rec-widener + `CallArmSpec` (consumes the 3 sub-derivations) |
-| `hFn` | `mEvalE` | `evalFnSim` | rec-widener (non-identity φc) + `FnArmSpec` |
+| `hCall` | `mEvalE` (`EvalEntry → EvalReturn`) | `callReturn_of_stages` | the four `CallArmStages` cuts + `armReturn_of_facts` (consumes the 3 sub-derivations) |
+| `hFn` | `mEvalE` | `fnResid_of_pipeline` | `FnArmGeom.hArm` (non-identity φc') + `EpilogueEntryFacts` + `armReturn_of_facts` |
 
 Each row's genuine gap is a NAMED typed residual field (never `sorry`).
 `hCallClosure` is OUT OF SCOPE (depth-crux, env_define-gated).
@@ -84,8 +84,10 @@ consumed by `evalCallSim` — they are consumed INSIDE `CallArmSpec`'s eventual
 discharge (via `evalArgsLoop` / the native/closure dispatch).  So the row
 threads them into the residual bundle unchanged. -/
 
-/-- The `hCall` residual bundle: the composite `CallArmSpec` arm run + the
-recursive `EvalExit → EvalExitD` widener, ∀-closed over the ghosts. -/
+/-- The `hCall` residual: the composite `EX_CALL` arm run, ∀-closed over the
+ghosts, landing the COHERENT return (`EvalReturn` at the trivial ownership) —
+the closure body may return a closure it allocated, so the arm selects its own
+map pair through `blockD_v_return` (`CallResidProviders.callReturn_of_stages`). -/
 def CallResid (st st' st'' st''' : SpecSt) (d : Nat) (env : Addr)
     (f : Expr) (args : List Expr) (fval : Value) (vs : List Value) (v : Value)
     (hEf : EvalE st d env f st' fval)
@@ -98,76 +100,39 @@ def CallResid (st st' st'' st''' : SpecSt) (d : Nat) (env : Addr)
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
-    Vsa.Sim.CallArmSpec g N A SL φf φc st st' st'' st''' d env f args fval vs v
-      sp r sret aEnv aExpr m0 ∧
-    Vsa.Sim.EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
-      st''' v sp r sret m0
-
-/-- **`evalCallSimD`** — `EvalE.call` re-landed at `EvalExitD` (the `EvalIH`
-shape).  Composes `evalCallSim`'s `EvalExit` with the recursive widener. -/
-theorem evalCallSimD
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st st' st'' st''' : SpecSt) (d : Nat) (env : Addr)
-    (f : Expr) (args : List Expr) (fval : Value) (vs : List Value) (v : Value)
-    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
-    (hIH_f : EvalIH st d env f st' fval)
-    (hArgs : EvalArgs st' d env args st'' vs)
-    (hCall : Call st'' d fval vs st''' v)
-    (hEval : EvalE st d env (.call f args) st''' v)
-    (hArm : Vsa.Sim.CallArmSpec g N A SL φf φc st st' st'' st''' d env f args fval vs v
-      sp r sret aEnv aExpr m0)
-    (hW : Vsa.Sim.EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
-      st''' v sp r sret m0) :
     Triple
       (EvalEntry g N A SL φf φc st d env (.call f args) sp r sret aEnv aExpr m0)
-      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
-        st''' v sp r sret m0) := by
-  intro c hEntry
-  obtain ⟨c', hs, hExit⟩ :=
-    evalCallSim g N A SL φf φc st st' st'' st''' d env f args fval vs v
-      sp r sret aEnv aExpr m0 hIH_f hArgs hCall hEval hArm c hEntry
-  exact ⟨c', hs, evalExitD_of_evalExit_rec hExit hW (hEntry.mem ▸ hEntry.sret_words)⟩
+      (EvalReturn g N A SL φf φc st.store.frames.size st.store.closures.size
+        st''' v sp r sret m0 (fun _ _ _ => True))
 
-/-! ## `hFn` — the `EX_FN` closure-alloc arm re-landed at `EvalExitD` -/
+/-! ## `hFn` — the `EX_FN` closure-alloc arm at the coherent return -/
 
-/-- The `hFn` residual bundle: the `FnArmSpec` arm run + the recursive widener,
-∀-closed over the ghosts.  φc is genuinely non-identity here (the closures array
-grows by one), so `EvalRecWiden` (not `LeafWiden`) is required. -/
+/-- The coherent `EX_FN` arm contract: from the `.fn` entry, the arm allocates the
+closure and returns `.closure a` with the store `⟨store', st.out⟩` and the value
+represented at ONE map pair (the fresh index mapped to the allocated block).
+Supplied by `fnResid_of_pipeline` (`rows/FnResidSupply.lean`) through
+`armReturn_of_facts`. -/
+def FnArmReturn
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : SpecSt) (d : Nat) (env : Addr)
+    (name : Option String) (params : List String) (body : List Stmt)
+    (store' : Store) (a : Addr)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem) : Prop :=
+  st.store.allocClosure ⟨env, name, params, body⟩ = (store', a) →
+  Triple
+    (EvalEntry g N A SL φf φc st d env (.fn name params body) sp r sret aEnv aExpr m0)
+    (EvalReturn g N A SL φf φc st.store.frames.size st.store.closures.size
+      ⟨store', st.out⟩ (.closure a) sp r sret m0 (fun _ _ _ => True))
+
+/-- The `hFn` residual: the coherent arm contract, ∀-closed over the ghosts. -/
 def FnResid (st : SpecSt) (d : Nat) (env : Addr)
     (name : Option String) (params : List String) (body : List Stmt)
     (store' : Store) (a : Addr) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
-    Vsa.Sim.FnArmSpec g N A SL φf φc st d env name params body store' a
-      sp r sret aEnv aExpr m0 ∧
-    Vsa.Sim.EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
-      ⟨store', st.out⟩ (.closure a) sp r sret m0
-
-/-- **`evalFnSimD`** — `EvalE.fn` re-landed at `EvalExitD`. -/
-theorem evalFnSimD
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : SpecSt) (d : Nat) (env : Addr)
-    (name : Option String) (params : List String) (body : List Stmt)
-    (store' : Store) (a : Addr)
-    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
-    (hAlloc : st.store.allocClosure ⟨env, name, params, body⟩ = (store', a))
-    (hEval : EvalE st d env (.fn name params body) ⟨store', st.out⟩ (.closure a))
-    (hArm : Vsa.Sim.FnArmSpec g N A SL φf φc st d env name params body store' a
-      sp r sret aEnv aExpr m0)
-    (hW : Vsa.Sim.EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
-      ⟨store', st.out⟩ (.closure a) sp r sret m0) :
-    Triple
-      (EvalEntry g N A SL φf φc st d env (.fn name params body) sp r sret aEnv aExpr m0)
-      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
-        ⟨store', st.out⟩ (.closure a) sp r sret m0) := by
-  intro c hEntry
-  obtain ⟨c', hs, hExit⟩ :=
-    evalFnSim g N A SL φf φc st d env name params body store' a
-      sp r sret aEnv aExpr m0 hAlloc hEval hArm c hEntry
-  exact ⟨c', hs, evalExitD_of_evalExit_rec hExit hW (hEntry.mem ▸ hEntry.sret_words)⟩
+    FnArmReturn g N A SL φf φc st d env name params body store' a sp r sret aEnv aExpr m0
 
 end Vsa.Sim
 
@@ -351,7 +316,7 @@ theorem eval_callClosure_indexed_row
 
 /-! ### `hCall` (composite `EvalIH` row) -/
 
-/-- Route `hCall` → `evalCallSimD`.  The residual is indexed by all three
+/-- Route `hCall` → `CallResid`.  The residual is indexed by all three
 semantic derivations and consumes all three recursive motives. -/
 theorem eval_call_row
     (hR : ∀ st st' st'' st''' d env f args fval vs v hEf hBound hArgs hCall,
@@ -366,18 +331,13 @@ theorem eval_call_row
       mEvalE st d env (f.call args) st''' v
         (EvalE.call st d env f args st' st'' st''' fv vs v a hargs a_1 a_2) := by
   intro st d env f args st' st'' st''' fv vs v hEf hargs hEargs hCall ihf iharg ihcall
-  show Vsa.Sim.EvalIH st d env (f.call args) st''' v
-  intro g N A SL φf φc sp r sret aEnv aExpr m0
-  obtain ⟨hArm, hW⟩ := hR st st' st'' st''' d env f args fv vs v
-    hEf hargs hEargs hCall ihf iharg ihcall
-    g N A SL φf φc sp r sret aEnv aExpr m0
-  exact Vsa.Sim.evalCallSimD g N A SL φf φc st st' st'' st''' d env f args fv vs v
-    sp r sret aEnv aExpr m0 ihf hEargs hCall
-    (EvalE.call st d env f args st' st'' st''' fv vs v hEf hargs hEargs hCall) hArm hW
+  exact ⟨fun g N A SL φf φc sp r sret aEnv aExpr m0 =>
+    hR st st' st'' st''' d env f args fv vs v hEf hargs hEargs hCall ihf iharg ihcall
+      g N A SL φf φc sp r sret aEnv aExpr m0⟩
 
 /-! ### `hFn` (closure-alloc `EvalIH` row) -/
 
-/-- Route `hFn` → `evalFnSimD`. -/
+/-- Route `hFn` → `FnResid` (the coherent `EX_FN` arm contract). -/
 theorem eval_fn_row
     (hR : ∀ st d env name params body store' a,
       FnResid st d env name params body store' a) :
@@ -387,12 +347,7 @@ theorem eval_fn_row
       mEvalE st d env (Expr.fn name params body) { store := store', out := st.out }
         (Value.closure a) (EvalE.fn st d env name params body store' a a_1) := by
   intro st d env name params body store' a hAlloc
-  show Vsa.Sim.EvalIH st d env (.fn name params body) ⟨store', st.out⟩ (.closure a)
-  intro g N A SL φf φc sp r sret aEnv aExpr m0
-  obtain ⟨hArm, hW⟩ := hR st d env name params body store' a
-    g N A SL φf φc sp r sret aEnv aExpr m0
-  exact Vsa.Sim.evalFnSimD g N A SL φf φc st d env name params body store' a
-    sp r sret aEnv aExpr m0 hAlloc
-    (EvalE.fn st d env name params body store' a hAlloc) hArm hW
+  exact ⟨fun g N A SL φf φc sp r sret aEnv aExpr m0 =>
+    hR st d env name params body store' a g N A SL φf φc sp r sret aEnv aExpr m0 hAlloc⟩
 
 end Vsa.Sim.Rows

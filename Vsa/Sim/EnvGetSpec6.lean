@@ -1030,7 +1030,7 @@ theorem env_get_hit_tail
     refine valueRepr_copy_of_writeWindow (m := m0) (m' := σ12.mem) (srcAddr := pv + 24 * i) (dstAddr := out.toNat) hcopy ?_ ?_ hvr
     · intro a ha; exact houtside a ha
     · -- the value's string payload target is disjoint from [out, out+24)
-      intro p s hp k hk
+      intro p s hp _ k hk
       -- the payload string lives in the arena / rodata, disjoint from the out buffer;
       -- carried by `HitTailSt.payDisj` (the pointed-to string is a separate region).
       exact hSt.payDisj p s hp k hk

@@ -109,6 +109,7 @@ def SubExecReturnR
   -- the returned value's string payload (if any) is disjoint from the retslot
   -- window, so the copied `ValueRepr` survives (`valueRepr_copy_of_writeWindow`).
   (∀ (p : Nat) (s : String), read64 c.σ.mem (subsret.toNat + 8) = some p →
+    Vsa.Sim.ValuePayload vsub s →
     ∀ k, k ≤ s.length → (p + k < aRet.toNat ∨ aRet.toNat + 24 ≤ p + k))
 
 /-! ## `ExecRetSimGoal` — the `ExecS.ret` simulation Triple (packaged) -/
@@ -755,8 +756,8 @@ theorem execRetSim
     refine valueRepr_copy_of_writeWindow (m := cG.σ.mem) (m' := σ6.mem)
       (srcAddr := subsret.toNat) (dstAddr := aRet.toNat) hcopy ?_ ?_ hvr
     · intro a ha; exact houtside6 a ha
-    · intro p s hp k hk
-      exact hpayDisj p s hp k hk
+    · intro p s hp hps k hk
+      exact hpayDisj p s hp hps k hk
   · -- frame: every callee-preserved register restored to `g R`.
     intro R hR
     by_cases h8 : (Register.x8 == R) = true

@@ -312,7 +312,7 @@ def PreExecEpilogue
   tohostAddr + 16 + 176 ≤ sp.toNat ∧ sp.toNat % 8 = 0 ∧
   r.toNat % 4 = 0
 
-/-- **`execBlockDQ`** (wave 48d, X3-c) — the epilogue `Triple` with an arbitrary
+/-- **`execBlockDQR`** — the epilogue `Triple` with an arbitrary
 memory predicate `Q : Mem → Prop` carried across the (memory-pure) epilogue: the
 seven epilogue instructions never write memory, so any `Q` holding at the
 epilogue-entry memory `mpre` also holds at the exit memory `c.σ.mem` (transported
@@ -320,14 +320,15 @@ by `hmem7e : σ7.mem = mpre`).  The brk leaf takes `Q := ExecLeafMemPin SL sp m0
 to carry the arm-entry pin to the exit, concluding `ExecExitPinned`.  Exec twin of
 `blockD_v`'s `Q` (`EvalSimCommon.lean`).  The plain `execBlockD` (below) is the
 `Q := fun _ => True` specialization — its 5 recursive-case callers are untouched. -/
-theorem execBlockDQ
+theorem execBlockDQR
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat)
     (st' : Vsa.While.St) (status : Status)
     (sp r aRet : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String) (m0 : Mem)
     (Q : Mem → Prop)
-    (hnotret : ∀ v, status ≠ .ret v) :
+    (hret : ∀ v, status = .ret v → ∀ m, Q m →
+      ∃ φc', PhiExtends φc φc' nc ∧ ValueRepr m N φc' aRet.toNat v) :
     Triple
       (fun c => ∃ mpre, PreExecEpilogue g N A SL φf φc st' status sp r aRet v8 v9 v18 v19 out0 m0 mpre c
         ∧ Q mpre)
@@ -541,8 +542,8 @@ theorem execBlockDQ
     · -- OutRepr σ7 st'
       show Vsa.Machine.output σ7 = st'.out
       simp only [Vsa.Machine.output]; rw [hout7]; exact houtStr
-    · -- retval: vacuous (status ≠ .ret v)
-      intro v hv; exact absurd hv (hnotret v)
+    · -- retval: the carried memory predicate supplies the returned value
+      intro v hv; exact hret v hv σ7.mem (by rw [hmem7e]; exact hQ)
     · -- ExecExit.frame: every AbiPreservedNoise R = g R at exit
       intro R hR
       by_cases h8 : (Register.x8 == R) = true
@@ -570,6 +571,23 @@ theorem execBlockDQ
     · -- memFrame: memory unchanged (σ7.mem = mpre), differs from m0 only in stack window
       intro a hstk _harena
       right; rw [hmem7e]; exact hmemframe a hstk
+
+/-- `execBlockDQR` for statuses that are not `ret`: the carried predicate
+need not describe the return slot. -/
+theorem execBlockDQ
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
+    (st' : Vsa.While.St) (status : Status)
+    (sp r aRet : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String) (m0 : Mem)
+    (Q : Mem → Prop)
+    (hnotret : ∀ v, status ≠ .ret v) :
+    Triple
+      (fun c => ∃ mpre, PreExecEpilogue g N A SL φf φc st' status sp r aRet v8 v9 v18 v19 out0 m0 mpre c
+        ∧ Q mpre)
+      (fun c => ExecExit g N A SL φf φc nf nc st' status sp r aRet m0 c ∧ Q c.σ.mem) :=
+  execBlockDQR g N A SL φf φc nf nc st' status sp r aRet v8 v9 v18 v19 out0 m0 Q
+    (fun v hv => absurd hv (hnotret v))
 
 /-- The `ExecExit` produced by the epilogue, packaged as a `Triple`. The store /
 output are re-represented with IDENTITY φ-maps (`st'.store` unchanged on the

@@ -5,21 +5,77 @@ the `RemainingWork` hypothesis of `endToEnd_refinement`.
 
 ## Status
 
-**27 of 63 base fields certified; 36 remain.** `DivWork`, `ErrWork`, and the
+**36 of 63 base fields certified; 27 remain.** `DivWork`, `ErrWork`, and the
 final constructor remain open. The certified fields cover literals, unary and
 logical operations, nine integer cells, break/continue, both initializers,
-and all four while cases. Their shared entry and ownership suppliers still
-need integration.
+all four while cases, the expression statement, all three `if` cases, all
+four for-loop cases, and the null return. Their shared entry and ownership
+suppliers still need integration.
 
-The last completed checkpoint passed 1,538 modules, 449 declaration axiom
-audits, four boundary regressions, 200 Python tests, and six static/generator
-checks. There are 56 inherited discipline findings. Receipt:
-`/private/tmp/vsa-return-abstractions/receipt.json`.
+The null return, the null declaration, the initialised declaration, the
+block, and the for-loop start are on the helper-call layer (`HelperCall`,
+task 4): the generic in-frame call of a runtime helper from any parked
+state, one adapter per callee, and the shared retslot/declaration tails.
+`hSRetNull` is closed. `hSVarNull` and `hSVarInit` are closed down to the
+`env_define` contract (`EnvDefineContract`), plus for `hSVarInit` the payload
+window (`VarInitPayloadOff`); `hSBlock` and `hSForStart` are closed down to
+the `env_new` contract (`EnvNewContract`). Both contracts are proved from
+named per-entry ledgers of external facts (allocator invariant and runs,
+ownership, pinned `gp`, geometry; task 2), so every statement field above
+rests on those ledgers only. The child's coherent exit is the recursor
+motive (`mEvalE := EvalReturnIH TrivialOwned`), not a premise. The three
+legacy files of these leaves (1,548 lines) are removed.
+
+The expression statement, the three `if` cases, and the four for-loop cases
+are closed by the parametric statement-arm layers (`EvalChildArm`,
+`StmtChildArm`, `TruthyCopy`, see task 4): generic dispatch of an expression
+or statement child (from the statement entry or from an in-frame arm state),
+exit kits, condition copy with `value_truthy`, reflected routes from any
+parked return, the normal-exit and return heads, the loop-head re-entry, and
+the map/memory rebase, instantiated per arm by a descriptor and
+certificates. The value-return arm is closed on the layer down to one named
+payload premise; the initialised-declaration arm's resume needs the
+`env_define` contract (task 4).
+
+The last completed checkpoint passed 1,587 modules (private resumed build
+after the sequence-boundary amendment), 1,054 declaration axiom audits
+(1,040 with exactly {propext, Classical.choice, Quot.sound}, 14 axiom-free),
+four boundary regressions, 200 Python tests, and the generator checks.
+There are 56 inherited discipline findings (unchanged by this checkpoint).
+Receipt: `/private/tmp/vsa-helpercall/receipt.json`.
 
 Indexed child returns and the shared coherent epilogue now pass the full
 1,539-module build and cache-fingerprint verification. Log:
-`/private/tmp/vsa-indexed-child/integration.log`. The remaining axiom/boundary
-checkpoint, full supplier search, and SMT/fuzzer campaigns are pending.
+`/private/tmp/vsa-indexed-child/integration.log`. The parametric layers, the
+closed expression statement, the three `if` cases, and the four for-loop
+cases pass the resumed private build, the complete-library census (35 FOUND
+of 65 inventoried fields), the four boundary regressions with a refreshed
+input lock, 200 Python tests, and the axiom audit of every new declaration.
+Evidence: `/private/tmp/vsa-evalchildarm/` (`integration*.log`,
+`all-fields*/`, `boundary-lock-changes*.json`, `discipline-delta*.json`).
+
+The helper-call layer and its three fields pass the resumed private build
+(1,566 modules, exit 0; log `/private/tmp/vsa-helpercall/logs/integration.log`)
+and the census of the affected fields (`hSRetNull` FOUND; `hSRet`,
+`hSVarNull`, `hSVarInit` NO_MATCH, each with a hypothesis-taking supplier;
+`/private/tmp/vsa-helpercall/census/`), the four boundary regressions with
+the input lock refreshed for the eight changed proof sources
+(`/private/tmp/vsa-helpercall/boundary/summary.json`,
+`boundary-lock-changes.json`), 200 Python tests, and the generator checks.
+The discipline gate (stage a4) reports 32 inherited findings and none in the
+new files (`discipline-delta.json`); the gate stops there, so stage c was
+run by hand against the private build. Twelve audit entries naming
+declarations no longer present (`execVarNullSimD`, `bin_add_cell_ofBundle`,
+`argsConsResid_of_oracle`, `argsNilResid_of_hop`, the three
+`native*Spec_of_span`, `errFamily_ofArmLinks`,
+`divEntryDrive_of_driveToLoopHead`, and the commented-out `errFamilyClosed`,
+`errFamilyClosed_ofClasses`, `errFamily_ofShared`) were pruned, and
+`rows/EvalVarBridgeCallee` (compiled but never imported by `Vsa`) is wired so
+its two audited theorems resolve. The hand-run audit of the 987 remaining
+entries reports every axiom set within `propext`, `Classical.choice`,
+`Quot.sound` (13 entries axiom-free; no `sorryAx`, `native_decide`, or
+`ofReduceBool`; log `/private/tmp/vsa-helpercall/logs/stagec.log`). The full
+SMT/fuzzer campaigns are pending.
 Recompute the census before changing the certified count.
 
 ## Remaining tasks, in dependency order
@@ -51,9 +107,19 @@ Reuse the implemented separation rules, `StableUnder`, `ReprDelta`,
   through malloc, free, reuse, and realloc, including indirect bin-link writes
   and live allocation extents. Resolve the fixed `MallocContract.privFoot`
   assumption against those actual writes.
-- Supply `env_new` from the actual allocation result and the existing
-  `envNewSuccess_run`/`.frameRepr` suffix. Its universal geometry and
-  nonexhaustion premises have checked obstructions; they need reached facts.
+- `env_new` is supplied: `envNewContract_of_ledger`
+  (`rows/EnvNewContractSupply.lean`) proves `EnvNewContract` from
+  `EnvNewLedger` (one named ledger per entry: pinned `gp`, `s0` ghost
+  presence, headroom and request bounds, `M.AInv` at entry and its stack-window
+  stability, `MallocRun` — `MallocContract.spec` with the console-output and
+  byte-presence clauses it omits —, the private footprint inside the arena,
+  arena/HTIF/stack geometry, `StoreParents`, and `HeapOwned` with the stack
+  region in the write footprint). The prologue is `envNewPrologueSeg` +
+  `site_80002a10_env` (`envNewParked_of_entry`), the suffix
+  `envNewSuccess_run`, the pushed store `storeRepr_allocFrame` after
+  `StoreOwned.repr_transport` and the frame-map rebase `storeRepr_phif_mono`
+  (`envNewPushedRepr`). `env_new_spec` stays unused (its `∀ p, EnvRegions … p`
+  premise is false at `p = 0`).
 - Finish `HeapOwned.pushClosure` at post-build memory. Use `prune_of_exit`
   for full extent freshness and `fnArmClosureBuild_reads` for the header;
   retain old ownership, captured-environment validity, and shared AST coverage.
@@ -61,7 +127,43 @@ Reuse the implemented separation rules, `StableUnder`, `ReprDelta`,
   store survival under arbitrary arena changes. Replace that demand with
   preservation under the actual build writes. The obstruction and ownership
   drafts in `/private/tmp/vsa-indexed-child/` are unchecked.
-- Complete copied-name, append/grow, frame, and closure allocation suppliers.
+- `EnvDefineContract` is proved by `envDefineContract_of_ledgers`
+  (`rows/EnvDefineContractSupply.lean`) from the two ledgers per entry,
+  `EnvDefineUpdateLedger` and `EnvDefineMissLedger`
+  (`rows/EnvDefineMissLedger.lean`). The hit lane is
+  `envDefineUpdateLane_ledger`. A miss on a non-empty frame runs
+  `envDefineMissLane` to the cap dispatch, then `envDefineMissReady_run`
+  (`rows/EnvDefineMissHead.lean`): the append arm is `envDefineAppendLane`
+  (`rows/EnvDefineAppendLane.lean`: `strlen ≫ malloc ≫ memcpy ≫` the append
+  store block `≫` epilogue over `StrlenRun`/`MallocRun`/`MemcpyRun`, the
+  store side `frameRepr_append` + `storeDefineAdvance_of_append`); the grow
+  arm is `envDefineGrowLane` (`rows/EnvDefineGrowLane.lean`: `cap' ≫
+  realloc(names) ≫ realloc(values) ≫` rejoin over a `ReallocInstance`, one
+  owned array per call through `reallocArray_run`, the ownership ledger
+  re-seated by `Ledger/Immutable/Reserved.replaceArray` and
+  `StoreOwned.replaceArrays`/`storeRepr_replaceArrays`
+  (`RuntimeOwnershipArrays.lean`)) then the append lane. The empty frame is
+  `envDefineEmptyLane` (`rows/EnvDefineEmptyLane.lean`): the CAP-INIT block
+  as `#derive_case` segs run by `segRowKeepGhost`, then the append lane
+  (`cap ≠ 0`) or the grow lane's `realloc(NULL,·)` entry
+  (`EnvDefineGrowKind.init`, `cap = 0`); `envDefineCapInitGrow_unreachable`
+  proves the `bnez` route's chain facts contradictory. Every call site is a
+  `bridgeOfSegFull` parking (`rows/EnvDefineCallRuns.lean`), so
+  `sailOutput` and byte presence reach `EnvDefineReturnState`;
+  `bridgeMallocPre_at` states the malloc bridge at the actual memory.
+  `EnvDefineMissLedger` names the external facts: `MallocRun`, the
+  `ReallocInstance` (`ReallocOps` + `ReallocRun`), `StrlenRun`, `MemcpyRun`
+  (each the landed spec plus its omitted `sailOutput`/presence clauses; the
+  `memcpy` route hypothesis covers the byte route and the ≤ 64-byte word
+  route), `ainv_private` (the allocator invariant reads only `gp` and its
+  private footprint), the private footprint inside the arena, arena/stack
+  disjointness, the queried name's arena residence, alignment and
+  `StrRegions`, `copy_fit` (`8 * ((x.length + 1) / 8) ≤ 64`: identifiers of
+  at most 71 bytes; the larger aligned `memcpy` route is outside every landed
+  spec), and the request bounds. The ledger's ownership is runtime
+  `HeapOwned` (`EnvDefineOwned`): the legacy `StoreHeapOwned` with `HeapArena`
+  is uninhabitable for a fresh frame (`env_new` sets `cap = 0`, `names =
+  vals = NULL`, and `FrameHeapOwned.arrays` demands `(NULL, 0) ∈ exts`).
 - Derive initial stack/body bounds and allocator capacity from a source
   resource bound over every finite execution prefix. Account for physical
   chunk overhead and fragmentation: a 32-byte request occupies 48 bytes.
@@ -72,7 +174,13 @@ Reuse the implemented separation rules, `StableUnder`, `ReprDelta`,
 - Close `hSeqSteps` for interpreter, closure-body, and block-body copies.
   Thread reached dispatch/resume carriers and whole-suffix invariants through
   empty, final, and continuing routes. Reuse `SeqSuffixGround` and the compiled
-  closure return, normal-exit, and continuation lemmas.
+  closure return, normal-exit, and continuation lemmas. The block-body copy's
+  child boundary demands `ExecSeqStackFrame .blockBody` (the parent's window
+  `[esp+136, SL.hi)` outside the retslot and the arena); it follows from each
+  child's `ExecExitD` by `blockBodyStackFrame_of_execExitD` with no geometry.
+  Every sequence exit now also supplies `mem_extends` and `store_survives`
+  (`ExecSeqExitI`), and every sequence entry `store_survives`
+  (`ExecSeqEntryI`); the step suppliers take both from the child's `ExecExitD`.
 - At closure child entry, derive `Exec_stmt` code, register presence
   (`x9`, `x20`, `x21`), header/array reads, and arena/stack geometry.
 - Retain environment validity and machine geometry in `FEntryC`, `mForCond`,
@@ -90,8 +198,265 @@ Reuse the implemented separation rules, `StableUnder`, `ReprDelta`,
 | Arguments | Empty/nonempty loop assembly and `EvalArgsStep`; preserve spill slots `sp+24` and `sp+16`. Discharge the Lean supplier before removing SMT premise `argsLoopBoundAcrossCall`. |
 | Calls and functions | `hCall`, `hCallClosure`, `hFn`; parameter bindings, depth bounds, allocation, and result marshalling. Complete the existing `CallClosureRow`/`CallClosureSplice` stage providers. |
 | Native/output | Print, println, successful assert, `fprintf`/`_vfprintf_r`, `__swbuf_r`, `_putc_r`, and enclosing fputc folds. Preserve stdout/errno/HTIF state and output suffixes; reuse existing flush/write frames. |
-| Statements | Expression statements, value/null returns, declarations, if branches, block allocation, for-start, and `hExecRouteCases`. |
+| Statements | `hExecRouteCases`. The null declaration and the initialised declaration wait only for the named `env_define` contract (and, for the latter, the fresh-closure coherence and the payload window); the value return waits for the payload window; the for-start waits only for the named `env_new` contract; the block waits for `env_new` and the sequence-exit epilogue seam (below). All are on the layer. |
 | Entry/exit | `hInitStore`: extend the owned initial execution to the full loop entry. `hEpilogueSpill`: retain code, saved slots, and runtime state through the reached sequence exit. The universal exit widener is refuted in `/private/tmp/vsa-epilogue-audit/EpilogueSpillObstruction.lean`. |
+
+#### The parametric statement-arm layer
+
+`Vsa/Sim/EvalChildArm.lean` states the `exec_stmt` arm → `eval_expr` child
+seam once, over a descriptor (`kind`, `armPC`, reflected prefix, `jal` PC and
+immediate, sub-result-slot immediate, child field offset) and two certificate
+records: `Cert` (chain well-formedness, register fold, end PC, `jal` site; all
+`decide`/`rfl`) and `Sem s e` (tag, child field, region projection, budget,
+bodies bound, prefix chain facts). Generic theorems: `dispatch` (statement
+entry → child `EvalEntry` plus the parent `Carrier`), `exitKit_at_exit`
+(parent ground/AST/code/truthiness header at the child's widened exit),
+`normalExitPre_of_exit` (a normal completion parked at the arm's `li a0,0`),
+and `normalExitTail` (`ExecNormalExitTail.lean`: the parametric
+`li a0,0; j 0x8000409c; epilogue`).
+
+Instances (`rows/EvalChildArm{While,If,Expr,Ret,VarInit,ForCond}.lean`) are one
+`#derive_case` prefix, one descriptor, and the certificates each.
+`execWhileCondDispatch_closed_of_generic` re-derives the hand-closed
+`WhileCondDispatchClosed` statement from the while instance. Measured on the
+resumed private build:
+
+| Arm | Hand-closed dispatch | Instance | Compile |
+|---|---|---|---|
+| while condition | 397 lines (`WhileCondPrefix` + `WhileCondDispatchClosed`), 3.2 s | 161 lines (reuses the seg) | 4.5 s incl. confirmation |
+| if condition | none | 131 lines | 1.3 s |
+| expression statement | none | 118 lines | 4.5 s |
+| value return | none | 135 lines | 1.7 s |
+| initialised declaration | none | 139 lines | 1.5 s |
+| for-loop condition (in-frame) | none | 225 lines | 4.5 s |
+
+The dispatch is split into `armState_of_entry` (prologue and jump table,
+needs `EntryCert`) and `dispatch_of_armState` (the arm prefix and `jal`). The
+for-loop condition enters the second half from the real loop head:
+`EvalChildArm.ArmState.ofForLoopReady` and `forCond_dispatchFromLoopHead`.
+
+`Vsa/Sim/TruthyCopy.lean` states the condition copy and `value_truthy` seam
+once over a descriptor `TruthyCopy` (copy segment, `jal value_truthy` PC and
+immediate) and `TruthyCopy.Cert D T` (register fold, the write log as three
+`sd`s, the copy's chain facts, the generated call site). Generic theorems:
+`copyReady_of_exitKit`, `truthyReturn_of_copyReady`, `route_of_truthyReturn`
+(any reflected route from the return; routes may reload `s0`, so they are
+framed by `abiButS0` rather than the full ABI set), and
+`normalExitPre_of_route`. `rows/TruthyCopyWhile.lean` confirms
+`ExecWhileCondCopyReady` from the generic parked state;
+`rows/TruthyCopyIf.lean` carries the if copy and its three routes with their
+chain facts. The `jal value_truthy` sites are generated from
+`scripts/truthy_copy_sites.tsv`.
+
+The generic layer is 996 + 178 + 696 lines and compiles in about 15 s; the
+if copy seam with its three routes is 283 lines at 1.9 s, the closed
+`hSIfNone` supplier is 110 lines at 1.6 s, the closed `hSIfTrue`/`hSIfFalse`
+supplier (`rows/Field_hSIfBranchClosed.lean`, one shared `ifBranch_resume`)
+is 340 lines, and the closed `hFlCondFalse` supplier
+(`rows/Field_hFlCondFalseClosed.lean`, with `rows/TruthyCopyFor.lean`) is
+120 + 150 lines. Rules R10 and R11
+(`scripts/discipline_rules.tsv`) fail any new file that reflects an exec-arm
+prefix (expression or statement child) by hand.
+
+`Vsa/Sim/StmtChildArm.lean` states the in-frame call of a child statement
+once, over a descriptor (`armPC`, reflected prefix, `jal` PC and immediate,
+child field offset) with `Cert` and `Sem s sc`: `dispatch_of_armState` lands
+the child's `ExecEntry` with the parent `Carrier`, `exitKit_of_exit`
+recovers the parent at the child's `ExecExitD`, and the exit heads after a
+status route are `normalExitPre_of_routeHead` and `retExit_of_routeHead`.
+The same file carries the pieces every in-frame continuation shares:
+`FrameFacts` (the parent frame at any in-frame point, with `transport`,
+`afterExit`, and `EvalChildArm.frameFacts_at_exit`), `ArmState` generalised
+over its PC with `ArmState.of_routeHead`, `TruthyCopy.RouteReady` and
+`route_of_gholds`/`route_of_ready` (a reflected route from any parked
+return, keyed by `a0`), and `LoopFrame` (memory bookkeeping across an
+iteration for the final rebase). The `ForCond` and `ExecStep` motives now
+carry the condition's and step's eval IHs (`ForCondIH`, `ExecStepIH` in
+`TermSimAssembly.lean`; rows `hFcSome_row`/`hEsSome_row`).
+
+The for-loop instances (`rows/ForLoopArms.lean`, 356 lines: the body call
+`forBodyArm`, the in-frame step arm `forStepArm`, and seven reflected
+routes) and the closed `hFlBodyBreak`/`hFlBodyRet`/`hFlLoop` suppliers
+(`rows/Field_hFlBodyClosed.lean`, 418 lines) compile in under 10 s; the
+generic layer file is 1,114 lines and the ret-arm resume
+(`rows/RetSlotCopy.lean`) is 477 lines. The step arm and body call are entered
+from arm states reached by routes, never through the prologue.
+
+#### The helper-call layer
+
+`Vsa/Sim/HelperCall.lean` states the in-frame call of a runtime helper once,
+over a descriptor `HelperCall` (head PC, reflected prefix, `jal` PC and
+immediate, callee entry) and a certificate `Cert` (link alignment, `jal`
+target, ABI-avoiding prefix, the generated `jal` site from
+`scripts/helper_call_sites.tsv`). `parked_of_gholds` runs the prefix and the
+`jal` from any state whose pinned registers hold a list `L`
+(`bridgeOfSegOut`) and lands `Parked` at the callee entry; `parked_of_armState`
+enters from an `ArmState` (the five frame registers), `parked_of_ready` from
+a `RouteReady` (the six call registers `callL`; the link register is
+rewritten). The helper's return is `Return`: a `RouteReady` at the link PC
+plus the memory footprint. Each callee has one adapter from its contract:
+`nullReturn_of_parked` (`HelperCallNull.lean`, over `value_null_spec_full`)
+and `envDefineReturn_of_parked` (`HelperCallEnvDefine.lean`, over the named
+`EnvDefineContract`). The continuation reuses the existing kit
+(`RouteHead.toRouteReady`, `ArmState.frameFacts`,
+`FrameFacts.afterStackHelper`/`.afterExit`, `normalExitPre_of_routeHead`),
+`armState_of_entry_kind` reaches any arm from the statement entry by its tag,
+and the two shared tails are `retSlotResume` (`rows/RetSlotCopy.lean`: the
+retslot copy and the status-3 epilogue from any route-ready state; the value
+return is re-proved through it) and `envDefineTail_run`
+(`rows/EnvDefineCall.lean`: `ld a1,8(s0)`, the copy to `esp+16`, the
+`env_define` call, the normal exit). The three-word copy's byte facts
+(`copy3_total`/`copy3_frame`) and the payload premise (`PayloadOffWindow`, the
+former `RetPayloadOffSlot`) are shared. Rule R12 fails a hand-reflected helper
+prefix.
+
+Measured on the private overlay (warm imports):
+
+| Leaf | Legacy (hand) | On the layer | Result |
+|---|---|---|---|
+| `ret;` (`hSRetNull`) | `ExecRetNull` 760 lines (`maxHeartbeats 8000000`) + `ExecRetNullGlue` 516 lines + `ExecRetNullGeom`; seam still open | `rows/Field_hSRetNullClosed` 167 lines, 3.7 s | closed |
+| `var x;` (`hSVarNull`) | `ExecVarNull` 272 lines; `value_null`, the copy and `env_define` inside one open glue | `rows/Field_hSVarNullClosed` 168 lines, 3 s | `EnvDefineContract` only |
+| `var x = e;` resume (`hSVarInit`) | `ExecVarInitGeom` glue oracle (child IH, copy, `env_define`) | `rows/Field_hSVarInitClosed` 112 lines, 2.4 s | `EnvDefineContract` + `VarInitPayloadOff` (the child's coherent exit is the motive `mEvalE := EvalReturnIH TrivialOwned`, not a premise) |
+| shared | — | `HelperCall` 572, `HelperCallNull` 89, `HelperCallEnvDefine` 188, `rows/EnvDefineCall` 341 lines; 4–7 s each | — |
+
+| `for` start (`hSForStart`) | `hArm` oracle in `ForStartGeom` | `rows/Field_hSForStartClosed` 205 lines, 3.5 s: `ExecInitReady` at the `env_new` return | `EnvNewContract` only |
+| block (`hSBlock`) | `hArm`/`hEpi` oracles in `BlockGeom` | `rows/BlockArmEnvNew` 470 lines, 4.3 s: `ExecSeqEntryI .blockBody` at the loop head (nonempty) or the epilogue entry (empty) with the retained parent frame `Rows.BlockArmFrame`; `blockEpilogue_run` = sequence exit ≫ `epilogueTail` | `EnvNewContract` |
+
+The `env_define` contract (`EnvDefineEntryState` → `EnvDefineReturnState`,
+`HelperCallEnvDefine.lean`) is the one seam shared by `hSVarNull`,
+`hSVarInit`, `hAssign`, and `hCallClosure`. The `env_new` contract
+(`EnvNewEntryState` → `EnvNewReturnState` with `EnvNewFresh`: the returned
+address, the extended frame map, and the pushed store represented under it;
+`HelperCallEnvNew.lean`) is the seam shared by `hSBlock`, `hSForStart`, and
+the closure call. Both are consumed through one adapter each
+(`envDefineReturn_of_parked`, `envNewReturn_of_parked`).
+
+Suppliers. `env_define`: the closed exact lanes (`rows/EnvDefinePrologueSaved`,
+`rows/EnvDefineScanFramed.envDefineScanFiniteFramed`,
+`rows/EnvDefineUpdateExact.envDefineUpdateClosed_of_heap_owned`,
+`rows/EnvDefineDispatchExact.envDefineMissCapDispatch`,
+`rows/EnvDefineAppendClosed`, `rows/EnvDefineGrowExact.envDefineGrowClosed`,
+`rows/EnvDefineEpilogue`) composed under `MallocContract`, `ReallocOps`, the
+ownership ledger (`StoreHeapOwned`/`ValueHeapOwned`), `FrameUnique`, and the
+allocator-private footprint inside the arena; the per-lane geometry records
+(`EnvDefRegions`, `EnvDefineUpdateGeom`, `AppendStoreFactsGeom`,
+`EnvDefineGrowClosedGeom`) are the remaining caller data. `env_new`:
+`env_new_spec` with `MallocContract`, `storeRepr_allocFrame`
+(`rows/CallClosureEnvNewMarshal`) for the pushed store under `pushFrameMap`,
+and the freshness of the returned block against every represented frame,
+which needs the ledger relating `StoreRepr` images to the allocator's extents
+(task 2; no such lemma exists).
+
+`rows/EnvDefineContractUpdate.lean` (12 s) composes the `env_define` update
+path from the statement arms' entry state: `envDefineUpdateLaneKeep` runs a
+framed prologue (one `#derive_case` of the 13 instructions), the scan hit, the
+keep-set-framed exact update and epilogue (`rows/EnvDefineTailFramed.lean`:
+`segRowKeepGhost` instantiated for `updateStoreSeg` and
+`envDefineEpilogueSeg`), and `envDefineUpdateLane_full` closes
+`EnvDefineReturnState` with no residual hypothesis. The three former
+`EnvDefineReturnResiduals` are discharged: `sailOutput` rides the scan frame
+(`EnvDefineScanEntryFrame.out`/`EnvDefineScanFrame.out`, fed across the
+`strcmp` seam by `rows/EnvDefineScanCallOut.envDefineScanCallRead64Out` over
+`bridgeOfSegFull`), the untouched `x3`/`x4`/`x23–x27` come off the scan
+frame's ABI ghost through `KeepGhost`, and `a0` is the hit's `strcmp` result
+kept by both rows. `envDefineMissLane` runs the miss to `EnvDefineMissReady`
+at the cap dispatch. The oracle record `EnvDefineUpdateOracles` is derived by
+`EnvDefineUpdateOracles.of_entry` from `EnvDefineMem` (fixed-text projections
+`FixedTextLoaded.Env_defineLoaded`/`.StrcmpLoaded`, `slot_in_stack`,
+`value_words`, `arena_image`; the last three are new `EnvDefineMem` fields
+supplied at the call site by `FrameFacts.geom`, `copy3_total`, and
+`ExecGround.eval_call.image.arena`) and the external ledger
+`EnvDefineUpdateLedger` (gp pin, saved-register presence, allocator headroom,
+allocator invariant at entry and its footprint stability, `HeapArena`, arena
+RAM/HTIF bounds, `StoreHeapOwned`/`ValueHeapOwned`, `FrameUnique`, the scan
+string regions `ScanNames`, array alignment, and `define_survives` — the
+defined store's survival, whose supplier is `StoreOwned.repr_transport` after
+`HeapOwned.defineHit`). Not covered: the empty-frame path (`count = 0`
+branches to `0x80002bf4`, no landed lane) and the append/grow lanes from
+`EnvDefineMissReady` (`rows/EnvDefineAppendClosed`,
+`rows/EnvDefineGrowExact.envDefineGrowClosed` under `ReallocOps`).
+
+The block's epilogue seam is closed (`blockEpilogue_run`,
+`rows/BlockArmEnvNew.lean`). The indexed sequence boundary carries what the
+shared epilogue needs: `ExecSeqStackFrame .blockBody` keeps the parent's
+window `[esp+136, SL.hi)` outside the retslot and the arena, and
+`ExecSeqExitI` carries presence (`mem_extends`) and store survival
+(`store_survives`) like `ExecExitD`. The arm retains the parent frame as
+`Rows.BlockArmFrame` (spill slots, ghost tie, memory relation to the entry);
+`EpilogueReady`/`epilogueTail` (`ExecNormalExitTail.lean`) run the epilogue
+from any status over `execBlockDQR`, whose carried memory predicate supplies
+the `ret` value. `normalExitTail` is the `li a0,0; j` prefix of the same
+tail.
+
+Residuals restated in the dispatch/resume shape (`Rows.RetCaseGeom`,
+`Rows.VarInitCaseGeom`, `Rows.IfNoneCaseGeom`): the dispatch half is supplied
+by `retResid_of_resume`, `varInitResid_of_resume`, and the closed
+`field_hSIfNone`; the named resume seams still open are:
+
+- `Rows.RetResumeResid` (`hSRet`): closed on the layer
+  (`retSlotResume`) down to `PayloadOffWindow`: the returned string or native
+  payload lies outside the retslot window. `retResumeResid_of_payload`
+  supplies the residual from that premise. The premise is not derivable at
+  `EvalExitD`: `ValueRepr` fixes no payload location, and the ground bundle
+  relates the arena to the stack only below `sp` (`ExecGround.arena_stack`)
+  while the retslot lies above `sp`. Suppliers: the ownership layer's payload
+  location (`ValueOwned`, payload in the arena or the AST region) plus an
+  arena/retslot separation fact in `ExecGround`.
+- `Rows.VarInitResumeResid` (`hSVarInit`): closed on the layer
+  (`varInit_resume`, through `envDefineTail_run`) down to two named premises:
+  `EnvDefineContract` and `VarInitPayloadOff` (the `PayloadOffWindow` class at
+  the call buffer `[esp+16, esp+40)`). The child's coherence is no premise:
+  the recursor motive is `mEvalE := EvalReturnIH TrivialOwned` (`EvalReturn.lean`,
+  `TermSimAssembly.lean`), so every child returns `EvalReturn` — the widened
+  exit plus ONE selected map pair (`EvalReturn.repr`) representing its value,
+  its store, and the store's survival across the stack region — and the resume
+  consumes that pair directly. Producers: the four pinned leaves through
+  `pinnedLeafReturn` (`eval*SimR`); the variable leaf through
+  `evalReturn_of_exit_id` from the identity-map result `evalVarSim` now exposes
+  (`blockC_var`'s post) and the identity-map widener `LeafReturnWiden`
+  (`VarLeafResid`); the integer/boolean/string arms (unary, logical, binary)
+  through `EvalIH.coherent_of_bounded` (`binOpSem_closuresBounded`); the
+  allocating arms land the coherent epilogue themselves through
+  `armReturn_of_facts` (= `blockD_v_return` from `EpilogueEntryFacts` at the
+  arm's selected pair): `fn` in `fnResid_of_pipeline` (`FnArmGeom.hArm` at the
+  widened `φc'`, the fresh index mapped to the allocated block; the bundle's
+  former exit-level `EvalRecWiden` conjunct is replaced by the epilogue-entry
+  facts at that pair), `call` in `callReturn_of_stages` (`CallArmHandoff` now
+  carries the facts at the pair its children selected). `AssignArmSpec` is
+  restated at the coherent motive. Consumers that need only the widened exit
+  project `EvalReturnIH.forget`. Remaining split below the eval motive: the
+  statement/call motives (`ExecExit.retval`, `CallExitI`) still select the
+  returned value's map independently of the store's; the call arm's
+  `callToEpilogue` stage is where that pair is currently selected.
+- `Rows.ForStartPrefixResid` (`hSForStart`) is supplied by `forStart_run`
+  from `EnvNewContract`; `Rows.BlockCaseResid` (`hSBlock`) by
+  `field_hSBlock` from `EnvNewContract`.
+- `Rows.VarNullResid` (`hSVarNull`) and `Rows.RetNullResid` (`hSRetNull`)
+  are restated as the leaf simulation Triple (statement entry to widened
+  exit); `field_hSRetNull` is closed and `field_hSVarNull` takes
+  `EnvDefineContract`.
+
+Three obstructions recorded by the layer were resolved in place:
+
+- `ForLoopReady`, `ExecInitReady`, and `InitSomeStage` now carry
+  `parentSp : g x2 = some sp`, `ra_align : r.toNat % 4 = 0`, and
+  `mem_extends : MemExtends m0 ment`; `Field_hInitNone`, `Field_hInitSome`,
+  and `InitSomeReturnReady` supply them from the actual initializer run.
+  `forCond_dispatchFromLoopHead` takes only the record.
+- `ExecDispatchReady` keeps its strong memory frame. The if-branch residuals
+  (`Rows.IfBranchCaseGeom`, `IfTrueCaseResid`/`IfFalseCaseResid`) instantiate
+  its ghost memory as the reached memory and rebase the branch's `ExecExitD`
+  to the entry memory with `Rows.execExitD_rebaseMem` (memory extension plus
+  the arena/retslot-excepted frame). `exec_ifTrue_row`/`exec_ifFalse_row`
+  are re-proved by composition. `Field_hSIfBranchClosed` closes both fields;
+  the `auipc a4; addi a4` table base is read back from the reflected route
+  by unfolding the register fold (`if_route_a4`), not by `rfl`.
+- `SubExecReturnR`'s payload clause is conditioned on the returned value's
+  actual string (`Vsa.Sim.ValuePayload v s`, `ReprCopy.lean`): it is vacuous
+  for integer, boolean, and null payloads and names the string or native
+  payload otherwise. `valueRepr_copy` and `valueRepr_copy_of_writeWindow`
+  take the same guard; `ExecRet`, `ExecRetNull`, `EvalCallNative2`,
+  `FrameCalc`, `EnvGetSpec6`, and `EvalVarBridge` consume it.
 
 ### 5. Close divergence, errors, and final assembly
 

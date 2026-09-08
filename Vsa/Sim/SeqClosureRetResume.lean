@@ -19,7 +19,8 @@ structure SeqClosureRetCarrier
   childFrame : ClosureBodyFrameGeom A SL sp aRet
   memFrame : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < SL.hi) →
     ¬ (A.lo ≤ a ∧ a < A.hi) → mCall[a]? = m0[a]?
-  highStack : ExecSeqStackFrame .closureBody SL sp m0 mCall
+  highStack : ExecSeqStackFrame .closureBody A SL sp aRet m0 mCall
+  memExtends : MemExtends m0 mCall
   frame : ∀ R : Register, ExecSeqFrameReg .closureBody R → gExec R = g R
 
 /-- A returned closure-body statement is already at the sequence's return
@@ -55,6 +56,8 @@ theorem seqClosureRetResume
         · exact False.elim (hstack ⟨by omega, by omega⟩)
         · exact heq.trans (h.memFrame a hstack hArena)
       stack_frame := h.highStack.trans (closureBodyStackFrame_of_execExitD h.childFrame hChild)
+      mem_extends := h.memExtends.trans hChild.2.1
+      store_survives := hChild.2.2
       frame := fun R hR => (hChild.1.frame R hR.1).trans (h.frame R hR)
       minstret := hChild.1.minstret }
 

@@ -1,0 +1,10 @@
+# `jal` sites of the in-frame runtime-helper calls of `exec_stmt` (the `HelperCall`
+# instances): value_null at the ret-null (0x800042f4) and var-null (0x80004300)
+# bridges, env_define at the varDecl tail (0x80004114), env_new at the block
+# (0x80004190) and for (0x80004238) arms.  jal immediates are the decoder's
+# unscrambled imm21 values (target - pc mod 2^21).
+800042f4	cf8fe0ef	jal	1	1fe4f8
+80004300	cecfe0ef	jal	1	1fe4ec
+80004114	949fe0ef	jal	1	1fe948
+80004190	86dfe0ef	jal	1	1fe86c
+80004238	fc4fe0ef	jal	1	1fe7c4

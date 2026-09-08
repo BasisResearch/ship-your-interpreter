@@ -934,8 +934,9 @@ theorem nativeAssertInternal
     rw [getElem_writeMap8_disjoint c.σ.mem (fsp.toNat-80+56) a (sdData_val s1v) (winStore_disjoint fsp.toNat a 56 ha hfsp80 (by decide)), hmem]
   -- payload AgreeP: the arena string (disjoint from the frame+buffer window) is preserved
   have hbufpay : ∀ (p : Nat) (s : String), read64 m0 (argsBase.toNat + 8) = some p →
+      Vsa.Sim.ValuePayload v s →
       AgreeP (fun a => ∃ k, k ≤ s.length ∧ a = p + k) m0 mb5 := by
-    intro p s hp a ha
+    intro p s hp _ a ha
     obtain ⟨k, hk, rfl⟩ := ha
     exact (hbufout (p + k) (hpayDisj p s hp k hk)).symm
   have hbufRepr : ValueRepr mb5 N φc (fsp.toNat - 64) v :=

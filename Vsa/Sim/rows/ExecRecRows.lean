@@ -1,9 +1,9 @@
 import Vsa.Sim.ExecExprRet
 import Vsa.Sim.ExecRet
-import Vsa.Sim.ExecRetNull
-import Vsa.Sim.ExecVarNull
 import Vsa.Sim.rows.ExecCaseGeom
 import Vsa.Sim.TermSimClose
+import Vsa.Sim.rows.EvalChildArmExpr
+import Vsa.Sim.rows.EvalChildArmRet
 
 /-!
 # Layer 4 — M4 RECURSIVE `ExecS` cases re-landed at `ExecExitD` (`hSExpr`/`hSRet`)
@@ -218,138 +218,21 @@ theorem execRetSimD
       hRetArena hRetCode (hGlue c.σ.sailOutput) c ⟨hEntry, rfl⟩
   exact ⟨c', hs, execExitD_of_execExit_rec hExit hW⟩
 
-/-! ## `ExecRetNullGeom` — the `hSRetNull` recursor-supplied residual bundle
-     (STRETCH; the `hGlue` `value_null` bridge is the surfaced open residual)
+/-! ## `hSRetNull` — the null return, a leaf on the helper-call layer
 
-`execRetNullSim` (`ExecRetNull.lean`) is a LEAF — no sub-`EvalIH`, `st' = st`,
-value fixed `.null` — but it still writes the retslot `[aRet, aRet+24)` and
-completes `.ret .null`, so (like `ret`) it needs the recursive widener, NOT the
-identity-φ leaf widener.  Its `hGlue` residual is DIFFERENT from `expr`/`ret`:
-it takes the `beqz`-TAKEN path through the `value_null` callee bridge
-(`0x80004124 → 0x800042f0 → jal value_null → j 0x80004138`), which materialises
-`ValueRepr … subsret .null` and rejoins the shared copy+epilogue at `0x80004138`
-in a `SubExecReturnR` state for `st`/`.null`.
+`ret;` has no child: the arm takes the `beqz` into the `value_null` bridge,
+rejoins the retslot copy, and runs the status-3 epilogue.  Its residual is
+the whole leaf simulation at the widened exit; `rows/Field_hSRetNullClosed`
+supplies it from `HelperCall` (the bridge), `retSlotResume` (the copy and
+epilogue) and `armState_of_entry_kind` (the prologue). -/
 
-This bundle carries `execRetNullSim`'s full residual list (the same retslot
-geometry as `ret`, the `value_null`-bridge `hGlue`, and the widener at `.ret
-.null`).  The `hGlue` here is a NAMED TYPED premise (surfaced, not discharged):
-closing it requires a landed `value_null` callee-bridge Triple + the `beqz`-taken
-arm setup, which is NOT among the landed site batteries — see the ledger note in
-the report.  Everything ELSE (widener + entry marshalling) is closed. -/
-def ExecRetNullGeom
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : Vsa.While.St) (d : Nat) (env : Addr)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop :=
-  StmtSlotPinned 6 execArmRet m0 ∧
-  (stmtJumpTableBase + 4 * 6 + 4 ≤ SL.lo ∨ sp.toNat ≤ stmtJumpTableBase + 4 * 6) ∧
-  aRet.toNat % 8 = 0 ∧
-  0x80000000 ≤ aRet.toNat ∧ aRet.toNat + 24 ≤ 0x100000000 ∧
-  tohostAddr + 16 ≤ aRet.toNat ∧
-  (aRet.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ aRet.toNat) ∧
-  (aRet.toNat + 24 ≤ A.lo ∨ A.hi ≤ aRet.toNat) ∧
-  (aRet.toNat + 24 ≤ execStmtEntry ∨ execStmtEnd ≤ aRet.toNat) ∧
-  -- the OPEN `value_null`-bridge glue (∀-closed over `out0`):
-  (∀ out0 : Array String,
-    Triple
-      (fun c => ∃ ment v8 v9 v18 v19,
-        ExecArmEntryK g N A SL φf φc st execArmRet sp r aInterp aStmt aEnv aRet
-          v8 v9 v18 v19 out0 m0 ment c)
-      (fun c => ∃ subsret v1 v8 v9 v18 v19 mcall,
-        SubExecReturnR g N A SL φf φc st.store.frames.size st.store.closures.size st .null
-          sp r aRet subsret (0x80004138#64) v1 v8 v9 v18 v19 m0 mcall c)) ∧
-  ExecRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size st (.ret .null) sp r aRet m0
+/-! ## `hSVarNull` — the null declaration on the helper-call layer
 
-/-- **`execRetNullSimD`** — `ExecS.retNull` re-landed at `ExecExitD`.  Composes
-`execRetNullSim`'s `ExecExit` (`st`, `.ret .null`) with the recursive widener.
-The `value_null`-bridge `hGlue` is threaded from the `ExecRetNullGeom` bundle as a
-surfaced open residual. -/
-theorem execRetNullSimD
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : Vsa.While.St) (d : Nat) (env : Addr)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem)
-    (hSpec : ExecS st d env (.ret none) st (.ret .null))
-    (hG : ExecRetNullGeom g N A SL φf φc st d env
-      sp r aInterp aStmt aEnv aRet m0) :
-    Triple
-      (ExecEntry g N A SL φf φc st d env (.ret none) sp r aInterp aStmt aEnv aRet m0)
-      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
-        st (.ret .null) sp r aRet m0) := by
-  intro c hEntry
-  obtain ⟨hslot, htableStk, hRetAl, hRetLo, hRetHi, hRetWin, hRetStk, hRetArena,
-    hRetCode, hGlue, hW⟩ := hG
-  obtain ⟨c', hs, hExit⟩ :=
-    execRetNullSim g N A SL φf φc st d env sp r aInterp aStmt aEnv aRet m0
-      c.σ.sailOutput hSpec hslot htableStk hRetAl hRetLo hRetHi hRetWin hRetStk
-      hRetArena hRetCode (hGlue c.σ.sailOutput) c ⟨hEntry, rfl⟩
-  exact ⟨c', hs, execExitD_of_execExit_rec hExit hW⟩
-
-/-! ## PAYOFF DEMO (T1.2) — `execVarNullSimD`: the non-identity-φ statement leaf
-
-`ExecS.varNull` (`.varDecl x none`) is the statement case whose exit store is
-`st.store.define env x .null` — a `Store.define` that ADDS a frame binding, so the
-exit frame count `≠` the entry `nf` and the survival φ-pair is genuinely
-NON-identity.  Under the OLD identity-φ-only `ExecLeafWiden` (`PhiExtends.refl`)
-this case could NOT be re-landed at `ExecExitD` (the step-6b ledger's
-`hSVarNull`-blocked note).  The parametric `Widen` (= the re-landed `ExecRecWiden`
-at the `ExecExit` family, `stackFoot SL` footprint) carries its own
-`∃ φf' φc', PhiExtends φf φf' nf ∧ …`, so the `define`-widened φ is exactly the
-supplied witness — the case is now dischargeable.  `execVarNullSimD` composes
-`execVarDeclNullSim`'s packaged `ExecExit` with `execExitD_of_execExit_rec`,
-threading the widener from the geom bundle.  This is the statement twin of
-`execRetNullSimD`; the `value_null`+`env_define` body `hGlue` is the surfaced open
-residual (unchanged from `execVarDeclNullSim`).
-
-The retslot/`define` footprint story is captured by `Widen`'s `foot` parameter:
-`execVarDeclNullSim`'s survival clause already lands at `stackFoot SL` (the
-`define`d binding lives in the frame arena, disjoint from `[SL.lo,SL.hi)`), and
-`Widen.footMono` (`retslotFoot SL aRet ⊇ stackFoot SL`) is the bridge available for
-any variant whose survival is stated at the wider retslot-augmented footprint. -/
-def ExecVarNullGeom
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : Vsa.While.St) (d : Nat) (env : Addr) (x : String)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop :=
-  StmtSlotPinned 1 execArmVarDecl m0 ∧
-  (stmtJumpTableBase + 4 * 1 + 4 ≤ SL.lo ∨ sp.toNat ≤ stmtJumpTableBase + 4 * 1) ∧
-  -- the OPEN `value_null` + `env_define` body glue (∀-closed over `out0`):
-  (∀ out0 : Array String,
-    Triple
-      (fun c => ∃ ment v8 v9 v18 v19,
-        ExecArmEntryK g N A SL φf φc st execArmVarDecl sp r aInterp aStmt aEnv aRet
-          v8 v9 v18 v19 out0 m0 ment c)
-      (fun c => ∃ subsret v1 v8 v9 v18 v19 mcall,
-        SubExecReturn g N A SL φf φc st.store.frames.size st.store.closures.size
-          ⟨st.store.define env x .null, st.out⟩ .null
-          sp r aRet subsret (0x80004118#64) v1 v8 v9 v18 v19 m0 mcall c)) ∧
-  -- the NON-identity-φ widener (`define` grew the frame count): the payoff.
-  ExecRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
-    ⟨st.store.define env x .null, st.out⟩ .normal sp r aRet m0
-
-/-- **`execVarNullSimD`** — `ExecS.varNull` re-landed at `ExecExitD`, the
-non-identity-φ statement leaf.  Discharges the `hSVarNull` motive shape via the
-parametric widener (`ExecRecWiden = Widen … (stackFoot SL)`). -/
-theorem execVarNullSimD
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st : Vsa.While.St) (d : Nat) (env : Addr) (x : String)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem)
-    (hSpec : ExecS st d env (.varDecl x none)
-      ⟨st.store.define env x .null, st.out⟩ .normal)
-    (hG : ExecVarNullGeom g N A SL φf φc st d env x
-      sp r aInterp aStmt aEnv aRet m0) :
-    Triple
-      (ExecEntry g N A SL φf φc st d env (.varDecl x none)
-        sp r aInterp aStmt aEnv aRet m0)
-      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
-        ⟨st.store.define env x .null, st.out⟩ .normal sp r aRet m0) := by
-  intro c hEntry
-  obtain ⟨hslot, htableStk, hGlue, hW⟩ := hG
-  obtain ⟨c', hs, hExit⟩ :=
-    execVarDeclNullSim g N A SL φf φc st d env x sp r aInterp aStmt aEnv aRet m0
-      c.σ.sailOutput hSpec hslot htableStk (hGlue c.σ.sailOutput) c ⟨hEntry, rfl⟩
-  exact ⟨c', hs, execExitD_of_execExit_rec hExit hW⟩
+`var x;` takes the `beqz` into the `value_null` bridge and rejoins the
+declaration tail (`ld a1,8(s0)`, the copy, `jal env_define`, the normal exit).
+Its residual is the whole leaf simulation at the widened exit;
+`rows/Field_hSVarNullClosed` supplies it from `HelperCall` and the named
+`env_define` contract. -/
 
 end Vsa.Sim
 
@@ -372,17 +255,36 @@ open Vsa.Sim.TermSimAssembly
 
 local notation "SpecSt" => Vsa.While.St
 
-/-- The expr-case residual: the `ExecExprGeom` bundle, ∀-closed over the ghosts. -/
+/-- The two finite boundaries of the expression statement around the actual
+child evaluation: the parametric arm dispatch (`stmtExprArm`, `EvalChildArm`)
+and the normal resume from the child's widened exit. -/
+structure ExprCaseGeom
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' : SpecSt) (d : Nat) (env : Addr) (e : Expr) (v : Value)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop where
+  dispatch : Triple
+    (Vsa.Sim.ExecEntry g N A SL φf φc st d env (.expr e) sp r aInterp aStmt aEnv aRet m0)
+    (stmtExprArm.DispatchPost (.expr e) e g N A SL φf φc st d env
+      sp r aInterp aStmt aEnv aRet m0)
+  resume : ∀ (gC : (R : Register) → Option (RegisterType R)) (aC : BitVec 64) (mC : Mem),
+    stmtExprArm.Carrier (.expr e) e g N A SL φf φc st d env
+      sp r aInterp aStmt aEnv aRet m0 gC aC mC →
+    Triple
+      (EvalExitD gC N A SL φf φc st.store.frames.size st.store.closures.size st' v
+        (sp - 176#64) stmtExprArm.retPC (stmtExprArm.sret (sp - 176#64)) mC)
+      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' .normal sp r aRet m0)
+
+/-- The expr-case residual: `ExprCaseGeom` ∀-closed over the ghosts. -/
 def ExprResid (st st' : SpecSt) (d : Nat) (env : Addr) (e : Expr) (v : Value) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (c : Config),
-    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.expr e) sp r aInterp aStmt aEnv aRet m0 c →
-    Vsa.Sim.ExecExprGeom g N A SL φf φc st st' d env e v
-      sp r aInterp aStmt aEnv aRet m0
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    ExprCaseGeom g N A SL φf φc st st' d env e v sp r aInterp aStmt aEnv aRet m0
 
-/-- Route `hSExpr` → `execExprSimD`.  The sub-`EvalIH` (`mEvalE … a`) passes to
-`hIH` by `rfl` (`mEvalE = EvalIH`). -/
+/-- Route `hSExpr`: dispatch to the child, apply its IH at the reached entry,
+and resume at its widened exit. -/
 theorem exec_expr_row
     (hR : ∀ st st' d env e v, ExprResid st st' d env e v) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt) (v : Value)
@@ -391,22 +293,69 @@ theorem exec_expr_row
       mExecS st d env (Stmt.expr e) st' Status.normal (ExecS.expr st d env e st' v a) := by
   intro st d env e st' v a hIH
   show Vsa.Sim.ExecIH st d env (.expr e) st' .normal
-  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
-  intro c hEntry
-  exact Vsa.Sim.execExprSimD g N A SL φf φc st st' d env e v
-    sp r aInterp aStmt aEnv aRet m0 (ExecS.expr st d env e st' v a) hIH
-    (hR st st' d env e v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 c hEntry) c hEntry
+  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hEntry
+  let G := hR st st' d env e v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  obtain ⟨cfgC, hsC, gC, aC, mC, hCarrier, hChildEntry⟩ := G.dispatch cfg hEntry
+  obtain ⟨cfgX, hsX, hChildExit⟩ :=
+    hIH.forget gC N A SL φf φc (sp - 176#64) stmtExprArm.retPC
+      (stmtExprArm.sret (sp - 176#64)) aInterp aC mC cfgC hChildEntry
+  obtain ⟨cfgD, hsD, hExit⟩ := G.resume gC aC mC hCarrier cfgX hChildExit
+  exact ⟨cfgD, hsC.trans (hsX.trans hsD), hExit⟩
 
-/-- The ret-case residual: the `ExecRetGeom` bundle, ∀-closed over the ghosts. -/
+/-- The two finite boundaries of the value return around the actual child
+evaluation: the parametric arm dispatch (`stmtRetArm`) and the resume from the
+child's widened exit (the three-word copy into the retslot and the status-3
+epilogue at `0x80004138`). -/
+structure RetCaseGeom
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' : SpecSt) (d : Nat) (env : Addr) (e : Expr) (v : Value)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop where
+  dispatch : Triple
+    (Vsa.Sim.ExecEntry g N A SL φf φc st d env (.ret (some e)) sp r aInterp aStmt aEnv aRet m0)
+    (stmtRetArm.DispatchPost (.ret (some e)) e g N A SL φf φc st d env
+      sp r aInterp aStmt aEnv aRet m0)
+  resume : ∀ (gC : (R : Register) → Option (RegisterType R)) (aC : BitVec 64) (mC : Mem),
+    stmtRetArm.Carrier (.ret (some e)) e g N A SL φf φc st d env
+      sp r aInterp aStmt aEnv aRet m0 gC aC mC →
+    Triple
+      (EvalExitD gC N A SL φf φc st.store.frames.size st.store.closures.size st' v
+        (sp - 176#64) stmtRetArm.retPC (stmtRetArm.sret (sp - 176#64)) mC)
+      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' (.ret v) sp r aRet m0)
+
+/-- The ret-case residual: `RetCaseGeom` ∀-closed over the ghosts. -/
 def RetResid (st st' : SpecSt) (d : Nat) (env : Addr) (e : Expr) (v : Value) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (c : Config),
-    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.ret (some e)) sp r aInterp aStmt aEnv aRet m0 c →
-    Vsa.Sim.ExecRetGeom g N A SL φf φc st st' d env e v
-      sp r aInterp aStmt aEnv aRet m0
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    RetCaseGeom g N A SL φf φc st st' d env e v sp r aInterp aStmt aEnv aRet m0
 
-/-- Route `hSRet` → `execRetSimD`. -/
+/-- The resume seam alone: the retslot copy and status-3 epilogue from the
+child's widened exit.  The dispatch half is generic (`execStmtRetDispatch_generic`). -/
+def RetResumeResid (st st' : SpecSt) (d : Nat) (env : Addr) (e : Expr) (v : Value) : Prop :=
+  ∀ (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem)
+    (gC : (R : Register) → Option (RegisterType R)) (aC : BitVec 64) (mC : Mem),
+    stmtRetArm.Carrier (.ret (some e)) e g N A SL φf φc st d env
+      sp r aInterp aStmt aEnv aRet m0 gC aC mC →
+    Triple
+      (EvalExitD gC N A SL φf φc st.store.frames.size st.store.closures.size st' v
+        (sp - 176#64) stmtRetArm.retPC (stmtRetArm.sret (sp - 176#64)) mC)
+      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' (.ret v) sp r aRet m0)
+
+/-- The dispatch half is generic; only the resume seam is residual. -/
+theorem retResid_of_resume {st st' : SpecSt} {d : Nat} {env : Addr} {e : Expr} {v : Value}
+    (h : RetResumeResid st st' d env e v) : RetResid st st' d env e v :=
+  fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 =>
+    { dispatch := execStmtRetDispatch_generic g N A SL φf φc st d env e
+        sp r aInterp aStmt aEnv aRet m0
+      resume := h g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 }
+
+/-- Route `hSRet`: dispatch to the child, apply its IH at the reached entry,
+and resume at its widened exit. -/
 theorem exec_ret_row
     (hR : ∀ st st' d env e v, RetResid st st' d env e v) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt) (v : Value)
@@ -415,24 +364,28 @@ theorem exec_ret_row
       mExecS st d env (Stmt.ret (some e)) st' (Status.ret v) (ExecS.ret st d env e st' v a) := by
   intro st d env e st' v a hIH
   show Vsa.Sim.ExecIH st d env (.ret (some e)) st' (.ret v)
-  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
-  intro c hEntry
-  exact Vsa.Sim.execRetSimD g N A SL φf φc st st' d env e v
-    sp r aInterp aStmt aEnv aRet m0 (ExecS.ret st d env e st' v a) hIH
-    (hR st st' d env e v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 c hEntry) c hEntry
+  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hEntry
+  let G := hR st st' d env e v g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  obtain ⟨cfgC, hsC, gC, aC, mC, hCarrier, hChildEntry⟩ := G.dispatch cfg hEntry
+  obtain ⟨cfgX, hsX, hChildExit⟩ :=
+    hIH.forget gC N A SL φf φc (sp - 176#64) stmtRetArm.retPC
+      (stmtRetArm.sret (sp - 176#64)) aInterp aC mC cfgC hChildEntry
+  obtain ⟨cfgD, hsD, hExit⟩ := G.resume gC aC mC hCarrier cfgX hChildExit
+  exact ⟨cfgD, hsC.trans (hsX.trans hsD), hExit⟩
 
-/-- The retNull-case residual: the `ExecRetNullGeom` bundle (carrying the OPEN
-`value_null`-bridge glue), ∀-closed over the ghosts. -/
+/-- The retNull-case residual: the leaf simulation from the statement entry
+to the widened exit (state unchanged, status `.ret .null`), ∀-closed over
+the ghosts.  A leaf has no child, so dispatch and resume are one seam. -/
 def RetNullResid (st : SpecSt) (d : Nat) (env : Addr) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (c : Config),
-    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.ret none) sp r aInterp aStmt aEnv aRet m0 c →
-    Vsa.Sim.ExecRetNullGeom g N A SL φf φc st d env
-      sp r aInterp aStmt aEnv aRet m0
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    Triple
+      (Vsa.Sim.ExecEntry g N A SL φf φc st d env (.ret none) sp r aInterp aStmt aEnv aRet m0)
+      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st (.ret .null) sp r aRet m0)
 
-/-- Route `hSRetNull` → `execRetNullSimD` (STRETCH; leaf, no sub-IH; conditional
-on the surfaced `value_null`-bridge glue inside `RetNullResid`). -/
+/-- Route `hSRetNull`: the leaf simulation is the induction motive. -/
 theorem exec_retNull_row
     (hR : ∀ st d env, RetNullResid st d env) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr),
@@ -440,24 +393,21 @@ theorem exec_retNull_row
   intro st d env
   show Vsa.Sim.ExecIH st d env (.ret none) st (.ret .null)
   intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
-  intro c hEntry
-  exact Vsa.Sim.execRetNullSimD g N A SL φf φc st d env
-    sp r aInterp aStmt aEnv aRet m0 (ExecS.retNull st d env)
-    (hR st d env g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 c hEntry) c hEntry
+  exact hR st d env g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
 
-/-- The varNull-case residual: the `ExecVarNullGeom` bundle (carrying the OPEN
-`value_null`+`env_define` glue), ∀-closed over the ghosts. -/
+/-- The varNull-case residual: the leaf simulation from the statement entry
+to the widened exit at the defined store, ∀-closed over the ghosts. -/
 def VarNullResid (st : SpecSt) (d : Nat) (env : Addr) (x : String) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (c : Config),
-    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.varDecl x none) sp r aInterp aStmt aEnv aRet m0 c →
-    Vsa.Sim.ExecVarNullGeom g N A SL φf φc st d env x
-      sp r aInterp aStmt aEnv aRet m0
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    Triple
+      (Vsa.Sim.ExecEntry g N A SL φf φc st d env (.varDecl x none)
+        sp r aInterp aStmt aEnv aRet m0)
+      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        ⟨st.store.define env x .null, st.out⟩ .normal sp r aRet m0)
 
-/-- Route `hSVarNull` → `execVarNullSimD` (the PAYOFF: non-identity-φ statement
-leaf, unblocked by the parametric widener; conditional on the surfaced
-`value_null`+`env_define` glue inside `VarNullResid`). -/
+/-- Route `hSVarNull`: the leaf simulation is the induction motive. -/
 theorem exec_varNull_row
     (hR : ∀ st d env x, VarNullResid st d env x) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (x : String),
@@ -468,9 +418,6 @@ theorem exec_varNull_row
   show Vsa.Sim.ExecIH st d env (.varDecl x none)
     ⟨st.store.define env x .null, st.out⟩ .normal
   intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
-  intro c hEntry
-  exact Vsa.Sim.execVarNullSimD g N A SL φf φc st d env x
-    sp r aInterp aStmt aEnv aRet m0 (ExecS.varNull st d env x)
-    (hR st d env x g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 c hEntry) c hEntry
+  exact hR st d env x g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
 
 end Vsa.Sim.Rows

@@ -174,26 +174,35 @@ def ExecSeqStatusABI
 
 /-- Copy-specific stack preservation.  The closure-body loop uses bytes below
 `sp+168` for its statement return buffer and scratch, but its caller restores
-saved registers from the higher part of the same frame. -/
+saved registers from the higher part of the same frame.  The block-body loop
+runs in its parent's `exec_stmt` frame: the parent's saved registers at
+`[sp+136, sp+176)` and everything above survive, except the forwarded return
+slot `[aRet, aRet+24)`, which a returning child may write, and arena bytes,
+which the children's own frames exclude. -/
 def ExecSeqStackFrame
-    (copy : ExecSeqCopy) (SL : StackLayout) (sp : BitVec 64)
+    (copy : ExecSeqCopy) (A : Arena) (SL : StackLayout) (sp aRet : BitVec 64)
     (m0 m : Mem) : Prop :=
   match copy with
   | .closureBody => ∀ a : Nat, sp.toNat + 168 ≤ a → a < SL.hi → m[a]? = m0[a]?
-  | _ => True
+  | .blockBody => ∀ a : Nat, sp.toNat + 136 ≤ a → a < SL.hi →
+      ¬ (aRet.toNat ≤ a ∧ a < aRet.toNat + 24) → ¬ (A.lo ≤ a ∧ a < A.hi) →
+      m[a]? = m0[a]?
+  | .interpRun => True
 
 theorem ExecSeqStackFrame.trans
-    {copy : ExecSeqCopy} {SL : StackLayout} {sp : BitVec 64}
+    {copy : ExecSeqCopy} {A : Arena} {SL : StackLayout} {sp aRet : BitVec 64}
     {m0 m1 m2 : Mem}
-    (h01 : ExecSeqStackFrame copy SL sp m0 m1)
-    (h12 : ExecSeqStackFrame copy SL sp m1 m2) :
-    ExecSeqStackFrame copy SL sp m0 m2 := by
+    (h01 : ExecSeqStackFrame copy A SL sp aRet m0 m1)
+    (h12 : ExecSeqStackFrame copy A SL sp aRet m1 m2) :
+    ExecSeqStackFrame copy A SL sp aRet m0 m2 := by
   cases copy with
   | closureBody =>
       intro a hlo hhi
       rw [h12 a hlo hhi, h01 a hlo hhi]
   | interpRun => trivial
-  | blockBody => trivial
+  | blockBody =>
+      intro a hlo hhi hr hA
+      rw [h12 a hlo hhi hr hA, h01 a hlo hhi hr hA]
 
 def execSeqChildRetPC : ExecSeqCopy → Nat
   | .interpRun => 0x80004478
@@ -346,6 +355,10 @@ structure ExecSeqEntryI
   pc : c.σ.regs.get? Register.PC =
     some (BitVec.ofNat 64 (execSeqEntryPC copy ss))
   store : StoreRepr c.σ.mem N A φf φc st.store
+  /-- The represented store tolerates any further change inside the stack. -/
+  store_survives : ∀ m' : Mem,
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
+      StoreRepr m' N A φf φc st.store
   out : OutRepr c.σ st
   mem : c.σ.mem = m0
   ready : ss ≠ [] → ExecSeqLoopReady copy N A SL φf φc st d env ss sp aRet c
@@ -385,7 +398,17 @@ structure ExecSeqExitI
     ¬ (SL.lo ≤ a ∧ a < SL.hi) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       c.σ.mem[a]? = m0[a]?
   /-- The physical copy's caller-owned high-stack window survives. -/
-  stack_frame : ExecSeqStackFrame copy SL sp m0 c.σ.mem
+  stack_frame : ExecSeqStackFrame copy A SL sp aRet m0 c.σ.mem
+  /-- Presence monotonicity (`MemExtends m0 c.σ.mem`, spelled out: that
+  definition lives in `EvalSimCommon`, above this module), as in `ExecExitD`. -/
+  mem_extends : ∀ (a : Nat) (b : BitVec 8), m0[a]? = some b → ∃ b', c.σ.mem[a]? = some b'
+  /-- The re-represented store at one map pair tolerates any further change
+  inside the stack, as in `ExecExitD`. -/
+  store_survives : ∃ (φf' φc' : Addr → Nat),
+    PhiExtends φf φf' nf ∧ PhiExtends φc φc' nc ∧
+      ∀ m' : Mem,
+        (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
+          StoreRepr m' N A φf' φc' st'.store
   frame : ∀ R : Register, ExecSeqFrameReg copy R → c.σ.regs.get? R = g R
   minstret : ∃ v, c.σ.regs.get? Register.minstret = some v
 
@@ -414,7 +437,12 @@ theorem execSeqNilI
       retval := fun v hv => by cases hv
       mem_frame := fun a _ _ => by rw [hc.mem]
       stack_frame := by
-        cases copy <;> simp [ExecSeqStackFrame, hc.mem]
+        cases copy with
+        | interpRun => trivial
+        | closureBody => intro a _ _; rw [hc.mem]
+        | blockBody => intro a _ _ _ _; rw [hc.mem]
+      mem_extends := fun _ b h => ⟨b, by rw [hc.mem]; exact h⟩
+      store_survives := ⟨φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, hc.store_survives⟩
       frame := hc.frame
       minstret := hc.minstret }
 

@@ -254,7 +254,7 @@ theorem argsConsResid_of_stages
     obtain ⟨callNode, f, hpre⟩ := hc0
     obtain ⟨c1, hs1, hret⟩ :=
       (argsChildReturn_of_jalBundle st st' d env callNode f
-        (esPrefix ++ e :: es) e v hHead) c0 hpre
+        (esPrefix ++ e :: es) e v hHead.forget) c0 hpre
     obtain ⟨c2, hs2, hcopy⟩ := hToCopy callNode f c1 hret
     exact ⟨c2, hs1.trans hs2, hcopy⟩
   have hOne : Triple
@@ -660,7 +660,27 @@ def CallArmHandoff
     st.store.closures.size ≤ st'''.store.closures.size ∧
     String.join out0.toList = st'''.out ∧
     PreEpilogueV g N A SL φf' φc' st''' v
-      sp r sret v8 v9 v18 out0 m0 mpre c
+      sp r sret v8 v9 v18 out0 m0 mpre c ∧
+    -- the epilogue-entry facts at the SAME selected pair: presence, the complete
+    -- result words, and `st'''.store` survival across the stack region.
+    EpilogueEntryFacts N A SL φf' φc' st''' sret m0 mpre
+
+/-- The shared epilogue lands the COHERENT return at the pair the call arm
+selected (`armReturn_of_facts` = `blockD_v_return` from the handoff's facts). -/
+theorem callArmEpilogueReturn
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st''' : SpecSt) (v : Value) (sp r sret : BitVec 64) (m0 : Mem) :
+    Triple
+      (CallArmHandoff g N A SL φf φc st st''' v sp r sret m0)
+      (EvalReturn g N A SL φf φc st.store.frames.size st.store.closures.size
+        st''' v sp r sret m0 (fun _ _ _ => True)) := by
+  intro c hc
+  obtain ⟨φf', φc', v8, v9, v18, out0, mpre,
+    hpf, hpc, _hfr, _hcl, _hout, hpre, hF⟩ := hc
+  exact armReturn_of_facts g N A SL φf φc φf' φc'
+    st.store.frames.size st.store.closures.size st''' v
+    sp r sret v8 v9 v18 out0 m0 hpf hpc c ⟨mpre, hpre, hF⟩
 
 theorem callArmEpilogueRun
     (g : (R : Register) → Option (RegisterType R))
@@ -669,16 +689,9 @@ theorem callArmEpilogueRun
     Triple
       (CallArmHandoff g N A SL φf φc st st''' v sp r sret m0)
       (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
-        st''' v sp r sret m0) := by
-  intro c hc
-  obtain ⟨φf', φc', v8, v9, v18, out0, mpre,
-    hpf, hpc, hfr, hcl, _hout, hpre⟩ := hc
-  obtain ⟨c', hs, hexit, _⟩ :=
-    blockD_v_phic g N A SL φf φc φf' φc'
-      st.store.frames.size st.store.closures.size st''' v
-      sp r sret v8 v9 v18 out0 m0 (fun _ => True)
-      hpf hpc ⟨hfr, hcl⟩ c ⟨mpre, hpre, trivial⟩
-  exact ⟨c', hs, hexit⟩
+        st''' v sp r sret m0) :=
+  (callArmEpilogueReturn g N A SL φf φc st st''' v sp r sret m0).conseq
+    (fun _ h => h) (fun _ h => h.exit.1)
 
 /-- Four strict residual cuts for the call arm.  No field restates the whole
 `EvalEntry → EvalExit` goal. -/
@@ -702,8 +715,37 @@ structure CallArmStages
     (CallDispatchDone g N A SL φf φc st st'' st''' v sret)
     (CallArmHandoff g N A SL φf φc st st''' v sp r sret m0)
 
-/-- Full arm composition.  The callee, argument-list, and call motives are
-executed at their real indexed boundaries. -/
+/-- Full arm composition to the COHERENT return.  The callee, argument-list, and
+call motives are executed at their real indexed boundaries; the epilogue lands
+`EvalReturn` at the pair the handoff selected. -/
+theorem callReturn_of_stages
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' st''' : SpecSt) (d : Nat) (env : Addr)
+    (f : Expr) (args : List Expr) (fv : Value) (vs : List Value) (v : Value)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
+    {hArgs : EvalArgs st' d env args st'' vs}
+    {hCall : Call st'' d fv vs st''' v}
+    (hCallee : EvalIH st d env f st' fv)
+    (hArgsIH : mEvalArgs st' d env args st'' vs hArgs)
+    (hCallIH : mCall st'' d fv vs st''' v hCall)
+    (hS : CallArmStages g N A SL φf φc st st' st'' st''' d env
+      f args fv vs v sp r sret aEnv aExpr m0) :
+    Triple
+      (EvalEntry g N A SL φf φc st d env (.call f args) sp r sret aEnv aExpr m0)
+      (EvalReturn g N A SL φf φc st.store.frames.size st.store.closures.size
+        st''' v sp r sret m0 (fun _ _ _ => True)) :=
+  Triple.seq hS.callee <| Triple.seq
+    (argsChildReturn_of_jalBundle st st' d env aExpr f args f fv hCallee) <| Triple.seq
+    hS.calleeToArgs <| Triple.seq
+    (callArgsRun g N A SL φf φc st st' st'' d env args vs
+      (Vsa.While.maxCallDepth - d) (Vsa.While.maxCallDepth - d) m0 hArgsIH) <|
+    Triple.seq hS.argsToCall <| Triple.seq
+    (callDispatchRun g N A SL φf φc st st'' st''' d fv vs v sret hCallIH) <|
+    Triple.seq hS.callToEpilogue
+      (callArmEpilogueReturn g N A SL φf φc st st''' v sp r sret m0)
+
+/-- The plain-exit projection of the same composition. -/
 theorem callArmSpec_of_stages
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -719,15 +761,9 @@ theorem callArmSpec_of_stages
     CallArmSpec g N A SL φf φc st st' st'' st''' d env
       f args fv vs v sp r sret aEnv aExpr m0 := by
   intro hCallee _hArgs _hCall
-  exact Triple.seq hS.callee <| Triple.seq
-    (argsChildReturn_of_jalBundle st st' d env aExpr f args f fv hCallee) <| Triple.seq
-    hS.calleeToArgs <| Triple.seq
-    (callArgsRun g N A SL φf φc st st' st'' d env args vs
-      (Vsa.While.maxCallDepth - d) (Vsa.While.maxCallDepth - d) m0 hArgsIH) <|
-    Triple.seq hS.argsToCall <| Triple.seq
-    (callDispatchRun g N A SL φf φc st st'' st''' d fv vs v sret hCallIH) <|
-    Triple.seq hS.callToEpilogue
-      (callArmEpilogueRun g N A SL φf φc st st''' v sp r sret m0)
+  exact (callReturn_of_stages g N A SL φf φc st st' st'' st''' d env f args fv vs v
+    sp r sret aEnv aExpr m0 hCallee hArgsIH hCallIH hS).conseq
+    (fun _ h => h) (fun _ h => h.exit.1)
 
 /-- Residual provider consumed by `eval_call_row`. -/
 theorem callResid_of_stages
@@ -741,25 +777,21 @@ theorem callResid_of_stages
       (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
       (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
       CallArmStages g N A SL φf φc st st' st'' st''' d env
-        f args fv vs v sp r sret aEnv aExpr m0)
-    (hWiden : ∀ (g : (R : Register) → Option (RegisterType R))
-      (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-      (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem),
-      EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
-        st''' v sp r sret m0) :
+        f args fv vs v sp r sret aEnv aExpr m0) :
     CallResid st st' st'' st''' d env f args fv vs v hEf hBound hArgs hCall := by
   intro hCallee hArgsIH hCallIH g N A SL φf φc sp r sret aEnv aExpr m0
-  exact ⟨callArmSpec_of_stages g N A SL φf φc st st' st'' st''' d env
-      f args fv vs v sp r sret aEnv aExpr m0 hArgsIH hCallIH
-      (hStages g N A SL φf φc sp r sret aEnv aExpr m0),
-    hWiden g N A SL φf φc sp r sret aEnv aExpr m0⟩
+  exact callReturn_of_stages g N A SL φf φc st st' st'' st''' d env
+    f args fv vs v sp r sret aEnv aExpr m0 hCallee.forget hArgsIH hCallIH
+    (hStages g N A SL φf φc sp r sret aEnv aExpr m0)
 
 #print axioms argsChildReturn_of_jalBundle
 #print axioms argsReturnCopyRun
 #print axioms argsConsResid_of_stages
 #print axioms callArgsRun
 #print axioms callDispatchRun
+#print axioms callArmEpilogueReturn
 #print axioms callArmEpilogueRun
+#print axioms callReturn_of_stages
 #print axioms callArmSpec_of_stages
 #print axioms callResid_of_stages
 #print axioms nativeCallSpec_of_stages

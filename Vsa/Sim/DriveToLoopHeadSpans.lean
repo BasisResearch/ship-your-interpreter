@@ -1379,6 +1379,7 @@ def segEntryFields_of_ready
     { good := hgood, tick := htick,
       pc := by rw [hentryPC]; exact hpc,
       store := hstore,
+      store_survives := hsurv,
       out := houtH, mem := rfl,
       ready := fun _ =>
         { env_valid := EnvValid.init

@@ -25,7 +25,7 @@ This file is the **arm-site supplier**: it discharges the tag-`10` (`EX_FN`, arm
   `fnArmSeamRun_of_allocClosure` (`rows/FnArmSeamReduce`, modulo the
   `AllocClosureContract`);
 * the closure-alloc `PhiExtends`/output invariant, the store-WF invariant
-  `StoreClosuresBounded`, and the `EvalRecWiden` φc-widener.
+  `StoreClosuresBounded`, and the `EpilogueEntryFacts` φc-widener.
 
 The two SEAM bundles (`AllocBuildStagingLink`/`AllocBuildTailFacts`) are NOT
 supplied here: per the wave-40 analysis they are the irreducible off-path machine
@@ -112,7 +112,7 @@ the closure-alloc facts, the store-WF invariant, and a per-ghost provider of the
 `FnSlotBytes` via `groundSlot_10`).  This is the arm-site supplier: every field of
 `perGhost` is supplied, with the ONE Layout byte-fact (`hslot`) now discharged from
 concrete ELF bytes rather than assumed.  What remains inside `hSeamPer` is exactly
-the irreducible `EX_FN` machine (the two seam bundles + `EvalRecWiden`), the same
+the irreducible `EX_FN` machine (the two seam bundles + `EpilogueEntryFacts`), the same
 class every arm carries to the M6 Layout. -/
 theorem fnResidBundle_of_parts
     (st : Vsa.While.St) (d : Nat) (env : Addr)
@@ -124,7 +124,7 @@ theorem fnResidBundle_of_parts
     -- widened closures map, the register/geometry ghosts, a callee-code
     -- predicate, the closure-alloc PhiExtends + output invariant, the tag-10
     -- dispatch layout (slot bytes + kind/survival/disjointness), the EX_FN seam,
-    -- and the EvalRecWiden widener.  The seam (`FnArmSeamRun`) is the irreducible
+    -- and the EpilogueEntryFacts widener.  The seam (`FnArmSeamRun`) is the irreducible
     -- machine residual (the two seam bundles enter through it).
     (hSeamPer : ∀ (g : (R : Register) → Option (RegisterType R))
       (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -139,8 +139,7 @@ theorem fnResidBundle_of_parts
           SL.lo ≤ a8 → a8 + 8 ≤ sp.toNat → calleeLoaded mem → calleeLoaded (writeMap8 mem a8 dd)) ∧
         FnArmSeamRun g N A SL φf φc' st a (0x800033c4#64) calleeLoaded name params body store'
           sp r sret aExpr aEnv m0 v8 v9 v18 out0 mpre ∧
-        EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
-          ⟨store', st.out⟩ (.closure a) sp r sret m0) :
+        EpilogueEntryFacts N A SL φf φc' ⟨store', st.out⟩ sret m0 mpre) :
     FnResidBundle st d env name params body store' a where
   hAlloc := hAlloc
   hWF := hWF
@@ -186,8 +185,7 @@ theorem fnResid_of_parts
           SL.lo ≤ a8 → a8 + 8 ≤ sp.toNat → calleeLoaded mem → calleeLoaded (writeMap8 mem a8 dd)) ∧
         FnArmSeamRun g N A SL φf φc' st a (0x800033c4#64) calleeLoaded name params body store'
           sp r sret aExpr aEnv m0 v8 v9 v18 out0 mpre ∧
-        EvalRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size
-          ⟨store', st.out⟩ (.closure a) sp r sret m0) :
+        EpilogueEntryFacts N A SL φf φc' ⟨store', st.out⟩ sret m0 mpre) :
     FnResid st d env name params body store' a :=
   fnResid_from_bundle st d env name params body store' a
     (fnResidBundle_of_parts st d env name params body store' a hAlloc hWF hSeamPer)

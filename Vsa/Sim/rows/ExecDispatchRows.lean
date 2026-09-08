@@ -1,4 +1,5 @@
 import Vsa.Sim.ExecIf
+import Vsa.Sim.rows.EvalChildArmIf
 import Vsa.Sim.ExecIf2
 import Vsa.Sim.ExecWhile
 import Vsa.Sim.ExecWhile2
@@ -97,13 +98,34 @@ structure IfNoneGeom
             sp r aRet subsret (0x800042d4#64) v1 v8 v9 v18 v19 m0 mcall cfg)
   hW : ExecRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size st' .normal sp r aRet m0
 
-/-- The ifNone residual: `IfNoneGeom` ∀-closed over the ghosts. -/
+/-- The two finite boundaries of `ifNone` around the actual condition
+evaluation: the parametric arm dispatch (`ifCondArm`) and the falsy resume from
+the condition's widened exit (the copy, `value_truthy`, the taken `beqz`, the
+null else read, and the normal epilogue at `0x800042d4`). -/
+structure IfNoneCaseGeom
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : Stmt) (v : Value)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop where
+  dispatch : Triple
+    (ExecEntry g N A SL φf φc st d env (.ifStmt c t none) sp r aInterp aStmt aEnv aRet m0)
+    (ifCondArm.DispatchPost (.ifStmt c t none) c g N A SL φf φc st d env
+      sp r aInterp aStmt aEnv aRet m0)
+  resume : ∀ (gC : (R : Register) → Option (RegisterType R)) (aC : BitVec 64) (mC : Mem),
+    ifCondArm.Carrier (.ifStmt c t none) c g N A SL φf φc st d env
+      sp r aInterp aStmt aEnv aRet m0 gC aC mC →
+    Triple
+      (EvalExitD gC N A SL φf φc st.store.frames.size st.store.closures.size st' v
+        (sp - 176#64) ifCondArm.retPC (ifCondArm.sret (sp - 176#64)) mC)
+      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' .normal sp r aRet m0)
+
+/-- The ifNone residual: `IfNoneCaseGeom` ∀-closed over the ghosts. -/
 def IfNoneResid (st st' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : Stmt) (v : Value) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (cfg : Config),
-    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.ifStmt c t none) sp r aInterp aStmt aEnv aRet m0 cfg →
-    IfNoneGeom g N A SL φf φc st st' d env c t v sp r aInterp aStmt aEnv aRet m0
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    IfNoneCaseGeom g N A SL φf φc st st' d env c t v sp r aInterp aStmt aEnv aRet m0
 
 /-- Exact `ifNone` constructor boundary. -/
 def IfNoneCaseResid
@@ -113,9 +135,8 @@ def IfNoneCaseResid
   mEvalE st d env c st' v hC →
   IfNoneResid st st' d env c t v
 
-/-- Route `hSIfNone` → `execIH_of_exitSim` over `execIfNoneSim`.  The cond `EvalIH`
-passes to the sim's `hIH` by `rfl`; the falsy hypothesis `a_1` is the sim's own spec
-premise `hSpec`. -/
+/-- Route `hSIfNone`: dispatch to the condition, apply its IH at the reached
+entry, and resume at its widened exit. -/
 theorem exec_ifNone_row
     (hR : ∀ st st' d env c t v hC,
       IfNoneCaseResid st st' d env c t v hC) :
@@ -125,15 +146,14 @@ theorem exec_ifNone_row
       mExecS st d env (Stmt.ifStmt c t none) st' Status.normal (ExecS.ifNone st d env c t st' v a a_1) := by
   intro st d env c t st' v a a_1 hIH
   show ExecIH st d env (.ifStmt c t none) st' .normal
-  exact execIH_of_exitSim'
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
-      (hR st st' d env c t v a a_1 hIH g N A SL φf φc
-        sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
-      let G := hR st st' d env c t v a a_1 hIH g N A SL φf φc
-        sp r aInterp aStmt aEnv aRet m0 cfg hE
-      execIfNoneSim g N A SL φf φc st st' d env c t v sp r aInterp aStmt aEnv aRet m0
-        out0 (ExecS.ifNone st d env c t st' v a a_1) hIH G.hslot G.htableStk (G.hGlue out0))
+  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hEntry
+  let G := hR st st' d env c t v a a_1 hIH g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  obtain ⟨cfgC, hsC, gC, aC, mC, hCarrier, hCondEntry⟩ := G.dispatch cfg hEntry
+  obtain ⟨cfgX, hsX, hCondExit⟩ :=
+    hIH.forget gC N A SL φf φc (sp - 176#64) ifCondArm.retPC
+      (ifCondArm.sret (sp - 176#64)) aInterp aC mC cfgC hCondEntry
+  obtain ⟨cfgD, hsD, hExit⟩ := G.resume gC aC mC hCarrier cfgX hCondExit
+  exact ⟨cfgD, hsC.trans (hsX.trans hsD), hExit⟩
 
 /-! ## `whileFalse` — condition dispatch and reached normal return -/
 
@@ -195,54 +215,96 @@ theorem exec_whileFalse_row
   obtain ⟨cfgC, hsC, gCond, aCond, mCond, hCarrier, hCondEntry⟩ :=
     G.condDispatch cfg hEntry
   obtain ⟨cfgCX, hsCX, hCondExit⟩ :=
-    hIH gCond N A SL φf φc (sp - 176#64) 0x80004050#64
+    hIH.forget gCond N A SL φf φc (sp - 176#64) 0x80004050#64
       (sp - 96#64) aInterp aCond mCond cfgC hCondEntry
   obtain ⟨cfgD, hsD, hExit⟩ :=
     G.condResume gCond aCond mCond hCarrier cfgCX hCondExit
   exact ⟨cfgD, hsC.trans (hsCX.trans hsD), hExit⟩
 
-/-! ## `ifTrue` — `execIfTrueSim` (re-dispatch; carries the branch `ExecDispatchIH`) -/
+/-! ## `ifTrue` / `ifFalse` — dispatch, condition, and the in-frame re-dispatch -/
 
-/-- `execIfTrueSim`'s residual bundle: the branch `ExecDispatchIH` (the genuine
-separate residual — see module doc), the slot pins, the frame-alloc `hmaps`, the
-arm-body glue reaching `ExecDispatchReady` for the `then` branch, and the widener. -/
-structure IfTrueGeom
+/-- Rebase a widened statement exit from the memory reached before the branch
+to the statement's entry memory: presence extends through, and the frame
+composes (the branch's exceptions are the same arena and retslot windows). -/
+theorem execExitD_rebaseMem
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st st' st'' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : Stmt)
-    (e : Option Stmt) (v : Value) (status : Status)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop where
-  hslot : StmtSlotPinned 3 execArmIf m0
-  htableStk : stmtJumpTableBase + 4 * 3 + 4 ≤ SL.lo ∨ sp.toNat ≤ stmtJumpTableBase + 4 * 3
-  hmaps : ∀ (φfE φcE : Addr → Nat) (cD : Config),
-    PhiExtends φf φfE st'.store.frames.size →
-    PhiExtends φc φcE st'.store.closures.size →
-    ExecExit g N A SL φfE φcE st'.store.frames.size st'.store.closures.size
-      st'' status sp r aRet m0 cD →
-    ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
-      st'' status sp r aRet m0 cD
-  hGlue : ∀ out0 : Array String, EvalIH st d env c st' v →
-    Triple
-      (fun cfg => ∃ ment v8 v9 v18 v19,
-        ExecArmEntryK g N A SL φf φc st execArmIf sp r aInterp aStmt aEnv aRet
-          v8 v9 v18 v19 out0 m0 ment cfg)
-      (fun cfg => ∃ (φfE φcE : Addr → Nat) (aThen : BitVec 64)
-          (ment : Mem) (v8 v9 v18 v19 liveRA : BitVec 64) (outE : Array String),
-        PhiExtends φf φfE st'.store.frames.size ∧
-        PhiExtends φc φcE st'.store.closures.size ∧
-        EnvValid st' env ∧
-        ExecDispatchReady g N A SL φfE φcE st' t sp r aInterp aThen aEnv aRet
-          v8 v9 v18 v19 outE m0 ment cfg (liveRA := liveRA))
-  hW : ExecRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size st'' status sp r aRet m0
+    (nf nc : Nat) (st' : SpecSt) (status : Status) (sp r aRet : BitVec 64)
+    (m0 mR : Mem) (cfg : Config)
+    (hExt : MemExtends m0 mR)
+    (hFrame : ∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
+      (aRet.toNat ≤ a ∧ a < aRet.toNat + 24) ∨ mR[a]? = m0[a]?)
+    (hExit : ExecExitD g N A SL φf φc nf nc st' status sp r aRet mR cfg) :
+    ExecExitD g N A SL φf φc nf nc st' status sp r aRet m0 cfg := by
+  rcases hExit with ⟨hPlain, hMem, φf'', φc'', hpf, hpc, hStore⟩
+  refine ⟨?_, hExt.trans hMem, φf'', φc'', hpf, hpc, hStore⟩
+  exact
+    { good := hPlain.good
+      tick := hPlain.tick
+      pc := hPlain.pc
+      a0 := hPlain.a0
+      ra := hPlain.ra
+      spReg := hPlain.spReg
+      minstret := hPlain.minstret
+      store := hPlain.store
+      out := hPlain.out
+      retval := hPlain.retval
+      frame := hPlain.frame
+      memFrame := by
+        intro a hstk hA
+        rcases hPlain.memFrame a hstk hA with hr | heq
+        · exact Or.inl hr
+        · rcases hFrame a hstk hA with hr | heq0
+          · exact Or.inl hr
+          · exact Or.inr (heq.trans heq0) }
 
-/-- The ifTrue residual: `IfTrueGeom` ∀-closed over the ghosts. -/
-def IfTrueResid (st st' st'' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : Stmt)
-    (e : Option Stmt) (v : Value) (status : Status) : Prop :=
+/-- The in-frame re-dispatch state for a branch: the branch node in `s0`, the
+dispatch registers, and the frame relative to the memory actually reached. -/
+def IfBranchReady
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf' φc' : Addr → Nat)
+    (st' : SpecSt) (branch : Stmt) (sp r aInterp aEnv aRet : BitVec 64)
+    (cfg : Config) : Prop :=
+  ∃ (aBranch liveRA v8 v9 v18 v19 : BitVec 64),
+    ExecDispatchReady g N A SL φf' φc' st' branch sp r aInterp aBranch aEnv aRet
+      v8 v9 v18 v19 cfg.σ.sailOutput cfg.σ.mem cfg.σ.mem cfg (liveRA := liveRA)
+
+/-- The two finite boundaries of an `if` with a taken branch: the parametric
+arm dispatch and the resume from the condition's widened exit to the branch's
+in-frame re-dispatch, with the reached memory's relation to the entry memory. -/
+structure IfBranchCaseGeom
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : Stmt)
+    (e : Option Stmt) (v : Value) (branch : Stmt)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop where
+  dispatch : Triple
+    (ExecEntry g N A SL φf φc st d env (.ifStmt c t e) sp r aInterp aStmt aEnv aRet m0)
+    (ifCondArm.DispatchPost (.ifStmt c t e) c g N A SL φf φc st d env
+      sp r aInterp aStmt aEnv aRet m0)
+  resume : ∀ (gC : (R : Register) → Option (RegisterType R)) (aC : BitVec 64) (mC : Mem),
+    ifCondArm.Carrier (.ifStmt c t e) c g N A SL φf φc st d env
+      sp r aInterp aStmt aEnv aRet m0 gC aC mC →
+    Triple
+      (EvalExitD gC N A SL φf φc st.store.frames.size st.store.closures.size st' v
+        (sp - 176#64) ifCondArm.retPC (ifCondArm.sret (sp - 176#64)) mC)
+      (fun cfg => ∃ (φf' φc' : Addr → Nat),
+        PhiExtends φf φf' st.store.frames.size ∧
+        PhiExtends φc φc' st.store.closures.size ∧
+        MemExtends m0 cfg.σ.mem ∧
+        (∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
+          (aRet.toNat ≤ a ∧ a < aRet.toNat + 24) ∨ cfg.σ.mem[a]? = m0[a]?) ∧
+        IfBranchReady g N A SL φf' φc' st' branch sp r aInterp aEnv aRet cfg)
+
+/-- The ifTrue residual: `IfBranchCaseGeom` at the `then` branch, ∀-closed
+over the ghosts.  (`st''`/`status` are the recursor's exit indices; the
+branch run supplies them through its own induction hypothesis.) -/
+def IfTrueResid (st st' _st'' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t : Stmt)
+    (e : Option Stmt) (v : Value) (_status : Status) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (cfg : Config),
-    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.ifStmt c t e) sp r aInterp aStmt aEnv aRet m0 cfg →
-    IfTrueGeom g N A SL φf φc st st' st'' d env c t e v status sp r aInterp aStmt aEnv aRet m0
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    IfBranchCaseGeom g N A SL φf φc st st' d env c t e v t sp r aInterp aStmt aEnv aRet m0
 
 /-- Exact `ifTrue` constructor boundary. -/
 def IfTrueCaseResid
@@ -255,9 +317,44 @@ def IfTrueCaseResid
   ExecDispatchIH st' d env t st'' status →
   IfTrueResid st st' st'' d env c t e v status
 
-/-- Route `hSIfTrue` → `execIH_of_exitSim` over `execIfTrueSim`.  The `hGlue` field is
-stated at the per-config `cfg.σ.sailOutput`, matching what `execIfTrueSim` expects
-(its `hGlue` is NOT `out0`-quantified — it fires at the sim's chosen entry output). -/
+/-- Route a taken-branch geometry through the condition IH, the branch's
+in-frame dispatch IH, and the two exit rebases. -/
+theorem execIH_of_ifBranch
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st st' st'' : SpecSt} {d : Nat} {env : Addr} {c : Expr} {t : Stmt}
+    {e : Option Stmt} {v : Value} {branch : Stmt} {status : Status}
+    {sp r aInterp aStmt aEnv aRet : BitVec 64} {m0 : Mem}
+    (hC : EvalE st d env c st' v)
+    (hIH : EvalIH st d env c st' v)
+    (hBranch : ExecDispatchIH st' d env branch st'' status)
+    (G : IfBranchCaseGeom g N A SL φf φc st st' d env c t e v branch
+      sp r aInterp aStmt aEnv aRet m0) :
+    Triple
+      (ExecEntry g N A SL φf φc st d env (.ifStmt c t e) sp r aInterp aStmt aEnv aRet m0)
+      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st'' status sp r aRet m0) := by
+  intro cfg hEntry
+  obtain ⟨cfgC, hsC, gC, aC, mC, hCarrier, hCondEntry⟩ := G.dispatch cfg hEntry
+  obtain ⟨cfgX, hsX, hCondExit⟩ :=
+    hIH gC N A SL φf φc (sp - 176#64) ifCondArm.retPC
+      (ifCondArm.sret (sp - 176#64)) aInterp aC mC cfgC hCondEntry
+  obtain ⟨cfgR, hsR, φf', φc', hpf, hpc, hExt, hFrame, aBranch, liveRA, v8, v9, v18, v19,
+    hReady⟩ := G.resume gC aC mC hCarrier cfgX hCondExit
+  have henv : EnvValid st' env := hCarrier.env_valid.afterEvalE hC
+  obtain ⟨cfgE, hsE, hExitR⟩ :=
+    hBranch henv g N A SL φf' φc' sp r aInterp aBranch aEnv aRet v8 v9 v18 v19
+      cfgR.σ.sailOutput cfgR.σ.mem cfgR.σ.mem cfgR ⟨liveRA, hReady⟩
+  have hSize : StoreLe st.store st'.store := evalE_store_mono hC
+  have hExit1 := execExitD_rebaseMaps g N A SL φf φc φf' φc'
+    st.store.frames.size st.store.closures.size
+    st'.store.frames.size st'.store.closures.size st'' status sp r aRet
+    cfgR.σ.mem cfgE hSize hpf hpc hExitR
+  exact ⟨cfgE, ((hsC.trans hsX).trans hsR).trans hsE,
+    execExitD_rebaseMem g N A SL φf φc _ _ st'' status sp r aRet m0 cfgR.σ.mem cfgE
+      hExt hFrame hExit1⟩
+
+/-- Route `hSIfTrue` (indexed form: the branch dispatch IH is explicit). -/
 theorem exec_ifTrue_indexed_row
     (hR : ∀ st st' st'' d env c t e v status hC hB,
       IfTrueCaseResid st st' st'' d env c t e v status hC hB) :
@@ -270,16 +367,10 @@ theorem exec_ifTrue_indexed_row
       mExecS st d env (Stmt.ifStmt c t e) st'' status (ExecS.ifTrue st d env c t e st' st'' v status a a_1 a_2) := by
   intro st d env c t e st' st'' v status a a_1 a_2 hIH hFreshBranch hBranch
   show ExecIH st d env (.ifStmt c t e) st'' status
-  exact execIH_of_exitSim'
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
-      (hR st st' st'' d env c t e v status a a_2 a_1 hIH hFreshBranch hBranch
-        g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
-      let G := hR st st' st'' d env c t e v status a a_2 a_1 hIH hFreshBranch hBranch
-        g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE
-      execIfTrueSim g N A SL φf φc st st' st'' d env c t e status v
-        sp r aInterp aStmt aEnv aRet m0 out0 (ExecS.ifTrue st d env c t e st' st'' v status a a_1 a_2)
-        hIH a_1 hBranch G.hslot G.htableStk G.hmaps (G.hGlue out0))
+  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  exact execIH_of_ifBranch a hIH.forget hBranch
+    (hR st st' st'' d env c t e v status a a_2 a_1 hIH hFreshBranch hBranch
+      g N A SL φf φc sp r aInterp aStmt aEnv aRet m0)
 
 theorem exec_ifTrue_row
     (hRoutes : ExecSRouteFamily)
@@ -297,47 +388,14 @@ theorem exec_ifTrue_row
   exact exec_ifTrue_indexed_row hR st d env c t e st' st'' v status a a_1 a_2
     hIH hFreshBranch (hRoutes st' d env t st'' status a_2).dispatch
 
-/-! ## `ifFalse` — symmetric to `ifTrue` (else branch, `bnez` taken) -/
-
-/-- `execIfFalseSim`'s residual bundle: the `else`-branch `ExecDispatchIH`, slot pins,
-`hmaps`, arm-body glue reaching `ExecDispatchReady` for `e`, widener. -/
-structure IfFalseGeom
-    (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (st st' st'' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t e : Stmt)
-    (v : Value) (status : Status)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) : Prop where
-  hslot : StmtSlotPinned 3 execArmIf m0
-  htableStk : stmtJumpTableBase + 4 * 3 + 4 ≤ SL.lo ∨ sp.toNat ≤ stmtJumpTableBase + 4 * 3
-  hmaps : ∀ (φfE φcE : Addr → Nat) (cD : Config),
-    PhiExtends φf φfE st'.store.frames.size →
-    PhiExtends φc φcE st'.store.closures.size →
-    ExecExit g N A SL φfE φcE st'.store.frames.size st'.store.closures.size
-      st'' status sp r aRet m0 cD →
-    ExecExit g N A SL φf φc st.store.frames.size st.store.closures.size
-      st'' status sp r aRet m0 cD
-  hGlue : ∀ out0 : Array String, EvalIH st d env c st' v →
-    Triple
-      (fun cfg => ∃ ment v8 v9 v18 v19,
-        ExecArmEntryK g N A SL φf φc st execArmIf sp r aInterp aStmt aEnv aRet
-          v8 v9 v18 v19 out0 m0 ment cfg)
-      (fun cfg => ∃ (φfE φcE : Addr → Nat) (aElse : BitVec 64)
-          (ment : Mem) (v8 v9 v18 v19 liveRA : BitVec 64) (outE : Array String),
-        PhiExtends φf φfE st'.store.frames.size ∧
-        PhiExtends φc φcE st'.store.closures.size ∧
-        EnvValid st' env ∧
-        ExecDispatchReady g N A SL φfE φcE st' e sp r aInterp aElse aEnv aRet
-          v8 v9 v18 v19 outE m0 ment cfg (liveRA := liveRA))
-  hW : ExecRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size st'' status sp r aRet m0
-
-/-- The ifFalse residual: `IfFalseGeom` ∀-closed over the ghosts. -/
-def IfFalseResid (st st' st'' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t e : Stmt)
-    (v : Value) (status : Status) : Prop :=
+/-- The ifFalse residual: `IfBranchCaseGeom` at the `else` branch. -/
+def IfFalseResid (st st' _st'' : SpecSt) (d : Nat) (env : Addr) (c : Expr) (t e : Stmt)
+    (v : Value) (_status : Status) : Prop :=
   ∀ (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) (cfg : Config),
-    Vsa.Sim.ExecEntry g N A SL φf φc st d env (.ifStmt c t (some e)) sp r aInterp aStmt aEnv aRet m0 cfg →
-    IfFalseGeom g N A SL φf φc st st' st'' d env c t e v status sp r aInterp aStmt aEnv aRet m0
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem),
+    IfBranchCaseGeom g N A SL φf φc st st' d env c t (some e) v e
+      sp r aInterp aStmt aEnv aRet m0
 
 /-- Exact `ifFalse` constructor boundary. -/
 def IfFalseCaseResid
@@ -350,7 +408,7 @@ def IfFalseCaseResid
   ExecDispatchIH st' d env e st'' status →
   IfFalseResid st st' st'' d env c t e v status
 
-/-- Route `hSIfFalse` → `execIH_of_exitSim` over `execIfFalseSim`. -/
+/-- Route `hSIfFalse` (indexed form). -/
 theorem exec_ifFalse_indexed_row
     (hR : ∀ st st' st'' d env c t e v status hC hB,
       IfFalseCaseResid st st' st'' d env c t e v status hC hB) :
@@ -363,16 +421,10 @@ theorem exec_ifFalse_indexed_row
       mExecS st d env (Stmt.ifStmt c t (some e)) st'' status (ExecS.ifFalse st d env c t e st' st'' v status a a_1 a_2) := by
   intro st d env c t e st' st'' v status a a_1 a_2 hIH hFreshBranch hBranch
   show ExecIH st d env (.ifStmt c t (some e)) st'' status
-  exact execIH_of_exitSim'
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE =>
-      (hR st st' st'' d env c t e v status a a_2 a_1 hIH hFreshBranch hBranch
-        g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE).hW)
-    (fun g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE out0 =>
-      let G := hR st st' st'' d env c t e v status a a_2 a_1 hIH hFreshBranch hBranch
-        g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hE
-      execIfFalseSim g N A SL φf φc st st' st'' d env c t e status v
-        sp r aInterp aStmt aEnv aRet m0 out0 (ExecS.ifFalse st d env c t e st' st'' v status a a_1 a_2)
-        hIH a_1 hBranch G.hslot G.htableStk G.hmaps (G.hGlue out0))
+  intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
+  exact execIH_of_ifBranch a hIH.forget hBranch
+    (hR st st' st'' d env c t e v status a a_2 a_1 hIH hFreshBranch hBranch
+      g N A SL φf φc sp r aInterp aStmt aEnv aRet m0)
 
 theorem exec_ifFalse_row
     (hRoutes : ExecSRouteFamily)
@@ -425,9 +477,51 @@ structure BlockGeom
         st' status sp r aRet m0)
   hW : ExecRecWiden g N A SL φf φc st.store.frames.size st.store.closures.size st' status sp r aRet m0
 
+/-- The parent `exec_stmt` frame as the block arm hands it to the indexed
+block-body loop: the saved registers in the spill slots, the loop's ghost frame
+tied to the parent's, the selected maps, and the memory relation to the
+statement entry.  The block epilogue consumes it (`blockEpilogue_run`). -/
+structure BlockArmFrame
+    (g gSeq : (R : Register) → Option (RegisterType R))
+    (A : Arena) (SL : StackLayout) (φf φc φf' φc' : Addr → Nat)
+    (st : SpecSt) (store' : Store)
+    (sp r aRet : BitVec 64) (m0 mSeq : Mem) : Prop where
+  frames : PhiExtends φf φf' st.store.frames.size
+  closures : PhiExtends φc φc' st.store.closures.size
+  frames_le : st.store.frames.size ≤ store'.frames.size
+  closures_le : st.store.closures.size ≤ store'.closures.size
+  code : Exec_stmtLoaded mSeq
+  saved_ra : read64 mSeq (sp.toNat - 8) = some r.toNat
+  saved_s0 : ∃ v, read64 mSeq (sp.toNat - 16) = some v.toNat ∧ g Register.x8 = some v
+  saved_s1 : ∃ v, read64 mSeq (sp.toNat - 24) = some v.toNat ∧ g Register.x9 = some v
+  saved_s2 : ∃ v, read64 mSeq (sp.toNat - 32) = some v.toNat ∧ g Register.x18 = some v
+  saved_s3 : ∃ v, read64 mSeq (sp.toNat - 40) = some v.toNat ∧ g Register.x19 = some v
+  parentSp : g Register.x2 = some sp
+  seqSp : gSeq Register.x2 = some (sp - 176#64)
+  seqFrame : ∀ R : Register, AbiPreservedNoise R →
+    (Register.x8 == R) = false → (Register.x9 == R) = false →
+    (Register.x18 == R) = false → (Register.x19 == R) = false →
+    (Register.x2 == R) = false → gSeq R = g R
+  memExtends : MemExtends m0 mSeq
+  memFrame : ∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
+    (aRet.toNat ≤ a ∧ a < aRet.toNat + 24) ∨ mSeq[a]? = m0[a]?
+  spRoom : 176 ≤ sp.toNat
+  spHi : sp.toNat ≤ 0x100000000
+  spLo : 0x80000000 ≤ sp.toNat
+  spWin : tohostAddr + 16 + 176 ≤ sp.toNat
+  spAlign : sp.toNat % 8 = 0
+  retAlign : r.toNat % 4 = 0
+  stackLo : SL.lo + 176 ≤ sp.toNat
+  stackHi : sp.toNat ≤ SL.hi
+  stackWin : tohostAddr + 16 ≤ SL.lo
+  arenaStack : A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo
+  arenaCode : A.hi ≤ execStmtEntry ∨ execStmtEnd ≤ A.lo
+  retAbove : sp.toNat ≤ aRet.toNat
+
 /-- Faithful block composition around the indexed physical block-body loop.
-The arm includes `env_new` and loop setup; the epilogue restores the enclosing
-`exec_stmt` frame. -/
+The arm includes `env_new` and loop setup and retains the parent frame
+(`BlockArmFrame`); the epilogue restores the enclosing `exec_stmt` frame from
+it. -/
 structure BlockIndexedGeom
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -440,9 +534,11 @@ structure BlockIndexedGeom
     (fun cfg => ∃ (gSeq : (R : Register) → Option (RegisterType R))
         (φf' φc' : Addr → Nat) (mSeq : Mem),
       ExecSeqEntryI .blockBody gSeq N A SL φf' φc'
-        ⟨store', st.out⟩ d inner ss (sp - 176#64) aRet mSeq cfg)
+        ⟨store', st.out⟩ d inner ss (sp - 176#64) aRet mSeq cfg ∧
+      BlockArmFrame g gSeq A SL φf φc φf' φc' st store' sp r aRet m0 mSeq)
   hEpi : ∀ (gSeq : (R : Register) → Option (RegisterType R))
       (φf' φc' : Addr → Nat) (mSeq : Mem),
+    BlockArmFrame g gSeq A SL φf φc φf' φc' st store' sp r aRet m0 mSeq →
     Triple
       (ExecSeqExitI .blockBody gSeq N A SL φf' φc'
         store'.frames.size store'.closures.size st' status
@@ -496,11 +592,11 @@ theorem exec_block_row
   intro g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hEntry
   let G := hR st st' d env ss status store' inner a_1 a hSeqIH
     g N A SL φf φc sp r aInterp aStmt aEnv aRet m0 cfg hEntry
-  obtain ⟨cfgS, hsS, gSeq, φf', φc', mSeq, hSeqEntry⟩ := G.hArm cfg hEntry
+  obtain ⟨cfgS, hsS, gSeq, φf', φc', mSeq, hSeqEntry, hFr⟩ := G.hArm cfg hEntry
   obtain ⟨cfgX, hsX, hSeqExit⟩ :=
     hSeqIH .blockBody gSeq N A SL φf' φc' (sp - 176#64) aRet mSeq
       (by trivial) cfgS hSeqEntry
-  obtain ⟨cfgE, hsE, hExit⟩ := G.hEpi gSeq φf' φc' mSeq cfgX hSeqExit
+  obtain ⟨cfgE, hsE, hExit⟩ := G.hEpi gSeq φf' φc' mSeq hFr cfgX hSeqExit
   exact ⟨cfgE, (hsS.trans hsX).trans hsE, hExit⟩
 
 #print axioms exec_block_row
@@ -748,7 +844,7 @@ theorem exec_whileBreak_row
   let G := hR st st' st'' d env c b v a a_2 a_1 hCond hBody
     g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
   have hstep := execWhileStepI_of_geom g N A SL φf φc st st' st'' st'' d env
-    c b v .brk .normal sp r aInterp aStmt aEnv aRet m0 hCond hBody G.geom
+    c b v .brk .normal sp r aInterp aStmt aEnv aRet m0 hCond.forget hBody G.geom
   obtain ⟨cfgE, hsE, hExit⟩ :=
     execWhileExitI g N A SL φf φc st st'' d env c b .brk .normal
       sp r aInterp aStmt aEnv aRet m0 (by rintro (h | h) <;> cases h)
@@ -770,7 +866,7 @@ theorem exec_whileRet_row
     g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
   have hstep := execWhileStepI_of_geom g N A SL φf φc st st' st'' st'' d env
     c b v (.ret rv) (.ret rv) sp r aInterp aStmt aEnv aRet m0
-    hCond hBody G.geom
+    hCond.forget hBody G.geom
   obtain ⟨cfgE, hsE, hExit⟩ :=
     execWhileExitI g N A SL φf φc st st'' d env c b (.ret rv) (.ret rv)
       sp r aInterp aStmt aEnv aRet m0 (by rintro (h | h) <;> cases h)
@@ -803,7 +899,7 @@ theorem exec_whileLoop_indexed_row
     g N A SL φf φc sp r aInterp aStmt aEnv aRet m0
   have hstep := execWhileStepI_of_geom g N A SL φf φc st st' st'' st''' d env
     c b v status status' sp r aInterp aStmt aEnv aRet m0
-    hCond hBody G.geom
+    hCond.forget hBody G.geom
   exact execWhileLoopI g N A SL φf φc st st' st'' st''' d env c b v
     status status' sp r aInterp aStmt aEnv aRet m0 a a_2 a_3 a_4
     hstep hRestArm cfg hEntry

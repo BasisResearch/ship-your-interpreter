@@ -119,6 +119,14 @@ The `hpayload` hypothesis carries the payload-region agreement in the exact shap
 `read64 m (srcAddr+8)`, `m'` and `m` agree on `[p, p + s.length]` (packaged via
 `AgreeP` from `ReprSurvival`). -/
 
+/-- The string a value's payload word points at: the string itself for a
+`.str`, the native name for a `.native`, nothing otherwise.  Copy lemmas ask
+for payload disjointness only for this string, never for every string. -/
+def ValuePayload : Value → String → Prop
+  | .str s, t => s = t
+  | .native f, t => nativeName f = t
+  | _, _ => False
+
 /-- **`ValueRepr` TRANSLATION-COPY (general form).**
 
 Given `ValueRepr m N φc srcAddr v`, a struct-byte copy
@@ -132,7 +140,7 @@ no string payload); pass `fun _ _ _ _ => rfl` or the vacuous witness. -/
 theorem valueRepr_copy {m m' : Mem} {N : NativeAddrs} {φc : Addr → Nat}
     {srcAddr dstAddr : Nat} {v : Value}
     (hcopy : ∀ j, j < 24 → m'[dstAddr + j]? = m[srcAddr + j]?)
-    (hpay : ∀ (p : Nat) (s : String), read64 m (srcAddr + 8) = some p →
+    (hpay : ∀ (p : Nat) (s : String), read64 m (srcAddr + 8) = some p → ValuePayload v s →
       AgreeP (fun a => ∃ k, k ≤ s.length ∧ a = p + k) m m')
     (hv : ValueRepr m N φc srcAddr v) : ValueRepr m' N φc dstAddr v := by
   -- normalize `srcAddr` / `dstAddr` to `· + 0` so the offset lemmas apply at @0
@@ -161,7 +169,7 @@ theorem valueRepr_copy {m m' : Mem} {N : NativeAddrs} {φc : Addr → Nat}
     refine ⟨?_, p, ?_, hpne, ?_⟩
     · rw [h0dst, read32_copy hcopy (by omega), ← h0src]; exact hk
     · rw [read64_copy hcopy (off := 8) (by omega)]; exact hp
-    · exact cstring_agreeP (hpay p s hp) hcstr (fun k hk => ⟨k, hk, rfl⟩)
+    · exact cstring_agreeP (hpay p s hp rfl) hcstr (fun k hk => ⟨k, hk, rfl⟩)
   | closure ca =>
     simp only [ValueRepr] at hv ⊢
     obtain ⟨hk, h8, hne⟩ := hv
@@ -174,7 +182,7 @@ theorem valueRepr_copy {m m' : Mem} {N : NativeAddrs} {φc : Addr → Nat}
     refine ⟨?_, ⟨p, ?_, ?_⟩, ?_⟩
     · rw [h0dst, read32_copy hcopy (by omega), ← h0src]; exact hk
     · rw [read64_copy hcopy (off := 8) (by omega)]; exact hp
-    · exact cstring_agreeP (hpay p _ hp) hcstr (fun k hk => ⟨k, hk, rfl⟩)
+    · exact cstring_agreeP (hpay p _ hp rfl) hcstr (fun k hk => ⟨k, hk, rfl⟩)
     · rw [read64_copy hcopy (off := 16) (by omega)]; exact h16
 
 /-! ## Convenience corollary: copy realized as a write of the dst window
@@ -205,13 +213,13 @@ theorem valueRepr_copy_of_writeWindow {m m' : Mem} {N : NativeAddrs} {φc : Addr
     {srcAddr dstAddr : Nat} {v : Value}
     (hcopy : ∀ j, j < 24 → m'[dstAddr + j]? = m[srcAddr + j]?)
     (houtside : ∀ a, (a < dstAddr ∨ dstAddr + 24 ≤ a) → m'[a]? = m[a]?)
-    (hdisj : ∀ (p : Nat) (s : String), read64 m (srcAddr + 8) = some p →
+    (hdisj : ∀ (p : Nat) (s : String), read64 m (srcAddr + 8) = some p → ValuePayload v s →
       ∀ k, k ≤ s.length → (p + k < dstAddr ∨ dstAddr + 24 ≤ p + k))
     (hv : ValueRepr m N φc srcAddr v) : ValueRepr m' N φc dstAddr v := by
   refine valueRepr_copy hcopy ?_ hv
-  intro p s hp a ha
+  intro p s hp hps a ha
   obtain ⟨k, hk, rfl⟩ := ha
-  exact (houtside (p + k) (hdisj p s hp k hk)).symm
+  exact (houtside (p + k) (hdisj p s hp hps k hk)).symm
 
 
 /-! ## Total-read copy (wave 48k)
@@ -442,7 +450,7 @@ section Sanity
 example {m m' : Mem} {N : NativeAddrs} {φc : Addr → Nat}
     {srcAddr dstAddr : Nat} {v : Value}
     (hcopy : ∀ j, j < 24 → m'[dstAddr + j]? = m[srcAddr + j]?)
-    (hpay : ∀ (p : Nat) (s : String), read64 m (srcAddr + 8) = some p →
+    (hpay : ∀ (p : Nat) (s : String), read64 m (srcAddr + 8) = some p → ValuePayload v s →
       AgreeP (fun a => ∃ k, k ≤ s.length ∧ a = p + k) m m')
     (hv : ValueRepr m N φc srcAddr v) : ValueRepr m' N φc dstAddr v :=
   valueRepr_copy hcopy hpay hv

@@ -1,4 +1,5 @@
 import Vsa.Sim.EvalRecCommon
+import Vsa.Sim.EvalReturn
 import Vsa.Sim.TermSimAssembly
 import Vsa.Sim.StoreInvariant
 
@@ -92,7 +93,9 @@ local notation "SpecSt" => Vsa.While.St
 
 /-! ## `AssignArmSpec` — the assign-arm oracle (the `O`-class residual)
 
-The whole `Expr.assign x e` arm as an `EvalIH`-shaped sim, ∀-closed over the ghosts:
+The whole `Expr.assign x e` arm as a coherent `EvalReturnIH`-shaped sim (the assigned
+value may be a closure the child allocated, so the child's selected map pair is
+consumed and the arm's own pair is produced), ∀-closed over the ghosts:
 from the assign arm entry `EvalEntry (.assign x e)`, consuming the sub-`EvalIH` for `e`,
 reach `EvalExitD` at the `set?`-updated store `⟨store'', st'.out⟩` and value `v` (the
 sub-eval value, unchanged by `set?`).  This is the eval-arm analogue of
@@ -105,8 +108,8 @@ def AssignArmSpec (st : SpecSt) (d : Nat) (env : Addr) (x : String) (e : Expr)
     (st' : SpecSt) (v : Value) (store'' : Store) : Prop :=
   EvalE st d env e st' v →
   st'.store.set? env x v = some store'' →
-  EvalIH st d env e st' v →
-  EvalIH st d env (Expr.assign x e) ⟨store'', st'.out⟩ v
+  EvalReturnIH TrivialOwned st d env e st' v →
+  EvalReturnIH TrivialOwned st d env (Expr.assign x e) ⟨store'', st'.out⟩ v
 
 /-- The assign-case residual: the `AssignArmSpec` oracle, ∀-closed (the sub-eval data
 `st'`/`v`/`store''` are recursor-supplied, so the residual is keyed on them). -/
@@ -143,7 +146,6 @@ theorem eval_assign_row
       mEvalE st d env (Expr.assign x e) { store := store'', out := st'.out } v
         (EvalE.assign st d env x e st' v store'' a a_1) := by
   intro st d env x e st' v store'' a hset ihE
-  show Vsa.Sim.EvalIH st d env (.assign x e) ⟨store'', st'.out⟩ v
   exact hR st d env x e st' v store'' a hset ihE
 
 /-- Assignment row consuming the semantic extension. -/
@@ -166,8 +168,8 @@ theorem assignArmSpec_apply (st : SpecSt) (d : Nat) (env : Addr) (x : String)
     (hR : AssignArmSpec st d env x e st' v store'')
     (a : EvalE st d env e st' v)
     (hset : st'.store.set? env x v = some store'')
-    (ihE : EvalIH st d env e st' v) :
-    EvalIH st d env (Expr.assign x e) ⟨store'', st'.out⟩ v :=
+    (ihE : EvalReturnIH TrivialOwned st d env e st' v) :
+    EvalReturnIH TrivialOwned st d env (Expr.assign x e) ⟨store'', st'.out⟩ v :=
   hR a hset ihE
 
 /-- **Slot-verify.** `eval_assign_row` fills the EXACT `hAssign` minor-premise slot of

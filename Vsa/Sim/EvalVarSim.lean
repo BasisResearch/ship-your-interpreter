@@ -1041,7 +1041,9 @@ theorem blockC_var
     (hsret_stack : sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat) :
     Triple
       (fun c => ∃ mpc, VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpc c)
-      (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st v sp r sret m0) := by
+      (fun c => EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st v sp r sret m0 c ∧
+        -- the copied value is represented at the ENTRY closures map (the frame slot's map).
+        ValueRepr c.σ.mem N φc sret.toNat v) := by
   intro c hc
   obtain ⟨mpc, hG, htick, hpc, ⟨a0v, ha0v, ha0vnz⟩, hs1, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmem, hcode,
     ⟨d0, d1, d2, hsrc0, hsrc1, hsrc2, hcopy⟩, hstore, hframe,
@@ -1407,10 +1409,10 @@ theorem blockC_var
     rcases hXR : (X == R) with _ | _
     · rfl
     · rw [beq_iff_eq] at hXR; rw [hXR] at hX; rw [hX] at hR; exact absurd hR (by decide)
-  refine ⟨⟨σ14, i14, _⟩, hsteps, hG14, hi14, hpc14, ha0_14, hra_14, hsp_14, ⟨_, hmi14⟩,
+  refine ⟨⟨σ14, i14, _⟩, hsteps, ⟨hG14, hi14, hpc14, ha0_14, hra_14, hsp_14, ⟨_, hmi14⟩,
     ⟨φc, PhiExtends.refl _ _, hmem14e ▸ hvalFin⟩,
     ⟨φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, hmem14e ▸ hstoreFin⟩,
-    ?_, ?_, ?_⟩
+    ?_, ?_, ?_⟩, hmem14e ▸ hvalFin⟩
   · -- OutRepr σ14 st
     show Vsa.Machine.output σ14 = st.out
     simp only [Vsa.Machine.output]; rw [hout14]; exact houtStr
@@ -1571,7 +1573,8 @@ def EvalVarSimGoal : Prop :=
     EvalE st d a (.var x) st v →
     Triple
       (EvalVarEntry g N A SL φf φc st d a x v sp r sret aEnv aExpr m0)
-      (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st v sp r sret m0)
+      (fun c => EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st v sp r sret m0 c ∧
+        ValueRepr c.σ.mem N φc sret.toNat v)
 
 /-- **The M4 `EvalE.var` gate.**  Composes `blockA_k` (k=4, prologue + dispatch →
 `ArmEntryK` at the var arm `0x80003434`), the honest `env_get`-found contract

@@ -176,7 +176,10 @@ theorem field_hInitNone : ∀ (st : SpecSt) (d : Nat) (env : Addr),
       ground := by rw [hmem']; exact h.ground
       mem_frame := fun a ha hA => by rw [hmem']; exact h.mem_frame a ha hA
       frame := ?_
-      minstret := hmi' }
+      minstret := hmi'
+      parentSp := h.parentSp
+      ra_align := h.ra_align
+      mem_extends := by rw [hmem']; exact h.mem_extends }
   · rw [hframe Register.x8 (by decide) (by decide)]; exact h.s0
   · rw [hframe Register.x9 (by decide) (by decide)]; exact h.s1
   · rw [hframe Register.x18 (by decide) (by decide)]; exact h.s2

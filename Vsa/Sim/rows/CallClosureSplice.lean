@@ -535,6 +535,7 @@ theorem closureBodyEntryI_of_abi
       | nil => exact False.elim (hne hb)
       | cons s ss => simpa [execSeqEntryPC, hb] using hc.pc
     store := hc.store
+    store_survives := ha.storeSurvives
     out := hc.out
     mem := hc.mem
     ready := fun _ =>

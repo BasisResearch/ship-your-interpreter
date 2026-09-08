@@ -69,7 +69,16 @@ python3 -B scripts/gen_fixed_image.py \
   --projection Value_int --projection Value_bool --projection Value_str \
   --projection Value_truthy --projection __muldi3 --projection __divdi3 \
   --projection __umoddi3 --projection __hidden___udivdi3 \
-  --projection __moddi3 --check
+  --projection __moddi3 --projection Env_define --projection Strcmp --check
+```
+
+The in-frame helper-call `jal` sites of `exec_stmt` (`HelperCall` instances) are
+generated the same way:
+
+```sh
+python3 -B scripts/gen_sites.py scripts/helper_call_sites.tsv \
+  --code-loaded Vsa.Sim.Code.Exec_stmtLoaded --suffix _hc \
+  --default-limits -o Vsa/Sim/HelperCallSites.lean
 ```
 
 Use `gen_transport.py value_int --exact-range` to regenerate

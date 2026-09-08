@@ -126,6 +126,110 @@ theorem EvalIH.coherent_of_bounded
     (h g N A SL phiF phiC sp r sret aEnv aExpr m0).conseq
       (fun _ hp => hp) (fun _ hp => hp.coherent_of_bounded hb)
 
+/-- The weakest ownership index: every landed coherent supplier is stated at it,
+and it is the index of the recursor motive `TermSimAssembly.mEvalE`. -/
+abbrev TrivialOwned : NativeAddrs → Arena → (Addr → Nat) → (Addr → Nat) → Mem → Prop :=
+  fun _ _ _ _ _ => True
+
+/-- Binary-operator results are integers, booleans, or strings: no closure reference. -/
+theorem binOpSem_closuresBounded {s : Store} {op : BinOp} {l r v : Value} {n : Nat}
+    (h : binOpSem s op l r = some v) : ValueClosuresBounded n v := by
+  cases op <;> cases l <;> cases r <;>
+    simp only [binOpSem, Option.some.injEq, reduceCtorEq] at h <;>
+    (try split at h) <;> (try cases h) <;> (try subst h) <;> trivial
+
+/-- The facts a producer holds at the shared epilogue entry `mpre`, at the ONE
+map pair its result and store are represented with: presence, the complete
+result words, and store survival across the stack region. Every arm that runs
+`blockD_v_return` supplies this record from its actual construction. -/
+structure EpilogueEntryFacts (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (phiF phiC : Addr → Nat) (st : Vsa.While.St) (sret : BitVec 64)
+    (m0 mpre : Mem) : Prop where
+  presence : MemExtends m0 mpre
+  words : ValueWordsTotal mpre sret.toNat
+  survives : ∀ m' : Mem,
+    (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → mpre[k]? = m'[k]?) →
+    StoreRepr m' N A phiF phiC st.store
+
+/-- The epilogue-entry state with its facts is the owned pre-epilogue state at
+the trivial ownership. -/
+theorem EpilogueEntryFacts.preEpilogueOwned
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {phiF phiC : Addr → Nat}
+    {st : Vsa.While.St} {v : Value} {sp r sret v8 v9 v18 : BitVec 64}
+    {out0 : Array String} {m0 mpre : Mem} {c : Config}
+    (hPre : PreEpilogueV g N A SL phiF phiC st v sp r sret v8 v9 v18 out0 m0 mpre c)
+    (hF : EpilogueEntryFacts N A SL phiF phiC st sret m0 mpre) :
+    PreEpilogueOwned g N A SL phiF phiC st v sp r sret v8 v9 v18 out0 m0
+      (fun _ _ _ => True) c :=
+  ⟨mpre, ⟨hPre, hF.presence, hF.words, hF.survives⟩, trivial⟩
+
+/-- Land the coherent return from an arm's epilogue entry at the maps it selected
+(`resultF`/`resultC`, extending the entry maps over the entry objects). This is
+the whole epilogue of every allocating arm: `fn` (closures grown by one) and
+`call` (frames and closures grown by the body). -/
+theorem armReturn_of_facts
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (phiF phiC resultF resultC : Addr → Nat) (nf nc : Nat)
+    (st : Vsa.While.St) (v : Value)
+    (sp r sret v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem)
+    (hf : PhiExtends phiF resultF nf) (hc : PhiExtends phiC resultC nc) :
+    Triple
+      (fun c => ∃ mpre,
+        PreEpilogueV g N A SL resultF resultC st v sp r sret v8 v9 v18 out0 m0 mpre c ∧
+        EpilogueEntryFacts N A SL resultF resultC st sret m0 mpre)
+      (EvalReturn g N A SL phiF phiC nf nc st v sp r sret m0 (fun _ _ _ => True)) :=
+  (blockD_v_return g N A SL phiF phiC resultF resultC nf nc st v sp r sret v8 v9 v18
+    out0 m0 (fun _ _ _ => True) hf hc).conseq
+    (fun _ h => let ⟨_, hPre, hF⟩ := h; hF.preEpilogueOwned hPre)
+    (fun _ h => h)
+
+/-- Identity-map exit widening: presence plus store survival at the ENTRY maps.
+The leaf whose result is represented at the entry closures map (the variable
+lookup copies a frame slot) needs exactly this, not the map-existential
+`Widen`. -/
+structure ReturnWiden (ExitP : Config → Prop)
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (phiF phiC : Addr → Nat)
+    (st : Vsa.While.St) (m0 : Mem) : Prop where
+  pres : ∀ c : Config, ExitP c → MemExtends m0 c.σ.mem
+  surv : ∀ c : Config, ExitP c → ∀ m' : Mem,
+    (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
+    StoreRepr m' N A phiF phiC st.store
+
+/-- A leaf exit whose result is represented at the entry closures map returns
+coherently at the entry maps. -/
+theorem evalReturn_of_exit_id
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {phiF phiC : Addr → Nat}
+    {st : Vsa.While.St} {v : Value} {sp r sret : BitVec 64} {m0 : Mem} {c : Config}
+    (hExit : EvalExit g N A SL phiF phiC st.store.frames.size st.store.closures.size
+      st v sp r sret m0 c)
+    (hval : ValueRepr c.σ.mem N phiC sret.toNat v)
+    (hW : ReturnWiden (EvalExit g N A SL phiF phiC st.store.frames.size
+      st.store.closures.size st v sp r sret m0) N A SL phiF phiC st m0)
+    (hwords : ValueWordsTotal m0 sret.toNat) :
+    EvalReturn g N A SL phiF phiC st.store.frames.size st.store.closures.size
+      st v sp r sret m0 (fun _ _ _ => True) c :=
+  have hD : EvalExitD g N A SL phiF phiC st.store.frames.size st.store.closures.size
+      st v sp r sret m0 c :=
+    ⟨hExit, hW.pres c hExit, ValueWordsTotal.mono (hW.pres c hExit) hwords,
+      phiF, phiC, PhiExtends.refl _ _, PhiExtends.refl _ _, hW.surv c hExit⟩
+  hD.withReturnRepr
+    { frames := PhiExtends.refl _ _
+      closures := PhiExtends.refl _ _
+      values := fun a w haw => by
+        have heq : (a, w) = (sret.toNat, v) := List.mem_singleton.mp haw
+        cases heq
+        exact hval
+      owned := trivial
+      survives := fun m' hag => hW.surv c hExit m' (fun k hk => hag k hk) }
+
+#print axioms binOpSem_closuresBounded
+#print axioms EpilogueEntryFacts.preEpilogueOwned
+#print axioms armReturn_of_facts
+#print axioms evalReturn_of_exit_id
+
 #print axioms EvalExitD.coherent_of_bounded
 #print axioms EvalExitD.withReturnRepr
 #print axioms blockD_v_return

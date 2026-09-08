@@ -197,6 +197,8 @@ theorem seqClosureNormalExitResume
       stack_frame := by
         rw [hmem]
         exact h.highStack.trans (closureBodyStackFrame_of_execExitD h.childFrame hChild)
+      mem_extends := by rw [hmem]; exact h.memExtends.trans hChild.2.1
+      store_survives := by rw [hmem]; exact hChild.2.2
       frame := by
         intro R hR
         exact (hregs R (by simp [seqClosureNormalKeep, hR.1.1, hR.2])).trans

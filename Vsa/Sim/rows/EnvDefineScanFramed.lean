@@ -1,4 +1,5 @@
 import Vsa.Sim.rows.EnvDefineScanLoop
+import Vsa.Sim.rows.EnvDefineScanCallOut
 import Vsa.Sim.SegToTripleFramed
 import Vsa.Sim.BridgeSegFramed
 import Vsa.Alloc
@@ -64,19 +65,20 @@ initialized for the loop. -/
 structure EnvDefineScanEntryFrame
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
     (M : MallocContract A SL gpv headroom maxReq)
-    (exts : List (Nat × Nat)) (sp : BitVec 64)
+    (exts : List (Nat × Nat)) (outp : Array String) (sp : BitVec 64)
     (gm : (R : Register) → Option (RegisterType R)) (c : Config) : Prop where
   stack : StackOK SL sp headroom
   gp : c.σ.regs.get? Register.x3 = some gpv
   abi : ∀ R, AbiPreserved R = true → c.σ.regs.get? R = gm R
   ainv : M.AInv c.σ exts
+  out : c.σ.sailOutput = outp
 
 /-- The same frame while scanning.  The full ABI relation is retained against
 the dynamically reseated `s0`/`s1` ghost. -/
 structure EnvDefineScanFrame
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
     (M : MallocContract A SL gpv headroom maxReq)
-    (exts : List (Nat × Nat)) (sp : BitVec 64)
+    (exts : List (Nat × Nat)) (outp : Array String) (sp : BitVec 64)
     (gm : (R : Register) → Option (RegisterType R))
     (idx cursor : BitVec 64) (c : Config) : Prop where
   stack : StackOK SL sp headroom
@@ -84,6 +86,7 @@ structure EnvDefineScanFrame
   abi : ∀ R, AbiPreserved R = true →
     c.σ.regs.get? R = envDefineScanGhost gm idx cursor R
   ainv : M.AInv c.σ exts
+  out : c.σ.sailOutput = outp
 
 /-- Rebuild the scan frame after an exact memory-free row.  Only `x8` and
 `x9` may be reseated. -/
@@ -92,8 +95,9 @@ theorem EnvDefineScanFrame.reseat
     {M : MallocContract A SL gpv headroom maxReq}
     {exts : List (Nat × Nat)} {sp oldIdx oldCursor newIdx newCursor : BitVec 64}
     {gm : (R : Register) → Option (RegisterType R)} {c c' : Config}
-    (h : EnvDefineScanFrame M exts sp gm oldIdx oldCursor c)
+    (h : EnvDefineScanFrame M exts outp sp gm oldIdx oldCursor c)
     (hmem : c'.σ.mem = c.σ.mem)
+    (hout : c'.σ.sailOutput = c.σ.sailOutput)
     (hreg : ∀ R, AbiPreserved R = true → R ≠ Register.x8 → R ≠ Register.x9 →
       c'.σ.regs.get? R = c.σ.regs.get? R)
     (hx8 : c'.σ.regs.get? Register.x8 = some newIdx)
@@ -102,10 +106,10 @@ theorem EnvDefineScanFrame.reseat
       sigmaa.regs.get? Register.x3 = sigmab.regs.get? Register.x3 ->
       (∀ a : Nat, sigmaa.mem[a]? = sigmab.mem[a]?) →
       M.AInv sigmaa exts → M.AInv sigmab exts) :
-    EnvDefineScanFrame M exts sp gm newIdx newCursor c' := by
+    EnvDefineScanFrame M exts outp sp gm newIdx newCursor c' := by
   have hgpEq : c'.σ.regs.get? Register.x3 = c.σ.regs.get? Register.x3 :=
     hreg Register.x3 (by decide) (by decide) (by decide)
-  refine ⟨h.stack, hgpEq.trans h.gp, ?_, ?_⟩
+  refine ⟨h.stack, hgpEq.trans h.gp, ?_, ?_, hout.trans h.out⟩
   · intro R hR
     by_cases h8 : R = Register.x8
     · subst R
@@ -123,26 +127,26 @@ theorem EnvDefineScanFrame.reseat
 structure EnvDefineScanFramedSt
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
     (M : MallocContract A SL gpv headroom maxReq)
-    (exts : List (Nat × Nat))
+    (exts : List (Nat × Nat)) (outp : Array String)
     (saved gm : (R : Register) → Option (RegisterType R))
     (env name pv count pn sp : BitVec 64) (i : Nat)
     (f : Vsa.While.Frame) (nameStr : String) (N : NativeAddrs)
     (phif phic : Vsa.While.Addr → Nat) (m0 : Mem) (c : Config) : Prop where
   scan : EnvDefineScanSt saved env name pv count pn sp i f nameStr N phif phic m0 c
-  frame : EnvDefineScanFrame M exts sp gm (BitVec.ofNat 64 i)
+  frame : EnvDefineScanFrame M exts outp sp gm (BitVec.ofNat 64 i)
     (pn + BitVec.ofNat 64 (8 * i)) c
 
 /-- Post-`strcmp` carrier with the complete allocator/caller frame. -/
 structure EnvDefineScanCmpFramedSt
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
     (M : MallocContract A SL gpv headroom maxReq)
-    (exts : List (Nat × Nat))
+    (exts : List (Nat × Nat)) (outp : Array String)
     (saved gm : (R : Register) → Option (RegisterType R))
     (env name pv count pn sp : BitVec 64) (i : Nat)
     (f : Vsa.While.Frame) (nameStr : String) (N : NativeAddrs)
     (phif phic : Vsa.While.Addr → Nat) (m0 : Mem) (c : Config) : Prop where
   scan : EnvDefineScanCmpSt saved env name pv count pn sp i f nameStr N phif phic m0 c
-  frame : EnvDefineScanFrame M exts sp gm (BitVec.ofNat 64 i)
+  frame : EnvDefineScanFrame M exts outp sp gm (BitVec.ofNat 64 i)
     (pn + BitVec.ofNat 64 (8 * i)) c
 
 private theorem scanFramedInitLdLine :
@@ -168,7 +172,7 @@ private def AbiExceptS0S1S6 (R : Register) : Bool :=
 callee-saved frame needed by the append/grow continuations. -/
 theorem envDefineScanStartFramed
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat))
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (outp : Array String)
     (saved gm : (R : Register) → Option (RegisterType R))
     (env name pv count pn sp : BitVec 64)
     (f : Vsa.While.Frame) (nameStr : String) (N : NativeAddrs)
@@ -193,8 +197,8 @@ theorem envDefineScanStartFramed
         c.σ.regs.get? Register.x19 = some count ∧
         c.σ.regs.get? Register.x2 = some sp ∧ c.tick < 2 ∧
         EnvDefineSavedSpillFrame sp saved c ∧
-        EnvDefineScanEntryFrame M exts sp gm c)
-      (EnvDefineScanFramedSt M exts saved (envDefineScanBaseGhost gm pn)
+        EnvDefineScanEntryFrame M exts outp sp gm c)
+      (EnvDefineScanFramedSt M exts outp saved (envDefineScanBaseGhost gm pn)
         env name pv count pn sp 0
         f nameStr N phif phic m0) := by
   intro c h
@@ -251,7 +255,7 @@ theorem envDefineScanStartFramed
       · rw [hmem, hea]
         exact hpins
   obtain ⟨vmi, hmi⟩ := hG.minstret
-  obtain ⟨sigma', i', hsteps, htick', hG', hmem', _hout, hpc', _hmi', hregs, hraw⟩ :=
+  obtain ⟨sigma', i', hsteps, htick', hG', hmem', hout, hpc', _hmi', hregs, hraw⟩ :=
     segEval_sound envDefineScanInitSeg c.σ c.tick c.steps 0x80002a90#64 vmi
       (envDefineScanInitLiveL env count name pv sp) [bs]
       hG hpc hmi hL (by show KeysOK [10, 19, 18, 21, 2, 20]; decide) hfacts
@@ -313,9 +317,9 @@ theorem envDefineScanStartFramed
       hraw
   have hgp : c'.σ.regs.get? Register.x3 = some gpv :=
     (hrawAbi Register.x3 (by decide)).trans hentry.gp
-  have hframe' : EnvDefineScanFrame M exts sp (envDefineScanBaseGhost gm pn)
+  have hframe' : EnvDefineScanFrame M exts outp sp (envDefineScanBaseGhost gm pn)
       0#64 pn c' := by
-    refine ⟨hentry.stack, ?_, ?_, ?_⟩
+    refine ⟨hentry.stack, ?_, ?_, ?_, hout.trans hentry.out⟩
     · exact hgp
     · intro R hR
       by_cases h8 : R = Register.x8
@@ -346,7 +350,7 @@ allocator/caller frame retained. -/
 theorem envDefineScanCompareFramed
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
     (M : MallocContract A SL gpv headroom maxReq)
-    (exts : List (Nat × Nat))
+    (exts : List (Nat × Nat)) (outp : Array String)
     (saved gm : (R : Register) → Option (RegisterType R))
     (env name pv count pn sp : BitVec 64) (i : Nat)
     (f : Vsa.While.Frame) (nameStr : String) (N : NativeAddrs)
@@ -356,9 +360,9 @@ theorem envDefineScanCompareFramed
       (∀ a : Nat, sigmaa.mem[a]? = sigmab.mem[a]?) →
       M.AInv sigmaa exts → M.AInv sigmab exts) :
     Triple
-      (EnvDefineScanFramedSt M exts saved gm env name pv count pn sp i
+      (EnvDefineScanFramedSt M exts outp saved gm env name pv count pn sp i
         f nameStr N phif phic m0)
-      (EnvDefineScanCmpFramedSt M exts saved gm env name pv count pn sp i
+      (EnvDefineScanCmpFramedSt M exts outp saved gm env name pv count pn sp i
         f nameStr N phif phic m0) := by
   intro c h
   let hs := h.scan
@@ -367,14 +371,15 @@ theorem envDefineScanCompareFramed
     apply ptrN
     have hhi := hs.names.slotHi i hs.index
     omega
-  obtain ⟨c1, hsteps1, hG1, htick1, hmem1, hpc1, hra1, ha01, ha11, hmi1, habi1⟩ :=
-    envDefineScanCallRead64 (pn + BitVec.ofNat 64 (8 * i)) name q c hs.good hs.pc
+  obtain ⟨c1, C1⟩ :=
+    envDefineScanCallRead64Out (pn + BitVec.ofNat 64 (8 * i)) name q c hs.good hs.pc
       hs.cursor hs.nameReg (by rw [hs.mem, hcursorNat]; exact hq)
       (by rw [hcursorNat]; exact hs.names.slotLo i hs.index)
       (by rw [hcursorNat]; exact hs.names.slotHi i hs.index)
       (by rw [hcursorNat]; exact hs.names.slotHtif i hs.index)
       (by rw [hcursorNat]; exact hs.names.slotAlign i hs.index)
       hs.loadedD hs.tick
+  obtain ⟨hsteps1, hG1, htick1, hmem1, hpc1, hra1, ha01, ha11, hmi1, habi1, hout1⟩ := C1
   have hqLt : q < 2^64 := read64_lt_eg4 m0 (pn.toNat + 8 * i) q hq
   have hqNat : (BitVec.ofNat 64 q).toNat = q := by
     rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqLt]
@@ -398,7 +403,7 @@ theorem envDefineScanCompareFramed
       rfl
   obtain ⟨c2, hsteps2, hp⟩ := strcmp_full_spec g1 (BitVec.ofNat 64 q) name
     0x80002abc#64 (f.vars[i]'hs.index).1 nameStr m0 c1.σ.sailOutput c1 hpre
-  obtain ⟨hG2, hpc2, _hra2, hmem2, _hout2, htick2, hframe2,
+  obtain ⟨hG2, hpc2, _hra2, hmem2, hout2, htick2, hframe2,
     csa, csb, x, hcsa, hcsb, hsa, hsb, hx, hsign⟩ := hp
   have preserve (R : Register) (hR : AbiPreserved R = true) :
       c2.σ.regs.get? R = c.σ.regs.get? R := by
@@ -426,9 +431,9 @@ theorem envDefineScanCompareFramed
       exact string_eq_iff_strcmpSpecSign_zero m0 q name.toNat
         (f.vars[i]'hs.index).1 nameStr csa csb
         (by simpa [hqNat] using hcsa) hcsb hsa hsb
-  have hframe : EnvDefineScanFrame M exts sp gm (BitVec.ofNat 64 i)
+  have hframe : EnvDefineScanFrame M exts outp sp gm (BitVec.ofNat 64 i)
       (pn + BitVec.ofNat 64 (8 * i)) c2 := by
-    apply h.frame.reseat (hmem2.trans hs.mem.symm)
+    apply h.frame.reseat (hmem2.trans hs.mem.symm) (hout2.trans hout1)
       (fun R hR _ _ => preserve R hR)
       ((preserve Register.x8 (by decide)).trans hs.idx)
       ((preserve Register.x9 (by decide)).trans hs.cursor)
@@ -442,7 +447,7 @@ instantiate it with kernel-checked concrete control-flow and write sets. -/
 theorem envDefineScanLiveRowFramed
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
     (M : MallocContract A SL gpv headroom maxReq)
-    (exts : List (Nat × Nat))
+    (exts : List (Nat × Nat)) (outp : Array String)
     (gm : (R : Register) → Option (RegisterType R))
     (bs : List BBlock) (target cmp idx cursor count env name pv sp : BitVec 64)
     (newIdx newCursor : BitVec 64) (m0 : Mem)
@@ -468,12 +473,12 @@ theorem envDefineScanLiveRowFramed
       (fun c => SegPre bs
         (envDefineScanLiveL cmp idx cursor count env name pv sp) []
         0x80002abc#64 m0 c ∧
-        EnvDefineScanFrame M exts sp gm idx cursor c)
+        EnvDefineScanFrame M exts outp sp gm idx cursor c)
       (fun c => EnvDefineScanLivePost bs target cmp idx cursor count env name pv sp [] m0 c ∧
-        EnvDefineScanFrame M exts sp gm newIdx newCursor c) := by
+        EnvDefineScanFrame M exts outp sp gm newIdx newCursor c) := by
   intro c ⟨hseg, hframe⟩
   obtain ⟨hG0, hmem0, hpc0, ⟨vm, hmi0⟩, hL0, hkeys0, hfacts0, htick0⟩ := hseg
-  obtain ⟨sigma', i', hsteps, htick, hG, hmem, _hout, hpc, _hmi, hregs, hraw⟩ :=
+  obtain ⟨sigma', i', hsteps, htick, hG, hmem, hout, hpc, _hmi, hregs, hraw⟩ :=
     segEval_sound bs c.σ c.tick c.steps 0x80002abc#64 vm
       (envDefineScanLiveL cmp idx cursor count env name pv sp) []
       hG0 hpc0 hmi0 hL0 hkeys0 hfacts0 hwf htick0
@@ -492,11 +497,11 @@ theorem envDefineScanLiveRowFramed
   have hx9 : c'.σ.regs.get? Register.x9 = some newCursor := by
     simpa [gprGet] using gholds_lookup _ hregs hx9Eval
   exact ⟨c', hsteps, hpost,
-    hframe.reseat hmemEq habiOff hx8 hx9 hAInvStable⟩
+    hframe.reseat hmemEq hout habiOff hx8 hx9 hAInvStable⟩
 
 theorem envDefineScanHitLiveRowFramed
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat))
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (outp : Array String)
     (gm : (R : Register) → Option (RegisterType R))
     (cmp idx cursor count env name pv sp : BitVec 64) (m0 : Mem)
     (hAInvStable : ∀ (sigmaa sigmab : MState),
@@ -506,11 +511,11 @@ theorem envDefineScanHitLiveRowFramed
     Triple
       (fun c => SegPre envDefineScanHitSeg
         (envDefineScanLiveL cmp idx cursor count env name pv sp) []
-        0x80002abc#64 m0 c ∧ EnvDefineScanFrame M exts sp gm idx cursor c)
+        0x80002abc#64 m0 c ∧ EnvDefineScanFrame M exts outp sp gm idx cursor c)
       (fun c => EnvDefineScanLivePost envDefineScanHitSeg 0x80002ac0#64
         cmp idx cursor count env name pv sp [] m0 c ∧
-        EnvDefineScanFrame M exts sp gm idx cursor c) := by
-  apply envDefineScanLiveRowFramed M exts gm envDefineScanHitSeg 0x80002ac0#64
+        EnvDefineScanFrame M exts outp sp gm idx cursor c) := by
+  apply envDefineScanLiveRowFramed M exts outp gm envDefineScanHitSeg 0x80002ac0#64
     cmp idx cursor count env name pv sp idx cursor m0
   · show ChainOK 0x80002abc#64 [10, 8, 9, 19, 20, 18, 21, 2]
       envDefineScanHitSeg
@@ -525,7 +530,7 @@ theorem envDefineScanHitLiveRowFramed
 
 theorem envDefineScanNextLiveRowFramed
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat))
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (outp : Array String)
     (gm : (R : Register) → Option (RegisterType R))
     (cmp idx cursor count env name pv sp : BitVec 64) (m0 : Mem)
     (hAInvStable : ∀ (sigmaa sigmab : MState),
@@ -535,11 +540,11 @@ theorem envDefineScanNextLiveRowFramed
     Triple
       (fun c => SegPre envDefineScanNextSeg
         (envDefineScanLiveL cmp idx cursor count env name pv sp) []
-        0x80002abc#64 m0 c ∧ EnvDefineScanFrame M exts sp gm idx cursor c)
+        0x80002abc#64 m0 c ∧ EnvDefineScanFrame M exts outp sp gm idx cursor c)
       (fun c => EnvDefineScanLivePost envDefineScanNextSeg 0x80002ab0#64
         cmp idx cursor count env name pv sp [] m0 c ∧
-        EnvDefineScanFrame M exts sp gm (idx + 1#64) (cursor + 8#64) c) := by
-  apply envDefineScanLiveRowFramed M exts gm envDefineScanNextSeg 0x80002ab0#64
+        EnvDefineScanFrame M exts outp sp gm (idx + 1#64) (cursor + 8#64) c) := by
+  apply envDefineScanLiveRowFramed M exts outp gm envDefineScanNextSeg 0x80002ab0#64
     cmp idx cursor count env name pv sp (idx + 1#64) (cursor + 8#64) m0
   · show ChainOK 0x80002abc#64 [10, 8, 9, 19, 20, 18, 21, 2]
       envDefineScanNextSeg
@@ -554,7 +559,7 @@ theorem envDefineScanNextLiveRowFramed
 
 theorem envDefineScanDoneLiveRowFramed
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat))
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (outp : Array String)
     (gm : (R : Register) → Option (RegisterType R))
     (cmp idx cursor count env name pv sp : BitVec 64) (m0 : Mem)
     (hAInvStable : ∀ (sigmaa sigmab : MState),
@@ -564,11 +569,11 @@ theorem envDefineScanDoneLiveRowFramed
     Triple
       (fun c => SegPre envDefineScanDoneSeg
         (envDefineScanLiveL cmp idx cursor count env name pv sp) []
-        0x80002abc#64 m0 c ∧ EnvDefineScanFrame M exts sp gm idx cursor c)
+        0x80002abc#64 m0 c ∧ EnvDefineScanFrame M exts outp sp gm idx cursor c)
       (fun c => EnvDefineScanLivePost envDefineScanDoneSeg 0x80002b14#64
         cmp idx cursor count env name pv sp [] m0 c ∧
-        EnvDefineScanFrame M exts sp gm (idx + 1#64) (cursor + 8#64) c) := by
-  apply envDefineScanLiveRowFramed M exts gm envDefineScanDoneSeg 0x80002b14#64
+        EnvDefineScanFrame M exts outp sp gm (idx + 1#64) (cursor + 8#64) c) := by
+  apply envDefineScanLiveRowFramed M exts outp gm envDefineScanDoneSeg 0x80002b14#64
     cmp idx cursor count env name pv sp (idx + 1#64) (cursor + 8#64) m0
   · show ChainOK 0x80002abc#64 [10, 8, 9, 19, 20, 18, 21, 2]
       envDefineScanDoneSeg
@@ -589,7 +594,7 @@ theorem envDefineScanDoneLiveRowFramed
 exhausted miss. -/
 def EnvDefineScanBranchFramedPost
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat))
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (outp : Array String)
     (saved gm : (R : Register) → Option (RegisterType R))
     (env name pv count pn sp : BitVec 64) (i : Nat)
     (f : Vsa.While.Frame) (nameStr : String) (m0 : Mem)
@@ -598,20 +603,20 @@ def EnvDefineScanBranchFramedPost
     ∃ x, EnvDefineScanLivePost envDefineScanHitSeg 0x80002ac0#64
       x (BitVec.ofNat 64 i) (pn + BitVec.ofNat 64 (8 * i)) count
       env name pv sp [] m0 c ∧ EnvDefineSavedSpillFrame sp saved c ∧
-      EnvDefineScanFrame M exts sp gm (BitVec.ofNat 64 i)
+      EnvDefineScanFrame M exts outp sp gm (BitVec.ofNat 64 i)
         (pn + BitVec.ofNat 64 (8 * i)) c) ∨
   ((f.vars[i]'hi).1 ≠ nameStr ∧
     ((i + 1 < f.vars.length ∧ ∃ x,
       EnvDefineScanLivePost envDefineScanNextSeg 0x80002ab0#64
         x (BitVec.ofNat 64 i) (pn + BitVec.ofNat 64 (8 * i)) count
         env name pv sp [] m0 c ∧ EnvDefineSavedSpillFrame sp saved c ∧
-      EnvDefineScanFrame M exts sp gm (BitVec.ofNat 64 (i + 1))
+      EnvDefineScanFrame M exts outp sp gm (BitVec.ofNat 64 (i + 1))
         (pn + BitVec.ofNat 64 (8 * (i + 1))) c) ∨
      (i + 1 = f.vars.length ∧ ∃ x,
       EnvDefineScanLivePost envDefineScanDoneSeg 0x80002b14#64
         x (BitVec.ofNat 64 i) (pn + BitVec.ofNat 64 (8 * i)) count
         env name pv sp [] m0 c ∧ EnvDefineSavedSpillFrame sp saved c ∧
-      EnvDefineScanFrame M exts sp gm (BitVec.ofNat 64 (i + 1))
+      EnvDefineScanFrame M exts outp sp gm (BitVec.ofNat 64 (i + 1))
         (pn + BitVec.ofNat 64 (8 * (i + 1))) c)))
 
 private theorem scanCmp_zero_value (x : BitVec 64)
@@ -629,7 +634,7 @@ private theorem scanCmp_zero_value (x : BitVec 64)
 
 theorem envDefineScanBranchHitFramed
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat))
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (outp : Array String)
     (saved gm : (R : Register) → Option (RegisterType R))
     (env name pv count pn sp : BitVec 64) (i : Nat)
     (f : Vsa.While.Frame) (nameStr : String) (N : NativeAddrs)
@@ -639,9 +644,9 @@ theorem envDefineScanBranchHitFramed
       (∀ a : Nat, sigmaa.mem[a]? = sigmab.mem[a]?) →
       M.AInv sigmaa exts → M.AInv sigmab exts) :
     Triple
-      (fun c => EnvDefineScanCmpFramedSt M exts saved gm env name pv count pn sp i
+      (fun c => EnvDefineScanCmpFramedSt M exts outp saved gm env name pv count pn sp i
         f nameStr N phif phic m0 c ∧ (f.vars[i]'hi).1 = nameStr)
-      (EnvDefineScanBranchFramedPost M exts saved gm env name pv count pn sp i
+      (EnvDefineScanBranchFramedPost M exts outp saved gm env name pv count pn sp i
         f nameStr m0 hi) := by
   intro c ⟨h, hnameEq⟩
   let hs := h.scan
@@ -667,7 +672,7 @@ theorem envDefineScanBranchHitFramed
       0x80002abc#64 m0 c :=
     ⟨hs.good, hs.mem, hs.pc, ⟨vmi, hmi⟩, hL,
       (by show KeysOK [10, 8, 9, 19, 20, 18, 21, 2]; decide), hfacts, hs.tick⟩
-  obtain ⟨c', hsteps, hp, hframe⟩ := envDefineScanHitLiveRowFramed M exts gm x
+  obtain ⟨c', hsteps, hp, hframe⟩ := envDefineScanHitLiveRowFramed M exts outp gm x
     (BitVec.ofNat 64 i) (pn + BitVec.ofNat 64 (8 * i)) count env name pv sp m0
     hAInvStable c ⟨hpre, h.frame⟩
   have hsaved : EnvDefineSavedSpillFrame sp saved c' := by
@@ -677,7 +682,7 @@ theorem envDefineScanBranchHitFramed
 
 theorem envDefineScanBranchMissFramed
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat))
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (outp : Array String)
     (saved gm : (R : Register) → Option (RegisterType R))
     (env name pv count pn sp : BitVec 64) (i : Nat)
     (f : Vsa.While.Frame) (nameStr : String) (N : NativeAddrs)
@@ -687,9 +692,9 @@ theorem envDefineScanBranchMissFramed
       (∀ a : Nat, sigmaa.mem[a]? = sigmab.mem[a]?) →
       M.AInv sigmaa exts → M.AInv sigmab exts) :
     Triple
-      (fun c => EnvDefineScanCmpFramedSt M exts saved gm env name pv count pn sp i
+      (fun c => EnvDefineScanCmpFramedSt M exts outp saved gm env name pv count pn sp i
         f nameStr N phif phic m0 c ∧ (f.vars[i]'hi).1 ≠ nameStr)
-      (EnvDefineScanBranchFramedPost M exts saved gm env name pv count pn sp i
+      (EnvDefineScanBranchFramedPost M exts outp saved gm env name pv count pn sp i
         f nameStr m0 hi) := by
   intro c ⟨h, hnameNe⟩
   let hs := h.scan
@@ -736,13 +741,13 @@ theorem envDefineScanBranchMissFramed
         0x80002abc#64 m0 c :=
       ⟨hs.good, hs.mem, hs.pc, ⟨vmi, hmi⟩, hL,
         (by show KeysOK [10, 8, 9, 19, 20, 18, 21, 2]; decide), hfacts, hs.tick⟩
-    obtain ⟨c', hsteps, hp, hframe⟩ := envDefineScanNextLiveRowFramed M exts gm x
+    obtain ⟨c', hsteps, hp, hframe⟩ := envDefineScanNextLiveRowFramed M exts outp gm x
       (BitVec.ofNat 64 i) (pn + BitVec.ofNat 64 (8 * i)) count env name pv sp m0
       hAInvStable c ⟨hpre, h.frame⟩
     have hsaved : EnvDefineSavedSpillFrame sp saved c' := by
       apply hs.savedSpills.of_mem_eq
       exact hp.2.1.trans hs.mem.symm
-    have hframe' : EnvDefineScanFrame M exts sp gm (BitVec.ofNat 64 (i + 1))
+    have hframe' : EnvDefineScanFrame M exts outp sp gm (BitVec.ofNat 64 (i + 1))
         (pn + BitVec.ofNat 64 (8 * (i + 1))) c' := by
       simpa [ofNat_succ_bv i hiLt, cursor_succ_bv pn i hcursorLt] using hframe
     exact ⟨c', hsteps, Or.inr ⟨hnameNe, Or.inl ⟨hn, x, hp, hsaved, hframe'⟩⟩⟩
@@ -767,20 +772,20 @@ theorem envDefineScanBranchMissFramed
         0x80002abc#64 m0 c :=
       ⟨hs.good, hs.mem, hs.pc, ⟨vmi, hmi⟩, hL,
         (by show KeysOK [10, 8, 9, 19, 20, 18, 21, 2]; decide), hfacts, hs.tick⟩
-    obtain ⟨c', hsteps, hp, hframe⟩ := envDefineScanDoneLiveRowFramed M exts gm x
+    obtain ⟨c', hsteps, hp, hframe⟩ := envDefineScanDoneLiveRowFramed M exts outp gm x
       (BitVec.ofNat 64 i) (pn + BitVec.ofNat 64 (8 * i)) count env name pv sp m0
       hAInvStable c ⟨hpre, h.frame⟩
     have hsaved : EnvDefineSavedSpillFrame sp saved c' := by
       apply hs.savedSpills.of_mem_eq
       exact hp.2.1.trans hs.mem.symm
-    have hframe' : EnvDefineScanFrame M exts sp gm (BitVec.ofNat 64 (i + 1))
+    have hframe' : EnvDefineScanFrame M exts outp sp gm (BitVec.ofNat 64 (i + 1))
         (pn + BitVec.ofNat 64 (8 * (i + 1))) c' := by
       simpa [ofNat_succ_bv i hiLt, cursor_succ_bv pn i hcursorLt] using hframe
     exact ⟨c', hsteps, Or.inr ⟨hnameNe, Or.inr ⟨heq, x, hp, hsaved, hframe'⟩⟩⟩
 
 theorem envDefineScanBranchFramed
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat))
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (outp : Array String)
     (saved gm : (R : Register) → Option (RegisterType R))
     (env name pv count pn sp : BitVec 64) (i : Nat)
     (f : Vsa.While.Frame) (nameStr : String) (N : NativeAddrs)
@@ -790,15 +795,15 @@ theorem envDefineScanBranchFramed
       (∀ a : Nat, sigmaa.mem[a]? = sigmab.mem[a]?) →
       M.AInv sigmaa exts → M.AInv sigmab exts) :
     Triple
-      (EnvDefineScanCmpFramedSt M exts saved gm env name pv count pn sp i
+      (EnvDefineScanCmpFramedSt M exts outp saved gm env name pv count pn sp i
         f nameStr N phif phic m0)
-      (EnvDefineScanBranchFramedPost M exts saved gm env name pv count pn sp i
+      (EnvDefineScanBranchFramedPost M exts outp saved gm env name pv count pn sp i
         f nameStr m0 hi) := by
   intro c h
   by_cases heq : (f.vars[i]'hi).1 = nameStr
-  · exact envDefineScanBranchHitFramed M exts saved gm env name pv count pn sp i
+  · exact envDefineScanBranchHitFramed M exts outp saved gm env name pv count pn sp i
       f nameStr N phif phic m0 hi hAInvStable c ⟨h, heq⟩
-  · exact envDefineScanBranchMissFramed M exts saved gm env name pv count pn sp i
+  · exact envDefineScanBranchMissFramed M exts outp saved gm env name pv count pn sp i
       f nameStr N phif phic m0 hi hAInvStable c ⟨h, heq⟩
 
 #print axioms envDefineScanBranchFramed
@@ -807,7 +812,7 @@ theorem envDefineScanBranchFramed
 complete allocator/caller frame at the concrete exit register image. -/
 def EnvDefineScanFramedResult
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat))
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (outp : Array String)
     (saved gm : (R : Register) → Option (RegisterType R))
     (env name pv count pn sp : BitVec 64) (f : Vsa.While.Frame)
     (nameStr : String) (m0 : Mem) (c : Config) : Prop :=
@@ -816,14 +821,14 @@ def EnvDefineScanFramedResult
     ∃ x, EnvDefineScanLivePost envDefineScanHitSeg 0x80002ac0#64
       x (BitVec.ofNat 64 i) (pn + BitVec.ofNat 64 (8 * i)) count
       env name pv sp [] m0 c ∧ EnvDefineSavedSpillFrame sp saved c ∧
-      EnvDefineScanFrame M exts sp gm (BitVec.ofNat 64 i)
+      EnvDefineScanFrame M exts outp sp gm (BitVec.ofNat 64 i)
         (pn + BitVec.ofNat 64 (8 * i)) c) ∨
   ((∀ j (hj : j < f.vars.length), (f.vars[j]'hj).1 ≠ nameStr) ∧
     ∃ i, i + 1 = f.vars.length ∧ ∃ x,
       EnvDefineScanLivePost envDefineScanDoneSeg 0x80002b14#64
         x (BitVec.ofNat 64 i) (pn + BitVec.ofNat 64 (8 * i)) count
         env name pv sp [] m0 c ∧ EnvDefineSavedSpillFrame sp saved c ∧
-      EnvDefineScanFrame M exts sp gm (BitVec.ofNat 64 (i + 1))
+      EnvDefineScanFrame M exts outp sp gm (BitVec.ofNat 64 (i + 1))
         (pn + BitVec.ofNat 64 (8 * (i + 1))) c)
 
 /-- Total finite env-define scan with StackOK, gp, all ABI-preserved registers,
@@ -831,7 +836,7 @@ the allocator invariant, and the independent spill image carried to either
 concrete exit. -/
 theorem envDefineScanFiniteFramed
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat))
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (outp : Array String)
     (saved gm : (R : Register) → Option (RegisterType R))
     (env name pv count pn sp : BitVec 64) (i : Nat)
     (f : Vsa.While.Frame) (nameStr : String) (N : NativeAddrs)
@@ -841,15 +846,15 @@ theorem envDefineScanFiniteFramed
       (∀ a : Nat, sigmaa.mem[a]? = sigmab.mem[a]?) →
       M.AInv sigmaa exts → M.AInv sigmab exts) :
     Triple
-      (fun c => EnvDefineScanFramedSt M exts saved gm env name pv count pn sp i
+      (fun c => EnvDefineScanFramedSt M exts outp saved gm env name pv count pn sp i
         f nameStr N phif phic m0 c ∧ EnvDefineNamesMissBefore f nameStr i)
-      (EnvDefineScanFramedResult M exts saved gm env name pv count pn sp
+      (EnvDefineScanFramedResult M exts outp saved gm env name pv count pn sp
         f nameStr m0) := by
   intro c ⟨h, hmiss⟩
   obtain ⟨c', hsteps, hb⟩ :=
-    (envDefineScanCompareFramed M exts saved gm env name pv count pn sp i
+    (envDefineScanCompareFramed M exts outp saved gm env name pv count pn sp i
       f nameStr N phif phic m0 hAInvStable).seq
-      (envDefineScanBranchFramed M exts saved gm env name pv count pn sp i
+      (envDefineScanBranchFramed M exts outp saved gm env name pv count pn sp i
         f nameStr N phif phic m0 hi hAInvStable) c h
   rcases hb with hhit | ⟨hnameNe, hnext | hdone⟩
   · obtain ⟨hnameEq, x, hp, hsaved, hframe⟩ := hhit
@@ -864,7 +869,7 @@ theorem envDefineScanFiniteFramed
       exact hs.loadedS
     have hheadBase := envDefineScanNextCarrier saved env name pv count pn sp x i f nameStr
       N phif phic m0 c' hn hloadedD hloadedS hs.frame hs.names hs.countEq hp hsaved
-    have hhead : EnvDefineScanFramedSt M exts saved gm env name pv count pn sp (i + 1)
+    have hhead : EnvDefineScanFramedSt M exts outp saved gm env name pv count pn sp (i + 1)
         f nameStr N phif phic m0 c' := ⟨hheadBase, hframe⟩
     have hmiss' : EnvDefineNamesMissBefore f nameStr (i + 1) := by
       intro j hj hjlt
@@ -873,7 +878,7 @@ theorem envDefineScanFiniteFramed
         simpa using hnameNe
       · exact hmiss j hj (by omega)
     obtain ⟨c'', hsteps', hr⟩ :=
-      envDefineScanFiniteFramed M exts saved gm env name pv count pn sp (i + 1)
+      envDefineScanFiniteFramed M exts outp saved gm env name pv count pn sp (i + 1)
         f nameStr N phif phic m0 hn hAInvStable c' ⟨hhead, hmiss'⟩
     exact ⟨c'', hsteps.trans hsteps', hr⟩
   · obtain ⟨heq, x, hp, hsaved, hframe⟩ := hdone

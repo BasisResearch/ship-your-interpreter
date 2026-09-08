@@ -865,9 +865,11 @@ theorem eval_binary_row
       mEvalE st d env (.binary op l r) st'' v
         (EvalE.binary st d env op l r st' st'' lv rv v a a_1 a_2) := by
   intro st d env op el er st' st'' lv rv v hEl hEr hsem ihL ihR
-  show EvalIH st d env (.binary op el er) st'' v
-  have ihL' : EvalIH st d env el st' lv := ihL
-  have ihR' : EvalIH st' d env er st'' rv := ihR
+  -- the result carries no closure reference: the coherent return is the widened
+  -- exit's own pair (`EvalIH.coherent_of_bounded`, as for every bounded arm).
+  refine EvalIH.coherent_of_bounded ?_ (binOpSem_closuresBounded hsem)
+  have ihL' : EvalIH st d env el st' lv := ihL.forget
+  have ihR' : EvalIH st' d env er st'' rv := ihR.forget
   cases op with
   | add =>
     match lv, rv, hsem with

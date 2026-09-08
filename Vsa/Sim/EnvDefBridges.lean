@@ -501,7 +501,10 @@ where `len = nameStr.length` (from `strlen_post`'s `x10 = ofNat len`); the retur
 is `0x80002b30`; `sp`/`gp`/`AInv` come straight from the carried `EnvDefFrame`.  The one
 callee-saved the prefix rewrites is `x8`/`s0` (holds the size across the malloc call), so the
 malloc-entry ABI ghost `g'` agrees with the entry ghost `gm` everywhere except `x8`. -/
-theorem bridgeMallocPre_closed (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
+/-- **`bridgeMallocPre` at the actual memory**: the `env_define` text at the
+strlen-return memory `m0` (a `FixedTextLoaded` projection) is the only code
+fact the prefix reads. -/
+theorem bridgeMallocPre_at (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
     (AInv : MState → List (Nat × Nat) → Prop) (exts : List (Nat × Nat))
     (sp : BitVec 64) (gm g' : (R : Register) → Option (RegisterType R))
     (nameStr : String) (m0 : Std.ExtHashMap Nat (BitVec 8))
@@ -512,8 +515,7 @@ theorem bridgeMallocPre_closed (SL : StackLayout) (gpv : BitVec 64) (headroom : 
     (hAInvStable : ∀ (σa σb : MState),
       σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
       (∀ a : Nat, σa.mem[a]? = σb.mem[a]?) → AInv σa exts → AInv σb exts)
-    (hloaded : ∀ (mem : Std.ExtHashMap Nat (BitVec 8)), StrlenLoaded mem → Env_defineLoaded mem)
-    (hstrlenLoaded : StrlenLoaded m0) :
+    (hcode : Env_defineLoaded m0) :
     Triple
       (fun c => strlen_post (0x80002b24#64 : BitVec 64) nameStr m0 c ∧
         EnvDefFrame SL gpv headroom AInv exts sp gm c)
@@ -532,7 +534,7 @@ theorem bridgeMallocPre_closed (SL : StackLayout) (gpv : BitVec 64) (headroom : 
   obtain ⟨hG, hpc, hx10, hra, hmem⟩ := hpost
   obtain ⟨hsp, hstackOK, hgp, hAbi, hAInv, htick, _hSpills⟩ := hFrame
   obtain ⟨vmi, hmi⟩ : ∃ v, c.σ.regs.get? Register.minstret = some v := hG.minstret
-  have hloadedD : Env_defineLoaded c.σ.mem := by rw [hmem]; exact hloaded m0 hstrlenLoaded
+  have hloadedD : Env_defineLoaded c.σ.mem := by rw [hmem]; exact hcode
   obtain ⟨σ', i', hsteps, hi', hG', hmem', hpc', hx10', hx8', hra', hmi', hframe'⟩ :=
     mallocPrefix_run c.σ c.tick c.steps vmi (BitVec.ofNat 64 nameStr.length) hG hpc hmi hx10
       hloadedD htick
@@ -580,6 +582,39 @@ theorem bridgeMallocPre_closed (SL : StackLayout) (gpv : BitVec 64) (headroom : 
       · intro a; rw [hmem']
     · -- mem = m0
       rw [hmem']; exact hmem
+
+#print axioms bridgeMallocPre_at
+
+/-- `bridgeMallocPre_at` under the universally quantified code premise (kept
+for its consumers; only its instance at `m0` is used). -/
+theorem bridgeMallocPre_closed (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
+    (AInv : MState → List (Nat × Nat) → Prop) (exts : List (Nat × Nat))
+    (sp : BitVec 64) (gm g' : (R : Register) → Option (RegisterType R))
+    (nameStr : String) (m0 : Std.ExtHashMap Nat (BitVec 8))
+    -- the malloc-entry ABI ghost `g'` agrees with the strlen-frame ghost `gm` on every
+    -- callee-saved register EXCEPT `x8`/s0 (which the `addi` overwrites with the size):
+    (hg'x8 : g' Register.x8 = some (BitVec.ofNat 64 (nameStr.length + 1)))
+    (hg'other : ∀ R, AbiPreserved R = true → R ≠ Register.x8 → g' R = gm R)
+    (hAInvStable : ∀ (σa σb : MState),
+      σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
+      (∀ a : Nat, σa.mem[a]? = σb.mem[a]?) → AInv σa exts → AInv σb exts)
+    (hloaded : ∀ (mem : Std.ExtHashMap Nat (BitVec 8)), StrlenLoaded mem → Env_defineLoaded mem)
+    (hstrlenLoaded : StrlenLoaded m0) :
+    Triple
+      (fun c => strlen_post (0x80002b24#64 : BitVec 64) nameStr m0 c ∧
+        EnvDefFrame SL gpv headroom AInv exts sp gm c)
+      (fun c =>
+        GoodState c.σ ∧ c.tick < 2 ∧
+        c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 mallocEntry) ∧
+        c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 (nameStr.length + 1)) ∧
+        c.σ.regs.get? Register.x1 = some (0x80002b30#64 : BitVec 64) ∧
+          (0x80002b30#64 : BitVec 64).toNat % 4 = 0 ∧
+        c.σ.regs.get? Register.x2 = some sp ∧ StackOK SL sp headroom ∧
+        c.σ.regs.get? Register.x3 = some gpv ∧
+        (∀ R, AbiPreserved R = true → c.σ.regs.get? R = g' R) ∧
+        AInv c.σ exts ∧ c.σ.mem = m0) :=
+  bridgeMallocPre_at SL gpv headroom AInv exts sp gm g' nameStr m0 hg'x8 hg'other hAInvStable
+    (hloaded m0 hstrlenLoaded)
 
 #print axioms bridgeMallocPre_closed
 

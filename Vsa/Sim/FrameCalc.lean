@@ -114,9 +114,11 @@ theorem valueRepr_copy {m m' : Mem} {N : NativeAddrs} {phiC : Addr → Nat}
     (hdisj : ∀ (p : Nat) (s : String), read64 m (srcAddr + 8) = some p →
       ∀ k, k ≤ s.length → (p + k < dstAddr ∨ dstAddr + 24 ≤ p + k))
     (hv : ValueRepr m N phiC srcAddr v) : ValueRepr m' N phiC dstAddr v := by
-  apply valueRepr_copy_of_writeWindow hcopy _ hdisj hv
-  intro a ha
-  exact h.frameOn a ⟨ha, trivial⟩
+  refine valueRepr_copy_of_writeWindow hcopy ?_ ?_ hv
+  · intro a ha
+    exact h.frameOn a ⟨ha, trivial⟩
+  · intro p s hp _ k hk
+    exact hdisj p s hp k hk
 
 end FrameCalc
 

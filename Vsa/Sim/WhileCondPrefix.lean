@@ -7,7 +7,7 @@ open Vsa.Machine (Config Steps)
 open Vsa.RuntimeRepr Vsa.MemRepr Vsa.While Vsa.Alloc
 
 #derive_case execWhileCondPrefixSeg chain
-  [(0x8000403c#64, 0x00843603#32),
+  [(0x8000403c#64, 0x00843603#32),  -- discipline: allow(R10-exec-evalchild-arm) reused as `whileCondArm.seg` (rows/EvalChildArmWhile)
    (0x80004040#64, 0x00098693#32),
    (0x80004044#64, 0x05010513#32),
    (0x80004048#64, 0x00048593#32)]

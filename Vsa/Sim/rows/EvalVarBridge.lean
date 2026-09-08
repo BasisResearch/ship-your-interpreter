@@ -527,7 +527,8 @@ theorem varBridge_callee
         exact hb
     · intro a ha
       exact (hout' a (by rcases ha with h | h <;> omega)).symm
-    · exact hL.payloadDisj m9 mpc hspill' houtside'
+    · intro p s hp _ k hk
+      exact hL.payloadDisj m9 mpc hspill' houtside' p s hp k hk
   obtain ⟨hslotRa, hslotS0, hslotS1, hslotS2⟩ := hL.finalSlots m9 mpc hspill' houtside'
   refine ⟨c', hsteps, mpc, hpost.good, hpost.tick, hpost.pc,
     ⟨(1#64), hpost.found, by decide⟩, hpost.s1, ?_, hL.finalMinstret m9 c' hpost, hpost.output,
@@ -596,7 +597,7 @@ def VarRowResid (st : SpecSt) (x : String) (v : Value) : Prop :=
       ((0x80002cdc : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x80002c10) ∧
       Vsa.Sim.VarSlotPinned c.σ.mem ∧
       ((0x80019f58 : Nat) + 20 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58 + 16)) ∧
-    Vsa.Sim.LeafWiden g N A SL φf φc st v sp r sret m0 ∧
+    Vsa.Sim.LeafReturnWiden g N A SL φf φc st v sp r sret m0 ∧
     -- the caller-linkage seam for every callee-entry witness (with its env
     -- pointer `penv` and name `nm` chosen by the caller per memory witness).
     (∀ (ment : Mem) (v8 v9 v18 : BitVec 64),

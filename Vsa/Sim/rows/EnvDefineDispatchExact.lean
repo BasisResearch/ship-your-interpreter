@@ -34,7 +34,7 @@ theorem envDefineCapSigned_of_heap
 miss loop, with the allocator, ABI and saved-spill frames retained. -/
 theorem envDefineScanDispatchFramed
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat))
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (outp : Array String)
     (saved gm : (R : Register) → Option (RegisterType R))
     (env name pv count pn sp : BitVec 64)
     (f : Vsa.While.Frame) (nameStr : String) (N : NativeAddrs)
@@ -59,14 +59,14 @@ theorem envDefineScanDispatchFramed
         c.σ.regs.get? Register.x19 = some count ∧
         c.σ.regs.get? Register.x2 = some sp ∧ c.tick < 2 ∧
         EnvDefineSavedSpillFrame sp saved c ∧
-        EnvDefineScanEntryFrame M exts sp gm c)
-      (EnvDefineScanFramedResult M exts saved (envDefineScanBaseGhost gm pn)
+        EnvDefineScanEntryFrame M exts outp sp gm c)
+      (EnvDefineScanFramedResult M exts outp saved (envDefineScanBaseGhost gm pn)
         env name pv count pn sp f nameStr m0) := by
   exact Triple.seq
-    (envDefineScanStartFramed M exts saved gm env name pv count pn sp f nameStr
+    (envDefineScanStartFramed M exts outp saved gm env name pv count pn sp f nameStr
       N phif phic m0 hframe hnames hcount hpositive hcountSigned hgeom hAInvStable)
     (fun c h =>
-      envDefineScanFiniteFramed M exts saved (envDefineScanBaseGhost gm pn)
+      envDefineScanFiniteFramed M exts outp saved (envDefineScanBaseGhost gm pn)
         env name pv count pn sp 0 f nameStr N phif phic m0 hpositive hAInvStable
         c ⟨h, by intro _ _ hj; omega⟩)
 
@@ -101,16 +101,16 @@ def EnvDefineCapPost (seg : List BBlock) (pc : BitVec 64)
 
 def EnvDefineCapFramedPost
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat))
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (outp : Array String)
     (gm : (R : Register) → Option (RegisterType R))
     (idx cursor sp : BitVec 64) (seg : List BBlock) (pc env count : BitVec 64)
     (lds : List (List (BitVec 8))) (m0 : Mem) (c : Config) : Prop :=
   EnvDefineCapPost seg pc env count lds m0 c ∧
-  EnvDefineScanFrame M exts sp gm idx cursor c
+  EnvDefineScanFrame M exts outp sp gm idx cursor c
 
 theorem envDefineCapRowFramed
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat))
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (outp : Array String)
     (gm : (R : Register) → Option (RegisterType R))
     (idx cursor sp : BitVec 64) (seg : List BBlock) (target env count : BitVec 64)
     (lds : List (List (BitVec 8))) (m0 : Mem)
@@ -126,11 +126,11 @@ theorem envDefineCapRowFramed
       M.AInv sigmaa exts → M.AInv sigmab exts) :
     Triple
       (fun c => SegPre seg (envDefineCapL env count) lds 0x80002b14#64 m0 c ∧
-        EnvDefineScanFrame M exts sp gm idx cursor c)
-      (EnvDefineCapFramedPost M exts gm idx cursor sp seg target env count lds m0) := by
+        EnvDefineScanFrame M exts outp sp gm idx cursor c)
+      (EnvDefineCapFramedPost M exts outp gm idx cursor sp seg target env count lds m0) := by
   intro c ⟨hseg, hframe⟩
   obtain ⟨hG0, hmem0, hpc0, ⟨vmi, hmi0⟩, hL0, hkeys0, hfacts0, htick0⟩ := hseg
-  obtain ⟨sigma', i', hsteps, htick', hG', hmem', _hout, hpc', _hmi', hregs', hraw⟩ :=
+  obtain ⟨sigma', i', hsteps, htick', hG', hmem', hout, hpc', _hmi', hregs', hraw⟩ :=
     segEval_sound seg c.σ c.tick c.steps 0x80002b14#64 vmi
       (envDefineCapL env count) lds hG0 hpc0 hmi0 hL0 hkeys0 hfacts0 hwf htick0
   rw [hmem0] at hmem'
@@ -139,8 +139,9 @@ theorem envDefineCapRowFramed
   have habi : ∀ R, AbiPreserved R = true →
       c'.σ.regs.get? R = c.σ.regs.get? R :=
     frame_of_wrChain_avoids_abi hAvoid hraw
-  have hframe' : EnvDefineScanFrame M exts sp gm idx cursor c' := by
-    refine ⟨hframe.stack, (habi Register.x3 (by decide)).trans hframe.gp, ?_, ?_⟩
+  have hframe' : EnvDefineScanFrame M exts outp sp gm idx cursor c' := by
+    refine ⟨hframe.stack, (habi Register.x3 (by decide)).trans hframe.gp, ?_, ?_,
+      hout.trans hframe.out⟩
     · intro R hR
       exact (habi R hR).trans (hframe.abi R hR)
     · exact hAInvStable c.σ c'.σ
@@ -181,7 +182,7 @@ theorem envDefineCapGrowRow (env count : BitVec 64)
 
 theorem envDefineCapAppendRowFramed
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat))
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (outp : Array String)
     (gm : (R : Register) → Option (RegisterType R))
     (idx cursor sp env count : BitVec 64) (lds : List (List (BitVec 8))) (m0 : Mem)
     (hAInvStable : ∀ (sigmaa sigmab : Vsa.Machine.MState),
@@ -190,10 +191,10 @@ theorem envDefineCapAppendRowFramed
       M.AInv sigmaa exts → M.AInv sigmab exts) :
     Triple
       (fun c => SegPre envDefineCapAppendSeg (envDefineCapL env count) lds
-          0x80002b14#64 m0 c ∧ EnvDefineScanFrame M exts sp gm idx cursor c)
-      (EnvDefineCapFramedPost M exts gm idx cursor sp envDefineCapAppendSeg
+          0x80002b14#64 m0 c ∧ EnvDefineScanFrame M exts outp sp gm idx cursor c)
+      (EnvDefineCapFramedPost M exts outp gm idx cursor sp envDefineCapAppendSeg
         0x80002b1c#64 env count lds m0) := by
-  apply envDefineCapRowFramed M exts gm idx cursor sp envDefineCapAppendSeg
+  apply envDefineCapRowFramed M exts outp gm idx cursor sp envDefineCapAppendSeg
     0x80002b1c#64 env count lds m0
   · decide
   · rfl
@@ -203,7 +204,7 @@ theorem envDefineCapAppendRowFramed
 
 theorem envDefineCapGrowRowFramed
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat))
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (outp : Array String)
     (gm : (R : Register) → Option (RegisterType R))
     (idx cursor sp env count : BitVec 64) (lds : List (List (BitVec 8))) (m0 : Mem)
     (hAInvStable : ∀ (sigmaa sigmab : Vsa.Machine.MState),
@@ -212,10 +213,10 @@ theorem envDefineCapGrowRowFramed
       M.AInv sigmaa exts → M.AInv sigmab exts) :
     Triple
       (fun c => SegPre envDefineCapGrowSeg (envDefineCapL env count) lds
-          0x80002b14#64 m0 c ∧ EnvDefineScanFrame M exts sp gm idx cursor c)
-      (EnvDefineCapFramedPost M exts gm idx cursor sp envDefineCapGrowSeg
+          0x80002b14#64 m0 c ∧ EnvDefineScanFrame M exts outp sp gm idx cursor c)
+      (EnvDefineCapFramedPost M exts outp gm idx cursor sp envDefineCapGrowSeg
         0x80002b90#64 env count lds m0) := by
-  apply envDefineCapRowFramed M exts gm idx cursor sp envDefineCapGrowSeg
+  apply envDefineCapRowFramed M exts outp gm idx cursor sp envDefineCapGrowSeg
     0x80002b90#64 env count lds m0
   · decide
   · rfl
@@ -231,36 +232,40 @@ structure EnvDefineArenaGeom (A : Arena) : Prop where
 
 def EnvDefineMissCapResult
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List Extent)
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List Extent) (outp : Array String)
     (saved gm : (R : Register) → Option (RegisterType R))
     (env count pn sp : BitVec 64) (f : Vsa.While.Frame)
     (m0 : Mem) (c : Config) : Prop :=
   ∃ cap, (f.vars.length < cap ∧ ∃ i lds,
     i + 1 = f.vars.length ∧
-    EnvDefineCapFramedPost M exts gm (BitVec.ofNat 64 (i + 1))
+    EnvDefineCapFramedPost M exts outp gm (BitVec.ofNat 64 (i + 1))
       (pn + BitVec.ofNat 64 (8 * (i + 1))) sp envDefineCapAppendSeg
       0x80002b1c#64 env count lds m0 c ∧
-    EnvDefineSavedSpillFrame sp saved c) ∨
+    EnvDefineSavedSpillFrame sp saved c ∧
+    read32 m0 (env.toNat + 4) = some cap ∧
+    c.σ.regs.get? Register.x15 = some (BitVec.ofNat 64 cap)) ∨
   (f.vars.length = cap ∧ ∃ i lds,
     i + 1 = f.vars.length ∧
-    EnvDefineCapFramedPost M exts gm (BitVec.ofNat 64 (i + 1))
+    EnvDefineCapFramedPost M exts outp gm (BitVec.ofNat 64 (i + 1))
       (pn + BitVec.ofNat 64 (8 * (i + 1))) sp envDefineCapGrowSeg
       0x80002b90#64 env count lds m0 c ∧
-    EnvDefineSavedSpillFrame sp saved c)
+    EnvDefineSavedSpillFrame sp saved c ∧
+    read32 m0 (env.toNat + 4) = some cap ∧
+    c.σ.regs.get? Register.x15 = some (BitVec.ofNat 64 cap))
 
 /-- Turn the exhaustive scan miss into the exact append/grow cap branch.  The
-signed `lw` fact is derived from the owned values-array extent and bounded
-arena, rather than assumed as an unrelated arithmetic oracle. -/
+capacity word is the represented frame's (`FrameRepr`), its signedness comes
+from the owned values array inside the bounded arena
+(`RuntimeOwnership.FrameOwned.capSigned`); neither is an arithmetic oracle. -/
 theorem envDefineMissCapDispatch
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List Extent)
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List Extent) (outp : Array String)
     (saved gm : (R : Register) → Option (RegisterType R))
     (env name pv count pn sp : BitVec 64)
-    (f : Vsa.While.Frame) (nameStr : String) (m0 : Mem)
-    (phif : Vsa.While.Addr → Nat) (target : Vsa.While.Addr)
-    (henv : env.toNat = phif target)
-    (howned : FrameHeapOwned m0 phif exts target f)
-    (harena : HeapArena A exts) (hgeom : EnvDefineArenaGeom A)
+    (f : Vsa.While.Frame) (nameStr : String) (m0 : Mem) (cap : Nat)
+    (hcap' : read32 m0 (env.toNat + 4) = some cap)
+    (hcapSigned : cap < 2^31) (hlenCap : f.vars.length ≤ cap)
+    (hgeom : EnvDefineArenaGeom A)
     (henvArena : A.contains env.toNat 32) (henvAlign : env.toNat % 8 = 0)
     (hcount : count.toNat = f.vars.length)
     (hAInvStable : ∀ (sigmaa sigmab : Vsa.Machine.MState),
@@ -274,20 +279,11 @@ theorem envDefineMissCapDispatch
           EnvDefineScanLivePost envDefineScanDoneSeg 0x80002b14#64
             x (BitVec.ofNat 64 i) (pn + BitVec.ofNat 64 (8 * i)) count
             env name pv sp [] m0 c ∧ EnvDefineSavedSpillFrame sp saved c ∧
-          EnvDefineScanFrame M exts sp gm (BitVec.ofNat 64 (i + 1))
+          EnvDefineScanFrame M exts outp sp gm (BitVec.ofNat 64 (i + 1))
             (pn + BitVec.ofNat 64 (8 * (i + 1))) c)
-      (EnvDefineMissCapResult M exts saved gm env count pn sp f m0) := by
+      (EnvDefineMissCapResult M exts outp saved gm env count pn sp f m0) := by
   intro c h
   obtain ⟨_hall, i, hiLen, x, hdone, hsaved, hscanFrame⟩ := h
-  obtain ⟨cap, names, vals, hcap, _hnames, _hvals, hlenCap,
-    _hnamesMem, _hvalsMem, _hnamesOwned⟩ := howned.arrays
-  have hcapAddr : phif target + 4 = env.toNat + 4 := by omega
-  have hcap' : read32 m0 (env.toNat + 4) = some cap := by
-    rw [← hcapAddr]
-    exact hcap
-  have hcapSigned : cap < 2^31 := by
-    apply envDefineCapSigned_of_heap harena howned hcap
-    exact hgeom.ramHi
   obtain ⟨b0, b1, b2, b3, hb0, hb1, hb2, hb3, hrec⟩ :=
     read32_bytes_ed m0 (env.toNat + 4) cap hcap'
   let bs := [b0, b1, b2, b3]
@@ -374,13 +370,22 @@ theorem envDefineMissCapDispatch
       ⟨hdone.1, hmem, hdone.2.2.1, hdone.1.minstret, hL,
         (by show KeysOK [20, 19]; decide), hfacts, hdone.2.2.2.2⟩
     obtain ⟨c', hsteps, hpost, hframe'⟩ :=
-      envDefineCapAppendRowFramed M exts gm (BitVec.ofNat 64 (i + 1))
+      envDefineCapAppendRowFramed M exts outp gm (BitVec.ofNat 64 (i + 1))
         (pn + BitVec.ofNat 64 (8 * (i + 1))) sp env count [bs] m0 hAInvStable
         c ⟨hpre, hscanFrame⟩
     have hsaved' : EnvDefineSavedSpillFrame sp saved c' :=
       EnvDefineSavedSpillFrame.of_mem_eq (hpost.2.1.trans hmem.symm) hsaved0
+    have ha5 : c'.σ.regs.get? Register.x15 = some (BitVec.ofNat 64 cap) := by
+      rw [← hcapWord]
+      have hl : lookupG 15 (evalBlocks envDefineCapAppendSeg
+          (SegEvalState.init (envDefineCapL env count) [bs])).regs =
+          some (bytesVal .lw bs) := by
+        simp only [envDefineCapAppendSeg, evalBlocks, evalBlock, SegEvalState.init]
+        rw [envDefineCapLoadLine]
+        simp [runGM, stepGM, stepLdsM, ldsRunM, wvalM, lookupG, eraseG, envDefineCapL]
+      simpa [gprGet] using gholds_lookup _ hpost.2.2.2.1 hl
     exact ⟨c', hsteps, cap, Or.inl ⟨hlt, i, [bs], hiLen,
-      ⟨hpost, hframe'⟩, hsaved'⟩⟩
+      ⟨hpost, hframe'⟩, hsaved', hcap', ha5⟩⟩
   · have heqNat : f.vars.length = cap := by omega
     have heqBV : BitVec.ofNat 64 cap = count := by
       apply BitVec.eq_of_toNat_eq
@@ -418,20 +423,29 @@ theorem envDefineMissCapDispatch
       ⟨hdone.1, hmem, hdone.2.2.1, hdone.1.minstret, hL,
         (by show KeysOK [20, 19]; decide), hfacts, hdone.2.2.2.2⟩
     obtain ⟨c', hsteps, hpost, hframe'⟩ :=
-      envDefineCapGrowRowFramed M exts gm (BitVec.ofNat 64 (i + 1))
+      envDefineCapGrowRowFramed M exts outp gm (BitVec.ofNat 64 (i + 1))
         (pn + BitVec.ofNat 64 (8 * (i + 1))) sp env count [bs] m0 hAInvStable
         c ⟨hpre, hscanFrame⟩
     have hsaved' : EnvDefineSavedSpillFrame sp saved c' :=
       EnvDefineSavedSpillFrame.of_mem_eq (hpost.2.1.trans hmem.symm) hsaved0
+    have ha5 : c'.σ.regs.get? Register.x15 = some (BitVec.ofNat 64 cap) := by
+      rw [← hcapWord]
+      have hl : lookupG 15 (evalBlocks envDefineCapGrowSeg
+          (SegEvalState.init (envDefineCapL env count) [bs])).regs =
+          some (bytesVal .lw bs) := by
+        simp only [envDefineCapGrowSeg, evalBlocks, evalBlock, SegEvalState.init]
+        rw [envDefineCapLoadLine]
+        simp [runGM, stepGM, stepLdsM, ldsRunM, wvalM, lookupG, eraseG, envDefineCapL]
+      simpa [gprGet] using gholds_lookup _ hpost.2.2.2.1 hl
     exact ⟨c', hsteps, cap, Or.inr ⟨heqNat, i, [bs], hiLen,
-      ⟨hpost, hframe'⟩, hsaved'⟩⟩
+      ⟨hpost, hframe'⟩, hsaved', hcap', ha5⟩⟩
 
 /-- The append cap arm already contains the complete carried frame needed by
 the exact strlen prefix.  This is a zero-step ABI marshal, not a machine-stage
 oracle. -/
 theorem envDefineAppendEntry_of_cap
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts : List Extent)
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List Extent) (outp : Array String)
     (saved gm : (R : Register) → Option (RegisterType R))
     (idx cursor sp env name count : BitVec 64)
     (lds : List (List (BitVec 8))) (m0 : Mem) (nameStr : String)
@@ -441,7 +455,7 @@ theorem envDefineAppendEntry_of_cap
     (hregions : StrRegions name nameStr.length)
     (halign : name.toNat % 8 = 0) (hcstr : CString m0 name.toNat nameStr) :
     Triple
-      (fun c => EnvDefineCapFramedPost M exts gm idx cursor sp
+      (fun c => EnvDefineCapFramedPost M exts outp gm idx cursor sp
           envDefineCapAppendSeg 0x80002b1c#64 env count lds m0 c ∧
         EnvDefineSavedSpillFrame sp saved c)
       (fun c => AppendStrlenEntry SL gpv headroom M.AInv exts sp
