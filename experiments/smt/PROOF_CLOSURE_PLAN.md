@@ -313,10 +313,24 @@ replace every per-entry `ainv_stable` field.
   `HeapOwned` (`EnvDefineOwned`): the legacy `StoreHeapOwned` with `HeapArena`
   is uninhabitable for a fresh frame (`env_new` sets `cap = 0`, `names =
   vals = NULL`, and `FrameHeapOwned.arrays` demands `(NULL, 0) ∈ exts`).
-- Derive initial stack/body bounds and allocator capacity from a source
-  resource bound over every finite execution prefix. Account for physical
-  chunk overhead and fragmentation: a 32-byte request occupies 48 bytes.
-  Connect the bound to `Loaded` and concrete allocator state.
+- Physical accounting and arena capacity are `Vsa/Sim/AllocCapacity.lean`.
+  `physSize n = 16 * ((n + 8 + 15) / 16)` is the chunk cost, header and
+  16-byte alignment included, so `physSize_32 : physSize 32 = 48` is the plan's
+  recorded figure as a checked theorem; `physTotal` sums it over a ledger.
+  `extents_total_le` is the capacity theorem — pairwise-disjoint extents inside
+  `[A.lo, A.hi)` have total size at most `A.hi - A.lo`, by strong induction on
+  the ledger splitting each tail around its head extent into the part ending
+  below it and the part starting above it. Nothing bounded the live set before
+  this: `HeapArena` constrains each extent and their disjointness but never
+  their total, so `MallocContract.nonNull_of_bounded` had no capacity content
+  behind it. `ResourceBound` names the source-side obligation (the live
+  ledger's physical cost leaves room for one more request at the static
+  ceiling) and `arena_has_room` derives that the next bounded request fits.
+  REMAINING: supply `ResourceBound` from a source-level accounting of the
+  interpreter's allocation behaviour over every finite execution prefix, and
+  connect it to `Loaded` and the concrete arena bounds of the linker script.
+  Discharging `nonNull_of_bounded` itself additionally needs the allocator's
+  own placement argument, which is behind `MallocContract`.
 
 ### 3. Close sequence and for-loop recursion
 
