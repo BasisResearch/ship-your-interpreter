@@ -25,10 +25,10 @@ hEq	hole	`hBinary` eq cell.  Supplier: `EqResid` via `value_equal_spec_full` (`T
 hNe	hole	`hBinary` ne cell.  Supplier: `EqResid` (`EvalEqNeRow`).
 hStrAddL	hole	`hBinary` str `+` (left-str) cell.  Supplier: `StrConcatCellResid` (`TermGuards.strConcat`, blocked on the stringify spec).
 hStrAddR	hole	`hBinary` str `+` (right-str) cell.  Supplier: `StrConcatCellResid`.
-hStrLt	hole	`hBinary` str `<` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue` (`TermGuards.strCmp`/`strArmProlog`, LANDED slots via `strcmp_full_spec`).
-hStrLe	hole	`hBinary` str `≤` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`.
-hStrGt	hole	`hBinary` str `>` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`.
-hStrGe	hole	`hBinary` str `≥` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`.
+hStrLt	hole	`hBinary` str `<` cell.  Supplier: `ScaffoldRows.field_hStrLt_of` (`rows/StrCmpCellInstances.lean`, on the `StrCmpCell` layer) from `StrCmpOperandsSupply` and `StrLeftSurvivesSupply`.
+hStrLe	hole	`hBinary` str `≤` cell.  Supplier: `ScaffoldRows.field_hStrLe_of` (`StrCmpCell` layer).
+hStrGt	hole	`hBinary` str `>` cell.  Supplier: `ScaffoldRows.field_hStrGt_of` (`StrCmpCell` layer).
+hStrGe	hole	`hBinary` str `≥` cell.  Supplier: `ScaffoldRows.field_hStrGe_of` (`StrCmpCell` layer).
 hDivOv	hole	`hBinary` div-overflow arm (`INT64_MIN / -1` wraps).  Supplier: `TermGuards.divOvfArm` wrap-semantics div row.
 hArgsCons	hole	`hArgsCons`/`eval_argsCons_row`.  Supplier: `ArgsConsResid` per-iter body oracle + fall-through (`TermGuards.argsMeasure`, `evalArgsStepOf`/`loopFromBody`).
 hCallPrint	hole	`hCallPrint`/`eval_callPrint_row`.  Supplier: native `print` seg (`NativePrintSpec`).

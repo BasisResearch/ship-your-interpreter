@@ -134,64 +134,7 @@ theorem strOperandsStaged_of_twoSubReturn
 
 #print axioms strOperandsStaged_of_twoSubReturn
 
-/-! ## Making the readback LOAD-BEARING: reach `strKindCheckRow`'s entry
-
-`strKindCheckRow` (`StrArmChain.lean`) is the LANDED kind-check span; its entry
-`SegPre strKindCheck strKindL [] 0x80003628 m0` demands the two operand kind tags
-staged into REGISTERS — `strKindL = [(10, 3), (16, 3)]`, i.e. `x10 = 3` (right
-kind), `x16 = 3` (left kind) — which drive the `bnez`/`beqz` guards.  Those come
-from the op-dispatch's str-arm STAGING span (`0x8000351c … → 0x80003628`): after the
-`jr` op-dispatch lands the str-compare arm, the arm loads each operand's kind field
-`lw`/`ld` off its value box (`sp-944` right, `sp-968` left — exactly the addresses
-my readback pins) into `a0`/`a6`, and stages the two CString pointers (`read64
-box+8`) into `a7`/`s3` for the strcmp seam.
-
-The readback (`strOperandsStaged_of_twoSubReturn`) supplies the SEMANTIC content of
-that span's premise: the box kind tags ARE 3, the pointers ARE nonzero CStrings.
-What remains is the machine reach — the concrete instruction span that MOVES box
-bytes into registers.  That is a genuine (unbuilt) straight-line/dispatch span; I
-name it as a typed residual rather than assert it.  `StrArmStageSpan` reads
-`StrOperandsStaged` and produces the `strKindCheckRow` entry; `strReadbackToKindCheck`
-then composes it with the readback + the landed `strKindCheckRow` + the landed
-`StrSeamSpan2` seam (`strKindToStrcmp_seam`) to REACH the strcmp entry from a
-`.str`/`.str` `TwoSubReturn` — the whole front of `StrArmToStrcmp` modulo this one
-named staging span. -/
-
-/-- **The str-arm operand-box STAGING span residual** — the honest machine span
-from the `.str`/`.str` `TwoSubReturn` entry config to `strKindCheckRow`'s entry.
-`Pre` is any predicate the caller reaches at the `TwoSubReturn` PC `0x8000351c`
-(carrying `StrOperandsStaged` for its memory); the span runs the op-dispatch str-arm
-box→register staging (`0x8000351c … → 0x80003628`: the `jr` op-dispatch into the
-str-compare arm + the `lw`/`ld` box reads that stage each operand's kind field into
-`a0`/`a6` and its CString pointer into `a7`/`s3`) to land the kind-check entry
-`SegPre strKindCheck strKindL [] 0x80003628 m0` (`x10 = 3`, `x16 = 3` staged).
-
-The readback (`strOperandsStaged_of_twoSubReturn`) supplies this span's SEMANTIC
-obligation (box tags = 3, pointers are CStrings); the residual is the concrete
-instruction transport, dischargeable as a `#derive_case` seg once the op-dispatch
-route to the str-compare arm is pinned.  Named as a typed premise so the kind-3
-readback is load-bearing, mirroring `StrSeamSpan2`. -/
-def StrArmStageSpan (Pre : Config → Prop) (m0 : Mem) : Prop :=
-  Triple Pre (SegPre strKindCheck strKindL [] 0x80003628#64 m0)
-
-/-- **Readback ≫ staging ≫ kind-check ≫ strcmp seam.**  From any `Pre` the caller
-reaches at the `.str`/`.str` `TwoSubReturn` entry, the staging span (`StrArmStageSpan`,
-named) reaches `strKindCheckRow`'s entry, the LANDED `strKindCheckRow` runs the
-kind-check branch to `0x80003b0c`, and the named `StrSeamSpan2` seam marshals into the
-strcmp entry — landing `strcmp_full_pre`.  This threads the kind-3 readback THROUGH
-the two landed rows (`strKindCheckRow` + the `StrSeamSpan2` seam via
-`strKindToStrcmp_seam`), leaving exactly ONE unbuilt machine span (`StrArmStageSpan`)
-+ the already-named `StrSeamSpan2`, mirroring how `strKindToStrcmp_seam` keeps
-`strKindCheckRow` load-bearing. -/
-theorem strReadbackToKindCheck
-    (Pre : Config → Prop)
-    (g : (R : Register) → Option (RegisterType R))
-    (pa pb : BitVec 64) (sa sb : String) (mA : Mem) (out0 : Array String)
-    (hStage : StrArmStageSpan Pre mA)
-    (hSpan2 : StrSeamSpan2 g pa pb sa sb mA out0) :
-    Triple Pre (strcmp_full_pre g pa pb (0x80003b1c#64) sa sb mA out0) :=
-  Triple.seq hStage (strKindToStrcmp_seam g pa pb sa sb mA out0 hSpan2)
-
-#print axioms strReadbackToKindCheck
+/-! The readback is consumed by `Vsa/Sim/StrCmpCell.lean`
+(`strCmpKindEntry_of_twoSubReturn`, `strCmpSeamGeom_of_resid`). -/
 
 end Vsa.Sim

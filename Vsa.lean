@@ -493,6 +493,10 @@ import Vsa.Sim.rows.StrCmpBlockC
 import Vsa.Sim.rows.StrArmChain
 import Vsa.Sim.rows.StrCmpOrderClose
 import Vsa.Sim.rows.BinStrReadback
+import Vsa.Sim.StrCmpSeamSites
+import Vsa.Sim.StrCmpSeam
+import Vsa.Sim.StrCmpCell
+import Vsa.Sim.rows.StrCmpCellInstances
 import Vsa.Sim.rows.BinIntReadback
 import Vsa.Sim.rows.StringifySpec
 import Vsa.Sim.rows.StringifyStrdupTail

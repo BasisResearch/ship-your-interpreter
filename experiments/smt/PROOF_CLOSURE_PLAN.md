@@ -37,6 +37,17 @@ certificates. The value-return arm is closed on the layer down to one named
 payload premise; the initialised-declaration arm's resume needs the
 `env_define` contract (task 4).
 
+The four string-comparison cells (`hStrLt`, `hStrLe`, `hStrGt`, `hStrGe`) are
+on the string-comparison cell layer (`StrCmpCell`, task 4): one descriptor and
+one decided certificate per operator instantiate ONE generic proof of the
+dispatch, the kind check, the `strcmp` call, the rejoin, the operator's sign
+tail, and the `value_bool` box. Each cell is closed down to the two residuals
+the layer shares, `StrCmpOperandsSupply` (both operand payloads are
+`strcmp`-admissible regions at the actual return) and `StrLeftSurvivesSupply`
+(the left string survives the right child). The second is the `hVlSurv`
+premise of `blockB_binary_data`, recorded below as an obstruction for arena
+payloads; it is the same premise the equality cells carry.
+
 The last completed checkpoint passed 1,587 modules (private resumed build
 after the sequence-boundary amendment), 1,054 declaration axiom audits
 (1,040 with exactly {propext, Classical.choice, Quot.sound}, 14 axiom-free),
@@ -76,6 +87,19 @@ entries reports every axiom set within `propext`, `Classical.choice`,
 `Quot.sound` (13 entries axiom-free; no `sorryAx`, `native_decide`, or
 `ofReduceBool`; log `/private/tmp/vsa-helpercall/logs/stagec.log`). The full
 SMT/fuzzer campaigns are pending.
+The string-comparison cell layer passes the resumed private build (1,591
+modules, 25 rebuilt, exit 0; log
+`/private/tmp/claude-501/-Users-kirancodes-Documents-code-verified-semantic-abstraction/3f98120e-d469-40e3-ab61-f89a096c4e7c/scratchpad/integration.log`),
+the backend verification, the four boundary regressions with the input lock
+refreshed for the fifteen changed proof sources (`boundary/summary.json` and
+`boundary-lock-changes.json` in the same directory), 200 Python tests, the
+generator checks, and the discipline gate with the 56 inherited findings
+unchanged and none in the new files. The stage c audit (run by hand, the gate
+stopping at stage a4 as before) covers 1,060 entries after replacing the seven
+retired scaffolding names by the seven new theorems and removing eight
+duplicate names from the list; every axiom set is within `propext`,
+`Classical.choice`, `Quot.sound` (`stagec3.out` in the same directory).
+
 Recompute the census before changing the certified count.
 
 ## Remaining tasks, in dependency order
@@ -97,6 +121,18 @@ Recompute the census before changing the certified count.
   and distinct addresses for the three native functions through entries.
 - Replace `VarCallLinkage.payloadDisj` and its unpinned `LeafWiden` premise
   with facts about the actual returned value and memory.
+- Obstruction (string and equality cells): `blockB_binary_data` takes the left
+  value's survival across the right child as `hVlSurv`, quantified over ALL
+  memory pairs that agree outside the right child's frame, the arena, and the
+  right result slot. For a string payload inside the arena that statement is
+  false (the pair may differ on the payload), so `StrLeftSurvivesSupply`
+  (`StrCmpCell.lean`) and the first conjunct of `BinEqCellResid` are
+  supplyable only for payloads outside the arena. Cure: restate the survival at
+  the right child's actual exit — the recursive motive already retains the
+  store's survival (`EvalReturn`); extend it to the left temporary through
+  `ValueOwned` and thread that fact into `TwoSubReturn` in place of `hVlSurv`.
+  Evidence: the hypothesis shape at `Vsa/Sim/EvalBinSim.lean`
+  (`blockB_binary_data`, `hVlSurv`).
 
 Reuse the implemented separation rules, `StableUnder`, `ReprDelta`,
 `OutputDelta`, `CertifiedSegment`, and `RecursiveStepGeom` throughout.
@@ -194,7 +230,7 @@ Reuse the implemented separation rules, `StableUnder`, `ReprDelta`,
 
 | Family | Remaining work |
 |---|---|
-| Expressions | Variable lookup, assignment, constructor dispatch, equality/inequality, six string cells, and `hDivOv`. Equality needs coherent operand maps, allocated bounds, payload coverage, and native identity. |
+| Expressions | Variable lookup, assignment, constructor dispatch, equality/inequality, the two string concatenation cells, and `hDivOv`. Equality needs coherent operand maps, allocated bounds, payload coverage, and native identity. The four string comparison cells are on the `StrCmpCell` layer down to `StrCmpOperandsSupply` and `StrLeftSurvivesSupply` (below). |
 | Arguments | Empty/nonempty loop assembly and `EvalArgsStep`; preserve spill slots `sp+24` and `sp+16`. Discharge the Lean supplier before removing SMT premise `argsLoopBoundAcrossCall`. |
 | Calls and functions | `hCall`, `hCallClosure`, `hFn`; parameter bindings, depth bounds, allocation, and result marshalling. Complete the existing `CallClosureRow`/`CallClosureSplice` stage providers. |
 | Native/output | Print, println, successful assert, `fprintf`/`_vfprintf_r`, `__swbuf_r`, `_putc_r`, and enclosing fputc folds. Preserve stdout/errno/HTIF state and output suffixes; reuse existing flush/write frames. |
@@ -457,6 +493,64 @@ Three obstructions recorded by the layer were resolved in place:
   payload otherwise. `valueRepr_copy` and `valueRepr_copy_of_writeWindow`
   take the same guard; `ExecRet`, `ExecRetNull`, `EvalCallNative2`,
   `FrameCalc`, `EnvGetSpec6`, and `EvalVarBridge` consume it.
+
+#### The string-comparison cell layer
+
+`Vsa/Sim/StrCmpCell.lean` states the four string-comparison cells once over a
+descriptor `StrCmpOp` (operator, result function, token, jump-table index and
+slot, the landed slot predicate, the sign-tail seg, the `jal value_bool` /
+`ld s3` / `j` PCs and immediates) and a certificate `StrCmpOp.Cert` (the token
+and slot arithmetic, the sign tail's `ChainOK`/facts/end PC/readbacks, the
+three generated box sites, the box wiring, the `binOpSem` closure, and the
+proved `StrCmpOrderBridge`). Generic theorems:
+
+- `strCmpKindEntry_of_twoSubReturn` — the shared operator dispatch
+  (`evalBinopChain_run`) from the actual return of both children, reading both
+  kind tags and payload pointers back from the represented operand boxes
+  (`strOperandsStaged_of_twoSubReturn`, `BinaryReturnLoads`);
+- `strCmpTailReady_of_kindEntry` (`Vsa/Sim/StrCmpSeam.lean`) — the
+  operator-independent middle: the landed kind check `strKindCheck`, the seam
+  seg `strSeamSeg` (`mv a1,a7; mv a0,s3; sd a2,0(sp)`) with the generated
+  `site_80003b18_sc` through `bridgeOfSegOut`, `strcmp_full_spec`, and the
+  landed rejoin `strRejoin` with the token read back through the write log; the
+  exit `StrCmpTailReady` ties the `strcmp` word to the operand strings for every
+  proved order bridge; `FixedRodataLoaded.maskPinned` supplies the word mask
+  from the fixed image;
+- `blockC_strcmp` — dispatch ≫ seam ≫ the operator's sign tail (a framed
+  `segEval_sound` run over the certificate) ≫ the `jal value_bool` site ≫
+  `boolBoxEpilogue`, landing the integer rows' `PreEpilogueVD` post;
+- `evalStrCmpSim`, `binRow_strcmp`, `binStrCmpCell_of` — the recursive case
+  from the arm entry (`blockB_binary_data ≫ blockC_strcmp ≫ blockD_v_rec`), from
+  the node entry (`blockA_binaryArm_budgeted`), and the field supplier. The
+  reached data `StrCmpResid` is supplied by `EvalEntry.binaryPostGeom` and
+  `EvalEntry.binaryReturnImage`; the operand regions are the named residual.
+
+Instances (`rows/StrCmpCellInstances.lean`) are one descriptor and one
+certificate each; `ScaffoldRows.field_hStr{Lt,Le,Gt,Ge}_of` take the two shared
+residuals. Measured on the private overlay (warm imports, `proof_slice`):
+
+| Layer or cell | Lines | Compile |
+|---|---|---|
+| `StrCmpSeam` (op-independent middle) | 471 | 2.8 s |
+| `StrCmpCell` (dispatch, block C, sim, row, supplier) | 868 | 4.6 s |
+| `StrCmpSeamSites` (generated) | 52 | — |
+| all four instances (`StrCmpCellInstances`) | 237 (≈55 per cell) | 4.7 s |
+| one INTEGER comparison cell for comparison (`rows/EvalLtRow` + `EvalLtChain`, hand-rolled, `maxHeartbeats 8000000`) | 1,912 | — |
+
+Every declaration of the three new files depends only on `propext`,
+`Classical.choice`, and `Quot.sound`. The superseded hand scaffolding
+(`StrArmFrontData`, `strArmFront`, `StrArmPrologue`, `StrArmMachineResid`,
+`StrSeamSpan2`, `StrArmToStrcmp`, `StrArmStageSpan`) is removed; the residual
+bundle field `TermGuards.strArmProlog` is replaced by `strCmpOperands` and
+`strLeftSurvives`. Rule R13 (`scripts/discipline_rules.tsv`) fails any new file
+that reflects the seam by hand.
+
+The residual `StrCmpOperandsSupply` is true and derivable: string payloads live
+in the arena (`value_str`, concatenation) or in the AST region (literals), both
+inside RAM, 8-aligned, and disjoint from the `strcmp` code, the HTIF window,
+and the callee's spill slot; the supplier is the ownership layer's payload
+location (`ValueOwned`) plus `EvalGround`'s arena/stack geometry. The residual
+`StrLeftSurvivesSupply` is the `hVlSurv` obstruction recorded in task 1.
 
 ### 5. Close divergence, errors, and final assembly
 

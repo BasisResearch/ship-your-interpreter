@@ -1,0 +1,5 @@
+# `jal strcmp` site of the string-comparison arm of `eval_expr` (EX_BINARY, both
+# operands strings): the `StrCmpSeam` layer parks the arm at the `strcmp` entry
+# through `bridgeOfSegOut` over the seam seg `mv a1,a7 ; mv a0,s3 ; sd a2,0(sp)`
+# and this one generated `jal` site.  Target 0x80006ea0 = 0x80003b18 + 0x3388.
+80003b18	388030ef	jal	1	03388

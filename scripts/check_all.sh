@@ -766,17 +766,12 @@ THEOREMS=(
   Vsa.Sim.sTailLtRow                                # rows/StrCmpSignTail (lt sign-test tail seg row; gprGet posts, DivDispatchSeg idiom)
   Vsa.Sim.sTailGtRow                                # rows/StrCmpSignTail (gt sign-test tail; TAKEN-branch end-PC literal fixed +4)
   Vsa.Sim.sTailLeRow                                # rows/StrCmpSignTail (le sign-test tail)
-  Vsa.Sim.strCmpCell_lt_of                          # rows/StrCmpBlockC (StrCmpCellResid provider; residual = StrArmMachineResid + StrCmpOrderBridge)
-  Vsa.Sim.strCmpCell_le_of                          # rows/StrCmpBlockC (le provider)
-  Vsa.Sim.strCmpCell_gt_of                          # rows/StrCmpBlockC (gt provider)
-  Vsa.Sim.strCmpCell_ge_of                          # rows/StrCmpBlockC (ge provider; ge tail = landed cmpFixupTail)
   Vsa.While.strcmpSpecSign_neg_iff_lex              # While/StringOrder (the mathematical core: byte-lex ↔ List.Lex over the ASCII CStr repr — no UTF-8 subtlety, CStr is single-byte <128)
   Vsa.Sim.strCmpOrderBridge_lt                      # rows/StrCmpOrderClose (StrCmpOrderBridge CLOSED — the landed statement was FALSE (unconstrained w), restated tied to the strcmp post)
   Vsa.Sim.strCmpOrderBridge_le                      # rows/StrCmpOrderClose
   Vsa.Sim.strCmpOrderBridge_gt                      # rows/StrCmpOrderClose
   Vsa.Sim.strCmpOrderBridge_ge                      # rows/StrCmpOrderClose
   Vsa.Sim.strOperandsStaged_of_twoSubReturn         # rows/BinStrReadback (kind-3 readback — blockB was ALREADY kind-generic; ledger premise machine-corrected)
-  Vsa.Sim.strReadbackToKindCheck                    # rows/BinStrReadback (readback ≫ stage ≫ kindCheck ≫ seam → strcmp entry; residual = ONE staging span + hVlSurv)
   Vsa.Sim.intOperandsStaged_of_twoSubReturn         # rows/BinIntReadback (kind-2 readback; bool sibling verified consumer-free and skipped honestly)
   Vsa.Sim.addResid_of_armPostGeomV                  # rows/BinIntReadback (the missing int/tblOff=4 reverse isos, found+built)
   Vsa.Sim.binIntCellResid_add_ofStaged              # rows/BinIntReadback (consumer demo: the .add cell = ArmPostGeomV + storeSize + BinArmExtras)
@@ -797,8 +792,6 @@ THEOREMS=(
   Vsa.Sim.strConcatCellResid_of_cblock              # rows/StrConcatHeap (concat cell direct from the C-block residual — the whole str-concat path plumbed)
   Vsa.Sim.strKindCheckRow                           # rows/StrArmChain (kind-3 branch span seg row)
   Vsa.Sim.strRejoinRow                              # rows/StrArmChain (strcmp-ret rejoin seg row: ld;mv;j → shared sign tail)
-  Vsa.Sim.strArmFront                               # rows/StrArmChain (strcmp_full_spec ≫ rejoin ≫ SignTailLeg ≫ value_bool box, the blockC_eqne_front analogue)
-  Vsa.Sim.strArmMachineResid_of                     # rows/StrArmChain (StrArmMachineResid = StrArmPrologue ≫ strArmFront; four op instances land)
   # Wave 34
   Vsa.Sim.execEntry_recast_depth                    # SeqHeadStages (ExecEntry's depth is a machine-side PHANTOM — depth-0 spans re-type at any d for free)
   Vsa.Sim.seqHeadStagePre_of_span                   # SeqHeadStages (SqEntry seqHead field ← loopHeadDispatch_span's already-built inputs; span premise families = the standing DriveToLoopHead residual)
@@ -865,7 +858,6 @@ THEOREMS=(
   Vsa.Sim.callF_field_of_dispatch                   # rows/CallArmStagePre (callF FIELD-COMPOSED — 7/14 eval-child)
   Vsa.Sim.evalChildStages_ublrac_wired              # ArmStagesWave34 (unary+binaryL+binaryR+logicalL+logicalR+assignE+callF wired into the capstone)
   Vsa.Sim.callClosureSim                            # rows/CallClosureRow (falsities #5/#6 AMENDED: BodyHandoff ∃-mid + emptyBypass, entryFold deleted; depth step composed — the motive was already depth-indexed)
-  Vsa.Sim.Rows.eval_callClosure_row_fills_hCallClosure # rows/CallClosureRow (slot-verify vs the VERBATIM hCallClosure premise — unchanged and green)
   Vsa.Sim.callClosureEntrySplice                    # rows/CallClosureSplice (ONE spliceFold: dispatch ≫ real env_new_spec ≫ zero-param split ≫ storeChainList params-fold ≫ handoff)
   Vsa.Sim.callClosureRet_of_status                  # rows/CallClosureSplice (the a_6 status classification split)
   Vsa.Sim.callClosureGeom_of                        # rows/CallClosureSplice (3-field assembly into the amended residual slot)
@@ -1002,7 +994,6 @@ THEOREMS=(
   Vsa.Sim.valueNullHandoffSplice                    # rows/CallCruxMarshal4 (ValueNullStage -> BodyHandoff via real value_null_spec_full)
   Vsa.Sim.foldDefineExitReturn_step                 # rows/CallCruxMarshal4
   Vsa.Sim.foldToHandoff_of                          # rows/CallCruxMarshal4 (the amended hFoldToHandoff composed)
-  Vsa.Sim.callClosureEntrySplice                    # rows/CallClosureSplice (AMENDED: hFoldSeam k+1<n, hFoldToHandoff at carrier n-1)
   # Wave 44: arm-dispatch combinator (7/12), bridge twins + pilots, value_print arms, exit segs, falsity #9, StoreWF invariant
   Vsa.Sim.evalArmDispatch_of_slot                   # rows/ArmDispatchCombinator (Group-A parametric dispatch via KindSlotPinned)
   Vsa.Sim.execArmDispatch_of_slot                   # rows/ArmDispatchCombinatorExec (Group-B twin)
@@ -1099,13 +1090,9 @@ THEOREMS=(
   Vsa.Sim.ifTruthy_cert                             # rows/TruthyCopyIf (if copy seam + three routes)
   Vsa.Sim.Rows.retResid_of_resume                   # rows/ExecRecRows (RetResid restated: generic dispatch + named resume seam)
   Vsa.Sim.Rows.varInitResid_of_resume               # rows/ExecVarInitRow (VarInitResid restated likewise)
-  Vsa.Sim.Rows.exec_ret_row                         # rows/ExecRecRows (re-proved by composition)
-  Vsa.Sim.Rows.exec_ifNone_row                      # rows/ExecDispatchRows (IfNoneCaseResid restated; re-proved by composition)
   Vsa.Sim.ScaffoldRows.field_hSIfNone               # rows/Field_hSIfNoneClosed (hSIfNone CLOSED through the parametric layer)
   Vsa.Sim.forTruthy_cert                            # rows/TruthyCopyFor (for-loop copy seam + falsy route)
   Vsa.Sim.Rows.execExitD_rebaseMem                  # rows/ExecDispatchRows (ghost-memory rebase: reached memory -> entry memory)
-  Vsa.Sim.Rows.exec_ifTrue_row                      # rows/ExecDispatchRows (IfTrueCaseResid restated at the reached memory)
-  Vsa.Sim.Rows.exec_ifFalse_row                     # rows/ExecDispatchRows (IfFalseCaseResid restated likewise)
   Vsa.Sim.ScaffoldRows.field_hSIfTrue               # rows/Field_hSIfBranchClosed (hSIfTrue CLOSED through the parametric layer)
   Vsa.Sim.ScaffoldRows.field_hSIfFalse              # rows/Field_hSIfBranchClosed (hSIfFalse CLOSED likewise)
   Vsa.Sim.ScaffoldRows.field_hFlCondFalse           # rows/Field_hFlCondFalseClosed (hFlCondFalse CLOSED: in-frame dispatch + rebase)
@@ -1118,8 +1105,6 @@ THEOREMS=(
   Vsa.Sim.EvalChildArm.frameFacts_at_exit           # StmtChildArm (parent frame at an expression child's exit)
   Vsa.Sim.forBodyArm_cert                           # rows/ForLoopArms (for body call instance)
   Vsa.Sim.forStepArm_cert                           # rows/ForLoopArms (for step arm instance, in-frame)
-  Vsa.Sim.ScaffoldRows.hFcSome_row                  # rows/ScaffoldRows (ForCond motive now carries the eval IH)
-  Vsa.Sim.ScaffoldRows.hEsSome_row                  # rows/ScaffoldRows (ExecStep motive now carries the eval IH)
   Vsa.Sim.ScaffoldRows.field_hFlBodyBreak           # rows/Field_hFlBodyClosed (hFlBodyBreak CLOSED)
   Vsa.Sim.ScaffoldRows.field_hFlBodyRet             # rows/Field_hFlBodyClosed (hFlBodyRet CLOSED)
   Vsa.Sim.ScaffoldRows.field_hFlLoop                # rows/Field_hFlBodyClosed (hFlLoop CLOSED: step arm + loop-head re-entry + rest IH)
@@ -1216,6 +1201,13 @@ THEOREMS=(
   Vsa.Sim.EnvDefineUpdatePost.restoreKeep           # rows/EnvDefineTailFramed (exact epilogue with KeepGhost carried)
   Vsa.Sim.Code.FixedTextLoaded.Env_defineLoaded     # Code/FixedImage_Env_define (generated projection of the fixed text image)
   Vsa.Sim.Code.FixedTextLoaded.StrcmpLoaded         # Code/FixedImage_Strcmp (generated projection of the fixed text image)
+  Vsa.Sim.strCmpTailReady_of_kindEntry          # StrCmpSeam (kind check ≫ strcmp ≫ rejoin, op-independent)
+  Vsa.Sim.blockC_strcmp                         # StrCmpCell (dispatch ≫ seam ≫ sign tail ≫ value_bool box, any operator)
+  Vsa.Sim.binStrCmpCell_of                      # StrCmpCell (the string-comparison field supplier)
+  Vsa.Sim.ScaffoldRows.field_hStrLt_of          # rows/StrCmpCellInstances
+  Vsa.Sim.ScaffoldRows.field_hStrLe_of
+  Vsa.Sim.ScaffoldRows.field_hStrGt_of
+  Vsa.Sim.ScaffoldRows.field_hStrGe_of
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean

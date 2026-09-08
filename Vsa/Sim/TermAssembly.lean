@@ -141,14 +141,15 @@ structure TermResidualsBase (L : Layout) where
   hStrAddL : BinStrAddLCell
   /-- `hBinary` str `+` (right-str) cell.  Supplier: `StrConcatCellResid`. -/
   hStrAddR : BinStrAddRCell
-  /-- `hBinary` str `<` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`
-      (`TermGuards.strCmp`/`strArmProlog`, LANDED slots via `strcmp_full_spec`). -/
+  /-- `hBinary` str `<` cell.  Supplier: `ScaffoldRows.field_hStrLt_of`
+      (`rows/StrCmpCellInstances.lean`, on the `StrCmpCell` layer) from
+      `StrCmpOperandsSupply` and `StrLeftSurvivesSupply`. -/
   hStrLt : BinStrCmpCell .lt (fun sl sr => sl < sr)
-  /-- `hBinary` str `≤` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`. -/
+  /-- `hBinary` str `≤` cell.  Supplier: `ScaffoldRows.field_hStrLe_of` (`StrCmpCell` layer). -/
   hStrLe : BinStrCmpCell .le (fun sl sr => sl < sr || sl == sr)
-  /-- `hBinary` str `>` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`. -/
+  /-- `hBinary` str `>` cell.  Supplier: `ScaffoldRows.field_hStrGt_of` (`StrCmpCell` layer). -/
   hStrGt : BinStrCmpCell .gt (fun sl sr => sr < sl)
-  /-- `hBinary` str `≥` cell.  Supplier: `StrCmpOrderBridge`/`StrArmPrologue`. -/
+  /-- `hBinary` str `≥` cell.  Supplier: `ScaffoldRows.field_hStrGe_of` (`StrCmpCell` layer). -/
   hStrGe : BinStrCmpCell .ge (fun sl sr => sr < sl || sl == sr)
   /-- `hBinary` div-overflow arm (`INT64_MIN / -1` wraps).  Supplier:
       `TermGuards.divOvfArm` wrap-semantics div row. -/

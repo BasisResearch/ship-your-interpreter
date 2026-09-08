@@ -11,7 +11,7 @@ import Vsa.Sim.rows.TermRouting
 import Vsa.Sim.rows.BinStrCells
 import Vsa.Sim.rows.StrCmpBlockC
 import Vsa.Sim.rows.StrCmpOrderClose
-import Vsa.Sim.rows.StrArmChain
+import Vsa.Sim.StrCmpCell
 
 /-!
 # `TermBundles` — the T1.4 assembly-target shape (`TermShared`/`TermCallees`/`TermGuards`)
@@ -51,7 +51,7 @@ free for the 33 recursive premises.
 | `hNull` | `eval_null_row` | `TermShared.geom` (G) |
 | `hVar` | `eval_var_row` | `TermShared.geom`; `TermCallees.envGet` (C, `env_get_found_framed`) |
 | `hAssign` | *(gap)* | `TermShared.geom`; `TermCallees.envDefine` (OPEN) |
-| `hBinary` | `eval_binary_row` | `TermShared.geom`; div/mod seam `TermCallees.divdi3`; eq/ne `TermCallees.valueEqual`; `TermGuards.binNoOvf`/`divOvfArm`; str cells `TermGuards.strCmp`/`strConcat`/`strArmProlog` |
+| `hBinary` | `eval_binary_row` | `TermShared.geom`; div/mod seam `TermCallees.divdi3`; eq/ne `TermCallees.valueEqual`; `TermGuards.binNoOvf`/`divOvfArm`; str cells `TermGuards.strCmp`/`strConcat`/`strCmpOperands`/`strLeftSurvives` |
 | `hOrTrue`/`hOrFalse`/`hAndFalse`/`hAndTrue` | logical rows | `TermShared.geom` (G, I) |
 | `hNeg`/`hNot` | `eval_neg_row`/`eval_not_row` | `TermShared.geom` (G, I) |
 | `hCall` | `evalCallSim` | `TermShared.geom` (G, I) — 3 sub-motives free |
@@ -265,17 +265,23 @@ structure TermGuards where
       boxed sign test only agrees with the source order for the four real comparison
       closures; the free-`bres` form was the machine-checked falsity that the tied
       `StrCmpOrderBridge` fixed).  Consumed by the four str compare cells of
-      `eval_binary_row` (via `StrCmpBlockC.strCmpCell_{lt,le,gt,ge}_of`).  Supplied by
+      `eval_binary_row` (via `StrCmpCell.binStrCmpCell_of`).  Supplied by
       the LANDED `strCmpOrderBridge_{lt,le,gt,ge}` (`rows/StrCmpOrderClose.lean`),
       resting on `Vsa/While/StringOrder.lean`. -/
   strCmpLt : Vsa.Sim.StrCmpOrderBridge .lt (fun sl sr => sl < sr)
   strCmpLe : Vsa.Sim.StrCmpOrderBridge .le (fun sl sr => sl < sr || sl == sr)
   strCmpGt : Vsa.Sim.StrCmpOrderBridge .gt (fun sl sr => sr < sl)
   strCmpGe : Vsa.Sim.StrCmpOrderBridge .ge (fun sl sr => sr < sl || sl == sr)
-  /-- **strArmProlog** — the str-arm machine-chain prologue.  Consumed by the str
-      compare cells' `StrArmMachineResid` (via `strArmMachineResid_of`).  Supplied by
-      the landed `StrArmPrologue op bres` slot (`rows/StrArmChain.lean`). -/
-  strArmProlog : ∀ (op : BinOp) (bres : String → String → Bool), Vsa.Sim.StrArmPrologue op bres
+  /-- **strCmpOperands** — at the actual return of both children of a string
+      comparison, both payloads are `strcmp`-admissible regions outside the callee's
+      spill slot.  Consumed by the four str compare cells through
+      `StrCmpCell.binStrCmpCell_of` (`rows/StrCmpCellInstances.lean`).  Supplied by
+      the ownership layer's payload location plus `EvalGround` geometry. -/
+  strCmpOperands : Vsa.Sim.StrCmpOperandsSupply
+  /-- **strLeftSurvives** — the left string survives the right child (the `hVlSurv`
+      premise of `blockB_binary_data` at a string).  Consumed by the same four cells.
+      An obstruction for arena payloads; see `PROOF_CLOSURE_PLAN.md`. -/
+  strLeftSurvives : Vsa.Sim.StrLeftSurvivesSupply
   /-- **strConcat** — the string `+` concatenation cell residual.  Consumed by the
       `hStrAddL`/`hStrAddR` slots of `eval_binary_row`.  Supplied by the landed
       `StrConcatCellResid` slot (`rows/BinStrCells.lean`) — currently blocked on the
