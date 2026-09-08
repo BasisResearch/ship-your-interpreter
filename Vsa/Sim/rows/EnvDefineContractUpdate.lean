@@ -531,16 +531,14 @@ structure EnvDefineUpdateOracles (g : (R : Register) → Option (RegisterType R)
   ainv_entry : ∀ σ : MState, σ.regs.get? Register.x3 = some gpv → σ.mem = m → M.AInv σ exts
   /-- The allocator invariant reads only `gp` and bytes outside the callee's stack
   window (the `MallocContract` footprint discipline; every lane's `hAInvStable`). -/
-  ainv_stable : ∀ σa σb : MState,
-    σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
-    (∀ a, ¬ (SL.lo ≤ a ∧ a < esp.toNat) → σa.mem[a]? = σb.mem[a]?) →
-    M.AInv σa exts → M.AInv σb exts
+  stack_hi : esp.toNat ≤ SL.hi
+  /-- The run-global allocator ledger (`Vsa/Sim/AllocRuns.lean`). -/
+  alloc : AllocLedger A SL gpv headroom maxReq M
   /-- Ledger geometry (`HeapOwnershipGeometry`; the interpreter's ownership invariant). -/
   heap : HeapArena A exts
   /-- The arena is RAM above the HTIF window and disjoint from `env_define`'s text
   (linker script, M6). -/
   arena_ram : 0x80000000 ≤ A.lo ∧ A.hi ≤ 0x100000000
-  arena_htif : tohostAddr + 16 ≤ A.lo
   arena_code : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo
   /-- The caller's staged value slot `[esp+16, esp+40)` lies inside the stack region
   (the caller's own `StackOK`). -/
@@ -594,10 +592,7 @@ structure EnvDefineUpdateLedger (g : (R : Register) → Option (RegisterType R))
   ainv_entry : ∀ σ : MState, σ.regs.get? Register.x3 = some gpv → σ.mem = m → M.AInv σ exts
   /-- The allocator invariant reads only `gp` and bytes outside the callee's stack
   window (the `MallocContract` footprint discipline). -/
-  ainv_stable : ∀ σa σb : MState,
-    σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
-    (∀ a, ¬ (SL.lo ≤ a ∧ a < esp.toNat) → σa.mem[a]? = σb.mem[a]?) →
-    M.AInv σa exts → M.AInv σb exts
+  stack_hi : esp.toNat ≤ SL.hi
   /-- The run-global allocator ledger (`Vsa/Sim/AllocRuns.lean`). -/
   alloc : AllocLedger A SL gpv headroom maxReq M
   /-- Ledger geometry (`HeapOwnershipGeometry`; the interpreter's ownership
@@ -628,6 +623,47 @@ structure EnvDefineUpdateLedger (g : (R : Register) → Option (RegisterType R))
     ∀ m' : Mem, (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → m1[k]? = m'[k]?) →
       StoreRepr m' N A φf φc (st.store.define env x v)
 
+/-- The footprint discipline, DERIVED from the run-global ledger. -/
+theorem EnvDefineUpdateLedger.ainv_stable
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : Vsa.While.St} {env : Addr} {x : String} {v : Value}
+    {esp aEnv aName pv r : BitVec 64} {m : Mem}
+    {gpv : BitVec 64} {headroom maxReq : Nat}
+    {M : MallocContract A SL gpv headroom maxReq} {exts : List Extent}
+    (L : EnvDefineUpdateLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts) :
+    ∀ σa σb : MState,
+      σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
+      (∀ a, ¬ (SL.lo ≤ a ∧ a < esp.toNat) → σa.mem[a]? = σb.mem[a]?) →
+      M.AInv σa exts → M.AInv σb exts :=
+  L.alloc.ainv_stable esp L.stack_hi exts
+
+/-- The same, for the derived oracles bundle. -/
+theorem EnvDefineUpdateOracles.ainv_stable
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : Vsa.While.St} {env : Addr} {x : String} {v : Value}
+    {esp aEnv aName pv r : BitVec 64} {m : Mem}
+    {gpv : BitVec 64} {headroom maxReq : Nat}
+    {M : MallocContract A SL gpv headroom maxReq} {exts : List Extent}
+    (O : EnvDefineUpdateOracles g N A SL φf φc st env x v esp aEnv aName pv r m M exts) :
+    ∀ σa σb : MState,
+      σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
+      (∀ a, ¬ (SL.lo ≤ a ∧ a < esp.toNat) → σa.mem[a]? = σb.mem[a]?) →
+      M.AInv σa exts → M.AInv σb exts :=
+  O.alloc.ainv_stable esp O.stack_hi exts
+
+/-- The arena is RAM above the HTIF window, DERIVED from the ledger. -/
+theorem EnvDefineUpdateOracles.arena_htif
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : Vsa.While.St} {env : Addr} {x : String} {v : Value}
+    {esp aEnv aName pv r : BitVec 64} {m : Mem}
+    {gpv : BitVec 64} {headroom maxReq : Nat}
+    {M : MallocContract A SL gpv headroom maxReq} {exts : List Extent}
+    (O : EnvDefineUpdateOracles g N A SL φf φc st env x v esp aEnv aName pv r m M exts) :
+    tohostAddr + 16 ≤ A.lo := O.alloc.arena_htif
+
 /-- **The oracles from the entry facts and the ledger.**  `code`/`strcmp_code`
 are projections of the fixed text image, `slot_in_stack`/`value_words` are
 `EnvDefineMem` fields, and `arena_code` follows from the arena/image separation. -/
@@ -645,10 +681,10 @@ theorem EnvDefineUpdateOracles.of_entry
   present := L.present
   headroom_le := L.alloc.headroom_le
   ainv_entry := L.ainv_entry
-  ainv_stable := L.ainv_stable
+  stack_hi := L.stack_hi
+  alloc := L.alloc
   heap := L.heap
   arena_ram := L.alloc.arena_ram
-  arena_htif := L.alloc.arena_htif
   arena_code := by
     rcases hM.arena_image with h | h
     · left; omega

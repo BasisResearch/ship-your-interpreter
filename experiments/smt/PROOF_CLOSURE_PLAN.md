@@ -288,11 +288,14 @@ replace every per-entry `ainv_stable` field.
   36 consumer references across the four `env_define` lane files and
   `EnvNewContractSupply` project through it. The discipline gate falls from 68
   findings to 60 and R14 from 12 to 3.
-  The 3 remaining R14 findings are `ainv_stable`, which each ledger still states
-  itself although `AllocLedger.ainv_stable` proves it; removing the field needs
-  `esp.toNat ≤ SL.hi` threaded at each of the five use sites, available from the
-  entry's `StackOK`. `ainv_entry` is NOT one of them and R14 no longer flags it:
-  it mentions this entry's memory `m` and `exts`, so it is the per-entry
+  `ainv_stable` is gone too: each ledger now carries the arithmetic fact
+  `stack_hi : esp.toNat ≤ SL.hi` (the entry's own `StackOK`) and DERIVES the
+  footprint discipline as a theorem, `EnvNewLedger.ainv_stable` /
+  `EnvDefineUpdateLedger.ainv_stable` / `EnvDefineUpdateOracles.ainv_stable`, so
+  the five consumers are unchanged. `EnvDefineUpdateOracles.arena_htif` is
+  derived the same way. R14 now reports 0 and the discipline gate is back to its
+  56 inherited findings. `ainv_entry` stays a field and is not flagged: it
+  mentions this entry's memory and extents, so it is the per-entry
   instantiation rather than a run-global fact.
 - OPEN (unchanged, and outside this layer): relating `MallocContract.privFoot` to
   dlmalloc's actual indirect bin-link writes. That is the verified-allocator

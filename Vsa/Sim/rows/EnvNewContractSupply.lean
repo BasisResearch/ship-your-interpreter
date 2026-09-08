@@ -299,12 +299,10 @@ structure EnvNewLedger (g : (R : Register) → Option (RegisterType R))
   /-- The allocator invariant at the entry memory with the pinned `gp`
   (the caller's `MallocContract` state). -/
   ainv_entry : ∀ σ : MState, σ.regs.get? Register.x3 = some gpv → σ.mem = m → M.AInv σ exts
-  /-- The allocator invariant reads only `gp` and bytes outside the callee's stack
-  window (the `MallocContract` footprint discipline). -/
-  ainv_stable : ∀ σa σb : MState,
-    σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
-    (∀ a, ¬ (SL.lo ≤ a ∧ a < esp.toNat) → σa.mem[a]? = σb.mem[a]?) →
-    M.AInv σa exts → M.AInv σb exts
+  /-- The caller's stack pointer is inside the stack region (the entry's
+  `StackOK`).  With the ledger this DERIVES the footprint discipline; see
+  `EnvNewLedger.ainv_stable` below. -/
+  stack_hi : esp.toNat ≤ SL.hi
   /-- The run-global allocator ledger (`Vsa/Sim/AllocRuns.lean`). -/
   alloc : AllocLedger A SL gpv headroom maxReq M
   /-- Parent frames are older than their children (source invariant
@@ -316,6 +314,21 @@ structure EnvNewLedger (g : (R : Register) → Option (RegisterType R))
   owned : ∃ (alloc : Allocations) (shared readable writes : Nat → Prop),
     HeapOwned A exts m φf φc alloc shared readable writes st.store ∧
     ∀ k, SL.lo ≤ k → k < SL.hi → writes k
+
+/-- The allocator invariant reads only `gp` and bytes outside the callee's stack
+window.  DERIVED from the run-global ledger, not restated per entry. -/
+theorem EnvNewLedger.ainv_stable
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : Vsa.While.St} {env : Addr} {esp aEnv r : BitVec 64} {m : Mem}
+    {gpv : BitVec 64} {headroom maxReq : Nat}
+    {M : MallocContract A SL gpv headroom maxReq} {exts : List Extent}
+    (L : EnvNewLedger g N A SL φf φc st env esp aEnv r m M exts) :
+    ∀ σa σb : MState,
+      σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
+      (∀ a, ¬ (SL.lo ≤ a ∧ a < esp.toNat) → σa.mem[a]? = σb.mem[a]?) →
+      M.AInv σa exts → M.AInv σb exts :=
+  L.alloc.ainv_stable esp L.stack_hi exts
 
 /-! ## 5. The pushed store at any memory agreeing off the three windows -/
 

@@ -302,7 +302,7 @@ theorem EnvNewLedger.of_alloc
       ∀ k, SL.lo ≤ k → k < SL.hi → writes k) :
     EnvNewLedger g N A SL φf φc st env esp aEnv r m M exts :=
   { gp := hgp, s0_present := hs0
-    ainv_entry := hA, ainv_stable := L.ainv_stable esp hesp exts
+    ainv_entry := hA, stack_hi := hesp
     alloc := L, parents := hparents, owned := howned }
 
 /-- `EnvDefineUpdateLedger` from the run-global ledger and the entry-local facts. -/
@@ -328,7 +328,7 @@ theorem EnvDefineUpdateLedger.of_alloc
         StoreRepr m' N A φf φc (st.store.define env x v)) :
     EnvDefineUpdateLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts :=
   { gp := hgp, present := present
-    ainv_entry := hA, ainv_stable := L.ainv_stable esp hesp exts
+    ainv_entry := hA, stack_hi := hesp
     alloc := L
     heap := by
       obtain ⟨_, _, _, _, hheap, _, _, _⟩ := owned
