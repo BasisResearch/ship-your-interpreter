@@ -1,0 +1,35 @@
+# ih_clauses.tsv — induction-hypothesis clause table for gen_ih_clause.py
+#
+# One line per clause; each emits Vsa/Sim/rows/IHClause_<name>.lean
+# (namespace Vsa.Sim.IHClause.<name>). Columns (tab-separated):
+# Columns are matched by the header row's names; `kind` may be omitted (= extra).
+#   name    : clause name (Lean identifier, CamelCase); module and namespace suffix
+#   kind    : extra  — pred : EvalExtra (N A SL φf φc sret.toNat c), embedded into the
+#                      motive through `EvalIHWith.toM` (generated `extraM`, `ofWith`)
+#             extraM — pred : EvalExtraM (N A SL φf φc sp sret m0 c), e.g. a footprint
+#                      `footExtra F` (Vsa/Sim/ExitFootprint.lean); the motive is
+#                      `EvalIHWithM extraM` (= `EvalIHF F` for footprints)
+#   pred    : the Lean term of the kind's type: the fact retained at the child's
+#             actual return
+#   imports : comma-separated modules the pred/dischargers need ('-' for none);
+#             Vsa.Sim.TermCaseBundle, Vsa.Sim.ExitFootprint and Vsa.Sim.IHClauseSupport
+#             are always imported
+#   motives : clause motives of the OTHER eight relations, `Rel=<Lean term over the
+#             relation's binders>` separated by ';' ('-' = all `True`); relations:
+#             EvalArgs Call ExecS ExecInit ForLoop ForCond ExecStep ExecSeq
+#   steps   : per-case discharge tags `<case>=<tag>` separated by ';', `*` = default
+#             for every case not named; a case is a TermCases premise (hInt, hBinary, …)
+#             whose PARENT relation has a non-True clause motive. Tags:
+#               manual                — the field stays a residual (default)
+#               generic:<id>          — the field stays; its doc comment names the
+#                                       generic discharger <id> (agent L2) and the hook
+#               from_old:<Lean term>  — wired: <term> maps the case's old-motive
+#                                       conclusion (hOld) to the clause conclusion
+#                                       (`EvalIHWithM extraM …`; use `ofWith` to lift
+#                                       an `EvalIHWith extra` result)
+#               exact:<Lean term>     — wired: <term> has exactly the field's type
+#   notes   : free text
+#
+name	kind	pred	imports	motives	steps	notes
+Trivial	extra	trueExtra	-	-	*=from_old:trivialStep_of_old	pipeline check: every EvalE step follows from the old motive; all fields wired, `closed` emitted
+Footprint	extraM	footExtra noArenaFoot	-	-	*=generic:footprint	the exit footprint outside the arena (L1 `noArenaFoot`: stack window ∪ result slot): children `EvalIHF noArenaFoot` → parent `EvalIHF noArenaFoot`; the 15 EvalE steps are the `footprint` generic hooks (agent L2)

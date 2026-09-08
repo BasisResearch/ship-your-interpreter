@@ -210,8 +210,7 @@ the operand node's `ExprRepr` + geometry, the extra 1088-byte stack headroom,
 and the arena/code/table disjointness facts. Output: `SubEvalReturn` at the
 link PC `0x800035ec` with sub-result buffer `(sp - 1088) + 144`, plus the
 memory frame of the pre-call memory against the case entry memory `m0`. -/
-theorem blockB_unary_with
-    {Extra : EvalExtra}
+theorem blockB_unary_gen (Q : Mem → Config → Prop)
     (gouter gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' : Vsa.While.St) (d : Nat) (env : Addr) (op : UnOp) (esub : Expr) (vsub : Value)
@@ -221,7 +220,18 @@ theorem blockB_unary_with
     (henvset : ∃ v19 v20 v21 : BitVec 64,
       gpre Register.x19 = some v19 ∧ gpre Register.x20 = some v20 ∧
       gpre Register.x21 = some v21)
-    (hIH : EvalIHWith Extra st d env esub st' vsub) :
+    -- the induction hypothesis for the sub-derivation at THIS call (any ghost
+    -- frame `g_sub`, the actual call memory `mcall`), retaining any fact `Q mcall`
+    -- about the child's actual return:
+    (hIH : ∀ (g_sub : (R : Register) → Option (RegisterType R)) (mcall : Mem),
+      Triple
+        (EvalEntry g_sub N A SL φf φc st d env esub (sp - 1088#64) (0x800035ec#64)
+          ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aIn aOperand mcall)
+        (ReturnedWith
+          (EvalExitD g_sub N A SL φf φc st.store.frames.size st.store.closures.size
+            st' vsub (sp - 1088#64) (0x800035ec#64)
+            ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) mcall)
+          (Q mcall))) :
     Triple
       (fun c => ∃ ment,
         ArmEntryK gouter N A SL φf φc st (0x800035e0#64) UnaryArmCallee (.unary op esub)
@@ -256,14 +266,13 @@ theorem blockB_unary_with
         Expr.bodiesBound Vsa.While.perCallBudget esub = true ∧
         Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget ∧
         MemExtends m0 ment)
-      (ReturnedWith (fun c => ∃ mcall,
+      (fun c => ∃ mcall,
         SubEvalReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
           st' vsub sp r sret
           ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) (0x800035ec#64)
           v8 v9 v18 mcall c ∧
-        UnaryCallMemory m0 mcall SL sp)
-        (Extra N A SL φf φc
-          ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)).toNat)) := by
+        UnaryCallMemory m0 mcall SL sp ∧
+        Q mcall c) := by
   intro c hpre
   obtain ⟨ment, hArm, hx11, hx13, hgframe, hg8, hg18, hpay, hsubexpr, hground, hexprHi24,
     hopLo, hopHi, hopWin, hopStk,
@@ -365,7 +374,7 @@ theorem blockB_unary_with
   have hwords := hground.valueWordsTotal hground.sret_inSL.1 hground.sret_inSL.2
   obtain ⟨w19, w20, w21, hg19, hg20, hg21⟩ := henvset
   obtain ⟨c3, hs3, hpost⟩ :=
-    armTail_rec_with gpre N A SL φf φc st st' d env esub vsub
+    armTail_rec_gen (Q ment) gpre N A SL φf φc st st' d env esub vsub
       (0x800035e8#64) (0x800035ec#64) (0x1ffb7c#21)
       sp r sret ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aIn aOperand v8 v9 v18
       out0 ment
@@ -379,7 +388,7 @@ theorem blockB_unary_with
             rw [show ((0x800035e8#64 : BitVec 64) + sign_extend (m := 64) (0x1ffb7c#21))
               = (0x80003164#64 : BitVec 64) from by apply BitVec.eq_of_toNat_eq; decide]
             decide) hiσ)
-      hIH
+      (fun g_sub => hIH g_sub ment)
       ⟨σ2, i2, c.steps + 1 + 1⟩
       ⟨hG2, hi2, hpc2, hx10_2, hs1_2, hx11_2, hx13_2, hx12_2, hsp_2, ⟨vmi2, hmi2⟩, hout2, houtStr,
         hmem2e, hwords, hcode, hviInt, hviSlot, hnbs, hground, hsubexpr, hstore, hstoreSurv, hframeB,
@@ -391,7 +400,69 @@ theorem blockB_unary_with
         hcodeStk, hviStk, htableStk, harenaStk, harenaCode,
         hstackBudget, hexprBodies, hstoreBodies⟩
   exact ⟨c3, (Steps.single hstep1).trans ((Steps.single hstep2).trans hs3),
-    ⟨⟨ment, hpost.result, ⟨hmemframe_m0, hmemExt⟩⟩, hpost.extra⟩⟩
+    ment, hpost.result, ⟨hmemframe_m0, hmemExt⟩, hpost.extra⟩
+
+/-- The landed head at an `sret`-keyed extra (`EvalIHWith`): `blockB_unary_gen` at
+`Q := Extra … subsret.toNat`, repackaged as `ReturnedWith`. -/
+theorem blockB_unary_with
+    {Extra : EvalExtra}
+    (gouter gpre : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' : Vsa.While.St) (d : Nat) (env : Addr) (op : UnOp) (esub : Expr) (vsub : Value)
+    (sp r sret aExpr aIn aOperand : BitVec 64) (v8 v9 v18 : BitVec 64)
+    (out0 : Array String) (m0 : Mem)
+    (henvValid : EnvValid st env)
+    (henvset : ∃ v19 v20 v21 : BitVec 64,
+      gpre Register.x19 = some v19 ∧ gpre Register.x20 = some v20 ∧
+      gpre Register.x21 = some v21)
+    (hIH : EvalIHWith Extra st d env esub st' vsub) :
+    Triple
+      (fun c => ∃ ment,
+        ArmEntryK gouter N A SL φf φc st (0x800035e0#64) UnaryArmCallee (.unary op esub)
+          sp r sret aExpr aIn v8 v9 v18 out0 m0 ment c ∧
+        -- ===== recursive-case extras (the ArmEntryK widening residual) =====
+        c.σ.regs.get? Register.x11 = some aIn ∧
+        c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) ∧
+        (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
+        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        read64 ment (aExpr.toNat + 16) = some aOperand.toNat ∧
+        ExprRepr ment aOperand.toNat esub ∧
+        EvalGround ment SL A (sp - 1088#64)
+          ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aOperand.toNat esub ∧
+        aExpr.toNat + 24 ≤ 0x100000000 ∧
+        0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
+        tohostAddr + 16 ≤ aOperand.toNat ∧
+        (aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat) ∧
+        SL.lo + 3264 ≤ sp.toNat ∧ sp.toNat ≤ SL.hi ∧ sp.toNat % 16 = 0 ∧
+        SL.hi ≤ 0x100000000 ∧
+        (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
+        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
+        StackOK SL (sp - 1088#64)
+          (esub.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget esub = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget ∧
+        MemExtends m0 ment)
+      (ReturnedWith (fun c => ∃ mcall,
+        SubEvalReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+          st' vsub sp r sret
+          ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) (0x800035ec#64)
+          v8 v9 v18 mcall c ∧
+        UnaryCallMemory m0 mcall SL sp)
+        (Extra N A SL φf φc
+          ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)).toNat)) :=
+  (blockB_unary_gen
+      (fun _ c => Extra N A SL φf φc ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)).toNat c)
+      gouter gpre N A SL φf φc st st' d env op esub vsub sp r sret aExpr aIn aOperand
+      v8 v9 v18 out0 m0 henvValid henvset
+      (fun g_sub mcall => hIH.run g_sub N A SL φf φc (sp - 1088#64) (0x800035ec#64)
+        ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aIn aOperand mcall)).conseq
+    (fun _ hp => hp)
+    (fun _ hp => by
+      obtain ⟨mcall, hSub, hCM, hQ⟩ := hp
+      exact ⟨⟨mcall, hSub, hCM⟩, hQ⟩)
 
 /-- Ordinary unary caller projection, retaining the actual memory evidence. -/
 def blockB_unary
@@ -410,6 +481,7 @@ def blockB_unary
       sp r sret aExpr aIn aOperand v8 v9 v18 out0 m0 henvValid henvset
       (EvalIH.withTrue hIH))
 
+#print axioms blockB_unary_gen
 #print axioms blockB_unary_with
 #print axioms blockB_unary
 

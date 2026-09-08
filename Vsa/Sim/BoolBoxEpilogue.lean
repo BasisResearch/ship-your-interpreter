@@ -1,5 +1,6 @@
 import Vsa.Sim.BinopTailGen
 import Vsa.Sim.BoxSuffixSeams
+import Vsa.Sim.ExitFootprint
 
 /-!
 # `BoolBoxEpilogue` — the `value_bool` box variant of `intBoxEpilogue`
@@ -45,8 +46,13 @@ From the `value_bool` entry config `τ0` (`pay` = boolean word in `x11`,
 `sret` in `x10`/`x9`, `boxLink` in `x1`, `sp-1088` in `x2`, `PC = 0x800027f8`,
 `tick<2`, `sailOutput = out0`, `Value_boolLoaded τ0.mem`) plus the transport
 hypotheses both arms establish, run `value_bool_box ≫ ld s3,0x418(sp) ≫ j 0x800033ec`
-and package `PreEpilogueVD` at `0x800033ec` for the boxed value `.bool bres`. -/
-theorem boolBoxEpilogue
+and package `PreEpilogueVD` at `0x800033ec` for the boxed value `.bool bres`,
+RETAINING the exact memory footprint of the box: `value_bool` writes only
+`[sret, sret+24)`, the `ld`/`j` suffix writes nothing, so the epilogue-entry
+memory `mpre` agrees with the entry memory `τ0.σ.mem` outside the result slot
+(`MemFootprint (resultSlot sret.toNat) τ0.σ.mem mpre`).  `boolBoxEpilogue` is
+its footprint-free projection. -/
+theorem boolBoxEpilogue_footprint
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (φf φc φfm φcm φf' φc' : Addr → Nat)
@@ -131,7 +137,8 @@ theorem boolBoxEpilogue
       PhiExtends φc φcm' nc ∧
       PhiExtends φfm' φfe nf2 ∧
       PhiExtends φcm' φce nc2 ∧
-      PreEpilogueVD g N A SL φfe φce st'' (.bool bres) sp r sret v8 v9 v18 out0 m0 mpre cfin := by
+      PreEpilogueVD g N A SL φfe φce st'' (.bool bres) sp r sret v8 v9 v18 out0 m0 mpre cfin ∧
+      MemFootprint (resultSlot sret.toNat) τ0.σ.mem mpre := by
   -- === value_bool callee (via value_bool_box): buf = sret, vb = pay, ghost = τ0 snapshot ===
   have hcallpre : boxBool_pre (fun R => τ0.σ.regs.get? R) sret pay boxLink τ0.σ.mem out0 τ0 := by
     refine ⟨hGτ0, hVboolτ0, rfl, hpcτ0, hx10τ0, hx11τ0, hlinkτ0, hminτ0, htickτ0, hBoolRegion,
@@ -275,8 +282,110 @@ theorem boolBoxEpilogue
       hout_fin houtStr hcode_fin (by rw [hmemτ5e]; exact hvalfinal) hstore_fin hSurvSL_fin
       hframeG hslotRa_f hslotS0_f hslotS1_f hslotS2_f hgv8 hgv9 hgv18 hgv2
       hMemExt_fin hWords_fin hmemframe_fin hsp1088 hspRam hspLo hspHtif hsp8 hraAl
-  exact ⟨mpre, φfm2, φcm2, φfe, φce, ⟨τ5, j5, cvi.steps + 1 + 1⟩, hchain, hp1, hp2, hp3, hp4, hPre⟩
+  refine ⟨mpre, φfm2, φcm2, φfe, φce, ⟨τ5, j5, cvi.steps + 1 + 1⟩, hchain, hp1, hp2, hp3, hp4, hPre, ?_⟩
+  -- the footprint: `mpre = τ5.mem = cvi.mem`, and `value_bool` frames the box.
+  have hmpre : mpre = cvi.σ.mem := (PreEpilogueVD.mem hPre).symm.trans hmemτ5e
+  exact ⟨fun k hk => by rw [hmpre]; exact (hmemframevi k hk).symm⟩
 
+/-- The footprint-free projection (the landed statement). -/
+theorem boolBoxEpilogue
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (φf φc φfm φcm φf' φc' : Addr → Nat)
+    (nf nc nf2 nc2 : Nat)
+    (st' st'' : Vsa.While.St)
+    (sp r sret : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64) (pay : BitVec 64)
+    (bres : Bool) (out0 : Array String)
+    (m0 : Mem) (τ0 : Config) (boxLink : BitVec 64)
+    (ldPC jPC : BitVec 64) (jImm : BitVec 21)
+    (ldS3 : LdS3Site ldPC) (jExit : JExitSite jPC jImm)
+    -- suffix PC / target facts
+    (hboxLink : boxLink = ldPC)
+    (hldPCupdate : BitVec.update (ldPC + sign_extend (m := 64) (0x000#12)) 0 0#1 = ldPC)
+    (hldAfter : BitVec.addInt ldPC 4 = jPC)
+    (hjTgt : (jPC + sign_extend (m := 64) jImm) = (0x800033ec#64 : BitVec 64))
+    (hjTgtAl : (jPC + sign_extend (m := 64) jImm).toNat % 4 = 0)
+    (hldPCeq : ((sp - 1088#64) + sign_extend (m := 64) (0x418#12)).toNat = sp.toNat - 40)
+    -- === `value_bool` entry `τ0` (boxBool_pre pieces; ghost := τ0-snapshot internally) ===
+    (hGτ0 : GoodState τ0.σ) (hVboolτ0 : Value_boolLoaded τ0.σ.mem)
+    (hpcτ0 : τ0.σ.regs.get? Register.PC = some (0x800027f8#64))
+    (hx10τ0 : τ0.σ.regs.get? Register.x10 = some sret)
+    (hx11τ0 : τ0.σ.regs.get? Register.x11 = some pay)
+    (hlinkτ0 : τ0.σ.regs.get? Register.x1 = some boxLink)
+    (hs1τ0 : τ0.σ.regs.get? Register.x9 = some sret)
+    (hspτ0 : τ0.σ.regs.get? Register.x2 = some (sp - 1088#64))
+    (hminτ0 : ∃ v, τ0.σ.regs.get? Register.minstret = some v)
+    (htickτ0 : τ0.tick < 2) (houtτ0 : τ0.σ.sailOutput = out0)
+    (hcodeτ0 : Eval_exprLoaded τ0.σ.mem)
+    (hBoolRegion : BoolRegion sret)
+    (hlinkAl : (BitVec.update (boxLink + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0)
+    -- boxed-value bridge
+    (hval_bridge : (pay != 0#64) = bres)
+    -- === the arm's transport of `τ0.σ.mem` back to `c`/`m0`/store/geometry ===
+    -- φ-extension chain
+    (hpfm : PhiExtends φf φfm nf)
+    (hpcm : PhiExtends φc φcm nc)
+    (hpf' : PhiExtends φfm φf' nf2)
+    (hpc' : PhiExtends φcm φc' nc2)
+    (houtStr : String.join out0.toList = st''.out)
+    -- store survival outside SL (from τ0.mem)
+    (hSurvSL0 : ∀ m' : Mem,
+      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → τ0.σ.mem[k]? = m'[k]?) →
+      StoreRepr m' N A φf' φc' st''.store)
+    -- the s3 restore slot at τ0 holds entry `w19`
+    (hs3τ0 : read64 τ0.σ.mem (sp.toNat - 40) = some w19.toNat)
+    -- four callee-saved spill reads at τ0 (survive value_bool's [sret,+24) write)
+    (hslotRa0 : read64 τ0.σ.mem (sp.toNat - 8) = some r.toNat)
+    (hslotS00 : read64 τ0.σ.mem (sp.toNat - 16) = some v8.toNat)
+    (hslotS10 : read64 τ0.σ.mem (sp.toNat - 24) = some v9.toNat)
+    (hslotS20 : read64 τ0.σ.mem (sp.toNat - 32) = some v18.toNat)
+    -- entry ghost frame values (+ x19 = v19, w19 = v19)
+    (hgv8 : g Register.x8 = some v8) (hgv9 : g Register.x9 = some v9)
+    (hgv18 : g Register.x18 = some v18) (hgv2 : g Register.x2 = some sp)
+    (hgx19 : g Register.x19 = some v19) (hw19 : w19 = v19)
+    -- frame collapse to `g` for R ≠ x19 (threaded by the arm through its front + callees)
+    (hframeGτ0 : ∀ R : Register, AbiPreservedNoise R →
+      (Register.x8 == R) = false → (Register.x9 == R) = false →
+      (Register.x18 == R) = false → (Register.x2 == R) = false →
+      (Register.x19 == R) = false → τ0.σ.regs.get? R = g R)
+    -- memory frame vs entry m0
+    (hMemExt0 : MemExtends m0 τ0.σ.mem)
+    (hWords0 : ValueWordsTotal τ0.σ.mem sret.toNat)
+    (hmemframe0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
+      (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ τ0.σ.mem[a]? = m0[a]?)
+    -- geometry the epilogue + s3-restore need
+    (hsretEvalCode : sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat)
+    (hsretStk : sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat)
+    (hsretInSL : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi)
+    (hSLlo40 : SL.lo ≤ sp.toNat - 40) (hSLlo32 : SL.lo ≤ sp.toNat - 32)
+    (hsp1088 : 1088 ≤ sp.toNat) (hspRam : sp.toNat ≤ 0x100000000)
+    (hspLo : 0x80000000 ≤ sp.toNat) (hspHtif : tohostAddr + 16 + 1088 ≤ sp.toNat)
+    (hsp8 : sp.toNat % 8 = 0) (hraAl : r.toNat % 4 = 0)
+    -- ld-slot geometry (bounds for the ld site's side conditions, from Phase-0 bundle)
+    (hldLo : 0x80000000 ≤ (sp.toNat - 40))
+    (hldHiRam : (sp.toNat - 40) + 8 ≤ 0x100000000)
+    (hldHtif : (sp.toNat - 40) + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (sp.toNat - 40))
+    (hldAl : (sp.toNat - 40) % 8 = 0) :
+    ∃ (mpre : Mem) (φfm' φcm' φfe φce : Addr → Nat)
+      (cfin : Config),
+      Steps τ0 cfin ∧
+      PhiExtends φf φfm' nf ∧
+      PhiExtends φc φcm' nc ∧
+      PhiExtends φfm' φfe nf2 ∧
+      PhiExtends φcm' φce nc2 ∧
+      PreEpilogueVD g N A SL φfe φce st'' (.bool bres) sp r sret v8 v9 v18 out0 m0 mpre cfin := by
+  obtain ⟨mpre, φfm', φcm', φfe, φce, cfin, hs, h1, h2, h3, h4, hPre, _⟩ :=
+    boolBoxEpilogue_footprint g N A SL φf φc φfm φcm φf' φc' nf nc nf2 nc2 st' st'' sp r
+      sret v8 v9 v18 v19 w19 pay bres out0 m0 τ0 boxLink ldPC jPC jImm ldS3 jExit hboxLink
+      hldPCupdate hldAfter hjTgt hjTgtAl hldPCeq hGτ0 hVboolτ0 hpcτ0 hx10τ0 hx11τ0 hlinkτ0
+      hs1τ0 hspτ0 hminτ0 htickτ0 houtτ0 hcodeτ0 hBoolRegion hlinkAl hval_bridge hpfm hpcm
+      hpf' hpc' houtStr hSurvSL0 hs3τ0 hslotRa0 hslotS00 hslotS10 hslotS20 hgv8 hgv9 hgv18
+      hgv2 hgx19 hw19 hframeGτ0 hMemExt0 hWords0 hmemframe0 hsretEvalCode hsretStk
+      hsretInSL hSLlo40 hSLlo32 hsp1088 hspRam hspLo hspHtif hsp8 hraAl hldLo hldHiRam
+      hldHtif hldAl
+  exact ⟨mpre, φfm', φcm', φfe, φce, cfin, hs, h1, h2, h3, h4, hPre⟩
+
+#print axioms boolBoxEpilogue_footprint
 #print axioms boolBoxEpilogue
 
 end Vsa.Sim

@@ -7,6 +7,7 @@ import Vsa.Sim.BlockLogic
 import Vsa.Sim.ValueSpec
 import Vsa.Sim.DivSites2
 import Vsa.Sim.ObsAvoid
+import Vsa.Sim.ExitFootprint
 
 /-!
 # Layer 4 — M4 pilot RECURSIVE case: the `neg` post-call tail (`blockC_neg`)
@@ -118,13 +119,22 @@ theorem loaded_value_int_agreeP (m m' : Mem)
     (rw [← ha _ (by omega)]; simp_all only [])
 
 /-! ## `blockC_neg` — the post-call `neg` tail -/
-theorem blockC_neg
+
+/-- The exact memory footprint of the `neg` cell from the child's return to the
+epilogue entry: the three dispatch temporaries `[sp-848, sp-824)` (written by
+`sd` at `sp-848`, `sp-840`, `sp-832`) and the `value_int` box `[sret, sret+24)`. -/
+def negCellFoot (sp sret : Nat) (k : Nat) : Prop :=
+  word8 (sp - 848) k ∨ word8 (sp - 840) k ∨ word8 (sp - 832) k ∨ resultSlot sret k
+
+/-- `blockC_neg` RETAINING the cell's footprint `negCellFoot` from the return memory
+`mret` to the epilogue-entry memory.  `blockC_neg` is its projection. -/
+theorem blockC_neg_footprint
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat)
     (st' : Vsa.While.St) (n : Int)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
-    (esub : Expr) (m0 : Mem) (hsretWords : ValueWordsTotal m0 sret.toNat) :
+    (esub : Expr) (m0 mret : Mem) (hsretWords : ValueWordsTotal m0 sret.toNat) :
     Triple
       (fun c => ∃ mcall,
         SubEvalReturn gpre N A SL φf φc nf nc st' (.int n) sp r sret
@@ -175,18 +185,21 @@ theorem blockC_neg
         (∀ R : Register, AbiPreservedNoise R →
           (Register.x8 == R) = false → (Register.x9 == R) = false →
           (Register.x18 == R) = false → (Register.x2 == R) = false →
-          gpre R = g R))
+          gpre R = g R) ∧
+        c.σ.mem = mret)
       (fun c => ∃ (mpre : Mem) (φfe φce : Addr → Nat),
         PhiExtends φf φfe nf ∧
         PhiExtends φc φce nc ∧
-        PreEpilogueVD g N A SL φfe φce st' (.int (wrap64 (-n))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+        PreEpilogueVD g N A SL φfe φce st' (.int (wrap64 (-n))) sp r sret v8 v9 v18 out0 m0 mpre c ∧
+        MemFootprint (negCellFoot sp.toNat sret.toNat) mret mpre) := by
   intro c hpre
   obtain ⟨mcall, hSub, hgx8, hexpr, hMemExtM0, hexprLo, hexprHi, hexprWin,
     hexprSL, hexprA, hexprSub,
     houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
     hraAl, hSLloSp, hSLlo, hSLwin,
     hout0eq, hVint, hcodeStk, hviStk, hviArena, hsretInSL, hMcallM0,
-    hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge⟩ := hpre
+    hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge,
+    hmret⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hra, hs1, hsp, ⟨vmi, hmi⟩, hout, hframe,
     ⟨φcv, hpcv, hvalSub⟩, hstoreBundle, hcode,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemFrame, hMemExt⟩ := hSub
@@ -552,7 +565,7 @@ theorem blockC_neg
   -- assemble the epilogue-entry package `PreEpilogueV` at the extended maps
   ------------------------------------------------------------------------
   refine ⟨⟨σ17, i17, cvi.steps + 1⟩, ?_, σ17.mem, φf', φc', hpf', hpc',
-    ⟨?_, hMemExt_fin, ValueWordsTotal.mono hMemExt_fin hsretWords, hSurvSL_fin⟩⟩
+    ⟨?_, hMemExt_fin, ValueWordsTotal.mono hMemExt_fin hsretWords, hSurvSL_fin⟩, ?_⟩
   · exact hstepSpine.trans ((Steps.single hstep16).trans (hsvi.trans ((Steps.single hstep17))))
   · refine ⟨hG17, hi17, hpc_fin, hs1_fin, hsp_fin, ⟨vmifin, hmifin⟩,
       hout_fin.trans hout0eq, houtStr, rfl, (by rw [hmem17e]; exact hcode_vi),
@@ -574,5 +587,88 @@ theorem blockC_neg
       rcases hmemFrame a (by omega) hA with hin | heq
       · exact absurd hin (by omega)
       · rw [heq]; exact hMcallM0 a ha hA
+  · -- the footprint: `mret = c.σ.mem → m3` are the three temporaries,
+    -- `m3 = σ16.mem → cvi.mem` is the `value_int` box, the final `j` writes nothing.
+    refine ⟨fun k hk => ?_⟩
+    unfold negCellFoot word8 resultSlot at hk
+    have hbox : ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) := by omega
+    show σ17.mem[k]? = mret[k]?
+    rw [hmem17e, ← hmemframevi k hbox, hmem16_3, ← hmret]
+    show (writeMap8 m2 (sp.toNat-832) (sdData_val V14))[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint m2 (sp.toNat-832) k (sdData_val V14) (by omega)]
+    show (writeMap8 m1 (sp.toNat-840) (sdData_val payV))[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint m1 (sp.toNat-840) k (sdData_val payV) (by omega)]
+    show (writeMap8 c.σ.mem (sp.toNat-848) (sdData_val K13))[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat-848) k (sdData_val K13) (by omega)]
+
+/-- The footprint-free projection (the landed statement). -/
+-- discipline: allow(R7-conj-tower-def) the landed `blockC_neg` statement is re-stated verbatim as the projection of `blockC_neg_footprint`; no new ∃/∧ post is defined here
+theorem blockC_neg
+    (gpre g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
+    (st' : Vsa.While.St) (n : Int)
+    (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
+    (esub : Expr) (m0 : Mem) (hsretWords : ValueWordsTotal m0 sret.toNat) :
+    Triple
+      (fun c => ∃ mcall,
+        SubEvalReturn gpre N A SL φf φc nf nc st' (.int n) sp r sret
+          ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) (0x800035ec#64)
+          v8 v9 v18 mcall c ∧
+        gpre Register.x8 = some aExpr ∧
+        ExprRepr mcall aExpr.toNat (.unary .neg esub) ∧
+        MemExtends m0 mcall ∧
+        0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
+        tohostAddr + 8 ≤ aExpr.toNat ∧
+        (aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat) ∧
+        (aExpr.toNat + 16 ≤ A.lo ∨ A.hi ≤ aExpr.toNat) ∧
+        (aExpr.toNat + 16 ≤ sp.toNat - 944 ∨ sp.toNat - 944 + 24 ≤ aExpr.toNat) ∧
+        String.join out0.toList = st'.out ∧
+        sret.toNat % 8 = 0 ∧ 0x80000000 ≤ sret.toNat ∧ sret.toNat + 24 ≤ 0x100000000 ∧
+        tohostAddr + 16 ≤ sret.toNat ∧
+        (sret.toNat + 24 ≤ 0x8000280c ∨ 0x8000281c ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat) ∧
+        r.toNat % 4 = 0 ∧
+        SL.lo + 1088 ≤ sp.toNat ∧ 0x80000000 ≤ SL.lo ∧ tohostAddr + 16 ≤ SL.lo ∧
+        c.σ.sailOutput = out0 ∧
+        Value_intLoaded mcall ∧
+        (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
+        (sp.toNat ≤ 0x8000280c ∨ 0x8000281c ≤ SL.lo) ∧
+        (A.hi ≤ 0x8000280c ∨ 0x8000281c ≤ A.lo) ∧
+        (SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi) ∧
+        (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
+          mcall[a]? = m0[a]?) ∧
+        sp.toNat ≤ 0x100000000 ∧ sp.toNat % 8 = 0 ∧ SL.hi ≤ 0x100000000 ∧ sp.toNat ≤ SL.hi ∧
+        g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
+        g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧
+        (∀ R : Register, AbiPreservedNoise R →
+          (Register.x8 == R) = false → (Register.x9 == R) = false →
+          (Register.x18 == R) = false → (Register.x2 == R) = false →
+          gpre R = g R))
+      (fun c => ∃ (mpre : Mem) (φfe φce : Addr → Nat),
+        PhiExtends φf φfe nf ∧
+        PhiExtends φc φce nc ∧
+        PreEpilogueVD g N A SL φfe φce st' (.int (wrap64 (-n))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+  intro c hpre
+  obtain ⟨mcall, hSub, hgx8, hexpr, hMemExtM0, hexprLo, hexprHi, hexprWin,
+    hexprSL, hexprA, hexprSub,
+    houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
+    hraAl, hSLloSp, hSLlo, hSLwin,
+    hout0eq, hVint, hcodeStk, hviStk, hviArena, hsretInSL, hMcallM0,
+    hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge⟩ := hpre
+  obtain ⟨c', hs, mpre, φfe, φce, hp1, hp2, hPre, _⟩ :=
+    blockC_neg_footprint gpre g N A SL φf φc nf nc st' n sp r sret aExpr v8 v9 v18 out0
+      esub m0 c.σ.mem hsretWords c
+      ⟨mcall, hSub, hgx8, hexpr, hMemExtM0, hexprLo, hexprHi, hexprWin,
+        hexprSL, hexprA, hexprSub,
+        houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode,
+        hraAl, hSLloSp, hSLlo, hSLwin,
+        hout0eq, hVint, hcodeStk, hviStk, hviArena, hsretInSL, hMcallM0,
+        hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge, rfl⟩
+  exact ⟨c', hs, mpre, φfe, φce, hp1, hp2, hPre⟩
+
+#print axioms blockC_neg_footprint
+#print axioms blockC_neg
 
 end Vsa.Sim

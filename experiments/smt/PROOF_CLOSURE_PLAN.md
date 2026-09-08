@@ -100,9 +100,58 @@ retired scaffolding names by the seven new theorems and removing eight
 duplicate names from the list; every axiom set is within `propext`,
 `Classical.choice`, `Quot.sound` (`stagec3.out` in the same directory).
 
+The induction-hypothesis tower (task 0) passes the resumed private build
+(1,621 modules, 455 rebuilt, exit 0), the backend verification, the four
+boundary regressions with the input lock refreshed for 26 changed sources,
+241 Python tests, the four generator drift checks, stage b, and the
+discipline gate with the 56 inherited findings unchanged and none in the 41
+new files; the stage c audit (run by hand) covers 1,081 entries after adding
+the tower's key theorems. Evidence under the session scratchpad
+(`integration2.log`, `boundary2/summary.json`, `boundary-lock-changes-2.json`,
+`stagec4.out`).
+
 Recompute the census before changing the certified count.
 
 ## Remaining tasks, in dependency order
+
+### 0. Induction-hypothesis clauses through the tower
+
+A new fact about a child's execution (a memory footprint, payload ownership,
+shared-byte agreement) is a CLAUSE, never an edit of `mEvalE` or of a landed
+row's post. The tower that makes a clause cheap:
+
+1. Effect summaries: every arm block has a footprint-carrying sibling
+   (`blockC_<cell>_footprint`, `blockB_*_footprint`, `blockD_v_rec_footprint`)
+   and every row an `EvalIHF F` supplier (`Vsa/Sim/ExitFootprint.lean`, the
+   `*Footprint.lean` modules). The landed theorem is always the projection of
+   its sibling, so no certified row changes statement.
+2. Clause metatheorems: a clause SHAPE is one lemma over `MemFootprint`
+   (`Vsa/Sim/IHClauseFootprintMeta.lean`); the per-case steps of a clause are
+   generic over arms (`Vsa/Sim/IHClauseGeneric.lean`, allocating arms in
+   `IHClauseGenericAlloc.lean` over the allocator contracts).
+3. Generation: `scripts/ih_clauses.tsv` + `scripts/gen_ih_clause.py` emit the
+   clause's `EvalIHWithM` motive, one named `Residuals` field per recursor
+   case, and the recursion (`rows/IHClause_<Name>.lean`); declaring a clause
+   never breaks the build.
+4. Automation: `scripts/ih_clause_status.py` (WIRED/HOOK/MANUAL per field,
+   backend lemma probe, `--suggest` drafts), `ih_clause_fuzz.py`
+   (refute-before-prove), `ih_clause_ledger.py`, `proof_slice --structure`,
+   `check_all.sh` stage a5.
+
+Open steps on the tower, in order: (a) generator `guard` column so the
+footprint clause is declared at `noAllocExpr e = true → EvalIHF noArenaFoot`
+(`IHClauseGeneric.footprintNA`, all 15 steps proved) and wire the four closed
+leaf steps as `exact:`; (b) supply the row-contract premises of the generic
+steps from the landed `*RowFootprint` suppliers (`NegRowF`, `NotRowF`,
+`LogicalShortRowF`, `LogicalFallRowF`, the remaining `IntCellF`/`EqCellF` cells
+from `binRow_<op>F`, `VarPinnedSim` after the `env_get` write-set conjunct)
+and `BinaryHeadFootprintSupplyCov`; (c) declare `Call`/`ExecSeq` motives in the
+`motives` column so `hCall` receives the callee's clause; (d) the allocating
+family `allocFoot` over `MallocRun`/`HeapOwned.pushClosure`/`EnvNewContract`;
+(e) a generator for the `*RowFootprint` modules and one shared `intCellFoot`
+(the eight integer modules and six one-child modules are one template each).
+After (a)–(d) the four string cells close from `StrCmpOwnedOperands` alone,
+and `hEq`/`hNe` lose their `hVlSurv` conjunct the same way.
 
 ### 1. Finish recursive return and ownership contracts
 
@@ -552,6 +601,111 @@ and the callee's spill slot; the supplier is the ownership layer's payload
 location (`ValueOwned`) plus `EvalGround`'s arena/stack geometry. The residual
 `StrLeftSurvivesSupply` is the `hVlSurv` obstruction recorded in task 1.
 
+Footprint-carrying exit (IH tower, Level 1; contract in the session scratchpad
+`ih-tower/L1-interface.md`). `Vsa/Sim/ExitFootprint.lean` states `MemFootprint`
+(named field `agree`), the standard windows (`stackWin`, `resultSlot`,
+`arenaWin`, `word8`) and families (`FootFam`, `noArenaFoot`, `exitFoot`,
+`binaryHeadFoot`), and the exit siblings `EvalExitF F` / `EvalIHF F` over
+`EvalIHWithM`: an `EvalExtra` cannot see `sp` or the entry memory `m0`, and a
+footprint is relative to `m0`, so the footprint contract is the `sp`/`m0`-aware
+`EvalIHWithM`, with `EvalIHWith.toM`, `EvalIHF.forget`, `EvalIHF.mono`, and
+`EvalIH.exitFoot` (the weak exit is the footprint `exitFoot`). Glue, all
+statement-preserving: `armTail_rec_gen` (`EvalRecCommon`; `armTail_rec_with` is
+its corollary), `armTail_rec_withM`/`armTail_rec_footprint`
+(`ArmTailFootprint`), `blockD_v_rec_footprint`, `boolBoxEpilogue_footprint`,
+`blockC_strcmp_footprint`, `blockC_lt_footprint`, and `blockB_binary_footprint`
+(`EvalBinSim`; `blockB_binary_data` is its projection at `exitFoot`).
+`BinaryHeadFootprintSupply` (`BinaryHeadFootprint.lean`) is discharged by
+`binaryHeadFootprintSupply`. Pilots: `StrCmpCellFootprint.lean`
+(`evalStrCmpSimF`, `binRow_strcmpF`, `binStrCmpCellF_of` at
+`EvalIHF noArenaFoot`, from the two `StrCmpCell` residuals) and
+`rows/EvalLtRowFootprint.lean` (`evalLtSimF`, `binRow_ltF`). A generated
+`Footprint` clause must be an `EvalExtraM` motive (`EvalIHF F`), not an
+`EvalExtra`; the recursion glue at a child call is `armTail_rec_gen`.
+Integer cells (Level 1B, all eight, `ih-tower/L1B-int.md`): `blockC_<op>_footprint`
+(`.add .sub .mul .div .mod .le .gt .ge`; each landed `blockC_<op>` is its
+projection) with the cell footprint `<op>CellFoot` = the three dispatch-ladder
+temporaries `sp-848/840/832` ∪ the result slot — identical for all nine integer
+cells; the libgcc callees (`muldi3_post`, `divdi3_post`, `moddi3_post`) state
+memory unchanged, so no scratch window enters. `.div`/`.mod` write through a
+reflected `writeLog`: `evalBlocks_store_offsets_exact` +
+`divDispatch_footprint`/`modDispatch_footprint` (`rows/EvalDivRow.lean`,
+`rows/EvalModRow.lean`) refine the landed `[v2, v2+0x108)` window to the exact
+`{0xf0, 0xf8, 0x100}` stores. `intBoxEpilogue_footprint` (`BinopTailGen`) is the
+int twin of `boolBoxEpilogue_footprint`. `rows/Eval<Op>RowFootprint.lean`:
+`eval<Op>SimF`, `binRow_<op>F` (residual at the entry config as
+`BinIntCellResid`), `Bin<Op>CellF` + `bin<Op>CellF_of` discharged by the landed
+`BinIntCell .<op>` suppliers (`ScaffoldRows.field_hI<Op>`); no new residual.
+Duplication signal: eight per-op copies of one template — a generator + one
+shared `intCellFoot` is the next step.
+
+Clauses as metatheorems over footprints (IH tower, Level 2; contract in the
+session scratchpad `ih-tower/L2-clauses.md`). `Vsa/Sim/IHClauseFootprintMeta.lean`
+derives the two clause shapes once over `MemFootprint` (region preservation:
+`agreeP_of_disjoint`/`region`/`EvalIHF.regionPreserved`; payload survival:
+`cstring`/`valueRepr`/`sharedCString`/`valueOwned`/`EvalIHF.cstringSurvives`) and
+`strLeftSurvives_of_footprint`, the left temporary's survival at the ACTUAL
+memories from the right child's `noArenaFoot` footprint and the left payload's
+whole-stack coverage. `Vsa/Sim/IHClauseGeneric.lean` holds the `Footprint`
+clause's generic steps at the generator's field types (`EvalIHF noArenaFoot`
+motive): `hInt`/`hStr`/`hBool`/`hNull` CLOSED (`leafExitF_of_pinned`: the pinned
+leaf exit IS the `noArenaFoot` footprint); `hVar` from `Rows.VarLeafResid` +
+the named premise `VarPinnedSim`; `hNeg`/`hNot`/the four logical cases from the
+arms' footprint row contracts `NegRowF`/`NotRowF`/`LogicalShortRowF`/
+`LogicalFallRowF` (Level 1B: the `F` siblings of the closed fields); `hBinary`
+from `BinaryFootprintCells` (`.lt` supplied by `intCellF_lt` over pilot B, the
+four string comparisons by `binStrCmpCellF_of`). OBSTRUCTION: at `noArenaFoot`
+the clause is uninhabited — `hAssign`, `hFn`, `hCall`, and `hBinary` at `.add`
+with a string operand write the arena (`StrAddLCellF`/`StrAddRCellF` are
+unsatisfiable). The closable shape is the guarded motive
+`noAllocExpr e = true → EvalIHF noArenaFoot …` (`IHClauseGeneric.footprintNA`,
+all 15 steps; needs a generator `guard` column), or the allocating family
+`allocFoot` (`Vsa/Sim/IHClauseGenericAlloc.lean`: `EvalIHAlloc priv`, named
+premises `FnArmFootprint M`, `CallArmFootprint M`, `StrAddFootprint M` from
+`MallocRun`, `HeapOwned.pushClosure`, `EnvNewContract`, `Reserved.outsideFresh`;
+`value_str` does not allocate). String cells (`Vsa/Sim/StrCmpCellClauses.lean`):
+`strCmpOperandsAt_of_owned` derives `StrCmpOperandsAt` from both returned values
+being owned (`ValueOwned`, the `Owned` index of `EvalReturn`) under
+`SharedGeom shared SL`; `StrCmpOperandsSupply` reduces to `StrCmpOwnedOperands`.
+The alignment defect is fixed: `strcmp_full_spec_cond` (`StrcmpSpecCond.lean`)
+derives the word-path alignment from the entry test (`align8_of_test`) and
+`StrCmpRegion.wordRegion` is the alignment-free `StrcmpWSlack`. `StrLeftSurvivesSupply`
+is replaced by the head premise `BinaryHeadFootprintSupplyCov` (Level 1B:
+`blockB_binary_footprint` with the left child at the product clause `EvalIHFP`
+and `strLeftSurvives_of_footprint` at `hvalL_R`); the exact `BinDispatchRow`
+fields follow (`field_hStr{Lt,Le,Gt,Ge}_of_clauses`) from it, `StrCmpOwnedOperands`,
+and the closed clause recursions `FootprintPayloadClause`/`FootprintClause`.
+
+One-child arms and leaves at the footprint exit (L1B-una). Heads:
+`blockB_unary_gen` (`EvalNegSim`; `blockB_unary_with`/`blockB_unary` are its
+projections) and `blockB_logical_gen` (`EvalAndSim`; `blockB_logical` is its
+projection) take the child at any retained fact `Q mcall`;
+`blockB_unary_footprint` (`UnaryHeadFootprint.lean`, `unaryHeadFoot F`) and
+`blockB_logical_footprint` (`LogicalHeadFootprint.lean`, `logicalHeadFoot F`,
+`logShortNodeFoot`, `logFallNodeFoot`) are their `EvalIHF F` instances. Cells,
+each with the landed theorem as projection: `blockC_neg_footprint`
+(`negCellFoot`: `sp-848/840/832` + the box), `blockC_not_footprint`,
+`blockC_andFalse_footprint`, `blockC_orTrue_footprint`, `blockC_logTail_footprint`
+(all `truthyCellFoot`: the `value_truthy` argument copy `[sp-1024, sp-1000)` + the
+box), `blockC_andTrue_footprint Fr`/`blockC_orFalse_footprint Fr`
+(`logFallCellFoot Fr 848`/`944`, the RIGHT child through `armTail_rec_footprint`).
+Rows `rows/Eval{Neg,Not,OrTrue,AndFalse,AndTrue,OrFalse}RowFootprint.lean` land
+`eval<Arm>SimF`, `<arm>RowF`, and the unconditional `EvalIHF noArenaFoot` supplier
+`eval<Arm>IHF`. Leaves (`LeafFootprint.lean`): `pinnedLeafExitF` turns the pinned
+exit (`LeafMemPin.agree` = `noArenaFoot`) into `EvalExitF noArenaFoot`; `evalIntIHF`
+is unconditional, `evalNullIHF`/`evalBoolIHF`/`evalStrIHF` take the named
+`EvalEntry → Eval*Entry` bridges (`NullEntryBridge`/`BoolEntryBridge`, supplied
+inline by `rows/TermRouting.lean`'s `eval_null_row`/`eval_bool_row`; `StrEntryBridge`
+open on `EvalEntryStrAstRegion`). Obstruction (var leaf): `evalVarSim` retains no
+write set because `env_get_found_uncond''` (`EnvGetSpec9.lean:371`) exposes only
+`c'.σ.mem = m'`; the prologue agreement `houtside` (`EnvGetSpec8.lean`, the
+`hScanReady` continuation of `env_get_found_uncond'`) is consumed by
+`foundSt_scanReady` and dropped. Missing supplier: one agreement conjunct
+`∀ a ∉ [sp0-64, sp0) ∪ [out, out+24), m'[a]? = m0[a]?` through `foundSt_scanReady`,
+`env_get_found_uncond''`, `EvalVarEntry.env_get_found`/`VarPostCall.memFrame`, and
+`blockC_var` (≈40 lines); until then the variable leaf is available at `exitFoot`
+only (`EvalIH.exitFoot`).
+
 ### 5. Close divergence, errors, and final assembly
 
 - Construct `DivWork`: loop-head representation, `Loaded` entry drive,
@@ -591,6 +745,30 @@ location (`ValueOwned`) plus `EvalGround`'s arena/stack geometry. The residual
   Lean-only/nonfinite capabilities.
 - Rerun the full supplier search at exact inherited types and the complete
   library census. Preserve all four initial-boundary regression cases.
+- Induction-hypothesis clauses (`scripts/ih_clauses.tsv`, `gen_ih_clause.py`,
+  `Vsa/Sim/IHClauseSupport.lean`): a clause is an `EvalExtraM` (or an
+  `EvalExtra` embedded through `EvalIHWith.toM`) recursed as the `EvalIHWithM`
+  motive beside the old motive (product recursor); each recursor case is a
+  named `Residuals` field (`Vsa.Sim.IHClause.<Name>.Residuals.<case>`).
+  `Trivial` is closed (`closed`, axiom-clean). `Footprint` is
+  `footExtra noArenaFoot` (`Vsa/Sim/ExitFootprint.lean`): its 15 `EvalE`
+  fields (children `EvalIHF noArenaFoot` → parent `EvalIHF noArenaFoot`) are
+  the generic `footprint` hooks. Motives
+  of the other eight relations default to `True`, so a clause step at `hCall`
+  receives nothing from the callee: a footprint-style clause needs the `Call`
+  and `ExecSeq` motives declared in the `motives` column before its `hCall`
+  field is inhabited.
+- Clause-field automation (`scripts/ih_clause_status.py`, `ih_clause_fuzz.py`,
+  `ih_clause_ledger.py`, `proof_slice --structure`; TOOLING.md "Validation"):
+  per field WIRED/HOOK/MANUAL/STALE, hook-lemma probes, census re-check of the
+  wirings, drafted candidates checked in Lean, refutation verdicts, and an
+  evidence ledger. Measured on the overlay: `Trivial` 15/15 WIRED (census
+  FOUND); `Footprint` (`footExtra noArenaFoot`) 15/15 HOOK,
+  `Vsa.Sim.IHClauseGeneric.footprint.*` missing, every drafted candidate
+  (hook lemma, `trivialStep_of_old`, `withMaps_of_old` bare/`.toM`) rejected
+  by Lean (FAILED ×15). Unwired steps are outside the statement_fuzz/smt_check
+  fragment (motive conclusions); the bounded engines report ENCODE-GAP. No
+  trace query targets a clause step (execution evidence 0/30).
 
 ## Completion gates
 

@@ -11,6 +11,7 @@ import Vsa.Sim.EnvGetSpec9
 import Vsa.Sim.BlockTactics2
 import Vsa.Sim.PinW
 import Vsa.Sim.FixedOperatorTable
+import Vsa.Sim.StrcmpSpecCond
 
 /-!
 # `StrCmpSeam` — the string-comparison arm from its kind check to the sign tail
@@ -22,7 +23,7 @@ comparison arm at `0x80003628` with both operand kinds equal to `3`, the arm run
 ```
 80003628  kind check (both str)           →  80003b0c      strKindCheck  (landed)
 80003b0c  mv a1,a7 ; mv a0,s3 ; sd a2,0(sp) ; jal strcmp     strSeamSeg + site_80003b18_sc
-80006ea0  strcmp                          →  80003b1c      strcmp_full_spec (landed)
+80006ea0  strcmp                          →  80003b1c      strcmp_full_spec_cond (landed)
 80003b1c  ld a2,0(sp) ; mv a1,a0 ; j 0x800036a4              strRejoin     (landed)
 ```
 
@@ -153,11 +154,13 @@ structure StrCmpKindEntry
   frame : ∀ R, AbiPreservedNoise R → (Register.x8 == R) = false →
     (Register.x19 == R) = false → c.σ.regs.get? R = gC R
 
-/-- What `strcmp` needs of one operand payload: the landed byte- and word-path
-regions, and separation from the token spill slot `[sp', sp'+8)`. -/
+/-- What `strcmp` needs of one operand payload: the word loop's slack region
+(`StrcmpWSlack`, alignment-free — the word path's 8-alignment is derived from
+the entry test by `strcmp_full_spec_cond`; the byte-path region is its
+projection `StrcmpWSlack.toRegion`), and separation from the token spill slot
+`[sp', sp'+8)`. -/
 structure StrCmpRegion (sp' p : BitVec 64) (len : Nat) : Prop where
-  byteRegion : StrcmpRegion p len
-  wordRegion : StrcmpWRegion p len
+  wordRegion : StrcmpWSlack p len
   offScratch : p.toNat + len + 1 ≤ sp'.toNat ∨ sp'.toNat + 8 ≤ p.toNat
 
 /-- Geometry of the seam at the kind-check memory `mA`: the fixed image, the
@@ -348,25 +351,20 @@ theorem strCmpTailReady_of_seamEntry
   let cfg2 : Config := ⟨σ2, i2, c.steps + evalBlocksFuel strSeamSeg + 1⟩
   have hStrcmp2 : StrcmpLoaded σ2.mem := by rw [hmemB]; exact himageB.text.StrcmpLoaded
   have hMask2 : MaskPinned (strCmpSeamMem mA sp' tok) := FixedRodataLoaded.maskPinned himageB.rodata
-  have hpre : strcmp_full_pre (fun R => σ2.regs.get? R) pl pr 0x80003b1c#64 sl sr
-      (strCmpSeamMem mA sp' tok) out cfg2 := by
-    refine ⟨hG2, hStrcmp2, hmemB, hout2.trans h.out, hpc2, hx10, hx11, hra2,
-      hmi2, hi2, by decide, ⟨csa, hcsaB, hsa⟩, ⟨csb, hcsbB, hsb⟩, hMask2,
-      ?_, ?_, ?_, ?_, fun R _ => rfl⟩
-    · intro cs hcs
-      rw [cstr_unique_eg9 _ _ cs csa hcs hcsaB]
-      exact hRegA.byteRegion
-    · intro cs hcs
-      rw [cstr_unique_eg9 _ _ cs csb hcs hcsbB]
-      exact hRegB.byteRegion
-    · intro cs hcs
-      rw [cstr_unique_eg9 _ _ cs csa hcs hcsaB]
-      exact hRegA.wordRegion
-    · intro cs hcs
-      rw [cstr_unique_eg9 _ _ cs csb hcs hcsbB]
-      exact hRegB.wordRegion
+  have hpre : StrcmpEntryCond (fun R => σ2.regs.get? R) pl pr 0x80003b1c#64 sl sr
+      (strCmpSeamMem mA sp' tok) out cfg2 :=
+    { good := hG2, loaded := hStrcmp2, mem := hmemB, out := hout2.trans h.out, pc := hpc2,
+      a0 := hx10, a1 := hx11, ra := hra2, minstret := hmi2, tick := hi2, ralign := by decide,
+      cstra := ⟨csa, hcsaB, hsa⟩, cstrb := ⟨csb, hcsbB, hsb⟩, maskpin := hMask2,
+      wrega := fun cs hcs => by
+        rw [cstr_unique_eg9 _ _ cs csa hcs hcsaB]
+        exact hRegA.wordRegion,
+      wregb := fun cs hcs => by
+        rw [cstr_unique_eg9 _ _ cs csb hcs hcsbB]
+        exact hRegB.wordRegion,
+      frame := fun R _ => rfl }
   obtain ⟨c3, hs3, hpost⟩ :=
-    strcmp_full_spec (fun R => σ2.regs.get? R) pl pr 0x80003b1c#64 sl sr
+    strcmp_full_spec_cond (fun R => σ2.regs.get? R) pl pr 0x80003b1c#64 sl sr
       (strCmpSeamMem mA sp' tok) out cfg2 hpre
   obtain ⟨hG3, hpc3, _hra3, hmem3, hout3, htick3, hframe3,
     csa', csb', x, hcsa', hcsb', hsa', hsb', hx10_3, hsign⟩ := hpost

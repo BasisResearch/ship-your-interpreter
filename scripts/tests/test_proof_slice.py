@@ -195,5 +195,16 @@ class ProofSliceTests(unittest.TestCase):
         self.assertFalse(list(self.output.rglob("receipt.json")))
 
 
+class AuditSourceStructureTests(unittest.TestCase):
+    def test_structure_selects_the_residual_record(self) -> None:
+        default = proof.audit_source(["M"], [], "hInt", "s")
+        self.assertIn(f"census_probe {census.STRUCTURE} hInt at {census.LAYOUT} using s", default)
+        clause = proof.audit_source(["M"], [], "hInt", "s", "Vsa.Sim.IHClause.T.Residuals")
+        self.assertIn("census_probe Vsa.Sim.IHClause.T.Residuals hInt at", clause)
+        self.assertNotIn(census.STRUCTURE, clause)
+        with self.assertRaisesRegex(ValueError, "requires a supplier"):
+            proof.audit_source(["M"], [], "hInt", None)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,6 @@
 import Vsa.Sim.EvalBinSim2
 import Vsa.Sim.EvalAddChain
+import Vsa.Sim.ExitFootprint
 
 /-!
 # `EvalAddRow` — Wave-D M4 row: `evalAddSim` (the `EvalE.binary .add` int pilot)
@@ -32,13 +33,22 @@ set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
 
-theorem blockC_add
+/-- The exact memory footprint of the `.add` integer cell from the return of both
+children to the epilogue entry: the three dispatch-ladder temporaries
+`[sp-848, sp-824)` (written by `sd` at `sp-848`, `sp-840`, `sp-832`) and the
+`value_int` box `[sret, sret+24)`. -/
+def addCellFoot (sp sret : Nat) (k : Nat) : Prop :=
+  word8 (sp - 848) k ∨ word8 (sp - 840) k ∨ word8 (sp - 832) k ∨ resultSlot sret k
+
+/-- `blockC_add` RETAINING the cell's footprint `addCellFoot` from the return memory
+`mret` to the epilogue-entry memory.  `blockC_add` is its projection. -/
+theorem blockC_add_footprint
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat)
     (st' st'' : Vsa.While.St) (a b : Int)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
-    (m0 : Mem) :
+    (m0 mret : Mem) :
     Triple
       (fun c =>
         TwoSubReturn gpre N A SL φf φc nf nc st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c ∧
@@ -74,20 +84,23 @@ theorem blockC_add
         (∀ R : Register, AbiPreservedNoise R →
           (Register.x8 == R) = false → (Register.x9 == R) = false →
           (Register.x18 == R) = false → (Register.x2 == R) = false →
-          gpre R = g R))
+          gpre R = g R) ∧
+        c.σ.mem = mret)
       (fun c => ∃ (mpre : Mem) (φfm φcm φfe φce : Addr → Nat),
         PhiExtends φf φfm nf ∧
         PhiExtends φc φcm nc ∧
         PhiExtends φfm φfe st'.store.frames.size ∧
         PhiExtends φcm φce st'.store.closures.size ∧
-        PreEpilogueVD g N A SL φfe φce st'' (.int (wrap64 (a + b))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+        PreEpilogueVD g N A SL φfe φce st'' (.int (wrap64 (a + b))) sp r sret v8 v9 v18 out0 m0 mpre c ∧
+        MemFootprint (addCellFoot sp.toNat sret.toNat) mret mpre) := by
   intro c hpre
   obtain ⟨hTS, hgx8, hopTok, hSlot, hReadData,
     hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode, hraAl,
     hVint, hcodeStk, hviStk, hTableStk, hsretInSL,
     hSLloSp, hSLlo, hSLwin, hsphiRam, hsp8, hSLhiRam, hspSLhi,
-    hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge⟩ := hpre
+    hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge,
+    hmret⟩ := hpre
   obtain ⟨hG, htick, hpc, hra, hs1, hsp, ⟨vmi, hmi⟩, hout, hframe,
     ⟨w19, hgprex19', hs3slot⟩, hstoreBundle, hcode,
     hslotRa, hslotS0, hslotS1, hslotS2, hMemExt, hmemframe⟩ := hTS
@@ -700,12 +713,90 @@ theorem blockC_add
     hLadderSteps.trans <| (Steps.single hstepτ20).trans <|
     hsvi.trans <| (Steps.single hstepτ21).trans (Steps.single hstepτ22)
   refine ⟨⟨τ22, j22, cvi.steps + 1 + 1⟩, hchain, τ22.mem, φfm, φcm, φf', φc', hpfm, hpcm, hpf', hpc',
-    ⟨?_, hMemExt_fin, hWords_fin, hSurvSL_fin⟩⟩
+    ⟨?_, hMemExt_fin, hWords_fin, hSurvSL_fin⟩, ?_⟩
   refine ⟨hGτ22, hj22, hpc_fin, hs1_fin, hsp_fin, ⟨vmifin, hmifin⟩,
     hout_fin, houtStr, rfl, hcode_fin, (by rw [hmemτ22e]; exact hvalfinal),
     hstore_fin, hframeG,
     hslotRa_f, hslotS0_f, hslotS1_f, hslotS2_f, hgv8, hgv9, hgv18, hgv2, hmemframe_fin,
     (by omega), hsphiRam, (by omega), (by omega), hsp8, hraAl⟩
+  -- the footprint: `mret = c.mem → m5` are the three temporaries, `m5 = τ20.mem → τ22.mem`
+  -- is the `value_int` box (the remaining steps write nothing).
+  refine ⟨fun k hk => ?_⟩
+  unfold addCellFoot word8 resultSlot at hk
+  have hbox : ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) := by omega
+  have hm5k : m5[k]? = c.σ.mem[k]? := by
+    show (writeMap8 m4 (sp.toNat - 832) D5)[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint m4 (sp.toNat - 832) k D5 (by omega)]
+    show (writeMap8 m3 (sp.toNat - 840) D4)[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint m3 (sp.toNat - 840) k D4 (by omega)]
+    show (writeMap8 m2 (sp.toNat - 848) D3)[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint m2 (sp.toNat - 848) k D3 (by omega)]
+    show (writeMap8 m1 (sp.toNat - 832) D2)[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint m1 (sp.toNat - 832) k D2 (by omega)]
+    show (writeMap8 c.σ.mem (sp.toNat - 848) D1)[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat - 848) k D1 (by omega)]
+  show τ22.mem[k]? = mret[k]?
+  rw [hmemτ22e, ← hmemframevi k hbox, hmemτ20e, hm5k, hmret]
+
+/-- The footprint-free projection (the landed statement). -/
+theorem blockC_add
+    (gpre g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
+    (st' st'' : Vsa.While.St) (a b : Int)
+    (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
+    (m0 : Mem) :
+    Triple
+      (fun c =>
+        TwoSubReturn gpre N A SL φf φc nf nc st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c ∧
+        -- the operator-token node (`.binary` node, offsets 4/8 read after the calls)
+        gpre Register.x8 = some aExpr ∧
+        read32 c.σ.mem (aExpr.toNat + 8) = some 11 ∧      -- op token = binOpTok .add
+        AddSlotPinned c.σ.mem ∧
+        BinaryReturnData SL sp sret c ∧
+        -- Operand loads are supplied by the actual binary return.
+        -- === geometry ===
+        0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
+        tohostAddr + 8 ≤ aExpr.toNat ∧
+        (aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat) ∧
+        String.join out0.toList = st''.out ∧
+        c.σ.sailOutput = out0 ∧
+        sret.toNat % 8 = 0 ∧ 0x80000000 ≤ sret.toNat ∧ sret.toNat + 24 ≤ 0x100000000 ∧
+        tohostAddr + 16 ≤ sret.toNat ∧
+        (sret.toNat + 24 ≤ 0x8000280c ∨ 0x8000281c ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat) ∧
+        r.toNat % 4 = 0 ∧
+        Value_intLoaded c.σ.mem ∧
+        (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
+        (sp.toNat ≤ 0x8000280c ∨ 0x8000281c ≤ SL.lo) ∧
+        (opTableBase + 4 ≤ SL.lo ∨ sp.toNat ≤ opTableBase) ∧
+        (SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi) ∧
+        SL.lo + 1088 ≤ sp.toNat ∧ 0x80000000 ≤ SL.lo ∧ tohostAddr + 16 ≤ SL.lo ∧
+        sp.toNat ≤ 0x100000000 ∧ sp.toNat % 8 = 0 ∧ SL.hi ≤ 0x100000000 ∧ sp.toNat ≤ SL.hi ∧
+        -- entry ghost bridge (as in `blockC_neg`)
+        g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
+        g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧
+        gpre Register.x19 = some v19 ∧ g Register.x19 = some v19 ∧
+        (∀ R : Register, AbiPreservedNoise R →
+          (Register.x8 == R) = false → (Register.x9 == R) = false →
+          (Register.x18 == R) = false → (Register.x2 == R) = false →
+          gpre R = g R))
+      (fun c => ∃ (mpre : Mem) (φfm φcm φfe φce : Addr → Nat),
+        PhiExtends φf φfm nf ∧
+        PhiExtends φc φcm nc ∧
+        PhiExtends φfm φfe st'.store.frames.size ∧
+        PhiExtends φcm φce st'.store.closures.size ∧
+        PreEpilogueVD g N A SL φfe φce st'' (.int (wrap64 (a + b))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+  intro c hpre
+  obtain ⟨hTS, hgx8, hopTok, hSlot, hReadData, hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq, hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode, hraAl, hVint, hcodeStk, hviStk, hTableStk, hsretInSL, hSLloSp, hSLlo, hSLwin, hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge⟩ := hpre
+  obtain ⟨c', hs, mpre, φfm, φcm, φfe, φce, hp1, hp2, hp3, hp4, hPre, _⟩ :=
+    blockC_add_footprint gpre g N A SL φf φc nf nc st' st'' a b sp r sret aExpr v8 v9 v18 v19 out0 m0 c.σ.mem c
+      ⟨hTS, hgx8, hopTok, hSlot, hReadData, hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq, hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode, hraAl, hVint, hcodeStk, hviStk, hTableStk, hsretInSL, hSLloSp, hSLlo, hSLwin, hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge, rfl⟩
+  exact ⟨c', hs, mpre, φfm, φcm, φfe, φce, hp1, hp2, hp3, hp4, hPre⟩
+
+#print axioms blockC_add_footprint
+#print axioms blockC_add
 
 /-! ## `binOpSem_add_int` — the spec-side add bridge -/
 

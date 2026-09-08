@@ -9,6 +9,7 @@ import Vsa.Sim.rows.EvalMulRow
 import Vsa.Sim.rows.IntPostEpilogue
 import Vsa.Sim.BinopTailGen
 import Vsa.Sim.MemPresence
+import Vsa.Sim.ExitFootprint
 
 /-!
 # `EvalDivRow` — Wave-D M4 row: `evalDivSim` (the `EvalE.binary .div` int case)
@@ -161,6 +162,68 @@ theorem divDispatch_mem_frame (v2 sret Wr Wl : BitVec 64) (lds : List (List (Bit
   · exact Or.inr (by omega)
   · exact Or.inl (by omega)
 
+/-- Exact store offsets of a reflected frame chain: every write-log entry starts at
+`base + off` for the offset `off` of one of the chain's own store instructions
+(`P off` for any predicate `P` the chain's stores satisfy, decided on the concrete
+chain).  Refines `evalBlocks_frame_offsets`, which only bounds the window. -/
+theorem evalBlocks_store_offsets_exact (P : Nat → Prop) :
+    ∀ (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
+      (base : BitVec 64) (m : Std.ExtHashMap Nat (BitVec 8)) (fb : FrameBundle m base),
+      srcVal 2 L = base →
+      (∀ b ∈ bs, ∀ a ∈ b.body, a.rd ≠ 2) →
+      (∀ b ∈ bs, ∀ a ∈ b.body, (a.kind = .sw ∨ a.kind = .sd ∨ a.kind = .sb ∨ a.kind = .sh) →
+        a.rs1 = 2 ∧ (sign_extend (m := 64) a.imm : BitVec 64).toNat + 8 ≤ 0x108 ∧
+        P (sign_extend (m := 64) a.imm : BitVec 64).toNat) →
+      ∀ e ∈ (evalBlocks bs (SegEvalState.init L lds)).log,
+        ∃ off, P off ∧ e.1 = base.toNat + off := by
+  intro bs
+  induction bs with
+  | nil =>
+    intro L lds base m fb _ _ _ e he
+    simp only [evalBlocks, SegEvalState.init, List.not_mem_nil] at he
+  | cons b rest ih =>
+    intro L lds base m fb h2 hrd hst e he
+    rw [evalBlocks_cons] at he
+    have hlog_split := evalBlocks_log_shift rest (evalBlock (SegEvalState.init L lds) b)
+    rw [hlog_split, List.mem_append] at he
+    rcases he with hb | hrest
+    · have hbb : e ∈ wlogM b.body L lds := by
+        simpa only [evalBlock, SegEvalState.init, List.nil_append] using hb
+      obtain ⟨a, ha, hk, haddr⟩ :=
+        wlogM_store_offsets b.body L lds base m fb h2
+          (fun x hx => hrd b (List.mem_cons_self ..) x hx)
+          (fun x hx hkx => ⟨(hst b (List.mem_cons_self ..) x hx hkx).1,
+            by have := (hst b (List.mem_cons_self ..) x hx hkx).2.1; omega⟩) e hbb
+      exact ⟨_, (hst b (List.mem_cons_self ..) a ha hk).2.2, haddr⟩
+    · have hbase' : srcVal 2 (evalBlock (SegEvalState.init L lds) b).regs = base := by
+        show srcVal 2 (runGM b.body (SegEvalState.init L lds).regs (SegEvalState.init L lds).loads) = base
+        rw [srcVal_runGM_ne 2 b.body (fun x hx => hrd b (List.mem_cons_self ..) x hx)]
+        exact h2
+      exact ih (evalBlock (SegEvalState.init L lds) b).regs
+        (evalBlock (SegEvalState.init L lds) b).loads base m fb hbase'
+        (fun x hx => hrd x (List.mem_cons_of_mem _ hx))
+        (fun x hx => hst x (List.mem_cons_of_mem _ hx)) e hrest
+
+/-- **The exact div-dispatch footprint.**  The dispatch chain's stores are the `sd`s at
+`x2 + 0xf0`, `x2 + 0xf8`, `x2 + 0x100` (decided on `divDispatch`), so the reflected
+`writeLog` agrees with its input outside those three words.  Refines
+`divDispatch_mem_frame` (the `[v2, v2+0x108)` window) to the actual write set. -/
+theorem divDispatch_footprint (v2 sret Wr Wl : BitVec 64) (lds : List (List (BitVec 8)))
+    (m : Std.ExtHashMap Nat (BitVec 8)) (fb : FrameBundle m v2) :
+    MemFootprint (fun k => word8 (v2.toNat + 0xf0) k ∨ word8 (v2.toNat + 0xf8) k ∨
+        word8 (v2.toNat + 0x100) k)
+      m (writeLog m (evalBlocks divDispatch (SegEvalState.init (divDispL v2 sret Wr Wl) lds)).log) := by
+  refine ⟨fun k hk => ?_⟩
+  refine writeLog_getElem_disjoint k _ m
+    (fun e he => evalBlocks_init_log_width divDispatch (divDispL v2 sret Wr Wl) lds e he)
+    (fun e he => ?_)
+  obtain ⟨off, hoff, haddr⟩ :=
+    evalBlocks_store_offsets_exact (fun off => off = 0xf0 ∨ off = 0xf8 ∨ off = 0x100)
+      divDispatch (divDispL v2 sret Wr Wl) lds v2 m fb (by rfl) (by decide) (by decide) e he
+  have hw := evalBlocks_init_log_width divDispatch (divDispL v2 sret Wr Wl) lds e he
+  unfold word8 at hk
+  omega
+
 /-- `__divdi3Loaded` survives on any memory agreeing over `[0x800046a4, 0x800046ac)`. -/
 theorem loaded_divdi3_agreeP (m m' : Mem)
     (ha : ∀ a, (0x800046a4 ≤ a ∧ a < 0x800046ac) → m[a]? = m'[a]?)
@@ -200,13 +263,22 @@ theorem loaded_udivdi3_agreeP (m m' : Mem)
 
 /-! ## `blockC_div` — the `.div` int dispatch + `__divdi3` value tail -/
 
-theorem blockC_div
+/-- The exact memory footprint of the `.div` integer cell from the return of both
+children to the epilogue entry: the dispatch chain's three `sd` temporaries at
+`sp-848`, `sp-840`, `sp-832` (`divDispatch_footprint`), nothing from the libgcc callee
+(`__divdi3` performs no stores), and the `value_int` box `[sret, sret+24)`. -/
+def divCellFoot (sp sret : Nat) (k : Nat) : Prop :=
+  word8 (sp - 848) k ∨ word8 (sp - 840) k ∨ word8 (sp - 832) k ∨ resultSlot sret k
+
+/-- `blockC_div` RETAINING the cell's footprint `divCellFoot` from the return memory
+`mret` to the epilogue-entry memory.  `blockC_div` is its projection. -/
+theorem blockC_div_footprint
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat)
     (st' st'' : Vsa.While.St) (a b : Int)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
-    (m0 : Mem)
+    (m0 mret : Mem)
     (hbNe : b ≠ 0)
     (hOv : ¬(a = -2^63 ∧ b = -1)) :
     Triple
@@ -246,20 +318,23 @@ theorem blockC_div
         (∀ R : Register, AbiPreservedNoise R →
           (Register.x8 == R) = false → (Register.x9 == R) = false →
           (Register.x18 == R) = false → (Register.x2 == R) = false →
-          gpre R = g R))
+          gpre R = g R) ∧
+        c.σ.mem = mret)
       (fun c => ∃ (mpre : Mem) (φfm φcm φfe φce : Addr → Nat),
         PhiExtends φf φfm nf ∧
         PhiExtends φc φcm nc ∧
         PhiExtends φfm φfe st'.store.frames.size ∧
         PhiExtends φcm φce st'.store.closures.size ∧
-        PreEpilogueVD g N A SL φfe φce st'' (.int (wrap64 (a.tdiv b))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+        PreEpilogueVD g N A SL φfe φce st'' (.int (wrap64 (a.tdiv b))) sp r sret v8 v9 v18 out0 m0 mpre c ∧
+        MemFootprint (divCellFoot sp.toNat sret.toNat) mret mpre) := by
   intro c hpre
   obtain ⟨hTS, hgx8, hopTok, hSlot, hReadData,
     hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode, hraAl,
     hVint, hDivdi3, hUmoddi3, hUdivdi3, hdivStk, hcodeStk, hviStk, hTableStk, hsretInSL,
     hSLloSp, hSLlo, hSLwin, hsphiRam, hsp8, hSLhiRam, hspSLhi,
-    hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge⟩ := hpre
+    hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge,
+    hmret⟩ := hpre
   obtain ⟨hG, htick, hpc, hra, hs1, hsp, ⟨vmi, hmi⟩, hout, hframe,
     ⟨w19, hgprex19', hs3slot⟩, hstoreBundle, hcode,
     hslotRa, hslotS0, hslotS1, hslotS2, hMemExt, hmemframe⟩ := hTS
@@ -636,8 +711,8 @@ theorem blockC_div
     rw [f_3, f_2, f_1, fQ, fD]
     exact (hframe R hR' h19ne).trans (hbridge R hR' he8 he9 he18 he2)
   -- === invoke the GENERATED shared tail ===
-  obtain ⟨mpre, φfm2, φcm2, φfe, φce, cfin, hStepsFin, hp1, hp2, hp3, hp4, hPreD⟩ :=
-    intBoxEpilogue g N A SL φf φc φfm φcm φf' φc' nf nc st'.store.frames.size st'.store.closures.size st' st''
+  obtain ⟨mpre, φfm2, φcm2, φfe, φce, cfin, hStepsFin, hp1, hp2, hp3, hp4, hPreD, hBoxFoot⟩ :=
+    intBoxEpilogue_footprint g N A SL φf φc φfm φcm φf' φc' nf nc st'.store.frames.size st'.store.closures.size st' st''
       sp r sret v8 v9 v18 v19 w19 resQ (wrap64 (a.tdiv b)) out0 m0
       ⟨τ3, j3, cQ.steps + 1 + 1 + 1⟩ (0x8000382c#64) (0x8000382c#64) (0x80003830#64) (0x1ffbbc#21)
       (fun σ i u pc vminstret v2 b0 b1 b2 b3 b4 b5 b6 b7 => site_8000382c_ee σ i u pc vminstret v2 b0 b1 b2 b3 b4 b5 b6 b7)
@@ -657,7 +732,86 @@ theorem blockC_div
     (hStepsD.trans <| hStepsP.trans <| hStepsQ.trans <|
       (Steps.single hstepτ1).trans <| (Steps.single hstepτ2).trans <|
       (Steps.single hstepτ3)).trans hStepsFin
-  exact ⟨cfin, hchain, mpre, φfm2, φcm2, φfe, φce, hp1, hp2, hp3, hp4, hPreD⟩
+  refine ⟨cfin, hchain, mpre, φfm2, φcm2, φfe, φce, hp1, hp2, hp3, hp4, hPreD, ?_⟩
+  -- the footprint: `mret = c.mem → cD.mem` are the dispatch's three `sd`s (exact
+  -- offsets `0xf0`/`0xf8`/`0x100` off `x2 = sp-1088`), the libgcc callee and the `mv`s
+  -- write nothing (`cD.mem = τ3.mem`), and the boxed tail writes only the result slot.
+  refine ⟨fun k hk => ?_⟩
+  unfold divCellFoot word8 resultSlot at hk
+  have hbox : ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) := by omega
+  have hdisp : ¬ (word8 ((sp - 1088#64).toNat + 0xf0) k ∨
+      word8 ((sp - 1088#64).toNat + 0xf8) k ∨ word8 ((sp - 1088#64).toNat + 0x100) k) := by
+    unfold word8; rw [hspsub]; omega
+  rw [hBoxFoot.agree k hbox]
+  show τ3.mem[k]? = mret[k]?
+  rw [hmemτ3e, hmemD,
+    (divDispatch_footprint (sp - 1088#64) sret
+      (bytesVal MKind.ld [rpb0, rpb1, rpb2, rpb3, rpb4, rpb5, rpb6, rpb7] : BitVec 64) Wl ldsD
+      c.σ.mem hfb).agree k hdisp, hmret]
+
+/-- The footprint-free projection (the landed statement). -/
+theorem blockC_div
+    (gpre g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
+    (st' st'' : Vsa.While.St) (a b : Int)
+    (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
+    (m0 : Mem)
+    (hbNe : b ≠ 0)
+    (hOv : ¬(a = -2^63 ∧ b = -1)) :
+    Triple
+      (fun c =>
+        TwoSubReturn gpre N A SL φf φc nf nc st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c ∧
+        gpre Register.x8 = some aExpr ∧
+        read32 c.σ.mem (aExpr.toNat + 8) = some 14 ∧      -- op token = binOpTok .div
+        DivSlotPinned c.σ.mem ∧
+        BinaryReturnData SL sp sret c ∧
+        -- === geometry ===
+        0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
+        tohostAddr + 8 ≤ aExpr.toNat ∧
+        (aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat) ∧
+        String.join out0.toList = st''.out ∧
+        c.σ.sailOutput = out0 ∧
+        sret.toNat % 8 = 0 ∧ 0x80000000 ≤ sret.toNat ∧ sret.toNat + 24 ≤ 0x100000000 ∧
+        tohostAddr + 16 ≤ sret.toNat ∧
+        (sret.toNat + 24 ≤ 0x8000280c ∨ 0x8000281c ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat) ∧
+        r.toNat % 4 = 0 ∧
+        Value_intLoaded c.σ.mem ∧
+        -- === the DIV-specific extra conjuncts (libgcc __divdi3 code images) ===
+        Vsa.Sim.Code.__divdi3Loaded c.σ.mem ∧
+        Vsa.Sim.Code.__umoddi3Loaded c.σ.mem ∧
+        __hidden___udivdi3Loaded c.σ.mem ∧
+        (sp.toNat ≤ 0x800046a4 ∨ 0x80004728 ≤ SL.lo) ∧  -- libgcc div block disjoint from stack
+        (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
+        (sp.toNat ≤ 0x8000280c ∨ 0x8000281c ≤ SL.lo) ∧
+        (opTableBase + 20 ≤ SL.lo ∨ sp.toNat ≤ opTableBase) ∧
+        (SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi) ∧
+        SL.lo + 1088 ≤ sp.toNat ∧ 0x80000000 ≤ SL.lo ∧ tohostAddr + 16 ≤ SL.lo ∧
+        sp.toNat ≤ 0x100000000 ∧ sp.toNat % 8 = 0 ∧ SL.hi ≤ 0x100000000 ∧ sp.toNat ≤ SL.hi ∧
+        g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
+        g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧
+        gpre Register.x19 = some v19 ∧ g Register.x19 = some v19 ∧
+        (∀ R : Register, AbiPreservedNoise R →
+          (Register.x8 == R) = false → (Register.x9 == R) = false →
+          (Register.x18 == R) = false → (Register.x2 == R) = false →
+          gpre R = g R))
+      (fun c => ∃ (mpre : Mem) (φfm φcm φfe φce : Addr → Nat),
+        PhiExtends φf φfm nf ∧
+        PhiExtends φc φcm nc ∧
+        PhiExtends φfm φfe st'.store.frames.size ∧
+        PhiExtends φcm φce st'.store.closures.size ∧
+        PreEpilogueVD g N A SL φfe φce st'' (.int (wrap64 (a.tdiv b))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+  intro c hpre
+  obtain ⟨hTS, hgx8, hopTok, hSlot, hReadData, hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq, hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode, hraAl, hVint, hDivdi3, hUmoddi3, hUdivdi3, hdivStk, hcodeStk, hviStk, hTableStk, hsretInSL, hSLloSp, hSLlo, hSLwin, hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge⟩ := hpre
+  obtain ⟨c', hs, mpre, φfm, φcm, φfe, φce, hp1, hp2, hp3, hp4, hPre, _⟩ :=
+    blockC_div_footprint gpre g N A SL φf φc nf nc st' st'' a b sp r sret aExpr v8 v9 v18 v19 out0 m0 c.σ.mem hbNe hOv c
+      ⟨hTS, hgx8, hopTok, hSlot, hReadData, hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq, hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode, hraAl, hVint, hDivdi3, hUmoddi3, hUdivdi3, hdivStk, hcodeStk, hviStk, hTableStk, hsretInSL, hSLloSp, hSLlo, hSLwin, hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge, rfl⟩
+  exact ⟨c', hs, mpre, φfm, φcm, φfe, φce, hp1, hp2, hp3, hp4, hPre⟩
+
+#print axioms blockC_div_footprint
+#print axioms blockC_div
 
 /-! ## `DivResid` — the blockC_div residuals about the POST-`TwoSubReturn` config -/
 

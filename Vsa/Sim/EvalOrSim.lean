@@ -74,13 +74,15 @@ op-dispatch (`beq` TAKEN since `logOpTok .or = 25`), OR arm copies `vl` into the
 `0x8000399c` (`li a1,1; mv a0,s1; jal value_bool`), producing `.bool true`.
 
 Output: `PreEpilogueVD … (.bool true) 0x800033ec` (fed to `blockD_v_rec`). -/
-theorem blockC_orTrue
+/-- `blockC_orTrue` RETAINING the cell's footprint `truthyCellFoot` from the return
+memory `mret` to the epilogue-entry memory.  `blockC_orTrue` is its projection. -/
+theorem blockC_orTrue_footprint
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat)
     (st' : Vsa.While.St) (vl : Value)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
-    (el er : Expr) (m0 : Mem) (hsretWords : ValueWordsTotal m0 sret.toNat)
+    (el er : Expr) (m0 mret : Mem) (hsretWords : ValueWordsTotal m0 sret.toNat)
     (hvltrue : vl.truthy = true) :
     Triple
       (fun c => ∃ mcall,
@@ -126,11 +128,13 @@ theorem blockC_orTrue
         (∀ R : Register, AbiPreservedNoise R →
           (Register.x8 == R) = false → (Register.x9 == R) = false →
           (Register.x18 == R) = false → (Register.x2 == R) = false →
-          gpre R = g R))
+          gpre R = g R) ∧
+        c.σ.mem = mret)
       (fun c => ∃ (mpre : Mem) (φfe φce : Addr → Nat),
         PhiExtends φf φfe nf ∧
         PhiExtends φc φce nc ∧
-        PreEpilogueVD g N A SL φfe φce st' (.bool true) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+        PreEpilogueVD g N A SL φfe φce st' (.bool true) sp r sret v8 v9 v18 out0 m0 mpre c ∧
+        MemFootprint (truthyCellFoot sp.toNat sret.toNat) mret mpre) := by
   intro c hpre
   obtain ⟨mcall, hSub, hgx8, hexpr, hMemExtM0, hexprLo, hexprHi, hexprWin,
     hexprSL, hexprA, hexprSub,
@@ -138,7 +142,8 @@ theorem blockC_orTrue
     hraAl, hSLloSp, hSLlo, hSLwin,
     hout0eq, hVtruthyMcall, hVboolMcall, hBufExtras, hTruthyStk, hBoolStk, hSretBoolCode,
     hTruthyArena, hBoolArena, hcodeStk, hsretInSL, hMcallM0,
-    hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge⟩ := hpre
+    hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge,
+    hmret⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hra, hs1, hsp, ⟨vmi, hmi⟩, hout, hframe,
     ⟨φcv, hpcv, hvalSub⟩, hstoreBundle, hcode,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemFrame, hMemExt⟩ := hSub
@@ -908,7 +913,7 @@ theorem blockC_orTrue
     refine hsB.trans (?_)
     exact Steps.single hstep18
   refine ⟨⟨σ18, i18, cB.steps + 1⟩, hSteps, σ18.mem, φf', φc', hpf', hpc',
-    ⟨?_, hMemExt_fin, ValueWordsTotal.mono hMemExt_fin hsretWords, hSurvSL_fin⟩⟩
+    ⟨?_, hMemExt_fin, ValueWordsTotal.mono hMemExt_fin hsretWords, hSurvSL_fin⟩, ?_⟩
   refine ⟨hG18, hi18, hpc_fin, hs1_fin, hsp_fin, ⟨vmifin, hmifin⟩,
     hout_fin, houtStr, ?_,
     (by rw [hmem18e]; exact hcode_B), (by rw [hmem18e]; exact hvaltrue), hstore_fin, hframeG,
@@ -929,6 +934,101 @@ theorem blockC_orTrue
       rcases hmemFrame a (by omega) hA with hin | heq
       · exact absurd hin (by omega)
       · rw [heq]; exact hMcallM0 a ha hA
+  · -- the footprint: `mret = c.σ.mem → m3` is the 24-byte argument copy, `m3 → cB.mem`
+    -- is the `value_bool` box (`value_truthy` and the final `j` write nothing).
+    refine ⟨fun k hk => ?_⟩
+    unfold truthyCellFoot word8 resultSlot at hk
+    have hbox : ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) := by omega
+    show σ18.mem[k]? = mret[k]?
+    rw [hmem18e, ← hmemframeB k hbox, ← hmret]
+    show (writeMap8 m2 (sp.toNat-1008) (sdData_val QV))[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint m2 (sp.toNat-1008) k (sdData_val QV) (by omega)]
+    show (writeMap8 m1 (sp.toNat-1016) (sdData_val PV))[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint m1 (sp.toNat-1016) k (sdData_val PV) (by omega)]
+    show (writeMap8 c.σ.mem (sp.toNat-1024) (sdData_val K13))[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat-1024) k (sdData_val K13) (by omega)]
+
+/-- The footprint-free projection (the landed statement). -/
+-- discipline: allow(R7-conj-tower-def) the landed `blockC_orTrue` statement is re-stated verbatim as the projection of `blockC_orTrue_footprint`; no new ∃/∧ post is defined here
+theorem blockC_orTrue
+    (gpre g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
+    (st' : Vsa.While.St) (vl : Value)
+    (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
+    (el er : Expr) (m0 : Mem) (hsretWords : ValueWordsTotal m0 sret.toNat)
+    (hvltrue : vl.truthy = true) :
+    Triple
+      (fun c => ∃ mcall,
+        SubEvalReturn gpre N A SL φf φc nf nc st' vl sp r sret
+          ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)) (0x8000356c#64)
+          v8 v9 v18 mcall c ∧
+        gpre Register.x8 = some aExpr ∧
+        ExprRepr mcall aExpr.toNat (.logical .or el er) ∧
+        -- WAVE 47i (`McallPopTotality` amendment): presence ONLY on the actual
+        -- dead-byte read footprint — the lowered-frame window `[sp-1120, sp)`
+        -- plus the node's line-word bytes `[aExpr+4, aExpr+8)` — replacing the
+        -- REFUTED total-population oracle.
+        -- WAVE 48k: the dead-byte presence conjunct is GONE (total reads).
+        -- presence-monotonicity over the entry `m0` (`mem_ext` residual).
+        MemExtends m0 mcall ∧
+        0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
+        tohostAddr + 8 ≤ aExpr.toNat ∧
+        (aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat) ∧
+        (aExpr.toNat + 16 ≤ A.lo ∨ A.hi ≤ aExpr.toNat) ∧
+        (aExpr.toNat + 16 ≤ sp.toNat - 968 ∨ sp.toNat - 968 + 24 ≤ aExpr.toNat) ∧
+        String.join out0.toList = st'.out ∧
+        sret.toNat % 8 = 0 ∧ 0x80000000 ≤ sret.toNat ∧ sret.toNat + 24 ≤ 0x100000000 ∧
+        tohostAddr + 16 ≤ sret.toNat ∧
+        (sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat) ∧
+        r.toNat % 4 = 0 ∧
+        SL.lo + 1088 ≤ sp.toNat ∧ 0x80000000 ≤ SL.lo ∧ tohostAddr + 16 ≤ SL.lo ∧
+        c.σ.sailOutput = out0 ∧
+        Value_truthyLoaded mcall ∧ Value_boolLoaded mcall ∧
+        LogicalBufExtras sp ∧
+        (sp.toNat ≤ 0x8000282c ∨ 0x8000285c ≤ SL.lo) ∧
+        (sp.toNat ≤ 0x800027f8 ∨ 0x8000280c ≤ SL.lo) ∧
+        (sret.toNat + 24 ≤ 0x800027f8 ∨ 0x8000280c ≤ sret.toNat) ∧
+        (A.hi ≤ 0x8000282c ∨ 0x8000285c ≤ A.lo) ∧
+        (A.hi ≤ 0x800027f8 ∨ 0x8000280c ≤ A.lo) ∧
+        (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
+        (SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi) ∧
+        (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
+          mcall[a]? = m0[a]?) ∧
+        sp.toNat ≤ 0x100000000 ∧ sp.toNat % 8 = 0 ∧ SL.hi ≤ 0x100000000 ∧ sp.toNat ≤ SL.hi ∧
+        g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
+        g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧
+        (∀ R : Register, AbiPreservedNoise R →
+          (Register.x8 == R) = false → (Register.x9 == R) = false →
+          (Register.x18 == R) = false → (Register.x2 == R) = false →
+          gpre R = g R))
+      (fun c => ∃ (mpre : Mem) (φfe φce : Addr → Nat),
+        PhiExtends φf φfe nf ∧
+        PhiExtends φc φce nc ∧
+        PreEpilogueVD g N A SL φfe φce st' (.bool true) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+  intro c hpre
+  obtain ⟨mcall, hSub, hgx8, hexpr, hMemExtM0, hexprLo, hexprHi, hexprWin,
+    hexprSL, hexprA, hexprSub,
+    houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretStk, hsretEvalCode,
+    hraAl, hSLloSp, hSLlo, hSLwin,
+    hout0eq, hVtruthyMcall, hVboolMcall, hBufExtras, hTruthyStk, hBoolStk, hSretBoolCode,
+    hTruthyArena, hBoolArena, hcodeStk, hsretInSL, hMcallM0,
+    hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge⟩ := hpre
+  obtain ⟨c', hs, mpre, φfe, φce, hp1, hp2, hPre, _⟩ :=
+    blockC_orTrue_footprint gpre g N A SL φf φc nf nc st' vl sp r sret aExpr v8 v9 v18 out0
+      el er m0 c.σ.mem hsretWords hvltrue c
+      ⟨mcall, hSub, hgx8, hexpr, hMemExtM0, hexprLo, hexprHi, hexprWin,
+    hexprSL, hexprA, hexprSub,
+    houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretStk, hsretEvalCode,
+    hraAl, hSLloSp, hSLlo, hSLwin,
+    hout0eq, hVtruthyMcall, hVboolMcall, hBufExtras, hTruthyStk, hBoolStk, hSretBoolCode,
+    hTruthyArena, hBoolArena, hcodeStk, hsretInSL, hMcallM0,
+    hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge, rfl⟩
+  exact ⟨c', hs, mpre, φfe, φce, hp1, hp2, hPre⟩
+
+#print axioms blockC_orTrue_footprint
+#print axioms blockC_orTrue
 
 /-! ## `OrTrueExtras` — the recursive-case facts beyond `EvalEntry`
 

@@ -55,11 +55,20 @@ python3 scripts/gen_term_case_bundle.py --check \
   || fail "stage a3: Vsa/Sim/TermCaseBundle.lean is stale"
 python3 scripts/gen_m4_term_row.py --check \
   || fail "stage a3: Vsa/Sim/rows/TermRouting.lean is stale"
+python3 scripts/gen_ih_clause.py --check \
+  || fail "stage a3: Vsa/Sim/rows/IHClause_*.lean is stale"
 
 # ------------------------------------------------------------ (b) grep gate
 echo "== stage a4: proof-discipline gate (exponentiating layer mandatory for new files)"
 python3 scripts/check_discipline.py || fail "stage a4: discipline violation (see above)"
 echo "stage a4: OK"
+
+# ------------------------------------ (a5) IH clause residual status (informational)
+# WIRED / HOOK / MANUAL / STALE per generated clause field (scripts/ih_clauses.tsv);
+# never fails the gate. Lean-backed modes: scripts/ih_clause_status.py --backend.
+echo "== stage a5: IH clause status (informational)"
+python3 -B scripts/ih_clause_status.py --summary \
+  || echo "stage a5: clause status unavailable (informational; see above)"
 
 echo "== stage b: sorry / native_decide / axiom gate"
 python3 - <<'PYEOF' || fail "stage b: forbidden token(s) found (see above)"
@@ -1208,6 +1217,27 @@ THEOREMS=(
   Vsa.Sim.ScaffoldRows.field_hStrLe_of
   Vsa.Sim.ScaffoldRows.field_hStrGt_of
   Vsa.Sim.ScaffoldRows.field_hStrGe_of
+  Vsa.Sim.blockD_v_rec_footprint                # ExitFootprint (footprint-carrying shared epilogue)
+  Vsa.Sim.blockB_binary_footprint               # EvalBinSim (two-children head with footprint)
+  Vsa.Sim.blockB_unary_footprint                # UnaryHeadFootprint
+  Vsa.Sim.blockB_logical_footprint              # LogicalHeadFootprint
+  Vsa.Sim.binRow_ltF                            # rows/EvalLtRowFootprint (pilot B)
+  Vsa.Sim.binRow_strcmpF                        # StrCmpCellFootprint (pilot A)
+  Vsa.Sim.binAddCellF_of
+  Vsa.Sim.binGeCellF_of
+  Vsa.Sim.evalNegIHF
+  Vsa.Sim.evalOrFalseIHF
+  Vsa.Sim.evalIntIHF
+  Vsa.Sim.strcmp_full_spec_cond                 # StrcmpSpecCond (alignment-conditional strcmp)
+  Vsa.Sim.strLeftSurvives_of_footprint          # IHClauseFootprintMeta
+  Vsa.Sim.IHClauseGeneric.footprint.hInt        # IHClauseGeneric (closed generic clause step)
+  Vsa.Sim.IHClauseGeneric.footprint.hStr
+  Vsa.Sim.IHClauseGeneric.footprint.hBool
+  Vsa.Sim.IHClauseGeneric.footprint.hNull
+  Vsa.Sim.strCmpOperandsSupply_of_owned         # StrCmpCellClauses
+  Vsa.Sim.ScaffoldRows.field_hStrLt_of_clauses
+  Vsa.Sim.IHClause.Trivial.closed               # rows/IHClause_Trivial (generated clause, closed)
+  Vsa.Sim.IHClause.Footprint.of_residuals       # rows/IHClause_Footprint (generated clause recursion)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean

@@ -18,6 +18,7 @@ import Vsa.Sim.ReprCopy
 import Vsa.Sim.DivSites2
 import Vsa.Sim.ObsAvoid
 import Vsa.Sim.EntryGroundKit
+import Vsa.Sim.ExitFootprint
 
 /-!
 # Layer 4 — M4 RECURSIVE case: `evalNotSim` (the `EvalE.not` case)
@@ -170,13 +171,23 @@ structure NotExtras (sp : BitVec 64) : Prop where
 
 /-! ## `blockC_not` — the post-call `not` tail -/
 
-theorem blockC_not
+/-- The exact memory footprint of a truthiness-testing cell (logical not, the four
+logical arms' tails) from the child's return to the epilogue entry: the 24-byte
+`value_truthy` argument copy `[sp-1024, sp-1000)` (written by `sd` at `sp-1024`,
+`sp-1016`, `sp-1008`) and the `value_bool` box `[sret, sret+24)`.  `value_truthy`
+itself writes nothing (`truthy_post`). -/
+def truthyCellFoot (sp sret : Nat) (k : Nat) : Prop :=
+  word8 (sp - 1024) k ∨ word8 (sp - 1016) k ∨ word8 (sp - 1008) k ∨ resultSlot sret k
+
+/-- `blockC_not` RETAINING the cell's footprint `truthyCellFoot` from the return
+memory `mret` to the epilogue-entry memory.  `blockC_not` is its projection. -/
+theorem blockC_not_footprint
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat)
     (st' : Vsa.While.St) (vsub : Value)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
-    (esub : Expr) (m0 : Mem) (hsretWords : ValueWordsTotal m0 sret.toNat) :
+    (esub : Expr) (m0 mret : Mem) (hsretWords : ValueWordsTotal m0 sret.toNat) :
     Triple
       (fun c => ∃ mcall,
         SubEvalReturn gpre N A SL φf φc nf nc st' vsub sp r sret
@@ -223,11 +234,13 @@ theorem blockC_not
         (∀ R : Register, AbiPreservedNoise R →
           (Register.x8 == R) = false → (Register.x9 == R) = false →
           (Register.x18 == R) = false → (Register.x2 == R) = false →
-          gpre R = g R))
+          gpre R = g R) ∧
+        c.σ.mem = mret)
       (fun c => ∃ (mpre : Mem) (φfe φce : Addr → Nat),
         PhiExtends φf φfe nf ∧
         PhiExtends φc φce nc ∧
-        PreEpilogueVD g N A SL φfe φce st' (.bool (!vsub.truthy)) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+        PreEpilogueVD g N A SL φfe φce st' (.bool (!vsub.truthy)) sp r sret v8 v9 v18 out0 m0 mpre c ∧
+        MemFootprint (truthyCellFoot sp.toNat sret.toNat) mret mpre) := by
   intro c hpre
   obtain ⟨mcall, hSub, hgx8, hexpr, hMemExtM0, hexprLo, hexprHi, hexprWin,
     hexprSL, hexprA, hexprSub,
@@ -235,7 +248,8 @@ theorem blockC_not
     hraAl, hSLloSp, hSLlo, hSLwin,
     hout0eq, hVtruthyMcall, hVboolMcall, hNotExtras, hTruthyStk, hBoolStk, hSretBoolCode,
     hTruthyArena, hBoolArena, hcodeStk, hsretInSL, hMcallM0,
-    hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge⟩ := hpre
+    hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge,
+    hmret⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hra, hs1, hsp, ⟨vmi, hmi⟩, hout, hframe,
     ⟨φcv, hpcv, hvalSub⟩, hstoreBundle, hcode,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemFrame, hMemExt⟩ := hSub
@@ -937,7 +951,7 @@ theorem blockC_not
             ((Steps.single hstep13).trans ((Steps.single hstep14).trans ((Steps.single hstep15).trans
               (hsB.trans (Steps.single hstep17))))))))))))))))
   refine ⟨⟨σ17, i17, cB.steps + 1⟩, hSteps, σ17.mem, φf', φc', hpf', hpc',
-    ⟨?_, hMemExt_fin, ValueWordsTotal.mono hMemExt_fin hsretWords, hSurvSL_fin⟩⟩
+    ⟨?_, hMemExt_fin, ValueWordsTotal.mono hMemExt_fin hsretWords, hSurvSL_fin⟩, ?_⟩
   refine ⟨hG17, hi17, hpc_fin, hs1_fin, hsp_fin, ⟨vmifin, hmifin⟩,
     hout_fin, houtStr, ?_,
     (by rw [hmem17e]; exact hcode_B), (by rw [hmem17e]; exact hvalfinal), hstore_fin, hframeG,
@@ -960,6 +974,93 @@ theorem blockC_not
       rcases hmemFrame a (by omega) hA with hin | heq
       · exact absurd hin (by omega)
       · rw [heq]; exact hMcallM0 a ha hA
+  · -- the footprint: `mret = c.σ.mem → m3` is the 24-byte argument copy, `m3 → cB.mem`
+    -- is the `value_bool` box (`value_truthy` and the final `j` write nothing).
+    refine ⟨fun k hk => ?_⟩
+    unfold truthyCellFoot word8 resultSlot at hk
+    have hbox : ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) := by omega
+    show σ17.mem[k]? = mret[k]?
+    rw [hmem17e, ← hmemframeB k hbox, ← hmret]
+    show (writeMap8 m2 (sp.toNat-1008) (sdData_val QV))[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint m2 (sp.toNat-1008) k (sdData_val QV) (by omega)]
+    show (writeMap8 m1 (sp.toNat-1016) (sdData_val PV))[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint m1 (sp.toNat-1016) k (sdData_val PV) (by omega)]
+    show (writeMap8 c.σ.mem (sp.toNat-1024) (sdData_val K13))[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat-1024) k (sdData_val K13) (by omega)]
+
+/-- The footprint-free projection (the landed statement). -/
+-- discipline: allow(R7-conj-tower-def) the landed `blockC_not` statement is re-stated verbatim as the projection of `blockC_not_footprint`; no new ∃/∧ post is defined here
+theorem blockC_not
+    (gpre g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
+    (st' : Vsa.While.St) (vsub : Value)
+    (sp r sret aExpr : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
+    (esub : Expr) (m0 : Mem) (hsretWords : ValueWordsTotal m0 sret.toNat) :
+    Triple
+      (fun c => ∃ mcall,
+        SubEvalReturn gpre N A SL φf φc nf nc st' vsub sp r sret
+          ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) (0x800035ec#64)
+          v8 v9 v18 mcall c ∧
+        gpre Register.x8 = some aExpr ∧
+        ExprRepr mcall aExpr.toNat (.unary .not esub) ∧
+        MemExtends m0 mcall ∧
+        0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
+        tohostAddr + 8 ≤ aExpr.toNat ∧
+        (aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat) ∧
+        (aExpr.toNat + 16 ≤ A.lo ∨ A.hi ≤ aExpr.toNat) ∧
+        (aExpr.toNat + 16 ≤ sp.toNat - 944 ∨ sp.toNat - 944 + 24 ≤ aExpr.toNat) ∧
+        String.join out0.toList = st'.out ∧
+        sret.toNat % 8 = 0 ∧ 0x80000000 ≤ sret.toNat ∧ sret.toNat + 24 ≤ 0x100000000 ∧
+        tohostAddr + 16 ≤ sret.toNat ∧
+        (sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat) ∧
+        r.toNat % 4 = 0 ∧
+        SL.lo + 1088 ≤ sp.toNat ∧ 0x80000000 ≤ SL.lo ∧ tohostAddr + 16 ≤ SL.lo ∧
+        c.σ.sailOutput = out0 ∧
+        Value_truthyLoaded mcall ∧ Value_boolLoaded mcall ∧
+        NotExtras sp ∧
+        (sp.toNat ≤ 0x8000282c ∨ 0x8000285c ≤ SL.lo) ∧
+        (sp.toNat ≤ 0x800027f8 ∨ 0x8000280c ≤ SL.lo) ∧
+        (sret.toNat + 24 ≤ 0x800027f8 ∨ 0x8000280c ≤ sret.toNat) ∧
+        (A.hi ≤ 0x8000282c ∨ 0x8000285c ≤ A.lo) ∧
+        (A.hi ≤ 0x800027f8 ∨ 0x8000280c ≤ A.lo) ∧
+        (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
+        (SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi) ∧
+        (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
+          mcall[a]? = m0[a]?) ∧
+        sp.toNat ≤ 0x100000000 ∧ sp.toNat % 8 = 0 ∧ SL.hi ≤ 0x100000000 ∧ sp.toNat ≤ SL.hi ∧
+        g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
+        g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧
+        (∀ R : Register, AbiPreservedNoise R →
+          (Register.x8 == R) = false → (Register.x9 == R) = false →
+          (Register.x18 == R) = false → (Register.x2 == R) = false →
+          gpre R = g R))
+      (fun c => ∃ (mpre : Mem) (φfe φce : Addr → Nat),
+        PhiExtends φf φfe nf ∧
+        PhiExtends φc φce nc ∧
+        PreEpilogueVD g N A SL φfe φce st' (.bool (!vsub.truthy)) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+  intro c hpre
+  obtain ⟨mcall, hSub, hgx8, hexpr, hMemExtM0, hexprLo, hexprHi, hexprWin,
+    hexprSL, hexprA, hexprSub,
+    houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretStk, hsretEvalCode,
+    hraAl, hSLloSp, hSLlo, hSLwin,
+    hout0eq, hVtruthyMcall, hVboolMcall, hNotExtras, hTruthyStk, hBoolStk, hSretBoolCode,
+    hTruthyArena, hBoolArena, hcodeStk, hsretInSL, hMcallM0,
+    hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge⟩ := hpre
+  obtain ⟨c', hs, mpre, φfe, φce, hp1, hp2, hPre, _⟩ :=
+    blockC_not_footprint gpre g N A SL φf φc nf nc st' vsub sp r sret aExpr v8 v9 v18 out0
+      esub m0 c.σ.mem hsretWords c
+      ⟨mcall, hSub, hgx8, hexpr, hMemExtM0, hexprLo, hexprHi, hexprWin,
+        hexprSL, hexprA, hexprSub,
+        houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretStk, hsretEvalCode,
+        hraAl, hSLloSp, hSLlo, hSLwin,
+        hout0eq, hVtruthyMcall, hVboolMcall, hNotExtras, hTruthyStk, hBoolStk, hSretBoolCode,
+        hTruthyArena, hBoolArena, hcodeStk, hsretInSL, hMcallM0,
+        hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge, rfl⟩
+  exact ⟨c', hs, mpre, φfe, φce, hp1, hp2, hPre⟩
+
+#print axioms blockC_not_footprint
 
 /-! ## `NotSimExtras` — the recursive-case facts beyond `EvalEntry` (mirrors `NegExtras`)
 

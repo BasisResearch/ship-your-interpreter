@@ -117,14 +117,20 @@ def audit_source(
     declarations: Sequence[str],
     field: str | None,
     supplier: str | None,
+    structure: str = census.STRUCTURE,
 ) -> str:
-    """Use the existing census elaborator for explicit residual type checks."""
+    """Use the existing census elaborator for explicit residual type checks.
+
+    `structure` selects the residual record; the default is the inherited
+    term record, a generated clause record is
+    `Vsa.Sim.IHClause.<Name>.Residuals`.
+    """
     source = "".join(f"import {name}\n" for name in sorted(set(imports)))
     if field is not None:
         if supplier is None:
             raise ValueError("field check requires a supplier")
         source += census.SUPPORT.read_text() + "\n"
-        source += f"census_probe {census.STRUCTURE} {field} at {census.LAYOUT} using {supplier}\n"
+        source += f"census_probe {structure} {field} at {census.LAYOUT} using {supplier}\n"
     source += "".join(f"#print axioms {name}\n" for name in declarations)
     return source
 
@@ -149,6 +155,7 @@ def execute(
     field: str | None,
     supplier: str | None,
     plan_only: bool,
+    structure: str = census.STRUCTURE,
 ) -> Path | None:
     """Build the selected closure, check proofs, and retain scoped evidence."""
     backend, output = check_roots(repo, backend, output)
@@ -199,7 +206,7 @@ def execute(
             objects[item.name] = build.hash_file(target)
 
         source = run / "Check.lean"
-        source.write_text(audit_source(imports, declarations, field, supplier))
+        source.write_text(audit_source(imports, declarations, field, supplier, structure))
         result = census.run_lean(repo, output, source)
         if result.returncode != 0 or not source.with_suffix(".olean").is_file():
             raise build.BuildError(
@@ -243,6 +250,7 @@ def execute(
             "build_seconds": timings,
             "axioms": axioms,
             "field": asdict(field_result) if field_result is not None else None,
+            "structure": structure if field is not None else None,
             "supplier": supplier,
             "tool_sha256": tool_hashes,
             "artifacts_sha256": {
@@ -268,6 +276,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--field", type=census.lean_identifier)
     parser.add_argument("--supplier", type=census.lean_identifier)
+    parser.add_argument(
+        "--structure",
+        type=census.lean_identifier,
+        default=census.STRUCTURE,
+        help="residual record for --field (default: the inherited term record)",
+    )
     parser.add_argument("--plan-only", action="store_true")
     args = parser.parse_args(argv)
     if (args.field is None) != (args.supplier is None):
@@ -278,7 +292,9 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("duplicate --audit declaration")
     imports = list(args.module)
     if args.field is not None:
-        imports += ["Vsa.Sim.TermAssembly", "Vsa.Sim.LayoutInstance"]
+        imports.append("Vsa.Sim.LayoutInstance")
+        if args.structure == census.STRUCTURE:
+            imports.append("Vsa.Sim.TermAssembly")
     try:
         execute(
             ROOT,
@@ -289,6 +305,7 @@ def main(argv: list[str] | None = None) -> int:
             args.field,
             args.supplier,
             args.plan_only,
+            args.structure,
         )
     except (build.BuildError, OSError, ValueError) as error:
         print(f"proof slice failed: {error}")

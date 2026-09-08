@@ -201,7 +201,9 @@ From `LogTailPre` at `0x800035bc`: copy `rv` (words `kv/pv/qv` in a3/a4/a5) into
 the `value_truthy` arg buffer `sp-1024`, compute `value_truthy(rv)`, then
 `value_bool(sret, rv.truthy)` producing `.bool rv.truthy`, and `j 0x800033ec`.
 Output: `PreEpilogueVD … (.bool rv.truthy) 0x800033ec`, ready for `blockD_v_rec`. -/
-theorem blockC_logTail
+/-- `blockC_logTail` RETAINING the cell's footprint `truthyCellFoot` from the tail-entry
+memory `mret` to the epilogue-entry memory.  `blockC_logTail` is its projection. -/
+theorem blockC_logTail_footprint
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st'' : Vsa.While.St) (rv : Value)
@@ -209,14 +211,16 @@ theorem blockC_logTail
     (kb0 kb1 kb2 kb3 kb4 kb5 kb6 kb7 : BitVec 8)
     (pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 : BitVec 8)
     (qb0 qb1 qb2 qb3 qb4 qb5 qb6 qb7 : BitVec 8)
-    (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem) :
+    (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 mret : Mem) :
     Triple
       (fun c => LogTailPre g N A SL φf φc st'' rv sp r sret sretR
         kb0 kb1 kb2 kb3 kb4 kb5 kb6 kb7 pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7
-        qb0 qb1 qb2 qb3 qb4 qb5 qb6 qb7 v8 v9 v18 out0 m0 c)
+        qb0 qb1 qb2 qb3 qb4 qb5 qb6 qb7 v8 v9 v18 out0 m0 c ∧
+        c.σ.mem = mret)
       (fun c => ∃ mpre,
-        PreEpilogueVD g N A SL φf φc st'' (.bool rv.truthy) sp r sret v8 v9 v18 out0 m0 mpre c) := by
-  intro c hpre
+        PreEpilogueVD g N A SL φf φc st'' (.bool rv.truthy) sp r sret v8 v9 v18 out0 m0 mpre c ∧
+        MemFootprint (truthyCellFoot sp.toNat sret.toNat) mret mpre) := by
+  intro c ⟨hpre, hmret⟩
   obtain ⟨hG, htick, hpc, hs1, hsp, ha3, ha4, ha5, ⟨vmi, hmi⟩, hout, houtStr, hcode,
     hVtruthyC, hVboolC, hheader,
     hkb0, hkb1, hkb2, hkb3, hkb4, hkb5, hkb6, hkb7,
@@ -689,8 +693,8 @@ theorem blockC_logTail
     refine (Steps.single hstep8).trans (?_)
     refine hsB.trans (?_)
     exact Steps.single hstep10
-  refine ⟨⟨σ10, i10, cB.steps + 1⟩, hSteps, σ10.mem, ?_, hMemExt_fin,
-    ValueWordsTotal.mono (hMemExt_c_8.trans hMemExt_8_10) hsretWords, ?_⟩
+  refine ⟨⟨σ10, i10, cB.steps + 1⟩, hSteps, σ10.mem, ⟨?_, hMemExt_fin,
+    ValueWordsTotal.mono (hMemExt_c_8.trans hMemExt_8_10) hsretWords, ?_⟩, ?_⟩
   · refine ⟨hG10, hi10, hpc_fin, hs1_fin, hsp_fin, ⟨vmifin, hmifin⟩,
       hout_fin, houtStr, rfl, (by rw [hmem10e]; exact hcode_B),
       (by rw [hmem10e]; exact hvaltrue), hstore_fin, hframeG,
@@ -712,5 +716,52 @@ theorem blockC_logTail
         · exact heq
   · intro m' hm'
     exact hstoreSurv m' (fun k hk => (hSL10 k hk).trans (hm' k hk))
+  · -- the footprint: `mret = c.σ.mem → m3` is the 24-byte argument copy, `m3 → cB.mem`
+    -- is the `value_bool` box (`value_truthy` and the final `j` write nothing).
+    refine ⟨fun k hk => ?_⟩
+    unfold truthyCellFoot word8 resultSlot at hk
+    have hbox : ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) := by omega
+    show σ10.mem[k]? = mret[k]?
+    rw [hmem10e, ← hmemframeB k hbox, ← hmret]
+    show (writeMap8 m2 (sp.toNat-1008) (sdData_val qv))[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint m2 (sp.toNat-1008) k (sdData_val qv) (by omega)]
+    show (writeMap8 m1 (sp.toNat-1016) (sdData_val pv))[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint m1 (sp.toNat-1016) k (sdData_val pv) (by omega)]
+    show (writeMap8 c.σ.mem (sp.toNat-1024) (sdData_val kv))[k]? = c.σ.mem[k]?
+    rw [getElem_writeMap8_disjoint c.σ.mem (sp.toNat-1024) k (sdData_val kv) (by omega)]
+
+/-- The footprint-free projection (the landed statement). -/
+theorem blockC_logTail
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st'' : Vsa.While.St) (rv : Value)
+    (sp r sret sretR : BitVec 64)
+    (kb0 kb1 kb2 kb3 kb4 kb5 kb6 kb7 : BitVec 8)
+    (pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7 : BitVec 8)
+    (qb0 qb1 qb2 qb3 qb4 qb5 qb6 qb7 : BitVec 8)
+    (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem) :
+    Triple
+      (fun c => LogTailPre g N A SL φf φc st'' rv sp r sret sretR
+        kb0 kb1 kb2 kb3 kb4 kb5 kb6 kb7 pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7
+        qb0 qb1 qb2 qb3 qb4 qb5 qb6 qb7 v8 v9 v18 out0 m0 c)
+      (fun c => ∃ mpre,
+        PreEpilogueVD g N A SL φf φc st'' (.bool rv.truthy) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+  intro c hpre
+  obtain ⟨c', hs, mpre, hPre, _⟩ :=
+    blockC_logTail_footprint g N A SL φf φc st'' rv sp r sret sretR
+      kb0 kb1 kb2 kb3 kb4 kb5 kb6 kb7 pb0 pb1 pb2 pb3 pb4 pb5 pb6 pb7
+      qb0 qb1 qb2 qb3 qb4 qb5 qb6 qb7 v8 v9 v18 out0 m0 c.σ.mem c ⟨hpre, rfl⟩
+  exact ⟨c', hs, mpre, hPre⟩
+
+/-- The two-eval logical tails' cell footprint from the LEFT child's return to the
+epilogue entry: the truthiness cell (both 24-byte argument copies and the box) and
+the RIGHT child's footprint at its geometry (`sp - 1088`, buffer `sp - off`;
+`off = 848` for and-true, `944` for or-false). -/
+def logFallCellFoot (Fr : FootFam) (off : Nat) (SL : StackLayout) (A : Arena)
+    (sp sret : Nat) (k : Nat) : Prop :=
+  truthyCellFoot sp sret k ∨ Fr SL A (sp - 1088) (sp - off) k
+
+#print axioms blockC_logTail_footprint
+#print axioms blockC_logTail
 
 end Vsa.Sim

@@ -7,6 +7,7 @@ import Vsa.Sim.Code.FixedImage_Value_bool
 import Vsa.Sim.rows.EvalEqNeRow
 import Vsa.Sim.rows.BinStrReadback
 import Vsa.Sim.rows.BinDispatchRow
+import Vsa.Sim.ExitFootprint
 
 /-!
 # `StrCmpCell` — the four string-comparison cells of `eval_binary_row`, ONCE
@@ -416,14 +417,23 @@ theorem strCmpSeamGeom_of_resid (D : StrCmpOp)
 
 /-! ## `blockC_strcmp` — dispatch ≫ seam ≫ sign tail ≫ box -/
 
-/-- From the actual return of both children to the shared pre-epilogue, for any
-string comparison.  The post is the integer rows' (`blockC_lt`, …). -/
-theorem blockC_strcmp (D : StrCmpOp) (C : D.Cert)
+/-- The exact memory footprint of a string-comparison cell from the return of
+both children to the epilogue entry: the token spill `[sp-1088, sp-1080)` (the
+seam's `sd a2,0(sp)`; `strcmp` and the sign tail write nothing) and the
+`value_bool` box `[sret, sret+24)`. -/
+def strCmpCellFoot (sp sret : Nat) (k : Nat) : Prop :=
+  word8 (sp - 1088) k ∨ resultSlot sret k
+
+/-- From the actual return of both children (memory `mret`) to the shared
+pre-epilogue, for any string comparison, RETAINING the cell's footprint
+`strCmpCellFoot` from `mret` to the epilogue-entry memory.  `blockC_strcmp` is
+its footprint-free projection (the integer rows' post, `blockC_lt`, …). -/
+theorem blockC_strcmp_footprint (D : StrCmpOp) (C : D.Cert)
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat) (st' st'' : Vsa.While.St) (sl sr : String)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
-    (m0 : Mem) :
+    (m0 mret : Mem) :
     Triple
       (fun c =>
         TwoSubReturn gpre N A SL φf φc nf nc st' st'' (.str sl) (.str sr)
@@ -438,17 +448,19 @@ theorem blockC_strcmp (D : StrCmpOp) (C : D.Cert)
         (∀ R : Register, AbiPreservedNoise R →
           (Register.x8 == R) = false → (Register.x9 == R) = false →
           (Register.x18 == R) = false → (Register.x2 == R) = false →
-          gpre R = g R))
+          gpre R = g R) ∧
+        c.σ.mem = mret)
       (fun c => ∃ (mpre : Mem) (φfm φcm φfe φce : Addr → Nat),
         PhiExtends φf φfm nf ∧
         PhiExtends φc φcm nc ∧
         PhiExtends φfm φfe st'.store.frames.size ∧
         PhiExtends φcm φce st'.store.closures.size ∧
         PreEpilogueVD g N A SL φfe φce st'' (.bool (D.bres sl sr))
-          sp r sret v8 v9 v18 out0 m0 mpre c) := by
+          sp r sret v8 v9 v18 out0 m0 mpre c ∧
+        MemFootprint (strCmpCellFoot sp.toNat sret.toNat) mret mpre) := by
   intro c hpre
-  obtain ⟨hTS, R, hData, houtStr, hout0eq, hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge⟩ :=
-    hpre
+  obtain ⟨hTS, R, hData, houtStr, hout0eq, hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge,
+    hmret⟩ := hpre
   have parts := TwoSubReturn.destruct gpre N A SL φf φc nf nc st' st'' (.str sl) (.str sr)
     sp r sret v8 v9 v18 m0 c hTS
   have hsp1088 : 1088 ≤ sp.toNat := by have := R.geom.SLloSp; omega
@@ -611,8 +623,8 @@ theorem blockC_strcmp (D : StrCmpOp) (C : D.Cert)
   obtain ⟨hgeo1, hgeo2, hgeo3, hgeo4⟩ :=
     eqne_ld_geom sp hsp1088 R.geom.sphiRam hspHtif R.geom.sp8
   let cvb : Config := ⟨τ, j, c2.steps + evalBlocksFuel D.tailSeg + 1⟩
-  obtain ⟨mpre, φfm2, φcm2, φfe, φce, cfin, hStepsFin, hp1, hp2, hp3, hp4, hPre⟩ :=
-    boolBoxEpilogue g N A SL φf φc φfm φcm φf' φc' nf nc
+  obtain ⟨mpre, φfm2, φcm2, φfe, φce, cfin, hStepsFin, hp1, hp2, hp3, hp4, hPre, hBoxFoot⟩ :=
+    boolBoxEpilogue_footprint g N A SL φf φc φfm φcm φf' φc' nf nc
       st'.store.frames.size st'.store.closures.size st' st''
       sp r sret v8 v9 v18 v19 w19 (sTailWord D.op x) (D.bres sl sr) out0 m0
       cvb D.ldPC D.ldPC D.jPC D.jImm
@@ -631,10 +643,56 @@ theorem blockC_strcmp (D : StrCmpOp) (C : D.Cert)
       hsp1088 R.geom.sphiRam (by have := R.geom.SLloSp; have := R.geom.SLlo; omega)
       hspHtif R.geom.sp8 R.geom.raAl
       hgeo1 hgeo2 hgeo3 hgeo4
-  refine ⟨cfin, ?_, mpre, φfm2, φcm2, φfe, φce, hp1, hp2, hp3, hp4, hPre⟩
-  have hchain : Steps c cvb :=
-    ((hs1.trans hs2).trans hs3).trans (Steps.single hstepτ)
-  exact hchain.trans hStepsFin
+  refine ⟨cfin, ?_, mpre, φfm2, φcm2, φfe, φce, hp1, hp2, hp3, hp4, hPre, ?_⟩
+  · have hchain : Steps c cvb :=
+      ((hs1.trans hs2).trans hs3).trans (Steps.single hstepτ)
+    exact hchain.trans hStepsFin
+  · -- the footprint: `mret → mB` is the token spill, `mB = τ.mem → mpre` the box.
+    have hSpill : MemFootprint (word8 (sp.toNat - 1088)) mret mB :=
+      ⟨fun k hk => by
+        rw [← hmret]
+        exact hAgB k (by unfold word8 at hk; omega)⟩
+    have hBox : MemFootprint (resultSlot sret.toNat) mB mpre := by
+      rw [hmemτB] at hBoxFoot; exact hBoxFoot
+    exact hSpill.trans hBox
+
+/-- The footprint-free projection (the landed statement). -/
+theorem blockC_strcmp (D : StrCmpOp) (C : D.Cert)
+    (gpre g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat) (st' st'' : Vsa.While.St) (sl sr : String)
+    (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
+    (m0 : Mem) :
+    Triple
+      (fun c =>
+        TwoSubReturn gpre N A SL φf φc nf nc st' st'' (.str sl) (.str sr)
+          sp r sret v8 v9 v18 m0 c ∧
+        StrCmpResid D gpre N A SL sp r sret aExpr c ∧
+        BinaryReturnData SL sp sret c ∧
+        String.join out0.toList = st''.out ∧
+        c.σ.sailOutput = out0 ∧
+        g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
+        g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧
+        gpre Register.x19 = some v19 ∧ g Register.x19 = some v19 ∧
+        (∀ R : Register, AbiPreservedNoise R →
+          (Register.x8 == R) = false → (Register.x9 == R) = false →
+          (Register.x18 == R) = false → (Register.x2 == R) = false →
+          gpre R = g R))
+      (fun c => ∃ (mpre : Mem) (φfm φcm φfe φce : Addr → Nat),
+        PhiExtends φf φfm nf ∧
+        PhiExtends φc φcm nc ∧
+        PhiExtends φfm φfe st'.store.frames.size ∧
+        PhiExtends φcm φce st'.store.closures.size ∧
+        PreEpilogueVD g N A SL φfe φce st'' (.bool (D.bres sl sr))
+          sp r sret v8 v9 v18 out0 m0 mpre c) := by
+  intro c hpre
+  obtain ⟨hTS, R, hData, houtStr, hout0eq, hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge⟩ :=
+    hpre
+  obtain ⟨c', hs, mpre, φfm, φcm, φfe, φce, hp1, hp2, hp3, hp4, hPre, _⟩ :=
+    blockC_strcmp_footprint D C gpre g N A SL φf φc nf nc st' st'' sl sr
+      sp r sret aExpr v8 v9 v18 v19 out0 m0 c.σ.mem c
+      ⟨hTS, R, hData, houtStr, hout0eq, hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge, rfl⟩
+  exact ⟨c', hs, mpre, φfm, φcm, φfe, φce, hp1, hp2, hp3, hp4, hPre⟩
 
 /-! ## The recursive case from the arm entry and from the node entry -/
 
@@ -859,6 +917,7 @@ theorem binStrCmpCell_of (D : StrCmpOp) (C : D.Cert)
 
 #print axioms strCmpKindEntry_of_twoSubReturn
 #print axioms strCmpSeamGeom_of_resid
+#print axioms blockC_strcmp_footprint
 #print axioms blockC_strcmp
 #print axioms evalStrCmpSim
 #print axioms binRow_strcmp

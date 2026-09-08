@@ -10,6 +10,7 @@ import Vsa.Sim.rows.IntPostEpilogue
 import Vsa.Sim.BinopTailGen
 import Vsa.Sim.MemPresence
 import Vsa.Sim.rows.EvalDivRow
+import Vsa.Sim.ExitFootprint
 
 /-!
 # `EvalModRow` — Wave-D M4 row: `evalModSim` (the `EvalE.binary .mod` int case)
@@ -90,15 +91,42 @@ theorem modDispatch_mem_frame (v2 sret Wr Wl : BitVec 64) (lds : List (List (Bit
   · exact Or.inr (by omega)
   · exact Or.inl (by omega)
 
+/-- **The exact mod-dispatch footprint.**  As `divDispatch_footprint`: the chain's stores
+are the `sd`s at `x2 + 0xf0`, `x2 + 0xf8`, `x2 + 0x100` (decided on `modDispatch`). -/
+theorem modDispatch_footprint (v2 sret Wr Wl : BitVec 64) (lds : List (List (BitVec 8)))
+    (m : Std.ExtHashMap Nat (BitVec 8)) (fb : FrameBundle m v2) :
+    MemFootprint (fun k => word8 (v2.toNat + 0xf0) k ∨ word8 (v2.toNat + 0xf8) k ∨
+        word8 (v2.toNat + 0x100) k)
+      m (writeLog m (evalBlocks modDispatch (SegEvalState.init (modDispLS v2 sret Wr Wl) lds)).log) := by
+  refine ⟨fun k hk => ?_⟩
+  refine writeLog_getElem_disjoint k _ m
+    (fun e he => evalBlocks_init_log_width modDispatch (modDispLS v2 sret Wr Wl) lds e he)
+    (fun e he => ?_)
+  obtain ⟨off, hoff, haddr⟩ :=
+    evalBlocks_store_offsets_exact (fun off => off = 0xf0 ∨ off = 0xf8 ∨ off = 0x100)
+      modDispatch (modDispLS v2 sret Wr Wl) lds v2 m fb (by rfl) (by decide) (by decide) e he
+  have hw := evalBlocks_init_log_width modDispatch (modDispLS v2 sret Wr Wl) lds e he
+  unfold word8 at hk
+  omega
+
 /-! ## `blockC_mod` — the `.mod` int dispatch + `__moddi3` value tail -/
 
-theorem blockC_mod
+/-- The exact memory footprint of the `.mod` integer cell from the return of both
+children to the epilogue entry: the dispatch chain's three `sd` temporaries at
+`sp-848`, `sp-840`, `sp-832` (`modDispatch_footprint`), nothing from the libgcc callee
+(`__moddi3` performs no stores), and the `value_int` box `[sret, sret+24)`. -/
+def modCellFoot (sp sret : Nat) (k : Nat) : Prop :=
+  word8 (sp - 848) k ∨ word8 (sp - 840) k ∨ word8 (sp - 832) k ∨ resultSlot sret k
+
+/-- `blockC_mod` RETAINING the cell's footprint `modCellFoot` from the return memory
+`mret` to the epilogue-entry memory.  `blockC_mod` is its projection. -/
+theorem blockC_mod_footprint
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat)
     (st' st'' : Vsa.While.St) (a b : Int)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
-    (m0 : Mem)
+    (m0 mret : Mem)
     (hbNe : b ≠ 0) :
     Triple
       (fun c =>
@@ -136,20 +164,23 @@ theorem blockC_mod
         (∀ R : Register, AbiPreservedNoise R →
           (Register.x8 == R) = false → (Register.x9 == R) = false →
           (Register.x18 == R) = false → (Register.x2 == R) = false →
-          gpre R = g R))
+          gpre R = g R) ∧
+        c.σ.mem = mret)
       (fun c => ∃ (mpre : Mem) (φfm φcm φfe φce : Addr → Nat),
         PhiExtends φf φfm nf ∧
         PhiExtends φc φcm nc ∧
         PhiExtends φfm φfe st'.store.frames.size ∧
         PhiExtends φcm φce st'.store.closures.size ∧
-        PreEpilogueVD g N A SL φfe φce st'' (.int (wrap64 (a.tmod b))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+        PreEpilogueVD g N A SL φfe φce st'' (.int (wrap64 (a.tmod b))) sp r sret v8 v9 v18 out0 m0 mpre c ∧
+        MemFootprint (modCellFoot sp.toNat sret.toNat) mret mpre) := by
   intro c hpre
   obtain ⟨hTS, hgx8, hopTok, hSlot, hReadData,
     hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq,
     hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode, hraAl,
     hVint, hModdi3, hUdivdi3, hmodStk, hcodeStk, hviStk, hTableStk, hsretInSL,
     hSLloSp, hSLlo, hSLwin, hsphiRam, hsp8, hSLhiRam, hspSLhi,
-    hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge⟩ := hpre
+    hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge,
+    hmret⟩ := hpre
   obtain ⟨hG, htick, hpc, hra, hs1, hsp, ⟨vmi, hmi⟩, hout, hframe,
     ⟨w19, hgprex19', hs3slot⟩, hstoreBundle, hcode,
     hslotRa, hslotS0, hslotS1, hslotS2, hMemExt, hmemframe⟩ := hTS
@@ -524,8 +555,8 @@ theorem blockC_mod
     rw [f_3, f_2, f_1, fQ, fD]
     exact (hframe R hR' h19ne).trans (hbridge R hR' he8 he9 he18 he2)
   -- === invoke the GENERATED shared tail ===
-  obtain ⟨mpre, φfm2, φcm2, φfe, φce, cfin, hStepsFin, hp1, hp2, hp3, hp4, hPreD⟩ :=
-    intBoxEpilogue g N A SL φf φc φfm φcm φf' φc' nf nc st'.store.frames.size st'.store.closures.size st' st''
+  obtain ⟨mpre, φfm2, φcm2, φfe, φce, cfin, hStepsFin, hp1, hp2, hp3, hp4, hPreD, hBoxFoot⟩ :=
+    intBoxEpilogue_footprint g N A SL φf φc φfm φcm φf' φc' nf nc st'.store.frames.size st'.store.closures.size st' st''
       sp r sret v8 v9 v18 v19 w19 resQ (wrap64 (a.tmod b)) out0 m0
       ⟨τ3, j3, cQ.steps + 1 + 1 + 1⟩ (0x800037d4#64) (0x800037d4#64) (0x800037d8#64) (0x1ffc14#21)
       (fun σ i u pc vminstret v2 b0 b1 b2 b3 b4 b5 b6 b7 => site_800037d4_ee σ i u pc vminstret v2 b0 b1 b2 b3 b4 b5 b6 b7)
@@ -545,7 +576,84 @@ theorem blockC_mod
     (hStepsD.trans <| hStepsP.trans <| hStepsQ.trans <|
       (Steps.single hstepτ1).trans <| (Steps.single hstepτ2).trans <|
       (Steps.single hstepτ3)).trans hStepsFin
-  exact ⟨cfin, hchain, mpre, φfm2, φcm2, φfe, φce, hp1, hp2, hp3, hp4, hPreD⟩
+  refine ⟨cfin, hchain, mpre, φfm2, φcm2, φfe, φce, hp1, hp2, hp3, hp4, hPreD, ?_⟩
+  -- the footprint: `mret = c.mem → cD.mem` are the dispatch's three `sd`s (exact
+  -- offsets `0xf0`/`0xf8`/`0x100` off `x2 = sp-1088`), the libgcc callee and the `mv`s
+  -- write nothing (`cD.mem = τ3.mem`), and the boxed tail writes only the result slot.
+  refine ⟨fun k hk => ?_⟩
+  unfold modCellFoot word8 resultSlot at hk
+  have hbox : ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) := by omega
+  have hdisp : ¬ (word8 ((sp - 1088#64).toNat + 0xf0) k ∨
+      word8 ((sp - 1088#64).toNat + 0xf8) k ∨ word8 ((sp - 1088#64).toNat + 0x100) k) := by
+    unfold word8; rw [hspsub]; omega
+  rw [hBoxFoot.agree k hbox]
+  show τ3.mem[k]? = mret[k]?
+  rw [hmemτ3e, hmemD,
+    (modDispatch_footprint (sp - 1088#64) sret
+      (bytesVal MKind.ld [rpb0, rpb1, rpb2, rpb3, rpb4, rpb5, rpb6, rpb7] : BitVec 64) Wl ldsD
+      c.σ.mem hfb).agree k hdisp, hmret]
+
+/-- The footprint-free projection (the landed statement). -/
+theorem blockC_mod
+    (gpre g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
+    (st' st'' : Vsa.While.St) (a b : Int)
+    (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
+    (m0 : Mem)
+    (hbNe : b ≠ 0) :
+    Triple
+      (fun c =>
+        TwoSubReturn gpre N A SL φf φc nf nc st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c ∧
+        gpre Register.x8 = some aExpr ∧
+        read32 c.σ.mem (aExpr.toNat + 8) = some 15 ∧      -- op token = binOpTok .mod
+        SlotPinned 0x80019f94#64 0x00#8 0x98#8 0xfe#8 0xff#8 c.σ.mem ∧
+        BinaryReturnData SL sp sret c ∧
+        -- === geometry ===
+        0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
+        tohostAddr + 8 ≤ aExpr.toNat ∧
+        (aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat) ∧
+        String.join out0.toList = st''.out ∧
+        c.σ.sailOutput = out0 ∧
+        sret.toNat % 8 = 0 ∧ 0x80000000 ≤ sret.toNat ∧ sret.toNat + 24 ≤ 0x100000000 ∧
+        tohostAddr + 16 ≤ sret.toNat ∧
+        (sret.toNat + 24 ≤ 0x8000280c ∨ 0x8000281c ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat) ∧
+        r.toNat % 4 = 0 ∧
+        Value_intLoaded c.σ.mem ∧
+        -- === the MOD-specific extra conjuncts (libgcc __moddi3 code images) ===
+        Vsa.Sim.Code.__moddi3Loaded c.σ.mem ∧
+        __hidden___udivdi3Loaded c.σ.mem ∧
+        (sp.toNat ≤ 0x800046ac ∨ 0x80004764 ≤ SL.lo) ∧  -- libgcc mod block disjoint from stack
+        (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
+        (sp.toNat ≤ 0x8000280c ∨ 0x8000281c ≤ SL.lo) ∧
+        (opTableBase + 20 ≤ SL.lo ∨ sp.toNat ≤ opTableBase) ∧
+        (SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi) ∧
+        SL.lo + 1088 ≤ sp.toNat ∧ 0x80000000 ≤ SL.lo ∧ tohostAddr + 16 ≤ SL.lo ∧
+        sp.toNat ≤ 0x100000000 ∧ sp.toNat % 8 = 0 ∧ SL.hi ≤ 0x100000000 ∧ sp.toNat ≤ SL.hi ∧
+        g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
+        g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧
+        gpre Register.x19 = some v19 ∧ g Register.x19 = some v19 ∧
+        (∀ R : Register, AbiPreservedNoise R →
+          (Register.x8 == R) = false → (Register.x9 == R) = false →
+          (Register.x18 == R) = false → (Register.x2 == R) = false →
+          gpre R = g R))
+      (fun c => ∃ (mpre : Mem) (φfm φcm φfe φce : Addr → Nat),
+        PhiExtends φf φfm nf ∧
+        PhiExtends φc φcm nc ∧
+        PhiExtends φfm φfe st'.store.frames.size ∧
+        PhiExtends φcm φce st'.store.closures.size ∧
+        PreEpilogueVD g N A SL φfe φce st'' (.int (wrap64 (a.tmod b))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+  intro c hpre
+  obtain ⟨hTS, hgx8, hopTok, hSlot, hReadData, hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq, hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode, hraAl, hVint, hModdi3, hUdivdi3, hmodStk, hcodeStk, hviStk, hTableStk, hsretInSL, hSLloSp, hSLlo, hSLwin, hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge⟩ := hpre
+  obtain ⟨c', hs, mpre, φfm, φcm, φfe, φce, hp1, hp2, hp3, hp4, hPre, _⟩ :=
+    blockC_mod_footprint gpre g N A SL φf φc nf nc st' st'' a b sp r sret aExpr v8 v9 v18 v19 out0 m0 c.σ.mem hbNe c
+      ⟨hTS, hgx8, hopTok, hSlot, hReadData, hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq, hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode, hraAl, hVint, hModdi3, hUdivdi3, hmodStk, hcodeStk, hviStk, hTableStk, hsretInSL, hSLloSp, hSLlo, hSLwin, hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge, rfl⟩
+  exact ⟨c', hs, mpre, φfm, φcm, φfe, φce, hp1, hp2, hp3, hp4, hPre⟩
+
+#print axioms blockC_mod_footprint
+#print axioms blockC_mod
 
 /-! ## `ModResid` — the blockC_mod residuals about the POST-`TwoSubReturn` config -/
 

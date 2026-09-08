@@ -13,6 +13,7 @@ python3 -B scripts/build_private.py \
 python3 -B -m unittest discover -s scripts/tests
 python3 -B scripts/gen_m4_term_row.py --check
 python3 -B scripts/gen_term_case_bundle.py --check
+python3 -B scripts/gen_ih_clause.py --check
 git diff --check
 ```
 
@@ -40,6 +41,7 @@ existing theorem or generated segment with the required shape.
 | Annotated segment composition | `gen_segment.py` |
 | Checked source variants | `twin_spec.py` |
 | Recursive rows and case bundle | `gen_m4_term_row.py`, `gen_exec_row.py`, `gen_bin_dispatch_row.py`, `gen_term_case_bundle.py` |
+| Induction-hypothesis clause modules | `gen_ih_clause.py` |
 | Entry and call bridges | `gen_arm_bridge.py`, `gen_stagepre.py` |
 | Error routing and spill rows | `gen_m5_error_routing.py`, `gen_err_spill_rows.py` |
 | Layout, image and transport facts | `gen_layout.py`, `gen_image_pins.py`, `gen_transport.py` |
@@ -81,6 +83,21 @@ python3 -B scripts/gen_sites.py scripts/helper_call_sites.tsv \
   --default-limits -o Vsa/Sim/HelperCallSites.lean
 ```
 
+Induction-hypothesis clauses are declared in `scripts/ih_clauses.tsv` (name,
+kind `extra`/`extraM`, the `EvalExtra`/`EvalExtraM` predicate, imports,
+non-`EvalE` motive overrides, per-case discharge tags). Each line emits
+`Vsa/Sim/rows/IHClause_<Name>.lean`: `extraM`, the nine clause motives
+(`mEvalE` = `EvalIHWithM extraM`), `Residuals` (one field per recursor case with a clause motive; a
+`Layout` parameter for the census), `of_residuals`/`execSeq_of_residuals`
+(the recursor over the product motive old ∧ clause), and `Residuals.ofUnwired`
+for the fields wired to a discharger. Regenerate and check with
+
+```sh
+python3 -B scripts/gen_ih_clause.py            # write every clause module
+python3 -B scripts/gen_ih_clause.py --check    # drift (stage a3)
+python3 -B scripts/gen_ih_clause.py --stdout --clause Footprint
+```
+
 Use `gen_transport.py value_int --exact-range` to regenerate
 `rows/TransportValue_intRange.lean`. This mode requires agreement only on the
 callee's code interval. `--stdout` emits without writing; compile through the
@@ -99,6 +116,9 @@ private backend, not the generator's direct `--check` mode.
 | Summary mining and residual queries | `houdini_summary.py` |
 | Trace, semantic and effect checks | `difftest.py`, `difftest.sh` |
 | Typed evidence accounting | `residual_coverage_ledger.py` |
+| Clause residual status, hook probes, candidate drafts | `ih_clause_status.py` |
+| Clause step refutation | `ih_clause_fuzz.py` |
+| Clause field evidence ledger | `ih_clause_ledger.py` |
 
 The default `check_validation.py` gate imports every compiled module and
 inventories inherited residual fields before running boundary regressions.
@@ -143,6 +163,50 @@ The statement checker and fuzzer write `vsa-smt-check.log` and
 Candidate amendment reports go under its `vsa-cures/` directory.
 Lean acceptance inputs remain under `experiments/invariants/`,
 `experiments/cegis/` and `experiments/fleet/obstructions/`.
+
+### Induction-hypothesis clause fields
+
+The generated clause records `Vsa.Sim.IHClause.<Name>.Residuals` (one field per
+recursor case, `scripts/ih_clauses.tsv`) have their own automation over the
+same elaborators. `check_all.sh` stage a5 prints the status summary without
+failing the gate. `--backend` accepts the full private backend or a
+`proof_slice` overlay that contains the clause modules; run Lean-backed modes
+with exclusive compiler access.
+
+```sh
+python3 -B scripts/ih_clause_status.py --summary               # WIRED / HOOK / MANUAL / STALE
+python3 -B scripts/ih_clause_status.py --backend <B> --output <D> \
+  --verify-census --suggest                                      # hook lemmas, census re-check, drafts
+python3 -B scripts/ih_clause_fuzz.py --output <D> [--lean --backend <B>]
+python3 -B scripts/ih_clause_ledger.py build --dir <D>
+python3 -B scripts/field_census.py --backend <B> --output <C> \
+  --structure Vsa.Sim.IHClause.Trivial.Residuals                 # supplier search (full backend only)
+python3 -B -m scripts.proof_slice --backend <B> --output <O> \
+  --module Vsa.Sim.rows.IHClause_Trivial \
+  --structure Vsa.Sim.IHClause.Trivial.Residuals --field hInt --supplier <ident>
+```
+
+`ih_clause_status.py` writes `ih_clause_status.tsv/json`; a HOOK field names the
+expected lemma `Vsa.Sim.IHClauseGeneric.<id>.<case>` with its source-scan and
+backend (`#print axioms`) result. `--suggest` drafts every hook lemma and
+`*_of_old` discharger of `Vsa/Sim/IHClauseSupport.lean` (plus `--candidate`)
+per open field into `<D>/drafts/Draft_<Name>.lean`, checks them in one Lean run
+per clause, runs `houdini_ih.py`/`autoprove.py` with the field registered at
+its encoding (`--bounded-target <case>=<encoding>`; the default is an honest
+`encode-gap`), and records DIRECT / WITH-IH / FAILED / UNSUPPORTED in
+`ih_clause_suggest.tsv`. Nothing is written into `Vsa/`.
+
+`ih_clause_fuzz.py` extracts each step into `<D>/statements/<Name>_<case>.lean`
+(`def Step_<case> (_L : Layout) : Prop`, the `statement_fuzz.py --file` shape)
+and reports REFUTED / NOT-REFUTED / UNSUPPORTED. A wired field is NOT-REFUTED
+by its compiled wiring; an unwired step concludes a motive over machine runs,
+outside the address-map fragment, so it is UNSUPPORTED unless `--lean` runs
+the fuzzer's witness probe against a fingerprint-current backend.
+`smt_check.py` is not applied (a motive conclusion is an opaque atom to it).
+
+`ih_clause_ledger.py` emits one row per field and evidence kind (execution,
+smt, oracle, lean-bridge) from those artifacts and an optional `--execution`
+TSV; a missing artifact is an explicit hole.
 
 ## Differential tests
 

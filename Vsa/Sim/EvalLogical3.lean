@@ -1,4 +1,5 @@
 import Vsa.Sim.EvalLogical2
+import Vsa.Sim.ArmTailFootprint
 import Vsa.Sim.EvalAndSim
 import Vsa.Sim.EvalBinSim
 import Vsa.Sim.EvalAndChain
@@ -62,15 +63,18 @@ continue, evaluate `er` (RIGHT `armTail_rec`, buffer `sp-848`), then the shared
 `blockC_logTail` (`value_truthy(vr)`+`value_bool`) → `.bool vr.truthy`.
 
 Output: `PreEpilogueVD … (.bool vr.truthy) 0x800033ec` (fed to `blockD_v_rec`). -/
-theorem blockC_andTrue
+/-- `blockC_andTrue` RETAINING the cell's footprint `logFallCellFoot Fr 848` from the LEFT
+child's return memory `mret` to the epilogue-entry memory, at a footprint-carrying
+RIGHT child.  `blockC_andTrue` is its projection at `exitFoot`. -/
+theorem blockC_andTrue_footprint (Fr : FootFam)
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat)
     (st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (vl vr : Value)
     (sp r sret aExpr aEnv aRight : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
-    (el er : Expr) (m0 : Mem)
+    (el er : Expr) (m0 mret : Mem)
     (hvltrue : vl.truthy = true)
-    (hIHr : EvalIH st' d env er st'' vr)
+    (hIHr : EvalIHF Fr st' d env er st'' vr)
     (henvValid : EnvValid st' env)
     (henvset : ∃ v19 v20 v21 : BitVec 64,
       gpre Register.x19 = some v19 ∧ gpre Register.x20 = some v20 ∧
@@ -154,11 +158,13 @@ theorem blockC_andTrue
         StackOK SL (sp - 1088#64)
           (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
         Expr.bodiesBound Vsa.While.perCallBudget er = true ∧
-        Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
+        Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget ∧
+        c.σ.mem = mret)
       (fun c => ∃ (mpre : Mem) (φfe φce : Addr → Nat) (outF : Array String),
         PhiExtends φf φfe nf ∧
         PhiExtends φc φce nc ∧
-        PreEpilogueVD g N A SL φfe φce st'' (.bool vr.truthy) sp r sret v8 v9 v18 outF m0 mpre c) := by
+        PreEpilogueVD g N A SL φfe φce st'' (.bool vr.truthy) sp r sret v8 v9 v18 outF m0 mpre c ∧
+        MemFootprint (logFallCellFoot Fr 848 SL A sp.toNat sret.toNat) mret mpre) := by
   intro c hpre
   obtain ⟨mcall, hSub, hEnvSlotMcall, hgx8, hgx18, hexpr, hPayRight, hMemExtM0, hgroundP, hexprLo, hexprHi, hexprHi32,
     hexprWin, hexprSL, hexprSL32, hexprA, hexprA32, hexprSub,
@@ -169,7 +175,8 @@ theorem blockC_andTrue
     hTruthyStk, hBoolStk, hTruthyArena, hBoolArena, hcodeStk, hviStk, htableStk,
     harenaStk, harenaCode, harenaVi, harenaTable, hsretInSL, hMcallM0,
     hsphiRam, hsp8, hsp16, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge,
-    hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩ := hpre
+    hstackBudgetR, hexprBodiesR, hstoreBodiesR,
+    hmret⟩ := hpre
   obtain ⟨hG, htick, hpc, ha0, hra, hs1, hsp, ⟨vmi, hmi⟩, hout, hframe,
     ⟨φcv, hpcv, hvalSub⟩, hstoreBundle, hcode,
     hslotRa, hslotS0, hslotS1, hslotS2, hmemFrame, hMemExt⟩ := hSub
@@ -813,7 +820,7 @@ theorem blockC_andTrue
   -- RIGHT recursive call via armTail_rec (subsret = sp-848, retPC = 0x800035b0).
   ------------------------------------------------------------------------
   obtain ⟨cR, hsR, hpostR⟩ :=
-    armTail_rec (fun R => τ3.regs.get? R) N A SL φf' φc' st' st'' d env er vr
+    armTail_rec_footprint Fr (fun R => τ3.regs.get? R) N A SL φf' φc' st' st'' d env er vr
       (0x800035ac#64) (0x800035b0#64) (0x1ffbb8#21)
       sp r sret ((sp - 1088#64) + sign_extend (m := 64) (0x0f0#12)) aEnv aRight
       v8 v9 v18 out0 m3
@@ -841,7 +848,8 @@ theorem blockC_andTrue
   -- unpack the RIGHT SubEvalReturn
   obtain ⟨hGR, htickR, hpcR, ha0R, hraR, hs1R, hspR, ⟨vmiR, hmiR⟩, houtR, hframeR,
     ⟨φcvR, hpcvR, hvalR⟩, hstoreBundleR, hcodeR,
-    hslotRaR, hslotS0R, hslotS1R, hslotS2R, hmemFrameR, hMemExtR⟩ := hpostR
+    hslotRaR, hslotS0R, hslotS1R, hslotS2R, hmemFrameR, hMemExtR⟩ := hpostR.result
+  have hfootR := hpostR.extra
   obtain ⟨φf2, φc2, hpf2, hpc2'', hstore2', hstoreSurv2'⟩ := hstoreBundleR
   have hsub848R : ((sp - 1088#64) + sign_extend (m := 64) (0x0f0#12)).toNat = sp.toNat - 848 := haddr240
   have hvalR848 : ValueRepr cR.σ.mem N φcvR (sp.toNat - 848) vr := by
@@ -1034,11 +1042,12 @@ theorem blockC_andTrue
   -- store bundle re-represented for st'' at ρ3.mem = cR.mem (from the RIGHT SubEvalReturn)
   -- spill slots survive into cR.mem (from the RIGHT SubEvalReturn) and ρ-loads (no writes)
   -- Build the LogTailPre and apply blockC_logTail.
-  obtain ⟨cFin, hsFin, mpreFin, hPreFin⟩ :=
-    blockC_logTail g N A SL φf2 φc2 st'' vr sp r sret (sp - 848#64)
+  obtain ⟨cFin, hsFin, mpreFin, hPreFin, hFootFin⟩ :=
+    blockC_logTail_footprint g N A SL φf2 φc2 st'' vr sp r sret (sp - 848#64)
       rb0 rb1 rb2 rb3 rb4 rb5 rb6 rb7 sb0 sb1 sb2 sb3 sb4 sb5 sb6 sb7
-      tb0 tb1 tb2 tb3 tb4 tb5 tb6 tb7 v8 v9 v18 cR.σ.sailOutput m0
+      tb0 tb1 tb2 tb3 tb4 tb5 tb6 tb7 v8 v9 v18 cR.σ.sailOutput m0 cR.σ.mem
       ⟨ρ3, k3, cR.steps + 1 + 1 + 1⟩
+      (And.intro
       { good := hGρ3
         tick := hk3
         pc := hpcρ3
@@ -1131,6 +1140,7 @@ theorem blockC_andTrue
         truthyStk := hTruthyStk
         boolStk := hBoolStk
         codeStk := hcodeStk }
+      hmemρ3e)
   ------------------------------------------------------------------------
   -- assemble: total Steps chain + PhiExtends witnesses + PreEpilogueVD.
   ------------------------------------------------------------------------
@@ -1153,7 +1163,155 @@ theorem blockC_andTrue
   -- at the RIGHT call's entry sizes (`st'`), and `hnf` drops the RIGHT bound.
   have hpfF : PhiExtends φf φf2 nf := hpf'.trans (PhiExtends.mono hnf.1 hpf2)
   have hpcF : PhiExtends φc φc2 nc := hpc'.trans (PhiExtends.mono hnf.2 hpc2'')
-  exact ⟨cFin, hSteps, mpreFin, φf2, φc2, cR.σ.sailOutput, hpfF, hpcF, hPreFin⟩
+  refine ⟨cFin, hSteps, mpreFin, φf2, φc2, cR.σ.sailOutput, hpfF, hpcF, hPreFin, ?_⟩
+  -- the cell footprint: `mret = c.σ.mem → m3` is the LEFT argument copy (baked into
+  -- the block, `hm3_out`), `m3 = τ3.mem → cR.mem` is the RIGHT child (`Fr` at
+  -- `sp-1088`/`sp-848`), `cR.mem = ρ3.mem → mpreFin` is the shared tail.
+  have hFootL : MemFootprint (truthyCellFoot sp.toNat sret.toNat) mret m3 := by
+    refine ⟨fun k hk => ?_⟩
+    unfold truthyCellFoot word8 resultSlot at hk
+    rw [← hmret]
+    exact hm3_out k (by omega)
+  have hFootR : MemFootprint (Fr SL A (sp.toNat - 1088) (sp.toNat - 848)) m3 cR.σ.mem := by
+    have h : MemFootprint (Fr SL A (sp - 1088#64).toNat
+        ((sp - 1088#64) + sign_extend (m := 64) (0x0f0#12)).toNat) m3 cR.σ.mem := hfootR
+    rw [hspsub, hsub848R] at h
+    exact h
+  exact ((hFootL.trans hFootR).trans hFootFin).mono (fun k hk => by
+    unfold logFallCellFoot
+    rcases hk with (h | h) | h
+    · exact Or.inl h
+    · exact Or.inr h
+    · exact Or.inl h)
+
+/-- The footprint-free projection (the landed statement): `blockC_andTrue_footprint` at the
+weak exit's own footprint. -/
+-- discipline: allow(R7-conj-tower-def) the landed `blockC_andTrue` statement is re-stated verbatim as the projection of `blockC_andTrue_footprint`; no new ∃/∧ post is defined here
+theorem blockC_andTrue
+    (gpre g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
+    (st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (vl vr : Value)
+    (sp r sret aExpr aEnv aRight : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String)
+    (el er : Expr) (m0 : Mem)
+    (hvltrue : vl.truthy = true)
+    (hIHr : EvalIH st' d env er st'' vr)
+    (henvValid : EnvValid st' env)
+    (henvset : ∃ v19 v20 v21 : BitVec 64,
+      gpre Register.x19 = some v19 ∧ gpre Register.x20 = some v20 ∧
+      gpre Register.x21 = some v21)
+    (henvPrefix : env < nf)
+    -- the entry-agreement sizes sit under the RIGHT call's entry state (the LEFT
+    -- sub-derivation only grows the store — `evalE_store_mono` at the caller):
+    (hnf : nf ≤ st'.store.frames.size ∧ nc ≤ st'.store.closures.size) :
+    Triple
+      (fun c => ∃ mcall,
+        SubEvalReturn gpre N A SL φf φc nf nc st' vl sp r sret
+          ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)) (0x8000356c#64)
+          v8 v9 v18 mcall c ∧
+        read64 mcall (sp.toNat - 1088) = some (BitVec.ofNat 64 (φf env)).toNat ∧
+        gpre Register.x8 = some aExpr ∧
+        gpre Register.x18 = some aEnv ∧
+        ExprRepr mcall aExpr.toNat (.logical .and el er) ∧
+        read64 mcall (aExpr.toNat + 24) = some aRight.toNat ∧
+        -- WAVE 47i (`McallPopTotality` amendment): presence ONLY on the actual
+        -- dead-byte read footprint — the lowered-frame window `[sp-1120, sp)`
+        -- plus the node's line-word bytes `[aExpr+4, aExpr+8)` — replacing the
+        -- REFUTED total-population oracle.
+        -- WAVE 48k: the dead-byte presence conjunct is GONE (total reads).
+        -- presence-monotonicity over the entry `m0` (`mem_ext` residual).
+        MemExtends m0 mcall ∧
+        -- WAVE 47i: the parent node's entry-ground bundle at the pre-call
+        -- memory (the RIGHT child is derived inside via the kit).
+        EvalGround mcall SL A sp sret aExpr.toNat (.logical .and el er) ∧
+        0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
+        aExpr.toNat + 32 ≤ 0x100000000 ∧
+        tohostAddr + 8 ≤ aExpr.toNat ∧
+        (aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat) ∧
+        (aExpr.toNat + 32 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat) ∧
+        (aExpr.toNat + 16 ≤ A.lo ∨ A.hi ≤ aExpr.toNat) ∧
+        (aExpr.toNat + 32 ≤ A.lo ∨ A.hi ≤ aExpr.toNat) ∧
+        (aExpr.toNat + 16 ≤ sp.toNat - 968 ∨ sp.toNat - 968 + 24 ≤ aExpr.toNat) ∧
+        -- RIGHT operand geometry (the second sub-call's `aExpr`):
+        (∀ m' : Mem,
+          (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
+            mcall[a]? = m'[a]?) →
+          ExprRepr m' aRight.toNat er) ∧
+        0x80000000 ≤ aRight.toNat ∧ aRight.toNat + 16 ≤ 0x100000000 ∧
+        tohostAddr + 16 ≤ aRight.toNat ∧
+        (aRight.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aRight.toNat) ∧
+        String.join out0.toList = st'.out ∧
+        sret.toNat % 8 = 0 ∧ 0x80000000 ≤ sret.toNat ∧ sret.toNat + 24 ≤ 0x100000000 ∧
+        tohostAddr + 16 ≤ sret.toNat ∧
+        (sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ 0x800027f8 ∨ 0x8000280c ≤ sret.toNat) ∧
+        r.toNat % 4 = 0 ∧
+        SL.lo + 3264 ≤ sp.toNat ∧ 0x80000000 ≤ SL.lo ∧ tohostAddr + 16 ≤ SL.lo ∧
+        c.σ.sailOutput = out0 ∧
+        Value_truthyLoaded mcall ∧ Value_boolLoaded mcall ∧
+        Value_intLoaded mcall ∧ IntSlotPinned mcall ∧ NBSPins mcall ∧
+        LogicalBufExtras sp ∧
+        (sp.toNat ≤ 0x8000282c ∨ 0x8000285c ≤ SL.lo) ∧
+        (sp.toNat ≤ 0x800027f8 ∨ 0x8000280c ≤ SL.lo) ∧
+        (A.hi ≤ 0x8000282c ∨ 0x8000285c ≤ A.lo) ∧
+        (A.hi ≤ 0x800027f8 ∨ 0x8000280c ≤ A.lo) ∧
+        (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
+        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
+        (A.hi ≤ 0x800027ec ∨ 0x8000282c ≤ A.lo) ∧
+        (A.hi ≤ jumpTableBase ∨ jumpTableBase + 44 ≤ A.lo) ∧
+        (SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi) ∧
+        (∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
+          mcall[a]? = m0[a]?) ∧
+        sp.toNat ≤ 0x100000000 ∧ sp.toNat % 8 = 0 ∧ sp.toNat % 16 = 0 ∧
+        SL.hi ≤ 0x100000000 ∧ sp.toNat ≤ SL.hi ∧
+        g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
+        g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧
+        (∀ R : Register, AbiPreservedNoise R →
+          (Register.x8 == R) = false → (Register.x9 == R) = false →
+          (Register.x18 == R) = false → (Register.x2 == R) = false →
+          gpre R = g R) ∧
+        -- ITEM ZERO B1: the RIGHT operand's recursion-sound budget at `sp - 1088`,
+        -- its `.fn`-bodies bound, and the post-LEFT store-bodies invariant.
+        StackOK SL (sp - 1088#64)
+          (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget er = true ∧
+        Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
+      (fun c => ∃ (mpre : Mem) (φfe φce : Addr → Nat) (outF : Array String),
+        PhiExtends φf φfe nf ∧
+        PhiExtends φc φce nc ∧
+        PreEpilogueVD g N A SL φfe φce st'' (.bool vr.truthy) sp r sret v8 v9 v18 outF m0 mpre c) := by
+  intro c hpre
+  obtain ⟨mcall, hSub, hEnvSlotMcall, hgx8, hgx18, hexpr, hPayRight, hMemExtM0, hgroundP, hexprLo, hexprHi, hexprHi32,
+    hexprWin, hexprSL, hexprSL32, hexprA, hexprA32, hexprSub,
+    hRightSurv, hropLo, hropHi, hropWin, hropStk,
+    houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretStk, hsretEvalCode, hSretBoolCode,
+    hraAl, hSLloSp, hSLlo, hSLwin,
+    hout0eq, hVtruthyMcall, hVboolMcall, hViIntMcall, hViSlotMcall, hNbsMcall, hBufExtras,
+    hTruthyStk, hBoolStk, hTruthyArena, hBoolArena, hcodeStk, hviStk, htableStk,
+    harenaStk, harenaCode, harenaVi, harenaTable, hsretInSL, hMcallM0,
+    hsphiRam, hsp8, hsp16, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge,
+    hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩ := hpre
+  obtain ⟨c', hs, mpre, φfe, φce, outF, hp1, hp2, hPre, _⟩ :=
+    blockC_andTrue_footprint exitFoot gpre g N A SL φf φc nf nc st' st'' d env vl vr sp r sret aExpr aEnv aRight
+      v8 v9 v18 out0 el er m0 c.σ.mem hvltrue (EvalIH.exitFoot hIHr) henvValid henvset henvPrefix hnf c
+      ⟨mcall, hSub, hEnvSlotMcall, hgx8, hgx18, hexpr, hPayRight, hMemExtM0, hgroundP, hexprLo, hexprHi, hexprHi32,
+    hexprWin, hexprSL, hexprSL32, hexprA, hexprA32, hexprSub,
+    hRightSurv, hropLo, hropHi, hropWin, hropStk,
+    houtStr, hsretAl, hsretLo, hsretHi, hsretWin, hsretStk, hsretEvalCode, hSretBoolCode,
+    hraAl, hSLloSp, hSLlo, hSLwin,
+    hout0eq, hVtruthyMcall, hVboolMcall, hViIntMcall, hViSlotMcall, hNbsMcall, hBufExtras,
+    hTruthyStk, hBoolStk, hTruthyArena, hBoolArena, hcodeStk, hviStk, htableStk,
+    harenaStk, harenaCode, harenaVi, harenaTable, hsretInSL, hMcallM0,
+    hsphiRam, hsp8, hsp16, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hbridge,
+    hstackBudgetR, hexprBodiesR, hstoreBodiesR, rfl⟩
+  exact ⟨c', hs, mpre, φfe, φce, outF, hp1, hp2, hPre⟩
+
+#print axioms blockC_andTrue_footprint
+#print axioms blockC_andTrue
 
 /-! ## `AndTrueExtras` — the two-eval recursive-case facts
 
