@@ -749,6 +749,7 @@ import Vsa.Sim.RamReadData
 import Vsa.Sim.RamReadSplit
 import Vsa.Sim.RuntimeOwnershipUpdate
 import Vsa.Sim.RuntimeOwnershipArrays
+import Vsa.Sim.AllocOff
 import Vsa.Sim.InitialOwnershipPreservation
 
 import Vsa.Sim.LoopSetupData
@@ -790,6 +791,7 @@ import Vsa.Sim.rows.EnvDefineCallRuns
 import Vsa.Sim.rows.EnvDefineAppendLane
 import Vsa.Sim.rows.EnvDefineReallocArray
 import Vsa.Sim.rows.EnvDefineGrowLane
+import Vsa.Sim.AllocLedger
 import Vsa.Sim.rows.EnvDefineMissHead
 import Vsa.Sim.rows.EnvDefineEmptyLane
 import Vsa.Sim.rows.EnvDefineContractSupply

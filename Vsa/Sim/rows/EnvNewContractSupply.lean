@@ -5,6 +5,7 @@ import Vsa.Sim.BridgeSegFramed
 import Vsa.Sim.rows.CallClosureEnvNewMarshal
 import Vsa.Sim.RuntimeOwnershipTransport
 import Vsa.Sim.RuntimeOwnershipAllocation
+import Vsa.Sim.AllocOff
 import Vsa.Sim.StoreInvariant
 import Vsa.Sim.MemPresence
 import Vsa.Sim.Code.FixedImage_Env_new
@@ -413,31 +414,15 @@ theorem envNewPushedRepr
     (hfr : FrameRepr m' N (pushFrameMap φf st.store.frames.size p) φc p ⟨some env, []⟩) :
     StoreRepr m' N A (pushFrameMap φf st.store.frames.size p) φc
       (st.store.allocFrame (some env)).1 := by
-  have hpriv := M.privFoot_disjoint σ exts hainv
-  -- allocated extents are off the three windows
+  -- the ONE proof that owned and shared bytes are off the allocator's three
+  -- windows (`AllocOff.lean`); `EnvNewOff` is its single-block instance at 32 bytes
+  have O : OwnedOff SL M.privFoot [(p, 32)] alloc shared :=
+    hown.ownedOff hwrites (M.privFoot_disjoint σ exts hainv) priv_arena arena_stack
+      (freshExtents_single hpA hpdisj)
   have ha : ∀ role q n, Allocated alloc role q n → ∀ k, ExtentByte (q, n) k →
-      EnvNewOff SL M.privFoot p k := by
-    intro role q n hq k hk
-    have hmem := hown.ledger.live role q n hq
-    obtain ⟨_, hqA⟩ := hown.ledger.arena.1 (q, n) hmem
-    change A.lo ≤ q ∧ q + n ≤ A.hi at hqA
-    change q ≤ k ∧ k < q + n at hk
-    refine ⟨by omega, ?_, ?_⟩
-    · intro hp
-      have := hpriv (q, n) hmem (k - q) (by change k - q < n; omega)
-      change ¬ M.privFoot (q + (k - q)) at this
-      rw [show q + (k - q) = k by omega] at this
-      exact this hp
-    · have hd := hpdisj (q, n) hmem
-      change p + 32 ≤ q ∨ q + n ≤ p at hd
-      omega
-  -- shared bytes are off the three windows
-  have hs : ∀ k, shared k → EnvNewOff SL M.privFoot p k := by
-    intro k hk
-    refine ⟨fun hst => hown.immutable.outsideWrites k hk (hwrites k hst.1 hst.2), ?_, ?_⟩
-    · exact hown.reserved.outsidePrivate hown.immutable hpriv
-        (fun a hp hna => absurd (priv_arena a hp) hna) k hk
-    · exact hown.reserved.outsideFresh hpA hpdisj k hk
+      EnvNewOff SL M.privFoot p k :=
+    fun role q n hq k hk => (O.alloc role q n hq k hk).single
+  have hs : ∀ k, shared k → EnvNewOff SL M.privFoot p k := fun k hk => (O.shared k hk).single
   have hold : StoreRepr m' N A φf φc st.store :=
     hown.store.repr_transport hr hag ha hs
   have hold' : StoreRepr m' N A (pushFrameMap φf st.store.frames.size p) φc st.store :=

@@ -1,3 +1,4 @@
+import Vsa.Sim.AllocOff
 import Vsa.Sim.rows.EnvDefineCallRuns
 import Vsa.Sim.rows.EnvDefineAppendClosed
 import Vsa.Sim.rows.EnvDefineTailFramed
@@ -365,26 +366,15 @@ theorem envDefineAppendLane
       htif := by rw [H.facts.env_addr]; omega
       align := by rw [H.facts.env_addr]; exact (H.facts.store.frames_arena env henvLt).2
       code := by rw [H.facts.env_addr]; rcases hAimg with h | h <;> omega }
-  -- allocator-private bytes are inside the arena, off every live extent
+  -- the four entry-side allocator separation facts, from ONE lemma (`AllocOff.lean`)
   have hprivLive : ∀ e ∈ extsA, ∀ i < e.2, ¬ M.privFoot (e.1 + i) :=
     M.privFoot_disjoint c0.σ extsA H.regs.ainv
-  have hsharedPriv : ∀ k, shared k → ¬ M.privFoot k :=
-    hheap.reserved.outsidePrivate hheap.immutable hprivLive
-      (fun k hk hnot => absurd (LM.priv_arena k hk) hnot)
-  have hsharedStack : ∀ k, shared k → ¬ (SL.lo ≤ k ∧ k < SL.hi) := by
-    intro k hk hin
-    exact hheap.immutable.outsideWrites k hk (hstackW k hin.1 hin.2)
-  have hextArena : ∀ e ∈ extsA, ∀ k, ExtentByte e k → A.lo ≤ k ∧ k < A.hi := by
-    intro e he k hk
-    obtain ⟨_, hlo, hhi⟩ := hheap.ledger.arena.1 _ he
-    change e.1 ≤ k ∧ k < e.1 + e.2 at hk
-    omega
-  have hextPriv : ∀ e ∈ extsA, ∀ k, ExtentByte e k → ¬ M.privFoot k := by
-    intro e he k hk hp
-    change e.1 ≤ k ∧ k < e.1 + e.2 at hk
-    have := hprivLive e he (k - e.1) (by omega)
-    rw [show e.1 + (k - e.1) = k by omega] at this
-    exact this hp
+  have EO : EntryOff A SL extsA M.privFoot alloc shared :=
+    hheap.entryOff hstackW hprivLive LM.priv_arena
+  have hsharedPriv := EO.shared_priv
+  have hsharedStack := EO.shared_stack
+  have hextArena := EO.ext_arena
+  have hextPriv := EO.ext_priv
   -- the text image at any memory agreeing off the arena and the stack window
   have htextOf : ∀ m', (∀ a, ¬ (A.lo ≤ a ∧ a < A.hi) → ¬ (SL.lo ≤ a ∧ a < esp.toNat - 64) →
       m'[a]? = mA[a]?) → FixedTextLoaded m' := by

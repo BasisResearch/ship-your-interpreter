@@ -1,3 +1,4 @@
+import Vsa.Sim.AllocOff
 import Vsa.Sim.rows.EnvDefineAppendLane
 import Vsa.Sim.rows.EnvDefineReallocArray
 
@@ -278,17 +279,12 @@ theorem envDefineGrowCalls
     · have := hvalsArena hc; omega
   have hprivA : ∀ e ∈ extsA, ∀ i < e.2, ¬ M.privFoot (e.1 + i) :=
     M.privFoot_disjoint c0.σ extsA R.ainv
-  have hsharedPriv : ∀ k, shared k → ¬ M.privFoot k :=
-    hheap.reserved.outsidePrivate hheap.immutable hprivA
-      (fun k hk hnot => absurd (LM.priv_arena k hk) hnot)
-  have hsharedStack : ∀ k, shared k → ¬ (SL.lo ≤ k ∧ k < SL.hi) := by
-    intro k hk hin
-    exact hheap.immutable.outsideWrites k hk (hstackW k hin.1 hin.2)
-  have hextArena : ∀ e ∈ extsA, ∀ k, ExtentByte e k → A.lo ≤ k ∧ k < A.hi := by
-    intro e he k hk
-    obtain ⟨_, hlo, hhi⟩ := hheap.ledger.arena.1 _ he
-    change e.1 ≤ k ∧ k < e.1 + e.2 at hk
-    omega
+  -- the entry-side allocator separation facts, from ONE lemma (`AllocOff.lean`)
+  have EO : EntryOff A SL extsA M.privFoot alloc shared :=
+    hheap.entryOff hstackW hprivA LM.priv_arena
+  have hsharedPriv := EO.shared_priv
+  have hsharedStack := EO.shared_stack
+  have hextArena := EO.ext_arena
   -- ── the first prefix (either entry), parked at `realloc(names)`
   have hcode0 : Env_defineLoaded c0.σ.mem := by rw [R.mem]; exact F.text.Env_defineLoaded
   obtain ⟨cap', hcapLt, hcapPos, hreq8, hreq24, hcapS', c1, P1⟩ :

@@ -110,6 +110,29 @@ the tower's key theorems. Evidence under the session scratchpad
 (`integration2.log`, `boundary2/summary.json`, `boundary-lock-changes-2.json`,
 `stagec4.out`).
 
+The allocator layer (task 2) lands `Vsa/Sim/AllocOff.lean` and
+`Vsa/Sim/AllocLedger.lean`: one run-global `AllocLedger` in place of the
+allocator fields each per-entry ledger restated, one `OwnedOff`/`EntryOff` proof
+in place of the per-lane separation derivations, ledger movement
+(`HeapOwned.fresh`/`.free`/`.pushClosure`), and the `malloc`/`free` call adapters
+`mallocReturn_of_parked`/`freeReturn_of_parked`. The two modules add 48
+declarations, 26 of them audited by `#print axioms` at exactly `propext`,
+`Classical.choice`, `Quot.sound`. Three landed sites are
+reseated on it: `envNewPushedRepr` and the `env_define` append and grow lanes
+(53 hand lines of separation replaced by 24, all of it projection). Discipline
+rule R14 catches a hand-rolled allocator ledger field; the gate reports 68
+findings, the 56 inherited ones plus the 12 per-entry ledger declarations the
+new `of_alloc` projections supply and the reseat will delete.
+
+Verified over the eleven-module dependency closure of the change plus `Vsa` and
+`VsaRun`, all thirteen compiling clean in 62 s with every axiom set inside
+`propext`, `Classical.choice`, `Quot.sound`; the generator drift checks pass and
+no source of this change is a boundary-lock input, so the input lock needs no
+refresh. Log: `rebuild.log` under the session scratchpad. NOT yet run for this
+change: the complete-library census and the full resumed integration build, both
+deferred because a second session holds concurrent in-flight edits to the
+induction-hypothesis tower in the same checkout.
+
 Recompute the census before changing the certified count.
 
 ## Remaining tasks, in dependency order
@@ -188,10 +211,46 @@ Reuse the implemented separation rules, `StableUnder`, `ReprDelta`,
 
 ### 2. Complete allocation and resource suppliers
 
-- Relate the ownership ledger to concrete allocator state. Prove preservation
-  through malloc, free, reuse, and realloc, including indirect bin-link writes
-  and live allocation extents. Resolve the fixed `MallocContract.privFoot`
-  assumption against those actual writes.
+**The allocator layer.** Allocator facts are RUN-GLOBAL, not per entry. One
+`AllocLedger` (`Vsa/Sim/AllocLedger.lean`) carries the `malloc`/`free`/`realloc`
+runs (`MallocRun`, the new `FreeRun`, `ReallocInstance`), the `strlen`/`memcpy`
+runs, the private footprint's arena residence, the arena/stack/HTIF geometry, the
+footprint discipline `ainv_private`, the request and headroom bounds, and one new
+named clause `ainv_perm` (the abstract live list is a set, needed because
+`MallocContract.freeSpec` pops the head). The three landed per-entry ledgers are
+now projections of it: `EnvNewLedger.of_alloc`, `EnvDefineUpdateLedger.of_alloc`,
+`EnvDefineMissLedger.of_alloc`. `AInvAt` states the allocator invariant at a
+memory with the pinned `gp`; `AllocLedger.ainv_stable` and `.ainvAt_transport`
+replace every per-entry `ainv_stable` field.
+
+- Ownership preservation through malloc, free, reuse, and realloc is ONE proof.
+  `HeapOwned.ownedOff` (`Vsa/Sim/AllocOff.lean`) derives `OwnedOff` — every owned
+  extent and shared byte is outside the stack region, the allocator-private set,
+  and the fresh blocks — from the ledger, the caller's stack write footprint, and
+  `MallocContract.privFoot_disjoint`; `HeapOwned.transport_off`/`.repr_off`
+  consume it for ownership and representation. `HeapOwned.entryOff` is its
+  entry-side (`fresh = []`) presentation, `EntryOff`, in the shape the landed
+  lanes consume. Ledger movement is `HeapOwned.fresh` (a block enters
+  unassigned), `HeapOwned.free` (an unassigned block leaves; `HeapArena.nodup`
+  and `.freshErase` supply the list side), and the existing
+  `Ledger.replace`/`.replaceArray` for realloc.
+- The call adapters are `mallocReturn_of_parked` and `freeReturn_of_parked`: from
+  a parked call carrying the caller's ownership to a named return that hands over
+  the fresh block (`MallocBlock`), the advanced invariant, the memory frame, the
+  footprint (`MallocReturnAt.allocFoot`, at the `allocFoot` family of
+  `IHClauseGenericAlloc`), and the caller's `HeapOwned` and `StoreRepr` survived.
+  A new allocating site adds no allocator fields and no separation derivation.
+- Reseated so far: `envNewPushedRepr` (27 hand lines of separation → 7 on
+  `HeapOwned.ownedOff`), and the `env_define` append and grow lanes (the four
+  entry-side facts, derived twice by hand, → `HeapOwned.entryOff`). Remaining
+  mechanical step: replace the allocator fields of the three per-entry ledgers by
+  one `AllocLedger` field and rewire their consumers. Discipline rule R14 fires
+  on exactly those 12 declarations.
+- OPEN (unchanged, and outside this layer): relating `MallocContract.privFoot` to
+  dlmalloc's actual indirect bin-link writes. That is the verified-allocator
+  obligation behind `MallocContract` itself, not a fact any interpreter call site
+  can supply; the proof consumes it only through `AllocLedger.ainv_private` and
+  `MallocContract.privFoot_disjoint`, both named.
 - `env_new` is supplied: `envNewContract_of_ledger`
   (`rows/EnvNewContractSupply.lean`) proves `EnvNewContract` from
   `EnvNewLedger` (one named ledger per entry: pinned `gp`, `s0` ghost
@@ -205,13 +264,18 @@ Reuse the implemented separation rules, `StableUnder`, `ReprDelta`,
   `StoreOwned.repr_transport` and the frame-map rebase `storeRepr_phif_mono`
   (`envNewPushedRepr`). `env_new_spec` stays unused (its `∀ p, EnvRegions … p`
   premise is false at `p = 0`).
-- Finish `HeapOwned.pushClosure` at post-build memory. Use `prune_of_exit`
-  for full extent freshness and `fnArmClosureBuild_reads` for the header;
-  retain old ownership, captured-environment validity, and shared AST coverage.
-- Check `AllocBuildEntry.hOld` and `AllocBuildTailFacts.hOld`, which demand
-  store survival under arbitrary arena changes. Replace that demand with
-  preservation under the actual build writes. The obstruction and ownership
-  drafts in `/private/tmp/vsa-indexed-child/` are unchecked.
+- `HeapOwned.pushClosure` is DONE (`Vsa/Sim/AllocOff.lean`), over
+  `StoreOwned.pushClosure`: old roles and bytes survive the build's memory through
+  `OwnedOff`, the fresh record takes the `closure` role at the new index, captured
+  environments stay allocated, and the pushed closure's AST is shared.
+- `AllocBuildEntry.hOld` and `AllocBuildTailFacts.hOld` demand store survival
+  under arbitrary arena changes. Their replacement supplier is
+  `closurePushed_of_mallocReturn` (`AllocLedger.lean`), which derives the old
+  store at the extended closure map from the ACTUAL `malloc` frame plus the build's
+  own writes, then lands `storeRepr_pushClosure`. Remaining: rewire
+  `rows/FnArmSeams.lean` to take `ClosurePushed` instead of the two `hOld` fields.
+  The drafts in `/private/tmp/vsa-indexed-child/` remain unchecked and are
+  superseded by this supplier.
 - `EnvDefineContract` is proved by `envDefineContract_of_ledgers`
   (`rows/EnvDefineContractSupply.lean`) from the two ledgers per entry,
   `EnvDefineUpdateLedger` and `EnvDefineMissLedger`
@@ -715,7 +779,8 @@ only (`EvalIH.exitFoot`).
   Complete auxiliary `hCallTooMany` with its indexed child and signed count
   bridge; reuse the bad-closure impossibility proof.
 - Construct all 63 `TermResidualsBase` fields, then `RemainingWork`, then the
-  final refinement theorem. Remove the 56 inherited discipline findings.
+  final refinement theorem. Remove the 56 inherited discipline findings and the
+  12 per-entry allocator ledger fields R14 reports (supplied by `of_alloc`).
 
 ## Validation and automation still to finish
 
@@ -745,6 +810,12 @@ only (`EvalIH.exitFoot`).
   Lean-only/nonfinite capabilities.
 - Rerun the full supplier search at exact inherited types and the complete
   library census. Preserve all four initial-boundary regression cases.
+- Allocator-layer checks: rule R14 (`scripts/discipline_rules.tsv`) fires on any
+  hand-rolled allocator ledger field outside `AllocLedger`; the census must find
+  `EnvNewLedger.of_alloc`, `EnvDefineUpdateLedger.of_alloc` and
+  `EnvDefineMissLedger.of_alloc` at their inherited types, and `FreeRun` and
+  `AllocLedger.ainv_perm` are new named premises needing SMT/oracle evidence
+  rows in the coverage ledger.
 - Induction-hypothesis clauses (`scripts/ih_clauses.tsv`, `gen_ih_clause.py`,
   `Vsa/Sim/IHClauseSupport.lean`): a clause is an `EvalExtraM` (or an
   `EvalExtra` embedded through `EvalIHWith.toM`) recursed as the `EvalIHWithM`
