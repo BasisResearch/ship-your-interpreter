@@ -6,7 +6,8 @@ as the `EvalIHWith` motive.  For clause `<Name>` the module
 `Vsa/Sim/rows/IHClause_<Name>.lean` (namespace `Vsa.Sim.IHClause.<Name>`) holds
 
 * `extraM : EvalExtraM` and the nine clause motives `mEvalE … mExecSeq`
-  (`mEvalE` is `EvalIHWithM extraM`; a kind-`extra` clause also has
+  (`mEvalE` is `EvalIHWithM extraM`, under the table's `guard` on the
+  expression when one is declared; a kind-`extra` clause also has
   `extra : EvalExtra`, `extraM` = its `sp`/`m0`-blind embedding, and `ofWith`
   = `EvalIHWith.toM`; the other eight motives are `True` unless the TSV
   overrides them);
@@ -46,10 +47,10 @@ RELATIONS = [
     "EvalE", "EvalArgs", "Call", "ExecS", "ExecInit",
     "ForLoop", "ForCond", "ExecStep", "ExecSeq",
 ]
-COLUMNS = ["name", "kind", "pred", "imports", "motives", "steps", "notes"]
+COLUMNS = ["name", "kind", "pred", "imports", "motives", "guard", "steps", "notes"]
 KINDS = ("extra", "extraM")
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_']*$")
-TAG_KINDS = ("manual", "generic", "from_old", "exact")
+TAG_KINDS = ("manual", "generic", "from_old", "exact", "unguarded")
 
 
 # ----------------------------------------------------------------- TSV schema
@@ -60,14 +61,20 @@ class Clause:
 
     def __init__(self, name: str, pred: str, imports: list[str],
                  motives: dict[str, str], steps: dict[str, str], notes: str,
-                 kind: str = "extra") -> None:
+                 kind: str = "extra", guard: str = "") -> None:
         self.name = name
         self.kind = kind
         self.pred = pred
         self.imports = imports
         self.motives = motives
+        self.guard = guard
         self.steps = steps
         self.notes = notes
+
+    def eval_motive_body(self, params: str = "st d env e st' v") -> str:
+        """The `EvalE` motive body: `EvalIHWithM extraM …`, under the guard when declared."""
+        body = f"EvalIHWithM extraM {params}"
+        return f"{self.guard} → {body}" if self.guard else body
 
     def motive_body(self, relation: str) -> str | None:
         """The clause motive body for a non-`EvalE` relation, or None for `True`."""
@@ -143,15 +150,21 @@ def load_clauses(tsv: pathlib.Path = TSV) -> list[Clause]:
             if relation not in RELATIONS[1:]:
                 raise ValueError(
                     f"{tsv.name}:{number}: motives key {relation!r} is not one of {RELATIONS[1:]}")
+        guard = row["guard"].strip()
+        if guard == "-":
+            guard = ""
         steps = parse_pairs(row["steps"], f"{tsv.name}:{number} steps")
         for case, tag in steps.items():
             if case != "*" and not IDENT.match(case):
                 raise ValueError(f"{tsv.name}:{number}: bad case key {case!r}")
             try:
-                parse_tag(tag)
+                tag_kind, _ = parse_tag(tag)
             except ValueError as error:
                 raise ValueError(f"{tsv.name}:{number}: {error}") from None
-        clauses.append(Clause(name, pred, imports, motives, steps, row["notes"].strip(), kind))
+            if tag_kind == "unguarded" and not guard:
+                raise ValueError(f"{tsv.name}:{number}: unguarded tag needs a guard column")
+        clauses.append(Clause(name, pred, imports, motives, steps, row["notes"].strip(), kind,
+                              guard))
     names = [clause.name for clause in clauses]
     duplicates = sorted({n for n in names if names.count(n) > 1})
     if duplicates:
@@ -317,12 +330,38 @@ def hypothesis_names(case: Case) -> tuple[list[str], str, list[str]]:
     return olds, "hOld", ihs
 
 
-def wiring_term(case: Case, kind: str, payload: str) -> str:
-    """The field value for a wired case."""
+def wiring_term(case: Case, kind: str, payload: str, guard: str = "") -> str:
+    """The field value for a wired case.
+
+    `exact`: `payload` at the field type.  `from_old`: `payload hOld` (the
+    guard hypothesis `_hg`, when the clause is guarded, is discarded).
+    `unguarded` (guarded clauses only): `<term>|<proj_1>|…|<proj_k>` where
+    `<term>` has the field's type WITHOUT the guard on the `EvalE` child IHs
+    and on the parent, and `proj_i : <guard parent> → <guard child_i>` for the
+    i-th `EvalE` child (none for a leaf); the wiring is
+    `fun <binders> <olds> hOld <ihs> hg => <term> <binders> <olds> hOld (ih_i (proj_i hg)) …`.
+    """
     if kind == "exact":
         return payload
     olds, old, ihs = hypothesis_names(case)
-    unused = ["_" + n for n in case.binder_names + olds] + [old] + ["_" + n for n in ihs]
+    guard_hyp = ["_hg"] if guard else []
+    if kind == "unguarded":
+        parts = split_top(payload, "|")
+        term, projections = parts[0], parts[1:]
+        eval_children = [i for i, atom in enumerate(case.children) if atom.relation == "EvalE"]
+        if len(projections) != len(eval_children):
+            raise ValueError(
+                f"unguarded: case {case.name!r} has {len(eval_children)} guarded child IH(s); "
+                f"expected `<term>` followed by that many `|<guard projection>`, got "
+                f"{len(projections)}")
+        lifted = list(ihs)
+        for index, projection in zip(eval_children, projections):
+            lifted[index] = f"({ihs[index]} ({projection} hg))"
+        names = case.binder_names + olds + [old] + ihs + (["hg"] if projections else ["_hg"])
+        args = case.binder_names + olds + [old] + lifted
+        return f"fun {' '.join(names)} =>\n  {term} {' '.join(args)}"
+    unused = (["_" + n for n in case.binder_names + olds] + [old] + ["_" + n for n in ihs]
+              + guard_hyp)
     return f"fun {' '.join(unused)} =>\n  {payload} {old}"
 
 
@@ -366,6 +405,13 @@ def render_clause(clause: Clause, cases: list[Case],
         + ("an `EvalExtra`, embedded as an `EvalExtraM` through `EvalIHWith.toM`)."
            if clause.kind == "extra" else "an `EvalExtraM`, retained through `EvalIHWithM`)."),
     ]
+    if clause.guard:
+        lines += [
+            "",
+            f"Guard: `{clause.guard}` — the `EvalE` motive is `{clause.eval_motive_body()}`;",
+            "every clause child IH and the clause parent carry the guard, so a step for",
+            "an expression outside the guard is vacuous.",
+        ]
     if clause.notes:
         lines += ["", clause.notes]
     lines += [
@@ -422,8 +468,9 @@ def render_clause(clause: Clause, cases: list[Case],
         binder_text = " ".join(f"({' '.join(n)} : {ty})" for n, ty in binders)
         params = " ".join(n for names, _ in binders[:-1] for n in names)
         if relation == "EvalE":
-            body = f"EvalIHWithM extraM {params}"
-            doc = "`EvalE` motive: the clause as an `EvalIHWithM`."
+            body = clause.eval_motive_body(params)
+            doc = ("`EvalE` motive: the clause as an `EvalIHWithM`"
+                   + (" under the guard." if clause.guard else "."))
         elif clause.motive_body(relation) is not None:
             body = clause.motive_body(relation)
             doc = f"`{relation}` motive (from the clause table)."
@@ -460,10 +507,16 @@ def render_clause(clause: Clause, cases: list[Case],
             hooks.append((case.name, payload))
         elif kind == "from_old":
             note = f"Discharger: wired from the old motive by `{payload}`."
-            wired[case.name] = wiring_term(case, kind, payload)
+            wired[case.name] = wiring_term(case, kind, payload, clause.guard)
+        elif kind == "unguarded":
+            note = f"Discharger: wired from the unguarded step `{payload}`."
+            try:
+                wired[case.name] = wiring_term(case, kind, payload, clause.guard)
+            except ValueError as error:
+                raise ValueError(f"clause {clause.name}: {error}") from None
         else:
             note = f"Discharger: wired exactly by `{payload}`."
-            wired[case.name] = wiring_term(case, kind, payload)
+            wired[case.name] = wiring_term(case, kind, payload, clause.guard)
         lines += [
             f"  /-- `{case.name}`: the `{clause.name}` step for `{case.constructor}`",
             f"      (parent relation `{case.conclusion.relation}`). {note} -/",
@@ -538,7 +591,8 @@ def render_clause(clause: Clause, cases: list[Case],
             "",
             "Each hook names the generic lemma (agent L2) expected to fill the field.",
             "Wire it by changing the case's table tag to `exact:<lemma>` (or",
-            "`from_old:<lemma>` when it consumes only the old parent); the generator",
+            "`from_old:<lemma>` when it consumes only the old parent, `unguarded:<lemma>`",
+            "for a leaf lemma stated without the clause guard); the generator",
             "then moves the field into `Residuals.ofUnwired`. -/",
             "",
         ]

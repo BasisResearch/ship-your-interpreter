@@ -70,8 +70,9 @@ class MainTests(unittest.TestCase):
             self.assertEqual(code, 0)
             rows = (Path(directory) / "ih_clause_fuzz.tsv").read_text().splitlines()
             self.assertEqual(rows[0].split("\t"), list(fuzz.COLUMNS))
-            self.assertEqual(len(rows), 31)
-            self.assertEqual(len(list((Path(directory) / "statements").glob("*.lean"))), 30)
+            fields = sum(len(i.fields) for i in model.load_model().values())
+            self.assertEqual(len(rows), fields + 1)
+            self.assertEqual(len(list((Path(directory) / "statements").glob("*.lean"))), fields)
             with redirect_stdout(io.StringIO()):
                 self.assertEqual(fuzz.main(["--output", directory, "--field", "hNope"]), 2)
             with patch.object(fuzz, "fuzz_field", return_value={

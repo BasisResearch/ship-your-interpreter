@@ -44,9 +44,7 @@ theorem negNodeFoot_noArena {SL : StackLayout} {A : Arena} {sp sret : Nat}
     noArenaFoot SL A sp sret k := by
   rcases hk with hh | hc
   · exact Or.inl (unaryHeadFoot_noArena h k hh)
-  · unfold negCellFoot word8 resultSlot at hc
-    unfold noArenaFoot stackWin resultSlot
-    omega
+  · exact intCellFoot_noArena h k hc
 
 /-- **`evalNegSimF`** — `evalNegSim` with the node's footprint retained:
 `blockA_k ≫ blockB_unary_footprint ≫ blockC_neg_footprint ≫ blockD_v_rec_footprint`. -/

@@ -1,0 +1,40 @@
+# Footprint row modules — one line per recursor arm with a footprint sibling.
+# `scripts/gen_footprint_row.py` emits `Vsa/Sim/rows/Eval<Arm>RowFootprint.lean` from
+# these rows plus the per-family templates and per-arm proof fragments in the generator.
+#
+# Columns
+#   arm       lower-camel arm name; the module is `Eval<Arm capitalised>RowFootprint`
+#   family    int | intPilot | unary | logicalShort | logicalFall (template + fragment set)
+#   module    emitted module basename (checked against `arm`)
+#   result    the arm's result value form, as written in the emitted statements
+#   resid     the cell's residual record (`int`/`intPilot` only; `-` otherwise)
+#   guard     semantic guards of the cell contract, `name=prop` separated by `;` (`-` = none)
+#   guardfn   the `BinIntCell` guard function the supplier consumes (`-` outside `int`)
+#   guardpf   the term discharging that guard in the supplier (`-` outside `int`)
+#   cell      the cell footprint (`<op>CellFoot`; `intCellFoot`-shaped unless noted)
+#   shared    the shared cell footprint in `ExitFootprint.lean` this cell is
+#             (`intCellFoot` / `truthyArgCellFoot`); its `_noArena` lemma closes the
+#             cell half of `<arm>NodeFoot_noArena`.  `-` = the arm shares a node
+#             footprint lemma with its sibling (`logShortNodeFoot_noArena`, …)
+#   node      the node footprint used by the row's `EvalExitF`
+#   box       the boxing helper whose write set closes the cell footprint
+#   supplier  the emitted `EvalIHF noArenaFoot` supplier (`-` = none in this module)
+#   extras    per-arm extras: `int` = the residual fields consumed (incl. libgcc `Loaded`
+#             facts); other families = the arm's entry-extras structure
+#   notes     free text
+arm	family	module	result	resid	guard	guardfn	guardpf	cell	shared	node	box	supplier	extras	notes
+add	int	EvalAddRowFootprint	(.int (wrap64 (a + b)))	AddResid	-	(fun _ _ => True)	trivial	addCellFoot	intCellFoot	addNodeFoot	value_int	binAddCellF_of	hR.vint	three dispatch temporaries + box
+sub	int	EvalSubRowFootprint	(.int (wrap64 (a - b)))	SubResid	-	(fun _ _ => True)	trivial	subCellFoot	intCellFoot	subNodeFoot	value_int	binSubCellF_of	hR.vint	three dispatch temporaries + box
+mul	int	EvalMulRowFootprint	(.int (wrap64 (a * b)))	MulResid	-	(fun _ _ => True)	trivial	mulCellFoot	intCellFoot	mulNodeFoot	value_int	binMulCellF_of	hR.vint, hR.muldi3, hR.muldiStk	__muldi3 stores nothing (muldi3_post)
+div	int	EvalDivRowFootprint	(.int (wrap64 (a.tdiv b)))	DivResid	hbNe=b ≠ 0;hOv=¬(a = -2^63 ∧ b = -1)	(fun a b => ¬(a = -2^63 ∧ b = -1))	hOv	divCellFoot	intCellFoot	divNodeFoot	value_int	binDivCellF_of	hR.vint, hR.divdi3, hR.umoddi3, hR.udivdi3, hR.divStk	reflected dispatch writeLog (divDispatch_footprint)
+mod	int	EvalModRowFootprint	(.int (wrap64 (a.tmod b)))	ModResid	hbNe=b ≠ 0	(fun _ _ => True)	trivial	modCellFoot	intCellFoot	modNodeFoot	value_int	binModCellF_of	hR.vint, hR.moddi3, hR.udivdi3, hR.modStk	reflected dispatch writeLog (modDispatch_footprint)
+lt	intPilot	EvalLtRowFootprint	(.bool (a < b))	LtResid	-	-	-	ltCellFoot	intCellFoot	ltNodeFoot	value_bool	-	hR.vbool	pilot B: residual at the arm frame, no cell contract
+le	int	EvalLeRowFootprint	(.bool (a ≤ b))	LeResid	-	(fun _ _ => True)	trivial	leCellFoot	intCellFoot	leNodeFoot	value_bool	binLeCellF_of	hR.vbool	three dispatch temporaries + box
+gt	int	EvalGtRowFootprint	(.bool (a > b))	GtResid	-	(fun _ _ => True)	trivial	gtCellFoot	intCellFoot	gtNodeFoot	value_bool	binGtCellF_of	hR.vbool	three dispatch temporaries + box
+ge	int	EvalGeRowFootprint	(.bool (a ≥ b))	GeResid	-	(fun _ _ => True)	trivial	geCellFoot	intCellFoot	geNodeFoot	value_bool	binGeCellF_of	hR.vbool	three dispatch temporaries + box
+neg	unary	EvalNegRowFootprint	(.int (wrap64 (-n)))	-	-	-	-	negCellFoot	intCellFoot	negNodeFoot	value_int	evalNegIHF	NegExtras	unaryHeadFoot F ∨ negCellFoot
+not	unary	EvalNotRowFootprint	(.bool (!vsub.truthy))	-	-	-	-	truthyCellFoot	truthyArgCellFoot	notNodeFoot	value_bool	evalNotIHF	NotSimExtras	value_truthy copy at sp-1024 (writes nothing)
+orTrue	logicalShort	EvalOrTrueRowFootprint	(.bool true)	-	-	-	-	truthyCellFoot	-	logShortNodeFoot F	value_bool	evalOrTrueIHF	OrTrueExtras	short circuit: left child only
+andFalse	logicalShort	EvalAndFalseRowFootprint	(.bool false)	-	-	-	-	truthyCellFoot	-	logShortNodeFoot F	value_bool	evalAndFalseIHF	AndFalseExtras	short circuit: left child only
+andTrue	logicalFall	EvalAndTrueRowFootprint	(.bool vr.truthy)	-	-	-	-	logFallCellFoot Fr 848	-	logFallNodeFoot Fl Fr 848	value_bool	evalAndTrueIHF	AndTrueExtras	right child at buffer sp-848
+orFalse	logicalFall	EvalOrFalseRowFootprint	(.bool vr.truthy)	-	-	-	-	logFallCellFoot Fr 944	-	logFallNodeFoot Fl Fr 944	value_bool	evalOrFalseIHF	OrFalseExtras	right child at buffer sp-944

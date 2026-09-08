@@ -14,6 +14,7 @@ python3 -B -m unittest discover -s scripts/tests
 python3 -B scripts/gen_m4_term_row.py --check
 python3 -B scripts/gen_term_case_bundle.py --check
 python3 -B scripts/gen_ih_clause.py --check
+python3 -B scripts/gen_footprint_row.py --check
 git diff --check
 ```
 
@@ -42,6 +43,7 @@ existing theorem or generated segment with the required shape.
 | Checked source variants | `twin_spec.py` |
 | Recursive rows and case bundle | `gen_m4_term_row.py`, `gen_exec_row.py`, `gen_bin_dispatch_row.py`, `gen_term_case_bundle.py` |
 | Induction-hypothesis clause modules | `gen_ih_clause.py` |
+| Footprint row modules (IH tower, Level 1) | `gen_footprint_row.py` |
 | Entry and call bridges | `gen_arm_bridge.py`, `gen_stagepre.py` |
 | Error routing and spill rows | `gen_m5_error_routing.py`, `gen_err_spill_rows.py` |
 | Layout, image and transport facts | `gen_layout.py`, `gen_image_pins.py`, `gen_transport.py` |
@@ -85,7 +87,14 @@ python3 -B scripts/gen_sites.py scripts/helper_call_sites.tsv \
 
 Induction-hypothesis clauses are declared in `scripts/ih_clauses.tsv` (name,
 kind `extra`/`extraM`, the `EvalExtra`/`EvalExtraM` predicate, imports,
-non-`EvalE` motive overrides, per-case discharge tags). Each line emits
+non-`EvalE` motive overrides, a `guard` on the expression, per-case discharge
+tags). A `guard` (a Lean `Prop` over the `mEvalE` binders, e.g.
+`Vsa.Sim.IHClauseGeneric.noAllocExpr e = true`) makes the `EvalE` motive
+`<guard> → EvalIHWithM extraM …`, so every clause child IH and the clause
+parent carry it and a step outside the guard is vacuous (clause `FootprintNA`).
+A guarded clause wires a step stated WITHOUT the guard with
+`unguarded:<term>|<proj_1>|…|<proj_k>`, where `proj_i` maps the parent guard to
+the i-th `EvalE` child's guard (none for a leaf). Each line emits
 `Vsa/Sim/rows/IHClause_<Name>.lean`: `extraM`, the nine clause motives
 (`mEvalE` = `EvalIHWithM extraM`), `Residuals` (one field per recursor case with a clause motive; a
 `Layout` parameter for the census), `of_residuals`/`execSeq_of_residuals`
@@ -97,6 +106,29 @@ python3 -B scripts/gen_ih_clause.py            # write every clause module
 python3 -B scripts/gen_ih_clause.py --check    # drift (stage a3)
 python3 -B scripts/gen_ih_clause.py --stdout --clause Footprint
 ```
+
+Footprint rows are declared in `scripts/footprint_rows.tsv` (arm, family, module,
+result value, residual, cell guards, cell/shared/node footprints, boxing helper,
+supplier, per-arm extras). Each line emits
+`Vsa/Sim/rows/Eval<Arm>RowFootprint.lean`: the node footprint and its `_noArena`
+lemma, `eval<Arm>SimF` (the landed sim through the footprint-carrying blocks), the
+row at `EvalEntry`, and the arm's contract and supplier (`Bin<Op>CellF` +
+`bin<Op>CellF_of`, or `eval<Arm>IHF`). A family is one template plus the arm's slot
+values; proof fragments that differ structurally between two arms of a family live
+in the generator's `ARM_FRAGMENTS`. The shared cell footprints `intCellFoot` and
+`truthyArgCellFoot` (`Vsa/Sim/ExitFootprint.lean`) close the cell half of every
+`<arm>NodeFoot_noArena`.
+
+```sh
+python3 -B scripts/gen_footprint_row.py            # write every footprint row
+python3 -B scripts/gen_footprint_row.py --check    # drift (stage a3)
+python3 -B scripts/gen_footprint_row.py --stdout --arm neg
+```
+
+A NEW FAMILY (the allocating `allocFoot` family, an exec-side arm) adds one
+`TEMPLATES` entry — the landed module with its per-arm names replaced by
+`%%SLOT%%` — one `SLOTS_FROM_TSV` entry naming the slots the table fills, and one
+TSV line per arm; `--check` then fails on any drift between table and modules.
 
 Use `gen_transport.py value_int --exact-range` to regenerate
 `rows/TransportValue_intRange.lean`. This mode requires agreement only on the

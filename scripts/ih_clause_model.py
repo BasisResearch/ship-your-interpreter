@@ -29,10 +29,11 @@ MODULE_STATES = ("current", "stale", "missing")
 # The statement fragment statement_fuzz.py / smt_check.py can express: Mem,
 # BitVec, StackOK and address windows.  A clause step concludes a motive.
 FRAGMENT_REASON = (
-    "the step concludes `m{relation} …` = `EvalIHWithM extraM` (kind `{kind}`, "
+    "the step concludes `m{relation} …` = `{guard}EvalIHWithM extraM` (kind `{kind}`, "
     "predicate `{pred}`) over machine runs (∀-closed Config contract); outside "
     "the address-map fragment"
 )
+WIRED_TAGS = ("from_old", "exact", "unguarded")
 KINDS = ("extra", "extraM")
 
 
@@ -56,15 +57,16 @@ class ClauseField:
     wiring: str
     wiring_line: int
     field_type: str
+    guard: str = ""
 
     @property
     def hypothesis_names(self) -> list[str]:
         olds = [f"old_{i + 1}" for i in range(self.children)]
         ihs = [f"ih_{i + 1}" for i in range(self.children)]
-        return olds + ["hOld"] + ihs
+        return olds + ["hOld"] + ihs + (["hg"] if self.guard else [])
 
     def from_old_term(self, discharger: str, wrap: str = "") -> str:
-        """The field value `fun <binders> <olds> hOld <ihs> => <discharger> hOld`.
+        """The field value `fun <binders> <olds> hOld <ihs> [_hg] => <discharger> hOld`.
 
         `wrap` post-composes an adapter: `ofWith` (kind `extra`) or `.toM`.
         """
@@ -87,6 +89,7 @@ class ClauseInfo:
     kind: str
     pred: str
     notes: str
+    guard: str
     module: str
     namespace: str
     path: str
@@ -199,7 +202,9 @@ def parse_wiring(module_text: str) -> dict[str, tuple[str, int]]:
 
 
 def fragment_reason(field: ClauseField, info: "ClauseInfo") -> str:
-    return FRAGMENT_REASON.format(relation=field.relation, pred=info.pred, kind=info.kind)
+    guard = f"{info.guard} → " if info.guard else ""
+    return FRAGMENT_REASON.format(relation=field.relation, pred=info.pred, kind=info.kind,
+                                  guard=guard)
 
 
 def load_model(tsv: Path = generator.TSV, assembly: Path = generator.bundle.ASSEMBLY,
@@ -226,7 +231,7 @@ def load_model(tsv: Path = generator.TSV, assembly: Path = generator.bundle.ASSE
                 continue
             kind, payload = generator.parse_tag(clause.tag(case.name))
             term, line = wiring.get(case.name, ("", 0))
-            if kind in ("from_old", "exact"):
+            if kind in WIRED_TAGS:
                 status = "WIRED" if term and state == "current" else "STALE"
             elif kind == "generic":
                 status = "HOOK"
@@ -239,10 +244,11 @@ def load_model(tsv: Path = generator.TSV, assembly: Path = generator.bundle.ASSE
                 relation=case.conclusion.relation, children=len(case.children),
                 binders=tuple(case.binder_names), tag=clause.tag(case.name), kind=kind, payload=payload, status=status,
                 hook_lemma=hook_lemma(payload, case.name) if kind == "generic" else "",
-                wiring=term, wiring_line=line, field_type=generator.field_type(case)))
+                wiring=term, wiring_line=line, field_type=generator.field_type(case),
+                guard=clause.guard))
         result[clause.name] = ClauseInfo(
             name=clause.name, kind=getattr(clause, "kind", "extra"), pred=clause.pred,
-            notes=clause.notes,
+            notes=clause.notes, guard=clause.guard,
             module=module_name(clause.name), namespace=namespace(clause.name),
             path=str(path), module_state=state,
             closed="theorem closed" in (text or rendered),

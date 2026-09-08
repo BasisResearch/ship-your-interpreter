@@ -146,6 +146,42 @@ theorem binaryHeadFoot_noArena {SL : StackLayout} {A : Arena} {sp : Nat}
   unfold stackWin
   omega
 
+/-! ## Shared CELL footprints (the per-arm `<op>CellFoot` are these predicates) -/
+
+/-- The exact footprint of an integer/comparison CELL from the return of its
+children to the epilogue entry: the three dispatch-ladder temporaries
+`[sp-848, sp-824)` (the `sd`s at `sp-848`, `sp-840`, `sp-832`) and the boxed
+result `[sret, sret+24)`.  The eight integer rows' `<op>CellFoot`, the pilot's
+`ltCellFoot` and the `neg` cell's `negCellFoot` are stated beside their cells
+(in the row files) and are definitionally this predicate; a NEW cell of this
+shape uses `intCellFoot` directly. -/
+def intCellFoot (sp sret : Nat) (k : Nat) : Prop :=
+  word8 (sp - 848) k ∨ word8 (sp - 840) k ∨ word8 (sp - 832) k ∨ resultSlot sret k
+
+/-- The exact footprint of a `value_truthy` CELL: the 24-byte argument copy at
+`esp+64 = sp-1024` (`value_truthy` itself writes nothing) and the boxed result
+`[sret, sret+24)`.  `truthyCellFoot` (`EvalNotSim.lean`, shared by logical-not
+and the two short-circuit arms) is definitionally this predicate. -/
+def truthyArgCellFoot (sp sret : Nat) (k : Nat) : Prop :=
+  word8 (sp - 1024) k ∨ word8 (sp - 1016) k ∨ word8 (sp - 1008) k ∨ resultSlot sret k
+
+/-- A cell writing only temporaries inside the frame and the result slot is
+non-allocating. -/
+theorem intCellFoot_noArena {SL : StackLayout} {A : Arena} {sp sret : Nat}
+    (h : SL.lo + 1088 ≤ sp) (k : Nat) (hk : intCellFoot sp sret k) :
+    noArenaFoot SL A sp sret k := by
+  unfold intCellFoot word8 resultSlot at hk
+  unfold noArenaFoot stackWin resultSlot
+  omega
+
+/-- The truthiness cell is non-allocating for the same reason. -/
+theorem truthyArgCellFoot_noArena {SL : StackLayout} {A : Arena} {sp sret : Nat}
+    (h : SL.lo + 1088 ≤ sp) (k : Nat) (hk : truthyArgCellFoot sp sret k) :
+    noArenaFoot SL A sp sret k := by
+  unfold truthyArgCellFoot word8 resultSlot at hk
+  unfold noArenaFoot stackWin resultSlot
+  omega
+
 /-- The `EvalExit.memFrame` shape as a footprint. -/
 theorem MemFootprint.of_exitFrame {SL : StackLayout} {A : Arena} {sp sret : BitVec 64}
     {m0 m : Mem}
@@ -329,6 +365,8 @@ theorem blockD_v_rec_exitF (F : FootFam)
 #print axioms MemFootprint.of_writeLog
 #print axioms MemFootprint.of_exitFrame
 #print axioms binaryHeadFoot_noArena
+#print axioms intCellFoot_noArena
+#print axioms truthyArgCellFoot_noArena
 #print axioms EvalIHWithM.forget
 #print axioms EvalIHF.mono
 #print axioms EvalIH.exitFoot

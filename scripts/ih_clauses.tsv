@@ -17,6 +17,10 @@
 #   motives : clause motives of the OTHER eight relations, `Rel=<Lean term over the
 #             relation's binders>` separated by ';' ('-' = all `True`); relations:
 #             EvalArgs Call ExecS ExecInit ForLoop ForCond ExecStep ExecSeq
+#   guard   : '-' or a Lean Prop over the `mEvalE` binders (`st d env e st' v`), e.g.
+#             `Vsa.Sim.IHClauseGeneric.noAllocExpr e = true`; the EvalE motive becomes
+#             `<guard> → EvalIHWithM extraM …`, so every clause child IH and the clause
+#             parent of a step carry it (a step outside the guard is vacuous)
 #   steps   : per-case discharge tags `<case>=<tag>` separated by ';', `*` = default
 #             for every case not named; a case is a TermCases premise (hInt, hBinary, …)
 #             whose PARENT relation has a non-True clause motive. Tags:
@@ -28,8 +32,19 @@
 #                                       (`EvalIHWithM extraM …`; use `ofWith` to lift
 #                                       an `EvalIHWith extra` result)
 #               exact:<Lean term>     — wired: <term> has exactly the field's type
+#               unguarded:<term>|<proj_1>|…|<proj_k>
+#                                     — wired (guarded clauses): <term> has the field's type
+#                                       WITHOUT the guard on the EvalE child IHs and the
+#                                       parent; proj_i : <guard parent> → <guard child_i>
+#                                       for the i-th EvalE child (none for a leaf), e.g.
+#                                       `unguarded:footprint.hNeg|noAllocExpr_unary`
+#               unguarded:<Lean term> — wired (guarded clauses, cases without child
+#                                       derivations): <term> has the field's type without
+#                                       the guard; the generator discards the guard
 #   notes   : free text
 #
-name	kind	pred	imports	motives	steps	notes
-Trivial	extra	trueExtra	-	-	*=from_old:trivialStep_of_old	pipeline check: every EvalE step follows from the old motive; all fields wired, `closed` emitted
-Footprint	extraM	footExtra noArenaFoot	-	-	*=generic:footprint	the exit footprint outside the arena (L1 `noArenaFoot`: stack window ∪ result slot): children `EvalIHF noArenaFoot` → parent `EvalIHF noArenaFoot`; the 15 EvalE steps are the `footprint` generic hooks (agent L2)
+name	kind	pred	imports	motives	guard	steps	notes
+Trivial	extra	trueExtra	-	-	-	*=from_old:trivialStep_of_old	pipeline check: every EvalE step follows from the old motive; all fields wired, `closed` emitted
+Footprint	extraM	footExtra noArenaFoot	Vsa.Sim.IHClauseGeneric,Vsa.Sim.IHClauseGenericSupply	-	-	hInt=exact:Vsa.Sim.IHClauseGeneric.footprint.hInt;hStr=exact:Vsa.Sim.IHClauseGeneric.footprint.hStr;hBool=exact:Vsa.Sim.IHClauseGeneric.footprint.hBool;hNull=exact:Vsa.Sim.IHClauseGeneric.footprint.hNull;hNeg=exact:Vsa.Sim.IHClauseGeneric.footprint.hNeg;hNot=exact:Vsa.Sim.IHClauseGeneric.footprint.hNot;hOrTrue=exact:Vsa.Sim.IHClauseGeneric.footprint.hOrTrue;hAndFalse=exact:Vsa.Sim.IHClauseGeneric.footprint.hAndFalse;hOrFalse=exact:Vsa.Sim.IHClauseGeneric.footprint.hOrFalse;hAndTrue=exact:Vsa.Sim.IHClauseGeneric.footprint.hAndTrue;*=generic:footprint	the exit footprint outside the arena (L1 `noArenaFoot`: stack window ∪ result slot): children `EvalIHF noArenaFoot` → parent `EvalIHF noArenaFoot`. UNINHABITED as a whole (`hAssign`/`hFn`/`hCall` and string concatenation write the arena; `PROOF_CLOSURE_PLAN.md` task 0); the four closed leaves and the six one-child arms are wired from `IHClauseGeneric.footprint.<case>` (`Vsa/Sim/IHClauseGenericSupply.lean`), the remaining five EvalE steps are `footprint` generic hooks
+FootprintNA	extraM	footExtra noArenaFoot	Vsa.Sim.IHClauseGeneric,Vsa.Sim.IHClauseGenericSupply	-	Vsa.Sim.IHClauseGeneric.noAllocExpr e = true	hAssign=exact:Vsa.Sim.IHClauseGeneric.footprintNA.hAssign;hFn=exact:Vsa.Sim.IHClauseGeneric.footprintNA.hFn;hCall=exact:Vsa.Sim.IHClauseGeneric.footprintNA.hCall;hInt=unguarded:Vsa.Sim.IHClauseGeneric.footprint.hInt;hStr=unguarded:Vsa.Sim.IHClauseGeneric.footprint.hStr;hBool=unguarded:Vsa.Sim.IHClauseGeneric.footprint.hBool;hNull=unguarded:Vsa.Sim.IHClauseGeneric.footprint.hNull;hNeg=exact:(Vsa.Sim.IHClauseGeneric.footprintNA.hNeg Vsa.Sim.negRowF_closed);hNot=exact:(Vsa.Sim.IHClauseGeneric.footprintNA.hNot Vsa.Sim.notRowF_closed);hOrTrue=exact:(Vsa.Sim.IHClauseGeneric.footprintNA.hOrTrue Vsa.Sim.logicalShortRowF_orTrue);hAndFalse=exact:(Vsa.Sim.IHClauseGeneric.footprintNA.hAndFalse Vsa.Sim.logicalShortRowF_andFalse);hOrFalse=exact:(Vsa.Sim.IHClauseGeneric.footprintNA.hOrFalse Vsa.Sim.logicalFallRowF_orFalse);hAndTrue=exact:(Vsa.Sim.IHClauseGeneric.footprintNA.hAndTrue Vsa.Sim.logicalFallRowF_andTrue);*=generic:footprintNA	the `Footprint` clause guarded by the syntactic non-allocation predicate `noAllocExpr` (`Vsa/Sim/IHClauseGeneric.lean`): `hAssign`/`hFn`/`hCall` are vacuous under the guard, the four leaves are the unguarded closed leaf steps, and `hNeg`/`hNot`/the four logical steps take their row contract from the closed suppliers of `Vsa/Sim/IHClauseGenericSupply.lean`. Open: `hVar` (needs `footprint.hVar_of` at `Rows.VarLeafResid` + `VarPinnedSim`) and `hBinary` (`footprintNA.hBinary_of_base` still needs `DivOverflowCellF`, both `EqCellF`s and the four `BinStrCmpCellF`s) — `PROOF_CLOSURE_PLAN.md` task 0 step (b)
+OwnedPayload	extraM	ownedExtra stdShared	Vsa.Sim.OwnedPayloadClause,Vsa.Sim.IHClauseGenericOwned	-	-	hInt=exact:(Vsa.Sim.IHClauseGenericOwned.owned.hInt Vsa.Sim.stdShared);hStr=exact:(Vsa.Sim.IHClauseGenericOwned.owned.hStr Vsa.Sim.stdShared Vsa.Sim.ownedIndex_std);hBool=exact:(Vsa.Sim.IHClauseGenericOwned.owned.hBool Vsa.Sim.stdShared);hNull=exact:(Vsa.Sim.IHClauseGenericOwned.owned.hNull Vsa.Sim.stdShared);hOrTrue=exact:(Vsa.Sim.IHClauseGenericOwned.owned.hOrTrue Vsa.Sim.stdShared);hOrFalse=exact:(Vsa.Sim.IHClauseGenericOwned.owned.hOrFalse Vsa.Sim.stdShared);hAndFalse=exact:(Vsa.Sim.IHClauseGenericOwned.owned.hAndFalse Vsa.Sim.stdShared);hAndTrue=exact:(Vsa.Sim.IHClauseGenericOwned.owned.hAndTrue Vsa.Sim.stdShared);hNeg=exact:(Vsa.Sim.IHClauseGenericOwned.owned.hNeg Vsa.Sim.stdShared);hNot=exact:(Vsa.Sim.IHClauseGenericOwned.owned.hNot Vsa.Sim.stdShared);hFn=exact:(Vsa.Sim.IHClauseGenericOwned.owned.hFn Vsa.Sim.stdShared);*=manual	payload ownership at the index `stdShared`

@@ -3,6 +3,7 @@ import Vsa.Sim.rows.StrCmpCellInstances
 import Vsa.Sim.IHClauseFootprintMeta
 import Vsa.Sim.IHClauseGeneric
 import Vsa.Sim.WordLoadData
+import Vsa.Sim.ValuePayloadCoverage
 
 /-!
 # `StrCmpCellClauses` — the string-comparison cells from clause-shaped facts (IH tower, Level 2)
@@ -26,14 +27,14 @@ arena payloads).  This file replaces both by clause-shaped facts:
   covered outside the whole stack) and the right child at
   `EvalIHF noArenaFoot`; `strLeftSurvives_of_footprint`
   (`IHClauseFootprintMeta.lean`) closes the survival at the ACTUAL memories.
-  The head with that hypothesis shape is the named premise
-  `BinaryHeadFootprintSupplyCov` (`blockB_binary_footprint` with `hVlSurv`
-  replaced by the left payload clause; Level 1B).  `evalStrCmpSimF_cov` /
-  `binRow_strcmpF_cov` / `binStrCmpCell_of_clauses` are the pilot's chain over
-  it, and `field_hStr{Lt,Le,Gt,Ge}_of_clauses` produce the EXACT `BinDispatchRow`
-  fields from `StrCmpOwnedOperands`, the head premise, and the two closed
-  clause recursions (`FootprintPayloadClause` for the left child,
-  `FootprintClause` for the right).
+  The head with that hypothesis shape is `BinaryHeadFootprintSupplyCov`, now
+  DISCHARGED by `binaryHeadFootprintSupplyCov` from the parametric head
+  `blockB_binary_footprint_gen` (`EvalBinSim.lean`) at the left child's payload
+  coverage; `evalStrCmpSimF_cov` / `binRow_strcmpF_cov` /
+  `binStrCmpCell_of_clauses` are the pilot's chain over it, and
+  `field_hStr{Lt,Le,Gt,Ge}_of_clauses` produce the EXACT `BinDispatchRow` fields
+  from `StrCmpOwnedOperands` and the two closed clause recursions
+  (`FootprintPayloadClause` for the left child, `FootprintClause` for the right).
 
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
 -/
@@ -195,16 +196,15 @@ theorem evalStrPayloadIHF (st : Vsa.While.St) (d env : Nat) (s : String) :
     obtain ⟨_, hlo, hhi⟩ := exprIn_str_payload spec.nodes p hp0
     rcases spec.stack_disjoint with hd | hd <;> omega
 
-/-- **NAMED PREMISE — the head with the left survival derived at the actual
-memories.**  `blockB_binary_footprint` (`EvalBinSim.lean`) with the left child at
-the product clause `EvalIHFP Fl` (footprint ∧ payload covered outside the whole
-stack), the right child at `EvalIHF noArenaFoot`, and NO `hVlSurv`: at the point
-`hVlSurv` is consumed (`hvalL_R`, the left `ValueRepr` at `cL.σ.mem` transported
-to `cR.σ.mem`) the amended proof applies `strLeftSurvives_of_footprint` to the
-left return's payload coverage and the right child's `armTail_rec_footprint`
-extra (`MemFootprint (noArenaFoot SL A (sp-1088) (sp-944)) mcall2 cR.σ.mem`,
-composed with the `writeMap8` at `sp-1088` that `hAgLR` already peels).  Supplier:
-Level 1B (`EvalBinSim.lean`). -/
+/-- **The head with the left survival derived at the actual memories.**  The
+parametric head `blockB_binary_footprint_gen` (`EvalBinSim.lean`) at the left
+child's product clause `EvalIHFP Fl` (footprint ∧ payload covered outside the
+whole stack), the right child at `EvalIHF noArenaFoot`, and NO `hVlSurv`: where
+the head consumed `hVlSurv` (`hvalL_R`, the left `ValueRepr` at `cL.σ.mem`
+transported to `cR.σ.mem`) it now hands out the left return's retained fact and
+the composed footprint of the argument respill at `sp-1088` and the right child,
+and `valueSurvives_of_covered` closes the transport.  DISCHARGED by
+`binaryHeadFootprintSupplyCov` below. -/
 def BinaryHeadFootprintSupplyCov (Fl : FootFam) : Prop :=
   ∀ (gouter gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -247,6 +247,39 @@ def BinaryHeadFootprintSupplyCov (Fl : FootFam) : Prop :=
           st' st'' vl vr sp r sret v8 v9 v18 m0)
         (fun c => BinaryReturnData SL sp sret c ∧
           MemFootprint (binaryHeadFoot Fl noArenaFoot SL A sp.toNat) m0 c.σ.mem))
+
+/-- **`valueSurvives_of_covered`** — the general-value form of
+`strLeftSurvives_of_footprint` at the head's composed family: the left temporary at
+`sp - 968` (header inside the parent frame, payload covered outside the WHOLE stack)
+survives the argument respill at `sp - 1088` and a NON-allocating right child. -/
+theorem valueSurvives_of_covered {N : NativeAddrs} {SL : StackLayout} {A : Arena}
+    {sp : Nat} {φ : Addr → Nat} {mm mm' : Mem} {v : Value}
+    (hsp : SL.lo + 1088 ≤ sp) (hspHi : sp ≤ SL.hi)
+    (hv : ValueRepr mm N φ (sp - 968) v)
+    (hcov : ValuePayloadCovered (fun k => ¬ (SL.lo ≤ k ∧ k < SL.hi)) mm (sp - 968) v)
+    (hfoot : MemFootprint (fun k => word8 (sp - 1088) k ∨
+      noArenaFoot SL A (sp - 1088) (sp - 944) k) mm mm') :
+    ValueRepr mm' N φ (sp - 968) v := by
+  refine hfoot.valueRepr hv ?_ (hcov.mono ?_)
+  · intro k hk hF
+    unfold valHeader at hk
+    unfold word8 noArenaFoot stackWin resultSlot at hF
+    omega
+  · intro k hk hF
+    unfold word8 noArenaFoot stackWin resultSlot at hF
+    omega
+
+/-- **`binaryHeadFootprintSupplyCov`** — the covered head premise, DISCHARGED from
+the parametric head at the left child's payload coverage. -/
+theorem binaryHeadFootprintSupplyCov (Fl : FootFam) : BinaryHeadFootprintSupplyCov Fl :=
+  fun gouter gpre N A SL φf φc st st' st'' d env op el er vl vr
+      sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hLeft hIHl hIHr =>
+    blockB_binary_footprint_gen Fl noArenaFoot
+      (fun SL m a => ValuePayloadCovered (fun k => ¬ (SL.lo ≤ k ∧ k < SL.hi)) m a vl)
+      gouter gpre N A SL φf φc st st' st'' d env op el er vl vr
+      sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hLeft hIHl hIHr
+      (fun hsproom hspSLhi _ _φ _m _m' hQ hv _hag hfoot =>
+        valueSurvives_of_covered (by omega) hspSLhi hv hQ hfoot)
 
 /-- `evalStrCmpSimF` (pilot A) over the survival-free head. -/
 theorem evalStrCmpSimF_cov (D : StrCmpOp) (C : D.Cert) (Fl : FootFam)
@@ -408,12 +441,13 @@ def FootprintPayloadClause : Prop :=
 closed clause recursions at the children's own derivations, so the EXACT landed
 cell shape `BinStrCmpCell` (children at `EvalIH`) is produced. -/
 theorem binStrCmpCell_of_clauses (D : StrCmpOp) (C : D.Cert)
-    (hOps : StrCmpOwnedOperands) (hHead : BinaryHeadFootprintSupplyCov noArenaFoot)
+    (hOps : StrCmpOwnedOperands)
     (hCL : FootprintPayloadClause) (hCR : FootprintClause) :
     BinStrCmpCell D.op D.bres := by
   intro st d env el er st' st'' sl sr hEl hEr _ _
   intro g N A SL φf φc sp r sret aEnv aExpr m0
-  exact binRow_strcmpF_cov D C hHead g N A SL φf φc st st' st'' d env el er sl sr
+  exact binRow_strcmpF_cov D C (binaryHeadFootprintSupplyCov noArenaFoot)
+    g N A SL φf φc st st' st'' d env el er sl sr
     sp r sret aEnv aExpr m0 hEl (hCL st d env el st' (.str sl) hEl)
     (hCR st' d env er st'' (.str sr) hEr)
     (EvalE.binary st d env D.op el er st' st'' (.str sl) (.str sr) _ hEl hEr (C.sem _ _ _))
@@ -426,33 +460,31 @@ theorem binStrCmpCell_of_clauses (D : StrCmpOp) (C : D.Cert)
     |>.conseq (fun _ hp => hp) (fun _ hp => hp.result)
 
 theorem ScaffoldRows.field_hStrLt_of_clauses (hOps : StrCmpOwnedOperands)
-    (hHead : BinaryHeadFootprintSupplyCov noArenaFoot)
     (hCL : FootprintPayloadClause) (hCR : FootprintClause) :
     BinStrCmpCell .lt (fun sl sr => sl < sr) :=
-  binStrCmpCell_of_clauses strCmpLt strCmpLt_cert hOps hHead hCL hCR
+  binStrCmpCell_of_clauses strCmpLt strCmpLt_cert hOps hCL hCR
 
 theorem ScaffoldRows.field_hStrLe_of_clauses (hOps : StrCmpOwnedOperands)
-    (hHead : BinaryHeadFootprintSupplyCov noArenaFoot)
     (hCL : FootprintPayloadClause) (hCR : FootprintClause) :
     BinStrCmpCell .le (fun sl sr => sl < sr || sl == sr) :=
-  binStrCmpCell_of_clauses strCmpLe strCmpLe_cert hOps hHead hCL hCR
+  binStrCmpCell_of_clauses strCmpLe strCmpLe_cert hOps hCL hCR
 
 theorem ScaffoldRows.field_hStrGt_of_clauses (hOps : StrCmpOwnedOperands)
-    (hHead : BinaryHeadFootprintSupplyCov noArenaFoot)
     (hCL : FootprintPayloadClause) (hCR : FootprintClause) :
     BinStrCmpCell .gt (fun sl sr => sr < sl) :=
-  binStrCmpCell_of_clauses strCmpGt strCmpGt_cert hOps hHead hCL hCR
+  binStrCmpCell_of_clauses strCmpGt strCmpGt_cert hOps hCL hCR
 
 theorem ScaffoldRows.field_hStrGe_of_clauses (hOps : StrCmpOwnedOperands)
-    (hHead : BinaryHeadFootprintSupplyCov noArenaFoot)
     (hCL : FootprintPayloadClause) (hCR : FootprintClause) :
     BinStrCmpCell .ge (fun sl sr => sr < sl || sl == sr) :=
-  binStrCmpCell_of_clauses strCmpGe strCmpGe_cert hOps hHead hCL hCR
+  binStrCmpCell_of_clauses strCmpGe strCmpGe_cert hOps hCL hCR
 
 #print axioms strCmpRegion_of_shared
 #print axioms strCmpOperandsAt_of_owned
 #print axioms strCmpOperandsSupply_of_owned
 #print axioms evalStrPayloadIHF
+#print axioms valueSurvives_of_covered
+#print axioms binaryHeadFootprintSupplyCov
 #print axioms evalStrCmpSimF_cov
 #print axioms binRow_strcmpF_cov
 #print axioms binStrCmpCell_of_clauses

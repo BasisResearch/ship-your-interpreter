@@ -15,10 +15,11 @@ The `int` leaf runs from `EvalEntry` directly (`evalIntIHF`, unconditional).  Th
 bridges are named premises here (`NullEntryBridge`/`BoolEntryBridge`/`StrEntryBridge`),
 each with its supplier named in its doc comment.
 
-The `var` leaf (`evalVarSim`) retains no pin: its `env_get` found-case contract
-(`env_get_found_uncond''`, `EnvGetSpec9.lean`) exposes only `c'.σ.mem = m'`, so the
-variable leaf is available at `exitFoot` only (`EvalIH.exitFoot`); see
-`ih-tower/L1B-una.md` for the missing conjunct.
+The `var` leaf is landed separately (`rows/EvalVarRowFootprint.lean`,
+`Rows.evalVarIHF`): it has no pinned sibling because the `env_get` FOUND-case
+contract it consumes (`VarPostCall`) states its memory frame with the arena carved
+out, so its `noArenaFoot` footprint is threaded through `evalVarSimQ` from the named
+conjunct `Rows.VarPostCallPin` on the arm's own oracle.
 
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
 -/

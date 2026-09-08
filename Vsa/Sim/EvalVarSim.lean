@@ -1029,7 +1029,7 @@ theorem var_off_pos (sp : BitVec 64) (off : BitVec 12) (k : Nat)
   have := sp.isLt
   rw [Nat.mod_eq_of_lt (show sp.toNat - 1088 + k < 2^64 by omega)]
 
-theorem blockC_var
+theorem blockC_var_gen (Q : Mem → Prop)
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (v : Value)
@@ -1040,17 +1040,22 @@ theorem blockC_var
     (hsret_code : sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat)
     (hsret_stack : sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat) :
     Triple
-      (fun c => ∃ mpc, VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpc c)
+      (fun c => ∃ mpc, VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpc c ∧ Q mpc)
       (fun c => EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st v sp r sret m0 c ∧
         -- the copied value is represented at the ENTRY closures map (the frame slot's map).
-        ValueRepr c.σ.mem N φc sret.toNat v) := by
-  intro c hc
-  obtain ⟨mpc, hG, htick, hpc, ⟨a0v, ha0v, ha0vnz⟩, hs1, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmem, hcode,
+        ValueRepr c.σ.mem N φc sret.toNat v ∧
+        -- the block's OWN write set: the three-word copy into `[sret, sret+24)`.  The
+        -- call-return memory `mpc` (carrying `Q`) is the exit memory everywhere else.
+        ∃ mpc, Q mpc ∧
+          ∀ k, ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) → mpc[k]? = c.σ.mem[k]?) := by
+  intro c hcQ
+  obtain ⟨mpc, hcVP, hQ⟩ := hcQ
+  obtain ⟨hG, htick, hpc, ⟨a0v, ha0v, ha0vnz⟩, hs1, hsp, ⟨vmi, hmi⟩, hout, houtStr, hmem, hcode,
     ⟨d0, d1, d2, hsrc0, hsrc1, hsrc2, hcopy⟩, hstore, hframe,
     hslotRa, hslotS0, hslotS1, hslotS2, hgx8, hgx9, hgx18, hgx2, hmemframe, hbufsret,
     hsretAl, hsretLo, hsretHi, hsretWin,
     hbufLo, hbufHi, hbufWin, hbufAl,
-    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLloSp, hraAl⟩ := hc
+    hsp1088, hsphi, hsplo, hspwin, hsp8, hSLloSp, hraAl⟩ := hcVP
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- addresses of the three source words (positive small offsets from `sp-1088`).
   have hbuf0 : ((sp - 1088#64) + sign_extend (m := 64) (0x0f0#12)).toNat = sp.toNat - 1088 + 0xf0 :=
@@ -1412,7 +1417,7 @@ theorem blockC_var
   refine ⟨⟨σ14, i14, _⟩, hsteps, ⟨hG14, hi14, hpc14, ha0_14, hra_14, hsp_14, ⟨_, hmi14⟩,
     ⟨φc, PhiExtends.refl _ _, hmem14e ▸ hvalFin⟩,
     ⟨φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, hmem14e ▸ hstoreFin⟩,
-    ?_, ?_, ?_⟩, hmem14e ▸ hvalFin⟩
+    ?_, ?_, ?_⟩, hmem14e ▸ hvalFin, mpc, hQ, ?_⟩
   · -- OutRepr σ14 st
     show Vsa.Machine.output σ14 = st.out
     simp only [Vsa.Machine.output]; rw [hout14]; exact houtStr
@@ -1478,6 +1483,32 @@ theorem blockC_var
         rcases hmemframe a hstk harena with h | h
         · exact absurd h hsr
         · exact h))
+  · -- the block's own write set: outside `[sret, sret+24)` the exit memory IS `mpc`.
+    intro k hk
+    show mpc[k]? = σ14.mem[k]?
+    rw [hmem14e]
+    exact hmfinAgree k hk
+
+/-- **The landed var-arm epilogue** (`blockC_var`): the `Q := True` projection of
+`blockC_var_gen`.  Statement unchanged. -/
+theorem blockC_var
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (v : Value)
+    (sp r sret : BitVec 64) (v8 v9 v18 : BitVec 64) (out0 : Array String) (m0 : Mem)
+    (hsret_arena : sret.toNat + 24 ≤ A.lo ∨ A.hi ≤ sret.toNat)
+    (hsret_code : sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat)
+    (hsret_stack : sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat) :
+    Triple
+      (fun c => ∃ mpc, VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpc c)
+      (fun c => EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st v sp r sret m0 c ∧
+        ValueRepr c.σ.mem N φc sret.toNat v) := by
+  intro c hc
+  obtain ⟨mpc, hVP⟩ := hc
+  obtain ⟨c', hs, hExit, hval, _⟩ :=
+    blockC_var_gen (fun _ => True) g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0
+      hsret_arena hsret_code hsret_stack c ⟨mpc, hVP, trivial⟩
+  exact ⟨c', hs, hExit, hval⟩
 
 /-! ## `EvalVarEntry` — the machine precondition for the `EvalE.var` case
 
@@ -1576,12 +1607,35 @@ def EvalVarSimGoal : Prop :=
       (fun c => EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st v sp r sret m0 c ∧
         ValueRepr c.σ.mem N φc sret.toNat v)
 
-/-- **The M4 `EvalE.var` gate.**  Composes `blockA_k` (k=4, prologue + dispatch →
-`ArmEntryK` at the var arm `0x80003434`), the honest `env_get`-found contract
-(`ArmEntryK → VarPostCall`), and `blockC_var` (var-arm epilogue → `EvalExit`). -/
-theorem evalVarSim : EvalVarSimGoal := by
-  intro g N A SL φf φc st d a x v sp r sret aEnv aExpr m0 _hEvalE
-  intro c hc
+/-- **The M4 `EvalE.var` gate, with the call-return memory retained**
+(`evalVarSimQ`).  Composes `blockA_k` (k=4, prologue + dispatch → `ArmEntryK` at
+the var arm `0x80003434`), an `env_get`-found contract carrying ANY extra fact `Q`
+about the call-return memory `mpc`, and `blockC_var_gen` (var-arm epilogue →
+`EvalExit`, retaining the arm's own write set `[sret, sret+24)`).
+
+Point-wise (not a `Triple`) so the oracle may be taken at the entry configuration
+`c` — `EvalVarEntry.env_get_found` is stated at that config's output.  `evalVarSim`
+is the `Q := True` projection. -/
+theorem evalVarSimQ (Q : Mem → Prop)
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (d : Nat) (a : Addr) (x : String) (v : Value)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
+    (c : Config)
+    (hc : EvalVarEntry g N A SL φf φc st d a x v sp r sret aEnv aExpr m0 c)
+    (hOracle : Triple
+      (fun c' => ∃ ment v8 v9 v18,
+        ArmEntryK g N A SL φf φc st (0x80003434#64) Env_getLoaded (.var x)
+          sp r sret aExpr aEnv v8 v9 v18 c.σ.sailOutput m0 ment c' ∧
+        c'.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf a)))
+      (fun c' => ∃ mpc v8 v9 v18,
+        VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 c.σ.sailOutput m0 mpc c' ∧
+        Q mpc)) :
+    ∃ c', Steps c c' ∧
+      (EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size st v sp r sret m0 c' ∧
+        ValueRepr c'.σ.mem N φc sret.toNat v ∧
+        ∃ mpc, Q mpc ∧
+          ∀ k, ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) → mpc[k]? = c'.σ.mem[k]?) := by
   have hexpr_m0 : ExprRepr m0 aExpr.toNat (.var x) := hc.mem ▸ hc.expr
   -- expose the var-name pointer `p` and CString from `ExprRepr … (.var x)`.
   obtain ⟨p, hkm0, hp64, hpcstr⟩ : ∃ p, read32 m0 aExpr.toNat = some 4 ∧
@@ -1630,14 +1684,32 @@ theorem evalVarSim : EvalVarSimGoal := by
       hc.expr_win, hc.sret_align, hc.sret_ram, hc.sret_win, hc.sret_vicode_disjoint,
       hc.sret_stack_disjoint, hc.sret_evalcode_disjoint, hc.stack_ram, hc.stack_win,
       ⟨hc.spill_defined.1, hc.spill_defined.2.1, hc.spill_defined.2.2, hc.envReg⟩⟩, rfl⟩
-  -- === env_get found-case (honest hypothesis): ArmEntryK → VarPostCall ===
-  obtain ⟨c2, hs2, mpc, v8', v9', v18', hPC⟩ :=
-    hc.env_get_found c1 ⟨ment, v8, v9, v18, hArm, _hx13⟩
-  -- === block C: var-arm epilogue → EvalExit ===
+  -- === env_get found-case (the Q-carrying oracle): ArmEntryK → VarPostCall ∧ Q ===
+  obtain ⟨c2, hs2, mpc, v8', v9', v18', hPC, hQ⟩ :=
+    hOracle c1 ⟨ment, v8, v9, v18, hArm, _hx13⟩
+  -- === block C: var-arm epilogue → EvalExit, retaining `Q` and the copy window ===
   obtain ⟨c3, hs3, hExit⟩ :=
-    blockC_var g N A SL φf φc st v sp r sret v8' v9' v18' c.σ.sailOutput m0
+    blockC_var_gen Q g N A SL φf φc st v sp r sret v8' v9' v18' c.σ.sailOutput m0
       hc.sret_arena_disjoint hc.sret_evalcode_disjoint hc.sret_stack_disjoint
-      c2 ⟨mpc, hPC⟩
+      c2 ⟨mpc, hPC, hQ⟩
   exact ⟨c3, (hs1.trans hs2).trans hs3, hExit⟩
+
+/-- **The M4 `EvalE.var` gate.**  The `Q := True` projection of `evalVarSimQ`;
+statement unchanged. -/
+theorem evalVarSim : EvalVarSimGoal := by
+  intro g N A SL φf φc st d a x v sp r sret aEnv aExpr m0 _hEvalE
+  intro c hc
+  obtain ⟨c', hs, hExit, hval, _⟩ :=
+    evalVarSimQ (fun _ => True) g N A SL φf φc st d a x v sp r sret aEnv aExpr m0 c hc
+      (by
+        intro c' hpre
+        obtain ⟨c'', hs', mpc, v8, v9, v18, hVPC⟩ := hc.env_get_found c' hpre
+        exact ⟨c'', hs', mpc, v8, v9, v18, hVPC, trivial⟩)
+  exact ⟨c', hs, hExit, hval⟩
+
+#print axioms blockC_var_gen
+#print axioms blockC_var
+#print axioms evalVarSimQ
+#print axioms evalVarSim
 
 end Vsa.Sim

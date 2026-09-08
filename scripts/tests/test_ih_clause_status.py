@@ -15,23 +15,23 @@ from scripts import ih_clause_model as model
 from scripts import ih_clause_status as status
 
 MISSING = ("Probe.lean:3:14: error(lean.unknownIdentifier): Unknown constant "
-           "`Vsa.Sim.IHClauseGeneric.footprint.hInt`\n")
-EXISTS = "'Vsa.Sim.IHClauseGeneric.footprint.hStr' depends on axioms: [propext]\n"
-UNCLEAN = "'Vsa.Sim.IHClauseGeneric.footprint.hBool' depends on axioms: [propext, sorryAx]\n"
+           "`Vsa.Sim.IHClauseGeneric.footprint.hCall`\n")
+EXISTS = "'Vsa.Sim.IHClauseGeneric.footprint.hVar' depends on axioms: [propext]\n"
+UNCLEAN = "'Vsa.Sim.IHClauseGeneric.footprint.hBinary' depends on axioms: [propext, sorryAx]\n"
 
 
 class ParsingTests(unittest.TestCase):
     def test_axiom_reports_unknown_constants_and_errors(self) -> None:
         output = MISSING + EXISTS + UNCLEAN + "'N.clean' does not depend on any axioms\n"
         reports = status.axiom_reports(output)
-        self.assertEqual(reports["Vsa.Sim.IHClauseGeneric.footprint.hStr"], ["propext"])
+        self.assertEqual(reports["Vsa.Sim.IHClauseGeneric.footprint.hVar"], ["propext"])
         self.assertEqual(reports["N.clean"], [])
         self.assertTrue(status.clean(reports["N.clean"]))
-        self.assertFalse(status.clean(reports["Vsa.Sim.IHClauseGeneric.footprint.hBool"]))
+        self.assertFalse(status.clean(reports["Vsa.Sim.IHClauseGeneric.footprint.hBinary"]))
         self.assertEqual(status.unknown_constants(output),
-                         {"Vsa.Sim.IHClauseGeneric.footprint.hInt"})
+                         {"Vsa.Sim.IHClauseGeneric.footprint.hCall"})
         self.assertEqual(status.error_lines(output),
-                         [(3, "Unknown constant `Vsa.Sim.IHClauseGeneric.footprint.hInt`")])
+                         [(3, "Unknown constant `Vsa.Sim.IHClauseGeneric.footprint.hCall`")])
 
     def test_candidate_and_target_parsing(self) -> None:
         self.assertEqual(status.parse_candidate("from_old:x"), ("from_old", "x"))
@@ -52,10 +52,10 @@ class HookProbeTests(unittest.TestCase):
         with patch.object(status, "run_lean",
                           return_value=census.LeanResult(1, MISSING + EXISTS + UNCLEAN)):
             verdicts = status.probe_hooks(self.info, Path("/backend"), Path("/out"))
-        self.assertEqual(verdicts["Vsa.Sim.IHClauseGeneric.footprint.hInt"], "missing")
-        self.assertEqual(verdicts["Vsa.Sim.IHClauseGeneric.footprint.hStr"], "exists")
-        self.assertEqual(verdicts["Vsa.Sim.IHClauseGeneric.footprint.hBool"], "exists-unclean")
-        self.assertEqual(verdicts["Vsa.Sim.IHClauseGeneric.footprint.hCall"], "unknown")
+        self.assertEqual(verdicts["Vsa.Sim.IHClauseGeneric.footprint.hCall"], "missing")
+        self.assertEqual(verdicts["Vsa.Sim.IHClauseGeneric.footprint.hVar"], "exists")
+        self.assertEqual(verdicts["Vsa.Sim.IHClauseGeneric.footprint.hBinary"], "exists-unclean")
+        self.assertEqual(verdicts["Vsa.Sim.IHClauseGeneric.footprint.hAssign"], "unknown")
 
     def test_source_scan_finds_theorem_under_namespace(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -63,12 +63,12 @@ class HookProbeTests(unittest.TestCase):
             (root / "Vsa").mkdir()
             (root / "Vsa/G.lean").write_text(
                 "namespace Vsa.Sim.IHClauseGeneric.footprint\n"
-                "theorem hStr : True := trivial\n-- theorem hInt\nend Vsa.Sim\n")
+                "theorem hVar : True := trivial\n-- theorem hCall\nend Vsa.Sim\n")
             status._SOURCE_INDEX.clear()
             self.assertTrue(status.declared_in_source(
-                "Vsa.Sim.IHClauseGeneric.footprint.hStr", root))
+                "Vsa.Sim.IHClauseGeneric.footprint.hVar", root))
             self.assertFalse(status.declared_in_source(
-                "Vsa.Sim.IHClauseGeneric.footprint.hInt", root))
+                "Vsa.Sim.IHClauseGeneric.footprint.hCall", root))
             self.assertFalse(status.declared_in_source("Other.ns.hStr", root))
             status._SOURCE_INDEX.clear()
 
@@ -85,14 +85,14 @@ class DraftTests(unittest.TestCase):
         self.info = model.load_model(clauses=["Footprint"])["Footprint"]
 
     def test_draft_source_line_ranges_cover_each_theorem(self) -> None:
-        field = self.info.field("hInt")
-        drafts = {"hInt": status.candidates(field, ["trivialStep_of_old"], [("exact", "foo")],
+        field = self.info.field("hCall")
+        drafts = {"hCall": status.candidates(field, ["trivialStep_of_old"], [("exact", "foo")],
                                             "extraM")}
-        self.assertEqual([c.label for c in drafts["hInt"]],
-                         ["exact:Vsa.Sim.IHClauseGeneric.footprint.hInt",
+        self.assertEqual([c.label for c in drafts["hCall"]],
+                         ["exact:Vsa.Sim.IHClauseGeneric.footprint.hCall",
                           "from_old:trivialStep_of_old", "from_old:.toM∘trivialStep_of_old",
                           "exact:foo"])
-        self.assertTrue(drafts["hInt"][2].term.endswith("(trivialStep_of_old hOld).toM"))
+        self.assertTrue(drafts["hCall"][2].term.endswith("(trivialStep_of_old hOld).toM"))
         wrapped = status.candidates(field, ["d"], [], "extra")
         self.assertTrue(wrapped[2].term.endswith("ofWith (d hOld)"))
         shaped = status.candidates(field, ["d"], [], "extraM", frozenset({"d"}))
@@ -102,26 +102,26 @@ class DraftTests(unittest.TestCase):
         for name, (start, end) in ranges.items():
             index = int(name.rsplit("_", 1)[1])
             self.assertEqual(lines[start - 1],
-                             f"/-- `hInt` candidate {index}: `{drafts['hInt'][index - 1].label}`. -/")
+                             f"/-- `hCall` candidate {index}: `{drafts['hCall'][index - 1].label}`. -/")
             self.assertEqual(lines[end - 1], "")
             self.assertEqual(lines[end - 2], f"#print axioms {name}")
         self.assertTrue(source.rstrip().endswith("end Vsa.Sim.IHClause.Footprint"))
 
     def test_evaluate_drafts_attributes_errors_by_line(self) -> None:
-        field = self.info.field("hInt")
-        drafts = {"hInt": status.candidates(field, ["trivialStep_of_old"], [])}
+        field = self.info.field("hCall")
+        drafts = {"hCall": status.candidates(field, ["trivialStep_of_old"], [], "extraM")}
         _, ranges = status.draft_source(self.info, drafts)
-        first_start = ranges["draft_hInt_1"][0]
+        first_start = ranges["draft_hCall_1"][0]
         ns = self.info.namespace
         output = (f"D.lean:{first_start + 3}:2: error: Unknown identifier `x`\n"
-                  f"'{ns}.draft_hInt_1' depends on axioms: [sorryAx]\n"
-                  f"'{ns}.draft_hInt_2' depends on axioms: [propext]\n")
+                  f"'{ns}.draft_hCall_1' depends on axioms: [sorryAx]\n"
+                  f"'{ns}.draft_hCall_2' depends on axioms: [propext]\n")
         result = status.evaluate_drafts(self.info, drafts, output, ranges)
-        self.assertEqual(result["hInt"]["candidate"], "from_old:trivialStep_of_old")
-        self.assertIn("Unknown identifier", result["hInt"]["detail"])
+        self.assertEqual(result["hCall"]["candidate"], "from_old:trivialStep_of_old")
+        self.assertIn("Unknown identifier", result["hCall"]["detail"])
         failing = status.evaluate_drafts(self.info, drafts, "", ranges)
-        self.assertEqual(failing["hInt"]["candidate"], "")
-        self.assertIn("no axiom report", failing["hInt"]["detail"])
+        self.assertEqual(failing["hCall"]["candidate"], "")
+        self.assertIn("no axiom report", failing["hCall"]["detail"])
 
     def test_outcome_mapping(self) -> None:
         self.assertEqual(status.outcome("from_old:x", True, "ENCODE-GAP: y", "ENCODE-GAP: y"),
@@ -155,7 +155,8 @@ class DraftTests(unittest.TestCase):
                              return_value={"houdini": "ENCODE-GAP: a", "autoprove": "ENCODE-GAP: a"}):
             rows = status.suggest(self.info, None, Path(directory), ["trivialStep_of_old"], [],
                                   {}, {"trueExtra"})
-            self.assertEqual(len(rows), 15)
+            self.assertEqual(
+                len(rows), sum(f.status in ("HOOK", "MANUAL", "STALE") for f in self.info.fields))
             self.assertTrue(all(r["outcome"] == "UNSUPPORTED" for r in rows))
             self.assertTrue(all(r["encoding"].startswith("encode-gap:the step concludes")
                                 for r in rows))
@@ -190,10 +191,11 @@ class MainTests(unittest.TestCase):
             self.assertEqual(code, 0)
             rows = (Path(directory) / "ih_clause_status.tsv").read_text().splitlines()
             self.assertEqual(rows[0].split("\t"), list(status.STATUS_COLUMNS))
-            self.assertEqual(len(rows), 31)
+            fields = sum(len(i.fields) for i in model.load_model().values())
+            self.assertEqual(len(rows), fields + 1)
             report = json.loads((Path(directory) / "ih_clause_status.json").read_text())
             self.assertIsNone(report["backend"])
-            self.assertEqual(len(report["status"]), 30)
+            self.assertEqual(len(report["status"]), fields)
             self.assertEqual(report["clauses"]["Trivial"]["module_state"], "current")
 
     def test_unknown_clause_fails(self) -> None:

@@ -11,6 +11,8 @@ import scripts.gen_ih_clause as generator
 
 HEADER = "name\tpred\timports\tmotives\tsteps\tnotes\n"
 HEADER_KIND = "name\tkind\tpred\timports\tmotives\tsteps\tnotes\n"
+HEADER_GUARD = "name\tkind\tpred\timports\tmotives\tguard\tsteps\tnotes\n"
+GUARD = "Vsa.Sim.IHClauseGeneric.noAllocExpr e = true"
 
 
 def write_tsv(directory: Path, body: str, header: str = HEADER) -> Path:
@@ -31,6 +33,35 @@ class SchemaTests(unittest.TestCase):
                          ("from_old", "trivialStep_of_old"))
         footprint = next(c for c in clauses if c.name == "Footprint")
         self.assertEqual((footprint.kind, footprint.pred), ("extraM", "footExtra noArenaFoot"))
+        self.assertEqual(footprint.guard, "")
+        self.assertEqual(generator.parse_tag(footprint.tag("hInt")),
+                         ("exact", "Vsa.Sim.IHClauseGeneric.footprint.hInt"))
+        self.assertEqual(generator.parse_tag(footprint.tag("hCall")), ("generic", "footprint"))
+        guarded = next(c for c in clauses if c.name == "FootprintNA")
+        self.assertEqual(guarded.guard, GUARD)
+        self.assertEqual(generator.parse_tag(guarded.tag("hCall")),
+                         ("exact", "Vsa.Sim.IHClauseGeneric.footprintNA.hCall"))
+        self.assertEqual(generator.parse_tag(guarded.tag("hInt")),
+                         ("unguarded", "Vsa.Sim.IHClauseGeneric.footprint.hInt"))
+        self.assertEqual(generator.parse_tag(guarded.tag("hVar")), ("generic", "footprintNA"))
+        kind, payload = generator.parse_tag(guarded.tag("hNeg"))
+        self.assertEqual(kind, "exact")
+        self.assertIn("footprintNA.hNeg", payload)
+
+    def test_guard_column_is_optional_and_gates_unguarded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (clause,) = generator.load_clauses(
+                write_tsv(root, f"Demo\textraM\tp\t-\t-\t{GUARD}\t*=manual\t\n", HEADER_GUARD))
+            self.assertEqual(clause.guard, GUARD)
+            self.assertEqual(clause.eval_motive_body(), f"{GUARD} → EvalIHWithM extraM st d env e st' v")
+            (clause,) = generator.load_clauses(
+                write_tsv(root, "Demo\textraM\tp\t-\t-\t-\t*=manual\t\n", HEADER_GUARD))
+            self.assertEqual(clause.guard, "")
+            self.assertEqual(clause.eval_motive_body(), "EvalIHWithM extraM st d env e st' v")
+            with self.assertRaisesRegex(ValueError, "unguarded tag needs a guard"):
+                generator.load_clauses(
+                    write_tsv(root, "Demo\textraM\tp\t-\t-\t-\thInt=unguarded:x\t\n", HEADER_GUARD))
 
     def test_kind_column_is_optional_and_validated(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -131,6 +162,37 @@ class EmissionTests(unittest.TestCase):
         self.assertIn("  hInt :=\n    someLemma", text)
         self.assertNotIn("theorem closed", text)
         self.assertNotIn("  hSExpr :", text)  # ExecS motive is True: no field
+
+    def test_guarded_clause_emits_guarded_motive_and_lifts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tsv = write_tsv(Path(directory),
+                            f"Demo\textraM\tfootExtra noArenaFoot\t-\t-\t{GUARD}\t"
+                            "hInt=unguarded:leafLemma;hNeg=unguarded:negLemma|projUnary;"
+                            "hBinary=unguarded:binLemma|projL|projR;hStr=from_old:d;"
+                            "hCall=exact:callLemma;*=generic:fpNA\t\n", HEADER_GUARD)
+            text = generator.render_all(tsv)["Demo"]
+        self.assertIn(f"  {GUARD} → EvalIHWithM extraM st d env e st' v\n", text)
+        self.assertIn(f"Guard: `{GUARD}`", text)
+        self.assertIn("  hInt :=\n    fun st d env n hOld _hg =>\n      leafLemma st d env n hOld\n", text)
+        self.assertIn("  hNeg :=\n    fun st d env e st' n a old_1 hOld ih_1 hg =>\n"
+                      "      negLemma st d env e st' n a old_1 hOld (ih_1 (projUnary hg))\n", text)
+        self.assertIn("old_1 old_2 hOld (ih_1 (projL hg)) (ih_2 (projR hg))\n", text)
+        self.assertIn("  hStr :=\n    fun _st _d _env _s hOld _hg =>\n      d hOld\n", text)
+        self.assertIn("  hCall :=\n    callLemma\n", text)
+        self.assertIn("-- IHCLAUSE-HOOK Demo hNot generic:fpNA", text)
+        self.assertNotIn("theorem closed", text)
+
+    def test_unguarded_projection_count_is_checked(self) -> None:
+        for steps, message in {
+            "hNeg=unguarded:negLemma": "1 guarded child IH",
+            "hInt=unguarded:leafLemma|proj": "0 guarded child IH",
+            "hCall=unguarded:callLemma|p|q|r": "1 guarded child IH",
+        }.items():
+            with self.subTest(steps=steps), tempfile.TemporaryDirectory() as directory:
+                tsv = write_tsv(Path(directory),
+                                f"Demo\textraM\tp\t-\t-\t{GUARD}\t{steps}\t\n", HEADER_GUARD)
+                with self.assertRaisesRegex(ValueError, message):
+                    generator.render_all(tsv)
 
     def test_relation_override_adds_fields(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

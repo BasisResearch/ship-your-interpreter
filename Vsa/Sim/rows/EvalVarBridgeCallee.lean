@@ -1,5 +1,6 @@
 import Vsa.Sim.rows.EvalVarBridge
 import Vsa.Sim.EnvGetMarshal
+import Vsa.Sim.rows.EvalVarRowFootprint
 
 /-!
 # `EvalVarBridgeCallee` — discharging `VarCallLinkage.callee` from the two new
@@ -211,7 +212,104 @@ theorem varCallLinkage_callee
       fa iw len pn r0 r8 r9 r18 r19 r20 r21 hpenv hSR hfa hiw hbelow hhit hlen hval hGeom hD)
     (VarPostRepack g SL r out0 m0)
 
+/-! ## The `env_get` write set at the caller's stack window (`VarPostCallPin`)
+
+`EnvGetFramedPost` carries `env_get`'s exact frame — the run wrote only
+`[out, out+24) ∪ [sp0-64, sp0)` with `out = (sp-1088)+0xf0` and `sp0 = sp-1088`.
+Both windows sit inside the caller's live stack `[SL.lo, sp)` whenever the arm's
+entry geometry holds (`EvalEntry.stackOK : StackOK SL sp 2176` gives
+`SL.lo + 1152 ≤ sp.toNat`), so the framed post yields the arm-level pin
+`Rows.VarPostCallPin` — the conjunct the var leaf needs to reach
+`EvalIHF noArenaFoot` (`rows/EvalVarRowFootprint.lean`).  The pin is stated against
+the arm-entry memory `ment`; `ArmEntryK`'s own frame
+(`∀ a ∉ [SL.lo, sp), ment[a]? = m0[a]?`) composes it to the row entry `m0`. -/
+theorem envGetFramedPost_pin
+    (SL : StackLayout) (sp : BitVec 64)
+    (penv r0 r8 r9 r18 r19 r20 r21 : BitVec 64)
+    (N : NativeAddrs) (φf φc : Vsa.While.Addr → Nat)
+    (v : Value) (ment : Mem) (c : Config)
+    (hsp : SL.lo + 1152 ≤ sp.toNat)
+    (h : EnvGetFramedPost penv r0 r8 r9 r18 r19 r20 r21 N φf φc v sp ment c) :
+    Rows.VarPostCallPin SL sp ment c.σ.mem := by
+  obtain ⟨m', _, _, _, _, _, _, _, _, _, _, _, _, hmem, _, _, hframe⟩ := h
+  have hsp1088 : 1088 ≤ sp.toNat := by omega
+  have h1088 : (sp - 1088#64).toNat = sp.toNat - 1088 := by
+    rw [BitVec.toNat_sub]
+    have hb : (1088#64 : BitVec 64).toNat = 1088 := by decide
+    rw [hb]; have := sp.isLt; omega
+  have h1152 : ((sp - 1088#64) - 64#64).toNat = sp.toNat - 1152 := by
+    rw [BitVec.toNat_sub, h1088]
+    have hb : (64#64 : BitVec 64).toNat = 64 := by decide
+    rw [hb]; have := sp.isLt; omega
+  have hout : ((sp - 1088#64) + 0xf0#64).toNat = sp.toNat - 1088 + 0xf0 := by
+    rw [show (0xf0#64 : BitVec 64) =
+        LeanRV64DExecutable.Functions.sign_extend (m := 64) (0x0f0#12) from by
+      apply BitVec.eq_of_toNat_eq; decide]
+    exact var_off_pos sp (0x0f0#12) 0xf0 (by decide) (by omega) hsp1088
+  intro a ha
+  rw [hmem]
+  refine hframe a ⟨?_, ?_⟩
+  · rw [hout]; omega
+  · rw [h1152]; omega
+
+-- discipline: allow(R7-conj-tower-def) the two `∃ mpc` below re-state the LANDED
+-- `varCallLinkage_callee`/`VarPostCall` seam shape for its pin-carrying sibling;
+-- the new fact itself is the named `Rows.VarPostCallPin`.
+/-- `varCallLinkage_callee` with the arm-level write-set pin retained.
+
+The repackaging premise is taken in its memory-transparent form (`VarPostRepack`
+below): the relocation of `env_get`'s framed post into `VarPostCall` reads the
+result buffer and rebuilds the caller's facts — it executes no store, so the
+`VarPostCall` memory `mpc` IS the memory the callee returned at.  That is the ONLY
+strengthening over `varCallLinkage_callee`'s premise, and it is what carries
+`env_get`'s frame (`envGetFramedPost_pin`) to the arm. -/
+theorem varCallLinkage_calleeF
+    (st : SpecSt) (x : String) (v : Value)
+    (sp sret aExpr aEnv : BitVec 64) (v8 v9 v18 v19 v20 v21 : BitVec 64)
+    (out0 : Array String) (ment : Mem)
+    (penv nm : BitVec 64)
+    (N : NativeAddrs) (A : Arena) (φf φc : Vsa.While.Addr → Nat)
+    (fa : Vsa.While.Addr) (iw : Nat) (len pn : Nat)
+    (r0 r8 r9 r18 r19 r20 r21 : BitVec 64)
+    (hpenv : penv.toNat = φf fa)
+    (hSR : StoreRepr ment N A φf φc st.store)
+    (hfa : fa < st.store.frames.size)
+    (hiw : iw < st.store.frames[fa].vars.length)
+    (hbelow : ∀ j, (hj : j < iw) →
+      ¬ (st.store.frames[fa].vars[j]'(Nat.lt_trans hj hiw)).1 = x)
+    (hhit : (st.store.frames[fa].vars[iw]).1 = x)
+    (hlen : len = st.store.frames[fa].vars.length)
+    (hval : (st.store.frames[fa].vars[iw]).2 = v)
+    (hGeom : ∀ c, EnvGetEntryV st sp sret aExpr aEnv v8 v9 v18 v19 v20 v21 out0 ment penv nm c →
+      EnvGetCallerGeom penv nm ((sp - 1088#64) + 0xf0#64) (0x80003444#64) (sp - 1088#64)
+        r0 r8 r9 r18 r19 r20 r21 len pn x st.store.frames[fa] ment c)
+    (hD : FrameStackDisj penv nm (sp - 1088#64) pn x st.store.frames[fa] ment)
+    (g : (R : Register) → Option (RegisterType R)) (SL : StackLayout)
+    (r : BitVec 64) (m0 : Mem)
+    (hsp : SL.lo + 1152 ≤ sp.toNat)
+    (VarPostRepack : ∀ (m : Mem),
+      Triple
+        (fun c => EnvGetFramedPost penv r0 r8 r9 r18 r19 r20 r21 N φf φc v sp ment c ∧
+          c.σ.mem = m)
+        (fun c => ∃ mpc, VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpc c ∧
+          mpc = m)) :
+    Triple
+      (EnvGetEntryV st sp sret aExpr aEnv v8 v9 v18 v19 v20 v21 out0 ment penv nm)
+      (fun c => ∃ mpc, VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpc c ∧
+        Rows.VarPostCallPin SL sp ment mpc) := by
+  intro c hEntry
+  obtain ⟨c1, hs1, hFramed⟩ :=
+    envGetFramed_triple st x v sp sret aExpr aEnv v8 v9 v18 v19 v20 v21 out0 ment penv nm N A φf φc
+      fa iw len pn r0 r8 r9 r18 r19 r20 r21 hpenv hSR hfa hiw hbelow hhit hlen hval hGeom hD
+      c hEntry
+  have hPin : Rows.VarPostCallPin SL sp ment c1.σ.mem :=
+    envGetFramedPost_pin SL sp penv r0 r8 r9 r18 r19 r20 r21 N φf φc v ment c1 hsp hFramed
+  obtain ⟨c2, hs2, mpc, hVPC, hmpc⟩ := VarPostRepack c1.σ.mem c1 ⟨hFramed, rfl⟩
+  exact ⟨c2, hs1.trans hs2, mpc, hVPC, by rw [hmpc]; exact hPin⟩
+
 #print axioms envGetFramed_triple
 #print axioms varCallLinkage_callee
+#print axioms envGetFramedPost_pin
+#print axioms varCallLinkage_calleeF
 
 end Vsa.Sim

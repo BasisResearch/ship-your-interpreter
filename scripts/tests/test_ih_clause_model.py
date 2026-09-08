@@ -55,8 +55,23 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(trivial.module_state, "current")
         self.assertTrue(trivial.closed)
         self.assertEqual(trivial.counts()["WIRED"], 15)
-        self.assertEqual(footprint.counts()["HOOK"], 15)
+        self.assertEqual(footprint.counts()["HOOK"] + footprint.counts()["WIRED"], 15)
+        self.assertEqual(footprint.field("hCall").status, "HOOK")
         self.assertFalse(footprint.closed)
+        self.assertEqual(footprint.guard, "")
+        self.assertEqual(footprint.field("hInt").wiring, "Vsa.Sim.IHClauseGeneric.footprint.hInt")
+        guarded = loaded["FootprintNA"]
+        self.assertEqual(guarded.guard, "Vsa.Sim.IHClauseGeneric.noAllocExpr e = true")
+        self.assertEqual(guarded.counts()["WIRED"], 13)
+        self.assertEqual(guarded.counts()["HOOK"], 2)
+        self.assertEqual(guarded.field("hCall").status, "WIRED")
+        self.assertEqual(guarded.field("hBinary").hook_lemma,
+                         "Vsa.Sim.IHClauseGeneric.footprintNA.hBinary")
+        self.assertEqual(guarded.field("hNeg").hypothesis_names, ["old_1", "hOld", "ih_1", "hg"])
+        self.assertTrue(guarded.field("hNeg").from_old_term("d").endswith("hOld _ih_1 _hg =>\n    d hOld"))
+        self.assertIn("noAllocExpr e = true → EvalIHWithM extraM",
+                      model.fragment_reason(guarded.field("hNeg"), guarded))
+        self.assertTrue(guarded.field("hInt").wiring.startswith("fun st d env n hOld _hg =>"))
         field = trivial.field("hBinary")
         self.assertEqual(field.projection, "Vsa.Sim.IHClause.Trivial.Residuals.hBinary")
         self.assertEqual(field.module, "Vsa.Sim.rows.IHClause_Trivial")
@@ -115,7 +130,7 @@ class ModelTests(unittest.TestCase):
         self.assertTrue(field.from_old_term("d", ".toM").endswith("(d hOld).toM"))
         self.assertTrue(field.from_old_term("d", "ofWith").endswith("ofWith (d hOld)"))
         rows = model.field_rows(loaded)
-        self.assertEqual(len(rows), 30)
+        self.assertEqual(len(rows), sum(len(i.fields) for i in loaded.values()))
         self.assertNotIn("field_type", rows[0])
 
 

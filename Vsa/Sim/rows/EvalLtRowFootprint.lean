@@ -48,9 +48,7 @@ theorem ltNodeFoot_noArena {SL : StackLayout} {A : Arena} {sp sret : Nat}
     noArenaFoot SL A sp sret k := by
   rcases hk with hh | hc
   · exact Or.inl (binaryHeadFoot_noArena h k hh)
-  · unfold ltCellFoot word8 resultSlot at hc
-    unfold noArenaFoot stackWin resultSlot
-    omega
+  · exact intCellFoot_noArena h k hc
 
 /-- **`evalLtSimF`** — `evalLtSim` with the node's footprint retained:
 `head ≫ blockC_lt_footprint ≫ blockD_v_rec_footprint`. -/

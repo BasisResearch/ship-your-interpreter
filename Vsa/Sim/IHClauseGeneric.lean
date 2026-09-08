@@ -268,6 +268,20 @@ def IntCellF (op : BinOp) (res : Int → Int → Value) (guard : Int → Int →
     guard a b →
     EvalIHF noArenaFoot st d env (.binary op el er) st'' (res a b)
 
+/-- The division-overflow cell at `EvalIHF noArenaFoot` (the whole-node form of
+`BinDivOverflowCell`, `rows/BinDispatchRow.lean`).  `IntCellF .div` is guarded only
+by `b ≠ 0` — exactly the guard `binOpSem` imposes — so, as in `eval_binary_row`,
+the `INT64_MIN / -1` subcase is a separate cell; `intCellF_div`
+(`IHClauseGenericSupply.lean`) splits on it. -/
+def DivOverflowCellF : Prop :=
+  ∀ (st : SpecSt) (d : Nat) (env : Addr) (el er : Expr) (st' st'' : SpecSt) (a b : Int),
+    EvalE st d env el st' (.int a) → EvalE st' d env er st'' (.int b) →
+    EvalIHF noArenaFoot st d env el st' (.int a) →
+    EvalIHF noArenaFoot st' d env er st'' (.int b) →
+    a = -2^63 → b = -1 →
+    EvalIHF noArenaFoot st d env (.binary .div el er) st''
+      (.int (wrap64 ((-2^63 : Int).tdiv (-1))))
+
 /-- An equality cell at `EvalIHF noArenaFoot` (the whole-node form of `BinEqCell`). -/
 def EqCellF (op : BinOp) (res : Value → Value → Value) : Prop :=
   ∀ (st : SpecSt) (d : Nat) (env : Addr) (el er : Expr) (st' st'' : SpecSt) (lv rv : Value),

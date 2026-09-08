@@ -4,8 +4,8 @@
 For each clause in `scripts/ih_clauses.tsv` the tool lists the fields of
 `Vsa.Sim.IHClause.<Name>.Residuals`, their table tag and their status:
 
-  WIRED   tag `exact:`/`from_old:` and the generated `Residuals.ofUnwired`
-          fills the field (the module is current);
+  WIRED   tag `exact:`/`from_old:`/`unguarded:` and the generated
+          `Residuals.ofUnwired` fills the field (the module is current);
   HOOK    tag `generic:<id>`: the field waits for the generic discharger
           `Vsa.Sim.IHClauseGeneric.<id>.<case>`; the tool reports whether that
           lemma is declared in the sources and, with `--backend`, whether it
@@ -352,8 +352,9 @@ def summary(model_: dict[str, model.ClauseInfo], rows: list[dict[str, str]],
     lines = [f"IH clause status: {len(model_)} clause(s), {total} residual field(s)"]
     for info in model_.values():
         counts = info.counts()
+        guard = f" guard={info.guard}" if info.guard else ""
         lines.append(
-            f"  {info.name:<12} {info.kind}={info.pred:<24} "
+            f"  {info.name:<12} {info.kind}={info.pred:<24}{guard} "
             + " ".join(f"{s} {counts[s]}" for s in model.STATUSES)
             + f"  closed={'yes' if info.closed else 'no'} module={info.module_state}")
         hooks = [r for r in rows if r["clause"] == info.name and r["hook_lemma"]]

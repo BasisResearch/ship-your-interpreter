@@ -80,6 +80,24 @@ structure EqNeDispatchInput
   expr : ExprBounds aExpr
   stack : StackBounds sp SL
 
+/-- The dispatch frame bundle at the arm's frame base `sp - 1088`, from the entry
+stack bounds (the geometry `evalEqNeChain_dispatch_of_twoSubReturn` builds
+internally, exposed so consumers can state the dispatch's memory frame). -/
+theorem frameBundle_of_stackBounds {sp : BitVec 64} {SL : StackLayout} {m : Mem}
+    (hSB : StackBounds sp SL) : FrameBundle m (sp - 1088#64) := by
+  have hspsub : (sp - 1088#64).toNat = sp.toNat - 1088 := by
+    rw [BitVec.toNat_sub]
+    have h1088 : (1088#64 : BitVec 64).toNat = 1088 := by decide
+    rw [h1088]
+    have := sp.isLt
+    have := hSB.SLloSp
+    have := hSB.SLlo
+    omega
+  exact ⟨hspsub ▸ (frameBaseGeom hSB).1, hspsub ▸ (frameBaseGeom hSB).2.1,
+    hspsub ▸ (frameBaseGeom hSB).2.2.1, hspsub ▸ (frameBaseGeom hSB).2.2.2⟩
+
+#print axioms frameBundle_of_stackBounds
+
 /-- The actual left value tag identifies the kind respilled by the binary head. -/
 theorem BinaryReturnLoads.kind_readback {sp : BitVec 64} {c : Config}
     {N : NativeAddrs} {φ : Addr → Nat} {v : Value}

@@ -157,7 +157,7 @@ site lemmas + the first-site word map `bwOf`) to reach the `value_bool` entry, t
 hand off to `boolBoxEpilogue` for the box + epilogue, producing
 `PreEpilogueVD .bool bres`.  eq/ne share this ENTIRE proof; they differ only in the
 `firstSite`/`bwOf` (mv vs seqz), the three site PCs, the box constants, and `bres`. -/
-theorem blockC_eqne
+theorem blockC_eqne_footprint
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (φf φc φfm φcm φf' φc' : Addr → Nat)
@@ -231,7 +231,8 @@ theorem blockC_eqne
       PhiExtends φc φcm' st'.store.closures.size ∧
       PhiExtends φfm' φfe st''.store.frames.size ∧
       PhiExtends φcm' φce st''.store.closures.size ∧
-      PreEpilogueVD g N A SL φfe φce st'' (.bool bres) sp r sret v8 v9 v18 out0 m0 mpre cfin := by
+      PreEpilogueVD g N A SL φfe φce st'' (.bool bres) sp r sret v8 v9 v18 out0 m0 mpre cfin ∧
+      MemFootprint (resultSlot sret.toNat) cR.σ.mem mpre := by
   obtain ⟨hGR, hpcR, hx10R, hx9R, hspR, ⟨vmiR, hmiR⟩, htickR, houtR, hmemframeR, hMemExtR, hframeR⟩ := hcR
   have hpcR' : cR.σ.regs.get? Register.PC = some firstPC := by rw [hpcR, hlink0]
   have hfb : (sp - 1088#64).toNat = sp.toNat - 1088 := by
@@ -376,8 +377,8 @@ theorem blockC_eqne
   -- === invoke the SHARED bool-box epilogue ===
   let cvb : Config := ⟨τ3, j3, cR.steps + 1 + 1 + 1⟩
   have hmemcvb : cvb.σ.mem = cR.σ.mem := hmemτ3e
-  obtain ⟨mpre, φfm2, φcm2, φfe, φce, cfin, hStepsFin, hp1, hp2, hp3, hp4, hPre⟩ :=
-    boolBoxEpilogue g N A SL φf φc φfm φcm φf' φc'
+  obtain ⟨mpre, φfm2, φcm2, φfe, φce, cfin, hStepsFin, hp1, hp2, hp3, hp4, hPre, hFoot0⟩ :=
+    boolBoxEpilogue_footprint g N A SL φf φc φfm φcm φf' φc'
       st'.store.frames.size st'.store.closures.size
       st''.store.frames.size st''.store.closures.size st' st''
       sp r sret v8 v9 v18 v19 w19 (bwOf (cond (Value.equal vl vr) (1#64) (0#64))) bres out0 m0
@@ -397,12 +398,12 @@ theorem blockC_eqne
       hsretEvalCode hsretStk hsretInSL hSLlo40 hSLlo32
       hsp1088 hspRam hspLo hspHtif hsp8 hraAl
       hldLo hldHiRam hldHtif hldAl
-  refine ⟨mpre, φfm2, φcm2, φfe, φce, cfin, ?_, hp1, hp2, hp3, hp4, hPre⟩
+  refine ⟨mpre, φfm2, φcm2, φfe, φce, cfin, ?_, hp1, hp2, hp3, hp4, hPre, hmemcvb ▸ hFoot0⟩
   have hchain : Steps cR cvb :=
     ((Steps.single hstepτ1).trans (Steps.single hstepτ2)).trans (Steps.single hstepτ3)
   exact hchain.trans hStepsFin
 
-#print axioms blockC_eqne
+#print axioms blockC_eqne_footprint
 
 /-! ## `EqNeBoxPre` — the shared post-`value_equal` residual bundle
 
@@ -472,7 +473,7 @@ theorem eqne_ldPCeq (sp : BitVec 64) (hsp1088 : 1088 ≤ sp.toNat) :
 1 0`) run the eq middle (`mv a1,a0 ; mv a0,s1 ; jal value_bool`) and box to
 `.bool (vl.equal vr)`, producing `PreEpilogueVD`.  A thin instantiation of
 `blockC_eqne` with the eq site lemmas + box constants. -/
-theorem blockC_eq
+theorem blockC_eq_footprint
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (φf φc φfm φcm φf' φc' : Addr → Nat) (st' st'' : Vsa.While.St)
@@ -490,9 +491,10 @@ theorem blockC_eq
       PhiExtends φc φcm' st'.store.closures.size ∧
       PhiExtends φfm' φfe st''.store.frames.size ∧
       PhiExtends φcm' φce st''.store.closures.size ∧
-      PreEpilogueVD g N A SL φfe φce st'' (.bool (vl.equal vr)) sp r sret v8 v9 v18 out0 m0 mpre cfin := by
+      PreEpilogueVD g N A SL φfe φce st'' (.bool (vl.equal vr)) sp r sret v8 v9 v18 out0 m0 mpre cfin ∧
+      MemFootprint (resultSlot sret.toNat) cR.σ.mem mpre := by
   obtain ⟨hgeo1, hgeo2, hgeo3, hgeo4⟩ := eqne_ld_geom sp hBox.hsp1088 hBox.hspRam hBox.hspHtif hBox.hsp8
-  exact blockC_eqne g N A SL φf φc φfm φcm φf' φc' st' st''
+  exact blockC_eqne_footprint g N A SL φf φc φfm φcm φf' φc' st' st''
     sp r sret v8 v9 v18 v19 w19 vl vr (vl.equal vr) out0 m0 mEnt cR (0x80003720#64)
     (0x80003720#64) (0x80003724#64) (0x80003728#64) (fun v => v + sign_extend (m := 64) (0x000#12))
     (0x1ff0d0#21)
@@ -517,7 +519,7 @@ theorem blockC_eq
 
 /-- **`blockC_ne`.**  As `blockC_eq` but the ne middle (`seqz a1,a0` instead of `mv`)
 and box to `.bool (!(vl.equal vr))`. -/
-theorem blockC_ne
+theorem blockC_ne_footprint
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout)
     (φf φc φfm φcm φf' φc' : Addr → Nat) (st' st'' : Vsa.While.St)
@@ -535,9 +537,10 @@ theorem blockC_ne
       PhiExtends φc φcm' st'.store.closures.size ∧
       PhiExtends φfm' φfe st''.store.frames.size ∧
       PhiExtends φcm' φce st''.store.closures.size ∧
-      PreEpilogueVD g N A SL φfe φce st'' (.bool (!(vl.equal vr))) sp r sret v8 v9 v18 out0 m0 mpre cfin := by
+      PreEpilogueVD g N A SL φfe φce st'' (.bool (!(vl.equal vr))) sp r sret v8 v9 v18 out0 m0 mpre cfin ∧
+      MemFootprint (resultSlot sret.toNat) cR.σ.mem mpre := by
   obtain ⟨hgeo1, hgeo2, hgeo3, hgeo4⟩ := eqne_ld_geom sp hBox.hsp1088 hBox.hspRam hBox.hspHtif hBox.hsp8
-  exact blockC_eqne g N A SL φf φc φfm φcm φf' φc' st' st''
+  exact blockC_eqne_footprint g N A SL φf φc φfm φcm φf' φc' st' st''
     sp r sret v8 v9 v18 v19 w19 vl vr (!(vl.equal vr)) out0 m0 mEnt cR (0x80003770#64)
     (0x80003770#64) (0x80003774#64) (0x80003778#64)
     (fun v => zero_extend (m := 64) (bool_to_bit (zopz0zI_u v (sign_extend (m := 64) (0x001#12)))))
@@ -561,8 +564,152 @@ theorem blockC_ne
     hBox.hSLlo40 hBox.hSLlo32 hBox.hSLloSp hBox.hspSLhi hBox.hsp1088 hBox.hspRam
     hBox.hspLo hBox.hspHtif hBox.hsp8 hBox.hraAl hgeo1 hgeo2 hgeo3 hgeo4
 
+/-- **`blockC_eqne`** — the landed statement: the footprint-free projection of
+`blockC_eqne_footprint`. -/
+theorem blockC_eqne
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (φf φc φfm φcm φf' φc' : Addr → Nat)
+    (st' st'' : Vsa.While.St)
+    (sp r sret : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64)
+    (vl vr : Value) (bres : Bool) (out0 : Array String)
+    (m0 mEnt : Mem) (cR : Config) (link : BitVec 64)
+    -- middle-stage sites (op-specific)
+    (firstPC secondPC jalPC : BitVec 64) (bwOf : BitVec 64 → BitVec 64) (jImm' : BitVec 21)
+    (firstSite : EqNeFirstSite firstPC bwOf) (secondSite : EqNeSecondSite secondPC)
+    (jalVboolSite : EqNeJalVboolSite jalPC jImm')
+    -- box params (op-specific)
+    (ldPC jPC : BitVec 64) (jImm : BitVec 21)
+    (ldS3 : LdS3Site ldPC) (jExit : JExitSite jPC jImm)
+    -- middle wiring facts
+    (hfirstAfter : BitVec.addInt firstPC 4 = secondPC)
+    (hsecondAfter : BitVec.addInt secondPC 4 = jalPC)
+    (hjalTgt : (jalPC + sign_extend (m := 64) jImm') = (0x800027f8#64 : BitVec 64))
+    (hlink0 : BitVec.update (link + sign_extend (m := 64) (0x000#12)) 0 0#1 = firstPC)
+    (hboxLink : BitVec.addInt jalPC 4 = ldPC)
+    -- box wiring facts
+    (hldPCupdate : BitVec.update (ldPC + sign_extend (m := 64) (0x000#12)) 0 0#1 = ldPC)
+    (hldAfter : BitVec.addInt ldPC 4 = jPC)
+    (hjTgt : (jPC + sign_extend (m := 64) jImm) = (0x800033ec#64 : BitVec 64))
+    (hjTgtAl : (jPC + sign_extend (m := 64) jImm).toNat % 4 = 0)
+    (hldPCeq : ((sp - 1088#64) + sign_extend (m := 64) (0x418#12)).toNat = sp.toNat - 40)
+    (hlinkAl : (BitVec.update (ldPC + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0)
+    -- the boolean bridge: bw fed to value_bool boxes to `bres`
+    (hval_bridge : (bwOf (cond (Value.equal vl vr) (1#64) (0#64)) != 0#64) = bres)
+    -- === the `value_equal` return config ===
+    (hcR : VeReturn g (sp - 1088#64) sret vl vr link out0 mEnt cR)
+    (hVboolEnt : Value_boolLoaded mEnt)
+    (hcodeEnt : Eval_exprLoaded mEnt)
+    (hBoolRegion : BoolRegion sret)
+    -- === the arm's transport of `mEnt` back to `c`/`m0`/store/geometry ===
+    (hpfm : PhiExtends φf φfm st'.store.frames.size)
+    (hpcm : PhiExtends φc φcm st'.store.closures.size)
+    (hpf' : PhiExtends φfm φf' st''.store.frames.size)
+    (hpc' : PhiExtends φcm φc' st''.store.closures.size)
+    (houtStr : String.join out0.toList = st''.out)
+    (hSurvSL0 : ∀ m' : Mem,
+      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → mEnt[k]? = m'[k]?) →
+      StoreRepr m' N A φf' φc' st''.store)
+    (hs3Ent : read64 mEnt (sp.toNat - 40) = some w19.toNat)
+    (hslotRa0 : read64 mEnt (sp.toNat - 8) = some r.toNat)
+    (hslotS00 : read64 mEnt (sp.toNat - 16) = some v8.toNat)
+    (hslotS10 : read64 mEnt (sp.toNat - 24) = some v9.toNat)
+    (hslotS20 : read64 mEnt (sp.toNat - 32) = some v18.toNat)
+    (hgv8 : g Register.x8 = some v8) (hgv9 : g Register.x9 = some v9)
+    (hgv18 : g Register.x18 = some v18) (hgv2 : g Register.x2 = some sp)
+    (hgx19 : g Register.x19 = some v19) (hw19 : w19 = v19)
+    (hMemExt0 : MemExtends m0 mEnt)
+    (hWordsEnt : ValueWordsTotal mEnt sret.toNat)
+    (hmemframe0 : ∀ a : Nat, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
+      (sret.toNat ≤ a ∧ a < sret.toNat + 24) ∨ mEnt[a]? = m0[a]?)
+    (hsretEvalCode : sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat)
+    (hsretStk : sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat)
+    (hsretInSL : SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi)
+    (hSLlo40 : SL.lo ≤ sp.toNat - 40) (hSLlo32 : SL.lo ≤ sp.toNat - 32)
+    (hSLloSp : SL.lo + 1104 ≤ sp.toNat) (hspSLhi : sp.toNat ≤ SL.hi)
+    (hsp1088 : 1088 ≤ sp.toNat) (hspRam : sp.toNat ≤ 0x100000000)
+    (hspLo : 0x80000000 ≤ sp.toNat) (hspHtif : tohostAddr + 16 + 1088 ≤ sp.toNat)
+    (hsp8 : sp.toNat % 8 = 0) (hraAl : r.toNat % 4 = 0)
+    (hldLo : 0x80000000 ≤ (sp.toNat - 40))
+    (hldHiRam : (sp.toNat - 40) + 8 ≤ 0x100000000)
+    (hldHtif : (sp.toNat - 40) + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ (sp.toNat - 40))
+    (hldAl : (sp.toNat - 40) % 8 = 0) :
+    ∃ (mpre : Mem) (φfm' φcm' φfe φce : Addr → Nat) (cfin : Config),
+      Steps cR cfin ∧
+      PhiExtends φf φfm' st'.store.frames.size ∧
+      PhiExtends φc φcm' st'.store.closures.size ∧
+      PhiExtends φfm' φfe st''.store.frames.size ∧
+      PhiExtends φcm' φce st''.store.closures.size ∧
+      PreEpilogueVD g N A SL φfe φce st'' (.bool bres) sp r sret v8 v9 v18 out0 m0 mpre cfin := by
+  obtain ⟨mpre, φfm', φcm', φfe, φce, cfin, hs, h1, h2, h3, h4, hPre, _⟩ :=
+    blockC_eqne_footprint g N A SL φf φc φfm φcm φf' φc' st' st'' sp r sret v8 v9 v18 v19 w19 vl
+      vr bres out0 m0 mEnt cR link firstPC secondPC jalPC bwOf jImm' firstSite secondSite
+      jalVboolSite ldPC jPC jImm ldS3 jExit hfirstAfter hsecondAfter hjalTgt hlink0 hboxLink
+      hldPCupdate hldAfter hjTgt hjTgtAl hldPCeq hlinkAl hval_bridge hcR hVboolEnt hcodeEnt
+      hBoolRegion hpfm hpcm hpf' hpc' houtStr hSurvSL0 hs3Ent hslotRa0 hslotS00 hslotS10
+      hslotS20 hgv8 hgv9 hgv18 hgv2 hgx19 hw19 hMemExt0 hWordsEnt hmemframe0 hsretEvalCode
+      hsretStk hsretInSL hSLlo40 hSLlo32 hSLloSp hspSLhi hsp1088 hspRam hspLo hspHtif hsp8 hraAl
+      hldLo hldHiRam hldHtif hldAl
+  exact ⟨mpre, φfm', φcm', φfe, φce, cfin, hs, h1, h2, h3, h4, hPre⟩
+
+/-- **`blockC_eq`** — the landed statement: the footprint-free projection of
+`blockC_eq_footprint`. -/
+theorem blockC_eq
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (φf φc φfm φcm φf' φc' : Addr → Nat) (st' st'' : Vsa.While.St)
+    (sp r sret : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64)
+    (vl vr : Value) (out0 : Array String) (m0 mEnt : Mem) (cR : Config)
+    (hpfm : PhiExtends φf φfm st'.store.frames.size)
+    (hpcm : PhiExtends φc φcm st'.store.closures.size)
+    (hpf' : PhiExtends φfm φf' st''.store.frames.size)
+    (hpc' : PhiExtends φcm φc' st''.store.closures.size)
+    (hcR : VeReturn g (sp - 1088#64) sret vl vr (0x80003720#64) out0 mEnt cR)
+    (hBox : EqNeBoxPre g N A SL φf' φc' st'' sp r sret v8 v9 v18 v19 w19 out0 m0 mEnt) :
+    ∃ (mpre : Mem) (φfm' φcm' φfe φce : Addr → Nat) (cfin : Config),
+      Steps cR cfin ∧
+      PhiExtends φf φfm' st'.store.frames.size ∧
+      PhiExtends φc φcm' st'.store.closures.size ∧
+      PhiExtends φfm' φfe st''.store.frames.size ∧
+      PhiExtends φcm' φce st''.store.closures.size ∧
+      PreEpilogueVD g N A SL φfe φce st'' (.bool (vl.equal vr)) sp r sret v8 v9 v18 out0 m0 mpre cfin := by
+  obtain ⟨mpre, φfm', φcm', φfe, φce, cfin, hs, h1, h2, h3, h4, hPre, _⟩ :=
+    blockC_eq_footprint g N A SL φf φc φfm φcm φf' φc' st' st'' sp r sret v8 v9 v18 v19 w19 vl
+      vr out0 m0 mEnt cR hpfm hpcm hpf' hpc' hcR hBox
+  exact ⟨mpre, φfm', φcm', φfe, φce, cfin, hs, h1, h2, h3, h4, hPre⟩
+
+/-- **`blockC_ne`** — the landed statement: the footprint-free projection of
+`blockC_ne_footprint`. -/
+theorem blockC_ne
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (φf φc φfm φcm φf' φc' : Addr → Nat) (st' st'' : Vsa.While.St)
+    (sp r sret : BitVec 64) (v8 v9 v18 v19 w19 : BitVec 64)
+    (vl vr : Value) (out0 : Array String) (m0 mEnt : Mem) (cR : Config)
+    (hpfm : PhiExtends φf φfm st'.store.frames.size)
+    (hpcm : PhiExtends φc φcm st'.store.closures.size)
+    (hpf' : PhiExtends φfm φf' st''.store.frames.size)
+    (hpc' : PhiExtends φcm φc' st''.store.closures.size)
+    (hcR : VeReturn g (sp - 1088#64) sret vl vr (0x80003770#64) out0 mEnt cR)
+    (hBox : EqNeBoxPre g N A SL φf' φc' st'' sp r sret v8 v9 v18 v19 w19 out0 m0 mEnt) :
+    ∃ (mpre : Mem) (φfm' φcm' φfe φce : Addr → Nat) (cfin : Config),
+      Steps cR cfin ∧
+      PhiExtends φf φfm' st'.store.frames.size ∧
+      PhiExtends φc φcm' st'.store.closures.size ∧
+      PhiExtends φfm' φfe st''.store.frames.size ∧
+      PhiExtends φcm' φce st''.store.closures.size ∧
+      PreEpilogueVD g N A SL φfe φce st'' (.bool (!(vl.equal vr))) sp r sret v8 v9 v18 out0 m0 mpre cfin := by
+  obtain ⟨mpre, φfm', φcm', φfe, φce, cfin, hs, h1, h2, h3, h4, hPre, _⟩ :=
+    blockC_ne_footprint g N A SL φf φc φfm φcm φf' φc' st' st'' sp r sret v8 v9 v18 v19 w19 vl
+      vr out0 m0 mEnt cR hpfm hpcm hpf' hpc' hcR hBox
+  exact ⟨mpre, φfm', φcm', φfe, φce, cfin, hs, h1, h2, h3, h4, hPre⟩
+
+#print axioms blockC_eqne
 #print axioms blockC_eq
 #print axioms blockC_ne
+
+#print axioms blockC_eq_footprint
+#print axioms blockC_ne_footprint
 
 /-! ## `evalEqNeSim` — the shared `EvalE.binary .eq/.ne` recursive-case core
 

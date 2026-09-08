@@ -478,6 +478,8 @@ import Vsa.Sim.TermCaseBundle
 import Vsa.Sim.IHClauseSupport
 import Vsa.Sim.rows.IHClause_Trivial
 import Vsa.Sim.rows.IHClause_Footprint
+import Vsa.Sim.rows.IHClause_FootprintNA
+import Vsa.Sim.rows.IHClause_OwnedPayload
 import Vsa.Sim.rows.ArmPostGeom
 import Vsa.Sim.TripleCat
 import Vsa.Sim.TripleCatDemos
@@ -523,10 +525,15 @@ import Vsa.Sim.rows.EvalOrTrueRowFootprint
 import Vsa.Sim.rows.EvalAndFalseRowFootprint
 import Vsa.Sim.rows.EvalAndTrueRowFootprint
 import Vsa.Sim.rows.EvalOrFalseRowFootprint
+import Vsa.Sim.rows.EvalVarRowFootprint
 import Vsa.Sim.IHClauseFootprintMeta
 import Vsa.Sim.IHClauseGeneric
+import Vsa.Sim.IHClauseGenericOwned
+import Vsa.Sim.OwnedPayloadClause
 import Vsa.Sim.IHClauseGenericAlloc
 import Vsa.Sim.StrCmpCellClauses
+import Vsa.Sim.IHClauseGenericSupply
+import Vsa.Sim.rows.EvalEqNeRowFootprint
 import Vsa.Sim.rows.BinIntReadback
 import Vsa.Sim.rows.StringifySpec
 import Vsa.Sim.rows.StringifyStrdupTail

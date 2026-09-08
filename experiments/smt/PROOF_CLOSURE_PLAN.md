@@ -161,18 +161,53 @@ row's post. The tower that makes a clause cheap:
    (refute-before-prove), `ih_clause_ledger.py`, `proof_slice --structure`,
    `check_all.sh` stage a5.
 
-Open steps on the tower, in order: (a) generator `guard` column so the
-footprint clause is declared at `noAllocExpr e = true → EvalIHF noArenaFoot`
-(`IHClauseGeneric.footprintNA`, all 15 steps proved) and wire the four closed
-leaf steps as `exact:`; (b) supply the row-contract premises of the generic
-steps from the landed `*RowFootprint` suppliers (`NegRowF`, `NotRowF`,
-`LogicalShortRowF`, `LogicalFallRowF`, the remaining `IntCellF`/`EqCellF` cells
-from `binRow_<op>F`, `VarPinnedSim` after the `env_get` write-set conjunct)
-and `BinaryHeadFootprintSupplyCov`; (c) declare `Call`/`ExecSeq` motives in the
+Open steps on the tower, in order: (a) DONE: the generator has a `guard`
+column (`scripts/gen_ih_clause.py`, `scripts/ih_clauses.tsv`) — a guard makes
+the `EvalE` motive `<guard> → EvalIHWithM extraM …`, and the new tag
+`unguarded:<term>|<proj_1>|…|<proj_k>` wires a step stated without it. Clause
+`FootprintNA` (`Vsa/Sim/rows/IHClause_FootprintNA.lean`, guard
+`IHClauseGeneric.noAllocExpr e = true`) has 13 of 15 fields wired: the three
+allocating cases vacuously (`footprintNA.{hAssign,hFn,hCall}`), the four leaves
+from the unguarded closed leaf steps, and `hNeg`/`hNot`/the four logical steps
+from `footprintNA.<case>` applied to the closed row contracts of
+`Vsa/Sim/IHClauseGenericSupply.lean`. Clause `Footprint` wires the four closed
+leaves and the six one-child arms (`IHClauseGeneric.footprint.<case>`) and keeps
+five `generic:footprint` hooks (`hVar`, `hBinary`, and the three allocating
+cases, which are FALSE at `noArenaFoot`). OPEN in (a):
+`FootprintNA.hVar` (supply from `Rows.evalVarIHF` over `Rows.VarLeafResidF`;
+`footprint.hVar_of`'s `VarPinnedSim` is uninhabitable as stated) and `FootprintNA.hBinary` (`footprint.hBinary_of_cells` needs
+`BinaryFootprintCells`), i.e. step (b); the guarded clause is a stepping stone —
+allocating arms need the `allocFoot` family of task 2. (b) LANDED except the var
+leaf (`Vsa/Sim/IHClauseGenericSupply.lean`): the six one-child steps
+`footprint.{hNeg,hNot,hOrTrue,hAndFalse,hOrFalse,hAndTrue}` are CLOSED from the
+landed `eval<Arm>IHF` suppliers; the nine `IntCellF` cells are closed from
+`bin<Op>CellF_of` + `ScaffoldRows.field_hI<Op>` (division's `INT64_MIN / -1`
+subcase is the named premise `DivOverflowCellF`, the footprint twin of
+`eval_binary_row`'s `hDivOv`); `eqCellF_of`/`neCellF_of`
+(`Vsa/Sim/rows/EvalEqNeRowFootprint.lean`, over `eqBlockC_bridge_footprint` ≫
+`blockC_eq/ne_footprint`) supply the two `EqCellF` cells from the landed
+`BinEqCell` residuals; and `footprint{,NA}.hBinary_of_base` closes `hBinary` on
+exactly `eval_binary_row`'s remaining hypotheses.
+`BinaryHeadFootprintSupplyCov` is DISCHARGED (`binaryHeadFootprintSupplyCov`)
+over the parametric head `blockB_binary_footprint_gen` (`EvalBinSim.lean`; the
+landed `blockB_binary_footprint` is its projection at the trivial left-child
+fact), so `ScaffoldRows.field_hStr{Lt,Le,Gt,Ge}_of_clauses` need only
+`StrCmpOwnedOperands` and the two closed clause recursions. Left open in (b):
+`hVar` at the `VarPinnedSim` shape (superseded: `Rows.evalVarIHF` over
+`Rows.VarLeafResidF` lands the leaf; wire it in place of `footprint.hVar_of`) and the four
+`BinStrCmpCellF` fields of `BinaryFootprintCells` — obstruction: a string
+comparison's left child must carry its payload coverage, which the plain
+footprint clause does not give, so those four cells are supplyable only at a
+PRODUCT clause (footprint × payload coverage, `EvalIHFP`) declared as its own
+TSV line; (c) declare `Call`/`ExecSeq` motives in the
 `motives` column so `hCall` receives the callee's clause; (d) the allocating
 family `allocFoot` over `MallocRun`/`HeapOwned.pushClosure`/`EnvNewContract`;
-(e) a generator for the `*RowFootprint` modules and one shared `intCellFoot`
-(the eight integer modules and six one-child modules are one template each).
+(e) DONE: `scripts/gen_footprint_row.py` + `scripts/footprint_rows.tsv` emit all
+fifteen `*RowFootprint` modules (five family templates; `--check` in stage a3), and
+`ExitFootprint.lean` carries the shared `intCellFoot`/`truthyArgCellFoot` whose
+`_noArena` lemmas close the cell half of every `<arm>NodeFoot_noArena`. The per-op
+`<op>CellFoot` stay stated beside their cells in the row files (definitionally the
+shared predicate); folding them into aliases needs an edit of the landed row files.
 After (a)–(d) the four string cells close from `StrCmpOwnedOperands` alone,
 and `hEq`/`hNe` lose their `hVlSurv` conjunct the same way.
 
@@ -744,8 +779,8 @@ memories from the right child's `noArenaFoot` footprint and the left payload's
 whole-stack coverage. `Vsa/Sim/IHClauseGeneric.lean` holds the `Footprint`
 clause's generic steps at the generator's field types (`EvalIHF noArenaFoot`
 motive): `hInt`/`hStr`/`hBool`/`hNull` CLOSED (`leafExitF_of_pinned`: the pinned
-leaf exit IS the `noArenaFoot` footprint); `hVar` from `Rows.VarLeafResid` +
-the named premise `VarPinnedSim`; `hNeg`/`hNot`/the four logical cases from the
+leaf exit IS the `noArenaFoot` footprint); `hVar` from `Rows.VarLeafResidF` (`Rows.evalVarIHF`;
+`VarPinnedSim` is uninhabitable as stated — see the variable-leaf paragraph); `hNeg`/`hNot`/the four logical cases from the
 arms' footprint row contracts `NegRowF`/`NotRowF`/`LogicalShortRowF`/
 `LogicalFallRowF` (Level 1B: the `F` siblings of the closed fields); `hBinary`
 from `BinaryFootprintCells` (`.lt` supplied by `intCellF_lt` over pilot B, the
@@ -791,15 +826,30 @@ exit (`LeafMemPin.agree` = `noArenaFoot`) into `EvalExitF noArenaFoot`; `evalInt
 is unconditional, `evalNullIHF`/`evalBoolIHF`/`evalStrIHF` take the named
 `EvalEntry → Eval*Entry` bridges (`NullEntryBridge`/`BoolEntryBridge`, supplied
 inline by `rows/TermRouting.lean`'s `eval_null_row`/`eval_bool_row`; `StrEntryBridge`
-open on `EvalEntryStrAstRegion`). Obstruction (var leaf): `evalVarSim` retains no
-write set because `env_get_found_uncond''` (`EnvGetSpec9.lean:371`) exposes only
-`c'.σ.mem = m'`; the prologue agreement `houtside` (`EnvGetSpec8.lean`, the
-`hScanReady` continuation of `env_get_found_uncond'`) is consumed by
-`foundSt_scanReady` and dropped. Missing supplier: one agreement conjunct
-`∀ a ∉ [sp0-64, sp0) ∪ [out, out+24), m'[a]? = m0[a]?` through `foundSt_scanReady`,
-`env_get_found_uncond''`, `EvalVarEntry.env_get_found`/`VarPostCall.memFrame`, and
-`blockC_var` (≈40 lines); until then the variable leaf is available at `exitFoot`
-only (`EvalIH.exitFoot`).
+open on `EvalEntryStrAstRegion`). Variable leaf
+(`rows/EvalVarRowFootprint.lean`): LANDED at `EvalIHF noArenaFoot` — the SAME
+family as the literal leaves — down to ONE named conjunct. `evalVarSimQ`
+(`EvalVarSim.lean`; `evalVarSim` is its `Q := True` projection) threads any fact
+`Q` about the `env_get` call-return memory through `blockC_var_gen` (`blockC_var`
+is ITS projection), which retains the arm's own write window `[sret, sret+24)`.
+`Rows.VarLeafResidF` is `Rows.VarLeafResid` with the `env_get_found` oracle's post
+strengthened by `Rows.VarPostCallPin SL sp m0 mpc`
+(`∀ a ∉ [SL.lo, sp), mpc[a]? = m0[a]?` — no arena drift); `varLeafResid_of_F`
+projects it back onto the landed residual, and `evalVarIHF`/`eval_var_rowF` land
+the leaf at the generator's `hVar` field type. The conjunct has a proved supplier:
+`env_get`'s write set is `[out, out+24) ∪ [sp0-64, sp0)` with
+`out = (sp-1088)+0xf0`, `sp0 = sp-1088`, both inside `[SL.lo, sp)` under the entry's
+`StackOK SL sp 2176`; `EnvGetSpec10.env_get_found_framed` already carries that frame
+and `envGetFramedPost_pin` (`rows/EvalVarBridgeCallee.lean`) converts it to
+`VarPostCallPin`, with `varCallLinkage_calleeF` composing it through a
+memory-transparent repack. OBSTRUCTION: the LANDED call seam
+`VarCallLinkage.finalMemFrame` (`rows/EvalVarBridge.lean`, the `varBridge` path
+`eval_var_row_closed` uses) states its frame ARENA-CARVED, so it cannot supply the
+pin; restating that one field at `env_get`'s own footprint closes it. Consequently
+`IHClauseGeneric.VarPinnedSim` is NOT provable as stated (from `EvalVarEntry` alone
+nothing constrains the arena on the call-return memory); the `Footprint` clause's
+`hVar` step should take `Rows.VarLeafResidF` (→ `Rows.evalVarIHF`) instead of
+`Rows.VarLeafResid` + `VarPinnedSim`.
 
 ### 5. Close divergence, errors, and final assembly
 

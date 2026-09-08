@@ -57,6 +57,8 @@ python3 scripts/gen_m4_term_row.py --check \
   || fail "stage a3: Vsa/Sim/rows/TermRouting.lean is stale"
 python3 scripts/gen_ih_clause.py --check \
   || fail "stage a3: Vsa/Sim/rows/IHClause_*.lean is stale"
+python3 scripts/gen_footprint_row.py --check \
+  || fail "stage a3: Vsa/Sim/rows/Eval*RowFootprint.lean is stale"
 
 # ------------------------------------------------------------ (b) grep gate
 echo "== stage a4: proof-discipline gate (exponentiating layer mandatory for new files)"
@@ -1238,6 +1240,11 @@ THEOREMS=(
   Vsa.Sim.ScaffoldRows.field_hStrLt_of_clauses
   Vsa.Sim.IHClause.Trivial.closed               # rows/IHClause_Trivial (generated clause, closed)
   Vsa.Sim.IHClause.Footprint.of_residuals       # rows/IHClause_Footprint (generated clause recursion)
+  Vsa.Sim.IHClause.FootprintNA.of_residuals     # rows/IHClause_FootprintNA (guarded clause recursion)
+  Vsa.Sim.IHClause.FootprintNA.Residuals.ofUnwired  # elaborates every wiring of the guarded clause
+  Vsa.Sim.IHClause.Footprint.Residuals.ofUnwired    # elaborates every wiring of the footprint clause
+  Vsa.Sim.Rows.evalVarIHF                       # rows/EvalVarRowFootprint (variable leaf at noArenaFoot)
+  Vsa.Sim.intCellFoot_noArena                   # ExitFootprint (shared integer cell footprint)
 )
 
 AXFILE="$(mktemp /tmp/vsa_axiom_check.XXXXXX)".lean
