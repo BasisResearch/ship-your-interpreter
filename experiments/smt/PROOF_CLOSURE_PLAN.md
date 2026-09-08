@@ -246,6 +246,18 @@ replace every per-entry `ainv_stable` field.
   mechanical step: replace the allocator fields of the three per-entry ledgers by
   one `AllocLedger` field and rewire their consumers. Discipline rule R14 fires
   on exactly those 12 declarations.
+  That step needs ONE preparatory move, because the callee runs are currently
+  declared above the ledger that would carry them: `MallocEntry`/`MallocExit`/
+  `MallocRun` live in `rows/EnvNewContractSupply.lean` and `ReallocRun`/
+  `ReallocInstance`/`StrlenRun`/`MemcpyRun` in `rows/EnvDefineMissLedger.lean`,
+  while `AllocLedger` (which bundles all of them) imports the latter — so a
+  per-entry ledger cannot take an `AllocLedger` field without a cycle. Cure:
+  move the run declarations and the `AllocLedger` record down into one new
+  module below both (`Vsa/Sim/AllocRuns.lean`), leave the call adapters in
+  `AllocLedger.lean`, then give each per-entry ledger a single `alloc` field.
+  The consumer rewiring is 36 references (26 `LM.<field>` across the four
+  `env_define` lane files, 10 `L.<field>` in `EnvNewContractSupply`), all
+  mechanical renames to `.alloc.<field>`.
 - OPEN (unchanged, and outside this layer): relating `MallocContract.privFoot` to
   dlmalloc's actual indirect bin-link writes. That is the verified-allocator
   obligation behind `MallocContract` itself, not a fact any interpreter call site
@@ -325,7 +337,11 @@ replace every per-entry `ainv_stable` field.
   their total, so `MallocContract.nonNull_of_bounded` had no capacity content
   behind it. `ResourceBound` names the source-side obligation (the live
   ledger's physical cost leaves room for one more request at the static
-  ceiling) and `arena_has_room` derives that the next bounded request fits.
+  ceiling) and `arena_has_room` derives that the arena holds enough BYTES for the
+  next bounded request. That is necessary, not sufficient: a byte total exhibits
+  no contiguous PLACEMENT, so external fragmentation and the allocator's bin and
+  coalescing behaviour stay behind `MallocContract`. `physSize` covers internal
+  fragmentation only.
   REMAINING: supply `ResourceBound` from a source-level accounting of the
   interpreter's allocation behaviour over every finite execution prefix, and
   connect it to `Loaded` and the concrete arena bounds of the linker script.

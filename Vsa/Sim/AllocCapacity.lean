@@ -18,7 +18,9 @@ Two things land here.
 
 * `physSize` is the physical cost of a request: an 8-byte header rounded up to
   the 16-byte alignment, so `physSize 32 = 48` exactly as the plan records.
-  `physTotal` sums it over a ledger.
+  `physTotal` sums it over a ledger.  This is INTERNAL fragmentation only — the
+  bytes a chunk wastes on its own header and padding.  External fragmentation,
+  the free space that exists but is not contiguous, is not modelled here.
 * `extents_total_le` is the capacity theorem: pairwise-disjoint extents inside
   `[A.lo, A.hi)` have total size at most `A.hi - A.lo`.  It is proved by strong
   induction on the ledger, splitting the tail around the head extent into the
@@ -28,9 +30,19 @@ Two things land here.
   constraint on the live set, not a restatement of disjointness.
 
 `ResourceBound` then states the source-side obligation in one named record, and
-`arena_has_room` derives from it that the next request fits, which is the honest
-interface for `nonNull_of_bounded`: the allocator may only fail when the arena is
-genuinely full, and the source bound says it never is.
+`arena_has_room` derives from it that the arena holds enough BYTES for the next
+request beyond everything currently live.
+
+That is a necessary condition for `nonNull_of_bounded`, not a sufficient one,
+and the difference is worth stating plainly rather than leaving in a reader's
+way.  A total-byte bound does not exhibit a PLACEMENT: an arena can have ample
+free bytes and still no contiguous run of `n` of them, which is exactly external
+fragmentation.  Turning `arena_has_room` into `malloc` actually succeeding needs
+the allocator's own placement argument — dlmalloc's bin structure, coalescing and
+top-chunk behaviour — which is behind `MallocContract` and is not something a
+call site or a source-level bound can supply.  What this module removes is the
+weaker gap: before it, `nonNull_of_bounded` had no capacity content at all, and
+the live set was unbounded.
 -/
 
 namespace Vsa.Sim
@@ -162,11 +174,13 @@ theorem sum_le_physTotal (exts : List Extent) :
     have := physSize_ge a.2
     omega
 
-/-- **The next request fits.**  From the source bound, the arena has at least
-`physSize n` bytes beyond everything currently live, for any request within the
-static ceiling.  This is the capacity content `MallocContract.nonNull_of_bounded`
-asserts without proof: the allocator may return NULL only when the arena is
-genuinely exhausted, and the bound says it is not. -/
+/-- **The arena holds enough bytes for the next request.**  From the source
+bound, at least `physSize n` bytes remain beyond everything currently live, for
+any request within the static ceiling.  This is the capacity content
+`MallocContract.nonNull_of_bounded` asserts without proof, but it is a NECESSARY
+condition only: it does not exhibit a contiguous placement for those bytes, so
+external fragmentation and the allocator's placement strategy remain behind
+`MallocContract`. -/
 theorem arena_has_room {A : Arena} {maxReq : Nat} {exts : List Extent}
     (h : ResourceBound A maxReq exts) {n : Nat} (hn : n ≤ maxReq) :
     (exts.map Prod.snd).sum + physSize n ≤ A.hi - A.lo := by
