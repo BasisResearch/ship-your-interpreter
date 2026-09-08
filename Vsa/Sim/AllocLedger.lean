@@ -1,5 +1,6 @@
 import Vsa.Sim.rows.EnvDefineMissLedger
 import Vsa.Sim.AllocOff
+import Vsa.Sim.AllocRuns
 
 /-!
 # `AllocLedger` — ONE run-global allocator ledger and its call adapters
@@ -46,189 +47,6 @@ open Vsa.Machine (MState Config Step Steps)
 open Vsa.Logic (Triple)
 open Vsa.RuntimeRepr Vsa.MemRepr Vsa.While Vsa.Alloc
 open Vsa.Sim.RuntimeOwnership
-
-/-! ## 1. The `free` run, named -/
-
-/-- `MallocContract.freeSpec`'s precondition, named: the block `q` of size `n`
-is live and at the head of the abstract list. -/
-structure FreeEntry (A : Arena) (SL : StackLayout) (gpv : BitVec 64)
-    (headroom maxReq : Nat) (M : MallocContract A SL gpv headroom maxReq)
-    (g : (R : Register) → Option (RegisterType R)) (exts : List Extent) (q n : Nat)
-    (spv r : BitVec 64) (m0 : Mem) (out : Array String) (c : Config) : Prop where
-  good : GoodState c.σ
-  tick : c.tick < 2
-  pc : c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 freeEntry)
-  a0 : c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 q)
-  ra : c.σ.regs.get? Register.x1 = some r
-  ra_align : r.toNat % 4 = 0
-  sp : c.σ.regs.get? Register.x2 = some spv
-  stack : StackOK SL spv headroom
-  gp : c.σ.regs.get? Register.x3 = some gpv
-  frame : ∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R
-  ainv : M.AInv c.σ ((q, n) :: exts)
-  mem : c.σ.mem = m0
-  out : c.σ.sailOutput = out
-
-/-- `MallocContract.freeSpec`'s postcondition, named, plus the console output
-and byte presence clauses the abstract contract omits. -/
-structure FreeExit (A : Arena) (SL : StackLayout) (gpv : BitVec 64)
-    (headroom maxReq : Nat) (M : MallocContract A SL gpv headroom maxReq)
-    (g : (R : Register) → Option (RegisterType R)) (exts : List Extent) (q n : Nat)
-    (spv r : BitVec 64) (m0 : Mem) (out : Array String) (c : Config) : Prop where
-  good : GoodState c.σ
-  tick : c.tick < 2
-  pc : c.σ.regs.get? Register.PC = some r
-  sp : c.σ.regs.get? Register.x2 = some spv
-  gp : c.σ.regs.get? Register.x3 = some gpv
-  frame : ∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R
-  ainv : M.AInv c.σ exts
-  mem_frame : ∀ a, ¬ M.privFoot a → ¬ (q ≤ a ∧ a < q + n) →
-    ¬ (SL.lo ≤ a ∧ a < spv.toNat) → c.σ.mem[a]? = m0[a]?
-  out : c.σ.sailOutput = out
-  mem_extends : MemExtends m0 c.σ.mem
-
-/-- **The `free` run.**  `MallocContract.freeSpec` (named) with the two clauses it
-omits.  Supplier: the verified-allocator proof behind `MallocContract.freeSpec`;
-`free` writes no HTIF output and the machine's stores only insert bytes. -/
-def FreeRun {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) : Prop :=
-  ∀ (g : (R : Register) → Option (RegisterType R)) (exts : List Extent) (q n : Nat)
-    (sp r : BitVec 64) (m0 : Mem) (out : Array String),
-    Triple (FreeEntry A SL gpv headroom maxReq M g exts q n sp r m0 out)
-      (FreeExit A SL gpv headroom maxReq M g exts q n sp r m0 out)
-
-/-! ## 2. The run-global ledger -/
-
-/-- **The run-global allocator ledger.**  One record per run: the callee runs
-and the footprint discipline every allocating call site consumes.  Each field
-names its supplier; none depends on an entry. -/
-structure AllocLedger (A : Arena) (SL : StackLayout) (gpv : BitVec 64)
-    (headroom maxReq : Nat) (M : MallocContract A SL gpv headroom maxReq) : Prop where
-  /-- `MallocContract.spec` with silence and presence (`MallocRun`). -/
-  malloc : MallocRun M
-  /-- `MallocContract.freeSpec` with silence and presence (`FreeRun`). -/
-  free : FreeRun M
-  /-- A `realloc` operation instance over the same allocator state and private
-  footprint, with silence and presence (`ReallocRun`). -/
-  realloc : ReallocInstance A SL gpv headroom maxReq M.AInv M.privFoot
-  /-- `strlen` with the console output retained (`StrlenRun`). -/
-  strlen : StrlenRun
-  /-- `memcpy` on both landed routes with the console output retained
-  (`MemcpyRun`). -/
-  memcpy : MemcpyRun
-  /-- The allocator-private footprint lies inside the arena (the allocator's
-  metadata and reent state are arena-resident; linker script, M6). -/
-  -- discipline: allow(R14-alloc-ledger-field) the canonical run-global home
-  priv_arena : ∀ a, M.privFoot a → A.lo ≤ a ∧ a < A.hi
-  /-- The arena is RAM above the HTIF window (linker script, M6). -/
-  -- discipline: allow(R14-alloc-ledger-field) the canonical run-global home
-  arena_htif : tohostAddr + 16 ≤ A.lo
-  arena_hi : A.hi ≤ 0x100000000
-  /-- The arena and the stack region are disjoint (linker script, M6). -/
-  arena_stack : A.hi ≤ SL.lo ∨ SL.hi ≤ A.lo
-  /-- The allocator invariant reads only `gp` and the allocator-private bytes
-  (the `MallocContract` footprint discipline: `privFoot` is the allocator's
-  whole state; live extents are caller data). -/
-  -- discipline: allow(R14-alloc-ledger-field) the canonical run-global home
-  ainv_private : ∀ (exts : List Extent) (σa σb : MState),
-    σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
-    (∀ a, M.privFoot a → σa.mem[a]? = σb.mem[a]?) →
-    M.AInv σa exts → M.AInv σb exts
-  /-- The abstract live list is a set: the invariant is stable under
-  reordering (dlmalloc keeps no order on the caller's live blocks; the list is
-  the specification's own bookkeeping). -/
-  ainv_perm : ∀ (σ : MState) (exts exts' : List Extent),
-    exts.Perm exts' → M.AInv σ exts → M.AInv σ exts'
-  /-- The allocator's stack headroom fits under the largest interpreter helper
-  frame that calls it (`env_define`'s 64 bytes under the 1088-byte budget;
-  concrete at M6). -/
-  headroom_le : headroom + 64 ≤ 1088
-  /-- The largest fixed request (the empty frame's first value array, 192 bytes)
-  is within the interpreter's static ceiling (concrete at M6). -/
-  init_req : 192 ≤ maxReq
-
-namespace AllocLedger
-
-variable {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-  {M : MallocContract A SL gpv headroom maxReq}
-
-theorem arena_ram (L : AllocLedger A SL gpv headroom maxReq M) :
-    0x80000000 ≤ A.lo ∧ A.hi ≤ 0x100000000 := by
-  have h := L.arena_htif
-  have ht : tohostAddr = 0x8001ad00 := rfl
-  exact ⟨by omega, L.arena_hi⟩
-
-/-- Private bytes are off any stack window below `hi ≤ SL.hi`. -/
-theorem priv_off_stack (L : AllocLedger A SL gpv headroom maxReq M)
-    {hi : Nat} (hhi : hi ≤ SL.hi) {a : Nat} (hp : M.privFoot a) :
-    ¬ (SL.lo ≤ a ∧ a < hi) := by
-  have hA := L.priv_arena a hp
-  rcases L.arena_stack with h | h <;> omega
-
-end AllocLedger
-
-/-! ## 3. The allocator invariant at a memory -/
-
-/-- The allocator invariant at memory `m` with the pinned `gp`: exactly the
-`ainv_entry` field shape of the per-entry ledgers. -/
-def AInvAt {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (gpv : BitVec 64) (m : Mem)
-    (exts : List Extent) : Prop :=
-  ∀ σ : MState, σ.regs.get? Register.x3 = some gpv → σ.mem = m → M.AInv σ exts
-
-namespace AllocLedger
-
-variable {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-  {M : MallocContract A SL gpv headroom maxReq}
-
-/-- The invariant at a state is the invariant at its memory. -/
-theorem ainvAt_of_state (L : AllocLedger A SL gpv headroom maxReq M)
-    {σ : MState} {exts : List Extent}
-    (hgp : σ.regs.get? Register.x3 = some gpv) (h : M.AInv σ exts) :
-    AInvAt M gpv σ.mem exts :=
-  fun σ' hgp' hm => L.ainv_private exts σ σ' (hgp.trans hgp'.symm) (fun _ _ => by rw [hm]) h
-
-theorem ainvAt_at_state {σ : MState} {exts : List Extent} {m : Mem}
-    (h : AInvAt M gpv m exts) (hgp : σ.regs.get? Register.x3 = some gpv)
-    (hm : σ.mem = m) : M.AInv σ exts :=
-  h σ hgp hm
-
-/-- The invariant survives any memory change off the private bytes. -/
-theorem ainvAt_transport (L : AllocLedger A SL gpv headroom maxReq M)
-    {m m' : Mem} {exts : List Extent} (h : AInvAt M gpv m exts)
-    (hag : ∀ a, M.privFoot a → m[a]? = m'[a]?) : AInvAt M gpv m' exts := by
-  intro σ' hgp' hm'
-  have hσ : M.AInv { σ' with mem := m } exts := h _ hgp' rfl
-  refine L.ainv_private exts { σ' with mem := m } σ' rfl ?_ hσ
-  intro a hp
-  show m[a]? = σ'.mem[a]?
-  rw [hm']
-  exact hag a hp
-
-/-- The invariant survives any memory change inside a stack window. -/
-theorem ainvAt_transport_offStack (L : AllocLedger A SL gpv headroom maxReq M)
-    {m m' : Mem} {exts : List Extent} {hi : Nat} (hhi : hi ≤ SL.hi)
-    (h : AInvAt M gpv m exts)
-    (hag : ∀ a, ¬ (SL.lo ≤ a ∧ a < hi) → m[a]? = m'[a]?) : AInvAt M gpv m' exts :=
-  L.ainvAt_transport h (fun a hp => hag a (L.priv_off_stack hhi hp))
-
-/-- The per-entry `ainv_stable` field, as ONE theorem of the ledger. -/
-theorem ainv_stable (L : AllocLedger A SL gpv headroom maxReq M)
-    (esp : BitVec 64) (hesp : esp.toNat ≤ SL.hi) (exts : List Extent) :
-    ∀ σa σb : MState,
-      σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
-      (∀ a, ¬ (SL.lo ≤ a ∧ a < esp.toNat) → σa.mem[a]? = σb.mem[a]?) →
-      M.AInv σa exts → M.AInv σb exts :=
-  fun σa σb hgp hag h =>
-    L.ainv_private exts σa σb hgp (fun a hp => hag a (L.priv_off_stack hesp hp)) h
-
-/-- Live extents are off the private bytes, at any memory carrying the invariant. -/
-theorem privDisjoint_of_ainvAt {m : Mem} {exts : List Extent}
-    (h : AInvAt M gpv m exts) (σ : MState) (hgp : σ.regs.get? Register.x3 = some gpv) :
-    ∀ e ∈ exts, ∀ k < e.2, ¬ M.privFoot (e.1 + k) :=
-  M.privFoot_disjoint { σ with mem := m } exts (h _ hgp rfl)
-
-end AllocLedger
 
 /-! ## 4. The `malloc` adapter -/
 
@@ -484,11 +302,8 @@ theorem EnvNewLedger.of_alloc
       ∀ k, SL.lo ≤ k → k < SL.hi → writes k) :
     EnvNewLedger g N A SL φf φc st env esp aEnv r m M exts :=
   { gp := hgp, s0_present := hs0
-    headroom_le := by have := L.headroom_le; omega
-    req := by have := L.init_req; omega
-    ainv_entry := hA, ainv_stable := L.ainv_stable esp hesp exts, malloc := L.malloc
-    priv_arena := L.priv_arena, arena_htif := L.arena_htif, arena_hi := L.arena_hi
-    arena_stack := L.arena_stack, parents := hparents, owned := howned }
+    ainv_entry := hA, ainv_stable := L.ainv_stable esp hesp exts
+    alloc := L, parents := hparents, owned := howned }
 
 /-- `EnvDefineUpdateLedger` from the run-global ledger and the entry-local facts. -/
 theorem EnvDefineUpdateLedger.of_alloc
@@ -512,12 +327,12 @@ theorem EnvDefineUpdateLedger.of_alloc
       ∀ m' : Mem, (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → m1[k]? = m'[k]?) →
         StoreRepr m' N A φf φc (st.store.define env x v)) :
     EnvDefineUpdateLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts :=
-  { gp := hgp, present := present, headroom_le := L.headroom_le
+  { gp := hgp, present := present
     ainv_entry := hA, ainv_stable := L.ainv_stable esp hesp exts
+    alloc := L
     heap := by
       obtain ⟨_, _, _, _, hheap, _, _, _⟩ := owned
       exact hheap.ledger.arena
-    arena_ram := L.arena_ram, arena_htif := L.arena_htif
     owned := owned, unique := unique, names := names, arrays_aligned := arrays_aligned
     define_survives := define_survives }
 
@@ -538,11 +353,10 @@ theorem EnvDefineMissLedger.of_alloc
     (copy_req : x.length + 1 ≤ maxReq)
     (grow_req : ∀ cap, read32 m (φf env + 4) = some cap → 48 * cap ≤ maxReq) :
     EnvDefineMissLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts :=
-  { malloc := L.malloc, realloc := L.realloc, strlen := L.strlen, memcpy := L.memcpy
-    priv_arena := L.priv_arena, arena_stack := L.arena_stack, ainv_private := L.ainv_private
+  { alloc := L
     name_regions := name_regions, name_align := name_align, name_arena := name_arena
     names_aligned := names_aligned, copy_fit := copy_fit, copy_req := copy_req
-    grow_req := grow_req, init_req := L.init_req }
+    grow_req := grow_req }
 
 #print axioms AllocLedger.ainv_stable
 #print axioms AllocLedger.ainvAt_of_state

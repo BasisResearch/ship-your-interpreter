@@ -1,3 +1,4 @@
+import Vsa.Sim.AllocRuns
 import Vsa.Sim.HelperCallEnvDefine
 import Vsa.Sim.rows.EnvDefinePrologueSaved
 import Vsa.Sim.rows.EnvDefineDispatchExact
@@ -588,9 +589,6 @@ structure EnvDefineUpdateLedger (g : (R : Register) → Option (RegisterType R))
   /-- The caller's ghost is total on the seven spilled callee-saved registers
   (the caller's `GRegs` pins). -/
   present : EnvDefineSavedPresent g
-  /-- The allocator's stack headroom fits under `env_define`'s 64-byte frame
-  (concrete at M6). -/
-  headroom_le : headroom + 64 ≤ 1088
   /-- The allocator invariant at the entry memory with the pinned `gp`
   (the caller's `MallocContract` state). -/
   ainv_entry : ∀ σ : MState, σ.regs.get? Register.x3 = some gpv → σ.mem = m → M.AInv σ exts
@@ -600,12 +598,11 @@ structure EnvDefineUpdateLedger (g : (R : Register) → Option (RegisterType R))
     σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
     (∀ a, ¬ (SL.lo ≤ a ∧ a < esp.toNat) → σa.mem[a]? = σb.mem[a]?) →
     M.AInv σa exts → M.AInv σb exts
+  /-- The run-global allocator ledger (`Vsa/Sim/AllocRuns.lean`). -/
+  alloc : AllocLedger A SL gpv headroom maxReq M
   /-- Ledger geometry (`HeapOwnershipGeometry`; the interpreter's ownership
   invariant). -/
   heap : HeapArena A exts
-  /-- The arena is RAM above the HTIF window (linker script, M6). -/
-  arena_ram : 0x80000000 ≤ A.lo ∧ A.hi ≤ 0x100000000
-  arena_htif : tohostAddr + 16 ≤ A.lo
   /-- Runtime ownership of the store, the staged value's payload and the
   queried name's bytes at the entry memory (the interpreter's ownership
   invariant `HeapOwned`; the producer's `ValueOwned`; the parser's shared
@@ -646,12 +643,12 @@ theorem EnvDefineUpdateOracles.of_entry
     EnvDefineUpdateOracles g N A SL φf φc st env x v esp aEnv aName pv r m M exts where
   gp := L.gp
   present := L.present
-  headroom_le := L.headroom_le
+  headroom_le := L.alloc.headroom_le
   ainv_entry := L.ainv_entry
   ainv_stable := L.ainv_stable
   heap := L.heap
-  arena_ram := L.arena_ram
-  arena_htif := L.arena_htif
+  arena_ram := L.alloc.arena_ram
+  arena_htif := L.alloc.arena_htif
   arena_code := by
     rcases hM.arena_image with h | h
     · left; omega

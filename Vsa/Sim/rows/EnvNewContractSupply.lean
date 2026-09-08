@@ -6,6 +6,7 @@ import Vsa.Sim.rows.CallClosureEnvNewMarshal
 import Vsa.Sim.RuntimeOwnershipTransport
 import Vsa.Sim.RuntimeOwnershipAllocation
 import Vsa.Sim.AllocOff
+import Vsa.Sim.AllocRuns
 import Vsa.Sim.StoreInvariant
 import Vsa.Sim.MemPresence
 import Vsa.Sim.Code.FixedImage_Env_new
@@ -280,61 +281,6 @@ theorem envNewParked_of_entry
 
 #print axioms envNewParked_of_entry
 
-/-! ## 3. The allocator call, named -/
-
-/-- `MallocContract.spec`'s precondition, named. -/
-structure MallocEntry (A : Arena) (SL : StackLayout) (gpv : BitVec 64)
-    (headroom maxReq : Nat) (M : MallocContract A SL gpv headroom maxReq)
-    (g : (R : Register) → Option (RegisterType R)) (exts : List Extent) (n : Nat)
-    (spv r : BitVec 64) (m0 : Mem) (out : Array String) (c : Config) : Prop where
-  good : GoodState c.σ
-  tick : c.tick < 2
-  pc : c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 mallocEntry)
-  a0 : c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 n)
-  ra : c.σ.regs.get? Register.x1 = some r
-  ra_align : r.toNat % 4 = 0
-  sp : c.σ.regs.get? Register.x2 = some spv
-  stack : StackOK SL spv headroom
-  gp : c.σ.regs.get? Register.x3 = some gpv
-  frame : ∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R
-  ainv : M.AInv c.σ exts
-  mem : c.σ.mem = m0
-  out : c.σ.sailOutput = out
-
-/-- `MallocContract.spec`'s postcondition, named, plus the two clauses the
-abstract contract omits: the console output is unchanged and no byte is
-removed. -/
-structure MallocExit (A : Arena) (SL : StackLayout) (gpv : BitVec 64)
-    (headroom maxReq : Nat) (M : MallocContract A SL gpv headroom maxReq)
-    (g : (R : Register) → Option (RegisterType R)) (exts : List Extent) (n : Nat)
-    (spv r : BitVec 64) (m0 : Mem) (out : Array String) (c : Config) : Prop where
-  good : GoodState c.σ
-  tick : c.tick < 2
-  pc : c.σ.regs.get? Register.PC = some r
-  sp : c.σ.regs.get? Register.x2 = some spv
-  gp : c.σ.regs.get? Register.x3 = some gpv
-  frame : ∀ R, AbiPreserved R = true → c.σ.regs.get? R = g R
-  result : (c.σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧ M.AInv c.σ exts) ∨
-    (∃ p, c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 p) ∧
-      p ≠ 0 ∧ p % 16 = 0 ∧ A.contains p n ∧
-      (∀ e ∈ exts, ExtDisjoint (p, n) e) ∧
-      M.AInv c.σ ((p, n) :: exts))
-  mem_frame : ∀ a, ¬ M.privFoot a → ¬ (SL.lo ≤ a ∧ a < spv.toNat) → c.σ.mem[a]? = m0[a]?
-  out : c.σ.sailOutput = out
-  mem_extends : MemExtends m0 c.σ.mem
-
-/-- **The allocator run.**  `MallocContract.spec` (the same pre and post, named)
-with the two clauses it omits.  Supplier: the verified-allocator proof behind
-`MallocContract.spec`; `malloc` writes no HTIF output and the machine's stores
-only insert bytes (`memExtends_applyW`). -/
-def MallocRun {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) : Prop :=
-  ∀ (g : (R : Register) → Option (RegisterType R)) (exts : List Extent) (n : Nat)
-    (sp r : BitVec 64) (m0 : Mem) (out : Array String),
-    n ≤ maxReq →
-    Triple (MallocEntry A SL gpv headroom maxReq M g exts n sp r m0 out)
-      (MallocExit A SL gpv headroom maxReq M g exts n sp r m0 out)
-
 /-! ## 4. The ledger -/
 
 /-- **The external ledger** for `env_new`: the facts `EnvNewEntryState` does not
@@ -350,12 +296,6 @@ structure EnvNewLedger (g : (R : Register) → Option (RegisterType R))
   /-- The caller's ghost is total on the spilled `s0` (the caller's `GRegs` pins:
   `HelperCall.callL`). -/
   s0_present : (g Register.x8).isSome = true
-  /-- The allocator's stack headroom fits under `env_new`'s 16-byte frame
-  (`EnvNewMem.stack` budgets 1088 bytes; concrete at M6). -/
-  headroom_le : headroom + 16 ≤ 1088
-  /-- The 32-byte `Env` request is within the interpreter's static ceiling
-  (concrete at M6). -/
-  req : 32 ≤ maxReq
   /-- The allocator invariant at the entry memory with the pinned `gp`
   (the caller's `MallocContract` state). -/
   ainv_entry : ∀ σ : MState, σ.regs.get? Register.x3 = some gpv → σ.mem = m → M.AInv σ exts
@@ -365,17 +305,8 @@ structure EnvNewLedger (g : (R : Register) → Option (RegisterType R))
     σa.regs.get? Register.x3 = σb.regs.get? Register.x3 →
     (∀ a, ¬ (SL.lo ≤ a ∧ a < esp.toNat) → σa.mem[a]? = σb.mem[a]?) →
     M.AInv σa exts → M.AInv σb exts
-  /-- The allocator run: `MallocContract.spec` with silence and byte presence
-  (`MallocRun`). -/
-  malloc : MallocRun M
-  /-- The allocator-private footprint lies inside the arena (the allocator's
-  metadata and reent state are arena-resident; linker script, M6). -/
-  priv_arena : ∀ a, M.privFoot a → A.lo ≤ a ∧ a < A.hi
-  /-- The arena is RAM above the HTIF window and disjoint from the stack region
-  (linker script, M6). -/
-  arena_htif : tohostAddr + 16 ≤ A.lo
-  arena_hi : A.hi ≤ 0x100000000
-  arena_stack : A.hi ≤ SL.lo ∨ SL.hi ≤ A.lo
+  /-- The run-global allocator ledger (`Vsa/Sim/AllocRuns.lean`). -/
+  alloc : AllocLedger A SL gpv headroom maxReq M
   /-- Parent frames are older than their children (source invariant
   `StoreInvariant.parents`). -/
   parents : StoreParents st.store
@@ -467,9 +398,9 @@ theorem envNewReturn_of_ledger
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hlt := esp.isLt
   have h16 : 16 ≤ esp.toNat := by omega
-  have hAhtif := L.arena_htif
-  have hAhi := L.arena_hi
-  have hAstack := L.arena_stack
+  have hAhtif := L.alloc.arena_htif
+  have hAhi := L.alloc.arena_hi
+  have hAstack := L.alloc.arena_stack
   obtain ⟨s0, hg8⟩ := Option.isSome_iff_exists.mp L.s0_present
   have hcode : Env_newLoaded m := FixedTextLoaded.Env_newLoaded F.text
   obtain ⟨alloc, shared, readable, writes, hown, hwrites⟩ := L.owned
@@ -486,15 +417,15 @@ theorem envNewReturn_of_ledger
       (fun a ha => by rw [hoff1 a ha, h.mem]) hainv0
   have hspn := sp_sub16_toNat esp h16
   have hstack1 : StackOK SL (esp - 16#64) headroom := by
-    have := L.headroom_le
+    have := L.alloc.headroom_le
     refine ⟨by omega, by omega, by omega⟩
   -- 2. malloc
-  obtain ⟨c2, hs2, X⟩ := L.malloc (fun R => c1.σ.regs.get? R) exts 32 (esp - 16#64)
-    0x80002a14#64 c1.σ.mem out L.req c1
+  obtain ⟨c2, hs2, X⟩ := L.alloc.malloc (fun R => c1.σ.regs.get? R) exts 32 (esp - 16#64)
+    0x80002a14#64 c1.σ.mem out L.alloc.req32 c1
     { good := P.good, tick := P.tick, pc := P.pc, a0 := P.a0, ra := P.ra
       ra_align := by decide, sp := P.sp, stack := hstack1, gp := hgp1
       frame := fun _ _ => rfl, ainv := hainv1, mem := rfl, out := P.out }
-  obtain ⟨p, ha0, hp0, hp16, hpA, hpdisj, hainv2⟩ := M.nonNull_of_bounded c2.σ exts 32 L.req X.result
+  obtain ⟨p, ha0, hp0, hp16, hpA, hpdisj, hainv2⟩ := M.nonNull_of_bounded c2.σ exts 32 L.alloc.req32 X.result
   obtain ⟨hplo, hphi⟩ := hpA
   have hp64 : p < 2 ^ 64 := by omega
   have hpn : (BitVec.ofNat 64 p).toNat = p := by
@@ -502,12 +433,12 @@ theorem envNewReturn_of_ledger
   -- the spill window is off the allocator's footprint and above its stack window
   have hspill_priv : ∀ a, esp.toNat - 16 ≤ a → a < esp.toNat → ¬ M.privFoot a := by
     intro a h1 h2 hp
-    have := L.priv_arena a hp
+    have := L.alloc.priv_arena a hp
     omega
   have hoff2 : ∀ a, ¬ (A.lo ≤ a ∧ a < A.hi) → ¬ (SL.lo ≤ a ∧ a < esp.toNat) →
       c2.σ.mem[a]? = c1.σ.mem[a]? := by
     intro a hA hst
-    exact X.mem_frame a (fun hp => hA (L.priv_arena a hp)) (fun hw => hst ⟨hw.1, by omega⟩)
+    exact X.mem_frame a (fun hp => hA (L.alloc.priv_arena a hp)) (fun hw => hst ⟨hw.1, by omega⟩)
   have hcode1 : Env_newLoaded c1.σ.mem := by
     rw [hmem1]
     exact loaded_env_of_agree m _ (fun a hlo hhi => envNew_offMem hsp1 a (by omega)) hcode
@@ -618,7 +549,7 @@ theorem envNewReturn_of_ledger
         nonzero := Pre.fresh.nonzero
         arena := by rw [hpn]; exact ⟨hplo, hphi⟩
         align := by rw [hpn]; omega
-        store := envNewPushedRepr hown hwrites F.store hainv0 L.priv_arena hAstack L.parents
+        store := envNewPushedRepr hown hwrites F.store hainv0 L.alloc.priv_arena hAstack L.parents
           ⟨hplo, hphi⟩ hp16 hpdisj hagree03 hfr3
         survives := by
           intro m' hm'
@@ -630,7 +561,7 @@ theorem envNewReturn_of_ledger
             · intro _ _ _ _ i hi; exact absurd hi (Nat.not_lt_zero _)
             · intro _ _ _ _ i hi; exact absurd hi (Nat.not_lt_zero _)
             · intro _ _ _ _ i hi; exact absurd hi (Nat.not_lt_zero _)
-          exact envNewPushedRepr hown hwrites F.store hainv0 L.priv_arena hAstack L.parents
+          exact envNewPushedRepr hown hwrites F.store hainv0 L.alloc.priv_arena hAstack L.parents
             ⟨hplo, hphi⟩ hp16 hpdisj hag' hfr' }
   · intro k hA hst
     rw [hoff3 k (by omega), hoff2 k hA hst, hoff1 k hst]

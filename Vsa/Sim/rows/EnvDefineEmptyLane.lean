@@ -201,7 +201,7 @@ theorem envDefineEmptyRegs
   have hsp1 := hE.stack.1
   have hsp2 := hE.stack.2.1
   have hsp3 := hE.stack.2.2
-  have hhr := L.headroom_le
+  have hhr := L.alloc.headroom_le
   have hsp64 : (esp - 64#64).toNat = esp.toNat - 64 := sp_sub64_toNat esp (by omega)
   have hmem12 : c2.σ.mem = c1.σ.mem := hmem.trans P.mem.symm
   exact
@@ -248,9 +248,9 @@ theorem envDefineEmptyLane
   have henvLt := Sf.env_lt
   have hcount0 : st.store.frames[env].vars.length = 0 := hempty henvLt
   have htoh : tohostAddr = 0x8001ad00 := rfl
-  have hAlo := L.arena_ram.1
-  have hAhi := L.arena_ram.2
-  have hAhtif := L.arena_htif
+  have hAlo := L.alloc.arena_ram.1
+  have hAhi := L.alloc.arena_ram.2
+  have hAhtif := L.alloc.arena_htif
   obtain ⟨henvArena, henvAlign⟩ := hE.store.frames_arena env henvLt
   unfold Arena.contains at henvArena
   have henvNat : aEnv.toNat = φf env := Sf.env_addr

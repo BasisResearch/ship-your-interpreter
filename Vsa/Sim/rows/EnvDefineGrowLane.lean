@@ -195,10 +195,10 @@ theorem envDefineGrowCalls
   have hwin := hE.stack_win
   have h64 : 64 ≤ esp.toNat := by omega
   have hsp64 : (esp - 64#64).toNat = esp.toNat - 64 := sp_sub64_toNat esp h64
-  have hAlo := L.arena_ram.1
-  have hAhi := L.arena_ram.2
-  have hAhtif := L.arena_htif
-  have hAstack := LM.arena_stack
+  have hAlo := L.alloc.arena_ram.1
+  have hAhi := L.alloc.arena_ram.2
+  have hAhtif := L.alloc.arena_htif
+  have hAstack := LM.alloc.arena_stack
   have hAimg := hE.arena_image
   have hpvNat := hE.pv_frame
   have hslot := hE.slot_in_stack
@@ -281,7 +281,7 @@ theorem envDefineGrowCalls
     M.privFoot_disjoint c0.σ extsA R.ainv
   -- the entry-side allocator separation facts, from ONE lemma (`AllocOff.lean`)
   have EO : EntryOff A SL extsA M.privFoot alloc shared :=
-    hheap.entryOff hstackW hprivA LM.priv_arena
+    hheap.entryOff hstackW hprivA LM.alloc.priv_arena
   have hsharedPriv := EO.shared_priv
   have hsharedStack := EO.shared_stack
   have hextArena := EO.ext_arena
@@ -297,8 +297,8 @@ theorem envDefineGrowCalls
     · subst hc
       obtain ⟨c1, P1⟩ := envDefineReallocNamesParked_init aEnv (BitVec.ofNat 64 pn) c0 henvGeom
         R.good hpc ha5 ha1 R.s4 hs6 hcode0 R.tick
-      exact ⟨8, by omega, by omega, by have := LM.init_req; omega,
-        by have := LM.init_req; omega, by omega, c1, P1⟩
+      exact ⟨8, by omega, by omega, by have := LM.alloc.init_req; omega,
+        by have := LM.alloc.init_req; omega, by omega, c1, P1⟩
   have henvNat : aEnv.toNat = φf env := F.env_addr
   have hmem1 : c1.σ.mem = writeMap4 mA (aEnv.toNat + 4) (swData (BitVec.ofNat 64 cap')) := by
     rw [P1.mem, R.mem]
@@ -328,7 +328,7 @@ theorem envDefineGrowCalls
   have hx2_1 : c1.σ.regs.get? Register.x2 = some (esp - 64#64) := by
     rw [P1.abi _ (by decide)]; exact R.sp
   have hainv1 : M.AInv c1.σ extsA := by
-    apply LM.ainv_private extsA c0.σ c1.σ (R.gp.trans hx3_1.symm) _ R.ainv
+    apply LM.alloc.ainv_private extsA c0.σ c1.σ (R.gp.trans hx3_1.symm) _ R.ainv
     intro a hpa
     rw [R.mem, ← (A1 a ?_)]
     by_cases hin : aEnv.toNat + 4 ≤ a ∧ a < aEnv.toNat + 8
@@ -340,7 +340,7 @@ theorem envDefineGrowCalls
     ⟨P1.good, P1.tick, P1.pc, P1.a0, P1.a1, P1.ra, by decide, hx2_1, R.stack, hx3_1,
       fun _ _ => rfl, hainv1, rfl⟩
   obtain ⟨c2, hs2, post2, res2, out2, ext2⟩ :=
-    reallocArray_run LM.realloc hheap.ledger.arena hnamesO hnamesMem
+    reallocArray_run LM.alloc.realloc hheap.ledger.arena hnamesO hnamesMem
       (fun hc => by have := hnamesArena hc; omega) (by omega) hreq8 (by omega) g1
       (esp - 64#64) 0x80002ba4#64 c1.σ.mem out c1 ⟨hpre1, P1.out.trans R.out⟩
   obtain ⟨hG2, htick2, hpc2, hsp2, hgp2, habi2⟩ := post2
@@ -417,7 +417,7 @@ theorem envDefineGrowCalls
       rcases Nat.lt_or_ge a (φf env + 4) with h | h
       · exact Or.inl h
       · right; omega
-    rw [A2 a (fun hp => hna (LM.priv_arena a hp)) (hOffTextStack a h1 h2) hoffN hoffNN]
+    rw [A2 a (fun hp => hna (LM.alloc.priv_arena a hp)) (hOffTextStack a h1 h2) hoffN hoffNN]
     exact A1 a hoffR
   -- ── the second prefix, parked at `realloc(vals)`
   have hs4_2 : c2.σ.regs.get? Register.x20 = some aEnv := by
@@ -435,7 +435,7 @@ theorem envDefineGrowCalls
   have hx2_3 : c3.σ.regs.get? Register.x2 = some (esp - 64#64) := by
     rw [P3.abi _ (by decide)]; exact hsp2
   have hainv3 : M.AInv c3.σ exts1 := by
-    apply LM.ainv_private exts1 c2.σ c3.σ (hgp2.trans hx3_3.symm) _ hainv2
+    apply LM.alloc.ainv_private exts1 c2.σ c3.σ (hgp2.trans hx3_3.symm) _ hainv2
     intro a hpa
     rw [← (A3 a ?_)]
     by_cases hin : aEnv.toNat + 8 ≤ a ∧ a < aEnv.toNat + 16
@@ -453,7 +453,7 @@ theorem envDefineGrowCalls
     ⟨P3.good, P3.tick, P3.pc, P3.a0, P3.a1, P3.ra, by decide, hx2_3, R.stack, hx3_3,
       fun _ _ => rfl, hainv3, rfl⟩
   obtain ⟨c4, hs4, post4, res4, out4, ext4⟩ :=
-    reallocArray_run LM.realloc ledger1.arena hvalsO1
+    reallocArray_run LM.alloc.realloc ledger1.arena hvalsO1
       (fun hc => ledger1.live _ _ _ (hvalsO1.nonempty hc))
       (fun hc => by have := hvalsArena hc; omega) (by omega) hreq24 (by omega) g3
       (esp - 64#64) 0x80002bc0#64 c3.σ.mem out c3 ⟨hpre3, P3.out.trans out2⟩
@@ -537,7 +537,7 @@ theorem envDefineGrowCalls
       rcases Nat.lt_or_ge a (φf env + 8) with h | h
       · exact Or.inl h
       · right; omega
-    rw [A4 a (fun hp => hna (LM.priv_arena a hp)) (hOffTextStack a h1 h2) hoffV hoffNV]
+    rw [A4 a (fun hp => hna (LM.alloc.priv_arena a hp)) (hOffTextStack a h1 h2) hoffV hoffNV]
     exact A3 a hoffR
   have hnzBV : BitVec.ofNat 64 pNamesNew ≠ 0#64 := by
     intro hz
@@ -661,10 +661,10 @@ theorem envDefineGrowMemCore
   have hwin := hE.stack_win
   have h64 : 64 ≤ esp.toNat := by omega
   have hsp64 : (esp - 64#64).toNat = esp.toNat - 64 := sp_sub64_toNat esp h64
-  have hAlo := L.arena_ram.1
-  have hAhi := L.arena_ram.2
-  have hAhtif := L.arena_htif
-  have hAstack := LM.arena_stack
+  have hAlo := L.alloc.arena_ram.1
+  have hAhi := L.alloc.arena_ram.2
+  have hAhtif := L.alloc.arena_htif
+  have hAstack := LM.alloc.arena_stack
   have hAimg := hE.arena_image
   have hpvNat := hE.pv_frame
   have hslot := hE.slot_in_stack
@@ -744,7 +744,7 @@ theorem envDefineGrowMemCore
     · have := hvalsArena hc; omega
   have hsharedPriv : ∀ k, shared k → ¬ M.privFoot k :=
     hheap.reserved.outsidePrivate hheap.immutable hprivA
-      (fun k hk hnot => absurd (LM.priv_arena k hk) hnot)
+      (fun k hk hnot => absurd (LM.alloc.priv_arena k hk) hnot)
   have hsharedStack : ∀ k, shared k → ¬ (SL.lo ≤ k ∧ k < SL.hi) := by
     intro k hk hin
     exact hheap.immutable.outsideWrites k hk (hstackW k hin.1 hin.2)
@@ -1078,10 +1078,10 @@ theorem envDefineGrowMemOff
   have hwin := hE.stack_win
   have h64 : 64 ≤ esp.toNat := by omega
   have hsp64 : (esp - 64#64).toNat = esp.toNat - 64 := sp_sub64_toNat esp h64
-  have hAlo := L.arena_ram.1
-  have hAhi := L.arena_ram.2
-  have hAhtif := L.arena_htif
-  have hAstack := LM.arena_stack
+  have hAlo := L.alloc.arena_ram.1
+  have hAhi := L.alloc.arena_ram.2
+  have hAhtif := L.alloc.arena_htif
+  have hAstack := LM.alloc.arena_stack
   have hAimg := hE.arena_image
   have hpvNat := hE.pv_frame
   have hslot := hE.slot_in_stack
@@ -1161,7 +1161,7 @@ theorem envDefineGrowMemOff
     · have := hvalsArena hc; omega
   have hsharedPriv : ∀ k, shared k → ¬ M.privFoot k :=
     hheap.reserved.outsidePrivate hheap.immutable hprivA
-      (fun k hk hnot => absurd (LM.priv_arena k hk) hnot)
+      (fun k hk hnot => absurd (LM.alloc.priv_arena k hk) hnot)
   have hsharedStack : ∀ k, shared k → ¬ (SL.lo ≤ k ∧ k < SL.hi) := by
     intro k hk hin
     exact hheap.immutable.outsideWrites k hk (hstackW k hin.1 hin.2)
@@ -1350,7 +1350,7 @@ theorem envDefineGrowMemOff
       rcases Nat.lt_or_ge k (φf env + 4) with h | h
       · left; exact h
       · right; omg
-    exact hagOff k (fun hp => hkA (LM.priv_arena k hp)) hkS hoffN hoffNN hoffV hoffNV hoffR
+    exact hagOff k (fun hp => hkA (LM.alloc.priv_arena k hp)) hkS hoffN hoffNN hoffV hoffNV hoffR
   -- the staged value slot is untouched
   have hSlotOff : ∀ k, valHeader pv.toNat k → c5.σ.mem[k]? = mA[k]? := by
     intro k hk
@@ -1398,9 +1398,9 @@ theorem envDefineGrowLane
   have hwin := hE.stack_win
   have h64 : 64 ≤ esp.toNat := by omega
   have hsp64 : (esp - 64#64).toNat = esp.toNat - 64 := sp_sub64_toNat esp h64
-  have hAlo := L.arena_ram.1
-  have hAhi := L.arena_ram.2
-  have hAstack := LM.arena_stack
+  have hAlo := L.alloc.arena_ram.1
+  have hAhi := L.alloc.arena_ram.2
+  have hAstack := LM.alloc.arena_stack
   have hAimg := hE.arena_image
   have hpvNat := hE.pv_frame
   have hslot := hE.slot_in_stack
@@ -1557,7 +1557,7 @@ theorem envDefineGrowLane
       (fun i hi k hk => K.keys i (by omega) k hk) (fun i hi k hk => K.values i (by omega) k hk)
   -- ── the registers, the spill image and the allocator invariant
   have hainv5 : M.AInv c5.σ exts2 := by
-    apply LM.ainv_private exts2 c4.σ c5.σ D.x3_54.symm _ D.ainv4
+    apply LM.alloc.ainv_private exts2 c4.σ c5.σ D.x3_54.symm _ D.ainv4
     intro a hpa
     rw [D.mem5]
     apply Eq.symm

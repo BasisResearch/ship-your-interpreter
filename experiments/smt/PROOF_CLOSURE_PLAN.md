@@ -243,21 +243,22 @@ replace every per-entry `ainv_stable` field.
 - Reseated so far: `envNewPushedRepr` (27 hand lines of separation → 7 on
   `HeapOwned.ownedOff`), and the `env_define` append and grow lanes (the four
   entry-side facts, derived twice by hand, → `HeapOwned.entryOff`). Remaining
-  mechanical step: replace the allocator fields of the three per-entry ledgers by
-  one `AllocLedger` field and rewire their consumers. Discipline rule R14 fires
-  on exactly those 12 declarations.
-  That step needs ONE preparatory move, because the callee runs are currently
-  declared above the ledger that would carry them: `MallocEntry`/`MallocExit`/
-  `MallocRun` live in `rows/EnvNewContractSupply.lean` and `ReallocRun`/
-  `ReallocInstance`/`StrlenRun`/`MemcpyRun` in `rows/EnvDefineMissLedger.lean`,
-  while `AllocLedger` (which bundles all of them) imports the latter — so a
-  per-entry ledger cannot take an `AllocLedger` field without a cycle. Cure:
-  move the run declarations and the `AllocLedger` record down into one new
-  module below both (`Vsa/Sim/AllocRuns.lean`), leave the call adapters in
-  `AllocLedger.lean`, then give each per-entry ledger a single `alloc` field.
-  The consumer rewiring is 36 references (26 `LM.<field>` across the four
-  `env_define` lane files, 10 `L.<field>` in `EnvNewContractSupply`), all
-  mechanical renames to `.alloc.<field>`.
+  step is DONE. `Vsa/Sim/AllocRuns.lean` now holds the runs (`MallocRun`,
+  `FreeRun`, `ReallocRun`/`ReallocInstance`, `StrlenRun`, `MemcpyRun`) and the
+  `AllocLedger` record BELOW every per-entry ledger, which removes the import
+  cycle that had forced each ledger to restate the allocator: `MallocRun` used
+  to be declared in `rows/EnvNewContractSupply.lean` and the other three runs in
+  `rows/EnvDefineMissLedger.lean`, above the record that bundles them. Each of
+  the three per-entry ledgers now carries ONE `alloc : AllocLedger …` field, and
+  36 consumer references across the four `env_define` lane files and
+  `EnvNewContractSupply` project through it. The discipline gate falls from 68
+  findings to 60 and R14 from 12 to 3.
+  The 3 remaining R14 findings are `ainv_stable`, which each ledger still states
+  itself although `AllocLedger.ainv_stable` proves it; removing the field needs
+  `esp.toNat ≤ SL.hi` threaded at each of the five use sites, available from the
+  entry's `StackOK`. `ainv_entry` is NOT one of them and R14 no longer flags it:
+  it mentions this entry's memory `m` and `exts`, so it is the per-entry
+  instantiation rather than a run-global fact.
 - OPEN (unchanged, and outside this layer): relating `MallocContract.privFoot` to
   dlmalloc's actual indirect bin-link writes. That is the verified-allocator
   obligation behind `MallocContract` itself, not a fact any interpreter call site

@@ -330,10 +330,10 @@ theorem envDefineAppendLane
   have hwin := hE.stack_win
   have h64 : 64 ≤ esp.toNat := by omega
   have hsp64 : (esp - 64#64).toNat = esp.toNat - 64 := sp_sub64_toNat esp h64
-  have hAlo := L.arena_ram.1
-  have hAhi := L.arena_ram.2
-  have hAhtif := L.arena_htif
-  have hAstack := LM.arena_stack
+  have hAlo := L.alloc.arena_ram.1
+  have hAhi := L.alloc.arena_ram.2
+  have hAhtif := L.alloc.arena_htif
+  have hAstack := LM.alloc.arena_stack
   have hAimg := hE.arena_image
   have hpvNat := hE.pv_frame
   have hslot := hE.slot_in_stack
@@ -370,7 +370,7 @@ theorem envDefineAppendLane
   have hprivLive : ∀ e ∈ extsA, ∀ i < e.2, ¬ M.privFoot (e.1 + i) :=
     M.privFoot_disjoint c0.σ extsA H.regs.ainv
   have EO : EntryOff A SL extsA M.privFoot alloc shared :=
-    hheap.entryOff hstackW hprivLive LM.priv_arena
+    hheap.entryOff hstackW hprivLive LM.alloc.priv_arena
   have hsharedPriv := EO.shared_priv
   have hsharedStack := EO.shared_stack
   have hextArena := EO.ext_arena
@@ -392,7 +392,7 @@ theorem envDefineAppendLane
     ⟨S1.good, by rw [S1.mem, H.regs.mem]; exact H.facts.text.StrlenLoaded, S1.mem.trans H.regs.mem, S1.pc, S1.a0,
       S1.ra, S1.minstret, S1.tick, LM.name_regions, LM.name_align, hnameO.repr, by decide⟩
   obtain ⟨c2, hs2, hpost2, habi2, htick2, hout2⟩ :=
-    LM.strlen aName 0x80002b24#64 x mA (fun R => c1.σ.regs.get? R) out c1
+    LM.alloc.strlen aName 0x80002b24#64 x mA (fun R => c1.σ.regs.get? R) out c1
       ⟨hpre1, fun _ _ => rfl, S1.out.trans H.regs.out⟩
   obtain ⟨hG2, hpc2, ha02, hra2, hmem2⟩ := hpost2
   -- ── malloc
@@ -404,7 +404,7 @@ theorem envDefineAppendLane
   have hx3_3 : c3.σ.regs.get? Register.x3 = some gpv := by
     rw [S3.abi _ (by decide), habi2 _ (by decide), S1.abi _ (by decide)]; exact H.regs.gp
   have hainv3 : M.AInv c3.σ extsA := by
-    apply LM.ainv_private extsA c0.σ c3.σ (H.regs.gp.trans hx3_3.symm) _ H.regs.ainv
+    apply LM.alloc.ainv_private extsA c0.σ c3.σ (H.regs.gp.trans hx3_3.symm) _ H.regs.ainv
     intro a _
     rw [S3.mem, hmem2, H.regs.mem]
   let g3 : (R : Register) → Option (RegisterType R) := fun R => c3.σ.regs.get? R
@@ -423,7 +423,7 @@ theorem envDefineAppendLane
       ainv := hainv3
       mem := S3.mem.trans hmem2
       out := S3.out.trans hout2 }
-  obtain ⟨c4, hs4, X4⟩ := LM.malloc g3 extsA (x.length + 1) (esp - 64#64) 0x80002b30#64 mA out
+  obtain ⟨c4, hs4, X4⟩ := LM.alloc.malloc g3 extsA (x.length + 1) (esp - 64#64) 0x80002b30#64 mA out
     LM.copy_req c3 hentry3
   obtain ⟨p, ha04, hp0, hp16, hpA, hpFresh, hainv4⟩ :=
     M.nonNull_of_bounded c4.σ extsA (x.length + 1) LM.copy_req X4.result
@@ -436,7 +436,7 @@ theorem envDefineAppendLane
     rw [hsp64]; exact h2
   have hag4' : ∀ a, ¬ (A.lo ≤ a ∧ a < A.hi) → ¬ (SL.lo ≤ a ∧ a < esp.toNat - 64) →
       c4.σ.mem[a]? = mA[a]? :=
-    fun a h1 h2 => hag4 a (fun hp => h1 (LM.priv_arena a hp)) h2
+    fun a h1 h2 => hag4 a (fun hp => h1 (LM.alloc.priv_arena a hp)) h2
   have htext4 : FixedTextLoaded c4.σ.mem := htextOf _ hag4'
   -- ── memcpy
   have hx8_4 : c4.σ.regs.get? Register.x8 = some (BitVec.ofNat 64 (x.length + 1)) := by
@@ -519,7 +519,7 @@ theorem envDefineAppendLane
         decide
       exact ⟨hx, hge, by omega, LM.copy_fit⟩
   obtain ⟨c6, hs6, ⟨g', hbyte⟩, habi6, hout6⟩ :=
-    LM.memcpy g5 0x80002b44#64 (BitVec.ofNat 64 p) aName (x.length + 1) c5.σ.mem bs out (by decide) hroute c5
+    LM.alloc.memcpy g5 0x80002b44#64 (BitVec.ofNat 64 p) aName (x.length + 1) c5.σ.mem bs out (by decide) hroute c5
       ⟨hpre5, fun _ _ => rfl, S5.out.trans (X4.out)⟩
   have hbyteK := hbyte
   obtain ⟨hG6, hpc6, ha06, hra6, hcopiedB, hout6m, htick6, _⟩ := hbyte
@@ -531,7 +531,7 @@ theorem envDefineAppendLane
     exact hag4 a h1 h2
   have hag6' : ∀ a, ¬ (A.lo ≤ a ∧ a < A.hi) → ¬ (SL.lo ≤ a ∧ a < esp.toNat - 64) →
       c6.σ.mem[a]? = mA[a]? :=
-    fun a h1 h2 => hag6 a (fun hp => h1 (LM.priv_arena a hp)) h2 (by omega)
+    fun a h1 h2 => hag6 a (fun hp => h1 (LM.alloc.priv_arena a hp)) h2 (by omega)
   -- the footprint the store block reads: live extents, shared bytes, the value slot
   let P6 : Nat → Prop := fun k => (∃ e ∈ extsA, ExtentByte e k) ∨ shared k ∨ valHeader pv.toNat k
   have hagP6 : AgreeP P6 mA c6.σ.mem := by
@@ -549,7 +549,7 @@ theorem envDefineAppendLane
       exact hag6 k (hsharedPriv k hk) (fun hin => hsharedStack k hk ⟨hin.1, by omega⟩) (by omega)
     · unfold valHeader at hk
       refine hag6 k (fun hp => ?_) (by omega) (by rcases hAstack with h | h <;> omega)
-      have := LM.priv_arena k hp
+      have := LM.alloc.priv_arena k hp
       rcases hAstack with h | h <;> omega
   have hExt6 : ∀ e ∈ extsA, ∀ k, ExtentByte e k → P6 k := fun e he k hk => Or.inl ⟨e, he, hk⟩
   have hsP6 : ∀ k, shared k → P6 k := fun k hk => Or.inr (Or.inl hk)
@@ -582,7 +582,7 @@ theorem envDefineAppendLane
   -- ── the store block
   obtain ⟨hgeomS, hnameA, hvalsA, henvA⟩ := appendStoreFactsGeom_of hheap henvLt H.facts.env_addr
     H.facts.cap_read hpn hpvals H.room hcapS (H.facts.names_align pn hpn) (H.facts.vals_align pvals hpvals)
-    (H.facts.store.frames_arena env henvLt).2 L.arena_ram L.arena_htif hpvNat hE.stack
+    (H.facts.store.frames_arena env henvLt).2 L.alloc.arena_ram L.alloc.arena_htif hpvNat hE.stack
     hE.slot_in_stack hramLo hramHi hwin
   have hfp6 : EnvDefineAppendFootprint c6.σ.mem aEnv.toNat pn pvals (st.store.frames[env]).vars.length
       (BitVec.ofNat 64 p).toNat pv.toNat (st.store.frames[env]).vars x v := by

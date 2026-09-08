@@ -250,7 +250,7 @@ theorem envDefineMissReady_run
   intro c ⟨v8, v9, v18, v19, v20, v21, v22, pn, gm, R⟩
   have Sf := R.facts
   have henvLt := Sf.env_lt
-  have hAhi := L.arena_ram.2
+  have hAhi := L.alloc.arena_ram.2
   obtain ⟨hcountR, ⟨cap, hcapR, hcaple⟩, ⟨pn', pvals, hpn', hpvals, _⟩, _⟩ :=
     Sf.store0.frames env henvLt
   have hpnEq : pn' = pn := Option.some.inj (hpn'.symm.trans Sf.pn_read)
