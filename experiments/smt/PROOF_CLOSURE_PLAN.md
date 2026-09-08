@@ -319,8 +319,17 @@ replace every per-entry `ainv_stable` field.
   `StoreOwned.pushClosure`: old roles and bytes survive the build's memory through
   `OwnedOff`, the fresh record takes the `closure` role at the new index, captured
   environments stay allocated, and the pushed closure's AST is shared.
-- `AllocBuildEntry.hOld` and `AllocBuildTailFacts.hOld` demand store survival
-  under arbitrary arena changes. Their replacement supplier is
+- `AllocBuildEntry.hOld` and `AllocBuildTailFacts.hOld` are UNINHABITABLE as
+  stated, not merely too strong. Each demands `StoreRepr mpre N A φf φc' st.store`
+  for EVERY `mpre` agreeing with the post-malloc memory outside the stack window,
+  the arena and the result slot. The arena is EXCLUDED from that agreement, so
+  `mpre` may differ arbitrarily inside `[A.lo, A.hi)` — and `StoreRepr.frames`
+  reads `FrameRepr` at `φf fa`, which `StoreRepr.frames_arena` places inside the
+  arena. So for any store with at least one frame, perturbing a single frame byte
+  of `mpre` satisfies the hypothesis and refutes the conclusion. Anything built on
+  these bundles is vacuous for a non-empty store, which is the record-uninhabited
+  class. This is a sharpening of the earlier note, which recorded only that they
+  "demand store survival under arbitrary arena changes". Their replacement supplier is
   `closurePushed_of_mallocReturn` (`AllocLedger.lean`), which derives the old
   store at the extended closure map from the ACTUAL `malloc` frame plus the build's
   own writes, then lands `storeRepr_pushClosure`. Remaining: rewire
