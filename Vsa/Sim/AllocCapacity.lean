@@ -193,9 +193,77 @@ theorem arena_has_room {A : Arena} {maxReq : Nat} {exts : List Extent}
 theorem physTotal_fresh (p n : Nat) (exts : List Extent) :
     physTotal ((p, n) :: exts) = physSize n + physTotal exts := rfl
 
+/-! ## 4. Carrying the bound along an execution -/
+
+/-- **Room for `k` further requests at the ceiling.**  `ResourceBound` asserts the
+budget at ONE point; this is the same statement indexed by how many more
+allocations it still covers, which is what an induction along an execution
+needs.  A source-level accounting supplies `k` — the number of allocations the
+program can still make — and the lemmas below carry it. -/
+def ResourceBudget (A : Arena) (maxReq : Nat) (exts : List Extent) (k : Nat) : Prop :=
+  physTotal exts + k * physSize maxReq ≤ A.hi - A.lo
+
+/-- A sublist costs no more physically than the list it came from. -/
+theorem physTotal_le_of_sublist {l₁ l₂ : List Extent} (h : l₁.Sublist l₂) :
+    physTotal l₁ ≤ physTotal l₂ := by
+  induction h with
+  | slnil => exact Nat.le_refl 0
+  | cons a _ ih => simp only [physTotal_cons]; omega
+  | cons₂ a _ ih => simp only [physTotal_cons]; omega
+
+/-- Releasing a block never costs more room. -/
+theorem physTotal_erase_le (e : Extent) (l : List Extent) :
+    physTotal (l.erase e) ≤ physTotal l :=
+  physTotal_le_of_sublist List.erase_sublist
+
+/-- **The allocation step.**  One request within the ceiling consumes exactly one
+unit of the budget, whatever its size. -/
+theorem ResourceBudget.alloc {A : Arena} {maxReq : Nat} {exts : List Extent} {k : Nat}
+    (h : ResourceBudget A maxReq exts (k + 1)) {p n : Nat} (hn : n ≤ maxReq) :
+    ResourceBudget A maxReq ((p, n) :: exts) k := by
+  have hm := physSize_mono hn
+  unfold ResourceBudget at h ⊢
+  rw [physTotal_fresh]
+  have hs : (k + 1) * physSize maxReq = k * physSize maxReq + physSize maxReq :=
+    Nat.succ_mul k (physSize maxReq)
+  omega
+
+/-- **The release step.**  Freeing never spends budget, and may recover some. -/
+theorem ResourceBudget.free {A : Arena} {maxReq : Nat} {exts : List Extent} {k : Nat}
+    (h : ResourceBudget A maxReq exts k) (e : Extent) :
+    ResourceBudget A maxReq (exts.erase e) k := by
+  have := physTotal_erase_le e exts
+  unfold ResourceBudget at h ⊢
+  omega
+
+/-- A budget with room to spare is a bound at the current point. -/
+theorem ResourceBudget.toBound {A : Arena} {maxReq : Nat} {exts : List Extent} {k : Nat}
+    (h : ResourceBudget A maxReq exts (k + 1)) (harena : HeapArena A exts) :
+    ResourceBound A maxReq exts where
+  budget := by
+    unfold ResourceBudget at h
+    have hs : (k + 1) * physSize maxReq = k * physSize maxReq + physSize maxReq :=
+      Nat.succ_mul k (physSize maxReq)
+    omega
+  arena := harena
+
+/-- The budget is monotone in the count, so a coarser source bound still serves. -/
+theorem ResourceBudget.mono {A : Arena} {maxReq : Nat} {exts : List Extent} {j k : Nat}
+    (h : ResourceBudget A maxReq exts k) (hjk : j ≤ k) : ResourceBudget A maxReq exts j := by
+  have hjm : j * physSize maxReq ≤ k * physSize maxReq :=
+    Nat.mul_le_mul_right (physSize maxReq) hjk
+  unfold ResourceBudget at h ⊢
+  omega
+
 #print axioms physSize_32
 #print axioms extents_total_le
 #print axioms sum_le_physTotal
 #print axioms arena_has_room
+#print axioms physTotal_le_of_sublist
+#print axioms physTotal_erase_le
+#print axioms ResourceBudget.alloc
+#print axioms ResourceBudget.free
+#print axioms ResourceBudget.toBound
+#print axioms ResourceBudget.mono
 
 end Vsa.Sim

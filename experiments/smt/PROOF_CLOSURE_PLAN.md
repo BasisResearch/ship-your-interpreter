@@ -406,9 +406,20 @@ replace every per-entry `ainv_stable` field.
   no contiguous PLACEMENT, so external fragmentation and the allocator's bin and
   coalescing behaviour stay behind `MallocContract`. `physSize` covers internal
   fragmentation only.
-  REMAINING: supply `ResourceBound` from a source-level accounting of the
-  interpreter's allocation behaviour over every finite execution prefix, and
-  connect it to `Loaded` and the concrete arena bounds of the linker script.
+  `ResourceBudget A maxReq exts k` is the same statement indexed by how many
+  further requests it still covers, which is what an induction along an
+  execution needs. `.alloc` spends exactly one unit per request within the
+  ceiling, whatever its size (`physSize_mono`); `.free` spends none and may
+  recover some (`physTotal_erase_le`, over `physTotal_le_of_sublist`); `.mono`
+  weakens the count; `.toBound` turns any budget with room to spare into the
+  bound at that point.
+  REMAINING: supply the COUNT. The carry lemmas reduce the obligation from
+  "the live set is bounded at every point of every finite prefix" to "the source
+  program makes at most `k` allocations", a static accounting over the
+  interpreter's allocating constructs (environment records and their arrays,
+  copied binding names, closure records, string payloads). That count then has
+  to be connected to `Loaded` and the concrete arena bounds of the linker
+  script.
   Discharging `nonNull_of_bounded` itself additionally needs the allocator's
   own placement argument, which is behind `MallocContract`.
 
