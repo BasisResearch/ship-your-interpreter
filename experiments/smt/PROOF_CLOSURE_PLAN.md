@@ -413,6 +413,29 @@ replace every per-entry `ainv_stable` field.
   recover some (`physTotal_erase_le`, over `physTotal_le_of_sublist`); `.mono`
   weakens the count; `.toBound` turns any budget with room to spare into the
   bound at that point.
+  PARKED, NOT LANDED: the capacity precondition itself. `MallocContract.
+  nonNull_of_bounded` currently quantifies over every machine state and every
+  live list with no capacity condition anywhere in its statement, so read alone
+  it says `malloc` never returns NULL for a bounded request however full the
+  arena is. A future dlmalloc verification could not discharge that with
+  dlmalloc's own heap invariant. It is inhabitable today only because `AInv` is
+  a field of the same structure, so an inhabitant may define `AInv` to include
+  "the arena has room" — which moves a CLIENT obligation inside the allocator's
+  spec, hidden in an opaque predicate, and makes the contract unverifiable in
+  isolation. The amendment adds `ArenaHasRoom A maxReq exts` (stated in
+  `Vsa/Alloc.lean` beside `physSize`/`physTotal`) as an explicit precondition of
+  `nonNull_of_bounded`, threaded through the eight call sites that prune OOM
+  branches: as a ledger field on `EnvNewLedger` and `EnvDefineMissLedger`, and
+  as a named premise on `prune_of_exit`, `concatOOM_prune`,
+  `envDefMallocSuccessSaved_of_post`, `strdupMemcpy_prune_null` and
+  `mallocReturn_of_parked`. The allocator side then reads "if there is room, it
+  finds one", which is about dlmalloc alone; the client side is the caller's,
+  discharged by `ResourceBudget`. UNVERIFIED: `Vsa/Alloc.lean` sits near the
+  bottom of the graph, so the change invalidates ~1000 modules and 233 remain
+  unbuilt. `Vsa.Alloc` and `Vsa.Sim.AllocCapacity` compile clean directly; that
+  is no evidence of a proof error and no evidence of correctness for the rest.
+  The diff is `capacity-precondition.patch` in the session scratchpad, checked
+  to reverse-apply against the tree before it was parked.
   REMAINING: supply the COUNT. The carry lemmas reduce the obligation from
   "the live set is bounded at every point of every finite prefix" to "the source
   program makes at most `k` allocations", a static accounting over the
@@ -901,6 +924,24 @@ nothing constrains the arena on the call-return memory); the `Footprint` clause'
 - Construct all 63 `TermResidualsBase` fields, then `RemainingWork`, then the
   final refinement theorem. Remove the 56 inherited discipline findings and the
   12 per-entry allocator ledger fields R14 reports (supplied by `of_alloc`).
+
+### Verification hygiene: an overlay is not the backend
+
+`rows/ClosureBuildSupply.lean` was committed (`fef1ec8`) and imported from
+`Vsa.lean`, but only ever compiled into a private `proof_slice` overlay. Its
+object was therefore absent from the shared backend, and the next full
+`build_private` run failed at `Vsa.lean` with a missing-object error for it.
+The module itself is fine; the mistake was treating "verified in my overlay" as
+"verified", when the two differ exactly on whether the rest of the tree can see
+the result.
+
+The rule this implies: a slice verifies a change, but only a full build verifies
+that the change is INTEGRATED. Any commit that adds a module and imports it from
+a root has to be followed by a build that compiles the root against the shared
+backend, or it breaks the next person's gate rather than your own. Overlays stay
+the right tool for iteration — the shared backend must not be written by hand —
+but the integration build is not optional, and the gap between them is a commit
+that looks green and is not.
 
 ## Validation and automation still to finish
 
