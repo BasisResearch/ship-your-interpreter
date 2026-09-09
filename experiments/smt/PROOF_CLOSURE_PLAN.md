@@ -192,14 +192,25 @@ exactly `eval_binary_row`'s remaining hypotheses.
 over the parametric head `blockB_binary_footprint_gen` (`EvalBinSim.lean`; the
 landed `blockB_binary_footprint` is its projection at the trivial left-child
 fact), so `ScaffoldRows.field_hStr{Lt,Le,Gt,Ge}_of_clauses` need only
-`StrCmpOwnedOperands` and the two closed clause recursions. Left open in (b):
+`StrCmpOwnedOperands` and the two closed clause recursions. The four
+`BinStrCmpCellF` cells are CLOSED but for the shared operand residual: the
+PRODUCT clause (footprint × payload coverage, `EvalIHFP noArenaFoot`) is declared
+as the TSV line `FootprintCov` (`Vsa/Sim/rows/IHClause_FootprintCov.lean`,
+generator kind `motive` — the `pred` column is the `EvalE` motive itself, since
+the coverage half is indexed by the returned value), with the four leaves and the
+six one-child arms wired from `IHClauseGeneric.footprintCov.<case>`
+(payload-free results, plus the string literal's `evalStrPayloadIHF`) and the
+same five steps open as `Footprint`. `Vsa/Sim/IHClauseGenericSupply.lean` states
+the cell with its left child at the product clause (`BinStrCmpCellFP`), supplies
+it from `StrCmpOperandsSupply` alone (`binStrCmpCellFP_cov`, over
+`binRow_strcmpF_cov` and `binaryHeadFootprintSupplyCov`), and lowers it to the
+plain `BinStrCmpCellF` through the closed product clause (`binStrCmpCellF_cov` at
+`FootprintPayloadClause`); `binaryFootprintCells_of` and
+`footprint{,NA}.hBinary_of_base` therefore take `StrCmpOperandsSupply` and
+`FootprintPayloadClause` in place of the four cells. Left open in (b):
 `hVar` at the `VarPinnedSim` shape (superseded: `Rows.evalVarIHF` over
-`Rows.VarLeafResidF` lands the leaf; wire it in place of `footprint.hVar_of`) and the four
-`BinStrCmpCellF` fields of `BinaryFootprintCells` — obstruction: a string
-comparison's left child must carry its payload coverage, which the plain
-footprint clause does not give, so those four cells are supplyable only at a
-PRODUCT clause (footprint × payload coverage, `EvalIHFP`) declared as its own
-TSV line; (c) declare `Call`/`ExecSeq` motives in the
+`Rows.VarLeafResidF` lands the leaf; wire it in place of `footprint.hVar_of`),
+and `hBinary`'s remaining `DivOverflowCellF` and equality pair; (c) declare `Call`/`ExecSeq` motives in the
 `motives` column so `hCall` receives the callee's clause; (d) the allocating
 family `allocFoot` over `MallocRun`/`HeapOwned.pushClosure`/`EnvNewContract`;
 (e) DONE: `scripts/gen_footprint_row.py` + `scripts/footprint_rows.tsv` emit all
@@ -208,8 +219,160 @@ fifteen `*RowFootprint` modules (five family templates; `--check` in stage a3), 
 `_noArena` lemmas close the cell half of every `<arm>NodeFoot_noArena`. The per-op
 `<op>CellFoot` stay stated beside their cells in the row files (definitionally the
 shared predicate); folding them into aliases needs an edit of the landed row files.
+`StrCmpOwnedOperands` (`Vsa/Sim/StrCmpCellClauses.lean`) is UNREACHABLE AS
+STATED, and the verdict is stronger than "unproven": it quantifies an arbitrary
+configuration constrained only by `TwoSubReturn`, which pins the operands solely
+by `ValueRepr … (.str s)`, so the payload pointer may lie inside the stack,
+inside the arena, or in the top eight bytes of the address space, and no shared
+set satisfies `SharedGeom` for such a configuration. The derived-theorem
+technique (keep the name, derive the content) was tried and does not fit. CLOSED
+BY RETENTION instead: `blockB_binary_footprint_gen2` (`Vsa/Sim/EvalBinSim.lean`)
+retains `BinaryOperandRetained` at the head's actual return, with the left
+operand transported across the right child's footprint by
+`ownedSlot_head_transport`; `binRow_strcmpF_owned`, `binStrCmpCell_of_owned` and
+`ScaffoldRows.field_hStr{Lt,Le,Gt,Ge}_of_owned` consume it there. Every landed
+name keeps its statement; the configuration-quantified definition survives as a
+documented dead branch. The four string-comparison cells now take exactly a
+shared-set choice (`OwnedIndex`, discharged at `stdShared` by `ownedIndex_std`),
+the Layout premise `SharedTopSlackAll` (the pinned AST region and the arena end
+far below `0x100000000`, so the `strcmp` word loop's eight-byte read stays in
+RAM), and the two product-clause recursions.
+
+The product clause is `FootprintCov` (`scripts/ih_clauses.tsv`, generated into
+`rows/IHClause_FootprintCov.lean`), declared at the landed `EvalIHFP noArenaFoot`.
+It needed a new clause KIND: `ValuePayloadCovered` is indexed by the RETURNED
+VALUE, which an `EvalExtraM` cannot see, so `kind = motive` takes the `EvalE`
+motive itself as the predicate. Ten steps are closed;
+`binStrCmpCellF_cov`/`binStrCmpCellFP_cov` supply the four string cells, and
+`hBinary`'s residual set shrank from seven to three.
+
 After (a)–(d) the four string cells close from `StrCmpOwnedOperands` alone,
 and `hEq`/`hNe` lose their `hVlSurv` conjunct the same way.
+
+The two premises of `ScaffoldRows.field_hStr{Lt,Le,Gt,Ge}_of_owned` are supplied
+by ONE recursion: the clause `FootprintPayloadOwned` (`scripts/ih_clauses.tsv`,
+kind `motive`, guard `IHClauseGeneric.noAllocExpr e = true`, generated into
+`rows/IHClause_FootprintPayloadOwned.lean`) at the landed `EvalIHFPO stdShared
+noArenaFoot`; the right-operand premise `FootprintOwnedClause` is that clause
+with the coverage conjunct dropped (`EvalIHFPO.forgetCov`). The three conjuncts
+cannot be assembled from the landed `FootprintCov` and `OwnedPayload` clauses —
+two `EvalIHWithM` recursions each quantify their own reached configuration — so
+the steps are proved at the conjunction in `Vsa/Sim/IHClauseGenericProduct.lean`,
+over the same rows the three landed families use: `EvalIHWithM.monoD` reads the
+ownership and coverage halves off the child's OWN exit (`EvalExitD`'s
+`ValueRepr`) for every payload-free result, `evalStrProductIHF` lands all three
+conjuncts for the string literal at one run of `evalStrSimP_exact`, and
+`IHClauseGenericProduct.hBinary` dispatches the binary arm with the four string
+comparisons discharged by `binRow_strcmpF_owned` AT THE STEP'S OWN CHILD IHs
+(the only place the left child's coverage and both operands' ownership exist
+together). Thirteen of fifteen fields are wired; `hVar` (`VarProductStep`) and
+`hBinary` (`DivOverflowCellF` + the two `BinEqCell`s) stay residual. The cells
+close at `BinStrCmpCellNA` — the `BinDispatchRow` field restricted to operands
+that do not allocate — because the guard is what makes `hAssign`/`hFn`/`hCall`
+and `.add` vacuous; lifting it needs the `allocFoot` family of (d)/task 2.
+
+OBSTRUCTION (the `SharedTopSlackAll` premise). `SharedTopSlackAll stdShared` is
+FALSE, not merely unproven: `stdShared` is the envelope `k < 0x100000000`, which
+contains the top eight bytes of the address space
+(`not_sharedTopSlackAll_std`, `Vsa/Sim/IHClauseGenericProduct.lean`), so
+`ScaffoldRows.field_hStr*_closed` (`Vsa/Sim/rows/StrCmpCellsOwnedClosed.lean`)
+are vacuous as stated. And no index repairs it while
+`AstRegionSpec.hi_ram` is `hi ≤ 0x100000000`: `OwnedIndex.ast` puts every byte of
+every entry's AST region into the shared set, so the slack forces `hi + 7 ≤
+0x100000000` on every AST region (`astRegionSlack_forced`), which the entry does
+not carry. FIX: amend `AstRegionSpec.hi_ram` (`Vsa/Sim/InterpEntry.lean`) to
+`hi + 8 ≤ 0x100000000` at its concrete Layout supplier. The landing pad is
+already in place: the repaired index `stdSharedSlack` has `SharedTopSlackAll` as
+a THEOREM (`sharedTopSlackAll_stdSlack`), `OwnedIndex stdSharedSlack` reduces to
+the two named entry-layer premises `AstRegionSlack`/`ArenaSlack`
+(`ownedIndex_stdSlack`), the clause is generated at it
+(`FootprintPayloadOwnedSlack`), and `ScaffoldRows.field_hStr*_closedSlack` close
+the four cells there with no false premise; the amendment discharges
+`AstRegionSlack` outright.
+
+#### The AST-region slack amendment
+
+`AstRegionSpec.hi_ram` (`Vsa/Sim/InterpEntry.lean`) and its statement-side twin
+`StmtRegionSpec.hi_ram` (`Vsa/Sim/ExecEntry.lean`) bounded the syntax region by
+`hi ≤ 0x100000000`, the top of RAM. The `strcmp` word loop reads eight bytes at
+a time and may read past a payload's final NUL, so that bound left the read
+unjustified, and `IHClauseGenericProduct.astRegionSlack_forced` shows no choice
+of shared index repairs it downstream: `OwnedIndex.ast` puts every syntax byte
+into the shared set, so the set inherits exactly the region's bound. Both fields
+are now `hi + 8 ≤ 0x100000000`. The two must move together, because a child
+expression's region is derived from its statement's; that derivation
+(`EntryGroundKit`) was the only site that broke.
+
+The amendment strengthens an already-open assumption rather than adding a new
+one: no proof constructs either field from concrete layout facts, every
+occurrence propagates it from the entry bundles' assumption. What it does
+discharge is `AstRegionSlack`, which is that field verbatim and is now the
+theorem `astRegionSlack_holds` (`Vsa/Sim/IHClauseGenericProduct.lean`). The
+field itself is true of the loaded image, whose syntax region sits in low RAM,
+and it is discharged with the rest of `AstRegionSpec` when the entry-side region
+assumptions are replaced by exact coverage (task 1). What it buys is that the
+string-comparison closure is no longer vacuous: `SharedTopSlackAll stdShared` is
+FALSE (`not_sharedTopSlackAll_std`, machine-checked, since `stdShared` is the
+whole `k < 0x100000000` envelope and so contains the top eight bytes), and the
+repaired index `stdSharedSlack` now derives its slack from these fields instead.
+
+`ScaffoldRows.field_hStr*_closedSlack` and `strCmpCellsNA_slack`
+(`Vsa/Sim/rows/StrCmpCellsOwnedClosed.lean`) therefore no longer carry
+`AstRegionSlack`; `ownedIndex_stdSlack` is applied to `astRegionSlack_holds`.
+The four cells at the repaired index rest on `ArenaSlack` (supplier: the
+allocator ledger's concrete arena bounds, task 2), `VarProductStep`,
+`DivOverflowCellF`, and the two `BinEqCell`s — each a named premise with a
+supplier, none false. Slice-checked axiom-clean.
+
+Two consumers needed weakening. `EvalChildArm.lean` and
+`WhileCondDispatchClosed.lean` derive a child expression's region bound from
+its statement's and wanted the old `hi ≤ 0x100000000`; they now compose
+`Nat.le_add_right` with the strengthened field. The source audit found no other
+direct use at the old bound. Other occurrences feed `omega` or rebuild the
+amended twin spec.
+
+#### Verification state of the amendment
+
+| Step | State |
+|---|---|
+| Both `hi_ram` fields strengthened, both consumers weakened, `AstRegionSlack` discharged | Source complete |
+| Integration build, all sources, `--resume` on the private cache | All 1,640 modules fingerprint-current, exit 0, including the executable and modules outside `Vsa`'s imports. The last run rebuilt exactly the three modules edited after the preceding build began (`rows/IHClause_FootprintPayloadOwnedSlack`, `rows/StrCmpCellsOwnedClosed`, `Vsa.lean`) and reused 1,637 |
+| Generator checks (`gen_m4_term_row`, `gen_term_case_bundle`, `gen_ih_clause`, `gen_footprint_row` `--check`), `git diff --check` | PASS |
+| `scripts/tests` | 257 run, 12 skipped, ONE error: `BoundaryInputTests` input fingerprint drift. Every other test passes |
+| Boundary lock refresh | Refreshed for the amendment's four proof sources (ELF, fixture, case inventory and expectations all unchanged). It has since drifted again on five `EnvGetSpec` modules under concurrent edit; those are not part of the amendment, so the lock is left for whoever lands them. Boundary execution rerun pending |
+| `check_all.sh` stage a4 (discipline) | FAIL, pre-existing: 56 findings across 27 files, none of them modified in the tree, so all present at HEAD. Recorded here per CLAUDE.md; the amendment adds none |
+| `check_all.sh` stage b (forbidden tokens) | OK — 1,639 `.lean` files scanned, no `sorry`/`native_decide`/`bv_decide`/`axiom` |
+| `check_all.sh` stage c (axioms) | OK — 1,086/1,086 theorems audited, axioms ⊆ {`propext`, `Classical.choice`, `Quot.sound`}. Stage a4's failure aborts the script, so b and c were run standalone against the same tree |
+| `check_all.sh` stage a5 (IH clause status, informational) | 7 clauses, 105 residual fields. `FootprintPayloadOwnedSlack`: 12 WIRED, 3 MANUAL (`hStr`, `hVar`, `hBinary`) |
+
+#### Residuals left open on the tower
+
+The current selected check of `rows/StrCmpCellsOwnedClosed` passed: 950
+modules, 889 reused and 61 rebuilt. Both requested declaration audits,
+`astRegionSlack_holds` and `strCmpCellsNA_slack`, use only allowed axioms.
+The driver checked selected source/object fingerprints before writing
+`/private/tmp/vsa-slack-discharge/run-sky3uquq/receipt.json`.
+`/private/tmp/vsa-closure-work/slack-slice-receipt.json` records that receipt,
+the audit log, hashes, and counts. The external process is terminal; its exact
+shell exit status was not directly observed. The all-source lookup integration
+build remains live. This slice does not change the certified base-field count.
+
+The amendment closes the string-comparison cells at
+`ScaffoldRows.field_hStr*_closedSlack`. It closes nothing else. Still open:
+
+- `VarProductStep` — `hVar` at the product clause. The current recursive
+  lookup already retains its write set (`env_get_lookup_from_entry`);
+  `varBridge_callee` drops it. The caller interfaces also need repair and
+  store ownership must reach the clause entry. See the variable-lookup audit
+  below; the older immediate-frame lookup is not the active supplier path.
+- `DivOverflowCellF` — the footprint twin of `eval_binary_row`'s `hDivOv`, the
+  `INT64_MIN / -1` subcase.
+- The two `BinEqCell`s — `hEq`/`hNe`, which lose their `hVlSurv` conjunct by
+  the same retention route the string cells took.
+- Guard lifting: the cells close at `BinStrCmpCellNA`, operands that do not
+  allocate, because the guard is what makes `hAssign`/`hFn`/`hCall` and `.add`
+  vacuous. Lifting it needs the `allocFoot` family, step (d) over task 2's
+  allocator ledger.
 
 ### 1. Finish recursive return and ownership contracts
 
@@ -228,6 +391,22 @@ and `hEq`/`hNe` lose their `hVlSurv` conjunct the same way.
   and distinct addresses for the three native functions through entries.
 - Replace `VarCallLinkage.payloadDisj` and its unpinned `LeafWiden` premise
   with facts about the actual returned value and memory.
+  The active field is `VarLeafResid`'s `LeafReturnWiden`: its `pres` and
+  `surv` quantify over every `EvalExit`, which omits byte presence and permits
+  arena changes. `VarLeafResidF` retains that same premise. `evalVarSimQ`
+  discards the prologue's `_hpresM`; its final post retains agreement outside
+  the result slot but no presence witness. Retain presence and the exact
+  footprint through the actual prologue, lookup, and copy, then derive store
+  survival from the entry at that returned memory.
+  `/private/tmp/vsa-closure-work/return-repair/` stages
+  `evalReturn_of_exit_facts`, which consumes presence and store survival at
+  one return. The existing `evalReturn_of_exit_id` keeps its statement and
+  projects the new lemma. `check-return-facts.sh` passed (exit 0): 142 selected
+  modules, 141 reused, one rebuilt in 38.808 seconds. Both declaration audits
+  report only `propext`, `Classical.choice`, and `Quot.sound`. Receipt:
+  `return-repair/backend/run-yv1xs_o6/receipt.json`. The patch remains staged;
+  actual variable-return presence and store-survival suppliers, consumer
+  wiring, and full integration remain open.
 - Obstruction (string and equality cells): `blockB_binary_data` takes the left
   value's survival across the right child as `hVlSurv`, quantified over ALL
   memory pairs that agree outside the right child's frame, the arena, and the
@@ -903,15 +1082,346 @@ the leaf at the generator's `hVar` field type. The conjunct has a proved supplie
 `out = (sp-1088)+0xf0`, `sp0 = sp-1088`, both inside `[SL.lo, sp)` under the entry's
 `StackOK SL sp 2176`; `EnvGetSpec10.env_get_found_framed` already carries that frame
 and `envGetFramedPost_pin` (`rows/EvalVarBridgeCallee.lean`) converts it to
-`VarPostCallPin`, with `varCallLinkage_calleeF` composing it through a
-memory-transparent repack. OBSTRUCTION: the LANDED call seam
-`VarCallLinkage.finalMemFrame` (`rows/EvalVarBridge.lean`, the `varBridge` path
-`eval_var_row_closed` uses) states its frame ARENA-CARVED, so it cannot supply the
-pin; restating that one field at `env_get`'s own footprint closes it. Consequently
+`VarPostCallPin`, with `varCallLinkage_calleeF` composing it through an assumed
+memory-transparent repack. The active recursive path already carries the same
+write windows in `env_get_lookup_from_entry`; retain them through
+`varBridge_callee` instead of changing `VarCallLinkage.finalMemFrame`.
+The existing arena-carved post cannot recover this discarded information.
+Consequently
 `IHClauseGeneric.VarPinnedSim` is NOT provable as stated (from `EvalVarEntry` alone
 nothing constrains the arena on the call-return memory); the `Footprint` clause's
 `hVar` step should take `Rows.VarLeafResidF` (→ `Rows.evalVarIHF`) instead of
 `Rows.VarLeafResid` + `VarPinnedSim`.
+
+#### Variable-lookup supplier audit
+
+The active supplier is `env_get_lookup_from_entry`
+(`Vsa/Sim/EnvGetRecursive.lean`), which covers parent-chain lookup. Its return
+retains the prologue spill agreement and `EnvGetValuePost.mem` retains the
+output-buffer agreement. `varBridge_callee` obtains both and discards them
+while constructing `VarPostCall`. Retaining their composition at that actual
+return supplies the footprint; strengthening `finalMemFrame` is unnecessary.
+The immediate-hit adapter in `rows/EvalVarBridgeCallee.lean` still assumes its
+repackaging and cannot supply the general parent-chain path.
+
+The source audit identified additional contract gaps:
+
+- `VarRowResid` (`rows/EvalVarBridge.lean`) quantifies over arbitrary ghosts
+  and arbitrary `ment/v8/v9/v18`. Choosing the everywhere-`none` ghost makes
+  the demanded `VarCallLinkage.g8` read `none = some 0`. Its replacement must
+  receive both the actual `EvalEntry` and actual `ArmEntryK` witnesses.
+  Consumers: `varLeafResid_of_rowResid`, `eval_var_row_closed`.
+- `VarCallLinkage.payloadDisj`, `EnvGetHitGeom.payDisj`,
+  `HitTailSt.payDisj`, `FoundSt.pvVals`, `EnvGetCallerGeom.pvVals`, and
+  `FrameStackDisj.valstr`
+  quantify over unrelated strings. The downstream copy theorem already
+  requires `ValuePayload v s`, but these callers discard that guard.
+  The unguarded proposition forces every payload word above the destination,
+  excluding integer zero and valid lower-addressed strings. Use the actual
+  value's `ValuePayload` guard throughout the lookup/copy chain; ownership
+  supplies its equivalent `ValuePayloadCovered` predicate. The spill-frame
+  transport needs the same guard on each binding's actual value.
+- `VarCallLinkage.finalFrame` quantifies over arbitrary `EnvGetValuePost`
+  witnesses. That post omits the full saved-register frame. Retain it through
+  the recursive execution and scan seams. `finalMinstret` is already supplied
+  by `EnvGetValuePost.good.minstret`; it needs no additional retention.
+  The post already restores `x19`–`x21`; with the linkage's ghost pins,
+  only `x3`, `x4`, and `x22`–`x27` remain. `gen_fn.py --fn env_get
+  --entry 0x80002c10 --cfg-only` identifies 51 instructions, twelve blocks,
+  two loop back-edges, and one `strcmp` call. Its generated block draft is
+  `/private/tmp/vsa-closure-work/FnEnvGet.lean`; use those segments with
+  `segRowFramed`/`segRowKeepGhost` to retain the eight registers. The generic
+  generator does not supply a fold for these loops. The draft is uncompiled.
+  `EnvGetSegments.lean` extracts its seventeen generated branch/block variants
+  and pin lists, then applies `segEval_selected_framed` through one wrapper.
+  `check-env-get-segments.sh` passed (exit 0): all seventeen variants avoid
+  `x3`, `x4`, and `x22`–`x27`. Its 783-module dependency slice reused every
+  module. The three segment declarations have only allowed axioms.
+  `EnvGetSegments.receipt.json` records source/object/log hashes and the
+  dependency receipt; `extract-env-get-segments.py` and
+  `EnvGetSegments.sources.json` retain extraction provenance. This verifies
+  the blocks and frame wrapper; call and loop composition remain pending.
+  `EnvGetCallFrame.lean` now stages the call seam: `call_framed` uses
+  `bridgeOfSegFull` and `site_80002c68_eg2` to retain the generated argument
+  block's computed result, output, and eight-register frame at the actual
+  `strcmp` entry. It takes the block's `ChainFacts`; it does not yet assemble
+  the string inputs or compose the comparison and recursive loop.
+  `check-env-get-call.sh` passed (exit 0), with all 788 dependency modules
+  reused. `call_framed` reports only the allowed axioms. Frozen sources and
+  logs are in `/private/tmp/vsa-closure-work/call-source/`; provenance and
+  object hashes are in `EnvGetCallFrame.receipt.json`. The comparison and
+  recursive loop remain outside that check.
+  `EnvGetCompareFrame.lean` stages the subsequent `strcmp` composition.
+  A generated `strcmp_post.destruct` exposes the legacy post by name;
+  `CallResult.compare` combines its full saved-register frame with the call's
+  retained frame at the same endpoint. `EnvGetReflected.scan_compare` in
+  `EnvGetScanCompare.lean` stages the caller: from `ScanSt`, it selects the binding pointer, obtains
+  reflected load facts through `wordLoadFacts_of_read64`, and assembles
+  `StrcmpEntryCond` at the actual call endpoint. `check-env-get-scan.sh` failed in `EnvGetCompareFrame`: its unbounded
+  register proposition lacked a `Decidable` instance, and the destructurer
+  was generated under the wrong namespace. Its 824-module dependency slice
+  passed (819 reused, five rebuilt); both dependency audits use only allowed
+  axioms. The segment and call modules also compiled. The comparison caller
+  was not reached. `scan-repair-source/` contains a fresh seven-module snapshot
+  with a bounded register proof and the destructurer invoked at root scope.
+  `check-env-get-scan-repair.sh` used the verified dependency slice;
+  it checks comparison, scan transport, branching, and semantic decision.
+  The corrected 824-module slice passed with all modules reused.
+  `EnvGetCompareFrame` then compiled, and all six declaration audits use
+  only allowed axioms. `EnvGetCompareFrame.receipt.json` records the source,
+  object, log, and dependency receipt. `EnvGetScanCompare` and
+  `EnvGetScanState` also compiled, with four further allowed-axiom audits.
+  `EnvGetScanState.receipt.json` records both modules. The result branch also
+  passed its two audits (`EnvGetScanBranch.receipt.json`). The check then failed
+  in `CompareResult.value`: its local zero-sign equivalence left one integer
+  sign case open. `scan-advance-source/` replaces the ambiguous `split` with
+  an explicit sign case split. The decision theorem remains unverified.
+  No loop frame is yet proved.
+  `EnvGetScanState.lean` adds the shared `ScanSt.transport` adapter;
+  `CompareResult.scan` uses it at the actual `0x80002c6c` return.
+  `scan_compare_state` keeps the semantic comparison and scan carrier at
+  one endpoint. `EnvGetScanBranch.lean` instantiates the generated result
+  branch for both polarities through `segEval_selected_framed`, retaining
+  the scan carrier, output, and caller frame. The obsolete queued
+  `check-env-get-scan-branch.sh` was retired before starting because it used
+  the same failed comparison source. Its snapshot remains preserved in
+  `scan-branch-source/`. The corrected check covers these additions.
+  `EnvGetScanDecision.lean` stages the semantic composition:
+  `CompareResult.value` exposes the actual `a0` with its name-equality
+  equivalence; `scan_decision` composes the slot load, call, and branch while
+  retaining the scan, output, and caller frame at one endpoint. Its source
+  and dependency-manifest hashes are in `EnvGetScanDecision.sources.json`.
+  This draft is included in the corrected scan check and has not been compiled.
+  `scan-advance-source/` stages the generated `c54` back-edge for both
+  count-branch polarities. `ScanSt.reseat` centralises carrier construction;
+  `ScanSt.transport` projects it for unchanged indices. `scan_advance` selects
+  the incremented index and cursor from the same reflected result, retains
+  the caller frame, and relates the exit branch to semantic exhaustion.
+  The snapshot records source and reused-object hashes. Its four unchanged
+  prefix modules are verified; `check-env-get-scan-advance.sh` is queued to
+  check the factored carrier, branch, repaired semantic decision, and back-edge.
+  The factored scan carrier, result branch, and repaired semantic decision
+  have now compiled with eight allowed-axiom audits. Their source/object/log
+  hashes are in `EnvGetScanDecision.receipt.json`. The back-edge then failed:
+  `sign_extend` needed the `LeanRV64DExecutable.Functions` namespace, and
+  `gholds_lookup` needed its register-list argument before the held-register
+  proof. `scan-loop-source/` fixes those references and reuses the seven
+  verified prefix modules. The corrected back-edge compiled and passed its
+  three allowed-axiom audits. `EnvGetScanAdvance.receipt.json` records source,
+  object, log, and dependencies.
+  `EnvGetScanLoop.lean` stages the fold through
+  `loopFromBody`: named scan points retain the first-match invariant, a typed
+  position distinguishes head/hit/exhaustion, and the loop invariant retains
+  the actual caller frame and output. Its measure is remaining names at the
+  generated `c60` load head and zero at either exit. Source and dependency
+  hashes are in `EnvGetScanLoop.sources.json`. The frozen nine-module snapshot
+  is in `scan-loop-source/`. `check-env-get-scan-loop.sh` is queued to include
+  the missing `DeriveLoop` dependency, check the corrected back-edge, and then
+  check this fold. Its complete 825-module slice passed (29 reused from the
+  loop cache and 796 from the scan cache). The back-edge passed; compilation
+  reached the loop fold, which failed only at `scanLoopMeasure_head`: its
+  simplifier left `if True` unreduced. `scan-loop-repair-source/` rewrites the
+  known guard before simplifying the index read. `check-env-get-scan-loop-repair.sh`
+  reuses all eight verified dependency modules and checks only the corrected
+  loop module. The corrected fold passed (exit 0), with six declaration audits
+  using only allowed axioms. `EnvGetScanLoop.receipt.json` records its frozen
+  source, object, log, dependencies, and the compiler-overlap incident below.
+  A post-check hash audit matched all 825 selected dependency objects.
+  This closes the inner scan loop with its actual caller frame and output.
+  The whole lookup still needs prologue, parent traversal, hit copy, and return
+  composition. `EnvGetScanOutcome.lean` stages the semantic exit adapter through
+  `lookup_first_match` and `lookup_scan_miss`. `EnvGetParentBranch.lean` stages
+  the generated parent load/branch with its actual loaded pointer and frame.
+  The parent check failed before elaboration because its unnecessary
+  `EnvGetSpec5` import was absent from the selected backend. The frozen
+  `parent-outcome-repair-source/` snapshot imports `Code.Env_get` directly and
+  reuses the verified loop objects. Both adapters await compilation.
+  `EnvGetScanStart.lean` stages the generated `c48` pointer/index
+  initialisation and its composition with the loop. `ScanStartReady` names
+  the reached positive-count state, header read, and ownership-derived scan
+  names. `scan_frame` retains the source lookup outcome and actual caller
+  frame through initialisation and scanning. The frozen `scan-entry-source/`
+  snapshot contains all three candidates and nine verified dependency objects.
+  `check-env-get-scan-entry.sh` checks the independent parent branch, then the
+  outcome and initialisation consumers. Its shell syntax check passed.
+  `wait-for-lookup-checks.py` is now live with process visibility, waiting for
+  the two existing build drivers, their wrappers, and project compiler children
+  before entering the compiler lock. It aborts on permission failure and never
+  reclaims a lock while waiting. Log: `scan-entry-wait.log`; session `44848`.
+  No additional compiler has started. The positive-count
+  branch must still supply `ScanStartReady` from the reached outer-loop state.
+  `EnvGetCountHead.lean` now stages that generated `c40` load/test, retaining
+  the loaded count, branch destination, unchanged memory, output, and saved
+  registers. It reuses `wordLds4`, `bytesVal_lw_wordLds4`, and the `blez_guard`
+  lemmas in `HelperCall`. Its signed count bound comes from
+  `FrameOwned.length_signed`. The frozen `count-head-source/` snapshot awaits
+  the additional `HelperCall` dependency and compilation. The dependency
+  preview selected 906 modules, with 880 reusable and 26 pending rebuilds in
+  the then-current full backend (`count-head-dependencies-plan.log`).
+  `check-env-get-count-head.sh` will re-evaluate that plan, check dependencies,
+  and compile the count test. `wait-for-count-check.py` is live with process
+  visibility behind the builds and scan waiter; session `26008`, log
+  `count-head-wait.log`. The script's syntax check passed. The count result
+  has an uncompiled composition in `EnvGetFrameScan.lean`. `FrameState` retains
+  frame data before scan registers are initialised; its `after_count` and
+  `scan_ready` adapters supply the positive branch from the actual count result.
+  `frame_scan` composes the generated count test, initialisation, and inner
+  scan. `FrameOutcome.miss` unifies empty and exhausted frames at the parent
+  entry, while `.hit` retains the source lookup's first binding. Source and
+  pending-dependency hashes are in `EnvGetFrameScan.sources.json`. This candidate
+  awaits the queued count/scan checks before compilation. Prologue and parent
+  traversal must still supply `FrameState` from actual owned-store entries.
+  `EnvGetOwnedFrameState.lean` stages that data supplier. `owned_frame_state`
+  combines reached `FrameRegisters` with `StoreOwned`, `StoreRepr`,
+  `StoreArraysReady`, `Ledger`, query ownership, and comparison geometry. It
+  selects the actual names pointer and reuses the verified `scanNames` and
+  `length_signed` suppliers. `FrameRegisters.after_parent` preserves the
+  reached pins through `ParentResult`. Hashes and pending dependencies are in
+  `EnvGetOwnedFrameState.sources.json`. These adapters are uncompiled; prologue
+  execution and ownership transport to reached memory remain obligations.
+  The queued `VarRowResidObstruction.lean` now also contains
+  `EnvGetValuePost.with_gp` and `envGetPost_gp_not_determined`: replacing `x3`
+  preserves `GoodState` by `insert_nonpinned` and every recorded post field,
+  so an inhabited post cannot determine `gp`. These candidates still await
+  compilation; they concern arbitrary post witnesses, not the actual run.
+- `VarProductStep` needs the source store's ownership at entry. `EvalEntry`
+  currently carries `StoreRepr`, not `StoreOwned`. The suppliers are
+  `StoreOwned.frames`, `FrameOwned.values`, `ValueOwned.covered`, and
+  `ValueOwned.copy_total`; their ownership input remains unsupplied.
+- `ScanNames.nameRegW` and `bindRegW` in both `EnvGetSpec3` and
+  `EnvSetScanCore` require `StrcmpWRegion` unconditionally. Together with
+  `nameCStr`, the query clause forces `name.toNat % 8 = 0`, including calls
+  that take the byte path. `VarRowResidObstruction.lean` now stages
+  `ScanNames.name_aligned` and `scanNames_unaligned_false`; compilation is
+  pending. Use the existing `StrcmpWSlack` and `strcmp_full_spec_cond`, which
+  derives word alignment from the executed branch test. Keep names-array
+  slot alignment separate from string-pointer alignment.
+
+The applied alignment repair was checked in
+`/private/tmp/vsa-closure-work/alignment-repair/`, over the payload-repair
+snapshot. Seven files replace the two scan carriers' word regions and migrate
+five comparison call sites in lookup, update, and definition scans to
+`StrcmpEntryCond`. `EnvSetScan.scanMiss_to_chain` remains a direct carrier
+conversion. `check-scan-alignment.sh` passed (exit 0): 860 selected modules,
+833 reused and 27 rebuilt; summed module build time 2,232.6 seconds. Its four
+declaration audits (`env_get_lookup_from_entry`, `scanMiss_to_chain`,
+`envDefineScanCompare`, `envDefineScanCompareFramed`) report only `propext`,
+`Classical.choice`, and `Quot.sound`. Receipt, source fingerprints, object
+hashes, and audit log are in
+`/private/tmp/vsa-closure-work/alignment-repair/backend/run-s2icy46k/`.
+The module log `alignment-repair/backend/logs/Vsa_Sim_EnvGetSpec6.log` also
+audits `env_get_hit_tail` and `env_get_found_spec` with the same allowed axioms.
+This checks the selected dependency closure. The combined check below
+also covers the marshalling consumer. Full integration remains pending.
+
+The combined payload/alignment patch and twelve-file hash manifest are
+`combined-lookup-repair.patch` and `combined-lookup-repair.sources.json`
+under `/private/tmp/vsa-closure-work/`. `git apply --check` passed against
+the recorded root hashes. `check-combined-lookup.sh` passed (exit 0): 862 selected modules,
+860 reused, two rebuilt, and thirteen declaration audits with only allowed
+axioms. This includes `EnvGetMarshal` and the lookup, update, and definition
+consumers. Receipt: `combined-lookup-backend/run-6m_zxu3l/receipt.json`.
+The twelve-file patch is now applied to the worktree. Full integration remains
+pending in `check-lookup-integration.sh`, queued under the compiler lock.
+
+Candidate counterexamples and recursive footprint adapters are in
+`/private/tmp/vsa-closure-work/`. `check.sh` passed its 364-module dependency
+slice (all reused) and the lookup audit, then failed in the obstruction file:
+`St` resolved to the wrong declaration, and `insert_nonpinned` lacked its
+explicit register argument. The footprint file was not reached.
+`footprint-repair-source/` fixes both elaboration errors and preserves source
+hashes and the dependency receipt. `check-footprint-repair.sh` checks the
+footprint file first and then the obstruction file, retaining both results.
+The footprint file passed all six declaration audits with allowed axioms;
+`EnvGetFootprint.receipt.json` records source, object, log, and dependencies.
+The obstruction file still failed because `SpecSt` is not an exported alias;
+`obstruction-repair-source/` now uses the exact semantic type `Vsa.While.St`.
+Its corrected check passed (exit 0), with seven allowed-axiom audits against
+the preserved pre-amendment contracts. `VarRowResidObstruction.receipt.json`
+records the source, object, log, and dependency snapshot. The word-alignment
+obstruction concerns the old carrier, already amended in the worktree.
+The arbitrary-post `gp` obstruction confirms that `VarCallLinkage.finalFrame`
+must be replaced in the actual-run path by retained execution frame facts.
+The variable residual remains open.
+`EnvGetFootprint.lean` also contains `EnvGetEntryPost` and
+`env_get_lookup_from_entry_framed`: a named adapter retaining the prologue
+frame and value post at one return configuration. Its `.footprint` composes
+the spill and result windows. The queued check covers these additions.
+Its `.callerFootprint` composes that result with the arm-entry frame.
+`ArmEntryK.destruct.memFrame` already supplies agreement outside the caller's
+stack, including arena bytes; no stronger arm-memory premise is needed.
+The caller still supplies `SL.lo + 1152 ≤ sp.toNat` from the actual eval entry.
+`/private/tmp/vsa-closure-work/bridge-repair/` stages the consumer change over
+the alignment snapshot. `varBridge_calleeQ` retains an extra memory fact at
+the actual lookup return; the old `varBridge_callee` projects it.
+`varBridgeF` composes the existing argument prefix and arm-entry frame with
+the recursive lookup footprint. It retains `VarCallLinkage`'s outstanding
+register-frame premise. This draft awaits the helper and alignment checks;
+it has not been compiled or counted as a closed residual.
+
+`EnvGetOwnedSource.lean` in that directory adds the candidate
+`StoreOwned.lookupSource`: `get?_terminal_first`, `FirstMatch.index`, and
+`frame_slot_valueRepr` select the same source slot that `FrameOwned.values`
+owns. `EnvGetOwnedSource.copy_owned` transports its payload through the actual
+total copy via `ValueOwned.copy_total`. This covers terminal frames reached
+through parents. It still requires the entry's store ownership and the
+copy's shared-byte agreement. `check-owned.sh` stopped before elaborating the candidate because its
+dependency slice omitted the imported `RuntimeOwnershipInitial` module.
+`check-owned-repair.sh` passed the complete 236-module dependency slice
+(all reused), then failed because `Frame` resolved to the machine-frame
+predicate. `owned-frame-repair-source/` qualifies all semantic frame types
+as `Vsa.While.Frame` and records source hashes and the verified dependency
+receipt. `check-owned-frame-repair.sh` passed (exit 0), with all eight
+candidate audits using only allowed axioms. `EnvGetOwnedSource.receipt.json`
+records the source, object, log, and dependency receipt. Entry ownership
+remains unsupplied; this does not close the variable residual.
+The same candidate now derives the guarded copy premise through
+`ValueOwned.payload_disjoint`, and the source slot's arena bounds through
+`ArrayOwned.slot_in_arena` and `FrameOwned.value_slot_in_arena`. The latter
+uses the actual values-pointer read and the live allocation ledger. These
+facts supply payload and source-slot geometry; they do not supply the
+entry's ownership, array readiness, or scan-register facts.
+`EnvGetOwnedSource.access` additionally selects all three copied words from
+`StoreArraysReady`, derives source alignment, and uses
+`FrameOwned.length_signed` to bound the semantic scan index by `2^31`.
+These additions passed with the ownership candidate above.
+
+`EnvGetOwnedNames.lean` stages the next consumer against the alignment repair.
+`SharedCString.strcmpSlack` derives comparison geometry from the actual string
+and `SharedGeom`; `FrameOwned.bindingString` selects the owned key through its
+actual names-array read. `FrameOwned.scanNames` combines those facts with
+`Ledger`, names-array alignment, query ownership, and mask bytes to construct
+the repaired `ScanNames` carrier for every occupied slot. Its array bounds use
+`ArrayOwned.slot_in_arena`. `owned-names-source/` now qualifies the semantic
+frame types and imports `SharedGeometry` directly. The staged
+`shared-geometry-repair/repair.patch` moves the unchanged `SharedGeom` record
+out of `StrCmpCellClauses`, avoiding a dependency on the recursive cell proofs
+from the entry/lookup geometry layer. `git apply --check` passed; the patch
+is now applied to the worktree. `check-owned-names.sh` is queued against that frozen source
+snapshot, reusing ownership and alignment dependencies before checking both
+ownership modules. Its 238-module dependency slice passed (22 reused from
+the ownership cache, 215 from alignment, one new geometry module built).
+The ownership helper then recompiled with eight allowed-axiom audits. The name
+carrier failed on its missing `EnvGetSpec9` import for `cstr_unique_eg9`.
+`owned-names-repair-source/` adds that import and reuses the verified ownership
+object; `check-owned-names-repair.sh` is queued to check the additional dependency
+and name carrier. The corrected check passed (exit 0): 242 selected modules,
+238 reused from the output cache and four from the alignment backend, with
+no rebuilds. All four name-carrier declaration audits use only allowed axioms.
+`EnvGetOwnedNames.receipt.json` records source, object, log, dependencies, and
+the compiler-overlap incident. A post-check hash audit matched all 242 selected
+dependency objects. The existing cell consumer still requires integration.
+Entry ownership, shared geometry, and the fixed mask supplier remain obligations.
+
+The payload-guard repair is staged in
+`/private/tmp/vsa-closure-work/payload-repair/repair.patch`, with source hashes
+in `sources.json`. It guards all six affected contracts by the actual
+binding's `ValuePayload` and preserves that guard at the copy and spill
+transport consumers. Its isolated source snapshot needs eleven modules
+rebuilt in a 364-module dependency closure; 353 match the private backend.
+The unstarted `check-payload.sh` was retired after the combined repair check
+passed both of its imports and all ten declaration audits. The combined patch
+supersedes this isolated candidate and is now applied to the worktree.
 
 ### 5. Close divergence, errors, and final assembly
 
@@ -944,6 +1454,21 @@ but the integration build is not optional, and the gap between them is a commit
 that looks green and is not.
 
 ## Validation and automation still to finish
+
+Repository artifact cleanup removed twelve tracked `.olean` files under
+`experiments/`; their Lean sources remain. The active build imports none of
+those experiment modules. `difftest.sh` and `smt_check.py` compile their
+experiment dependencies into private directories. Backups and hashes are in
+`/private/tmp/vsa-closure-work/tracked-olean-backup/removed.json`.
+The source-tree scan, including ignored files and excluding dependency/Lake
+directories, now finds no `.olean` or `.ilean` files. `.gitignore` excludes
+both extensions. `houdini_summary_remote.sh` now requires a fingerprint-current
+private backend and recompiles both experiment modules into a fresh temporary
+directory before emission. Its five refusal tests and shell syntax check pass;
+no remote campaign was run.
+Project compiler objects also remain under `.lake/build`; they were not
+removed during the live integration build.
+This cleanup does not close the remaining hygiene or validation gates.
 
 - Export typed Lean authority for each query, field, span, stop, semantic
   relation, effect, dependency, and source hash. Replace duplicated Python
@@ -1002,6 +1527,39 @@ that looks green and is not.
   fragment (motive conclusions); the bounded engines report ENCODE-GAP. No
   trace query targets a clause step (execution evidence 0/30).
 
+The current checkpoint's four actual Sail boundary regressions passed against
+matching source hashes. The three unsafe snapshots are excluded by the current
+boundary; the admitted stable control matches source output and termination.
+`/private/tmp/vsa-closure-work/integration-boundary-receipt.json` records the
+summary hash, all 1,254 verified input hashes, eight artifact hashes, and all
+four case results. The checkpoint then passed all 260 Python tests in 80.211
+seconds without skips and the four generator checks. It stopped at stage a4
+with 56 discipline findings; later stages did not run. Exact log hash and
+findings: `integration-checkpoint-receipt.json` in the same directory.
+The separate declaration audit passed all 1,086 entries with allowed axioms.
+`integration-axiom-receipt.json` retains its script/log hashes and the preceding
+backend manifest. These checkpoint results predate the lookup integration batch.
+
+The worktree now contains the twelve lookup amendments,
+`Vsa/Sim/SharedGeometry.lean` with the unchanged geometry record, and
+`Vsa/Sim/RuntimeOwnershipLookup.lean` with the verified ownership suppliers.
+`Vsa.lean` imports the ownership module. `lookup-integration-sources.json`
+records the sixteen affected source hashes. `check-lookup-integration.sh` has
+completed the all-source private compilation (exit 0). Backend verification
+failed (exit 2): `Vsa.Sim.rows.IHClause_FootprintPayloadOwnedSlack`,
+`Vsa.Sim.rows.StrCmpCellsOwnedClosed`, and `Vsa` were stale.
+`lookup-integration-receipt.json` retains the exit codes and log hashes.
+This does not establish a fingerprint-current integration checkpoint.
+The queued scan-entry check also finished: `EnvGetScanOutcome` passed;
+`EnvGetParentBranch` and `EnvGetScanStart` failed on unreduced bitvector
+numerals in address arithmetic. Failed declarations are not accepted proof
+evidence. `EnvGetScanEntry.receipt.json` records the aggregate failure.
+The count-head check passed (exit 0), recorded in
+`EnvGetCountHead.receipt.json`. Frame-scan and owned-frame-state composition
+remain uncompiled private drafts.
+Fresh boundary validation and the complete supplier search remain required.
+The final residual construction remains open.
+
 ## Completion gates
 
 Run against one frozen source snapshot. Partial checks do not close these gates.
@@ -1033,3 +1591,14 @@ Check changed dependencies before consumers; run the all-source gate at a
 completed residual or shared-interface checkpoint. Record fingerprints,
 built/reused counts, exit status, log, and timing. Documentation edits need
 no Lean rebuild.
+
+The latest parent-branch launch exposed a lock-wrapper failure: `kill -0`
+reported live owners as unavailable, and the wrapper reclaimed their locks.
+Process inspection confirmed overlapping external, integration, name-carrier,
+and loop checks. Preserve those running jobs and their snapshots. Launch no
+further compiler until they finish. Future lock acquisition must have process
+visibility; permission failure is not evidence that an owner is dead.
+`lock-visibility-receipt.json` records the confirming probe: sandboxed
+`kill -0 58547` failed with `operation not permitted`; the same probe with
+process visibility succeeded. Launch future compiler wrappers with
+`require_escalated`; do not modify the running wrapper or reclaim its lock.

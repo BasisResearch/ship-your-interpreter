@@ -422,7 +422,7 @@ structure VarCallLinkage
   payloadDisj : ∀ m9 mpc, VarSpillAgree sp m9 ment → VarOutAgree sp mpc m9 →
     ∀ (p : Nat) (s : String),
       read64 mpc (((sp - 1088#64) + 0xf0#64).toNat + 8) = some p →
-      ∀ k, k ≤ s.length → p + k < sret.toNat ∨ sret.toNat + 24 ≤ p + k
+      ValuePayload v s → ∀ k, k ≤ s.length → p + k < sret.toNat ∨ sret.toNat + 24 ≤ p + k
   bufSret : sp.toNat - 1088 + 0xf0 + 24 ≤ sret.toNat ∨
     sret.toNat + 24 ≤ sp.toNat - 1088 + 0xf0
   sretAl : sret.toNat % 8 = 0
@@ -527,8 +527,8 @@ theorem varBridge_callee
         exact hb
     · intro a ha
       exact (hout' a (by rcases ha with h | h <;> omega)).symm
-    · intro p s hp _ k hk
-      exact hL.payloadDisj m9 mpc hspill' houtside' p s hp k hk
+    · intro p s hp hps k hk
+      exact hL.payloadDisj m9 mpc hspill' houtside' p s hp hps k hk
   obtain ⟨hslotRa, hslotS0, hslotS1, hslotS2⟩ := hL.finalSlots m9 mpc hspill' houtside'
   refine ⟨c', hsteps, mpc, hpost.good, hpost.tick, hpost.pc,
     ⟨(1#64), hpost.found, by decide⟩, hpost.s1, ?_, hL.finalMinstret m9 c' hpost, hpost.output,

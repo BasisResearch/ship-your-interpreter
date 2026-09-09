@@ -53,8 +53,9 @@ structure EnvGetHitGeom
   pvNoWrap : pv + 24 * i < 2^64
   src_out_disjoint : pv + 24 * i + 24 ≤ out.toNat ∨ out.toNat + 24 ≤ pv + 24 * i
   out_spill_disjoint : out.toNat + 24 ≤ sp.toNat + 8 ∨ sp.toNat + 64 ≤ out.toNat
-  payDisj : ∀ (p : Nat) (s : String), read64 m0 (pv + 24 * i + 8) = some p →
-    ∀ k, k ≤ s.length → p + k < out.toNat ∨ out.toNat + 24 ≤ p + k
+  payDisj : ∀ (hi : i < f.vars.length) (p : Nat) (s : String),
+    read64 m0 (pv + 24 * i + 8) = some p →
+    ValuePayload (f.vars[i]'hi).2 s → ∀ k, k ≤ s.length → p + k < out.toNat ∨ out.toNat + 24 ≤ p + k
   retAlign : ret.toNat % 4 = 0
   indexSmall : i < 2^32
 
@@ -158,7 +159,7 @@ theorem env_get_scan_to_value
       srcLo := hG.srcLo, srcHi := hG.srcHi, srcWin := hG.srcWin,
       srcAlign := hG.srcAlign, srcNoWrap := hG.srcNoWrap, pvNoWrap := hG.pvNoWrap,
       src_out_disjoint := hG.src_out_disjoint,
-      out_spill_disjoint := hG.out_spill_disjoint, payDisj := hG.payDisj,
+      out_spill_disjoint := hG.out_spill_disjoint, payDisj := hG.payDisj hiw,
       rAlign := hG.retAlign }
   obtain ⟨c', m', hsTail, hGood, hTick, hpc, hfound, hra, hsp, hs0, hs1r,
     hs2r, hs3r, hs4r, hs5r, hmem, hloaded, hvalue, hw0, hw1, hw2, hframe, houtTail⟩ :=

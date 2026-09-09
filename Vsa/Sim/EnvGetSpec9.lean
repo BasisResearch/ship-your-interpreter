@@ -111,7 +111,7 @@ structure FrameStackDisj
   valstr : ∀ pn' pv, read64 m0 (env.toNat + 8) = some pn' → read64 m0 (env.toNat + 16) = some pv →
     ∀ i, (hi : i < f.vars.length) →
       ∀ (pval : Nat) (s : String), read64 m0 (pv + 24 * i + 8) = some pval →
-        (∀ k, k ≤ s.length → OutsideSpill sp0 (pval + k))
+        ValuePayload (f.vars[i]'hi).2 s → (∀ k, k ≤ s.length → OutsideSpill sp0 (pval + k))
   -- the query `name` argument's own string `[name.toNat, name.toNat + nameStr.length]`
   query : ∀ k, k ≤ nameStr.length → OutsideSpill sp0 (name.toNat + k)
   -- strcmp mask rodata `[maskAddr, maskAddr+8)`
@@ -242,12 +242,13 @@ theorem frameRepr_outsideSpill
     FrameRepr m9 N φf φc env.toNat f := by
   apply frameRepr_agreeP hA hD.hdr hD.slots hD.names _ hF
   intro pn' pv hpn hpv i hi
-  cases f.vars[i].2 with
+  cases hv : f.vars[i].2 with
   | str s =>
-      exact fun p hp k hk => hD.valstr pn' pv hpn hpv i hi p s hp k hk
+      exact fun p hp k hk => hD.valstr pn' pv hpn hpv i hi p s hp (by simp only [hv, ValuePayload]) k hk
   | native fn =>
       exact fun p hp k hk =>
-        hD.valstr pn' pv hpn hpv i hi p (nativeName fn) hp k hk
+        hD.valstr pn' pv hpn hpv i hi p (nativeName fn) hp
+          (by simp only [hv, ValuePayload]) k hk
   | _ => trivial
 
 /-- The per-value-slot read facts in `FoundSt` survive the prologue spills. -/
@@ -261,7 +262,7 @@ theorem foundPvVals_agreeP
     (hA : AgreeP (OutsideSpill sp0) m0 m9)
     (hD : FrameStackDisj env name sp0 pn nameStr f m0) :
     ∀ pv, read64 m9 (env.toNat + 16) = some pv →
-      ∀ i, i < f.vars.length →
+      ∀ i, (hi : i < f.vars.length) →
         (∃ w0 w1 w2, read64 m9 (pv + 24 * i) = some w0 ∧
           read64 m9 (pv + 24 * i + 8) = some w1 ∧
           read64 m9 (pv + 24 * i + 16) = some w2) ∧
@@ -270,7 +271,7 @@ theorem foundPvVals_agreeP
         pv + 24 * i + 24 < 2^64 ∧ pv + 24 * i < 2^64 ∧
         (pv + 24 * i + 24 ≤ out.toNat ∨ out.toNat + 24 ≤ pv + 24 * i) ∧
         (∀ (p : Nat) (s : String), read64 m9 (pv + 24 * i + 8) = some p →
-          ∀ k, k ≤ s.length → (p + k < out.toNat ∨ out.toNat + 24 ≤ p + k)) := by
+          ValuePayload (f.vars[i]'hi).2 s → ∀ k, k ≤ s.length → (p + k < out.toNat ∨ out.toNat + 24 ≤ p + k)) := by
   intro pv hpv9 i hi
   have henv16 : ∀ k, k < 8 → OutsideSpill sp0 (env.toNat + 16 + k) :=
     fun k hk => hD.hdr _ ⟨by omega, by omega⟩
@@ -287,11 +288,11 @@ theorem foundPvVals_agreeP
     exact hw1
   · rw [← read64_agreeP hA (valHeader_read64_off16 hvhdr)]
     exact hw2
-  · intro p s hp9 k hk
+  · intro p s hp9 hps k hk
     have hp0 : read64 m0 (pv + 24 * i + 8) = some p := by
       rw [read64_agreeP hA (valHeader_read64_off8 hvhdr)]
       exact hp9
-    exact hpay p s hp0 k hk
+    exact hpay p s hp0 hps k hk
 
 /-- Build the post-prologue scan state from `FoundSt` and the honest spill
 disjointness assumptions.  This discharges `env_get_found_uncond'`'s last residual. -/
@@ -330,7 +331,7 @@ theorem foundSt_scanReady
         (BitVec.ofNat 64 pn) r0 (sp0 - 64#64) 0 f nameStr N φf φc m9 c60 ∧
       FrameRepr m9 N φf φc env.toNat f ∧ Env_getLoaded m9 ∧
       (∀ pv, read64 m9 (env.toNat + 16) = some pv →
-        ∀ i, i < f.vars.length →
+        ∀ i, (hi : i < f.vars.length) →
           (∃ w0 w1 w2, read64 m9 (pv + 24 * i) = some w0 ∧
             read64 m9 (pv + 24 * i + 8) = some w1 ∧
             read64 m9 (pv + 24 * i + 16) = some w2) ∧
@@ -339,7 +340,7 @@ theorem foundSt_scanReady
           pv + 24 * i + 24 < 2^64 ∧ pv + 24 * i < 2^64 ∧
           (pv + 24 * i + 24 ≤ out.toNat ∨ out.toNat + 24 ≤ pv + 24 * i) ∧
           (∀ (p : Nat) (s : String), read64 m9 (pv + 24 * i + 8) = some p →
-            ∀ k, k ≤ s.length → (p + k < out.toNat ∨ out.toNat + 24 ≤ p + k))) := by
+            ValuePayload (f.vars[i]'hi).2 s → ∀ k, k ≤ s.length → (p + k < out.toNat ∨ out.toNat + 24 ≤ p + k))) := by
   let g0 : (R : Register) → Option (RegisterType R) := fun R => c60.σ.regs.get? R
   have hA : AgreeP (OutsideSpill sp0) m0 m9 := agreeP_of_prologue houtside
   have hframe9 : FrameRepr m9 N φf φc env.toNat f :=

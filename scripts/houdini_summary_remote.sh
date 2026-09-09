@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # houdini_summary_remote.sh — run the Houdini summary campaign on the Pro's
-# dedicated cores (the Air's are busy with the running agent), reusing the
-# local agent's emit if it is up to date.
+# dedicated cores, with a fresh local emission from a checked private backend.
 #
 # Emit is a ~10s Lean #eval, deterministic from the reflect olean; Houdini then
-# reads the emitted files. So: rebuild the oleans in dependency order, (re)emit
-# only if the source changed, ship the campaign to the Pro, run Z3-only Houdini
+# reads the emitted files. Rebuild experiment oleans in a private directory,
+# emit the campaign, ship it to the Pro, run Z3-only Houdini
 # there (no Lean rebuild on the Pro), pull the verdicts back.
 #
 # Gotchas baked in:
@@ -29,7 +28,6 @@ STAGE="${HOUDINI_STAGE:-/tmp/bmc-remote}"
 JOBS="${JOBS:-10}"                        # ~= Pro core count; see gotcha above
 TIMEOUT="${TIMEOUT:-30}"
 Z3_EXPECT="${Z3_EXPECT:-4.15.4}"          # asserted on the Pro before launching
-mt() { stat -f %m "$1" 2>/dev/null || echo 0; }
 
 # The legacy transport cannot establish typed-certificate authority or the
 # complete source snapshot. Reject that path before remote writes or launch.
@@ -52,45 +50,41 @@ for argument in "$@"; do
 done
 if has_typed_certificates; then refuse_typed_campaign; fi
 
-# REBUILD the oleans in dependency order rather than telling the caller to.
-# The emit runs `lake env lean` over the OLEANS, and nothing in Lean checks an
-# olean against its own source, so a stale `ReflectSpan.olean` emits a campaign
-# from the OLD encoder while `#emit_bmc` stamps `src/` with the CURRENT
-# `ReflectSpan.lean` text -- after which `check_provenance` compares equal and
-# the guard that exists for exactly this case cannot fire.  The old test looked
-# at `ReflectResiduals.olean` alone, and its error message told you to rebuild
-# `ReflectResiduals.olean` alone, which is the way INTO that state.
-# `ReflectResiduals.olean` must also postdate `ReflectSpan.olean`: an unchanged
-# `ReflectResiduals.lean` still has to be recompiled against a rebuilt
-# dependency.  Same invocation `scripts/difftest.sh` uses; never `lake build`.
+[ -n "${VSA_PRIVATE_BUILD:-}" ] || {
+  echo "ERROR: VSA_PRIVATE_BUILD must identify the current private Lean build" >&2
+  exit 2
+}
+python3 -B scripts/check_validation.py --backend "$VSA_PRIVATE_BUILD" --verify-backend-only || {
+  echo "ERROR: private Lean backend is missing or stale" >&2
+  exit 2
+}
+
+# Fresh experiment objects cannot inherit stale imports from a previous emit.
+LEAN_OUT=$(mktemp -d /tmp/vsa-houdini-emission.XXXXXX)
+mkdir -p "$LEAN_OUT/experiments/smt"
 relean() {
-  echo "== olean: rebuilding experiments/smt/$1.olean"
-  lake env sh -c "LEAN_PATH=\"\$LEAN_PATH:.\" lean -o experiments/smt/$1.olean experiments/smt/$1.lean" \
+  echo "== olean: compiling $1 into $LEAN_OUT"
+  lake env sh -c 'LEAN_PATH="$1:$2${LEAN_PATH:+:$LEAN_PATH}" lean -o "$3" "$4"' \
+    houdini-emission "$VSA_PRIVATE_BUILD" "$LEAN_OUT" \
+    "$LEAN_OUT/experiments/smt/$1.olean" "experiments/smt/$1.lean" \
     || { echo "ERROR: experiments/smt/$1.lean does not elaborate" >&2; exit 1; }
 }
-[ "$(mt experiments/smt/ReflectSpan.olean)" -ge "$(mt experiments/smt/ReflectSpan.lean)" ] \
-  || relean ReflectSpan
-dep=$(printf '%s\n' "$(mt experiments/smt/ReflectResiduals.lean)" "$(mt experiments/smt/ReflectSpan.olean)" | sort -rn | head -1)
-[ "$(mt experiments/smt/ReflectResiduals.olean)" -ge "$dep" ] \
-  || relean ReflectResiduals
+relean ReflectSpan
+relean ReflectResiduals
 
-# Stat a FILE the emit always rewrites, not the `obligations/` DIRECTORY.  A
-# directory's mtime does not move when the files inside it are overwritten, so
-# the old test re-emitted needlessly after every source edit AND would reuse a
-# campaign whose emit died half way through.  `query-summaries.tsv` is the LAST
-# file `#emit_bmc` writes, so it is stale unless the emit ran to completion.
-# The reference is the olean the emit actually runs, so a rebuild above forces
-# a re-emit.
-if [ "$(mt "$STAGE/query-summaries.tsv")" -lt "$(mt experiments/smt/ReflectResiduals.olean)" ]; then
-  echo "== emit: source newer than staged campaign, re-emitting to $STAGE"
-  # `#emit_bmc`, not `#emit_campaign`: the latter is the older DAG emitter and
-  # leaves `writes/` EMPTY, which the driver used to read as an empty footprint
-  # and therefore a VALID verdict.  60 rounds is what makes all 52 spans complete.
-  printf 'import experiments.smt.ReflectResiduals\n#emit_bmc "%s" 60\n' "$STAGE" > /tmp/emit_rc.lean
-  LEAN_PATH="$PWD:$(lake env printenv LEAN_PATH 2>/dev/null)" lake env lean /tmp/emit_rc.lean | tail -1
-else
-  echo "== emit: reusing up-to-date campaign at $STAGE"
-fi
+echo "== emit: fresh campaign at $STAGE"
+python3 - "$STAGE" "$LEAN_OUT/Emit.lean" <<'PYTHON'
+import json
+from pathlib import Path
+import sys
+
+Path(sys.argv[2]).write_text(
+    "import experiments.smt.ReflectResiduals\n#emit_bmc "
+    + json.dumps(sys.argv[1], ensure_ascii=False) + " 60\n"
+)
+PYTHON
+lake env sh -c 'LEAN_PATH="$1:$2${LEAN_PATH:+:$LEAN_PATH}" lean "$3"' \
+  houdini-emission "$VSA_PRIVATE_BUILD" "$LEAN_OUT" "$LEAN_OUT/Emit.lean" | tail -1
 if has_typed_certificates; then refuse_typed_campaign; fi
 echo "== campaign: $(($(wc -l < "$STAGE/summaries.tsv")-1)) summaries, $(ls "$STAGE/queries" | wc -l | tr -d ' ') queries"
 

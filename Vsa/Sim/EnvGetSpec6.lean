@@ -199,7 +199,7 @@ structure HitTailSt
   -- the arena / rodata, the out buffer is the caller's sret slot.  This is the payload
   -- hypothesis `valueRepr_copy_of_writeWindow` consumes for the `.str`/`.native` kinds.
   payDisj : ∀ (p : Nat) (s : String), read64 m0 (pv + 24 * i + 8) = some p →
-    ∀ k, k ≤ s.length → (p + k < out.toNat ∨ out.toNat + 24 ≤ p + k)
+    ValuePayload (f.vars[i]'ilt).2 s → ∀ k, k ≤ s.length → (p + k < out.toNat ∨ out.toNat + 24 ≤ p + k)
   -- return-address alignment
   rAlign : r.toNat % 4 = 0
 
@@ -1030,10 +1030,10 @@ theorem env_get_hit_tail
     refine valueRepr_copy_of_writeWindow (m := m0) (m' := σ12.mem) (srcAddr := pv + 24 * i) (dstAddr := out.toNat) hcopy ?_ ?_ hvr
     · intro a ha; exact houtside a ha
     · -- the value's string payload target is disjoint from [out, out+24)
-      intro p s hp _ k hk
+      intro p s hp hps k hk
       -- the payload string lives in the arena / rodata, disjoint from the out buffer;
       -- carried by `HitTailSt.payDisj` (the pointed-to string is a separate region).
-      exact hSt.payDisj p s hp k hk
+      exact hSt.payDisj p s hp hps k hk
   · -- outside-window agreement for the exit predicate
     intro a ha
     refine houtside a ?_

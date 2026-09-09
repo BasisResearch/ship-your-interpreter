@@ -134,7 +134,7 @@ structure EnvGetCallerGeom
   spillAlign : (sp0 - 64#64).toNat % 8 = 0
   spillNoWrap : (sp0 - 64#64).toNat + 64 < 2^64
   pvVals : ∀ pv, read64 m0 (env.toNat + 16) = some pv →
-    ∀ i, i < f.vars.length →
+    ∀ i, (hi : i < f.vars.length) →
       (∃ w0 w1 w2, read64 m0 (pv + 24 * i) = some w0 ∧ read64 m0 (pv + 24 * i + 8) = some w1 ∧
         read64 m0 (pv + 24 * i + 16) = some w2) ∧
       0x80000000 ≤ pv + 24 * i ∧ pv + 24 * i + 24 ≤ 0x100000000 ∧
@@ -142,7 +142,7 @@ structure EnvGetCallerGeom
       pv + 24 * i < 2^64 ∧
       (pv + 24 * i + 24 ≤ out.toNat ∨ out.toNat + 24 ≤ pv + 24 * i) ∧
       (∀ (p : Nat) (s : String), read64 m0 (pv + 24 * i + 8) = some p →
-        ∀ k, k ≤ s.length → (p + k < out.toNat ∨ out.toNat + 24 ≤ p + k))
+        ValuePayload (f.vars[i]'hi).2 s → ∀ k, k ≤ s.length → (p + k < out.toNat ∨ out.toNat + 24 ≤ p + k))
   outSpillDisj : out.toNat + 24 ≤ (sp0 - 64#64).toNat + 8 ∨ (sp0 - 64#64).toNat + 64 ≤ out.toNat
 
 /-! ## `PrologueSt` from `FrameRepr` + `EnvGetCallerGeom`

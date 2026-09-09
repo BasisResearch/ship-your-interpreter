@@ -1,3 +1,4 @@
+import Vsa.Sim.StrcmpSpecCond
 import Vsa.Sim.EnvGetSpec2
 import Vsa.Sim.EnvSetSites
 import Vsa.Sim.EnvDefSpec3
@@ -22,15 +23,15 @@ all names differing).  It covers ONE frame of `env_get`'s linear scan of
   frame, `∀ j < count, CStr mem names_j (cs j)` where `names_j = pn + 8*j` is read off
   `FrameRepr` and `cs j = f.vars[j].1`'s char list.  `FrameRepr` only gives
   `CString m q (f.vars[i].1)` for the pointer `q` stored at slot `i`; `ScanNames`
-  repackages this (plus the argument `name`'s CStr and `StrcmpRegion`/`StrcmpWRegion`
-  witnesses) into the exact shape `strcmp_full_pre` consumes at the `jal` site.
+  repackages this (plus the argument `name`'s CStr and `StrcmpRegion`/`StrcmpWSlack`
+  witnesses) into the exact shape `StrcmpEntryCond` consumes at the `jal` site.
 * Config-level straight-line scan transitions built from the `_eg2` site lemmas via the
   `EnvGetSpec` frame/obs consumers (`site_80002c54`/`c58` back-edge advance; `c60`/`c64`
   argument setup).
 * `scan_iter_miss` — **the per-iteration lemma** (item 1 of the deliverable): from a
   scan-test config at index `i < count` whose binding name DIFFERS from the query, the
   machine runs `c5c`(beq not taken) → `c60`(load `names[i]`) → `c64`(`mv a1`) →
-  `c68`(`jal strcmp`) → strcmp callee (`strcmp_full_spec`) → `c6c`(`bnez` taken via the
+  `c68`(`jal strcmp`) → strcmp callee (`strcmp_full_spec_cond`) → `c6c`(`bnez` taken via the
   MISS bridge) → `c54`(`i++`) → `c58`(`names += 8`) → back to the test at `i+1`, with
   the scan measure strictly decreased.
 * `env_set_scan_spec` — the loop assembly (`Triple.loop` with `ScanMu`) landing the
@@ -77,30 +78,30 @@ theorem notWrittenStrcmp_of_abiPreserved (R : Register) (hR : AbiPreserved R = t
 
 /-! ## 1. The per-binding CStr / region carrier (`ScanNames`)
 
-The scan calls `strcmp(names[i], name)` at every iteration.  `strcmp_full_pre` needs,
-for the two argument buffers, both a `CString` witness and the `StrcmpRegion` /
-`StrcmpWRegion` disjointness witnesses, plus `MaskPinned`.  `FrameRepr` gives, per slot
+The scan calls `strcmp(names[i], name)` at every iteration.  `StrcmpEntryCond` needs,
+for the two argument buffers, a `CString` witness and `StrcmpWSlack`, plus `MaskPinned`.
+The entry test supplies word alignment.  `FrameRepr` gives, per slot
 `i < count`, a pointer `qᵢ` stored at `pn + 8 * i` with `CString mem qᵢ (f.vars[i].1)`.
 `ScanNames` bundles exactly the facts the call site consumes, phrased over the frame:
 
 * `nameCStr`  — the query `name` argument is `CString`/`CStr` for `nameStr`;
-* `nameRegs`  — its byte/word `StrcmpRegion`/`StrcmpWRegion`;
+* `nameRegs`  — its byte/word `StrcmpRegion`/`StrcmpWSlack`;
 * `bindPtr i` — the slot-`i` name pointer `qᵢ` (`read64 mem (pn + 8 * i) = some qᵢ`);
 * `bindCStr i`— `CStr mem qᵢ (f.vars[i].1).toList` (from `FrameRepr`'s `CString`);
-* `bindRegs i`— `qᵢ`'s byte/word `StrcmpRegion`/`StrcmpWRegion`;
+* `bindRegs i`— `qᵢ`'s byte/word `StrcmpRegion`/`StrcmpWSlack`;
 * `maskPinned`— `MaskPinned mem` for the word path's mask rodata. -/
 structure ScanNames (mem : Mem) (pn : Nat) (name : BitVec 64) (nameStr : String)
     (f : Vsa.While.Frame) : Prop where
   maskPinned : MaskPinned mem
   nameCStr : CString mem name.toNat nameStr
   nameRegB : ∀ cs, CStr mem name.toNat cs → StrcmpRegion name cs.length
-  nameRegW : ∀ cs, CStr mem name.toNat cs → StrcmpWRegion name cs.length
+  nameRegW : ∀ cs, CStr mem name.toNat cs → StrcmpWSlack name cs.length
   bindPtr : ∀ i, (h : i < f.vars.length) → ∃ q, read64 mem (pn + 8 * i) = some q ∧
     CString mem q (f.vars[i].1)
   bindRegB : ∀ i, (h : i < f.vars.length) → ∀ q, read64 mem (pn + 8 * i) = some q →
     ∀ cs, CStr mem q cs → StrcmpRegion (BitVec.ofNat 64 q) cs.length
   bindRegW : ∀ i, (h : i < f.vars.length) → ∀ q, read64 mem (pn + 8 * i) = some q →
-    ∀ cs, CStr mem q cs → StrcmpWRegion (BitVec.ofNat 64 q) cs.length
+    ∀ cs, CStr mem q cs → StrcmpWSlack (BitVec.ofNat 64 q) cs.length
   -- the `c60 ld a0,0(s1)` load-address side conditions for the names slot `pn+8 * i`
   -- (RAM bounds, HTIF disjointness, 8-alignment) — the names array is in the arena.
   slotLo : ∀ i, i < f.vars.length → 0x80000000 ≤ pn + 8 * i
@@ -377,7 +378,7 @@ scan-test config at index `i+1`.  The body is:
 `c5c` beq not taken (`i ≠ count` since `i < count`; `ofNat i ≠ ofNat count` — the small
 indices are distinct as `BitVec`) → `c60` `ld a0, 0(s1)` loading `names[i] = ofNat q`
 (via `ld_value_eq_read64`) → `c64` `mv a1, s3` (`a1 = name`) → `c68` `jal strcmp`
-(`ra := c6c`, ghost `g' := σ_call.regs.get?`) → `strcmp_full_spec` (its `pre` assembled
+(`ra := c6c`, ghost `g' := σ_call.regs.get?`) → `strcmp_full_spec_cond` (its `pre` assembled
 from `ScanNames`: `q`'s `CStr`/regions + `name`'s + `MaskPinned`; saved regs survive as
 `NotWrittenStrcmp`) → `c6c` `bnez a0` TAKEN (`x10 ≠ 0` via `x10_ne_zero_of_specSign_ne`
 + `strcmp_miss_ne`, from the name inequality) → `c54` `i++` → `c58` `names += 8`, landing
@@ -387,14 +388,14 @@ The full `Steps`-threading of these 8 machine transitions plus the callee compos
 mechanical given every ingredient below is landed and verified; within this session's
 budget it is DOCUMENTED (statement recorded, glue enumerated) rather than executed — the
 one remaining piece being the ~8-site register/memory bookkeeping, identical in shape to
-`DivSpec`'s `utr_*` chain but with the `strcmp_full_spec` cross-call spliced at `c68`
+`DivSpec`'s `utr_*` chain but with the `strcmp_full_spec_cond` cross-call spliced at `c68`
 (the ghost-at-call-site pattern of `EnvNewSpec`/`umoddi3_spec`).  The verified building
 blocks it composes:
 
 * `site_80002d28_nottaken_es`, `site_80002d2c_es`, `site_80002d30_es`,
   `site_80002d34_es`, `site_80002d38_taken_es`, `site_80002d20_es`,
   `site_80002d24_es` (all in `EnvGetSites2`);
-* `strcmp_full_spec` (`StrcmpSpecW4`) with `strcmp_full_pre` built from `ScanNames`;
+* `strcmp_full_spec_cond` (`StrcmpSpecW4`) with `StrcmpEntryCond` built from `ScanNames`;
 * `ld_value_eq_read64` / `read64_bytes_eg4` / `read64_lt_eg4` (this file) for the load ↔ pointer
   bridge, and the `CString`/region transfer `(ofNat q).toNat = q` (`read64_lt_eg4`);
 * `strcmp_miss_ne` + `x10_ne_zero_of_specSign_ne` (`EnvDefSpec3`) for the `bnez`-taken

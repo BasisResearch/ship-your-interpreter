@@ -173,19 +173,30 @@ theorem scan_iter_from_c60 (g : (R : Register) → Option (RegisterType R))
   have hqlt : q < 2^64 := read64_lt_eg4 m0 (pn.toNat + 8 * i) q hq
   have hqNat : (BitVec.ofNat 64 q).toNat = q := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]
   let g4 : (R : Register) → Option (RegisterType R) := fun R => σ4.regs.get? R
-  have hStrPre : strcmp_full_pre g4 (BitVec.ofNat 64 q) name (0x80002c6c#64) (f.vars[i].1) nameStr m0
+  have hStrPre : StrcmpEntryCond g4 (BitVec.ofNat 64 q) name (0x80002c6c#64) (f.vars[i].1) nameStr m0
       σ4.sailOutput ⟨σ4, i4, c2.steps + 1 + 1⟩ := by
-    refine ⟨hG4, hloadedS4, hmem4', rfl, hpc4, hx10_4, hx11_4, hra4, ⟨vmi4, hmi4⟩, hi4, by decide, ?_, ?_,
-      hSt.names.maskPinned, ?_, ?_, ?_, ?_, ?_⟩
-    · rw [hqNat]; exact hCSq
-    · exact hSt.names.nameCStr
-    · rw [hqNat]; exact fun cs hcs => hSt.names.bindRegB i hilt q hq cs hcs
-    · exact fun cs hcs => hSt.names.nameRegB cs hcs
-    · rw [hqNat]; exact fun cs hcs => hSt.names.bindRegW i hilt q hq cs hcs
-    · exact fun cs hcs => hSt.names.nameRegW cs hcs
-    · intro R _; rfl
+    exact
+      { good := hG4
+        loaded := hloadedS4
+        mem := hmem4'
+        out := rfl
+        pc := hpc4
+        a0 := hx10_4
+        a1 := hx11_4
+        ra := hra4
+        minstret := ⟨vmi4, hmi4⟩
+        tick := hi4
+        ralign := by decide
+        cstra := by rw [hqNat]; exact hCSq
+        cstrb := hSt.names.nameCStr
+        maskpin := hSt.names.maskPinned
+        wrega := by
+          rw [hqNat]
+          exact fun cs hcs => hSt.names.bindRegW i hilt q hq cs hcs
+        wregb := hSt.names.nameRegW
+        frame := fun _ _ => rfl }
   obtain ⟨c5, hstepsStr, hStrPost⟩ :=
-    strcmp_full_spec g4 (BitVec.ofNat 64 q) name (0x80002c6c#64) (f.vars[i].1) nameStr m0
+    strcmp_full_spec_cond g4 (BitVec.ofNat 64 q) name (0x80002c6c#64) (f.vars[i].1) nameStr m0
       σ4.sailOutput ⟨σ4, i4, c2.steps + 1 + 1⟩ hStrPre
   obtain ⟨hG5, hpc5, hra5, hmem5, hout5raw, htick5, hframe5,
     csa, csb, xres, hCSa, hCSb, hsaEq, hsbEq, hx10_5, hsign5⟩ := hStrPost
@@ -536,7 +547,7 @@ structure FoundSt
   spillNoWrap : (sp0 - 64#64).toNat + 64 < 2^64
   -- source value slot geometry + words, per slot (pv = read64 (env+16))
   pvVals : ∀ pv, read64 m0 (env.toNat + 16) = some pv →
-    ∀ i, i < f.vars.length →
+    ∀ i, (hi : i < f.vars.length) →
       (∃ w0 w1 w2, read64 m0 (pv + 24 * i) = some w0 ∧ read64 m0 (pv + 24 * i + 8) = some w1 ∧
         read64 m0 (pv + 24 * i + 16) = some w2) ∧
       0x80000000 ≤ pv + 24 * i ∧ pv + 24 * i + 24 ≤ 0x100000000 ∧
@@ -544,7 +555,7 @@ structure FoundSt
       pv + 24 * i < 2^64 ∧
       (pv + 24 * i + 24 ≤ out.toNat ∨ out.toNat + 24 ≤ pv + 24 * i) ∧
       (∀ (p : Nat) (s : String), read64 m0 (pv + 24 * i + 8) = some p →
-        ∀ k, k ≤ s.length → (p + k < out.toNat ∨ out.toNat + 24 ≤ p + k))
+        ValuePayload (f.vars[i]'hi).2 s → ∀ k, k ≤ s.length → (p + k < out.toNat ∨ out.toNat + 24 ≤ p + k))
   -- out buffer disjoint from the spill window
   outSpillDisj : out.toNat + 24 ≤ (sp0 - 64#64).toNat + 8 ∨ (sp0 - 64#64).toNat + 64 ≤ out.toNat
   -- return-address alignment (the caller link r)
@@ -576,7 +587,7 @@ theorem hitAt_to_hitTail
       pv + 24 * iHit < 2^64 ∧
       (pv + 24 * iHit + 24 ≤ out.toNat ∨ out.toNat + 24 ≤ pv + 24 * iHit) ∧
       (∀ (p : Nat) (s : String), read64 m9 (pv + 24 * iHit + 8) = some p →
-        ∀ k, k ≤ s.length → (p + k < out.toNat ∨ out.toNat + 24 ≤ p + k)))
+        ValuePayload (f.vars[iHit]'(hHit.ilt)).2 s → ∀ k, k ≤ s.length → (p + k < out.toNat ∨ out.toNat + 24 ≤ p + k)))
     -- the seven spill slots over m9 (from the prologue's output)
     (hs56 : read64 m9 ((sp0 - 64#64).toNat + 56) = some r0.toNat)
     (hs48 : read64 m9 ((sp0 - 64#64).toNat + 48) = some r8.toNat)
@@ -668,7 +679,7 @@ theorem env_get_found_uncond'
           r0 (sp0 - 64#64) 0 f nameStr N φf φc m9 c60 ∧
         FrameRepr m9 N φf φc env.toNat f ∧ Env_getLoaded m9 ∧
         (∀ pv, read64 m9 (env.toNat + 16) = some pv →
-          ∀ i, i < f.vars.length →
+          ∀ i, (hi : i < f.vars.length) →
             (∃ w0 w1 w2, read64 m9 (pv + 24 * i) = some w0 ∧ read64 m9 (pv + 24 * i + 8) = some w1 ∧
               read64 m9 (pv + 24 * i + 16) = some w2) ∧
             0x80000000 ≤ pv + 24 * i ∧ pv + 24 * i + 24 ≤ 0x100000000 ∧
@@ -676,7 +687,7 @@ theorem env_get_found_uncond'
             pv + 24 * i < 2^64 ∧
             (pv + 24 * i + 24 ≤ out.toNat ∨ out.toNat + 24 ≤ pv + 24 * i) ∧
             (∀ (p : Nat) (s : String), read64 m9 (pv + 24 * i + 8) = some p →
-              ∀ k, k ≤ s.length → (p + k < out.toNat ∨ out.toNat + 24 ≤ p + k)))) :
+              ValuePayload (f.vars[i]'hi).2 s → ∀ k, k ≤ s.length → (p + k < out.toNat ∨ out.toNat + 24 ≤ p + k)))) :
     ∃ (c' : Config) (m' : Mem) (iHit : Nat) (hi : iHit < f.vars.length),
       Steps c c' ∧ GoodState c'.σ ∧ c'.tick < 2 ∧
       c'.σ.regs.get? Register.PC = some r ∧

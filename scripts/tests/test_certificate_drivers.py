@@ -29,6 +29,7 @@ class CertificateDriverTests(unittest.TestCase):
             DRIVER_CALLS=str(self.calls),
             HOUDINI_STAGE=str(self.directory / "stage"),
         )
+        self.environment.pop("VSA_PRIVATE_BUILD", None)
 
     def run_script(
         self, script: str, *arguments: str
@@ -65,19 +66,21 @@ class CertificateDriverTests(unittest.TestCase):
         self.assertFalse(self.calls.exists())
 
     def test_legacy_remote_campaign_is_not_rejected_by_authority_gate(self) -> None:
-        # A stub compiler stops the legacy path without executing Lean or SSH.
         stage = Path(self.environment["HOUDINI_STAGE"])
         stage.mkdir()
         (stage / "segment-certificates.tsv").write_text("query\tfield\n\n")
         result = self.run_script("houdini_summary_remote.sh")
         self.assertNotIn("authority transport is unsupported", result.stderr)
-        self.assertTrue(self.calls.exists())
-        self.assertTrue(
-            all(
-                Path(line).name == "lake"
-                for line in self.calls.read_text().splitlines()
-            )
-        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("VSA_PRIVATE_BUILD must identify", result.stderr)
+        self.assertFalse(self.calls.exists())
+
+    def test_remote_invalid_backend_refuses_before_build_or_shipping(self) -> None:
+        self.environment["VSA_PRIVATE_BUILD"] = str(self.directory / "missing")
+        result = self.run_script("houdini_summary_remote.sh")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("private Lean backend is missing or stale", result.stderr)
+        self.assertFalse(self.calls.exists())
 
 
 if __name__ == "__main__":

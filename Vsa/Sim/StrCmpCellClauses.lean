@@ -1,3 +1,4 @@
+import Vsa.Sim.SharedGeometry
 import Vsa.Sim.StrCmpCellFootprint
 import Vsa.Sim.rows.StrCmpCellInstances
 import Vsa.Sim.IHClauseFootprintMeta
@@ -53,14 +54,6 @@ set_option maxHeartbeats 4000000
 set_option maxRecDepth 100000
 
 /-! ## 1. Operand regions from ownership -/
-
-/-- Geometry of the shared byte set: every shared byte is RAM above the static
-image `[0x80000000, 0x8001acf0)` with the word loop's 8-byte slack below the
-RAM top, above the HTIF window at `tohostAddr`, and outside the stack. -/
-structure SharedGeom (shared : Nat → Prop) (SL : StackLayout) : Prop where
-  ram : ∀ k, shared k → 0x8001acf0 ≤ k ∧ k + 8 ≤ 0x100000000
-  htif : ∀ k, shared k → tohostAddr + 16 ≤ k
-  stack : ∀ k, shared k → k < SL.lo ∨ SL.hi ≤ k
 
 /-- A byte range `[p, p + len]` inside the shared set is a `strcmp` operand
 region relative to any spill slot `sp'` inside the stack. -/

@@ -25,7 +25,7 @@ c58 addi s1,s1,8    -- names += 8                                    → c5c  (A
 ```
 
 Everything the body needs is landed: the 8 site lemmas (`EnvGetSites2`), the
-`strcmp_full_spec` callee (`StrcmpSpecW4`), the load↔pointer bridge and index
+`strcmp_full_spec_cond` callee (`StrcmpSpecW4`), the load↔pointer bridge and index
 arithmetic (`EnvGetSpec3`), the equality bridges (`EnvDefSpec2`/`EnvDefSpec3`),
 and the `ScanNames` per-binding carrier.  The `strcmp` cross-call is spliced with
 the ghost-at-call-site pattern (`g_call := σ_call.regs.get?`, so the callee's
@@ -149,7 +149,7 @@ first-match invariant, one loop body runs to the disjunctive next config:
 
 The chain: `c5c`(beq not taken) → `c60`(load `names[i]=ofNat qᵢ`, via `scan_c60_load`)
 → `c64`(`mv a1,s3`) → `c68`(`jal strcmp`, ghost `g' := σ_call.regs.get?`) → `strcmp`
-(`strcmp_full_spec`; pre from `ScanNames`) → `c6c`(`bnez a0`): TAKEN (x10≠0 ⇒ names
+(`strcmp_full_spec_cond`; pre from `ScanNames`) → `c6c`(`bnez a0`): TAKEN (x10≠0 ⇒ names
 differ ⇒ MISS-iter after `c54`/`c58`), NOT taken (x10=0 ⇒ names equal ⇒ HIT-in-body). -/
 
 /-- **The per-iteration body chain.** From `ScanSt`@`0x80002c5c` at `i < count`
@@ -295,26 +295,30 @@ theorem scan_iter (g : (R : Register) → Option (RegisterType R))
   have hqNat : (BitVec.ofNat 64 q).toNat = q := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]
   -- the ghost at the call site: the ABI-frame entry is `rfl`.
   let g4 : (R : Register) → Option (RegisterType R) := fun R => σ4.regs.get? R
-  have hStrPre : strcmp_full_pre g4 (BitVec.ofNat 64 q) name (0x80002c6c#64) (f.vars[i].1) nameStr m0
+  have hStrPre : StrcmpEntryCond g4 (BitVec.ofNat 64 q) name (0x80002c6c#64) (f.vars[i].1) nameStr m0
       σ4.sailOutput ⟨σ4, i4, c2.steps + 1 + 1⟩ := by
-    refine ⟨hG4, hloadedS4, hmem4', rfl, hpc4, hx10_4, hx11_4, hra4, ⟨vmi4, hmi4⟩, hi4, by decide, ?_, ?_,
-      hSt.names.maskPinned, ?_, ?_, ?_, ?_, ?_⟩
-    · -- CString m0 (ofNat q).toNat (f.vars[i].1)
-      rw [hqNat]; exact hCSq
-    · -- CString m0 name.toNat nameStr
-      exact hSt.names.nameCStr
-    · -- byte region for pa
-      rw [hqNat]; exact fun cs hcs => hSt.names.bindRegB i hilt q hq cs hcs
-    · -- byte region for pb
-      exact fun cs hcs => hSt.names.nameRegB cs hcs
-    · -- word region for pa
-      rw [hqNat]; exact fun cs hcs => hSt.names.bindRegW i hilt q hq cs hcs
-    · -- word region for pb
-      exact fun cs hcs => hSt.names.nameRegW cs hcs
-    · -- frame: g4 R = σ4.get? R, so this is rfl
-      intro R _; rfl
+    exact
+      { good := hG4
+        loaded := hloadedS4
+        mem := hmem4'
+        out := rfl
+        pc := hpc4
+        a0 := hx10_4
+        a1 := hx11_4
+        ra := hra4
+        minstret := ⟨vmi4, hmi4⟩
+        tick := hi4
+        ralign := by decide
+        cstra := by rw [hqNat]; exact hCSq
+        cstrb := hSt.names.nameCStr
+        maskpin := hSt.names.maskPinned
+        wrega := by
+          rw [hqNat]
+          exact fun cs hcs => hSt.names.bindRegW i hilt q hq cs hcs
+        wregb := hSt.names.nameRegW
+        frame := fun _ _ => rfl }
   obtain ⟨c5, hstepsStr, hStrPost⟩ :=
-    strcmp_full_spec g4 (BitVec.ofNat 64 q) name (0x80002c6c#64) (f.vars[i].1) nameStr m0
+    strcmp_full_spec_cond g4 (BitVec.ofNat 64 q) name (0x80002c6c#64) (f.vars[i].1) nameStr m0
       σ4.sailOutput ⟨σ4, i4, c2.steps + 1 + 1⟩ hStrPre
   obtain ⟨hG5, hpc5, hra5, hmem5, _hout5, htick5, hframe5,
     csa, csb, xres, hCSa, hCSb, hsaEq, hsbEq, hx10_5, hsign5⟩ := hStrPost

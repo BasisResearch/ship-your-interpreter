@@ -1,5 +1,7 @@
 # lake/Lean build output
 .lake/
+*.olean
+*.ilean
 
 # Python
 __pycache__/
