@@ -165,6 +165,23 @@ including the mutable top-pointer global. Their allocating consumers need a
 named write region covering allocator globals as well as the arena.
 Nonallocating store frames may retain their stronger statements.
 
+The exact framing consequence is now checked in `AllocatorGlobalFrame`.
+`env_new_top_unchanged` applies the current `EnvNewReturnState.mem_frame` to
+all eight bytes of the top-pointer slot. Exact consumer:
+`Vsa.Sim.AllocatorGlobalFrame.rejects_top_change`. Its remaining premises are
+`0x8001ad28 ≤ A.lo`, `0x8001ad28 ≤ SL.lo ∨ sp.toNat ≤ 0x8001ad20`, and
+`read64 cfg.σ.mem 0x8001ad20 ≠ read64 m 0x8001ad20`.
+It excludes that endpoint from the current return type. It does not prove
+that a particular allocator execution changes the top pointer.
+
+The checkpoint is
+`/private/tmp/vsa-realloc-migration-20260911.jAzmk8/global-frame/checkpoint.json`;
+receipt `resource-overlay/run-ivfs0yoe/receipt.json` is under the correction
+directory. The slice selected 910 modules, rebuilt one, and reused 909.
+Compilation took 7.539 seconds; the full check took 18.031 seconds. All three
+declaration audits and the exact consumer use standard axioms. This is
+prerequisite evidence for correcting the shared frames.
+
 `Reserved.outsidePrivate` already accepts the needed weaker condition:
 private bytes outside the arena belong to the caller's writable region.
 `HeapOwned.ownedOff` and `entryOff` currently manufacture it from `priv_arena`;
