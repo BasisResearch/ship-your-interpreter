@@ -356,7 +356,7 @@ theorem envNewPushedRepr
     (hwrites : ∀ k, SL.lo ≤ k → k < SL.hi → writes k)
     (hr : StoreRepr m N A φf φc st.store)
     (hainv : M.AInv σ exts)
-    (priv_arena : ∀ a, M.privFoot a → A.lo ≤ a ∧ a < A.hi)
+    (privateOutsideWrites : ∀ k, M.privFoot k → ¬ (A.lo ≤ k ∧ k < A.hi) → writes k)
     (arena_stack : A.hi ≤ SL.lo ∨ SL.hi ≤ A.lo)
     (hparents : StoreParents st.store)
     (hpA : A.contains p 32) (hpalign : p % 16 = 0)
@@ -368,7 +368,7 @@ theorem envNewPushedRepr
   -- the ONE proof that owned and shared bytes are off the allocator's three
   -- windows (`AllocOff.lean`); `EnvNewOff` is its single-block instance at 32 bytes
   have O : OwnedOff SL M.privFoot [(p, 32)] alloc shared :=
-    hown.ownedOff hwrites (M.privFoot_disjoint σ exts hainv) priv_arena arena_stack
+    hown.ownedOff hwrites (M.privFoot_disjoint σ exts hainv) privateOutsideWrites arena_stack
       (freshExtents_single hpA hpdisj)
   have ha : ∀ role q n, Allocated alloc role q n → ∀ k, ExtentByte (q, n) k →
       EnvNewOff SL M.privFoot p k :=
@@ -562,7 +562,8 @@ theorem envNewRetainedReturn_of_ledger
         nonzero := Pre.fresh.nonzero
         arena := by rw [hpn]; exact ⟨hplo, hphi⟩
         align := by rw [hpn]; omega
-        store := envNewPushedRepr hown hwrites F.store hainv0 L.alloc.priv_arena hAstack L.parents
+        store := envNewPushedRepr hown hwrites F.store hainv0
+          (fun k hk hnot => absurd (L.alloc.priv_arena k hk) hnot) hAstack L.parents
           ⟨hplo, hphi⟩ hp16 hpdisj hagree03 hfr3
         survives := by
           intro m' hm'
@@ -574,7 +575,8 @@ theorem envNewRetainedReturn_of_ledger
             · intro _ _ _ _ i hi; exact absurd hi (Nat.not_lt_zero _)
             · intro _ _ _ _ i hi; exact absurd hi (Nat.not_lt_zero _)
             · intro _ _ _ _ i hi; exact absurd hi (Nat.not_lt_zero _)
-          exact envNewPushedRepr hown hwrites F.store hainv0 L.alloc.priv_arena hAstack L.parents
+          exact envNewPushedRepr hown hwrites F.store hainv0
+            (fun k hk hnot => absurd (L.alloc.priv_arena k hk) hnot) hAstack L.parents
             ⟨hplo, hphi⟩ hp16 hpdisj hag' hfr' }
   have gp2 : c2.σ.regs.get? Register.x3 = some gpv :=
     (X.frame .x3 (by decide)).trans hgp1

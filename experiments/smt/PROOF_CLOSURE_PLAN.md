@@ -184,13 +184,36 @@ prerequisite evidence for correcting the shared frames.
 
 `Reserved.outsidePrivate` already accepts the needed weaker condition:
 private bytes outside the arena belong to the caller's writable region.
-`HeapOwned.ownedOff` and `entryOff` currently manufacture it from `priv_arena`;
-they should consume explicit coverage instead. Concrete `InitialWriteByte`
+`HeapOwned.ownedOff`, `entryOff`, `closureBuildOld_of_owned`, and
+`envNewPushedRepr` now consume that coverage explicitly:
+`∀ k, priv k → ¬ (A.lo ≤ k ∧ k < A.hi) → writes k`.
+The allocating callers derive it from their existing `AllocLedger.priv_arena`;
+that ledger premise and the allocating return-frame correction remain open.
+Seven caller theorem headers are unchanged. Concrete `InitialWriteByte`
 covers mutable globals in `[0x8001ad00, 0x8001c168)`. Generic callers still
 need their own coverage proof. Static code and rodata precede `0x8001acf0`.
 ELF symbols identify allocator globals, but no exhaustive machine-write
 footprint or invariant supplier has been proved. Preserve read-only pinned
 globals such as `_impure_ptr` separately from mutable allocator storage.
+
+Exact checked consumer: `Vsa.Sim.envNewPushedRepr`. Its complete type and
+twelve remaining premises are recorded in `allocator-private-coverage.json`
+beside this plan. These retain ownership, stack-write coverage, store
+representation, the allocator invariant, private-byte coverage, arena/stack
+separation, parent bounds, fresh-block placement/alignment/disjointness,
+memory agreement, and the initialized frame representation.
+
+All 1,977 source modules passed: 229 rebuilt and 1,748 reused. Dependency
+compilation took 456.531 seconds; the full check took 476.598 seconds.
+All 31 audits, including the exact consumer, use standard axioms. The
+slowest rebuilt module took 14.249 seconds, within the existing limits.
+Receipt: `resource-overlay/run-ph2gv73f/receipt.json` under the allocator
+correction directory. Coverage and header evidence are in
+`/private/tmp/vsa-private-write-coverage-20260912.LBIVlQ/`.
+Both preserved allocator regression fixtures pass against these dependencies.
+The full axiom inventory, boundary replay, census, and validation suite are
+pending. Static checks retain the same 30 inherited discipline findings.
+This is prerequisite progress; no completion gate is closed.
 
 `RuntimeAllocatorState.heap`, `InitialOwned.heap`, and the initial execution
 adapter already use `InitialWriteByte SL`. Retain that ownership index.

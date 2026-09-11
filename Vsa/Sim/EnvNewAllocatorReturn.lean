@@ -25,7 +25,7 @@ theorem EnvNewAllocationPost.runtime
   have off := entry.heap.ownedOff
     (fun k hlo hhi => Or.inr ⟨hlo, hhi⟩)
     (AllocLedger.privDisjoint_of_ainvAt entry.ainv after.σ gp)
-    L.priv_arena L.arena_stack h.block.freshExtents
+    (fun k hk hnot => absurd (L.priv_arena k hk) hnot) L.arena_stack h.block.freshExtents
   have owned := entry.heap.store.transport h.agreement off.alloc off.shared
   have arrays := entry.arrays.transport entry.heap.store h.agreement off.alloc off.shared
   have address := pushFrameMap_fresh phiF st.store.frames.size p.toNat
@@ -64,7 +64,7 @@ theorem EnvNewAllocationPost.shared_agree
   have off := entry.heap.ownedOff
     (fun k hlo hhi => Or.inr ⟨hlo, hhi⟩)
     (AllocLedger.privDisjoint_of_ainvAt entry.ainv after.σ gp)
-    L.priv_arena L.arena_stack h.block.freshExtents
+    (fun k hk hnot => absurd (L.priv_arena k hk) hnot) L.arena_stack h.block.freshExtents
   exact fun k hk => h.agreement k (off.shared k hk)
 
 #print axioms EnvNewAllocationPost.runtime

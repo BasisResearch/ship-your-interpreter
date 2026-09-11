@@ -398,7 +398,8 @@ theorem envDefineAppendLane
   have hprivLive : ∀ e ∈ extsA, ∀ i < e.2, ¬ M.privFoot (e.1 + i) :=
     M.privFoot_disjoint c0.σ extsA H.regs.ainv
   have EO : EntryOff A SL extsA M.privFoot alloc shared :=
-    hheap.entryOff hstackW hprivLive LM.alloc.priv_arena
+    hheap.entryOff hstackW hprivLive
+      (fun k hk hnot => absurd (LM.alloc.priv_arena k hk) hnot)
   have hsharedPriv := EO.shared_priv
   have hsharedStack := EO.shared_stack
   have hextArena := EO.ext_arena

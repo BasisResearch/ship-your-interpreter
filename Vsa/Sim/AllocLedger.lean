@@ -148,7 +148,8 @@ theorem mallocReturn_of_parked {A : Arena} {SL : StackLayout} {gpv : BitVec 64}
   have hpriv : ∀ e ∈ exts, ∀ k < e.2, ¬ M.privFoot (e.1 + k) :=
     M.privFoot_disjoint c.σ exts h.entry.ainv
   have hoff : OwnedOff SL M.privFoot [] alloc shared :=
-    h.owned.ownedOff h.writes_stack hpriv L.priv_arena L.arena_stack
+    h.owned.ownedOff h.writes_stack hpriv
+      (fun k hk hnot => absurd (L.priv_arena k hk) hnot) L.arena_stack
       (fun e he => absurd he List.not_mem_nil)
   have block : MallocBlock A exts n p := ⟨hp0, hp16, hpA, hpdisj⟩
   refine ⟨c', hs, p, ?_⟩
@@ -164,7 +165,8 @@ theorem mallocReturn_of_parked {A : Arena} {SL : StackLayout} {gpv : BitVec 64}
       owned0 := h.owned.transport_off hoff hag
       owned := (h.owned.transport_off hoff hag).fresh hpos hpA hpdisj
       store := h.owned.repr_off h.store hoff hag
-      ownedOff := h.owned.ownedOff h.writes_stack hpriv L.priv_arena L.arena_stack
+      ownedOff := h.owned.ownedOff h.writes_stack hpriv
+        (fun k hk hnot => absurd (L.priv_arena k hk) hnot) L.arena_stack
         block.freshExtents }
 
 /-! ## 5. The `free` adapter -/
@@ -242,7 +244,8 @@ theorem freeReturn_of_parked {A : Arena} {SL : StackLayout} {gpv : BitVec 64}
   have hpriv : ∀ e ∈ exts.erase (q, n), ∀ k < e.2, ¬ M.privFoot (e.1 + k) :=
     fun e he => M.privFoot_disjoint c.σ exts h.ainv e (List.mem_of_mem_erase he)
   have hoff : OwnedOff SL M.privFoot [(q, n)] alloc shared :=
-    hown'.ownedOff h.writes_stack hpriv L.priv_arena L.arena_stack
+    hown'.ownedOff h.writes_stack hpriv
+      (fun k hk hnot => absurd (L.priv_arena k hk) hnot) L.arena_stack
       (HeapArena.freshErase h.owned.ledger.arena h.live)
   refine ⟨c', hs, ?_⟩
   exact

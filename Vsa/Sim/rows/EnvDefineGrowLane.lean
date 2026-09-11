@@ -311,7 +311,8 @@ theorem envDefineGrowCallsAt
     M.privFoot_disjoint c0.σ extsA R.ainv
   -- the entry-side allocator separation facts, from ONE lemma (`AllocOff.lean`)
   have EO : EntryOff A SL extsA M.privFoot alloc shared :=
-    hheap.entryOff hstackW hprivA L.priv_arena
+    hheap.entryOff hstackW hprivA
+      (fun k hk hnot => absurd (L.priv_arena k hk) hnot)
   have hsharedPriv := EO.shared_priv
   have hsharedStack := EO.shared_stack
   have hextArena := EO.ext_arena

@@ -1,0 +1,57 @@
+{
+  "target_obligation": "remainingWork_closed: allocator ownership with private globals",
+  "target_type": "Vsa.Sim.EndToEnd.RemainingWork Vsa.Sim.LayoutInstance.interpRunLayout",
+  "consumer": "Vsa.Sim.envNewPushedRepr",
+  "role": "prerequisite",
+  "consumer_type": "∀ {N : Vsa.RuntimeRepr.NativeAddrs} {A : Vsa.RuntimeRepr.Arena} {SL : Vsa.Alloc.StackLayout} {φf φc : Vsa.While.Addr → Nat} {st : Vsa.While.St} {env : Vsa.While.Addr} {m m' : Vsa.MemRepr.Mem} {gpv : BitVec 64} {headroom maxReq : Nat} {M : Vsa.Alloc.MallocContract A SL gpv headroom maxReq} {exts : List Vsa.Sim.Extent} {alloc : Vsa.Sim.RuntimeOwnership.Allocations} {shared readable writes : Nat → Prop} {σ : Vsa.Machine.MState} {p : Nat} (hown : Vsa.Sim.RuntimeOwnership.HeapOwned A exts m φf φc alloc shared readable writes st.store) (hwrites : ∀ k, SL.lo ≤ k → k < SL.hi → writes k) (hr : Vsa.RuntimeRepr.StoreRepr m N A φf φc st.store) (hainv : M.AInv σ exts) (privateOutsideWrites : ∀ k, M.privFoot k → ¬ (A.lo ≤ k ∧ k < A.hi) → writes k) (arena_stack : A.hi ≤ SL.lo ∨ SL.hi ≤ A.lo) (hparents : Vsa.Sim.StoreParents st.store) (hpA : A.contains p 32) (hpalign : p % 16 = 0) (hpdisj : ∀ e ∈ exts, Vsa.Alloc.ExtDisjoint (p, 32) e) (hag : Vsa.Sim.AgreeP (Vsa.Sim.EnvNewOff SL M.privFoot p) m m') (hfr : Vsa.RuntimeRepr.FrameRepr m' N (Vsa.Sim.pushFrameMap φf st.store.frames.size p) φc p ⟨some env, []⟩), Vsa.RuntimeRepr.StoreRepr m' N A (Vsa.Sim.pushFrameMap φf st.store.frames.size p) φc (st.store.allocFrame (some env)).1",
+  "remaining_premises": [
+    {
+      "name": "hown",
+      "type": "Vsa.Sim.RuntimeOwnership.HeapOwned A exts m φf φc alloc shared readable writes st.store"
+    },
+    {
+      "name": "hwrites",
+      "type": "∀ k, SL.lo ≤ k → k < SL.hi → writes k"
+    },
+    {
+      "name": "hr",
+      "type": "Vsa.RuntimeRepr.StoreRepr m N A φf φc st.store"
+    },
+    {
+      "name": "hainv",
+      "type": "M.AInv σ exts"
+    },
+    {
+      "name": "privateOutsideWrites",
+      "type": "∀ k, M.privFoot k → ¬ (A.lo ≤ k ∧ k < A.hi) → writes k"
+    },
+    {
+      "name": "arena_stack",
+      "type": "A.hi ≤ SL.lo ∨ SL.hi ≤ A.lo"
+    },
+    {
+      "name": "hparents",
+      "type": "Vsa.Sim.StoreParents st.store"
+    },
+    {
+      "name": "hpA",
+      "type": "A.contains p 32"
+    },
+    {
+      "name": "hpalign",
+      "type": "p % 16 = 0"
+    },
+    {
+      "name": "hpdisj",
+      "type": "∀ e ∈ exts, Vsa.Alloc.ExtDisjoint (p, 32) e"
+    },
+    {
+      "name": "hag",
+      "type": "Vsa.Sim.AgreeP (Vsa.Sim.EnvNewOff SL M.privFoot p) m m'"
+    },
+    {
+      "name": "hfr",
+      "type": "Vsa.RuntimeRepr.FrameRepr m' N (Vsa.Sim.pushFrameMap φf st.store.frames.size p) φc p ⟨some env, []⟩"
+    }
+  ]
+}

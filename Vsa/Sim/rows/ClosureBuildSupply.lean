@@ -53,7 +53,7 @@ theorem closureBuildOld_of_owned
     (hr : StoreRepr mMalloc N A φf φc st.store)
     (hwrites : ∀ k, SL.lo ≤ k → k < SL.hi → writes k)
     (hpriv : ∀ e ∈ exts, ∀ k < e.2, ¬ priv (e.1 + k))
-    (priv_arena : ∀ a, priv a → A.lo ≤ a ∧ a < A.hi)
+    (privateOutsideWrites : ∀ k, priv k → ¬ (A.lo ≤ k ∧ k < A.hi) → writes k)
     (arena_stack : A.hi ≤ SL.lo ∨ SL.hi ≤ A.lo)
     (hA : A.contains p 16) (hf : ∀ e ∈ exts, ExtDisjoint (p, 16) e)
     (hsret : ∀ k, sret.toNat ≤ k → k < sret.toNat + 24 → SL.lo ≤ k ∧ k < SL.hi)
@@ -62,7 +62,7 @@ theorem closureBuildOld_of_owned
       StoreRepr mpre N A φf φc' st.store := by
   intro mpre hag
   have hoff : OwnedOff SL priv [(p, 16)] alloc shared :=
-    hown.ownedOff hwrites hpriv priv_arena arena_stack (freshExtents_single hA hf)
+    hown.ownedOff hwrites hpriv privateOutsideWrites arena_stack (freshExtents_single hA hf)
   have hagP : AgreeP (BuildOff p sret) mMalloc mpre := fun a ha => (hag a ha).symm
   have hold : StoreRepr mpre N A φf φc st.store :=
     hown.store.repr_transport hr hagP

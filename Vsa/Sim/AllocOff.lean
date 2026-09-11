@@ -90,7 +90,7 @@ bytes, and fresh blocks are disjoint from every live extent. -/
 theorem HeapOwned.ownedOff (hown : HeapOwned A exts m phiF phiC alloc shared readable writes s)
     (hwrites : ∀ k, SL.lo ≤ k → k < SL.hi → writes k)
     {priv : Nat → Prop} (hpriv : ∀ e ∈ exts, ∀ k < e.2, ¬ priv (e.1 + k))
-    (priv_arena : ∀ a, priv a → A.lo ≤ a ∧ a < A.hi)
+    (privateOutsideWrites : ∀ k, priv k → ¬ (A.lo ≤ k ∧ k < A.hi) → writes k)
     (arena_stack : A.hi ≤ SL.lo ∨ SL.hi ≤ A.lo)
     {fresh : List Extent} (hfresh : FreshExtents A exts fresh) :
     OwnedOff SL priv fresh alloc shared := by
@@ -115,8 +115,7 @@ theorem HeapOwned.ownedOff (hown : HeapOwned A exts m phiF phiC alloc shared rea
       omega
   · intro k hk
     refine ⟨fun hst => hown.immutable.outsideWrites k hk (hwrites k hst.1 hst.2), ?_, ?_⟩
-    · exact hown.reserved.outsidePrivate hown.immutable hpriv
-        (fun a hp hna => absurd (priv_arena a hp) hna) k hk
+    · exact hown.reserved.outsidePrivate hown.immutable hpriv privateOutsideWrites k hk
     · intro e he
       exact hown.reserved.outsideFresh (hfresh e he).1 (hfresh e he).2 k hk
 
@@ -237,10 +236,9 @@ theorem HeapOwned.entryOff {A : Arena} {SL : StackLayout} {exts : List Extent} {
     (hown : HeapOwned A exts m phiF phiC alloc shared readable writes s)
     (hwrites : ∀ k, SL.lo ≤ k → k < SL.hi → writes k)
     (hpriv : ∀ e ∈ exts, ∀ k < e.2, ¬ priv (e.1 + k))
-    (priv_arena : ∀ a, priv a → A.lo ≤ a ∧ a < A.hi) :
+    (privateOutsideWrites : ∀ k, priv k → ¬ (A.lo ≤ k ∧ k < A.hi) → writes k) :
     EntryOff A SL exts priv alloc shared where
-  shared_priv := hown.reserved.outsidePrivate hown.immutable hpriv
-    (fun k hk hnot => absurd (priv_arena k hk) hnot)
+  shared_priv := hown.reserved.outsidePrivate hown.immutable hpriv privateOutsideWrites
   shared_stack k hk hin := hown.immutable.outsideWrites k hk (hwrites k hin.1 hin.2)
   ext_arena e he k hk := by
     obtain ⟨_, hlo, hhi⟩ := hown.ledger.arena.1 _ he
