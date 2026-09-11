@@ -1,5 +1,6 @@
 import Vsa.MemRepr
 import Vsa.Sim.MemRegion
+import Vsa.Sim.MemRegionStmtFacts
 import Vsa.Sim.ReprSurvival
 
 /-!
@@ -389,10 +390,10 @@ theorem stmtFp_region {m : Mem} {lo hi a addr : Nat} {s : Stmt}
       | whileStmt c b => exact ih (hin.2.2 _ hp)
     · intro a s p addr t hkind hp ht ih hin
       cases hkind
-      exact ih (hin.2.2.2.2 _ hp)
+      exact ih (stmtIn_if_else hin hp)
     · intro a s p addr t hkind hp ht ih hin
       cases hkind
-      exact ih (hin.2.2.2.2 _ hp)
+      exact ih (stmtIn_for_body hin hp)
     · intro a s stmts count addr ss hkind hp hss ih hin
       cases hkind
       exact ih (hin.2 _ hp)
@@ -543,10 +544,10 @@ theorem exprFp_region {m : Mem} {lo hi a addr : Nat} {e : Expr}
       | whileStmt c b => exact ih (hin.2.2 _ hp)
     · intro a s p addr t hkind hp ht ih hin
       cases hkind
-      exact ih (hin.2.2.2.2 _ hp)
+      exact ih (stmtIn_if_else hin hp)
     · intro a s p addr t hkind hp ht ih hin
       cases hkind
-      exact ih (hin.2.2.2.2 _ hp)
+      exact ih (stmtIn_for_body hin hp)
     · intro a s stmts count addr ss hkind hp hss ih hin
       cases hkind
       exact ih (hin.2 _ hp)

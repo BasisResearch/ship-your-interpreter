@@ -2,6 +2,7 @@ import Vsa.Sim.EvalBinSim3
 import Vsa.Sim.EvalDivArm
 import Vsa.Sim.DivTailSites
 import Vsa.Sim.DivSpec3
+import Vsa.Sim.DivWrapBridge
 import Vsa.Sim.DivDispatchSeg
 import Vsa.Sim.EvalDivValueTail
 import Vsa.Sim.LoopStep
@@ -26,10 +27,10 @@ instead of re-deriving mul's inline dispatch.  The value tail then runs the six
 
   `jal __divdi3 ; mv a1,a0 ; mv a0,s1 ; jal value_int ; ld s3,0x418(sp) ; j 0x800033ec`.
 
-The `__divdi3` seam is discharged by the STRONG `divdi3_spec` (`Vsa/Sim/DivSpec3.lean`,
-`x10.toInt = n.toInt.tdiv d.toInt` + `sailOutput=o` + `NotWrittenD` frame).  The value
-bridge commutes `res → wrap64 (a.tdiv b)` via `div_wrap_bridge` (`res.toInt` pins
-`res` uniquely by `BitVec.toInt` injectivity).
+The `__divdi3` seam uses `divdi3_wrap_spec`: the actual quotient word is
+`BitVec.ofInt 64 (n.toInt.tdiv d.toInt)`, including `INT64_MIN / -1`.
+`blockC_div_wrap_footprint` retains the complete cell footprint. The original
+nonoverflow contracts project this same execution.
 
 Assembled INLINE (not via the `divValueTail` combinator, which cannot host a runtime
 value_int-entry ghost snapshot — see `experiments/binop-value-tail-wiring.md` VERDICT).
@@ -270,17 +271,45 @@ children to the epilogue entry: the dispatch chain's three `sd` temporaries at
 def divCellFoot (sp sret : Nat) (k : Nat) : Prop :=
   word8 (sp - 848) k ∨ word8 (sp - 840) k ∨ word8 (sp - 832) k ∨ resultSlot sret k
 
+set_option maxHeartbeats 200000 in
+theorem divCellFoot_compose {sp sret : BitVec 64} {before middle after : Mem}
+    (base : (sp - 1088#64).toNat = sp.toNat - 1088)
+    (dispatch : MemFootprint (fun k => word8 ((sp - 1088#64).toNat + 0xf0) k ∨
+      word8 ((sp - 1088#64).toNat + 0xf8) k ∨ word8 ((sp - 1088#64).toNat + 0x100) k)
+      before middle)
+    (box : MemFootprint (resultSlot sret.toNat) middle after)
+    (room : 1088 ≤ sp.toNat) :
+    MemFootprint (divCellFoot sp.toNat sret.toNat) before after := by
+  refine ⟨fun k hk => ?_⟩
+  unfold divCellFoot word8 resultSlot at hk
+  rw [box.agree k (by unfold resultSlot; omega)]
+  apply dispatch.agree k
+  unfold word8
+  rw [base]
+  omega
+
+set_option maxHeartbeats 200000 in
+private theorem twoSubReturn_output
+    {g : (R : Register) → Option (RegisterType R)} {N : NativeAddrs}
+    {A : Arena} {SL : StackLayout} {phiF phiC : Addr → Nat} {nf nc : Nat}
+    {middle final : Vsa.While.St} {left right : Value}
+    {sp ret dst v8 v9 v18 : BitVec 64} {m0 : Mem} {c : Config}
+    (h : TwoSubReturn g N A SL phiF phiC nf nc middle final left right
+      sp ret dst v8 v9 v18 m0 c) : String.join c.σ.sailOutput.toList = final.out := by
+  obtain ⟨_, _, _, _, _, _, _, output, _⟩ := h
+  exact output
+
+set_option maxHeartbeats 200000 in
 /-- `blockC_div` RETAINING the cell's footprint `divCellFoot` from the return memory
 `mret` to the epilogue-entry memory.  `blockC_div` is its projection. -/
-theorem blockC_div_footprint
+theorem blockC_div_wrap_footprint
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (nf nc : Nat)
     (st' st'' : Vsa.While.St) (a b : Int)
     (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
     (m0 mret : Mem)
-    (hbNe : b ≠ 0)
-    (hOv : ¬(a = -2^63 ∧ b = -1)) :
+    (hbNe : b ≠ 0) :
     Triple
       (fun c =>
         TwoSubReturn gpre N A SL φf φc nf nc st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c ∧
@@ -530,19 +559,20 @@ theorem blockC_div_footprint
   -- 0x8000381c: jal __divdi3 → x1 := 0x80003820, PC := 0x800046a4 (via divPreBridge)
   --------------------------------------------------------------------------------
   have hWr_toInt' : (bytesVal MKind.ld [rpb0, rpb1, rpb2, rpb3, rpb4, rpb5, rpb6, rpb7] : BitVec 64).toInt = b := hWr_toInt
-  -- the `divdi3_pre` ghost is the __divdi3-entry snapshot; supply via divPreBridge
+  -- The actual JAL supplies the wrapping callee entry and its ghost frame.
   obtain ⟨cP, hStepsP, hDivPre⟩ :=
-    divPreBridge (fun R => cD.σ.regs.get? R) (fun R => c.σ.regs.get? R)
+    divWrapPreBridge (fun R => cD.σ.regs.get? R) (fun R => c.σ.regs.get? R)
       (sp - 1088#64) sret (bytesVal MKind.ld [rpb0, rpb1, rpb2, rpb3, rpb4, rpb5, rpb6, rpb7] : BitVec 64) Wl ldsD
       c.σ.mem cD.σ.mem out0 hmemD hcodeA hDivdi3A hUmoddi3A hUdivdi3A
       (by rw [hWr_toInt']; exact hbNe)
-      (by rw [hWl_toInt, hWr_toInt']; exact hOv)
       cD ⟨⟨hGD, hmemD, hpcD, hx10D, hx11D, hx9D, hx2D, ⟨w12D, hx12D⟩, ⟨w13D, hx13D⟩,
         htickD, houtD, hframeD⟩, fun R _ => rfl⟩
-  -- divdi3_spec: from divdi3_pre run to divdi3_post (quotient in x10, mem=mA, out=out0, frame)
+  -- Run the wrapping quotient contract at the actual callee entry.
   obtain ⟨cQ, hStepsQ, hDivPost⟩ :=
-    divdi3_spec (fun R => cD.σ.regs.get? R) Wl (bytesVal MKind.ld [rpb0, rpb1, rpb2, rpb3, rpb4, rpb5, rpb6, rpb7] : BitVec 64) (0x80003820#64) cD.σ.mem out0 cP hDivPre
-  obtain ⟨hGQ, hmemQ, houtQ, hpcQ, htickQ, hframeQ, resQ, hx10Q, hresQ⟩ := hDivPost
+    divdi3_wrap_spec (fun R => cD.σ.regs.get? R) Wl (bytesVal MKind.ld [rpb0, rpb1, rpb2, rpb3, rpb4, rpb5, rpb6, rpb7] : BitVec 64) (0x80003820#64) cD.σ.mem out0 cP hDivPre
+  let resQ := BitVec.ofInt 64 (Wl.toInt.tdiv
+    (bytesVal MKind.ld [rpb0, rpb1, rpb2, rpb3, rpb4, rpb5, rpb6, rpb7] : BitVec 64).toInt)
+  obtain ⟨hGQ, hmemQ, houtQ, hpcQ, htickQ, hframeQ, hx10Q⟩ := hDivPost
   -- mem of cQ = mA = cD.σ.mem; recover the loaded/geometry facts on cQ
   have hmemQe : cQ.σ.mem = cD.σ.mem := hmemQ
   have hcodeQ : Eval_exprLoaded cQ.σ.mem := by rw [hmemQe]; exact hcodeA
@@ -553,8 +583,6 @@ theorem blockC_div_footprint
   have hspQ : cQ.σ.regs.get? Register.x2 = some (sp - 1088#64) := by
     rw [hframeQ Register.x2 ⟨by decide, by decide, by decide⟩]; exact hx2D
   obtain ⟨vmiQ, hmiQ⟩ := hGQ.minstret
-  -- the value the value_int suffix must box: res, pinned by res.toInt = Wl.tdiv (bytesVal MKind.ld [rpb0, rpb1, rpb2, rpb3, rpb4, rpb5, rpb6, rpb7] : BitVec 64)
-  have hresQ' : resQ.toInt = Wl.toInt.tdiv (bytesVal MKind.ld [rpb0, rpb1, rpb2, rpb3, rpb4, rpb5, rpb6, rpb7] : BitVec 64).toInt := hresQ
   --------------------------------------------------------------------------------
   -- 0x80003820: mv a1,a0 → x11 := resQ (the quotient)
   --------------------------------------------------------------------------------
@@ -622,8 +650,12 @@ theorem blockC_div_footprint
   -- value_int callee (via value_int_spec): buf = sret, pay = resQ
   --------------------------------------------------------------------------------
   have hIntRegion : IntRegion sret := ⟨hsretAl, hsretLo, hsretHi, hsretWin, hsretVi⟩
-  have hval_bridge : (BitVec.ofNat 64 resQ.toNat).toInt = wrap64 (a.tdiv b) :=
-    div_wrap_bridge Wl (bytesVal MKind.ld [rpb0, rpb1, rpb2, rpb3, rpb4, rpb5, rpb6, rpb7] : BitVec 64) resQ a b hWl_toInt hWr_toInt' hresQ'
+  have hval_bridge : (BitVec.ofNat 64 resQ.toNat).toInt = wrap64 (a.tdiv b) := by
+    rw [ofNat_toNat_self64]
+    change (BitVec.ofInt 64 (Wl.toInt.tdiv
+      (bytesVal MKind.ld [rpb0, rpb1, rpb2, rpb3, rpb4, rpb5, rpb6, rpb7] : BitVec 64).toInt)).toInt = _
+    rw [hWl_toInt, hWr_toInt']
+    rfl
   -- ── Phase-4a: the whole `value_int ; ld s3 ; j` tail + `PreEpilogueVD` packaging
   --    is now the GENERATED `intBoxEpilogue` (`Vsa/Sim/BinopTailGen.lean`).  The `.div`
   --    front supplies `τ3` (the `jal value_int` entry) and its transport facts. ──
@@ -733,23 +765,131 @@ theorem blockC_div_footprint
       (Steps.single hstepτ1).trans <| (Steps.single hstepτ2).trans <|
       (Steps.single hstepτ3)).trans hStepsFin
   refine ⟨cfin, hchain, mpre, φfm2, φcm2, φfe, φce, hp1, hp2, hp3, hp4, hPreD, ?_⟩
-  -- the footprint: `mret = c.mem → cD.mem` are the dispatch's three `sd`s (exact
-  -- offsets `0xf0`/`0xf8`/`0x100` off `x2 = sp-1088`), the libgcc callee and the `mv`s
-  -- write nothing (`cD.mem = τ3.mem`), and the boxed tail writes only the result slot.
-  refine ⟨fun k hk => ?_⟩
-  unfold divCellFoot word8 resultSlot at hk
-  have hbox : ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) := by omega
-  have hdisp : ¬ (word8 ((sp - 1088#64).toNat + 0xf0) k ∨
-      word8 ((sp - 1088#64).toNat + 0xf8) k ∨ word8 ((sp - 1088#64).toNat + 0x100) k) := by
-    unfold word8; rw [hspsub]; omega
-  rw [hBoxFoot.agree k hbox]
-  show τ3.mem[k]? = mret[k]?
-  rw [hmemτ3e, hmemD,
-    (divDispatch_footprint (sp - 1088#64) sret
-      (bytesVal MKind.ld [rpb0, rpb1, rpb2, rpb3, rpb4, rpb5, rpb6, rpb7] : BitVec 64) Wl ldsD
-      c.σ.mem hfb).agree k hdisp, hmret]
+  apply divCellFoot_compose hspsub (middle := cD.σ.mem) (room := hsp1088)
+  · rw [← hmret, hmemD]
+    exact divDispatch_footprint (sp - 1088#64) sret
+      (bytesVal MKind.ld [rpb0, rpb1, rpb2, rpb3, rpb4, rpb5, rpb6, rpb7]) Wl ldsD c.σ.mem hfb
+  · simpa only [hmemτ3e] using hBoxFoot
+
+/-- The original nonoverflow contract uses the same wrapped execution. -/
+theorem blockC_div_footprint
+    (gpre g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
+    (st' st'' : Vsa.While.St) (a b : Int)
+    (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
+    (m0 mret : Mem)
+    (hbNe : b ≠ 0)
+    (hOv : ¬(a = -2^63 ∧ b = -1)) :
+    Triple
+      (fun c =>
+        TwoSubReturn gpre N A SL φf φc nf nc st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c ∧
+        gpre Register.x8 = some aExpr ∧
+        read32 c.σ.mem (aExpr.toNat + 8) = some 14 ∧      -- op token = binOpTok .div
+        DivSlotPinned c.σ.mem ∧
+        BinaryReturnData SL sp sret c ∧
+        -- === geometry ===
+        0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
+        tohostAddr + 8 ≤ aExpr.toNat ∧
+        (aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat) ∧
+        String.join out0.toList = st''.out ∧
+        c.σ.sailOutput = out0 ∧
+        sret.toNat % 8 = 0 ∧ 0x80000000 ≤ sret.toNat ∧ sret.toNat + 24 ≤ 0x100000000 ∧
+        tohostAddr + 16 ≤ sret.toNat ∧
+        (sret.toNat + 24 ≤ 0x8000280c ∨ 0x8000281c ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat) ∧
+        r.toNat % 4 = 0 ∧
+        Value_intLoaded c.σ.mem ∧
+        -- === the DIV-specific extra conjuncts (libgcc __divdi3 code images) ===
+        Vsa.Sim.Code.__divdi3Loaded c.σ.mem ∧
+        Vsa.Sim.Code.__umoddi3Loaded c.σ.mem ∧
+        __hidden___udivdi3Loaded c.σ.mem ∧
+        (sp.toNat ≤ 0x800046a4 ∨ 0x80004728 ≤ SL.lo) ∧  -- libgcc div block disjoint from stack
+        (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
+        (sp.toNat ≤ 0x8000280c ∨ 0x8000281c ≤ SL.lo) ∧
+        (opTableBase + 20 ≤ SL.lo ∨ sp.toNat ≤ opTableBase) ∧
+        (SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi) ∧
+        SL.lo + 1088 ≤ sp.toNat ∧ 0x80000000 ≤ SL.lo ∧ tohostAddr + 16 ≤ SL.lo ∧
+        sp.toNat ≤ 0x100000000 ∧ sp.toNat % 8 = 0 ∧ SL.hi ≤ 0x100000000 ∧ sp.toNat ≤ SL.hi ∧
+        g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
+        g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧
+        gpre Register.x19 = some v19 ∧ g Register.x19 = some v19 ∧
+        (∀ R : Register, AbiPreservedNoise R →
+          (Register.x8 == R) = false → (Register.x9 == R) = false →
+          (Register.x18 == R) = false → (Register.x2 == R) = false →
+          gpre R = g R) ∧
+        c.σ.mem = mret)
+      (fun c => ∃ (mpre : Mem) (φfm φcm φfe φce : Addr → Nat),
+        PhiExtends φf φfm nf ∧
+        PhiExtends φc φcm nc ∧
+        PhiExtends φfm φfe st'.store.frames.size ∧
+        PhiExtends φcm φce st'.store.closures.size ∧
+        PreEpilogueVD g N A SL φfe φce st'' (.int (wrap64 (a.tdiv b))) sp r sret v8 v9 v18 out0 m0 mpre c ∧
+        MemFootprint (divCellFoot sp.toNat sret.toNat) mret mpre) :=
+  blockC_div_wrap_footprint gpre g N A SL φf φc nf nc st' st'' a b
+    sp r sret aExpr v8 v9 v18 v19 out0 m0 mret hbNe
 
 /-- The footprint-free projection (the landed statement). -/
+theorem blockC_div_wrap
+    (gpre g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (nf nc : Nat)
+    (st' st'' : Vsa.While.St) (a b : Int)
+    (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (out0 : Array String)
+    (m0 : Mem)
+    (hbNe : b ≠ 0) :
+    Triple
+      (fun c =>
+        TwoSubReturn gpre N A SL φf φc nf nc st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c ∧
+        gpre Register.x8 = some aExpr ∧
+        read32 c.σ.mem (aExpr.toNat + 8) = some 14 ∧      -- op token = binOpTok .div
+        DivSlotPinned c.σ.mem ∧
+        BinaryReturnData SL sp sret c ∧
+        -- === geometry ===
+        0x80000000 ≤ aExpr.toNat ∧ aExpr.toNat + 16 ≤ 0x100000000 ∧
+        tohostAddr + 8 ≤ aExpr.toNat ∧
+        (aExpr.toNat + 16 ≤ SL.lo ∨ sp.toNat ≤ aExpr.toNat) ∧
+        String.join out0.toList = st''.out ∧
+        c.σ.sailOutput = out0 ∧
+        sret.toNat % 8 = 0 ∧ 0x80000000 ≤ sret.toNat ∧ sret.toNat + 24 ≤ 0x100000000 ∧
+        tohostAddr + 16 ≤ sret.toNat ∧
+        (sret.toNat + 24 ≤ 0x8000280c ∨ 0x8000281c ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ SL.lo ∨ sp.toNat ≤ sret.toNat) ∧
+        (sret.toNat + 24 ≤ 0x80003164 ∨ 0x80003fe0 ≤ sret.toNat) ∧
+        r.toNat % 4 = 0 ∧
+        Value_intLoaded c.σ.mem ∧
+        -- === the DIV-specific extra conjuncts (libgcc __divdi3 code images) ===
+        Vsa.Sim.Code.__divdi3Loaded c.σ.mem ∧
+        Vsa.Sim.Code.__umoddi3Loaded c.σ.mem ∧
+        __hidden___udivdi3Loaded c.σ.mem ∧
+        (sp.toNat ≤ 0x800046a4 ∨ 0x80004728 ≤ SL.lo) ∧  -- libgcc div block disjoint from stack
+        (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
+        (sp.toNat ≤ 0x8000280c ∨ 0x8000281c ≤ SL.lo) ∧
+        (opTableBase + 20 ≤ SL.lo ∨ sp.toNat ≤ opTableBase) ∧
+        (SL.lo ≤ sret.toNat ∧ sret.toNat + 24 ≤ SL.hi) ∧
+        SL.lo + 1088 ≤ sp.toNat ∧ 0x80000000 ≤ SL.lo ∧ tohostAddr + 16 ≤ SL.lo ∧
+        sp.toNat ≤ 0x100000000 ∧ sp.toNat % 8 = 0 ∧ SL.hi ≤ 0x100000000 ∧ sp.toNat ≤ SL.hi ∧
+        g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
+        g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧
+        gpre Register.x19 = some v19 ∧ g Register.x19 = some v19 ∧
+        (∀ R : Register, AbiPreservedNoise R →
+          (Register.x8 == R) = false → (Register.x9 == R) = false →
+          (Register.x18 == R) = false → (Register.x2 == R) = false →
+          gpre R = g R))
+      (fun c => ∃ (mpre : Mem) (φfm φcm φfe φce : Addr → Nat),
+        PhiExtends φf φfm nf ∧
+        PhiExtends φc φcm nc ∧
+        PhiExtends φfm φfe st'.store.frames.size ∧
+        PhiExtends φcm φce st'.store.closures.size ∧
+        PreEpilogueVD g N A SL φfe φce st'' (.int (wrap64 (a.tdiv b))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
+  intro c hpre
+  obtain ⟨hTS, hgx8, hopTok, hSlot, hReadData, hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq, hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode, hraAl, hVint, hDivdi3, hUmoddi3, hUdivdi3, hdivStk, hcodeStk, hviStk, hTableStk, hsretInSL, hSLloSp, hSLlo, hSLwin, hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge⟩ := hpre
+  obtain ⟨c', hs, mpre, φfm, φcm, φfe, φce, hp1, hp2, hp3, hp4, hPre, _⟩ :=
+    blockC_div_wrap_footprint gpre g N A SL φf φc nf nc st' st'' a b sp r sret aExpr v8 v9 v18 v19 out0 m0 c.σ.mem hbNe c
+      ⟨hTS, hgx8, hopTok, hSlot, hReadData, hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq, hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode, hraAl, hVint, hDivdi3, hUmoddi3, hUdivdi3, hdivStk, hcodeStk, hviStk, hTableStk, hsretInSL, hSLloSp, hSLlo, hSLwin, hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge, rfl⟩
+  exact ⟨c', hs, mpre, φfm, φcm, φfe, φce, hp1, hp2, hp3, hp4, hPre⟩
+
 theorem blockC_div
     (gpre g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -802,13 +942,9 @@ theorem blockC_div
         PhiExtends φc φcm nc ∧
         PhiExtends φfm φfe st'.store.frames.size ∧
         PhiExtends φcm φce st'.store.closures.size ∧
-        PreEpilogueVD g N A SL φfe φce st'' (.int (wrap64 (a.tdiv b))) sp r sret v8 v9 v18 out0 m0 mpre c) := by
-  intro c hpre
-  obtain ⟨hTS, hgx8, hopTok, hSlot, hReadData, hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq, hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode, hraAl, hVint, hDivdi3, hUmoddi3, hUdivdi3, hdivStk, hcodeStk, hviStk, hTableStk, hsretInSL, hSLloSp, hSLlo, hSLwin, hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge⟩ := hpre
-  obtain ⟨c', hs, mpre, φfm, φcm, φfe, φce, hp1, hp2, hp3, hp4, hPre, _⟩ :=
-    blockC_div_footprint gpre g N A SL φf φc nf nc st' st'' a b sp r sret aExpr v8 v9 v18 v19 out0 m0 c.σ.mem hbNe hOv c
-      ⟨hTS, hgx8, hopTok, hSlot, hReadData, hexprLo, hexprHi, hexprWin, hexprSL, houtStr, hout0eq, hsretAl, hsretLo, hsretHi, hsretWin, hsretVi, hsretStk, hsretEvalCode, hraAl, hVint, hDivdi3, hUmoddi3, hUdivdi3, hdivStk, hcodeStk, hviStk, hTableStk, hsretInSL, hSLloSp, hSLlo, hSLwin, hsphiRam, hsp8, hSLhiRam, hspSLhi, hgv8, hgv9, hgv18, hgv2, hgprex19, hgx19, hbridge, rfl⟩
-  exact ⟨c', hs, mpre, φfm, φcm, φfe, φce, hp1, hp2, hp3, hp4, hPre⟩
+        PreEpilogueVD g N A SL φfe φce st'' (.int (wrap64 (a.tdiv b))) sp r sret v8 v9 v18 out0 m0 mpre c) :=
+  blockC_div_wrap gpre g N A SL φf φc nf nc st' st'' a b
+    sp r sret aExpr v8 v9 v18 v19 out0 m0 hbNe
 
 #print axioms blockC_div_footprint
 #print axioms blockC_div
@@ -910,13 +1046,65 @@ def EvalDivSimGoal : Prop :=
       (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
         st'' (.int (wrap64 (a.tdiv b))) sp r sret m0)
 
-/-- **`evalDivSim`**: the `EvalE.binary .div` (int) recursive case, composing
-`blockB_binary ≫ blockC_div ≫ blockD_v_rec` in the `EvalIH` motive shape.  Caller
-obligations `b ≠ 0` (value-path; `b = 0` is the M5 error case) and no-overflow
-`¬(a = INT64_MIN ∧ b = -1)` are carried into the goal. -/
-theorem evalDivSim : EvalDivSimGoal := by
+set_option maxHeartbeats 200000 in
+/-- Execute integer division for every nonzero divisor, including signed overflow. -/
+theorem evalDivWrapSim :
+  ∀ (gouter gpre g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (a b : Int)
+    (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 : BitVec 64)
+    (out0 : Array String) (m0 : Mem),
+    b ≠ 0 →
+    EvalE st d env el st' (.int a) →
+    EvalIH st d env el st' (.int a) →
+    EvalIH st' d env er st'' (.int b) →
+    EvalE st d env (.binary .div el er) st'' (.int (wrap64 (a.tdiv b))) →
+    Triple
+      (fun c => ∃ ment,
+        ArmEntryK gouter N A SL φf φc st (0x800034e8#64) UnaryArmCallee (.binary .div el er)
+          sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
+        BinExtras N A SL el er ment sp sret aExpr aLOp aROp ∧
+        BinaryRecContext gpre φf st env aEnvReg ∧
+        c.σ.regs.get? Register.x11 = some aEnv ∧
+        c.σ.regs.get? Register.x13 = some aEnvReg ∧
+        c.σ.regs.get? Register.x19 = some v19 ∧
+        (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
+        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        gpre Register.x8 = some aExpr ∧ gpre Register.x18 = some aEnv ∧
+        gpre Register.x19 = some v19 ∧
+        read64 ment (aExpr.toNat + 16) = some aLOp.toNat ∧
+        ExprRepr ment aLOp.toNat el ∧
+        read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
+        ExprRepr ment aROp.toNat er ∧
+        MemExtends m0 ment ∧
+        -- WAVE 47i: the parent node's entry-ground bundle at the arm entry.
+        EvalGround ment SL A sp sret aExpr.toNat (.binary .div el er) ∧
+        -- ITEM ZERO B1: BOTH operands' recursion-sound budgets at `sp - 1088`,
+        -- their `.fn`-bodies bounds, and the store-bodies invariants (LEFT over
+        -- the entry store `st`, RIGHT over the post-left store `st'`) --
+        -- forwarded to `blockB_binary`'s amended pre.
+        StackOK SL (sp - 1088#64)
+          (el.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget el = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget ∧
+        StackOK SL (sp - 1088#64)
+          (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget er = true ∧
+        Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget ∧
+        (∀ c' : Vsa.Machine.Config,
+          TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+            st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
+          DivResid gpre N A SL sp r sret aExpr c') ∧
+        g Register.x8 = some v8 ∧ g Register.x9 = some v9 ∧
+        g Register.x18 = some v18 ∧ g Register.x2 = some sp ∧ g Register.x19 = some v19 ∧
+        (∀ R : Register, AbiPreservedNoise R →
+          (Register.x8 == R) = false → (Register.x9 == R) = false →
+          (Register.x18 == R) = false → (Register.x2 == R) = false →
+          gpre R = g R))
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st'' (.int (wrap64 (a.tdiv b))) sp r sret m0) := by
   intro gouter gpre g N A SL φf φc st st' st'' d env el er a b
-    sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hbNe hOv hLeft hIHl hIHr _hEvalE
+    sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hbNe hLeft hIHl hIHr _hEvalE
   intro c hpre
   obtain ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
     hpayL, hexprL, hpayR, hexprR, hMemExtM0, hGmt47,
@@ -949,12 +1137,12 @@ theorem evalDivSim : EvalDivSimGoal := by
   have hTS := hReturned.result
   have hData := hReturned.extra
   have hR : DivResid gpre N A SL sp r sret aExpr c2 := hResid c2 hTS
-  have hOutC2 : String.join c2.σ.sailOutput.toList = st''.out := hTS.2.2.2.2.2.2.2.1
+  have hOutC2 : String.join c2.σ.sailOutput.toList = st''.out := twoSubReturn_output hTS
   -- === block C: dispatch + __divdi3 tail → PreEpilogueVD @0x800033ec ===
   obtain ⟨c3, hs3, mpre, φfm, φcm, φfe, φce, hpfm, hpcm, hpfe, hpce, hPreD⟩ :=
-    blockC_div gpre g N A SL φf φc st.store.frames.size st.store.closures.size
+    blockC_div_wrap gpre g N A SL φf φc st.store.frames.size st.store.closures.size
       st' st'' a b sp r sret aExpr v8 v9 v18 v19 c2.σ.sailOutput m0
-      hbNe hOv
+      hbNe
       c2 ⟨hTS, hR.gx8, hR.opTok, hR.slot, hData,
         hR.exprLo, hR.exprHi, hR.exprWin, hR.exprSL, hOutC2, rfl,
         hR.sretAl, hR.sretLo, hR.sretHi, hR.sretWin, hR.sretVi, hR.sretStk, hR.sretEvalCode, hR.raAl,
@@ -978,5 +1166,17 @@ theorem evalDivSim : EvalDivSimGoal := by
   exact ⟨c4, ((hs2.trans hs3).trans hs4), hExit, hMemExt, hWords,
     φf', φc', hpfF.trans (PhiExtends.mono hmono.1 hpf'),
     hpcF.trans (PhiExtends.mono hmono.2 hpc'), hSurv⟩
+
+theorem evalDivSim : EvalDivSimGoal := by
+  intro gouter gpre g N A SL φf φc st st' st'' d env el er a b
+    sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hbNe _hOv
+  exact evalDivWrapSim gouter gpre g N A SL φf φc st st' st'' d env el er a b
+    sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hbNe
+
+#print axioms divCellFoot_compose
+#print axioms blockC_div_wrap_footprint
+#print axioms blockC_div_wrap
+#print axioms evalDivWrapSim
+#print axioms evalDivSim
 
 end Vsa.Sim

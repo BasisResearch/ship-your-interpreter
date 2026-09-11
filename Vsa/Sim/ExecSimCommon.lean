@@ -324,6 +324,106 @@ def ExecSeqCursorRepr
         count < 2^31 ∧
         StmtArrayRepr m (base.toNat + 8 * i) ss.length ss
 
+/-- Named facts of the interpreter loop's selected cursor. -/
+structure ExecSeqInterpCursor
+    (m : Mem) (ss : List Stmt) (sp aRet cursor finish : BitVec 64)
+    (regs : (R : Register) → Option (RegisterType R)) : Prop where
+  cursorReg : regs Register.x8 = some cursor
+  finishReg : regs Register.x18 = some finish
+  spReg : regs Register.x2 = some sp
+  retSlot : aRet = sp + 88#64
+  remaining : finish.toNat = cursor.toNat + 8 * ss.length
+  script : read64 m (sp.toNat + 8) = some 0
+  array : StmtArrayRepr m cursor.toNat ss.length ss
+
+/-- Expose the interpreter cursor's witnesses through named fields. -/
+theorem ExecSeqCursorRepr.interp
+    {m : Mem} {phiF : Addr → Nat} {env : Addr} {ss : List Stmt} {sp aRet : BitVec 64}
+    {regs : (R : Register) → Option (RegisterType R)}
+    (h : ExecSeqCursorRepr .interpRun m phiF env ss sp aRet regs) :
+    ∃ cursor finish, ExecSeqInterpCursor m ss sp aRet cursor finish regs := by
+  obtain ⟨cursor, finish, hc, hf, hs, hr, hn, hscript, ha⟩ := h
+  exact ⟨cursor, finish, hc, hf, hs, hr, hn, hscript, ha⟩
+
+/-- Named facts of the closure loop's selected cursor. -/
+structure ExecSeqClosureCursor
+    (m : Mem) (phiF : Addr → Nat) (env : Addr) (ss : List Stmt)
+    (sp aRet body base : BitVec 64) (index count : Nat)
+    (regs : (R : Register) → Option (RegisterType R)) : Prop where
+  bodyReg : regs Register.x16 = some body
+  indexReg : regs Register.x8 = some (BitVec.ofNat 64 index)
+  envReg : regs Register.x19 = some (BitVec.ofNat 64 (phiF env))
+  spReg : regs Register.x2 = some sp
+  retSlot : aRet = sp + 144#64
+  baseRead : read64 m (body.toNat + 8) = some base.toNat
+  countRead : read32 m (body.toNat + 16) = some count
+  remaining : index + ss.length = count
+  countBound : count < 2^31
+  array : StmtArrayRepr m (base.toNat + 8 * index) ss.length ss
+
+/-- Expose the closure cursor's witnesses through named fields. -/
+theorem ExecSeqCursorRepr.closure
+    {m : Mem} {phiF : Addr → Nat} {env : Addr} {ss : List Stmt} {sp aRet : BitVec 64}
+    {regs : (R : Register) → Option (RegisterType R)}
+    (h : ExecSeqCursorRepr .closureBody m phiF env ss sp aRet regs) :
+    ∃ body base index count, ExecSeqClosureCursor m phiF env ss sp aRet body base index count regs := by
+  obtain ⟨body, base, index, count, hb, hi, he, hs, hr, hbase, hc, hn, hbound, ha⟩ := h
+  exact ⟨body, base, index, count, hb, hi, he, hs, hr, hbase, hc, hn, hbound, ha⟩
+
+/-- Named facts of the block loop's selected cursor. -/
+structure ExecSeqBlockCursor
+    (m : Mem) (phiF : Addr → Nat) (env : Addr) (ss : List Stmt)
+    (sp aRet block base : BitVec 64) (index count : Nat)
+    (regs : (R : Register) → Option (RegisterType R)) : Prop where
+  blockReg : regs Register.x8 = some block
+  indexReg : regs Register.x16 = some (BitVec.ofNat 64 index)
+  envReg : regs Register.x19 = some (BitVec.ofNat 64 (phiF env))
+  retReg : regs Register.x18 = some aRet
+  spReg : regs Register.x2 = some sp
+  baseRead : read64 m (block.toNat + 8) = some base.toNat
+  countRead : read32 m (block.toNat + 16) = some count
+  remaining : index + ss.length = count
+  countBound : count < 2^31
+  array : StmtArrayRepr m (base.toNat + 8 * index) ss.length ss
+
+/-- Expose the block cursor's witnesses through named fields. -/
+theorem ExecSeqCursorRepr.block
+    {m : Mem} {phiF : Addr → Nat} {env : Addr} {ss : List Stmt} {sp aRet : BitVec 64}
+    {regs : (R : Register) → Option (RegisterType R)}
+    (h : ExecSeqCursorRepr .blockBody m phiF env ss sp aRet regs) :
+    ∃ block base index count, ExecSeqBlockCursor m phiF env ss sp aRet block base index count regs := by
+  obtain ⟨block, base, index, count, hb, hi, he, hr, hs, hbase, hc, hn, hbound, ha⟩ := h
+  exact ⟨block, base, index, count, hb, hi, he, hr, hs, hbase, hc, hn, hbound, ha⟩
+
+/-- Named entry obligations for the cursor-selected statement. -/
+structure ExecSeqHeadFacts
+    (copy : ExecSeqCopy) (m : Mem) (regs : (R : Register) → Option (RegisterType R))
+    (SL : StackLayout) (A : Arena) (phiF : Addr → Nat)
+    (sp aRet p : BitVec 64) (st : St) (d : Nat) (env : Addr) (s : Stmt) : Prop where
+  selected : ExecSeqHeadAt copy m regs p
+  stmt : StmtRepr m p.toNat s
+  call : ExecSeqCallABI copy m regs phiF env sp aRet
+  ground : ExecGround m SL A sp aRet p.toNat s
+  stackOK : StackOK SL sp (176 + 1088)
+  stackBudget : StackOK SL sp (s.stackNeed + (maxCallDepth - d) * perCallBudget + 1088)
+  bodies : Stmt.bodiesBound perCallBudget s = true
+  storeBodies : StoreBodiesBound st.store perCallBudget
+
+/-- Destructure the represented head once, retaining its call and ground facts. -/
+theorem ExecSeqHeadGround.facts
+    {copy : ExecSeqCopy} {m : Mem} {regs : (R : Register) → Option (RegisterType R)}
+    {SL : StackLayout} {A : Arena} {phiF : Addr → Nat} {sp aRet : BitVec 64}
+    {st : St} {d : Nat} {env : Addr} {s : Stmt} {ss : List Stmt}
+    (h : ExecSeqHeadGround copy m regs SL A phiF sp aRet st d env (s :: ss)) :
+    ∃ p, ExecSeqHeadFacts copy m regs SL A phiF sp aRet p st d env s := by
+  obtain ⟨p, hp, hs, hc, hg, hstack, hbudget, hb, hstore⟩ := h
+  exact ⟨p, hp, hs, hc, hg, hstack, hbudget, hb, hstore⟩
+
+#print axioms ExecSeqCursorRepr.closure
+#print axioms ExecSeqCursorRepr.interp
+#print axioms ExecSeqCursorRepr.block
+#print axioms ExecSeqHeadGround.facts
+
 /-- Facts needed only when the sequence has another child to dispatch. -/
 structure ExecSeqLoopReady
     (copy : ExecSeqCopy)
@@ -414,18 +514,15 @@ structure ExecSeqExitI
 
 /-- The indexed empty-sequence case is an exact identity at the copy's empty
 boundary.  No arbitrary entry/exit-PC pair remains. -/
-theorem execSeqNilI
+theorem ExecSeqEntryI.nilExit
     (copy : ExecSeqCopy)
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : St) (d : Nat) (env : Addr) (sp aRet : BitVec 64) (m0 : Mem)
-    (hsupport : copy.Supports .normal) :
-    Triple
-      (ExecSeqEntryI copy g N A SL φf φc st d env [] sp aRet m0)
-      (ExecSeqExitI copy g N A SL φf φc st.store.frames.size
-        st.store.closures.size st .normal sp aRet m0) := by
-  intro c hc
-  refine ⟨c, .refl c, ?_⟩
+    (hsupport : copy.Supports .normal) {c : Config}
+    (hc : ExecSeqEntryI copy g N A SL φf φc st d env [] sp aRet m0 c) :
+    ExecSeqExitI copy g N A SL φf φc st.store.frames.size
+      st.store.closures.size st .normal sp aRet m0 c := by
   exact
     { supported := hsupport
       good := hc.good
@@ -446,6 +543,21 @@ theorem execSeqNilI
       frame := hc.frame
       minstret := hc.minstret }
 
+/-- The empty sequence uses the same entry as its zero-step exit. -/
+theorem execSeqNilI
+    (copy : ExecSeqCopy)
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : St) (d : Nat) (env : Addr) (sp aRet : BitVec 64) (m0 : Mem)
+    (hsupport : copy.Supports .normal) :
+    Triple
+      (ExecSeqEntryI copy g N A SL φf φc st d env [] sp aRet m0)
+      (ExecSeqExitI copy g N A SL φf φc st.store.frames.size
+        st.store.closures.size st .normal sp aRet m0) :=
+  fun c hc => ⟨c, .refl c,
+    ExecSeqEntryI.nilExit copy g N A SL φf φc st d env sp aRet m0 hsupport hc⟩
+
+#print axioms ExecSeqEntryI.nilExit
 #print axioms execSeqNilI
 
 /-! ## `execSeqNil` — the `ExecSeq.nil` case

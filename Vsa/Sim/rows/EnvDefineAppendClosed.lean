@@ -1,9 +1,11 @@
 import Vsa.Sim.rows.EnvDefineDispatchExact
 import Vsa.Sim.rows.EnvDefineAppendPrefix
 import Vsa.Sim.EnvDefCompose
+import Vsa.Sim.EnvDefComposeFacts
 import Vsa.Sim.ValueWordRepr
 import Vsa.Sim.StrcpySpec
 import Vsa.Sim.rows.StrcpyContractInhab
+import Vsa.Sim.AllocSuccessAdapters
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa
 open Register
@@ -73,7 +75,7 @@ theorem bridgeMallocPreSaved_closed
     hgp, habi, hainv, hmem⟩
   have hsaved' : EnvDefineSavedSpillFrame sp saved c' := by
     apply hsaved.of_mem_eq
-    exact hmem.trans hpost.2.2.2.2.symm
+    exact hmem.trans hpost.mem_eq.symm
   exact ⟨c', hs,
     ⟨hG, htick, hpc, hx10, hra, hralign, hsp, hstack, hgp, habi, hainv, hmem⟩,
     hsaved'⟩
@@ -98,7 +100,7 @@ theorem envDefMallocSaved
         EnvDefineSavedSpillFrame sp saved c) := by
   intro c ⟨hpre, hsaved⟩
   obtain ⟨c', hs, hpost⟩ := M.spec g exts n sp r m0 hn c hpre
-  have hmem0 : c.σ.mem = m0 := hpre.2.2.2.2.2.2.2.2.2.2.2
+  have hmem0 : c.σ.mem = m0 := hpre.mem_eq
   rcases hpost with ⟨hgood, htick, hpc, hsp, hgp, habi, hresult, hpublic⟩
   have hsaved' : EnvDefineSavedSpillFrame sp saved c' := by
     apply hsaved.of_interval_agree
@@ -111,8 +113,8 @@ theorem envDefMallocSaved
   exact ⟨c', hs,
     ⟨hgood, htick, hpc, hsp, hgp, habi, hresult, hpublic⟩, hsaved'⟩
 
-/-- Bounded malloc cannot take the env_define OOM edge.  Keep the allocator's
-exact success facts, public-memory frame, and saved spill image together. -/
+/-- The successful allocator result, public-memory frame, and saved spill image.
+The failure-aware `envDefMallocSaved` does not supply success by itself. -/
 def EnvDefMallocSuccessSaved
     {A : Vsa.RuntimeRepr.Arena} {SL : StackLayout} {gpv : BitVec 64}
     {headroom maxReq : Nat}
@@ -141,18 +143,20 @@ theorem envDefMallocSuccessSaved_of_post
     (M : MallocContract A SL gpv headroom maxReq)
     (g saved : (R : Register) → Option (RegisterType R))
     (exts : List Extent) (n : Nat) (sp r : BitVec 64) (m0 : Mem)
-    (hn : n ≤ maxReq) (hstack : StackOK SL sp headroom) :
+    {credits : Nat} {out : Array String} (hstack : StackOK SL sp headroom) :
     Triple
-      (fun c => EnvDefMallocPost M g exts n sp r m0 c ∧
+      (fun c => MallocSuccessExit A SL gpv maxReq credits M.AInv M.privFoot
+          g exts n sp r m0 out c ∧
         EnvDefineSavedSpillFrame sp saved c)
       (EnvDefMallocSuccessSaved M g saved exts n sp r m0) := by
   intro c ⟨hpost, hsaved⟩
-  rcases hpost with ⟨hgood, htick, hpc, hsp, hgp, habi, hresult, hpublic⟩
-  obtain ⟨p, ha0, hp, halign, harena, hfresh, hainv⟩ :=
-    M.nonNull_of_bounded c.σ exts n hn hresult
+  obtain ⟨p, hp⟩ := hpost.allocated
   exact ⟨c, Vsa.Machine.Steps.refl c,
-    p, hgood, htick, hpc, hsp, hstack, hgp, habi, ha0, hp, halign,
-    harena, hfresh, hainv, hpublic, hsaved⟩
+    p, hpost.returned.good, hpost.returned.tick, hpost.returned.pc,
+    hpost.returned.sp, hstack, hpost.returned.gp, hpost.returned.frame,
+    hp.pointer.register, hp.pointer.nonzero, hp.pointer.aligned,
+    hp.pointer.arena, hp.disjoint, hp.ainv,
+    (fun a hpriv hstack => hp.mem_frame a hpriv hstack (by simp)), hsaved⟩
 
 /-- The b30..b40 staging deliberately reseats s1/x9 to the fresh copy
 destination. -/
@@ -569,7 +573,7 @@ theorem envDefineMemcpyPostCString
     CString c.σ.mem (BitVec.ofNat 64 p).toNat nameStr := by
   apply cstring_shift_copy hcstr
   intro k hk
-  rw [h.2.2.2.2.1 k (by omega)]
+  rw [h.copied (k := k) (by omega)]
   by_cases hkl : k < len
   · exact (hstr.chars k hkl).1.symm
   · have hkeq : k = len := by omega

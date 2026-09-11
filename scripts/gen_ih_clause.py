@@ -9,7 +9,9 @@ as the `EvalIHWith` motive.  For clause `<Name>` the module
   (`mEvalE` is `EvalIHWithM extraM`, under the table's `guard` on the
   expression when one is declared; a kind-`extra` clause also has
   `extra : EvalExtra`, `extraM` = its `sp`/`m0`-blind embedding, and `ofWith`
-  = `EvalIHWith.toM`; the other eight motives are `True` unless the TSV
+  = `EvalIHWith.toM`; a kind-`motive` clause has `clauseMotive` — the `EvalE`
+  motive itself — in place of `extraM`, for a retained fact that depends on the
+  returned value; the other eight motives are `True` unless the TSV
   overrides them);
 * `structure Residuals (L : Layout) : Prop` with ONE field per recursor case
   whose parent relation has a non-`True` clause motive — the case's clause step:
@@ -48,7 +50,7 @@ RELATIONS = [
     "ForLoop", "ForCond", "ExecStep", "ExecSeq",
 ]
 COLUMNS = ["name", "kind", "pred", "imports", "motives", "guard", "steps", "notes"]
-KINDS = ("extra", "extraM")
+KINDS = ("extra", "extraM", "motive")
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_']*$")
 TAG_KINDS = ("manual", "generic", "from_old", "exact", "unguarded")
 
@@ -72,8 +74,15 @@ class Clause:
         self.notes = notes
 
     def eval_motive_body(self, params: str = "st d env e st' v") -> str:
-        """The `EvalE` motive body: `EvalIHWithM extraM …`, under the guard when declared."""
-        body = f"EvalIHWithM extraM {params}"
+        """The `EvalE` motive body, under the guard when declared.
+
+        Kinds `extra`/`extraM`: `EvalIHWithM extraM …`. Kind `motive`: the
+        declared motive `clauseMotive …` applied to the same binders (the
+        predicate IS the `EvalE` motive, so a landed child contract that indexes
+        its retained fact by the returned VALUE is reused unchanged).
+        """
+        body = (f"clauseMotive {params}" if self.kind == "motive"
+                else f"EvalIHWithM extraM {params}")
         return f"{self.guard} → {body}" if self.guard else body
 
     def motive_body(self, relation: str) -> str | None:
@@ -402,8 +411,10 @@ def render_clause(clause: Clause, cases: list[Case],
         "authoritative `term_sim_of_cases` signature. Do not hand-edit.",
         "",
         f"Clause predicate: `{clause.pred}` (kind `{clause.kind}`: "
-        + ("an `EvalExtra`, embedded as an `EvalExtraM` through `EvalIHWith.toM`)."
-           if clause.kind == "extra" else "an `EvalExtraM`, retained through `EvalIHWithM`)."),
+        + {"extra": "an `EvalExtra`, embedded as an `EvalExtraM` through `EvalIHWith.toM`).",
+           "extraM": "an `EvalExtraM`, retained through `EvalIHWithM`).",
+           "motive": "the `EvalE` motive itself, for a fact indexed by the returned value)."}[
+              clause.kind],
     ]
     if clause.guard:
         lines += [
@@ -456,6 +467,15 @@ def render_clause(clause: Clause, cases: list[Case],
             "  h.toM",
             "",
         ]
+    elif clause.kind == "motive":
+        lines += [
+            f"/-- The `{clause.name}` clause as the `EvalE` motive itself: a landed",
+            "child contract whose retained fact depends on the returned VALUE, which an",
+            "`EvalExtraM` (blind to the value) cannot express. -/",
+            "def clauseMotive : SpecSt → Nat → Addr → Expr → SpecSt → Value → Prop :=",
+            f"  {clause.pred}",
+            "",
+        ]
     else:
         lines += [
             f"/-- The `{clause.name}` clause retained at the child's actual return",
@@ -469,8 +489,10 @@ def render_clause(clause: Clause, cases: list[Case],
         params = " ".join(n for names, _ in binders[:-1] for n in names)
         if relation == "EvalE":
             body = clause.eval_motive_body(params)
-            doc = ("`EvalE` motive: the clause as an `EvalIHWithM`"
-                   + (" under the guard." if clause.guard else "."))
+            doc = ("`EvalE` motive: the declared clause motive"
+                   if clause.kind == "motive" else
+                   "`EvalE` motive: the clause as an `EvalIHWithM`")
+            doc += " under the guard." if clause.guard else "."
         elif clause.motive_body(relation) is not None:
             body = clause.motive_body(relation)
             doc = f"`{relation}` motive (from the clause table)."

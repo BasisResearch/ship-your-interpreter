@@ -1,6 +1,7 @@
 import Vsa.Sim.rows.EnvDefineScanRows
+import Vsa.Sim.SegmentReturnFacts
 import Vsa.Sim.rows.EnvDefinePrologueSaved
-import Vsa.Sim.StrcmpSpecW4
+import Vsa.Sim.StrcmpSpecCond
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa
 open Register
@@ -95,20 +96,29 @@ theorem envDefineScanCompare
   have hqNat : (BitVec.ofNat 64 q).toNat = q := by
     rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqLt]
   let g1 : (R : Register) → Option (RegisterType R) := fun R => c1.σ.regs.get? R
-  have hpre : strcmp_full_pre g1 (BitVec.ofNat 64 q) name 0x80002abc#64
+  have hpre : StrcmpEntryCond g1 (BitVec.ofNat 64 q) name 0x80002abc#64
       (f.vars[i]'h.index).1 nameStr m0 c1.σ.sailOutput c1 := by
-    refine ⟨hG1, ?_, ?_, rfl, hpc1, ha01, ha11, hra1, hmi1, htick1,
-      (by decide), ?_, h.names.nameCStr, h.names.maskPinned, ?_, ?_, ?_, ?_, ?_⟩
-    · rw [hmem1]
-      exact h.loadedS
-    · exact hmem1.trans h.mem
-    · rw [hqNat]; exact hqstr
-    · rw [hqNat]; exact fun cs hcs => h.names.bindRegB i h.index q hq cs hcs
-    · exact h.names.nameRegB
-    · rw [hqNat]; exact fun cs hcs => h.names.bindRegW i h.index q hq cs hcs
-    · exact h.names.nameRegW
-    · intro R _; rfl
-  obtain ⟨c2, hs2, hp⟩ := strcmp_full_spec g1 (BitVec.ofNat 64 q) name
+    exact
+      { good := hG1
+        loaded := by rw [hmem1]; exact h.loadedS
+        mem := hmem1.trans h.mem
+        out := rfl
+        pc := hpc1
+        a0 := ha01
+        a1 := ha11
+        ra := hra1
+        minstret := hmi1
+        tick := htick1
+        ralign := by decide
+        cstra := by rw [hqNat]; exact hqstr
+        cstrb := h.names.nameCStr
+        maskpin := h.names.maskPinned
+        wrega := by
+          rw [hqNat]
+          exact fun cs hcs => h.names.bindRegW i h.index q hq cs hcs
+        wregb := h.names.nameRegW
+        frame := fun _ _ => rfl }
+  obtain ⟨c2, hs2, hp⟩ := strcmp_full_spec_cond g1 (BitVec.ofNat 64 q) name
     0x80002abc#64 (f.vars[i]'h.index).1 nameStr m0 c1.σ.sailOutput c1 hpre
   obtain ⟨hG2, hpc2, _hra2, hmem2, _hout2, htick2, hframe2,
     csa, csb, x, hcsa, hcsb, hsa, hsb, hx, hsign⟩ := hp
@@ -332,10 +342,11 @@ theorem envDefineScanNextCarrier
       env name pv sp [] m0 c)
     (hsaved : EnvDefineSavedSpillFrame sp saved c) :
     EnvDefineScanSt saved env name pv count pn sp (i + 1) f nameStr N φf φc m0 c := by
+  have facts := SegmentReturnFacts.of_conjunction hp
   have hmem : c.σ.mem = m0 := by
     simpa [EnvDefineScanLivePost, envDefineScanNextSeg, evalBlocks,
-      SegEvalState.init, writeLog] using hp.2.1
-  have hregs := hp.2.2.2.1
+      SegEvalState.init, writeLog] using facts.memory
+  have hregs := facts.registers
   have hlenLt : f.vars.length < 2^64 := by rw [← hcount]; exact count.isLt
   have hiLt : i + 1 < 2^64 := Nat.lt_trans hi hlenLt
   have hcursorLt : 8 * (i + 1) < 2^64 := by
@@ -347,7 +358,7 @@ theorem envDefineScanNextCarrier
           (pn + BitVec.ofNat 64 (8 * i)) count env name pv sp) [])).regs = some v) :
       gprGet c.σ n = some v :=
     gholds_lookup _ hregs hl
-  refine ⟨hp.1, ?_, ?_, hmem, hp.2.2.1, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hp.2.2.2.2,
+  refine ⟨facts.good, ?_, ?_, hmem, facts.programCounter, ?_, ?_, ?_, ?_, ?_, ?_, ?_, facts.tick,
     hframe, hnames, hcount, hi, hsaved⟩
   · rw [hmem]; exact hloadedD
   · rw [hmem]; exact hloadedS
@@ -465,7 +476,8 @@ theorem envDefineScanStart
     ⟨hG, hmem, hpc, hG.minstret, hL,
       (by show KeysOK [10, 19, 18, 21, 2, 20]; decide), hfacts, htick⟩
   obtain ⟨c', hs, hp⟩ := envDefineScanInitLiveRow env count name pv sp [bs] m0 c hpre
-  have hregs := hp.2.2.2.1
+  have facts := SegmentReturnFacts.of_conjunction hp
+  have hregs := facts.registers
   have hpn : (BitVec.ofNat 64 pn.toNat : BitVec 64) = pn := by
     simpa using BitVec.ofNat_toNat 64 pn
   have reg (n : Nat) (v : BitVec 64)
@@ -474,11 +486,11 @@ theorem envDefineScanStart
       gprGet c'.σ n = some v := gholds_lookup _ hregs hl
   have hsaved' : EnvDefineSavedSpillFrame sp saved c' := by
     apply hsaved.of_mem_eq
-    exact hp.2.1.trans hmem.symm
-  refine ⟨c', hs, hp.1, ?_, ?_, hp.2.1, hp.2.2.1, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
-    hp.2.2.2.2, hframe, hnames, hcount, hpositive, hsaved'⟩
-  · rw [hp.2.1]; exact hmem ▸ hloadedD
-  · rw [hp.2.1]; exact hmem ▸ hloadedS
+    exact facts.memory.trans hmem.symm
+  refine ⟨c', hs, facts.good, ?_, ?_, facts.memory, facts.programCounter, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
+    facts.tick, hframe, hnames, hcount, hpositive, hsaved'⟩
+  · rw [facts.memory]; exact hmem ▸ hloadedD
+  · rw [facts.memory]; exact hmem ▸ hloadedS
   · simpa [gprGet] using reg 20 env (by rfl)
   · simpa [gprGet] using reg 18 name (by rfl)
   · simpa [gprGet] using reg 21 pv (by rfl)

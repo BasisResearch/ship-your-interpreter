@@ -1,4 +1,5 @@
 import Vsa.Sim.rows.EnvDefineGrowLane
+import Vsa.Sim.AllocCapacity
 
 /-!
 # `EnvDefineMissHead` — the non-empty miss: cap dispatch arms to the return
@@ -213,17 +214,19 @@ theorem envDefineGrowEntry_run
     (M : MallocContract A SL gpv headroom maxReq) (exts extsA : List Extent) (mA : Mem)
     (hE : EnvDefineMem N A SL φf φc st env x v aEnv aName pv esp m)
     (L : EnvDefineUpdateLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts)
-    (LM : EnvDefineMissLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts) :
+    (LM : EnvDefineMissLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts)
+    (budget : ResourceBudget A maxReq extsA 3)
+    (reserve : AllocationReserve A mA extsA maxReq 3) :
     Triple (EnvDefineGrowEntry g N A SL φf φc st env x v esp aEnv aName pv r m out M extsA mA)
       (EnvDefineReturnState g N A SL φf φc st env x v esp r m out) := by
   intro c0 E
   obtain ⟨cap, pn, pvals, F, R, hfull, hpn, hpvals, hreq, K, hs6⟩ := E
   obtain ⟨c1, extsA', mA', cap', hs1, H⟩ :=
-    envDefineGrowLane g N A SL φf φc st env x v esp aEnv aName pv r m out M exts extsA mA
-      cap pn pvals c0 hE L LM F R hfull hpn hpvals hreq K hs6
+    envDefineGrowLane (credits := 1) g N A SL φf φc st env x v esp aEnv aName pv r m out M exts extsA mA
+      cap pn pvals c0 hE L LM F R hfull hpn hpvals hreq K hs6 budget reserve
   obtain ⟨c2, hs2, hret⟩ :=
     envDefineAppendLane g N A SL φf φc st env x v esp aEnv aName pv r m out M exts extsA' mA'
-      cap' hE L LM c1 H
+      cap' hE L LM H.budget H.reserve c1 H.head
   exact ⟨c2, hs1.trans hs2, hret⟩
 
 /-! ## 4. The arms to the return state -/
@@ -249,6 +252,7 @@ theorem envDefineMissReady_run
       (EnvDefineReturnState g N A SL φf φc st env x v esp r m out) := by
   intro c ⟨v8, v9, v18, v19, v20, v21, v22, pn, gm, R⟩
   have Sf := R.facts
+  have scannedReserve := LM.reserve_after_spills hE.stack Sf.mem_agree
   have henvLt := Sf.env_lt
   have hAhi := L.alloc.arena_ram.2
   obtain ⟨hcountR, ⟨cap, hcapR, hcaple⟩, ⟨pn', pvals, hpn', hpvals, _⟩, _⟩ :=
@@ -283,7 +287,8 @@ theorem envDefineMissReady_run
     have Rg := envDefineMissRegs_of_arm g N A SL φf φc st env x v esp aEnv aName pv r m out M
       exts v8 v9 v18 v19 v20 v21 v22 pn gm Sf hpost hsaved
     exact envDefineAppendLane g N A SL φf φc st env x v esp aEnv aName pv r m out M exts exts
-      _ cap' hE L LM c ⟨F, Rg, hpost.1.2.2.1, hroom⟩
+      _ cap' hE L LM (LM.budget.mono (by decide : 1 ≤ 3))
+        (scannedReserve.mono (by decide : 1 ≤ 3)) c ⟨F, Rg, hpost.1.2.2.1, hroom⟩
   · have hcapEq : cap' = cap := by
       rw [Sf.env_addr] at hcapArm
       exact Option.some.inj (hcapArm.symm.trans hcapR)
@@ -295,7 +300,8 @@ theorem envDefineMissReady_run
       (hpost.2.abi _ (by decide)).trans
         ((envDefineScanGhost_ne gm _ _ (by decide) (by decide)).trans Sf.gm_s6)
     exact envDefineGrowEntry_run g N A SL φf φc st env x v esp aEnv aName pv r m out M exts exts
-      _ hE L LM c ⟨cap', pn, pvals, F, Rg, hfull, Sf.pn_read, hpvals, LM.grow_req cap' hcapM,
+      _ hE L LM LM.budget scannedReserve c
+        ⟨cap', pn, pvals, F, Rg, hfull, Sf.pn_read, hpvals, LM.grow_req cap' hcapM,
         .grow hpos hpost.1.2.2.1 ha5, hs6⟩
 
 #print axioms EnvDefineMissCapResult.arms

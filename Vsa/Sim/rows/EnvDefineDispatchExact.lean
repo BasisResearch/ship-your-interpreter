@@ -1,6 +1,7 @@
 import Vsa.Sim.rows.EnvDefineAppendPrefix
 import Vsa.Sim.rows.EnvDefineGrowExact
 import Vsa.Sim.rows.EnvDefineScanFramed
+import Vsa.Sim.SegmentReturnFacts
 import Vsa.Sim.DecodeTable.Batch03Part11
 import Vsa.Sim.DecodeTable.Batch08Part22
 
@@ -253,6 +254,49 @@ def EnvDefineMissCapResult
     read32 m0 (env.toNat + 4) = some cap ∧
     c.σ.regs.get? Register.x15 = some (BitVec.ofNat 64 cap))
 
+/-- Named capacity-dispatch exit, including the exact branch and saved caller frame. -/
+structure EnvDefineCapacityExit
+    {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List Extent) (out : Array String)
+    (saved gm : (R : Register) → Option (RegisterType R))
+    (env count pn sp : BitVec 64) (f : Vsa.While.Frame) (m : Mem) (cap : Nat)
+    (c : Config) : Prop where
+  good : GoodState c.σ
+  tick : c.tick < 2
+  memory : c.σ.mem = m
+  bound : f.vars.length ≤ cap
+  pc : c.σ.regs.get? Register.PC = some
+    (if f.vars.length < cap then 0x80002b1c#64 else 0x80002b90#64)
+  capacityRead : read32 m (env.toNat + 4) = some cap
+  capacityReg : c.σ.regs.get? Register.x15 = some (BitVec.ofNat 64 cap)
+  savedFrame : EnvDefineSavedSpillFrame sp saved c
+  frame : EnvDefineScanFrame M exts out sp gm (BitVec.ofNat 64 f.vars.length)
+    (pn + BitVec.ofNat 64 (8 * f.vars.length)) c
+
+/-- Consume the legacy capacity result through one named exit. -/
+theorem EnvDefineMissCapResult.resolve
+    {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
+    {M : MallocContract A SL gpv headroom maxReq} {exts : List Extent} {out : Array String}
+    {saved gm : (R : Register) → Option (RegisterType R)}
+    {env count pn sp : BitVec 64} {f : Vsa.While.Frame} {m : Mem} {c : Config} {Q : Prop}
+    (h : EnvDefineMissCapResult M exts out saved gm env count pn sp f m c)
+    (next : ∀ cap, EnvDefineCapacityExit M exts out saved gm env count pn sp f m cap c → Q) : Q := by
+  obtain ⟨cap, branch⟩ := h
+  rcases branch with ⟨space, i, lds, lastIndex, post, saved, read, reg⟩ |
+    ⟨full, i, lds, lastIndex, post, saved, read, reg⟩
+  · obtain ⟨⟨good, memory, pc, _, tick⟩, frame⟩ := post
+    apply next cap
+    refine ⟨good, tick, memory, by omega, ?_, read, reg, saved, ?_⟩
+    · simpa only [if_pos space] using pc
+    · simpa only [lastIndex] using frame
+  · obtain ⟨⟨good, memory, pc, _, tick⟩, frame⟩ := post
+    apply next cap
+    refine ⟨good, tick, memory, by omega, ?_, read, reg, saved, ?_⟩
+    · simpa only [if_neg (by omega : ¬ f.vars.length < cap)] using pc
+    · simpa only [lastIndex] using frame
+
+#print axioms EnvDefineMissCapResult.resolve
+
 /-- Turn the exhaustive scan miss into the exact append/grow cap branch.  The
 capacity word is the represented frame's (`FrameRepr`), its signedness comes
 from the owned values array inside the bounded arena
@@ -284,6 +328,7 @@ theorem envDefineMissCapDispatch
       (EnvDefineMissCapResult M exts outp saved gm env count pn sp f m0) := by
   intro c h
   obtain ⟨_hall, i, hiLen, x, hdone, hsaved, hscanFrame⟩ := h
+  have doneFacts := SegmentReturnFacts.of_conjunction hdone
   obtain ⟨b0, b1, b2, b3, hb0, hb1, hb2, hb3, hrec⟩ :=
     read32_bytes_ed m0 (env.toNat + 4) cap hcap'
   let bs := [b0, b1, b2, b3]
@@ -296,8 +341,8 @@ theorem envDefineMissCapDispatch
     simpa [bytesVal, bs] using sext_count_ed b0 b1 b2 b3 cap hcapSigned hrec
   have hmem : c.σ.mem = m0 := by
     simpa [EnvDefineScanLivePost, envDefineScanDoneSeg, evalBlocks,
-      SegEvalState.init, writeLog] using hdone.2.1
-  have hregs := hdone.2.2.2.1
+      SegEvalState.init, writeLog] using doneFacts.memory
+  have hregs := doneFacts.registers
   have reg (n : Nat) (w : BitVec 64)
       (hl : lookupG n (evalBlocks envDefineScanDoneSeg
         (SegEvalState.init (envDefineScanLiveL x (BitVec.ofNat 64 i)
@@ -367,8 +412,8 @@ theorem envDefineMissCapDispatch
         simp [envDefineCapL, guardB, hneBV, srcVal, lookupG, eraseG]
     have hpre : SegPre envDefineCapAppendSeg (envDefineCapL env count) [bs]
         0x80002b14#64 m0 c :=
-      ⟨hdone.1, hmem, hdone.2.2.1, hdone.1.minstret, hL,
-        (by show KeysOK [20, 19]; decide), hfacts, hdone.2.2.2.2⟩
+      ⟨doneFacts.good, hmem, doneFacts.programCounter, doneFacts.good.minstret, hL,
+        (by show KeysOK [20, 19]; decide), hfacts, doneFacts.tick⟩
     obtain ⟨c', hsteps, hpost, hframe'⟩ :=
       envDefineCapAppendRowFramed M exts outp gm (BitVec.ofNat 64 (i + 1))
         (pn + BitVec.ofNat 64 (8 * (i + 1))) sp env count [bs] m0 hAInvStable
@@ -420,8 +465,8 @@ theorem envDefineMissCapDispatch
         simp [envDefineCapL, guardB, heqBV, srcVal, lookupG, eraseG]
     have hpre : SegPre envDefineCapGrowSeg (envDefineCapL env count) [bs]
         0x80002b14#64 m0 c :=
-      ⟨hdone.1, hmem, hdone.2.2.1, hdone.1.minstret, hL,
-        (by show KeysOK [20, 19]; decide), hfacts, hdone.2.2.2.2⟩
+      ⟨doneFacts.good, hmem, doneFacts.programCounter, doneFacts.good.minstret, hL,
+        (by show KeysOK [20, 19]; decide), hfacts, doneFacts.tick⟩
     obtain ⟨c', hsteps, hpost, hframe'⟩ :=
       envDefineCapGrowRowFramed M exts outp gm (BitVec.ofNat 64 (i + 1))
         (pn + BitVec.ofNat 64 (8 * (i + 1))) sp env count [bs] m0 hAInvStable
@@ -463,6 +508,7 @@ theorem envDefineAppendEntry_of_cap
         EnvDefineSavedSpillFrame sp saved c) := by
   intro c ⟨hcap, hsaved⟩
   obtain ⟨hpost, hframe⟩ := hcap
+  have facts := SegmentReturnFacts.of_conjunction hpost
   have hsp : c.σ.regs.get? Register.x2 = some sp :=
     (hframe.abi Register.x2 (by decide)).trans hghostSp
   have hname : c.σ.regs.get? Register.x18 = some name :=
@@ -474,11 +520,11 @@ theorem envDefineAppendEntry_of_cap
     obtain ⟨spillLds, himage, _hvalues⟩ := hsaved
     exact ⟨spillLds, himage⟩
   refine ⟨c, Vsa.Machine.Steps.refl c, ?_⟩
-  exact ⟨⟨hpost.1, hloaded, (by rw [hpost.2.1]; exact hstrlen),
-    hpost.2.1, hpost.2.2.1, hname, hpost.1.minstret, hpost.2.2.2.2,
+  exact ⟨⟨facts.good, hloaded, (by rw [facts.memory]; exact hstrlen),
+    facts.memory, facts.programCounter, hname, facts.good.minstret, facts.tick,
     hregions, halign, hcstr,
     hsp, hframe.stack, hframe.gp, hframe.abi, hframe.ainv,
-    hpost.2.2.2.2, hspill⟩, hsaved⟩
+    facts.tick, hspill⟩, hsaved⟩
 
 #print axioms envDefineCapAppendRow
 #print axioms envDefineCapGrowRow

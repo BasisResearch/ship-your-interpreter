@@ -15,6 +15,7 @@ import Vsa.Sim.rows.EvalLeRowFootprint
 import Vsa.Sim.rows.EvalGtRowFootprint
 import Vsa.Sim.rows.EvalGeRowFootprint
 import Vsa.Sim.rows.EvalEqNeRowFootprint
+import Vsa.Sim.StrCmpCellClauses
 
 /-!
 # `IHClauseGenericSupply` — the row-contract premises of the generic steps (IH tower, Level 2)
@@ -41,6 +42,19 @@ the landed residual suppliers `ScaffoldRows.field_hI<Op>`
 (`IntegerCellSuppliers.lean`).  Eight are unconditional; `intCellF_div` takes the
 `INT64_MIN / -1` subcase as the named premise `DivOverflowCellF`, exactly as
 `eval_binary_row` takes `hDivOv : BinDivOverflowCell`.
+
+It also lands the PRODUCT clause `FootprintCov` (`EvalIHFP noArenaFoot` =
+footprint ∧ the returned value's payload covered outside the stack window,
+`Vsa/Sim/StrCmpCellClauses.lean`).  The four string-comparison cells need the
+LEFT child's payload coverage — `valueSurvives_of_covered` consumes exactly it —
+so they are stated at `BinStrCmpCellFP` (left child at the product clause) and
+supplied by `binStrCmpCellFP_cov`; `binStrCmpCellF_cov` lowers them to the plain
+`BinStrCmpCellF` through the CLOSED product clause `FootprintPayloadClause`.
+`binaryFootprintCells_of` therefore no longer takes the four cells, and neither
+does `footprint{,NA}.hBinary_of_base`.  The ten closed steps of the product
+clause itself are `IHClauseGeneric.footprintCov.<case>`: the four leaves and the
+six one-child arms, whose results are payload-free (`.int`/`.bool`/`.null`)
+except the string literal, whose coverage is `evalStrPayloadIHF`.
 
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
 -/
@@ -152,24 +166,79 @@ theorem intCellF_ge : IntCellF .ge (fun a b => .bool (a ≥ b)) (fun _ _ => True
     ScaffoldRows.field_hIGe st d env el er st' st'' a b hEl hEr ihL ihR
     (EvalE.binary st d env .ge el er st' st'' (.int a) (.int b) _ hEl hEr (by simp [binOpSem]))
 
+/-! ## 2b. The product clause `EvalIHFP` and the four string-comparison cells
+
+`valueSurvives_of_covered` (`StrCmpCellClauses.lean`) transports the left string
+operand across the right child from the left child's PAYLOAD COVERAGE, which the
+plain footprint contract does not carry.  So a string-comparison cell is stated
+with its LEFT child at the product clause (`BinStrCmpCellFP`), where it is closed
+but for the shared operand residual; the plain `BinStrCmpCellF` follows from the
+CLOSED product clause at the left child's own derivation. -/
+
+/-- Lift a footprint child contract to the product clause when the returned value
+has no indirect payload (`ValuePayloadCovered` is `True` off `.str`/`.native`). -/
+theorem EvalIHFP.of_footprint_payloadFree {F : FootFam} {st st' : SpecSt} {d env : Nat}
+    {e : Expr} {v : Value}
+    (hv : ∀ (P : Nat → Prop) m a, ValuePayloadCovered P m a v)
+    (h : EvalIHF F st d env e st' v) : EvalIHFP F st d env e st' v :=
+  EvalIHWithM.mono (fun _ _ _ _ _ _ _ _ _ hf => ⟨hf, hv _ _ _⟩) h
+
+/-- **The string-comparison cell at the product clause.**  The left child carries
+its payload coverage, the right child only its footprint, and the node's result
+is a `Bool`, so the parent stays at the plain footprint contract. -/
+def BinStrCmpCellFP (op : BinOp) (bres : String → String → Bool) : Prop :=
+  ∀ (st : SpecSt) (d : Nat) (env : Addr) (el er : Expr)
+    (st' st'' : SpecSt) (sl sr : String),
+    EvalE st d env el st' (.str sl) →
+    EvalE st' d env er st'' (.str sr) →
+    EvalIHFP noArenaFoot st d env el st' (.str sl) →
+    EvalIHF noArenaFoot st' d env er st'' (.str sr) →
+    EvalIHF noArenaFoot st d env (.binary op el er) st'' (.bool (bres sl sr))
+
+/-- **The product-clause cell supplier, CLOSED but for the operand residual.**
+`binRow_strcmpF_cov` over the survival-free head `binaryHeadFootprintSupplyCov`:
+the left temporary's survival across the right child is derived at the actual
+memories from the left child's coverage, so `StrLeftSurvivesSupply` is gone.
+`hOps` is the shared operand residual of `StrCmpCell.lean`
+(`strCmpOperandsSupply_of_owned` derives it from `StrCmpOwnedOperands`). -/
+theorem binStrCmpCellFP_cov (D : StrCmpOp) (C : D.Cert) (hOps : StrCmpOperandsSupply) :
+    BinStrCmpCellFP D.op D.bres := by
+  intro st d env el er st' st'' sl sr hEl hEr ihL ihR
+  refine EvalIHF.of_exitF (fun g N A SL φf φc sp r sret aEnv aExpr m0 => ?_)
+  exact binRow_strcmpF_cov D C (binaryHeadFootprintSupplyCov noArenaFoot)
+    g N A SL φf φc st st' st'' d env el er sl sr sp r sret aEnv aExpr m0 hEl ihL ihR
+    (EvalE.binary st d env D.op el er st' st'' (.str sl) (.str sr) _ hEl hEr (C.sem _ _ _))
+    (fun c hc gpre v8 v9 v18 v19 hf c2 hTS =>
+      strCmpResid_of_entry D C hc hf hTS
+        (hOps g gpre N A SL φf φc st st' st'' d env D.op el er sl sr
+          sp r sret aEnv aExpr v8 v9 v18 v19 m0 c c2 hc hf hTS))
+
+/-- **The plain footprint cell from the closed product clause.**  The left child's
+coverage is taken at its OWN derivation, so the cell's own `EvalIHF` left
+hypothesis is discarded and the landed `BinStrCmpCellF` shape is produced. -/
+theorem binStrCmpCellF_cov (D : StrCmpOp) (C : D.Cert) (hOps : StrCmpOperandsSupply)
+    (hCL : FootprintPayloadClause) : BinStrCmpCellF D.op D.bres :=
+  fun st d env el er st' st'' sl sr hEl hEr _ihL ihR =>
+    binStrCmpCellFP_cov D C hOps st d env el er st' st'' sl sr hEl hEr
+      (hCL st d env el st' (.str sl) hEl) ihR
+
 /-! ## 3. The binary dispatcher's cell record
 
 `hBinary` is the dispatcher over `BinaryFootprintCells`.  Nine fields are the
 integer cells above; the remaining six are exactly the cells `eval_binary_row`
 itself takes as residuals: the equality pair at the LANDED `BinEqCell` suppliers
-(through `eqCellF_of`/`neCellF_of`, `rows/EvalEqNeRowFootprint.lean`), the four
-string comparisons (`BinStrCmpCellF`, `binStrCmpCellF_of`), and the division
-overflow (`DivOverflowCellF`, the footprint twin of `eval_binary_row`'s `hDivOv`). -/
+(through `eqCellF_of`/`neCellF_of`, `rows/EvalEqNeRowFootprint.lean`), the division
+overflow (`DivOverflowCellF`, the footprint twin of `eval_binary_row`'s `hDivOv`).
+The four string comparisons are supplied here (`binStrCmpCellF_cov`) from the
+shared operand residual and the closed product clause. -/
 
-/-- The non-allocating binary cells, with the nine integer cells discharged. -/
+/-- The non-allocating binary cells, with the nine integer cells and the four
+string comparisons discharged. -/
 theorem binaryFootprintCells_of
     (hDivOv : DivOverflowCellF)
     (hEq : BinEqCell .eq .eq (0x80003720#64) (0x8000371c#64) (0x1ff140#21))
     (hNe : BinEqCell .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21))
-    (hStrLt : BinStrCmpCellF .lt (fun sl sr => sl < sr))
-    (hStrLe : BinStrCmpCellF .le (fun sl sr => sl < sr || sl == sr))
-    (hStrGt : BinStrCmpCellF .gt (fun sl sr => sr < sl))
-    (hStrGe : BinStrCmpCellF .ge (fun sl sr => sr < sl || sl == sr)) :
+    (hOps : StrCmpOperandsSupply) (hCL : FootprintPayloadClause) :
     BinaryFootprintCells where
   add := intCellF_add
   sub := intCellF_sub
@@ -182,10 +251,10 @@ theorem binaryFootprintCells_of
   ge := intCellF_ge
   eq := eqCellF_of hEq
   ne := neCellF_of hNe
-  strLt := hStrLt
-  strLe := hStrLe
-  strGt := hStrGt
-  strGe := hStrGe
+  strLt := binStrCmpCellF_cov strCmpLt strCmpLt_cert hOps hCL
+  strLe := binStrCmpCellF_cov strCmpLe strCmpLe_cert hOps hCL
+  strGt := binStrCmpCellF_cov strCmpGt strCmpGt_cert hOps hCL
+  strGe := binStrCmpCellF_cov strCmpGe strCmpGe_cert hOps hCL
 
 /-! ## 3. The generic steps at the generator's field types, CLOSED -/
 
@@ -264,7 +333,8 @@ theorem hAndTrue :
 
 /-- **`hBinary` from the base row's own cells.**  Exactly `eval_binary_row`'s
 hypotheses at the footprint contract: the nine integer cells are discharged
-(section 2), the equality pair, the four string comparisons, the division
+(section 2) and so are the four string comparisons (section 2b, from the shared
+operand residual and the closed product clause); the equality pair, the division
 overflow and — only for `op = .add` — the two string-concatenation cells remain,
 as they do in the base row.  The concatenation cells ALLOCATE, so at
 `noArenaFoot` they are unsatisfiable; the guarded step below excludes them. -/
@@ -272,10 +342,7 @@ theorem hBinary_of_base
     (hDivOv : DivOverflowCellF)
     (hEq : BinEqCell .eq .eq (0x80003720#64) (0x8000371c#64) (0x1ff140#21))
     (hNe : BinEqCell .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21))
-    (hStrLt : BinStrCmpCellF .lt (fun sl sr => sl < sr))
-    (hStrLe : BinStrCmpCellF .le (fun sl sr => sl < sr || sl == sr))
-    (hStrGt : BinStrCmpCellF .gt (fun sl sr => sr < sl))
-    (hStrGe : BinStrCmpCellF .ge (fun sl sr => sr < sl || sl == sr))
+    (hOps : StrCmpOperandsSupply) (hCL : FootprintPayloadClause)
     (hStrAddL : StrAddLCellF) (hStrAddR : StrAddRCellF) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (op : BinOp) (l r : Expr) (st' st'' : SpecSt)
       (lv rv v : Value) (a : EvalE st d env l st' lv) (a_1 : EvalE st' d env r st'' rv)
@@ -289,7 +356,7 @@ theorem hBinary_of_base
       EvalIHF noArenaFoot st d env (Expr.binary op l r) st'' v :=
   fun st d env op l r st' st'' lv rv v a a_1 a_2 o1 o2 o3 ihL ihR =>
     hBinary_of_cells
-      (binaryFootprintCells_of hDivOv hEq hNe hStrLt hStrLe hStrGt hStrGe)
+      (binaryFootprintCells_of hDivOv hEq hNe hOps hCL)
       st d env op l r st' st'' lv rv v a a_1 a_2 (fun _ => ⟨hStrAddL, hStrAddR⟩)
       o1 o2 o3 ihL ihR
 
@@ -300,16 +367,13 @@ namespace IHClauseGeneric.footprintNA
 
 /-- **`hBinary` of the guarded clause from the base row's own cells.**  The guard
 excludes `op = .add`, so the two allocating concatenation cells are gone; what
-remains is exactly the residual set `eval_binary_row` itself carries beyond the
-nine integer cells. -/
+remains beyond the nine integer cells and the four string comparisons is the
+equality pair and the division overflow. -/
 theorem hBinary_of_base
     (hDivOv : DivOverflowCellF)
     (hEq : BinEqCell .eq .eq (0x80003720#64) (0x8000371c#64) (0x1ff140#21))
     (hNe : BinEqCell .ne .ne (0x80003770#64) (0x8000376c#64) (0x1ff0f0#21))
-    (hStrLt : BinStrCmpCellF .lt (fun sl sr => sl < sr))
-    (hStrLe : BinStrCmpCellF .le (fun sl sr => sl < sr || sl == sr))
-    (hStrGt : BinStrCmpCellF .gt (fun sl sr => sr < sl))
-    (hStrGe : BinStrCmpCellF .ge (fun sl sr => sr < sl || sl == sr)) :
+    (hOps : StrCmpOperandsSupply) (hCL : FootprintPayloadClause) :
     ∀ (st : SpecSt) (d : Nat) (env : Addr) (op : BinOp) (l r : Expr) (st' st'' : SpecSt)
       (lv rv v : Value) (a : EvalE st d env l st' lv) (a_1 : EvalE st' d env r st'' rv)
       (a_2 : binOpSem st''.store op lv rv = some v),
@@ -321,9 +385,141 @@ theorem hBinary_of_base
       (IHClauseGeneric.noAllocExpr r = true → EvalIHF noArenaFoot st' d env r st'' rv) →
       (IHClauseGeneric.noAllocExpr (Expr.binary op l r) = true →
         EvalIHF noArenaFoot st d env (Expr.binary op l r) st'' v) :=
-  hBinary (binaryFootprintCells_of hDivOv hEq hNe hStrLt hStrLe hStrGt hStrGe)
+  hBinary (binaryFootprintCells_of hDivOv hEq hNe hOps hCL)
 
 end IHClauseGeneric.footprintNA
+
+namespace IHClauseGeneric.footprintCov
+
+/-! ## 4. The product clause `FootprintCov` — the ten closed steps
+
+The clause is `EvalIHFP noArenaFoot` (`Vsa/Sim/StrCmpCellClauses.lean`): the
+`Footprint` fact AND the returned value's payload covered outside the stack
+window.  Off `.str`/`.native` the coverage half is `True`
+(`ValuePayloadCovered`), so every step whose node returns an `.int`, a `.bool`
+or `.null` is its `Footprint` step plus `EvalIHFP.of_footprint_payloadFree`; the
+string literal's coverage is `evalStrPayloadIHF`.  Field types are those of
+`Vsa/Sim/rows/IHClause_FootprintCov.lean`. -/
+
+/-- `hInt`: CLOSED (payload-free result). -/
+theorem hInt :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (n : Int),
+      Vsa.Sim.TermSimAssembly.mEvalE st d env (Expr.int n) st (Value.int n) (EvalE.int st d env n) →
+      EvalIHFP noArenaFoot st d env (Expr.int n) st (Value.int n) :=
+  fun st d env n hOld =>
+    EvalIHFP.of_footprint_payloadFree (fun _ _ _ => trivial) (footprint.hInt st d env n hOld)
+
+/-- `hStr`: CLOSED — the coverage half is the string leaf's own payload pin. -/
+theorem hStr :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (s : String),
+      Vsa.Sim.TermSimAssembly.mEvalE st d env (Expr.str s) st (Value.str s) (EvalE.str st d env s) →
+      EvalIHFP noArenaFoot st d env (Expr.str s) st (Value.str s) :=
+  fun st d env s _ => evalStrPayloadIHF st d env s
+
+/-- `hBool`: CLOSED (payload-free result). -/
+theorem hBool :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (b : Bool),
+      Vsa.Sim.TermSimAssembly.mEvalE st d env (Expr.bool b) st (Value.bool b)
+        (EvalE.bool st d env b) →
+      EvalIHFP noArenaFoot st d env (Expr.bool b) st (Value.bool b) :=
+  fun st d env b hOld =>
+    EvalIHFP.of_footprint_payloadFree (fun _ _ _ => trivial) (footprint.hBool st d env b hOld)
+
+/-- `hNull`: CLOSED (payload-free result). -/
+theorem hNull :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr),
+      Vsa.Sim.TermSimAssembly.mEvalE st d env Expr.null st Value.null (EvalE.null st d env) →
+      EvalIHFP noArenaFoot st d env Expr.null st Value.null :=
+  fun st d env hOld =>
+    EvalIHFP.of_footprint_payloadFree (fun _ _ _ => trivial) (footprint.hNull st d env hOld)
+
+/-- `hNeg`: CLOSED (payload-free result; the child's coverage is dropped). -/
+theorem hNeg :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt) (n : Int)
+      (a : EvalE st d env e st' (Value.int n)),
+      Vsa.Sim.TermSimAssembly.mEvalE st d env e st' (Value.int n) a →
+      Vsa.Sim.TermSimAssembly.mEvalE st d env (Expr.unary UnOp.neg e) st'
+        (Value.int (wrap64 (-n))) (EvalE.neg st d env e st' n a) →
+      EvalIHFP noArenaFoot st d env e st' (Value.int n) →
+      EvalIHFP noArenaFoot st d env (Expr.unary UnOp.neg e) st' (Value.int (wrap64 (-n))) :=
+  fun st d env e st' n a o1 hOld ih =>
+    EvalIHFP.of_footprint_payloadFree (fun _ _ _ => trivial)
+      (footprint.hNeg st d env e st' n a o1 hOld (EvalIHFP.footprint (F := noArenaFoot) ih))
+
+/-- `hNot`: CLOSED (payload-free result). -/
+theorem hNot :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (e : Expr) (st' : SpecSt) (v : Value)
+      (a : EvalE st d env e st' v),
+      Vsa.Sim.TermSimAssembly.mEvalE st d env e st' v a →
+      Vsa.Sim.TermSimAssembly.mEvalE st d env (Expr.unary UnOp.not e) st'
+        (Value.bool !v.truthy) (EvalE.not st d env e st' v a) →
+      EvalIHFP noArenaFoot st d env e st' v →
+      EvalIHFP noArenaFoot st d env (Expr.unary UnOp.not e) st' (Value.bool !v.truthy) :=
+  fun st d env e st' v a o1 hOld ih =>
+    EvalIHFP.of_footprint_payloadFree (fun _ _ _ => trivial)
+      (footprint.hNot st d env e st' v a o1 hOld (EvalIHFP.footprint (F := noArenaFoot) ih))
+
+/-- `hOrTrue`: CLOSED (payload-free result). -/
+theorem hOrTrue :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr) (st' : SpecSt) (lv : Value)
+      (a : EvalE st d env l st' lv) (a_1 : lv.truthy = true),
+      Vsa.Sim.TermSimAssembly.mEvalE st d env l st' lv a →
+      Vsa.Sim.TermSimAssembly.mEvalE st d env (Expr.logical LogOp.or l r) st'
+        (Value.bool true) (EvalE.orTrue st d env l r st' lv a a_1) →
+      EvalIHFP noArenaFoot st d env l st' lv →
+      EvalIHFP noArenaFoot st d env (Expr.logical LogOp.or l r) st' (Value.bool true) :=
+  fun st d env l r st' lv a a_1 o1 hOld ih =>
+    EvalIHFP.of_footprint_payloadFree (fun _ _ _ => trivial)
+      (footprint.hOrTrue st d env l r st' lv a a_1 o1 hOld
+        (EvalIHFP.footprint (F := noArenaFoot) ih))
+
+/-- `hAndFalse`: CLOSED (payload-free result). -/
+theorem hAndFalse :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr) (st' : SpecSt) (lv : Value)
+      (a : EvalE st d env l st' lv) (a_1 : lv.truthy = false),
+      Vsa.Sim.TermSimAssembly.mEvalE st d env l st' lv a →
+      Vsa.Sim.TermSimAssembly.mEvalE st d env (Expr.logical LogOp.and l r) st'
+        (Value.bool false) (EvalE.andFalse st d env l r st' lv a a_1) →
+      EvalIHFP noArenaFoot st d env l st' lv →
+      EvalIHFP noArenaFoot st d env (Expr.logical LogOp.and l r) st' (Value.bool false) :=
+  fun st d env l r st' lv a a_1 o1 hOld ih =>
+    EvalIHFP.of_footprint_payloadFree (fun _ _ _ => trivial)
+      (footprint.hAndFalse st d env l r st' lv a a_1 o1 hOld
+        (EvalIHFP.footprint (F := noArenaFoot) ih))
+
+/-- `hOrFalse`: CLOSED (payload-free result). -/
+theorem hOrFalse :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr) (st' st'' : SpecSt) (lv rv : Value)
+      (a : EvalE st d env l st' lv) (a_1 : lv.truthy = false) (a_2 : EvalE st' d env r st'' rv),
+      Vsa.Sim.TermSimAssembly.mEvalE st d env l st' lv a →
+      Vsa.Sim.TermSimAssembly.mEvalE st' d env r st'' rv a_2 →
+      Vsa.Sim.TermSimAssembly.mEvalE st d env (Expr.logical LogOp.or l r) st''
+        (Value.bool rv.truthy) (EvalE.orFalse st d env l r st' st'' lv rv a a_1 a_2) →
+      EvalIHFP noArenaFoot st d env l st' lv →
+      EvalIHFP noArenaFoot st' d env r st'' rv →
+      EvalIHFP noArenaFoot st d env (Expr.logical LogOp.or l r) st'' (Value.bool rv.truthy) :=
+  fun st d env l r st' st'' lv rv a a_1 a_2 o1 o2 hOld ihL ihR =>
+    EvalIHFP.of_footprint_payloadFree (fun _ _ _ => trivial)
+      (footprint.hOrFalse st d env l r st' st'' lv rv a a_1 a_2 o1 o2 hOld
+        (EvalIHFP.footprint (F := noArenaFoot) ihL) (EvalIHFP.footprint (F := noArenaFoot) ihR))
+
+/-- `hAndTrue`: CLOSED (payload-free result). -/
+theorem hAndTrue :
+    ∀ (st : SpecSt) (d : Nat) (env : Addr) (l r : Expr) (st' st'' : SpecSt) (lv rv : Value)
+      (a : EvalE st d env l st' lv) (a_1 : lv.truthy = true) (a_2 : EvalE st' d env r st'' rv),
+      Vsa.Sim.TermSimAssembly.mEvalE st d env l st' lv a →
+      Vsa.Sim.TermSimAssembly.mEvalE st' d env r st'' rv a_2 →
+      Vsa.Sim.TermSimAssembly.mEvalE st d env (Expr.logical LogOp.and l r) st''
+        (Value.bool rv.truthy) (EvalE.andTrue st d env l r st' st'' lv rv a a_1 a_2) →
+      EvalIHFP noArenaFoot st d env l st' lv →
+      EvalIHFP noArenaFoot st' d env r st'' rv →
+      EvalIHFP noArenaFoot st d env (Expr.logical LogOp.and l r) st'' (Value.bool rv.truthy) :=
+  fun st d env l r st' st'' lv rv a a_1 a_2 o1 o2 hOld ihL ihR =>
+    EvalIHFP.of_footprint_payloadFree (fun _ _ _ => trivial)
+      (footprint.hAndTrue st d env l r st' st'' lv rv a a_1 a_2 o1 o2 hOld
+        (EvalIHFP.footprint (F := noArenaFoot) ihL) (EvalIHFP.footprint (F := noArenaFoot) ihR))
+
+end IHClauseGeneric.footprintCov
 
 #print axioms negRowF_closed
 #print axioms notRowF_closed
@@ -349,5 +545,17 @@ end IHClauseGeneric.footprintNA
 #print axioms binaryFootprintCells_of
 #print axioms IHClauseGeneric.footprint.hBinary_of_base
 #print axioms IHClauseGeneric.footprintNA.hBinary_of_base
+#print axioms binStrCmpCellFP_cov
+#print axioms binStrCmpCellF_cov
+#print axioms IHClauseGeneric.footprintCov.hInt
+#print axioms IHClauseGeneric.footprintCov.hStr
+#print axioms IHClauseGeneric.footprintCov.hBool
+#print axioms IHClauseGeneric.footprintCov.hNull
+#print axioms IHClauseGeneric.footprintCov.hNeg
+#print axioms IHClauseGeneric.footprintCov.hNot
+#print axioms IHClauseGeneric.footprintCov.hOrTrue
+#print axioms IHClauseGeneric.footprintCov.hAndFalse
+#print axioms IHClauseGeneric.footprintCov.hOrFalse
+#print axioms IHClauseGeneric.footprintCov.hAndTrue
 
 end Vsa.Sim

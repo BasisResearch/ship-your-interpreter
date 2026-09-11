@@ -1,4 +1,5 @@
 import Vsa.Sim.ReallocSpec
+import Vsa.Sim.AllocSuccess
 import Vsa.Sim.StrlenSpec
 import Vsa.Sim.MemcpySpecFramedWord
 import Vsa.Sim.Code.FixedImage_Strlen
@@ -123,6 +124,16 @@ inductive ReallocInstance (A : Arena) (SL : StackLayout) (gpv : BitVec 64)
     (headroom maxReq : Nat) (AInv : MState → List Extent → Prop)
     (privFoot : Nat → Prop) : Prop where
   | intro (ops : ReallocOps A SL gpv headroom maxReq AInv privFoot) (run : ReallocRun ops)
+      (success : ReallocSuccessRun A SL gpv headroom maxReq AInv privFoot)
+
+/-- The run-global instance supplies successful execution under actual entry resources. -/
+theorem ReallocInstance.success
+    {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
+    {AInv : MState → List Extent → Prop} {privFoot : Nat → Prop}
+    (h : ReallocInstance A SL gpv headroom maxReq AInv privFoot) :
+    ReallocSuccessRun A SL gpv headroom maxReq AInv privFoot := by
+  obtain ⟨ops, run, success⟩ := h
+  exact success
 
 /-- `strlen_spec_framed` with the console output retained (its post keeps the
 memory, so presence is immediate).  Supplier: `strlen_spec_framed` plus the
@@ -215,6 +226,8 @@ structure AllocLedger (A : Arena) (SL : StackLayout) (gpv : BitVec 64)
     (headroom maxReq : Nat) (M : MallocContract A SL gpv headroom maxReq) : Prop where
   /-- `MallocContract.spec` with silence and presence (`MallocRun`). -/
   malloc : MallocRun M
+  /-- Successful malloc execution under actual entry credit and placement. -/
+  mallocSuccess : MallocSuccessRun A SL gpv headroom maxReq M.AInv M.privFoot
   /-- `MallocContract.freeSpec` with silence and presence (`FreeRun`). -/
   free : FreeRun M
   /-- A `realloc` operation instance over the same allocator state and private
@@ -233,6 +246,10 @@ structure AllocLedger (A : Arena) (SL : StackLayout) (gpv : BitVec 64)
   -- discipline: allow(R14-alloc-ledger-field) the canonical run-global home
   arena_htif : tohostAddr + 16 ≤ A.lo
   arena_hi : A.hi ≤ 0x100000000
+  /-- The top-pointer global lies below live heap storage (linker layout). -/
+  arena_globals : 0x8001ad28 ≤ A.lo
+  /-- The top-pointer global is outside the C stack region (linker layout). -/
+  globals_stack : 0x8001ad28 ≤ SL.lo ∨ SL.hi ≤ 0x8001ad20
   /-- The arena and the stack region are disjoint (linker script, M6). -/
   arena_stack : A.hi ≤ SL.lo ∨ SL.hi ≤ A.lo
   /-- The allocator invariant reads only `gp` and the allocator-private bytes

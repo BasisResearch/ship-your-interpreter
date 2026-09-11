@@ -650,13 +650,56 @@ def CallEntryI
     -- The call boundary is after CRT/newlib initialization.
     ConsoleStream c.σ.mem
 
+/-- The existing call-entry facts, named at the same configuration and maps. -/
+structure CallEntryFacts
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : SpecSt) (d : Nat) (fv : Value) (vs : List Value)
+    (dLeft aLeft : Nat) (sp sret : BitVec 64) (m0 : Mem) (c : Config) : Prop where
+  seg : SegEntry g N A SL φf φc st d dLeft aLeft callDispatchPC m0 c
+  span : CallSpanGround g m0
+  store : CallStoreGround N A SL φf φc st c.σ.mem
+  allocator : CallAllocatorGround A SL φf φc st sp vs c
+  nativeContracts : CallNativeContracts SL
+  stack : StackOK SL sp 4096
+  abi : CallAbiGround g SL sp sret c.σ.mem
+  depth : CallDepthGround d c
+  stackPointer : c.σ.regs.get? Register.x2 = some sp
+  resultPointer : c.σ.regs.get? Register.x9 = some sret
+  count : c.σ.regs.get? Register.x15 = some (BitVec.ofNat 64 vs.length)
+  callee : ValueRepr c.σ.mem N φc (sp.toNat + 96) fv
+  calleeBytes : ValueBytes c.σ.mem (sp.toNat + 96)
+  args : ArgVecRepr c.σ.mem N φc (sp.toNat + 240) vs
+  argsBytes : ArgVecBytes c.σ.mem (sp.toNat + 240) vs
+  storeBounded : StoreClosuresBounded st.store
+  valueBounded : ValueClosuresBounded st.store.closures.size fv
+  valuesBounded : ValuesClosuresBounded st.store.closures.size vs
+  console : ConsoleStream c.σ.mem
+
+/-- Destructure the landed call-entry conjunction once. -/
+theorem CallEntryI.facts
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : SpecSt} {d : Nat} {fv : Value} {vs : List Value}
+    {dLeft aLeft : Nat} {sp sret : BitVec 64} {m0 : Mem} {c : Config}
+    (h : CallEntryI g N A SL φf φc st d fv vs dLeft aLeft sp sret m0 c) :
+    CallEntryFacts g N A SL φf φc st d fv vs dLeft aLeft sp sret m0 c := by
+  obtain ⟨seg, span, store, allocator, nativeContracts, stack, abi, depth,
+    stackPointer, resultPointer, count, callee, calleeBytes, args, argsBytes,
+    storeBounded, valueBounded, valuesBounded, console⟩ := h
+  exact ⟨seg, span, store, allocator, nativeContracts, stack, abi, depth,
+    stackPointer, resultPointer, count, callee, calleeBytes, args, argsBytes,
+    storeBounded, valueBounded, valuesBounded, console⟩
+
+#print axioms CallEntryI.facts
+
 theorem CallEntryI.storeBounded
     {g : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
     {st : SpecSt} {d : Nat} {fv : Value} {vs : List Value}
     {dLeft aLeft : Nat} {sp sret : BitVec 64} {m0 : Mem} {c : Config}
     (h : CallEntryI g N A SL φf φc st d fv vs dLeft aLeft sp sret m0 c) :
-    StoreClosuresBounded st.store := h.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1
+    StoreClosuresBounded st.store := h.facts.storeBounded
 
 theorem CallEntryI.valueBounded
     {g : (R : Register) → Option (RegisterType R)}
@@ -665,7 +708,7 @@ theorem CallEntryI.valueBounded
     {dLeft aLeft : Nat} {sp sret : BitVec 64} {m0 : Mem} {c : Config}
     (h : CallEntryI g N A SL φf φc st d fv vs dLeft aLeft sp sret m0 c) :
     ValueClosuresBounded st.store.closures.size fv :=
-  h.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1
+  h.facts.valueBounded
 
 theorem CallEntryI.valuesBounded
     {g : (R : Register) → Option (RegisterType R)}
@@ -674,7 +717,7 @@ theorem CallEntryI.valuesBounded
     {dLeft aLeft : Nat} {sp sret : BitVec 64} {m0 : Mem} {c : Config}
     (h : CallEntryI g N A SL φf φc st d fv vs dLeft aLeft sp sret m0 c) :
     ValuesClosuresBounded st.store.closures.size vs :=
-  h.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1
+  h.facts.valuesBounded
 
 theorem CallEntryI.console
     {g : (R : Register) → Option (RegisterType R)}
@@ -683,7 +726,7 @@ theorem CallEntryI.console
     {dLeft aLeft : Nat} {sp sret : BitVec 64} {m0 : Mem} {c : Config}
     (h : CallEntryI g N A SL φf φc st d fv vs dLeft aLeft sp sret m0 c) :
     ConsoleStream c.σ.mem :=
-  h.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2
+  h.facts.console
 
 theorem CallEntryI.spanGround
     {g : (R : Register) → Option (RegisterType R)}
@@ -691,7 +734,7 @@ theorem CallEntryI.spanGround
     {st : SpecSt} {d : Nat} {fv : Value} {vs : List Value}
     {dLeft aLeft : Nat} {sp sret : BitVec 64} {m0 : Mem} {c : Config}
     (h : CallEntryI g N A SL φf φc st d fv vs dLeft aLeft sp sret m0 c) :
-    CallSpanGround g m0 := h.2.1
+    CallSpanGround g m0 := h.facts.span
 
 theorem CallEntryI.entryImage
     {g : (R : Register) → Option (RegisterType R)}
@@ -715,7 +758,7 @@ theorem CallEntryI.allocator
     {st : SpecSt} {d : Nat} {fv : Value} {vs : List Value}
     {dLeft aLeft : Nat} {sp sret : BitVec 64} {m0 : Mem} {c : Config}
     (h : CallEntryI g N A SL φf φc st d fv vs dLeft aLeft sp sret m0 c) :
-    CallAllocatorGround A SL φf φc st sp vs c := h.2.2.2.1
+    CallAllocatorGround A SL φf φc st sp vs c := h.facts.allocator
 
 theorem CallEntryI.storeHeapOwned
     {g : (R : Register) → Option (RegisterType R)}
@@ -744,7 +787,7 @@ theorem CallEntryI.ioContracts
     {st : SpecSt} {d : Nat} {fv : Value} {vs : List Value}
     {dLeft aLeft : Nat} {sp sret : BitVec 64} {m0 : Mem} {c : Config}
     (h : CallEntryI g N A SL φf φc st d fv vs dLeft aLeft sp sret m0 c) :
-    CallNativeContracts SL := h.2.2.2.2.1
+    CallNativeContracts SL := h.facts.nativeContracts
 
 /-- Concrete call result at the pre-epilogue join. -/
 def CallExitI

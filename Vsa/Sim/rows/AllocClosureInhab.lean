@@ -15,7 +15,7 @@ This file assembles that inhabitant from the machine pieces:
 
 ```
 li a0,16 ; sd a3,0(sp) ; jal malloc          -- fnArmMallocCallBridge (0x800033c4)
-ld a3,0(sp) ; beqz a0,OOM                      -- reload a3; OOM prune (nonNull_of_bounded)
+ld a3,0(sp) ; beqz a0,OOM                      -- reload a3; OOM branch excluded by successful return
 li a5,4 ; sd s0,0(a0) ; sd a3,8(a0)            -- fnArmClosureBuildSeg (0x800033d8)
         ; sd a0,8(s1) ; sw a5,0(s1)
 ```
@@ -59,7 +59,7 @@ namespace Vsa.Sim
 
 The state after `malloc(16)` returned the fresh block `p` in `a0`, `a3` was reloaded
 off the spill slot (`ld a3,0(sp)`), and the `beqz a0` OOM guard fell through (the
-no-OOM edge, `MallocContract.nonNull_of_bounded`).  The closure-build seg
+nonzero pointer from a successful return).  The closure-build seg
 `fnArmClosureBuildSeg` reads exactly `x10=a0=p`, `x8=s0=aExpr`, `x13=a3=φf env`,
 `x9=s1=sret` (its pin list `fnArmClosureBuildL p aExpr (φf env) sret`), so those four
 register images are pinned here.  The malloc-result geometry (`p≠0`, `p%8=0`,

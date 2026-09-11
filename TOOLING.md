@@ -7,24 +7,32 @@ status, remaining obligations, and validation requirements.
 ## Build and tests
 
 ```sh
+# Source-only gate. This does not require or validate compiled objects.
+scripts/check_all.sh --static-only
+python3 -B -m unittest scripts.tests.test_check_all
+
+# Compiled checks.
 python3 -B scripts/build_private.py \
   --output-root /private/tmp/vsa-full-build.sQd0gM \
   --include-executable --resume
 python3 -B -m unittest discover -s scripts/tests
-python3 -B scripts/gen_m4_term_row.py --check
-python3 -B scripts/gen_term_case_bundle.py --check
-python3 -B scripts/gen_ih_clause.py --check
-python3 -B scripts/gen_footprint_row.py --check
+VSA_PRIVATE_BUILD=/private/tmp/vsa-full-build.sQd0gM scripts/check_all.sh --skip-build
 git diff --check
 ```
+
+`check_all.sh --static-only` runs generator drift, discipline, the informational
+IH summary, and forbidden-token checks. Its success message explicitly excludes
+compiled checks. The full gate requires `VSA_PRIVATE_BUILD`; `--skip-build`
+still checks compiled-object freshness, boundary validation, and theorem axioms.
 
 Reuse the private cache and its manifest. On a new checkout, create an external
 directory with `mktemp -d` and retain it. The driver compiles current sources
 serially, including modules outside `Vsa.lean` and `VsaRun.lean`.
 Dependencies must already be built. `--list` inspects the import order.
 
-`check_all.sh` contains generator, discipline, forbidden-token, and axiom
-checks. Follow the plan's gate procedure with current private objects.
+`check_all.sh` runs generator, discipline, and forbidden-token checks before
+requesting the backend or starting compiled checks. Follow the plan's gate
+procedure with current private objects.
 `check_discipline.py` checks `discipline_rules.tsv`; its outstanding
 findings are recorded in the plan.
 
@@ -49,12 +57,22 @@ existing theorem or generated segment with the required shape.
 | Layout, image and transport facts | `gen_layout.py`, `gen_image_pins.py`, `gen_transport.py` |
 | Decode imports | `gen_decode_index.py` |
 | Assembly record | `experiments/gen_assembly_skeleton.py` |
+| Owned source recursion | `python3 -B -m scripts.gen_allocator_cases` |
 | Code pins and environment sites | `experiments/gen_code_lemmas.py`, `experiments/gen_envget_sites.py` |
 
 Script paths are under `scripts/` unless shown otherwise. Use `--help`
 and the generator's source for its schema. Preserve TSV, TOML, JSON and
 template inputs for retained generators. Complete draft proof obligations
 before adding generated modules to `Vsa/`.
+
+`python3 -B -m scripts.gen_allocator_cases` reuses the constructor parser
+from `gen_ih_clause.py` to generate owned source recursion. `AllocatorCases`
+supplies the five leaves, expression statements, both equality branches,
+block statements, and all sequence constructors. `mExecSeq` retains owned
+returns for each physical copy. `seqConsNormal` and `seqConsAbrupt` select the checked
+supplier for that copy; `Residuals` has 40 fields. `AuxMotives` carries six
+auxiliary relation contracts. All nine source relations have an induction
+entry point. Run the generator with `--check` to detect drift.
 
 `genseg.py` and `gen_sites.py` accept `--default-limits` to omit elaboration
 limit overrides. The initial null-call proofs use that mode:
@@ -68,6 +86,15 @@ python3 -B scripts/gen_sites.py scripts/initial_null_sites.tsv \
 python3 -B scripts/gen_sites.py scripts/initial_exec_sites.tsv \
   --code-loaded Vsa.Sim.Code.Interp_runLoaded --suffix _initialExec \
   --default-limits -o Vsa/Sim/InitialExecSites.lean
+python3 -B scripts/gen_sites.py scripts/sequence_dispatch_sites.tsv \
+  --code-loaded Vsa.Sim.Code.Eval_exprLoaded --suffix _sequenceDispatch \
+  --default-limits -o Vsa/Sim/SequenceDispatchSites.lean
+python3 -B scripts/gen_sites.py scripts/closure_body_sites.tsv \
+  --code-loaded Vsa.Sim.Code.Eval_exprLoaded --suffix _closureBody \
+  --default-limits -o Vsa/Sim/ClosureBodySites.lean
+python3 -B scripts/gen_sites.py scripts/closure_param_sites.tsv \
+  --code-loaded Vsa.Sim.Code.Eval_exprLoaded --suffix _closureParam \
+  --default-limits -o Vsa/Sim/ClosureParamSites.lean
 python3 -B scripts/gen_fixed_image.py \
   --projection Value_null --projection Exec_stmt --projection Eval_expr \
   --projection Value_int --projection Value_bool --projection Value_str \
@@ -86,17 +113,22 @@ python3 -B scripts/gen_sites.py scripts/helper_call_sites.tsv \
 ```
 
 Induction-hypothesis clauses are declared in `scripts/ih_clauses.tsv` (name,
-kind `extra`/`extraM`, the `EvalExtra`/`EvalExtraM` predicate, imports,
+kind `extra`/`extraM`/`motive`, the predicate, imports,
 non-`EvalE` motive overrides, a `guard` on the expression, per-case discharge
-tags). A `guard` (a Lean `Prop` over the `mEvalE` binders, e.g.
+tags). Kind `motive` takes the `EvalE` motive ITSELF
+(`SpecSt → Nat → Addr → Expr → SpecSt → Value → Prop`, generated `clauseMotive`)
+for a fact that depends on the returned VALUE, which an `EvalExtraM` cannot see:
+clause `FootprintCov` at `EvalIHFP noArenaFoot` (footprint ∧ the returned value's
+payload coverage), whose left-child coverage is what the four string-comparison
+cells of `BinaryFootprintCells` need. A `guard` (a Lean `Prop` over the `mEvalE` binders, e.g.
 `Vsa.Sim.IHClauseGeneric.noAllocExpr e = true`) makes the `EvalE` motive
 `<guard> → EvalIHWithM extraM …`, so every clause child IH and the clause
 parent carry it and a step outside the guard is vacuous (clause `FootprintNA`).
 A guarded clause wires a step stated WITHOUT the guard with
 `unguarded:<term>|<proj_1>|…|<proj_k>`, where `proj_i` maps the parent guard to
 the i-th `EvalE` child's guard (none for a leaf). Each line emits
-`Vsa/Sim/rows/IHClause_<Name>.lean`: `extraM`, the nine clause motives
-(`mEvalE` = `EvalIHWithM extraM`), `Residuals` (one field per recursor case with a clause motive; a
+`Vsa/Sim/rows/IHClause_<Name>.lean`: `extraM` (or `clauseMotive`), the nine
+clause motives (`mEvalE` = `EvalIHWithM extraM`, resp. `clauseMotive`), `Residuals` (one field per recursor case with a clause motive; a
 `Layout` parameter for the census), `of_residuals`/`execSeq_of_residuals`
 (the recursor over the product motive old ∧ clause), and `Residuals.ofUnwired`
 for the fields wired to a discharger. Regenerate and check with
@@ -190,6 +222,50 @@ checks only its selected dependency closure. The complete-library census,
 resumed integration build, and checkpoint regression gates remain required.
 Run with exclusive compiler access, as specified above.
 
+For an obligation checkpoint, add `--checkpoint <description.json>`. The
+description names the requested obligation and its exact acceptance type:
+
+```json
+{
+  "target_obligation": "remainingWork_closed",
+  "target_type": "Vsa.Sim.RemainingWork Vsa.Sim.interpRunLayout",
+  "consumer": "Vsa.Sim.remainingWork_closed",
+  "role": "target",
+  "remaining_premises": []
+}
+```
+
+This is the final acceptance description; it passes only once that consumer
+exists at the stated type. Use fully qualified names and explicit, single-line
+type expressions. Holes, commands, comments, and implicit free parameters are
+not accepted. List outstanding premises as `{"name": "child", "type": "..."}`;
+the check prepends these dependent binders to the target type and reports
+`conditional`. With no remaining premises it reports `complete` for that
+specified obligation. To record a helper, use `"role": "prerequisite"` and
+add its exact `consumer_type`; this always reports `prerequisite`.
+
+The generated consumer application is checked and audited before a successful
+receipt is written. An axiom audit of a helper alone cannot close the target.
+The caller must supply the correct requested type and all remaining premises;
+the tool does not infer the user's intended obligation or enumerate project-wide
+prerequisites. Existing full-library and residual-coverage flags remain false.
+
+Slice receipts also retain actual build/reuse counts, a UTC start time, and
+elapsed wall time for planning, dependency compilation, consumer checking,
+evidence validation, and the unattributed remainder. These are wall durations,
+not CPU measurements. The measured interval ends before receipt serialization.
+An unattributed interval is not evidence of duplicate attempts or avoidable cost.
+
+Native checkpoint tests use disposable projects and external build outputs.
+Run them only with exclusive compiler access:
+
+```sh
+VSA_NATIVE_CHECKPOINT_TESTS=1 python3 -B -m unittest \
+  scripts.tests.test_proof_checkpoint_native
+```
+
+The default Python suite skips these compiler tests.
+
 The statement checker and fuzzer write `vsa-smt-check.log` and
 `vsa-statement-fuzz.log` under the system temporary directory.
 Candidate amendment reports go under its `vsa-cures/` directory.
@@ -227,6 +303,26 @@ per clause, runs `houdini_ih.py`/`autoprove.py` with the field registered at
 its encoding (`--bounded-target <case>=<encoding>`; the default is an honest
 `encode-gap`), and records DIRECT / WITH-IH / FAILED / UNSUPPORTED in
 `ih_clause_suggest.tsv`. Nothing is written into `Vsa/`.
+
+Each clause-wide candidate compilation also writes a new read-only JSON receipt
+under `<D>/attempts/`. It retains the generated statements, candidates and
+diagnostics, target names, toolchain and dependency fingerprints, and measured
+compiler wall time. Missing or changed comparison inputs are explicit. Such an
+attempt receives no comparable key. These records are attempt evidence; they do
+not certify a proof or suppress another run.
+Receipts time input capture separately; include that overhead when comparing costs.
+
+Use `--rerun-reason "..."` to retain the reason for a repeated candidate run.
+Measure the retained receipts before deciding whether retry suppression is
+worth implementing:
+
+```sh
+python3 -B scripts/attempt_receipts.py <D>/attempts
+```
+
+Counts refer to clause-wide compilations. Separate candidates within one
+compilation are not separate timed attempts. Historical logs without complete
+input fingerprints cannot establish duplicate attempts or potential time savings.
 
 `ih_clause_fuzz.py` extracts each step into `<D>/statements/<Name>_<case>.lean`
 (`def Step_<case> (_L : Layout) : Prop`, the `statement_fuzz.py --file` shape)

@@ -5,6 +5,7 @@ import Vsa.Sim.rows.StringifyStrdupTail
 import Vsa.Sim.MemcpySpec4
 import Vsa.Sim.MemcpySpec
 import Vsa.Sim.WriteLogNF
+import Vsa.Sim.AllocSuccessAdapters
 
 /-!
 # `StrdupTailContractClose` — the malloc/memcpy/epilogue bridges + the contract instantiated
@@ -17,7 +18,8 @@ machine-bridge premises.  Wave 32 landed the three `jal` seams
 (`strdupTail_{strlen,malloc,memcpy}_run`, `StrdupTailJalSeams.lean`) plus the
 frame-carrying `bridgeStrlenPre` wrapper (`strdupTailBridgeStrlenPre_closed`).
 
-This file lands the remaining three bridge wrappers and instantiates the contract.
+This file supplies bridge wrappers and a conditional contract composition. The
+actual successful malloc producer for the memcpy bridge remains open.
 Each wrapper follows the `strdupTailBridgeStrlenPre_closed` idiom exactly: run the
 landed `jal` seam, read the marshalled regs off the `GHolds` post, carry `sp`/`gp`/
 ABI through the ABI frame, and survive `AInv` under the (gp-agree ∧ mem-agree)
@@ -158,50 +160,17 @@ theorem strdupTailBridgeMallocPre_closed
 
 #print axioms strdupTailBridgeMallocPre_closed
 
-/-! ## §2. `bridgeMemcpyPre` — the OOM-guard + memcpy-staging bridge, named residual
+/-! ## §2. Failure-aware composition boundary
 
-`stringifyStrdupTailContract`'s `bridgeMemcpyPre` takes the malloc-post shape (the
-malloc disjunction + the outside-footprint mem-agreement with `mMalloc`) to
-`PreDispatch gm rMemcpy dst src nMemcpy mMemcpy bs ∧ CalleeFrame …`.  The machine
-core is `strdupTail_memcpy_run` (`ld a2,8(sp) ; mv s0,a0 ▷ beqz(false) ; mv a1,s1 ;
-jal memcpy`, `AbiExceptS0`-framed because `mv s0,a0` reseats `s0`).
+`stringifyStrdupTailContract` executes `M.spec`, whose post permits NULL. Its
+`StrdupTailMemcpyBridge` premise must handle that whole post. The successful
+staging reader below cannot discharge that premise. Migrating the external
+producer requires entry budget, concrete placement, and code at the actual
+malloc call, then passing its selected successful endpoint to staging. -/
 
-**Law-4 residual — TWO genuine gaps this bridge cannot close from the landed
-pieces**, both named here rather than assumed away:
-
-1. **The a2-reload.**  `PreDispatch.a2` demands `x12 = ofNat nMemcpy`, read back from
-   the `sd a2,8(sp)` spill the malloc-staging wrote into `mMalloc`.  But
-   `strdupTail_memcpy_run` runs the seg with `lds = []` — the seg model does NOT
-   reconstruct the reloaded size from `mMalloc`'s memory (`ld a2,8(sp)` reads the
-   empty loads list, not `mMalloc[spM+8]`).  Closing it needs a `lds`-carrying
-   memcpy-staging run whose `lds` head is the spilled-size image, OR a
-   `writeLog`/`ld` readback lemma over `mMalloc`.  See
-   `experiments/observations.md#strdup-memcpy-a2-reload`.
-
-2. **The NULL-branch exclusion.**  The malloc-post disjunction includes the NULL
-   branch (`x10 = 0`), on which the seg's `beqz a0 → 80003140` is TAKEN (to the OOM
-   error path, NOT the memcpy entry).  The contract's `bridgeMemcpyPre` target is
-   unconditionally `PreDispatch ∧ CalleeFrame` at the memcpy entry, so it is only
-   provable if NULL is excluded — which needs the arena's no-OOM guarantee
-   (`nMalloc ≤ maxReq ⇒ malloc ≠ NULL`), a `MallocContract` property the arena
-   supplies but the disjunction alone does not.
-
-We NAME the whole bridge as the typed residual `StrdupTailMemcpyBridge` (the exact
-`bridgeMemcpyPre` Triple shape parameterised over the contract's ghosts).  Its
-suppliers are (1) the a2-reload and (2) the no-OOM exclusion above; everything else
-(the staging run, the `AbiExceptS0` frame, `src = s1` marshalling) is the landed
-`strdupTail_memcpy_run`. -/
-
-/-- **The strdup-tail `bridgeMemcpyPre` residual** — the exact Triple
-`stringifyStrdupTailContract` demands, parameterised over its ghosts.  Suppliers:
-the a2-reload (a `lds`-carrying memcpy-staging run) and the arena no-OOM exclusion
-(a `MallocContract` non-null guarantee).  Machine core = `strdupTail_memcpy_run`.
-
-**AMENDED (Task #82a):** the target frame is threaded under the RESEATED ghost
-`ghostReseatS0 gm dst` (`gm[x8 := dst]`), matching the amended contract — the memcpy
-span's `mv s0,a0` reseats `s0`/x8 to the malloc result `dst`, so the memcpy-entry
-`CalleeFrame` (and `PreDispatch`) must record `s0 = dst`, not the pre-reseat `gm x8`.
-This is what unblocks `strdupTailMemcpyBridge_of` (§2c) from `strdupMemcpy_frame_obstruction`. -/
+/-- The existing nullable-post bridge required by `stringifyStrdupTailContract`.
+It remains an explicit residual; `strdupTailMemcpyBridge_of` supplies the distinct
+success-input bridge below. The target records the reseated s0 ghost. -/
 def StrdupTailMemcpyBridge
     (SL : StackLayout) (A : Arena) (gpv : BitVec 64) (headroom : Nat)
     (AInv : MState → List (Nat × Nat) → Prop) (exts extsC : List (Nat × Nat))
@@ -226,58 +195,21 @@ def StrdupTailMemcpyBridge
     (fun c => PreDispatch (ghostReseatS0 gm dst) rMemcpy dst src nMemcpy mMemcpy bs c ∧
       CalleeFrame SL gpv headroom AInv extsC spC (ghostReseatS0 gm dst) c)
 
-/-! ## §2b. `StrdupTailMemcpyBridge` — the two documented gaps discharged, plus a
-MACHINE-CHECKED OBSTRUCTION in the READ-ONLY contract's frame ghost (Law 4)
+/-! ## §2b. Read a selected successful malloc result -/
 
-The two named gaps (§2's doc) ARE now individually dischargeable:
-
-1. **The a2-reload** — `strdupTail_memcpy_run` is now `lds`-generic (Task #82 Part
-   1.1).  Run it at the SINGLETON `lds = [sizeBytes]` whose head is the LE image of
-   the spilled size `nMemcpy`; the seg's `ld a2,8(sp)` reads that image, so
-   `x12 = bytesVal MKind.ld sizeBytes`, pinned to `ofNat nMemcpy` by a `hReadback`
-   equation (the established `BinopChain` byte-list idiom).  `strdupMemcpyArg_a2_reload`
-   below WITNESSES the reload mechanism (green + axiom-clean).
-
-2. **The NULL-branch exclusion** — `M.nonNull_of_bounded` (Task #82 Part 1.2,
-   `Vsa/Alloc.lean`) collapses the malloc-post disjunction to its non-null disjunct
-   given `nMalloc ≤ maxReq`.  `strdupMemcpy_prune_null` below WITNESSES it.
-
-**But `StrdupTailMemcpyBridge` itself is NOT closable as stated** — and the
-obstruction is a REAL over-constraint in the READ-ONLY `stringifyStrdupTailContract`
-(`StringifyStrdupTail.lean`), machine-checked in `strdupMemcpy_frame_obstruction`:
-
-The memcpy-staging span contains `mv s0,a0` (`0x80003060`), which RESEATS the
-callee-saved `s0`/x8 to the malloc result (deliberate — s0 carries `new` across the
-memcpy call to be returned by the epilogue's `mv a0,s0`).  The bridge's PRE frame
-(`∀ R, AbiPreserved R → get? R = gm R`, inherited from the malloc post) pins
-`s0 = gm x8` at the STAGING entry (pre-reseat).  The bridge's TARGET
-`CalleeFrame … gm` (SAME `gm`) pins `s0 = gm x8` at the MEMCPY entry (post-reseat).
-Since `mv s0,a0` changes s0 (to a fresh malloc result ≠ the entry s0 in general),
-NO single `gm` satisfies both — the contract demands `CalleeFrame … gm` where it
-should demand `CalleeFrame … (gm[x8 := dst])`.  `AbiPreserved x8 = true`, so
-`CalleeFrame.abi` genuinely pins s0.  Closing the bridge therefore requires
-AMENDING `stringifyStrdupTailContract`'s `bridgeMemcpyPre`/`bridgeEpilogue`/callee
-threading to carry the reseated ghost — a change to the READ-ONLY statement, out of
-scope.  Reported per Law 4 (the machine-checkable obstruction, not a workaround).
-See `experiments/observations.md#strdup-memcpy-s0-reseat-frameghost`. -/
-
-/-- **Gap-2 witness (no-OOM prune).**  `M.nonNull_of_bounded` collapses the
-malloc-post disjunction (as it appears in `StrdupTailMemcpyBridge`'s pre) to the
-non-null block for a bounded request.  This DISCHARGES the NULL-branch exclusion. -/
+/-- The non-null pointer belongs to the same successful return configuration. -/
 theorem strdupMemcpy_prune_null
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
     (M : MallocContract A SL gpv headroom maxReq)
-    (σ : MState) (exts : List (Nat × Nat)) (nMalloc : Nat) (hnM : nMalloc ≤ maxReq)
-    (hdisj :
-      ((σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧ M.AInv σ exts) ∨
-       (∃ p, σ.regs.get? Register.x10 = some (BitVec.ofNat 64 p) ∧
-         p ≠ 0 ∧ p % 16 = 0 ∧ A.contains p nMalloc ∧
-         (∀ e ∈ exts, ExtDisjoint (p, nMalloc) e) ∧
-         M.AInv σ ((p, nMalloc) :: exts)))) :
-    ∃ p, σ.regs.get? Register.x10 = some (BitVec.ofNat 64 p) ∧ p ≠ 0 ∧
+    {credits : Nat} {out : Array String}
+    {gm : (R : Register) → Option (RegisterType R)} {sp r : BitVec 64} {m0 : Mem}
+    (c : Config) (exts : List (Nat × Nat)) (nMalloc : Nat)
+    (hpost : MallocSuccessExit A SL gpv maxReq credits M.AInv M.privFoot
+      gm exts nMalloc sp r m0 out c) :
+    ∃ p, c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 p) ∧ p ≠ 0 ∧
       p % 16 = 0 ∧ A.contains p nMalloc ∧
-      (∀ e ∈ exts, ExtDisjoint (p, nMalloc) e) ∧ M.AInv σ ((p, nMalloc) :: exts) :=
-  M.nonNull_of_bounded σ exts nMalloc hnM hdisj
+      (∀ e ∈ exts, ExtDisjoint (p, nMalloc) e) ∧ M.AInv c.σ ((p, nMalloc) :: exts) :=
+  hpost.result
 
 #print axioms strdupMemcpy_prune_null
 
@@ -354,24 +286,12 @@ theorem strdupMemcpy_frame_obstruction
 
 #print axioms strdupMemcpy_frame_obstruction
 
-/-! ## §2c. `strdupTailMemcpyBridge_of` — the amended `bridgeMemcpyPre` CLOSED
+/-! ## §2c. Staging from a successful malloc return
 
-With the contract amended (Task #82a) to thread the reseated ghost
-`ghostReseatS0 gm dst` in the memcpy target (`StringifyStrdupTail.lean`, matching
-`StrdupTailMemcpyBridge`'s def above), the frame-ghost obstruction is GONE: the
-memcpy-entry `CalleeFrame`/`PreDispatch` are keyed to `gm[x8 := dst]`, which the
-`mv s0,a0`-reseated `s0 = dst` honours.  `strdupMemcpy_frame_obstruction` above stays
-as the machine-checked regression guard for the FORMER over-constraint (the Trichotomy
-precedent: a falsity found, then fixed by amendment).
-
-The closer runs the machine staging (`strdupTail_memcpy_run` at the a2-reload
-singleton `[sizeBytes]`), prunes the malloc-post NULL branch (`M.nonNull_of_bounded`),
-and assembles the target from:
-- the run's GHolds post (PC/x10=dst/x11=src/x12=ofNat nMemcpy/x1/x2=spM/x8=dst) and its
-  `AbiExceptS0` frame preservation (every ABI callee-saved EXCEPT s0 = entry value = gm);
-- a NAMED content bundle `StrdupMemcpyContent` supplying the memcpy-CALL precondition
-  facts that the staging alone cannot produce (they are the callee's own entry needs
-  over the fresh block + copy source), each a doc-commented residual. -/
+The staging run uses the supplied reload bytes and preserves the ABI under
+`ghostReseatS0 gm dst`. The caller still supplies the pointer identity, byte
+readback, chain facts, code, and memcpy content. The external nullable-post
+composition remains unconnected to this successful reader. -/
 
 /-- **The memcpy-CALL content residuals** — the `PreDispatch`/`CalleeFrame` fields the
 strdup staging cannot manufacture (they are the memcpy callee's OWN precondition over
@@ -429,30 +349,42 @@ def StrdupMemcpyBridgePre
   (∀ a, ¬ privFoot a → ¬ (SL.lo ≤ a ∧ a < spM.toNat) →
     c.σ.mem[a]? = mMalloc[a]?)
 
-/-- **The amended `bridgeMemcpyPre` CLOSED.**  Given the arena `M` (for the no-OOM
-prune), the a2-reload data (`sizeBytes`/`hReadback`/`hjalmem`/`hfacts`), the malloc
-pointer link `hPtrDst` (the non-null malloc result at the bridge entry IS `dst` — a
-semantic fact the arena determines, not the staging), and the named
-`StrdupMemcpyContent` bundle at the memcpy-entry state, `StrdupTailMemcpyBridge`
-holds — the whole memcpy-staging bridge, frame threaded under `ghostReseatS0 gm dst`.
+/-- Memcpy entry and its frame at the single staging endpoint. -/
+structure StrdupMemcpyReady
+    (SL : StackLayout) (gpv : BitVec 64) (headroom : Nat)
+    (AInv : MState → List Extent → Prop) (exts : List Extent) (sp : BitVec 64)
+    (gm : (R : Register) → Option (RegisterType R))
+    (r dst src : BitVec 64) (n : Nat) (m0 : Mem) (bs : Nat → BitVec 8)
+    (c : Config) : Prop where
+  dispatch : PreDispatch (ghostReseatS0 gm dst) r dst src n m0 bs c
+  frame : CalleeFrame SL gpv headroom AInv exts sp (ghostReseatS0 gm dst) c
 
-The two gap witnesses (`strdupMemcpy_prune_null`, `strdupMemcpyArg_a2_reload`'s
-mechanism) are folded in; the FRAME obstruction is gone (target is `ghostReseatS0 gm dst`).
-`hcontent` provides the memcpy-CALL residuals at whatever entry state the staging
-produces (parameterised over `σ2`). -/
+/-- The staging bridge consumes a successful allocator return. The failure-aware
+`StrdupTailMemcpyBridge` remains a separate residual of the old composition. -/
+def StrdupTailSuccessMemcpyBridge
+    (SL : StackLayout) (A : Arena) (gpv : BitVec 64) (headroom maxReq credits : Nat)
+    (AInv : MState → List Extent → Prop) (exts extsC : List Extent)
+    (spM spC : BitVec 64) (gm : (R : Register) → Option (RegisterType R))
+    (privFoot : Nat → Prop) (rM rMemcpy dst src : BitVec 64) (nMemcpy nMalloc : Nat)
+    (mMalloc mMemcpy : Mem) (out : Array String) (bs : Nat → BitVec 8) : Prop :=
+  Triple
+    (MallocSuccessExit A SL gpv maxReq credits AInv privFoot
+      gm exts nMalloc spM rM mMalloc out)
+    (StrdupMemcpyReady SL gpv headroom AInv extsC spC gm
+      rMemcpy dst src nMemcpy mMemcpy bs)
+
+/-- Execute memcpy staging from the selected successful malloc post. -/
 theorem strdupTailMemcpyBridge_of
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
     (M : MallocContract A SL gpv headroom maxReq)
+    {credits : Nat} {out : Array String}
     (extsC : List (Nat × Nat)) (spC : BitVec 64)
     (gm : (R : Register) → Option (RegisterType R))
-    (dst src : BitVec 64) (nMemcpy nMalloc : Nat) (hnM : nMalloc ≤ maxReq)
+    (dst src : BitVec 64) (nMemcpy nMalloc : Nat)
     (mMalloc mMemcpy : Std.ExtHashMap Nat (BitVec 8)) (bs : Nat → BitVec 8)
     (sizeBytes : List (BitVec 8))
     (hReadback : bytesVal MKind.ld sizeBytes = BitVec.ofNat 64 nMemcpy)
-    -- the (pruned, non-null) malloc result at the bridge entry is `dst`.  We fold in
-    -- gap-2 (`strdupMemcpy_prune_null`): the caller need only link the NON-NULL pointer
-    -- `p` (with its `A.contains`/disjointness data) to `dst` — the NULL branch is already
-    -- excluded by the arena no-OOM guarantee, so `dst` need never be 0.
+    -- Identify the selected successful pointer with the caller's destination.
     (hPtrDst : ∀ (σ : MState) (p : Nat),
       σ.regs.get? Register.x10 = some (BitVec.ofNat 64 p) → p ≠ 0 → p % 16 = 0 →
       A.contains p nMalloc → (∀ e ∈ extsC, ExtDisjoint (p, nMalloc) e) →
@@ -474,14 +406,19 @@ theorem strdupTailMemcpyBridge_of
       σ2.regs.get? Register.x11 = some src →
       σ2.regs.get? Register.x12 = some (BitVec.ofNat 64 nMemcpy) →
       StrdupMemcpyContent SL gpv headroom M.AInv extsC spC gm dst src nMemcpy mMemcpy bs σ2) :
-    StrdupTailMemcpyBridge SL A gpv headroom M.AInv extsC extsC spC spC gm
-      M.privFoot (0x8000305c#64) (0x80003070#64) dst src nMemcpy nMalloc mMalloc mMemcpy bs := by
+    StrdupTailSuccessMemcpyBridge SL A gpv headroom maxReq credits
+      M.AInv extsC extsC spC spC gm M.privFoot (0x8000305c#64) (0x80003070#64)
+      dst src nMemcpy nMalloc mMalloc mMemcpy out bs := by
   intro c hpre
-  obtain ⟨hG, htick, hpc, hsp, hgp, hAbi, hdisj, houtside⟩ := hpre
-  -- Gap 2 (fold in `strdupMemcpy_prune_null`): prune the malloc-post NULL branch via the
-  -- arena no-OOM guarantee, then link the non-null pointer `p` to `dst`.
+  have hG := hpre.returned.good
+  have htick := hpre.returned.tick
+  have hpc := hpre.returned.pc
+  have hsp := hpre.returned.sp
+  have hgp := hpre.returned.gp
+  have hAbi := hpre.returned.frame
+  -- Read the selected successful endpoint, then identify its pointer with `dst`.
   obtain ⟨p, hx10p, hpne, hp16, hcontains, hdisjp, hainvp⟩ :=
-    strdupMemcpy_prune_null M c.σ extsC nMalloc hnM hdisj
+    strdupMemcpy_prune_null M c extsC nMalloc hpre
   have hx10dst : c.σ.regs.get? Register.x10 = some dst :=
     hPtrDst c.σ p hx10p hpne hp16 hcontains hdisjp hainvp
   obtain ⟨vmi, hmi⟩ : ∃ v, c.σ.regs.get? Register.minstret = some v := hG.minstret
@@ -627,18 +564,13 @@ theorem strdupTailBridgeEpilogue_closed
 
 /-! ## §4. `stringifyStrdupTailContract` instantiated
 
-All four bridges are now supplied: `bridgeStrlenPre` = `strdupTailBridgeStrlenPre_closed`
-(wave 32), `strlenFramed` = `calleeFrameStrlen`, `bridgeMallocPre` =
-`strdupTailBridgeMallocPre_closed` (§1), `bridgeMemcpyPre` = the named residual
-`StrdupTailMemcpyBridge` (§2, its two suppliers documented), `bridgeEpilogue` =
-`strdupTailBridgeEpilogue_closed` (§3).  The contract HOLDS modulo only the
-entry-config supplier `P` and the §2 memcpy-bridge residual (a2-reload + no-OOM). -/
+The strlen, malloc-entry, and epilogue wrappers are supplied below. The nullable
+`StrdupTailMemcpyBridge` remains a premise. The success-input bridge does not
+satisfy it: the external producer still executes failure-aware `M.spec`. -/
 
-/-- **`stringifyStrdupTailContract` instantiated.**  From the strlen-entry predicate
-`StrdupTailStrlenEntry` as `P`, the three landed bridge wrappers, `calleeFrameStrlen`,
-and the named `StrdupTailMemcpyBridge` residual, the whole strdup tail reaches
-`StrdupTailExit rRet str`.  The memcpy bridge is the ONE remaining machine object
-(its suppliers: the a2-reload and the arena no-OOM exclusion, §2). -/
+/-- Conditional composition through the existing failure-aware allocator spec.
+The caller still owes `hMemcpyBridge`; this theorem does not connect the new
+successful staging reader to an actual allocator execution. -/
 theorem stringifyStrdupTailContract_closed
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom : Nat}
     (str : String)

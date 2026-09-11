@@ -134,17 +134,25 @@ structure EpilogueReady
   spAlign : sp.toNat % 8 = 0
   retAlign : r.toNat % 4 = 0
 
-/-- Run the shared epilogue from any produced status.  The widened exit
-retains the preselected store witnesses; the return value (if any) is
-rebased to the entry closure map. -/
-theorem epilogueTail
+/-- The statement epilogue returns without changing its incoming memory. -/
+structure ExecTailResult
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout)
+    (φf φc : Addr → Nat) (nf nc : Nat)
+    (st' : Vsa.While.St) (status : Status) (sp r aRet : BitVec 64)
+    (m0 incoming : Mem) (cfg : Config) : Prop where
+  exit : ExecExitD g N A SL φf φc nf nc st' status sp r aRet m0 cfg
+  memory : cfg.σ.mem = incoming
+
+/-- Run the shared epilogue and retain its exact memory equality. -/
+theorem epilogueTail_memory
     {g : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
     {φf φc φf' φc' : Addr → Nat} {nf nc : Nat}
     {st' : Vsa.While.St} {status : Status} {sp r aRet : BitVec 64} {m0 : Mem} :
-    Triple
-      (EpilogueReady g N A SL φf φc φf' φc' nf nc st' status sp r aRet m0)
-      (ExecExitD g N A SL φf φc nf nc st' status sp r aRet m0) := by
+    ∀ cfg, EpilogueReady g N A SL φf φc φf' φc' nf nc st' status sp r aRet m0 cfg →
+      ∃ after, Steps cfg after ∧
+        ExecTailResult g N A SL φf φc nf nc st' status sp r aRet m0 cfg.σ.mem after := by
   intro cfg h
   obtain ⟨v8, hr8, hg8⟩ := h.saved_s0
   obtain ⟨v9, hr9, hg9⟩ := h.saved_s1
@@ -162,7 +170,8 @@ theorem epilogueTail
       (fun m => m = cfg.σ.mem)
       (fun v hv m hm => by subst hm; exact h.retval v hv)
       cfg ⟨cfg.σ.mem, hpre, rfl⟩
-  refine ⟨cD, hstepsD, ?_, ?_, φf', φc', h.frames, h.closures, ?_⟩
+  refine ⟨cD, hstepsD, ?_, hmD⟩
+  refine ⟨?_, ?_, φf', φc', h.frames, h.closures, ?_⟩
   · exact
       { good := hExit.good
         tick := hExit.tick
@@ -184,20 +193,36 @@ theorem epilogueTail
   · rw [hmD]
     exact h.storeSurvives
 
+/-- Run the shared epilogue from any produced status.  The widened exit
+retains the preselected store witnesses; the return value (if any) is
+rebased to the entry closure map. -/
+theorem epilogueTail
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout}
+    {φf φc φf' φc' : Addr → Nat} {nf nc : Nat}
+    {st' : Vsa.While.St} {status : Status} {sp r aRet : BitVec 64} {m0 : Mem} :
+    Triple
+      (EpilogueReady g N A SL φf φc φf' φc' nf nc st' status sp r aRet m0)
+      (ExecExitD g N A SL φf φc nf nc st' status sp r aRet m0) := by
+  intro cfg h
+  obtain ⟨after, steps, result⟩ := epilogueTail_memory cfg h
+  exact ⟨after, steps, result.exit⟩
+
+#print axioms epilogueTail_memory
 #print axioms epilogueTail
 
 /-- Set normal status, jump into the shared epilogue, and run it.  The widened
 exit is attached to this run and retains the preselected store witnesses. -/
-theorem normalExitTail (liPC : BitVec 64) (jImm : BitVec 21)
+theorem normalExitTail_memory (liPC : BitVec 64) (jImm : BitVec 21)
     (hli : LiZeroSite liPC) (hj : JumpSite (BitVec.addInt liPC 4) jImm)
     (htgt : BitVec.addInt liPC 4 + sign_extend (m := 64) jImm = 0x8000409c#64)
     {g : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout}
     {φf φc φf' φc' : Addr → Nat} {nf nc : Nat}
     {st' : Vsa.While.St} {sp r aRet : BitVec 64} {m0 : Mem} :
-    Triple
-      (NormalExitTailPre liPC g N A SL φf φc φf' φc' nf nc st' sp r aRet m0)
-      (ExecExitD g N A SL φf φc nf nc st' .normal sp r aRet m0) := by
+    ∀ cfg, NormalExitTailPre liPC g N A SL φf φc φf' φc' nf nc st' sp r aRet m0 cfg →
+      ∃ after, Steps cfg after ∧
+        ExecTailResult g N A SL φf φc nf nc st' .normal sp r aRet m0 cfg.σ.mem after := by
   intro cfg h
   obtain ⟨vmi, hmi⟩ := h.minstret
   obtain ⟨σ1, i1, hs1', hi1, hg1, hm1, ho1⟩ :=
@@ -269,9 +294,26 @@ theorem normalExitTail (liPC : BitVec 64) (jImm : BitVec 21)
       spWin := h.spWin
       spAlign := h.spAlign
       retAlign := h.retAlign }
-  obtain ⟨cD, hstepsD, hExit⟩ := epilogueTail _ hready
-  exact ⟨cD, (Steps.single hs1).trans ((Steps.single hs2).trans hstepsD), hExit⟩
+  obtain ⟨cD, hstepsD, hExit⟩ := epilogueTail_memory _ hready
+  exact ⟨cD, (Steps.single hs1).trans ((Steps.single hs2).trans hstepsD),
+    hExit.exit, hExit.memory.trans hm2⟩
 
+/-- Project the widened exit from the same memory-preserving normal tail. -/
+theorem normalExitTail (liPC : BitVec 64) (jImm : BitVec 21)
+    (hli : LiZeroSite liPC) (hj : JumpSite (BitVec.addInt liPC 4) jImm)
+    (htgt : BitVec.addInt liPC 4 + sign_extend (m := 64) jImm = 0x8000409c#64)
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout}
+    {φf φc φf' φc' : Addr → Nat} {nf nc : Nat}
+    {st' : Vsa.While.St} {sp r aRet : BitVec 64} {m0 : Mem} :
+    Triple
+      (NormalExitTailPre liPC g N A SL φf φc φf' φc' nf nc st' sp r aRet m0)
+      (ExecExitD g N A SL φf φc nf nc st' .normal sp r aRet m0) := by
+  intro cfg h
+  obtain ⟨after, steps, result⟩ := normalExitTail_memory liPC jImm hli hj htgt cfg h
+  exact ⟨after, steps, result.exit⟩
+
+#print axioms normalExitTail_memory
 #print axioms normalExitTail
 
 end Vsa.Sim

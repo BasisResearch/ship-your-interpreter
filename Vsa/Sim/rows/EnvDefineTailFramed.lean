@@ -125,9 +125,18 @@ theorem envDefineEpilogueRowKeep (sp : BitVec 64) (lds : List (List (BitVec 8)))
 #print axioms updateStoreLiveRowKeep
 #print axioms envDefineEpilogueRowKeep
 
+/-- The same update endpoint retains exact copied bytes and its caller frame. -/
+structure EnvDefineCopiedKeptUpdatePost
+    (saved g : (R : Register) → Option (RegisterType R))
+    (env src dst sp : BitVec 64) (idx : Nat) (m : Mem)
+    (N : NativeAddrs) (phiC : Vsa.While.Addr → Nat) (v : Vsa.While.Value)
+    (out : Array String) (c : Config) : Prop where
+  copy : EnvDefineCopiedUpdatePost saved env src dst sp idx m N phiC v c
+  kept : KeepGhost EnvDefineTailKeepSp g out c
+
 /-- `envDefineUpdateFromHit` with the keep-set frame carried through the update
 block. -/
-theorem envDefineUpdateFromHitKeep
+theorem envDefineUpdateFromHitCopiedKeep
     (saved : (R : Register) → Option (RegisterType R))
     (env name src count cursor sp vals dst : BitVec 64) (idx : Nat)
     (m0 : Mem) (N : NativeAddrs) (φc : Vsa.While.Addr → Nat)
@@ -144,8 +153,7 @@ theorem envDefineUpdateFromHitKeep
     Triple
       (fun c => EnvDefineUpdateHitPre saved env name src count cursor sp idx m0 c ∧
         KeepGhost EnvDefineTailKeepSp g outp c)
-      (fun c => EnvDefineUpdatePost saved env src dst sp idx m0 N φc v c ∧
-        KeepGhost EnvDefineTailKeepSp g outp c) := by
+      (EnvDefineCopiedKeptUpdatePost saved g env src dst sp idx m0 N φc v outp) := by
   intro c ⟨h, hk⟩
   obtain ⟨cmp, hp, hsaved⟩ := h
   obtain ⟨hgood, hmemRaw, hpc, hregs, htick⟩ := hp
@@ -191,7 +199,40 @@ theorem envDefineUpdateFromHitKeep
     rw [hmemTower, hmem]
     exact updateValueTowerOutside m0 dst.toNat a
       (lds.getD 1 []) (lds.getD 2 []) (lds.getD 3 []) ha
-  exact ⟨c', hs, ⟨lds, hp', hrepr, hsaved', hsp', hmemTower⟩, hk'⟩
+  refine ⟨c', hs, ⟨⟨lds, hp', hrepr, hsaved', hsp', hmemTower⟩, ?_⟩, hk'⟩
+  intro k hk
+  rw [hmemTower]
+  exact updateValueTowerCopy m0 src.toNat dst.toNat
+    (lds.getD 1 []) (lds.getD 2 []) (lds.getD 3 []) hpin0 hpin1 hpin2 k hk
+
+/-- `envDefineUpdateFromHit` with the keep-set frame carried through the update
+block. -/
+theorem envDefineUpdateFromHitKeep
+    (saved : (R : Register) → Option (RegisterType R))
+    (env name src count cursor sp vals dst : BitVec 64) (idx : Nat)
+    (m0 : Mem) (N : NativeAddrs) (φc : Vsa.While.Addr → Nat)
+    (v : Vsa.While.Value) (A : Arena)
+    (g : (R : Register) → Option (RegisterType R)) (outp : Array String)
+    (hcode : Vsa.Sim.Code.Env_defineLoaded m0)
+    (hword : ValueWordRepr m0 N φc src.toNat v)
+    (hgeom : EnvDefineUpdateGeom env src vals dst idx m0)
+    (hpayload : ValuePayloadCovered
+      (fun a => a < dst.toNat ∨ dst.toNat + 24 ≤ a) m0 src.toNat v)
+    (hdstArena : A.contains dst.toNat 24)
+    (harenaStack : A.hi ≤ sp.toNat ∨ sp.toNat + 64 ≤ A.lo)
+    (harenaCode : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo) :
+    Triple
+      (fun c => EnvDefineUpdateHitPre saved env name src count cursor sp idx m0 c ∧
+        KeepGhost EnvDefineTailKeepSp g outp c)
+      (fun c => EnvDefineUpdatePost saved env src dst sp idx m0 N φc v c ∧
+        KeepGhost EnvDefineTailKeepSp g outp c) := by
+  intro c entry
+  obtain ⟨after, steps, post⟩ := envDefineUpdateFromHitCopiedKeep saved env name src count
+    cursor sp vals dst idx m0 N φc v A g outp hcode hword hgeom hpayload
+    hdstArena harenaStack harenaCode c entry
+  exact ⟨after, steps, post.copy.update, post.kept⟩
+
+#print axioms envDefineUpdateFromHitCopiedKeep
 
 /-- `envDefineUpdateFromHit_of_heap_owned` with the keep-set frame carried. -/
 theorem envDefineUpdateFromHitKeep_of_heap_owned

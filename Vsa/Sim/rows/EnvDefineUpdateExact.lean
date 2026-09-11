@@ -7,6 +7,7 @@ import Vsa.Sim.EqNeReprReadback
 import Vsa.Sim.SegToTripleFramed
 import Vsa.Sim.rows.EnvDefineEpilogue
 import Vsa.Sim.StoreSetFootprint
+import Vsa.Sim.MemPresence
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa
 open Register
@@ -473,6 +474,31 @@ def EnvDefineUpdatePost
     c.σ.regs.get? Register.x2 = some sp ∧
     c.σ.mem = UpdateValueTower m0 dst.toNat
       (lds.getD 1 []) (lds.getD 2 []) (lds.getD 3 [])
+
+/-- Named readback of the landed update post. -/
+structure EnvDefineUpdateFacts
+    (saved : (R : Register) → Option (RegisterType R))
+    (env src dst sp : BitVec 64) (idx : Nat) (m0 : Mem)
+    (N : NativeAddrs) (phiC : Vsa.While.Addr → Nat)
+    (v : Vsa.While.Value) (c : Config) : Prop where
+  word : ValueWordRepr c.σ.mem N phiC dst.toNat v
+  savedFrame : EnvDefineSavedSpillFrame sp saved c
+  spReg : c.σ.regs.get? Register.x2 = some sp
+  presence : MemExtends m0 c.σ.mem
+
+/-- Expose the copied word and exact memory without navigating the legacy tower. -/
+theorem EnvDefineUpdatePost.destruct
+    {saved : (R : Register) → Option (RegisterType R)}
+    {env src dst sp : BitVec 64} {idx : Nat} {m0 : Mem}
+    {N : NativeAddrs} {phiC : Vsa.While.Addr → Nat} {v : Vsa.While.Value} {c : Config}
+    (h : EnvDefineUpdatePost saved env src dst sp idx m0 N phiC v c) :
+    EnvDefineUpdateFacts saved env src dst sp idx m0 N phiC v c := by
+  obtain ⟨_lds, _, word, savedFrame, spReg, image⟩ := h
+  refine ⟨word, savedFrame, spReg, ?_⟩
+  rw [image]
+  unfold UpdateValueTower
+  exact ((memExtends_writeMap8 _ _ _).trans
+    (memExtends_writeMap8 _ _ _)).trans (memExtends_writeMap8 _ _ _)
 
 /-- The exact update write tower preserves every byte outside its value slot. -/
 theorem EnvDefineUpdatePost.agree_outside

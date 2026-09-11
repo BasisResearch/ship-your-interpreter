@@ -242,7 +242,7 @@ PC (`callPC`), with the sub-call's arguments already in place
 lands at `eval_expr`'s entry with link `retPC = callPC + 4`; the sub-call's
 `EvalEntry` is assembled from the arm state, the IH is applied, and its
 `EvalExitD` is repackaged into `SubEvalReturn`. -/
-theorem armTail_rec_gen (Q : Config → Prop)
+theorem armTail_rec_frame (Q : Config → Prop)
     (gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' : Vsa.While.St) (d : Nat) (env : Addr) (esub : Expr) (vsub : Value)
@@ -265,6 +265,7 @@ theorem armTail_rec_gen (Q : Config → Prop)
     -- frame `g_sub`; the arm supplies the post-`jal` register file), with an
     -- arbitrary retained fact `Q` about the child's actual return:
     (hIH : ∀ g_sub : (R : Register) → Option (RegisterType R),
+      (∀ R, AbiPreservedNoise R → g_sub R = gpre R) →
       Triple
         (EvalEntry g_sub N A SL φf φc st d env esub (sp - 1088#64) retPC subsret aIn aOperand
           mcall)
@@ -467,32 +468,30 @@ theorem armTail_rec_gen (Q : Config → Prop)
       envset_defined := ⟨w19, w20, w21, hx19_1, hx20_1, hx21_1⟩
       envReg := hx13_1
       x13_defined := ⟨_, hx13_1⟩ }
-  -- ============ the sub-call (the induction hypothesis) ============
-  obtain ⟨c2, hs2, hReturned⟩ :=
-    hIH (fun R => σ1.regs.get? R) ⟨σ1, i1, c.steps + 1⟩ hEntry
-  obtain ⟨hExit, hpres, hwords, φf', φc', hpf', hpc', hsurvSL⟩ := hReturned.result
-  -- PC back at the link (ret target of an aligned retPC)
-  have hpcRet : c2.σ.regs.get? Register.PC = some retPC := by
-    rw [hExit.pc, ret_tgt retPC hretAl]
-  -- frame composition: callee-saved regs at c2 = call-point `gpre`
   have abi_ne' : ∀ {X R : Register}, AbiPreserved X = false → AbiPreserved R = true →
       (X == R) = false := by
     intro X R hX hR
     rcases hXR : (X == R) with _ | _
     · rfl
     · rw [beq_iff_eq] at hXR; rw [hXR] at hX; rw [hX] at hR; exact absurd hR (by decide)
-  have hframe2 : ∀ R : Register, AbiPreservedNoise R → c2.σ.regs.get? R = gpre R := by
+  have hframe1 : ∀ R : Register, AbiPreservedNoise R → σ1.regs.get? R = gpre R := by
     intro R hR
     obtain ⟨hab, hpcR, hnpcR, hmiR, hmiiR, hmcR, hmtR, hmipR⟩ := hR
     have hR' : AbiPreservedNoise R := ⟨hab, hpcR, hnpcR, hmiR, hmiiR, hmcR, hmtR, hmipR⟩
     have hx1R : (Register.x1 == R) = false := abi_ne' (by decide) hab
-    -- c2 → σ1 (the sub-call restores every AbiPreservedNoise register to g_sub = σ1)
-    have f2 : c2.σ.regs.get? R = σ1.regs.get? R := hExit.frame R hR'
-    -- σ1 → c (the jal writes only x1/PC/minstret machinery)
     have f1 : σ1.regs.get? R = c.σ.regs.get? R :=
       (hobs1.1 R hmcR hmtR hmipR).trans
         (get?_sigmaPost_jal _ _ _ _ _ _ R hmiR hpcR hx1R hnpcR hmiiR)
-    rw [f2, f1]; exact hframe R hR'
+    exact f1.trans (hframe R hR')
+  -- ============ the sub-call (the induction hypothesis) ============
+  obtain ⟨c2, hs2, hReturned⟩ :=
+    hIH (fun R => σ1.regs.get? R) hframe1 ⟨σ1, i1, c.steps + 1⟩ hEntry
+  obtain ⟨hExit, hpres, hwords, φf', φc', hpf', hpc', hsurvSL⟩ := hReturned.result
+  -- PC back at the link (ret target of an aligned retPC)
+  have hpcRet : c2.σ.regs.get? Register.PC = some retPC := by
+    rw [hExit.pc, ret_tgt retPC hretAl]
+  have hframe2 : ∀ R : Register, AbiPreservedNoise R → c2.σ.regs.get? R = gpre R :=
+    fun R hR => (hExit.frame R hR).trans (hframe1 R hR)
   -- s1 (x9) back to the outer sret
   have hs1_2 : c2.σ.regs.get? Register.x9 = some sret := by
     rw [hframe2 Register.x9 (by decide)]
@@ -536,6 +535,102 @@ theorem armTail_rec_gen (Q : Config → Prop)
         exact ⟨φcr, hpcr, ValueWordRepr.of_repr_total hrepr hwords⟩),
     ⟨φf', φc', hpf', hpc', hsurvSL c2.σ.mem (fun _ _ => rfl), hsurvSL⟩,
     hcode2, hslotRa2, hslotS02, hslotS12, hslotS22, hmemFrame2, hpres⟩
+
+/-- The original call helper projects the callback's retained ABI relation. -/
+theorem armTail_rec_gen (Q : Config → Prop)
+    (gpre : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' : Vsa.While.St) (d : Nat) (env : Addr) (esub : Expr) (vsub : Value)
+    (callPC retPC : BitVec 64) (jalImm : BitVec 21)
+    (sp r sret subsret aIn aOperand : BitVec 64) (v8 v9 v18 : BitVec 64)
+    (out0 : Array String) (mcall : Mem)
+    -- target arithmetic, fixed by the arm (`decide`-able concretely):
+    (hjaltgt : (callPC + sign_extend (m := 64) jalImm) = BitVec.ofNat 64 evalExprEntry)
+    (hlink : (BitVec.addInt callPC 4) = retPC)
+    (hretAl : retPC.toNat % 4 = 0)
+    (henvValid : EnvValid st env)
+    -- the per-arm `jal eval_expr` site step:
+    (hjalSite : ∀ (σ : MState) (i u : Nat) (vmi : BitVec 64),
+      GoodState σ → σ.regs.get? Register.PC = some callPC →
+      σ.regs.get? Register.minstret = some vmi → Eval_exprLoaded σ.mem → i < 2 →
+      ∃ (σ' : MState) (i' : Nat),
+        Step ⟨σ, i, u⟩ ⟨σ', i', u + 1⟩ ∧ i' < 2 ∧ GoodState σ' ∧ σ'.mem = σ.mem ∧
+        ReadsLikePost σ' (sigmaPost_jal σ callPC vmi jalImm Register.x1 (BitVec.addInt callPC 4)))
+    -- the induction hypothesis for the sub-derivation, at THIS call (any ghost
+    -- frame `g_sub`; the arm supplies the post-`jal` register file), with an
+    -- arbitrary retained fact `Q` about the child's actual return:
+    (hIH : ∀ g_sub : (R : Register) → Option (RegisterType R),
+      Triple
+        (EvalEntry g_sub N A SL φf φc st d env esub (sp - 1088#64) retPC subsret aIn aOperand
+          mcall)
+        (ReturnedWith
+          (EvalExitD g_sub N A SL φf φc st.store.frames.size st.store.closures.size
+            st' vsub (sp - 1088#64) retPC subsret mcall)
+          Q)) :
+    Triple
+      (fun c =>
+        GoodState c.σ ∧ c.tick < 2 ∧
+        c.σ.regs.get? Register.PC = some callPC ∧
+        c.σ.regs.get? Register.x10 = some subsret ∧          -- a0 = sub-sret
+        c.σ.regs.get? Register.x9 = some sret ∧              -- s1 = outer sret
+        c.σ.regs.get? Register.x11 = some aIn ∧              -- a1 = interp*
+        c.σ.regs.get? Register.x13 = some (BitVec.ofNat 64 (φf env)) ∧
+        c.σ.regs.get? Register.x12 = some aOperand ∧         -- a2 = operand node
+        c.σ.regs.get? Register.x2 = some (sp - 1088#64) ∧    -- sp lowered
+        (∃ w, c.σ.regs.get? Register.minstret = some w) ∧
+        c.σ.sailOutput = out0 ∧
+        String.join out0.toList = st.out ∧
+        c.σ.mem = mcall ∧
+        ValueWordsTotal mcall subsret.toNat ∧
+        Eval_exprLoaded mcall ∧ Value_intLoaded mcall ∧ IntSlotPinned mcall ∧
+        NBSPins mcall ∧
+        -- WAVE 47i: the child's entry-ground bundle (transported+projected
+        -- from the parent `EvalEntry.ground` by the supplier).
+        EvalGround mcall SL A (sp - 1088#64) subsret aOperand.toNat esub ∧
+        ExprRepr mcall aOperand.toNat esub ∧
+        StoreRepr mcall N A φf φc st.store ∧
+        (∀ m' : Mem,
+          (∀ k, ¬ (SL.lo ≤ k ∧ k < SL.hi) → ¬ (sret.toNat ≤ k ∧ k < sret.toNat + 24) →
+            mcall[k]? = m'[k]?) →
+          StoreRepr m' N A φf φc st.store) ∧
+        (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
+        ((∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+          (∃ w, gpre Register.x19 = some w) ∧ (∃ w, gpre Register.x20 = some w) ∧
+          (∃ w, gpre Register.x21 = some w)) ∧
+        read64 mcall (sp.toNat - 8) = some r.toNat ∧
+        read64 mcall (sp.toNat - 16) = some v8.toNat ∧
+        read64 mcall (sp.toNat - 24) = some v9.toNat ∧
+        read64 mcall (sp.toNat - 32) = some v18.toNat ∧
+        -- operand-node geometry (the sub-call's `aExpr`):
+        0x80000000 ≤ aOperand.toNat ∧ aOperand.toNat + 16 ≤ 0x100000000 ∧
+        tohostAddr + 16 ≤ aOperand.toNat ∧
+        (aOperand.toNat + 16 ≤ SL.lo ∨ sp.toNat - 1088 ≤ aOperand.toNat) ∧
+        -- sub-result buffer geometry: inside the lowered frame, below the spill slots:
+        subsret.toNat % 8 = 0 ∧
+        sp.toNat - 1088 ≤ subsret.toNat ∧ subsret.toNat + 24 ≤ sp.toNat - 32 ∧
+        -- stack geometry: recursive headroom (one extra frame), 16-alignment:
+        SL.lo + 3264 ≤ sp.toNat ∧ sp.toNat ≤ SL.hi ∧ sp.toNat % 16 = 0 ∧
+        sp.toNat ≤ 0x100000000 ∧
+        0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000 ∧ tohostAddr + 16 ≤ SL.lo ∧
+        -- code/table/arena region disjointness:
+        (sp.toNat ≤ 0x80003164 ∨ 0x80003fe0 ≤ SL.lo) ∧
+        ((0x8000282c : Nat) ≤ SL.lo ∨ sp.toNat ≤ 0x800027ec) ∧
+        ((0x80019f58 : Nat) + 44 ≤ SL.lo ∨ sp.toNat ≤ 0x80019f58) ∧
+        (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) ∧
+        (A.hi ≤ 0x80003164 ∨ 0x80003fe0 ≤ A.lo) ∧
+        -- ITEM ZERO B1: child budget at the lowered `sp - 1088`, `.fn`-bodies
+        -- bound, store-bodies invariant (eval_expr keeps depth `d`).
+        StackOK SL (sp - 1088#64)
+          (esub.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget esub = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget)
+      (ReturnedWith
+        (SubEvalReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+          st' vsub sp r sret subsret retPC v8 v9 v18 mcall)
+        Q) :=
+  armTail_rec_frame Q gpre N A SL φf φc st st' d env esub vsub
+    callPC retPC jalImm sp r sret subsret aIn aOperand v8 v9 v18 out0 mcall
+    hjaltgt hlink hretAl henvValid hjalSite (fun g_sub _frame => hIH g_sub)
 
 /-- `armTail_rec_gen` at a ∀-closed child contract with an `sp`/`m0`-blind extra. -/
 theorem armTail_rec_with
@@ -746,6 +841,7 @@ theorem blockD_v_rec
   · exact fun _ h => h
 
 #print axioms PreEpilogueV.value
+#print axioms armTail_rec_frame
 #print axioms armTail_rec_gen
 #print axioms armTail_rec_with
 #print axioms blockD_v_rec_coherent

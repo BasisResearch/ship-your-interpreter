@@ -122,55 +122,45 @@ theorem blockEmpty_facts
 
 /-! ## The arm -/
 
-/-- The block arm from the statement entry to the indexed sequence entry. -/
-theorem blockArm_run (hEN : EnvNewContract)
-    {st : Vsa.While.St} {d : Nat} {env : Addr} {ss : List Stmt}
-    {store' : Store} {inner : Addr}
-    (hAlloc : st.store.allocFrame (some env) = (store', inner))
+/-- The block continuation retains its complete suffix and caller frame. -/
+structure BlockArmResumePost
     (g : (R : Register) → Option (RegisterType R))
-    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
-    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) :
-    Triple
-      (ExecEntry g N A SL φf φc st d env (.block ss) sp r aInterp aStmt aEnv aRet m0)
-      (fun cfg => ∃ (gSeq : (R : Register) → Option (RegisterType R))
-          (φf' φc' : Addr → Nat) (mSeq : Mem),
-        ExecSeqEntryI .blockBody gSeq N A SL φf' φc'
-          ⟨store', st.out⟩ d inner ss (sp - 176#64) aRet mSeq cfg ∧
-        Rows.BlockArmFrame g gSeq A SL φf φc φf' φc' st store' sp r aRet m0 mSeq) := by
-  intro cfg hEntry
-  have hstore' : store' = (st.store.allocFrame (some env)).1 := by
-    simpa using (congrArg Prod.fst hAlloc).symm
-  have hinner : inner = st.store.frames.size := by
-    simpa using (congrArg Prod.snd hAlloc).symm
-  subst hstore' hinner
-  obtain ⟨cA, ment, hsA, hA⟩ := armState_of_entry_kind 2 execArmBlock (by decide) rfl (by decide)
-    (fun _ _ h => by cases h with | block hk _ _ _ => exact hk) hEntry
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (phiF phiC resultF : Addr → Nat)
+    (st : Vsa.While.St) (d env : Nat) (ss : List Stmt)
+    (sp r aStmt aRet : BitVec 64) (base : Nat) (m0 mReturn : Mem)
+    (arm after : Config) : Prop where
+  entry : ExecSeqEntryI .blockBody after.σ.regs.get? N A SL resultF phiC
+    ⟨(st.store.allocFrame (some env)).1, st.out⟩ d st.store.frames.size ss
+    (sp - 176#64) aRet after.σ.mem after
+  parent : Rows.BlockArmFrame g after.σ.regs.get? A SL phiF phiC resultF phiC st
+    (st.store.allocFrame (some env)).1 sp r aRet m0 after.σ.mem
+  memory : after.σ.mem = mReturn
+  kept : ∀ R, keepS3 R = true → after.σ.regs.get? R = arm.σ.regs.get? R
+  ground : ExecGround after.σ.mem SL A sp aRet aStmt.toNat (.block ss)
+  baseRead : read64 after.σ.mem (aStmt.toNat + 8) = some base
+  countRead : read32 after.σ.mem (aStmt.toNat + 16) = some ss.length
+  suffix : SeqSuffixGround after.σ.mem SL A (sp - 176#64) aRet d base ss
+
+/-- Reuse the existing block routes after an actual env_new return. -/
+theorem blockArm_resume
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc φf' : Addr → Nat}
+    {st : Vsa.While.St} {d : Nat} {env : Addr} {ss : List Stmt}
+    {sp r aInterp aStmt aEnv aRet p : BitVec 64} {m0 ment : Mem} {cA cR : Config}
+    (hA : ArmState execArmBlock (.block ss) g N A SL φf φc st d env
+      sp r aInterp aStmt aEnv aRet m0 ment cA)
+    (hRet : blockEnvNewCall.Return cA.σ.regs.get? p (sp - 176#64) aStmt aInterp aRet aEnv
+      ment cR.σ.mem
+      (fun k => (A.lo ≤ k ∧ k < A.hi) ∨ (SL.lo ≤ k ∧ k < (sp - 176#64).toNat))
+      cA.σ.sailOutput cR)
+    (hFresh : EnvNewFresh N A SL φf φc st env p φf' cR.σ.mem) :
+    ∃ cfgR base, Steps cR cfgR ∧
+      BlockArmResumePost g N A SL φf φc φf' st d env ss sp r aStmt aRet base m0 cR.σ.mem cA cfgR := by
   have F := hA.frameFacts
   obtain ⟨h176, hesp, hSLlo, hSLhi, hal⟩ := F.geom
-  have hstack := F.espStack
-  have harena := F.espArena
-  -- park at `env_new`
-  obtain ⟨cP, hsP, hP⟩ := blockEnvNewCall.parked_of_armState blockEnvNewCall_cert hA []
-    (by change ChainOK 0x8000418c#64 [2, 8, 9, 18, 19] blockEnvNewSeg; decide) rfl
-    (by change KeysOK [10, 2, 8, 9, 18, 19]; decide)
-    (by change ∀ n ∈ [10, 2, 8, 9, 18, 19], n ≠ 1; decide)
-    (by show Exec_stmtLoaded (writeLog ment []); exact hA.code)
-    (blockEnvNew_facts ment _ _ _ _ _ hA.code)
   have hsext : (sign_extend (m := 64) (0#12) : BitVec 64) = 0#64 := by decide
-  have hM : EnvNewMem N A SL φf φc st env (aEnv + sign_extend (m := 64) (0#12)) (sp - 176#64)
-      (writeLog ment []) :=
-    { text := hA.ground.eval_call.image.text
-      store := hA.store
-      store_survives := hA.store_survives
-      env_valid := hA.env_valid
-      env_addr := by rw [hsext, BitVec.add_zero]; exact hA.env_addr
-      stack := hstack
-      stack_ram := hA.stack_ram
-      stack_win := hA.stack_win
-      stack_bytes := hA.ground.stack_bytes
-      arena_stack := harena }
-  obtain ⟨cR, p, φf', hsR, hRet, hFresh⟩ :=
-    blockEnvNewCall.envNewReturn_of_parked blockEnvNewCall_cert rfl hEN hP rfl rfl rfl rfl rfl rfl hM
+  have hAlloc : st.store.allocFrame (some env) =
+      ((st.store.allocFrame (some env)).1, st.store.frames.size) := rfl
   -- the memory after the callee
   have hframeP : ∀ a, ¬ (SL.lo ≤ a ∧ a < sp.toNat) → ¬ (A.lo ≤ a ∧ a < A.hi) →
       (aRet.toNat ≤ a ∧ a < aRet.toNat + 24) ∨ cR.σ.mem[a]? = ment[a]? := by
@@ -275,8 +265,13 @@ theorem blockArm_run (hEN : EnvNewContract)
     have hmR : cfgR.σ.mem = cR.σ.mem := by rw [hHead.mem]; rfl
     have h2 : cfgR.σ.regs.get? Register.x2 = some (sp - 176#64) := by
       simpa only [gprGet] using gholds_lookup (n := 2) _ hHead.regs rfl
-    refine ⟨cfgR, hsA.trans (hsP.trans (hsR.trans hsRoute)), fun R => cfgR.σ.regs.get? R,
-      φf', φc, cfgR.σ.mem, ?_, mkFrame cfgR hmR hHead.frame h2⟩
+    refine ⟨cfgR, base, hsRoute,
+      { entry := ?_, parent := mkFrame cfgR hmR hHead.frame h2
+        memory := hmR, kept := hHead.frame
+        ground := by rw [hmR]; exact hgroundR
+        baseRead := by rw [hmR]; exact hbase
+        countRead := by rw [hmR]; exact hcount
+        suffix := by rw [hmR]; exact hsuffix }⟩
     exact
       { good := hHead.good
         tick := hHead.tick
@@ -336,8 +331,13 @@ theorem blockArm_run (hEN : EnvNewContract)
     have hqLt : q < 2 ^ 64 := read64_lt_eg4 cR.σ.mem base q hq
     have hneed := Stmt.stackNeed_ge s
     simp only [execFrame] at hneed
-    refine ⟨cfgR, hsA.trans (hsP.trans (hsR.trans hsRoute)), fun R => cfgR.σ.regs.get? R,
-      φf', φc, cfgR.σ.mem, ?_, mkFrame cfgR hmR hHead.frame h2⟩
+    refine ⟨cfgR, base, hsRoute,
+      { entry := ?_, parent := mkFrame cfgR hmR hHead.frame h2
+        memory := hmR, kept := hHead.frame
+        ground := by rw [hmR]; exact hgroundR
+        baseRead := by rw [hmR]; exact hbase
+        countRead := by rw [hmR]; exact hcount
+        suffix := by rw [hmR]; exact hsuffix }⟩
     exact
       { good := hHead.good
         tick := hHead.tick
@@ -382,20 +382,76 @@ theorem blockArm_run (hEN : EnvNewContract)
         frame := fun _ _ => rfl
         minstret := hHead.minstret }
 
+/-- The block arm from the statement entry to the indexed sequence entry. -/
+theorem blockArm_run (hEN : EnvNewContract)
+    {st : Vsa.While.St} {d : Nat} {env : Addr} {ss : List Stmt}
+    {store' : Store} {inner : Addr}
+    (hAlloc : st.store.allocFrame (some env) = (store', inner))
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (sp r aInterp aStmt aEnv aRet : BitVec 64) (m0 : Mem) :
+    Triple
+      (ExecEntry g N A SL φf φc st d env (.block ss) sp r aInterp aStmt aEnv aRet m0)
+      (fun cfg => ∃ (gSeq : (R : Register) → Option (RegisterType R))
+          (φf' φc' : Addr → Nat) (mSeq : Mem),
+        ExecSeqEntryI .blockBody gSeq N A SL φf' φc'
+          ⟨store', st.out⟩ d inner ss (sp - 176#64) aRet mSeq cfg ∧
+        Rows.BlockArmFrame g gSeq A SL φf φc φf' φc' st store' sp r aRet m0 mSeq) := by
+  intro cfg hEntry
+  have hstore' : store' = (st.store.allocFrame (some env)).1 := by
+    simpa using (congrArg Prod.fst hAlloc).symm
+  have hinner : inner = st.store.frames.size := by
+    simpa using (congrArg Prod.snd hAlloc).symm
+  subst hstore' hinner
+  obtain ⟨cA, ment, hsA, hA⟩ := armState_of_entry_kind 2 execArmBlock (by decide) rfl (by decide)
+    (fun _ _ h => by cases h with | block hk _ _ _ => exact hk) hEntry
+  have F := hA.frameFacts
+  obtain ⟨h176, hesp, hSLlo, hSLhi, hal⟩ := F.geom
+  have hstack := F.espStack
+  have harena := F.espArena
+  -- park at `env_new`
+  obtain ⟨cP, hsP, hP⟩ := blockEnvNewCall.parked_of_armState blockEnvNewCall_cert hA []
+    (by change ChainOK 0x8000418c#64 [2, 8, 9, 18, 19] blockEnvNewSeg; decide) rfl
+    (by change KeysOK [10, 2, 8, 9, 18, 19]; decide)
+    (by change ∀ n ∈ [10, 2, 8, 9, 18, 19], n ≠ 1; decide)
+    (by show Exec_stmtLoaded (writeLog ment []); exact hA.code)
+    (blockEnvNew_facts ment _ _ _ _ _ hA.code)
+  have hsext : (sign_extend (m := 64) (0#12) : BitVec 64) = 0#64 := by decide
+  have hM : EnvNewMem N A SL φf φc st env (aEnv + sign_extend (m := 64) (0#12)) (sp - 176#64)
+      (writeLog ment []) :=
+    { text := hA.ground.eval_call.image.text
+      store := hA.store
+      store_survives := hA.store_survives
+      env_valid := hA.env_valid
+      env_addr := by rw [hsext, BitVec.add_zero]; exact hA.env_addr
+      stack := hstack
+      stack_ram := hA.stack_ram
+      stack_win := hA.stack_win
+      stack_bytes := hA.ground.stack_bytes
+      arena_stack := harena }
+  obtain ⟨cR, p, φf', hsR, hRet, hFresh⟩ :=
+    blockEnvNewCall.envNewReturn_of_parked blockEnvNewCall_cert rfl hEN hP rfl rfl rfl rfl rfl rfl hM
+  obtain ⟨cfgR, base, resume, post⟩ := blockArm_resume hA hRet hFresh
+  exact ⟨cfgR, hsA.trans (hsP.trans (hsR.trans resume)), cfgR.σ.regs.get?,
+    φf', φc, cfgR.σ.mem, post.entry, post.parent⟩
+
+#print axioms blockArm_resume
+
 /-- The epilogue seam of the block: from the indexed sequence exit at the
 shared epilogue entry to the widened statement exit, through the retained
 parent frame. -/
-theorem blockEpilogue_run
+theorem blockEpilogue_memory
     {g gSeq : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc φf' φc' : Addr → Nat}
     {st st' : Vsa.While.St} {store' : Store} {status : Status}
     {sp r aRet : BitVec 64} {m0 mSeq : Mem}
     (hFr : Rows.BlockArmFrame g gSeq A SL φf φc φf' φc' st store' sp r aRet m0 mSeq) :
-    Triple
-      (ExecSeqExitI .blockBody gSeq N A SL φf' φc'
-        store'.frames.size store'.closures.size st' status (sp - 176#64) aRet mSeq)
-      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
-        st' status sp r aRet m0) := by
+    ∀ cfg,
+      ExecSeqExitI .blockBody gSeq N A SL φf' φc'
+        store'.frames.size store'.closures.size st' status (sp - 176#64) aRet mSeq cfg →
+      ∃ after, Steps cfg after ∧
+      ExecTailResult g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' status sp r aRet m0 cfg.σ.mem after := by
   intro cfg hX
   have h176 := hFr.spRoom
   have hesp : (sp - 176#64).toNat = sp.toNat - 176 := EvalChildArm.esp_toNat sp h176
@@ -427,7 +483,7 @@ theorem blockEpilogue_run
       (by intro hA; rcases hac with hd | hd <;> omega)).symm
   have hsp : cfg.σ.regs.get? Register.x2 = some (sp - 176#64) :=
     (hX.frame Register.x2 ⟨by decide, trivial⟩).trans hFr.seqSp
-  refine epilogueTail (φf' := φfS) (φc' := φcS) cfg ?_
+  refine epilogueTail_memory (φf' := φfS) (φc' := φcS) cfg ?_
   exact
     { good := hX.good
       tick := hX.tick
@@ -470,6 +526,24 @@ theorem blockEpilogue_run
       spWin := hFr.spWin
       spAlign := hFr.spAlign
       retAlign := hFr.retAlign }
+
+/-- Project the ordinary block exit from the same memory-preserving epilogue. -/
+theorem blockEpilogue_run
+    {g gSeq : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc φf' φc' : Addr → Nat}
+    {st st' : Vsa.While.St} {store' : Store} {status : Status}
+    {sp r aRet : BitVec 64} {m0 mSeq : Mem}
+    (hFr : Rows.BlockArmFrame g gSeq A SL φf φc φf' φc' st store' sp r aRet m0 mSeq) :
+    Triple
+      (ExecSeqExitI .blockBody gSeq N A SL φf' φc'
+        store'.frames.size store'.closures.size st' status (sp - 176#64) aRet mSeq)
+      (ExecExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st' status sp r aRet m0) := by
+  intro cfg hX
+  obtain ⟨after, steps, result⟩ := blockEpilogue_memory hFr cfg hX
+  exact ⟨after, steps, result.exit⟩
+
+#print axioms blockEpilogue_memory
 
 /-- The block residual from the `env_new` contract alone. -/
 theorem ScaffoldRows.field_hSBlock (hEN : EnvNewContract) :

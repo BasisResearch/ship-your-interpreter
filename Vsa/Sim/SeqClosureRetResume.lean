@@ -25,19 +25,16 @@ structure SeqClosureRetCarrier
 
 /-- A returned closure-body statement is already at the sequence's return
 boundary. Rebase its memory and ghost frame without executing an instruction. -/
-theorem seqClosureRetResume
+theorem SeqClosureRetCarrier.exit
     {g gExec : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
     {nf nc : Nat} {st' : Vsa.While.St} {v : Value}
     {sp aRet : BitVec 64} {m0 mCall : Mem}
-    (h : SeqClosureRetCarrier g gExec A SL sp aRet m0 mCall) :
-    Triple
-      (ExecExitD gExec N A SL φf φc nf nc st' (.ret v)
-        sp 0x80003378#64 aRet mCall)
-      (ExecSeqExitI .closureBody g N A SL φf φc nf nc
-        st' (.ret v) sp aRet m0) := by
-  intro cfg hChild
-  refine ⟨cfg, Steps.refl cfg, ?_⟩
+    (h : SeqClosureRetCarrier g gExec A SL sp aRet m0 mCall)
+    {cfg : Config}
+    (hChild : ExecExitD gExec N A SL φf φc nf nc st' (.ret v)
+      sp 0x80003378#64 aRet mCall cfg) :
+    ExecSeqExitI .closureBody g N A SL φf φc nf nc st' (.ret v) sp aRet m0 cfg := by
   exact
     { supported := Or.inr ⟨v, rfl⟩
       good := hChild.1.good
@@ -61,6 +58,21 @@ theorem seqClosureRetResume
       frame := fun R hR => (hChild.1.frame R hR.1).trans (h.frame R hR)
       minstret := hChild.1.minstret }
 
+/-- Project the same zero-step return as an ordinary sequence triple. -/
+theorem seqClosureRetResume
+    {g gExec : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {nf nc : Nat} {st' : Vsa.While.St} {v : Value}
+    {sp aRet : BitVec 64} {m0 mCall : Mem}
+    (h : SeqClosureRetCarrier g gExec A SL sp aRet m0 mCall) :
+    Triple
+      (ExecExitD gExec N A SL φf φc nf nc st' (.ret v)
+        sp 0x80003378#64 aRet mCall)
+      (ExecSeqExitI .closureBody g N A SL φf φc nf nc
+        st' (.ret v) sp aRet m0) :=
+  fun cfg child => ⟨cfg, Steps.refl cfg, h.exit child⟩
+
+#print axioms SeqClosureRetCarrier.exit
 #print axioms seqClosureRetResume
 
 end Vsa.Sim

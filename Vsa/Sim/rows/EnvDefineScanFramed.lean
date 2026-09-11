@@ -384,24 +384,29 @@ theorem envDefineScanCompareFramed
   have hqNat : (BitVec.ofNat 64 q).toNat = q := by
     rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqLt]
   let g1 : (R : Register) → Option (RegisterType R) := fun R => c1.σ.regs.get? R
-  have hpre : strcmp_full_pre g1 (BitVec.ofNat 64 q) name 0x80002abc#64
+  have hpre : StrcmpEntryCond g1 (BitVec.ofNat 64 q) name 0x80002abc#64
       (f.vars[i]'hs.index).1 nameStr m0 c1.σ.sailOutput c1 := by
-    refine ⟨hG1, ?_, ?_, rfl, hpc1, ha01, ha11, hra1, hmi1, htick1,
-      (by decide), ?_, hs.names.nameCStr, hs.names.maskPinned, ?_, ?_, ?_, ?_, ?_⟩
-    · rw [hmem1]
-      exact hs.loadedS
-    · exact hmem1.trans hs.mem
-    · rw [hqNat]
-      exact hqstr
-    · rw [hqNat]
-      exact fun cs hcs => hs.names.bindRegB i hs.index q hq cs hcs
-    · exact hs.names.nameRegB
-    · rw [hqNat]
-      exact fun cs hcs => hs.names.bindRegW i hs.index q hq cs hcs
-    · exact hs.names.nameRegW
-    · intro R _
-      rfl
-  obtain ⟨c2, hsteps2, hp⟩ := strcmp_full_spec g1 (BitVec.ofNat 64 q) name
+    exact
+      { good := hG1
+        loaded := by rw [hmem1]; exact hs.loadedS
+        mem := hmem1.trans hs.mem
+        out := rfl
+        pc := hpc1
+        a0 := ha01
+        a1 := ha11
+        ra := hra1
+        minstret := hmi1
+        tick := htick1
+        ralign := by decide
+        cstra := by rw [hqNat]; exact hqstr
+        cstrb := hs.names.nameCStr
+        maskpin := hs.names.maskPinned
+        wrega := by
+          rw [hqNat]
+          exact fun cs hcs => hs.names.bindRegW i hs.index q hq cs hcs
+        wregb := hs.names.nameRegW
+        frame := fun _ _ => rfl }
+  obtain ⟨c2, hsteps2, hp⟩ := strcmp_full_spec_cond g1 (BitVec.ofNat 64 q) name
     0x80002abc#64 (f.vars[i]'hs.index).1 nameStr m0 c1.σ.sailOutput c1 hpre
   obtain ⟨hG2, hpc2, _hra2, hmem2, hout2, htick2, hframe2,
     csa, csb, x, hcsa, hcsb, hsa, hsb, hx, hsign⟩ := hp
@@ -830,6 +835,67 @@ def EnvDefineScanFramedResult
         env name pv sp [] m0 c ∧ EnvDefineSavedSpillFrame sp saved c ∧
       EnvDefineScanFrame M exts outp sp gm (BitVec.ofNat 64 (i + 1))
         (pn + BitVec.ofNat 64 (8 * (i + 1))) c)
+
+/-- Named existing-name exit of the finite scan. -/
+structure EnvDefineScanHitExit
+    {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (out : Array String)
+    (saved gm : (R : Register) → Option (RegisterType R))
+    (env name pv count pn sp : BitVec 64) (f : Vsa.While.Frame) (query : String)
+    (m : Mem) (i : Nat) (hi : i < f.vars.length) (cmp : BitVec 64) (c : Config) : Prop where
+  first : EnvDefineNamesMissBefore f query i
+  nameEq : f.vars[i].1 = query
+  live : EnvDefineScanLivePost envDefineScanHitSeg 0x80002ac0#64
+    cmp (BitVec.ofNat 64 i) (pn + BitVec.ofNat 64 (8 * i)) count env name pv sp [] m c
+  savedFrame : EnvDefineSavedSpillFrame sp saved c
+  frame : EnvDefineScanFrame M exts out sp gm (BitVec.ofNat 64 i)
+    (pn + BitVec.ofNat 64 (8 * i)) c
+  memory : c.σ.mem = m
+  resultReg : c.σ.regs.get? Register.x10 = some cmp
+
+/-- Named exhausted-name exit of the finite scan. -/
+structure EnvDefineScanMissExit
+    {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List (Nat × Nat)) (out : Array String)
+    (saved gm : (R : Register) → Option (RegisterType R))
+    (env name pv count pn sp : BitVec 64) (f : Vsa.While.Frame) (query : String)
+    (m : Mem) (i : Nat) (cmp : BitVec 64) (c : Config) : Prop where
+  missing : ∀ j (hj : j < f.vars.length), f.vars[j].1 ≠ query
+  lastIndex : i + 1 = f.vars.length
+  live : EnvDefineScanLivePost envDefineScanDoneSeg 0x80002b14#64
+    cmp (BitVec.ofNat 64 i) (pn + BitVec.ofNat 64 (8 * i)) count env name pv sp [] m c
+  savedFrame : EnvDefineSavedSpillFrame sp saved c
+  frame : EnvDefineScanFrame M exts out sp gm (BitVec.ofNat 64 (i + 1))
+    (pn + BitVec.ofNat 64 (8 * (i + 1))) c
+  memory : c.σ.mem = m
+
+/-- Consume the legacy result through named hit and miss fields. -/
+theorem EnvDefineScanFramedResult.resolve
+    {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
+    {M : MallocContract A SL gpv headroom maxReq} {exts : List (Nat × Nat)} {out : Array String}
+    {saved gm : (R : Register) → Option (RegisterType R)}
+    {env name pv count pn sp : BitVec 64} {f : Vsa.While.Frame} {query : String}
+    {m : Mem} {c : Config} {Q : Prop}
+    (h : EnvDefineScanFramedResult M exts out saved gm env name pv count pn sp f query m c)
+    (hit : ∀ i hi cmp, EnvDefineScanHitExit M exts out saved gm
+      env name pv count pn sp f query m i hi cmp c → Q)
+    (miss : ∀ i cmp, EnvDefineScanMissExit M exts out saved gm
+      env name pv count pn sp f query m i cmp c → Q) : Q := by
+  rcases h with ⟨i, hi, first, nameEq, cmp, live, savedFrame, frame⟩ |
+    ⟨missing, i, lastIndex, cmp, live, savedFrame, frame⟩
+  · apply hit i hi cmp
+    refine ⟨first, nameEq, live, savedFrame, frame, ?_, ?_⟩
+    · obtain ⟨_, memory, _, _, _⟩ := live
+      simpa [envDefineScanHitSeg, evalBlocks, SegEvalState.init, writeLog] using memory
+    · obtain ⟨_, _, _, regs, _⟩ := live
+      show gprGet c.σ 10 = some cmp
+      exact gholds_lookup _ regs (by rfl)
+  · apply miss i cmp
+    refine ⟨missing, lastIndex, live, savedFrame, frame, ?_⟩
+    obtain ⟨_, memory, _, _, _⟩ := live
+    simpa [envDefineScanDoneSeg, evalBlocks, SegEvalState.init, writeLog] using memory
+
+#print axioms EnvDefineScanFramedResult.resolve
 
 /-- Total finite env-define scan with StackOK, gp, all ABI-preserved registers,
 the allocator invariant, and the independent spill image carried to either

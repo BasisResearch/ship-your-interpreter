@@ -80,9 +80,14 @@ From the post-call state (`ve_str_reaches_result`'s conclusion) at `0x800028d8` 
 where `m1` agrees with `m0` off `[sp-16, sp)` and the spill slot `[sp-8, sp)` holds
 `sdData_val r`, run the four epilogue instructions to the return at `r`. -/
 
-/-- The epilogue restores `ra`, computes `seqz`, restores `sp`, and returns. The `ld ra`
-reads the spilled `r` back from the untouched slot `mem[sp-8] = sdData_val r`. -/
-theorem ve_str_epilogue
+/-- Equality's string return retains the exact memory produced by its spill. -/
+structure VeStrPostMemory
+    (g : (R : Register) → Option (RegisterType R)) (r sp : BitVec 64)
+    (va vb : Value) (m0 m1 : Mem) (o : Array String) (c : Config) : Prop where
+  post : ve_str_post g r sp va vb m0 o c
+  memory : c.σ.mem = m1
+
+theorem ve_str_epilogue_memory
     (g : (R : Register) → Option (RegisterType R)) (r sp : BitVec 64) (x : BitVec 64)
     (va vb : Value) (m0 m1 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
     (c : Config) (hi : c.tick < 2) (hG : GoodState c.σ)
@@ -103,7 +108,7 @@ theorem ve_str_epilogue
     (he4lo : 0x80000000 ≤ (0x800028e4 : Nat)) (he4hi : (0x800028e4 : Nat) + 4 ≤ tohostAddr)
     -- the spill slot `[sp-8, sp)` of `m1` holds `sdData_val r` (from the `sd ra,8(sp)`)
     (hspill : m1 = writeMap8 m0 ((sp - 16#64).toNat + 8) (sdData_val r)) :
-    ∃ c', Steps c c' ∧ ve_str_post g r sp va vb m0 o c' := by
+    ∃ c', Steps c c' ∧ VeStrPostMemory g r sp va vb m0 m1 o c' := by
   have htoh : tohostAddr = 0x8001ad00 := rfl
   -- spn = sp - 16 arithmetic
   have hspn_toNat : (sp - 16#64).toNat = sp.toNat - 16 := ve_sp_sub16_toNat sp hsp16
@@ -216,7 +221,37 @@ theorem ve_str_epilogue
     (by chain_out [hobs1, hobs2, hobs3, hobs4] : σ4.sailOutput = c.σ.sailOutput).trans hout
   refine ⟨⟨σ4, i4, c.steps + 1 + 1 + 1 + 1⟩,
     (((Steps.single hs1).trans (Steps.single hs2)).trans (Steps.single hs3)).trans (Steps.single hs4),
-    hG4, hpc4, ha0_4, hra_4, hsp_4, ⟨vmi4, hmi4⟩, hi4, hout4, hmemframe, hframe4⟩
+    ⟨hG4, hpc4, ha0_4, hra_4, hsp_4, ⟨vmi4, hmi4⟩, hi4, hout4, hmemframe, hframe4⟩, hmem4eq⟩
+
+
+/-- The epilogue restores `ra`, computes `seqz`, restores `sp`, and returns. The `ld ra`
+reads the spilled `r` back from the untouched slot `mem[sp-8] = sdData_val r`. -/
+theorem ve_str_epilogue
+    (g : (R : Register) → Option (RegisterType R)) (r sp : BitVec 64) (x : BitVec 64)
+    (va vb : Value) (m0 m1 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String)
+    (c : Config) (hi : c.tick < 2) (hG : GoodState c.σ)
+    (hloaded1 : Value_equalLoaded m1) (hmem : c.σ.mem = m1) (hout : c.σ.sailOutput = o)
+    (hpc : c.σ.regs.get? Register.PC = some (0x800028d8#64 : BitVec 64))
+    (hra : c.σ.regs.get? Register.x1 = some (0x800028d8#64 : BitVec 64))
+    (hx10 : c.σ.regs.get? Register.x10 = some x)
+    (hsp : c.σ.regs.get? Register.x2 = some (sp - 16#64))
+    (vmi : BitVec 64) (hmi : c.σ.regs.get? Register.minstret = some vmi)
+    (hframe : ∀ R : Register, NotWrittenVEStr R → c.σ.regs.get? R = g R)
+    -- the result bridge
+    (hbridge : (x == 0#64) = Value.equal va vb)
+    -- stack facts: `sp` 16-aligned window in RAM, above HTIF; `r` 4-aligned
+    (hsp16 : 16 ≤ sp.toNat) (hwin_lo : 0x80000000 ≤ sp.toNat - 16)
+    (hwin_hi : sp.toNat ≤ 0x100000000) (hwin_htif : tohostAddr + 16 ≤ sp.toNat - 16)
+    (hwin_align : (sp.toNat - 16) % 8 = 0)
+    (hralign : (BitVec.update (r + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0)
+    (he4lo : 0x80000000 ≤ (0x800028e4 : Nat)) (he4hi : (0x800028e4 : Nat) + 4 ≤ tohostAddr)
+    -- the spill slot `[sp-8, sp)` of `m1` holds `sdData_val r` (from the `sd ra,8(sp)`)
+    (hspill : m1 = writeMap8 m0 ((sp - 16#64).toNat + 8) (sdData_val r)) :
+    ∃ c', Steps c c' ∧ ve_str_post g r sp va vb m0 o c' := by
+  obtain ⟨after, steps, result⟩ := ve_str_epilogue_memory g r sp x va vb m0 m1 o
+    c hi hG hloaded1 hmem hout hpc hra hx10 hsp vmi hmi hframe hbridge
+    hsp16 hwin_lo hwin_hi hwin_htif hwin_align hralign he4lo he4hi hspill
+  exact ⟨after, steps, result.post⟩
 
 /-! ## The whole `str` handler `0x800028c4 → ret`
 

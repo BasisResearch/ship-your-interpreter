@@ -244,6 +244,7 @@ theorem envDefineEmptyLane
     envDefinePrologueExit g N A SL φf φc st env x v esp aEnv aName pv r m out M exts
       (EnvDefineUpdateOracles.of_entry h.facts L) c h
   have Sf := Q.facts
+  have scannedReserve := LM.reserve_after_spills hE.stack Sf.mem_agree
   have P := Q.post
   have henvLt := Sf.env_lt
   have hcount0 : st.store.frames[env].vars.length = 0 := hempty henvLt
@@ -395,7 +396,7 @@ theorem envDefineEmptyLane
       v8 v9 v18 v19 v20 v21 v22 pn c1 c2 hE L Q hG2 htick2 hmemA hmi2 hk2.keep hk2.out
     obtain ⟨c3, hs3', hret⟩ :=
       envDefineGrowEntry_run g N A SL φf φc st env x v esp aEnv aName pv r m out M exts exts _
-        hE L LM c2 ⟨0, pn, pvals, F, Rg, hcount0, Sf.pn_read, hpvals, by omega,
+        hE L LM LM.budget scannedReserve c2 ⟨0, pn, pvals, F, Rg, hcount0, Sf.pn_read, hpvals, by omega,
           .init rfl hpcA ha5 ha1, hs6⟩
     exact ⟨c3, hs1.trans (hs2.trans hs3'), hret⟩
   · -- `cap ≠ 0`: the append head, entered without the scan
@@ -457,7 +458,9 @@ theorem envDefineEmptyLane
       v8 v9 v18 v19 v20 v21 v22 pn c1 c2 hE L Q hG2 htick2 hmemA hmi2 hk2.keep hk2.out
     obtain ⟨c3, hs3', hret⟩ :=
       envDefineAppendLane g N A SL φf φc st env x v esp aEnv aName pv r m out M exts exts _
-        cap hE L LM c2 ⟨F, Rg, hpcA, by rw [hcount0]; exact hcapPos⟩
+        cap hE L LM (LM.budget.mono (by decide : 1 ≤ 3))
+          (scannedReserve.mono (by decide : 1 ≤ 3)) c2
+          ⟨F, Rg, hpcA, by rw [hcount0]; exact hcapPos⟩
     exact ⟨c3, hs1.trans (hs2.trans hs3'), hret⟩
 
 #print axioms envDefineCapInitGrow_unreachable

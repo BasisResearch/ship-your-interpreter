@@ -444,8 +444,16 @@ theorem SelectedFramedSegResult.framedSteps
 
 #print axioms SelectedFramedSegResult.framedSteps
 
-/-- Generic constructor for the selected, footprint-aware segment result. -/
-theorem segEval_selected_framed
+/-- A selected segment result also retaining its exact instruction count. -/
+structure CountedSelectedFramedSegResult
+    (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
+    (pc0 : BitVec 64) (foot : Nat → Prop) (keep : Register → Bool)
+    (selected : GRegs) (c0 c1 : Config) : Prop extends
+    SelectedFramedSegResult bs L lds pc0 foot keep selected c0 c1 where
+  count : c1.steps = c0.steps + evalBlocksFuel bs
+
+/-- The reflected execution supplies its frame and instruction count together. -/
+theorem segEval_selected_counted
     (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
     (pc0 vm : BitVec 64) (foot : Nat → Prop) (keep : Register → Bool)
     (selected : GRegs) (c : Config)
@@ -459,14 +467,15 @@ theorem segEval_selected_framed
     (hnoise : ∀ rr ∈ noiseRegs, keep rr = false)
     (havoid : WrChainAvoids keep bs)
     (hproj : GProjects (evalBlocks bs (SegEvalState.init L lds)).regs selected) :
-    ∃ c', SelectedFramedSegResult bs L lds pc0 foot keep selected c c' := by
+    ∃ c', CountedSelectedFramedSegResult bs L lds pc0 foot keep selected c c' := by
   obtain ⟨sigma', i', hsteps, hi', hG', hmem', hout', hpc', hmi', hregs', hframe'⟩ :=
     segEval_sound bs c.σ c.tick c.steps pc0 vm L lds
       hG hpc hmi hL hkeys hfacts hwf hi
   let c' : Config := ⟨sigma', i', c.steps + evalBlocksFuel bs⟩
   refine ⟨c', ?_⟩
   refine
-    { steps := by simpa [c'] using hsteps
+    { count := rfl
+      steps := by simpa [c'] using hsteps
       good := by simpa [c'] using hG'
       tick := by simpa [c'] using hi'
       mem := by simpa [c'] using hmem'
@@ -482,6 +491,28 @@ theorem segEval_selected_framed
   · intro R hR
     simpa [c'] using
       frame_of_wrChain_avoids (P := keep) hnoise havoid hframe' R hR
+
+#print axioms segEval_selected_counted
+
+/-- Forget only the count from the same selected reflected execution. -/
+theorem segEval_selected_framed
+    (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8)))
+    (pc0 vm : BitVec 64) (foot : Nat → Prop) (keep : Register → Bool)
+    (selected : GRegs) (c : Config)
+    (hG : GoodState c.σ) (hpc : c.σ.regs.get? Register.PC = some pc0)
+    (hmi : c.σ.regs.get? Register.minstret = some vm)
+    (hL : GHolds c.σ L) (hkeys : KeysOK (keysG L))
+    (hfacts : ChainFacts c.σ.mem c.σ.mem L lds bs)
+    (hwf : ChainOK pc0 (keysG L) bs) (hi : c.tick < 2)
+    (hfoot : ∀ k, ¬ foot k → c.σ.mem[k]? =
+      (writeLog c.σ.mem (evalBlocks bs (SegEvalState.init L lds)).log)[k]?)
+    (hnoise : ∀ rr ∈ noiseRegs, keep rr = false)
+    (havoid : WrChainAvoids keep bs)
+    (hproj : GProjects (evalBlocks bs (SegEvalState.init L lds)).regs selected) :
+    ∃ c', SelectedFramedSegResult bs L lds pc0 foot keep selected c c' := by
+  obtain ⟨after, result⟩ := segEval_selected_counted bs L lds pc0 vm foot keep selected
+    c hG hpc hmi hL hkeys hfacts hwf hi hfoot hnoise havoid hproj
+  exact ⟨after, result.toSelectedFramedSegResult⟩
 
 #print axioms segEval_selected_framed
 

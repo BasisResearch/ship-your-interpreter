@@ -1,3 +1,4 @@
+import Vsa.Sim.AllocMallocAdapters
 import Vsa.Sim.AllocOff
 import Vsa.Sim.rows.EnvDefineCallRuns
 import Vsa.Sim.rows.EnvDefineAppendClosed
@@ -248,6 +249,46 @@ theorem appendFootprint_of_owned {A : Arena} {exts : List Extent} {m : Mem}
   · omega
 
 /-- The store block's address geometry from the arena and the stack slot. -/
+theorem appendStoreFactsGeom_at {A : Arena} {exts : List Extent}
+    {m : Mem} {φf φc : Addr → Nat} {alloc : Allocations}
+    {shared readable writes : Nat → Prop} {s : Vsa.While.Store} {env : Addr}
+    {cap names vals : Nat} {aEnv pv : BitVec 64}
+    (h : HeapOwned A exts m φf φc alloc shared readable writes s)
+    (henv : env < s.frames.size) (henvAddr : aEnv.toNat = φf env)
+    (hcap : read32 m (φf env + 4) = some cap)
+    (hnames : read64 m (φf env + 8) = some names)
+    (hvals : read64 m (φf env + 16) = some vals)
+    (hroom : s.frames[env].vars.length < cap) (hcapS : cap < 2^31)
+    (hnamesAl : names % 8 = 0) (hvalsAl : vals % 8 = 0)
+    (henvAl : φf env % 8 = 0)
+    (harenaRam : 0x80000000 ≤ A.lo ∧ A.hi ≤ 0x100000000)
+    (harenaHtif : tohostAddr + 16 ≤ A.lo)
+    (sourceLo : 0x80000000 ≤ pv.toNat) (sourceHi : pv.toNat + 24 ≤ 0x100000000)
+    (sourceHtif : tohostAddr + 16 ≤ pv.toNat) (sourceAlign : pv.toNat % 8 = 0) :
+    AppendStoreFactsGeom aEnv pv s.frames[env].vars.length names vals ∧
+      A.contains (names + 8 * s.frames[env].vars.length) 8 ∧
+      A.contains (vals + 24 * s.frames[env].vars.length) 24 ∧
+      A.contains aEnv.toNat 4 := by
+  have hfo := h.store.frames env henv
+  obtain ⟨a, harr⟩ := hfo.arrays
+  have ec : a.cap = cap := Option.some.inj (harr.capRead.symm.trans hcap)
+  have en : a.names = names := Option.some.inj (harr.namesRead.symm.trans hnames)
+  have ev : a.values = vals := Option.some.inj (harr.valuesRead.symm.trans hvals)
+  have hposCap : 0 < a.cap := by omega
+  obtain ⟨_, hnLo, hnHi⟩ := h.ledger.arena.1 _ (h.ledger.live _ _ _ (harr.names.nonempty hposCap))
+  obtain ⟨_, hvLo, hvHi⟩ := h.ledger.arena.1 _ (h.ledger.live _ _ _ (harr.values.nonempty hposCap))
+  obtain ⟨_, hrLo, hrHi⟩ := h.ledger.arena.1 _ (h.ledger.live _ _ _ hfo.record)
+  simp only at hnLo hnHi hvLo hvHi hrLo hrHi
+  rw [en] at hnLo
+  rw [en, ec] at hnHi
+  rw [ev] at hvLo
+  rw [ev, ec] at hvHi
+  have htoh : tohostAddr = 0x8001ad00 := rfl
+  refine ⟨⟨by omega, by omega, by omega, by omega, by omega, by omega, by omega, by omega,
+    by omega, by omega, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩,
+    ⟨by omega, by omega⟩, ⟨by omega, by omega⟩, ⟨by omega, by omega⟩⟩
+
+/-- The original caller slot supplies the same append-store geometry. -/
 theorem appendStoreFactsGeom_of {A : Arena} {SL : StackLayout} {exts : List Extent}
     {m : Mem} {φf φc : Addr → Nat} {alloc : Allocations}
     {shared readable writes : Nat → Prop} {s : Vsa.While.Store} {env : Addr}
@@ -270,27 +311,12 @@ theorem appendStoreFactsGeom_of {A : Arena} {SL : StackLayout} {exts : List Exte
       A.contains (names + 8 * s.frames[env].vars.length) 8 ∧
       A.contains (vals + 24 * s.frames[env].vars.length) 24 ∧
       A.contains aEnv.toNat 4 := by
-  have hfo := h.store.frames env henv
-  obtain ⟨a, harr⟩ := hfo.arrays
-  have ec : a.cap = cap := Option.some.inj (harr.capRead.symm.trans hcap)
-  have en : a.names = names := Option.some.inj (harr.namesRead.symm.trans hnames)
-  have ev : a.values = vals := Option.some.inj (harr.valuesRead.symm.trans hvals)
-  have hposCap : 0 < a.cap := by omega
-  obtain ⟨_, hnLo, hnHi⟩ := h.ledger.arena.1 _ (h.ledger.live _ _ _ (harr.names.nonempty hposCap))
-  obtain ⟨_, hvLo, hvHi⟩ := h.ledger.arena.1 _ (h.ledger.live _ _ _ (harr.values.nonempty hposCap))
-  obtain ⟨_, hrLo, hrHi⟩ := h.ledger.arena.1 _ (h.ledger.live _ _ _ hfo.record)
-  simp only at hnLo hnHi hvLo hvHi hrLo hrHi
-  rw [en] at hnLo
-  rw [en, ec] at hnHi
-  rw [ev] at hvLo
-  rw [ev, ec] at hvHi
-  have htoh : tohostAddr = 0x8001ad00 := rfl
   have hsp1 := hstack.1
   have hsp2 := hstack.2.1
   have hsp3 := hstack.2.2
-  refine ⟨⟨by omega, by omega, by omega, by omega, by omega, by omega, by omega, by omega,
-    by omega, by omega, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩,
-    ⟨by omega, by omega⟩, ⟨by omega, by omega⟩, ⟨by omega, by omega⟩⟩
+  exact appendStoreFactsGeom_at h henv henvAddr hcap hnames hvals hroom hcapS
+    hnamesAl hvalsAl henvAl harenaRam harenaHtif
+    (by omega) (by omega) (by omega) (by omega)
 
 /-! ## 4. The lane -/
 
@@ -316,7 +342,9 @@ theorem envDefineAppendLane
     (cap : Nat)
     (hE : EnvDefineMem N A SL φf φc st env x v aEnv aName pv esp m)
     (L : EnvDefineUpdateLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts)
-    (LM : EnvDefineMissLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts) :
+    (LM : EnvDefineMissLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts)
+    (budget : ResourceBudget A maxReq extsA 1)
+    (reserve : AllocationReserve A mA extsA maxReq 1) :
     Triple (EnvDefineAppendHead g N A SL φf φc st env x v esp aEnv aName pv r m out M extsA mA cap)
       (EnvDefineReturnState g N A SL φf φc st env x v esp r m out) := by
   intro c0 H
@@ -423,10 +451,19 @@ theorem envDefineAppendLane
       ainv := hainv3
       mem := S3.mem.trans hmem2
       out := S3.out.trans hout2 }
-  obtain ⟨c4, hs4, X4⟩ := LM.alloc.malloc g3 extsA (x.length + 1) (esp - 64#64) 0x80002b30#64 mA out
-    LM.copy_req c3 hentry3
-  obtain ⟨p, ha04, hp0, hp16, hpA, hpFresh, hainv4⟩ :=
-    M.nonNull_of_bounded c4.σ extsA (x.length + 1) LM.copy_req X4.result
+  obtain ⟨c4, hs4, success4⟩ := LM.alloc.mallocSuccess g3 extsA (x.length + 1) 0
+    (esp - 64#64) 0x80002b30#64 mA out c3
+    (MallocSuccessEntry.of_entry hentry3 (by rw [hentry3.mem]; exact H.facts.text)
+      { bounded := LM.copy_req, budget := budget
+        reserve := by rw [hentry3.mem]; exact reserve })
+  obtain ⟨p, result4⟩ := success4.allocated
+  have X4 := success4.returned.toMallocExit (M := M) result4
+  have ha04 := result4.pointer.register
+  have hp0 := result4.pointer.nonzero
+  have hp16 := result4.pointer.aligned
+  have hpA := result4.pointer.arena
+  have hpFresh := result4.disjoint
+  have hainv4 := result4.ainv
   change A.lo ≤ p ∧ p + (x.length + 1) ≤ A.hi at hpA
   have hpLt : p + (x.length + 1) < 2^64 := by omega
   -- memory after malloc: agrees with `mA` off the private bytes and the window

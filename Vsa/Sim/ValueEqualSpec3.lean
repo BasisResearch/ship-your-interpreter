@@ -1,6 +1,6 @@
 import Vsa.Sim.ValueEqualSpec2
 import Vsa.Sim.ValueEqualSites3
-import Vsa.Sim.StrcmpSpecW4
+import Vsa.Sim.StrcmpSpecCond
 import Vsa.Sim.ValueSpec
 import Vsa.Sim.EnvDefSpec2
 import Vsa.Sim.ObsAvoid
@@ -385,7 +385,7 @@ spill via `cstr_writeMap8_disjoint` / `strcmpLoaded_of_agree` / `maskPinned_of_a
 `ve_str_reaches_result`: from `0x800028c4` to the `strcmp` return `0x800028d8`, with
 `x10`'s value being the machine `strcmp` result whose `== 0` test decides `sa = sb`, and
 `mem = m1` (the spilled memory, agreeing with `m0` off the stack window). -/
-theorem ve_str_reaches_result
+theorem ve_str_reaches_result_cond
     (g : (R : Register) → Option (RegisterType R)) (bufa bufb r sp : BitVec 64)
     (sa sb : String) (pa' pb' : Nat) (csa csb : List Char)
     (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) (σ : MState) (i : Nat) (steps0 : Nat)
@@ -406,8 +406,8 @@ theorem ve_str_reaches_result
     -- strcmp region families (over `m0`; the specific `csa`/`csb` witnesses suffice)
     (hbra : StrcmpRegion (BitVec.ofNat 64 pa') csa.length)
     (hbrb : StrcmpRegion (BitVec.ofNat 64 pb') csb.length)
-    (hwra : StrcmpWRegion (BitVec.ofNat 64 pa') csa.length)
-    (hwrb : StrcmpWRegion (BitVec.ofNat 64 pb') csb.length)
+    (hwra : StrcmpWSlack (BitVec.ofNat 64 pa') csa.length)
+    (hwrb : StrcmpWSlack (BitVec.ofNat 64 pb') csb.length)
     -- stack / disjointness bundle
     (hSR : VEStrRegions sp pa' pb' csa.length csb.length) :
     ∃ (c6 : Config) (m1 : Std.ExtHashMap Nat (BitVec 8)) (x : BitVec 64),
@@ -599,17 +599,15 @@ theorem ve_str_reaches_result
   have hcb1' : CStr m1 (BitVec.ofNat 64 pb').toNat csb := by rw [hpb_nat]; exact hcb1
   have hout5 : σ5.sailOutput = o :=
     (by chain_out [hobs1, hobs2, hobs3, hobs4, hobs5] : σ5.sailOutput = σ.sailOutput).trans hout
-  have hcorepre : strcmp_full_pre (fun R => σ5.regs.get? R) (BitVec.ofNat 64 pa')
+  have hcorepre : StrcmpEntryCond (fun R => σ5.regs.get? R) (BitVec.ofNat 64 pa')
       (BitVec.ofNat 64 pb') (0x800028d8#64) sa sb m1 o ⟨σ5, i5, steps0 + 1 + 1 + 1 + 1 + 1⟩ := by
     refine ⟨hG5, hmem5eq ▸ hstrc1, hmem5eq, hout5, ?_, ha0_5', ha1_5, hra_5,
       ⟨vmi5, hmi5⟩, hi5, (by decide), hcstra1, hcstrb1, hmem5eq ▸ hmask1,
-      (fun cs hcs => cstr_functional m1 _ cs csa hcs hca1' ▸ hbra),
-      (fun cs hcs => cstr_functional m1 _ cs csb hcs hcb1' ▸ hbrb),
       (fun cs hcs => cstr_functional m1 _ cs csa hcs hca1' ▸ hwra),
       (fun cs hcs => cstr_functional m1 _ cs csb hcs hcb1' ▸ hwrb), fun R _ => rfl⟩
     rw [hpc5]
   obtain ⟨c6, hs6, hpost6⟩ :=
-    strcmp_full_spec (fun R => σ5.regs.get? R) (BitVec.ofNat 64 pa') (BitVec.ofNat 64 pb')
+    strcmp_full_spec_cond (fun R => σ5.regs.get? R) (BitVec.ofNat 64 pa') (BitVec.ofNat 64 pb')
       (0x800028d8#64) sa sb m1 o ⟨σ5, i5, steps0 + 1 + 1 + 1 + 1 + 1⟩ hcorepre
   -- strcmp post: returned to 0x800028d8, mem = m1, x10's sign the spec sign
   obtain ⟨hG6, hpc6, hra6, hmem6, hout6, htick6, hframe6, csa', csb', x10v, hca6, hcb6, hsa6, hsb6, hx10_6, hsign6⟩ := hpost6
@@ -655,5 +653,56 @@ theorem ve_str_reaches_result
     (hframe6 R (notWrittenStrcmp_of_str hR)).trans (hframe5 R hR)
   exact ⟨c6, m1, x10v, hsteps_all, hG6, htick6, hpc6, hra6, hx10_6, hbridge, hsp6, hmem6, hout6,
     hmem_frame, hframeStr6, hm1def, hloaded1⟩
+
+
+/-- Preserve the original aligned-string interface. -/
+theorem ve_str_reaches_result
+    (g : (R : Register) → Option (RegisterType R)) (bufa bufb r sp : BitVec 64)
+    (sa sb : String) (pa' pb' : Nat) (csa csb : List Char)
+    (m0 : Std.ExtHashMap Nat (BitVec 8)) (o : Array String) (c : Config) (σ : MState) (i : Nat) (steps0 : Nat)
+    (hsteps0 : Steps c ⟨σ, i, steps0⟩) (hi : i < 2)
+    (hG : GoodState σ) (hmem : σ.mem = m0) (hout : σ.sailOutput = o) (hloaded : Value_equalLoaded m0)
+    (hstrc : StrcmpLoaded m0) (hmask : MaskPinned m0)
+    (hpc : σ.regs.get? Register.PC = some (0x800028c4#64 : BitVec 64))
+    (ha0 : σ.regs.get? Register.x10 = some bufa) (ha1 : σ.regs.get? Register.x11 = some bufb)
+    (hra : σ.regs.get? Register.x1 = some r) (hsp : σ.regs.get? Register.x2 = some sp)
+    (vmi : BitVec 64) (hmi : σ.regs.get? Register.minstret = some vmi)
+    (hrega : VERegion bufa) (hregb : VERegion bufb)
+    (_hralign : r.toNat % 4 = 0)
+    (hframe : ∀ R : Register, NotWrittenVE R → σ.regs.get? R = g R)
+    -- the two string payloads (from `ValueRepr .str`)
+    (hpa : read64 m0 (bufa.toNat + 8) = some pa') (hpb : read64 m0 (bufb.toNat + 8) = some pb')
+    (hca : CStr m0 pa' csa) (hcb : CStr m0 pb' csb)
+    (hsa : sa = String.ofList csa) (hsb : sb = String.ofList csb)
+    -- strcmp region families (over `m0`; the specific `csa`/`csb` witnesses suffice)
+    (hbra : StrcmpRegion (BitVec.ofNat 64 pa') csa.length)
+    (hbrb : StrcmpRegion (BitVec.ofNat 64 pb') csb.length)
+    (hwra : StrcmpWRegion (BitVec.ofNat 64 pa') csa.length)
+    (hwrb : StrcmpWRegion (BitVec.ofNat 64 pb') csb.length)
+    -- stack / disjointness bundle
+    (hSR : VEStrRegions sp pa' pb' csa.length csb.length) :
+    ∃ (c6 : Config) (m1 : Std.ExtHashMap Nat (BitVec 8)) (x : BitVec 64),
+      Steps c c6 ∧ GoodState c6.σ ∧ c6.tick < 2 ∧
+      c6.σ.regs.get? Register.PC = some (0x800028d8#64 : BitVec 64) ∧
+      c6.σ.regs.get? Register.x1 = some (0x800028d8#64 : BitVec 64) ∧
+      c6.σ.regs.get? Register.x10 = some x ∧
+      -- the `== 0` result test decides `Value.equal (.str sa) (.str sb)`:
+      ((x == 0#64) = Value.equal (.str sa) (.str sb)) ∧
+      -- `sp` is recovered across the call via strcmp's ghost frame (`x2 ∉ write-set`):
+      c6.σ.regs.get? Register.x2 = some (sp - 16#64) ∧
+      c6.σ.mem = m1 ∧ c6.σ.sailOutput = o ∧
+      (∀ a, ¬ (sp.toNat - 16 ≤ a ∧ a < sp.toNat) → m1[a]? = m0[a]?) ∧
+      -- the whole `NotWrittenVEStr` frame carries back to the handler-entry ghost `g`
+      -- (strcmp's frame ∘ the pre-call str frame); the epilogue consumes this.
+      (∀ R : Register, NotWrittenVEStr R → c6.σ.regs.get? R = g R) ∧
+      -- the concrete spilled-memory form (for the epilogue's `ld ra` slot readback) and its
+      -- `Value_equalLoaded`:
+      m1 = writeMap8 m0 ((sp - 16#64).toNat + 8) (sdData_val r) ∧
+      Value_equalLoaded m1 := by
+  exact ve_str_reaches_result_cond g bufa bufb r sp sa sb pa' pb' csa csb m0 o c σ i steps0
+    hsteps0 hi hG hmem hout hloaded hstrc hmask hpc ha0 ha1 hra hsp vmi hmi hrega hregb
+    _hralign hframe hpa hpb hca hcb hsa hsb hbra hbrb
+    ⟨hwra.lo, hwra.hi, hwra.nowrap, hwra.code, hwra.htif⟩
+    ⟨hwrb.lo, hwrb.hi, hwrb.nowrap, hwrb.code, hwrb.htif⟩ hSR
 
 end Vsa.Sim

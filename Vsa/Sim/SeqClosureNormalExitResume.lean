@@ -95,11 +95,29 @@ theorem seqClosureNormal_load32
   exact ⟨⟨by omega, by omega, Or.inr hwin⟩,
     by simp [LPins4, seqClosureNormalCountBytes]⟩
 
-theorem SeqClosureNormalExitCarrier.facts
+/-- Caller frame and arithmetic facts for the last normal iteration. -/
+structure SeqClosureNormalFinalData
+    (g gExec : (R : Register) → Option (RegisterType R))
+    (A : Arena) (SL : StackLayout) (sp aRet body : BitVec 64)
+    (index count : Nat) (m0 mCall : Mem) : Prop
+    extends SeqClosureRetCarrier g gExec A SL sp aRet m0 mCall where
+  indexReg : gExec x8 = some (BitVec.ofNat 64 index)
+  last : index + 1 = count
+  countBound : count < 2^31
+  spLo : 0x80000000 ≤ sp.toNat
+  spHi : sp.toNat + 8 ≤ 0x100000000
+  spWin : tohostAddr + 8 ≤ sp.toNat
+  spAlign : sp.toNat % 8 = 0
+  bodyLo : 0x80000000 ≤ body.toNat
+  bodyHi : body.toNat + 20 ≤ 0x100000000
+  bodyWin : tohostAddr + 8 ≤ body.toNat + 16
+  bodyAlign : body.toNat % 4 = 0
+
+theorem SeqClosureNormalFinalData.facts
     {g gExec : (R : Register) → Option (RegisterType R)}
     {A : Arena} {SL : StackLayout} {sp aRet body : BitVec 64}
     {index count : Nat} {m0 mCall : Mem}
-    (h : SeqClosureNormalExitCarrier g gExec A SL sp aRet body index count m0 mCall)
+    (h : SeqClosureNormalFinalData g gExec A SL sp aRet body index count m0 mCall)
     {m : Mem} (hc : Code.Eval_exprLoaded m)
     (hsaved : read64 m sp.toNat = some body.toNat)
     (hcount : read32 m (body.toNat + 16) = some count) :
@@ -132,35 +150,56 @@ theorem SeqClosureNormalExitCarrier.facts
       hinc, Sail.BitVec.extractLsb, BitVec.extractLsb, hextract, hsext,
       zopz0zKzJ_s]
 
+/-- Project the final-iteration geometry from the ordinary carrier. -/
+def SeqClosureNormalExitCarrier.finalData
+    {g gExec : (R : Register) → Option (RegisterType R)}
+    {A : Arena} {SL : StackLayout} {sp aRet body : BitVec 64}
+    {index count : Nat} {m0 mCall : Mem}
+    (h : SeqClosureNormalExitCarrier g gExec A SL sp aRet body index count m0 mCall) :
+    SeqClosureNormalFinalData g gExec A SL sp aRet body index count m0 mCall :=
+  { toSeqClosureRetCarrier := h.toSeqClosureRetCarrier
+    indexReg := h.indexReg, last := h.last, countBound := h.countBound
+    spLo := h.spLo, spHi := h.spHi, spWin := h.spWin, spAlign := h.spAlign
+    bodyLo := h.bodyLo, bodyHi := h.bodyHi, bodyWin := h.bodyWin, bodyAlign := h.bodyAlign }
+
+theorem SeqClosureNormalExitCarrier.facts
+    {g gExec : (R : Register) → Option (RegisterType R)}
+    {A : Arena} {SL : StackLayout} {sp aRet body : BitVec 64}
+    {index count : Nat} {m0 mCall : Mem}
+    (h : SeqClosureNormalExitCarrier g gExec A SL sp aRet body index count m0 mCall)
+    {m : Mem} (hc : Code.Eval_exprLoaded m)
+    (hsaved : read64 m sp.toNat = some body.toNat)
+    (hcount : read32 m (body.toNat + 16) = some count) :
+    ChainFacts m m (callClosureBodyExitL 0#64 sp (BitVec.ofNat 64 index))
+      (seqClosureNormalLoads m sp body) callClosureBodyExitNormalSeg :=
+  h.finalData.facts hc hsaved hcount
+
 def seqClosureNormalKeep (R : Register) : Bool :=
   AbiPreserved R && !(R == x8)
 
-/-- Execute the reflected final-iteration route and retain the child's exact
-store witnesses, output, and caller frame at the normal sequence boundary. -/
-theorem seqClosureNormalExitResume
+/-- The final normal route retains the exact child-return memory. -/
+structure SeqClosureNormalExitResult
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (phiF phiC : Addr → Nat)
+    (nf nc : Nat) (st : Vsa.While.St) (sp aRet : BitVec 64) (m0 childMem : Mem)
+    (cfg : Config) : Prop where
+  exit : ExecSeqExitI .closureBody g N A SL phiF phiC nf nc st .normal sp aRet m0 cfg
+  memory : cfg.σ.mem = childMem
+
+/-- Run the final route from the actual child-return code and saved-word reads. -/
+theorem seqClosureNormalExitRun
     {g gExec : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
     {nf nc : Nat} {st' : Vsa.While.St}
     {sp aRet body : BitVec 64} {index count : Nat} {m0 mCall : Mem}
-    (h : SeqClosureNormalExitCarrier g gExec A SL sp aRet body index count m0 mCall) :
-    Triple
-      (ExecExitD gExec N A SL φf φc nf nc st' .normal
-        sp 0x80003378#64 aRet mCall)
-      (ExecSeqExitI .closureBody g N A SL φf φc nf nc
-        st' .normal sp aRet m0) := by
-  intro cfg hChild
-  have hag : AgreeP (seqClosureNormalReads sp body) mCall cfg.σ.mem := by
-    intro a ha
-    obtain ⟨hs, hA, hr⟩ := h.readSafe a ha
-    exact ((hChild.1.memFrame a hs hA).resolve_left hr).symm
-  have hc := loaded_eval_expr_agreeP mCall cfg.σ.mem
-    (fun a ha => hag a (Or.inl ha)) h.code
-  have hb : read64 cfg.σ.mem sp.toNat = some body.toNat := by
-    rw [← read64_agreeP hag (fun k hk => Or.inr (Or.inl ⟨by omega, by omega⟩))]
-    exact h.savedBody
-  have hn : read32 cfg.σ.mem (body.toNat + 16) = some count := by
-    rw [← read32_agreeP hag (fun k hk => Or.inr (Or.inr ⟨by omega, by omega⟩))]
-    exact h.bodyCount
+    (h : SeqClosureNormalFinalData g gExec A SL sp aRet body index count m0 mCall)
+    (cfg : Config)
+    (hChild : ExecExitD gExec N A SL φf φc nf nc st' .normal sp 0x80003378#64 aRet mCall cfg)
+    (hc : Code.Eval_exprLoaded cfg.σ.mem)
+    (hb : read64 cfg.σ.mem sp.toNat = some body.toNat)
+    (hn : read32 cfg.σ.mem (body.toNat + 16) = some count) :
+    ∃ after, Vsa.Machine.Steps cfg after ∧
+      SeqClosureNormalExitResult g N A SL φf φc nf nc st' sp aRet m0 cfg.σ.mem after := by
   have h8 := (hChild.1.frame x8 (by decide)).trans h.indexReg
   obtain ⟨vm, hmi⟩ := hChild.1.minstret
   obtain ⟨σ', i', hs, hi, hg, hm, ho, hpc, hmi', _, hframe⟩ :=
@@ -175,7 +214,7 @@ theorem seqClosureNormalExitResume
   have hregs := frame_of_wrChain_avoids
     (by decide : ∀ rr ∈ noiseRegs, seqClosureNormalKeep rr = false)
     (by decide : WrChainAvoids seqClosureNormalKeep callClosureBodyExitNormalSeg) hframe
-  refine ⟨⟨σ', i', cfg.steps + evalBlocksFuel callClosureBodyExitNormalSeg⟩, hs, ?_⟩
+  refine ⟨⟨σ', i', cfg.steps + evalBlocksFuel callClosureBodyExitNormalSeg⟩, hs, ⟨?_, hmem⟩⟩
   exact
     { supported := Or.inl rfl
       good := hg
@@ -205,6 +244,39 @@ theorem seqClosureNormalExitResume
           ((hChild.1.frame R hR.1).trans (h.frame R hR))
       minstret := hmi' }
 
+
+/-- Execute the reflected final-iteration route and retain the child's exact
+store witnesses, output, and caller frame at the normal sequence boundary. -/
+theorem seqClosureNormalExitResume
+    {g gExec : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {nf nc : Nat} {st' : Vsa.While.St}
+    {sp aRet body : BitVec 64} {index count : Nat} {m0 mCall : Mem}
+    (h : SeqClosureNormalExitCarrier g gExec A SL sp aRet body index count m0 mCall) :
+    Triple
+      (ExecExitD gExec N A SL φf φc nf nc st' .normal
+        sp 0x80003378#64 aRet mCall)
+      (ExecSeqExitI .closureBody g N A SL φf φc nf nc
+        st' .normal sp aRet m0) := by
+  intro cfg hChild
+  have hag : AgreeP (seqClosureNormalReads sp body) mCall cfg.σ.mem := by
+    intro a ha
+    obtain ⟨hs, hA, hr⟩ := h.readSafe a ha
+    exact ((hChild.1.memFrame a hs hA).resolve_left hr).symm
+  have hc := loaded_eval_expr_agreeP mCall cfg.σ.mem
+    (fun a ha => hag a (Or.inl ha)) h.code
+  have hb : read64 cfg.σ.mem sp.toNat = some body.toNat := by
+    rw [← read64_agreeP hag (fun k hk => Or.inr (Or.inl ⟨by omega, by omega⟩))]
+    exact h.savedBody
+  have hn : read32 cfg.σ.mem (body.toNat + 16) = some count := by
+    rw [← read32_agreeP hag (fun k hk => Or.inr (Or.inr ⟨by omega, by omega⟩))]
+    exact h.bodyCount
+  obtain ⟨after, steps, result⟩ := seqClosureNormalExitRun h.finalData cfg hChild hc hb hn
+  exact ⟨after, steps, result.exit⟩
+
+#print axioms SeqClosureNormalFinalData.facts
+#print axioms SeqClosureNormalExitCarrier.finalData
+#print axioms seqClosureNormalExitRun
 #print axioms SeqClosureNormalExitCarrier.facts
 #print axioms seqClosureNormalExitResume
 

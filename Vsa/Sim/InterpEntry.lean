@@ -384,7 +384,14 @@ structure AstRegionSpec (m : Mem) (SL : StackLayout) (A : Arena)
     (sret aExpr : Nat) (e : Vsa.While.Expr) (lo hi : Nat) : Prop where
   nodes : ExprIn m lo hi aExpr e
   lo_ram : 0x80000000 ≤ lo
-  hi_ram : hi ≤ 0x100000000
+  /-- The region ends EIGHT bytes below the RAM top, not merely at it. The
+  `strcmp` word loop reads eight bytes at a time and may read past the final
+  NUL of a payload in this region, so a bound of `hi ≤ 0x100000000` leaves that
+  read unjustified (`IHClauseGenericProduct.astRegionSlack_forced`: no choice of
+  shared index repairs it downstream). True of the loaded image, whose AST
+  region sits in low RAM; discharged with the rest of `AstRegionSpec` when the
+  entry-side region assumptions are replaced by exact coverage (task 1). -/
+  hi_ram : hi + 8 ≤ 0x100000000
   win : tohostAddr + 16 ≤ lo
   stack_disjoint : hi ≤ SL.lo ∨ SL.hi ≤ lo
   sret_disjoint : hi ≤ sret ∨ sret + 24 ≤ lo

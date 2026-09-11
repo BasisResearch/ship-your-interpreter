@@ -5,6 +5,8 @@ import Vsa.Sim.IHClauseFootprintMeta
 import Vsa.Sim.IHClauseGeneric
 import Vsa.Sim.WordLoadData
 import Vsa.Sim.ValuePayloadCoverage
+import Vsa.Sim.OwnedPayloadClause
+import Vsa.Sim.IHClauseGenericOwned
 
 /-!
 # `StrCmpCellClauses` — the string-comparison cells from clause-shaped facts (IH tower, Level 2)
@@ -36,6 +38,21 @@ arena payloads).  This file replaces both by clause-shaped facts:
   `field_hStr{Lt,Le,Gt,Ge}_of_clauses` produce the EXACT `BinDispatchRow` fields
   from `StrCmpOwnedOperands` and the two closed clause recursions
   (`FootprintPayloadClause` for the left child, `FootprintClause` for the right).
+* **operands from ownership RETAINED at the return** (section 4) — the ∀-shaped
+  `StrCmpOwnedOperands` is NOT reachable: it quantifies over an arbitrary
+  configuration satisfying `TwoSubReturn`, which pins no payload geometry.  The
+  reachable form retains both operands' `OwnedSlot`s at the head's ACTUAL return:
+  the two-children head `blockB_binary_footprint_gen2` (`EvalBinSim.lean`) carries
+  the right child's clause fact at `sp - 944` and transports the left child's
+  across the right child's `noArenaFoot` footprint (`ownedSlot_head_transport` =
+  `OwnedSlot.transport`), landing `BinaryOperandRetained`.
+  `strCmpOperandsAt_of_retained` turns that into `StrCmpOperandsAt` through
+  `IHClauseGenericOwned.ownedOperands_of_clause`, and `binRow_strcmpF_owned` /
+  `binStrCmpCell_of_owned` / `field_hStr{Lt,Le,Gt,Ge}_of_owned` produce the four
+  cells from two ownership-carrying clause products
+  (`FootprintPayloadOwnedClause` / `FootprintOwnedClause`) and the index premises
+  `OwnedIndex S` + `SharedTopSlackAll S`.  Both chains share the cell tail
+  `strCmpCellTail` (dispatch + value epilogue at the head's return).
 
 NO `sorry`/`axiom`/`native_decide`/`bv_decide`; no Mathlib.
 -/
@@ -131,7 +148,15 @@ represented string-comparison entry, the two returned values are owned (the
 `Owned` index of `EvalReturn`: `ValueOwned` at the two result slots) at a shared
 set with `SharedGeom`.  Supplier: the ownership index of the recursive return
 (`ReturnRepr`/`EvalReturn … Owned`) at the string values, plus the shared set's
-geometry from `HeapOwned`/`EvalGround` (arena and AST region). -/
+geometry from `HeapOwned`/`EvalGround` (arena and AST region).
+
+UNREACHABLE AS STATED: `c'` is an ARBITRARY configuration satisfying
+`TwoSubReturn`, which constrains the operands only by `ValueRepr` — a payload
+pointer inside the stack, inside the arena, or in the top eight bytes of the
+address space is admitted, and no choice of `shared` then satisfies `SharedGeom`.
+No clause fact transports to a configuration no execution reaches.  Section 4 is
+the reachable form: the head RETAINS both operands' ownership at its own return,
+and the cells consume it there (`binStrCmpCell_of_owned`). -/
 def StrCmpOwnedOperands : Prop :=
   ∀ (g gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
@@ -274,6 +299,66 @@ theorem binaryHeadFootprintSupplyCov (Fl : FootFam) : BinaryHeadFootprintSupplyC
       (fun hsproom hspSLhi _ _φ _m _m' hQ hv _hag hfoot =>
         valueSurvives_of_covered (by omega) hspSLhi hv hQ hfoot)
 
+/-- **The string-comparison cell's tail at the head's ACTUAL return.**  From the
+two-children return (`TwoSubReturn` + `BinaryReturnData` + the head's footprint)
+and the operator residual `StrCmpResid`, this runs the comparison dispatch
+(`blockC_strcmp_footprint`) and the shared value epilogue
+(`blockD_v_rec_footprint`), landing the row's `EvalExitF`.  Both cell chains —
+`evalStrCmpSimF_cov` (the survival head) and `binRow_strcmpF_owned` (the
+ownership head) — go through this one copy. -/
+theorem strCmpCellTail (D : StrCmpOp) (C : D.Cert) (Fl : FootFam)
+    (gpre g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (sl sr : String)
+    (sp r sret aExpr : BitVec 64) (v8 v9 v18 v19 : BitVec 64) (m0 : Mem)
+    (hLeft : EvalE st d env el st' (.str sl))
+    (hEvalE : EvalE st d env (.binary D.op el er) st'' (.bool (D.bres sl sr)))
+    (hgx19 : gpre Register.x19 = some v19)
+    (hgv8 : g Register.x8 = some v8) (hgv9 : g Register.x9 = some v9)
+    (hgv18 : g Register.x18 = some v18) (hgv2 : g Register.x2 = some sp)
+    (hgvx19 : g Register.x19 = some v19)
+    (hbridge : ∀ R : Register, AbiPreservedNoise R →
+      (Register.x8 == R) = false → (Register.x9 == R) = false →
+      (Register.x18 == R) = false → (Register.x2 == R) = false → gpre R = g R) :
+    Triple
+      (fun c =>
+        TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+          st' st'' (.str sl) (.str sr) sp r sret v8 v9 v18 m0 c ∧
+        BinaryReturnData SL sp sret c ∧
+        MemFootprint (binaryHeadFoot Fl noArenaFoot SL A sp.toNat) m0 c.σ.mem ∧
+        StrCmpResid D gpre N A SL sp r sret aExpr c)
+      (EvalExitF (strCmpNodeFoot Fl noArenaFoot) g N A SL φf φc
+        st.store.frames.size st.store.closures.size
+        st'' (.bool (D.bres sl sr)) sp r sret m0) := by
+  intro c2 hpre
+  obtain ⟨hTS, hData, hHeadFoot, hR⟩ := hpre
+  have hOutC2 : String.join c2.σ.sailOutput.toList = st''.out :=
+    (TwoSubReturn.destruct gpre N A SL φf φc st.store.frames.size st.store.closures.size
+      st' st'' (.str sl) (.str sr) sp r sret v8 v9 v18 m0 c2 hTS).p8
+  obtain ⟨c3, hs3, mpre, φfm, φcm, φfe, φce, hpfm, hpcm, hpfe, hpce, hPreD, hCellFoot⟩ :=
+    blockC_strcmp_footprint D C gpre g N A SL φf φc st.store.frames.size st.store.closures.size
+      st' st'' sl sr sp r sret aExpr v8 v9 v18 v19 c2.σ.sailOutput m0 c2.σ.mem
+      c2 ⟨hTS, hR, hData, hOutC2, rfl, hgv8, hgv9, hgv18, hgv2, hgx19, hgvx19, hbridge, rfl⟩
+  obtain ⟨c4, hs4, hExitDe, hFoot⟩ :=
+    blockD_v_rec_footprint (strCmpNodeFoot Fl noArenaFoot SL A sp.toNat sret.toNat)
+      g N A SL φfe φce st'' (.bool (D.bres sl sr)) sp r sret v8 v9 v18
+      c2.σ.sailOutput m0 c3 ⟨mpre, hPreD, hHeadFoot.trans hCellFoot⟩
+  obtain ⟨hExitE, hMemExt, hWords, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
+  have hmono := evalE_store_mono hEvalE
+  have hleftMono := evalE_store_mono hLeft
+  have hleF' : st.store.frames.size ≤ st'.store.frames.size := hleftMono.1
+  have hleC' : st.store.closures.size ≤ st'.store.closures.size := hleftMono.2
+  have hpfF : PhiExtends φf φfe st.store.frames.size := hpfm.trans (PhiExtends.mono hleF' hpfe)
+  have hpcF : PhiExtends φc φce st.store.closures.size :=
+    hpcm.trans (PhiExtends.mono hleC' hpce)
+  have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
+      st'' (.bool (D.bres sl sr)) sp r sret m0 c4 :=
+    evalExit_of_phiExtends hpfF hpcF hExitE hmono.1 hmono.2
+  refine ⟨c4, hs3.trans hs4, ?_, hFoot⟩
+  exact ⟨hExit, hMemExt, hWords,
+    φf', φc', hpfF.trans (PhiExtends.mono hmono.1 hpf'),
+    hpcF.trans (PhiExtends.mono hmono.2 hpc'), hSurv⟩
+
 /-- `evalStrCmpSimF` (pilot A) over the survival-free head. -/
 theorem evalStrCmpSimF_cov (D : StrCmpOp) (C : D.Cert) (Fl : FootFam)
     (hHead : BinaryHeadFootprintSupplyCov Fl)
@@ -339,35 +424,12 @@ theorem evalStrCmpSimF_cov (D : StrCmpOp) (C : D.Cert) (Fl : FootFam)
         hpayL, hexprL, hpayR, hexprR, hMemExtM0, hGmt47,
         hstackBudgetL, hexprBodiesL, hstoreBodiesL,
         hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩
-  have hTS := hReturned.result
   obtain ⟨hData, hHeadFoot⟩ := hReturned.extra
-  have hR : StrCmpResid D gpre N A SL sp r sret aExpr c2 := hResid c2 hTS
-  have hOutC2 : String.join c2.σ.sailOutput.toList = st''.out :=
-    (TwoSubReturn.destruct gpre N A SL φf φc st.store.frames.size st.store.closures.size
-      st' st'' (.str sl) (.str sr) sp r sret v8 v9 v18 m0 c2 hTS).p8
-  obtain ⟨c3, hs3, mpre, φfm, φcm, φfe, φce, hpfm, hpcm, hpfe, hpce, hPreD, hCellFoot⟩ :=
-    blockC_strcmp_footprint D C gpre g N A SL φf φc st.store.frames.size st.store.closures.size
-      st' st'' sl sr sp r sret aExpr v8 v9 v18 v19 c2.σ.sailOutput m0 c2.σ.mem
-      c2 ⟨hTS, hR, hData, hOutC2, rfl, hgv8, hgv9, hgv18, hgv2, hgx19, hgvx19, hbridge, rfl⟩
-  obtain ⟨c4, hs4, hExitDe, hFoot⟩ :=
-    blockD_v_rec_footprint (strCmpNodeFoot Fl noArenaFoot SL A sp.toNat sret.toNat)
-      g N A SL φfe φce st'' (.bool (D.bres sl sr)) sp r sret v8 v9 v18
-      c2.σ.sailOutput m0 c3 ⟨mpre, hPreD, hHeadFoot.trans hCellFoot⟩
-  obtain ⟨hExitE, hMemExt, hWords, φf', φc', hpf', hpc', hSurv⟩ := hExitDe
-  have hmono := evalE_store_mono hEvalE
-  have hleftMono := evalE_store_mono hLeft
-  have hleF' : st.store.frames.size ≤ st'.store.frames.size := hleftMono.1
-  have hleC' : st.store.closures.size ≤ st'.store.closures.size := hleftMono.2
-  have hpfF : PhiExtends φf φfe st.store.frames.size := hpfm.trans (PhiExtends.mono hleF' hpfe)
-  have hpcF : PhiExtends φc φce st.store.closures.size :=
-    hpcm.trans (PhiExtends.mono hleC' hpce)
-  have hExit : EvalExit g N A SL φf φc st.store.frames.size st.store.closures.size
-      st'' (.bool (D.bres sl sr)) sp r sret m0 c4 :=
-    evalExit_of_phiExtends hpfF hpcF hExitE hmono.1 hmono.2
-  refine ⟨c4, ((hs2.trans hs3).trans hs4), ?_, hFoot⟩
-  exact ⟨hExit, hMemExt, hWords,
-    φf', φc', hpfF.trans (PhiExtends.mono hmono.1 hpf'),
-    hpcF.trans (PhiExtends.mono hmono.2 hpc'), hSurv⟩
+  obtain ⟨c4, hs4, hExit⟩ :=
+    strCmpCellTail D C Fl gpre g N A SL φf φc st st' st'' d env el er sl sr
+      sp r sret aExpr v8 v9 v18 v19 m0 hLeft hEvalE hgx19 hgv8 hgv9 hgv18 hgv2 hgvx19 hbridge
+      c2 ⟨hReturned.result, hData, hHeadFoot, hResid c2 hReturned.result⟩
+  exact ⟨c4, hs2.trans hs4, hExit⟩
 
 /-- `binRow_strcmpF` (pilot A) over the survival-free head: from the recursor
 entry, both children non-allocating, to `EvalExitF noArenaFoot`. -/
@@ -472,6 +534,202 @@ theorem ScaffoldRows.field_hStrGe_of_clauses (hOps : StrCmpOwnedOperands)
     BinStrCmpCell .ge (fun sl sr => sr < sl || sl == sr) :=
   binStrCmpCell_of_clauses strCmpGe strCmpGe_cert hOps hCL hCR
 
+/-! ## 4. The operands' ownership retained at the head's actual return -/
+
+/-- The LEFT child's clause product: the footprint `F`, the returned value's
+payload covered outside the WHOLE stack (what `valueSurvives_of_covered`
+consumes), and the returned slot owned at the shared family `S`. -/
+abbrev EvalIHFPO (S : SharedFam) (F : FootFam) (st : Vsa.While.St) (d : Nat) (env : Addr)
+    (e : Expr) (st' : Vsa.While.St) (v : Value) : Prop :=
+  EvalIHWithM (fun _ A SL _ _ sp sret m0 c =>
+      MemFootprint (F SL A sp.toNat sret.toNat) m0 c.σ.mem ∧
+      (ValuePayloadCovered (fun k => ¬ (SL.lo ≤ k ∧ k < SL.hi)) c.σ.mem sret.toNat v ∧
+        OwnedSlot c.σ.mem (S SL A) sret.toNat))
+    st d env e st' v
+
+/-- The RIGHT child's clause product: the footprint `F` and the returned slot
+owned at `S` (no coverage — nothing has to survive past the right child). -/
+abbrev EvalIHFO (S : SharedFam) (F : FootFam) (st : Vsa.While.St) (d : Nat) (env : Addr)
+    (e : Expr) (st' : Vsa.While.St) (v : Value) : Prop :=
+  EvalIHWithM (fun _ A SL _ _ sp sret m0 c =>
+      MemFootprint (F SL A sp.toNat sret.toNat) m0 c.σ.mem ∧
+      OwnedSlot c.σ.mem (S SL A) sret.toNat)
+    st d env e st' v
+
+theorem EvalIHFPO.footprintPayload {S : SharedFam} {F : FootFam} {st st' : Vsa.While.St}
+    {d env : Nat} {e : Expr} {v : Value} (h : EvalIHFPO S F st d env e st' v) :
+    EvalIHFP F st d env e st' v :=
+  EvalIHWithM.mono (fun _ _ _ _ _ _ _ _ _ hp => ⟨hp.1, hp.2.1⟩) h
+
+theorem EvalIHFO.footprint {S : SharedFam} {F : FootFam} {st st' : Vsa.While.St}
+    {d env : Nat} {e : Expr} {v : Value} (h : EvalIHFO S F st d env e st' v) :
+    EvalIHF F st d env e st' v :=
+  EvalIHWithM.mono (fun _ _ _ _ _ _ _ _ _ hp => hp.1) h
+
+/-- **NAMED PREMISE** — the shared family's RAM-top slack at EVERY call geometry a
+cell is instantiated at (`SharedTopSlack`, `OwnedPayloadClause.lean`, is one
+`SL`/`A`; a cell quantifies over both).  Supplier: the Layout's concrete image and
+arena bounds — the pinned AST region and the arena both end far below
+`0x100000000`, so the `strcmp` word loop's 8-byte read never leaves RAM. -/
+def SharedTopSlackAll (S : SharedFam) : Prop := ∀ SL A, SharedTopSlack S SL A
+
+/-- The head's own footprint — the argument respill at `sp - 1088` and a
+NON-allocating right child — misses the left operand's 24-byte header at
+`sp - 968` and every shared byte, so the left child's `OwnedSlot` survives the
+right child (`OwnedSlot.transport`). -/
+theorem ownedSlot_head_transport {S : SharedFam} {SL : StackLayout} {A : Arena}
+    {sp : Nat} {m m' : Mem}
+    (hI : OwnedIndex S) (hsp : SL.lo + 1088 ≤ sp) (hspHi : sp ≤ SL.hi)
+    (h : OwnedSlot m (S SL A) (sp - 968))
+    (hfoot : MemFootprint (fun k => word8 (sp - 1088) k ∨
+      noArenaFoot SL A (sp - 1088) (sp - 944) k) m m') :
+    OwnedSlot m' (S SL A) (sp - 968) := by
+  refine OwnedSlot.transport h hfoot (fun k hk hF => ?_) (fun k hk hF => ?_)
+  · unfold valHeader at hk
+    unfold word8 noArenaFoot stackWin resultSlot at hF
+    omega
+  · have hs := hI.stack SL A k hk
+    unfold word8 noArenaFoot stackWin resultSlot at hF
+    omega
+
+/-- **The reachable operand regions** — both operands' `OwnedSlot`s at the head's
+actual return, with their `ValueRepr`s from `TwoSubReturn`, give
+`StrCmpOperandsAt` through `IHClauseGenericOwned.ownedOperands_of_clause`.  This
+is what `StrCmpOwnedOperands` tried to say at an unrelated configuration. -/
+theorem strCmpOperandsAt_of_retained {S : SharedFam} {SL : StackLayout} {A : Arena}
+    {N : NativeAddrs} {φl φr : Addr → Nat} {sp : BitVec 64} {m : Mem} {sl sr : String}
+    (hI : OwnedIndex S) (htop : SharedTopSlack S SL A)
+    (hsp : SL.lo + 1088 ≤ sp.toNat) (hspHi : sp.toNat ≤ SL.hi)
+    (hOL : OwnedSlot m (S SL A) (sp.toNat - 968))
+    (hOR : OwnedSlot m (S SL A) (sp.toNat - 944))
+    (hvl : ValueRepr m N φl (sp.toNat - 968) (.str sl))
+    (hvr : ValueRepr m N φr (sp.toNat - 944) (.str sr)) :
+    StrCmpOperandsAt sp m := by
+  have f := IHClauseGenericOwned.ownedOperands_of_clause hI htop hOL hOR hvl hvr
+  exact strCmpOperandsAt_of_owned ⟨f.geom.ram, f.geom.htif, f.geom.stack⟩ hsp hspHi
+    f.left f.right
+
+/-- **`binRow_strcmpF_owned`** — the string-comparison row over the OWNERSHIP head.
+Both children are consumed at their ownership-carrying clause products; the head
+`blockB_binary_footprint_gen2` (`EvalBinSim.lean`) retains both operands'
+`OwnedSlot`s at its actual return (the left one transported across the right child
+by `ownedSlot_head_transport`, the right one its own child's fact);
+`strCmpOperandsAt_of_retained` derives the operand regions there and
+`strCmpResid_of_entry` closes the residual.  No ∀-quantified operand supply
+appears: `StrCmpOwnedOperands` is GONE from this chain. -/
+theorem binRow_strcmpF_owned (D : StrCmpOp) (C : D.Cert) (S : SharedFam)
+    (hI : OwnedIndex S) (htop : SharedTopSlackAll S)
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (sl sr : String)
+    (sp r sret aEnv aExpr : BitVec 64) (m0 : Mem)
+    (hLeft : EvalE st d env el st' (.str sl))
+    (hIHl : EvalIHFPO S noArenaFoot st d env el st' (.str sl))
+    (hIHr : EvalIHFO S noArenaFoot st' d env er st'' (.str sr))
+    (hEvalE : EvalE st d env (.binary D.op el er) st'' (.bool (D.bres sl sr))) :
+    Triple
+      (fun c => EvalEntry g N A SL φf φc st d env (.binary D.op el er) sp r sret aEnv aExpr m0 c)
+      (EvalExitF noArenaFoot g N A SL φf φc st.store.frames.size st.store.closures.size
+        st'' (.bool (D.bres sl sr)) sp r sret m0) := by
+  intro c hc
+  obtain ⟨aLOp, aROp, hX⟩ := hc.binaryExtras
+  have hstoreBodiesR := StoreBodiesBound.afterEvalE hLeft
+    (Expr.bodiesBound_binary hc.expr_bodies).1 hc.store_bodies
+  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hRec, hx11, hx13, hx19,
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
+    hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
+    blockA_binaryArm_budgeted g N A SL φf φc st st' d env D.op el er sp r sret aEnv aExpr
+      aLOp aROp m0 hX hstoreBodiesR c hc
+  have hArmFrame := BinaryArmFrame.of_entry hArm hgframe hgx19
+  have hsproom := hBE.sproom
+  obtain ⟨c2, hs2, hReturned⟩ :=
+    blockB_binary_footprint_gen2 noArenaFoot noArenaFoot
+      (fun SL A m a =>
+        ValuePayloadCovered (fun k => ¬ (SL.lo ≤ k ∧ k < SL.hi)) m a (.str sl) ∧
+          OwnedSlot m (S SL A) a)
+      (fun SL A m a => OwnedSlot m (S SL A) a) (fun SL A m a => OwnedSlot m (S SL A) a)
+      g gpre' N A SL φf φc st st' st'' d env D.op el er (.str sl) (.str sr)
+      sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' c1.σ.sailOutput m0
+      hLeft hIHl hIHr
+      (fun hsproom hspSLhi _ _φ _m _m' hQ hv _hag hfoot =>
+        valueSurvives_of_covered (by omega) hspSLhi hv hQ.1 hfoot)
+      (fun hsproom hspSLhi _ _m _m' hQ _hag hfoot =>
+        ownedSlot_head_transport hI (by omega) hspSLhi hQ.2 hfoot)
+      c1 ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+        hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
+        hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩
+  obtain ⟨hData, hHeadFoot, hOwn⟩ := hReturned.extra
+  -- the two operands' `ValueRepr`s, by named destructuring of the landed tower
+  obtain ⟨_hG, _htick, _hpc, _hra, _hs9, _hsp, _hmi, _hout, _hframe, _hs3spill,
+    ⟨_φfm, _φcm, _hpf, _hpc0,
+      ⟨_φcr, _hpcr, hvalR⟩, ⟨_φcl, hvalL⟩, _hstoreBundle⟩,
+    _hcode, _hslotRa, _hslot8, _hslot9, _hslot18, _hMemExt, _hmemframe⟩ := hReturned.result
+  have hops : StrCmpOperandsAt sp c2.σ.mem :=
+    strCmpOperandsAt_of_retained hI (htop SL A) (by omega) hBE.spSLhi
+      hOwn.left hOwn.right hvalL hvalR
+  obtain ⟨c4, hs4, hExit⟩ :=
+    strCmpCellTail D C noArenaFoot gpre' g N A SL φf φc st st' st'' d env el er sl sr
+      sp r sret aExpr v8' v9' v18' v19' m0 hLeft hEvalE hgx19
+      hArmFrame.saved8 hArmFrame.saved9 hArmFrame.saved18 hArmFrame.savedSp
+      hArmFrame.saved19 hArmFrame.bridge
+      c2 ⟨hReturned.result, hData, hHeadFoot,
+        strCmpResid_of_entry D C hc hArmFrame hReturned.result hops⟩
+  exact ⟨c4, (hs1.trans hs2).trans hs4, hExit.result,
+    hExit.extra.mono (strCmpNodeFoot_noArena (by omega))⟩
+
+/-- The closed product clause for the LEFT child (footprint ∧ payload coverage ∧
+ownership) over every derivation, at the index `S`.  Supplier: the generated
+clause recursion for the product of `Footprint`, the payload coverage and
+`OwnedPayload` (`scripts/ih_clauses.tsv`). -/
+def FootprintPayloadOwnedClause (S : SharedFam) : Prop :=
+  ∀ (st : Vsa.While.St) (d : Nat) (env : Addr) (e : Expr) (st' : Vsa.While.St) (v : Value),
+    EvalE st d env e st' v → EvalIHFPO S noArenaFoot st d env e st' v
+
+/-- The closed product clause for the RIGHT child (footprint ∧ ownership) over
+every derivation, at the index `S`. -/
+def FootprintOwnedClause (S : SharedFam) : Prop :=
+  ∀ (st : Vsa.While.St) (d : Nat) (env : Addr) (e : Expr) (st' : Vsa.While.St) (v : Value),
+    EvalE st d env e st' v → EvalIHFO S noArenaFoot st d env e st' v
+
+/-- **The cell supplier from REACHABLE clauses.**  Every hypothesis is a closed
+clause recursion or an index premise; nothing is quantified over a configuration
+no execution reaches. -/
+theorem binStrCmpCell_of_owned (D : StrCmpOp) (C : D.Cert) (S : SharedFam)
+    (hI : OwnedIndex S) (htop : SharedTopSlackAll S)
+    (hCL : FootprintPayloadOwnedClause S) (hCR : FootprintOwnedClause S) :
+    BinStrCmpCell D.op D.bres := by
+  intro st d env el er st' st'' sl sr hEl hEr _ _
+  intro g N A SL φf φc sp r sret aEnv aExpr m0
+  exact binRow_strcmpF_owned D C S hI htop g N A SL φf φc st st' st'' d env el er sl sr
+    sp r sret aEnv aExpr m0 hEl (hCL st d env el st' (.str sl) hEl)
+    (hCR st' d env er st'' (.str sr) hEr)
+    (EvalE.binary st d env D.op el er st' st'' (.str sl) (.str sr) _ hEl hEr (C.sem _ _ _))
+    |>.conseq (fun _ hp => hp) (fun _ hp => hp.result)
+
+theorem ScaffoldRows.field_hStrLt_of_owned (S : SharedFam)
+    (hI : OwnedIndex S) (htop : SharedTopSlackAll S)
+    (hCL : FootprintPayloadOwnedClause S) (hCR : FootprintOwnedClause S) :
+    BinStrCmpCell .lt (fun sl sr => sl < sr) :=
+  binStrCmpCell_of_owned strCmpLt strCmpLt_cert S hI htop hCL hCR
+
+theorem ScaffoldRows.field_hStrLe_of_owned (S : SharedFam)
+    (hI : OwnedIndex S) (htop : SharedTopSlackAll S)
+    (hCL : FootprintPayloadOwnedClause S) (hCR : FootprintOwnedClause S) :
+    BinStrCmpCell .le (fun sl sr => sl < sr || sl == sr) :=
+  binStrCmpCell_of_owned strCmpLe strCmpLe_cert S hI htop hCL hCR
+
+theorem ScaffoldRows.field_hStrGt_of_owned (S : SharedFam)
+    (hI : OwnedIndex S) (htop : SharedTopSlackAll S)
+    (hCL : FootprintPayloadOwnedClause S) (hCR : FootprintOwnedClause S) :
+    BinStrCmpCell .gt (fun sl sr => sr < sl) :=
+  binStrCmpCell_of_owned strCmpGt strCmpGt_cert S hI htop hCL hCR
+
+theorem ScaffoldRows.field_hStrGe_of_owned (S : SharedFam)
+    (hI : OwnedIndex S) (htop : SharedTopSlackAll S)
+    (hCL : FootprintPayloadOwnedClause S) (hCR : FootprintOwnedClause S) :
+    BinStrCmpCell .ge (fun sl sr => sr < sl || sl == sr) :=
+  binStrCmpCell_of_owned strCmpGe strCmpGe_cert S hI htop hCL hCR
+
 #print axioms strCmpRegion_of_shared
 #print axioms strCmpOperandsAt_of_owned
 #print axioms strCmpOperandsSupply_of_owned
@@ -485,5 +743,14 @@ theorem ScaffoldRows.field_hStrGe_of_clauses (hOps : StrCmpOwnedOperands)
 #print axioms ScaffoldRows.field_hStrLe_of_clauses
 #print axioms ScaffoldRows.field_hStrGt_of_clauses
 #print axioms ScaffoldRows.field_hStrGe_of_clauses
+#print axioms strCmpCellTail
+#print axioms ownedSlot_head_transport
+#print axioms strCmpOperandsAt_of_retained
+#print axioms binRow_strcmpF_owned
+#print axioms binStrCmpCell_of_owned
+#print axioms ScaffoldRows.field_hStrLt_of_owned
+#print axioms ScaffoldRows.field_hStrLe_of_owned
+#print axioms ScaffoldRows.field_hStrGt_of_owned
+#print axioms ScaffoldRows.field_hStrGe_of_owned
 
 end Vsa.Sim

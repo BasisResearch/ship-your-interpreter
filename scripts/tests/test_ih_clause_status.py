@@ -1,5 +1,6 @@
 """Tests for the clause residual status, hook probes and candidate drafts."""
 
+import base64
 import io
 import json
 import sys
@@ -169,6 +170,221 @@ class DraftTests(unittest.TestCase):
                                 for r in rows))
             self.assertTrue((Path(directory) / "drafts/Draft_Footprint.lean").is_file())
             self.assertFalse(list((Path(directory) / "drafts").glob("*.log")))
+
+    def test_suggest_receipts_mocked_lean_failure_with_exact_inputs(self) -> None:
+        receipt_tool = status.attempt_receipts
+        digest = "a" * 64
+        file_ = receipt_tool.FileFingerprint("/tool", "/tool", digest, 1, None)
+        dependency = receipt_tool.DependencyFingerprint(
+            "Vsa.A", file_, digest, digest, file_, True
+        )
+        environment = receipt_tool.ArtifactInventory(
+            "lean-toolchain-lib", "/toolchain/lib/lean", digest, 1, 1, None
+        )
+        snapshot = receipt_tool.BuildSnapshot(
+            "2026-09-11T00:00:00+00:00",
+            (self.info.module,),
+            digest,
+            (file_,),
+            file_,
+            (dependency,),
+            (),
+            (environment,),
+            "",
+            (),
+        )
+        engine_result = {"houdini": "ENCODE-GAP: a", "autoprove": "ENCODE-GAP: a"}
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(status, "run_lean", return_value=census.LeanResult(
+                1, "maximum number of heartbeats exceeded"
+            )),
+            patch.object(status, "bounded_engines", return_value=engine_result),
+            patch.object(receipt_tool, "capture_build_snapshot", return_value=snapshot),
+        ):
+            rows = status.suggest(
+                self.info,
+                Path("/backend"),
+                Path(directory),
+                ["trivialStep_of_old"],
+                [],
+                {},
+                {"trueExtra"},
+                rerun_reason="confirm deterministic failure",
+            )
+            paths = list((Path(directory) / "attempts").glob("attempt-*.json"))
+            self.assertEqual(len(paths), 1)
+            receipt = json.loads(paths[0].read_text())
+            self.assertEqual(
+                receipt["result"]["failure_class"], "deterministic_heartbeat_timeout"
+            )
+            diagnostics = receipt["result"]["diagnostics"]
+            self.assertEqual(
+                base64.b64decode(diagnostics["utf8_base64"]).decode(),
+                "maximum number of heartbeats exceeded",
+            )
+            self.assertEqual(receipt["rerun_reason"], "confirm deterministic failure")
+            self.assertIsNotNone(receipt["comparable_key"])
+            self.assertTrue(all(row["attempt_receipt"] == str(paths[0]) for row in rows))
+            candidate = next(
+                item
+                for item in receipt["generated"]["candidates"]
+                if item["target"].endswith(".hCall") and item["label"].startswith("exact:")
+            )
+            encoded = candidate["candidate"]["utf8_base64"]
+            self.assertEqual(
+                base64.b64decode(encoded).decode(),
+                model.indent(
+                    status.candidates(
+                        self.info.field("hCall"), ["trivialStep_of_old"], [], "extraM"
+                    )[0].term,
+                    2,
+                ),
+            )
+            self.assertEqual(
+                set(receipt["timing_seconds"]),
+                {"environment_capture_before", "lean_wall", "environment_capture_after"},
+            )
+
+            def interrupted(_backend, output, name, _source):
+                (output / f"{name}.log").write_text("partial compiler transcript\n")
+                raise KeyboardInterrupt
+
+            with (
+                patch.object(status, "run_lean", side_effect=interrupted),
+                patch.object(receipt_tool, "capture_build_snapshot", return_value=snapshot),
+                self.assertRaises(KeyboardInterrupt),
+            ):
+                status.suggest(
+                    self.info,
+                    Path("/backend"),
+                    Path(directory),
+                    ["trivialStep_of_old"],
+                    [],
+                    {},
+                    {"trueExtra"},
+                )
+            paths = list((Path(directory) / "attempts").glob("attempt-*.json"))
+            self.assertEqual(len(paths), 2)
+            cancelled = next(
+                json.loads(path.read_text())
+                for path in paths
+                if json.loads(path.read_text())["result"]["failure_class"]
+                == "explicit_transient_failure"
+            )
+            diagnostics = cancelled["result"]["diagnostics"]
+            self.assertEqual(
+                base64.b64decode(diagnostics["utf8_base64"]).decode(),
+                "partial compiler transcript\n",
+            )
+
+            draft_log = Path(directory) / "drafts/Draft_Footprint.log"
+            draft_log.write_text("old diagnostics that must not be reused\n")
+            with (
+                patch.object(
+                    status, "run_lean", side_effect=OSError("compiler startup failed")
+                ),
+                patch.object(receipt_tool, "capture_build_snapshot", return_value=snapshot),
+                self.assertRaises(OSError),
+            ):
+                status.suggest(
+                    self.info,
+                    Path("/backend"),
+                    Path(directory),
+                    ["trivialStep_of_old"],
+                    [],
+                    {},
+                    {"trueExtra"},
+                )
+            receipts_ = [
+                json.loads(path.read_text())
+                for path in (Path(directory) / "attempts").glob("attempt-*.json")
+            ]
+            startup = next(
+                receipt
+                for receipt in receipts_
+                if receipt["result"]["failure_class"] == "invocation_error"
+            )
+            diagnostics = startup["result"]["diagnostics"]
+            self.assertEqual(
+                base64.b64decode(diagnostics["utf8_base64"]).decode(),
+                "compiler startup failed",
+            )
+            self.assertNotIn("old diagnostics", base64.b64decode(
+                diagnostics["utf8_base64"]
+            ).decode())
+
+    def test_suggest_rejects_clean_candidate_when_build_inputs_drift(self) -> None:
+        receipt_tool = status.attempt_receipts
+        digest = "a" * 64
+        changed_digest = "b" * 64
+        file_ = receipt_tool.FileFingerprint("/tool", "/tool", digest, 1, None)
+        dependency = receipt_tool.DependencyFingerprint(
+            "Vsa.A", file_, digest, digest, file_, True
+        )
+        before = receipt_tool.BuildSnapshot(
+            "2026-09-11T00:00:00+00:00",
+            (self.info.module,),
+            digest,
+            (file_,),
+            file_,
+            (dependency,),
+            (),
+            (receipt_tool.ArtifactInventory(
+                "lean-toolchain-lib", "/toolchain/lib/lean", digest, 1, 1, None
+            ),),
+            "",
+            (),
+        )
+        after = receipt_tool.BuildSnapshot(
+            **{
+                **before.__dict__,
+                "environment_artifacts": (
+                    receipt_tool.ArtifactInventory(
+                        "lean-toolchain-lib",
+                        "/toolchain/lib/lean",
+                        changed_digest,
+                        1,
+                        1,
+                        None,
+                    ),
+                ),
+            }
+        )
+        output = (
+            f"'{self.info.namespace}.draft_hVar_1' "
+            "does not depend on any axioms\n"
+        )
+        engine_result = {"houdini": "ENCODE-GAP: a", "autoprove": "ENCODE-GAP: a"}
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(status, "run_lean", return_value=census.LeanResult(0, output)),
+            patch.object(status, "bounded_engines", return_value=engine_result),
+            patch.object(
+                receipt_tool, "capture_build_snapshot", side_effect=[before, after]
+            ),
+        ):
+            rows = status.suggest(
+                self.info,
+                Path("/backend"),
+                Path(directory),
+                ["trivialStep_of_old"],
+                [],
+                {},
+                {"trueExtra"},
+            )
+            self.assertTrue(all(not row["lean_candidate"] for row in rows))
+            self.assertTrue(
+                all("stale or changing build inputs" in row["lean_detail"] for row in rows)
+            )
+            receipt_path = next(
+                (Path(directory) / "attempts").glob("attempt-*.json")
+            )
+            receipt = json.loads(receipt_path.read_text())
+            self.assertEqual(
+                receipt["result"]["failure_class"], "stale_or_missing_dependency"
+            )
+            self.assertIsNone(receipt["comparable_key"])
 
 
 class MainTests(unittest.TestCase):

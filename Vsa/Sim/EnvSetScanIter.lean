@@ -1,4 +1,5 @@
 import Vsa.Sim.EnvSetScanCore
+import Vsa.Sim.StrcmpRegisterFacts
 import Vsa.Sim.EnvGetSpec4
 import Vsa.Sim.ObsAvoid
 
@@ -144,7 +145,7 @@ theorem set_scan_iter_from_d2c (g : (R : Register) → Option (RegisterType R))
   have hghost3 : ∀ R : Register, AbiPreserved R = true → σ3.regs.get? R = g R := by
     intro R hR
     have hnws : NotWrittenStrcmp R := notWrittenStrcmp_of_abiPreserved R hR
-    have hx11 : (Register.x11 == R) = false := hnws.2.2.2.2.1
+    have hx11 : (Register.x11 == R) = false := hnws.x11
     rw [(sframe_alu hobs3 R hx11 hnws)]; exact hghost2 R hR
   -- ============ c68: jal strcmp → ra := c6c, PC := strcmp entry ============
   obtain ⟨σ4, i4, hs4, hi4, hG4, hmem4, hobs4⟩ :=

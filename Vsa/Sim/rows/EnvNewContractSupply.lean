@@ -1,4 +1,7 @@
+import Vsa.Sim.AllocMallocAdapters
+import Vsa.Sim.AllocReserveTransport
 import Vsa.Sim.HelperCallEnvNew
+import Vsa.Sim.EnvNewRetained
 import Vsa.Sim.EnvNewSuccessSuffix
 import Vsa.Sim.BridgeSegFull
 import Vsa.Sim.BridgeSegFramed
@@ -20,9 +23,9 @@ import Vsa.Sim.Code.FixedImage_Env_new
   li a0,32; sd ra`) is ONE `#derive_case` seg (`envNewPrologueSeg`), run by
   `segEval_sound`; the `jal malloc` at `0x80002a10` is the generated site
   `site_80002a10_env` through `jalCallFacts_of_obs` (`envNewParked_of_entry`);
-* the allocator call is the ledger's `MallocRun` (the `MallocContract.spec`
-  Triple with the two clauses the abstract contract omits: no console output,
-  no byte removal); `MallocContract.nonNull_of_bounded` selects the block;
+* the allocator call uses the ledger's `MallocSuccessRun`, with credit and
+  concrete placement at the actual entry. Its selected return retains the
+  fresh block, memory frame, code, output, presence, and unused reserve;
 * the landed success suffix `envNewSuccess_run` (`EnvNewSuccessSuffix.lean`)
   initialises the 32-byte frame and returns;
 * the pushed store is `storeRepr_allocFrame` (`rows/CallClosureEnvNewMarshal`)
@@ -305,6 +308,10 @@ structure EnvNewLedger (g : (R : Register) → Option (RegisterType R))
   stack_hi : esp.toNat ≤ SL.hi
   /-- The run-global allocator ledger (`Vsa/Sim/AllocRuns.lean`). -/
   alloc : AllocLedger A SL gpv headroom maxReq M
+  /-- Initial capacity for this call; supplied by the caller resource proof. -/
+  budget : ResourceBudget A maxReq exts 1
+  /-- Concrete placement at the original entry memory. -/
+  reserve : AllocationReserve A m exts maxReq 1
   /-- Parent frames are older than their children (source invariant
   `StoreInvariant.parents`). -/
   parents : StoreParents st.store
@@ -392,17 +399,19 @@ private theorem envNew_offMem {m : Mem} {esp r s0 : BitVec 64} {SL : StackLayout
   simp only [envNewSpillLog, OutL, and_true]
   omega
 
-/-- **The `env_new` contract's Triple from the ledger.** -/
-theorem envNewReturn_of_ledger
+/-- Retain allocation and initialization from the checked env_new execution. -/
+theorem envNewRetainedReturn_of_ledger
     {g : (R : Register) → Option (RegisterType R)}
     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
     {st : Vsa.While.St} {env : Addr} {esp aEnv r : BitVec 64} {m : Mem}
-    {out : Array String}
+    {out : Array String} {credits : Nat}
     {gpv : BitVec 64} {headroom maxReq : Nat}
     {M : MallocContract A SL gpv headroom maxReq} {exts : List Extent}
-    (L : EnvNewLedger g N A SL φf φc st env esp aEnv r m M exts) :
+    (L : EnvNewLedger g N A SL φf φc st env esp aEnv r m M exts)
+    (budget : ResourceBudget A maxReq exts (credits + 1))
+    (reserve : AllocationReserve A m exts maxReq (credits + 1)) :
     Triple (EnvNewEntryState g N A SL φf φc st env esp aEnv r m out)
-      (EnvNewReturnState g N A SL φf φc st env esp r m out) := by
+      (EnvNewRetainedReturn g N M φf φc exts st env esp aEnv r m out credits) := by
   intro c h
   have F := h.facts
   obtain ⟨hsp1, hsp2, hsp3⟩ := F.stack
@@ -433,12 +442,29 @@ theorem envNewReturn_of_ledger
     have := L.alloc.headroom_le
     refine ⟨by omega, by omega, by omega⟩
   -- 2. malloc
-  obtain ⟨c2, hs2, X⟩ := L.alloc.malloc (fun R => c1.σ.regs.get? R) exts 32 (esp - 16#64)
-    0x80002a14#64 c1.σ.mem out L.alloc.req32 c1
-    { good := P.good, tick := P.tick, pc := P.pc, a0 := P.a0, ra := P.ra
-      ra_align := by decide, sp := P.sp, stack := hstack1, gp := hgp1
-      frame := fun _ _ => rfl, ainv := hainv1, mem := rfl, out := P.out }
-  obtain ⟨p, ha0, hp0, hp16, hpA, hpdisj, hainv2⟩ := M.nonNull_of_bounded c2.σ exts 32 L.alloc.req32 X.result
+  have reserve1 : AllocationReserve A c1.σ.mem exts maxReq (credits + 1) :=
+    reserve.after_stack (SL := SL)
+      (fun a ha => (hoff1 a (fun hw => ha ⟨hw.1, by omega⟩)).symm)
+      (by intro k hk; rcases L.alloc.globals_stack with before | after <;> omega)
+      L.alloc.arena_stack
+  have text1 : FixedTextLoaded c1.σ.mem :=
+    F.text.transport (fun a lo hi => hoff1 a (by omega))
+  obtain ⟨c2, hs2, success⟩ := L.alloc.mallocSuccess (fun R => c1.σ.regs.get? R)
+    exts 32 credits (esp - 16#64) 0x80002a14#64 c1.σ.mem out c1
+    { entry :=
+        { good := P.good, tick := P.tick, pc := P.pc, ra := P.ra
+          ra_align := by decide, sp := P.sp, stack := hstack1, gp := hgp1
+          frame := fun _ _ => rfl, ainv := hainv1, mem := rfl, out := P.out, code := text1 }
+      request := P.a0
+      resources := { bounded := L.alloc.req32, budget := budget, reserve := reserve1 } }
+  obtain ⟨p, result⟩ := success.allocated
+  have X := success.returned.toMallocExit (M := M) result
+  have ha0 := result.pointer.register
+  have hp0 := result.pointer.nonzero
+  have hp16 := result.pointer.aligned
+  have hpA := result.pointer.arena
+  have hpdisj := result.disjoint
+  have hainv2 := result.ainv
   obtain ⟨hplo, hphi⟩ := hpA
   have hp64 : p < 2 ^ 64 := by omega
   have hpn : (BitVec.ofNat 64 p).toNat = p := by
@@ -529,34 +555,8 @@ theorem envNewReturn_of_ledger
   have hfr3 : FrameRepr c3.σ.mem N φf' φc p ⟨some env, []⟩ := by
     have := S.frameRepr N φf' φc (some env) ⟨hlink, hne⟩
     rwa [hpn] at this
-  refine ⟨c3, (hs1.trans hs2).trans FS.steps, ?_⟩
-  refine
-    { good := S.good
-      tick := S.tick
-      pc := S.pc
-      ra := S.ra
-      sp := by rw [S.sp, BitVec.sub_add_cancel]
-      minstret := S.minstret
-      out := S.output.trans X.out
-      frame := ?_
-      fresh := ⟨BitVec.ofNat 64 p, φf', S.result, ?_⟩
-      mem_frame := ?_
-      mem_extends := ?_ }
-  · intro R hR
-    by_cases h2 : R = Register.x2
-    · subst h2
-      rw [S.sp, BitVec.sub_add_cancel]
-      exact ((h.frame _ hR).symm.trans h.sp).symm
-    · by_cases h8 : R = Register.x8
-      · subst h8
-        rw [S.s0]; exact hg8.symm
-      · have hk : envNewSuccessKeep R = true := by
-          simp only [envNewSuccessKeep, hR, Bool.true_and, Bool.not_eq_true', Bool.or_eq_false_iff,
-            beq_eq_false_iff_ne, ne_eq]
-          exact ⟨h2, h8⟩
-        have h3 : c3.σ.regs.get? R = c2.σ.regs.get? R := FS.frame.regs.eq R hk
-        exact (h3.trans (X.frame R hR)).trans (P.keep R hk)
-  · exact
+  have fresh : EnvNewFresh N A SL φf φc st env (BitVec.ofNat 64 p) φf' c3.σ.mem := by
+    exact
       { map_extends := pushFrameMap_extends φf _ p
         addr := by rw [hpn]; exact pushFrameMap_fresh φf _ p
         nonzero := Pre.fresh.nonzero
@@ -576,12 +576,87 @@ theorem envNewReturn_of_ledger
             · intro _ _ _ _ i hi; exact absurd hi (Nat.not_lt_zero _)
           exact envNewPushedRepr hown hwrites F.store hainv0 L.alloc.priv_arena hAstack L.parents
             ⟨hplo, hphi⟩ hp16 hpdisj hag' hfr' }
+  have gp2 : c2.σ.regs.get? Register.x3 = some gpv :=
+    (X.frame .x3 (by decide)).trans hgp1
+  have invariant : AInvAt M gpv c3.σ.mem ((p, 32) :: exts) := by
+    apply L.alloc.ainvAt_transport (L.alloc.ainvAt_of_state gp2 hainv2)
+    intro k hk
+    apply (hoff3 k ?_).symm
+    intro hin
+    have hd := M.privFoot_disjoint c2.σ ((p, 32) :: exts) hainv2
+      (p, 32) List.mem_cons_self (k - p) (by change k - p < 32; omega)
+    change ¬ M.privFoot (p + (k - p)) at hd
+    rw [show p + (k - p) = k by omega] at hd
+    exact hd hk
+  have reserve3 : AllocationReserve A c3.σ.mem ((p, 32) :: exts) maxReq credits :=
+    result.reserve.after_live
+      (fun k outside => (hoff3 k (outside (p, 32) List.mem_cons_self)).symm)
+      (by
+        intro e member
+        rcases List.mem_cons.mp member with rfl | old
+        · exact ⟨hplo, hphi⟩
+        · exact (hown.ledger.arena.1 e old).2)
+      L.alloc.arena_globals
+  refine ⟨c3, (hs1.trans hs2).trans FS.steps,
+    { exit := ?_
+      allocation := .intro (BitVec.ofNat 64 p) s0 c2
+        { block := by rw [hpn]; exact ⟨hp0, hp16, ⟨hplo, hphi⟩, hpdisj⟩
+          budget := by rw [hpn]; exact result.budget
+          reserve := by rw [hpn]; exact reserve3
+          initialized := S
+          invariant := by rw [hpn]; exact invariant
+          fresh := by simpa only [hpn] using fresh
+          agreement := by
+            rw [hpn]
+            exact fun k hk => hagree03 k hk.single } }⟩
+  refine
+    { good := S.good
+      tick := S.tick
+      pc := S.pc
+      ra := S.ra
+      sp := by rw [S.sp, BitVec.sub_add_cancel]
+      minstret := S.minstret
+      out := S.output.trans X.out
+      frame := ?_
+      fresh := ⟨BitVec.ofNat 64 p, φf', S.result, fresh⟩
+      mem_frame := ?_
+      mem_extends := ?_ }
+  · intro R hR
+    by_cases h2 : R = Register.x2
+    · subst h2
+      rw [S.sp, BitVec.sub_add_cancel]
+      exact ((h.frame _ hR).symm.trans h.sp).symm
+    · by_cases h8 : R = Register.x8
+      · subst h8
+        rw [S.s0]; exact hg8.symm
+      · have hk : envNewSuccessKeep R = true := by
+          simp only [envNewSuccessKeep, hR, Bool.true_and, Bool.not_eq_true', Bool.or_eq_false_iff,
+            beq_eq_false_iff_ne, ne_eq]
+          exact ⟨h2, h8⟩
+        have h3 : c3.σ.regs.get? R = c2.σ.regs.get? R := FS.frame.regs.eq R hk
+        exact (h3.trans (X.frame R hR)).trans (P.keep R hk)
   · intro k hA hst
     rw [hoff3 k (by omega), hoff2 k hA hst, hoff1 k hst]
   · have e1 : MemExtends m c1.σ.mem := by rw [hmem1]; exact memExtends_writeLog _ _
     have e3 : MemExtends c2.σ.mem c3.σ.mem := by rw [hmem3]; exact memExtends_writeLog _ _
     exact (e1.trans X.mem_extends).trans e3
 
+/-- **The `env_new` contract's Triple from the ledger.** -/
+theorem envNewReturn_of_ledger
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : Vsa.While.St} {env : Addr} {esp aEnv r : BitVec 64} {m : Mem}
+    {out : Array String}
+    {gpv : BitVec 64} {headroom maxReq : Nat}
+    {M : MallocContract A SL gpv headroom maxReq} {exts : List Extent}
+    (L : EnvNewLedger g N A SL φf φc st env esp aEnv r m M exts) :
+    Triple (EnvNewEntryState g N A SL φf φc st env esp aEnv r m out)
+      (EnvNewReturnState g N A SL φf φc st env esp r m out) := by
+  intro before entry
+  obtain ⟨after, steps, result⟩ := envNewRetainedReturn_of_ledger L L.budget L.reserve before entry
+  exact ⟨after, steps, result.exit⟩
+
+#print axioms envNewRetainedReturn_of_ledger
 #print axioms envNewReturn_of_ledger
 
 /-- **`EnvNewContract` from the ledger.**  Every entry state has a

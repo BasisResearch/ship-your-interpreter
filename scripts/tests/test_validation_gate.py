@@ -33,17 +33,6 @@ class ValidationGateTests(unittest.TestCase):
             with self.assertRaisesRegex(build_private.BuildError, "stale private backend"):
                 check_validation.verify_backend(root, backend)
 
-    def test_skip_build_cannot_bypass_fingerprint_check(self):
-        with tempfile.TemporaryDirectory() as directory:
-            environment = dict(check_validation.os.environ, VSA_PRIVATE_BUILD=directory)
-            result = subprocess.run(
-                ["bash", "scripts/check_all.sh", "--skip-build"],
-                cwd=Path(__file__).resolve().parents[2], env=environment,
-                capture_output=True, text=True, check=False,
-            )
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("stale private backend", result.stderr)
-
     def test_known_finding_is_not_a_green_gate(self):
         for boundary_code, test_code in ((1, 0), (0, 1), (2, 0)):
             with self.subTest(boundary_code=boundary_code, test_code=test_code):

@@ -430,8 +430,7 @@ theorem callClosureSim
     obtain ⟨c1, hs1, g', φf', mB, hpe, hfr, htie, hslots, hEntryI⟩ :=
       hGeom.entryBase hne c hc
     have hspGhost : g Register.x2 = some sp :=
-      (hc.1.frame Register.x2 (by decide)).symm.trans
-        hc.2.2.2.2.2.2.2.2.1
+      (hc.facts.seg.frame Register.x2 (by decide)).symm.trans hc.facts.stackPointer
     have hspEq : BitVec.ofNat 64 ((g Register.x2).getD 0).toNat = sp := by
       rw [hspGhost]
       simp

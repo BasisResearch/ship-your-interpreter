@@ -1,48 +1,18 @@
 import Vsa.Sim.AllocOff
+import Vsa.AllocResource
 
 /-!
-# `AllocCapacity` — physical chunk accounting and the arena capacity theorem
+# Allocator capacity and numeric credit
 
-`PROOF_CLOSURE_PLAN.md` task 2 asks to "derive initial stack/body bounds and
-allocator capacity from a source resource bound over every finite execution
-prefix", accounting for "physical chunk overhead and fragmentation: a 32-byte
-request occupies 48 bytes".
+`Vsa.AllocResource` defines the minimum chunk size and live-ledger accounting.
+The minimum includes eight overhead bytes, sixteen-byte rounding, and the
+allocator's thirty-two-byte minimum. An unsplit free chunk may occupy more.
 
-Nothing in the development bounded the live set before this module.  `HeapArena`
-says each live extent lies inside the arena and that they are pairwise disjoint,
-but says nothing about their TOTAL, so `MallocContract.nonNull_of_bounded` — the
-field that collapses `malloc`'s NULL branch — was an assumption with no capacity
-content behind it at all.
-
-Two things land here.
-
-* `physSize` is the physical cost of a request: an 8-byte header rounded up to
-  the 16-byte alignment, so `physSize 32 = 48` exactly as the plan records.
-  `physTotal` sums it over a ledger.  This is INTERNAL fragmentation only — the
-  bytes a chunk wastes on its own header and padding.  External fragmentation,
-  the free space that exists but is not contiguous, is not modelled here.
-* `extents_total_le` is the capacity theorem: pairwise-disjoint extents inside
-  `[A.lo, A.hi)` have total size at most `A.hi - A.lo`.  It is proved by strong
-  induction on the ledger, splitting the tail around the head extent into the
-  part that ends below it and the part that starts above it — the two halves are
-  bounded by the sub-arenas `[lo, e.1)` and `[e.1 + e.2, hi)`.  This is what
-  makes an arena-capacity statement non-vacuous: a ledger that fits is a real
-  constraint on the live set, not a restatement of disjointness.
-
-`ResourceBound` then states the source-side obligation in one named record, and
-`arena_has_room` derives from it that the arena holds enough BYTES for the next
-request beyond everything currently live.
-
-That is a necessary condition for `nonNull_of_bounded`, not a sufficient one,
-and the difference is worth stating plainly rather than leaving in a reader's
-way.  A total-byte bound does not exhibit a PLACEMENT: an arena can have ample
-free bytes and still no contiguous run of `n` of them, which is exactly external
-fragmentation.  Turning `arena_has_room` into `malloc` actually succeeding needs
-the allocator's own placement argument — dlmalloc's bin structure, coalescing and
-top-chunk behaviour — which is behind `MallocContract` and is not something a
-call site or a source-level bound can supply.  What this module removes is the
-weaker gap: before it, `nonNull_of_bounded` had no capacity content at all, and
-the live set was unbounded.
+`extents_total_le` bounds the sum of disjoint payloads inside the arena.
+`ResourceBound` and `ResourceBudget` carry separate source-resource premises;
+`arena_has_room` establishes an aggregate byte bound from those premises.
+Concrete contiguous placement and successful execution require the allocator
+metadata and operation proofs. Numeric credit alone supplies neither.
 -/
 
 namespace Vsa.Sim
@@ -50,22 +20,6 @@ namespace Vsa.Sim
 open Vsa.RuntimeRepr Vsa.Alloc Vsa.Sim.RuntimeOwnership
 
 /-! ## 1. Physical chunk size -/
-
-/-- The physical bytes a request of `n` occupies: an 8-byte chunk header, rounded
-up to the allocator's 16-byte alignment. -/
-def physSize (n : Nat) : Nat := 16 * ((n + 8 + 15) / 16)
-
-/-- The plan's recorded figure: a 32-byte request occupies 48 bytes. -/
-theorem physSize_32 : physSize 32 = 48 := by decide
-
-theorem physSize_ge (n : Nat) : n ≤ physSize n := by
-  unfold physSize; omega
-
-theorem physSize_mono {m n : Nat} (h : m ≤ n) : physSize m ≤ physSize n := by
-  unfold physSize; omega
-
-/-- The physical cost of a whole ledger. -/
-def physTotal (exts : List Extent) : Nat := (exts.map (fun e => physSize e.2)).sum
 
 theorem physTotal_nil : physTotal [] = 0 := rfl
 
@@ -176,11 +130,8 @@ theorem sum_le_physTotal (exts : List Extent) :
 
 /-- **The arena holds enough bytes for the next request.**  From the source
 bound, at least `physSize n` bytes remain beyond everything currently live, for
-any request within the static ceiling.  This is the capacity content
-`MallocContract.nonNull_of_bounded` asserts without proof, but it is a NECESSARY
-condition only: it does not exhibit a contiguous placement for those bytes, so
-external fragmentation and the allocator's placement strategy remain behind
-`MallocContract`. -/
+any request within the static ceiling. This is a numeric capacity bound.
+Concrete placement and successful allocator execution require separate proofs. -/
 theorem arena_has_room {A : Arena} {maxReq : Nat} {exts : List Extent}
     (h : ResourceBound A maxReq exts) {n : Nat} (hn : n ≤ maxReq) :
     (exts.map Prod.snd).sum + physSize n ≤ A.hi - A.lo := by
@@ -194,14 +145,6 @@ theorem physTotal_fresh (p n : Nat) (exts : List Extent) :
     physTotal ((p, n) :: exts) = physSize n + physTotal exts := rfl
 
 /-! ## 4. Carrying the bound along an execution -/
-
-/-- **Room for `k` further requests at the ceiling.**  `ResourceBound` asserts the
-budget at ONE point; this is the same statement indexed by how many more
-allocations it still covers, which is what an induction along an execution
-needs.  A source-level accounting supplies `k` — the number of allocations the
-program can still make — and the lemmas below carry it. -/
-def ResourceBudget (A : Arena) (maxReq : Nat) (exts : List Extent) (k : Nat) : Prop :=
-  physTotal exts + k * physSize maxReq ≤ A.hi - A.lo
 
 /-- A sublist costs no more physically than the list it came from. -/
 theorem physTotal_le_of_sublist {l₁ l₂ : List Extent} (h : l₁.Sublist l₂) :

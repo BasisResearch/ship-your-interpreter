@@ -303,11 +303,24 @@ theorem BinaryReturnLoads.int_readback {sp : BitVec 64} {a : Int} {c : Config}
 
 #print axioms BinaryReturnLoads.int_readback
 
-/-- **`blockB_binary_footprint_gen`** — the two-children head with the memory
+/-- Both operands' retained facts at the ACTUAL two-children return: the LEFT
+operand's fact at `sp - 968` (the left child's own fact, carried across the
+argument respill and the right child by `hQLret`) and the RIGHT operand's fact at
+`sp - 944` (the right child's own fact, at its own return memory).  Both families
+are indexed by the head's geometry `SL A`, so a clause fact — `OwnedSlot` at a
+`SharedFam` — instantiates them directly. -/
+structure BinaryOperandRetained (QO QR : StackLayout → Arena → Mem → Nat → Prop)
+    (SL : StackLayout) (A : Arena) (sp : BitVec 64) (c : Config) : Prop where
+  left : QO SL A c.σ.mem (sp.toNat - 968)
+  right : QR SL A c.σ.mem (sp.toNat - 944)
+
+/-- **`blockB_binary_footprint_gen2`** — the two-children head with the memory
 footprint retained, PARAMETRIC in an extra fact `QL` the LEFT child retains at its
-own return (its geometry `SL`, its return memory, its result slot).  From the
-row-entry memory `m0`: the parent's own stack writes and the two children's
-footprints at their geometry (`binaryHeadFoot`).
+own return (its geometry `SL A`, its return memory, its result slot), an extra
+fact `QR` the RIGHT child retains at its own return, and the LEFT fact `QO` that
+survives to the head's return.  From the row-entry memory `m0`: the parent's own
+stack writes and the two children's footprints at their geometry
+(`binaryHeadFoot`), plus `BinaryOperandRetained QO QR` at the SAME return.
 
 The left value's survival across the right sub-call is the hypothesis `hVlSurv`,
 which now receives everything the head owns at that point: the head's geometry,
@@ -317,7 +330,8 @@ whose left child carries its payload coverage (`EvalIHFP`, `StrCmpCellClauses.le
 discharges it at the ACTUAL memories; the landed `blockB_binary_footprint` is this
 theorem at `QL := fun _ _ _ => True`, where `hVlSurv` degenerates to the
 ∀-quantified layout residual it always was. -/
-theorem blockB_binary_footprint_gen (Fl Fr : FootFam) (QL : StackLayout → Mem → Nat → Prop)
+theorem blockB_binary_footprint_gen2 (Fl Fr : FootFam)
+    (QL QO QR : StackLayout → Arena → Mem → Nat → Prop)
     (gouter gpre : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr)
@@ -326,9 +340,11 @@ theorem blockB_binary_footprint_gen (Fl Fr : FootFam) (QL : StackLayout → Mem 
     (out0 : Array String) (m0 : Mem)
     (hLeft : EvalE st d env el st' vl)
     (hIHl : EvalIHWithM (fun _ A SL _ _ sp sret m0 c =>
-      MemFootprint (Fl SL A sp.toNat sret.toNat) m0 c.σ.mem ∧ QL SL c.σ.mem sret.toNat)
+      MemFootprint (Fl SL A sp.toNat sret.toNat) m0 c.σ.mem ∧ QL SL A c.σ.mem sret.toNat)
       st d env el st' vl)
-    (hIHr : EvalIHF Fr st' d env er st'' vr)
+    (hIHr : EvalIHWithM (fun _ A SL _ _ sp sret m0 c =>
+      MemFootprint (Fr SL A sp.toNat sret.toNat) m0 c.σ.mem ∧ QR SL A c.σ.mem sret.toNat)
+      st' d env er st'' vr)
     -- LEFT-value survival across the RIGHT sub-call, at the head's own geometry and
     -- the ACTUAL left/right return memories: the left value at `sp-968` keeps its
     -- representation given the left child's retained fact `QL`, the weak agreement
@@ -339,13 +355,26 @@ theorem blockB_binary_footprint_gen (Fl Fr : FootFam) (QL : StackLayout → Mem 
     (hVlSurv : SL.lo + 3264 ≤ sp.toNat → sp.toNat ≤ SL.hi →
       (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) →
       ∀ (φ : Addr → Nat) (m m' : Mem),
-      QL SL m (sp.toNat - 968) →
+      QL SL A m (sp.toNat - 968) →
       ValueRepr m N φ (sp.toNat - 968) vl →
       (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
         ¬ ((sp.toNat - 944) ≤ k ∧ k < (sp.toNat - 944) + 24) → m[k]? = m'[k]?) →
       MemFootprint (fun k => word8 (sp.toNat - 1088) k ∨
         Fr SL A (sp.toNat - 1088) (sp.toNat - 944) k) m m' →
-      ValueRepr m' N φ (sp.toNat - 968) vl) :
+      ValueRepr m' N φ (sp.toNat - 968) vl)
+    -- LEFT-operand fact retained at the ACTUAL two-children return: the left
+    -- child's own fact `QL` at `sp-968`, carried across the argument respill at
+    -- `sp-1088` and the right child's footprint.  For an ownership clause it is
+    -- `OwnedSlot.transport`; at `QO := fun _ _ _ _ => True` it is vacuous.
+    (hQLret : SL.lo + 3264 ≤ sp.toNat → sp.toNat ≤ SL.hi →
+      (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) →
+      ∀ m m' : Mem,
+      QL SL A m (sp.toNat - 968) →
+      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
+        ¬ ((sp.toNat - 944) ≤ k ∧ k < (sp.toNat - 944) + 24) → m[k]? = m'[k]?) →
+      MemFootprint (fun k => word8 (sp.toNat - 1088) k ∨
+        Fr SL A (sp.toNat - 1088) (sp.toNat - 944) k) m m' →
+      QO SL A m' (sp.toNat - 968)) :
     Triple
       (fun c => ∃ ment,
         ArmEntryK gouter N A SL φf φc st (0x800034e8#64) UnaryArmCallee (.binary op el er)
@@ -392,7 +421,8 @@ theorem blockB_binary_footprint_gen (Fl Fr : FootFam) (QL : StackLayout → Mem 
         (TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
           st' st'' vl vr sp r sret v8 v9 v18 m0)
         (fun c => BinaryReturnData SL sp sret c ∧
-          MemFootprint (binaryHeadFoot Fl Fr SL A sp.toNat) m0 c.σ.mem)) := by
+          MemFootprint (binaryHeadFoot Fl Fr SL A sp.toNat) m0 c.σ.mem ∧
+          BinaryOperandRetained QO QR SL A sp c)) := by
   intro c hpre
   obtain ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8, hg18, hgx8v, hgx18v, hgx19v,
     hpayL, hexprL, hpayR, hexprR, hMemExtM0, hgroundP,
@@ -649,7 +679,7 @@ theorem blockB_binary_footprint_gen (Fl Fr : FootFam) (QL : StackLayout → Mem 
   ------------------------------------------------------------------------------
   obtain ⟨cL, hsL, hpostLF⟩ :=
     armTail_rec_withM (Extra := fun _ A SL _ _ sp sret m0 c =>
-        MemFootprint (Fl SL A sp.toNat sret.toNat) m0 c.σ.mem ∧ QL SL c.σ.mem sret.toNat)
+        MemFootprint (Fl SL A sp.toNat sret.toNat) m0 c.σ.mem ∧ QL SL A c.σ.mem sret.toNat)
       gpre N A SL φf φc st st' d env el vl
       (0x800034f8#64) (0x800034fc#64) (0x1ffc6c#21)
       sp r sret ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)) aEnv aLOp v8 v9 v18
@@ -676,7 +706,7 @@ theorem blockB_binary_footprint_gen (Fl Fr : FootFam) (QL : StackLayout → Mem 
   have hpostL := hpostLF.result
   have hfootL : MemFootprint (Fl SL A (sp - 1088#64).toNat
       ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)).toNat) mcall1 cL.σ.mem := hpostLF.extra.1
-  have hQLcL : QL SL cL.σ.mem ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)).toNat :=
+  have hQLcL : QL SL A cL.σ.mem ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)).toNat :=
     hpostLF.extra.2
   -- unpack the LEFT `SubEvalReturn`
   obtain ⟨hGL, htickL, hpcL, ha0L, hraL, hs1L, hspL, ⟨vmiL, hmiL⟩, houtL, hframeL,
@@ -1117,7 +1147,9 @@ theorem blockB_binary_footprint_gen (Fl Fr : FootFam) (QL : StackLayout → Mem 
   -- the callee lowers to sp-2176; subsret = sp-944, retPC = 0x8000351c).
   ----------------------------------------------------------------------------
   obtain ⟨cR, hsR, hpostRF⟩ :=
-    armTail_rec_footprint Fr (fun R => τ7.regs.get? R) N A SL φf1 φc1 st' st'' d env er vr
+    armTail_rec_withM (Extra := fun _ A SL _ _ sp sret m0 c =>
+        MemFootprint (Fr SL A sp.toNat sret.toNat) m0 c.σ.mem ∧ QR SL A c.σ.mem sret.toNat)
+      (fun R => τ7.regs.get? R) N A SL φf1 φc1 st' st'' d env er vr
       (0x80003518#64) (0x8000351c#64) (0x1ffc4c#21)
       sp r sret ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)) aEnv aROp
       v8 v9 v18 cL.σ.sailOutput mcall2
@@ -1144,7 +1176,10 @@ theorem blockB_binary_footprint_gen (Fl Fr : FootFam) (QL : StackLayout → Mem 
         hstackBudgetR, hexprBodiesR, hstoreBodiesR⟩
   have hpostR := hpostRF.result
   have hfootR : MemFootprint (Fr SL A (sp - 1088#64).toNat
-      ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)).toNat) mcall2 cR.σ.mem := hpostRF.extra
+      ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)).toNat) mcall2 cR.σ.mem :=
+    hpostRF.extra.1
+  have hQRcR : QR SL A cR.σ.mem
+      ((sp - 1088#64) + sign_extend (m := 64) (0x090#12)).toNat := hpostRF.extra.2
   -- unpack the RIGHT `SubEvalReturn`
   obtain ⟨hGR, htickR, hpcR, ha0R, hraR, hs1R, hspR, ⟨vmiR, hmiR⟩, houtR, hframeR,
     ⟨φcvR, hpcvR, hvalR⟩, hstoreBundleR, hcodeR,
@@ -1181,6 +1216,13 @@ theorem blockB_binary_footprint_gen (Fl Fr : FootFam) (QL : StackLayout → Mem 
   have hvalL_R : ValueRepr cR.σ.mem N φcvL (sp.toNat - 968) vl :=
     hVlSurv hBE.sproom hBE.spSLhi hBE.arenaStk φcvL cL.σ.mem cR.σ.mem
       (hsub968 ▸ hQLcL) hvalL968 (fun k h1 h2 h3 => hAgLR k h1 h2 h3) hFootLR
+  -- both operands' retained facts at the SAME return: the left child's carried
+  -- across the right child, the right child's at its own return memory.
+  have hRetained : BinaryOperandRetained QO QR SL A sp cR :=
+    { left :=
+        hQLret hBE.sproom hBE.spSLhi hBE.arenaStk cL.σ.mem cR.σ.mem
+          (hsub968 ▸ hQLcL) (fun k h1 h2 h3 => hAgLR k h1 h2 h3) hFootLR
+      right := by rw [← hsub944R]; exact hQRcR }
   -- bring `vr` and `vl` under a common φ-map: `φcvR` extends `φc` (right) and `φcvL`
   -- extends `φc` (left) — but `vl` was represented at `φcvL`. We expose both at `φcvR`
   -- via the closure-monotonicity of `ValueRepr` — for the `TwoSubReturn` we simply
@@ -1299,7 +1341,73 @@ theorem blockB_binary_footprint_gen (Fl Fr : FootFam) (QL : StackLayout → Mem 
     have hR : ¬ Fr SL A (sp.toNat - 1088) (sp.toNat - 944) k := fun h => hk (Or.inr (Or.inr h))
     rw [hfootR.agree k hR, ← hAgMcall2 k hstk, hfootL.agree k hL, ← hAgMcall1 k hstk,
       hmemframe_m0 k hstk]
-  exact ⟨cR, hchain, ⟨hReturn, hData, hFoot⟩⟩
+  exact ⟨cR, hchain, ⟨hReturn, hData, hFoot, hRetained⟩⟩
+
+/-- **`blockB_binary_footprint_gen`** — the landed one-family head, unchanged in
+statement: `blockB_binary_footprint_gen2` with no operand fact retained at the
+return (`QO`/`QR` both `True`), so its right child is the plain footprint child
+and `hQLret` is vacuous. -/
+theorem blockB_binary_footprint_gen (Fl Fr : FootFam) (QL : StackLayout → Mem → Nat → Prop)
+    (gouter gpre : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr)
+    (op : BinOp) (el er : Expr) (vl vr : Value)
+    (sp r sret aExpr aEnv aLOp aROp aEnvReg : BitVec 64) (v8 v9 v18 v19 : BitVec 64)
+    (out0 : Array String) (m0 : Mem)
+    (hLeft : EvalE st d env el st' vl)
+    (hIHl : EvalIHWithM (fun _ A SL _ _ sp sret m0 c =>
+      MemFootprint (Fl SL A sp.toNat sret.toNat) m0 c.σ.mem ∧ QL SL c.σ.mem sret.toNat)
+      st d env el st' vl)
+    (hIHr : EvalIHF Fr st' d env er st'' vr)
+    (hVlSurv : SL.lo + 3264 ≤ sp.toNat → sp.toNat ≤ SL.hi →
+      (A.hi ≤ SL.lo ∨ sp.toNat ≤ A.lo) →
+      ∀ (φ : Addr → Nat) (m m' : Mem),
+      QL SL m (sp.toNat - 968) →
+      ValueRepr m N φ (sp.toNat - 968) vl →
+      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
+        ¬ ((sp.toNat - 944) ≤ k ∧ k < (sp.toNat - 944) + 24) → m[k]? = m'[k]?) →
+      MemFootprint (fun k => word8 (sp.toNat - 1088) k ∨
+        Fr SL A (sp.toNat - 1088) (sp.toNat - 944) k) m m' →
+      ValueRepr m' N φ (sp.toNat - 968) vl) :
+    Triple
+      (fun c => ∃ ment,
+        ArmEntryK gouter N A SL φf φc st (0x800034e8#64) UnaryArmCallee (.binary op el er)
+          sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
+        BinExtras N A SL el er ment sp sret aExpr aLOp aROp ∧
+        BinaryRecContext gpre φf st env aEnvReg ∧
+        c.σ.regs.get? Register.x11 = some aEnv ∧
+        c.σ.regs.get? Register.x13 = some aEnvReg ∧
+        c.σ.regs.get? Register.x19 = some v19 ∧
+        (∀ R : Register, AbiPreservedNoise R → c.σ.regs.get? R = gpre R) ∧
+        (∃ w, gpre Register.x8 = some w) ∧ (∃ w, gpre Register.x18 = some w) ∧
+        gpre Register.x8 = some aExpr ∧ gpre Register.x18 = some aEnv ∧
+        gpre Register.x19 = some v19 ∧
+        read64 ment (aExpr.toNat + 16) = some aLOp.toNat ∧
+        ExprRepr ment aLOp.toNat el ∧
+        read64 ment (aExpr.toNat + 24) = some aROp.toNat ∧
+        ExprRepr ment aROp.toNat er ∧
+        MemExtends m0 ment ∧
+        EvalGround ment SL A sp sret aExpr.toNat (.binary op el er) ∧
+        StackOK SL (sp - 1088#64)
+          (el.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget el = true ∧
+        Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget ∧
+        StackOK SL (sp - 1088#64)
+          (er.stackNeed + (Vsa.While.maxCallDepth - d) * Vsa.While.perCallBudget + 1088) ∧
+        Expr.bodiesBound Vsa.While.perCallBudget er = true ∧
+        Vsa.While.StoreBodiesBound st'.store Vsa.While.perCallBudget)
+      (ReturnedWith
+        (TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+          st' st'' vl vr sp r sret v8 v9 v18 m0)
+        (fun c => BinaryReturnData SL sp sret c ∧
+          MemFootprint (binaryHeadFoot Fl Fr SL A sp.toNat) m0 c.σ.mem)) :=
+  (blockB_binary_footprint_gen2 Fl Fr (fun SL _ m a => QL SL m a)
+      (fun _ _ _ _ => True) (fun _ _ _ _ => True)
+      gouter gpre N A SL φf φc st st' st'' d env op el er vl vr
+      sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0 hLeft hIHl
+      (EvalIHWithM.mono (fun _ _ _ _ _ _ _ _ _ hf => ⟨hf, trivial⟩) hIHr)
+      hVlSurv (fun _ _ _ _ _ _ _ _ => trivial)).conseq (fun _ hp => hp)
+    (fun _ hp => ⟨hp.result, hp.extra.1, hp.extra.2.1⟩)
 
 /-- **`blockB_binary_footprint`** — the landed head, unchanged in statement: the
 parametric head at the trivial left-child fact (`QL := fun _ _ _ => True`), whose
@@ -1501,6 +1609,7 @@ def blockB_binary
       sp r sret aExpr aEnv aLOp aROp aEnvReg v8 v9 v18 v19 out0 m0
       hLeft hIHl hIHr hVlSurv)
 
+#print axioms blockB_binary_footprint_gen2
 #print axioms blockB_binary_footprint_gen
 #print axioms blockB_binary_footprint
 #print axioms blockB_binary_data

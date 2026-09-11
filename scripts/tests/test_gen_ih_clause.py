@@ -215,6 +215,33 @@ class EmissionTests(unittest.TestCase):
         self.assertNotIn("theorem ofWith", text)
         self.assertIn("  EvalIHWithM extraM st d env e st' v\n", text)
 
+    def test_motive_clause_emits_the_motive_verbatim(self) -> None:
+        """Kind `motive`: the pred IS the `EvalE` motive (a fact indexed by the value)."""
+        with tempfile.TemporaryDirectory() as directory:
+            tsv = write_tsv(Path(directory),
+                            "Demo\tmotive\tEvalIHFP noArenaFoot\t-\t-\t*=manual\t\n",
+                            HEADER_KIND)
+            (clause,) = generator.load_clauses(tsv)
+            self.assertEqual((clause.kind, clause.pred), ("motive", "EvalIHFP noArenaFoot"))
+            self.assertEqual(clause.eval_motive_body(), "clauseMotive st d env e st' v")
+            text = generator.render_all(tsv)["Demo"]
+        self.assertIn("def clauseMotive : SpecSt \u2192 Nat \u2192 Addr \u2192 Expr \u2192 SpecSt "
+                      "\u2192 Value \u2192 Prop :=\n  EvalIHFP noArenaFoot\n", text)
+        self.assertNotIn("def extraM :", text)
+        self.assertNotIn("def extra :", text)
+        self.assertNotIn("theorem ofWith", text)
+        self.assertIn("  clauseMotive st d env e st' v\n", text)
+
+    def test_tracked_product_clause_is_declared(self) -> None:
+        """`FootprintCov` is the product clause the string-comparison cells need."""
+        clauses = {c.name: c for c in generator.load_clauses()}
+        cov = clauses["FootprintCov"]
+        self.assertEqual((cov.kind, cov.pred, cov.guard),
+                         ("motive", "EvalIHFP noArenaFoot", ""))
+        self.assertEqual(generator.parse_tag(cov.tag("hStr")),
+                         ("exact", "Vsa.Sim.IHClauseGeneric.footprintCov.hStr"))
+        self.assertEqual(generator.parse_tag(cov.tag("hBinary")), ("generic", "footprintCov"))
+
     def test_step_for_trivial_parent_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             tsv = write_tsv(Path(directory),

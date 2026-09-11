@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 # check_all.sh — the CI gate for the Vsa Lean development.
 #
-# Usage: scripts/check_all.sh [--skip-build]
+# Usage: scripts/check_all.sh [--skip-build | --static-only]
 #
 # Stages (all must pass; exits nonzero with a message on the first failure):
+#   (a3) generated-interface drift — generated source matches its inputs;
+#   (a4) proof discipline          — source follows the repository's proof rules;
+#   (a5) IH clause status          — informational source summary;
+#   (b) grep gate                   — no `sorry`, `native_decide`, `bv_decide`,
+#                                     or `axiom` declarations
+#                                     anywhere under Vsa/ or in Vsa.lean.
+#                                     Comments/docstrings and string literals
+#                                     are stripped first;
 #   (a) private serial build        — all source modules compile;
 #                                     --skip-build verifies current fingerprints.
 #       initial-state validation    — mandatory actual Sail regressions;
-#   (b) grep gate                   — no `sorry`, no `native_decide`, and no
-#                                     `axiom` declarations anywhere under Vsa/
-#                                     or in Vsa.lean.  Comments/docstrings and
-#                                     string literals are stripped first, so
-#                                     "NO sorry/native_decide" prose is fine;
 #   (c) `#print axioms`             — every key top-level spec theorem depends
 #                                     only on {propext, Classical.choice,
 #                                     Quot.sound}.  Extend THEOREMS below as
@@ -25,34 +28,29 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
 
 SKIP_BUILD=0
+STATIC_ONLY=0
 for arg in "$@"; do
   case "$arg" in
     --skip-build) SKIP_BUILD=1 ;;
-    -h|--help) echo "usage: $0 [--skip-build]"; exit 0 ;;
-    *) echo "usage: $0 [--skip-build]" >&2; exit 2 ;;
+    --static-only) STATIC_ONLY=1 ;;
+    -h|--help) echo "usage: $0 [--skip-build | --static-only]"; exit 0 ;;
+    *) echo "usage: $0 [--skip-build | --static-only]" >&2; exit 2 ;;
   esac
 done
 
-fail() { echo "check_all: FAIL: $*" >&2; exit 1; }
-
-# ---------------------------------------------------------------- (a) build
-VSA_PRIVATE_BUILD="${VSA_PRIVATE_BUILD:?set VSA_PRIVATE_BUILD to a private build directory}"
-if [ "$SKIP_BUILD" -eq 0 ]; then
-  python3 scripts/check_validation.py --backend "$VSA_PRIVATE_BUILD" \
-    --build-backend --verify-backend-only || fail "stage a: private build or elaboration budget failed"
+if [ "$SKIP_BUILD" -eq 1 ] && [ "$STATIC_ONLY" -eq 1 ]; then
+  echo "usage: $0 [--skip-build | --static-only]" >&2
+  exit 2
 fi
-python3 scripts/check_validation.py --backend "$VSA_PRIVATE_BUILD" \
-  --verify-backend-only || fail "stage a: stale or incomplete private build"
 
-# Direct initial-state cases are mandatory, including when the build is reused.
-VALIDATION_BASE=$(mktemp -d)
-python3 scripts/check_validation.py --backend "$VSA_PRIVATE_BUILD" \
-  --output "$VALIDATION_BASE/boundary" || fail "initial-state validation failed; see $VALIDATION_BASE"
+fail() { echo "check_all: FAIL: $*" >&2; exit 1; }
 
 # ----------------------------------------- stage a3: generated-interface drift
 echo "== stage a3: generated term-case bundle"
 python3 scripts/gen_term_case_bundle.py --check \
   || fail "stage a3: Vsa/Sim/TermCaseBundle.lean is stale"
+python3 -B -m scripts.gen_allocator_cases --check \
+  || fail "stage a3: Vsa/Sim/AllocatorCases.lean is stale"
 python3 scripts/gen_m4_term_row.py --check \
   || fail "stage a3: Vsa/Sim/rows/TermRouting.lean is stale"
 python3 scripts/gen_ih_clause.py --check \
@@ -72,7 +70,7 @@ echo "== stage a5: IH clause status (informational)"
 python3 -B scripts/ih_clause_status.py --summary \
   || echo "stage a5: clause status unavailable (informational; see above)"
 
-echo "== stage b: sorry / native_decide / axiom gate"
+echo "== stage b: sorry / native_decide / bv_decide / axiom gate"
 python3 - <<'PYEOF' || fail "stage b: forbidden token(s) found (see above)"
 import pathlib, re, sys
 
@@ -125,6 +123,25 @@ if bad:
     sys.exit(1)
 PYEOF
 echo "stage b: OK"
+
+if [ "$STATIC_ONLY" -eq 1 ]; then
+  echo "check_all: source-only checks passed; compiled checks NOT RUN"
+  exit 0
+fi
+
+# ---------------------------------------------------------------- (a) build
+VSA_PRIVATE_BUILD="${VSA_PRIVATE_BUILD:?set VSA_PRIVATE_BUILD to a private build directory}"
+if [ "$SKIP_BUILD" -eq 0 ]; then
+  python3 scripts/check_validation.py --backend "$VSA_PRIVATE_BUILD" \
+    --build-backend --verify-backend-only || fail "stage a: private build or elaboration budget failed"
+fi
+python3 scripts/check_validation.py --backend "$VSA_PRIVATE_BUILD" \
+  --verify-backend-only || fail "stage a: stale or incomplete private build"
+
+# Direct initial-state cases are mandatory, including when the build is reused.
+VALIDATION_BASE=$(mktemp -d)
+python3 scripts/check_validation.py --backend "$VSA_PRIVATE_BUILD" \
+  --output "$VALIDATION_BASE/boundary" || fail "initial-state validation failed; see $VALIDATION_BASE"
 
 # ------------------------------------------------------- (c) #print axioms
 echo "== stage c: #print axioms on the key spec theorems"
@@ -810,13 +827,13 @@ THEOREMS=(
   Vsa.Sim.concatHeapCore                            # rows/ConcatHeapCore (the concat C-block splice: 8 callees over 7 seams as pure callSeg algebra, front/middle/tail)
   Vsa.Sim.concatMallocSlot                          # rows/ConcatSeams (malloc callee slot ← MallocContract.spec)
   Vsa.Sim.concatFreeSlot                            # rows/ConcatSeams (both free slots ← MallocContract.freeSpec)
-  Vsa.Sim.concatOOM_prune                           # rows/ConcatSeams (beqz no-OOM prune ← M.nonNull_of_bounded through the named ConcatMallocPost.disj destructurer)
+  Vsa.Sim.concatOOM_prune                           # rows/ConcatSeams (selected pointer from the actual successful malloc return)
   Vsa.Sim.concatValueStrSeam_readback               # rows/ConcatSeams (the value_str seam's CString (sL++sR) ← concatReadback)
   Vsa.Sim.concatCBlockTriple_of                     # rows/ConcatSeams (concatHeapCore with the contract-layer slots pre-plugged; strlen/memcpy/strcpy/value_str per-call threaded)
   Vsa.Sim.evalChildField_of_blockA_stage            # EvalChildFieldCombinator (THE per-field closer: dispatch bridge + counted arm-head cut ⇒ LandedN 1 JalPreBundle — kills the hand-composition across all eval-child fields)
   Vsa.Sim.binaryL_field_of_extras                   # ArmStagesWave34 (FIRST fully machine-composed field: blockA_binaryArm ≫ blockB_binary_leftStagePre via the combinator, mod BinArmGeomProvider)
   Vsa.Sim.divFamily_wave34                          # ArmStagesWave34 (capstone: binaryL + seqHead wired, premise list visibly shrinking)
-  Vsa.Sim.strdupMemcpy_prune_null                   # rows/StrdupTailContractClose (gap-2 witness: no-OOM prune via M.nonNull_of_bounded)
+  Vsa.Sim.strdupMemcpy_prune_null                   # rows/StrdupTailContractClose (selected successful malloc return for memcpy staging)
   Vsa.Sim.strdupMemcpyArg_a2_reload                 # rows/StrdupTailContractClose (gap-1 witness: lds-generic reload readback at singleton [sizeBytes])
   Vsa.Sim.strdupMemcpy_frame_obstruction            # rows/StrdupTailContractClose (Law-4 REGRESSION GUARD: the pre-amendment single-gm bridge forced sOld = dst)
   Vsa.Sim.strdupTailMemcpyBridge_of                 # rows/StrdupTailContractClose (the AMENDED memcpy bridge CLOSED: reseated ghost + the two witnesses + StrdupMemcpyContent named bundle)
@@ -873,7 +890,7 @@ THEOREMS=(
   Vsa.Sim.callClosureRet_of_status                  # rows/CallClosureSplice (the a_6 status classification split)
   Vsa.Sim.callClosureGeom_of                        # rows/CallClosureSplice (3-field assembly into the amended residual slot)
   Vsa.Sim.callClosureEnvNewSeamFrame                # rows/CallClosureSplice (rzSeamFrame_of_run firing on the real env_new spill log — AInv + Env_newLoaded one-shot)
-  Vsa.Sim.prune_of_exit                             # rows/FnArmSeams (reusable: the malloc NULL/success disjunction collapsed via nonNull_of_bounded, memOut exposed)
+  Vsa.Sim.prune_of_exit                             # rows/FnArmSeams (pointer and memory frame from the same successful malloc return)
   Vsa.Sim.allocBuildEntry_tail                      # rows/FnArmSeams (all ~30 AllocBuildEntry fields off ExitPost; foot/memOut transport used as designed)
   Vsa.Sim.staging_of_link                           # rows/FnArmSeams (malloc EntryP off the arm front; AllocBuildStagingLink = the irreducible named front bundle)
   Vsa.Sim.fnArmSeamRun_of_seams                     # rows/FnArmSeams (capstone: the whole FnArmSeamRun pipeline closes from the two bundles)

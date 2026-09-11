@@ -677,7 +677,7 @@ theorem dispatch_of_armState (D : EvalChildArm) (C : D.Cert) {s : Stmt} {e : Exp
       rcases hr.stack_disjoint with hd | hd <;> simp only [hesp] <;> omega
     · exact ⟨Nat.le_trans hr.lo_ram hn.lo_le,
         Nat.le_trans (Nat.add_le_add_left (by decide : 16 ≤ 40) _)
-          (Nat.le_trans hn.hi_ge hr.hi_ram)⟩
+          (Nat.le_trans hn.hi_ge (Nat.le_trans (Nat.le_add_right _ 8) hr.hi_ram))⟩
     · have := hr.win; have := hn.lo_le; omega
     · rw [hsret]; have := hA.stack_budget.2.2; omega
     · exact ⟨Nat.le_trans hA.stack_ram.1 hsretSL.1,

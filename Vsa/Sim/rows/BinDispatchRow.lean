@@ -568,6 +568,66 @@ theorem binRow_ge
         hArmFrame.saved19, hArmFrame.bridge⟩
   exact ⟨c2, hs1.trans hs2, hExit⟩
 
+set_option maxHeartbeats 200000 in
+/-- **`binRow_div_wrap`** — the `.div` int cell (`.int (wrap64 (a.tdiv b))`, `DivResid`, + guards). -/
+theorem binRow_div_wrap
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (a b : Int)
+    (sp r sret aEnv aExpr : BitVec 64)
+    (m0 : Mem)
+    (hbNe : b ≠ 0)
+    (hLeft : EvalE st d env el st' (.int a))
+    (hIHl : EvalIH st d env el st' (.int a))
+    (hIHr : EvalIH st' d env er st'' (.int b))
+    (hEvalE : EvalE st d env (.binary .div el er) st'' (.int (wrap64 (a.tdiv b))))
+    (hPost : ∀ (gpre : (R : Register) → Option (RegisterType R))
+        (v8 v9 v18 v19 : BitVec 64),
+      BinaryArmFrame g gpre sp aExpr v8 v9 v18 v19 →
+      ∀ c' : Vsa.Machine.Config,
+        TwoSubReturn gpre N A SL φf φc st.store.frames.size st.store.closures.size
+          st' st'' (.int a) (.int b) sp r sret v8 v9 v18 m0 c' →
+        DivResid gpre N A SL sp r sret aExpr c') :
+    Triple
+      (fun c => EvalEntry g N A SL φf φc st d env (.binary .div el er) sp r sret aEnv aExpr m0 c)
+      (EvalExitD g N A SL φf φc st.store.frames.size st.store.closures.size
+        st'' (.int (wrap64 (a.tdiv b))) sp r sret m0) := by
+  intro c hc
+  obtain ⟨aLOp, aROp, hX⟩ := hc.binaryExtras
+  have hstoreBodiesR := StoreBodiesBound.afterEvalE hLeft
+    (Expr.bodiesBound_binary hc.expr_bodies).1 hc.store_bodies
+  obtain ⟨c1, hs1, gpre', aEnvReg', v8', v9', v18', v19', ment, hArm, hBE, hRec, hx11, hx13, hx19,
+    hgframe, hg8w, hg18w, hgx8, hgx18, hgx19, hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
+    hsbL, hebL, hstbL, hsbR, hebR, hstbR⟩ :=
+    blockA_binaryArm_budgeted g N A SL φf φc st st' d env .div el er sp r sret aEnv aExpr aLOp aROp m0 hX hstoreBodiesR c hc
+  have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
+      ValueRepr mm N φ (sp.toNat - 968) (.int a) →
+      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < sp.toNat - 1080) → ¬ (A.lo ≤ k ∧ k < A.hi) →
+        ¬ ((sp.toNat - 944) ≤ k ∧ k < (sp.toNat - 944) + 24) → mm[k]? = mm'[k]?) →
+      ValueRepr mm' N φ (sp.toNat - 968) (.int a) := by
+    intro φ mm mm' hv hag
+    have hsproom := hBE.sproom
+    obtain ⟨hk, hp⟩ := hv
+    have hAg : AgreeP (fun k => sp.toNat - 968 ≤ k ∧ k < sp.toNat - 952) mm mm' := by
+      intro k hk'
+      exact hag k (by omega) (by rcases hBE.arenaStk with h | h <;> omega) (by omega)
+    refine ⟨?_, ?_⟩
+    · rw [← read32_agreeP hAg (fun j hj => ⟨by omega, by omega⟩)]; exact hk
+    · rw [readI64] at hp ⊢
+      rw [← read64_agreeP hAg (fun j hj => ⟨by omega, by omega⟩)]; exact hp
+  have hArmFrame := BinaryArmFrame.of_entry hArm hgframe hgx19
+  have hResid := hPost gpre' v8' v9' v18' v19' hArmFrame
+  obtain ⟨c2, hs2, hExit⟩ :=
+    evalDivWrapSim g gpre' g N A SL φf φc st st' st'' d env el er a b
+      sp r sret aExpr aEnv aLOp aROp aEnvReg' v8' v9' v18' v19' c1.σ.sailOutput m0
+      hbNe hLeft hIHl hIHr hEvalE
+      c1 ⟨ment, hArm, hBE, hRec, hx11, hx13, hx19, hgframe, hg8w, hg18w, hgx8, hgx18, hgx19,
+        hpayL, hexprL, hpayR, hexprR, hMemExt, hGmt,
+        hsbL, hebL, hstbL, hsbR, hebR, hstbR, hResid,
+        hArmFrame.saved8, hArmFrame.saved9, hArmFrame.saved18, hArmFrame.savedSp,
+        hArmFrame.saved19, hArmFrame.bridge⟩
+  exact ⟨c2, hs1.trans hs2, hExit⟩
+
 /-- **`binRow_eq`** — the `.eq` cell (arbitrary operand kinds, `evalEqSimD`). -/
 theorem binRow_eq
     (g : (R : Register) → Option (RegisterType R))

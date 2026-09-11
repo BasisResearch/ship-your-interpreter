@@ -1,3 +1,5 @@
+import Vsa.Sim.AllocSuccessAdapters
+import Vsa.Sim.AllocReserveTransport
 import Vsa.Sim.AllocOff
 import Vsa.Sim.rows.EnvDefineAppendLane
 import Vsa.Sim.rows.EnvDefineReallocArray
@@ -32,6 +34,8 @@ open Vsa.Sim.RuntimeOwnership (HeapOwned ValueOwned SharedCString Allocated Exte
 open Vsa.Sim.TruthyCopy (abiButS0 abiButS0_noise)
 
 namespace Vsa.Sim
+
+variable {credits : Nat}
 
 -- `omega` after discarding the lane's standing interval disjunctions (each
 -- consumer case-splits the one it needs first): keeps every arithmetic leaf a
@@ -82,7 +86,7 @@ two `realloc` runs and the rejoin, with the per-step memory relations, the
 fresh arrays, the two ledgers and the allocator invariant they carry. -/
 structure GrowCallsData (A : Arena) (SL : StackLayout) {gpv : BitVec 64} {headroom maxReq : Nat}
     (M : MallocContract A SL gpv headroom maxReq) (mA : Mem) (aEnv esp : BitVec 64)
-    (extsA : List Extent) (pn pvals cap : Nat) (c0 c1 c2 c3 c4 c5 : Config)
+    (extsA : List Extent) (pn pvals cap credits : Nat) (c0 c1 c2 c3 c4 c5 : Config)
     (cap' pNamesNew pValsNew : Nat) (exts1 exts2 : List Extent) : Prop where
   steps : Steps c0 c5
   good5 : GoodState c5.σ
@@ -94,6 +98,8 @@ structure GrowCallsData (A : Arena) (SL : StackLayout) {gpv : BitVec 64} {headro
   capLt : cap < cap'
   capPos : 0 < cap'
   capS : cap' < 2^31
+  namesReq : 8 * cap' ≤ maxReq
+  valuesReq : 24 * cap' ≤ maxReq
   privA : ∀ e ∈ extsA, ∀ i < e.2, ¬ M.privFoot (e.1 + i)
   mem1 : c1.σ.mem = writeMap4 mA (aEnv.toNat + 4) (swData (BitVec.ofNat 64 cap'))
   A2 : ∀ k, ¬ M.privFoot k → ¬ (SL.lo ≤ k ∧ k < esp.toNat - 64) →
@@ -122,13 +128,15 @@ structure GrowCallsData (A : Arena) (SL : StackLayout) {gpv : BitVec 64} {headro
   ainv4 : M.AInv c4.σ exts2
   x3_54 : c5.σ.regs.get? Register.x3 = c4.σ.regs.get? Register.x3
   text4 : FixedTextLoaded c4.σ.mem
+  budget5 : ResourceBudget A maxReq exts2 credits
+  reserve5 : AllocationReserve A c5.σ.mem exts2 maxReq credits
 
 /-- The calls, with their configs and results selected. -/
 inductive GrowCalls (A : Arena) (SL : StackLayout) {gpv : BitVec 64} {headroom maxReq : Nat}
     (M : MallocContract A SL gpv headroom maxReq) (mA : Mem) (aEnv esp : BitVec 64)
-    (extsA : List Extent) (pn pvals cap : Nat) (c0 : Config) : Prop where
+    (extsA : List Extent) (pn pvals cap credits : Nat) (c0 : Config) : Prop where
   | intro (c1 c2 c3 c4 c5 : Config) (cap' pNamesNew pValsNew : Nat) (exts1 exts2 : List Extent)
-      (data : GrowCallsData A SL M mA aEnv esp extsA pn pvals cap c0 c1 c2 c3 c4 c5
+      (data : GrowCallsData A SL M mA aEnv esp extsA pn pvals cap credits c0 c1 c2 c3 c4 c5
         cap' pNamesNew pValsNew exts1 exts2)
 
 /-- **The grow lane's memory core** at the rejoined memory `m5`: the master
@@ -163,19 +171,39 @@ structure GrowMemFacts (A : Arena) (SL : StackLayout) (mA m5 : Mem) (φf : Addr 
   offArena : ∀ k, ¬ (A.lo ≤ k ∧ k < A.hi) → ¬ (SL.lo ≤ k ∧ k < esp.toNat - 64) →
     m5[k]? = mA[k]?
   slot : ∀ k, valHeader pv.toNat k → m5[k]? = mA[k]?
+/-- Caller geometry needed by the array reallocations. -/
+structure EnvDefineGrowGeometry (A : Arena) (SL : StackLayout) (esp pv : BitVec 64) : Prop where
+  stack : StackOK SL esp 1088
+  stack_ram : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000
+  stack_win : tohostAddr + 16 ≤ SL.lo
+  slot_above : esp.toNat ≤ pv.toNat
+  slot_in_stack : pv.toNat + 24 ≤ SL.hi
+  arena_image : A.hi ≤ 0x80000000 ∨ 0x8001acf0 ≤ A.lo
+
+/-- The original helper entry supplies the grow geometry. -/
+theorem EnvDefineMem.growGeometry
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : Vsa.While.St} {env : Addr} {x : String} {v : Value}
+    {aEnv aName pv esp : BitVec 64} {m : Mem}
+    (h : EnvDefineMem N A SL φf φc st env x v aEnv aName pv esp m) :
+    EnvDefineGrowGeometry A SL esp pv :=
+  { stack := h.stack, stack_ram := h.stack_ram, stack_win := h.stack_win
+    slot_above := by have := h.pv_frame; omega
+    slot_in_stack := by have := h.pv_frame; have := h.slot_in_stack; omega
+    arena_image := h.arena_image }
+
 /-- **The grow lane's calls**: from either entry, the prefixes, both `realloc`
 runs and the rejoin. -/
-theorem envDefineGrowCalls
+theorem envDefineGrowCallsAt
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (env : Addr) (x : String) (v : Value)
     (esp aEnv aName pv r : BitVec 64) (m : Mem) (out : Array String)
     {gpv : BitVec 64} {headroom maxReq : Nat}
-    (M : MallocContract A SL gpv headroom maxReq) (exts extsA : List Extent) (mA : Mem)
+    (M : MallocContract A SL gpv headroom maxReq) (extsA : List Extent) (mA : Mem)
     (cap pn pvals : Nat) (c0 : Config)
-    (hE : EnvDefineMem N A SL φf φc st env x v aEnv aName pv esp m)
-    (L : EnvDefineUpdateLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts)
-    (LM : EnvDefineMissLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts)
+    (hE : EnvDefineGrowGeometry A SL esp pv)
+    (L : AllocLedger A SL gpv headroom maxReq M)
     (F : EnvDefineMissFacts g N A SL φf φc st env x v esp aEnv aName pv r m extsA mA cap)
     (R : EnvDefineMissRegs g A SL st env esp aEnv aName pv r out M extsA mA F.env_lt c0)
     (hfull : (st.store.frames[env]'F.env_lt).vars.length = cap)
@@ -183,8 +211,10 @@ theorem envDefineGrowCalls
     (hpvals : read64 mA (φf env + 16) = some pvals)
     (hgrowReq : 48 * cap ≤ maxReq)
     (K : EnvDefineGrowKind cap c0)
-    (hs6 : c0.σ.regs.get? Register.x22 = some (BitVec.ofNat 64 pn)) :
-    GrowCalls A SL M mA aEnv esp extsA pn pvals cap c0 := by
+    (hs6 : c0.σ.regs.get? Register.x22 = some (BitVec.ofNat 64 pn))
+    (budget : ResourceBudget A maxReq extsA (credits + 2))
+    (reserve : AllocationReserve A mA extsA maxReq (credits + 2)) :
+    GrowCalls A SL M mA aEnv esp extsA pn pvals cap credits c0 := by
   -- ── geometry
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hsp1 := hE.stack.1
@@ -195,12 +225,12 @@ theorem envDefineGrowCalls
   have hwin := hE.stack_win
   have h64 : 64 ≤ esp.toNat := by omega
   have hsp64 : (esp - 64#64).toNat = esp.toNat - 64 := sp_sub64_toNat esp h64
-  have hAlo := L.alloc.arena_ram.1
-  have hAhi := L.alloc.arena_ram.2
-  have hAhtif := L.alloc.arena_htif
-  have hAstack := LM.alloc.arena_stack
+  have hAlo := L.arena_ram.1
+  have hAhi := L.arena_ram.2
+  have hAhtif := L.arena_htif
+  have hAstack := L.arena_stack
   have hAimg := hE.arena_image
-  have hpvNat := hE.pv_frame
+  have hpvNat := hE.slot_above
   have hslot := hE.slot_in_stack
   have henvLt := F.env_lt
   have hfull' : (st.store.frames[env]).vars.length = cap := hfull
@@ -281,7 +311,7 @@ theorem envDefineGrowCalls
     M.privFoot_disjoint c0.σ extsA R.ainv
   -- the entry-side allocator separation facts, from ONE lemma (`AllocOff.lean`)
   have EO : EntryOff A SL extsA M.privFoot alloc shared :=
-    hheap.entryOff hstackW hprivA LM.alloc.priv_arena
+    hheap.entryOff hstackW hprivA L.priv_arena
   have hsharedPriv := EO.shared_priv
   have hsharedStack := EO.shared_stack
   have hextArena := EO.ext_arena
@@ -297,8 +327,8 @@ theorem envDefineGrowCalls
     · subst hc
       obtain ⟨c1, P1⟩ := envDefineReallocNamesParked_init aEnv (BitVec.ofNat 64 pn) c0 henvGeom
         R.good hpc ha5 ha1 R.s4 hs6 hcode0 R.tick
-      exact ⟨8, by omega, by omega, by have := LM.alloc.init_req; omega,
-        by have := LM.alloc.init_req; omega, by omega, c1, P1⟩
+      exact ⟨8, by omega, by omega, by have := L.init_req; omega,
+        by have := L.init_req; omega, by omega, c1, P1⟩
   have henvNat : aEnv.toNat = φf env := F.env_addr
   have hmem1 : c1.σ.mem = writeMap4 mA (aEnv.toNat + 4) (swData (BitVec.ofNat 64 cap')) := by
     rw [P1.mem, R.mem]
@@ -328,7 +358,7 @@ theorem envDefineGrowCalls
   have hx2_1 : c1.σ.regs.get? Register.x2 = some (esp - 64#64) := by
     rw [P1.abi _ (by decide)]; exact R.sp
   have hainv1 : M.AInv c1.σ extsA := by
-    apply LM.alloc.ainv_private extsA c0.σ c1.σ (R.gp.trans hx3_1.symm) _ R.ainv
+    apply L.ainv_private extsA c0.σ c1.σ (R.gp.trans hx3_1.symm) _ R.ainv
     intro a hpa
     rw [R.mem, ← (A1 a ?_)]
     by_cases hin : aEnv.toNat + 4 ≤ a ∧ a < aEnv.toNat + 8
@@ -339,12 +369,42 @@ theorem envDefineGrowCalls
       c1.σ.mem g1 c1 :=
     ⟨P1.good, P1.tick, P1.pc, P1.a0, P1.a1, P1.ra, by decide, hx2_1, R.stack, hx3_1,
       fun _ _ => rfl, hainv1, rfl⟩
-  obtain ⟨c2, hs2, post2, res2, out2, ext2⟩ :=
-    reallocArray_run LM.alloc.realloc hheap.ledger.arena hnamesO hnamesMem
-      (fun hc => by have := hnamesArena hc; omega) (by omega) hreq8 (by omega) g1
-      (esp - 64#64) 0x80002ba4#64 c1.σ.mem out c1 ⟨hpre1, P1.out.trans R.out⟩
+  have reserve1 : AllocationReserve A c1.σ.mem extsA maxReq (credits + 2) := by
+    apply reserve.after_live
+    · intro a outside
+      have offRecord := outside (φf env, 32) hrecMem
+      exact (A1 a (by rw [henvNat]; omega)).symm
+    · intro e he
+      exact (hheap.ledger.arena.1 e he).2
+    · exact L.arena_globals
+  have text1 : FixedTextLoaded c1.σ.mem := by
+    apply F.text.transport
+    intro a lo hi
+    apply A1
+    have below := L.arena_globals
+    rw [henvNat]
+    omega
+  obtain ⟨c2, hs2, success2⟩ :=
+    reallocArray_run L.realloc hheap.ledger.arena hnamesO hnamesMem
+      (fun hc => by have := hnamesArena hc; omega) (by omega) g1
+      (esp - 64#64) 0x80002ba4#64 c1.σ.mem out (credits + 1) c1
+      (ReallocSuccessEntry.of_pre hpre1 (P1.out.trans R.out) text1
+        { bounded := hreq8
+          budget := by simpa only [Nat.add_assoc] using budget
+          reserve := by simpa only [Nat.add_assoc] using reserve1 } (by omega))
+  have post2 := success2.returned.toReallocPost
+  have out2 := success2.returned.out
+  have ext2 := success2.returned.mem_extends
   obtain ⟨hG2, htick2, hpc2, hsp2, hgp2, habi2⟩ := post2
-  obtain ⟨pNamesNew, hx10_2, hnz2, hal2, hA2, hfresh2, hcopies2, hainv2, hframe2⟩ := res2
+  obtain ⟨pNamesNew, result2⟩ := success2.grown
+  have hx10_2 := result2.pointer.register
+  have hnz2 := result2.pointer.nonzero
+  have hal2 := result2.pointer.aligned
+  have hA2 := result2.pointer.arena
+  have hfresh2 := result2.disjoint
+  have hcopies2 := result2.copies
+  have hainv2 := result2.ainv
+  have hframe2 := result2.mem_frame
   have hA2' : A.lo ≤ pNamesNew ∧ pNamesNew + 8 * cap' ≤ A.hi := hA2
   have A2 : ∀ k, ¬ M.privFoot k → ¬ (SL.lo ≤ k ∧ k < esp.toNat - 64) →
       (k < pn ∨ pn + 8 * cap ≤ k) → (k < pNamesNew ∨ pNamesNew + 8 * cap' ≤ k) →
@@ -417,7 +477,7 @@ theorem envDefineGrowCalls
       rcases Nat.lt_or_ge a (φf env + 4) with h | h
       · exact Or.inl h
       · right; omega
-    rw [A2 a (fun hp => hna (LM.alloc.priv_arena a hp)) (hOffTextStack a h1 h2) hoffN hoffNN]
+    rw [A2 a (fun hp => hna (L.priv_arena a hp)) (hOffTextStack a h1 h2) hoffN hoffNN]
     exact A1 a hoffR
   -- ── the second prefix, parked at `realloc(vals)`
   have hs4_2 : c2.σ.regs.get? Register.x20 = some aEnv := by
@@ -435,7 +495,7 @@ theorem envDefineGrowCalls
   have hx2_3 : c3.σ.regs.get? Register.x2 = some (esp - 64#64) := by
     rw [P3.abi _ (by decide)]; exact hsp2
   have hainv3 : M.AInv c3.σ exts1 := by
-    apply LM.alloc.ainv_private exts1 c2.σ c3.σ (hgp2.trans hx3_3.symm) _ hainv2
+    apply L.ainv_private exts1 c2.σ c3.σ (hgp2.trans hx3_3.symm) _ hainv2
     intro a hpa
     rw [← (A3 a ?_)]
     by_cases hin : aEnv.toNat + 8 ≤ a ∧ a < aEnv.toNat + 16
@@ -452,13 +512,47 @@ theorem envDefineGrowCalls
       0x80002bc0#64 c3.σ.mem g3 c3 :=
     ⟨P3.good, P3.tick, P3.pc, P3.a0, P3.a1, P3.ra, by decide, hx2_3, R.stack, hx3_3,
       fun _ _ => rfl, hainv3, rfl⟩
-  obtain ⟨c4, hs4, post4, res4, out4, ext4⟩ :=
-    reallocArray_run LM.alloc.realloc ledger1.arena hvalsO1
+  have reserve2 : AllocationReserve A c2.σ.mem exts1 maxReq (credits + 1) := by
+    rw [← hexts1]
+    exact result2.reserve
+  have reserve3 : AllocationReserve A c3.σ.mem exts1 maxReq (credits + 1) := by
+    apply reserve2.after_live
+    · intro a outside
+      have offRecord := outside (φf env, 32) hrec1
+      exact (A3 a (by rw [henvNat]; omega)).symm
+    · intro e he
+      exact (ledger1.arena.1 e he).2
+    · exact L.arena_globals
+  have budget3 : ResourceBudget A maxReq exts1 (credits + 1) := by
+    rw [← hexts1]
+    exact result2.budget
+  have text3 : FixedTextLoaded c3.σ.mem := by
+    apply success2.returned.code.transport
+    intro a lo hi
+    apply A3
+    have below := L.arena_globals
+    rw [henvNat]
+    omega
+  obtain ⟨c4, hs4, success4⟩ :=
+    reallocArray_run L.realloc ledger1.arena hvalsO1
       (fun hc => ledger1.live _ _ _ (hvalsO1.nonempty hc))
-      (fun hc => by have := hvalsArena hc; omega) (by omega) hreq24 (by omega) g3
-      (esp - 64#64) 0x80002bc0#64 c3.σ.mem out c3 ⟨hpre3, P3.out.trans out2⟩
+      (fun hc => by have := hvalsArena hc; omega) (by omega) g3
+      (esp - 64#64) 0x80002bc0#64 c3.σ.mem out credits c3
+      (ReallocSuccessEntry.of_pre hpre3 (P3.out.trans out2) text3
+        { bounded := hreq24, budget := budget3, reserve := reserve3 } (by omega))
+  have post4 := success4.returned.toReallocPost
+  have out4 := success4.returned.out
+  have ext4 := success4.returned.mem_extends
   obtain ⟨hG4, htick4, hpc4, hsp4, hgp4, habi4⟩ := post4
-  obtain ⟨pValsNew, hx10_4, hnz4, hal4, hA4, hfresh4, hcopies4, hainv4, hframe4⟩ := res4
+  obtain ⟨pValsNew, result4⟩ := success4.grown
+  have hx10_4 := result4.pointer.register
+  have hnz4 := result4.pointer.nonzero
+  have hal4 := result4.pointer.aligned
+  have hA4 := result4.pointer.arena
+  have hfresh4 := result4.disjoint
+  have hcopies4 := result4.copies
+  have hainv4 := result4.ainv
+  have hframe4 := result4.mem_frame
   have hA4' : A.lo ≤ pValsNew ∧ pValsNew + 24 * cap' ≤ A.hi := hA4
   have A4 : ∀ k, ¬ M.privFoot k → ¬ (SL.lo ≤ k ∧ k < esp.toNat - 64) →
       (k < pvals ∨ pvals + 24 * cap ≤ k) → (k < pValsNew ∨ pValsNew + 24 * cap' ≤ k) →
@@ -537,7 +631,7 @@ theorem envDefineGrowCalls
       rcases Nat.lt_or_ge a (φf env + 8) with h | h
       · exact Or.inl h
       · right; omega
-    rw [A4 a (fun hp => hna (LM.alloc.priv_arena a hp)) (hOffTextStack a h1 h2) hoffV hoffNV]
+    rw [A4 a (fun hp => hna (L.priv_arena a hp)) (hOffTextStack a h1 h2) hoffV hoffNV]
     exact A3 a hoffR
   have hnzBV : BitVec.ofNat 64 pNamesNew ≠ 0#64 := by
     intro hz
@@ -557,6 +651,26 @@ theorem envDefineGrowCalls
     intro k hk
     rw [D.mem]
     exact getElem_writeMap8_disjoint _ _ _ _ hk
+  have reserve4 : AllocationReserve A c4.σ.mem exts2 maxReq credits := by
+    rw [← hexts2]
+    exact result4.reserve
+  have live2 : ∀ e ∈ exts2, A.contains e.1 e.2 := by
+    intro e he
+    rw [← hexts2] at he
+    rcases List.mem_cons.mp he with equal | prior
+    · subst e
+      exact hA4
+    · exact (ledger1.arena.1 e (List.mem_of_mem_erase prior)).2
+  have reserve5 : AllocationReserve A c5.σ.mem exts2 maxReq credits := by
+    apply reserve4.after_live
+    · intro a outside
+      have offRecord := outside (φf env, 32) hrec2
+      exact (A5 a (by rw [henvNat]; omega)).symm
+    · exact live2
+    · exact L.arena_globals
+  have budget5 : ResourceBudget A maxReq exts2 credits := by
+    rw [← hexts2]
+    exact result4.budget
   refine ⟨c1, c2, c3, c4, c5, cap', pNamesNew, pValsNew, exts1, exts2, ?_⟩
   exact
     { steps := P1.steps.trans (hs2.trans (P3.steps.trans (hs4.trans D.steps)))
@@ -575,6 +689,8 @@ theorem envDefineGrowCalls
       capLt := hcapLt
       capPos := hcapPos
       capS := hcapS'
+      namesReq := hreq8
+      valuesReq := hreq24
       privA := hprivA
       mem1 := hmem1
       A2 := A2
@@ -598,10 +714,12 @@ theorem envDefineGrowCalls
       ainv2 := hainv2
       ainv4 := hainv4
       x3_54 := D.abi _ (by decide)
-      text4 := htext4 }
+      text4 := htext4
+      budget5 := budget5
+      reserve5 := reserve5 }
 
-/-- **The grow lane's memory core** from the calls and the arm's ownership. -/
-theorem envDefineGrowMemCore
+/-- Preserve the original helper entry interface. -/
+theorem envDefineGrowCalls
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (env : Addr) (x : String) (v : Value)
@@ -618,8 +736,33 @@ theorem envDefineGrowMemCore
     (hpn : read64 mA (φf env + 8) = some pn)
     (hpvals : read64 mA (φf env + 16) = some pvals)
     (hgrowReq : 48 * cap ≤ maxReq)
+    (K : EnvDefineGrowKind cap c0)
+    (hs6 : c0.σ.regs.get? Register.x22 = some (BitVec.ofNat 64 pn))
+    (budget : ResourceBudget A maxReq extsA (credits + 2))
+    (reserve : AllocationReserve A mA extsA maxReq (credits + 2)) :
+    GrowCalls A SL M mA aEnv esp extsA pn pvals cap credits c0 := by
+  exact envDefineGrowCallsAt g N A SL φf φc st env x v esp aEnv aName pv r m out M extsA
+    mA cap pn pvals c0 hE.growGeometry LM.alloc F R hfull hpn hpvals hgrowReq K hs6 budget reserve
+
+/-- **The grow lane's memory core** from the calls and the arm's ownership. -/
+theorem envDefineGrowMemCoreAt
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (env : Addr) (x : String) (v : Value)
+    (esp aEnv aName pv r : BitVec 64) (m : Mem) (out : Array String)
+    {gpv : BitVec 64} {headroom maxReq : Nat}
+    (M : MallocContract A SL gpv headroom maxReq) (extsA : List Extent) (mA : Mem)
+    (cap pn pvals : Nat) (c0 : Config)
+    (hE : EnvDefineGrowGeometry A SL esp pv)
+    (L : AllocLedger A SL gpv headroom maxReq M)
+    (F : EnvDefineMissFacts g N A SL φf φc st env x v esp aEnv aName pv r m extsA mA cap)
+    (R : EnvDefineMissRegs g A SL st env esp aEnv aName pv r out M extsA mA F.env_lt c0)
+    (hfull : (st.store.frames[env]'F.env_lt).vars.length = cap)
+    (hpn : read64 mA (φf env + 8) = some pn)
+    (hpvals : read64 mA (φf env + 16) = some pvals)
+    (hgrowReq : 48 * cap ≤ maxReq)
     (c1 c2 c3 c4 c5 : Config) (cap' pNamesNew pValsNew : Nat) (exts1 exts2 : List Extent)
-    (D : GrowCallsData A SL M mA aEnv esp extsA pn pvals cap c0 c1 c2 c3 c4 c5
+    (D : GrowCallsData A SL M mA aEnv esp extsA pn pvals cap credits c0 c1 c2 c3 c4 c5
       cap' pNamesNew pValsNew exts1 exts2)
     (alloc : Allocations) (shared readable writes : Nat → Prop)
     (hheap : HeapOwned A extsA mA φf φc alloc shared readable writes st.store)
@@ -661,12 +804,12 @@ theorem envDefineGrowMemCore
   have hwin := hE.stack_win
   have h64 : 64 ≤ esp.toNat := by omega
   have hsp64 : (esp - 64#64).toNat = esp.toNat - 64 := sp_sub64_toNat esp h64
-  have hAlo := L.alloc.arena_ram.1
-  have hAhi := L.alloc.arena_ram.2
-  have hAhtif := L.alloc.arena_htif
-  have hAstack := LM.alloc.arena_stack
+  have hAlo := L.arena_ram.1
+  have hAhi := L.arena_ram.2
+  have hAhtif := L.arena_htif
+  have hAstack := L.arena_stack
   have hAimg := hE.arena_image
-  have hpvNat := hE.pv_frame
+  have hpvNat := hE.slot_above
   have hslot := hE.slot_in_stack
   have henvLt := F.env_lt
   have hfull' : (st.store.frames[env]).vars.length = cap := hfull
@@ -744,7 +887,7 @@ theorem envDefineGrowMemCore
     · have := hvalsArena hc; omega
   have hsharedPriv : ∀ k, shared k → ¬ M.privFoot k :=
     hheap.reserved.outsidePrivate hheap.immutable hprivA
-      (fun k hk hnot => absurd (LM.alloc.priv_arena k hk) hnot)
+      (fun k hk hnot => absurd (L.priv_arena k hk) hnot)
   have hsharedStack : ∀ k, shared k → ¬ (SL.lo ≤ k ∧ k < SL.hi) := by
     intro k hk hin
     exact hheap.immutable.outsideWrites k hk (hstackW k hin.1 hin.2)
@@ -1016,8 +1159,8 @@ theorem envDefineGrowMemCore
       ext := hext5
       text := htext5 }
 
-/-- **The grow lane's untouched bytes** from the memory core. -/
-theorem envDefineGrowMemOff
+/-- Preserve the original helper entry interface. -/
+theorem envDefineGrowMemCore
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (env : Addr) (x : String) (v : Value)
@@ -1035,7 +1178,35 @@ theorem envDefineGrowMemOff
     (hpvals : read64 mA (φf env + 16) = some pvals)
     (hgrowReq : 48 * cap ≤ maxReq)
     (c1 c2 c3 c4 c5 : Config) (cap' pNamesNew pValsNew : Nat) (exts1 exts2 : List Extent)
-    (D : GrowCallsData A SL M mA aEnv esp extsA pn pvals cap c0 c1 c2 c3 c4 c5
+    (D : GrowCallsData A SL M mA aEnv esp extsA pn pvals cap credits c0 c1 c2 c3 c4 c5
+      cap' pNamesNew pValsNew exts1 exts2)
+    (alloc : Allocations) (shared readable writes : Nat → Prop)
+    (hheap : HeapOwned A extsA mA φf φc alloc shared readable writes st.store)
+    (hstackW : ∀ k, SL.lo ≤ k → k < SL.hi → writes k) :
+    GrowMemCore A SL M mA c5.σ.mem φf env aEnv esp pn pvals cap pNamesNew pValsNew cap' := by
+  exact envDefineGrowMemCoreAt g N A SL φf φc st env x v esp aEnv aName pv r m out M extsA
+    mA cap pn pvals c0 hE.growGeometry LM.alloc F R hfull hpn hpvals hgrowReq
+    c1 c2 c3 c4 c5 cap' pNamesNew pValsNew exts1 exts2 D alloc shared readable writes hheap hstackW
+
+/-- **The grow lane's untouched bytes** from the memory core. -/
+theorem envDefineGrowMemOffAt
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (env : Addr) (x : String) (v : Value)
+    (esp aEnv aName pv r : BitVec 64) (m : Mem) (out : Array String)
+    {gpv : BitVec 64} {headroom maxReq : Nat}
+    (M : MallocContract A SL gpv headroom maxReq) (extsA : List Extent) (mA : Mem)
+    (cap pn pvals : Nat) (c0 : Config)
+    (hE : EnvDefineGrowGeometry A SL esp pv)
+    (L : AllocLedger A SL gpv headroom maxReq M)
+    (F : EnvDefineMissFacts g N A SL φf φc st env x v esp aEnv aName pv r m extsA mA cap)
+    (R : EnvDefineMissRegs g A SL st env esp aEnv aName pv r out M extsA mA F.env_lt c0)
+    (hfull : (st.store.frames[env]'F.env_lt).vars.length = cap)
+    (hpn : read64 mA (φf env + 8) = some pn)
+    (hpvals : read64 mA (φf env + 16) = some pvals)
+    (hgrowReq : 48 * cap ≤ maxReq)
+    (c1 c2 c3 c4 c5 : Config) (cap' pNamesNew pValsNew : Nat) (exts1 exts2 : List Extent)
+    (D : GrowCallsData A SL M mA aEnv esp extsA pn pvals cap credits c0 c1 c2 c3 c4 c5
       cap' pNamesNew pValsNew exts1 exts2)
     (alloc : Allocations) (shared readable writes : Nat → Prop)
     (hheap : HeapOwned A extsA mA φf φc alloc shared readable writes st.store)
@@ -1078,12 +1249,12 @@ theorem envDefineGrowMemOff
   have hwin := hE.stack_win
   have h64 : 64 ≤ esp.toNat := by omega
   have hsp64 : (esp - 64#64).toNat = esp.toNat - 64 := sp_sub64_toNat esp h64
-  have hAlo := L.alloc.arena_ram.1
-  have hAhi := L.alloc.arena_ram.2
-  have hAhtif := L.alloc.arena_htif
-  have hAstack := LM.alloc.arena_stack
+  have hAlo := L.arena_ram.1
+  have hAhi := L.arena_ram.2
+  have hAhtif := L.arena_htif
+  have hAstack := L.arena_stack
   have hAimg := hE.arena_image
-  have hpvNat := hE.pv_frame
+  have hpvNat := hE.slot_above
   have hslot := hE.slot_in_stack
   have henvLt := F.env_lt
   have hfull' : (st.store.frames[env]).vars.length = cap := hfull
@@ -1161,7 +1332,7 @@ theorem envDefineGrowMemOff
     · have := hvalsArena hc; omega
   have hsharedPriv : ∀ k, shared k → ¬ M.privFoot k :=
     hheap.reserved.outsidePrivate hheap.immutable hprivA
-      (fun k hk hnot => absurd (LM.alloc.priv_arena k hk) hnot)
+      (fun k hk hnot => absurd (L.priv_arena k hk) hnot)
   have hsharedStack : ∀ k, shared k → ¬ (SL.lo ≤ k ∧ k < SL.hi) := by
     intro k hk hin
     exact hheap.immutable.outsideWrites k hk (hstackW k hin.1 hin.2)
@@ -1350,7 +1521,7 @@ theorem envDefineGrowMemOff
       rcases Nat.lt_or_ge k (φf env + 4) with h | h
       · left; exact h
       · right; omg
-    exact hagOff k (fun hp => hkA (LM.alloc.priv_arena k hp)) hkS hoffN hoffNN hoffV hoffNV hoffR
+    exact hagOff k (fun hp => hkA (L.priv_arena k hp)) hkS hoffN hoffNN hoffV hoffNV hoffR
   -- the staged value slot is untouched
   have hSlotOff : ∀ k, valHeader pv.toNat k → c5.σ.mem[k]? = mA[k]? := by
     intro k hk
@@ -1365,9 +1536,8 @@ theorem envDefineGrowMemOff
       offArena := hOffArena
       slot := hSlotOff }
 
-/-- **The grow lane.**  From either entry, under both ledgers and the entry
-facts, the helper reaches the append head over the post-`realloc` ledger. -/
-theorem envDefineGrowLane
+/-- Preserve the original helper entry interface. -/
+theorem envDefineGrowMemOff
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
     (st : Vsa.While.St) (env : Addr) (x : String) (v : Value)
@@ -1384,11 +1554,75 @@ theorem envDefineGrowLane
     (hpn : read64 mA (φf env + 8) = some pn)
     (hpvals : read64 mA (φf env + 16) = some pvals)
     (hgrowReq : 48 * cap ≤ maxReq)
+    (c1 c2 c3 c4 c5 : Config) (cap' pNamesNew pValsNew : Nat) (exts1 exts2 : List Extent)
+    (D : GrowCallsData A SL M mA aEnv esp extsA pn pvals cap credits c0 c1 c2 c3 c4 c5
+      cap' pNamesNew pValsNew exts1 exts2)
+    (alloc : Allocations) (shared readable writes : Nat → Prop)
+    (hheap : HeapOwned A extsA mA φf φc alloc shared readable writes st.store)
+    (hstackW : ∀ k, SL.lo ≤ k → k < SL.hi → writes k)
+    (K : GrowMemCore A SL M mA c5.σ.mem φf env aEnv esp pn pvals cap pNamesNew pValsNew cap') :
+    GrowMemFacts A SL mA c5.σ.mem φf env esp pv alloc shared pn pvals cap pNamesNew pValsNew cap' := by
+  exact envDefineGrowMemOffAt g N A SL φf φc st env x v esp aEnv aName pv r m out M extsA
+    mA cap pn pvals c0 hE.growGeometry LM.alloc F R hfull hpn hpvals hgrowReq
+    c1 c2 c3 c4 c5 cap' pNamesNew pValsNew exts1 exts2 D alloc shared readable writes hheap hstackW K
+
+/-- The append head retains the selected array allocations and their memory effects. -/
+structure EnvDefineGrowHeapPost
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (env : Addr) (x : String) (v : Value)
+    (esp aEnv aName pv r : BitVec 64) (m mA : Mem) (out : Array String)
+    {gpv : BitVec 64} {headroom maxReq : Nat}
+    (M : MallocContract A SL gpv headroom maxReq) (extsA : List Extent)
+    (alloc : Allocations) (shared readable writes : Nat → Prop)
+    (pn pvals cap credits : Nat) (before after : Config) (exts' : List Extent)
+    (cap' pn' pvals' : Nat) : Prop where
+  steps : Steps before after
+  head : EnvDefineAppendHead g N A SL φf φc st env x v esp aEnv aName pv r m out M
+    exts' after.σ.mem cap' after
+  heap : HeapOwned A exts' after.σ.mem φf φc
+    ((alloc.insert (.names env) pn' (8 * cap')).insert (.values env) pvals' (24 * cap'))
+    shared readable writes st.store
+  core : GrowMemCore A SL M mA after.σ.mem φf env aEnv esp pn pvals cap pn' pvals' cap'
+  off : GrowMemFacts A SL mA after.σ.mem φf env esp pv alloc shared pn pvals cap pn' pvals' cap'
+  extents : exts' = (pvals', 24 * cap') ::
+    ((pn', 8 * cap') :: extsA.erase (pn, 8 * cap)).erase (pvals, 24 * cap)
+  namesReq : 8 * cap' ≤ maxReq
+  valuesReq : 24 * cap' ≤ maxReq
+  namesAligned : pn' % 16 = 0
+  valuesAligned : pvals' % 16 = 0
+  budget : ResourceBudget A maxReq exts' credits
+  reserve : AllocationReserve A after.σ.mem exts' maxReq credits
+
+/-- Execute both array reallocations and retain the concrete owned result. -/
+theorem envDefineGrowLaneOwnedAt
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (env : Addr) (x : String) (v : Value)
+    (esp aEnv aName pv r : BitVec 64) (m : Mem) (out : Array String)
+    {gpv : BitVec 64} {headroom maxReq : Nat}
+    (M : MallocContract A SL gpv headroom maxReq) (extsA : List Extent) (mA : Mem)
+    (cap pn pvals : Nat) (c0 : Config)
+    (hE : EnvDefineGrowGeometry A SL esp pv)
+    (L : AllocLedger A SL gpv headroom maxReq M)
+    (F : EnvDefineMissFacts g N A SL φf φc st env x v esp aEnv aName pv r m extsA mA cap)
+    (R : EnvDefineMissRegs g A SL st env esp aEnv aName pv r out M extsA mA F.env_lt c0)
+    (hfull : (st.store.frames[env]'F.env_lt).vars.length = cap)
+    (hpn : read64 mA (φf env + 8) = some pn)
+    (hpvals : read64 mA (φf env + 16) = some pvals)
+    (hgrowReq : 48 * cap ≤ maxReq)
     (K : EnvDefineGrowKind cap c0)
-    (hs6 : c0.σ.regs.get? Register.x22 = some (BitVec.ofNat 64 pn)) :
-    ∃ (c' : Config) (extsA' : List Extent) (mA' : Mem) (cap' : Nat),
-      Steps c0 c' ∧
-      EnvDefineAppendHead g N A SL φf φc st env x v esp aEnv aName pv r m out M extsA' mA' cap' c' := by
+    (hs6 : c0.σ.regs.get? Register.x22 = some (BitVec.ofNat 64 pn))
+    (budget : ResourceBudget A maxReq extsA (credits + 2))
+    (reserve : AllocationReserve A mA extsA maxReq (credits + 2))
+    (alloc : Allocations) (shared readable writes : Nat → Prop)
+    (hheap : HeapOwned A extsA mA φf φc alloc shared readable writes st.store)
+    (hstackW : ∀ k, SL.lo ≤ k → k < SL.hi → writes k)
+    (hvalO : ValueOwned mA shared pv.toNat v)
+    (hnameO : SharedCString mA shared aName.toNat x) :
+    ∃ after exts' cap' pn' pvals',
+      EnvDefineGrowHeapPost g N A SL φf φc st env x v esp aEnv aName pv r m mA out M
+        extsA alloc shared readable writes pn pvals cap credits c0 after exts' cap' pn' pvals' := by
   have htoh : tohostAddr = 0x8001ad00 := rfl
   have hsp1 := hE.stack.1
   have hsp2 := hE.stack.2.1
@@ -1398,15 +1632,14 @@ theorem envDefineGrowLane
   have hwin := hE.stack_win
   have h64 : 64 ≤ esp.toNat := by omega
   have hsp64 : (esp - 64#64).toNat = esp.toNat - 64 := sp_sub64_toNat esp h64
-  have hAlo := L.alloc.arena_ram.1
-  have hAhi := L.alloc.arena_ram.2
-  have hAstack := LM.alloc.arena_stack
+  have hAlo := L.arena_ram.1
+  have hAhi := L.arena_ram.2
+  have hAstack := L.arena_stack
   have hAimg := hE.arena_image
-  have hpvNat := hE.pv_frame
+  have hpvNat := hE.slot_above
   have hslot := hE.slot_in_stack
   have henvLt := F.env_lt
   have hfull' : (st.store.frames[env]).vars.length = cap := hfull
-  obtain ⟨alloc, shared, readable, writes, hheap, hstackW, hvalO, hnameO⟩ := F.owned
   have hfo := hheap.store.frames env henvLt
   obtain ⟨arr, harr⟩ := hfo.arrays
   obtain ⟨hcountR, ⟨cap0, hcap0, hcaple⟩, ⟨pn0, pvals0, hpn0, hpvals0, hslots⟩, hpar⟩ :=
@@ -1457,13 +1690,13 @@ theorem envDefineGrowLane
   change pvals + 24 * cap ≤ φf env ∨ φf env + 32 ≤ pvals at hsepVR
   -- ── the calls and the memory facts
   obtain ⟨c1, c2, c3, c4, c5, cap', pNamesNew, pValsNew, exts1, exts2, D⟩ :=
-    envDefineGrowCalls g N A SL φf φc st env x v esp aEnv aName pv r m out M exts extsA
-      mA cap pn pvals c0 hE L LM F R hfull hpn hpvals hgrowReq K hs6
-  have K := envDefineGrowMemCore g N A SL φf φc st env x v esp aEnv aName pv r m out M exts
-    extsA mA cap pn pvals c0 hE L LM F R hfull hpn hpvals hgrowReq c1 c2 c3 c4 c5 cap'
+    envDefineGrowCallsAt g N A SL φf φc st env x v esp aEnv aName pv r m out M extsA
+      mA cap pn pvals c0 hE L F R hfull hpn hpvals hgrowReq K hs6 budget reserve
+  have K := envDefineGrowMemCoreAt g N A SL φf φc st env x v esp aEnv aName pv r m out M
+    extsA mA cap pn pvals c0 hE L F R hfull hpn hpvals hgrowReq c1 c2 c3 c4 c5 cap'
     pNamesNew pValsNew exts1 exts2 D alloc shared readable writes hheap hstackW
-  have GM := envDefineGrowMemOff g N A SL φf φc st env x v esp aEnv aName pv r m out M exts
-    extsA mA cap pn pvals c0 hE L LM F R hfull hpn hpvals hgrowReq c1 c2 c3 c4 c5 cap'
+  have GM := envDefineGrowMemOffAt g N A SL φf φc st env x v esp aEnv aName pv r m out M
+    extsA mA cap pn pvals c0 hE L F R hfull hpn hpvals hgrowReq c1 c2 c3 c4 c5 cap'
     pNamesNew pValsNew exts1 exts2 D alloc shared readable writes hheap hstackW K
   have henvNat : aEnv.toNat = φf env := F.env_addr
   have hcapLt := D.capLt
@@ -1557,7 +1790,7 @@ theorem envDefineGrowLane
       (fun i hi k hk => K.keys i (by omega) k hk) (fun i hi k hk => K.values i (by omega) k hk)
   -- ── the registers, the spill image and the allocator invariant
   have hainv5 : M.AInv c5.σ exts2 := by
-    apply LM.alloc.ainv_private exts2 c4.σ c5.σ D.x3_54.symm _ D.ainv4
+    apply L.ainv_private exts2 c4.σ c5.σ D.x3_54.symm _ D.ainv4
     intro a hpa
     rw [D.mem5]
     apply Eq.symm
@@ -1582,7 +1815,13 @@ theorem envDefineGrowLane
     intro k hkA hkS
     rw [← F.mem_agree k hkA hkS]
     exact GM.offArena k hkA (by omega)
-  refine ⟨c5, exts2, c5.σ.mem, cap', D.steps, ?_⟩
+  refine ⟨c5, exts2, cap', pNamesNew, pValsNew,
+    { steps := D.steps, head := ?_, heap := heap2, core := K, off := GM
+      extents := by rw [D.exts2_def, D.exts1_def]
+      namesReq := D.namesReq, valuesReq := D.valuesReq
+      namesAligned := D.al2, valuesAligned := D.al4
+      budget := D.budget5
+      reserve := D.reserve5 }⟩
   refine
     { facts :=
         { ra_align := F.ra_align
@@ -1629,6 +1868,54 @@ theorem envDefineGrowLane
           ainv := hainv5 }
       pc := D.pc5
       room := by rw [hfull]; exact hcapLt }
+
+/-- The append head and residual resources share one returned memory and ledger. -/
+structure EnvDefineGrowAppendPost
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (env : Addr) (x : String) (v : Value)
+    (esp aEnv aName pv r : BitVec 64) (m : Mem) (out : Array String)
+    {gpv : BitVec 64} {headroom maxReq : Nat}
+    (M : MallocContract A SL gpv headroom maxReq) (exts : List Extent) (mA : Mem)
+    (cap credits : Nat) (after : Config) : Prop where
+  head : EnvDefineAppendHead g N A SL φf φc st env x v esp aEnv aName pv r m out M
+    exts mA cap after
+  budget : ResourceBudget A maxReq exts credits
+  reserve : AllocationReserve A mA exts maxReq credits
+
+/-- Execute both reallocations and retain their append entry and remaining resources. -/
+theorem envDefineGrowLane
+    (g : (R : Register) → Option (RegisterType R))
+    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+    (st : Vsa.While.St) (env : Addr) (x : String) (v : Value)
+    (esp aEnv aName pv r : BitVec 64) (m : Mem) (out : Array String)
+    {gpv : BitVec 64} {headroom maxReq : Nat}
+    (M : MallocContract A SL gpv headroom maxReq) (exts extsA : List Extent) (mA : Mem)
+    (cap pn pvals : Nat) (c0 : Config)
+    (hE : EnvDefineMem N A SL φf φc st env x v aEnv aName pv esp m)
+    (L : EnvDefineUpdateLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts)
+    (LM : EnvDefineMissLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts)
+    (F : EnvDefineMissFacts g N A SL φf φc st env x v esp aEnv aName pv r m extsA mA cap)
+    (R : EnvDefineMissRegs g A SL st env esp aEnv aName pv r out M extsA mA F.env_lt c0)
+    (hfull : (st.store.frames[env]'F.env_lt).vars.length = cap)
+    (hpn : read64 mA (φf env + 8) = some pn)
+    (hpvals : read64 mA (φf env + 16) = some pvals)
+    (hgrowReq : 48 * cap ≤ maxReq)
+    (K : EnvDefineGrowKind cap c0)
+    (hs6 : c0.σ.regs.get? Register.x22 = some (BitVec.ofNat 64 pn))
+    (budget : ResourceBudget A maxReq extsA (credits + 2))
+    (reserve : AllocationReserve A mA extsA maxReq (credits + 2)) :
+    ∃ (c' : Config) (extsA' : List Extent) (mA' : Mem) (cap' : Nat),
+      Steps c0 c' ∧
+      EnvDefineGrowAppendPost g N A SL φf φc st env x v esp aEnv aName pv r m out M
+        extsA' mA' cap' credits c' := by
+  obtain ⟨alloc, shared, readable, writes, heap, stackW, value, name⟩ := F.owned
+  obtain ⟨after, exts', cap', pn', pvals', post⟩ :=
+    envDefineGrowLaneOwnedAt g N A SL φf φc st env x v esp aEnv aName pv r m out M extsA
+      mA cap pn pvals c0 hE.growGeometry LM.alloc F R hfull hpn hpvals hgrowReq K hs6 budget reserve
+      alloc shared readable writes heap stackW value name
+  exact ⟨after, exts', after.σ.mem, cap', post.steps,
+    { head := post.head, budget := post.budget, reserve := post.reserve }⟩
 
 #print axioms envDefineGrowCalls
 #print axioms envDefineGrowMemCore

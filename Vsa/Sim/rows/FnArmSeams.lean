@@ -1,4 +1,5 @@
 import Vsa.Sim.rows.AllocBuildEntrySplice
+import Vsa.Sim.AllocSuccessAdapters
 
 /-!
 # `FnArmSeams` — the `staging` / `tail` seams of `allocBuildEntry_hEntry`
@@ -18,10 +19,10 @@ anonymous ∃/∧ tower), consumed through a single destructurer.
 
 ## `tail` — the mechanizable core (this file)
 
-`tail` is genuinely composite: malloc's `ExitP` at `g.r = 0x800033d0` is pruned to the
-success block by `M.nonNull_of_bounded` (`g.hn : g.n ≤ maxReq`, malloc never NULL for a
-bounded request), then the reload span `fnArmReloadRow` runs to `0x800033d8`, then the
-`AllocBuildEntry` ~30 fields are reconstructed.  What the reload span + `ExitP` alone
+`prune_of_exit` reads an actual `MallocSuccessExit` at `g.r = 0x800033d0`.
+The existing failure-aware `tail` still requires its reload seam as a premise;
+connecting that seam to a successful allocator run remains open.
+What the reload span + `ExitP` alone
 CANNOT produce are the arm-entry-carried facts (`ExprRepr`/`StoreRepr` of the Expr node
 and the OLD store, the sret-window geometry, the spill readbacks, the register images
 `x8=aExpr`/`x13=φf env`/`x9=sret`).  They survive the `malloc` call ONLY because malloc's
@@ -33,9 +34,8 @@ values as inputs, so we package them as `AllocBuildTailFacts` (a named-field bun
 caller supplies from the arm's own front, the analog of the strdup route's
 `StrdupMemcpyContent`).  `allocBuildEntry_tail` then closes `tail` as a `Triple`.
 
-`prune_of_exit` is the reusable null-prune: it collapses `mallocCallSpec`'s `ExitPost`
-disjunction to the success witness `p` (with `p ≠ 0`, `p % 16 = 0`, `A.contains p n`,
-freshness, `AInv (p::exts)`) via `M.nonNull_of_bounded`.
+The success reader retains the selected pointer, geometry, updated invariant,
+ABI, and memory frame at one return configuration.
 
 ## `staging` — the named arm-front linkage (this file)
 
@@ -65,25 +65,24 @@ namespace Vsa.Sim
 -- named-field structure (`AllocBuildTailFacts`, `AllocBuildStagingLink`,
 -- `AllocBuildReloadPost`).  The residual `∃` occurrences are NOT anonymous post towers:
 -- they are run-witnesses (`∃ c'`, `∃ w, minstret = some w`) and verbatim relays of
--- LANDED signatures (`prune_of_exit`'s `∃ p` mirrors `MallocContract.nonNull_of_bounded`;
+-- LANDED signatures (`prune_of_exit` retains its existing `∃ p` result;
 -- the `∃ o ment vv8 vv9 vv18, ArmEntryK …` Pre is copied verbatim from the existing
 -- `fnArmSeamRun_of_hEntry` pipeline seam, not a new definition).
 
 set_option maxHeartbeats 1600000
 set_option maxRecDepth 1000000
 
-/-! ## §1. The null-prune — collapse malloc's `ExitPost` disjunction to success -/
+/-! ## §1. Read the successful allocator exit -/
 
-/-- **`prune_of_exit`** — malloc's `ExitPost g` at a bounded request is the SUCCESS
-block.  Consumes `mallocCallSpec`'s `ExitP` (bound `res`), prunes the NULL branch of
-`postSide` by `M.nonNull_of_bounded` (`g.hn : g.n ≤ maxReq`), and returns the config
-`c` at `pc = g.r`, `x10 = ofNat p`, `x2 = g.sp`, `x3 = gpv`, with the fresh-block facts
-and `M.AInv c.σ ((p, g.n) :: g.exts)` — plus the memory-transform clause `memOut` (reads
-outside `foot g` unchanged) that carries every survival fact across the call. -/
+/-- Project the selected allocation, return ABI, and public-memory frame from
+one successful operation endpoint. -/
 theorem prune_of_exit
     {A : Arena} {SL : StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat}
     (M : MallocContract A SL gpv headroom maxReq) (g : MallocG maxReq)
-    (c : Config) (hexit : (mallocCallSpec M).ExitPost g c) :
+    {credits : Nat} {out : Array String}
+    (c : Config)
+    (hexit : MallocSuccessExit A SL gpv maxReq credits M.AInv M.privFoot
+      g.gm g.exts g.n g.sp g.r g.m0 out c) :
     ∃ p : Nat,
       GoodState c.σ ∧ c.tick < 2 ∧
       c.σ.regs.get? Register.PC = some g.r ∧
@@ -95,28 +94,16 @@ theorem prune_of_exit
       p ≠ 0 ∧ p % 16 = 0 ∧ A.contains p g.n ∧
       (∀ e ∈ g.exts, ExtDisjoint (p, g.n) e) ∧
       M.AInv c.σ ((p, g.n) :: g.exts) := by
-  obtain ⟨res, hE⟩ := hexit
-  -- the register pins from `rets = postPins g res = [(10, ofNat res), (2, g.sp), (3, gpv)]`
-  obtain ⟨hx10', hx2, hx3, -⟩ := hE.rets
-  have hx10 : c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 res) := hx10'
-  -- the frame: every AbiPreserved reg (clobber = false) ties back to g.gm
-  have habi : ∀ R, AbiPreserved R = true → c.σ.regs.get? R = g.gm R := by
-    intro R hR; exact hE.frame R hR (by rfl)
-  -- prune: feed `postSide` (the NULL-or-success disjunction at witness res) to
-  -- `nonNull_of_bounded` after phrasing the x10 pin as the disjunction demands.
-  have hdisj :
-      ((c.σ.regs.get? Register.x10 = some (0#64 : BitVec 64) ∧ M.AInv c.σ g.exts) ∨
-       (∃ p, c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 p) ∧
-         p ≠ 0 ∧ p % 16 = 0 ∧ A.contains p g.n ∧
-         (∀ e ∈ g.exts, ExtDisjoint (p, g.n) e) ∧
-         M.AInv c.σ ((p, g.n) :: g.exts))) := by
-    rcases hE.side with ⟨h0, hai⟩ | ⟨hne, h16, hcont, hdis, hai⟩
-    · exact Or.inl ⟨by rw [hx10, h0], hai⟩
-    · exact Or.inr ⟨res, hx10, hne, h16, hcont, hdis, hai⟩
-  obtain ⟨p, hpx10, hpne, hp16, hpcont, hpdis, hpai⟩ :=
-    M.nonNull_of_bounded c.σ g.exts g.n g.hn hdisj
-  exact ⟨p, hE.good, hE.tick, hE.pc, hpx10, hx2, hx3, habi, hE.memOut,
-    hpne, hp16, hpcont, hpdis, hpai⟩
+  obtain ⟨p, hp⟩ := hexit.allocated
+  have hmem : ∀ a : Nat, ¬ ((mallocCallSpec M).foot g a) →
+      c.σ.mem[a]? = g.m0[a]? := by
+    intro a ha
+    exact hp.mem_frame a (fun h => ha (Or.inl h))
+      (fun h => ha (Or.inr h)) (by simp)
+  exact ⟨p, hexit.returned.good, hexit.returned.tick, hexit.returned.pc,
+    hp.pointer.register, hexit.returned.sp, hexit.returned.gp,
+    hexit.returned.frame, hmem, hp.pointer.nonzero, hp.pointer.aligned,
+    hp.pointer.arena, hp.disjoint, hp.ainv⟩
 
 #print axioms prune_of_exit
 
@@ -230,22 +217,9 @@ structure AllocBuildReloadPost
   hFacts : AllocBuildTailFacts g N A SL φf φc φc' st cd p
     sp r sret aExpr m0 mMalloc v8 v9 v18 out0 c'
 
-/-- **`allocBuildEntry_tail`** — the `tail` seam CLOSED (modulo the named
-`AllocBuildTailFacts` bundle + the reload linkage).  The fresh block `p` is a FIXED
-parameter (`p := φc' st.store.closures.size`, the store-side allocation index the
-downstream contract reads); `tail`'s post `AllocBuildEntry … p …` is parked at `p`, so
-the seam must land malloc's result AT `p`.  That the malloc result equals `p` is the
-`hResultP` linkage (the CallSpec `Res = Nat` witness is existential; tying it to the
-store-side `p` is caller geometry — the analog of `hp : φc' size = p`).
-
-From malloc's `ExitPost gMal`: `prune_of_exit` gives a success block `q` at `0x800033d0`;
-`hResultP` identifies `q = p`; the reload span `fnArmReloadRow` (via `hReload`) lands the
-config at `0x800033d8` with `mem = mMalloc`; then the `AllocBuildEntry` fields assemble —
-the register images `x10 = ofNat p` / geometry from the pruned exit + reload, the rest
-from `AllocBuildTailFacts`.  `hReload` packages the reload run + the bundle (the caller
-runs `fnArmReloadRow` on the pruned config; its `lds` head is the spilled `a3 = φf env`,
-which only the caller's spill contents fix — so the reload PLUS the bundle is the one
-caller-supplied linkage). -/
+/-- Compose the caller-supplied reload run and `AllocBuildTailFacts`.
+`hReload` must handle the failure-aware malloc exit. The successful-post reader
+`prune_of_exit` alone does not supply this premise. -/
 theorem allocBuildEntry_tail
     (g : (R : Register) → Option (RegisterType R))
     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc φc' : Addr → Nat)
@@ -255,12 +229,7 @@ theorem allocBuildEntry_tail
     (v8 v9 v18 : BitVec 64) (out0 : Array String)
     {gpv : BitVec 64} {headroom maxReq : Nat}
     (Malloc : MallocContract A SL gpv headroom maxReq) (gMal : MallocG maxReq)
-    -- the reload linkage: from any exit config, the caller runs `fnArmReloadRow` (on the
-    -- pruned success config) to `0x800033d8` (mem = mMalloc) and supplies the
-    -- arm-entry-carried facts (the `AllocBuildTailFacts` bundle) surviving to it.  This
-    -- is the ONE caller-supplied linkage: the reload's `lds` head is the spilled
-    -- `a3 = φf env`, which only the caller's spill contents fix, and the transported
-    -- bundle rides malloc's `ExitP.memOut` (reads outside `foot` unchanged).
+    -- The caller still supplies a reload endpoint for every nullable exit.
     (hReload : ∀ (c : Config), (mallocCallSpec Malloc).ExitPost gMal c →
       ∃ c' : Config, AllocBuildReloadPost g N A SL φf φc φc' st ⟨env, name, params, body⟩ p
         sp r sret aExpr m0 mMalloc v8 v9 v18 out0 c c') :

@@ -112,10 +112,13 @@ VLSURV = '''  have hVlSurv : ∀ (φ : Addr → Nat) (mm mm' : Mem),
 
 def emit_int_row(A, r):
     op, val, resid, sim = r["op"], r["val"], r["resid"], r["sim"]
+    name = r.get("name", f"binRow_{op}")
     guard_binders = "".join(f"    ({b} : {t})\n" for b, t in r["guards"])
-    A(f"/-- **`binRow_{op}`** — the `.{op}` int cell "
+    if "name" in r:
+        A("set_option maxHeartbeats 200000 in")
+    A(f"/-- **`{name}`** — the `.{op}` int cell "
       f"(`{val}`, `{resid}`" + (", + guards" if r["guards"] else "") + "). -/")
-    A(f"theorem binRow_{op}")
+    A(f"theorem {name}")
     A("    (g : (R : Register) → Option (RegisterType R))")
     A("    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)")
     A("    (st st' st'' : Vsa.While.St) (d : Nat) (env : Addr) (el er : Expr) (a b : Int)")
@@ -217,6 +220,11 @@ def render() -> str:
     A(HEADER)
     for r in INT_ROWS:
         emit_int_row(A, r)
+    emit_int_row(A, dict(
+        op="div", name="binRow_div_wrap", val=".int (wrap64 (a.tdiv b))",
+        resid="DivResid", sim="evalDivWrapSim", guards=[("hbNe", "b ≠ 0")],
+        guard_args="hbNe ", str_cell=False,
+    ))
     emit_eq_row(A, "eq", ".bool (vl.equal vr)",
                 "0x80003720#64", "0x8000371c#64", "0x1ff140#21", "evalEqSimD")
     emit_eq_row(A, "ne", ".bool (!(vl.equal vr))",
@@ -231,7 +239,7 @@ def render() -> str:
 def emit() -> None:
     with open(OUT, "w", encoding="utf-8") as output:
         output.write(render())
-    print(f"wrote {OUT} ({len(INT_ROWS)} int rows + eq/ne + shell)")
+    print(f"wrote {OUT} ({len(INT_ROWS)} int rows + wrapping division + eq/ne + shell)")
 
 
 # The dispatcher shell + the two cell-residual defs (hand-templated: the

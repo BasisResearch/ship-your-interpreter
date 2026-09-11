@@ -26,6 +26,23 @@ def ExecWhileFrameKeep (R : Register) : Prop :=
   (Register.x9 == R) = false ∧ (Register.x18 == R) = false ∧
   (Register.x19 == R) = false ∧ (Register.x2 == R) = false
 
+/-- Named exclusions for the live while frame's explicitly owned registers. -/
+structure ExecWhileFrameKeepFacts (R : Register) : Prop where
+  abi : AbiPreservedNoise R
+  x8 : (Register.x8 == R) = false
+  x9 : (Register.x9 == R) = false
+  x18 : (Register.x18 == R) = false
+  x19 : (Register.x19 == R) = false
+  x2 : (Register.x2 == R) = false
+
+/-- Destructure the existing frame-keep predicate once. -/
+theorem ExecWhileFrameKeep.facts {R : Register} (h : ExecWhileFrameKeep R) :
+    ExecWhileFrameKeepFacts R := by
+  obtain ⟨abi, x8, x9, x18, x19, x2⟩ := h
+  exact ⟨abi, x8, x9, x18, x19, x2⟩
+
+#print axioms ExecWhileFrameKeep.facts
+
 /-- Convert the consumer's propositional exclusions once at the seam. -/
 theorem ExecWhileFrameKeep.of_ne (R : Register) (hR : AbiPreservedNoise R)
     (h8 : R ≠ Register.x8) (h9 : R ≠ Register.x9)
@@ -334,8 +351,8 @@ theorem execWhileCondArmStable_of_stage
     _hv8, _hv9, _hv18, _hv19, _hgsp, hArmFrame, _hMemFrame,
     _hsp176, _hsphi, _hsplo, _hspwin, _hsp8, _hraAl, _hMemExt⟩ := hArm
   refine ⟨fun R hR => ?_⟩
-  exact hArmFrame R hR.1 hR.2.1 hR.2.2.1 hR.2.2.2.1
-    hR.2.2.2.2.1 hR.2.2.2.2.2
+  have facts := hR.facts
+  exact hArmFrame R facts.abi facts.x8 facts.x9 facts.x18 facts.x19 facts.x2
 
 #print axioms execWhileCondArmStable_of_stage
 

@@ -13,11 +13,13 @@ import tempfile
 import time
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
 from scripts import build_private as build
 from scripts import field_census as census
+from scripts import proof_checkpoint as checkpoint
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -118,6 +120,7 @@ def audit_source(
     field: str | None,
     supplier: str | None,
     structure: str = census.STRUCTURE,
+    progress: checkpoint.Checkpoint | None = None,
 ) -> str:
     """Use the existing census elaborator for explicit residual type checks.
 
@@ -130,8 +133,12 @@ def audit_source(
         if supplier is None:
             raise ValueError("field check requires a supplier")
         source += census.SUPPORT.read_text() + "\n"
-        source += f"census_probe {structure} {field} at {census.LAYOUT} using {supplier}\n"
+        source += (
+            f"census_probe {structure} {field} at {census.LAYOUT} using {supplier}\n"
+        )
     source += "".join(f"#print axioms {name}\n" for name in declarations)
+    if progress is not None:
+        source += progress.source()
     return source
 
 
@@ -156,8 +163,11 @@ def execute(
     supplier: str | None,
     plan_only: bool,
     structure: str = census.STRUCTURE,
+    progress: checkpoint.Checkpoint | None = None,
 ) -> Path | None:
     """Build the selected closure, check proofs, and retain scoped evidence."""
+    started_at = datetime.now(timezone.utc).isoformat()
+    started = time.monotonic()
     backend, output = check_roots(repo, backend, output)
     modules = build.discover_modules(repo, include_executable=True)
     order = build.topological_order(modules)
@@ -169,6 +179,7 @@ def execute(
         for action in ("reuse-output", "reuse-backend", "build")
     }
     print(json.dumps({"selected_modules": len(selected), **counts}), flush=True)
+    planning_seconds = time.monotonic() - started
     if plan_only:
         for item in actions:
             if item.action == "build":
@@ -181,7 +192,13 @@ def execute(
         # Another invocation may have completed between planning and locking.
         actions = plan_modules(selected, fingerprints, backend, output)
         run = Path(tempfile.mkdtemp(prefix="run-", dir=output))
-        tool_inputs = [Path(__file__), census.SUPPORT, Path(census.__file__)]
+        tool_inputs = [
+            Path(__file__),
+            census.SUPPORT,
+            Path(census.__file__),
+            Path(checkpoint.__file__),
+            Path(build.__file__),
+        ]
         tool_hashes = {str(path): build.hash_file(path) for path in tool_inputs}
         manifest_path = output / build.MANIFEST_NAME
         manifest = build.load_manifest(manifest_path)
@@ -198,21 +215,27 @@ def execute(
                 manifest.pop(item.name, None)
                 build.write_manifest(manifest_path, manifest)
                 print(f"build {item.name}", flush=True)
-                started = time.monotonic()
+                compile_started = time.monotonic()
                 build.compile_module(repo, output, module)
-                timings[item.name] = time.monotonic() - started
+                timings[item.name] = time.monotonic() - compile_started
             manifest[item.name] = item.fingerprint
             build.write_manifest(manifest_path, manifest)
             objects[item.name] = build.hash_file(target)
 
         source = run / "Check.lean"
-        source.write_text(audit_source(imports, declarations, field, supplier, structure))
+        source.write_text(
+            audit_source(imports, declarations, field, supplier, structure, progress)
+        )
+        check_started = time.monotonic()
         result = census.run_lean(repo, output, source)
+        check_seconds = time.monotonic() - check_started
         if result.returncode != 0 or not source.with_suffix(".olean").is_file():
             raise build.BuildError(
                 f"proof check failed; inspect {source.with_suffix('.log')}"
             )
-        axioms = audit_axioms(result.output, declarations)
+        validation_started = time.monotonic()
+        expected = declarations + ([checkpoint.WITNESS] if progress is not None else [])
+        axioms = audit_axioms(result.output, expected)
         field_result = None
         if field is not None:
             field_result = census.classify(census.Field(field, ""), result, True)
@@ -240,6 +263,15 @@ def execute(
             for path, digest in tool_hashes.items()
         ):
             raise build.BuildError("proof-check tooling changed during run")
+        artifacts = {path.name: build.hash_file(path) for path in run.iterdir()}
+        validation_seconds = time.monotonic() - validation_started
+        total_seconds = time.monotonic() - started
+        measured = {
+            "planning": planning_seconds,
+            "dependency_compile": sum(timings.values()),
+            "consumer_check": check_seconds,
+            "evidence_validation": validation_seconds,
+        }
         report = {
             "scope": "selected dependency closure",
             "full_library_checked": False,
@@ -248,14 +280,31 @@ def execute(
             "modules": [asdict(item) for item in actions],
             "objects_sha256": objects,
             "build_seconds": timings,
+            "counts": {
+                action: sum(item.action == action for item in actions)
+                for action in ("reuse-output", "reuse-backend", "build")
+            },
+            "started_at": started_at,
+            "timing_scope": "execute entry through evidence collection; excludes receipt write",
+            "timing_seconds": {
+                **measured,
+                "unattributed": total_seconds - sum(measured.values()),
+                "total": total_seconds,
+            },
+            "checkpoint": {
+                **asdict(progress),
+                "status": progress.status,
+                "checked_type": progress.checked_type,
+                "checked_application": checkpoint.WITNESS,
+            }
+            if progress is not None
+            else None,
             "axioms": axioms,
             "field": asdict(field_result) if field_result is not None else None,
             "structure": structure if field is not None else None,
             "supplier": supplier,
             "tool_sha256": tool_hashes,
-            "artifacts_sha256": {
-                path.name: build.hash_file(path) for path in run.iterdir()
-            },
+            "artifacts_sha256": artifacts,
         }
         receipt = run / "receipt.json"
         receipt.write_text(json.dumps(report, indent=2) + "\n")
@@ -283,19 +332,36 @@ def main(argv: list[str] | None = None) -> int:
         help="residual record for --field (default: the inherited term record)",
     )
     parser.add_argument("--plan-only", action="store_true")
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        help="JSON target, consumer, role and remaining premises; check its exact type",
+    )
     args = parser.parse_args(argv)
     if (args.field is None) != (args.supplier is None):
         parser.error("--field and --supplier must be supplied together")
-    if not args.plan_only and not args.audit and args.field is None:
-        parser.error("request --audit or --field, or use --plan-only")
+    if (
+        not args.plan_only
+        and not args.audit
+        and args.field is None
+        and args.checkpoint is None
+    ):
+        parser.error("request --audit, --field or --checkpoint, or use --plan-only")
     if len(set(args.audit)) != len(args.audit):
         parser.error("duplicate --audit declaration")
+    if checkpoint.WITNESS in args.audit:
+        parser.error("the checkpoint witness is reserved for --checkpoint")
     imports = list(args.module)
     if args.field is not None:
         imports.append("Vsa.Sim.LayoutInstance")
         if args.structure == census.STRUCTURE:
             imports.append("Vsa.Sim.TermAssembly")
     try:
+        progress = (
+            checkpoint.read_checkpoint(args.checkpoint)
+            if args.checkpoint is not None
+            else None
+        )
         execute(
             ROOT,
             args.backend,
@@ -306,6 +372,7 @@ def main(argv: list[str] | None = None) -> int:
             args.supplier,
             args.plan_only,
             args.structure,
+            progress,
         )
     except (build.BuildError, OSError, ValueError) as error:
         print(f"proof slice failed: {error}")

@@ -30,16 +30,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import tempfile
+import time
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 try:
+    from scripts import attempt_receipts
     from scripts import build_private, field_census as census, gen_ih_clause as generator
     from scripts import ih_clause_model as model
 except ModuleNotFoundError:  # invoked as a script
+    import attempt_receipts  # type: ignore[no-redef]
     import build_private  # type: ignore[no-redef]
     import field_census as census  # type: ignore[no-redef]
     import gen_ih_clause as generator  # type: ignore[no-redef]
@@ -56,7 +61,8 @@ ERROR_LINE = re.compile(r"^(.*?):(\d+):(\d+): error(?:\([^)]*\))?: (.*)$", re.M)
 STATUS_COLUMNS = ("clause", "field", "constructor", "relation", "tag", "status",
                   "hook_lemma", "hook_source", "hook_backend", "wiring", "census", "evidence")
 SUGGEST_COLUMNS = ("clause", "field", "status", "outcome", "lean_candidate", "lean_detail",
-                   "houdini", "autoprove", "encoding", "draft", "evidence")
+                   "houdini", "autoprove", "encoding", "draft", "evidence",
+                   "attempt_receipt")
 
 
 @dataclass(frozen=True)
@@ -129,7 +135,9 @@ def declared_in_source(lemma: str, root: Path = ROOT) -> bool:
 
 
 def hook_probe_source(info: model.ClauseInfo, lemmas: list[str]) -> str:
-    return f"import {info.module}\n\n" + "".join(f"#print axioms {l}\n" for l in lemmas)
+    return f"import {info.module}\n\n" + "".join(
+        f"#print axioms {lemma}\n" for lemma in lemmas
+    )
 
 
 def probe_hooks(info: model.ClauseInfo, backend: Path, directory: Path) -> dict[str, str]:
@@ -248,6 +256,143 @@ def evaluate_drafts(info: model.ClauseInfo, drafts: dict[str, list[Candidate]],
     return results
 
 
+def _candidate_inputs(
+    info: model.ClauseInfo, drafts: dict[str, list[Candidate]]
+) -> tuple[attempt_receipts.CandidateInput, ...]:
+    result = []
+    for case, options in drafts.items():
+        field = info.field(case)
+        target = f"{info.namespace}.Residuals.{case}"
+        for index, option in enumerate(options, start=1):
+            result.append(
+                attempt_receipts.CandidateInput(
+                    target=target,
+                    theorem=f"{info.namespace}.draft_{case}_{index}",
+                    label=option.label,
+                    statement=attempt_receipts.Blob.from_text(
+                        model.indent(field.field_type, 4)
+                    ),
+                    candidate=attempt_receipts.Blob.from_text(model.indent(option.term, 2)),
+                )
+            )
+    return tuple(result)
+
+
+def run_candidate_lean(
+    info: model.ClauseInfo,
+    backend: Path,
+    directory: Path,
+    name: str,
+    source: str,
+    drafts: dict[str, list[Candidate]],
+    *,
+    rerun_reason: str | None = None,
+    inherited_lean_path: str | None = None,
+) -> tuple[census.LeanResult, Path, str]:
+    """Compile one generated candidate module and append its attempt receipt."""
+    targets = tuple(f"{info.namespace}.Residuals.{case}" for case in drafts)
+    candidates_ = _candidate_inputs(info, drafts)
+    source_ = attempt_receipts.Blob.from_text(source)
+    capture_started = time.monotonic()
+    before = attempt_receipts.capture_build_snapshot(
+        ROOT,
+        backend,
+        source,
+        inherited_lean_path,
+        (Path(__file__), Path(census.__file__)),
+    )
+    capture_before_seconds = time.monotonic() - capture_started
+    log_path = directory / f"{name}.log"
+    log_path.unlink(missing_ok=True)
+    started_at = datetime.now(timezone.utc).isoformat()
+    started = time.monotonic()
+    try:
+        result = run_lean(backend, directory, name, source)
+    except (OSError, build_private.BuildError, KeyboardInterrupt) as error:
+        wall = time.monotonic() - started
+        diagnostics = str(error)
+        try:
+            saved_diagnostics = log_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            saved_diagnostics = ""
+        if saved_diagnostics:
+            diagnostics = saved_diagnostics
+        capture_started = time.monotonic()
+        after = attempt_receipts.capture_build_snapshot(
+            ROOT,
+            backend,
+            source,
+            inherited_lean_path,
+            (Path(__file__), Path(census.__file__)),
+        )
+        capture_after_seconds = time.monotonic() - capture_started
+        receipt = attempt_receipts.make_receipt(
+            targets=targets,
+            source=source_,
+            candidates=candidates_,
+            before=before,
+            after=after,
+            started_at=started_at,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            wall_seconds=wall,
+            returncode=None,
+            diagnostics=diagnostics,
+            failure_class=attempt_receipts.classify_exception(error),
+            rerun_reason=rerun_reason,
+            capture_before_seconds=capture_before_seconds,
+            capture_after_seconds=capture_after_seconds,
+        )
+        attempt_receipts.write_receipt(directory.parent / "attempts", receipt)
+        raise
+    wall = time.monotonic() - started
+    capture_started = time.monotonic()
+    after = attempt_receipts.capture_build_snapshot(
+        ROOT,
+        backend,
+        source,
+        inherited_lean_path,
+        (Path(__file__), Path(census.__file__)),
+    )
+    capture_after_seconds = time.monotonic() - capture_started
+    failure_class = attempt_receipts.classify_result(result.returncode, result.output)
+    before_identity = attempt_receipts.comparison_payload(
+        targets, source_, candidates_, before
+    )
+    after_identity = attempt_receipts.comparison_payload(
+        targets, source_, candidates_, after
+    )
+    if (
+        failure_class in ("success", "compiler_diagnostic")
+        and (
+            attempt_receipts.has_stale_inputs(before)
+            or attempt_receipts.has_stale_inputs(after)
+            or (
+                before_identity != after_identity
+                and (before_identity is not None or after_identity is not None)
+            )
+        )
+    ):
+        failure_class = "stale_or_missing_dependency"
+    receipt = attempt_receipts.make_receipt(
+        targets=targets,
+        source=source_,
+        candidates=candidates_,
+        before=before,
+        after=after,
+        started_at=started_at,
+        finished_at=datetime.now(timezone.utc).isoformat(),
+        wall_seconds=wall,
+        returncode=result.returncode,
+        diagnostics=result.output,
+        failure_class=failure_class,
+        rerun_reason=rerun_reason,
+        capture_before_seconds=capture_before_seconds,
+        capture_after_seconds=capture_after_seconds,
+    )
+    path = attempt_receipts.write_receipt(directory.parent / "attempts", receipt)
+    return result, path, failure_class
+
+
 def bounded_engines(key: str, encoding: str, lemma: str) -> dict[str, str]:
     """Run houdini_ih / autoprove with the field registered at `encoding`."""
     try:
@@ -284,7 +429,9 @@ def outcome(lean_candidate: str, lean_ran: bool, houdini: str, autoprove: str) -
 
 def suggest(info: model.ClauseInfo, backend: Path | None, directory: Path,
             dischargers: list[str], extra: list[tuple[str, str]],
-            targets: dict[str, str], trivial: set[str]) -> list[dict[str, str]]:
+            targets: dict[str, str], trivial: set[str], *,
+            rerun_reason: str | None = None,
+            inherited_lean_path: str | None = None) -> list[dict[str, str]]:
     open_fields = [f for f in info.fields if f.status in ("HOOK", "MANUAL", "STALE")]
     shaped = frozenset(model.dischargers_at_motive_shape())
     drafts = {f.name: candidates(f, dischargers, extra, info.kind, shaped) for f in open_fields}
@@ -293,9 +440,29 @@ def suggest(info: model.ClauseInfo, backend: Path | None, directory: Path,
     draft_path.parent.mkdir(parents=True, exist_ok=True)
     draft_path.write_text(source)
     lean_results: dict[str, dict] = {}
+    attempt_receipt = ""
     if backend is not None and drafts:
-        result = run_lean(backend, draft_path.parent, f"Draft_{info.name}", source)
-        lean_results = evaluate_drafts(info, drafts, result.output, ranges)
+        result, receipt_path, failure_class = run_candidate_lean(
+            info,
+            backend,
+            draft_path.parent,
+            f"Draft_{info.name}",
+            source,
+            drafts,
+            rerun_reason=rerun_reason,
+            inherited_lean_path=inherited_lean_path,
+        )
+        attempt_receipt = str(receipt_path)
+        if failure_class == "stale_or_missing_dependency":
+            lean_results = {
+                case: {
+                    "candidate": "",
+                    "detail": "not accepted: stale or changing build inputs",
+                }
+                for case in drafts
+            }
+        else:
+            lean_results = evaluate_drafts(info, drafts, result.output, ranges)
     rows = []
     for field in open_fields:
         key = f"IHClause.{info.name}.{field.name}"
@@ -316,6 +483,7 @@ def suggest(info: model.ClauseInfo, backend: Path | None, directory: Path,
             "houdini": engines["houdini"], "autoprove": engines["autoprove"],
             "encoding": encoding, "draft": str(draft_path),
             "evidence": str(draft_path.with_suffix(".log")) if lean_results else "",
+            "attempt_receipt": attempt_receipt,
         })
     return rows
 
@@ -418,6 +586,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="extra from_old:<term> or exact:<term> candidate for --suggest")
     parser.add_argument("--bounded-target", action="append", default=[], type=parse_target,
                         help="<case|*>=<encoding> for houdini_ih/autoprove (e.g. valuerepr-copy:str)")
+    parser.add_argument("--rerun-reason",
+                        help="optional reason for deliberately repeating a candidate attempt")
     parser.add_argument("--summary", action="store_true", help="print the summary only")
     parser.add_argument("--json", action="store_true", help="print the JSON report")
     args = parser.parse_args(argv)
@@ -441,7 +611,9 @@ def main(argv: list[str] | None = None) -> int:
             trivial = model.trivial_predicates()
             for info in model_.values():
                 suggestions += suggest(info, backend, args.output, dischargers, args.candidate,
-                                       dict(args.bounded_target), trivial)
+                                       dict(args.bounded_target), trivial,
+                                       rerun_reason=args.rerun_reason,
+                                       inherited_lean_path=os.environ.get("LEAN_PATH", ""))
         text = summary(model_, rows, suggestions)
         if args.summary and not (args.suggest or backend):
             print(text)

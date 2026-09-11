@@ -133,4 +133,22 @@ theorem ReadyPrefixFacts.globals
   exact he.symm.trans F.globals
 
 #print axioms ReadyPrefixFacts.globals
+
+/-- The reached prefix retains the initialized interpreter depth word. -/
+theorem ReadyPrefixFacts.call_depth
+    {before after : Config} {stmts count : Nat} {inp : BitVec 64}
+    {N : NativeAddrs} {A : Arena} {phiF phiC : Vsa.While.Addr → Nat} {aLeft : Nat}
+    (P : ReadyPrefixFacts inp before after)
+    (F : LayoutInstance.InterpRunReadyFacts before stmts count inp N A phiF phiC aLeft) :
+    read32 after.σ.mem (inp.toNat + 8) = some 0 := by
+  have he := read32_agreeP (P := fun k => ¬ interpRunPrefixWriteFootprint inp k)
+    P.outside_prefix (a := inp.toNat + 8) (by
+      intro k hk
+      rw [F.interp_local]
+      change ¬ ((0x87fffc50 ≤ 0x87fffe10 + 8 + k ∧ 0x87fffe10 + 8 + k < 0x87fffd00) ∨
+        (0x87fffe20 ≤ 0x87fffe10 + 8 + k ∧ 0x87fffe10 + 8 + k < 0x87fffe90))
+      omega)
+  exact he.symm.trans F.call_depth
+
+#print axioms ReadyPrefixFacts.call_depth
 end Vsa.Sim

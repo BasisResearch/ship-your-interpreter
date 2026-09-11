@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "purpose": "Preserve the exact pre-correction allocator contract and checked contradiction in an isolated namespace.",
+  "fixture": "experiments/fleet/obstructions/LegacyAllocatorContract.lean",
+  "fixture_sha256": "320dd8a081f06c06e5920f9533f7ca3fd5a8348a033750a6ade834dbe3ab81e6",
+  "original_source_directory": "/private/tmp/vsa-allocator-correction-20260911.oghh8x",
+  "original_sources": [
+    {
+      "name": "Alloc.lean",
+      "sha256": "6cc7dbc6087df9376477846a6538fddf427618a01fab8f3b828b6ea9800324ba"
+    },
+    {
+      "name": "AllocRuns.lean",
+      "sha256": "0743c99086427d640590c9a16830f605f28ffbd8b79ddfc1b4293f0791fec314"
+    },
+    {
+      "name": "RuntimeAllocatorState.lean",
+      "sha256": "7cfabdb6c449b1e5f57363ea7cf62c74f7885a11a30ab5e1189bc3d7a373739b"
+    },
+    {
+      "name": "AllocatorContractObstruction.lean",
+      "sha256": "dcc6ea8ea05af12dd35e5fa683d86706968ba6f05a12f36cc37c0e00241887bb"
+    },
+    {
+      "name": "ReallocSpec.lean",
+      "sha256": "3817191810e4a895b43377c0002fcba2db679787cd1055fee8e113adc8ccfbeb"
+    },
+    {
+      "name": "AllocCapacity.lean",
+      "sha256": "67f0cd04999a8ae001c60187e42f6c398ff3ceb81fab9099d090da865114ce8f"
+    }
+  ],
+  "copied_sections": [
+    {
+      "source": "Alloc.lean",
+      "start_line": 65,
+      "end_line": 195,
+      "original_sha256": "97ef77851b462094c2121225eaae6a5abb7d5d274f126847f9e0dd8992c8449f",
+      "fixture_section_sha256": "97ef77851b462094c2121225eaae6a5abb7d5d274f126847f9e0dd8992c8449f"
+    },
+    {
+      "source": "AllocRuns.lean",
+      "start_line": 285,
+      "end_line": 290,
+      "original_sha256": "a2ec3d71d5552b8670f1eee8259594476eedb63a03976a8d57ceea60375af797",
+      "fixture_section_sha256": "6a1f3476c8d769dbacebcf54e32b269c271af83dde92802134b91a4abf3f8e53"
+    },
+    {
+      "source": "AllocCapacity.lean",
+      "start_line": 54,
+      "end_line": 56,
+      "original_sha256": "a3b8ce161cfa150ac84ea5ca975da592fe2f62e092851c2b3a50cc83f18f13ae",
+      "fixture_section_sha256": "a3b8ce161cfa150ac84ea5ca975da592fe2f62e092851c2b3a50cc83f18f13ae"
+    },
+    {
+      "source": "AllocCapacity.lean",
+      "start_line": 67,
+      "end_line": 68,
+      "original_sha256": "7ad8f8ba7d6e6841f04be6a895d8206594a04c9825e5b722472b0df61d762b66",
+      "fixture_section_sha256": "7ad8f8ba7d6e6841f04be6a895d8206594a04c9825e5b722472b0df61d762b66"
+    },
+    {
+      "source": "AllocCapacity.lean",
+      "start_line": 198,
+      "end_line": 204,
+      "original_sha256": "3256b96dacaa347366e19a0d3110ac2efcfeec311c60c3b21264df26a4abacc3",
+      "fixture_section_sha256": "3256b96dacaa347366e19a0d3110ac2efcfeec311c60c3b21264df26a4abacc3"
+    },
+    {
+      "source": "RuntimeAllocatorState.lean",
+      "start_line": 11,
+      "end_line": 22,
+      "original_sha256": "6abe6d7efd9e249f9964e9f970f19839fb2952216bb3eb64511426537c0d8a25",
+      "fixture_section_sha256": "720b52417c4f3f8077831d2d466a698205ffa5e5171c052f1e0b326936cfe9d8"
+    },
+    {
+      "source": "AllocatorContractObstruction.lean",
+      "start_line": 7,
+      "end_line": 46,
+      "original_sha256": "70d8c06fc93560e6ea9fa3c9984fcf5cbe442a7d9d1692cb87ec9d1e09fc956d",
+      "fixture_section_sha256": "b5dccdaf05d74d7433b8404c9f43835db6ce998fd2fcaab539744e1dd1cf0e56"
+    }
+  ],
+  "namespace_import_only_edits": [
+    "Import Vsa.Alloc, Vsa.Sim.RuntimeOwnershipDataTransport, and Vsa.Sim.AllocCapacity for unchanged supporting types; omit imports of current allocator-state and obstruction modules.",
+    "Place the verbatim MallocContract record in Vsa.Alloc.Legacy; retain the original open declarations.",
+    "Place the copied AInvAt and RuntimeAllocatorState definitions in Vsa.Sim.Legacy.",
+    "Qualify MallocContract references in copied AInvAt and RuntimeAllocatorState as Vsa.Alloc.Legacy.MallocContract.",
+    "Qualify RuntimeAllocatorState.ainv with Vsa.Sim.Legacy.AInvAt.",
+    "Place both copied obstruction theorems and their original axiom checks in Vsa.Sim.Legacy.AllocatorContractObstruction.",
+    "Qualify obstruction theorem parameter M as Vsa.Alloc.Legacy.MallocContract; qualify their conclusions with Vsa.Sim.Legacy.AInvAt and Vsa.Sim.Legacy.RuntimeAllocatorState.",
+    "Provide the original supporting open declarations in each copied section namespace; qualify RuntimeOwnership open as Vsa.Sim.RuntimeOwnership.",
+    "Place the verbatim pre-correction physSize, physTotal, and ResourceBudget definitions in Vsa.Sim.Legacy before RuntimeAllocatorState, so their unqualified references bind to the legacy definitions.",
+    "Qualify RuntimeAllocatorState.budget with Vsa.Sim.Legacy.ResourceBudget; retain the original physical cost formula independently of canonical allocator corrections."
+  ],
+  "other_edits": [
+    "Add fixture-level provenance documentation and separating whitespace; do not change copied documentation, fields, quantifiers, or proof bodies."
+  ],
+  "validation": {
+    "copied_source_comparison": "pass",
+    "lean_compilation": "pass",
+    "axiom_audit": "pass: standard axioms only",
+    "exact_consumer": "Vsa.Sim.Legacy.AllocatorContractObstruction.no_initial_invariant",
+    "receipt": "/private/tmp/vsa-allocator-correction-20260911.oghh8x/regression-LegacyAllocatorContract/receipt.json",
+    "receipt_sha256": "1f467af9a936f4e598a0ea96bd04dd2378e2d43f865b6474af8b2338ec235900"
+  }
+}

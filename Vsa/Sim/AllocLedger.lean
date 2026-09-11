@@ -1,6 +1,7 @@
 import Vsa.Sim.rows.EnvDefineMissLedger
 import Vsa.Sim.AllocOff
 import Vsa.Sim.AllocRuns
+import Vsa.Sim.AllocMallocAdapters
 
 /-!
 # `AllocLedger` — ONE run-global allocator ledger and its call adapters
@@ -56,8 +57,10 @@ structure MallocParked (A : Arena) (SL : StackLayout) (gpv : BitVec 64)
     (g : (R : Register) → Option (RegisterType R)) (exts : List Extent) (n : Nat)
     (spv r : BitVec 64) (m0 : Mem) (out : Array String) (N : NativeAddrs)
     (phiF phiC : Addr → Nat) (alloc : Allocations)
-    (shared readable writes : Nat → Prop) (s : Store) (c : Config) : Prop where
+    (shared readable writes : Nat → Prop) (s : Store) (credits : Nat) (c : Config) : Prop where
   entry : MallocEntry A SL gpv headroom maxReq M g exts n spv r m0 out c
+  code : Code.FixedTextLoaded c.σ.mem
+  resources : AllocationResources A maxReq credits n exts c.σ.mem
   owned : HeapOwned A exts m0 phiF phiC alloc shared readable writes s
   store : StoreRepr m0 N A phiF phiC s
   writes_stack : ∀ k, SL.lo ≤ k → k < SL.hi → writes k
@@ -70,8 +73,10 @@ structure MallocReturnAt (A : Arena) (SL : StackLayout) (gpv : BitVec 64)
     (g : (R : Register) → Option (RegisterType R)) (exts : List Extent) (n : Nat)
     (spv r : BitVec 64) (m0 : Mem) (out : Array String) (N : NativeAddrs)
     (phiF phiC : Addr → Nat) (alloc : Allocations)
-    (shared readable writes : Nat → Prop) (s : Store) (p : Nat) (c : Config) : Prop where
+    (shared readable writes : Nat → Prop) (s : Store) (credits p : Nat) (c : Config) : Prop where
   exit : MallocExit A SL gpv headroom maxReq M g exts n spv r m0 out c
+  budget : ResourceBudget A maxReq ((p, n) :: exts) credits
+  reserve : AllocationReserve A c.σ.mem ((p, n) :: exts) maxReq credits
   a0 : c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 p)
   block : MallocBlock A exts n p
   ainv : AInvAt M gpv c.σ.mem ((p, n) :: exts)
@@ -90,9 +95,9 @@ def MallocReturn (A : Arena) (SL : StackLayout) (gpv : BitVec 64)
     (g : (R : Register) → Option (RegisterType R)) (exts : List Extent) (n : Nat)
     (spv r : BitVec 64) (m0 : Mem) (out : Array String) (N : NativeAddrs)
     (phiF phiC : Addr → Nat) (alloc : Allocations)
-    (shared readable writes : Nat → Prop) (s : Store) (c : Config) : Prop :=
+    (shared readable writes : Nat → Prop) (s : Store) (credits : Nat) (c : Config) : Prop :=
   ∃ p, MallocReturnAt A SL gpv headroom maxReq M g exts n spv r m0 out N phiF phiC alloc
-    shared readable writes s p c
+    shared readable writes s credits p c
 
 /-- The footprint of one `malloc` is `allocFoot` at its block (the allocating
 clause family of `IHClauseGenericAlloc`). -/
@@ -101,9 +106,9 @@ theorem MallocReturnAt.allocFoot {A : Arena} {SL : StackLayout} {gpv : BitVec 64
     {g : (R : Register) → Option (RegisterType R)} {exts : List Extent} {n : Nat}
     {spv r : BitVec 64} {m0 : Mem} {out : Array String} {N : NativeAddrs}
     {phiF phiC : Addr → Nat} {alloc : Allocations}
-    {shared readable writes : Nat → Prop} {s : Store} {p : Nat} {c : Config}
+    {shared readable writes : Nat → Prop} {s : Store} {credits p : Nat} {c : Config}
     (X : MallocReturnAt A SL gpv headroom maxReq M g exts n spv r m0 out N phiF phiC alloc
-      shared readable writes s p c) (sret : Nat) :
+      shared readable writes s credits p c) (sret : Nat) :
     MemFootprint (allocFoot M.privFoot [(p, n)] SL A spv.toNat sret) m0 c.σ.mem :=
   X.footprint.mono (fun k hk => by
     rcases hk with hs | hp
@@ -118,17 +123,24 @@ theorem mallocReturn_of_parked {A : Arena} {SL : StackLayout} {gpv : BitVec 64}
     (g : (R : Register) → Option (RegisterType R)) (exts : List Extent) (n : Nat)
     (spv r : BitVec 64) (m0 : Mem) (out : Array String) (N : NativeAddrs)
     (phiF phiC : Addr → Nat) (alloc : Allocations)
-    (shared readable writes : Nat → Prop) (s : Store)
+    (shared readable writes : Nat → Prop) (s : Store) (credits : Nat)
     (hn : n ≤ maxReq) (hpos : 0 < n) :
     Triple
       (MallocParked A SL gpv headroom maxReq M g exts n spv r m0 out N phiF phiC alloc
-        shared readable writes s)
+        shared readable writes s credits)
       (MallocReturn A SL gpv headroom maxReq M g exts n spv r m0 out N phiF phiC alloc
-        shared readable writes s) := by
+        shared readable writes s credits) := by
   intro c h
-  obtain ⟨c', hs, X⟩ := L.malloc g exts n spv r m0 out hn c h.entry
-  obtain ⟨p, ha0, hp0, hp16, hpA, hpdisj, hainv⟩ :=
-    M.nonNull_of_bounded c'.σ exts n hn X.result
+  obtain ⟨c', hs, success⟩ := L.mallocSuccess g exts n credits spv r m0 out c
+    (MallocSuccessEntry.of_entry h.entry h.code h.resources)
+  obtain ⟨p, result⟩ := success.allocated
+  have X := success.returned.toMallocExit (M := M) result
+  have ha0 := result.pointer.register
+  have hp0 := result.pointer.nonzero
+  have hp16 := result.pointer.aligned
+  have hpA := result.pointer.arena
+  have hpdisj := result.disjoint
+  have hainv := result.ainv
   have hsp : spv.toNat ≤ SL.hi := h.entry.stack.2.1
   have hag : AgreeP (AllocOff SL M.privFoot []) m0 c'.σ.mem := by
     intro k hk
@@ -142,6 +154,7 @@ theorem mallocReturn_of_parked {A : Arena} {SL : StackLayout} {gpv : BitVec 64}
   refine ⟨c', hs, p, ?_⟩
   exact
     { exit := X
+      budget := result.budget, reserve := result.reserve
       a0 := ha0
       block := block
       ainv := L.ainvAt_of_state X.gp hainv
@@ -258,9 +271,9 @@ theorem closurePushed_of_mallocReturn {A : Arena} {SL : StackLayout} {gpv : BitV
     {g : (R : Register) → Option (RegisterType R)} {exts : List Extent}
     {spv r : BitVec 64} {m0 : Mem} {out : Array String} {N : NativeAddrs}
     {phiF phiC phiC' : Addr → Nat} {alloc : Allocations}
-    {shared readable writes : Nat → Prop} {s : Store} {p : Nat} {c : Config}
+    {shared readable writes : Nat → Prop} {s : Store} {credits p : Nat} {c : Config}
     (X : MallocReturnAt A SL gpv headroom maxReq M g exts 16 spv r m0 out N phiF phiC alloc
-      shared readable writes s p c)
+      shared readable writes s credits p c)
     {m' : Mem} {cd : ClosureData} {q : Nat}
     (hag : AgreeP (AllocOff SL M.privFoot [(p, 16)]) c.σ.mem m')
     (hext : PhiExtends phiC phiC' s.closures.size) (hp : phiC' s.closures.size = p)
@@ -294,6 +307,8 @@ theorem EnvNewLedger.of_alloc
     {gpv : BitVec 64} {headroom maxReq : Nat}
     {M : MallocContract A SL gpv headroom maxReq} {exts : List Extent}
     (L : AllocLedger A SL gpv headroom maxReq M)
+    (budget : ResourceBudget A maxReq exts 1)
+    (reserve : AllocationReserve A m exts maxReq 1)
     (hgp : g Register.x3 = some gpv) (hs0 : (g Register.x8).isSome = true)
     (hesp : esp.toNat ≤ SL.hi) (hA : AInvAt M gpv m exts)
     (hparents : StoreParents st.store)
@@ -303,7 +318,7 @@ theorem EnvNewLedger.of_alloc
     EnvNewLedger g N A SL φf φc st env esp aEnv r m M exts :=
   { gp := hgp, s0_present := hs0
     ainv_entry := hA, stack_hi := hesp
-    alloc := L, parents := hparents, owned := howned }
+    alloc := L, budget := budget, reserve := reserve, parents := hparents, owned := howned }
 
 /-- `EnvDefineUpdateLedger` from the run-global ledger and the entry-local facts. -/
 theorem EnvDefineUpdateLedger.of_alloc
@@ -345,6 +360,8 @@ theorem EnvDefineMissLedger.of_alloc
     {gpv : BitVec 64} {headroom maxReq : Nat}
     {M : MallocContract A SL gpv headroom maxReq} {exts : List Extent}
     (L : AllocLedger A SL gpv headroom maxReq M)
+    (budget : ResourceBudget A maxReq exts 3)
+    (reserve : AllocationReserve A m exts maxReq 3)
     (name_regions : StrRegions aName x.length)
     (name_align : aName.toNat % 8 = 0)
     (name_arena : A.contains aName.toNat (x.length + 1))
@@ -353,7 +370,7 @@ theorem EnvDefineMissLedger.of_alloc
     (copy_req : x.length + 1 ≤ maxReq)
     (grow_req : ∀ cap, read32 m (φf env + 4) = some cap → 48 * cap ≤ maxReq) :
     EnvDefineMissLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts :=
-  { alloc := L
+  { alloc := L, budget := budget, reserve := reserve
     name_regions := name_regions, name_align := name_align, name_arena := name_arena
     names_aligned := names_aligned, copy_fit := copy_fit, copy_req := copy_req
     grow_req := grow_req }

@@ -1,6 +1,7 @@
 import Vsa.Sim.rows.ConcatHeapCore
 import Vsa.Sim.rows.StrcpyContractInhab
 import Vsa.Alloc
+import Vsa.Sim.AllocSuccessAdapters
 
 /-!
 # `ConcatSeams` — instantiating `concatHeapCore`'s callee slots from the landed layer
@@ -9,8 +10,8 @@ Task #82b Part 1.  `concatHeapCore` (`ConcatHeapCore.lean`) is the pure
 `callSeg`/`Triple.seq` algebra over eight abstract callee `Triple`s and seven
 abstract seam `Triple`s.  This file DISCHARGES the callee slots that the landed
 abstraction layer already supplies — the three `MallocContract` slots
-(`malloc` = `M.spec`, `free1`/`free2` = `M.freeSpec`) and the no-OOM prune
-(`M.nonNull_of_bounded`) — and closes the one non-mechanical seam obligation
+(`malloc` = `M.spec`, `free1`/`free2` = `M.freeSpec`). The success reader consumes
+`MallocSuccessExit`; its actual-run producer remains a caller obligation. It closes the readback obligation
 (the `value_str` box's concluding `CString new (sL ++ sR)`, via `concatReadback`).
 
 ## What discharges vs. what remains
@@ -20,7 +21,7 @@ abstraction layer already supplies — the three `MallocContract` slots
 | `malloc`   (callee)    | `M.spec`  (malloc contract)                   | DISCHARGED    |
 | `free1`    (callee)    | `M.freeSpec`  (free contract, L-buf)          | DISCHARGED    |
 | `free2`    (callee)    | `M.freeSpec`  (free contract, R-buf)          | DISCHARGED    |
-| no-OOM prune @ `beqz`  | `M.nonNull_of_bounded`                        | DISCHARGED    |
+| success facts @ `beqz` | `MallocSuccessExit.result`                   | READER ONLY   |
 | value_str readback     | `concatReadback` (CStringAppend)              | DISCHARGED    |
 | `strlenL`/`strlenR`    | `strlen_spec_framed` (caller-threaded)        | HYP (contract)|
 | `memcpy`   (callee)    | `memcpy_spec_framed_byte` (caller-threaded)   | HYP (contract)|
@@ -91,7 +92,7 @@ def ConcatMallocPost (M : MallocContract A SL gpv headroom maxReq)
 
 /-- **Named destructurer** for `ConcatMallocPost` (per CLAUDE.md R6: never
 positional `.2.2.2` chains into a landed ∧-tower).  Projects out the success-or-null
-disjunction — the only field `concatOOM_prune` reads.  `ConcatMallocPost` mirrors
+disjunction for failure-aware consumers.  `ConcatMallocPost` mirrors
 `M.spec`'s post shape verbatim (the canonical landed contract interface), so we
 consume it through this ONE reader. -/
 theorem ConcatMallocPost.disj
@@ -160,28 +161,24 @@ theorem concatFreeSlot (M : MallocContract A SL gpv headroom maxReq)
     Triple (ConcatFreePre M g exts q n sp r m0) (ConcatFreePost M g exts q n sp r m0) :=
   M.freeSpec g exts q n sp r m0
 
-/-! ## The no-OOM prune at `beqz a0`
+/-! ## Successful malloc result at `beqz a0`
 
-`0x80003a9c beqz a0 → 80003e28` (OOM path).  `M.nonNull_of_bounded` collapses
-`ConcatMallocPost`'s success-or-null disjunction to the fresh-block disjunct for a
-bounded request, so the `beqz` branch is provably NOT taken and the middle chain
-continues with a non-null `new`.  This is the exact obligation the plan flags as
-"the no-OOM prune uses `MallocContract.nonNull_of_bounded`". -/
+The caller must supply the successful post from the actual allocator run.
+`concatMallocSlot` still supplies the failure-aware `M.spec`; it does not produce
+this post from the request bound alone. -/
 
-/-- **The malloc post's disjunction pruned to the success block.**  From
-`ConcatMallocPost` (the malloc slot's exit) at a bounded request, `x10 = new` is a
-fresh, aligned, in-arena, non-null pointer — the `beqz a0` OOM branch is dead.  This
-is the value the middle chain (`memcpy(new,…)`) consumes. -/
+/-- Read the selected successful allocation at the same return configuration. -/
 theorem concatOOM_prune (M : MallocContract A SL gpv headroom maxReq)
     (g : (R : Register) → Option (RegisterType R)) (exts : List (Nat × Nat))
     (n : Nat) (sp r : BitVec 64) (m0 : Std.ExtHashMap Nat (BitVec 8))
-    (hn : n ≤ maxReq) {c : Config}
-    (hpost : ConcatMallocPost M g exts n sp r m0 c) :
+    {credits : Nat} {out : Array String} {c : Config}
+    (hpost : MallocSuccessExit A SL gpv maxReq credits M.AInv M.privFoot
+      g exts n sp r m0 out c) :
     ∃ p, c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 p) ∧
       p ≠ 0 ∧ p % 16 = 0 ∧ A.contains p n ∧
       (∀ e ∈ exts, ExtDisjoint (p, n) e) ∧
       M.AInv c.σ ((p, n) :: exts) :=
-  M.nonNull_of_bounded c.σ exts n hn hpost.disj
+  hpost.result
 
 /-! ## The `value_str` box's concluding `CString`
 

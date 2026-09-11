@@ -15,7 +15,7 @@ byte-exact concat C-block `0x80003a20 → 0x80003ae0` (disasm confirmed in
 80003a74  mv a0,s2 ; jal strlen    → s2 = |L.display|                    [strlen framed]
 80003a80  mv a0,s0 ; jal strlen    → a0 = |R.display|                    [strlen framed]
 80003a88  add a0,s2,a0 ; addi a0,a0,1 ; jal malloc → s0 = new            [MallocContract.spec]  ← concatMallocArgRow
-80003a9c  beqz a0 → 80003e28       (OOM; arena no-OOM ⇒ not taken)       [M.nonNull_of_bounded]
+80003a9c  beqz a0 → 80003e28       (OOM; successful return required for fallthrough)
 80003aa0  mv a2,s2 ; mv a1,s3 ; jal memcpy(new, L, |L|)                  [memcpy framed byte]   ← concatMemcpyArgRow
 80003ab4  add a0,s0,s2 ; mv a1,s5 ; jal strcpy(new+|L|, R)  (copies R+NUL)[StrcpyContractCpw]    ← concatStrcpyArgRow
 80003abc  mv a0,s3 ; jal free ; mv a0,s5 ; jal free                      [MallocContract.freeSpec ×2]

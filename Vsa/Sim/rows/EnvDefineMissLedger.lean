@@ -1,6 +1,7 @@
 import Vsa.Sim.rows.EnvDefineContractUpdate
 import Vsa.Sim.rows.EnvNewContractSupply
 import Vsa.Sim.AllocRuns
+import Vsa.Sim.AllocReserveTransport
 import Vsa.Sim.Code.FixedImage_Strlen
 import Vsa.Sim.Code.FixedImage_Memcpy
 
@@ -43,6 +44,8 @@ structure EnvDefineMissLedger (g : (R : Register) → Option (RegisterType R))
   geometry, the footprint discipline and the request ceilings
   (`Vsa/Sim/AllocRuns.lean`).  ONE field per entry, not a restatement. -/
   alloc : AllocLedger A SL gpv headroom maxReq M
+  budget : ResourceBudget A maxReq exts 3
+  reserve : AllocationReserve A m exts maxReq 3
   /-- The queried name's bytes are RAM off the HTIF window and the `strlen`
   text (`StrRegions`; the parser's script region). -/
   name_regions : StrRegions aName x.length
@@ -64,5 +67,27 @@ structure EnvDefineMissLedger (g : (R : Register) → Option (RegisterType R))
   (8 slots: 64 and 192 bytes). -/
   copy_req : x.length + 1 ≤ maxReq
   grow_req : ∀ cap, read32 m (φf env + 4) = some cap → 48 * cap ≤ maxReq
+
+/-- The actual spill frame transports the initial placement to the scanned memory. -/
+theorem EnvDefineMissLedger.reserve_after_spills
+    {g : (R : Register) → Option (RegisterType R)}
+    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {φf φc : Addr → Nat}
+    {st : Vsa.While.St} {env : Addr} {x : String} {v : Value}
+    {esp aEnv aName pv r : BitVec 64} {m m' : Mem}
+    {gpv : BitVec 64} {headroom maxReq : Nat}
+    {M : MallocContract A SL gpv headroom maxReq} {exts : List Extent}
+    (LM : EnvDefineMissLedger g N A SL φf φc st env x v esp aEnv aName pv r m M exts)
+    (stack : StackOK SL esp 1088)
+    (agreement : ∀ k, k < esp.toNat - 64 ∨ esp.toNat ≤ k → m'[k]? = m[k]?) :
+    AllocationReserve A m' exts maxReq 3 := by
+  apply LM.reserve.after_stack ?_ ?_ LM.alloc.arena_stack
+  · intro k outside
+    apply Eq.symm (agreement k ?_)
+    obtain ⟨lower, upper, _⟩ := stack
+    omega
+  · intro k hk
+    rcases LM.alloc.globals_stack with above | below <;> omega
+
+#print axioms EnvDefineMissLedger.reserve_after_spills
 
 end Vsa.Sim

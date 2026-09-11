@@ -1,6 +1,9 @@
 import Vsa.Sim.rows.EnvDefineAppendExact
 import Vsa.Sim.EnvDefBridges4
 import Vsa.Sim.EnvGetSpec7
+import Vsa.Sim.ReallocPublicFrame
+import Vsa.Sim.AllocSuccessAdapters
+import Vsa.Sim.AllocReserveTransport
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa
 open Register
@@ -177,28 +180,6 @@ theorem appendHeadPublicFrame
     rcases henvA with ⟨hlo, hhi⟩
     rcases harenaStack with h | h <;> omega
 
-/-- Explicit bounded-request elimination of realloc's NULL branch. -/
-theorem reallocGrowSuccess_of_bounded
-    {A : Arena} {SL : Vsa.Alloc.StackLayout} {gpv : BitVec 64}
-    {headroom maxReq : Nat}
-    {AInv : Vsa.Machine.MState → List Extent → Prop}
-    {privFoot : Nat → Prop}
-    (RO : ReallocOps A SL gpv headroom maxReq AInv privFoot)
-    (g : (R : Register) → Option (RegisterType R))
-    (exts : List Extent) (pOld nOld nNew : Nat) (sp r : BitVec 64)
-    (m0 : Mem) (c : Config) (hle : nNew ≤ maxReq)
-    (h : ReallocPost gpv sp r g c ∧
-      ReallocGrowResult A SL privFoot AInv exts pOld nOld nNew sp m0 c.σ) :
-    ∃ pNew,
-      c.σ.regs.get? Register.x10 = some (BitVec.ofNat 64 pNew) ∧
-      pNew ≠ 0 ∧ pNew % 16 = 0 ∧ A.contains pNew nNew ∧
-      (∀ e ∈ exts, e ≠ (pOld, nOld) →
-        Vsa.Alloc.ExtDisjoint (pNew, nNew) e) ∧
-      ReallocCopies m0 c.σ.mem pOld pNew nOld ∧
-      AInv c.σ ((pNew, nNew) :: exts.erase (pOld, nOld)) ∧
-      HeapPublicFrame privFoot SL sp [(pOld, nOld), (pNew, nNew)] m0 c.σ.mem :=
-  RO.nonNullGrow_of_bounded c.σ exts pOld nOld nNew sp m0 hle h.2
-
 /-- Exact public-memory geometry needed after the second realloc. -/
 structure AppendHeadReallocPublic
     (privFoot : Nat → Prop) (SL : Vsa.Alloc.StackLayout)
@@ -232,18 +213,17 @@ structure NamesReallocPublic
     ¬ (SL.lo ≤ a ∧ a < sp.toNat) ∧
     (∀ e ∈ [(pOld, nOld), (pNew, nNew)], a < e.1 ∨ e.1 + e.2 ≤ a)
 
-/-- The first bounded realloc produces the exact carrier consumed by the
-finite names-to-values staging lane. -/
+/-- Read the first successful return at its selected pointer and configuration.
+The caller retains its exact remaining credit and placement for the second call. -/
 theorem growEnvEntry_of_realloc
     {A : Arena} {SL : Vsa.Alloc.StackLayout} {gpv : BitVec 64}
-    {headroom maxReq : Nat}
+    {headroom maxReq credits : Nat}
     {AInv : Vsa.Machine.MState → List Extent → Prop}
     {privFoot : Nat → Prop}
-    (RO : ReallocOps A SL gpv headroom maxReq AInv privFoot)
     (g saved : (R : Register) → Option (RegisterType R))
-    (exts : List Extent) (pOld nOld nNew pValsOld capw : Nat)
-    (sp env : BitVec 64) (m0 : Mem)
-    (hle : nNew ≤ maxReq) (hnGrow : nOld < nNew)
+    (exts : List Extent) (pOld nOld pNew nNew pValsOld capw : Nat)
+    (sp env : BitVec 64) (m0 : Mem) (out : Array String)
+    (hnGrow : nOld < nNew)
     (hstack : Vsa.Alloc.StackOK SL sp headroom)
     (henvReg : g Register.x20 = some env)
     (hcode : Vsa.Sim.Code.Env_defineLoaded m0)
@@ -251,21 +231,20 @@ theorem growEnvEntry_of_realloc
     (hvals : read64 m0 (env.toNat + 16) = some pValsOld)
     (hgeom : ∀ pNew,
       NamesReallocPublic privFoot SL sp pOld nOld pNew nNew env.toNat)
-    (hArenaHi : A.hi ≤ 2^64) :
-    Triple
-      (fun c => (ReallocPost gpv sp 0x80002ba4#64 g c ∧
-        ReallocGrowResult A SL privFoot AInv exts pOld nOld nNew sp m0 c.σ) ∧
-        EnvDefineSavedSpillFrame sp saved c)
-      (fun c => ∃ pNew,
-        (GrowEnvEntry SL gpv headroom AInv
-          ((pNew, nNew) :: exts.erase (pOld, nOld)) sp g env
-          (BitVec.ofNat 64 pNew) pValsOld capw c.σ.mem c ∧
-         EnvDefineSavedSpillFrame sp saved c) ∧
-        pNew ≠ 0 ∧ A.contains pNew nNew) := by
-  intro c h
-  have hr := h.1
-  obtain ⟨pNew, hx10, hpNew, _halign, hpArena, _hdis, _hcopy, hAInv, hframe⟩ :=
-    reallocGrowSuccess_of_bounded RO g exts pOld nOld nNew sp 0x80002ba4#64 m0 c hle hr
+    (hArenaHi : A.hi ≤ 2^64) {c : Config}
+    (returned : AllocatorReturn gpv sp 0x80002ba4#64 g m0 out c)
+    (grown : ReallocGrown A SL maxReq credits AInv privFoot exts
+      pOld nOld pNew nNew sp m0 c.σ)
+    (savedSpills : EnvDefineSavedSpillFrame sp saved c) :
+    GrowEnvEntry SL gpv headroom AInv
+      ((pNew, nNew) :: exts.erase (pOld, nOld)) sp g env
+      (BitVec.ofNat 64 pNew) pValsOld capw c.σ.mem c ∧
+    EnvDefineSavedSpillFrame sp saved c := by
+  have hr := returned.toReallocPost
+  have hx10 := grown.pointer.register
+  have hpArena := grown.pointer.arena
+  have hAInv := grown.ainv
+  have hframe := grown.mem_frame
   have hnNewPos : 0 < nNew := by omega
   have hpNewLt : pNew < 2^64 := by
     have := hpArena.2
@@ -299,25 +278,25 @@ theorem growEnvEntry_of_realloc
     rw [read64_agreeP hagree (by intro k hk; omega)]
     exact hvals
   have hx20 : c.σ.regs.get? Register.x20 = some env := by
-    rw [hr.1.2.2.2.2.2 Register.x20 (by decide)]
+    rw [hr.facts.abi Register.x20 (by decide)]
     exact henvReg
   have hspills : EnvDefineSpillFrame sp g c := by
-    obtain ⟨lds, himage, _hvalues⟩ := h.2
+    obtain ⟨lds, himage, _hvalues⟩ := savedSpills
     exact ⟨lds, himage⟩
-  refine ⟨c, .refl c, pNew, ⟨?_, h.2⟩, hpNew, hpArena⟩
+  refine ⟨?_, savedSpills⟩
   exact
-    { good := hr.1.1
+    { good := hr.facts.good
       loadedD := hloaded
       memEq := rfl
-      pc := hr.1.2.2.1
+      pc := hr.facts.pc
       s4 := hx20
       namesRes := by simpa [Nat.mod_eq_of_lt hpNewLt] using hx10
-      minstret := hr.1.1.minstret
-      tick := hr.1.2.1
+      minstret := hr.facts.good.minstret
+      tick := hr.facts.tick
       capEq := hcap'
       valsEq := hvals'
-      frame := ⟨hr.1.2.2.2.1, hstack, hr.1.2.2.2.2.1,
-        hr.1.2.2.2.2.2, hAInv, hr.1.2.1, hspills⟩ }
+      frame := ⟨hr.facts.stack, hstack, hr.facts.gp,
+        hr.facts.abi, hAInv, hr.facts.tick, hspills⟩ }
 
 /-- The values-pointer tie required by the finite names-to-values lane follows
 directly from `read64`; it is not a residual oracle. -/
@@ -452,51 +431,78 @@ theorem reallocGrowSaved
         ReallocGrowResult A SL privFoot AInv exts pOld nOld nNew sp m0 c.σ) ∧
         EnvDefineSavedSpillFrame sp saved c) := by
   intro c h
-  have hmem0 : c.σ.mem = m0 := h.1.2.2.2.2.2.2.2.2.2.2.2.2
+  have hmem0 : c.σ.mem = m0 := h.1.mem_eq
   obtain ⟨c', hs, hpost, hresult⟩ :=
     RO.grow g exts pOld nOld nNew sp r m0 hle hlt hpOld hmem c h.1
-  obtain ⟨pNew, _hx10, _hnz, _halign, hNewArena, _hdis, _hcopy, _hAInv, hpublic⟩ :=
-    RO.nonNullGrow_of_bounded c'.σ exts pOld nOld nNew sp m0 hle hresult
   have hsaved' : EnvDefineSavedSpillFrame sp saved c' := by
     apply h.2.of_interval_agree
     · intro a ha0 ha1
-      have houtOld : a < pOld ∨ pOld + nOld ≤ a := by
-        rcases hOldArena with ⟨hlo, hhi⟩
-        rcases hArenaCode with hbefore | hafter <;> omega
-      have houtNew : a < pNew ∨ pNew + nNew ≤ a := by
-        rcases hNewArena with ⟨hlo, hhi⟩
-        rcases hArenaCode with hbefore | hafter <;> omega
-      exact (hpublic a (hPrivCode a ha0 ha1) (hCodeStack a ha0 ha1)
-        (by intro e he; simp only [List.mem_cons] at he
-            rcases he with rfl | rfl | h <;> simp_all)).trans
+      have outside : a < A.lo ∨ A.hi ≤ a := by
+        rcases hArenaCode with before | after <;> omega
+      exact (hresult.outside_arena hOldArena a outside
+        (hPrivCode a ha0 ha1) (hCodeStack a ha0 ha1)).trans
         (congrArg (fun m => m[a]?) hmem0.symm)
     · intro a ha0 ha1
-      have houtOld : a < pOld ∨ pOld + nOld ≤ a := by
-        rcases hOldArena with ⟨hlo, hhi⟩
-        rcases hArenaSpill with hbefore | hafter <;> omega
-      have houtNew : a < pNew ∨ pNew + nNew ≤ a := by
-        rcases hNewArena with ⟨hlo, hhi⟩
-        rcases hArenaSpill with hbefore | hafter <;> omega
-      exact (hpublic a (hPrivSpill a ha0 ha1) (by omega)
-        (by intro e he; simp only [List.mem_cons] at he
-            rcases he with rfl | rfl | h <;> simp_all)).trans
+      have outside : a < A.lo ∨ A.hi ≤ a := by
+        rcases hArenaSpill with before | after <;> omega
+      exact (hresult.outside_arena hOldArena a outside
+        (hPrivSpill a ha0 ha1) (by omega)).trans
         (congrArg (fun m => m[a]?) hmem0.symm)
   exact ⟨c', hs, ⟨hpost, hresult⟩, hsaved'⟩
 
-/-- A bounded second realloc lands directly in the reflected grow rejoin.
-The only extra assumptions are numeric access geometry and public-footprint
-separation; success, the returned pointer, code survival, and the names-field
-readback are derived from `ReallocOps`. -/
+/-- Execute a resource-backed realloc and preserve spills at its selected return. -/
+theorem reallocGrowSuccessSaved
+    {A : Arena} {SL : Vsa.Alloc.StackLayout} {gpv : BitVec 64}
+    {headroom maxReq credits : Nat}
+    {AInv : Vsa.Machine.MState → List Extent → Prop} {privFoot : Nat → Prop}
+    (run : ReallocSuccessRun A SL gpv headroom maxReq AInv privFoot)
+    (g saved : (R : Register) → Option (RegisterType R))
+    (exts : List Extent) (pOld nOld nNew : Nat) (sp r : BitVec 64)
+    (m0 : Mem) (out : Array String)
+    (hOldArena : A.contains pOld nOld)
+    (hArenaSpill : A.hi ≤ sp.toNat ∨ sp.toNat + 64 ≤ A.lo)
+    (hArenaCode : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo)
+    (hPrivCode : ∀ a, 0x80002a5c ≤ a → a < 0x80002c10 → ¬ privFoot a)
+    (hPrivSpill : ∀ a, sp.toNat ≤ a → a < sp.toNat + 64 → ¬ privFoot a)
+    (hCodeStack : ∀ a, 0x80002a5c ≤ a → a < 0x80002c10 →
+      ¬ (SL.lo ≤ a ∧ a < sp.toNat)) :
+    Triple
+      (fun c => ReallocGrowSuccessEntry A SL gpv headroom maxReq credits AInv
+        g exts pOld nOld nNew sp r m0 out c ∧ EnvDefineSavedSpillFrame sp saved c)
+      (fun c => ReallocGrowSuccessExit A SL gpv maxReq credits AInv privFoot
+        g exts pOld nOld nNew sp r m0 out c ∧ EnvDefineSavedSpillFrame sp saved c) := by
+  intro c h
+  have memory := h.1.call.entry.mem
+  obtain ⟨after, steps, returned⟩ := run.grow g exts pOld nOld nNew credits sp r m0 out c h.1
+  obtain ⟨pNew, grown⟩ := returned.grown
+  have result := grown.toResult
+  have savedAfter : EnvDefineSavedSpillFrame sp saved after := by
+    apply h.2.of_interval_agree
+    · intro a lo hi
+      have outside : a < A.lo ∨ A.hi ≤ a := by
+        rcases hArenaCode with before | after <;> omega
+      exact (result.outside_arena hOldArena a outside
+        (hPrivCode a lo hi) (hCodeStack a lo hi)).trans
+        (congrArg (fun m => m[a]?) memory.symm)
+    · intro a lo hi
+      have outside : a < A.lo ∨ A.hi ≤ a := by
+        rcases hArenaSpill with before | after <;> omega
+      exact (result.outside_arena hOldArena a outside
+        (hPrivSpill a lo hi) (by omega)).trans
+        (congrArg (fun m => m[a]?) memory.symm)
+  exact ⟨after, steps, returned, savedAfter⟩
+
+/-- The successful second realloc supplies the reflected grow-rejoin input.
+Pointer, code, and names-field readback refer to the same returned state. -/
 theorem appendHeadSegPre_of_realloc
     {A : Arena} {SL : Vsa.Alloc.StackLayout} {gpv : BitVec 64}
-    {headroom maxReq : Nat}
+    {maxReq credits : Nat}
     {AInv : Vsa.Machine.MState → List Extent → Prop}
     {privFoot : Nat → Prop}
-    (RO : ReallocOps A SL gpv headroom maxReq AInv privFoot)
     (g : (R : Register) → Option (RegisterType R))
     (saved : (R : Register) → Option (RegisterType R))
     (exts : List Extent) (pOld nOld nNew : Nat) (sp : BitVec 64)
-    (env names : BitVec 64) (m0 : Mem)
+    (env names : BitVec 64) (m0 : Mem) (out : Array String)
     (hle : nNew ≤ maxReq)
     (hnGrow : nOld < nNew)
     (henvReg : g Register.x20 = some env)
@@ -517,8 +523,8 @@ theorem appendHeadSegPre_of_realloc
     (hvalsHtif : tohostAddr + 16 ≤ env.toNat + 16)
     (hvalsAlign : (env.toNat + 16) % 8 = 0) :
     Triple
-      (fun c => (ReallocPost gpv sp 0x80002bc0#64 g c ∧
-        ReallocGrowResult A SL privFoot AInv exts pOld nOld nNew sp m0 c.σ) ∧
+      (fun c => ReallocGrowSuccessExit A SL gpv maxReq credits AInv privFoot
+        g exts pOld nOld nNew sp 0x80002bc0#64 m0 out c ∧
         EnvDefineSavedSpillFrame sp saved c)
       (fun c => ∃ valsNew lds,
         SegPre appendHeadSeg (appendHeadL env valsNew) lds
@@ -527,9 +533,12 @@ theorem appendHeadSegPre_of_realloc
         EnvDefineSavedSpillFrame sp saved c ∧
         valsNew ≠ 0#64 ∧ A.contains valsNew.toNat nNew) := by
   intro c h
-  have hr := h.1
-  obtain ⟨pNew, hx10, hpNew, _halign, hpArena, _hdis, _hcopy, _hAInv, hframe⟩ :=
-    reallocGrowSuccess_of_bounded RO g exts pOld nOld nNew sp 0x80002bc0#64 m0 c hle hr
+  have hr := h.1.returned.toReallocPost
+  obtain ⟨pNew, grown⟩ := h.1.grown
+  have hx10 := grown.pointer.register
+  have hpNew := grown.pointer.nonzero
+  have hpArena := grown.pointer.arena
+  have hframe := grown.mem_frame
   have hpublic := hgeom pNew
   have hloaded : Vsa.Sim.Code.Env_defineLoaded c.σ.mem := by
     apply loaded_envdef_of_agree m0 c.σ.mem _ hcode
@@ -562,13 +571,13 @@ theorem appendHeadSegPre_of_realloc
       hnamesHtif, hnamesAlign, hvalsLo, hvalsHi, hvalsHtif, hvalsAlign⟩
   obtain ⟨lds, hfacts⟩ := appendHeadFacts env names valsNew c.σ.mem hloaded hentryGeom
   have hx20 : c.σ.regs.get? Register.x20 = some env := by
-    rw [hr.1.2.2.2.2.2 Register.x20 (by decide)]
+    rw [hr.facts.abi Register.x20 (by decide)]
     exact henvReg
   have hGH : GHolds c.σ (appendHeadL env valsNew) := by
     exact ⟨hx20, hx10, trivial⟩
-  refine ⟨c, .refl c, valsNew, lds, ?_, hr.1.2.2.2.1, h.2, hvalsNZ, ?_⟩
-  · exact ⟨hr.1.1, rfl, hr.1.2.2.1, hr.1.1.minstret, hGH,
-      (by show KeysOK [20, 10]; decide), hfacts, hr.1.2.1⟩
+  refine ⟨c, .refl c, valsNew, lds, ?_, hr.facts.stack, h.2, hvalsNZ, ?_⟩
+  · exact ⟨hr.facts.good, rfl, hr.facts.pc, hr.facts.good.minstret, hGH,
+      (by show KeysOK [20, 10]; decide), hfacts, hr.facts.tick⟩
   · simpa [valsNew, Nat.mod_eq_of_lt hpNewLt] using hpArena
 
 /-- Successful grow rejoin parked at the ordinary append head, with the outer
@@ -611,17 +620,15 @@ theorem envDefineGrowRejoin
       exact hpublic.spills a ha0 ha1
   exact ⟨c', hs, hrow, hsp', hsaved', htick⟩
 
-/-- The bounded second realloc and the four reflected rejoin instructions form
-one closed grow suffix. No post-realloc entry `Triple` is supplied by callers. -/
+/-- The successful second return and reflected rejoin form one grow suffix. -/
 theorem envDefineGrowRejoin_of_realloc
     {A : Arena} {SL : Vsa.Alloc.StackLayout} {gpv : BitVec 64}
-    {headroom maxReq : Nat}
+    {maxReq credits : Nat}
     {AInv : Vsa.Machine.MState → List Extent → Prop}
     {privFoot : Nat → Prop}
-    (RO : ReallocOps A SL gpv headroom maxReq AInv privFoot)
     (g saved : (R : Register) → Option (RegisterType R))
     (exts : List Extent) (pOld nOld nNew : Nat) (sp : BitVec 64)
-    (env names : BitVec 64) (m0 : Mem)
+    (env names : BitVec 64) (m0 : Mem) (out : Array String)
     (hle : nNew ≤ maxReq) (hnGrow : nOld < nNew)
     (henvReg : g Register.x20 = some env)
     (hcode : Vsa.Sim.Code.Env_defineLoaded m0)
@@ -644,15 +651,15 @@ theorem envDefineGrowRejoin_of_realloc
     (harenaStack : A.hi ≤ sp.toNat ∨ sp.toNat + 64 ≤ A.lo)
     (harenaCode : A.hi ≤ 0x80002a5c ∨ 0x80002c10 ≤ A.lo) :
     Triple
-      (fun c => (ReallocPost gpv sp 0x80002bc0#64 g c ∧
-        ReallocGrowResult A SL privFoot AInv exts pOld nOld nNew sp m0 c.σ) ∧
+      (fun c => ReallocGrowSuccessExit A SL gpv maxReq credits AInv privFoot
+        g exts pOld nOld nNew sp 0x80002bc0#64 m0 out c ∧
         EnvDefineSavedSpillFrame sp saved c)
       (fun c => ∃ valsNew lds m,
         EnvDefineGrowRejoinReady saved env valsNew sp lds m c ∧
         valsNew ≠ 0#64 ∧ A.contains valsNew.toNat nNew) := by
   intro c h
   obtain ⟨c1, hs1, valsNew, lds, hpre, hsp, hsaved, hnz, hvalsA⟩ :=
-    appendHeadSegPre_of_realloc RO g saved exts pOld nOld nNew sp env names m0
+    appendHeadSegPre_of_realloc g saved exts pOld nOld nNew sp env names m0 out
       hle hnGrow henvReg hcode hnamesRead hnamesNonzero hgeom hArenaHi henvHi
       hnamesLo hnamesHi hnamesHtif hnamesAlign hvalsLo hvalsHi hvalsHtif
       hvalsAlign c h
@@ -715,35 +722,42 @@ structure EnvDefineGrowClosedGeom
   appendPublic : ∀ pNew,
     AppendHeadReallocPublic privFoot SL sp pValsOld nValsOld pNew nValsNew env.toNat
   envFieldArena : A.contains (env.toNat + 16) 8
+  liveArena : ∀ e ∈ exts, A.contains e.1 e.2
+  frameLive : (env.toNat, 32) ∈ exts
+  frameNeNames : (env.toNat, 32) ≠ (pNamesOld, nNamesOld)
+  globalsBelow : 0x8001ad28 ≤ A.lo
 
-/-- Complete grow lane from the first realloc return through the second
-realloc and reflected append-head rejoin. -/
+/-- From the first successful return, preserve its reserve through the names
+write, execute the second realloc, and run the reflected append-head rejoin. -/
 theorem envDefineGrowClosed
     {A : Arena} {SL : Vsa.Alloc.StackLayout} {gpv : BitVec 64}
-    {headroom maxReq : Nat}
+    {headroom maxReq credits : Nat}
     {AInv : Vsa.Machine.MState → List Extent → Prop}
     {privFoot : Nat → Prop}
-    (RO : ReallocOps A SL gpv headroom maxReq AInv privFoot)
+    (run : ReallocSuccessRun A SL gpv headroom maxReq AInv privFoot)
     (g gV saved : (R : Register) → Option (RegisterType R))
     (exts : List Extent) (pNamesOld nNamesOld nNamesNew : Nat)
-    (pValsOld nValsOld nValsNew capw : Nat) (sp env : BitVec 64) (m0 : Mem)
+    (pValsOld nValsOld nValsNew capw : Nat) (sp env : BitVec 64) (m0 : Mem) (out : Array String)
     (hleNames : nNamesNew ≤ maxReq) (hltNames : nNamesOld < nNamesNew)
     (hleVals : nValsNew ≤ maxReq) (hltVals : nValsOld < nValsNew)
     (G : EnvDefineGrowClosedGeom A SL AInv privFoot exts pNamesOld
       nNamesOld nNamesNew pValsOld nValsOld nValsNew capw sp env g gV m0)
     (hstack : Vsa.Alloc.StackOK SL sp headroom) :
     Triple
-      (fun c => (ReallocPost gpv sp 0x80002ba4#64 g c ∧
-        ReallocGrowResult A SL privFoot AInv exts pNamesOld nNamesOld
-          nNamesNew sp m0 c.σ) ∧ EnvDefineSavedSpillFrame sp saved c)
+      (fun c => ReallocGrowSuccessExit A SL gpv maxReq (credits + 1) AInv privFoot
+        g exts pNamesOld nNamesOld nNamesNew sp 0x80002ba4#64 m0 out c ∧
+        EnvDefineSavedSpillFrame sp saved c)
       (fun c => ∃ valsNew lds m,
         EnvDefineGrowRejoinReady saved env valsNew sp lds m c ∧
         valsNew ≠ 0#64 ∧ A.contains valsNew.toNat nValsNew) := by
   intro c h
-  obtain ⟨c1, hs1, pNamesNew, hentry, hpNames, hpNamesArena⟩ :=
-    growEnvEntry_of_realloc RO g saved exts pNamesOld nNamesOld nNamesNew
-      pValsOld capw sp env m0 hleNames hltNames hstack G.envReg G.code
-      G.capRead G.valsRead G.namesPublic G.arenaHi c h
+  obtain ⟨pNamesNew, namesGrown⟩ := h.1.grown
+  let c1 := c
+  have hpNames := namesGrown.pointer.nonzero
+  have hpNamesArena := namesGrown.pointer.arena
+  have hentry := growEnvEntry_of_realloc g saved exts pNamesOld nNamesOld pNamesNew nNamesNew
+    pValsOld capw sp env m0 out hltNames hstack G.envReg G.code G.capRead G.valsRead
+    G.namesPublic G.arenaHi h.1.returned namesGrown h.2
   let extsV := (pNamesNew, nNamesNew) :: exts.erase (pNamesOld, nNamesOld)
   let pNamesBV := BitVec.ofNat 64 pNamesNew
   obtain ⟨c2, hs2, hpreVals, hsaved2⟩ :=
@@ -771,27 +785,56 @@ theorem envDefineGrowClosed
   have hgVenv : gV Register.x20 = some env := by
     rw [G.ghost Register.x20 (by decide) (by decide) (by decide) (by decide) (by decide)]
     exact G.envReg
+  have frameLive : (env.toNat, 32) ∈ extsV :=
+    List.mem_cons_of_mem _ ((List.mem_erase_of_ne G.frameNeNames).mpr G.frameLive)
+  have liveArena : ∀ e ∈ extsV, A.contains e.1 e.2 := by
+    intro e member
+    rcases List.mem_cons.mp member with rfl | old
+    · exact namesGrown.pointer.arena
+    · exact G.liveArena e (List.mem_of_mem_erase old)
+  have liveAgreement : ∀ a,
+      (∀ e ∈ extsV, ¬ (e.1 ≤ a ∧ a < e.1 + e.2)) → c1.σ.mem[a]? = mVals[a]? := by
+    intro a outside
+    have off := outside (env.toNat, 32) frameLive
+    exact (getElem_writeMap8_disjoint c1.σ.mem (env.toNat + 8) a
+      (sdData_val pNamesBV) (by simp only at off; omega)).symm
+  have reserve := namesGrown.reserve.after_live liveAgreement liveArena G.globalsBelow
+  have text : Vsa.Sim.Code.FixedTextLoaded mVals := by
+    apply h.1.returned.code.transport
+    intro a lo hi
+    have arena := G.liveArena (env.toNat, 32) G.frameLive
+    have globals := G.globalsBelow
+    unfold Arena.contains at arena
+    exact getElem_writeMap8_disjoint c1.σ.mem (env.toNat + 8) a
+      (sdData_val pNamesBV) (by simp only at arena; omega)
+  have resources : AllocationResources A maxReq credits nValsNew extsV c2.σ.mem := by
+    rw [hpreVals.mem_eq]
+    exact { bounded := hleVals, budget := namesGrown.budget, reserve := reserve }
+  have entry : ReallocGrowSuccessEntry A SL gpv headroom maxReq credits AInv
+      gV extsV pValsOld nValsOld nValsNew sp 0x80002bc0#64 mVals c2.σ.sailOutput c2 :=
+    { call := ReallocSuccessEntry.of_pre hpreVals rfl
+        (by rw [hpreVals.mem_eq]; exact text) resources (by omega)
+      growth := hltVals, nonzero := G.valsNonzero, live := G.valsMember pNamesNew }
   obtain ⟨c3, hs3, hpostVals, hsaved3⟩ :=
-    reallocGrowSaved RO gV saved extsV pValsOld nValsOld nValsNew sp
-      0x80002bc0#64 mVals hleVals hltVals G.valsNonzero
-      (G.valsMember pNamesNew) G.valsArena G.arenaSpill G.arenaCode
-      G.privCode G.privSpill G.codeStack c2 ⟨hpreVals, hsaved2⟩
+    reallocGrowSuccessSaved run gV saved extsV pValsOld nValsOld nValsNew sp
+      0x80002bc0#64 mVals c2.σ.sailOutput G.valsArena G.arenaSpill G.arenaCode
+      G.privCode G.privSpill G.codeStack c2 ⟨entry, hsaved2⟩
   obtain ⟨c4, hs4, valsNew, lds, m, hready, hnz, hvalsArena⟩ :=
-    envDefineGrowRejoin_of_realloc RO gV saved extsV pValsOld nValsOld
-      nValsNew sp env pNamesBV mVals hleVals hltVals hgVenv hcodeV
+    envDefineGrowRejoin_of_realloc gV saved extsV pValsOld nValsOld
+      nValsNew sp env pNamesBV mVals c2.σ.sailOutput hleVals hltVals hgVenv hcodeV
       hnamesReadV hnamesNZ G.appendPublic G.arenaHi G.envHi G.namesLo
       G.namesHi (Or.inr (by have := G.namesHtif; omega)) G.namesAlign
       G.valsLo G.valsHi (by have := G.namesHtif; omega) G.valsAlign
       G.envFieldArena G.arenaSpill G.arenaCode
       c3 ⟨hpostVals, hsaved3⟩
-  exact ⟨c4, hs1.trans (hs2.trans (hs3.trans hs4)), valsNew, lds, m,
+  exact ⟨c4, hs2.trans (hs3.trans hs4), valsNew, lds, m,
     hready, hnz, hvalsArena⟩
 
 #print axioms appendHeadRowSp
 #print axioms appendHeadLogExact
 #print axioms appendHeadMemoryExact
 #print axioms appendHeadFacts
-#print axioms reallocGrowSuccess_of_bounded
+#print axioms reallocGrowSuccessSaved
 #print axioms growEnvEntry_of_realloc
 #print axioms namesToValsPointerTie
 #print axioms namesToValsSizeTie

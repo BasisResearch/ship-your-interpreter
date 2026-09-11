@@ -1,4 +1,5 @@
-import Vsa.Sim.rows.EnvDefineMissLedger
+import Vsa.Sim.rows.EnvDefineReallocArraySuccess
+import Vsa.Sim.AllocRuns
 import Vsa.Sim.RuntimeOwnershipArrays
 
 /-!
@@ -34,9 +35,8 @@ inductive ArrayReallocResult (A : Arena) (SL : StackLayout) (privFoot : Nat → 
       (ainv : AInv σ ((pNew, nNew) :: exts.erase (pOld, nOld)))
       (frame : HeapPublicFrame privFoot SL sp [(pOld, nOld), (pNew, nNew)] m0 σ.mem)
 
-/-- **One owned array through `realloc`**, from its `ArrayOwned` witness: the
-empty array takes `ReallocRun`'s `null` clause, the live one its `grow`
-clause; both land `ArrayReallocResult` with the output and presence retained. -/
+/-- Execute the resource-bearing successful array contract from the run-global instance.
+The selected result retains the unused reserve for the following call. -/
 theorem reallocArray_run {A : Arena} {SL : StackLayout} {gpv : BitVec 64}
     {headroom maxReq : Nat} {AInv : MState → List Extent → Prop} {privFoot : Nat → Prop}
     (RI : ReallocInstance A SL gpv headroom maxReq AInv privFoot)
@@ -45,39 +45,14 @@ theorem reallocArray_run {A : Arena} {SL : StackLayout} {gpv : BitVec 64}
     (hold : ArrayOwned alloc role pOld width cap)
     (hmem : 0 < cap → (pOld, width * cap) ∈ exts)
     (hnz : 0 < cap → pOld ≠ 0)
-    (hpos : 0 < nNew) (hle : nNew ≤ maxReq) (hgrow : width * cap < nNew)
+    (hgrow : width * cap < nNew)
     (g : (R : Register) → Option (RegisterType R)) (sp r : BitVec 64) (m0 : Mem)
-    (out : Array String) :
+    (out : Array String) (credits : Nat) :
     Triple
-      (fun c => ReallocPre SL gpv headroom AInv exts pOld nNew sp r m0 g c ∧
-        c.σ.sailOutput = out)
-      (fun c => ReallocPost gpv sp r g c ∧
-        ArrayReallocResult A SL privFoot AInv exts pOld (width * cap) nNew sp m0 c.σ ∧
-        c.σ.sailOutput = out ∧ MemExtends m0 c.σ.mem) := by
-  obtain ⟨RO, run⟩ := RI
-  intro c ⟨hpre, hout⟩
-  rcases hold with ⟨hz, hp⟩ | ⟨hc, _⟩
-  · subst hz; subst hp
-    obtain ⟨c', hs, hpost, hres, hout', hext⟩ :=
-      run.2 g exts nNew sp r m0 out hpos hle c ⟨hpre, hout⟩
-    obtain ⟨pNew, hx10, hnz', hal, hA, hfresh, hainv, hframe⟩ :=
-      RO.nonNullNull_of_bounded c'.σ exts nNew sp m0 hle hres
-    refine ⟨c', hs, hpost, ⟨pNew, hx10, hnz', hal, hA, fun e he _ => hfresh e he, ?_, ?_, ?_⟩,
-      hout', hext⟩
-    · intro k hk
-      simp only [Nat.mul_zero] at hk
-      omega
-    · rw [Nat.mul_zero, heapArena_erase_zero harena]
-      exact hainv
-    · intro a h1 h2 h3
-      exact hframe a h1 h2 (fun e he => h3 e (List.mem_cons_of_mem _ he))
-  · obtain ⟨c', hs, hpost, hres, hout', hext⟩ :=
-      run.1 g exts pOld (width * cap) nNew sp r m0 out hle hgrow (hnz hc) (hmem hc) c
-        ⟨hpre, hout⟩
-    obtain ⟨pNew, hx10, hnz', hal, hA, hfresh, hcopies, hainv, hframe⟩ :=
-      RO.nonNullGrow_of_bounded c'.σ exts pOld (width * cap) nNew sp m0 hle hres
-    exact ⟨c', hs, hpost, ⟨pNew, hx10, hnz', hal, hA, hfresh, hcopies, hainv, hframe⟩,
-      hout', hext⟩
+      (ReallocSuccessEntry A SL gpv headroom maxReq credits AInv g exts pOld nNew sp r m0 out)
+      (ReallocGrowSuccessExit A SL gpv maxReq credits AInv privFoot
+        g exts pOld (width * cap) nNew sp r m0 out) :=
+  reallocArraySuccess_run RI.success harena hold hmem hnz hgrow g sp r m0 out credits
 
 /-- A live extent is never equal to an extent of a different role. -/
 theorem ne_of_extDisjoint_pos {a b : Extent} (hd : ExtDisjoint a b) (hpos : 0 < a.2) :

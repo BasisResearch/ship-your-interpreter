@@ -100,31 +100,6 @@ structure ReallocOps (A : Arena) (SL : StackLayout) (gpv : BitVec 64)
       (ReallocPre SL gpv headroom AInv exts 0 n sp r m0 g)
       (fun c => ReallocPost gpv sp r g c ∧
         ReallocNullResult A SL privFoot AInv exts n sp m0 c.σ)
-  /-- Bounded grow requests do not exhaust the verified arena. This is the
-  realloc analogue of `MallocContract.nonNull_of_bounded`; it eliminates the
-  NULL branch of `ReallocGrowResult` without weakening that result relation. -/
-  nonNullGrow_of_bounded : ∀ (σ : MState) (exts : List Extent)
-      (pOld nOld nNew : Nat) (sp : BitVec 64) (m0 : Vsa.MemRepr.Mem),
-    nNew ≤ maxReq →
-    ReallocGrowResult A SL privFoot AInv exts pOld nOld nNew sp m0 σ →
-    ∃ pNew,
-      σ.regs.get? Register.x10 = some (BitVec.ofNat 64 pNew) ∧
-      pNew ≠ 0 ∧ pNew % 16 = 0 ∧ A.contains pNew nNew ∧
-      (∀ e ∈ exts, e ≠ (pOld, nOld) → ExtDisjoint (pNew, nNew) e) ∧
-      ReallocCopies m0 σ.mem pOld pNew nOld ∧
-      AInv σ ((pNew, nNew) :: exts.erase (pOld, nOld)) ∧
-      HeapPublicFrame privFoot SL sp [(pOld, nOld), (pNew, nNew)] m0 σ.mem
-  /-- Bounded `realloc(NULL,n)` requests likewise do not exhaust the arena. -/
-  nonNullNull_of_bounded : ∀ (σ : MState) (exts : List Extent)
-      (n : Nat) (sp : BitVec 64) (m0 : Vsa.MemRepr.Mem),
-    n ≤ maxReq →
-    ReallocNullResult A SL privFoot AInv exts n sp m0 σ →
-    ∃ pNew,
-      σ.regs.get? Register.x10 = some (BitVec.ofNat 64 pNew) ∧
-      pNew ≠ 0 ∧ pNew % 16 = 0 ∧ A.contains pNew n ∧
-      (∀ e ∈ exts, ExtDisjoint (pNew, n) e) ∧
-      AInv σ ((pNew, n) :: exts) ∧
-      HeapPublicFrame privFoot SL sp [(pNew, n)] m0 σ.mem
 
 theorem heapPublicFrame_refl (privFoot : Nat → Prop) (SL : StackLayout)
     (sp : BitVec 64) (m : Vsa.MemRepr.Mem) : HeapPublicFrame privFoot SL sp [] m m :=

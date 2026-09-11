@@ -235,7 +235,10 @@ structure StmtRegionSpec (m : Mem) (SL : StackLayout) (A : Arena)
     (aRet aStmt : Nat) (s : Vsa.While.Stmt) (lo hi : Nat) : Prop where
   nodes : StmtIn m lo hi aStmt s
   lo_ram : 0x80000000 ≤ lo
-  hi_ram : hi ≤ 0x100000000
+  /-- Eight bytes of slack below the RAM top, matching `AstRegionSpec.hi_ram`:
+  the two region specs are twins and a child expression's region is derived
+  from its statement's, so they must carry the same bound. See the note there. -/
+  hi_ram : hi + 8 ≤ 0x100000000
   win : tohostAddr + 16 ≤ lo
   stack_disjoint : hi ≤ SL.lo ∨ SL.hi ≤ lo
   ret_disjoint : hi ≤ aRet ∨ aRet + 24 ≤ lo

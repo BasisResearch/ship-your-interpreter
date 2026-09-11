@@ -9,8 +9,8 @@ import Vsa.Sim.WriteLogNF
 # `FnArmClosureBuild` — the `EX_FN` closure-build straight-line span as a `#derive_case` seg
 
 After `malloc` returns the fresh 16-byte block in `a0` and `a3` is reloaded off the
-spill slot (`ld a3,0(sp)` @0x800033d0), the `beqz a0,OOM` guard is pruned (via
-`MallocContract.nonNull_of_bounded`), and the arm runs the closure-build store span
+spill slot (`ld a3,0(sp)` @0x800033d0), the successful return excludes the `beqz a0,OOM` branch. The arm then runs
+the closure-build store span
 
 ```
 0x800033d8  li  a5,4          -- kind VAL_CLOSURE
