@@ -211,9 +211,14 @@ Receipt: `resource-overlay/run-ph2gv73f/receipt.json` under the allocator
 correction directory. Coverage and header evidence are in
 `/private/tmp/vsa-private-write-coverage-20260912.LBIVlQ/`.
 Both preserved allocator regression fixtures pass against these dependencies.
-The full axiom inventory, boundary replay, census, and validation suite are
-pending. Static checks retain the same 30 inherited discipline findings.
-This is prerequisite progress; no completion gate is closed.
+The retained 1,149-declaration axiom inventory and all four unchanged boundary
+cases pass. The census inventories 65 fields across all 1,977 modules.
+The validation suite ran 298 tests in 34.785 seconds, with six native skips.
+Forbidden-token and whitespace checks pass. External refinement files, the
+ELF, boundary input hashes, and validation gates remain unchanged.
+The full gate stops at stage a4 with the same 30 inherited discipline findings.
+`integration-receipt.json` in the coverage directory records these results.
+Implementation commit: `5fc518e`. No completion gate is closed.
 
 `RuntimeAllocatorState.heap`, `InitialOwned.heap`, and the initial execution
 adapter already use `InitialWriteByte SL`. Retain that ownership index.
