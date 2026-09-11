@@ -118,18 +118,37 @@ Receipts are `regression-LegacyAllocatorContract/receipt.json` and
 The legacy exact consumer retains `M` and `arenaHi`; the resource-gap exact
 consumer proves `no_credit` for the fixed oversized ledger without premises.
 It does not exclude a different initial ledger or refute the external theorem.
-All regression audits use standard axioms. Full-source integration is running;
-the complete census, axiom inventory, and boundary gates remain required.
+All regression audits use standard axioms. Full-source integration and its
+validation results follow.
 
-Checkpoint requested before usage limits. The active full-source run writes
-`/private/tmp/vsa-realloc-migration-20260911.jAzmk8/all-source-check-1.log`.
-Its plan covers 1,976 modules: 632 builds and 1,344 reusable objects.
-Keep sources frozen until that process exits. After a successful run,
-`check-integration-gates.py` in the same directory runs the retained axiom
-inventory, unchanged boundary candidate, full census and boundary validation,
-and hygiene checks under the process-visible serial wrapper. The boundary
-candidate may refresh only the two approved allocator-contract fingerprints
-after all four unchanged cases pass. These checks have not yet run.
+Checkpoint `72962c3` preserves the proof and tooling work before usage limits.
+Full-source integration subsequently passed for all 1,976 modules: 632 rebuilt
+and 1,344 reused. Dependency compilation took 2,867.866 seconds; the complete
+check took 2,887.364 seconds. Its 27 audits use standard axioms. Measured
+module times satisfy the existing limits and allowances.
+Receipt: `resource-overlay/run-zb5675fb/receipt.json` under the correction
+directory. `all-source-coverage.json` beside the malloc checkpoint verifies
+that the receipt covers every current library and executable module.
+
+The retained axiom inventory passes: 1,149 declarations, including all 1,086
+original gate declarations and the allocator additions. The two legacy
+contradiction declarations retain their separate exact fixture audits.
+The full-library census inventories 65 fields across 1,976 modules; this
+enumerates obligations and does not construct their suppliers.
+
+All four unchanged boundary cases pass against 1,261 pinned inputs. The
+candidate replay passed before refreshing only `Vsa/Alloc.lean` and
+`Vsa/Sim/ReallocSpec.lean` fingerprints. The final replay also passed.
+The validation suite ran 298 tests in 27.925 seconds, with six native tests
+skipped. Forbidden-token and whitespace checks pass. External refinement
+files and the ELF match the pre-checkpoint revision; no source-tree proof
+objects were generated.
+
+The full gate still stops at stage a4 with exactly the same 30 inherited
+discipline findings. No exemption, limit, case, or expected outcome changed.
+Evidence: `integration-receipt.json`, `axiom-coverage.json`, and
+`integration-gate-status.json` beside the malloc checkpoint.
+These results establish prerequisite integration, not proof closure.
 
 The successful strdup bridge needs a different producer. The existing
 `StringifyStrdupTail.stringifyStrdupTailContract` uses the nullable `M.spec`
@@ -257,7 +276,7 @@ These source changes are checked; their concrete entry suppliers remain open.
 The seven direct malloc consumers have been migrated and checked.
 Nullable outer concat, closure-allocation, and strdup compositions still need
 successful producers. `AllocLedger.priv_arena` still excludes concrete
-allocator globals. Full integration is not current.
+allocator globals. The current integration checks do not supply those premises.
 
 Pre-compilation static validation still reports 30 inherited findings.
 All completion gates A–J remain required. The following receipts describe

@@ -6,7 +6,7 @@
     "stable_control"
   ],
   "inputs": {
-    "Vsa/Alloc.lean": "6cc7dbc6087df9376477846a6538fddf427618a01fab8f3b828b6ea9800324ba",
+    "Vsa/Alloc.lean": "42ff846e492e13adc774635bf43666d60324fdcba4aaa43e45f24797d9b4c9b8",
     "Vsa/Elf.lean": "ca81bd6043b29fa63734a3f692dd28732d0ff7709420eae8e75ba17e2f597a9e",
     "Vsa/Machine.lean": "8703d28af9399918475e603de2956b4bd7b365ea21af3fe7dcdc3e3e4babb05b",
     "Vsa/MemRepr.lean": "5c47e7efe257d4a54d914f882b77c618a5bb4881ff486e8f7205e3315f9beae8",
@@ -943,7 +943,7 @@
     "Vsa/Sim/RamReadSplit.lean": "a6488f369c114dd8d2aceb07fdead51f515ee68fbf7282db01a4dd49d8c2f70e",
     "Vsa/Sim/RamReadValue.lean": "dca3bbd9ee78da0cee087c925d48e318aaae21b779a4421c4a7d8293c43f5f06",
     "Vsa/Sim/RamReadVirtual.lean": "c3ecbd93e5109b4a9241b22ccfe21d866eb075856fb4273463880d4a2327e0b3",
-    "Vsa/Sim/ReallocSpec.lean": "3817191810e4a895b43377c0002fcba2db679787cd1055fee8e113adc8ccfbeb",
+    "Vsa/Sim/ReallocSpec.lean": "e2edc8a0c987b365a89924af160a963d511c4e6d514e600cae65d702f3bb8760",
     "Vsa/Sim/RecursiveStepGeom.lean": "3bd4630c9854df4ded887c407db638f04879d23b93b2c2a3585e005a7a9c525c",
     "Vsa/Sim/RegAccess.lean": "3ca8caa1c4f93c6d9f5e01b74b65a48d8d30fcccda1a425bac5b1f4dfdfd686f",
     "Vsa/Sim/RegPins.lean": "3058d01b0f4b8109ba4d4b0d63f292a755fbc9daa5d97a3c6806e3efbe140192",
