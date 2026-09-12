@@ -278,7 +278,15 @@ two-module check. Dependency compilation took 97.529 seconds; the full check
 took 118.959 seconds. All 43 audits use standard axioms. Receipt:
 `resource-overlay/run-k0iqk9gq/receipt.json` under the correction directory.
 Evidence is in `/private/tmp/vsa-stmt-owned-20260912.ruwTgb/`.
-Full validation remains pending. No completion gate is closed.
+Validation completed for implementation commit `62d1f85`. All 1,149 axiom
+audits, both allocator regression fixtures, and four boundary cases passed.
+The census covered all 1,980 modules and 65 fields; it remains inventory-only.
+The test suite passed 298 tests in 28.264 seconds, with six native-tool skips.
+Forbidden-proof and whitespace checks passed. The full gate retains exactly
+the same 30 stage-a4 discipline findings. Boundary hashes, external theorem
+files, and the ELF are unchanged. Elaboration stayed within the existing
+180-second limit. `integration-receipt.json` records the validation evidence.
+No validation gate was relaxed. No completion gate is closed.
 
 `RuntimeAllocatorState.heap`, `InitialOwned.heap`, and the initial execution
 adapter already use `InitialWriteByte SL`. Retain that ownership index.
