@@ -247,7 +247,16 @@ the exact consumer, use standard axioms. Receipt:
 The ground adapter's exact checkpoint is `run-fh68rsz3/receipt.json` there.
 Descriptions, unchanged-header evidence, and rejected elaboration diagnostics
 are in `/private/tmp/vsa-owned-region-20260912.ls053e/`.
-Full validation remains pending. Static checks retain the same 30 findings.
+Validation completed for implementation commit `04a7916`. All 1,149 axiom
+audits passed, including the original 1,086 declarations. Both preserved
+allocator regressions and all four boundary cases passed. The 65-field census
+checked all 1,979 modules; it remains inventory-only. The test suite passed
+298 tests in 28.501 seconds, with six native-tool skips. Forbidden-proof and
+whitespace checks passed. The full gate still exits at stage a4 with exactly
+the same 30 discipline findings. Boundary input hashes, external theorem
+files, and the ELF are unchanged. No validation gate was relaxed.
+`integration-receipt.json` in the owned-region directory records these results.
+No completion gate is closed.
 
 `RuntimeAllocatorState.heap`, `InitialOwned.heap`, and the initial execution
 adapter already use `InitialWriteByte SL`. Retain that ownership index.
