@@ -1,7 +1,7 @@
 import Vsa.Sim.MemPresence
 import Vsa.Sim.BinaryArmReady
 import Vsa.Sim.BinaryRightStage
-import Vsa.Sim.EvalGroundFrame
+import Vsa.Sim.EvalGroundOwned
 import Vsa.Sim.SubEvalReturnFacts
 import Vsa.Sim.AllocatorResult
 import Vsa.While.StoreBodiesBoundPreservation
@@ -41,7 +41,7 @@ theorem BinaryArmReady.stage_right
     (data : AllocatorResultAt M N entryShared credits middle.store
       [(((sp - 1088#64) + 120#64).toNat, vl)] before.σ.mem
       middleF middleC alloc exts shared after.σ.mem)
-    (ast : ExprReprWithin before.σ.mem entryShared right.toNat er) :
+    (ast : ExprReprWithin before.σ.mem entryShared node.toNat (.binary op el er)) :
     LandedN 7 after (BinaryRightStaged gpre N A SL middleF middleC middle d env er
       sp ret dst node interp right v8 v9 v18 after) := by
   have p := ArmEntryK.destruct g N A SL phiF phiC st 0x800034e8#64 UnaryArmCallee
@@ -72,22 +72,18 @@ theorem BinaryArmReady.stage_right
     · rw [child] at slot
       exact False.elim (hs (by omega))
     · exact hp.trans same.symm
+  have support := h.ground.eval_call.transport_frame (sp' := sp) (cut := sp.toNat)
+    (ret := ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)).toNat)
+    high (by rw [child]; omega) (fun k hs ha => Or.inr (agree k hs ha).symm)
   have parentGround : EvalGround after.σ.mem SL A sp dst node.toNat (.binary op el er) :=
-    h.ground.transport_frame (cut := sp.toNat)
-      (result := ((sp - 1088#64) + sign_extend (m := 64) (0x078#12)).toNat)
-      high (by rw [child]; omega) (prefixPresence.trans q.presence)
-      (fun k hs ha => Or.inr (agree k hs ha).symm)
+    h.ground.transport_owned ast data.agreement support (prefixPresence.trans q.presence)
   have rightRead : read64 after.σ.mem (node.toNat + 24) = some right.toNat := by
-    have eq := read64_agreeP (P := fun k =>
-      ¬ (SL.lo ≤ k ∧ k < sp.toNat) ∧ ¬ (A.lo ≤ k ∧ k < A.hi))
-      (fun k hk => agree k hk.1 hk.2) (a := node.toNat + 24) (fun k hk => by
-        constructor
-        · have := h.geometry.node_stk; omega
-        · have := h.geometry.node_arena; omega)
+    have eq := (ast.fieldCovers (.word64 24) (by simp [exprReadFields])).read64_eq data.agreement
     exact eq.symm.trans h.rightRead
   have ground := parentGround.child_node (fun lo hi within =>
     exprIn_binary_right within right.toNat rightRead)
-  have ownedAst := (ast.transport data.agreement).mono data.includes
+  have rightAst := ast.child (.binaryRight op el er) h.rightRead
+  have ownedAst := (rightAst.transport data.agreement).mono data.includes
   have astSurv : ∀ m : Mem,
       (∀ k, ¬ (SL.lo ≤ k ∧ k < sp.toNat) → after.σ.mem[k]? = m[k]?) →
       ExprRepr m right.toNat er := by

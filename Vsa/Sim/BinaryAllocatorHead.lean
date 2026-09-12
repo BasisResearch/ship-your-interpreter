@@ -84,7 +84,7 @@ theorem BinaryArmReady.run_allocator_at
   obtain ⟨middleF, middleC, first⟩ := returnedL.extra.repr.selected
   obtain ⟨middleAlloc, middleExts, middleShared, data⟩ := first.owned.selected
   obtain ⟨_, calledR, _, _, stagedR⟩ := h.stage_right stagedL L leftSem
-    returnedL.result first data rightAst
+    returnedL.result first data ast
   obtain ⟨afterR, stepsR, returnedR⟩ := stagedR.bind_allocator_at L request data first
     ((rightAst.transport data.agreement).mono data.includes) returnedL.extra.gp rightIH
     lowered (by rw [lowered]; omega) (evalE_store_mono leftSem).1

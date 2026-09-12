@@ -1,0 +1,41 @@
+{
+  "target_obligation": "remainingWork_closed: owned AST-region preservation across allocator calls",
+  "target_type": "Vsa.Sim.EndToEnd.RemainingWork Vsa.Sim.LayoutInstance.interpRunLayout",
+  "role": "prerequisite",
+  "consumer": "Vsa.Sim.evalBinaryAllocatorOperands_at",
+  "consumer_type": "∀ {g : (R : LeanRV64DExecutable.Register) → Option (LeanRV64DExecutable.RegisterType R)} {N : Vsa.RuntimeRepr.NativeAddrs} {A : Vsa.RuntimeRepr.Arena} {SL : Vsa.Alloc.StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat} {M : Vsa.Alloc.MallocContract A SL gpv headroom maxReq} {phiF phiC : Vsa.While.Addr → Nat} {alloc : Vsa.Sim.RuntimeOwnership.Allocations} {exts : List Vsa.Sim.Extent} {shared : Nat → Prop} {st middle final : Vsa.While.St} {d env : Nat} {op : Vsa.While.BinOp} {el er : Vsa.While.Expr} {vl vr : Vsa.While.Value} {costL costR maxRequest reserve : Nat} {sp ret dst node interp : BitVec 64} {m0 : Vsa.MemRepr.Mem} (L : Vsa.Sim.AllocLedger A SL gpv headroom maxReq M) (request : maxRequest ≤ maxReq) (leftSem : Vsa.While.EvalE st d env el middle vl) (bounded : Vsa.Sim.StoreClosuresBounded st.store) (leftIH : Vsa.Sim.EvalAllocatorAt N st d env el middle vl costL maxRequest) (rightIH : Vsa.Sim.EvalAllocatorAt N middle d env er final vr costR maxRequest), Vsa.Logic.Triple (Vsa.Sim.EvalAllocatorEntry g N M phiF phiC alloc exts shared (costL + (costR + reserve)) st d env (.binary op el er) sp ret dst interp node m0) (Vsa.Sim.BinaryAllocatorOperands g N M phiF phiC st.store.frames.size st.store.closures.size shared reserve middle final vl vr sp ret dst node m0)",
+  "remaining_premises": [
+    {
+      "name": "M",
+      "type": "Vsa.Alloc.MallocContract A SL gpv headroom maxReq"
+    },
+    {
+      "name": "L",
+      "type": "Vsa.Sim.AllocLedger A SL gpv headroom maxReq M"
+    },
+    {
+      "name": "request",
+      "type": "maxRequest ≤ maxReq"
+    },
+    {
+      "name": "leftSem",
+      "type": "Vsa.While.EvalE st d env el middle vl"
+    },
+    {
+      "name": "bounded",
+      "type": "Vsa.Sim.StoreClosuresBounded st.store"
+    },
+    {
+      "name": "leftIH",
+      "type": "Vsa.Sim.EvalAllocatorAt N st d env el middle vl costL maxRequest"
+    },
+    {
+      "name": "rightIH",
+      "type": "Vsa.Sim.EvalAllocatorAt N middle d env er final vr costR maxRequest"
+    },
+    {
+      "name": "entry",
+      "type": "Vsa.Sim.EvalAllocatorEntry g N M phiF phiC alloc exts shared (costL + (costR + reserve)) st d env (.binary op el er) sp ret dst interp node m0 before"
+    }
+  ]
+}

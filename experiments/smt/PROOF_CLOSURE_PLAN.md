@@ -220,6 +220,35 @@ The full gate stops at stage a4 with the same 30 inherited discipline findings.
 `integration-receipt.json` in the coverage directory records these results.
 Implementation commit: `5fc518e`. No completion gate is closed.
 
+Owned AST-region preservation is checked in `MemRegionOwned` and
+`EvalGroundOwned`. The expression and statement proofs preserve hereditary
+bounds from `ExprReprWithin`/`StmtReprWithin` and agreement on their covered
+reads. They require no agreement on unused bytes of an enclosing interval.
+
+`BinaryArmReady.stage_right` now receives the parent AST witness already held
+by `run_allocator_at`. It preserves the parent ground and right-child pointer
+using the selected left return's `data.agreement`. The right child uses the
+same maps, memory, and shared-set inclusion. Static support and saved-stack
+reads still consume the existing frame; their global-write correction remains
+open. The analogous statement and sequence ground consumers still need this
+ownership-based transport.
+
+Exact checked consumer: `Vsa.Sim.evalBinaryAllocatorOperands_at`, at its
+unchanged theorem type. `owned-ast-region-consumer.json` records that type
+and all remaining premises: `M`, `L`, the request bound, left source
+derivation, store closure bounds, both child contracts, and the actual owned
+allocator entry. No initial supplier or child contract is discharged.
+
+All 1,979 source modules passed. Integration rebuilt 13 modules and reused
+1,966, after the local consumer checks. Dependency compilation took 50.184
+seconds; the complete check took 70.820 seconds. All 36 audits, including
+the exact consumer, use standard axioms. Receipt:
+`resource-overlay/run-m7sm3mbf/receipt.json` under the correction directory.
+The ground adapter's exact checkpoint is `run-fh68rsz3/receipt.json` there.
+Descriptions, unchanged-header evidence, and rejected elaboration diagnostics
+are in `/private/tmp/vsa-owned-region-20260912.ls053e/`.
+Full validation remains pending. Static checks retain the same 30 findings.
+
 `RuntimeAllocatorState.heap`, `InitialOwned.heap`, and the initial execution
 adapter already use `InitialWriteByte SL`. Retain that ownership index.
 It describes additional writes outside mutable allocation roles; adding the
