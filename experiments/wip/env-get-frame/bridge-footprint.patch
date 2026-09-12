@@ -1,0 +1,154 @@
+--- a/Vsa/Sim/rows/EvalVarBridge.lean
++++ b/Vsa/Sim/rows/EvalVarBridge.lean
+@@ -1,3 +1,5 @@
++import Vsa.Sim.EnvGetFootprint
++import Vsa.Sim.DeriveMetaTowers
+ import Vsa.Sim.EvalVarSim
+ import Vsa.Sim.EnvGetSpec9
+ import Vsa.Sim.EnvGetRecursive
+@@ -446,7 +448,7 @@
+ 
+ `prefix ≫ (callee-body ≫ relocation)`, spliced with `callSeg`.  Consumes
+ `VarCallLinkage` (the residual seam); no other open obligation. -/
+-theorem varBridge_callee
++theorem varBridge_calleeQ
+     (g : (R : Register) → Option (RegisterType R))
+     (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
+     (st : Vsa.While.St) (env : Addr) (x : String) (v : Value)
+@@ -454,10 +456,15 @@
+     (out0 : Array String)
+     (m0 ment : Mem) (penv nm : BitVec 64) (len pn : Nat)
+     (hL : VarCallLinkage g N A SL φf φc st env x v sp r sret aExpr aEnv
+-      v8 v9 v18 v19 v20 v21 out0 m0 ment penv nm len pn) :
++      v8 v9 v18 v19 v20 v21 out0 m0 ment penv nm len pn)
++    (Q : Mem → Prop)
++    (hQ : ∀ m9 c',
++      EnvGetValuePost N φc ((sp - 1088#64) + 0xf0#64) ((sp - 1088#64) - 64#64)
++        (0x80003444#64) aExpr sret aEnv v19 v20 v21 out0 v m9 c' →
++      VarSpillAgree sp m9 ment → Q c'.σ.mem) :
+     Triple
+       (EnvGetEntryV st sp sret aExpr aEnv v8 v9 v18 v19 v20 v21 out0 ment penv nm)
+-      (fun c => ∃ mpc, VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpc c) := by
++      (fun c => ∃ mpc, VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpc c ∧ Q mpc) := by
+   intro c hc
+   obtain ⟨hgood, htick, hmem, hpc, ha0, ha1, ha2, hra, hsp, hs1, hs0, hs2,
+     hs3, hs4, hs5, hout0, hmi⟩ := hc
+@@ -487,7 +494,12 @@
+       (by intro m' hm'; exact hL.strcmp m' (by simpa [VarSpillAgree] using hm'))
+   have hspill' : VarSpillAgree sp m9 ment := by simpa [VarSpillAgree] using hspill
+   have hpost := hpost0.output_trans hout0
+-  obtain ⟨mpc, w0, w1, w2, hmempc, hloaded, hvalue, hw0, hw1, hw2, houtside⟩ := hpost.mem
++  let mpc := c'.σ.mem
++  have hmemory := hpost.returnedMemory
++  obtain ⟨w0, w1, w2, hw0, hw1, hw2⟩ := hmemory.words
++  have hmempc : c'.σ.mem = mpc := rfl
++  have hvalue := hmemory.value
++  have houtside := hmemory.footprint.agree
+   have houtside' : VarOutAgree sp mpc m9 := by
+     intro k hk
+     exact houtside k hk
+@@ -530,22 +542,43 @@
+     · intro p s hp hps k hk
+       exact hL.payloadDisj m9 mpc hspill' houtside' p s hp hps k hk
+   obtain ⟨hslotRa, hslotS0, hslotS1, hslotS2⟩ := hL.finalSlots m9 mpc hspill' houtside'
+-  refine ⟨c', hsteps, mpc, hpost.good, hpost.tick, hpost.pc,
+-    ⟨(1#64), hpost.found, by decide⟩, hpost.s1, ?_, hL.finalMinstret m9 c' hpost, hpost.output,
+-    hL.outEq, hmempc, hL.finalCode m9 mpc hspill' houtside',
+-    ⟨d0, d1, d2, ?_, ?_, ?_, hcopy⟩, ?_, hL.finalFrame m9 c' hpost,
+-    hslotRa, hslotS0, hslotS1, hslotS2, hL.g8, hL.g9, hL.g18, hL.g2,
+-    hL.finalMemFrame m9 mpc hspill' houtside', hL.bufSret,
+-    hL.sretAl, hL.sretLo, hL.sretHi, hL.sretWin, hL.bufLo, hL.bufHi, hL.bufWin,
+-    hL.bufAl, hL.sp1088, hL.spHi64, hL.spLo64, hL.spWin64, hL.spAl64,
+-    hL.stackLo, hL.retAl⟩
+-  · have hspeq := hpost.sp
+-    rw [BitVec.sub_add_cancel] at hspeq
+-    exact hspeq
+-  · simpa [houtNat, hd0] using hw0
+-  · simpa [houtNat, hd1] using hw1
+-  · simpa [houtNat, hd2] using hw2
+-  · intro m' hm'; exact hL.finalStore m9 mpc m' hspill' houtside' hm'
++  have hCall : VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpc c' := by
++    refine ⟨hpost.good, hpost.tick, hpost.pc,
++      ⟨(1#64), hpost.found, by decide⟩, hpost.s1, ?_, hL.finalMinstret m9 c' hpost, hpost.output,
++      hL.outEq, hmempc, hL.finalCode m9 mpc hspill' houtside',
++      ⟨d0, d1, d2, ?_, ?_, ?_, hcopy⟩, ?_, hL.finalFrame m9 c' hpost,
++      hslotRa, hslotS0, hslotS1, hslotS2, hL.g8, hL.g9, hL.g18, hL.g2,
++      hL.finalMemFrame m9 mpc hspill' houtside', hL.bufSret,
++      hL.sretAl, hL.sretLo, hL.sretHi, hL.sretWin, hL.bufLo, hL.bufHi, hL.bufWin,
++      hL.bufAl, hL.sp1088, hL.spHi64, hL.spLo64, hL.spWin64, hL.spAl64,
++      hL.stackLo, hL.retAl⟩
++    · have hspeq := hpost.sp
++      rw [BitVec.sub_add_cancel] at hspeq
++      exact hspeq
++    · simpa [houtNat, hd0] using hw0
++    · simpa [houtNat, hd1] using hw1
++    · simpa [houtNat, hd2] using hw2
++    · intro m' hm'; exact hL.finalStore m9 mpc m' hspill' houtside' hm'
++  exact ⟨c', hsteps, mpc, hCall, hQ m9 c' hpost hspill'⟩
++
++theorem varBridge_callee
++    (g : (R : Register) → Option (RegisterType R))
++    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
++    (st : Vsa.While.St) (env : Addr) (x : String) (v : Value)
++    (sp r sret aExpr aEnv : BitVec 64) (v8 v9 v18 v19 v20 v21 : BitVec 64)
++    (out0 : Array String)
++    (m0 ment : Mem) (penv nm : BitVec 64) (len pn : Nat)
++    (hL : VarCallLinkage g N A SL φf φc st env x v sp r sret aExpr aEnv
++      v8 v9 v18 v19 v20 v21 out0 m0 ment penv nm len pn) :
++    Triple
++      (EnvGetEntryV st sp sret aExpr aEnv v8 v9 v18 v19 v20 v21 out0 ment penv nm)
++      (fun c => ∃ mpc, VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpc c) := by
++  intro c hc
++  obtain ⟨c', hs, mpc, hp, _⟩ :=
++    varBridge_calleeQ g N A SL φf φc st env x v sp r sret aExpr aEnv
++      v8 v9 v18 v19 v20 v21 out0 m0 ment penv nm len pn hL (fun _ => True)
++      (fun _ _ _ _ => True.intro) c hc
++  exact ⟨c', hs, mpc, hp⟩
+ 
+ theorem varBridge
+     (g : (R : Register) → Option (RegisterType R))
+@@ -566,6 +599,44 @@
+       hL.nmLo hL.nmHi hL.nmWin)
+     (varBridge_callee g N A SL φf φc st env x v sp r sret aExpr aEnv
+       v8 v9 v18 v19 v20 v21 out0 m0 ment penv nm len pn hL)
++
++/-- Variable bridge retaining the caller's stack footprint. -/
++theorem varBridgeF
++    (g : (R : Register) → Option (RegisterType R))
++    (N : NativeAddrs) (A : Arena) (SL : StackLayout) (φf φc : Addr → Nat)
++    (st : Vsa.While.St) (env : Addr) (x : String) (v : Value)
++    (sp r sret aExpr aEnv : BitVec 64) (v8 v9 v18 v19 v20 v21 : BitVec 64)
++    (out0 : Array String) (m0 ment : Mem) (penv nm : BitVec 64) (len pn : Nat)
++    (hL : VarCallLinkage g N A SL φf φc st env x v sp r sret aExpr aEnv
++      v8 v9 v18 v19 v20 v21 out0 m0 ment penv nm len pn)
++    (hroom : SL.lo + 1152 ≤ sp.toNat) :
++    Triple
++      (fun c => ArmEntryK g N A SL φf φc st (0x80003434#64) Env_getLoaded (.var x)
++        sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c ∧
++        c.σ.regs.get? Register.x13 = some penv)
++      (fun c => ∃ mpc, VarPostCall g N A SL φf φc st v sp r sret v8 v9 v18 out0 m0 mpc c ∧
++        MemFootprint (stackWin SL sp.toNat) m0 mpc) := by
++  intro c hc
++  have hEntry := ArmEntryK.destruct g N A SL φf φc st (0x80003434#64)
++    Env_getLoaded (.var x) sp r sret aExpr aEnv v8 v9 v18 out0 m0 ment c hc.1
++  obtain ⟨c1, hs1, h1⟩ :=
++    varBridge_prefix_triple g N A SL φf φc st x sp r sret aExpr aEnv
++      v8 v9 v18 v19 v20 v21 out0 m0 ment penv nm hL.name hL.g19 hL.g20 hL.g21
++      hL.nmLo hL.nmHi hL.nmWin c hc
++  obtain ⟨c2, hs2, mpc, hp, hm⟩ :=
++    varBridge_calleeQ g N A SL φf φc st env x v sp r sret aExpr aEnv
++      v8 v9 v18 v19 v20 v21 out0 m0 ment penv nm len pn hL
++      (MemFootprint (stackWin SL sp.toNat) m0)
++      (by
++        intro m9 c' hpost hspill
++        have hlookup := hpost.callerFootprint
++          (by simpa only [VarSpillAgree] using hspill) hroom
++        exact ((MemFootprint.mk hEntry.memFrame).trans hlookup).mono
++          (fun _ hk => hk.elim id id)) c1 h1
++  exact ⟨c2, hs1.trans hs2, mpc, hp, hm⟩
++
++#print axioms varBridge_calleeQ
++#print axioms varBridgeF
+ 
+ /-! ## `eval_var_row_closed` — the UNCONDITIONAL row modulo the caller-linkage seam
+ 

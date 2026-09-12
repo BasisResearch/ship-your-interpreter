@@ -1,0 +1,261 @@
+{
+  "EvalVarTailShape": [
+    "Vsa.Sim.EnvGetReflected.value_tail_log",
+    "Vsa.Sim.EnvGetReflected.value_tail_copy",
+    "Vsa.Sim.EnvGetReflected.value_tail_regs",
+    "Vsa.Sim.EnvGetReflected.value_tail_pc"
+  ],
+  "EvalVarTailFacts": [
+    "Vsa.Sim.EnvGetReflected.value_tail_load",
+    "Vsa.Sim.EnvGetReflected.value_tail_store",
+    "Vsa.Sim.EnvGetReflected.value_tail_facts"
+  ],
+  "EvalVarTailData": [
+    "Vsa.Sim.EnvGetReflected.value_tail_operands",
+    "Vsa.Sim.EnvGetReflected.ValueTailSaved.after_copy",
+    "Vsa.Sim.EnvGetReflected.value_tail_data"
+  ],
+  "EvalVarTailFramed": [
+    "Vsa.Sim.EnvGetReflected.value_tail_framed",
+    "Vsa.Sim.EnvGetReflected.value_found_branch",
+    "Vsa.Sim.EnvGetReflected.value_found_tail"
+  ],
+  "EvalVarLookupEntry": [
+    "Vsa.Sim.EnvGetReflected.CallerTailWindow.stack_base",
+    "Vsa.Sim.EnvGetReflected.CallerTailWindow.lookup_spill",
+    "Vsa.Sim.EnvGetReflected.LookupData.var_prologue",
+    "Vsa.Sim.EnvGetReflected.var_lookup"
+  ],
+  "EvalVarCallFrame": [
+    "Vsa.Sim.EnvGetReflected.var_call_framed",
+    "Vsa.Sim.EnvGetReflected.var_call_read",
+    "Vsa.Sim.EnvGetReflected.VarCallResult.caller",
+    "Vsa.Sim.EnvGetReflected.VarCallResult.args",
+    "Vsa.Sim.EnvGetReflected.VarCallResult.memory",
+    "Vsa.Sim.EnvGetReflected.var_call"
+  ],
+  "EnvGetCallFrame": [
+    "Vsa.Sim.EnvGetReflected.call_framed"
+  ],
+  "EnvGetCompareFrame": [
+    "Vsa.Sim.EnvGetReflected.kept_abi",
+    "Vsa.Sim.EnvGetReflected.CallResult.abi_frame",
+    "Vsa.Sim.EnvGetReflected.CompareResult.kept_frame",
+    "Vsa.Sim.EnvGetReflected.CallResult.compare",
+    "Vsa.Sim.strcmp_post.destruct",
+    "Vsa.Sim.strcmp_post.mk'"
+  ],
+  "EnvGetCopyData": [
+    "Vsa.Sim.EnvGetReflected.copy_store_facts",
+    "Vsa.Sim.EnvGetReflected.copy_facts",
+    "Vsa.Sim.EnvGetReflected.copy_input_log",
+    "Vsa.Sim.EnvGetReflected.copy_data"
+  ],
+  "EnvGetCopyFramed": [
+    "Vsa.Sim.EnvGetReflected.copy_framed"
+  ],
+  "EnvGetCopyLog": [
+    "Vsa.Sim.EnvGetReflected.copy_log_of_loads",
+    "Vsa.Sim.EnvGetReflected.copy_log",
+    "Vsa.Sim.EnvGetReflected.copy_value"
+  ],
+  "EnvGetCountHead": [
+    "Vsa.Sim.EnvGetReflected.countKeep_noise",
+    "Vsa.Sim.EnvGetReflected.count_head"
+  ],
+  "EnvGetFootprint": [
+    "Vsa.Sim.EnvGetEntryPost.footprint",
+    "Vsa.Sim.EnvGetEntryPost.callerFootprint",
+    "Vsa.Sim.env_get_lookup_from_entry_framed",
+    "Vsa.Sim.EnvGetValuePost.returnedMemory",
+    "Vsa.Sim.EnvGetValuePost.entryFootprint",
+    "Vsa.Sim.EnvGetValuePost.callerFootprint"
+  ],
+  "EnvGetFrameParent": [
+    "Vsa.Sim.EnvGetReflected.FrameState.parent_read",
+    "Vsa.Sim.EnvGetReflected.kept_parent",
+    "Vsa.Sim.EnvGetReflected.FrameParentResult.kept_frame",
+    "Vsa.Sim.EnvGetReflected.frame_parent"
+  ],
+  "EnvGetFrameScan": [
+    "Vsa.Sim.EnvGetReflected.frame_count_read",
+    "Vsa.Sim.EnvGetReflected.FrameState.after_count",
+    "Vsa.Sim.EnvGetReflected.FrameState.scan_ready",
+    "Vsa.Sim.EnvGetReflected.FrameState.after_scan",
+    "Vsa.Sim.EnvGetReflected.kept_count",
+    "Vsa.Sim.EnvGetReflected.frame_scan"
+  ],
+  "EnvGetHitGeometry": [
+    "Vsa.Sim.EnvGetReflected.LookupData.hit_geometry"
+  ],
+  "EnvGetHitTail": [
+    "Vsa.Sim.EnvGetReflected.hit_tail",
+    "Vsa.Sim.EnvGetReflected.HitTailResult.toValuePost"
+  ],
+  "EnvGetLookupData": [
+    "Vsa.Sim.EnvGetReflected.LookupData.framePointer",
+    "Vsa.Sim.EnvGetReflected.LookupData.frame_state",
+    "Vsa.Sim.EnvGetReflected.LookupData.frameIndex",
+    "Vsa.Sim.EnvGetReflected.LookupData.measure_head",
+    "Vsa.Sim.EnvGetReflected.lookupMeasure_exit"
+  ],
+  "EnvGetLookupEntry": [
+    "Vsa.Sim.EnvGetReflected.lookup_entry"
+  ],
+  "EnvGetLookupLoop": [
+    "Vsa.Sim.EnvGetReflected.lookup_loop_body",
+    "Vsa.Sim.EnvGetReflected.lookup_loop",
+    "Vsa.Sim.EnvGetReflected.LookupExit.pc",
+    "Vsa.Sim.EnvGetReflected.LookupExit.mem"
+  ],
+  "EnvGetLookupReturn": [
+    "Vsa.Sim.EnvGetReflected.lookup_return"
+  ],
+  "EnvGetLookupSource": [
+    "Vsa.Sim.EnvGetReflected.LookupExit.owned_hit"
+  ],
+  "EnvGetLookupTransport": [
+    "Vsa.Sim.EnvGetReflected.LookupData.after_spill"
+  ],
+  "EnvGetOutputTransport": [
+    "Vsa.Sim.EnvGetReflected.LookupData.after_output",
+    "Vsa.Sim.EnvGetReflected.LookupData.after_stack_slot"
+  ],
+  "EnvGetOwnedFrameState": [
+    "Vsa.Sim.EnvGetReflected.FrameRegisters.after_parent",
+    "Vsa.Sim.EnvGetReflected.FrameState.registers",
+    "Vsa.Sim.EnvGetReflected.owned_frame_state"
+  ],
+  "EnvGetOwnedNames": [
+    "Vsa.Sim.strcmpWSlack_of_shared",
+    "Vsa.Sim.RuntimeOwnership.SharedCString.strcmpSlack",
+    "Vsa.Sim.RuntimeOwnership.FrameOwned.bindingString",
+    "Vsa.Sim.RuntimeOwnership.FrameOwned.scanNames"
+  ],
+  "EnvGetParentBranch": [
+    "Vsa.Sim.EnvGetReflected.parentKeep_noise",
+    "Vsa.Sim.EnvGetReflected.parent_branch"
+  ],
+  "EnvGetPrologueData": [
+    "Vsa.Sim.EnvGetReflected.prologue_log",
+    "Vsa.Sim.EnvGetReflected.prologue_saved",
+    "Vsa.Sim.EnvGetReflected.prologue_store_facts",
+    "Vsa.Sim.EnvGetReflected.prologue_facts"
+  ],
+  "EnvGetPrologueFramed": [
+    "Vsa.Sim.EnvGetReflected.prologue_framed"
+  ],
+  "EnvGetRestore": [
+    "Vsa.Sim.EnvGetReflected.PrologueSaved.transport",
+    "Vsa.Sim.EnvGetReflected.restore_word",
+    "Vsa.Sim.EnvGetReflected.restore_framed"
+  ],
+  "EnvGetScanAdvance": [
+    "Vsa.Sim.EnvGetReflected.scanAdvanceKeep_noise",
+    "Vsa.Sim.EnvGetReflected.kept_fixed",
+    "Vsa.Sim.EnvGetReflected.scan_advance"
+  ],
+  "EnvGetScanBranch": [
+    "Vsa.Sim.EnvGetReflected.scanBranchKeep_noise",
+    "Vsa.Sim.EnvGetReflected.scan_branch"
+  ],
+  "EnvGetScanCompare": [
+    "Vsa.Sim.EnvGetReflected.scan_compare"
+  ],
+  "EnvGetScanDecision": [
+    "Vsa.Sim.EnvGetReflected.CompareResult.value",
+    "Vsa.Sim.EnvGetReflected.scan_decision"
+  ],
+  "EnvGetScanLoop": [
+    "Vsa.Sim.EnvGetReflected.ScanPrefixClear.empty",
+    "Vsa.Sim.EnvGetReflected.ScanPrefixClear.succ",
+    "Vsa.Sim.EnvGetReflected.scanLoopMeasure_head",
+    "Vsa.Sim.EnvGetReflected.scanLoopMeasure_exit",
+    "Vsa.Sim.EnvGetReflected.scan_loop_body",
+    "Vsa.Sim.EnvGetReflected.scan_loop"
+  ],
+  "EnvGetScanOutcome": [
+    "Vsa.Sim.EnvGetReflected.ScanLoopExit.outcome",
+    "Vsa.Sim.EnvGetReflected.scan_outcome"
+  ],
+  "EnvGetScanStart": [
+    "Vsa.Sim.EnvGetReflected.scan_start",
+    "Vsa.Sim.EnvGetReflected.scan_frame"
+  ],
+  "EnvGetScanState": [
+    "Vsa.Sim.ScanSt.reseat",
+    "Vsa.Sim.ScanSt.transport",
+    "Vsa.Sim.EnvGetReflected.CompareResult.scan",
+    "Vsa.Sim.EnvGetReflected.scan_compare_state"
+  ],
+  "EnvGetSegments": [
+    "Vsa.Sim.EnvGetReflected.kept_of_members",
+    "Vsa.Sim.EnvGetReflected.kept_noise",
+    "Vsa.Sim.EnvGetReflected.kept_segments",
+    "Vsa.Sim.EnvGetReflected.segment_framed"
+  ],
+  "TransportEnv_getRange": [
+    "Vsa.Sim.Code.env_getChunk0_of_agree_range",
+    "Vsa.Sim.Code.env_getChunk1_of_agree_range",
+    "Vsa.Sim.Code.env_getChunk2_of_agree_range",
+    "Vsa.Sim.Code.env_getChunk3_of_agree_range",
+    "Vsa.Sim.Code.env_getLoaded_of_agree_range"
+  ],
+  "EvalVarLookupTail": [
+    "Vsa.Sim.EnvGetReflected.CallerTailWindow.stack_output",
+    "Vsa.Sim.EnvGetReflected.LookupReturnResult.tail_saved",
+    "Vsa.Sim.EnvGetReflected.LookupReturnResult.eval_code",
+    "Vsa.Sim.EnvGetReflected.var_lookup_tail"
+  ],
+  "EvalVarReturn": [
+    "Vsa.Sim.EnvGetReflected.LookupData.stack_survives",
+    "Vsa.Sim.EnvGetReflected.var_abi_cases",
+    "Vsa.Sim.EnvGetReflected.kept_arm_registers",
+    "Vsa.Sim.EnvGetReflected.var_lookup_windows",
+    "Vsa.Sim.EnvGetReflected.VarReturnResult.at_arm"
+  ],
+  "EvalVarArm": [
+    "Vsa.Sim.EnvGetReflected.var_arm_data",
+    "Vsa.Sim.EnvGetReflected.var_arm_run",
+    "Vsa.Sim.EnvGetReflected.var_arm_return"
+  ],
+  "ArmEntryRetained": [
+    "Vsa.Sim.armEntry_retained"
+  ],
+  "FixedImage_Env_get": [
+    "Vsa.Sim.Code.FixedTextLoaded.Env_getLoaded",
+    "Vsa.Sim.Code.fixedText_env_getChunk0",
+    "Vsa.Sim.Code.fixedText_env_getChunk1",
+    "Vsa.Sim.Code.fixedText_env_getChunk2",
+    "Vsa.Sim.Code.fixedText_env_getChunk3"
+  ],
+  "EnvGetEntryTransport": [
+    "Vsa.Sim.EnvGetReflected.LookupData.after_stack"
+  ],
+  "StoreRuntimeData": [],
+  "EvalVarEntryReturn": [
+    "Vsa.Sim.EnvGetReflected.eval_var_return"
+  ],
+  "EvalVarProduct": [
+    "Vsa.Sim.OwnedSlot.of_owned",
+    "Vsa.Sim.EnvGetReflected.VarEvalResult.product"
+  ],
+  "EvalRuntimeEntry": [
+    "Vsa.Sim.EnvGetReflected.eval_var_owned",
+    "Vsa.Sim.EnvGetReflected.eval_var_product",
+    "Vsa.Sim.EnvGetReflected.VarEvalResult.shared_agree"
+  ],
+  "EnvGetRuntimeData": [
+    "Vsa.Sim.RuntimeOwnership.StoreRuntimeData.lookup",
+    "Vsa.Sim.EnvGetReflected.LookupData.runtime"
+  ],
+  "SharedReadGeometry": [
+    "Vsa.Sim.SharedGeom.toReadGeom",
+    "Vsa.Sim.shared_string_window"
+  ],
+  "SharedGeometryBoundary": [
+    "Vsa.Sim.native_print_above_image_impossible",
+    "Vsa.Sim.native_names_read_geometry"
+  ],
+  "RuntimeEntryCore": []
+}

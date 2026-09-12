@@ -1,0 +1,65 @@
+--- a/Vsa/Sim/EvalReturn.lean
++++ b/Vsa/Sim/EvalReturn.lean
+@@ -199,6 +199,35 @@
+ 
+ /-- A leaf exit whose result is represented at the entry closures map returns
+ coherently at the entry maps. -/
++theorem evalReturn_of_exit_facts
++    {g : (R : Register) → Option (RegisterType R)}
++    {N : NativeAddrs} {A : Arena} {SL : StackLayout} {phiF phiC : Addr → Nat}
++    {st : Vsa.While.St} {v : Value} {sp r sret : BitVec 64} {m0 : Mem} {c : Config}
++    (hExit : EvalExit g N A SL phiF phiC st.store.frames.size st.store.closures.size
++      st v sp r sret m0 c)
++    (hval : ValueRepr c.σ.mem N phiC sret.toNat v)
++    (hpres : MemExtends m0 c.σ.mem)
++    (hsurv : ∀ m' : Mem,
++      (∀ k : Nat, ¬ (SL.lo ≤ k ∧ k < SL.hi) → c.σ.mem[k]? = m'[k]?) →
++      StoreRepr m' N A phiF phiC st.store)
++    (hwords : ValueWordsTotal m0 sret.toNat) :
++    EvalReturn g N A SL phiF phiC st.store.frames.size st.store.closures.size
++      st v sp r sret m0 (fun _ _ _ => True) c :=
++  have hD : EvalExitD g N A SL phiF phiC st.store.frames.size st.store.closures.size
++      st v sp r sret m0 c :=
++    ⟨hExit, hpres, ValueWordsTotal.mono (hpres) hwords,
++      phiF, phiC, PhiExtends.refl _ _, PhiExtends.refl _ _, hsurv⟩
++  hD.withReturnRepr
++    { frames := PhiExtends.refl _ _
++      closures := PhiExtends.refl _ _
++      values := fun a w haw => by
++        have heq : (a, w) = (sret.toNat, v) := List.mem_singleton.mp haw
++        cases heq
++        exact hval
++      owned := trivial
++      survives := fun m' hag => hsurv m' (fun k hk => hag k hk) }
++
++/-- Project the actual-return constructor through the legacy universal widener. -/
+ theorem evalReturn_of_exit_id
+     {g : (R : Register) → Option (RegisterType R)}
+     {N : NativeAddrs} {A : Arena} {SL : StackLayout} {phiF phiC : Addr → Nat}
+@@ -211,23 +240,12 @@
+     (hwords : ValueWordsTotal m0 sret.toNat) :
+     EvalReturn g N A SL phiF phiC st.store.frames.size st.store.closures.size
+       st v sp r sret m0 (fun _ _ _ => True) c :=
+-  have hD : EvalExitD g N A SL phiF phiC st.store.frames.size st.store.closures.size
+-      st v sp r sret m0 c :=
+-    ⟨hExit, hW.pres c hExit, ValueWordsTotal.mono (hW.pres c hExit) hwords,
+-      phiF, phiC, PhiExtends.refl _ _, PhiExtends.refl _ _, hW.surv c hExit⟩
+-  hD.withReturnRepr
+-    { frames := PhiExtends.refl _ _
+-      closures := PhiExtends.refl _ _
+-      values := fun a w haw => by
+-        have heq : (a, w) = (sret.toNat, v) := List.mem_singleton.mp haw
+-        cases heq
+-        exact hval
+-      owned := trivial
+-      survives := fun m' hag => hW.surv c hExit m' (fun k hk => hag k hk) }
++  evalReturn_of_exit_facts hExit hval (hW.pres c hExit) (hW.surv c hExit) hwords
+ 
+ #print axioms binOpSem_closuresBounded
+ #print axioms EpilogueEntryFacts.preEpilogueOwned
+ #print axioms armReturn_of_facts
++#print axioms evalReturn_of_exit_facts
+ #print axioms evalReturn_of_exit_id
+ 
+ #print axioms EvalExitD.coherent_of_bounded
+
