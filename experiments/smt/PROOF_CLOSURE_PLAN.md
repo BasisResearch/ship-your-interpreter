@@ -230,8 +230,8 @@ by `run_allocator_at`. It preserves the parent ground and right-child pointer
 using the selected left return's `data.agreement`. The right child uses the
 same maps, memory, and shared-set inclusion. Static support and saved-stack
 reads still consume the existing frame; their global-write correction remains
-open. The analogous statement and sequence ground consumers still need this
-ownership-based transport.
+open. Other statement ground consumers still need ownership-based transport;
+the owned sequence suffix is checked below.
 
 Exact checked consumer: `Vsa.Sim.evalBinaryAllocatorOperands_at`, at its
 unchanged theorem type. `owned-ast-region-consumer.json` records that type
@@ -257,6 +257,28 @@ the same 30 discipline findings. Boundary input hashes, external theorem
 files, and the ELF are unchanged. No validation gate was relaxed.
 `integration-receipt.json` in the owned-region directory records these results.
 No completion gate is closed.
+
+Owned sequence statement regions are checked in `ExecGroundOwned` and consumed
+by `SeqSuffixGround.transport_shared`. Each owned statement is aligned with
+the ground array's selected pointer before transport. The same child return
+supplies shared agreement, memory presence, and static framing. AST bounds and
+representation now use owned reads. Static support and table preservation
+still require the existing exit frame; its global-write correction remains open.
+
+Exact checked consumer: `Vsa.Sim.seqInterpAllocatorContinue_of_return`.
+`owned-statement-region-consumer.json` records its unchanged type and thirteen
+remaining premises: allocator contract and ledger, continuation carrier,
+source execution, environment validity, statement and store body bounds,
+stack budget, stack RAM and HTIF geometry, static support, initial shared
+agreement, and the actual owned child return. The block, closure, and interpreter
+continuation sources are unchanged. Their rebuilt consumers pass axiom checks.
+
+All 1,980 source modules passed: 56 rebuilt and 1,924 reused after the local
+two-module check. Dependency compilation took 97.529 seconds; the full check
+took 118.959 seconds. All 43 audits use standard axioms. Receipt:
+`resource-overlay/run-k0iqk9gq/receipt.json` under the correction directory.
+Evidence is in `/private/tmp/vsa-stmt-owned-20260912.ruwTgb/`.
+Full validation remains pending. No completion gate is closed.
 
 `RuntimeAllocatorState.heap`, `InitialOwned.heap`, and the initial execution
 adapter already use `InitialWriteByte SL`. Retain that ownership index.

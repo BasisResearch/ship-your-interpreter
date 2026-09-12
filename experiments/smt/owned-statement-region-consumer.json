@@ -1,0 +1,61 @@
+{
+  "target_obligation": "remainingWork_closed: owned statement regions across sequence allocator returns",
+  "target_type": "Vsa.Sim.EndToEnd.RemainingWork Vsa.Sim.LayoutInstance.interpRunLayout",
+  "role": "prerequisite",
+  "consumer": "Vsa.Sim.seqInterpAllocatorContinue_of_return",
+  "consumer_type": "∀ {g gExec : (R : LeanRV64DExecutable.Register) → Option (LeanRV64DExecutable.RegisterType R)} {N : Vsa.RuntimeRepr.NativeAddrs} {A : Vsa.RuntimeRepr.Arena} {SL : Vsa.Alloc.StackLayout} {gpv : BitVec 64} {headroom maxReq : Nat} {M : Vsa.Alloc.MallocContract A SL gpv headroom maxReq} {phiF phiC : Vsa.While.Addr → Nat} {shared : Nat → Prop} {reserve d env : Nat} {st final : Vsa.While.St} {s : Vsa.While.Stmt} {ss : List Vsa.While.Stmt} {sp aRet cursor finish interp : BitVec 64} {m0 mCall : Vsa.MemRepr.Mem} {cfg : Vsa.Machine.Config} (L : Vsa.Sim.AllocLedger A SL gpv headroom maxReq M) (h : Vsa.Sim.SeqInterpContinueCarrier g gExec A SL phiF shared d env sp aRet cursor finish interp ss m0 mCall) (source : Vsa.While.ExecS st d env s final .normal) (envValid : Vsa.Sim.EnvValid st env) (bodies : Vsa.While.Stmt.bodiesBound Vsa.While.perCallBudget s = true) (storeBodies : Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget) (stackOK : Vsa.Alloc.StackOK SL sp (176 + 1088)) (stackRam : 0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000) (stackWin : Vsa.Sim.tohostAddr + 16 ≤ SL.lo) (support : Vsa.Sim.EvalCallSupport mCall SL A sp) (beforeShared : Vsa.Sim.AgreeP shared m0 mCall) (child : Vsa.Sim.ExecAllocatorReturn gExec N M phiF phiC st.store.frames.size st.store.closures.size shared reserve final .normal sp (BitVec.ofNat 64 0x80004478) aRet mCall cfg), ∃ after, Vsa.Machine.Steps cfg after ∧ ∃ resultF resultC alloc exts returnedShared, Vsa.Sim.SeqAllocatorContinueAt .interpRun g N M phiF phiC resultF resultC st.store.frames.size st.store.closures.size alloc exts shared returnedShared reserve final d env ss sp aRet m0 after",
+  "remaining_premises": [
+    {
+      "name": "M",
+      "type": "Vsa.Alloc.MallocContract A SL gpv headroom maxReq"
+    },
+    {
+      "name": "L",
+      "type": "Vsa.Sim.AllocLedger A SL gpv headroom maxReq M"
+    },
+    {
+      "name": "h",
+      "type": "Vsa.Sim.SeqInterpContinueCarrier g gExec A SL phiF shared d env sp aRet cursor finish interp ss m0 mCall"
+    },
+    {
+      "name": "source",
+      "type": "Vsa.While.ExecS st d env s final .normal"
+    },
+    {
+      "name": "envValid",
+      "type": "Vsa.Sim.EnvValid st env"
+    },
+    {
+      "name": "bodies",
+      "type": "Vsa.While.Stmt.bodiesBound Vsa.While.perCallBudget s = true"
+    },
+    {
+      "name": "storeBodies",
+      "type": "Vsa.While.StoreBodiesBound st.store Vsa.While.perCallBudget"
+    },
+    {
+      "name": "stackOK",
+      "type": "Vsa.Alloc.StackOK SL sp (176 + 1088)"
+    },
+    {
+      "name": "stackRam",
+      "type": "0x80000000 ≤ SL.lo ∧ SL.hi ≤ 0x100000000"
+    },
+    {
+      "name": "stackWin",
+      "type": "Vsa.Sim.tohostAddr + 16 ≤ SL.lo"
+    },
+    {
+      "name": "support",
+      "type": "Vsa.Sim.EvalCallSupport mCall SL A sp"
+    },
+    {
+      "name": "beforeShared",
+      "type": "Vsa.Sim.AgreeP shared m0 mCall"
+    },
+    {
+      "name": "child",
+      "type": "Vsa.Sim.ExecAllocatorReturn gExec N M phiF phiC st.store.frames.size st.store.closures.size shared reserve final .normal sp (BitVec.ofNat 64 0x80004478) aRet mCall cfg"
+    }
+  ]
+}

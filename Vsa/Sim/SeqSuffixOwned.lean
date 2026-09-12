@@ -1,4 +1,4 @@
-import Vsa.Sim.SeqSuffixGround
+import Vsa.Sim.ExecGroundOwned
 import Vsa.MemReprReadArrays
 
 namespace Vsa.Sim
@@ -25,11 +25,13 @@ theorem SeqSuffixGround.transport_shared
     SeqSuffixGround cfg.σ.mem SL A sp aRet d a ss := by
   induction h with
   | nil => exact .nil
-  | cons hread hstmt _ ih =>
+  | @cons a p s ss hread hstmt _ ih =>
     cases reads with
     | cons cell tail =>
+      have pointer := Option.some.inj (cell.read.symm.trans hread)
       exact .cons ((read64_agreeP agreement cell.covered).symm.trans hread)
-        (hstmt.transport_execExit exit presence) (ih tail)
+        (hstmt.transport_owned_execExit (pointer ▸ cell.target) agreement exit presence)
+        (ih tail)
 
 variable {m : Mem} {shared : Nat → Prop} {SL : StackLayout} {A : Arena}
   {sp aRet : BitVec 64} {d a : Nat} {s : Stmt} {ss : List Stmt}
