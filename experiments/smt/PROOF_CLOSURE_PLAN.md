@@ -288,6 +288,28 @@ files, and the ELF are unchanged. Elaboration stayed within the existing
 180-second limit. `integration-receipt.json` records the validation evidence.
 No validation gate was relaxed. No completion gate is closed.
 
+Allocator metadata admission audit: **prerequisite checked**; a candidate
+counterexample is open. `Vsa.Sim.AllocatorBoundary.loaded` proves the
+unchanged `Loaded interpRunLayout program config` boundary admits a dense
+snapshot of `[.block [], .block []]` with no remaining premises.
+`source_terminates` gives its terminating source derivation with empty output.
+`top_zero` shows the snapshot leaves the allocator top pointer at zero.
+`allocator-boundary-admission.json` records the consumer. The all-source
+slice reused all 1,982 modules. All 64 audits use standard axioms. Receipt:
+`resource-overlay/run-h92yujh2/receipt.json` under the correction directory.
+
+A sparse Sail replay of that admitted snapshot stops with `sail_error` after
+120 steps inside malloc. It faults at `0x800047f4` on an 8-byte load from
+address 8, following a zero bin pointer. If this lifts to the dense
+execution, `Loaded` admits a terminating program whose binary gets stuck,
+and the refinement statement is false as stated. That would be the initial
+resource gap of task 1 in executable form. Two premises remain unproved:
+a kernel-checked dense prefix from `AllocatorBoundary.config` to the
+120-step endpoint, and stuckness of that endpoint excluding `Halts`.
+Evidence: `candidate.json`, `admitted-replay.json`, and `AdmittedReplay.lean`
+in `/private/tmp/vsa-allocator-boundary-20260912.HBcAOj/`.
+No validation gate was rerun for this audit. No completion gate is closed.
+
 `RuntimeAllocatorState.heap`, `InitialOwned.heap`, and the initial execution
 adapter already use `InitialWriteByte SL`. Retain that ownership index.
 It describes additional writes outside mutable allocation roles; adding the
