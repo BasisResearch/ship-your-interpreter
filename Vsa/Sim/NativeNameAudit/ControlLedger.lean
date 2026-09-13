@@ -17,17 +17,22 @@ def alloc : Allocations :=
   let a5 := a4.insert (.binding 0 1) 0x81000210 8
   a5.insert (.binding 0 2) 0x81000220 7
 
-def exts : List Extent :=
+/-- The represented AST: one live immutable extent of the heap. -/
+def astExtent : Extent := (0x82000000, 0x100)
+
+def roleExts : List Extent :=
   [(0x81000220, 7), (0x81000210, 8), (0x81000200, 6),
    (0x81000100, 192), (0x81000040, 64), (0x81000000, 32)]
+
+def exts : List Extent := astExtent :: roleExts
 
 def shared (k : Nat) : Prop :=
   (0x81000200 ≤ k ∧ k < 0x81000206) ∨
   (0x81000210 ≤ k ∧ k < 0x81000218) ∨
   (0x81000220 ≤ k ∧ k < 0x81000227) ∨ AstPage k
 
-theorem ledger : Ledger arena exts alloc := by
-  have h0 : Ledger arena [] (fun _ => none) := by
+theorem roleLedger : Ledger heapArena roleExts alloc := by
+  have h0 : Ledger heapArena [] (fun _ => none) := by
     refine ⟨?_, ?_, ?_⟩
     · simp [HeapArena]
     · intro r p n hr
@@ -35,18 +40,25 @@ theorem ledger : Ledger arena exts alloc := by
     · intro r s p n q size hr _ _
       simp [Allocated] at hr
   have h1 := h0.insert (role := .frame 0) (p := 0x81000000) (n := 32)
-    (by decide) (by simp [Arena.contains, arena]) (by simp)
+    (by decide) (by simp [Arena.contains, heapArena, DlHeap.heapStart, DlHeap.heapEnd]) (by simp)
   have h2 := h1.insert (role := .names 0) (p := 0x81000040) (n := 64)
-    (by decide) (by simp [Arena.contains, arena]) (by simp [ExtDisjoint])
+    (by decide) (by simp [Arena.contains, heapArena, DlHeap.heapStart, DlHeap.heapEnd]) (by simp [ExtDisjoint])
   have h3 := h2.insert (role := .values 0) (p := 0x81000100) (n := 192)
-    (by decide) (by simp [Arena.contains, arena]) (by simp [ExtDisjoint])
+    (by decide) (by simp [Arena.contains, heapArena, DlHeap.heapStart, DlHeap.heapEnd]) (by simp [ExtDisjoint])
   have h4 := h3.insert (role := .binding 0 0) (p := 0x81000200) (n := 6)
-    (by decide) (by simp [Arena.contains, arena]) (by simp [ExtDisjoint])
+    (by decide) (by simp [Arena.contains, heapArena, DlHeap.heapStart, DlHeap.heapEnd]) (by simp [ExtDisjoint])
   have h5 := h4.insert (role := .binding 0 1) (p := 0x81000210) (n := 8)
-    (by decide) (by simp [Arena.contains, arena]) (by simp [ExtDisjoint])
+    (by decide) (by simp [Arena.contains, heapArena, DlHeap.heapStart, DlHeap.heapEnd]) (by simp [ExtDisjoint])
   have h6 := h5.insert (role := .binding 0 2) (p := 0x81000220) (n := 7)
-    (by decide) (by simp [Arena.contains, arena]) (by simp [ExtDisjoint])
+    (by decide) (by simp [Arena.contains, heapArena, DlHeap.heapStart, DlHeap.heapEnd]) (by simp [ExtDisjoint])
   exact h6
+
+theorem ledger : Ledger heapArena exts alloc where
+  arena := by
+    unfold HeapArena exts roleExts astExtent ExtDisjoint Arena.contains heapArena DlHeap.heapStart DlHeap.heapEnd
+    decide
+  live := fun role p n hp => List.mem_cons_of_mem _ (roleLedger.live role p n hp)
+  separated := roleLedger.separated
 
 private theorem mutable_extent {role : Role} {p n : Nat}
     (hm : role.mutable) (ha : Allocated alloc role p n) :
@@ -98,15 +110,16 @@ theorem immutable : Immutable alloc shared InitialReadableByte (InitialWriteByte
     all_goals simp only [ExtentByte, Nat.reduceAdd] at hin
     all_goals omega
 
-theorem reserved : Reserved arena exts shared where
+theorem reserved : Reserved heapArena exts shared where
   live := by
-    intro k hk _ hhi
-    change k < 0x81001000 at hhi
+    intro k hk _ _
     rcases hk with hk | hk | hk | hk
-    · exact ⟨(0x81000200, 6), by simp [exts], hk⟩
-    · exact ⟨(0x81000210, 8), by simp [exts], hk⟩
-    · exact ⟨(0x81000220, 7), by simp [exts], hk⟩
-    · unfold AstPage at hk
+    · exact ⟨(0x81000200, 6), by simp [exts, roleExts], hk⟩
+    · exact ⟨(0x81000210, 8), by simp [exts, roleExts], hk⟩
+    · exact ⟨(0x81000220, 7), by simp [exts, roleExts], hk⟩
+    · refine ⟨astExtent, by simp [exts], ?_⟩
+      unfold AstPage at hk
+      change 0x82000000 ≤ k ∧ k < 0x82000000 + 0x100
       omega
 
 theorem printShared : SharedCString heapMem shared 0x81000200 "print" where

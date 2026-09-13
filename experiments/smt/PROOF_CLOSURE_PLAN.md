@@ -336,9 +336,14 @@ the closure. Both allocator fixtures pass, with `InitialResourceGap.heap`
 added to its audits. The source-only gate stops at stage a4 with the same 30
 inherited discipline findings. Evidence: `/private/tmp/vsa-allocator-heap-20260912/`.
 
-Two obligations remain on this boundary. The arena is not yet pinned to
-`[_end, __heap_end)`, so the concrete malloc contract (`A.contains`) cannot be
-instantiated at every admitted state. Capacity soundness relies on
+The arena is pinned to `[_end, __heap_end)` (`InitialOwned.arenaHeap`); the
+control's ledger covers its AST with a live immutable extent. After the pin,
+all 1,984 source modules passed (457 rebuilt, 1,798.5 seconds, receipt
+`run-rf029jp0`); all 25 audits use standard axioms. Both allocator fixtures
+pass, `InitialResourceGap` now proving `small_arena_excluded` and
+`heap_credit`. All four boundary regressions pass against the refreshed lock.
+The static gate stops at stage a4 with the same 30 inherited findings.
+One obligation remains on this boundary. Capacity soundness relies on
 `Vsa/While/Cost.lean` charging every interpreter `malloc`/`realloc` request at
 least one 16-byte granule; a difftest comparing `__malloc_max_sbrked_mem`
 against modeled cost would check it. No completion gate is closed.
@@ -2595,9 +2600,12 @@ The amendment closes the string-comparison cells at
   adapter must select a suitable allocator-consistent ledger; the obstruction
   does not rule out such a selection or refute `RemainingWork`.
   `InitialOwned.allocator` now supplies the dlmalloc heap shape and capacity
-  below `__heap_end` for every terminating derivation. Pinning the arena to
-  `[_end, __heap_end)` remains open; `InitialResourceGap` still exhibits a
-  4 KiB arena whose ledger admits no `ResourceBudget`.
+  below `__heap_end` for every terminating derivation, and `arenaHeap` pins
+  the arena to `[_end, __heap_end)`. `InitialResourceGap.small_arena_excluded`
+  shows the pinned boundary excludes its 4 KiB arena; `heap_credit` gives the
+  same oversized ledger room for a million maximal requests. The initial
+  adapter still has to select an allocator-consistent ledger and derive
+  `AInvAt` for the concrete malloc contract from `HeapAt`.
   `Vsa/While/Cost.lean` already proves `bigStep_budget_exists`, but that bound
   counts rounded requested bytes and does not establish available physical
   capacity. Reuse it when constructing request counts and ceilings; do not

@@ -25,22 +25,23 @@ theorem extra_bounds (e : Extent) (he : e ∈ extra) :
   cases eq
   omega
 
-theorem heapArena : HeapArena arena extents := by
+theorem heapArena : HeapArena Control.heapArena extents := by
   refine ⟨?_, List.pairwise_append.mpr ⟨?_, Control.ledger.arena.2, ?_⟩⟩
   · intro e he
     rcases List.mem_append.mp he with added | old
     · have h := extra_bounds e added
       exact ⟨h.2.2, by
-        change 0x81000000 ≤ e.1 ∧ e.1 + e.2 ≤ 0x81001000
+        change 0x8001c170 ≤ e.1 ∧ e.1 + e.2 ≤ 0x87800000
         omega⟩
     · exact Control.ledger.arena.1 e old
   · unfold ExtDisjoint
     decide
   · intro a ha b hb
-    have lo := (extra_bounds a ha).1
-    have oldEnds : ∀ e ∈ Control.exts, e.1 + e.2 ≤ 0x81000300 := by
-      simp [Control.exts]
-    exact Or.inr (Nat.le_trans (oldEnds b hb) lo)
+    have lo := extra_bounds a ha
+    have old : ∀ e ∈ Control.exts, e.1 + e.2 ≤ 0x81000300 ∨ 0x81001000 ≤ e.1 := by decide
+    rcases old b hb with hb' | hb'
+    · exact Or.inr (by omega)
+    · exact Or.inl (by omega)
 
 /-- The heap control's chunks cover the extra extents; arrays stay exact. -/
 theorem heap : DlHeap.HeapAt Control.heapMem extents (ReallocExtent Control.alloc)
@@ -61,7 +62,8 @@ theorem heap : DlHeap.HeapAt Control.heapMem extents (ReallocExtent Control.allo
         rcases Control.realloc_extent hr with rfl | rfl <;> simp at h
       · exact Control.heapAt.exact e old hr }
 
-theorem initialOwned : InitialOwned Control.heapMem arena stackSL phif phic
+/-- The oversized ledger is admitted at the pinned heap arena. -/
+theorem initialOwned : InitialOwned Control.heapMem Control.heapArena stackSL phif phic
     0x82000000 2 data := by
   have old := Control.initialOwned
   exact
@@ -78,13 +80,13 @@ theorem initialOwned : InitialOwned Control.heapMem arena stackSL phif phic
       arrays := old.arrays
       program := old.program
       allocator := ⟨Control.heapTop, Control.heapBrk, Control.heapChunks, fun _ => [],
-        heap, Control.heapCapacity⟩ }
+        heap, Control.heapCapacity⟩
+      arenaHeap := old.arenaHeap }
 
-/-- The unchanged concrete machine snapshot admits this ownership witness. -/
 theorem ready : InterpRunReadyFacts Control.heapConfig 0x82000000 2 fixedInp
-    Nfixed arena phif phic 0 :=
+    Nfixed Control.heapArena phif phic 0 :=
   { Control.readyFacts with ownership := ⟨data, by
-      show InitialOwned (physicalConfig Control.heapMem).σ.mem arena stackSL phif phic
+      show InitialOwned (physicalConfig Control.heapMem).σ.mem Control.heapArena stackSL phif phic
         0x82000000 2 data
       rw [physicalConfig_mem]
       exact initialOwned⟩ }
@@ -102,7 +104,7 @@ theorem original_zero_credit : ResourceBudget arena 32 Control.ownershipData.ext
 /-- This ledger exceeds capacity independently of future request parameters. -/
 theorem no_credit (maxReq credits : Nat) :
     ¬ ResourceBudget arena maxReq data.exts credits := by
-  have total : physTotal data.exts = 4528 := by decide
+  have total : physTotal data.exts = 4800 := by decide
   intro h
   change physTotal data.exts + credits * physSize maxReq ≤ 4096 at h
   rw [total] at h
@@ -116,13 +118,16 @@ theorem no_allocator_state {gpv : BitVec 64} {headroom maxReq credits : Nat}
     ¬ RuntimeAllocatorState M N phiF phiC alloc data.exts shared credits store m :=
   fun h => no_credit maxReq credits h.budget
 
-/-- A supplier preserving an arbitrary admitted initial ledger cannot infer even zero credit.
-This does not refute the existence of another ledger or the refinement theorem. -/
-theorem no_budget_supplier : ¬ (∀ D : InitialOwnershipData,
-    InitialOwned Control.heapMem arena stackSL phif phic 0x82000000 2 D →
-    ResourceBudget arena 32 D.exts 0) := by
-  intro supplier
-  exact no_zero_credit (supplier data initialOwned)
+/-- The pinned boundary excludes the 4 KiB arena, whatever the ledger. -/
+theorem small_arena_excluded {m : Mem} {stmts count : Nat} {D : InitialOwnershipData} :
+    ¬ InitialOwned m arena stackSL phif phic stmts count D :=
+  fun h => absurd h.arenaHeap.1 (by decide)
+
+/-- At the pinned arena the same oversized ledger leaves room for a million
+maximal requests. -/
+theorem heap_credit : ResourceBudget Control.heapArena 32 data.exts 1000000 := by
+  unfold ResourceBudget
+  decide
 
 #print axioms included
 #print axioms extra_bounds
@@ -134,6 +139,7 @@ theorem no_budget_supplier : ¬ (∀ D : InitialOwnershipData,
 #print axioms original_zero_credit
 #print axioms no_credit
 #print axioms no_allocator_state
-#print axioms no_budget_supplier
+#print axioms small_arena_excluded
+#print axioms heap_credit
 
 end Vsa.Sim.InitialResourceGap

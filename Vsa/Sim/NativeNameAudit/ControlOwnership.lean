@@ -67,7 +67,7 @@ theorem storeOwned : StoreOwned heapMem phif phic alloc shared initSt.store wher
 
 def ownershipData : InitialOwnershipData := ⟨exts, alloc, shared⟩
 
-theorem initialOwned : InitialOwned heapMem arena stackSL phif phic 0x82000000 2
+theorem initialOwned : InitialOwned heapMem heapArena stackSL phif phic 0x82000000 2
     ownershipData where
   heapLower := by decide
   heapUpper := by decide
@@ -76,6 +76,7 @@ theorem initialOwned : InitialOwned heapMem arena stackSL phif phic 0x82000000 2
   program := fun p hp => (heap_program_owned p hp).mono
     (fun _ hk => Or.inr (Or.inr (Or.inr hk)))
   allocator := heapAllocator
+  arenaHeap := ⟨rfl, rfl⟩
 
 #print axioms frameOwned
 #print axioms storeOwned

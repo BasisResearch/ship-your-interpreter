@@ -176,7 +176,12 @@ of `[.block [], .block []]` satisfies every other boundary fact, yet a sparse
 Sail replay faults in `_malloc_r` at `0x800047f4` reading address 8.
 `AllocatorBoundary.not_loaded` excludes it.
 
-Not included: pinning the arena to `[_end, __heap_end)`. Admitted witnesses may
-still choose a smaller arena, so the concrete malloc contract (`A.contains`)
-cannot yet be instantiated at every admitted state. That is the next boundary
-obligation.
+The same correction pins the arena: `InitialOwned.arenaHeap` requires
+`A = [_end, __heap_end)`, the range `_sbrk` grows through. Every protected
+initial byte lies outside it, and malloc's results lie inside it, so the
+concrete malloc contract (`A.contains`) can be instantiated at every admitted
+state. Shared bytes inside the arena must be covered by live extents
+(`Reserved`), so the represented AST is a live immutable extent. Pinning
+excludes the 4 KiB arena of `InitialResourceGap`
+(`small_arena_excluded`); at the pinned arena its oversized ledger leaves
+room for a million maximal requests (`heap_credit`).

@@ -50,6 +50,8 @@ structure InitialOwned (m : Mem) (A : Arena) (SL : StackLayout)
   program : ∀ p : Program, ProgramRepr m stmts count p →
     ProgramReprWithin m D.shared stmts count p
   allocator : DlHeap.InitialAllocator m D.exts (ReallocExtent D.allocations) stmts count
+  /-- The arena is exactly the range `_sbrk` grows through. -/
+  arenaHeap : A.lo = DlHeap.heapStart ∧ A.hi = DlHeap.heapEnd
 
 theorem InitialOwned.ast_owned {m : Mem} {A : Arena} {SL : StackLayout}
     {phiF phiC : Addr → Nat} {stmts count : Nat} {D : InitialOwnershipData}

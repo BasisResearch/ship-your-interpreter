@@ -502,8 +502,65 @@ theorem heapBinblocks : read64 heapMem binblocksAddr = some 0 :=
   read64_heap (by old_read) (fun j hj => unchanged_low (by
     simp only [binblocksAddr, avAddr]; omega))
 
+/-- The heap arena `_sbrk` grows through: `[_end, __heap_end)`. -/
+def heapArena : Arena := ⟨heapStart, heapEnd⟩
+
+theorem HeapStoreFacts.storeAt {m : Mem} (h : HeapStoreFacts m) {A : Arena}
+    (hA : A.lo ≤ 0x81000000 ∧ 0x81000000 + 32 ≤ A.hi) :
+    StoreRepr m Nfixed A phif phic initSt.store where
+  frames := h.store.frames
+  closures := h.store.closures
+  φf_inj := h.store.φf_inj
+  φc_inj := h.store.φc_inj
+  frames_arena := by
+    intro fa hfa
+    change fa < 1 at hfa
+    have hz : fa = 0 := by omega
+    subst fa
+    change (A.lo ≤ 0x81000000 ∧ 0x81000000 + 32 ≤ A.hi) ∧ 0x81000000 % 8 = 0
+    exact ⟨hA, by decide⟩
+  closures_arena := by
+    intro ca hca
+    change ca < 0 at hca
+    omega
+
+theorem heapArena_protected :
+    ∀ a, ProtectedInitialByte a → ¬ (heapArena.lo ≤ a ∧ a < heapArena.hi) := by
+  intro a ha hin
+  obtain ⟨r, hr, hlo, hhi⟩ := ha
+  have hb : ∀ r ∈ exitProtectedRegions, r.1 + r.2 ≤ 0x8001c170 ∨ 0x87800000 ≤ r.1 := by
+    decide
+  have := hb r hr
+  simp only [heapArena, heapStart, heapEnd] at hin
+  omega
+
+theorem heapStoreSurvivesAt : ∀ m' : Mem,
+    (∀ k, ¬ interpRunWriteFootprint fixedInp k → heapMem[k]? = m'[k]?) →
+    StoreRepr m' Nfixed heapArena phif phic initSt.store := by
+  intro m' hag
+  exact (heapStoreFacts.transport (fun k hk => hag k (storePage_outside_prefix hk))).storeAt
+    (by decide)
+
+/-- The physical boundary facts at the pinned heap arena. -/
+theorem heapPhysicalFactsAt : InterpRunPhysicalFacts heapConfig 0x82000000 2 fixedInp
+    Nfixed heapArena phif phic 0 :=
+  { heapPhysicalFacts with
+    arena_protected := heapArena_protected
+    store := by
+      show StoreRepr (physicalConfig heapMem).σ.mem Nfixed heapArena phif phic initSt.store
+      rw [physicalConfig_mem]
+      exact heapStoreFacts.storeAt (by decide)
+    store_survives := by
+      show ∀ m' : Mem, (∀ k, ¬ interpRunWriteFootprint fixedInp k →
+        (physicalConfig heapMem).σ.mem[k]? = m'[k]?) →
+        StoreRepr m' Nfixed heapArena phif phic initSt.store
+      rw [physicalConfig_mem]
+      exact heapStoreSurvivesAt
+    arena_budget := by decide }
+
 #print axioms heapBins
 #print axioms heapTopPtr
+#print axioms heapPhysicalFactsAt
 #print axioms heapStoreFacts
 #print axioms heapMemoryFacts
 #print axioms heapPhysicalFacts
