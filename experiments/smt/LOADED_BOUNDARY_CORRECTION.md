@@ -141,3 +141,42 @@ Approval scope: correcting the concrete atInterpRun snapshot using the listed ph
 The machine setup correction does not supply all `SeqSuffixGround` requirements. Current `Loaded` also lacks hereditary AST geometry, structural stack budgets, and function-body budgets. These are not consequences of mere `ProgramRepr`; that relation describes recursive pointer contents and counts, not stack consumption or disjoint storage.
 
 No new resource/semantic assumption is proposed or authorized by this document. A separate audit is recorded in `/private/tmp/vsa-loaded-resource-audit.md`. In particular, a shallow, terminating loop can exhaust the finite heap, so a syntactic stack bound alone would not establish the unrestricted forward theorem. Further policy or theorem changes require a separate concrete proposal and approval.
+
+## Allocator heap correction
+
+Approved by the user on 2026-09-12 ("please strengthen loaded"), choosing the
+full dlmalloc invariant. `InitialOwned` gains one field,
+`allocator : DlHeap.InitialAllocator m D.exts (ReallocExtent D.allocations) stmts count`
+(`Vsa/Sim/DlHeap.lean`). The concrete theorem still prints
+`Loaded interpRunLayout p c`; its premise changes.
+
+The field has two parts:
+
+- `HeapAt`: the newlib dlmalloc state `_malloc_r` reads. `sbrk` base is `_end`
+  (`0x8001c170`), the break `brk.0` is at most `__heap_end` (`0x87800000`),
+  and top pads are zero. A contiguous chunk walk runs from `_end` to the top
+  chunk, which ends at the break. Free chunks are coalesced, carry footers,
+  and sit on exactly one of the 127 well-formed circular bin lists, indexed
+  by `bin_index`; the `binblocks` bitmap covers every non-empty bin. Every
+  live ledger extent lies in an in-use chunk's usable payload. Extents that
+  `env_define` reallocates (frame names and values arrays) are exact payloads.
+- `capacity`: for every represented program `p`, every terminating cost
+  derivation `ExecSeqCost initSt 0 0 p st' .normal n` satisfies
+  `2n + 8256 ≤ __heap_end - top`. Each modeled charge is at least one
+  16-byte granule per request and a chunk is at most twice its granules; the
+  slack covers `malloc_extend_top` page rounding and the minimum remainder.
+  The theorem is therefore resource-bounded for terminating programs: a
+  terminating program that exhausts the heap exits 1 on the machine.
+
+Evidence that the field admits real states: the proof ELF run to
+`interp_run` in the Sail model (85,483 steps), and three test ELFs built from
+`c/tests/{for,arithmetic,strings}.wl`, all satisfy the walk, bin, and top
+checks with no free chunks. Evidence that it is needed: the zero-top snapshot
+of `[.block [], .block []]` satisfies every other boundary fact, yet a sparse
+Sail replay faults in `_malloc_r` at `0x800047f4` reading address 8.
+`AllocatorBoundary.not_loaded` excludes it.
+
+Not included: pinning the arena to `[_end, __heap_end)`. Admitted witnesses may
+still choose a smaller arena, so the concrete malloc contract (`A.contains`)
+cannot yet be instantiated at every admitted state. That is the next boundary
+obligation.

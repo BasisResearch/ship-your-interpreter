@@ -1,6 +1,7 @@
 import Vsa.Sim.RuntimeOwnershipAllocation
 import Vsa.MemReprWithin
 import Vsa.Sim.Regions
+import Vsa.Sim.DlHeap
 
 open Vsa.MemRepr Vsa.RuntimeRepr Vsa.While Vsa.Alloc
 
@@ -31,9 +32,14 @@ structure StoreArraysReady (m : Mem) (phiF : Addr → Nat) (s : Store) : Prop wh
     read64 m (phiF fa + 16) = some pv →
     ∀ i, i < s.frames[fa].vars.length → ValueWordsTotal m (pv + 24 * i)
 
-/-- Data-only initial ownership. The heap starts at or above the ELF _end
-symbol and ends before the stack. This does not assert allocator metadata
-consistency, capacity, termination, or successful execution. -/
+/-- Frame arrays: the live extents `env_define` passes to `realloc`. -/
+def ReallocExtent (alloc : Allocations) (e : Extent) : Prop :=
+  ∃ fa, Allocated alloc (.names fa) e.1 e.2 ∨ Allocated alloc (.values fa) e.1 e.2
+
+/-- Initial ownership. The heap starts at or above the ELF _end symbol and
+ends before the stack. The dlmalloc heap is consistent with the live ledger
+and has room for every terminating derivation of the represented program.
+This does not assert termination or successful execution. -/
 structure InitialOwned (m : Mem) (A : Arena) (SL : StackLayout)
     (phiF phiC : Addr → Nat) (stmts count : Nat) (D : InitialOwnershipData) : Prop where
   heapLower : 0x8001c170 ≤ A.lo
@@ -43,6 +49,7 @@ structure InitialOwned (m : Mem) (A : Arena) (SL : StackLayout)
   arrays : StoreArraysReady m phiF initSt.store
   program : ∀ p : Program, ProgramRepr m stmts count p →
     ProgramReprWithin m D.shared stmts count p
+  allocator : DlHeap.InitialAllocator m D.exts (ReallocExtent D.allocations) stmts count
 
 theorem InitialOwned.ast_owned {m : Mem} {A : Arena} {SL : StackLayout}
     {phiF phiC : Addr → Nat} {stmts count : Nat} {D : InitialOwnershipData}

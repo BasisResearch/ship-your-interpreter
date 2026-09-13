@@ -1,16 +1,16 @@
-import Vsa.Sim.NativeNameAudit.ControlLedger
-import Vsa.Sim.NativeNameAudit.ControlPhysical
+import Vsa.Sim.NativeNameAudit.ControlHeapAllocator
 
 open Vsa.MemRepr Vsa.RuntimeRepr Vsa.While Vsa.Alloc
 
 namespace Vsa.Sim.NativeNameAudit.Control
 open RuntimeOwnership Vsa.Sim.OutputAliasLoaded Vsa.Sim.LayoutInstance
 
-theorem frameOwned : FrameOwned mem phif alloc shared 0 globalFrame where
+theorem frameOwned : FrameOwned heapMem phif alloc shared 0 globalFrame where
   record := by simp [Allocated, alloc, Allocations.insert, phif]
   arrays := by
-    refine ⟨⟨8, 0x81000040, 0x81000080⟩,
-      reads.capacity, reads.names, reads.values, by decide, ?_, ?_, ?_⟩
+    refine ⟨⟨8, 0x81000040, 0x81000100⟩,
+      heapStoreFacts.capacity, heapStoreFacts.names, heapStoreFacts.values, by decide,
+      ?_, ?_, ?_⟩
     · right
       exact ⟨by decide, by simp [Allocated, alloc, Allocations.insert]⟩
     · right
@@ -19,24 +19,24 @@ theorem frameOwned : FrameOwned mem phif alloc shared 0 globalFrame where
       change i < 3 at hi
       have hc : i = 0 ∨ i = 1 ∨ i = 2 := by omega
       rcases hc with rfl | rfl | rfl
-      · exact ⟨0x81000200, reads.names0,
+      · exact ⟨0x81000200, heapStoreFacts.names0,
           by simp [Allocated, alloc, Allocations.insert, globalFrame]; decide, printShared⟩
-      · exact ⟨0x81000210, reads.names1,
+      · exact ⟨0x81000210, heapStoreFacts.names1,
           by simp [Allocated, alloc, Allocations.insert, globalFrame]; decide, printlnShared⟩
-      · exact ⟨0x81000220, reads.names2,
+      · exact ⟨0x81000220, heapStoreFacts.names2,
           by simp [Allocated, alloc, Allocations.insert, globalFrame]; decide, assertShared⟩
   values := by
     intro pv hp i hi
-    have he := Option.some.inj (hp.symm.trans reads.values)
+    have he := Option.some.inj (hp.symm.trans heapStoreFacts.values)
     subst pv
     change i < 3 at hi
     have hc : i = 0 ∨ i = 1 ∨ i = 2 := by omega
     rcases hc with rfl | rfl | rfl
-    · exact ⟨0x81000200, reads.name0, printShared⟩
-    · exact ⟨0x81000210, reads.name1, printlnShared⟩
-    · exact ⟨0x81000220, reads.name2, assertShared⟩
+    · exact ⟨0x81000200, heapStoreFacts.name0, printShared⟩
+    · exact ⟨0x81000210, heapStoreFacts.name1, printlnShared⟩
+    · exact ⟨0x81000220, heapStoreFacts.name2, assertShared⟩
 
-theorem storeOwned : StoreOwned mem phif phic alloc shared initSt.store where
+theorem storeOwned : StoreOwned heapMem phif phic alloc shared initSt.store where
   frames := by
     intro fa hf
     change fa < 1 at hf
@@ -67,14 +67,15 @@ theorem storeOwned : StoreOwned mem phif phic alloc shared initSt.store where
 
 def ownershipData : InitialOwnershipData := ⟨exts, alloc, shared⟩
 
-theorem initialOwned : InitialOwned mem arena stackSL phif phic 0x82000000 2
+theorem initialOwned : InitialOwned heapMem arena stackSL phif phic 0x82000000 2
     ownershipData where
   heapLower := by decide
   heapUpper := by decide
   heap := ⟨ledger, immutable, reserved, storeOwned⟩
-  arrays := arraysReady
-  program := fun p hp => (program_owned p hp).mono
+  arrays := heapArraysReady
+  program := fun p hp => (heap_program_owned p hp).mono
     (fun _ hk => Or.inr (Or.inr (Or.inr hk)))
+  allocator := heapAllocator
 
 #print axioms frameOwned
 #print axioms storeOwned

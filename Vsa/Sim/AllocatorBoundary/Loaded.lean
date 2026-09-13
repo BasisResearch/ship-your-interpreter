@@ -1,6 +1,13 @@
-import Vsa.Sim.AllocatorBoundary.Store
-import Vsa.Sim.NativeNameAudit.ControlLoaded
+import Vsa.Sim.NativeNameAudit.ControlPhysical
 import Vsa.Sim.RuntimeOwnershipTransport
+
+/-!
+The allocator-metadata audit snapshot: two empty blocks over the control store,
+with `__malloc_av_` left zero. Its program is represented and every physical
+boundary fact holds, but its top-chunk pointer is zero. A sparse Sail replay of
+it faults inside `_malloc_r` after following a zero bin pointer. The dlmalloc
+heap field of `InitialOwned` excludes it from `Loaded`.
+-/
 
 namespace Vsa.Sim.AllocatorBoundary
 open Vsa.MemRepr Vsa.RuntimeRepr Vsa.While Vsa.Alloc Vsa.Machine RuntimeOwnership
@@ -46,28 +53,6 @@ theorem programWithin : ProgramReprWithin mem AstPage 0x82000000 2 program := by
     (StmtArrayReprWithin.cons array1 ?_ blockWithin StmtArrayReprWithin.nil), rfl⟩
   all_goals intro i hi; unfold AstPage; omega
 
-theorem block_unique {s : Stmt} (h : StmtRepr mem 0x82000020 s) : s = .block [] := by
-  cases h with
-  | block ht hp hn hs =>
-    rw [Option.some.inj (hp.symm.trans blockArray),
-      Option.some.inj (hn.symm.trans blockCount)] at hs
-    cases hs
-    rfl
-  | _ => simp_all [blockTag]
-
-theorem program_unique {p : Program} (h : ProgramRepr mem 0x82000000 2 p) :
-    p = program := by
-  cases h.1 with
-  | cons hp hs ht =>
-    rw [Option.some.inj (hp.symm.trans array0)] at hs
-    have first := block_unique hs
-    cases ht with
-    | cons hp hs ht =>
-      rw [Option.some.inj (hp.symm.trans array1)] at hs
-      have second := block_unique hs
-      cases ht
-      simp_all [program]
-
 theorem storeAgreement : AgreeP StorePage Control.mem mem := by
   intro k hk
   exact (unchanged (Or.inl (by unfold StorePage at hk; omega))).symm
@@ -105,52 +90,9 @@ theorem memoryFacts : SnapshotMemoryFacts mem where
     intro m' hag
     exact (view.transport (fun k hk => hag k (storePage_outside_prefix hk))).store
 
-theorem arraysReady : StoreArraysReady mem phif initSt.store where
-  namesAligned := by
-    intro fa hf pn hp
-    change fa < 1 at hf
-    have he : fa = 0 := by omega
-    subst fa
-    have he := Option.some.inj (hp.symm.trans view.names)
-    subst pn
-    decide
-  valuesAligned := by
-    intro fa hf pv hp
-    change fa < 1 at hf
-    have he : fa = 0 := by omega
-    subst fa
-    have he := Option.some.inj (hp.symm.trans view.values)
-    subst pv
-    decide
-  valueWords := by
-    intro fa hf pv hp i hi
-    change fa < 1 at hf
-    have he : fa = 0 := by omega
-    subst fa
-    have he := Option.some.inj (hp.symm.trans view.values)
-    subst pv
-    exact valueWordsTotal_transport (Control.arraysReady.valueWords 0 (by decide)
-      0x81000080 Control.reads.values i hi) storeAgreement (by
-        intro k hk
-        change i < 3 at hi
-        unfold valHeader StorePage at *
-        omega)
-
-theorem initialOwned : InitialOwned mem arena stackSL phif phic 0x82000000 2
-    Control.ownershipData where
-  heapLower := by decide
-  heapUpper := by decide
-  heap := ⟨Control.ledger, Control.immutable, Control.reserved, storeOwned view⟩
-  arrays := arraysReady
-  program := by
-    intro p hp
-    rw [program_unique hp]
-    exact programWithin.mono (fun _ hk => Or.inr (Or.inr (Or.inr hk)))
-
-theorem loaded : Vsa.Refine.Loaded interpRunLayout program config :=
-  ⟨0x82000000, 2, programWithin.erase, fixedInp, Nfixed, arena, phif, phic, 0,
-    { toInterpRunPhysicalFacts := memoryFacts.physicalFacts
-      ownership := ⟨Control.ownershipData, initialOwned⟩ }⟩
+/-- Every physical boundary fact holds at the snapshot. -/
+theorem physicalFacts : InterpRunPhysicalFacts config 0x82000000 2 fixedInp
+    Nfixed arena phif phic 0 := memoryFacts.physicalFacts
 
 theorem source_terminates : BigStep program "" := by
   let st1 : Vsa.While.St := ⟨(initSt.store.allocFrame (some 0)).1, ""⟩
@@ -162,10 +104,22 @@ theorem source_terminates : BigStep program "" := by
   exact ⟨st2, ExecSeq.consNormal _ _ _ _ _ _ _ _ first
     (ExecSeq.consNormal _ _ _ _ _ _ _ _ second (ExecSeq.nil st2 0 0)), rfl⟩
 
-/-- This admitted snapshot leaves the allocator's top pointer zero. -/
-theorem top_zero : read64 mem 0x8001ad20 = some 0 := by boundary_read
+/-- The snapshot leaves the allocator's top pointer zero. -/
+theorem top_zero : read64 mem DlHeap.topAddr = some 0 := by
+  simp only [DlHeap.topAddr, DlHeap.avAddr]
+  boundary_read
 
-#print axioms loaded
+/-- Address 8, where `_malloc_r` would read the zero top chunk's size, is not memory. -/
+theorem top_header_absent : read64 mem (0 + 8) = none := by boundary_read
+
+/-- The strengthened boundary excludes the snapshot. -/
+theorem not_loaded : ¬ Vsa.Refine.Loaded interpRunLayout program config := by
+  rintro ⟨_, _, -, _, _, _, _, _, _, F⟩
+  obtain ⟨_, hD⟩ := F.ownership
+  exact DlHeap.not_initialAllocator_of_top top_zero top_header_absent hD.allocator
+
+#print axioms physicalFacts
 #print axioms source_terminates
-#print axioms top_zero
+#print axioms not_loaded
+
 end Vsa.Sim.AllocatorBoundary

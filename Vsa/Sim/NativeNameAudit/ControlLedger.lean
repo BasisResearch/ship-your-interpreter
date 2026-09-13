@@ -1,6 +1,6 @@
-import Vsa.Sim.NativeNameAudit.ControlMemory
+import Vsa.Sim.NativeNameAudit.ControlHeapMemory
 
-/-! Concrete allocation ledger and shared strings for the repaired control. -/
+/-! Concrete allocation ledger and shared strings for the heap control. -/
 
 open Vsa.MemRepr Vsa.RuntimeRepr Vsa.While Vsa.Alloc
 
@@ -12,14 +12,14 @@ def alloc : Allocations :=
   let a0 : Allocations := fun _ => none
   let a1 := a0.insert (.frame 0) 0x81000000 32
   let a2 := a1.insert (.names 0) 0x81000040 64
-  let a3 := a2.insert (.values 0) 0x81000080 192
+  let a3 := a2.insert (.values 0) 0x81000100 192
   let a4 := a3.insert (.binding 0 0) 0x81000200 6
   let a5 := a4.insert (.binding 0 1) 0x81000210 8
   a5.insert (.binding 0 2) 0x81000220 7
 
 def exts : List Extent :=
   [(0x81000220, 7), (0x81000210, 8), (0x81000200, 6),
-   (0x81000080, 192), (0x81000040, 64), (0x81000000, 32)]
+   (0x81000100, 192), (0x81000040, 64), (0x81000000, 32)]
 
 def shared (k : Nat) : Prop :=
   (0x81000200 ≤ k ∧ k < 0x81000206) ∨
@@ -38,7 +38,7 @@ theorem ledger : Ledger arena exts alloc := by
     (by decide) (by simp [Arena.contains, arena]) (by simp)
   have h2 := h1.insert (role := .names 0) (p := 0x81000040) (n := 64)
     (by decide) (by simp [Arena.contains, arena]) (by simp [ExtDisjoint])
-  have h3 := h2.insert (role := .values 0) (p := 0x81000080) (n := 192)
+  have h3 := h2.insert (role := .values 0) (p := 0x81000100) (n := 192)
     (by decide) (by simp [Arena.contains, arena]) (by simp [ExtDisjoint])
   have h4 := h3.insert (role := .binding 0 0) (p := 0x81000200) (n := 6)
     (by decide) (by simp [Arena.contains, arena]) (by simp [ExtDisjoint])
@@ -51,7 +51,7 @@ theorem ledger : Ledger arena exts alloc := by
 private theorem mutable_extent {role : Role} {p n : Nat}
     (hm : role.mutable) (ha : Allocated alloc role p n) :
     (p, n) = (0x81000000, 32) ∨ (p, n) = (0x81000040, 64) ∨
-      (p, n) = (0x81000080, 192) := by
+      (p, n) = (0x81000100, 192) := by
   cases role with
   | frame fa =>
     by_cases hf : fa = 0
@@ -70,7 +70,7 @@ private theorem mutable_extent {role : Role} {p n : Nat}
   | values fa =>
     by_cases hf : fa = 0
     · subst fa
-      have he : (0x81000080, 192) = (p, n) := by
+      have he : (0x81000100, 192) = (p, n) := by
         simpa [Allocated, alloc, Allocations.insert] using ha
       exact Or.inr (Or.inr he.symm)
     · simp [Allocated, alloc, Allocations.insert, hf] at ha
@@ -109,22 +109,22 @@ theorem reserved : Reserved arena exts shared where
     · unfold AstPage at hk
       omega
 
-theorem printShared : SharedCString mem shared 0x81000200 "print" where
-  repr := view.printName
+theorem printShared : SharedCString heapMem shared 0x81000200 "print" where
+  repr := heapStoreFacts.printName
   bytes := by
     intro k hk
     change k ≤ 5 at hk
     exact Or.inl ⟨by omega, by omega⟩
 
-theorem printlnShared : SharedCString mem shared 0x81000210 "println" where
-  repr := view.printlnName
+theorem printlnShared : SharedCString heapMem shared 0x81000210 "println" where
+  repr := heapStoreFacts.printlnName
   bytes := by
     intro k hk
     change k ≤ 7 at hk
     exact Or.inr (Or.inl ⟨by omega, by omega⟩)
 
-theorem assertShared : SharedCString mem shared 0x81000220 "assert" where
-  repr := view.assertName
+theorem assertShared : SharedCString heapMem shared 0x81000220 "assert" where
+  repr := heapStoreFacts.assertName
   bytes := by
     intro k hk
     change k ≤ 6 at hk

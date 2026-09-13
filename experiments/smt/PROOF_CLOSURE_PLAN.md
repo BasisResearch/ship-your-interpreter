@@ -288,27 +288,60 @@ files, and the ELF are unchanged. Elaboration stayed within the existing
 180-second limit. `integration-receipt.json` records the validation evidence.
 No validation gate was relaxed. No completion gate is closed.
 
-Allocator metadata admission audit: **prerequisite checked**; a candidate
-counterexample is open. `Vsa.Sim.AllocatorBoundary.loaded` proves the
-unchanged `Loaded interpRunLayout program config` boundary admits a dense
-snapshot of `[.block [], .block []]` with no remaining premises.
-`source_terminates` gives its terminating source derivation with empty output.
-`top_zero` shows the snapshot leaves the allocator top pointer at zero.
-`allocator-boundary-admission.json` records the consumer. The all-source
-slice reused all 1,982 modules. All 64 audits use standard axioms. Receipt:
-`resource-overlay/run-h92yujh2/receipt.json` under the correction directory.
+Allocator heap boundary: **boundary strengthened** (approved 2026-09-12).
+`InitialOwned.allocator : DlHeap.InitialAllocator` (`Vsa/Sim/DlHeap.lean`)
+requires the newlib dlmalloc state `_malloc_r` reads and per-program heap
+capacity. `LOADED_BOUNDARY_CORRECTION.md` records the exact fields and the
+approval. The final theorem still prints `Loaded interpRunLayout p c`.
 
-A sparse Sail replay of that admitted snapshot stops with `sail_error` after
-120 steps inside malloc. It faults at `0x800047f4` on an 8-byte load from
-address 8, following a zero bin pointer. If this lifts to the dense
-execution, `Loaded` admits a terminating program whose binary gets stuck,
-and the refinement statement is false as stated. That would be the initial
-resource gap of task 1 in executable form. Two premises remain unproved:
-a kernel-checked dense prefix from `AllocatorBoundary.config` to the
-120-step endpoint, and stuckness of that endpoint excluding `Halts`.
-Evidence: `candidate.json`, `admitted-replay.json`, and `AdmittedReplay.lean`
-in `/private/tmp/vsa-allocator-boundary-20260912.HBcAOj/`.
-No validation gate was rerun for this audit. No completion gate is closed.
+The field excludes the zero-top snapshot of `[.block [], .block []]`:
+`Vsa.Sim.AllocatorBoundary.not_loaded` proves `¬ Loaded` although the same
+snapshot satisfies every physical boundary fact (`physicalFacts`) and has a
+terminating source derivation (`source_terminates`). A sparse Sail replay of
+that snapshot faults in `_malloc_r` at `0x800047f4` reading address 8, after
+following a zero bin pointer; `allocator-boundary-admission.json` names the
+exclusion consumer. Replay evidence:
+`/private/tmp/vsa-allocator-boundary-20260912.HBcAOj/`.
+
+The admitted control is rebuilt with a consistent heap:
+`ControlHeapMemory` writes empty bins, the break, the `sbrk` base, and eight
+in-use chunk headers over the repaired control log, and moves the value array
+to its own payload at `0x81000100`. `ControlHeapAllocator` proves `HeapAt`
+and capacity by cost inversion (both `println()` statements cost 0).
+`Control.loaded` now admits `heapConfig`; the stable-control regression
+replays `Control.fullLog`. `InitialResourceGap` inherits the same heap; its
+extra extents lie in an in-use filler chunk.
+
+Real heaps satisfy the field: the proof ELF run to `interp_run` in the Sail
+model (85,483 steps) and three test ELFs from `c/tests` pass the walk, bin,
+and top checks, with no free chunks.
+
+The exclusion slice rebuilt 104 modules in 763.9 seconds
+(`/private/tmp/vsa-dlheap-work/run-nvtu23tl/receipt.json`). The control slice
+checks `Control.loaded`, `readyFacts`, `initialOwned`, `heapAllocator`,
+`heapAt`, `heapBins`, `heapTopPtr`, `program_cost`, and `not_loaded`
+(`run-xy4s8fhb` in the same overlay). Every audit uses standard axioms. Bin
+reads are proved by induction over `binsLog`; the 127-bin log is irreducible
+so elaboration never unfolds it, and admission rewrites with
+`physicalConfig_mem` rather than evaluating the heap write log.
+
+All 1,984 source modules passed through the same overlay; all 22 audits,
+including `endToEnd_refinement` and the exclusion checkpoint consumer, use
+standard axioms (`run-quv0c78f`). All four boundary regressions passed against
+a candidate lock before it was installed: the stable control is admitted by
+`Control.loaded` and halts with `"\n\n"` from the heap snapshot; the three
+unsafe snapshots stay excluded. The lock's changed inputs are the edited
+boundary sources plus `InterpSpillReads` and `rows/DriveSpillGen`, newly in
+the closure. Both allocator fixtures pass, with `InitialResourceGap.heap`
+added to its audits. The source-only gate stops at stage a4 with the same 30
+inherited discipline findings. Evidence: `/private/tmp/vsa-allocator-heap-20260912/`.
+
+Two obligations remain on this boundary. The arena is not yet pinned to
+`[_end, __heap_end)`, so the concrete malloc contract (`A.contains`) cannot be
+instantiated at every admitted state. Capacity soundness relies on
+`Vsa/While/Cost.lean` charging every interpreter `malloc`/`realloc` request at
+least one 16-byte granule; a difftest comparing `__malloc_max_sbrked_mem`
+against modeled cost would check it. No completion gate is closed.
 
 `RuntimeAllocatorState.heap`, `InitialOwned.heap`, and the initial execution
 adapter already use `InitialWriteByte SL`. Retain that ownership index.
@@ -2561,6 +2594,10 @@ The amendment closes the string-comparison cells at
   that the same snapshot also admits an affordable witness. Thus the initial
   adapter must select a suitable allocator-consistent ledger; the obstruction
   does not rule out such a selection or refute `RemainingWork`.
+  `InitialOwned.allocator` now supplies the dlmalloc heap shape and capacity
+  below `__heap_end` for every terminating derivation. Pinning the arena to
+  `[_end, __heap_end)` remains open; `InitialResourceGap` still exhibits a
+  4 KiB arena whose ledger admits no `ResourceBudget`.
   `Vsa/While/Cost.lean` already proves `bigStep_budget_exists`, but that bound
   counts rounded requested bytes and does not establish available physical
   capacity. Reuse it when constructing request counts and ceilings; do not

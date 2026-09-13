@@ -245,7 +245,7 @@ def cases : List Case := [
       (nativeName_not_loaded _), executionProof := none },
   { id := "stable_control", program := nativeNameProgram, expectedOutput := "\n\n",
     sourceProof := nativeName_bigStep,
-    log := nativeNameLog ++ [(0x81000048, 8, 0x81000210#64)],
+    log := Control.fullLog,
     oracle := "Vsa.Sim.NativeNameAudit.nativeName_bigStep",
     admission := "Vsa.Sim.NativeNameAudit.Control.loaded (current)",
     currentBoundary := .admitted "Vsa.Sim.NativeNameAudit.Control.loaded" Control.loaded,

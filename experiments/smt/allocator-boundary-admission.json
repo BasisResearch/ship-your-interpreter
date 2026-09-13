@@ -2,7 +2,7 @@
   "target_obligation": "remainingWork_closed: allocator metadata admission audit",
   "target_type": "Vsa.Sim.EndToEnd.RemainingWork Vsa.Sim.LayoutInstance.interpRunLayout",
   "role": "prerequisite",
-  "consumer": "Vsa.Sim.AllocatorBoundary.loaded",
-  "consumer_type": "Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout Vsa.Sim.AllocatorBoundary.program Vsa.Sim.AllocatorBoundary.config",
+  "consumer": "Vsa.Sim.AllocatorBoundary.not_loaded",
+  "consumer_type": "¬ Vsa.Refine.Loaded Vsa.Sim.LayoutInstance.interpRunLayout Vsa.Sim.AllocatorBoundary.program Vsa.Sim.AllocatorBoundary.config",
   "remaining_premises": []
 }
