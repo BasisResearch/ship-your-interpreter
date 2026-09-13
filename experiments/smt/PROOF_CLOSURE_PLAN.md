@@ -2697,6 +2697,23 @@ Reuse the implemented separation rules, `StableUnder`, `ReprDelta`,
 
 ### 2. Complete allocation and resource suppliers
 
+Malloc is not verified; `MallocContract` stays an assumed contract. It must
+remain satisfiable by the binary's newlib dlmalloc, or the final theorem is
+vacuous. Its current frame is not: `privFoot` is one state-independent
+predicate, required inside the arena (`AllocLedger.priv_arena`) and off every
+live payload in every invariant state (`privFoot_disjoint`), and `spec`,
+`MallocSuccessRun`, and `HeapPublicFrame` leave every byte outside it and the
+stack window unchanged. dlmalloc writes chunk headers at state-dependent arena
+addresses. On the admitted control heap (top chunk `0x82000200`),
+`malloc(32)` writes the new top header at `0x82000238`, while `malloc(64)`
+from the same state returns `[0x82000210, 0x82000250)`, which contains it. No
+single `privFoot` covers the first write and avoids the second payload.
+Correction: frame the allocator by the current live extents — it may write
+arena bytes outside every live extent plus fixed allocator globals outside the
+arena — and drop `priv_arena`. Evidence: the `_malloc_r` top-split path in
+`experiments/disasm.txt`; not yet machine-checked. 47 modules consume
+`privFoot`.
+
 **The allocator layer.** Allocator facts are RUN-GLOBAL, not per entry. One
 `AllocLedger` (`Vsa/Sim/AllocLedger.lean`) carries the `malloc`/`free`/`realloc`
 runs (`MallocRun`, the new `FreeRun`, `ReallocInstance`), the `strlen`/`memcpy`
