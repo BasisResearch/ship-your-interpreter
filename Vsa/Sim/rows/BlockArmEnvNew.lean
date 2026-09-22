@@ -288,7 +288,7 @@ theorem blockArm_resume
               (TruthyCopy.routeL p (sp - 176#64) blockEnvNewCall.retPC aStmt aInterp aRet aEnv)
               (blockLds cR.σ.mem aStmt))).regs = some (0#64 + sign_extend (m := 64) (0#12)) := rfl
           have := gholds_lookup _ hHead.regs h10
-          simpa only [gprGet, hsext, BitVec.add_zero] using this
+          simpa only [gprGet, hsext, BitVec.add_zero, ExecSeqStatusABI, StatusCode] using this
         frame := fun _ _ => rfl
         minstret := hHead.minstret }
   | cons s rest =>
@@ -401,7 +401,7 @@ theorem blockArm_run (hEN : EnvNewContract)
   have hstore' : store' = (st.store.allocFrame (some env)).1 := by
     simpa using (congrArg Prod.fst hAlloc).symm
   have hinner : inner = st.store.frames.size := by
-    simpa using (congrArg Prod.snd hAlloc).symm
+    simpa [Vsa.While.Store.allocFrame] using (congrArg Prod.snd hAlloc).symm
   subst hstore' hinner
   obtain ⟨cA, ment, hsA, hA⟩ := armState_of_entry_kind 2 execArmBlock (by decide) rfl (by decide)
     (fun _ _ h => by cases h with | block hk _ _ _ => exact hk) hEntry
