@@ -28,6 +28,10 @@ Prior fixes: ~/vsa-iris-spike-logs/prior-fixes.patch
   (as in `CmpDispatchSeg.lean`).
 - `Vsa/Sim/MemcpyCopyByte.lean` — `simp` no longer ground-reduces `evalBlocksPC`: added the local
   `byteSegPC` end-PC lemma (`chainEndPC_eq_bt`) and used it in both loop-branch `simpa`s.
+- `Vsa/Sim/StrlenHeadRun.lean` — `simp` no longer unfolds `gprGet` at a literal index (and the
+  `RegisterType x14` index blocks the plain ascription): added `gprGet` to the `a4` `simpa`.
+- `Vsa/Sim/WhileGeomSuppliers.lean` — `sign_extend` on literals: added the `jalr` target equation
+  `BitVec.update (0x800042d0#64 + sign_extend 0#12) 0 0#1 = 0x800042d0#64`.
 
 ## SLOW (per-module build time > 180 s)
 

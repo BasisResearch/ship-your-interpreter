@@ -37,7 +37,7 @@ theorem entry {p r : BitVec 64} {len : Nat} {cs : List Char} {m0 : Mem}
   exact { output := C.output, frame := C.reg_frame
           state := { good := C.good, loaded := by rw [C.mem]; exact h.loaded
                      mem := C.mem.trans h.mem, pc := C.pc, a0 := ha0
-                     a4 := by simpa using ha4, ra := hra, minstret := C.minstret
+                     a4 := by simpa [gprGet] using ha4, ra := hra, minstret := C.minstret
                      tick := C.tick, regions := h.regions, cstr := h.cstr
                      hlen := h.hlen, mle := Nat.zero_le _ } }
 

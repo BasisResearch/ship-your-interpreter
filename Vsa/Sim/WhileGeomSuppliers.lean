@@ -734,7 +734,13 @@ theorem execWhileCondExitKit_at_exit
     { ground := hGround
       good := hExit.good
       tick := hExit.tick
-      pc := by simpa using hExit.pc
+      pc := by
+        have hpcv : BitVec.update ((2147500112#64 : BitVec 64)
+            + LeanRV64DExecutable.Functions.sign_extend (m := 64) (0x000#12)) 0 0#1
+            = 2147500112#64 := by
+          apply BitVec.eq_of_toNat_eq
+          decide
+        simpa [hpcv] using hExit.pc
       minstret := hExit.minstret
       parent_stmt := hParent
       body_read := hBodyRead
