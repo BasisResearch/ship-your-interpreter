@@ -244,7 +244,7 @@ theorem updateStoreFacts
         rw [show (sign_extend (m := 64) (0x010#12) : BitVec 64) = 16#64 by decide]
         simp only [BitVec.toNat_add, BitVec.toNat_ofNat]
         rw [Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by decide)]
-      · simpa [lds, updateStoreLds] using hpv
+      · simpa +ground [lds, updateStoreLds, stepMemM, stepGM, stepLdsM, bytesVal] using hpv
     · refine updateMemFactsLd src.toNat (by rfl) ?_ hgeom.srcLo (by omega)
         (by rcases hgeom.srcHtif with h | h <;> omega) hgeom.srcAlign ?_
       · simp [eaddrM, updLine0, updLine1, stepMemM, stepGM, stepLdsM,
@@ -252,7 +252,7 @@ theorem updateStoreFacts
           updateStoreLds]
         rw [show (sign_extend (m := 64) (0#12) : BitVec 64).toNat = 0 by decide,
           Nat.add_zero, Nat.mod_eq_of_lt src.isLt]
-      · simpa [lds, updateStoreLds] using hpa
+      · simpa +ground [lds, updateStoreLds, stepMemM, stepGM, stepLdsM, bytesVal] using hpa
     · refine updateMemFactsLd (src.toNat + 8) (by rfl) ?_ (by omega) (by omega)
         (by rcases hgeom.srcHtif with h | h <;> omega) (by omega) ?_
       · simp [eaddrM, updLine0, updLine1, updLine2, stepMemM, stepGM, stepLdsM,
@@ -260,7 +260,7 @@ theorem updateStoreFacts
           updateStoreLds]
         rw [show (sign_extend (m := 64) (0x008#12) : BitVec 64).toNat = 8 by decide,
           Nat.mod_eq_of_lt (by omega)]
-      · simpa [lds, updateStoreLds] using hpb
+      · simpa +ground [lds, updateStoreLds, stepMemM, stepGM, stepLdsM, bytesVal] using hpb
     · refine updateMemFactsLd (src.toNat + 16) (by rfl) ?_ (by omega) (by omega)
         (by rcases hgeom.srcHtif with h | h <;> omega) (by omega) ?_
       · simp [eaddrM, updLine0, updLine1, updLine2, updLine3, stepMemM, stepGM,
@@ -268,14 +268,15 @@ theorem updateStoreFacts
           updateStoreLds]
         rw [show (sign_extend (m := 64) (0x010#12) : BitVec 64).toNat = 16 by decide,
           Nat.mod_eq_of_lt (by omega)]
-      · simpa [lds, updateStoreLds] using hpc
+      · simpa +ground [lds, updateStoreLds, stepMemM, stepGM, stepLdsM, bytesVal] using hpc
     · refine updateMemFactsSd dst.toNat (by rfl) ?_ hgeom.dstLo (by omega)
         hgeom.dstHtif hgeom.dstAlign
       simp [eaddrM, updLine0, updLine1, updLine2, updLine3, updLine4, updLine5,
         updLine6, updLine7, stepMemM, stepGM, stepLdsM, updateStoreL, wvalM,
         bytesVal, srcVal, lookupG, eraseG, lds, updateStoreLds, shamtOf]
       rw [hvalsNat']
-      simpa [BitVec.toNat_add] using hbaseNat
+      simpa [BitVec.toNat_add,
+        show (sign_extend (m := 64) (0#12) : BitVec 64).toNat = 0 by decide] using hbaseNat
     · refine updateMemFactsSd (dst.toNat + 8) (by rfl) ?_ (by omega) (by omega)
         (by omega) (by omega)
       simp [eaddrM, updLine0, updLine1, updLine2, updLine3, updLine4, updLine5,
@@ -302,19 +303,19 @@ theorem updateStoreFacts
       rw [← Nat.mod_eq_of_lt hdst16]
       simpa [BitVec.toNat_add] using h
   · refine ⟨?_, d0, d1, d2, h0, h1, h2, ?_, ?_, ?_, ?_, ?_, ?_⟩
-    · simpa [lds, updateStoreLds] using hvals
-    · simpa [lds, updateStoreLds] using
+    · simpa +ground [lds, updateStoreLds, stepMemM, stepGM, stepLdsM, bytesVal] using hvals
+    · simpa +ground [lds, updateStoreLds, stepMemM, stepGM, stepLdsM, bytesVal] using
       (ld_value_eq_read64 m src.toNat d0.toNat
         a0 a1 a2 a3 a4 a5 a6 a7 h0 ha0 ha1 ha2 ha3 ha4 ha5 ha6 ha7)
-    · simpa [lds, updateStoreLds] using
+    · simpa +ground [lds, updateStoreLds, stepMemM, stepGM, stepLdsM, bytesVal] using
       (ld_value_eq_read64 m (src.toNat + 8) d1.toNat
         b0 b1 b2 b3 b4 b5 b6 b7 h1 hb0 hb1 hb2 hb3 hb4 hb5 hb6 hb7)
-    · simpa [lds, updateStoreLds] using
+    · simpa +ground [lds, updateStoreLds, stepMemM, stepGM, stepLdsM, bytesVal] using
       (ld_value_eq_read64 m (src.toNat + 16) d2.toNat
         c0 c1 c2 c3 c4 c5 c6 c7 h2 hc0 hc1 hc2 hc3 hc4 hc5 hc6 hc7)
-    · simpa [lds, updateStoreLds] using hpa
-    · simpa [lds, updateStoreLds] using hpb
-    · simpa [lds, updateStoreLds] using hpc
+    · simpa +ground [lds, updateStoreLds, stepMemM, stepGM, stepLdsM, bytesVal] using hpa
+    · simpa +ground [lds, updateStoreLds, stepMemM, stepGM, stepLdsM, bytesVal] using hpb
+    · simpa +ground [lds, updateStoreLds, stepMemM, stepGM, stepLdsM, bytesVal] using hpc
 
 /-- The reflected update log is exactly three adjacent value-word stores. -/
 theorem updateStoreLog
@@ -543,7 +544,8 @@ theorem envDefineUpdateFromHitCopied
   obtain ⟨cmp, hp, _hsaved⟩ := h
   obtain ⟨hgood, hmemRaw, hpc, hregs, htick⟩ := hp
   have hmem : c.σ.mem = m0 := by
-    simpa [envDefineScanHitSeg, evalBlocks, SegEvalState.init, writeLog] using hmemRaw
+    simpa +ground [envDefineScanHitSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hmemRaw
   obtain ⟨lds, hfacts, hevidence⟩ :=
     updateStoreFacts env src vals dst idx m0 N φc v hcode hword hgeom
   obtain ⟨hvals, d0, d1, d2, h0, h1, h2, hw0, hw1, hw2,
@@ -636,7 +638,7 @@ theorem envDefineUpdateFromHit_of_heap_owned
   apply envDefineUpdateFromHit saved env name src count cursor sp valsBV dst idx
     m0 N φc v A hcode hword hgeom
   · have hp := howned.valuePayloadOutsideSet htarget hidx hvals hsrcOwned
-    simpa [SetOutside, hdst] using hp
+    simpa +unfoldPartialApp [SetOutside, hdst] using hp
   · exact hdstArena
   · exact harenaStack
   · exact harenaCode
