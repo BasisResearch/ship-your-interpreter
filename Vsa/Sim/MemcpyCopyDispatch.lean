@@ -43,6 +43,16 @@ theorem smallEntry {dst src r : BitVec 64} {n : Nat} {bs : Nat → BitVec 8} {m0
 def largeEntrySeg (bulk : Bool) : List BBlock :=
   lengthLargeSeg ++ memcpyX6be0FSeg ++ if bulk then memcpyX6becTSeg else memcpyX6becFSeg
 
+/-- Reflected end PC of the aligned entry: `simp` no longer ground-reduces `evalBlocksPC`. -/
+private theorem largeEntrySegPC (L : GRegs) (lds : List (List (BitVec 8))) (bulk : Bool) :
+    evalBlocksPC (0x80006bdc#64) (SegEvalState.init L lds) (largeEntrySeg bulk)
+      = if bulk then 0x80006c60#64 else 0x80006bfc#64 := by
+  cases bulk
+  · rw [evalBlocksPC, chainEndPC_eq_bt (largeEntrySeg false) _ _ _ (by decide)]
+    rfl
+  · rw [evalBlocksPC, chainEndPC_eq_bt (largeEntrySeg true) _ _ _ (by decide)]
+    rfl
+
 /-- The aligned destination enters the bulk or small-word route selected by the binary. -/
 theorem largeEntry {dst src r : BitVec 64} {n : Nat} {bs : Nat → BitVec 8} {m0 : Mem}
     {before : Config} (h : TestedInput dst src r n bs m0 before)
@@ -98,9 +108,9 @@ theorem largeEntry {dst src r : BitVec 64} {n : Nat} {bs : Nat → BitVec 8} {m0
   have pc := C.pc
   by_cases wide : 72 ≤ 8*(n/8)
   · simp only [more, wide, decide_true] at pc
-    simpa only [Nat.zero_add, wide, if_true] using pc
+    simpa only [Nat.zero_add, wide, if_true, largeEntrySegPC] using pc
   · simp only [more, wide, decide_false] at pc
-    simpa only [Nat.zero_add, wide, if_false] using pc
+    simpa only [Nat.zero_add, wide, largeEntrySegPC, Bool.false_eq_true, ite_false] using pc
 
 #print axioms smallEntry
 #print axioms largeEntry

@@ -91,6 +91,11 @@ which `simp only` no longer supplied).
 `MemcpyCopyBulk` (local `bulkSegPC`), `rows/EnvDefineEmptyLane` (`+ground` recipes, `bytesVal`),
 `EnvDefineMissAppend` (`BitVec.setWidth_eq` after `BitVec.ofNat_toNat`).
 
+### Passes 11-12 (1 module each)
+
+`MemcpyCopyRemainder` and `MemcpyCopyDispatch` — local end-PC lemmas, as for the other
+`MemcpyCopy` rows.
+
 ## SLOW (per-module build time > 180 s)
 
 - `Vsa.Sim.SnprintfSpec20` — 210 s (pass 2)
