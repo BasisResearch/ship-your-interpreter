@@ -149,9 +149,12 @@ theorem assign_arm_return_live_row
     0x800034b4#64 m0 out0 (AssignArmReturnLivePost sp sret m0 out0)
     (by show ChainOK 0x800034b4#64 [10, 2, 9] assignArmReturnSeg; decide)
   intro σ' i' u' hG hi hmem hout hpc hmi hregs
-  have hmem' : σ'.mem = m0 := by simpa using hmem
+  have hmem' : σ'.mem = m0 := by
+    simpa +ground [assignArmReturnSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hmem
   have hpc' : σ'.regs.get? Register.PC = some 0x80003448#64 := by
-    simpa using hpc
+    rw [hpc, evalBlocksPC, chainEndPC_eq_bt assignArmReturnSeg _ _ _ (by decide)]
+    try rfl
   have hsp : σ'.regs.get? Register.x2 = some sp :=
     gholds_lookup (n := 2) (v := sp) _ hregs (by rfl)
   have hsret : σ'.regs.get? Register.x9 = some sret :=
@@ -349,7 +352,8 @@ theorem assign_arm_stage_to_env_set_entry
   have ha2 : σ'.regs.get? Register.x12 = some (sp + 64#64) := by
     have hh := gholds_lookup (n := 12)
       (v := sp + sign_extend (m := 64) (0x040#12)) _ hregs (by rfl)
-    simpa using hh
+    simpa [gprGet, show (sign_extend (m := 64) (0x040#12) : BitVec 64) = 64#64 by decide]
+      using hh
   refine ⟨c', hs, ?_, hout.trans hE.output⟩
   exact
     { good := hG

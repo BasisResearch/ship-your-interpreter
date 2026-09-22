@@ -30,7 +30,8 @@ theorem argumentSlots_member (sp : BitVec 64) (start : Nat) (values : List Value
     | zero => simp [argumentSlots]
     | succ index =>
       apply List.mem_cons_of_mem
-      simpa only [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using ih (start + 1) index (by simpa using bound)
+      simpa only [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm, List.getElem_cons_succ] using
+        ih (start + 1) index (by simpa using bound)
 
 end Vsa.Sim.CallArgStage
 

@@ -67,6 +67,12 @@ equations, and `+unfoldPartialApp` where a predicate argument had to be unfolded
 `SeqClosureNormalContinue`, `rows/EnvDefineAppendExact`, `WhileCondPrefix`, `CallArgsSetup`,
 `EnvGetReflected/EnvGetFrameParent`, `CallArgReturnFacts`.
 
+### Pass 6 (9 errors, 5 modules — same categories)
+
+`rows/EnvDefineAppendPrefix`, `rows/EnvDefineGrowExact`, `rows/EnvDefineTailFramed`,
+`EvalValueReturnTail`, `CallArgumentValues` (the last also needed `List.getElem_cons_succ`,
+which `simp only` no longer supplied).
+
 ## SLOW (per-module build time > 180 s)
 
 - `Vsa.Sim.SnprintfSpec20` — 210 s (pass 2)
