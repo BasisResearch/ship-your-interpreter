@@ -235,7 +235,6 @@ theorem updateSubrange_zeros_load (w : Nat) (hw : 0 < w) (v : BitVec (8 * w)) :
   simp only [hN, hM, BitVec.zero_eq, BitVec.toNat_ofNat, Nat.zero_mod]
   have hvlt : v.toNat < 2 ^ (8 * w) := BitVec.isLt _
   rw [Nat.and_zero, Nat.zero_or, Nat.mod_mod, Nat.mod_eq_of_lt hvlt]
-  rfl
 
 /-! ## `vmem_read_addr (Virtaddr a) width (Load Data) …` on the Bare hot path.
 
@@ -699,7 +698,7 @@ theorem execute_load_signed_char (imm : BitVec 12) (rs1 rd : regidx)
     (execute (instruction.LOAD (imm, rs1, rd, false, width))).run σ
       = .ok RETIRE_SUCCESS σ' :=
   execute_load_char imm rs1 rd false width data σ σ' hwidth hread
-    (by simpa only [extend_value, if_false] using hwr)
+    (by simpa only [extend_value, Bool.false_eq_true, if_false] using hwr)
 
 /-- **Unsigned load** (`is_unsigned = true`: `lwu`/`lhu`/`lbu`). `extend_value true =
 zero_extend`, so the GPR write value is `zero_extend data`. Thin corollary of
