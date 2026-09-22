@@ -21,6 +21,8 @@ Prior fixes: ~/vsa-iris-spike-logs/prior-fixes.patch
 - `Vsa/Sim/DeriveMeta.lean`, `Vsa/Sim/RepackTac.lean` — numeral elaboration: `let mut n := 0`
   now takes its type from the later `m!"{n}"` interpolation (`OfNat MessageData 0`); annotated
   the four counters `: Nat`.
+- `Vsa/Sim/EnvSetReturn.lean` — `simp` no longer ground-reduces `mkLine`/`evalBlock`: routed the
+  memory goal through `writeLog_evalBlocks_init` and added `+ground` to the closing `simp`.
 
 ## SLOW (per-module build time > 180 s)
 

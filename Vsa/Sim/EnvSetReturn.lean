@@ -74,7 +74,8 @@ theorem env_set_return_row (sp : BitVec 64) (lds : List (List (BitVec 8)))
     (by show ChainOK 0x80002d68#64 [2] envSetReturnSeg; decide)
   intro σ' i' u' hG' hi' hmem' hout' hpc' hmi' hregs
   refine ⟨hG', hi', ?_, hout', hpc', ?_, hmi', hregs⟩
-  · simpa using hmem'
+  · rw [hmem', writeLog_evalBlocks_init]
+    simp +ground [envSetReturnSeg, memChain, wlogM, writeLog]
   · have hone : ((0#64 : BitVec 64) + sign_extend (m := 64) (0x001#12)) = 1#64 := by
       apply BitVec.eq_of_toNat_eq
       decide
