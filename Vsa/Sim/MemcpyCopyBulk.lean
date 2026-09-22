@@ -18,6 +18,16 @@ theorem bulkDifference (dst : BitVec 64) (n i : Nat) (remaining : i+72 ≤ 8*(n/
   rw [← sum]
   exact sub_base_span _ _
 
+/-- Reflected end PC of the bulk segment: `simp` no longer ground-reduces `evalBlocksPC`. -/
+private theorem bulkSegPC (L : GRegs) (lds : List (List (BitVec 8))) (more : Bool) :
+    evalBlocksPC (0x80006c60#64) (SegEvalState.init L lds) (bulkSeg more)
+      = if more then 0x80006c60#64 else 0x80006bfc#64 := by
+  cases more
+  · rw [evalBlocksPC, chainEndPC_eq_bt (bulkSeg false) _ _ _ (by decide)]
+    rfl
+  · rw [evalBlocksPC, chainEndPC_eq_bt (bulkSeg true) _ _ _ (by decide)]
+    rfl
+
 /-- The signed branch tests whether another full 72-byte iteration remains. -/
 theorem bulkGuard {dst src r : BitVec 64} {n i : Nat} {bs : Nat → BitVec 8} {m0 : Mem}
     {before : Config} (h : BulkState dst src r n i bs m0 before)
@@ -76,9 +86,9 @@ theorem bulk {dst src r : BitVec 64} {n i : Nat} {bs : Nat → BitVec 8} {m0 : M
   · have pc := C.pc
     by_cases next : i+72+72 ≤ 8*(n/8)
     · simp only [more, next, decide_true] at pc
-      simpa only [next, if_true] using pc
+      simpa only [next, if_true, bulkSegPC] using pc
     · simp only [more, next, decide_false] at pc
-      simpa only [next, if_false] using pc
+      simpa only [next, bulkSegPC, Bool.false_eq_true, ite_false] using pc
 
 #print axioms bulkGuard
 #print axioms bulk
