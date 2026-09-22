@@ -324,8 +324,8 @@ theorem EnvDefineSpillImage.chainFacts {sp : BitVec 64} {c : Config}
   · refine envDefineMemFactsLd (sp := sp) (off := 0) hlo hhi hhtif halign
       (by decide) (by rfl) (by decide) (by decide) (by decide) ?_
     simpa only [stepMemM, stepLdsM, epiKind0, epiKind1, epiKind2, epiKind3, epiKind4,
-      epiKind5, epiKind6, envDefLdsHead, envDefLdsTail, Nat.zero_add, Nat.add_assoc,
-      Nat.reduceAdd] using p00
+      epiKind5, epiKind6, envDefLdsHead, envDefLdsTail, Nat.zero_add, Nat.add_zero,
+      Nat.add_assoc, Nat.reduceAdd] using p00
   · exact hterm
 
 theorem EnvDefineSpillFrame.chainFacts {sp : BitVec 64}

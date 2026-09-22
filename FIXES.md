@@ -32,6 +32,10 @@ Prior fixes: ~/vsa-iris-spike-logs/prior-fixes.patch
   `RegisterType x14` index blocks the plain ascription): added `gprGet` to the `a4` `simpa`.
 - `Vsa/Sim/WhileGeomSuppliers.lean` — `sign_extend` on literals: added the `jalr` target equation
   `BitVec.update (0x800042d0#64 + sign_extend 0#12) 0 0#1 = 0x800042d0#64`.
+- `Vsa/Sim/rows/EnvDefineEpilogueCore.lean` — `simp only` no longer normalises `n + 0` here:
+  added `Nat.add_zero` to the `off := 0` `LPins8` `simpa only`.
+- `Vsa/Sim/ExecRetEpilogue.lean` — `simp` no longer ground-reduces `mkLine`/`evalBlock`: added
+  `+ground` and `evalBlock`/`wlogM` to the memory-frame `simpa`.
 
 ## SLOW (per-module build time > 180 s)
 

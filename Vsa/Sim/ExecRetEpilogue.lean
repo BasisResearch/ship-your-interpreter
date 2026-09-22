@@ -151,7 +151,8 @@ theorem execRetEpilogue_run
   have hs2 := execRetEpilogueWord_value _ _ _ h.saved_s2
   have hs3 := execRetEpilogueWord_value _ _ _ h.saved_s3
   have hmem : σ'.mem = cfg.σ.mem := by
-    simpa [execRetEpilogueSeg, evalBlocks, SegEvalState.init, writeLog] using hm
+    simpa +ground [execRetEpilogueSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hm
   have reg (n : Nat) (v : BitVec 64)
       (hp : lookupG n (evalBlocks execRetEpilogueSeg (SegEvalState.init
         (execRetEpilogueL esp) (execRetEpilogueLoads cfg.σ.mem esp))).regs = some v) :
