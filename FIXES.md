@@ -105,6 +105,11 @@ which `simp only` no longer supplied).
 `ClosureBodyReads` — new category: `intros` now also consumes the trailing `coverage` binder, so
 the following `intro coverage` had nothing left; replaced with `rename_i coverage`.
 
+### Pass 15 (1 module)
+
+`ClosureCallReturn` — the deprecated `if_false` no longer reduces `if false = true then _ else _`;
+replaced with `Bool.false_eq_true, ite_false`.
+
 ## SLOW (per-module build time > 180 s)
 
 - `Vsa.Sim.SnprintfSpec20` — 210 s (pass 2)

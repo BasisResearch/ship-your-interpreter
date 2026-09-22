@@ -39,7 +39,9 @@ theorem BodyRunAt.run_return
   · have input : ClosureReturn.Pre sp sret interp saved5 saved3 saved7 depth false exited :=
       { depthEntry :=
           { good := h.exit.good, tick := h.exit.tick
-            pc := by simpa only [normal, execSeqExitPC, ClosureReturnDepth.entryPC, if_false] using h.exit.pc
+            pc := by
+              simpa only [normal, execSeqExitPC, ClosureReturnDepth.entryPC,
+                Bool.false_eq_true, ite_false] using h.exit.pc
             minstret := h.exit.minstret, regs := ⟨h.interpReg, resultReg, trivial⟩
             geometry := geometry, depthRead := reads.depthRead, bound := depthBound
             code := reachedSupport.image.text.Eval_exprLoaded }
