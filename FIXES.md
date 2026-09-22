@@ -1,5 +1,42 @@
 # Lean 4.34 port fixes (MBP overnight)
 
+## FINAL: GREEN
+
+`lake build Vsa Vsa.IrisSmoke` completes successfully — 2188/2188 jobs, 0 errors.
+
+- 61 modules repaired across 16 build passes (per-pass failing modules:
+  1, 4, 13, 17, 9, 5, 1, 2, 1, 3, 1, 1, 1, 1, 1, 0).
+- No theorem, def or structure statement was changed (the diff removes no declaration line).
+- No `sorry`, `admit`, `axiom`, `native_decide` or `bv_decide` added; no `maxHeartbeats` or
+  `maxRecDepth` raised. Diff: 61 files, +417/-145.
+- Every declaration's axioms stay within {propext, Classical.choice, Quot.sound}; no `sorryAx`
+  anywhere in the final build log.
+- BLOCKED: none.
+
+### The six 4.34 breakage categories, and the fix for each
+
+1. `simp` no longer ground-reduces the reflected block machinery (`mkLine`, `evalBlock`,
+   `evalBlocksPC`, `stepMemM`/`stepLdsM`) — add `+ground` and name `evalBlock`/`wlogM`, or route
+   end PCs through the repo's own `chainEndPC_eq_bt … (by decide); rfl` idiom (as
+   `CmpDispatchSeg.lean` already did). Several rows got a local end-PC lemma instead of repeating
+   the idiom per branch.
+2. `simp` no longer evaluates `sign_extend` on literals — supply the equation explicitly with
+   `BitVec.eq_of_toNat_eq` + `decide` (the `EnvSetReturn.lean` idiom), including the `jalr`
+   `BitVec.update (pc + sign_extend 0#12) 0 0#1` form.
+3. `simp` no longer unfolds these defs at literal indices/arguments — name the def in the simp
+   set: `gprGet`, `gprReg`, `guardB`, `bytesVal`, `StatusCode`, `ExecSeqCopy.Loaded`,
+   `Store.allocFrame`, `Alloc.ExtDisjoint`, `callBodyLoopPC`, `loads`.
+4. Partially applied predicates are no longer unfolded — `+unfoldPartialApp` (`SetOutside`,
+   `AppendOutside`).
+5. `intros` now consumes a trailing binder that a later `intro <name>` expected — `rename_i`.
+6. Deprecated `if_false`/`if_true` no longer reduce `if false = true then _ else _` —
+   `Bool.false_eq_true, ite_false`.
+
+Plus one-off: `EStateM.pure`/`EStateM.bind` no longer collapse `pure () >>= k` in an unfolded
+Sail `do` block (`RamReadVirtual`, one local `rfl` lemma); `simp only` no longer supplies
+`List.foldl_nil`, `List.tail_cons`, `List.headD_cons`, `List.getElem_cons_succ`,
+`Nat.add_zero`, `Option.getD_some`, `BitVec.setWidth_eq`, `BitVec.toNat_zero`.
+
 Prior fixes: ~/vsa-iris-spike-logs/prior-fixes.patch
 
 ## Fixed
