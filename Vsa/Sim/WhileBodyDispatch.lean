@@ -108,7 +108,8 @@ theorem execWhileBodyCall_of_stage
         unfold KeysAvoidRa
         change ∀ n ∈ [10, 12, 13, 11, 2, 8, 18, 19, 9], n ≠ 1
         decide)
-      (by simpa only [stmtWhileBodySeg, writeLog] using h.carrier.code)
+      (by simpa +ground only [stmtWhileBodySeg, writeLog, evalBlocks, evalBlock,
+        SegEvalState.init, wlogM, List.foldl_nil] using h.carrier.code)
   have hmem' : σ'.mem = mBody := hmem
   have hload := execWhileBodyLds_value mBody aStmt aChild hread
   have hzero : (sign_extend (m := 64) (0#12) : BitVec 64) = 0#64 := by decide

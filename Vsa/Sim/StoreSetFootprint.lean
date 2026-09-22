@@ -238,7 +238,8 @@ theorem of_covered
             h.names pn pv hpn hpv i hi q hq k hk
         valueStrings := by
           intro pn pv hpn hpv i hi
-          simpa [OutsideSetSlot, SetOutside] using h.values pn pv hpn hpv i hi }
+          simpa +unfoldPartialApp [OutsideSetSlot, SetOutside] using
+            h.values pn pv hpn hpv i hi }
   · intro ca hca
     have h := hclosures ca hca
     refine
@@ -294,7 +295,7 @@ theorem target_of_covered
           h.otherValueHeaders pn pv hpn hpv i hi hne k hk
       otherValueStrings := by
         intro pn pv hpn hpv i hi hne
-        simpa [OutsideSetSlot, SetOutside] using
+        simpa +unfoldPartialApp [OutsideSetSlot, SetOutside] using
           h.otherValues pn pv hpn hpv i hi hne }
 
 /-- The target shell certificate is the target component of the same global

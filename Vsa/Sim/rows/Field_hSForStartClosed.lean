@@ -57,7 +57,7 @@ theorem forStart_run (hEN : EnvNewContract)
   have hstore' : store' = (st.store.allocFrame (some env)).1 := by
     simpa using (congrArg Prod.fst hAlloc).symm
   have houter : outer = st.store.frames.size := by
-    simpa using (congrArg Prod.snd hAlloc).symm
+    simpa [Vsa.While.Store.allocFrame] using (congrArg Prod.snd hAlloc).symm
   subst hstore' houter
   obtain ⟨cA, ment, hsA, hA⟩ := armState_of_entry_kind 5 execArmFor (by decide) rfl (by decide)
     (fun _ _ h => by cases h with | forS hk _ _ _ _ _ => exact hk) hEntry
