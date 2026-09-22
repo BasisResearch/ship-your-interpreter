@@ -95,7 +95,8 @@ theorem envDefineCapInitAppendRow (env count : BitVec 64)
     (by show ChainOK 0x80002a90#64 [19, 10] envDefineCapInitAppendSeg; decide)
   intro σ' i' u' hG' hi' hmem' hpc' _hmi' hregs'
   refine ⟨hG', ?_, ?_, hregs', hi'⟩
-  · simpa [envDefineCapInitAppendSeg, evalBlocks, SegEvalState.init, writeLog] using hmem'
+  · simpa +ground [envDefineCapInitAppendSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hmem'
   · rw [hpc']; rfl
 
 theorem envDefineCapInitGrowRow (env count : BitVec 64)
@@ -106,7 +107,8 @@ theorem envDefineCapInitGrowRow (env count : BitVec 64)
     (by show ChainOK 0x80002a90#64 [19, 10] envDefineCapInitGrowSeg; decide)
   intro σ' i' u' hG' hi' hmem' hpc' _hmi' hregs'
   refine ⟨hG', ?_, ?_, hregs', hi'⟩
-  · simpa [envDefineCapInitGrowSeg, evalBlocks, SegEvalState.init, writeLog] using hmem'
+  · simpa +ground [envDefineCapInitGrowSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hmem'
   · rw [hpc']; rfl
 
 theorem envDefineCapInitZeroRow (env count : BitVec 64)
@@ -117,7 +119,8 @@ theorem envDefineCapInitZeroRow (env count : BitVec 64)
     (by show ChainOK 0x80002a90#64 [19, 10] envDefineCapInitZeroSeg; decide)
   intro σ' i' u' hG' hi' hmem' hpc' _hmi' hregs'
   refine ⟨hG', ?_, ?_, hregs', hi'⟩
-  · simpa [envDefineCapInitZeroSeg, evalBlocks, SegEvalState.init, writeLog] using hmem'
+  · simpa +ground [envDefineCapInitZeroSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hmem'
   · rw [hpc']; rfl
 
 #print axioms envDefineCapInitAppendRow
@@ -284,8 +287,9 @@ theorem envDefineEmptyLane
   have hcapWord : bytesVal .lw bs4 = BitVec.ofNat 64 cap := by
     simpa [bytesVal, bs4] using sext_count_ed b0 b1 b2 b3 cap hcapSigned hrec
   have hpnWord : bytesVal .ld bs8 = BitVec.ofNat 64 pn := by
-    simpa [bs8] using ld_value_eq_read64 _ (aEnv.toNat + 8) pn d0 d1 d2 d3 d4 d5 d6 d7 hpnA
-      hd0 hd1 hd2 hd3 hd4 hd5 hd6 hd7
+    simpa [bs8, bytesVal] using
+      ld_value_eq_read64 _ (aEnv.toNat + 8) pn d0 d1 d2 d3 d4 d5 d6 d7 hpnA
+        hd0 hd1 hd2 hd3 hd4 hd5 hd6 hd7
   have henv4 : (aEnv + sign_extend (m := 64) (0x004#12)).toNat = aEnv.toNat + 4 := by
     rw [BitVec.toNat_add, sext4_64, Nat.mod_eq_of_lt (by omega)]
   have henv8 : (aEnv + sign_extend (m := 64) (0x008#12)).toNat = aEnv.toNat + 8 := by
@@ -317,7 +321,7 @@ theorem envDefineEmptyLane
       · refine memFactsLw (aEnv.toNat + 4) (by decide) ?_ (by omega) (by omega)
           (by right; omega) ?_
         · rw [capInitLwLine]
-          simpa [eaddrM, envDefineCapInitL, srcVal, lookupG] using henv4
+          simpa +ground [eaddrM, envDefineCapInitL, srcVal, lookupG, runGM] using henv4
         · rw [P.mem]; exact hpins4
       · rw [capInitLwLine]
         simp only [runGM, stepGM, stepLdsM, ldsRunM, wvalM]
@@ -367,7 +371,8 @@ theorem envDefineEmptyLane
         (fun σ' i' u' hG hi hmem hpc hmi hregs => ⟨hG, hmem, hpc, hi, hmi, hregs⟩)
         c1 ⟨hpre, fun _ _ => rfl, P.out⟩
     have hmemA : c2.σ.mem = envDefineScannedMem m esp r v8 v9 v18 v19 v20 v21 v22 := by
-      simpa [envDefineCapInitZeroSeg, evalBlocks, SegEvalState.init, writeLog] using hmem2
+      simpa +ground [envDefineCapInitZeroSeg, evalBlocks, evalBlock, SegEvalState.init,
+        writeLog, wlogM] using hmem2
     have hpcA : c2.σ.regs.get? Register.PC = some 0x80002b98#64 := by rw [hpc2]; rfl
     have reg (n : Nat) (w : BitVec 64)
         (hl : lookupG n (evalBlocks envDefineCapInitZeroSeg
@@ -419,7 +424,7 @@ theorem envDefineEmptyLane
       · refine memFactsLw (aEnv.toNat + 4) (by decide) ?_ (by omega) (by omega)
           (by right; omega) ?_
         · rw [capInitLwLine]
-          simpa [eaddrM, envDefineCapInitL, srcVal, lookupG] using henv4
+          simpa +ground [eaddrM, envDefineCapInitL, srcVal, lookupG, runGM] using henv4
         · rw [P.mem]; exact hpins4
       · rw [capInitLwLine]
         simp only [runGM, stepGM, stepLdsM, ldsRunM, wvalM]
@@ -452,7 +457,8 @@ theorem envDefineEmptyLane
         (fun σ' i' u' hG hi hmem hpc hmi hregs => ⟨hG, hmem, hpc, hi, hmi, hregs⟩)
         c1 ⟨hpre, fun _ _ => rfl, P.out⟩
     have hmemA : c2.σ.mem = envDefineScannedMem m esp r v8 v9 v18 v19 v20 v21 v22 := by
-      simpa [envDefineCapInitAppendSeg, evalBlocks, SegEvalState.init, writeLog] using hmem2
+      simpa +ground [envDefineCapInitAppendSeg, evalBlocks, evalBlock, SegEvalState.init,
+        writeLog, wlogM] using hmem2
     have hpcA : c2.σ.regs.get? Register.PC = some 0x80002b1c#64 := by rw [hpc2]; rfl
     have Rg := envDefineEmptyRegs g N A SL φf φc st env x v esp aEnv aName pv r m out M exts
       v8 v9 v18 v19 v20 v21 v22 pn c1 c2 hE L Q hG2 htick2 hmemA hmi2 hk2.keep hk2.out
