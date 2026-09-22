@@ -261,7 +261,8 @@ theorem initSome_to_stage
   let cfg' : Config := ⟨σ', i', cfg.steps + evalBlocksFuel initSomeDispatchSeg⟩
   have hmem' : σ'.mem = ment := by
     rw [h.mem] at hmem
-    simpa only [initSomeDispatchSeg, writeLog, evalBlocks, evalBlock] using hmem
+    simpa +ground [initSomeDispatchSeg, writeLog, evalBlocks, evalBlock,
+      SegEvalState.init, wlogM] using hmem
   have hs3' : σ'.regs.get? Register.x19 = some aOuter := by
     simp only [initSomeDispatchSeg, initSomeDispatchL, evalBlocks, evalBlock,
       runGM, stepGM, wvalM, srcVal, lookupG, eraseG,
@@ -271,12 +272,12 @@ theorem initSome_to_stage
       show (mkLine 0x80004240#64 0x00050993#32).rd = 19 from rfl,
       show (mkLine 0x80004240#64 0x00050993#32).rs1 = 10 from rfl,
       show (mkLine 0x80004240#64 0x00050993#32).imm = 0 from rfl] at hregs
-    simpa [SegEvalState.init, eraseG, lookupG,
+    simpa [SegEvalState.init, eraseG, lookupG, gprGet,
       show sign_extend (m := 64) (0#12) = 0#64 by decide] using hregs.1
   have ha1' : σ'.regs.get? Register.x11 = some p := by
     simp only [initSomeDispatchSeg, initSomeDispatchL, evalBlocks, evalBlock,
       runGM, stepGM, wvalM, srcVal, lookupG, eraseG] at hregs
-    simpa [SegEvalState.init, eraseG, lookupG, hp,
+    simpa [SegEvalState.init, eraseG, lookupG, hp, gprGet,
       show (mkLine 0x8000423c#64 0x00843583#32).kind = MKind.ld from rfl,
       show (mkLine 0x8000423c#64 0x00843583#32).rd = 11 from rfl] using hregs.2.1
   refine ⟨cfg', hs, liveRA, p, ?_⟩
@@ -404,11 +405,12 @@ theorem initSome_stage_to_bodyPost
         intro σ' i' u' hG' hi' hpc' hmi' hmem' hregs'
         obtain ⟨vm', hmi'v⟩ := hmi'
         have hpc'' : σ'.regs.get? Register.PC = some (0x80004254#64) := by
-          simpa only [stmtForInitBodySeg, L, evalBlocksPC, evalBlocks,
-            evalBlock, SegEvalState.init, runGM, stepGM] using hpc'
+          rw [hpc', evalBlocksPC, chainEndPC_eq_bt stmtForInitBodySeg _ _ _ (by decide)]
+          rfl
         have hcode' : Exec_stmtLoaded σ'.mem := by
           rw [hmem']
-          simpa only [stmtForInitBodySeg, writeLog, evalBlocks, evalBlock] using h.code
+          simpa +ground [stmtForInitBodySeg, writeLog, evalBlocks, evalBlock,
+            SegEvalState.init, wlogM] using h.code
         obtain ⟨hb0, hb1, hb2, hb3⟩ := exec_stmt_at_80004254 hcode'
         obtain ⟨σj, ij, hstepj, hij, hGj, hmemj, hobsj⟩ :=
           stepObs_jal σ' i' u' (0x80004254#64) vm' (0xd8dff0ef#32) (0x1ffd8c#21)
@@ -431,7 +433,8 @@ theorem initSome_stage_to_bodyPost
   let cfg2 : Config := ⟨σ2, i2, cfg.steps + evalBlocksFuel stmtForInitBodySeg + 1⟩
   refine ⟨cfg2, hs, ⟨⟨cfg, liveRA, p, h, hG2, hi2, hpc2, hra2, hmi2, hregs2, ?_, ?_,
     hframe2⟩⟩⟩
-  · simpa only [stmtForInitBodySeg, writeLog, evalBlocks, evalBlock] using hmem2
+  · simpa +ground [stmtForInitBodySeg, writeLog, evalBlocks, evalBlock,
+      SegEvalState.init, wlogM] using hmem2
   · change String.join σ2.sailOutput.toList = st.out
     rw [hout2]
     exact h.out
