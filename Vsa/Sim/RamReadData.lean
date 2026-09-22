@@ -39,7 +39,7 @@ theorem within_mmio_readable_ram_false_width
       = ((2147593472 : Nat) : Int) := by decide
   rw [hrhs]
   intro hbad
-  exact False.elim ((Nat.not_lt_of_ge hle) (by exact_mod_cast hbad))
+  omega
 
 
 /-- Concrete RAM checks for a scalar access accepted without splitting. -/

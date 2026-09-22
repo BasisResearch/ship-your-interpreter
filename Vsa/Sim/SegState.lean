@@ -94,7 +94,7 @@ theorem pinsHold_sublist {σ : MState} {L' L : List Pin}
   induction hs with
   | slnil => trivial
   | cons _ _ ih => exact ih h.2
-  | cons₂ _ _ ih => exact ⟨h.1, ih h.2⟩
+  | cons_cons _ _ ih => exact ⟨h.1, ih h.2⟩
 
 /-- Extend a pin list with a freshly-written register (the `rd` of an
 ALU/JAL step, from `obs_alu_rd`/`obs_jal_rd`).  A determined application —

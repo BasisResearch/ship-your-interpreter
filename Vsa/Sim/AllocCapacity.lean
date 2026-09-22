@@ -152,7 +152,7 @@ theorem physTotal_le_of_sublist {l₁ l₂ : List Extent} (h : l₁.Sublist l₂
   induction h with
   | slnil => exact Nat.le_refl 0
   | cons a _ ih => simp only [physTotal_cons]; omega
-  | cons₂ a _ ih => simp only [physTotal_cons]; omega
+  | cons_cons a _ ih => simp only [physTotal_cons]; omega
 
 /-- Releasing a block never costs more room. -/
 theorem physTotal_erase_le (e : Extent) (l : List Extent) :
