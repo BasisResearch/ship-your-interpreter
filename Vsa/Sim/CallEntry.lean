@@ -852,7 +852,11 @@ theorem evalArgsNil
         frame := ?_
         memFrame := ?_
         stackWin := ?_ }
-    · simpa [evalArgsNilTerm, tgtPCT, tgtPC0, evalArgsContPC, callDispatchPC] using hpc'
+    · have hpcv : (2147496408#64 : BitVec 64)
+          + LeanRV64DExecutable.Functions.sign_extend (m := 64) (124#13) = 2147496532#64 := by
+        apply BitVec.eq_of_toNat_eq
+        decide
+      simpa [evalArgsNilTerm, tgtPCT, tgtPC0, evalArgsContPC, callDispatchPC, hpcv] using hpc'
     · refine ⟨φf, φc, PhiExtends.refl _ _, PhiExtends.refl _ _, ?_⟩
       rw [hmem']
       exact hseg.store
