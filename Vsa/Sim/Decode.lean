@@ -46,8 +46,5 @@ theorem decode_spike_addi
     get_xLPE, readReg, Vsa.Sim.initMisa]
   simp +decide [encdec_reg_backwards, encdec_iop_backwards,
     EStateM.bind, pure, EStateM.pure]
-  constructor
-  · apply BitVec.eq_of_toNat_eq; decide
-  · apply BitVec.eq_of_toNat_eq; decide
 
 end Vsa.Sim

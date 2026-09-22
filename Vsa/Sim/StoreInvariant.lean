@@ -400,11 +400,11 @@ theorem FrameNamesUnique.defineBindings {vars : List (String × Value)}
 
 theorem StoreUnique.allocClosure (s : Store) (closure : ClosureData)
     (h : StoreUnique s) : StoreUnique (s.allocClosure closure).1 := by
-  simpa [Store.allocClosure] using h
+  simpa [Store.allocClosure, StoreUnique] using h
 
 theorem StoreParents.allocClosure (s : Store) (closure : ClosureData)
     (h : StoreParents s) : StoreParents (s.allocClosure closure).1 := by
-  simpa [Store.allocClosure] using h
+  simpa [Store.allocClosure, StoreParents] using h
 
 theorem StoreUnique.allocFrame (s : Store) (parent : Option Addr)
     (h : StoreUnique s) : StoreUnique (s.allocFrame parent).1 := by

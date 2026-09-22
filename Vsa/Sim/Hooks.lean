@@ -176,7 +176,7 @@ theorem within_mmio_readable_ram_false
   have hrhs : ((2147593472 : Nat) : Int) % 18446744073709551616 = ((2147593472 : Nat) : Int) := by
     decide
   rw [hrhs]
-  exact_mod_cast hle
+  omega
 
 open MemoryRegionType AtomicSupport Reservability misaligned_exception in
 /-- `pmaCheck (Physaddr a) 4 (InstructionFetch ()) PBMT_PMA false` succeeds

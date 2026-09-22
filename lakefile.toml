@@ -3,6 +3,7 @@ defaultTargets = ["Vsa"]
 
 [[lean_lib]]
 name = "Vsa"
+leanOptions.backward.isDefEq.respectTransparency = false
 
 [[lean_exe]]
 name = "vsa_run"
