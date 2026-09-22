@@ -18,6 +18,9 @@ Prior fixes: ~/vsa-iris-spike-logs/prior-fixes.patch
   0x80003378#64` to the `SeqClosureRetCarrier.exit` PC `simpa`.
 - `Vsa/Sim/SegEval.lean` — `simp only [writeLog]` no longer reduces the resulting
   `List.foldl applyW m []`: added `List.foldl_nil` to the `writeLog_evalBlocks_init` `simpa only`.
+- `Vsa/Sim/DeriveMeta.lean`, `Vsa/Sim/RepackTac.lean` — numeral elaboration: `let mut n := 0`
+  now takes its type from the later `m!"{n}"` interpolation (`OfNat MessageData 0`); annotated
+  the four counters `: Nat`.
 
 ## SLOW (per-module build time > 180 s)
 

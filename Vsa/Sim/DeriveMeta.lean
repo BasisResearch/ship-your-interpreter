@@ -88,7 +88,7 @@ def elabVerifySlots : CommandElab := fun stx => do
       let _ ← getConstInfoInduct structName
       let env ← getEnv
       let mut msgs : Array MessageData := #[]
-      let mut nfail := 0
+      let mut nfail : Nat := 0
       for p in pairs.getElems do
         match p with
         | `(vsPair| ($fld:ident, $row:ident)) => do
@@ -114,7 +114,7 @@ def elabVerifySlots : CommandElab := fun stx => do
           let fldBinders ← leadingBinderCount fldTy
           let maxStrip := rowBinders - fldBinders
           let mut ok := false
-          let mut depth := 0
+          let mut depth : Nat := 0
           for k in [0:maxStrip+1] do
             unless ok do
               let cand ← stripBinders rowInfo.type k

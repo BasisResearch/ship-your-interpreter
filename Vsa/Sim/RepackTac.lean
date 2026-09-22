@@ -69,7 +69,7 @@ elab "repack" hs:term,* : tactic => do
       | throwError "repack: goal{indentExpr ty}\nis not a named-field structure application"
     -- Candidate terms: each hypothesis itself, then its projections, in order.
     let mut cands : Array (Expr × Expr) := #[]
-    let mut nHyps := 0
+    let mut nHyps : Nat := 0
     for hStx in hs.getElems do
       let h ← Tactic.elabTerm hStx none
       let h ← instantiateMVars h
@@ -96,7 +96,7 @@ elab "repack" hs:term,* : tactic => do
       e := mkApp e mv
       ctorTy := body.instantiate1 mv
     -- Match every field against the candidates; first defeq candidate wins.
-    let mut filled := 0
+    let mut filled : Nat := 0
     for (_, mv) in fieldMVars do
       let mvId := mv.mvarId!
       unless ← mvId.isAssigned do
