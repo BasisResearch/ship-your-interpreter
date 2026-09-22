@@ -13,6 +13,12 @@ structure TailInput (dst src r : BitVec 64) (n i : Nat) (bs : Nat → BitVec 8)
   a4 : c.σ.regs.get? Register.x14 = some (dst + BitVec.ofNat 64 i)
   a7 : c.σ.regs.get? Register.x17 = some (dst + BitVec.ofNat 64 n)
 
+/-- Reflected end PC of the tail branch: `simp` no longer ground-reduces `evalBlocksPC`. -/
+private theorem tailSegPC (L : GRegs) (lds : List (List (BitVec 8))) :
+    evalBlocksPC (0x80006c38#64) (SegEvalState.init L lds) memcpyX6c38TSeg = 0x80006c48#64 := by
+  rw [evalBlocksPC, chainEndPC_eq_bt memcpyX6c38TSeg _ _ _ (by decide)]
+  rfl
+
 /-- Take the actual branch to the remaining byte suffix. -/
 theorem tailBytes {dst src r : BitVec 64} {n i : Nat} {bs : Nat → BitVec 8} {m0 : Mem}
     {before : Config} (h : TailInput dst src r n i bs m0 before) (remaining : i < n) :
@@ -39,7 +45,7 @@ theorem tailBytes {dst src r : BitVec 64} {n i : Nat} {bs : Nat → BitVec 8} {m
       state := { good := C.good, loaded := by rw [C.mem]; exact h.loaded
                  tick := C.tick, a0 := a0, ra := ra, regions := h.regions, bound := h.bound
                  meminv := by rw [C.mem]; exact h.meminv
-                 pc := by simpa only [remaining, if_true] using C.pc
+                 pc := by simpa only [remaining, if_true, tailSegPC] using C.pc
                  a1 := a1, a4 := a4, a7 := a7 } }⟩
 
 /-- Return directly when the whole-word copy exhausted the input. -/

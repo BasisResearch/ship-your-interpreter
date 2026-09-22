@@ -14,6 +14,16 @@ def wordRegs (dst src r : BitVec 64) (n start j : Nat) : GRegs :=
    (12, dst + BitVec.ofNat 64 (8*(n/8))), (11, src + BitVec.ofNat 64 (8*start)),
    (14, dst + BitVec.ofNat 64 (8*start)), (17, dst + BitVec.ofNat 64 n), (10, dst), (1, r)]
 
+/-- Reflected end PC of the word segment: `simp` no longer ground-reduces `evalBlocksPC`. -/
+private theorem wordSegPC (L : GRegs) (lds : List (List (BitVec 8))) (more : Bool) :
+    evalBlocksPC (0x80006c08#64) (SegEvalState.init L lds) (wordSeg more)
+      = if more then 0x80006c08#64 else 0x80006c1c#64 := by
+  cases more
+  · rw [evalBlocksPC, chainEndPC_eq_bt (wordSeg false) _ _ _ (by decide)]
+    rfl
+  · rw [evalBlocksPC, chainEndPC_eq_bt (wordSeg true) _ _ _ (by decide)]
+    rfl
+
 /-- Normalize the actual word-store address in the reflected write log. -/
 theorem wordMemory (dst src r : BitVec 64) (n start j : Nat) (bytes : List (BitVec 8))
     (m : Mem) (more : Bool) (bound : dst.toNat + 8*j < 2^64) :
@@ -132,9 +142,9 @@ theorem word {dst src r : BitVec 64} {n start j : Nat} {bs : Nat → BitVec 8} {
   · have pc := C.pc
     by_cases next : j+1 < n/8
     · simp only [more, next, decide_true] at pc
-      simpa only [next, if_true] using pc
+      simpa only [next, if_true, wordSegPC] using pc
     · simp only [more, next, decide_false] at pc
-      simpa only [next, if_false] using pc
+      simpa only [next, wordSegPC, Bool.false_eq_true, ite_false] using pc
 
 #print axioms wordMemory
 #print axioms word

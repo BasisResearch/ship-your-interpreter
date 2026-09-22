@@ -15,6 +15,12 @@ structure Input (dst src r : BitVec 64) (n : Nat) (bs : Nat → BitVec 8)
   a2 : c.σ.regs.get? Register.x12 = some (BitVec.ofNat 64 n)
   positive : 0 < n
 
+/-- Reflected end PC of the entry branch: `simp` no longer ground-reduces `evalBlocksPC`. -/
+private theorem entrySegPC (L : GRegs) (lds : List (List (BitVec 8))) :
+    evalBlocksPC (0x80006c40#64) (SegEvalState.init L lds) memcpyX6c40FSeg = 0x80006c48#64 := by
+  rw [evalBlocksPC, chainEndPC_eq_bt memcpyX6c40FSeg _ _ _ (by decide)]
+  rfl
+
 /-- The common byte-path setup at the actual branch destination. -/
 structure ByteInput (dst src r : BitVec 64) (n : Nat) (bs : Nat → BitVec 8)
     (m0 : Mem) (c : Config) : Prop extends State dst src r n 0 bs m0 c where
@@ -47,7 +53,7 @@ theorem byteEntry {dst src r : BitVec 64} {n : Nat} {bs : Nat → BitVec 8} {m0 
       state := { good := C.good, loaded := by rw [C.mem]; exact h.loaded
                  tick := C.tick, a0 := a0, ra := ra, regions := h.regions, bound := h.bound
                  meminv := by rw [C.mem]; exact h.meminv
-                 pc := by simpa only [h.positive, if_true] using C.pc
+                 pc := by simpa only [h.positive, if_true, entrySegPC] using C.pc
                  a1 := a1, a4 := a4, a7 := a7 } }⟩
 
 /-- Differing pointer alignments select the byte path in the binary. -/

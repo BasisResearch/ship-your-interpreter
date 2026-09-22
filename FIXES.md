@@ -46,6 +46,9 @@ Prior fixes: ~/vsa-iris-spike-logs/prior-fixes.patch
   idiom for the body end PC.
 - `Vsa/Sim/BinarySecondData.lean` — `simp only` no longer reduces the reflected load list: added
   `stepLdsM`/`stepMemM`/`List.tail_cons`/`List.headD_cons` and `+ground`.
+- `Vsa/Sim/MemcpyCopyTail.lean`, `Vsa/Sim/MemcpyCopyEntry.lean`, `Vsa/Sim/MemcpyCopyWord.lean` —
+  `simp` no longer ground-reduces `evalBlocksPC`: added local end-PC lemmas
+  (`tailSegPC`/`entrySegPC`/`wordSegPC`, all via `chainEndPC_eq_bt`) to the branch `simpa`s.
 
 ## SLOW (per-module build time > 180 s)
 
