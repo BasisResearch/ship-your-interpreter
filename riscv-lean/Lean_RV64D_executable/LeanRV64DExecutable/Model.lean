@@ -209,7 +209,7 @@ def reset (_ : Unit) : SailM Unit := do
   (pure (ext_reset ()))
 
 def init_model (config_filename : String) : SailM Unit := do
-  assert (← (config_is_valid ())) (HAppend.hAppend
+  LeanRV64DExecutable.assert (← (config_is_valid ())) (HAppend.hAppend
     (if ((config_filename == "") : Bool)
     then "Default config"
     else (HAppend.hAppend "Config in " config_filename)) " is invalid.")

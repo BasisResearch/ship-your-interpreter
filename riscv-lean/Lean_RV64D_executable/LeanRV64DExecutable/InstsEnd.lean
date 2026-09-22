@@ -3449,7 +3449,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     imm 4 0) +++ 0b01#2)))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_ADDI4SPN (rd, nzimm) =>
     (do
@@ -3460,7 +3460,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                         rd) +++ 0b00#2)))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_LW (uimm, rs1, rd) =>
     (do
@@ -3470,7 +3470,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     uimm 0 0) +++ ((Sail.BitVec.extractLsb uimm 4 4) +++ ((encdec_creg_forwards rd) +++ 0b00#2)))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_LD (uimm, rs1, rd) =>
     (do
@@ -3480,7 +3480,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     uimm 4 3) +++ ((encdec_creg_forwards rd) +++ 0b00#2))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_SW (uimm, rs1, rs2) =>
     (do
@@ -3490,7 +3490,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     uimm 0 0) +++ ((Sail.BitVec.extractLsb uimm 4 4) +++ ((encdec_creg_forwards rs2) +++ 0b00#2)))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_SD (uimm, rs1, rs2) =>
     (do
@@ -3500,7 +3500,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     uimm 4 3) +++ ((encdec_creg_forwards rs2) +++ 0b00#2))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_ADDI (imm, rsd) =>
     (do
@@ -3510,7 +3510,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     imm 4 0) +++ 0b01#2)))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_JAL imm =>
     (do
@@ -3522,7 +3522,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                             2 0) +++ ((Sail.BitVec.extractLsb imm 4 4) +++ 0b01#2))))))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_ADDIW (imm, rsd) =>
     (do
@@ -3532,7 +3532,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     imm 4 0) +++ 0b01#2)))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_LI (imm, rd) =>
     (do
@@ -3542,7 +3542,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     imm 4 0) +++ 0b01#2)))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_ADDI16SP nzimm =>
     (do
@@ -3553,7 +3553,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                         nzimm 4 3) +++ ((Sail.BitVec.extractLsb nzimm 1 1) +++ 0b01#2))))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_LUI (imm, rd) =>
     (do
@@ -3563,7 +3563,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     imm 4 0) +++ 0b01#2)))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_SRLI (shamt, rsd) =>
     (do
@@ -3573,7 +3573,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     rsd) +++ ((Sail.BitVec.extractLsb shamt 4 0) +++ 0b01#2))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_SRAI (shamt, rsd) =>
     (do
@@ -3583,7 +3583,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     rsd) +++ ((Sail.BitVec.extractLsb shamt 4 0) +++ 0b01#2))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_ANDI (imm, rsd) =>
     (do
@@ -3593,7 +3593,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     rsd) +++ ((Sail.BitVec.extractLsb imm 4 0) +++ 0b01#2))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_SUB (rsd, rs2) =>
     (do
@@ -3603,7 +3603,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                         rs2) +++ 0b01#2)))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_XOR (rsd, rs2) =>
     (do
@@ -3613,7 +3613,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                         rs2) +++ 0b01#2)))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_OR (rsd, rs2) =>
     (do
@@ -3623,7 +3623,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                         rs2) +++ 0b01#2)))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_AND (rsd, rs2) =>
     (do
@@ -3633,7 +3633,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                         rs2) +++ 0b01#2)))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_SUBW (rsd, rs2) =>
     (do
@@ -3643,7 +3643,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                         rs2) +++ 0b01#2)))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_ADDW (rsd, rs2) =>
     (do
@@ -3653,7 +3653,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                         rs2) +++ 0b01#2)))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_J imm =>
     (do
@@ -3665,7 +3665,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                             2 0) +++ ((Sail.BitVec.extractLsb imm 4 4) +++ 0b01#2))))))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_BEQZ (imm, rs) =>
     (do
@@ -3676,7 +3676,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                           imm 4 4) +++ 0b01#2))))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_BNEZ (imm, rs) =>
     (do
@@ -3687,7 +3687,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                           imm 4 4) +++ 0b01#2))))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_SLLI (shamt, rsd) =>
     (do
@@ -3697,7 +3697,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     shamt 4 0) +++ 0b10#2)))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_LWSP (uimm, rd) =>
     (do
@@ -3707,7 +3707,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     uimm 2 0) +++ ((Sail.BitVec.extractLsb uimm 5 4) +++ 0b10#2))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_LDSP (uimm, rd) =>
     (do
@@ -3717,7 +3717,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     uimm 1 0) +++ ((Sail.BitVec.extractLsb uimm 5 3) +++ 0b10#2))))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_SWSP (uimm, rs2) =>
     (do
@@ -3727,7 +3727,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     rs2) +++ 0b10#2)))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_SDSP (uimm, rs2) =>
     (do
@@ -3737,7 +3737,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
                     rs2) +++ 0b10#2)))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_JR rs1 =>
     (do
@@ -3745,7 +3745,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
       then (pure (0b100#3 +++ (0#1 +++ ((encdec_reg_forwards rs1) +++ (0b00000#5 +++ 0b10#2)))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_JALR rs1 =>
     (do
@@ -3753,7 +3753,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
       then (pure (0b100#3 +++ (1#1 +++ ((encdec_reg_forwards rs1) +++ (0b00000#5 +++ 0b10#2)))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_MV (rd, rs2) =>
     (do
@@ -3762,7 +3762,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
         (pure (0b100#3 +++ (0#1 +++ ((encdec_reg_forwards rd) +++ ((encdec_reg_forwards rs2) +++ 0b10#2)))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_EBREAK () =>
     (do
@@ -3770,7 +3770,7 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
       then (pure (0b1001#4 +++ (0b0000000000#10 +++ 0b10#2)))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_ADD (rsd, rs2) =>
     (do
@@ -3779,12 +3779,12 @@ def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVec 16) := do
         (pure (0b100#3 +++ (1#1 +++ ((encdec_reg_forwards rsd) +++ ((encdec_reg_forwards rs2) +++ 0b10#2)))))
       else
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
   | .C_ILLEGAL s => (pure s)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def encdec_compressed_backwards (arg_ : (BitVec 16)) : SailM instruction := do
@@ -6512,7 +6512,7 @@ def execute_ZICBOZ (rs1 : regidx) : SailM ExecutionResult := SailME.run do
           match (← (mem_write_ea paddr cache_block_size access pbmt false false false)) with
           | .Err (exc_addr, e) =>
             (do
-              assert (exc_addr == paddr) "extensions/Zicboz/zicboz_insts.sail:57.38-57.39"
+              LeanRV64DExecutable.assert (exc_addr == paddr) "extensions/Zicboz/zicboz_insts.sail:57.38-57.39"
               (memory_exception (sub_virtaddr_xlenbits vaddr negative_offset) e))
           | .Ok _ =>
             (do
@@ -6525,7 +6525,7 @@ def execute_ZICBOZ (rs1 : regidx) : SailM ExecutionResult := SailME.run do
                   "store got false from mem_write_value")
               | .Err (exc_addr, e) =>
                 (do
-                  assert (exc_addr == paddr) "extensions/Zicboz/zicboz_insts.sail:66.42-66.43"
+                  LeanRV64DExecutable.assert (exc_addr == paddr) "extensions/Zicboz/zicboz_insts.sail:66.42-66.43"
                   (memory_exception (sub_virtaddr_xlenbits vaddr negative_offset) e)))))
 
 def execute_ZICBOM (arg0 : cbop_zicbom) (arg1 : regidx) : SailM ExecutionResult := do
@@ -6581,7 +6581,7 @@ def execute_UTYPE (imm : (BitVec 20)) (rd : regidx) (op : uop) : SailM Execution
 /-- Type quantifiers: width : Nat, width ∈ {1, 2, 4, 8} -/
 def execute_STORE (imm : (BitVec 12)) (rs2 : regidx) (rs1 : regidx) (width : Nat) : SailM ExecutionResult := do
   let offset : xlenbits := (sign_extend (m := 64) imm)
-  assert (width ≤b xlen_bytes) "extensions/I/base_insts.sail:320.28-320.29"
+  LeanRV64DExecutable.assert (width ≤b xlen_bytes) "extensions/I/base_insts.sail:320.28-320.29"
   let data ← do (pure (Sail.BitVec.extractLsb (← (rX_bits rs2)) ((width *i 8) -i 1) 0))
   match (← (vmem_write rs1 offset width data (Store Data) false false false)) with
   | .Ok _ => (pure RETIRE_SUCCESS)
@@ -6778,7 +6778,7 @@ def execute_LPAD (lpl : (BitVec 20)) : SailM ExecutionResult := do
 /-- Type quantifiers: width : Nat, k_ex609834_ : Bool, width ∈ {1, 2, 4, 8} -/
 def execute_LOAD (imm : (BitVec 12)) (rs1 : regidx) (rd : regidx) (is_unsigned : Bool) (width : Nat) : SailM ExecutionResult := do
   let offset : xlenbits := (sign_extend (m := 64) imm)
-  assert (width ≤b xlen_bytes) "extensions/I/base_insts.sail:289.28-289.29"
+  LeanRV64DExecutable.assert (width ≤b xlen_bytes) "extensions/I/base_insts.sail:289.28-289.29"
   match (← (vmem_read rs1 offset width (Load Data) false false false)) with
   | .Ok data =>
     (do

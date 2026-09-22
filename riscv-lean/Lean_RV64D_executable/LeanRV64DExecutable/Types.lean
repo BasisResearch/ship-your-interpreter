@@ -421,7 +421,7 @@ def interruptType_bits_backwards (arg_ : (BitVec 6)) : SailM InterruptType := do
   | 0b001101 => (pure I_COF)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def interruptType_bits_forwards_matches (arg_ : InterruptType) : Bool :=
@@ -541,7 +541,7 @@ def exceptionType_bits_backwards (arg_ : (BitVec 6)) : SailM ExceptionType := do
   | .some result => (pure result)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def exceptionType_bits_forwards_matches (arg_ : ExceptionType) : Bool :=
@@ -663,7 +663,7 @@ def trapCause_bits_backwards (arg_ : (BitVec 6)) : SailM TrapCause := do
       | .some result => (pure result)
       | _ =>
         (do
-          assert false "Pattern match failure at unknown location"
+          LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
           throw Error.Exit))
 
 def trapCause_bits_forwards_matches (arg_ : TrapCause) : Bool :=
@@ -909,7 +909,7 @@ def width_mnemonic_backwards (arg_ : String) : SailM Int := do
   | "d" => (pure 8)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 /-- Type quantifiers: arg_ : Nat, arg_ ∈ {1, 2, 4, 8} -/
@@ -947,7 +947,7 @@ def width_enc_wide_backwards (arg_ : (BitVec 3)) : SailM Int := do
   | 0b100 => (pure 16)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 /-- Type quantifiers: arg_ : Nat, arg_ ∈ {1, 2, 4, 8, 16} -/
@@ -987,7 +987,7 @@ def width_mnemonic_wide_backwards (arg_ : String) : SailM Int := do
   | "q" => (pure 16)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 /-- Type quantifiers: arg_ : Nat, arg_ ∈ {1, 2, 4, 8, 16} -/

@@ -226,7 +226,7 @@ def software_check_cause_backwards (arg_ : (BitVec 2)) : SailM Software_Check_Co
   | 0b11 => (pure SWC_SHADOW_STACK_FAULT)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def software_check_cause_forwards_matches (arg_ : Software_Check_Code) : Bool :=

@@ -47,7 +47,7 @@ def splitReadBody (a : BitVec 64) (w n d : Nat) :
   let rk := read_kind.Read_plain
   let meta' := false
   fun (data, finished, i) => do
-        assert true "loop dummy assert"
+        LeanRV64DExecutable.assert true "loop dummy assert"
         let offset := i
         let paddr := (physaddr.Physaddr (BitVec.addInt paddr_bits (offset *i split_width)))
         match (← (pmpCheck paddr split_width access priv)) with

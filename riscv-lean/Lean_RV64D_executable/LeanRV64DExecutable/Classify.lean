@@ -266,6 +266,6 @@ def float_classify (f : (BitVec k_ex608420_)) : SailM float_class := do
                         else (pure float_class_negative_inf))
                       else
                         (do
-                          assert false "float_classify internal logic error"
+                          LeanRV64DExecutable.assert false "float_classify internal logic error"
                           throw Error.Exit))))))
 

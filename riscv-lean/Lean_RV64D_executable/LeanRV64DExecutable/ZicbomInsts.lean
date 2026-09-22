@@ -209,7 +209,7 @@ def encdec_cbop_backwards (arg_ : (BitVec 12)) : SailM cbop_zicbom := do
   | 0b000000000000 => (pure CBO_INVAL)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def encdec_cbop_forwards_matches (arg_ : cbop_zicbom) : Bool :=
@@ -232,7 +232,7 @@ def cbop_mnemonic_backwards (arg_ : String) : SailM cbop_zicbom := do
   | "cbo.inval" => (pure CBO_INVAL)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def cbop_mnemonic_forwards_matches (arg_ : cbop_zicbom) : Bool :=

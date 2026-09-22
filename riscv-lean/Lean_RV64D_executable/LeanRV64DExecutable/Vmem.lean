@@ -253,7 +253,7 @@ def pt_walk (sv_width : Nat) (vpn : (BitVec (sv_width - 12))) (access : (MemoryA
     then 2
     else 3
   let pte_addr := (pt_base +++ (vpn_i +++ (zeros (n := log_pte_size_bytes))))
-  assert ((sv_width == 32) || (xlen == 64)) "sys/vmem.sail:128.36-128.37"
+  LeanRV64DExecutable.assert ((sv_width == 32) || (xlen == 64)) "sys/vmem.sail:128.36-128.37"
   let pte_addr := (Physaddr (zero_extend (m := 64) pte_addr))
   match (← (read_pte pte_addr (2 ^i log_pte_size_bytes))) with
   | .Err _ =>
@@ -372,7 +372,7 @@ def translationMode (priv : Privilege) : SailM SATPMode := do
         match arch with
         | .RV64 =>
           (do
-            assert (xlen ≥b 64) "sys/vmem.sail:255.25-255.26"
+            LeanRV64DExecutable.assert (xlen ≥b 64) "sys/vmem.sail:255.25-255.26"
             (pure (_get_Satp64_Mode (Mk_Satp64 (← readReg satp)))))
         | .RV32 =>
           (pure (0b000#3 +++ (_get_Satp32_Mode
@@ -452,7 +452,7 @@ def satp_mode_width_forwards (arg_ : SATPMode) : SailM Int := do
   | .Sv57 => (pure 57)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      LeanRV64DExecutable.assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 /-- Type quantifiers: arg_ : Nat, arg_ ∈ {32, 39, 48, 57} -/
@@ -491,7 +491,7 @@ def translate (sv_width : Nat) (asid : (BitVec (if ( 64 = 32  : Bool) then 9 els
 
 /-- Type quantifiers: sv_width : Nat, is_sv_mode(sv_width) -/
 def get_satp (sv_width : Nat) : SailM (BitVec (if ( sv_width = 32  : Bool) then 32 else 64)) := do
-  assert ((sv_width == 32) || (xlen == 64)) "sys/vmem.sail:396.30-396.31"
+  LeanRV64DExecutable.assert ((sv_width == 32) || (xlen == 64)) "sys/vmem.sail:396.30-396.31"
   if ((sv_width == 32) : Bool)
   then (pure (Sail.BitVec.extractLsb (← readReg satp) 31 0))
   else readReg satp
@@ -514,7 +514,7 @@ def translateAddr (vAddr : virtaddr) (access : (MemoryAccessType mem_payload)) :
     (do
       let sv_width ← do (satp_mode_width_forwards mode)
       let satp_sxlen ← do (get_satp sv_width)
-      assert ((sv_width == 32) || (xlen == 64)) "sys/vmem.sail:432.36-432.37"
+      LeanRV64DExecutable.assert ((sv_width == 32) || (xlen == 64)) "sys/vmem.sail:432.36-432.37"
       let svAddr := (Sail.BitVec.extractLsb (bits_of_virtaddr vAddr) (sv_width -i 1) 0)
       if (((bits_of_virtaddr vAddr) != (sign_extend (m := 64) svAddr)) : Bool)
       then (pure (Err ((← (translationException access (PTW_Invalid_Addr ()))), init_ext_ptw)))
