@@ -103,7 +103,8 @@ theorem execWhileCondPrefix_run
         intro σ i u hG hi hpc hmi hm _
         obtain ⟨vm, hvm⟩ := hmi
         have hp : σ.regs.get? Register.PC = some 0x8000404c#64 := by
-          simpa only [execWhileCondPrefixSeg] using hpc
+          rw [hpc, evalBlocksPC, chainEndPC_eq_bt execWhileCondPrefixSeg _ _ _ (by decide)]
+          try rfl
         have hc : Code.Exec_stmtLoaded σ.mem := by
           simpa only [execWhileCondPrefixSeg, writeLog] using hm ▸ hcode
         obtain ⟨σ2, i2, hs2, hi2, hG2, hm2, ho2⟩ :=
@@ -141,7 +142,9 @@ theorem execWhileCondPrefix_run
       a1 := gholds_lookup (n := 11) _ hRegs (by rfl)
       a2 := gholds_lookup (n := 12) _ hRegs (by rfl)
       a3 := gholds_lookup (n := 13) _ hRegs (by rfl)
-      mem := by simpa only [execWhileCondPrefixSeg, writeLog] using hMem
+      mem := by
+        simpa +ground only [execWhileCondPrefixSeg, writeLog, evalBlocks, evalBlock,
+          SegEvalState.init, wlogM, List.foldl_nil] using hMem
       out := hOut
       frame := hFrame }
 

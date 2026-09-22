@@ -521,7 +521,8 @@ theorem StoreAppendFootprint.of_covered
             h.names pn pv hpn hpv i hi q hq k hk
         valuePayload := by
           intro pn pv hpn hpv i hi
-          simpa [AppendOutside, AppendUntouched] using h.values pn pv hpn hpv i hi }
+          simpa +unfoldPartialApp [AppendOutside, AppendUntouched] using
+            h.values pn pv hpn hpv i hi }
   · intro ca hca
     have h := hclosures ca hca
     refine

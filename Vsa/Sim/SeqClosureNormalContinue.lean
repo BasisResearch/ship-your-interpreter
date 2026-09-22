@@ -118,7 +118,8 @@ theorem seqClosureNormalContinue_run
       (by change ChainOK 0x80003378#64 [10, 2, 8] _; decide) h.tick
   have hbody := execRetEpilogueWord_value _ _ _ h.savedBody
   have hmem : σ'.mem = cfg.σ.mem := by
-    simpa [seqClosureNormalContinueSeg, evalBlocks, SegEvalState.init, writeLog] using hm
+    simpa +ground [seqClosureNormalContinueSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hm
   have reg (n : Nat) (v : BitVec 64)
       (hp : lookupG n (evalBlocks seqClosureNormalContinueSeg (SegEvalState.init
         (callClosureBodyExitL 0#64 sp (BitVec.ofNat 64 index))
