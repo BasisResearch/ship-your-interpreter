@@ -129,7 +129,7 @@ theorem EnvNewSuccessPre.facts
     off24_addr p (by have := h.fresh.hi; omega)
   unfold envNewSuccessSeg ChainFacts
   chain_facts h.code with "Vsa.Sim.Code.env_new_at_"
-  · simpa [guardB, envNewSuccessL, srcVal, lookupG] using
+  · simpa +ground [guardB, envNewSuccessL, srcVal, lookupG, runGM] using
       (beq_eq_false_iff_ne.mpr h.fresh.nonzero)
   · exact envNew_loadFact esp 8 h.caller.lo h.caller.hi h.caller.win
       h.caller.align (by decide) rfl (by decide) (by decide) (by decide)

@@ -50,6 +50,17 @@ Prior fixes: ~/vsa-iris-spike-logs/prior-fixes.patch
   `simp` no longer ground-reduces `evalBlocksPC`: added local end-PC lemmas
   (`tailSegPC`/`entrySegPC`/`wordSegPC`, all via `chainEndPC_eq_bt`) to the branch `simpa`s.
 
+### Pass 4 (same four 4.34 categories, 17 further modules)
+
+`StrlenCompleteRun`, `EnvGetReflected/EnvGetCountHead`, `EnvGetReflected/EnvGetScanAdvance`,
+`InitialNullRun`, `SeqClosureNormalExitResume`, `rows/EnvDefineEpilogue`, `StoreSetFootprint`,
+`WhileBodyDispatch`, `rows/Field_hSForStartClosed`, `rows/EnvDefineScanLoop`,
+`rows/BlockArmEnvNew`, `rows/CallClosureSplice`, `EnvNewSuccessSuffix`, and the three
+`MemcpyCopy` rows. Fixes are the same shapes as above: `+ground` plus `evalBlock`/`wlogM` for
+reflected-segment memory, local `chainEndPC_eq_bt` end-PC lemmas, `gprGet`/`gprReg`/`guardB`/
+`StatusCode`/`ExecSeqCopy.Loaded`/`Store.allocFrame` unfoldings, explicit `sign_extend` literal
+equations, and `+unfoldPartialApp` where a predicate argument had to be unfolded.
+
 ## SLOW (per-module build time > 180 s)
 
 - `Vsa.Sim.SnprintfSpec20` — 210 s (pass 2)
