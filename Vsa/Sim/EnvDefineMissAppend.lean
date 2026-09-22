@@ -71,7 +71,7 @@ theorem EnvDefinePrologueAllocatorPost.reach_append
       have kind : EnvDefineGrowKind cap dispatched :=
         .grow (by omega) (by simpa only [if_neg room] using C.pc) C.capacityReg
       have namesReg : dispatched.σ.regs.get? Register.x22 = some (BitVec.ofNat 64 pn.toNat) := by
-        simpa only [BitVec.ofNat_toNat] using caller.namesReg
+        simpa only [BitVec.ofNat_toNat, BitVec.setWidth_eq] using caller.namesReg
       obtain ⟨grown, exts', cap', pn', pvals', growSteps, grownPost, growAgreement⟩ :=
         envDefineGrowAllocator_run g N A SL phiF phiC st target name v esp env namePtr src r m out M
           exts dispatched.σ.mem alloc shared (credits + 1) cap pn.toNat a.values dispatched geometry L

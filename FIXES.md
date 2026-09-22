@@ -86,6 +86,11 @@ which `simp only` no longer supplied).
 
 `rows/EnvDefineCallRuns` — `+ground` for the reflected store/load addresses and `bytesVal`.
 
+### Pass 10 (11 errors, 3 modules)
+
+`MemcpyCopyBulk` (local `bulkSegPC`), `rows/EnvDefineEmptyLane` (`+ground` recipes, `bytesVal`),
+`EnvDefineMissAppend` (`BitVec.setWidth_eq` after `BitVec.ofNat_toNat`).
+
 ## SLOW (per-module build time > 180 s)
 
 - `Vsa.Sim.SnprintfSpec20` — 210 s (pass 2)
