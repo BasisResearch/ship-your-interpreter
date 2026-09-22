@@ -79,7 +79,8 @@ theorem ClosureScopePost.fold_entry
       savedRead := h.savedS6 rfl, gp := h.gp, present := presentAfter, support := h.support
       emptyCapacity := fun _ => by rw [pushFrameMap_fresh]; exact h.capacity
       output := rfl, frame := fun _ _ => rfl }
-  simpa only [Nat.mul_zero, Nat.add_zero, BitVec.ofNat_add, BitVec.ofNat_toNat] using cursor
+  simpa only [Nat.mul_zero, Nat.add_zero, BitVec.ofNat_add, BitVec.ofNat_toNat,
+    BitVec.setWidth_eq] using cursor
 
 /-- Bind the nonempty parameter list from the actual allocated scope through body entry. -/
 theorem ClosureScopePost.bind_params

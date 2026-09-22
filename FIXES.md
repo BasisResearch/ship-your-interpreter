@@ -96,6 +96,10 @@ which `simp only` no longer supplied).
 `MemcpyCopyRemainder` and `MemcpyCopyDispatch` — local end-PC lemmas, as for the other
 `MemcpyCopy` rows.
 
+### Pass 13 (1 error, 1 module)
+
+`ClosureParamFoldEntry` — `BitVec.setWidth_eq` after `BitVec.ofNat_toNat`.
+
 ## SLOW (per-module build time > 180 s)
 
 - `Vsa.Sim.SnprintfSpec20` — 210 s (pass 2)
