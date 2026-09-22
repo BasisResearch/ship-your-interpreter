@@ -41,6 +41,11 @@ Prior fixes: ~/vsa-iris-spike-logs/prior-fixes.patch
 - `Vsa/Sim/DriveToLoopHeadSpans.lean` — four sites: two `evalBlocksPC` end-PCs rerouted through
   `chainEndPC_eq_bt … (by decide); rfl`, one `output` unfolding added to a `simpa`, one
   `BitVec.addInt pc 4` literal supplied by `decide`.
+- `Vsa/Sim/rows/Field_hInitSome.lean` — six sites: `+ground`/`SegEvalState.init`/`wlogM` for three
+  segment-memory `simpa only`s, `gprGet` for two register readbacks, and the `chainEndPC_eq_bt`
+  idiom for the body end PC.
+- `Vsa/Sim/BinarySecondData.lean` — `simp only` no longer reduces the reflected load list: added
+  `stepLdsM`/`stepMemM`/`List.tail_cons`/`List.headD_cons` and `+ground`.
 
 ## SLOW (per-module build time > 180 s)
 

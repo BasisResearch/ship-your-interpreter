@@ -64,7 +64,7 @@ theorem second_data (m : Mem) (node sp interp right : BitVec 64)
   unfold secondLoads
   chain_facts hcode with "Vsa.Sim.Code.eval_expr_at_"
   · exact hw.facts
-  · simpa only [Nat.add_zero] using
+  · simpa +ground only [Nat.add_zero, stepLdsM, stepMemM, List.tail_cons, List.headD_cons] using
       stack_load_facts geometry 0 (by decide) (by rfl) (by decide) (by decide)
   · exact stack_load_facts geometry 120 (by decide) (by rfl) (by decide) (by decide)
   · exact stack_load_facts geometry 128 (by decide) (by rfl) (by decide) (by decide)
