@@ -6,6 +6,12 @@ namespace Vsa.Sim.MemcpyCopy
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa
 open Vsa.Machine Vsa.MemRepr Vsa.Alloc Vsa.Logic
 
+/-- Reflected end PC of the remainder entry: `simp` no longer ground-reduces `evalBlocksPC`. -/
+private theorem remainderSegPC (L : GRegs) (lds : List (List (BitVec 8))) :
+    evalBlocksPC (0x80006bfc#64) (SegEvalState.init L lds) memcpyX6bfcFSeg = 0x80006c08#64 := by
+  rw [evalBlocksPC, chainEndPC_eq_bt memcpyX6bfcFSeg _ _ _ (by decide)]
+  rfl
+
 /-- Enter the small-word loop after the bulk copy stops. -/
 theorem remainderWords {dst src r : BitVec 64} {n i : Nat} {bs : Nat → BitVec 8} {m0 : Mem}
     {before : Config} (h : BulkState dst src r n i bs m0 before)
@@ -45,7 +51,7 @@ theorem remainderWords {dst src r : BitVec 64} {n i : Nat} {bs : Nat → BitVec 
                  tick := C.tick, a0 := a0, ra := ra, regions := h.regions
                  bound := by rw [indexEq]; exact h.bound
                  meminv := by rw [C.mem, indexEq]; exact h.meminv
-                 pc := by simpa only [wordRemaining, if_true] using C.pc
+                 pc := by simpa only [wordRemaining, if_true, remainderSegPC] using C.pc
                  a1 := a1, a2 := a2, a3 := a3, a4 := a4, a5 := a5, a7 := a7
                  align := h.align, start_lt := wordRemaining
                  start_le := Nat.le_refl _, word_bound := Nat.le_of_lt wordRemaining } }⟩
