@@ -39,7 +39,13 @@ theorem SeqClosureRetCarrier.exit
     { supported := Or.inr ⟨v, rfl⟩
       good := hChild.1.good
       tick := hChild.1.tick
-      pc := by simpa [execSeqExitPC] using hChild.1.pc
+      pc := by
+        have hpcv : BitVec.update ((2147496824#64 : BitVec 64)
+            + LeanRV64DExecutable.Functions.sign_extend (m := 64) (0x000#12)) 0 0#1
+            = 2147496824#64 := by
+          apply BitVec.eq_of_toNat_eq
+          decide
+        simpa [execSeqExitPC, hpcv] using hChild.1.pc
       status_abi := hChild.1.a0
       store := hChild.1.store
       out := hChild.1.out

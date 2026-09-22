@@ -13,3 +13,6 @@ Prior fixes: ~/vsa-iris-spike-logs/prior-fixes.patch
   the `EnvSetReturn.lean` idiom) to the `simpa` for `hx8_4`.
 - `Vsa/Sim/CallEntry.lean` — `simp` no longer evaluates `sign_extend` on literals: added
   `hpcv : 2147496408#64 + sign_extend 124#13 = 2147496532#64` to the `evalArgsNil` PC `simpa`.
+- `Vsa/Sim/SeqClosureRetResume.lean` — `simp` no longer evaluates `sign_extend` on literals:
+  added the `jalr` target equation `BitVec.update (0x80003378#64 + sign_extend 0#12) 0 0#1 =
+  0x80003378#64` to the `SeqClosureRetCarrier.exit` PC `simpa`.
