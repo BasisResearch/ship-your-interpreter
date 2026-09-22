@@ -88,7 +88,7 @@ theorem writeLog_evalBlocks_init (bs : List BBlock) (m : Std.ExtHashMap Nat (Bit
     (regs : GRegs) (loads : List (List (BitVec 8))) :
     writeLog m (evalBlocks bs (SegEvalState.init regs loads)).log =
       memChain bs m regs loads := by
-  simpa only [SegEvalState.init, writeLog] using
+  simpa only [SegEvalState.init, writeLog, List.foldl_nil] using
     writeLog_evalBlocks bs (SegEvalState.init regs loads) m
 
 @[simp] theorem evalBlocks_init_regs_nil (regs : GRegs)

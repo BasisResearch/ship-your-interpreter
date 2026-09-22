@@ -16,3 +16,5 @@ Prior fixes: ~/vsa-iris-spike-logs/prior-fixes.patch
 - `Vsa/Sim/SeqClosureRetResume.lean` — `simp` no longer evaluates `sign_extend` on literals:
   added the `jalr` target equation `BitVec.update (0x80003378#64 + sign_extend 0#12) 0 0#1 =
   0x80003378#64` to the `SeqClosureRetCarrier.exit` PC `simpa`.
+- `Vsa/Sim/SegEval.lean` — `simp only [writeLog]` no longer reduces the resulting
+  `List.foldl applyW m []`: added `List.foldl_nil` to the `writeLog_evalBlocks_init` `simpa only`.
