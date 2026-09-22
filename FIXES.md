@@ -36,6 +36,8 @@ Prior fixes: ~/vsa-iris-spike-logs/prior-fixes.patch
   added `Nat.add_zero` to the `off := 0` `LPins8` `simpa only`.
 - `Vsa/Sim/ExecRetEpilogue.lean` — `simp` no longer ground-reduces `mkLine`/`evalBlock`: added
   `+ground` and `evalBlock`/`wlogM` to the memory-frame `simpa`.
+- `Vsa/Sim/rows/EnvDefineScanRows.lean` — `simp` no longer ground-reduces `mkLine`/`evalBlock`:
+  added `+ground` and `evalBlock`/`wlogM` to the three segment-memory `simpa`s.
 
 ## SLOW (per-module build time > 180 s)
 

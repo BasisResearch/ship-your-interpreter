@@ -77,7 +77,8 @@ theorem envDefineScanInitLiveRow
     (by show ChainOK 0x80002a90#64 [10, 19, 18, 21, 2, 20] envDefineScanInitSeg; decide)
   intro σ' i' u' hG' hi' hmem' hpc' _ hregs'
   refine ⟨hG', ?_, ?_, hregs', hi'⟩
-  · simpa [envDefineScanInitSeg, evalBlocks, SegEvalState.init, writeLog] using hmem'
+  · simpa +ground [envDefineScanInitSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hmem'
   · rw [hpc']; rfl
 
 /- One scan-head argument marshal, ending immediately before `jal strcmp`. -/
@@ -159,7 +160,8 @@ theorem envDefineScanCallRun (cursor name : BitVec 64)
       envDefineScanCallSeg = 0x80002ab8#64 := by rfl
   have hloaded' : Vsa.Sim.Code.Env_defineLoaded σ'.mem := by
     rw [hmem']
-    simpa using hloaded
+    simpa +ground [envDefineScanCallSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hloaded
   obtain ⟨σ2, i2, hstep, hi2, hG2, hmem2, hobs⟩ :=
     site_80002ab8_ed σ' i' u' 0x80002ab8#64 vm' hG'
       (hpcE ▸ hpc') hmi'v hloaded' rfl (by decide) hi'
@@ -241,7 +243,8 @@ theorem envDefineScanCallRead64
     rw [sext_zero, BitVec.add_zero]
   refine ⟨c', ?_, hG', hi', ?_, hpc', hra', ?_, ?_, hmi', ?_⟩
   · exact hsteps
-  · simpa [c'] using hmem'
+  · simpa +ground [c', envDefineScanCallSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hmem'
   · simpa [c', gprGet] using hx10g
   · simpa [c', gprGet] using hx11g
   · intro R hR
