@@ -1018,7 +1018,8 @@ private theorem spillBodyLanded_of_ready
   have hsetjmp' : Code.SetjmpLoaded cB.σ.mem :=
     setjmpLoaded_of_stack_frame c.σ.mem cB.σ.mem F.setjmp_code hwide
   have hpc4424 : cB.σ.regs.get? Register.PC = some 0x80004424#64 := by
-    simpa [L] using S.pc
+    rw [S.pc, evalBlocksPC, chainEndPC_eq_bt driveSpillSeg _ _ _ (by decide)]
+    rfl
   refine ⟨cB, {
     run := S.steps
     mem_extends := by rw [S.mem]; exact memExtends_writeLog _ _
@@ -2228,11 +2229,13 @@ theorem hLoopB_ready_of_data
       simpa [cH] using
         (P.outside_prefix k hk).trans (congrArg (fun m : Mem => m[k]?) hmem3.symm)
     · unfold output
-      simpa [cH] using
+      simpa [cH, output] using
         (congrArg (fun a : Array String => String.join a.toList) hout').trans P.output
     · simpa [cH] using (hmem3.symm ▸ P.run_code)
   refine ⟨cH, ⟨hsteps, ?_, hG', hi', hmi', L⟩, hmem3, hregs⟩
-  simpa [cH] using hpc'
+  show σ'.regs.get? Register.PC = some 0x8000448c#64
+  rw [hpc', evalBlocksPC, chainEndPC_eq_bt driveLoopSetupBSeg _ _ _ (by decide)]
+  rfl
 
 /-- Legacy setup-B landing projected from the exact direct-data result. -/
 theorem hLoopB_ready_of_row
@@ -2364,7 +2367,8 @@ private theorem bnezFallthroughPayload_of_loaded (spNew : BitVec 64) : BnezFallt
     sp := obs_branch_nottaken_other' hobs Register.x2 (by decide) hsp,
     minstret := obs_branch_nottaken_minstret hobs, payload := ?_, gp := ?_ }⟩
   · rw [hobs.out]
-  · simpa using obs_branch_nottaken_pc hobs
+  · simpa [show BitVec.addInt (0x80004428#64 : BitVec 64) 4 = (0x8000442c#64 : BitVec 64)
+      from by decide] using obs_branch_nottaken_pc hobs
   · rw [hobs.1 Register.htif_payload_writes (by decide) (by decide) (by decide)]
     exact get?_sigmaPost_branch_nottaken σ 0x80004428#64 vm
       Register.htif_payload_writes (by decide) (by decide) (by decide) (by decide)

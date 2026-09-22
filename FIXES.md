@@ -38,6 +38,9 @@ Prior fixes: ~/vsa-iris-spike-logs/prior-fixes.patch
   `+ground` and `evalBlock`/`wlogM` to the memory-frame `simpa`.
 - `Vsa/Sim/rows/EnvDefineScanRows.lean` — `simp` no longer ground-reduces `mkLine`/`evalBlock`:
   added `+ground` and `evalBlock`/`wlogM` to the three segment-memory `simpa`s.
+- `Vsa/Sim/DriveToLoopHeadSpans.lean` — four sites: two `evalBlocksPC` end-PCs rerouted through
+  `chainEndPC_eq_bt … (by decide); rfl`, one `output` unfolding added to a `simpa`, one
+  `BitVec.addInt pc 4` literal supplied by `decide`.
 
 ## SLOW (per-module build time > 180 s)
 
