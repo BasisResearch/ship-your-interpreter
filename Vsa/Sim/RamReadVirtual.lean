@@ -5,6 +5,12 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterface
 open Register Sail.ConcurrencyInterfaceV1.PreSail
 namespace Vsa.Sim
 
+/-- Collapse the unit-valued `assert` prefix of a Sail `do` block in the exception monad.
+Lean 4.34 no longer unfolds this bind through `simp only [EStateM.pure, EStateM.bind]`. -/
+private theorem pure_unit_bindCont {ε σ ε' β : Type}
+    (f : Unit → ExceptT ε' (EStateM ε σ) β) :
+    (EStateM.pure (Except.ok () : Except ε' Unit)).bind (ExceptT.bindCont f) = f () := rfl
+
 /-- Bare-mode reads ignore the successfully computed page split and permit misalignment. -/
 theorem vmem_read_addr_of_pageSplit
     (σ : SequentialState RegisterType trivialChoiceSource)
@@ -27,7 +33,7 @@ theorem vmem_read_addr_of_pageSplit
   have htm := translationMode_machine σ
   simp only [EStateM.run] at hsplit hep htm htrv
   unfold vmem_read_addr
-  simp only [hmis, ite_self, LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
+  simp only [hmis, pure_unit_bindCont, ite_self, LeanRV64DExecutable.SailME.run, LeanRV64DExecutable.SailME.throw,
     Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run,
     Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
     bind, ExceptT.bind, ExceptT.mk, liftM, monadLift, MonadLift.monadLift,
