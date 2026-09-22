@@ -15,6 +15,18 @@ def byteRegs (dst src r : BitVec 64) (n i : Nat) : GRegs :=
   [(11, src + BitVec.ofNat 64 i), (14, dst + BitVec.ofNat 64 i),
    (17, dst + BitVec.ofNat 64 n), (10, dst), (1, r)]
 
+/-- Reflected end PC of the byte segment: `simp` no longer ground-reduces `evalBlocksPC`. -/
+private theorem byteSegPC (L : GRegs) (ld : List (BitVec 8)) (more : Bool) :
+    evalBlocksPC (0x80006c48#64) (SegEvalState.init L [ld]) (byteSeg more)
+      = if more then 0x80006c48#64 else 0x80006c5c#64 := by
+  cases more
+  · show chainEndPC 0x80006c48#64 L [ld] (byteSeg false) = _
+    rw [chainEndPC_eq_bt (byteSeg false) 0x80006c48#64 L [ld] (by decide)]
+    rfl
+  · show chainEndPC 0x80006c48#64 L [ld] (byteSeg true) = _
+    rw [chainEndPC_eq_bt (byteSeg true) 0x80006c48#64 L [ld] (by decide)]
+    rfl
+
 /-- The reflected store writes exactly the current destination byte. -/
 theorem byteMemory (dst src r : BitVec 64) (n i : Nat) (b : BitVec 8) (m : Mem)
     (more : Bool) (bound : dst.toNat + i < 2^64) :
@@ -121,9 +133,9 @@ theorem byte {dst src r : BitVec 64} {n i : Nat} {bs : Nat → BitVec 8} {m0 : M
   · have pc := C.pc
     by_cases next : i+1 < n
     · simp only [more, next, decide_true] at pc
-      simpa only [next, if_true] using pc
+      simpa only [next, if_true, byteSegPC] using pc
     · simp only [more, next, decide_false] at pc
-      simpa only [next, if_false] using pc
+      simpa only [next, byteSegPC, Bool.false_eq_true, ite_false] using pc
 
 #print axioms byteMemory
 #print axioms byte

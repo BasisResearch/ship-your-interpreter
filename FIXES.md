@@ -26,6 +26,8 @@ Prior fixes: ~/vsa-iris-spike-logs/prior-fixes.patch
 - `Vsa/Sim/rows/ArgsReturnCopy.lean` — `simp` no longer ground-reduces `evalBlocksPC`: replaced
   both `simpa using hpc'` with the repo's `chainEndPC_eq_bt … (by decide); rfl` idiom
   (as in `CmpDispatchSeg.lean`).
+- `Vsa/Sim/MemcpyCopyByte.lean` — `simp` no longer ground-reduces `evalBlocksPC`: added the local
+  `byteSegPC` end-PC lemma (`chainEndPC_eq_bt`) and used it in both loop-branch `simpa`s.
 
 ## SLOW (per-module build time > 180 s)
 
