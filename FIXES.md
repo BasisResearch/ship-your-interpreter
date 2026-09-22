@@ -61,6 +61,12 @@ reflected-segment memory, local `chainEndPC_eq_bt` end-PC lemmas, `gprGet`/`gprR
 `StatusCode`/`ExecSeqCopy.Loaded`/`Store.allocFrame` unfoldings, explicit `sign_extend` literal
 equations, and `+unfoldPartialApp` where a predicate argument had to be unfolded.
 
+### Pass 5 (30 errors, 9 modules — same categories)
+
+`rows/EnvDefineUpdateExact`, `EnvSetHitReconstruct`, `rows/EnvDefineScanFramed`,
+`SeqClosureNormalContinue`, `rows/EnvDefineAppendExact`, `WhileCondPrefix`, `CallArgsSetup`,
+`EnvGetReflected/EnvGetFrameParent`, `CallArgReturnFacts`.
+
 ## SLOW (per-module build time > 180 s)
 
 - `Vsa.Sim.SnprintfSpec20` — 210 s (pass 2)

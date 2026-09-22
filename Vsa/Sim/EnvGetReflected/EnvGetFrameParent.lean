@@ -48,7 +48,7 @@ theorem frame_parent
     intro hz
     apply hnonnull
     have hn := congrArg BitVec.toNat hz
-    simpa only [hptr] using hn
+    simpa only [hptr, BitVec.toNat_zero] using hn
   obtain ⟨after, present, hp⟩ := parent_branch env (BitVec.ofNat 64 (phiF parent)) c
     h.good hpc h.tick h.env4 h.loadedG
     (by have := h.header_lo; omega) h.header_hi

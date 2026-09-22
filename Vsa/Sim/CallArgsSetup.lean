@@ -93,7 +93,7 @@ theorem Pre.facts {node sp saved7 env : BitVec 64} {count : Nat} {before : Confi
   have emptyGuard : guardB bop.BGE 0#64 (BitVec.ofNat 64 count) = decide (count = 0) := by
     by_cases hz : count = 0
     · subst count; exact blez_guard_zero
-    · simpa [hz] using blez_guard_pos count (by omega) (by have := h.countBound; omega)
+    · simpa [hz, guardB] using blez_guard_pos count (by omega) (by have := h.countBound; omega)
   generalize he : decide (count = 0) = empty
   cases empty <;> simp only [seg, initSeg, Bool.false_eq_true, if_false, if_true] <;> chain_facts h.code with "Vsa.Sim.Code.eval_expr_at_"
   all_goals first

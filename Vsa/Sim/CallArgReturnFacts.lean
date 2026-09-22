@@ -56,7 +56,9 @@ theorem facts {node base sp : BitVec 64} {index count : Nat}
   all_goals
     chain_facts code with "Vsa.Sim.Code.eval_expr_at_"
     · exact BinaryPrefix.stack_load_facts G.caller 64 (Or.inl rfl) rfl rfl (by decide)
-    · simpa only [Nat.add_zero] using BinaryPrefix.stack_load_facts G.caller 0 (Or.inl rfl) rfl rfl (by decide)
+    · simpa +ground only [Nat.add_zero, stepLdsM, stepMemM, loads, List.tail_cons,
+        List.headD_cons] using
+        BinaryPrefix.stack_load_facts G.caller 0 (Or.inl rfl) rfl rfl (by decide)
     · exact BinaryPrefix.stack_load_facts G.caller 16 (Or.inl rfl) rfl rfl (by decide)
     · exact BinaryPrefix.stack_load_facts G.caller 24 (Or.inl rfl) rfl rfl (by decide)
     · exact storeFacts G 0 (by decide) (by decide) rfl address0
