@@ -97,7 +97,9 @@ theorem env_set_hit_load_row
     (envSetHitLds pv w0 w1 w2) 0x80002d3c#64 m out0 _
     (by show ChainOK 0x80002d3c#64 [20, 21, 8, 2] envSetHitLoadSeg; decide)
   intro σ' i' u' hg ht hm ho hp hmi hr
-  refine ⟨hg, ht, by simpa using hm, ho, by simpa using hp, hmi, ?_⟩
+  refine ⟨hg, ht, by simpa +ground [envSetHitLoadSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hm, ho,
+    by rw [hp, evalBlocksPC, chainEndPC_eq_bt envSetHitLoadSeg _ _ _ (by decide)]; try rfl, hmi, ?_⟩
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, trivial⟩
   · rw [← envSetWordBytes_val pv]; exact gholds_lookup (n := 15) _ hr (by rfl)
   · exact gholds_lookup (n := 8) _ hr (by rfl)
@@ -117,7 +119,9 @@ theorem env_set_hit_calc_row (pv idx w0 w1 w2 sp : BitVec 64)
     0x80002d50#64 m out0 _
     (by show ChainOK 0x80002d50#64 [15, 8, 14, 11, 12, 13, 2] envSetHitCalcSeg; decide)
   intro σ' i' u' hg ht hm ho hp hmi hr
-  refine ⟨hg, ht, by simpa using hm, ho, by simpa using hp, hmi, ?_⟩
+  refine ⟨hg, ht, by simpa +ground [envSetHitCalcSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hm, ho,
+    by rw [hp, evalBlocksPC, chainEndPC_eq_bt envSetHitCalcSeg _ _ _ (by decide)]; try rfl, hmi, ?_⟩
   refine ⟨?_, ?_, ?_, ?_, ?_, trivial⟩
   · exact gholds_lookup (n := 15) _ hr (by rfl)
   · exact gholds_lookup (n := 11) _ hr (by rfl)
@@ -174,7 +178,7 @@ theorem env_set_hit_store0_row (dst w0 w1 w2 sp : BitVec 64)
     (by show ChainOK 0x80002d5c#64 [15, 11, 12, 13, 2] envSetHitStore0Seg; decide)
   intro σ' i' u' hg ht hm ho hp hmi hr
   refine ⟨hg, ht, hm.trans (envSetHitStore0_mem m dst w0 w1 w2 sp), ho,
-    by simpa using hp, hmi, ?_⟩
+    by rw [hp, evalBlocksPC, chainEndPC_eq_bt envSetHitStore0Seg _ _ _ (by decide)]; try rfl, hmi, ?_⟩
   refine ⟨?_, ?_, ?_, ?_, ?_, trivial⟩ <;>
     exact gholds_lookup _ hr (by rfl)
 
@@ -191,7 +195,7 @@ theorem env_set_hit_store1_row (dst w0 w1 w2 sp : BitVec 64)
     (by show ChainOK 0x80002d60#64 [15, 11, 12, 13, 2] envSetHitStore1Seg; decide)
   intro σ' i' u' hg ht hm ho hp hmi hr
   refine ⟨hg, ht, hm.trans (envSetHitStore1_mem m dst w0 w1 w2 sp), ho,
-    by simpa using hp, hmi, ?_⟩
+    by rw [hp, evalBlocksPC, chainEndPC_eq_bt envSetHitStore1Seg _ _ _ (by decide)]; try rfl, hmi, ?_⟩
   refine ⟨?_, ?_, ?_, ?_, ?_, trivial⟩ <;>
     exact gholds_lookup _ hr (by rfl)
 
@@ -208,7 +212,7 @@ theorem env_set_hit_store2_row (dst w0 w1 w2 sp : BitVec 64)
     (by show ChainOK 0x80002d64#64 [15, 11, 12, 13, 2] envSetHitStore2Seg; decide)
   intro σ' i' u' hg ht hm ho hp hmi hr
   refine ⟨hg, ht, hm.trans (envSetHitStore2_mem m dst w0 w1 w2 sp), ho,
-    by simpa using hp, hmi, ?_⟩
+    by rw [hp, evalBlocksPC, chainEndPC_eq_bt envSetHitStore2Seg _ _ _ (by decide)]; try rfl, hmi, ?_⟩
   refine ⟨?_, ?_, ?_, ?_, ?_, trivial⟩ <;>
     exact gholds_lookup _ hr (by rfl)
 
