@@ -210,7 +210,8 @@ theorem seqClosureNormalExitRun
       (by change KeysOK [10, 2, 8]; decide) (h.facts hc hb hn)
       (by change ChainOK 0x80003378#64 [10, 2, 8] _; decide) hChild.1.tick
   have hmem : σ'.mem = cfg.σ.mem := by
-    simpa [callClosureBodyExitNormalSeg, evalBlocks, SegEvalState.init, writeLog] using hm
+    simpa +ground [callClosureBodyExitNormalSeg, evalBlocks, evalBlock,
+      SegEvalState.init, writeLog, wlogM] using hm
   have hregs := frame_of_wrChain_avoids
     (by decide : ∀ rr ∈ noiseRegs, seqClosureNormalKeep rr = false)
     (by decide : WrChainAvoids seqClosureNormalKeep callClosureBodyExitNormalSeg) hframe

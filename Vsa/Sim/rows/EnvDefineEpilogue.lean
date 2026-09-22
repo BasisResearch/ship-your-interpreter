@@ -48,7 +48,8 @@ theorem envDefineEpilogueExact_of_post
       gprGet c.σ n = some w :=
     gholds_lookup _ hregs hl
   refine ⟨hG, htick, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simpa [envDefineEpilogueSeg, evalBlocks, SegEvalState.init, writeLog] using hmem
+  · simpa +ground [envDefineEpilogueSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hmem
   · rw [hpc]
     simp [envDefineEpilogueSeg, evalBlocks, evalBlock, evalBlocksPC, chainEndPC,
       endPCB, tgtPCT, SegEvalState.init, runGM, stepGM, stepLdsM, wvalM, srcVal,

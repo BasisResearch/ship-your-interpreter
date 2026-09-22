@@ -75,7 +75,7 @@ theorem interpValueNull_run (c : Config) (sp : BitVec 64) (N : NativeAddrs)
   intro R hR hra harg
   apply post.frame R hR ?_ hra
   change ∀ n ∈ ([10] : List Nat), (gprReg n == R) = false
-  simpa only [List.mem_singleton, forall_eq] using harg
+  simpa only [List.mem_singleton, forall_eq, gprReg] using harg
 
 /-- Execute the initial result-slot initialization from its actual code and registers. -/
 theorem initialValueNull_run (c : Config) (N : NativeAddrs) (phiC : Addr → Nat)
