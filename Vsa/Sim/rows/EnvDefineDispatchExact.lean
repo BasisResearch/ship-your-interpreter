@@ -163,7 +163,8 @@ theorem envDefineCapAppendRow (env count : BitVec 64)
     (by show ChainOK 0x80002b14#64 [20, 19] envDefineCapAppendSeg; decide)
   intro σ' i' u' hG' hi' hmem' hpc' _hmi' hregs'
   refine ⟨hG', ?_, ?_, hregs', hi'⟩
-  · simpa [envDefineCapAppendSeg, evalBlocks, SegEvalState.init, writeLog] using hmem'
+  · simpa +ground [envDefineCapAppendSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hmem'
   · rw [hpc']; rfl
 
 theorem envDefineCapGrowRow (env count : BitVec 64)
@@ -178,7 +179,8 @@ theorem envDefineCapGrowRow (env count : BitVec 64)
     (by show ChainOK 0x80002b14#64 [20, 19] envDefineCapGrowSeg; decide)
   intro σ' i' u' hG' hi' hmem' hpc' _hmi' hregs'
   refine ⟨hG', ?_, ?_, hregs', hi'⟩
-  · simpa [envDefineCapGrowSeg, evalBlocks, SegEvalState.init, writeLog] using hmem'
+  · simpa +ground [envDefineCapGrowSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hmem'
   · rw [hpc']; rfl
 
 theorem envDefineCapAppendRowFramed
@@ -340,8 +342,8 @@ theorem envDefineMissCapDispatch
   have hcapWord : bytesVal .lw bs = BitVec.ofNat 64 cap := by
     simpa [bytesVal, bs] using sext_count_ed b0 b1 b2 b3 cap hcapSigned hrec
   have hmem : c.σ.mem = m0 := by
-    simpa [EnvDefineScanLivePost, envDefineScanDoneSeg, evalBlocks,
-      SegEvalState.init, writeLog] using doneFacts.memory
+    simpa +ground [EnvDefineScanLivePost, envDefineScanDoneSeg, evalBlocks, evalBlock,
+      SegEvalState.init, writeLog, wlogM] using doneFacts.memory
   have hregs := doneFacts.registers
   have reg (n : Nat) (w : BitVec 64)
       (hl : lookupG n (evalBlocks envDefineScanDoneSeg

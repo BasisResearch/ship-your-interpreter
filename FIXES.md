@@ -73,6 +73,10 @@ equations, and `+unfoldPartialApp` where a predicate argument had to be unfolded
 `EvalValueReturnTail`, `CallArgumentValues` (the last also needed `List.getElem_cons_succ`,
 which `simp only` no longer supplied).
 
+### Pass 7 (3 errors, 1 module)
+
+`rows/EnvDefineDispatchExact` — reflected-segment memory, `+ground` recipe.
+
 ## SLOW (per-module build time > 180 s)
 
 - `Vsa.Sim.SnprintfSpec20` — 210 s (pass 2)
