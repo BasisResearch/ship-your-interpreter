@@ -57,7 +57,7 @@ theorem count_head (env : BitVec 64) (count : Nat) (c : Config)
     · subst count
       exact blez_guard_zero
     · have hpos : 0 < count := Nat.pos_of_ne_zero hz
-      simpa [empty, hz] using blez_guard_pos count hpos (by omega)
+      simpa [empty, hz, guardB] using blez_guard_pos count hpos (by omega)
   have hload : MemFacts c.σ.mem L bs (mkLine 0x80002c40#64 0x000a2903#32) := by
     change (0x80000000 ≤ (env + sign_extend (m := 64) (0#12)).toNat ∧
       (env + sign_extend (m := 64) (0#12)).toNat + 4 ≤ 0x100000000 ∧

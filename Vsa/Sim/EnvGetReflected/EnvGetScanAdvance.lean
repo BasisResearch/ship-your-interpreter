@@ -64,7 +64,8 @@ theorem scan_advance
   have hfacts : ChainFacts c.σ.mem c.σ.mem L [] (scanAdvanceSeg exhausted) := by
     generalize he : exhausted = b
     cases b <;> chain_facts hloaded with "Vsa.Sim.Code.env_get_at_" <;>
-      simpa only [show sign_extend (m := 64) (0x001#12) = 1#64 from by decide] using
+      simpa +ground [L, idx, guardB, srcVal, runGM, stepGM, lookupG, eraseG, wvalM,
+        show sign_extend (m := 64) (0x001#12) = 1#64 from by decide] using
         hbranch.trans he
   have hmemLog : writeLog c.σ.mem
       (evalBlocks (scanAdvanceSeg exhausted) (SegEvalState.init L [])).log = c.σ.mem := by
