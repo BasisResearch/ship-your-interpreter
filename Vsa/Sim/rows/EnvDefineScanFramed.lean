@@ -231,8 +231,9 @@ theorem envDefineScanStartFramed
       unfold guardB
       unfold zopz0zKzJ_s
       rw [decide_eq_false_iff_not]
-      simpa only [envDefineScanInitSeg, envDefineScanInitLiveL, srcVal, lookupG, runGM,
-        BitVec.toInt_zero, ge_iff_le, Int.not_le] using hpos
+      simpa +ground only [envDefineScanInitSeg, envDefineScanInitLiveL, srcVal, lookupG,
+        runGM, ite_true, ite_false, Option.getD_some, BitVec.toInt_zero, ge_iff_le,
+        Int.not_le] using hpos
     · unfold MemFacts
       have hea :
           (eaddrM (mkLine 0x80002a94#64 0x00853b03#32)
@@ -271,7 +272,8 @@ theorem envDefineScanStartFramed
         (SegEvalState.init (envDefineScanInitLiveL env count name pv sp) [bs])).regs = some v) :
       gprGet c'.σ n = some v := gholds_lookup _ hregs hl
   have hmemEq : c'.σ.mem = m0 := by
-    simpa [envDefineScanInitSeg, evalBlocks, SegEvalState.init, writeLog] using hmem'
+    simpa +ground [envDefineScanInitSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hmem'
   have hsaved' : EnvDefineSavedSpillFrame sp saved c' := by
     exact hsaved.of_mem_eq (hmemEq.trans hmem.symm)
   have hx9' : c'.σ.regs.get? Register.x9 = some pn := by
@@ -293,7 +295,8 @@ theorem envDefineScanStartFramed
       hframe, hnames, hcount, hpositive, hsaved'⟩
     · rw [hmemEq, ← hmem]; exact hloadedD
     · rw [hmemEq, ← hmem]; exact hloadedS
-    · simpa using hpc'
+    · rw [hpc', evalBlocksPC, chainEndPC_eq_bt envDefineScanInitSeg _ _ _ (by decide)]
+      try rfl
     · simpa [gprGet] using reg 20 env (by rfl)
     · simpa [gprGet] using reg 18 name (by rfl)
     · simpa [gprGet] using reg 21 pv (by rfl)
@@ -886,14 +889,16 @@ theorem EnvDefineScanFramedResult.resolve
   · apply hit i hi cmp
     refine ⟨first, nameEq, live, savedFrame, frame, ?_, ?_⟩
     · obtain ⟨_, memory, _, _, _⟩ := live
-      simpa [envDefineScanHitSeg, evalBlocks, SegEvalState.init, writeLog] using memory
+      simpa +ground [envDefineScanHitSeg, evalBlocks, evalBlock, SegEvalState.init,
+        writeLog, wlogM] using memory
     · obtain ⟨_, _, _, regs, _⟩ := live
       show gprGet c.σ 10 = some cmp
       exact gholds_lookup _ regs (by rfl)
   · apply miss i cmp
     refine ⟨missing, lastIndex, live, savedFrame, frame, ?_⟩
     obtain ⟨_, memory, _, _, _⟩ := live
-    simpa [envDefineScanDoneSeg, evalBlocks, SegEvalState.init, writeLog] using memory
+    simpa +ground [envDefineScanDoneSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using memory
 
 #print axioms EnvDefineScanFramedResult.resolve
 
