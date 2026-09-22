@@ -129,7 +129,7 @@ theorem appendHeadFacts
       lpin_of_present h3, lpin_of_present h4, lpin_of_present h5,
       lpin_of_present h6, lpin_of_present h7⟩
   have hloaded : bytesVal .ld [b0,b1,b2,b3,b4,b5,b6,b7] = names := by
-    simpa using ld_value_eq_read64 m (env.toNat + 8) names.toNat
+    simpa [bytesVal] using ld_value_eq_read64 m (env.toNat + 8) names.toNat
       b0 b1 b2 b3 b4 b5 b6 b7 hgeom.namesRead h0 h1 h2 h3 h4 h5 h6 h7
   have hloaded' :
       sign_extend (m := 64)

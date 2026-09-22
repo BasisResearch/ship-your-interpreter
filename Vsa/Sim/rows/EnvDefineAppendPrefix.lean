@@ -44,7 +44,8 @@ theorem envDefineMemcpyArgRow (copy size name : BitVec 64) (m0 : Mem) :
     (by show ChainOK 0x80002b30#64 [10, 8, 18] envDefineMemcpyArgSeg; decide)
   intro σ' i' u' hG' hi' hmem' hpc' _hmi' hregs'
   refine ⟨hG', ?_, ?_, hregs', hi'⟩
-  · simpa [envDefineMemcpyArgSeg, evalBlocks, SegEvalState.init, writeLog] using hmem'
+  · simpa +ground [envDefineMemcpyArgSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hmem'
   · rw [hpc']
     rfl
 
@@ -101,7 +102,8 @@ theorem envDefineMemcpyCallRun
   intro σ' i' u' hG' hi' hpc' hmi' hmem' _hregs'
   obtain ⟨vm', hmi'v⟩ := hmi'
   have hpc'' : σ'.regs.get? Register.PC = some 0x80002b40#64 := by
-    simpa using hpc'
+    rw [hpc', evalBlocksPC, chainEndPC_eq_bt envDefineMemcpyArgSeg _ _ _ (by decide)]
+    try rfl
   have hlog : writeLog m0 (evalBlocks envDefineMemcpyArgSeg
       (SegEvalState.init (envDefineMemcpyArgL copy size name) [])).log = m0 := by rfl
   have hloaded' : Vsa.Sim.Code.Env_defineLoaded σ'.mem := by

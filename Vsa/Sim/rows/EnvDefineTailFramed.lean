@@ -158,7 +158,8 @@ theorem envDefineUpdateFromHitCopiedKeep
   obtain ⟨cmp, hp, hsaved⟩ := h
   obtain ⟨hgood, hmemRaw, hpc, hregs, htick⟩ := hp
   have hmem : c.σ.mem = m0 := by
-    simpa [envDefineScanHitSeg, evalBlocks, SegEvalState.init, writeLog] using hmemRaw
+    simpa +ground [envDefineScanHitSeg, evalBlocks, evalBlock, SegEvalState.init,
+      writeLog, wlogM] using hmemRaw
   obtain ⟨lds, hfacts, hevidence⟩ :=
     updateStoreFacts env src vals dst idx m0 N φc v hcode hword hgeom
   obtain ⟨hvals, d0, d1, d2, h0, h1, h2, hw0, hw1, hw2,
@@ -262,7 +263,7 @@ theorem envDefineUpdateFromHitKeep_of_heap_owned
   apply envDefineUpdateFromHitKeep saved env name src count cursor sp valsBV dst idx
     m0 N φc v A g outp hcode hword hgeom
   · have hp := howned.valuePayloadOutsideSet htarget hidx hvals hsrcOwned
-    simpa [SetOutside, hdst] using hp
+    simpa +unfoldPartialApp [SetOutside, hdst] using hp
   · exact hdstArena
   · exact harenaStack
   · exact harenaCode
