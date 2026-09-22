@@ -100,6 +100,11 @@ which `simp only` no longer supplied).
 
 `ClosureParamFoldEntry` — `BitVec.setWidth_eq` after `BitVec.ofNat_toNat`.
 
+### Pass 14 (1 module)
+
+`ClosureBodyReads` — new category: `intros` now also consumes the trailing `coverage` binder, so
+the following `intro coverage` had nothing left; replaced with `rename_i coverage`.
+
 ## SLOW (per-module build time > 180 s)
 
 - `Vsa.Sim.SnprintfSpec20` — 210 s (pass 2)

@@ -22,7 +22,7 @@ private theorem stmt_owned {m : Mem} {shared : Nat → Prop} {a : Nat} {s : Stmt
     ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ h covered
   all_goals
     intros
-    intro coverage
+    rename_i coverage
     constructor
     all_goals first
       | assumption
