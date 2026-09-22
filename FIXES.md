@@ -23,6 +23,9 @@ Prior fixes: ~/vsa-iris-spike-logs/prior-fixes.patch
   the four counters `: Nat`.
 - `Vsa/Sim/EnvSetReturn.lean` — `simp` no longer ground-reduces `mkLine`/`evalBlock`: routed the
   memory goal through `writeLog_evalBlocks_init` and added `+ground` to the closing `simp`.
+- `Vsa/Sim/rows/ArgsReturnCopy.lean` — `simp` no longer ground-reduces `evalBlocksPC`: replaced
+  both `simpa using hpc'` with the repo's `chainEndPC_eq_bt … (by decide); rfl` idiom
+  (as in `CmpDispatchSeg.lean`).
 
 ## SLOW (per-module build time > 180 s)
 

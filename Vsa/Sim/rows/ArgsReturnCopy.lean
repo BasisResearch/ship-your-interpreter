@@ -79,7 +79,10 @@ theorem argsReturnMoreRow (sp : BitVec 64) (lds : List (List (BitVec 8)))
     (by show ChainOK 0x80003224#64 [2] argsReturnMoreSeg; decide)
   intro σ' i' u' hG' _hi' hmem' hpc' _hmi' hregs
   refine ⟨hG', ?_, hregs, hmem'⟩
-  simpa using hpc'
+  rw [hpc']
+  show some (chainEndPC 0x80003224#64 (argsReturnL sp) lds argsReturnMoreSeg) = some 0x800031dc#64
+  rw [chainEndPC_eq_bt argsReturnMoreSeg 0x80003224#64 (argsReturnL sp) lds (by decide)]
+  rfl
 
 theorem argsReturnDoneRow (sp : BitVec 64) (lds : List (List (BitVec 8)))
     (m0 : Std.ExtHashMap Nat (BitVec 8)) :
@@ -90,7 +93,10 @@ theorem argsReturnDoneRow (sp : BitVec 64) (lds : List (List (BitVec 8)))
     (by show ChainOK 0x80003224#64 [2] argsReturnDoneSeg; decide)
   intro σ' i' u' hG' _hi' hmem' hpc' _hmi' hregs
   refine ⟨hG', ?_, hregs, hmem'⟩
-  simpa using hpc'
+  rw [hpc']
+  show some (chainEndPC 0x80003224#64 (argsReturnL sp) lds argsReturnDoneSeg) = some 0x80003254#64
+  rw [chainEndPC_eq_bt argsReturnDoneSeg 0x80003224#64 (argsReturnL sp) lds (by decide)]
+  rfl
 
 #print axioms argsReturnMoreRow
 #print axioms argsReturnDoneRow
