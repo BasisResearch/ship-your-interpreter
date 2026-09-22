@@ -533,14 +533,14 @@ theorem closureBodyEntryI_of_abi
     pc := by
       cases hb : body with
       | nil => exact False.elim (hne hb)
-      | cons s ss => simpa [execSeqEntryPC, hb] using hc.pc
+      | cons s ss => simpa [execSeqEntryPC, hb, callBodyLoopPC] using hc.pc
     store := hc.store
     store_survives := ha.storeSurvives
     out := hc.out
     mem := hc.mem
     ready := fun _ =>
       { env_valid := ha.envValid
-        code := by simpa [hc.mem] using hLoad
+        code := by simpa [hc.mem, ExecSeqCopy.Loaded] using hLoad
         cursor := ha.cursor
         head_ground := ha.headGround
         store_survives := ha.storeSurvives
@@ -722,7 +722,12 @@ theorem emptyValueNullRunFramed
   have hx21 : c3.σ.regs.get? Register.x21 = some clp :=
     (hRun.frame.regs.eq Register.x21 ⟨hStageX21, hNullX21⟩).trans h.closReg
   have hpc3' : c3.σ.regs.get? Register.PC = some (0x8000332c#64 : BitVec 64) := by
-    simpa using hpc3
+    have hpcv : BitVec.update ((0x8000332c#64 : BitVec 64)
+        + LeanRV64DExecutable.Functions.sign_extend (m := 64) (0x000#12)) 0 0#1
+        = 0x8000332c#64 := by
+      apply BitVec.eq_of_toNat_eq
+      decide
+    simpa [hpcv] using hpc3
   have hfacts := h.bypassReads c3.σ.mem hagree
   refine ⟨c3, ?_, hRun⟩
   exact ⟨stageLds, c3.σ.mem, hG3, rfl, hpc3', hmi3, ⟨hx21, trivial⟩,
@@ -1050,7 +1055,12 @@ theorem normalDepthNullRun
   rcases hpost with ⟨hG3, hpc3, hx103, hx13, hmi3, hi3, hv3, hout3,
     hmem3, _hframe3, hext3⟩
   refine ⟨hG3, ?_, hx103, hx13, hmi3, hi3, hv3, hout3, hmem3, hext3⟩
-  simpa using hpc3
+  have hpcv : BitVec.update ((0x80003968#64 : BitVec 64)
+      + LeanRV64DExecutable.Functions.sign_extend (m := 64) (0x000#12)) 0 0#1
+      = 0x80003968#64 := by
+    apply BitVec.eq_of_toNat_eq
+    decide
+  simpa [hpcv] using hpc3
 
 #print axioms normalDepthNullRun
 
