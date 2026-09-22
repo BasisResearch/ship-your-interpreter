@@ -26,7 +26,7 @@ theorem setup {p r : BitVec 64} {len off : Nat} {cs : List Char} {m0 : Mem}
     { output := C.output, frame := C.reg_frame
       state := { good := C.good, loaded := by rw [C.mem]; exact h.loaded
                  mem := C.mem.trans h.mem, pc := C.pc, a0 := a0, a1 := a1, a3 := a3
-                 a4 := by simpa using a4, ra := ra, minstret := C.minstret, tick := C.tick
+                 a4 := by simpa [gprGet] using a4, ra := ra, minstret := C.minstret, tick := C.tick
                  regions := h.regions, qalign := h.qalign, cstr := h.cstr, hlen := h.hlen
                  jle := by simpa using h.off0le } }⟩
 
@@ -58,7 +58,7 @@ theorem alignedEntry {p r : BitVec 64} {len : Nat} {cs : List Char} {m0 : Mem}
     { output := C.output, frame := C.reg_frame
       state := { good := C.good, loaded := by rw [C.mem]; exact h.loaded
                  mem := C.mem.trans h.mem, pc := C.pc, a0 := a0, a1 := a1, a3 := a3
-                 a4 := by simpa using a4, ra := ra, minstret := C.minstret, tick := C.tick
+                 a4 := by simpa [gprGet] using a4, ra := ra, minstret := C.minstret, tick := C.tick
                  regions := h.regions, qalign := by simpa using h.align
                  cstr := h.cstr, hlen := h.hlen, jle := Nat.zero_le _ } }⟩
 
