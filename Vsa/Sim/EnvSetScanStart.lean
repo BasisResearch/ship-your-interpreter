@@ -139,7 +139,10 @@ theorem env_set_parent_scan_start
     rwa [show BitVec.addInt (0x80002d18#64) 4 = (0x80002d1c#64 : BitVec 64) from by decide] at h
   have hx8_4 : σ4.regs.get? Register.x8 = some (0#64 : BitVec 64) := by
     have h := obs_alu_rd hobs4 (by decide) (by decide) (by decide) (by decide) (by decide)
-    simpa using h
+    have hz : (sign_extend (m := 64) (0x000#12) : BitVec 64) = 0#64 := by
+      apply BitVec.eq_of_toNat_eq
+      decide
+    simpa [hz] using h
   have hx9_4 := obs_alu_other' hobs4 Register.x9 (by decide) hx9_3
   have hx18_4 := obs_alu_other' hobs4 Register.x18 (by decide) hx18_3
   have hx20_4 := obs_alu_other' hobs4 Register.x20 (by decide) hx20_3
