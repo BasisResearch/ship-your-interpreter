@@ -1335,7 +1335,7 @@ theorem envDefineUpdateLaneKeep
         (BitVec.ofNat 64 vals + BitVec.ofNat 64 (24 * i)).toNat + 24 ≤ a)
       (envDefineScannedMem m esp r v8 v9 v18 v19 v20 v21 v22) pv.toNat v := by
     have hp := hfo.payloadOutsideSet hheap.immutable hi hvals hvalO
-    simpa [SetOutside, hdstNat] using hp
+    simpa +unfoldPartialApp [SetOutside, hdstNat] using hp
   obtain ⟨c3, hs3, hp, hk3⟩ := envDefineUpdateFromHitKeep (envDefineSaved g r) aEnv
     aName pv (BitVec.ofNat 64 st.store.frames[env].vars.length)
     (BitVec.ofNat 64 pn + BitVec.ofNat 64 (8 * i)) (esp - 64#64)

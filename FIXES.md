@@ -77,6 +77,11 @@ which `simp only` no longer supplied).
 
 `rows/EnvDefineDispatchExact` — reflected-segment memory, `+ground` recipe.
 
+### Pass 8 (9 errors, 2 modules)
+
+`rows/EnvDefineAppendClosed` (reflected load lists, `bytesVal`, `Alloc.ExtDisjoint`),
+`rows/EnvDefineContractUpdate` (`+unfoldPartialApp` for `SetOutside`).
+
 ## SLOW (per-module build time > 180 s)
 
 - `Vsa.Sim.SnprintfSpec20` — 210 s (pass 2)

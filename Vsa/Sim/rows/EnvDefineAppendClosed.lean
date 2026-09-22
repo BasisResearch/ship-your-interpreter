@@ -282,7 +282,7 @@ theorem envDefineMemcpyContent_of_public
     · simp only [hpNat]
       have := hgeom.ramHi; omega
     · have := hgeom.ramHi; omega
-    · simpa only [hpNat] using hpFresh (name.toNat, n) hname
+    · simpa only [hpNat, Vsa.Alloc.ExtDisjoint] using hpFresh (name.toNat, n) hname
     · rcases hgeom.code with hbefore | hafter
       · left; simpa only [hpNat] using (show p + n ≤ 0x80006bc8 by omega)
       · right; simpa only [hpNat] using (show 0x80006cf0 ≤ p by omega)
@@ -774,10 +774,10 @@ theorem appendStoreFacts
     simpa [bytesVal] using sext_count_ed c0 c1 c2 c3 count
       (by have := hgeom.countNext32; omega) hcountRec
   have hnword : bytesVal .ld [n0,n1,n2,n3,n4,n5,n6,n7] = BitVec.ofNat 64 names := by
-    simpa using ld_value_eq_read64 m (env.toNat + 8) names
+    simpa [bytesVal] using ld_value_eq_read64 m (env.toNat + 8) names
       n0 n1 n2 n3 n4 n5 n6 n7 hnames hn0 hn1 hn2 hn3 hn4 hn5 hn6 hn7
   have hvword : bytesVal .ld [v0,v1,v2,v3,v4,v5,v6,v7] = BitVec.ofNat 64 vals := by
-    simpa using ld_value_eq_read64 m (env.toNat + 16) vals
+    simpa [bytesVal] using ld_value_eq_read64 m (env.toNat + 16) vals
       v0 v1 v2 v3 v4 v5 v6 v7 hvals hv0 hv1 hv2 hv3 hv4 hv5 hv6 hv7
   have hcount64 : count < 2^64 := by have := hgeom.countNext32; omega
   have hnames64 : names < 2^64 := by have := hgeom.nameHi; omega
@@ -833,7 +833,7 @@ theorem appendStoreFacts
         (by have := hgeom.envAlign; omega) ?_
       · simp [eaddrM, appendStoreL, srcVal, lookupG, himm0,
           Nat.mod_eq_of_lt henv0lt]
-      · simpa [lds, appendStoreLds] using hpc
+      · simpa +ground [lds, appendStoreLds, stepMemM, stepGM, stepLdsM] using hpc
     · refine appendMemFactsLd (env.toNat + 8) (by rfl) ?_
         (by have := hgeom.envLo; omega) (by have := hgeom.envHi; omega)
         (by right; have := hgeom.envHtif; omega)
@@ -841,7 +841,7 @@ theorem appendStoreFacts
       · simp [appendStoreSeg, eaddrM, appendStoreL, appendStoreLds, lds,
           stepMemM, stepGM, stepLdsM, wvalM, srcVal, lookupG, eraseG, himm8,
           Nat.mod_eq_of_lt henv8lt]
-      · simpa [lds, appendStoreLds] using hpn
+      · simpa +ground [lds, appendStoreLds, stepMemM, stepGM, stepLdsM] using hpn
     · refine appendMemFactsLd (env.toNat + 16) (by rfl) ?_
         (by have := hgeom.envLo; omega) (by have := hgeom.envHi; omega)
         (by right; have := hgeom.envHtif; omega)
@@ -849,14 +849,14 @@ theorem appendStoreFacts
       · simp [appendStoreSeg, eaddrM, appendStoreL, appendStoreLds, lds,
           stepMemM, stepGM, stepLdsM, wvalM, srcVal, lookupG, eraseG, himm16,
           Nat.mod_eq_of_lt henv16lt]
-      · simpa [lds, appendStoreLds] using hpv
+      · simpa +ground [lds, appendStoreLds, stepMemM, stepGM, stepLdsM] using hpv
     · refine appendMemFactsLd src.toNat (by rfl) ?_ hgeom.srcLo
         (by have := hgeom.srcHi; omega)
         (by right; have := hgeom.srcHtif; omega) hgeom.srcAlign ?_
       · simp [appendStoreSeg, eaddrM, appendStoreL, appendStoreLds, lds,
           stepMemM, stepGM, stepLdsM, wvalM, srcVal, lookupG, eraseG,
           shamtOf, himm0, Nat.mod_eq_of_lt hsrc0lt]
-      · simpa [lds, appendStoreLds] using hp0
+      · simpa +ground [lds, appendStoreLds, stepMemM, stepGM, stepLdsM] using hp0
     · refine appendMemFactsLd (src.toNat + 8) (by rfl) ?_
         (by have := hgeom.srcLo; omega) (by have := hgeom.srcHi; omega)
         (by right; have := hgeom.srcHtif; omega)
@@ -864,7 +864,7 @@ theorem appendStoreFacts
       · simp [appendStoreSeg, eaddrM, appendStoreL, appendStoreLds, lds,
           stepMemM, stepGM, stepLdsM, wvalM, srcVal, lookupG, eraseG,
           shamtOf, himm8, Nat.mod_eq_of_lt hsrc8lt]
-      · simpa [lds, appendStoreLds] using hp1
+      · simpa +ground [lds, appendStoreLds, stepMemM, stepGM, stepLdsM] using hp1
     · refine appendMemFactsLd (src.toNat + 16) (by rfl) ?_
         (by have := hgeom.srcLo; omega) (by have := hgeom.srcHi; omega)
         (by right; have := hgeom.srcHtif; omega)
@@ -872,7 +872,7 @@ theorem appendStoreFacts
       · simp [appendStoreSeg, eaddrM, appendStoreL, appendStoreLds, lds,
           stepMemM, stepGM, stepLdsM, wvalM, srcVal, lookupG, eraseG,
           shamtOf, himm16, Nat.mod_eq_of_lt hsrc16lt]
-      · simpa [lds, appendStoreLds] using hp2
+      · simpa +ground [lds, appendStoreLds, stepMemM, stepGM, stepLdsM] using hp2
     · refine appendMemFactsSd (names + 8 * count) (by rfl) ?_ hgeom.nameLo
         hgeom.nameHi hgeom.nameHtif hgeom.nameAlign
       simp [appendStoreSeg, eaddrM, appendStoreL, appendStoreLds, lds,
@@ -906,12 +906,12 @@ theorem appendStoreFacts
         stepMemM, stepGM, stepLdsM, wvalM, srcVal, lookupG, eraseG,
         shamtOf, hcword, hnword, hvword, hstride24, hvalsAddr, himm0,
         Nat.mod_eq_of_lt henv0lt]
-  · simpa [lds, appendStoreLds] using hcword
-  · simpa [lds, appendStoreLds] using hnword
-  · simpa [lds, appendStoreLds] using hvword
-  · simpa [lds, appendStoreLds] using hp0
-  · simpa [lds, appendStoreLds] using hp1
-  · simpa [lds, appendStoreLds] using hp2
+  · simpa +ground [lds, appendStoreLds, stepMemM, stepGM, stepLdsM] using hcword
+  · simpa +ground [lds, appendStoreLds, stepMemM, stepGM, stepLdsM] using hnword
+  · simpa +ground [lds, appendStoreLds, stepMemM, stepGM, stepLdsM] using hvword
+  · simpa +ground [lds, appendStoreLds, stepMemM, stepGM, stepLdsM] using hp0
+  · simpa +ground [lds, appendStoreLds, stepMemM, stepGM, stepLdsM] using hp1
+  · simpa +ground [lds, appendStoreLds, stepMemM, stepGM, stepLdsM] using hp2
 
 /-- The memcpy return and the retained helper frame marshal directly into the
 exact append-block `SegPre`. -/
