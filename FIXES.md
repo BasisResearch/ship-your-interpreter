@@ -82,6 +82,10 @@ which `simp only` no longer supplied).
 `rows/EnvDefineAppendClosed` (reflected load lists, `bytesVal`, `Alloc.ExtDisjoint`),
 `rows/EnvDefineContractUpdate` (`+unfoldPartialApp` for `SetOutside`).
 
+### Pass 9 (6 errors, 1 module)
+
+`rows/EnvDefineCallRuns` — `+ground` for the reflected store/load addresses and `bytesVal`.
+
 ## SLOW (per-module build time > 180 s)
 
 - `Vsa.Sim.SnprintfSpec20` — 210 s (pass 2)

@@ -483,7 +483,7 @@ theorem envDefineReallocNamesParked_grow (env names : BitVec 64) (cap : Nat) (c 
     · refine memFactsSw (env.toNat + 4) (by decide) ?_ (by have := hgeom.lo; omega)
         (by have := hgeom.hi; omega) (by have := hgeom.htif; omega)
         (by have := hgeom.align; omega)
-      simpa [eaddrM, envDefineGrowPreL, srcVal, lookupG, eraseG, stepGM] using henv4
+      simpa +ground [eaddrM, envDefineGrowPreL, srcVal, lookupG, eraseG, stepGM] using henv4
   have hmemLog : writeLog c.σ.mem (evalBlocks envDefineGrowPreSeg
       (SegEvalState.init (envDefineGrowPreL (BitVec.ofNat 64 cap) env names) [])).log =
       writeMap4 c.σ.mem (env.toNat + 4) (swData (BitVec.ofNat 64 (2 * cap))) := by
@@ -557,7 +557,7 @@ theorem envDefineReallocNamesParked_init (env names : BitVec 64) (c : Config)
     · refine memFactsSw (env.toNat + 4) (by decide) ?_ (by have := hgeom.lo; omega)
         (by have := hgeom.hi; omega) (by have := hgeom.htif; omega)
         (by have := hgeom.align; omega)
-      simpa [eaddrM, envDefineInitPreL, srcVal, lookupG, eraseG, stepGM] using henv4
+      simpa +ground [eaddrM, envDefineInitPreL, srcVal, lookupG, eraseG, stepGM] using henv4
   have hmemLog : writeLog c.σ.mem (evalBlocks envDefineInitPreSeg
       (SegEvalState.init (envDefineInitPreL env names) [])).log =
       writeMap4 c.σ.mem (env.toNat + 4) (swData (BitVec.ofNat 64 8)) := by
@@ -648,8 +648,9 @@ theorem envDefineReallocValsParked_of (env pn : BitVec 64) (cap' pv : Nat) (c : 
   have hcapWord : bytesVal .lw [c0, c1, c2, c3] = BitVec.ofNat 64 cap' := by
     simpa [bytesVal] using sext_count_ed c0 c1 c2 c3 cap' hcapS hcRe
   have hpvWord : bytesVal .ld [d0, d1, d2, d3, d4, d5, d6, d7] = BitVec.ofNat 64 pv := by
-    simpa using ld_value_eq_read64 c.σ.mem (env.toNat + 16) pv d0 d1 d2 d3 d4 d5 d6 d7 hpv
-      hd0 hd1 hd2 hd3 hd4 hd5 hd6 hd7
+    simpa [bytesVal] using
+      ld_value_eq_read64 c.σ.mem (env.toNat + 16) pv d0 d1 d2 d3 d4 d5 d6 d7 hpv
+        hd0 hd1 hd2 hd3 hd4 hd5 hd6 hd7
   have hL : GHolds c.σ (envDefineValsPreL env pn) :=
     ⟨by simpa [gprGet] using hs4, by simpa [gprGet] using ha0, trivial⟩
   have henv4 : (env + sign_extend (m := 64) (0x004#12)).toNat = env.toNat + 4 := by
@@ -663,7 +664,7 @@ theorem envDefineReallocValsParked_of (env pn : BitVec 64) (cap' pv : Nat) (c : 
     chain_facts hloaded with "Vsa.Sim.Code.env_define_at_"
     · refine memFactsLw (env.toNat + 4) (by decide) ?_ (by have := hgeom.lo; omega)
         (by have := hgeom.hi; omega) (by right; have := hgeom.htif; omega) ?_
-      · simpa [eaddrM, envDefineValsPreL, srcVal, lookupG] using henv4
+      · simpa +ground [eaddrM, envDefineValsPreL, srcVal, lookupG] using henv4
       · simpa [lds] using hpins4
     · refine memFactsSd (env.toNat + 8) (by decide) ?_ (by have := hgeom.lo; omega)
         (by have := hgeom.hi; omega) (by have := hgeom.htif; omega)
@@ -674,7 +675,7 @@ theorem envDefineReallocValsParked_of (env pn : BitVec 64) (cap' pv : Nat) (c : 
         (by have := hgeom.hi; omega) (by right; have := hgeom.htif; omega) ?_
       · simpa [eaddrM, envDefineValsPreL, srcVal, lookupG, eraseG, stepGM, wvalM, stepLdsM,
           mkLine, decodeM, lds] using henv16
-      · refine lpins8_of_agree ?_ (by simpa [lds] using hpins8)
+      · refine lpins8_of_agree ?_ (by simpa +ground [lds, stepLdsM] using hpins8)
         intro k hk
         rw [stepMemM_sd_outside (by decide) _ (by
           simp [eaddrM, envDefineValsPreL, srcVal, lookupG, eraseG, stepGM, wvalM, stepLdsM,
