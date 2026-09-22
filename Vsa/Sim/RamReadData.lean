@@ -33,7 +33,7 @@ theorem within_mmio_readable_ram_false_width
   rename_i hx
   have hxlt : a.toNat < 2147593480 := by
     have hxv : (2147593472#64 + 8#64).toNat = 2147593480 := by decide
-    exact Nat.lt_of_lt_of_eq hx hxv
+    omega
   have hle : (a + BitVec.ofNat 64 w).toNat ≤ 2147593472 := by rw [hadd]; omega
   have hrhs : ((2147593472 : Nat) : Int) % 18446744073709551616
       = ((2147593472 : Nat) : Int) := by decide

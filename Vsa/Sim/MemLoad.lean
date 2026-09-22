@@ -156,12 +156,12 @@ theorem within_mmio_readable_ram_false_eight
   -- (`Nat.lt_of_lt_of_eq`) rather than `rw`, which the width mismatch defeats.
   have hxlt : a.toNat < 2147593480 := by
     have hxv : (2147593472#64 + 8#64).toNat = 2147593480 := by decide
-    exact Nat.lt_of_lt_of_eq hx hxv
+    omega
   have hle : (a + 8#64).toNat ≤ 2147593472 := by rw [hadd]; omega
   have hrhs : ((2147593472 : Nat) : Int) % 18446744073709551616
       = ((2147593472 : Nat) : Int) := by decide
   rw [hrhs]
-  exact_mod_cast hle
+  omega
 
 /-- `within_mmio_readable a 4 = false` for a RAM `lw`/`lwu`. -/
 theorem within_mmio_readable_ram_false_four'
@@ -194,12 +194,12 @@ theorem within_mmio_readable_ram_false_four'
   -- (`Nat.lt_of_lt_of_eq`) rather than `rw`, which the width mismatch defeats.
   have hxlt : a.toNat < 2147593480 := by
     have hxv : (2147593472#64 + 8#64).toNat = 2147593480 := by decide
-    exact Nat.lt_of_lt_of_eq hx hxv
+    omega
   have hle : (a + 4#64).toNat ≤ 2147593472 := by rw [hadd]; omega
   have hrhs : ((2147593472 : Nat) : Int) % 18446744073709551616
       = ((2147593472 : Nat) : Int) := by decide
   rw [hrhs]
-  exact_mod_cast hle
+  omega
 
 /-- `within_mmio_readable a 2 = false` for a RAM `lh`/`lhu`. -/
 theorem within_mmio_readable_ram_false_two
@@ -232,12 +232,12 @@ theorem within_mmio_readable_ram_false_two
   -- (`Nat.lt_of_lt_of_eq`) rather than `rw`, which the width mismatch defeats.
   have hxlt : a.toNat < 2147593480 := by
     have hxv : (2147593472#64 + 8#64).toNat = 2147593480 := by decide
-    exact Nat.lt_of_lt_of_eq hx hxv
+    omega
   have hle : (a + 2#64).toNat ≤ 2147593472 := by rw [hadd]; omega
   have hrhs : ((2147593472 : Nat) : Int) % 18446744073709551616
       = ((2147593472 : Nat) : Int) := by decide
   rw [hrhs]
-  exact_mod_cast hle
+  omega
 
 /-- `within_mmio_readable a 1 = false` for a RAM `lb`/`lbu`. -/
 theorem within_mmio_readable_ram_false_one
@@ -270,12 +270,12 @@ theorem within_mmio_readable_ram_false_one
   -- (`Nat.lt_of_lt_of_eq`) rather than `rw`, which the width mismatch defeats.
   have hxlt : a.toNat < 2147593480 := by
     have hxv : (2147593472#64 + 8#64).toNat = 2147593480 := by decide
-    exact Nat.lt_of_lt_of_eq hx hxv
+    omega
   have hle : (a + 1#64).toNat ≤ 2147593472 := by rw [hadd]; omega
   have hrhs : ((2147593472 : Nat) : Int) % 18446744073709551616
       = ((2147593472 : Nat) : Int) := by decide
   rw [hrhs]
-  exact_mod_cast hle
+  omega
 
 /-! ## Control-plane clones for the `Load Data` access type. -/
 

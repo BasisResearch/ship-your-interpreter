@@ -59,9 +59,6 @@ theorem decode_bgeu_t0_t1
     get_xLPE, readReg, Vsa.Sim.initMisa]
   simp +decide [encdec_reg_backwards, encdec_bop_backwards,
     EStateM.bind, pure, EStateM.pure]
-  constructor
-  · apply BitVec.eq_of_toNat_eq; decide
-  · apply BitVec.eq_of_toNat_eq; decide
 
 /-! ## Source GPR reads (`t0 = x5`, `t1 = x6`) -/
 

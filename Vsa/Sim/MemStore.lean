@@ -206,11 +206,8 @@ theorem within_mmio_writable_ram_false
     get, getThe, MonadStateOf.get, EStateM.get, BitVec.toNatInt,
     htif_tohost_size]
   simp only [tohostAddr]
-  have hbadd : (2147593472#64 + 8#64).toNat = 2147593480 := by decide
   refine ⟨fun _ => by push_cast; omega, fun _ => by push_cast; omega,
-    fun hcontra => ?_⟩
-  have hc2 : a.toNat < 2147593480 := hbadd ▸ hcontra
-  omega
+    fun hcontra => by omega⟩
 
 /-! ## `write_ram` per width: the little-endian byte-insert spine
 

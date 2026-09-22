@@ -50,7 +50,7 @@ local macro "within_region" rec:ident m:ident lo:ident hi:ident h:ident : tactic
       ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
       ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ $h
     all_goals
-      dsimp only
+      try dsimp only
       intros
       simp only [ExprIn, ExprsIn, ParamsIn, StmtIn, OptStmtIn, OptExprIn, StmtsIn] at *
       constructor

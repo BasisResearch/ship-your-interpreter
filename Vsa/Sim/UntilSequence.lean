@@ -30,7 +30,7 @@ theorem untilFuelM_sequence {α ε error state : Type}
       by_cases hn : i + 1 = n
       · simp [hn, pure, ExceptT.pure, ExceptT.mk, EStateM.pure]
       · have hf := ih (i + 1) (by omega)
-        simpa [hn] using hf
+        simpa [hn, EStateM.run] using hf
   exact go n 0 (by omega)
 
 #print axioms untilFuelM_sequence

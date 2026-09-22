@@ -62,9 +62,6 @@ theorem checked_mem_read_single_of_ram
   congr 3
   simp [BitVec.updateSubrange, Sail.BitVec.updateSubrange', Functions.zeros,
     show 8 * w - 1 + 1 = 8 * w from by omega, Int.toNat_mul]
-  have key (mask : BitVec (8 * w)) :
-      (mask &&& 0#(8 * w) ||| v <<< (0 : Nat)) = v := by simp
-  exact key _
 
 
 #print axioms checked_mem_read_single_of_ram
