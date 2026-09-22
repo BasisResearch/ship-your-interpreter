@@ -344,8 +344,8 @@ theorem envDefineScanNextCarrier
     EnvDefineScanSt saved env name pv count pn sp (i + 1) f nameStr N φf φc m0 c := by
   have facts := SegmentReturnFacts.of_conjunction hp
   have hmem : c.σ.mem = m0 := by
-    simpa [EnvDefineScanLivePost, envDefineScanNextSeg, evalBlocks,
-      SegEvalState.init, writeLog] using facts.memory
+    simpa +ground [EnvDefineScanLivePost, envDefineScanNextSeg, evalBlocks, evalBlock,
+      SegEvalState.init, writeLog, wlogM] using facts.memory
   have hregs := facts.registers
   have hlenLt : f.vars.length < 2^64 := by rw [← hcount]; exact count.isLt
   have hiLt : i + 1 < 2^64 := Nat.lt_trans hi hlenLt
@@ -448,8 +448,9 @@ theorem envDefineScanStart
       unfold guardB
       unfold zopz0zKzJ_s
       rw [decide_eq_false_iff_not]
-      simpa only [envDefineScanInitSeg, envDefineScanInitLiveL, srcVal, lookupG, runGM,
-        BitVec.toInt_zero, ge_iff_le, Int.not_le] using hpos
+      simpa +ground only [envDefineScanInitSeg, envDefineScanInitLiveL, srcVal, lookupG,
+        runGM, ite_true, ite_false, Option.getD_some, BitVec.toInt_zero, ge_iff_le,
+        Int.not_le] using hpos
     · unfold MemFacts
       have hea :
           (eaddrM (mkLine 0x80002a94#64 0x00853b03#32)
