@@ -124,6 +124,57 @@ theorem segFrom_of_seg {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVe
     (fun a _ => by rw [hsilent]; trivial) hfacts hMR (fun q hq => nomatch hq) hPC hpc hL
     (fun rv' mv' h1 h2 h3 _ h5 => hP rv' mv' h1 h2 h3 (fun a ha => h5 a ha (fun q hq => nomatch hq)))
 
+/-! ## Leaf functions
+
+A leaf function (`strlen`, `strcmp`, `memcpy`, the `snprintf` digit loop)
+touches a FIXED set of GPRs, reads a fixed footprint and writes a fixed owned
+byte set, so the whole function — loops, branches, tails and all — is ONE
+`LocalRun` over ONE pin list. `leafL`/`leafStep` package that: a segment of
+such a run contributes its `ChainFacts` and nothing else, and `hwf`, `hkeys`
+and `hwr` are one `decide` each on the literal register list. -/
+
+/-- The pin list of a leaf function: the registers it touches, at the run's
+current values. -/
+def leafL (regs : List Nat) (rv : Nat → BitVec 64) : GRegs := regs.map (fun k => (k, rv k))
+
+theorem keysG_leafL : ∀ (regs : List Nat) (rv : Nat → BitVec 64), keysG (leafL regs rv) = regs
+  | [], _ => rfl
+  | k :: ks, rv => by
+    show k :: keysG (leafL ks rv) = k :: ks
+    rw [keysG_leafL ks rv]
+
+/-- **One reflected segment of a leaf function's run.** -/
+theorem leafStep {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
+    {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
+    {rv : Nat → BitVec 64} {mv : Nat → BitVec 8} (regs : List Nat) (m : Nat)
+    (bs : List BBlock) (lds : List (List (BitVec 8))) (pc0 : BitVec 64)
+    (MR : List (Nat × DFrac × BitVec 8)) (W : List (Nat × BitVec 8)) (n : Nat)
+    (hlen : evalBlocksFuel bs = n + 1)
+    (hkeys : KeysOK regs) (hwf : ChainOK pc0 regs bs)
+    (hwr : ∀ k ∈ wrChain bs, k ∈ regs)
+    (hcover : ∀ a, (∀ q ∈ W, q.1 ≠ a) → OutL (segOut bs (leafL regs rv) lds).log a)
+    (hfacts : ∀ c : Config, VsaOk live c →
+      FootHolds (M := vsaModel live) c [] MR (segRW bs (leafL regs rv) lds pc0)
+        (segMW bs (leafL regs rv) lds W) →
+      ChainFacts c.σ.mem c.σ.mem (leafL regs rv) lds bs)
+    (hMR : ∀ q ∈ MR, (q.1, q.2.2) ∈ text ∨ (S q.1 ∧ mv q.1 = q.2.2))
+    (hW : ∀ q ∈ W, S q.1 ∧ mv q.1 = q.2)
+    (hpc : rv VsaIris.PC = pc0)
+    (hnext : ∀ (rv' : Nat → BitVec 64) (mv' : Nat → BitVec 8),
+      rv' VsaIris.PC = evalBlocksPC pc0 (SegEvalState.init (leafL regs rv) lds) bs →
+      (∀ k ∈ regs, rv' k = finReg bs (leafL regs rv) lds k) →
+      (∀ q ∈ W, mv' q.1 = newByte bs (leafL regs rv) lds W q.1) →
+      (∀ a, S a → (∀ q ∈ W, q.1 ≠ a) → mv' a = mv a) →
+      LocalRun (vsaModel live) ro text (VsaIris.PC :: regs) S Q m rv' mv') :
+    LocalRun (vsaModel live) ro text (VsaIris.PC :: regs) S Q (m + 1) rv mv := by
+  refine Or.inr ⟨n, segFrom_of_segW bs (leafL regs rv) lds pc0 MR W n hlen
+    (by rw [keysG_leafL]; exact hwf) (by rw [keysG_leafL]; exact hkeys)
+    (by rw [keysG_leafL]; exact hwr) hcover hfacts hMR hW List.mem_cons_self hpc
+    (fun q hq => ?_) (fun rv' mv' h1 h2 h3 h4 h5 => hnext rv' mv' h1 (fun k hk => ?_) h4 h5)⟩
+  · obtain ⟨k, hk, rfl⟩ := List.mem_map.mp hq
+    exact ⟨.tail _ hk, rfl⟩
+  · exact h2 (k, rv k) (List.mem_map_of_mem (f := fun k => (k, rv k)) hk)
+
 /-! ## Instructions outside the reflected block model
 
 `MKind` (`Vsa/Sim/BlockMem.lean:549`) does not cover every RISC-V instruction

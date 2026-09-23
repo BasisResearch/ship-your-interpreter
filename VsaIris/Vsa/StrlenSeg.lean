@@ -310,9 +310,13 @@ def strlenRegs : List Nat := [1, 10, 11, 12, 13, 14, 15]
 /-- The run's owned registers: the PC and those seven. -/
 def strlenRs : List Nat := VsaIris.PC :: strlenRegs
 
-/-- The uniform pin list, read off the run's register valuation. -/
+/-- The uniform pin list, read off the run's register valuation. This is
+`Inst.leafL` at `strlenRegs`; the literal spelling is what the per-segment
+`rfl`s reduce against. -/
 def strlenL (rv : Nat → BitVec 64) : GRegs :=
   [(1, rv 1), (10, rv 10), (11, rv 11), (12, rv 12), (13, rv 13), (14, rv 14), (15, rv 15)]
+
+theorem strlenL_eq (rv : Nat → BitVec 64) : strlenL rv = leafL strlenRegs rv := rfl
 
 theorem keysG_strlenL (rv : Nat → BitVec 64) : keysG (strlenL rv) = strlenRegs := rfl
 
@@ -329,7 +333,8 @@ abbrev SRun (live : Nat → Prop) (p len : Nat) (bv : Nat → BitVec 8) (r : Bit
   LocalRun (vsaModel live) [] (strlenText p len bv) strlenRs (slackSet p len)
     (strlenQ r p len bv) n rv mv
 
-/-- **One reflected `strlen` segment.** -/
+/-- **One reflected `strlen` segment**: `Inst.leafStep` at `strlenRegs`, with
+the read footprint resolved once by `reads_of_foot`. -/
 theorem strlenStep {live : Nat → Prop} {p len : Nat} {bv : Nat → BitVec 8} {r : BitVec 64}
     {rv : Nat → BitVec 64} {mv : Nat → BitVec 8} (m : Nat)
     (bs : List BBlock) (lds : List (List (BitVec 8))) (pc0 : BitVec 64) (n : Nat)
@@ -347,27 +352,13 @@ theorem strlenStep {live : Nat → Prop} {p len : Nat} {bv : Nat → BitVec 8} {
       (∀ k ∈ strlenRegs, rv' k = finReg bs (strlenL rv) lds k) →
       (∀ a, slackSet p len a → mv' a = bv a) →
       SRun live p len bv r m rv' mv') :
-    SRun live p len bv r (m + 1) rv mv := by
-  refine Or.inr ⟨n, segFrom_of_seg bs (strlenL rv) lds pc0 (strlenMR p len bv) n hlen
-    (by rw [keysG_strlenL]; exact hwf) (by rw [keysG_strlenL]; decide)
-    (by rw [keysG_strlenL]; exact hwr) hsilent
+    SRun live p len bv r (m + 1) rv mv :=
+  leafStep strlenRegs m bs lds pc0 (strlenMR p len bv) [] n hlen (by decide) hwf hwr
+    (fun a _ => by rw [← strlenL_eq, hsilent]; trivial)
     (fun c hok hfoot => hfacts c.σ (reads_of_foot hok hlive hfoot.2.1))
-    (strlenMR_split hslack) (by unfold strlenRs; exact List.mem_cons_self) hpc ?_ ?_⟩
-  · intro q hq
-    simp only [strlenL, List.mem_cons, List.not_mem_nil, or_false] at hq
-    rcases hq with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-      exact ⟨by simp [strlenRs, strlenRegs], rfl⟩
-  · intro rv' mv' hpc' hfin _ hmem
-    refine hnext rv' mv' hpc' (fun k hk => ?_) (fun a ha => (hmem a ha).trans (hslack a ha))
-    simp only [strlenRegs, List.mem_cons, List.not_mem_nil, or_false] at hk
-    rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl
-    · exact hfin (1, rv 1) (by simp [strlenL])
-    · exact hfin (10, rv 10) (by simp [strlenL])
-    · exact hfin (11, rv 11) (by simp [strlenL])
-    · exact hfin (12, rv 12) (by simp [strlenL])
-    · exact hfin (13, rv 13) (by simp [strlenL])
-    · exact hfin (14, rv 14) (by simp [strlenL])
-    · exact hfin (15, rv 15) (by simp [strlenL])
+    (strlenMR_split hslack) (fun q hq => nomatch hq) hpc
+    (fun rv' mv' h1 h2 _ h4 =>
+      hnext rv' mv' h1 h2 (fun a ha => (h4 a ha (fun q hq => nomatch hq)).trans (hslack a ha)))
 
 /-- **One observational ALU step of the run** (the `snez` at `0x80006d64`,
 which `MKind` does not cover). The step reads one GPR and writes one. -/
