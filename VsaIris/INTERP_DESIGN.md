@@ -211,14 +211,62 @@ frame, and the abort continuation it inherited, are available to both.
     re-establishes. The binary has no narrow `tohost` store.
   - Change from the draft: `γo` lives in `MachGS`, not `InterpGS`, because
     its authority is in the machine's state interpretation.
-- **F3, calling conventions and stack.**
-  - `fnSpecW` and `fnSpecAbort`, with `wp_callW` and `wp_callAbort` (the `jal`
-    rule plus the re-basing below).
-  - `stackScratch s n` split and join (`blockOwn` arithmetic).
+- **F3, calling conventions and stack (built: `CallAbort.lean`, `Stack.lean`,
+  `Loop.lean`, `Interp/Need.lean`).**
+  - `fnSpecAbort Wp entry P Q A` with `wp_callAbort` and the Löb twin
+    `wp_callAbort_later`, both mode-generic. `fnSpecAbort_of_fnSpecW` lets a
+    partial-mode proof call a helper proved only with `fnSpecW` (H1-H4);
+    `fnSpecAbort_mono` is the consequence rule, and `fnSpecAbort_rebase`
+    carries the abort-resource difference as an extra precondition.
+  - `stackScratch s n` split and join (`blockOwn` arithmetic):
+    `blockOwn_split`/`blockOwn_join` state the successor address and the
+    lengths as EQUATIONS, so no call site rewrites under `blockOwn`;
+    `stackScratch_narrow`/`_widen` and the carve/join pair
+    `stackScratch_carve`/`stackScratch_join`, whose side condition
+    `nc + f ≤ n` is `Vsa.Alloc.StackOK.child`'s.
   - The ItemZero need `evalNeed e d = e.stackNeed + (maxCallDepth - d) * perCallBudget + evalFrame`,
     verbatim from `EvalEntry.stackBudget` (`Vsa/Sim/InterpEntry.lean:630`).
   - xv6iris spells a budget as the sum, never a round number (`durable-notes.md`
     "A stack-budget premise is arithmetic").
+  - Change from the draft: `evalNeed`/`execNeed` are both `stackBudget need d`,
+    and the whole kit rests on TWO arithmetic lemmas — `stackBudget_child`
+    (the Iris route's `StackOK.child`: a child's budget plus the parent's
+    spilled frame fits the parent's, at the same depth) and `stackBudget_call`
+    (a closure body at depth `d + 1`, inside one `perCallBudget`). Each arm of
+    the two recursors is one line over them (`evalNeed_binary_left`,
+    `execNeed_block`, `execNeed_callBody`, ...). The boundary bridge to S1 is
+    `execNeed_of_stackFits` (arithmetic) and `stackScratch_boundary` (the Iris
+    carve) over `ProgramStackFits`.
+  - Change from the draft: the abort resource is `abortAt Core s need :=
+    Core ∗ stackScratch s need`, generic in the site-independent `Core`
+    (§4.2's `abortRes` is this at `abortCore`, the landing registers and SOME
+    world). The skeleton wrote the `stackScratch` INSIDE the existential; it
+    binds neither `s` nor `need`, so the two are equivalent, and hoisting it
+    is what lets `abort_rebase` move the stack part on its own.
+  - Change from the draft: the call step itself is ONE rule, not a per-site
+    carve. `wp_callArmW` (ordinary) and `wp_callArmAbort` (partial) lend the
+    callee a narrower part of the caller's owned region, keep the slack, and
+    on the partial side re-base BOTH continuations: the return branch gets the
+    caller's region and frame back, and the abort branch joins the very same
+    frame and slack into the caller's `abortAt Core s n`. That the two
+    branches use the same bytes is what the `∧` of `fnSpecAbort` buys, and it
+    is the step every one of E1-E6's call sites takes.
+  - STATEMENT CHANGE (F3): `abort_rebase` needs two more side conditions,
+    `np ≤ sp_.toNat` and `nc ≤ sc.toNat`. `Nat` subtraction truncates, so
+    without them `stackScratch s n` is `blockOwn 0 n` and the three intervals
+    `[s_p - n_p, s_c - n_c)`, `[s_c - n_c, s_c)`, `[s_c, s_p)` do not join.
+  - **The bounded-loop rule** (`Loop.lean`, §4.3): `MachWP.loop I K body fin n`
+    by fuel induction, for either WP (xv6iris `ProofMemset.v:1-9` "bounded
+    loop, not iLöb"; `ProofMemmove.v:350` `mm_loop`, induction on `rem`).
+    Change from the draft: the body's two continuations — the next iteration's
+    `I k` and the loop's inherited exit `K` — are an ADDITIVE pair, the same
+    fix as §10.1. With a separating pair the body consumes `K` and the second
+    iteration has none, which is exactly the bug §10.1 records for `while`.
+    `MachWP.loopI` is the variant with no separate exit resource, and
+    `MachWP.loopSeg` the one whose body is ONE reflected `RunFact` segment
+    (an invariant opener/closer around the segment footprint, with a frame
+    `F k` across it) — the shape `strlen`, `memcpy`, `strcmp` and the
+    `args[32]` fill use (H3).
 
 ## 3. Representation predicates (work package R)
 
@@ -365,6 +413,12 @@ and count live, the `jal exec_stmt` site and the exits. Instantiations:
 - Total mode: induction on the `ExecSeqCost` derivation.
 - Partial mode: fuel induction on the remaining count, which is bounded by
   `count`. Each statement uses the Löb hypothesis for `exec_stmt`.
+
+The fuel-induction rule itself is F3's `MachWP.loop` (`VsaIris/Loop.lean`),
+with `MachWP.loopSeg` for a body that is one reflected `RunFact` segment. Its
+body takes the next iteration's invariant and the loop's inherited exit as an
+ADDITIVE pair, which is what keeps an abort continuation alive across
+iterations (§10.1).
 
 `EvalArgs` (the `args[32]` fill), `while`, and `for` are loop lemmas of the same
 kind.
@@ -602,7 +656,7 @@ S1 cost/admiss. ┘                                      └─> G generator ─
 | **F1** | `mWP`, `MachWP`, `twpW`/`wpW`, `run_later`, partial adequacy at the VSA instance | none | F2, S1 |
 | **F2** | console ghost, `out` projection, `putc` rule, halt/console agreement | none | F1, S1 |
 | **S1** | `ExecSeqCost.exists`; stack-admissibility predicate (Q1); `Room` ↔ `Cost` bridge (2n + slack against `vsaRoom` credits) | none | F1, F2 |
-| **F3** | `fnSpecW`, `fnSpecAbort`, `wp_callW`, `wp_callAbort`, `abort_rebase`, stack carve lemmas, `evalNeed`/`execNeed` arithmetic | F1 | R (after F1) |
+| **F3** (landed) | `fnSpecAbort`, `wp_callAbort`, `wp_callAbort_later`, `abort_rebase`, `blockOwn`/`stackScratch` carve-join, `evalNeed`/`execNeed` arithmetic and the `ProgramStackFits` bridge, `MachWP.loop`/`loopSeg` | F1 | R (after F1) |
 | **R** | `InterpGS`, all §3 predicates, openers (one frame out of `storeRepr`), `astE_of_exprRepr`, the two-owner sanity lemmas | F1, F2 | F3 |
 | **A0** | `world_of_boundary`, vacuity check at the control program | R, S1 | H* |
 | **H1** | `env_new`, `env_define` (append / grow / hit), `env_get`, `env_set` over `storeRepr` openers | R | H2–H5 |
