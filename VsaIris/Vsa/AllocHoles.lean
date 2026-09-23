@@ -19,7 +19,8 @@ regimes (INTERP_DESIGN §3), over
 
 Each field is proved by lane H4, which then deletes the field and its
 `VsaIris/HOLES.md` row. `allocSpecs` turns the fields into the Iris specs
-that callers use.
+that callers use, for every `MachWP` (`twpW` for `term_sim`, `wpW` for
+`stuck_sim`): the runs are first-order, so the specs are WP-agnostic.
 -/
 
 namespace VsaIris.VsaHeap

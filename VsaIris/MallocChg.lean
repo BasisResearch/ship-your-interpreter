@@ -42,11 +42,11 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineM
 
 /-- `malloc` in the counted regime: `c` credits buy a fresh block for a
 request they cover. -/
-def mallocChgSpec (M : MachineModel) (L : DlLayout) (Room : RoomPred) (Chg : ChgRel)
+def mallocChgSpec (Wp : MachWP (GF := GF) M) (L : DlLayout) (Room : RoomPred) (Chg : ChgRel)
     (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64) (clob : List Nat)
     (saved : List (Nat × BitVec 64)) (headroom : Nat) (H : List (Nat × Nat)) (n s : BitVec 64)
     (k c : Nat) : IProp GF :=
-  fnSpec (M := M) entry
+  fnSpecW Wp entry
     (fun r => iprop(⌜SpOK s ∧ r.toNat % 4 = 0 ∧ Chg n.toNat c⌝ ∗ a0 ↦ᵣ n ∗ sp ↦ᵣ s ∗
       gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗ stackScratch s headroom ∗
       isHeapRoom L Room H (k + c)))
@@ -56,21 +56,21 @@ def mallocChgSpec (M : MachineModel) (L : DlLayout) (Room : RoomPred) (Chg : Chg
         isHeapRoom L Room ((p.toNat, n.toNat) :: H) k ∗ blockOwn p.toNat n.toNat)))
 
 /-- **`mallocChgSpec` from the charged run.** -/
-theorem mallocChgSpec_of_run {L : DlLayout} {Room : RoomPred} {Chg : ChgRel}
+theorem mallocChgSpec_of_run (Wp : MachWP (GF := GF) M) {L : DlLayout} {Room : RoomPred} {Chg : ChgRel}
     {SpOK : BitVec 64 → Prop} {entry gpv : BitVec 64} {clob savedRegs : List Nat}
     {headroom : Nat} {text : List (Nat × BitVec 8)}
     (hrun : MallocChgRun M L Room Chg SpOK entry gpv clob savedRegs headroom text)
     (hloc : ShapeLocal L) (hroom : RoomLocal L Room) (hnd : (allocRegs clob savedRegs).Nodup)
     (H : List (Nat × Nat)) (n s : BitVec 64) (k c : Nat) (saved : List (Nat × BitVec 64))
     (hsv : saved.map Prod.fst = savedRegs) :
-    textOwn (GF := GF) text ⊢ mallocChgSpec M L Room Chg SpOK entry gpv clob saved headroom H n s k c := by
+    textOwn (GF := GF) text ⊢ mallocChgSpec Wp L Room Chg SpOK entry gpv clob saved headroom H n s k c := by
   subst hsv
   have hd := RegsDistinct.of_nodup hnd
-  unfold mallocChgSpec fnSpec isHeapRoom
+  unfold mallocChgSpec fnSpecW isHeapRoom
   iintro #Htext
   imodintro
   iintro %r %Φ Hpc Hra ⟨%⟨hspok, hral, hchg⟩, Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, Hheap⟩ Hk
-  iapply allocCall_of_localRun hd (heapFoot L H) (fun img => L.Shape img H ∧ Room img H (k + c))
+  iapply allocCall_of_localRun Wp hd (heapFoot L H) (fun img => L.Shape img H ∧ Room img H (k + c))
     (fun img img' h hs => ⟨hloc H img img' h hs.1, hroom H img img' _ h hs.2⟩)
     (fun rv' mv' => FreshBlock L H (rv' a0).toNat n.toNat ∧ (rv' a0).toNat % 16 = 0 ∧
       L.Shape mv' (((rv' a0).toNat, n.toNat) :: H) ∧
@@ -101,9 +101,9 @@ theorem mallocChgSpec_of_run {L : DlLayout} {Room : RoomPred} {Chg : ChgRel}
 structure DlMallocChgImpl (M : MachineModel) (L : DlLayout) (Room : RoomPred) (Chg : ChgRel)
     (SpOK : BitVec 64 → Prop) (mallocEntry gpv : BitVec 64) (clob savedRegs : List Nat)
     (headroom : Nat) (text : List (Nat × BitVec 8)) : Prop where
-  malloc : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] H n s k c
+  malloc : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] (Wp : MachWP (GF := GF) M) H n s k c
     (saved : List (Nat × BitVec 64)), saved.map Prod.fst = savedRegs →
-    textOwn (GF := GF) text ⊢ mallocChgSpec M L Room Chg SpOK mallocEntry gpv clob saved headroom H n s k c
+    textOwn (GF := GF) text ⊢ mallocChgSpec Wp L Room Chg SpOK mallocEntry gpv clob saved headroom H n s k c
 
 theorem dlMallocChgImpl_of_run {M : MachineModel} {L : DlLayout} {Room : RoomPred} {Chg : ChgRel}
     {SpOK : BitVec 64 → Prop} {mallocEntry gpv : BitVec 64} {clob savedRegs : List Nat}
@@ -111,7 +111,7 @@ theorem dlMallocChgImpl_of_run {M : MachineModel} {L : DlLayout} {Room : RoomPre
     (hrun : MallocChgRun M L Room Chg SpOK mallocEntry gpv clob savedRegs headroom text)
     (hloc : ShapeLocal L) (hroom : RoomLocal L Room) (hnd : (allocRegs clob savedRegs).Nodup) :
     DlMallocChgImpl M L Room Chg SpOK mallocEntry gpv clob savedRegs headroom text where
-  malloc H n s k c saved hsv := mallocChgSpec_of_run hrun hloc hroom hnd H n s k c saved hsv
+  malloc Wp H n s k c saved hsv := mallocChgSpec_of_run Wp hrun hloc hroom hnd H n s k c saved hsv
 
 end Spec
 
@@ -160,11 +160,11 @@ def reallocChgPost (L : DlLayout) (Room : RoomPred) (H : List (Nat × Nat)) (p :
     ∃ v : Nat → BitVec 8, ⌜Copies old v p.toNat p'.toNat nOld⌝ ∗ blockOwnAt p'.toNat nNew v)
 
 /-- **`realloc` in the counted regime.** -/
-def reallocChgSpec (M : MachineModel) (L : DlLayout) (Room : RoomPred) (Chg : ChgRel)
+def reallocChgSpec (Wp : MachWP (GF := GF) M) (L : DlLayout) (Room : RoomPred) (Chg : ChgRel)
     (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64) (clob : List Nat)
     (saved : List (Nat × BitVec 64)) (headroom : Nat) (H : List (Nat × Nat)) (p : BitVec 64)
     (nOld nNew : Nat) (s : BitVec 64) (old : Nat → BitVec 8) (k c : Nat) : IProp GF :=
-  fnSpec (M := M) entry
+  fnSpecW Wp entry
     (fun r => iprop(⌜SpOK s ∧ r.toNat % 4 = 0 ∧ nOld < nNew ∧ Chg nNew c⌝ ∗ a0 ↦ᵣ p ∗
       clobberedArg clob a1 (BitVec.ofNat 64 nNew) ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ savedOwn saved ∗
       stackScratch s headroom ∗ isHeapRoom L Room ((p.toNat, nOld) :: H) (k + c) ∗
@@ -173,7 +173,7 @@ def reallocChgSpec (M : MachineModel) (L : DlLayout) (Room : RoomPred) (Chg : Ch
       stackScratch s headroom ∗ reallocChgPost L Room H p nOld nNew old k p'))
 
 /-- **`reallocChgSpec` from the charged run.** -/
-theorem reallocChgSpec_of_run {L : DlLayout} {Room : RoomPred} {Chg : ChgRel}
+theorem reallocChgSpec_of_run (Wp : MachWP (GF := GF) M) {L : DlLayout} {Room : RoomPred} {Chg : ChgRel}
     {SpOK : BitVec 64 → Prop} {entry gpv : BitVec 64} {clob savedRegs : List Nat}
     {headroom : Nat} {text : List (Nat × BitVec 8)}
     (hrun : ReallocChgRun M L Room Chg SpOK entry gpv clob savedRegs headroom text)
@@ -183,10 +183,10 @@ theorem reallocChgSpec_of_run {L : DlLayout} {Room : RoomPred} {Chg : ChgRel}
     (old : Nat → BitVec 8) (k c : Nat) (saved : List (Nat × BitVec 64))
     (hsv : saved.map Prod.fst = savedRegs) :
     textOwn (GF := GF) text ⊢
-      reallocChgSpec M L Room Chg SpOK entry gpv clob saved headroom H p nOld nNew s old k c := by
+      reallocChgSpec Wp L Room Chg SpOK entry gpv clob saved headroom H p nOld nNew s old k c := by
   subst hsv
   have hd := RegsDistinct.of_nodup hnd
-  unfold reallocChgSpec fnSpec blockOwnAt clobberedArg isHeapRoom
+  unfold reallocChgSpec fnSpecW blockOwnAt clobberedArg isHeapRoom
   iintro #Htext
   imodintro
   iintro %r %Φ Hpc Hra ⟨%⟨hspok, hral, hlt, hchg⟩, Ha0, Hclob, Hsp, #Hgp, Hsv, Hstk,
@@ -200,7 +200,7 @@ theorem reallocChgSpec_of_run {L : DlLayout} {Room : RoomPred} {Chg : ChgRel}
     fun a hb hh => hHB a hh hb
   have hagree : ∀ a, heapFoot L ((p.toNat, nOld) :: H) a →
       img a = glue (heapFoot L ((p.toNat, nOld) :: H)) img old a := fun a ha => by simp [glue, ha]
-  iapply allocCallArgs_of_localRun hd
+  iapply allocCallArgs_of_localRun Wp hd
     (fun a => heapFoot L ((p.toNat, nOld) :: H) a ∨ InExt (p.toNat, nOld) a)
     (fun img => L.Shape img ((p.toNat, nOld) :: H) ∧ Room img ((p.toNat, nOld) :: H) (k + c) ∧
       Copies old img p.toNat p.toNat nOld)

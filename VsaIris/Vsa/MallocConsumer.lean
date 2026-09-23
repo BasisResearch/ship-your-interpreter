@@ -50,7 +50,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineM
 same image, and it is disjoint from the fresh block and from the allocator's
 new footprint. This replaces `HeapOwned.ownedOff` (`OwnedOff`) and the
 `mem_frame` uses of a `MallocReturnAt` in one step. -/
-theorem wp_call_malloc_owns {Φ : Nat × String → IProp GF} {L : DlLayout} {SpOK : BitVec 64 → Prop}
+theorem wp_call_malloc_owns (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF} {L : DlLayout} {SpOK : BitVec 64 → Prop}
     {mallocEntry freeEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
     {text : List (Nat × BitVec 8)}
     (impl : DlMallocImpl M L SpOK mallocEntry freeEntry gpv clob savedRegs headroom text)
@@ -67,10 +67,10 @@ theorem wp_call_malloc_owns {Φ : Nat × String → IProp GF} {L : DlLayout} {Sp
         mallocPost L H n.toNat p -∗ ownSet C (fun a => a ↦ₘ img a) -∗
         ⌜p ≠ 0 → ∀ a, C a →
           ¬ InExt (p.toNat, n.toNat) a ∧ ¬ heapFoot L ((p.toNat, n.toNat) :: H) a⌝ -∗
-        mTWP M Φ)
-    ⊢ mTWP M Φ := by
+        Wp.W Φ)
+    ⊢ Wp.W Φ := by
   iintro ⟨Hi, Htext, Hpc, Hra, Ha0, Hsp, Hgp, Hclob, Hsv, Hstk, Hheap, HC, Hk⟩
-  iapply wp_call_malloc impl hexec H v n s saved hsaved hsp hal (ownSet C (fun a => a ↦ₘ img a))
+  iapply wp_call_malloc Wp impl hexec H v n s saved hsaved hsp hal (ownSet C (fun a => a ↦ₘ img a))
   iframe Hi Htext Hpc Hra Ha0 Hsp Hgp Hclob Hsv Hstk Hheap HC
   unfold mallocPost
   iintro %p Hpc Hra Ha0 Hsp Hclob Hsv Hstk Hpost HC
