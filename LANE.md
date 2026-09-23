@@ -23,6 +23,11 @@ first-order runs of `_malloc_r`, `_free_r` and `_realloc_r` at the binary.
     caller's stack discipline `SpOK`. Without it they are unsatisfiable: the prologue's frame stores
     fault for a bad `sp`.
   - The Iris shape `vsaLayoutP` requires a page-aligned break (see Findings).
+- **WP-agnostic specs**: merged `hub/lane-f1`'s `MachWP`. Every allocator spec takes a
+  `Wp : MachWP M` (`fnSpecW`), the `Impl` structures quantify over it, and the `*_of_run`
+  lemmas hold for every `Wp` (`wp_localRunW`); the runs themselves are first-order.
+- **Heap algebra** (`Vsa/HeapAlg.lean`, `Vsa/HeapTake.lean`): bins as rings of fd/bk links,
+  walk rewriting under `reflag`, and the take of a free chunk from a bin (`PHeapAt.take`).
 - **Symbolic-execution layer** (the exponentiating layer for machine code):
   - `SWP pc R Mt` (`Vsa/SymRun.lean`): a WP over `LocalRun`, with `swp_step`, `swp_jal` and store
     forwarding (`ldv_store_hit`/`_miss`).
@@ -45,18 +50,21 @@ first-order runs of `_malloc_r`, `_free_r` and `_realloc_r` at the binary.
   allocator does not call.
 
 ## In flight
-- Normalizing `upd` lookups and addresses in `sx_run`'s side goals (`toNat` arithmetic to `omega`).
-- The `HeapAt` algebra, then the malloc paths.
+- `_malloc_r` paths (`Vsa/MallocPaths.lean`), on the step table and the heap algebra:
+  - done: entry/exit adapters (`mallocChgRun_of_aw`, `malloc_exit`), the epilogue copies
+    (`epi_core`), the small-bin join `j_small`, and the exact small-bin take `small_take`
+    (unlink, `PREV_INUSE`, return), via `PHeapAt.take`/`take_fresh` (`Vsa/HeapTake.lean`);
+  - next: the prologue to `j_small`, the last-remainder check (`0x800048ec`), the binblocks
+    scan, the top split and `malloc_extend_top`, large bins.
 
 ## Holes (see `VsaIris/HOLES.md`)
 - `alloc.mallocChgRun`, `alloc.mallocLocalRun`, `alloc.freeChgRun`, `alloc.freeLocalRun`,
   `alloc.reallocChgRun`, `alloc.reallocLocalRun`.
 
 ## Next
-1. `sx_norm`/`sx_side` for addresses and branch conditions; the entry adapter (`MallocChgRun`
-   hypotheses to `AW` at `mallocEntry`) and the exit adapter (`ret` to `MallocRoomEnd`).
+1. The remaining malloc joins (see In flight).
 2. Heap algebra on `PHeapAt`: unlink, small and large `frontlink`, split with the last-remainder
    bin, `binblocks`, top split and extension, coalescing, trim.
 3. Malloc paths, then free, then realloc (with the `sltu` step). Delete each field and its row
    as it is proved.
-4. The `xmalloc` site lemma; switch the runs to `MachWP` once `hub/lane-f1` has it.
+4. The `xmalloc` site lemma.
