@@ -36,6 +36,10 @@ def TextAt (i : Nat) (code : List (BitVec 8)) : Prop :=
 instance (i : Nat) (code : List (BitVec 8)) : Decidable (TextAt i code) := by
   unfold TextAt; infer_instance
 
+theorem codeFoot_mem {i : Nat} {code : List (BitVec 8)} {b : BitVec 8} {k : Nat}
+    (h : (b, k) ∈ code.zipIdx) : (i + k, Iris.DFrac.discard, b) ∈ codeFoot i code :=
+  List.mem_map_of_mem (f := fun p => (i + p.2, Iris.DFrac.discard, p.1)) h
+
 /-- Code taken from the image is present in every state of a `CodeLive` run. -/
 theorem TextAt.live {live : Nat → Prop} (hl : CodeLive live) {i : Nat} {code : List (BitVec 8)}
     (h : TextAt i code) : ∀ p ∈ codeFoot i code, live p.1 := by
@@ -66,6 +70,18 @@ theorem roImg_sepL (S : Nat → Prop) (img : Nat → BitVec 8) :
       rw [← he]
       iapply H $$ %(f q.2) %hs
     · iapply roImg_sepL S img l f (fun p hp => h p (List.mem_cons_of_mem _ hp)) $$ H
+
+theorem roImg_congr {S : Nat → Prop} {f g : Nat → BitVec 8} (h : ∀ a, S a → f a = g a) :
+    roImg (GF := GF) S f ⊢ roImg S g := by
+  unfold roImg
+  iintro #H
+  imodintro
+  iintro %k %hk
+  rw [← h k hk]
+  iapply H $$ %k %hk
+
+theorem binImg_rodata : binImg (GF := GF) ⊢ roImg rodataDom rodataByte := by
+  unfold binImg; iintro ⟨-, #H⟩; iexact H
 
 /-- **Code from the image.** -/
 theorem instrAt_of_binImg {i : Nat} {code : List (BitVec 8)} (h : TextAt i code) :

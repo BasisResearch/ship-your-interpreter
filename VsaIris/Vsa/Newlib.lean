@@ -140,6 +140,26 @@ structure FmtArgsAt (R : Nat → Prop) (rd : Nat → BitVec 8) (fmt : BitVec 64)
   strs : ∀ i (h : i < convs.length), convs[i] = .str →
     ∃ t, CStrCov R rd (args[i]'(Nat.lt_of_lt_of_le h arity)).toNat t
 
+/-- A NUL within `n` bytes of `p`, all inside `R`, makes a C string there: the
+bytes before the first NUL. -/
+theorem cstrCov_of_nul {R : Nat → Prop} {rd : Nat → BitVec 8} {p : Nat} :
+    ∀ {n : Nat}, (∀ i, i < n → R (p + i)) → (∃ k, k < n ∧ rd (p + k) = 0) →
+      ∃ t, CStrCov R rd p t
+  | 0, _, ⟨_, hk, _⟩ => absurd hk (Nat.not_lt_zero _)
+  | n + 1, hR, h => by
+    by_cases h' : ∃ k, k < n ∧ rd (p + k) = 0
+    · exact cstrCov_of_nul (fun i hi => hR i (by omega)) h'
+    · obtain ⟨k, hk, h0⟩ := h
+      have hkn : k = n := by
+        apply Classical.byContradiction; intro hne; exact h' ⟨k, by omega, h0⟩
+      subst hkn
+      refine ⟨(List.range k).map (fun i => rd (p + i)), ⟨fun i hi => ?_, ?_⟩⟩
+      · have hi' : i < k := by simpa using hi
+        refine ⟨hR i (by omega), by simp, ?_⟩
+        simpa using fun hz => h' ⟨i, hi', hz⟩
+      · simp only [List.length_map, List.length_range]
+        exact ⟨hR k (by omega), h0⟩
+
 /-- Some format bytes and conversions make `fmt` and `args` safe to print. -/
 def FmtArgsOK (R : Nat → Prop) (rd : Nat → BitVec 8) (fmt : BitVec 64)
     (args : List (BitVec 64)) : Prop :=

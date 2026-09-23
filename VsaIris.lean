@@ -38,3 +38,6 @@ import VsaIris.Vsa.BinImg
 import VsaIris.Vsa.JalSite
 import VsaIris.Vsa.H5Sites
 import VsaIris.Vsa.Exit
+import VsaIris.Vsa.SegImg
+import VsaIris.Vsa.StdioRead
+import VsaIris.Vsa.MainErr

@@ -2,3 +2,9 @@
 code	exitCode	0x80004764	0x80004790
 code	exitCodeE	0x80000180	0x80000198
 jal	exitJalExitE	0x8000478c
+decode_alias	72c0406f	Vsa.Sim.OutputAliasDecode
+code	mainErrCode	0x800045ec	0x80004620
+code	crt0JCode	0x80000038	0x8000003c
+code	interpLandCode	0x80004428	0x8000442c
+code	interpEpiCode	0x80004508	0x80004540
+jal	mainJalFprintf	0x80004614
