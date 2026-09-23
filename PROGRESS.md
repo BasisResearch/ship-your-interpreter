@@ -227,8 +227,9 @@ iris-machine's. The earlier iris-heap history is in git (`git log --grep iris-he
 - VSA obstruction, machine-checked: `vsa_reserve_fails_after_split`. VSA's `AllocationReserve` is false after `malloc(24)`. The corrected `Reserve` is used instead, and the finding is recorded in `PROOF_CLOSURE_PLAN.md` §2.
 
 ## In flight
-- `MallocRoomRun` on the top-split fast path (requests 24..487 bytes, heap with no free chunk, `binblocks = 0`). The segments are being reflected with `#derive_case` and `chain_facts`, and chained through `segFrom_of_runFact`.
-
+- `MallocRoomRun` on the top-split fast path (requests 24..487, heap with no free chunk, `binblocks = 0`):
+  - **Done:** every `ChainFacts` obligation (`MallocFastSegs`); the heap lemma `FastAt.split`; generic `seg_step`/`jal_step`; both lock-call `jal` sites; and stage 10 (epilogue → `MallocRoomEnd`, `MallocFastChain`).
+  - **Remaining:** stages 9..0, which are bookkeeping on the same pattern.
 ## Holes left
 - `MallocLocalRun`, `FreeLocalRun`, and `MallocRoomRun` beyond the fast path.
 
