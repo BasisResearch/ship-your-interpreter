@@ -1,4 +1,4 @@
-import VsaIris.Interp.EnvGetSpans
+import VsaIris.Interp.EnvGetHit
 
 /-!
 # `env_get`, proved (INTERP_DESIGN.md §9 H1)
