@@ -285,8 +285,29 @@ def BlocksCover (bl : List (Nat × Nat)) (a : Nat) : Prop := ∃ b ∈ bl, InExt
 /-- Two extents share no byte. -/
 def ExtDisj (b b' : Nat × Nat) : Prop := ∀ a, InExt b a → ¬ InExt b' a
 
+/-- Where a heap block may sit: RAM above the HTIF words, 16-aligned (a chunk
+payload). The `env_*` loads and stores into a frame need exactly this. -/
+structure BlockWin (b : Nat × Nat) : Prop where
+  lo : 0x80000000 ≤ b.1
+  hi : b.1 + b.2 ≤ 0x100000000
+  htif : htifLo + 16 ≤ b.1
+  align : b.1 % 16 = 0
+
+/-- The capacity `env_define`'s growth policy reaches for `k` bindings
+(`env.c:29-33`: `cap = cap ? 2*cap : 8`), by the same fuel recursion as the
+cost model's `arrayCostAux` (`Vsa/While/Cost.lean`), so the two are related
+step by step. -/
+def capForAux : (fuel cap k : Nat) → Nat
+  | 0, cap, _ => cap
+  | fuel + 1, cap, k => if k ≤ cap then cap else capForAux fuel (if cap = 0 then 8 else 2 * cap) k
+
+/-- The canonical capacity of a frame with `k` bindings: `0, 8, 16, 32, …`. -/
+def capFor (k : Nat) : Nat := capForAux k 0 k
+
 /-- The pure layout of one frame in its image (`FrameRepr`'s struct words,
-plus the block geometry `env_define`'s `realloc` needs). -/
+plus the block geometry `env_define`'s `realloc` needs, the blocks' address
+windows the `env_*` loads and stores need, and the canonical capacity the
+counted regime's charges follow). -/
 structure FrameLayout (img : Nat → BitVec 8) (G : FrameGeom) (n : Nat) : Prop where
   e_ne : G.e ≠ 0
   sblk : G.sblk.1 ≤ G.e ∧ G.e + 32 ≤ G.sblk.1 + G.sblk.2
@@ -300,6 +321,9 @@ structure FrameLayout (img : Nat → BitVec 8) (G : FrameGeom) (n : Nat) : Prop 
   arrays : 0 < G.cap → G.nblk.1 = G.pn ∧ 8 * G.cap ≤ G.nblk.2 ∧
     G.vblk.1 = G.pv ∧ 24 * G.cap ≤ G.vblk.2
   disjoint : G.blocks.Pairwise ExtDisj
+  win : ∀ b ∈ G.blocks, BlockWin b
+  e_align : G.e % 8 = 0
+  cap_canon : G.cap = capFor n
 
 /-- The bindings of a frame: name `i` is the string at `names[i]`, value `i`
 the words at `vals[i]` (persistent meanings; the words are in the image). -/

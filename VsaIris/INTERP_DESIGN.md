@@ -833,3 +833,13 @@ without the fact and no other resource carries it:
   the boundary (`ctl_sharedWin` at the control program). The over-read bytes
   themselves are NOT owned by the string: their values never decide the
   result, so the H3 runs read them as total reads (`readByte = getD 0`).
+- **`FrameLayout` gains `win`, `e_align`, `cap_canon`.** `win`: every block
+  of a frame is RAM above the HTIF words and 16-aligned (`BlockWin`), which
+  every `env_*` load and store into the struct and arrays needs (`LdOK`,
+  `StOK`), and which only the frame knows (`env_get`/`env_set` hold the store,
+  not the heap). `cap_canon`: `cap = capFor count` (`0, 8, 16, 32, …`,
+  `env.c`'s growth policy). The counted regime charges `defineCost`, which
+  pays for array growth exactly when the count sits on a canonical cap; a
+  frame with `count = cap` off that sequence would grow without credits.
+  `capForAux` mirrors `arrayCostAux`'s fuel recursion. `FrameBridge` carries
+  the three facts at the boundary (`ctl_frameBridge`: cap 8 for 3 natives).

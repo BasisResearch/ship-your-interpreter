@@ -103,6 +103,13 @@ theorem ctl_frameBridge :
   empty := by intro h; exact absurd h (by decide)
   arrays := by intro _; exact ⟨rfl, by decide, rfl, by decide⟩
   disjoint := ctlGeom_disjoint
+  win := by
+    intro b hb
+    rw [ctlGeom_blocks] at hb
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hb
+    rcases hb with rfl | rfl | rfl <;> exact ⟨by decide, by decide, by decide, by decide⟩
+  e_align := by decide
+  cap_canon := by decide
   agree := fun _ _ => rfl
   nameShared := by
     intro i hi q hq j hj

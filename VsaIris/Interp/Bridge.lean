@@ -543,6 +543,9 @@ structure FrameBridge (P : Nat → Prop) (m : Mem) (N : NativeAddrs) (φc : Addr
   arrays : 0 < G.cap → G.nblk.1 = G.pn ∧ 8 * G.cap ≤ G.nblk.2 ∧
     G.vblk.1 = G.pv ∧ 24 * G.cap ≤ G.vblk.2
   disjoint : G.blocks.Pairwise ExtDisj
+  win : ∀ b ∈ G.blocks, BlockWin b
+  e_align : G.e % 8 = 0
+  cap_canon : G.cap = capFor f.vars.length
   agree : ∀ k, BlocksCover G.blocks k → img k = memImg m k
   nameShared : ∀ i, (h : i < f.vars.length) → ∀ q, read64 m (G.pn + 8 * i) = some q →
     ∀ j, j ≤ (f.vars[i].1).length → P (q + j)
@@ -622,6 +625,9 @@ theorem frameLayout_of_frameRepr {P : Nat → Prop} {m : Mem} {N : NativeAddrs}
   empty := h.empty
   arrays := h.arrays
   disjoint := h.disjoint
+  win := h.win
+  e_align := h.e_align
+  cap_canon := h.cap_canon
 
 /-- **One frame's bindings** out of `FrameRepr` and a read-only view. -/
 theorem bindings_of_frameRepr {P : Nat → Prop} {m : Mem} {N : NativeAddrs}
