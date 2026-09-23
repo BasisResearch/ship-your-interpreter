@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Malloc
 import Vsa.Sim.AllocLedger
+import Vsa.Sim.AllocCapacity
 
 /-!
 # Feeding a VSA allocator consumer from the Iris spec
@@ -135,9 +136,6 @@ namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.RuntimeRepr Vsa.While Vsa.Alloc Vsa.Sim Vsa.Sim.DlHeap Vsa.Sim.RuntimeOwnership
 
-/-- The fixed binary's arena, as VSA's ledger states it (`Control.heapArena`). -/
-def vsaArena : Arena := ⟨heapStart, heapEnd⟩
-
 /-- Every VSA ledger extent lies in an Iris live block. -/
 def Covered (exts : List Extent) (H : List (Nat × Nat)) : Prop :=
   ∀ e ∈ exts, ∃ b ∈ H, ∀ a, InExt e a → InExt b a
@@ -204,5 +202,66 @@ theorem mallocCallerFacts_of_iris {H : List (Nat × Nat)} {exts : List Extent} {
       owned := owned0.fresh hn block.arena block.fresh
       store := h.store.repr_transport hr hag ha hs
       sharedAgree := fun x hx => hag x (hs x hx) }
+
+/-- A reserve stated over the live blocks holds over any ledger inside them. -/
+theorem reserve_of_covered {m : Mem} {H : List (Nat × Nat)} {exts : List Extent}
+    {maxReq k : Nat} (h : AllocationReserve vsaArena m H maxReq k) (hcov : Covered exts H)
+    (hpos : ∀ e ∈ exts, 0 < e.2) : AllocationReserve vsaArena m exts maxReq k := by
+  refine { available := fun positive => ?_ }
+  obtain ⟨top, bytes, reserve⟩ := h.available positive
+  refine ⟨top, bytes, { reserve with chunk := { reserve.chunk with disjoint := ?_ } }⟩
+  intro e he
+  obtain ⟨b, hb, hsub⟩ := hcov e he
+  have hp := hpos e he
+  have lo := hsub e.1 (by unfold InExt; omega)
+  have hi := hsub (e.1 + e.2 - 1) (by unfold InExt; omega)
+  unfold InExt at lo hi
+  have := reserve.chunk.disjoint b hb
+  omega
+
+/-- The consumer's facts with capacity: the budget and the placement reserve
+for the remaining credits. -/
+structure MallocRoomCallerFacts (exts : List Extent) (n p : Nat) (m0 m1 : Mem)
+    (N : NativeAddrs) (phiF phiC : Addr → Nat) (alloc : Allocations)
+    (shared readable writes : Nat → Prop) (s : Store) (maxReq credits : Nat) : Prop
+    extends MallocCallerFacts exts n p m0 m1 N phiF phiC alloc shared readable writes s where
+  budget : ResourceBudget vsaArena maxReq ((p, n) :: exts) credits
+  reserve : AllocationReserve vsaArena m1 ((p, n) :: exts) maxReq credits
+
+/-- **Every `MallocReturnAt` field `prepareCopy` uses, from `mallocRoomSpec`.**
+Besides `mallocCallerFacts_of_iris`'s inputs: the entry budget (a ledger
+count), the request bound, and the room of the returned heap image, pinned in
+the actual memory by the allocator's own bytes (`ownSet_agree_state` applied
+to `isHeapRoom`). `ainv` is `isHeapRoom` itself. -/
+theorem mallocRoomCallerFacts_of_iris {H : List (Nat × Nat)} {exts : List Extent} {n p : Nat}
+    {m0 m1 : Mem} {N : NativeAddrs} {phiF phiC : Addr → Nat} {alloc : Allocations}
+    {shared readable writes : Nat → Prop} {s : Store} {maxReq credits : Nat}
+    {img : Nat → BitVec 8}
+    (h : HeapOwned vsaArena exts m0 phiF phiC alloc shared readable writes s)
+    (hr : StoreRepr m0 N vsaArena phiF phiC s)
+    (hag : AgreeP (callerFoot alloc shared) m0 m1)
+    (hf : FreshBlock vsaLayout H p n) (hal : p % 16 = 0) (hn : 0 < n)
+    (hcov : Covered exts H)
+    (hbud : ResourceBudget vsaArena maxReq exts (credits + 1)) (hreq : n ≤ maxReq)
+    (hroom : vsaRoom maxReq img ((p, n) :: H) credits)
+    (him : ImgOn (vsaFoot ((p, n) :: H)) img m1) :
+    MallocRoomCallerFacts exts n p m0 m1 N phiF phiC alloc shared readable writes s
+      maxReq credits := by
+  have base := mallocCallerFacts_of_iris h hr hag hf hal hn hcov
+  have hcov' : Covered ((p, n) :: exts) ((p, n) :: H) := by
+    intro e he
+    rcases List.mem_cons.mp he with rfl | he
+    · exact ⟨_, List.mem_cons_self, fun a ha => ha⟩
+    · obtain ⟨b, hb, hsub⟩ := hcov e he
+      exact ⟨b, List.mem_cons_of_mem _ hb, hsub⟩
+  have hpos : ∀ e ∈ (p, n) :: exts, 0 < e.2 := by
+    intro e he
+    rcases List.mem_cons.mp he with rfl | he
+    · exact hn
+    · exact (h.ledger.arena.1 e he).1
+  exact
+    { toMallocCallerFacts := base
+      budget := ResourceBudget.alloc hbud hreq
+      reserve := reserve_of_covered (reserve_of_room hroom him) hcov' hpos }
 
 end VsaIris.VsaHeap
