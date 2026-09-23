@@ -379,4 +379,64 @@ theorem imgOn_of_getD {S : Nat → Prop} {img : Nat → BitVec 8} {m : Mem}
   | none => rw [hma] at hp; cases hp
   | some b => rw [hma] at hv; simp at hv; rw [hv]
 
+/-! ## From VSA's boundary heap to the block view -/
+
+/-- The usable payload of every in-use chunk, as dlmalloc hands it out
+(`malloc_usable_size = size - 8`). -/
+def inuseBlocks (chunks : List Chunk) : List (Nat × Nat) :=
+  chunks.filterMap fun c => if c.inuse then some (c.addr + 16, c.size - 8) else none
+
+theorem mem_inuseBlocks {chunks : List Chunk} {e : Nat × Nat} :
+    e ∈ inuseBlocks chunks ↔ ∃ c ∈ chunks, c.inuse = true ∧ e = (c.addr + 16, c.size - 8) := by
+  unfold inuseBlocks
+  rw [List.mem_filterMap]
+  constructor
+  · rintro ⟨c, hc, h⟩
+    by_cases hu : c.inuse = true
+    · simp only [hu, ite_true, Option.some.injEq] at h
+      exact ⟨c, hc, hu, h.symm⟩
+    · simp [hu] at h
+  · rintro ⟨c, hc, hu, rfl⟩
+    exact ⟨c, hc, by simp [hu]⟩
+
+/-- **VSA's heap shape in block form.** Any `HeapAt` (VSA's boundary allocator,
+whose ledger extents may be sub-ranges of a chunk) gives the block-heap shape
+whose live blocks are the in-use chunk payloads, and every VSA extent lies in
+one of those blocks. So the caller owns at least every VSA ledger extent. -/
+theorem blockHeapAt_of_heapAt {m : Mem} {exts : List (Nat × Nat)}
+    {reallocs : Nat × Nat → Prop} {top brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} (h : HeapAt m exts reallocs top brkv chunks bins)
+    (hroom : top + 16 ≤ brkv) :
+    BlockHeapAt m (inuseBlocks chunks) top brkv chunks bins ∧
+      ∀ e ∈ exts, ∃ b ∈ inuseBlocks chunks, ∀ a, InExt e a → InExt b a := by
+  have hb := h.walk.chunk_bounds
+  refine ⟨⟨{ h with
+      live := ?_
+      exact := ?_ }, hroom⟩, ?_⟩
+  · intro e he
+    obtain ⟨c, hc, hu, rfl⟩ := mem_inuseBlocks.1 he
+    have := hb c hc
+    exact ⟨c, hc, hu, by simp, by simp; omega⟩
+  · intro e he _
+    obtain ⟨c, hc, hu, rfl⟩ := mem_inuseBlocks.1 he
+    have := hb c hc
+    exact ⟨c, hc, hu, rfl, by simp; omega⟩
+  · intro e he
+    obtain ⟨c, hc, hu, h1, h2⟩ := h.live e he
+    have := hb c hc
+    refine ⟨(c.addr + 16, c.size - 8), mem_inuseBlocks.2 ⟨c, hc, hu, rfl⟩, fun a ha => ?_⟩
+    unfold InExt at ha ⊢
+    simp only at ha ⊢
+    omega
+
+/-- VSA's initial allocator (`DlHeap.InitialAllocatorAt`, supplied at the
+boundary by `InitialOwned.allocator`) gives the Iris heap shape at the initial
+memory, with the in-use chunk payloads as the initial live blocks. -/
+theorem blockHeap_of_initial {m : Mem} {exts : List (Nat × Nat)}
+    {reallocs : Nat × Nat → Prop} {stmts count top brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat}
+    (h : InitialAllocatorAt m exts reallocs stmts count top brkv chunks bins)
+    (hroom : top + 16 ≤ brkv) : BlockHeap m (inuseBlocks chunks) :=
+  ⟨top, brkv, chunks, bins, (blockHeapAt_of_heapAt h.heap hroom).1⟩
+
 end VsaIris.VsaHeap

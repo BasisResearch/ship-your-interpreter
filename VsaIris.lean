@@ -8,3 +8,4 @@ import VsaIris.Example
 import VsaIris.Audit
 import VsaIris.Vsa.Instance
 import VsaIris.Vsa.HeapShape
+import VsaIris.Vsa.ControlWitness
