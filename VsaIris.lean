@@ -26,3 +26,4 @@ import VsaIris.Vsa.CostRoom
 import VsaIris.Interp.Repr
 import VsaIris.Interp.Store
 import VsaIris.Interp.Bridge
+import VsaIris.Interp.Boundary
