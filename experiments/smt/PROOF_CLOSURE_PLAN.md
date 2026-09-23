@@ -2740,6 +2740,22 @@ corrected clause keeps only the top's header word off live extents:
 Affected: `AllocationReserve`, `TopChunkRoom`, and every supplier and consumer
 of `reserve`.
 
+Machine-checked run (`VsaIris`, branch `iris-heap`): `malloc`'s top-split path
+for every request `n ≤ maxReq ≤ 487`, from the binary's reflected code, is
+`VsaIris.MallocFast.mallocRoomRun_fast`. It covers a heap with no free chunk,
+`binblocks = 0`, and the corrected top reserve. It is instantiated at an
+approved boundary by `vsaDlMallocRoomImpl_boundary`, which takes the code bytes
+from `FixedTextLoaded`/`ImageStaticsLoaded`.
+
+MISSING SUPPLIER (`VsaIris.MallocFast.AllocBytesPresent`): the Iris model
+requires the allocator's bytes to be present (`VsaOk.live`) to read VSA's
+`HeapAt` from the owned image (`shape_iff_state`, `mallocCallerFacts_of_iris`).
+`InterpRunPhysicalFacts` states byte presence for the stack (`stack_bytes`).
+For the allocator globals and the arena it states presence only at the words
+`HeapAt` reads, not at every byte. The loader supplies it; it is not derivable
+from the current boundary. Affected: `vsaFoot_live` and every consumer
+instantiating `hlive` at the boundary.
+
 **The allocator layer.** Allocator facts are RUN-GLOBAL, not per entry. One
 `AllocLedger` (`Vsa/Sim/AllocLedger.lean`) carries the `malloc`/`free`/`realloc`
 runs (`MallocRun`, the new `FreeRun`, `ReallocInstance`), the `strlen`/`memcpy`
