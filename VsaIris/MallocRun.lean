@@ -243,6 +243,7 @@ def MallocLocalRun (M : MachineModel) (L : DlLayout) (entry gpv : BitVec 64)
   ∀ (H : List (Nat × Nat)) (n s r : BitVec 64) (saved : List (Nat × BitVec 64))
     (rv : Nat → BitVec 64) (mv : Nat → BitVec 8),
     saved.map Prod.fst = savedRegs → EntryRegs rv entry r n s saved → L.Shape mv H →
+    (∀ a, stackWin s headroom a → ¬ heapFoot L H a) →
     ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob savedRegs) (mallocBytes L H s headroom)
       (MallocEnd L H n r s saved) fuel rv mv
 
@@ -253,6 +254,7 @@ def FreeLocalRun (M : MachineModel) (L : DlLayout) (entry gpv : BitVec 64)
     (saved : List (Nat × BitVec 64)) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8),
     saved.map Prod.fst = savedRegs → EntryRegs rv entry r q s saved →
     L.Shape mv ((q.toNat, n) :: H) →
+    (∀ a, stackWin s headroom a → ¬ (heapFoot L ((q.toNat, n) :: H) a ∨ InExt (q.toNat, n) a)) →
     ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob savedRegs) (freeBytes L H q n s headroom)
       (FreeEnd L H r s saved) fuel rv mv
 
@@ -419,6 +421,7 @@ theorem allocCall_of_localRun {entry gpv r arg s : BitVec 64} {clob : List Nat}
     (E : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (Post : BitVec 64 → IProp GF)
     (post : ∀ rv' mv', E rv' mv' → ownSet F (fun a => a ↦ₘ mv' a) ⊢ Post (rv' a0))
     (hrun : ∀ rv mv, EntryRegs rv entry r arg s saved → P mv →
+      (∀ a, stackWin s headroom a → ¬ F a) →
       ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob (saved.map Prod.fst))
         (fun a => stackWin s headroom a ∨ F a)
         (fun rv' mv' => RetFrame rv' r s saved ∧ E rv' mv') fuel rv mv)
@@ -449,7 +452,7 @@ theorem allocCall_of_localRun {entry gpv r arg s : BitVec 64} {clob : List Nat}
     hlocP img _ (fun a ha => by
       have hn : ¬ stackWin s headroom a := fun h => hdisj a h ha
       simp [glue, hn]) hP
-  obtain ⟨fuel, hlr⟩ := hrun _ _ (entryRegs_entryVal hd) hP'
+  obtain ⟨fuel, hlr⟩ := hrun _ _ (entryRegs_entryVal hd) hP' hdisj
   iapply wp_localRun fuel _ _ hlr
   isplitr
   · unfold roOwn
@@ -494,7 +497,7 @@ theorem mallocSpec_of_localRun {L : DlLayout} {entry gpv : BitVec 64} {clob save
       (FreshBlock L H (rv' a0).toNat n.toNat ∧ (rv' a0).toNat % 16 = 0 ∧
         L.Shape mv' (((rv' a0).toNat, n.toNat) :: H)))
     (fun p => mallocPost L H n.toNat p) ?_
-    (fun rv mv he hs => (hrun H n s r saved rv mv rfl he hs).imp fun _ h =>
+    (fun rv mv he hs hdj => (hrun H n s r saved rv mv rfl he hs hdj).imp fun _ h =>
       LocalRun.mono (fun _ _ he => ⟨he.frame, he.result⟩) _ _ _ h)
   · intro rv' mv' hE
     unfold mallocPost blockOwn
@@ -559,7 +562,7 @@ theorem freeSpec_of_localRun {L : DlLayout} {entry gpv : BitVec 64} {clob savedR
     (fun img => L.Shape img ((q.toNat, n) :: H))
     (fun img img' h hs => hloc _ img img' (fun a ha => h a (.inl ha)) hs)
     (fun _ mv' => L.Shape mv' H) (fun _ => isHeap L H) ?_
-    (fun rv mv he hs => (hrun H q n s r saved rv mv rfl he hs).imp fun _ h =>
+    (fun rv mv he hs hdj => (hrun H q n s r saved rv mv rfl he hs hdj).imp fun _ h =>
       LocalRun.mono (fun _ _ he => ⟨he.frame, he.shape⟩) _ _ _ h)
   · intro rv' mv' hsh'
     iintro HF
@@ -629,12 +632,13 @@ structure MallocRoomEnd (L : DlLayout) (Room : RoomPred) (H : List (Nat × Nat))
 /-- **`_malloc_r`'s run under capacity, first-order.** A request within
 `maxReq` from a heap with a credit left returns a fresh block. -/
 def MallocRoomRun (M : MachineModel) (L : DlLayout) (Room : RoomPred) (maxReq : Nat)
+    (SpOK : BitVec 64 → Prop)
     (entry gpv : BitVec 64) (clob savedRegs : List Nat) (headroom : Nat)
     (text : List (Nat × BitVec 8)) : Prop :=
   ∀ (H : List (Nat × Nat)) (n s r : BitVec 64) (saved : List (Nat × BitVec 64))
     (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) (k : Nat),
-    saved.map Prod.fst = savedRegs → n.toNat ≤ maxReq → EntryRegs rv entry r n s saved →
-    L.Shape mv H → Room mv H (k + 1) →
+    saved.map Prod.fst = savedRegs → n.toNat ≤ maxReq → SpOK s → EntryRegs rv entry r n s saved →
+    L.Shape mv H → Room mv H (k + 1) → (∀ a, stackWin s headroom a → ¬ heapFoot L H a) →
     ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob savedRegs) (mallocBytes L H s headroom)
       (MallocRoomEnd L Room H n r s saved k) fuel rv mv
 
@@ -651,12 +655,15 @@ theorem isHeapRoom_forget (L : DlLayout) (Room : RoomPred) (H : List (Nat × Nat
   iframe HF
   ipureintro; exact hs
 
-/-- `mallocSpec` under capacity: one credit buys a fresh block. -/
-def mallocRoomSpec (M : MachineModel) (L : DlLayout) (Room : RoomPred) (entry gpv : BitVec 64)
+/-- `mallocSpec` under capacity: one credit buys a fresh block. `SpOK` is the
+caller's stack-pointer discipline (RAM, alignment, headroom), a pure fact the
+caller supplies. -/
+def mallocRoomSpec (M : MachineModel) (L : DlLayout) (Room : RoomPred) (SpOK : BitVec 64 → Prop)
+    (entry gpv : BitVec 64)
     (clob : List Nat) (saved : List (Nat × BitVec 64)) (headroom : Nat)
     (H : List (Nat × Nat)) (n s : BitVec 64) (k : Nat) : IProp GF :=
   fnSpec (M := M) entry
-    (fun _ => iprop(a0 ↦ᵣ n ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗
+    (fun _ => iprop(⌜SpOK s⌝ ∗ a0 ↦ᵣ n ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ isHeapRoom L Room H (k + 1)))
     (fun _ => iprop(∃ p, a0 ↦ᵣ p ∗ sp ↦ᵣ s ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗
@@ -665,19 +672,21 @@ def mallocRoomSpec (M : MachineModel) (L : DlLayout) (Room : RoomPred) (entry gp
 
 /-- **`mallocRoomSpec` from the capacity run.** -/
 theorem mallocRoomSpec_of_run {L : DlLayout} {Room : RoomPred} {maxReq : Nat}
+    {SpOK : BitVec 64 → Prop}
     {entry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
     {text : List (Nat × BitVec 8)}
-    (hrun : MallocRoomRun M L Room maxReq entry gpv clob savedRegs headroom text)
+    (hrun : MallocRoomRun M L Room maxReq SpOK entry gpv clob savedRegs headroom text)
     (hloc : ShapeLocal L) (hroom : RoomLocal L Room) (hnd : (allocRegs clob savedRegs).Nodup)
     (H : List (Nat × Nat)) (n s : BitVec 64) (k : Nat) (saved : List (Nat × BitVec 64))
     (hsv : saved.map Prod.fst = savedRegs) (hn : n.toNat ≤ maxReq) :
-    textOwn (GF := GF) text ⊢ mallocRoomSpec M L Room entry gpv clob saved headroom H n s k := by
+    textOwn (GF := GF) text ⊢
+      mallocRoomSpec M L Room SpOK entry gpv clob saved headroom H n s k := by
   subst hsv
   have hd := RegsDistinct.of_nodup hnd
   unfold mallocRoomSpec fnSpec isHeapRoom
   iintro #Htext
   imodintro
-  iintro %r %Φ Hpc Hra ⟨Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, Hheap⟩ Hk
+  iintro %r %Φ Hpc Hra ⟨%hspok, Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, Hheap⟩ Hk
   iapply allocCall_of_localRun hd (heapFoot L H) (fun img => L.Shape img H ∧ Room img H (k + 1))
     (fun img img' h hs => ⟨hloc H img img' h hs.1, hroom H img img' _ h hs.2⟩)
     (fun rv' mv' => FreshBlock L H (rv' a0).toNat n.toNat ∧ (rv' a0).toNat % 16 = 0 ∧
@@ -688,7 +697,7 @@ theorem mallocRoomSpec_of_run {L : DlLayout} {Room : RoomPred} {maxReq : Nat}
         Room img ((p.toNat, n.toNat) :: H) k⌝ ∗
         ownSet (heapFoot L ((p.toNat, n.toNat) :: H)) (fun a => a ↦ₘ img a)) ∗
       blockOwn p.toNat n.toNat)) ?_
-    (fun rv mv he hs => (hrun H n s r saved rv mv k rfl hn he hs.1 hs.2).imp fun _ h =>
+    (fun rv mv he hs hdj => (hrun H n s r saved rv mv k rfl hn hspok he hs.1 hs.2 hdj).imp fun _ h =>
       LocalRun.mono (fun _ _ he => ⟨he.frame, he.fresh, he.align, he.shape, he.room⟩) _ _ _ h)
   · intro rv' mv' ⟨hf, hal, hsh, hrm⟩
     unfold blockOwn
@@ -708,18 +717,18 @@ theorem mallocRoomSpec_of_run {L : DlLayout} {Room : RoomPred} {maxReq : Nat}
 /-- **The allocator under capacity, as a module parameter**: malloc with a
 credit left always returns a fresh block. -/
 structure DlMallocRoomImpl (M : MachineModel) (L : DlLayout) (Room : RoomPred) (maxReq : Nat)
-    (mallocEntry gpv : BitVec 64) (clob savedRegs : List Nat) (headroom : Nat)
+    (SpOK : BitVec 64 → Prop) (mallocEntry gpv : BitVec 64) (clob savedRegs : List Nat) (headroom : Nat)
     (text : List (Nat × BitVec 8)) : Prop where
   malloc : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] H n s k
     (saved : List (Nat × BitVec 64)), saved.map Prod.fst = savedRegs → n.toNat ≤ maxReq →
-    textOwn (GF := GF) text ⊢ mallocRoomSpec M L Room mallocEntry gpv clob saved headroom H n s k
+    textOwn (GF := GF) text ⊢ mallocRoomSpec M L Room SpOK mallocEntry gpv clob saved headroom H n s k
 
 theorem dlMallocRoomImpl_of_run {M : MachineModel} {L : DlLayout} {Room : RoomPred}
-    {maxReq : Nat} {mallocEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
+    {maxReq : Nat} {SpOK : BitVec 64 → Prop} {mallocEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
     {text : List (Nat × BitVec 8)}
-    (hrun : MallocRoomRun M L Room maxReq mallocEntry gpv clob savedRegs headroom text)
+    (hrun : MallocRoomRun M L Room maxReq SpOK mallocEntry gpv clob savedRegs headroom text)
     (hloc : ShapeLocal L) (hroom : RoomLocal L Room) (hnd : (allocRegs clob savedRegs).Nodup) :
-    DlMallocRoomImpl M L Room maxReq mallocEntry gpv clob savedRegs headroom text where
+    DlMallocRoomImpl M L Room maxReq SpOK mallocEntry gpv clob savedRegs headroom text where
   malloc H n s k saved hsv hn := mallocRoomSpec_of_run hrun hloc hroom hnd H n s k saved hsv hn
 
 end Build

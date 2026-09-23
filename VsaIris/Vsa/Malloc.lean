@@ -165,11 +165,11 @@ theorem reserve_of_room {img : Nat → BitVec 8} {H : List (Nat × Nat)} {maxReq
   exact Reserve.transport_foot hr fun a ha => (hm a ha).trans (him a ha).symm
 
 /-- **The allocator under capacity at the fixed binary.** -/
-theorem vsaDlMallocRoomImpl (live : Nat → Prop) (maxReq : Nat) (gpv : BitVec 64)
-    (headroom : Nat) (text : List (Nat × BitVec 8))
-    (hrun : MallocRoomRun (vsaModel live) vsaLayout (vsaRoom maxReq) maxReq mallocEntryBV gpv
+theorem vsaDlMallocRoomImpl (live : Nat → Prop) (maxReq : Nat) (SpOK : BitVec 64 → Prop)
+    (gpv : BitVec 64) (headroom : Nat) (text : List (Nat × BitVec 8))
+    (hrun : MallocRoomRun (vsaModel live) vsaLayout (vsaRoom maxReq) maxReq SpOK mallocEntryBV gpv
       vsaClob vsaSaved headroom text) :
-    DlMallocRoomImpl (vsaModel live) vsaLayout (vsaRoom maxReq) maxReq mallocEntryBV gpv
+    DlMallocRoomImpl (vsaModel live) vsaLayout (vsaRoom maxReq) maxReq SpOK mallocEntryBV gpv
       vsaClob vsaSaved headroom text :=
   dlMallocRoomImpl_of_run hrun shapeLocal_vsaLayout (roomLocal_vsa maxReq) vsaAllocRegs_nodup
 
