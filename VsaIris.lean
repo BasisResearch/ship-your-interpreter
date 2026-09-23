@@ -1,6 +1,9 @@
 import VsaIris.Machine
 import VsaIris.Ptsto
+import VsaIris.Lag
 import VsaIris.Step
+import VsaIris.PartialWP
+import VsaIris.MachWP
 import VsaIris.Adequacy
 import VsaIris.Call
 import VsaIris.DlHeap

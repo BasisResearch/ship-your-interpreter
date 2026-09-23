@@ -30,75 +30,33 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris VsaIris.Inst
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr
 
-/-! ## §A Modes and the mode-generic WP interface (F1)
+/-! ## §A Modes and the mode-generic WP interface (F1) — LANDED
 
-Every block lemma is proved once against `MachWP`; `twpW` (total) and `wpW`
-(partial) instantiate it. Helper loops are fuel induction (xv6iris
-`ProofMemset.v:1-9`, `ProofMemmove.v:350` `mm_loop`), valid for both. -/
+Built in `VsaIris/MachWP.lean` (no longer a placeholder here):
+* `MachWP M` — fields `W`, `lat` (the step modality: `id` total, `▷` partial),
+  `lat_intro`, `lagRun` (the lag kernel `Lag.lag_run` at the WP level), `halt`,
+  `fupd`. Derived for every `Wp`: `Wp.run` (= `wp_run`), `Wp.runL` (continuation
+  under `Wp.lat`; at `wpW` this is `run_later`), `Wp.local_step`, `Wp.local_stepL`.
+* `twpW M` (`W := mTWP M`) and `wpW M` (`W := mWP M`, `PartialWP.lean`).
+* `twp_wp : mTWP M Φ ⊢ mWP M Φ` (`PartialWP.lean`).
+* Mode-generic rules: `wp_retW`, `wp_jalW`, `wp_callW`, `fnSpecW` (`Call.lean`),
+  `wp_localRunW` (`LocalRun.lean`), `Inst.wp_segW` (`Vsa/Instance.lean`);
+  the Löb call `wp_call_later` (`Call.lean`).
+* Partial adequacy: `mach_adequacyP` (`Adequacy.lean`), `Inst.vsa_adequacyP`
+  and `Inst.vsa_adequacyP_nonzero` (exactly `stuck_sim`'s conclusion).
+* The console (F2): `MachWP.runOut` (printing run, the `putc` rule) and
+  `MachWP.haltConsole` (halt/console agreement), derived for every `Wp`
+  (`MachWP.lean`); VSA instances `Inst.wp_putcW`/`Inst.wp_exitW` at the
+  newlib `tohost` stores (`Vsa/Console.lean`). -/
 
-section Modes
+/-! ## §B Mode-generic function specs (F3)
 
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
-
-/-- The WP interface blocks are proved against. `run` is `VsaIris.wp_run`'s
-statement with the WP abstracted. -/
-structure MachWP (M : MachineModel) where
-  W : (Nat × String → IProp GF) → IProp GF
-  run : ∀ {Φ : Nat × String → IProp GF} (n : Nat)
-    (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
-    (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8)),
-    RunFact M n RR MR RW MW →
-      footPre (GF := GF) RR MR RW MW ∗ (footPost RR MR RW MW -∗ W Φ) ⊢ W Φ
-  /-- F2: the printing run (`VsaIris.wp_runOut`); VSA instance `Inst.wp_putc`. -/
-  putc : ∀ {Φ : Nat × String → IProp GF} (n : Nat)
-    (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
-    (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8))
-    (o s : String), RunFactO M n RR MR RW MW (some o) →
-      footPre (GF := GF) RR MR RW MW ∗ consoleOwn s ∗
-        (footPost RR MR RW MW -∗ consoleOwn (s ++ o) -∗ W Φ) ⊢ W Φ
-  /-- F2: halt/console agreement (`VsaIris.wp_halt_console`); VSA instance
-  `Inst.wp_exit`. -/
-  halt : ∀ {Φ : Nat × String → IProp GF} (RR : List (Nat × DFrac × BitVec 64))
-    (MR : List (Nat × DFrac × BitVec 8)) (e : Nat) (s : String), HaltFact M RR MR e →
-      footPre (GF := GF) RR MR [] [] ∗ consoleOwn s ∗ Φ (e, s) ⊢ W Φ
-
-/-- The total instance: exists today (`mTWP`, `wp_run`). -/
-def twpW (M : MachineModel) : MachWP (GF := GF) M where
-  W := mTWP M
-  run := fun n RR MR RW MW h => wp_run (M := M) n RR MR RW MW h
-  putc := fun n RR MR RW MW o s h => wp_runOut (M := M) n RR MR RW MW o s h
-  halt := fun RR MR e s h => wp_halt_console (M := M) RR MR e s h
-
-/-- The partial WP (F1): `cpuTok -∗ WP Loop @ NotStuck; ⊤ {{ Φ }}` over the
-same lagging state interpretation. DESIGN: F1 defines it; here it is a
-placeholder so the statements below parse. -/
-opaque mWP (M : MachineModel) (Φ : Nat × String → IProp GF) : IProp GF
-
-/-- The partial instance (F1 proves `run`, plus `run_later` for Löb). -/
-def wpW (M : MachineModel) : MachWP (GF := GF) M where
-  W := mWP M
-  run := by intros; sorry
-  putc := by intros; sorry
-  halt := by intros; sorry
-
-/-- F1: the total WP implies the partial one (iris-lean `TotalWeakestPre`). -/
-theorem twp_wp (M : MachineModel) (Φ : Nat × String → IProp GF) :
-    mTWP M Φ ⊢ mWP M Φ := by sorry
-
-end Modes
-
-/-! ## §B Mode-generic function specs (F3) -/
+`fnSpecW` and `wp_callW` are landed in `Call.lean` (F1). F3 owns the abort
+variants below. -/
 
 section Fn
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineModel}
-
-/-- `fnSpec` (Call.lean) with the WP a parameter; `fnSpecW (twpW M)` is `fnSpec`. -/
-def fnSpecW (Wp : MachWP (GF := GF) M) (entry : BitVec 64) (P Q : BitVec 64 → IProp GF) :
-    IProp GF :=
-  iprop(□ ∀ (r : BitVec 64) (Φ : Nat × String → IProp GF),
-    PC ↦ᵣ entry -∗ ra ↦ᵣ r -∗ P r -∗
-      (PC ↦ᵣ r -∗ ra ↦ᵣ r -∗ Q r -∗ Wp.W Φ) -∗ Wp.W Φ)
 
 /-- A function that returns OR aborts (runtime error / OOM exit). The two
 continuations are an ADDITIVE pair (xv6iris durable-notes "Contracts and
@@ -109,17 +67,6 @@ def fnSpecAbort (Wp : MachWP (GF := GF) M) (entry : BitVec 64)
   iprop(□ ∀ (r : BitVec 64) (Φ : Nat × String → IProp GF),
     PC ↦ᵣ entry -∗ ra ↦ᵣ r -∗ P r -∗
       ((PC ↦ᵣ r -∗ ra ↦ᵣ r -∗ Q r -∗ Wp.W Φ) ∧ (A -∗ Wp.W Φ)) -∗ Wp.W Φ)
-
-/-- `wp_call` for `fnSpecW` (F3): the jal, the callee's spec, the continuation
-at `i + 4`; everything else the caller owns is framed by the wand. -/
-theorem wp_callW {Wp : MachWP (GF := GF) M} {Φ : Nat × String → IProp GF} {i : Nat}
-    {code : List (BitVec 8)} {entry v : BitVec 64} {P Q : BitVec 64 → IProp GF}
-    (hexec : JalExec M i code entry) :
-    instrAt (GF := GF) i code ∗ fnSpecW Wp entry P Q ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗
-      P (BitVec.ofNat 64 (i + 4)) ∗
-      (PC ↦ᵣ BitVec.ofNat 64 (i + 4) -∗ ra ↦ᵣ BitVec.ofNat 64 (i + 4) -∗
-        Q (BitVec.ofNat 64 (i + 4)) -∗ Wp.W Φ)
-    ⊢ Wp.W Φ := by sorry
 
 /-- `wp_call` for `fnSpecAbort` (F3): the caller supplies the return branch
 and the callee's abort branch from ONE context (`∧`). -/

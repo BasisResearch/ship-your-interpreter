@@ -1,36 +1,46 @@
 # Lane F2: the console resource
 
-Package F2 of `VsaIris/INTERP_DESIGN.md` §9.
+Package F2 of `VsaIris/INTERP_DESIGN.md` §9. Branch `lane-f2`, merged with `hub/lane-f1`
+(`MachWP`, the partial WP, the shared lag kernel). As-built design: INTERP_DESIGN.md §2 F2.
 
 ## Done
-- `MachineModel.out` (VSA: `Vsa.Machine.output`).
-- Console ghost cell `consoleOwn s` (`Ptsto.lean`): a ghost map on `MachGS.conName`, key 0.
-  Its authority `conInterp` is part of `mstateInterp` and lags with the register and memory
-  maps (`lagInterp`, `ConAgree`).
-- `RunFactO … o` (`Step.lean`): a run's console effect `OutStep` (`none` silent, `some o` prints `o`).
-  `RunFact` is the silent case, so every segment fact must now frame the output.
-  `wp_run` is unchanged for clients; `wp_runOut` is the printing (`putc`) rule; `wp_halt_console`
-  and `HaltFact` give halt/console agreement.
-- Adequacy allocates the console at the initial output. `AdequacyHyp` gains the initial output `o`
-  and the client receives `consoleOwn o`.
-- VSA: `vsaModel.out`, `VsaOk.htifIdle` (`htif_payload_writes = 0`). `seg_runFact` frames both.
-  `jalExec_of_site` takes `StepConFrame` (`stepConFrame_of_jalObs`).
+All in `lake build VsaIris`; axioms ⊆ {propext, Classical.choice, Quot.sound} (`VsaIris/Audit.lean`).
 
-- `Vsa/Console.lean`: `TohostSite` + decided `Cert`; `putc_runFact`/`wp_putc` (print one
-  character), `exit_haltFact`/`wp_exit` (halt with the console's output), `vsa_adequacy_exit`
-  (`Halts c out e ∧ φ`), and the newlib sites `putcSite` (`_write`, 0x8000005c) and `exitSite`
-  (`_exit`, 0x80000190).
-- `Interp/Specs.lean`: `MachWP` has `putc`/`halt` fields; `InterpGS` no longer carries the console.
-- INTERP_DESIGN.md §2 F2 and §3 record the as-built design and the two changes from the draft.
+- `MachineModel.out` (VSA: `Vsa.Machine.output`).
+- Console cell `consoleOwn s` (`Ptsto.lean`): ghost map on `MachGS.conName`, key 0. Its authority
+  `conInterp` is in `mstateInterp` and lags with the register and memory maps (`lagInterp`,
+  `ConAgree`). `consoleOwn_excl`.
+- Lag kernel (`Lag.lean`): `LagFoot.look`/`commit` carry all three authorities (`mauths`);
+  `LagFoot.ofRM` builds a silent run's instance from register/memory lookup/commit plus its output
+  frame.
+- `Step.lean`: `OutStep`, `RunFactO … o` (console effect), `RunFact` = silent `RunFactO`,
+  `RunFact.lagFoot` (silent), `RunFactO.lagFootPrint` (printing, owns the cell), `HaltFact`.
+- `MachWP.lean`, for either WP: `MachWP.runOutL`/`runOut` (the `putc` rule) and
+  `MachWP.haltConsole` (halt/console agreement), derived from `lagRun`/`halt`. Total names
+  `wp_runOut`, `wp_halt_console`.
+- Adequacy (total and partial) allocates the cell at the initial output; `AdequacyHyp`/
+  `AdequacyHypP` take the initial output `o` and hand the client `consoleOwn o`.
+- VSA (`Vsa/Instance.lean`, `Vsa/Tools.lean`): `vsaModel.out`, `VsaOk.htifIdle`
+  (`htif_payload_writes = 0`), `seg_runFact` frames both, `jalExec_of_site` takes `StepConFrame`
+  (`stepConFrame_of_jalObs`).
+- VSA console (`Vsa/Console.lean`): `TohostSite` + decided `Cert`; `putc_runFact`, `wp_putcW`
+  (print one character), `exit_haltFact`, `wp_exitW` (halt with the console's output),
+  `vsa_adequacy_exit` (`Halts c out e ∧ φ`); newlib sites `putcSite` (`_write`, 0x8000005c) and
+  `exitSite` (`_exit`, 0x80000190), both certified by `decide` + the decode table.
 
 ## In flight
-- Waiting for F1's `MachWP` on `hub/lane-f1` to add the `putc`/`halt` fields there and prove them
-  for the partial WP.
+Nothing.
 
 ## Holes
-None.
+None added. `python3 scripts/check_iris_holes.py` passes.
 
-## Interface changes other lanes must know
-- `SegFrom` (LocalRun) and `RetExec`/`JalExec` (Call) have a new `M.out σ' = M.out σ` conjunct.
-- `VsaOk` has a fifth field `htifIdle`; `MachGS` has `conName`; `MachPreG` has `conG`; `MachGF` has slot 7.
-- `lagInterp`/`lagInterp_intro` carry the console map `mo`.
+## Notes for other lanes
+- Every run fact frames the output: `SegFrom` (LocalRun), `RetExec`/`JalExec` (Call),
+  `MachWP.local_step` have a `M.out σ' = M.out σ` conjunct. A new multi-step rule that prints
+  nothing is `LagFoot.ofRM`; one that prints owns `consoleOwn` in its footprint.
+- `VsaOk` has a fifth field `htifIdle`; `MachGS` has `conName`; `MachPreG` has `conG`; `MachGF`
+  has slot 7; `lagInterp_intro` takes the console map `mo`.
+- `world` (R) uses `VsaIris.consoleOwn st.out`; `InterpGS` no longer carries the console.
+- A print path (H2 `value_print`, natives) ends in `_write`'s loop, whose store is `putcSite`:
+  use `Inst.wp_putcW putcSite putcSite_cert`. The exit tail (A) ends in `_exit`'s store:
+  `Inst.wp_exitW exitSite exitSite_cert`.

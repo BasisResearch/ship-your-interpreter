@@ -1,4 +1,5 @@
 import VsaIris.Vsa.Tools
+import VsaIris.MachWP
 import Vsa.Sim.HtifStepObs
 import Vsa.Sim.TermEntry
 import Vsa.Sim.DecodeTable.Batch14Part06
@@ -7,8 +8,9 @@ import Vsa.Sim.DecodeTable.Batch17
 /-!
 # The console on VSA's machine (INTERP_DESIGN.md §2, package F2)
 
-The generic console rules are `wp_runOut` (print) and `wp_halt_console`
-(exit, with the output read off the console cell), in `Step.lean`. This file
+The generic console rules are `MachWP.runOut` (print) and
+`MachWP.haltConsole` (exit, with the output read off the console cell), in
+`MachWP.lean`, for either WP. This file
 instantiates both at VSA's HTIF `tohost` store.
 
 An HTIF console store is one `sd rs2, imm(rs1)` whose effective address is
@@ -223,28 +225,38 @@ theorem putc_runFact (live : Nat → Prop) (S : TohostSite) (hS : S.Cert) (c : B
 
 section Wp
 
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {live : Nat → Prop}
 
-/-- **The putchar rule on VSA.** Owning the PC at the site, the base and
-putchar word, the code and the console cell `s`, the store prints `c`: the
-continuation gets the PC past the store and the console at `s ++ c`. -/
-theorem wp_putc {Φ : Nat × String → IProp GF} (live : Nat → Prop) (S : TohostSite)
-    (hS : S.Cert) (c : BitVec 8) (q1 q2 : DFrac) (s : String)
+/-- **The putchar rule on VSA**, for either WP. Owning the PC at the site,
+the base and putchar word, the code and the console cell `s`, the store
+prints `c`: the continuation gets the PC past the store and the console at
+`s ++ c`. -/
+theorem wp_putcW (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    (S : TohostSite) (hS : S.Cert) (c : BitVec 8) (q1 q2 : DFrac) (s : String)
     (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1) :
     instrAt (GF := GF) S.pc S.code ∗ VsaIris.PC ↦ᵣ BitVec.ofNat 64 S.pc ∗
       S.rs1 ↦ᵣ{q1} S.base ∗ S.rs2 ↦ᵣ{q2} putcWord c ∗ consoleOwn s ∗
       (VsaIris.PC ↦ᵣ BitVec.ofNat 64 (S.pc + 4) -∗ S.rs1 ↦ᵣ{q1} S.base -∗
-        S.rs2 ↦ᵣ{q2} putcWord c -∗ consoleOwn (s ++ putcStr c) -∗ mTWP (vsaModel live) Φ)
-    ⊢ mTWP (vsaModel live) Φ := by
+        S.rs2 ↦ᵣ{q2} putcWord c -∗ consoleOwn (s ++ putcStr c) -∗ Wp.W Φ)
+    ⊢ Wp.W Φ := by
   iintro ⟨#Hi, Hpc, H1, H2, Hs, Hk⟩
-  iapply wp_runOut (M := vsaModel live) 0 _ _ _ _ (putcStr c) s
-    (putc_runFact live S hS c q1 q2 hlive)
+  iapply Wp.runOut 0 _ _ _ _ (putcStr c) s (putc_runFact live S hS c q1 q2 hlive)
   unfold footPre footPost
   rw [← instrAt_eq]
   simp only [sepL_cons, sepL_nil]
   iframe Hi Hs H1 H2 Hpc
   iintro ⟨⟨H1, H2, -⟩, -, ⟨Hpc, -⟩, -⟩ Hs
   iapply Hk $$ Hpc H1 H2 Hs
+
+/-- The putchar rule for the total WP. -/
+theorem wp_putc {Φ : Nat × String → IProp GF} (S : TohostSite) (hS : S.Cert) (c : BitVec 8)
+    (q1 q2 : DFrac) (s : String) (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1) :
+    instrAt (GF := GF) S.pc S.code ∗ VsaIris.PC ↦ᵣ BitVec.ofNat 64 S.pc ∗
+      S.rs1 ↦ᵣ{q1} S.base ∗ S.rs2 ↦ᵣ{q2} putcWord c ∗ consoleOwn s ∗
+      (VsaIris.PC ↦ᵣ BitVec.ofNat 64 (S.pc + 4) -∗ S.rs1 ↦ᵣ{q1} S.base -∗
+        S.rs2 ↦ᵣ{q2} putcWord c -∗ consoleOwn (s ++ putcStr c) -∗ mTWP (vsaModel live) Φ)
+    ⊢ mTWP (vsaModel live) Φ :=
+  wp_putcW (twpW (vsaModel live)) S hS c q1 q2 s hlive
 
 end Wp
 
@@ -275,21 +287,20 @@ theorem exit_haltFact (live : Nat → Prop) (S : TohostSite) (hS : S.Cert) (e : 
 
 section Wp
 
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {live : Nat → Prop}
 
-/-- **Halt/console agreement on VSA.** At the exit store with the console
-cell `s`, the loop's WP holds as soon as the postcondition holds at
-`(e, s)`: the halting step reports exactly the console's contents. With
-`vsa_adequacy` this is `Halts c s e`. -/
-theorem wp_exit {Φ : Nat × String → IProp GF} (live : Nat → Prop) (S : TohostSite)
-    (hS : S.Cert) (e : BitVec 64) (he : e.toNat < 2 ^ 47) (q0 q1 q2 : DFrac) (s : String)
-    (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1) :
+/-- **Halt/console agreement on VSA**, for either WP. At the exit store with
+the console cell `s`, the loop's WP holds as soon as the postcondition holds
+at `(e, s)`: the halting step reports exactly the console's contents. With
+adequacy this is `Halts c s e`. -/
+theorem wp_exitW (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    (S : TohostSite) (hS : S.Cert) (e : BitVec 64) (he : e.toNat < 2 ^ 47) (q0 q1 q2 : DFrac)
+    (s : String) (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1) :
     instrAt (GF := GF) S.pc S.code ∗ VsaIris.PC ↦ᵣ{q0} BitVec.ofNat 64 S.pc ∗
       S.rs1 ↦ᵣ{q1} S.base ∗ S.rs2 ↦ᵣ{q2} exitWord e ∗ consoleOwn s ∗ Φ (e.toNat, s)
-    ⊢ mTWP (vsaModel live) Φ := by
+    ⊢ Wp.W Φ := by
   iintro ⟨#Hi, Hpc, H1, H2, Hs, HΦ⟩
-  iapply wp_halt_console (M := vsaModel live) _ _ e.toNat s
-    (exit_haltFact live S hS e he q0 q1 q2 hlive)
+  iapply Wp.haltConsole _ _ e.toNat s (exit_haltFact live S hS e he q0 q1 q2 hlive)
   unfold footPre
   rw [← instrAt_eq]
   simp only [sepL_cons, sepL_nil]
@@ -299,6 +310,15 @@ theorem wp_exit {Φ : Nat × String → IProp GF} (live : Nat → Prop) (S : Toh
   isplitr
   · iempintro
   iempintro
+
+/-- Halt/console agreement for the total WP. -/
+theorem wp_exit {Φ : Nat × String → IProp GF} (S : TohostSite) (hS : S.Cert) (e : BitVec 64)
+    (he : e.toNat < 2 ^ 47) (q0 q1 q2 : DFrac) (s : String)
+    (hlive : ∀ p ∈ codeFoot S.pc S.code, live p.1) :
+    instrAt (GF := GF) S.pc S.code ∗ VsaIris.PC ↦ᵣ{q0} BitVec.ofNat 64 S.pc ∗
+      S.rs1 ↦ᵣ{q1} S.base ∗ S.rs2 ↦ᵣ{q2} exitWord e ∗ consoleOwn s ∗ Φ (e.toNat, s)
+    ⊢ mTWP (vsaModel live) Φ :=
+  wp_exitW (twpW (vsaModel live)) S hS e he q0 q1 q2 s hlive
 
 end Wp
 
