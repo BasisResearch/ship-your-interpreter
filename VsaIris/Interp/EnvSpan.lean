@@ -229,6 +229,19 @@ def Span (live : Nat → Prop) (S : Nat → Prop) (pc : BitVec 64) (R : Nat → 
     (F : BitVec 64 → (Nat → BitVec 64) → Mem → Prop) : Prop :=
   ∀ Q, (∀ pc' R' Mt', F pc' R' Mt' → EW live S Q pc' R' Mt') → EW live S Q pc R Mt
 
+/-- Spans compose: continue every exit of the first with a span. -/
+theorem Span.trans {live : Nat → Prop} {S : Nat → Prop} {pc : BitVec 64} {R : Nat → BitVec 64}
+    {Mt : Mem} {F F' : BitVec 64 → (Nat → BitVec 64) → Mem → Prop}
+    (h : Span live S pc R Mt F) (k : ∀ pc' R' Mt', F pc' R' Mt' → Span live S pc' R' Mt' F') :
+    Span live S pc R Mt F' :=
+  fun Q hk => h Q fun pc' R' Mt' hF => k pc' R' Mt' hF Q hk
+
+/-- A span with no instructions. -/
+theorem Span.refl {live : Nat → Prop} {S : Nat → Prop} {pc : BitVec 64} {R : Nat → BitVec 64}
+    {Mt : Mem} {F : BitVec 64 → (Nat → BitVec 64) → Mem → Prop} (h : F pc R Mt) :
+    Span live S pc R Mt F :=
+  fun _ hk => hk pc R Mt h
+
 /-- **A span at the Iris level**, exits described by `F`. The continuation
 gets the exit PC, the registers and the tracking memory at the exit, and
 `F`'s facts about them. -/
