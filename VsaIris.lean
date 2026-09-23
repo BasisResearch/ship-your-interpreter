@@ -66,3 +66,4 @@ import VsaIris.Interp.Vacuity
 import VsaIris.Vsa.SymData
 import VsaIris.Interp.IRun
 import VsaIris.Interp.Steps
+import VsaIris.Interp.ITac

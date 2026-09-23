@@ -63,13 +63,66 @@ the stage-a3 drift gate for `VsaIris/Interp/Case/*`.
 - **The binary arm reads the node's line field** (`0x80003524 lw s0,4(s0)`),
   which `ExprReprWithin`'s read set `P` does not cover.
 
-## In flight
-- `VsaIris/Interp/SpecEval.lean`: the statement-only spec module (xv6iris
-  `Spec<F>` shape), with the ABI fix.
-- The arm layer (frame, prologue/epilogue, child/helper call steps).
-- The symbolic step table for `eval_expr`/`exec_stmt` (reusing lane H4's
-  `SWP` layer).
-- Emitters, the `BinaryAddInt` worked example in both modes, `seqLoop`.
+## Done (all in `lake build VsaIris`, no holes)
+- Row format, step language, emitter interface (above); `gen_iris_cases.py`
+  parses and validates rows (`--list`, `--check`); `emit` is still a stub.
+- Merged `hub/lane-h4` for its symbolic-execution layer (`SWP`,
+  `VsaIris/Vsa/SymRun.lean`; driver `sx_run`, `AllocTac.lean`).
+- `scripts/rv_steps.py`: the RISC-V classifier factored out of
+  `gen_alloc_steps.py` (H4's generated output is byte-identical).
+- `VsaIris/Vsa/SymData.lean`: `swp_segLD`/`swp_stepD` — SWP steps whose
+  read-only list is live code `T` followed by persistent data `D` (AST bytes)
+  that needs no liveness; `ldvf`, `lpins{1,2,4,8}_fn`, `dataOf`/`DataReads`.
+- `scripts/gen_interp_steps.py` → `VsaIris/Interp/Code.lean` (`interpCode`,
+  `interpRO` = the 3 jump tables at 0x80019f58/84/b8, `interpText`,
+  `interpROImg`, `interp_at_<pc>`, `interp_code_<pc>`) and
+  `VsaIris/Interp/Steps/Part00-10.lean`: one lemma per instruction of
+  `eval_expr`/`exec_stmt`/`interp_run` (1232) over
+  `IW live Dt DA S Q pc R Mt` (`VsaIris/Interp/IRun.lean`, owned regs
+  `iRegs` = all GPRs but gp/tp, plus PC): `it_<pc>` (ALU/store/branch/j/ret/
+  indirect jr, owned load), `itD_<pc>` (load from the data view `Dt` on `DA`),
+  `itT_<pc>` (jump-table load, value `ldvf k interpROImg ea`), `jalx_<pc>`
+  (`JalExec` of each jal). No lemma for `seqz` 0x80003618/0x80003770 and
+  `jalr` 0x800039f4 (outside `MKind`). Builds in ~35 s.
+- `VsaIris/Interp/ITac.lean`: `ix_run h [at pc…]`, the driver (tries it_,
+  itD_, itT_; prunes refuted branches; `sx_side` extensible). Compiles, NOT yet
+  exercised on a real run.
+
+## Next (exact plan for the resuming session)
+1. **Exercise `ix_run`** on run 1 of `BinaryAddInt` (0x80003164 → jal
+   0x800034f8): state `IW` with `S = InExt (s-1088, 1088)` (the frame),
+   `Dt`/`DA` = the AST view `m` of `astE aX e` on the node's covered bytes;
+   facts to feed `sx_side` via `macro_rules`: `ldv .lw m aX = 6`,
+   `ldv .ld m (aX+16) = pl` (from `ExprReprWithin.binary`, `ldv_ld`).
+2. **Havoc load** (`swp_havoc`, SymData): `0x80003524 lw s0,4(s0)` reads the
+   node's line field, which `P` does not cover. Prove a SegFrom step directly
+   (choose `lds` from the state's own bytes; `seg_runFact` then gives the step);
+   continuation `∀ v, SWP … (upd R 8 v)`, uniform fuel via a finite-sup lemma
+   over `BitVec 64` (no Mathlib: induction on `toNat` bound). Generate
+   `itH_<pc>` for loads; driver tries it last.
+3. **`VsaIris/Interp/SpecEval.lean`** (statement only; `Specs.lean` imports
+   it and keeps its sorries). Changes vs `Specs.lean` §D, to record in
+   INTERP_DESIGN.md §10: ABI `a0=sret a1=in a2=e a3=env`; registers as one
+   valuation `regFile rv` (all GPRs but PC/ra/gp/tp) with pure pins, post
+   `∃ rv'` agreeing on s-regs+sp; `□ sepL interpText (↦ₘ□)` + `InterpLive
+   live` in the pre; AST predicate `astEG` = `astE` plus `∀ k, P k → RAM ∧ off
+   tohost` (a projection to `astE`, A0 supplies it from `ast_readable`);
+   stack/slot geometry as named structures; `M := vsaModel live`.
+4. **Arm layer** `VsaIris/Interp/Arm.lean`: `wp_swpW` (run an `IW` goal whose
+   Q is `Matches pcf Rf Mtf`, symbolic in and out, over `wp_localRunW`);
+   `toMem`/`patch` images with `imgM` lemmas; slot carve/join between the
+   frame `ownImg` and `slot24`/`valAt`; `ldvf .lw/.ld` ↔ `imgW` bridges for
+   `valOf`; child-call step over `wp_callArmW`/`wp_callArmAbort`; helper-call
+   step over `wp_callW` + `fnSpecAbort_of_fnSpecW`.
+5. **Hand-write `BinaryAddInt` total** (runs: 0x80003164→0x800034f8,
+   0x800034fc→0x80003518, 0x8000351c→0x800038d4 (jump table op 11 →
+   0x80003888), 0x800038d8→ret via `j 0x800033ec`; helper `value_int`
+   0x8000280c: `sw 2,0(a0); sd a1,8(a0)`, clobbers a5 — state its stub
+   `fnSpecW` in a spec file), then the partial twin; then turn both into
+   `emit_total`/`emit_partial` in `gen_iris_cases.py`, regenerate, add the
+   `--check` drift gate to `scripts/check_all.sh` stage a3 (and
+   `gen_interp_steps.py --check`).
+6. `seqLoop (site)` for the block arm / closure body / `interp_run` loop.
 
 ## Holes
-None added.
+None added. `python3 scripts/check_iris_holes.py` passes.

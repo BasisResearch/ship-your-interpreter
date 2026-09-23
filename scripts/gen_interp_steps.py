@@ -212,7 +212,7 @@ def hRo(ks, rd=None):
 
 
 def hdr(name, pc, extra=''):
-    return (f"theorem {name}_{pc:08x} {{live : Nat → Prop}} {{D : List (Nat × BitVec 8)}} {{S : Nat → Prop}}\n"
+    return (f"theorem {name}_{pc:08x} {{live : Nat → Prop}} {{Dt : Mem}} {{DA : List Nat}} {{S : Nat → Prop}}\n"
             f"    {{Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}} {{R : Nat → BitVec 64}} {{Mt : Mem}}{extra}\n"
             f"    (hlive : ∀ p ∈ interpText, live p.1)")
 
@@ -236,7 +236,7 @@ def step(seg, ks, lds, LD, Wr, cover, tail, hpc, R, Ro, hk, ind='  '):
 
 
 def iw(pc_expr, R='R', Mt='Mt'):
-    return f'IW live D S Q {pc_expr} {R} {Mt}'
+    return f'IW live Dt DA S Q {pc_expr} {R} {Mt}'
 
 
 def emit(pc):
@@ -276,13 +276,13 @@ def emit(pc):
 """ + step(f'ix_{pc:08x}', ks, f'[bytesAt (imgM Mt) {ea} {wd}]', f'(accAddrs {ea} {wd})', '[]', NIL,
            f'exact ⟨hea, lpins{suf}_img hLD⟩', 'rfl', hR(ks), hRo(ks, d['rd']), 'hk'))
         # persistent data
-        thm.append(hdr('itD', pc, ' {Dt : Mem}') + f"""
+        thm.append(hdr('itD', pc) + f"""
     (hea : LdOK {ea} {wd})
-    (hLDD : ∀ b ∈ accAddrs {ea} {wd}, (b, imgM Dt b) ∈ D)
+    (hLDD : ∀ b ∈ accAddrs {ea} {wd}, b ∈ DA)
     (hk : {iw(nxt, f"(upd R {d['rd']} (ldv .{d['kind']} Dt {ea}))")}) :
     {iw(f'0x{pc:x}#64')} :=
 """ + step(f'ix_{pc:08x}', ks, f'[bytesAt (imgM Dt) {ea} {wd}]', '[]', '[]', NIL,
-           f'exact ⟨hea, lpins{suf}_img (fun b hb => hD _ (hLDD b hb))⟩', 'rfl', hR(ks),
+           f'exact ⟨hea, lpins{suf}_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩', 'rfl', hR(ks),
            hRo(ks, d['rd']), 'hk'))
         if pc in TABLE_LOADS:
             thm.append(hdr('itT', pc) + f"""
