@@ -2777,6 +2777,20 @@ after the parser's first `malloc`); it is not derivable from
 `InterpRunPhysicalFacts`. Affected: `InitialAllocatorAt`, A0's
 `world_of_boundary`, and every malloc success claim.
 
+MISSING BOUNDARY FACT (lane H4, the same shape): `binblocks` (bin 0's size
+word, `0x8001ad18`) must fit in 32 bits. `_malloc_r`'s block search loads it
+at `0x80004920`, forms `1 << (idx / 4)` (`0x80004968`), and, when
+`binblocks >= that bit` (`0x80004974`), shifts the mask left until it meets a
+set bit (`0x80004994`-`0x800049a0`), advancing the bin index by 4 each time.
+`HeapAt.binblocks` only constrains the bits of nonempty blocks (dlmalloc
+clears the bitmap lazily, so a set bit need not have a nonempty block), so
+nothing bounds the top set bit. A bit at 32 or above walks the index past bin
+127 and out of `__malloc_av_`. The Iris shape therefore adds
+`read64 m binblocksAddr = some bb -> bb < 2 ^ 32` (`PHeapAt.bb_lt`). Every
+path preserves it: the bits written are `1 << (i / 4)` for `i < 128`. Supplier:
+the boundary, beside the page-aligned break. Affected: `InitialAllocatorAt`,
+A0's `world_of_boundary`, `roomB_of_initial` (which takes it as `hbb`).
+
 Machine-checked `free` (`VsaIris`, branch `iris-heap`): `_free_r`'s top-merge
 path is `VsaIris.MallocFast.freeRoomRun_fast` / `vsaDlFreeRoomImpl_boundary`.
 The heap half is `VsaIris.VsaHeap.FastAt.merge`. `realloc` has an Iris spec,

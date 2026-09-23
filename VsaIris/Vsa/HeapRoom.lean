@@ -11,8 +11,9 @@ The counted regime's resources for the binary's allocator:
   (`PHeapAt`). `malloc_extend_top` extends the top in place only from a
   page-aligned end (`0x80004f70`). Otherwise it can return NULL whatever the
   room (`0x80004f94`), or fencepost the old top, which `ChunkWalk` cannot
-  describe. Every path keeps the break page-aligned. `PROOF_CLOSURE_PLAN.md`
-  §2 and INTERP_DESIGN Q5 record the boundary fact this needs.
+  describe. Every path keeps the break page-aligned. The shape also bounds
+  the `binblocks` word to 32 bits. `PROOF_CLOSURE_PLAN.md` §2 and
+  INTERP_DESIGN Q5 record the boundary facts these need.
 * `vsaRoomB`: `k` credits back `2 k + extendSlack` bytes between the top chunk
   and `__heap_end`. That is `InitialAllocatorAt.capacity` with the
   derivation's cost as the credits (`roomB_of_initial`). Top extension draws
@@ -27,11 +28,14 @@ namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap
 
-/-- The block-heap shape with a page-aligned break. -/
+/-- The block-heap shape with a page-aligned break and a `binblocks` word of
+32 bits, one per block of four bins: `_malloc_r`'s block search shifts a
+mask up to the next set bit, and a bit above 31 would index past bin 127. -/
 structure PHeapAt (m : Mem) (H : List (Nat × Nat)) (top brkv : Nat) (chunks : List Chunk)
     (bins : Nat → List Nat) : Prop where
   heap : BlockHeapAt m H top brkv chunks bins
   brk_page : brkv % 4096 = 0
+  bb_lt : ∀ bb, read64 m binblocksAddr = some bb → bb < 2 ^ 32
 
 /-- The owned image has the page-aligned block-heap shape. -/
 def pShape (img : Nat → BitVec 8) (H : List (Nat × Nat)) : Prop :=
@@ -89,18 +93,20 @@ theorem physSize_le_chg {n c : Nat} (h : vsaChg n c) : physSize n ≤ 2 * c := b
   omega
 
 /-- **The counted heap from VSA's boundary allocator.** An `InitialAllocatorAt`
-with a page-aligned break and room for the top's header gives the counted
+with a page-aligned break, a 32-bit `binblocks` word and room for the top's
+header gives the counted
 heap over the in-use chunk payloads, with the derivation's cost `n` as the
 credits. -/
 theorem roomB_of_initial {m : Mem} {exts : List (Nat × Nat)} {reallocs : Nat × Nat → Prop}
     {stmts count top brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
     (h : InitialAllocatorAt m exts reallocs stmts count top brkv chunks bins)
     (hroom : top + 16 ≤ brkv) (hpage : brkv % 4096 = 0)
+    (hbb : ∀ bb, read64 m binblocksAddr = some bb → bb < 2 ^ 32)
     {img : Nat → BitVec 8} (him : ImgOn (vsaFoot (inuseBlocks chunks)) img m)
     {p : Vsa.While.Program} (hp : Vsa.MemRepr.ProgramRepr m stmts count p)
     {st' : Vsa.While.St} {n : Nat} (hcost : Vsa.While.ExecSeqCost Vsa.While.initSt 0 0 p st' .normal n) :
     vsaRoomB img (inuseBlocks chunks) n :=
-  ⟨m, top, brkv, chunks, bins, him, ⟨(blockHeapAt_of_heapAt h.heap hroom).1, hpage⟩,
+  ⟨m, top, brkv, chunks, bins, him, ⟨(blockHeapAt_of_heapAt h.heap hroom).1, hpage, hbb⟩,
     h.capacity p hp st' n hcost⟩
 
 end VsaIris.VsaHeap

@@ -223,7 +223,7 @@ theorem PHeapAt.take {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chun
     (hag : ∀ a, vsaFoot H a → ¬ TakeW pred succ (v + c.size) a → m'[a]? = m[a]?) :
     PHeapAt m' ((v + 16, n) :: H) top brkv (chunks.map (reflag (v + c.size) true))
       (updBins bins i (pre ++ post)) := by
-  obtain ⟨B, hpage⟩ := h
+  obtain ⟨B, hpage, hbbl⟩ := h
   have HH := B.heap
   obtain ⟨hal, htop16⟩ := HH.aligned
   have hvmem : v ∈ bins i := by rw [hbin]; exact List.mem_append_right _ List.mem_cons_self
@@ -497,7 +497,7 @@ theorem PHeapAt.take {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chun
               binblocks_present := by rw [kBb]; exact HH.binblocks_present,
               binblocks := ?_,
               live := ?_,
-              exact := ?_ }, B.top_room⟩, hpage⟩
+              exact := ?_ }, B.top_room⟩, hpage, fun bb hbb => hbbl bb (by rw [← kBb]; exact hbb)⟩
   · -- the first chunk's header
     have hs := HH.walk.head_or_top
     have hne : heapStart ≠ c.addr + c.size := by omega

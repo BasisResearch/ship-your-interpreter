@@ -229,7 +229,9 @@ theorem pres_store {C : MCtx} {Mt : Mem} {a w : Nat} {v : BitVec 64}
 theorem PHeapAt.transport_read {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
     (hag : AgreeP (vsaRead H) m m') : PHeapAt m' H top brkv chunks bins :=
-  ⟨h.heap.transport_read hag, h.brk_page⟩
+  ⟨h.heap.transport_read hag, h.brk_page, fun bb hbb => h.bb_lt bb (by
+    rw [read64_agreeP hag fun k hk => ?_]; exact hbb
+    refine ⟨.inl (.inl ⟨?_, ?_⟩), ?_, ?_⟩ <;> simp only [InRange, binblocksAddr, avAddr] <;> omega)⟩
 
 /-- The heap invariant through a store to the run's stack. -/
 theorem MHeap.store_stack {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}

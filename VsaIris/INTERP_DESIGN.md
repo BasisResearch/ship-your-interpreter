@@ -692,6 +692,14 @@ lanes); then E1–E6 (six lanes).
   whole pages). A0 needs it at the boundary, which means a new `Loaded` field beside `capacity`,
   or a proof from the loader. Recorded in `PROOF_CLOSURE_PLAN.md` §2.
 
+- **Q5b (lane H4, needs the user): a 32-bit `binblocks` word at the boundary.** `_malloc_r`'s
+  block search shifts a mask up to the next set bit of `binblocks` and advances the bin index by
+  four each shift (`0x80004994`-`0x800049a0`). `HeapAt.binblocks` bounds only the bits of nonempty
+  blocks, and dlmalloc clears the bitmap lazily, so a bit at 32 or above would walk the index past
+  bin 127. The Iris heap shape therefore adds `bb < 2 ^ 32` (`PHeapAt.bb_lt`); every path preserves
+  it, since the bits written are `1 << (i / 4)` for `i < 128`. Same supplier as Q5. Recorded in
+  `PROOF_CLOSURE_PLAN.md` §2.
+
 - **Q1 (hard to change later): stack admissibility at the boundary** (§10.4).
   Approve a `stack_admissible` field in `InterpRunReady`, shaped like
   `capacity`? Without it, `InterpSim interpRunLayout` looks false for very deep
