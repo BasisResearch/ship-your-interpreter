@@ -419,6 +419,26 @@ theorem segFrom_of_runFact {ro : List (Nat × BitVec 64)} {text : List (Nat × B
     (fun r hr hne => (hloc.reg_frame r hne).trans (hrs r hr)) hloc.mem_new
     (fun a ha hne => (hloc.mem_frame a hne).trans (hS a ha))⟩
 
+theorem SegFrom.mono {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
+    {rs : List Nat} {S : Nat → Prop} {k : Nat} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
+    {P P' : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
+    (h : SegFrom M ro text rs S k rv mv P) (hP : ∀ rv' mv', P rv' mv' → P' rv' mv') :
+    SegFrom M ro text rs S k rv mv P' := by
+  intro σ hok hro hrs hS
+  obtain ⟨σ', hre, hok', hregs, hmems, hp⟩ := h σ hok hro hrs hS
+  exact ⟨σ', hre, hok', hregs, hmems, hP _ _ hp⟩
+
+/-- Local runs are monotone in their end condition. -/
+theorem LocalRun.mono {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
+    {rs : List Nat} {S : Nat → Prop} {Q Q' : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
+    (hQ : ∀ rv' mv', Q rv' mv' → Q' rv' mv') :
+    ∀ n rv mv, LocalRun M ro text rs S Q n rv mv → LocalRun M ro text rs S Q' n rv mv
+  | 0, _, _, h => hQ _ _ h
+  | n + 1, _, _, h => by
+    rcases h with h | ⟨k, h⟩
+    · exact .inl (hQ _ _ h)
+    · exact .inr ⟨k, h.mono fun rv' mv' hr => LocalRun.mono hQ n rv' mv' hr⟩
+
 end Run
 
 end VsaIris
