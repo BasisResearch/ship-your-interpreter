@@ -58,32 +58,39 @@ first-order runs of `_malloc_r`, `_free_r` and `_realloc_r` at the binary.
   allocator does not call.
 
 ## In flight
-- `_malloc_r` paths (`Vsa/MallocPaths.lean`, `Vsa/MallocPro.lean`, `Vsa/MallocLR.lean`), on the
-  step table and the heap algebra:
-  - done: entry/exit adapters (`mallocChgRun_of_aw`, `malloc_exit`), the epilogue copies
-    (`epi_core`), the prologue and error return (`malloc_pro`, `malloc_errno`), the small-bin
-    join `j_small`, the exact small-bin take `small_take`, the last-remainder check
-    (`lr_check`/`lr_last`) and its exact-fit return (`lr_take`), all via `PHeapAt.take`/`take_fresh`
-    (`Vsa/HeapTake.lean`);
-  - residual joins named by `lr_last`: the block search (`0x80004be8`), the last-remainder split
-    (`0x80004da0`), and the re-binding of a too-small remainder (`0x8000491c`);
-  - next: the large-bin scan (`0x80004884`), then those three joins, then the top split and
-    `malloc_extend_top`.
+- `_malloc_r` paths, on the step table and the heap algebra. `Vsa/MallocChain.lean`
+  (`malloc_paths`) chains everything proved so far from the entry `0x800047a8`, and its five
+  hypotheses are exactly the joins left:
+
+  | PC | what runs there |
+  |---|---|
+  | `0x80004884` | the large-bin index and scan |
+  | `0x80004da0` | splitting the last remainder |
+  | `0x8000491c` | putting a too-small remainder back on its own bin |
+  | `0x80004978` | the block walk over `binblocks` |
+  | `0x80004a48` | `malloc_extend_top` |
+
+  Proved: `malloc_pro` + `malloc_errno` (prologue, `request2size`, the ENOMEM return),
+  `j_small` + `small_take` (small bins, over `PHeapAt.take`), `lr_check`/`lr_take`/`lr_last`
+  (the last-remainder check and its exact-fit return), `bb_check`/`bb_top` (the block search's
+  entry) and `top_path` (the top split, over the new `PHeapAt.topSplit` in `Vsa/HeapSplit.lean`).
 - **Factor before the third copy** (CLAUDE.md law 3): `small_take` and `lr_take` share the
   return tail `sd a5,8(sp)` / `jal __malloc_unlock` / `ld a5,8(sp)` / `addi a0,a5,16` / epilogue.
-  The split path (`0x80004da0`) and the large-bin take (`0x800049e8`) are the third and fourth
-  copies; extract that tail (parameterized by its two epilogue copies, like `epi_core`) before
-  writing either.
+  `top_path`'s split arm is a third copy of the same tail with a different heap step, and the
+  large-bin take (`0x800049e8`) is a fourth; extract that tail before writing another.
 
 ## Holes (see `VsaIris/HOLES.md`)
 - `alloc.mallocChgRun`, `alloc.mallocLocalRun`, `alloc.freeChgRun`, `alloc.freeLocalRun`,
   `alloc.reallocChgRun`, `alloc.reallocLocalRun`.
 
 ## Next
-1. The residual malloc joins (see In flight), starting with the take-return tail abstraction.
-2. Heap algebra on `PHeapAt`: `rebin` (move a chunk between bins, for `0x8000491c`), split with
-   the last-remainder bin, unlink, small and large `frontlink`, `binblocks`, top split and
-   extension, coalescing, trim.
-3. Malloc paths, then free, then realloc (with the `sltu` step). Delete each field and its row
-   as it is proved.
+1. The five residual malloc joins (the table above). `0x80004a48` (`malloc_extend_top`) is the
+   one the counted regime needs most, since the boundary's capacity is `heapEnd`-relative;
+   `PHeapAt.topSplit` already takes its post-state reads abstractly, so the in-place growth can
+   reuse it.
+2. Heap algebra on `PHeapAt`: `rebin` (move a chunk between bins, for `0x8000491c`), the
+   last-remainder split (`0x80004da0`), unlink, small and large `frontlink`, `binblocks`,
+   top extension, coalescing, trim.
+3. Then free, then realloc (with the `sltu` step). Delete each `IrisHoles` field and its
+   HOLES.md row as it is proved.
 4. The `xmalloc` site lemma.

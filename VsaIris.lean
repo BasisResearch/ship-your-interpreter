@@ -52,4 +52,5 @@ import VsaIris.Vsa.MallocPro
 import VsaIris.Vsa.HeapSplit
 import VsaIris.Vsa.MallocLR
 import VsaIris.Vsa.MallocTop
+import VsaIris.Vsa.MallocChain
 import VsaIris.Vsa.CostRoom
