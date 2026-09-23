@@ -7,3 +7,8 @@ code	mainErrCode	0x800045ec	0x80004620
 code	crt0JCode	0x80000038	0x8000003c
 code	interpLandCode	0x80004428	0x80004540
 jal	mainJalFprintf	0x80004614
+code	rtErrCode	0x80002da8	0x80002df4
+code	ljCode	0x8000703c	0x80007080
+jal	rtJalSnprintf1	0x80002dc8
+jal	rtJalSnprintf2	0x80002de4
+jal	rtJalLongjmp	0x80002df0

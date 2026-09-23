@@ -7,7 +7,7 @@ import VsaIris.Vsa.Console
 import VsaIris.LocalRun
 import VsaIris.Loop
 import VsaIris.Interp.Need
-import VsaIris.Interp.Abort
+import VsaIris.Vsa.RuntimeError
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -94,3 +94,5 @@ import VsaIris.Interp.Abort
 #print axioms VsaIris.Interp.wp_abortOom
 #print axioms VsaIris.Interp.wp_abortLanding
 #print axioms VsaIris.Interp.wp_abort
+#print axioms VsaIris.Inst.aluA0_runFact
+#print axioms VsaIris.Newlib.RtErr.rtErr_spec

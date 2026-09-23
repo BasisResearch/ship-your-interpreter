@@ -1,6 +1,7 @@
 import VsaIris.Vsa.Instance
 import VsaIris.Vsa.Tools
 import VsaIris.Interp.Repr
+import VsaIris.Interp.Bridge
 import VsaIris.MallocRun
 import Vsa.Sim.JmpSpec
 
@@ -140,6 +141,17 @@ theorem ownImg_range_w (a n : Nat) (img : Nat → BitVec 8) :
   · iintro H
     ihave H := sepL_to_ownSet _ (List.nodup_range' _ (by omega)) $$ H
     iapply ownSet_iff _ (fun k => (ownImg_inExt_iff a n k).symm) $$ H
+
+/-- Written bytes of an extent, at any values, give its block back. -/
+theorem blockOwn_of_W (W : List (Nat × BitVec 8)) (p n : Nat) (g : Nat → BitVec 8)
+    (hW : W.map Prod.fst = List.range' p n) :
+    sepL (GF := GF) W (fun q => q.1 ↦ₘ g q.1) ⊢ blockOwn p n := by
+  rw [show sepL W (fun q => q.1 ↦ₘ g q.1) = sepL (W.map Prod.fst) (fun a => a ↦ₘ g a) from
+    (VsaIris.sepL_map (GF := GF) W Prod.fst (fun a => a ↦ₘ g a)).symm, hW]
+  iintro H
+  ihave H := sepL_to_ownSet _ (List.nodup_range' _ (by omega)) _ $$ H
+  ihave H := ownSet_iff _ (fun k => (ownImg_inExt_iff p n k).symm) $$ H
+  iapply Interp.blockOwn_of_ownImg p n g $$ H
 
 /-- A footprint agreement on an owned extent reads every byte of it. -/
 theorem imgFoot_pin {live : Nat → Prop} {c : Vsa.Machine.Config} {MR : List (Nat × DFrac × BitVec 8)}

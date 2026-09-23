@@ -43,3 +43,5 @@ import VsaIris.Vsa.StdioRead
 import VsaIris.Vsa.MainErr
 import VsaIris.Vsa.Landing
 import VsaIris.Interp.Abort
+import VsaIris.Vsa.AluStep
+import VsaIris.Vsa.RuntimeError

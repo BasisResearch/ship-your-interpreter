@@ -160,6 +160,20 @@ theorem cstrCov_of_nul {R : Nat → Prop} {rd : Nat → BitVec 8} {p : Nat} :
       · simp only [List.length_map, List.length_range]
         exact ⟨hR k (by omega), h0⟩
 
+/-- A C string of the fixed `.rodata`, read through any `rd` that agrees with
+the image there. The byte facts are one `decide` over the image. -/
+theorem cstrCov_rodata {R : Nat → Prop} {rd : Nat → BitVec 8}
+    (hro : ∀ a, rodataDom a → R a ∧ rd a = rodataByte a) {p : Nat} {bs : List (BitVec 8)}
+    (hb : ∀ i (h : i < bs.length), rodataDom (p + i) ∧ rodataByte (p + i) = bs[i] ∧ bs[i] ≠ 0)
+    (hn : rodataDom (p + bs.length) ∧ rodataByte (p + bs.length) = 0) : CStrCov R rd p bs where
+  bytes i h := by
+    obtain ⟨hd, hbv, hnz⟩ := hb i h
+    obtain ⟨hR, hrd⟩ := hro _ hd
+    exact ⟨hR, hrd.trans hbv, hnz⟩
+  nul := by
+    obtain ⟨hR, hrd⟩ := hro _ hn.1
+    exact ⟨hR, hrd.trans hn.2⟩
+
 /-- Some format bytes and conversions make `fmt` and `args` safe to print. -/
 def FmtArgsOK (R : Nat → Prop) (rd : Nat → BitVec 8) (fmt : BitVec 64)
     (args : List (BitVec 64)) : Prop :=

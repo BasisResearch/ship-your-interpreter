@@ -96,6 +96,20 @@ theorem roImg_congr {S : Nat → Prop} {f g : Nat → BitVec 8} (h : ∀ a, S a 
 theorem binImg_rodata : binImg (GF := GF) ⊢ roImg rodataDom rodataByte := by
   unfold binImg; iintro ⟨-, #H⟩; iexact H
 
+/-- Read-only bytes of a view as a segment's read footprint. -/
+theorem roImg_foot (S : Nat → Prop) (img : Nat → BitVec 8) :
+    ∀ l : List Nat, (∀ a ∈ l, S a) →
+      roImg (GF := GF) S img ⊢
+        sepL (l.map (fun a => (a, Iris.DFrac.discard, img a))) (fun p => p.1 ↦ₘ{p.2.1} p.2.2)
+  | [], _ => by iintro _; simp only [List.map_nil, sepL_nil]; iempintro
+  | a :: l, h => by
+    simp only [List.map_cons, sepL_cons]
+    iintro #H
+    isplitl
+    · unfold roImg
+      iapply H $$ %a %(h a List.mem_cons_self)
+    · iapply roImg_foot S img l (fun b hb => h b (List.mem_cons_of_mem _ hb)) $$ H
+
 /-- **Code from the image.** -/
 theorem instrAt_of_binImg {i : Nat} {code : List (BitVec 8)} (h : TextAt i code) :
     binImg (GF := GF) ⊢ instrAt i code := by
