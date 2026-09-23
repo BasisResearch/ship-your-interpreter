@@ -733,6 +733,117 @@ theorem dlMallocRoomImpl_of_run {M : MachineModel} {L : DlLayout} {Room : RoomPr
     DlMallocRoomImpl M L Room maxReq SpOK mallocEntry gpv clob savedRegs headroom text where
   malloc H n s k saved hsv hn := mallocRoomSpec_of_run hrun hloc hroom hnd H n s k saved hsv hn
 
+
+/-! ## Freeing under capacity
+
+`freeRoomSpec` is `freeSpec` for a heap in a restricted shape `FreeOK` (for
+the binary: the block is the chunk below the top chunk), returning the heap
+with its credits. -/
+
+/-- What a free run under capacity ends in: the frame restored, the block
+popped, the heap in shape with its credits. -/
+structure FreeRoomEnd (L : DlLayout) (Room : RoomPred) (H : List (Nat × Nat))
+    (r s : BitVec 64) (saved : List (Nat × BitVec 64)) (k : Nat)
+    (rv' : Nat → BitVec 64) (mv' : Nat → BitVec 8) : Prop where
+  frame : RetFrame rv' r s saved
+  shape : L.Shape mv' H
+  room : Room mv' H k
+
+/-- **`_free_r`'s run under capacity, first-order.** A block whose heap is in
+the shape `FreeOK` is freed, keeping `k` credits. -/
+def FreeRoomRun (M : MachineModel) (L : DlLayout) (Room FreeOK : RoomPred)
+    (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64) (clob savedRegs : List Nat) (headroom : Nat)
+    (text : List (Nat × BitVec 8)) : Prop :=
+  ∀ (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (s r : BitVec 64)
+    (saved : List (Nat × BitVec 64)) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) (k : Nat),
+    saved.map Prod.fst = savedRegs → SpOK s → r.toNat % 4 = 0 → EntryRegs rv entry r q s saved →
+    L.Shape mv ((q.toNat, n) :: H) → FreeOK mv ((q.toNat, n) :: H) k →
+    (∀ a, stackWin s headroom a → ¬ (heapFoot L ((q.toNat, n) :: H) a ∨ InExt (q.toNat, n) a)) →
+    ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob savedRegs) (freeBytes L H q n s headroom)
+      (FreeRoomEnd L Room H r s saved k) fuel rv mv
+
+/-- `freeSpec` under capacity: the block goes back, the credits stay. -/
+def freeRoomSpec (M : MachineModel) (L : DlLayout) (Room FreeOK : RoomPred)
+    (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64) (clob : List Nat)
+    (saved : List (Nat × BitVec 64)) (headroom : Nat)
+    (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (s : BitVec 64) (k : Nat) : IProp GF :=
+  fnSpec (M := M) entry
+    (fun r => iprop(⌜SpOK s ∧ r.toNat % 4 = 0⌝ ∗ a0 ↦ᵣ q ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗
+      clobbered clob ∗ savedOwn saved ∗ stackScratch s headroom ∗
+      isHeapRoom L FreeOK ((q.toNat, n) :: H) k ∗ blockOwn q.toNat n))
+    (fun _ => iprop(sp ↦ᵣ s ∗ (∃ v, a0 ↦ᵣ v) ∗ clobbered clob ∗ savedOwn saved ∗
+      stackScratch s headroom ∗ isHeapRoom L Room H k))
+
+/-- **`freeRoomSpec` from the capacity run.** -/
+theorem freeRoomSpec_of_run {L : DlLayout} {Room FreeOK : RoomPred} {SpOK : BitVec 64 → Prop}
+    {entry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
+    {text : List (Nat × BitVec 8)}
+    (hrun : FreeRoomRun M L Room FreeOK SpOK entry gpv clob savedRegs headroom text)
+    (hloc : ShapeLocal L) (hfree : RoomLocal L FreeOK) (hnd : (allocRegs clob savedRegs).Nodup)
+    (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (s : BitVec 64) (k : Nat)
+    (saved : List (Nat × BitVec 64)) (hsv : saved.map Prod.fst = savedRegs) :
+    textOwn (GF := GF) text ⊢ freeRoomSpec M L Room FreeOK SpOK entry gpv clob saved headroom H q n s k := by
+  subst hsv
+  have hd := RegsDistinct.of_nodup hnd
+  unfold freeRoomSpec fnSpec blockOwn isHeapRoom
+  iintro #Htext
+  imodintro
+  iintro %r %Φ Hpc Hra ⟨%⟨hspok, hral⟩, Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, ⟨%img, %⟨hsh, hok⟩, Hheap⟩, Hblk⟩ Hk
+  ihave ⟨%fb, Hblk⟩ := ownSet_fn _ $$ Hblk
+  ihave ⟨⟨Hheap, Hblk⟩, %hHB⟩ := keep_pure
+    (ownSet_disj (heapFoot L ((q.toNat, n) :: H)) (InExt (q.toNat, n)) img fb) $$ [Hheap Hblk]
+  · iframe Hheap Hblk
+  ihave Hhb := ownSet_glue _ _ img fb hHB $$ [Hheap Hblk]
+  · iframe Hheap Hblk
+  have hagree : ∀ a, heapFoot L ((q.toNat, n) :: H) a →
+      img a = glue (heapFoot L ((q.toNat, n) :: H)) img fb a := fun a ha => by simp [glue, ha]
+  iapply allocCall_of_localRun hd (fun a => heapFoot L ((q.toNat, n) :: H) a ∨ InExt (q.toNat, n) a)
+    (fun img => L.Shape img ((q.toNat, n) :: H) ∧ FreeOK img ((q.toNat, n) :: H) k)
+    (fun img img' h hs => ⟨hloc _ img img' (fun a ha => h a (.inl ha)) hs.1,
+      hfree _ img img' k (fun a ha => h a (.inl ha)) hs.2⟩)
+    (fun _ mv' => L.Shape mv' H ∧ Room mv' H k)
+    (fun _ => iprop(∃ img : Nat → BitVec 8, ⌜L.Shape img H ∧ Room img H k⌝ ∗
+      ownSet (heapFoot L H) (fun a => a ↦ₘ img a))) ?_
+    (fun rv mv he hs hdj => (hrun H q n s r saved rv mv k rfl hspok hral he hs.1 hs.2 hdj).imp
+      fun _ h => LocalRun.mono (fun _ _ he => ⟨he.frame, he.shape, he.room⟩) _ _ _ h)
+  · intro rv' mv' ⟨hsh', hrm'⟩
+    iintro HF
+    ihave ⟨HF, -⟩ := ownSet_split _ (heapFoot L H) _ $$ HF
+    ihave HF := ownSet_iff (T := heapFoot L H) _
+      (fun a => ⟨fun h => h.2, fun h => ⟨heapFoot_sub_return L H _ _ a h, h⟩⟩) $$ HF
+    iexists mv'
+    iframe HF
+    ipureintro; exact ⟨hsh', hrm'⟩
+  · iframe Htext Hpc Hra Ha0 Hsp Hgp Hclob Hsv Hstk
+    isplitl [Hhb]
+    · iexists (glue (heapFoot L ((q.toNat, n) :: H)) img fb)
+      iframe Hhb
+      ipureintro
+      exact ⟨hloc _ img _ hagree hsh, hfree _ img _ k hagree hok⟩
+    iintro Hpc Hra ⟨%p, Ha0, Hsp, Hclob, Hsv, Hstk, Hh⟩
+    iapply Hk $$ Hpc Hra
+    isplitl [Hsp]
+    · iexact Hsp
+    isplitl [Ha0]
+    · iexists p; iexact Ha0
+    iframe Hclob Hsv Hstk Hh
+
+/-- **Freeing under capacity, as a module parameter.** -/
+structure DlFreeRoomImpl (M : MachineModel) (L : DlLayout) (Room FreeOK : RoomPred)
+    (SpOK : BitVec 64 → Prop) (freeEntry gpv : BitVec 64) (clob savedRegs : List Nat) (headroom : Nat)
+    (text : List (Nat × BitVec 8)) : Prop where
+  free : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] H q n s k
+    (saved : List (Nat × BitVec 64)), saved.map Prod.fst = savedRegs →
+    textOwn (GF := GF) text ⊢ freeRoomSpec M L Room FreeOK SpOK freeEntry gpv clob saved headroom H q n s k
+
+theorem dlFreeRoomImpl_of_run {M : MachineModel} {L : DlLayout} {Room FreeOK : RoomPred}
+    {SpOK : BitVec 64 → Prop} {freeEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
+    {text : List (Nat × BitVec 8)}
+    (hrun : FreeRoomRun M L Room FreeOK SpOK freeEntry gpv clob savedRegs headroom text)
+    (hloc : ShapeLocal L) (hfree : RoomLocal L FreeOK) (hnd : (allocRegs clob savedRegs).Nodup) :
+    DlFreeRoomImpl M L Room FreeOK SpOK freeEntry gpv clob savedRegs headroom text where
+  free H q n s k saved hsv := freeRoomSpec_of_run hrun hloc hfree hnd H q n s k saved hsv
+
 end Build
 
 end VsaIris

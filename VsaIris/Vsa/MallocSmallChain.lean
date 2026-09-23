@@ -75,7 +75,7 @@ variable {live : Nat → Prop} {maxReq headroom : Nat} {H : List (Nat × Nat)} {
 /-- Stage 5 of a small request: back from the lock hook, at bin 4. -/
 theorem stB5 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
     (hB : n.toNat ≤ 23) {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
-    (h : StPost s rv0 (MtP m1 s headroom mv0 (proLogB s (rv0 8) r)) (mallocBytes vsaLayout H s headroom)
+    (h : StPost (spN s) rv0 (MtP m1 s headroom mv0 (proLogB s (rv0 8) r)) (mallocBytes vsaLayout H s headroom)
       0x800047d0#64 rv mv) :
     LocalRun (vsaModel live) roR pathText mRegs (mallocBytes vsaLayout H s headroom)
       (MallocRoomEnd vsaLayout (vsaRoomFast maxReq) H n r s saved k) 6 rv mv := by
@@ -116,7 +116,7 @@ theorem stB5 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brk
 /-- Stage 2 of a small request: at the `jal __malloc_lock` at `0x800047cc`. -/
 theorem stB2 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
     (hB : n.toNat ≤ 23) {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
-    (h : StPost s rv0 (MtP m1 s headroom mv0 (proLogB s (rv0 8) r)) (mallocBytes vsaLayout H s headroom)
+    (h : StPost (spN s) rv0 (MtP m1 s headroom mv0 (proLogB s (rv0 8) r)) (mallocBytes vsaLayout H s headroom)
       0x800047cc#64 rv mv) :
     LocalRun (vsaModel live) roR pathText mRegs (mallocBytes vsaLayout H s headroom)
       (MallocRoomEnd vsaLayout (vsaRoomFast maxReq) H n r s saved k) 9 rv mv :=
