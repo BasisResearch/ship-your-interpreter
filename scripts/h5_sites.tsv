@@ -15,3 +15,4 @@ jal	rtJalLongjmp	0x80002df0
 oom	env_new	0x80002a38
 oom	env_define	0x80002bd0
 oom	stringify	0x80003140
+code	setjmpCode	0x80006ffc	0x8000703c

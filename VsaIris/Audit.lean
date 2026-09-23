@@ -9,6 +9,7 @@ import VsaIris.Loop
 import VsaIris.Interp.Need
 import VsaIris.Vsa.RuntimeError
 import VsaIris.Vsa.OomSites
+import VsaIris.Vsa.Setjmp
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -102,3 +103,4 @@ import VsaIris.Vsa.OomSites
 #print axioms VsaIris.Newlib.OomSites.oom80002a38_ok
 #print axioms VsaIris.Newlib.OomSites.oom80002bd0_ok
 #print axioms VsaIris.Newlib.OomSites.oom80003140_ok
+#print axioms VsaIris.Newlib.Setjmp.setjmp_spec

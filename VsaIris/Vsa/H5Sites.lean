@@ -1203,4 +1203,133 @@ theorem rtJalLongjmp_cert : rtJalLongjmp.Cert where
   hi := by decide
   align := by decide
 
+/-- `.text` [0x80006ffc, 0x8000703c). -/
+abbrev setjmpCodeBase : Nat := 0x80006ffc
+def setjmpCode : List (BitVec 8) :=
+  [0x23#8, 0x30#8, 0x15#8, 0x00#8, 0x23#8, 0x34#8, 0x85#8, 0x00#8, 0x23#8, 0x38#8, 0x95#8, 0x00#8, 0x23#8, 0x3c#8, 0x25#8, 0x01#8, 0x23#8, 0x30#8, 0x35#8, 0x03#8, 0x23#8, 0x34#8, 0x45#8, 0x03#8, 0x23#8, 0x38#8, 0x55#8, 0x03#8, 0x23#8, 0x3c#8, 0x65#8, 0x03#8, 0x23#8, 0x30#8, 0x75#8, 0x05#8, 0x23#8, 0x34#8, 0x85#8, 0x05#8, 0x23#8, 0x38#8, 0x95#8, 0x05#8, 0x23#8, 0x3c#8, 0xa5#8, 0x05#8, 0x23#8, 0x30#8, 0xb5#8, 0x07#8, 0x23#8, 0x34#8, 0x25#8, 0x06#8, 0x13#8, 0x05#8, 0x00#8, 0x00#8, 0x67#8, 0x80#8, 0x00#8, 0x00#8]
+
+theorem setjmpCode_text : TextAt setjmpCodeBase setjmpCode := by decide +kernel
+
+/-- The bytes of `setjmpCode` are present, by index. -/
+def setjmpCodeLoaded (m : Std.ExtHashMap Nat (BitVec 8)) : Prop :=
+  ∀ k, k < 64 → m[setjmpCodeBase + k]? = some (setjmpCode.getD k 0)
+
+theorem setjmpCode_len : setjmpCode.length = 64 := by decide +kernel
+
+theorem setjmpCodeLoaded_of {m : Std.ExtHashMap Nat (BitVec 8)}
+    (h : ∀ p ∈ codeFoot setjmpCodeBase setjmpCode, m[p.1]? = some p.2.2) : setjmpCodeLoaded m :=
+  fun k hk => loaded_of_foot h k (by rw [setjmpCode_len]; exact hk)
+
+theorem setjmpCode_at_80006ffc {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x80006ffc : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x80006ffd : Nat)]? = some (0x30 : BitVec 8) ∧
+    m[(0x80006ffe : Nat)]? = some (0x15 : BitVec 8) ∧
+    m[(0x80006fff : Nat)]? = some (0x00 : BitVec 8) :=
+  ⟨h 0 (by decide), h 1 (by decide), h 2 (by decide), h 3 (by decide)⟩
+
+theorem setjmpCode_at_80007000 {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x80007000 : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x80007001 : Nat)]? = some (0x34 : BitVec 8) ∧
+    m[(0x80007002 : Nat)]? = some (0x85 : BitVec 8) ∧
+    m[(0x80007003 : Nat)]? = some (0x00 : BitVec 8) :=
+  ⟨h 4 (by decide), h 5 (by decide), h 6 (by decide), h 7 (by decide)⟩
+
+theorem setjmpCode_at_80007004 {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x80007004 : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x80007005 : Nat)]? = some (0x38 : BitVec 8) ∧
+    m[(0x80007006 : Nat)]? = some (0x95 : BitVec 8) ∧
+    m[(0x80007007 : Nat)]? = some (0x00 : BitVec 8) :=
+  ⟨h 8 (by decide), h 9 (by decide), h 10 (by decide), h 11 (by decide)⟩
+
+theorem setjmpCode_at_80007008 {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x80007008 : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x80007009 : Nat)]? = some (0x3c : BitVec 8) ∧
+    m[(0x8000700a : Nat)]? = some (0x25 : BitVec 8) ∧
+    m[(0x8000700b : Nat)]? = some (0x01 : BitVec 8) :=
+  ⟨h 12 (by decide), h 13 (by decide), h 14 (by decide), h 15 (by decide)⟩
+
+theorem setjmpCode_at_8000700c {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x8000700c : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x8000700d : Nat)]? = some (0x30 : BitVec 8) ∧
+    m[(0x8000700e : Nat)]? = some (0x35 : BitVec 8) ∧
+    m[(0x8000700f : Nat)]? = some (0x03 : BitVec 8) :=
+  ⟨h 16 (by decide), h 17 (by decide), h 18 (by decide), h 19 (by decide)⟩
+
+theorem setjmpCode_at_80007010 {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x80007010 : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x80007011 : Nat)]? = some (0x34 : BitVec 8) ∧
+    m[(0x80007012 : Nat)]? = some (0x45 : BitVec 8) ∧
+    m[(0x80007013 : Nat)]? = some (0x03 : BitVec 8) :=
+  ⟨h 20 (by decide), h 21 (by decide), h 22 (by decide), h 23 (by decide)⟩
+
+theorem setjmpCode_at_80007014 {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x80007014 : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x80007015 : Nat)]? = some (0x38 : BitVec 8) ∧
+    m[(0x80007016 : Nat)]? = some (0x55 : BitVec 8) ∧
+    m[(0x80007017 : Nat)]? = some (0x03 : BitVec 8) :=
+  ⟨h 24 (by decide), h 25 (by decide), h 26 (by decide), h 27 (by decide)⟩
+
+theorem setjmpCode_at_80007018 {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x80007018 : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x80007019 : Nat)]? = some (0x3c : BitVec 8) ∧
+    m[(0x8000701a : Nat)]? = some (0x65 : BitVec 8) ∧
+    m[(0x8000701b : Nat)]? = some (0x03 : BitVec 8) :=
+  ⟨h 28 (by decide), h 29 (by decide), h 30 (by decide), h 31 (by decide)⟩
+
+theorem setjmpCode_at_8000701c {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x8000701c : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x8000701d : Nat)]? = some (0x30 : BitVec 8) ∧
+    m[(0x8000701e : Nat)]? = some (0x75 : BitVec 8) ∧
+    m[(0x8000701f : Nat)]? = some (0x05 : BitVec 8) :=
+  ⟨h 32 (by decide), h 33 (by decide), h 34 (by decide), h 35 (by decide)⟩
+
+theorem setjmpCode_at_80007020 {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x80007020 : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x80007021 : Nat)]? = some (0x34 : BitVec 8) ∧
+    m[(0x80007022 : Nat)]? = some (0x85 : BitVec 8) ∧
+    m[(0x80007023 : Nat)]? = some (0x05 : BitVec 8) :=
+  ⟨h 36 (by decide), h 37 (by decide), h 38 (by decide), h 39 (by decide)⟩
+
+theorem setjmpCode_at_80007024 {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x80007024 : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x80007025 : Nat)]? = some (0x38 : BitVec 8) ∧
+    m[(0x80007026 : Nat)]? = some (0x95 : BitVec 8) ∧
+    m[(0x80007027 : Nat)]? = some (0x05 : BitVec 8) :=
+  ⟨h 40 (by decide), h 41 (by decide), h 42 (by decide), h 43 (by decide)⟩
+
+theorem setjmpCode_at_80007028 {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x80007028 : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x80007029 : Nat)]? = some (0x3c : BitVec 8) ∧
+    m[(0x8000702a : Nat)]? = some (0xa5 : BitVec 8) ∧
+    m[(0x8000702b : Nat)]? = some (0x05 : BitVec 8) :=
+  ⟨h 44 (by decide), h 45 (by decide), h 46 (by decide), h 47 (by decide)⟩
+
+theorem setjmpCode_at_8000702c {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x8000702c : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x8000702d : Nat)]? = some (0x30 : BitVec 8) ∧
+    m[(0x8000702e : Nat)]? = some (0xb5 : BitVec 8) ∧
+    m[(0x8000702f : Nat)]? = some (0x07 : BitVec 8) :=
+  ⟨h 48 (by decide), h 49 (by decide), h 50 (by decide), h 51 (by decide)⟩
+
+theorem setjmpCode_at_80007030 {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x80007030 : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x80007031 : Nat)]? = some (0x34 : BitVec 8) ∧
+    m[(0x80007032 : Nat)]? = some (0x25 : BitVec 8) ∧
+    m[(0x80007033 : Nat)]? = some (0x06 : BitVec 8) :=
+  ⟨h 52 (by decide), h 53 (by decide), h 54 (by decide), h 55 (by decide)⟩
+
+theorem setjmpCode_at_80007034 {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x80007034 : Nat)]? = some (0x13 : BitVec 8) ∧
+    m[(0x80007035 : Nat)]? = some (0x05 : BitVec 8) ∧
+    m[(0x80007036 : Nat)]? = some (0x00 : BitVec 8) ∧
+    m[(0x80007037 : Nat)]? = some (0x00 : BitVec 8) :=
+  ⟨h 56 (by decide), h 57 (by decide), h 58 (by decide), h 59 (by decide)⟩
+
+theorem setjmpCode_at_80007038 {m : Std.ExtHashMap Nat (BitVec 8)} (h : setjmpCodeLoaded m) :
+    m[(0x80007038 : Nat)]? = some (0x67 : BitVec 8) ∧
+    m[(0x80007039 : Nat)]? = some (0x80 : BitVec 8) ∧
+    m[(0x8000703a : Nat)]? = some (0x00 : BitVec 8) ∧
+    m[(0x8000703b : Nat)]? = some (0x00 : BitVec 8) :=
+  ⟨h 60 (by decide), h 61 (by decide), h 62 (by decide), h 63 (by decide)⟩
+
 end VsaIris.Newlib.Sites

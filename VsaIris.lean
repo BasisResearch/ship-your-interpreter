@@ -48,3 +48,4 @@ import VsaIris.Vsa.RuntimeError
 import VsaIris.Vsa.SegRO
 import VsaIris.Vsa.Oom
 import VsaIris.Vsa.OomSites
+import VsaIris.Vsa.Setjmp
