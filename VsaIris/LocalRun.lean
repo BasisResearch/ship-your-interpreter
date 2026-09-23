@@ -384,9 +384,10 @@ theorem wp_localRun {Φ : Nat × String → IProp GF} {ro : List (Nat × BitVec 
 /-- **VSA segments are local-run segments.** A `RunFact` (the shape
 `Inst.seg_runFact` produces from `segEval_sound`) whose read-only registers
 and bytes are read-only or owned, whose written registers are owned at their
-current values, and whose written bytes are owned bytes at their current
-values, is one `SegFrom` segment. The successor's owned values are the old
-ones overwritten by the write lists. -/
+current values (or read-only and left unchanged, like a pinned `gp`), and
+whose written bytes are owned bytes at their current values, is one `SegFrom`
+segment. The successor's owned values are the old ones overwritten by the
+write lists. -/
 theorem segFrom_of_runFact {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
     {rs : List Nat} {S : Nat → Prop} {n : Nat} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
     {RR : List (Nat × DFrac × BitVec 64)} {MR : List (Nat × DFrac × BitVec 8)}
@@ -395,7 +396,7 @@ theorem segFrom_of_runFact {ro : List (Nat × BitVec 64)} {text : List (Nat × B
     (hrun : RunFact M n RR MR RW MW)
     (hRR : ∀ p ∈ RR, (p.1, p.2.2) ∈ ro ∨ (p.1 ∈ rs ∧ rv p.1 = p.2.2))
     (hMR : ∀ p ∈ MR, (p.1, p.2.2) ∈ text ∨ (S p.1 ∧ mv p.1 = p.2.2))
-    (hRW : ∀ p ∈ RW, p.1 ∈ rs ∧ rv p.1 = p.2.1)
+    (hRW : ∀ p ∈ RW, (p.1 ∈ rs ∧ rv p.1 = p.2.1) ∨ ((p.1, p.2.1) ∈ ro ∧ p.2.2 = p.2.1))
     (hMW : ∀ p ∈ MW, S p.1 ∧ mv p.1 = p.2.1)
     (hP : ∀ rv' mv', (∀ p ∈ RW, rv' p.1 = p.2.2) →
       (∀ r ∈ rs, (∀ p ∈ RW, p.1 ≠ r) → rv' r = rv r) →
@@ -411,13 +412,22 @@ theorem segFrom_of_runFact {ro : List (Nat × BitVec 64)} {text : List (Nat × B
     · rcases hMR p hp with h | ⟨h1, h2⟩
       · exact hro.2 _ h
       · rw [hS _ h1, h2]
-    · obtain ⟨h1, h2⟩ := hRW p hp; rw [hrs _ h1, h2]
+    · rcases hRW p hp with ⟨h1, h2⟩ | ⟨h1, _⟩
+      · rw [hrs _ h1, h2]
+      · exact hro.1 _ h1
     · obtain ⟨h1, h2⟩ := hMW p hp; rw [hS _ h1, h2]
   obtain ⟨σ', hre, hok', hloc⟩ := hrun σ hok hfoot
-  refine ⟨σ', hre, hok', fun key hk => hloc.reg_frame key fun p hp h => hk (h ▸ (hRW p hp).1),
+  refine ⟨σ', hre, hok', fun key hk => ?_,
     fun a ha => hloc.mem_frame a fun p hp h => ha (h ▸ (hMW p hp).1), hP _ _ hloc.reg_new
     (fun r hr hne => (hloc.reg_frame r hne).trans (hrs r hr)) hloc.mem_new
     (fun a ha hne => (hloc.mem_frame a hne).trans (hS a ha))⟩
+  by_cases hin : ∃ p ∈ RW, p.1 = key
+  · obtain ⟨p, hp, rfl⟩ := hin
+    rcases hRW p hp with ⟨h1, _⟩ | ⟨h1, h2⟩
+    · exact absurd h1 hk
+    · obtain ⟨_, _, hrw, _⟩ := hfoot
+      rw [hloc.reg_new p hp, h2]; exact (hrw p hp).symm
+  · exact hloc.reg_frame key fun p hp h => hin ⟨p, hp, h⟩
 
 theorem SegFrom.mono {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
     {rs : List Nat} {S : Nat → Prop} {k : Nat} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}

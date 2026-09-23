@@ -20,3 +20,4 @@ import VsaIris.Vsa.MallocFastHeap
 import VsaIris.Vsa.MallocFastCode
 import VsaIris.Vsa.MallocFastLines
 import VsaIris.Vsa.MallocFastSegs
+import VsaIris.Vsa.MallocFastRun

@@ -71,6 +71,13 @@ L.append('theorem path_impure {mem : Std.ExtHashMap Nat (BitVec 8)} (h : PathLoa
 a0, bs = IMPURE
 L.append('    ' + ' ∧\n    '.join(f'mem[(0x{a0 + i:x} : Nat)]? = some (0x{bs[i]:02x} : BitVec 8)' for i in range(8)) + ' :=')
 L.append('  ⟨' + ',\n   '.join(f'h _ ({mem_proof(a0 + i, bs[i])})' for i in range(8)) + '⟩\n')
+for pc in (0x800047cc, 0x80004874, 0x80004c10):
+    w = W[pc]
+    bs = [(w >> (8 * i)) & 0xff for i in range(4)]
+    L.append(f'/-- The bytes of the `jal` at `0x{pc:x}` are in the text. -/')
+    L.append(f'theorem jal_bytes_{pc:08x} :')
+    L.append('    ' + ' ∧\n    '.join(f'((0x{pc + i:x} : Nat), (0x{bs[i]:02x}#8 : BitVec 8)) ∈ pathText' for i in range(4)) + ' :=')
+    L.append('  ⟨' + ',\n   '.join(mem_proof(pc + i, bs[i]) for i in range(4)) + '⟩\n')
 L.append('end VsaIris.MallocFast\n')
 pathlib.Path('VsaIris/Vsa/MallocFastCode.lean').write_text('\n'.join(L))
 print(len(PCS), 'instructions,', len(text), 'bytes,', len(chunks), 'chunks')

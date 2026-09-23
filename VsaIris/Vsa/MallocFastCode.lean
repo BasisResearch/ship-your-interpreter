@@ -887,4 +887,37 @@ theorem path_impure {mem : Std.ExtHashMap Nat (BitVec 8)} (h : PathLoaded mem) :
    h _ (List.mem_append_right pathChunk0 (List.mem_append_right pathChunk1 (List.mem_append_right pathChunk2 (List.mem_append_right pathChunk3 (List.mem_append_right pathChunk4 (List.mem_append_right pathChunk5 (List.mem_append_right pathChunk6 (List.mem_append_right pathChunk7 (List.mem_append_right pathChunk8 (List.mem_append_right pathChunk9 (List.mem_append_right pathChunk10 (List.mem_append_right pathChunk11 (List.mem_append_right pathChunk12 (List.mem_append_right pathChunk13 (List.mem_append_right pathChunk14 (List.mem_append_right pathChunk15 (List.mem_append_right pathChunk16 (List.mem_append_right pathChunk17 (List.mem_append_right pathChunk18 (List.mem_append_right pathChunk19 ((by decide : ((0x8001b976 : Nat), (0x00#8 : BitVec 8)) ∈ pathChunk20)))))))))))))))))))))),
    h _ (List.mem_append_right pathChunk0 (List.mem_append_right pathChunk1 (List.mem_append_right pathChunk2 (List.mem_append_right pathChunk3 (List.mem_append_right pathChunk4 (List.mem_append_right pathChunk5 (List.mem_append_right pathChunk6 (List.mem_append_right pathChunk7 (List.mem_append_right pathChunk8 (List.mem_append_right pathChunk9 (List.mem_append_right pathChunk10 (List.mem_append_right pathChunk11 (List.mem_append_right pathChunk12 (List.mem_append_right pathChunk13 (List.mem_append_right pathChunk14 (List.mem_append_right pathChunk15 (List.mem_append_right pathChunk16 (List.mem_append_right pathChunk17 (List.mem_append_right pathChunk18 (List.mem_append_right pathChunk19 ((by decide : ((0x8001b977 : Nat), (0x00#8 : BitVec 8)) ∈ pathChunk20))))))))))))))))))))))⟩
 
+/-- The bytes of the `jal` at `0x800047cc` are in the text. -/
+theorem jal_bytes_800047cc :
+    ((0x800047cc : Nat), (0xef#8 : BitVec 8)) ∈ pathText ∧
+    ((0x800047cd : Nat), (0x00#8 : BitVec 8)) ∈ pathText ∧
+    ((0x800047ce : Nat), (0xd0#8 : BitVec 8)) ∈ pathText ∧
+    ((0x800047cf : Nat), (0x09#8 : BitVec 8)) ∈ pathText :=
+  ⟨List.mem_append_right pathChunk0 (List.mem_append_right pathChunk1 (List.mem_append_right pathChunk2 (List.mem_append_left _ (by decide : ((0x800047cc : Nat), (0xef#8 : BitVec 8)) ∈ pathChunk3)))),
+   List.mem_append_right pathChunk0 (List.mem_append_right pathChunk1 (List.mem_append_right pathChunk2 (List.mem_append_left _ (by decide : ((0x800047cd : Nat), (0x00#8 : BitVec 8)) ∈ pathChunk3)))),
+   List.mem_append_right pathChunk0 (List.mem_append_right pathChunk1 (List.mem_append_right pathChunk2 (List.mem_append_left _ (by decide : ((0x800047ce : Nat), (0xd0#8 : BitVec 8)) ∈ pathChunk3)))),
+   List.mem_append_right pathChunk0 (List.mem_append_right pathChunk1 (List.mem_append_right pathChunk2 (List.mem_append_left _ (by decide : ((0x800047cf : Nat), (0x09#8 : BitVec 8)) ∈ pathChunk3))))⟩
+
+/-- The bytes of the `jal` at `0x80004874` are in the text. -/
+theorem jal_bytes_80004874 :
+    ((0x80004874 : Nat), (0xef#8 : BitVec 8)) ∈ pathText ∧
+    ((0x80004875 : Nat), (0x00#8 : BitVec 8)) ∈ pathText ∧
+    ((0x80004876 : Nat), (0x40#8 : BitVec 8)) ∈ pathText ∧
+    ((0x80004877 : Nat), (0x7f#8 : BitVec 8)) ∈ pathText :=
+  ⟨List.mem_append_right pathChunk0 (List.mem_append_right pathChunk1 (List.mem_append_right pathChunk2 (List.mem_append_right pathChunk3 (List.mem_append_right pathChunk4 (List.mem_append_right pathChunk5 (List.mem_append_right pathChunk6 (List.mem_append_right pathChunk7 (List.mem_append_left _ (by decide : ((0x80004874 : Nat), (0xef#8 : BitVec 8)) ∈ pathChunk8))))))))),
+   List.mem_append_right pathChunk0 (List.mem_append_right pathChunk1 (List.mem_append_right pathChunk2 (List.mem_append_right pathChunk3 (List.mem_append_right pathChunk4 (List.mem_append_right pathChunk5 (List.mem_append_right pathChunk6 (List.mem_append_right pathChunk7 (List.mem_append_left _ (by decide : ((0x80004875 : Nat), (0x00#8 : BitVec 8)) ∈ pathChunk8))))))))),
+   List.mem_append_right pathChunk0 (List.mem_append_right pathChunk1 (List.mem_append_right pathChunk2 (List.mem_append_right pathChunk3 (List.mem_append_right pathChunk4 (List.mem_append_right pathChunk5 (List.mem_append_right pathChunk6 (List.mem_append_right pathChunk7 (List.mem_append_left _ (by decide : ((0x80004876 : Nat), (0x40#8 : BitVec 8)) ∈ pathChunk8))))))))),
+   List.mem_append_right pathChunk0 (List.mem_append_right pathChunk1 (List.mem_append_right pathChunk2 (List.mem_append_right pathChunk3 (List.mem_append_right pathChunk4 (List.mem_append_right pathChunk5 (List.mem_append_right pathChunk6 (List.mem_append_right pathChunk7 (List.mem_append_left _ (by decide : ((0x80004877 : Nat), (0x7f#8 : BitVec 8)) ∈ pathChunk8)))))))))⟩
+
+/-- The bytes of the `jal` at `0x80004c10` are in the text. -/
+theorem jal_bytes_80004c10 :
+    ((0x80004c10 : Nat), (0xef#8 : BitVec 8)) ∈ pathText ∧
+    ((0x80004c11 : Nat), (0x00#8 : BitVec 8)) ∈ pathText ∧
+    ((0x80004c12 : Nat), (0x00#8 : BitVec 8)) ∈ pathText ∧
+    ((0x80004c13 : Nat), (0x46#8 : BitVec 8)) ∈ pathText :=
+  ⟨List.mem_append_right pathChunk0 (List.mem_append_right pathChunk1 (List.mem_append_right pathChunk2 (List.mem_append_right pathChunk3 (List.mem_append_right pathChunk4 (List.mem_append_right pathChunk5 (List.mem_append_right pathChunk6 (List.mem_append_right pathChunk7 (List.mem_append_right pathChunk8 (List.mem_append_right pathChunk9 (List.mem_append_right pathChunk10 (List.mem_append_right pathChunk11 (List.mem_append_right pathChunk12 (List.mem_append_right pathChunk13 (List.mem_append_right pathChunk14 (List.mem_append_left _ (by decide : ((0x80004c10 : Nat), (0xef#8 : BitVec 8)) ∈ pathChunk15)))))))))))))))),
+   List.mem_append_right pathChunk0 (List.mem_append_right pathChunk1 (List.mem_append_right pathChunk2 (List.mem_append_right pathChunk3 (List.mem_append_right pathChunk4 (List.mem_append_right pathChunk5 (List.mem_append_right pathChunk6 (List.mem_append_right pathChunk7 (List.mem_append_right pathChunk8 (List.mem_append_right pathChunk9 (List.mem_append_right pathChunk10 (List.mem_append_right pathChunk11 (List.mem_append_right pathChunk12 (List.mem_append_right pathChunk13 (List.mem_append_right pathChunk14 (List.mem_append_left _ (by decide : ((0x80004c11 : Nat), (0x00#8 : BitVec 8)) ∈ pathChunk15)))))))))))))))),
+   List.mem_append_right pathChunk0 (List.mem_append_right pathChunk1 (List.mem_append_right pathChunk2 (List.mem_append_right pathChunk3 (List.mem_append_right pathChunk4 (List.mem_append_right pathChunk5 (List.mem_append_right pathChunk6 (List.mem_append_right pathChunk7 (List.mem_append_right pathChunk8 (List.mem_append_right pathChunk9 (List.mem_append_right pathChunk10 (List.mem_append_right pathChunk11 (List.mem_append_right pathChunk12 (List.mem_append_right pathChunk13 (List.mem_append_right pathChunk14 (List.mem_append_left _ (by decide : ((0x80004c12 : Nat), (0x00#8 : BitVec 8)) ∈ pathChunk15)))))))))))))))),
+   List.mem_append_right pathChunk0 (List.mem_append_right pathChunk1 (List.mem_append_right pathChunk2 (List.mem_append_right pathChunk3 (List.mem_append_right pathChunk4 (List.mem_append_right pathChunk5 (List.mem_append_right pathChunk6 (List.mem_append_right pathChunk7 (List.mem_append_right pathChunk8 (List.mem_append_right pathChunk9 (List.mem_append_right pathChunk10 (List.mem_append_right pathChunk11 (List.mem_append_right pathChunk12 (List.mem_append_right pathChunk13 (List.mem_append_right pathChunk14 (List.mem_append_left _ (by decide : ((0x80004c13 : Nat), (0x46#8 : BitVec 8)) ∈ pathChunk15))))))))))))))))⟩
+
 end VsaIris.MallocFast
