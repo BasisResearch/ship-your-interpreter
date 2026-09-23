@@ -261,3 +261,168 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
         · exact ha4
         · exact hwv
         · exact h8
+
+/-- A footprint doubleword off bin `i`'s link words reads the same after the
+detach. -/
+theorem MDetach.read {C : MCtx} {Mt Mt' : Mem} {bins : Nat → List Nat} {i v : Nat}
+    (D : MDetach C Mt Mt' bins i v) {a : Nat} (hf : ∀ k, k < 8 → vsaFoot C.H (a + k))
+    (hoff : a + 8 ≤ binAt i + 16 ∨ binAt i + 32 ≤ a) : read64 Mt' a = read64 Mt a :=
+  read64_agreeP (P := fun b => vsaFoot C.H b ∧ ¬ (binAt i + 16 ≤ b ∧ b < binAt i + 32))
+    (fun b hb => D.agree b hb.1 hb.2) (fun k hk => ⟨hf k hk, by omega⟩)
+
+/-- **The exact-fit last remainder** (`0x80004d78`): the victim is already off
+bin 1 (`MDetach`) and the remainder is below `MINSIZE`, so the whole chunk is
+returned. Set `PREV_INUSE` in the next header, unlock, and return `v + 16`. -/
+theorem lr_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
+    {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb sz v : Nat}
+    (Hp : MHeap C Mt brkv chunks bins) (hnb : NbOK C.n nb)
+    (hfree : FreeAt chunks v sz) (hle : nb ≤ sz)
+    (F : MFrame C R Mt') (D : MDetach C Mt Mt' bins 1 v) (G : LRVictim nb sz v R) :
+    AW C.live C.S C.Q 0x80004d78#64 R Mt' := by
+  have HH := Hp.heap.heap.heap
+  have B := Hp.heap.heap
+  have hb1 : binAt 1 = 2147593504 := by unfold binAt avAddr; rfl
+  have hlo := O.sp.lo; have hhi := O.sp.hi
+  unfold mHead Vsa.Sim.tohostAddr at hlo
+  have hbnd := HH.walk.chunk_bounds _ hfree
+  have htle := HH.top_le; have hbrk := HH.brk_le
+  have hroom := Hp.heap.heap.top_room
+  obtain ⟨_, ⟨hd, hdr, hdpi⟩⟩ := HH.headers hfree
+  simp only at hbnd hdr hdpi
+  unfold heapStart at hbnd
+  unfold heapEnd at hbrk
+  have hdlt := Vsa.Sim.read64_lt _ _ _ hdr
+  have hnx := foot_header B (HH.end_bnd hfree)
+  simp only at hnx
+  have ha5 := G.a5; have ht1 := G.t1
+  have hs2 := F.sp; have hsal := O.sp.align
+  obtain ⟨hal0, htop16⟩ := HH.aligned
+  have halv := hal0 _ hfree
+  have hszal := (walk_sizes HH.walk _ hfree).1
+  simp only at halv hszal
+  have hdr' : read64 Mt' (v + sz + 8) = some hd := (D.read hnx (by omega)).trans hdr
+  have hES : ((R 2) + sign_extend (m := 64) (0x008#12)).toNat = C.s.toNat - 96 + 8 := by
+    rw [hs2]; sx_addr
+  -- `add t1,a5,t1`: the next chunk
+  refine st_80004d78 O.live ?_
+  sx_norm
+  have hEN : ((R 15) + (R 6) + 8#64).toNat = v + sz + 8 := by sx_addr
+  -- `ld a4,8(t1)`: its header
+  refine st_80004d7c O.live ?_ ?_ ?_
+  · sx_norm; rw [hEN]; unfold LdOK Vsa.Sim.tohostAddr; omega
+  · sx_norm; rw [hEN]; exact O.foot_at hnx _ rfl
+  sx_norm
+  rw [ldv_at hdr' _ hEN]
+  refine st_80004d80 O.live ?_
+  -- `sd a5,8(sp)`: spill the victim
+  refine st_80004d84 O.live ?_ ?_ ?_
+  · sx_norm; rw [hES]; unfold StOK Vsa.Sim.tohostAddr; omega
+  · sx_norm; rw [hES]; exact O.stack (by unfold mHead; omega) (by omega)
+  sx_norm
+  rw [hES]
+  refine st_80004d88 O.live ?_
+  -- `sd a4,8(t1)`: the next header, with `PREV_INUSE`
+  refine st_80004d8c O.live ?_ ?_ ?_
+  · sx_norm; rw [hEN]; unfold StOK Vsa.Sim.tohostAddr; omega
+  · sx_norm; rw [hEN]; exact O.foot_at hnx _ rfl
+  sx_norm
+  rw [hEN]
+  -- the next chunk is a chunk, not the top: `v` is free
+  have hdeven : hd % 2 = 0 := by
+    unfold prevInuse at hdpi
+    simp only [beq_eq_false_iff_ne, ne_eq] at hdpi; omega
+  have hd4 : hd % 4 < 2 := by
+    obtain ⟨dch, hdmem, hda⟩ : ∃ d ∈ chunks, d.addr = v + sz := by
+      rcases HH.end_bnd hfree with he | hd'
+      · exfalso
+        simp only at he
+        rw [he, HH.top_header] at hdr
+        cases hdr
+        have := HH.top_size
+        omega
+      · simpa using hd'
+    obtain ⟨hd0, hd0r, _, hd0low⟩ := walk_header HH.walk dch hdmem
+    rw [hda, hdr] at hd0r
+    cases hd0r
+    exact hd0low
+  have hOr : ((BitVec.ofNat 64 hd) ||| 1#64).toNat = hd + 1 := by
+    have hoe := or_one_even (BitVec.ofNat 64 hd)
+      (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hdlt]; exact hdeven)
+    rw [show (sign_extend (m := 64) (0x001#12) : BitVec 64) = 1#64 from rfl] at hoe
+    rw [hoe, BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hdlt]
+    simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
+    omega
+  -- the heap after the take
+  have hfd2 : fdOf (writeLog (writeLog Mt' [(C.s.toNat - 96 + 8, 8, R 15)])
+      [(v + sz + 8, 8, BitVec.ofNat 64 hd ||| 1#64)]) (binAt 1) = some (binAt 1) := by
+    show read64 _ (binAt 1 + 16) = _
+    rw [read64_store_miss _ _ (by omega), read64_store_miss _ _ (by omega)]
+    exact D.fd
+  have hbk2 : bkOf (writeLog (writeLog Mt' [(C.s.toNat - 96 + 8, 8, R 15)])
+      [(v + sz + 8, 8, BitVec.ofNat 64 hd ||| 1#64)]) (binAt 1) = some (binAt 1) := by
+    show read64 _ (binAt 1 + 24) = _
+    rw [read64_store_miss _ _ (by omega), read64_store_miss _ _ (by omega)]
+    exact D.bk
+  have hhdr2 : read64 (writeLog (writeLog Mt' [(C.s.toNat - 96 + 8, 8, R 15)])
+      [(v + sz + 8, 8, BitVec.ofNat 64 hd ||| 1#64)]) (v + sz + 8) = some (hd + 1) := by
+    rw [read64_store_hit, hOr]
+  have hszf : ∀ h0, read64 Mt (v + sz + 8) = some h0 →
+      chunkSize (hd + 1) = chunkSize h0 ∧ (hd + 1) % 4 < 2 := by
+    intro h0 h0r
+    rw [hdr] at h0r; cases h0r
+    unfold chunkSize; omega
+  have hpi : prevInuse (hd + 1) = true := by unfold prevInuse; simp only [beq_iff_eq]; omega
+  have hns : ∀ a, vsaFoot C.H a → a < C.s.toNat - 256 ∨ C.s.toNat ≤ a := fun a ha =>
+    Classical.byContradiction fun hc => Hp.disj a (by unfold mHead; omega) (by omega) ha
+  have hag : ∀ a, vsaFoot C.H a → ¬ TakeW (binAt 1) (binAt 1) (v + sz) a →
+      (writeLog (writeLog Mt' [(C.s.toNat - 96 + 8, 8, R 15)])
+        [(v + sz + 8, 8, BitVec.ofNat 64 hd ||| 1#64)])[a]? = Mt[a]? := by
+    intro a ha hna
+    unfold TakeW at hna
+    have := hns a ha
+    rw [writeLog_out _ _ _ (by simp only [OutL]; exact ⟨by omega, trivial⟩),
+      writeLog_out _ _ _ (by simp only [OutL]; exact ⟨by omega, trivial⟩)]
+    exact D.agree a ha (by omega)
+  have hn8 : C.n.toNat + 8 ≤ sz := by have := hnb.fits; omega
+  have hheap := PHeapAt.take Hp.heap (i := 1) (by decide) (by unfold numBins; decide)
+    (pre := []) (post := []) (v := v) D.bin hfree rfl (n := C.n.toNat) hn8 rfl rfl
+    hfd2 hbk2 hhdr2 hszf hpi hag
+  obtain ⟨hfr, hal16⟩ := PHeapAt.take_fresh Hp.heap hfree rfl (n := C.n.toNat) hn8
+  simp only at hfr hal16
+  have hnsN : v + sz + 8 < C.s.toNat - 256 ∨ C.s.toNat ≤ v + sz + 8 :=
+    hns (v + sz + 8) (by have := hnx 0 (by omega); simpa using this)
+  sx_run [8] O.live at 0x8000484c
+  have ha0 : ((R 15) + 16#64).toNat = v + 16 := by sx_addr
+  refine epi_8000484c O ?F (O.fin_ok ?fr ?al ?heap
+    (pres_store (pres_store D.pres))
+    (frame_store (win_foot hnx) (frame_store (win_stack (a := C.s.toNat - 96 + 8) (w := 8)
+      (by unfold mHead; omega) (by omega)) D.frame)))
+  case F =>
+    refine MFrame.of_regs ((F.store (by omega)).store (by omega)) ?_ ?_ ?_ ?_ <;>
+      simp only [upd_apply, Nat.reduceEqDiff, ite_false]
+  case fr => simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [ha0]; exact hfr
+  case al => simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [ha0]; exact hal16
+  case heap =>
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    rw [ha0]
+    exact ⟨_, _, _, _, hheap, by omega⟩
+
+/-- **The last-remainder check with its exact-fit return.** `lr_check` with
+`lr_take` closing the whole-chunk arm, so only the split (`0x80004da0`), the
+re-binding (`0x8000491c`) and the block search (`0x80004be8`) remain. -/
+theorem lr_last {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
+    {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx : Nat}
+    (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins)
+    (G : LRRegs nb idx R) (h8 : R 8 = reentV) (hnb : NbOK C.n nb) (hnb31 : nb < 2 ^ 31)
+    (hscan : bins 1 = [] → ∀ R', MFrame C R' Mt → LRRegs nb idx R' → R' 8 = reentV →
+      AW C.live C.S C.Q 0x80004be8#64 R' Mt)
+    (hsplit : ∀ v sz, bins 1 = [v] → FreeAt chunks v sz → nb + 32 ≤ sz →
+      ∀ R', MFrame C R' Mt → LRRegs nb idx R' → LRVictim nb sz v R' → R' 8 = reentV →
+        AW C.live C.S C.Q 0x80004da0#64 R' Mt)
+    (hrebin : ∀ v sz, FreeAt chunks v sz → sz < nb →
+      ∀ R' Mt', MFrame C R' Mt' → MDetach C Mt Mt' bins 1 v → LRRegs nb idx R' →
+        LRVictim nb sz v R' → R' 8 = reentV →
+        AW C.live C.S C.Q 0x8000491c#64 R' Mt') :
+    AW C.live C.S C.Q 0x800048ec#64 R Mt :=
+  lr_check O F Hp G h8 hnb31 hscan hsplit
+    (fun _ _ hfree hle _ _ _ F' D' G' => lr_take O Hp hnb hfree hle F' D' G') hrebin
