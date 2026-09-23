@@ -47,6 +47,7 @@ import Vsa.While.ErrorSem
 import Vsa.While.Derive
 import Vsa.While.Validation
 import Vsa.While.Cost
+import Vsa.While.CostExists
 import Vsa.Refinement
 import Vsa.Sim.Attr
 import Vsa.Sim.StateNF
