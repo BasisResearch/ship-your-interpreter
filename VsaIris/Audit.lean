@@ -1,6 +1,7 @@
 import VsaIris.DlHeap
 import VsaIris.Adequacy
 import VsaIris.Example
+import VsaIris.Vsa.Instance
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -20,3 +21,6 @@ import VsaIris.Example
 #print axioms VsaIris.no_fixed_privFoot
 #print axioms VsaIris.eb73d8c_witness
 #print axioms VsaIris.Example.countdown_halts
+#print axioms VsaIris.Inst.vsa_adequacy
+#print axioms VsaIris.Inst.seg_runFact
+#print axioms VsaIris.Inst.wp_seg
