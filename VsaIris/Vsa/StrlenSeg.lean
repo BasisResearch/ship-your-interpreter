@@ -340,8 +340,8 @@ theorem strlenStep {live : Nat → Prop} {p len : Nat} {bv : Nat → BitVec 8} {
     (hlive : ∀ q ∈ strlenMR p len bv, live q.1)
     (hslack : ∀ a, slackSet p len a → mv a = bv a)
     (hpc : rv VsaIris.PC = pc0)
-    (hfacts : ∀ m0 : Std.ExtHashMap Nat (BitVec 8), Reads p len bv m0 →
-      ChainFacts m0 m0 (strlenL rv) lds bs)
+    (hfacts : ∀ σ : Vsa.Machine.MState, Reads p len bv σ.mem →
+      ChainFacts σ.mem σ.mem (strlenL rv) lds bs)
     (hnext : ∀ (rv' : Nat → BitVec 64) (mv' : Nat → BitVec 8),
       rv' VsaIris.PC = evalBlocksPC pc0 (SegEvalState.init (strlenL rv) lds) bs →
       (∀ k ∈ strlenRegs, rv' k = finReg bs (strlenL rv) lds k) →
@@ -351,7 +351,7 @@ theorem strlenStep {live : Nat → Prop} {p len : Nat} {bv : Nat → BitVec 8} {
   refine Or.inr ⟨n, segFrom_of_seg bs (strlenL rv) lds pc0 (strlenMR p len bv) n hlen
     (by rw [keysG_strlenL]; exact hwf) (by rw [keysG_strlenL]; decide)
     (by rw [keysG_strlenL]; exact hwr) hsilent
-    (fun c hok hfoot => hfacts c.σ.mem (reads_of_foot hok hlive hfoot.2.1))
+    (fun c hok hfoot => hfacts c.σ (reads_of_foot hok hlive hfoot.2.1))
     (strlenMR_split hslack) (by unfold strlenRs; exact List.mem_cons_self) hpc ?_ ?_⟩
   · intro q hq
     simp only [strlenL, List.mem_cons, List.not_mem_nil, or_false] at hq

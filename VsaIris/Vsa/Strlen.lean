@@ -17,7 +17,7 @@ namespace VsaIris.Inst.Strlen
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
-open Vsa.Machine (Config)
+open Vsa.Machine (Config MState)
 open Vsa.Sim Vsa.MemRepr
 
 section Run
@@ -117,8 +117,8 @@ theorem retArm (ctx : Ctx live P r len bv) {t k : Nat} {rv : Nat → BitVec 64}
     (hwf : ChainOK armPC strlenRegs seg)
     (hwr : ∀ j ∈ wrChain seg, j ∈ strlenRegs)
     (hlog : (segOut seg (strlenL rv) []).log = [])
-    (hfacts : ∀ m0 : Std.ExtHashMap Nat (BitVec 8), Reads P.toNat len bv m0 →
-      ChainFacts m0 m0 (strlenL rv) [] seg)
+    (hfacts : ∀ σ : MState, Reads P.toNat len bv σ.mem →
+      ChainFacts σ.mem σ.mem (strlenL rv) [] seg)
     (hpcOut : evalBlocksPC armPC (SegEvalState.init (strlenL rv) []) seg
       = Sail.BitVec.update (rv 1 + sign_extend (m := 64) (0x000#12)) 0 0#1)
     (hfin10 : finReg seg (strlenL rv) [] 10 = rv 13 + sign_extend (m := 64) imm)
@@ -179,10 +179,10 @@ theorem tailTest (ctx : Ctx live P r len bv) {t k m : Nat}
       finReg segT (strlenL rv) [[bv (P.toNat + (t + k))]] j = rv j)
     (hkeepF : ∀ j ∈ strlenRegs, j ≠ 15 →
       finReg segF (strlenL rv) [[bv (P.toNat + (t + k))]] j = rv j)
-    (hfactsT : t + k = len → ∀ m0 : Std.ExtHashMap Nat (BitVec 8), Reads P.toNat len bv m0 →
-      ChainFacts m0 m0 (strlenL rv) [[bv (P.toNat + (t + k))]] segT)
-    (hfactsF : t + k ≠ len → ∀ m0 : Std.ExtHashMap Nat (BitVec 8), Reads P.toNat len bv m0 →
-      ChainFacts m0 m0 (strlenL rv) [[bv (P.toNat + (t + k))]] segF)
+    (hfactsT : t + k = len → ∀ σ : MState, Reads P.toNat len bv σ.mem →
+      ChainFacts σ.mem σ.mem (strlenL rv) [[bv (P.toNat + (t + k))]] segT)
+    (hfactsF : t + k ≠ len → ∀ σ : MState, Reads P.toNat len bv σ.mem →
+      ChainFacts σ.mem σ.mem (strlenL rv) [[bv (P.toNat + (t + k))]] segF)
     (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
     (hpc : rv VsaIris.PC = pcK)
     (hcontT : t + k = len → ∀ (rv' : Nat → BitVec 64) (mv' : Nat → BitVec 8),
@@ -295,6 +295,335 @@ theorem snezAluStep (ctx : Ctx live P r len bv) (a5 : BitVec 64) :
   · show Vsa.Machine.output σ' = Vsa.Machine.output c.σ
     unfold Vsa.Machine.output
     rw [hframe.out]
+
+/-- **Tail offset 6.** The `snez` block returns `t+6` or `t+7` with no further
+test: the byte load, the `snez` site, and the arithmetic return. -/
+theorem tail6 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
+    {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
+    (h : TailK P r len t 6 0x80006d60#64 rv) :
+    SRun live P.toNat len bv r 3 rv mv := by
+  have hb6 : bv (P.toNat + (t + 6)) = 0 ↔ t + 8 * 0 + 6 = len := by
+    have hb := byteBeq ctx (t + 6) (by have := h.lo; omega)
+    rw [Bool.eq_iff_iff, beq_iff_eq, decide_eq_true_eq] at hb
+    simpa using hb
+  have hnw := ctx.regions.nowrap
+  have hlo' := ctx.regions.lo
+  -- (1) `lbu a5,-2(a4)`
+  refine strlenStep 2 strlenX6d60LoadSeg [[bv (P.toNat + (t + 6))]] 0x80006d60#64 0 rfl
+    (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
+  · intro σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    refine lbuFact ctx hread (t + 6) (by have := h.lo; omega) _ _ rfl ?_
+    show ((rv 14 + sign_extend (m := 64) (0xffe#12)).toNat) = P.toNat + (t + 6)
+    rw [h.a4]
+    exact tailAddr ctx t 6 (by omega) (by have := h.lo; omega) (0xffe#12) (by decide)
+  intro rv1 mv1 hpc1 hfin1 hslack1
+  -- (2) the `snez a0,a5` site
+  have h1ra : rv1 1 = rv 1 := hfin1 1 (by simp [strlenRegs])
+  have h1a3 : rv1 13 = rv 13 := hfin1 13 (by simp [strlenRegs])
+  have h1a5 : rv1 15 = zero_extend (m := 64) (bv (P.toNat + (t + 6))) :=
+    hfin1 15 (by simp [strlenRegs])
+  refine strlenAluStep 1 0x80006d64 10 15
+    (zero_extend (m := 64) (bool_to_bit (zopz0zI_u (0#64) (rv1 15))))
+    (by simp [strlenRegs]) (by simp [strlenRegs]) hslack1 (by rw [hpc1]; rfl)
+    (by rw [h1a5]; exact snezAluStep ctx _) ?_
+  intro rv2 mv2 hpc2 ha02 hfin2 hslack2
+  -- (3) `add a0,a0,a3; addi a0,a0,-2; ret`
+  refine strlenStep 0 strlenX6d68Seg [] 0x80006d68#64 2 rfl (by decide) (by decide) rfl
+    ctx.codeLive hslack2 (by rw [hpc2]) ?_ ?_
+  · intro σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    change (Sail.BitVec.update (rv2 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
+    rw [hfin2 1 (by simp [strlenRegs]) (by decide), h1ra, h.ra, ret_tgt r ctx.retAlign]
+    exact ctx.retAlign
+  intro rv3 mv3 hpc3 hfin3 hslack3
+  have hra2 : rv2 1 = r := by rw [hfin2 1 (by simp [strlenRegs]) (by decide), h1ra, h.ra]
+  refine ⟨?_, ?_, ?_, hslack3⟩
+  · rw [hpc3]
+    show Sail.BitVec.update (rv2 1 + sign_extend (m := 64) (0x000#12)) 0 0#1 = r
+    rw [hra2, ret_tgt r ctx.retAlign]
+  · rw [hfin3 1 (by simp [strlenRegs]), show finReg strlenX6d68Seg (strlenL rv2) [] 1 = rv2 1 from rfl]
+    exact hra2
+  · rw [hfin3 10 (by simp [strlenRegs])]
+    show (rv2 10 + rv2 13) + sign_extend (m := 64) (0xffe#12) = BitVec.ofNat 64 len
+    rw [ha02, h1a5, hfin2 13 (by simp [strlenRegs]) (by decide), h1a3, h.a3]
+    exact snez_finalG t 0 len _ (by have := h.lo; omega) (by have := h.hi; omega)
+      (by have := h.lo; have := h.hi; omega) hb6
+
+/-- Tail offset 5. -/
+theorem tail5 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
+    {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
+    (h : TailK P r len t 5 0x80006d58#64 rv) :
+    SRun live P.toNat len bv r 4 rv mv := by
+  refine tailTest (t := t) (k := 5) (m := 3) ctx strlenX6d58TSeg strlenX6d58FSeg 1 1
+    0x80006d58#64 0x80006dbc#64 0x80006d60#64 rfl rfl (by decide) (by decide) (by decide) (by decide)
+    rfl rfl rfl rfl (keepOf _ _ _ rfl rfl rfl rfl rfl rfl)
+    (keepOf _ _ _ rfl rfl rfl rfl rfl rfl) ?_ ?_ hslack h.pcv ?_ ?_
+  · intro he σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    · refine lbuFact ctx hread (t + 5) (by have := h.lo; omega) _ _ rfl ?_
+      show ((rv 14 + sign_extend (m := 64) (0xffd#12)).toNat) = P.toNat + (t + 5)
+      rw [h.a4]
+      exact tailAddr ctx t 5 (by omega) (by have := h.lo; omega) (0xffd#12) (by decide)
+    · change ((zero_extend (m := 64) (bv (P.toNat + (t + 5)))) == 0#64) = true
+      rw [zext_beqz, byteBeq ctx (t + 5) h.lo]
+      simp [he]
+  · intro he σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    · refine lbuFact ctx hread (t + 5) (by have := h.lo; omega) _ _ rfl ?_
+      show ((rv 14 + sign_extend (m := 64) (0xffd#12)).toNat) = P.toNat + (t + 5)
+      rw [h.a4]
+      exact tailAddr ctx t 5 (by omega) (by have := h.lo; omega) (0xffd#12) (by decide)
+    · change ((zero_extend (m := 64) (bv (P.toNat + (t + 5)))) == 0#64) = false
+      rw [zext_beqz, byteBeq ctx (t + 5) h.lo]
+      simp [he]
+  · intro he rv' mv' hpc' hkeep hslack'
+    have hra' : rv' 1 = r := by rw [hkeep 1 (by simp [strlenRegs]) (by decide)]; exact h.ra
+    refine localRun_le (by omega) (retArm (t := t) (k := 5) ctx strlenX6dbcSeg 0x80006dbc#64 (0xffd#12) 1
+      rfl (by decide) (by decide) rfl ?_ rfl rfl rfl hslack' hpc' hra'
+      (by rw [hkeep 13 (by simp [strlenRegs]) (by decide)]; exact h.a3) (by omega) he (by decide))
+    intro σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    change (Sail.BitVec.update (rv' 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
+    rw [hra', ret_tgt r ctx.retAlign]
+    exact ctx.retAlign
+  · intro he rv' mv' hpc' hkeep hslack'
+    exact tail6 ctx hslack'
+      ⟨hpc', by rw [hkeep 1 (by simp [strlenRegs]) (by decide)]; exact h.ra,
+       by rw [hkeep 13 (by simp [strlenRegs]) (by decide)]; exact h.a3,
+       by rw [hkeep 14 (by simp [strlenRegs]) (by decide)]; exact h.a4,
+       by have := h.lo; omega, h.hi⟩
+
+/-- Tail offset 4. -/
+theorem tail4 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
+    {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
+    (h : TailK P r len t 4 0x80006d50#64 rv) :
+    SRun live P.toNat len bv r 5 rv mv := by
+  refine tailTest (t := t) (k := 4) (m := 4) ctx strlenX6d50TSeg strlenX6d50FSeg 1 1
+    0x80006d50#64 0x80006db4#64 0x80006d58#64 rfl rfl (by decide) (by decide) (by decide) (by decide)
+    rfl rfl rfl rfl (keepOf _ _ _ rfl rfl rfl rfl rfl rfl)
+    (keepOf _ _ _ rfl rfl rfl rfl rfl rfl) ?_ ?_ hslack h.pcv ?_ ?_
+  · intro he σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    · refine lbuFact ctx hread (t + 4) (by have := h.lo; omega) _ _ rfl ?_
+      show ((rv 14 + sign_extend (m := 64) (0xffc#12)).toNat) = P.toNat + (t + 4)
+      rw [h.a4]
+      exact tailAddr ctx t 4 (by omega) (by have := h.lo; omega) (0xffc#12) (by decide)
+    · change ((zero_extend (m := 64) (bv (P.toNat + (t + 4)))) == 0#64) = true
+      rw [zext_beqz, byteBeq ctx (t + 4) h.lo]
+      simp [he]
+  · intro he σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    · refine lbuFact ctx hread (t + 4) (by have := h.lo; omega) _ _ rfl ?_
+      show ((rv 14 + sign_extend (m := 64) (0xffc#12)).toNat) = P.toNat + (t + 4)
+      rw [h.a4]
+      exact tailAddr ctx t 4 (by omega) (by have := h.lo; omega) (0xffc#12) (by decide)
+    · change ((zero_extend (m := 64) (bv (P.toNat + (t + 4)))) == 0#64) = false
+      rw [zext_beqz, byteBeq ctx (t + 4) h.lo]
+      simp [he]
+  · intro he rv' mv' hpc' hkeep hslack'
+    have hra' : rv' 1 = r := by rw [hkeep 1 (by simp [strlenRegs]) (by decide)]; exact h.ra
+    refine localRun_le (by omega) (retArm (t := t) (k := 4) ctx strlenX6db4Seg 0x80006db4#64 (0xffc#12) 1
+      rfl (by decide) (by decide) rfl ?_ rfl rfl rfl hslack' hpc' hra'
+      (by rw [hkeep 13 (by simp [strlenRegs]) (by decide)]; exact h.a3) (by omega) he (by decide))
+    intro σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    change (Sail.BitVec.update (rv' 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
+    rw [hra', ret_tgt r ctx.retAlign]
+    exact ctx.retAlign
+  · intro he rv' mv' hpc' hkeep hslack'
+    exact tail5 ctx hslack'
+      ⟨hpc', by rw [hkeep 1 (by simp [strlenRegs]) (by decide)]; exact h.ra,
+       by rw [hkeep 13 (by simp [strlenRegs]) (by decide)]; exact h.a3,
+       by rw [hkeep 14 (by simp [strlenRegs]) (by decide)]; exact h.a4,
+       by have := h.lo; omega, h.hi⟩
+
+/-- Tail offset 3. -/
+theorem tail3 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
+    {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
+    (h : TailK P r len t 3 0x80006d48#64 rv) :
+    SRun live P.toNat len bv r 6 rv mv := by
+  refine tailTest (t := t) (k := 3) (m := 5) ctx strlenX6d48TSeg strlenX6d48FSeg 1 1
+    0x80006d48#64 0x80006da4#64 0x80006d50#64 rfl rfl (by decide) (by decide) (by decide) (by decide)
+    rfl rfl rfl rfl (keepOf _ _ _ rfl rfl rfl rfl rfl rfl)
+    (keepOf _ _ _ rfl rfl rfl rfl rfl rfl) ?_ ?_ hslack h.pcv ?_ ?_
+  · intro he σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    · refine lbuFact ctx hread (t + 3) (by have := h.lo; omega) _ _ rfl ?_
+      show ((rv 14 + sign_extend (m := 64) (0xffb#12)).toNat) = P.toNat + (t + 3)
+      rw [h.a4]
+      exact tailAddr ctx t 3 (by omega) (by have := h.lo; omega) (0xffb#12) (by decide)
+    · change ((zero_extend (m := 64) (bv (P.toNat + (t + 3)))) == 0#64) = true
+      rw [zext_beqz, byteBeq ctx (t + 3) h.lo]
+      simp [he]
+  · intro he σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    · refine lbuFact ctx hread (t + 3) (by have := h.lo; omega) _ _ rfl ?_
+      show ((rv 14 + sign_extend (m := 64) (0xffb#12)).toNat) = P.toNat + (t + 3)
+      rw [h.a4]
+      exact tailAddr ctx t 3 (by omega) (by have := h.lo; omega) (0xffb#12) (by decide)
+    · change ((zero_extend (m := 64) (bv (P.toNat + (t + 3)))) == 0#64) = false
+      rw [zext_beqz, byteBeq ctx (t + 3) h.lo]
+      simp [he]
+  · intro he rv' mv' hpc' hkeep hslack'
+    have hra' : rv' 1 = r := by rw [hkeep 1 (by simp [strlenRegs]) (by decide)]; exact h.ra
+    refine localRun_le (by omega) (retArm (t := t) (k := 3) ctx strlenX6da4Seg 0x80006da4#64 (0xffb#12) 1
+      rfl (by decide) (by decide) rfl ?_ rfl rfl rfl hslack' hpc' hra'
+      (by rw [hkeep 13 (by simp [strlenRegs]) (by decide)]; exact h.a3) (by omega) he (by decide))
+    intro σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    change (Sail.BitVec.update (rv' 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
+    rw [hra', ret_tgt r ctx.retAlign]
+    exact ctx.retAlign
+  · intro he rv' mv' hpc' hkeep hslack'
+    exact tail4 ctx hslack'
+      ⟨hpc', by rw [hkeep 1 (by simp [strlenRegs]) (by decide)]; exact h.ra,
+       by rw [hkeep 13 (by simp [strlenRegs]) (by decide)]; exact h.a3,
+       by rw [hkeep 14 (by simp [strlenRegs]) (by decide)]; exact h.a4,
+       by have := h.lo; omega, h.hi⟩
+
+/-- Tail offset 2. -/
+theorem tail2 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
+    {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
+    (h : TailK P r len t 2 0x80006d40#64 rv) :
+    SRun live P.toNat len bv r 7 rv mv := by
+  refine tailTest (t := t) (k := 2) (m := 6) ctx strlenX6d40TSeg strlenX6d40FSeg 1 1
+    0x80006d40#64 0x80006dac#64 0x80006d48#64 rfl rfl (by decide) (by decide) (by decide) (by decide)
+    rfl rfl rfl rfl (keepOf _ _ _ rfl rfl rfl rfl rfl rfl)
+    (keepOf _ _ _ rfl rfl rfl rfl rfl rfl) ?_ ?_ hslack h.pcv ?_ ?_
+  · intro he σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    · refine lbuFact ctx hread (t + 2) (by have := h.lo; omega) _ _ rfl ?_
+      show ((rv 14 + sign_extend (m := 64) (0xffa#12)).toNat) = P.toNat + (t + 2)
+      rw [h.a4]
+      exact tailAddr ctx t 2 (by omega) (by have := h.lo; omega) (0xffa#12) (by decide)
+    · change ((zero_extend (m := 64) (bv (P.toNat + (t + 2)))) == 0#64) = true
+      rw [zext_beqz, byteBeq ctx (t + 2) h.lo]
+      simp [he]
+  · intro he σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    · refine lbuFact ctx hread (t + 2) (by have := h.lo; omega) _ _ rfl ?_
+      show ((rv 14 + sign_extend (m := 64) (0xffa#12)).toNat) = P.toNat + (t + 2)
+      rw [h.a4]
+      exact tailAddr ctx t 2 (by omega) (by have := h.lo; omega) (0xffa#12) (by decide)
+    · change ((zero_extend (m := 64) (bv (P.toNat + (t + 2)))) == 0#64) = false
+      rw [zext_beqz, byteBeq ctx (t + 2) h.lo]
+      simp [he]
+  · intro he rv' mv' hpc' hkeep hslack'
+    have hra' : rv' 1 = r := by rw [hkeep 1 (by simp [strlenRegs]) (by decide)]; exact h.ra
+    refine localRun_le (by omega) (retArm (t := t) (k := 2) ctx strlenX6dacSeg 0x80006dac#64 (0xffa#12) 1
+      rfl (by decide) (by decide) rfl ?_ rfl rfl rfl hslack' hpc' hra'
+      (by rw [hkeep 13 (by simp [strlenRegs]) (by decide)]; exact h.a3) (by omega) he (by decide))
+    intro σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    change (Sail.BitVec.update (rv' 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
+    rw [hra', ret_tgt r ctx.retAlign]
+    exact ctx.retAlign
+  · intro he rv' mv' hpc' hkeep hslack'
+    exact tail3 ctx hslack'
+      ⟨hpc', by rw [hkeep 1 (by simp [strlenRegs]) (by decide)]; exact h.ra,
+       by rw [hkeep 13 (by simp [strlenRegs]) (by decide)]; exact h.a3,
+       by rw [hkeep 14 (by simp [strlenRegs]) (by decide)]; exact h.a4,
+       by have := h.lo; omega, h.hi⟩
+
+/-- Tail offset 1. -/
+theorem tail1 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
+    {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
+    (h : TailK P r len t 1 0x80006d38#64 rv) :
+    SRun live P.toNat len bv r 8 rv mv := by
+  refine tailTest (t := t) (k := 1) (m := 7) ctx strlenX6d38TSeg strlenX6d38FSeg 1 1
+    0x80006d38#64 0x80006d94#64 0x80006d40#64 rfl rfl (by decide) (by decide) (by decide) (by decide)
+    rfl rfl rfl rfl (keepOf _ _ _ rfl rfl rfl rfl rfl rfl)
+    (keepOf _ _ _ rfl rfl rfl rfl rfl rfl) ?_ ?_ hslack h.pcv ?_ ?_
+  · intro he σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    · refine lbuFact ctx hread (t + 1) (by have := h.lo; omega) _ _ rfl ?_
+      show ((rv 14 + sign_extend (m := 64) (0xff9#12)).toNat) = P.toNat + (t + 1)
+      rw [h.a4]
+      exact tailAddr ctx t 1 (by omega) (by have := h.lo; omega) (0xff9#12) (by decide)
+    · change ((zero_extend (m := 64) (bv (P.toNat + (t + 1)))) == 0#64) = true
+      rw [zext_beqz, byteBeq ctx (t + 1) h.lo]
+      simp [he]
+  · intro he σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    · refine lbuFact ctx hread (t + 1) (by have := h.lo; omega) _ _ rfl ?_
+      show ((rv 14 + sign_extend (m := 64) (0xff9#12)).toNat) = P.toNat + (t + 1)
+      rw [h.a4]
+      exact tailAddr ctx t 1 (by omega) (by have := h.lo; omega) (0xff9#12) (by decide)
+    · change ((zero_extend (m := 64) (bv (P.toNat + (t + 1)))) == 0#64) = false
+      rw [zext_beqz, byteBeq ctx (t + 1) h.lo]
+      simp [he]
+  · intro he rv' mv' hpc' hkeep hslack'
+    have hra' : rv' 1 = r := by rw [hkeep 1 (by simp [strlenRegs]) (by decide)]; exact h.ra
+    refine localRun_le (by omega) (retArm (t := t) (k := 1) ctx strlenX6d94Seg 0x80006d94#64 (0xff9#12) 1
+      rfl (by decide) (by decide) rfl ?_ rfl rfl rfl hslack' hpc' hra'
+      (by rw [hkeep 13 (by simp [strlenRegs]) (by decide)]; exact h.a3) (by omega) he (by decide))
+    intro σ hread
+    chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+    change (Sail.BitVec.update (rv' 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
+    rw [hra', ret_tgt r ctx.retAlign]
+    exact ctx.retAlign
+  · intro he rv' mv' hpc' hkeep hslack'
+    exact tail2 ctx hslack'
+      ⟨hpc', by rw [hkeep 1 (by simp [strlenRegs]) (by decide)]; exact h.ra,
+       by rw [hkeep 13 (by simp [strlenRegs]) (by decide)]; exact h.a3,
+       by rw [hkeep 14 (by simp [strlenRegs]) (by decide)]; exact h.a4,
+       by have := h.lo; omega, h.hi⟩
+
+/-- **The tail entry `0x80006d2c`.** `sub a3,a4,a0` sets `a3 = t+8`; the first
+byte test then dispatches. -/
+theorem tail0 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
+    {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
+    (h : TailAt P r len t rv) :
+    SRun live P.toNat len bv r 9 rv mv := by
+  have haddr : ∀ σ : MState, Reads P.toNat len bv σ.mem →
+      MemFacts σ.mem (strlenL rv) [bv (P.toNat + t)] (mkLine 0x80006d2c#64 0xff874783#32) := by
+    intro σ hread
+    refine lbuFact ctx hread t (by have := h.lo; omega) _ _ rfl ?_
+    show ((rv 14 + sign_extend (m := 64) (0xff8#12)).toNat) = P.toNat + t
+    rw [h.a4]
+    exact tailAddr ctx t 0 (by omega) (by have := h.lo; omega) (0xff8#12) (by decide)
+  have hnew3 : rv 14 - rv 10 = BitVec.ofNat 64 (t + 8) := by
+    rw [h.a4, h.a0]; exact sub_a4_a0_val P (t + 8)
+  by_cases he : t = len
+  · refine strlenStep 8 strlenX6d2cTSeg [[bv (P.toNat + t)]] 0x80006d2c#64 2 rfl
+      (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
+    · intro σ hread
+      chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+      · exact haddr σ hread
+      · change ((zero_extend (m := 64) (bv (P.toNat + t))) == 0#64) = true
+        rw [zext_beqz, byteBeq ctx t h.lo]
+        simp [he]
+    intro rv' mv' hpc' hfin hslack'
+    have hra' : rv' 1 = r := by
+      rw [hfin 1 (by simp [strlenRegs])]
+      show rv 1 = r
+      exact h.ra
+    refine localRun_le (by omega) (retArm (t := t) (k := 0) ctx strlenX6d9cSeg 0x80006d9c#64
+      (0xff8#12) 1 rfl (by decide) (by decide) rfl ?_ rfl rfl rfl hslack'
+      (by rw [hpc']; rfl) hra' ?_ (by omega) (by omega) (by decide))
+    · intro σ hread
+      chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+      change (Sail.BitVec.update (rv' 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
+      rw [hra', ret_tgt r ctx.retAlign]
+      exact ctx.retAlign
+    · rw [hfin 13 (by simp [strlenRegs])]
+      show rv 14 - rv 10 = BitVec.ofNat 64 (t + 8)
+      exact hnew3
+  · refine strlenStep 8 strlenX6d2cFSeg [[bv (P.toNat + t)]] 0x80006d2c#64 2 rfl
+      (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
+    · intro σ hread
+      chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+      · exact haddr σ hread
+      · change ((zero_extend (m := 64) (bv (P.toNat + t))) == 0#64) = false
+        rw [zext_beqz, byteBeq ctx t h.lo]
+        simp [he]
+    intro rv' mv' hpc' hfin hslack'
+    exact tail1 ctx hslack'
+      ⟨by rw [hpc']; rfl, by rw [hfin 1 (by simp [strlenRegs])]; exact h.ra,
+       by rw [hfin 13 (by simp [strlenRegs])]; exact hnew3,
+       by rw [hfin 14 (by simp [strlenRegs])]; exact h.a4,
+       by have := h.lo; omega, h.hi⟩
 
 end Run
 
