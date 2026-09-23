@@ -202,7 +202,10 @@ Branch `iris-heap`, rebased on `iris-machine` `074583c` (`VsaIris/Vsa/Instance.l
 3. Port realloc as a third `allocCall_of_localRun` instance.
 4. Use `wp_call_malloc_owns` in the sibling's `EnvNewPilot` to replace its allocator premises.
 
-### DECIDED (confirmed by the user)
+### Gate note
+- `scripts/check_all.sh --static-only` fails at stage a4 (discipline) on 20 `Vsa/Sim` files from the baseline import (4a00550) and the Lean 4.34 repairs. No `VsaIris` file is flagged.
+
+## DECIDED (confirmed by the user)
 - The in-place signature change stays: `DlMallocImpl`/`mallocSpec`/`freeSpec`/`wp_call_malloc*` take the allocator's code (`textOwn`) and the callee-saved registers it spills (`savedOwn`, `s0-s3`).
 - Iris live blocks are whole chunk payloads. VSA's finer ledger extents live inside blocks (`Covered`).
 
@@ -227,13 +230,45 @@ iris-machine's. The earlier iris-heap history is in git (`git log --grep iris-he
 - VSA obstruction, machine-checked: `vsa_reserve_fails_after_split`. VSA's `AllocationReserve` is false after `malloc(24)`. The corrected `Reserve` is used instead, and the finding is recorded in `PROOF_CLOSURE_PLAN.md` §2.
 
 ## In flight
-- `MallocRoomRun` on the top-split fast path (requests 24..487 bytes, heap with no free chunk, `binblocks = 0`). The segments are being reflected with `#derive_case` and `chain_facts`, and chained through `segFrom_of_runFact`.
+- Nothing. The Next list from the confirmed QUESTIONS is done, within the scope stated in each section below.
+
+## Done (realloc)
+- The core call lemma is generalised to `allocCallArgs_of_localRun`: further arguments travel in clobbered registers under a predicate `Args`. `allocCall_of_localRun` is its `Args := True` instance, so the malloc and free specs are unchanged.
+- `reallocSpec`, `ReallocLocalRun`, `ReallocEnd`, `DlReallocImpl`, and `reallocSpec_of_localRun` (`MallocRun.lean`) are the third instance. The spec covers `realloc(p, nNew)` growing a live block `(p, nOld)`. The block is owned at its contents (`blockOwnAt`). The result is NULL with the block and heap unchanged, or a fresh block whose first `nOld` bytes are the old contents (`Copies`).
+- `vsaDlReallocImpl` (`Vsa/MallocConsumer.lean`) is the binary's instance given `ReallocLocalRun`. `reallocBlock_of_fresh` and `reallocCopies_of_owned` feed the fresh-block and copy clauses of VSA's `ReallocGrowResult`.
+
+## Done (free)
+- `freeRoomSpec`, `FreeRoomRun`, `DlFreeRoomImpl`, and `freeRoomSpec_of_run` (`MallocRun.lean`): `freeSpec` under capacity. The precondition is a shape predicate `FreeOK` on the owned image; the postcondition is `isHeapRoom Room H k`, keeping every credit.
+- `vsaDlFreeRoomImpl_fast` / `_boundary` (`Vsa/FreeChain.lean`, `Vsa/MallocLive.lean`): proved from the binary's `free` for `vsaFreeTop`. That shape is the fast heap where the block is the payload of the chunk below the top, no other live block starts there, and the merged top stays below `__malloc_trim_threshold`.
+  - The heap half is `FastAt.merge` (`Vsa/FreeFastHeap.lean`).
+  - The machine half is six stages: wrapper, prologue, lock call, merge body, epilogue, and the unlock hook's tail return.
+  - Shared machinery: the generic `lock_call`/`unlock_hook`, `StPost` over the stack-pointer value, and the generated `jal` site at `0x80007368`.
+
+## Done (boundary)
+- `pathLoaded_of_image` (generated, `scripts/gen_malloc_path_image.py`): the fast paths' code bytes come from `FixedTextLoaded` and `ImageStaticsLoaded` (`_impure_ptr`).
+- `vsaDlMallocRoomImpl_boundary` (`Vsa/MallocLive.lean`): `DlMallocRoomImpl` over `vsaModel (liveOf c0)` at any `InterpRunPhysicalFacts` boundary. It has no premise beyond the boundary.
+- `live ⊇ allocGlobal ∪ arena` (`vsaFoot_live`) needs the named premise `AllocBytesPresent`. VSA's boundary states byte presence for the stack only; for the allocator it states presence only at the words `HeapAt` reads. This is recorded in `PROOF_CLOSURE_PLAN.md` §2 as a missing supplier.
+
+## Done (top-split malloc)
+- `mallocRoomRun_fast` / `vsaDlMallocRoomImpl_fast` (`Vsa/MallocSmallChain.lean`): `MallocRoomRun`/`DlMallocRoomImpl` for the fast heap (`vsaRoomFast`: no free chunk, `binblocks = 0`, top-chunk reserve), for every request `n ≤ maxReq ≤ 487`, with stack discipline `SpOKFast` and code `pathText`. The only premise is that `pathText`'s addresses are `live`. Axioms: propext, Classical.choice, Quot.sound.
+- Structure:
+  - `fast_run` dispatches at the wrapper: requests ≥ 24 take `st1..st5`, requests ≤ 23 take `stB1, stB2, stB5`.
+  - Both paths join at `st6` (split), then `st7..st10` (unlock, epilogue).
+  - The prologue's stores are abstracted as `ProLog`, and the chunk size is `nbN n = max 32 …`.
+  - Lock calls use one generic `lock_call`/`lock_hook`.
+  - `jal` sites come from `scripts/gen_malloc_jal_sites.py`.
+- `FastAt.split` no longer needs `0 < n`, so `malloc(0)` is covered.
 
 ## Holes left
-- `MallocLocalRun`, `FreeLocalRun`, and `MallocRoomRun` beyond the fast path.
+- `pathText` liveness from `VsaOk`/the loaded image (in flight).
+- `MallocRoomRun` for heaps with free chunks (bin reuse, remainder splitting, `sbrk` growth), i.e. general `vsaRoom`; `MallocLocalRun` without capacity.
+- `FreeLocalRun` in general: freeing a chunk that is not below the top (bin insertion, which leaves the fast shape), coalescing with a free neighbour, and trimming via `_malloc_trim_r`/`sbrk`.
+- `ReallocLocalRun` for the binary (`_realloc_r`'s machine run). It is a named hypothesis of `vsaDlReallocImpl`.
 
 ## Next
-- Fast-path segments, jal sites, and the chaining; then requests ≤ 23 (path B); then `FreeLocalRun`; then realloc.
+- A LIFO lemma: after a fast `malloc`, `vsaFreeTop` holds for the returned block when the original top is below the trim threshold. This needs `MallocRoomEnd`'s room to expose the chunk list.
+- `_realloc_r`'s grow path (`ReallocLocalRun`) on the fast heap, reusing the stage machinery (`seg_step`, `lock_call`, `unlock_hook`, `StPost`).
+- The general allocator paths (bins, coalescing, `sbrk`), and a loader fact for `AllocBytesPresent`.
 
 ## DECIDED (confirmed by the user)
 - The in-place `DlMallocImpl` signature change (code bytes, callee-saved `s0-s3`) stays.

@@ -822,6 +822,23 @@ interpreter control's dlmalloc heap and stays with H4/A0.
 
 ## 11. Open questions for the user
 
+- **Q5 (lane H4, needs the user): a page-aligned break at the boundary.** `malloc_extend_top`
+  grows the top in place only when the old heap end is page-aligned (`0x80004f70`). Otherwise it
+  returns NULL when the old top is under 32 bytes (`0x80004f94`), or it fenceposts and frees the
+  old top, which `ChunkWalk` cannot describe. `InitialAllocatorAt` does not rule this out, so its
+  `capacity` does not imply allocation success. The Iris heap shape therefore adds
+  `brkv % 4096 = 0`. Every allocator path preserves it (extension by page-rounded sizes, trim by
+  whole pages). A0 needs it at the boundary, which means a new `Loaded` field beside `capacity`,
+  or a proof from the loader. Recorded in `PROOF_CLOSURE_PLAN.md` §2.
+
+- **Q5b (lane H4, needs the user): a 32-bit `binblocks` word at the boundary.** `_malloc_r`'s
+  block search shifts a mask up to the next set bit of `binblocks` and advances the bin index by
+  four each shift (`0x80004994`-`0x800049a0`). `HeapAt.binblocks` bounds only the bits of nonempty
+  blocks, and dlmalloc clears the bitmap lazily, so a bit at 32 or above would walk the index past
+  bin 127. The Iris heap shape therefore adds `bb < 2 ^ 32` (`PHeapAt.bb_lt`); every path preserves
+  it, since the bits written are `1 << (i / 4)` for `i < 128`. Same supplier as Q5. Recorded in
+  `PROOF_CLOSURE_PLAN.md` §2.
+
 - **Q1 (hard to change later): stack admissibility at the boundary** (§10.4).
   Approve a `stack_admissible` field in `InterpRunReady`, shaped like
   `capacity`? Without it, `InterpSim interpRunLayout` looks false for very deep
