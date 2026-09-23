@@ -210,15 +210,16 @@ def MallocCostRun (M : MachineModel) (SpOK : BitVec 64 → Prop) (entry gpv : Bi
 charge `c`**: from `isHeapRoom costRoom H (c + k)`, a fresh block and
 `isHeapRoom costRoom ((p, n) :: H) k` (after `isHeapRoom_costAt_one`/`_zero`). -/
 theorem mallocCostSpec {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF]
-    {M : MachineModel} {SpOK : BitVec 64 → Prop} {entry gpv : BitVec 64}
+    {M : MachineModel} (Wp : MachWP (GF := GF) M)
+    {SpOK : BitVec 64 → Prop} {entry gpv : BitVec 64}
     {clob savedRegs : List Nat} {headroom : Nat} {text : List (Nat × BitVec 8)}
     (hrun : MallocCostRun M SpOK entry gpv clob savedRegs headroom text)
     (hnd : (allocRegs clob savedRegs).Nodup)
     (H : List (Nat × Nat)) (n s : BitVec 64) (c k : Nat) (saved : List (Nat × BitVec 64))
     (hsv : saved.map Prod.fst = savedRegs) (hc : 16 ≤ c) (hn : n.toNat ≤ c) :
     textOwn (GF := GF) text ⊢
-      mallocRoomSpec M vsaLayout (costRoomAt c k) SpOK entry gpv clob saved headroom H n s 0 :=
-  mallocRoomSpec_of_run (hrun c k hc) shapeLocal_vsaLayout (roomLocal_costAt c k) hnd
+      mallocRoomSpec Wp vsaLayout (costRoomAt c k) SpOK entry gpv clob saved headroom H n s 0 :=
+  mallocRoomSpec_of_run Wp (hrun c k hc) shapeLocal_vsaLayout (roomLocal_costAt c k) hnd
     H n s 0 saved hsv hn
 
 /-! ## The boundary: capacity is the reserve at the derivation's cost -/
