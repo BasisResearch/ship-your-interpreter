@@ -202,7 +202,10 @@ Branch `iris-heap`, rebased on `iris-machine` `074583c` (`VsaIris/Vsa/Instance.l
 3. Port realloc as a third `allocCall_of_localRun` instance.
 4. Use `wp_call_malloc_owns` in the sibling's `EnvNewPilot` to replace its allocator premises.
 
-### DECIDED (confirmed by the user)
+### Gate note
+- `scripts/check_all.sh --static-only` fails at stage a4 (discipline) on 20 `Vsa/Sim` files from the baseline import (4a00550) and the Lean 4.34 repairs. No `VsaIris` file is flagged.
+
+## DECIDED (confirmed by the user)
 - The in-place signature change stays: `DlMallocImpl`/`mallocSpec`/`freeSpec`/`wp_call_malloc*` take the allocator's code (`textOwn`) and the callee-saved registers it spills (`savedOwn`, `s0-s3`).
 - Iris live blocks are whole chunk payloads. VSA's finer ledger extents live inside blocks (`Covered`).
 
