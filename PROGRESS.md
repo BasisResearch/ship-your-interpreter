@@ -57,6 +57,6 @@ Branch `iris-heap`, rebased on `iris-machine` `074583c` (`VsaIris/Vsa/Instance.l
 3. Port realloc as a third `allocCall_of_localRun` instance.
 4. Use `wp_call_malloc_owns` in the sibling's `EnvNewPilot` to replace its allocator premises.
 
-## QUESTIONS
-- `DlMallocImpl`/`mallocSpec`/`freeSpec`/`wp_call_malloc*` changed signature: code bytes and callee-saved registers were added. This is necessary for satisfiability, but the sibling branch should adopt it. I made the change in place rather than adding a second structure.
-- Live blocks are exact chunk payloads (`n = size - 8` for the initial in-use chunks), so `free` is satisfiable. VSA's finer ledger extents (strings sharing a chunk in the control) are covered by blocks rather than being blocks. Is that the intended granularity for the interpreter's Iris representation predicates?
+## DECIDED (confirmed by the user)
+- The in-place signature change stays: `DlMallocImpl`/`mallocSpec`/`freeSpec`/`wp_call_malloc*` take the allocator's code (`textOwn`) and the callee-saved registers it spills (`savedOwn`, `s0-s3`).
+- Iris live blocks are whole chunk payloads. VSA's finer ledger extents live inside blocks (`Covered`).
