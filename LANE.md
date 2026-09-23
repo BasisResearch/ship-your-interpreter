@@ -27,8 +27,16 @@ Branch `lane-h1` (from `hub/iris-main`, merged `hub/lane-h4`). Design:
   `storeRepr` carries `StoreInvariant` (named pure part `StorePure`); `strAt` carries
   `StrWin` (bridges take `SharedWin P`); `FrameLayout` gains `win`/`e_align`/`cap_canon`.
 
+- **`env_new` proved over `heapStore`, both regimes**: `envNew_spec : textOwn envText ∗
+  textOwn allocText ∗ gp ↦ᵣ□ gpV ⊢ envNewSpec Wp N` (`ProofEnvNew.lean`), given H4's
+  `AllocSpecs`. Generalises the pilot: the fresh block becomes frame `st.frames.size`
+  (`storeRepr_allocFrame`), charged `envBytes` counted, and NULL (uncounted only) takes the
+  abort branch parked at the OOM arm (`oomAt … 0x80002a38`). Reusable pieces:
+  `mallocRho_spec`/`mallocRes` (`HeapCall.lean`: one malloc spec for both regimes) and
+  `wp_call_malloc` (`EnvCalls.lean`: `jal malloc` from a span).
+
 ## In flight
-- `env_new` over `heapStore` (generalise the pilot, both regimes), then `env_define`.
+- `env_define` (hit / append / grow).
 
 ## Holes
 - `reallocNull.chgRun`, `reallocNull.localRun` (`IrisHoles.reallocNull`,
@@ -43,6 +51,9 @@ Branch `lane-h1` (from `hub/iris-main`, merged `hub/lane-h4`). Design:
 - E-lanes: `envGetSpec`'s `getSaved` includes `s6` (a span owns the whole file).
 
 ## Line counts (vs VSA's cones)
+- env_new: 655 hand lines (`EnvNewSpans` 91, `HeapCall` 89, `EnvCalls` 141, `ProofEnvNew` 334)
+  plus the shared `EnvSpan`, against VSA's `EnvNew*` cone: 3,235 lines (the pilot was 443
+  lines for the raw-heap statement).
 - env_get + env_set: 2,580 hand lines (`EnvSpan` 329, `EnvScanCore` 177, `EnvScan` ~990,
   `EnvGetSpans` 183, `EnvGetHit` 75, `ProofEnvGet` 160, `EnvSetHit` 74, `ProofEnvSet` 415;
   `EnvSetSpans` 186 generated) against VSA's `EnvGet*`+`EnvGetReflected/*`+`EnvSet*` cone:

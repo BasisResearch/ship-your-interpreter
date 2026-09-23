@@ -75,3 +75,4 @@ import VsaIris.Interp.ProofEnvSet
 import VsaIris.Interp.EnvNewSpans
 import VsaIris.Interp.HeapCall
 import VsaIris.Interp.EnvCalls
+import VsaIris.Interp.ProofEnvNew
