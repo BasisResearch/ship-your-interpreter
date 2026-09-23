@@ -449,6 +449,18 @@ structure ScanSite (live : Nat → Prop) where
     Span live (getS s out G) epi R Mt
       (fun pc' R' Mt' => pc' = r ∧ Mt' = Mt ∧ GetRet s r sv (R 10) R')
 
+/-- The first match `j` of a frame, as `FirstMatch`. -/
+theorem firstMatch_of_index {vars : List (String × Value)} {x : String} {v : Value} {j : Nat}
+    (hj : vars[j]? = some (x, v)) (hne : ∀ p ∈ vars.take j, p.1 ≠ x) : FirstMatch vars x v := by
+  have hlt : j < vars.length := by
+    rcases Nat.lt_or_ge j vars.length with h | h
+    · exact h
+    · simp [List.getElem?_eq_none h] at hj
+  refine ⟨vars.take j, vars.drop (j + 1), ?_, hne⟩
+  have hvj : vars[j] = (x, v) := by simpa [List.getElem?_eq_getElem hlt] using hj
+  conv => lhs; rw [← List.take_append_drop j vars, List.drop_eq_getElem_cons hlt]
+  rw [hvj]
+
 /-! ## The chain's path -/
 
 /-- The frames the walk reaches from `fa` looking for `x`: `fa`, and the
@@ -687,7 +699,8 @@ def scanMissK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → I
     (N : NativeAddrs) (C : GetCall) (st : Store) (B : List (Nat × Nat)) (fa : Addr) : IProp GF :=
   iprop(∀ (R' : Nat → BitVec 64) (Mt' : Mem) (fa'' : Addr) (f'' : Frame),
     ⌜GetRet C.s.toNat C.r (pairVal C.saved) 0#64 R' ∧ ChainFrom st C.x fa fa'' ∧
-      st.frames[fa'']? = some f'' ∧ FrameMiss f''.vars C.x ∧ f''.parent = none⌝ -∗
+      st.frames[fa'']? = some f'' ∧ FrameMiss f''.vars C.x ∧ f''.parent = none ∧
+      ∀ a, C.out.toNat ≤ a → a < C.out.toNat + 24 → imgM Mt' a = C.so a⌝ -∗
     VsaIris.PC ↦ᵣ C.r -∗ regsOf gprs R' -∗
     ownSet (baseS C.s.toNat C.out.toNat) (fun a => a ↦ₘ imgM Mt' a) -∗ storeRepr N st B -∗ Wp.W Φ)
 
@@ -792,8 +805,8 @@ theorem scan_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     | none =>
       ihave Kmiss := and_elim_l $$ HK
       unfold scanMissK
-      iapply Kmiss $$ %R2 %_ %fa' %f %⟨by rw [h10] at hret; exact hret, hpath, hf, hmiss, hfp⟩
-        Hpc HR HB Hst
+      iapply Kmiss $$ %R2 %_ %fa' %f
+        %⟨by rw [h10] at hret; exact hret, hpath, hf, hmiss, hfp, hF.slot⟩ Hpc HR HB Hst
 
 /-- **The parent chain**: the scan code from any frame's head, by strong
 induction on the frame address (parents are older). -/

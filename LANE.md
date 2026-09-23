@@ -9,9 +9,12 @@ Branch `lane-h1` (from `hub/iris-main`, merged `hub/lane-h4`). Design:
   abort = `oomAt` parked before the OOM `fwrite`), `envGetSpec`, `envSetSpec`
   (`fnSpecW`); `heapStore` (= the heap/store part of `world`, `world_heapStore`);
   callee specs `strcmpSpec`/`strlenSpec`/`memcpySpec` as hypotheses.
-- **`env_get` proved**: `envGet_spec : textOwn envText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ⊢
-  envGetSpec Wp N` for every `MachWP` (`VsaIris/Interp/ProofEnvGet.lean`).
-  Axioms: propext, Classical.choice, Quot.sound.
+- **`env_get` and `env_set` proved**: `envGet_spec`/`envSet_spec : textOwn envText ∗
+  gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ⊢ env{Get,Set}Spec Wp N` for every `MachWP`
+  (`ProofEnvGet.lean`, `ProofEnvSet.lean`). Axioms: propext, Classical.choice, Quot.sound.
+  The scan and parent chain are proved ONCE over a `ScanSite` (`EnvScan.lean`); each function
+  is an instance plus its hit arm. `env_set`'s spans are generated from `env_get`'s
+  (`scripts/gen_env_set_spans.py`, the same code 0xcc bytes later).
 - **The exponentiating layer for env.c**: `scripts/gen_alloc_steps.py --target env`
   (H4's generator, now parameterized; default output byte-identical) emits
   `EnvCode.lean` (`envText`) and `EnvSteps/*` (235 `st_<pc>` lemmas over
@@ -25,10 +28,7 @@ Branch `lane-h1` (from `hub/iris-main`, merged `hub/lane-h4`). Design:
   `StrWin` (bridges take `SharedWin P`); `FrameLayout` gains `win`/`e_align`/`cap_canon`.
 
 ## In flight
-- `env_set`: factor the scan / parent-chain Iris lemmas over a site record
-  (`env_get` and `env_set` are the same code 0xcc apart, differing in the hit arm),
-  generate `env_set`'s spans from `env_get`'s.
-- Then `env_new` over `heapStore` (generalise the pilot, both regimes), `env_define`.
+- `env_new` over `heapStore` (generalise the pilot, both regimes), then `env_define`.
 
 ## Holes
 - `reallocNull.chgRun`, `reallocNull.localRun` (`IrisHoles.reallocNull`,
@@ -43,5 +43,7 @@ Branch `lane-h1` (from `hub/iris-main`, merged `hub/lane-h4`). Design:
 - E-lanes: `envGetSpec`'s `getSaved` includes `s6` (a span owns the whole file).
 
 ## Line counts (vs VSA's cones)
-- env_get: 1586 lines (`EnvSpan` 329 shared + `EnvGetSpans` 401 + `ProofEnvGet` 856)
-  against VSA's `EnvGet*` cone (see final report).
+- env_get + env_set: 2,580 hand lines (`EnvSpan` 329, `EnvScanCore` 177, `EnvScan` ~990,
+  `EnvGetSpans` 183, `EnvGetHit` 75, `ProofEnvGet` 160, `EnvSetHit` 74, `ProofEnvSet` 415;
+  `EnvSetSpans` 186 generated) against VSA's `EnvGet*`+`EnvGetReflected/*`+`EnvSet*` cone:
+  20,565 lines.

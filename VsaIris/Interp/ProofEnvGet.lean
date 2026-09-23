@@ -40,18 +40,6 @@ def getSite (live : Nat → Prop) (hl : ∀ p ∈ envText, live p.1) : ScanSite 
   sParent := get_parent hl
   sEpi := get_epi hl
 
-/-- The first match `j` of a frame, as `FirstMatch`. -/
-theorem firstMatch_of_index {vars : List (String × Value)} {x : String} {v : Value} {j : Nat}
-    (hj : vars[j]? = some (x, v)) (hne : ∀ p ∈ vars.take j, p.1 ≠ x) : FirstMatch vars x v := by
-  have hlt : j < vars.length := by
-    rcases Nat.lt_or_ge j vars.length with h | h
-    · exact h
-    · simp [List.getElem?_eq_none h] at hj
-  refine ⟨vars.take j, vars.drop (j + 1), ?_, hne⟩
-  have hvj : vars[j] = (x, v) := by simpa [List.getElem?_eq_getElem hlt] using hj
-  conv => lhs; rw [← List.take_append_drop j vars, List.drop_eq_getElem_cons hlt]
-  rw [hvj]
-
 section Main
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
@@ -92,7 +80,7 @@ theorem envGet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
   isplit
   · -- the chain missed: return 0, `out` untouched
     unfold scanMissK
-    iintro %R' %Mt' %fa'' %f'' %⟨hret, hpath, hf, hmiss, hroot⟩ Hpc HR HB Hst
+    iintro %R' %Mt' %fa'' %f'' %⟨hret, hpath, hf, hmiss, hroot, -⟩ Hpc HR HB Hst
     have hnone : st.get? fa x = none := (hget fa'' hpath).trans (look_root hf hmiss hroot)
     ihave ⟨Hra, Ha0, Hsp, Hsv, Hcl⟩ := scan_exit_regs hsv hret $$ HR
     ihave ⟨Hstk, Hout⟩ := scan_exit_bytes (Mt := Mt') hs64 hsep $$ HB
