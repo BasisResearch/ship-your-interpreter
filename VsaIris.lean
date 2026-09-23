@@ -65,3 +65,4 @@ import VsaIris.Interp.Vacuity
 import VsaIris.Interp.EnvSteps
 import VsaIris.Interp.SpecEnv
 import VsaIris.Interp.EnvSpan
+import VsaIris.Interp.EnvGetSpans

@@ -268,4 +268,109 @@ theorem get_epi {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out 
     · exact hr20
     · exact hr21
 
+/-- The compare's branch `0x80002c6c`: `bnez a0` to the next name, or on to
+the hit copy. -/
+theorem get_cmp {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out n i : Nat}
+    {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem} (hi : i < n) (hn : n < 2 ^ 31)
+    (h8 : R 8 = BitVec.ofNat 64 i) (h18 : R 18 = BitVec.ofNat 64 n) :
+    Span live (getS s out G) 0x80002c6c#64 R Mt
+      (fun pc' R' Mt' => Mt' = Mt ∧
+        ((R 10 ≠ 0#64 ∧ i + 1 < n ∧ pc' = 0x80002c60#64 ∧ CmpNext i R R') ∨
+         (R 10 ≠ 0#64 ∧ i + 1 = n ∧ pc' = 0x80002cc4#64 ∧ CmpNext i R R') ∨
+         (R 10 = 0#64 ∧ pc' = 0x80002c70#64 ∧ R' = R))) := by
+  intro Q hk
+  have hinc : R 8 + 1#64 = BitVec.ofNat 64 (i + 1) := by
+    rw [h8]; apply BitVec.eq_of_toNat_eq; simp [BitVec.toNat_add]
+  have hnext : CmpNext i R (upd (upd R 8 (R 8 + 1#64)) 9 (R 9 + 8#64)) :=
+    ⟨fun k h8' h9 => by simp [upd_apply, h8', h9], by simp [upd_apply, hinc], by simp [upd_apply]⟩
+  sx_run hl at 0x80002c60 0x80002cc4 0x80002c70
+  · intro hc
+    sx_run hl at 0x80002c60 0x80002cc4
+    · intro he
+      have : i + 1 = n := by
+        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hinc, h18] at he
+        have := congrArg BitVec.toNat he
+        simp at this; omega
+      exact hk _ _ _ ⟨rfl, .inr (.inl ⟨hc, this, rfl, hnext⟩)⟩
+    · intro he
+      have : i + 1 ≠ n := fun h => he (by
+        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hinc, h18, h])
+      exact hk _ _ _ ⟨rfl, .inl ⟨hc, by omega, rfl, hnext⟩⟩
+  · intro hc
+    exact hk _ _ _ ⟨rfl, .inr (.inr ⟨by simpa using hc, rfl, rfl⟩)⟩
+
+/-- The hit copy `0x80002c70`: `out := vals[i]`, `a0 := 1`. -/
+theorem get_copy {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out n i : Nat}
+    {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem}
+    (hlay : FrameLayout (imgM Mt) G n) (hi : i < n)
+    (h8 : R 8 = BitVec.ofNat 64 i) (he : (R 20).toNat = G.e) (hout : (R 21).toNat = out)
+    (hwo : 0x80000000 ≤ out ∧ out + 24 ≤ 0x100000000 ∧ htifLo + 16 ≤ out ∧ out % 8 = 0)
+    (hdv : out + 24 ≤ G.pv ∨ G.vblk.1 + G.vblk.2 ≤ out) :
+    Span live (getS s out G) 0x80002c70#64 R Mt
+      (fun pc' R' Mt' => pc' = 0x80002ca0#64 ∧ CopyOut out (G.pv + 24 * i) Mt Mt' ∧
+        R' 10 = 1#64 ∧ R' 2 = R 2) := by
+  intro Q hk
+  obtain ⟨hcap, -, -, hv1, hv2, -, hvw⟩ := hlay.slot hi
+  have := hvw.lo; have := hvw.hi; have := hvw.htif
+  have hw := hlay.win G.sblk (by simp [FrameGeom.blocks])
+  have hsb := hlay.sblk
+  have := hw.lo; have := hw.hi; have := hw.htif
+  have hpv : ldv .ld Mt (R 20 + 16#64).toNat = BitVec.ofNat 64 G.pv := by
+    rw [show (R 20 + 16#64).toNat = G.e + 16 by rw [BitVec.toNat_add, he]; simp; omega,
+      ldv_ld_img]
+    unfold imgW; rw [hlay.vals]
+  sx_run hl at 0x80002c84
+  rw [hpv, h8, slot24_index i, ← BitVec.ofNat_add]
+  generalize hA : BitVec.ofNat 64 (G.pv + 24 * i) = A
+  have hAn : A.toNat = G.pv + 24 * i := by
+    rw [← hA, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+  clear hA
+  sx_run hl at 0x80002ca0
+  have hout8 : (R 21 + 8#64).toNat = out + 8 := by rw [BitVec.toNat_add, hout]; simp; omega
+  have hout16 : (R 21 + 16#64).toNat = out + 16 := by rw [BitVec.toNat_add, hout]; simp; omega
+  have hA8 : (A + 8#64).toNat = G.pv + 24 * i + 8 := by rw [BitVec.toNat_add, hAn]; simp; omega
+  have hA16 : (A + 16#64).toNat = G.pv + 24 * i + 16 := by
+    rw [BitVec.toNat_add, hAn]; simp; omega
+  refine hk _ _ _ ⟨rfl, ?_, by simp [upd_apply], by simp [upd_apply]⟩
+  rw [hout8, hout16, hout, hA8, hA16, hAn]
+  refine ⟨?_, ?_, ?_, fun a ha => ?_⟩
+  · rw [ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega), ldv_ld_hit_eq _ _ rfl]
+  · rw [ldv_ld_miss _ _ (by omega), ldv_ld_hit_eq _ _ rfl]
+  · rw [ldv_ld_hit_eq _ _ rfl]
+  · rw [imgM_store_miss _ _ (by omega), imgM_store_miss _ _ (by omega),
+      imgM_store_miss _ _ (by omega)]
+
+/-- The parent step `0x80002cc4`: `s4 := parent`; on to its head, or `a0 := 0`
+and the epilogue. -/
+theorem get_parent {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out n : Nat}
+    {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem}
+    (hlay : FrameLayout (imgM Mt) G n) (he : (R 20).toNat = G.e) :
+    Span live (getS s out G) 0x80002cc4#64 R Mt
+      (fun pc' R' Mt' => Mt' = Mt ∧ R' 2 = R 2 ∧ R' 19 = R 19 ∧ R' 21 = R 21 ∧
+        ((G.par ≠ 0 ∧ pc' = 0x80002c40#64 ∧ R' 20 = BitVec.ofNat 64 G.par) ∨
+         (G.par = 0 ∧ pc' = 0x80002ca0#64 ∧ R' 10 = 0#64))) := by
+  intro Q hk
+  have hw := hlay.win G.sblk (by simp [FrameGeom.blocks])
+  have hsb := hlay.sblk
+  have := hw.lo; have := hw.hi; have := hw.htif
+  have hpar : ldv .ld Mt (R 20 + 24#64).toNat = BitVec.ofNat 64 G.par := by
+    rw [show (R 20 + 24#64).toNat = G.e + 24 by rw [BitVec.toNat_add, he]; simp; omega,
+      ldv_ld_img]
+    unfold imgW; rw [hlay.parent]
+  have hparlt : G.par < 2 ^ 64 := by
+    rw [← hlay.parent]; exact imgLE_lt _ _ 8
+  sx_run hl at 0x80002c40 0x80002ca0
+  · intro hc
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hpar] at hc
+    refine hk _ _ _ ⟨rfl, by simp [upd_apply], by simp [upd_apply], by simp [upd_apply],
+      .inl ⟨fun h => hc (by rw [h]), rfl, by
+        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hpar⟩⟩
+  · intro hc
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hpar] at hc
+    sx_run hl at 0x80002ca0
+    refine hk _ _ _ ⟨rfl, by simp [upd_apply], by simp [upd_apply], by simp [upd_apply],
+      .inr ⟨?_, rfl, by simp [upd_apply]⟩⟩
+    have := congrArg BitVec.toNat (show BitVec.ofNat 64 G.par = 0#64 by simpa using hc)
+    simp at this; omega
+
 end VsaIris.Interp
