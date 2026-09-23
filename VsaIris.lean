@@ -25,3 +25,4 @@ import VsaIris.Vsa.MallocFastCode
 import VsaIris.Vsa.CostRoom
 import VsaIris.Interp.Repr
 import VsaIris.Interp.Store
+import VsaIris.Interp.Bridge
