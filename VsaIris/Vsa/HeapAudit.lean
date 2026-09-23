@@ -48,3 +48,6 @@ import VsaIris.Vsa.FreeChain
 #print axioms VsaIris.allocCallArgs_of_localRun
 #print axioms VsaIris.reallocSpec_of_localRun
 #print axioms VsaIris.dlReallocImpl_of_localRun
+#print axioms VsaIris.VsaHeap.vsaDlReallocImpl
+#print axioms VsaIris.VsaHeap.reallocBlock_of_fresh
+#print axioms VsaIris.VsaHeap.reallocCopies_of_owned

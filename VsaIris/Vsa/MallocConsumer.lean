@@ -270,4 +270,34 @@ theorem mallocRoomCallerFacts_of_iris {H : List (Nat × Nat)} {exts : List Exten
       budget := ResourceBudget.alloc hbud hreq
       reserve := reserve_of_covered (reserve_of_room hroom him) hcov' hpos }
 
+
+/-! ## Reallocation -/
+
+def reallocEntryBV : BitVec 64 := BitVec.ofNat 64 Vsa.Sim.reallocEntry
+
+/-- The binary's `realloc` meets `reallocSpec`, given its first-order run. -/
+theorem vsaDlReallocImpl (live : Nat → Prop) (gpv : BitVec 64) (headroom : Nat)
+    (text : List (Nat × BitVec 8))
+    (hr : ReallocLocalRun (VsaIris.Inst.vsaModel live) vsaLayout reallocEntryBV gpv vsaClob vsaSaved headroom text) :
+    DlReallocImpl (VsaIris.Inst.vsaModel live) vsaLayout reallocEntryBV gpv vsaClob vsaSaved headroom text :=
+  dlReallocImpl_of_localRun hr shapeLocal_vsaLayout vsaAllocRegs_nodup (by decide)
+
+/-- `reallocPost`'s success arm gives the fresh-block clauses of VSA's
+`ReallocGrowResult`: nonzero, aligned, in the arena, and disjoint from every
+live extent but the old one. -/
+theorem reallocBlock_of_fresh {H : List (Nat × Nat)} {exts : List Extent} {old : Extent} {p n : Nat}
+    (hf : FreshBlock vsaLayout H p n) (hal : p % 16 = 0) (hn : 0 < n)
+    (harena : HeapArena vsaArena exts) (hcov : Covered (exts.erase old) H) :
+    MallocBlock vsaArena (exts.erase old) n p :=
+  mallocBlock_of_fresh hf hal hn
+    ⟨fun e he => harena.1 e (List.erase_subset he), harena.2.sublist List.erase_sublist⟩ hcov
+
+/-- The old contents at the new block: VSA's `ReallocCopies`, from the owned
+bytes before and after (present, as `ImgOn` gives them). -/
+theorem reallocCopies_of_owned {m0 m1 : Mem} {old v : Nat → BitVec 8} {pOld pNew nOld : Nat}
+    (h0 : ∀ k, k < nOld → m0[pOld + k]? = some (old (pOld + k)))
+    (h1 : ∀ k, k < nOld → m1[pNew + k]? = some (v (pNew + k)))
+    (hc : Copies old v pOld pNew nOld) : ReallocCopies m0 m1 pOld pNew nOld :=
+  fun k hk => by rw [h1 k hk, h0 k hk, hc k hk]
+
 end VsaIris.VsaHeap
