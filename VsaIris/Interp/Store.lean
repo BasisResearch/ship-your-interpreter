@@ -614,8 +614,8 @@ theorem world_blocks_off_heap {N : NativeAddrs} {L : DlLayout} {Room : RoomPred}
     world (GF := GF) N L Room inp ρ st d ⊢
       ∃ (H B : List (Nat × Nat)), ⌜(∀ b ∈ B, b ∈ H) ∧ B.Pairwise ExtDisj ∧
         ∀ b ∈ B, ∀ a, InExt b a → ¬ heapFoot L H a⌝ := by
-  unfold world
-  iintro ⟨%H, %B, Hh, Hs, -, -, %hBH⟩
+  unfold world worldE
+  iintro ⟨%H, %B, Hh, Hs, -, -, -, %hBH⟩
   ihave Hh := heapRes_isHeap L Room ρ H $$ Hh
   ihave ⟨Hs, %hdisj⟩ := keep_pure (storeRepr_blocks_disjoint N) $$ Hs
   ihave %hoff := storeRepr_blocks_off_heap N $$ [Hs Hh]

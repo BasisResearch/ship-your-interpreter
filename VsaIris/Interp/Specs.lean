@@ -314,11 +314,13 @@ structure IrisHoles : Prop where
   /-- `MallocRoomRun`/`MallocLocalRun`/`FreeLocalRun`/`ReallocLocalRun`
   (`VsaIris/MallocRun.lean`) at the binary. H4 may discharge them. -/
   alloc : True
-  /-- Safety of `snprintf` (`%s`/`%d` messages in `runtime_error`) and
-  `fprintf` (error and OOM paths). Partial mode only. -/
-  newlib : True
-  -- DESIGN: replace each `True` with the exact run/spec structure once H4/H5
-  -- fix their statements.
+  /-- The newlib calls on the error and exit paths, exact Iris statements
+  (`VsaIris/Vsa/Newlib.lean`, H5): `snprintf` and `fprintf` with `%s`/`%d`
+  formats, `fwrite` of the out-of-memory message, and `exit`'s newlib
+  interior. -/
+  newlib : Newlib.NewlibHoles
+  -- DESIGN: replace `alloc : True` with the exact run structure once H4
+  -- fixes its statements.
 
 /-- The boundary (A0): from `InterpRunReady` and `ProgramRepr`, allocate the
 ghost state and produce the initial world, the persistent AST and code, the

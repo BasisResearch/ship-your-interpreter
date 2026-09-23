@@ -769,6 +769,38 @@ exhibits all the predicates together at the control program's real initial
 memory. `heapRes`/`world` inhabitation at that memory needs `isHeap` for the
 interpreter control's dlmalloc heap and stays with H4/A0.
 
+### STATEMENT CHANGES (H5)
+
+- **`struct Interp` layout.** `interpJmpLen = 208`, `interpErrOff = 224`
+  (were 112 and 128). newlib's riscv `jmp_buf` is 26 words (14 integer + 12
+  FP slots; `setjmp` fills the first 14), so `err_msg` starts at `in+224`:
+  `runtime_error` passes `addi a0,s0,224` to `snprintf`, and `main` passes
+  `addi a2,sp,496` with `in = sp+272`. VSA's `ObjGeom (inp, 384)` undercounts
+  the object (480 bytes) but is only a geometry bound.
+- **`err_msg` is a parameter of the context.** `interpCoreE`/`interpCtxE`/
+  `worldE` take the `err_msg` resource `E`; `interpCore`/`interpCtx`/`world`
+  are the instances at `errAny` (any bytes). The landing's `world` has
+  `errStr` (a NUL within the 256 bytes), which `runtime_error`'s second
+  `snprintf` establishes and `main`'s `fprintf("%s\n", in->err_msg)` needs.
+- **`world` owns newlib's runtime data.** `Stdio.stdioOwn`: every
+  `.data`/`.bss` byte from `__sglue` to `__bss_end` outside the allocator's
+  globals, at an image satisfying VSA's `ConsoleStream` and
+  `ExitRuntimeData` (`Stdio.StdioOK`). `value_print` (H2), the error line and
+  `exit` all need it; `InterpRunPhysicalFacts.console`/`.exit_runtime` give it
+  at the boundary. `Newlib.stdioFoot_off_alloc`: the two owners are disjoint.
+- **`IrisHoles.newlib` is exact** (`VsaIris/Vsa/Newlib.lean`):
+  `snprintf`/`fprintf` with `%s`/`%d` formats (`FmtArgsOK`), `fwrite` (gcc's
+  form of the out-of-memory `fprintf`), and `exit`'s newlib interior
+  (`__call_exitprocs`, `__stdio_exit_handler`). A write to `stderr` leaves
+  newlib's data in a state `Ierr` outside `ExitRuntimeData` (the `FILE`
+  gains `__SWR` and a buffer), so `NewlibHoles := ∃ Ierr, NewlibHolesAt Ierr`.
+- **`stderr` output is console output.** `_write` ignores its descriptor and
+  stores every byte to `tohost`, so the error line is printed. VSA's
+  `FprintfStderrNeutral` (`Vsa/Sim/ExitPath.lean`: the output is unchanged
+  across `fprintf`) is false; nothing in the Iris route uses it.
+- **Out of memory is `fwrite` + `exit(1)`**, not `fprintf`: every inlined
+  `xmalloc` NULL arm is `fwrite(msg, 1, 14, stderr); exit(1)`.
+
 ## 11. Open questions for the user
 
 - **Q1 (hard to change later): stack admissibility at the boundary** (§10.4).

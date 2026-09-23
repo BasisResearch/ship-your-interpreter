@@ -1,4 +1,5 @@
 import VsaIris.MallocRun
+import VsaIris.Vsa.Stdio
 import Vsa.RuntimeRepr
 import Vsa.MemReprWithin
 import Vsa.While.StackNeed
@@ -366,12 +367,13 @@ def storeRepr (N : NativeAddrs) (s : Store) (B : List (Nat × Nat)) : IProp GF :
 /-! ## The interpreter context -/
 
 /-- `struct Interp` (`c/src/interp.h`): `globals` @0, `call_depth` @8,
-`on_error` (a 112-byte `jmp_buf`, `Vsa/Sim/JmpSpec.lean`) @16, `err_msg[256]`
-@128. -/
+`on_error` @16 (newlib's riscv `jmp_buf`, 26 words; `setjmp` fills the first
+14, `Vsa/Sim/JmpSpec.lean`), `err_msg[256]` @224 (`runtime_error`:
+`addi a0,s0,224`; `main`: `addi a2,sp,496` with `in = sp+272`). -/
 def interpDepthOff : Nat := 8
 def interpJmpOff : Nat := 16
-def interpJmpLen : Nat := 112
-def interpErrOff : Nat := 128
+def interpJmpLen : Nat := 208
+def interpErrOff : Nat := 224
 def interpErrLen : Nat := 256
 
 /-- An exclusively owned `n`-byte little-endian word holding `v`. -/
@@ -385,17 +387,40 @@ def wordRO (a n v : Nat) : IProp GF :=
 instance (a n v : Nat) : Persistent (wordRO (GF := GF) a n v) := by
   unfold wordRO; infer_instance
 
-/-- The fields every mode shares: `globals` read-only (it points at frame 0
-forever), `call_depth = d` exclusive (with its padding), `err_msg`
-exclusive. -/
-def interpCore (inp d : Nat) : IProp GF :=
-  iprop(∃ g, wordRO inp 8 g ∗ frameAt 0 g ∗ wordAt (inp + interpDepthOff) 4 d ∗
-    blockOwn (inp + interpDepthOff + 4) 4 ∗ blockOwn (inp + interpErrOff) interpErrLen)
+/-- `err_msg` at any contents. -/
+def errAny (inp : Nat) : IProp GF := blockOwn (inp + interpErrOff) interpErrLen
 
-/-- The context inside `interp_run`, after `setjmp`: the `jmp_buf` is
-read-only (H5 pins its contents by agreement with `interp_run`'s own copy). -/
-def interpCtx (inp d : Nat) : IProp GF :=
-  iprop(interpCore inp d ∗ ∃ jb, roImg (InExt (inp + interpJmpOff, interpJmpLen)) jb)
+/-- `err_msg` holding a C string: a NUL within its 256 bytes. `runtime_error`'s
+`snprintf` leaves it so, and `main`'s `fprintf("%s\n", in->err_msg)` reads it
+(H5). -/
+def errStr (inp : Nat) : IProp GF :=
+  iprop(∃ img, ownImg (InExt (inp + interpErrOff, interpErrLen)) img ∗
+    ⌜∃ k, k < interpErrLen ∧ img (inp + interpErrOff + k) = 0⌝)
+
+/-- The fields every mode shares, with `err_msg` as `E`: `globals` read-only
+(it points at frame 0 forever), `call_depth = d` exclusive (with its
+padding). -/
+def interpCoreE (inp d : Nat) (E : IProp GF) : IProp GF :=
+  iprop(∃ g, wordRO inp 8 g ∗ frameAt 0 g ∗ wordAt (inp + interpDepthOff) 4 d ∗
+    blockOwn (inp + interpDepthOff + 4) 4 ∗ E)
+
+/-- The fields every mode shares; `err_msg` exclusive at any contents. -/
+def interpCore (inp d : Nat) : IProp GF := interpCoreE inp d (errAny inp)
+
+/-- The `jmp_buf` read-only at the image `jb`. -/
+def jmpRO (inp : Nat) (jb : Nat → BitVec 8) : IProp GF :=
+  roImg (InExt (inp + interpJmpOff, interpJmpLen)) jb
+
+instance (inp : Nat) (jb : Nat → BitVec 8) : Persistent (jmpRO (GF := GF) inp jb) := by
+  unfold jmpRO; infer_instance
+
+/-- The context inside `interp_run`, after `setjmp`, with `err_msg` as `E`:
+the `jmp_buf` is read-only (H5 reads the landing registers off it). -/
+def interpCtxE (inp d : Nat) (E : IProp GF) : IProp GF :=
+  iprop(interpCoreE inp d E ∗ ∃ jb, jmpRO inp jb)
+
+/-- The context inside `interp_run`, after `setjmp`. -/
+def interpCtx (inp d : Nat) : IProp GF := interpCtxE inp d (errAny inp)
 
 /-- The context at `interp_run`'s entry (A0), before `setjmp`: the `jmp_buf`
 is exclusive. -/
@@ -422,13 +447,19 @@ theorem heapRes_isHeap (L : DlLayout) (Room : RoomPred) (ρ : Regime) (H : List 
   | counted k => exact isHeapRoom_forget L Room H k
   | uncounted => exact .rfl
 
-/-- Everything an evaluation threads: heap, store, console, interpreter
-context. `B ⊆ H`: the store's blocks are live, so `free`/`realloc` of a
-frame array finds its block in `H`. -/
-def world (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
+/-- Everything an evaluation threads, with `err_msg` as `E`: heap, store,
+console, newlib's runtime data, interpreter context. `B ⊆ H`: the store's
+blocks are live, so `free`/`realloc` of a frame array finds its block in
+`H`. -/
+def worldE (E : IProp GF) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
     (ρ : Regime) (st : St) (d : Nat) : IProp GF :=
   iprop(∃ H B, heapRes L Room ρ H ∗ storeRepr N st.store B ∗ consoleOwn st.out ∗
-    interpCtx inp d ∗ ⌜∀ b ∈ B, b ∈ H⌝)
+    Stdio.stdioOwn ∗ interpCtxE inp d E ∗ ⌜∀ b ∈ B, b ∈ H⌝)
+
+/-- Everything an evaluation threads. -/
+def world (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
+    (ρ : Regime) (st : St) (d : Nat) : IProp GF :=
+  worldE (errAny inp) N L Room inp ρ st d
 
 end Repr
 
