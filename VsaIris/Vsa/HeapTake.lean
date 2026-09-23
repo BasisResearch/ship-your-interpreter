@@ -92,6 +92,34 @@ theorem _root_.Vsa.Sim.DlHeap.HeapAt.end_bnd (h : HeapAt m H (fun e => e ∈ H) 
   · exact .inl he
   · exact .inr ⟨d, by rw [hsplit]; simp, hd⟩
 
+/-- Every chunk's size is a positive multiple of 16. -/
+theorem walk_sizes {m : Mem} :
+    ∀ {p top : Nat} {cs : List Chunk}, ChunkWalk m p top cs → ∀ c ∈ cs, c.size % 16 = 0 ∧ 32 ≤ c.size
+  | _, _, [], ChunkWalk.top => fun _ h => nomatch h
+  | _, _, _ :: _, ChunkWalk.chunk _ _ hmin hal _ rest => by
+    intro c hc
+    rcases List.mem_cons.mp hc with rfl | hc
+    · exact ⟨hal, hmin⟩
+    · exact walk_sizes rest c hc
+
+/-- A member of a small bin `i` (`i < 64`) has size `8 i`; so odd small bins are
+empty. -/
+theorem _root_.Vsa.Sim.DlHeap.HeapAt.small_member (h : HeapAt m H (fun e => e ∈ H) top brkv chunks bins)
+    {i q : Nat} (hi1 : 1 < i) (hi : i < 64) (hq : q ∈ bins i) :
+    ∃ c ∈ chunks, c.addr = q ∧ c.inuse = false ∧ c.size = 8 * i ∧ i % 2 = 0 := by
+  obtain ⟨c, hc, h1, h2, h3⟩ := h.bin_free i q (by omega) (by unfold numBins; omega) hq
+  have hbi := h3 hi1
+  obtain ⟨hs16, hs32⟩ := walk_sizes h.walk c hc
+  unfold binIndex at hbi
+  refine ⟨c, hc, h1, h2, ?_, ?_⟩ <;> (repeat' split at hbi) <;> omega
+
+theorem _root_.Vsa.Sim.DlHeap.HeapAt.odd_empty (h : HeapAt m H (fun e => e ∈ H) top brkv chunks bins)
+    {i : Nat} (hi1 : 1 < i) (hi : i < 64) (hodd : i % 2 = 1) : bins i = [] := by
+  rcases hb : bins i with _ | ⟨q, qs⟩
+  · rfl
+  · obtain ⟨_, _, _, _, _, he⟩ := h.small_member hi1 hi (by rw [hb]; exact List.mem_cons_self)
+    omega
+
 /-- Bin headers are 16-aligned, in `__malloc_av_`, below the arena. -/
 theorem binAt_geo (j : Nat) (hj : j < numBins) :
     binAt j % 16 = 0 ∧ 0x8001ad10 ≤ binAt j ∧ binAt j + 32 ≤ 0x8001b520 := by

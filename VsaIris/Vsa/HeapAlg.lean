@@ -368,4 +368,41 @@ theorem pair_ne_head {a b x : Nat} {l : List Nat} (h : [a, b] <:+: x :: l)
     simp only [List.append_assoc, List.cons_append, List.nil_append, List.nodup_cons] at hnd
     exact hnd.1 (by simp)
 
+
+/-! ## Reading a ring -/
+
+theorem links_append_single {m : Mem} {l : List Nat} {x y : Nat} (h : Links m (l ++ [x, y])) :
+    fdOf m x = some y ∧ bkOf m y = some x := by
+  rw [show l ++ [x, y] = l ++ x :: [y] from rfl, links_append] at h
+  exact ⟨h.2.1, h.2.2.1⟩
+
+/-- The header's `bk` is the last member (the header itself when empty). -/
+theorem ring_bk_head {m : Mem} {b l : Nat} {qs : List Nat} (h : Ring m b qs)
+    (hl : (b :: qs).getLast? = some l) : bkOf m b = some l := by
+  unfold Ring at h
+  obtain ⟨ys, hys⟩ := List.getLast?_eq_some_iff.1 hl
+  rw [show b :: qs ++ [b] = (b :: qs) ++ [b] from rfl, hys, List.append_assoc] at h
+  exact (links_append_single h).2
+
+/-- The header's `fd` is the first member (the header itself when empty). -/
+theorem ring_fd_head {m : Mem} {b f : Nat} {qs : List Nat} (h : Ring m b qs)
+    (hf : (qs ++ [b]).head? = some f) : fdOf m b = some f := by
+  unfold Ring at h
+  obtain ⟨zs, hzs⟩ := List.head?_eq_some_iff.1 hf
+  rw [show b :: qs ++ [b] = b :: (qs ++ [b]) from rfl, hzs] at h
+  exact h.1
+
+/-- A member's links: `fd` its successor, `bk` its predecessor. -/
+theorem ring_member {m : Mem} {b v p q : Nat} {pre post : List Nat} (h : Ring m b (pre ++ v :: post))
+    (hp : (b :: pre).getLast? = some p) (hq : (post ++ [b]).head? = some q) :
+    fdOf m v = some q ∧ bkOf m v = some p := by
+  unfold Ring at h
+  obtain ⟨ys, hys⟩ := List.getLast?_eq_some_iff.1 hp
+  obtain ⟨zs, hzs⟩ := List.head?_eq_some_iff.1 hq
+  have e : b :: (pre ++ v :: post) ++ [b] = ys ++ p :: v :: q :: zs := by
+    rw [show b :: (pre ++ v :: post) ++ [b] = (b :: pre) ++ v :: (post ++ [b]) by simp, hys, hzs]
+    simp
+  rw [e, links_append] at h
+  exact ⟨h.2.2.2.1, h.2.2.1⟩
+
 end VsaIris.VsaHeap
