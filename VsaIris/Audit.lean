@@ -5,6 +5,7 @@ import VsaIris.Vsa.Instance
 import VsaIris.Vsa.EnvNewPilot
 import VsaIris.Vsa.Console
 import VsaIris.LocalRun
+import VsaIris.Loop
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -58,3 +59,8 @@ import VsaIris.LocalRun
 #print axioms VsaIris.Inst.vsa_adequacy_exit
 #print axioms VsaIris.Inst.putcSite_cert
 #print axioms VsaIris.Inst.exitSite_cert
+#print axioms VsaIris.MachWP.loop
+#print axioms VsaIris.MachWP.loopI
+#print axioms VsaIris.MachWP.loopSeg
+#print axioms VsaIris.wp_loop
+#print axioms VsaIris.wpP_loop

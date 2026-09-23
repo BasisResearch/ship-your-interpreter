@@ -6,6 +6,7 @@ import VsaIris.PartialWP
 import VsaIris.MachWP
 import VsaIris.Adequacy
 import VsaIris.Call
+import VsaIris.Loop
 import VsaIris.DlHeap
 import VsaIris.Example
 import VsaIris.Audit
