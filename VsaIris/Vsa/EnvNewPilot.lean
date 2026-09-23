@@ -1,4 +1,5 @@
 import VsaIris.Vsa.Tools
+import VsaIris.Vsa.MallocConsumer
 import Vsa.Sim.EnvNewSuccessSuffix
 
 namespace VsaIris.Inst.EnvNew
@@ -166,14 +167,13 @@ theorem succ_facts {m mS : Std.ExtHashMap Nat (BitVec 8)} {b p par r : BitVec 64
 theorem succ_log (mS : Std.ExtHashMap Nat (BitVec 8)) {b p par : BitVec 64}
     (hhi : p.toNat + 32 ≤ 0x100000000) :
     (segOut envNewSuccessSeg (succL b p par) (succLds mS b)).log = envNewSuccessLog p par := by
-  have hp0 := off0_addr p
   have hp8 := off8_addr p (by omega)
   have hp16 := off16_addr p (by omega)
   have hp24 := off24_addr p (by omega)
   simp [segOut, envNewSuccessSeg, evalBlocks, evalBlock, SegEvalState.init,
     succL, succLds, envNewSuccessLog, wlogM, wentryM, widthOfM,
     runGM, stepGM, stepLdsM, ldsRunM, wvalM, srcVal, lookupG, eraseG,
-    mkLine, decodeM, eaddrM, hp0, hp8, hp16, hp24]
+    mkLine, decodeM, eaddrM, hp8, hp16, hp24]
 
 theorem succ_fin (mS : Std.ExtHashMap Nat (BitVec 8)) (b p par : BitVec 64) :
     finReg envNewSuccessSeg (succL b p par) (succLds mS b) 2 = b + sign_extend (m := 64) (0x010#12) ∧
@@ -338,28 +338,31 @@ caller handed over back at its entry value (the stack bytes at some value).
 caller owns is framed by the continuation. -/
 theorem envNew_spec {Φ : Nat × String → IProp GF} (live : Nat → Prop)
     (hlive : ∀ a, codeBase ≤ a → a < codeBase + 96 → live a)
-    {HL : DlLayout} {freeEntry gpv : BitVec 64} {clob : List Nat} {headroom : Nat}
-    (impl : DlMallocImpl (vsaModel live) HL mallocEntry freeEntry gpv clob headroom)
+    {HL : DlLayout} {freeEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
+    {text : List (Nat × BitVec 8)}
+    (impl : DlMallocImpl (vsaModel live) HL mallocEntry freeEntry gpv clob savedRegs headroom text)
     (harena : ArenaGeom HL) (H : List (Nat × Nat)) (esp r par s0v : BitVec 64)
+    (rest : List (Nat × BitVec 64)) (hsaved : 8 :: rest.map Prod.fst = savedRegs)
     (hg : EnvNewCallerGeom (esp - 16#64) r) :
-    instrAt codeBase envNewCode ∗ PC ↦ᵣ 0x800029fc#64 ∗ (1 : Nat) ↦ᵣ r ∗ (10 : Nat) ↦ᵣ par ∗
-      (2 : Nat) ↦ᵣ esp ∗ (8 : Nat) ↦ᵣ s0v ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗
-      sepL (List.range' (esp - 16#64).toNat 16) byteAny ∗
+    instrAt codeBase envNewCode ∗ textOwn text ∗ PC ↦ᵣ 0x800029fc#64 ∗ (1 : Nat) ↦ᵣ r ∗
+      (10 : Nat) ↦ᵣ par ∗ (2 : Nat) ↦ᵣ esp ∗ (8 : Nat) ↦ᵣ s0v ∗ savedOwn rest ∗ gp ↦ᵣ□ gpv ∗
+      clobbered clob ∗ sepL (List.range' (esp - 16#64).toNat 16) byteAny ∗
       stackScratch (esp - 16#64) headroom ∗ isHeap HL H ∗
-      (∀ p : BitVec 64, ⌜FreshBlock HL H p.toNat 32⌝ -∗ PC ↦ᵣ r -∗ (1 : Nat) ↦ᵣ r -∗
-        (10 : Nat) ↦ᵣ p -∗ (2 : Nat) ↦ᵣ esp -∗ (8 : Nat) ↦ᵣ s0v -∗ clobbered clob -∗
-        sepL (List.range' (esp - 16#64).toNat 16) byteAny -∗
+      (∀ p : BitVec 64, ⌜FreshBlock HL H p.toNat 32 ∧ p.toNat % 16 = 0⌝ -∗ PC ↦ᵣ r -∗
+        (1 : Nat) ↦ᵣ r -∗ (10 : Nat) ↦ᵣ p -∗ (2 : Nat) ↦ᵣ esp -∗ (8 : Nat) ↦ᵣ s0v -∗
+        savedOwn rest -∗ clobbered clob -∗ sepL (List.range' (esp - 16#64).toNat 16) byteAny -∗
         stackScratch (esp - 16#64) headroom -∗ isHeap HL ((p.toNat, 32) :: H) -∗
         envBlock p par -∗ mTWP (vsaModel live) Φ) ∗
       (PC ↦ᵣ link -∗ (1 : Nat) ↦ᵣ link -∗ (10 : Nat) ↦ᵣ 0#64 -∗ (2 : Nat) ↦ᵣ (esp - 16#64) -∗
-        (8 : Nat) ↦ᵣ par -∗ clobbered clob -∗
+        (8 : Nat) ↦ᵣ par -∗ savedOwn rest -∗ clobbered clob -∗
         sepL (List.range' (esp - 16#64).toNat 16) byteAny -∗
         stackScratch (esp - 16#64) headroom -∗ isHeap HL H -∗ mTWP (vsaModel live) Φ)
     ⊢ mTWP (vsaModel live) Φ := by
   have h16 := esp_ge16 hg
   have hb := sp_sub16_toNat esp h16
   have hcodeLive := codeFoot_live hlive
-  iintro ⟨#Hcode, Hpc, Hra, Ha0, Hsp, Hs0, #Hgp, Hclob, Hstk, Hscr, Hheap, Kok, Knull⟩
+  iintro ⟨#Hcode, #Htext, Hpc, Hra, Ha0, Hsp, Hs0, Hsv, #Hgp, Hclob, Hstk, Hscr, Hheap, Kok,
+    Knull⟩
   ihave ⟨%Wstk, %hWstk, Hstk⟩ := sepL_byteAny_exists _ $$ Hstk
   have hWmem : ∀ a, (∃ q ∈ Wstk, q.1 = a) ↔ a ∈ List.range' (esp - 16#64).toNat 16 := by
     intro a; rw [← hWstk]; simp
@@ -387,60 +390,50 @@ theorem envNew_spec {Φ : Nat × String → IProp GF} (live : Nat → Prop)
   rw [← instrAt_eq]
   iframe Hpc Hsp Hs0 Ha0 Hra Hstk Hcode
   iintro Hpc ⟨Hsp, Hs0, Ha0, Hra, -⟩ Hstk -
-  -- the call
-  have hs := impl.malloc (GF := GF) H (32#64) (esp - 16#64)
-  unfold mallocSpec at hs
-  ihave #Hspec := hs
-  ihave #Hjal := code_jal $$ Hcode
+  -- the call: the stack frame is the owned set `wp_call_malloc_owns` keeps
   have hjal := jal_exec live fun q hq => by
     have := codeFoot_bounds hq
     exact hlive _ (by simp [codeBase] at *; omega) (by simp [jalCode, codeBase] at *; omega)
-  unfold fnSpec
-  iapply wp_jal (v := r) hjal
-  unfold VsaIris.ra
-  iframe Hjal Hpc Hra
-  iintro Hpc Hra
-  unfold VsaIris.a0 VsaIris.sp
-  iapply Hspec $$ %link %Φ Hpc Hra [Ha0 Hsp Hclob Hscr Hheap]
-  · isplitl [Ha0]
-    · iexact Ha0
-    iframe Hsp Hgp Hclob Hscr Hheap
-  iintro Hpc Hra ⟨%p, Ha0, Hsp, Hclob, Hscr, Hpost⟩
+  ihave #Hjal := code_jal $$ Hcode
+  have hnd : (Wstk.map Prod.fst).Nodup := by rw [hWstk]; exact List.nodup_range' _ (by omega)
+  let stkB : Nat → BitVec 8 := fun a => ((stackImg Wstk esp s0v par r)[a]?).getD 0
+  ihave HC := sepL_to_ownSet _ hnd (fun a => a ↦ₘ stkB a) $$ [Hstk]
+  · rw [sepL_map]; iexact Hstk
+  iapply wp_call_malloc_owns impl hjal H r (32#64) (esp - 16#64) ((8, par) :: rest)
+    (by simp [hsaved]) (fun a => a ∈ Wstk.map Prod.fst) stkB
+  unfold VsaIris.ra VsaIris.a0 VsaIris.sp savedOwn
+  simp only [sepL_cons]
+  iframe Hjal Htext Hpc Hra Hsp Hgp Hclob Hs0 Hsv Hscr Hheap HC
+  isplitl [Ha0]
+  · iexact Ha0
+  iintro %p Hpc Hra Ha0 Hsp Hclob ⟨Hs0, Hsv⟩ Hscr Hpost HC %hoff
+  ihave Hstk := ownSet_to_sepL _ hnd _ $$ HC
   unfold mallocPost
   icases Hpost with (⟨%hp0, Hheap⟩ | ⟨%⟨hfresh, halign⟩, Hheap, Hblk⟩)
   · -- malloc returned NULL: the caller's continuation at the `beqz`
     subst hp0
-    iapply Knull $$ Hpc Hra Ha0 Hsp Hs0 Hclob [Hstk] Hscr Hheap
+    iapply Knull $$ Hpc Hra Ha0 Hsp Hs0 Hsv Hclob [Hstk] Hscr Hheap
     rw [← hWstk]
-    iapply sepL_forget $$ Hstk
+    iapply sepL_mono _ _ _ (fun a => by iintro H; iexists stkB a; iexact H) $$ Hstk
   -- malloc returned a fresh block
   have hfresh : FreshBlock HL H p.toNat 32 := hfresh
+  have hdisj : p.toNat + 32 ≤ (esp - 16#64).toNat ∨ (esp - 16#64).toNat + 16 ≤ p.toNat := by
+    apply Classical.byContradiction; intro hc
+    have hp : p ≠ 0 := fun h => hfresh.nonzero (by rw [h]; rfl)
+    let a := max (esp - 16#64).toNat p.toNat
+    have ha : a ∈ Wstk.map Prod.fst := by
+      rw [hWstk, List.mem_range']
+      exact ⟨a - (esp - 16#64).toNat, by simp only [a, Nat.max_def]; split <;> omega, by omega⟩
+    exact (hoff hp a ha).1 (by unfold InExt; simp only [a, Nat.max_def]; split <;> simp <;> omega)
+  have hf := fresh_geom harena hfresh halign hdisj
+  obtain ⟨hra, hs0⟩ := stackImg_reads Wstk (s0v := s0v) (par := par) hg
   ihave Hblk := blockOwn_range _ _ $$ Hblk
   ihave ⟨%Wblk, %hWblk, Hblk⟩ := sepL_byteAny_exists _ $$ Hblk
   have hWblk : Wblk.map Prod.fst = List.range' p.toNat 32 := hWblk
-  ihave ⟨Hstk, Hblk, %hdis⟩ := sepL_disjoint Wstk Wblk _ (fun q => q.2) $$ [Hstk Hblk]
-  · isplitl [Hstk]
-    · iexact Hstk
-    iexact Hblk
-  have hdisj : p.toNat + 32 ≤ (esp - 16#64).toNat ∨ (esp - 16#64).toNat + 16 ≤ p.toNat := by
-    apply Classical.byContradiction; intro hc
-    have hin : ∀ (W : List (Nat × BitVec 8)) (s n a : Nat), W.map Prod.fst = List.range' s n →
-        s ≤ a → a < s + n → ∃ q ∈ W, q.1 = a := fun W s n a hW h1 h2 => by
-      have : a ∈ W.map Prod.fst := by rw [hW, List.mem_range']; exact ⟨a - s, by omega, by omega⟩
-      simpa using this
-    let a := max (esp - 16#64).toNat p.toNat
-    obtain ⟨q1, hq1, e1⟩ := hin Wstk _ 16 a hWstk (Nat.le_max_left _ _)
-      (by simp only [a, Nat.max_def]; split <;> omega)
-    obtain ⟨q2, hq2, e2⟩ := hin Wblk _ 32 a hWblk (Nat.le_max_right _ _)
-      (by simp only [a, Nat.max_def]; split <;> omega)
-    exact hdis q1 hq1 q2 hq2 (e1.trans e2.symm)
-  have hf := fresh_geom harena hfresh halign hdisj
-  obtain ⟨hra, hs0⟩ := stackImg_reads Wstk (s0v := s0v) (par := par) hg
   -- the success suffix
   iapply wp_seg live envNewSuccessSeg (succL (esp - 16#64) p par)
     (succLds (stackImg Wstk esp s0v par r) (esp - 16#64)) link
-    (codeFoot codeBase envNewCode ++
-      Wstk.map fun q => (q.1, DFrac.own 1, ((stackImg Wstk esp s0v par r)[q.1]?).getD 0))
+    (codeFoot codeBase envNewCode ++ (Wstk.map Prod.fst).map fun a => (a, DFrac.own 1, stkB a))
     Wblk 8 (by decide)
     (by change ChainOK _ [2, 10, 8, 1] _; decide) (by change KeysOK [2, 10, 8, 1]; decide)
     (by change ∀ k ∈ wrChain envNewSuccessSeg, k ∈ [2, 10, 8, 1]; decide)
@@ -458,12 +451,10 @@ theorem envNew_spec {Φ : Nat × String → IProp GF} (live : Nat → Prop)
     (fun c hok ⟨_, hMR, _, _⟩ => by
       refine succ_facts (loaded_of_code (code_present hok _
         (fun q hq => hMR q (List.mem_append_left _ hq)) hcodeLive)) hg hf hra fun k hk => ?_
-      have : (esp - 16#64).toNat + k ∈ Wstk.map Prod.fst := by
+      have hk' : (esp - 16#64).toNat + k ∈ Wstk.map Prod.fst := by
         rw [hWstk, List.mem_range']; exact ⟨k, hk, by omega⟩
-      obtain ⟨q, hq, e⟩ := List.mem_map.mp this
-      rw [← e]
       exact hMR _ (List.mem_append_right _ (List.mem_map_of_mem
-        (f := fun q => (q.1, DFrac.own 1, ((stackImg Wstk esp s0v par r)[q.1]?).getD 0)) hq)))
+        (f := fun a => (a, DFrac.own 1, stkB a)) hk')))
   simp only [newByte]
   rw [succ_log _ hf.hi, succ_pc' _ _ _ _ _ hra hg.ret_align]
   obtain ⟨g2, g10, g8, g1⟩ := succ_fin' _ _ p par r s0v hra hs0
@@ -475,11 +466,11 @@ theorem envNew_spec {Φ : Nat × String → IProp GF} (live : Nat → Prop)
   · iapply (sepL_append _ _ _).2
     isplitr
     · rw [← instrAt_eq]; iexact Hcode
-    rw [sepL_map]; iexact Hstk
+    rw [sepL_map (fun a => (a, DFrac.own 1, stkB a))]; iexact Hstk
   iintro Hpc ⟨Hsp, Ha0, Hs0, Hra, -⟩ Hblk HMR
   ihave ⟨-, Hstk⟩ := (sepL_append _ _ _).1 $$ HMR
-  ihave Hstk := sepL_map_forget Wstk (fun a => ((stackImg Wstk esp s0v par r)[a]?).getD 0) $$ Hstk
-  iapply Kok $$ %p %hfresh Hpc Hra Ha0 Hsp Hs0 Hclob [Hstk] Hscr [Hheap] [Hblk]
+  ihave Hstk := sepL_map_forget' _ stkB $$ Hstk
+  iapply Kok $$ %p %⟨hfresh, halign⟩ Hpc Hra Ha0 Hsp Hs0 Hsv Hclob [Hstk] Hscr [Hheap] [Hblk]
   · rw [← hWstk]; iexact Hstk
   · rw [show ((p.toNat, 32) :: H) = ((p.toNat, (32#64).toNat) :: H) from rfl]
     iexact Hheap

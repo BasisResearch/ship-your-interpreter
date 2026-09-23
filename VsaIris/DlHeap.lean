@@ -212,6 +212,24 @@ disjoint from every live extent (VSA `MallocContract.spec`'s success arm:
 def FreshBlock (L : DlLayout) (H : List (Nat × Nat)) (p n : Nat) : Prop :=
   p ≠ 0 ∧ L.lo ≤ p ∧ p + n ≤ L.hi ∧ ∀ e ∈ H, ∀ a, InExt (p, n) a → ¬ InExt e a
 
+/-- The named fields of `FreshBlock`. -/
+theorem FreshBlock.destruct {L : DlLayout} {H : List (Nat × Nat)} {p n : Nat}
+    (h : FreshBlock L H p n) :
+    p ≠ 0 ∧ L.lo ≤ p ∧ p + n ≤ L.hi ∧ ∀ e ∈ H, ∀ a, InExt (p, n) a → ¬ InExt e a := h
+
+theorem FreshBlock.nonzero {L : DlLayout} {H : List (Nat × Nat)} {p n : Nat}
+    (h : FreshBlock L H p n) : p ≠ 0 := h.destruct.1
+
+theorem FreshBlock.lo {L : DlLayout} {H : List (Nat × Nat)} {p n : Nat}
+    (h : FreshBlock L H p n) : L.lo ≤ p := by obtain ⟨_, h, _⟩ := h; exact h
+
+theorem FreshBlock.hi {L : DlLayout} {H : List (Nat × Nat)} {p n : Nat}
+    (h : FreshBlock L H p n) : p + n ≤ L.hi := by obtain ⟨_, _, h, _⟩ := h; exact h
+
+theorem FreshBlock.disjoint {L : DlLayout} {H : List (Nat × Nat)} {p n : Nat}
+    (h : FreshBlock L H p n) : ∀ e ∈ H, ∀ a, InExt (p, n) a → ¬ InExt e a := by
+  obtain ⟨_, _, _, h⟩ := h; exact h
+
 section Heap
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
@@ -229,17 +247,17 @@ theorem ownSet_forget (S : Nat → Prop) (img : Nat → BitVec 8) :
     ownSet (GF := GF) S (fun a => a ↦ₘ img a) ⊢ ownSet S byteAny :=
   ownSet_mono _ _ (fun a => by iintro H; iexists img a; iexact H)
 
-/-- **Carve** a fresh block out of the allocator's footprint: what the malloc
-proof does at its return (KallocInv.v "kalloc's logical core", the pop). -/
-theorem heapFoot_carve (L : DlLayout) (H : List (Nat × Nat)) (p n : Nat)
-    (hf : FreshBlock L H p n) :
-    ownSet (GF := GF) (heapFoot L H) byteAny ⊢
-      ownSet (heapFoot L ((p, n) :: H)) byteAny ∗ blockOwn p n := by
+/-- **Carve** a fresh block out of the allocator's footprint, for any per-byte
+resource `Φ` (byte ownership at any value, or at the image's values). -/
+theorem heapFoot_carve_gen (L : DlLayout) (H : List (Nat × Nat)) (p n : Nat)
+    (hf : FreshBlock L H p n) (Φ : Nat → IProp GF) :
+    ownSet (GF := GF) (heapFoot L H) Φ ⊢
+      ownSet (heapFoot L ((p, n) :: H)) Φ ∗ ownSet (InExt (p, n)) Φ := by
   obtain ⟨_, hlo, hhi, hdisj⟩ := hf
   iintro Hh
-  ihave ⟨Hb, Hr⟩ := ownSet_split (heapFoot L H) (InExt (p, n)) byteAny $$ Hh
+  ihave ⟨Hb, Hr⟩ := ownSet_split (heapFoot L H) (InExt (p, n)) Φ $$ Hh
   isplitl [Hr]
-  · iapply ownSet_iff byteAny _ $$ Hr
+  · iapply ownSet_iff Φ _ $$ Hr
     intro a
     unfold heapFoot InExt
     constructor
@@ -254,8 +272,7 @@ theorem heapFoot_carve (L : DlLayout) (H : List (Nat × Nat)) (p n : Nat)
         rcases L.global_off_arena a hg with h | h <;> simp at hp1 hp2 <;> omega
       · exact ⟨.inr ⟨h1, h2, fun e he => h3 e (List.mem_cons_of_mem _ he)⟩,
           h3 (p, n) List.mem_cons_self⟩
-  · unfold blockOwn
-    iapply ownSet_iff byteAny _ $$ Hb
+  · iapply ownSet_iff Φ _ $$ Hb
     intro a
     constructor
     · exact fun h => h.2
@@ -263,6 +280,14 @@ theorem heapFoot_carve (L : DlLayout) (H : List (Nat × Nat)) (p n : Nat)
       refine ⟨.inr ⟨?_, ?_, fun e he => hdisj e he a ha⟩, ha⟩
       · unfold InExt at ha; simp at ha; omega
       · unfold InExt at ha; simp at ha; omega
+
+/-- **Carve** a fresh block out of the allocator's footprint: what the malloc
+proof does at its return (KallocInv.v "kalloc's logical core", the pop). -/
+theorem heapFoot_carve (L : DlLayout) (H : List (Nat × Nat)) (p n : Nat)
+    (hf : FreshBlock L H p n) :
+    ownSet (GF := GF) (heapFoot L H) byteAny ⊢
+      ownSet (heapFoot L ((p, n) :: H)) byteAny ∗ blockOwn p n :=
+  heapFoot_carve_gen L H p n hf byteAny
 
 /-- **Return** a block to the footprint: what the free proof does (the
 push, `kmem_res_push`, KallocInv.v:417). -/
@@ -322,6 +347,20 @@ register file") and states callee-saved preservation as
 simply not handed over. -/
 def clobbered (rs : List Nat) : IProp GF := sepL rs (fun r => iprop(∃ v, r ↦ᵣ v))
 
+/-- Callee-saved registers the callee uses and restores: handed over at their
+values and handed back at the same values. A callee that spills a register
+(`_malloc_r` runs `sd s0,80(sp); mv s0,a0`) must own it during the call,
+because the state interpretation agrees with the machine at every step. -/
+def savedOwn (saved : List (Nat × BitVec 64)) : IProp GF := sepL saved (fun p => p.1 ↦ᵣ p.2)
+
+/-- The callee's code bytes, persistent (MachCSL's `text_pointsto … □`). A
+closed spec `⊢ fnSpec …` cannot be proved for real code without them: from
+emp, the bytes at the entry are unconstrained. -/
+def textOwn (text : List (Nat × BitVec 8)) : IProp GF := sepL text (fun p => p.1 ↦ₘ□ p.2)
+
+instance (text : List (Nat × BitVec 8)) : Persistent (textOwn (GF := GF) text) := by
+  unfold textOwn; infer_instance
+
 /-- The stack bytes below `sp` a callee may use (VSA `StackOK SL sp
 headroom`). An owned resource, handed to the callee and back, instead of the
 "stack window below the entry sp" exception in `MallocContract`'s frame. -/
@@ -338,22 +377,24 @@ def mallocPost (L : DlLayout) (H : List (Nat × Nat)) (n : Nat) (p : BitVec 64) 
 variable (M : MachineModel)
 
 /-- `wp_kalloc_sconf_body` (SpecKalloc.v:30), sequential: -/
-def mallocSpec (L : DlLayout) (entry gpv : BitVec 64) (clob : List Nat) (headroom : Nat)
+def mallocSpec (L : DlLayout) (entry gpv : BitVec 64) (clob : List Nat)
+    (saved : List (Nat × BitVec 64)) (headroom : Nat)
     (H : List (Nat × Nat)) (n s : BitVec 64) : IProp GF :=
   fnSpec (M := M) entry
-    (fun _ => iprop(a0 ↦ᵣ n ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗
+    (fun _ => iprop(a0 ↦ᵣ n ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ isHeap L H))
-    (fun _ => iprop(∃ p, a0 ↦ᵣ p ∗ sp ↦ᵣ s ∗ clobbered clob ∗
+    (fun _ => iprop(∃ p, a0 ↦ᵣ p ∗ sp ↦ᵣ s ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ mallocPost L H n.toNat p))
 
 /-- `wp_kfree_sconf_body` (SpecKfree.v:30): `kfree_pre p := page_own p`
 (KallocInv.v:444), the block at any contents. -/
-def freeSpec (L : DlLayout) (entry gpv : BitVec 64) (clob : List Nat) (headroom : Nat)
+def freeSpec (L : DlLayout) (entry gpv : BitVec 64) (clob : List Nat)
+    (saved : List (Nat × BitVec 64)) (headroom : Nat)
     (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (s : BitVec 64) : IProp GF :=
   fnSpec (M := M) entry
-    (fun _ => iprop(a0 ↦ᵣ q ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗
+    (fun _ => iprop(a0 ↦ᵣ q ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ isHeap L ((q.toNat, n) :: H) ∗ blockOwn q.toNat n))
-    (fun _ => iprop(sp ↦ᵣ s ∗ (∃ v, a0 ↦ᵣ v) ∗ clobbered clob ∗
+    (fun _ => iprop(sp ↦ᵣ s ∗ (∃ v, a0 ↦ᵣ v) ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ isHeap L H))
 
 end Heap
@@ -365,13 +406,19 @@ assumption about the binary's dlmalloc. It is NOT proved here; discharging
 it is the instruction-level proof of `_malloc_r`/`_free_r` against the Sail
 model (MachCSL's ProofKalloc.v is 834 lines for xv6's much simpler kalloc).
 The difference from `MallocContract` is that this statement can be true of
-dlmalloc; see `eb73d8c_witness`. -/
+dlmalloc; see `eb73d8c_witness`. `text` is the allocator's code (owned
+persistently by the caller's context) and `savedRegs` the callee-saved
+registers it spills and restores. `VsaIris.dlMallocImpl_of_localRuns`
+(`LocalRun.lean`, `MallocRun.lean`) builds this structure from first-order
+facts about the machine's steps. -/
 structure DlMallocImpl (M : MachineModel) (L : DlLayout) (mallocEntry freeEntry gpv : BitVec 64)
-    (clob : List Nat) (headroom : Nat) : Prop where
-  malloc : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] H n s,
-    ⊢ mallocSpec (GF := GF) M L mallocEntry gpv clob headroom H n s
-  free : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] H q n s,
-    ⊢ freeSpec (GF := GF) M L freeEntry gpv clob headroom H q n s
+    (clob savedRegs : List Nat) (headroom : Nat) (text : List (Nat × BitVec 8)) : Prop where
+  malloc : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] H n s
+    (saved : List (Nat × BitVec 64)), saved.map Prod.fst = savedRegs →
+    textOwn (GF := GF) text ⊢ mallocSpec M L mallocEntry gpv clob saved headroom H n s
+  free : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] H q n s
+    (saved : List (Nat × BitVec 64)), saved.map Prod.fst = savedRegs →
+    textOwn (GF := GF) text ⊢ freeSpec M L freeEntry gpv clob saved headroom H q n s
 
 section Client
 
@@ -383,53 +430,59 @@ unchanged in the continuation. Nothing about `R` appears in malloc's spec:
 this is VSA's `HeapOwned.transport_off`/`.repr_off` and the whole
 `privFoot` clause, as one application of the frame rule. -/
 theorem wp_call_malloc {Φ : Nat × String → IProp GF} {L : DlLayout}
-    {mallocEntry freeEntry gpv : BitVec 64} {clob : List Nat} {headroom : Nat}
-    (impl : DlMallocImpl M L mallocEntry freeEntry gpv clob headroom)
+    {mallocEntry freeEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
+    {text : List (Nat × BitVec 8)}
+    (impl : DlMallocImpl M L mallocEntry freeEntry gpv clob savedRegs headroom text)
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec M i code mallocEntry)
-    (H : List (Nat × Nat)) (v n s : BitVec 64) (R : IProp GF) :
-    instrAt (GF := GF) i code ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗ a0 ↦ᵣ n ∗ sp ↦ᵣ s ∗
-      gp ↦ᵣ□ gpv ∗ clobbered clob ∗ stackScratch s headroom ∗ isHeap L H ∗ R ∗
+    (H : List (Nat × Nat)) (v n s : BitVec 64) (saved : List (Nat × BitVec 64))
+    (hsaved : saved.map Prod.fst = savedRegs) (R : IProp GF) :
+    instrAt (GF := GF) i code ∗ textOwn text ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗ a0 ↦ᵣ n ∗
+      sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗ stackScratch s headroom ∗
+      isHeap L H ∗ R ∗
       (∀ p, PC ↦ᵣ BitVec.ofNat 64 (i + 4) -∗ ra ↦ᵣ BitVec.ofNat 64 (i + 4) -∗ a0 ↦ᵣ p -∗
-        sp ↦ᵣ s -∗ clobbered clob -∗ stackScratch s headroom -∗
+        sp ↦ᵣ s -∗ clobbered clob -∗ savedOwn saved -∗ stackScratch s headroom -∗
         mallocPost L H n.toNat p -∗ R -∗ mTWP M Φ)
     ⊢ mTWP M Φ := by
-  have hs := impl.malloc (GF := GF) H n s
+  have hs := impl.malloc (GF := GF) H n s saved hsaved
   unfold mallocSpec at hs
-  iintro ⟨#Hi, Hpc, Hra, Ha0, Hsp, #Hgp, Hclob, Hstk, Hheap, HR, Hk⟩
-  ihave #Hspec := hs
+  iintro ⟨#Hi, #Htext, Hpc, Hra, Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, Hheap, HR, Hk⟩
+  ihave #Hspec := hs $$ Htext
   iapply wp_call (M := M) hexec
-  iframe Hi Hspec Hpc Hra Ha0 Hsp Hgp Hclob Hstk Hheap
-  iintro Hpc Hra ⟨%p, Ha0, Hsp, Hclob, Hstk, Hpost⟩
-  iapply Hk $$ %p Hpc Hra Ha0 Hsp Hclob Hstk Hpost HR
+  iframe Hi Hspec Hpc Hra Ha0 Hsp Hgp Hclob Hsv Hstk Hheap
+  iintro Hpc Hra ⟨%p, Ha0, Hsp, Hclob, Hsv, Hstk, Hpost⟩
+  iapply Hk $$ %p Hpc Hra Ha0 Hsp Hclob Hsv Hstk Hpost HR
 
 /-- The caller's byte `a` survives a malloc call *with its value*, and it is
 disjoint from both the returned block and the allocator's new footprint. -/
 theorem wp_call_malloc_keeps {Φ : Nat × String → IProp GF} {L : DlLayout}
-    {mallocEntry freeEntry gpv : BitVec 64} {clob : List Nat} {headroom : Nat}
-    (impl : DlMallocImpl M L mallocEntry freeEntry gpv clob headroom)
+    {mallocEntry freeEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
+    {text : List (Nat × BitVec 8)}
+    (impl : DlMallocImpl M L mallocEntry freeEntry gpv clob savedRegs headroom text)
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec M i code mallocEntry)
-    (H : List (Nat × Nat)) (v n s : BitVec 64) (a : Nat) (b : BitVec 8) :
-    instrAt (GF := GF) i code ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗ a0 ↦ᵣ n ∗ sp ↦ᵣ s ∗
-      gp ↦ᵣ□ gpv ∗ clobbered clob ∗ stackScratch s headroom ∗ isHeap L H ∗ a ↦ₘ b ∗
+    (H : List (Nat × Nat)) (v n s : BitVec 64) (saved : List (Nat × BitVec 64))
+    (hsaved : saved.map Prod.fst = savedRegs) (a : Nat) (b : BitVec 8) :
+    instrAt (GF := GF) i code ∗ textOwn text ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗ a0 ↦ᵣ n ∗
+      sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗ stackScratch s headroom ∗
+      isHeap L H ∗ a ↦ₘ b ∗
       (∀ p, PC ↦ᵣ BitVec.ofNat 64 (i + 4) -∗ ra ↦ᵣ BitVec.ofNat 64 (i + 4) -∗ a0 ↦ᵣ p -∗
-        sp ↦ᵣ s -∗ clobbered clob -∗ stackScratch s headroom -∗
+        sp ↦ᵣ s -∗ clobbered clob -∗ savedOwn saved -∗ stackScratch s headroom -∗
         mallocPost L H n.toNat p -∗ a ↦ₘ b -∗
         ⌜p ≠ 0 → ¬ InExt (p.toNat, n.toNat) a ∧ ¬ heapFoot L ((p.toNat, n.toNat) :: H) a⌝ -∗
         mTWP M Φ)
     ⊢ mTWP M Φ := by
-  iintro ⟨Hi, Hpc, Hra, Ha0, Hsp, Hgp, Hclob, Hstk, Hheap, Hab, Hk⟩
-  iapply wp_call_malloc impl hexec H v n s (a ↦ₘ b)
-  iframe Hi Hpc Hra Ha0 Hsp Hgp Hclob Hstk Hheap Hab
+  iintro ⟨Hi, Htext, Hpc, Hra, Ha0, Hsp, Hgp, Hclob, Hsv, Hstk, Hheap, Hab, Hk⟩
+  iapply wp_call_malloc impl hexec H v n s saved hsaved (a ↦ₘ b)
+  iframe Hi Htext Hpc Hra Ha0 Hsp Hgp Hclob Hsv Hstk Hheap Hab
   unfold mallocPost
-  iintro %p Hpc Hra Ha0 Hsp Hclob Hstk Hpost Hab
+  iintro %p Hpc Hra Ha0 Hsp Hclob Hsv Hstk Hpost Hab
   icases Hpost with (⟨%hp, Hheap⟩ | ⟨%hf, Hheap, Hblk⟩)
-  · iapply Hk $$ %p Hpc Hra Ha0 Hsp Hclob Hstk [Hheap] Hab
+  · iapply Hk $$ %p Hpc Hra Ha0 Hsp Hclob Hsv Hstk [Hheap] Hab
     · ileft; iframe Hheap; ipureintro; exact hp
     ipureintro
     intro hne; exact absurd hp hne
   · ihave %hb := owned_off_block p.toNat n.toNat a b $$ Hab Hblk
     ihave %hh := owned_off_heap L ((p.toNat, n.toNat) :: H) a b $$ Hab Hheap
-    iapply Hk $$ %p Hpc Hra Ha0 Hsp Hclob Hstk [Hheap Hblk] Hab
+    iapply Hk $$ %p Hpc Hra Ha0 Hsp Hclob Hsv Hstk [Hheap Hblk] Hab
     · iright; iframe Hheap Hblk; ipureintro; exact hf
     ipureintro
     intro _; exact ⟨hb, hh⟩

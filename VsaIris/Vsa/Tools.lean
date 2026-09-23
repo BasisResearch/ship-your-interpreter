@@ -111,6 +111,35 @@ theorem sepL_map_forget (W : List (Nat × BitVec 8)) (f : Nat → BitVec 8) :
   iexists f q.1
   iexact H
 
+/-- Forget the values of a read footprint listed by address. -/
+theorem sepL_map_forget' (l : List Nat) (f : Nat → BitVec 8) :
+    sepL (GF := GF) (l.map fun a => (a, DFrac.own 1, f a)) (fun p => p.1 ↦ₘ{p.2.1} p.2.2) ⊢
+      sepL l byteAny := by
+  rw [sepL_map]
+  apply sepL_mono
+  intro a
+  iintro H
+  iexists f a
+  iexact H
+
+/-- A duplicate-free list of owned bytes is an owned byte set. -/
+theorem sepL_to_ownSet (l : List Nat) (hnd : l.Nodup) (Φ : Nat → IProp GF) :
+    sepL l Φ ⊢ ownSet (fun a => a ∈ l) Φ := by
+  unfold ownSet
+  iintro H
+  iexists l
+  iframe H
+  ipureintro
+  exact ⟨hnd, fun _ => Iff.rfl⟩
+
+/-- An owned byte set with the members of a duplicate-free list is that
+list of owned bytes. -/
+theorem ownSet_to_sepL (l : List Nat) (hnd : l.Nodup) (Φ : Nat → IProp GF) :
+    ownSet (fun a => a ∈ l) Φ ⊢ sepL l Φ := by
+  unfold ownSet
+  iintro ⟨%l', %⟨hnd', hmem⟩, H⟩
+  iapply (sepL_perm Φ ((List.perm_ext_iff_of_nodup hnd' hnd).mpr hmem)).1 $$ H
+
 /-- Two lists of exclusively owned bytes have disjoint addresses. -/
 theorem sepL_disjoint (W₁ W₂ : List (Nat × BitVec 8)) (f g : Nat × BitVec 8 → BitVec 8) :
     sepL (GF := GF) W₁ (fun q => q.1 ↦ₘ f q) ∗ sepL W₂ (fun q => q.1 ↦ₘ g q) ⊢

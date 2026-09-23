@@ -7,4 +7,12 @@ import VsaIris.DlHeap
 import VsaIris.Example
 import VsaIris.Audit
 import VsaIris.Vsa.Instance
+import VsaIris.Vsa.HeapShape
+import VsaIris.Vsa.ControlWitness
+import VsaIris.LocalRun
+import VsaIris.MallocRun
+import VsaIris.Vsa.Malloc
+import VsaIris.Vsa.MallocConsumer
+import VsaIris.Vsa.HeapAudit
+import VsaIris.Vsa.ControlEnd
 import VsaIris.Vsa.EnvNewPilot
