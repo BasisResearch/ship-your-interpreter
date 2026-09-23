@@ -7,7 +7,7 @@ import VsaIris.Vsa.Console
 import VsaIris.LocalRun
 import VsaIris.Loop
 import VsaIris.Interp.Need
-import VsaIris.Vsa.Landing
+import VsaIris.Interp.Abort
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -90,3 +90,7 @@ import VsaIris.Vsa.Landing
 #print axioms VsaIris.Newlib.Exit.wp_exitCall
 #print axioms VsaIris.Newlib.MainErr.wp_mainErrTail
 #print axioms VsaIris.Newlib.Landing.wp_landing
+#print axioms VsaIris.Interp.abortRes_widen
+#print axioms VsaIris.Interp.wp_abortOom
+#print axioms VsaIris.Interp.wp_abortLanding
+#print axioms VsaIris.Interp.wp_abort

@@ -800,6 +800,25 @@ interpreter control's dlmalloc heap and stays with H4/A0.
   across `fprintf`) is false; nothing in the Iris route uses it.
 - **Out of memory is `fwrite` + `exit(1)`**, not `fprintf`: every inlined
   `xmalloc` NULL arm is `fwrite(msg, 1, 14, stderr); exit(1)`.
+- **`abortCore` depends on the site's region** (`VsaIris/Interp/Abort.lean`).
+  `abortRes s n = abortAt (abortCore s n) s n` with `abortCore s n :=
+  landingCore ∨ oomCore s n`. `landingCore` is the `longjmp` landing: some
+  `worldE (errStr inp)`, the `jmp_buf` read-only at `jb`, and `landingRegs jb`
+  (`ra`, `s0`–`s11`, `sp` read off `jb`, `a0 = 1`, PC at the restored `ra`).
+  `oomCore s n` is `exit`'s entry with `a0 = 1` after the out-of-memory
+  `fwrite`, and its stack pointer `s'` leaves room for `exit` inside `[s - n,
+  s)` (`OomSp`). That fact is about the site's region, so the core is not
+  site-independent as F3's `abortAt Core` assumed; it is monotone in the region
+  (`abortCore_mono`), and `abortRes_widen` turns a callee's `abortRes` into
+  `abortAt (abortCore s n) (s - f) nc`, which is what F3's `wp_callArmAbort`
+  (at `Core := abortCore s n`) consumes through `fnSpecAbort_mono`. The
+  alternative, `exit(1)` run by the site itself, needs `Φ (1, _)`, which only
+  the top's continuation can supply.
+- **The abort continuation is closed** (`wp_abort`): at `interp_run`'s `jal
+  exec_stmt` (`sp = sM - 176`), `abortRes` plus what `interp_run`'s proof keeps
+  (`TopLanding`: the `jmp_buf` it wrote, its frame, `main`'s saved pair) ends in
+  `exit(70)` (`wp_abortLanding` → `Landing.wp_landing` → `MainErr.wp_mainErrTail`
+  → `Exit.wp_exitCall`) or `exit(1)` (`wp_abortOom`), for either WP.
 
 ## 11. Open questions for the user
 
