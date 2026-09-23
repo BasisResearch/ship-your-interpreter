@@ -55,7 +55,7 @@ theorem malloc64_roomEnd (maxReq : Nat) (rv' : Nat → BitVec 64) (r s : BitVec 
   · rw [hp]; exact shape64
   · rw [hp]
     obtain ⟨m, hm, _⟩ := shape64
-    exact ⟨m, hm, AllocationReserve.zero _ _ _ _⟩
+    exact ⟨m, hm, Reserve.zero _ _ _⟩
 
 /-- The old contract's obstruction, at the control's live blocks. -/
 theorem control_no_fixed_privFoot :

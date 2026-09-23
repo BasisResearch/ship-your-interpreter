@@ -16,3 +16,4 @@ import VsaIris.Vsa.MallocConsumer
 import VsaIris.Vsa.HeapAudit
 import VsaIris.Vsa.ControlEnd
 import VsaIris.Vsa.EnvNewPilot
+import VsaIris.Vsa.MallocFastHeap

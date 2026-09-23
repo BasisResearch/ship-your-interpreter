@@ -2726,6 +2726,20 @@ fields that `EnvDefineAppendAllocatorPost.prepareCopy` consumes follow from
 the Iris spec without `privFoot`
 (`VsaIris.VsaHeap.mallocRoomCallerFacts_of_iris`).
 
+OBSTRUCTION (machine-checked, `VsaIris.VsaHeap.vsa_reserve_fails_after_split`,
+`split24_vsa_reserve_false`): `TopChunkRoom.disjoint` requires every live
+extent to avoid the whole top chunk. dlmalloc's usable size is the chunk size
+minus 8, so a returned block may cover the first word of the chunk after it.
+After a top split for `malloc(24)` (a 32-byte chunk at `top`), the ledger
+entry `(top + 16, 24)` ends at `top + 40`, inside the new top chunk at
+`top + 32`. So `AllocationReserve` with a credit left is false, and
+`MallocReturnAt.reserve` / `MallocSuccessRun`'s post cannot be met by the
+binary whenever `n + 16 > physSize n` (for example, most name copies). The
+corrected clause keeps only the top's header word off live extents:
+`e.1 + e.2 ≤ top + 8 ∨ top + bytes ≤ e.1` (`VsaIris.VsaHeap.TopReserve`).
+Affected: `AllocationReserve`, `TopChunkRoom`, and every supplier and consumer
+of `reserve`.
+
 **The allocator layer.** Allocator facts are RUN-GLOBAL, not per entry. One
 `AllocLedger` (`Vsa/Sim/AllocLedger.lean`) carries the `malloc`/`free`/`realloc`
 runs (`MallocRun`, the new `FreeRun`, `ReallocInstance`), the `strlen`/`memcpy`

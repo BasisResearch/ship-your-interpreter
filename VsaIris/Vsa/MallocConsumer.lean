@@ -16,7 +16,7 @@ calls `malloc` through `mallocReturn_of_parked` and uses these fields of the
 | `store` (via `.runtime`) | store representation survives | `repr_off`, same |
 | `agree` + `ownedOff.shared` | shared bytes unchanged | `mem_frame` off `privFoot` |
 | `exit.mem_frame` | the value slot and eval-call support unchanged | `mem_frame` + `priv_arena` + `arena_stack` |
-| `ainv`, `budget`, `reserve` | allocator invariant and capacity | `MallocSuccessRun`, `AllocLedger` |
+| `ainv`, `budget`, `reserve` | allocator invariant and capacity | `MallocSuccessRun`, `AllocLedger` (`reserve` is unsatisfiable for requests whose usable tail reaches the new top; see `vsa_reserve_fails_after_split`) |
 
 This module derives the first five from the Iris spec with no
 `MallocContract`, `AllocLedger`, `privFoot` or ledger arithmetic:
@@ -31,8 +31,11 @@ This module derives the first five from the Iris spec with no
   both `HeapOwned`s, `StoreRepr` and shared-byte agreement follow by VSA's own
   `HeapOwned.transport`/`.fresh`/`repr_transport`.
 
-`ainv` is `isHeap` itself. `budget`/`reserve` (success under credits) are NOT
-supplied: `mallocPost` allows NULL. See `PROGRESS.md`.
+`ainv` is `isHeap` itself. `mallocRoomCallerFacts_of_iris` adds `budget` and
+the reserve from `mallocRoomSpec` (success under credits). The reserve is the
+corrected `Reserve`: VSA's `AllocationReserve` cannot hold after a request
+whose usable tail reaches the new top chunk (`vsa_reserve_fails_after_split`),
+so that consumer premise must be weakened in VSA to the corrected clause.
 -/
 
 namespace VsaIris
@@ -205,18 +208,18 @@ theorem mallocCallerFacts_of_iris {H : List (Nat × Nat)} {exts : List Extent} {
 
 /-- A reserve stated over the live blocks holds over any ledger inside them. -/
 theorem reserve_of_covered {m : Mem} {H : List (Nat × Nat)} {exts : List Extent}
-    {maxReq k : Nat} (h : AllocationReserve vsaArena m H maxReq k) (hcov : Covered exts H)
-    (hpos : ∀ e ∈ exts, 0 < e.2) : AllocationReserve vsaArena m exts maxReq k := by
-  refine { available := fun positive => ?_ }
-  obtain ⟨top, bytes, reserve⟩ := h.available positive
-  refine ⟨top, bytes, { reserve with chunk := { reserve.chunk with disjoint := ?_ } }⟩
+    {maxReq k : Nat} (h : Reserve m H maxReq k) (hcov : Covered exts H)
+    (hpos : ∀ e ∈ exts, 0 < e.2) : Reserve m exts maxReq k := by
+  intro positive
+  obtain ⟨top, bytes, r⟩ := h positive
+  refine ⟨top, bytes, { r with disjoint := ?_ }⟩
   intro e he
   obtain ⟨b, hb, hsub⟩ := hcov e he
   have hp := hpos e he
   have lo := hsub e.1 (by unfold InExt; omega)
   have hi := hsub (e.1 + e.2 - 1) (by unfold InExt; omega)
   unfold InExt at lo hi
-  have := reserve.chunk.disjoint b hb
+  have := r.disjoint b hb
   omega
 
 /-- The consumer's facts with capacity: the budget and the placement reserve
@@ -226,7 +229,9 @@ structure MallocRoomCallerFacts (exts : List Extent) (n p : Nat) (m0 m1 : Mem)
     (shared readable writes : Nat → Prop) (s : Store) (maxReq credits : Nat) : Prop
     extends MallocCallerFacts exts n p m0 m1 N phiF phiC alloc shared readable writes s where
   budget : ResourceBudget vsaArena maxReq ((p, n) :: exts) credits
-  reserve : AllocationReserve vsaArena m1 ((p, n) :: exts) maxReq credits
+  /-- The corrected reserve (`Reserve`); VSA's own `AllocationReserve` is not
+  satisfiable here in general (`vsa_reserve_fails_after_split`). -/
+  reserve : Reserve m1 ((p, n) :: exts) maxReq credits
 
 /-- **Every `MallocReturnAt` field `prepareCopy` uses, from `mallocRoomSpec`.**
 Besides `mallocCallerFacts_of_iris`'s inputs: the entry budget (a ledger
