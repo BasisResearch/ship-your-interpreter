@@ -113,12 +113,11 @@ theorem sepL_off (T : Nat → Prop) (f : Nat → BitVec 8) :
     · exact h.1
     · exact h.2 y hy
 
-/-- Two owned byte sets are disjoint (ghost exclusivity). -/
-theorem ownSet_disj (S T : Nat → Prop) (f g : Nat → BitVec 8) :
-    ownSet (GF := GF) S (fun a => a ↦ₘ f a) ∗ ownSet T (fun a => a ↦ₘ g a) ⊢
-      ⌜∀ a, S a → ¬ T a⌝ := by
+/-- Bytes owned at values are off any set owned at unknown values (ghost
+exclusivity). -/
+theorem ownSet_off (S T : Nat → Prop) (f : Nat → BitVec 8) :
+    ownSet (GF := GF) S (fun a => a ↦ₘ f a) ∗ ownSet T byteAny ⊢ ⌜∀ a, S a → ¬ T a⌝ := by
   iintro ⟨HS, HT⟩
-  ihave HT := ownSet_forget T g $$ HT
   rw [show ownSet S (fun a => a ↦ₘ f a) = iprop(∃ l : List Nat,
       ⌜l.Nodup ∧ ∀ a, a ∈ l ↔ S a⌝ ∗ sepL l (fun a => a ↦ₘ f a)) from rfl]
   icases HS with ⟨%l, %⟨_, hmem⟩, Hl⟩
@@ -126,6 +125,19 @@ theorem ownSet_disj (S T : Nat → Prop) (f g : Nat → BitVec 8) :
   · iframe Hl HT
   ipureintro
   exact fun a ha => h a ((hmem a).2 ha)
+
+/-- Two owned byte sets are disjoint (ghost exclusivity). -/
+theorem ownSet_disj (S T : Nat → Prop) (f g : Nat → BitVec 8) :
+    ownSet (GF := GF) S (fun a => a ↦ₘ f a) ∗ ownSet T (fun a => a ↦ₘ g a) ⊢
+      ⌜∀ a, S a → ¬ T a⌝ := by
+  iintro ⟨HS, HT⟩
+  ihave HT := ownSet_forget T g $$ HT
+  iapply ownSet_off S T f
+  iframe HS HT
+
+/-- Derive a pure fact from resources and keep them. -/
+theorem keep_pure {P : IProp GF} {φ : Prop} (h : P ⊢ ⌜φ⌝) : P ⊢ P ∗ ⌜φ⌝ :=
+  (and_intro .rfl h).trans persistent_and_sep_mp
 
 /-- The value a register takes in a (key, value) list. -/
 def pairVal (saved : List (Nat × BitVec 64)) (k : Nat) : BitVec 64 :=
