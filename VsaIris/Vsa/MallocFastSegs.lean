@@ -195,33 +195,33 @@ theorem sub_imm (x : BitVec 64) (imm : BitVec 12) (d : Nat)
   rw [show x.toNat + (2 ^ 64 - d) = (x.toNat - d) + 2 ^ 64 by omega, Nat.add_mod_right,
     Nat.mod_eq_of_lt (by omega)]
 
-/-- Masking with `-16` rounds down to a multiple of 16. -/
-theorem and_m16_toNat (a : BitVec 64) :
-    (a &&& sign_extend (m := 64) (0xff0#12)).toNat = a.toNat / 16 * 16 := by
-  have hmeq : (sign_extend (m := 64) (0xff0#12) : BitVec 64) = (BitVec.allOnes 64) <<< 4 := by
-    decide
-  have hshift : (a &&& sign_extend (m := 64) (0xff0#12)) = (a >>> 4) <<< 4 := by
-    rw [hmeq]
+/-- Masking with `allOnes <<< k` rounds down to a multiple of `2 ^ k`. -/
+theorem and_high_toNat (a : BitVec 64) (k : Nat) (hk : k < 64) :
+    (a &&& (BitVec.allOnes 64 <<< k)).toNat = a.toNat / 2 ^ k * 2 ^ k := by
+  have hshift : (a &&& (BitVec.allOnes 64 <<< k)) = (a >>> k) <<< k := by
     apply BitVec.eq_of_getLsbD_eq
     intro i
     simp only [BitVec.getLsbD_and, BitVec.getLsbD_shiftLeft, BitVec.getLsbD_ushiftRight,
       BitVec.getLsbD_allOnes]
-    by_cases hi : i < 4
-    · simp only [hi, decide_true, Bool.not_true, Bool.false_and, Bool.and_false, Bool.and_true,
-        Bool.and_self, implies_true]
+    by_cases hi : i < k
+    · simp [hi]
     · by_cases hlt : i < 64
-      · have h3 : 4 + (i - 4) = i := by omega
-        have h2 : i - 4 < 64 := by omega
-        simp only [hi, decide_false, Bool.not_false, Bool.true_and, hlt, decide_true,
-          h2, Bool.and_true, h3, Bool.and_self, implies_true]
+      · have h3 : k + (i - k) = i := by omega
+        have h2 : i - k < 64 := by omega
+        simp [hi, hlt, h2, h3]
       · have hge : a.getLsbD i = false := BitVec.getLsbD_of_ge a i (by omega)
-        simp only [hi, decide_false, Bool.not_false, Bool.true_and, hlt,
-          Bool.false_and, Bool.and_false, hge, Bool.and_self, implies_true]
-  rw [hshift, BitVec.toNat_shiftLeft, BitVec.toNat_ushiftRight]
-  have ha : a.toNat < 2 ^ 64 := a.isLt
-  rw [Nat.shiftRight_eq_div_pow]
-  have hb : a.toNat / 16 < 2 ^ 60 := by omega
-  rw [Nat.shiftLeft_eq, Nat.mod_eq_of_lt (by omega)]
+        simp [hi, hlt, hge]
+  rw [hshift, BitVec.toNat_shiftLeft, BitVec.toNat_ushiftRight, Nat.shiftRight_eq_div_pow,
+    Nat.shiftLeft_eq]
+  apply Nat.mod_eq_of_lt
+  calc a.toNat / 2 ^ k * 2 ^ k ≤ a.toNat := Nat.div_mul_le_self _ _
+    _ < 2 ^ 64 := a.isLt
+
+/-- Masking with `-16` rounds down to a multiple of 16. -/
+theorem and_m16_toNat (a : BitVec 64) :
+    (a &&& sign_extend (m := 64) (0xff0#12)).toNat = a.toNat / 16 * 16 := by
+  rw [show (sign_extend (m := 64) (0xff0#12) : BitVec 64) = BitVec.allOnes 64 <<< 4 by decide,
+    and_high_toNat a 4 (by decide)]
 
 /-! ## `segWrap` -/
 
@@ -744,29 +744,14 @@ end BinsCases
 /-- Masking with `-4` clears the two low bits. -/
 theorem and_m4_toNat (a : BitVec 64) :
     (a &&& sign_extend (m := 64) (0xffc#12)).toNat = a.toNat / 4 * 4 := by
-  have hmeq : (sign_extend (m := 64) (0xffc#12) : BitVec 64) = (BitVec.allOnes 64) <<< 2 := by
-    decide
-  have hshift : (a &&& sign_extend (m := 64) (0xffc#12)) = (a >>> 2) <<< 2 := by
-    rw [hmeq]
-    apply BitVec.eq_of_getLsbD_eq
-    intro i
-    simp only [BitVec.getLsbD_and, BitVec.getLsbD_shiftLeft, BitVec.getLsbD_ushiftRight,
-      BitVec.getLsbD_allOnes]
-    by_cases hi : i < 2
-    · simp only [hi, decide_true, Bool.not_true, Bool.false_and, Bool.and_false, implies_true]
-    · by_cases hlt : i < 64
-      · have h3 : 2 + (i - 2) = i := by omega
-        have h2 : i - 2 < 64 := by omega
-        simp only [hi, decide_false, Bool.not_false, Bool.true_and, hlt, decide_true,
-          h2, Bool.and_true, h3, Bool.and_self, implies_true]
-      · have hge : a.getLsbD i = false := BitVec.getLsbD_of_ge a i (by omega)
-        simp only [hi, decide_false, Bool.not_false, hlt, Bool.false_and, hge, Bool.and_self,
-          implies_true]
-  rw [hshift, BitVec.toNat_shiftLeft, BitVec.toNat_ushiftRight]
-  have ha : a.toNat < 2 ^ 64 := a.isLt
-  rw [Nat.shiftRight_eq_div_pow]
-  have hb : a.toNat / 4 < 2 ^ 62 := by omega
-  rw [Nat.shiftLeft_eq, Nat.mod_eq_of_lt (by omega)]
+  rw [show (sign_extend (m := 64) (0xffc#12) : BitVec 64) = BitVec.allOnes 64 <<< 2 by decide,
+    and_high_toNat a 2 (by decide)]
+
+/-- Masking with `-2` clears the low bit. -/
+theorem and_m2_toNat (a : BitVec 64) :
+    (a &&& sign_extend (m := 64) (0xffe#12)).toNat = a.toNat / 2 * 2 := by
+  rw [show (sign_extend (m := 64) (0xffe#12) : BitVec 64) = BitVec.allOnes 64 <<< 1 by decide,
+    and_high_toNat a 1 (by decide)]
 
 /-- `slti x, 32` is false for a non-negative `x ≥ 32`. -/
 theorem slt32_false (x : BitVec 64) (h1 : 32 ≤ x.toNat) (h2 : x.toNat < 2 ^ 63) :
