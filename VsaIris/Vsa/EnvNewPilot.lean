@@ -400,7 +400,7 @@ theorem envNew_spec {Φ : Nat × String → IProp GF} (live : Nat → Prop)
   ihave HC := sepL_to_ownSet _ hnd (fun a => a ↦ₘ stkB a) $$ [Hstk]
   · rw [sepL_map]; iexact Hstk
   iapply wp_call_malloc_owns impl hjal H r (32#64) (esp - 16#64) ((8, par) :: rest)
-    (by simp [hsaved]) (fun a => a ∈ Wstk.map Prod.fst) stkB
+    (by simp [hsaved]) (by decide) (fun a => a ∈ Wstk.map Prod.fst) stkB
   unfold VsaIris.ra VsaIris.a0 VsaIris.sp savedOwn
   simp only [sepL_cons]
   iframe Hjal Htext Hpc Hra Hsp Hgp Hclob Hs0 Hsv Hscr Hheap HC

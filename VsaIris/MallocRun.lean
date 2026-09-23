@@ -242,8 +242,8 @@ def MallocLocalRun (M : MachineModel) (L : DlLayout) (entry gpv : BitVec 64)
     (clob savedRegs : List Nat) (headroom : Nat) (text : List (Nat × BitVec 8)) : Prop :=
   ∀ (H : List (Nat × Nat)) (n s r : BitVec 64) (saved : List (Nat × BitVec 64))
     (rv : Nat → BitVec 64) (mv : Nat → BitVec 8),
-    saved.map Prod.fst = savedRegs → EntryRegs rv entry r n s saved → L.Shape mv H →
-    (∀ a, stackWin s headroom a → ¬ heapFoot L H a) →
+    saved.map Prod.fst = savedRegs → r.toNat % 4 = 0 → EntryRegs rv entry r n s saved →
+    L.Shape mv H → (∀ a, stackWin s headroom a → ¬ heapFoot L H a) →
     ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob savedRegs) (mallocBytes L H s headroom)
       (MallocEnd L H n r s saved) fuel rv mv
 
@@ -252,7 +252,7 @@ def FreeLocalRun (M : MachineModel) (L : DlLayout) (entry gpv : BitVec 64)
     (clob savedRegs : List Nat) (headroom : Nat) (text : List (Nat × BitVec 8)) : Prop :=
   ∀ (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (s r : BitVec 64)
     (saved : List (Nat × BitVec 64)) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8),
-    saved.map Prod.fst = savedRegs → EntryRegs rv entry r q s saved →
+    saved.map Prod.fst = savedRegs → r.toNat % 4 = 0 → EntryRegs rv entry r q s saved →
     L.Shape mv ((q.toNat, n) :: H) →
     (∀ a, stackWin s headroom a → ¬ (heapFoot L ((q.toNat, n) :: H) a ∨ InExt (q.toNat, n) a)) →
     ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob savedRegs) (freeBytes L H q n s headroom)
@@ -490,14 +490,14 @@ theorem mallocSpec_of_localRun {L : DlLayout} {entry gpv : BitVec 64} {clob save
   unfold mallocSpec fnSpec
   iintro #Htext
   imodintro
-  iintro %r %Φ Hpc Hra ⟨Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, Hheap⟩ Hk
+  iintro %r %Φ Hpc Hra ⟨%hral, Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, Hheap⟩ Hk
   ihave Hheap := isHeap_unfold L H $$ Hheap
   iapply allocCall_of_localRun hd (heapFoot L H) (fun img => L.Shape img H) (hloc H)
     (fun rv' mv' => (rv' a0 = 0 ∧ L.Shape mv' H) ∨
       (FreshBlock L H (rv' a0).toNat n.toNat ∧ (rv' a0).toNat % 16 = 0 ∧
         L.Shape mv' (((rv' a0).toNat, n.toNat) :: H)))
     (fun p => mallocPost L H n.toNat p) ?_
-    (fun rv mv he hs hdj => (hrun H n s r saved rv mv rfl he hs hdj).imp fun _ h =>
+    (fun rv mv he hs hdj => (hrun H n s r saved rv mv rfl hral he hs hdj).imp fun _ h =>
       LocalRun.mono (fun _ _ he => ⟨he.frame, he.result⟩) _ _ _ h)
   · intro rv' mv' hE
     unfold mallocPost blockOwn
@@ -550,7 +550,7 @@ theorem freeSpec_of_localRun {L : DlLayout} {entry gpv : BitVec 64} {clob savedR
   unfold freeSpec fnSpec blockOwn
   iintro #Htext
   imodintro
-  iintro %r %Φ Hpc Hra ⟨Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, Hheap, Hblk⟩ Hk
+  iintro %r %Φ Hpc Hra ⟨%hral, Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, Hheap, Hblk⟩ Hk
   ihave ⟨%img, %hsh, Hheap⟩ := isHeap_unfold L _ $$ Hheap
   ihave ⟨%fb, Hblk⟩ := ownSet_fn _ $$ Hblk
   ihave ⟨⟨Hheap, Hblk⟩, %hHB⟩ := keep_pure
@@ -562,7 +562,7 @@ theorem freeSpec_of_localRun {L : DlLayout} {entry gpv : BitVec 64} {clob savedR
     (fun img => L.Shape img ((q.toNat, n) :: H))
     (fun img img' h hs => hloc _ img img' (fun a ha => h a (.inl ha)) hs)
     (fun _ mv' => L.Shape mv' H) (fun _ => isHeap L H) ?_
-    (fun rv mv he hs hdj => (hrun H q n s r saved rv mv rfl he hs hdj).imp fun _ h =>
+    (fun rv mv he hs hdj => (hrun H q n s r saved rv mv rfl hral he hs hdj).imp fun _ h =>
       LocalRun.mono (fun _ _ he => ⟨he.frame, he.shape⟩) _ _ _ h)
   · intro rv' mv' hsh'
     iintro HF

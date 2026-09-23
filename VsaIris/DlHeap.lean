@@ -376,12 +376,14 @@ def mallocPost (L : DlLayout) (H : List (Nat × Nat)) (n : Nat) (p : BitVec 64) 
 
 variable (M : MachineModel)
 
-/-- `wp_kalloc_sconf_body` (SpecKalloc.v:30), sequential: -/
+/-- `wp_kalloc_sconf_body` (SpecKalloc.v:30), sequential. The return address
+is 4-aligned: `ret` (`jalr x0, 0(ra)`) clears bit 0, so no implementation
+returns to an odd `r`; every `jal` call site discharges it. -/
 def mallocSpec (L : DlLayout) (entry gpv : BitVec 64) (clob : List Nat)
     (saved : List (Nat × BitVec 64)) (headroom : Nat)
     (H : List (Nat × Nat)) (n s : BitVec 64) : IProp GF :=
   fnSpec (M := M) entry
-    (fun _ => iprop(a0 ↦ᵣ n ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗
+    (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ a0 ↦ᵣ n ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ isHeap L H))
     (fun _ => iprop(∃ p, a0 ↦ᵣ p ∗ sp ↦ᵣ s ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ mallocPost L H n.toNat p))
@@ -392,7 +394,7 @@ def freeSpec (L : DlLayout) (entry gpv : BitVec 64) (clob : List Nat)
     (saved : List (Nat × BitVec 64)) (headroom : Nat)
     (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (s : BitVec 64) : IProp GF :=
   fnSpec (M := M) entry
-    (fun _ => iprop(a0 ↦ᵣ q ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗
+    (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ a0 ↦ᵣ q ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ isHeap L ((q.toNat, n) :: H) ∗ blockOwn q.toNat n))
     (fun _ => iprop(sp ↦ᵣ s ∗ (∃ v, a0 ↦ᵣ v) ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ isHeap L H))
@@ -435,7 +437,8 @@ theorem wp_call_malloc {Φ : Nat × String → IProp GF} {L : DlLayout}
     (impl : DlMallocImpl M L mallocEntry freeEntry gpv clob savedRegs headroom text)
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec M i code mallocEntry)
     (H : List (Nat × Nat)) (v n s : BitVec 64) (saved : List (Nat × BitVec 64))
-    (hsaved : saved.map Prod.fst = savedRegs) (R : IProp GF) :
+    (hsaved : saved.map Prod.fst = savedRegs) (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    (R : IProp GF) :
     instrAt (GF := GF) i code ∗ textOwn text ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗ a0 ↦ᵣ n ∗
       sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗ stackScratch s headroom ∗
       isHeap L H ∗ R ∗
@@ -448,7 +451,10 @@ theorem wp_call_malloc {Φ : Nat × String → IProp GF} {L : DlLayout}
   iintro ⟨#Hi, #Htext, Hpc, Hra, Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, Hheap, HR, Hk⟩
   ihave #Hspec := hs $$ Htext
   iapply wp_call (M := M) hexec
-  iframe Hi Hspec Hpc Hra Ha0 Hsp Hgp Hclob Hsv Hstk Hheap
+  iframe Hi Hspec Hpc Hra
+  isplitl [Ha0 Hsp Hclob Hsv Hstk Hheap]
+  · iframe Ha0 Hsp Hgp Hclob Hsv Hstk Hheap
+    ipureintro; exact hal
   iintro Hpc Hra ⟨%p, Ha0, Hsp, Hclob, Hsv, Hstk, Hpost⟩
   iapply Hk $$ %p Hpc Hra Ha0 Hsp Hclob Hsv Hstk Hpost HR
 
@@ -460,7 +466,8 @@ theorem wp_call_malloc_keeps {Φ : Nat × String → IProp GF} {L : DlLayout}
     (impl : DlMallocImpl M L mallocEntry freeEntry gpv clob savedRegs headroom text)
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec M i code mallocEntry)
     (H : List (Nat × Nat)) (v n s : BitVec 64) (saved : List (Nat × BitVec 64))
-    (hsaved : saved.map Prod.fst = savedRegs) (a : Nat) (b : BitVec 8) :
+    (hsaved : saved.map Prod.fst = savedRegs) (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    (a : Nat) (b : BitVec 8) :
     instrAt (GF := GF) i code ∗ textOwn text ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗ a0 ↦ᵣ n ∗
       sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗ stackScratch s headroom ∗
       isHeap L H ∗ a ↦ₘ b ∗
@@ -471,7 +478,7 @@ theorem wp_call_malloc_keeps {Φ : Nat × String → IProp GF} {L : DlLayout}
         mTWP M Φ)
     ⊢ mTWP M Φ := by
   iintro ⟨Hi, Htext, Hpc, Hra, Ha0, Hsp, Hgp, Hclob, Hsv, Hstk, Hheap, Hab, Hk⟩
-  iapply wp_call_malloc impl hexec H v n s saved hsaved (a ↦ₘ b)
+  iapply wp_call_malloc impl hexec H v n s saved hsaved hal (a ↦ₘ b)
   iframe Hi Htext Hpc Hra Ha0 Hsp Hgp Hclob Hsv Hstk Hheap Hab
   unfold mallocPost
   iintro %p Hpc Hra Ha0 Hsp Hclob Hsv Hstk Hpost Hab

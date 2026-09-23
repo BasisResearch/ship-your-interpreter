@@ -56,7 +56,8 @@ theorem wp_call_malloc_owns {Φ : Nat × String → IProp GF} {L : DlLayout}
     (impl : DlMallocImpl M L mallocEntry freeEntry gpv clob savedRegs headroom text)
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec M i code mallocEntry)
     (H : List (Nat × Nat)) (v n s : BitVec 64) (saved : List (Nat × BitVec 64))
-    (hsaved : saved.map Prod.fst = savedRegs) (C : Nat → Prop) (img : Nat → BitVec 8) :
+    (hsaved : saved.map Prod.fst = savedRegs) (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    (C : Nat → Prop) (img : Nat → BitVec 8) :
     instrAt (GF := GF) i code ∗ textOwn text ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗ a0 ↦ᵣ n ∗
       sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗ stackScratch s headroom ∗
       isHeap L H ∗ ownSet C (fun a => a ↦ₘ img a) ∗
@@ -68,7 +69,7 @@ theorem wp_call_malloc_owns {Φ : Nat × String → IProp GF} {L : DlLayout}
         mTWP M Φ)
     ⊢ mTWP M Φ := by
   iintro ⟨Hi, Htext, Hpc, Hra, Ha0, Hsp, Hgp, Hclob, Hsv, Hstk, Hheap, HC, Hk⟩
-  iapply wp_call_malloc impl hexec H v n s saved hsaved (ownSet C (fun a => a ↦ₘ img a))
+  iapply wp_call_malloc impl hexec H v n s saved hsaved hal (ownSet C (fun a => a ↦ₘ img a))
   iframe Hi Htext Hpc Hra Ha0 Hsp Hgp Hclob Hsv Hstk Hheap HC
   unfold mallocPost
   iintro %p Hpc Hra Ha0 Hsp Hclob Hsv Hstk Hpost HC
