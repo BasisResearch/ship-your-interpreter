@@ -18,3 +18,4 @@ import VsaIris.Vsa.ControlEnd
 import VsaIris.Vsa.EnvNewPilot
 import VsaIris.Vsa.MallocFastHeap
 import VsaIris.Vsa.MallocFastCode
+import VsaIris.Vsa.CostRoom

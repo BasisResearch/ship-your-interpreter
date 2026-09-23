@@ -4,7 +4,7 @@ Every assumption left in the Iris route is a field of `structure IrisHoles` and 
 
 | field | what it assumes | owner | satisfiability evidence | discharge plan |
 |---|---|---|---|---|
-| `alloc.mallocRoomRun` | `_malloc_r` top-split fast path meets `MallocRoomEnd` | H4 | `Vsa/ControlEnd.lean` (control heap, hand-computed post-states) | chain `seg_runFact` segments via `segFrom_of_runFact` |
+| `alloc.mallocRoomRun` | `_malloc_r` top-split fast path meets `MallocRoomEnd`; for the counted regime it is stated at byte credits as `MallocCostRun` (`MallocRoomRun` at every `costRoomAt c k`, `16 ≤ c`, `VsaIris/Vsa/CostRoom.lean`), which also needs the `sbrk` extension path | H4 | `Vsa/ControlEnd.lean` (control heap, hand-computed post-states) | chain `seg_runFact` segments via `segFrom_of_runFact` |
 | `alloc.mallocLocalRun` | general `_malloc_r` (bins, sbrk) meets `MallocEnd` | H4 | `ControlWitness` | per-path segment chains |
 | `alloc.freeLocalRun` | general `_free_r` (coalescing, bins) meets `FreeEnd` | H4 | top-merge path proved (`FreeRoomRun`) | per-path segment chains |
 | `alloc.reallocLocalRun` | `_realloc_r` grow path | H4 | `reallocSpec_of_localRun` consumers | segment chains |

@@ -357,6 +357,39 @@ xv6iris's vacuity check (`durable-notes.md` "Vacuity"): prove the boundary
 bundle is satisfiable at the concrete control program (the `ControlWitness`
 image), not only that it typechecks.
 
+### 5.1b The heap credits: Room ↔ Cost (S1, landed)
+
+`VsaIris/Vsa/CostRoom.lean`. The counted regime's index is COST BYTES, so
+`heapRes (.counted k) := isHeapRoom vsaLayout costRoom H k`. It is NOT
+`vsaRoom`: VSA's `AllocationReserve` is unsatisfiable after `malloc(24)`
+(`split24_vsa_reserve_false`), and it counts requests of a uniform `maxReq`,
+not bytes.
+
+- **`costRoom img H k`** holds when `av->top + 2k + extendSlack ≤ heapEnd`.
+  - It reads only the top word, an allocator global (`roomLocal_cost`), and is
+    monotone (`isHeapRoom_cost_mono`).
+  - It has no live-extent clause: freshness is `Shape`'s job.
+- **Charges cover chunks (2n + slack).** Each C allocation site's request `n`
+  sits under its modeled charge `c`, with `16 ≤ c` (`Covers`: `covers_envNew`,
+  `covers_closure`, `covers_nameCopy`, `covers_stringify`,
+  `covers_concatBuffer`, and `arrayRealloc_split` for the two array
+  `realloc`s). Hence `physSize n ≤ 2c` (`physSize_le_two_charge`).
+- **Per allocation.** `CostTop.spend`/`.split`: advancing top by at most `2c`
+  turns `c + k` credit bytes into `k`. A bin hit, or a free merging into top,
+  only helps.
+- **Iris malloc at charge `c`.** `mallocCostSpec` is `mallocRoomSpec` at
+  `costRoomAt c k` (unit credit = `c` bytes). `isHeapRoom_costAt_one`/`_zero`
+  rewrite it to `isHeapRoom costRoom H (c + k) → isHeapRoom costRoom _ k`.
+  Its first-order obligation is `MallocCostRun` (H4, the `alloc.mallocRoomRun`
+  row of HOLES.md).
+- **Boundary (A0).** `costRoom_of_bigStep`: `BigStep` gives a costed
+  derivation of cost `n` (`BigStep.cost`), and `InitialAllocatorAt.capacity`
+  gives `costRoom` at `n` (`costReserve_of_initial`). Non-vacuous:
+  `Control.costReserve` has 2^20 credit bytes at the control heap.
+- **Cost existence/soundness** for the recursor: `Vsa/While/CostExists.lean`
+  (`EvalECost.exists` … `ExecSeqCost.exists`, and `EvalECost.sound` …, which
+  give the `EvalE`-level invariants to a case lemma holding only `D`).
+
 ### 5.2 `term_sim`
 
 ```lean
