@@ -31,3 +31,4 @@ import VsaIris.Vsa.SegRun
 import VsaIris.Vsa.StrlenSeg
 import VsaIris.Vsa.Strlen
 import VsaIris.Vsa.StrlenSpec
+import VsaIris.Vsa.StrcmpSeg
