@@ -913,6 +913,149 @@ theorem st2 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv
         (by rcases hq with rfl | rfl | rfl <;> decide) (by rcases hq with rfl | rfl | rfl <;> decide),
       hI⟩ (by rw [show (1 : Nat) = VsaIris.ra from rfl, hra])
 
+/-- The prologue's reflected write log, in clean form. -/
+theorem pro_log {s s0 r n a0 a4 a5 : BitVec 64} (hs : SpGeom s) :
+    (segOut segPro (proL s s0 r n a0 a4 a5) []).log = proLogN s s0 r n := by
+  have h96 := sp96 hs
+  have := hs.hi
+  simp only [segOut, segPro, evalBlocks, evalBlock, SegEvalState.init, wlogM, wentryM, widthOfM,
+    eaddrM]
+  seg_norm
+  simp only [List.nil_append, List.cons_append, List.append_nil]
+  have e := fun (imm : BitVec 12) (c : Nat) (hc : (sign_extend (m := 64) imm : BitVec 64).toNat = c)
+      (hcl : c ≤ 96) => add_imm (s + sign_extend (m := 64) (0xfa0#12)) imm c hc (by rw [h96]; omega)
+  rw [e (0x050#12) 80 (by decide) (by omega), e (0x058#12) 88 (by decide) (by omega),
+    e (0x008#12) 8 (by decide) (by omega), h96]
+
+theorem pro_sp (s s0 r n a0 a4 a5 : BitVec 64) :
+    finReg segPro (proL s s0 r n a0 a4 a5) [] 2 = spN s := by
+  simp only [finReg, segOut, segPro, evalBlocks_regs, runChain, SegEvalState.init]
+  seg_norm
+
+/-- Stage 1: in `_malloc_r`, at the prologue. -/
+structure St1 (s r n : BitVec 64) (rv0 : Nat → BitVec 64) (Mt : Mem) (S : Nat → Prop)
+    (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) : Prop where
+  pc : rv VsaIris.PC = 0x800047a8#64
+  sp : rv 2 = s
+  ra : rv 1 = r
+  a1 : rv 11 = n
+  s0 : rv 8 = rv0 8
+  keep : KeepS rv rv0
+  img : ∀ a, S a → mv a = imgM Mt a
+
+theorem st1 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
+    {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
+    (h : St1 s r n rv0 (Mt0 m1 s headroom mv0) (mallocBytes vsaLayout H s headroom) rv mv) :
+    LocalRun (vsaModel live) roR pathText mRegs (mallocBytes vsaLayout H s headroom)
+      (MallocRoomEnd vsaLayout (vsaRoomFast maxReq) H n r s saved k) 10 rv mv := by
+  have h96 := C.sp96
+  have hle := C.sp.geom.lo; have hhi := C.sp.geom.hi
+  unfold tohostAddr at hle
+  refine seg_step segPro (proL s (rv 8) (rv 1) (rv 11) (rv 10) (rv 14) (rv 15)) [] 0x800047a8#64 []
+    (wordW mv (s.toNat - 96 + 80) ++ wordW mv (s.toNat - 96 + 88) ++ wordW mv (s.toNat - 96 + 8)) 12 rfl
+    (by change ChainOK _ [2, 8, 1, 11, 10, 14, 15] _; decide)
+    (by change KeysOK [2, 8, 1, 11, 10, 14, 15]; decide)
+    (by change ∀ x ∈ wrChain segPro, x ∈ [2, 8, 1, 11, 10, 14, 15]; decide) ?_ C.text
+    (fun c _ hcode _ => pro_facts hcode C.sp.geom (h.a1 ▸ C.n_lo) (h.a1 ▸ Nat.le_trans C.n_hi C.max))
+    (by decide) h.pc ?_ (fun p hp => by cases hp) ?_ h.img ?_
+  · intro a ha
+    rw [pro_log C.sp.geom]
+    have cw : ∀ b, (∀ p ∈ wordW mv b, p ∈ wordW mv (s.toNat - 96 + 80) ++
+        wordW mv (s.toNat - 96 + 88) ++ wordW mv (s.toNat - 96 + 8)) → a < b ∨ b + 8 ≤ a := fun b hb => by
+      refine Classical.byContradiction fun hc => ?_
+      obtain ⟨p, hp, hpa⟩ := mem_wordW (f := mv) (a := b) (b := a) (by omega) (by omega)
+      exact ha p (hb p hp) hpa
+    simp only [proLogN, OutL]
+    refine ⟨cw _ fun p hp => ?_, cw _ fun p hp => ?_, cw _ fun p hp => ?_, trivial⟩
+    · simp only [List.mem_append]; exact .inl (.inl hp)
+    · simp only [List.mem_append]; exact .inl (.inr hp)
+    · simp only [List.mem_append]; exact .inr hp
+  · intro p hp
+    simp only [proL, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    · exact .inl ⟨by dsimp only; decide, h.sp⟩
+    all_goals exact .inl ⟨by dsimp only; decide, rfl⟩
+  · intro p hp
+    simp only [List.mem_append] at hp
+    have hw : ∀ o, o + 8 ≤ 96 → ∀ p ∈ wordW mv (s.toNat - 96 + o),
+        mallocBytes vsaLayout H s headroom p.1 ∧ mv p.1 = p.2 := fun o ho p hp => by
+      obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hp
+      rw [List.mem_range] at hj
+      refine ⟨?_, rfl⟩
+      rw [Nat.add_assoc]; exact C.frame_owned (j := o + j) (by omega)
+    rcases hp with (hp | hp) | hp
+    · exact hw 80 (by omega) p hp
+    · exact hw 88 (by omega) p hp
+    · exact hw 8 (by omega) p hp
+  · intro rv' mv' hpc hL hU hI
+    refine st2 C ⟨hpc, ?_, h.keep.step fun q hq => hU q ?_ ?_ ?_, fun a ha => ?_⟩
+    · rw [hL (2, s) (by simp [proL]), pro_sp]
+    · rcases hq with rfl | rfl | rfl <;> decide
+    · rcases hq with rfl | rfl | rfl <;> decide
+    · exact not_pin (by rcases hq with rfl | rfl | rfl <;> simp [proL])
+    · rw [hI a ha, pro_log C.sp.geom, h.s0, h.ra, h.a1]
+
+theorem wrap_a1 (n a1 : BitVec 64) : finReg segWrap (wrapL n a1) [impW] 11 = n := by
+  simp only [finReg, segOut, segWrap, evalBlocks_regs, runChain, SegEvalState.init]
+  seg_norm
+  rw [show (sign_extend (m := 64) (0#12) : BitVec 64) = 0#64 by decide, BitVec.add_zero]
+
+/-- Stage 0: at `malloc`, the entry. -/
+theorem st0 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
+    {mv : Nat → BitVec 8}
+    (himg : ∀ a, mallocBytes vsaLayout H s headroom a → mv a = imgM (Mt0 m1 s headroom mv0) a) :
+    LocalRun (vsaModel live) roR pathText mRegs (mallocBytes vsaLayout H s headroom)
+      (MallocRoomEnd vsaLayout (vsaRoomFast maxReq) H n r s saved k) 11 rv0 mv := by
+  have E := C.entry
+  refine seg_step segWrap (wrapL (rv0 10) (rv0 11)) [impW] 0x80004790#64 [] [] 2 rfl
+    (by change ChainOK _ [10, 11, 3] _; decide) (by change KeysOK [10, 11, 3]; decide)
+    (by change ∀ x ∈ wrChain segWrap, x ∈ [10, 11, 3]; decide) (fun a _ => by show OutL [] a; trivial)
+    C.text (fun c _ hcode _ => wrap_facts hcode (rv0 10) (rv0 11))
+    (by decide) E.pc (fun p hp => by
+      simp only [wrapL, List.mem_cons, List.not_mem_nil, or_false] at hp
+      rcases hp with rfl | rfl | rfl
+      · exact .inl ⟨by dsimp only; decide, rfl⟩
+      · exact .inl ⟨by dsimp only; decide, rfl⟩
+      · exact .inr ⟨List.mem_singleton.2 rfl, rfl⟩) (fun p hp => by cases hp) (fun p hp => by cases hp)
+    himg ?_
+  intro rv' mv' hpc hL hU hI
+  have keep := fun q (hq : q = 9 ∨ q = 18 ∨ q = 19 ∨ q = 1 ∨ q = 2 ∨ q = 8) => hU q
+    (by rcases hq with rfl | rfl | rfl | rfl | rfl | rfl <;> decide)
+    (by rcases hq with rfl | rfl | rfl | rfl | rfl | rfl <;> decide)
+    (not_pin (by rcases hq with rfl | rfl | rfl | rfl | rfl | rfl <;> simp [wrapL]))
+  refine st1 C ⟨hpc, (keep 2 (by simp)).trans E.sp, (keep 1 (by simp)).trans E.ra, ?_,
+    keep 8 (by simp), ⟨keep 9 (by simp), keep 18 (by simp), keep 19 (by simp)⟩,
+    fun a ha => (hI a ha).trans (by
+      rw [show (segOut segWrap (wrapL (rv0 10) (rv0 11)) [impW]).log = [] from rfl, writeLog_nil'])⟩
+  rw [hL (11, rv0 11) (by simp [wrapL]), wrap_a1]
+  exact E.a0
+
 end Stages
+
+/-- **The fast path's run.** A request of 24..`maxReq` bytes (`maxReq ≤ 487`)
+from a fast heap with a credit left runs `malloc` to the return, carving the
+block off the top. -/
+theorem fast_run {live : Nat → Prop} {maxReq headroom : Nat} (hmax : maxReq ≤ 487)
+    (htext : ∀ p ∈ pathText, live p.1)
+    (H : List (Nat × Nat)) (n s r : BitVec 64) (saved : List (Nat × BitVec 64))
+    (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) (k : Nat)
+    (hkeys : saved.map Prod.fst = vsaSaved) (hn : n.toNat ≤ maxReq) (hn24 : 24 ≤ n.toNat)
+    (hsp : SpOKFast headroom s) (hral : r.toNat % 4 = 0)
+    (hE : EntryRegs rv mallocEntryBV r n s saved)
+    (hroom : vsaRoomFast maxReq mv H (k + 1))
+    (hdisj : ∀ a, stackWin s headroom a → ¬ heapFoot vsaLayout H a) :
+    LocalRun (vsaModel live) roR pathText mRegs (mallocBytes vsaLayout H s headroom)
+      (MallocRoomEnd vsaLayout (vsaRoomFast maxReq) H n r s saved k) 11 rv mv := by
+  obtain ⟨m1, top, brkv, chunks, bins, himg, hfast⟩ := hroom
+  refine st0 (mv0 := mv) (m1 := m1)
+    ⟨htext, hmax, hsp, hral, hn24, hn, hkeys, hE, hfast, himg, hdisj⟩ fun a ha => ?_
+  unfold imgM
+  rw [stackBase_get]
+  by_cases hw : s.toNat - headroom ≤ a ∧ a < s.toNat - headroom + headroom
+  · rw [ite_eq_left hw]; rfl
+  · rw [ite_eq_right hw]
+    rcases ha with ha | ha
+    · exact absurd ⟨ha.1, ha.2⟩ hw
+    · rw [himg a ha]; rfl
 
 end VsaIris.MallocFast
