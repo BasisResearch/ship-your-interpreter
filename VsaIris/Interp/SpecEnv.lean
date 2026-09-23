@@ -146,13 +146,13 @@ def setOut (N : NativeAddrs) (s : Store) (B : List (Nat × Nat)) (fa : Addr) (x 
 setup of `fwrite("out of memory\n", 1, 14, stderr)` before `exit(1)`
 (`env.c`'s `xmalloc`, `0x80002a38`, and `env_define`'s array check,
 `0x80002bd0`). H5 runs it to `exit(1)` (with `newlib.fprintf`). The helper
-hands over everything it owned: its registers at unknown values, the stack it
-was given and `sp` inside it, and the heap and store (uncounted; the store as
-it stood). -/
-def oomAt (N : NativeAddrs) (pc sp0 s : BitVec 64) (need : Nat) (regs : List Nat) (st : Store) :
-    IProp GF :=
+hands over its registers at unknown values, the stack it was given with `sp`
+inside it, and the (uncounted) heap. The store is dropped: after a partial
+growth (`names` reallocated, `vals` not) no frame representation holds, and
+`exit(1)` never reads it. -/
+def oomAt (pc sp0 s : BitVec 64) (need : Nat) (regs : List Nat) : IProp GF :=
   iprop(PC ↦ᵣ pc ∗ sp ↦ᵣ sp0 ∗ clobbered regs ∗ stackScratch s need ∗
-    heapStore N .uncounted st)
+    ∃ H, heapRes vsaLayoutP vsaRoomB .uncounted H)
 
 /-! ## Callee specs (hypotheses; H3 proves them) -/
 
@@ -203,8 +203,8 @@ def envNewSpec (Wp : MachWP (GF := GF) M) (N : NativeAddrs) : IProp GF :=
       (fun _ => iprop(∃ e : BitVec 64, (10 : Nat) ↦ᵣ e ∗ sp ↦ᵣ s ∗ clobbered retClob ∗
         savedOwn saved ∗ stackScratch s envNewNeed ∗ heapStore N ρ (st.allocFrame po).1 ∗
         frameAt st.frames.size e.toNat))
-      (iprop(⌜ρ = .uncounted⌝ ∗ oomAt N 0x80002a38#64 (s - 16#64) s envNewNeed
-        (VsaIris.ra :: 10 :: retClob ++ newSaved) st)))
+      (iprop(⌜ρ = .uncounted⌝ ∗ oomAt 0x80002a38#64 (s - 16#64) s envNewNeed
+        (VsaIris.ra :: 10 :: retClob ++ newSaved))))
 
 /-- **`env_get(env, name, out)`** (`env.c:43`): `Store.get?` through the
 parent chain, copying the found value into `out`. -/
@@ -247,8 +247,8 @@ def envDefineSpec (Wp : MachWP (GF := GF) M) (N : NativeAddrs) : IProp GF :=
         strAt pn.toNat x ∗ valAt N pv.toNat v ∗ heapStore N (ρ.plus (defineCost st fa x)) st))
       (fun _ => iprop(sp ↦ᵣ s ∗ clobbered (10 :: retClob) ∗ savedOwn saved ∗
         stackScratch s envDefineNeed ∗ valAt N pv.toNat v ∗ heapStore N ρ (st.define fa x v)))
-      (iprop(⌜ρ = .uncounted⌝ ∗ ∃ st', oomAt N 0x80002bd0#64 (s - 64#64) s envDefineNeed
-        (VsaIris.ra :: 10 :: retClob ++ defineSaved) st' ∗ valAt N pv.toNat v)))
+      (iprop(⌜ρ = .uncounted⌝ ∗ oomAt 0x80002bd0#64 (s - 64#64) s envDefineNeed
+        (VsaIris.ra :: 10 :: retClob ++ defineSaved) ∗ valAt N pv.toNat v)))
 
 end Store
 

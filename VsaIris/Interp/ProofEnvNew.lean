@@ -192,10 +192,8 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
       rw [show (16#64 : BitVec 64).toNat = 16 from rfl]
       unfold blockOwn
       iapply ownSet_forget $$ Hfr
-    unfold heapStore
-    iexists H, B
-    iframe Hh Hst
-    ipureintro; exact hBH
+    iexists H
+    iexact Hh
   · -- a fresh block: initialize the `Env`, return it
     have h32 : (R1 10).toNat = 32 := by rw [h10]; rfl
     rw [h32]
