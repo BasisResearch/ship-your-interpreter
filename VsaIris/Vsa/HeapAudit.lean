@@ -1,4 +1,4 @@
-import VsaIris.Vsa.MallocPaths
+import VsaIris.Vsa.MallocPro
 import VsaIris.Vsa.MallocConsumer
 import VsaIris.Vsa.ControlEnd
 import VsaIris.Vsa.MallocFastHeap
@@ -77,3 +77,5 @@ import VsaIris.Vsa.AllocTac
 #print axioms VsaIris.VsaHeap.small_take
 #print axioms VsaIris.VsaHeap.mOK_chg
 #print axioms VsaIris.VsaHeap.epi_core
+#print axioms VsaIris.VsaHeap.malloc_pro
+#print axioms VsaIris.VsaHeap.malloc_errno

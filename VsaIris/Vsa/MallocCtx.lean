@@ -179,6 +179,21 @@ theorem MHeap.off_stack {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
     split <;> omega
   exact Hp.disj _ (by split <;> omega) (by unfold mHead at *; split <;> omega) (hf _ hk)
 
+/-- A footprint range of positive width lies wholly below or above the stack window. -/
+theorem MHeap.off_stack_w {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} (Hp : MHeap C Mt brkv chunks bins) {a w : Nat} (hw : 0 < w)
+    (hf : ∀ k, k < w → vsaFoot C.H (a + k)) :
+    a + w ≤ C.s.toNat - mHead ∨ C.s.toNat ≤ a := by
+  refine Classical.byContradiction fun hc => ?_
+  have hm : 0 < mHead := by unfold mHead; omega
+  by_cases h : C.s.toNat - mHead ≤ a
+  · have := hf 0 hw
+    rw [Nat.add_zero] at this
+    exact Hp.disj a h (by omega) this
+  · have := hf (C.s.toNat - mHead - a) (by omega)
+    rw [show a + (C.s.toNat - mHead - a) = C.s.toNat - mHead by omega] at this
+    exact Hp.disj _ (Nat.le_refl _) (by omega) this
+
 /-! ## The write window through stores -/
 
 /-- A store inside the write window keeps the memory outside it. -/
@@ -209,6 +224,61 @@ theorem pres_store {C : MCtx} {Mt : Mem} {a w : Nat} {v : BitVec 64}
     (hp : ∀ b, vsaFoot C.H b → (Mt[b]?).isSome) :
     ∀ b, vsaFoot C.H b → ((writeLog Mt [(a, w, v)])[b]?).isSome :=
   fun b hb => writeLog_present _ _ _ (hp b hb)
+
+/-- `PHeapAt` through memories that agree on the bytes it reads. -/
+theorem PHeapAt.transport_read {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
+    (hag : AgreeP (vsaRead H) m m') : PHeapAt m' H top brkv chunks bins :=
+  ⟨h.heap.transport_read hag, h.brk_page⟩
+
+/-- The heap invariant through a store to the run's stack. -/
+theorem MHeap.store_stack {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} (Hp : MHeap C Mt brkv chunks bins) {a w : Nat} {v : BitVec 64}
+    (h1 : C.s.toNat - mHead ≤ a) (h2 : a + w ≤ C.s.toNat) :
+    MHeap C (writeLog Mt [(a, w, v)]) brkv chunks bins where
+  heap := Hp.heap.transport_read fun x hx => by
+    have hd := Hp.disj x
+    have ho : OutL [(a, w, v)] x := ⟨Classical.byContradiction fun hc => by
+      simp only at hc
+      exact hd (by omega) (by omega) hx.1, trivial⟩
+    rw [writeLog_out _ _ _ ho]
+  pres := pres_store Hp.pres
+  disj := Hp.disj
+  frame := frame_store (win_stack h1 h2) Hp.frame
+
+/-- The heap invariant through a store to `_errno`, which `HeapAt` never reads. -/
+theorem MHeap.store_errno {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} (Hp : MHeap C Mt brkv chunks bins) {v : BitVec 64} :
+    MHeap C (writeLog Mt [(0x8001b538, 4, v)]) brkv chunks bins where
+  heap := Hp.heap.transport_read fun x hx => by
+    have ho : OutL [(0x8001b538, 4, v)] x := ⟨Classical.byContradiction fun hc => by
+      simp only at hc
+      exact hx.2.1 ⟨by omega, by omega⟩, trivial⟩
+    rw [writeLog_out _ _ _ ho]
+  pres := pres_store Hp.pres
+  disj := Hp.disj
+  frame := frame_store (fun b h1 h2 => .inl (.inl (.inr (.inl ⟨h1, h2⟩)))) Hp.frame
+
+/-- The frame through a register write other than `sp` and `s1-s3`. -/
+theorem MFrame.upd {C : MCtx} {R : Nat → BitVec 64} {Mt : Mem} (F : MFrame C R Mt) {k : Nat}
+    {v : BitVec 64} (hk : k ≠ 2 ∧ k ≠ 9 ∧ k ≠ 18 ∧ k ≠ 19) : MFrame C (VsaIris.Sym.upd R k v) Mt where
+  sp := by rw [upd_other _ _ (Ne.symm hk.1)]; exact F.sp
+  s0 := F.s0
+  ra := F.ra
+  s1 := by rw [upd_other _ _ (Ne.symm hk.2.1)]; exact F.s1
+  s2 := by rw [upd_other _ _ (Ne.symm hk.2.2.1)]; exact F.s2
+  s3 := by rw [upd_other _ _ (Ne.symm hk.2.2.2)]; exact F.s3
+
+/-- The frame through a store that misses the saved `s0` and `ra`. -/
+theorem MFrame.store {C : MCtx} {R : Nat → BitVec 64} {Mt : Mem} (F : MFrame C R Mt)
+    {a w : Nat} {v : BitVec 64} (h : a + w ≤ C.s.toNat - 96 + 80 ∨ C.s.toNat - 96 + 96 ≤ a) :
+    MFrame C R (writeLog Mt [(a, w, v)]) where
+  sp := F.sp
+  s0 := by rw [read64_store_miss _ _ (by omega)]; exact F.s0
+  ra := by rw [read64_store_miss _ _ (by omega)]; exact F.ra
+  s1 := F.s1
+  s2 := F.s2
+  s3 := F.s3
 
 /-! ## The epilogue -/
 

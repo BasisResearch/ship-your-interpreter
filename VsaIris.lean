@@ -47,3 +47,4 @@ import VsaIris.Vsa.HeapTake
 import VsaIris.Vsa.MallocGen
 import VsaIris.Vsa.MallocCtx
 import VsaIris.Vsa.MallocPaths
+import VsaIris.Vsa.MallocPro
