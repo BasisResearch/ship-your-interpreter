@@ -123,7 +123,8 @@ theorem ownImg_of_memMap {S : Nat → Prop} {img : Nat → BitVec 8} {l : List N
 
 /-- **A read-only view** out of the boundary map: one discard. -/
 theorem roOn_of_memMap {P : Nat → Prop} {img : Nat → BitVec 8} {m : Mem} {l : List Nat}
-    (hnd : l.Nodup) (hmem : ∀ a, a ∈ l ↔ P a) (hag : ∀ k, P k → m[k]? = some (img k)) :
+    (hnd : l.Nodup) (hmem : ∀ a, a ∈ l ↔ P a)
+    (hag : ∀ k b, P k → m[k]? = some b → img k = b) :
     ([∗map] k ↦ v ∈ imgMap img l, iprop(k ↦ₘ v)) ⊢ |==> roOn (GF := GF) P m := by
   iintro H
   iapply roOn_of_ownImg hag

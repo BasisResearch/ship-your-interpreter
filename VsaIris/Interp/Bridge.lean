@@ -110,22 +110,23 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
 
 omit I in
 /-- A read-only image over `P` IS a read-only view of any memory it agrees
-with on `P`. -/
+with WHERE THAT MEMORY IS MAPPED: `roOn` promises nothing at an unmapped
+byte, so the image need not be defined there (`memImg` always qualifies). -/
 theorem roOn_of_roImg {P : Nat → Prop} {img : Nat → BitVec 8} {m : Mem}
-    (h : ∀ k, P k → m[k]? = some (img k)) : roImg (GF := GF) P img ⊢ roOn P m := by
+    (h : ∀ k b, P k → m[k]? = some b → img k = b) : roImg (GF := GF) P img ⊢ roOn P m := by
   unfold roImg roOn
   iintro #H
   imodintro
   iintro %k %b %hk %hb
-  have hb' : img k = b := Option.some.inj ((h k hk).symm.trans hb)
-  rw [← hb']
+  rw [← h k b hk hb]
   iapply H $$ %k %hk
 
 omit I in
 /-- **Discard to a view.** Exclusively owned bytes agreeing with `m` on `P`
 become a read-only view of `m` on `P`. -/
 theorem roOn_of_ownImg {P : Nat → Prop} {img : Nat → BitVec 8} {m : Mem}
-    (h : ∀ k, P k → m[k]? = some (img k)) : ownImg (GF := GF) P img ⊢ |==> roOn P m := by
+    (h : ∀ k b, P k → m[k]? = some b → img k = b) :
+    ownImg (GF := GF) P img ⊢ |==> roOn P m := by
   iintro H
   imod ownImg_persist P img $$ H with H
   imodintro
@@ -265,6 +266,39 @@ omit I in
 theorem astSs_of_programRepr {P : Nat → Prop} {m : Mem} {a n : Nat} {p : Program}
     (h : ProgramReprWithin m P a n p) : roOn (GF := GF) P m ⊢ astSs a n p :=
   astSs_of_stmtArrayRepr h.1
+
+/-! ## Words and blocks -/
+
+omit I in
+/-- An owned image of a window IS the exclusive word it spells. -/
+theorem wordAt_of_ownImg {a n v : Nat} {img : Nat → BitVec 8} (h : imgLE img a n = v) :
+    ownImg (GF := GF) (InExt (a, n)) img ⊢ wordAt a n v := by
+  unfold wordAt
+  iintro H
+  iexists img
+  iframe H
+  ipureintro; exact h
+
+omit I in
+/-- **Discard a word.** An owned window becomes the read-only word it spells
+(the `globals` pointer, which never changes after `interp_init`). -/
+theorem wordRO_of_ownImg {a n v : Nat} {img : Nat → BitVec 8} (h : imgLE img a n = v) :
+    ownImg (GF := GF) (InExt (a, n)) img ⊢ |==> wordRO a n v := by
+  iintro H
+  imod ownImg_persist _ img $$ H with H
+  imodintro
+  unfold wordRO
+  iexists img
+  iframe H
+  ipureintro; exact h
+
+omit I in
+/-- An owned image of a window forgets its values. -/
+theorem blockOwn_of_ownImg (a n : Nat) (img : Nat → BitVec 8) :
+    ownImg (GF := GF) (InExt (a, n)) img ⊢ blockOwn a n := by
+  unfold blockOwn
+  iintro H
+  iapply ownSet_forget $$ H
 
 /-! ## Values
 

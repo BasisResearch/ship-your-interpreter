@@ -27,3 +27,4 @@ import VsaIris.Interp.Repr
 import VsaIris.Interp.Store
 import VsaIris.Interp.Bridge
 import VsaIris.Interp.Boundary
+import VsaIris.Interp.Vacuity
