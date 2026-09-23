@@ -33,6 +33,11 @@ def getSite (live : Nat → Prop) (hl : ∀ p ∈ envText, live p.1) : ScanSite 
   jexec := jalx_80002c68 live fun p hp => hl _ (env_code_80002c68 p hp)
   jtext := env_code_80002c68
   jal4 := by decide
+  nameR := 19
+  cntR := 18
+  cntOK := by decide
+  nameIs := rfl
+  cntIs := rfl
   sEntry := get_entry hl
   sHead := get_head hl
   sLoad := get_load hl

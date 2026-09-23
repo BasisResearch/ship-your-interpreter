@@ -398,21 +398,45 @@ end Frames
 
 /-! ## A site: one address of the scan code -/
 
-/-- **One address of the scan code**: its PCs, its `jal strcmp` site, and its
-first-order spans (`EnvGetSpans.lean` for `env_get`, the generated
-`EnvSetSpans.lean` for `env_set`). The hit arm is not part of it. -/
-structure ScanSite (live : Nat → Prop) where
-  entry : BitVec 64
-  head : BitVec 64
+/-- The loop over one frame's names (`scan_frame`): the load of name `i`,
+`jal strcmp`, and the test. Its name register is `nameR`, its count register
+`cntR`; the index is `s0` and the names cursor `s1`. -/
+structure ScanLoop (live : Nat → Prop) where
   scan : BitVec 64
   jal : Nat
   jcode : List (BitVec 8)
   hit : BitVec 64
   tail : BitVec 64
-  epi : BitVec 64
+  nameR : Nat
+  cntR : Nat
+  cntOK : cntR ∉ strcmpKs ∧ cntR ≠ 8 ∧ cntR ≠ 9 ∧ cntR ≠ 10 ∧ cntR ≠ 11
   jexec : JalExec (vsaModel live) jal jcode strcmpPC
   jtext : ∀ p ∈ codeFoot jal jcode, (p.1, p.2.2) ∈ envText
   jal4 : (BitVec.ofNat 64 (jal + 4)).toNat % 4 = 0
+  sLoad : ∀ {s out n i : Nat} {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem},
+    FrameLayout (imgM Mt) G n → i < n → (R 9).toNat = G.pn + 8 * i →
+    Span live (getS s out G) scan R Mt
+      (fun pc' R' Mt' => Mt' = Mt ∧ pc' = BitVec.ofNat 64 jal ∧
+        R' 10 = imgW (imgM Mt) (G.pn + 8 * i) ∧ R' 11 = R nameR ∧
+        ∀ k, k ≠ 10 → k ≠ 11 → R' k = R k)
+  sCmp : ∀ {s out n i : Nat} {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem},
+    i < n → n < 2 ^ 31 → R 8 = BitVec.ofNat 64 i → R cntR = BitVec.ofNat 64 n →
+    Span live (getS s out G) (BitVec.ofNat 64 (jal + 4)) R Mt
+      (fun pc' R' Mt' => Mt' = Mt ∧
+        ((R 10 ≠ 0#64 ∧ i + 1 < n ∧ pc' = scan ∧ CmpNext i R R') ∨
+         (R 10 ≠ 0#64 ∧ i + 1 = n ∧ pc' = tail ∧ CmpNext i R R') ∨
+         (R 10 = 0#64 ∧ pc' = hit ∧ R' = R)))
+
+/-- **One address of the chain-scan code** (`env_get`/`env_set`): the frame
+loop, the entry, the frame head, the parent step and the epilogue, as
+first-order spans (`EnvGetSpans.lean`, the generated `EnvSetSpans.lean`). The
+hit arm is not part of it. -/
+structure ScanSite (live : Nat → Prop) extends ScanLoop live where
+  nameIs : nameR = 19
+  cntIs : cntR = 18
+  entry : BitVec 64
+  head : BitVec 64
+  epi : BitVec 64
   sEntry : ∀ {s out : Nat} {r : BitVec 64} {sv R : Nat → BitVec 64} {so : Nat → BitVec 8}
     {Mt : Mem}, htifLo + 16 + 64 ≤ s → s ≤ 0x100000000 → s % 16 = 0 → GetEntry s r sv R →
     (∀ a, (R 12).toNat ≤ a → a < (R 12).toNat + 24 → imgM Mt a = so a) →
@@ -425,19 +449,6 @@ structure ScanSite (live : Nat → Prop) where
       (fun pc' R' Mt' => Mt' = Mt ∧
         ((n = 0 ∧ pc' = tail ∧ ∀ k, k ≠ 18 → R' k = R k) ∨
          (0 < n ∧ pc' = scan ∧ HeadScan G n R R')))
-  sLoad : ∀ {s out n i : Nat} {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem},
-    FrameLayout (imgM Mt) G n → i < n → (R 9).toNat = G.pn + 8 * i →
-    Span live (getS s out G) scan R Mt
-      (fun pc' R' Mt' => Mt' = Mt ∧ pc' = BitVec.ofNat 64 jal ∧
-        R' 10 = imgW (imgM Mt) (G.pn + 8 * i) ∧ R' 11 = R 19 ∧
-        ∀ k, k ≠ 10 → k ≠ 11 → R' k = R k)
-  sCmp : ∀ {s out n i : Nat} {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem},
-    i < n → n < 2 ^ 31 → R 8 = BitVec.ofNat 64 i → R 18 = BitVec.ofNat 64 n →
-    Span live (getS s out G) (BitVec.ofNat 64 (jal + 4)) R Mt
-      (fun pc' R' Mt' => Mt' = Mt ∧
-        ((R 10 ≠ 0#64 ∧ i + 1 < n ∧ pc' = scan ∧ CmpNext i R R') ∨
-         (R 10 ≠ 0#64 ∧ i + 1 = n ∧ pc' = tail ∧ CmpNext i R R') ∨
-         (R 10 = 0#64 ∧ pc' = hit ∧ R' = R)))
   sParent : ∀ {s out n : Nat} {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem},
     FrameLayout (imgM Mt) G n → (R 20).toNat = G.e →
     Span live (getS s out G) tail R Mt
@@ -558,96 +569,102 @@ theorem frameS_val {img : Nat → BitVec 8} {G : FrameGeom} {n i j : Nat}
   unfold frameS InExt
   exact .inr ⟨hcap, .inr ⟨by omega, by omega⟩⟩
 
+/-- What the frame loop needs of the state between spans (`Inv`): the frame's
+layout and image, the name register, and stability under the registers the
+loop writes. -/
+structure ScanInv (Sx : ScanLoop live) (G : FrameGeom) (n : Nat) (img : Nat → BitVec 8)
+    (pn : BitVec 64) (Inv : (Nat → BitVec 64) → Mem → Prop) : Prop where
+  lay : ∀ {R Mt}, Inv R Mt → FrameLayout (imgM Mt) G n
+  img : ∀ {R Mt}, Inv R Mt → ∀ a, frameS G a → imgM Mt a = img a
+  name : ∀ {R Mt}, Inv R Mt → R Sx.nameR = pn
+  regs : ∀ {R R' Mt}, Inv R Mt →
+    (∀ k, k ∉ strcmpKs → k ≠ 8 → k ≠ 9 → k ≠ 10 → k ≠ 11 → R' k = R k) → Inv R' Mt
+
 /-- **One frame's scan**, from name `i` on. It ends at the frame's end
 (`Sx.tail`, every name differs from `x`) or at the hit (`Sx.hit`) with the
 first match `j`. -/
 theorem scan_frame (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
-    (Sx : ScanSite live) (N : NativeAddrs) (C : GetCall) (hC : C.OK)
-    {f : Frame} {G : FrameGeom} {img : Nat → BitVec 8} :
+    (Sx : ScanLoop live) (N : NativeAddrs) {s out : Nat} {pn : BitVec 64} {x : String}
+    {f : Frame} {G : FrameGeom} {img : Nat → BitVec 8} {Inv : (Nat → BitVec 64) → Mem → Prop}
+    (hI : ScanInv Sx G f.vars.length img pn Inv) :
     ∀ m i R Mt, f.vars.length - i = m → i < f.vars.length →
-      (∀ p ∈ f.vars.take i, p.1 ≠ C.x) →
+      (∀ p ∈ f.vars.take i, p.1 ≠ x) →
       R 8 = BitVec.ofNat 64 i → (R 9).toNat = G.pn + 8 * i →
-      R 18 = BitVec.ofNat 64 f.vars.length → InFrame C G f.vars.length img R Mt →
-      textOwn envText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ∗ strAt C.pn.toNat C.x ∗
+      R Sx.cntR = BitVec.ofNat 64 f.vars.length → Inv R Mt →
+      textOwn envText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ∗ strAt pn.toNat x ∗
         bindings N img G.pn G.pv f.vars ∗ VsaIris.PC ↦ᵣ Sx.scan ∗ regsOf gprs R ∗
-        ownSet (getS C.s.toNat C.out.toNat G) (fun a => a ↦ₘ imgM Mt a) ∗
-        ((∀ R' Mt', ⌜InFrame C G f.vars.length img R' Mt' ∧ FrameMiss f.vars C.x⌝ -∗
+        ownSet (getS s out G) (fun a => a ↦ₘ imgM Mt a) ∗
+        ((∀ R' Mt', ⌜Inv R' Mt' ∧ FrameMiss f.vars x⌝ -∗
             VsaIris.PC ↦ᵣ Sx.tail -∗ regsOf gprs R' -∗
-            ownSet (getS C.s.toNat C.out.toNat G) (fun a => a ↦ₘ imgM Mt' a) -∗ Wp.W Φ) ∧
-         (∀ (j : Nat) (v : Value) R' Mt', ⌜f.vars[j]? = some (C.x, v) ∧
-            (∀ p ∈ f.vars.take j, p.1 ≠ C.x) ∧ InFrame C G f.vars.length img R' Mt' ∧
+            ownSet (getS s out G) (fun a => a ↦ₘ imgM Mt' a) -∗ Wp.W Φ) ∧
+         (∀ (j : Nat) (v : Value) R' Mt', ⌜f.vars[j]? = some (x, v) ∧
+            (∀ p ∈ f.vars.take j, p.1 ≠ x) ∧ Inv R' Mt' ∧
             R' 8 = BitVec.ofNat 64 j⌝ -∗
             VsaIris.PC ↦ᵣ Sx.hit -∗ regsOf gprs R' -∗
-            ownSet (getS C.s.toNat C.out.toNat G) (fun a => a ↦ₘ imgM Mt' a) -∗ Wp.W Φ))
+            ownSet (getS s out G) (fun a => a ↦ₘ imgM Mt' a) -∗ Wp.W Φ))
       ⊢ Wp.W Φ := by
+  obtain ⟨hcS, hc8, hc9, hc10, hc11⟩ := Sx.cntOK
   intro m
   induction m with
   | zero => intro i R Mt hm hi; omega
   | succ m ih =>
     intro i R Mt hm hi hne h8 h9 h18 hF
     iintro ⟨#Ht, #Hgp, #Hcmp, #Hx, #Hb, Hpc, HR, HS, HKK⟩
-    iapply wp_span Wp (Sx.sLoad (s := C.s.toNat) (out := C.out.toNat) hF.lay hi h9)
+    iapply wp_span Wp (Sx.sLoad (s := s) (out := out) (hI.lay hF) hi h9)
     iframe Ht Hgp Hpc HR HS
     iintro %pc1 %R1 %Mt1 %⟨rfl, rfl, h10, h11, hk1⟩ Hpc HR HS
     ihave ⟨#Hname, #Hval⟩ := bindings_get N img G.pn G.pv f.vars hi $$ Hb
     have hname : (R1 10).toNat = imgLE img (G.pn + 8 * i) 8 := by
       rw [h10, imgW_toNat]
-      exact imgLE_congr fun j hj => hF.img _ (frameS_name hF.lay hi hj)
-    iapply wp_call_strcmp Wp Sx.jexec Sx.jal4 (xi := (f.vars[i]).1) (x := C.x)
+      exact imgLE_congr fun j hj => hI.img hF _ (frameS_name (hI.lay hF) hi hj)
+    iapply wp_call_strcmp Wp Sx.jexec Sx.jal4 (xi := (f.vars[i]).1) (x := x)
     isplitl []
     · iapply instrAt_of_text Sx.jtext $$ Ht
     iframe Hcmp Hpc HR
     isplitl []
     · rw [hname]; iexact Hname
     isplitl []
-    · rw [h11, hF.name]; iexact Hx
+    · rw [h11, hI.name hF]; iexact Hx
     iintro %R2 %⟨hres, h1, hk2⟩ Hpc HR
     have k2 : ∀ k, k ∉ strcmpKs → k ≠ 10 → k ≠ 11 → R2 k = R k := fun k hk h10 h11 =>
       (hk2 k hk).trans (hk1 k h10 h11)
     have h8' : R2 8 = BitVec.ofNat 64 i := (k2 8 (by decide) (by decide) (by decide)).trans h8
-    have h18' : R2 18 = BitVec.ofNat 64 f.vars.length :=
-      (k2 18 (by decide) (by decide) (by decide)).trans h18
-    have hn := hF.lay.count_lt
-    iapply wp_span Wp (Sx.sCmp (s := C.s.toNat) (out := C.out.toNat) (G := G) hi hn h8' h18')
+    have h18' : R2 Sx.cntR = BitVec.ofNat 64 f.vars.length :=
+      (k2 Sx.cntR hcS hc10 hc11).trans h18
+    have hn := (hI.lay hF).count_lt
+    iapply wp_span Wp (Sx.sCmp (s := s) (out := out) (G := G) hi hn h8' h18')
     iframe Ht Hgp Hpc HR HS
     iintro %pc3 %R3 %Mt3 %⟨rfl, hcase⟩ Hpc HR HS
-    have hs64 : 64 ≤ C.s.toNat := by have := hC.sp.lo; unfold htifLo at this; omega
     rcases hcase with ⟨hne0, hlt, rfl, hnx⟩ | ⟨hne0, heq, rfl, hnx⟩ | ⟨heq0, rfl, hR3⟩
     · -- the next name
-      have hxi : (f.vars[i]).1 ≠ C.x := fun h => hne0 (hres.2 h)
-      have k3 : ∀ k, k ∉ strcmpKs → k ≠ 10 → k ≠ 11 → k ≠ 8 → k ≠ 9 → R3 k = R k :=
-        fun k hk h10 h11 h8 h9 => (hnx.keep k h8 h9).trans (k2 k hk h10 h11)
-      obtain ⟨-, -, hn2, -, -, hnw, -⟩ := hF.lay.slot hi
+      have hxi : (f.vars[i]).1 ≠ x := fun h => hne0 (hres.2 h)
+      have k3 : ∀ k, k ∉ strcmpKs → k ≠ 8 → k ≠ 9 → k ≠ 10 → k ≠ 11 → R3 k = R k :=
+        fun k hk h8 h9 h10 h11 => (hnx.keep k h8 h9).trans (k2 k hk h10 h11)
+      obtain ⟨-, -, hn2, -, -, hnw, -⟩ := (hI.lay hF).slot hi
       have h9' : (R3 9).toNat = G.pn + 8 * (i + 1) := by
         rw [hnx.cur, k2 9 (by decide) (by decide) (by decide), BitVec.toNat_add, h9]
         have := hnw.hi; simp; omega
       iapply ih (i + 1) R3 _ (by omega) hlt (take_succ_all hi hne hxi) hnx.idx h9'
-        ((hnx.keep 18 (by decide) (by decide)).trans h18')
-        (hF.regs hs64 fun k hk => by
-          rcases hk with rfl | rfl | rfl | rfl | rfl <;>
-            exact k3 _ (by decide) (by decide) (by decide) (by decide) (by decide))
+        ((hnx.keep Sx.cntR hc8 hc9).trans h18') (hI.regs hF k3)
       iframe Ht Hgp Hcmp Hx Hb Hpc HR HS HKK
     · -- the frame is exhausted
-      have hxi : (f.vars[i]).1 ≠ C.x := fun h => hne0 (hres.2 h)
-      have k3 : ∀ k, k ∉ strcmpKs → k ≠ 10 → k ≠ 11 → k ≠ 8 → k ≠ 9 → R3 k = R k :=
-        fun k hk h10 h11 h8 h9 => (hnx.keep k h8 h9).trans (k2 k hk h10 h11)
-      have hmiss : FrameMiss f.vars C.x := by
+      have hxi : (f.vars[i]).1 ≠ x := fun h => hne0 (hres.2 h)
+      have k3 : ∀ k, k ∉ strcmpKs → k ≠ 8 → k ≠ 9 → k ≠ 10 → k ≠ 11 → R3 k = R k :=
+        fun k hk h8 h9 h10 h11 => (hnx.keep k h8 h9).trans (k2 k hk h10 h11)
+      have hmiss : FrameMiss f.vars x := by
         intro p hp
         have := take_succ_all hi hne hxi
         rw [List.take_of_length_le (by omega)] at this
         exact this p hp
       ihave Kex := and_elim_l $$ HKK
-      iapply Kex $$ %R3 %_ %⟨hF.regs hs64 fun k hk => by
-          rcases hk with rfl | rfl | rfl | rfl | rfl <;>
-            exact k3 _ (by decide) (by decide) (by decide) (by decide) (by decide), hmiss⟩ Hpc HR HS
+      iapply Kex $$ %R3 %_ %⟨hI.regs hF k3, hmiss⟩ Hpc HR HS
     · -- the hit
       subst hR3
-      have hx : (f.vars[i]).1 = C.x := hres.1 heq0
+      have hx : (f.vars[i]).1 = x := hres.1 heq0
       ihave Khit := and_elim_r $$ HKK
-      iapply Khit $$ %i %((f.vars[i]).2) %R3 %_ %⟨?_, hne, hF.regs hs64 fun k hk => by
-          rcases hk with rfl | rfl | rfl | rfl | rfl <;>
-            exact k2 _ (by decide) (by decide) (by decide), h8'⟩ Hpc HR HS
-      rw [List.getElem?_eq_getElem hi, show f.vars[i] = (C.x, (f.vars[i]).2) from Prod.ext hx rfl]
+      iapply Khit $$ %i %((f.vars[i]).2) %R3 %_ %⟨?_, hne,
+          hI.regs hF fun k hk _ _ h10 h11 => k2 k hk h10 h11, h8'⟩ Hpc HR HS
+      rw [List.getElem?_eq_getElem hi, show f.vars[i] = (x, (f.vars[i]).2) from Prod.ext hx rfl]
 
 end ScanLoop
 
@@ -686,6 +703,17 @@ section Chain
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
   {live : Nat → Prop}
+
+/-- `InFrame` is a frame-loop invariant for the get/set sites (name in `s3`). -/
+theorem inFrame_scanInv {Sx : ScanSite live} (C : GetCall) {G : FrameGeom} {n : Nat}
+    {img : Nat → BitVec 8} (hs : 64 ≤ C.s.toNat) :
+    ScanInv Sx.toScanLoop G n img C.pn (InFrame C G n img) where
+  lay h := h.lay
+  img h := h.img
+  name h := by rw [Sx.nameIs]; exact h.name
+  regs h hk := h.regs hs fun k hk' => by
+    rcases hk' with rfl | rfl | rfl | rfl | rfl <;>
+      exact hk _ (by decide) (by decide) (by decide) (by decide) (by decide)
 
 /-- The closer of an open frame (`storeRepr_openAt`). -/
 abbrev frameCloser (N : NativeAddrs) (st : Store) (fa : Addr) (B₁ B₂ : List (Nat × Nat)) :
@@ -848,9 +876,11 @@ theorem scan_chain (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     iframe Ht Hgp Hcmp Hx Hb Hp HGe Hclose Hpc HR HS HK
   · -- scan the names
     obtain ⟨-, -, hn2, -, -, hnw, -⟩ := hF.lay.slot hpos
-    iapply scan_frame Wp Sx N C hC f.vars.length 0 R1 _ (by omega) hpos (by simp) hsc.idx
+    iapply scan_frame Wp Sx.toScanLoop N (inFrame_scanInv (Sx := Sx) C hs64) f.vars.length 0 R1 _
+      (by omega) hpos (by simp) hsc.idx
       (by rw [hsc.cur, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by have := hnw.hi; omega)]; simp)
-      hsc.cnt (hF.regs hs64 fun k hk' => hsc.keep k (by omega) (by omega) (by omega))
+      (by rw [Sx.cntIs]; exact hsc.cnt)
+      (hF.regs hs64 fun k hk' => hsc.keep k (by omega) (by omega) (by omega))
     iframe Ht Hgp Hcmp Hx Hb Hpc HR HS
     isplit
     · iintro %R' %Mt' %⟨hF', hmiss⟩ Hpc HR HS
