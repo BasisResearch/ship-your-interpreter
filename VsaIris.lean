@@ -39,3 +39,5 @@ import VsaIris.Vsa.AllocTac
 import VsaIris.MallocChg
 import VsaIris.Vsa.HeapRoom
 import VsaIris.Vsa.AllocHoles
+import VsaIris.Vsa.HeapAlg
+import VsaIris.Vsa.HeapTake
