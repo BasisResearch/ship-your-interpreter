@@ -50,3 +50,8 @@ import VsaIris.Vsa.Oom
 import VsaIris.Vsa.OomSites
 import VsaIris.Vsa.Setjmp
 import VsaIris.Vsa.TopAbrupt
+import VsaIris.Vsa.SegRun
+import VsaIris.Vsa.StrlenSeg
+import VsaIris.Vsa.Strlen
+import VsaIris.Vsa.StrlenSpec
+import VsaIris.Vsa.StrcmpSeg

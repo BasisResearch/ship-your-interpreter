@@ -3936,3 +3936,34 @@ visibility; permission failure is not evidence that an owner is dead.
 `kill -0 58547` failed with `operation not permitted`; the same probe with
 process visibility succeeded. Launch future compiler wrappers with
 `require_escalated`; do not modify the running wrapper or reclaim its lock.
+
+## `MKind` gap: `sltu`/`sltiu` are outside the reflected block model (lane H3, 2026-09-23)
+
+`MKind` (`Vsa/Sim/BlockMem.lean:549`) has `slt`/`slti` but no `sltu`/`sltiu`.
+Two instructions gcc emitted are therefore unreachable by `#derive_case`:
+
+| site | instruction | word | consumer |
+|---|---|---|---|
+| `0x80006d64` | `snez a0,a5` = `sltu a0,x0,a5` | `0x00f03533` | `strlen`'s last byte test |
+| `0x80006bd8` | `sltiu a2,a2,8` | `0x00863613` | `memcpy`'s length dispatch |
+
+**Evidence (machine-checked).** `#derive_case` accepts the word — it decodes
+to the nearest kind — but the block's `DecodeFactM` then cannot be closed:
+`DecodeTable.decode_00f03533` concludes
+`instruction.RTYPE (…, rop.SLTU)` while `astOfM` of the reflected line does
+not, so `chain_facts` leaves a type mismatch. That is the model's safety net
+working. It is why `Vsa/Sim/StrlenLastRun.lean` (83 lines plus its share of
+`StrlenSites.lean`) proves that one instruction observationally, and why
+`Vsa/Sim/MemcpyCopyLengthTest.lean` uses `site_80006bd8`.
+
+**Workaround in place.** The Iris route consumes the same generated sites
+through `VsaIris.Inst.AluStep` / `runFact_of_aluStep`
+(`VsaIris/Vsa/SegRun.lean`), the `jalExec_of_site` analogue for a
+register-writing step: one observational step becomes one local-run step.
+
+**Discharge plan.** Add `sltu` and `sltiu` to `MKind`, their evaluation to
+`runGM`/`astOfM`, and their `MemFacts` case (`True`, as for `slt`/`slti`).
+That retires `StrlenLastRun.lean`, the `site_80006d64`/`site_80006bd8`
+batteries, and the `AluStep` bridge, and makes both blocks ordinary
+`gen_fn.py` output. It is a core-model change, so it needs a full rebuild and
+should be scheduled where it does not block a lane.
