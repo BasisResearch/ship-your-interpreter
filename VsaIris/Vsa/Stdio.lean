@@ -15,8 +15,10 @@ partition that range (`nm c/while-riscv-htif.elf`).
 `StdioOK` is the state the interpreter keeps at every boundary: VSA's
 `ConsoleStream` (stdout's `FILE`, unbuffered, `_w = 0`, the `__swrite`
 callback) and `ExitRuntimeData` (empty `atexit` list, the installed
-`stdio_exit_handler`, idle stdin/stderr). `InterpRunPhysicalFacts.console`
-and `.exit_runtime` supply both at the boundary.
+`stdio_exit_handler`, idle stdin/stderr) and `_impure_data._stderr`.
+`InterpRunPhysicalFacts.console` and `.exit_runtime` supply the first two at
+the boundary; the `stderr` pointer is not yet a boundary field
+(INTERP_DESIGN.md Q6).
 -/
 
 namespace VsaIris.Stdio
@@ -36,11 +38,18 @@ def stdioFoot (a : Nat) : Prop :=
   InRange 0x8001b970 0x8001b990 a ∨ InRange 0x8001b9b0 0x8001ba08 a ∨
   InRange 0x8001ba0c 0x8001ba18 a ∨ InRange 0x8001ba68 0x8001c168 a
 
+/-- `_impure_data._stderr` (`reent + 24`) points at `__sf[2]`. `main`'s error
+line loads its stream from there (`ld a0,24(a5)`); neither `ConsoleStream`
+nor `ExitRuntimeData` pins it. -/
+def stderrPtrAddr : Nat := consoleReent + 24
+
 /-- The runtime data the interpreter keeps at every boundary, read off an
 image of `stdioFoot`: any memory agreeing with the image there satisfies
-`ConsoleStream` and `ExitRuntimeData` (both read only inside `stdioFoot`). -/
+`ConsoleStream`, `ExitRuntimeData` and the `stderr` pointer (all read only
+inside `stdioFoot`). -/
 def StdioOK (img : Nat → BitVec 8) : Prop :=
-  ∀ m : Mem, (∀ a, stdioFoot a → m[a]? = some (img a)) → ConsoleStream m ∧ ExitRuntimeData m
+  ∀ m : Mem, (∀ a, stdioFoot a → m[a]? = some (img a)) →
+    ConsoleStream m ∧ ExitRuntimeData m ∧ read64 m stderrPtrAddr = some exitStderr
 
 section Own
 

@@ -3758,6 +3758,13 @@ supersedes this isolated candidate and is now applied to the worktree.
   propagation, formatted error/exit tail, and top-level abrupt completion.
   Complete auxiliary `hCallTooMany` with its indexed child and signed count
   bridge; reuse the bad-closure impossibility proof.
+- Iris route, H5 (`VsaIris/INTERP_DESIGN.md` Q6, Q7): `main`'s error line
+  needs `_impure_data._stderr = &__sf[2]` (`0x8001b550`), which no
+  `InterpRunPhysicalFacts` field pins (supplier: an `ExitRuntimeData` field
+  from the snapshot); and `runtime_error` + `snprintf` need 1152 bytes of
+  stack against the budget's 1088-byte leaf headroom at the deepest call
+  (`Newlib.snprintfNeed`, `EvalEntry.stackBudget`). `FprintfStderrNeutral`
+  (`ExitPath.lean`) is false: `_write` stores `stderr` bytes to `tohost`.
 - Construct all 63 `TermResidualsBase` fields, then `RemainingWork`, then the
   final refinement theorem. Remove the 30 remaining discipline findings and the
   12 per-entry allocator ledger fields R14 reports (supplied by `of_alloc`).

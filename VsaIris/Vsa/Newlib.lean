@@ -38,7 +38,10 @@ The stack needs are measured frame chains of the binary, rounded up:
 the write path ≈ 3200; `fwrite` 112 + `__sfvwrite_r` 96 + `__swsetup_r` 32 +
 `__smakebuf_r` 160 + `__swhatbuf_r` 160 + `_fstat_r` 16 + `_fstat` 16 = 592;
 `__call_exitprocs` 96, `_fwalk_sglue` 80 + `_fclose_r` 32 + `__sflush_r` 48 +
-`__swrite` 48 + `_write_r` 16 = 224.
+`__swrite` 48 + `_lseek_r`/`_write_r` 16 + 16 = 240. `exit` runs at
+`main`'s stack top, where the 256 bytes below its own frame are `err_msg`: the
+rest of `struct Interp` below is read-only (`globals`, the `jmp_buf`), so
+`exitHandlersNeed` cannot exceed 256.
 -/
 
 namespace VsaIris.Newlib
@@ -157,7 +160,7 @@ def stderrFile : BitVec 64 := 0x8001bbd8#64
 def snprintfNeed : Nat := 1024
 def fprintfNeed : Nat := 4096
 def fwriteNeed : Nat := 768
-def exitHandlersNeed : Nat := 512
+def exitHandlersNeed : Nat := 256
 
 /-! ## The statements -/
 

@@ -819,3 +819,24 @@ interpreter control's dlmalloc heap and stays with H4/A0.
 - **Q4: newlib safety holes.** `snprintf`/`fprintf` on the error paths are
   needed only so that partial mode is "never stuck". Leave them as named
   holes, or schedule proofs? (`vfprintf` is large.)
+- **Q6 (lane H5, needs the user): `_impure_data._stderr` at the boundary.**
+  `main`'s error line (`0x80004600`) loads its stream with `ld a5,0(s0);
+  ld a0,24(a5)`, i.e. from the reentrancy record's `_stderr` field
+  (`0x8001b550`). `InterpRunPhysicalFacts` pins stdout (`ConsoleStream`) and
+  the idle `stderr` `FILE` (`ExitRuntimeData.stderr`) but not this pointer, so
+  from the boundary alone `fprintf` may be handed any stream and the error
+  path's safety is unprovable. `Stdio.StdioOK` requires it
+  (`read64 m stderrPtrAddr = some exitStderr`); the supplier is one more
+  `ExitRuntimeData` field, read off the same snapshot
+  (`Vsa/Sim/OutputAliasSnapshot.lean`).
+- **Q7 (lane H5, needs the user): the error path's stack at the deepest call.**
+  `runtime_error` needs 224 bytes plus `snprintf`'s chain (272 + 592 + 64 =
+  928, `IrisHoles.newlib.snprintf` claims 1024). The budget's leaf headroom is
+  `evalFrame = 1088` (`EvalEntry.stackBudget`, `ProgramStackFits.need`), so an
+  error raised at call depth `maxCallDepth` from the deepest `eval_expr` has
+  no owned stack for `runtime_error`: 1152 > 1088 even at the measured need.
+  Either the boundary reserves an error headroom `rtErrNeed ≥ 224 + 1024`
+  below the program's need, or `perCallBudget` accounting leaves it at depth
+  `maxCallDepth`. H5 states `runtime_error`'s spec with its real need; E1–E6
+  must supply it at each error site.
+
