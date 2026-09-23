@@ -51,8 +51,10 @@ class MachPreG (GF : BundledGFunctors) where
   memG : GhostMapG GF Nat (BitVec 8) NatMap
   /-- Control ghost map; key 0 holds the lag counter. -/
   ctlG : GhostMapG GF Nat Nat NatMap
+  /-- Console ghost map; key 0 holds the output printed so far. -/
+  conG : GhostMapG GF Nat String NatMap
 
-attribute [reducible, instance] MachPreG.regG MachPreG.memG MachPreG.ctlG
+attribute [reducible, instance] MachPreG.regG MachPreG.memG MachPreG.ctlG MachPreG.conG
 
 class MachGpreS (GF : BundledGFunctors) extends InvGpreS GF where
   machPre : MachPreG GF
@@ -66,6 +68,8 @@ class MachGS (hlc : outParam HasLC) (GF : BundledGFunctors) where
   regName : GName
   memName : GName
   ctlName : GName
+  /-- The console cell (INTERP_DESIGN.md §2 F2). -/
+  conName : GName
 
 attribute [reducible, instance] MachGS.machPre
 attribute [implicit_reducible, instance] MachGS.invGS
@@ -104,6 +108,10 @@ def RegAgree (m : NatMap (BitVec 64)) (σ : M.State) : Prop :=
 def MemAgree (m : NatMap (BitVec 8)) (σ : M.State) : Prop :=
   ∀ k v, PartialMap.get? m k = some v → M.mem σ k = v
 
+/-- The console cell agrees with the model's output where defined (key 0). -/
+def ConAgree (m : NatMap String) (σ : M.State) : Prop :=
+  ∀ v, PartialMap.get? m 0 = some v → M.out σ = v
+
 /-- `reg_interp_at` (RiscvPtsto.v:2213). -/
 def regInterp (σ : M.State) : IProp GF :=
   iprop(∃ m, ghost_map_auth G.regName (DFrac.own 1) m ∗ ⌜RegAgree M m σ⌝)
@@ -111,9 +119,15 @@ def regInterp (σ : M.State) : IProp GF :=
 def memInterp (σ : M.State) : IProp GF :=
   iprop(∃ m, ghost_map_auth G.memName (DFrac.own 1) m ∗ ⌜MemAgree M m σ⌝)
 
+/-- The console bridge. MachCSL's console authority (paper §7.5, Figure 28
+`cons_auth`) sits in the state interpretation the same way. -/
+def conInterp (σ : M.State) : IProp GF :=
+  iprop(∃ m, ghost_map_auth G.conName (DFrac.own 1) m ∗ ⌜ConAgree M m σ⌝)
+
 /-- `mstate_interp` (RiscvPtsto.v:2340) without the device conjunct, plus the
 model's global invariant. This is what clients see. -/
-def mstateInterp (σ : M.State) : IProp GF := iprop(regInterp M σ ∗ memInterp M σ ∗ ⌜M.ok σ⌝)
+def mstateInterp (σ : M.State) : IProp GF :=
+  iprop(regInterp M σ ∗ memInterp M σ ∗ conInterp M σ ∗ ⌜M.ok σ⌝)
 
 /-- The ghost maps agree with `σ0`, which satisfies the global invariant. -/
 def AgreeOk (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8)) (σ0 : M.State) : Prop :=
@@ -121,9 +135,14 @@ def AgreeOk (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8)) (σ0 : M.State) :
 
 /-- The ghost maps agree with a state `j` steps before `σ`. -/
 def lagInterp (j : Nat) (σ : M.State) : IProp GF :=
-  iprop(∃ mr mm, ghost_map_auth G.regName (DFrac.own 1) mr ∗
-    ghost_map_auth G.memName (DFrac.own 1) mm ∗
-    ⌜∃ σ0, AgreeOk M mr mm σ0 ∧ ReachesN M j σ0 σ⌝)
+  iprop(∃ mr mm mo, ghost_map_auth G.regName (DFrac.own 1) mr ∗
+    ghost_map_auth G.memName (DFrac.own 1) mm ∗ ghost_map_auth G.conName (DFrac.own 1) mo ∗
+    ⌜∃ σ0, AgreeOk M mr mm σ0 ∧ ConAgree M mo σ0 ∧ ReachesN M j σ0 σ⌝)
+
+/-- The console cell: the output printed so far is `s`. Exclusive. Holding
+it is the only way to print (`wp_runOut`, Step.lean), and the halt rule reads
+the exit's output off it (`wp_halt_console`). -/
+def consoleOwn (s : String) : IProp GF := ghost_map_elem G.conName (DFrac.own 1) 0 s
 
 /-- The key-0 control cell at lag `j`. -/
 def ctlAt (j : Nat) : IProp GF := ghost_map_elem G.ctlName (DFrac.own 1) 0 j
@@ -244,21 +263,23 @@ theorem memInterp_frame {σ σ' : M.State} (h : ∀ k, M.mem σ' k = M.mem σ k)
 
 /-- At lag zero the lagging bridges are exactly the client-visible ones. -/
 theorem lagInterp_zero {σ : M.State} : lagInterp (GF := GF) M 0 σ ⊣⊢ mstateInterp M σ := by
-  unfold lagInterp mstateInterp regInterp memInterp
+  unfold lagInterp mstateInterp regInterp memInterp conInterp
   constructor
-  · iintro ⟨%mr, %mm, Hr, Hm, %h⟩
-    obtain ⟨σ0, ⟨hr, hm, hok⟩, hre⟩ := h
+  · iintro ⟨%mr, %mm, %mo, Hr, Hm, Ho, %h⟩
+    obtain ⟨σ0, ⟨hr, hm, hok⟩, ho, hre⟩ := h
     cases hre.zero_eq
     isplitl [Hr]
     · iexists mr; iframe Hr; ipureintro; exact hr
     isplitl [Hm]
     · iexists mm; iframe Hm; ipureintro; exact hm
+    isplitl [Ho]
+    · iexists mo; iframe Ho; ipureintro; exact ho
     ipureintro; exact hok
-  · iintro ⟨⟨%mr, Hr, %hr⟩, ⟨%mm, Hm, %hm⟩, %hok⟩
-    iexists mr, mm
-    iframe Hr Hm
+  · iintro ⟨⟨%mr, Hr, %hr⟩, ⟨%mm, Hm, %hm⟩, ⟨%mo, Ho, %ho⟩, %hok⟩
+    iexists mr, mm, mo
+    iframe Hr Hm Ho
     ipureintro
-    exact ⟨σ, ⟨hr, hm, hok⟩, .zero σ⟩
+    exact ⟨σ, ⟨hr, hm, hok⟩, ho, .zero σ⟩
 
 /-- A client holding the CPU token sees lag zero. -/
 theorem fullInterp_cpu {σ : M.State} :

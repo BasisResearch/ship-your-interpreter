@@ -203,16 +203,47 @@ theorem code_present {live : Nat → Prop} {c : Config} (hok : VsaOk live c)
   | none => rw [hg] at hs; cases hs
   | some b => rw [hg] at hv; exact congrArg some hv
 
+/-- The console frame of a step (INTERP_DESIGN.md §2 F2): whatever `Step`
+the machine takes from `σp`, it prints nothing and leaves the HTIF mailbox
+counter alone. `Step` is deterministic, so this is a fact about THE step. -/
+def StepConFrame (σp : MState) (ip up : Nat) : Prop :=
+  ∀ c' : Config, Step ⟨σp, ip, up⟩ c' → c'.σ.sailOutput = σp.sailOutput ∧
+    c'.σ.regs.get? Register.htif_payload_writes = σp.regs.get? Register.htif_payload_writes
+
+/-- The console frame from a step observation (`StepObs`'s `ReadsLikePost`):
+the observed post-state's output and mailbox counter are the pre-state's. -/
+theorem stepConFrame_of_obs {σp σ2 spost : MState} {ip up i2 : Nat}
+    (hstep : Step ⟨σp, ip, up⟩ ⟨σ2, i2, up + 1⟩) (hobs : ReadsLikePost σ2 spost)
+    (hout : spost.sailOutput = σp.sailOutput)
+    (hpw : spost.regs.get? Register.htif_payload_writes =
+      σp.regs.get? Register.htif_payload_writes) :
+    StepConFrame σp ip up := by
+  intro c' hs
+  cases hstep.deterministic hs
+  exact ⟨hobs.out.trans hout, (hobs.1 _ (by decide) (by decide) (by decide)).trans hpw⟩
+
+/-- The console frame of a `jal ra` step, from its observation. -/
+theorem stepConFrame_of_jalObs {σp σ2 : MState} {ip up i2 : Nat}
+    {jalPC vm : BitVec 64} {imm : BitVec 21} {link : BitVec 64}
+    (hstep : Step ⟨σp, ip, up⟩ ⟨σ2, i2, up + 1⟩)
+    (hobs : ReadsLikePost σ2 (sigmaPost_jal σp jalPC vm imm Register.x1 link)) :
+    StepConFrame σp ip up :=
+  stepConFrame_of_obs hstep hobs rfl
+    (get?_sigmaPost_jal σp jalPC vm imm Register.x1 link _ (by decide) (by decide) (by decide)
+      (by decide) (by decide))
+
 /-- **A `jal` site as an Iris exec fact.** VSA's per-site fact (`JalStep`:
 one step to the callee with the link in `ra`, every other GPR and all of
-memory unchanged) from any good state parked at `i` with the site's bytes
+memory unchanged) plus its console frame (`StepConFrame`, from the same
+observation), from any good state parked at `i` with the site's bytes
 present, is the `JalExec` that `wp_jal`/`wp_call` consume. -/
 theorem jalExec_of_site (live : Nat → Prop) (i : Nat) (code : List (BitVec 8)) (tgt : BitVec 64)
     (hlive : ∀ p ∈ codeFoot i code, live p.1)
     (hsite : ∀ c : Config, GoodState c.σ → c.tick < 2 →
       c.σ.regs.get? Register.PC = some (BitVec.ofNat 64 i) →
       (∀ p ∈ codeFoot i code, c.σ.mem[p.1]? = some p.2.2) →
-      JalStep tgt (BitVec.ofNat 64 (i + 4)) c.σ c.tick c.steps) :
+      JalStep tgt (BitVec.ofNat 64 (i + 4)) c.σ c.tick c.steps ∧
+        StepConFrame c.σ c.tick c.steps) :
     JalExec (vsaModel live) i code tgt := by
   intro v c hok hfoot
   have hok : VsaOk live c := hok
@@ -224,8 +255,9 @@ theorem jalExec_of_site (live : Nat → Prop) (i : Nat) (code : List (BitVec 8))
     unfold pcVal at h
     rw [hw] at h ⊢
     exact congrArg some h
-  obtain ⟨σ2, i2, hs, hi2, hG2, hmem, hpc2, hra2, _, hnonra, _⟩ :=
+  obtain ⟨⟨σ2, i2, hs, hi2, hG2, hmem, hpc2, hra2, _, hnonra, _⟩, hcon⟩ :=
     hsite c hok.good hok.tick hpc (code_present hok _ hMR hlive)
+  obtain ⟨hout2, hpw2⟩ := hcon _ hs
   have hra2' : gprGet σ2 1 = some (BitVec.ofNat 64 (i + 4)) := hra2
   have hframe : ∀ n, n ≠ 1 → gprGet σ2 n = gprGet c.σ n := by
     intro n hn
@@ -235,7 +267,8 @@ theorem jalExec_of_site (live : Nat → Prop) (i : Nat) (code : List (BitVec 8))
       | none => rw [hg] at hs; cases hs
       | some w => exact hnonra n hr.1 hr.2 hn w hg
     · rw [gprGet_none (by omega), gprGet_none (by omega)]
-  refine ⟨⟨σ2, i2, c.steps + 1⟩, vsaStep_of_step hs, ⟨hG2, hi2, fun n h1 h31 => ?_, ?_⟩, ?_⟩
+  refine ⟨⟨σ2, i2, c.steps + 1⟩, vsaStep_of_step hs, ⟨hG2, hi2, fun n h1 h31 => ?_, ?_,
+    hpw2.trans hok.htifIdle⟩, ?_, show Vsa.Machine.output σ2 = Vsa.Machine.output c.σ by unfold Vsa.Machine.output; rw [hout2]⟩
   · by_cases hn : n = 1
     · subst hn; rw [hra2']; rfl
     · rw [hframe n hn]; exact hok.gpr n h1 h31

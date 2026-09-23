@@ -126,15 +126,15 @@ def ROHolds (M : MachineModel) (σ : M.State) (ro : List (Nat × BitVec 64))
 
 /-- One segment of a local run from owned values `rv` (registers `rs`) and
 `mv` (bytes `S`): from every well-formed state holding them, the machine runs
-exactly `k + 1` steps to a well-formed state, changing only owned cells, and
-`P` holds of the successor's values. -/
+exactly `k + 1` steps to a well-formed state, changing only owned cells and
+printing nothing, and `P` holds of the successor's values. -/
 def SegFrom (M : MachineModel) (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8))
     (rs : List Nat) (S : Nat → Prop) (k : Nat) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8)
     (P : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) : Prop :=
   ∀ σ, M.ok σ → ROHolds M σ ro text → (∀ r ∈ rs, M.reg σ r = rv r) →
     (∀ a, S a → M.mem σ a = mv a) →
     ∃ σ', ReachesN M (k + 1) σ σ' ∧ M.ok σ' ∧ (∀ key, key ∉ rs → M.reg σ' key = M.reg σ key) ∧
-      (∀ a, ¬ S a → M.mem σ' a = M.mem σ a) ∧ P (M.reg σ') (M.mem σ')
+      (∀ a, ¬ S a → M.mem σ' a = M.mem σ a) ∧ M.out σ' = M.out σ ∧ P (M.reg σ') (M.mem σ')
 
 /-- A run of at most `n` segments from owned register values `rv` (on `rs`)
 and byte values `mv` (on `S`), each segment confined to the owned cells at its
@@ -262,13 +262,13 @@ theorem seg_aux {Φ : Nat × String → IProp GF} {ro : List (Nat × BitVec 64)}
     iintro %σ₁ %ns %obs %nt Hσ
     ihave ⟨%c, Hc, %hc, Hj, Hl⟩ := fullInterp_lag (M := M) $$ Hσ Hj
     unfold lagInterp ctlAt
-    icases Hl with ⟨%mr, %mm, Hmr, Hmm, %hlag⟩
-    obtain ⟨σ0, ⟨hr, hm, hok⟩, hre⟩ := hlag
+    icases Hl with ⟨%mr, %mm, %mo, Hmr, Hmm, Hmo, %hlag⟩
+    obtain ⟨σ0, ⟨hr, hm, hok⟩, ho, hre⟩ := hlag
     ihave ⟨Hmr, Hmm, Hf, %hfoot⟩ := runFoot_lookup (M := M) mr mm ro text rs l rv mv
       $$ [Hmr Hmm Hf]
     · iframe Hmr Hmm Hf
     obtain ⟨hro, hrs, hl⟩ := hfoot σ0 hr hm
-    obtain ⟨σf, hrun, hokf, hregs, hmems, hP⟩ :=
+    obtain ⟨σf, hrun, hokf, hregs, hmems, hout, hP⟩ :=
       hseg σ0 hok hro hrs (fun a ha => hl a ((hmem a).2 ha))
   · -- last step: commit the segment, reset the lag
     have hrest : ReachesN M 1 σ₁ σf := ReachesN.split hre (hjk ▸ hrun)
@@ -295,11 +295,12 @@ theorem seg_aux {Φ : Nat × String → IProp GF} {ro : List (Nat × BitVec 64)}
       imodintro
       isplitr
       · ipureintro; rfl
-      isplitl [Hc Hmr Hmm]
+      isplitl [Hc Hmr Hmm Hmo]
       · iapply fullInterp_intro (M := M) _ 0 (LawfulPartialMap.get?_insert_eq rfl)
         iframe Hc
-        iapply lagInterp_intro (M := M) mr' mm' _ ⟨hr', hm', hokf⟩ (.zero _)
-        iframe Hmr Hmm
+        iapply lagInterp_intro (M := M) mr' mm' mo _ ⟨hr', hm', hokf⟩
+          (fun v hv => hout.trans (ho v hv)) (.zero _)
+        iframe Hmr Hmm Hmo
       isplitl [HR Hf Hj]
       · ihave Hw := next _ _ hP $$ [Hf HR]
         · iframe Hf HR
@@ -329,11 +330,11 @@ theorem seg_aux {Φ : Nat × String → IProp GF} {ro : List (Nat × BitVec 64)}
       imodintro
       isplitr
       · ipureintro; rfl
-      isplitl [Hc Hmr Hmm]
+      isplitl [Hc Hmr Hmm Hmo]
       · iapply fullInterp_intro (M := M) _ (j + 1) (LawfulPartialMap.get?_insert_eq rfl)
         iframe Hc
-        iapply lagInterp_intro (M := M) mr mm σ0 ⟨hr, hm, hok⟩ (hre.snoc hs1)
-        iframe Hmr Hmm
+        iapply lagInterp_intro (M := M) mr mm mo σ0 ⟨hr, hm, hok⟩ ho (hre.snoc hs1)
+        iframe Hmr Hmm Hmo
       isplitl [HR Hf Hj]
       · iapply ih (j + 1) (by omega)
         unfold ctlAt
@@ -413,9 +414,9 @@ theorem segFrom_of_runFact {ro : List (Nat × BitVec 64)} {text : List (Nat × B
       · rw [hS _ h1, h2]
     · obtain ⟨h1, h2⟩ := hRW p hp; rw [hrs _ h1, h2]
     · obtain ⟨h1, h2⟩ := hMW p hp; rw [hS _ h1, h2]
-  obtain ⟨σ', hre, hok', hloc⟩ := hrun σ hok hfoot
+  obtain ⟨σ', hre, hok', hloc, hout⟩ := hrun σ hok hfoot
   refine ⟨σ', hre, hok', fun key hk => hloc.reg_frame key fun p hp h => hk (h ▸ (hRW p hp).1),
-    fun a ha => hloc.mem_frame a fun p hp h => ha (h ▸ (hMW p hp).1), hP _ _ hloc.reg_new
+    fun a ha => hloc.mem_frame a fun p hp h => ha (h ▸ (hMW p hp).1), hout, hP _ _ hloc.reg_new
     (fun r hr hne => (hloc.reg_frame r hne).trans (hrs r hr)) hloc.mem_new
     (fun a ha hne => (hloc.mem_frame a hne).trans (hS a ha))⟩
 
@@ -425,8 +426,8 @@ theorem SegFrom.mono {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 
     (h : SegFrom M ro text rs S k rv mv P) (hP : ∀ rv' mv', P rv' mv' → P' rv' mv') :
     SegFrom M ro text rs S k rv mv P' := by
   intro σ hok hro hrs hS
-  obtain ⟨σ', hre, hok', hregs, hmems, hp⟩ := h σ hok hro hrs hS
-  exact ⟨σ', hre, hok', hregs, hmems, hP _ _ hp⟩
+  obtain ⟨σ', hre, hok', hregs, hmems, hout, hp⟩ := h σ hok hro hrs hS
+  exact ⟨σ', hre, hok', hregs, hmems, hout, hP _ _ hp⟩
 
 /-- Local runs are monotone in their end condition. -/
 theorem LocalRun.mono {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
