@@ -237,122 +237,42 @@ theorem runFoot_update {σ0 σf : M.State} (mr : NatMap (BitVec 64)) (mm : NatMa
     · rfl
     · rw [hmems key (fun hS => hnot key ((hmem key).2 hS) rfl)]; exact hm key v hk
 
-/-- One segment of a local run under the lagging interpretation: `k + 1`
-machine steps remain and the ghost maps lag by `j`. Intermediate steps
-advance the lag; the last commits the segment's effect and hands the rest of
-the run to `next`. -/
-theorem seg_aux {Φ : Nat × String → IProp GF} {ro : List (Nat × BitVec 64)}
-    {text : List (Nat × BitVec 8)} {rs l : List Nat} {S : Nat → Prop}
-    (hmem : ∀ a, a ∈ l ↔ S a) {K : Nat} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
+/-- A `SegFrom` segment is a lagged run over the footprint `runFoot`: the
+lookup and commit are `runFoot_lookup` and `runFoot_update`. -/
+theorem SegFrom.lagFoot {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
+    {rs l : List Nat} {S : Nat → Prop} (hmem : ∀ a, a ∈ l ↔ S a) {K : Nat}
+    {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
     {P : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
-    (hseg : SegFrom M ro text rs S K rv mv P) (R : IProp GF)
-    (next : ∀ rv' mv', P rv' mv' →
-      runFoot (GF := GF) ro text rs l rv' mv' ∗ R ⊢ mTWP M Φ) :
-    ∀ k j, j + (k + 1) = K + 1 →
-      ctlAt (GF := GF) j ∗ runFoot ro text rs l rv mv ∗ R ⊢
-        WP (MachineModel.Loop M) @ Stuckness.NotStuck; ⊤ [{ Φ }] := by
-  intro k
-  induction k with
-  | zero => ?_
-  | succ k ih => ?_
-  all_goals
-    intro j hjk
-    iintro ⟨Hj, Hf, HR⟩
-    iapply twp.lift_step (s := Stuckness.NotStuck) rfl
-    iintro %σ₁ %ns %obs %nt Hσ
-    ihave ⟨%c, Hc, %hc, Hj, Hl⟩ := fullInterp_lag (M := M) $$ Hσ Hj
-    unfold lagInterp ctlAt
-    icases Hl with ⟨%mr, %mm, Hmr, Hmm, %hlag⟩
-    obtain ⟨σ0, ⟨hr, hm, hok⟩, hre⟩ := hlag
-    ihave ⟨Hmr, Hmm, Hf, %hfoot⟩ := runFoot_lookup (M := M) mr mm ro text rs l rv mv
-      $$ [Hmr Hmm Hf]
-    · iframe Hmr Hmm Hf
-    obtain ⟨hro, hrs, hl⟩ := hfoot σ0 hr hm
-    obtain ⟨σf, hrun, hokf, hregs, hmems, hP⟩ :=
-      hseg σ0 hok hro hrs (fun a ha => hl a ((hmem a).2 ha))
-  · -- last step: commit the segment, reset the lag
-    have hrest : ReachesN M 1 σ₁ σf := ReachesN.split hre (hjk ▸ hrun)
-    obtain ⟨σ1, hs1, hrest1⟩ : ∃ σ1, M.step σ₁ = .next σ1 ∧ ReachesN M 0 σ1 σf := by
-      cases hrest with
-      | succ s r => exact ⟨_, s, r⟩
-    cases hrest1.zero_eq
-    iapply fupd_mask_intro Std.LawfulSet.empty_subset
-    iintro Hclose
-    isplitr
-    · ipureintro
-      exact ⟨_, _, _, MachineModel.primStep_loop_next M hs1⟩
-    iintro %κ %e₂ %σ₂ %eₜ %Hstep
-    imod Hclose with -
-    obtain ⟨hκ, heₜ, (⟨σn, hn, he, hs⟩ | ⟨e, out, hh, _, _⟩)⟩ :=
-      MachineModel.primStep_loop_inv M Hstep
-    · subst hκ heₜ he hs
-      rw [hs1] at hn
-      cases hn
-      imod ghost_map_update 0 $$ Hc Hj with ⟨Hc, Hj⟩
-      imod runFoot_update (M := M) mr mm ro text rs l S hmem rv mv hr hm hregs hmems
-        $$ [Hmr Hmm Hf] with ⟨%mr', %mm', Hmr, Hmm, Hf, %⟨hr', hm'⟩⟩
-      · iframe Hmr Hmm Hf
-      imodintro
-      isplitr
-      · ipureintro; rfl
-      isplitl [Hc Hmr Hmm]
-      · iapply fullInterp_intro (M := M) _ 0 (LawfulPartialMap.get?_insert_eq rfl)
-        iframe Hc
-        iapply lagInterp_intro (M := M) mr' mm' _ ⟨hr', hm', hokf⟩ (.zero _)
-        iframe Hmr Hmm
-      isplitl [HR Hf Hj]
-      · ihave Hw := next _ _ hP $$ [Hf HR]
-        · iframe Hf HR
-        unfold mTWP cpuTok ctlAt
-        iapply Hw $$ Hj
-      iapply BigSepL.bigSepL_nil.2
-      iempintro
-    · rw [hs1] at hh; cases hh
-  · -- intermediate step: advance the lag
-    have hrest : ReachesN M (k + 1 + 1) σ₁ σf := ReachesN.split hre (hjk ▸ hrun)
-    obtain ⟨σ1, hs1, _⟩ : ∃ σ1, M.step σ₁ = .next σ1 ∧ ReachesN M (k + 1) σ1 σf := by
-      cases hrest with
-      | succ s r => exact ⟨_, s, r⟩
-    iapply fupd_mask_intro Std.LawfulSet.empty_subset
-    iintro Hclose
-    isplitr
-    · ipureintro
-      exact ⟨_, _, _, MachineModel.primStep_loop_next M hs1⟩
-    iintro %κ %e₂ %σ₂ %eₜ %Hstep
-    imod Hclose with -
-    obtain ⟨hκ, heₜ, (⟨σn, hn, he, hs⟩ | ⟨e, out, hh, _, _⟩)⟩ :=
-      MachineModel.primStep_loop_inv M Hstep
-    · subst hκ heₜ he hs
-      rw [hs1] at hn
-      cases hn
-      imod ghost_map_update (j + 1) $$ Hc Hj with ⟨Hc, Hj⟩
-      imodintro
-      isplitr
-      · ipureintro; rfl
-      isplitl [Hc Hmr Hmm]
-      · iapply fullInterp_intro (M := M) _ (j + 1) (LawfulPartialMap.get?_insert_eq rfl)
-        iframe Hc
-        iapply lagInterp_intro (M := M) mr mm σ0 ⟨hr, hm, hok⟩ (hre.snoc hs1)
-        iframe Hmr Hmm
-      isplitl [HR Hf Hj]
-      · iapply ih (j + 1) (by omega)
-        unfold ctlAt
-        iframe Hj Hf HR
-      iapply BigSepL.bigSepL_nil.2
-      iempintro
-    · rw [hs1] at hh; cases hh
+    (hseg : SegFrom M ro text rs S K rv mv P) :
+    LagFoot (GF := GF) M (runFoot ro text rs l rv mv)
+      (fun σf => runFoot ro text rs l (M.reg σf) (M.mem σf))
+      (fun σ => ROHolds M σ ro text ∧ (∀ r ∈ rs, M.reg σ r = rv r) ∧ (∀ a ∈ l, M.mem σ a = mv a))
+      (fun σ σf => (∀ key, key ∉ rs → M.reg σf key = M.reg σ key) ∧
+        (∀ a, ¬ S a → M.mem σf a = M.mem σ a) ∧ P (M.reg σf) (M.mem σf)) K where
+  look mr mm := runFoot_lookup (M := M) mr mm ro text rs l rv mv
+  run σ hok h := hseg σ hok h.1 h.2.1 (fun a ha => h.2.2 a ((hmem a).2 ha))
+  commit mr mm _ _ hr hm h :=
+    runFoot_update (M := M) mr mm ro text rs l S hmem rv mv hr hm h.1 h.2.1
 
-/-- **Owned-footprint run rule.** Owning the run's registers and bytes at their
-current values, with the read-only cells, and handing the continuation the
-final owned values, proves the loop's total WP. The states inside each
-segment are never described (the ghost maps lag behind them). -/
-theorem wp_localRun {Φ : Nat × String → IProp GF} {ro : List (Nat × BitVec 64)}
-    {text : List (Nat × BitVec 8)} {rs : List Nat} {S : Nat → Prop}
-    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} :
+/-- The continuation of a local run, for either WP. -/
+abbrev runKontW (Wp : MachWP (GF := GF) M) (Φ : Nat × String → IProp GF) (rs : List Nat)
+    (S : Nat → Prop) (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) : IProp GF :=
+  iprop(∀ rv' mv', ⌜Q rv' mv'⌝ -∗ sepL rs (fun r => r ↦ᵣ rv' r) -∗
+    ownSet S (fun a => a ↦ₘ mv' a) -∗ Wp.W Φ)
+
+/-- **Owned-footprint run rule** (the loop rule), for either WP. Owning the
+run's registers and bytes at their current values, with the read-only cells,
+and handing the continuation the final owned values, proves the run. The
+states inside each segment are never described (the ghost maps lag behind
+them). The run is bounded by fuel, so the rule needs no Löb and holds for
+both WPs (xv6iris `ProofMemset.v:1-9`, "bounded loop, not iLöb"). -/
+theorem wp_localRunW (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF}
+    {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)} {rs : List Nat}
+    {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} :
     ∀ n rv mv, LocalRun M ro text rs S Q n rv mv →
       roOwn (GF := GF) ro text ∗ sepL rs (fun r => r ↦ᵣ rv r) ∗ ownSet S (fun a => a ↦ₘ mv a) ∗
-        runKont M Φ rs S Q
-      ⊢ mTWP M Φ := by
+        runKontW Wp Φ rs S Q
+      ⊢ Wp.W Φ := by
   intro n
   induction n with
   | zero =>
@@ -365,21 +285,29 @@ theorem wp_localRun {Φ : Nat × String → IProp GF} {ro : List (Nat × BitVec 
     · iintro ⟨_, Hrs, HS, Hk⟩
       iapply Hk $$ %rv %mv %hQ Hrs HS
     unfold roOwn ownSet
-    iintro ⟨⟨#Hro, #Htx⟩, Hrs, ⟨%l, %⟨hnd, hmem⟩, Hl⟩, Hk⟩ Htok
-    have next : ∀ rv' mv', LocalRun M ro text rs S Q n rv' mv' →
-        runFoot (GF := GF) ro text rs l rv' mv' ∗ runKont M Φ rs S Q ⊢ mTWP M Φ := by
-      intro rv' mv' hr'
-      unfold runFoot
-      iintro ⟨⟨#Hro, #Htx, Hrs, Hl⟩, Hk⟩
-      iapply ih rv' mv' hr'
-      unfold roOwn ownSet
-      iframe Hro Htx Hrs Hk
-      iexists l
-      iframe Hl
-      ipureintro; exact ⟨hnd, hmem⟩
-    iapply seg_aux (M := M) hmem hseg (runKont M Φ rs S Q) next K 0 (by omega)
-    unfold cpuTok runFoot
-    iframe Htok Hro Htx Hrs Hl Hk
+    iintro ⟨⟨#Hro, #Htx⟩, Hrs, ⟨%l, %⟨hnd, hmem⟩, Hl⟩, Hk⟩
+    iapply Wp.lagRun (hseg.lagFoot hmem)
+    unfold runFoot
+    isplitl [Hrs Hl]
+    · iframe Hro Htx Hrs Hl
+    iintro %σ %σf %⟨_, _, hP⟩ ⟨_, _, Hrs, Hl⟩
+    iapply Wp.lat_intro
+    iapply ih _ _ hP
+    unfold roOwn ownSet
+    iframe Hro Htx Hrs Hk
+    iexists l
+    iframe Hl
+    ipureintro; exact ⟨hnd, hmem⟩
+
+/-- **Owned-footprint run rule** for the total WP. -/
+theorem wp_localRun {Φ : Nat × String → IProp GF} {ro : List (Nat × BitVec 64)}
+    {text : List (Nat × BitVec 8)} {rs : List Nat} {S : Nat → Prop}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} :
+    ∀ n rv mv, LocalRun M ro text rs S Q n rv mv →
+      roOwn (GF := GF) ro text ∗ sepL rs (fun r => r ↦ᵣ rv r) ∗ ownSet S (fun a => a ↦ₘ mv a) ∗
+        runKont M Φ rs S Q
+      ⊢ mTWP M Φ :=
+  wp_localRunW (twpW M)
 
 /-- **VSA segments are local-run segments.** A `RunFact` (the shape
 `Inst.seg_runFact` produces from `segEval_sound`) whose read-only registers

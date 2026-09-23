@@ -1,4 +1,5 @@
 import VsaIris.Adequacy
+import VsaIris.MachWP
 import Vsa.Sim.SegToTripleFramed
 import Vsa.Sim.StepCount
 import Vsa.Sim.WriteLogNF
@@ -124,6 +125,39 @@ theorem vsa_adequacy {GF : BundledGFunctors} [MachGpreS GF] (live : Nat → Prop
   cases hφ
   obtain ⟨σf, hhalt, hout⟩ := vsaStep_halt hh
   exact ⟨cf, σf, steps_of_reaches hre, hhalt, hout⟩
+
+/-- A counted run of the model is a counted run of the machine. -/
+theorem stepsN_of_reachesN {live : Nat → Prop} {n : Nat} {c c' : (vsaModel live).State}
+    (h : ReachesN (vsaModel live) n c c') : StepsN n c c' := by
+  induction h with
+  | zero c => exact .zero c
+  | succ s _ ih => exact .succ (vsaStep_next s) ih
+
+/-- **Partial adequacy for VSA.** If, from ownership of the initial registers
+`mr` and bytes `mm`, the loop's PARTIAL WP holds with postcondition `φ`, then
+VSA's machine diverges or halts with an exit satisfying `φ`
+(`Vsa.Machine.Diverges`/`Halts`, verbatim). -/
+theorem vsa_adequacyP {GF : BundledGFunctors} [MachGpreS GF] (live : Nat → Prop) (c : Config)
+    (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
+    (hr : RegAgree (vsaModel live) mr c) (hm : MemAgree (vsaModel live) mm c)
+    (hok : VsaOk live c) (φ : Nat × String → Prop)
+    (H : AdequacyHypP GF (vsaModel live) mr mm φ) :
+    Vsa.Machine.Diverges c ∨ ∃ out e, Vsa.Machine.Halts c out e ∧ φ (e, out) := by
+  rcases mach_adequacyP (GF := GF) (M := vsaModel live) c mr mm hr hm hok φ H with
+    hd | ⟨e, out, ⟨cf, hre, hh⟩, hφ⟩
+  · exact .inl fun n => (hd n).imp fun _ h => stepsN_of_reachesN h
+  · obtain ⟨σf, hhalt, hout⟩ := vsaStep_halt hh
+    exact .inr ⟨out, e, ⟨cf, σf, steps_of_reaches hre, hhalt, hout⟩, hφ⟩
+
+/-- **Partial adequacy in `stuck_sim`'s shape** (`Vsa.Refine.InterpSim`): the
+partial WP with postcondition "the exit code is nonzero" gives
+`Diverges c ∨ ∃ out e, Halts c out e ∧ e ≠ 0`. -/
+theorem vsa_adequacyP_nonzero {GF : BundledGFunctors} [MachGpreS GF] (live : Nat → Prop)
+    (c : Config) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
+    (hr : RegAgree (vsaModel live) mr c) (hm : MemAgree (vsaModel live) mm c)
+    (hok : VsaOk live c) (H : AdequacyHypP GF (vsaModel live) mr mm (fun v => v.1 ≠ 0)) :
+    Vsa.Machine.Diverges c ∨ ∃ out e, Vsa.Machine.Halts c out e ∧ e ≠ 0 :=
+  vsa_adequacyP live c mr mm hr hm hok _ H
 
 /-! ## Register-pin lists -/
 
@@ -445,13 +479,40 @@ section Wp
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 
-/-- **The segment rule for VSA.** A reflected segment `bs` from `pc0`: own
+/-- **The segment rule for VSA**, for either WP. A reflected segment `bs` from `pc0`: own
 the PC, every pinned GPR of `L` (at its pin), every byte `W` the segment may
 write (at its old value), and the read-only bytes `MR`; the rest of the run
 gets the PC at the reflected end PC, every pinned GPR at its reflected final
 value, and every written byte at its value after the reflected write log.
 Everything else the caller owns is framed by the wand. The premises are the
 ones `segEval_sound` already takes, plus the log coverage `hcover`. -/
+theorem wp_segW {Φ : Nat × String → IProp GF} (live : Nat → Prop)
+    (Wp : MachWP (GF := GF) (vsaModel live)) (bs : List BBlock) (L : GRegs) (lds : List (List (BitVec 8))) (pc0 : BitVec 64)
+    (MR : List (Nat × DFrac × BitVec 8)) (W : List (Nat × BitVec 8)) (n : Nat)
+    (hlen : evalBlocksFuel bs = n + 1)
+    (hwf : ChainOK pc0 (keysG L) bs) (hkeys : KeysOK (keysG L))
+    (hwr : ∀ k ∈ wrChain bs, k ∈ keysG L)
+    (hcover : ∀ a, (∀ p ∈ W, p.1 ≠ a) → OutL (segOut bs L lds).log a)
+    (hfacts : ∀ c : Config, VsaOk live c →
+      FootHolds (M := vsaModel live) c [] MR (segRW bs L lds pc0) (segMW bs L lds W) →
+      ChainFacts c.σ.mem c.σ.mem L lds bs) :
+    VsaIris.PC ↦ᵣ pc0 ∗ sepL L (fun p => p.1 ↦ᵣ p.2) ∗ sepL W (fun p => p.1 ↦ₘ p.2) ∗
+      sepL MR (fun p => p.1 ↦ₘ{p.2.1} p.2.2) ∗
+      (VsaIris.PC ↦ᵣ evalBlocksPC pc0 (SegEvalState.init L lds) bs -∗
+        sepL L (fun p => p.1 ↦ᵣ finReg bs L lds p.1) -∗
+        sepL W (fun p => p.1 ↦ₘ newByte bs L lds W p.1) -∗
+        sepL MR (fun p => p.1 ↦ₘ{p.2.1} p.2.2) -∗ Wp.W Φ)
+    ⊢ Wp.W Φ := by
+  iintro ⟨Hpc, HL, HW, HMR, Hk⟩
+  iapply Wp.run n [] MR (segRW bs L lds pc0) (segMW bs L lds W)
+    (seg_runFact live bs L lds pc0 MR W n hlen hwf hkeys hwr hcover hfacts)
+  unfold footPre footPost segRW segMW
+  simp only [sepL_cons, sepL_nil, sepL_map]
+  iframe HMR Hpc HL HW
+  iintro ⟨-, HMR, ⟨Hpc, HL⟩, HW⟩
+  iapply Hk $$ Hpc HL HW HMR
+
+/-- **The segment rule for VSA** (total). -/
 theorem wp_seg {Φ : Nat × String → IProp GF} (live : Nat → Prop) (bs : List BBlock)
     (L : GRegs) (lds : List (List (BitVec 8))) (pc0 : BitVec 64)
     (MR : List (Nat × DFrac × BitVec 8)) (W : List (Nat × BitVec 8)) (n : Nat)
@@ -468,15 +529,8 @@ theorem wp_seg {Φ : Nat × String → IProp GF} (live : Nat → Prop) (bs : Lis
         sepL L (fun p => p.1 ↦ᵣ finReg bs L lds p.1) -∗
         sepL W (fun p => p.1 ↦ₘ newByte bs L lds W p.1) -∗
         sepL MR (fun p => p.1 ↦ₘ{p.2.1} p.2.2) -∗ mTWP (vsaModel live) Φ)
-    ⊢ mTWP (vsaModel live) Φ := by
-  iintro ⟨Hpc, HL, HW, HMR, Hk⟩
-  iapply wp_run (M := vsaModel live) n [] MR (segRW bs L lds pc0) (segMW bs L lds W)
-    (seg_runFact live bs L lds pc0 MR W n hlen hwf hkeys hwr hcover hfacts)
-  unfold footPre footPost segRW segMW
-  simp only [sepL_cons, sepL_nil, sepL_map]
-  iframe HMR Hpc HL HW
-  iintro ⟨-, HMR, ⟨Hpc, HL⟩, HW⟩
-  iapply Hk $$ Hpc HL HW HMR
+    ⊢ mTWP (vsaModel live) Φ :=
+  wp_segW live (twpW _) bs L lds pc0 MR W n hlen hwf hkeys hwr hcover hfacts
 
 end Wp
 
