@@ -1,3 +1,4 @@
+import VsaIris.Vsa.MallocPaths
 import VsaIris.Vsa.MallocConsumer
 import VsaIris.Vsa.ControlEnd
 import VsaIris.Vsa.MallocFastHeap
@@ -71,3 +72,6 @@ import VsaIris.Vsa.AllocTac
 #print axioms VsaIris.VsaHeap.roomB_of_initial
 #print axioms VsaIris.VsaHeap.physSize_le_chg
 #print axioms VsaIris.VsaHeap.allocSpecs
+#print axioms VsaIris.VsaHeap.PHeapAt.take
+#print axioms VsaIris.VsaHeap.j_small
+#print axioms VsaIris.VsaHeap.small_take

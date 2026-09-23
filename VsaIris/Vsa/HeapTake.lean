@@ -120,6 +120,29 @@ theorem _root_.Vsa.Sim.DlHeap.HeapAt.odd_empty (h : HeapAt m H (fun e => e ∈ H
   · obtain ⟨_, _, _, _, _, he⟩ := h.small_member hi1 hi (by rw [hb]; exact List.mem_cons_self)
     omega
 
+/-- Every chunk's header in the walk. -/
+theorem walk_header {m : Mem} :
+    ∀ {p top : Nat} {cs : List Chunk}, ChunkWalk m p top cs → ∀ c ∈ cs,
+      ∃ h, read64 m (c.addr + 8) = some h ∧ chunkSize h = c.size ∧ h % 4 < 2
+  | _, _, [], ChunkWalk.top => fun _ h => nomatch h
+  | _, _, _ :: _, ChunkWalk.chunk hh hlow _ _ _ rest => by
+    intro c hc
+    rcases List.mem_cons.mp hc with rfl | hc
+    · exact ⟨_, hh, rfl, hlow⟩
+    · exact walk_header rest c hc
+
+/-- A chunk's header and the header after it (the next chunk's, which carries
+this chunk's in-use flag). -/
+theorem _root_.Vsa.Sim.DlHeap.HeapAt.headers (h : HeapAt m H (fun e => e ∈ H) top brkv chunks bins)
+    {c : Chunk} (hc : c ∈ chunks) :
+    (∃ hc0, read64 m (c.addr + 8) = some hc0 ∧ chunkSize hc0 = c.size ∧ hc0 % 4 < 2) ∧
+    (∃ hn, read64 m (c.addr + c.size + 8) = some hn ∧ prevInuse hn = c.inuse) := by
+  refine ⟨walk_header h.walk c hc, ?_⟩
+  obtain ⟨cs₁, cs₂, hsplit⟩ := List.append_of_mem hc
+  have hw := h.walk
+  rw [hsplit] at hw
+  exact (walk_next_of hw).1
+
 /-- Bin headers are 16-aligned, in `__malloc_av_`, below the arena. -/
 theorem binAt_geo (j : Nat) (hj : j < numBins) :
     binAt j % 16 = 0 ∧ 0x8001ad10 ≤ binAt j ∧ binAt j + 32 ≤ 0x8001b520 := by
@@ -168,6 +191,20 @@ theorem _root_.Vsa.Sim.DlHeap.HeapAt.bnd_ne_node {m : Mem} {H : List (Nat × Nat
   · have := binAt_geo i hi; unfold heapStart at hlo; omega
   · have := (h.walk.chunk_bounds cx hcx).2.2
     rcases h.boundary_out hcx hb with h1 | h1 <;> omega
+
+/-- The link words of a bin node (its header, or a member) are allocator
+footprint. -/
+theorem BlockHeapAt.node_foot {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (B : BlockHeapAt m H top brkv chunks bins)
+    {j x : Nat} (hj0 : 0 < j) (hj : j < numBins) (hx : x = binAt j ∨ x ∈ bins j) :
+    ∀ k, 16 ≤ k → k < 32 → vsaFoot H (x + k) := by
+  intro k hk1 hk2
+  rcases hx with rfl | hx
+  · have := binAt_geo j hj
+    exact .inl (.inl ⟨by omega, by omega⟩)
+  · obtain ⟨cx, hcx, rfl, hf⟩ := B.heap.member hj0 hj hx
+    have := (foot_free B hcx hf).1 (k - 16) (by omega)
+    rwa [show cx.addr + 16 + (k - 16) = cx.addr + k by omega] at this
 
 /-- **Take a free chunk.** Unlinking `v` from bin `i` (the predecessor's `fd`
 and the successor's `bk`) and setting `PREV_INUSE` in the next header gives

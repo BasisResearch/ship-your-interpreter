@@ -62,7 +62,9 @@ macro_rules
   | `(tactic| sx_pre) =>
     `(tactic| try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, reduceIte,
         LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend,
-        BitVec.add_zero, LdOK, StOK, StOKb, Vsa.Sim.tohostAddr] at *)
+        BitVec.add_zero, LdOK, StOK, StOKb, Vsa.Sim.tohostAddr, Vsa.Sim.DlHeap.heapStart,
+        Vsa.Sim.DlHeap.heapEnd, Vsa.Sim.DlHeap.binAt, Vsa.Sim.DlHeap.avAddr,
+        Vsa.Sim.DlHeap.chunkSize] at *)
 
 /-- `BitVec` sums as `Nat` sums modulo `2^64`. `BitVec.toNat_add` goes
 through `rw`: `simp` with it does not terminate on large literals. -/
@@ -75,7 +77,7 @@ syntax "sx_lits" : tactic
 macro_rules
   | `(tactic| sx_lits) => `(tactic| try simp only [BitVec.reduceToNat, Nat.reducePow,
       toNat_and_m16, toNat_and_m4, toNat_and_m2, BitVec.toNat_shiftLeft, BitVec.toNat_ushiftRight,
-      Nat.shiftLeft_eq, Nat.shiftRight_eq_div_pow] at *)
+      Nat.shiftLeft_eq, Nat.shiftRight_eq_div_pow, BitVec.toNat_ofNat] at *)
 
 /-- Addresses and unsigned comparisons as `Nat` arithmetic, then `omega`. -/
 syntax "sx_addr" : tactic
@@ -89,11 +91,16 @@ theorem ldv_ld_miss (Mt : Vsa.MemRepr.Mem) {a b w : Nat} (v : BitVec 64) (h : a 
     ldv .ld (Vsa.Sim.writeLog Mt [(b, w, v)]) a = ldv .ld Mt a :=
   ldv_store_miss .ld Mt v h
 
+/-- A doubleword load at the address of the latest doubleword store. -/
+theorem ldv_ld_hit_eq (Mt : Vsa.MemRepr.Mem) {a b : Nat} (v : BitVec 64) (h : a = b) :
+    ldv .ld (Vsa.Sim.writeLog Mt [(b, 8, v)]) a = v := by
+  subst h; exact ldv_store_hit Mt a v
+
 /-- Store forwarding: a doubleword load reads the latest store at its address,
 through stores to disjoint addresses (`sx_addr` decides disjointness). -/
 syntax "sx_mem" : tactic
 macro_rules
-  | `(tactic| sx_mem) => `(tactic| simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_miss] at *)
+  | `(tactic| sx_mem) => `(tactic| simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq, ldv_ld_miss] at *)
 
 /-- The PC literal of an `SWP` goal, if any. -/
 def swpPC? (ty : Expr) : MetaM (Option Nat) := do
