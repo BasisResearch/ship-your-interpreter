@@ -559,6 +559,11 @@ macro_rules
       t ← `(tactic| ($t; $st; $sh; (try ix_reg)))
     `(tactic| ($t; (try rfl)))
 
+/-- Machine subtraction of two 64-bit integers is the source's wrapping
+difference. -/
+theorem toInt_sub_wrap (x y : BitVec 64) : (x - y).toInt = wrap64 (x.toInt - y.toInt) := by
+  unfold wrap64; rw [BitVec.toInt_sub, BitVec.toInt_ofInt]
+
 /-! ## `eval_expr`'s frame -/
 
 /-- `eval_expr`'s stack pointer after its prologue (`addi sp,sp,-1088`), in the

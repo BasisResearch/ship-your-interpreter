@@ -28,6 +28,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 ARMS = ROOT / "scripts/iris_arms/arms.tsv"
 DISASM = ROOT / "experiments/disasm.txt"
 OUT = ROOT / "VsaIris/Interp/Case"
+TEMPLATES = ROOT / "scripts/iris_arms/templates"
 
 EVAL_ENTRY = 0x80003164
 EXEC_ENTRY = 0x80003FE0
@@ -89,10 +90,16 @@ class Arm:
     result: str
     steps: list[Step]
     errors: list[Divert]
+    family: str = ""                  # the case template (`templates/<family>_<mode>.lean`)
+    params: dict[str, str] = dataclasses.field(default_factory=dict)
 
 
 def parse_row(cols: list[str]) -> Arm:
-    name, fn, tag, ctor, children, result, steps, errors = cols
+    name, fn, tag, ctor, children, result, steps, errors = cols[:8]
+    family, params = "", {}
+    if len(cols) > 8 and cols[8].strip():
+        family, *kvs = cols[8].split()
+        params = dict(kv.split("=", 1) for kv in kvs)
     ch = []
     for c in filter(None, (x.strip() for x in children.split(";"))):
         var, kind, value, slot = c.split(":")
@@ -105,7 +112,7 @@ def parse_row(cols: list[str]) -> Arm:
     for e in filter(None, (x.strip() for x in errors.split(";"))):
         kind, at, to = e.split(":")
         er.append(Divert(kind, int(at, 0), int(to, 0)))
-    return Arm(name, fn, int(tag), ctor, ch, result, st, er)
+    return Arm(name, fn, int(tag), ctor, ch, result, st, er, family, params)
 
 
 def validate(arm: Arm, code: dict[int, tuple[int, str, str]]) -> None:
@@ -162,10 +169,49 @@ def load_rows() -> list[Arm]:
 
 
 # ------------------------------------------------------------------ emitters
+def run_steps(arm: Arm) -> list[Step]:
+    return [s for s in arm.steps if s.op == "run"]
+
+
+def fill(template: str, subst: dict[str, str]) -> str:
+    """Replace every `{KEY}` of the template; fail on a placeholder left over."""
+    for k, v in subst.items():
+        template = template.replace("{" + k + "}", v)
+    left = re.findall(r"\{[A-Z0-9]+\}", template)
+    if left:
+        raise SystemExit(f"template placeholders left unfilled: {sorted(set(left))}")
+    return template
+
+
+def subst_binInt(arm: Arm, mode: str) -> dict[str, str]:
+    """Family `binInt`: `eval_expr`'s binary arm on two ints whose tail is one
+    `value_int` call (`+`, `-`). Params: `op` (the `BinOp`), `mop` (the machine
+    operator of the tail), `wrap` (the `toInt` lemma of that operator), `tok`
+    (the operator token the dispatch reads)."""
+    runs = run_steps(arm)
+    helpers = [s for s in arm.steps if s.op == "helper"]
+    if len(runs) != 4 or len(helpers) != 1 or [c.slot for c in arm.children] != [120, 144]:
+        raise SystemExit(f"{arm.name}: family binInt needs 4 runs, 1 helper, child slots 120/144")
+    j3 = int(helpers[0].args[1], 0)
+    r4 = int(runs[3].args[0], 0)
+    if r4 != j3 + 4 or int(runs[2].args[1], 0) != j3:
+        raise SystemExit(f"{arm.name}: the last two runs must meet the helper call at {j3:#x}")
+    p = arm.params
+    return {"ARM": arm.name, "OP": p["op"], "MOP": p["mop"], "WRAP": p["wrap"], "TOK": p["tok"],
+            "RES": "(" + arm.result.removeprefix(".int ").strip() + ")",
+            "J3": f"{j3:08x}", "R4": f"{r4:08x}"}
+
+
+FAMILIES = {"binInt": subst_binInt}
+
+
 def emit(arm: Arm, mode: str) -> str:
-    """The Lean source of one generated case. Filled in by the case emitters
-    (`emit_total` / `emit_partial`) once the arm layer is in place."""
-    raise NotImplementedError(f"emitter for mode {mode}")
+    """The Lean source of one generated case: the row's family template
+    (`templates/<family>_<mode>.lean`) filled from the row."""
+    tmpl = TEMPLATES / f"{arm.family}_{mode}.lean"
+    if arm.family not in FAMILIES or not tmpl.exists():
+        raise NotImplementedError(f"{arm.name}: no template {tmpl.name}")
+    return fill(tmpl.read_text(), FAMILIES[arm.family](arm, mode))
 
 
 def write_all(check: bool = False) -> int:

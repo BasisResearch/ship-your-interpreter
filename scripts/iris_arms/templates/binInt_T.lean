@@ -1,22 +1,13 @@
 import VsaIris.Interp.Arm
 
 /-!
-# Worked case: `binary .add` on two ints, total mode (INTERP_DESIGN.md §6)
+# `{ARM}`, total mode (family `binInt`, INTERP_DESIGN.md §6)
 
-`caseT_BinaryAddInt`: `eval_expr` on `.binary .add l r` meets its total,
-derivation-indexed spec, given the children's specs and `value_int`'s stub
-spec as hypotheses. This is the reference the emitter
-(`scripts/gen_iris_cases.py`, row `BinaryAddInt` of
-`scripts/iris_arms/arms.tsv`) reproduces; its shape:
-
-* four symbolic runs, each its own lemma (`#ix_seg`), with the facts the run
-  needs as binders: the entry to the left child's `jal` (`_run1`), staging
-  the right child (`_run2`), operator dispatch and the int/int tail up to the
-  `jal value_int` (`_run3`), the epilogue (`_run4`);
-* the Iris glue in four pieces (`#ix_piece`, one declaration each), split at
-  the calls: `ms_callEvalT` for the children, `ms_callHelper` for
-  `value_int`; the prologue spills travel as the seam invariant `EvalSaved`;
-* `#ix_chain` assembles the theorem.
+`caseT_{ARM}`: `eval_expr` on `.binary {OP} l r` over two ints meets its total,
+derivation-indexed spec, given the children's specs and `value_int`'s spec.
+Four symbolic runs (`#ix_seg`), the glue in four pieces (`#ix_piece`, split at
+the calls), assembled by `#ix_chain`. Template:
+`scripts/iris_arms/templates/binInt_T.lean`.
 -/
 
 namespace VsaIris.Interp
@@ -24,7 +15,7 @@ namespace VsaIris.Interp
 open VsaIris VsaIris.Sym VsaIris.MallocFast
 open Vsa.MemRepr Vsa.Sim
 
-#ix_seg BinaryAddIntT_run1 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+#ix_seg {ARM}T_run1 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s aE inp sret : BitVec 64}
     (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
@@ -37,7 +28,7 @@ open Vsa.MemRepr Vsa.Sim
   by ix_run hlive using [h10, h11, h12, h13, h2, hk6, hk6u, hsf] at 0x800034f8
 
 
-#ix_seg BinaryAddIntT_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+#ix_seg {ARM}T_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s aE inp aR w1 : BitVec 64}
     (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
@@ -53,7 +44,7 @@ open Vsa.MemRepr Vsa.Sim
   by ix_run hlive using [h8, h2, h18, hright, hA, hK, hP, hsf] at 0x80003518
 
 
-#ix_seg BinaryAddIntT_run3 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+#ix_seg {ARM}T_run3 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s sret w1 : BitVec 64}
     (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
@@ -61,14 +52,14 @@ open Vsa.MemRepr Vsa.Sim
     (hx1 : 0x80000000 ≤ aX.toNat) (hx2 : aX.toNat + 32 ≤ 0x100000000)
     (hx3 : aX.toNat + 32 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aX.toNat)
     (h8 : R 8 = aX) (h2 : R 2 = s + 18446744073709550528#64) (h9 : R 9 = sret) (h19 : R 19 = w1)
-    (hop : ldv .lw m (aX + 8#64).toNat = 11#64)
+    (hop : ldv .lw m (aX + 8#64).toNat = {TOK}#64)
     (hKL : ldv .ld Mt (s.toNat - 1088) = 2#64)
     (hKR : ldv .lw Mt (s + 18446744073709550528#64 + 144#64).toNat = 2#64) :
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x8000351c#64 R Mt
-  by ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x800038d4
+  by ix_run hlive using [h8, h2, h9, h19, hop, hKL, hKR, hsf] at 0x{J3}
 
 
-#ix_seg BinaryAddIntT_run4 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+#ix_seg {ARM}T_run4 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s ret v8 v9 v18 v19 : BitVec 64}
     (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
@@ -80,24 +71,24 @@ open Vsa.MemRepr Vsa.Sim
     (hS1 : ldv .ld Mt (s + 18446744073709550528#64 + 1064#64).toNat = v9)
     (hS2 : ldv .ld Mt (s + 18446744073709550528#64 + 1056#64).toNat = v18)
     (hS3 : ldv .ld Mt (s + 18446744073709550528#64 + 1048#64).toNat = v19) :
-    IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x800038d8#64 R Mt
+    IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x{R4}#64 R Mt
   by ix_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hsf, hal]
 
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
 
-#ix_piece BinaryAddIntT_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+#ix_piece {ARM}T_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
     {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
     {st st1 st2 : St} {d env : Nat} {l r : Expr} {a b : Int} {nl nr : Nat}
     (Dl : EvalECost st d env l st1 (.int a) nl) (Dr : EvalECost st1 d env r st2 (.int b) nr)
-    (D : EvalECost st d env (.binary .add l r) st2 (.int (wrap64 (a + b))) (nl + nr))
+    (D : EvalECost st d env (.binary {OP} l r) st2 (.int {RES}) (nl + nr))
     (hl : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env l st1 (.int a) nl Dl)
     (hr : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st1 d env r st2 (.int b) nr Dr)
     (hvi : ⊢ ∀ p n, valueIntSpec (GF := GF) (vsaModel live) N (twpW (vsaModel live)) p n) :
-    ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env (.binary .add l r) st2
-        (.int (wrap64 (a + b))) (nl + nr) D by
+    ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env (.binary {OP} l r) st2
+        (.int {RES}) (nl + nr) D by
   unfold evalSpecT_body fnSpecW
   iintro %k %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
   unfold evalPre
@@ -105,8 +96,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   unfold astEG
   icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
   obtain ⟨aL, aR, hn, hrl, hrr, haL, haR⟩ := binNode_of_repr hrepr hgeo
-  have hneed : 1088 ≤ evalNeed (.binary .add l r) d := by
-    have := Expr.stackNeed_ge (.binary .add l r); unfold evalNeed stackBudget; unfold evalFrame at this; omega
+  have hneed : 1088 ≤ evalNeed (.binary {OP} l r) d := by
+    have := Expr.stackNeed_ge (.binary {OP} l r); unfold evalNeed stackBudget; unfold evalFrame at this; omega
   have hs := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
   unfold Vsa.Sim.LayoutInstance.stackSL at hs hs2
   simp only at hs hs2
@@ -115,9 +106,9 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
     rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
   have gL := evalCallGeom (o := 120) hsg
-    (by have := evalNeed_binary_left .add l r d; unfold evalFrame at this; omega) (by decide) (by decide)
+    (by have := evalNeed_binary_left {OP} l r d; unfold evalFrame at this; omega) (by decide) (by decide)
   have gR := evalCallGeom (o := 144) hsg
-    (by have := evalNeed_binary_right .add l r d; unfold evalFrame at this; omega) (by decide) (by decide)
+    (by have := evalNeed_binary_right {OP} l r d; unfold evalFrame at this; omega) (by decide) (by decide)
   have hbl : l.bodiesBound perCallBudget = true := by
     simp only [Expr.bodiesBound, Bool.and_eq_true] at hbb; exact hbb.1
   have hbr : r.bodiesBound perCallBudget = true := by
@@ -134,15 +125,15 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (twpW _) (F := evalArmF P m env aE (s + 18446744073709550528#64)
-      (evalNeed (.binary .add l r) d - 1088) (slot24 sret.toNat)
+      (evalNeed (.binary {OP} l r) d - 1088) (slot24 sret.toNat)
       (world N L Room inp (.counted (k + (nl + nr))) st d)
-      iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ evalPost N L Room inp (.counted k) st2 d (.binary .add l r)
-        (.int (wrap64 (a + b))) sret s rv -∗ (twpW (vsaModel live)).W Φ))
+      iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ evalPost N L Room inp (.counted k) st2 d (.binary {OP} l r)
+        (.int {RES}) sret s rv -∗ (twpW (vsaModel live)).W Φ))
   rotate_left
   · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hw; iexact Hk
   intro F'
   unfold evalEntryPC
-  refine BinaryAddIntT_run1 hlive hsf hs' hs2 hs3 hx1 hx2 hx3 (by ix_reg; exact hregs.a0)
+  refine {ARM}T_run1 hlive hsf hs' hs2 hs3 hx1 hx2 hx3 (by ix_reg; exact hregs.a0)
     (by ix_reg; exact hregs.a1) (by ix_reg; exact hregs.a2) (by ix_reg; exact hregs.a3)
     (by ix_reg; exact hregs.sp) hn.kind hn.kindu ?_
   apply swp_closeM
@@ -159,7 +150,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     (jalx_800034f8 live (fun p hp => hlive _ (interp_code_800034f8 p hp)))
     interp_code_800034f8 (by decide) Dl (k := k + nr) (slot := s + 18446744073709550528#64 + 120#64)
     (aC := BitVec.ofNat 64 aL) (aE := aE) (s := s + 18446744073709550528#64)
-    (m := evalNeed (.binary .add l r) d - 1088)
+    (m := evalNeed (.binary {OP} l r) d - 1088)
     gL.child gL.fits gL.below gL.slotGeom hbl
   iframe Hl Hcode Hfb Hms Hst Hw
   isplitl []
@@ -174,19 +165,19 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   icases Hv1 with %⟨hw0, hw1⟩
   have hk0 := ofNat_lo32 hw0
 
-#ix_piece BinaryAddIntT_p2 from BinaryAddIntT_p1 by
+#ix_piece {ARM}T_p2 from {ARM}T_p1 by
   -- run 2: stage the right child
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (twpW _) (F := evalArmF P m env aE (s + 18446744073709550528#64)
-      (evalNeed (.binary .add l r) d - 1088) (slot24 sret.toNat)
+      (evalNeed (.binary {OP} l r) d - 1088) (slot24 sret.toNat)
       (world N L Room inp (.counted (k + nr)) st1 d)
-      iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ evalPost N L Room inp (.counted k) st2 d (.binary .add l r)
-        (.int (wrap64 (a + b))) sret s rv -∗ (twpW (vsaModel live)).W Φ))
+      iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ evalPost N L Room inp (.counted k) st2 d (.binary {OP} l r)
+        (.int {RES}) sret s rv -∗ (twpW (vsaModel live)).W Φ))
   rotate_left
   · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hw; iexact Hk
   intro F'
-  refine BinaryAddIntT_run2 (aE := aE) (inp := BitVec.ofNat 64 inp) (w1 := w1) hlive hsf hs' hs2 hs3 hx1 hx2 hx3 ?_ ?_ ?_ hn.right ?_ ?_ ?_ ?_
+  refine {ARM}T_run2 (aE := aE) (inp := BitVec.ofNat 64 inp) (w1 := w1) hlive hsf hs' hs2 hs3 hx1 hx2 hx3 ?_ ?_ ?_ hn.right ?_ ?_ ?_ ?_
   · ix_keep [hkeep1]
   · ix_keep [hkeep1]
   · ix_keep [hkeep1]
@@ -205,7 +196,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     (jalx_80003518 live (fun p hp => hlive _ (interp_code_80003518 p hp)))
     interp_code_80003518 (by decide) Dr (k := k) (slot := s + 18446744073709550528#64 + 144#64)
     (aC := BitVec.ofNat 64 aR) (aE := aE) (s := s + 18446744073709550528#64)
-    (m := evalNeed (.binary .add l r) d - 1088)
+    (m := evalNeed (.binary {OP} l r) d - 1088)
     gR.child gR.fits gR.below gR.slotGeom hbr
   iframe Hr Hcode Hfb Hms Hst Hw
   isplitl []
@@ -219,19 +210,19 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   icases Hv2 with %⟨hu0, hu1⟩
   have hk0' := ofNat_lo32 hu0
 
-#ix_piece BinaryAddIntT_p3 from BinaryAddIntT_p2 by
+#ix_piece {ARM}T_p3 from {ARM}T_p2 by
   -- run 3: operator dispatch, int/int checks, the sum
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (twpW _) (F := evalArmF P m env aE (s + 18446744073709550528#64)
-      (evalNeed (.binary .add l r) d - 1088) (slot24 sret.toNat)
+      (evalNeed (.binary {OP} l r) d - 1088) (slot24 sret.toNat)
       (world N L Room inp (.counted k) st2 d)
-      iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ evalPost N L Room inp (.counted k) st2 d (.binary .add l r)
-        (.int (wrap64 (a + b))) sret s rv -∗ (twpW (vsaModel live)).W Φ))
+      iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ evalPost N L Room inp (.counted k) st2 d (.binary {OP} l r)
+        (.int {RES}) sret s rv -∗ (twpW (vsaModel live)).W Φ))
   rotate_left
   · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hw; iexact Hk
   intro F'
-  refine BinaryAddIntT_run3 (aX := aX) (s := s) (sret := sret) (w1 := w1) hlive hsf hs' hs2 hs3 hx1 hx2 hx3
+  refine {ARM}T_run3 (aX := aX) (s := s) (sret := sret) (w1 := w1) hlive hsf hs' hs2 hs3 hx1 hx2 hx3
     ?_ ?_ ?_ ?_ hn.op ?_ ?_ ?_
   · ix_keep [hkeep2, hkeep1]
   · ix_keep [hkeep2, hkeep1]
@@ -247,33 +238,33 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   unfold F' evalArmF
   iintro ⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, Hms⟩
   -- value_int
-  ihave Hvi := hvi $$ %sret %(w1 + u1)
+  ihave Hvi := hvi $$ %sret %(w1 {MOP} u1)
   unfold valueIntSpec
-  iapply ms_callHelper (twpW _) (i := 0x800038d4)
-    (jalx_800038d4 live (fun p hp => hlive _ (interp_code_800038d4 p hp)))
-    interp_code_800038d4
+  iapply ms_callHelper (twpW _) (i := 0x{J3})
+    (jalx_{J3} live (fun p hp => hlive _ (interp_code_{J3} p hp)))
+    interp_code_{J3}
   iframe Hvi Hcode Hms
   isplitl []
   · ipureintro; exact ⟨by ix_keep [hkeep2, hkeep1], by ix_reg; ix_fwd⟩
   isplitl [Hslot]
   · iframe Hslot; ipureintro; exact hslg
   iintro %R3 %hkeep3 Hval Hms
-  have hsum : (w1 + u1).toInt = wrap64 (a + b) := by rw [toInt_add_wrap, hw1, hu1]
+  have hsum : (w1 {MOP} u1).toInt = {RES} := by rw [{WRAP}, hw1, hu1]
   rw [hsum]
 
-#ix_piece BinaryAddIntT_p4 from BinaryAddIntT_p3 by
+#ix_piece {ARM}T_p4 from {ARM}T_p3 by
   -- run 4: the epilogue
   ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
   · iframe Hcode Hro
   iapply wp_swpF (twpW _) (F := evalArmF P m env aE (s + 18446744073709550528#64)
-      (evalNeed (.binary .add l r) d - 1088) (valAt N sret.toNat (.int (wrap64 (a + b))))
+      (evalNeed (.binary {OP} l r) d - 1088) (valAt N sret.toNat (.int {RES}))
       (world N L Room inp (.counted k) st2 d)
-      iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ evalPost N L Room inp (.counted k) st2 d (.binary .add l r)
-        (.int (wrap64 (a + b))) sret s rv -∗ (twpW (vsaModel live)).W Φ))
+      iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ evalPost N L Room inp (.counted k) st2 d (.binary {OP} l r)
+        (.int {RES}) sret s rv -∗ (twpW (vsaModel live)).W Φ))
   rotate_left
   · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hval Hw; iexact Hk
   intro F'
-  refine BinaryAddIntT_run4 (aX := aX) (s := s) (ret := ret) (v8 := rv 8) (v9 := rv 9)
+  refine {ARM}T_run4 (aX := aX) (s := s) (ret := ret) (v8 := rv 8) (v9 := rv 9)
     (v18 := rv 18) (v19 := rv 19) hlive hsf hs' hs2 hs3 hal ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · ix_keep [hkeep3, hkeep2, hkeep1]
   · rw [hoff _ (by decide)]; exact hsv3.ra
@@ -299,7 +290,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   · ix_reg; exact evalSP_restore s |>.trans hregs.sp.symm
   all_goals ix_keep [hkeep3, hkeep2, hkeep1]
 
-#ix_chain caseT_BinaryAddInt := [BinaryAddIntT_p1, BinaryAddIntT_p2, BinaryAddIntT_p3, BinaryAddIntT_p4]
+#ix_chain caseT_{ARM} := [{ARM}T_p1, {ARM}T_p2, {ARM}T_p3, {ARM}T_p4]
 
 
 
