@@ -12,3 +12,6 @@ code	ljCode	0x8000703c	0x80007080
 jal	rtJalSnprintf1	0x80002dc8
 jal	rtJalSnprintf2	0x80002de4
 jal	rtJalLongjmp	0x80002df0
+oom	env_new	0x80002a38
+oom	env_define	0x80002bd0
+oom	stringify	0x80003140

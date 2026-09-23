@@ -45,3 +45,6 @@ import VsaIris.Vsa.Landing
 import VsaIris.Interp.Abort
 import VsaIris.Vsa.AluStep
 import VsaIris.Vsa.RuntimeError
+import VsaIris.Vsa.SegRO
+import VsaIris.Vsa.Oom
+import VsaIris.Vsa.OomSites
