@@ -185,51 +185,131 @@ elab_rules : tactic
 
 end VsaIris.Sym
 
-/-! ## `#ix_seg`: a symbolic run as its own lemma -/
+/-! ## `#ix_seg` / `#ix_piece`: a proof step as its own lemma -/
 
 namespace VsaIris.Sym
 
 open Lean Elab Command Term Meta
 
+/-- Universe metavariables of a proof's library lemmas: any level. -/
+private def zeroLevels (e : Expr) : Expr :=
+  e.replaceLevel fun l =>
+    if l.hasMVar then some (l.replace fun | .mvar _ => some levelZero | _ => none) else none
+
+/-- Run `tac` on `goal` (under the locals `vars`) and add
+`declName : ∀ vars, (∀ extras, leftover) → goal`, or `∀ vars, goal` when
+nothing is left. `allLocals`: `extras` are every local the script introduced
+(a proof piece handing its whole context on); otherwise only those the
+leftover mentions (a symbolic run's havoc values). -/
+def ixAddPiece (declName : Name) (vars : Array Expr) (goal : Expr) (tac : Syntax)
+    (allLocals : Bool) (hidden : Array Expr := #[]) : TermElabM Unit := do
+  let g ← mkFreshExprMVar goal
+  let gs ← withDeclName declName <| Tactic.run g.mvarId! (Tactic.evalTactic tac)
+  let gs ← gs.filterM fun g => return !(← g.isAssigned)
+  let finish (hks : Array Expr) : TermElabM Unit := do
+    let val := zeroLevels (← instantiateMVars (← mkLambdaFVars (vars ++ hks) (← instantiateMVars g)))
+    let ty := zeroLevels (← instantiateMVars (← mkForallFVars (vars ++ hks) goal))
+    if ty.hasMVar || val.hasMVar then
+      throwError "#ix_piece: the proof left metavariables"
+    if ty.hasFVar || val.hasFVar then
+      let fs := (collectFVars {} val).fvarIds ++ (collectFVars {} ty).fvarIds
+      let ds ← fs.mapM fun f => do
+        match (← getLCtx).find? f with
+        | some d => return m!"{d.userName} : {d.type}"
+        | none => return m!"{mkFVar f} (not in scope)"
+      throwError m!"#ix_piece: the proof mentions locals outside its statement:{indentD (MessageData.joinSep ds.toList "\n")}"
+    addDecl (.thmDecl { name := declName, levelParams := [], type := ty, value := val })
+  match gs with
+  | [] => finish #[]
+  | [gf] =>
+    let (Tf, extras) ← gf.withContext do
+      let Tf ← instantiateMVars (← gf.getType)
+      let lctx ← getLCtx
+      -- `let` locals (a run's opaque frame) are not handed on
+      let fresh := lctx.foldl (init := #[]) fun acc d =>
+        if d.isImplementationDetail || d.isLet || vars.contains (mkFVar d.fvarId) ||
+            hidden.contains (mkFVar d.fvarId) then acc
+        else acc.push d.fvarId
+      let used := collectFVars {} Tf
+      let extras := if allLocals then fresh else fresh.filter used.fvarSet.contains
+      let ex := extras.map mkFVar
+      return (← mkForallFVars ex Tf, ex)
+    withLocalDeclD `hk Tf fun hk => do
+      gf.assign (mkAppN hk extras)
+      finish #[hk]
+  | gs =>
+    throwError m!"#ix_piece: the proof left {gs.length} goals:{indentD (goalsToMessageData gs)}"
+
 /-- `#ix_seg name binders : goal by tac` runs `tac` (an `ix_run`) on `goal`
 (an `IW … Q pc R Mt` start state) and defines the theorem
 `name : ∀ binders, <end goal> → goal`, whose end goal is the symbolic state
-the run reached. The run must leave exactly that one goal (every side
-condition closed). The lemma is its own declaration: its elaboration budget
-and context are the run's alone, and an arm applies it by name without
-writing the end state down. -/
+the run reached (quantified over the values the run havoc-loaded). -/
 syntax (name := ixSeg) "#ix_seg " ident bracketedBinder* " : " term " by " tacticSeq : command
 
 @[command_elab ixSeg] def elabIxSeg : CommandElab := fun stx => do
   let declName := (← getCurrNamespace) ++ stx[1].getId
-  let binders := stx[2].getArgs
-  let goalStx := stx[4]
-  let tac := stx[6]
   liftTermElabM do
-    Term.elabBinders binders fun vars => do
-      let T ← Term.elabType goalStx
+    Term.elabBinders stx[2].getArgs fun vars => do
+      let T ← Term.elabType stx[4]
       Term.synthesizeSyntheticMVarsNoPostponing
-      let T ← instantiateMVars T
-      let g ← mkFreshExprMVar T
-      let gs ← Tactic.run g.mvarId! (Tactic.evalTactic tac)
-      let gs ← gs.filterM fun g => return !(← g.isAssigned)
-      match gs with
-      | [gf] =>
-        let Tf ← instantiateMVars (← gf.getType)
-        withLocalDeclD `hk Tf fun hk => do
-          gf.assign hk
-          let pf ← instantiateMVars g
-          -- universe metavariables of the proof's library lemmas: any level
-          let zl : Level → Option Level := fun l =>
-            if l.hasMVar then some (l.replace fun | .mvar _ => some levelZero | _ => none) else none
-          let val := (← instantiateMVars (← mkLambdaFVars (vars.push hk) pf)).replaceLevel zl
-          let ty := (← instantiateMVars (← mkForallFVars (vars.push hk) T)).replaceLevel zl
-          if ty.hasMVar || val.hasMVar then
-            let ms := (← getMVars val) ++ (← getMVars ty)
-            let ds ← ms.mapM fun m => do return m!"{mkMVar m} : {← m.getType}"
-            throwError m!"#ix_seg: the run left metavariables:{indentD (MessageData.joinSep ds.toList "\n")}"
-          addDecl (.thmDecl { name := declName, levelParams := [], type := ty, value := val })
-      | gs =>
-        throwError m!"#ix_seg: the run left {gs.length} goals:{indentD (goalsToMessageData gs)}"
+      ixAddPiece declName vars (← instantiateMVars T) stx[6] false
+
+/-- `#ix_piece name binders : goal by tac` is `#ix_seg` for any proof step:
+the leftover goal keeps EVERY local the script introduced.
+`#ix_piece name from prev by tac` continues from the leftover of the piece
+`prev`: its binders are `prev`'s, its goal `prev`'s leftover. A long proof is
+a chain of pieces (`#ix_chain`), each its own declaration: its own
+elaboration budget, and nothing about the intermediate states written by
+hand. -/
+syntax (name := ixPiece) "#ix_piece " ident bracketedBinder* " : " term " by " tacticSeq : command
+syntax (name := ixPieceFrom) "#ix_piece " ident " from " ident " by " tacticSeq : command
+
+@[command_elab ixPiece] def elabIxPiece : CommandElab := fun stx => do
+  let declName := (← getCurrNamespace) ++ stx[1].getId
+  liftTermElabM do
+    Term.elabBinders stx[2].getArgs fun vars => do
+      let T ← Term.elabType stx[4]
+      Term.synthesizeSyntheticMVarsNoPostponing
+      ixAddPiece declName vars (← instantiateMVars T) stx[6] true
+
+@[command_elab ixPieceFrom] def elabIxPieceFrom : CommandElab := fun stx => do
+  let declName := (← getCurrNamespace) ++ stx[1].getId
+  let prev ← liftCoreM <| realizeGlobalConstNoOverload stx[3]
+  liftTermElabM do
+    let info ← getConstInfo prev
+    forallTelescope info.type fun xs _ => do
+      let some hk := xs.back? | throwError "#ix_piece: {prev} has no leftover"
+      -- the leftover's own locals become this piece's binders
+      forallTelescope (← inferType hk) fun ys T => do
+        ixAddPiece declName (xs.pop ++ ys) T stx[5] true #[hk]
+
+/-- `#ix_chain name : type := [p₁, p₂, …]` proves `name` by chaining pieces:
+`p₁ xs (fun ys₁ => p₂ xs ys₁ (fun ys₂ => …))`, each piece continuing the
+previous one's leftover. -/
+syntax (name := ixChain) "#ix_chain " ident " := " "[" ident,+ "]" : command
+
+@[command_elab ixChain] def elabIxChain : CommandElab := fun stx => do
+  let declName := (← getCurrNamespace) ++ stx[1].getId
+  let names ← stx[4].getSepArgs.mapM fun n => liftCoreM <| realizeGlobalConstNoOverload n
+  liftTermElabM do
+    let some first := names[0]? | throwError "#ix_chain: no pieces"
+    let info0 ← getConstInfo first
+    -- the statement: the first piece's, without its leftover
+    let ty ← forallTelescope info0.type fun xs body => do
+      let vars := if names.size > 1 then xs.pop else xs
+      mkForallFVars vars body
+    -- build the proof: piece k applied to the chain's locals and the rest
+    let rec build (k : Nat) (args : Array Expr) : MetaM Expr := do
+      let c := Lean.mkConst names[k]!
+      let cty ← inferType (mkAppN c args)
+      if k + 1 < names.size then
+        let .forallE _ hkTy _ _ := cty | throwError "#ix_chain: {names[k]!} has no leftover"
+        let rest ← forallTelescope hkTy fun ys _ => do
+          mkLambdaFVars ys (← build (k + 1) (args ++ ys))
+        return mkApp (mkAppN c args) rest
+      else
+        return mkAppN c args
+    let val ← forallTelescope ty fun xs _ => do mkLambdaFVars xs (← build 0 xs)
+    addDecl (.thmDecl { name := declName, levelParams := [], type := ty, value := val })
 
 end VsaIris.Sym

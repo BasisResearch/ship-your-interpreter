@@ -355,6 +355,15 @@ theorem instrAt_of_codeRes {i : Nat} {code : List (BitVec 8)}
   obtain ⟨p, _, rfl⟩ := List.mem_map.mp hq
   rfl
 
+/-- `swp_closeF` with the end memory named: the rest of the arm holds for a
+memory variable equal to it, so seam invariants (`EvalSaved`) are stated about
+a variable and the end memory's term is not carried further. -/
+theorem swp_closeM (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {F : IProp GF} {text : List (Nat × BitVec 8)} {S : Nat → Prop} {pc : BitVec 64}
+    {R : Nat → BitVec 64} {Mt : Mem} (h : ∀ Mt', Mt' = Mt → F ∗ ms pc R S Mt' ⊢ Wp.W Φ) :
+    SWP live text iRegs S (RunK Wp Φ F S) pc R Mt :=
+  swp_closeF Wp (h Mt rfl)
+
 end Res
 
 /-! ## Entry, exit, the data view -/
@@ -519,6 +528,37 @@ theorem keep_reg {ks : List Nat} {R R' : Nat → BitVec 64} (h : KeepRegs ks R R
 theorem ofNat_lo32 {w : BitVec 64} {k : Nat} (h : w.toNat % 2 ^ 32 = k) :
     BitVec.ofNat 64 (w.toNat % 2 ^ 32) = BitVec.ofNat 64 k := by rw [h]
 
+/-- A load fact over a tracking memory built by the runs and calls: forward
+through the stores and the calls' slot words (`sx_addr` decides each
+disjointness). -/
+syntax "ix_fwd" (" using " "[" term,* "]")? : tactic
+macro_rules
+  | `(tactic| ix_fwd) => `(tactic| simp (disch := first | rfl | sx_addr) only [slotWrite, ldv_store_hit,
+      ldv_ld_hit_eq, ldv_ld_miss, ldv_lw_miss, ldv_lw_store8])
+  | `(tactic| ix_fwd using [$hs,*]) => do
+    let lems ← hs.getElems.mapM fun h => `(Lean.Parser.Tactic.simpLemma| $h:term)
+    `(tactic| ((try simp (disch := decide) only [$lems,*]); ix_fwd))
+
+/-- Machine addition of two 64-bit integers is the source's wrapping sum. -/
+theorem toInt_add_wrap (x y : BitVec 64) : (x + y).toInt = wrap64 (x.toInt + y.toInt) := by
+  unfold wrap64; rw [BitVec.toInt_add, BitVec.toInt_ofInt]
+
+theorem keep_helper {clob : List Nat} {R R' : Nat → BitVec 64}
+    (h : ∀ x ∈ fRegs, x ∉ clob → R' x = R x) {x : Nat} (hx : x ∈ fRegs) (hc : x ∉ clob) :
+    R' x = R x := h x hx hc
+
+/-- A register through calls: read each end state, step back through each
+call's kept registers (`h₁` the latest), and read the state before. -/
+syntax "ix_keep " "[" term,* "]" : tactic
+macro_rules
+  | `(tactic| ix_keep [$hs,*]) => do
+    let mut t ← `(tactic| (try ix_reg))
+    for h in hs.getElems do
+      let st ← `(tactic| (try rw [keep_reg $h (by decide)]))
+      let sh ← `(tactic| (try rw [keep_helper $h (by decide) (by decide)]))
+      t ← `(tactic| ($t; $st; $sh; (try ix_reg)))
+    `(tactic| ($t; (try rfl)))
+
 /-! ## `eval_expr`'s frame -/
 
 /-- `eval_expr`'s stack pointer after its prologue (`addi sp,sp,-1088`), in the
@@ -527,6 +567,57 @@ abbrev evalSP (s : BitVec 64) : BitVec 64 := s + 18446744073709550528#64
 
 theorem evalSP_eq (s : BitVec 64) : s - 1088#64 = evalSP s := by
   rw [BitVec.sub_eq_add_neg]; rfl
+
+/-- The epilogue's `addi sp,sp,1088` restores the entry `sp`. -/
+theorem evalSP_restore (s : BitVec 64) : evalSP s + 1088#64 = s := by
+  rw [BitVec.add_assoc, show (18446744073709550528#64 + 1088#64 : BitVec 64) = 0#64 by decide,
+    BitVec.add_zero]
+
+/-- A frame address as a plain sum: `(evalSP s + c).toNat = s.toNat - 1088 + c`
+for the offsets inside the frame. With it, the runs' and calls' address side
+conditions are linear arithmetic, without `% 2^64`. -/
+theorem evalSP_off {s : BitVec 64} (hsf : (evalSP s).toNat = s.toNat - 1088)
+    (hs : s.toNat ≤ 0x100000000) (c : Nat) (hc : c < 4096) :
+    (evalSP s + BitVec.ofNat 64 c).toNat = s.toNat - 1088 + c := by
+  rw [BitVec.toNat_add, hsf, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (a := c) (by omega)]
+  exact Nat.mod_eq_of_lt (by omega)
+
+/-- **`eval_expr`'s prologue spills**, the seam invariant every eval arm
+carries from its prologue to its epilogue: the return address and `s0`-`s3`
+at the top of the frame. -/
+structure EvalSaved (Mt : Mem) (s ret v8 v9 v18 v19 : BitVec 64) : Prop where
+  ra : ldv .ld Mt (s.toNat - 1088 + 1080) = ret
+  s0 : ldv .ld Mt (s.toNat - 1088 + 1072) = v8
+  s1 : ldv .ld Mt (s.toNat - 1088 + 1064) = v9
+  s2 : ldv .ld Mt (s.toNat - 1088 + 1056) = v18
+  s3 : ldv .ld Mt (s.toNat - 1088 + 1048) = v19
+
+/-- The spills survive a store below them. -/
+theorem EvalSaved.store {Mt : Mem} {s ret v8 v9 v18 v19 : BitVec 64}
+    (h : EvalSaved Mt s ret v8 v9 v18 v19) {a w : Nat} (v : BitVec 64)
+    (ha : a + w ≤ s.toNat - 1088 + 1048) :
+    EvalSaved (writeLog Mt [(a, w, v)]) s ret v8 v9 v18 v19 :=
+  ⟨by rw [ldv_store_miss .ld Mt v (by omega)]; exact h.ra,
+   by rw [ldv_store_miss .ld Mt v (by omega)]; exact h.s0,
+   by rw [ldv_store_miss .ld Mt v (by omega)]; exact h.s1,
+   by rw [ldv_store_miss .ld Mt v (by omega)]; exact h.s2,
+   by rw [ldv_store_miss .ld Mt v (by omega)]; exact h.s3⟩
+
+/-- The spills survive a child's result written into a frame slot below them. -/
+theorem EvalSaved.slotWrite {Mt : Mem} {s ret v8 v9 v18 v19 : BitVec 64}
+    (h : EvalSaved Mt s ret v8 v9 v18 v19) {a : Nat} (w0 w1 w2 : BitVec 64)
+    (ha : a + 24 ≤ s.toNat - 1088 + 1048) :
+    EvalSaved (slotWrite Mt a w0 w1 w2) s ret v8 v9 v18 v19 :=
+  ((h.store w0 (by omega)).store w1 (by omega)).store w2 (by omega)
+
+/-- Carry `EvalSaved` back through a memory's stores and calls' slot words
+to a memory it is known for (`hoff` normalizes the frame addresses). -/
+syntax "ix_saved " term " using " term : tactic
+macro_rules
+  | `(tactic| ix_saved $h using $hoff) => `(tactic| (
+      (try unfold slotWrite);
+      repeat refine EvalSaved.store ?_ _ (by first | omega | (rw [($hoff:term)] <;> first | omega | decide));
+      exact $h))
 
 /-- The geometry of a child call from `eval_expr`'s frame: the child runs at
 the lowered `sp` with its budget, its result slot at frame offset `o`. -/
@@ -554,6 +645,22 @@ theorem evalCallGeom {s : BitVec 64} {np nc : Nat} (hsg : StackGeom s np) (hle :
   · rw [hsl]; omega
   · rw [hsl]; unfold Vsa.Sim.tohostAddr; omega
   · rw [hsl]; omega
+
+section FrameRes
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
+
+/-- **Leaving `eval_expr`'s frame**: the frame bytes rejoin the stack below
+the entry `sp`. -/
+theorem evalFrame_join {s : BitVec 64} {n : Nat} (hn : n ≤ s.toNat) (hf : 1088 ≤ n) :
+    stackScratch (GF := GF) (evalSP s) (n - 1088) ∗ ownSet (InExt (s.toNat - 1088, 1088)) byteAny ⊢
+      stackScratch s n := by
+  have e : (s - 1088#64).toNat = s.toNat - 1088 := toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
+  have h := stackScratch_unframe (GF := GF) (s := s) (f := 1088#64) (n := n) hn (by simp only [BitVec.toNat_ofNat]; omega)
+  rw [e, show (1088#64).toNat = 1088 from rfl, evalSP_eq] at h
+  exact h
+
+end FrameRes
 
 /-! ## Calls -/
 

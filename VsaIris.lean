@@ -69,3 +69,4 @@ import VsaIris.Interp.Steps
 import VsaIris.Interp.ITac
 import VsaIris.Interp.SpecEval
 import VsaIris.Interp.Arm
+import VsaIris.Interp.Worked.BinaryAddIntT
