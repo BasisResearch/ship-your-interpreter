@@ -750,6 +750,91 @@ theorem st6 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv
     · exact not_pin (by rcases hq with rfl | rfl | rfl <;> simp [splitL])
     · rw [hI a ha, split_log_eq C.sp.geom ht]
 
+theorem bins_a4 (sp a0 a1 a2 a3 a4 a5 a6 a7 t4 : BitVec 64) (f : Nat → BitVec 8) (nb : Nat) :
+    finReg segBins (binsL sp a0 a1 a2 a3 a4 a5 a6 a7 t4) (binsLds f sp nb) 14 =
+      bytesVal .ld (wordOf f (sp.toNat + 8)) := by
+  simp only [finReg, segOut, segBins, evalBlocks_regs, runChain, SegEvalState.init]
+  seg_norm
+
+theorem bins_a6 (sp a0 a1 a2 a3 a4 a5 a6 a7 t4 : BitVec 64) (f : Nat → BitVec 8) (nb : Nat) :
+    finReg segBins (binsL sp a0 a1 a2 a3 a4 a5 a6 a7 t4) (binsLds f sp nb) 16 = 0x8001ad10#64 := by
+  simp only [finReg, segOut, segBins, evalBlocks_regs, runChain, SegEvalState.init]
+  seg_norm
+  decide
+
+theorem bins_sp (sp a0 a1 a2 a3 a4 a5 a6 a7 t4 : BitVec 64) (f : Nat → BitVec 8) (nb : Nat) :
+    finReg segBins (binsL sp a0 a1 a2 a3 a4 a5 a6 a7 t4) (binsLds f sp nb) 2 = sp := by
+  simp only [finReg, segOut, segBins, evalBlocks_regs, runChain, SegEvalState.init]
+  seg_norm
+
+/-- Stage 5: back from the lock hook, at the bin checks. -/
+theorem st5 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
+    {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
+    (h : StPost s rv0 (MtP m1 s headroom mv0 (rv0 8) r n) (mallocBytes vsaLayout H s headroom)
+      0x80004878#64 rv mv) :
+    LocalRun (vsaModel live) roR pathText mRegs (mallocBytes vsaLayout H s headroom)
+      (MallocRoomEnd vsaLayout (vsaRoomFast maxReq) H n r s saved k) 6 rv mv := by
+  have G := C.geo
+  have h96 := C.sp96
+  have hle := C.sp.geom.lo; have hhi := C.sp.geom.hi
+  unfold tohostAddr at hle
+  have R := C.fast.reads (Nat.succ_pos k)
+  have hglobS : ∀ a, 0x8001ad10 ≤ a → a < 0x8001b520 → mallocBytes vsaLayout H s headroom a :=
+    fun a h1 h2 => .inr (.inl (.inl ⟨h1, h2⟩))
+  have hglobH : ∀ a, 0x8001ad10 ≤ a → a < 0x8001b520 → heapFoot vsaLayout H a :=
+    fun a h1 h2 => .inl (.inl ⟨h1, h2⟩)
+  have gword : ∀ a v, 0x8001ad10 ≤ a → a + 8 ≤ 0x8001b520 → v < 2 ^ 64 → read64 m1 a = some v →
+      bytesVal .ld (wordOf mv a) = BitVec.ofNat 64 v := fun a v h1 h2 hv hr =>
+    word_val (Mt := MtP m1 s headroom mv0 (rv0 8) r n)
+      (fun j hj => h.img _ (hglobS _ (by omega) (by omega)))
+      (by rw [C.mtP_read (fun j hj => hglobH _ (by omega) (by omega)), hr, ofNat_toNat_lt hv])
+  have hb : BinsImg mv :=
+    { bk := fun i h0 h1 => gword _ _ (by unfold binAt avAddr; omega)
+        (by unfold binAt avAddr; omega)
+        (by unfold binAt avAddr; omega) (R.bin_bk i h0 h1)
+      fd1 := gword _ _ (by decide) (by decide) (by decide) (R.bin_fd 1 (by decide) (by decide))
+      binblocks := gword _ _ (by decide) (by decide) (by decide) R.binblocks }
+  have hv1 : bytesVal .ld (wordOf mv ((spN s).toNat + 8)) = BitVec.ofNat 64 (nbN n) := by
+    rw [h96]
+    refine word_val (Mt := MtP m1 s headroom mv0 (rv0 8) r n)
+      (fun j hj => by rw [Nat.add_assoc]; exact h.img _ (C.frame_owned (j := 8 + j) (by omega))) ?_
+    rw [read64_of_writeLog_at _ _ 2 _ (nbOf n) rfl (by simp only [List.drop, OutLRange]),
+      nbOf_toNat (Nat.le_trans C.n_hi C.max), ofNat_toNat_lt (by have := G.nb496; omega)]
+  refine seg_step segBins (binsL (spN s) (rv 10) (rv 11) (rv 12) (rv 13) (rv 14) (rv 15) (rv 16)
+      (rv 17) (rv 29)) (binsLds mv (spN s) (nbN n)) 0x80004878#64 (avLD mv ++ frameLD mv (spN s)) []
+    26 rfl (by change ChainOK _ [2, 10, 11, 12, 13, 14, 15, 16, 17, 29] _; decide)
+    (by change KeysOK [2, 10, 11, 12, 13, 14, 15, 16, 17, 29]; decide)
+    (by change ∀ x ∈ wrChain segBins, x ∈ [2, 10, 11, 12, 13, 14, 15, 16, 17, 29]; decide)
+    (fun a _ => by show OutL [] a; trivial) C.text
+    (fun c _ hcode hLD => bins_facts hcode (by rw [h96]; unfold tohostAddr; omega)
+      (by rw [h96]; omega) (frameLD_pin fun p hp => hLD p (List.mem_append_right _ hp))
+      (avLD_pin hLD) (mem_sizeClasses G.nb16 G.nb32 G.nb496) hv1 hb)
+    (by decide) h.pc ?_ ?_ (fun p hp => by cases hp) h.img ?_
+  · intro p hp
+    simp only [binsL, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    · exact .inl ⟨by dsimp only; decide, h.sp⟩
+    all_goals exact .inl ⟨by dsimp only; decide, rfl⟩
+  · intro p hp
+    rcases List.mem_append.mp hp with hp | hp
+    · obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hp
+      rw [List.mem_range] at hj
+      exact ⟨hglobS _ (by omega) (by omega), rfl⟩
+    · obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hp
+      rw [List.mem_range] at hj
+      refine ⟨?_, rfl⟩
+      rw [h96]; exact C.frame_owned hj
+  · intro rv' mv' hpc hL hU hI
+    refine st6 C ⟨hpc, ?_, ?_, ?_, h.keep.step fun q hq => hU q ?_ ?_ ?_, fun a ha => ?_⟩
+    · rw [hL (2, spN s) (by simp [binsL]), bins_sp]
+    · rw [hL (14, rv 14) (by simp [binsL]), bins_a4, hv1]
+    · rw [hL (16, rv 16) (by simp [binsL]), bins_a6]
+    · rcases hq with rfl | rfl | rfl <;> decide
+    · rcases hq with rfl | rfl | rfl <;> decide
+    · exact not_pin (by rcases hq with rfl | rfl | rfl <;> simp [binsL])
+    · rw [hI a ha, show (segOut segBins (binsL (spN s) (rv 10) (rv 11) (rv 12) (rv 13) (rv 14) (rv 15)
+        (rv 16) (rv 17) (rv 29)) (binsLds mv (spN s) (nbN n))).log = [] from rfl, writeLog_nil']
+
 end Stages
 
 end VsaIris.MallocFast
