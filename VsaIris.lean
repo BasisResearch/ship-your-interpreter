@@ -68,4 +68,5 @@ import VsaIris.Interp.EnvSpan
 import VsaIris.Interp.EnvGetSpans
 import VsaIris.Interp.EnvGetHit
 import VsaIris.Interp.EnvSetSpans
+import VsaIris.Interp.EnvScan
 import VsaIris.Interp.ProofEnvGet
