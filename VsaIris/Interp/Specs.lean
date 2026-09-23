@@ -2,6 +2,7 @@ import VsaIris.Vsa.Instance
 import VsaIris.MallocRun
 import VsaIris.Loop
 import VsaIris.Interp.Need
+import VsaIris.Interp.Vacuity
 import VsaIris.Vsa.HeapShape
 import Vsa.RuntimeRepr
 import Vsa.While.Cost
@@ -88,159 +89,45 @@ and `VsaIris/Interp/Need.lean` (no longer placeholders here):
 * `MachWP.loop` / `MachWP.loopI` / `MachWP.loopSeg` — the bounded-loop rule by
   fuel induction, for either WP (§E). -/
 
-/-! ## §C Representation predicates (R) -/
+/-! ## §C Representation predicates (R) — LANDED
 
-/-- The interpreter's ghost state (INTERP_DESIGN.md §3). Frame and closure
-addresses are PERSISTENT map elements: an `Env*` never moves (only its arrays
-are reallocated) and a closure is immutable. -/
-class InterpGS (GF : BundledGFunctors) where
-  frameMapG : GhostMapG GF Nat Nat NatMap
-  closMapG : GhostMapG GF Nat Nat NatMap
-  frameName : GName
-  closName : GName
-  -- The console (γo) is `MachGS.conName`: its authority is in the machine's
-  -- state interpretation (F2, `VsaIris.consoleOwn`), not here.
+Built in `VsaIris/Interp/{Repr,Store,Bridge,Boundary,Vacuity}.lean` (no longer
+a placeholder here; this file imports them):
 
-attribute [reducible, instance] InterpGS.frameMapG InterpGS.closMapG
+* `VsaIris/Interp/Repr.lean` — `InterpGS` (two ghost-map names over the
+  machine's `Nat ↦ Nat` functor, so no second `GhostMapG` instance is in
+  scope), `frameAt`/`closAt`, the byte layers `roImg`/`roOn`/`ownImg`, the
+  persistent `strAt`, `astE`/`astS`/`astSs`, `valOf`/`valImg`/`valAt`/
+  `slot24`, `closOwn`, `FrameGeom`/`FrameLayout`/`bindings`/`parentAt`/
+  `frameBody`/`frameOwn`/`framesOwn`/`closuresOwn`, `StoreMaps`/`storeRepr`,
+  `interpCore`/`interpCtx`/`interpCtxPre`, `Regime`/`heapRes`, `world`.
+* `VsaIris/Interp/Store.lean` — the ONE frame opener `storeRepr_open` (+ the
+  `env_define` closer `storeRepr_open_define`), `storeRepr_frameAt`/
+  `_closAt`/`_closure`, `storeRepr_empty`/`_allocFrame`/`_allocClosure`, the
+  discard `ownImg_persist`/`strAt_of_owned`, and the two-owner sanity lemmas
+  `storeRepr_blocks_disjoint`, `storeRepr_blocks_off_heap`,
+  `world_blocks_off_heap`.
+* `VsaIris/Interp/Bridge.lean` — VSA's pure relations to these predicates:
+  `astE_of_exprRepr`/`astS_of_stmtRepr`/`astSs_of_stmtArrayRepr`/
+  `astSs_of_programRepr` (what `InterpRunReadyFacts.ast_owned` gives A0),
+  `strAt_of_cstringWithin`, `valOf_of_valueRepr`/`valAt_of_valueWordRepr`,
+  `FrameReads`/`FrameBridge`/`frameBody_of_frameRepr`, and the `memImg`
+  read calculus (`readLE_memImg`, `imgW_lo32`, `imgW_read64`).
+* `VsaIris/Interp/Boundary.lean` — `ownImg_of_memMap`/`roOn_of_memMap`: the
+  `[∗map] k ↦ v ∈ mm, k ↦ₘ v` adequacy hands the client becomes the exclusive
+  and read-only byte resources, over `extAddrs`/`blockAddrs` address lists.
+* `VsaIris/Interp/Vacuity.lean` — the vacuity check: every predicate above
+  instantiated at the control program's real initial memory
+  (`ctl_predicates_inhabited`).
 
-section Repr
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-
-/-- Spec frame `fa` lives at machine `Env*` `e`, forever. -/
-def frameAt (fa e : Nat) : IProp GF := ghost_map_elem I.frameName DFrac.discard fa e
-/-- Spec closure `ca` lives at machine `Closure*` `p`, forever. -/
-def closAt (ca p : Nat) : IProp GF := ghost_map_elem I.closName DFrac.discard ca p
-
-instance (fa e : Nat) : Persistent (frameAt (GF := GF) fa e) := by unfold frameAt; infer_instance
-instance (ca p : Nat) : Persistent (closAt (GF := GF) ca p) := by unfold closAt; infer_instance
-
--- `consoleOwn s` is `VsaIris.consoleOwn` (Ptsto.lean, F2): its authority is in
--- `mstateInterp`, tied to `MachineModel.out` (VSA: `Vsa.Machine.output`).
-
-/-- Immutable bytes. -/
-def bytesRO (a : Nat) (bs : List (BitVec 8)) : IProp GF :=
-  sepL bs.zipIdx (fun p => (a + p.2) ↦ₘ□ p.1)
-
-/-- A C string, NUL included, read-only forever (`CString`). -/
-def strAt (p : Nat) (s : String) : IProp GF :=
-  iprop(⌜∀ c ∈ s.toList, 0 < c.toNat ∧ c.toNat < 128⌝ ∗
-    bytesRO p (s.toList.map (fun c => BitVec.ofNat 8 c.toNat) ++ [0#8]))
-
-/-- Persistent AST ownership: `ExprRepr` over read-only bytes. R proves the
-lift `astE_of_exprRepr` from the boundary image. Stated here by existential
-image for the skeleton; R replaces it with the structural definition. -/
-def astE (a : Nat) (e : Expr) : IProp GF :=
-  iprop(∃ (bs : List (Nat × BitVec 8)) (m : Mem), ⌜ExprRepr m a e ∧ ∀ q ∈ bs, m[q.1]? = some q.2 ∧
-      ∀ k, (∃ b, m[k]? = some b) → ∃ b, (k, b) ∈ bs⌝ ∗
-    sepL bs (fun q => q.1 ↦ₘ□ q.2))
-def astS (a : Nat) (s : Stmt) : IProp GF :=
-  iprop(∃ (bs : List (Nat × BitVec 8)) (m : Mem), ⌜StmtRepr m a s ∧ ∀ q ∈ bs, m[q.1]? = some q.2 ∧
-      ∀ k, (∃ b, m[k]? = some b) → ∃ b, (k, b) ∈ bs⌝ ∗
-    sepL bs (fun q => q.1 ↦ₘ□ q.2))
-def astSs (a n : Nat) (ss : List Stmt) : IProp GF :=
-  iprop(∃ (bs : List (Nat × BitVec 8)) (m : Mem), ⌜StmtArrayRepr m a n ss ∧ ∀ q ∈ bs, m[q.1]? = some q.2 ∧
-      ∀ k, (∃ b, m[k]? = some b) → ∃ b, (k, b) ∈ bs⌝ ∗
-    sepL bs (fun q => q.1 ↦ₘ□ q.2))
-
-/-- The meaning of a 24-byte `Value`'s three words (`ValueRepr`), persistent. -/
-def valOf (N : NativeAddrs) : Value → BitVec 64 → BitVec 64 → BitVec 64 → IProp GF
-  | .null, w0, _, _ => iprop(⌜w0.toNat % 2^32 = 0⌝)
-  | .bool b, w0, w1, _ => iprop(⌜w0.toNat % 2^32 = 1 ∧ w1.toNat % 2^32 = cond b 1 0⌝)
-  | .int n, w0, w1, _ => iprop(⌜w0.toNat % 2^32 = 2 ∧ w1.toInt = n⌝)
-  | .str s, w0, w1, _ => iprop(⌜w0.toNat % 2^32 = 3 ∧ w1.toNat ≠ 0⌝ ∗ strAt w1.toNat s)
-  | .closure ca, w0, w1, _ => iprop(⌜w0.toNat % 2^32 = 4 ∧ w1.toNat ≠ 0⌝ ∗ closAt ca w1.toNat)
-  | .native f, w0, w1, w2 =>
-      iprop(⌜w0.toNat % 2^32 = 5 ∧ w2.toNat = N.addr f⌝ ∗ strAt w1.toNat (nativeName f))
-
-/-- Eight little-endian bytes of a word, exclusive. -/
-def word64 (a : Nat) (w : BitVec 64) : IProp GF :=
-  sepL (List.range 8) (fun i => (a + i) ↦ₘ BitVec.ofNat 8 (w.toNat / 256 ^ i))
-
-/-- A 24-byte slot of unknown contents (an sret buffer, a frame's spare slot). -/
-def slot24 (a : Nat) : IProp GF := blockOwn a 24
-
-/-- A represented value in an owned 24-byte slot (`ValueWordRepr`). -/
-def valAt (N : NativeAddrs) (a : Nat) (v : Value) : IProp GF :=
-  iprop(∃ w0 w1 w2 : BitVec 64, word64 a w0 ∗ word64 (a + 8) w1 ∗ word64 (a + 16) w2 ∗
-    valOf N v w0 w1 w2)
-
-/-- A closure object (`ClosureRepr`), persistent: `fn_expr` and `env` words,
-the `EX_FN` node, and the captured frame's address. -/
-def closOwn (ca : Nat) (cd : ClosureData) : IProp GF :=
-  iprop(∃ p q e, closAt ca p ∗ bytesRO p ((List.range 8).map (fun i => BitVec.ofNat 8 (q / 256 ^ i)) ++
-      (List.range 8).map (fun i => BitVec.ofNat 8 (e / 256 ^ i))) ∗
-    astE q (.fn cd.name cd.params cd.body) ∗ frameAt cd.env e)
-
-/-- One frame (`FrameRepr` + the ownership of its struct and array blocks).
-The arrays are whole heap blocks with spare capacity; names are persistent
-strings, slots exclusive. `blocks` are the heap blocks it owns (for
-`B ⊆ H`). -/
-def frameOwn (N : NativeAddrs) (fa : Nat) (f : Frame) (blocks : List (Nat × Nat)) : IProp GF :=
-  iprop(∃ (e pn pv cap : Nat) (par : Nat),
-    frameAt fa e ∗
-    ⌜f.vars.length ≤ cap ∧ blocks = [(e, 32), (pn, 8 * cap), (pv, 24 * cap)] ∧
-      (match f.parent with | none => par = 0 | some _ => par ≠ 0)⌝ ∗
-    (match f.parent with | none => iprop(emp) | some pa => frameAt pa par) ∗
-    -- the Env struct: count, cap, names, vals, parent
-    blockOwn e 32 ∗
-    -- names[0..count): persistent strings; names[count..cap): spare
-    sepL (f.vars.zipIdx) (fun p => iprop(∃ q, word64 (pn + 8 * p.2) (BitVec.ofNat 64 q) ∗ strAt q p.1.1)) ∗
-    blockOwn (pn + 8 * f.vars.length) (8 * (cap - f.vars.length)) ∗
-    -- vals[0..count): represented slots; vals[count..cap): spare
-    sepL (f.vars.zipIdx) (fun p => valAt N (pv + 24 * p.2) p.1.2) ∗
-    blockOwn (pv + 24 * f.vars.length) (24 * (cap - f.vars.length)))
-  -- R: the struct words' VALUES (count/cap/pn/pv/par) are pinned inside
-  -- `blockOwn e 32` by a structural refinement; kept existential here.
-
-/-- The whole store (`StoreRepr` + `HeapOwned` + `StoreOwned`), monolithic:
-BigStep's frames are shared by closures, so every call can reach any frame.
-`env_*` specs open ONE frame with one opener/closer (R). -/
-def storeRepr (N : NativeAddrs) (s : Store) (B : List (Nat × Nat)) : IProp GF :=
-  iprop(∃ (mf mc : NatMap Nat) (Bs : List (List (Nat × Nat))),
-    ghost_map_auth I.frameName (DFrac.own 1) mf ∗ ghost_map_auth I.closName (DFrac.own 1) mc ∗
-    ⌜(∀ k, (PartialMap.get? mf k).isSome ↔ k < s.frames.size) ∧
-      (∀ k, (PartialMap.get? mc k).isSome ↔ k < s.closures.size) ∧
-      Bs.length = s.frames.size ∧ B = Bs.flatten ∧
-      StoreBodiesBound s perCallBudget⌝ ∗
-    sepL (List.range s.frames.size) (fun fa =>
-      iprop(∃ (f : Frame) (bl : List (Nat × Nat)), ⌜s.frames[fa]? = some f ∧ Bs[fa]? = some bl⌝ ∗
-        frameOwn N fa f bl)) ∗
-    sepL (List.range s.closures.size) (fun ca =>
-      iprop(∃ cd, ⌜s.closures[ca]? = some cd⌝ ∗ □ closOwn ca cd)))
-
-/-- The `Interp` struct at `inp`: `call_depth` exclusive, `globals` and the
-`jmp_buf` read-only, `err_msg` exclusive. Offsets from `interp.h` /
-`LayoutInstance.InterpRunPhysicalFacts` (R pins them). -/
-def interpCtx (inp : Nat) (d : Nat) : IProp GF :=
-  iprop(∃ g, sepL (List.range 4) (fun i => (inp + 8 + i) ↦ₘ BitVec.ofNat 8 (d / 256 ^ i)) ∗
-    frameAt 0 g ∗ blockOwn (inp + 24) 256)
-  -- R: add the persistent `on_error` bytes once `setjmp` has run.
-
-/-- MachCSL's two allocator regimes (`KvmSpec.v:123` `kalloc_env γ (Some n)` /
-`None`, paper §6.5): counted (total mode; cannot fail) and uncounted (partial
-mode; malloc may return NULL). -/
-inductive Regime where
-  | counted (k : Nat)
-  | uncounted
-
-def heapRes (L : DlLayout) (Room : RoomPred) : Regime → List (Nat × Nat) → IProp GF
-  | .counted k, H => isHeapRoom L Room H k
-  | .uncounted, H => isHeap L H
-
-/-- Everything an evaluation threads: heap, store, console, interpreter
-context. `B ⊆ H` ties the store's blocks to the allocator's live list. -/
-def world (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
-    (ρ : Regime) (st : St) (d : Nat) : IProp GF :=
-  iprop(∃ H B, heapRes L Room ρ H ∗ storeRepr N st.store B ∗ consoleOwn st.out ∗
-    interpCtx inp d ∗ ⌜∀ b ∈ B, b ∈ H⌝)
-
-/-- R's two-owner sanity lemma (xv6iris durable-notes "The resource form"):
-the world is satisfiable, not merely well-typed. Proved at the boundary
-world (A0), stated here as the obligation. -/
-theorem world_consistent_obligation : True := trivial
-
-end Repr
+STATEMENT CHANGES against the skeleton (recorded in INTERP_DESIGN.md §10):
+`astE`/`astS`/`astSs` are `*ReprWithin` over a read-only view `roOn P m`
+rather than an enumerated byte list; `valAt`/`frameOwn`/`storeRepr` own a
+byte IMAGE (`ownImg`) with pure layout facts rather than per-word `word64`
+chains, which is the form `LocalRun`/`wp_seg` consume; `frameOwn` carries a
+named `FrameGeom`/`FrameLayout` instead of an existential tower; `interpCtx`
+splits into `interpCore` plus the `jmp_buf` (read-only after `setjmp`,
+exclusive before: `interpCtxPre`). -/
 
 /-! ## §D The three recursive specs -/
 
@@ -321,11 +208,11 @@ def execSpecT_body (st : St) (d env : Nat) (sm : Stmt) (st' : St) (status : Stat
 its spec. The 49 recursor rows become the generated `Case/*T` lemmas. -/
 theorem evalSpecT (st : St) (d env : Nat) (e : Expr) (st' : St) (v : Value) (n : Nat)
     (D : EvalECost st d env e st' v n) :
-    ⊢ evalSpecT_body M N L Room inp st d env e st' v n D := by sorry
+    ⊢ evalSpecT_body (GF := GF) M N L Room inp st d env e st' v n D := by sorry
 
 theorem execSpecT (st : St) (d env : Nat) (sm : Stmt) (st' : St) (status : Status) (n : Nat)
     (D : ExecSCost st d env sm st' status n) :
-    ⊢ execSpecT_body M N L Room inp st d env sm st' status n D := by sorry
+    ⊢ execSpecT_body (GF := GF) M N L Room inp st d env sm st' status n D := by sorry
 
 /-! ### Partial, outcome-quantified, with abort (stuck_sim) -/
 
@@ -367,8 +254,8 @@ def execSpecP_body (st : St) (d env : Nat) (sm : Stmt) : IProp GF :=
 
 /-- The Löb conclusion (A): both partial specs, for every input. -/
 theorem specsP :
-    ⊢ □ ((∀ st d env e, evalSpecP_body M N L Room inp st d env e) ∧
-         (∀ st d env sm, execSpecP_body M N L Room inp st d env sm)) := by sorry
+    ⊢ □ ((∀ st d env e, evalSpecP_body (GF := GF) M N L Room inp st d env e) ∧
+         (∀ st d env sm, execSpecP_body (GF := GF) M N L Room inp st d env sm)) := by sorry
 
 /-- F3 (landed as `VsaIris.abort_rebase`): re-basing an abort continuation
 from the caller's region to the child's, joining the caller's frame bytes

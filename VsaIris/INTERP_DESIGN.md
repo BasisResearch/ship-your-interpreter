@@ -735,6 +735,40 @@ lanes); then E1–E6 (six lanes).
    does not own `tohost` provably cannot print (F2), so a missing putchar in a
    print path shows up as an unprovable goal, not as a silent output mismatch.
 
+### STATEMENT CHANGES (R, landed)
+
+The §3 predicates are built in
+`VsaIris/Interp/{Repr,Store,Bridge,Boundary,Vacuity}.lean`. Four statements
+differ from the skeleton, each because the skeleton's shape does not compose
+with what the proofs consume:
+
+- **The AST is `*ReprWithin` over a read-only VIEW.** `astE a e` is
+  `∃ P m, ⌜ExprReprWithin m P a e⌝ ∗ roOn P m` (`roOn P m := □ ∀ k b, ⌜P k⌝ →
+  ⌜m[k]? = some b⌝ → k ↦ₘ□ b`), not an enumerated byte list. The hereditary
+  read set `P` of `ExprReprWithin` IS the set `roOn` needs, so child
+  projections (`MemReprReadFields`/`ReadChildren`/`ReadArrays`) apply
+  unchanged, and `InterpRunReadyFacts.ast_owned` hands A0 exactly this `P`
+  (`astSs_of_programRepr`).
+- **Mutable data is an owned byte IMAGE plus pure layout facts**, not a chain
+  of per-word `word64`s: `ownImg S img := ownSet S (fun a => a ↦ₘ img a)`
+  with `imgLE`/`imgW` reading the words. This is the form `wp_seg`/`LocalRun`
+  consume (a segment's write log is a function on addresses), and it keeps
+  one `decide` per fact instead of one per byte.
+- **`frameOwn` carries a named `FrameGeom` + `FrameLayout`** (CLAUDE.md law 6)
+  instead of the skeleton's existential-and-conjunction tower; `env_define`'s
+  `realloc` needs the block extents by name. VSA's `FrameRepr` conjunction is
+  consumed through ONE named destructurer, `FrameReads`.
+- **`interpCtx` splits.** `interpCore` holds the fields every mode shares;
+  `interpCtx` adds the read-only `jmp_buf` (after `setjmp`), `interpCtxPre`
+  the exclusive one (at `interp_run`'s entry, what A0 has).
+
+§10.7's scratch check is discharged concretely rather than abstractly:
+`storeRepr_blocks_off_heap` / `world_blocks_off_heap` prove no store byte is
+in `heapFoot`, and `VsaIris/Interp/Vacuity.lean`'s `ctl_predicates_inhabited`
+exhibits all the predicates together at the control program's real initial
+memory. `heapRes`/`world` inhabitation at that memory needs `isHeap` for the
+interpreter control's dlmalloc heap and stays with H4/A0.
+
 ## 11. Open questions for the user
 
 - **Q1 (hard to change later): stack admissibility at the boundary** (§10.4).
