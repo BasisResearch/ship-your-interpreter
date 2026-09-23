@@ -17,6 +17,45 @@ Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 - **Q3: two WPs** (`mTWP` total, `mWP` partial) behind `MachWP`.
 - **Q4: newlib `snprintf`/`fprintf` safety specs stay as named holes for now,** scheduled after E1–E6. They must not be forgotten: every hole lives as a field of `IrisHoles` (so it appears in the final theorem's hypothesis) AND has an entry in `VsaIris/HOLES.md` with owner package, satisfiability evidence and discharge plan. `scripts/check_iris_holes.py` fails if the two disagree.
 
+## STATEMENT CHANGE (S1, Q1 landed): `Loaded interpRunLayout` now carries stack admissibility
+
+`Vsa/Sim/LayoutInstance.lean` `InterpRunReadyFacts` gained the field
+
+```lean
+stack_admissible : StackAdmissible c.σ.mem stmts count
+-- StackAdmissible m stmts count :=
+--   ∀ p, ProgramRepr m stmts count p → ProgramStackFits p
+structure ProgramStackFits (p : Program) : Prop where
+  need   : stackSL.lo + Stmt.stackNeedList p + maxCallDepth * perCallBudget
+             + evalFrame + interpRunFrame ≤ spEntry
+  bodies : Stmt.bodiesBoundList perCallBudget p = true
+```
+
+- **What narrowed.** `interpRunLayout.atInterpRun`, hence
+  `Loaded interpRunLayout p c`, hence the hypothesis of `endToEnd_refinement`
+  (and of `endToEnd_refinement_iris`). `Refinement.lean` is unchanged:
+  `Loaded` is generic in `Layout`, and the field sits in the concrete layout's
+  ready facts, beside `ownership`, which carries
+  `DlHeap.InitialAllocatorAt.capacity` (same ∀-over-`ProgramRepr` shape).
+- **So `interpRunLayout' = interpRunLayout`.** §5.4 and `Specs.lean` need no
+  separate layout. The skeleton's `StackAdmissible` is superseded by the
+  landed one.
+- **Why.** §10.4: without it, an AST deeper than the 8 MiB stack overflows
+  into the heap (`heapEnd = stackSL.lo = 0x87800000`), and `InterpSim` is
+  unprovable.
+- **The bound's arithmetic.** `interp_run` spills 176 bytes
+  (`interpRunFrame`), then calls `exec_stmt` at `spEntry - 176` with depth 0.
+  Each top-level statement needs ItemZero's `execNeed s 0 = s.stackNeed +
+  maxCallDepth * perCallBudget + evalFrame` below that. The consumer is
+  `ProgramStackFits.execBudget`, which gives the `StackOK` at the first call.
+- **Not vacuous.**
+  - The control program: `NativeNameAudit.Control.readyFacts` (so
+    `Control.loaded` still inhabits `Loaded interpRunLayout`).
+  - Every `c/tests/*.wl` program and `Validation.recursionSmall`:
+    `Vsa/Sim/StackAdmissibleWitness.lean`, one kernel `decide` of
+    `programStackFits` each.
+  - Needs range from 3440 to 5232 bytes, against about 2.24 MB of slack.
+
 ## 0. The design in five sentences
 
 1. Every block of machine code (a reflected segment, a helper call, a loop) is
@@ -360,8 +399,8 @@ theorem endToEnd_refinement_iris (h : IrisHoles) :
   Vsa.Refine.refinement (interpSim_iris h)
 ```
 
-`interpRunLayout'` is `interpRunLayout`, plus the stack admissibility field of
-Q1 if the user approves it.
+`interpRunLayout'` is `interpRunLayout`: Q1's stack-admissibility field landed
+in `InterpRunReadyFacts` (see "STATEMENT CHANGE" at the top).
 
 ## 6. The exponentiating layer on Iris (work package G)
 
@@ -531,9 +570,9 @@ lanes); then E1–E6 (six lanes).
      below it (`heapEnd = stack lo = 0x87800000`). After that, nothing
      constrains the machine, and both `term_sim` and `stuck_sim` are
      unprovable.
-   - Fix (needs the user's approval, Q1): add
-     `stack_admissible : ∀ p, ProgramRepr m a n p → (p.stackNeed + maxCallDepth * perCallBudget + slack ≤ stackSize) ∧ p.bodiesBound perCallBudget`
-     beside `capacity`.
+   - Fix (approved as Q1, landed by S1): `InterpRunReadyFacts.stack_admissible`
+     (`ProgramStackFits`, see "STATEMENT CHANGE" at the top), beside
+     `capacity`.
 5. **The out-of-memory path in partial mode.** The capacity bound only covers
    terminating derivations, so a divergent program can exhaust the heap. That
    is correct behaviour, `exit(1) ≠ 0`, but only if the uncounted regime's

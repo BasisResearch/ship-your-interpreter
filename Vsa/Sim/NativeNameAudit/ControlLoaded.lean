@@ -13,6 +13,12 @@ theorem readyFacts : InterpRunReadyFacts heapConfig 0x82000000 2 fixedInp
       0x82000000 2 ownershipData
     rw [physicalConfig_mem]
     exact initialOwned⟩
+  stack_admissible := by
+    intro p hp
+    change Vsa.MemRepr.ProgramRepr (physicalConfig heapMem).σ.mem 0x82000000 2 p at hp
+    rw [physicalConfig_mem] at hp
+    rw [heapAstReads.program_unique hp]
+    exact ProgramStackFits.of_check (by decide)
 
 theorem loaded : Vsa.Refine.Loaded interpRunLayout nativeNameProgram heapConfig := by
   refine ⟨0x82000000, 2, ?_, fixedInp, Nfixed, heapArena, phif, phic, 0, readyFacts⟩

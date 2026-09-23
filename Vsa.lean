@@ -722,6 +722,7 @@ import Vsa.Sim.DeriveMetaDemo
 import Vsa.Sim.DeriveMetaTowers
 import Vsa.Sim.DeriveRow
 import Vsa.Sim.LayoutInstance
+import Vsa.Sim.StackAdmissibleWitness
 -- wave 41
 import Vsa.Sim.ExecCondArmSites
 import Vsa.Sim.rows.StmtRetArmStagePre

@@ -5,6 +5,7 @@ import Vsa.RuntimeRepr
 import Vsa.While.Cost
 import Vsa.While.StackNeed
 import Vsa.Refinement
+import Vsa.Sim.LayoutInstance
 
 /-!
 # DESIGN SKELETON: interpreter-level specs (see `VsaIris/INTERP_DESIGN.md`)
@@ -456,18 +457,11 @@ ghost state and produce the initial world, the persistent AST and code, the
 top stack region, in either regime. -/
 theorem world_of_boundary_obligation : True := trivial
 
-/-- Q1 (user approval needed): the stack admissibility a loaded program must
-satisfy, beside `DlHeap.InitialAllocatorAt.capacity`. Without it, an AST
-deeper than the 8 MiB stack overflows into the heap directly below
-(`heapEnd = 0x87800000 = stackSL.lo`) and neither `term_sim` nor `stuck_sim`
-is provable. -/
-def StackAdmissible (m : Mem) (stmts count : Nat) : Prop :=
-  ∀ p : Program, ProgramRepr m stmts count p →
-    Stmt.stackNeedList p + maxCallDepth * perCallBudget + evalFrame + execFrame ≤ 0x800000 ∧
-    Stmt.bodiesBoundList perCallBudget p = true
-
-/-- The layout with Q1's field (A0 defines it by extending `InterpRunReady`). -/
-opaque interpRunLayout' : Vsa.Refine.Layout
+/-- Q1 (approved, landed by S1): the stack admissibility a loaded program
+satisfies is `Vsa.Sim.LayoutInstance.StackAdmissible`, a field of
+`InterpRunReadyFacts` beside the allocator's `capacity`. So the Iris route's
+layout is the concrete one (INTERP_DESIGN.md "STATEMENT CHANGE"). -/
+abbrev interpRunLayout' : Vsa.Refine.Layout := Vsa.Sim.LayoutInstance.interpRunLayout
 
 theorem term_sim_iris (_h : IrisHoles) :
     ∀ p c out, Vsa.Refine.Loaded interpRunLayout' p c → BigStep p out →
