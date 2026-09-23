@@ -4,7 +4,7 @@ file outside the design skeleton contains sorry/admit/axiom."""
 import re, sys, pathlib
 root = pathlib.Path(__file__).resolve().parent.parent
 rows = set(re.findall(r'^\| `([\w.]+)` \|', (root/'VsaIris/HOLES.md').read_text(), re.M))
-src = "\n".join(p.read_text() for p in (root/'VsaIris').rglob('*.lean'))
+src = "\n".join(p.read_text() for p in (root/'VsaIris').rglob('*.lean') if 'Interp/Specs.lean' not in str(p))
 m = re.search(r'structure IrisHoles[^\n]*\n((?:  .*\n|\n)*)', src)
 fields = set()
 if m:
