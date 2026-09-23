@@ -227,7 +227,12 @@ iris-machine's. The earlier iris-heap history is in git (`git log --grep iris-he
 - VSA obstruction, machine-checked: `vsa_reserve_fails_after_split`. VSA's `AllocationReserve` is false after `malloc(24)`. The corrected `Reserve` is used instead, and the finding is recorded in `PROOF_CLOSURE_PLAN.md` §2.
 
 ## In flight
-- Instantiating `pathText`'s `live` premise (`htext : ∀ p ∈ pathText, live p.1`) and `live ⊇ allocGlobal ∪ arena` from `VsaOk` and the loaded image.
+- `free` on the fast heap. `FreeLocalRun` over every heap shape needs all of `_free_r`: backward/forward coalescing, bin insertion, and `_malloc_trim_r`/`sbrk`. I am proving its top-merge path first, as a capacity-style spec in the manner of `MallocRoomRun`. The block must be the chunk adjacent to the top, and the merged top must stay below `__malloc_trim_threshold`. That path is: wrapper, prologue, lock, merge into the top, tail-jump to unlock.
+
+## Done (boundary)
+- `pathLoaded_of_image` (generated, `scripts/gen_malloc_path_image.py`): the fast paths' code bytes come from `FixedTextLoaded` and `ImageStaticsLoaded` (`_impure_ptr`).
+- `vsaDlMallocRoomImpl_boundary` (`Vsa/MallocLive.lean`): `DlMallocRoomImpl` over `vsaModel (liveOf c0)` at any `InterpRunPhysicalFacts` boundary. It has no premise beyond the boundary.
+- `live ⊇ allocGlobal ∪ arena` (`vsaFoot_live`) needs the named premise `AllocBytesPresent`. VSA's boundary states byte presence for the stack only; for the allocator it states presence only at the words `HeapAt` reads. This is recorded in `PROOF_CLOSURE_PLAN.md` §2 as a missing supplier.
 
 ## Done (top-split malloc)
 - `mallocRoomRun_fast` / `vsaDlMallocRoomImpl_fast` (`Vsa/MallocSmallChain.lean`): `MallocRoomRun`/`DlMallocRoomImpl` for the fast heap (`vsaRoomFast`: no free chunk, `binblocks = 0`, top-chunk reserve), for every request `n ≤ maxReq ≤ 487`, with stack discipline `SpOKFast` and code `pathText`. The only premise is that `pathText`'s addresses are `live`. Axioms: propext, Classical.choice, Quot.sound.
