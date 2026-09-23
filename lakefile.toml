@@ -9,6 +9,9 @@ leanOptions.backward.isDefEq.respectTransparency = false
 name = "vsa_run"
 root = "VsaRun"
 
+[[lean_lib]]
+name = "VsaIris"
+
 [[require]]
 name = "lean-riscv"
 path = "riscv-lean/lean_emulator"
