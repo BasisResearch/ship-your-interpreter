@@ -100,6 +100,7 @@ ro = []
 for base, n in TABLES:
     ro += [(base + i, b) for i, b in enumerate(elf_bytes(base, 4 * n))]
 BYTE = dict(code)
+BYTE_RO = dict(ro)
 CH = 16
 chunks = [code[i:i + CH] for i in range(0, len(code), CH)]
 where = {a: j for j, c in enumerate(chunks) for (a, _) in c}
@@ -184,6 +185,19 @@ def gen_code():
         for i in range(4):
             C.append(f'  · exact {mem_proof(pc + i)}')
         C.append('')
+    # one value per jump-table entry: `ldvf .lw interpROImg <entry>` (the
+    # word the dispatch loads) and the target it jumps to (`+ base`)
+    names = []
+    for base, n in TABLES:
+        for i in range(n):
+            a = base + 4 * i
+            w = int.from_bytes(bytes(BYTE_RO[a + j] for j in range(4)), 'little')
+            sx = w | (0xffffffff00000000 if w & 0x80000000 else 0)
+            names.append(f'interpRO_lw_{a:08x}')
+            C.append(f'theorem interpRO_lw_{a:08x} : ldvf .lw interpROImg {a} = 0x{sx:x}#64 := by decide')
+    C.append('')
+    C.append('/-- Evaluate the jump-table words (`ix_run`\'s normalizer). -/')
+    C.append('macro "ix_tab" : tactic => `(tactic| simp only [' + ', '.join(names) + '] at *)\n')
     C.append('end VsaIris.Sym\n')
     return '\n'.join(C)
 

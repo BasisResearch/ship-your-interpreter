@@ -23,26 +23,53 @@ namespace VsaIris.Sym
 
 open Lean Elab Tactic Meta
 
+theorem mem_accAddrs_iff {a w b : Nat} : b ∈ accAddrs a w ↔ a ≤ b ∧ b < a + w :=
+  ⟨of_mem_accAddrs, fun ⟨h1, h2⟩ => by
+    have e : a + (b - a) = b := by omega
+    rw [← e]; exact mem_accAddrs (by omega)⟩
+
+/-- Byte-set side conditions (`∀ b ∈ accAddrs a w, b ∈ DA` or `S b`), when
+the data addresses are a concatenation of `accAddrs` ranges and the owned set
+is built from `InExt`: both become interval arithmetic for `omega`. -/
+macro_rules
+  | `(tactic| sx_side) =>
+    `(tactic| (intro b hb; simp only [mem_accAddrs_iff, List.mem_append, VsaIris.InExt] at *; sx_addr))
+
+/-- Closed side conditions (a jump-table byte at a literal address is in
+`interpRO`). -/
+macro_rules
+  | `(tactic| sx_side) => `(tactic| decide)
+
 private def hex8 (n : Nat) : String :=
   let s := String.ofList (Nat.toDigits 16 n)
   String.ofList (List.replicate (8 - s.length) (Char.ofNat 48)) ++ s
 
+/-- The normalizer run after every step and before every side condition:
+register lookups, the caller's facts (`using`), store forwarding. -/
+def ixNorm (facts : Array Term) : TacticM Syntax := do
+  if facts.isEmpty then
+    `(tactic| ((try sx_norm) <;> (try ix_tab) <;> (try sx_norm) <;> (try sx_mem)))
+  else
+    let lems : Array (TSyntax `Lean.Parser.Tactic.simpLemma) ←
+      facts.mapM fun f => `(Lean.Parser.Tactic.simpLemma| $f:term)
+    `(tactic| ((try sx_norm) <;> (try simp only [$lems,*]) <;> (try ix_tab) <;> (try sx_norm) <;> (try sx_mem)))
+
 /-- Try `sx_side` (after the normalizers) on a goal; `true` when it closes. -/
-def ixTrySide (g : MVarId) : TacticM Bool := do
+def ixTrySide (norm : Syntax) (g : MVarId) : TacticM Bool := do
   let saved ← saveState
   try
-    let gs ← evalTacticAt (← `(tactic| ((try sx_norm) <;> (try sx_mem) <;> sx_side))) g
+    let gs ← evalTacticAt (← `(tactic| ($(⟨norm⟩) <;> sx_side))) g
     if gs.isEmpty then return true
     saved.restore; return false
   catch _ =>
     saved.restore; return false
 
 /-- Close a branch goal `C → IW …` when `sx_side` refutes `C`. -/
-def ixTryPrune (g : MVarId) : TacticM Bool := do
+def ixTryPrune (norm : Syntax) (g : MVarId) : TacticM Bool := do
   let saved ← saveState
   try
     let gs ← evalTacticAt
-      (← `(tactic| (intro hc; exfalso; ((try sx_norm) <;> (try sx_mem) <;> (revert hc; sx_side))))) g
+      (← `(tactic| (intro hc; exfalso; ($(⟨norm⟩) <;> (revert hc; sx_side))))) g
     if gs.isEmpty then return true
     saved.restore; return false
   catch _ =>
@@ -52,11 +79,11 @@ def ixTryPrune (g : MVarId) : TacticM Bool := do
 def ixCandidates (pc : Nat) : TacticM (List Name) := do
   let env ← getEnv
   let mk (p : String) := Name.mkStr (Name.mkStr (Name.mkStr .anonymous "VsaIris") "Sym") s!"{p}_{hex8 pc}"
-  return [mk "it", mk "itD", mk "itT"].filter env.contains
+  return [mk "it", mk "itD", mk "itT", mk "itH"].filter env.contains
 
 /-- Apply one candidate: the continuation goals (an `SWP` conclusion) and the
 side conditions `sx_side` could not close; `none` when it does not apply. -/
-def ixApply (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool) :
+def ixApply (norm : Syntax) (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool) :
     TacticM (Option (List MVarId × List MVarId)) := do
   let saved ← saveState
   try
@@ -67,7 +94,7 @@ def ixApply (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool) :
       let ty ← g.withContext (do instantiateMVars (← g.getType))
       if ← g.withContext (forallTelescopeReducing ty fun _ b => isSWP b) then
         conts := conts ++ [g]
-      else if !(← ixTrySide g) then
+      else if !(← ixTrySide norm g) then
         pending := pending ++ [g]
     if strict && !pending.isEmpty then
       saved.restore; return none
@@ -78,38 +105,43 @@ def ixApply (h : Syntax) (g : MVarId) (nm : Name) (strict : Bool) :
 /-- One step at a literal PC: the first candidate whose side conditions all
 close; failing that, the first candidate that applies, with its side
 conditions left pending. -/
-def ixStep (h : Syntax) (g : MVarId) : TacticM (Option (List MVarId × List MVarId)) := do
+def ixStep (norm : Syntax) (h : Syntax) (g : MVarId) :
+    TacticM (Option (List MVarId × List MVarId)) := do
   let some pc ← g.withContext (do swpPC? (← g.getType)) | return none
   let cands ← ixCandidates pc
   for nm in cands do
-    if let some r ← ixApply h g nm true then return some r
+    if let some r ← ixApply norm h g nm true then return some r
   for nm in cands do
-    if let some r ← ixApply h g nm false then return some r
+    if let some r ← ixApply norm h g nm false then return some r
   return none
 
-/-- `ix_run h`, `ix_run [n] h`, `ix_run h at pc…`. -/
-syntax "ix_run " ("[" num "] ")? term (" at " num+)? : tactic
+/-- `ix_run h`, `ix_run [n] h`, `ix_run h using [e,…]`, `ix_run h at pc…`. -/
+syntax "ix_run " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
 
 elab_rules : tactic
-  | `(tactic| ix_run $[[$n]]? $h $[at $stops*]?) => do
+  | `(tactic| ix_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => do
     let budget := (n.map (·.getNat)).getD 400
     let stopPCs : List Nat := match stops with
       | some ss => ss.toList.map (·.getNat)
       | none => []
+    let facts : Array Term := match fs with
+      | some fs => fs.getElems
+      | none => #[]
+    let norm ← ixNorm facts
     let mut pending : List MVarId := []
     let mut cur ← getMainGoal
     let mut stuck : List MVarId := []
     for _ in [0:budget] do
       if let some pc ← cur.withContext (do swpPC? (← cur.getType)) then
         if stopPCs.contains pc then stuck := [cur]; break
-      let some (conts, pend) ← ixStep h cur | stuck := [cur]; break
+      let some (conts, pend) ← ixStep norm h cur | stuck := [cur]; break
       pending := pending ++ pend
       match conts with
       | [c] =>
         let c ← do
           let saved ← saveState
           try
-            match ← evalTacticAt (← `(tactic| ((try sx_norm) <;> (try sx_mem)))) c with
+            match ← evalTacticAt norm c with
             | [c'] => pure c'
             | _ => saved.restore; pure c
           catch _ => saved.restore; pure c
@@ -118,10 +150,10 @@ elab_rules : tactic
         else
           stuck := [c]; break
       | [t, f] =>
-        if ← ixTryPrune t then
+        if ← ixTryPrune norm t then
           let [f'] ← evalTacticAt (← `(tactic| intro hc)) f | stuck := [f]; break
           cur := f'
-        else if ← ixTryPrune f then
+        else if ← ixTryPrune norm f then
           let [t'] ← evalTacticAt (← `(tactic| intro hc)) t | stuck := [t]; break
           cur := t'
         else

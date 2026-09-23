@@ -15302,4 +15302,41 @@ theorem interp_code_8000457c : ∀ p ∈ codeFoot 0x8000457c [0xef#8, 0x10#8, 0x
   · exact List.mem_append_left interpRO (List.mem_append_right interpNode0_154 (List.mem_append_right interpNode154_231 (List.mem_append_right interpNode231_269 (List.mem_append_right interpNode269_288 (List.mem_append_right interpNode288_298 (List.mem_append_right interpNode298_303 (List.mem_append_right interpNode303_305 (List.mem_append_right interpChunk305 (List.mem_append_right interpChunk306 ((by decide : ((0x8000457e : Nat), (0x80#8 : BitVec 8)) ∈ interpChunk307)))))))))))
   · exact List.mem_append_left interpRO (List.mem_append_right interpNode0_154 (List.mem_append_right interpNode154_231 (List.mem_append_right interpNode231_269 (List.mem_append_right interpNode269_288 (List.mem_append_right interpNode288_298 (List.mem_append_right interpNode298_303 (List.mem_append_right interpNode303_305 (List.mem_append_right interpChunk305 (List.mem_append_right interpChunk306 ((by decide : ((0x8000457f : Nat), (0x6c#8 : BitVec 8)) ∈ interpChunk307)))))))))))
 
+theorem interpRO_lw_80019f58 : ldvf .lw interpROImg 2147589976 = 0xfffffffffffe94b0#64 := by decide
+theorem interpRO_lw_80019f5c : ldvf .lw interpROImg 2147589980 = 0xfffffffffffe94bc#64 := by decide
+theorem interpRO_lw_80019f60 : ldvf .lw interpROImg 2147589984 = 0xfffffffffffe94c8#64 := by decide
+theorem interpRO_lw_80019f64 : ldvf .lw interpROImg 2147589988 = 0xfffffffffffe94d4#64 := by decide
+theorem interpRO_lw_80019f68 : ldvf .lw interpROImg 2147589992 = 0xfffffffffffe94dc#64 := by decide
+theorem interpRO_lw_80019f6c : ldvf .lw interpROImg 2147589996 = 0xfffffffffffe9524#64 := by decide
+theorem interpRO_lw_80019f70 : ldvf .lw interpROImg 2147590000 = 0xfffffffffffe9590#64 := by decide
+theorem interpRO_lw_80019f74 : ldvf .lw interpROImg 2147590004 = 0xfffffffffffe9604#64 := by decide
+theorem interpRO_lw_80019f78 : ldvf .lw interpROImg 2147590008 = 0xfffffffffffe9688#64 := by decide
+theorem interpRO_lw_80019f7c : ldvf .lw interpROImg 2147590012 = 0xfffffffffffe9258#64 := by decide
+theorem interpRO_lw_80019f80 : ldvf .lw interpROImg 2147590016 = 0xfffffffffffe946c#64 := by decide
+theorem interpRO_lw_80019f84 : ldvf .lw interpROImg 2147590020 = 0xfffffffffffe9904#64 := by decide
+theorem interpRO_lw_80019f88 : ldvf .lw interpROImg 2147590024 = 0xfffffffffffe995c#64 := by decide
+theorem interpRO_lw_80019f8c : ldvf .lw interpROImg 2147590028 = 0xfffffffffffe98b0#64 := by decide
+theorem interpRO_lw_80019f90 : ldvf .lw interpROImg 2147590032 = 0xfffffffffffe9858#64 := by decide
+theorem interpRO_lw_80019f94 : ldvf .lw interpROImg 2147590036 = 0xfffffffffffe9800#64 := by decide
+theorem interpRO_lw_80019f98 : ldvf .lw interpROImg 2147590040 = 0xfffffffffffe99a4#64 := by decide
+theorem interpRO_lw_80019f9c : ldvf .lw interpROImg 2147590044 = 0xfffffffffffe97b0#64 := by decide
+theorem interpRO_lw_80019fa0 : ldvf .lw interpROImg 2147590048 = 0xfffffffffffe99a4#64 := by decide
+theorem interpRO_lw_80019fa4 : ldvf .lw interpROImg 2147590052 = 0xfffffffffffe9760#64 := by decide
+theorem interpRO_lw_80019fa8 : ldvf .lw interpROImg 2147590056 = 0xfffffffffffe96a4#64 := by decide
+theorem interpRO_lw_80019fac : ldvf .lw interpROImg 2147590060 = 0xfffffffffffe96a4#64 := by decide
+theorem interpRO_lw_80019fb0 : ldvf .lw interpROImg 2147590064 = 0xfffffffffffe96a4#64 := by decide
+theorem interpRO_lw_80019fb4 : ldvf .lw interpROImg 2147590068 = 0xfffffffffffe96a4#64 := by decide
+theorem interpRO_lw_80019fb8 : ldvf .lw interpROImg 2147590072 = 0xfffffffffffea1b8#64 := by decide
+theorem interpRO_lw_80019fbc : ldvf .lw interpROImg 2147590076 = 0xfffffffffffea120#64 := by decide
+theorem interpRO_lw_80019fc0 : ldvf .lw interpROImg 2147590080 = 0xfffffffffffea1d4#64 := by decide
+theorem interpRO_lw_80019fc4 : ldvf .lw interpROImg 2147590084 = 0xfffffffffffea230#64 := by decide
+theorem interpRO_lw_80019fc8 : ldvf .lw interpROImg 2147590088 = 0xfffffffffffea084#64 := by decide
+theorem interpRO_lw_80019fcc : ldvf .lw interpROImg 2147590092 = 0xfffffffffffea27c#64 := by decide
+theorem interpRO_lw_80019fd0 : ldvf .lw interpROImg 2147590096 = 0xfffffffffffea168#64 := by decide
+theorem interpRO_lw_80019fd4 : ldvf .lw interpROImg 2147590100 = 0xfffffffffffea0e0#64 := by decide
+theorem interpRO_lw_80019fd8 : ldvf .lw interpROImg 2147590104 = 0xfffffffffffea100#64 := by decide
+
+/-- Evaluate the jump-table words (`ix_run`'s normalizer). -/
+macro "ix_tab" : tactic => `(tactic| simp only [interpRO_lw_80019f58, interpRO_lw_80019f5c, interpRO_lw_80019f60, interpRO_lw_80019f64, interpRO_lw_80019f68, interpRO_lw_80019f6c, interpRO_lw_80019f70, interpRO_lw_80019f74, interpRO_lw_80019f78, interpRO_lw_80019f7c, interpRO_lw_80019f80, interpRO_lw_80019f84, interpRO_lw_80019f88, interpRO_lw_80019f8c, interpRO_lw_80019f90, interpRO_lw_80019f94, interpRO_lw_80019f98, interpRO_lw_80019f9c, interpRO_lw_80019fa0, interpRO_lw_80019fa4, interpRO_lw_80019fa8, interpRO_lw_80019fac, interpRO_lw_80019fb0, interpRO_lw_80019fb4, interpRO_lw_80019fb8, interpRO_lw_80019fbc, interpRO_lw_80019fc0, interpRO_lw_80019fc4, interpRO_lw_80019fc8, interpRO_lw_80019fcc, interpRO_lw_80019fd0, interpRO_lw_80019fd4, interpRO_lw_80019fd8] at *)
+
 end VsaIris.Sym
