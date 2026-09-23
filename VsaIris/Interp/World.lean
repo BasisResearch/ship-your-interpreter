@@ -26,6 +26,8 @@ namespace VsaIris.Interp
 open Iris Iris.BI Iris.Std Iris.ProofMode
 open VsaIris VsaIris.VsaHeap
 open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr Vsa.Sim Vsa.Sim.DlHeap
+open Vsa.Sim.LayoutInstance (stackSL spEntry interpObject interpRunFrame)
+open Vsa.Sim.RuntimeOwnership (InitialWriteByte)
 
 /-! ## 1. Filling a memory -/
 
@@ -377,6 +379,338 @@ theorem frameBridge (b : Boot c p) {G : FrameGeom}
     exact payloadShared_of_valueOwned (ho.values G.pv (h.env ▸ h.vals) i hi)
 
 end Boot
+
+/-! ## 6. The boundary's bytes, partitioned
+
+Everything the initial world owns, as disjoint sets of addresses. All lie
+below `2^32` (`BootByte_lt`), so one finite list enumerates them. -/
+
+/-- The fixed binary's text and read-only data (below the writable sections). -/
+def CodeByte (k : Nat) : Prop := 0x80000000 ≤ k ∧ k < 0x8001ad00
+
+/-- Writable ELF data outside the allocator's globals (newlib's `FILE`
+state, `_impure_ptr`, the interpreter's statics). -/
+def StaticByte (k : Nat) : Prop := (0x8001ad00 ≤ k ∧ k < 0x8001c168) ∧ ¬ allocGlobal k
+
+/-- The whole C stack. -/
+def StackByte (k : Nat) : Prop := stackSL.lo ≤ k ∧ k < stackSL.hi
+
+/-- `struct Interp` (384 bytes, `interp.h`), inside `main`'s frame. -/
+def InterpByte (inp k : Nat) : Prop := InExt (inp, 384) k
+
+/-- The owned stack below `interp_run`'s entry `sp`. -/
+def FreeStackByte (k : Nat) : Prop := InExt (stackSL.lo, spEntry - stackSL.lo) k
+
+/-- The stack above `interp_run`'s entry `sp` outside `struct Interp`:
+`main`'s saved registers and locals, owned at their values. -/
+def CallerByte (inp k : Nat) : Prop := (spEntry ≤ k ∧ k < stackSL.hi) ∧ ¬ InterpByte inp k
+
+/-- Read-only bytes: the code and the boundary's immutable (shared) set. -/
+def RoByte (shared : Nat → Prop) (k : Nat) : Prop := shared k ∨ CodeByte k
+
+/-- Every byte the boundary world owns. -/
+def BootByte (shared : Nat → Prop) (G : FrameGeom) (H : List (Nat × Nat)) (k : Nat) : Prop :=
+  RoByte shared k ∨ BlocksCover G.blocks k ∨ heapFoot vsaLayout H k ∨ StackByte k ∨ StaticByte k
+
+namespace Boot
+
+variable {c : Vsa.Machine.Config} {p : Program}
+
+theorem inp_toNat (b : Boot c p) : b.inp.toNat = interpObject := by
+  rw [b.ready.interp_local]; decide
+
+theorem blockHeapAt (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) :
+    BlockHeapAt c.σ.mem b.H b.top b.brkv b.chunks b.bins :=
+  (blockHeapAt_of_heapAt b.alloc.heap hroom).1
+
+/-- Shared bytes are outside every writable byte of the boundary. -/
+theorem shared_not_write (b : Boot c p) {k : Nat} (hk : b.D.shared k) :
+    ¬ InitialWriteByte stackSL k :=
+  b.owned.heap.immutable.outsideWrites k hk
+
+theorem shared_lt (b : Boot c p) {k : Nat} (hk : b.D.shared k) : k < 2 ^ 32 := by
+  have := (b.owned.heap.immutable.readable k hk).2
+  exact this
+
+/-- Shared arena bytes lie in a live block, so the allocator does not own them. -/
+theorem shared_not_heapFoot (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {k : Nat}
+    (hk : b.D.shared k) :
+    ¬ heapFoot vsaLayout b.H k := by
+  rintro (hg | ⟨hlo, hhi, hout⟩)
+  · apply b.shared_not_write hk
+    left
+    change allocGlobal k at hg
+    unfold allocGlobal InRange at hg
+    omega
+  · have harena := b.owned.arenaHeap
+    obtain ⟨e, he, hek⟩ := b.owned.heap.reserved.live k hk
+      (by rw [harena.1]; exact hlo) (by rw [harena.2]; exact hhi)
+    obtain ⟨blk, hblk, hcov⟩ := (blockHeapAt_of_heapAt b.alloc.heap hroom).2 e he
+    exact hout blk hblk (hcov k hek)
+
+end Boot
+
+theorem stackSL_lo : stackSL.lo = 0x87800000 := rfl
+theorem stackSL_hi : stackSL.hi = 0x88000000 := rfl
+theorem spEntry_eq : spEntry = 0x87fffd00 := rfl
+theorem interpObject_eq : interpObject = 0x87fffe10 := rfl
+
+theorem heapFoot_cases {H : List (Nat × Nat)} {k : Nat} (h : heapFoot vsaLayout H k) :
+    (0x8001ad10 ≤ k ∧ k < 0x8001ba68 ∧ allocGlobal k) ∨
+      (heapStart ≤ k ∧ k < heapEnd ∧ ∀ e ∈ H, ¬ InExt e k) := by
+  rcases h with hg | h
+  · left
+    change allocGlobal k at hg
+    refine ⟨?_, ?_, hg⟩ <;> (unfold allocGlobal InRange at hg; omega)
+  · exact .inr h
+
+namespace Boot
+
+variable {c : Vsa.Machine.Config} {p : Program}
+
+/-- The store's blocks are arena bytes. -/
+theorem store_arena (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {G : FrameGeom}
+    (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G) {k : Nat}
+    (hk : BlocksCover G.blocks k) : heapStart ≤ k ∧ k < heapEnd := by
+  obtain ⟨blk, hblk, hin⟩ := hk
+  exact (b.blockHeapAt hroom).block_arena (hG.live blk hblk) hin
+
+theorem store_not_heapFoot (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {G : FrameGeom}
+    (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G) {k : Nat}
+    (hk : BlocksCover G.blocks k) : ¬ heapFoot vsaLayout b.H k := by
+  have ha := b.store_arena hroom hG hk
+  intro hf
+  rcases heapFoot_cases hf with ⟨_, h2, _⟩ | ⟨_, _, hout⟩
+  · unfold heapStart at ha; omega
+  · obtain ⟨blk, hblk, hin⟩ := hk
+    exact hout blk (hG.live blk hblk) hin
+
+/-- Every boot byte is a 32-bit address. -/
+theorem bootByte_lt (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {G : FrameGeom}
+    (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G) {k : Nat}
+    (hk : BootByte b.D.shared G b.H k) : k < 2 ^ 32 := by
+  rcases hk with (hs | hc) | hst | hh | hstk | hsta
+  · exact b.shared_lt hs
+  · unfold CodeByte at hc; omega
+  · have := b.store_arena hroom hG hst; unfold heapEnd at this; omega
+  · rcases heapFoot_cases hh with h | h
+    · omega
+    · unfold heapEnd at h; omega
+  · unfold StackByte at hstk; rw [stackSL_hi] at hstk; omega
+  · unfold StaticByte at hsta; omega
+
+/-- The five parts of `BootByte` are pairwise disjoint (in the order the
+carving peels them). -/
+theorem ro_disj (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {G : FrameGeom}
+    (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G) (k : Nat)
+    (hk : RoByte b.D.shared k) :
+    ¬ (BlocksCover G.blocks k ∨ heapFoot vsaLayout b.H k ∨ StackByte k ∨ StaticByte k) := by
+  rcases hk with hs | hc
+  · have hw := b.shared_not_write hs
+    unfold InitialWriteByte at hw
+    rintro (hst | hh | hstk | hsta)
+    · exact hG.unshared k hst hs
+    · exact b.shared_not_heapFoot hroom hs hh
+    · exact hw (.inr hstk)
+    · exact hw (.inl hsta.1)
+  · unfold CodeByte at hc
+    rintro (hst | hh | hstk | hsta)
+    · have := b.store_arena hroom hG hst; unfold heapStart at this; omega
+    · rcases heapFoot_cases hh with h | h
+      · omega
+      · unfold heapStart at h; omega
+    · unfold StackByte at hstk; rw [stackSL_lo] at hstk; omega
+    · unfold StaticByte at hsta; omega
+
+theorem store_disj (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {G : FrameGeom}
+    (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G) (k : Nat)
+    (hk : BlocksCover G.blocks k) :
+    ¬ (heapFoot vsaLayout b.H k ∨ StackByte k ∨ StaticByte k) := by
+  have ha := b.store_arena hroom hG hk
+  unfold heapStart heapEnd at ha
+  rintro (hh | hstk | hsta)
+  · exact b.store_not_heapFoot hroom hG hk hh
+  · unfold StackByte at hstk; rw [stackSL_lo] at hstk; omega
+  · unfold StaticByte at hsta; omega
+
+end Boot
+
+theorem heap_disj {H : List (Nat × Nat)} (k : Nat) (hk : heapFoot vsaLayout H k) :
+    ¬ (StackByte k ∨ StaticByte k) := by
+  rintro (hstk | hsta)
+  · unfold StackByte at hstk; rw [stackSL_lo] at hstk
+    rcases heapFoot_cases hk with h | h
+    · omega
+    · unfold heapEnd at h; omega
+  · unfold StaticByte at hsta
+    rcases heapFoot_cases hk with h | h
+    · exact hsta.2 h.2.2
+    · unfold heapStart at h; omega
+
+theorem stack_disj (k : Nat) (hk : StackByte k) : ¬ StaticByte k := by
+  unfold StackByte at hk; rw [stackSL_lo] at hk
+  unfold StaticByte; omega
+
+/-- The stack below `interp_run`'s entry, `struct Interp`, and the rest of
+`main`'s frame. -/
+theorem stack_parts (inp k : Nat) (hinp : inp = interpObject) :
+    StackByte k ↔ FreeStackByte k ∨ InterpByte inp k ∨ CallerByte inp k := by
+  subst hinp
+  unfold StackByte FreeStackByte InterpByte CallerByte InExt
+  rw [stackSL_lo, stackSL_hi, spEntry_eq, interpObject_eq]
+  dsimp only
+  constructor
+  · intro h
+    by_cases h1 : k < 0x87fffd00
+    · exact .inl ⟨by omega, by omega⟩
+    · by_cases h2 : 0x87fffe10 ≤ k ∧ k < 0x87fffe10 + 384
+      · exact .inr (.inl h2)
+      · exact .inr (.inr ⟨⟨by omega, by omega⟩, h2⟩)
+  · rintro (h | h | h) <;> omega
+
+/-! ## 7. The finite byte map adequacy hands over -/
+
+/-- Every boot byte, enumerated. -/
+noncomputable def bootAddrs (shared : Nat → Prop) (G : FrameGeom) (H : List (Nat × Nat)) :
+    List Nat :=
+  (List.range (2 ^ 32)).filter fun k => @decide (BootByte shared G H k) (Classical.propDecidable _)
+
+theorem bootAddrs_nodup (shared : Nat → Prop) (G : FrameGeom) (H : List (Nat × Nat)) :
+    (bootAddrs shared G H).Nodup :=
+  List.nodup_range.filter _
+
+theorem mem_bootAddrs {shared : Nat → Prop} {G : FrameGeom} {H : List (Nat × Nat)}
+    (hlt : ∀ k, BootByte shared G H k → k < 2 ^ 32) (k : Nat) :
+    k ∈ bootAddrs shared G H ↔ BootByte shared G H k := by
+  unfold bootAddrs
+  rw [List.mem_filter, List.mem_range, @decide_eq_true_iff _ (Classical.propDecidable _)]
+  exact ⟨fun h => h.2, fun h => ⟨hlt k h, h⟩⟩
+
+/-- **The boundary's byte map**: the memory's own total read on every boot
+byte. `A` passes it to adequacy as `mm`. -/
+noncomputable def Boot.bytes {c : Vsa.Machine.Config} {p : Program} (b : Boot c p)
+    (G : FrameGeom) : NatMap (BitVec 8) :=
+  imgMap (memImg c.σ.mem) (bootAddrs b.D.shared G b.H)
+
+/-- It agrees with the configuration (the model's memory IS the total read). -/
+theorem Boot.bytes_agree {c : Vsa.Machine.Config} {p : Program} (b : Boot c p)
+    (G : FrameGeom) (live : Nat → Prop) :
+    MemAgree (VsaIris.Inst.vsaModel live) (b.bytes G) c :=
+  memAgree_imgMap (fun _ _ => rfl)
+
+/-! ## 8. Regimes
+
+Total mode starts `isHeapRoom` at the cost of the program's derivation
+(S1's `costRoom_of_bigStep`); partial mode starts `isHeap`. -/
+
+/-- The pure side condition a regime needs at the boundary memory. -/
+def RegimeOK (m : Mem) : Regime → Prop
+  | .counted k => CostReserve m k
+  | .uncounted => True
+
+/-- **The counted regime's start**: a big-step behaviour has a costed
+derivation whose cost the boundary heap covers. -/
+theorem Boot.regime_of_bigStep {c : Vsa.Machine.Config} {p : Program} (b : Boot c p)
+    {out : String} (hb : BigStep p out) :
+    ∃ st' n, ExecSeqCost initSt 0 0 p st' .normal n ∧ st'.out = out ∧
+      RegimeOK c.σ.mem (.counted n) := by
+  obtain ⟨st', n, hn, hout⟩ := BigStep.cost hb
+  exact ⟨st', n, hn, hout, b.top, costReserve_of_initial b.alloc b.repr hn⟩
+
+theorem regimeOK_uncounted (m : Mem) : RegimeOK m .uncounted := trivial
+
+section Iris
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF]
+
+/-- Cut an owned extent at `k`. -/
+theorem ownImg_ext_split (a n k q r : Nat) (img : Nat → BitVec 8) (hk : k ≤ n)
+    (hq : q = a + k) (hr : r = n - k) :
+    ownImg (GF := GF) (InExt (a, n)) img ⊢
+      ownImg (InExt (a, k)) img ∗ ownImg (InExt (q, r)) img := by
+  subst hq hr
+  iintro H
+  ihave ⟨H1, H2⟩ := ownSet_split (InExt (a, n)) (InExt (a, k)) _ $$ H
+  isplitl [H1]
+  · iapply ownSet_iff _ _ $$ H1
+    intro x; unfold InExt; dsimp only; omega
+  · iapply ownSet_iff _ _ $$ H2
+    intro x; unfold InExt; dsimp only; omega
+
+/-- **The allocator in either regime**, from its footprint's bytes at the
+boundary image. -/
+theorem heapRes_of_bytes {m : Mem} {H : List (Nat × Nat)} {ρ : Regime}
+    (hshape : vsaLayout.Shape (memImg m) H) (hρ : RegimeOK m ρ) :
+    ownImg (GF := GF) (heapFoot vsaLayout H) (memImg m) ⊢ heapRes vsaLayout costRoom ρ H := by
+  cases ρ with
+  | counted k =>
+    unfold heapRes isHeapRoom
+    iintro Hb
+    iexists memImg m
+    iframe Hb
+    ipureintro
+    exact ⟨hshape, costRoom_of_reserve hρ⟩
+  | uncounted =>
+    unfold heapRes isHeap
+    iintro Hb
+    iexists memImg m
+    iframe Hb
+    ipureintro
+    exact hshape
+
+/-- The boundary stack below `interp_run`'s entry, cut where `interp_run`
+spills its 176-byte frame; the rest is what `stackScratch_boundary` carves
+the first `exec_stmt` call's budget from. -/
+theorem freeStack_carve :
+    blockOwn (GF := GF) stackSL.lo (spEntry - stackSL.lo) ⊢
+      blockOwn stackSL.lo (spEntry - interpRunFrame - stackSL.lo) ∗
+        blockOwn (spEntry - interpRunFrame) interpRunFrame :=
+  blockOwn_split _ _ _ _ _ (by decide) (by decide) (by decide)
+
+section Ghost
+
+variable [I : InterpGS GF]
+
+/-- **`struct Interp` at `interp_run`'s entry** from its 384 bytes. -/
+theorem interpCtxPre_of_bytes {inp g : Nat} {img : Nat → BitVec 8}
+    (hg : imgLE img inp 8 = g) (hd : imgLE img (inp + interpDepthOff) 4 = 0) :
+    ownImg (GF := GF) (InExt (inp, 384)) img ∗ frameAt 0 g ⊢ |==> interpCtxPre inp 0 := by
+  iintro ⟨H, #Hf⟩
+  ihave ⟨Hg, H⟩ := ownImg_ext_split inp 384 8 (inp + interpDepthOff) 376 img
+    (by decide) rfl rfl $$ H
+  ihave ⟨Hd, H⟩ := ownImg_ext_split (inp + interpDepthOff) 376 4 (inp + interpDepthOff + 4) 372
+    img (by decide) rfl rfl $$ H
+  ihave ⟨Hp, H⟩ := ownImg_ext_split (inp + interpDepthOff + 4) 372 4 (inp + interpJmpOff) 368
+    img (by decide) (by unfold interpDepthOff interpJmpOff; omega) rfl $$ H
+  ihave ⟨Hj, He⟩ := ownImg_ext_split (inp + interpJmpOff) 368 interpJmpLen
+    (inp + interpErrOff) interpErrLen img (by decide)
+    (by unfold interpJmpOff interpJmpLen interpErrOff; omega) rfl $$ H
+  imod wordRO_of_ownImg hg $$ Hg with Hg
+  imodintro
+  unfold interpCtxPre interpCore
+  isplitl [Hg Hd Hp He]
+  · iexists g
+    iframe Hg Hf
+    isplitl [Hd]
+    · iapply wordAt_of_ownImg hd $$ Hd
+    isplitl [Hp]
+    · iapply blockOwn_of_ownImg _ _ _ $$ Hp
+    · iapply blockOwn_of_ownImg _ _ _ $$ He
+  · iapply blockOwn_of_ownImg _ _ _ $$ Hj
+
+/-- The global frame binds only natives, so it needs no closure fragment. -/
+theorem closSupply_frame0 (φc : Addr → Nat) :
+    ⊢ closSupplyL (GF := GF) φc (frame0.vars.map Prod.snd) := by
+  unfold closSupplyL
+  imodintro
+  iintro %v %hv
+  iapply closSupply_of_ne ?_
+  simp [frame0, initSt] at hv
+  rcases hv with rfl | rfl | rfl <;> (intro ca h; exact absurd h (by simp))
+
+end Ghost
+
+end Iris
 
 #print axioms Boot.frameBridge
 #print axioms Vsa.Sim.DlHeap.HeapAt.grow
