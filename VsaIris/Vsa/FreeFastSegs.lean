@@ -171,33 +171,47 @@ theorem and_one_toNat (a : BitVec 64) :
   rw [show (sign_extend (m := 64) (0x001#12) : BitVec 64) = 1#64 by decide, BitVec.toNat_and]
   simp [Nat.and_one_is_mod]
 
-theorem fbody_facts {m : Std.ExtHashMap Nat (BitVec 8)} (hcode : PathLoaded m)
-    {sp a0 a1 a2 a3 a4 a5 a6 a7 t1 s0 r : BitVec 64} {f : Nat → BitVec 8} {c top csz tsz thr : Nat}
-    (hsp : tohostAddr + 16 ≤ sp.toNat) (hsp' : sp.toNat + 32 ≤ 0x100000000)
-    (hpinF : ∀ k, k < 32 → (m[sp.toNat + k]?).getD 0 = f (sp.toNat + k))
-    (hglob : ∀ a, 0x8001ad10 ≤ a → a < 0x8001b970 → (m[a]?).getD 0 = f a)
-    (hpinC : ∀ k, k < 8 → (m[c + 8 + k]?).getD 0 = f (c + 8 + k))
-    (hpinT : ∀ k, k < 8 → (m[top + 8 + k]?).getD 0 = f (top + 8 + k))
-    (G : FreeGeo c top csz tsz thr) (V : FBodyVals f sp c top csz tsz thr) :
-    ChainFacts m m (fbodyL sp a0 a1 a2 a3 a4 a5 a6 a7 t1 s0 r) (fbodyLds f sp c top) segFBody := by
-  have hclo := G.c_lo; have hc16 := G.c16; have hct := G.c_top; have hcs := G.csz16
-  have hts := G.tsz16; have hthi := G.top_hi; have hbel := G.below; have htr := G.top_room
-  have hthr := G.thr_lt
+/-- The values `segFBody` computes from the words it reads. -/
+structure FBodyEqs (f : Nat → BitVec 8) (sp : BitVec 64) (c top csz tsz : Nat) : Prop where
+  c8 : (bytesVal .ld (wordOf f (sp.toNat + 8)) + sign_extend (m := 64) (0xff8#12)).toNat = c + 8
+  a4 : (bytesVal .ld (wordOf f (sp.toNat + 8)) + sign_extend (m := 64) (0xff0#12)).toNat = c
+  a5 : (bytesVal .ld (wordOf f (c + 8)) &&& sign_extend (m := 64) (0xffe#12)).toNat = csz
+  a2 : (bytesVal .ld (wordOf f (sp.toNat + 8)) + sign_extend (m := 64) (0xff0#12) +
+      (bytesVal .ld (wordOf f (c + 8)) &&& sign_extend (m := 64) (0xffe#12))).toNat = top
+  t : (bytesVal .ld (wordOf f (top + 8)) &&& sign_extend (m := 64) (0xffc#12)).toNat = tsz
+
+theorem FBodyVals.eqs {f : Nat → BitVec 8} {sp : BitVec 64} {c top csz tsz thr : Nat}
+    (V : FBodyVals f sp c top csz tsz thr) (G : FreeGeo c top csz tsz thr) :
+    FBodyEqs f sp c top csz tsz := by
+  have hclo := G.c_lo; have hct := G.c_top; have hcs := G.csz16
+  have hts := G.tsz16; have hthi := G.top_hi
   unfold Vsa.Sim.DlHeap.heapStart at hclo; unfold Vsa.Sim.DlHeap.heapEnd at hthi
   have e_q : (bytesVal .ld (wordOf f (sp.toNat + 8))).toNat = c + 16 := by
     rw [V.q, ofNat_toNat_lt (by omega)]
-  have e_c8 : (bytesVal .ld (wordOf f (sp.toNat + 8)) + sign_extend (m := 64) (0xff8#12)).toNat =
-      c + 8 := by
-    rw [sub_imm _ _ 8 (by decide) (by omega) (by decide), e_q]; omega
   have e_a4 : (bytesVal .ld (wordOf f (sp.toNat + 8)) + sign_extend (m := 64) (0xff0#12)).toNat = c := by
     rw [sub_imm _ _ 16 (by decide) (by omega) (by decide), e_q]; omega
   have e_a5 : (bytesVal .ld (wordOf f (c + 8)) &&& sign_extend (m := 64) (0xffe#12)).toNat = csz := by
     rw [and_m2_toNat, V.hdr, ofNat_toNat_lt (by omega)]; omega
-  have e_a2 : (bytesVal .ld (wordOf f (sp.toNat + 8)) + sign_extend (m := 64) (0xff0#12) +
-      (bytesVal .ld (wordOf f (c + 8)) &&& sign_extend (m := 64) (0xffe#12))).toNat = top := by
-    rw [BitVec.toNat_add, e_a4, e_a5, Nat.mod_eq_of_lt (by omega)]; omega
-  have e_t : (bytesVal .ld (wordOf f (top + 8)) &&& sign_extend (m := 64) (0xffc#12)).toNat = tsz := by
-    rw [and_m4_toNat, V.thdr, ofNat_toNat_lt (by omega)]; omega
+  refine ⟨?_, e_a4, e_a5, ?_, ?_⟩
+  · rw [sub_imm _ _ 8 (by decide) (by omega) (by decide), e_q]; omega
+  · rw [BitVec.toNat_add, e_a4, e_a5, Nat.mod_eq_of_lt (by omega)]; omega
+  · rw [and_m4_toNat, V.thdr, ofNat_toNat_lt (by omega)]; omega
+
+theorem fbody_facts {m : Std.ExtHashMap Nat (BitVec 8)} (hcode : PathLoaded m)
+    {sp a0 a1 a2 a3 a4 a5 a6 a7 t1 s0 r : BitVec 64} {f : Nat → BitVec 8} {c top csz tsz thr : Nat}
+    (hsp : tohostAddr + 16 ≤ sp.toNat) (hsp' : sp.toNat + 32 ≤ 0x100000000)
+    (hpinF : ∀ k, k < 32 → (m[sp.toNat + k]?).getD 0 = f (sp.toNat + k))
+    (hpinA : ∀ k, k < 8 → (m[Vsa.Sim.DlHeap.topAddr + k]?).getD 0 = f (Vsa.Sim.DlHeap.topAddr + k))
+    (hpinR : ∀ k, k < 8 → (m[trimAddr + k]?).getD 0 = f (trimAddr + k))
+    (hpinC : ∀ k, k < 8 → (m[c + 8 + k]?).getD 0 = f (c + 8 + k))
+    (hpinT : ∀ k, k < 8 → (m[top + 8 + k]?).getD 0 = f (top + 8 + k))
+    (G : FreeGeo c top csz tsz thr) (V : FBodyVals f sp c top csz tsz thr) :
+    ChainFacts m m (fbodyL sp a0 a1 a2 a3 a4 a5 a6 a7 t1 s0 r) (fbodyLds f sp c top) segFBody := by
+  have E := V.eqs G
+  have hclo := G.c_lo; have hc16 := G.c16; have hct := G.c_top; have hcs := G.csz16
+  have hts := G.tsz16; have hthi := G.top_hi; have hbel := G.below; have htr := G.top_room
+  have hthr := G.thr_lt
+  unfold Vsa.Sim.DlHeap.heapStart at hclo; unfold Vsa.Sim.DlHeap.heapEnd at hthi
   unfold segFBody ChainFacts
   chain_facts hcode with "VsaIris.MallocFast.path_at_"
   all_goals seg_norm
@@ -205,25 +219,23 @@ theorem fbody_facts {m : Std.ExtHashMap Nat (BitVec 8)} (hcode : PathLoaded m)
   · exact frameLoadW hsp hsp' 8 rfl rfl (by decide) (by decide) hpinF
   · refine ldFact rfl Vsa.Sim.DlHeap.topAddr
       (by unfold eaddrM; seg_norm; decide) (by decide) (by decide)
-      (by decide) (lpins_of_img fun k hk => hglob _
-        (by unfold Vsa.Sim.DlHeap.topAddr Vsa.Sim.DlHeap.avAddr; omega)
-        (by unfold Vsa.Sim.DlHeap.topAddr Vsa.Sim.DlHeap.avAddr; omega))
-  · refine ldFact rfl (c + 8) (by unfold eaddrM; seg_norm; exact e_c8) (by omega) (by omega)
+      (by decide) (lpins_of_img hpinA)
+  · refine ldFact rfl (c + 8) (by unfold eaddrM; seg_norm; exact E.c8) (by omega) (by omega)
       (by unfold tohostAddr; omega) (lpins_of_img hpinC)
-  · refine ldFact rfl (top + 8) (by unfold eaddrM; seg_norm; rw [add_imm _ _ 8 (by decide) (by omega), e_a2])
+  · refine ldFact rfl (top + 8) (by unfold eaddrM; seg_norm; rw [add_imm _ _ 8 (by decide) (by rw [E.a2]; omega), E.a2])
       (by omega) (by omega) (by unfold tohostAddr; omega) (lpins_of_img hpinT)
   · rw [beq_iff_eq]
     apply BitVec.eq_of_toNat_eq
-    rw [e_a2, V.tptr, ofNat_toNat_lt (by omega)]
+    rw [E.a2, V.tptr, ofNat_toNat_lt (by omega)]
   · rw [bne_iff_ne, ne_eq, ← BitVec.toNat_inj, and_one_toNat, V.hdr, ofNat_toNat_lt (by omega)]
     simp; omega
   · refine ldFact rfl trimAddr (by unfold eaddrM; seg_norm; decide) (by decide) (by decide)
-      (by decide) (lpins_of_img fun k hk => hglob _ (by unfold trimAddr; omega) (by unfold trimAddr; omega))
-  · refine sdFact rfl (c + 8) (by unfold eaddrM; seg_norm; rw [add_imm _ _ 8 (by decide) (by omega), e_a4])
+      (by decide) (lpins_of_img hpinR)
+  · refine sdFact rfl (c + 8) (by unfold eaddrM; seg_norm; rw [add_imm _ _ 8 (by decide) (by rw [E.a4]; omega), E.a4])
       (by omega) (by omega) (by unfold tohostAddr; omega) (by omega)
   · exact sdFact rfl Vsa.Sim.DlHeap.topAddr (by unfold eaddrM; seg_norm; decide) (by decide) (by decide)
       (by decide) (by decide)
-  · rw [ult_iff, BitVec.toNat_add, e_a5, e_t, Nat.mod_eq_of_lt (by omega), V.thr, ofNat_toNat_lt hthr]
+  · rw [ult_iff, BitVec.toNat_add, E.a5, E.t, Nat.mod_eq_of_lt (by omega), V.thr, ofNat_toNat_lt hthr]
     exact hbel
 
 abbrev fepiL (sp a0 s0 r : BitVec 64) : GRegs := [(2, sp), (10, a0), (8, s0), (1, r)]
