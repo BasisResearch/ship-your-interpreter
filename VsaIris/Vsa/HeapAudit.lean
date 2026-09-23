@@ -1,7 +1,7 @@
 import VsaIris.Vsa.MallocConsumer
 import VsaIris.Vsa.ControlEnd
 import VsaIris.Vsa.MallocFastHeap
-import VsaIris.Vsa.MallocFastChain
+import VsaIris.Vsa.MallocSmallChain
 
 /-! Axiom audit for the iris-heap results: every headline theorem, printed. -/
 
@@ -33,3 +33,5 @@ import VsaIris.Vsa.MallocFastChain
 #print axioms VsaIris.VsaHeap.FastAt.split
 #print axioms VsaIris.VsaHeap.split24_vsa_reserve_false
 #print axioms VsaIris.MallocFast.fast_run
+#print axioms VsaIris.MallocFast.mallocRoomRun_fast
+#print axioms VsaIris.MallocFast.vsaDlMallocRoomImpl_fast

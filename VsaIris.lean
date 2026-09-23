@@ -23,3 +23,5 @@ import VsaIris.Vsa.MallocFastSegs
 import VsaIris.Vsa.MallocFastJal
 import VsaIris.Vsa.MallocFastRun
 import VsaIris.Vsa.MallocFastChain
+import VsaIris.Vsa.MallocSmallSegs
+import VsaIris.Vsa.MallocSmallChain

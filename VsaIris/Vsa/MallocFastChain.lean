@@ -1056,31 +1056,4 @@ theorem st0 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv
 
 end Stages
 
-/-- **The fast path's run.** A request of 24..`maxReq` bytes (`maxReq ≤ 487`)
-from a fast heap with a credit left runs `malloc` to the return, carving the
-block off the top. -/
-theorem fast_run {live : Nat → Prop} {maxReq headroom : Nat} (hmax : maxReq ≤ 487)
-    (htext : ∀ p ∈ pathText, live p.1)
-    (H : List (Nat × Nat)) (n s r : BitVec 64) (saved : List (Nat × BitVec 64))
-    (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) (k : Nat)
-    (hkeys : saved.map Prod.fst = vsaSaved) (hn : n.toNat ≤ maxReq) (hn24 : 24 ≤ n.toNat)
-    (hsp : SpOKFast headroom s) (hral : r.toNat % 4 = 0)
-    (hE : EntryRegs rv mallocEntryBV r n s saved)
-    (hroom : vsaRoomFast maxReq mv H (k + 1))
-    (hdisj : ∀ a, stackWin s headroom a → ¬ heapFoot vsaLayout H a) :
-    LocalRun (vsaModel live) roR pathText mRegs (mallocBytes vsaLayout H s headroom)
-      (MallocRoomEnd vsaLayout (vsaRoomFast maxReq) H n r s saved k) 11 rv mv := by
-  obtain ⟨m1, top, brkv, chunks, bins, himg, hfast⟩ := hroom
-  have C : FastIn live maxReq headroom H n s r saved rv mv k m1 top brkv chunks bins :=
-    ⟨htext, hmax, hsp, hral, hn, hkeys, hE, hfast, himg, hdisj⟩
-  refine st0 C (st1 C hn24) fun a ha => ?_
-  unfold imgM
-  rw [stackBase_get]
-  by_cases hw : s.toNat - headroom ≤ a ∧ a < s.toNat - headroom + headroom
-  · rw [ite_eq_left hw]; rfl
-  · rw [ite_eq_right hw]
-    rcases ha with ha | ha
-    · exact absurd ⟨ha.1, ha.2⟩ hw
-    · rw [himg a ha]; rfl
-
 end VsaIris.MallocFast
