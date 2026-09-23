@@ -227,17 +227,24 @@ iris-machine's. The earlier iris-heap history is in git (`git log --grep iris-he
 - VSA obstruction, machine-checked: `vsa_reserve_fails_after_split`. VSA's `AllocationReserve` is false after `malloc(24)`. The corrected `Reserve` is used instead, and the finding is recorded in `PROOF_CLOSURE_PLAN.md` §2.
 
 ## In flight
-- Requests ≤ 23 (path B: `li a4,32`, the `jal` at `0x800047cc`, bins entered at `0x800047d0`), to close `MallocRoomRun` for every `n ≤ maxReq`.
+- Instantiating `pathText`'s `live` premise (`htext : ∀ p ∈ pathText, live p.1`) and `live ⊇ allocGlobal ∪ arena` from `VsaOk` and the loaded image.
 
-## Done (fast path)
-- `fast_run` (`Vsa/MallocFastChain.lean`): for 24 ≤ n ≤ maxReq ≤ 487, a heap with no free chunk and `binblocks = 0` (`vsaRoomFast`), and a caller stack with `SpOKFast`, `malloc` runs from entry to `MallocRoomEnd` in 11 segment/jal steps. It covers eleven stages (wrap, prologue, lock call, lock hook, retarget, bins, split, unlock call, unlock hook, retarget, epilogue), each a `seg_step`/`jal_step` over reflected `#derive_case` chains. Axioms: propext, Classical.choice, Quot.sound.
+## Done (top-split malloc)
+- `mallocRoomRun_fast` / `vsaDlMallocRoomImpl_fast` (`Vsa/MallocSmallChain.lean`): `MallocRoomRun`/`DlMallocRoomImpl` for the fast heap (`vsaRoomFast`: no free chunk, `binblocks = 0`, top-chunk reserve), for every request `n ≤ maxReq ≤ 487`, with stack discipline `SpOKFast` and code `pathText`. The only premise is that `pathText`'s addresses are `live`. Axioms: propext, Classical.choice, Quot.sound.
+- Structure:
+  - `fast_run` dispatches at the wrapper: requests ≥ 24 take `st1..st5`, requests ≤ 23 take `stB1, stB2, stB5`.
+  - Both paths join at `st6` (split), then `st7..st10` (unlock, epilogue).
+  - The prologue's stores are abstracted as `ProLog`, and the chunk size is `nbN n = max 32 …`.
+  - Lock calls use one generic `lock_call`/`lock_hook`.
+  - `jal` sites come from `scripts/gen_malloc_jal_sites.py`.
+- `FastAt.split` no longer needs `0 < n`, so `malloc(0)` is covered.
 
 ## Holes left
-- `MallocRoomRun` for n ≤ 23 (path B) and for heaps with free chunks. `MallocLocalRun` and `FreeLocalRun` in general.
-- `text`/`live` instantiation from `VsaOk` (the `htext : ∀ p ∈ pathText, live p.1` premise of `fast_run`).
+- `pathText` liveness from `VsaOk`/the loaded image (in flight).
+- `MallocRoomRun` for heaps with free chunks (bin reuse, remainder splitting, `sbrk` growth), i.e. general `vsaRoom`; `MallocLocalRun` without capacity; `FreeLocalRun`; realloc.
 
 ## Next
-- Path B; then the `MallocRoomRun` instance; then `text`/`live` from the loaded image; then `FreeLocalRun`; then realloc.
+- Liveness instantiation; then `FreeLocalRun` (free's fast path: chunk into the top or a bin); then realloc via `allocCall_of_localRun`.
 
 ## DECIDED (confirmed by the user)
 - The in-place `DlMallocImpl` signature change (code bytes, callee-saved `s0-s3`) stays.
