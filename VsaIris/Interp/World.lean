@@ -21,6 +21,8 @@ the total read (`memImg`). `HeapAt` reads only present words, so it survives
 the extension (`HeapAt.extend`).
 -/
 
+set_option autoImplicit false
+
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProofMode
@@ -711,6 +713,135 @@ theorem closSupply_frame0 (φc : Addr → Nat) :
 end Ghost
 
 end Iris
+
+/-! ## 9. The boundary world -/
+
+section Assembly
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] {c : Vsa.Machine.Config}
+  {p : Program}
+
+/-- §3's `world` at `interp_run`'s ENTRY: identical except that the
+`jmp_buf` is still exclusive (`interpCtxPre`); `setjmp` (H5) turns it into
+`world`'s read-only one. -/
+def worldPre [InterpGS GF] (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
+    (ρ : Regime) (st : St) (d : Nat) : IProp GF :=
+  iprop(∃ H B, heapRes L Room ρ H ∗ storeRepr N st.store B ∗ consoleOwn st.out ∗
+    interpCtxPre inp d ∗ ⌜∀ b ∈ B, b ∈ H⌝)
+
+/-- **The boundary world**: what `interp_run`'s entry owns, in regime `ρ`.
+
+* `worldPre … ρ initSt 0`: the allocator (`isHeapRoom` at the derivation's
+  cost, or `isHeap`), the store (one frame, three natives), the console at
+  the initial output, and `struct Interp`;
+* `frameAt 0 (φf 0)`: the global frame's address, forever;
+* `astSs stmts count p`: the program, persistent;
+* `roOn CodeByte m`: the fixed binary's text and read-only data, persistent
+  (every `textOwn` a block lemma needs is a projection, `textOwn_of_roOn`);
+* `roOn shared m`: the boundary's immutable heap bytes;
+* the stack below `interp_run`'s entry `sp` (`freeStack_carve`, then F3's
+  `stackScratch_boundary` with `Boot.fits`);
+* `main`'s frame above `sp` (outside `struct Interp`) and the writable ELF
+  statics outside the allocator's globals, both at their boundary values. -/
+def bootRes [InterpGS GF] (b : Boot c p) (ρ : Regime) : IProp GF :=
+  iprop(worldPre b.N vsaLayout costRoom b.inp.toNat ρ initSt 0 ∗
+    frameAt 0 (b.φf 0) ∗ astSs b.stmts b.count p ∗ roOn CodeByte c.σ.mem ∗
+    roOn b.D.shared c.σ.mem ∗ blockOwn stackSL.lo (spEntry - stackSL.lo) ∗
+    ownImg (CallerByte b.inp.toNat) (memImg c.σ.mem) ∗ ownImg StaticByte (memImg c.σ.mem))
+
+theorem freeStack_disj (inp : Nat) (hinp : inp = interpObject) (k : Nat)
+    (hk : FreeStackByte k) : ¬ (InterpByte inp k ∨ CallerByte inp k) := by
+  subst hinp
+  unfold FreeStackByte InterpByte CallerByte InExt at *
+  rw [stackSL_lo, spEntry_eq, interpObject_eq] at *
+  dsimp only at *
+  omega
+
+theorem interp_disj (inp k : Nat) (hk : InterpByte inp k) : ¬ CallerByte inp k :=
+  fun h => h.2 hk
+
+/-- **The carving, at fixed ghost names.** -/
+theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv)
+    {G : FrameGeom} (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G)
+    (ρ : Regime) (hρ : RegimeOK c.σ.mem ρ) :
+    ghost_map_auth (GF := GF) I.frameName (DFrac.own 1) (∅ : NatMap Nat) ∗
+      ghost_map_auth I.closName (DFrac.own 1) (∅ : NatMap Nat) ∗
+      ([∗map] k ↦ v ∈ b.bytes G, iprop(k ↦ₘ v)) ∗ consoleOwn (Vsa.Machine.output c.σ) ⊢
+      |==> bootRes b ρ := by
+  have hout : Vsa.Machine.output c.σ = initSt.out := b.ready.out
+  have hg : imgLE (memImg c.σ.mem) b.inp.toNat 8 = G.e := by
+    rw [hG.env]; exact readLE_memImg b.ready.globals
+  have hd : imgLE (memImg c.σ.mem) (b.inp.toNat + interpDepthOff) 4 = 0 :=
+    readLE_memImg b.ready.call_depth
+  have hrd : FrameReads c.σ.mem b.N b.φf b.φc G.e frame0 := hG.env ▸ b.frameReads
+  unfold bootRes worldPre Boot.bytes
+  rw [← hG.env, ← hout]
+  iintro ⟨Hf, Hc, Hm, Hcon⟩
+  ihave Hall := ownImg_of_memMap (img := memImg c.σ.mem)
+    (S := fun k => RoByte b.D.shared k ∨ BlocksCover G.blocks k ∨ heapFoot vsaLayout b.H k ∨
+      StackByte k ∨ StaticByte k)
+    (bootAddrs_nodup _ _ _)
+    (mem_bootAddrs (fun k hk => b.bootByte_lt hroom hG hk)) $$ Hm
+  ihave ⟨Hro, Hall⟩ := ownSet_unglue _ _ _ (b.ro_disj hroom hG) $$ Hall
+  ihave ⟨Hst, Hall⟩ := ownSet_unglue _ _ _ (b.store_disj hroom hG) $$ Hall
+  ihave ⟨Hh, Hall⟩ := ownSet_unglue _ _ _ (fun k hk => heap_disj k hk) $$ Hall
+  ihave ⟨Hstk, Hsta⟩ := ownSet_unglue _ _ _ stack_disj $$ Hall
+  ihave Hstk := ownSet_iff _ (fun k => stack_parts b.inp.toNat k b.inp_toNat) $$ Hstk
+  ihave ⟨Hfree, Hstk⟩ := ownSet_unglue _ _ _ (freeStack_disj _ b.inp_toNat) $$ Hstk
+  ihave ⟨Hint, Hcal⟩ := ownSet_unglue _ _ _ (interp_disj _) $$ Hstk
+  imod roOn_of_ownImg (m := c.σ.mem) (fun k v _ hv => memImg_eq hv) $$ Hro with #Hro
+  ihave #Hsh := roOn_mono (Q := RoByte b.D.shared) (P := b.D.shared) (m := c.σ.mem)
+    (fun k h => Or.inl h) $$ Hro
+  ihave Hempty := storeRepr_empty (N := b.N) $$ [Hf Hc]
+  · iframe Hf Hc
+  ihave Hbody := frameBody_of_frameRepr hrd (b.frameBridge hG) $$ [Hst]
+  · iframe Hsh Hst
+    isplitl []
+    · iapply closSupply_frame0
+    · iapply parentSupply_none
+  imod storeRepr_allocFrame (N := b.N) (s := ⟨#[], #[]⟩) (B := []) (s' := initSt.store)
+    (f := frame0) (Gm := G) (by rfl) (by rfl) $$ [Hempty Hbody] with ⟨Hs, #He⟩
+  · iframe Hempty Hbody
+  imod interpCtxPre_of_bytes hg hd $$ [Hint He] with Hi
+  · iframe Hint He
+  imodintro
+  iframe He Hsta Hcal
+  isplitl [Hh Hs Hcon Hi]
+  · iexists b.H, ([] ++ G.blocks)
+    iframe Hs Hcon Hi
+    isplitl [Hh]
+    · iapply heapRes_of_bytes (imgShape_of_blockHeapAt (b.blockHeapAt hroom)) hρ $$ Hh
+    · ipureintro
+      intro blk hblk
+      exact hG.live blk (by simpa using hblk)
+  isplitl []
+  · iapply astSs_of_programRepr (b.owned.program p b.repr) $$ Hsh
+  isplitl []
+  · iapply roOn_mono (Q := RoByte b.D.shared) (P := CodeByte) (m := c.σ.mem)
+      (fun k h => Or.inr h) $$ Hro
+  iframe Hsh
+  iapply blockOwn_of_ownImg _ _ _ $$ Hfree
+
+/-- **`world_of_boundary`** (INTERP_DESIGN.md §5.1): from the bytes adequacy
+hands the client (`Boot.bytes`, which agrees with the configuration:
+`Boot.bytes_agree`) and the console cell at the initial output, allocate the
+two `InterpGS` ghost maps and carve the boundary world in regime `ρ`. -/
+theorem world_of_boundary (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {G : FrameGeom}
+    (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G)
+    (ρ : Regime) (hρ : RegimeOK c.σ.mem ρ) :
+    ([∗map] k ↦ v ∈ b.bytes G, iprop(k ↦ₘ v)) ∗ consoleOwn (GF := GF) (Vsa.Machine.output c.σ) ⊢
+      |==> ∃ γf γc : GName, (letI : InterpGS GF := ⟨γf, γc⟩; bootRes b ρ) := by
+  iintro ⟨Hm, Hcon⟩
+  imod ghost_map_alloc_empty (GF := GF) (K := Nat) (V := Nat) (H := NatMap) with ⟨%γf, Hf⟩
+  imod ghost_map_alloc_empty (GF := GF) (K := Nat) (V := Nat) (H := NatMap) with ⟨%γc, Hc⟩
+  iexists γf, γc
+  iapply (boot_of_bytes (I := ⟨γf, γc⟩) b hroom hG ρ hρ) $$ [Hf Hc Hm Hcon]
+  iframe Hf Hc Hm Hcon
+
+end Assembly
+
+#print axioms boot_of_bytes
+#print axioms world_of_boundary
 
 #print axioms Boot.frameBridge
 #print axioms Vsa.Sim.DlHeap.HeapAt.grow
