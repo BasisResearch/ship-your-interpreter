@@ -72,3 +72,6 @@ import VsaIris.Interp.EnvSetHit
 import VsaIris.Interp.EnvScan
 import VsaIris.Interp.ProofEnvGet
 import VsaIris.Interp.ProofEnvSet
+import VsaIris.Interp.EnvNewSpans
+import VsaIris.Interp.HeapCall
+import VsaIris.Interp.EnvCalls

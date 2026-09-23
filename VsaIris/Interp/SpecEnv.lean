@@ -55,10 +55,10 @@ def argClob : List Nat := [5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31]
 clobbered. -/
 def retClob : List Nat := 11 :: 12 :: argClob
 
-/-- The callee-saved registers each helper preserves. `env_new` spills
-`s0`, and `malloc` below it `s0-s3`; `env_get`/`env_set` spill `s0-s5` and
-leave `s6` alone (a span owns the whole file `VsaIris.Sym.eRegs`). -/
-def newSaved : List Nat := [8, 9, 18, 19]
+/-- The callee-saved registers each helper preserves: `s0-s6`, the file a
+span owns (`VsaIris.Sym.eRegs`). `env_new` spills `s0` (and `malloc` below it
+`s0-s3`); `env_get`/`env_set` spill `s0-s5`; `env_define` spills `s0-s6`. -/
+def newSaved : List Nat := [8, 9, 18, 19, 20, 21, 22]
 def getSaved : List Nat := [8, 9, 18, 19, 20, 21, 22]
 def defineSaved : List Nat := [8, 9, 18, 19, 20, 21, 22]
 
