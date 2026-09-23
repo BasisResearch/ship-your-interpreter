@@ -350,6 +350,12 @@ theorem entry_regs_own {entry r arg s : BitVec 64} {clob : List Nat} {cv : Nat �
   rw [hc, hs]
   iframe Hc Hs
 
+theorem entryVal_clob {entry r arg s : BitVec 64} {clob : List Nat} {cv : Nat → BitVec 64}
+    {saved : List (Nat × BitVec 64)} (hd : RegsDistinct clob (saved.map Prod.fst)) {k : Nat}
+    (hk : k ∈ clob) : entryVal entry r arg s clob cv saved k = cv k := by
+  obtain ⟨h1, h2, h3, h4⟩ := hd.clob_fixed k hk
+  simp [entryVal, h1, h2, h3, h4, hk]
+
 theorem entryRegs_entryVal {entry r arg s : BitVec 64} {clob : List Nat} {cv : Nat → BitVec 64}
     {saved : List (Nat × BitVec 64)} (hd : RegsDistinct clob (saved.map Prod.fst)) :
     EntryRegs (entryVal entry r arg s clob cv saved) entry r arg s saved where
@@ -409,33 +415,36 @@ theorem isHeap_fold (L : DlLayout) (H : List (Nat × Nat)) :
 
 /-- **One allocator call from its local run.** The generic core of every
 allocator spec below: the caller hands over the argument, the frame
-registers, the stack scratch and a byte set `F` at an image satisfying `P`;
-the callee's local run over `allocRegs` and `stackWin ∪ F` ends with the ABI
-frame restored and `E`; `post` turns the final bytes of `F` into the
-callee's result resource. -/
-theorem allocCall_of_localRun {entry gpv r arg s : BitVec 64} {clob : List Nat}
+registers, the clobbered registers at values satisfying `Args` (further
+arguments, such as `realloc`'s size in `a1`), the stack scratch and a byte set
+`F` at an image satisfying `P`; the callee's local run over `allocRegs` and
+`stackWin ∪ F` ends with the ABI frame restored and `E`; `post` turns the
+final bytes of `F` into the callee's result resource. -/
+theorem allocCallArgs_of_localRun {entry gpv r arg s : BitVec 64} {clob : List Nat}
     {saved : List (Nat × BitVec 64)} {headroom : Nat} {text : List (Nat × BitVec 8)}
     (hd : RegsDistinct clob (saved.map Prod.fst))
     (F : Nat → Prop) (P : (Nat → BitVec 8) → Prop)
     (hlocP : ∀ img img', (∀ a, F a → img a = img' a) → P img → P img')
+    (Args : (Nat → BitVec 64) → Prop)
+    (hArgs : ∀ f g : Nat → BitVec 64, (∀ k ∈ clob, f k = g k) → Args f → Args g)
     (E : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (Post : BitVec 64 → IProp GF)
     (post : ∀ rv' mv', E rv' mv' → ownSet F (fun a => a ↦ₘ mv' a) ⊢ Post (rv' a0))
-    (hrun : ∀ rv mv, EntryRegs rv entry r arg s saved → P mv →
+    (hrun : ∀ rv mv, EntryRegs rv entry r arg s saved → Args rv → P mv →
       (∀ a, stackWin s headroom a → ¬ F a) →
       ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob (saved.map Prod.fst))
         (fun a => stackWin s headroom a ∨ F a)
         (fun rv' mv' => RetFrame rv' r s saved ∧ E rv' mv') fuel rv mv)
     {Φ : Nat × String → IProp GF} :
     textOwn text ∗ PC ↦ᵣ entry ∗ ra ↦ᵣ r ∗ a0 ↦ᵣ arg ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗
-      clobbered clob ∗ savedOwn saved ∗ stackScratch s headroom ∗
+      (∃ cv : Nat → BitVec 64, ⌜Args cv⌝ ∗ sepL clob (fun k => k ↦ᵣ cv k)) ∗
+      savedOwn saved ∗ stackScratch s headroom ∗
       (∃ img : Nat → BitVec 8, ⌜P img⌝ ∗ ownSet F (fun a => a ↦ₘ img a)) ∗
       (PC ↦ᵣ r -∗ ra ↦ᵣ r -∗
         (∃ p, a0 ↦ᵣ p ∗ sp ↦ᵣ s ∗ clobbered clob ∗ savedOwn saved ∗
           stackScratch s headroom ∗ Post p) -∗ mTWP M Φ)
     ⊢ mTWP M Φ := by
   unfold stackScratch blockOwn
-  iintro ⟨#Htext, Hpc, Hra, Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, ⟨%img, %hP, HF⟩, Hk⟩
-  ihave ⟨%cv, Hclob⟩ := clobbered_fn clob hd.clob_nd $$ Hclob
+  iintro ⟨#Htext, Hpc, Hra, Ha0, Hsp, #Hgp, ⟨%cv, %hcv, Hclob⟩, Hsv, Hstk, ⟨%img, %hP, HF⟩, Hk⟩
   ihave Hsv := savedOwn_fn saved hd.saved_nd $$ Hsv
   ihave ⟨%fs, Hstk⟩ := ownSet_fn _ $$ Hstk
   ihave Hstk := ownSet_iff (S := InExt (s.toNat - headroom, headroom))
@@ -452,7 +461,8 @@ theorem allocCall_of_localRun {entry gpv r arg s : BitVec 64} {clob : List Nat}
     hlocP img _ (fun a ha => by
       have hn : ¬ stackWin s headroom a := fun h => hdisj a h ha
       simp [glue, hn]) hP
-  obtain ⟨fuel, hlr⟩ := hrun _ _ (entryRegs_entryVal hd) hP' hdisj
+  obtain ⟨fuel, hlr⟩ := hrun _ _ (entryRegs_entryVal hd)
+    (hArgs cv _ (fun k hk => (entryVal_clob hd hk).symm) hcv) hP' hdisj
   iapply wp_localRun fuel _ _ hlr
   isplitr
   · unfold roOwn
@@ -476,6 +486,36 @@ theorem allocCall_of_localRun {entry gpv r arg s : BitVec 64} {clob : List Nat}
   iapply Hk $$ Hpc Hra
   iexists rv' a0
   iframe Ha0 Hsp Hclob Hsv Hstk Hpost
+
+
+/-- `allocCallArgs_of_localRun` with no further argument. -/
+theorem allocCall_of_localRun {entry gpv r arg s : BitVec 64} {clob : List Nat}
+    {saved : List (Nat × BitVec 64)} {headroom : Nat} {text : List (Nat × BitVec 8)}
+    (hd : RegsDistinct clob (saved.map Prod.fst))
+    (F : Nat → Prop) (P : (Nat → BitVec 8) → Prop)
+    (hlocP : ∀ img img', (∀ a, F a → img a = img' a) → P img → P img')
+    (E : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) (Post : BitVec 64 → IProp GF)
+    (post : ∀ rv' mv', E rv' mv' → ownSet F (fun a => a ↦ₘ mv' a) ⊢ Post (rv' a0))
+    (hrun : ∀ rv mv, EntryRegs rv entry r arg s saved → P mv →
+      (∀ a, stackWin s headroom a → ¬ F a) →
+      ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob (saved.map Prod.fst))
+        (fun a => stackWin s headroom a ∨ F a)
+        (fun rv' mv' => RetFrame rv' r s saved ∧ E rv' mv') fuel rv mv)
+    {Φ : Nat × String → IProp GF} :
+    textOwn text ∗ PC ↦ᵣ entry ∗ ra ↦ᵣ r ∗ a0 ↦ᵣ arg ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗
+      clobbered clob ∗ savedOwn saved ∗ stackScratch s headroom ∗
+      (∃ img : Nat → BitVec 8, ⌜P img⌝ ∗ ownSet F (fun a => a ↦ₘ img a)) ∗
+      (PC ↦ᵣ r -∗ ra ↦ᵣ r -∗
+        (∃ p, a0 ↦ᵣ p ∗ sp ↦ᵣ s ∗ clobbered clob ∗ savedOwn saved ∗
+          stackScratch s headroom ∗ Post p) -∗ mTWP M Φ)
+    ⊢ mTWP M Φ := by
+  iintro ⟨#Htext, Hpc, Hra, Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, HF, Hk⟩
+  ihave ⟨%cv, Hclob⟩ := clobbered_fn clob hd.clob_nd $$ Hclob
+  iapply allocCallArgs_of_localRun hd F P hlocP (fun _ => True) (fun _ _ _ _ => trivial) E Post post
+    (fun rv mv he _ hp hdj => hrun rv mv he hp hdj)
+  iframe Htext Hpc Hra Ha0 Hsp Hgp Hsv Hstk HF Hk
+  iexists cv
+  iframe Hclob
 
 /-- **`mallocSpec` from `_malloc_r`'s local run.** -/
 theorem mallocSpec_of_localRun {L : DlLayout} {entry gpv : BitVec 64} {clob savedRegs : List Nat}
