@@ -70,6 +70,97 @@ theorem blockOwn_range (p n : Nat) :
     · rintro ⟨k, hk, rfl⟩; simp; omega
   iapply (sepL_perm byteAny hperm).1 $$ Hl
 
+/-- Bytes owned at some value are bytes owned at known values. -/
+theorem sepL_byteAny_exists : ∀ l : List Nat,
+    sepL (GF := GF) l byteAny ⊢
+      ∃ W : List (Nat × BitVec 8), ⌜W.map Prod.fst = l⌝ ∗ sepL W (fun q => q.1 ↦ₘ q.2)
+  | [] => by
+    iintro _
+    iexists []
+    isplitr
+    · ipureintro; rfl
+    simp only [sepL_nil]; iempintro
+  | a :: l => by
+    rw [sepL_cons]
+    iintro ⟨⟨%b, Ha⟩, Hl⟩
+    ihave ⟨%W, %hW, HW⟩ := sepL_byteAny_exists l $$ Hl
+    iexists (a, b) :: W
+    rw [sepL_cons]
+    iframe Ha HW
+    ipureintro
+    simp [hW]
+
+/-- Forget the values of owned bytes. -/
+theorem sepL_forget (W : List (Nat × BitVec 8)) (f : Nat → BitVec 8) :
+    sepL (GF := GF) W (fun q => q.1 ↦ₘ f q.1) ⊢ sepL (W.map Prod.fst) byteAny := by
+  rw [sepL_map]
+  apply sepL_mono
+  intro q
+  iintro H
+  iexists f q.1
+  iexact H
+
+/-- Forget the values of owned bytes listed as read footprint entries. -/
+theorem sepL_map_forget (W : List (Nat × BitVec 8)) (f : Nat → BitVec 8) :
+    sepL (GF := GF) (W.map fun q => (q.1, DFrac.own 1, f q.1)) (fun p => p.1 ↦ₘ{p.2.1} p.2.2) ⊢
+      sepL (W.map Prod.fst) byteAny := by
+  rw [sepL_map, sepL_map]
+  apply sepL_mono
+  intro q
+  iintro H
+  iexists f q.1
+  iexact H
+
+/-- Two lists of exclusively owned bytes have disjoint addresses. -/
+theorem sepL_disjoint (W₁ W₂ : List (Nat × BitVec 8)) (f g : Nat × BitVec 8 → BitVec 8) :
+    sepL (GF := GF) W₁ (fun q => q.1 ↦ₘ f q) ∗ sepL W₂ (fun q => q.1 ↦ₘ g q) ⊢
+      sepL W₁ (fun q => q.1 ↦ₘ f q) ∗ sepL W₂ (fun q => q.1 ↦ₘ g q) ∗
+        ⌜∀ q₁ ∈ W₁, ∀ q₂ ∈ W₂, q₁.1 ≠ q₂.1⌝ := by
+  induction W₁ with
+  | nil =>
+    iintro ⟨H1, H2⟩
+    iframe H1 H2
+    ipureintro; intro _ h; cases h
+  | cons x xs ih =>
+    rw [sepL_cons]
+    iintro ⟨⟨Hx, Hxs⟩, H2⟩
+    ihave ⟨Hxs, H2, %hxs⟩ := ih $$ [Hxs H2]
+    · iframe Hxs H2
+    have hone : ∀ l : List (Nat × BitVec 8),
+        (x.1 ↦ₘ f x) ∗ sepL l (fun q => q.1 ↦ₘ g q) ⊢@{IProp GF}
+          (x.1 ↦ₘ f x) ∗ sepL l (fun q => q.1 ↦ₘ g q) ∗ ⌜∀ q ∈ l, x.1 ≠ q.1⌝ := by
+      intro l
+      induction l with
+      | nil => iintro ⟨Hx, H⟩; iframe Hx H; ipureintro; intro _ h; cases h
+      | cons y ys ihy =>
+        rw [sepL_cons]
+        iintro ⟨Hx, Hy, Hys⟩
+        ihave %hy := mem_ne x.1 y.1 _ (f x) (g y) $$ Hx Hy
+        ihave ⟨Hx, Hys, %hys⟩ := ihy $$ [Hx Hys]
+        · iframe Hx Hys
+        iframe Hx Hy Hys
+        ipureintro
+        intro q hq
+        rcases List.mem_cons.mp hq with rfl | hq
+        · exact hy
+        · exact hys q hq
+    ihave ⟨Hx, H2, %hx⟩ := hone W₂ $$ [Hx H2]
+    · iframe Hx H2
+    iframe Hx Hxs H2
+    ipureintro
+    intro q hq
+    rcases List.mem_cons.mp hq with rfl | hq
+    · exact hx
+    · exact hxs q hq
+
+theorem codeFoot_bounds {i : Nat} {code : List (BitVec 8)} {p : Nat × DFrac × BitVec 8}
+    (h : p ∈ codeFoot i code) : i ≤ p.1 ∧ p.1 < i + code.length := by
+  unfold codeFoot at h
+  obtain ⟨q, hq, rfl⟩ := List.mem_map.mp h
+  have := List.snd_lt_of_mem_zipIdx hq
+  simp at this ⊢
+  omega
+
 /-- Owned code bytes that `live` keeps present are present with their
 values. -/
 theorem code_present {live : Nat → Prop} {c : Config} (hok : VsaOk live c)

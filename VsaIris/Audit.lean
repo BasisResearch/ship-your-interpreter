@@ -2,6 +2,7 @@ import VsaIris.DlHeap
 import VsaIris.Adequacy
 import VsaIris.Example
 import VsaIris.Vsa.Instance
+import VsaIris.Vsa.EnvNewPilot
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -24,3 +25,5 @@ import VsaIris.Vsa.Instance
 #print axioms VsaIris.Inst.vsa_adequacy
 #print axioms VsaIris.Inst.seg_runFact
 #print axioms VsaIris.Inst.wp_seg
+#print axioms VsaIris.Inst.jalExec_of_site
+#print axioms VsaIris.Inst.EnvNew.envNew_spec
