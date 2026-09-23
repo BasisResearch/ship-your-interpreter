@@ -68,6 +68,27 @@ theorem ldFact {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr}
     hpin 3 (by omega), hpin 4 (by omega), hpin 5 (by omega), hpin 6 (by omega),
     hpin 7 (by omega)⟩
 
+/-- The 4 bytes an `lw` at `a` reads from `img`. -/
+def imgWord4 (img : Nat → BitVec 8) (a : Nat) : List (BitVec 8) :=
+  [img a, img (a + 1), img (a + 2), img (a + 3)]
+
+/-- An `lw` at `ea` in RAM, off the HTIF words, where the memory agrees with
+`img`: its `MemFacts` with the loaded bytes `imgWord4 img ea`. -/
+theorem lwFact {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr}
+    {img : Nat → BitVec 8} {ea : Nat} (hk : a.kind = .lw) (hea : (eaddrM a L).toNat = ea)
+    (hlo : 0x80000000 ≤ ea) (hhi : ea + 4 ≤ 0x100000000)
+    (hwin : ea + 4 ≤ tohostAddr ∨ tohostAddr + 8 ≤ ea)
+    (hpin : ∀ k, k < 4 → (m[ea + k]?).getD 0 = img (ea + k)) :
+    MemFacts m L (imgWord4 img ea) a := by
+  unfold MemFacts
+  rw [hk]
+  simp only
+  rw [hea]
+  refine ⟨⟨hlo, hhi, hwin⟩, ?_⟩
+  simp only [LPins4, imgWord4, List.getD_cons_zero, List.getD_cons_succ]
+  exact ⟨by simpa using hpin 0 (by omega), hpin 1 (by omega), hpin 2 (by omega),
+    hpin 3 (by omega)⟩
+
 /-- A `sw` at `ea`: its `MemFacts`. -/
 theorem swFact {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr} {bs : List (BitVec 8)}
     {ea : Nat} (hk : a.kind = .sw) (hea : (eaddrM a L).toNat = ea)
