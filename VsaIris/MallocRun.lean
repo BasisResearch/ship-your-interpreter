@@ -304,11 +304,12 @@ theorem RegsDistinct.of_nodup {clob savedRegs : List Nat} (h : (allocRegs clob s
   simp only [List.nodup_cons, List.mem_cons, List.mem_append, not_or] at h
   obtain ⟨⟨_, _, _, hpc1, hpc2⟩, ⟨_, _, hra1, hra2⟩, ⟨_, ha01, ha02⟩, ⟨hsp1, hsp2⟩, hcs⟩ := h
   rw [List.nodup_append] at hcs
-  refine ⟨hcs.1, hcs.2.1, fun k hk => ?_, fun k hk => ?_⟩
+  obtain ⟨hcn, hsn, hcs⟩ := hcs
+  refine ⟨hcn, hsn, fun k hk => ?_, fun k hk => ?_⟩
   · refine ⟨fun h => hpc1 (h ▸ hk), fun h => hra1 (h ▸ hk), fun h => ha01 (h ▸ hk),
       fun h => hsp1 (h ▸ hk)⟩
   · refine ⟨fun h => hpc2 (h ▸ hk), fun h => hra2 (h ▸ hk), fun h => ha02 (h ▸ hk),
-      fun h => hsp2 (h ▸ hk), fun hc => hcs.2.2 k hc k hk rfl⟩
+      fun h => hsp2 (h ▸ hk), fun hc => hcs k hc k hk rfl⟩
 
 theorem allocRegs_split (clob savedRegs : List Nat) (Φ : Nat → IProp GF) :
     sepL (allocRegs clob savedRegs) Φ ⊢

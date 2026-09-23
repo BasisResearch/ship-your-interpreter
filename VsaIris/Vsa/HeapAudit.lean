@@ -1,5 +1,5 @@
 import VsaIris.Vsa.MallocConsumer
-import VsaIris.Vsa.ControlWitness
+import VsaIris.Vsa.ControlEnd
 
 /-! Axiom audit for the iris-heap results: every headline theorem, printed. -/
 
@@ -25,3 +25,5 @@ import VsaIris.Vsa.ControlWitness
 #print axioms VsaIris.ownSet_agree_state
 #print axioms VsaIris.VsaHeap.mallocCallerFacts_of_iris
 #print axioms VsaIris.VsaHeap.mallocRoomCallerFacts_of_iris
+#print axioms VsaIris.VsaHeap.Control.malloc64_end
+#print axioms VsaIris.VsaHeap.Control.malloc64_roomEnd

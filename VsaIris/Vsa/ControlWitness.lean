@@ -277,32 +277,55 @@ theorem frame_post {w : List WEntry} (hw : w = w32 ∨ w = w64) :
   · exact (writeLog_out heapMem w a ho).symm
   · exact absurd (writes_in_foot hw a ho) ha
 
-/-- **The live-relative frame admits both calls of the obstruction.** From the
-control heap, `malloc(32)` and `malloc(64)` each change only
-`heapFoot vsaLayout controlBlocks` (which contains `0x82000238`), each lands in
-the block-heap shape with its returned block live, the 64-byte block is fresh
-and contains the byte the 32-byte call wrote, and after the 64-byte call that
-byte belongs to the caller's block, not to the allocator. -/
-theorem live_relative_frame_admits_both :
-    vsaLayout.Shape img0 controlBlocks ∧
-    AgreeP (fun a => ¬ heapFoot vsaLayout controlBlocks a) heapMem m32 ∧
-    BlockHeap m32 H32 ∧ read64 m32 0x82000238 = some 0xdd1 ∧
-    AgreeP (fun a => ¬ heapFoot vsaLayout controlBlocks a) heapMem m64 ∧
-    BlockHeap m64 H64 ∧
-    FreshBlock vsaLayout controlBlocks 0x82000210 64 ∧
-    InExt (0x82000210, 64) 0x82000238 ∧
-    ¬ heapFoot vsaLayout H64 0x82000238 := by
-  refine ⟨control_shape, frame_post (.inl rfl), ⟨_, _, _, _, post32⟩, ?_,
-    frame_post (.inr rfl), ⟨_, _, _, _, post64⟩, ?_, by unfold InExt; decide, ?_⟩
-  · post_read
-  · refine ⟨by decide, by decide, by decide, fun e he a ha hin => ?_⟩
-    change e ∈ controlBlocks at he
-    rw [controlBlocks_eq] at he
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at he
-    unfold InExt at ha hin
-    rcases he with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> simp only at ha hin <;> omega
+/-- The 64-byte block is fresh at the control's live blocks. -/
+theorem fresh64 : FreshBlock vsaLayout controlBlocks 0x82000210 64 := by
+  refine ⟨by decide, by decide, by decide, fun e he a ha hin => ?_⟩
+  change e ∈ controlBlocks at he
+  rw [controlBlocks_eq] at he
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+  unfold InExt at ha hin
+  rcases he with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> simp only at ha hin <;> omega
+
+/-- The byte `malloc(32)` writes is the allocator's before the calls, and the
+caller's after `malloc(64)`. -/
+theorem byte_moves : heapFoot vsaLayout controlBlocks 0x82000238 ∧
+    InExt (0x82000210, 64) 0x82000238 ∧ ¬ heapFoot vsaLayout H64 0x82000238 := by
+  refine ⟨writes_in_foot (.inl rfl) _ ?_, by unfold InExt; decide, ?_⟩
+  · simp only [w32, OutL, topAddr, avAddr]; omega
   · rintro (hg | ⟨_, _, h⟩)
     · unfold vsaLayout allocGlobal InRange at hg; simp only at hg; omega
     · exact h (0x82000210, 64) List.mem_cons_self (by unfold InExt; decide)
+
+/-- **The live-relative frame admits both calls of the obstruction**, named
+field by field. -/
+structure ObstructionAdmitted : Prop where
+  /-- The control heap has the Iris heap shape. -/
+  shape : vsaLayout.Shape img0 controlBlocks
+  /-- `malloc(32)` changes only the allocator's footprint... -/
+  frame32 : AgreeP (fun a => ¬ heapFoot vsaLayout controlBlocks a) heapMem m32
+  /-- ...lands in the block-heap shape with its block live... -/
+  post32 : BlockHeap m32 H32
+  /-- ...and writes the new top header at `0x82000238`. -/
+  writes : read64 m32 0x82000238 = some 0xdd1
+  /-- `malloc(64)` changes only the allocator's footprint... -/
+  frame64 : AgreeP (fun a => ¬ heapFoot vsaLayout controlBlocks a) heapMem m64
+  /-- ...lands in the block-heap shape with its block live... -/
+  post64 : BlockHeap m64 H64
+  /-- ...returns a fresh block... -/
+  fresh : FreshBlock vsaLayout controlBlocks 0x82000210 64
+  /-- ...that contains the byte `malloc(32)` writes, which then belongs to the
+  caller, not the allocator. -/
+  moves : heapFoot vsaLayout controlBlocks 0x82000238 ∧
+    InExt (0x82000210, 64) 0x82000238 ∧ ¬ heapFoot vsaLayout H64 0x82000238
+
+theorem live_relative_frame_admits_both : ObstructionAdmitted where
+  shape := control_shape
+  frame32 := frame_post (.inl rfl)
+  post32 := ⟨_, _, _, _, post32⟩
+  writes := by post_read
+  frame64 := frame_post (.inr rfl)
+  post64 := ⟨_, _, _, _, post64⟩
+  fresh := fresh64
+  moves := byte_moves
 
 end VsaIris.VsaHeap.Control
