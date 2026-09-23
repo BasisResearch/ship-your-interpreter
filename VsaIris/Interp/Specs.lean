@@ -1,5 +1,7 @@
 import VsaIris.Vsa.Instance
 import VsaIris.MallocRun
+import VsaIris.Loop
+import VsaIris.Interp.Need
 import VsaIris.Vsa.HeapShape
 import Vsa.RuntimeRepr
 import Vsa.While.Cost
@@ -50,37 +52,41 @@ Built in `VsaIris/MachWP.lean` (no longer a placeholder here):
   (`MachWP.lean`); VSA instances `Inst.wp_putcW`/`Inst.wp_exitW` at the
   newlib `tohost` stores (`Vsa/Console.lean`). -/
 
-/-! ## §B Mode-generic function specs (F3)
+/-! ## §B Mode-generic function specs (F3) — LANDED
 
-`fnSpecW` and `wp_callW` are landed in `Call.lean` (F1). F3 owns the abort
-variants below. -/
+Built in `VsaIris/CallAbort.lean`, `VsaIris/Stack.lean`, `VsaIris/Loop.lean`
+and `VsaIris/Interp/Need.lean` (no longer placeholders here):
 
-section Fn
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineModel}
-
-/-- A function that returns OR aborts (runtime error / OOM exit). The two
-continuations are an ADDITIVE pair (xv6iris durable-notes "Contracts and
-resources"): both are proved from the caller's one context, so the caller's
-frame and its own abort continuation serve both branches. -/
-def fnSpecAbort (Wp : MachWP (GF := GF) M) (entry : BitVec 64)
-    (P Q : BitVec 64 → IProp GF) (A : IProp GF) : IProp GF :=
-  iprop(□ ∀ (r : BitVec 64) (Φ : Nat × String → IProp GF),
-    PC ↦ᵣ entry -∗ ra ↦ᵣ r -∗ P r -∗
-      ((PC ↦ᵣ r -∗ ra ↦ᵣ r -∗ Q r -∗ Wp.W Φ) ∧ (A -∗ Wp.W Φ)) -∗ Wp.W Φ)
-
-/-- `wp_call` for `fnSpecAbort` (F3): the caller supplies the return branch
-and the callee's abort branch from ONE context (`∧`). -/
-theorem wp_callAbort {Wp : MachWP (GF := GF) M} {Φ : Nat × String → IProp GF} {i : Nat}
-    {code : List (BitVec 8)} {entry v : BitVec 64} {P Q : BitVec 64 → IProp GF} {A : IProp GF}
-    (hexec : JalExec M i code entry) :
-    instrAt (GF := GF) i code ∗ fnSpecAbort Wp entry P Q A ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗
-      ra ↦ᵣ v ∗ P (BitVec.ofNat 64 (i + 4)) ∗
-      ((PC ↦ᵣ BitVec.ofNat 64 (i + 4) -∗ ra ↦ᵣ BitVec.ofNat 64 (i + 4) -∗
-          Q (BitVec.ofNat 64 (i + 4)) -∗ Wp.W Φ) ∧ (A -∗ Wp.W Φ))
-    ⊢ Wp.W Φ := by sorry
-
-end Fn
+* `fnSpecAbort Wp entry P Q A` — a function that returns OR aborts. The two
+  continuations are an ADDITIVE pair (xv6iris `durable-notes.md`, "Contracts
+  and resources"), so the caller's frame and its own inherited abort
+  continuation serve both branches. Persistent, like `fnSpecW`.
+* `wp_callAbort Wp hexec` — the `jal` rule for it; `wp_callAbort_later` is the
+  Löb twin (the recursive `jal` of `specsP` below).
+* `fnSpecAbort_of_fnSpecW` — a helper that always returns (H1-H4's `fnSpecW`
+  specs) meets an abort spec with ANY abort resource; `fnSpecAbort_mono` is
+  the consequence rule and `fnSpecAbort_rebase` carries the abort-resource
+  difference as an extra precondition.
+* `blockOwn_split`/`blockOwn_join`/`blockOwn_cast`,
+  `stackScratch_narrow`/`_widen`, the prologue/epilogue pair
+  `stackScratch_frame`/`stackScratch_unframe` (`addi sp,sp,-f`), and the
+  carve/join pair `stackScratch_carve`/`stackScratch_join`: a callee's scratch
+  is carved out of the caller's owned stack region and returned. The side
+  condition `nc + f ≤ n` is `Vsa.Alloc.StackOK.child`'s.
+* `abortAt Core s need` with `abortAt_elim`/`abortAt_intro`, and
+  `abort_rebase` (used by `abortRes` in §D).
+* `wp_callArmW` and `wp_callArmAbort` — **the call step an arm takes**, once:
+  lend the callee a narrower part of the owned stack, keep the slack, and (in
+  partial mode) re-base BOTH continuations to the callee's region. E1-E6 call
+  these instead of re-deriving the carve per site.
+* `stackBudget`, `evalNeed`, `execNeed`, the arithmetic lemmas
+  `stackBudget_child` (the Iris route's `StackOK.child`) and
+  `stackBudget_call`, one inequality per recursor arm
+  (`evalNeed_binary_left`, `execNeed_block`, `execNeed_callBody`, ...), and
+  S1's boundary bridge `execNeed_of_stackFits` / `stackScratch_boundary` over
+  `ProgramStackFits`.
+* `MachWP.loop` / `MachWP.loopI` / `MachWP.loopSeg` — the bounded-loop rule by
+  fuel induction, for either WP (§E). -/
 
 /-! ## §C Representation predicates (R) -/
 
@@ -243,10 +249,7 @@ section Specs
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable (M : MachineModel) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
 
-/-- ItemZero's budget, verbatim from `EvalEntry.stackBudget`
-(`Vsa/Sim/InterpEntry.lean:630`); the sum, never a round number. -/
-def evalNeed (e : Expr) (d : Nat) : Nat := e.stackNeed + (maxCallDepth - d) * perCallBudget + evalFrame
-def execNeed (s : Stmt) (d : Nat) : Nat := s.stackNeed + (maxCallDepth - d) * perCallBudget + evalFrame
+-- `evalNeed` / `execNeed` are landed in `VsaIris/Interp/Need.lean` (F3).
 
 def evalEntryPC : BitVec 64 := 0x80003164#64
 def execEntryPC : BitVec 64 := 0x80003fe0#64
@@ -329,11 +332,18 @@ theorem execSpecT (st : St) (d env : Nat) (sm : Stmt) (st' : St) (status : Statu
 /-- What an abort hands the top: the landing registers (H5 pins them from the
 `jmp_buf`, or the `exit(1)` entry for OOM), SOME world, and the whole owned
 stack below `s`. Callers re-base it at each call (`abort_rebase`). -/
-def abortRes (s : BitVec 64) (need : Nat) : IProp GF :=
+def abortCore : IProp GF :=
   iprop(∃ (landing : Bool) (ρ : Regime) (st : St) (d : Nat),
-    world N L Room inp ρ st d ∗ stackScratch s need ∗
+    world N L Room inp ρ st d ∗
     (if landing then PC ↦ᵣ 0#64 -- H5: the `setjmp` return site in `interp_run`, a0 = 1
      else PC ↦ᵣ 0x80004764#64 ∗ (10 : Nat) ↦ᵣ 1#64)) -- `exit`, a0 = 1
+
+/-- The abort resource at a site: `abortCore` and the whole owned stack below
+`s` (F3's landed `VsaIris.abortAt`). The `stackScratch` is OUTSIDE the
+existential — nothing under it mentions `s` or `need` — which is what lets
+`abort_rebase` move it. -/
+def abortRes (s : BitVec 64) (need : Nat) : IProp GF :=
+  abortAt (abortCore N L Room inp) s need
 
 /-- **`eval_expr`, partial.** The return branch gets SOME outcome with its
 derivation; error arms take the abort branch. Proved by Löb (A). -/
@@ -360,15 +370,21 @@ theorem specsP :
     ⊢ □ ((∀ st d env e, evalSpecP_body M N L Room inp st d env e) ∧
          (∀ st d env sm, execSpecP_body M N L Room inp st d env sm)) := by sorry
 
-/-- F3: re-basing an abort continuation from the caller's region to the
-child's, joining the caller's frame bytes `[s_c, s_p)` back in. -/
+/-- F3 (landed as `VsaIris.abort_rebase`): re-basing an abort continuation
+from the caller's region to the child's, joining the caller's frame bytes
+`[s_c, s_p)` and the slack `[s_p - n_p, s_c - n_c)` back in.
+
+STATEMENT CHANGE (F3): the skeleton's two side conditions were not enough —
+the two regions must also lie below their stack pointers (`hnp`, `hnc`),
+otherwise `stackScratch` truncates at 0 and the intervals do not join. -/
 theorem abort_rebase {Wp : MachWP (GF := GF) M} {Φ : Nat × String → IProp GF}
-    (sp_ sc : BitVec 64) (np nc : Nat) (hle : sp_.toNat - np ≤ sc.toNat - nc)
-    (hsc : sc.toNat ≤ sp_.toNat) :
+    (sp_ sc : BitVec 64) (np nc : Nat) (hnp : np ≤ sp_.toNat) (hnc : nc ≤ sc.toNat)
+    (hsc : sc.toNat ≤ sp_.toNat) (hle : sp_.toNat - np ≤ sc.toNat - nc) :
     (abortRes N L Room inp sp_ np -∗ Wp.W Φ) ∗
       blockOwn (sc.toNat) (sp_.toNat - sc.toNat) ∗
       blockOwn (sp_.toNat - np) ((sc.toNat - nc) - (sp_.toNat - np))
-    ⊢ (abortRes N L Room inp sc nc -∗ Wp.W Φ) := by sorry
+    ⊢ (abortRes N L Room inp sc nc -∗ Wp.W Φ) :=
+  VsaIris.abort_rebase _ sp_ sc np nc hnp hnc hsc hle
 
 end Specs
 
@@ -393,8 +409,12 @@ structure SeqSite where
 
 /-- `seqLoop`, total: induction on the `ExecSeqCost` derivation; each statement
 through `execSpecT`. Partial twin: fuel induction on the remaining count, each
-statement through the Löb hypothesis. Statement is G's to fix against the real
-seam registers; recorded here as the obligation. -/
+statement through the Löb hypothesis. Both are instances of F3's landed
+`MachWP.loop` (`VsaIris/Loop.lean`), whose two body continuations are an
+additive pair, so the inherited abort continuation survives every iteration
+(INTERP_DESIGN.md §10.1); `MachWP.loopSeg` is the shape whose body is one
+reflected `RunFact` segment (H3's `strlen`/`memcpy`/`strcmp`). Statement is
+G's to fix against the real seam registers; recorded here as the obligation. -/
 theorem seqLoop_obligation (_site : SeqSite) : True := trivial
 
 /-! ## §F Assembly -/
