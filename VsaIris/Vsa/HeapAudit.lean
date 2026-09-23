@@ -75,3 +75,5 @@ import VsaIris.Vsa.AllocTac
 #print axioms VsaIris.VsaHeap.PHeapAt.take
 #print axioms VsaIris.VsaHeap.j_small
 #print axioms VsaIris.VsaHeap.small_take
+#print axioms VsaIris.VsaHeap.mOK_chg
+#print axioms VsaIris.VsaHeap.epi_core

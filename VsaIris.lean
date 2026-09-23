@@ -45,4 +45,5 @@ import VsaIris.Vsa.AllocHoles
 import VsaIris.Vsa.HeapAlg
 import VsaIris.Vsa.HeapTake
 import VsaIris.Vsa.MallocGen
+import VsaIris.Vsa.MallocCtx
 import VsaIris.Vsa.MallocPaths
