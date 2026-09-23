@@ -10,6 +10,13 @@ and a proof that fights its interface is evidence the interface is wrong.
 
 Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 
+## Decisions (user, 2026-09-23)
+
+- **Q1 accepted.** `Loaded` gains a `StackAdmissible` field shaped like `capacity`. The top-level statement narrows honestly; no unprovable stack claim remains. (S1)
+- **Q2: `IrisHoles` replaces `RemainingWork`.** Do not keep both. Package A deletes `RemainingWork`, `TermResidualsBase`, `DivWork`, `ErrWork` and their suppliers once `endToEnd_refinement` is re-proved from `IrisHoles`; the name `endToEnd_refinement` is kept.
+- **Q3: two WPs** (`mTWP` total, `mWP` partial) behind `MachWP`.
+- **Q4: newlib `snprintf`/`fprintf` safety specs stay as named holes for now,** scheduled after E1–E6. They must not be forgotten: every hole lives as a field of `IrisHoles` (so it appears in the final theorem's hypothesis) AND has an entry in `VsaIris/HOLES.md` with owner package, satisfiability evidence and discharge plan. `scripts/check_iris_holes.py` fails if the two disagree.
+
 ## 0. The design in five sentences
 
 1. Every block of machine code (a reflected segment, a helper call, a loop) is
