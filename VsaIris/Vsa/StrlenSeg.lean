@@ -23,11 +23,23 @@ This file fixes the pieces every step of that run shares:
   footprint (`reads_of_foot`);
 * `strlenL` / `strlenStep`: ONE pin list (all seven GPRs `strlen` touches) and
   ONE step combinator, so a segment contributes a `ChainFacts` and nothing
-  else. `gen_fn.py --fn strlen --entry 0x80006cf0` emits every segment; the
-  two it emits that `Vsa/Sim/StrlenSegments.lean` does not retain
-  (`0x80006d60`, the `snez` tail, and `0x80006d88`, the byte-peel exit) are
-  declared here from the same generator output — both elaborate, so the hand
-  observational battery `Vsa/Sim/StrlenLastRun.lean` is no longer needed.
+  else.
+
+`gen_fn.py --fn strlen --entry 0x80006cf0` emits a segment for every block.
+`Vsa/Sim/StrlenSegments.lean` retains all but two. One of those,
+`0x80006d88` (the byte-peel exit, `sub a4,a4,a0; addi a0,a4,-1; ret`), is
+declared here: it is ordinary and its `ChainFacts` discharge.
+
+The other, `0x80006d60` (the `snez` tail), is NOT declared: `snez rd,rs` is
+`sltu rd,x0,rs`, and `MKind` (`Vsa/Sim/BlockMem.lean:549`) has `slt` but no
+`sltu`. `#derive_case` still accepts the word — it decodes it to the nearest
+kind — but the block's `DecodeFactM` then cannot be closed, because
+`DecodeTable.decode_00f03533` concludes `rop.SLTU` while `astOfM` of the
+reflected line does not. That is the model's safety net working, and it is
+why `Vsa/Sim/StrlenLastRun.lean` proves that one instruction observationally.
+The Iris route reuses the same generated site (`StrlenSites.site_80006d64`)
+through `Inst.runFact_of_aluStep` (`SegRun.lean`). Adding `sltu` to `MKind`
+would retire both.
 -/
 
 namespace VsaIris.Inst.Strlen
@@ -37,17 +49,17 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 open Vsa.Machine (Config)
 open Vsa.Sim Vsa.MemRepr
 
-/-! ## The two segments `Vsa/Sim/StrlenSegments.lean` does not retain
+/-! ## The segments `Vsa/Sim/StrlenSegments.lean` does not retain -/
 
-Both are `gen_fn.py --fn strlen --entry 0x80006cf0` output; the retained file
-predates `#derive_case` support for `snez` (`sltu rd, x0, rs`). -/
+/- `0x80006d60`: the last byte's load, on its own (the `snez` that follows is
+not in the block model; see the module doc). -/
+#derive_case strlenX6d60LoadSeg chain
+  [(0x80006d60#64, 0xffe74783#32)]  -- lbu a5,-2(a4)
 
-/- `0x80006d60 … 0x80006d70`: the last byte's test and the arithmetic return
-(`lbu a5,-2(a4); snez a0,a5; add a0,a0,a3; addi a0,a0,-2; ret`). -/
-#derive_case strlenX6d60Seg chain
-  [(0x80006d60#64, 0xffe74783#32),  -- lbu a5,-2(a4)
-   (0x80006d64#64, 0x00f03533#32),  -- snez a0,a5
-   (0x80006d68#64, 0x00d50533#32),  -- add a0,a0,a3
+/- `0x80006d68 … 0x80006d70`: the arithmetic return after the `snez`
+(`add a0,a0,a3; addi a0,a0,-2; ret`). -/
+#derive_case strlenX6d68Seg chain
+  [(0x80006d68#64, 0x00d50533#32),  -- add a0,a0,a3
    (0x80006d6c#64, 0xffe50513#32)]  -- addi a0,a0,-2
     terminator ⟨0x80006d70#64, 0x00008067#32, 0x67#8, 0x80#8, 0x00#8, 0x00#8, .jr, 1, 0, 0#13, 0#21, 0x000#12⟩
 
@@ -356,5 +368,45 @@ theorem strlenStep {live : Nat → Prop} {p len : Nat} {bv : Nat → BitVec 8} {
     · exact hfin (13, rv 13) (by simp [strlenL])
     · exact hfin (14, rv 14) (by simp [strlenL])
     · exact hfin (15, rv 15) (by simp [strlenL])
+
+/-- **One observational ALU step of the run** (the `snez` at `0x80006d64`,
+which `MKind` does not cover). The step reads one GPR and writes one. -/
+theorem strlenAluStep {live : Nat → Prop} {p len : Nat} {bv : Nat → BitVec 8} {r : BitVec 64}
+    {rv : Nat → BitVec 64} {mv : Nat → BitVec 8} (m : Nat) (i : Nat) (rd rsrc : Nat)
+    (val : BitVec 64)
+    (hrd : rd ∈ strlenRegs) (hrs : rsrc ∈ strlenRegs)
+    (hslack : ∀ a, slackSet p len a → mv a = bv a)
+    (hpc : rv VsaIris.PC = BitVec.ofNat 64 i)
+    (hstep : AluStep live i [(rsrc, DFrac.own 1, rv rsrc)] (strlenMR p len bv) rd val)
+    (hnext : ∀ (rv' : Nat → BitVec 64) (mv' : Nat → BitVec 8),
+      rv' VsaIris.PC = BitVec.ofNat 64 (i + 4) → rv' rd = val →
+      (∀ j ∈ strlenRegs, j ≠ rd → rv' j = rv j) →
+      (∀ a, slackSet p len a → mv' a = bv a) →
+      SRun live p len bv r m rv' mv') :
+    SRun live p len bv r (m + 1) rv mv := by
+  have hregLt : ∀ j ∈ strlenRegs, j ≠ VsaIris.PC := by
+    intro j hj
+    simp only [strlenRegs, List.mem_cons, List.not_mem_nil, _root_.or_false] at hj
+    rcases hj with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide
+  refine Or.inr ⟨0, segFrom_of_runFact (runFact_of_aluStep (old := rv rd) hstep)
+    (fun q hq => ?_) (strlenMR_split hslack) (fun q hq => ?_) (fun q hq => nomatch hq) ?_⟩
+  · rcases List.mem_cons.mp hq with rfl | hq
+    · exact .inr ⟨by unfold strlenRs; exact .tail _ hrs, rfl⟩
+    · cases hq
+  · rcases List.mem_cons.mp hq with rfl | hq
+    · exact ⟨by unfold strlenRs; exact List.mem_cons_self, hpc⟩
+    · rcases List.mem_cons.mp hq with rfl | hq
+      · exact ⟨by unfold strlenRs; exact .tail _ hrd, rfl⟩
+      · cases hq
+  · intro rv' mv' hnew hframe _ hmem
+    refine hnext rv' mv' (hnew _ List.mem_cons_self)
+      (hnew _ (.tail _ List.mem_cons_self)) (fun j hj hjrd => ?_)
+      (fun a ha => (hmem a ha (fun q hq => nomatch hq)).trans (hslack a ha))
+    refine hframe j (by unfold strlenRs; exact .tail _ hj) (fun q hq => ?_)
+    rcases List.mem_cons.mp hq with rfl | hq
+    · exact fun e => hregLt j hj e.symm
+    · rcases List.mem_cons.mp hq with rfl | hq
+      · exact fun e => hjrd e.symm
+      · cases hq
 
 end VsaIris.Inst.Strlen

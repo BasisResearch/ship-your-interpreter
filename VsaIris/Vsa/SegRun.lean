@@ -88,6 +88,54 @@ theorem segFrom_of_seg {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVe
     · obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
       exact hkL q hq
 
+/-! ## Instructions outside the reflected block model
+
+`MKind` (`Vsa/Sim/BlockMem.lean:549`) does not cover every RISC-V instruction
+gcc emitted: `sltu` (`snez`) is the one `strlen` needs. Such an instruction
+still has a generated VSA site lemma (`stepObs_alu`): ONE step that advances
+the PC by four, writes ONE GPR, and leaves memory, the output and every other
+register alone. `AluStep` is that fact in the Iris machine's own vocabulary
+and `runFact_of_aluStep` turns it into one local-run step, exactly as
+`jalExec_of_site` does for a `jal`. -/
+
+/-- **One observational ALU step.** From a well-formed state parked at `i`
+with the read registers `RR` and read bytes `MR` at their values: one step to
+a well-formed state with the PC at `i + 4`, `rd` holding `val`, and every
+other register, every byte and the output unchanged. -/
+def AluStep (live : Nat → Prop) (i : Nat) (RR : List (Nat × DFrac × BitVec 64))
+    (MR : List (Nat × DFrac × BitVec 8)) (rd : Nat) (val : BitVec 64) : Prop :=
+  ∀ c : Config, VsaOk live c → vsaReg c VsaIris.PC = BitVec.ofNat 64 i →
+    (∀ q ∈ RR, vsaReg c q.1 = q.2.2) → (∀ q ∈ MR, (vsaModel live).mem c q.1 = q.2.2) →
+    ∃ c' : Config, Vsa.Machine.Step c c' ∧ VsaOk live c' ∧
+      vsaReg c' VsaIris.PC = BitVec.ofNat 64 (i + 4) ∧ vsaReg c' rd = val ∧
+      (∀ k, k ≠ VsaIris.PC → k ≠ rd → vsaReg c' k = vsaReg c k) ∧
+      (∀ a, (vsaModel live).mem c' a = (vsaModel live).mem c a) ∧
+      (vsaModel live).out c' = (vsaModel live).out c
+
+/-- **An observational ALU step as a one-step `RunFact`.** -/
+theorem runFact_of_aluStep {live : Nat → Prop} {i : Nat}
+    {RR : List (Nat × DFrac × BitVec 64)} {MR : List (Nat × DFrac × BitVec 8)}
+    {rd : Nat} {old val : BitVec 64} (h : AluStep live i RR MR rd val) :
+    RunFact (vsaModel live) 0 RR MR
+      [(VsaIris.PC, BitVec.ofNat 64 i, BitVec.ofNat 64 (i + 4)), (rd, old, val)] [] := by
+  intro c hok hfoot
+  obtain ⟨hRR, hMR, hRW, _⟩ := hfoot
+  have hpc : vsaReg c VsaIris.PC = BitVec.ofNat 64 i := hRW _ List.mem_cons_self
+  obtain ⟨c', hstep, hok', hpc', hrd', hframe, hmem, hout⟩ := h c hok hpc hRR hMR
+  refine ⟨c', ReachesN.succ (M := vsaModel live) (vsaStep_of_step hstep) (ReachesN.zero (M := vsaModel live) c'), hok', ⟨?_, ?_, ?_, ?_⟩,
+    hout⟩
+  · intro q hq
+    rcases List.mem_cons.mp hq with rfl | hq
+    · exact hpc'
+    · rcases List.mem_cons.mp hq with rfl | hq
+      · exact hrd'
+      · cases hq
+  · intro k hk
+    exact hframe k (fun e => hk _ List.mem_cons_self e.symm)
+      (fun e => hk _ (.tail _ List.mem_cons_self) e.symm)
+  · intro q hq; cases hq
+  · intro a _; exact hmem a
+
 /-- Fuel is a bound: a run that finishes in `n` segments finishes in `n+1`. -/
 theorem localRun_succ {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
     {rs : List Nat} {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} :
