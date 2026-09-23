@@ -2791,6 +2791,18 @@ path preserves it: the bits written are `1 << (i / 4)` for `i < 128`. Supplier:
 the boundary, beside the page-aligned break. Affected: `InitialAllocatorAt`,
 A0's `world_of_boundary`, `roomB_of_initial` (which takes it as `hbb`).
 
+Machine-checked `malloc` paths (`VsaIris`, lane H4): `VsaIris.VsaHeap.malloc_paths`
+(`VsaIris/Vsa/MallocChain.lean`) runs `_malloc_r` from its entry `0x800047a8`
+over the generated `SWP` step table. Proved: the prologue and the ENOMEM return
+(`malloc_pro`, `malloc_errno`), the small-bin check and take (`j_small`,
+`small_take`, over `PHeapAt.take`), the last-remainder check and its exact-fit
+return (`lr_check`, `lr_take`), the block search's entry (`bb_check`) and the
+top split (`top_path`, over the new `PHeapAt.topSplit`). Five joins remain, and
+are exactly `malloc_paths`' hypotheses: the large-bin scan (`0x80004884`), the
+last-remainder split (`0x80004da0`), the re-binding of a too-small remainder
+(`0x8000491c`), the block walk (`0x80004978`) and `malloc_extend_top`
+(`0x80004a48`).
+
 Machine-checked `free` (`VsaIris`, branch `iris-heap`): `_free_r`'s top-merge
 path is `VsaIris.MallocFast.freeRoomRun_fast` / `vsaDlFreeRoomImpl_boundary`.
 The heap half is `VsaIris.VsaHeap.FastAt.merge`. `realloc` has an Iris spec,
