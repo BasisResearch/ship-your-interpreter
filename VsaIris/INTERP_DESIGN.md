@@ -56,25 +56,42 @@ That is the brittle counting VSA's `TripleN` already pays for. Two WPs cost one
 extra piece of glue per case (the generator emits both, §6). The blocks are
 shared, and blocks are where the proof mass lives.
 
-### The shared interface (work package F1)
+### The shared interface (work package F1, landed)
 
 ```lean
-structure MachWP (M : MachineModel) where
-  W      : (Nat × String → IProp GF) → IProp GF
-  run    : RunFact M n RR MR RW MW →                     -- VsaIris.wp_run
-           footPre RR MR RW MW ∗ (footPost RR MR RW MW -∗ W Φ) ⊢ W Φ
-  halt   : …                                             -- VsaIris.wp_exec_halt
-  putc   : …                                             -- console step (F2)
+structure MachWP (M : MachineModel) where          -- VsaIris/MachWP.lean
+  W       : (Nat × String → IProp GF) → IProp GF
+  lat     : IProp GF → IProp GF                    -- step modality: id (total), ▷ (partial)
+  lat_intro : ∀ P, P ⊢ lat P
+  lagRun  : LagFoot M Fp Fp' Pre Post K →          -- the lag kernel (Lag.lean) at W level
+            Fp ∗ (∀ σ σf, ⌜Post σ σf⌝ -∗ Fp' σf -∗ lat (W Φ)) ⊢ W Φ
+  halt    : …                                      -- VsaIris.wp_exec_halt, abstracted
+  fupd    : (|={⊤}=> W Φ) ⊢ W Φ
+  -- putc: console step (F2)
 ```
 
-- `twpW M := ⟨mTWP M, wp_run, wp_exec_halt, …⟩` exists today, apart from `putc`.
-- `wpW M` is new. It is `cpuTok -∗ WP Loop @ NotStuck; ⊤ {{ Φ }}` (iris-lean
+- `twpW M := ⟨mTWP M, id, …⟩` and `wpW M := ⟨mWP M, ▷, …⟩`.
+  `mWP M Φ := cpuTok -∗ WP Loop @ NotStuck; ⊤ {{ Φ }}` (iris-lean
   `ProgramLogic/WeakestPre.lean`) with the same lagging state interpretation
-  (`Ptsto.fullInterp`). It adds `run_later`: the continuation may assume `▷`,
-  which Löb consumes.
-- `twp_wp : mTWP M Φ ⊢ mWP M Φ` (iris-lean `TotalWeakestPre.lean`) is not
+  (`Ptsto.fullInterp`).
+- Why `lagRun` rather than a `run` field: a `RunFact` segment and a
+  `LocalRun` segment are both instances of one lagged run (`LagFoot`). Both
+  WPs prove the kernel once (`Lag.lag_run`, from a single-step rule
+  `StepRule lat L`), and `MachWP.run` (= `wp_run`), `MachWP.runL` and
+  `wp_localRunW` derive from it for every `Wp`. The earlier draft's `run`
+  field could not give the loop rule, whose segments end in a predicate, not
+  in exact values.
+- `lat` records the later that one step of the partial WP pays for. Blocks use
+  the later-free `Wp.run`; `(wpW M).runL` (`wp_run_later`) gives the
+  continuation `▷ mWP`, which Löb consumes (`wp_call_later` for a recursive
+  `jal`).
+- `twp_wp : mTWP M Φ ⊢ mWP M Φ` (iris-lean `twp.to_wp`) is not
   needed by any block, because blocks are generic. The assembly uses it only
   where a partial proof calls something proved only totally (§5.3).
+- Partial adequacy: `mach_adequacyP` (`Adequacy.lean`) and, at the VSA
+  instance, `Inst.vsa_adequacyP_nonzero`:
+  `AdequacyHypP GF (vsaModel live) mr mm (fun v => v.1 ≠ 0) →
+   Diverges c ∨ ∃ out e, Halts c out e ∧ e ≠ 0`, `stuck_sim`'s conclusion.
 
 Every lemma below `eval_expr` is stated `∀ (Wp : MachWP M)`. Helper loops are
 proved by **fuel induction, not Löb**, which is sound for both WPs and is also
@@ -102,14 +119,16 @@ frame, and the abort continuation it inherited, are available to both.
 
 ## 2. Foundations the specs need (work packages F1–F3)
 
-- **F1, the partial WP.** `mWP`; `wp_run` with a later for it; the halt rule;
-  and partial adequacy at the VSA instance:
+- **F1, the partial WP (landed).** `mWP` (`PartialWP.lean`); the segment rule
+  with a later for it (`wp_run_later`); the halt rule (`wpP_exec_halt`); and
+  partial adequacy at the VSA instance (`Inst.vsa_adequacyP`):
 
-  `AdequacyHypP … (fun v => ψ v) → (∀ n, ∃ c', StepsN n c c') ∨ ∃ e out, Halts c out e ∧ ψ (e, out)`
+  `AdequacyHypP … φ → Diverges c ∨ ∃ out e, Halts c out e ∧ φ (e, out)`
 
-  This uses determinism (`Machine.Step.deterministic`). Never stuck plus never
-  halted gives `Diverges`. Iris-lean has `wp_adequacy`; the work is adapting
-  `Adequacy.lean`'s total route.
+  The loop is deterministic with one non-value expression, so never stuck
+  plus no reachable exit gives `Diverges` (`diverges_or_halts_of_adequate`,
+  classical case split on exit reachability). It reuses `wp_adequacy_gen`,
+  as the total route does.
 - **F2, the console.**
   - `MachineModel` gains `out : State → String` (VSA: `Vsa.Machine.output`).
   - A console ghost cell `console ↦c s` joins `fullInterp`. It lags with the

@@ -1,4 +1,4 @@
-import VsaIris.Ptsto
+import VsaIris.Lag
 
 /-!
 # Stepping the machine
@@ -338,143 +338,47 @@ def RunFact (M : MachineModel) (n : Nat) (RR : List (Nat × DFrac × BitVec 64))
   ∀ σ, M.ok σ → FootHolds (M := M) σ RR MR RW MW →
     ∃ σ', ReachesN M (n + 1) σ σ' ∧ M.ok σ' ∧ LocalStep (M := M) σ σ' RW MW
 
-/-- Opening the state interpretation with the control cell at lag `j`. -/
-theorem fullInterp_lag {σ : M.State} {j : Nat} :
-    fullInterp (GF := GF) M σ ⊢ ctlAt j -∗
-      ∃ c : NatMap Nat, ghost_map_auth G.ctlName (DFrac.own 1) c ∗
-        ⌜PartialMap.get? c 0 = some j⌝ ∗ ctlAt j ∗ lagInterp M j σ := by
-  unfold fullInterp
-  iintro ⟨%c, %j', Hc, %hj, Hl⟩ Ht
-  unfold ctlAt
-  ihave %hl := ghost_map_lookup $$ Hc Ht
-  rw [hj] at hl
-  cases hl
-  iexists c
-  iframe Hc Ht Hl
-  ipureintro; exact hj
+/-- A `RunFact` is a lagged run over the footprint `footPre`: the lookup and
+commit are `foot_lookup` and `foot_update`. -/
+theorem RunFact.lagFoot {n : Nat} {RR : List (Nat × DFrac × BitVec 64)}
+    {MR : List (Nat × DFrac × BitVec 8)} {RW : List (Nat × BitVec 64 × BitVec 64)}
+    {MW : List (Nat × BitVec 8 × BitVec 8)} (hexec : RunFact M n RR MR RW MW) :
+    LagFoot (GF := GF) M (footPre RR MR RW MW) (fun _ => footPost RR MR RW MW)
+      (fun σ => FootHolds (M := M) σ RR MR RW MW) (fun σ σf => LocalStep (M := M) σ σf RW MW) n where
+  look mr mm := foot_lookup (M := M) mr mm RR MR RW MW
+  run σ hok hf := hexec σ hok hf
+  commit mr mm _ _ hr hm hloc := foot_update (M := M) mr mm RR MR RW MW hr hm hloc
 
-theorem fullInterp_intro {σ : M.State} (c : NatMap Nat) (j : Nat)
-    (hc : PartialMap.get? c 0 = some j) :
-    ghost_map_auth (GF := GF) G.ctlName (DFrac.own 1) c ∗ lagInterp M j σ ⊢ fullInterp M σ := by
-  unfold fullInterp
-  iintro ⟨Hc, Hl⟩
-  iexists c, j
-  iframe Hc Hl
-  ipureintro; exact hc
-
-theorem lagInterp_intro {σ : M.State} {j : Nat} (mr : NatMap (BitVec 64))
-    (mm : NatMap (BitVec 8)) (σ0 : M.State) (h : AgreeOk M mr mm σ0)
-    (hre : ReachesN M j σ0 σ) :
-    ghost_map_auth (GF := GF) G.regName (DFrac.own 1) mr ∗
-      ghost_map_auth G.memName (DFrac.own 1) mm ⊢ lagInterp M j σ := by
-  unfold lagInterp
-  iintro ⟨Hr, Hm⟩
-  iexists mr, mm
-  iframe Hr Hm
-  ipureintro; exact ⟨σ0, h, hre⟩
-
-/-- The segment rule's inner loop: `k + 1` steps remain, and the ghost maps
-lag the machine by `j` steps. Each step reads the lag from the control cell,
-re-derives the footprint facts at the lagged state, and either advances the
-lag or (last step) commits the effect and resets the lag to zero. -/
-theorem run_aux {Φ : Nat × String → IProp GF} {n : Nat}
-    {RR : List (Nat × DFrac × BitVec 64)} {MR : List (Nat × DFrac × BitVec 8)}
-    {RW : List (Nat × BitVec 64 × BitVec 64)} {MW : List (Nat × BitVec 8 × BitVec 8)}
-    (hexec : RunFact M n RR MR RW MW) (k j : Nat) (hjk : j + (k + 1) = n + 1) :
-    ctlAt (GF := GF) j ∗ footPre RR MR RW MW ∗ (footPost RR MR RW MW -∗ mTWP M Φ) ⊢
-      WP (MachineModel.Loop M) @ Stuckness.NotStuck; ⊤ [{ Φ }] := by
-  iintro ⟨Hj, Hf, Hk⟩
+/-- The total loop WP satisfies the single-step rule with no later. -/
+theorem twp_stepRule {Φ : Nat × String → IProp GF} :
+    StepRule M id (WP (MachineModel.Loop M) @ Stuckness.NotStuck; ⊤ [{ Φ }]) := by
+  unfold StepRule
+  simp only [id]
+  iintro H
   iapply twp.lift_step (s := Stuckness.NotStuck) rfl
   iintro %σ₁ %ns %obs %nt Hσ
-  ihave ⟨%c, Hc, %hc, Hj, Hl⟩ := fullInterp_lag (M := M) $$ Hσ Hj
-  unfold lagInterp ctlAt
-  icases Hl with ⟨%mr, %mm, Hmr, Hmm, %hlag⟩
-  obtain ⟨σ0, ⟨hr, hm, hok⟩, hre⟩ := hlag
-  ihave ⟨Hmr, Hmm, Hf, %hfoot⟩ := foot_lookup (M := M) mr mm RR MR RW MW $$ [Hmr Hmm Hf]
-  · iframe Hmr Hmm Hf
-  obtain ⟨σf, hrun, hokf, hloc⟩ := hexec σ0 hok (hfoot σ0 hr hm)
-  have hrest : ReachesN M (k + 1) σ₁ σf := ReachesN.split hre (hjk ▸ hrun)
-  obtain ⟨σ1, hs1, hrest1⟩ : ∃ σ1, M.step σ₁ = .next σ1 ∧ ReachesN M k σ1 σf := by
-    cases hrest with
-    | succ s r => exact ⟨_, s, r⟩
+  imod H $$ %σ₁ Hσ with ⟨%⟨σ', hσ'⟩, H⟩
   iapply fupd_mask_intro Std.LawfulSet.empty_subset
   iintro Hclose
   isplitr
   · ipureintro
-    exact ⟨_, _, _, MachineModel.primStep_loop_next M hs1⟩
+    exact ⟨_, _, _, MachineModel.primStep_loop_next M hσ'⟩
   iintro %κ %e₂ %σ₂ %eₜ %Hstep
-  imod Hclose with -
   obtain ⟨hκ, heₜ, (⟨σn, hn, he, hs⟩ | ⟨e, out, hh, _, _⟩)⟩ :=
     MachineModel.primStep_loop_inv M Hstep
   · subst hκ heₜ he hs
-    rw [hs1] at hn
-    cases hn
-    rcases k with _ | k
-    · -- last step: commit the effect, reset the lag
-      cases hrest1.zero_eq
-      imod ghost_map_update 0 $$ Hc Hj with ⟨Hc, Hj⟩
-      imod foot_update (M := M) mr mm RR MR RW MW hr hm hloc $$ [Hmr Hmm Hf]
-        with ⟨%mr', %mm', Hmr, Hmm, Hf, %⟨hr', hm'⟩⟩
-      · iframe Hmr Hmm Hf
-      imodintro
-      isplitr
-      · ipureintro; rfl
-      isplitl [Hc Hmr Hmm]
-      · iapply fullInterp_intro (M := M) _ 0 (LawfulPartialMap.get?_insert_eq rfl)
-        iframe Hc
-        iapply lagInterp_intro (M := M) mr' mm' _ ⟨hr', hm', hokf⟩ (.zero _)
-        iframe Hmr Hmm
-      isplitl [Hk Hf Hj]
-      · ihave Hw := Hk $$ Hf
-        unfold mTWP cpuTok ctlAt
-        iapply Hw $$ Hj
-      iapply BigSepL.bigSepL_nil.2
-      iempintro
-    · -- intermediate step: advance the lag
-      imod ghost_map_update (j + 1) $$ Hc Hj with ⟨Hc, Hj⟩
-      imodintro
-      isplitr
-      · ipureintro; rfl
-      isplitl [Hc Hmr Hmm]
-      · iapply fullInterp_intro (M := M) _ (j + 1) (LawfulPartialMap.get?_insert_eq rfl)
-        iframe Hc
-        iapply lagInterp_intro (M := M) mr mm σ0 ⟨hr, hm, hok⟩ (hre.snoc hs1)
-        iframe Hmr Hmm
-      isplitl [Hk Hf Hj]
-      · iapply run_aux hexec k (j + 1) (by omega)
-        unfold ctlAt
-        iframe Hj Hf Hk
-      iapply BigSepL.bigSepL_nil.2
-      iempintro
-  · rw [hs1] at hh; cases hh
-termination_by k
-
-/-- **The segment rule.** If from every well-formed state satisfying the
-footprint the machine runs `n + 1` steps with an effect confined to the
-written cells (`RunFact`), then owning the footprint and proving the rest of
-the run from the updated footprint proves the run. Everything the caller
-owns outside the footprint is framed by the wand (paper §4.6). The states
-between the first and the last step are never described: the ghost maps lag
-behind them (Ptsto.lean §Lag). -/
-theorem wp_run {Φ : Nat × String → IProp GF} (n : Nat)
-    (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
-    (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8))
-    (hexec : RunFact M n RR MR RW MW) :
-    footPre (GF := GF) RR MR RW MW ∗ (footPost RR MR RW MW -∗ mTWP M Φ) ⊢ mTWP M Φ := by
-  iintro ⟨Hf, Hk⟩ Htok
-  iapply run_aux hexec n 0 (by omega)
-  iframe Htok Hf Hk
-
-/-- `wp_instr` in footprint form: the one-step case of `wp_run`. -/
-theorem wp_local_step {Φ : Nat × String → IProp GF}
-    (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
-    (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8))
-    (hexec : ∀ σ, M.ok σ → FootHolds (M := M) σ RR MR RW MW →
-      ∃ σ', M.step σ = .next σ' ∧ M.ok σ' ∧ LocalStep (M := M) σ σ' RW MW) :
-    footPre (GF := GF) RR MR RW MW ∗ (footPost RR MR RW MW -∗ mTWP M Φ) ⊢ mTWP M Φ :=
-  wp_run 0 RR MR RW MW fun σ hok hf => by
-    obtain ⟨σ', hs, hok', hloc⟩ := hexec σ hok hf
-    exact ⟨σ', .succ hs (.zero σ'), hok', hloc⟩
+    imod H $$ %_ %hn with ⟨Hσ, Hwp⟩
+    imod Hclose with -
+    imodintro
+    isplitr
+    · ipureintro; rfl
+    isplitl [Hσ]
+    · iexact Hσ
+    isplitl [Hwp]
+    · iexact Hwp
+    iapply BigSepL.bigSepL_nil.2
+    iempintro
+  · rw [hσ'] at hh; cases hh
 
 end Rules
 
