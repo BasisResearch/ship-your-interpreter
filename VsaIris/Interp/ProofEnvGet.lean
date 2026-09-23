@@ -704,4 +704,153 @@ theorem get_chain (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
 
 end Chain
 
+/-! ## `env_get` -/
+
+section Main
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+  {live : Nat → Prop}
+
+/-- A frame address names an allocated frame at a nonzero `Env*`. -/
+theorem storeRepr_frameInfo (N : NativeAddrs) {s : Store} {B : List (Nat × Nat)} {fa e : Nat} :
+    storeRepr (GF := GF) N s B ∗ frameAt fa e ⊢
+      storeRepr N s B ∗ ⌜e ≠ 0 ∧ fa < s.frames.size ∧ Vsa.Sim.StoreInvariant s⌝ := by
+  iintro ⟨Hs, #He⟩
+  ihave ⟨%f, %Gm, %img, %⟨hf, hGe, hlay, hinv⟩, Hown, -, -, Hclose⟩ := storeRepr_openRead N $$ [Hs He]
+  · iframe Hs He
+  ihave Hs := Hclose $$ Hown
+  iframe Hs
+  ipureintro
+  refine ⟨hGe ▸ hlay.e_ne, ?_, hinv⟩
+  rcases Nat.lt_or_ge fa s.frames.size with h | h
+  · exact h
+  · simp [Array.getElem?_eq_none h] at hf
+
+omit I in
+/-- `blockOwn` at some image. -/
+theorem blockOwn_img (p n : Nat) :
+    blockOwn (GF := GF) p n ⊢ ∃ f : Nat → BitVec 8, ownSet (InExt (p, n)) (fun a => a ↦ₘ f a) :=
+  ownSet_fn _
+
+/-- **`env_get`** (`env.c:43`), for every `MachWP`. -/
+theorem envGet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ envText, live p.1)
+    (N : NativeAddrs) :
+    textOwn envText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ⊢ envGetSpec Wp N := by
+  iintro ⟨#Ht, #Hgp, #Hcmp⟩
+  unfold envGetSpec
+  imodintro
+  iintro %st %B %fa %x %e %pn %out %s %saved %hsv
+  unfold fnSpecW
+  imodintro
+  iintro %r %Φ Hpc Hra ⟨%⟨hr, hsp, hslot⟩, Ha0, Ha1, Ha2, Hsp, Hcl, Hsv, Hstk, #Hfa, #Hx, Hout, Hst⟩ Hk
+  ihave ⟨Hst, %⟨hene, hfalt, hinv⟩⟩ := storeRepr_frameInfo N $$ [Hst Hfa]
+  · iframe Hst Hfa
+  unfold envGetPC
+  have hs64 : 64 ≤ s.toNat := by have := hsp.lo; unfold htifLo envGetNeed at this; omega
+  -- the owned bytes: the stack frame and the output slot
+  unfold stackScratch slot24
+  ihave ⟨%fs, Hstk⟩ := blockOwn_img _ _ $$ Hstk
+  ihave ⟨%fo, Hout⟩ := blockOwn_img _ _ $$ Hout
+  ihave ⟨⟨Hstk, Hout⟩, %hdo⟩ := keep_pure (ownSet_disj _ _ fs fo) $$ [Hstk Hout]
+  · iframe Hstk Hout
+  have hsep : out.toNat + 24 ≤ s.toNat - 64 ∨ s.toNat ≤ out.toNat := by
+    have := interval_apart (a := out.toNat) (n := 24) (b := s.toNat - envGetNeed)
+      (m := envGetNeed) (by omega) (by unfold envGetNeed; omega) fun c h1 h2 => by
+        have := hdo c ⟨h1, h2⟩
+        unfold InExt at this; omega
+    unfold envGetNeed at this; omega
+  ihave HB := ownSet_glue _ _ fs fo hdo $$ [Hstk Hout]
+  · iframe Hstk Hout
+  ihave HB := ownSet_iff (T := baseS s.toNat out.toNat) _ (fun a => by
+    unfold baseS InExt envGetNeed; omega) $$ HB
+  ihave ⟨%Mt0, -, HB⟩ := ownSet_tracked _ _ $$ HB
+  -- the register file
+  have hperm : (([(VsaIris.ra, r), (10, e), (11, pn), (12, out), (VsaIris.sp, s)] ++ saved).map Prod.fst ++
+      argClob).Perm gprs := by
+    simp only [List.map_append, List.map_cons, List.map_nil, hsv]; decide
+  ihave ⟨%R0, %hR0, HR⟩ := regsOf_entry gprs _ argClob hperm gprs_nodup $$ [Hra Ha0 Ha1 Ha2 Hsp Hsv Hcl]
+  · iframe Hcl
+    unfold savedOwn
+    iapply (sepL_append _ _ _).2
+    isplitr [Hsv]
+    · simp only [sepL_cons, sepL_nil]
+      isplitl [Hra]
+      · iexact Hra
+      iframe Ha0 Ha1 Ha2
+      isplitl [Hsp]
+      · iexact Hsp
+      iempintro
+    · iexact Hsv
+  have hR : ∀ k v, (k, v) ∈ [(VsaIris.ra, r), (10, e), (11, pn), (12, out), (VsaIris.sp, s)] ++ saved → R0 k = v :=
+    fun k v h => hR0 (k, v) h
+  have hsvR : ∀ k ∈ getSaved, R0 k = pairVal saved k := fun k hk => by
+    rw [← hsv] at hk
+    obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hk
+    rw [hR0 p (List.mem_append_right _ hp), pairVal_of_mem saved (by rw [hsv]; decide) p hp]
+  let C : GetCall := ⟨s, r, pn, out, x, saved⟩
+  have hC : C.OK := ⟨hsp, hslot, hr, hsv, hsep⟩
+  have hentry : GetEntry s.toNat r (pairVal saved) R0 :=
+    ⟨by rw [hR 10 e (by simp)]; intro h; exact hene (by rw [h]; rfl),
+     by rw [show (2 : Nat) = VsaIris.sp from rfl, hR VsaIris.sp s (by simp)],
+     hR VsaIris.ra r (by simp), hsvR⟩
+  iapply wp_span Wp (get_entry hl (out := out.toNat) hsp.lo hsp.hi hsp.align hentry)
+  iframe Ht Hgp Hpc HR HB
+  iintro %pc1 %R1 %Mt1 %⟨rfl, hhead⟩ Hpc HR HB
+  rw [hR 10 e (by simp), hR 11 pn (by simp), hR 12 out (by simp)] at hhead
+  iapply get_chain Wp hl N C hC fa R1 Mt1 e (get?_eq_look hinv.parents hfalt x).symm hhead
+  iframe Ht Hgp Hcmp Hx Hfa Hpc HR HB Hst
+  unfold getK
+  iintro %R' %Mt' %res %hret Hpc HR HB Hst Hres
+  have hperm' : (([(VsaIris.ra, r), (10, res), (VsaIris.sp, s)] ++ saved).map Prod.fst ++
+      retClob).Perm gprs := by
+    simp only [List.map_append, List.map_cons, List.map_nil, hsv]; decide
+  have hfix : ∀ p ∈ [(VsaIris.ra, r), (10, res), (VsaIris.sp, s)] ++ saved, R' p.1 = p.2 := by
+    intro p hp
+    rcases List.mem_append.1 hp with hp | hp
+    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
+      rcases hp with rfl | rfl | rfl
+      · exact hret.ra
+      · exact hret.a0
+      · show R' 2 = s
+        rw [hret.sp]; exact BitVec.eq_of_toNat_eq (by simp [C])
+    · rw [hret.saved p.1 (by rw [← hsv]; exact List.mem_map_of_mem hp),
+        pairVal_of_mem saved (by rw [hsv]; decide) p hp]
+  ihave Hregs := regsOf_exit gprs _ retClob hperm' R' hfix $$ HR
+  icases Hregs with ⟨Hfix, Hcl⟩
+  unfold savedOwn
+  ihave ⟨H5, Hsv⟩ := (sepL_append _ _ _).1 $$ Hfix
+  simp only [sepL_cons, sepL_nil]
+  icases H5 with ⟨Hra, Ha0, Hsp, -⟩
+  ihave HB := ownSet_iff (T := fun a => InExt (s.toNat - 64, 64) a ∨ InExt (out.toNat, 24) a) _
+    (fun a => by
+      have hCs : C.s.toNat = s.toNat := rfl; have hCo : C.out.toNat = out.toNat := rfl
+      simp only [baseS, InExt]; omega) $$ HB
+  ihave ⟨Hstk, Hout⟩ := ownSet_unglue _ _ _ (fun a h1 h2 => by
+    have := hsep; have hCs : C.s.toNat = s.toNat := rfl; have hCo : C.out.toNat = out.toNat := rfl
+    simp only [InExt] at h1 h2; omega) $$ HB
+  iapply Hk $$ Hpc Hra
+  iexists res
+  iframe Ha0 Hsp Hcl Hsv Hst
+  isplitl [Hstk]
+  · unfold blockOwn envGetNeed
+    iapply ownSet_forget $$ Hstk
+  unfold getOut getRes
+  cases hg : st.get? fa x with
+  | none =>
+    icases Hres with %hres
+    isplitr
+    · ipureintro; exact hres
+    · unfold slot24 blockOwn; iapply ownSet_forget $$ Hout
+  | some v =>
+    icases Hres with ⟨%hres, #Hv⟩
+    isplitr
+    · ipureintro; exact hres
+    · unfold valAt
+      iexists (imgM Mt')
+      iframe Hout Hv
+
+end Main
+
 end VsaIris.Interp
+
+#print axioms VsaIris.Interp.envGet_spec
