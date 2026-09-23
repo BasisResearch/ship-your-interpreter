@@ -1,4 +1,5 @@
-# kind	name	lo	hi (code: [lo, hi) bytes of .text; jal: the site's pc)
+# kind	name	lo	hi (code: [lo, hi) bytes of .text; jal: the site's pc;
+# oom: head, staging instructions, spills reg:sp-offset or -, spill window top)
 code	exitCode	0x80004764	0x80004790
 code	exitCodeE	0x80000180	0x80000198
 jal	exitJalExitE	0x8000478c
@@ -12,7 +13,8 @@ code	ljCode	0x8000703c	0x80007080
 jal	rtJalSnprintf1	0x80002dc8
 jal	rtJalSnprintf2	0x80002de4
 jal	rtJalLongjmp	0x80002df0
-oom	env_new	0x80002a38
-oom	env_define	0x80002bd0
-oom	stringify	0x80003140
+oom	env_new	0x80002a38	6	-	0
+oom	env_define	0x80002bd0	6	-	0
+oom	stringify	0x80003140	6	-	0
 code	setjmpCode	0x80006ffc	0x8000703c
+oom	eval_expr	0x80003e28	8	22:1024,23:1016	1032

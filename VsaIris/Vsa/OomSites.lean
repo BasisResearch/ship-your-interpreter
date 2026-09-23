@@ -132,6 +132,9 @@ theorem oom80002a38Ex_cert : oom80002a38Ex.Cert where
 def oom80002a38 : OomSite where
   head := 0x80002a38
   code := oom80002a38Code
+  stage := 6
+  spills := []
+  frameTop := 0
   seg := oom80002a38Seg
   li := oom80002a38Li
   fw := oom80002a38Fw
@@ -139,12 +142,17 @@ def oom80002a38 : OomSite where
 
 theorem oom80002a38_ok : oom80002a38.OK where
   text := oom80002a38Code_text
+  stage_pos := by decide
   len := rfl
   wf := by decide
   keys := by decide
   wr := by decide
-  log _ _ _ _ _ _ := rfl
-  facts m a5v a2v a1v a3v a0v simg hcode hok hpin := by
+  spillsSaved := by decide
+  logIn _ _ _ _ _ _ _ _ _ e he := nomatch he
+  facts m a5v a2v a1v a3v a0v s' cs simg hcode hok hs hpin := by
+    have h1 := hs.lo; have h2 := hs.hi; have h3 := hs.align
+    unfold tohostAddr at h1
+    simp only [oom80002a38] at h2
     change ChainFacts m m _ _ oom80002a38Seg
     unfold oom80002a38Seg ChainFacts
     chain_facts (oom80002a38CodeLoaded_of hcode) with "VsaIris.Newlib.OomSites.oom80002a38Code_at_"
@@ -160,9 +168,9 @@ theorem oom80002a38_ok : oom80002a38.OK where
           sign_extend (m := 64) (0x018#12) → x.toNat = stderrPtrAddr := by
         intro x hx; rw [hx, bytesVal_imgWord, ha5]; decide
       exact e _ rfl
-  pc _ _ _ _ _ _ := rfl
-  fin a5v a2v a1v a3v a0v simg hok := by
-    refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  pc _ _ _ _ _ _ _ _ := rfl
+  fin a5v a2v a1v a3v a0v s' cs simg hok := by
+    refine ⟨?_, ?_, ?_, ?_, ?_, rfl⟩
     · show bytesVal .ld (imgWord simg consoleImpurePtrAddr) = _
       rw [bytesVal_imgWord, hok.impure]
     · show 0#64 + sign_extend (m := 64) (0x00e#12) = _; decide
@@ -172,6 +180,7 @@ theorem oom80002a38_ok : oom80002a38.OK where
     · show (0x80002a48#64 + sign_extend (m := 64) ((0x00016#20) +++ (0x000#12))) +
         sign_extend (m := 64) (0x5f8#12) = _
       decide
+  finKeep _ _ _ _ _ _ _ _ p hp := nomatch hp
   liLen := rfl
   liWf := by decide
   liWr := by decide
@@ -317,6 +326,9 @@ theorem oom80002bd0Ex_cert : oom80002bd0Ex.Cert where
 def oom80002bd0 : OomSite where
   head := 0x80002bd0
   code := oom80002bd0Code
+  stage := 6
+  spills := []
+  frameTop := 0
   seg := oom80002bd0Seg
   li := oom80002bd0Li
   fw := oom80002bd0Fw
@@ -324,12 +336,17 @@ def oom80002bd0 : OomSite where
 
 theorem oom80002bd0_ok : oom80002bd0.OK where
   text := oom80002bd0Code_text
+  stage_pos := by decide
   len := rfl
   wf := by decide
   keys := by decide
   wr := by decide
-  log _ _ _ _ _ _ := rfl
-  facts m a5v a2v a1v a3v a0v simg hcode hok hpin := by
+  spillsSaved := by decide
+  logIn _ _ _ _ _ _ _ _ _ e he := nomatch he
+  facts m a5v a2v a1v a3v a0v s' cs simg hcode hok hs hpin := by
+    have h1 := hs.lo; have h2 := hs.hi; have h3 := hs.align
+    unfold tohostAddr at h1
+    simp only [oom80002bd0] at h2
     change ChainFacts m m _ _ oom80002bd0Seg
     unfold oom80002bd0Seg ChainFacts
     chain_facts (oom80002bd0CodeLoaded_of hcode) with "VsaIris.Newlib.OomSites.oom80002bd0Code_at_"
@@ -345,9 +362,9 @@ theorem oom80002bd0_ok : oom80002bd0.OK where
           sign_extend (m := 64) (0x018#12) → x.toNat = stderrPtrAddr := by
         intro x hx; rw [hx, bytesVal_imgWord, ha5]; decide
       exact e _ rfl
-  pc _ _ _ _ _ _ := rfl
-  fin a5v a2v a1v a3v a0v simg hok := by
-    refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  pc _ _ _ _ _ _ _ _ := rfl
+  fin a5v a2v a1v a3v a0v s' cs simg hok := by
+    refine ⟨?_, ?_, ?_, ?_, ?_, rfl⟩
     · show bytesVal .ld (imgWord simg consoleImpurePtrAddr) = _
       rw [bytesVal_imgWord, hok.impure]
     · show 0#64 + sign_extend (m := 64) (0x00e#12) = _; decide
@@ -357,6 +374,7 @@ theorem oom80002bd0_ok : oom80002bd0.OK where
     · show (0x80002be0#64 + sign_extend (m := 64) ((0x00016#20) +++ (0x000#12))) +
         sign_extend (m := 64) (0x460#12) = _
       decide
+  finKeep _ _ _ _ _ _ _ _ p hp := nomatch hp
   liLen := rfl
   liWf := by decide
   liWr := by decide
@@ -502,6 +520,9 @@ theorem oom80003140Ex_cert : oom80003140Ex.Cert where
 def oom80003140 : OomSite where
   head := 0x80003140
   code := oom80003140Code
+  stage := 6
+  spills := []
+  frameTop := 0
   seg := oom80003140Seg
   li := oom80003140Li
   fw := oom80003140Fw
@@ -509,12 +530,17 @@ def oom80003140 : OomSite where
 
 theorem oom80003140_ok : oom80003140.OK where
   text := oom80003140Code_text
+  stage_pos := by decide
   len := rfl
   wf := by decide
   keys := by decide
   wr := by decide
-  log _ _ _ _ _ _ := rfl
-  facts m a5v a2v a1v a3v a0v simg hcode hok hpin := by
+  spillsSaved := by decide
+  logIn _ _ _ _ _ _ _ _ _ e he := nomatch he
+  facts m a5v a2v a1v a3v a0v s' cs simg hcode hok hs hpin := by
+    have h1 := hs.lo; have h2 := hs.hi; have h3 := hs.align
+    unfold tohostAddr at h1
+    simp only [oom80003140] at h2
     change ChainFacts m m _ _ oom80003140Seg
     unfold oom80003140Seg ChainFacts
     chain_facts (oom80003140CodeLoaded_of hcode) with "VsaIris.Newlib.OomSites.oom80003140Code_at_"
@@ -530,9 +556,9 @@ theorem oom80003140_ok : oom80003140.OK where
           sign_extend (m := 64) (0x018#12) → x.toNat = stderrPtrAddr := by
         intro x hx; rw [hx, bytesVal_imgWord, ha5]; decide
       exact e _ rfl
-  pc _ _ _ _ _ _ := rfl
-  fin a5v a2v a1v a3v a0v simg hok := by
-    refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  pc _ _ _ _ _ _ _ _ := rfl
+  fin a5v a2v a1v a3v a0v s' cs simg hok := by
+    refine ⟨?_, ?_, ?_, ?_, ?_, rfl⟩
     · show bytesVal .ld (imgWord simg consoleImpurePtrAddr) = _
       rw [bytesVal_imgWord, hok.impure]
     · show 0#64 + sign_extend (m := 64) (0x00e#12) = _; decide
@@ -542,6 +568,7 @@ theorem oom80003140_ok : oom80003140.OK where
     · show (0x80003150#64 + sign_extend (m := 64) ((0x00016#20) +++ (0x000#12))) +
         sign_extend (m := 64) (0xef0#12) = _
       decide
+  finKeep _ _ _ _ _ _ _ _ p hp := nomatch hp
   liLen := rfl
   liWf := by decide
   liWr := by decide
@@ -557,6 +584,231 @@ theorem oom80003140_ok : oom80003140.OK where
   fwTgt := rfl
   fwText := by decide +kernel
   exCert := oom80003140Ex_cert
+  exPc := rfl
+  exTgt := rfl
+  exText := by decide +kernel
+
+/-! ### `eval_expr`: the block at `0x80003e28` -/
+
+def oom80003e28Code : List (BitVec 8) :=
+  [0x83#8, 0xb7#8, 0x01#8, 0x46#8, 0x13#8, 0x06#8, 0xe0#8, 0x00#8, 0x93#8, 0x05#8, 0x10#8, 0x00#8, 0x83#8, 0xb6#8, 0x87#8, 0x01#8, 0x17#8, 0x55#8, 0x01#8, 0x00#8, 0x13#8, 0x05#8, 0x85#8, 0x20#8, 0x23#8, 0x30#8, 0x61#8, 0x41#8, 0x23#8, 0x3c#8, 0x71#8, 0x3f#8, 0xef#8, 0x10#8, 0x80#8, 0x41#8, 0x13#8, 0x05#8, 0x10#8, 0x00#8, 0xef#8, 0x00#8, 0x50#8, 0x11#8]
+
+theorem oom80003e28Code_text : TextAt 0x80003e28 oom80003e28Code := by decide +kernel
+
+def oom80003e28CodeLoaded (m : Std.ExtHashMap Nat (BitVec 8)) : Prop :=
+  ∀ k, k < 44 → m[0x80003e28 + k]? = some (oom80003e28Code.getD k 0)
+
+theorem oom80003e28Code_len : oom80003e28Code.length = 44 := by decide
+
+theorem oom80003e28CodeLoaded_of {m : Std.ExtHashMap Nat (BitVec 8)}
+    (h : ∀ p ∈ codeFoot 0x80003e28 oom80003e28Code, m[p.1]? = some p.2.2) : oom80003e28CodeLoaded m :=
+  fun k hk => loaded_of_foot h k (by rw [oom80003e28Code_len]; exact hk)
+
+theorem oom80003e28Code_at_80003e28 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
+    m[(0x80003e28 : Nat)]? = some (0x83 : BitVec 8) ∧
+    m[(0x80003e29 : Nat)]? = some (0xb7 : BitVec 8) ∧
+    m[(0x80003e2a : Nat)]? = some (0x01 : BitVec 8) ∧
+    m[(0x80003e2b : Nat)]? = some (0x46 : BitVec 8) :=
+  ⟨h 0 (by decide), h 1 (by decide), h 2 (by decide), h 3 (by decide)⟩
+
+theorem oom80003e28Code_at_80003e2c {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
+    m[(0x80003e2c : Nat)]? = some (0x13 : BitVec 8) ∧
+    m[(0x80003e2d : Nat)]? = some (0x06 : BitVec 8) ∧
+    m[(0x80003e2e : Nat)]? = some (0xe0 : BitVec 8) ∧
+    m[(0x80003e2f : Nat)]? = some (0x00 : BitVec 8) :=
+  ⟨h 4 (by decide), h 5 (by decide), h 6 (by decide), h 7 (by decide)⟩
+
+theorem oom80003e28Code_at_80003e30 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
+    m[(0x80003e30 : Nat)]? = some (0x93 : BitVec 8) ∧
+    m[(0x80003e31 : Nat)]? = some (0x05 : BitVec 8) ∧
+    m[(0x80003e32 : Nat)]? = some (0x10 : BitVec 8) ∧
+    m[(0x80003e33 : Nat)]? = some (0x00 : BitVec 8) :=
+  ⟨h 8 (by decide), h 9 (by decide), h 10 (by decide), h 11 (by decide)⟩
+
+theorem oom80003e28Code_at_80003e34 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
+    m[(0x80003e34 : Nat)]? = some (0x83 : BitVec 8) ∧
+    m[(0x80003e35 : Nat)]? = some (0xb6 : BitVec 8) ∧
+    m[(0x80003e36 : Nat)]? = some (0x87 : BitVec 8) ∧
+    m[(0x80003e37 : Nat)]? = some (0x01 : BitVec 8) :=
+  ⟨h 12 (by decide), h 13 (by decide), h 14 (by decide), h 15 (by decide)⟩
+
+theorem oom80003e28Code_at_80003e38 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
+    m[(0x80003e38 : Nat)]? = some (0x17 : BitVec 8) ∧
+    m[(0x80003e39 : Nat)]? = some (0x55 : BitVec 8) ∧
+    m[(0x80003e3a : Nat)]? = some (0x01 : BitVec 8) ∧
+    m[(0x80003e3b : Nat)]? = some (0x00 : BitVec 8) :=
+  ⟨h 16 (by decide), h 17 (by decide), h 18 (by decide), h 19 (by decide)⟩
+
+theorem oom80003e28Code_at_80003e3c {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
+    m[(0x80003e3c : Nat)]? = some (0x13 : BitVec 8) ∧
+    m[(0x80003e3d : Nat)]? = some (0x05 : BitVec 8) ∧
+    m[(0x80003e3e : Nat)]? = some (0x85 : BitVec 8) ∧
+    m[(0x80003e3f : Nat)]? = some (0x20 : BitVec 8) :=
+  ⟨h 20 (by decide), h 21 (by decide), h 22 (by decide), h 23 (by decide)⟩
+
+theorem oom80003e28Code_at_80003e40 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
+    m[(0x80003e40 : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x80003e41 : Nat)]? = some (0x30 : BitVec 8) ∧
+    m[(0x80003e42 : Nat)]? = some (0x61 : BitVec 8) ∧
+    m[(0x80003e43 : Nat)]? = some (0x41 : BitVec 8) :=
+  ⟨h 24 (by decide), h 25 (by decide), h 26 (by decide), h 27 (by decide)⟩
+
+theorem oom80003e28Code_at_80003e44 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
+    m[(0x80003e44 : Nat)]? = some (0x23 : BitVec 8) ∧
+    m[(0x80003e45 : Nat)]? = some (0x3c : BitVec 8) ∧
+    m[(0x80003e46 : Nat)]? = some (0x71 : BitVec 8) ∧
+    m[(0x80003e47 : Nat)]? = some (0x3f : BitVec 8) :=
+  ⟨h 28 (by decide), h 29 (by decide), h 30 (by decide), h 31 (by decide)⟩
+
+theorem oom80003e28Code_at_80003e48 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
+    m[(0x80003e48 : Nat)]? = some (0xef : BitVec 8) ∧
+    m[(0x80003e49 : Nat)]? = some (0x10 : BitVec 8) ∧
+    m[(0x80003e4a : Nat)]? = some (0x80 : BitVec 8) ∧
+    m[(0x80003e4b : Nat)]? = some (0x41 : BitVec 8) :=
+  ⟨h 32 (by decide), h 33 (by decide), h 34 (by decide), h 35 (by decide)⟩
+
+theorem oom80003e28Code_at_80003e4c {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
+    m[(0x80003e4c : Nat)]? = some (0x13 : BitVec 8) ∧
+    m[(0x80003e4d : Nat)]? = some (0x05 : BitVec 8) ∧
+    m[(0x80003e4e : Nat)]? = some (0x10 : BitVec 8) ∧
+    m[(0x80003e4f : Nat)]? = some (0x00 : BitVec 8) :=
+  ⟨h 36 (by decide), h 37 (by decide), h 38 (by decide), h 39 (by decide)⟩
+
+theorem oom80003e28Code_at_80003e50 {m : Std.ExtHashMap Nat (BitVec 8)} (h : oom80003e28CodeLoaded m) :
+    m[(0x80003e50 : Nat)]? = some (0xef : BitVec 8) ∧
+    m[(0x80003e51 : Nat)]? = some (0x00 : BitVec 8) ∧
+    m[(0x80003e52 : Nat)]? = some (0x50 : BitVec 8) ∧
+    m[(0x80003e53 : Nat)]? = some (0x11 : BitVec 8) :=
+  ⟨h 40 (by decide), h 41 (by decide), h 42 (by decide), h 43 (by decide)⟩
+
+#derive_case oom80003e28Seg chain [(0x80003e28#64, 0x4601b783#32), (0x80003e2c#64, 0x00e00613#32), (0x80003e30#64, 0x00100593#32), (0x80003e34#64, 0x0187b683#32), (0x80003e38#64, 0x00015517#32), (0x80003e3c#64, 0x20850513#32), (0x80003e40#64, 0x41613023#32), (0x80003e44#64, 0x3f713c23#32)]
+
+#derive_case oom80003e28Li chain [(0x80003e4c#64, 0x00100513#32)]
+
+def oom80003e28Fw : JalSite where
+  pc := 0x80003e48
+  b0 := 0xef#8
+  b1 := 0x10#8
+  b2 := 0x80#8
+  b3 := 0x41#8
+  w := 0x418010ef#32
+  imm := 0x1418#21
+  tgt := 0x80005260#64
+
+theorem oom80003e28Fw_cert : oom80003e28Fw.Cert where
+  word := by decide
+  notrvc := by decide
+  dec := fun σ h1 h2 h3 => Vsa.Sim.DecodeTable.decode_418010ef σ h1 h2 h3
+  tgt := by decide
+  tgt_align := by decide
+  lo := by decide
+  hi := by decide
+  align := by decide
+
+def oom80003e28Ex : JalSite where
+  pc := 0x80003e50
+  b0 := 0xef#8
+  b1 := 0x00#8
+  b2 := 0x50#8
+  b3 := 0x11#8
+  w := 0x115000ef#32
+  imm := 0x914#21
+  tgt := 0x80004764#64
+
+theorem oom80003e28Ex_cert : oom80003e28Ex.Cert where
+  word := by decide
+  notrvc := by decide
+  dec := fun σ h1 h2 h3 => Vsa.Sim.DecodeTable.decode_115000ef σ h1 h2 h3
+  tgt := by decide
+  tgt_align := by decide
+  lo := by decide
+  hi := by decide
+  align := by decide
+
+def oom80003e28 : OomSite where
+  head := 0x80003e28
+  code := oom80003e28Code
+  stage := 8
+  spills := [(22, 1024), (23, 1016)]
+  frameTop := 1032
+  seg := oom80003e28Seg
+  li := oom80003e28Li
+  fw := oom80003e28Fw
+  ex := oom80003e28Ex
+
+theorem oom80003e28_ok : oom80003e28.OK where
+  text := oom80003e28Code_text
+  stage_pos := by decide
+  len := rfl
+  wf := by decide
+  keys := by decide
+  wr := by decide
+  spillsSaved := by decide
+  logIn a5v a2v a1v a3v a0v s' cs simg hs := by
+    have hlog : (segOut oom80003e28Seg (oomLx oom80003e28 a5v a2v a1v a3v a0v s' cs ++ oomLr) (oomLds simg)).log =
+      [((s' + sign_extend (m := 64) (0x400#12)).toNat, 8, cs 22), ((s' + sign_extend (m := 64) (0x3f8#12)).toNat, 8, cs 23)] := rfl
+    intro e he
+    change e ∈ (segOut oom80003e28Seg _ _).log at he
+    rw [hlog] at he
+    have h2 := hs.hi
+    simp only [oom80003e28] at h2
+    simp only [List.mem_cons, List.not_mem_nil, _root_.or_false] at he
+    rcases he with rfl | rfl
+    · rw [oomSp_off hs 1024 (0x400#12) (by decide) (by decide) _ rfl]; simp [oom80003e28] <;> omega
+    · rw [oomSp_off hs 1016 (0x3f8#12) (by decide) (by decide) _ rfl]; simp [oom80003e28] <;> omega
+  facts m a5v a2v a1v a3v a0v s' cs simg hcode hok hs hpin := by
+    have h1 := hs.lo; have h2 := hs.hi; have h3 := hs.align
+    unfold tohostAddr at h1
+    simp only [oom80003e28] at h2
+    change ChainFacts m m _ _ oom80003e28Seg
+    unfold oom80003e28Seg ChainFacts
+    chain_facts (oom80003e28CodeLoaded_of hcode) with "VsaIris.Newlib.OomSites.oom80003e28Code_at_"
+    · have e : ∀ x : BitVec 64, x = gpV + sign_extend (m := 64) (0x460#12) →
+          x.toNat = consoleImpurePtrAddr := by
+        intro x hx; rw [hx]; decide
+      exact ldFact (img := simg) rfl (e _ rfl) (by decide) (by decide) (by decide)
+        (fun k hk => hpin _ (.inl ⟨by omega, by omega⟩))
+    · have ha5 := hok.impure
+      refine ldFact (img := simg) rfl ?_ (by decide) (by decide) (by decide)
+        (fun k hk => hpin _ (.inr ⟨by omega, by omega⟩))
+      have e : ∀ x : BitVec 64, x = bytesVal .ld (imgWord simg consoleImpurePtrAddr) +
+          sign_extend (m := 64) (0x018#12) → x.toNat = stderrPtrAddr := by
+        intro x hx; rw [hx, bytesVal_imgWord, ha5]; decide
+      exact e _ rfl
+    · exact sdFact (ea := s'.toNat + 1024) rfl (oomSp_off hs 1024 (0x400#12) (by decide) (by decide) _ rfl)
+        (by omega) (by omega) (by unfold tohostAddr; omega) (by omega)
+    · exact sdFact (ea := s'.toNat + 1016) rfl (oomSp_off hs 1016 (0x3f8#12) (by decide) (by decide) _ rfl)
+        (by omega) (by omega) (by unfold tohostAddr; omega) (by omega)
+  pc _ _ _ _ _ _ _ _ := rfl
+  fin a5v a2v a1v a3v a0v s' cs simg hok := by
+    refine ⟨?_, ?_, ?_, ?_, ?_, rfl⟩
+    · show bytesVal .ld (imgWord simg consoleImpurePtrAddr) = _
+      rw [bytesVal_imgWord, hok.impure]
+    · show 0#64 + sign_extend (m := 64) (0x00e#12) = _; decide
+    · show 0#64 + sign_extend (m := 64) (0x001#12) = _; decide
+    · show bytesVal .ld (imgWord simg stderrPtrAddr) = _
+      rw [bytesVal_imgWord, hok.stderr]; rfl
+    · show (0x80003e38#64 + sign_extend (m := 64) ((0x00015#20) +++ (0x000#12))) +
+        sign_extend (m := 64) (0x208#12) = _
+      decide
+  finKeep _ _ _ _ _ _ _ _ p hp := by
+    simp only [oom80003e28, List.mem_cons, List.not_mem_nil, _root_.or_false] at hp
+    rcases hp with rfl | rfl <;> rfl
+  liLen := rfl
+  liWf := by decide
+  liWr := by decide
+  liLog _ := rfl
+  liFacts m a0v hcode := by
+    change ChainFacts m m _ _ oom80003e28Li
+    unfold oom80003e28Li ChainFacts
+    chain_facts (oom80003e28CodeLoaded_of hcode) with "VsaIris.Newlib.OomSites.oom80003e28Code_at_"
+  liPc _ := rfl
+  liFin _ := by show 0#64 + sign_extend (m := 64) (0x001#12) = _; decide
+  fwCert := oom80003e28Fw_cert
+  fwPc := rfl
+  fwTgt := rfl
+  fwText := by decide +kernel
+  exCert := oom80003e28Ex_cert
   exPc := rfl
   exTgt := rfl
   exText := by decide +kernel

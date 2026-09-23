@@ -64,8 +64,9 @@ out += ['end VsaIris.Newlib.Sites', '']
 text = '\n'.join(out)
 dst = root / 'VsaIris/Vsa/H5Sites.lean'
 
-# Out-of-memory blocks: one `OomSite` instance per `oom` row (VsaIris/Vsa/Oom.lean).
-OOM_FIXED = {0: 0x4601b783, 4: 0x00e00613, 8: 0x00100593, 12: 0x0187b683, 28: 0x00100513}
+# Out-of-memory blocks: one `OomSite` instance per `oom` row (VsaIris/Vsa/Oom.lean):
+# `oom <name> <head> <stage> <spills reg:off,... or -> <frameTop>`.
+OOM_FIXED = {0: 0x4601b783, 4: 0x00e00613, 8: 0x00100593, 12: 0x0187b683}
 
 def jal_imm(pc, w):
     imm = (((w >> 31) & 1) << 20) | (((w >> 12) & 0xff) << 12) | (((w >> 20) & 1) << 11) | (((w >> 21) & 0x3ff) << 1)
@@ -79,33 +80,45 @@ for line in (root / 'scripts/h5_sites.tsv').read_text().splitlines():
     if not line.strip() or line.startswith('#'): continue
     f = line.split('\t')
     if f[0] != 'oom': continue
-    h = int(f[2], 16); nm = f'oom{h:08x}'
+    h = int(f[2], 16); nm = f'oom{h:08x}'; stage = int(f[3])
+    spills = [] if f[4] == '-' else [tuple(int(x) for x in p.split(':')) for p in f[4].split(',')]
+    top = int(f[5])
     for k, w in OOM_FIXED.items():
         assert words[h + k] == w, f'{nm}: {h + k:#x} is {words[h + k]:08x}, not {w:08x}'
-    assert words[h + 24] & 0xfff == 0x0ef and words[h + 32] & 0xfff == 0x0ef, f'{nm}: jal shape'
-    fwi, fwt = jal_imm(h + 24, words[h + 24]); exi, ext = jal_imm(h + 32, words[h + 32])
+    fwpc, lipc, expc = h + 4 * stage, h + 4 * stage + 4, h + 4 * stage + 8
+    assert words[lipc] == 0x00100513, f'{nm}: li a0,1'
+    fwi, fwt = jal_imm(fwpc, words[fwpc]); exi, ext = jal_imm(expc, words[expc])
     assert fwt == 0x80005260 and ext == 0x80004764, f'{nm}: callees {fwt:#x} {ext:#x}'
-    bs = [b for a in range(h, h + 36, 4) for b in le(words[a])]
+    sds = [a for a in range(h + 24, fwpc, 4)]
+    assert len(sds) == len(spills), f'{nm}: {len(sds)} spills'
+    for a, (rg, off) in zip(sds, spills):
+        w = words[a]
+        assert w & 0x7f == 0x23 and (w >> 12) & 7 == 3 and (w >> 15) & 0x1f == 2 and (w >> 20) & 0x1f == rg, f'{nm}: sd at {a:#x}'
+        assert (((w >> 25) << 5) | ((w >> 7) & 0x1f)) == off, f'{nm}: offset at {a:#x}'
+    end = expc + 4
+    bs = [b for a in range(h, end, 4) for b in le(words[a])]
+    n = end - h
     body = ', '.join(f'0x{b:02x}#8' for b in bs)
+    spl = '[' + ', '.join(f'({rg}, {off})' for rg, off in spills) + ']'
     oom += [f'/-! ### `{f[1]}`: the block at `{h:#x}` -/', '',
             f'def {nm}Code : List (BitVec 8) :=', f'  [{body}]', '',
             f'theorem {nm}Code_text : TextAt {h:#x} {nm}Code := by decide +kernel', '',
             f'def {nm}CodeLoaded (m : Std.ExtHashMap Nat (BitVec 8)) : Prop :=',
-            f'  ∀ k, k < 36 → m[{h:#x} + k]? = some ({nm}Code.getD k 0)', '',
-            f'theorem {nm}Code_len : {nm}Code.length = 36 := by decide', '',
+            f'  ∀ k, k < {n} → m[{h:#x} + k]? = some ({nm}Code.getD k 0)', '',
+            f'theorem {nm}Code_len : {nm}Code.length = {n} := by decide', '',
             f'theorem {nm}CodeLoaded_of {{m : Std.ExtHashMap Nat (BitVec 8)}}',
             f'    (h : ∀ p ∈ codeFoot {h:#x} {nm}Code, m[p.1]? = some p.2.2) : {nm}CodeLoaded m :=',
             f'  fun k hk => loaded_of_foot h k (by rw [{nm}Code_len]; exact hk)', '']
-    for a in range(h, h + 36, 4):
+    for a in range(h, end, 4):
         k = a - h; w = le(words[a])
         pins = ' ∧\n    '.join(f'm[({a + j:#x} : Nat)]? = some ({w[j]:#04x} : BitVec 8)' for j in range(4))
         proofs = ', '.join(f'h {k + j} (by decide)' for j in range(4))
         oom += [f'theorem {nm}Code_at_{a:08x} {{m : Std.ExtHashMap Nat (BitVec 8)}} (h : {nm}CodeLoaded m) :',
                 f'    {pins} :=', f'  ⟨{proofs}⟩', '']
-    seg = ', '.join(f'({h + k:#x}#64, 0x{words[h + k]:08x}#32)' for k in range(0, 24, 4))
+    seg = ', '.join(f'({h + k:#x}#64, 0x{words[h + k]:08x}#32)' for k in range(0, 4 * stage, 4))
     oom += [f'#derive_case {nm}Seg chain [{seg}]', '',
-            f'#derive_case {nm}Li chain [({h + 28:#x}#64, 0x00100513#32)]', '']
-    for nmj, pc, imm, tgt in ((f'{nm}Fw', h + 24, fwi, fwt), (f'{nm}Ex', h + 32, exi, ext)):
+            f'#derive_case {nm}Li chain [({lipc:#x}#64, 0x00100513#32)]', '']
+    for nmj, pc, imm, tgt in ((f'{nm}Fw', fwpc, fwi, fwt), (f'{nm}Ex', expc, exi, ext)):
         w = words[pc]; b = le(w)
         oom += [f'def {nmj} : JalSite where', f'  pc := {pc:#x}', *[f'  b{k} := 0x{b[k]:02x}#8' for k in range(4)],
                 f'  w := 0x{w:08x}#32', f'  imm := 0x{imm:x}#21', f'  tgt := 0x{tgt:x}#64', '',
@@ -114,13 +127,39 @@ for line in (root / 'scripts/h5_sites.tsv').read_text().splitlines():
                 f'  dec := fun σ h1 h2 h3 => Vsa.Sim.DecodeTable.decode_{w:08x} σ h1 h2 h3',
                 '  tgt := by decide', '  tgt_align := by decide', '  lo := by decide',
                 '  hi := by decide', '  align := by decide', '']
-    oom += [f'def {nm} : OomSite where', f'  head := {h:#x}', f'  code := {nm}Code', f'  seg := {nm}Seg',
+    sdproofs = [f"    · exact sdFact (ea := s'.toNat + {off}) rfl (oomSp_off hs {off} (0x{off:03x}#12) (by decide)" +
+                f" (by decide) _ rfl)\n        (by omega) (by omega) (by unfold tohostAddr; omega) (by omega)" for rg, off in spills]
+    if spills:
+        logl = ', '.join(f"((s' + sign_extend (m := 64) (0x{off:03x}#12)).toNat, 8, cs {rg})" for rg, off in spills)
+        logproof = [f"  logIn a5v a2v a1v a3v a0v s' cs simg hs := by",
+                    f"    have hlog : (segOut {nm}Seg (oomLx {nm} a5v a2v a1v a3v a0v s' cs ++ oomLr) (oomLds simg)).log =",
+                    f"      [{logl}] := rfl",
+                    "    intro e he",
+                    f"    change e ∈ (segOut {nm}Seg _ _).log at he",
+                    "    rw [hlog] at he",
+                    "    have h2 := hs.hi",
+                    f"    simp only [{nm}] at h2",
+                    "    simp only [List.mem_cons, List.not_mem_nil, _root_.or_false] at he",
+                    "    rcases he with " + ' | '.join(['rfl'] * len(spills)),
+                    *[f"    · rw [oomSp_off hs {off} (0x{off:03x}#12) (by decide) (by decide) _ rfl]; simp [{nm}] <;> omega"
+                      for rg, off in spills]]
+    else:
+        logproof = ["  logIn _ _ _ _ _ _ _ _ _ e he := nomatch he"]
+    keepproof = ("  finKeep _ _ _ _ _ _ _ _ p hp := by\n    simp only [" + nm + ", List.mem_cons, List.not_mem_nil, _root_.or_false] at hp\n"
+                 "    rcases hp with " + ' | '.join(['rfl'] * len(spills)) + " <;> rfl") if spills else \
+                "  finKeep _ _ _ _ _ _ _ _ p hp := nomatch hp"
+    oom += [f'def {nm} : OomSite where', f'  head := {h:#x}', f'  code := {nm}Code', f'  stage := {stage}',
+            f'  spills := {spl}', f'  frameTop := {top}', f'  seg := {nm}Seg',
             f'  li := {nm}Li', f'  fw := {nm}Fw', f'  ex := {nm}Ex', '',
             f'theorem {nm}_ok : {nm}.OK where',
             f'  text := {nm}Code_text',
-            '  len := rfl', '  wf := by decide', '  keys := by decide', '  wr := by decide',
-            '  log _ _ _ _ _ _ := rfl',
-            '  facts m a5v a2v a1v a3v a0v simg hcode hok hpin := by',
+            '  stage_pos := by decide', '  len := rfl', '  wf := by decide', '  keys := by decide',
+            '  wr := by decide', '  spillsSaved := by decide',
+            *logproof,
+            "  facts m a5v a2v a1v a3v a0v s' cs simg hcode hok hs hpin := by",
+            "    have h1 := hs.lo; have h2 := hs.hi; have h3 := hs.align",
+            "    unfold tohostAddr at h1",
+            f"    simp only [{nm}] at h2",
             f'    change ChainFacts m m _ _ {nm}Seg',
             f'    unfold {nm}Seg ChainFacts',
             f'    chain_facts ({nm}CodeLoaded_of hcode) with "VsaIris.Newlib.OomSites.{nm}Code_at_"',
@@ -136,9 +175,10 @@ for line in (root / 'scripts/h5_sites.tsv').read_text().splitlines():
             '          sign_extend (m := 64) (0x018#12) → x.toNat = stderrPtrAddr := by',
             '        intro x hx; rw [hx, bytesVal_imgWord, ha5]; decide',
             '      exact e _ rfl',
-            '  pc _ _ _ _ _ _ := rfl',
-            '  fin a5v a2v a1v a3v a0v simg hok := by',
-            '    refine ⟨?_, ?_, ?_, ?_, ?_⟩',
+            *sdproofs,
+            '  pc _ _ _ _ _ _ _ _ := rfl',
+            "  fin a5v a2v a1v a3v a0v s' cs simg hok := by",
+            '    refine ⟨?_, ?_, ?_, ?_, ?_, rfl⟩',
             '    · show bytesVal .ld (imgWord simg consoleImpurePtrAddr) = _',
             '      rw [bytesVal_imgWord, hok.impure]',
             '    · show 0#64 + sign_extend (m := 64) (0x00e#12) = _; decide',
@@ -148,6 +188,7 @@ for line in (root / 'scripts/h5_sites.tsv').read_text().splitlines():
             f'    · show ({h + 16:#x}#64 + sign_extend (m := 64) ((0x{words[h + 16] >> 12:05x}#20) +++ (0x000#12))) +',
             f'        sign_extend (m := 64) (0x{words[h + 20] >> 20:03x}#12) = _',
             '      decide',
+            keepproof,
             '  liLen := rfl', '  liWf := by decide', '  liWr := by decide', '  liLog _ := rfl',
             '  liFacts m a0v hcode := by',
             f'    change ChainFacts m m _ _ {nm}Li',

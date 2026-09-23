@@ -104,3 +104,4 @@ import VsaIris.Vsa.Setjmp
 #print axioms VsaIris.Newlib.OomSites.oom80002bd0_ok
 #print axioms VsaIris.Newlib.OomSites.oom80003140_ok
 #print axioms VsaIris.Newlib.Setjmp.setjmp_spec
+#print axioms VsaIris.Newlib.OomSites.oom80003e28_ok
