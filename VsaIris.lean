@@ -19,6 +19,7 @@ import VsaIris.Vsa.MallocConsumer
 import VsaIris.Vsa.HeapAudit
 import VsaIris.Vsa.ControlEnd
 import VsaIris.Vsa.EnvNewPilot
+import VsaIris.Vsa.Console
 import VsaIris.Vsa.MallocFastHeap
 import VsaIris.Vsa.FreeFastHeap
 import VsaIris.Vsa.MallocFastCode
@@ -48,3 +49,4 @@ import VsaIris.Vsa.MallocGen
 import VsaIris.Vsa.MallocCtx
 import VsaIris.Vsa.MallocPaths
 import VsaIris.Vsa.MallocPro
+import VsaIris.Vsa.CostRoom

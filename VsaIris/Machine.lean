@@ -53,6 +53,11 @@ structure MachineModel where
   /-- `reg σ PC` is the program counter. -/
   reg : State → Nat → BitVec 64
   mem : State → Nat → BitVec 8
+  /-- Everything printed on the console so far (VSA: `Vsa.Machine.output`).
+  The console ghost cell (`consoleOwn`, Ptsto.lean) agrees with it, and the
+  exit value `done e out` of a halting step carries it (`HaltFact`,
+  Step.lean). Defaults to the empty string for models without a console. -/
+  out : State → String := fun _ => ""
   /-- A global well-formedness invariant of the states the logic reasons
   about (VSA: `GoodState`, the tick bound, GPR and code-byte presence). It is
   part of the state interpretation, so every step rule must re-establish it.

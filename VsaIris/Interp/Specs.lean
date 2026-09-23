@@ -6,6 +6,7 @@ import Vsa.RuntimeRepr
 import Vsa.While.Cost
 import Vsa.While.StackNeed
 import Vsa.Refinement
+import Vsa.Sim.LayoutInstance
 
 /-!
 # DESIGN SKELETON: interpreter-level specs (see `VsaIris/INTERP_DESIGN.md`)
@@ -45,7 +46,10 @@ Built in `VsaIris/MachWP.lean` (no longer a placeholder here):
   the Löb call `wp_call_later` (`Call.lean`).
 * Partial adequacy: `mach_adequacyP` (`Adequacy.lean`), `Inst.vsa_adequacyP`
   and `Inst.vsa_adequacyP_nonzero` (exactly `stuck_sim`'s conclusion).
-F2 adds `putc` to `MachWP` and restates `halt` against the console cell. -/
+* The console (F2): `MachWP.runOut` (printing run, the `putc` rule) and
+  `MachWP.haltConsole` (halt/console agreement), derived for every `Wp`
+  (`MachWP.lean`); VSA instances `Inst.wp_putcW`/`Inst.wp_exitW` at the
+  newlib `tohost` stores (`Vsa/Console.lean`). -/
 
 /-! ## §B Mode-generic function specs (F3)
 
@@ -87,12 +91,12 @@ are reallocated) and a closure is immutable. -/
 class InterpGS (GF : BundledGFunctors) where
   frameMapG : GhostMapG GF Nat Nat NatMap
   closMapG : GhostMapG GF Nat Nat NatMap
-  consoleG : GhostMapG GF Nat String NatMap
   frameName : GName
   closName : GName
-  consoleName : GName
+  -- The console (γo) is `MachGS.conName`: its authority is in the machine's
+  -- state interpretation (F2, `VsaIris.consoleOwn`), not here.
 
-attribute [reducible, instance] InterpGS.frameMapG InterpGS.closMapG InterpGS.consoleG
+attribute [reducible, instance] InterpGS.frameMapG InterpGS.closMapG
 
 section Repr
 
@@ -106,9 +110,8 @@ def closAt (ca p : Nat) : IProp GF := ghost_map_elem I.closName DFrac.discard ca
 instance (fa e : Nat) : Persistent (frameAt (GF := GF) fa e) := by unfold frameAt; infer_instance
 instance (ca p : Nat) : Persistent (closAt (GF := GF) ca p) := by unfold closAt; infer_instance
 
-/-- The console cell (F2 puts its authority in the state interpretation, tied
-to `Vsa.Machine.output`). -/
-def consoleOwn (s : String) : IProp GF := ghost_map_elem I.consoleName (DFrac.own 1) 0 s
+-- `consoleOwn s` is `VsaIris.consoleOwn` (Ptsto.lean, F2): its authority is in
+-- `mstateInterp`, tied to `MachineModel.out` (VSA: `Vsa.Machine.output`).
 
 /-- Immutable bytes. -/
 def bytesRO (a : Nat) (bs : List (BitVec 8)) : IProp GF :=
@@ -417,18 +420,11 @@ ghost state and produce the initial world, the persistent AST and code, the
 top stack region, in either regime. -/
 theorem world_of_boundary_obligation : True := trivial
 
-/-- Q1 (user approval needed): the stack admissibility a loaded program must
-satisfy, beside `DlHeap.InitialAllocatorAt.capacity`. Without it, an AST
-deeper than the 8 MiB stack overflows into the heap directly below
-(`heapEnd = 0x87800000 = stackSL.lo`) and neither `term_sim` nor `stuck_sim`
-is provable. -/
-def StackAdmissible (m : Mem) (stmts count : Nat) : Prop :=
-  ∀ p : Program, ProgramRepr m stmts count p →
-    Stmt.stackNeedList p + maxCallDepth * perCallBudget + evalFrame + execFrame ≤ 0x800000 ∧
-    Stmt.bodiesBoundList perCallBudget p = true
-
-/-- The layout with Q1's field (A0 defines it by extending `InterpRunReady`). -/
-opaque interpRunLayout' : Vsa.Refine.Layout
+/-- Q1 (approved, landed by S1): the stack admissibility a loaded program
+satisfies is `Vsa.Sim.LayoutInstance.StackAdmissible`, a field of
+`InterpRunReadyFacts` beside the allocator's `capacity`. So the Iris route's
+layout is the concrete one (INTERP_DESIGN.md "STATEMENT CHANGE"). -/
+abbrev interpRunLayout' : Vsa.Refine.Layout := Vsa.Sim.LayoutInstance.interpRunLayout
 
 theorem term_sim_iris (_h : IrisHoles) :
     ∀ p c out, Vsa.Refine.Loaded interpRunLayout' p c → BigStep p out →

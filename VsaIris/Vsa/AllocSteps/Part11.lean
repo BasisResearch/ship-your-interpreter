@@ -1116,6 +1116,7 @@ theorem jalx_80007574 (live : Nat → Prop)
       (wX_bits_x1 _ (BitVec.addInt (0x80007574#64) 4)) hi
   have h := jalStep_of_obs (calleeEntry := 0x8000722c#64) hs hi' hG' hmem hobs
     (by apply BitVec.eq_of_toNat_eq; decide)
+  refine ⟨?_, stepConFrame_of_jalObs hs hobs⟩
   rwa [show BitVec.addInt (0x80007574#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x80007574 + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
 

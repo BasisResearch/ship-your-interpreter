@@ -17,6 +17,45 @@ Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 - **Q3: two WPs** (`mTWP` total, `mWP` partial) behind `MachWP`.
 - **Q4: newlib `snprintf`/`fprintf` safety specs stay as named holes for now,** scheduled after E1–E6. They must not be forgotten: every hole lives as a field of `IrisHoles` (so it appears in the final theorem's hypothesis) AND has an entry in `VsaIris/HOLES.md` with owner package, satisfiability evidence and discharge plan. `scripts/check_iris_holes.py` fails if the two disagree.
 
+## STATEMENT CHANGE (S1, Q1 landed): `Loaded interpRunLayout` now carries stack admissibility
+
+`Vsa/Sim/LayoutInstance.lean` `InterpRunReadyFacts` gained the field
+
+```lean
+stack_admissible : StackAdmissible c.σ.mem stmts count
+-- StackAdmissible m stmts count :=
+--   ∀ p, ProgramRepr m stmts count p → ProgramStackFits p
+structure ProgramStackFits (p : Program) : Prop where
+  need   : stackSL.lo + Stmt.stackNeedList p + maxCallDepth * perCallBudget
+             + evalFrame + interpRunFrame ≤ spEntry
+  bodies : Stmt.bodiesBoundList perCallBudget p = true
+```
+
+- **What narrowed.** `interpRunLayout.atInterpRun`, hence
+  `Loaded interpRunLayout p c`, hence the hypothesis of `endToEnd_refinement`
+  (and of `endToEnd_refinement_iris`). `Refinement.lean` is unchanged:
+  `Loaded` is generic in `Layout`, and the field sits in the concrete layout's
+  ready facts, beside `ownership`, which carries
+  `DlHeap.InitialAllocatorAt.capacity` (same ∀-over-`ProgramRepr` shape).
+- **So `interpRunLayout' = interpRunLayout`.** §5.4 and `Specs.lean` need no
+  separate layout. The skeleton's `StackAdmissible` is superseded by the
+  landed one.
+- **Why.** §10.4: without it, an AST deeper than the 8 MiB stack overflows
+  into the heap (`heapEnd = stackSL.lo = 0x87800000`), and `InterpSim` is
+  unprovable.
+- **The bound's arithmetic.** `interp_run` spills 176 bytes
+  (`interpRunFrame`), then calls `exec_stmt` at `spEntry - 176` with depth 0.
+  Each top-level statement needs ItemZero's `execNeed s 0 = s.stackNeed +
+  maxCallDepth * perCallBudget + evalFrame` below that. The consumer is
+  `ProgramStackFits.execBudget`, which gives the `StackOK` at the first call.
+- **Not vacuous.**
+  - The control program: `NativeNameAudit.Control.readyFacts` (so
+    `Control.loaded` still inhabits `Loaded interpRunLayout`).
+  - Every `c/tests/*.wl` program and `Validation.recursionSmall`:
+    `Vsa/Sim/StackAdmissibleWitness.lean`, one kernel `decide` of
+    `programStackFits` each.
+  - Needs range from 3440 to 5232 bytes, against about 2.24 MB of slack.
+
 ## 0. The design in five sentences
 
 1. Every block of machine code (a reflected segment, a helper call, a loop) is
@@ -67,7 +106,7 @@ structure MachWP (M : MachineModel) where          -- VsaIris/MachWP.lean
             Fp ∗ (∀ σ σf, ⌜Post σ σf⌝ -∗ Fp' σf -∗ lat (W Φ)) ⊢ W Φ
   halt    : …                                      -- VsaIris.wp_exec_halt, abstracted
   fupd    : (|={⊤}=> W Φ) ⊢ W Φ
-  -- putc: console step (F2)
+  -- console (F2): MachWP.runOut and MachWP.haltConsole are derived theorems
 ```
 
 - `twpW M := ⟨mTWP M, id, …⟩` and `wpW M := ⟨mWP M, ▷, …⟩`.
@@ -129,18 +168,49 @@ frame, and the abort continuation it inherited, are available to both.
   plus no reachable exit gives `Diverges` (`diverges_or_halts_of_adequate`,
   classical case split on exit reachability). It reuses `wp_adequacy_gen`,
   as the total route does.
-- **F2, the console.**
-  - `MachineModel` gains `out : State → String` (VSA: `Vsa.Machine.output`).
-  - A console ghost cell `console ↦c s` joins `fullInterp`. It lags with the
-    other maps. It OWNS the `tohost`/`fromhost` words (MachCSL gives the UART
-    registers to the console the same way, paper §7.5 and Figure 28's
-    `cons_auth`).
-  - A segment that does not own `tohost` cannot write it, so output is
-    unchanged by `wp_seg` for free.
-  - A new `putc` rule: storing a character request to `tohost` and taking the
-    host-poll step appends to `out` and needs `console ↦c s`.
-  - The halt rule must report `out σ` equal to the console cell. That is how
-    `Φ (0, out)` meets `BigStep`'s `out`.
+- **F2, the console (built: `Ptsto.lean`, `Step.lean`, `Vsa/Console.lean`).**
+  - `MachineModel` has `out : State → String` (VSA: `Vsa.Machine.output`).
+  - The console cell `consoleOwn s` is a ghost map on `MachGS.conName`, key 0.
+    Its authority `conInterp` is part of `mstateInterp` and lags with the
+    register and memory maps (`lagInterp`, `ConAgree`). MachCSL's console
+    authority sits in the state interpretation the same way (paper §7.5,
+    Figure 28 `cons_auth`). `consoleOwn_excl`: there is one console.
+  - Every run fact frames the output. `RunFactO … o` carries the run's console
+    effect `OutStep` (`none` silent, `some o` prints `o`), and `RunFact` is the
+    silent case. `SegFrom`, `RetExec` and `JalExec` carry the same conjunct.
+    VSA's `segEval_sound` already proves it (`σ'.sailOutput = σ.sailOutput`);
+    `jalExec_of_site` takes `StepConFrame` from the jal's observation. A run
+    that does not own the console cannot print, so a missing putchar is an
+    unprovable goal.
+  - The lag kernel carries the console authority: `LagFoot.look`/`commit`
+    see all three authorities (`mauths`). `LagFoot.ofRM` builds a silent
+    run's instance from register/memory lookup and commit plus its output
+    frame; `RunFact.lagFoot` and `SegFrom.lagFoot` use it.
+  - `MachWP.runOut` (the `putc` rule), for either WP: a printing run
+    (`RunFactO.lagFootPrint`) consumes `consoleOwn s` and returns
+    `consoleOwn (s ++ o)`. VSA instance `Inst.wp_putcW` over
+    `stepObs_tohost_putchar`, at `_write`'s store `0x8000005c` (`putcSite`).
+  - `MachWP.haltConsole` with `HaltFact` (halt/console agreement), for either
+    WP, from the `halt` field: at an exit step, `Φ (e, s)` with `s` the
+    console cell. VSA instance `Inst.wp_exitW` over `stepOnce_tohost_G`, at
+    `_exit`'s store `0x80000190` (`exitSite`). `Inst.vsa_adequacy_exit`
+    turns the total WP into `Halts c out e ∧ φ (e, out)`; `vsa_adequacyP`
+    does the same for the partial WP.
+  - Adequacy allocates the cell at the initial output: `AdequacyHyp` and
+    `AdequacyHypP` take the initial output `o` and hand the client
+    `consoleOwn o`.
+  - Change from the draft: the console rules are derived theorems, not
+    `MachWP` fields. `putc` is `lagRun` at a printing footprint, and the halt
+    rule is the `halt` field read against `mstateInterp`, which carries the
+    console authority.
+  - Change from the draft: the console does not own `tohost` bytes. In the
+    Sail model a `tohost` store is MMIO: memory is unchanged and the HTIF
+    registers decide the effect (`Vsa/Sim/Htif.lean`). What every console
+    store needs is an idle mailbox (`htif_payload_writes = 0`); it is a global
+    invariant, `VsaOk.htifIdle`, which segments frame and the putchar store
+    re-establishes. The binary has no narrow `tohost` store.
+  - Change from the draft: `γo` lives in `MachGS`, not `InterpGS`, because
+    its authority is in the machine's state interpretation.
 - **F3, calling conventions and stack.**
   - `fnSpecW` and `fnSpecAbort`, with `wp_callW` and `wp_callAbort` (the `jal`
     rule plus the re-basing below).
@@ -152,11 +222,12 @@ frame, and the abort continuation it inherited, are available to both.
 
 ## 3. Representation predicates (work package R)
 
-The ghost state is a new class `InterpGS GF` with three names:
+The ghost state is a new class `InterpGS GF` with two names, plus the
+console from F2:
 
 - `γf : ghost_map Nat Nat`: spec frame address to machine `Env*`.
 - `γc : ghost_map Nat Nat`: spec closure address to machine `Closure*`.
-- `γo`: the console, from F2.
+- `γo`: the console, `MachGS.conName` (F2), used through `consoleOwn`.
 
 `φf` and `φc` stop being arguments threaded through every lemma (the
 `φf φc : Addr → Nat` pairs in `StoreRepr`). They become ghost maps whose
@@ -337,6 +408,39 @@ xv6iris's vacuity check (`durable-notes.md` "Vacuity"): prove the boundary
 bundle is satisfiable at the concrete control program (the `ControlWitness`
 image), not only that it typechecks.
 
+### 5.1b The heap credits: Room ↔ Cost (S1, landed)
+
+`VsaIris/Vsa/CostRoom.lean`. The counted regime's index is COST BYTES, so
+`heapRes (.counted k) := isHeapRoom vsaLayout costRoom H k`. It is NOT
+`vsaRoom`: VSA's `AllocationReserve` is unsatisfiable after `malloc(24)`
+(`split24_vsa_reserve_false`), and it counts requests of a uniform `maxReq`,
+not bytes.
+
+- **`costRoom img H k`** holds when `av->top + 2k + extendSlack ≤ heapEnd`.
+  - It reads only the top word, an allocator global (`roomLocal_cost`), and is
+    monotone (`isHeapRoom_cost_mono`).
+  - It has no live-extent clause: freshness is `Shape`'s job.
+- **Charges cover chunks (2n + slack).** Each C allocation site's request `n`
+  sits under its modeled charge `c`, with `16 ≤ c` (`Covers`: `covers_envNew`,
+  `covers_closure`, `covers_nameCopy`, `covers_stringify`,
+  `covers_concatBuffer`, and `arrayRealloc_split` for the two array
+  `realloc`s). Hence `physSize n ≤ 2c` (`physSize_le_two_charge`).
+- **Per allocation.** `CostTop.spend`/`.split`: advancing top by at most `2c`
+  turns `c + k` credit bytes into `k`. A bin hit, or a free merging into top,
+  only helps.
+- **Iris malloc at charge `c`.** `mallocCostSpec` is `mallocRoomSpec` at
+  `costRoomAt c k` (unit credit = `c` bytes). `isHeapRoom_costAt_one`/`_zero`
+  rewrite it to `isHeapRoom costRoom H (c + k) → isHeapRoom costRoom _ k`.
+  Its first-order obligation is `MallocCostRun` (H4, the `alloc.mallocRoomRun`
+  row of HOLES.md).
+- **Boundary (A0).** `costRoom_of_bigStep`: `BigStep` gives a costed
+  derivation of cost `n` (`BigStep.cost`), and `InitialAllocatorAt.capacity`
+  gives `costRoom` at `n` (`costReserve_of_initial`). Non-vacuous:
+  `Control.costReserve` has 2^20 credit bytes at the control heap.
+- **Cost existence/soundness** for the recursor: `Vsa/While/CostExists.lean`
+  (`EvalECost.exists` … `ExecSeqCost.exists`, and `EvalECost.sound` …, which
+  give the `EvalE`-level invariants to a case lemma holding only `D`).
+
 ### 5.2 `term_sim`
 
 ```lean
@@ -379,8 +483,8 @@ theorem endToEnd_refinement_iris (h : IrisHoles) :
   Vsa.Refine.refinement (interpSim_iris h)
 ```
 
-`interpRunLayout'` is `interpRunLayout`, plus the stack admissibility field of
-Q1 if the user approves it.
+`interpRunLayout'` is `interpRunLayout`: Q1's stack-admissibility field landed
+in `InterpRunReadyFacts` (see "STATEMENT CHANGE" at the top).
 
 ## 6. The exponentiating layer on Iris (work package G)
 
@@ -550,9 +654,9 @@ lanes); then E1–E6 (six lanes).
      below it (`heapEnd = stack lo = 0x87800000`). After that, nothing
      constrains the machine, and both `term_sim` and `stuck_sim` are
      unprovable.
-   - Fix (needs the user's approval, Q1): add
-     `stack_admissible : ∀ p, ProgramRepr m a n p → (p.stackNeed + maxCallDepth * perCallBudget + slack ≤ stackSize) ∧ p.bodiesBound perCallBudget`
-     beside `capacity`.
+   - Fix (approved as Q1, landed by S1): `InterpRunReadyFacts.stack_admissible`
+     (`ProgramStackFits`, see "STATEMENT CHANGE" at the top), beside
+     `capacity`.
 5. **The out-of-memory path in partial mode.** The capacity bound only covers
    terminating derivations, so a divergent program can exhaust the heap. That
    is correct behaviour, `exit(1) ≠ 0`, but only if the uncounted regime's

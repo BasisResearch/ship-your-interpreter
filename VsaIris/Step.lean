@@ -328,26 +328,87 @@ theorem foot_update {σ0 σf : M.State} (mr : NatMap (BitVec 64)) (mm : NatMap (
     · exact hloc.mem_new p hp
     · rw [hloc.mem_frame k hnot]; exact hm k v hk
 
+/-- The console effect of a run (INTERP_DESIGN.md §2 F2): `none` prints
+nothing, `some o` appends `o` to the output. -/
+def OutStep (σ σ' : M.State) : Option String → Prop
+  | none => M.out σ' = M.out σ
+  | some o => M.out σ' = M.out σ ++ o
+
 /-- The hypothesis of the segment rule: from every well-formed state where
 the footprint holds, the machine takes exactly `n + 1` normal steps to a
-well-formed state, with an effect confined to the written cells. This is the
-shape of VSA's `segEval_sound` (`VsaIris/Vsa/Instance.lean`). -/
-def RunFact (M : MachineModel) (n : Nat) (RR : List (Nat × DFrac × BitVec 64))
+well-formed state, with an effect confined to the written cells and the
+console effect `o`. -/
+def RunFactO (M : MachineModel) (n : Nat) (RR : List (Nat × DFrac × BitVec 64))
+    (MR : List (Nat × DFrac × BitVec 8)) (RW : List (Nat × BitVec 64 × BitVec 64))
+    (MW : List (Nat × BitVec 8 × BitVec 8)) (o : Option String) : Prop :=
+  ∀ σ, M.ok σ → FootHolds (M := M) σ RR MR RW MW →
+    ∃ σ', ReachesN M (n + 1) σ σ' ∧ M.ok σ' ∧ LocalStep (M := M) σ σ' RW MW ∧
+      OutStep (M := M) σ σ' o
+
+/-- A run that prints nothing: the shape of VSA's `segEval_sound`
+(`VsaIris/Vsa/Instance.lean`, `seg_runFact`), whose `sailOutput` frame is the
+last conjunct. A run that does not own the console cannot print. -/
+abbrev RunFact (M : MachineModel) (n : Nat) (RR : List (Nat × DFrac × BitVec 64))
     (MR : List (Nat × DFrac × BitVec 8)) (RW : List (Nat × BitVec 64 × BitVec 64))
     (MW : List (Nat × BitVec 8 × BitVec 8)) : Prop :=
-  ∀ σ, M.ok σ → FootHolds (M := M) σ RR MR RW MW →
-    ∃ σ', ReachesN M (n + 1) σ σ' ∧ M.ok σ' ∧ LocalStep (M := M) σ σ' RW MW
+  RunFactO M n RR MR RW MW none
 
 /-- A `RunFact` is a lagged run over the footprint `footPre`: the lookup and
-commit are `foot_lookup` and `foot_update`. -/
+commit are `foot_lookup` and `foot_update`, and the console authority is kept
+(`LagFoot.ofRM`). -/
 theorem RunFact.lagFoot {n : Nat} {RR : List (Nat × DFrac × BitVec 64)}
     {MR : List (Nat × DFrac × BitVec 8)} {RW : List (Nat × BitVec 64 × BitVec 64)}
     {MW : List (Nat × BitVec 8 × BitVec 8)} (hexec : RunFact M n RR MR RW MW) :
     LagFoot (GF := GF) M (footPre RR MR RW MW) (fun _ => footPost RR MR RW MW)
-      (fun σ => FootHolds (M := M) σ RR MR RW MW) (fun σ σf => LocalStep (M := M) σ σf RW MW) n where
-  look mr mm := foot_lookup (M := M) mr mm RR MR RW MW
+      (fun σ => FootHolds (M := M) σ RR MR RW MW)
+      (fun σ σf => LocalStep (M := M) σ σf RW MW ∧ OutStep (M := M) σ σf none) n :=
+  LagFoot.ofRM (foot_lookup (M := M) · · RR MR RW MW) (fun σ hok hf => hexec σ hok hf)
+    (fun mr mm _ _ hr hm hp => foot_update (M := M) mr mm RR MR RW MW hr hm hp.1)
+    (fun _ _ hp => hp.2)
+
+/-- A printing run is a lagged run over the footprint plus the console cell,
+which the commit advances by what the run printed. -/
+theorem RunFactO.lagFootPrint {n : Nat} {RR : List (Nat × DFrac × BitVec 64)}
+    {MR : List (Nat × DFrac × BitVec 8)} {RW : List (Nat × BitVec 64 × BitVec 64)}
+    {MW : List (Nat × BitVec 8 × BitVec 8)} {o : String}
+    (hexec : RunFactO M n RR MR RW MW (some o)) (s : String) :
+    LagFoot (GF := GF) M iprop(footPre RR MR RW MW ∗ consoleOwn s)
+      (fun _ => iprop(footPost RR MR RW MW ∗ consoleOwn (s ++ o)))
+      (fun σ => FootHolds (M := M) σ RR MR RW MW)
+      (fun σ σf => LocalStep (M := M) σ σf RW MW ∧ OutStep (M := M) σ σf (some o)) n where
+  look mr mm mo := by
+    unfold mauths
+    iintro ⟨⟨Hr, Hm, Ho⟩, Hf, Hs⟩
+    ihave ⟨Hr, Hm, Hf, %h⟩ := foot_lookup (M := M) mr mm RR MR RW MW $$ [Hr Hm Hf]
+    · iframe Hr Hm Hf
+    iframe Hr Hm Ho Hf Hs
+    ipureintro
+    exact fun σ hr hm _ => h σ hr hm
   run σ hok hf := hexec σ hok hf
-  commit mr mm _ _ hr hm hloc := foot_update (M := M) mr mm RR MR RW MW hr hm hloc
+  commit mr mm mo σ σf hr hm ho hp := by
+    unfold mauths consoleOwn
+    iintro ⟨⟨Hr, Hm, Ho⟩, Hf, Hs⟩
+    imod foot_update (M := M) mr mm RR MR RW MW hr hm hp.1 $$ [Hr Hm Hf]
+      with ⟨%mr', %mm', Hr, Hm, Hf, %⟨hr', hm'⟩⟩
+    · iframe Hr Hm Hf
+    ihave %hs := ghost_map_lookup $$ Ho Hs
+    imod ghost_map_update (s ++ o) $$ Ho Hs with ⟨Ho, Hs⟩
+    imodintro
+    iexists mr', mm', _
+    iframe Hr Hm Ho Hf Hs
+    ipureintro
+    refine ⟨hr', hm', fun v hv => ?_⟩
+    rw [LawfulPartialMap.get?_insert_eq rfl] at hv
+    cases hv
+    rw [show M.out σf = M.out σ ++ o from hp.2, ho s hs]
+
+/-- The hypothesis of the halt rule: from every well-formed state holding
+the (read-only) footprint, the machine's next step is the exit with code `e`,
+and the exit reports the output printed so far. VSA's instance is the HTIF
+exit store (`Inst.exit_haltFact`), which leaves `sailOutput` untouched. -/
+def HaltFact (M : MachineModel) (RR : List (Nat × DFrac × BitVec 64))
+    (MR : List (Nat × DFrac × BitVec 8)) (e : Nat) : Prop :=
+  ∀ σ, M.ok σ → FootHolds (M := M) σ RR MR [] [] → M.step σ = .halt e (M.out σ)
 
 /-- The total loop WP satisfies the single-step rule with no later. -/
 theorem twp_stepRule {Φ : Nat × String → IProp GF} :

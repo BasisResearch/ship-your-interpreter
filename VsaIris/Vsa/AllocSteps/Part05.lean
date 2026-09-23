@@ -398,6 +398,7 @@ theorem jalx_800052b0 (live : Nat → Prop)
       (wX_bits_x1 _ (BitVec.addInt (0x800052b0#64) 4)) hi
   have h := jalStep_of_obs (calleeEntry := 0x80005068#64) hs hi' hG' hmem hobs
     (by apply BitVec.eq_of_toNat_eq; decide)
+  refine ⟨?_, stepConFrame_of_jalObs hs hobs⟩
   rwa [show BitVec.addInt (0x800052b0#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x800052b0 + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
 
@@ -1103,6 +1104,7 @@ theorem jalx_80005360 (live : Nat → Prop)
       (wX_bits_x1 _ (BitVec.addInt (0x80005360#64) 4)) hi
   have h := jalStep_of_obs (calleeEntry := 0x800047a8#64) hs hi' hG' hmem hobs
     (by apply BitVec.eq_of_toNat_eq; decide)
+  refine ⟨?_, stepConFrame_of_jalObs hs hobs⟩
   rwa [show BitVec.addInt (0x80005360#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x80005360 + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
 
@@ -1542,6 +1544,7 @@ theorem jalx_800053cc (live : Nat → Prop)
       (wX_bits_x1 _ (BitVec.addInt (0x800053cc#64) 4)) hi
   have h := jalStep_of_obs (calleeEntry := 0x80007350#64) hs hi' hG' hmem hobs
     (by apply BitVec.eq_of_toNat_eq; decide)
+  refine ⟨?_, stepConFrame_of_jalObs hs hobs⟩
   rwa [show BitVec.addInt (0x800053cc#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x800053cc + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
 
@@ -1594,6 +1597,7 @@ theorem jalx_800053d4 (live : Nat → Prop)
       (wX_bits_x1 _ (BitVec.addInt (0x800053d4#64) 4)) hi
   have h := jalStep_of_obs (calleeEntry := 0x80005070#64) hs hi' hG' hmem hobs
     (by apply BitVec.eq_of_toNat_eq; decide)
+  refine ⟨?_, stepConFrame_of_jalObs hs hobs⟩
   rwa [show BitVec.addInt (0x800053d4#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x800053d4 + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
 
@@ -2018,6 +2022,7 @@ theorem jalx_80005444 (live : Nat → Prop)
       (wX_bits_x1 _ (BitVec.addInt (0x80005444#64) 4)) hi
   have h := jalStep_of_obs (calleeEntry := 0x80005070#64) hs hi' hG' hmem hobs
     (by apply BitVec.eq_of_toNat_eq; decide)
+  refine ⟨?_, stepConFrame_of_jalObs hs hobs⟩
   rwa [show BitVec.addInt (0x80005444#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x80005444 + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
 

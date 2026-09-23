@@ -50,6 +50,7 @@ def MachGF : BundledGFunctors
   | 4 => ⟨constOF (HeapView Nat (Agree (DiscreteO (BitVec 64))) NatMap), by infer_instance⟩
   | 5 => ⟨constOF (HeapView Nat (Agree (DiscreteO (BitVec 8))) NatMap), by infer_instance⟩
   | 6 => ⟨constOF (HeapView Nat (Agree (DiscreteO Nat)) NatMap), by infer_instance⟩
+  | 7 => ⟨constOF (HeapView Nat (Agree (DiscreteO String)) NatMap), by infer_instance⟩
   | _ => ⟨constOF Unit, by infer_instance⟩
 
 instance instMachGpreS : MachGpreS MachGF where
@@ -66,58 +67,65 @@ instance instMachGpreS : MachGpreS MachGF where
     · constructor; exists 4
     · constructor; exists 5
     · constructor; exists 6
+    · constructor; exists 7
 
 section Adequacy
 
 variable {GF : BundledGFunctors} [P : MachGpreS GF] {M : MachineModel}
 
-/-- The client's obligation: from ownership of the initial registers `mr`
-and bytes `mm`, prove the total WP of the loop with a pure postcondition. -/
+/-- The client's obligation: from ownership of the initial registers `mr`,
+bytes `mm` and the console cell at the initial output `o`, prove the total WP
+of the loop with a pure postcondition. -/
 abbrev AdequacyHyp (GF : BundledGFunctors) [MachGpreS GF] (M : MachineModel)
-    (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8)) (φ : Nat × String → Prop) : Prop :=
+    (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8)) (o : String)
+    (φ : Nat × String → Prop) : Prop :=
   ∀ [_G : MachGS .hasLC GF],
-    ⊢ ([∗map] k ↦ v ∈ mr, k ↦ᵣ v) -∗ ([∗map] k ↦ v ∈ mm, k ↦ₘ v) -∗
+    ⊢ ([∗map] k ↦ v ∈ mr, k ↦ᵣ v) -∗ ([∗map] k ↦ v ∈ mm, k ↦ₘ v) -∗ consoleOwn o -∗
       mTWP (GF := GF) M (fun v => iprop(⌜φ v⌝))
 
-/-- Allocate the two ghost maps and the control map (lag 0), and hand the
-client its initial ownership and the CPU token. Shared by the termination
-and the safety halves. -/
+/-- Allocate the two ghost maps, the control map (lag 0) and the console
+cell (at the initial output), and hand the client its initial ownership and
+the CPU token. Shared by the termination and the safety halves. -/
 theorem alloc_mach [InvGS_gen .hasLC GF] (σ : M.State) (mr : NatMap (BitVec 64))
     (mm : NatMap (BitVec 8)) (hr : RegAgree M mr σ) (hm : MemAgree M mm σ) (hok : M.ok σ) :
-    ⊢@{IProp GF} |==> ∃ γr γm γc,
+    ⊢@{IProp GF} |==> ∃ γr γm γc γo,
       (letI : MachGS .hasLC GF :=
-          { machPre := P.machPre, regName := γr, memName := γm, ctlName := γc }
+          { machPre := P.machPre, regName := γr, memName := γm, ctlName := γc, conName := γo }
        iprop(fullInterp M σ ∗ cpuTok ∗ ([∗map] k ↦ v ∈ mr, k ↦ᵣ v) ∗
-         ([∗map] k ↦ v ∈ mm, k ↦ₘ v))) := by
+         ([∗map] k ↦ v ∈ mm, k ↦ₘ v) ∗ consoleOwn (M.out σ))) := by
   imod ghost_map_alloc (GF := GF) mr with ⟨%γr, Hr, Hrs⟩
   imod ghost_map_alloc (GF := GF) mm with ⟨%γm, Hm, Hms⟩
   imod ghost_map_alloc_empty (GF := GF) (K := Nat) (V := Nat) (H := NatMap) with ⟨%γc, Hc⟩
   imod ghost_map_insert (0 : Nat) (0 : Nat) (LawfulPartialMap.get?_empty _) $$ Hc with ⟨Hc, Ht⟩
+  imod ghost_map_alloc_empty (GF := GF) (K := Nat) (V := String) (H := NatMap) with ⟨%γo, Ho⟩
+  imod ghost_map_insert (0 : Nat) (M.out σ) (LawfulPartialMap.get?_empty _) $$ Ho with ⟨Ho, Hs⟩
   imodintro
-  iexists γr, γm, γc
-  unfold fullInterp lagInterp cpuTok ctlAt regPointsTo memPointsTo
-  iframe Hrs Hms Ht
+  iexists γr, γm, γc, γo
+  unfold fullInterp lagInterp cpuTok ctlAt regPointsTo memPointsTo consoleOwn
+  iframe Hrs Hms Ht Hs
   iexists _, 0
   iframe Hc
   isplitr
   · ipureintro; exact LawfulPartialMap.get?_insert_eq rfl
-  iexists mr, mm
-  iframe Hr Hm
+  iexists mr, mm, _
+  iframe Hr Hm Ho
   ipureintro
-  exact ⟨σ, ⟨hr, hm, hok⟩, .zero σ⟩
+  refine ⟨σ, ⟨hr, hm, hok⟩, fun v hv => ?_, .zero σ⟩
+  rw [LawfulPartialMap.get?_insert_eq rfl] at hv
+  cases hv; rfl
 
 /-- Termination: the loop is strongly normalising. -/
 theorem mach_sn (σ : M.State) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (hr : RegAgree M mr σ) (hm : MemAgree M mm σ) (hok : M.ok σ) (φ : Nat × String → Prop)
-    (H : AdequacyHyp GF M mr mm φ) :
+    (H : AdequacyHyp GF M mr mm (M.out σ) φ) :
     Relation.StronglyNormalizing Language.ErasedStep ([MachineModel.Loop M], σ) := by
   refine twp_total (hlc := .hasLC) (GF := GF) .NotStuck (MachineModel.Loop M) σ
     (fun v => iprop(⌜φ v⌝)) 0 0 ?_
   intro Hinv
-  imod alloc_mach (GF := GF) σ mr mm hr hm hok with ⟨%γr, %γm, %γc, Hσ, Ht, Hrs, Hms⟩
+  imod alloc_mach (GF := GF) σ mr mm hr hm hok with ⟨%γr, %γm, %γc, %γo, Hσ, Ht, Hrs, Hms, Hs⟩
   letI G : MachGS .hasLC GF :=
-    { machPre := P.machPre, regName := γr, memName := γm, ctlName := γc }
-  ihave Hw := (H (_G := G)) $$ Hrs Hms Ht
+    { machPre := P.machPre, regName := γr, memName := γm, ctlName := γc, conName := γo }
+  ihave Hw := (H (_G := G)) $$ Hrs Hms Hs Ht
   imodintro
   iexists (fun σ _ _ _ => fullInterp (GF := GF) M σ), (fun _ => 0), (fun _ => iprop(True)),
     (machIrisGS (hlc := .hasLC) (GF := GF) M).stateInterp_mono
@@ -129,14 +137,14 @@ theorem mach_sn (σ : M.State) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8)
 /-- Safety and the postcondition at every reachable value. -/
 theorem mach_adequate (σ : M.State) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (hr : RegAgree M mr σ) (hm : MemAgree M mm σ) (hok : M.ok σ) (φ : Nat × String → Prop)
-    (H : AdequacyHyp GF M mr mm φ) :
+    (H : AdequacyHyp GF M mr mm (M.out σ) φ) :
     adequate .NotStuck (MachineModel.Loop M) σ (fun v _ => φ v) := by
   refine wp_adequacy_gen (hlc := .hasLC) (GF := GF) .NotStuck (MachineModel.Loop M) σ φ ?_
   intro Hinv κs
-  imod alloc_mach (GF := GF) σ mr mm hr hm hok with ⟨%γr, %γm, %γc, Hσ, Ht, Hrs, Hms⟩
+  imod alloc_mach (GF := GF) σ mr mm hr hm hok with ⟨%γr, %γm, %γc, %γo, Hσ, Ht, Hrs, Hms, Hs⟩
   letI G : MachGS .hasLC GF :=
-    { machPre := P.machPre, regName := γr, memName := γm, ctlName := γc }
-  ihave Hw := (H (_G := G)) $$ Hrs Hms Ht
+    { machPre := P.machPre, regName := γr, memName := γm, ctlName := γc, conName := γo }
+  ihave Hw := (H (_G := G)) $$ Hrs Hms Hs Ht
   imodintro
   iexists (fun σ _ => fullInterp (GF := GF) M σ), (fun _ => iprop(True))
   isplitl [Hσ]
@@ -182,7 +190,7 @@ initial ownership, the machine halts, and its exit satisfies `φ`. With
 `φ (e, out) := e = 0 ∧ out = o` this is VSA's `Halts c o 0`. -/
 theorem mach_adequacy (σ : M.State) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (hr : RegAgree M mr σ) (hm : MemAgree M mm σ) (hok : M.ok σ) (φ : Nat × String → Prop)
-    (H : AdequacyHyp GF M mr mm φ) :
+    (H : AdequacyHyp GF M mr mm (M.out σ) φ) :
     ∃ e out, Halts M σ e out ∧ φ (e, out) :=
   halts_of_sn_adequate σ φ (mach_adequate σ mr mm hr hm hok φ H) _
     (mach_sn σ mr mm hr hm hok φ H) σ rfl .refl
@@ -199,25 +207,27 @@ realised, i.e. the machine diverges. This is xv6iris's safety reading of
 postcondition. -/
 
 /-- The client's obligation for partial adequacy: the partial WP of the loop
-from the initial ownership. -/
+from the initial ownership, the console cell at the initial output `o`
+included. -/
 abbrev AdequacyHypP (GF : BundledGFunctors) [MachGpreS GF] (M : MachineModel)
-    (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8)) (φ : Nat × String → Prop) : Prop :=
+    (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8)) (o : String)
+    (φ : Nat × String → Prop) : Prop :=
   ∀ [_G : MachGS .hasLC GF],
-    ⊢ ([∗map] k ↦ v ∈ mr, k ↦ᵣ v) -∗ ([∗map] k ↦ v ∈ mm, k ↦ₘ v) -∗
+    ⊢ ([∗map] k ↦ v ∈ mr, k ↦ᵣ v) -∗ ([∗map] k ↦ v ∈ mm, k ↦ₘ v) -∗ consoleOwn o -∗
       mWP (GF := GF) M (fun v => iprop(⌜φ v⌝))
 
 /-- Safety and the postcondition at every reachable value, from the partial
 WP. -/
 theorem mach_adequateP (σ : M.State) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (hr : RegAgree M mr σ) (hm : MemAgree M mm σ) (hok : M.ok σ) (φ : Nat × String → Prop)
-    (H : AdequacyHypP GF M mr mm φ) :
+    (H : AdequacyHypP GF M mr mm (M.out σ) φ) :
     adequate .NotStuck (MachineModel.Loop M) σ (fun v _ => φ v) := by
   refine wp_adequacy_gen (hlc := .hasLC) (GF := GF) .NotStuck (MachineModel.Loop M) σ φ ?_
   intro Hinv κs
-  imod alloc_mach (GF := GF) σ mr mm hr hm hok with ⟨%γr, %γm, %γc, Hσ, Ht, Hrs, Hms⟩
+  imod alloc_mach (GF := GF) σ mr mm hr hm hok with ⟨%γr, %γm, %γc, %γo, Hσ, Ht, Hrs, Hms, Hs⟩
   letI G : MachGS .hasLC GF :=
-    { machPre := P.machPre, regName := γr, memName := γm, ctlName := γc }
-  ihave Hw := (H (_G := G)) $$ Hrs Hms Ht
+    { machPre := P.machPre, regName := γr, memName := γm, ctlName := γc, conName := γo }
+  ihave Hw := (H (_G := G)) $$ Hrs Hms Hs Ht
   imodintro
   iexists (fun σ _ => fullInterp (GF := GF) M σ), (fun _ => iprop(True))
   isplitl [Hσ]
@@ -278,7 +288,7 @@ the initial ownership, then the machine diverges or halts with an exit
 satisfying `φ`. -/
 theorem mach_adequacyP (σ : M.State) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (hr : RegAgree M mr σ) (hm : MemAgree M mm σ) (hok : M.ok σ) (φ : Nat × String → Prop)
-    (H : AdequacyHypP GF M mr mm φ) :
+    (H : AdequacyHypP GF M mr mm (M.out σ) φ) :
     (∀ n, ∃ σ', ReachesN M n σ σ') ∨ ∃ e out, Halts M σ e out ∧ φ (e, out) :=
   diverges_or_halts_of_adequate σ φ (mach_adequateP σ mr mm hr hm hok φ H)
 

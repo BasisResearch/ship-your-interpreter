@@ -55,12 +55,17 @@ def pcVal (σ : MState) : BitVec 64 :=
 def vsaReg (c : Config) (k : Nat) : BitVec 64 :=
   if k = VsaIris.PC then pcVal c.σ else (gprGet c.σ k).getD 0
 
-/-- The global invariant VSA's reflected facts need. -/
+/-- The global invariant VSA's reflected facts need. `htifIdle` is the HTIF
+mailbox state every console store needs (`stepObs_tohost_putchar`,
+`stepOnce_tohost_G`: no half-written `tohost` word). Segments frame it, the
+putchar store resets it, and the program never writes `tohost` with a narrow
+store. -/
 structure VsaOk (live : Nat → Prop) (c : Config) : Prop where
   good : GoodState c.σ
   tick : c.tick < 2
   gpr : ∀ n, 1 ≤ n → n ≤ 31 → (gprGet c.σ n).isSome
   live : ∀ a, live a → (c.σ.mem[a]?).isSome
+  htifIdle : c.σ.regs.get? Register.htif_payload_writes = some (0#4)
 
 /-- VSA's machine as an Iris machine model. -/
 def vsaModel (live : Nat → Prop) : MachineModel where
@@ -68,6 +73,7 @@ def vsaModel (live : Nat → Prop) : MachineModel where
   step := vsaStep
   reg := vsaReg
   mem c a := (c.σ.mem[a]?).getD 0
+  out c := output c.σ
   ok := VsaOk live
 
 /-- The bytes present in a configuration's memory. -/
@@ -118,7 +124,7 @@ theorem vsa_adequacy {GF : BundledGFunctors} [MachGpreS GF] (live : Nat → Prop
     (out : String) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (hr : RegAgree (vsaModel live) mr c) (hm : MemAgree (vsaModel live) mm c)
     (hok : VsaOk live c)
-    (H : AdequacyHyp GF (vsaModel live) mr mm (fun v => v = (0, out))) :
+    (H : AdequacyHyp GF (vsaModel live) mr mm (output c.σ) (fun v => v = (0, out))) :
     Vsa.Machine.Halts c out 0 := by
   obtain ⟨e, out', ⟨cf, hre, hh⟩, hφ⟩ :=
     mach_adequacy (GF := GF) (M := vsaModel live) c mr mm hr hm hok _ H
@@ -141,7 +147,7 @@ theorem vsa_adequacyP {GF : BundledGFunctors} [MachGpreS GF] (live : Nat → Pro
     (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (hr : RegAgree (vsaModel live) mr c) (hm : MemAgree (vsaModel live) mm c)
     (hok : VsaOk live c) (φ : Nat × String → Prop)
-    (H : AdequacyHypP GF (vsaModel live) mr mm φ) :
+    (H : AdequacyHypP GF (vsaModel live) mr mm (output c.σ) φ) :
     Vsa.Machine.Diverges c ∨ ∃ out e, Vsa.Machine.Halts c out e ∧ φ (e, out) := by
   rcases mach_adequacyP (GF := GF) (M := vsaModel live) c mr mm hr hm hok φ H with
     hd | ⟨e, out, ⟨cf, hre, hh⟩, hφ⟩
@@ -155,7 +161,7 @@ partial WP with postcondition "the exit code is nonzero" gives
 theorem vsa_adequacyP_nonzero {GF : BundledGFunctors} [MachGpreS GF] (live : Nat → Prop)
     (c : Config) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
     (hr : RegAgree (vsaModel live) mr c) (hm : MemAgree (vsaModel live) mm c)
-    (hok : VsaOk live c) (H : AdequacyHypP GF (vsaModel live) mr mm (fun v => v.1 ≠ 0)) :
+    (hok : VsaOk live c) (H : AdequacyHypP GF (vsaModel live) mr mm (output c.σ) (fun v => v.1 ≠ 0)) :
     Vsa.Machine.Diverges c ∨ ∃ out e, Vsa.Machine.Halts c out e ∧ e ≠ 0 :=
   vsa_adequacyP live c mr mm hr hm hok _ H
 
@@ -320,6 +326,11 @@ theorem writeLog_getD_congr (m m' : Std.ExtHashMap Nat (BitVec 8)) (log : List W
   · rw [hp, hp]; exact h
   · rw [hp, hp]
 
+/-- GPR writes never target the HTIF mailbox counter. -/
+theorem gprReg_htif_payload (n : Nat) : (gprReg n == Register.htif_payload_writes) = false := by
+  unfold gprReg
+  split <;> rfl
+
 /-! ## The segment footprint -/
 
 /-- The reflected outcome of a segment. -/
@@ -396,7 +407,7 @@ theorem seg_runFact (live : Nat → Prop) (bs : List BBlock) (L : GRegs)
       (hRW (p.1, p.2, finReg bs L lds p.1)
         (.tail _ (List.mem_map_of_mem (f := fun p => (p.1, p.2, finReg bs L lds p.1)) hp)))
   -- run the segment
-  obtain ⟨σ', i', hs, hi', hG', hmem', _, hpc', _, hregs, hframe⟩ :=
+  obtain ⟨σ', i', hs, hi', hG', hmem', hout', hpc', _, hregs, hframe⟩ :=
     segEval_sound bs c.σ c.tick c.steps pc0 vm L lds hok.good hpc hmi hL hkeys hfacts' hwf
       hok.tick
   have hN : StepsN (n + 1) c ⟨σ', i', c.steps + evalBlocksFuel bs⟩ := by
@@ -417,15 +428,18 @@ theorem seg_runFact (live : Nat → Prop) (bs : List BBlock) (L : GRegs)
     unfold finReg
     rw [hw]
     exact gholds_lookup _ hregs hw
-  refine ⟨⟨σ', i', c.steps + evalBlocksFuel bs⟩, reachesN_of_stepsN hN, ?_, ?_⟩
+  refine ⟨⟨σ', i', c.steps + evalBlocksFuel bs⟩, reachesN_of_stepsN hN, ?_, ?_,
+    show output σ' = output c.σ by unfold output; rw [hout']⟩
   · -- the invariant at the end
-    refine ⟨hG', hi', fun k h1 h31 => ?_, fun a ha => ?_⟩
+    refine ⟨hG', hi', fun k h1 h31 => ?_, fun a ha => ?_, ?_⟩
     · by_cases hk : k ∈ wrChain bs
       · rw [hfin k (hwr k hk)]; rfl
       · rw [hframeK k hk h1 h31]; exact hok.gpr k h1 h31
     · show ((σ'.mem)[a]?).isSome
       rw [hmem']
       exact writeLog_present _ _ _ (hok.live a ha)
+    · rw [hframe _ (by decide) (fun m _ => gprReg_htif_payload m)]
+      exact hok.htifIdle
   · -- the effect is confined to the footprint
     constructor
     · intro p hp

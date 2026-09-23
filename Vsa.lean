@@ -47,6 +47,7 @@ import Vsa.While.ErrorSem
 import Vsa.While.Derive
 import Vsa.While.Validation
 import Vsa.While.Cost
+import Vsa.While.CostExists
 import Vsa.Refinement
 import Vsa.Sim.Attr
 import Vsa.Sim.StateNF
@@ -722,6 +723,7 @@ import Vsa.Sim.DeriveMetaDemo
 import Vsa.Sim.DeriveMetaTowers
 import Vsa.Sim.DeriveRow
 import Vsa.Sim.LayoutInstance
+import Vsa.Sim.StackAdmissibleWitness
 -- wave 41
 import Vsa.Sim.ExecCondArmSites
 import Vsa.Sim.rows.StmtRetArmStagePre
