@@ -92,13 +92,67 @@ branch structure costs nothing extra. `memcpy` writes memory but over a fixed
 byte set, so the same shape applies. Both rules are used by name; neither was
 reimplemented.
 
+### The reusable layer the other three instantiate
+
+`VsaIris/Vsa/SegRun.lean` (263 lines) is now function-independent:
+
+| piece | what it does |
+|---|---|
+| `segFrom_of_segW` | a reflected segment that WRITES owned bytes, as one `SegFrom` step (this is what `memcpy`'s copy loops need) |
+| `segFrom_of_seg` | its empty-write-set specialization |
+| `leafL` / `leafStep` | ONE pin list for a leaf function; `hwf`/`hkeys`/`hwr` become one `decide` each on the literal register list, and a segment contributes only its `ChainFacts` and the successor's register values |
+| `localRun_le` | fuel as a bound, not an exact count |
+| `AluStep` / `runFact_of_aluStep` | an observational VSA site as one local-run step, for instructions outside `MKind` |
+
+`strlenStep` is `leafStep` at `strlenRegs`, not a second proof.
+
+### `strcmp`: reflected blocks landed and decode-checked
+
+`VsaIris/Vsa/StrcmpSeg.lean` — `gen_fn.py --fn strcmp --entry 0x80006ea0`
+verbatim: 40 `#derive_case` blocks over the 24 CFG blocks, both polarities.
+`Vsa/Sim/` had only a site battery (`StrcmpSites.lean`, 3,557 lines) for this
+function. A scratchpad probe (outside the repo) ran `chain_facts` on all 40
+and confirmed every decode and fetch leaf closes, leaving only data-dependent
+goals: **`strcmp` needs no observational site** — every instruction it uses is
+inside `MKind`/`bop`.
+
 ## In flight
-- `memcpy`, `strcmp`, `snprintf` `%lld`: statements and straight-line parts.
+Nothing half-landed. `memcpy`, `strcmp` and `snprintf` `%lld` are not started
+as chains; the plan below is mechanical from here.
 
 ## Holes
-- none opened.
+None opened. No `sorry`, `axiom`, `native_decide`, `bv_decide` or raised limit
+anywhere in this lane's files; `scripts/check_iris_holes.py` passes.
 
-## Next
-1. `memcpy` spec over `MachWP` (dispatch, 72-byte bulk, word loop, byte tail).
-2. `strcmp` spec.
-3. `snprintf` `%lld` digit loop.
+## Next — the remaining three, with what is already in place
+
+**`strcmp`** (entry `0x80006ea0`, 24 blocks). Segments: landed and checked
+(above). Needed: the `Ctx`/`Reads`/pin-list module (the `StrlenSeg.lean`
+template at `strcmpRegs = [1, 5, 6, 7, 10, 11, 12, 13, 14, 15]`), then the
+chain. Two read regions instead of one, and the static `mask` word at
+`0x8001ac80` (loaded by the `auipc`/`ld` at `0x80006eb0`) enters the
+persistent `text`. The word loop is the same `detect_all_ones` arithmetic as
+`strlen`'s, three words unrolled per iteration; the tail extracts the
+differing byte with `slli`/`srli`. Estimate: about the size of `strlen`'s
+chain, plus the second pointer.
+
+**`memcpy`** (entry `0x80006bc8`, 17 blocks). Segments: `Vsa/Sim/`
+`MemcpyCopySegments.lean` already has 21 of them, covering every block EXCEPT
+`0x80006bd8` (the `sltiu` length test — the `MKind` gap, take it through
+`runFact_of_aluStep` at the generated `site_80006bd8`) and the three
+unaligned-destination head-peel blocks `0x80006cbc`/`0x80006cd4`/`0x80006cec`
+(regenerate with `gen_fn.py` if the unaligned case is wanted; `env_define`'s
+destinations are `malloc`ed, hence aligned). This is the first consumer of
+`segFrom_of_segW`: the owned byte set is the destination window, and the run's
+end condition says it holds the source bytes.
+
+**`snprintf` `%lld`** (VSA M3). The success path is proved in
+`Vsa/Sim/SnprintfSpec*.lean`; the Iris job is the digit loop plus the format
+parser segments, and the `%s`/`%d` error paths stay as the `newlib.snprintf`
+hole (INTERP_DESIGN Q4). Start from `SnprintfSites*.lean` and the M3 digit
+loop rather than re-reflecting.
+
+**Model fix that would help all of them.** Adding `sltu`/`sltiu` to `MKind`
+retires `Vsa/Sim/StrlenLastRun.lean`, the `site_80006d64`/`site_80006bd8`
+batteries and the `AluStep` bridge; recorded with its evidence and discharge
+plan in `experiments/smt/PROOF_CLOSURE_PLAN.md`.
