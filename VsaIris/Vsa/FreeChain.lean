@@ -495,6 +495,292 @@ theorem fst4 (C : FreeIn live maxReq headroom H q n s r saved rv0 mv0 k W)
         [wordOf mv ((spF s).toNat + 16), wordOf mv ((spF s).toNat + 24)]).log = [] from rfl,
         writeLog_nil']
 
+theorem fbody_reg {sp a0 a1 a2 a3 a4 a5 a6 a7 t1 s0 r : BitVec 64} {f : Nat → BitVec 8} {c top : Nat} :
+    finReg segFBody (fbodyL sp a0 a1 a2 a3 a4 a5 a6 a7 t1 s0 r) (fbodyLds f sp c top) 2 = sp ∧
+    finReg segFBody (fbodyL sp a0 a1 a2 a3 a4 a5 a6 a7 t1 s0 r) (fbodyLds f sp c top) 3 = gpV := by
+  simp only [finReg, segOut, segFBody, evalBlocks_regs, runChain, SegEvalState.init]
+  seg_norm
+  exact ⟨trivial, trivial⟩
+
+/-- Stage 3 of `free`: back from the lock hook, the merge. -/
+theorem fst3 (C : FreeIn live maxReq headroom H q n s r saved rv0 mv0 k W)
+    {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
+    (h : StPost (spF s) rv0 (MtFP W q n s headroom mv0 (rv0 8) r) (freeBytes vsaLayout H q n s headroom)
+      0x8000736c#64 rv mv) :
+    LocalRun (vsaModel live) roR pathText mRegs (freeBytes vsaLayout H q n s headroom)
+      (FreeRoomEnd vsaLayout (vsaRoomFast maxReq) H r s saved k) 4 rv mv := by
+  obtain ⟨G, R⟩ := C.top.facts
+  have h32 := spF_toNat C.sp.geom
+  have hle := C.sp.geom.lo; have hhi := C.sp.geom.hi
+  unfold tohostAddr at hle
+  have hp := C.top.payload
+  have hgc := G.c_lo; have hgt := G.top_hi; have hct := G.c_top; have hthr := G.thr_lt
+  have hbrk := C.top.fast.heap.heap.top_le
+  unfold heapStart at hgc; unfold heapEnd at hgt
+  have hS_top : ∀ j, j < 8 → heapFoot vsaLayout ((q.toNat, n) :: H) (topAddr + j) := fun j hj =>
+    .inl (.inl ⟨by unfold topAddr avAddr; omega, by unfold topAddr avAddr; omega⟩)
+  have hS_trim : ∀ j, j < 8 → heapFoot vsaLayout ((q.toNat, n) :: H) (trimAddr + j) := fun j hj =>
+    .inl (.inr (.inr (.inl ⟨by unfold trimAddr; omega, by unfold trimAddr; omega⟩)))
+  have hS : ∀ {a}, heapFoot vsaLayout ((q.toNat, n) :: H) a → freeBytes vsaLayout H q n s headroom a :=
+    fun ha => .inr (.inl ha)
+  have V : FBodyVals mv (spF s) W.c.addr W.top W.c.size (W.brkv - W.top) W.thr :=
+    { q := FreeIn.word h.img (fun j hj => by rw [h32, Nat.add_assoc]; exact C.frame_owned (by omega))
+        (by rw [h32, read64_of_writeLog_at _ _ 1 _ q rfl (by simp only [List.drop, OutLRange, and_true]; omega),
+          ofNat_toNat_lt (by omega), hp])
+      tptr := FreeIn.word h.img (fun j hj => hS (hS_top j hj))
+        (by rw [C.mtFP_read hS_top, R.top_ptr, ofNat_toNat_lt (by omega)])
+      hdr := FreeIn.word h.img (fun j hj => hS (C.hdr_foot hj))
+        (by rw [C.mtFP_read (fun j hj => C.hdr_foot hj), R.hdr, ofNat_toNat_lt (by omega)])
+      thdr := FreeIn.word h.img (fun j hj => hS (C.thdr_foot hj))
+        (by rw [C.mtFP_read (fun j hj => C.thdr_foot hj), R.thdr, ofNat_toNat_lt (by omega)])
+      thr := FreeIn.word h.img (fun j hj => hS (hS_trim j hj))
+        (by rw [C.mtFP_read hS_trim, R.thr, ofNat_toNat_lt hthr]) }
+  have hlog := fbody_log (sp := spF s) (a0 := rv 10) (a1 := rv 11) (a2 := rv 12) (a3 := rv 13)
+    (a4 := rv 14) (a5 := rv 15) (a6 := rv 16) (a7 := rv 17) (t1 := rv 6) (s0 := rv 8) (r := rv 1)
+    (brkv := W.brkv) G V (by omega)
+  refine seg_step segFBody (fbodyL (spF s) (rv 10) (rv 11) (rv 12) (rv 13) (rv 14) (rv 15) (rv 16)
+      (rv 17) (rv 6) (rv 8) (rv 1)) (fbodyLds mv (spF s) W.c.addr W.top) 0x8000736c#64
+    (frameLDn mv (spF s) 32 ++ wordLD mv topAddr ++ wordLD mv trimAddr ++ wordLD mv (W.c.addr + 8) ++
+      wordLD mv (W.top + 8))
+    (wordW mv (W.c.addr + 8) ++ wordW mv topAddr) 18 rfl
+    (by change ChainOK _ [2, 10, 11, 12, 13, 14, 15, 16, 17, 6, 8, 1, 3] _; decide)
+    (by change KeysOK [2, 10, 11, 12, 13, 14, 15, 16, 17, 6, 8, 1, 3]; decide)
+    (by change ∀ x ∈ wrChain segFBody, x ∈ [2, 10, 11, 12, 13, 14, 15, 16, 17, 6, 8, 1, 3]; decide)
+    ?_ C.text
+    (fun c _ hcode hLD => fbody_facts hcode (by rw [h32]; unfold tohostAddr; omega) (by rw [h32]; omega)
+      (pin_range hLD fun k hk => List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
+        (List.mem_append_left _ (mem_rangeLD hk)))))
+      (pin_range hLD fun k hk => List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
+        (List.mem_append_right _ (mem_rangeLD hk)))))
+      (pin_range hLD fun k hk => List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
+        (mem_rangeLD hk))))
+      (pin_range hLD fun k hk => List.mem_append_left _ (List.mem_append_right _ (mem_rangeLD hk)))
+      (pin_range hLD fun k hk => List.mem_append_right _ (mem_rangeLD hk)) G V)
+    (by decide) h.pc ?_ ?_ ?_ h.img ?_
+  · intro a ha
+    rw [hlog]
+    have cw : ∀ b, (∀ p ∈ wordW mv b, p ∈ wordW mv (W.c.addr + 8) ++ wordW mv topAddr) →
+        a < b ∨ b + 8 ≤ a := fun b hb => by
+      refine Classical.byContradiction fun hc => ?_
+      obtain ⟨p, hp, hpa⟩ := mem_wordW (f := mv) (a := b) (b := a) (by omega) (by omega)
+      exact ha p (hb p hp) hpa
+    simp only [mergeLog, OutL]
+    exact ⟨cw _ fun p hp => List.mem_append_left _ hp, cw _ fun p hp => List.mem_append_right _ hp,
+      trivial⟩
+  · intro p hp
+    simp only [fbodyL, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    · exact .inl ⟨by dsimp only; decide, h.sp⟩
+    rotate_right
+    · exact .inr ⟨List.mem_singleton.2 rfl, fbody_reg.2⟩
+    all_goals exact .inl ⟨by dsimp only; decide, rfl⟩
+  · intro p hp
+    simp only [List.mem_append] at hp
+    rcases hp with (((hp | hp) | hp) | hp) | hp <;>
+    · obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hp
+      rw [List.mem_range] at hj
+      refine ⟨?_, rfl⟩
+      first
+        | (rw [h32]; exact C.frame_owned hj)
+        | exact hS (hS_top j hj)
+        | exact hS (hS_trim j hj)
+        | exact hS (C.hdr_foot hj)
+        | exact hS (C.thdr_foot hj)
+  · intro p hp
+    rcases List.mem_append.mp hp with hp | hp <;>
+    · obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hp
+      rw [List.mem_range] at hj
+      refine ⟨?_, rfl⟩
+      first
+        | exact hS (C.hdr_foot hj)
+        | exact hS (hS_top j hj)
+  · intro rv' mv' hpc hL hU hI
+    refine fst4 C ⟨hpc, ?_, h.keep.step fun q hq => hU q ?_ ?_ ?_, fun a ha => ?_⟩
+    · rw [hL (2, spF s) (by simp [fbodyL]), fbody_reg.1]
+    · rcases hq with rfl | rfl | rfl <;> decide
+    · rcases hq with rfl | rfl | rfl <;> decide
+    · exact not_pin (by rcases hq with rfl | rfl | rfl <;> simp [fbodyL])
+    · rw [hI a ha, hlog]
+
+/-- Stage 2 of `free`: at the `jal __malloc_lock`. -/
+theorem fst2 (C : FreeIn live maxReq headroom H q n s r saved rv0 mv0 k W)
+    {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
+    (h : StPost (spF s) rv0 (MtFP W q n s headroom mv0 (rv0 8) r) (freeBytes vsaLayout H q n s headroom)
+      0x80007368#64 rv mv) :
+    LocalRun (vsaModel live) roR pathText mRegs (freeBytes vsaLayout H q n s headroom)
+      (FreeRoomEnd vsaLayout (vsaRoomFast maxReq) H r s saved k) 7 rv mv :=
+  lock_call C.text 0x80007368 _ (jal_exec_80007368 live fun p hp => C.text (p.1, p.2.2)
+    (jal_code jal_bytes_80007368 p hp)) (jal_code jal_bytes_80007368) (by decide)
+    (fun _ _ h' => fst3 C h') h
+
+theorem fpro_log {s s0 r q a0 : BitVec 64} (hs : SpGeom s) :
+    (segOut segFPro (fproL s s0 r q a0) []).log = fproLog s s0 q r := by
+  have h32 := spF_toNat hs
+  have := hs.hi
+  simp only [segOut, segFPro, evalBlocks, evalBlock, SegEvalState.init, wlogM, wentryM, widthOfM,
+    eaddrM]
+  seg_norm
+  simp only [List.nil_append, List.append_nil]
+  have e := fun (imm : BitVec 12) (c : Nat) (hc : (sign_extend (m := 64) imm : BitVec 64).toNat = c)
+      (hcl : c ≤ 32) => add_imm (s + sign_extend (m := 64) (0xfe0#12)) imm c hc (by rw [h32]; omega)
+  rw [e (0x010#12) 16 (by decide) (by omega), e (0x008#12) 8 (by decide) (by omega),
+    e (0x018#12) 24 (by decide) (by omega), h32]
+
+theorem fpro_sp (s s0 r q a0 : BitVec 64) :
+    finReg segFPro (fproL s s0 r q a0) [] 2 = spF s := by
+  simp only [finReg, segOut, segFPro, evalBlocks_regs, runChain, SegEvalState.init]
+  seg_norm
+
+theorem fwrap_a1 (q a1 : BitVec 64) : finReg segFWrap (wrapL q a1) [impW] 11 = q := by
+  simp only [finReg, segOut, segFWrap, evalBlocks_regs, runChain, SegEvalState.init]
+  seg_norm
+  rw [show (sign_extend (m := 64) (0#12) : BitVec 64) = 0#64 by decide, BitVec.add_zero]
+
+/-- In `_free_r`, at its entry. -/
+structure FSt1 (s r q : BitVec 64) (rv0 : Nat → BitVec 64) (Mt : Mem) (S : Nat → Prop)
+    (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) : Prop where
+  pc : rv VsaIris.PC = 0x80007350#64
+  sp : rv 2 = s
+  ra : rv 1 = r
+  a1 : rv 11 = q
+  s0 : rv 8 = rv0 8
+  keep : KeepS rv rv0
+  img : ∀ a, S a → mv a = imgM Mt a
+
+/-- Stage 1 of `free`: the non-null test and the prologue. -/
+theorem fst1 (C : FreeIn live maxReq headroom H q n s r saved rv0 mv0 k W)
+    {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
+    (h : FSt1 s r q rv0 (MtF0 W q n s headroom mv0) (freeBytes vsaLayout H q n s headroom) rv mv) :
+    LocalRun (vsaModel live) roR pathText mRegs (freeBytes vsaLayout H q n s headroom)
+      (FreeRoomEnd vsaLayout (vsaRoomFast maxReq) H r s saved k) 8 rv mv := by
+  have h32 := spF_toNat C.sp.geom
+  have hle := C.sp.geom.lo; have hhi := C.sp.geom.hi
+  unfold tohostAddr at hle
+  have hq0 : rv 11 ≠ 0#64 := by
+    rw [h.a1]; intro e
+    have := C.block_arena
+    rw [e] at this
+    unfold heapStart at this
+    simp at this
+  refine seg_step segFPro (fproL s (rv 8) (rv 1) (rv 11) (rv 10)) [] 0x80007350#64 []
+    (wordW mv (s.toNat - 32 + 16) ++ wordW mv (s.toNat - 32 + 8) ++ wordW mv (s.toNat - 32 + 24)) 5 rfl
+    (by change ChainOK _ [2, 8, 1, 11, 10] _; decide)
+    (by change KeysOK [2, 8, 1, 11, 10]; decide)
+    (by change ∀ x ∈ wrChain segFPro, x ∈ [2, 8, 1, 11, 10]; decide) ?_ C.text
+    (fun c _ hcode _ => fpro_facts hcode C.sp.geom hq0)
+    (by decide) h.pc ?_ (fun p hp => by cases hp) ?_ h.img ?_
+  · intro a ha
+    rw [fpro_log C.sp.geom]
+    have cw : ∀ b, (∀ p ∈ wordW mv b, p ∈ wordW mv (s.toNat - 32 + 16) ++
+        wordW mv (s.toNat - 32 + 8) ++ wordW mv (s.toNat - 32 + 24)) → a < b ∨ b + 8 ≤ a :=
+      fun b hb => by
+        refine Classical.byContradiction fun hc => ?_
+        obtain ⟨p, hp, hpa⟩ := mem_wordW (f := mv) (a := b) (b := a) (by omega) (by omega)
+        exact ha p (hb p hp) hpa
+    simp only [fproLog, OutL]
+    refine ⟨cw _ fun p hp => ?_, cw _ fun p hp => ?_, cw _ fun p hp => ?_, trivial⟩
+    · simp only [List.mem_append]; exact .inl (.inl hp)
+    · simp only [List.mem_append]; exact .inl (.inr hp)
+    · simp only [List.mem_append]; exact .inr hp
+  · intro p hp
+    simp only [fproL, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with rfl | rfl | rfl | rfl | rfl
+    · exact .inl ⟨by dsimp only; decide, h.sp⟩
+    all_goals exact .inl ⟨by dsimp only; decide, rfl⟩
+  · intro p hp
+    have hw : ∀ o, o + 8 ≤ 32 → ∀ p ∈ wordW mv (s.toNat - 32 + o),
+        freeBytes vsaLayout H q n s headroom p.1 ∧ mv p.1 = p.2 := fun o ho p hp => by
+      obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hp
+      rw [List.mem_range] at hj
+      refine ⟨?_, rfl⟩
+      rw [Nat.add_assoc]; exact C.frame_owned (j := o + j) (by omega)
+    simp only [List.mem_append] at hp
+    rcases hp with (hp | hp) | hp
+    · exact hw 16 (by omega) p hp
+    · exact hw 8 (by omega) p hp
+    · exact hw 24 (by omega) p hp
+  · intro rv' mv' hpc hL hU hI
+    refine fst2 C ⟨hpc, ?_, h.keep.step fun q hq => hU q ?_ ?_ ?_, fun a ha => ?_⟩
+    · rw [hL (2, s) (by simp [fproL]), fpro_sp]
+    · rcases hq with rfl | rfl | rfl <;> decide
+    · rcases hq with rfl | rfl | rfl <;> decide
+    · exact not_pin (by rcases hq with rfl | rfl | rfl <;> simp [fproL])
+    · rw [hI a ha, fpro_log C.sp.geom, h.s0, h.ra, h.a1]
+
+/-- Stage 0 of `free`: the wrapper. -/
+theorem fst0 (C : FreeIn live maxReq headroom H q n s r saved rv0 mv0 k W) {mv : Nat → BitVec 8}
+    (himg : ∀ a, freeBytes vsaLayout H q n s headroom a → mv a = imgM (MtF0 W q n s headroom mv0) a) :
+    LocalRun (vsaModel live) roR pathText mRegs (freeBytes vsaLayout H q n s headroom)
+      (FreeRoomEnd vsaLayout (vsaRoomFast maxReq) H r s saved k) 9 rv0 mv := by
+  have E := C.entry
+  refine seg_step segFWrap (wrapL (rv0 10) (rv0 11)) [impW] 0x8000479c#64 [] [] 2 rfl
+    (by change ChainOK _ [10, 11, 3] _; decide) (by change KeysOK [10, 11, 3]; decide)
+    (by change ∀ x ∈ wrChain segFWrap, x ∈ [10, 11, 3]; decide) (fun a _ => by show OutL [] a; trivial)
+    C.text (fun c _ hcode _ => fwrap_facts hcode (rv0 10) (rv0 11))
+    (by decide) E.pc (fun p hp => by
+      simp only [wrapL, List.mem_cons, List.not_mem_nil, or_false] at hp
+      rcases hp with rfl | rfl | rfl
+      · exact .inl ⟨by dsimp only; decide, rfl⟩
+      · exact .inl ⟨by dsimp only; decide, rfl⟩
+      · exact .inr ⟨List.mem_singleton.2 rfl, rfl⟩) (fun p hp => by cases hp) (fun p hp => by cases hp)
+    himg ?_
+  intro rv' mv' hpc hL hU hI
+  have keep := fun q (hq : q = 9 ∨ q = 18 ∨ q = 19 ∨ q = 1 ∨ q = 2 ∨ q = 8) => hU q
+    (by rcases hq with rfl | rfl | rfl | rfl | rfl | rfl <;> decide)
+    (by rcases hq with rfl | rfl | rfl | rfl | rfl | rfl <;> decide)
+    (not_pin (by rcases hq with rfl | rfl | rfl | rfl | rfl | rfl <;> simp [wrapL]))
+  refine fst1 C ⟨hpc, (keep 2 (by simp)).trans E.sp, (keep 1 (by simp)).trans E.ra, ?_,
+    keep 8 (by simp), ⟨keep 9 (by simp), keep 18 (by simp), keep 19 (by simp)⟩,
+    fun a ha => (hI a ha).trans (by
+      rw [show (segOut segFWrap (wrapL (rv0 10) (rv0 11)) [impW]).log = [] from rfl, writeLog_nil'])⟩
+  rw [hL (11, rv0 11) (by simp [wrapL]), fwrap_a1]
+  exact E.a0
+
 end FreeStages
+
+/-- **`free`'s top-merge run.** Freeing the payload of the chunk below the top
+of a fast heap, with the merged top below the trim threshold, runs `free` to
+the return and keeps every credit. -/
+theorem free_run {live : Nat → Prop} {maxReq headroom : Nat} (htext : ∀ p ∈ pathText, live p.1)
+    (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (s r : BitVec 64)
+    (saved : List (Nat × BitVec 64)) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) (k : Nat)
+    (hkeys : saved.map Prod.fst = vsaSaved) (hsp : SpOKFast headroom s) (hral : r.toNat % 4 = 0)
+    (hE : EntryRegs rv freeEntryBV r q s saved)
+    (hok : vsaFreeTop maxReq mv ((q.toNat, n) :: H) k)
+    (hdisj : ∀ a, stackWin s headroom a →
+      ¬ (heapFoot vsaLayout ((q.toNat, n) :: H) a ∨ InExt (q.toNat, n) a)) :
+    LocalRun (vsaModel live) roR pathText mRegs (freeBytes vsaLayout H q n s headroom)
+      (FreeRoomEnd vsaLayout (vsaRoomFast maxReq) H r s saved k) 9 rv mv := by
+  obtain ⟨W, himg, htop⟩ := hok
+  have C : FreeIn live maxReq headroom H q n s r saved rv mv k W :=
+    ⟨htext, hsp, hral, hkeys, hE, htop, himg, hdisj⟩
+  refine fst0 C fun a ha => ?_
+  unfold imgM
+  rw [stackBase_get]
+  by_cases hw : s.toNat - headroom ≤ a ∧ a < s.toNat - headroom + headroom
+  · rw [ite_eq_left hw]; rfl
+  · rw [ite_eq_right hw]
+    rcases ha with ha | ha | ha
+    · exact absurd ⟨ha.1, ha.2⟩ hw
+    · show mv a = ((MtB1 W q n mv)[a]?).getD 0
+      rw [C.mtB1_heap ha, himg a ha]; rfl
+    · rw [stackBase_get, ite_eq_left ⟨ha.1, ha.2⟩]; rfl
+
+/-- **`FreeRoomRun` for the fast heap's top merge.** -/
+theorem freeRoomRun_fast {live : Nat → Prop} {maxReq headroom : Nat}
+    (htext : ∀ p ∈ pathText, live p.1) :
+    FreeRoomRun (vsaModel live) vsaLayout (vsaRoomFast maxReq) (vsaFreeTop maxReq)
+      (SpOKFast headroom) freeEntryBV gpV vsaClob vsaSaved headroom pathText :=
+  fun H q n s r saved rv mv k hkeys hsp hral hE _ hok hdisj =>
+    ⟨9, free_run htext H q n s r saved rv mv k hkeys hsp hral hE hok hdisj⟩
+
+/-- **`DlFreeRoomImpl` for the fast heap**: `freeRoomSpec` holds of the
+binary's `free` for a block below the top of a fast heap. -/
+theorem vsaDlFreeRoomImpl_fast {live : Nat → Prop} {maxReq headroom : Nat}
+    (htext : ∀ p ∈ pathText, live p.1) :
+    DlFreeRoomImpl (vsaModel live) vsaLayout (vsaRoomFast maxReq) (vsaFreeTop maxReq)
+      (SpOKFast headroom) freeEntryBV gpV vsaClob vsaSaved headroom pathText :=
+  dlFreeRoomImpl_of_run (freeRoomRun_fast htext) shapeLocal_vsaLayout (roomLocal_freeTop maxReq)
+    vsaAllocRegs_nodup
 
 end VsaIris.MallocFast

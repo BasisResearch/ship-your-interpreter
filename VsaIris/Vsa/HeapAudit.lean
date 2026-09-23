@@ -2,6 +2,7 @@ import VsaIris.Vsa.MallocConsumer
 import VsaIris.Vsa.ControlEnd
 import VsaIris.Vsa.MallocFastHeap
 import VsaIris.Vsa.MallocLive
+import VsaIris.Vsa.FreeChain
 
 /-! Axiom audit for the iris-heap results: every headline theorem, printed. -/
 
@@ -38,3 +39,8 @@ import VsaIris.Vsa.MallocLive
 #print axioms VsaIris.MallocFast.pathLoaded_of_image
 #print axioms VsaIris.MallocFast.vsaDlMallocRoomImpl_boundary
 #print axioms VsaIris.MallocFast.vsaFoot_live
+#print axioms VsaIris.VsaHeap.FastAt.merge
+#print axioms VsaIris.freeRoomSpec_of_run
+#print axioms VsaIris.MallocFast.free_run
+#print axioms VsaIris.MallocFast.freeRoomRun_fast
+#print axioms VsaIris.MallocFast.vsaDlFreeRoomImpl_fast
