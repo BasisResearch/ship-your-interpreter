@@ -22,3 +22,4 @@ import VsaIris.Vsa.EnvNewPilot
 import VsaIris.Vsa.Console
 import VsaIris.Vsa.MallocFastHeap
 import VsaIris.Vsa.MallocFastCode
+import VsaIris.Vsa.CostRoom

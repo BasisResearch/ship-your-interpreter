@@ -14,6 +14,7 @@ import Vsa.MemReprWithin
 import Vsa.Sim.AstMutableByte
 import Vsa.Sim.RuntimeOwnershipInitial
 import Vsa.Refinement
+import Vsa.While.StackNeed
 
 /-!
 # L8/M6 — `LayoutInstance`: the concrete `Layout` + its `GeomFacts` / statics
@@ -268,6 +269,63 @@ def interpRunLayout : Vsa.Refine.Layout where
 
 end BeforeRuntimeOwnership
 
+/-! ## Stack admissibility (INTERP_DESIGN.md Q1, §10.4)
+
+The boundary's `stack_ok` is the constant `176 + 1088`, but each recursion
+level consumes a real machine frame, and the heap ends where the stack begins
+(`DlHeap.heapEnd = stackSL.lo`). A loaded program must fit the stack below
+`interp_run`'s frame, beside the heap's `InitialAllocatorAt.capacity`. -/
+
+/-- `interp_run`'s machine frame, bytes (`800043ec: addi sp,sp,-176`). -/
+def interpRunFrame : Nat := 176
+
+/-- A program fits the stack: every top-level statement's ItemZero need at
+depth 0 (`ExecEntry.stackBudget`: `s.stackNeed + maxCallDepth * perCallBudget +
+evalFrame`) lies between `stackSL.lo` and `interp_run`'s post-spill `sp`, and
+every `.fn` body fits one call level. Decidable over the concrete AST
+(`programStackFits`). -/
+structure ProgramStackFits (p : Vsa.While.Program) : Prop where
+  need : stackSL.lo + Vsa.While.Stmt.stackNeedList p +
+    Vsa.While.maxCallDepth * Vsa.While.perCallBudget + Vsa.While.evalFrame +
+    interpRunFrame ≤ spEntry
+  bodies : Vsa.While.Stmt.bodiesBoundList Vsa.While.perCallBudget p = true
+
+/-- The kernel-computable checker for `ProgramStackFits`. -/
+def programStackFits (p : Vsa.While.Program) : Bool :=
+  decide (stackSL.lo + Vsa.While.Stmt.stackNeedList p +
+    Vsa.While.maxCallDepth * Vsa.While.perCallBudget + Vsa.While.evalFrame +
+    interpRunFrame ≤ spEntry) &&
+  Vsa.While.Stmt.bodiesBoundList Vsa.While.perCallBudget p
+
+theorem ProgramStackFits.of_check {p : Vsa.While.Program}
+    (h : programStackFits p = true) : ProgramStackFits p := by
+  unfold programStackFits at h
+  rw [Bool.and_eq_true, decide_eq_true_iff] at h
+  exact ⟨h.1, h.2⟩
+
+/-- **Stack admissibility**, shaped like `DlHeap.InitialAllocatorAt.capacity`:
+every program the memory represents fits the stack. -/
+def StackAdmissible (m : Vsa.MemRepr.Mem) (stmts count : Nat) : Prop :=
+  ∀ p : Vsa.While.Program, Vsa.MemRepr.ProgramRepr m stmts count p → ProgramStackFits p
+
+/-- The first `exec_stmt` call's ItemZero budget, from the fit: `interp_run`
+calls `exec_stmt` at `spEntry - 176` with depth 0. -/
+theorem ProgramStackFits.execBudget {p : Vsa.While.Program} (h : ProgramStackFits p)
+    {s : Vsa.While.Stmt} (hs : s ∈ p) :
+    StackOK stackSL (BitVec.ofNat 64 (spEntry - interpRunFrame))
+      (s.stackNeed + (Vsa.While.maxCallDepth - 0) * Vsa.While.perCallBudget +
+        Vsa.While.evalFrame) := by
+  have hle := Vsa.While.Stmt.stackNeedList_mem_le hs
+  have hn := h.need
+  have hsp : (BitVec.ofNat 64 (spEntry - interpRunFrame)).toNat = spEntry - interpRunFrame := by
+    decide
+  have hlo : stackSL.lo = 0x87800000 := rfl
+  have hhi : stackSL.hi = 0x88000000 := rfl
+  have hspv : spEntry = 0x87fffd00 := rfl
+  have hfr : interpRunFrame = 176 := rfl
+  rw [Nat.sub_zero]
+  refine ⟨?_, ?_, ?_⟩ <;> rw [hsp] <;> omega
+
 /-- Initial program and runtime store share one immutable domain and live ledger. -/
 structure InterpRunReadyFacts
     (c : Config) (stmts count : Nat) (inp : BitVec 64)
@@ -276,6 +334,10 @@ structure InterpRunReadyFacts
     InterpRunPhysicalFacts c stmts count inp N A φf φc aLeft where
   ownership : ∃ D : RuntimeOwnership.InitialOwnershipData,
     RuntimeOwnership.InitialOwned c.σ.mem A stackSL φf φc stmts count D
+  /-- Q1 (user-approved, 2026-09-23): the represented program fits the stack
+  below `interp_run`'s frame. Without it an AST deeper than the 8 MiB stack
+  overflows into the heap (INTERP_DESIGN.md §10.4). -/
+  stack_admissible : StackAdmissible c.σ.mem stmts count
 
 theorem InterpRunReadyFacts.ast_owned
     {c : Config} {stmts count : Nat} {inp : BitVec 64}
