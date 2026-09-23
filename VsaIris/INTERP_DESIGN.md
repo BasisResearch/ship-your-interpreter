@@ -243,6 +243,14 @@ frame, and the abort continuation it inherited, are available to both.
     world). The skeleton wrote the `stackScratch` INSIDE the existential; it
     binds neither `s` nor `need`, so the two are equivalent, and hoisting it
     is what lets `abort_rebase` move the stack part on its own.
+  - Change from the draft: the call step itself is ONE rule, not a per-site
+    carve. `wp_callArmW` (ordinary) and `wp_callArmAbort` (partial) lend the
+    callee a narrower part of the caller's owned region, keep the slack, and
+    on the partial side re-base BOTH continuations: the return branch gets the
+    caller's region and frame back, and the abort branch joins the very same
+    frame and slack into the caller's `abortAt Core s n`. That the two
+    branches use the same bytes is what the `∧` of `fnSpecAbort` buys, and it
+    is the step every one of E1-E6's call sites takes.
   - STATEMENT CHANGE (F3): `abort_rebase` needs two more side conditions,
     `np ≤ sp_.toNat` and `nc ≤ sc.toNat`. `Nat` subtraction truncates, so
     without them `stackScratch s n` is `blockOwn 0 n` and the three intervals

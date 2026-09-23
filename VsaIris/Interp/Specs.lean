@@ -67,11 +67,18 @@ and `VsaIris/Interp/Need.lean` (no longer placeholders here):
   specs) meets an abort spec with ANY abort resource; `fnSpecAbort_mono` is
   the consequence rule and `fnSpecAbort_rebase` carries the abort-resource
   difference as an extra precondition.
-* `blockOwn_split`/`blockOwn_join`, `stackScratch_narrow`/`_widen`, and the
+* `blockOwn_split`/`blockOwn_join`/`blockOwn_cast`,
+  `stackScratch_narrow`/`_widen`, the prologue/epilogue pair
+  `stackScratch_frame`/`stackScratch_unframe` (`addi sp,sp,-f`), and the
   carve/join pair `stackScratch_carve`/`stackScratch_join`: a callee's scratch
   is carved out of the caller's owned stack region and returned. The side
   condition `nc + f ≤ n` is `Vsa.Alloc.StackOK.child`'s.
-* `abortAt Core s need` and `abort_rebase` (used by `abortRes` in §D).
+* `abortAt Core s need` with `abortAt_elim`/`abortAt_intro`, and
+  `abort_rebase` (used by `abortRes` in §D).
+* `wp_callArmW` and `wp_callArmAbort` — **the call step an arm takes**, once:
+  lend the callee a narrower part of the owned stack, keep the slack, and (in
+  partial mode) re-base BOTH continuations to the callee's region. E1-E6 call
+  these instead of re-deriving the carve per site.
 * `stackBudget`, `evalNeed`, `execNeed`, the arithmetic lemmas
   `stackBudget_child` (the Iris route's `StackOK.child`) and
   `stackBudget_call`, one inequality per recursor arm

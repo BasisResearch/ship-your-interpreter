@@ -50,6 +50,12 @@ theorem blockOwn_emp (p : Nat) : emp ⊢@{IProp GF} blockOwn p 0 := by
   simp only [sepL_nil]
   iempintro
 
+/-- Re-index an owned interval by equal endpoints (the `Nat` arithmetic a
+call site would otherwise `rw` under `blockOwn`). -/
+theorem blockOwn_cast {p n p' n' : Nat} (hp : p = p') (hn : n = n') :
+    blockOwn (GF := GF) p n ⊢ blockOwn p' n' := by
+  subst hp; subst hn; exact .rfl
+
 /-- **Split** an owned interval at a cut point: `[p, p+n)` is `[p, p+m)` and
 `[p+m, p+n)`. The successor address and length are given as equations so call
 sites never rewrite under `blockOwn`. -/
@@ -140,6 +146,34 @@ theorem stackScratch_join {s f : BitVec 64} {n nc : Nat}
     (nc + f.toNat) n (by omega) (by omega)
   iframe H0 Hb
 
+/-- **The prologue**: `addi sp,sp,-f` takes the callee's own frame out of the
+top of its owned region, leaving the rest below the lowered `sp`. -/
+theorem stackScratch_frame {s f : BitVec 64} {n : Nat} (hn : n ≤ s.toNat) (hf : f.toNat ≤ n) :
+    stackScratch (GF := GF) s n ⊢
+      stackScratch (s - f) (n - f.toNat) ∗ blockOwn (s - f).toNat f.toNat := by
+  have hsf : (s - f).toNat = s.toNat - f.toNat := toNat_sub_frame (by omega)
+  unfold stackScratch
+  rw [hsf]
+  iintro Hb
+  ihave ⟨H1, H2⟩ := blockOwn_split (s.toNat - n) n (n - f.toNat) (s.toNat - f.toNat) f.toNat
+    (by omega) (by omega) (by omega) $$ Hb
+  isplitl [H1]
+  · iapply blockOwn_cast (by omega) rfl $$ H1
+  · iexact H2
+
+/-- **The epilogue**: `addi sp,sp,f` puts the frame back. -/
+theorem stackScratch_unframe {s f : BitVec 64} {n : Nat} (hn : n ≤ s.toNat) (hf : f.toNat ≤ n) :
+    stackScratch (GF := GF) (s - f) (n - f.toNat) ∗ blockOwn (s - f).toNat f.toNat ⊢
+      stackScratch s n := by
+  have hsf : (s - f).toNat = s.toNat - f.toNat := toNat_sub_frame (by omega)
+  unfold stackScratch
+  rw [hsf]
+  iintro ⟨H1, H2⟩
+  ihave H1 := blockOwn_cast (p' := s.toNat - n) (n' := n - f.toNat) (by omega) rfl $$ H1
+  iapply blockOwn_join (s.toNat - n) (n - f.toNat) (s.toNat - f.toNat) f.toNat n
+    (by omega) (by omega)
+  iframe H1 H2
+
 /-! ## The abort resource and its re-basing -/
 
 /-- **What an abort hands the top** (INTERP_DESIGN.md §4.2, `abortRes`).
@@ -149,6 +183,14 @@ out-of-memory), and SOME world. The rest is the WHOLE owned stack below `s`,
 because the landing runs `fprintf` on it. -/
 def abortAt (Core : IProp GF) (s : BitVec 64) (need : Nat) : IProp GF :=
   iprop(Core ∗ stackScratch s need)
+
+/-- The named destructurer / constructor of `abortAt` (CLAUDE.md: a landed
+∃/∧ tower is consumed through ONE named lemma, never positionally). -/
+theorem abortAt_elim (Core : IProp GF) (s : BitVec 64) (need : Nat) :
+    abortAt Core s need ⊢ iprop(Core ∗ stackScratch s need) := .rfl
+
+theorem abortAt_intro (Core : IProp GF) (s : BitVec 64) (need : Nat) :
+    iprop(Core ∗ stackScratch s need) ⊢ abortAt Core s need := .rfl
 
 /-- **Re-basing an abort continuation** (INTERP_DESIGN.md §10.2, F3). A
 caller holding "if the run aborts below MY `sp`, the rest of the run is
@@ -177,6 +219,100 @@ theorem abort_rebase {M : MachineModel} {Wp : MachWP (GF := GF) M}
   · iframe Hlow Htop
   iapply Hk $$ [HC Hlow]
   iframe HC Hlow
+
+
+/-! ## The call step of an arm
+
+At a call the caller lends the callee a NARROWER part of its own stack region
+and keeps the slack. In partial mode it must also re-base the abort
+continuation it inherited, and — because `fnSpecAbort`'s branches are an
+additive pair — the very same bytes serve the return branch
+(INTERP_DESIGN.md §10.2). These two rules are that step, once. -/
+
+section Arm
+
+variable {M : MachineModel}
+
+/-- **The call step, ordinary mode.** The caller owns `m` bytes below its
+current `sp = s`; the callee's spec asks for `nc ≤ m`. The slack
+`[s - m, s - nc)` never leaves the caller, and the whole region comes back at
+the return. -/
+theorem wp_callArmW (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF} {i : Nat}
+    {code : List (BitVec 8)} {entry v : BitVec 64} (P Q : BitVec 64 → IProp GF)
+    (s : BitVec 64) (m nc : Nat) (hm : m ≤ s.toNat) (hnc : nc ≤ m)
+    (hexec : JalExec M i code entry) :
+    instrAt (GF := GF) i code ∗
+      fnSpecW Wp entry (fun r => iprop(stackScratch s nc ∗ P r))
+        (fun r => iprop(stackScratch s nc ∗ Q r)) ∗
+      PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗ stackScratch s m ∗
+      P (BitVec.ofNat 64 (i + 4)) ∗
+      (PC ↦ᵣ BitVec.ofNat 64 (i + 4) -∗ ra ↦ᵣ BitVec.ofNat 64 (i + 4) -∗
+        Q (BitVec.ofNat 64 (i + 4)) -∗ stackScratch s m -∗ Wp.W Φ)
+    ⊢ Wp.W Φ := by
+  iintro ⟨#Hi, #Hspec, Hpc, Hra, Hst, HP, Hk⟩
+  ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hm hnc $$ Hst
+  iapply wp_callW Wp hexec
+  iframe Hi Hspec Hpc Hra
+  isplitl [Hst HP]
+  · iframe Hst HP
+  iintro Hpc Hra ⟨Hst, HQ⟩
+  ihave Hst := stackScratch_widen hm hnc $$ [Hslack Hst]
+  · iframe Hslack Hst
+  iapply Hk $$ Hpc Hra HQ Hst
+
+/-- **The call step, partial mode**: the same, and both of the caller's
+continuations are re-based to the callee's region. The caller enters at `s`
+owning `n` bytes, has already spilled its `f`-byte frame
+(`stackScratch_frame`), and calls a child needing `nc` below `s - f`; the side
+condition `nc + f ≤ n` is `Vsa.Alloc.StackOK.child`'s.
+
+On the return branch the caller gets its lowered region and its frame back; on
+the abort branch the SAME frame and slack are joined into the caller's own
+abort resource `abortAt Core s n` (`stackScratch_join`). Proving both from one
+context is exactly what the `∧` of `fnSpecAbort` buys. -/
+theorem wp_callArmAbort (Wp : MachWP (GF := GF) M) {Φ : Nat × String → IProp GF} {i : Nat}
+    {code : List (BitVec 8)} {entry v : BitVec 64} (P Q : BitVec 64 → IProp GF)
+    (Core : IProp GF) (s f : BitVec 64) (n nc : Nat)
+    (hn : n ≤ s.toNat) (hf : f.toNat ≤ s.toNat) (hle : nc + f.toNat ≤ n)
+    (hexec : JalExec M i code entry) :
+    instrAt (GF := GF) i code ∗
+      fnSpecAbort Wp entry (fun r => iprop(stackScratch (s - f) nc ∗ P r))
+        (fun r => iprop(stackScratch (s - f) nc ∗ Q r)) (abortAt Core (s - f) nc) ∗
+      PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗
+      stackScratch (s - f) (n - f.toNat) ∗ blockOwn (s - f).toNat f.toNat ∗
+      P (BitVec.ofNat 64 (i + 4)) ∗
+      ((PC ↦ᵣ BitVec.ofNat 64 (i + 4) -∗ ra ↦ᵣ BitVec.ofNat 64 (i + 4) -∗
+          Q (BitVec.ofNat 64 (i + 4)) -∗ stackScratch (s - f) (n - f.toNat) -∗
+          blockOwn (s - f).toNat f.toNat -∗ Wp.W Φ)
+        ∧ (abortAt Core s n -∗ Wp.W Φ))
+    ⊢ Wp.W Φ := by
+  have hsf : (s - f).toNat = s.toNat - f.toNat := toNat_sub_frame hf
+  iintro ⟨#Hi, #Hspec, Hpc, Hra, Hst, Hfr, HP, Hk⟩
+  ihave ⟨Hslack, Hst⟩ := stackScratch_narrow (s := s - f) (n := n - f.toNat) (m := nc)
+    (by omega) (by omega) $$ Hst
+  iapply wp_callAbort Wp hexec
+  iframe Hi Hspec Hpc Hra
+  isplitl [Hst HP]
+  · iframe Hst HP
+  isplit
+  · iintro Hpc Hra ⟨Hst, HQ⟩
+    ihave Hst := stackScratch_widen (s := s - f) (n := n - f.toNat) (m := nc)
+      (by omega) (by omega) $$ [Hslack Hst]
+    · iframe Hslack Hst
+    ihave Hk := and_elim_l $$ Hk
+    iapply Hk $$ Hpc Hra HQ Hst Hfr
+  · iintro HA
+    ihave ⟨HC, Hst⟩ := abortAt_elim Core (s - f) nc $$ HA
+    ihave Hslack := blockOwn_cast (p' := s.toNat - n) (n' := n - (nc + f.toNat))
+      (by omega) (by omega) $$ Hslack
+    ihave Hst := stackScratch_join hn hf hle $$ [Hslack Hst Hfr]
+    · iframe Hslack Hst Hfr
+    ihave HA := abortAt_intro Core s n $$ [HC Hst]
+    · iframe HC Hst
+    ihave Hk := and_elim_r $$ Hk
+    iapply Hk $$ HA
+
+end Arm
 
 end
 

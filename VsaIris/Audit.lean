@@ -76,6 +76,10 @@ import VsaIris.Interp.Need
 #print axioms VsaIris.stackScratch_carve
 #print axioms VsaIris.stackScratch_join
 #print axioms VsaIris.abort_rebase
+#print axioms VsaIris.stackScratch_frame
+#print axioms VsaIris.stackScratch_unframe
+#print axioms VsaIris.wp_callArmW
+#print axioms VsaIris.wp_callArmAbort
 #print axioms VsaIris.Interp.stackBudget_child
 #print axioms VsaIris.Interp.stackBudget_call
 #print axioms VsaIris.Interp.execNeed_callBody
