@@ -24,20 +24,37 @@ theorem pathChunk0_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLo
     ht 18329 (by decide),
     ht 18330 (by decide),
     ht 18331 (by decide),
-    ht 18344 (by decide),
-    ht 18345 (by decide),
-    ht 18346 (by decide),
-    ht 18347 (by decide),
+    ht 18332 (by decide),
+    ht 18333 (by decide),
+    ht 18334 (by decide),
+    ht 18335 (by decide),
     fun _ h => by cases h⟩
 
 theorem pathChunk1_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
     (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk1, mem[p.1]? = some p.2 := by
   simp only [pathChunk1, List.forall_mem_cons]
-  exact ⟨ht 18348 (by decide),
+  exact ⟨ht 18336 (by decide),
+    ht 18337 (by decide),
+    ht 18338 (by decide),
+    ht 18339 (by decide),
+    ht 18340 (by decide),
+    ht 18341 (by decide),
+    ht 18342 (by decide),
+    ht 18343 (by decide),
+    ht 18344 (by decide),
+    ht 18345 (by decide),
+    ht 18346 (by decide),
+    ht 18347 (by decide),
+    ht 18348 (by decide),
     ht 18349 (by decide),
     ht 18350 (by decide),
     ht 18351 (by decide),
-    ht 18352 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk2_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk2, mem[p.1]? = some p.2 := by
+  simp only [pathChunk2, List.forall_mem_cons]
+  exact ⟨ht 18352 (by decide),
     ht 18353 (by decide),
     ht 18354 (by decide),
     ht 18355 (by decide),
@@ -49,16 +66,16 @@ theorem pathChunk1_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLo
     ht 18361 (by decide),
     ht 18362 (by decide),
     ht 18363 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk2_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk2, mem[p.1]? = some p.2 := by
-  simp only [pathChunk2, List.forall_mem_cons]
-  exact ⟨ht 18364 (by decide),
+    ht 18364 (by decide),
     ht 18365 (by decide),
     ht 18366 (by decide),
     ht 18367 (by decide),
-    ht 18368 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk3_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk3, mem[p.1]? = some p.2 := by
+  simp only [pathChunk3, List.forall_mem_cons]
+  exact ⟨ht 18368 (by decide),
     ht 18369 (by decide),
     ht 18370 (by decide),
     ht 18371 (by decide),
@@ -70,16 +87,16 @@ theorem pathChunk2_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLo
     ht 18377 (by decide),
     ht 18378 (by decide),
     ht 18379 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk3_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk3, mem[p.1]? = some p.2 := by
-  simp only [pathChunk3, List.forall_mem_cons]
-  exact ⟨ht 18380 (by decide),
+    ht 18380 (by decide),
     ht 18381 (by decide),
     ht 18382 (by decide),
     ht 18383 (by decide),
-    ht 18384 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk4_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk4, mem[p.1]? = some p.2 := by
+  simp only [pathChunk4, List.forall_mem_cons]
+  exact ⟨ht 18384 (by decide),
     ht 18385 (by decide),
     ht 18386 (by decide),
     ht 18387 (by decide),
@@ -91,16 +108,16 @@ theorem pathChunk3_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLo
     ht 18393 (by decide),
     ht 18394 (by decide),
     ht 18395 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk4_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk4, mem[p.1]? = some p.2 := by
-  simp only [pathChunk4, List.forall_mem_cons]
-  exact ⟨ht 18396 (by decide),
+    ht 18396 (by decide),
     ht 18397 (by decide),
     ht 18398 (by decide),
     ht 18399 (by decide),
-    ht 18400 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk5_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk5, mem[p.1]? = some p.2 := by
+  simp only [pathChunk5, List.forall_mem_cons]
+  exact ⟨ht 18400 (by decide),
     ht 18401 (by decide),
     ht 18402 (by decide),
     ht 18403 (by decide),
@@ -112,16 +129,16 @@ theorem pathChunk4_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLo
     ht 18409 (by decide),
     ht 18410 (by decide),
     ht 18411 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk5_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk5, mem[p.1]? = some p.2 := by
-  simp only [pathChunk5, List.forall_mem_cons]
-  exact ⟨ht 18412 (by decide),
+    ht 18412 (by decide),
     ht 18413 (by decide),
     ht 18414 (by decide),
     ht 18415 (by decide),
-    ht 18416 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk6_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk6, mem[p.1]? = some p.2 := by
+  simp only [pathChunk6, List.forall_mem_cons]
+  exact ⟨ht 18416 (by decide),
     ht 18417 (by decide),
     ht 18418 (by decide),
     ht 18419 (by decide),
@@ -133,16 +150,16 @@ theorem pathChunk5_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLo
     ht 18485 (by decide),
     ht 18486 (by decide),
     ht 18487 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk6_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk6, mem[p.1]? = some p.2 := by
-  simp only [pathChunk6, List.forall_mem_cons]
-  exact ⟨ht 18488 (by decide),
+    ht 18488 (by decide),
     ht 18489 (by decide),
     ht 18490 (by decide),
     ht 18491 (by decide),
-    ht 18492 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk7_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk7, mem[p.1]? = some p.2 := by
+  simp only [pathChunk7, List.forall_mem_cons]
+  exact ⟨ht 18492 (by decide),
     ht 18493 (by decide),
     ht 18494 (by decide),
     ht 18495 (by decide),
@@ -154,16 +171,16 @@ theorem pathChunk6_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLo
     ht 18529 (by decide),
     ht 18530 (by decide),
     ht 18531 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk7_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk7, mem[p.1]? = some p.2 := by
-  simp only [pathChunk7, List.forall_mem_cons]
-  exact ⟨ht 18532 (by decide),
+    ht 18532 (by decide),
     ht 18533 (by decide),
     ht 18534 (by decide),
     ht 18535 (by decide),
-    ht 18536 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk8_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk8, mem[p.1]? = some p.2 := by
+  simp only [pathChunk8, List.forall_mem_cons]
+  exact ⟨ht 18536 (by decide),
     ht 18537 (by decide),
     ht 18538 (by decide),
     ht 18539 (by decide),
@@ -175,16 +192,16 @@ theorem pathChunk7_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLo
     ht 18545 (by decide),
     ht 18546 (by decide),
     ht 18547 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk8_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk8, mem[p.1]? = some p.2 := by
-  simp only [pathChunk8, List.forall_mem_cons]
-  exact ⟨ht 18548 (by decide),
+    ht 18548 (by decide),
     ht 18549 (by decide),
     ht 18550 (by decide),
     ht 18551 (by decide),
-    ht 18552 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk9_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk9, mem[p.1]? = some p.2 := by
+  simp only [pathChunk9, List.forall_mem_cons]
+  exact ⟨ht 18552 (by decide),
     ht 18553 (by decide),
     ht 18554 (by decide),
     ht 18555 (by decide),
@@ -196,16 +213,16 @@ theorem pathChunk8_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLo
     ht 18561 (by decide),
     ht 18562 (by decide),
     ht 18563 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk9_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk9, mem[p.1]? = some p.2 := by
-  simp only [pathChunk9, List.forall_mem_cons]
-  exact ⟨ht 18668 (by decide),
+    ht 18668 (by decide),
     ht 18669 (by decide),
     ht 18670 (by decide),
     ht 18671 (by decide),
-    ht 18672 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk10_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk10, mem[p.1]? = some p.2 := by
+  simp only [pathChunk10, List.forall_mem_cons]
+  exact ⟨ht 18672 (by decide),
     ht 18673 (by decide),
     ht 18674 (by decide),
     ht 18675 (by decide),
@@ -217,16 +234,16 @@ theorem pathChunk9_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLo
     ht 18681 (by decide),
     ht 18682 (by decide),
     ht 18683 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk10_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk10, mem[p.1]? = some p.2 := by
-  simp only [pathChunk10, List.forall_mem_cons]
-  exact ⟨ht 18792 (by decide),
+    ht 18792 (by decide),
     ht 18793 (by decide),
     ht 18794 (by decide),
     ht 18795 (by decide),
-    ht 18796 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk11_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk11, mem[p.1]? = some p.2 := by
+  simp only [pathChunk11, List.forall_mem_cons]
+  exact ⟨ht 18796 (by decide),
     ht 18797 (by decide),
     ht 18798 (by decide),
     ht 18799 (by decide),
@@ -238,16 +255,16 @@ theorem pathChunk10_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextL
     ht 18805 (by decide),
     ht 18806 (by decide),
     ht 18807 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk11_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk11, mem[p.1]? = some p.2 := by
-  simp only [pathChunk11, List.forall_mem_cons]
-  exact ⟨ht 18988 (by decide),
+    ht 18988 (by decide),
     ht 18989 (by decide),
     ht 18990 (by decide),
     ht 18991 (by decide),
-    ht 18992 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk12_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk12, mem[p.1]? = some p.2 := by
+  simp only [pathChunk12, List.forall_mem_cons]
+  exact ⟨ht 18992 (by decide),
     ht 18993 (by decide),
     ht 18994 (by decide),
     ht 18995 (by decide),
@@ -259,16 +276,16 @@ theorem pathChunk11_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextL
     ht 19001 (by decide),
     ht 19002 (by decide),
     ht 19003 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk12_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk12, mem[p.1]? = some p.2 := by
-  simp only [pathChunk12, List.forall_mem_cons]
-  exact ⟨ht 19004 (by decide),
+    ht 19004 (by decide),
     ht 19005 (by decide),
     ht 19006 (by decide),
     ht 19007 (by decide),
-    ht 19008 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk13_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk13, mem[p.1]? = some p.2 := by
+  simp only [pathChunk13, List.forall_mem_cons]
+  exact ⟨ht 19008 (by decide),
     ht 19009 (by decide),
     ht 19010 (by decide),
     ht 19011 (by decide),
@@ -280,16 +297,16 @@ theorem pathChunk12_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextL
     ht 19433 (by decide),
     ht 19434 (by decide),
     ht 19435 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk13_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk13, mem[p.1]? = some p.2 := by
-  simp only [pathChunk13, List.forall_mem_cons]
-  exact ⟨ht 19436 (by decide),
+    ht 19436 (by decide),
     ht 19437 (by decide),
     ht 19438 (by decide),
     ht 19439 (by decide),
-    ht 19440 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk14_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk14, mem[p.1]? = some p.2 := by
+  simp only [pathChunk14, List.forall_mem_cons]
+  exact ⟨ht 19440 (by decide),
     ht 19441 (by decide),
     ht 19442 (by decide),
     ht 19443 (by decide),
@@ -301,16 +318,16 @@ theorem pathChunk13_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextL
     ht 19449 (by decide),
     ht 19450 (by decide),
     ht 19451 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk14_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk14, mem[p.1]? = some p.2 := by
-  simp only [pathChunk14, List.forall_mem_cons]
-  exact ⟨ht 19452 (by decide),
+    ht 19452 (by decide),
     ht 19453 (by decide),
     ht 19454 (by decide),
     ht 19455 (by decide),
-    ht 19456 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk15_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk15, mem[p.1]? = some p.2 := by
+  simp only [pathChunk15, List.forall_mem_cons]
+  exact ⟨ht 19456 (by decide),
     ht 19457 (by decide),
     ht 19458 (by decide),
     ht 19459 (by decide),
@@ -322,16 +339,16 @@ theorem pathChunk14_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextL
     ht 19465 (by decide),
     ht 19466 (by decide),
     ht 19467 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk15_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk15, mem[p.1]? = some p.2 := by
-  simp only [pathChunk15, List.forall_mem_cons]
-  exact ⟨ht 19468 (by decide),
+    ht 19468 (by decide),
     ht 19469 (by decide),
     ht 19470 (by decide),
     ht 19471 (by decide),
-    ht 19472 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk16_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk16, mem[p.1]? = some p.2 := by
+  simp only [pathChunk16, List.forall_mem_cons]
+  exact ⟨ht 19472 (by decide),
     ht 19473 (by decide),
     ht 19474 (by decide),
     ht 19475 (by decide),
@@ -343,16 +360,16 @@ theorem pathChunk15_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextL
     ht 19481 (by decide),
     ht 19482 (by decide),
     ht 19483 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk16_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk16, mem[p.1]? = some p.2 := by
-  simp only [pathChunk16, List.forall_mem_cons]
-  exact ⟨ht 19484 (by decide),
+    ht 19484 (by decide),
     ht 19485 (by decide),
     ht 19486 (by decide),
     ht 19487 (by decide),
-    ht 19552 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk17_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk17, mem[p.1]? = some p.2 := by
+  simp only [pathChunk17, List.forall_mem_cons]
+  exact ⟨ht 19552 (by decide),
     ht 19553 (by decide),
     ht 19554 (by decide),
     ht 19555 (by decide),
@@ -364,16 +381,16 @@ theorem pathChunk16_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextL
     ht 19561 (by decide),
     ht 19562 (by decide),
     ht 19563 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk17_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk17, mem[p.1]? = some p.2 := by
-  simp only [pathChunk17, List.forall_mem_cons]
-  exact ⟨ht 19812 (by decide),
+    ht 19812 (by decide),
     ht 19813 (by decide),
     ht 19814 (by decide),
     ht 19815 (by decide),
-    ht 19816 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk18_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk18, mem[p.1]? = some p.2 := by
+  simp only [pathChunk18, List.forall_mem_cons]
+  exact ⟨ht 19816 (by decide),
     ht 19817 (by decide),
     ht 19818 (by decide),
     ht 19819 (by decide),
@@ -385,16 +402,16 @@ theorem pathChunk17_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextL
     ht 19825 (by decide),
     ht 19826 (by decide),
     ht 19827 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk18_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk18, mem[p.1]? = some p.2 := by
-  simp only [pathChunk18, List.forall_mem_cons]
-  exact ⟨ht 19828 (by decide),
+    ht 19828 (by decide),
     ht 19829 (by decide),
     ht 19830 (by decide),
     ht 19831 (by decide),
-    ht 20584 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk19_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk19, mem[p.1]? = some p.2 := by
+  simp only [pathChunk19, List.forall_mem_cons]
+  exact ⟨ht 20584 (by decide),
     ht 20585 (by decide),
     ht 20586 (by decide),
     ht 20587 (by decide),
@@ -406,17 +423,16 @@ theorem pathChunk18_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextL
     ht 20593 (by decide),
     ht 20594 (by decide),
     ht 20595 (by decide),
-    fun _ h => by cases h⟩
-
-theorem pathChunk19_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk19, mem[p.1]? = some p.2 := by
-  obtain ⟨i0, i1, i2, i3, i4, i5, i6, i7⟩ := imageStatics_impurePtr_range hs
-  simp only [pathChunk19, List.forall_mem_cons]
-  exact ⟨ht 20596 (by decide),
+    ht 20596 (by decide),
     ht 20597 (by decide),
     ht 20598 (by decide),
     ht 20599 (by decide),
-    ht 28640 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk20_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk20, mem[p.1]? = some p.2 := by
+  simp only [pathChunk20, List.forall_mem_cons]
+  exact ⟨ht 28640 (by decide),
     ht 28641 (by decide),
     ht 28642 (by decide),
     ht 28643 (by decide),
@@ -424,17 +440,176 @@ theorem pathChunk19_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextL
     ht 28665 (by decide),
     ht 28666 (by decide),
     ht 28667 (by decide),
+    ht 29520 (by decide),
+    ht 29521 (by decide),
+    ht 29522 (by decide),
+    ht 29523 (by decide),
+    ht 29524 (by decide),
+    ht 29525 (by decide),
+    ht 29526 (by decide),
+    ht 29527 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk21_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk21, mem[p.1]? = some p.2 := by
+  simp only [pathChunk21, List.forall_mem_cons]
+  exact ⟨ht 29528 (by decide),
+    ht 29529 (by decide),
+    ht 29530 (by decide),
+    ht 29531 (by decide),
+    ht 29532 (by decide),
+    ht 29533 (by decide),
+    ht 29534 (by decide),
+    ht 29535 (by decide),
+    ht 29536 (by decide),
+    ht 29537 (by decide),
+    ht 29538 (by decide),
+    ht 29539 (by decide),
+    ht 29540 (by decide),
+    ht 29541 (by decide),
+    ht 29542 (by decide),
+    ht 29543 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk22_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk22, mem[p.1]? = some p.2 := by
+  simp only [pathChunk22, List.forall_mem_cons]
+  exact ⟨ht 29544 (by decide),
+    ht 29545 (by decide),
+    ht 29546 (by decide),
+    ht 29547 (by decide),
+    ht 29548 (by decide),
+    ht 29549 (by decide),
+    ht 29550 (by decide),
+    ht 29551 (by decide),
+    ht 29552 (by decide),
+    ht 29553 (by decide),
+    ht 29554 (by decide),
+    ht 29555 (by decide),
+    ht 29556 (by decide),
+    ht 29557 (by decide),
+    ht 29558 (by decide),
+    ht 29559 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk23_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk23, mem[p.1]? = some p.2 := by
+  simp only [pathChunk23, List.forall_mem_cons]
+  exact ⟨ht 29560 (by decide),
+    ht 29561 (by decide),
+    ht 29562 (by decide),
+    ht 29563 (by decide),
+    ht 29564 (by decide),
+    ht 29565 (by decide),
+    ht 29566 (by decide),
+    ht 29567 (by decide),
+    ht 29568 (by decide),
+    ht 29569 (by decide),
+    ht 29570 (by decide),
+    ht 29571 (by decide),
+    ht 29572 (by decide),
+    ht 29573 (by decide),
+    ht 29574 (by decide),
+    ht 29575 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk24_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk24, mem[p.1]? = some p.2 := by
+  simp only [pathChunk24, List.forall_mem_cons]
+  exact ⟨ht 29576 (by decide),
+    ht 29577 (by decide),
+    ht 29578 (by decide),
+    ht 29579 (by decide),
+    ht 29580 (by decide),
+    ht 29581 (by decide),
+    ht 29582 (by decide),
+    ht 29583 (by decide),
+    ht 29584 (by decide),
+    ht 29585 (by decide),
+    ht 29586 (by decide),
+    ht 29587 (by decide),
+    ht 29588 (by decide),
+    ht 29589 (by decide),
+    ht 29590 (by decide),
+    ht 29591 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk25_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk25, mem[p.1]? = some p.2 := by
+  simp only [pathChunk25, List.forall_mem_cons]
+  exact ⟨ht 29592 (by decide),
+    ht 29593 (by decide),
+    ht 29594 (by decide),
+    ht 29595 (by decide),
+    ht 29748 (by decide),
+    ht 29749 (by decide),
+    ht 29750 (by decide),
+    ht 29751 (by decide),
+    ht 29752 (by decide),
+    ht 29753 (by decide),
+    ht 29754 (by decide),
+    ht 29755 (by decide),
+    ht 29756 (by decide),
+    ht 29757 (by decide),
+    ht 29758 (by decide),
+    ht 29759 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk26_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk26, mem[p.1]? = some p.2 := by
+  simp only [pathChunk26, List.forall_mem_cons]
+  exact ⟨ht 29760 (by decide),
+    ht 29761 (by decide),
+    ht 29762 (by decide),
+    ht 29763 (by decide),
+    ht 29764 (by decide),
+    ht 29765 (by decide),
+    ht 29766 (by decide),
+    ht 29767 (by decide),
+    ht 30004 (by decide),
+    ht 30005 (by decide),
+    ht 30006 (by decide),
+    ht 30007 (by decide),
+    ht 30008 (by decide),
+    ht 30009 (by decide),
+    ht 30010 (by decide),
+    ht 30011 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk27_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (_hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk27, mem[p.1]? = some p.2 := by
+  simp only [pathChunk27, List.forall_mem_cons]
+  exact ⟨ht 30040 (by decide),
+    ht 30041 (by decide),
+    ht 30042 (by decide),
+    ht 30043 (by decide),
+    ht 30044 (by decide),
+    ht 30045 (by decide),
+    ht 30046 (by decide),
+    ht 30047 (by decide),
+    ht 30048 (by decide),
+    ht 30049 (by decide),
+    ht 30050 (by decide),
+    ht 30051 (by decide),
+    ht 30052 (by decide),
+    ht 30053 (by decide),
+    ht 30054 (by decide),
+    ht 30055 (by decide),
+    fun _ h => by cases h⟩
+
+theorem pathChunk28_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
+    (hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk28, mem[p.1]? = some p.2 := by
+  obtain ⟨i0, i1, i2, i3, i4, i5, i6, i7⟩ := imageStatics_impurePtr_range hs
+  simp only [pathChunk28, List.forall_mem_cons]
+  exact ⟨ht 30056 (by decide),
+    ht 30057 (by decide),
+    ht 30058 (by decide),
+    ht 30059 (by decide),
     i0,
     i1,
     i2,
     i3,
-    fun _ h => by cases h⟩
-
-theorem pathChunk20_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTextLoaded mem)
-    (hs : ImageStaticsLoaded mem) : ∀ p ∈ pathChunk20, mem[p.1]? = some p.2 := by
-  obtain ⟨i0, i1, i2, i3, i4, i5, i6, i7⟩ := imageStatics_impurePtr_range hs
-  simp only [pathChunk20, List.forall_mem_cons]
-  exact ⟨i4,
+    i4,
     i5,
     i6,
     i7,
@@ -445,7 +620,7 @@ theorem pathLoaded_of_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTex
     (hs : ImageStaticsLoaded mem) : PathLoaded mem := by
   intro p hp
   simp only [pathText, List.mem_append] at hp
-  rcases hp with h0 | h1 | h2 | h3 | h4 | h5 | h6 | h7 | h8 | h9 | h10 | h11 | h12 | h13 | h14 | h15 | h16 | h17 | h18 | h19 | h20
+  rcases hp with h0 | h1 | h2 | h3 | h4 | h5 | h6 | h7 | h8 | h9 | h10 | h11 | h12 | h13 | h14 | h15 | h16 | h17 | h18 | h19 | h20 | h21 | h22 | h23 | h24 | h25 | h26 | h27 | h28
   · exact pathChunk0_image ht hs p h0
   · exact pathChunk1_image ht hs p h1
   · exact pathChunk2_image ht hs p h2
@@ -467,5 +642,13 @@ theorem pathLoaded_of_image {mem : Std.ExtHashMap Nat (BitVec 8)} (ht : FixedTex
   · exact pathChunk18_image ht hs p h18
   · exact pathChunk19_image ht hs p h19
   · exact pathChunk20_image ht hs p h20
+  · exact pathChunk21_image ht hs p h21
+  · exact pathChunk22_image ht hs p h22
+  · exact pathChunk23_image ht hs p h23
+  · exact pathChunk24_image ht hs p h24
+  · exact pathChunk25_image ht hs p h25
+  · exact pathChunk26_image ht hs p h26
+  · exact pathChunk27_image ht hs p h27
+  · exact pathChunk28_image ht hs p h28
 
 end VsaIris.MallocFast

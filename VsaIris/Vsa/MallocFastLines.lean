@@ -402,8 +402,173 @@ theorem line_80006ff8 : mkLine 0x80006ff8#64 0x00008067#32 =
       b2 := 0x00#8, b3 := 0x00#8, kind := .addi, rd := 0, rs1 := 0,
       rs2 := 0, imm := 0x000#12 } := rfl
 
+theorem line_8000479c : mkLine 0x8000479c#64 0x00050593#32 =
+    { pc := 0x8000479c#64, word := 0x00050593#32, b0 := 0x93#8, b1 := 0x05#8,
+      b2 := 0x05#8, b3 := 0x00#8, kind := .addi, rd := 11, rs1 := 10,
+      rs2 := 0, imm := 0x000#12 } := rfl
+
+theorem line_800047a0 : mkLine 0x800047a0#64 0x4601b503#32 =
+    { pc := 0x800047a0#64, word := 0x4601b503#32, b0 := 0x03#8, b1 := 0xb5#8,
+      b2 := 0x01#8, b3 := 0x46#8, kind := .ld, rd := 10, rs1 := 3,
+      rs2 := 0, imm := 0x460#12 } := rfl
+
+theorem line_800047a4 : mkLine 0x800047a4#64 0x3ad0206f#32 =
+    { pc := 0x800047a4#64, word := 0x3ad0206f#32, b0 := 0x6f#8, b1 := 0x20#8,
+      b2 := 0xd0#8, b3 := 0x3a#8, kind := .addi, rd := 0, rs1 := 0,
+      rs2 := 0, imm := 0x000#12 } := rfl
+
+theorem line_80007350 : mkLine 0x80007350#64 0x12058863#32 =
+    { pc := 0x80007350#64, word := 0x12058863#32, b0 := 0x63#8, b1 := 0x88#8,
+      b2 := 0x05#8, b3 := 0x12#8, kind := .addi, rd := 0, rs1 := 0,
+      rs2 := 0, imm := 0x000#12 } := rfl
+
+theorem line_80007354 : mkLine 0x80007354#64 0xfe010113#32 =
+    { pc := 0x80007354#64, word := 0xfe010113#32, b0 := 0x13#8, b1 := 0x01#8,
+      b2 := 0x01#8, b3 := 0xfe#8, kind := .addi, rd := 2, rs1 := 2,
+      rs2 := 0, imm := 0xfe0#12 } := rfl
+
+theorem line_80007358 : mkLine 0x80007358#64 0x00813823#32 =
+    { pc := 0x80007358#64, word := 0x00813823#32, b0 := 0x23#8, b1 := 0x38#8,
+      b2 := 0x81#8, b3 := 0x00#8, kind := .sd, rd := 0, rs1 := 2,
+      rs2 := 8, imm := 0x010#12 } := rfl
+
+theorem line_8000735c : mkLine 0x8000735c#64 0x00b13423#32 =
+    { pc := 0x8000735c#64, word := 0x00b13423#32, b0 := 0x23#8, b1 := 0x34#8,
+      b2 := 0xb1#8, b3 := 0x00#8, kind := .sd, rd := 0, rs1 := 2,
+      rs2 := 11, imm := 0x008#12 } := rfl
+
+theorem line_80007360 : mkLine 0x80007360#64 0x00050413#32 =
+    { pc := 0x80007360#64, word := 0x00050413#32, b0 := 0x13#8, b1 := 0x04#8,
+      b2 := 0x05#8, b3 := 0x00#8, kind := .addi, rd := 8, rs1 := 10,
+      rs2 := 0, imm := 0x000#12 } := rfl
+
+theorem line_80007364 : mkLine 0x80007364#64 0x00113c23#32 =
+    { pc := 0x80007364#64, word := 0x00113c23#32, b0 := 0x23#8, b1 := 0x3c#8,
+      b2 := 0x11#8, b3 := 0x00#8, kind := .sd, rd := 0, rs1 := 2,
+      rs2 := 1, imm := 0x018#12 } := rfl
+
+theorem line_8000736c : mkLine 0x8000736c#64 0x00813583#32 =
+    { pc := 0x8000736c#64, word := 0x00813583#32, b0 := 0x83#8, b1 := 0x35#8,
+      b2 := 0x81#8, b3 := 0x00#8, kind := .ld, rd := 11, rs1 := 2,
+      rs2 := 0, imm := 0x008#12 } := rfl
+
+theorem line_80007370 : mkLine 0x80007370#64 0x00014897#32 =
+    { pc := 0x80007370#64, word := 0x00014897#32, b0 := 0x97#8, b1 := 0x48#8,
+      b2 := 0x01#8, b3 := 0x00#8, kind := .auipc, rd := 17, rs1 := 0,
+      rs2 := 0, imm := 0x000#12 } := rfl
+
+theorem line_80007374 : mkLine 0x80007374#64 0x9a088893#32 =
+    { pc := 0x80007374#64, word := 0x9a088893#32, b0 := 0x93#8, b1 := 0x88#8,
+      b2 := 0x08#8, b3 := 0x9a#8, kind := .addi, rd := 17, rs1 := 17,
+      rs2 := 0, imm := 0x9a0#12 } := rfl
+
+theorem line_80007378 : mkLine 0x80007378#64 0x0108b803#32 =
+    { pc := 0x80007378#64, word := 0x0108b803#32, b0 := 0x03#8, b1 := 0xb8#8,
+      b2 := 0x08#8, b3 := 0x01#8, kind := .ld, rd := 16, rs1 := 17,
+      rs2 := 0, imm := 0x010#12 } := rfl
+
+theorem line_8000737c : mkLine 0x8000737c#64 0xff85b503#32 =
+    { pc := 0x8000737c#64, word := 0xff85b503#32, b0 := 0x03#8, b1 := 0xb5#8,
+      b2 := 0x85#8, b3 := 0xff#8, kind := .ld, rd := 10, rs1 := 11,
+      rs2 := 0, imm := 0xff8#12 } := rfl
+
+theorem line_80007380 : mkLine 0x80007380#64 0xff058713#32 =
+    { pc := 0x80007380#64, word := 0xff058713#32, b0 := 0x13#8, b1 := 0x87#8,
+      b2 := 0x05#8, b3 := 0xff#8, kind := .addi, rd := 14, rs1 := 11,
+      rs2 := 0, imm := 0xff0#12 } := rfl
+
+theorem line_80007384 : mkLine 0x80007384#64 0xffe57793#32 =
+    { pc := 0x80007384#64, word := 0xffe57793#32, b0 := 0x93#8, b1 := 0x77#8,
+      b2 := 0xe5#8, b3 := 0xff#8, kind := .andi, rd := 15, rs1 := 10,
+      rs2 := 0, imm := 0xffe#12 } := rfl
+
+theorem line_80007388 : mkLine 0x80007388#64 0x00f70633#32 =
+    { pc := 0x80007388#64, word := 0x00f70633#32, b0 := 0x33#8, b1 := 0x06#8,
+      b2 := 0xf7#8, b3 := 0x00#8, kind := .add, rd := 12, rs1 := 14,
+      rs2 := 15, imm := 0x000#12 } := rfl
+
+theorem line_8000738c : mkLine 0x8000738c#64 0x00863683#32 =
+    { pc := 0x8000738c#64, word := 0x00863683#32, b0 := 0x83#8, b1 := 0x36#8,
+      b2 := 0x86#8, b3 := 0x00#8, kind := .ld, rd := 13, rs1 := 12,
+      rs2 := 0, imm := 0x008#12 } := rfl
+
+theorem line_80007390 : mkLine 0x80007390#64 0x00157313#32 =
+    { pc := 0x80007390#64, word := 0x00157313#32, b0 := 0x13#8, b1 := 0x73#8,
+      b2 := 0x15#8, b3 := 0x00#8, kind := .andi, rd := 6, rs1 := 10,
+      rs2 := 0, imm := 0x001#12 } := rfl
+
+theorem line_80007394 : mkLine 0x80007394#64 0xffc6f693#32 =
+    { pc := 0x80007394#64, word := 0xffc6f693#32, b0 := 0x93#8, b1 := 0xf6#8,
+      b2 := 0xc6#8, b3 := 0xff#8, kind := .andi, rd := 13, rs1 := 13,
+      rs2 := 0, imm := 0xffc#12 } := rfl
+
+theorem line_80007398 : mkLine 0x80007398#64 0x18c80e63#32 =
+    { pc := 0x80007398#64, word := 0x18c80e63#32, b0 := 0x63#8, b1 := 0x0e#8,
+      b2 := 0xc8#8, b3 := 0x18#8, kind := .addi, rd := 0, rs1 := 0,
+      rs2 := 0, imm := 0x000#12 } := rfl
+
+theorem line_80007534 : mkLine 0x80007534#64 0x00d786b3#32 =
+    { pc := 0x80007534#64, word := 0x00d786b3#32, b0 := 0xb3#8, b1 := 0x86#8,
+      b2 := 0xd7#8, b3 := 0x00#8, kind := .add, rd := 13, rs1 := 15,
+      rs2 := 13, imm := 0x000#12 } := rfl
+
+theorem line_80007538 : mkLine 0x80007538#64 0x02031063#32 =
+    { pc := 0x80007538#64, word := 0x02031063#32, b0 := 0x63#8, b1 := 0x10#8,
+      b2 := 0x03#8, b3 := 0x02#8, kind := .addi, rd := 0, rs1 := 0,
+      rs2 := 0, imm := 0x000#12 } := rfl
+
+theorem line_80007558 : mkLine 0x80007558#64 0x0016e613#32 =
+    { pc := 0x80007558#64, word := 0x0016e613#32, b0 := 0x13#8, b1 := 0xe6#8,
+      b2 := 0x16#8, b3 := 0x00#8, kind := .ori, rd := 12, rs1 := 13,
+      rs2 := 0, imm := 0x001#12 } := rfl
+
+theorem line_8000755c : mkLine 0x8000755c#64 0x4581b783#32 =
+    { pc := 0x8000755c#64, word := 0x4581b783#32, b0 := 0x83#8, b1 := 0xb7#8,
+      b2 := 0x81#8, b3 := 0x45#8, kind := .ld, rd := 15, rs1 := 3,
+      rs2 := 0, imm := 0x458#12 } := rfl
+
+theorem line_80007560 : mkLine 0x80007560#64 0x00c73423#32 =
+    { pc := 0x80007560#64, word := 0x00c73423#32, b0 := 0x23#8, b1 := 0x34#8,
+      b2 := 0xc7#8, b3 := 0x00#8, kind := .sd, rd := 0, rs1 := 14,
+      rs2 := 12, imm := 0x008#12 } := rfl
+
+theorem line_80007564 : mkLine 0x80007564#64 0x00e8b823#32 =
+    { pc := 0x80007564#64, word := 0x00e8b823#32, b0 := 0x23#8, b1 := 0xb8#8,
+      b2 := 0xe8#8, b3 := 0x00#8, kind := .sd, rd := 0, rs1 := 17,
+      rs2 := 14, imm := 0x010#12 } := rfl
+
+theorem line_80007568 : mkLine 0x80007568#64 0xecf6e6e3#32 =
+    { pc := 0x80007568#64, word := 0xecf6e6e3#32, b0 := 0xe3#8, b1 := 0xe6#8,
+      b2 := 0xf6#8, b3 := 0xec#8, kind := .addi, rd := 0, rs1 := 0,
+      rs2 := 0, imm := 0x000#12 } := rfl
+
+theorem line_80007434 : mkLine 0x80007434#64 0x00040513#32 =
+    { pc := 0x80007434#64, word := 0x00040513#32, b0 := 0x13#8, b1 := 0x05#8,
+      b2 := 0x04#8, b3 := 0x00#8, kind := .addi, rd := 10, rs1 := 8,
+      rs2 := 0, imm := 0x000#12 } := rfl
+
+theorem line_80007438 : mkLine 0x80007438#64 0x01013403#32 =
+    { pc := 0x80007438#64, word := 0x01013403#32, b0 := 0x03#8, b1 := 0x34#8,
+      b2 := 0x01#8, b3 := 0x01#8, kind := .ld, rd := 8, rs1 := 2,
+      rs2 := 0, imm := 0x010#12 } := rfl
+
+theorem line_8000743c : mkLine 0x8000743c#64 0x01813083#32 =
+    { pc := 0x8000743c#64, word := 0x01813083#32, b0 := 0x83#8, b1 := 0x30#8,
+      b2 := 0x81#8, b3 := 0x01#8, kind := .ld, rd := 1, rs1 := 2,
+      rs2 := 0, imm := 0x018#12 } := rfl
+
+theorem line_80007440 : mkLine 0x80007440#64 0x02010113#32 =
+    { pc := 0x80007440#64, word := 0x02010113#32, b0 := 0x13#8, b1 := 0x01#8,
+      b2 := 0x01#8, b3 := 0x02#8, kind := .addi, rd := 2, rs1 := 2,
+      rs2 := 0, imm := 0x020#12 } := rfl
+
+theorem line_80007444 : mkLine 0x80007444#64 0xc2dfd06f#32 =
+    { pc := 0x80007444#64, word := 0xc2dfd06f#32, b0 := 0x6f#8, b1 := 0xd0#8,
+      b2 := 0xdf#8, b3 := 0xc2#8, kind := .addi, rd := 0, rs1 := 0,
+      rs2 := 0, imm := 0x000#12 } := rfl
+
 /-- Normalize a segment leftover: decoded lines, register-pin lookups, the
 reflected state threading. -/
-macro "seg_norm" : tactic => `(tactic| simp only [VsaIris.MallocFast.line_80004790, VsaIris.MallocFast.line_80004794, VsaIris.MallocFast.line_80004798, VsaIris.MallocFast.line_800047a8, VsaIris.MallocFast.line_800047ac, VsaIris.MallocFast.line_800047b0, VsaIris.MallocFast.line_800047b4, VsaIris.MallocFast.line_800047b8, VsaIris.MallocFast.line_800047bc, VsaIris.MallocFast.line_800047c0, VsaIris.MallocFast.line_800047c4, VsaIris.MallocFast.line_800047c8, VsaIris.MallocFast.line_800047cc, VsaIris.MallocFast.line_800047d0, VsaIris.MallocFast.line_800047d4, VsaIris.MallocFast.line_800047d8, VsaIris.MallocFast.line_800047dc, VsaIris.MallocFast.line_800047e0, VsaIris.MallocFast.line_800047e4, VsaIris.MallocFast.line_800047e8, VsaIris.MallocFast.line_800047ec, VsaIris.MallocFast.line_800047f0, VsaIris.MallocFast.line_80004830, VsaIris.MallocFast.line_80004834, VsaIris.MallocFast.line_80004838, VsaIris.MallocFast.line_8000483c, VsaIris.MallocFast.line_8000485c, VsaIris.MallocFast.line_80004860, VsaIris.MallocFast.line_80004864, VsaIris.MallocFast.line_80004868, VsaIris.MallocFast.line_8000486c, VsaIris.MallocFast.line_80004870, VsaIris.MallocFast.line_80004874, VsaIris.MallocFast.line_80004878, VsaIris.MallocFast.line_8000487c, VsaIris.MallocFast.line_80004880, VsaIris.MallocFast.line_800048ec, VsaIris.MallocFast.line_800048f0, VsaIris.MallocFast.line_800048f4, VsaIris.MallocFast.line_800048f8, VsaIris.MallocFast.line_80004968, VsaIris.MallocFast.line_8000496c, VsaIris.MallocFast.line_80004970, VsaIris.MallocFast.line_80004974, VsaIris.MallocFast.line_80004a2c, VsaIris.MallocFast.line_80004a30, VsaIris.MallocFast.line_80004a34, VsaIris.MallocFast.line_80004a38, VsaIris.MallocFast.line_80004a3c, VsaIris.MallocFast.line_80004a40, VsaIris.MallocFast.line_80004a44, VsaIris.MallocFast.line_80004be8, VsaIris.MallocFast.line_80004bec, VsaIris.MallocFast.line_80004bf0, VsaIris.MallocFast.line_80004bf4, VsaIris.MallocFast.line_80004bf8, VsaIris.MallocFast.line_80004bfc, VsaIris.MallocFast.line_80004c00, VsaIris.MallocFast.line_80004c04, VsaIris.MallocFast.line_80004c08, VsaIris.MallocFast.line_80004c0c, VsaIris.MallocFast.line_80004c10, VsaIris.MallocFast.line_80004c14, VsaIris.MallocFast.line_80004c18, VsaIris.MallocFast.line_80004c1c, VsaIris.MallocFast.line_80004c60, VsaIris.MallocFast.line_80004c64, VsaIris.MallocFast.line_80004c68, VsaIris.MallocFast.line_80004d64, VsaIris.MallocFast.line_80004d68, VsaIris.MallocFast.line_80004d6c, VsaIris.MallocFast.line_80004d70, VsaIris.MallocFast.line_80004d74, VsaIris.MallocFast.line_80005068, VsaIris.MallocFast.line_8000506c, VsaIris.MallocFast.line_80005070, VsaIris.MallocFast.line_80005074, VsaIris.MallocFast.line_80006fe0, VsaIris.MallocFast.line_80006ff8, guardB, srcVal, runGM, stepGM, lookupG, eraseG, wvalM, List.headD, stepLdsM, ldsRunM, stepMemM, Nat.reduceAdd, Nat.reduceEqDiff, reduceIte, ite_true, ite_false, Option.getD_some])
+macro "seg_norm" : tactic => `(tactic| simp only [VsaIris.MallocFast.line_80004790, VsaIris.MallocFast.line_80004794, VsaIris.MallocFast.line_80004798, VsaIris.MallocFast.line_800047a8, VsaIris.MallocFast.line_800047ac, VsaIris.MallocFast.line_800047b0, VsaIris.MallocFast.line_800047b4, VsaIris.MallocFast.line_800047b8, VsaIris.MallocFast.line_800047bc, VsaIris.MallocFast.line_800047c0, VsaIris.MallocFast.line_800047c4, VsaIris.MallocFast.line_800047c8, VsaIris.MallocFast.line_800047cc, VsaIris.MallocFast.line_800047d0, VsaIris.MallocFast.line_800047d4, VsaIris.MallocFast.line_800047d8, VsaIris.MallocFast.line_800047dc, VsaIris.MallocFast.line_800047e0, VsaIris.MallocFast.line_800047e4, VsaIris.MallocFast.line_800047e8, VsaIris.MallocFast.line_800047ec, VsaIris.MallocFast.line_800047f0, VsaIris.MallocFast.line_80004830, VsaIris.MallocFast.line_80004834, VsaIris.MallocFast.line_80004838, VsaIris.MallocFast.line_8000483c, VsaIris.MallocFast.line_8000485c, VsaIris.MallocFast.line_80004860, VsaIris.MallocFast.line_80004864, VsaIris.MallocFast.line_80004868, VsaIris.MallocFast.line_8000486c, VsaIris.MallocFast.line_80004870, VsaIris.MallocFast.line_80004874, VsaIris.MallocFast.line_80004878, VsaIris.MallocFast.line_8000487c, VsaIris.MallocFast.line_80004880, VsaIris.MallocFast.line_800048ec, VsaIris.MallocFast.line_800048f0, VsaIris.MallocFast.line_800048f4, VsaIris.MallocFast.line_800048f8, VsaIris.MallocFast.line_80004968, VsaIris.MallocFast.line_8000496c, VsaIris.MallocFast.line_80004970, VsaIris.MallocFast.line_80004974, VsaIris.MallocFast.line_80004a2c, VsaIris.MallocFast.line_80004a30, VsaIris.MallocFast.line_80004a34, VsaIris.MallocFast.line_80004a38, VsaIris.MallocFast.line_80004a3c, VsaIris.MallocFast.line_80004a40, VsaIris.MallocFast.line_80004a44, VsaIris.MallocFast.line_80004be8, VsaIris.MallocFast.line_80004bec, VsaIris.MallocFast.line_80004bf0, VsaIris.MallocFast.line_80004bf4, VsaIris.MallocFast.line_80004bf8, VsaIris.MallocFast.line_80004bfc, VsaIris.MallocFast.line_80004c00, VsaIris.MallocFast.line_80004c04, VsaIris.MallocFast.line_80004c08, VsaIris.MallocFast.line_80004c0c, VsaIris.MallocFast.line_80004c10, VsaIris.MallocFast.line_80004c14, VsaIris.MallocFast.line_80004c18, VsaIris.MallocFast.line_80004c1c, VsaIris.MallocFast.line_80004c60, VsaIris.MallocFast.line_80004c64, VsaIris.MallocFast.line_80004c68, VsaIris.MallocFast.line_80004d64, VsaIris.MallocFast.line_80004d68, VsaIris.MallocFast.line_80004d6c, VsaIris.MallocFast.line_80004d70, VsaIris.MallocFast.line_80004d74, VsaIris.MallocFast.line_80005068, VsaIris.MallocFast.line_8000506c, VsaIris.MallocFast.line_80005070, VsaIris.MallocFast.line_80005074, VsaIris.MallocFast.line_80006fe0, VsaIris.MallocFast.line_80006ff8, VsaIris.MallocFast.line_8000479c, VsaIris.MallocFast.line_800047a0, VsaIris.MallocFast.line_800047a4, VsaIris.MallocFast.line_80007350, VsaIris.MallocFast.line_80007354, VsaIris.MallocFast.line_80007358, VsaIris.MallocFast.line_8000735c, VsaIris.MallocFast.line_80007360, VsaIris.MallocFast.line_80007364, VsaIris.MallocFast.line_8000736c, VsaIris.MallocFast.line_80007370, VsaIris.MallocFast.line_80007374, VsaIris.MallocFast.line_80007378, VsaIris.MallocFast.line_8000737c, VsaIris.MallocFast.line_80007380, VsaIris.MallocFast.line_80007384, VsaIris.MallocFast.line_80007388, VsaIris.MallocFast.line_8000738c, VsaIris.MallocFast.line_80007390, VsaIris.MallocFast.line_80007394, VsaIris.MallocFast.line_80007398, VsaIris.MallocFast.line_80007534, VsaIris.MallocFast.line_80007538, VsaIris.MallocFast.line_80007558, VsaIris.MallocFast.line_8000755c, VsaIris.MallocFast.line_80007560, VsaIris.MallocFast.line_80007564, VsaIris.MallocFast.line_80007568, VsaIris.MallocFast.line_80007434, VsaIris.MallocFast.line_80007438, VsaIris.MallocFast.line_8000743c, VsaIris.MallocFast.line_80007440, VsaIris.MallocFast.line_80007444, guardB, srcVal, runGM, stepGM, lookupG, eraseG, wvalM, List.headD, stepLdsM, ldsRunM, stepMemM, Nat.reduceAdd, Nat.reduceEqDiff, reduceIte, ite_true, ite_false, Option.getD_some])
 
 end VsaIris.MallocFast

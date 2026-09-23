@@ -4,12 +4,14 @@ import Vsa.Sim.EnvNewSites
 import Vsa.Sim.DecodeTable.Batch09Part06
 import Vsa.Sim.DecodeTable.Batch12Part05
 import Vsa.Sim.DecodeTable.Batch13Part06
+import Vsa.Sim.DecodeTable.Batch14Part24
 
 /-!
 # The `jal` sites of malloc's fast paths
 
-One `JalExec` per site: the lock calls at `0x800047cc` (requests ≤ 23) and
-`0x80004874` (larger requests), and the unlock call at `0x80004c10`.
+One `JalExec` per site: `malloc`'s lock calls at `0x800047cc` (requests ≤ 23)
+and `0x80004874` (larger requests), its unlock call at `0x80004c10`, and
+`free`'s lock call at `0x80007368`.
 -/
 
 namespace VsaIris.MallocFast
@@ -101,6 +103,35 @@ theorem jal_exec_80004c10 (live : Nat → Prop)
   have h := jalStep_of_obs (calleeEntry := 0x80005070#64) hs hi' hG' hmem hobs
     (by apply BitVec.eq_of_toNat_eq; decide)
   rwa [show BitVec.addInt (0x80004c10#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x80004c10 + 4) from by
+    apply BitVec.eq_of_toNat_eq; decide] at h
+
+open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail in
+/-- `jal` at `0x80007368` to `0x80005068`. -/
+theorem jal_exec_80007368 (live : Nat → Prop)
+    (hlive : ∀ p ∈ codeFoot 0x80007368 [0xef#8, 0xd0#8, 0x1f#8, 0xd0#8], live p.1) :
+    JalExec (vsaModel live) 0x80007368 [0xef#8, 0xd0#8, 0x1f#8, 0xd0#8] 0x80005068#64 := by
+  refine jalExec_of_site live _ _ _ hlive fun c hG hi hpc hb => ?_
+  obtain ⟨vm, hmi⟩ := hG.minstret
+  have hb0 := hb (0x80007368, .discard, 0xef#8) (by simp [codeFoot])
+  have hb1 := hb (0x80007369, .discard, 0xd0#8) (by simp [codeFoot])
+  have hb2 := hb (0x8000736a, .discard, 0x1f#8) (by simp [codeFoot])
+  have hb3 := hb (0x8000736b, .discard, 0xd0#8) (by simp [codeFoot])
+  obtain ⟨σ', i', hs, hi', hG', hmem, hobs⟩ :=
+    stepObs_jal c.σ c.tick c.steps (0x80007368#64) vm (0xd01fd0ef#32) (0x1fdd00#21)
+      (regidx.Regidx 0x01#5) Register.x1 (BitVec.addInt (0x80007368#64) 4)
+      (0xef#8) (0xd0#8) (0x1f#8) (0xd0#8)
+      hG hpc hmi hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
+      (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
+      (Vsa.Sim.DecodeTable.decode_d01fd0ef (afterPrelude c.σ)
+        (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.misa)
+        (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.cur_privilege)
+        (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hG.mseccfg))
+      (by decide)
+      (by decide) (by decide) (by decide) (by decide) (by decide)
+      (wX_bits_x1 _ (BitVec.addInt (0x80007368#64) 4)) hi
+  have h := jalStep_of_obs (calleeEntry := 0x80005068#64) hs hi' hG' hmem hobs
+    (by apply BitVec.eq_of_toNat_eq; decide)
+  rwa [show BitVec.addInt (0x80007368#64 : BitVec 64) 4 = BitVec.ofNat 64 (0x80007368 + 4) from by
     apply BitVec.eq_of_toNat_eq; decide] at h
 
 end VsaIris.MallocFast
