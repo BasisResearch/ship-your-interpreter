@@ -124,31 +124,234 @@ def ROHolds (M : MachineModel) (σ : M.State) (ro : List (Nat × BitVec 64))
     (text : List (Nat × BitVec 8)) : Prop :=
   (∀ p ∈ ro, M.reg σ p.1 = p.2) ∧ (∀ p ∈ text, M.mem σ p.1 = p.2)
 
-/-- A run of at most `n` steps from owned register values `rv` (on `rs`) and
-byte values `mv` (on `S`), every step confined to the owned cells, ending in
-owned values satisfying `Q`. -/
+/-- One segment of a local run from owned values `rv` (registers `rs`) and
+`mv` (bytes `S`): from every well-formed state holding them, the machine runs
+exactly `k + 1` steps to a well-formed state, changing only owned cells, and
+`P` holds of the successor's values. -/
+def SegFrom (M : MachineModel) (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8))
+    (rs : List Nat) (S : Nat → Prop) (k : Nat) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8)
+    (P : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) : Prop :=
+  ∀ σ, M.ok σ → ROHolds M σ ro text → (∀ r ∈ rs, M.reg σ r = rv r) →
+    (∀ a, S a → M.mem σ a = mv a) →
+    ∃ σ', ReachesN M (k + 1) σ σ' ∧ M.ok σ' ∧ (∀ key, key ∉ rs → M.reg σ' key = M.reg σ key) ∧
+      (∀ a, ¬ S a → M.mem σ' a = M.mem σ a) ∧ P (M.reg σ') (M.mem σ')
+
+/-- A run of at most `n` segments from owned register values `rv` (on `rs`)
+and byte values `mv` (on `S`), each segment confined to the owned cells at its
+end (`SegFrom`), ending in owned values satisfying `Q`. A segment is what
+VSA's reflection produces (`segEval_sound`, `Inst.seg_runFact`); a loop is a
+chain of them. -/
 def LocalRun (M : MachineModel) (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8))
     (rs : List Nat) (S : Nat → Prop) (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) :
     Nat → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop
   | 0, rv, mv => Q rv mv
   | n + 1, rv, mv => Q rv mv ∨
-      ∀ σ, ROHolds M σ ro text → (∀ r ∈ rs, M.reg σ r = rv r) → (∀ a, S a → M.mem σ a = mv a) →
-        ∃ σ', M.step σ = .next σ' ∧ (∀ k, k ∉ rs → M.reg σ' k = M.reg σ k) ∧
-          (∀ a, ¬ S a → M.mem σ' a = M.mem σ a) ∧
-          LocalRun M ro text rs S Q n (M.reg σ') (M.mem σ')
+      ∃ k, SegFrom M ro text rs S k rv mv (LocalRun M ro text rs S Q n)
 
 variable {M : MachineModel}
 
+/-- The continuation of a local run. -/
+abbrev runKont (M : MachineModel) (Φ : Nat × String → IProp GF) (rs : List Nat) (S : Nat → Prop)
+    (Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop) : IProp GF :=
+  iprop(∀ rv' mv', ⌜Q rv' mv'⌝ -∗ sepL rs (fun r => r ↦ᵣ rv' r) -∗
+    ownSet S (fun a => a ↦ₘ mv' a) -∗ mTWP M Φ)
+
+/-- The owned footprint of a local run, with the byte set's enumeration. -/
+abbrev runFoot (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8)) (rs : List Nat)
+    (l : List Nat) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) : IProp GF :=
+  iprop(sepL ro (fun p => p.1 ↦ᵣ□ p.2) ∗ sepL text (fun p => p.1 ↦ₘ□ p.2) ∗
+    sepL rs (fun r => r ↦ᵣ rv r) ∗ sepL l (fun a => a ↦ₘ mv a))
+
+/-- Reading the footprint against the authorities: every state they agree
+with holds the read-only cells and the owned values. -/
+theorem runFoot_lookup (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
+    (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8)) (rs l : List Nat)
+    (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) :
+    ghost_map_auth (GF := GF) G.regName (DFrac.own 1) mr ∗
+      ghost_map_auth G.memName (DFrac.own 1) mm ∗ runFoot ro text rs l rv mv ⊢
+    ghost_map_auth G.regName (DFrac.own 1) mr ∗
+      ghost_map_auth G.memName (DFrac.own 1) mm ∗ runFoot ro text rs l rv mv ∗
+      ⌜∀ σ, RegAgree M mr σ → MemAgree M mm σ →
+        ROHolds M σ ro text ∧ (∀ r ∈ rs, M.reg σ r = rv r) ∧ (∀ a ∈ l, M.mem σ a = mv a)⌝ := by
+  unfold runFoot
+  iintro ⟨Hmr, Hmm, #Hro, #Htx, Hrs, Hl⟩
+  ihave ⟨Hmr, -, %hro⟩ := ghost_map_lookup_fn G.regName mr (fun p : Nat × BitVec 64 => p.1)
+    (fun _ => DFrac.discard) (fun p => p.2) ro $$ [Hmr]
+  · iframe Hmr; unfold regPointsTo; iexact Hro
+  ihave ⟨Hmm, -, %htx⟩ := ghost_map_lookup_fn G.memName mm (fun p : Nat × BitVec 8 => p.1)
+    (fun _ => DFrac.discard) (fun p => p.2) text $$ [Hmm]
+  · iframe Hmm; unfold memPointsTo; iexact Htx
+  ihave ⟨Hmr, Hrs, %hrs⟩ := ghost_map_lookup_fn G.regName mr (fun r : Nat => r)
+    (fun _ => DFrac.own 1) rv rs $$ [Hmr Hrs]
+  · iframe Hmr; unfold regPointsTo; iexact Hrs
+  ihave ⟨Hmm, Hl, %hl⟩ := ghost_map_lookup_fn G.memName mm (fun a : Nat => a)
+    (fun _ => DFrac.own 1) mv l $$ [Hmm Hl]
+  · iframe Hmm; unfold memPointsTo; iexact Hl
+  iframe Hmr Hmm Hro Htx
+  isplitl [Hrs Hl]
+  · isplitl [Hrs]
+    · unfold regPointsTo; iexact Hrs
+    · unfold memPointsTo; iexact Hl
+  ipureintro
+  intro σ hr hm
+  exact ⟨⟨fun p hp => hr _ _ (hro p hp), fun p hp => hm _ _ (htx p hp)⟩,
+    fun r hr' => hr _ _ (hrs r hr'), fun a ha => hm _ _ (hl a ha)⟩
+
+/-- Committing a segment's effect: the owned cells take the values of `σf`,
+and the authorities move from agreeing with `σ0` to agreeing with `σf`. -/
+theorem runFoot_update {σ0 σf : M.State} (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
+    (ro : List (Nat × BitVec 64)) (text : List (Nat × BitVec 8)) (rs l : List Nat)
+    (S : Nat → Prop) (hmem : ∀ a, a ∈ l ↔ S a)
+    (rv : Nat → BitVec 64) (mv : Nat → BitVec 8)
+    (hr : RegAgree M mr σ0) (hm : MemAgree M mm σ0)
+    (hregs : ∀ key, key ∉ rs → M.reg σf key = M.reg σ0 key)
+    (hmems : ∀ a, ¬ S a → M.mem σf a = M.mem σ0 a) :
+    ghost_map_auth (GF := GF) G.regName (DFrac.own 1) mr ∗
+      ghost_map_auth G.memName (DFrac.own 1) mm ∗ runFoot ro text rs l rv mv ⊢ |==>
+    ∃ mr' mm', ghost_map_auth G.regName (DFrac.own 1) mr' ∗
+      ghost_map_auth G.memName (DFrac.own 1) mm' ∗
+      runFoot ro text rs l (M.reg σf) (M.mem σf) ∗ ⌜RegAgree M mr' σf ∧ MemAgree M mm' σf⌝ := by
+  unfold runFoot
+  iintro ⟨Hmr, Hmm, #Hro, #Htx, Hrs, Hl⟩
+  imod ghost_map_update_fn G.regName (fun r : Nat => r) rv (M.reg σf) rs mr $$ [Hmr Hrs]
+    with ⟨%mr', Hmr, Hrs, %hmr'⟩
+  · iframe Hmr; unfold regPointsTo; iexact Hrs
+  imod ghost_map_update_fn G.memName (fun a : Nat => a) mv (M.mem σf) l mm $$ [Hmm Hl]
+    with ⟨%mm', Hmm, Hl, %hmm'⟩
+  · iframe Hmm; unfold memPointsTo; iexact Hl
+  imodintro
+  iexists mr', mm'
+  iframe Hmr Hmm Hro Htx
+  isplitl [Hrs Hl]
+  · isplitl [Hrs]
+    · unfold regPointsTo; iexact Hrs
+    · unfold memPointsTo; iexact Hl
+  ipureintro
+  constructor
+  · intro key v hk
+    rcases hmr' key v hk with ⟨x, _, rfl, rfl⟩ | ⟨hnot, hk⟩
+    · rfl
+    · rw [hregs key (fun hk' => hnot key hk' rfl)]; exact hr key v hk
+  · intro key v hk
+    rcases hmm' key v hk with ⟨x, _, rfl, rfl⟩ | ⟨hnot, hk⟩
+    · rfl
+    · rw [hmems key (fun hS => hnot key ((hmem key).2 hS) rfl)]; exact hm key v hk
+
+/-- One segment of a local run under the lagging interpretation: `k + 1`
+machine steps remain and the ghost maps lag by `j`. Intermediate steps
+advance the lag; the last commits the segment's effect and hands the rest of
+the run to `next`. -/
+theorem seg_aux {Φ : Nat × String → IProp GF} {ro : List (Nat × BitVec 64)}
+    {text : List (Nat × BitVec 8)} {rs l : List Nat} {S : Nat → Prop}
+    (hmem : ∀ a, a ∈ l ↔ S a) {K : Nat} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
+    {P : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
+    (hseg : SegFrom M ro text rs S K rv mv P) (R : IProp GF)
+    (next : ∀ rv' mv', P rv' mv' →
+      runFoot (GF := GF) ro text rs l rv' mv' ∗ R ⊢ mTWP M Φ) :
+    ∀ k j, j + (k + 1) = K + 1 →
+      ctlAt (GF := GF) j ∗ runFoot ro text rs l rv mv ∗ R ⊢
+        WP (MachineModel.Loop M) @ Stuckness.NotStuck; ⊤ [{ Φ }] := by
+  intro k
+  induction k with
+  | zero => ?_
+  | succ k ih => ?_
+  all_goals
+    intro j hjk
+    iintro ⟨Hj, Hf, HR⟩
+    iapply twp.lift_step (s := Stuckness.NotStuck) rfl
+    iintro %σ₁ %ns %obs %nt Hσ
+    ihave ⟨%c, Hc, %hc, Hj, Hl⟩ := fullInterp_lag (M := M) $$ Hσ Hj
+    unfold lagInterp ctlAt
+    icases Hl with ⟨%mr, %mm, Hmr, Hmm, %hlag⟩
+    obtain ⟨σ0, ⟨hr, hm, hok⟩, hre⟩ := hlag
+    ihave ⟨Hmr, Hmm, Hf, %hfoot⟩ := runFoot_lookup (M := M) mr mm ro text rs l rv mv
+      $$ [Hmr Hmm Hf]
+    · iframe Hmr Hmm Hf
+    obtain ⟨hro, hrs, hl⟩ := hfoot σ0 hr hm
+    obtain ⟨σf, hrun, hokf, hregs, hmems, hP⟩ :=
+      hseg σ0 hok hro hrs (fun a ha => hl a ((hmem a).2 ha))
+  · -- last step: commit the segment, reset the lag
+    have hrest : ReachesN M 1 σ₁ σf := ReachesN.split hre (hjk ▸ hrun)
+    obtain ⟨σ1, hs1, hrest1⟩ : ∃ σ1, M.step σ₁ = .next σ1 ∧ ReachesN M 0 σ1 σf := by
+      cases hrest with
+      | succ s r => exact ⟨_, s, r⟩
+    cases hrest1.zero_eq
+    iapply fupd_mask_intro Std.LawfulSet.empty_subset
+    iintro Hclose
+    isplitr
+    · ipureintro
+      exact ⟨_, _, _, MachineModel.primStep_loop_next M hs1⟩
+    iintro %κ %e₂ %σ₂ %eₜ %Hstep
+    imod Hclose with -
+    obtain ⟨hκ, heₜ, (⟨σn, hn, he, hs⟩ | ⟨e, out, hh, _, _⟩)⟩ :=
+      MachineModel.primStep_loop_inv M Hstep
+    · subst hκ heₜ he hs
+      rw [hs1] at hn
+      cases hn
+      imod ghost_map_update 0 $$ Hc Hj with ⟨Hc, Hj⟩
+      imod runFoot_update (M := M) mr mm ro text rs l S hmem rv mv hr hm hregs hmems
+        $$ [Hmr Hmm Hf] with ⟨%mr', %mm', Hmr, Hmm, Hf, %⟨hr', hm'⟩⟩
+      · iframe Hmr Hmm Hf
+      imodintro
+      isplitr
+      · ipureintro; rfl
+      isplitl [Hc Hmr Hmm]
+      · iapply fullInterp_intro (M := M) _ 0 (LawfulPartialMap.get?_insert_eq rfl)
+        iframe Hc
+        iapply lagInterp_intro (M := M) mr' mm' _ ⟨hr', hm', hokf⟩ (.zero _)
+        iframe Hmr Hmm
+      isplitl [HR Hf Hj]
+      · ihave Hw := next _ _ hP $$ [Hf HR]
+        · iframe Hf HR
+        unfold mTWP cpuTok ctlAt
+        iapply Hw $$ Hj
+      iapply BigSepL.bigSepL_nil.2
+      iempintro
+    · rw [hs1] at hh; cases hh
+  · -- intermediate step: advance the lag
+    have hrest : ReachesN M (k + 1 + 1) σ₁ σf := ReachesN.split hre (hjk ▸ hrun)
+    obtain ⟨σ1, hs1, _⟩ : ∃ σ1, M.step σ₁ = .next σ1 ∧ ReachesN M (k + 1) σ1 σf := by
+      cases hrest with
+      | succ s r => exact ⟨_, s, r⟩
+    iapply fupd_mask_intro Std.LawfulSet.empty_subset
+    iintro Hclose
+    isplitr
+    · ipureintro
+      exact ⟨_, _, _, MachineModel.primStep_loop_next M hs1⟩
+    iintro %κ %e₂ %σ₂ %eₜ %Hstep
+    imod Hclose with -
+    obtain ⟨hκ, heₜ, (⟨σn, hn, he, hs⟩ | ⟨e, out, hh, _, _⟩)⟩ :=
+      MachineModel.primStep_loop_inv M Hstep
+    · subst hκ heₜ he hs
+      rw [hs1] at hn
+      cases hn
+      imod ghost_map_update (j + 1) $$ Hc Hj with ⟨Hc, Hj⟩
+      imodintro
+      isplitr
+      · ipureintro; rfl
+      isplitl [Hc Hmr Hmm]
+      · iapply fullInterp_intro (M := M) _ (j + 1) (LawfulPartialMap.get?_insert_eq rfl)
+        iframe Hc
+        iapply lagInterp_intro (M := M) mr mm σ0 ⟨hr, hm, hok⟩ (hre.snoc hs1)
+        iframe Hmr Hmm
+      isplitl [HR Hf Hj]
+      · iapply ih (j + 1) (by omega)
+        unfold ctlAt
+        iframe Hj Hf HR
+      iapply BigSepL.bigSepL_nil.2
+      iempintro
+    · rw [hs1] at hh; cases hh
+
 /-- **Owned-footprint run rule.** Owning the run's registers and bytes at their
 current values, with the read-only cells, and handing the continuation the
-final owned values, proves the loop's total WP. -/
+final owned values, proves the loop's total WP. The states inside each
+segment are never described (the ghost maps lag behind them). -/
 theorem wp_localRun {Φ : Nat × String → IProp GF} {ro : List (Nat × BitVec 64)}
     {text : List (Nat × BitVec 8)} {rs : List Nat} {S : Nat → Prop}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} :
     ∀ n rv mv, LocalRun M ro text rs S Q n rv mv →
       roOwn (GF := GF) ro text ∗ sepL rs (fun r => r ↦ᵣ rv r) ∗ ownSet S (fun a => a ↦ₘ mv a) ∗
-        (∀ rv' mv', ⌜Q rv' mv'⌝ -∗ sepL rs (fun r => r ↦ᵣ rv' r) -∗
-          ownSet S (fun a => a ↦ₘ mv' a) -∗ mTWP M Φ)
+        runKont M Φ rs S Q
       ⊢ mTWP M Φ := by
   intro n
   induction n with
@@ -158,71 +361,63 @@ theorem wp_localRun {Φ : Nat × String → IProp GF} {ro : List (Nat × BitVec 
     iapply Hk $$ %rv %mv %hQ Hrs HS
   | succ n ih =>
     intro rv mv hrun
-    rcases hrun with hQ | hstep
+    rcases hrun with hQ | ⟨K, hseg⟩
     · iintro ⟨_, Hrs, HS, Hk⟩
       iapply Hk $$ %rv %mv %hQ Hrs HS
     unfold roOwn ownSet
-    iintro ⟨⟨#Hro, #Htx⟩, Hrs, ⟨%l, %⟨hnd, hmem⟩, Hl⟩, Hk⟩
-    iapply wp_exec_step
-    unfold mstateInterp regInterp memInterp
-    iintro %σ ⟨⟨%mr, Hmr, %hmr⟩, ⟨%mm, Hmm, %hmm⟩⟩
-    ihave ⟨Hmr, -, %hro⟩ := ghost_map_lookup_fn G.regName mr (fun p : Nat × BitVec 64 => p.1)
-      (fun _ => DFrac.discard) (fun p => p.2) ro $$ [Hmr]
-    · iframe Hmr; unfold regPointsTo; iexact Hro
-    ihave ⟨Hmm, -, %htx⟩ := ghost_map_lookup_fn G.memName mm (fun p : Nat × BitVec 8 => p.1)
-      (fun _ => DFrac.discard) (fun p => p.2) text $$ [Hmm]
-    · iframe Hmm; unfold memPointsTo; iexact Htx
-    ihave ⟨Hmr, Hrs, %hrs⟩ := ghost_map_lookup_fn G.regName mr (fun r : Nat => r)
-      (fun _ => DFrac.own 1) rv rs $$ [Hmr Hrs]
-    · iframe Hmr; unfold regPointsTo; iexact Hrs
-    ihave ⟨Hmm, Hl, %hl⟩ := ghost_map_lookup_fn G.memName mm (fun a : Nat => a)
-      (fun _ => DFrac.own 1) mv l $$ [Hmm Hl]
-    · iframe Hmm; unfold memPointsTo; iexact Hl
-    have hRO : ROHolds M σ ro text :=
-      ⟨fun p hp => hmr _ _ (hro p hp), fun p hp => hmm _ _ (htx p hp)⟩
-    obtain ⟨σ', hs, hregs, hmems, hrest⟩ := hstep σ hRO
-      (fun r hr => hmr _ _ (hrs r hr)) (fun a ha => hmm _ _ (hl a ((hmem a).2 ha)))
-    imodintro
-    isplitr
-    · ipureintro; exact ⟨σ', hs⟩
-    iintro %σ'' %hs'
-    rw [hs] at hs'
-    cases hs'
-    imod ghost_map_update_fn G.regName (fun r : Nat => r) rv (M.reg σ') rs mr $$ [Hmr Hrs]
-      with ⟨%mr', Hmr, Hrs, %hmr'⟩
-    · iframe Hmr; iexact Hrs
-    imod ghost_map_update_fn G.memName (fun a : Nat => a) mv (M.mem σ') l mm $$ [Hmm Hl]
-      with ⟨%mm', Hmm, Hl, %hmm'⟩
-    · iframe Hmm; iexact Hl
-    imodintro
-    isplitl [Hmr Hmm]
-    · isplitl [Hmr]
-      · iexists mr'
-        iframe Hmr
-        ipureintro
-        intro k v hk
-        rcases hmr' k v hk with ⟨x, _, rfl, rfl⟩ | ⟨hnot, hk⟩
-        · rfl
-        · rw [hregs k (fun hk' => hnot k hk' rfl)]; exact hmr k v hk
-      · iexists mm'
-        iframe Hmm
-        ipureintro
-        intro k v hk
-        rcases hmm' k v hk with ⟨x, _, rfl, rfl⟩ | ⟨hnot, hk⟩
-        · rfl
-        · rw [hmems k (fun hS => hnot k ((hmem k).2 hS) rfl)]; exact hmm k v hk
-    iapply ih (M.reg σ') (M.mem σ') hrest
-    unfold roOwn ownSet
-    isplitr
-    · iframe Hro Htx
-    isplitl [Hrs]
-    · unfold regPointsTo; iexact Hrs
-    isplitl [Hl]
-    · iexists l
-      isplitr
-      · ipureintro; exact ⟨hnd, hmem⟩
-      unfold memPointsTo; iexact Hl
-    iexact Hk
+    iintro ⟨⟨#Hro, #Htx⟩, Hrs, ⟨%l, %⟨hnd, hmem⟩, Hl⟩, Hk⟩ Htok
+    have next : ∀ rv' mv', LocalRun M ro text rs S Q n rv' mv' →
+        runFoot (GF := GF) ro text rs l rv' mv' ∗ runKont M Φ rs S Q ⊢ mTWP M Φ := by
+      intro rv' mv' hr'
+      unfold runFoot
+      iintro ⟨⟨#Hro, #Htx, Hrs, Hl⟩, Hk⟩
+      iapply ih rv' mv' hr'
+      unfold roOwn ownSet
+      iframe Hro Htx Hrs Hk
+      iexists l
+      iframe Hl
+      ipureintro; exact ⟨hnd, hmem⟩
+    iapply seg_aux (M := M) hmem hseg (runKont M Φ rs S Q) next K 0 (by omega)
+    unfold cpuTok runFoot
+    iframe Htok Hro Htx Hrs Hl Hk
+
+/-- **VSA segments are local-run segments.** A `RunFact` (the shape
+`Inst.seg_runFact` produces from `segEval_sound`) whose read-only registers
+and bytes are read-only or owned, whose written registers are owned at their
+current values, and whose written bytes are owned bytes at their current
+values, is one `SegFrom` segment. The successor's owned values are the old
+ones overwritten by the write lists. -/
+theorem segFrom_of_runFact {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
+    {rs : List Nat} {S : Nat → Prop} {n : Nat} {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
+    {RR : List (Nat × DFrac × BitVec 64)} {MR : List (Nat × DFrac × BitVec 8)}
+    {RW : List (Nat × BitVec 64 × BitVec 64)} {MW : List (Nat × BitVec 8 × BitVec 8)}
+    {P : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
+    (hrun : RunFact M n RR MR RW MW)
+    (hRR : ∀ p ∈ RR, (p.1, p.2.2) ∈ ro ∨ (p.1 ∈ rs ∧ rv p.1 = p.2.2))
+    (hMR : ∀ p ∈ MR, (p.1, p.2.2) ∈ text ∨ (S p.1 ∧ mv p.1 = p.2.2))
+    (hRW : ∀ p ∈ RW, p.1 ∈ rs ∧ rv p.1 = p.2.1)
+    (hMW : ∀ p ∈ MW, S p.1 ∧ mv p.1 = p.2.1)
+    (hP : ∀ rv' mv', (∀ p ∈ RW, rv' p.1 = p.2.2) →
+      (∀ r ∈ rs, (∀ p ∈ RW, p.1 ≠ r) → rv' r = rv r) →
+      (∀ p ∈ MW, mv' p.1 = p.2.2) → (∀ a, S a → (∀ p ∈ MW, p.1 ≠ a) → mv' a = mv a) →
+      P rv' mv') :
+    SegFrom M ro text rs S n rv mv P := by
+  intro σ hok hro hrs hS
+  have hfoot : FootHolds (M := M) σ RR MR RW MW := by
+    refine ⟨fun p hp => ?_, fun p hp => ?_, fun p hp => ?_, fun p hp => ?_⟩
+    · rcases hRR p hp with h | ⟨h1, h2⟩
+      · exact hro.1 _ h
+      · rw [hrs _ h1, h2]
+    · rcases hMR p hp with h | ⟨h1, h2⟩
+      · exact hro.2 _ h
+      · rw [hS _ h1, h2]
+    · obtain ⟨h1, h2⟩ := hRW p hp; rw [hrs _ h1, h2]
+    · obtain ⟨h1, h2⟩ := hMW p hp; rw [hS _ h1, h2]
+  obtain ⟨σ', hre, hok', hloc⟩ := hrun σ hok hfoot
+  refine ⟨σ', hre, hok', fun key hk => hloc.reg_frame key fun p hp h => hk (h ▸ (hRW p hp).1),
+    fun a ha => hloc.mem_frame a fun p hp h => ha (h ▸ (hMW p hp).1), hP _ _ hloc.reg_new
+    (fun r hr hne => (hloc.reg_frame r hne).trans (hrs r hr)) hloc.mem_new
+    (fun a ha hne => (hloc.mem_frame a hne).trans (hS a ha))⟩
 
 end Run
 

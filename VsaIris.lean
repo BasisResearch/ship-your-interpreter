@@ -9,3 +9,5 @@ import VsaIris.Audit
 import VsaIris.Vsa.Instance
 import VsaIris.Vsa.HeapShape
 import VsaIris.Vsa.ControlWitness
+import VsaIris.LocalRun
+import VsaIris.MallocRun
