@@ -3,6 +3,7 @@ import VsaIris.MallocRun
 import VsaIris.Loop
 import VsaIris.Interp.Need
 import VsaIris.Interp.Vacuity
+import VsaIris.Vsa.AllocHoles
 import VsaIris.Vsa.HeapShape
 import Vsa.RuntimeRepr
 import Vsa.While.Cost
@@ -311,9 +312,10 @@ field must come with a satisfiability witness (xv6iris durable-notes
 "Vacuity"): the allocator runs at the control image (`ControlEnd`), the
 newlib specs at a concrete call. -/
 structure IrisHoles : Prop where
-  /-- `MallocRoomRun`/`MallocLocalRun`/`FreeLocalRun`/`ReallocLocalRun`
-  (`VsaIris/MallocRun.lean`) at the binary. H4 may discharge them. -/
-  alloc : True
+  /-- The allocator's first-order runs at the binary, both regimes
+  (`VsaIris/Vsa/AllocHoles.lean`); `VsaHeap.allocSpecs` turns them into the
+  Iris specs. H4 discharges them field by field. -/
+  alloc : VsaHeap.AllocHoles
   /-- Safety of `snprintf` (`%s`/`%d` messages in `runtime_error`) and
   `fprintf` (error and OOM paths). Partial mode only. -/
   newlib : True
