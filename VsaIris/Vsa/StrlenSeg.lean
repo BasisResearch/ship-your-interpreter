@@ -385,9 +385,9 @@ theorem strlenAluStep {live : Nat → Prop} {p len : Nat} {bv : Nat → BitVec 8
     · exact .inr ⟨by unfold strlenRs; exact .tail _ hrs, rfl⟩
     · cases hq
   · rcases List.mem_cons.mp hq with rfl | hq
-    · exact ⟨by unfold strlenRs; exact List.mem_cons_self, hpc⟩
+    · exact .inl ⟨by unfold strlenRs; exact List.mem_cons_self, hpc⟩
     · rcases List.mem_cons.mp hq with rfl | hq
-      · exact ⟨by unfold strlenRs; exact .tail _ hrd, rfl⟩
+      · exact .inl ⟨by unfold strlenRs; exact .tail _ hrd, rfl⟩
       · cases hq
   · intro rv' mv' hnew hframe _ hmem
     refine hnext rv' mv' (hnew _ List.mem_cons_self)

@@ -76,9 +76,9 @@ theorem segFrom_of_segW {ro : List (Nat × BitVec 64)} {text : List (Nat × BitV
     (fun p hp => nomatch hp) hMR ?_ ?_ ?_
   · intro p hp
     rcases List.mem_cons.mp hp with rfl | hp
-    · exact ⟨hPC, hpc⟩
+    · exact Or.inl ⟨hPC, hpc⟩
     · obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
-      exact ⟨(hL q hq).1, (hL q hq).2.symm⟩
+      exact Or.inl ⟨(hL q hq).1, (hL q hq).2.symm⟩
   · intro p hp
     obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
     exact hW q hq
