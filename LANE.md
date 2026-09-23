@@ -162,12 +162,33 @@ anywhere in this lane's files; `scripts/check_iris_holes.py` passes.
 **`strcmp`** (entry `0x80006ea0`, 24 blocks). Segments: landed and checked
 (above). Needed: the `Ctx`/`Reads`/pin-list module (the `StrlenSeg.lean`
 template at `strcmpRegs = [1, 5, 6, 7, 10, 11, 12, 13, 14, 15]`), then the
-chain. Two read regions instead of one, and the static `mask` word at
-`0x8001ac80` (loaded by the `auipc`/`ld` at `0x80006eb0`) enters the
-persistent `text`. The word loop is the same `detect_all_ones` arithmetic as
-`strlen`'s, three words unrolled per iteration; the tail extracts the
-differing byte with `slli`/`srli`. Estimate: about the size of `strlen`'s
-chain, plus the second pointer.
+chain. Three things a reader should know before starting it:
+
+- **Two read regions, and a `.rodata` word.** The magic mask is loaded from
+  `0x8001ac80` by the `auipc`/`ld` pair at `0x80006eb0`; it holds eight `0x7f`
+  bytes, so the loaded word is `StrlenMagic.magic7f` and the NUL detection is
+  the SAME `detect_all_ones` arithmetic `strlen` uses. `Code.StrcmpLoaded`
+  does NOT cover those eight bytes (they are outside `[0x80006ea0,
+  0x80006fcc)`), so they enter the run's persistent `text` explicitly — VSA's
+  own word-path precondition carries them as eight byte pins
+  (`Vsa/Sim/StrcmpSpecW.lean:35-40`).
+- **The return value is a SIGN CLASS, not a byte difference.** The lane-compare
+  tail (`0x80006f20 … 0x80006f80`) narrows by 16-bit halves: at
+  `0x80006f5c`/`0x80006f44` it computes `lo16(a2) - lo16(a3)` (resp. the high
+  half) and only falls through to the byte subtraction at `0x80006f74` when
+  the low byte of that difference is nonzero. So when the first differing byte
+  is the ODD one of its 16-bit half, the function returns `256 ×` the byte
+  difference. Only the sign is the contract. VSA states it that way
+  (`strcmp_spec`'s "sign-class `Q` form", `Vsa/Sim/StrcmpSpecW.lean:5-10`);
+  the Iris spec must too. Writing the post as `a0 = byte₁ - byte₂` is WRONG
+  and will only fail at the very end of the tail.
+- **The NUL exits re-enter the byte loop.** `0x80006fa4`/`0x80006fac`/
+  `0x80006fb8` return 0 when the words are equal, but otherwise jump to the
+  byte loop at `0x80006f84` with the cursors advanced, so the byte path is
+  reachable from the aligned path and is not just the misaligned case.
+
+Estimate: larger than `strlen`'s chain — two cursors, the unrolled
+three-word body, and the lane-compare tail's bit reasoning.
 
 **`memcpy`** (entry `0x80006bc8`, 17 blocks). Segments: `Vsa/Sim/`
 `MemcpyCopySegments.lean` already has 21 of them, covering every block EXCEPT
