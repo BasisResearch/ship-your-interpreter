@@ -383,6 +383,31 @@ theorem MOK.fin_null {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   have h10 : R' 10 = R 10 := hk 10 (by decide) (by decide) (by decide)
   exact O.null R' Mt ⟨hR, h10.trans h0, hheap, hpres, hframe, hst⟩
 
+/-- **What a take owes its caller**: the block `v + 16` is fresh and aligned,
+the heap holds it with the top grown by at most the request's chunk, the
+footprint is present, and every byte outside the write window is at its entry
+value. Every path that hands out a block — a small-bin take, the exact-fit
+last remainder, the top split, a large-bin take — produces exactly this. -/
+structure TakeRet (C : MCtx) (Mt : Mem) (v : Nat) : Prop where
+  fresh : FreshBlock vsaLayoutP C.H (v + 16) C.n.toNat
+  align : (v + 16) % 16 = 0
+  heap : ∃ top brkv chunks bins,
+    PHeapAt Mt ((v + 16, C.n.toNat) :: C.H) top brkv chunks bins ∧
+      top ≤ C.top0 + physSize C.n.toNat
+  pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
+  frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
+
+/-- **The epilogue's end with a freshly taken block.** `MOK.fin_ok` at the
+pointer every take's `addi a0,a5,16` leaves in `a0`. -/
+theorem MOK.fin_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {v : Nat}
+    (h10 : (R 10).toNat = v + 16) (T : TakeRet C Mt v) :
+    ∀ R' : Nat → BitVec 64, MRegs C R' → (∀ x, x ≠ 1 → x ≠ 2 → x ≠ 8 → R' x = R x) →
+      AW C.live C.S C.Q C.r R' Mt := by
+  refine O.fin_ok ?_ ?_ ?_ T.pres T.frame <;> rw [h10]
+  · exact T.fresh
+  · exact T.align
+  · exact T.heap
+
 /-- The epilogue at `0x80004830`. -/
 theorem epi_80004830 {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} (F : MFrame C R Mt)
     (hfin : ∀ R' : Nat → BitVec 64, MRegs C R' → (∀ x, x ≠ 1 → x ≠ 2 → x ≠ 8 → R' x = R x) →

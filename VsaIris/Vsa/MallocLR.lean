@@ -393,19 +393,16 @@ theorem lr_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt Mt' : Mem}
     hns (v + sz + 8) (by have := hnx 0 (by omega); simpa using this)
   sx_run [8] O.live at 0x8000484c
   have ha0 : ((R 15) + 16#64).toNat = v + 16 := by sx_addr
-  refine epi_8000484c O ?F (O.fin_ok ?fr ?al ?heap
-    (pres_store (pres_store D.pres))
-    (frame_store (win_foot hnx) (frame_store (win_stack (a := C.s.toNat - 96 + 8) (w := 8)
-      (by unfold mHead; omega) (by omega)) D.frame)))
+  refine epi_8000484c O ?F (O.fin_take (v := v) ?_
+    ⟨hfr, hal16, ⟨_, _, _, _, hheap, by omega⟩,
+      pres_store (pres_store D.pres),
+      frame_store (win_foot hnx) (frame_store (win_stack (a := C.s.toNat - 96 + 8) (w := 8)
+        (by unfold mHead; omega) (by omega)) D.frame)⟩)
   case F =>
     refine MFrame.of_regs ((F.store (by omega)).store (by omega)) ?_ ?_ ?_ ?_ <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-  case fr => simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [ha0]; exact hfr
-  case al => simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [ha0]; exact hal16
-  case heap =>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    rw [ha0]
-    exact ⟨_, _, _, _, hheap, by omega⟩
+  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  exact ha0
 
 /-- **The last-remainder check with its exact-fit return.** `lr_check` with
 `lr_take` closing the whole-chunk arm, so only the split (`0x80004da0`), the

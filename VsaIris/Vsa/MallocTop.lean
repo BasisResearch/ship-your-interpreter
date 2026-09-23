@@ -219,24 +219,21 @@ theorem top_path {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
       have hnbP : nb = physSize C.n.toNat := hnb.eq
       sx_run [8] O.live at 0x80004830
       have ha0 : ((BitVec.ofNat 64 C.top0) + 16#64).toNat = C.top0 + 16 := by sx_addr
-      refine epi_80004830 O ?F (O.fin_ok ?fr ?al ?heap
-        (pres_store (pres_store (pres_store (pres_store Hp.pres))))
-        (frame_store (fun b h1 h2 => .inl (hfootTop b (by omega) (by omega)))
-          (frame_store (fun b h1 h2 => .inl (.inl (.inl ⟨by omega, by omega⟩)))
-            (frame_store (win_stack (a := C.s.toNat - 96 + 8) (w := 8)
-                (by unfold mHead; omega) (by omega))
-              (frame_store (fun b h1 h2 => .inl (hfootTop b (by omega) (by omega)))
-                Hp.frame)))))
+      refine epi_80004830 O ?F (O.fin_take (v := C.top0) ?_
+        ⟨hfr, hal16, ⟨_, _, _, _, hheap, by omega⟩,
+          pres_store (pres_store (pres_store (pres_store Hp.pres))),
+          frame_store (fun b h1 h2 => .inl (hfootTop b (by omega) (by omega)))
+            (frame_store (fun b h1 h2 => .inl (.inl (.inl ⟨by omega, by omega⟩)))
+              (frame_store (win_stack (a := C.s.toNat - 96 + 8) (w := 8)
+                  (by unfold mHead; omega) (by omega))
+                (frame_store (fun b h1 h2 => .inl (hfootTop b (by omega) (by omega)))
+                  Hp.frame)))⟩)
       case F =>
         refine MFrame.of_regs ((((F.store (by omega)).store (by omega)).store
           (by omega)).store (by omega)) ?_ ?_ ?_ ?_ <;>
           simp only [upd_apply, Nat.reduceEqDiff, ite_false]
-      case fr => simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [ha0]; exact hfr
-      case al => simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [ha0]; exact hal16
-      case heap =>
-        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-        rw [ha0]
-        exact ⟨_, _, _, _, hheap, by omega⟩
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      exact ha0
     · -- the remainder is too small: grow the top
       refine hext (by omega) _ (F.of_regs ?_ ?_ ?_ ?_) ⟨?_, ?_, ?_⟩ ⟨?_, ?_, ?_, ?_⟩ ?_ <;>
         simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]

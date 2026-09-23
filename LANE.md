@@ -74,10 +74,12 @@ first-order runs of `_malloc_r`, `_free_r` and `_realloc_r` at the binary.
   `j_small` + `small_take` (small bins, over `PHeapAt.take`), `lr_check`/`lr_take`/`lr_last`
   (the last-remainder check and its exact-fit return), `bb_check`/`bb_top` (the block search's
   entry) and `top_path` (the top split, over the new `PHeapAt.topSplit` in `Vsa/HeapSplit.lean`).
-- **Factor before the third copy** (CLAUDE.md law 3): `small_take` and `lr_take` share the
-  return tail `sd a5,8(sp)` / `jal __malloc_unlock` / `ld a5,8(sp)` / `addi a0,a5,16` / epilogue.
-  `top_path`'s split arm is a third copy of the same tail with a different heap step, and the
-  large-bin take (`0x800049e8`) is a fourth; extract that tail before writing another.
+- **The take return is factored** (CLAUDE.md law 3): `TakeRet C Mt v` names what a path that
+  hands out a block owes the caller (fresh, aligned, heap with the block live, footprint present,
+  window framed) and `MOK.fin_take` ends the epilogue at `a0 = v + 16`. `small_take`, `lr_take`
+  and `top_path`'s split arm all produce one `TakeRet`; the large-bin take (`0x800049e8`) and the
+  last-remainder split should too. The instruction tail itself (`sd a5,8(sp)` / `jal
+  __malloc_unlock` / `ld a5,8(sp)` / `addi a0,a5,16`) is one `sx_run` line per copy.
 
 ## Holes (see `VsaIris/HOLES.md`)
 - `alloc.mallocChgRun`, `alloc.mallocLocalRun`, `alloc.freeChgRun`, `alloc.freeLocalRun`,

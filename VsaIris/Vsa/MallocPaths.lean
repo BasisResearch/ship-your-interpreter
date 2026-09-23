@@ -369,11 +369,14 @@ theorem small_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     (pre := pre) (post := []) hbin hcv rfl (n := C.n.toNat) (by omega) hpred hsucc rd_fd rd_bk rd_hd
     hsz hpi hag
   rw [List.append_nil] at hheap
-  refine epi_80004830 O ?F (O.fin_ok ?fr ?al ?heap
-    (pres_store (pres_store (pres_store (pres_store Hp.pres))))
-    (frame_store (win_foot hnx) (frame_store (win_foot hfP)
-      (frame_store (win_stack (a := C.s.toNat - 96 + 8) (w := 8) (by unfold mHead; omega) (by omega))
-        (frame_store (win_foot hfB) Hp.frame)))))
+  refine epi_80004830 O ?F (O.fin_take (v := cv.addr) ?a0
+    ⟨?fr, ?al, ?heap,
+      pres_store (pres_store (pres_store (pres_store Hp.pres))),
+      frame_store (win_foot hnx) (frame_store (win_foot hfP)
+        (frame_store (win_stack (a := C.s.toNat - 96 + 8) (w := 8)
+            (by unfold mHead; omega) (by omega))
+          (frame_store (win_foot hfB) Hp.frame)))⟩)
+  case a0 => simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact ha0
   case F =>
     refine ⟨?_, by rw [rd_frame 80 (by omega) (by omega)]; exact F.s0,
       by rw [rd_frame 88 (by omega) (by omega)]; exact F.ra, ?_, ?_, ?_⟩ <;>
@@ -382,11 +385,8 @@ theorem small_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     · exact F.s1
     · exact F.s2
     · exact F.s3
-  case fr => simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [ha0]; exact hfr
-  case al => simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [ha0]; exact hal16
-  case heap =>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    rw [ha0]
-    exact ⟨_, _, _, _, hheap, by omega⟩
+  case fr => exact hfr
+  case al => exact hal16
+  case heap => exact ⟨_, _, _, _, hheap, by omega⟩
 
 end VsaIris.VsaHeap
