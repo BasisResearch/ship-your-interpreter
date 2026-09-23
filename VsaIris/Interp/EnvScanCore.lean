@@ -80,13 +80,14 @@ structure GetEntry (s : Nat) (r : BitVec 64) (sv : Nat → BitVec 64) (R : Nat �
   saved : ∀ k ∈ getSaved, R k = sv k
 
 /-- The frame head: the prologue done, `s3` the name, `s4` the frame, `s5`
-the output slot. -/
-structure GetHead (s : Nat) (r : BitVec 64) (sv : Nat → BitVec 64) (e name out : BitVec 64)
-    (R : Nat → BitVec 64) (Mt : Mem) : Prop where
+the value slot, whose bytes are still the caller's `so`. -/
+structure GetHead (s : Nat) (r : BitVec 64) (sv : Nat → BitVec 64) (so : Nat → BitVec 8)
+    (e name o : BitVec 64) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   stack : GetStack s r sv R Mt
   name : R 19 = name
   frame : R 20 = e
-  out : R 21 = out
+  out : R 21 = o
+  slot : ∀ a, o.toNat ≤ a → a < o.toNat + 24 → imgM Mt a = so a
 
 /-- `BitVec.toInt` of a small literal. -/
 theorem toInt_ofNat_small {n : Nat} (h : n < 2 ^ 63) : (BitVec.ofNat 64 n).toInt = n := by

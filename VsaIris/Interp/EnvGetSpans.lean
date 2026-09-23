@@ -22,18 +22,21 @@ namespace VsaIris.Interp
 open VsaIris.Sym VsaIris.MallocFast Vsa.MemRepr Vsa.Sim
 
 theorem get_entry {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out : Nat} {r : BitVec 64}
-    {sv : Nat → BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
+    {sv : Nat → BitVec 64} {so : Nat → BitVec 8} {R : Nat → BitVec 64} {Mt : Mem}
     (hlo : htifLo + 16 + 64 ≤ s) (hhi : s ≤ 0x100000000) (hal : s % 16 = 0)
-    (h : GetEntry s r sv R) :
+    (h : GetEntry s r sv R)
+    (hso : ∀ a, (R 12).toNat ≤ a → a < (R 12).toNat + 24 → imgM Mt a = so a)
+    (hsep : (R 12).toNat + 24 ≤ s - 64 ∨ s ≤ (R 12).toNat) :
     Span live (baseS s out) 0x80002c10#64 R Mt
-      (fun pc' R' Mt' => pc' = 0x80002c40#64 ∧ GetHead s r sv (R 10) (R 11) (R 12) R' Mt') := by
+      (fun pc' R' Mt' => pc' = 0x80002c40#64 ∧ GetHead s r sv so (R 10) (R 11) (R 12) R' Mt') := by
   intro Q hk
   have he := h.env
   have h2 := h.sp
   sx_run hl at 0x80002c40
-  refine hk _ _ _ ⟨rfl, ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_⟩
+  refine hk _ _ _ ⟨rfl, ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, fun a h1 h2' => ?_⟩
   all_goals (try sx_norm)
   all_goals (try sx_mem)
+  any_goals (simp (disch := sx_addr) only [imgM_store_miss]; exact hso a h1 h2')
   · rw [BitVec.toNat_add, h2]; simp only [BitVec.reduceToNat]; omega
   · exact h.ra
   all_goals exact h.saved _ (by decide)

@@ -231,6 +231,8 @@ structure GetCall where
   out : BitVec 64
   x : String
   saved : List (Nat × BitVec 64)
+  /-- The value slot's bytes at the entry. -/
+  so : Nat → BitVec 8
 
 /-- What the entry guarantees about a call's constants. -/
 structure GetCall.OK (C : GetCall) : Prop where
@@ -251,6 +253,7 @@ structure InFrame (C : GetCall) (G : FrameGeom) (n : Nat) (img : Nat → BitVec 
   img : ∀ a, frameS G a → imgM Mt a = img a
   sepOut : ∀ a, frameS G a → a < C.out.toNat ∨ C.out.toNat + 24 ≤ a
   sepStk : ∀ a, frameS G a → a < C.s.toNat - 64 ∨ C.s.toNat ≤ a
+  slot : ∀ a, C.out.toNat ≤ a → a < C.out.toNat + 24 → imgM Mt a = C.so a
 
 /-- The frame state reads only `sp`, `s3`, `s4`, `s5`, `s6`. -/
 theorem InFrame.regs {C : GetCall} {G : FrameGeom} {n : Nat} {img : Nat → BitVec 8}
@@ -265,6 +268,7 @@ theorem InFrame.regs {C : GetCall} {G : FrameGeom} {n : Nat} {img : Nat → BitV
   img := h.img
   sepOut := h.sepOut
   sepStk := h.sepStk
+  slot := h.slot
 
 theorem take_succ_all {l : List (String × Value)} {i : Nat} {x : String} (hi : i < l.length)
     (h : ∀ p ∈ l.take i, p.1 ≠ x) (hne : l[i].1 ≠ x) : ∀ p ∈ l.take (i + 1), p.1 ≠ x := by
@@ -409,10 +413,12 @@ structure ScanSite (live : Nat → Prop) where
   jexec : JalExec (vsaModel live) jal jcode strcmpPC
   jtext : ∀ p ∈ codeFoot jal jcode, (p.1, p.2.2) ∈ envText
   jal4 : (BitVec.ofNat 64 (jal + 4)).toNat % 4 = 0
-  sEntry : ∀ {s out : Nat} {r : BitVec 64} {sv R : Nat → BitVec 64} {Mt : Mem},
-    htifLo + 16 + 64 ≤ s → s ≤ 0x100000000 → s % 16 = 0 → GetEntry s r sv R →
+  sEntry : ∀ {s out : Nat} {r : BitVec 64} {sv R : Nat → BitVec 64} {so : Nat → BitVec 8}
+    {Mt : Mem}, htifLo + 16 + 64 ≤ s → s ≤ 0x100000000 → s % 16 = 0 → GetEntry s r sv R →
+    (∀ a, (R 12).toNat ≤ a → a < (R 12).toNat + 24 → imgM Mt a = so a) →
+    ((R 12).toNat + 24 ≤ s - 64 ∨ s ≤ (R 12).toNat) →
     Span live (baseS s out) entry R Mt
-      (fun pc' R' Mt' => pc' = head ∧ GetHead s r sv (R 10) (R 11) (R 12) R' Mt')
+      (fun pc' R' Mt' => pc' = head ∧ GetHead s r sv so (R 10) (R 11) (R 12) R' Mt')
   sHead : ∀ {s out n : Nat} {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem},
     FrameLayout (imgM Mt) G n → (R 20).toNat = G.e →
     Span live (getS s out G) head R Mt
@@ -705,7 +711,7 @@ def ScanChainAt (Sx : ScanSite live) (Wp : MachWP (GF := GF) (vsaModel live))
     (Φ : Nat × String → IProp GF) (N : NativeAddrs) (C : GetCall) (st : Store)
     (B : List (Nat × Nat)) (fa fa' : Addr) : Prop :=
   ∀ (R : Nat → BitVec 64) (Mt : Mem) (e' : BitVec 64), ChainFrom st C.x fa fa' →
-    GetHead C.s.toNat C.r (pairVal C.saved) e' C.pn C.out R Mt →
+    GetHead C.s.toNat C.r (pairVal C.saved) C.so e' C.pn C.out R Mt →
     (textOwn envText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ∗ strAt C.pn.toNat C.x ∗ frameAt fa' e'.toNat ∗
       VsaIris.PC ↦ᵣ Sx.head ∗ regsOf gprs R ∗
       ownSet (baseS C.s.toNat C.out.toNat) (fun a => a ↦ₘ imgM Mt a) ∗ storeRepr N st B ∗
@@ -762,7 +768,7 @@ theorem scan_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       iapply ih pa hpa R1 _ (BitVec.ofNat 64 Gm.par) (.step hpath hf hmiss hfp)
         ⟨hF.stack.congr (hk 2 (by decide) (by decide)) (hk 22 (by decide) (by decide))
           (fun _ _ _ => rfl) hs64, (hk 19 (by decide) (by decide)).trans hF.name, h20,
-          (hk 21 (by decide) (by decide)).trans hF.out⟩
+          (hk 21 (by decide) (by decide)).trans hF.out, hF.slot⟩
       rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hparlt]
       iframe Ht Hgp Hcmp Hx Hpa Hpc HR HB Hst HK
   · -- the root: return 0
@@ -816,7 +822,8 @@ theorem scan_chain (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       sepOut := fun a ha => by
         have := hdisj a ha; unfold baseS at this; omega
       sepStk := fun a ha => by
-        have := hdisj a ha; unfold baseS at this; omega }
+        have := hdisj a ha; unfold baseS at this; omega
+      slot := fun a h1 h2 => (hbase a (.inr ⟨h1, h2⟩)).trans (hhead.slot a h1 h2) }
   iapply wp_span Wp (Sx.sHead (s := C.s.toNat) (out := C.out.toNat) hF.lay hF.env)
   iframe Ht Hgp Hpc HR HS
   iintro %pc1 %R1 %Mt2 %⟨rfl, hcase⟩ Hpc HR HS
@@ -907,8 +914,8 @@ theorem scan_entry (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       (10 : Nat) ↦ᵣ e ∗ (11 : Nat) ↦ᵣ pn ∗ (12 : Nat) ↦ᵣ out ∗ VsaIris.sp ↦ᵣ s ∗
       clobbered argClob ∗ savedOwn saved ∗ stackScratch s envGetNeed ∗ frameAt fa e.toNat ∗
       strAt pn.toNat x ∗ ownSet (InExt (out.toNat, 24)) (fun a => a ↦ₘ fo a) ∗ storeRepr N st B ∗
-      (scanMissK Wp Φ N ⟨s, r, pn, out, x, saved⟩ st B fa ∧
-        scanHitK Sx Wp Φ N ⟨s, r, pn, out, x, saved⟩ st B fa)
+      (scanMissK Wp Φ N ⟨s, r, pn, out, x, saved, fo⟩ st B fa ∧
+        scanHitK Sx Wp Φ N ⟨s, r, pn, out, x, saved, fo⟩ st B fa)
     ⊢ Wp.W Φ := by
   iintro ⟨#Ht, #Hgp, #Hcmp, Hpc, Hra, Ha0, Ha1, Ha2, Hsp, Hcl, Hsv, Hstk, #Hfa, #Hx, Hout, Hst, HK⟩
   ihave ⟨Hst, %⟨hene, hfalt, hinv⟩⟩ := storeRepr_frameInfo N $$ [Hst Hfa]
@@ -928,7 +935,7 @@ theorem scan_entry (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   · iframe Hstk Hout
   ihave HB := ownSet_iff (T := baseS s.toNat out.toNat) _ (fun a => by
     unfold baseS InExt envGetNeed; omega) $$ HB
-  ihave ⟨%Mt0, -, HB⟩ := ownSet_tracked _ _ $$ HB
+  ihave ⟨%Mt0, %hag, HB⟩ := ownSet_tracked _ _ $$ HB
   have hperm : (([(VsaIris.ra, r), (10, e), (11, pn), (12, out), (VsaIris.sp, s)] ++ saved).map
       Prod.fst ++ argClob).Perm gprs := by
     simp only [List.map_append, List.map_cons, List.map_nil, hsv]; decide
@@ -951,13 +958,21 @@ theorem scan_entry (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     rw [← hsv] at hk
     obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hk
     rw [hR0 p (List.mem_append_right _ hp), pairVal_of_mem saved (by rw [hsv]; decide) p hp]
-  let C : GetCall := ⟨s, r, pn, out, x, saved⟩
+  let C : GetCall := ⟨s, r, pn, out, x, saved, fo⟩
   have hC : C.OK := ⟨hsp, hslot, hr, hsv, hsep⟩
   have hentry : GetEntry s.toNat r (pairVal saved) R0 :=
     ⟨by rw [hR 10 e (by simp)]; intro h; exact hene (by rw [h]; rfl),
      by rw [show (2 : Nat) = VsaIris.sp from rfl, hR VsaIris.sp s (by simp)],
      hR VsaIris.ra r (by simp), hsvR⟩
-  iapply wp_span Wp (Sx.sEntry (out := out.toNat) hsp.lo hsp.hi hsp.align hentry)
+  have hso : ∀ a, (R0 12).toNat ≤ a → a < (R0 12).toNat + 24 → imgM Mt0 a = fo a :=
+    fun a h1 h2 => by
+      rw [hR 12 out (by simp)] at h1 h2
+      have hns : ¬ InExt (s.toNat - envGetNeed, envGetNeed) a := by
+        unfold InExt envGetNeed; omega
+      rw [hag a (by unfold baseS; omega)]
+      simp [glue, hns]
+  iapply wp_span Wp (Sx.sEntry (out := out.toNat) hsp.lo hsp.hi hsp.align hentry hso
+    (by rw [hR 12 out (by simp)]; exact hsep))
   iframe Ht Hgp Hpc HR HB
   iintro %pc1 %R1 %Mt1 %⟨rfl, hhead⟩ Hpc HR HB
   rw [hR 10 e (by simp), hR 11 pn (by simp), hR 12 out (by simp)] at hhead
