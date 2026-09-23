@@ -41,12 +41,64 @@ section SegRun
 
 variable {live : Nat → Prop}
 
-/-- **A read-only reflected segment as one local-run step.** The segment `bs`
-from `pc0` writes no memory (`hsilent`), pins the registers `L` (each owned,
-at its current value in the run's valuation `rv`), and reads the bytes `MR`
-(each either a persistent text byte or an owned byte at its current value).
-The successor's valuation has the reflected end PC, the reflected final value
-of every pin, and every other owned register and byte unchanged. -/
+/-- **A reflected segment as one local-run step.** The segment `bs` from
+`pc0` pins the registers `L` (each owned, at its current value in the run's
+valuation `rv`), reads the bytes `MR` (each either a persistent text byte or
+an owned byte at its current value) and writes the owned bytes `W` (at their
+current values). The successor's valuation has the reflected end PC, the
+reflected final value of every pin, every written byte at its value after the
+reflected write log, and every other owned register and byte unchanged. -/
+theorem segFrom_of_segW {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
+    {rs : List Nat} {S : Nat → Prop} (bs : List BBlock) (L : GRegs)
+    (lds : List (List (BitVec 8))) (pc0 : BitVec 64) (MR : List (Nat × DFrac × BitVec 8))
+    (W : List (Nat × BitVec 8)) (n : Nat) {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
+    {P : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
+    (hlen : evalBlocksFuel bs = n + 1)
+    (hwf : ChainOK pc0 (keysG L) bs) (hkeys : KeysOK (keysG L))
+    (hwr : ∀ k ∈ wrChain bs, k ∈ keysG L)
+    (hcover : ∀ a, (∀ q ∈ W, q.1 ≠ a) → OutL (segOut bs L lds).log a)
+    (hfacts : ∀ c : Config, VsaOk live c →
+      FootHolds (M := vsaModel live) c [] MR (segRW bs L lds pc0) (segMW bs L lds W) →
+      ChainFacts c.σ.mem c.σ.mem L lds bs)
+    (hMR : ∀ q ∈ MR, (q.1, q.2.2) ∈ text ∨ (S q.1 ∧ mv q.1 = q.2.2))
+    (hW : ∀ q ∈ W, S q.1 ∧ mv q.1 = q.2)
+    (hPC : VsaIris.PC ∈ rs) (hpc : rv VsaIris.PC = pc0)
+    (hL : ∀ q ∈ L, q.1 ∈ rs ∧ q.2 = rv q.1)
+    (hP : ∀ (rv' : Nat → BitVec 64) (mv' : Nat → BitVec 8),
+      rv' VsaIris.PC = evalBlocksPC pc0 (SegEvalState.init L lds) bs →
+      (∀ q ∈ L, rv' q.1 = finReg bs L lds q.1) →
+      (∀ k ∈ rs, k ≠ VsaIris.PC → (∀ q ∈ L, q.1 ≠ k) → rv' k = rv k) →
+      (∀ q ∈ W, mv' q.1 = newByte bs L lds W q.1) →
+      (∀ a, S a → (∀ q ∈ W, q.1 ≠ a) → mv' a = mv a) → P rv' mv') :
+    SegFrom (vsaModel live) ro text rs S n rv mv P := by
+  refine segFrom_of_runFact
+    (seg_runFact live bs L lds pc0 MR W n hlen hwf hkeys hwr hcover hfacts)
+    (fun p hp => nomatch hp) hMR ?_ ?_ ?_
+  · intro p hp
+    rcases List.mem_cons.mp hp with rfl | hp
+    · exact ⟨hPC, hpc⟩
+    · obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
+      exact ⟨(hL q hq).1, (hL q hq).2.symm⟩
+  · intro p hp
+    obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
+    exact hW q hq
+  · intro rv' mv' hnew hframe hmemNew hmem
+    refine hP rv' mv' (hnew _ List.mem_cons_self) (fun q hq => hnew _ (.tail _
+      (List.mem_map_of_mem (f := fun p : Nat × BitVec 64 => (p.1, p.2, finReg bs L lds p.1)) hq)))
+      (fun k hk hkpc hkL => hframe k hk fun p hp => ?_)
+      (fun q hq => hmemNew _ (List.mem_map_of_mem
+        (f := fun p : Nat × BitVec 8 =>
+          (p.1, p.2, ((writeLog (wbase W) (segOut bs L lds).log)[p.1]?).getD 0)) hq))
+      (fun a ha hne => hmem a ha fun p hp => ?_)
+    · rcases List.mem_cons.mp hp with rfl | hp
+      · exact fun e => hkpc e.symm
+      · obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
+        exact hkL q hq
+    · obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
+      exact hne q hq
+
+/-- **A read-only reflected segment as one local-run step**: `segFrom_of_segW`
+with an empty written set (`hsilent`: the reflected write log is empty). -/
 theorem segFrom_of_seg {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVec 8)}
     {rs : List Nat} {S : Nat → Prop} (bs : List BBlock) (L : GRegs)
     (lds : List (List (BitVec 8))) (pc0 : BitVec 64) (MR : List (Nat × DFrac × BitVec 8))
@@ -67,26 +119,10 @@ theorem segFrom_of_seg {ro : List (Nat × BitVec 64)} {text : List (Nat × BitVe
       (∀ q ∈ L, rv' q.1 = finReg bs L lds q.1) →
       (∀ k ∈ rs, k ≠ VsaIris.PC → (∀ q ∈ L, q.1 ≠ k) → rv' k = rv k) →
       (∀ a, S a → mv' a = mv a) → P rv' mv') :
-    SegFrom (vsaModel live) ro text rs S n rv mv P := by
-  have hMWnil : segMW bs L lds [] = [] := rfl
-  refine segFrom_of_runFact
-    (hMW := fun p hp => nomatch (hMWnil ▸ hp))
-    (seg_runFact live bs L lds pc0 MR [] n hlen hwf hkeys hwr
-      (fun a _ => by rw [hsilent]; trivial) hfacts)
-    (fun p hp => nomatch hp) hMR ?_ ?_
-  · intro p hp
-    rcases List.mem_cons.mp hp with rfl | hp
-    · exact ⟨hPC, hpc⟩
-    · obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
-      exact ⟨(hL q hq).1, (hL q hq).2.symm⟩
-  · intro rv' mv' hnew hframe _ hmem
-    refine hP rv' mv' (hnew _ List.mem_cons_self) (fun q hq => hnew _ (.tail _
-      (List.mem_map_of_mem (f := fun p : Nat × BitVec 64 => (p.1, p.2, finReg bs L lds p.1)) hq)))
-      (fun k hk hkpc hkL => hframe k hk fun p hp => ?_) (fun a ha => hmem a ha (fun p hp => nomatch (hMWnil ▸ hp)))
-    rcases List.mem_cons.mp hp with rfl | hp
-    · exact fun e => hkpc e.symm
-    · obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
-      exact hkL q hq
+    SegFrom (vsaModel live) ro text rs S n rv mv P :=
+  segFrom_of_segW bs L lds pc0 MR [] n hlen hwf hkeys hwr
+    (fun a _ => by rw [hsilent]; trivial) hfacts hMR (fun q hq => nomatch hq) hPC hpc hL
+    (fun rv' mv' h1 h2 h3 _ h5 => hP rv' mv' h1 h2 h3 (fun a ha => h5 a ha (fun q hq => nomatch hq)))
 
 /-! ## Instructions outside the reflected block model
 
