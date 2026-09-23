@@ -637,7 +637,8 @@ def MallocRoomRun (M : MachineModel) (L : DlLayout) (Room : RoomPred) (maxReq : 
     (text : List (Nat × BitVec 8)) : Prop :=
   ∀ (H : List (Nat × Nat)) (n s r : BitVec 64) (saved : List (Nat × BitVec 64))
     (rv : Nat → BitVec 64) (mv : Nat → BitVec 8) (k : Nat),
-    saved.map Prod.fst = savedRegs → n.toNat ≤ maxReq → SpOK s → EntryRegs rv entry r n s saved →
+    saved.map Prod.fst = savedRegs → n.toNat ≤ maxReq → SpOK s → r.toNat % 4 = 0 →
+    EntryRegs rv entry r n s saved →
     L.Shape mv H → Room mv H (k + 1) → (∀ a, stackWin s headroom a → ¬ heapFoot L H a) →
     ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob savedRegs) (mallocBytes L H s headroom)
       (MallocRoomEnd L Room H n r s saved k) fuel rv mv
@@ -657,13 +658,14 @@ theorem isHeapRoom_forget (L : DlLayout) (Room : RoomPred) (H : List (Nat × Nat
 
 /-- `mallocSpec` under capacity: one credit buys a fresh block. `SpOK` is the
 caller's stack-pointer discipline (RAM, alignment, headroom), a pure fact the
-caller supplies. -/
+caller supplies. The return address is 4-aligned: `ret` (`jalr x0, 0(ra)`)
+clears bit 0, so no allocator returns to an odd `r`. -/
 def mallocRoomSpec (M : MachineModel) (L : DlLayout) (Room : RoomPred) (SpOK : BitVec 64 → Prop)
     (entry gpv : BitVec 64)
     (clob : List Nat) (saved : List (Nat × BitVec 64)) (headroom : Nat)
     (H : List (Nat × Nat)) (n s : BitVec 64) (k : Nat) : IProp GF :=
   fnSpec (M := M) entry
-    (fun _ => iprop(⌜SpOK s⌝ ∗ a0 ↦ᵣ n ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗
+    (fun r => iprop(⌜SpOK s ∧ r.toNat % 4 = 0⌝ ∗ a0 ↦ᵣ n ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ isHeapRoom L Room H (k + 1)))
     (fun _ => iprop(∃ p, a0 ↦ᵣ p ∗ sp ↦ᵣ s ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗
@@ -686,7 +688,7 @@ theorem mallocRoomSpec_of_run {L : DlLayout} {Room : RoomPred} {maxReq : Nat}
   unfold mallocRoomSpec fnSpec isHeapRoom
   iintro #Htext
   imodintro
-  iintro %r %Φ Hpc Hra ⟨%hspok, Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, Hheap⟩ Hk
+  iintro %r %Φ Hpc Hra ⟨%⟨hspok, hral⟩, Ha0, Hsp, #Hgp, Hclob, Hsv, Hstk, Hheap⟩ Hk
   iapply allocCall_of_localRun hd (heapFoot L H) (fun img => L.Shape img H ∧ Room img H (k + 1))
     (fun img img' h hs => ⟨hloc H img img' h hs.1, hroom H img img' _ h hs.2⟩)
     (fun rv' mv' => FreshBlock L H (rv' a0).toNat n.toNat ∧ (rv' a0).toNat % 16 = 0 ∧
@@ -697,7 +699,7 @@ theorem mallocRoomSpec_of_run {L : DlLayout} {Room : RoomPred} {maxReq : Nat}
         Room img ((p.toNat, n.toNat) :: H) k⌝ ∗
         ownSet (heapFoot L ((p.toNat, n.toNat) :: H)) (fun a => a ↦ₘ img a)) ∗
       blockOwn p.toNat n.toNat)) ?_
-    (fun rv mv he hs hdj => (hrun H n s r saved rv mv k rfl hn hspok he hs.1 hs.2 hdj).imp fun _ h =>
+    (fun rv mv he hs hdj => (hrun H n s r saved rv mv k rfl hn hspok hral he hs.1 hs.2 hdj).imp fun _ h =>
       LocalRun.mono (fun _ _ he => ⟨he.frame, he.fresh, he.align, he.shape, he.room⟩) _ _ _ h)
   · intro rv' mv' ⟨hf, hal, hsh, hrm⟩
     unfold blockOwn
