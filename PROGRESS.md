@@ -1,6 +1,6 @@
 # iris-heap progress
 
-Branch `iris-heap`, rebased on `iris-machine` `074583c` (`VsaIris/Vsa/Instance.lean`). `lake build Vsa VsaIris` is green. Every headline theorem depends only on `propext`, `Classical.choice` and `Quot.sound`; see `VsaIris/Vsa/HeapAudit.lean`. There is no sorry, axiom or raised limit.
+Branch `iris-heap`, rebased on `iris-machine` `cc4d62e` (Instance, Tools, EnvNewPilot). `lake build Vsa VsaIris` is green. Every headline theorem depends only on `propext`, `Classical.choice` and `Quot.sound`; see `VsaIris/Vsa/HeapAudit.lean`. There is no sorry, axiom or raised limit.
 
 ## Done
 

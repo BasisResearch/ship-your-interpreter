@@ -338,28 +338,31 @@ caller handed over back at its entry value (the stack bytes at some value).
 caller owns is framed by the continuation. -/
 theorem envNew_spec {Φ : Nat × String → IProp GF} (live : Nat → Prop)
     (hlive : ∀ a, codeBase ≤ a → a < codeBase + 96 → live a)
-    {HL : DlLayout} {freeEntry gpv : BitVec 64} {clob : List Nat} {headroom : Nat}
-    (impl : DlMallocImpl (vsaModel live) HL mallocEntry freeEntry gpv clob headroom)
+    {HL : DlLayout} {freeEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
+    {text : List (Nat × BitVec 8)}
+    (impl : DlMallocImpl (vsaModel live) HL mallocEntry freeEntry gpv clob savedRegs headroom text)
+    (saved : List (Nat × BitVec 64)) (hsv : saved.map Prod.fst = savedRegs)
     (harena : ArenaGeom HL) (H : List (Nat × Nat)) (esp r par s0v : BitVec 64)
     (hg : EnvNewCallerGeom (esp - 16#64) r) :
     instrAt codeBase envNewCode ∗ PC ↦ᵣ 0x800029fc#64 ∗ (1 : Nat) ↦ᵣ r ∗ (10 : Nat) ↦ᵣ par ∗
       (2 : Nat) ↦ᵣ esp ∗ (8 : Nat) ↦ᵣ s0v ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗
+      textOwn text ∗ savedOwn saved ∗
       sepL (List.range' (esp - 16#64).toNat 16) byteAny ∗
       stackScratch (esp - 16#64) headroom ∗ isHeap HL H ∗
       (∀ p : BitVec 64, ⌜FreshBlock HL H p.toNat 32⌝ -∗ PC ↦ᵣ r -∗ (1 : Nat) ↦ᵣ r -∗
         (10 : Nat) ↦ᵣ p -∗ (2 : Nat) ↦ᵣ esp -∗ (8 : Nat) ↦ᵣ s0v -∗ clobbered clob -∗
-        sepL (List.range' (esp - 16#64).toNat 16) byteAny -∗
+        savedOwn saved -∗ sepL (List.range' (esp - 16#64).toNat 16) byteAny -∗
         stackScratch (esp - 16#64) headroom -∗ isHeap HL ((p.toNat, 32) :: H) -∗
         envBlock p par -∗ mTWP (vsaModel live) Φ) ∗
       (PC ↦ᵣ link -∗ (1 : Nat) ↦ᵣ link -∗ (10 : Nat) ↦ᵣ 0#64 -∗ (2 : Nat) ↦ᵣ (esp - 16#64) -∗
-        (8 : Nat) ↦ᵣ par -∗ clobbered clob -∗
+        (8 : Nat) ↦ᵣ par -∗ clobbered clob -∗ savedOwn saved -∗
         sepL (List.range' (esp - 16#64).toNat 16) byteAny -∗
         stackScratch (esp - 16#64) headroom -∗ isHeap HL H -∗ mTWP (vsaModel live) Φ)
     ⊢ mTWP (vsaModel live) Φ := by
   have h16 := esp_ge16 hg
   have hb := sp_sub16_toNat esp h16
   have hcodeLive := codeFoot_live hlive
-  iintro ⟨#Hcode, Hpc, Hra, Ha0, Hsp, Hs0, #Hgp, Hclob, Hstk, Hscr, Hheap, Kok, Knull⟩
+  iintro ⟨#Hcode, Hpc, Hra, Ha0, Hsp, Hs0, #Hgp, Hclob, #Htext, Hsv, Hstk, Hscr, Hheap, Kok, Knull⟩
   ihave ⟨%Wstk, %hWstk, Hstk⟩ := sepL_byteAny_exists _ $$ Hstk
   have hWmem : ∀ a, (∃ q ∈ Wstk, q.1 = a) ↔ a ∈ List.range' (esp - 16#64).toNat 16 := by
     intro a; rw [← hWstk]; simp
@@ -388,9 +391,9 @@ theorem envNew_spec {Φ : Nat × String → IProp GF} (live : Nat → Prop)
   iframe Hpc Hsp Hs0 Ha0 Hra Hstk Hcode
   iintro Hpc ⟨Hsp, Hs0, Ha0, Hra, -⟩ Hstk -
   -- the call
-  have hs := impl.malloc (GF := GF) H (32#64) (esp - 16#64)
+  have hs := impl.malloc (GF := GF) H (32#64) (esp - 16#64) saved hsv
   unfold mallocSpec at hs
-  ihave #Hspec := hs
+  ihave #Hspec := hs $$ Htext
   ihave #Hjal := code_jal $$ Hcode
   have hjal := jal_exec live fun q hq => by
     have := codeFoot_bounds hq
@@ -401,16 +404,16 @@ theorem envNew_spec {Φ : Nat × String → IProp GF} (live : Nat → Prop)
   iframe Hjal Hpc Hra
   iintro Hpc Hra
   unfold VsaIris.a0 VsaIris.sp
-  iapply Hspec $$ %link %Φ Hpc Hra [Ha0 Hsp Hclob Hscr Hheap]
+  iapply Hspec $$ %link %Φ Hpc Hra [Ha0 Hsp Hclob Hsv Hscr Hheap]
   · isplitl [Ha0]
     · iexact Ha0
-    iframe Hsp Hgp Hclob Hscr Hheap
-  iintro Hpc Hra ⟨%p, Ha0, Hsp, Hclob, Hscr, Hpost⟩
+    iframe Hsp Hgp Hclob Hsv Hscr Hheap
+  iintro Hpc Hra ⟨%p, Ha0, Hsp, Hclob, Hsv, Hscr, Hpost⟩
   unfold mallocPost
   icases Hpost with (⟨%hp0, Hheap⟩ | ⟨%⟨hfresh, halign⟩, Hheap, Hblk⟩)
   · -- malloc returned NULL: the caller's continuation at the `beqz`
     subst hp0
-    iapply Knull $$ Hpc Hra Ha0 Hsp Hs0 Hclob [Hstk] Hscr Hheap
+    iapply Knull $$ Hpc Hra Ha0 Hsp Hs0 Hclob Hsv [Hstk] Hscr Hheap
     rw [← hWstk]
     iapply sepL_forget $$ Hstk
   -- malloc returned a fresh block
@@ -479,7 +482,7 @@ theorem envNew_spec {Φ : Nat × String → IProp GF} (live : Nat → Prop)
   iintro Hpc ⟨Hsp, Ha0, Hs0, Hra, -⟩ Hblk HMR
   ihave ⟨-, Hstk⟩ := (sepL_append _ _ _).1 $$ HMR
   ihave Hstk := sepL_map_forget Wstk (fun a => ((stackImg Wstk esp s0v par r)[a]?).getD 0) $$ Hstk
-  iapply Kok $$ %p %hfresh Hpc Hra Ha0 Hsp Hs0 Hclob [Hstk] Hscr [Hheap] [Hblk]
+  iapply Kok $$ %p %hfresh Hpc Hra Ha0 Hsp Hs0 Hclob Hsv [Hstk] Hscr [Hheap] [Hblk]
   · rw [← hWstk]; iexact Hstk
   · rw [show ((p.toNat, 32) :: H) = ((p.toNat, (32#64).toNat) :: H) from rfl]
     iexact Hheap
