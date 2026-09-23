@@ -23,16 +23,45 @@ open Lean Elab Tactic Meta
 
 /-- Side-condition discharger. Extend with `macro_rules | `(tactic| sx_side) => …`. -/
 syntax "sx_side" : tactic
-macro_rules | `(tactic| sx_side) => `(tactic| decide)
-macro_rules | `(tactic| sx_side) => `(tactic| (simp only [upd, ite_true, ite_false] at *; omega))
 
-/-- Normalize register lookups and literal immediates. -/
+/-- A register file read at a literal register. -/
+theorem upd_apply (R : Nat → BitVec 64) (k : Nat) (v : BitVec 64) (r : Nat) :
+    upd R k v r = if r = k then v else R r := rfl
+
+/-- Normalize register lookups (`upd` at literal registers) and literal
+immediates, everywhere. -/
 syntax "sx_norm" : tactic
 macro_rules
   | `(tactic| sx_norm) =>
-    `(tactic| simp only [upd_same, upd, LeanRV64DExecutable.Functions.sign_extend,
-        Sail.BitVec.signExtend, BitVec.reduceSignExtend, BitVec.reduceAdd, BitVec.reduceOfNat,
-        ite_true, ite_false, reduceIte, Nat.reduceEqDiff] at *)
+    `(tactic| simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, reduceIte,
+        LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend,
+        BitVec.add_zero, BitVec.reduceAdd, BitVec.reduceOfNat] at *)
+
+/-- Unfold the access predicates and fold literal immediates. -/
+syntax "sx_pre" : tactic
+macro_rules
+  | `(tactic| sx_pre) =>
+    `(tactic| try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, reduceIte,
+        LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend,
+        BitVec.add_zero, LdOK, StOK, StOKb, Vsa.Sim.tohostAddr] at *)
+
+/-- `BitVec` sums as `Nat` sums modulo `2^64`. `BitVec.toNat_add` goes
+through `rw`: `simp` with it does not terminate on large literals. -/
+syntax "sx_bv" : tactic
+macro_rules
+  | `(tactic| sx_bv) => `(tactic| repeat rw [BitVec.toNat_add] at *)
+
+/-- Literal `toNat`s and powers. -/
+syntax "sx_lits" : tactic
+macro_rules
+  | `(tactic| sx_lits) => `(tactic| try simp only [BitVec.reduceToNat, Nat.reducePow] at *)
+
+/-- Addresses and unsigned comparisons as `Nat` arithmetic, then `omega`. -/
+syntax "sx_addr" : tactic
+macro_rules
+  | `(tactic| sx_addr) => `(tactic| (sx_pre; sx_bv; sx_lits; omega))
+
+macro_rules | `(tactic| sx_side) => `(tactic| sx_addr)
 
 /-- The PC literal of an `SWP` goal, if any. -/
 def swpPC? (ty : Expr) : MetaM (Option Nat) := do
@@ -105,7 +134,15 @@ elab_rules : tactic
           pending := pending ++ [g]
       match conts with
       | [c] =>
-        -- a plain step, or a continuation whose PC is symbolic
+        -- a plain step, or a continuation whose PC is symbolic; keep the
+        -- register values in normal form as they are produced
+        let c ← do
+          let saved ← saveState
+          try
+            match ← evalTacticAt (← `(tactic| sx_norm)) c with
+            | [c'] => pure c'
+            | _ => saved.restore; pure c
+          catch _ => saved.restore; pure c
         if (← c.withContext (do swpPC? (← c.getType))).isSome then
           cur := c
         else
