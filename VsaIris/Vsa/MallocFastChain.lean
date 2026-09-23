@@ -835,6 +835,84 @@ theorem st5 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv
     · rw [hI a ha, show (segOut segBins (binsL (spN s) (rv 10) (rv 11) (rv 12) (rv 13) (rv 14) (rv 15)
         (rv 16) (rv 17) (rv 29)) (binsLds mv (spN s) (nbN n))).log = [] from rfl, writeLog_nil']
 
+/-- Stage 4: at the retarget `ret` after the lock hook. -/
+theorem st4 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
+    {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
+    (h : StPost s rv0 (MtP m1 s headroom mv0 (rv0 8) r n) (mallocBytes vsaLayout H s headroom)
+      0x80006fe0#64 rv mv) (hra : rv 1 = 0x80004878#64) :
+    LocalRun (vsaModel live) roR pathText mRegs (mallocBytes vsaLayout H s headroom)
+      (MallocRoomEnd vsaLayout (vsaRoomFast maxReq) H n r s saved k) 7 rv mv := by
+  refine seg_step segAcq [(1, rv 1)] [] 0x80006fe0#64 [] [] 0 rfl
+    (by change ChainOK _ [1] _; decide) (by change KeysOK [1]; decide)
+    (by change ∀ x ∈ wrChain segAcq, x ∈ [1]; decide) (fun a _ => by show OutL [] a; trivial) C.text
+    (fun c _ hcode _ => ret_facts_acq hcode (rv 1) (by rw [hra]; decide))
+    (by decide) h.pc (fun p hp => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
+      subst hp; exact .inl ⟨by dsimp only; decide, rfl⟩) (fun p hp => by cases hp) (fun p hp => by cases hp)
+    h.img ?_
+  intro rv' mv' hpc hL hU hI
+  refine st5 C ⟨?_, ?_, h.keep.step fun q hq => hU q (by rcases hq with rfl | rfl | rfl <;> decide)
+    (by rcases hq with rfl | rfl | rfl <;> decide) (not_pin (by rcases hq with rfl | rfl | rfl <;> simp)),
+    fun a ha => (hI a ha).trans (by rw [show (segOut segAcq [(1, rv 1)] []).log = [] from rfl,
+      writeLog_nil'])⟩
+  · rw [hpc]
+    show Sail.BitVec.update (rv 1 + sign_extend (m := 64) (0#12)) 0 0#1 = _
+    rw [hra, ret_tgt _ (by decide)]
+  · rw [hU 2 (by decide) (by decide) (not_pin (by simp))]; exact h.sp
+
+/-- Stage 3: at the lock hook. -/
+theorem st3 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
+    {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
+    (h : StPost s rv0 (MtP m1 s headroom mv0 (rv0 8) r n) (mallocBytes vsaLayout H s headroom)
+      0x80005068#64 rv mv) (hra : rv 1 = 0x80004878#64) :
+    LocalRun (vsaModel live) roR pathText mRegs (mallocBytes vsaLayout H s headroom)
+      (MallocRoomEnd vsaLayout (vsaRoomFast maxReq) H n r s saved k) 8 rv mv := by
+  refine seg_step segLock [(10, rv 10), (3, gpV)] [] 0x80005068#64 [] [] 1 rfl
+    (by change ChainOK _ [10, 3] _; decide) (by change KeysOK [10, 3]; decide)
+    (by change ∀ x ∈ wrChain segLock, x ∈ [10, 3]; decide) (fun a _ => by show OutL [] a; trivial)
+    C.text (fun c _ hcode _ => lock_facts hcode (rv 10))
+    (by decide) h.pc (fun p hp => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
+      rcases hp with rfl | rfl
+      · exact .inl ⟨by dsimp only; decide, rfl⟩
+      · exact .inr ⟨List.mem_singleton.2 rfl, rfl⟩) (fun p hp => by cases hp) (fun p hp => by cases hp)
+    h.img ?_
+  intro rv' mv' hpc hL hU hI
+  have keep := fun q (hq : q = 9 ∨ q = 18 ∨ q = 19 ∨ q = 1 ∨ q = 2) => hU q
+    (by rcases hq with rfl | rfl | rfl | rfl | rfl <;> decide)
+    (by rcases hq with rfl | rfl | rfl | rfl | rfl <;> decide)
+    (not_pin (by rcases hq with rfl | rfl | rfl | rfl | rfl <;> simp))
+  refine st4 C ⟨hpc, (keep 2 (by simp)).trans h.sp,
+    h.keep.step fun q hq => keep q (by rcases hq with rfl | rfl | rfl <;> simp),
+    fun a ha => (hI a ha).trans (by
+      rw [show (segOut segLock [(10, rv 10), (3, gpV)] []).log = [] from rfl, writeLog_nil'])⟩
+    ((keep 1 (by simp)).trans hra)
+
+/-- Stage 2: at the `jal __malloc_lock`. -/
+theorem st2 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv chunks bins)
+    {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
+    (h : StPost s rv0 (MtP m1 s headroom mv0 (rv0 8) r n) (mallocBytes vsaLayout H s headroom)
+      0x80004874#64 rv mv) :
+    LocalRun (vsaModel live) roR pathText mRegs (mallocBytes vsaLayout H s headroom)
+      (MallocRoomEnd vsaLayout (vsaRoomFast maxReq) H n r s saved k) 9 rv mv := by
+  have hmem : ∀ p ∈ codeFoot 0x80004874 [0xef#8, 0x00#8, 0x40#8, 0x7f#8], (p.1, p.2.2) ∈ pathText := by
+    obtain ⟨b0, b1, b2, b3⟩ := jal_bytes_80004874
+    intro p hp
+    simp [codeFoot] at hp
+    rcases hp with rfl | rfl | rfl | rfl
+    · exact b0
+    · exact b1
+    · exact b2
+    · exact b3
+  refine jal_step 0x80004874 [0xef#8, 0x00#8, 0x40#8, 0x7f#8] 0x80005068#64
+    (jal_exec_874 live fun p hp => C.text (p.1, p.2.2) (hmem p hp)) hmem (by decide) (by decide)
+    h.pc h.img ?_
+  · intro rv' mv' hpc hra hU hI
+    exact st3 C ⟨hpc, (hU 2 (by decide) (by decide) (by decide)).trans h.sp,
+      h.keep.step fun q hq => hU q (by rcases hq with rfl | rfl | rfl <;> decide)
+        (by rcases hq with rfl | rfl | rfl <;> decide) (by rcases hq with rfl | rfl | rfl <;> decide),
+      hI⟩ (by rw [show (1 : Nat) = VsaIris.ra from rfl, hra])
+
 end Stages
 
 end VsaIris.MallocFast
