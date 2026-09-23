@@ -320,7 +320,7 @@ theorem get_scan (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
         ownSet (getS C.s.toNat C.out.toNat G) (fun a => a ↦ₘ imgM Mt a) ∗
         ((∀ R' Mt', ⌜InFrame C G f.vars.length img R' Mt' ∧ FrameMiss f.vars C.x⌝ -∗
             VsaIris.PC ↦ᵣ 0x80002cc4#64 -∗ regsOf gprs R' -∗
-            ownSet (getS C.s.toNat C.out.toNat G) (fun a => a ↦ₘ imgM Mt' a) -∗ Wp.W Φ) ∗
+            ownSet (getS C.s.toNat C.out.toNat G) (fun a => a ↦ₘ imgM Mt' a) -∗ Wp.W Φ) ∧
          (∀ R' Mt' (v : Value), ⌜GetRet C.s.toNat C.r (pairVal C.saved) 1#64 R' ∧
             FirstMatch f.vars C.x v ∧ ∀ a, frameS G a → imgM Mt' a = img a⌝ -∗
             VsaIris.PC ↦ᵣ C.r -∗ regsOf gprs R' -∗
@@ -332,7 +332,7 @@ theorem get_scan (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   | zero => intro i R Mt hm hi; omega
   | succ m ih =>
     intro i R Mt hm hi hne h8 h9 h18 hF
-    iintro ⟨#Ht, #Hgp, #Hcmp, #Hx, #Hb, Hpc, HR, HS, Kex, Khit⟩
+    iintro ⟨#Ht, #Hgp, #Hcmp, #Hx, #Hb, Hpc, HR, HS, HKK⟩
     iapply wp_span Wp (get_load hl hF.lay hi h9)
     iframe Ht Hgp Hpc HR HS
     iintro %pc1 %R1 %Mt1 %⟨rfl, rfl, h10, h11, hk1⟩ Hpc HR HS
@@ -376,7 +376,7 @@ theorem get_scan (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
         (hF.regs hs64 fun k hk => by
           rcases hk with rfl | rfl | rfl | rfl | rfl <;>
             exact k3 _ (by decide) (by decide) (by decide) (by decide) (by decide))
-      iframe Ht Hgp Hcmp Hx Hb Hpc HR HS Kex Khit
+      iframe Ht Hgp Hcmp Hx Hb Hpc HR HS HKK
     · -- the frame is exhausted
       have hxi : (f.vars[i]).1 ≠ C.x := fun h => hne0 (hres.2 h)
       have k3 : ∀ k, k ∉ strcmpKs → k ≠ 10 → k ≠ 11 → k ≠ 8 → k ≠ 9 → R3 k = R k :=
@@ -386,6 +386,7 @@ theorem get_scan (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
         have := take_succ_all hi hne hxi
         rw [List.take_of_length_le (by omega)] at this
         exact this p hp
+      ihave Kex := and_elim_l $$ HKK
       iapply Kex $$ %R3 %_ %⟨hF.regs hs64 fun k hk => by
           rcases hk with rfl | rfl | rfl | rfl | rfl <;>
             exact k3 _ (by decide) (by decide) (by decide) (by decide) (by decide), hmiss⟩ Hpc HR HS
@@ -415,6 +416,7 @@ theorem get_scan (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       iintro %pc4 %R4 %Mt4 %⟨rfl, hret, hco⟩ Hpc HR HS
       have himg : ∀ a, frameS G a → imgM Mt4 a = img a := fun a ha =>
         (hco.frame a (hF.sepOut a ha)).trans (hF.img a ha)
+      ihave Khit := and_elim_r $$ HKK
       iapply Khit $$ %R4 %Mt4 %((f.vars[i]).2) %⟨hret, ?_, himg⟩ Hpc HR HS
       · refine ⟨f.vars.take i, f.vars.drop (i + 1), ?_, hne⟩
         conv => lhs; rw [← List.take_append_drop i f.vars, List.drop_eq_getElem_cons hi]
@@ -432,5 +434,274 @@ theorem get_scan (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
         iexact Hval
 
 end ScanLoop
+
+/-! ## Opening and closing a frame -/
+
+section Frames
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+
+/-- The frame layout reads only the frame's bytes. -/
+theorem FrameLayout.congr {img img' : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
+    (h : FrameLayout img G n) (hag : ∀ a, frameS G a → img' a = img a) : FrameLayout img' G n := by
+  have hs := h.sblk
+  have e : ∀ o w, o + w ≤ 32 → imgLE img' (G.e + o) w = imgLE img (G.e + o) w := fun o w how =>
+    imgLE_congr fun j hj => hag _ (by unfold frameS InExt; exact .inl ⟨by omega, by omega⟩)
+  exact { h with
+    count := by have := e 0 4 (by omega); simp at this; rw [this]; exact h.count
+    cap := by rw [e 4 4 (by omega)]; exact h.cap
+    names := by rw [e 8 8 (by omega)]; exact h.names
+    vals := by rw [e 16 8 (by omega)]; exact h.vals
+    parent := by rw [e 24 8 (by omega)]; exact h.parent }
+
+/-- The store's pure part. -/
+theorem storeRepr_pure (N : NativeAddrs) (s : Store) (B : List (Nat × Nat)) :
+    storeRepr (GF := GF) N s B ⊢ ⌜Vsa.Sim.StoreInvariant s⌝ := by
+  unfold storeRepr
+  iintro ⟨%mf, %mc, %Bs, -, -, %hp, -, -⟩
+  ipureintro; exact hp.inv
+
+/-- **Open one frame for reading**: its image comes out, and the same image
+closes it again (the store unchanged). -/
+theorem storeRepr_openRead (N : NativeAddrs) {s : Store} {B : List (Nat × Nat)} {fa e : Nat} :
+    storeRepr (GF := GF) N s B ∗ frameAt fa e ⊢
+      ∃ (f : Frame) (Gm : FrameGeom) (img : Nat → BitVec 8),
+        ⌜s.frames[fa]? = some f ∧ Gm.e = e ∧ FrameLayout img Gm f.vars.length ∧
+          Vsa.Sim.StoreInvariant s⌝ ∗
+        ownImg (BlocksCover Gm.blocks) img ∗ bindings N img Gm.pn Gm.pv f.vars ∗
+        parentAt f.parent Gm.par ∗ (ownImg (BlocksCover Gm.blocks) img -∗ storeRepr N s B) := by
+  iintro ⟨Hs, #He⟩
+  ihave ⟨Hs, %hinv⟩ := keep_pure (storeRepr_pure N s B) $$ Hs
+  ihave ⟨⟨Hs, -⟩, %hlt⟩ := keep_pure (storeRepr_frameAt N (s := s) (B := B) (fa := fa) (e := e))
+    $$ [Hs He]
+  · iframe Hs He
+  have hf : s.frames[fa]? = some s.frames[fa] := Array.getElem?_eq_getElem hlt
+  ihave ⟨%bl, %B₁, %B₂, %hB, Hf, Hc⟩ := storeRepr_open N hf $$ Hs
+  unfold frameOwn frameBody
+  icases Hf with ⟨%Gm, %hbl, #HGe, %img, %hlay, Hown, #Hb, #Hp⟩
+  ihave %hGe := frameAt_agree fa Gm.e e $$ [HGe He]
+  · iframe HGe He
+  iexists s.frames[fa], Gm, img
+  iframe Hown Hb Hp
+  isplitr
+  · ipureintro; exact ⟨hf, hGe, hlay, hinv⟩
+  iintro Hown
+  rw [hB, hbl]
+  iapply Hc $$ %s %(s.frames[fa]) %Gm.blocks
+    %⟨rfl, by rw [← Array.getElem_toList (h := hlt)]; exact (List.set_getElem_self _).symm, hinv⟩
+  iexists Gm
+  iframe HGe
+  isplitr
+  · ipureintro; rfl
+  iexists img
+  iframe Hown Hb Hp
+  ipureintro; exact hlay
+
+omit I in
+/-- **Join a frame's blocks** to `env_get`'s own bytes, at one tracking memory. -/
+theorem get_join (s out : Nat) (Gm : FrameGeom) (Mt : Mem) (img : Nat → BitVec 8) :
+    ownSet (GF := GF) (baseS s out) (fun a => a ↦ₘ imgM Mt a) ∗ ownImg (BlocksCover Gm.blocks) img ⊢
+      ∃ Mt' : Mem, ⌜(∀ a, baseS s out a → imgM Mt' a = imgM Mt a) ∧
+          (∀ a, frameS Gm a → imgM Mt' a = img a) ∧ (∀ a, frameS Gm a → ¬ baseS s out a)⌝ ∗
+        ownSet (getS s out Gm) (fun a => a ↦ₘ imgM Mt' a) := by
+  iintro ⟨HB, HF⟩
+  ihave ⟨⟨HB, HF⟩, %hd⟩ := keep_pure (ownSet_disj (baseS s out) (BlocksCover Gm.blocks) (imgM Mt) img)
+    $$ [HB HF]
+  · iframe HB HF
+  ihave H := ownSet_glue _ _ (imgM Mt) img hd $$ [HB HF]
+  · iframe HB HF
+  ihave H := ownSet_iff (T := getS s out Gm) _ (fun a => by
+    unfold getS; rw [frameS_iff]) $$ H
+  ihave ⟨%Mt', %hag, H⟩ := ownSet_tracked _ _ $$ H
+  iexists Mt'
+  iframe H
+  ipureintro
+  refine ⟨fun a ha => ?_, fun a ha => ?_, fun a ha hb => hd a hb ((frameS_iff Gm a).1 ha)⟩
+  · rw [hag a (.inl ha)]; simp [glue, ha]
+  · have hb : ¬ baseS s out a := fun hb => hd a hb ((frameS_iff Gm a).1 ha)
+    rw [hag a (.inr ha)]; simp [glue, hb]
+
+omit I in
+/-- **Split a frame's blocks** back off, at the frame's own image. -/
+theorem get_split {s out : Nat} {Gm : FrameGeom} {Mt : Mem} {img : Nat → BitVec 8}
+    (hd : ∀ a, frameS Gm a → ¬ baseS s out a) (himg : ∀ a, frameS Gm a → imgM Mt a = img a) :
+    ownSet (GF := GF) (getS s out Gm) (fun a => a ↦ₘ imgM Mt a) ⊢
+      ownSet (baseS s out) (fun a => a ↦ₘ imgM Mt a) ∗ ownImg (BlocksCover Gm.blocks) img := by
+  iintro H
+  unfold getS
+  ihave ⟨HB, HF⟩ := ownSet_unglue (baseS s out) (frameS Gm) _ (fun a hb hf => hd a hf hb) $$ H
+  iframe HB
+  ihave HF := ownSet_congr (Ψ := fun a => a ↦ₘ img a) (fun a ha => by rw [himg a ha]) $$ HF
+  iapply ownSet_iff _ (fun a => frameS_iff Gm a) $$ HF
+
+end Frames
+
+/-! ## The parent chain -/
+
+section Chain
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+  {live : Nat → Prop}
+
+/-- What the return hands on: the answer in `a0`, and on a hit the value's
+meaning at `out`. -/
+def getRes (N : NativeAddrs) (st : Store) (fa : Addr) (x : String) (out : Nat) (Mt : Mem)
+    (res : BitVec 64) : IProp GF :=
+  match st.get? fa x with
+  | some v => iprop(⌜res = 1#64⌝ ∗ valImg N (imgM Mt) out v)
+  | none => iprop(⌜res = 0#64⌝)
+
+/-- The continuation after `env_get`'s `ret`. -/
+def getK (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
+    (C : GetCall) (st : Store) (B : List (Nat × Nat)) (fa : Addr) : IProp GF :=
+  iprop(∀ (R' : Nat → BitVec 64) (Mt' : Mem) (res : BitVec 64),
+    ⌜GetRet C.s.toNat C.r (pairVal C.saved) res R'⌝ -∗ VsaIris.PC ↦ᵣ C.r -∗ regsOf gprs R' -∗
+    ownSet (baseS C.s.toNat C.out.toNat) (fun a => a ↦ₘ imgM Mt' a) -∗ storeRepr N st B -∗
+    getRes N st fa C.x C.out.toNat Mt' res -∗ Wp.W Φ)
+
+/-- `env_get` from the head of frame `fa'` of the chain. -/
+def GetChainAt (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
+    (N : NativeAddrs) (C : GetCall) (st : Store) (B : List (Nat × Nat)) (fa fa' : Addr) : Prop :=
+  ∀ (R : Nat → BitVec 64) (Mt : Mem) (e' : BitVec 64), look st fa' C.x = st.get? fa C.x →
+    GetHead C.s.toNat C.r (pairVal C.saved) e' C.pn C.out R Mt →
+    (textOwn envText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ∗ strAt C.pn.toNat C.x ∗ frameAt fa' e'.toNat ∗
+      VsaIris.PC ↦ᵣ 0x80002c40#64 ∗ regsOf gprs R ∗
+      ownSet (baseS C.s.toNat C.out.toNat) (fun a => a ↦ₘ imgM Mt a) ∗ storeRepr N st B ∗
+      getK Wp Φ N C st B fa ⊢ Wp.W Φ)
+
+/-- **After a frame's scan found nothing** (`0x80002cc4`): on to the parent,
+or return 0 at the root. -/
+theorem get_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    (hl : ∀ p ∈ envText, live p.1) (N : NativeAddrs) (C : GetCall) (hC : C.OK)
+    {st : Store} {B : List (Nat × Nat)} {fa fa' : Addr} {f : Frame} {Gm : FrameGeom}
+    {img : Nat → BitVec 8} (ih : ∀ p, p < fa' → GetChainAt Wp Φ N C st B fa p)
+    (hf : st.frames[fa']? = some f) (hinv : Vsa.Sim.StoreInvariant st)
+    (hmiss : FrameMiss f.vars C.x) (hlook : look st fa' C.x = st.get? fa C.x)
+    (hdisj : ∀ a, frameS Gm a → ¬ baseS C.s.toNat C.out.toNat a)
+    {R : Nat → BitVec 64} {Mt : Mem} (hF : InFrame C Gm f.vars.length img R Mt) :
+    textOwn envText ∗ gp ↦ᵣ□ gpV ∗ strcmpSpec Wp ∗ strAt C.pn.toNat C.x ∗
+      parentAt f.parent Gm.par ∗ (ownImg (BlocksCover Gm.blocks) img -∗ storeRepr N st B) ∗
+      VsaIris.PC ↦ᵣ 0x80002cc4#64 ∗ regsOf gprs R ∗
+      ownSet (getS C.s.toNat C.out.toNat Gm) (fun a => a ↦ₘ imgM Mt a) ∗ getK Wp Φ N C st B fa
+    ⊢ Wp.W Φ := by
+  iintro ⟨#Ht, #Hgp, #Hcmp, #Hx, #Hp, Hclose, Hpc, HR, HS, HK⟩
+  have hs64 : 64 ≤ C.s.toNat := by have := hC.sp.lo; unfold htifLo at this; omega
+  iapply wp_span Wp (get_parent hl (s := C.s.toNat) (out := C.out.toNat) hF.lay hF.env)
+  iframe Ht Hgp Hpc HR HS
+  iintro %pc1 %R1 %Mt1 %⟨rfl, hk, hcase⟩ Hpc HR HS
+  rcases hcase with ⟨hpar, rfl, h20⟩ | ⟨hpar, rfl, h10⟩
+  · -- the parent frame
+    ihave HB := get_split hdisj hF.img $$ HS
+    icases HB with ⟨HB, HF⟩
+    ihave Hst := Hclose $$ HF
+    cases hfp : f.parent with
+    | none =>
+      unfold parentAt
+      iexfalso
+      icases Hp with %h
+      exact absurd h hpar
+    | some pa =>
+      unfold parentAt
+      icases Hp with ⟨-, #Hpa⟩
+      have hpa : pa < fa' := by
+        have ha : fa' < st.frames.size := by
+          rcases Nat.lt_or_ge fa' st.frames.size with h | h
+          · exact h
+          · simp [Array.getElem?_eq_none h] at hf
+        have hfa : st.frames[fa'] = f := by simpa [Array.getElem?_eq_getElem ha] using hf
+        exact hinv.parents fa' ha pa (by rw [hfa]; exact hfp)
+      have hparlt : Gm.par < 2 ^ 64 := by rw [← hF.lay.parent]; exact imgLE_lt _ _ 8
+      iapply ih pa hpa R1 _ (BitVec.ofNat 64 Gm.par)
+        ((look_parent hinv.parents hf hmiss hfp).symm.trans hlook)
+        ⟨hF.stack.congr (hk 2 (by decide) (by decide)) (hk 22 (by decide) (by decide))
+          (fun _ _ _ => rfl) hs64, (hk 19 (by decide) (by decide)).trans hF.name, h20,
+          (hk 21 (by decide) (by decide)).trans hF.out⟩
+      rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hparlt]
+      iframe Ht Hgp Hcmp Hx Hpa Hpc HR HB Hst HK
+  · -- the root: return 0
+    cases hfp : f.parent with
+    | some pa =>
+      unfold parentAt
+      iexfalso
+      icases Hp with ⟨%h, -⟩
+      exact absurd hpar h
+    | none =>
+      have hlook0 : st.get? fa C.x = none := hlook.symm.trans (look_root hf hmiss hfp)
+      have hstk : GetStack C.s.toNat C.r (pairVal C.saved) R1 Mt1 :=
+        hF.stack.congr (hk 2 (by decide) (by decide)) (hk 22 (by decide) (by decide))
+          (fun _ _ _ => rfl) hs64
+      iapply wp_span Wp (get_epi hl (out := C.out.toNat) (G := Gm) hC.sp.lo hC.sp.hi hC.ra hstk)
+      iframe Ht Hgp Hpc HR HS
+      iintro %pc2 %R2 %Mt2 %⟨rfl, rfl, hret⟩ Hpc HR HS
+      ihave HB := get_split hdisj hF.img $$ HS
+      icases HB with ⟨HB, HF⟩
+      ihave Hst := Hclose $$ HF
+      unfold getK
+      iapply HK $$ %R2 %_ %0#64 %(by rw [h10] at hret; exact hret) Hpc HR HB Hst
+      unfold getRes
+      rw [hlook0]
+      ipureintro; rfl
+
+/-- **The parent chain**: `env_get` from any frame's head, by strong
+induction on the frame address (parents are older). -/
+theorem get_chain (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    (hl : ∀ p ∈ envText, live p.1) (N : NativeAddrs) (C : GetCall) (hC : C.OK)
+    {st : Store} {B : List (Nat × Nat)} {fa : Addr} :
+    ∀ fa', GetChainAt Wp Φ N C st B fa fa' := by
+  intro fa'
+  induction fa' using Nat.strongRecOn with
+  | ind fa' ih =>
+  intro R Mt e' hlook hhead
+  have hs64 : 64 ≤ C.s.toNat := by have := hC.sp.lo; unfold htifLo at this; omega
+  iintro ⟨#Ht, #Hgp, #Hcmp, #Hx, #Hfa, Hpc, HR, HS, Hst, HK⟩
+  ihave ⟨%f, %Gm, %img, %⟨hf, hGe, hlay, hinv⟩, Hown, #Hb, #Hp, Hclose⟩ :=
+    storeRepr_openRead N $$ [Hst Hfa]
+  · iframe Hst Hfa
+  ihave ⟨%Mt1, %⟨hbase, himg, hdisj⟩, HS⟩ := get_join _ _ Gm Mt img $$ [HS Hown]
+  · iframe HS Hown
+  have hF : InFrame C Gm f.vars.length img R Mt1 :=
+    { stack := hhead.stack.congr rfl rfl (fun a h1 h2 => hbase a (.inl ⟨h1, h2⟩)) hs64
+      name := hhead.name
+      out := hhead.out
+      env := by rw [hhead.frame, hGe]
+      lay := hlay.congr himg
+      img := himg
+      sepOut := fun a ha => by
+        have := hdisj a ha; unfold baseS at this; omega
+      sepStk := fun a ha => by
+        have := hdisj a ha; unfold baseS at this; omega }
+  iapply wp_span Wp (get_head hl (s := C.s.toNat) (out := C.out.toNat) hF.lay hF.env)
+  iframe Ht Hgp Hpc HR HS
+  iintro %pc1 %R1 %Mt2 %⟨rfl, hcase⟩ Hpc HR HS
+  rcases hcase with ⟨hn0, rfl, hk⟩ | ⟨hpos, rfl, hsc⟩
+  · -- an empty frame
+    have hnil : f.vars = [] := List.eq_nil_of_length_eq_zero hn0
+    iapply get_tail Wp hl N C hC ih hf hinv (by rw [hnil]; intro p hp; cases hp) hlook hdisj
+      (hF.regs hs64 fun k hk' => hk k (by omega))
+    iframe Ht Hgp Hcmp Hx Hp Hclose Hpc HR HS HK
+  · -- scan the names
+    obtain ⟨-, -, hn2, -, -, hnw, -⟩ := hF.lay.slot hpos
+    iapply get_scan Wp hl N C hC f.vars.length 0 R1 _ (by omega) hpos (by simp) hsc.idx
+      (by rw [hsc.cur, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by have := hnw.hi; omega)]; simp)
+      hsc.cnt (hF.regs hs64 fun k hk' => hsc.keep k (by omega) (by omega) (by omega))
+    iframe Ht Hgp Hcmp Hx Hb Hpc HR HS
+    isplit
+    · iintro %R' %Mt' %⟨hF', hmiss⟩ Hpc HR HS
+      iapply get_tail Wp hl N C hC ih hf hinv hmiss hlook hdisj hF'
+      iframe Ht Hgp Hcmp Hx Hp Hclose Hpc HR HS HK
+    · iintro %R' %Mt' %v %⟨hret, hfm, himg'⟩ Hpc HR HS #Hv
+      ihave HB := get_split hdisj himg' $$ HS
+      icases HB with ⟨HB, HF⟩
+      ihave Hst := Hclose $$ HF
+      have hget : st.get? fa C.x = some v := hlook.symm.trans (look_hit hf hfm)
+      unfold getK
+      iapply HK $$ %R' %_ %1#64 %hret Hpc HR HB Hst
+      unfold getRes
+      rw [hget]
+      isplitl []
+      · ipureintro; rfl
+      · iexact Hv
+
+end Chain
 
 end VsaIris.Interp
