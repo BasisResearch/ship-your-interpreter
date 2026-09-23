@@ -24,6 +24,8 @@ unproved callee as a `Module Type`.
 | `Adequacy.lean` | `RiscvAdequacy.v:182-196` (initial ghost maps), `:1533` (`riscv_power_adequacy`) | `mach_adequacy`: from the loop's total WP, the machine halts and its exit satisfies `φ`; `MachGF`, a concrete functor list, so the theorem is not vacuous |
 | `Call.lean` | paper Figs. 7-8 and §4.3-4.6; `SpecKalloc.v:30-56` for the spec shape | `wp_ret`, `wp_jal`, `fnSpec` (continuation-style function spec), and `wp_call` |
 | `DlHeap.lean` | `KallocInv.v:149-159` (`byte_any`, `page_own`), `:281` (`freelist_chain`), `:394` (`kmem_res`), `:403-434` (pop/push), `:436-445` (`kalloc_post`, `kfree_pre`); `SpecKalloc.v`/`SpecKfree.v`; `Module Type KALLOC` (`SpecKalloc.v:52`) | `isHeap L H`, `blockOwn`, carve/return lemmas, `mallocSpec`/`freeSpec`, `DlMallocImpl`, `wp_call_malloc`, `wp_call_malloc_keeps`, `no_fixed_privFoot`, `eb73d8c_witness` |
+| `Vsa/Instance.lean` | none | `vsaModel` (VSA's `Config`/`stepOnce`), `vsa_adequacy` (to `Machine.Halts c out 0`), `seg_runFact`/`wp_seg` (any reflected segment as one Iris rule) |
+| `Vsa/Tools.lean`, `Vsa/EnvNewPilot.lean` | none | code slicing, `jalExec_of_site`; `envNew_spec(_vsa)`, the env_new pilot |
 | `Example.lean` | none | A toy countdown machine carried through the whole stack to `Halts`, as a check that nothing is vacuous |
 | `LocalRun.lean` | none | `wp_localRun`: a chain of segments over an owned register list and an owned byte *set*, on the lagging interpretation; `segFrom_of_runFact` takes VSA `RunFact`s as segments |
 | `MallocRun.lean` | none | `allocCall_of_localRun` (one allocator call from its local run); `DlMallocImpl` and the credit-indexed `DlMallocRoomImpl` from the first-order runs `MallocLocalRun`/`FreeLocalRun`/`MallocRoomRun` |
@@ -73,6 +75,12 @@ The stack window below `sp`, which `MallocContract`'s frame special-cases, is
 here an owned resource (`stackScratch`) that the caller lends and gets back.
 
 ## Deviations from MachCSL, and why
+
+0. **Lagging state interpretation.** VSA's exec facts are segment facts with
+   end-state frames only. The interpretation lets the ghost maps agree with a
+   state `j` steps back; `j` lives in a control ghost map whose key-0 cell
+   `mTWP` hands to its prover, so clients see `j = 0`. `wp_run` is the
+   segment rule; `MachineModel.ok` is a global invariant (VSA's `GoodState`).
 
 1. **The language has values, and the WP is total.** MachCSL's loop never
    stops (`mval := Empty_set`), and `wp CpuLoop` is a safety statement.

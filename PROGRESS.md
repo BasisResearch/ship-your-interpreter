@@ -1,59 +1,143 @@
 # iris-machine progress
 
+Branch `iris-machine`, HEAD after the pilot. `lake build Vsa VsaIris` is green
+(2234 jobs). Every new theorem depends only on `propext`, `Classical.choice`,
+`Quot.sound` (`VsaIris/Audit.lean`). No sorry, axiom, native_decide or raised
+limit. `iris-heap` is merged, and the sibling has fast-forwarded to it.
+
 ## Done
 
-- **Multi-step segment rule** (`VsaIris/Step.lean`, `wp_run`, commit 356cb61).
-  VSA's facts are segment facts: `n` instructions with only an end-state
-  frame. The state interpretation now lets the ghost maps lag the machine by
-  `j` steps. `j` sits in a third ghost map (`ctl`, key 0). `mTWP` hands its
-  prover the key-0 cell at 0 (`cpuTok`), so clients always see `j = 0`.
-  `wp_run` proves an `n+1`-step footprint rule from a `RunFact`: a uniform
-  exact step count and an effect confined to the written cells. It never
-  describes the states in between. `wp_local_step` is now its one-step case.
-  `MachineModel` gains `ok : State → Prop` (default `True`), which the state
-  interpretation carries and every step rule re-establishes.
-- **VSA instance** (`VsaIris/Vsa/Instance.lean`, commit 074583c).
-  - `vsaModel live` is the Iris machine over `Config` and `stepOnce`. The PC
-    is at index 32, GPRs go through `gprGet`, and memory is the total read.
-    `VsaOk live` bundles `GoodState`, tick < 2, GPR presence, and presence
-    of a `live` byte set (for code fetch).
-  - `vsa_adequacy` concludes `Vsa.Machine.Halts c out 0`, verbatim.
-  - `seg_runFact` turns `segEval_sound` into a `RunFact`, and `wp_seg` is
-    the Iris segment rule with named ownership (PC, pinned GPRs, written
-    bytes, read-only bytes). It is one generic lemma, not per-site.
-- **Tools** (`VsaIris/Vsa/Tools.lean`): code slicing (`instrAt_append`),
-  blocks as byte lists (`blockOwn_range`), code presence (`code_present`),
-  and a `jal` site as `JalExec` (`jalExec_of_site`, over VSA's `JalStep`).
+1. **Multi-step segment rule** (`VsaIris/Step.lean`: `wp_run`, `RunFact`).
+   VSA's facts are segment facts: `n` instructions with an end-state frame
+   only. The state interpretation (`fullInterp`, `Ptsto.lean`) lets the ghost
+   maps lag the machine by `j` steps. `j` is recorded in a control ghost map,
+   `mTWP` hands its prover the key-0 cell at 0 (`cpuTok`), so clients always
+   see `j = 0` (`mstateInterp`). `wp_local_step` is the one-step case.
+   `MachineModel.ok` is a global invariant (default `True`).
+2. **Instance** (`VsaIris/Vsa/Instance.lean`).
+   - `vsaModel live` runs over `Config` and `stepOnce`. The PC is register
+     32, GPRs are read through `gprGet`, memory is the total read.
+     `VsaOk live` = `GoodState`, tick < 2, GPR presence, presence of the
+     `live` bytes.
+   - `vsa_adequacy`: the loop's total WP with postcondition `(0, out)` gives
+     `Vsa.Machine.Halts c out 0`, verbatim.
+3. **Bridge from reflection.**
+   - `seg_runFact` turns `segEval_sound` into a `RunFact`. `wp_seg` is the
+     one generic Iris rule for any `#derive_case` segment, with named
+     ownership: PC, pinned GPRs, written bytes, read-only bytes.
+   - `jalExec_of_site` (`Tools.lean`) turns VSA's `JalStep` into `JalExec`.
+   - Write logs are pointwise (`Pointwise`, `writeLog_getD_congr`,
+     `writeLog_present`).
+   - `segToTriple` and `bblocks_sound_framed` are projections of the same
+     `segEval_sound`/`bblocks_sound_bt` endpoint, so `wp_seg` subsumes them.
+     `Triple`/`TripleN` carry no frame, so they cannot feed a footprint rule
+     directly: the segment-level facts are the right producer.
+4. **Pilot: env_new** (`VsaIris/Vsa/EnvNewPilot.lean`).
+   - `envNew_spec` is a continuation-style (MachCSL) spec of the whole
+     function:
+     - the 5-instruction prefix segment goes through `wp_seg`;
+     - `jal malloc` goes through `wp_call_malloc_owns`, with the stack frame
+       as the owned set;
+     - the existing `envNewSuccessSeg` goes through `wp_seg`.
+   - The fresh block comes back as `envBlock p par`: owned bytes with
+     `read64` facts for all four `Env` words. Callee-saved registers, the
+     frame, and everything else the caller owns come back by ownership.
+   - `envNew_spec_vsa` instantiates it at the real allocator (`vsaLayout`,
+     `vsaDlMallocImpl`, arena geometry by `decide`).
 
-## In flight
+## Numbers (pilot versus VSA's `envNewAllocator_run` cone)
 
-- Pilot: env_new (`VsaIris/Vsa/EnvNewPilot.lean`), in continuation style.
-  The plan is the prefix segment (`wp_seg`), then `jal malloc`
-  (`wp_call_malloc` + `jalExec_of_site`), then the existing
-  `envNewSuccessSeg` (`wp_seg`).
+Lines are raw lines (non-blank, non-comment lines in parentheses).
+Elaboration is `lake env lean` wall time minus an imports-only stub, median of
+3 runs, load average about 2.
+
+| | lines | elaboration |
+|---|---|---|
+| **Iris pilot** `EnvNewPilot.lean` | 525 (443) | 1.4 s |
+| Iris shared, one-time: `Instance.lean` + `Tools.lean` | 750 (572) | 0.3 s |
+| **VSA env_new cone** (10 files below) | 3414 (2747) | ~5.3 s |
+| `EnvNewSpec` | 1197 (904) | 3.7 s |
+| `EnvNewSites` | 691 (603) | 0.2 s |
+| `rows/EnvNewContractSupply` | 682 (567) | 0.8 s |
+| `EnvNewSuccessSuffix` | 291 (262) | 0.6 s |
+| `HelperCallEnvNew`, `CallClosureEnvNewMarshal`, `EnvNewRetained`, `RuntimeOwnershipEnvNew`, `EnvNewAllocatorReturn`, `EnvNewAllocator` | 553 | ≈0 s each |
+
+Caveats. The comparison is not apples to apples.
+- **The pilot reuses VSA.** It uses `envNewSuccessSeg` (defined in
+  `EnvNewSuccessSuffix`), the geometry structures and address lemmas from
+  `EnvNewSpec`, two decode lemmas from `EnvNewSites`, the generated
+  `Code.Env_new`, and the decode tables. These are exec-fact producers, which
+  is the intended split.
+- **VSA proves more semantics.**
+  - `EnvNewAllocatorPost` includes the semantic frame (`EnvNewFresh`), the
+    runtime allocator ledger (`RuntimeAllocatorState` with the allocation map
+    and credits), and shared-byte agreement.
+  - The Iris spec states the machine-level effect only: bytes, registers,
+    and `isHeap`.
+  - Rebuilding those facts needs Iris representation predicates (DESIGN.md
+    migration step 4), and those are not written yet.
+- **NULL handling differs.** VSA assumes arena non-exhaustion. The pilot
+  hands the NULL return to a caller continuation. The sibling's credit-indexed
+  `mallocRoomSpec` could remove that continuation.
+- **The pilot is a single, simple function.** Most of VSA's cost there is
+  hand-threaded framing per site (`NotWrittenEnv`, `obs_*_other`, the
+  `hloaded` threading through every store), which the Iris proof never
+  states.
+- **Time.** Both are fast on this machine; neither is a bottleneck. The Iris
+  proof mode needed `iexact` where `iframe` failed on non-syntactic matches,
+  and `rw` on Iris goals also rewrites hypotheses. These are friction, not
+  cost.
 
 ## Holes
 
-- `DlMallocImpl` (unchanged, pre-existing): malloc/free meet their specs.
-- The pilot's NULL path, where `malloc` returns 0 and env_new reaches
-  `fwrite`/`exit`, will be a caller-supplied continuation. The VSA proof
-  assumes arena non-exhaustion instead.
+- `MallocLocalRun`, `FreeLocalRun` (sibling, `VsaIris/MallocRun.lean`). These
+  are the instruction-level runs of `_malloc_r`/`_free_r`, the only allocator
+  assumptions `envNew_spec_vsa` takes. The sibling is proving the top-split
+  path.
+- The `envNew_spec` NULL continuation `Knull` is the caller's obligation.
+  The error path is `fwrite`, then `exit(1)`.
+- `live` and `text` are parameters. They should be instantiated from the
+  loaded image (`Code.FixedTextLoaded`) when the whole-program adequacy is
+  assembled.
+- `stuck_sim` (partial WP) and the interpreter-level `fnSpec`s are not
+  started; see DESIGN.md.
 
 ## Next
 
-- Finish the pilot, measure lines and elaboration time against the VSA cone
-  of `envNewAllocator_run`, and write the report.
+1. Representation predicates for the store/frame (`Env` block ↦ semantic
+   frame), then state `env_new`'s post against them. This recovers
+   `EnvNewFresh`/`RuntimeAllocatorState` as derived facts.
+2. Switch the pilot to `mallocRoomSpec` to drop `Knull`.
+3. Next function: `env_define` (the malloc/realloc/memcpy consumer). This is
+   where VSA's hand framing (`AllocOff`, transports) is heaviest.
+
+## Recommendation
+
+Migrate. Keep all reflection (`#derive_case`, `segEval_sound`, site/decode
+lemmas) as the exec-fact producer, and consume it only through `wp_seg`,
+`jalExec_of_site` and the call rules. Port function by function, leaf
+callees first (`env_new`, `value_*`, `strlen`, `memcpy`). Each function gets
+one continuation-style spec, and callers use it by the frame rule.
+- **Build first:** representation predicates over owned bytes (store, frame,
+  value, AST) before porting interpreter cases. Without them each
+  function's post stays machine-level, as in this pilot.
+- **Don't port:** the framing rows of CLAUDE.md's table (`FrameMeta`
+  metatheorems, `AllocOff`, transports, `ReturnedWith`). The pilot needed
+  none of them.
+- **Main risk:** loops and recursion, which need measures under the total WP
+  (`LoopSteps` exists). The pilot has no loop; `strlen`'s word loop is the
+  natural next test.
 
 ## QUESTIONS
 
 - `live`: a points-to fixes the *total* read (`getD 0`). Fetch facts need
-  `σ.mem[a]? = some b`, so byte presence for code comes from `VsaOk.live`, a
+  `σ.mem[a]? = some b`, so code-byte presence comes from `VsaOk.live`, a
   fixed set that stores never shrink. The alternative is an `Option`-valued
-  memory projection, where points-to implies presence. That is cleaner for
-  code, but it makes never-written arena bytes unownable, which would break
-  `isHeap`. I chose the total read plus `live`.
+  memory projection, where points-to implies presence. That makes
+  never-written arena bytes unownable, which would break `isHeap`. I chose
+  the total read plus `live`.
 
-# Merged from iris-heap (sibling)
+# iris-heap (sibling) status, merged
 
 Branch `iris-heap`, rebased on `iris-machine` `074583c` (`VsaIris/Vsa/Instance.lean`). `lake build Vsa VsaIris` is green. Every headline theorem depends only on `propext`, `Classical.choice` and `Quot.sound`; see `VsaIris/Vsa/HeapAudit.lean`. There is no sorry, axiom or raised limit.
 

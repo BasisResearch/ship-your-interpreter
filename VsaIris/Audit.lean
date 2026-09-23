@@ -27,3 +27,4 @@ import VsaIris.Vsa.EnvNewPilot
 #print axioms VsaIris.Inst.wp_seg
 #print axioms VsaIris.Inst.jalExec_of_site
 #print axioms VsaIris.Inst.EnvNew.envNew_spec
+#print axioms VsaIris.Inst.EnvNew.envNew_spec_vsa

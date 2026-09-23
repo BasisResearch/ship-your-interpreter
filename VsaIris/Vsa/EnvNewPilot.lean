@@ -481,6 +481,45 @@ theorem envNew_spec {Φ : Nat × String → IProp GF} (live : Nat → Prop)
   rw [← hWblk, sepL_map]
   iexact Hblk
 
+/-- The fixed binary's arena lies in RAM above the HTIF window. -/
+theorem arenaGeom_vsa : ArenaGeom VsaHeap.vsaLayout :=
+  ⟨by decide, by decide, by decide⟩
+
+/-- **`env_new` against the binary's own allocator.** `envNew_spec` at
+`vsaLayout` with `vsaDlMallocImpl`: the only allocator assumptions left are
+the sibling's named instruction-level runs of `_malloc_r`/`_free_r`
+(`MallocLocalRun`, `FreeLocalRun`). The callee-saved registers `malloc`
+spills (`vsaSaved = s0 s1 s2 s3`) are handed over with `s0` at its spilled
+value and `s1-s3` from the caller. -/
+theorem envNew_spec_vsa {Φ : Nat × String → IProp GF} (live : Nat → Prop)
+    (hlive : ∀ a, codeBase ≤ a → a < codeBase + 96 → live a)
+    {gpv : BitVec 64} {headroom : Nat} {text : List (Nat × BitVec 8)}
+    (hm : MallocLocalRun (vsaModel live) VsaHeap.vsaLayout VsaHeap.mallocEntryBV gpv
+      VsaHeap.vsaClob VsaHeap.vsaSaved headroom text)
+    (hf : FreeLocalRun (vsaModel live) VsaHeap.vsaLayout VsaHeap.freeEntryBV gpv
+      VsaHeap.vsaClob VsaHeap.vsaSaved headroom text)
+    (H : List (Nat × Nat)) (esp r par s0v s1 s2 s3 : BitVec 64)
+    (hg : EnvNewCallerGeom (esp - 16#64) r) :
+    instrAt codeBase envNewCode ∗ textOwn text ∗ PC ↦ᵣ 0x800029fc#64 ∗ (1 : Nat) ↦ᵣ r ∗
+      (10 : Nat) ↦ᵣ par ∗ (2 : Nat) ↦ᵣ esp ∗ (8 : Nat) ↦ᵣ s0v ∗
+      savedOwn [(9, s1), (18, s2), (19, s3)] ∗ gp ↦ᵣ□ gpv ∗
+      clobbered VsaHeap.vsaClob ∗ sepL (List.range' (esp - 16#64).toNat 16) byteAny ∗
+      stackScratch (esp - 16#64) headroom ∗ isHeap VsaHeap.vsaLayout H ∗
+      (∀ p : BitVec 64, ⌜FreshBlock VsaHeap.vsaLayout H p.toNat 32 ∧ p.toNat % 16 = 0⌝ -∗
+        PC ↦ᵣ r -∗ (1 : Nat) ↦ᵣ r -∗ (10 : Nat) ↦ᵣ p -∗ (2 : Nat) ↦ᵣ esp -∗
+        (8 : Nat) ↦ᵣ s0v -∗ savedOwn [(9, s1), (18, s2), (19, s3)] -∗
+        clobbered VsaHeap.vsaClob -∗ sepL (List.range' (esp - 16#64).toNat 16) byteAny -∗
+        stackScratch (esp - 16#64) headroom -∗ isHeap VsaHeap.vsaLayout ((p.toNat, 32) :: H) -∗
+        envBlock p par -∗ mTWP (vsaModel live) Φ) ∗
+      (PC ↦ᵣ link -∗ (1 : Nat) ↦ᵣ link -∗ (10 : Nat) ↦ᵣ 0#64 -∗ (2 : Nat) ↦ᵣ (esp - 16#64) -∗
+        (8 : Nat) ↦ᵣ par -∗ savedOwn [(9, s1), (18, s2), (19, s3)] -∗
+        clobbered VsaHeap.vsaClob -∗ sepL (List.range' (esp - 16#64).toNat 16) byteAny -∗
+        stackScratch (esp - 16#64) headroom -∗ isHeap VsaHeap.vsaLayout H -∗
+        mTWP (vsaModel live) Φ)
+    ⊢ mTWP (vsaModel live) Φ :=
+  envNew_spec live hlive (VsaHeap.vsaDlMallocImpl live gpv headroom text hm hf) arenaGeom_vsa
+    H esp r par s0v [(9, s1), (18, s2), (19, s3)] rfl hg
+
 end Spec
 
 end VsaIris.Inst.EnvNew
