@@ -227,7 +227,14 @@ iris-machine's. The earlier iris-heap history is in git (`git log --grep iris-he
 - VSA obstruction, machine-checked: `vsa_reserve_fails_after_split`. VSA's `AllocationReserve` is false after `malloc(24)`. The corrected `Reserve` is used instead, and the finding is recorded in `PROOF_CLOSURE_PLAN.md` §2.
 
 ## In flight
-- `free` on the fast heap. `FreeLocalRun` over every heap shape needs all of `_free_r`: backward/forward coalescing, bin insertion, and `_malloc_trim_r`/`sbrk`. I am proving its top-merge path first, as a capacity-style spec in the manner of `MallocRoomRun`. The block must be the chunk adjacent to the top, and the merged top must stay below `__malloc_trim_threshold`. That path is: wrapper, prologue, lock, merge into the top, tail-jump to unlock.
+- realloc as a third `allocCall_of_localRun` instance.
+
+## Done (free)
+- `freeRoomSpec`, `FreeRoomRun`, `DlFreeRoomImpl`, and `freeRoomSpec_of_run` (`MallocRun.lean`): `freeSpec` under capacity. The precondition is a shape predicate `FreeOK` on the owned image; the postcondition is `isHeapRoom Room H k`, keeping every credit.
+- `vsaDlFreeRoomImpl_fast` / `_boundary` (`Vsa/FreeChain.lean`, `Vsa/MallocLive.lean`): proved from the binary's `free` for `vsaFreeTop`. That shape is the fast heap where the block is the payload of the chunk below the top, no other live block starts there, and the merged top stays below `__malloc_trim_threshold`.
+  - The heap half is `FastAt.merge` (`Vsa/FreeFastHeap.lean`).
+  - The machine half is six stages: wrapper, prologue, lock call, merge body, epilogue, and the unlock hook's tail return.
+  - Shared machinery: the generic `lock_call`/`unlock_hook`, `StPost` over the stack-pointer value, and the generated `jal` site at `0x80007368`.
 
 ## Done (boundary)
 - `pathLoaded_of_image` (generated, `scripts/gen_malloc_path_image.py`): the fast paths' code bytes come from `FixedTextLoaded` and `ImageStaticsLoaded` (`_impure_ptr`).
@@ -246,10 +253,12 @@ iris-machine's. The earlier iris-heap history is in git (`git log --grep iris-he
 
 ## Holes left
 - `pathText` liveness from `VsaOk`/the loaded image (in flight).
-- `MallocRoomRun` for heaps with free chunks (bin reuse, remainder splitting, `sbrk` growth), i.e. general `vsaRoom`; `MallocLocalRun` without capacity; `FreeLocalRun`; realloc.
+- `MallocRoomRun` for heaps with free chunks (bin reuse, remainder splitting, `sbrk` growth), i.e. general `vsaRoom`; `MallocLocalRun` without capacity.
+- `FreeLocalRun` in general: freeing a chunk that is not below the top (bin insertion, which leaves the fast shape), coalescing with a free neighbour, and trimming via `_malloc_trim_r`/`sbrk`.
+- realloc.
 
 ## Next
-- Liveness instantiation; then `FreeLocalRun` (free's fast path: chunk into the top or a bin); then realloc via `allocCall_of_localRun`.
+- realloc via `allocCall_of_localRun`. A LIFO lemma: after a fast `malloc`, `vsaFreeTop` holds for the returned block when the original top is below the trim threshold. This needs `MallocRoomEnd`'s room to expose the chunk list.
 
 ## DECIDED (confirmed by the user)
 - The in-place `DlMallocImpl` signature change (code bytes, callee-saved `s0-s3`) stays.

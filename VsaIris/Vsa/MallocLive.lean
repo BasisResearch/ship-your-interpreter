@@ -1,4 +1,5 @@
 import VsaIris.Vsa.MallocSmallChain
+import VsaIris.Vsa.FreeChain
 import VsaIris.Vsa.MallocFastImage
 import Vsa.Sim.LayoutInstance
 
@@ -11,8 +12,8 @@ initial memory. Present bytes stay present, since stores never remove one.
 
 * `pathText_live`: the fast paths' code (`pathText`) is live. The `.text` bytes
   come from `FixedTextLoaded` and `_impure_ptr` from `ImageStaticsLoaded`
-  (`pathLoaded_of_image`). This discharges `fast_run`'s code premise:
-  `vsaDlMallocRoomImpl_boundary`.
+  (`pathLoaded_of_image`). This discharges the code premise of `fast_run` and
+  `free_run`: `vsaDlMallocRoomImpl_boundary`, `vsaDlFreeRoomImpl_boundary`.
 * `vsaFoot_live`: the allocator footprint (`allocGlobal` and the arena) is live
   given `AllocBytesPresent`. VSA's boundary states byte presence only for the
   stack (`InterpRunPhysicalFacts.stack_bytes`). For the allocator it states
@@ -43,6 +44,16 @@ theorem vsaDlMallocRoomImpl_boundary {c0 : Config} {stmts count : Nat} {inp : Bi
     DlMallocRoomImpl (vsaModel (liveOf c0)) vsaLayout (vsaRoomFast maxReq) maxReq
       (SpOKFast headroom) mallocEntryBV gpV vsaClob vsaSaved headroom pathText :=
   vsaDlMallocRoomImpl_fast hmax (pathText_live F.text_image F.statics)
+
+/-- **`DlFreeRoomImpl` at the boundary**: `freeRoomSpec` holds of the binary's
+`free` over `vsaModel (liveOf c0)` for a block below the top of a fast heap. -/
+theorem vsaDlFreeRoomImpl_boundary {c0 : Config} {stmts count : Nat} {inp : BitVec 64}
+    {N : Vsa.RuntimeRepr.NativeAddrs} {A : Vsa.RuntimeRepr.Arena} {φf φc : Vsa.While.Addr → Nat}
+    {aLeft : Nat} (F : LayoutInstance.InterpRunPhysicalFacts c0 stmts count inp N A φf φc aLeft)
+    {maxReq headroom : Nat} :
+    DlFreeRoomImpl (vsaModel (liveOf c0)) vsaLayout (vsaRoomFast maxReq) (vsaFreeTop maxReq)
+      (SpOKFast headroom) freeEntryBV gpV vsaClob vsaSaved headroom pathText :=
+  vsaDlFreeRoomImpl_fast (pathText_live F.text_image F.statics)
 
 /-- **Presence of the allocator's bytes at the boundary** (a named premise).
 Every byte of the allocator's globals and of the arena `[heapStart, heapEnd)`
