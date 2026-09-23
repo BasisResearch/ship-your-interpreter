@@ -182,6 +182,13 @@ def memcpySpec (Wp : MachWP (GF := GF) M) : IProp GF :=
     (fun _ => iprop((10 : Nat) ↦ᵣ dst ∗ clobbered retClob ∗
       ownImg (InExt (dst.toNat, n)) (fun a => img (a - dst.toNat + src.toNat)))))
 
+instance (Wp : MachWP (GF := GF) M) : Persistent (strcmpSpec Wp) := by
+  unfold strcmpSpec; infer_instance
+instance (Wp : MachWP (GF := GF) M) : Persistent (strlenSpec Wp) := by
+  unfold strlenSpec; infer_instance
+instance (Wp : MachWP (GF := GF) M) : Persistent (memcpySpec Wp) := by
+  unfold memcpySpec; infer_instance
+
 /-! ## The helper specs -/
 
 /-- **`env_new(par)`** (`env.c:12`): a fresh empty frame under `po`, whose
