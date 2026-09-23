@@ -94,6 +94,12 @@ Caveats. The comparison is not apples to apples.
   are the instruction-level runs of `_malloc_r`/`_free_r`, the only allocator
   assumptions `envNew_spec_vsa` takes. The sibling is proving the top-split
   path.
+- The malloc/free specs now require a 4-aligned return address (`ret`
+  clears bit 0), from the sibling at c740152. The pilot discharges it by
+  `decide` at `link`. The sibling also found VSA's `AllocationReserve`
+  unsatisfiable after `malloc(24)` (`vsa_reserve_fails_after_split`,
+  recorded in PROOF_CLOSURE_PLAN §2). That affects VSA's
+  `MallocReturnAt.reserve` supplier, not the pilot.
 - The `envNew_spec` NULL continuation `Knull` is the caller's obligation.
   The error path is `fwrite`, then `exit(1)`.
 - `live` and `text` are parameters. They should be instantiated from the
