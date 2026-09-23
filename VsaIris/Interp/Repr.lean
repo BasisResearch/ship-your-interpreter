@@ -2,6 +2,7 @@ import VsaIris.MallocRun
 import Vsa.RuntimeRepr
 import Vsa.MemReprWithin
 import Vsa.While.StackNeed
+import Vsa.Sim.StoreInvariant
 
 /-!
 # Representation predicates (INTERP_DESIGN.md §3, package R)
@@ -176,9 +177,24 @@ def CStrImg (img : Nat → BitVec 8) (p : Nat) (s : String) : Prop :=
       0 < (s.toList[i]).toNat ∧ (s.toList[i]).toNat < 128) ∧
     img (p + s.toList.length) = 0
 
-/-- A C string at `p`, NUL included, read-only forever (`CString`). -/
+/-- The HTIF `tohost`/`fromhost` words start here (`Vsa.Sim.tohostAddr`;
+`VsaIris/Interp/SpecEnv.lean` checks the two agree). -/
+def htifLo : Nat := 0x8001ad00
+
+/-- **The window a word-at-a-time string routine reads.** `strlen` and
+`strcmp` load whole aligned 8-byte words, so they read up to 7 bytes past
+the NUL of a `len`-character string at `p`: the window `[p, p + len + 8)`
+must be RAM and off the HTIF words. -/
+structure StrWin (p len : Nat) : Prop where
+  lo : 0x80000000 ≤ p
+  hi : p + len + 8 ≤ 0x100000000
+  htif : p + len + 8 ≤ htifLo ∨ htifLo + 16 ≤ p
+
+/-- A C string at `p`, NUL included, read-only forever (`CString`), with the
+window `strlen`/`strcmp` over-read (`StrWin`). -/
 def strAt (p : Nat) (s : String) : IProp GF :=
-  iprop(∃ img, ⌜CStrImg img p s⌝ ∗ roImg (InExt (p, s.toList.length + 1)) img)
+  iprop(∃ img, ⌜CStrImg img p s ∧ StrWin p s.toList.length⌝ ∗
+    roImg (InExt (p, s.toList.length + 1)) img)
 
 instance (p : Nat) (s : String) : Persistent (strAt (GF := GF) p s) := by
   unfold strAt; infer_instance
@@ -354,13 +370,24 @@ structure StoreMaps (mf mc : NatMap Nat) (s : Store) : Prop where
   closures : ∀ k, (PartialMap.get? mc k).isSome ↔ k < s.closures.size
   clos_inj : ∀ a b p, PartialMap.get? mc a = some p → PartialMap.get? mc b = some p → a = b
 
+/-- The pure part of `storeRepr`: the two address maps, the block list, the
+closure-body bound and the environment invariant (`Vsa.Sim.StoreInvariant`:
+unique names per frame, parents point to older frames). `env_get`/`env_set`
+walk the parent chain by it, and `env_define` updates the first match by it. -/
+structure StorePure (mf mc : NatMap Nat) (s : Store) (B : List (Nat × Nat))
+    (Bs : List (List (Nat × Nat))) : Prop where
+  maps : StoreMaps mf mc s
+  blocks : B = Bs.flatten
+  bodies : StoreBodiesBound s perCallBudget
+  inv : Vsa.Sim.StoreInvariant s
+
 /-- **The whole store** (`StoreRepr` + `HeapOwned` + `StoreOwned`),
 monolithic: BigStep's frames are shared by closures, so every call can reach
 any frame. `B` is the list of heap blocks the frames own. -/
 def storeRepr (N : NativeAddrs) (s : Store) (B : List (Nat × Nat)) : IProp GF :=
   iprop(∃ (mf mc : NatMap Nat) (Bs : List (List (Nat × Nat))),
     ghost_map_auth I.frameName (DFrac.own 1) mf ∗ ghost_map_auth I.closName (DFrac.own 1) mc ∗
-    ⌜StoreMaps mf mc s ∧ B = Bs.flatten ∧ StoreBodiesBound s perCallBudget⌝ ∗
+    ⌜StorePure mf mc s B Bs⌝ ∗
     framesOwn N 0 s.frames.toList Bs ∗ closuresOwn 0 s.closures.toList)
 
 /-! ## The interpreter context -/

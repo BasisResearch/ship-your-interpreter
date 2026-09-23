@@ -96,10 +96,11 @@ theorem storeRepr_open {s : Store} {B : List (Nat × Nat)} {fa : Addr} {f : Fram
     (hf : s.frames[fa]? = some f) :
     storeRepr (GF := GF) N s B ⊢ ∃ bl B₁ B₂, ⌜B = B₁ ++ bl ++ B₂⌝ ∗ frameOwn N fa f bl ∗
       (∀ (s' : Store) (f' : Frame) (bl' : List (Nat × Nat)),
-        ⌜s'.closures = s.closures ∧ s'.frames.toList = s.frames.toList.set fa f'⌝ -∗
+        ⌜s'.closures = s.closures ∧ s'.frames.toList = s.frames.toList.set fa f' ∧
+          Vsa.Sim.StoreInvariant s'⌝ -∗
         frameOwn N fa f' bl' -∗ storeRepr N s' (B₁ ++ bl' ++ B₂)) := by
   unfold storeRepr
-  iintro ⟨%mf, %mc, %Bs, Hf, Hc, %⟨hmaps, hB, hbb⟩, Hfr, #Hcl⟩
+  iintro ⟨%mf, %mc, %Bs, Hf, Hc, %⟨hmaps, hB, hbb, -⟩, Hfr, #Hcl⟩
   have hf' : s.frames.toList[fa]? = some f := by rw [Array.getElem?_toList]; exact hf
   ihave ⟨%bl, %hbl, Hfa, Hclose⟩ := framesOwn_open N fa 0 s.frames.toList Bs f hf' $$ Hfr
   simp only [Nat.zero_add]
@@ -109,7 +110,7 @@ theorem storeRepr_open {s : Store} {B : List (Nat × Nat)} {fa : Addr} {f : Fram
     rw [hB]
     exact (congrArg List.flatten (list_split_at hbl)).trans (by simp)
   iframe Hfa
-  iintro %s' %f' %bl' %⟨hcl, hfr⟩ Hfa'
+  iintro %s' %f' %bl' %⟨hcl, hfr, hinv'⟩ Hfa'
   ihave Hfr' := Hclose $$ %f' %bl' Hfa'
   iexists mf, mc, Bs.set fa bl'
   rw [← hfr, ← hcl]
@@ -118,7 +119,7 @@ theorem storeRepr_open {s : Store} {B : List (Nat × Nat)} {fa : Addr} {f : Fram
   have hsize : s'.frames.size = s.frames.size := by
     rw [← Array.length_toList, ← Array.length_toList, hfr, List.length_set]
   refine ⟨⟨fun k => by rw [hsize]; exact hmaps.frames k,
-    fun k => by rw [hcl]; exact hmaps.closures k, hmaps.clos_inj⟩, ?_, ?_⟩
+    fun k => by rw [hcl]; exact hmaps.closures k, hmaps.clos_inj⟩, ?_, ?_, hinv'⟩
   · have hlt : fa < Bs.length := by
       rcases Nat.lt_or_ge fa Bs.length with h | h
       · exact h
@@ -145,7 +146,7 @@ theorem define_frames_toList {s : Store} {fa : Addr} {f : Frame} (hf : s.frames[
 
 /-- The opener with the closer specialized to `env_define`'s semantic update. -/
 theorem storeRepr_open_define {s : Store} {B : List (Nat × Nat)} {fa : Addr} {f : Frame}
-    (hf : s.frames[fa]? = some f) (x : String) (v : Value) :
+    (hf : s.frames[fa]? = some f) (x : String) (v : Value) (hinv : Vsa.Sim.StoreInvariant s) :
     storeRepr (GF := GF) N s B ⊢ ∃ bl B₁ B₂, ⌜B = B₁ ++ bl ++ B₂⌝ ∗ frameOwn N fa f bl ∗
       (∀ bl' : List (Nat × Nat), frameOwn N fa (defineFrame f x v) bl' -∗
         storeRepr N (s.define fa x v) (B₁ ++ bl' ++ B₂)) := by
@@ -156,7 +157,8 @@ theorem storeRepr_open_define {s : Store} {B : List (Nat × Nat)} {fa : Addr} {f
   isplitr
   · ipureintro; exact hB
   iintro %bl' Hfa'
-  iapply Hc $$ %(s.define fa x v) %_ %bl' %⟨rfl, define_frames_toList hf x v⟩ Hfa'
+  iapply Hc $$ %(s.define fa x v) %_ %bl'
+    %⟨rfl, define_frames_toList hf x v, hinv.define s fa x v⟩ Hfa'
 
 /-! ## Address lookups -/
 
@@ -183,19 +185,19 @@ theorem sepL_persist_all {α} (Φ : α → IProp GF) [∀ x, Persistent (Φ x)] 
 theorem storeRepr_frameAt {s : Store} {B : List (Nat × Nat)} {fa e : Nat} :
     storeRepr (GF := GF) N s B ∗ frameAt fa e ⊢ ⌜fa < s.frames.size⌝ := by
   unfold storeRepr frameAt
-  iintro ⟨⟨%mf, %mc, %Bs, Hf, -, %⟨hmaps, -⟩, -⟩, He⟩
+  iintro ⟨⟨%mf, %mc, %Bs, Hf, -, %hp, -⟩, He⟩
   ihave %h := ghost_map_lookup $$ Hf He
   ipureintro
-  exact (hmaps.frames fa).1 (by simp [h])
+  exact (hp.maps.frames fa).1 (by simp [h])
 
 /-- A closure address fragment names an allocated closure. -/
 theorem storeRepr_closAt {s : Store} {B : List (Nat × Nat)} {ca p : Nat} :
     storeRepr (GF := GF) N s B ∗ closAt ca p ⊢ ⌜ca < s.closures.size⌝ := by
   unfold storeRepr closAt
-  iintro ⟨⟨%mf, %mc, %Bs, -, Hc, %⟨hmaps, -⟩, -⟩, He⟩
+  iintro ⟨⟨%mf, %mc, %Bs, -, Hc, %hp, -⟩, He⟩
   ihave %h := ghost_map_lookup $$ Hc He
   ipureintro
-  exact (hmaps.closures ca).1 (by simp [h])
+  exact (hp.maps.closures ca).1 (by simp [h])
 
 theorem closuresOwn_get :
     ∀ (i : Nat) (cs : List ClosureData) (k : Nat) (cd : ClosureData), cs[k]? = some cd →
@@ -240,7 +242,8 @@ theorem storeRepr_empty :
     show (⟨#[], #[]⟩ : Store).closures.toList = [] from rfl, framesOwn_nil, closuresOwn_nil]
   isplitr
   · ipureintro
-    refine ⟨⟨fun k => by simp [get?_empty], fun k => by simp [get?_empty], ?_⟩, rfl, ?_⟩
+    refine ⟨⟨fun k => by simp [get?_empty], fun k => by simp [get?_empty], ?_⟩, rfl, ?_,
+      ⟨fun fa h => absurd h (by simp), fun fa h => absurd h (by simp)⟩⟩
     · intro a b p ha; simp [get?_empty] at ha
     · intro a cd h; simp at h
   isplitl []
@@ -273,11 +276,12 @@ theorem framesOwn_snoc (i : Nat) (fs : List Frame) (Bs : List (List (Nat × Nat)
 /-- **Frame allocation** (`env_new`): a frame body at a fresh `Env*` joins the
 store as frame `s.frames.size`, whose address fragment is handed out. -/
 theorem storeRepr_allocFrame {s s' : Store} {B : List (Nat × Nat)} {f : Frame} {Gm : FrameGeom}
-    (hfr : s'.frames.toList = s.frames.toList ++ [f]) (hcl : s'.closures = s.closures) :
+    (hfr : s'.frames.toList = s.frames.toList ++ [f]) (hcl : s'.closures = s.closures)
+    (hinv' : Vsa.Sim.StoreInvariant s') :
     storeRepr (GF := GF) N s B ∗ frameBody N f Gm ⊢
       |==> (storeRepr N s' (B ++ Gm.blocks) ∗ frameAt s.frames.size Gm.e) := by
   unfold storeRepr
-  iintro ⟨⟨%mf, %mc, %Bs, Hf, Hc, %⟨hmaps, hB, hbb⟩, Hfr, #Hcl⟩, Hbody⟩
+  iintro ⟨⟨%mf, %mc, %Bs, Hf, Hc, %⟨hmaps, hB, hbb, -⟩, Hfr, #Hcl⟩, Hbody⟩
   have hnone : PartialMap.get? mf s.frames.size = none := by
     cases h : PartialMap.get? mf s.frames.size with
     | none => rfl
@@ -296,7 +300,7 @@ theorem storeRepr_allocFrame {s s' : Store} {B : List (Nat × Nat)} {f : Frame} 
     have hsize : s'.frames.size = s.frames.size + 1 := by
       rw [← Array.length_toList, ← Array.length_toList, hfr]; simp
     refine ⟨⟨fun k => ?_, fun k => by rw [hcl]; exact hmaps.closures k, hmaps.clos_inj⟩,
-      by rw [hB]; simp, fun a cd h => by rw [hcl] at h; exact hbb a cd h⟩
+      by rw [hB]; simp, fun a cd h => by rw [hcl] at h; exact hbb a cd h, hinv'⟩
     rw [hsize, Iris.Std.LawfulPartialMap.get?_insert]
     by_cases hk : s.frames.size = k
     · subst hk; simp
@@ -346,7 +350,8 @@ theorem ownImg_persist (S : Nat → Prop) (img : Nat → BitVec 8) :
 
 omit I in
 /-- A freshly written C string, discarded. -/
-theorem strAt_of_owned {p : Nat} {s : String} {img : Nat → BitVec 8} (h : CStrImg img p s) :
+theorem strAt_of_owned {p : Nat} {s : String} {img : Nat → BitVec 8} (h : CStrImg img p s)
+    (hw : StrWin p s.toList.length) :
     ownImg (GF := GF) (InExt (p, s.toList.length + 1)) img ⊢ |==> strAt p s := by
   iintro H
   imod ownImg_persist _ img $$ H with H
@@ -354,7 +359,7 @@ theorem strAt_of_owned {p : Nat} {s : String} {img : Nat → BitVec 8} (h : CStr
   unfold strAt
   iexists img
   iframe H
-  ipureintro; exact h
+  ipureintro; exact ⟨h, hw⟩
 
 omit I in
 /-- A read-only byte and an exclusively owned image do not share an address. -/
@@ -444,7 +449,7 @@ theorem storeRepr_allocClosure {s s' : Store} {B : List (Nat × Nat)} {cd : Clos
         astE q (.fn cd.name cd.params cd.body) ∗ frameAt cd.env e ⊢
       |==> (storeRepr N s' B ∗ closAt s.closures.size p) := by
   unfold storeRepr
-  iintro ⟨⟨%mf, %mc, %Bs, Hf, Hc, %⟨hmaps, hB, hbb⟩, Hfr, #Hcl⟩, Hown, #Hast, #Henv⟩
+  iintro ⟨⟨%mf, %mc, %Bs, Hf, Hc, %⟨hmaps, hB, hbb, hinv⟩, Hfr, #Hcl⟩, Hown, #Hast, #Henv⟩
   ihave ⟨⟨-, Hc, Hown⟩, %hfresh⟩ := keep_pure (closuresOwn_fresh 0 s.closures.toList) $$ [Hc Hown]
   · iframe Hcl Hc Hown
   have hnone : PartialMap.get? mc s.closures.size = none := by
@@ -464,7 +469,9 @@ theorem storeRepr_allocClosure {s s' : Store} {B : List (Nat × Nat)} {cd : Clos
     rw [← Array.length_toList, ← Array.length_toList, hcl]; simp
   isplitr
   · ipureintro
-    refine ⟨⟨fun k => by rw [hfr]; exact hmaps.frames k, fun k => ?_, ?_⟩, hB, ?_⟩
+    refine ⟨⟨fun k => by rw [hfr]; exact hmaps.frames k, fun k => ?_, ?_⟩, hB, ?_,
+      ⟨fun fa h => by simp only [hfr] at h ⊢; exact hinv.unique fa h,
+       fun fa h => by simp only [hfr] at h ⊢; exact hinv.parents fa h⟩⟩
     · rw [hsize, Iris.Std.LawfulPartialMap.get?_insert]
       by_cases hk : s.closures.size = k
       · subst hk; simp
@@ -589,9 +596,9 @@ theorem framesOwn_cover :
 theorem storeRepr_blocks_disjoint {s : Store} {B : List (Nat × Nat)} :
     storeRepr (GF := GF) N s B ⊢ ⌜B.Pairwise ExtDisj⌝ := by
   unfold storeRepr
-  iintro ⟨%mf, %mc, %Bs, -, -, %⟨-, hB, -⟩, Hfr, -⟩
+  iintro ⟨%mf, %mc, %Bs, -, -, %hp, Hfr, -⟩
   ihave ⟨%img, -, %h⟩ := framesOwn_cover N 0 s.frames.toList Bs $$ Hfr
-  ipureintro; rw [hB]; exact h
+  ipureintro; rw [hp.blocks]; exact h
 
 /-- **Store vs heap.** No byte of a store block is in the allocator's
 footprint: every store block is covered by live extents (with `B ⊆ H`, its
@@ -600,13 +607,13 @@ theorem storeRepr_blocks_off_heap {s : Store} {B : List (Nat × Nat)} {L : DlLay
     {H : List (Nat × Nat)} :
     storeRepr (GF := GF) N s B ∗ isHeap L H ⊢ ⌜∀ b ∈ B, ∀ a, InExt b a → ¬ heapFoot L H a⌝ := by
   unfold storeRepr isHeap
-  iintro ⟨⟨%mf, %mc, %Bs, -, -, %⟨-, hB, -⟩, Hfr, -⟩, %img, -, Hheap⟩
+  iintro ⟨⟨%mf, %mc, %Bs, -, -, %hp, Hfr, -⟩, %img, -, Hheap⟩
   ihave ⟨%img', Hown, -⟩ := framesOwn_cover N 0 s.frames.toList Bs $$ Hfr
   ihave %hd := ownSet_disj _ _ img' img $$ [Hown Hheap]
   · iframe Hown Hheap
   ipureintro
   intro b hb a ha
-  exact hd a ⟨b, hB ▸ hb, ha⟩
+  exact hd a ⟨b, hp.blocks ▸ hb, ha⟩
 
 /-- The same at the level of the world, for either regime. -/
 theorem world_blocks_off_heap {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}

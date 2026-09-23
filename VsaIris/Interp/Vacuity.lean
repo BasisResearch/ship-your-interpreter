@@ -184,6 +184,13 @@ theorem ctlSharedExts_disjoint : ctlSharedExts.Pairwise ExtDisj := by
 theorem ctlOwnedAddrs_nodup : ctlOwnedAddrs.Nodup := blockAddrs_nodup ctlGeom_disjoint
 theorem ctlSharedAddrs_nodup : ctlSharedAddrs.Nodup := blockAddrs_nodup ctlSharedExts_disjoint
 
+/-- The control's shared view (heap names and the AST page) is window-safe. -/
+theorem ctl_sharedWin : SharedWin Control.shared := by
+  intro k hk
+  unfold Control.shared AstPage at hk
+  unfold htifLo
+  omega
+
 section Vac
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
@@ -192,17 +199,17 @@ omit I in
 /-- One of the control's C strings, out of the shared view. -/
 theorem ctl_strAt_print : roOn (GF := GF) Control.shared heapMem ⊢ strAt 0x81000200 "print" :=
   strAt_of_cstringWithin ⟨heapStoreFacts.printName,
-    fun j hj => ctl_shared_name _ 5 (Or.inl ⟨rfl, rfl⟩) j (Nat.le_trans hj (by decide))⟩
+    fun j hj => ctl_shared_name _ 5 (Or.inl ⟨rfl, rfl⟩) j (Nat.le_trans hj (by decide))⟩ ctl_sharedWin
 
 omit I in
 theorem ctl_strAt_println : roOn (GF := GF) Control.shared heapMem ⊢ strAt 0x81000210 "println" :=
   strAt_of_cstringWithin ⟨heapStoreFacts.printlnName,
-    fun j hj => ctl_shared_name _ 7 (Or.inr (Or.inl ⟨rfl, rfl⟩)) j (Nat.le_trans hj (by decide))⟩
+    fun j hj => ctl_shared_name _ 7 (Or.inr (Or.inl ⟨rfl, rfl⟩)) j (Nat.le_trans hj (by decide))⟩ ctl_sharedWin
 
 omit I in
 theorem ctl_strAt_assert : roOn (GF := GF) Control.shared heapMem ⊢ strAt 0x81000220 "assert" :=
   strAt_of_cstringWithin ⟨heapStoreFacts.assertName,
-    fun j hj => ctl_shared_name _ 6 (Or.inr (Or.inr ⟨rfl, rfl⟩)) j (Nat.le_trans hj (by decide))⟩
+    fun j hj => ctl_shared_name _ 6 (Or.inr (Or.inr ⟨rfl, rfl⟩)) j (Nat.le_trans hj (by decide))⟩ ctl_sharedWin
 
 omit I in
 /-- **The control program's AST**, persistent. -/
@@ -233,7 +240,7 @@ theorem ctl_frameBody :
     roOn (GF := GF) Control.shared heapMem ∗ ownImg (BlocksCover ctlGeom.blocks) (memImg heapMem)
       ⊢ frameBody Nfixed globalFrame ctlGeom := by
   iintro ⟨#H, Hown⟩
-  iapply frameBody_of_frameRepr ctl_frameReads ctl_frameBridge $$ [H Hown]
+  iapply frameBody_of_frameRepr ctl_frameReads ctl_frameBridge ctl_sharedWin $$ [H Hown]
   iframe H Hown
   isplitl []
   · iapply ctl_closSupply
@@ -256,6 +263,15 @@ theorem ctl_storeRepr :
   · iframe H Hown
   iapply storeRepr_allocFrame (N := Nfixed) (s := ⟨#[], #[]⟩) (B := [])
     (s' := Vsa.While.initSt.store) (f := globalFrame) (Gm := ctlGeom) (by rfl) (by rfl)
+    ⟨fun fa h => by
+      have : fa = 0 := by change fa < 1 at h; omega
+      subst this
+      exact (show Vsa.Sim.FrameNamesUnique globalFrame.vars by
+        unfold Vsa.Sim.FrameNamesUnique; simp [globalFrame]),
+     fun fa h p hp => by
+      have : fa = 0 := by change fa < 1 at h; omega
+      subst this
+      exact absurd hp (show globalFrame.parent ≠ some p by simp [globalFrame])⟩
   iframe Hempty Hbody
 
 /-! ### The interpreter context -/
@@ -321,7 +337,7 @@ theorem ctl_valAt :
       ownImg (InExt (0x81000100, 24)) (memImg heapMem) ⊢
       valAt Nfixed 0x81000100 (.native .print) := by
   iintro ⟨#H, Hown⟩
-  iapply valAt_of_valueWordRepr ctl_valueRepr ctl_payloadShared (fun _ _ => rfl) $$ [H Hown]
+  iapply valAt_of_valueWordRepr ctl_valueRepr ctl_payloadShared (fun _ _ => rfl) ctl_sharedWin $$ [H Hown]
   iframe H Hown
   iapply closSupply_of_ne (fun ca h => by exact absurd h (by simp))
 

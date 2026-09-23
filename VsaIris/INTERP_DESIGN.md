@@ -804,3 +804,32 @@ interpreter control's dlmalloc heap and stays with H4/A0.
 - **Q4: newlib safety holes.** `snprintf`/`fprintf` on the error paths are
   needed only so that partial mode is "never stuck". Leave them as named
   holes, or schedule proofs? (`vfprintf` is large.)
+
+### STATEMENT CHANGES (H1)
+
+Two changes to R's predicates, both because an `env_*` spec cannot be proved
+without the fact and no other resource carries it:
+
+- **`storeRepr` carries `Vsa.Sim.StoreInvariant`** (unique names per frame,
+  parents point to older frames), in the named pure part `StorePure`
+  (`maps`, `blocks`, `bodies`, `inv`). `env_get`/`env_set` walk the parent
+  chain: `parents` makes the walk terminate (the total WP needs it) and
+  bounds its length by `frames.size` (so the machine's answer is
+  `Store.get?`'s). `env_define` updates the FIRST matching slot, which is
+  `Store.define`'s update only when names are unique. VSA carried the same
+  pair in `HeapRepr` (`Vsa/Sim/HeapOps.lean`). Consequences: the generic
+  closer of `storeRepr_open` takes `StoreInvariant s'`;
+  `storeRepr_open_define` takes `StoreInvariant s` and re-establishes it
+  (`StoreInvariant.define`); `storeRepr_allocFrame` takes `StoreInvariant s'`
+  (from `StoreInvariant.allocFrame`, the parent being an allocated frame).
+- **`strAt p s` carries `StrWin p s.length`**: `[p, p + len + 8)` is RAM and
+  off the HTIF words. `strcmp` and `strlen` load whole aligned words and read
+  up to 7 bytes past the NUL (`0x80006eb8`, `strlen`'s word scan), so every
+  caller of either needs the window, and the window is a property of where
+  the string lives, not of the call. Producers: `strAt_of_owned` takes it
+  (heap strings: arena geometry); `strAt_of_cstringWithin` and the
+  `valOf`/`bindings`/`frameBody` bridges take `SharedWin P` — every byte of
+  the shared read view has its 8-byte window — which A0 establishes once at
+  the boundary (`ctl_sharedWin` at the control program). The over-read bytes
+  themselves are NOT owned by the string: their values never decide the
+  result, so the H3 runs read them as total reads (`readByte = getD 0`).

@@ -207,17 +207,38 @@ theorem cstrImg_of_cstring {m : Mem} {p : Nat} {s : String} (h : CString m p s) 
     · have : i = cs.length := by omega
       subst this; exact ⟨0, hz⟩
 
+/-- **Every shared byte has a string routine's read window**: RAM, and the
+8 bytes from it off the HTIF words. A0 establishes it at the boundary for the
+view the AST and the runtime strings live in; it gives `StrWin` to every
+string of the view (`strWin_of_shared`). -/
+def SharedWin (P : Nat → Prop) : Prop :=
+  ∀ k, P k → 0x80000000 ≤ k ∧ k + 8 ≤ 0x100000000 ∧ (k + 8 ≤ htifLo ∨ htifLo + 16 ≤ k)
+
+theorem strWin_of_shared {P : Nat → Prop} {p len : Nat} (hw : SharedWin P)
+    (hP : ∀ i, i ≤ len → P (p + i)) : StrWin p len := by
+  obtain ⟨h0lo, -, h0⟩ := hw p (by simpa using hP 0 (by omega))
+  obtain ⟨-, hnhi, hn⟩ := hw (p + len) (hP len (Nat.le_refl _))
+  refine ⟨h0lo, by omega, ?_⟩
+  rcases h0 with h0 | h0
+  · rcases hn with hn | hn
+    · left; exact hn
+    · have hk := hw (p + (htifLo - p)) (hP _ (by omega))
+      rw [show p + (htifLo - p) = htifLo by omega] at hk
+      omega
+  · right; exact h0
+
 omit I in
 /-- **A C string out of a read-only view.** -/
 theorem strAt_of_cstringWithin {P : Nat → Prop} {m : Mem} {p : Nat} {s : String}
-    (h : CStringWithin m P p s) : roOn (GF := GF) P m ⊢ strAt p s := by
+    (h : CStringWithin m P p s) (hw : SharedWin P) : roOn (GF := GF) P m ⊢ strAt p s := by
   obtain ⟨hstr, hP⟩ := h
   obtain ⟨himg, hmap⟩ := cstrImg_of_cstring hstr
   unfold strAt
   iintro H
   iexists (memImg m)
   isplitr
-  · ipureintro; exact himg
+  · ipureintro
+    exact ⟨himg, strWin_of_shared hw fun i hi => hP i (by simpa [String.length] using hi)⟩
   iapply roImg_of_roOn (P := P) (S := InExt (p, s.toList.length + 1)) ?_ $$ H
   intro k hk
   obtain ⟨i, hi, rfl⟩ : ∃ i, i ≤ s.toList.length ∧ k = p + i := by
@@ -333,7 +354,8 @@ theorem closSupply_of_ne {φc : Addr → Nat} {v : Value} (h : ∀ ca, v ≠ .cl
 
 /-- **A represented value's meaning out of a read-only view.** -/
 theorem valOf_of_valueRepr {P : Nat → Prop} {m : Mem} {N : NativeAddrs} {φc : Addr → Nat}
-    {a : Nat} {v : Value} (h : ValueRepr m N φc a v) (hsh : PayloadShared P m a v) :
+    {a : Nat} {v : Value} (h : ValueRepr m N φc a v) (hsh : PayloadShared P m a v)
+    (hwin : SharedWin P) :
     roOn (GF := GF) P m ∗ closSupply φc v ⊢ valImg N (memImg m) a v := by
   cases v with
   | null =>
@@ -367,7 +389,7 @@ theorem valOf_of_valueRepr {P : Nat → Prop} {m : Mem} {N : NativeAddrs} {φc :
       exact ⟨by rw [imgW_lo32, readLE_memImg h0], by omega⟩
     rw [hw]
     iapply strAt_of_cstringWithin (P := P) (m := m)
-      ⟨hstr, fun i hi => hsh t rfl q hq i hi⟩ $$ H
+      ⟨hstr, fun i hi => hsh t rfl q hq i hi⟩ hwin $$ H
   | closure ca =>
     obtain ⟨h0, hq, hqne⟩ := h
     have hw : (imgW (memImg m) (a + 8)).toNat = φc ca := imgW_read64 hq
@@ -389,7 +411,7 @@ theorem valOf_of_valueRepr {P : Nat → Prop} {m : Mem} {N : NativeAddrs} {φc :
       exact ⟨by rw [imgW_lo32, readLE_memImg h0], hw2⟩
     rw [hw]
     iapply strAt_of_cstringWithin (P := P) (m := m)
-      ⟨hstr, fun i hi => hsh (nativeName f) rfl q hq i hi⟩ $$ H
+      ⟨hstr, fun i hi => hsh (nativeName f) rfl q hq i hi⟩ hwin $$ H
 
 /-- An image agreeing with `m` on a value's 24 bytes carries the same words. -/
 theorem valImg_congr {N : NativeAddrs} {img : Nat → BitVec 8} {m : Mem} {a : Nat} {v : Value}
@@ -410,14 +432,15 @@ theorem valImg_congr {N : NativeAddrs} {img : Nat → BitVec 8} {m : Mem} {a : N
 image of the slot. -/
 theorem valAt_of_valueWordRepr {P : Nat → Prop} {m : Mem} {N : NativeAddrs} {φc : Addr → Nat}
     {a : Nat} {v : Value} {img : Nat → BitVec 8} (h : ValueRepr m N φc a v)
-    (hsh : PayloadShared P m a v) (hag : ∀ k, InExt (a, 24) k → img k = memImg m k) :
+    (hsh : PayloadShared P m a v) (hag : ∀ k, InExt (a, 24) k → img k = memImg m k)
+    (hw : SharedWin P) :
     roOn (GF := GF) P m ∗ closSupply φc v ∗ ownImg (InExt (a, 24)) img ⊢ valAt N a v := by
   unfold valAt
   iintro ⟨#H, #Hc, Hown⟩
   iexists img
   iframe Hown
   rw [valImg_congr (N := N) (v := v) hag]
-  iapply valOf_of_valueRepr h hsh $$ [H Hc]
+  iapply valOf_of_valueRepr h hsh hw $$ [H Hc]
   iframe H Hc
 
 /-! ## Frames
@@ -603,7 +626,7 @@ theorem frameLayout_of_frameRepr {P : Nat → Prop} {m : Mem} {N : NativeAddrs}
 /-- **One frame's bindings** out of `FrameRepr` and a read-only view. -/
 theorem bindings_of_frameRepr {P : Nat → Prop} {m : Mem} {N : NativeAddrs}
     {φf φc : Addr → Nat} {G : FrameGeom} {f : Frame} {img : Nat → BitVec 8}
-    (hrep : FrameReads m N φf φc G.e f) (h : FrameBridge P m N φc G f img) :
+    (hrep : FrameReads m N φf φc G.e f) (h : FrameBridge P m N φc G f img) (hw : SharedWin P) :
     roOn (GF := GF) P m ∗ closSupplyL φc (f.vars.map Prod.snd) ⊢
       bindings N img G.pn G.pv f.vars := by
   obtain ⟨pn, pv, hpn, hpv, hb⟩ := hrep.arrays
@@ -630,8 +653,8 @@ theorem bindings_of_frameRepr {P : Nat → Prop} {m : Mem} {N : NativeAddrs}
   isplitl []
   · iapply strAt_of_cstringWithin (P := P) (m := m)
       ⟨hstr, fun j hj => h.nameShared i hi q hq j
-        (by simpa [String.length] using hj)⟩ $$ H
-  · iapply valOf_of_valueRepr (P := P) hval (h.payloadShared i hi) $$ [H Hc]
+        (by simpa [String.length] using hj)⟩ hw $$ H
+  · iapply valOf_of_valueRepr (P := P) hval (h.payloadShared i hi) hw $$ [H Hc]
     iframe H
     unfold closSupplyL
     iapply Hc $$ %(f.vars[i].2) %(List.mem_map.2 ⟨f.vars[i], List.getElem_mem hi, rfl⟩)
@@ -640,7 +663,7 @@ theorem bindings_of_frameRepr {P : Nat → Prop} {m : Mem} {N : NativeAddrs}
 a read-only view of the shared bytes. -/
 theorem frameBody_of_frameRepr {P : Nat → Prop} {m : Mem} {N : NativeAddrs}
     {φf φc : Addr → Nat} {G : FrameGeom} {f : Frame} {img : Nat → BitVec 8}
-    (hrep : FrameReads m N φf φc G.e f) (h : FrameBridge P m N φc G f img) :
+    (hrep : FrameReads m N φf φc G.e f) (h : FrameBridge P m N φc G f img) (hw : SharedWin P) :
     roOn (GF := GF) P m ∗ closSupplyL φc (f.vars.map Prod.snd) ∗
       parentSupply f.parent G.par ∗ ownImg (BlocksCover G.blocks) img ⊢ frameBody N f G := by
   unfold frameBody parentSupply
@@ -650,7 +673,7 @@ theorem frameBody_of_frameRepr {P : Nat → Prop} {m : Mem} {N : NativeAddrs}
   · ipureintro; exact frameLayout_of_frameRepr hrep h
   iframe Hown
   isplitl []
-  · iapply bindings_of_frameRepr hrep h $$ [H Hc]
+  · iapply bindings_of_frameRepr hrep h hw $$ [H Hc]
     iframe H Hc
   · cases hpar : f.parent with
     | none =>
