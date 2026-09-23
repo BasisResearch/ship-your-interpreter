@@ -98,6 +98,57 @@ theorem clobbered_of_regsOf (clob : List Nat) (f : Nat → BitVec 64) :
     regsOf (GF := GF) clob f ⊢ clobbered clob :=
   clobbered_of_fn clob f
 
+/-- **The register file from an ABI entry**: registers at known values
+(`fixed`: the arguments, `ra`, `sp`, the callee-saved ones) and clobbered ones
+make up `rs` at some file `R` agreeing with `fixed`. -/
+theorem regsOf_entry (rs : List Nat) (fixed : List (Nat × BitVec 64)) (clob : List Nat)
+    (hperm : (fixed.map Prod.fst ++ clob).Perm rs) (hnd : rs.Nodup) :
+    savedOwn (GF := GF) fixed ∗ clobbered clob ⊢
+      ∃ R : Nat → BitVec 64, ⌜∀ p ∈ fixed, R p.1 = p.2⌝ ∗ regsOf rs R := by
+  have hnd' : (fixed.map Prod.fst ++ clob).Nodup := hperm.nodup_iff.2 hnd
+  have hfx : (fixed.map Prod.fst).Nodup := (List.nodup_append.1 hnd').1
+  have hcl : clob.Nodup := (List.nodup_append.1 hnd').2.1
+  have hdj := (List.nodup_append.1 hnd').2.2
+  iintro ⟨Hf, Hc⟩
+  ihave Hf := savedOwn_fn fixed hfx $$ Hf
+  ihave ⟨%f, Hc⟩ := clobbered_fn clob hcl $$ Hc
+  classical
+  obtain ⟨R, hR⟩ : ∃ R : Nat → BitVec 64,
+      R = fun k => if k ∈ fixed.map Prod.fst then pairVal fixed k else f k := ⟨_, rfl⟩
+  have e1 : sepL (GF := GF) (fixed.map Prod.fst) (fun r => r ↦ᵣ R r) =
+      sepL (fixed.map Prod.fst) (fun k => k ↦ᵣ pairVal fixed k) :=
+    sepL_congr fun k hk => by rw [hR]; simp only [hk, ite_true]
+  have e2 : sepL (GF := GF) clob (fun r => r ↦ᵣ R r) = sepL clob (fun k => k ↦ᵣ f k) :=
+    sepL_congr fun k hk => by
+      have : k ∉ fixed.map Prod.fst := fun h => hdj k h k hk rfl
+      rw [hR]; simp only [this, ite_false]
+  iexists R
+  isplitr
+  · ipureintro
+    intro p hp
+    have hm : p.1 ∈ fixed.map Prod.fst := List.mem_map_of_mem hp
+    simp only [hR, hm, ite_true]
+    exact pairVal_of_mem fixed hfx p hp
+  unfold regsOf
+  iapply (sepL_perm _ hperm).1
+  iapply (sepL_append _ _ _).2
+  rw [e1, e2]
+  iframe Hf Hc
+
+/-- **The register file at an ABI return**: registers at known values and
+the clobbered rest. -/
+theorem regsOf_exit (rs : List Nat) (fixed : List (Nat × BitVec 64)) (clob : List Nat)
+    (hperm : (fixed.map Prod.fst ++ clob).Perm rs) (R : Nat → BitVec 64)
+    (hR : ∀ p ∈ fixed, R p.1 = p.2) :
+    regsOf (GF := GF) rs R ⊢ savedOwn fixed ∗ clobbered clob := by
+  unfold regsOf
+  iintro H
+  ihave H := (sepL_perm _ hperm).2 $$ H
+  ihave ⟨Hf, Hc⟩ := (sepL_append _ _ _).1 $$ H
+  isplitl [Hf]
+  · iapply savedOwn_back fixed R hR $$ Hf
+  · iapply clobbered_of_fn clob R $$ Hc
+
 end Regs
 
 /-! ## Tracking memories -/

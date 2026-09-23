@@ -39,6 +39,7 @@ structure GetStack (s : Nat) (r : BitVec 64) (sv : Nat → BitVec 64) (R : Nat �
   s3 : ldv .ld Mt (s - 40) = sv 19
   s4 : ldv .ld Mt (s - 48) = sv 20
   s5 : ldv .ld Mt (s - 56) = sv 21
+  s6 : R 22 = sv 22
 
 /-- A load reads only its window. -/
 theorem ldv_congr (k : MKind) {Mt Mt' : Mem} {a : Nat}
@@ -51,7 +52,7 @@ theorem ldv_congr (k : MKind) {Mt Mt' : Mem} {a : Nat}
 
 /-- `GetStack` reads only the stack frame. -/
 theorem GetStack.congr {s : Nat} {r : BitVec 64} {sv : Nat → BitVec 64} {R R' : Nat → BitVec 64}
-    {Mt Mt' : Mem} (h : GetStack s r sv R Mt) (h2 : R' 2 = R 2)
+    {Mt Mt' : Mem} (h : GetStack s r sv R Mt) (h2 : R' 2 = R 2) (h22 : R' 22 = R 22)
     (hm : ∀ a, s - 64 ≤ a → a < s → imgM Mt' a = imgM Mt a) (hs : 64 ≤ s) :
     GetStack s r sv R' Mt' := by
   have c : ∀ o, 8 ≤ o → o ≤ 64 → ldv .ld Mt' (s - o) = ldv .ld Mt (s - o) := fun o h1 h2 =>
@@ -59,7 +60,18 @@ theorem GetStack.congr {s : Nat} {r : BitVec 64} {sv : Nat → BitVec 64} {R R' 
   exact ⟨by rw [h2]; exact h.sp, (c 8 (by omega) (by omega)).trans h.ra,
     (c 16 (by omega) (by omega)).trans h.s0, (c 24 (by omega) (by omega)).trans h.s1,
     (c 32 (by omega) (by omega)).trans h.s2, (c 40 (by omega) (by omega)).trans h.s3,
-    (c 48 (by omega) (by omega)).trans h.s4, (c 56 (by omega) (by omega)).trans h.s5⟩
+    (c 48 (by omega) (by omega)).trans h.s4, (c 56 (by omega) (by omega)).trans h.s5,
+    h22.trans h.s6⟩
+
+/-- The bytes `env_get` owns throughout: its stack frame and the output slot. -/
+def baseS (s out : Nat) (a : Nat) : Prop := (s - 64 ≤ a ∧ a < s) ∨ (out ≤ a ∧ a < out + 24)
+
+/-- The bytes a frame span owns: `baseS` and the current frame's blocks. -/
+def getS (s out : Nat) (G : FrameGeom) (a : Nat) : Prop := baseS s out a ∨ frameS G a
+
+macro_rules
+  | `(tactic| sx_side) =>
+    `(tactic| (intro b hb; have hb' := of_mem_accAddrs hb; simp only [InExt, frameS, getS, baseS, htifLo] at *; sx_addr))
 
 /-- The entry's register values: `a0 = env ≠ 0`, the caller's `sp`, `ra` and
 callee-saved registers. -/
@@ -79,31 +91,22 @@ structure GetHead (s : Nat) (r : BitVec 64) (sv : Nat → BitVec 64) (e name out
   frame : R 20 = e
   out : R 21 = out
 
-theorem get_entry {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s : Nat} {r : BitVec 64}
+theorem get_entry {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out : Nat} {r : BitVec 64}
     {sv : Nat → BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (hlo : htifLo + 16 + 64 ≤ s) (hhi : s ≤ 0x100000000) (hal : s % 16 = 0)
     (h : GetEntry s r sv R) :
-    Span live (fun a => s - 64 ≤ a ∧ a < s) 0x80002c10#64 R Mt
+    Span live (baseS s out) 0x80002c10#64 R Mt
       (fun pc' R' Mt' => pc' = 0x80002c40#64 ∧ GetHead s r sv (R 10) (R 11) (R 12) R' Mt') := by
   intro Q hk
   have he := h.env
   have h2 := h.sp
   sx_run hl at 0x80002c40
-  refine hk _ _ _ ⟨rfl, ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_⟩
+  refine hk _ _ _ ⟨rfl, ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_⟩
   all_goals (try sx_norm)
   all_goals (try sx_mem)
   · rw [BitVec.toNat_add, h2]; simp only [BitVec.reduceToNat]; omega
   · exact h.ra
   all_goals exact h.saved _ (by decide)
-
-/-- The bytes a frame span owns: `env_get`'s stack frame, the output slot and
-the current frame's blocks. -/
-def getS (s out : Nat) (G : FrameGeom) (a : Nat) : Prop :=
-  (s - 64 ≤ a ∧ a < s) ∨ (out ≤ a ∧ a < out + 24) ∨ frameS G a
-
-macro_rules
-  | `(tactic| sx_side) =>
-    `(tactic| (intro b hb; have hb' := of_mem_accAddrs hb; simp only [InExt, frameS, getS, htifLo] at *; sx_addr))
 
 /-- `BitVec.toInt` of a small literal. -/
 theorem toInt_ofNat_small {n : Nat} (h : n < 2 ^ 63) : (BitVec.ofNat 64 n).toInt = n := by
@@ -259,7 +262,7 @@ theorem get_epi {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out 
     omega
   · intro k hk
     simp only [getSaved, List.mem_cons, List.not_mem_nil, or_false] at hk
-    rcases hk with rfl | rfl | rfl | rfl | rfl | rfl <;>
+    rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · exact hr8
     · exact hr9
@@ -267,6 +270,7 @@ theorem get_epi {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out 
     · exact hr19
     · exact hr20
     · exact hr21
+    · exact hstk.s6
 
 /-- The compare's branch `0x80002c6c`: `bnez a0` to the next name, or on to
 the hit copy. -/
@@ -308,7 +312,7 @@ theorem get_copy {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out
     (hdv : out + 24 ≤ G.pv ∨ G.vblk.1 + G.vblk.2 ≤ out) :
     Span live (getS s out G) 0x80002c70#64 R Mt
       (fun pc' R' Mt' => pc' = 0x80002ca0#64 ∧ CopyOut out (G.pv + 24 * i) Mt Mt' ∧
-        R' 10 = 1#64 ∧ R' 2 = R 2) := by
+        R' 10 = 1#64 ∧ ∀ k, k ≠ 10 → k ≠ 14 → k ≠ 15 → R' k = R k) := by
   intro Q hk
   obtain ⟨hcap, -, -, hv1, hv2, -, hvw⟩ := hlay.slot hi
   have := hvw.lo; have := hvw.hi; have := hvw.htif
@@ -331,7 +335,8 @@ theorem get_copy {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out
   have hA8 : (A + 8#64).toNat = G.pv + 24 * i + 8 := by rw [BitVec.toNat_add, hAn]; simp; omega
   have hA16 : (A + 16#64).toNat = G.pv + 24 * i + 16 := by
     rw [BitVec.toNat_add, hAn]; simp; omega
-  refine hk _ _ _ ⟨rfl, ?_, by simp [upd_apply], by simp [upd_apply]⟩
+  refine hk _ _ _ ⟨rfl, ?_, by simp [upd_apply], fun k h10 h14 h15 => by
+    simp [upd_apply, h10, h14, h15]⟩
   rw [hout8, hout16, hout, hA8, hA16, hAn]
   refine ⟨?_, ?_, ?_, fun a ha => ?_⟩
   · rw [ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega), ldv_ld_hit_eq _ _ rfl]
@@ -346,7 +351,7 @@ theorem get_parent {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s o
     {G : FrameGeom} {R : Nat → BitVec 64} {Mt : Mem}
     (hlay : FrameLayout (imgM Mt) G n) (he : (R 20).toNat = G.e) :
     Span live (getS s out G) 0x80002cc4#64 R Mt
-      (fun pc' R' Mt' => Mt' = Mt ∧ R' 2 = R 2 ∧ R' 19 = R 19 ∧ R' 21 = R 21 ∧
+      (fun pc' R' Mt' => Mt' = Mt ∧ (∀ k, k ≠ 10 → k ≠ 20 → R' k = R k) ∧
         ((G.par ≠ 0 ∧ pc' = 0x80002c40#64 ∧ R' 20 = BitVec.ofNat 64 G.par) ∨
          (G.par = 0 ∧ pc' = 0x80002ca0#64 ∧ R' 10 = 0#64))) := by
   intro Q hk
@@ -362,13 +367,13 @@ theorem get_parent {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s o
   sx_run hl at 0x80002c40 0x80002ca0
   · intro hc
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hpar] at hc
-    refine hk _ _ _ ⟨rfl, by simp [upd_apply], by simp [upd_apply], by simp [upd_apply],
+    refine hk _ _ _ ⟨rfl, fun k h10 h20 => by simp [upd_apply, h10, h20],
       .inl ⟨fun h => hc (by rw [h]), rfl, by
         simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hpar⟩⟩
   · intro hc
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hpar] at hc
     sx_run hl at 0x80002ca0
-    refine hk _ _ _ ⟨rfl, by simp [upd_apply], by simp [upd_apply], by simp [upd_apply],
+    refine hk _ _ _ ⟨rfl, fun k h10 h20 => by simp [upd_apply, h10, h20],
       .inr ⟨?_, rfl, by simp [upd_apply]⟩⟩
     have := congrArg BitVec.toNat (show BitVec.ofNat 64 G.par = 0#64 by simpa using hc)
     simp at this; omega
