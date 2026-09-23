@@ -67,3 +67,5 @@ import VsaIris.Vsa.SymData
 import VsaIris.Interp.IRun
 import VsaIris.Interp.Steps
 import VsaIris.Interp.ITac
+import VsaIris.Interp.SpecEval
+import VsaIris.Interp.Arm

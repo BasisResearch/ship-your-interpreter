@@ -35,6 +35,11 @@ macro_rules
   | `(tactic| sx_side) =>
     `(tactic| (intro b hb; simp only [mem_accAddrs_iff, List.mem_append, VsaIris.InExt] at *; sx_addr))
 
+/-- Store forwarding for `ix_run` (default `sx_mem`; `Arm.lean` extends it
+to word loads). -/
+syntax "ix_mem" : tactic
+macro_rules | `(tactic| ix_mem) => `(tactic| sx_mem)
+
 /-- Closed side conditions (a jump-table byte at a literal address is in
 `interpRO`). -/
 macro_rules
@@ -48,11 +53,11 @@ private def hex8 (n : Nat) : String :=
 register lookups, the caller's facts (`using`), store forwarding. -/
 def ixNorm (facts : Array Term) : TacticM Syntax := do
   if facts.isEmpty then
-    `(tactic| ((try sx_norm) <;> (try ix_tab) <;> (try sx_norm) <;> (try sx_mem)))
+    `(tactic| ((try sx_norm) <;> (try ix_tab) <;> (try sx_norm) <;> (try ix_mem)))
   else
     let lems : Array (TSyntax `Lean.Parser.Tactic.simpLemma) ←
       facts.mapM fun f => `(Lean.Parser.Tactic.simpLemma| $f:term)
-    `(tactic| ((try sx_norm) <;> (try simp only [$lems,*]) <;> (try ix_tab) <;> (try sx_norm) <;> (try sx_mem)))
+    `(tactic| ((try sx_norm) <;> (try simp only [$lems,*]) <;> (try ix_tab) <;> (try sx_norm) <;> (try ix_mem)))
 
 /-- Try `sx_side` (after the normalizers) on a goal; `true` when it closes. -/
 def ixTrySide (norm : Syntax) (g : MVarId) : TacticM Bool := do
@@ -130,6 +135,14 @@ elab_rules : tactic
     let norm ← ixNorm facts
     let mut pending : List MVarId := []
     let mut cur ← getMainGoal
+    -- a start state from a call's return (`BitVec.ofNat 64 (i + 4)`) gets its literal PC
+    cur ← do
+      let saved ← saveState
+      try
+        match ← evalTacticAt (← `(tactic| (try simp only [Nat.reduceAdd]))) cur with
+        | [c'] => pure c'
+        | _ => saved.restore; pure cur
+      catch _ => saved.restore; pure cur
     let mut stuck : List MVarId := []
     for _ in [0:budget] do
       if let some pc ← cur.withContext (do swpPC? (← cur.getType)) then
@@ -169,5 +182,54 @@ elab_rules : tactic
       | cs => stuck := cs; break
     if stuck.isEmpty then stuck := [cur]
     setGoals (pending ++ stuck)
+
+end VsaIris.Sym
+
+/-! ## `#ix_seg`: a symbolic run as its own lemma -/
+
+namespace VsaIris.Sym
+
+open Lean Elab Command Term Meta
+
+/-- `#ix_seg name binders : goal by tac` runs `tac` (an `ix_run`) on `goal`
+(an `IW … Q pc R Mt` start state) and defines the theorem
+`name : ∀ binders, <end goal> → goal`, whose end goal is the symbolic state
+the run reached. The run must leave exactly that one goal (every side
+condition closed). The lemma is its own declaration: its elaboration budget
+and context are the run's alone, and an arm applies it by name without
+writing the end state down. -/
+syntax (name := ixSeg) "#ix_seg " ident bracketedBinder* " : " term " by " tacticSeq : command
+
+@[command_elab ixSeg] def elabIxSeg : CommandElab := fun stx => do
+  let declName := (← getCurrNamespace) ++ stx[1].getId
+  let binders := stx[2].getArgs
+  let goalStx := stx[4]
+  let tac := stx[6]
+  liftTermElabM do
+    Term.elabBinders binders fun vars => do
+      let T ← Term.elabType goalStx
+      Term.synthesizeSyntheticMVarsNoPostponing
+      let T ← instantiateMVars T
+      let g ← mkFreshExprMVar T
+      let gs ← Tactic.run g.mvarId! (Tactic.evalTactic tac)
+      let gs ← gs.filterM fun g => return !(← g.isAssigned)
+      match gs with
+      | [gf] =>
+        let Tf ← instantiateMVars (← gf.getType)
+        withLocalDeclD `hk Tf fun hk => do
+          gf.assign hk
+          let pf ← instantiateMVars g
+          -- universe metavariables of the proof's library lemmas: any level
+          let zl : Level → Option Level := fun l =>
+            if l.hasMVar then some (l.replace fun | .mvar _ => some levelZero | _ => none) else none
+          let val := (← instantiateMVars (← mkLambdaFVars (vars.push hk) pf)).replaceLevel zl
+          let ty := (← instantiateMVars (← mkForallFVars (vars.push hk) T)).replaceLevel zl
+          if ty.hasMVar || val.hasMVar then
+            let ms := (← getMVars val) ++ (← getMVars ty)
+            let ds ← ms.mapM fun m => do return m!"{mkMVar m} : {← m.getType}"
+            throwError m!"#ix_seg: the run left metavariables:{indentD (MessageData.joinSep ds.toList "\n")}"
+          addDecl (.thmDecl { name := declName, levelParams := [], type := ty, value := val })
+      | gs =>
+        throwError m!"#ix_seg: the run left {gs.length} goals:{indentD (goalsToMessageData gs)}"
 
 end VsaIris.Sym
