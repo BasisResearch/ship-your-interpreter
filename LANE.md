@@ -66,27 +66,40 @@ the stage-a3 drift gate for `VsaIris/Interp/Case/*`.
 ## Done (all in `lake build VsaIris`, no holes)
 - Row format, step language, emitter interface (above); `gen_iris_cases.py`
   parses and validates rows (`--list`, `--check`); `emit` is still a stub.
-- Merged `hub/lane-h4` for its symbolic-execution layer (`SWP`,
-  `VsaIris/Vsa/SymRun.lean`; driver `sx_run`, `AllocTac.lean`).
-- `scripts/rv_steps.py`: the RISC-V classifier factored out of
-  `gen_alloc_steps.py` (H4's generated output is byte-identical).
-- `VsaIris/Vsa/SymData.lean`: `swp_segLD`/`swp_stepD` — SWP steps whose
-  read-only list is live code `T` followed by persistent data `D` (AST bytes)
-  that needs no liveness; `ldvf`, `lpins{1,2,4,8}_fn`, `dataOf`/`DataReads`.
-- `scripts/gen_interp_steps.py` → `VsaIris/Interp/Code.lean` (`interpCode`,
-  `interpRO` = the 3 jump tables at 0x80019f58/84/b8, `interpText`,
-  `interpROImg`, `interp_at_<pc>`, `interp_code_<pc>`) and
-  `VsaIris/Interp/Steps/Part00-10.lean`: one lemma per instruction of
-  `eval_expr`/`exec_stmt`/`interp_run` (1232) over
-  `IW live Dt DA S Q pc R Mt` (`VsaIris/Interp/IRun.lean`, owned regs
-  `iRegs` = all GPRs but gp/tp, plus PC): `it_<pc>` (ALU/store/branch/j/ret/
-  indirect jr, owned load), `itD_<pc>` (load from the data view `Dt` on `DA`),
-  `itT_<pc>` (jump-table load, value `ldvf k interpROImg ea`), `jalx_<pc>`
-  (`JalExec` of each jal). No lemma for `seqz` 0x80003618/0x80003770 and
-  `jalr` 0x800039f4 (outside `MKind`). Builds in ~35 s.
-- `VsaIris/Interp/ITac.lean`: `ix_run h [at pc…]`, the driver (tries it_,
-  itD_, itT_; prunes refuted branches; `sx_side` extensible). Compiles, NOT yet
-  exercised on a real run.
+- Symbolic-run layer: `SWP` (H4) over the interpreter as `IW` (`IRun.lean`);
+  generated step table `Steps/Part00-10.lean` (`scripts/gen_interp_steps.py`,
+  one lemma per instruction: `it_`/`itD_`/`itT_`/`itH_`/`jalx_`), the jump
+  tables' values (`interpRO_lw_<addr>`, macro `ix_tab`), havoc loads of
+  unowned bytes (`swp_havocD`, `fuel_unif`, `SymData.lean`).
+- `ix_run h [using [facts]] [at pc…]` (`ITac.lean`) runs `eval_expr`'s binary
+  arm end to end: prologue, kind dispatch, operator table, int/int checks.
+  `#ix_seg name binders : goal by ix_run …` turns ONE run into ONE lemma whose
+  statement ends in the computed end state (own declaration, own elaboration
+  budget, small context; the `?`-hole / `have` approach does not work and a
+  whole arm in one declaration exceeds the default heartbeats).
+- `Interp/SpecEval.lean`: `eval_expr`'s statement (see INTERP_DESIGN.md §10
+  "STATEMENT CHANGES (G)"): `regFile rv` + `EvalRegs`/`KeepRegs`, `codeRes`,
+  `astEG`, `StackGeom`/`SlotGeom`, `evalPre`/`evalPost`, `evalSpecT_body`,
+  `helperSpec`, `valueIntSpec` (stub for H2).
+- `Interp/Arm.lean`, the arm layer: `ms pc R S Mt` (machine state of an arm),
+  `wp_swpF`/`swp_closeF` (a run in continuation form; the frame is `let`-bound
+  so the run's `simp … at *` cannot rewrite it), `ms_callEvalT` (child call,
+  slot carved/joined, result as `slotWrite` + `□ valOf`), `ms_callHelper`,
+  `ms_intro`/`ms_exit`, `roOwn_data` (AST view), `BinNode`/`binNode_of_repr`,
+  `evalCallGeom`, the `ldvf_*_imgLE` load calculus, `ix_mem` forwarding.
+
+## In flight
+Hand-written `BinaryAddInt` total case (scratch draft; runs 1 and the left
+call done in IPM glue). Next: runs 2-4 as `#ix_seg` lemmas with facts as
+binders, the right call, the `value_int` call, the exit into `evalPost`;
+then the partial twin, then `emit_total`/`emit_partial` and the drift gate.
+
+## Pitfalls found
+- `omega` on goals containing `2^64 - c` (`BitVec.toNat_sub` of a literal)
+  produces a proof the kernel rejects after 2 min ("deep recursion"); use
+  `toNat_sub_frame` / `evalSP_eq`.
+- `simp … at *` inside a run rewrites everything in the goal, including an
+  Iris frame carried in the post (`ra` became `1`): keep frames opaque.
 
 ## Next (exact plan for the resuming session)
 1. **Exercise `ix_run`** on run 1 of `BinaryAddInt` (0x80003164 → jal
