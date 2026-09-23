@@ -2756,6 +2756,27 @@ For the allocator globals and the arena it states presence only at the words
 from the current boundary. Affected: `vsaFoot_live` and every consumer
 instantiating `hlive` at the boundary.
 
+MISSING BOUNDARY FACT (lane H4; evidence from the disassembly, machine check
+pending): `DlHeap.HeapAt`/`InitialAllocatorAt` do not require the break
+(`brk.0`, the top chunk's end) to be page-aligned. `malloc_extend_top` extends
+the top in place only when the old end is page-aligned: `beq a2,a0` at
+`0x80004ac8`, then `slli a0,a0,0x34; bnez` at `0x80004f70`. Otherwise it takes
+the foreign-`sbrk` path at `0x80004acc`:
+- If the old top is smaller than `MINSIZE`, it sets the new top's size to 0 and
+  returns NULL (`0x80004f94`), whatever the capacity.
+- Otherwise it writes two 8-byte fencepost chunks and frees the old top
+  (`0x80005004`). `ChunkWalk` (minimum chunk size 32) cannot describe the
+  resulting heap.
+
+So `InitialAllocatorAt.capacity` does not imply allocation success, and no
+allocator contract with a success arm holds of every `InitialAllocatorAt`
+state. The Iris shape adds `brkv % 4096 = 0`. It is preserved by every path:
+the simple extension adds a page-rounded size, and `_malloc_trim_r` releases
+whole pages. Supplier: the boundary (the loader leaves the break page-aligned
+after the parser's first `malloc`); it is not derivable from
+`InterpRunPhysicalFacts`. Affected: `InitialAllocatorAt`, A0's
+`world_of_boundary`, and every malloc success claim.
+
 Machine-checked `free` (`VsaIris`, branch `iris-heap`): `_free_r`'s top-merge
 path is `VsaIris.MallocFast.freeRoomRun_fast` / `vsaDlFreeRoomImpl_boundary`.
 The heap half is `VsaIris.VsaHeap.FastAt.merge`. `realloc` has an Iris spec,

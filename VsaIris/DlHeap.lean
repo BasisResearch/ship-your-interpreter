@@ -378,23 +378,26 @@ variable (M : MachineModel)
 
 /-- `wp_kalloc_sconf_body` (SpecKalloc.v:30), sequential. The return address
 is 4-aligned: `ret` (`jalr x0, 0(ra)`) clears bit 0, so no implementation
-returns to an odd `r`; every `jal` call site discharges it. -/
-def mallocSpec (L : DlLayout) (entry gpv : BitVec 64) (clob : List Nat)
+returns to an odd `r`; every `jal` call site discharges it. `SpOK` is the
+caller's stack-pointer discipline (RAM, alignment, headroom): the callee's
+frame stores need it, so no implementation meets the spec from an arbitrary
+`s`. -/
+def mallocSpec (L : DlLayout) (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64) (clob : List Nat)
     (saved : List (Nat × BitVec 64)) (headroom : Nat)
     (H : List (Nat × Nat)) (n s : BitVec 64) : IProp GF :=
   fnSpec (M := M) entry
-    (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ a0 ↦ᵣ n ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗
+    (fun r => iprop(⌜SpOK s ∧ r.toNat % 4 = 0⌝ ∗ a0 ↦ᵣ n ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ isHeap L H))
     (fun _ => iprop(∃ p, a0 ↦ᵣ p ∗ sp ↦ᵣ s ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ mallocPost L H n.toNat p))
 
 /-- `wp_kfree_sconf_body` (SpecKfree.v:30): `kfree_pre p := page_own p`
 (KallocInv.v:444), the block at any contents. -/
-def freeSpec (L : DlLayout) (entry gpv : BitVec 64) (clob : List Nat)
+def freeSpec (L : DlLayout) (SpOK : BitVec 64 → Prop) (entry gpv : BitVec 64) (clob : List Nat)
     (saved : List (Nat × BitVec 64)) (headroom : Nat)
     (H : List (Nat × Nat)) (q : BitVec 64) (n : Nat) (s : BitVec 64) : IProp GF :=
   fnSpec (M := M) entry
-    (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ a0 ↦ᵣ q ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗
+    (fun r => iprop(⌜SpOK s ∧ r.toNat % 4 = 0⌝ ∗ a0 ↦ᵣ q ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ isHeap L ((q.toNat, n) :: H) ∗ blockOwn q.toNat n))
     (fun _ => iprop(sp ↦ᵣ s ∗ (∃ v, a0 ↦ᵣ v) ∗ clobbered clob ∗ savedOwn saved ∗
       stackScratch s headroom ∗ isHeap L H))
@@ -413,14 +416,15 @@ persistently by the caller's context) and `savedRegs` the callee-saved
 registers it spills and restores. `VsaIris.dlMallocImpl_of_localRuns`
 (`LocalRun.lean`, `MallocRun.lean`) builds this structure from first-order
 facts about the machine's steps. -/
-structure DlMallocImpl (M : MachineModel) (L : DlLayout) (mallocEntry freeEntry gpv : BitVec 64)
+structure DlMallocImpl (M : MachineModel) (L : DlLayout) (SpOK : BitVec 64 → Prop)
+    (mallocEntry freeEntry gpv : BitVec 64)
     (clob savedRegs : List Nat) (headroom : Nat) (text : List (Nat × BitVec 8)) : Prop where
   malloc : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] H n s
     (saved : List (Nat × BitVec 64)), saved.map Prod.fst = savedRegs →
-    textOwn (GF := GF) text ⊢ mallocSpec M L mallocEntry gpv clob saved headroom H n s
+    textOwn (GF := GF) text ⊢ mallocSpec M L SpOK mallocEntry gpv clob saved headroom H n s
   free : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] H q n s
     (saved : List (Nat × BitVec 64)), saved.map Prod.fst = savedRegs →
-    textOwn (GF := GF) text ⊢ freeSpec M L freeEntry gpv clob saved headroom H q n s
+    textOwn (GF := GF) text ⊢ freeSpec M L SpOK freeEntry gpv clob saved headroom H q n s
 
 section Client
 
@@ -431,13 +435,14 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineM
 unchanged in the continuation. Nothing about `R` appears in malloc's spec:
 this is VSA's `HeapOwned.transport_off`/`.repr_off` and the whole
 `privFoot` clause, as one application of the frame rule. -/
-theorem wp_call_malloc {Φ : Nat × String → IProp GF} {L : DlLayout}
+theorem wp_call_malloc {Φ : Nat × String → IProp GF} {L : DlLayout} {SpOK : BitVec 64 → Prop}
     {mallocEntry freeEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
     {text : List (Nat × BitVec 8)}
-    (impl : DlMallocImpl M L mallocEntry freeEntry gpv clob savedRegs headroom text)
+    (impl : DlMallocImpl M L SpOK mallocEntry freeEntry gpv clob savedRegs headroom text)
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec M i code mallocEntry)
     (H : List (Nat × Nat)) (v n s : BitVec 64) (saved : List (Nat × BitVec 64))
-    (hsaved : saved.map Prod.fst = savedRegs) (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    (hsaved : saved.map Prod.fst = savedRegs) (hsp : SpOK s)
+    (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
     (R : IProp GF) :
     instrAt (GF := GF) i code ∗ textOwn text ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗ a0 ↦ᵣ n ∗
       sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗ stackScratch s headroom ∗
@@ -454,19 +459,21 @@ theorem wp_call_malloc {Φ : Nat × String → IProp GF} {L : DlLayout}
   iframe Hi Hspec Hpc Hra
   isplitl [Ha0 Hsp Hclob Hsv Hstk Hheap]
   · iframe Ha0 Hsp Hgp Hclob Hsv Hstk Hheap
-    ipureintro; exact hal
+    ipureintro; exact ⟨hsp, hal⟩
   iintro Hpc Hra ⟨%p, Ha0, Hsp, Hclob, Hsv, Hstk, Hpost⟩
   iapply Hk $$ %p Hpc Hra Ha0 Hsp Hclob Hsv Hstk Hpost HR
 
 /-- The caller's byte `a` survives a malloc call *with its value*, and it is
 disjoint from both the returned block and the allocator's new footprint. -/
 theorem wp_call_malloc_keeps {Φ : Nat × String → IProp GF} {L : DlLayout}
+    {SpOK : BitVec 64 → Prop}
     {mallocEntry freeEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
     {text : List (Nat × BitVec 8)}
-    (impl : DlMallocImpl M L mallocEntry freeEntry gpv clob savedRegs headroom text)
+    (impl : DlMallocImpl M L SpOK mallocEntry freeEntry gpv clob savedRegs headroom text)
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec M i code mallocEntry)
     (H : List (Nat × Nat)) (v n s : BitVec 64) (saved : List (Nat × BitVec 64))
-    (hsaved : saved.map Prod.fst = savedRegs) (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    (hsaved : saved.map Prod.fst = savedRegs) (hsp : SpOK s)
+    (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
     (a : Nat) (b : BitVec 8) :
     instrAt (GF := GF) i code ∗ textOwn text ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗ a0 ↦ᵣ n ∗
       sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗ stackScratch s headroom ∗
@@ -478,7 +485,7 @@ theorem wp_call_malloc_keeps {Φ : Nat × String → IProp GF} {L : DlLayout}
         mTWP M Φ)
     ⊢ mTWP M Φ := by
   iintro ⟨Hi, Htext, Hpc, Hra, Ha0, Hsp, Hgp, Hclob, Hsv, Hstk, Hheap, Hab, Hk⟩
-  iapply wp_call_malloc impl hexec H v n s saved hsaved hal (a ↦ₘ b)
+  iapply wp_call_malloc impl hexec H v n s saved hsaved hsp hal (a ↦ₘ b)
   iframe Hi Htext Hpc Hra Ha0 Hsp Hgp Hclob Hsv Hstk Hheap Hab
   unfold mallocPost
   iintro %p Hpc Hra Ha0 Hsp Hclob Hsv Hstk Hpost Hab

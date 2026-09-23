@@ -338,12 +338,12 @@ caller handed over back at its entry value (the stack bytes at some value).
 caller owns is framed by the continuation. -/
 theorem envNew_spec {Φ : Nat × String → IProp GF} (live : Nat → Prop)
     (hlive : ∀ a, codeBase ≤ a → a < codeBase + 96 → live a)
-    {HL : DlLayout} {freeEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
-    {text : List (Nat × BitVec 8)}
-    (impl : DlMallocImpl (vsaModel live) HL mallocEntry freeEntry gpv clob savedRegs headroom text)
+    {HL : DlLayout} {SpOK : BitVec 64 → Prop} {freeEntry gpv : BitVec 64} {clob savedRegs : List Nat}
+    {headroom : Nat} {text : List (Nat × BitVec 8)}
+    (impl : DlMallocImpl (vsaModel live) HL SpOK mallocEntry freeEntry gpv clob savedRegs headroom text)
     (harena : ArenaGeom HL) (H : List (Nat × Nat)) (esp r par s0v : BitVec 64)
     (rest : List (Nat × BitVec 64)) (hsaved : 8 :: rest.map Prod.fst = savedRegs)
-    (hg : EnvNewCallerGeom (esp - 16#64) r) :
+    (hg : EnvNewCallerGeom (esp - 16#64) r) (hsp : SpOK (esp - 16#64)) :
     instrAt codeBase envNewCode ∗ textOwn text ∗ PC ↦ᵣ 0x800029fc#64 ∗ (1 : Nat) ↦ᵣ r ∗
       (10 : Nat) ↦ᵣ par ∗ (2 : Nat) ↦ᵣ esp ∗ (8 : Nat) ↦ᵣ s0v ∗ savedOwn rest ∗ gp ↦ᵣ□ gpv ∗
       clobbered clob ∗ sepL (List.range' (esp - 16#64).toNat 16) byteAny ∗
@@ -400,7 +400,7 @@ theorem envNew_spec {Φ : Nat × String → IProp GF} (live : Nat → Prop)
   ihave HC := sepL_to_ownSet _ hnd (fun a => a ↦ₘ stkB a) $$ [Hstk]
   · rw [sepL_map]; iexact Hstk
   iapply wp_call_malloc_owns impl hjal H r (32#64) (esp - 16#64) ((8, par) :: rest)
-    (by simp [hsaved]) (by decide) (fun a => a ∈ Wstk.map Prod.fst) stkB
+    (by simp [hsaved]) hsp (by decide) (fun a => a ∈ Wstk.map Prod.fst) stkB
   unfold VsaIris.ra VsaIris.a0 VsaIris.sp savedOwn
   simp only [sepL_cons]
   iframe Hjal Htext Hpc Hra Hsp Hgp Hclob Hs0 Hsv Hscr Hheap HC
@@ -493,13 +493,13 @@ spills (`vsaSaved = s0 s1 s2 s3`) are handed over with `s0` at its spilled
 value and `s1-s3` from the caller. -/
 theorem envNew_spec_vsa {Φ : Nat × String → IProp GF} (live : Nat → Prop)
     (hlive : ∀ a, codeBase ≤ a → a < codeBase + 96 → live a)
-    {gpv : BitVec 64} {headroom : Nat} {text : List (Nat × BitVec 8)}
-    (hm : MallocLocalRun (vsaModel live) VsaHeap.vsaLayout VsaHeap.mallocEntryBV gpv
+    {SpOK : BitVec 64 → Prop} {gpv : BitVec 64} {headroom : Nat} {text : List (Nat × BitVec 8)}
+    (hm : MallocLocalRun (vsaModel live) VsaHeap.vsaLayout SpOK VsaHeap.mallocEntryBV gpv
       VsaHeap.vsaClob VsaHeap.vsaSaved headroom text)
-    (hf : FreeLocalRun (vsaModel live) VsaHeap.vsaLayout VsaHeap.freeEntryBV gpv
+    (hf : FreeLocalRun (vsaModel live) VsaHeap.vsaLayout SpOK VsaHeap.freeEntryBV gpv
       VsaHeap.vsaClob VsaHeap.vsaSaved headroom text)
     (H : List (Nat × Nat)) (esp r par s0v s1 s2 s3 : BitVec 64)
-    (hg : EnvNewCallerGeom (esp - 16#64) r) :
+    (hg : EnvNewCallerGeom (esp - 16#64) r) (hsp : SpOK (esp - 16#64)) :
     instrAt codeBase envNewCode ∗ textOwn text ∗ PC ↦ᵣ 0x800029fc#64 ∗ (1 : Nat) ↦ᵣ r ∗
       (10 : Nat) ↦ᵣ par ∗ (2 : Nat) ↦ᵣ esp ∗ (8 : Nat) ↦ᵣ s0v ∗
       savedOwn [(9, s1), (18, s2), (19, s3)] ∗ gp ↦ᵣ□ gpv ∗
@@ -518,7 +518,7 @@ theorem envNew_spec_vsa {Φ : Nat × String → IProp GF} (live : Nat → Prop)
         mTWP (vsaModel live) Φ)
     ⊢ mTWP (vsaModel live) Φ :=
   envNew_spec live hlive (VsaHeap.vsaDlMallocImpl live gpv headroom text hm hf) arenaGeom_vsa
-    H esp r par s0v [(9, s1), (18, s2), (19, s3)] rfl hg
+    H esp r par s0v [(9, s1), (18, s2), (19, s3)] rfl hg hsp
 
 end Spec
 

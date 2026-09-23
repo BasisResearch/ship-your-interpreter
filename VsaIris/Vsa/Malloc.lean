@@ -52,11 +52,11 @@ def mallocEntryBV : BitVec 64 := BitVec.ofNat 64 Vsa.Alloc.mallocEntry
 def freeEntryBV : BitVec 64 := BitVec.ofNat 64 Vsa.Alloc.freeEntry
 
 /-- **The allocator spec at the fixed binary**, from the two local runs. -/
-theorem vsaDlMallocImpl (live : Nat → Prop) (gpv : BitVec 64) (headroom : Nat)
-    (text : List (Nat × BitVec 8))
-    (hm : MallocLocalRun (vsaModel live) vsaLayout mallocEntryBV gpv vsaClob vsaSaved headroom text)
-    (hf : FreeLocalRun (vsaModel live) vsaLayout freeEntryBV gpv vsaClob vsaSaved headroom text) :
-    DlMallocImpl (vsaModel live) vsaLayout mallocEntryBV freeEntryBV gpv vsaClob vsaSaved
+theorem vsaDlMallocImpl (live : Nat → Prop) {SpOK : BitVec 64 → Prop} (gpv : BitVec 64)
+    (headroom : Nat) (text : List (Nat × BitVec 8))
+    (hm : MallocLocalRun (vsaModel live) vsaLayout SpOK mallocEntryBV gpv vsaClob vsaSaved headroom text)
+    (hf : FreeLocalRun (vsaModel live) vsaLayout SpOK freeEntryBV gpv vsaClob vsaSaved headroom text) :
+    DlMallocImpl (vsaModel live) vsaLayout SpOK mallocEntryBV freeEntryBV gpv vsaClob vsaSaved
       headroom text :=
   dlMallocImpl_of_localRuns hm hf shapeLocal_vsaLayout vsaAllocRegs_nodup
 

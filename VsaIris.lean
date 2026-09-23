@@ -30,3 +30,12 @@ import VsaIris.Vsa.FreeFastSegs
 import VsaIris.Vsa.FreeChain
 import VsaIris.Vsa.MallocFastImage
 import VsaIris.Vsa.MallocLive
+import VsaIris.Vsa.RunBase
+import VsaIris.Vsa.SymRun
+import VsaIris.Vsa.AllocCode
+import VsaIris.Vsa.AllocRun
+import VsaIris.Vsa.AllocSteps
+import VsaIris.Vsa.AllocTac
+import VsaIris.MallocChg
+import VsaIris.Vsa.HeapRoom
+import VsaIris.Vsa.AllocHoles

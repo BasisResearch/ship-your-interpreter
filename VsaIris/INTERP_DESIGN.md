@@ -560,6 +560,15 @@ lanes); then E1–E6 (six lanes).
 
 ## 11. Open questions for the user
 
+- **Q5 (lane H4, needs the user): a page-aligned break at the boundary.** `malloc_extend_top`
+  grows the top in place only when the old heap end is page-aligned (`0x80004f70`). Otherwise it
+  returns NULL when the old top is under 32 bytes (`0x80004f94`), or it fenceposts and frees the
+  old top, which `ChunkWalk` cannot describe. `InitialAllocatorAt` does not rule this out, so its
+  `capacity` does not imply allocation success. The Iris heap shape therefore adds
+  `brkv % 4096 = 0`. Every allocator path preserves it (extension by page-rounded sizes, trim by
+  whole pages). A0 needs it at the boundary, which means a new `Loaded` field beside `capacity`,
+  or a proof from the loader. Recorded in `PROOF_CLOSURE_PLAN.md` §2.
+
 - **Q1 (hard to change later): stack admissibility at the boundary** (§10.4).
   Approve a `stack_admissible` field in `InterpRunReady`, shaped like
   `capacity`? Without it, `InterpSim interpRunLayout` looks false for very deep

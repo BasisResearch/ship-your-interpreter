@@ -1,4 +1,5 @@
 import VsaIris.Vsa.MallocFastSegs
+import VsaIris.Vsa.RunBase
 import VsaIris.Vsa.MallocFastHeap
 import VsaIris.Vsa.Tools
 import VsaIris.LocalRun
@@ -22,14 +23,8 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst
 open Vsa.Machine (Config)
 
-/-- The total byte image of a memory. -/
-def imgM (m : Mem) (a : Nat) : BitVec 8 := (m[a]?).getD 0
-
 /-- The allocator code as read-only footprint bytes. -/
 abbrev textMR : List (Nat × DFrac × BitVec 8) := pathText.map fun p => (p.1, DFrac.discard, p.2)
-
-/-- The read-only registers of the allocator's runs. -/
-abbrev roR : List (Nat × BitVec 64) := [(gp, gpV)]
 
 section Steps
 

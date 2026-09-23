@@ -50,13 +50,14 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] {M : MachineM
 same image, and it is disjoint from the fresh block and from the allocator's
 new footprint. This replaces `HeapOwned.ownedOff` (`OwnedOff`) and the
 `mem_frame` uses of a `MallocReturnAt` in one step. -/
-theorem wp_call_malloc_owns {Φ : Nat × String → IProp GF} {L : DlLayout}
+theorem wp_call_malloc_owns {Φ : Nat × String → IProp GF} {L : DlLayout} {SpOK : BitVec 64 → Prop}
     {mallocEntry freeEntry gpv : BitVec 64} {clob savedRegs : List Nat} {headroom : Nat}
     {text : List (Nat × BitVec 8)}
-    (impl : DlMallocImpl M L mallocEntry freeEntry gpv clob savedRegs headroom text)
+    (impl : DlMallocImpl M L SpOK mallocEntry freeEntry gpv clob savedRegs headroom text)
     {i : Nat} {code : List (BitVec 8)} (hexec : JalExec M i code mallocEntry)
     (H : List (Nat × Nat)) (v n s : BitVec 64) (saved : List (Nat × BitVec 64))
-    (hsaved : saved.map Prod.fst = savedRegs) (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    (hsaved : saved.map Prod.fst = savedRegs) (hsp : SpOK s)
+    (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
     (C : Nat → Prop) (img : Nat → BitVec 8) :
     instrAt (GF := GF) i code ∗ textOwn text ∗ PC ↦ᵣ BitVec.ofNat 64 i ∗ ra ↦ᵣ v ∗ a0 ↦ᵣ n ∗
       sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ clobbered clob ∗ savedOwn saved ∗ stackScratch s headroom ∗
@@ -69,7 +70,7 @@ theorem wp_call_malloc_owns {Φ : Nat × String → IProp GF} {L : DlLayout}
         mTWP M Φ)
     ⊢ mTWP M Φ := by
   iintro ⟨Hi, Htext, Hpc, Hra, Ha0, Hsp, Hgp, Hclob, Hsv, Hstk, Hheap, HC, Hk⟩
-  iapply wp_call_malloc impl hexec H v n s saved hsaved hal (ownSet C (fun a => a ↦ₘ img a))
+  iapply wp_call_malloc impl hexec H v n s saved hsaved hsp hal (ownSet C (fun a => a ↦ₘ img a))
   iframe Hi Htext Hpc Hra Ha0 Hsp Hgp Hclob Hsv Hstk Hheap HC
   unfold mallocPost
   iintro %p Hpc Hra Ha0 Hsp Hclob Hsv Hstk Hpost HC
@@ -276,10 +277,12 @@ theorem mallocRoomCallerFacts_of_iris {H : List (Nat × Nat)} {exts : List Exten
 def reallocEntryBV : BitVec 64 := BitVec.ofNat 64 Vsa.Sim.reallocEntry
 
 /-- The binary's `realloc` meets `reallocSpec`, given its first-order run. -/
-theorem vsaDlReallocImpl (live : Nat → Prop) (gpv : BitVec 64) (headroom : Nat)
-    (text : List (Nat × BitVec 8))
-    (hr : ReallocLocalRun (VsaIris.Inst.vsaModel live) vsaLayout reallocEntryBV gpv vsaClob vsaSaved headroom text) :
-    DlReallocImpl (VsaIris.Inst.vsaModel live) vsaLayout reallocEntryBV gpv vsaClob vsaSaved headroom text :=
+theorem vsaDlReallocImpl (live : Nat → Prop) {SpOK : BitVec 64 → Prop} (gpv : BitVec 64)
+    (headroom : Nat) (text : List (Nat × BitVec 8))
+    (hr : ReallocLocalRun (VsaIris.Inst.vsaModel live) vsaLayout SpOK reallocEntryBV gpv vsaClob vsaSaved
+      headroom text) :
+    DlReallocImpl (VsaIris.Inst.vsaModel live) vsaLayout SpOK reallocEntryBV gpv vsaClob vsaSaved
+      headroom text :=
   dlReallocImpl_of_localRun hr shapeLocal_vsaLayout vsaAllocRegs_nodup (by decide)
 
 /-- `reallocPost`'s success arm gives the fresh-block clauses of VSA's
