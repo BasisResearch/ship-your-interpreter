@@ -1,4 +1,4 @@
-import VsaIris.Interp.Repr
+import VsaIris.Vsa.BinImg
 import VsaIris.CallAbort
 import VsaIris.Vsa.Console
 import Vsa.Sim.Code.FixedImage
@@ -55,17 +55,6 @@ theorem stdioFoot_off_alloc (a : Nat) (h : stdioFoot a) : ¬ VsaHeap.allocGlobal
 
 /-! ## The image, the registers, the call frame -/
 
-/-- `.text` and `.rodata` of the fixed binary (`Vsa.Sim.Code.FixedTextLoaded`,
-`FixedRodataLoaded`). -/
-def textDom (a : Nat) : Prop := 0x80000000 ≤ a ∧ a < 0x80018be0
-def rodataDom (a : Nat) : Prop := 0x80018be0 ≤ a ∧ a < 0x8001acf0
-
-def textByte (a : Nat) : BitVec 8 := Vsa.Sim.Code.fixedTextByte (a - 0x80000000)
-def rodataByte (a : Nat) : BitVec 8 := Vsa.Sim.Code.fixedRodataByte (a - 0x80018be0)
-
-/-- The code bytes the newlib functions fetch are present. -/
-def CodeLive (live : Nat → Prop) : Prop := ∀ a, textDom a → live a
-
 /-- `gp` at `_start`'s value (`__global_pointer$`). -/
 def gpV : BitVec 64 := 0x8001b510#64
 
@@ -81,11 +70,6 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
 value. -/
 def argsAt (vs : List (BitVec 64)) : IProp GF :=
   iprop(sepL (vs.zipIdx) (fun p => (10 + p.2) ↦ᵣ p.1) ∗ clobbered (argRegs.drop vs.length))
-
-/-- The binary's `.text` and `.rodata`, persistent. -/
-def binImg : IProp GF := iprop(roImg textDom textByte ∗ roImg rodataDom rodataByte)
-
-instance : Persistent (binImg (GF := GF)) := by unfold binImg; infer_instance
 
 /-- The stack pointer of a call with `need` bytes of scratch: 16-aligned, in
 RAM, the scratch above the HTIF words. -/

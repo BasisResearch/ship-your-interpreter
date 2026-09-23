@@ -7,6 +7,7 @@ import VsaIris.Vsa.Console
 import VsaIris.LocalRun
 import VsaIris.Loop
 import VsaIris.Interp.Need
+import VsaIris.Vsa.Exit
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -85,3 +86,5 @@ import VsaIris.Interp.Need
 #print axioms VsaIris.Interp.execNeed_callBody
 #print axioms VsaIris.Interp.execNeed_of_stackFits
 #print axioms VsaIris.Interp.stackScratch_boundary
+#print axioms VsaIris.Newlib.NewlibHoles.at
+#print axioms VsaIris.Newlib.Exit.wp_exitCall

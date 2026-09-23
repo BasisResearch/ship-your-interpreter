@@ -1,0 +1,4 @@
+# kind	name	lo	hi (code: [lo, hi) bytes of .text; jal: the site's pc)
+code	exitCode	0x80004764	0x80004790
+code	exitCodeE	0x80000180	0x80000198
+jal	exitJalExitE	0x8000478c
