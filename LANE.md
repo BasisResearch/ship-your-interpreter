@@ -4,6 +4,9 @@ Branch `lane-h4` (pushed to `hub`). Goal: discharge `IrisHoles.alloc` (`VsaIris/
 first-order runs of `_malloc_r`, `_free_r` and `_realloc_r` at the binary.
 
 ## Done
+- **Merged `hub/iris-main`** (F1's `MachWP`, F2's console, S1's Room/Cost bridge): both `jal`-site
+  generators now supply `StepConFrame`, `segFrom_of_runFact` passes the output component through,
+  and `mallocCostSpec` takes a `MachWP`.
 - **Merged iris-heap's later work** (29 commits cherry-picked from `~/Documents/code/vsa-iris-heap`):
   - fast-heap `MallocRoomRun` (`mallocRoomRun_fast`);
   - the top-merge `FreeRoomRun` (`freeRoomRun_fast`);
@@ -43,6 +46,11 @@ first-order runs of `_malloc_r`, `_free_r` and `_realloc_r` at the binary.
   - `malloc_extend_top` returns NULL or fenceposts the old top when the heap end is not
     page-aligned (`0x80004f70`, `0x80004f94`).
   - `InitialAllocatorAt` does not exclude this, so A0 needs the fact at the boundary.
+- **A 32-bit `binblocks` word is needed** (INTERP_DESIGN Q5b, `PROOF_CLOSURE_PLAN.md` §2).
+  `_malloc_r`'s block search shifts a mask to the next set bit of `binblocks` and steps the bin
+  index by four; `HeapAt.binblocks` bounds only the bits of nonempty blocks, and dlmalloc clears
+  the bitmap lazily, so a bit at 32 or above walks past bin 127. `PHeapAt.bb_lt` carries the
+  bound; `roomB_of_initial` takes it at the boundary.
 - **Every path is needed in the counted regime.** String concat frees its `stringify` buffers, so
   bins fill. The boundary's capacity is `heapEnd`-relative, so the top grows by `sbrk`.
 - `sltu` at `0x800052d0` (`_realloc_r`) is outside `MKind` and needs a hand step lemma
@@ -50,21 +58,32 @@ first-order runs of `_malloc_r`, `_free_r` and `_realloc_r` at the binary.
   allocator does not call.
 
 ## In flight
-- `_malloc_r` paths (`Vsa/MallocPaths.lean`), on the step table and the heap algebra:
+- `_malloc_r` paths (`Vsa/MallocPaths.lean`, `Vsa/MallocPro.lean`, `Vsa/MallocLR.lean`), on the
+  step table and the heap algebra:
   - done: entry/exit adapters (`mallocChgRun_of_aw`, `malloc_exit`), the epilogue copies
-    (`epi_core`), the small-bin join `j_small`, and the exact small-bin take `small_take`
-    (unlink, `PREV_INUSE`, return), via `PHeapAt.take`/`take_fresh` (`Vsa/HeapTake.lean`);
-  - next: the prologue to `j_small`, the last-remainder check (`0x800048ec`), the binblocks
-    scan, the top split and `malloc_extend_top`, large bins.
+    (`epi_core`), the prologue and error return (`malloc_pro`, `malloc_errno`), the small-bin
+    join `j_small`, the exact small-bin take `small_take`, the last-remainder check
+    (`lr_check`/`lr_last`) and its exact-fit return (`lr_take`), all via `PHeapAt.take`/`take_fresh`
+    (`Vsa/HeapTake.lean`);
+  - residual joins named by `lr_last`: the block search (`0x80004be8`), the last-remainder split
+    (`0x80004da0`), and the re-binding of a too-small remainder (`0x8000491c`);
+  - next: the large-bin scan (`0x80004884`), then those three joins, then the top split and
+    `malloc_extend_top`.
+- **Factor before the third copy** (CLAUDE.md law 3): `small_take` and `lr_take` share the
+  return tail `sd a5,8(sp)` / `jal __malloc_unlock` / `ld a5,8(sp)` / `addi a0,a5,16` / epilogue.
+  The split path (`0x80004da0`) and the large-bin take (`0x800049e8`) are the third and fourth
+  copies; extract that tail (parameterized by its two epilogue copies, like `epi_core`) before
+  writing either.
 
 ## Holes (see `VsaIris/HOLES.md`)
 - `alloc.mallocChgRun`, `alloc.mallocLocalRun`, `alloc.freeChgRun`, `alloc.freeLocalRun`,
   `alloc.reallocChgRun`, `alloc.reallocLocalRun`.
 
 ## Next
-1. The remaining malloc joins (see In flight).
-2. Heap algebra on `PHeapAt`: unlink, small and large `frontlink`, split with the last-remainder
-   bin, `binblocks`, top split and extension, coalescing, trim.
+1. The residual malloc joins (see In flight), starting with the take-return tail abstraction.
+2. Heap algebra on `PHeapAt`: `rebin` (move a chunk between bins, for `0x8000491c`), split with
+   the last-remainder bin, unlink, small and large `frontlink`, `binblocks`, top split and
+   extension, coalescing, trim.
 3. Malloc paths, then free, then realloc (with the `sltu` step). Delete each field and its row
    as it is proved.
 4. The `xmalloc` site lemma.
