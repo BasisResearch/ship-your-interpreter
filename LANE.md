@@ -90,9 +90,10 @@ first-order runs of `_malloc_r`, `_free_r` and `_realloc_r` at the binary.
    one the counted regime needs most, since the boundary's capacity is `heapEnd`-relative;
    `PHeapAt.topSplit` already takes its post-state reads abstractly, so the in-place growth can
    reuse it.
-2. Heap algebra on `PHeapAt`: `rebin` (move a chunk between bins, for `0x8000491c`), the
-   last-remainder split (`0x80004da0`), unlink, small and large `frontlink`, `binblocks`,
-   top extension, coalescing, trim.
+2. Heap algebra on `PHeapAt`: the three edits `take`, `topSplit` and `moveBin` are proved
+   (`Vsa/HeapTake.lean`, `Vsa/HeapSplit.lean`, `Vsa/HeapMove.lean`). Still to build: the
+   last-remainder split (`0x80004da0`, a chunk split in the middle of the walk), the large-bin
+   sorted `frontlink`, top extension, coalescing and trim.
 3. Then free, then realloc (with the `sltu` step). Delete each `IrisHoles` field and its
    HOLES.md row as it is proved.
 4. The `xmalloc` site lemma.

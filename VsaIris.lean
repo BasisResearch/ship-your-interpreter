@@ -50,6 +50,7 @@ import VsaIris.Vsa.MallocCtx
 import VsaIris.Vsa.MallocPaths
 import VsaIris.Vsa.MallocPro
 import VsaIris.Vsa.HeapSplit
+import VsaIris.Vsa.HeapMove
 import VsaIris.Vsa.MallocLR
 import VsaIris.Vsa.MallocTop
 import VsaIris.Vsa.MallocChain

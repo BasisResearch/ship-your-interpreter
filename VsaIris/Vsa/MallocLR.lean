@@ -25,20 +25,6 @@ namespace VsaIris.VsaHeap
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- A free chunk of the walk at `v` with size `sz`. -/
-abbrev FreeAt (chunks : List Chunk) (v sz : Nat) : Prop := (⟨v, sz, false⟩ : Chunk) ∈ chunks
-
-/-- The chunk a bin member names is `FreeAt`. -/
-theorem freeAt_of_member {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
-    {chunks : List Chunk} {bins : Nat → List Nat}
-    (h : HeapAt m H (fun e => e ∈ H) top brkv chunks bins) {j q : Nat}
-    (hj0 : 0 < j) (hj : j < numBins) (hq : q ∈ bins j) : ∃ sz, FreeAt chunks q sz := by
-  obtain ⟨c, hc, ha, hf⟩ := h.member hj0 hj hq
-  obtain ⟨a, s, i⟩ := c
-  simp only at ha hf
-  subst ha; subst hf
-  exact ⟨s, hc⟩
-
 /-- **The remainder's two signed comparisons.** `a3 := t1 - a4` with both
 operands well below `2 ^ 63`: `blt a2,a3` at `0x8000490c` (with `a2 = 31`)
 decides `nb + 32 ≤ sz`, and `bgez a3` at `0x80004918` decides `nb ≤ sz`. -/

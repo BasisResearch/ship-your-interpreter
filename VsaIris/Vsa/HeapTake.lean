@@ -150,6 +150,21 @@ theorem binAt_geo (j : Nat) (hj : j < numBins) :
 
 end Geo
 
+/-- A free chunk of the walk at `v` with size `sz`, as one membership rather
+than a four-conjunct tower. -/
+abbrev FreeAt (chunks : List Chunk) (v sz : Nat) : Prop := (⟨v, sz, false⟩ : Chunk) ∈ chunks
+
+/-- The chunk a bin member names is `FreeAt`. -/
+theorem freeAt_of_member {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat}
+    (h : HeapAt m H (fun e => e ∈ H) top brkv chunks bins) {j q : Nat}
+    (hj0 : 0 < j) (hj : j < numBins) (hq : q ∈ bins j) : ∃ sz, FreeAt chunks q sz := by
+  obtain ⟨c, hc, ha, hf⟩ := h.member hj0 hj hq
+  obtain ⟨a, s, i⟩ := c
+  simp only at ha hf
+  subst ha; subst hf
+  exact ⟨s, hc⟩
+
 /-! ## The take -/
 
 /-- The three words a take writes: the predecessor's `fd`, the successor's
