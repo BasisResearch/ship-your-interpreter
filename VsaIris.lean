@@ -63,3 +63,4 @@ import VsaIris.Interp.Bridge
 import VsaIris.Interp.Boundary
 import VsaIris.Interp.Vacuity
 import VsaIris.Interp.EnvSteps
+import VsaIris.Interp.SpecEnv

@@ -4,6 +4,7 @@ import VsaIris.Loop
 import VsaIris.Interp.Need
 import VsaIris.Interp.Vacuity
 import VsaIris.Vsa.AllocHoles
+import VsaIris.Interp.SpecEnv
 import VsaIris.Vsa.HeapShape
 import Vsa.RuntimeRepr
 import Vsa.While.Cost
@@ -316,6 +317,9 @@ structure IrisHoles : Prop where
   (`VsaIris/Vsa/AllocHoles.lean`); `VsaHeap.allocSpecs` turns them into the
   Iris specs. H4 discharges them field by field. -/
   alloc : VsaHeap.AllocHoles
+  /-- `realloc(NULL, n)` at the binary, both regimes (`VsaIris/Interp/SpecEnv.lean`):
+  `env_define`'s first array growth. H4 discharges it. -/
+  reallocNull : ReallocNullHoles
   /-- Safety of `snprintf` (`%s`/`%d` messages in `runtime_error`) and
   `fprintf` (error and OOM paths). Partial mode only. -/
   newlib : True
