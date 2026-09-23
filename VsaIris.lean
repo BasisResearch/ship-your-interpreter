@@ -11,3 +11,5 @@ import VsaIris.Vsa.HeapShape
 import VsaIris.Vsa.ControlWitness
 import VsaIris.LocalRun
 import VsaIris.MallocRun
+import VsaIris.Vsa.Malloc
+import VsaIris.Vsa.MallocConsumer
