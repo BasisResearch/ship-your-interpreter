@@ -18,3 +18,6 @@ oom	env_define	0x80002bd0	6	-	0
 oom	stringify	0x80003140	6	-	0
 code	setjmpCode	0x80006ffc	0x8000703c
 oom	eval_expr	0x80003e28	8	22:1024,23:1016	1032
+code	topCode	0x80004540	0x80004588
+jal	topJalRet	0x80004558
+jal	topJalBrk	0x8000457c

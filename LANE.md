@@ -18,13 +18,22 @@ All in `lake build VsaIris`; axioms ⊆ {propext, Classical.choice, Quot.sound} 
   `fnSpecAbort` with an empty return branch and abort resource `abortRes s rtErrNeed`
   (`rtErrNeed = 1248`). Needs `FmtArgsOK` for `fmt`/`a1`/`a2`, the `jmp_buf` read-only
   (`jmpRO`), the world, every callee-saved register.
-- **Out-of-memory arms** (H1 `env_new`/`env_define`, H2 `stringify`): `Oom.wp_oomBlock` with the
-  generated `OomSites.oom80002a38_ok` (env_new), `oom80002bd0_ok` (env_define),
-  `oom80003140_ok` (stringify). From the block head with the site's whole region `[s - n, s)`
-  (`OomBlockSp`: 768 bytes below `sp`), it hands the caller's continuation `abortRes s n`.
+- **Out-of-memory arms** (H1 `env_new`/`env_define`, H2 `stringify`, E `eval_expr`'s `fn` arm):
+  `Oom.wp_oomBlock` with the generated `OomSites.oom80002a38_ok` (env_new), `oom80002bd0_ok`
+  (env_define), `oom80003140_ok` (stringify), `oom80003e28_ok` (eval_expr, two interleaved
+  spills). From the block head with the site's whole region `[s - n, s)` (`OomBlockSp`: 768
+  bytes below `sp`), it hands the caller's continuation `abortRes s n`. H1's `oomAt` (parked at
+  the block head) is consumed by rebasing to the head and applying `wp_oomBlock`.
+- **`interp_run`'s prologue**: `Setjmp.setjmp_spec` writes the `jmp_buf` image `TopLanding` names.
+- **Top-level abrupt statuses** (`interp_run` loop): `TopAbrupt.wp_topAbrupt` with `topRet_ok`
+  (`0x80004540`, status 3) or `topBrk_ok` (`0x80004564`, break/continue): `snprintf` into
+  `err_msg`, `interp_run` returns 1, exit 70. Needs `s1` = the statement with its `line` word
+  read-only (`roImg`, `LineGeom`).
 - **Exits**: `Exit.wp_exitCall` (`exit(e)` halts with `e`, any WP — `term_sim`'s `exit(0)` too),
-  `MainErr.wp_mainErrTail` (`main`'s error line → `exit(70)`), `Landing.wp_landing`
-  (`setjmp` return → `interp_run` returns 1 → `main`).
+  `MainErr.wp_mainErrTail` (`main`'s error line → `exit(70)`), `Landing.wp_interpRet1`
+  (`interp_run`'s epilogue with `s5 = 1` → `main` → `exit(70)`), `Landing.wp_landing`
+  (`setjmp` return → `wp_interpRet1`).
+- **A0**: `world` contains `Stdio.stdioOwn`; its boundary supplier needs Q6 (the `stderr` word).
 - **newlib's runtime data**: `Stdio.stdioOwn` is in `world`; `StdioOK` = VSA's `ConsoleStream` +
   `ExitRuntimeData` + the `stderr` pointer (Q6). `StdioRead`: `StdioOK.impure`/`.stderr`,
   `stdioAt_open`/`_close`.
@@ -54,8 +63,6 @@ All in `lake build VsaIris`; axioms ⊆ {propext, Classical.choice, Quot.sound} 
 
 ## Next
 
-- `setjmp` (`0x80006ffc`) spec for `interp_run`'s prologue (the `jmp_buf` image `TopLanding`
-  names).
-- `eval_expr`'s `fn`-arm out-of-memory block (`0x80003e28`, two spills interleaved).
 - Discharge `newlib.exitHandlers`' `__call_exitprocs` half (20 straight-line instructions with
   `__atexit = 0`).
+- `eval_expr`'s entry (`0x80003e1c`, extra spills `s3`–`s5`) is left to the E lanes.
