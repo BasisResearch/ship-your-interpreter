@@ -25,6 +25,11 @@ unproved callee as a `Module Type`.
 | `Call.lean` | paper Figs. 7-8 and §4.3-4.6; `SpecKalloc.v:30-56` for the spec shape | `wp_ret`, `wp_jal`, `fnSpec` (continuation-style function spec), and `wp_call` |
 | `DlHeap.lean` | `KallocInv.v:149-159` (`byte_any`, `page_own`), `:281` (`freelist_chain`), `:394` (`kmem_res`), `:403-434` (pop/push), `:436-445` (`kalloc_post`, `kfree_pre`); `SpecKalloc.v`/`SpecKfree.v`; `Module Type KALLOC` (`SpecKalloc.v:52`) | `isHeap L H`, `blockOwn`, carve/return lemmas, `mallocSpec`/`freeSpec`, `DlMallocImpl`, `wp_call_malloc`, `wp_call_malloc_keeps`, `no_fixed_privFoot`, `eb73d8c_witness` |
 | `Example.lean` | none | A toy countdown machine carried through the whole stack to `Halts`, as a check that nothing is vacuous |
+| `LocalRun.lean` | none | `wp_localRun`: a chain of segments over an owned register list and an owned byte *set*, on the lagging interpretation; `segFrom_of_runFact` takes VSA `RunFact`s as segments |
+| `MallocRun.lean` | none | `allocCall_of_localRun` (one allocator call from its local run); `DlMallocImpl` and the credit-indexed `DlMallocRoomImpl` from the first-order runs `MallocLocalRun`/`FreeLocalRun`/`MallocRoomRun` |
+| `Vsa/HeapShape.lean`, `Vsa/Malloc.lean` | none | `vsaLayout` (`Shape` = `DlHeap.HeapAt` with exact live blocks; `BlockHeapAt.transport`: it reads only `heapFoot`), `vsaRoom` (`AllocationReserve`), `vsaDlMallocImpl`, `vsaDlMallocRoomImpl` |
+| `Vsa/ControlWitness.lean`, `Vsa/ControlEnd.lean` | none | the eb73d8c control heap: its Iris shape, both calls' post-states inside the live-relative frame, and `MallocEnd`/`MallocRoomEnd` at the concrete `malloc(64)` return |
+| `Vsa/MallocConsumer.lean` | none | `wp_call_malloc_owns`, `ownSet_agree_state`, and `mallocRoomCallerFacts_of_iris`: every `MallocReturnAt` field `prepareCopy` uses, from the Iris spec |
 
 The project is 1,599 lines. MachCSL's corresponding Rocq layers run to
 several thousand lines, but most of that is multi-hart, TSO, device, and
@@ -189,13 +194,17 @@ the refinement composition in `Refinement.lean`.
   `loopFromBody`), but each spec must quantify its WP over the measure.
   `stuck_sim` needs the partial WP and its own adequacy route, which is
   sketched above but not built here.
-- **`DlMallocImpl` is still an assumption.** It is shown *consistent with*
-  the eb73d8c behaviour, not proved against the binary. `Shape` is left
-  abstract; linking it to VSA's `HeapAt` (a memory predicate) means reading
-  `HeapAt` off the owned byte image `img`, which should be direct but is
-  unchecked. Proving `_malloc_r` itself is a large job (xv6's much simpler
-  kalloc took 834 lines of `ProofKalloc.v`), but it would retire the last
-  contract.
+- **The allocator is still an assumption.** `DlMallocImpl` is proved from
+  the first-order runs `MallocLocalRun` and `FreeLocalRun`, and
+  `DlMallocRoomImpl` from `MallocRoomRun` (`MallocRun.lean`). Those runs are
+  the only allocator assumption. `Shape` is `HeapAt` over the owned image
+  (`Vsa/HeapShape.lean`). The concrete control heap satisfies the runs' end
+  conditions (`Vsa/ControlEnd.lean`), but nothing proves `_malloc_r` against
+  them. The spec hands the callee its code (`textOwn`) and the callee-saved
+  registers it spills (`savedOwn`). Without both, no real allocator could
+  meet it. Proving `_malloc_r` itself is a large job (xv6's much simpler
+  kalloc took 834 lines of `ProofKalloc.v`). A proof would chain `segEval`
+  segments through `segFrom_of_runFact`.
 - **Performance.** The state interpretation is two ghost maps, independent
   of Sail state size; only owned cells are tracked. The cost that remains is
   the exec facts, the same Sail evaluation VSA pays today. The proof mode

@@ -2714,6 +2714,18 @@ arena — and drop `priv_arena`. Evidence: the `_malloc_r` top-split path in
 `experiments/disasm.txt`; not yet machine-checked. 47 modules consume
 `privFoot`.
 
+Machine-checked since (`VsaIris`, branch `iris-heap`): the obstruction is
+`VsaIris.no_fixed_privFoot`. The live-relative frame admits both calls at the
+actual control memory (`VsaIris.VsaHeap.Control.live_relative_frame_admits_both`,
+`malloc64_end`). `HeapAt` reads only the globals plus the arena outside the
+live extents (`VsaIris.VsaHeap.BlockHeapAt.transport`). In the Iris route
+the frame comes from ownership (`isHeap` owns exactly that set). The
+remaining allocator assumption is the first-order runs
+`VsaIris.MallocLocalRun`/`FreeLocalRun`/`MallocRoomRun`. The `MallocReturnAt`
+fields that `EnvDefineAppendAllocatorPost.prepareCopy` consumes follow from
+the Iris spec without `privFoot`
+(`VsaIris.VsaHeap.mallocRoomCallerFacts_of_iris`).
+
 **The allocator layer.** Allocator facts are RUN-GLOBAL, not per entry. One
 `AllocLedger` (`Vsa/Sim/AllocLedger.lean`) carries the `malloc`/`free`/`realloc`
 runs (`MallocRun`, the new `FreeRun`, `ReallocInstance`), the `strlen`/`memcpy`
