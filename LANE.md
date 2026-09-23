@@ -19,6 +19,7 @@ table, never in the generated `VsaIris/Interp/Case/*.lean`.
 | `result` | the arm's outcome (value for `eval`, status for `exec`) | `.int (wrap64 (a + b))` |
 | `steps` | the arm's code, in order (step language below) | see the table |
 | `errors` | partial mode only: `family:branchPC:target` for each branch whose other polarity leaves this row (to `runtime_error` or another row) | `kind:0x800038ac:0x80003df8` |
+| `family` | the case template `scripts/iris_arms/templates/<family>_<T\|P>.lean` and its `key=value` parameters (addition, optional) | `binInt op=.add mop=+ wrap=toInt_add_wrap tok=11` |
 
 ### Step language (`;`-separated)
 
@@ -38,9 +39,16 @@ sites are linking `jal`s.
 
 ```
 rows = load_rows()          # list[Arm], validated against the disassembly
-text = emit(arm, "T"|"P")   # Lean source of one case
+text = emit(arm, "T"|"P")   # Lean source of one case: the family template, filled
 write_all(check=False)      # regenerate; check=True is the drift gate
+FAMILIES[name] = subst_fn   # a family: row -> {PLACEHOLDER: text}
 ```
+
+A family is a template (a proved case with `{PLACEHOLDER}`s, e.g.
+`templates/binInt_T.lean`, extracted from the hand-proved worked example) and a
+substitution function in `gen_iris_cases.py` that reads the row. A new arm
+shape is a new family: prove one instance by hand with the tools below, turn
+it into a template, register it. Rows of an existing family are one TSV line.
 
 `python3 -B scripts/gen_iris_cases.py [--check|--list]`. The `--check` mode is
 the stage-a3 drift gate for `VsaIris/Interp/Case/*`.
@@ -64,78 +72,43 @@ the stage-a3 drift gate for `VsaIris/Interp/Case/*`.
   which `ExprReprWithin`'s read set `P` does not cover.
 
 ## Done (all in `lake build VsaIris`, no holes)
-- Row format, step language, emitter interface (above); `gen_iris_cases.py`
-  parses and validates rows (`--list`, `--check`); `emit` is still a stub.
-- Symbolic-run layer: `SWP` (H4) over the interpreter as `IW` (`IRun.lean`);
-  generated step table `Steps/Part00-10.lean` (`scripts/gen_interp_steps.py`,
-  one lemma per instruction: `it_`/`itD_`/`itT_`/`itH_`/`jalx_`), the jump
-  tables' values (`interpRO_lw_<addr>`, macro `ix_tab`), havoc loads of
-  unowned bytes (`swp_havocD`, `fuel_unif`, `SymData.lean`).
-- `ix_run h [using [facts]] [at pc…]` (`ITac.lean`) runs `eval_expr`'s binary
-  arm end to end: prologue, kind dispatch, operator table, int/int checks.
-  `#ix_seg name binders : goal by ix_run …` turns ONE run into ONE lemma whose
-  statement ends in the computed end state (own declaration, own elaboration
-  budget, small context; the `?`-hole / `have` approach does not work and a
-  whole arm in one declaration exceeds the default heartbeats).
-- `Interp/SpecEval.lean`: `eval_expr`'s statement (see INTERP_DESIGN.md §10
-  "STATEMENT CHANGES (G)"): `regFile rv` + `EvalRegs`/`KeepRegs`, `codeRes`,
-  `astEG`, `StackGeom`/`SlotGeom`, `evalPre`/`evalPost`, `evalSpecT_body`,
-  `helperSpec`, `valueIntSpec` (stub for H2).
-- `Interp/Arm.lean`, the arm layer: `ms pc R S Mt` (machine state of an arm),
-  `wp_swpF`/`swp_closeF` (a run in continuation form; the frame is `let`-bound
-  so the run's `simp … at *` cannot rewrite it), `ms_callEvalT` (child call,
-  slot carved/joined, result as `slotWrite` + `□ valOf`), `ms_callHelper`,
-  `ms_intro`/`ms_exit`, `roOwn_data` (AST view), `BinNode`/`binNode_of_repr`,
-  `evalCallGeom`, the `ldvf_*_imgLE` load calculus, `ix_mem` forwarding.
+- **The worked example, total mode, from generated output**:
+  `VsaIris/Interp/Case/BinaryAddIntT.lean` (`caseT_BinaryAddInt`, axioms
+  ⊆ {propext, Classical.choice, Quot.sound}) and `BinarySubIntT.lean`, both
+  generated from `arms.tsv` (family `binInt`), ~25 s each. Drift gate:
+  `check_all.sh` stage a3 runs `gen_interp_steps.py --check` and
+  `gen_iris_cases.py --check`.
+- Symbolic runs: `IW`/`SWP` over the generated step table (`Steps/*`,
+  `it_`/`itD_`/`itT_`/`itH_`/`jalx_` per instruction), jump-table values,
+  havoc loads (`swp_havocD`); driver `ix_run h [using [facts]] [at pc…]`.
+- Proof steps as declarations (`ITac.lean`): `#ix_seg` (one run → one lemma
+  ending in the computed end state), `#ix_piece … [from prev]` (any proof step;
+  its one leftover goal, with every local, becomes the lemma's hypothesis),
+  `#ix_chain` (assemble). A whole arm in one declaration exceeds the default
+  heartbeats; pieces keep each step within budget without writing any
+  intermediate state by hand.
+- `Interp/SpecEval.lean` (statement; INTERP_DESIGN.md §10 "STATEMENT CHANGES
+  (G)"), `Interp/Arm.lean` (the arm layer): `ms`, `wp_swpF`/`swp_closeF`/
+  `swp_closeM`, `ms_callEvalT`, `ms_callHelper`, `ms_intro`/`ms_exit`,
+  `evalFrame_join`, `roOwn_data`, `BinNode`, `evalCallGeom`, `evalSP_off`,
+  the seam invariant `EvalSaved` (+ `ix_saved`), `ix_reg`/`ix_keep`/`ix_fwd`.
+
+## Recipe for a new family (E lanes)
+1. Write the runs as `#ix_seg` lemmas with the facts they need as binders
+   (register pins, data-view reads from the node facts, frame reads); iterate
+   on the error `#ix_seg` prints (the stuck goals).
+2. Write the glue as `#ix_piece`s split at calls: `wp_swpF` + the run lemma
+   (`refine … ?_` then prove the facts: `ix_keep [keeps…]`, `ix_fwd`,
+   `EvalSaved` fields) + `swp_closeM` + the call step; `#ix_chain` at the end.
+3. Replace the row-specific literals by `{PLACEHOLDER}`s, save as
+   `templates/<family>_T.lean`, add `FAMILIES[<family>]`, add the rows.
 
 ## In flight
-Hand-written `BinaryAddInt` total case (scratch draft; runs 1 and the left
-call done in IPM glue). Next: runs 2-4 as `#ix_seg` lemmas with facts as
-binders, the right call, the `value_int` call, the exit into `evalPost`;
-then the partial twin, then `emit_total`/`emit_partial` and the drift gate.
-
-## Pitfalls found
-- `omega` on goals containing `2^64 - c` (`BitVec.toNat_sub` of a literal)
-  produces a proof the kernel rejects after 2 min ("deep recursion"); use
-  `toNat_sub_frame` / `evalSP_eq`.
-- `simp … at *` inside a run rewrites everything in the goal, including an
-  Iris frame carried in the post (`ra` became `1`): keep frames opaque.
-
-## Next (exact plan for the resuming session)
-1. **Exercise `ix_run`** on run 1 of `BinaryAddInt` (0x80003164 → jal
-   0x800034f8): state `IW` with `S = InExt (s-1088, 1088)` (the frame),
-   `Dt`/`DA` = the AST view `m` of `astE aX e` on the node's covered bytes;
-   facts to feed `sx_side` via `macro_rules`: `ldv .lw m aX = 6`,
-   `ldv .ld m (aX+16) = pl` (from `ExprReprWithin.binary`, `ldv_ld`).
-2. **Havoc load** (`swp_havoc`, SymData): `0x80003524 lw s0,4(s0)` reads the
-   node's line field, which `P` does not cover. Prove a SegFrom step directly
-   (choose `lds` from the state's own bytes; `seg_runFact` then gives the step);
-   continuation `∀ v, SWP … (upd R 8 v)`, uniform fuel via a finite-sup lemma
-   over `BitVec 64` (no Mathlib: induction on `toNat` bound). Generate
-   `itH_<pc>` for loads; driver tries it last.
-3. **`VsaIris/Interp/SpecEval.lean`** (statement only; `Specs.lean` imports
-   it and keeps its sorries). Changes vs `Specs.lean` §D, to record in
-   INTERP_DESIGN.md §10: ABI `a0=sret a1=in a2=e a3=env`; registers as one
-   valuation `regFile rv` (all GPRs but PC/ra/gp/tp) with pure pins, post
-   `∃ rv'` agreeing on s-regs+sp; `□ sepL interpText (↦ₘ□)` + `InterpLive
-   live` in the pre; AST predicate `astEG` = `astE` plus `∀ k, P k → RAM ∧ off
-   tohost` (a projection to `astE`, A0 supplies it from `ast_readable`);
-   stack/slot geometry as named structures; `M := vsaModel live`.
-4. **Arm layer** `VsaIris/Interp/Arm.lean`: `wp_swpW` (run an `IW` goal whose
-   Q is `Matches pcf Rf Mtf`, symbolic in and out, over `wp_localRunW`);
-   `toMem`/`patch` images with `imgM` lemmas; slot carve/join between the
-   frame `ownImg` and `slot24`/`valAt`; `ldvf .lw/.ld` ↔ `imgW` bridges for
-   `valOf`; child-call step over `wp_callArmW`/`wp_callArmAbort`; helper-call
-   step over `wp_callW` + `fnSpecAbort_of_fnSpecW`.
-5. **Hand-write `BinaryAddInt` total** (runs: 0x80003164→0x800034f8,
-   0x800034fc→0x80003518, 0x8000351c→0x800038d4 (jump table op 11 →
-   0x80003888), 0x800038d8→ret via `j 0x800033ec`; helper `value_int`
-   0x8000280c: `sw 2,0(a0); sd a1,8(a0)`, clobbers a5 — state its stub
-   `fnSpecW` in a spec file), then the partial twin; then turn both into
-   `emit_total`/`emit_partial` in `gen_iris_cases.py`, regenerate, add the
-   `--check` drift gate to `scripts/check_all.sh` stage a3 (and
-   `gen_interp_steps.py --check`).
-6. `seqLoop (site)` for the block arm / closure body / `interp_run` loop.
+Partial-mode twin of the worked example (`binInt_P`): `evalSpecP_body`
+(abort resource over an abstract core), `ms_callEvalP` (Löb call with the
+abort continuation rebased), `#ix_seg` with several leftovers (a kind test on
+the children's actual values branches), the error branches through a
+`runtime_error` stub spec (H5), the concat branch as another row's hypothesis.
 
 ## Holes
 None added. `python3 scripts/check_iris_holes.py` passes.
