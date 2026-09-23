@@ -23,3 +23,5 @@ import VsaIris.Vsa.Console
 import VsaIris.Vsa.MallocFastHeap
 import VsaIris.Vsa.MallocFastCode
 import VsaIris.Vsa.CostRoom
+import VsaIris.Vsa.SegRun
+import VsaIris.Vsa.StrlenSeg
