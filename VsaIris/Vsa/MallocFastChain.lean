@@ -536,7 +536,7 @@ theorem st7 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv
     · exact b2
     · exact b3
   refine jal_step 0x80004c10 [0xef#8, 0x00#8, 0x00#8, 0x46#8] 0x80005070#64
-    (jal_exec_c10 live fun p hp => C.text (p.1, p.2.2) (hmem p hp)) hmem (by decide) (by decide)
+    (jal_exec_80004c10 live fun p hp => C.text (p.1, p.2.2) (hmem p hp)) hmem (by decide) (by decide)
     h.pc h.img ?_
   · intro rv' mv' hpc hra hU hI
     exact st8 C ⟨hpc, (hU 2 (by decide) (by decide) (by decide)).trans h.sp,
@@ -905,7 +905,7 @@ theorem st2 (C : FastIn live maxReq headroom H n s r saved rv0 mv0 k m1 top brkv
     · exact b2
     · exact b3
   refine jal_step 0x80004874 [0xef#8, 0x00#8, 0x40#8, 0x7f#8] 0x80005068#64
-    (jal_exec_874 live fun p hp => C.text (p.1, p.2.2) (hmem p hp)) hmem (by decide) (by decide)
+    (jal_exec_80004874 live fun p hp => C.text (p.1, p.2.2) (hmem p hp)) hmem (by decide) (by decide)
     h.pc h.img ?_
   · intro rv' mv' hpc hra hU hI
     exact st3 C ⟨hpc, (hU 2 (by decide) (by decide) (by decide)).trans h.sp,
