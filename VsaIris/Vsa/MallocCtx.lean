@@ -271,6 +271,13 @@ theorem MFrame.upd {C : MCtx} {R : Nat → BitVec 64} {Mt : Mem} (F : MFrame C R
   s2 := by rw [upd_other _ _ (Ne.symm hk.2.2.1)]; exact F.s2
   s3 := by rw [upd_other _ _ (Ne.symm hk.2.2.2)]; exact F.s3
 
+/-- The frame depends only on `sp` and `s1`-`s3`: a register file that agrees
+with `R` on them has the same frame. -/
+theorem MFrame.of_regs {C : MCtx} {R R' : Nat → BitVec 64} {Mt : Mem} (F : MFrame C R Mt)
+    (h2 : R' 2 = R 2) (h9 : R' 9 = R 9) (h18 : R' 18 = R 18) (h19 : R' 19 = R 19) :
+    MFrame C R' Mt :=
+  ⟨h2.trans F.sp, F.s0, F.ra, h9.trans F.s1, h18.trans F.s2, h19.trans F.s3⟩
+
 /-- The frame through a store that misses the saved `s0` and `ra`. -/
 theorem MFrame.store {C : MCtx} {R : Nat → BitVec 64} {Mt : Mem} (F : MFrame C R Mt)
     {a w : Nat} {v : BitVec 64} (h : a + w ≤ C.s.toNat - 96 + 80 ∨ C.s.toNat - 96 + 96 ≤ a) :
