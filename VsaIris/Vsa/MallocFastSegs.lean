@@ -739,4 +739,116 @@ theorem bins_facts (hcode : PathLoaded m)
 
 end BinsCases
 
+/-! ## `segSplit` -/
+
+/-- Masking with `-4` clears the two low bits. -/
+theorem and_m4_toNat (a : BitVec 64) :
+    (a &&& sign_extend (m := 64) (0xffc#12)).toNat = a.toNat / 4 * 4 := by
+  have hmeq : (sign_extend (m := 64) (0xffc#12) : BitVec 64) = (BitVec.allOnes 64) <<< 2 := by
+    decide
+  have hshift : (a &&& sign_extend (m := 64) (0xffc#12)) = (a >>> 2) <<< 2 := by
+    rw [hmeq]
+    apply BitVec.eq_of_getLsbD_eq
+    intro i
+    simp only [BitVec.getLsbD_and, BitVec.getLsbD_shiftLeft, BitVec.getLsbD_ushiftRight,
+      BitVec.getLsbD_allOnes]
+    by_cases hi : i < 2
+    · simp only [hi, decide_true, Bool.not_true, Bool.false_and, Bool.and_false, implies_true]
+    · by_cases hlt : i < 64
+      · have h3 : 2 + (i - 2) = i := by omega
+        have h2 : i - 2 < 64 := by omega
+        simp only [hi, decide_false, Bool.not_false, Bool.true_and, hlt, decide_true,
+          h2, Bool.and_true, h3, Bool.and_self, implies_true]
+      · have hge : a.getLsbD i = false := BitVec.getLsbD_of_ge a i (by omega)
+        simp only [hi, decide_false, Bool.not_false, hlt, Bool.false_and, hge, Bool.and_self,
+          implies_true]
+  rw [hshift, BitVec.toNat_shiftLeft, BitVec.toNat_ushiftRight]
+  have ha : a.toNat < 2 ^ 64 := a.isLt
+  rw [Nat.shiftRight_eq_div_pow]
+  have hb : a.toNat / 4 < 2 ^ 62 := by omega
+  rw [Nat.shiftLeft_eq, Nat.mod_eq_of_lt (by omega)]
+
+/-- `slti x, 32` is false for a non-negative `x ≥ 32`. -/
+theorem slt32_false (x : BitVec 64) (h1 : 32 ≤ x.toNat) (h2 : x.toNat < 2 ^ 63) :
+    zopz0zI_s x (sign_extend (m := 64) (32#12)) = false := by
+  unfold zopz0zI_s
+  rw [BitVec.toInt_eq_toNat_of_lt (by omega),
+    show (sign_extend (m := 64) (32#12) : BitVec 64).toInt = 32 by decide]
+  simp; omega
+
+/-- A store into the stack frame `[sp, sp + 96)`. -/
+theorem frameStore {m : Std.ExtHashMap Nat (BitVec 8)} {L : GRegs} {a : MInstr} {bs : List (BitVec 8)}
+    {sp : BitVec 64} (hsp : tohostAddr + 16 ≤ sp.toNat) (hsp' : sp.toNat + 96 ≤ 0x100000000)
+    (hal : sp.toNat % 8 = 0) (off : Nat) (hk : a.kind = .sd) (hsrc : srcVal a.rs1 L = sp)
+    (himm : (sign_extend (m := 64) a.imm : BitVec 64).toNat = off) (hoff : off + 8 ≤ 96)
+    (hoff8 : off % 8 = 0) : MemFacts m L bs a := by
+  unfold tohostAddr at hsp
+  exact sdFact hk _ (ea_of sp off hsrc himm (by omega)) (by omega) (by omega)
+    (by unfold tohostAddr; omega) (by omega)
+
+abbrev splitL (sp a0 s0 a2 a3 a5 t1 : BitVec 64) (nb : Nat) : GRegs :=
+  [(2, sp), (10, a0), (8, s0), (12, a2), (13, a3), (14, BitVec.ofNat 64 nb), (15, a5),
+   (16, 0x8001ad10#64), (6, t1)]
+
+/-- The loads of `segSplit`: `av->top` and the top chunk's header. -/
+abbrev splitLds (f : Nat → BitVec 8) (top : Nat) : List (List (BitVec 8)) :=
+  [wordOf f Vsa.Sim.DlHeap.topAddr, wordOf f (top + 8)]
+
+/-- The top chunk `segSplit` splits, named. -/
+structure SplitTop (f : Nat → BitVec 8) (top size nb : Nat) : Prop where
+  top_ptr : bytesVal .ld (wordOf f Vsa.Sim.DlHeap.topAddr) = BitVec.ofNat 64 top
+  header : bytesVal .ld (wordOf f (top + 8)) = BitVec.ofNat 64 (size + 1)
+  top_lo : Vsa.Sim.DlHeap.heapStart ≤ top
+  top_hi : top + size ≤ Vsa.Sim.DlHeap.heapEnd
+  top_align : top % 16 = 0
+  size_align : size % 16 = 0
+  room : nb + 32 ≤ size
+  nb16 : nb % 16 = 0
+  nb32 : 32 ≤ nb
+
+theorem split_facts {m : Std.ExtHashMap Nat (BitVec 8)} (hcode : PathLoaded m)
+    {sp a0 s0 a2 a3 a5 t1 : BitVec 64} {f : Nat → BitVec 8} {nb top size : Nat}
+    (hsp : tohostAddr + 16 ≤ sp.toNat) (hsp' : sp.toNat + 96 ≤ 0x100000000) (hspal : sp.toNat % 8 = 0)
+    (hglob : ∀ a, 0x8001ad10 ≤ a → a < 0x8001b520 → (m[a]?).getD 0 = f a)
+    (hhdr : ∀ k, k < 8 → (m[top + 8 + k]?).getD 0 = f (top + 8 + k))
+    (ht : SplitTop f top size nb) :
+    ChainFacts m m (splitL sp a0 s0 a2 a3 a5 t1 nb) (splitLds f top) segSplit := by
+  have hlo := ht.top_lo; have hhi := ht.top_hi; have hroom := ht.room
+  unfold Vsa.Sim.DlHeap.heapStart at hlo; unfold Vsa.Sim.DlHeap.heapEnd at hhi
+  have htop : (BitVec.ofNat 64 top).toNat = top := by
+    rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+  have hnbv : (BitVec.ofNat 64 nb).toNat = nb := by
+    rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+  have hszv : (BitVec.ofNat 64 (size + 1)).toNat = size + 1 := by
+    rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+  have hmask : (BitVec.ofNat 64 (size + 1) &&& sign_extend (m := 64) (0xffc#12)).toNat = size := by
+    rw [and_m4_toNat, hszv]; have := ht.size_align; omega
+  have htn : (BitVec.ofNat 64 top + BitVec.ofNat 64 nb).toNat = top + nb := by
+    rw [BitVec.toNat_add, htop, hnbv, Nat.mod_eq_of_lt (by omega)]
+  unfold segSplit ChainFacts
+  chain_facts hcode with "VsaIris.MallocFast.path_at_"
+  all_goals seg_norm
+  all_goals (try simp only [splitLds, List.tail_cons])
+  · refine ldFact rfl Vsa.Sim.DlHeap.topAddr (by unfold eaddrM; seg_norm; decide) (by decide)
+      (by decide) (by decide) (lpins_of_img fun k hk => hglob _
+        (by unfold Vsa.Sim.DlHeap.topAddr Vsa.Sim.DlHeap.avAddr; omega)
+        (by unfold Vsa.Sim.DlHeap.topAddr Vsa.Sim.DlHeap.avAddr; omega))
+  · refine ldFact rfl (top + 8) ((ea_of (BitVec.ofNat 64 top) 8
+      (by seg_norm; rw [ht.top_ptr]) (by decide) (by omega)).trans (by rw [htop]))
+      (by omega) (by omega) (by unfold tohostAddr; omega) (lpins_of_img hhdr)
+  · rw [ht.header, ult_false_iff, hmask, hnbv]; omega
+  · rw [ht.header, slt32_false _ (by rw [BitVec.toNat_sub, hmask, hnbv]; omega)
+      (by rw [BitVec.toNat_sub, hmask, hnbv]; omega)]
+    decide
+  · refine sdFact rfl (top + 8) ((ea_of (BitVec.ofNat 64 top) 8
+      (by seg_norm; rw [ht.top_ptr]) (by decide) (by omega)).trans (by rw [htop]))
+      (by omega) (by omega) (by unfold tohostAddr; omega) (by have := ht.top_align; omega)
+  · exact frameStore hsp hsp' hspal 8 rfl rfl (by decide) (by decide) (by decide)
+  · refine sdFact rfl Vsa.Sim.DlHeap.topAddr (by unfold eaddrM; seg_norm; decide) (by decide)
+      (by decide) (by decide) (by decide)
+  · refine sdFact rfl (top + nb + 8) ((ea_of (BitVec.ofNat 64 top + BitVec.ofNat 64 nb) 8
+      (by seg_norm; rw [ht.top_ptr]) (by decide) (by omega)).trans (by rw [htn]))
+      (by omega) (by omega) (by unfold tohostAddr; omega)
+      (by have := ht.top_align; have := ht.nb16; omega)
+
 end VsaIris.MallocFast
