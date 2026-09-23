@@ -298,6 +298,21 @@ def emit(pc):
 """ + step(f'ix_{pc:08x}', ks, f'[bytesAt (imgM Dt) {ea} {wd}]', '[]', '[]', NIL,
            f'exact ⟨hea, lpins{suf}_img (fun b hb => dataReads_view hD b (hLDD b hb))⟩', 'rfl', hR(ks),
            hRo(ks, d['rd']), 'hk'))
+        # bytes neither owned nor in the data view: any value (`swp_havocD`)
+        rd = d['rd']
+        alts = ' | '.join(['rfl'] * len(ks))
+        thm.append(hdr('itH', pc) + f"""
+    (hea : LdOK {ea} {wd})
+    (hk : ∀ v, {iw(nxt, f"(upd R {rd} v)")}) :
+    {iw(f'0x{pc:x}#64')} :=
+  swp_havocD (T := interpText) (D := dataOf Dt DA) (rs := iRegs) (S := S) (Q := Q) (R := R) (Mt := Mt)
+    ix_{pc:08x} {lst(ks)} {rd} (accAddrs {ea} {wd}) (fun f => [bytesAt f {ea} {wd}]) 0
+    (fun f g h => congrArg (· :: []) (List.map_congr_left fun j hj => h _ (mem_accAddrs (List.mem_range.mp hj))))
+    rfl (by decide) (by decide) (by decide) (fun _ _ => trivial) hlive
+    (fun m hm hD => by unfold ix_{pc:08x} ChainFacts; {CF}; exact ⟨hea, lpins{suf}_img (fun b _ => rfl)⟩)
+    (by decide) (by decide) (by decide) (fun _ => {hgp(ks)}) (by decide) (fun _ => rfl)
+    (fun _ x hx hg hr => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with {alts} <;> first | rfl | exact absurd rfl hg | exact absurd rfl hr)
+    hk""")
         if pc in TABLE_LOADS:
             thm.append(hdr('itT', pc) + f"""
     (hea : LdOK {ea} {wd})

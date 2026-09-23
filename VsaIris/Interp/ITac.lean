@@ -138,6 +138,14 @@ elab_rules : tactic
       pending := pending ++ pend
       match conts with
       | [c] =>
+        -- a havoc load's continuation holds for every loaded value
+        let c ← do
+          let ty ← c.withContext (do whnfR (← instantiateMVars (← c.getType)))
+          if ty.isForall then
+            match ← evalTacticAt (← `(tactic| intro _)) c with
+            | [c'] => pure c'
+            | _ => pure c
+          else pure c
         let c ← do
           let saved ← saveState
           try
