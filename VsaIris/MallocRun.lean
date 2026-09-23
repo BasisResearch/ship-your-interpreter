@@ -884,6 +884,171 @@ theorem dlFreeRoomImpl_of_run {M : MachineModel} {L : DlLayout} {Room FreeOK : R
     DlFreeRoomImpl M L Room FreeOK SpOK freeEntry gpv clob savedRegs headroom text where
   free H q n s k saved hsv := freeRoomSpec_of_run hrun hloc hfree hnd H q n s k saved hsv
 
+
+/-! ## Reallocation
+
+`realloc(p, nNew)` for a live block `(p, nOld)` with `nOld < nNew` (VSA's
+`ReallocOps.grow`). It returns NULL with everything unchanged, or a fresh
+block holding the old contents. The size travels in `a1`, a clobbered
+register (`allocCallArgs_of_localRun`). -/
+
+/-- The second argument register. -/
+def a1 : Nat := 11
+
+/-- A block owned at the contents `v`. -/
+def blockOwnAt (p n : Nat) (v : Nat → BitVec 8) : IProp GF := ownSet (InExt (p, n)) (fun a => a ↦ₘ v a)
+
+/-- The new contents' first `nOld` bytes are the old block's. -/
+def Copies (old new : Nat → BitVec 8) (p p' nOld : Nat) : Prop :=
+  ∀ k, k < nOld → new (p' + k) = old (p + k)
+
+/-- The clobbered registers, with register `k` holding `v`. -/
+def clobberedArg (clob : List Nat) (k : Nat) (v : BitVec 64) : IProp GF :=
+  iprop(∃ cv : Nat → BitVec 64, ⌜cv k = v⌝ ∗ sepL clob (fun r => r ↦ᵣ cv r))
+
+/-- What a realloc run ends in: the frame restored, and NULL with the block
+and heap unchanged, or a fresh aligned block holding the old contents. -/
+structure ReallocEnd (L : DlLayout) (H : List (Nat × Nat)) (p : BitVec 64) (nOld nNew : Nat)
+    (old : Nat → BitVec 8) (r s : BitVec 64) (saved : List (Nat × BitVec 64))
+    (rv' : Nat → BitVec 64) (mv' : Nat → BitVec 8) : Prop where
+  frame : RetFrame rv' r s saved
+  result : (rv' a0 = 0 ∧ L.Shape mv' ((p.toNat, nOld) :: H) ∧ Copies old mv' p.toNat p.toNat nOld) ∨
+    (FreshBlock L H (rv' a0).toNat nNew ∧ (rv' a0).toNat % 16 = 0 ∧
+      L.Shape mv' (((rv' a0).toNat, nNew) :: H) ∧ Copies old mv' p.toNat (rv' a0).toNat nOld)
+
+/-- **`_realloc_r`'s grow run, first-order.** -/
+def ReallocLocalRun (M : MachineModel) (L : DlLayout) (entry gpv : BitVec 64)
+    (clob savedRegs : List Nat) (headroom : Nat) (text : List (Nat × BitVec 8)) : Prop :=
+  ∀ (H : List (Nat × Nat)) (p : BitVec 64) (nOld nNew : Nat) (s r : BitVec 64)
+    (saved : List (Nat × BitVec 64)) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8)
+    (old : Nat → BitVec 8),
+    saved.map Prod.fst = savedRegs → r.toNat % 4 = 0 → EntryRegs rv entry r p s saved →
+    rv a1 = BitVec.ofNat 64 nNew → nOld < nNew →
+    L.Shape mv ((p.toNat, nOld) :: H) → Copies old mv p.toNat p.toNat nOld →
+    (∀ a, stackWin s headroom a → ¬ (heapFoot L ((p.toNat, nOld) :: H) a ∨ InExt (p.toNat, nOld) a)) →
+    ∃ fuel, LocalRun M [(gp, gpv)] text (allocRegs clob savedRegs) (freeBytes L H p nOld s headroom)
+      (ReallocEnd L H p nOld nNew old r s saved) fuel rv mv
+
+/-- `realloc`'s result resource. -/
+def reallocPost (L : DlLayout) (H : List (Nat × Nat)) (p : BitVec 64) (nOld nNew : Nat)
+    (old : Nat → BitVec 8) (p' : BitVec 64) : IProp GF :=
+  iprop((⌜p' = 0⌝ ∗ isHeap L ((p.toNat, nOld) :: H) ∗ blockOwnAt p.toNat nOld old) ∨
+    (⌜FreshBlock L H p'.toNat nNew ∧ p'.toNat % 16 = 0⌝ ∗ isHeap L ((p'.toNat, nNew) :: H) ∗
+      ∃ v : Nat → BitVec 8, ⌜Copies old v p.toNat p'.toNat nOld⌝ ∗ blockOwnAt p'.toNat nNew v))
+
+/-- **`realloc`'s spec**: grow a live block to `nNew` bytes. -/
+def reallocSpec (M : MachineModel) (L : DlLayout) (entry gpv : BitVec 64) (clob : List Nat)
+    (saved : List (Nat × BitVec 64)) (headroom : Nat) (H : List (Nat × Nat)) (p : BitVec 64)
+    (nOld nNew : Nat) (s : BitVec 64) (old : Nat → BitVec 8) : IProp GF :=
+  fnSpec (M := M) entry
+    (fun r => iprop(⌜r.toNat % 4 = 0 ∧ nOld < nNew⌝ ∗ a0 ↦ᵣ p ∗
+      clobberedArg clob a1 (BitVec.ofNat 64 nNew) ∗ sp ↦ᵣ s ∗ gp ↦ᵣ□ gpv ∗ savedOwn saved ∗
+      stackScratch s headroom ∗ isHeap L ((p.toNat, nOld) :: H) ∗ blockOwnAt p.toNat nOld old))
+    (fun _ => iprop(∃ p', a0 ↦ᵣ p' ∗ sp ↦ᵣ s ∗ clobbered clob ∗ savedOwn saved ∗
+      stackScratch s headroom ∗ reallocPost L H p nOld nNew old p'))
+
+/-- **`reallocSpec` from `_realloc_r`'s local run**, the third instance of
+`allocCallArgs_of_localRun`. -/
+theorem reallocSpec_of_localRun {L : DlLayout} {entry gpv : BitVec 64} {clob savedRegs : List Nat}
+    {headroom : Nat} {text : List (Nat × BitVec 8)}
+    (hrun : ReallocLocalRun M L entry gpv clob savedRegs headroom text) (hloc : ShapeLocal L)
+    (hnd : (allocRegs clob savedRegs).Nodup) (ha1 : a1 ∈ clob)
+    (H : List (Nat × Nat)) (p : BitVec 64) (nOld nNew : Nat) (s : BitVec 64)
+    (old : Nat → BitVec 8) (saved : List (Nat × BitVec 64)) (hsv : saved.map Prod.fst = savedRegs) :
+    textOwn (GF := GF) text ⊢ reallocSpec M L entry gpv clob saved headroom H p nOld nNew s old := by
+  subst hsv
+  have hd := RegsDistinct.of_nodup hnd
+  unfold reallocSpec fnSpec blockOwnAt clobberedArg
+  iintro #Htext
+  imodintro
+  iintro %r %Φ Hpc Hra ⟨%⟨hral, hlt⟩, Ha0, Hclob, Hsp, #Hgp, Hsv, Hstk, Hheap, Hblk⟩ Hk
+  ihave ⟨%img, %hsh, Hheap⟩ := isHeap_unfold L _ $$ Hheap
+  ihave ⟨⟨Hheap, Hblk⟩, %hHB⟩ := keep_pure
+    (ownSet_disj (heapFoot L ((p.toNat, nOld) :: H)) (InExt (p.toNat, nOld)) img old) $$ [Hheap Hblk]
+  · iframe Hheap Hblk
+  ihave Hhb := ownSet_glue _ _ img old hHB $$ [Hheap Hblk]
+  · iframe Hheap Hblk
+  have hblk : ∀ a, InExt (p.toNat, nOld) a → ¬ heapFoot L ((p.toNat, nOld) :: H) a :=
+    fun a hb hh => hHB a hh hb
+  iapply allocCallArgs_of_localRun hd
+    (fun a => heapFoot L ((p.toNat, nOld) :: H) a ∨ InExt (p.toNat, nOld) a)
+    (fun img => L.Shape img ((p.toNat, nOld) :: H) ∧ Copies old img p.toNat p.toNat nOld)
+    (fun img img' h hs => ⟨hloc _ img img' (fun a ha => h a (.inl ha)) hs.1,
+      fun k hk => (h _ (.inr ⟨by simp only; omega, by simp only; omega⟩)).symm.trans (hs.2 k hk)⟩)
+    (fun cv => cv a1 = BitVec.ofNat 64 nNew) (fun f g h hf => (h a1 ha1).symm.trans hf)
+    (fun rv' mv' => (rv' a0 = 0 ∧ L.Shape mv' ((p.toNat, nOld) :: H) ∧
+        Copies old mv' p.toNat p.toNat nOld) ∨
+      (FreshBlock L H (rv' a0).toNat nNew ∧ (rv' a0).toNat % 16 = 0 ∧
+        L.Shape mv' (((rv' a0).toNat, nNew) :: H) ∧ Copies old mv' p.toNat (rv' a0).toNat nOld))
+    (fun p' => reallocPost L H p nOld nNew old p') ?_
+    (fun rv mv he hargs hs hdj => (hrun H p nOld nNew s r saved rv mv old rfl hral he hargs hlt
+      hs.1 hs.2 hdj).imp fun _ h => LocalRun.mono (fun _ _ he => ⟨he.frame, he.result⟩) _ _ _ h)
+  · intro rv' mv' hE
+    unfold reallocPost blockOwnAt
+    rcases hE with ⟨h0, hsh', hcp⟩ | ⟨hf, hal, hsh', hcp⟩
+    · iintro HF
+      ileft
+      ihave ⟨Hb, Hh⟩ := ownSet_split _ (InExt (p.toNat, nOld)) _ $$ HF
+      ihave Hb := ownSet_iff (T := InExt (p.toNat, nOld)) _
+        (fun a => ⟨fun h => h.2, fun h => ⟨.inr h, h⟩⟩) $$ Hb
+      ihave Hh := ownSet_iff (T := heapFoot L ((p.toNat, nOld) :: H)) _
+        (fun a => ⟨fun h => h.1.elim id (fun hb => absurd hb h.2),
+          fun h => ⟨.inl h, fun hb => hblk a hb h⟩⟩) $$ Hh
+      isplitr
+      · ipureintro; exact h0
+      isplitl [Hh]
+      · iapply isHeap_fold
+        iexists mv'
+        iframe Hh
+        ipureintro; exact hsh'
+      · iapply ownSet_congr (fun a (ha : InExt (p.toNat, nOld) a) => by
+          have := hcp (a - p.toNat) (by obtain ⟨h1, h2⟩ := ha; simp only at h1 h2; omega)
+          rw [show p.toNat + (a - p.toNat) = a by obtain ⟨h1, _⟩ := ha; simp only at h1; omega] at this
+          rw [this]) $$ Hb
+    · iintro HF
+      iright
+      ihave ⟨HF, -⟩ := ownSet_split _ (heapFoot L H) _ $$ HF
+      ihave HF := ownSet_iff (T := heapFoot L H) _
+        (fun a => ⟨fun h => h.2, fun h => ⟨heapFoot_sub_return L H _ _ a h, h⟩⟩) $$ HF
+      ihave ⟨HF, Hblk⟩ := heapFoot_carve_gen L H _ _ hf _ $$ HF
+      isplitr
+      · ipureintro; exact ⟨hf, hal⟩
+      isplitl [HF]
+      · iapply isHeap_fold
+        iexists mv'
+        iframe HF
+        ipureintro; exact hsh'
+      · iexists mv'
+        iframe Hblk
+        ipureintro; exact hcp
+  · iframe Htext Hpc Hra Ha0 Hsp Hgp Hsv Hstk
+    isplitl [Hclob]
+    · iexact Hclob
+    isplitl [Hhb]
+    · iexists (glue (heapFoot L ((p.toNat, nOld) :: H)) img old)
+      iframe Hhb
+      ipureintro
+      refine ⟨hloc _ img _ (fun a ha => by simp [glue, ha]) hsh, fun k hk => ?_⟩
+      have hb : InExt (p.toNat, nOld) (p.toNat + k) := ⟨by simp only; omega, by simp only; omega⟩
+      simp [glue, hblk _ hb]
+    iintro Hpc Hra HQ
+    iapply Hk $$ Hpc Hra HQ
+
+/-- **Reallocation as a module parameter.** -/
+structure DlReallocImpl (M : MachineModel) (L : DlLayout) (reallocEntry gpv : BitVec 64)
+    (clob savedRegs : List Nat) (headroom : Nat) (text : List (Nat × BitVec 8)) : Prop where
+  realloc : ∀ {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] H p nOld nNew s old
+    (saved : List (Nat × BitVec 64)), saved.map Prod.fst = savedRegs →
+    textOwn (GF := GF) text ⊢ reallocSpec M L reallocEntry gpv clob saved headroom H p nOld nNew s old
+
+theorem dlReallocImpl_of_localRun {M : MachineModel} {L : DlLayout} {reallocEntry gpv : BitVec 64}
+    {clob savedRegs : List Nat} {headroom : Nat} {text : List (Nat × BitVec 8)}
+    (hrun : ReallocLocalRun M L reallocEntry gpv clob savedRegs headroom text) (hloc : ShapeLocal L)
+    (hnd : (allocRegs clob savedRegs).Nodup) (ha1 : a1 ∈ clob) :
+    DlReallocImpl M L reallocEntry gpv clob savedRegs headroom text where
+  realloc H p nOld nNew s old saved hsv :=
+    reallocSpec_of_localRun hrun hloc hnd ha1 H p nOld nNew s old saved hsv
+
 end Build
 
 end VsaIris

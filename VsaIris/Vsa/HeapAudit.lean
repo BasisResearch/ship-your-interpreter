@@ -45,3 +45,6 @@ import VsaIris.Vsa.FreeChain
 #print axioms VsaIris.MallocFast.freeRoomRun_fast
 #print axioms VsaIris.MallocFast.vsaDlFreeRoomImpl_fast
 #print axioms VsaIris.MallocFast.vsaDlFreeRoomImpl_boundary
+#print axioms VsaIris.allocCallArgs_of_localRun
+#print axioms VsaIris.reallocSpec_of_localRun
+#print axioms VsaIris.dlReallocImpl_of_localRun
