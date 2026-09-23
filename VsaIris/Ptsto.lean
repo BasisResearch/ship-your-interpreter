@@ -144,6 +144,13 @@ it is the only way to print (`wp_runOut`, Step.lean), and the halt rule reads
 the exit's output off it (`wp_halt_console`). -/
 def consoleOwn (s : String) : IProp GF := ghost_map_elem G.conName (DFrac.own 1) 0 s
 
+/-- The console cell is exclusive: there is one console. -/
+theorem consoleOwn_excl (s s' : String) : consoleOwn (GF := GF) s ∗ consoleOwn s' ⊢ False := by
+  unfold consoleOwn
+  iintro ⟨H1, H2⟩
+  ihave %h := ghost_map_elem_ne $$ H1 H2
+  exact absurd rfl h
+
 /-- The key-0 control cell at lag `j`. -/
 def ctlAt (j : Nat) : IProp GF := ghost_map_elem G.ctlName (DFrac.own 1) 0 j
 

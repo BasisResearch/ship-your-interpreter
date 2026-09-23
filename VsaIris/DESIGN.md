@@ -18,13 +18,14 @@ unproved callee as a `Module Type`.
 
 | File | Ports | Content |
 | --- | --- | --- |
-| `Machine.lean` | `RiscvLang.v:765-775` (`mexpr`, `LoopE`), `:1593-1604` (`mval`, `prim_step`), `:2254` (`riscv_lang`) | `MachineModel` (abstract deterministic ISA step with total register and memory projections) and its Iris `Language`: the expression is the CPU loop |
-| `Ptsto.lean` | `RiscvPtsto.v:1359` (`reg_pointsto`), `:1584` (`mem_pointsto`), `:2207-2219` (`reg_agree`, `reg_interp_at`), `:2340` (`mstate_interp`), `:2909-2926` (`reg_valid`, `reg_update`), `:2622` (the `irisGS` instance) | `r ↦ᵣ v`, `a ↦ₘ b`, the two ghost-map bridges, and the state interpretation |
+| `Machine.lean` | `RiscvLang.v:765-775` (`mexpr`, `LoopE`), `:1593-1604` (`mval`, `prim_step`), `:2254` (`riscv_lang`) | `MachineModel` (abstract deterministic ISA step with total register, memory and console-output projections) and its Iris `Language`: the expression is the CPU loop |
+| `Ptsto.lean` | `RiscvPtsto.v:1359` (`reg_pointsto`), `:1584` (`mem_pointsto`), `:2207-2219` (`reg_agree`, `reg_interp_at`), `:2340` (`mstate_interp`), `:2909-2926` (`reg_valid`, `reg_update`), `:2622` (the `irisGS` instance) | `r ↦ᵣ v`, `a ↦ₘ b`, the console cell `consoleOwn s`, the three ghost-map bridges, and the state interpretation |
 | `Step.lean` | `RiscvPtsto.v:2804-2809` (`wp_triv`, `mWP`); the `wp_exec_step` → `wp_instr` layering in `claude-notes/design/execution-model.md` | `mTWP` (the loop's total WP), `wp_exec_step`, `wp_exec_halt`, and `wp_local_step`, the footprint rule every instruction leaf reduces to |
 | `Adequacy.lean` | `RiscvAdequacy.v:182-196` (initial ghost maps), `:1533` (`riscv_power_adequacy`) | `mach_adequacy`: from the loop's total WP, the machine halts and its exit satisfies `φ`; `MachGF`, a concrete functor list, so the theorem is not vacuous |
 | `Call.lean` | paper Figs. 7-8 and §4.3-4.6; `SpecKalloc.v:30-56` for the spec shape | `wp_ret`, `wp_jal`, `fnSpec` (continuation-style function spec), and `wp_call` |
 | `DlHeap.lean` | `KallocInv.v:149-159` (`byte_any`, `page_own`), `:281` (`freelist_chain`), `:394` (`kmem_res`), `:403-434` (pop/push), `:436-445` (`kalloc_post`, `kfree_pre`); `SpecKalloc.v`/`SpecKfree.v`; `Module Type KALLOC` (`SpecKalloc.v:52`) | `isHeap L H`, `blockOwn`, carve/return lemmas, `mallocSpec`/`freeSpec`, `DlMallocImpl`, `wp_call_malloc`, `wp_call_malloc_keeps`, `no_fixed_privFoot`, `eb73d8c_witness` |
 | `Vsa/Instance.lean` | none | `vsaModel` (VSA's `Config`/`stepOnce`), `vsa_adequacy` (to `Machine.Halts c out 0`), `seg_runFact`/`wp_seg` (any reflected segment as one Iris rule) |
+| `Vsa/Console.lean` | paper §7.5, Fig. 28 (`cons_auth`) | the HTIF console: `TohostSite` + `Cert`, `putc_runFact`/`wp_putc` (print), `exit_haltFact`/`wp_exit` (halt with the console's output), `vsa_adequacy_exit`, the newlib sites `putcSite`/`exitSite` |
 | `Vsa/Tools.lean`, `Vsa/EnvNewPilot.lean` | none | code slicing, `jalExec_of_site`; `envNew_spec(_vsa)`, the env_new pilot |
 | `Example.lean` | none | A toy countdown machine carried through the whole stack to `Halts`, as a check that nothing is vacuous |
 | `LocalRun.lean` | none | `wp_localRun`: a chain of segments over an owned register list and an owned byte *set*, on the lagging interpretation; `segFrom_of_runFact` takes VSA `RunFact`s as segments |

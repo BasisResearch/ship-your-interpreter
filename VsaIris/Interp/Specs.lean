@@ -49,12 +49,25 @@ structure MachWP (M : MachineModel) where
     (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8)),
     RunFact M n RR MR RW MW →
       footPre (GF := GF) RR MR RW MW ∗ (footPost RR MR RW MW -∗ W Φ) ⊢ W Φ
-  -- F1/F2 add: `halt` (VsaIris.wp_exec_halt, abstracted) and `putc` (console step).
+  /-- F2: the printing run (`VsaIris.wp_runOut`); VSA instance `Inst.wp_putc`. -/
+  putc : ∀ {Φ : Nat × String → IProp GF} (n : Nat)
+    (RR : List (Nat × DFrac × BitVec 64)) (MR : List (Nat × DFrac × BitVec 8))
+    (RW : List (Nat × BitVec 64 × BitVec 64)) (MW : List (Nat × BitVec 8 × BitVec 8))
+    (o s : String), RunFactO M n RR MR RW MW (some o) →
+      footPre (GF := GF) RR MR RW MW ∗ consoleOwn s ∗
+        (footPost RR MR RW MW -∗ consoleOwn (s ++ o) -∗ W Φ) ⊢ W Φ
+  /-- F2: halt/console agreement (`VsaIris.wp_halt_console`); VSA instance
+  `Inst.wp_exit`. -/
+  halt : ∀ {Φ : Nat × String → IProp GF} (RR : List (Nat × DFrac × BitVec 64))
+    (MR : List (Nat × DFrac × BitVec 8)) (e : Nat) (s : String), HaltFact M RR MR e →
+      footPre (GF := GF) RR MR [] [] ∗ consoleOwn s ∗ Φ (e, s) ⊢ W Φ
 
 /-- The total instance: exists today (`mTWP`, `wp_run`). -/
 def twpW (M : MachineModel) : MachWP (GF := GF) M where
   W := mTWP M
   run := fun n RR MR RW MW h => wp_run (M := M) n RR MR RW MW h
+  putc := fun n RR MR RW MW o s h => wp_runOut (M := M) n RR MR RW MW o s h
+  halt := fun RR MR e s h => wp_halt_console (M := M) RR MR e s h
 
 /-- The partial WP (F1): `cpuTok -∗ WP Loop @ NotStuck; ⊤ {{ Φ }}` over the
 same lagging state interpretation. DESIGN: F1 defines it; here it is a
@@ -65,6 +78,8 @@ opaque mWP (M : MachineModel) (Φ : Nat × String → IProp GF) : IProp GF
 def wpW (M : MachineModel) : MachWP (GF := GF) M where
   W := mWP M
   run := by intros; sorry
+  putc := by intros; sorry
+  halt := by intros; sorry
 
 /-- F1: the total WP implies the partial one (iris-lean `TotalWeakestPre`). -/
 theorem twp_wp (M : MachineModel) (Φ : Nat × String → IProp GF) :
@@ -127,12 +142,12 @@ are reallocated) and a closure is immutable. -/
 class InterpGS (GF : BundledGFunctors) where
   frameMapG : GhostMapG GF Nat Nat NatMap
   closMapG : GhostMapG GF Nat Nat NatMap
-  consoleG : GhostMapG GF Nat String NatMap
   frameName : GName
   closName : GName
-  consoleName : GName
+  -- The console (γo) is `MachGS.conName`: its authority is in the machine's
+  -- state interpretation (F2, `VsaIris.consoleOwn`), not here.
 
-attribute [reducible, instance] InterpGS.frameMapG InterpGS.closMapG InterpGS.consoleG
+attribute [reducible, instance] InterpGS.frameMapG InterpGS.closMapG
 
 section Repr
 
@@ -146,9 +161,8 @@ def closAt (ca p : Nat) : IProp GF := ghost_map_elem I.closName DFrac.discard ca
 instance (fa e : Nat) : Persistent (frameAt (GF := GF) fa e) := by unfold frameAt; infer_instance
 instance (ca p : Nat) : Persistent (closAt (GF := GF) ca p) := by unfold closAt; infer_instance
 
-/-- The console cell (F2 puts its authority in the state interpretation, tied
-to `Vsa.Machine.output`). -/
-def consoleOwn (s : String) : IProp GF := ghost_map_elem I.consoleName (DFrac.own 1) 0 s
+-- `consoleOwn s` is `VsaIris.consoleOwn` (Ptsto.lean, F2): its authority is in
+-- `mstateInterp`, tied to `MachineModel.out` (VSA: `Vsa.Machine.output`).
 
 /-- Immutable bytes. -/
 def bytesRO (a : Nat) (bs : List (BitVec 8)) : IProp GF :=

@@ -16,9 +16,16 @@ Package F2 of `VsaIris/INTERP_DESIGN.md` §9.
 - VSA: `vsaModel.out`, `VsaOk.htifIdle` (`htif_payload_writes = 0`). `seg_runFact` frames both.
   `jalExec_of_site` takes `StepConFrame` (`stepConFrame_of_jalObs`).
 
+- `Vsa/Console.lean`: `TohostSite` + decided `Cert`; `putc_runFact`/`wp_putc` (print one
+  character), `exit_haltFact`/`wp_exit` (halt with the console's output), `vsa_adequacy_exit`
+  (`Halts c out e ∧ φ`), and the newlib sites `putcSite` (`_write`, 0x8000005c) and `exitSite`
+  (`_exit`, 0x80000190).
+- `Interp/Specs.lean`: `MachWP` has `putc`/`halt` fields; `InterpGS` no longer carries the console.
+- INTERP_DESIGN.md §2 F2 and §3 record the as-built design and the two changes from the draft.
+
 ## In flight
-- The VSA putchar and exit instances (`putc_runFact`, `exit_haltFact`) over
-  `stepObs_tohost_putchar`/`stepOnce_tohost_G`.
+- Waiting for F1's `MachWP` on `hub/lane-f1` to add the `putc`/`halt` fields there and prove them
+  for the partial WP.
 
 ## Holes
 None.

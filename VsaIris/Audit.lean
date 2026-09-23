@@ -3,6 +3,7 @@ import VsaIris.Adequacy
 import VsaIris.Example
 import VsaIris.Vsa.Instance
 import VsaIris.Vsa.EnvNewPilot
+import VsaIris.Vsa.Console
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -28,3 +29,13 @@ import VsaIris.Vsa.EnvNewPilot
 #print axioms VsaIris.Inst.jalExec_of_site
 #print axioms VsaIris.Inst.EnvNew.envNew_spec
 #print axioms VsaIris.Inst.EnvNew.envNew_spec_vsa
+#print axioms VsaIris.consoleOwn_excl
+#print axioms VsaIris.wp_runOut
+#print axioms VsaIris.wp_halt_console
+#print axioms VsaIris.Inst.putc_runFact
+#print axioms VsaIris.Inst.exit_haltFact
+#print axioms VsaIris.Inst.wp_putc
+#print axioms VsaIris.Inst.wp_exit
+#print axioms VsaIris.Inst.vsa_adequacy_exit
+#print axioms VsaIris.Inst.putcSite_cert
+#print axioms VsaIris.Inst.exitSite_cert
