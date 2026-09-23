@@ -2756,6 +2756,13 @@ For the allocator globals and the arena it states presence only at the words
 from the current boundary. Affected: `vsaFoot_live` and every consumer
 instantiating `hlive` at the boundary.
 
+Machine-checked `free` (`VsaIris`, branch `iris-heap`): `_free_r`'s top-merge
+path is `VsaIris.MallocFast.freeRoomRun_fast` / `vsaDlFreeRoomImpl_boundary`.
+The heap half is `VsaIris.VsaHeap.FastAt.merge`. `realloc` has an Iris spec,
+`VsaIris.reallocSpec`, whose success arm feeds `ReallocGrowResult`'s
+fresh-block and copy clauses (`reallocBlock_of_fresh`, `reallocCopies_of_owned`).
+Its machine run `ReallocLocalRun` remains a named hypothesis.
+
 **The allocator layer.** Allocator facts are RUN-GLOBAL, not per entry. One
 `AllocLedger` (`Vsa/Sim/AllocLedger.lean`) carries the `malloc`/`free`/`realloc`
 runs (`MallocRun`, the new `FreeRun`, `ReallocInstance`), the `strlen`/`memcpy`

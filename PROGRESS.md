@@ -227,7 +227,12 @@ iris-machine's. The earlier iris-heap history is in git (`git log --grep iris-he
 - VSA obstruction, machine-checked: `vsa_reserve_fails_after_split`. VSA's `AllocationReserve` is false after `malloc(24)`. The corrected `Reserve` is used instead, and the finding is recorded in `PROOF_CLOSURE_PLAN.md` §2.
 
 ## In flight
-- realloc as a third `allocCall_of_localRun` instance.
+- Nothing. The Next list from the confirmed QUESTIONS is done, within the scope stated in each section below.
+
+## Done (realloc)
+- The core call lemma is generalised to `allocCallArgs_of_localRun`: further arguments travel in clobbered registers under a predicate `Args`. `allocCall_of_localRun` is its `Args := True` instance, so the malloc and free specs are unchanged.
+- `reallocSpec`, `ReallocLocalRun`, `ReallocEnd`, `DlReallocImpl`, and `reallocSpec_of_localRun` (`MallocRun.lean`) are the third instance. The spec covers `realloc(p, nNew)` growing a live block `(p, nOld)`. The block is owned at its contents (`blockOwnAt`). The result is NULL with the block and heap unchanged, or a fresh block whose first `nOld` bytes are the old contents (`Copies`).
+- `vsaDlReallocImpl` (`Vsa/MallocConsumer.lean`) is the binary's instance given `ReallocLocalRun`. `reallocBlock_of_fresh` and `reallocCopies_of_owned` feed the fresh-block and copy clauses of VSA's `ReallocGrowResult`.
 
 ## Done (free)
 - `freeRoomSpec`, `FreeRoomRun`, `DlFreeRoomImpl`, and `freeRoomSpec_of_run` (`MallocRun.lean`): `freeSpec` under capacity. The precondition is a shape predicate `FreeOK` on the owned image; the postcondition is `isHeapRoom Room H k`, keeping every credit.
@@ -255,10 +260,12 @@ iris-machine's. The earlier iris-heap history is in git (`git log --grep iris-he
 - `pathText` liveness from `VsaOk`/the loaded image (in flight).
 - `MallocRoomRun` for heaps with free chunks (bin reuse, remainder splitting, `sbrk` growth), i.e. general `vsaRoom`; `MallocLocalRun` without capacity.
 - `FreeLocalRun` in general: freeing a chunk that is not below the top (bin insertion, which leaves the fast shape), coalescing with a free neighbour, and trimming via `_malloc_trim_r`/`sbrk`.
-- realloc.
+- `ReallocLocalRun` for the binary (`_realloc_r`'s machine run). It is a named hypothesis of `vsaDlReallocImpl`.
 
 ## Next
-- realloc via `allocCall_of_localRun`. A LIFO lemma: after a fast `malloc`, `vsaFreeTop` holds for the returned block when the original top is below the trim threshold. This needs `MallocRoomEnd`'s room to expose the chunk list.
+- A LIFO lemma: after a fast `malloc`, `vsaFreeTop` holds for the returned block when the original top is below the trim threshold. This needs `MallocRoomEnd`'s room to expose the chunk list.
+- `_realloc_r`'s grow path (`ReallocLocalRun`) on the fast heap, reusing the stage machinery (`seg_step`, `lock_call`, `unlock_hook`, `StPost`).
+- The general allocator paths (bins, coalescing, `sbrk`), and a loader fact for `AllocBytesPresent`.
 
 ## DECIDED (confirmed by the user)
 - The in-place `DlMallocImpl` signature change (code bytes, callee-saved `s0-s3`) stays.
