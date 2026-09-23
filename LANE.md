@@ -92,6 +92,39 @@ branch structure costs nothing extra. `memcpy` writes memory but over a fixed
 byte set, so the same shape applies. Both rules are used by name; neither was
 reimplemented.
 
+### What xv6iris does for the same loops, and where this lane agrees
+
+Read from the Rocq sources at `github.com/mit-pdos/xv6iris` (fetched; line
+numbers as they appear there).
+
+- **`iris/ProofMemset.v:141-144`, `:168-169` — `wp_memset_loop_free_sconf`.**
+  Fuel induction on the remaining byte count, `induction rem as [|rem' IH]`.
+  The file header states the rule this lane follows verbatim: "Fuel induction
+  over the remaining byte count … bounded loop, not iLöb." `wp_localRunW`'s
+  and `MachWP.loop`'s doc comments already cite it; `strlen`'s `wordRun` and
+  `peelRun` are the same shape, with the measure being bytes left before the
+  NUL and before the eight-byte boundary.
+- **`iris/ProofMemmove.v:331-370` — `mm_loop`.** The invariant carries the
+  source bytes FRACTIONALLY (`↦ₘ[kts]{dqs}`) over a sliding window, the
+  destination bytes EXCLUSIVELY (`↦ₘ[ktw]`, at old values `dst_olds`), and
+  three register pins for the two cursors and the source end. The
+  postcondition hands back the source unchanged and the destination holding
+  the source's bytes. Induction is again on `rem`, peeling one byte per
+  iteration.
+  **Consequence for `memcpy` here:** put BOTH windows in the run's owned byte
+  set `S` and let the end condition say "source unchanged, destination equals
+  source" — that is `mm_loop` at `dqs = 1`, and `wp_localRunW` supports it
+  directly through `segFrom_of_segW`. If a genuinely FRACTIONAL source is ever
+  needed, `wp_localRunW` cannot express it (its cells are persistent `text` or
+  exclusive `S`), and F3's `MachWP.loopSeg` is the rule to use instead,
+  because its invariant is an arbitrary `IProp` and can hold `↦ₘ{q}`.
+- **`iris/ProofCopyinstr.v` `cs_inner`** (the NUL scan, the closest analogue
+  of `strlen`). Its invariant tracks "no NUL appears before `done + i`"
+  (`bb_nonul`) and advances the cursor one byte per iteration, by plain `nat`
+  induction. This lane's `StrBytes` (`nonzero`, `ascii`, `nul`) plus `byteBeq`
+  ("the byte at offset `a ≤ len` is NUL exactly at `a = len`") is the same
+  fact, stated once and used by every byte test in the tail and the peel.
+
 ### The reusable layer the other three instantiate
 
 `VsaIris/Vsa/SegRun.lean` (263 lines) is now function-independent:
