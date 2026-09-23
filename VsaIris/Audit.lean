@@ -6,6 +6,7 @@ import VsaIris.Vsa.EnvNewPilot
 import VsaIris.Vsa.Console
 import VsaIris.LocalRun
 import VsaIris.Loop
+import VsaIris.Interp.Need
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -64,3 +65,19 @@ import VsaIris.Loop
 #print axioms VsaIris.MachWP.loopSeg
 #print axioms VsaIris.wp_loop
 #print axioms VsaIris.wpP_loop
+#print axioms VsaIris.fnSpecAbort
+#print axioms VsaIris.wp_callAbort
+#print axioms VsaIris.wp_callAbort_later
+#print axioms VsaIris.fnSpecAbort_of_fnSpecW
+#print axioms VsaIris.fnSpecAbort_mono
+#print axioms VsaIris.fnSpecAbort_rebase
+#print axioms VsaIris.blockOwn_split
+#print axioms VsaIris.blockOwn_join
+#print axioms VsaIris.stackScratch_carve
+#print axioms VsaIris.stackScratch_join
+#print axioms VsaIris.abort_rebase
+#print axioms VsaIris.Interp.stackBudget_child
+#print axioms VsaIris.Interp.stackBudget_call
+#print axioms VsaIris.Interp.execNeed_callBody
+#print axioms VsaIris.Interp.execNeed_of_stackFits
+#print axioms VsaIris.Interp.stackScratch_boundary

@@ -7,6 +7,7 @@ import VsaIris.MachWP
 import VsaIris.Adequacy
 import VsaIris.Call
 import VsaIris.Loop
+import VsaIris.CallAbort
 import VsaIris.DlHeap
 import VsaIris.Example
 import VsaIris.Audit
@@ -24,3 +25,5 @@ import VsaIris.Vsa.Console
 import VsaIris.Vsa.MallocFastHeap
 import VsaIris.Vsa.MallocFastCode
 import VsaIris.Vsa.CostRoom
+import VsaIris.Stack
+import VsaIris.Interp.Need
