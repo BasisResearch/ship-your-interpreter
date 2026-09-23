@@ -287,6 +287,13 @@ theorem Span.trans {live : Nat → Prop} {S : Nat → Prop} {pc : BitVec 64} {R 
     Span live S pc R Mt F' :=
   fun Q hk => h Q fun pc' R' Mt' hF => k pc' R' Mt' hF Q hk
 
+/-- Weaken a span's exits. -/
+theorem Span.mono {live : Nat → Prop} {S : Nat → Prop} {pc : BitVec 64} {R : Nat → BitVec 64}
+    {Mt : Mem} {F F' : BitVec 64 → (Nat → BitVec 64) → Mem → Prop}
+    (h : Span live S pc R Mt F) (k : ∀ pc' R' Mt', F pc' R' Mt' → F' pc' R' Mt') :
+    Span live S pc R Mt F' :=
+  fun Q hk => h Q fun pc' R' Mt' hF => hk pc' R' Mt' (k pc' R' Mt' hF)
+
 /-- A span with no instructions. -/
 theorem Span.refl {live : Nat → Prop} {S : Nat → Prop} {pc : BitVec 64} {R : Nat → BitVec 64}
     {Mt : Mem} {F : BitVec 64 → (Nat → BitVec 64) → Mem → Prop} (h : F pc R Mt) :
