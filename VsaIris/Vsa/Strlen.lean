@@ -625,6 +625,371 @@ theorem tail0 (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
        by rw [hfin 14 (by simp [strlenRegs])]; exact h.a4,
        by have := h.lo; omega, h.hi⟩
 
+/-! ## The word scan `0x80006d10 … 0x80006d28`
+
+One iteration is one reflected segment. The branch is decided by VSA's own
+zero-byte arithmetic (`StrlenMagic.detect_all_ones`, through
+`detect_takenG`/`detect_nottakenG`), and the loop is bounded by `len`. -/
+
+/-- The eight bytes of the word at `a`. -/
+def wordBytesAt (bv : Nat → BitVec 8) (a : Nat) : List (BitVec 8) :=
+  [bv a, bv (a + 1), bv (a + 2), bv (a + 3), bv (a + 4), bv (a + 5), bv (a + 6), bv (a + 7)]
+
+theorem byteVal' {m0 : Std.ExtHashMap Nat (BitVec 8)} (hread : Reads P.toNat len bv m0)
+    (t i : Nat) (h : t + i < len + 8) :
+    (m0[P.toNat + t + i]?).getD 0 = bv (P.toNat + t + i) := by
+  rw [show P.toNat + t + i = P.toNat + (t + i) from by omega]
+  exact byteVal hread (t + i) h
+
+theorem wordBytes_eq {m0 : Std.ExtHashMap Nat (BitVec 8)} (hread : Reads P.toNat len bv m0)
+    (t : Nat) (ht : t ≤ len) :
+    wordBytesAt bv (P.toNat + t) =
+      [(m0[P.toNat + t]?).getD 0, (m0[P.toNat + t + 1]?).getD 0, (m0[P.toNat + t + 2]?).getD 0,
+       (m0[P.toNat + t + 3]?).getD 0, (m0[P.toNat + t + 4]?).getD 0, (m0[P.toNat + t + 5]?).getD 0,
+       (m0[P.toNat + t + 6]?).getD 0, (m0[P.toNat + t + 7]?).getD 0] := by
+  unfold wordBytesAt
+  rw [byteVal hread t (by omega), byteVal' hread t 1 (by omega), byteVal' hread t 2 (by omega),
+    byteVal' hread t 3 (by omega), byteVal' hread t 4 (by omega), byteVal' hread t 5 (by omega),
+    byteVal' hread t 6 (by omega), byteVal' hread t 7 (by omega)]
+
+/-- The `ld a2,0(a4)` of one word iteration. -/
+theorem ldFact (ctx : Ctx live P r len bv) {m0 : Std.ExtHashMap Nat (BitVec 8)}
+    (hread : Reads P.toNat len bv m0) (t : Nat) (ht : t ≤ len)
+    (L : GRegs) (line : MInstr) (hkind : line.kind = .ld)
+    (haddr : (eaddrM line L).toNat = P.toNat + t) :
+    MemFacts m0 L (wordBytesAt bv (P.toNat + t)) line := by
+  have hlo := ctx.regions.lo
+  have hhi := ctx.regions.hi
+  have hh := ctx.regions.htif
+  have htoh : tohostAddr = 0x8001ad00 := rfl
+  unfold MemFacts
+  rw [hkind]
+  change (0x80000000 ≤ _ ∧ _ + 8 ≤ 0x100000000 ∧
+    (_ + 8 ≤ tohostAddr ∨ tohostAddr + 8 ≤ _)) ∧ _
+  rw [haddr]
+  refine ⟨⟨by omega, by omega, ?_⟩, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · rcases hh with h | h
+    · left; omega
+    · right; omega
+  · exact (byteVal hread t (by omega)).trans rfl
+  · exact byteVal' hread t 1 (by omega)
+  · exact byteVal' hread t 2 (by omega)
+  · exact byteVal' hread t 3 (by omega)
+  · exact byteVal' hread t 4 (by omega)
+  · exact byteVal' hread t 5 (by omega)
+  · exact byteVal' hread t 6 (by omega)
+  · exact byteVal' hread t 7 (by omega)
+
+/-- At the word-loop head `0x80006d10`, `t` bytes scanned. -/
+structure WordAt (P r : BitVec 64) (len t : Nat) (rv : Nat → BitVec 64) : Prop where
+  pcv : rv VsaIris.PC = 0x80006d10#64
+  ra : rv 1 = r
+  a0 : rv 10 = P
+  a1 : rv 11 = BitVec.allOnes 64
+  a3 : rv 13 = magic7f
+  a4 : rv 14 = P + BitVec.ofNat 64 t
+  tle : t ≤ len
+
+/-- The reflected magic test, at the bytes the run owns. -/
+theorem wordGuard (ctx : Ctx live P r len bv) {σ : MState}
+    (hread : Reads P.toNat len bv σ.mem) (t : Nat) (ht : t ≤ len) (tk : Bool)
+    (htk : decide (t + 8 ≤ len) = tk) :
+    ((((((bytesVal .ld (wordBytesAt bv (P.toNat + t))) &&& magic7f) + magic7f)
+      ||| (bytesVal .ld (wordBytesAt bv (P.toNat + t)))) ||| magic7f)
+      == BitVec.allOnes 64) = tk := by
+  have hpos : (P + BitVec.ofNat 64 t).toNat = P.toNat + t :=
+    ptrN P t (by have := ctx.regions.nowrap; omega)
+  have hcs : CStr σ.mem P.toNat (charsOf P.toNat len bv) := cstr_of_reads ctx.str hread
+  have hvalue : bytesVal .ld (wordBytesAt bv (P.toNat + t)) = ldBytesT σ (P + BitVec.ofNat 64 t) := by
+    rw [wordBytes_eq hread t ht, ldBytesT_wordAt, hpos]
+    exact sext64_self _
+  rw [strlenWordVal_eq, hvalue]
+  cases tk
+  · refine beq_eq_false_iff_ne.mpr (detect_nottakenG σ P len t (charsOf P.toNat len bv) hcs
+      (charsOf_length _ _ _) ht (by have := of_decide_eq_false htk; omega) hpos)
+  · exact beq_iff_eq.mpr (detect_takenG σ P len t (charsOf P.toNat len bv) hcs
+      (charsOf_length _ _ _) hpos (of_decide_eq_true htk))
+
+/-- **The word scan.** `n` is the fuel: at most `n` more full words fit before
+the NUL. -/
+theorem wordRun (ctx : Ctx live P r len bv) :
+    ∀ (n t : Nat) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8), len < t + 8 * n + 8 →
+      (∀ a, slackSet P.toNat len a → mv a = bv a) → WordAt P r len t rv →
+      SRun live P.toNat len bv r (n + 10) rv mv
+  | 0, t, rv, mv, hn, hslack, h => by
+    refine strlenStep 9 strlenX6d10FSeg [wordBytesAt bv (P.toNat + t)] 0x80006d10#64 6 rfl
+      (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
+    · intro σ hread
+      chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+      · refine ldFact ctx hread t h.tle _ _ rfl ?_
+        show ((rv 14 + sign_extend (m := 64) (0x000#12)).toNat) = P.toNat + t
+        rw [sext0_add, h.a4]
+        exact ptrN P t (by have := ctx.regions.nowrap; have := h.tle; omega)
+      · change ((((((bytesVal .ld (wordBytesAt bv (P.toNat + t))) &&& (rv 13)) + (rv 13))
+          ||| (bytesVal .ld (wordBytesAt bv (P.toNat + t)))) ||| (rv 13)) == (rv 11)) = false
+        rw [h.a3, h.a1]
+        exact wordGuard ctx hread t h.tle false (by simp; omega)
+    intro rv' mv' hpc' hfin hslack'
+    refine localRun_le (by omega) (tail0 ctx hslack' ⟨by rw [hpc']; rfl, ?_, ?_, ?_,
+      h.tle, by omega⟩)
+    · rw [hfin 1 (by simp [strlenRegs])]; exact h.ra
+    · rw [hfin 10 (by simp [strlenRegs])]; exact h.a0
+    · rw [hfin 14 (by simp [strlenRegs])]
+      show rv 14 + sign_extend (m := 64) (0x008#12) = P + BitVec.ofNat 64 (t + 8)
+      rw [h.a4]
+      exact a4_incrG P t 0
+  | n + 1, t, rv, mv, hn, hslack, h => by
+    by_cases hc : t + 8 ≤ len
+    · refine strlenStep (n + 10) strlenX6d10TSeg [wordBytesAt bv (P.toNat + t)] 0x80006d10#64 6
+        rfl (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
+      · intro σ hread
+        chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+        · refine ldFact ctx hread t h.tle _ _ rfl ?_
+          show ((rv 14 + sign_extend (m := 64) (0x000#12)).toNat) = P.toNat + t
+          rw [sext0_add, h.a4]
+          exact ptrN P t (by have := ctx.regions.nowrap; have := h.tle; omega)
+        · change ((((((bytesVal .ld (wordBytesAt bv (P.toNat + t))) &&& (rv 13)) + (rv 13))
+            ||| (bytesVal .ld (wordBytesAt bv (P.toNat + t)))) ||| (rv 13)) == (rv 11)) = true
+          rw [h.a3, h.a1]
+          exact wordGuard ctx hread t h.tle true (by simp [hc])
+      intro rv' mv' hpc' hfin hslack'
+      exact wordRun ctx n (t + 8) rv' mv' (by omega) hslack'
+        ⟨by rw [hpc']; rfl, by rw [hfin 1 (by simp [strlenRegs])]; exact h.ra,
+         by rw [hfin 10 (by simp [strlenRegs])]; exact h.a0,
+         by rw [hfin 11 (by simp [strlenRegs])]; exact h.a1,
+         by rw [hfin 13 (by simp [strlenRegs])]; exact h.a3,
+         by rw [hfin 14 (by simp [strlenRegs])]
+            show rv 14 + sign_extend (m := 64) (0x008#12) = P + BitVec.ofNat 64 (t + 8)
+            rw [h.a4]; exact a4_incrG P t 0,
+         by omega⟩
+    · refine strlenStep (n + 10) strlenX6d10FSeg [wordBytesAt bv (P.toNat + t)] 0x80006d10#64 6
+        rfl (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
+      · intro σ hread
+        chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+        · refine ldFact ctx hread t h.tle _ _ rfl ?_
+          show ((rv 14 + sign_extend (m := 64) (0x000#12)).toNat) = P.toNat + t
+          rw [sext0_add, h.a4]
+          exact ptrN P t (by have := ctx.regions.nowrap; have := h.tle; omega)
+        · change ((((((bytesVal .ld (wordBytesAt bv (P.toNat + t))) &&& (rv 13)) + (rv 13))
+            ||| (bytesVal .ld (wordBytesAt bv (P.toNat + t)))) ||| (rv 13)) == (rv 11)) = false
+          rw [h.a3, h.a1]
+          exact wordGuard ctx hread t h.tle false (by simp; omega)
+      intro rv' mv' hpc' hfin hslack'
+      refine localRun_le (by omega) (tail0 ctx hslack' ⟨by rw [hpc']; rfl, ?_, ?_, ?_,
+        h.tle, by omega⟩)
+      · rw [hfin 1 (by simp [strlenRegs])]; exact h.ra
+      · rw [hfin 10 (by simp [strlenRegs])]; exact h.a0
+      · rw [hfin 14 (by simp [strlenRegs])]
+        show rv 14 + sign_extend (m := 64) (0x008#12) = P + BitVec.ofNat 64 (t + 8)
+        rw [h.a4]
+        exact a4_incrG P t 0
+
+/-! ## The magic setup, the byte peel, and the entry -/
+
+/-- At the magic setup `0x80006cfc`, `t` bytes already scanned. -/
+structure AlignAt (P r : BitVec 64) (len t : Nat) (rv : Nat → BitVec 64) : Prop where
+  pcv : rv VsaIris.PC = 0x80006cfc#64
+  ra : rv 1 = r
+  a0 : rv 10 = P
+  a4 : rv 14 = P + BitVec.ofNat 64 t
+  tle : t ≤ len
+
+/-- The magic setup runs into the word scan. -/
+theorem alignRun (ctx : Ctx live P r len bv) {t : Nat} {rv : Nat → BitVec 64}
+    {mv : Nat → BitVec 8} (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a)
+    (h : AlignAt P r len t rv) :
+    SRun live P.toNat len bv r (len + 11) rv mv := by
+  refine strlenStep (len + 10) strlenX6cfcSeg [] 0x80006cfc#64 4 rfl (by decide) (by decide)
+    rfl ctx.codeLive hslack h.pcv (fun σ hread => by
+      chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_") ?_
+  intro rv' mv' hpc' hfin hslack'
+  refine wordRun ctx len t rv' mv' (by omega) hslack'
+    ⟨by rw [hpc']; rfl, by rw [hfin 1 (by simp [strlenRegs])]; exact h.ra,
+     by rw [hfin 10 (by simp [strlenRegs])]; exact h.a0, ?_, ?_,
+     by rw [hfin 14 (by simp [strlenRegs])]; exact h.a4, h.tle⟩
+  · rw [hfin 11 (by simp [strlenRegs])]
+    exact allOnes_build
+  · rw [hfin 13 (by simp [strlenRegs])]
+    exact magic_build
+
+/-- The peel's `addi a4,a4,1`. -/
+theorem a4_incr1 (x : BitVec 64) (m : Nat) :
+    (x + BitVec.ofNat 64 m) + sign_extend (m := 64) (0x001#12) = x + BitVec.ofNat 64 (m + 1) := by
+  rw [show (sign_extend (m := 64) (0x001#12) : BitVec 64) = BitVec.ofNat 64 1 from by
+      apply BitVec.eq_of_toNat_eq; decide, BitVec.add_assoc, ← BitVec.ofNat_add]
+
+/-- At the byte-peel head `0x80006d78`, `m` bytes peeled. -/
+structure PeelAt (P r : BitVec 64) (len m : Nat) (rv : Nat → BitVec 64) : Prop where
+  pcv : rv VsaIris.PC = 0x80006d78#64
+  ra : rv 1 = r
+  a0 : rv 10 = P
+  a4 : rv 14 = P + BitVec.ofNat 64 m
+  mle : m ≤ len
+
+/-- **The byte peel.** `n` is the number of single-byte steps still needed to
+reach an eight-byte boundary; the loop leaves early if the NUL comes first. -/
+theorem peelRun (ctx : Ctx live P r len bv) :
+    ∀ (n m : Nat) (rv : Nat → BitVec 64) (mv : Nat → BitVec 8),
+      (P.toNat + m + n) % 8 = 0 → 0 < n →
+      (∀ a, slackSet P.toNat len a → mv a = bv a) → PeelAt P r len m rv →
+      SRun live P.toNat len bv r (2 * n + len + 11) rv mv
+  | 0, _, _, _, _, hn, _, _ => absurd hn (by omega)
+  | n + 1, m, rv, mv, halign, _, hslack, h => by
+    have hptr1 : (P + BitVec.ofNat 64 (m + 1)).toNat = P.toNat + (m + 1) :=
+      ptrN P (m + 1) (by have := ctx.regions.nowrap; have := h.mle; omega)
+    have hload : ∀ σ : MState, Reads P.toNat len bv σ.mem →
+        MemFacts σ.mem (strlenL rv) [bv (P.toNat + m)] (mkLine 0x80006d78#64 0x00074783#32) := by
+      intro σ hread
+      refine lbuFact ctx hread m (by have := h.mle; omega) _ _ rfl ?_
+      show ((rv 14 + sign_extend (m := 64) (0x000#12)).toNat) = P.toNat + m
+      rw [sext0_add, h.a4]
+      exact ptrN P m (by have := ctx.regions.nowrap; have := h.mle; omega)
+    by_cases he : m = len
+    · -- the NUL is this byte: leave through `0x80006d88`
+      refine localRun_le (show 2 ≤ 2 * (n + 1) + len + 11 from by omega) ?_
+      refine strlenStep (rv := rv) 1 strlenX6d78FSeg [[bv (P.toNat + m)]] 0x80006d78#64 3 rfl
+        (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
+      · intro σ hread
+        chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+        · exact hload σ hread
+        · change (!((zero_extend (m := 64) (bv (P.toNat + m))) == 0#64)) = false
+          rw [zext_beqz, byteBeq ctx m h.mle]
+          simp [he]
+      intro rv1 mv1 hpc1 hfin1 hslack1
+      have hra1 : rv1 1 = r := by rw [hfin1 1 (by simp [strlenRegs])]; exact h.ra
+      have ha01 : rv1 10 = P := by rw [hfin1 10 (by simp [strlenRegs])]; exact h.a0
+      have ha41 : rv1 14 = P + BitVec.ofNat 64 (m + 1) := by
+        rw [hfin1 14 (by simp [strlenRegs])]
+        show rv 14 + sign_extend (m := 64) (0x001#12) = P + BitVec.ofNat 64 (m + 1)
+        rw [h.a4]
+        exact a4_incr1 P m
+      refine strlenStep (rv := rv1) 0 strlenX6d88Seg [] 0x80006d88#64 2 rfl (by decide)
+        (by decide) rfl ctx.codeLive hslack1 (by rw [hpc1]; rfl) ?_ ?_
+      · intro σ hread
+        chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+        change (Sail.BitVec.update (rv1 1 + sign_extend (m := 64) (0x000#12)) 0 0#1).toNat % 4 = 0
+        rw [hra1, ret_tgt r ctx.retAlign]
+        exact ctx.retAlign
+      intro rv2 mv2 hpc2 hfin2 hslack2
+      refine ⟨?_, ?_, ?_, hslack2⟩
+      · rw [hpc2]
+        show Sail.BitVec.update (rv1 1 + sign_extend (m := 64) (0x000#12)) 0 0#1 = r
+        rw [hra1, ret_tgt r ctx.retAlign]
+      · rw [hfin2 1 (by simp [strlenRegs])]; exact hra1
+      · rw [hfin2 10 (by simp [strlenRegs])]
+        show (rv1 14 - rv1 10) + sign_extend (m := 64) (0xfff#12) = BitVec.ofNat 64 len
+        rw [ha41, ha01, sub_a4_a0_val P (m + 1),
+          show (sign_extend (m := 64) (0xfff#12) : BitVec 64) = -(BitVec.ofNat 64 1) from by
+            apply BitVec.eq_of_toNat_eq; decide,
+          BitVec.add_neg_eq_sub, ofNat_sub (m + 1) 1 (by omega)]
+        congr 1
+        all_goals omega
+    · -- a character: one more peel step, then the alignment test
+      have hmlt : m + 1 ≤ len := by have := h.mle; omega
+      refine localRun_le (show 2 * n + len + 13 ≤ 2 * (n + 1) + len + 11 from by omega) ?_
+      refine strlenStep (rv := rv) (2 * n + len + 12) strlenX6d78TSeg [[bv (P.toNat + m)]]
+        0x80006d78#64 3 rfl (by decide) (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
+      · intro σ hread
+        chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+        · exact hload σ hread
+        · change (!((zero_extend (m := 64) (bv (P.toNat + m))) == 0#64)) = true
+          rw [zext_beqz, byteBeq ctx m h.mle]
+          simp [he]
+      intro rv1 mv1 hpc1 hfin1 hslack1
+      have hra1 : rv1 1 = r := by rw [hfin1 1 (by simp [strlenRegs])]; exact h.ra
+      have ha01 : rv1 10 = P := by rw [hfin1 10 (by simp [strlenRegs])]; exact h.a0
+      have ha41 : rv1 14 = P + BitVec.ofNat 64 (m + 1) := by
+        rw [hfin1 14 (by simp [strlenRegs])]
+        show rv 14 + sign_extend (m := 64) (0x001#12) = P + BitVec.ofNat 64 (m + 1)
+        rw [h.a4]
+        exact a4_incr1 P m
+      have ha31 : rv1 13 = (P + BitVec.ofNat 64 (m + 1)) &&& sign_extend (m := 64) (0x007#12) := by
+        rw [hfin1 13 (by simp [strlenRegs])]
+        show (rv 14 + sign_extend (m := 64) (0x001#12)) &&& sign_extend (m := 64) (0x007#12) = _
+        rw [show rv 14 + sign_extend (m := 64) (0x001#12) = P + BitVec.ofNat 64 (m + 1) from by
+          rw [h.a4]; exact a4_incr1 P m]
+      by_cases hal : (P.toNat + (m + 1)) % 8 = 0
+      · refine localRun_le (show len + 12 ≤ 2 * n + len + 12 from by omega) ?_
+        refine strlenStep (rv := rv1) (len + 11) strlenX6d74TSeg [] 0x80006d74#64 0 rfl
+          (by decide) (by decide) rfl ctx.codeLive hslack1 (by rw [hpc1]; rfl) ?_ ?_
+        · intro σ hread
+          chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+          change ((rv1 13) == 0#64) = true
+          rw [ha31]
+          exact beq_iff_eq.mpr (andi7_aligned _ (by rw [hptr1]; exact hal))
+        intro rv2 mv2 hpc2 hfin2 hslack2
+        exact alignRun ctx hslack2
+          ⟨by rw [hpc2]; rfl, by rw [hfin2 1 (by simp [strlenRegs])]; exact hra1,
+           by rw [hfin2 10 (by simp [strlenRegs])]; exact ha01,
+           by rw [hfin2 14 (by simp [strlenRegs])]; exact ha41, hmlt⟩
+      · refine strlenStep (rv := rv1) (2 * n + len + 11) strlenX6d74FSeg [] 0x80006d74#64 0 rfl
+          (by decide) (by decide) rfl ctx.codeLive hslack1 (by rw [hpc1]; rfl) ?_ ?_
+        · intro σ hread
+          chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+          change ((rv1 13) == 0#64) = false
+          rw [ha31]
+          exact beq_eq_false_iff_ne.mpr (andi7_unaligned _ (by rw [hptr1]; exact hal))
+        intro rv2 mv2 hpc2 hfin2 hslack2
+        refine localRun_le (show 2 * n + len + 11 ≤ 2 * n + len + 11 from by omega)
+          (peelRun ctx n (m + 1) rv2 mv2
+            (by rw [show P.toNat + (m + 1) + n = P.toNat + m + (n + 1) from by omega]
+                exact halign)
+            (by rcases Nat.eq_zero_or_pos n with rfl | hpos
+                · refine absurd ?_ hal
+                  rw [show P.toNat + (m + 1) = P.toNat + m + (0 + 1) from by omega]
+                  exact halign
+                · exact hpos) hslack2
+            ⟨by rw [hpc2]; rfl, by rw [hfin2 1 (by simp [strlenRegs])]; exact hra1,
+             by rw [hfin2 10 (by simp [strlenRegs])]; exact ha01,
+             by rw [hfin2 14 (by simp [strlenRegs])]; exact ha41, hmlt⟩)
+
+/-! ## The entry `0x80006cf0` and the whole run -/
+
+/-- At the entry `0x80006cf0`: `a0` is the string, `ra` the return address. -/
+structure EntryAt (P r : BitVec 64) (rv : Nat → BitVec 64) : Prop where
+  pcv : rv VsaIris.PC = 0x80006cf0#64
+  ra : rv 1 = r
+  a0 : rv 10 = P
+
+/-- **`strlen` as one bounded owned-footprint run.** From the entry, the run
+reaches the return address with the length in `a0`, `ra` restored and the
+owned slack bytes unchanged, in at most `len + 28` reflected segments. -/
+theorem strlenRun (ctx : Ctx live P r len bv) {rv : Nat → BitVec 64} {mv : Nat → BitVec 8}
+    (hslack : ∀ a, slackSet P.toNat len a → mv a = bv a) (h : EntryAt P r rv) :
+    SRun live P.toNat len bv r (len + 28) rv mv := by
+  have hzero : P + BitVec.ofNat 64 0 = P := by
+    rw [show (BitVec.ofNat 64 0 : BitVec 64) = 0#64 from rfl, BitVec.add_zero]
+  by_cases hal : P.toNat % 8 = 0
+  · refine strlenStep (rv := rv) (len + 27) strlenX6cf0FSeg [] 0x80006cf0#64 2 rfl (by decide)
+      (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
+    · intro σ hread
+      chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+      change (!((rv 10 &&& sign_extend (m := 64) (0x007#12)) == 0#64)) = false
+      rw [h.a0, andi7_aligned P hal]
+      rfl
+    intro rv1 mv1 hpc1 hfin1 hslack1
+    refine localRun_le (by omega) (alignRun (t := 0) ctx hslack1
+      ⟨by rw [hpc1]; rfl, by rw [hfin1 1 (by simp [strlenRegs])]; exact h.ra,
+       by rw [hfin1 10 (by simp [strlenRegs])]; exact h.a0, ?_, by omega⟩)
+    rw [hfin1 14 (by simp [strlenRegs])]
+    show rv 10 + sign_extend (m := 64) (0x000#12) = P + BitVec.ofNat 64 0
+    rw [sext0_add, h.a0, hzero]
+  · refine strlenStep (rv := rv) (len + 27) strlenX6cf0TSeg [] 0x80006cf0#64 2 rfl (by decide)
+      (by decide) rfl ctx.codeLive hslack h.pcv ?_ ?_
+    · intro σ hread
+      chain_facts hread.loaded with "Vsa.Sim.Code.strlen_at_"
+      change (!((rv 10 &&& sign_extend (m := 64) (0x007#12)) == 0#64)) = true
+      rw [h.a0]
+      simpa using beq_eq_false_iff_ne.mpr (andi7_unaligned P hal)
+    intro rv1 mv1 hpc1 hfin1 hslack1
+    refine localRun_le (show 2 * (8 - P.toNat % 8) + len + 11 ≤ len + 27 from by omega)
+      (peelRun ctx (8 - P.toNat % 8) 0 rv1 mv1 (by omega) (by omega) hslack1
+        ⟨by rw [hpc1]; rfl, by rw [hfin1 1 (by simp [strlenRegs])]; exact h.ra,
+         by rw [hfin1 10 (by simp [strlenRegs])]; exact h.a0, ?_, by omega⟩)
+    rw [hfin1 14 (by simp [strlenRegs])]
+    show rv 10 + sign_extend (m := 64) (0x000#12) = P + BitVec.ofNat 64 0
+    rw [sext0_add, h.a0, hzero]
+
 end Run
 
 end VsaIris.Inst.Strlen
