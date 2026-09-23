@@ -293,7 +293,9 @@ theorem BlockHeapAt.transport {m m' : Mem} {H : List (Nat × Nat)} {top brkv : N
       first_prev := hstart ▸ hH.first_prev
       walk := hH.walk.transport_headers hdr
       coalesced := hH.coalesced
-      footer := fun c hc hf => (hfreeRd c hc hf).2.2 ▸ hH.footer c hc hf
+      footer := fun c hc hf => by
+        obtain ⟨_, _, hft⟩ := hfreeRd c hc hf
+        exact hft ▸ hH.footer c hc hf
       bins_list := by
         intro i h0 h1
         obtain ⟨first, hfirst, hchain⟩ := hH.bins_list i h0 h1

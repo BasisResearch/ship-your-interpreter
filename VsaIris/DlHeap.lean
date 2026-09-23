@@ -212,6 +212,24 @@ disjoint from every live extent (VSA `MallocContract.spec`'s success arm:
 def FreshBlock (L : DlLayout) (H : List (Nat × Nat)) (p n : Nat) : Prop :=
   p ≠ 0 ∧ L.lo ≤ p ∧ p + n ≤ L.hi ∧ ∀ e ∈ H, ∀ a, InExt (p, n) a → ¬ InExt e a
 
+/-- The named fields of `FreshBlock`. -/
+theorem FreshBlock.destruct {L : DlLayout} {H : List (Nat × Nat)} {p n : Nat}
+    (h : FreshBlock L H p n) :
+    p ≠ 0 ∧ L.lo ≤ p ∧ p + n ≤ L.hi ∧ ∀ e ∈ H, ∀ a, InExt (p, n) a → ¬ InExt e a := h
+
+theorem FreshBlock.nonzero {L : DlLayout} {H : List (Nat × Nat)} {p n : Nat}
+    (h : FreshBlock L H p n) : p ≠ 0 := h.destruct.1
+
+theorem FreshBlock.lo {L : DlLayout} {H : List (Nat × Nat)} {p n : Nat}
+    (h : FreshBlock L H p n) : L.lo ≤ p := by obtain ⟨_, h, _⟩ := h; exact h
+
+theorem FreshBlock.hi {L : DlLayout} {H : List (Nat × Nat)} {p n : Nat}
+    (h : FreshBlock L H p n) : p + n ≤ L.hi := by obtain ⟨_, _, h, _⟩ := h; exact h
+
+theorem FreshBlock.disjoint {L : DlLayout} {H : List (Nat × Nat)} {p n : Nat}
+    (h : FreshBlock L H p n) : ∀ e ∈ H, ∀ a, InExt (p, n) a → ¬ InExt e a := by
+  obtain ⟨_, _, _, h⟩ := h; exact h
+
 section Heap
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]

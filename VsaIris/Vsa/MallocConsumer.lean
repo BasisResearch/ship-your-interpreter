@@ -150,9 +150,9 @@ theorem mallocBlock_of_fresh {H : List (Nat × Nat)} {exts : List Extent} {p n :
     (hf : FreshBlock vsaLayout H p n) (hal : p % 16 = 0) (hn : 0 < n)
     (harena : HeapArena vsaArena exts) (hcov : Covered exts H) :
     MallocBlock vsaArena exts n p where
-  nonzero := hf.1
+  nonzero := hf.nonzero
   align := hal
-  arena := ⟨hf.2.1, hf.2.2.1⟩
+  arena := ⟨hf.lo, hf.hi⟩
   fresh := by
     intro e he
     obtain ⟨b, hb, hsub⟩ := hcov e he
@@ -163,7 +163,7 @@ theorem mallocBlock_of_fresh {H : List (Nat × Nat)} {exts : List Extent} {p n :
     let a := max p e.1
     have ha1 : InExt (p, n) a := by unfold InExt; simp only [a]; omega
     have ha2 : InExt e a := by unfold InExt; simp only [a]; omega
-    exact hf.2.2.2 b hb a ha1 (hsub a ha2)
+    exact hf.disjoint b hb a ha1 (hsub a ha2)
 
 /-- What `EnvDefineAppendAllocatorPost.prepareCopy` and `envNewAllocator_run`
 take from a malloc return, besides the allocator invariant and capacity. -/
