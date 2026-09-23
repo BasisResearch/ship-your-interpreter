@@ -227,14 +227,17 @@ iris-machine's. The earlier iris-heap history is in git (`git log --grep iris-he
 - VSA obstruction, machine-checked: `vsa_reserve_fails_after_split`. VSA's `AllocationReserve` is false after `malloc(24)`. The corrected `Reserve` is used instead, and the finding is recorded in `PROOF_CLOSURE_PLAN.md` §2.
 
 ## In flight
-- `MallocRoomRun` on the top-split fast path (requests 24..487, heap with no free chunk, `binblocks = 0`):
-  - **Done:** every `ChainFacts` obligation (`MallocFastSegs`); the heap lemma `FastAt.split`; generic `seg_step`/`jal_step`; both lock-call `jal` sites; and stage 10 (epilogue → `MallocRoomEnd`, `MallocFastChain`).
-  - **Remaining:** stages 9..0, which are bookkeeping on the same pattern.
+- Requests ≤ 23 (path B: `li a4,32`, the `jal` at `0x800047cc`, bins entered at `0x800047d0`), to close `MallocRoomRun` for every `n ≤ maxReq`.
+
+## Done (fast path)
+- `fast_run` (`Vsa/MallocFastChain.lean`): for 24 ≤ n ≤ maxReq ≤ 487, a heap with no free chunk and `binblocks = 0` (`vsaRoomFast`), and a caller stack with `SpOKFast`, `malloc` runs from entry to `MallocRoomEnd` in 11 segment/jal steps. It covers eleven stages (wrap, prologue, lock call, lock hook, retarget, bins, split, unlock call, unlock hook, retarget, epilogue), each a `seg_step`/`jal_step` over reflected `#derive_case` chains. Axioms: propext, Classical.choice, Quot.sound.
+
 ## Holes left
-- `MallocLocalRun`, `FreeLocalRun`, and `MallocRoomRun` beyond the fast path.
+- `MallocRoomRun` for n ≤ 23 (path B) and for heaps with free chunks. `MallocLocalRun` and `FreeLocalRun` in general.
+- `text`/`live` instantiation from `VsaOk` (the `htext : ∀ p ∈ pathText, live p.1` premise of `fast_run`).
 
 ## Next
-- Fast-path segments, jal sites, and the chaining; then requests ≤ 23 (path B); then `FreeLocalRun`; then realloc.
+- Path B; then the `MallocRoomRun` instance; then `text`/`live` from the loaded image; then `FreeLocalRun`; then realloc.
 
 ## DECIDED (confirmed by the user)
 - The in-place `DlMallocImpl` signature change (code bytes, callee-saved `s0-s3`) stays.
