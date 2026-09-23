@@ -48,14 +48,14 @@ theorem countdown_twp (n : Nat) (hn : n < 2 ^ 64) :
   | succ n ih =>
     iintro Ha
     iapply wp_local_step [] [] [(a0, BitVec.ofNat 64 (n + 1), BitVec.ofNat 64 n)] []
-    · intro σ ⟨_, _, hrw, _⟩
+    · intro σ _ ⟨_, _, hrw, _⟩
       have hσ : σ = BitVec.ofNat 64 (n + 1) := by
         simpa [countdown] using hrw _ List.mem_cons_self
       have hne : σ ≠ 0#64 := by
         rw [hσ]; intro h
         have := congrArg BitVec.toNat h
         simp [Nat.mod_eq_of_lt hn] at this
-      refine ⟨σ - 1#64, by simp [countdown, hne], ?_, ?_, ?_, ?_⟩
+      refine ⟨σ - 1#64, by simp [countdown, hne], trivial, ?_, ?_, ?_, ?_⟩
       · intro p hp
         simp at hp; subst hp
         simp [countdown, hσ]
@@ -94,7 +94,7 @@ theorem countdown_halts (n : Nat) (hn : n < 2 ^ 64) :
     rw [LawfulPartialMap.get?_empty] at hk
     cases hk
   obtain ⟨e, out, hh, hφ⟩ := mach_adequacy (GF := MachGF) (M := countdown)
-    (BitVec.ofNat 64 n) _ _ hr hm (fun v => v = (0, "done")) (by
+    (BitVec.ofNat 64 n) _ _ hr hm trivial (fun v => v = (0, "done")) (by
       intro _
       iintro Hr -
       ihave Ha := (BigSepM.bigSepM_insert (LawfulPartialMap.get?_empty _)).1 $$ Hr

@@ -24,7 +24,17 @@ Port of xv6iris `iris/RiscvPtsto.v`, single-hart and sequential:
   not a finite map worth tracking, so memory gets the register treatment
   (DESIGN.md §"Deviations");
 * `mstate_interp` (RiscvPtsto.v:2340) = register bridge ∗ memory bridge; the
-  device conjunct is dropped.
+  device conjunct is dropped. The client-visible form `mstateInterp` also
+  carries the model's global invariant `M.ok`.
+
+**Lag.** VSA's instruction facts are *segment* facts: a reflected run of
+`n` instructions with an end-state frame, and no statement about the states in
+between. The state interpretation therefore allows the ghost maps to agree
+with a state `j` steps in the past (`lagInterp j`), where `j` is recorded in a
+third ghost map (`ctl`, key 0). Only the holder of the key-0 cell can make
+`j` nonzero, and every client holds it at value 0 (`cpuTok`, handed out by
+`mTWP`), so a client always sees `j = 0`, that is `mstateInterp`. The segment
+rule `wp_run` (Step.lean) moves the counter while a segment runs.
 -/
 
 namespace VsaIris
@@ -39,8 +49,10 @@ map per hart and memory in `gen_heapGS`). -/
 class MachPreG (GF : BundledGFunctors) where
   regG : GhostMapG GF Nat (BitVec 64) NatMap
   memG : GhostMapG GF Nat (BitVec 8) NatMap
+  /-- Control ghost map; key 0 holds the lag counter. -/
+  ctlG : GhostMapG GF Nat Nat NatMap
 
-attribute [reducible, instance] MachPreG.regG MachPreG.memG
+attribute [reducible, instance] MachPreG.regG MachPreG.memG MachPreG.ctlG
 
 class MachGpreS (GF : BundledGFunctors) extends InvGpreS GF where
   machPre : MachPreG GF
@@ -53,6 +65,7 @@ class MachGS (hlc : outParam HasLC) (GF : BundledGFunctors) where
   machPre : MachPreG GF
   regName : GName
   memName : GName
+  ctlName : GName
 
 attribute [reducible, instance] MachGS.machPre
 attribute [implicit_reducible, instance] MachGS.invGS
@@ -98,15 +111,37 @@ def regInterp (σ : M.State) : IProp GF :=
 def memInterp (σ : M.State) : IProp GF :=
   iprop(∃ m, ghost_map_auth G.memName (DFrac.own 1) m ∗ ⌜MemAgree M m σ⌝)
 
-/-- `mstate_interp` (RiscvPtsto.v:2340) without the device conjunct. -/
-def mstateInterp (σ : M.State) : IProp GF := iprop(regInterp M σ ∗ memInterp M σ)
+/-- `mstate_interp` (RiscvPtsto.v:2340) without the device conjunct, plus the
+model's global invariant. This is what clients see. -/
+def mstateInterp (σ : M.State) : IProp GF := iprop(regInterp M σ ∗ memInterp M σ ∗ ⌜M.ok σ⌝)
+
+/-- The ghost maps agree with `σ0`, which satisfies the global invariant. -/
+def AgreeOk (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8)) (σ0 : M.State) : Prop :=
+  RegAgree M mr σ0 ∧ MemAgree M mm σ0 ∧ M.ok σ0
+
+/-- The ghost maps agree with a state `j` steps before `σ`. -/
+def lagInterp (j : Nat) (σ : M.State) : IProp GF :=
+  iprop(∃ mr mm, ghost_map_auth G.regName (DFrac.own 1) mr ∗
+    ghost_map_auth G.memName (DFrac.own 1) mm ∗
+    ⌜∃ σ0, AgreeOk M mr mm σ0 ∧ ReachesN M j σ0 σ⌝)
+
+/-- The key-0 control cell at lag `j`. -/
+def ctlAt (j : Nat) : IProp GF := ghost_map_elem G.ctlName (DFrac.own 1) 0 j
+
+/-- The CPU token: the control cell at lag 0. `mTWP` hands it to its prover. -/
+abbrev cpuTok : IProp GF := ctlAt 0
+
+/-- The full state interpretation: the lag counter and the lagging bridges. -/
+def fullInterp (σ : M.State) : IProp GF :=
+  iprop(∃ (c : NatMap Nat) (j : Nat), ghost_map_auth G.ctlName (DFrac.own 1) c ∗
+    ⌜PartialMap.get? c 0 = some j⌝ ∗ lagInterp M j σ)
 
 /-- The `IrisGS` instance (RiscvPtsto.v:2622 §3): no later credits per
 step, no forks, and the state interpretation ignores the step and thread
 counters. -/
 instance machIrisGS : IrisGS_gen hlc (MExprOf M) GF where
   invGS := G.invGS
-  stateInterp σ _ _ _ := mstateInterp M σ
+  stateInterp σ _ _ _ := fullInterp M σ
   numLatersPerStep _ := 0
   forkPost _ := iprop(True)
   stateInterp_mono _ _ _ _ := by
@@ -206,6 +241,52 @@ theorem memInterp_frame {σ σ' : M.State} (h : ∀ k, M.mem σ' k = M.mem σ k)
   ipureintro
   intro k v hk
   rw [h k]; exact Hag k v hk
+
+/-- At lag zero the lagging bridges are exactly the client-visible ones. -/
+theorem lagInterp_zero {σ : M.State} : lagInterp (GF := GF) M 0 σ ⊣⊢ mstateInterp M σ := by
+  unfold lagInterp mstateInterp regInterp memInterp
+  constructor
+  · iintro ⟨%mr, %mm, Hr, Hm, %h⟩
+    obtain ⟨σ0, ⟨hr, hm, hok⟩, hre⟩ := h
+    cases hre.zero_eq
+    isplitl [Hr]
+    · iexists mr; iframe Hr; ipureintro; exact hr
+    isplitl [Hm]
+    · iexists mm; iframe Hm; ipureintro; exact hm
+    ipureintro; exact hok
+  · iintro ⟨⟨%mr, Hr, %hr⟩, ⟨%mm, Hm, %hm⟩, %hok⟩
+    iexists mr, mm
+    iframe Hr Hm
+    ipureintro
+    exact ⟨σ, ⟨hr, hm, hok⟩, .zero σ⟩
+
+/-- A client holding the CPU token sees lag zero. -/
+theorem fullInterp_cpu {σ : M.State} :
+    fullInterp (GF := GF) M σ ⊢ cpuTok -∗
+      ∃ c : NatMap Nat, ghost_map_auth G.ctlName (DFrac.own 1) c ∗ ⌜PartialMap.get? c 0 = some 0⌝ ∗
+        cpuTok ∗ mstateInterp M σ := by
+  unfold fullInterp
+  iintro ⟨%c, %j, Hc, %hj, Hl⟩ Ht
+  unfold cpuTok ctlAt
+  ihave %hl := ghost_map_lookup $$ Hc Ht
+  rw [hj] at hl
+  cases hl
+  iexists c
+  iframe Hc Ht
+  isplitr
+  · ipureintro; exact hj
+  iapply lagInterp_zero.1 $$ Hl
+
+/-- Rebuild the full interpretation at lag zero. -/
+theorem fullInterp_of_cpu {σ : M.State} (c : NatMap Nat) (hc : PartialMap.get? c 0 = some 0) :
+    ghost_map_auth (GF := GF) G.ctlName (DFrac.own 1) c ∗ mstateInterp M σ ⊢ fullInterp M σ := by
+  unfold fullInterp
+  iintro ⟨Hc, Hs⟩
+  iexists c, 0
+  iframe Hc
+  isplitr
+  · ipureintro; exact hc
+  iapply lagInterp_zero.2 $$ Hs
 
 end Rules
 

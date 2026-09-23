@@ -53,8 +53,56 @@ structure MachineModel where
   /-- `reg σ PC` is the program counter. -/
   reg : State → Nat → BitVec 64
   mem : State → Nat → BitVec 8
+  /-- A global well-formedness invariant of the states the logic reasons
+  about (VSA: `GoodState`, the tick bound, GPR and code-byte presence). It is
+  part of the state interpretation, so every step rule must re-establish it.
+  Defaults to `True` for models that need none. -/
+  ok : State → Prop := fun _ => True
 
 variable (M : MachineModel)
+
+/-- Exactly `n` normal steps of the model (VSA's `StepsN`). -/
+inductive ReachesN : Nat → M.State → M.State → Prop where
+  | zero (σ : M.State) : ReachesN 0 σ σ
+  | succ {n : Nat} {σ σ' σ'' : M.State} :
+      M.step σ = .next σ' → ReachesN n σ' σ'' → ReachesN (n + 1) σ σ''
+
+namespace ReachesN
+
+variable {M}
+
+/-- Counted runs compose. -/
+theorem trans {m n : Nat} {a b c : M.State} (h₁ : ReachesN M m a b) (h₂ : ReachesN M n b c) :
+    ReachesN M (m + n) a c := by
+  induction h₁ with
+  | zero => simpa using h₂
+  | succ s _ ih => exact Nat.succ_add _ n ▸ .succ s (ih h₂)
+
+/-- Append one step at the end. -/
+theorem snoc {n : Nat} {a b c : M.State} (h : ReachesN M n a b) (s : M.step b = .next c) :
+    ReachesN M (n + 1) a c :=
+  h.trans (.succ s (.zero c))
+
+/-- Determinism: a prefix of a longer run is where the longer run passes. If
+`a` reaches `b` in `j` steps and `c` in `j + k` steps, then `b` reaches `c` in
+`k` steps. -/
+theorem split {j k : Nat} {a b c : M.State} (hb : ReachesN M j a b)
+    (hc : ReachesN M (j + k) a c) : ReachesN M k b c := by
+  induction hb generalizing k with
+  | zero => simpa using hc
+  | @succ n σ σ' σ'' s _ ih =>
+    rw [Nat.add_right_comm] at hc
+    cases hc with
+    | succ s' hc' =>
+      rw [s] at s'
+      cases s'
+      exact ih hc'
+
+/-- A run of length zero does not move. -/
+theorem zero_eq {a b : M.State} (h : ReachesN M 0 a b) : a = b := by
+  cases h; rfl
+
+end ReachesN
 
 /-- The CPU loop (`LoopE`, RiscvLang.v:774) or its terminal value. -/
 inductive MExpr where

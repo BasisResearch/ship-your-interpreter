@@ -46,15 +46,15 @@ theorem instrAt_eq (i : Nat) (code : List (BitVec 8)) :
 
 /-- The exec fact for `ret` (`jalr x0, 0(ra)`) at `i`. -/
 def RetExec (M : MachineModel) (i : Nat) (code : List (BitVec 8)) : Prop :=
-  ∀ r σ, FootHolds (M := M) σ [(ra, DFrac.own 1, r)] (codeFoot i code)
+  ∀ r σ, M.ok σ → FootHolds (M := M) σ [(ra, DFrac.own 1, r)] (codeFoot i code)
       [(PC, BitVec.ofNat 64 i, r)] [] →
-    ∃ σ', M.step σ = .next σ' ∧ LocalStep (M := M) σ σ' [(PC, BitVec.ofNat 64 i, r)] []
+    ∃ σ', M.step σ = .next σ' ∧ M.ok σ' ∧ LocalStep (M := M) σ σ' [(PC, BitVec.ofNat 64 i, r)] []
 
 /-- The exec fact for `jal ra, tgt` at `i`. -/
 def JalExec (M : MachineModel) (i : Nat) (code : List (BitVec 8)) (tgt : BitVec 64) : Prop :=
-  ∀ v σ, FootHolds (M := M) σ [] (codeFoot i code)
+  ∀ v σ, M.ok σ → FootHolds (M := M) σ [] (codeFoot i code)
       [(PC, BitVec.ofNat 64 i, tgt), (ra, v, BitVec.ofNat 64 (i + 4))] [] →
-    ∃ σ', M.step σ = .next σ' ∧
+    ∃ σ', M.step σ = .next σ' ∧ M.ok σ' ∧
       LocalStep (M := M) σ σ' [(PC, BitVec.ofNat 64 i, tgt), (ra, v, BitVec.ofNat 64 (i + 4))] []
 
 /-- **RET** (paper Fig. 8b). -/
@@ -64,7 +64,7 @@ theorem wp_ret {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 
       (PC ↦ᵣ r -∗ ra ↦ᵣ r -∗ mTWP M Φ) ⊢ mTWP M Φ := by
   iintro ⟨#Hi, Hpc, Hra, Hk⟩
   iapply wp_local_step [(ra, DFrac.own 1, r)] (codeFoot i code) [(PC, BitVec.ofNat 64 i, r)] []
-    (fun σ h => hexec r σ h)
+    (fun σ hok h => hexec r σ hok h)
   unfold footPre footPost
   rw [← instrAt_eq]
   simp only [sepL_cons, sepL_nil]
@@ -79,7 +79,7 @@ theorem wp_jal {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 
       (PC ↦ᵣ tgt -∗ ra ↦ᵣ BitVec.ofNat 64 (i + 4) -∗ mTWP M Φ) ⊢ mTWP M Φ := by
   iintro ⟨#Hi, Hpc, Hra, Hk⟩
   iapply wp_local_step [] (codeFoot i code)
-    [(PC, BitVec.ofNat 64 i, tgt), (ra, v, BitVec.ofNat 64 (i + 4))] [] (fun σ h => hexec v σ h)
+    [(PC, BitVec.ofNat 64 i, tgt), (ra, v, BitVec.ofNat 64 (i + 4))] [] (fun σ hok h => hexec v σ hok h)
   unfold footPre footPost
   rw [← instrAt_eq]
   simp only [sepL_cons, sepL_nil]

@@ -7,6 +7,7 @@ import VsaIris.Example
 #print axioms VsaIris.wp_exec_step
 #print axioms VsaIris.wp_exec_halt
 #print axioms VsaIris.wp_local_step
+#print axioms VsaIris.wp_run
 #print axioms VsaIris.mach_adequacy
 #print axioms VsaIris.wp_ret
 #print axioms VsaIris.wp_jal
