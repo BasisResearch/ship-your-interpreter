@@ -63,3 +63,6 @@ import VsaIris.Interp.Store
 import VsaIris.Interp.Bridge
 import VsaIris.Interp.Boundary
 import VsaIris.Interp.Vacuity
+import VsaIris.Vsa.SymData
+import VsaIris.Interp.IRun
+import VsaIris.Interp.Steps
