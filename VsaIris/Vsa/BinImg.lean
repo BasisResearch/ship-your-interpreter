@@ -40,6 +40,19 @@ theorem codeFoot_mem {i : Nat} {code : List (BitVec 8)} {b : BitVec 8} {k : Nat}
     (h : (b, k) ∈ code.zipIdx) : (i + k, Iris.DFrac.discard, b) ∈ codeFoot i code :=
   List.mem_map_of_mem (f := fun p => (i + p.2, Iris.DFrac.discard, p.1)) h
 
+/-- The code bytes of a footprint, by index (`code_present` gives the
+footprint form). -/
+theorem loaded_of_foot {m : Std.ExtHashMap Nat (BitVec 8)} {i : Nat} {code : List (BitVec 8)}
+    (h : ∀ p ∈ codeFoot i code, m[p.1]? = some p.2.2) :
+    ∀ k, k < code.length → m[i + k]? = some (code.getD k 0) := by
+  intro k hk
+  have hm : (code[k], k) ∈ code.zipIdx := by
+    rw [List.mem_iff_getElem]
+    exact ⟨k, by simpa using hk, by simp⟩
+  have := h _ (codeFoot_mem (i := i) hm)
+  rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hk]
+  exact this
+
 /-- Code taken from the image is present in every state of a `CodeLive` run. -/
 theorem TextAt.live {live : Nat → Prop} (hl : CodeLive live) {i : Nat} {code : List (BitVec 8)}
     (h : TextAt i code) : ∀ p ∈ codeFoot i code, live p.1 := by

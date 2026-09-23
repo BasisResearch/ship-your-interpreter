@@ -285,7 +285,8 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
     (by change ∀ k ∈ wrChain mainErrASeg, k ∈ [10, 15, 12, 11, 8, 2]; decide)
     (fun a _ => trivial)
     (fun c hok' ⟨_, hMR, _, _⟩ => a_facts
-      (code_present hok' _ (fun q hq => hMR q (List.mem_append_left _ hq)) hcodeL) hv hok
+      (mainErrCodeLoaded_of (code_present hok' _ (fun q hq => hMR q (List.mem_append_left _ hq))
+        hcodeL)) hv hok
       (fun k hk => by
         rcases hk with hk | hk
         · exact imgFoot_pin (a := consoleImpurePtrAddr) (n := 8) hMR
@@ -383,7 +384,8 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
     (by change ∀ k ∈ wrChain mainErrBSeg, k ∈ [10, 1, 8, 2]; decide)
     (fun a _ => trivial)
     (fun c hok' ⟨_, hMR, _, _⟩ => b_facts
-      (code_present hok' _ (fun q hq => hMR q (List.mem_append_left _ hq)) hcodeL) hsM hra
+      (mainErrCodeLoaded_of (code_present hok' _ (fun q hq => hMR q (List.mem_append_left _ hq))
+        hcodeL)) hsM hra
       (imgFoot_pin hMR (fun q hq => List.mem_append_right _ hq)))
   have hpcB := b_pc a0v 0x80004618#64 (cs' 8) sM hra
   obtain ⟨g10, g1, g8, g2⟩ := b_fin a0v 0x80004618#64 (cs' 8) sM hra
@@ -408,7 +410,7 @@ theorem wp_mainErrTail {Ierr : (Nat → BitVec 8) → Prop} (H : NewlibHolesAt I
     (by change ChainOK _ [10] _; decide) (by change KeysOK [10]; decide)
     (by change ∀ k ∈ wrChain crt0JSeg, k ∈ [10]; decide)
     (fun a _ => trivial)
-    (fun c hok' ⟨_, hMR, _, _⟩ => crt0_facts (code_present hok' _ hMR hcrtL))
+    (fun c hok' ⟨_, hMR, _, _⟩ => crt0_facts (crt0JCodeLoaded_of (code_present hok' _ hMR hcrtL)))
   simp only [sepL_cons, sepL_nil, crt0_pc, crt0_fin]
   rw [← instrAt_eq]
   iframe Hpc Ha0 Hcrt

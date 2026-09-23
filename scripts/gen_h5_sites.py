@@ -22,16 +22,21 @@ for line in (root / 'scripts/h5_sites.tsv').read_text().splitlines():
         lo, hi = int(f[2], 16), int(f[3], 16)
         bs = [b for a in range(lo, hi, 4) for b in le(words[a])]
         body = ', '.join(f'0x{b:02x}#8' for b in bs)
+        n = hi - lo
         out += [f'/-- `.text` [{lo:#x}, {hi:#x}). -/', f'abbrev {name}Base : Nat := {lo:#x}',
                 f'def {name} : List (BitVec 8) :=', f'  [{body}]', '',
-                f'theorem {name}_text : TextAt {name}Base {name} := by decide', '',
-                f'/-- The bytes of `{name}` are present (what `code_present` gives). -/',
+                f'theorem {name}_text : TextAt {name}Base {name} := by decide +kernel', '',
+                f'/-- The bytes of `{name}` are present, by index. -/',
                 f'def {name}Loaded (m : Std.ExtHashMap Nat (BitVec 8)) : Prop :=',
-                f'  ∀ p ∈ codeFoot {name}Base {name}, m[p.1]? = some p.2.2', '']
+                f'  ∀ k, k < {n} → m[{name}Base + k]? = some ({name}.getD k 0)', '',
+                f'theorem {name}_len : {name}.length = {n} := by decide +kernel', '',
+                f'theorem {name}Loaded_of {{m : Std.ExtHashMap Nat (BitVec 8)}}',
+                f'    (h : ∀ p ∈ codeFoot {name}Base {name}, m[p.1]? = some p.2.2) : {name}Loaded m :=',
+                f'  fun k hk => loaded_of_foot h k (by rw [{name}_len]; exact hk)', '']
         for a in range(lo, hi, 4):
             k = a - lo; w = le(words[a])
             pins = ' ∧\n    '.join(f'm[({a + j:#x} : Nat)]? = some ({w[j]:#04x} : BitVec 8)' for j in range(4))
-            proofs = ', '.join(f'h _ (codeFoot_mem (by decide : ({w[j]:#04x}#8, {k + j}) ∈ {name}.zipIdx))' for j in range(4))
+            proofs = ', '.join(f'h {k + j} (by decide)' for j in range(4))
             out += [f'theorem {name}_at_{a:08x} {{m : Std.ExtHashMap Nat (BitVec 8)}} (h : {name}Loaded m) :',
                     f'    {pins} :=', f'  ⟨{proofs}⟩', '']
     elif kind == 'decode_alias':
