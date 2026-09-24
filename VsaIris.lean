@@ -172,6 +172,9 @@ import VsaIris.Interp.CallKs
 import VsaIris.Interp.HeapRealloc
 import VsaIris.Interp.EnvDefineCalls
 import VsaIris.Interp.DefineCost
+import VsaIris.Interp.EnvDefineArms
+import VsaIris.Interp.EnvDefineGrow
+import VsaIris.Interp.ProofEnvDefine
 import VsaIris.Interp.EnvScan
 import VsaIris.Interp.ProofEnvGet
 import VsaIris.Interp.ProofEnvSet
