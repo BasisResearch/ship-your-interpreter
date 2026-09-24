@@ -197,4 +197,30 @@ theorem trim_head {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {Y b
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hts))
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hE) hyes2
 
+/-- **`_malloc_trim_r`'s epilogue** (`0x8000729c`, from any `TrimSt`): release
+the lock, restore the frame and return to `_free_r`. -/
+theorem trim_ret {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (S : TrimSt C R M Y brkv chunks bins)
+    (hk : ∀ R' M', FFrame C R' M' → R' 8 = reentV → FDone C M' → AW C.live C.S C.Q 0x80007578#64 R' M') :
+    AW C.live C.S C.Q 0x8000729c#64 R M := by
+  have hlo := O.sp.lo; have hhi := O.sp.hi; have hsal := O.sp.align
+  unfold mHead Vsa.Sim.tohostAddr at hlo
+  have hs2 := S.sp
+  have hs2n : (R 2).toNat = C.s.toNat - 80 := by
+    rw [hs2, BitVec.toNat_add]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
+  have l40 := ldv_at S.sra (R 2 + sign_extend (m := 64) (0x028#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
+  have l32 := ldv_at S.ss0 (R 2 + sign_extend (m := 64) (0x020#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
+  have l24 := ldv_at S.ss1 (R 2 + sign_extend (m := 64) (0x018#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
+  have l16 := ldv_at S.ss2 (R 2 + sign_extend (m := 64) (0x010#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
+  have l8 := ldv_at S.ss3 (R 2 + sign_extend (m := 64) (0x008#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
+  simp only [BitVec.ofNat_toNat, BitVec.setWidth_eq] at l40 l32 l24 l16 l8
+  sx_run [12] O.live at 0x800072a4
+  sx_run [12] O.live
+  all_goals simp only [l40, l32, l24, l16, l8]
+  all_goals (try (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide))
+  refine hk _ M ⟨?_, S.fs0, S.fra, ?_, ?_, ?_⟩ ?_ ⟨⟨_, _, _, _, S.heap, S.top_le⟩, S.pres, S.frameM⟩ <;>
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  rw [hs2]; apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_add, BitVec.toNat_add, BitVec.toNat_add]
+  simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
+
 end VsaIris.VsaHeap
