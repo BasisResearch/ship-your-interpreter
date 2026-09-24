@@ -605,6 +605,208 @@ theorem sg_oomPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     dsimp only [F']
     exact sg_oomEnd Wp HN cx (by ix_reg; exact h2)
 
+/-- After `malloc` returned the block `q`: the heap extended, the block owned. -/
+def SgRestB (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
+    (N : NativeAddrs) (inp : Nat) (p s r : BitVec 64) (v : Value) (x : String) (ρ : Regime)
+    (H : List (Nat × Nat)) (o : String) (rv : Nat → BitVec 64) (Mp : Mem) (q : BitVec 64) :
+    IProp GF :=
+  iprop(codeRes ∗ binImg ∗ valImg N (imgM Mp) p.toNat v ∗
+    heapRes vsaLayoutP vsaRoomB ρ ((q.toNat, x.toList.length + 1) :: H) ∗
+    blockOwn q.toNat (x.toList.length + 1) ∗ stdioOwn ∗ consoleOwn o ∗
+    stackScratch (s + 18446744073709551504#64) (stringifyNeed - 112) ∗
+    SgK Wp Φ N inp p s r v x ρ H o rv)
+
+/-- After `memcpy`: the block holds the buffer's bytes `img`. -/
+def SgRestC (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
+    (N : NativeAddrs) (inp : Nat) (p s r : BitVec 64) (v : Value) (x : String) (ρ : Regime)
+    (H : List (Nat × Nat)) (o : String) (rv : Nat → BitVec 64) (Mp : Mem) (q : BitVec 64)
+    (img : Nat → BitVec 8) : IProp GF :=
+  iprop(codeRes ∗ valImg N (imgM Mp) p.toNat v ∗
+    heapRes vsaLayoutP vsaRoomB ρ ((q.toNat, x.toList.length + 1) :: H) ∗
+    ownImg (InExt (q.toNat, x.toList.length + 1)) img ∗ stdioOwn ∗ consoleOwn o ∗
+    stackScratch (s + 18446744073709551504#64) (stringifyNeed - 112) ∗
+    SgK Wp Φ N inp p s r v x ρ H o rv)
+
+/-- At `malloc`'s return (`0x8000305c`) with the block `q`. -/
+structure SgT3 (s p r : BitVec 64) (x : String) (H : List (Nat × Nat)) (q : BitVec 64)
+    (rv R : Nat → BitVec 64) (M Mp : Mem) : Prop where
+  h10 : R 10 = q
+  h9 : R 9 = s + 18446744073709551504#64 + 16#64
+  h2 : R 2 = s + 18446744073709551504#64
+  hk : ∀ y ∈ fRegs, y ∉ callerSaved → y ≠ 2 → y ≠ 9 → R y = rv y
+  sra : ldv .ld M (s + 18446744073709551504#64 + 104#64).toNat = r
+  ss0 : ldv .ld M (s + 18446744073709551504#64 + 96#64).toNat = rv 8
+  ss1 : ldv .ld M (s + 18446744073709551504#64 + 88#64).toNat = rv 9
+  sn : ldv .ld M (s + 18446744073709551504#64 + 8#64).toNat = BitVec.ofNat 64 (x.toList.length + 1)
+  hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k
+  hbuf : CStrImg (imgM M) (s.toNat - 96) x
+  hlen : x.toList.length ≤ 63
+  hfresh : FreshBlock vsaLayoutP H q.toNat (x.toList.length + 1) ∧ q.toNat % 16 = 0
+
+/-- After `memcpy` (`0x80003070`): `s0` holds the block, the block holds `img`,
+a copy of the rendering. -/
+structure SgT4 (s p r : BitVec 64) (x : String) (H : List (Nat × Nat)) (q : BitVec 64)
+    (rv R : Nat → BitVec 64) (M Mp : Mem) (img : Nat → BitVec 8) : Prop where
+  h8 : R 8 = q
+  h2 : R 2 = s + 18446744073709551504#64
+  hk : ∀ y ∈ fRegs, y ∉ callerSaved → y ≠ 2 → y ≠ 8 → y ≠ 9 → R y = rv y
+  sra : ldv .ld M (s + 18446744073709551504#64 + 104#64).toNat = r
+  ss0 : ldv .ld M (s + 18446744073709551504#64 + 96#64).toNat = rv 8
+  ss1 : ldv .ld M (s + 18446744073709551504#64 + 88#64).toNat = rv 9
+  hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k
+  hcopy : CStrImg img q.toNat x
+  hfresh : FreshBlock vsaLayoutP H q.toNat (x.toList.length + 1) ∧ q.toNat % 16 = 0
+
+/-- A C string's bytes, moved from `b` to `q`. -/
+theorem cstrImg_shift {img : Nat → BitVec 8} {b q : Nat} {x : String} (h : CStrImg img b x) :
+    CStrImg (fun a => img (a - q + b)) q x :=
+  ⟨fun i hi => by simp only [show q + i - q + b = b + i by omega]; exact h.1 i hi,
+    by simp only [show q + x.toList.length - q + b = b + x.toList.length by omega]; exact h.2⟩
+
+/-- **`memcpy(q, buf, len + 1)`** from `malloc`'s return. -/
+theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
+    {H : List (Nat × Nat)} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (cx : SgCtx live p s r rv) (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) {q : BitVec 64}
+    {R : Nat → BitVec 64} {M : Mem} (f : SgT3 s p r x H q rv R M Mp)
+    (hB : ∀ R' M' img, SgT4 s p r x H q rv R' M' Mp img →
+      SgRestC Wp Φ N inp p s r v x ρ H o rv Mp q img ∗ ms 0x80003070#64 R' (sgF s p) M' ⊢ Wp.W Φ) :
+    SgRestB Wp Φ N inp p s r v x ρ H o rv Mp q ∗ ms 0x8000305c#64 R (sgF s p) M ⊢ Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  have hlen := f.hlen
+  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  have hq0 : q ≠ 0#64 := fun h => f.hfresh.1.nonzero (by rw [h]; rfl)
+  iintro ⟨Hrest, Hms⟩
+  iapply wp_swpF Wp (S := sgF s p) (R := R) (Mt := M) (pc := 0x8000305c#64)
+    (F := SgRestB Wp Φ N inp p s r v x ρ H o rv Mp q)
+  rotate_left
+  · unfold SgRestB
+    icases Hrest with ⟨#Hcode, Hrest⟩
+    rw [hro]
+    iframe Hcode Hrest Hms
+  intro F'
+  refine sg_copy cx.hlive f.h2 (by omega) hs2 hs3 cx.hg.al
+    (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi (by rw [f.h10]; exact hq0) ?_
+  intros; apply swp_closeF
+  dsimp only [F']
+  have eB : (s + 18446744073709551504#64 + 16#64).toNat = s.toNat - 96 := by
+    rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
+  have hsub : ∀ k, InExt (s.toNat - 96, x.toList.length + 1) k → sgF s p k := fun k hk =>
+    .inl (by simp only [InExt] at hk ⊢; omega)
+  have hsl : ∀ k, sgF s p k ↔ ((sgF s p k ∧ ¬ InExt (s.toNat - 96, x.toList.length + 1) k) ∨
+      InExt (s.toNat - 96, x.toList.length + 1) k) := fun k => by
+    constructor
+    · intro h; by_cases h' : InExt (s.toNat - 96, x.toList.length + 1) k
+      · exact .inr h'
+      · exact .inl ⟨h, h'⟩
+    · rintro (⟨h, _⟩ | h)
+      · exact h
+      · exact hsub k h
+  have hfr := f.hfresh.1
+  have hq1 := hfr.lo; have hq2 := hfr.hi
+  simp only [vsaLayoutP, Vsa.Sim.DlHeap.heapStart, Vsa.Sim.DlHeap.heapEnd] at hq1 hq2
+  iintro ⟨Hrest, Hms⟩
+  ihave Hms := ms_iff hsl $$ Hms
+  ihave ⟨Hms, HB⟩ := ms_split (fun k h1 h2 => h1.2 h2) $$ Hms
+  unfold SgRestB
+  icases Hrest with ⟨#Hcode, #Himg, #Hv, Hh, Hblk, Hstd, Hcon, Hst, Hk⟩
+  ihave #Hmc0 := hmc
+  unfold memcpySpecOwned
+  ihave #Hmcs := Hmc0 $$ %q %(s + 18446744073709551504#64 + 16#64) %(x.toList.length + 1) %(imgM M)
+  unfold memcpyPC
+  rw [eB]
+  iapply (ms_callRegs Wp (i := 0x8000306c)
+    (jalx_8000306c live (fun q hq => cx.hlive _ (interp_code_8000306c q hq))) interp_code_8000306c
+    (L := [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31])
+    (K := [2, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27])
+    (by decide)
+    (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ RamWin q.toNat (x.toList.length + 1) ∧
+        RamWin (s.toNat - 96) (x.toList.length + 1)⌝ ∗
+      (10 : Nat) ↦ᵣ q ∗ (11 : Nat) ↦ᵣ (s + 18446744073709551504#64 + 16#64) ∗
+      (12 : Nat) ↦ᵣ BitVec.ofNat 64 (x.toList.length + 1) ∗ clobbered argClob ∗
+      blockOwn q.toNat (x.toList.length + 1) ∗
+      ownImg (InExt (s.toNat - 96, x.toList.length + 1)) (imgM M)))
+    (Q := fun _ => iprop((10 : Nat) ↦ᵣ q ∗ clobbered retClob ∗
+      ownImg (InExt (q.toNat, x.toList.length + 1)) (fun a => imgM M (a - q.toNat + (s.toNat - 96))) ∗
+      ownImg (InExt (s.toNat - 96, x.toList.length + 1)) (imgM M)))
+    (X := iprop(blockOwn q.toNat (x.toList.length + 1) ∗
+      ownImg (InExt (s.toNat - 96, x.toList.length + 1)) (imgM M)))
+    (Y := fun g => iprop(⌜g 10 = q⌝ ∗
+      ownImg (InExt (q.toNat, x.toList.length + 1)) (fun a => imgM M (a - q.toNat + (s.toNat - 96))) ∗
+      ownImg (InExt (s.toNat - 96, x.toList.length + 1)) (imgM M)))
+    (R := upd (upd (upd R 12 (ldv .ld M (s + 18446744073709551504#64 + 8#64).toNat)) 8 (R 10)) 11 (R 9))
+    (S := fun a => sgF s p a ∧ ¬ InExt (s.toNat - 96, x.toList.length + 1) a) (Mt := M)
+    ?hP ?hQ)
+  case hP =>
+    simp only [sepL_cons, sepL_nil]
+    iintro ⟨⟨H10, H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩, Hbk, HB⟩
+    iframe Hbk HB
+    isplitl []
+    · ipureintro
+      refine ⟨by decide, ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩,
+        ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩⟩
+    isplitl [H10]
+    · ix_reg; rw [f.h10]; iexact H10
+    isplitl [H11]
+    · ix_reg; rw [f.h9]; iexact H11
+    isplitl [H12]
+    · ix_reg; rw [f.sn]; iexact H12
+    iapply clobbered_of_fn argClob _
+    unfold argClob
+    simp only [sepL_cons, sepL_nil]
+    iframe H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31
+  case hQ =>
+    iintro ⟨H10, Hcl, Hd, HB⟩
+    ihave ⟨%g, Hcl⟩ := clobbered_fn retClob (by decide) $$ Hcl
+    iexists (fun y => if y = 10 then q else g y)
+    unfold retClob argClob
+    simp only [sepL_cons, sepL_nil]
+    icases Hcl with ⟨H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩
+    simp only [ite_true]
+    simp (config := { decide := true }) only [ite_false]
+    iframe H10 H11 H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31 Hd HB
+  iframe Hmcs Hcode Hms Hblk HB
+  iintro %g ⟨%hg10, Hd, HB⟩ Hms
+  ihave ⟨%M2, Hms, %⟨hM2a, hM2b, -⟩⟩ := ms_join $$ [Hms HB]
+  · iframe Hms HB
+  ihave Hms := ms_iff (fun k => (hsl k).symm) $$ Hms
+  have hM2 : ∀ k, sgF s p k → imgM M2 k = imgM M k := fun k hk => by
+    by_cases h : InExt (s.toNat - 96, x.toList.length + 1) k
+    · exact hM2b k h
+    · exact hM2a k ⟨hk, h⟩
+  have hoff : ∀ k, k < 112 → (s + 18446744073709551504#64 + BitVec.ofNat 64 k).toNat =
+      s.toNat - 112 + k := by
+    intro k hk; rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
+  have hld : ∀ o, 16 ≤ o → o + 8 ≤ 112 →
+      ldv .ld M2 (s + 18446744073709551504#64 + BitVec.ofNat 64 o).toNat =
+      ldv .ld M (s + 18446744073709551504#64 + BitVec.ofNat 64 o).toNat := fun o h1 h2 => by
+    rw [hoff o (by omega)]
+    exact ldv_agree fun j hj => hM2 _ (.inl (by simp only [InExt]; omega))
+  iapply (hB _ M2 _ ?t4)
+  rotate_left
+  · unfold SgRestC
+    iframe Hcode Hv Hh Hd Hstd Hcon Hst Hk Hms
+  case t4 =>
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, cstrImg_shift f.hbuf, f.hfresh⟩
+    · ix_reg; exact f.h10
+    · ix_reg; exact f.h2
+    · intro y hy hc hy2 hy8 hy9
+      have hy1 : y ≠ 1 := fun e => by subst e; revert hy; decide
+      have hK : y ∉ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] :=
+        fun h => hc ((show ∀ z ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31],
+          z ∈ callerSaved by decide) y h)
+      have hy11 : y ≠ 11 := fun e => hK (by simp [e])
+      have hy12 : y ≠ 12 := fun e => hK (by simp [e])
+      simp only [upd, hy1, hy8, hy11, hy12, hK, ite_false]
+      exact f.hk y hy hc hy2 hy9
+    · rw [hld 104 (by omega) (by omega)]; exact f.sra
+    · rw [hld 96 (by omega) (by omega)]; exact f.ss0
+    · rw [hld 88 (by omega) (by omega)]; exact f.ss1
+    · intro k hk
+      rw [hM2 k (.inr hk)]; exact f.hslot k hk
+
 end Glue
 
 end VsaIris.Interp
