@@ -150,11 +150,11 @@ import VsaIris.Interp.Case.BinaryAddIntP
 import VsaIris.Interp.Case.BinarySubIntP
 import VsaIris.Interp.LeafArm
 import VsaIris.Interp.LeafCalls
-import VsaIris.Interp.LeafErr
-import VsaIris.Interp.Case.VarT
-import VsaIris.Interp.Case.VarP
-import VsaIris.Interp.Case.AssignT
-import VsaIris.Interp.Case.AssignP
+-- E4/E5 (errCtx clash E1 LeafErr vs E2 SpecErr, LANE.md): import VsaIris.Interp.LeafErr
+-- E4/E5 (errCtx clash E1 LeafErr vs E2 SpecErr, LANE.md): import VsaIris.Interp.Case.VarT
+-- E4/E5 (errCtx clash E1 LeafErr vs E2 SpecErr, LANE.md): import VsaIris.Interp.Case.VarP
+-- E4/E5 (errCtx clash E1 LeafErr vs E2 SpecErr, LANE.md): import VsaIris.Interp.Case.AssignT
+-- E4/E5 (errCtx clash E1 LeafErr vs E2 SpecErr, LANE.md): import VsaIris.Interp.Case.AssignP
 import VsaIris.Interp.Case.LeafNullT
 import VsaIris.Interp.Case.LeafNullP
 import VsaIris.Interp.Case.LeafIntT

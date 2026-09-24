@@ -27,6 +27,7 @@ import VsaIris.Interp.ProofEnvNew
 import VsaIris.Interp.ProofEnvGet
 import VsaIris.Interp.ProofEnvSet
 import VsaIris.Interp.ProofEnvDefine
+import VsaIris.Interp.LeafCalls
 import VsaIris.Interp.Case.LeafNullT
 import VsaIris.Interp.Case.LeafNullP
 import VsaIris.Interp.Case.LeafIntT

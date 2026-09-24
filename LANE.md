@@ -89,6 +89,14 @@ All axioms ⊆ {propext, Classical.choice, Quot.sound} (`VsaIris/Interp/E5Audit.
 Generated: 2,581 lines (24 files). Hand: templates 2,191 lines (most families
 are one row: their template is the proof), layers 3,725 lines, table 18 rows.
 
+## Build
+`lake build Vsa VsaIris VsaIris.Audit` green (2,528 jobs). **E1/E2 `errCtx` clash:** E1's
+`LeafErr` and E2's `SpecErr` both define `VsaIris.Interp.errCtx` (different bodies), so both
+cannot be imported together. As E4 did (`e5b6ca4`), this branch keeps E2's (E5's partial
+allocating arms use `errCtx`/`CoreOK` from `SpecErr`) and leaves E1's `LeafErr` and the
+`var`/`assign` cases over it out of the root and audit imports (commented, marked). The
+integrator must pick one `errCtx`.
+
 ## Findings
 
 - The `if` in-frame tail call (above).
