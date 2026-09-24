@@ -269,6 +269,13 @@ def subst_execWhile(arm: Arm, mode: str) -> dict[str, str]:
     return {"ARM": arm.name}
 
 
+def subst_execBlock(arm: Arm, mode: str) -> dict[str, str]:
+    """Family `execBlock` (lane E5): the dispatch to `jal env_new`, the new
+    frame, the count test; the empty block exits, a nonempty one runs lane G's
+    statement loop (`blockSeqT_body`/`blockSeqP_body`) from `0x800041a4`."""
+    return {"ARM": arm.name}
+
+
 def subst_execIf(arm: Arm, mode: str) -> dict[str, str]:
     """Families `execIfTrue`/`execIfFalse`/`execIfNone` (total mode, one per
     `ExecSCost` constructor) and `execIfAll` (partial mode, every outcome):
@@ -403,6 +410,7 @@ FAMILIES = {
     "execIfNone": subst_execIf,
     "execIfAll": subst_execIf,
     "execWhile": subst_execWhile,
+    "execBlock": subst_execBlock,
     "leaf": subst_leaf,
     "var": subst_call1,
     "assign": subst_assign}

@@ -28,3 +28,5 @@ import VsaIris.Interp.E5
 #print axioms VsaIris.Interp.caseT_ExecWhile
 #print axioms VsaIris.Interp.caseP_ExecWhile
 #print axioms VsaIris.Interp.wp_loopExit
+#print axioms VsaIris.Interp.caseT_ExecBlock
+#print axioms VsaIris.Interp.ms_callEnvNewW

@@ -15,7 +15,7 @@ vacuous there (`fnSpecW_of_abort_false`).
 namespace VsaIris.Interp
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
-open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst
+open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Inst VsaIris.VsaHeap
 open Vsa.MemRepr Vsa.While Vsa.RuntimeRepr
 
 section
@@ -160,6 +160,43 @@ theorem ms_callEnvNew (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
     simp only [show (10 : Nat) ∈ envNewL from by decide, ite_true]
   rw [← e10] at *
   iapply Hk $$ %(fun x => if x ∈ envNewL then f x else R x) %hkeep Hst Hh Hfr Hms
+
+/-- **`env_new(env)` from a run on the whole world**, counted regime: the
+parent frame's binding in `a0`; the run continues with the world advanced to
+the allocated frame's store and the new frame bound at `a0`. -/
+theorem ms_callEnvNewW (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {i : Nat} {code : List (BitVec 8)}
+    (hexec : JalExec (vsaModel live) i code envNewPC)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    (hi4 : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0) {inp k : Nat} {st : St} {d env : Nat}
+    {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem}
+    (hsp : EnvSp (R 2) envNewNeed) :
+    envNewSpec Wp N ∗ codeRes ∗ ms (BitVec.ofNat 64 i) R S Mt ∗
+      stackScratch (R 2) envNewNeed ∗ □ frameAt env (R 10).toNat ∗
+      world N vsaLayoutP vsaRoomB inp (.counted (k + envBytes)) st d ∗
+      (∀ R' : Nat → BitVec 64, ⌜∀ x ∈ fRegs, x ∉ (10 :: retClob) → R' x = R x⌝ -∗
+        stackScratch (R 2) envNewNeed -∗
+        world N vsaLayoutP vsaRoomB inp (.counted k) ⟨(st.store.allocFrame (some env)).1, st.out⟩ d -∗
+        frameAt st.store.frames.size (R' 10).toNat -∗
+        ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt -∗ Wp.W Φ)
+    ⊢ Wp.W Φ := by
+  iintro ⟨Hen, #Hcode, Hms, Hst, #Hfr, Hw, Hk⟩
+  ihave ⟨Hh, Hc, Hio, Hi⟩ := (world_heapStore N inp (.counted (k + envBytes)) st d).1 $$ Hw
+  unfold heapStore
+  icases Hh with ⟨%H, %B, Hhr, Hs, %hB⟩
+  ihave ⟨⟨Hs, -⟩, %hne⟩ := keep_pure (storeRepr_frameAt_ne (N := N) (s := st.store) (B := B)
+    (fa := env) (e := (R 10).toNat)) $$ [Hs]
+  · iframe Hs Hfr
+  iapply ms_callEnvNew Wp hexec hcode hi4 (k := k) (st := st.store) (po := some env) hsp
+  iframe Hen Hcode Hms Hst
+  isplitl []
+  · simp only [parentAt]; iframe Hfr; ipureintro; exact hne
+  isplitl [Hhr Hs]
+  · unfold heapStore; iexists H, B; iframe Hhr Hs; ipureintro; exact hB
+  iintro %R' %hk Hst Hh #Hnew Hms
+  iapply Hk $$ %R' %hk Hst [Hh Hc Hio Hi] Hnew Hms
+  iapply (world_heapStore N inp _ _ d).2
+  iframe Hh Hc Hio Hi
 
 end
 
