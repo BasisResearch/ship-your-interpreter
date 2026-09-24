@@ -55,18 +55,21 @@ Branch `lane-h4`. Goal: discharge `IrisHoles.alloc` (`VsaIris/Vsa/AllocHoles.lea
 - **Interface correction** (`PROOF_CLOSURE_PLAN.md`): `pShape`/`vsaRoomB` carry `Starts H`
   (distinct block starts); without it `alloc.freeLocalRun`/`freeChgRun` were unsatisfiable.
 - **`_free_r` in progress**: heap edits `Vsa/HeapFree.lean` (`drop`, `unlink`, `absorb`,
-  `toTop`, `release`), `PHeapAt.topResize` (trim's shrink), `sbrk_r_gen` (any increment word),
-  the context `Vsa/FreeCtx.lean` (`FOK` over the shared `WOK`, `FRet`, `FFrame`), and the
-  prologue `free_pro` (`Vsa/FreePro.lean`) up to the first branch.
+  `toTop`, `release`, `coalNext`, `coalPrev`, and `agree_of_words`/`wl1_congr` for relating
+  virtual and machine memories), `PHeapAt.topResize` (trim's shrink), `sbrk_r_gen`, the
+  context `Vsa/FreeCtx.lean` (`FOK` over the shared `WOK`), the prologue and epilogue
+  (`Vsa/FreePro.lean`), the bin insertion (`Vsa/FreeBin.lean`, `Vsa/FreeLarge.lean`:
+  `fb_release`, small bins, the large cascade and sorted walk), and every path below the top
+  (`Vsa/FreePaths.lean`, `free_split`: both neighbours in use, forward, backward and double
+  coalescing, the last remainder on either side).
 
 ## Holes
 - Left: `alloc.freeChgRun`, `alloc.freeLocalRun`, `alloc.reallocChgRun`,
   `alloc.reallocLocalRun`.
 
 ## Next
-1. `_free_r`'s paths from `free_pro`: the top merge (`toTop`, then `_malloc_trim_r` over
-   `sbrk_r_gen` and `topResize`), the coalescing cases (`unlink` + `absorb` through virtual
-   memories), and the bin insertion `0x800073e8` (`release`: small bins, the large cascade and
-   the sorted walk).
+1. `_free_r`'s top merge (`0x80007534`: `toTop`, with `coalPrev` for a free predecessor) and
+   `_malloc_trim_r` (over `sbrk_r_gen` and `topResize`); then the entry wrapper and the
+   `alloc.freeChgRun`/`freeLocalRun` fields.
 2. `_realloc_r` (the `sltu` at `0x800052d0` needs a hand step lemma), whose nested
    `_malloc_r` call reuses `malloc_all` with its own `MCtx`.

@@ -1986,4 +1986,31 @@ theorem free_b2lr {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} 
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]) (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])) D.heap D.pres D.frame
 
+/-- **The coalescing cases below the top** (`0x800073ac`): by the
+predecessor's and the successor's flags. -/
+theorem free_split {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat}
+    {cs₁ cs₃ : List Chunk} {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64}
+    (N : FNt C R Mt Mt1 brkv cs₁ cs₃ d bins x sz hdr0 hnn w) :
+    AW C.live C.S C.Q 0x800073ac#64 R Mt1 := by
+  have ht1 := N.t1; have ha6 := N.a6
+  refine st_800073ac O.live (fun hp => ?_) (fun hp => ?_)
+  · have hprev : hdr0 % 2 = 1 := by
+      have : hdr0 % 2 ≠ 0 := fun h0 => hp (BitVec.eq_of_toNat_eq (by rw [ht1, h0]; rfl))
+      omega
+    refine st_80007448 O.live (fun hn => ?_) (fun hn => ?_)
+    · have hdin : d.inuse = true := by
+        have hh : hnn % 2 ≠ 0 := fun h0 => hn (BitVec.eq_of_toNat_eq (by rw [ha6, h0]; rfl))
+        rw [← N.nnf]; unfold prevInuse; rw [show hnn % 2 = 1 by omega]; rfl
+      exact free_b1a O N hprev hdin
+    · have hdf : d.inuse = false := by
+        simp only [ne_eq, Decidable.not_not] at hn
+        have h0 := congrArg BitVec.toNat hn; rw [ha6] at h0
+        rw [show (0#64 : BitVec 64).toNat = 0 from rfl] at h0
+        rw [← N.nnf]; unfold prevInuse; rw [h0]; rfl
+      exact free_b1b O N hprev hdf
+  · have hpf : hdr0 % 2 = 0 := by
+      simp only [ne_eq, Decidable.not_not] at hp
+      have h0 := congrArg BitVec.toNat hp; rw [ht1] at h0; exact h0
+    exact free_b2 O N hpf (fun R' _ _ _ _ _ _ _ _ _ B => free_b2nl O B) (fun R' _ _ _ B => free_b2lr O B)
+
 end VsaIris.VsaHeap
