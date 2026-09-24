@@ -1,4 +1,5 @@
 import VsaIris.Interp.ErrArm
+import VsaIris.Interp.SpecEnv
 
 /-!
 # `value_equal` from an `eval_expr` run (lane E2)
@@ -22,20 +23,6 @@ section
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
-
-/-- The store out of the world, and back. -/
-theorem world_store (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat) (ρ : Regime)
-    (st : St) (d : Nat) :
-    world (GF := GF) N L Room inp ρ st d ⊢
-      ∃ B, storeRepr N st.store B ∗ (storeRepr N st.store B -∗ world N L Room inp ρ st d) := by
-  unfold world worldE
-  iintro ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB⟩
-  iexists B
-  iframe Hs
-  iintro Hs
-  iexists H, B
-  iframe Hh Hs Hc Hio Hi
-  ipureintro; exact hB
 
 /-- The prologue's spills survive a memory that agrees on them. -/
 theorem EvalSaved.agree {M M' : Mem} {s ret v8 v9 v18 v19 : BitVec 64}

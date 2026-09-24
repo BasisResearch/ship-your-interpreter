@@ -19,8 +19,7 @@ This file: what the path reads besides the frame.
   every closure the store owns has it. It subsumes `DispSupply`
   (`dispSupply_of_cloSupply`).
 * `roOwn_roImg`: a data view of a read-only image (the closure object).
-* `world_store`, `world_depth`: the store and the depth word out of the
-  world, and back.
+* `world_depth`: the depth word out of the world, and back.
 -/
 
 namespace VsaIris.Interp
@@ -114,23 +113,6 @@ end Views
 section World
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-
-/-- **The store out of the world**, and back (the heap, console, newlib's
-data and the context stay in the closer). -/
-theorem world_store (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat) (ρ : Regime)
-    (st : St) (d : Nat) :
-    world (GF := GF) N L Room inp ρ st d ⊢
-      ∃ B, storeRepr N st.store B ∗ (storeRepr N st.store B -∗ world N L Room inp ρ st d) := by
-  unfold world worldE
-  iintro ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hb⟩
-  iexists B
-  iframe Hs
-  iintro Hs
-  iexists H, B
-  iframe Hh Hs Hc Hio Hi
-  isplitr
-  · ipureintro; exact hB
-  · iexact Hb
 
 /-- **The depth word out of the world** (with its bound), and back at any
 depth within the bound. -/

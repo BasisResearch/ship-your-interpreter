@@ -129,6 +129,23 @@ theorem world_heapStore (N : NativeAddrs) (inp : Nat) (ρ : Regime) (st : St) (d
     · ipureintro; exact hB
     · iexact Hb
 
+/-- **The store out of the world**, and back (the heap, console, newlib's
+data and the context stay in the closer). -/
+theorem world_store (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat) (ρ : Regime)
+    (st : St) (d : Nat) :
+    world (GF := GF) N L Room inp ρ st d ⊢
+      ∃ B, storeRepr N st.store B ∗ (storeRepr N st.store B -∗ world N L Room inp ρ st d) := by
+  unfold world worldE
+  iintro ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hb⟩
+  iexists B
+  iframe Hs
+  iintro Hs
+  iexists H, B
+  iframe Hh Hs Hc Hio Hi
+  isplitr
+  · ipureintro; exact hB
+  · iexact Hb
+
 /-- What `env_get` leaves in its `out` slot and `a0`: the value found through
 the parent chain (`Store.get?`), or nothing and `0`. -/
 def getOut (N : NativeAddrs) (s : Store) (fa : Addr) (x : String) (out res : BitVec 64) :

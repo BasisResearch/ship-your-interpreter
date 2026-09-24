@@ -130,7 +130,7 @@ theorem callNotCallable (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (G
   iframe Hcode Hms
   isplitl []
   · ipureintro; subst hR1; ix_reg
-  iintro %R2 %M2 %hk2 %h10 Hms
+  iintro %R2 %M2 %hk2 %h10 %_ Hms
   have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
     unfold codeRes; simp [dataOf]
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ []) (F := iprop(codeRes ∗ errCtx inp ∗

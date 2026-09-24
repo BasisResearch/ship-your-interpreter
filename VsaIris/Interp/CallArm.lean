@@ -1,5 +1,6 @@
 import VsaIris.Interp.SpecLoop
 import VsaIris.Interp.CallJalr
+import VsaIris.Interp.LoopArgs
 
 /-!
 # `eval_expr`'s call arm: the shared layer (lane E4)
@@ -45,11 +46,6 @@ structure CallNode (m : Mem) (P : Nat → Prop) (aX aF : BitVec 64) (argc : Nat)
   hi : aX.toNat + 28 ≤ 0x100000000
   off : aX.toNat + 28 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aX.toNat
   view : ∀ a ∈ callView aX.toNat, P a ∧ (m[a]?).isSome
-
-theorem exprArray_length {m : Mem} {P : Nat → Prop} :
-    ∀ {a n : Nat} {es : List Expr}, ExprArrayReprWithin m P a n es → es.length = n
-  | _, _, _, .nil => rfl
-  | _, _, _, .cons _ _ _ hrest => by simp [exprArray_length hrest]
 
 /-- A call node's facts, from its representation over a geometric view. -/
 theorem callNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {f : Expr} {args : List Expr}
