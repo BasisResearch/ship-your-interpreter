@@ -44,13 +44,6 @@ theorem strcmpSpecV_at {M : MachineModel} {Wp : MachWP (GF := GF) M} (p q : BitV
   iintro #H
   iapply H
 
-/-- A string value's payload is its string. -/
-theorem valImg_str {N : NativeAddrs} {f : Nat → BitVec 8} {a : Nat} {x : String} :
-    valImg (GF := GF) N f a (.str x) ⊢ strAt (imgW f (a + 8)).toNat x := by
-  unfold valImg valOf
-  iintro ⟨-, #H⟩
-  iexact H
-
 /-- The closure case of `value_equal`: the payload words are equal exactly
 when the closures are. -/
 def VeqClo : Value → Value → BitVec 64 → BitVec 64 → Prop

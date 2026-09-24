@@ -269,6 +269,13 @@ theorem ldv_ld_imgW (Mt : Mem) (a : Nat) : ldv .ld Mt a = imgW (imgM Mt) a := by
   simp only [BitVec.toNat_ofNat]
   exact Nat.mod_eq_of_lt (by have := imgLE_lt (imgM Mt) a 8; omega)
 
+/-- A string value's payload is its string. -/
+theorem valImg_str {N : Vsa.RuntimeRepr.NativeAddrs} {f : Nat → BitVec 8} {a : Nat} {x : String} :
+    valImg (GF := GF) N f a (.str x) ⊢ strAt (imgW f (a + 8)).toNat x := by
+  unfold valImg valOf
+  iintro ⟨-, #H⟩
+  iexact H
+
 end Vals
 
 end VsaIris.Interp
