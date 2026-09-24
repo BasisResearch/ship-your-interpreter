@@ -201,9 +201,15 @@ def Value.display (s : Store) : Value → String
 def printArgs (s : Store) (args : List Value) : String :=
   String.intercalate " " (args.map (Value.display s))
 
+/-- A named closure as `stringify` renders it: `snprintf(buf, 64, "<fn %s>",
+name)` leaves at most 63 characters (user decision Q8, 2026-09-24:
+the semantics cuts, as the binary does). -/
+def fnCatRender (n : String) : String := String.ofList (("<fn " ++ n ++ ">").toList.take 63)
+
 /-- `stringify` (`interp.c:84-106`): how values render when CONCATENATED by
-string `+`. Identical to `Value.display` EXCEPT `.native`: `stringify`'s
-default arm is `strcpy(buf, "<native fn>")` — the native's NAME is dropped,
+string `+`. Identical to `Value.display` EXCEPT `.native` and named
+closures. A named closure is `fnCatRender` (cut to 63 characters, Q8).
+`stringify`'s default arm is `strcpy(buf, "<native fn>")` — the native's NAME is dropped,
 unlike `value_print` (`value.c:66`, `"<native fn %s>"`) which `display`
 models. Empirically confirmed on the Sail-model emulator (2026-09-01):
 `println("x" + println)` prints `x<native fn>` while `println(println)`
@@ -211,6 +217,12 @@ prints `<native fn println>`. Keeping ONE renderer for both paths was falsity
 `stringify-native-name-mismatch` (`experiments/observations.md`). -/
 def Value.catDisplay (s : Store) : Value → String
   | .native _ => "<native fn>"
+  | .closure a =>
+    match s.closures[a]? with
+    | some c => match c.name with
+      | some n => fnCatRender n
+      | none => "<fn>"
+    | none => "<fn>"
   | v => v.display s
 
 /-! ## 64-bit wrapping arithmetic

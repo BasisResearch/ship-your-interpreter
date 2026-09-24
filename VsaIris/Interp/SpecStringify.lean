@@ -32,12 +32,23 @@ def closName (st : Store) : Value → Option String
   | .closure ca => (st.closures[ca]?).bind ClosureData.name
   | _ => none
 
-/-- **What `stringify` renders**: `Value.catDisplay`, with a named closure's
+/-- **What `stringify` renders**: `Value.catDisplay` (`strRender_eq`), with a named closure's
 `"<fn name>"` cut at 63 characters by `snprintf(buf, 64, …)`. -/
 def strRender (st : Store) (v : Value) : String :=
   match closName st v with
   | some x => fnRender x
   | none => v.catDisplay st
+
+/-- `stringify` renders exactly the semantics' concatenation form (Q8). -/
+theorem strRender_eq (st : Store) (v : Value) : strRender st v = v.catDisplay st := by
+  unfold strRender closName
+  cases v with
+  | closure ca =>
+    cases h : st.closures[ca]? with
+    | none => simp [Value.catDisplay, h]
+    | some cd =>
+      cases hn : cd.name <;> simp [Value.catDisplay, h, hn, fnRender_eq]
+  | _ => rfl
 
 /-- `stringify`'s stack: its 112-byte frame and `snprintf`'s need below it
 (the largest callee: `malloc` takes 512, the out-of-memory block 768). -/
