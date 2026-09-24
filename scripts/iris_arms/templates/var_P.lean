@@ -116,7 +116,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     (by rw [hsf]; omega)
     (by omega) $$ Hst
   unfold world worldE
-  icases Hw with ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB⟩
+  icases Hw with ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hbw⟩
   ihave #Hget := hget
   unfold envGetSpec
   ihave #Hg := Hget $$ %st.store %B %env %x %(R1 10) %(R1 11) %(R1 12) %(R1 2)
@@ -167,7 +167,9 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
       unfold world worldE
       iexists H, B
       iframe Hh Hs Hc Hio Hi
-      ipureintro; exact hB
+      isplitr
+      · ipureintro; exact hB
+      · iexact Hbw
     intro F'
     refine it_{R2} hlive (fun _ => ?_) (fun hc => absurd (by
       simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hres) hc)
@@ -218,7 +220,9 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     unfold world worldE
     iexists H, B
     iframe Hh Hs Hc Hio Hi
-    ipureintro; exact hB
+    isplitr
+    · ipureintro; exact hB
+    · iexact Hbw
   intro F'
   -- `beqz a0`: found
   refine it_{R2} hlive (fun hc => by

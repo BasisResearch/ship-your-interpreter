@@ -469,10 +469,13 @@ def errStr (inp : Nat) : IProp GF :=
 
 /-- The fields every mode shares, with `err_msg` as `E`: `globals` read-only
 (it points at frame 0 forever), `call_depth = d` exclusive (with its
-padding). -/
+padding), and `d ≤ maxCallDepth` (`call_value` checks `++call_depth >
+MAX_CALL_DEPTH` before a body runs and resets it on the error; lane E4: the
+closure call's signed depth test agrees with `Call.closure`'s `d <
+maxCallDepth` only below `2^31`). -/
 def interpCoreE (inp d : Nat) (E : IProp GF) : IProp GF :=
   iprop(∃ g, wordRO inp 8 g ∗ frameAt 0 g ∗ wordAt (inp + interpDepthOff) 4 d ∗
-    blockOwn (inp + interpDepthOff + 4) 4 ∗ E)
+    ⌜d ≤ Vsa.While.maxCallDepth⌝ ∗ blockOwn (inp + interpDepthOff + 4) 4 ∗ E)
 
 /-- The fields every mode shares; `err_msg` exclusive at any contents. -/
 def interpCore (inp d : Nat) : IProp GF := interpCoreE inp d (errAny inp)

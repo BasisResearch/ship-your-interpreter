@@ -1037,6 +1037,14 @@ binary or by what the proofs consume:
   `errCtx` supplied it as a partial-mode premise, which a total-mode `assert`
   call cannot have. With it in the world, `world_errCtx` derives `errCtx` in
   either mode. Supplier: A, after `setjmp` (the saved `ra` is `0x80004428`).
+- **`interpCoreE` carries `d ≤ maxCallDepth`.** The closure call's depth
+  test is a signed 32-bit compare (`addiw`, `blt 1000`); for a counter of
+  `2^31` or more it passes, while `Call.closure` needs `d < maxCallDepth`, so
+  the partial spec (quantified over every `d`) was unprovable at such worlds.
+  The machine keeps the bound (the check before every body, the reset on the
+  error, the decrement after); A0 establishes it at `d = 0`. Consumers adjusted:
+  `rtErr_spec` (rebuilds the landing's context with the same `d`),
+  `wp_abortLanding`, `world_of_boundary` (`World.lean`), `ctl_interpCtxPre`.
 - **`nativeAssertSpec`'s abort carries its reason**, `⌜¬ AssertOk vs⌝`
   (`AssertOk vs := ∃ v m, (vs = [v] ∨ vs = [v, m]) ∧ v.truthy`): total mode
   must prove the abort continuation of the `∧`, and refutes it with

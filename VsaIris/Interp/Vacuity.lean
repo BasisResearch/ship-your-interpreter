@@ -319,6 +319,8 @@ theorem ctl_interpCtxPre :
     iframe Hg Hf
     isplitl [Hd]
     · iapply wordAt_of_ownImg ctl_depth $$ Hd
+    isplitl []
+    · ipureintro; decide
     isplitl [Hp]
     · iapply blockOwn_of_ownImg _ _ _ $$ Hp
     · iapply blockOwn_of_ownImg _ _ _ $$ He

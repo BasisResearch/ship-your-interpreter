@@ -971,6 +971,8 @@ theorem interpCtxPre_of_bytes {inp g : Nat} {img : Nat → BitVec 8}
     iframe Hg Hf
     isplitl [Hd]
     · iapply wordAt_of_ownImg hd $$ Hd
+    isplitl []
+    · ipureintro; decide
     isplitl [Hp]
     · iapply blockOwn_of_ownImg _ _ _ $$ Hp
     · iapply blockOwn_of_ownImg _ _ _ $$ He

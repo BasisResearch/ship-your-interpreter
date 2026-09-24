@@ -132,29 +132,33 @@ theorem world_store (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Na
   · ipureintro; exact hB
   · iexact Hb
 
-/-- **The depth word out of the world**, and back at any depth. -/
+/-- **The depth word out of the world** (with its bound), and back at any
+depth within the bound. -/
 theorem world_depth (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat) (ρ : Regime)
     (st : St) (d : Nat) :
     world (GF := GF) N L Room inp ρ st d ⊢
       ∃ img : Nat → BitVec 8, ownImg (InExt (inp + interpDepthOff, 4)) img ∗
-        ⌜imgLE img (inp + interpDepthOff) 4 = d⌝ ∗
+        ⌜imgLE img (inp + interpDepthOff) 4 = d ∧ d ≤ maxCallDepth⌝ ∗
         (∀ (d' : Nat) (img' : Nat → BitVec 8), ownImg (InExt (inp + interpDepthOff, 4)) img' -∗
-          ⌜imgLE img' (inp + interpDepthOff) 4 = d'⌝ -∗ world N L Room inp ρ st d') := by
+          ⌜imgLE img' (inp + interpDepthOff) 4 = d' ∧ d' ≤ maxCallDepth⌝ -∗
+          world N L Room inp ρ st d') := by
   unfold world worldE interpCtxE interpCoreE wordAt
-  iintro ⟨%H, %B, Hh, Hs, Hc, Hio, ⟨⟨%g, Hg, Hfa, ⟨%img, Hd, %hd⟩, Hpad, He⟩, Hjb⟩, %hB, #Hb⟩
+  iintro ⟨%H, %B, Hh, Hs, Hc, Hio, ⟨⟨%g, Hg, Hfa, ⟨%img, Hd, %hd⟩, %hdle, Hpad, He⟩, Hjb⟩, %hB, #Hb⟩
   iexists img
   iframe Hd
   isplitl []
-  · ipureintro; exact hd
-  iintro %d' %img' Hd %hd'
+  · ipureintro; exact ⟨hd, hdle⟩
+  iintro %d' %img' Hd %⟨hd', hdle'⟩
   iexists H, B
   iframe Hh Hs Hc Hio Hjb
   isplitl [Hg Hfa Hd Hpad He]
   · iexists g
     iframe Hg Hfa Hpad He
-    iexists img'
-    iframe Hd
-    ipureintro; exact hd'
+    isplitl [Hd]
+    · iexists img'
+      iframe Hd
+      ipureintro; exact hd'
+    · ipureintro; exact hdle'
   · isplitr
     · ipureintro; exact hB
     · iexact Hb
@@ -342,5 +346,139 @@ theorem fnNode_of {m : Mem} {P : Nat → Prop} {q : BitVec 64} {name : Option St
     IW live Dt (accAddrs cp.toNat 16)
       (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp.toNat + 8, 4) b) Q 0x800032b4#64 R Mt
   by ix_run hlive using [h13, h2, he, hsf] at 0x800032bc
+
+end VsaIris.Interp
+
+namespace VsaIris.Interp
+
+open VsaIris VsaIris.Sym VsaIris.MallocFast VsaIris.Newlib
+open Vsa.MemRepr Vsa.Sim Vsa.While
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open VsaIris.Inst Vsa.RuntimeRepr
+
+/-- The frame and the depth word (`in->call_depth`), the closure head's owned
+bytes. -/
+abbrev cloS (s inp : BitVec 64) : Nat → Prop :=
+  fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp.toNat + 8, 4) b
+
+/-- The state at a closure call's `jal env_new` (`0x800032bc`): `a0` the
+closure's environment, `s5` the `EX_FN` node, `s7` the line, the spills
+(`s3`, `s5`, `s7`, the prologue's), `argc` at `sp+0`, the depth word bumped,
+the argument array unchanged since the dispatch (`Mt`). -/
+structure CloHd (R1 : Nat → BitVec 64) (Mt1 Mt : Mem) (s aX sret inp ret e q line : BitVec 64)
+    (rv : Nat → BitVec 64) (argc dep : Nat) : Prop where
+  a0 : R1 10 = e
+  sp : R1 2 = s + 18446744073709550528#64
+  s0 : R1 8 = aX
+  s1 : R1 9 = sret
+  s2 : R1 18 = inp
+  s5 : R1 21 = q
+  s7 : R1 23 = line
+  keep : ∀ x ∈ [19, 20, 22, 24, 25, 26, 27], R1 x = rv x
+  saved : CallSaved Mt1 s ret (rv 8) (rv 9) (rv 18)
+  s3m : ldv .ld Mt1 (s.toNat - 1088 + 1048) = rv 19
+  s5m : ldv .ld Mt1 (s.toNat - 1088 + 1032) = rv 21
+  s7m : ldv .ld Mt1 (s.toNat - 1088 + 1016) = rv 23
+  argcm : ldv .ld Mt1 (s.toNat - 1088) = BitVec.ofNat 64 argc
+  depth : imgLE (imgM Mt1) (inp.toNat + 8) 4 = dep + 1
+  args : ∀ a, InExt (argsBase s, 24 * argc) a → imgM Mt1 a = imgM Mt a
+
+/-- The state at the arity error (`0x80003d60`): the count and `paramc`
+differ; `s5` the node, `s7` the line, the depth word unchanged. -/
+structure CloAr (R1 : Nat → BitVec 64) (Mt1 Mt : Mem) (s aX sret inp ret q line : BitVec 64)
+    (rv : Nat → BitVec 64) (argc dep : Nat) : Prop where
+  sp : R1 2 = s + 18446744073709550528#64
+  s0 : R1 8 = aX
+  s1 : R1 9 = sret
+  s2 : R1 18 = inp
+  s5 : R1 21 = q
+  s7 : R1 23 = line
+  a5 : R1 15 = BitVec.ofNat 64 argc
+  keep : ∀ x ∈ [19, 20, 22, 24, 25, 26, 27], R1 x = rv x
+  saved : CallSaved Mt1 s ret (rv 8) (rv 9) (rv 18)
+  s5m : ldv .ld Mt1 (s.toNat - 1088 + 1032) = rv 21
+  s7m : ldv .ld Mt1 (s.toNat - 1088 + 1016) = rv 23
+  depth : imgLE (imgM Mt1) (inp.toNat + 8) 4 = dep
+  args : ∀ a, InExt (argsBase s, 24 * argc) a → imgM Mt1 a = imgM Mt a
+
+/-- The state at the depth error (`0x80003ca4`): the depth word bumped past
+the maximum; `a1`/`s7` the line. -/
+structure CloDp (R1 : Nat → BitVec 64) (Mt1 : Mem) (s aX sret inp ret line : BitVec 64)
+    (rv : Nat → BitVec 64) (dep : Nat) : Prop where
+  sp : R1 2 = s + 18446744073709550528#64
+  s0 : R1 8 = aX
+  s1 : R1 9 = sret
+  s2 : R1 18 = inp
+  a1 : R1 11 = line
+  s7 : R1 23 = line
+  keep : ∀ x ∈ [20, 22, 24, 25, 26, 27], R1 x = rv x
+  saved : CallSaved Mt1 s ret (rv 8) (rv 9) (rv 18)
+  s3m : ldv .ld Mt1 (s.toNat - 1088 + 1048) = rv 19
+  s5m : ldv .ld Mt1 (s.toNat - 1088 + 1032) = rv 21
+  s7m : ldv .ld Mt1 (s.toNat - 1088 + 1016) = rv 23
+  depth : imgLE (imgM Mt1) (inp.toNat + 8) 4 = dep + 1
+
+section Exits
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
+variable (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF)
+
+/-- The closure head's three exits, an additive triple. -/
+def CloHeadK (cd : ClosureData) (Mt : Mem) (s aX sret inp ret e q : BitVec 64)
+    (rv : Nat → BitVec 64) (argc dep : Nat) : IProp GF :=
+  iprop((∀ (R1 : Nat → BitVec 64) (Mt1 : Mem) (line : BitVec 64),
+      ⌜cd.params.length = argc ∧ dep + 1 ≤ maxCallDepth ∧
+        CloHd R1 Mt1 Mt s aX sret inp ret e q line rv argc dep⌝ -∗
+      ms 0x800032bc#64 R1 (cloS s inp) Mt1 -∗ Wp.W Φ) ∧
+    (∀ (R1 : Nat → BitVec 64) (Mt1 : Mem) (line : BitVec 64),
+      ⌜cd.params.length ≠ argc ∧ CloAr R1 Mt1 Mt s aX sret inp ret q line rv argc dep⌝ -∗
+      ms 0x80003d60#64 R1 (cloS s inp) Mt1 -∗ Wp.W Φ) ∧
+    (∀ (R1 : Nat → BitVec 64) (Mt1 : Mem) (line : BitVec 64),
+      ⌜maxCallDepth < dep + 1 ∧ CloDp R1 Mt1 s aX sret inp ret line rv dep⌝ -∗
+      ms 0x80003ca4#64 R1 (cloS s inp) Mt1 -∗ Wp.W Φ))
+
+end Exits
+
+#ix_piece callCloHead_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+    {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {st : Store} {fe : Expr} {args : List Expr} {ca : Nat} {cd : ClosureData} {q e : Nat}
+    {img : Nat → BitVec 8} {P : Nat → Prop} {m : Mem} {dimg : Nat → BitVec 8}
+    {s aX sret inp ret w0 w1 w2 : BitVec 64} {rv R : Nat → BitVec 64} {Mt : Mem} {argc dep : Nat}
+    (hcall : CallAt R Mt s aX sret inp ret rv w0 w1 w2 argc) (hargc : argc ≤ 32)
+    (hk4 : w0.toNat % 2 ^ 32 = 4) (hcf : CloFactsE st ca w1.toNat cd q e img P m)
+    (hinpG : RtErr.InpGeom inp) (hinpA : inp.toNat % 8 = 0)
+    (hdep : imgLE dimg (inp.toNat + 8) 4 = dep) (hdle : dep ≤ maxCallDepth) (hfg : EvalFrameG s) :
+    codeRes ∗ □ astEG aX.toNat (.call fe args) ∗ roImg (InExt (w1.toNat, 16)) img ∗ roOn P m ∗
+      ms 0x80003254#64 R (InExt (s.toNat - 1088, 1088)) Mt ∗
+      ownImg (InExt (inp.toNat + 8, 4)) dimg ∗
+      CloHeadK live Wp Φ cd Mt s aX sret inp ret (BitVec.ofNat 64 e) (BitVec.ofNat 64 q) rv argc dep
+    ⊢ Wp.W Φ by
+  have hsf := hfg.sf; have hs' := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
+  have hoff := evalSP_off (s := s) hsf (by omega)
+  iintro ⟨#Hcode, #Hast, #Himg, #Hro, Hms, Hdep, Hk⟩
+  unfold astEG
+  icases Hast with ⟨%Pc, %mc, %⟨hrepr, hgeo⟩, #Hroc⟩
+  obtain ⟨aF, hnd, -, -⟩ := callNode_of_repr hrepr hgeo
+  -- run K1a: the kind tests
+  ihave #Hdv := roOwn_data hnd.view $$ [Hcode Hroc]
+  · iframe Hcode Hroc
+  iapply wp_swpF Wp (F := iprop(ownImg (InExt (inp.toNat + 8, 4)) dimg ∗
+      CloHeadK live Wp Φ cd Mt s aX sret inp ret (BitVec.ofNat 64 e) (BitVec.ofNat 64 q) rv argc dep))
+  rotate_left
+  · iframe Hdv Hms Hdep; iexact Hk
+  intro F'
+  refine CallK_runA (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3 hnd.lo hnd.hi hnd.off
+    hcall.s0 hcall.sp ?_ ?_ ?_ ?_ ?_
+  · rw [hoff 96 (by decide)]; exact hcall.w0
+  · rw [hoff 104 (by decide)]; exact hcall.w1
+  · rw [hoff 112 (by decide)]; exact hcall.w2
+  · rw [hoff 96 (by decide)]; exact ldv_lw_of_ld hcall.w0 hk4 (by decide)
+  intro vl _ _
+  apply swp_closeRM
+  intro R1 Mt1 hR1 hMt1
+  unfold F'
+  iintro ⟨⟨Hdep, Hk⟩, Hms⟩
+  sorry
 
 end VsaIris.Interp

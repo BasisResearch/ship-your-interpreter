@@ -228,7 +228,7 @@ theorem wp_abortLanding (H : NewlibHoles) (live : Nat → Prop) (hlive : CodeLiv
   have hinp := hT.inp_eq
   unfold landingCore worldE interpCtxE interpCoreE errStr landingRegs wordAt
   iintro ⟨⟨%ρ, %st, %d, %jb, ⟨%Hh, %B, -, -, Hcon, Hstd,
-    ⟨⟨%g, -, -, ⟨%dimg, Hd, -⟩, -, ⟨%eimg, Herr, %hnul⟩⟩, -⟩, -, -⟩, #Hjb,
+    ⟨⟨%g, -, -, ⟨%dimg, Hd, -⟩, -, -, ⟨%eimg, Herr, %hnul⟩⟩, -⟩, -, -⟩, #Hjb,
     ⟨Hpc, Hra, Hsp, Ha0, Hsaved, Hargs, Htmp⟩⟩, Hscr, #Hjb0, HI, HT, #Hgp, #Himg⟩
   ihave %hag := jmpRO_agree inp jb jb0 $$ [Hjb Hjb0]
   · iframe Hjb Hjb0
