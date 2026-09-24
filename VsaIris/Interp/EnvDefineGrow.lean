@@ -273,7 +273,7 @@ theorem roundUp16_32 (c : Nat) : roundUp16 (32 * c) = 8 * c + 24 * c := by
 /-- **The growth** `0x80002b98`: both arrays `realloc`ed to the next cap,
 then the append at the grown geometry; NULL from either aborts. -/
 theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
-    (hl : ∀ p ∈ envText, live p.1) (NH : ReallocNullHoles)
+    (hl : ∀ p ∈ envText, live p.1)
     (hlive : AllocLive live) (N : NativeAddrs) {C : DefCall} (hC : C.OK) {ρ : Regime}
     {st : Store} {fa : Addr} {f : Frame} {G : FrameGeom} {img : Nat → BitVec 8}
     {R : Nat → BitVec 64} {Mt : Mem} {H B₁ B₂ : List (Nat × Nat)}
@@ -343,7 +343,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     · simp only [obOf, h0, ite_false, obLen]; rw [(hlay.arrays (by omega)).1]; simp only; omega
   have hsp1 : SpOKA (R1 2) := def_spOK hC (by rw [hk1 2 (by decide)]; exact h2)
   rw [← def_sp hC (show (R1 2).toNat = C.s.toNat - 64 by rw [hk1 2 (by decide)]; exact h2)]
-  iapply wp_call_reallocOpt NH hlive Wp (i := 0x80002ba0)
+  iapply wp_call_reallocOpt hlive Wp (i := 0x80002ba0)
     (jalx_80002ba0 live fun p hp => hl _ (env_code_80002ba0 p hp)) (by decide)
     ((ρ.plus (nameCopyCost C.x)).plus (24 * nextCap f.vars.length)) (obRest (obOf G.cap G.nblk) H)
     (obOf G.cap G.nblk) (8 * nextCap f.vars.length) (imgM Mt) (8 * nextCap f.vars.length)
@@ -406,7 +406,7 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have h32 : R3 2 = R1 2 := by rw [hk3 2 (by decide) (by decide) (by decide), e2 2 (by omega), hk1 2 (by decide)]
   have hsp3 : SpOKA (R3 2) := by rw [h32]; exact hsp1
   rw [← h32]
-  iapply wp_call_reallocOpt NH hlive Wp (i := 0x80002bbc)
+  iapply wp_call_reallocOpt hlive Wp (i := 0x80002bbc)
     (jalx_80002bbc live fun p hp => hl _ (env_code_80002bbc p hp)) (by decide)
     (ρ.plus (nameCopyCost C.x)) (obRest (obOf G.cap G.vblk) Hx)
     (obOf G.cap G.vblk) (24 * nextCap f.vars.length) (imgM Mt) (24 * nextCap f.vars.length)

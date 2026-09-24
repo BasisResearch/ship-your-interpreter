@@ -568,11 +568,13 @@ theorem saved_of_regs {C : MCtx} {R : Nat → BitVec 64} {saved : List (Nat × B
   · exact h.s3
 
 /-- **The counted context's obligations.** A return's top grows by at most
-the request's chunk, which the credits cover; NULL is refuted by them. -/
+the request's chunk, which the credits cover; NULL is refuted by them. The
+entry registers (at `malloc`, or at `realloc` for `realloc(NULL, n)`) supply
+only the saved registers. -/
 theorem mOK_chg {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64}
     {saved : List (Nat × BitVec 64)} {k c : Nat} {rv0 : Nat → BitVec 64} {Mt0 : Mem} {top0 : Nat}
     (hlive : AllocLive live) (hsv : saved.map Prod.fst = vsaSaved) (hchg : vsaChg n.toNat c)
-    (hsp : SpOKA s) (hral : r.toNat % 4 = 0) (hE : EntryRegs rv0 mallocEntryBV r n s saved)
+    (hsp : SpOKA s) (hral : r.toNat % 4 = 0) {e a : BitVec 64} (hE : EntryRegs rv0 e r a s saved)
     (hst : Starts H) (hcap : 2 * (k + c) + extendSlack ≤ heapEnd - top0) :
     MOK (mChgCtx live H n r s saved k rv0 Mt0 top0) where
   live := hlive
@@ -607,7 +609,7 @@ NULL return keeps the heap. -/
 theorem mOK_loc {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64}
     {saved : List (Nat × BitVec 64)} {rv0 : Nat → BitVec 64} {Mt0 : Mem} {top0 : Nat}
     (hlive : AllocLive live) (hsv : saved.map Prod.fst = vsaSaved) (hsp : SpOKA s)
-    (hral : r.toNat % 4 = 0) (hE : EntryRegs rv0 mallocEntryBV r n s saved) (hst : Starts H) :
+    (hral : r.toNat % 4 = 0) {e a : BitVec 64} (hE : EntryRegs rv0 e r a s saved) (hst : Starts H) :
     MOK (mLocCtx live H n r s saved rv0 Mt0 top0) where
   live := hlive
   sp := MSp.of_spOKA hsp

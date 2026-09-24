@@ -164,3 +164,6 @@ import VsaIris.Interp.ProofEnvDefine
 #print axioms VsaIris.Interp.envDefine_spec
 #print axioms VsaIris.Interp.reallocRho_spec
 #print axioms Vsa.Sim.NativeNameAudit.Control.sharedGeom
+#print axioms VsaIris.Interp.reallocNullChgRun_proved
+#print axioms VsaIris.Interp.reallocNullLocalRun_proved
+#print axioms VsaIris.Interp.reallocNullHoles_proved

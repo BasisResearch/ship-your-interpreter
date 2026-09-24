@@ -295,9 +295,6 @@ field must come with a satisfiability witness (xv6iris durable-notes
 "Vacuity"): the newlib specs at a concrete call. The allocator's runs are
 proved (`VsaHeap.allocSpecs`, `VsaIris/Vsa/AllocHoles.lean`). -/
 structure IrisHoles : Prop where
-  /-- `realloc(NULL, n)` at the binary, both regimes (`VsaIris/Interp/SpecEnv.lean`):
-  `env_define`'s first array growth. H4 discharges it. -/
-  reallocNull : ReallocNullHoles
   /-- The newlib calls on the error and exit paths, exact Iris statements
   (`VsaIris/Vsa/Newlib.lean`, H5): `snprintf` and `fprintf` with `%s`/`%d`
   formats, `fwrite` of the out-of-memory message, and `exit`'s newlib

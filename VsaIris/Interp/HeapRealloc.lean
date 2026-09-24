@@ -1,10 +1,11 @@
 import VsaIris.Interp.HeapCall
+import VsaIris.Interp.ReallocNullRun
 
 /-!
 # `realloc` in either regime
 
 `env_define` grows a frame's two arrays with `realloc`: from `NULL` on the
-first growth (`reallocNullRho_spec`, from the `ReallocNullHoles` runs) and
+first growth (`reallocNullRho_spec`, from `reallocNullChgRun_proved`/`reallocNullLocalRun_proved`) and
 from a live block afterwards (`reallocRho_spec`, from H4's
 `reallocChgRun_proved` and `AllocSpecs.reallocUncounted`). As for
 `malloc` (`mallocRho_spec`), one spec covers both regimes; NULL is possible
@@ -100,7 +101,7 @@ theorem vsaRegsDistinct {saved : List (Nat × BitVec 64)} (hsv : saved.map Prod.
 
 omit I in
 /-- **`realloc(NULL, n)` in regime `ρ`** (= `malloc(n)`), charged `c` credits when counted. -/
-theorem reallocNullRho_spec (NH : ReallocNullHoles) (hlive : AllocLive live)
+theorem reallocNullRho_spec (hlive : AllocLive live)
     (Wp : MachWP (GF := GF) (vsaModel live)) (ρ : Regime) (H : List (Nat × Nat)) (n s : BitVec 64)
     (c : Nat) (hc : vsaChg n.toNat c) (saved : List (Nat × BitVec 64))
     (hsv : saved.map Prod.fst = vsaSaved) :
@@ -132,7 +133,7 @@ theorem reallocNullRho_spec (NH : ReallocNullHoles) (hlive : AllocLive live)
               vsaRoomB mv' (((rv' a0).toNat, n.toNat) :: H) k)) fuel rv mv := by
       intro rv mv he hargs hs hdj
       rw [hsv]
-      exact (NH.chgRun live hlive H n s r saved rv mv k c hsv hc hsp hr ⟨he, hargs⟩ hs.1 hs.2
+      exact (reallocNullChgRun_proved live hlive H n s r saved rv mv k c hsv hc hsp hr ⟨he, hargs⟩ hs.1 hs.2
         hdj).imp fun _ h => LocalRun.mono (fun _ _ (he : MallocRoomEnd _ _ _ _ _ _ _ _ _ _) =>
           ⟨he.frame, he.fresh, he.align, he.shape, he.room⟩) _ _ _ h
     iapply allocCallArgs_of_localRun Wp hd (heapFoot vsaLayoutP H)
@@ -176,7 +177,7 @@ theorem reallocNullRho_spec (NH : ReallocNullHoles) (hlive : AllocLive live)
                 vsaLayoutP.Shape mv' (((rv' a0).toNat, n.toNat) :: H)))) fuel rv mv := by
       intro rv mv he hargs hs hdj
       rw [hsv]
-      exact (NH.localRun live hlive H n s r saved rv mv hsv hsp hr ⟨he, hargs⟩ hs hdj).imp
+      exact (reallocNullLocalRun_proved live hlive H n s r saved rv mv hsv hsp hr ⟨he, hargs⟩ hs hdj).imp
         fun _ h => LocalRun.mono (fun _ _ (he : MallocEnd _ _ _ _ _ _ _ _) =>
           ⟨he.frame, he.result⟩) _ _ _ h
     iapply allocCallArgs_of_localRun Wp hd (heapFoot vsaLayoutP H)
