@@ -149,6 +149,8 @@ import VsaIris.Interp.CallNativeOut
 import VsaIris.Interp.CallNativeSeg
 import VsaIris.Interp.CallNotCallable
 import VsaIris.Interp.CallCloHead
+import VsaIris.Interp.CallCloRuns
+import VsaIris.Interp.CallCloBind
 import VsaIris.Interp.CallClosure
 import VsaIris.Interp.Case.CallArmP
 import VsaIris.Interp.Case.CallAssertT
