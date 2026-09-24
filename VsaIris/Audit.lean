@@ -22,6 +22,7 @@ import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Vsa.StrlenOwned
 import VsaIris.Interp.ProofStringify
 import VsaIris.Interp.E5Audit
+import VsaIris.Interp.E4Audit
 import VsaIris.Vsa.AllocHoles
 import VsaIris.Interp.ProofEnvNew
 import VsaIris.Interp.ProofEnvGet

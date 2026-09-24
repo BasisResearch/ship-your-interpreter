@@ -40,6 +40,14 @@ def subst_callAssert(arm, mode):
     return {"ARM": arm.name}
 
 
+def subst_callClo(arm, mode):
+    """Family `callClo`: a closure call returning (`CallCost.closure`)."""
+    e4_check(arm, mode)
+    if mode != "T":
+        raise NotImplementedError(arm.name)
+    return {"ARM": arm.name}
+
+
 def subst_callArm(arm, mode):
     """Family `callArm`: the whole call arm in partial mode (every outcome)."""
     e4_check(arm, mode)
@@ -48,4 +56,5 @@ def subst_callArm(arm, mode):
     return {"ARM": arm.name}
 
 
-FAMILIES_EXT = {"callOut": subst_callOut, "callAssert": subst_callAssert, "callArm": subst_callArm}
+FAMILIES_EXT = {"callOut": subst_callOut, "callAssert": subst_callAssert, "callClo": subst_callClo,
+               "callArm": subst_callArm}

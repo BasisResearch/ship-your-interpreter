@@ -4227,6 +4227,22 @@ top-level `live` like `CodeLive`. Its supplier is the instantiation of
 - Missing supplier: `closOwn` carries no `ReadOK`/`SharedWin` geometry (the
   H2 entry above). Once `closOwn` carries it (from the `EX_FN` arm), the lemma
   is a projection of `storeRepr`'s closure list.
+## Closure call resources (lane E4, 2026-09-24)
+
+- Declaration: `CloSupply N` (`VsaIris/Interp/CallClosure.lean`), a premise
+  of `caseT_CallClosure` and the partial closure path: every closure the
+  store owns has its object's bytes, the `EX_FN` node's view (`ReadOK`,
+  `SharedWin`) and its environment's binding (`CloRes`). It subsumes
+  `DispSupply`. Supplier: the same geometry field on `closOwn` (the `EX_FN`
+  arm, H2's entry).
+- Declarations: `caseT_CallClosure`, `callClosureT`, `cloExitN`, `cloExitR`
+  (premises `hinpG : RtErr.InpGeom (ofNat inp)`, `hinpL : inp < 2 ^ 64`,
+  `hinpA : inp % 8 = 0`). The closure path reads and writes
+  `in->call_depth` through the machine and needs the interpreter struct's
+  placement. `world` owns its bytes but carries no address facts. Supplier: the
+  boundary (`interp_run`'s `inp` is `&interp` in `.bss`; Q-family with the
+  jmp_buf alignment already added to `interpCtxE`).
+
 ## `exec_stmt`'s `if` arm re-dispatches in its frame (lane E5, 2026-09-24)
 
 - **Affected:** the recursor motive of `ExecSCost` (lane A) and every exec arm.

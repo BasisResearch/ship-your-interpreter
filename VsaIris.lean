@@ -159,6 +159,7 @@ import VsaIris.Interp.Case.CallArmP
 import VsaIris.Interp.Case.CallAssertT
 import VsaIris.Interp.Case.CallPrintlnT
 import VsaIris.Interp.Case.CallPrintT
+import VsaIris.Interp.Case.CallClosureT
 import VsaIris.Interp.CallPrefixP
 import VsaIris.Interp.CallErr
 import VsaIris.Interp.CallSeg
