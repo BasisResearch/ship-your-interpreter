@@ -584,6 +584,194 @@ theorem na_badPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   simp (disch := omega) only [imgM_store_miss]
   exact hargs k hk
 
+/-- The state after `value_truthy` returns (`0x80002e48`): its answer in `a0`,
+the saved registers, the frame's words, the arguments' bytes. -/
+structure NaFacts (sret inp args s line r : BitVec 64) (n : Nat) (v : Value)
+    (rv R : Nat → BitVec 64) (M Margs : Mem) : Prop where
+  h10 : R 10 = if v.truthy then 1#64 else 0#64
+  h2 : R 2 = s + 18446744073709551536#64
+  h8 : R 8 = sret
+  h9 : R 9 = inp
+  h18 : R 18 = line
+  hk : ∀ x ∈ fRegs, x ∉ callerSaved → x ∉ [2, 8, 9, 18] → R x = rv x
+  sa : ldv .ld M (s.toNat - 80) = args
+  sc : ldv .ld M (s.toNat - 80 + 8) = BitVec.ofNat 64 n
+  sra : ldv .ld M (s + 18446744073709551536#64 + 72#64).toNat = r
+  ss0 : ldv .ld M (s + 18446744073709551536#64 + 64#64).toNat = rv 8
+  ss1 : ldv .ld M (s + 18446744073709551536#64 + 56#64).toNat = rv 9
+  ss2 : ldv .ld M (s + 18446744073709551536#64 + 48#64).toNat = rv 18
+  hargs : ∀ k, InExt (args.toNat, 24 * n) k → imgM M k = imgM Margs k
+
+/-- **One or two arguments**: the prologue, the copy of the first argument,
+`value_truthy` on it, the copy back into the frame. -/
+theorem na_head (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred}
+    {sret inp args s line r : BitVec 64} {n : Nat} {vs : List Value} {ρ : Regime} {st : St}
+    {d : Nat} {jb : Nat → BitVec 8} {rv : Nat → BitVec 64} {M Margs : Mem}
+    (c : NaCtx live sret inp args s line r n rv jb) (hlen : vs.length = n)
+    (hok : n = 1 ∨ n = 2)
+    (hargs : ∀ k, InExt (args.toNat, 24 * n) k → imgM M k = imgM Margs k)
+    (hB : ∀ R' M', NaFacts sret inp args s line r n (vs[0]'(by omega)) rv R' M' Margs →
+      NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs ∗
+        ms 0x80002e48#64 R' (npF s args n) M' ⊢ Wp.W Φ) :
+    NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs ∗
+      ms nativeAssertPC (upd rv 1 r) (npF s args n) M ⊢ Wp.W Φ := by
+  have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
+  unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed at hs1
+  have ha1 := c.ha.al; have ha2 := c.ha.lo; have ha3 := c.ha.hi
+  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  have hoff : ∀ k, k < 80 → (s + 18446744073709551536#64 + BitVec.ofNat 64 k).toNat =
+      s.toNat - 80 + k := by
+    intro k hk; rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
+  have e80 : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
+    rw [BitVec.toNat_add]; simp; omega
+  have eA : ∀ k, k < 24 → (args + BitVec.ofNat 64 k).toNat = args.toNat + k := by
+    intro k hk
+    rw [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (show k < 2 ^ 64 by omega),
+      Nat.mod_eq_of_lt (show args.toNat + k < 2 ^ 64 by omega)]
+  -- the prologue's stores leave the arguments' words
+  have hA1 : ∀ k, InExt (args.toNat, 24 * n) k →
+      imgM (writeLog (writeLog (writeLog (writeLog M
+        [((s + 18446744073709551536#64 + 56#64).toNat, 8, rv 9)])
+        [((s + 18446744073709551536#64 + 48#64).toNat, 8, rv 18)])
+        [((s + 18446744073709551536#64 + 72#64).toNat, 8, r)])
+        [((s + 18446744073709551536#64 + 64#64).toNat, 8, rv 8)]) k = imgM Margs k := by
+    intro k hk
+    have hk' := c.hdfa k
+    simp only [InExt] at hk hk'
+    simp only [hoff 72 (by omega), hoff 64 (by omega), hoff 56 (by omega), hoff 48 (by omega)]
+    simp (disch := omega) only [imgM_store_miss]
+    exact hargs k hk
+  have hw : ∀ o, o ≤ 16 → ldv .ld (writeLog (writeLog (writeLog (writeLog M
+        [((s + 18446744073709551536#64 + 56#64).toNat, 8, rv 9)])
+        [((s + 18446744073709551536#64 + 48#64).toNat, 8, rv 18)])
+        [((s + 18446744073709551536#64 + 72#64).toNat, 8, r)])
+        [((s + 18446744073709551536#64 + 64#64).toNat, 8, rv 8)]) (args.toNat + o) =
+      imgW (imgM Margs) (args.toNat + o) := fun o ho => by
+    rw [ldv_ld_imgW]
+    exact imgW_agree fun j hj => hA1 _ (by simp only [InExt]; omega)
+  iintro ⟨Hrest, Hms⟩
+  iapply wp_swpF Wp (S := npF s args n) (R := upd rv 1 r) (Mt := M) (pc := nativeAssertPC)
+    (F := NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs)
+  rotate_left
+  · unfold NaRest
+    icases Hrest with ⟨#Hcode, Hrest⟩
+    rw [hro]
+    iframe Hcode Hrest Hms
+  intro F'
+  refine na_pro c.hlive c.h12 c.h2 (by omega) hs2 hs3 hok ?_
+  intros
+  refine na_copy c.hlive (w0 := imgW (imgM Margs) args.toNat)
+    (w1 := imgW (imgM Margs) (args.toNat + 8)) (w2 := imgW (imgM Margs) (args.toNat + 16))
+    (by ix_reg; exact c.h13) (by ix_reg) (by omega) hs2 hs3 (by omega) ha1
+    (by unfold Vsa.Sim.tohostAddr at ha2; omega) ha3 (by have h := hw 0 (by omega); rw [Nat.add_zero] at h; exact h)
+    (by rw [eA 8 (by omega)]; exact hw 8 (by omega)) (by rw [eA 16 (by omega)]; exact hw 16 (by omega)) ?_
+  intros; apply swp_closeF
+  dsimp only [F']
+  unfold NaRest
+  iintro ⟨⟨#Hcode, #Himg, Hsl, #Hv, #Hjb, Hw, Hst, Hk⟩, Hms⟩
+  rw [hoff 16 (by omega), hoff 24 (by omega), hoff 32 (by omega)]
+  -- the copy slot holds the first argument's words
+  have hv0 : ∀ M0 : Mem, imgW (imgM (writeLog (writeLog (writeLog M0
+      [(s.toNat - 80 + 16, 8, imgW (imgM Margs) args.toNat)])
+      [(s.toNat - 80 + 24, 8, imgW (imgM Margs) (args.toNat + 8))])
+      [(s.toNat - 80 + 32, 8, imgW (imgM Margs) (args.toNat + 16))])) (s.toNat - 80 + 16) =
+      imgW (imgM Margs) args.toNat := fun M0 => by
+    rw [imgW_store_miss _ _ (by omega), imgW_store_miss _ _ (by omega), imgW_store_hit]
+  have hv8 : ∀ M0 : Mem, imgW (imgM (writeLog (writeLog (writeLog M0
+      [(s.toNat - 80 + 16, 8, imgW (imgM Margs) args.toNat)])
+      [(s.toNat - 80 + 24, 8, imgW (imgM Margs) (args.toNat + 8))])
+      [(s.toNat - 80 + 32, 8, imgW (imgM Margs) (args.toNat + 16))])) (s.toNat - 80 + 16 + 8) =
+      imgW (imgM Margs) (args.toNat + 8) := fun M0 => by
+    rw [show s.toNat - 80 + 16 + 8 = s.toNat - 80 + 24 by omega, imgW_store_miss _ _ (by omega),
+      imgW_store_hit]
+  have hv16 : ∀ M0 : Mem, imgW (imgM (writeLog (writeLog (writeLog M0
+      [(s.toNat - 80 + 16, 8, imgW (imgM Margs) args.toNat)])
+      [(s.toNat - 80 + 24, 8, imgW (imgM Margs) (args.toNat + 8))])
+      [(s.toNat - 80 + 32, 8, imgW (imgM Margs) (args.toNat + 16))])) (s.toNat - 80 + 16 + 16) =
+      imgW (imgM Margs) (args.toNat + 16) := fun M0 => by
+    rw [show s.toNat - 80 + 16 + 16 = s.toNat - 80 + 32 by omega, imgW_store_hit]
+  have hsl : ∀ k, InExt (s.toNat - 80 + 16, 24) k → npF s args n k := fun k hk =>
+    .inl (by simp only [InExt] at hk ⊢; omega)
+  ihave #Hv0 := valsImg_get N (imgM Margs) vs args.toNat 0 (by omega) $$ Hv
+  rw [show args.toNat + 24 * 0 = args.toNat by omega]
+  ihave ⟨Hms, Hval⟩ := ms_carveVal N (a := s.toNat - 80 + 16) (b := args.toNat) (img := imgM Margs)
+    (v := vs[0]'(by omega)) hsl (hv0 _) (hv8 _) (hv16 _) $$ [Hms Hv0]
+  · iframe Hms Hv0
+  -- `value_truthy(sp + 16)`
+  have e16 : (s + 18446744073709551536#64 + 16#64).toNat = s.toNat - 80 + 16 := hoff 16 (by omega)
+  have hslg : SlotGeom (s + 18446744073709551536#64 + 16#64) :=
+    ⟨by rw [e16]; omega, by rw [e16]; unfold Vsa.Sim.tohostAddr; omega, by rw [e16]; omega⟩
+  ihave #Hvt := valueTruthy_spec c.hlive Wp N (s + 18446744073709551536#64 + 16#64) (vs[0]'(by omega))
+  unfold valueTruthySpec
+  iapply ms_callHelper Wp (i := 0x80002e44)
+    (jalx_80002e44 live (fun p hp => c.hlive _ (interp_code_80002e44 p hp))) interp_code_80002e44
+    (by decide) (clob := [10, 14, 15]) (pins := fun rv => rv 10 = s + 18446744073709551536#64 + 16#64)
+    (Pre := iprop(valAt N (s + 18446744073709551536#64 + 16#64).toNat (vs[0]'(by omega)) ∗
+      ⌜SlotGeom (s + 18446744073709551536#64 + 16#64)⌝))
+    (Post := fun rv' => iprop(valAt N (s + 18446744073709551536#64 + 16#64).toNat (vs[0]'(by omega)) ∗
+      ⌜rv' 10 = if (vs[0]'(by omega)).truthy then 1#64 else 0#64⌝))
+  iframe Hcode Hms
+  isplitl []
+  · ipureintro; ix_reg
+  isplitl []
+  · iexact Hvt
+  isplitl [Hval]
+  · rw [e16]; iframe Hval; ipureintro; exact hslg
+  iintro %R3 %hk3 ⟨Hval, %h10⟩ Hms
+  rw [e16]
+  ihave ⟨%M3, Hms, %hM3⟩ := ms_uncarveVal N hsl $$ [Hms Hval]
+  · iframe Hms Hval
+  iapply (hB (upd R3 1 (BitVec.ofNat 64 (0x80002e44 + 4))) M3 ?f)
+  rotate_left
+  · unfold NaRest
+    iframe Hcode Himg Hsl Hv Hjb Hw Hst Hk Hms
+  case f =>
+    have k3 := fun x (hx : x ∈ fRegs) (hc : x ∉ [10, 14, 15]) => hk3 x hx hc
+    have hfr : ∀ o, (o + 8 ≤ 16 ∨ 40 ≤ o) → o + 8 ≤ 80 → ∀ j, j < 8 →
+        npF s args n (s.toNat - 80 + o + j) ∧ ¬ InExt (s.toNat - 80 + 16, 24) (s.toNat - 80 + o + j) :=
+      fun o ho1 ho2 j hj => ⟨.inl (by simp only [InExt]; omega), by simp only [InExt]; omega⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    · ix_reg; exact h10
+    · ix_reg; rw [k3 2 (by decide) (by decide)]; ix_reg
+    · ix_reg; rw [k3 8 (by decide) (by decide)]; ix_reg; exact c.h10
+    · ix_reg; rw [k3 9 (by decide) (by decide)]; ix_reg; exact c.h11
+    · ix_reg; rw [k3 18 (by decide) (by decide)]; ix_reg; exact c.h14
+    · intro x hx hc hn
+      have hx1 : x ≠ 1 := fun e => by subst e; revert hx; decide
+      simp only [List.mem_cons, List.not_mem_nil, or_false, not_or] at hn
+      obtain ⟨hx2, hx8, hx9, hx18⟩ := hn
+      have hcl : ∀ y ∈ callerSaved, x ≠ y := fun y hy e => hc (e ▸ hy)
+      have hx10 := hcl 10 (by decide); have hx11 := hcl 11 (by decide)
+      have hx14 := hcl 14 (by decide); have hx15 := hcl 15 (by decide)
+      have hx16 := hcl 16 (by decide)
+      simp only [upd, hx1, ite_false]
+      rw [k3 x hx (by simp [hx10, hx14, hx15])]
+      simp only [upd, hx1, hx2, hx8, hx9, hx10, hx11, hx14, hx15, hx16, hx18, ite_false]
+    · rw [show s.toNat - 80 = s.toNat - 80 + 0 by omega,
+        ldv_agree fun j hj => hM3 _ (hfr 0 (by omega) (by omega) j hj).1 (hfr 0 (by omega) (by omega) j hj).2]
+      simp only [Nat.add_zero, hoff 8 (by omega)]
+      simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss, ldv_store_hit]
+    · rw [ldv_agree fun j hj => hM3 _ (hfr 8 (by omega) (by omega) j hj).1 (hfr 8 (by omega) (by omega) j hj).2]
+      simp only [hoff 8 (by omega)]
+      simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss, ldv_store_hit]
+      ix_reg; exact c.h12
+    all_goals first
+      | (intro k hk
+         have hk' := c.hdfa k
+         have hn' : ¬ InExt (s.toNat - 80 + 16, 24) k := fun h => hk' (by simp only [InExt] at h ⊢; omega) hk
+         rw [hM3 k (.inr hk) hn']
+         simp only [InExt] at hk hk'
+         simp only [hoff 8 (by omega)]
+         simp (disch := omega) only [imgM_store_miss]
+         exact hA1 k hk)
+      | (simp only [hoff 72 (by omega), hoff 64 (by omega), hoff 56 (by omega), hoff 48 (by omega)]
+         rw [ldv_agree fun j hj => hM3 _ (hfr _ (by omega) (by omega) j hj).1 (hfr _ (by omega) (by omega) j hj).2]
+         simp only [hoff 8 (by omega), hoff 72 (by omega), hoff 64 (by omega), hoff 56 (by omega),
+           hoff 48 (by omega)]
+         simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss, ldv_store_hit])
+
 end Glue
 
 end VsaIris.Interp
