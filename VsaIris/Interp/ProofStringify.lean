@@ -1592,6 +1592,168 @@ theorem sg_intArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   unfold SgRest
   iframe Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms Hd
 
+omit G in
+/-- A C string's read window. -/
+theorem strAt_win [MachGS hlc GF] {q : Nat} {t : String} :
+    strAt (GF := GF) q t ⊢ ⌜StrWin q t.toList.length⌝ := by
+  unfold strAt
+  iintro ⟨%img, %⟨-, hw⟩, -⟩
+  ipureintro; exact hw
+
+omit G in
+/-- A string value's meaning gives its payload's C string. -/
+theorem valImg_str_strAt [MachGS hlc GF] {N : NativeAddrs} {img : Nat → BitVec 8} {a : Nat}
+    {t : String} : valImg (GF := GF) N img a (.str t) ⊢ strAt (imgW img (a + 8)).toNat t := by
+  simp only [valOf]
+  iintro ⟨-, #H⟩
+  iexact H
+
+/-- The string arm at `jal malloc` (`0x800030f8`): `len + 1` in `a0` and `s1`,
+the string's pointer at `sp + 8`. -/
+structure SgS2 (s p r sw : BitVec 64) (x : String) (rv R : Nat → BitVec 64) (M Mp : Mem) : Prop where
+  h10 : R 10 = BitVec.ofNat 64 (x.toList.length + 1)
+  h9 : R 9 = BitVec.ofNat 64 (x.toList.length + 1)
+  h2 : R 2 = s + 18446744073709551504#64
+  hk : ∀ y ∈ fRegs, y ∉ callerSaved → y ≠ 2 → y ≠ 9 → R y = rv y
+  sra : ldv .ld M (s + 18446744073709551504#64 + 104#64).toNat = r
+  ss0 : ldv .ld M (s + 18446744073709551504#64 + 96#64).toNat = rv 8
+  ss1 : ldv .ld M (s + 18446744073709551504#64 + 88#64).toNat = rv 9
+  sn : ldv .ld M (s + 18446744073709551504#64 + 8#64).toNat = sw
+  hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k
+
+/-- **A string**: its payload's `strlen` (H1's `strlenSpec`), the run to
+`jal malloc`. -/
+theorem sg_strHead (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
+    {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (cx : SgCtx live p s r rv) (hsl : ⊢ strlenSpec (GF := GF) Wp) {t : String} {M : Mem}
+    (hk : ldv .lw M p.toNat = 3#64) (hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k)
+    (hB : ∀ R' M', SgS2 s p r (imgW (imgM Mp) (p.toNat + 8)) t rv R' M' Mp →
+      SgRest Wp Φ N inp p s r (.str t) t ρ H c o rv Mp ∗ ms 0x800030f8#64 R' (sgF s p) M' ⊢ Wp.W Φ) :
+    SgRest Wp Φ N inp p s r (.str t) t ρ H c o rv Mp ∗
+      ms stringifyPC (upd rv 1 r) (sgF s p) M ⊢ Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  have hoff := sg_offs (s := s) (by omega)
+  have hsep := cx.sep
+  have hp1 := cx.hg.al; have hp2 := cx.hg.lo; have hp3 := cx.hg.hi
+  unfold Vsa.Sim.tohostAddr at hp2
+  have ep8 : (p + 8#64).toNat = p.toNat + 8 := by rw [BitVec.toNat_add]; simp; omega
+  have hsw0 : ldv .ld M (p.toNat + 8) = imgW (imgM Mp) (p.toNat + 8) := by
+    rw [ldv_ld_imgW]
+    exact imgW_agree fun j hj => hslot _ (by simp only [InExt]; omega)
+  have hsw : ldv .ld M (p + 8#64).toNat = imgW (imgM Mp) (p.toNat + 8) := by
+    rw [ep8]; exact hsw0
+  have hsw' : ldv .ld (writeLog (writeLog (writeLog M
+      [((s + 18446744073709551504#64 + 104#64).toNat, 8, r)])
+      [((s + 18446744073709551504#64 + 96#64).toNat, 8, rv 8)])
+      [((s + 18446744073709551504#64 + 88#64).toNat, 8, rv 9)]) (p.toNat + 8) =
+      imgW (imgM Mp) (p.toNat + 8) := by
+    rw [hoff 104 (by omega), hoff 96 (by omega), hoff 88 (by omega)]
+    simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss]
+    exact hsw0
+  iintro ⟨Hrest, Hms⟩
+  iapply wp_swpF Wp (S := sgF s p) (R := upd rv 1 r) (Mt := M) (pc := stringifyPC)
+    (F := SgRest Wp Φ N inp p s r (.str t) t ρ H c o rv Mp)
+  rotate_left
+  · unfold SgRest
+    icases Hrest with ⟨#Hcode, Hrest⟩
+    rw [hro]
+    iframe Hcode Hrest Hms
+  intro F'
+  refine sg_str cx.hlive cx.h10 cx.h2 (by omega) hs2 hs3 hp1 (by omega) hp3 hk hsw ?_
+  intros; apply swp_closeF
+  dsimp only [F']
+  rw [hsw']
+  iintro ⟨Hrest, Hms⟩
+  unfold SgRest
+  icases Hrest with ⟨#Hcode, #Himg, #Hat, #Hv, Hh, Hstd, Hcon, Hst, Hk⟩
+  ihave #Hs := valImg_str_strAt $$ Hv
+  ihave %hwin := strAt_win $$ Hs
+  ihave #Hsl0 := hsl
+  unfold strlenSpec
+  ihave #Hsls := Hsl0 $$ %(imgW (imgM Mp) (p.toNat + 8)) %t
+  unfold strlenPC
+  iapply (ms_callRegs Wp (i := 0x800030ec)
+    (jalx_800030ec live (fun q hq => cx.hlive _ (interp_code_800030ec q hq))) interp_code_800030ec
+    (L := [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31])
+    (K := [2, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27])
+    (by decide)
+    (P := fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ (10 : Nat) ↦ᵣ imgW (imgM Mp) (p.toNat + 8) ∗
+      clobbered retClob ∗ strAt (imgW (imgM Mp) (p.toNat + 8)).toNat t))
+    (Q := fun _ => iprop((10 : Nat) ↦ᵣ BitVec.ofNat 64 t.length ∗ clobbered retClob))
+    (X := strAt (imgW (imgM Mp) (p.toNat + 8)).toNat t)
+    (Y := fun g => iprop(⌜g 10 = BitVec.ofNat 64 t.length⌝))
+    (R := upd (upd (upd (upd (upd (upd rv 1 r) 15 3#64) 2 (s + 18446744073709551504#64)) 14 3#64) 11
+      (imgW (imgM Mp) (p.toNat + 8))) 10 (imgW (imgM Mp) (p.toNat + 8))) (S := sgF s p)
+    (Mt := writeLog (writeLog (writeLog (writeLog M
+      [((s + 18446744073709551504#64 + 104#64).toNat, 8, r)])
+      [((s + 18446744073709551504#64 + 96#64).toNat, 8, rv 8)])
+      [((s + 18446744073709551504#64 + 88#64).toNat, 8, rv 9)])
+      [((s + 18446744073709551504#64 + 8#64).toNat, 8, imgW (imgM Mp) (p.toNat + 8))]) ?hP ?hQ)
+  case hP =>
+    simp only [sepL_cons, sepL_nil]
+    iintro ⟨⟨H10, H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩, #Hs'⟩
+    iframe Hs'
+    isplitl []
+    · ipureintro; decide
+    isplitl [H10]
+    · simp only [upd, ite_true]; iexact H10
+    iapply clobbered_of_fn retClob _
+    unfold retClob argClob
+    simp only [sepL_cons, sepL_nil]
+    iframe H11 H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31
+  case hQ =>
+    iintro ⟨H10, Hcl⟩
+    ihave ⟨%g, Hcl⟩ := clobbered_fn retClob (by decide) $$ Hcl
+    iexists (fun y => if y = 10 then BitVec.ofNat 64 t.length else g y)
+    unfold retClob argClob
+    simp only [sepL_cons, sepL_nil]
+    icases Hcl with ⟨H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩
+    simp only [ite_true]
+    simp (config := { decide := true }) only [ite_false]
+    iframe H10 H11 H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31
+  iframe Hsls Hcode Hms Hs
+  iintro %g %hg10 Hms
+  iapply wp_swpF Wp (S := sgF s p) (pc := 0x800030f0#64)
+    (F := SgRest Wp Φ N inp p s r (.str t) t ρ H c o rv Mp)
+  rotate_left
+  · rw [hro]; unfold SgRest
+    iframe Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms
+  intro F'
+  refine sg_slen cx.hlive (by simp [upd]) (by omega) hs2 hs3 hp1 (by omega) hp3 ?_
+  intros; apply swp_closeF
+  dsimp only [F']
+  have hlt : t.toList.length + 1 < 2 ^ 64 := by have := hwin.hi; omega
+  have h1 : g 10 + 1#64 = BitVec.ofNat 64 (t.toList.length + 1) := by
+    rw [hg10, ← String.length_toList]
+    apply BitVec.eq_of_toNat_eq
+    rw [BitVec.toNat_add, BitVec.toNat_ofNat, BitVec.toNat_ofNat, BitVec.toNat_ofNat,
+      Nat.mod_eq_of_lt (show t.toList.length < 2 ^ 64 by omega),
+      Nat.mod_eq_of_lt (show 1 < 2 ^ 64 by decide),
+      Nat.mod_eq_of_lt (show t.toList.length + 1 < 2 ^ 64 by omega)]
+  refine hB _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · ix_reg; exact h1
+  · ix_reg; exact h1
+  · simp [upd]
+  · intro y hy hc' hy2 hy9
+    have hy1 : y ≠ 1 := fun e => by subst e; revert hy; decide
+    have hK : y ∉ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] := fun h => hc' ((show ∀ z ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31],
+      z ∈ callerSaved by decide) y h)
+    have hcl : ∀ z ∈ callerSaved, y ≠ z := fun z hz e => hc' (e ▸ hz)
+    simp only [upd, hy1, hy9, hcl 10 (by decide), hK, ite_false]
+    simp only [hy2, hcl 11 (by decide), hcl 14 (by decide), hcl 15 (by decide), ite_false]
+  all_goals first
+    | (simp only [hoff 104 (by omega), hoff 96 (by omega), hoff 88 (by omega), hoff 8 (by omega)]
+       simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss, ldv_store_hit])
+    | (intro k hk
+       simp only [InExt] at hk
+       simp only [hoff 104 (by omega), hoff 96 (by omega), hoff 88 (by omega), hoff 8 (by omega)]
+       simp (disch := omega) only [imgM_store_miss]
+       exact hslot k (by simp only [InExt]; omega))
+
 end Glue
 
 end VsaIris.Interp
