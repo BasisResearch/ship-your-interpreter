@@ -161,12 +161,14 @@ def evalSpecsP (Core : IProp GF) : IProp GF :=
 
 /-- **A runtime helper that always returns**, for either WP: entered with the
 body's registers at `rv` (argument facts `pins`) and `Pre`, it returns some
-`rv'` that changes only the registers `clob`, and `Post rv'`. -/
+`rv'` that changes only the registers `clob`, and `Post rv'`. The return
+address is word-aligned (the helper's `ret` needs it; H2, INTERP_DESIGN.md
+§10 "STATEMENT CHANGES (H2)"). -/
 def helperSpec (Wp : MachWP (GF := GF) M) (entry : BitVec 64) (clob : List Nat)
     (pins : (Nat → BitVec 64) → Prop) (Pre : IProp GF)
     (Post : (Nat → BitVec 64) → IProp GF) : IProp GF :=
   iprop(∀ rv : Nat → BitVec 64, fnSpecW Wp entry
-    (fun _ => iprop(regFile rv ∗ ⌜pins rv⌝ ∗ codeRes ∗ Pre))
+    (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗ regFile rv ∗ ⌜pins rv⌝ ∗ codeRes ∗ Pre))
     (fun _ => iprop(∃ rv', regFile rv' ∗ ⌜∀ x ∈ fRegs, x ∉ clob → rv' x = rv x⌝ ∗ Post rv')))
 
 /-- `value_int` (`0x8000280c`: `li a5,2; sd a1,8(a0); sw a5,0(a0); ret`): the

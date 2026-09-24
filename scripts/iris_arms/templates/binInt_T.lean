@@ -242,7 +242,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   unfold valueIntSpec
   iapply ms_callHelper (twpW _) (i := 0x{J3})
     (jalx_{J3} live (fun p hp => hlive _ (interp_code_{J3} p hp)))
-    interp_code_{J3}
+    interp_code_{J3} (by decide)
   iframe Hvi Hcode Hms
   isplitl []
   · ipureintro; exact ⟨by ix_keep [hkeep2, hkeep1], by ix_reg; ix_fwd⟩

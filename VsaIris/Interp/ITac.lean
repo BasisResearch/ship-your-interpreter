@@ -8,7 +8,7 @@ import VsaIris.Vsa.AllocTac
 goal, the interpreter twin of `sx_run` (`AllocTac.lean`, lane H4). At each PC
 literal it tries the step lemmas of that instruction in order — `it_<pc>`
 (ALU, store, branch, jump, and a load from OWNED bytes), `itD_<pc>` (a load
-from the persistent data view), `itT_<pc>` (a jump-table load) — and keeps the
+from the persistent data view), `itT_<pc>` (a jump-table load), `itO_<pc>` (`snez`/`seqz`) — and keeps the
 first whose side conditions `sx_side` closes after `sx_norm`/`sx_mem`. A
 branch whose condition `sx_side` refutes is pruned. The run stops at a branch
 it cannot decide, at a listed PC (`ix_run h at pc…`: the `jal` of a call), at
@@ -84,7 +84,7 @@ def ixTryPrune (norm : Syntax) (g : MVarId) : TacticM Bool := do
 def ixCandidates (pc : Nat) : TacticM (List Name) := do
   let env ← getEnv
   let mk (p : String) := Name.mkStr (Name.mkStr (Name.mkStr .anonymous "VsaIris") "Sym") s!"{p}_{hex8 pc}"
-  return [mk "it", mk "itD", mk "itT", mk "itH"].filter env.contains
+  return [mk "it", mk "itD", mk "itT", mk "itH", mk "itO"].filter env.contains
 
 /-- Apply one candidate: the continuation goals (an `SWP` conclusion) and the
 side conditions `sx_side` could not close; `none` when it does not apply. -/

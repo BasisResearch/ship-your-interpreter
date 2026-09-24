@@ -851,6 +851,24 @@ binary or by what the proofs consume:
 - Helpers are stated with `helperSpec` (registers kept but a clobber list);
   `valueIntSpec` is the stub for `value_int` (H2).
 
+### STATEMENT CHANGES (H2)
+
+- **`helperSpec` hands the callee an aligned return address.** Lane G's
+  `SpecEval.helperSpec` had no `⌜r.toNat % 4 = 0⌝` in its precondition, so no
+  helper could run its `ret` (the step needs the target word-aligned), and
+  G's stub `valueIntSpec` was unprovable. The fact is now in the
+  precondition, and `ms_callHelper` takes it at the call site (`by decide` on
+  the literal return address); G's `binInt` template passes it.
+- **The helpers' code is the interpreter's.** `gen_interp_steps.py`'s code
+  (`interpText`, `codeRes`) covers the value helpers, the natives and
+  `stringify`, so a helper spec needs no second code resource and lane G's
+  `helperSpec` shape is used as is. `sltu`/`sltiu` get `itO_<pc>` step lemmas
+  (`SymObs.swp_alu`), which `ix_run` tries.
+- **`IrisHoles.out`** (`VsaIris/Vsa/NewlibOut.lean`): newlib's stdout calls
+  (`fputs`, `fputc`, `fwrite`, `fprintf` on `stdout`) exact about what they
+  print, and `stringify`'s `snprintf(buf, 64, "<fn %s>", name)`. VSA assumed
+  the same (`CallIOContracts`).
+
 ## 11. Open questions for the user
 
 - **Q5 (lane H4, needs the user): a page-aligned break at the boundary.** `malloc_extend_top`

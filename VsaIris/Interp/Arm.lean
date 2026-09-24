@@ -769,6 +769,7 @@ theorem ms_callHelper (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
     {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
     (hexec : JalExec (vsaModel live) i code entry)
     (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
     {clob : List Nat} {pins : (Nat → BitVec 64) → Prop} {Pre : IProp GF}
     {Post : (Nat → BitVec 64) → IProp GF}
     {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} :
@@ -785,7 +786,7 @@ theorem ms_callHelper (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   iframe Hi Hspec Hpc Hra
   isplitl [Hregs HPre]
   · iframe Hregs HPre Hcode
-    ipureintro; exact hpins
+    ipureintro; exact ⟨hal, hpins⟩
   iintro Hpc Hra Hpost
   icases Hpost with ⟨%R', Hregs, %hkeep, HPost⟩
   iapply Hk $$ %R' %hkeep HPost
