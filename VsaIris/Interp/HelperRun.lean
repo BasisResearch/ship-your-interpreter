@@ -105,7 +105,7 @@ body register outside `clob` other than `ra` is untouched. -/
 macro "helper_keep" : tactic =>
   `(tactic| (intro x hx hc
              have h1 : x ≠ 1 := fun e => by subst e; revert hx; decide
-             simp only [List.mem_cons, List.not_mem_nil, or_false, not_or] at hc
+             simp only [List.mem_cons, List.not_mem_nil, _root_.or_false, not_or] at hc
              simp only [upd]
              simp_all))
 
@@ -173,6 +173,61 @@ theorem valAt_tracked (N : Vsa.RuntimeRepr.NativeAddrs) (a : Nat) (v : Vsa.While
   unfold valImg; rw [e0, e8, e16]
   iexact Hv
 
+omit I in
+/-- Owned bytes at any image are owned bytes at a tracking memory agreeing
+with it. -/
+theorem ownSet_trackedAt (S : Nat → Prop) (f : Nat → BitVec 8) :
+    ownSet (GF := GF) S (fun a => a ↦ₘ f a) ⊢
+      ∃ M : Mem, ownSet S (fun a => a ↦ₘ imgM M a) ∗ ⌜∀ a, S a → imgM M a = f a⌝ := by
+  unfold ownSet
+  iintro ⟨%l, %⟨hnd, hmem⟩, Hl⟩
+  obtain ⟨M, hM⟩ := exists_mem_img f l
+  iexists M
+  isplitl
+  · iexists l
+    isplitr
+    · ipureintro; exact ⟨hnd, hmem⟩
+    rw [sepL_congr (Ψ := fun a => iprop(a ↦ₘ imgM M a)) (fun a ha => by rw [hM a ha])] at *
+    iexact Hl
+  · ipureintro; exact fun a ha => hM a ((hmem a).2 ha)
+
+omit I in
+/-- **Two tracked byte sets as one**: owned bytes at two tracking memories are
+owned bytes at one, which agrees with each on its part. -/
+theorem ownSet_join_tracked (S T : Nat → Prop) (Ms Mt : Mem) :
+    ownSet (GF := GF) S (fun a => a ↦ₘ imgM Ms a) ∗ ownSet T (fun a => a ↦ₘ imgM Mt a) ⊢
+      ∃ M : Mem, ownSet (fun a => S a ∨ T a) (fun a => a ↦ₘ imgM M a) ∗
+        ⌜(∀ a, S a → imgM M a = imgM Ms a) ∧ (∀ a, T a → imgM M a = imgM Mt a) ∧
+          ∀ a, S a → ¬ T a⌝ := by
+  classical
+  iintro ⟨HS, HT⟩
+  ihave %hd := ownSet_disj S T _ _ $$ [HS HT]
+  · iframe HS HT
+  let f : Nat → BitVec 8 := fun a => if S a then imgM Ms a else imgM Mt a
+  ihave HS := ownSet_congr (Ψ := fun a => iprop(a ↦ₘ f a)) (fun a ha => by simp [f, ha]) $$ HS
+  ihave HT := ownSet_congr (Ψ := fun a => iprop(a ↦ₘ f a))
+    (fun a ha => by simp [f, show ¬ S a from fun h => hd a h ha]) $$ HT
+  ihave H := ownSet_join S T _ hd $$ [HS HT]
+  · iframe HS HT
+  ihave ⟨%M, H, %hM⟩ := ownSet_trackedAt _ f $$ H
+  iexists M
+  iframe H
+  ipureintro
+  refine ⟨fun a ha => ?_, fun a ha => ?_, hd⟩
+  · rw [hM a (.inl ha)]; simp [f, ha]
+  · rw [hM a (.inr ha)]; simp [f, show ¬ S a from fun h => hd a h ha]
+
+omit I in
+/-- **A tracked byte set in two parts**, each at the same tracking memory. -/
+theorem ownSet_split_tracked (S T : Nat → Prop) (M : Mem) (hd : ∀ a, S a → ¬ T a) :
+    ownSet (GF := GF) (fun a => S a ∨ T a) (fun a => a ↦ₘ imgM M a) ⊢
+      ownSet S (fun a => a ↦ₘ imgM M a) ∗ ownSet T (fun a => a ↦ₘ imgM M a) := by
+  iintro H
+  ihave ⟨H1, H2⟩ := ownSet_split _ S _ $$ H
+  isplitl [H1]
+  · iapply ownSet_iff _ (fun a => ⟨fun h => h.2, fun h => ⟨.inl h, h⟩⟩) $$ H1
+  · iapply ownSet_iff _ (fun a => ⟨fun h => h.1.resolve_left h.2, fun h => ⟨.inr h, fun h' => hd a h' h⟩⟩) $$ H2
+
 /-- The pure part of a value's meaning (`valOf` without the persistent
 strings and closure fragments): the kind word and the payload's facts. -/
 def ValPure (N : Vsa.RuntimeRepr.NativeAddrs) : Vsa.While.Value → BitVec 64 → BitVec 64 → BitVec 64 → Prop
@@ -192,6 +247,15 @@ theorem valOf_pure (N : Vsa.RuntimeRepr.NativeAddrs) (v : Vsa.While.Value) (w0 w
   · iintro ⟨%h, -⟩; ipureintro; exact h
   · iintro ⟨%h, -⟩; ipureintro; exact h
   · iintro ⟨%h, -⟩; ipureintro; exact h
+
+theorem ValPure.kind {N : Vsa.RuntimeRepr.NativeAddrs} {v : Vsa.While.Value} {w0 w1 w2 : BitVec 64}
+    (h : ValPure N v w0 w1 w2) : w0.toNat % 2 ^ 32 = Vsa.RuntimeRepr.kindTag v := by
+  cases v <;> simp only [ValPure] at h <;> first | exact h | exact h.1
+
+/-- Two tracking memories agreeing on a word's bytes read the same word. -/
+theorem imgW_agree {M M' : Mem} {x : Nat} (h : ∀ i, i < 8 → imgM M (x + i) = imgM M' (x + i)) :
+    imgW (imgM M) x = imgW (imgM M') x := by
+  unfold imgW; rw [imgLE_congr h]
 
 /-- A signed word load of a slot's kind. -/
 theorem ldv_lw_kind {Mt : Mem} {a k : Nat} (h : (imgW (imgM Mt) a).toNat % 2 ^ 32 = k)
