@@ -2315,6 +2315,133 @@ theorem sg_cloArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     unfold SgRest
     iframe Hview Hx Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms
 
+omit G in
+/-- A string value's length fits a word (its payload's `StrWin`). -/
+theorem valImg_strLen [MachGS hlc GF] {N : NativeAddrs} {img : Nat → BitVec 8} {a : Nat}
+    {v : Value} : valImg (GF := GF) N img a v ⊢
+      ⌜∀ t, v = .str t → t.toList.length + 1 < 2 ^ 64⌝ := by
+  cases v
+  case str t =>
+    iintro #H
+    ihave #Hs := valImg_str_strAt $$ H
+    ihave %hw := strAt_win $$ Hs
+    ipureintro
+    intro t' ht'
+    cases ht'
+    have := hw.hi
+    omega
+  all_goals
+    iintro -
+    ipureintro
+    intro t h
+    cases h
+
+/-- The kind dispatch at `stringify`'s entry: each kind's arm. -/
+theorem sg_dispatch (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {st : Store} {ρ : Regime}
+    {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (A : AllocSpecs live) (HN : NewlibHoles) (Hout : OutHoles) (cx : SgCtx live p s r rv)
+    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hmcr : ⊢ memcpySpec (GF := GF) Wp)
+    (hsl : ⊢ strlenSpec (GF := GF) Wp) (hsc : ⊢ strcpySpec (vsaModel live) Wp) {v : Value}
+    (hc : vsaChg ((strRender st v).toList.length + 1) c)
+    (hpv : ValPure N v (imgW (imgM Mp) p.toNat) (imgW (imgM Mp) (p.toNat + 8))
+      (imgW (imgM Mp) (p.toNat + 16)))
+    (hlt : ∀ t, v = .str t → t.toList.length + 1 < 2 ^ 64) {M : Mem}
+    (hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k) :
+    dispRes st v ∗ SgRest Wp Φ N inp p s r v (strRender st v) ρ H c o rv Mp ∗
+      ms stringifyPC (upd rv 1 r) (sgF s p) M ⊢ Wp.W Φ := by
+  have hp3 := cx.hg.hi
+  have hkind : ldv .lw M p.toNat = BitVec.ofNat 64 (Vsa.RuntimeRepr.kindTag v) := by
+    refine ldv_lw_kind ?_ (kindTag_small _)
+    rw [imgW_agree (g := imgM Mp) (fun j hj => hslot _ (by simp only [InExt]; omega))]
+    exact hpv.kind
+  have e8 : (p + 8#64).toNat = p.toNat + 8 := by
+    rw [BitVec.toNat_add, show (8#64 : BitVec 64).toNat = 8 from rfl,
+      Nat.mod_eq_of_lt (show p.toNat + 8 < 2 ^ 64 by omega)]
+  have hw8 : ∀ k, (imgW (imgM Mp) (p.toNat + 8)).toNat % 2 ^ 32 = k → k < 2 ^ 31 →
+      ldv .lw M (p + 8#64).toNat = BitVec.ofNat 64 k := by
+    intro k hk hk'
+    rw [e8]
+    refine ldv_lw_kind ?_ hk'
+    rw [imgW_agree (g := imgM Mp) (fun j hj => hslot _ (by simp only [InExt]; omega))]
+    exact hk
+  have hd8 : ldv .ld M (p + 8#64).toNat = imgW (imgM Mp) (p.toNat + 8) := by
+    rw [e8, ldv_ld_imgW,
+      imgW_agree (g := imgM Mp) (fun j hj => hslot _ (by simp only [InExt]; omega))]
+  cases v with
+  | null =>
+    rw [show strRender st .null = "null" from rfl] at hc ⊢
+    iintro ⟨-, HR⟩
+    iapply sg_nullArm (st := st) Wp A HN cx hmc hc (by rw [hkind]; rfl) hslot
+    iexact HR
+  | bool b =>
+    have hb : ldv .lw M (p + 8#64).toNat = if b then 1#64 else 0#64 := by
+      rw [hw8 (cond b 1 0) hpv.2 (by cases b <;> decide)]
+      cases b <;> rfl
+    rw [show strRender st (.bool b) = (if b then "true" else "false") by cases b <;> rfl] at hc ⊢
+    iintro ⟨-, HR⟩
+    iapply sg_boolArm Wp A HN cx hmc hsc hc (by rw [hkind]; rfl) hb hslot
+    iexact HR
+  | int n =>
+    rw [show strRender st (.int n) = intToString n from rfl] at hc ⊢
+    obtain ⟨-, hn⟩ := hpv
+    subst hn
+    iintro ⟨-, HR⟩
+    iapply sg_intArm Wp A HN Hout cx hmc hc (by rw [hkind]; rfl) hd8 hslot
+    iexact HR
+  | str t =>
+    rw [show strRender st (.str t) = t from rfl] at hc ⊢
+    iintro ⟨-, HR⟩
+    iapply sg_strArm Wp A HN cx hsl hmcr hc (hlt t rfl) (by rw [hkind]; rfl) hslot
+    iexact HR
+  | closure ca =>
+    exact sg_cloArm Wp A HN Hout cx hmc hc (by rw [hkind]; rfl) hslot
+  | native f =>
+    rw [show strRender st (.native f) = "<native fn>" from rfl] at hc ⊢
+    iintro ⟨-, HR⟩
+    iapply sg_natArm (st := st) (f := f) Wp A HN cx hmc hc (by rw [hkind]; rfl) hslot
+    iexact HR
+
+/-- **`stringify`**, for either WP: the rendering in a fresh heap block, or the
+out-of-memory abort. `hstk`: the stack region is live (H3's `strlen` over the
+stack buffer). -/
+theorem stringify_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLive live)
+    (hstk : ∀ a, 0x87800000 ≤ a → a < 0x88000000 → live a)
+    (A : AllocSpecs live) (HN : NewlibHoles) (Hout : OutHoles)
+    (Wp : MachWP (GF := GF) (vsaModel live))
+    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) (hmcr : ⊢ memcpySpec (GF := GF) Wp)
+    (hsl : ⊢ strlenSpec (GF := GF) Wp) (hsc : ⊢ strcpySpec (vsaModel live) Wp)
+    (N : NativeAddrs) (inp : Nat) (p s : BitVec 64) (v : Value) (st : Store) (ρ : Regime)
+    (H : List (Nat × Nat)) (c : Nat) (o : String) :
+    textOwn allocText ⊢ stringifySpec (vsaModel live) N Wp inp p s v st ρ H c o := by
+  unfold stringifySpec fnSpecAbort
+  iintro #Htx %rv !> %r %Φ Hpc Hra ⟨%hal, Hregs, %⟨h10, h2⟩, #Hcode, Hv, %⟨hg, hc⟩, #Hd, #Himg,
+    Hh, Hstd, Hcon, ⟨Hst, %hsg⟩⟩ Hk
+  have hs1 := hsg.le; have hs2 := hsg.lo; have hs3 := hsg.hi; have hs4 := hsg.al
+  simp only [Vsa.Sim.LayoutInstance.stackSL] at hs2 hs3
+  have hs0 : 0x87800000 + stringifyNeed ≤ s.toNat := by
+    unfold stringifyNeed snprintfNeed at hs1 hs2 ⊢
+    show 2273312768 + (112 + 1024) ≤ s.toNat
+    omega
+  ihave ⟨%Ma, HA, #Hw⟩ := valAt_tracked N _ v $$ Hv
+  ihave %hpv := valOf_pure N v _ _ _ $$ Hw
+  ihave %hlt := valImg_strLen $$ Hw
+  ihave ⟨Hst, HF⟩ := sgFrame_split (s := s) hs1 $$ Hst
+  ihave ⟨%f, HF⟩ := ownSet_fn _ $$ HF
+  ihave ⟨%Mf, HF⟩ := ownSet_mem _ f $$ HF
+  ihave ⟨%M, HM, %⟨-, hMa, hdsp⟩⟩ := ownSet_join_tracked _ _ Mf Ma $$ [HF HA]
+  · iframe HF HA
+  have cx : SgCtx live p s r rv := ⟨hlive, hcl, hstk, hal, h10, h2, hs0, hs3, hs4, hg, hdsp⟩
+  have hms : ms (GF := GF) stringifyPC (upd rv 1 r) (sgF s p) M =
+      iprop(PC ↦ᵣ stringifyPC ∗ ra ↦ᵣ r ∗ regFile rv ∗
+        ownSet (fun a => InExt (s.toNat - 112, 112) a ∨ InExt (p.toNat, 24) a)
+          (fun a => a ↦ₘ imgM M a)) := by
+    unfold ms; rw [regFile_upd_ra]; simp only [upd_same]
+  iapply sg_dispatch Wp A HN Hout cx hmc hmcr hsl hsc hc hpv hlt hMa
+  unfold SgRest
+  rw [hms]
+  iframe Hd Hcode Himg Htx Hw Hh Hstd Hcon Hst Hk Hpc Hra Hregs HM
+
 end Glue
 
 end VsaIris.Interp

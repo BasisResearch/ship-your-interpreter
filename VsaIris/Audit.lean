@@ -19,6 +19,7 @@ import VsaIris.Interp.ProofNativePrint
 import VsaIris.Interp.ProofNativePrintln
 import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Vsa.StrlenOwned
+import VsaIris.Interp.ProofStringify
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -131,6 +132,7 @@ import VsaIris.Vsa.StrlenOwned
 #print axioms VsaIris.Interp.nativePrint_spec
 #print axioms VsaIris.Interp.nativePrintln_spec
 #print axioms VsaIris.Interp.nativeAssert_spec
+#print axioms VsaIris.Interp.stringify_spec
 #print axioms VsaIris.Interp.ms_callNewlibAbort
 #print axioms VsaIris.LocalRun.promote
 #print axioms VsaIris.Inst.Strlen.strlen_specOwnedW

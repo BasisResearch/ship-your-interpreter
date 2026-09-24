@@ -113,6 +113,7 @@ import VsaIris.Interp.ProofValuePrint
 import VsaIris.Interp.ProofNativePrint
 import VsaIris.Interp.ProofNativePrintln
 import VsaIris.Interp.ProofNativeAssert
+import VsaIris.Interp.ProofStringify
 import VsaIris.Interp.SpecStringify
 import VsaIris.Interp.CallRegs
 import VsaIris.Interp.CallMalloc
