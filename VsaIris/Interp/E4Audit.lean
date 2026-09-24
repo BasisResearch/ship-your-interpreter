@@ -4,6 +4,7 @@ import VsaIris.Interp.Case.CallAssertT
 import VsaIris.Interp.Case.CallClosureT
 import VsaIris.Interp.Case.CallArmP
 import VsaIris.Interp.CallNotCallable
+import VsaIris.Interp.CallCloP
 
 /-! Lane E4's axiom audit: the call family's cases and its layer. -/
 
@@ -24,3 +25,9 @@ import VsaIris.Interp.CallNotCallable
 #print axioms VsaIris.Interp.cloExitR
 #print axioms VsaIris.Interp.cloCallT
 #print axioms VsaIris.Interp.callClosureT
+#print axioms VsaIris.Interp.cloDefineStepP
+#print axioms VsaIris.Interp.cloExitEsc
+#print axioms VsaIris.Interp.cloErrDepth
+#print axioms VsaIris.Interp.cloCallP
+#print axioms VsaIris.Interp.callClosureP
+#print axioms VsaIris.Interp.callCloP_of

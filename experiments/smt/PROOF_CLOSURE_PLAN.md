@@ -4243,6 +4243,24 @@ top-level `live` like `CodeLive`. Its supplier is the instantiation of
   boundary (`interp_run`'s `inp` is `&interp` in `.bss`; Q-family with the
   jmp_buf alignment already added to `interpCtxE`).
 
+## The closure call's arity error cannot rejoin its frame (lane E4, 2026-09-24)
+
+- Declaration: `CloArityP` (`VsaIris/Interp/CallCloP.lean`), a premise of
+  `callCloP_of` (the proof of `CallCloP`, `caseP_CallArm`'s closure branch).
+  It states the arity exit (`0x80003d60`): `snprintf(sp+144, 96, "%s: expected
+  %d arguments, got %d", name, paramc, argc)` and then `runtime_error(in, line,
+  "%s", sp+144)`.
+- Obstruction: the message buffer is in `eval_expr`'s frame. `rtErr_spec`
+  (`VsaIris/Vsa/RuntimeError.lean:489-500`) takes format arguments as
+  `readable Sro Sown rd`. Its abort post is `abortRes` alone, so owned readable
+  bytes passed in are not returned. The frame then cannot rejoin the arm's
+  `abortAt Core s n = Core ∗ stackScratch s n`. E2's `ms_rtErrEval` covers
+  read-only arguments only (`Sown = False`).
+- Supplier: H5 strengthens `rtErr_spec`'s abort to `abortRes ∗ ownImg Sown rd`
+  (its `snprintf` only reads them). With that, the proof is `CloE_runA`,
+  `NewlibHoles.snprintf` into the carved buffer, `CloE_runA2`, and the
+  strengthened call.
+
 ## `exec_stmt`'s `if` arm re-dispatches in its frame (lane E5, 2026-09-24)
 
 - **Affected:** the recursor motive of `ExecSCost` (lane A) and every exec arm.

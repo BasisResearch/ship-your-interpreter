@@ -498,6 +498,176 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     iapply Hk $$ %_ %Value.null %hC
 
 
+/-- **The arity error's obligation** (a NAMED premise, `PROOF_CLOSURE_PLAN.md`
+lane E4): from the arity exit (`0x80003d60`), `snprintf` formats the message
+into the frame's buffer `sp+144`, then `runtime_error(in, line, "%s",
+sp+144)` aborts. `rtErr_spec` takes the buffer's bytes as `readable` owned
+bytes and does not return them on abort, so the frame cannot rejoin the arm's
+`abortAt Core s n`. Supplier: `rtErr_spec` (H5) returning its owned readable
+bytes with `abortRes`. -/
+def CloArityP (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
+    (Core : IProp GF) : Prop :=
+  ∀ (Φ : Nat × String → IProp GF) (ρ : Regime) (st : St) (R : Nat → BitVec 64) (Mt1 Mt : Mem)
+    (s aX sret ret q line : BitVec 64) (rv : Nat → BitVec 64) (argc dep n : Nat) (P : Nat → Prop)
+    (m : Mem) (cd : ClosureData) (prm bod nam : BitVec 64),
+    EvalFrameG s → StackGeom s n → 1088 + RtErr.rtErrNeed ≤ n → cd.params.length ≠ argc →
+    (inp + 8 + 4 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp + 8) →
+    CloAr R Mt1 Mt s aX sret (BitVec.ofNat 64 inp) ret q line rv argc dep →
+    FnNode m P q cd.params.length prm bod nam → (∀ k, P k → ReadOK k) → SharedWin P →
+    (cd.name = none ∧ nam = 0#64 ∨ ∃ x, cd.name = some x ∧ nam ≠ 0#64 ∧ CStringWithin m P nam.toNat x) →
+    codeRes ∗ errCtx inp ∗ roOn P m ∗ ms 0x80003d60#64 R (cloS s (BitVec.ofNat 64 inp)) Mt1 ∗
+      (∀ (d' : Nat) (img' : Nat → BitVec 8), ownImg (InExt (inp + 8, 4)) img' -∗
+          ⌜imgLE img' (inp + 8) 4 = d' ∧ d' ≤ maxCallDepth⌝ -∗ world N L Room inp ρ st d') ∗
+      stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ (abortAt Core s n -∗ (wpW (vsaModel live)).W Φ)
+    ⊢ (wpW (vsaModel live)).W Φ
+
+/-- **The closure call from the kind dispatch, partial mode**: the closure's
+resources, the depth word, `callCloHead`, then its three exits (`cloCallP`,
+the arity error `CloArityP`, the depth error `cloErrDepth`). -/
+theorem callClosureP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {Core : IProp GF}
+    (hE : ErrEnv N vsaLayoutP vsaRoomB inp live Core)
+    (hvn : ⊢ ∀ p, valueNullSpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p)
+    (hen : ⊢ envNewSpec (GF := GF) (wpW (vsaModel live)) N)
+    (hed : ⊢ envDefineSpec (GF := GF) (wpW (vsaModel live)) N)
+    (hsup : CloSupply (GF := GF) N) (harity : CloArityP live N vsaLayoutP vsaRoomB inp Core)
+    (hinpA : inp % 8 = 0)
+    {st2 : St} {d : Nat} {ca : Addr} {vs : List Value}
+    {f : Expr} {args : List Expr} {s aX sret ret w0 w1 w2 : BitVec 64} {rv R : Nat → BitVec 64}
+    {Mt : Mem}
+    (hsg : StackGeom s (evalNeed (.call f args) d)) (hal : ret.toNat % 4 = 0) (hsp : rv 2 = s)
+    (hslg : SlotGeom sret)
+    (hcall : CallAt R Mt s aX sret (BitVec.ofNat 64 inp) ret rv w0 w1 w2 vs.length)
+    (hargc : vs.length ≤ 32) :
+    execSpecsP (vsaModel live) N vsaLayoutP vsaRoomB inp Core ∗ errCtx inp ∗ codeRes ∗
+      □ astEG aX.toNat (.call f args) ∗ □ valOf N (.closure ca) w0 w1 w2 ∗
+      argVals N (imgM Mt) (argsBase s) 0 vs ∗ ms 0x80003254#64 R (InExt (s.toNat - 1088, 1088)) Mt ∗
+      stackScratch (s + 18446744073709550528#64) (evalNeed (.call f args) d - 1088) ∗
+      world N vsaLayoutP vsaRoomB inp .uncounted st2 d ∗ slot24 sret.toNat ∗
+      CloKP live N vsaLayoutP vsaRoomB inp Core Φ st2 d ca vs rv s (evalNeed (.call f args) d) sret ret
+    ⊢ (wpW (vsaModel live)).W Φ := by
+  have hge := evalNeed_call_ge f args d
+  have hrt := evalNeed_call_rtErr f args d
+  have hs := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
+  unfold Vsa.Sim.LayoutInstance.stackSL at hs hs2
+  simp only at hs hs2
+  have hsF : s - 1088#64 = s + 18446744073709550528#64 := evalSP_eq s
+  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
+    rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
+  have hfg : EvalFrameG s := ⟨hsf, by omega, hs2, hs3⟩
+  have hinpG := hE.inpGeom
+  have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hE.inpLt
+  iintro ⟨#IHs, #HE, #Hcode, #Hast, #Hv, #Hav, Hms, Hst, Hw, Hsr, Hk⟩
+  unfold valOf
+  icases Hv with ⟨%⟨hk4, hw1⟩, #Hca⟩
+  ihave ⟨%B, Hs, Hcw⟩ := world_store N vsaLayoutP vsaRoomB inp _ st2 d $$ Hw
+  ihave ⟨Hs, #Hres⟩ := hsup st2.store B ca w1.toNat $$ [Hs Hca]
+  · iframe Hs Hca
+  ihave ⟨Hs, %hbod⟩ := keep_pure (storeRepr_bodies N st2.store B) $$ Hs
+  ihave Hw := Hcw $$ Hs
+  unfold CloRes
+  icases Hres with ⟨%cd, %q, %e, %img, %P, %m, %hcf, #Himg, #Hro, #Hfe⟩
+  obtain ⟨hbb1, hbb2⟩ := hbod ca cd hcf.lookup
+  have hwd := world_depth (GF := GF) N vsaLayoutP vsaRoomB inp .uncounted st2 d
+  rw [show inp + interpDepthOff = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]; rfl] at hwd
+  ihave ⟨%dimg, Hd, %⟨hdv, hdle⟩, Hcl⟩ := hwd $$ Hw
+  ihave ⟨Hms, Hd, %hdisj⟩ := ms_disj $$ [Hms Hd]
+  · iframe Hms Hd
+  have hi3 : inp + 8 + 4 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp + 8 := by
+    refine Classical.byContradiction fun hc => ?_
+    exact hdisj (max (s.toNat - 1088) (inp + 8)) (by simp only [InExt]; omega)
+      (by simp only [InExt]; rw [hinpN]; omega)
+  have hqlt : q < 2 ^ 64 := by rw [← hcf.fn]; have := imgLE_lt img w1.toNat 8; omega
+  have hqt : (BitVec.ofNat 64 q).toNat = q := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]
+  have helt : e < 2 ^ 64 := by rw [← hcf.env]; have := imgLE_lt img (w1.toNat + 8) 8; omega
+  have het : (BitVec.ofNat 64 e).toNat = e := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt helt]
+  have hrepq : ExprReprWithin m P (BitVec.ofNat 64 q).toNat (.fn cd.name cd.params cd.body) := by
+    rw [hqt]; exact hcf.repr
+  obtain ⟨prm, bod, nam, hfn, hprl, hbdl, hnml, hps, hbody, hname⟩ := fnNode_of hrepq hcf.geo
+  have hprt : (BitVec.ofNat 64 prm).toNat = prm := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hprl]
+  have hbdt : (BitVec.ofNat 64 bod).toNat = bod := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbdl]
+  have hnmt : (BitVec.ofNat 64 nam).toNat = nam := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hnml]
+  iapply callCloHead hlive (wpW _) hcall hargc hk4 hcf hinpG (by rw [hinpN]; exact hinpA) hdv hdle hfg
+  iframe Hcode Hast Himg Hro Hms Hd
+  unfold CloHeadK
+  isplit
+  · iintro %R1 %Mt1 %line %⟨hpl, hdl1, hhd⟩ Hms
+    have hd : d < maxCallDepth := Nat.lt_of_succ_le hdl1
+    iapply cloCallP hlive hE hvn hen hed hcf.lookup hpl.symm hd ⟨hbb1, hbb2⟩ hfg hsg hrt
+      (fun x hx => by have := execNeed_callBody (f := f) (args := args) hd hbb1 hx; unfold evalFrame at this; omega)
+      hal hsp hinpA hslg hi3 hfn (by rw [hprt]; exact hps) (by rw [hbdt]; exact hbody) hcf.geo
+      hcf.win hargc hhd
+    iframe IHs HE Hcode Hro Hav Hms Hst Hsr Hk
+    isplitl []
+    · rw [het]; iexact Hfe
+    rw [show inp + 8 = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]]
+    iexact Hcl
+  isplit
+  · iintro %R1 %Mt1 %line %⟨hne, har⟩ Hms
+    iapply harity Φ .uncounted st2 R1 Mt1 Mt s aX sret ret (BitVec.ofNat 64 q) line rv vs.length d _
+      P m cd (BitVec.ofNat 64 prm) (BitVec.ofNat 64 bod) (BitVec.ofNat 64 nam) hfg hsg hrt hne hi3 har hfn
+      hcf.geo hcf.win (by
+        rcases hname with ⟨h1, h2⟩ | ⟨x, h1, h2, h3⟩
+        · exact .inl ⟨h1, by rw [h2]⟩
+        · exact .inr ⟨x, h1, fun h => h2 (by rw [← hnmt, h]; rfl), by rw [hnmt]; exact h3⟩)
+    iframe Hcode HE Hro Hms Hst
+    isplitl [Hcl]
+    · rw [show inp + 8 = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]]
+      iexact Hcl
+    iintro HA
+    unfold CloKP
+    ihave Hk := and_elim_r $$ Hk
+    iapply Hk
+    iframe HA Hsr
+  · iintro %R1 %Mt1 %line %⟨hgt, hdp⟩ Hms
+    iapply cloErrDepth hlive (wpW _) hE hfg hsg hrt hinpA hi3 hdp
+    iframe Hcode HE Hms Hst
+    isplitl [Hcl]
+    · rw [show inp + 8 = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]]
+      iexact Hcl
+    iintro HA
+    unfold CloKP
+    ihave Hk := and_elim_r $$ Hk
+    iapply Hk
+    iframe HA Hsr
+
+/-- **`CallCloP` proved** (the premise of `caseP_CallArm`), from the helpers'
+specs, `CloSupply` and the arity error's obligation (`CloArityP`). -/
+theorem callCloP_of (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {inp : Nat}
+    {Core : IProp GF} (hE : ErrEnv N vsaLayoutP vsaRoomB inp live Core)
+    (hvn : ⊢ ∀ p, valueNullSpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p)
+    (hen : ⊢ envNewSpec (GF := GF) (wpW (vsaModel live)) N)
+    (hed : ⊢ envDefineSpec (GF := GF) (wpW (vsaModel live)) N)
+    (hsup : CloSupply (GF := GF) N) (harity : CloArityP live N vsaLayoutP vsaRoomB inp Core)
+    (hinpA : inp % 8 = 0) :
+    CallCloP (GF := GF) live N vsaLayoutP vsaRoomB inp Core := by
+  intro Φ st d env f args sret aE aX s ret w0 w1 w2 rv R Mt st1 st2 vs ca hregs hsg hbb hal hslg hf ha
+    hlen hcall
+  have hvl : vs.length = args.length := evalArgs_length ha
+  rw [← hvl] at hcall
+  iintro ⟨#IH, #IHs, #HE, #Hcode, #Hast, #Hfb, #Hv, Hav, Hms, Hst, Hw, Hsr, Hk⟩
+  iapply callClosureP hlive hE hvn hen hed hsup harity hinpA hsg hal hregs.sp hslg hcall
+    (by unfold maxArgs at hlen; omega)
+  iframe IHs HE Hcode Hast Hv Hav Hms Hst Hw Hsr
+  unfold CloKP
+  isplit
+  · iintro %st' %v %hC
+    unfold CallExitK
+    iintro %rv' %hkeep Hregs Hst Hval Hw Hpc Hra
+    ihave Hk := and_elim_l $$ Hk
+    iapply Hk $$ Hpc Hra
+    iexists st', v
+    isplitl []
+    · ipureintro; exact .call st d env f args st1 st2 st' (.closure ca) vs v hf hlen ha hC
+    unfold evalPost
+    iexists rv'
+    iframe Hregs Hst Hval Hw
+    ipureintro; exact hkeep
+  · iintro Hab
+    ihave Hk := and_elim_r $$ Hk
+    iapply Hk
+    iexact Hab
+
 end Partial
 
 end VsaIris.Interp
