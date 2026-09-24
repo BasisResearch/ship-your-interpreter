@@ -38,9 +38,13 @@ Branch `lane-h4`. Goal: discharge `IrisHoles.alloc` (`VsaIris/Vsa/AllocHoles.lea
   `binIndex` cascade (`lbin_idx`), the empty-bin case, and the sorted walk (`rebinL_walk`, an
   induction over the unvisited members), all onto `rebin_link` / `rebin_at_heap`.
 
+- **The large-request scan** (`0x80004884`, `lscan` in `Vsa/MallocLarge.lean`): the cascade
+  `lscan_idx`, the backward walk `lscan_walk`, the take `lscan_take`, over the general
+  `take_ret` (any bin and position). `from_lr` (`MallocChain.lean`) is the shared tree from
+  the last-remainder check on.
+
 ## In flight
-- The two residual malloc joins (`malloc_paths`' hypotheses): the large-bin scan
-  (`0x80004884`) and the block walk (`0x80004978`).
+- The last residual malloc join (`malloc_paths`' hypothesis): the block walk (`0x80004978`).
 
 ## Holes
 - Unchanged: `alloc.mallocChgRun`, `alloc.mallocLocalRun`, `alloc.freeChgRun`,
