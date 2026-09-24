@@ -1,0 +1,36 @@
+import VsaIris.Interp.ExecIf
+
+/-!
+# `{ARM}`, total mode (family `execIfNone`, lane E5)
+
+`caseT_{ARM}`: `exec_stmt` on `.ifStmt c t none` with a falsy condition
+(`ExecSCost.ifNone`) meets its dispatch-point spec: the prefix (`ifPrefixT`)
+then `li a0,0` and the shared exit (`ifRouteNone`).
+Template: `scripts/iris_arms/templates/execIfNone_T.lean`.
+-/
+
+namespace VsaIris.Interp
+
+open VsaIris VsaIris.Sym VsaIris.MallocFast
+open Vsa.MemRepr Vsa.Sim
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
+
+theorem caseT_{ARM} {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+    {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
+    {st : St} {d env : Nat} {c : Expr} {t : Stmt} {st' : St} {v : Value} {nc : Nat}
+    (Dc : EvalECost st d env c st' v nc) (hv : v.truthy = false)
+    (hc : ⊢ evalSpecT_body (GF := GF) (vsaModel live) N L Room inp st d env c st' v nc Dc)
+    (hvt : ⊢ ∀ p w, valueTruthySpec (GF := GF) (vsaModel live) N (twpW (vsaModel live)) p w) :
+    ⊢ execDispT_body (GF := GF) (vsaModel live) N L Room inp st d env (.ifStmt c t none) st' .normal
+        nc (.ifNone st d env c t st' v nc Dc hv) := by
+  unfold execDispT_body
+  iintro !> %Φ %k %aS %aE %aRet %s %R %Mt %ret %v8 %v9 %v18 %v19 Hpre HK
+  unfold execDispPre
+  icases Hpre with ⟨Hms, %hf, #Hcode, #Hast, #Hfb, Hst, Hslot, Hw⟩
+  iapply ifPrefixT hlive (k := k) Dc hc hvt hf
+    (fun P m R3 M3 hr => ifRouteNone hlive (twpW _) hf hr hv)
+  iframe HK Hms Hcode Hast Hfb Hst Hslot Hw
+
+end VsaIris.Interp

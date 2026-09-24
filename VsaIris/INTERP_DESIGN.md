@@ -1161,3 +1161,15 @@ without the fact and no other resource carries it:
   the equality gives `nOld = 8 * cap < 16 * cap`. `FrameLayout.arrays_le`
   recovers the componentwise bounds; `FrameBridge.arrays` carries the same
   equality (`ctl_frameBridge`: 64 and 192 bytes at cap 8).
+
+### STATEMENT CHANGES (E1)
+
+- **`ReadOK` carries the string window** (`SpecEval.lean`, field `win`: the
+  byte plus 8 is RAM and off the HTIF words). `astEG` gave the AST's read
+  set only `ReadOK` (RAM, off HTIF), but a string field of the AST (`str`'s
+  literal, `var`'s and `assign`'s name) becomes `strAt` only with H1's
+  `SharedWin P` (`strAt_of_cstringWithin`), and `strlen`/`strcmp` need that
+  window. `SharedWin P` follows from the strengthened `ReadOK`
+  (`sharedWin_of_readOK`, `LeafArm.lean`). The supplier is A0, which already
+  establishes `SharedWin` at the boundary (`ctl_sharedWin`); no existing
+  construction of `ReadOK` changed (all consumers project fields).

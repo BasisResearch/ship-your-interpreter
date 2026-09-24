@@ -356,52 +356,6 @@ theorem readable_str {p : Nat} {x : String} :
         simp only [InExt]; omega
       simp only [hin, ite_true]; exact hc.2
 
-/-- **A value slot out of a run's owned bytes**: the slot's three words are
-those of a value's image, so the slot is the value. -/
-theorem ms_carveVal (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop}
-    {M : Mem} {a b : Nat} {img : Nat → BitVec 8} {v : Value} (hS : ∀ k, InExt (a, 24) k → S k)
-    (h0 : imgW (imgM M) a = imgW img b) (h8 : imgW (imgM M) (a + 8) = imgW img (b + 8))
-    (h16 : imgW (imgM M) (a + 16) = imgW img (b + 16)) :
-    ms (GF := GF) pc R S M ∗ valImg N img b v ⊢
-      ms pc R (fun k => S k ∧ ¬ InExt (a, 24) k) M ∗ valAt N a v := by
-  have hsl : ∀ k, S k ↔ ((S k ∧ ¬ InExt (a, 24) k) ∨ InExt (a, 24) k) := fun k => by
-    constructor
-    · intro h; by_cases h' : InExt (a, 24) k
-      · exact .inr h'
-      · exact .inl ⟨h, h'⟩
-    · rintro (⟨h, _⟩ | h)
-      · exact h
-      · exact hS k h
-  iintro ⟨Hms, #Hv⟩
-  ihave Hms := ms_iff hsl $$ Hms
-  ihave ⟨Hms, Hslot⟩ := ms_split (fun k h1 h2 => h1.2 h2) $$ Hms
-  iframe Hms
-  rw [← valImg_words (GF := GF) (N := N) (v := v) h0 h8 h16]
-  iapply valAt_of_img N
-  iframe Hv Hslot
-
-/-- And back in: the run's other bytes unchanged. -/
-theorem ms_uncarveVal (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64} {S : Nat → Prop}
-    {M : Mem} {a : Nat} {v : Value} (hS : ∀ k, InExt (a, 24) k → S k) :
-    ms (GF := GF) pc R (fun k => S k ∧ ¬ InExt (a, 24) k) M ∗ valAt N a v ⊢
-      ∃ M', ms pc R S M' ∗ ⌜∀ k, S k → ¬ InExt (a, 24) k → imgM M' k = imgM M k⌝ := by
-  have hsl : ∀ k, ((S k ∧ ¬ InExt (a, 24) k) ∨ InExt (a, 24) k) ↔ S k := fun k => by
-    constructor
-    · rintro (⟨h, _⟩ | h)
-      · exact h
-      · exact hS k h
-    · intro h; by_cases h' : InExt (a, 24) k
-      · exact .inr h'
-      · exact .inl ⟨h, h'⟩
-  iintro ⟨Hms, Hval⟩
-  ihave ⟨%Ms, HsS, -⟩ := valAt_tracked N _ _ $$ Hval
-  ihave ⟨%M', Hms, %⟨h1, -, -⟩⟩ := ms_join $$ [Hms HsS]
-  · iframe Hms HsS
-  iexists M'
-  isplitl
-  · iapply ms_iff hsl $$ Hms
-  · ipureintro; exact fun k hk hn => h1 k ⟨hk, hn⟩
-
 /-- The registers and memory at a `native_assert` `jal runtime_error`:
 `runtime_error(in, line, fmt, x1, 0)` with `sp = s - 80`, the arguments'
 bytes unchanged. -/

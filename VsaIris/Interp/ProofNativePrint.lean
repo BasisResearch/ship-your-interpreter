@@ -428,15 +428,6 @@ structure NpFacts (sret args s r : BitVec 64) (n i8 i9 : Nat) (rv R : Nat → Bi
   ss4 : ldv .ld M (s + 18446744073709551536#64 + 32#64).toNat = rv 20
   hargs : ∀ k, InExt (args.toNat, 24 * n) k → imgM M k = imgM Margs k
 
-omit I in
-/-- A run's state over an equivalent owned set. -/
-theorem ms_iff {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M : Mem}
-    (h : ∀ k, S k ↔ T k) : ms (GF := GF) pc R S M ⊢ ms pc R T M := by
-  unfold ms
-  iintro ⟨Hpc, Hra, Hregs, HS⟩
-  iframe Hpc Hra Hregs
-  iapply ownSet_iff _ h $$ HS
-
 /-- The rest a `native_print` loop carries. -/
 def NpRest (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
     (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o : String) (rv : Nat → BitVec 64)
