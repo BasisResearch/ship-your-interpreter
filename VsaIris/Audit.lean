@@ -20,6 +20,14 @@ import VsaIris.Interp.ProofNativePrintln
 import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Vsa.StrlenOwned
 import VsaIris.Interp.ProofStringify
+import VsaIris.Interp.Case.LeafNullT
+import VsaIris.Interp.Case.LeafNullP
+import VsaIris.Interp.Case.LeafIntT
+import VsaIris.Interp.Case.LeafIntP
+import VsaIris.Interp.Case.LeafStrT
+import VsaIris.Interp.Case.LeafStrP
+import VsaIris.Interp.Case.LeafBoolT
+import VsaIris.Interp.Case.LeafBoolP
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -136,3 +144,13 @@ import VsaIris.Interp.ProofStringify
 #print axioms VsaIris.Interp.ms_callNewlibAbort
 #print axioms VsaIris.LocalRun.promote
 #print axioms VsaIris.Inst.Strlen.strlen_specOwnedW
+
+-- lane E1: eval_expr's leaf, var, assign and fn arms
+#print axioms VsaIris.Interp.caseT_LeafNull
+#print axioms VsaIris.Interp.caseP_LeafNull
+#print axioms VsaIris.Interp.caseT_LeafInt
+#print axioms VsaIris.Interp.caseP_LeafInt
+#print axioms VsaIris.Interp.caseT_LeafStr
+#print axioms VsaIris.Interp.caseP_LeafStr
+#print axioms VsaIris.Interp.caseT_LeafBool
+#print axioms VsaIris.Interp.caseP_LeafBool

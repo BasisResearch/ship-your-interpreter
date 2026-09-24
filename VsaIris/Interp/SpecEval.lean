@@ -64,11 +64,15 @@ end Regs
 
 /-! ## Pure geometry -/
 
-/-- A byte a load may read: RAM, off the HTIF words. -/
+/-- A byte a load may read: RAM, off the HTIF words. `win` is the string
+routines' over-read window from the byte (H1's `SharedWin`): `strlen` and
+`strcmp` load whole aligned words, so every string of an AST view needs its
+8-byte window (E1, INTERP_DESIGN.md §10 "STATEMENT CHANGES (E1)"). -/
 structure ReadOK (k : Nat) : Prop where
   lo : 0x80000000 ≤ k
   hi : k < 0x100000000
   off : k < Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 16 ≤ k
+  win : k + 8 ≤ 0x100000000 ∧ (k + 8 ≤ Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 16 ≤ k)
 
 /-- A stack pointer `s` with `n` owned bytes below it, inside the stack
 segment (`stackSL`), 16-aligned. -/

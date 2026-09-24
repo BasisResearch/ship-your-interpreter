@@ -205,7 +205,69 @@ def subst_binInt(arm: Arm, mode: str) -> dict[str, str]:
             "J3": f"{j3:08x}", "R4": f"{r4:08x}"}
 
 
-FAMILIES = {"binInt": subst_binInt}
+# Family `leaf` (lane E1): the helper each leaf kind calls and the facts that
+# kind's node gives (`LeafArm.lean`). Keys: node width `w` (field bytes read
+# from `+8`), the hypothesis binders, the node lemma, the helper spec and its
+# instance, the argument pins, the helper's precondition beyond the slot, and
+# the step turning the helper's post into `valAt sret <result>`.
+LEAF_KINDS = {
+    "null": dict(rule="EvalE.null st d env", w=0, binders="", node="have hn := leafNode_null hrepr hgeo",
+                 spec="valueNullSpec", helper="value_null",
+                 hspec="∀ p, valueNullSpec (GF := GF) (vsaModel live) N {WP} p",
+                 inst="%sret", pins="exact (by ix_reg; exact hregs.a0)",
+                 pre="ipureintro; exact hslg", post=""),
+    "int": dict(rule="EvalE.int st d env n", w=8, binders="{n : Int}",
+                node="obtain ⟨hn, hfv⟩ := leafNode_int hrepr hgeo",
+                spec="valueIntSpec", helper="value_int",
+                hspec="∀ p n, valueIntSpec (GF := GF) (vsaModel live) N {WP} p n",
+                inst="%sret %(ldv .ld m (aX + 8#64).toNat)",
+                pins="exact ⟨by ix_reg; exact hregs.a0, by ix_reg; try rfl⟩",
+                pre="ipureintro; exact hslg", post="rw [hfv]"),
+    "bool": dict(rule="EvalE.bool st d env b", w=4, binders="{b : Bool}",
+                 node="obtain ⟨hn, hfv⟩ := leafNode_bool hrepr hgeo",
+                 spec="valueBoolSpec", helper="value_bool",
+                 hspec="∀ p b, valueBoolSpec (GF := GF) (vsaModel live) N {WP} p b",
+                 inst="%sret %(ldv .lw m (aX + 8#64).toNat)",
+                 pins="exact ⟨by ix_reg; exact hregs.a0, by ix_reg; try rfl⟩",
+                 pre="ipureintro; exact hslg", post="rw [hfv]"),
+    "str": dict(rule="EvalE.str st d env x", w=8, binders="{x : String}",
+                node="obtain ⟨q, hn, hfs⟩ := leafNode_str hrepr hgeo\n"
+                     "  have hqt : (BitVec.ofNat 64 q).toNat = q := by\n"
+                     "    rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hfs.lt]",
+                spec="valueStrSpec", helper="value_str",
+                hspec="∀ p q x, valueStrSpec (GF := GF) (vsaModel live) N {WP} p q x",
+                inst="%sret %(BitVec.ofNat 64 q) %x",
+                pins="exact ⟨by ix_reg; exact hregs.a0, by ix_reg; exact hfs.ptr⟩",
+                pre="isplitl []\n    · ipureintro; exact ⟨hslg, by rw [hqt]; exact hfs.ne⟩\n"
+                    "    · rw [hqt]; iapply strAt_of_cstringWithin hfs.str (sharedWin_of_readOK hgeo) $$ Hro",
+                post=""),
+}
+
+
+def subst_leaf(arm: Arm, mode: str) -> dict[str, str]:
+    """Family `leaf` (lane E1): `eval_expr`'s constant arms (`int`, `str`,
+    `bool`, `null`): the prologue and kind dispatch, one helper call that
+    builds the value in `sret`, the shared epilogue. Param `kind` selects the
+    helper and the node facts (`LEAF_KINDS`)."""
+    runs = run_steps(arm)
+    helpers = [s for s in arm.steps if s.op == "helper"]
+    if len(runs) != 2 or len(helpers) != 1 or arm.children:
+        raise SystemExit(f"{arm.name}: family leaf needs 2 runs, 1 helper, no children")
+    j = int(helpers[0].args[1], 0)
+    r2 = int(runs[1].args[0], 0)
+    if int(runs[0].args[1], 0) != j or r2 != j + 4:
+        raise SystemExit(f"{arm.name}: the runs must meet the helper call at {j:#x}")
+    k = LEAF_KINDS[arm.params["kind"]]
+    wp = "(twpW (vsaModel live))" if mode == "T" else "(wpW (vsaModel live))"
+    return {"ARM": arm.name, "CTOR": arm.ctor, "VAL": arm.result, "TAG": str(arm.tag),
+            "W": str(k["w"]), "W8": str(8 + k["w"]), "J": f"{j:08x}", "R2": f"{r2:08x}",
+            "BINDERS": k["binders"], "NODE": k["node"], "HSPECNAME": k["spec"],
+            "HELPERNAME": k["helper"], "HSPEC": k["hspec"].replace("{WP}", wp),
+            "HINST": k["inst"], "PINS": k["pins"], "PRE": k["pre"], "POST": k["post"],
+            "RULE": k["rule"]}
+
+
+FAMILIES = {"binInt": subst_binInt, "leaf": subst_leaf}
 
 
 def emit(arm: Arm, mode: str) -> str:
