@@ -37,9 +37,20 @@ structure PHeapAt (m : Mem) (H : List (Nat × Nat)) (top brkv : Nat) (chunks : L
   brk_page : brkv % 4096 = 0
   bb_lt : ∀ bb, read64 m binblocksAddr = some bb → bb < 2 ^ 32
 
-/-- The owned image has the page-aligned block-heap shape. -/
+/-- The live blocks start at distinct addresses. `free` releases the chunk
+below its argument, so no other live block may start there. -/
+abbrev Starts (H : List (Nat × Nat)) : Prop := (H.map Prod.fst).Nodup
+
+theorem Starts.cons {H : List (Nat × Nat)} {p n : Nat} (hst : Starts H)
+    (hf : ∀ e ∈ H, e.1 ≠ p) : Starts ((p, n) :: H) := by
+  refine List.nodup_cons.2 ⟨fun hm => ?_, hst⟩
+  obtain ⟨e, he, heq⟩ := List.mem_map.1 hm
+  exact hf e he heq
+
+/-- The owned image has the page-aligned block-heap shape, over live blocks
+with distinct starts. -/
 def pShape (img : Nat → BitVec 8) (H : List (Nat × Nat)) : Prop :=
-  ∃ m top brkv chunks bins, ImgOn (vsaFoot H) img m ∧ PHeapAt m H top brkv chunks bins
+  Starts H ∧ ∃ m top brkv chunks bins, ImgOn (vsaFoot H) img m ∧ PHeapAt m H top brkv chunks bins
 
 /-- **The binary's dlmalloc layout, with a page-aligned break.** -/
 def vsaLayoutP : DlLayout where
@@ -52,34 +63,34 @@ def vsaLayoutP : DlLayout where
 theorem heapFoot_vsaLayoutP (H : List (Nat × Nat)) : heapFoot vsaLayoutP H = vsaFoot H := rfl
 
 theorem shapeLocal_vsaLayoutP : ShapeLocal vsaLayoutP := by
-  rintro H img img' h ⟨m, top, brkv, chunks, bins, hm, hs⟩
-  exact ⟨m, top, brkv, chunks, bins, fun a ha => (hm a ha).trans (by rw [h a ha]), hs⟩
+  rintro H img img' h ⟨hst, m, top, brkv, chunks, bins, hm, hs⟩
+  exact ⟨hst, m, top, brkv, chunks, bins, fun a ha => (hm a ha).trans (by rw [h a ha]), hs⟩
 
 /-- The page-aligned shape is the plain shape plus the alignment. -/
 theorem pShape_imgShape {img : Nat → BitVec 8} {H : List (Nat × Nat)} (h : pShape img H) :
     imgShape img H := by
-  obtain ⟨m, top, brkv, chunks, bins, hm, hs⟩ := h
+  obtain ⟨_, m, top, brkv, chunks, bins, hm, hs⟩ := h
   exact ⟨m, hm, top, brkv, chunks, bins, hs.heap⟩
 
 /-- **The counted capacity**: `k` credits back `2 k + extendSlack` bytes
 between the top chunk and the heap end. -/
 def vsaRoomB : RoomPred := fun img H k =>
-  ∃ m top brkv chunks bins, ImgOn (vsaFoot H) img m ∧ PHeapAt m H top brkv chunks bins ∧
+  Starts H ∧ ∃ m top brkv chunks bins, ImgOn (vsaFoot H) img m ∧ PHeapAt m H top brkv chunks bins ∧
     2 * k + extendSlack ≤ heapEnd - top
 
 theorem roomLocal_vsaRoomB : RoomLocal vsaLayoutP vsaRoomB := by
-  rintro H img img' k h ⟨m, top, brkv, chunks, bins, hm, hs, hk⟩
-  exact ⟨m, top, brkv, chunks, bins, fun a ha => (hm a ha).trans (by rw [h a ha]), hs, hk⟩
+  rintro H img img' k h ⟨hst, m, top, brkv, chunks, bins, hm, hs, hk⟩
+  exact ⟨hst, m, top, brkv, chunks, bins, fun a ha => (hm a ha).trans (by rw [h a ha]), hs, hk⟩
 
 theorem roomMono_vsaRoomB : RoomMono vsaRoomB := by
-  rintro img H k j ⟨m, top, brkv, chunks, bins, hm, hs, hk⟩
-  exact ⟨m, top, brkv, chunks, bins, hm, hs, by omega⟩
+  rintro img H k j ⟨hst, m, top, brkv, chunks, bins, hm, hs, hk⟩
+  exact ⟨hst, m, top, brkv, chunks, bins, hm, hs, by omega⟩
 
 /-- A heap with capacity has the shape. -/
 theorem vsaRoomB_shape {img : Nat → BitVec 8} {H : List (Nat × Nat)} {k : Nat}
     (h : vsaRoomB img H k) : vsaLayoutP.Shape img H := by
-  obtain ⟨m, top, brkv, chunks, bins, hm, hs, _⟩ := h
-  exact ⟨m, top, brkv, chunks, bins, hm, hs⟩
+  obtain ⟨hst, m, top, brkv, chunks, bins, hm, hs, _⟩ := h
+  exact ⟨hst, m, top, brkv, chunks, bins, hm, hs⟩
 
 /-- **The charge**: a request of `n ≥ 1` bytes costs at least its rounded
 size in credits. -/
@@ -91,6 +102,35 @@ theorem physSize_le_chg {n c : Nat} (h : vsaChg n c) : physSize n ≤ 2 * c := b
   unfold Vsa.While.roundUp16 at h2
   unfold physSize
   omega
+
+/-- A charged request's chunk exceeds its charge by at most one granule. -/
+theorem physSize_le_chg16 {n c : Nat} (h : vsaChg n c) : physSize n ≤ c + 16 := by
+  obtain ⟨h1, h2⟩ := h
+  unfold Vsa.While.roundUp16 at h2
+  unfold physSize
+  omega
+
+/-- A walk's chunks are in increasing address order. -/
+theorem walk_addr_sorted {m : Mem} {p top : Nat} {cs : List Chunk} (h : ChunkWalk m p top cs) :
+    cs.Pairwise (fun a b => a.addr < b.addr) := by
+  induction h with
+  | top => exact .nil
+  | chunk _ _ hmin _ _ rest ih =>
+    refine List.pairwise_cons.2 ⟨fun c hc => ?_, ih⟩
+    have := (rest.chunk_bounds c hc).1
+    simp only at this ⊢
+    omega
+
+/-- The in-use chunk payloads of a walk start at distinct addresses. -/
+theorem starts_inuseBlocks {m : Mem} {p top : Nat} {cs : List Chunk} (h : ChunkWalk m p top cs) :
+    Starts (inuseBlocks cs) := by
+  have hs : ((inuseBlocks cs).map Prod.fst).Pairwise (· < ·) := by
+    unfold inuseBlocks
+    rw [List.map_filterMap]
+    refine (walk_addr_sorted h).filterMap _ fun a b hab a' ha' b' hb' => ?_
+    by_cases hu : a.inuse <;> by_cases hv : b.inuse <;> simp [hu, hv] at ha' hb'
+    subst ha' hb'; omega
+  exact hs.imp (fun h => Nat.ne_of_lt h)
 
 /-- **The counted heap from VSA's boundary allocator.** An `InitialAllocatorAt`
 with a page-aligned break, a 32-bit `binblocks` word and room for the top's
@@ -106,7 +146,7 @@ theorem roomB_of_initial {m : Mem} {exts : List (Nat × Nat)} {reallocs : Nat ×
     {p : Vsa.While.Program} (hp : Vsa.MemRepr.ProgramRepr m stmts count p)
     {st' : Vsa.While.St} {n : Nat} (hcost : Vsa.While.ExecSeqCost Vsa.While.initSt 0 0 p st' .normal n) :
     vsaRoomB img (inuseBlocks chunks) n :=
-  ⟨m, top, brkv, chunks, bins, him, ⟨(blockHeapAt_of_heapAt h.heap hroom).1, hpage, hbb⟩,
+  ⟨starts_inuseBlocks h.heap.walk, m, top, brkv, chunks, bins, him, ⟨(blockHeapAt_of_heapAt h.heap hroom).1, hpage, hbb⟩,
     h.capacity p hp st' n hcost⟩
 
 end VsaIris.VsaHeap

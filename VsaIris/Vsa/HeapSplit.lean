@@ -209,13 +209,17 @@ theorem PHeapAt.topSplit {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
 theorem PHeapAt.topSplit_fresh {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
     {nb n : Nat} (hn8 : n + 8 ≤ nb) (hroom : top + nb + 32 ≤ brkv) :
-    FreshBlock vsaLayoutP H (top + 16) n ∧ (top + 16) % 16 = 0 := by
+    FreshAt H (top + 16) n ∧ (top + 16) % 16 = 0 := by
   have hH := h.heap.heap
   have hbrk := hH.brk_le
   have hlo := hH.walk.le
   have htop16 := hH.aligned.2
-  refine ⟨⟨by unfold heapStart at hlo; omega, by show heapStart ≤ _; omega,
-    by show _ ≤ heapEnd; omega, fun e he a ha hea => ?_⟩, by omega⟩
+  refine ⟨⟨⟨by unfold heapStart at hlo; omega, by show heapStart ≤ _; omega,
+    by show _ ≤ heapEnd; omega, fun e he a ha hea => ?_⟩, fun e he heq => ?_⟩, by omega⟩
+  rotate_right
+  · obtain ⟨c1, hc1, _, h1, _⟩ := hH.exact e he he
+    have := (hH.walk.chunk_bounds c1 hc1)
+    omega
   obtain ⟨c1, hc1, _, h1, h2⟩ := hH.live e he
   have hb1 := hH.walk.chunk_bounds c1 hc1
   unfold InExt at ha hea
