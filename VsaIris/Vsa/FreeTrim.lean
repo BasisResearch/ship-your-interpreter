@@ -360,4 +360,57 @@ theorem trim_sb0 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     rw [h10]; apply BitVec.eq_of_toNat_eq; rw [hsum, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
 
+/-- After `sbrk(-extra)` (`0x800072d0`): the trim state before the call at
+`M`, the memory after it with the break lowered by the extra, and the
+registers kept but for `a0` (the old break), `a4`, `a5`. -/
+structure TrimMid (C : MCtx) (R : Nat → BitVec 64) (M M' : Mem) (Y brkv : Nat) (chunks : List Chunk)
+    (bins : Nat → List Nat) : Prop where
+  st : TrimSt C R M Y brkv chunks bins
+  e : (R 8).toNat = trimExtra (brkv - Y)
+  e4 : 4096 ≤ trimExtra (brkv - Y)
+  brk : read64 M' brkAddr = some (brkv - trimExtra (brkv - Y))
+  agree : ∀ a : Nat, ¬ SbrkW (C.s.toNat - 80) a → M'[a]? = M[a]?
+  pres : ∀ a : Nat, (M[a]?).isSome → (M'[a]?).isSome
+  a0 : R 10 = BitVec.ofNat 64 brkv
+
+/-- **`sbrk(-extra)`** (`0x800072c4`): the break moves down by the extra. -/
+theorem trim_sb1 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (S : TrimSt C R M Y brkv chunks bins)
+    (hE : (R 8).toNat = trimExtra (brkv - Y)) (hE4 : 4096 ≤ trimExtra (brkv - Y))
+    (hk : ∀ R' M', TrimMid C R' M M' Y brkv chunks bins → AW C.live C.S C.Q 0x800072d0#64 R' M') :
+    AW C.live C.S C.Q 0x800072c4#64 R M := by
+  have HH := S.heap.heap.heap
+  have hlo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hlo
+  have hbrkle := HH.brk_le; have htle := HH.top_le; have hY := HH.walk.le
+  unfold heapEnd at hbrkle; unfold heapStart at hY
+  have hle := trimExtra_le (ts := brkv - Y) (by have := HH.top_size; omega) hE4
+  have hs2 : (R 2).toNat = C.s.toNat - 80 := by
+    rw [S.sp, BitVec.toNat_add]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
+  refine st_800072c4 O.live ?_
+  refine st_800072c8 O.live ?_
+  refine st_800072cc O.live ?_
+  simp only [VsaIris.ra]
+  have Sc := S.upd (R' := upd (upd (upd R 11 (0#64 - R 8)) 10 (R 18 + sign_extend (m := 64) (0x000#12))) 1
+      (BitVec.ofNat 64 (0x800072cc + 4)))
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]) (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]) (by simp only [upd_apply, Nat.reduceEqDiff, ite_false])
+  have hsum : (BitVec.ofNat 64 brkv + (upd (upd (upd R 11 (0#64 - R 8)) 10 (R 18 + sign_extend (m := 64) (0x000#12)))
+      1 (BitVec.ofNat 64 (0x800072cc + 4))) 11).toNat = brkv - trimExtra (brkv - Y) := by
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    rw [BitVec.toNat_add, BitVec.toNat_sub, BitVec.toNat_ofNat, hE]
+    simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
+    omega
+  refine sbrk_r_gen O.live (Sc.sbrkPre O rfl (by simp only [upd_apply, Nat.reduceEqDiff, ite_true]; decide) hsum)
+    (fun _ R' M' P h10 => ?_) (fun hlt => absurd hlt (by unfold heapEnd; omega))
+  simp only [upd_apply, Nat.reduceEqDiff, ite_true]
+  have hr := P.regs
+  have hs2c : ((upd (upd (upd R 11 (0#64 - R 8)) 10 (R 18 + sign_extend (m := 64) (0x000#12))) 1
+      (BitVec.ofNat 64 (0x800072cc + 4))) 2).toNat = C.s.toNat - 80 := by
+    simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hs2
+  refine hk R' M' ⟨Sc.upd (hr 2 (by decide) (by decide) (by decide)) (hr 18 (by decide) (by decide) (by decide))
+    (hr 19 (by decide) (by decide) (by decide)) (hr 9 (by decide) (by decide) (by decide)),
+    ?_, hE4, P.brk, fun a ha => P.agree a (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [hs2]; exact ha),
+    P.pres, h10⟩
+  rw [hr 8 (by decide) (by decide) (by decide)]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hE
+
 end VsaIris.VsaHeap
