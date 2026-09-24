@@ -59,13 +59,12 @@ changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
   `out.snprintfInt`). Runs done (`ProofStringify.lean`, fifteen `#ix_seg`).
   Glue in progress: shared tail (`strlen`, `malloc`, OOM/`memcpy`,
   epilogue), then the arms.
-- Old line: `stringify` (strlen/malloc/memcpy/snprintf, OOM through H5's
-  `wp_oomBlock`; `strcpy` run symbolically inline).
 
 ## Holes (`VsaIris/HOLES.md`, `IrisHoles.out`, `VsaIris/Vsa/NewlibOut.lean`)
 - `out.fputs`, `out.fputc`, `out.fwrite`, `out.fprintf`: newlib's stdout
   calls, exact about what they print (VSA assumed the same:
-  `CallIOContracts`). `out.snprintfFn`: `snprintf(buf, 64, "<fn %s>", name)`.
+  `CallIOContracts`). `out.snprintfFn`: `snprintf(buf, 64, "<fn %s>", name)`;
+  `out.snprintfInt`: `snprintf(buf, 64, "%lld", i)`.
 
 ## Findings
 - `closOwn`/`astE` carry no read geometry (`ReadOK`), so no run can load a
