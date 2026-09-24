@@ -248,6 +248,146 @@ theorem ms_callEnvNewP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live) {�
     iapply Hk
     iframe HA HS
 
+/-- **`env_define(R 10, R 11, R 12)` from a run, uncounted regime** (partial
+mode): the return branch is `ms_callEnvDefine`'s; out of memory (an array
+growth's `realloc` NULL), the helper's block runs to `exit(1)`'s entry
+(`wp_oomBlock` at `oom80002bd0`) over the arm's lowered stack; the value slot
+comes back with the abort. -/
+theorem ms_callEnvDefineP (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
+    {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
+    (hexec : JalExec (vsaModel live) i code envDefinePC)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    (hi4 : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0) {inp : Nat} {st : St} {d : Nat} {fa : Addr}
+    {x : String} {v : Value} {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {n : Nat}
+    (hsp : EnvSp (R 2) envDefineNeed) (hpv : SlotWin (R 12).toNat) (hn : envDefineNeed ≤ n)
+    (hn2 : n ≤ (R 2).toNat) (hlo : Vsa.Sim.tohostAddr + 16 ≤ (R 2).toNat - n)
+    (hfit : (R 2).toNat - n + Newlib.fwriteNeed + 64 ≤ (R 2).toNat)
+    (hhi : (R 2).toNat ≤ 0x88000000) :
+    envDefineSpec (wpW (vsaModel live)) N ∗ codeRes ∗ Newlib.binImg ∗ ms (BitVec.ofNat 64 i) R S Mt ∗
+      stackScratch (R 2) n ∗ □ frameAt fa (R 10).toNat ∗ □ strAt (R 11).toNat x ∗
+      valAt N (R 12).toNat v ∗ world N vsaLayoutP vsaRoomB inp .uncounted st d ∗
+      ((∀ R' : Nat → BitVec 64, ⌜∀ y ∈ fRegs, y ∉ (10 :: retClob) → R' y = R y⌝ -∗
+          stackScratch (R 2) n -∗ valAt N (R 12).toNat v -∗
+          world N vsaLayoutP vsaRoomB inp .uncounted ⟨st.store.define fa x v, st.out⟩ d -∗
+          ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt -∗
+          (wpW (vsaModel live)).W Φ) ∧
+        (abortRes N vsaLayoutP vsaRoomB inp (R 2) n ∗ valAt N (R 12).toNat v ∗ ownSet S byteAny -∗
+          (wpW (vsaModel live)).W Φ))
+    ⊢ (wpW (vsaModel live)).W Φ := by
+  unfold envDefineSpec
+  iintro ⟨#Hed, #Hcode, #Himg, Hms, Hst, #Hfr, #Hstr, Hval, Hw, Hk⟩
+  ihave #Hgp := codeRes_gp $$ Hcode
+  ihave ⟨Hh, Hc, Hio, Hi⟩ := (world_heapStore N inp .uncounted st d).1 $$ Hw
+  ihave ⟨Hsl, Hst⟩ := stackScratch_narrow (s := R 2) hn2 hn $$ Hst
+  ihave #Hspec := Hed $$ %.uncounted %st.store %fa %x %v %(R 10) %(R 11) %(R 12) %(R 2)
+    %(defineSaved.map fun k => (k, R k)) %(by simp [defineSaved])
+  iapply (ms_callRegsAbort (wpW _) hexec hcode (L := envDefineL) (K := [23, 24, 25, 26, 27])
+    (by decide)
+    (P := fun r => iprop(⌜r.toNat % 4 = 0 ∧ EnvSp (R 2) envDefineNeed ∧ SlotWin (R 12).toNat⌝ ∗
+      (10 : Nat) ↦ᵣ R 10 ∗ (11 : Nat) ↦ᵣ R 11 ∗ (12 : Nat) ↦ᵣ R 12 ∗ sp ↦ᵣ R 2 ∗ gp ↦ᵣ□ gpV ∗
+      clobbered argClob ∗ savedOwn (defineSaved.map fun k => (k, R k)) ∗
+      stackScratch (R 2) envDefineNeed ∗ frameAt fa (R 10).toNat ∗ strAt (R 11).toNat x ∗
+      valAt N (R 12).toNat v ∗ heapStore N (Regime.uncounted.plus (defineCost st.store fa x)) st.store))
+    (Q := fun _ => iprop(sp ↦ᵣ R 2 ∗ clobbered (10 :: retClob) ∗
+      savedOwn (defineSaved.map fun k => (k, R k)) ∗ stackScratch (R 2) envDefineNeed ∗
+      valAt N (R 12).toNat v ∗ heapStore N .uncounted (st.store.define fa x v)))
+    (X := iprop(gp ↦ᵣ□ Newlib.gpV ∗ stackScratch (R 2) envDefineNeed ∗ valAt N (R 12).toNat v ∗
+      heapStore N .uncounted st.store ∗ frameAt fa (R 10).toNat ∗ strAt (R 11).toNat x))
+    (Y := fun f => iprop(⌜f 2 = R 2 ∧ ∀ k ∈ defineSaved, f k = R k⌝ ∗
+      stackScratch (R 2) envDefineNeed ∗ valAt N (R 12).toNat v ∗
+      heapStore N .uncounted (st.store.define fa x v)))
+    (R := R) (S := S) (Mt := Mt) ?hP ?hQ)
+  case hP =>
+    simp only [envDefineL, sepL_cons]
+    iintro ⟨⟨H10, H11, H12, H2, Hcs⟩, #Hgp', Hst, Hval, Hh, #Hfr, #Hstr⟩
+    ihave ⟨Hcl, Hsv⟩ := (sepL_append _ _ _).1 $$ Hcs
+    unfold VsaIris.sp savedOwn
+    rw [show Newlib.gpV = MallocFast.gpV from rfl, Regime.plus_uncounted]
+    iframe H10 H11 H12 H2 Hgp' Hst Hfr Hstr Hval Hh
+    isplitl []
+    · ipureintro; exact ⟨hi4, hsp, hpv⟩
+    isplitl [Hcl]
+    · iapply clobbered_of_fn argClob R $$ Hcl
+    · rw [VsaIris.sepL_map]; iexact Hsv
+  case hQ =>
+    unfold VsaIris.sp savedOwn
+    iintro ⟨H2, Hcl, Hsv, Hst, Hval, Hh⟩
+    ihave ⟨%g, Hcl⟩ := clobbered_fn (10 :: retClob) (by decide) $$ Hcl
+    iexists (fun y => if y = 2 then R 2 else if y ∈ defineSaved then R y else g y)
+    simp only [envDefineL, sepL_cons]
+    rw [VsaIris.sepL_map] at *
+    ihave ⟨H10, Hcl⟩ := Hcl
+    ihave ⟨H11, H12, Hcl⟩ := (show sepL (GF := GF) retClob (fun r => r ↦ᵣ g r) ⊢
+      iprop((11 : Nat) ↦ᵣ g 11 ∗ (12 : Nat) ↦ᵣ g 12 ∗
+        sepL argClob (fun r => r ↦ᵣ g r)) by simp only [retClob, sepL_cons]; exact .rfl) $$ Hcl
+    have eCl : sepL (GF := GF) argClob (fun y => y ↦ᵣ (if y = 2 then R 2
+        else if y ∈ defineSaved then R y else g y)) = sepL argClob (fun y => y ↦ᵣ g y) :=
+      sepL_congr fun y hy => by
+        obtain ⟨h2, hs⟩ := (show ∀ y ∈ argClob, y ≠ 2 ∧ y ∉ defineSaved by decide) y hy
+        simp [h2, hs]
+    have eSv : sepL (GF := GF) defineSaved (fun y => y ↦ᵣ (if y = 2 then R 2
+        else if y ∈ defineSaved then R y else g y)) = sepL defineSaved (fun y => y ↦ᵣ R y) :=
+      sepL_congr fun y hy => by
+        have h2 := (show ∀ y ∈ defineSaved, y ≠ 2 by decide) y hy
+        simp [h2, hy]
+    simp only [ite_true, show (10 : Nat) ≠ 2 from by decide, show (11 : Nat) ≠ 2 from by decide,
+      show (12 : Nat) ≠ 2 from by decide, ite_false,
+      show (10 : Nat) ∉ defineSaved from by decide, show (11 : Nat) ∉ defineSaved from by decide,
+      show (12 : Nat) ∉ defineSaved from by decide]
+    isplitl [H10 H11 H12 H2 Hcl Hsv]
+    · iframe H10 H11 H12 H2
+      iapply (sepL_append _ _ _).2
+      rw [eCl, eSv]
+      iframe Hcl Hsv
+    iframe Hst Hval Hh
+    ipureintro
+    refine ⟨trivial, fun k hk => ?_⟩
+    have h2 := (show ∀ y ∈ defineSaved, y ≠ 2 by decide) k hk
+    simp [h2, hk]
+  iframe Hspec Hcode Hms Hgp Hst Hval Hh Hfr Hstr
+  isplit
+  · -- the return branch
+    iintro %f ⟨%⟨hf2, hfs⟩, Hst, Hval, Hh⟩ Hms
+    ihave Hk := and_elim_l $$ Hk
+    have hkeep : ∀ y ∈ fRegs, y ∉ (10 :: retClob) →
+        (fun y => if y ∈ envDefineL then f y else R y) y = R y := by
+      intro y hy hc
+      by_cases hL : y ∈ envDefineL
+      · simp only [hL, ite_true]
+        by_cases h2 : y = 2
+        · subst h2; exact hf2
+        · have hs : y ∈ defineSaved :=
+            (show ∀ z ∈ envDefineL, z ∉ (10 :: retClob) → z ≠ 2 → z ∈ defineSaved by decide) y hL hc h2
+          exact hfs y hs
+      · simp [hL]
+    ihave Hst := stackScratch_widen hn2 hn $$ [Hsl Hst]
+    · iframe Hsl Hst
+    iapply Hk $$ %(fun y => if y ∈ envDefineL then f y else R y) %hkeep Hst Hval [Hh Hc Hio Hi] Hms
+    iapply (world_heapStore N inp _ _ d).2
+    iframe Hh Hc Hio Hi
+  · -- out of memory
+    iintro ⟨-, HA, Hval⟩ HK HS
+    unfold oomAt
+    icases HA with ⟨Hpc, Hsp, Hcl, Hst, -⟩
+    rw [show VsaIris.ra :: 10 :: retClob ++ defineSaved = envOomRegs from rfl]
+    ihave ⟨%r, %cs, Hra, Hargs, Htmp, Hcs⟩ := oom_regs R $$ [Hcl HK]
+    · iframe Hcl HK
+    ihave Hst := stackScratch_widen hn2 hn $$ [Hsl Hst]
+    · iframe Hsl Hst
+    ihave Hk := and_elim_r $$ Hk
+    have e64 : (R 2 - 64#64).toNat = (R 2).toNat - 64 := toNat_sub_frame (by
+      simp only [BitVec.toNat_ofNat]; have := hsp.lo; unfold htifLo envDefineNeed at this; omega)
+    iapply Newlib.Oom.wp_oomBlock HN live hcl (wpW _) N vsaLayoutP vsaRoomB inp
+      Newlib.OomSites.oom80002bd0 Newlib.OomSites.oom80002bd0_ok (R 2) (R 2 - 64#64) r n
+      ⟨hn2, hlo, by rw [e64]; omega, by rw [e64]; show (R 2).toNat - 64 + 0 ≤ (R 2).toNat; omega,
+        hhi, by rw [e64]; have := hsp.align; omega⟩
+      cs st.out
+    rw [show BitVec.ofNat 64 Newlib.OomSites.oom80002bd0.head = 0x80002bd0#64 from rfl]
+    iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hio Hc
+    iintro HA
+    iapply Hk
+    iframe HA Hval HS
+
 end
 
 end VsaIris.Interp

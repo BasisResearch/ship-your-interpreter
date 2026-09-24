@@ -1,0 +1,119 @@
+import VsaIris.Interp.Case.{ARM}T
+
+/-!
+# `{ARM}`, partial mode (family `execVarInit`, lane E5)
+
+`caseP_{ARM}`: from the Löb hypothesis `evalSpecsP`, `exec_stmt` on
+`.varDecl x (some e)` meets its partial dispatch-point spec: the initializer
+through the Löb hypothesis (`ms_callEvalPF`: its abort aborts the arm), then
+`varTailP` (`env_define` uncounted; out of memory the arm aborts through
+`CoreOK`), returning with `ExecS.varInit`. Error premises as E2's.
+Template: `scripts/iris_arms/templates/execVarInit_P.lean`.
+-/
+
+namespace VsaIris.Interp
+
+open VsaIris VsaIris.Sym VsaIris.MallocFast
+open Vsa.MemRepr Vsa.Sim
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap
+
+theorem caseP_{ARM} {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+    {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {inp : Nat}
+    {Core : IProp GF} (HN : Newlib.NewlibHoles) (hcl : Newlib.CodeLive live)
+    (hcore : CoreOK N vsaLayoutP vsaRoomB inp Core)
+    (hed : ⊢ envDefineSpec (GF := GF) (wpW (vsaModel live)) N)
+    {st : St} {d env : Nat} {x : String} {e : Expr} :
+    errCtx inp ∗ evalSpecsP (GF := GF) (vsaModel live) N vsaLayoutP vsaRoomB inp Core ⊢
+      execDispP_body (GF := GF) (vsaModel live) N vsaLayoutP vsaRoomB inp Core st d env
+        (.varDecl x (some e)) := by
+  iintro ⟨#Herr, #IH⟩
+  ihave #Himg := errCtx_img inp $$ Herr
+  unfold execDispP_body
+  iintro !> %Φ %aS %aE %aRet %s %R %Mt %ret %v8 %v9 %v18 %v19 Hpre HK
+  unfold execDispPre
+  icases Hpre with ⟨Hms, %hf, #Hcode, #Hast, #Hfb, Hst, Hslot, Hw⟩
+  unfold astSG
+  icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
+  obtain ⟨pn, pi, hn⟩ := varNode_of hrepr hgeo
+  obtain ⟨hpe, hpi0⟩ := hn.initRepr e rfl
+  obtain ⟨hfg, hneed⟩ := execFrameGeom_of hf.stack
+  have hoff := execSP_offF (s := s) hfg.sf (by have := hfg.hi; omega)
+  have g := callGeomF (f := 176) (o := 104) hf.stack hfg.sf (execNeed_varDecl x e d) (by decide)
+    (by decide) (by decide)
+  have g1 : (execSP s + 104#64).toNat = s.toNat - 176 + 104 := g.slot
+  have hbb : e.bodiesBound perCallBudget = true := hf.bodies
+  ihave #Hdv := roOwn_data hn.node.view $$ [Hcode Hro]
+  · iframe Hcode Hro
+  iapply wp_swpF (wpW _) (F := iprop(evalSpecsP (vsaModel live) N vsaLayoutP vsaRoomB inp Core ∗
+      Newlib.binImg ∗ codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
+      stackScratch (execSP s) (execNeed (.varDecl x (some e)) d - 176) ∗ slot24 aRet.toNat ∗
+      world N vsaLayoutP vsaRoomB inp .uncounted st d ∗
+      ((∀ (st' : St) (status : Status), ⌜ExecS st d env (.varDecl x (some e)) st' status⌝ -∗
+        execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp (wpW (vsaModel live)) Φ .uncounted st' d
+          (.varDecl x (some e)) status aRet s R ret v8 v9 v18 v19) ∧
+       (iprop(abortAt Core s (execNeed (.varDecl x (some e)) d) ∗ slot24 aRet.toNat) -∗
+          (wpW (vsaModel live)).W Φ))))
+  rotate_left
+  · iframe Hdv Hms IH Himg Hcode Hro Hfb Hst Hslot Hw HK
+  intro F'
+  unfold execDispPC
+  refine VarArm_run1I (aI := BitVec.ofNat 64 pi) hlive hfg.sf hfg.lo hfg.hi hfg.al hn.node.lo
+    hn.node.hi hn.node.off hf.regs.s0 hf.regs.a6 hf.regs.a4 hf.regs.sp hn.node.kind hn.node.kindu
+    hn.init hpi0 ?_
+  intros
+  apply swp_closeRM
+  intro R0 Mt1 hR0 hMt1
+  unfold F'
+  iintro ⟨⟨#IH, #Himg, #Hcode, #Hro, #Hfb, Hst, Hslot, Hw, HK⟩, Hms⟩
+  -- the initializer, through the Löb hypothesis
+  ihave He := evalSpecsP_at Core st d env e $$ IH
+  iapply ms_callEvalPF (N := N) (L := vsaLayoutP) (Room := vsaRoomB) (inp := inp) (i := 0x800040ec)
+    (jalx_800040ec live (fun p hp => hlive _ (interp_code_800040ec p hp)))
+    interp_code_800040ec (by decide) (slot := execSP s + 104#64)
+    (aC := BitVec.ofNat 64 pi) (aE := aE) (s0 := s) (sF := execSP s) (f := 176)
+    (m := execNeed (.varDecl x (some e)) d - 176) (n0 := execNeed (.varDecl x (some e)) d)
+    (Out := slot24 aRet.toNat)
+    (Kret := iprop(∀ (st' : St) (status : Status), ⌜ExecS st d env (.varDecl x (some e)) st' status⌝ -∗
+      execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp (wpW (vsaModel live)) Φ .uncounted st' d
+        (.varDecl x (some e)) status aRet s R ret v8 v9 v18 v19))
+    (execSP_eq s).symm g.child g.fits g.below (by omega) hf.stack.le g.slotGeom hbb
+  iframe He Hcode Hfb Hms Hst Hw Hslot HK
+  isplitl []
+  · ipureintro
+    subst hR0
+    refine ⟨⟨by ix_reg, by ix_reg; exact hf.regs.s1, by ix_reg, by ix_reg; exact hf.regs.s3,
+      by ix_reg; exact hf.regs.sp⟩, fun b hb => ?_⟩
+    simp only [VsaIris.InExt] at hb g1 ⊢; omega
+  isplitl []
+  · imodintro; rw [hn.initNat]; iapply astEG_of_view hpe hn.node.geo $$ Hro
+  iintro %R1 %w0 %w1 %w2 %st' %v %hE %hkeep1 #Hv1 Hms Hst Hw Hslot HK
+  have hk1 : KeepRegs calleeSaved R (upd R1 1 (BitVec.ofNat 64 (0x800040ec + 4))) := by
+    subst hR0
+    intro y hy
+    simp only [calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hy
+    rcases hy with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+      ix_keep [hkeep1]
+  have hsub : ∀ y ∈ [20, 21, 22, 23, 24, 25, 26, 27], y ∈ calleeSaved := by decide
+  -- the copy, env_define, the exit
+  iapply varTailP hlive HN hcl hcore (N := N) (inp := inp) (st := st') (env := env) (v := v)
+    (aS := aS) (aE := aE) (aRet := aRet) (s := s) (ret := ret) (v8 := v8) (v9 := v9) (v18 := v18)
+    (v19 := v19) (R0 := R) (R := upd R1 1 (BitVec.ofNat 64 (0x800040ec + 4)))
+    (Mt := slotWrite Mt1 (execSP s + 104#64).toNat w0 w1 w2) (w0 := w0) (w1 := w1) (w2 := w2)
+    hf.stack hf.ral hn hgeo ((hk1 2 (by decide)).trans hf.regs.sp)
+    ((hk1 8 (by decide)).trans hf.regs.s0) ((hk1 19 (by decide)).trans hf.regs.s3)
+    (fun y hy => hk1 y (hsub y hy))
+    (by have := hfg.lo; rw [hMt1]; ix_esaved hf.saved using hoff)
+    (by rw [← g1]; try ix_fwd)
+    (by rw [show s.toNat - 176 + 112 = (execSP s + 104#64).toNat + 8 by omega]; try ix_fwd)
+    (by rw [show s.toNat - 176 + 120 = (execSP s + 104#64).toNat + 16 by omega]; try ix_fwd)
+  ihave Hed := hed
+  iframe Hed Hcode Himg Hro Hfb Hv1 Hms Hst Hslot Hw
+  isplit
+  · ihave HK := and_elim_l $$ HK
+    iapply HK $$ %⟨st'.store.define env x v, st'.out⟩ %Status.normal
+      %(ExecS.varInit st d env x e st' v hE)
+  · ihave HK := and_elim_r $$ HK
+    iexact HK
+
+end VsaIris.Interp
