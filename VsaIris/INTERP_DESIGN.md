@@ -843,3 +843,12 @@ without the fact and no other resource carries it:
   frame with `count = cap` off that sequence would grow without credits.
   `capForAux` mirrors `arrayCostAux`'s fuel recursion. `FrameBridge` carries
   the three facts at the boundary (`ctl_frameBridge`: cap 8 for 3 natives).
+- **`FrameLayout.arrays` states the arrays' exact extents**: with `cap > 0`,
+  `nblk = (pn, 8 * cap)` and `vblk = (pv, 24 * cap)` (was: lower bounds).
+  `env_define`'s growth `realloc`s each array from its live extent
+  (`realloc(names, 16 * cap)`), and `realloc`'s spec takes the live block
+  `(p, nOld)` at its heap entry with `nOld < nNew`; the heap's entries are the
+  exact requests (`env_define` allocates `8 * cap` and `24 * cap`), so only
+  the equality gives `nOld = 8 * cap < 16 * cap`. `FrameLayout.arrays_le`
+  recovers the componentwise bounds; `FrameBridge.arrays` carries the same
+  equality (`ctl_frameBridge`: 64 and 192 bytes at cap 8).

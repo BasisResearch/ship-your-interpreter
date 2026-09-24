@@ -101,7 +101,7 @@ theorem ctl_frameBridge :
   parent := heapStoreFacts.parent
   count_le := by decide
   empty := by intro h; exact absurd h (by decide)
-  arrays := by intro _; exact ⟨rfl, by decide, rfl, by decide⟩
+  arrays := by intro _; exact ⟨rfl, rfl⟩
   disjoint := ctlGeom_disjoint
   win := by
     intro b hb

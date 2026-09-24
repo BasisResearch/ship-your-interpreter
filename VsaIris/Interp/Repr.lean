@@ -318,12 +318,18 @@ structure FrameLayout (img : Nat → BitVec 8) (G : FrameGeom) (n : Nat) : Prop 
   parent : imgLE img (G.e + 24) 8 = G.par
   count_le : n ≤ G.cap
   empty : G.cap = 0 → G.pn = 0 ∧ G.pv = 0
-  arrays : 0 < G.cap → G.nblk.1 = G.pn ∧ 8 * G.cap ≤ G.nblk.2 ∧
-    G.vblk.1 = G.pv ∧ 24 * G.cap ≤ G.vblk.2
+  arrays : 0 < G.cap → G.nblk = (G.pn, 8 * G.cap) ∧ G.vblk = (G.pv, 24 * G.cap)
   disjoint : G.blocks.Pairwise ExtDisj
   win : ∀ b ∈ G.blocks, BlockWin b
   e_align : G.e % 8 = 0
   cap_canon : G.cap = capFor n
+
+/-- The arrays' extents, componentwise. -/
+theorem FrameLayout.arrays_le {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
+    (h : FrameLayout img G n) (hc : 0 < G.cap) :
+    G.nblk.1 = G.pn ∧ 8 * G.cap ≤ G.nblk.2 ∧ G.vblk.1 = G.pv ∧ 24 * G.cap ≤ G.vblk.2 := by
+  obtain ⟨h1, h2⟩ := h.arrays hc
+  rw [h1, h2]; exact ⟨rfl, Nat.le_refl _, rfl, Nat.le_refl _⟩
 
 /-- The bindings of a frame: name `i` is the string at `names[i]`, value `i`
 the words at `vals[i]` (persistent meanings; the words are in the image). -/

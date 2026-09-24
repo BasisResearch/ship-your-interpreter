@@ -101,7 +101,7 @@ theorem FrameLayout.count_lt {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
   have hle := h.count_le
   rcases Nat.eq_zero_or_pos G.cap with h0 | hpos
   · omega
-  obtain ⟨h1, h2, -, -⟩ := h.arrays hpos
+  obtain ⟨h1, h2, -, -⟩ := h.arrays_le hpos
   have hw := h.win G.nblk (by simp [FrameGeom.blocks, show G.cap ≠ 0 by omega])
   have := hw.lo; have := hw.hi
   omega
@@ -121,7 +121,7 @@ theorem FrameLayout.slot {img : Nat → BitVec 8} {G : FrameGeom} {n i : Nat}
       BlockWin G.nblk ∧ BlockWin G.vblk := by
   have hle := h.count_le
   have hpos : 0 < G.cap := by omega
-  obtain ⟨h1, h2, h3, h4⟩ := h.arrays hpos
+  obtain ⟨h1, h2, h3, h4⟩ := h.arrays_le hpos
   refine ⟨by omega, h1, by omega, h3, by omega,
     h.win _ (by simp [FrameGeom.blocks, show G.cap ≠ 0 by omega]),
     h.win _ (by simp [FrameGeom.blocks, show G.cap ≠ 0 by omega])⟩

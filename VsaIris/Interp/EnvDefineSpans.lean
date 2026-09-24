@@ -305,7 +305,7 @@ theorem FrameLayout.cap_lt {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
     (h : FrameLayout img G n) : G.cap < 2 ^ 29 := by
   rcases Nat.eq_zero_or_pos G.cap with h0 | hpos
   · omega
-  obtain ⟨-, h2, -, -⟩ := h.arrays hpos
+  obtain ⟨-, h2, -, -⟩ := h.arrays_le hpos
   have hw := h.win G.nblk (by simp [FrameGeom.blocks, show G.cap ≠ 0 by omega])
   have := hw.lo; have := hw.hi
   omega

@@ -540,8 +540,7 @@ structure FrameBridge (P : Nat → Prop) (m : Mem) (N : NativeAddrs) (φc : Addr
   parent : read64 m (G.e + 24) = some G.par
   count_le : f.vars.length ≤ G.cap
   empty : G.cap = 0 → G.pn = 0 ∧ G.pv = 0
-  arrays : 0 < G.cap → G.nblk.1 = G.pn ∧ 8 * G.cap ≤ G.nblk.2 ∧
-    G.vblk.1 = G.pv ∧ 24 * G.cap ≤ G.vblk.2
+  arrays : 0 < G.cap → G.nblk = (G.pn, 8 * G.cap) ∧ G.vblk = (G.pv, 24 * G.cap)
   disjoint : G.blocks.Pairwise ExtDisj
   win : ∀ b ∈ G.blocks, BlockWin b
   e_align : G.e % 8 = 0
@@ -577,7 +576,9 @@ theorem FrameBridge.nameCover {P : Nat → Prop} {m : Mem} {N : NativeAddrs} {φ
     (h : FrameBridge P m N φc G f img) {i j : Nat} (hi : i < f.vars.length) (hj : j < 8) :
     BlocksCover G.blocks (G.pn + 8 * i + j) := by
   have hcap : 0 < G.cap := by have := h.count_le; omega
-  obtain ⟨h1, h2, -, -⟩ := h.arrays hcap
+  obtain ⟨h12, -⟩ := h.arrays hcap
+  have h1 : G.nblk.1 = G.pn := by rw [h12]
+  have h2 : 8 * G.cap ≤ G.nblk.2 := by rw [h12]; exact Nat.le_refl _
   refine ⟨G.nblk, ?_, ?_⟩
   · simp [FrameGeom.blocks, show G.cap ≠ 0 by omega]
   · unfold InExt
@@ -592,7 +593,9 @@ theorem FrameBridge.valCover {P : Nat → Prop} {m : Mem} {N : NativeAddrs} {φc
     (h : FrameBridge P m N φc G f img) {i j : Nat} (hi : i < f.vars.length) (hj : j < 24) :
     BlocksCover G.blocks (G.pv + 24 * i + j) := by
   have hcap : 0 < G.cap := by have := h.count_le; omega
-  obtain ⟨-, -, h3, h4⟩ := h.arrays hcap
+  obtain ⟨-, h34⟩ := h.arrays hcap
+  have h3 : G.vblk.1 = G.pv := by rw [h34]
+  have h4 : 24 * G.cap ≤ G.vblk.2 := by rw [h34]; exact Nat.le_refl _
   refine ⟨G.vblk, ?_, ?_⟩
   · simp [FrameGeom.blocks, show G.cap ≠ 0 by omega]
   · unfold InExt
