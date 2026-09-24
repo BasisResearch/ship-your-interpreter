@@ -10,10 +10,19 @@ changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
   (+ G's `valueIntSpec`), `valueTruthySpec`, `valueEqualSpec`,
   `valuePrintSpec`, `nativePrintSpec`, `nativePrintlnSpec`; callee spec
   `strcmpSpecV` (H3). `native_assert` and `stringify` statements: in flight.
-- **Proved, for either WP** (`ProofValueCons.lean`): `valueNull_spec`,
-  `valueBool_spec`, `valueInt_spec` (discharges G's stub), `valueStr_spec`.
-  Each is `helper_leaf` (`HelperRun.lean`: a helper as one symbolic run) plus
-  one `ix_run`.
+- **Proved, for either WP** (axioms ⊆ {propext, Classical.choice, Quot.sound},
+  `VsaIris/Audit.lean`):
+  - `valueNull_spec`, `valueBool_spec`, `valueInt_spec` (discharges G's stub),
+    `valueStr_spec` (`ProofValueCons.lean`): `helper_leaf` (`HelperRun.lean`,
+    a helper as one symbolic run) plus one `ix_run` each;
+  - `valueTruthy_spec` (`ProofValueTruthy.lean`);
+  - `valueEqual_spec` (`ProofValueEqual.lean`): every kind; strings through
+    `strcmpSpecV` (H3) at `jal 0x800028d4`, closures by the store's address
+    map (`storeRepr_clos_inj`), natives by `NativeInj`; one lemma per arm;
+  - `valuePrint_spec` (`ProofValuePrint.lean`), given `IrisHoles.out`: every
+    arm tail-calls newlib (`ms_tailNewlib`, `NewlibCall.lean`); the closure
+    arm reads the closure object and the `EX_FN` name field through a data
+    view (`roOwn_clod`).
 - **Generator** (`scripts/gen_interp_steps.py`, shared with G): the step table
   covers the value helpers, the natives and `stringify` (their kind tables and
   `stringify`'s `.rodata` constant as table words); `sltu`/`sltiu` get
@@ -24,9 +33,8 @@ changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
   `(by decide)` at the call site; G's template and cases regenerated.
 
 ## In flight
-- `value_truthy`, `value_equal` (strcmp call), `value_print` (tail calls
-  into `IrisHoles.out`), natives, `stringify` (strlen/malloc/memcpy/snprintf,
-  OOM through H5's `wp_oomBlock`; `strcpy` is run symbolically inline).
+- natives `print`/`println`/`assert`, `stringify` (strlen/malloc/memcpy/
+  snprintf, OOM through H5's `wp_oomBlock`; `strcpy` run symbolically inline).
 
 ## Holes (`VsaIris/HOLES.md`, `IrisHoles.out`, `VsaIris/Vsa/NewlibOut.lean`)
 - `out.fputs`, `out.fputc`, `out.fwrite`, `out.fprintf`: newlib's stdout
@@ -34,6 +42,10 @@ changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
   `CallIOContracts`). `out.snprintfFn`: `snprintf(buf, 64, "<fn %s>", name)`.
 
 ## Findings
+- `closOwn`/`astE` carry no read geometry (`ReadOK`), so no run can load a
+  closure object or its `EX_FN` node from them. `dispRes` (what `value_print`
+  needs of a closure) carries it; its supplier is the `EX_FN` arm (heap block,
+  program AST) or a geometry field on `closOwn`. The `call` arm needs the same.
 - **Q8**: `stringify` cuts a named closure's rendering at 63 characters
   (`snprintf` into `char buf[64]`); `Value.catDisplay` does not, so the
   concat rule disagrees with the machine for names longer than 58 characters
