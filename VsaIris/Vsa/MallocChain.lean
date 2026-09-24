@@ -11,12 +11,9 @@ its re-binning (`rebin`, `rebinL`), the block search's entry, the top split
 and `malloc_extend_top` (`bb_top`, `bb_entry`, `extend_top`) — into one statement
 from the function's entry `0x800047a8`.
 
-Its hypotheses are exactly the joins still to prove, so the file is the
-residual ledger for `IrisHoles.alloc`'s malloc half:
-
-| PC | what runs there |
-|---|---|
-| `0x80004978` | the block walk over `binblocks` |
+Its one hypothesis is the block walk over `binblocks` (`0x80004978`), which
+`bw_find` (`MallocBlocks2.lean`) proves; `malloc_all` there is the closed
+statement.
 -/
 
 namespace VsaIris.VsaHeap
@@ -34,7 +31,7 @@ theorem from_lr {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     (hsf : ScanFrom chunks bins nb idx) (G : LRRegs nb idx R) (h8 : R 8 = reentV)
     (hblocks : ∀ R' Mt brkv' chunks' bins' nb idx bb, MFrame C R' Mt →
       MHeap C Mt brkv' chunks' bins' → bins' 1 = [] → ScanFrom chunks' bins' nb idx →
-      NbOK C.n nb → idx < numBins → LRRegs nb idx R' →
+      NbOK C.n nb → nb < 2 ^ 31 → idx < numBins → 1 < idx → LRRegs nb idx R' →
       (R' 29).toNat = binAt 1 → R' 8 = reentV → read64 Mt binblocksAddr = some bb →
       2 ^ (idx / 4) ≤ bb → (R' 11).toNat = bb → (R' 10).toNat = 2 ^ (idx / 4) →
       AW C.live C.S C.Q 0x80004978#64 R' Mt) :
@@ -48,7 +45,7 @@ theorem from_lr {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
         (fun hle R' F' G' h8' h29' h11' h10' =>
           hblocks R' Mt'' _ _ _ nb _ bb'' F' Hp'' hb1
             (hsf.imp id fun ⟨x, sz, hx, hfr, hle⟩ => ⟨x, sz, hsub idx (by omega) x hx, hfr, hle⟩)
-            hnb hidx G' h29' h8' hbb hle h11' h10')
+            hnb hnb31 hidx hidx1 G' h29' h8' hbb hle h11' h10')
   refine lr_last O F Hp G h8 hnb hnb31 (fun hb1 R3 F3 G3 h29 h83 => ?_)
     (fun v sz hbin hfree hle R3 F3 G3 V3 _ => lr_split O F3 Hp G3 V3 hnb hbin hfree hle)
     (fun v sz hfree hlt R3 Mt3 F3 D3 G3 V3 h83 =>
@@ -59,7 +56,7 @@ theorem from_lr {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
   exact bb_top O F3 Hp G3 h83 hidx hnb hnb31
     (fun hsmallTop R4 F4 G4 T4 h84 => extend_top O F4 Hp G4 T4 h84 hnb hnb31 hsmallTop) h29
     (fun bb hbb hle R4 F4 G4 h84 h29' h11 h10 =>
-      hblocks R4 Mt _ _ _ nb _ bb F4 Hp hb1 hsf hnb hidx G4 h29' h84 hbb hle h11 h10)
+      hblocks R4 Mt _ _ _ nb _ bb F4 Hp hb1 hsf hnb hnb31 hidx hidx1 G4 h29' h84 hbb hle h11 h10)
 
 /-- **`_malloc_r` on its proved paths.** From the entry, with the block walk
 still open as a hypothesis, a request either returns a block off a small bin,
@@ -72,7 +69,7 @@ theorem malloc_paths {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
     (E : MEntry C R) (Hp : MHeap C C.Mt0 brkv chunks bins)
     (hblocks : ∀ R' Mt brkv' chunks' bins' nb idx bb, MFrame C R' Mt →
       MHeap C Mt brkv' chunks' bins' → bins' 1 = [] → ScanFrom chunks' bins' nb idx →
-      NbOK C.n nb → idx < numBins → LRRegs nb idx R' →
+      NbOK C.n nb → nb < 2 ^ 31 → idx < numBins → 1 < idx → LRRegs nb idx R' →
       (R' 29).toNat = binAt 1 → R' 8 = reentV → read64 Mt binblocksAddr = some bb →
       2 ^ (idx / 4) ≤ bb → (R' 11).toNat = bb → (R' 10).toNat = 2 ^ (idx / 4) →
       AW C.live C.S C.Q 0x80004978#64 R' Mt) :

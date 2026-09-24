@@ -499,4 +499,272 @@ theorem bw_next {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv 
         (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.a5)
         (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.t3)
 
+/-- **A block's scan** (`0x800049a8`): bin `start`'s header in `t5`/`t1`, its
+last member in `a3`, then the bin loop from `start`. -/
+theorem bw_block {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} {nb start : Nat}
+    (W : BW C Mt brkv chunks bins nb R) (h17 : (R 17).toNat = start)
+    (h10 : (R 10).toNat = 2 ^ (start / 4)) (h28 : (R 28).toNat = 31)
+    (hsf : ScanFrom chunks bins nb start) (hs1 : 1 < start) (hsn : start < numBins)
+    (hblk : ∀ R', BWBlock C Mt brkv chunks bins nb start R' → (R' 31).toNat = bend start →
+      (∀ j, start ≤ j → j < bend start → bins j = []) → AW C.live C.S C.Q 0x80004e48#64 R' Mt) :
+    AW C.live C.S C.Q 0x800049a8#64 R Mt := by
+  have HH := W.heap.heap.heap.heap
+  have ha6 := W.a6
+  have hg := binAt_geo start hsn
+  have hring := (binList_iff_ring.1 (HH.bins_list start (by omega) hsn)).1
+  obtain ⟨l, hl⟩ : ∃ l, (binAt start :: bins start).getLast? = some l := ⟨_, List.getLast?_cons⟩
+  have hbk := ring_bk_head hring hl
+  have hbklt := Vsa.Sim.read64_lt _ _ _ hbk
+  refine st_800049a8 O.live ?_
+  refine st_800049ac O.live ?_
+  refine st_800049b0 O.live ?_
+  refine st_800049b4 O.live ?_
+  refine st_800049b8 O.live ?_
+  refine st_800049bc O.live ?_
+  sx_norm
+  have hT : (R 16 + ((BitVec.signExtend 64 (BitVec.extractLsb 31 0 (R 17 <<< 1 + 2#64))) <<< 3 +
+      18446744073709551600#64)).toNat = binAt start := by
+    have h1 : (R 17 <<< 1).toNat = 2 * start := by
+      rw [BitVec.toNat_shiftLeft, h17, Nat.shiftLeft_eq]; unfold numBins at hsn; omega
+    have h2 := sx32_add_toNat (x := R 17 <<< 1) (k := 2) (by rw [h1]; unfold numBins at hsn; omega)
+    rw [h1] at h2
+    rw [BitVec.toNat_add, BitVec.toNat_add, BitVec.toNat_shiftLeft, h2, ha6, Nat.shiftLeft_eq]
+    unfold binAt avAddr; unfold numBins at hsn
+    simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
+  have hE : (R 16 + ((BitVec.signExtend 64 (BitVec.extractLsb 31 0 (R 17 <<< 1 + 2#64))) <<< 3 +
+      18446744073709551600#64) + 24#64).toNat = binAt start + 24 := by
+    rw [BitVec.toNat_add, hT]; unfold binAt avAddr at hg ⊢
+    simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
+  refine st_800049c0 O.live ?_ ?_ ?_
+  · sx_norm; rw [hE]; unfold LdOK Vsa.Sim.tohostAddr; omega
+  · sx_norm; rw [hE]; exact O.bin_link hsn (.inr rfl)
+  sx_norm
+  rw [hE, ldv_at hbk _ rfl]
+  refine st_800049c4 O.live ?_
+  refine bw_bins O hblk _ start _ rfl (Nat.le_refl _) (by unfold bend; omega)
+    ⟨W.of_eq ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_, ?_, ?_, ?_, ?_, hsf, hs1, hsn⟩ ?_ ?_ ?_
+    (fun j h1 h2 => absurd h2 (by omega)) <;>
+    try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · exact h17
+  · exact h10
+  · exact hT
+  · exact h28
+  · exact hT
+  · simp; exact h17
+  · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbklt]
+    rw [getLast_cons_rev] at hl; cases hl; rfl
+
+/-- **A block from its scan to its clearing**: the scan (`bw_block`) finds
+nothing, so the block's bins below the start are checked and its bit
+possibly cleared (`bw_clear`) before the next-block search. -/
+theorem bw_scan {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} {nb start : Nat}
+    (W : BW C Mt brkv chunks bins nb R) (h17 : (R 17).toNat = start)
+    (h10 : (R 10).toNat = 2 ^ (start / 4)) (h28 : (R 28).toNat = 31)
+    (hsf : ScanFrom chunks bins nb start) (hs4 : 4 ≤ start) (hsn : start < numBins)
+    (hnext : ∀ R' Mt' bb', BWNext C Mt' brkv chunks bins nb (start / 4) bb' R' →
+      AW C.live C.S C.Q 0x80004e64#64 R' Mt') :
+    AW C.live C.S C.Q 0x800049a8#64 R Mt :=
+  bw_block O W h17 h10 h28 hsf (by omega) hsn fun R' B h31 hemp => by
+    have hlo : binIndex nb < start := by
+      rcases hsf with h | ⟨x, sz, hx, _, _⟩
+      · exact h
+      · rw [hemp start (Nat.le_refl _) (by unfold bend; omega)] at hx; cases hx
+    exact bw_clear O hs4 hsn (by unfold bend; omega) hnext _ start R' rfl (by omega) (Nat.le_refl _)
+      B.bw B.a7 B.t5 B.a0 h31 B.t3 hemp
+
+/-- The walk's exit to the top (`0x80004a2c`), from any memory. -/
+abbrev BWTop (C : MCtx) (brkv : Nat) (chunks : List Chunk) (bins : Nat → List Nat) (nb : Nat) : Prop :=
+  ∀ R' Mt', BW C Mt' brkv chunks bins nb R' → AW C.live C.S C.Q 0x80004a2c#64 R' Mt'
+
+/-- **The walk over the blocks** (`0x80004e64` after block `b`): an induction
+over the blocks left. -/
+theorem bw_walk {C : MCtx} (O : MOK C) {brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} {nb : Nat} (htop : BWTop C brkv chunks bins nb) :
+    ∀ n b Mt bb (R : Nat → BitVec 64), 32 - b ≤ n → BWNext C Mt brkv chunks bins nb b bb R →
+      AW C.live C.S C.Q 0x80004e64#64 R Mt := by
+  intro n
+  induction n with
+  | zero => intro b Mt bb R hn N; have := N.bl; omega
+  | succ n ih =>
+    intro b Mt bb R hn N
+    refine bw_next O N (htop · Mt) fun R' c W hbc hc32 _ h17 h10 h28 => ?_
+    have hlo := N.lo
+    have hc4 : 4 * c / 4 = c := by omega
+    refine bw_scan O W h17 (by rw [hc4]; exact h10) h28 (.inl (by omega)) (by omega)
+      (by unfold numBins; omega) fun R'' Mt'' bb'' N'' => ?_
+    rw [hc4] at N''
+    exact ih c Mt'' bb'' R'' (by omega) N''
+
+/-- **A found block** (`0x800049a4`): `t3 = 31`, then the walk from `start`. -/
+theorem bw_found {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} {nb start : Nat}
+    (htop : BWTop C brkv chunks bins nb)
+    (W : BW C Mt brkv chunks bins nb R) (h17 : (R 17).toNat = start)
+    (h10 : (R 10).toNat = 2 ^ (start / 4))
+    (hsf : ScanFrom chunks bins nb start) (hs4 : 4 ≤ start) (hsn : start < numBins) :
+    AW C.live C.S C.Q 0x800049a4#64 R Mt := by
+  refine st_800049a4 O.live ?_
+  refine bw_scan O (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) h17 h10 (by sx_norm) hsf hs4 hsn
+    fun R' Mt' bb' N => bw_walk O htop _ _ Mt' bb' R' (Nat.le_refl _) N
+
+/-- The initial search's loop (`0x80004994`): block `c`'s bit is clear; try
+the next. -/
+theorem bw_find_loop {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} {nb bb t : Nat} (htop : BWTop C brkv chunks bins nb)
+    (ht : bb / 2 ^ t % 2 = 1) (ht32 : t < 32) :
+    ∀ d c (R : Nat → BitVec 64), t - c = d → c < t → BW C Mt brkv chunks bins nb R →
+      (R 10).toNat = 2 ^ c → (R 17).toNat = 4 * c → (R 11).toNat = bb → binIndex nb < 4 * c →
+      AW C.live C.S C.Q 0x80004994#64 R Mt := by
+  intro d
+  induction d with
+  | zero => intro c R h1 h2; omega
+  | succ d ih =>
+    intro c R hd hct W h10 h17 h11 hlo
+    refine st_80004994 O.live ?_
+    refine st_80004998 O.live ?_
+    refine st_8000499c O.live ?_
+    sx_norm
+    have h10' : (R 10 <<< 1).toNat = 2 ^ (c + 1) := by
+      rw [BitVec.toNat_shiftLeft, h10, Nat.shiftLeft_eq, Nat.pow_succ]
+      have : 2 ^ c * 2 < 2 ^ 64 := by
+        rw [← Nat.pow_succ]; exact Nat.pow_lt_pow_right (by omega) (by omega)
+      omega
+    have h17' : (BitVec.signExtend 64 (BitVec.extractLsb 31 0 (R 17 + 4#64))).toNat = 4 * (c + 1) := by
+      have := sx32_add_toNat (x := R 17) (k := 4) (by rw [h17]; omega)
+      rw [h17] at this; rw [this]; omega
+    have hbt := bit_test (x := R 11) h10'
+    rw [h11] at hbt
+    refine st_800049a0 O.live (fun hz => ?_) (fun hnz => ?_)
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hz
+      have hc1 := hbt.1 hz
+      have hct' : c + 1 < t := by
+        refine Nat.lt_of_le_of_ne (by omega) ?_
+        intro he; rw [he] at hc1; omega
+      exact ih (c + 1) _ (by omega) hct' (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10')
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h17')
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h11) (by omega)
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hnz
+      exact bw_found O htop (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h17')
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+            rw [h10', show 4 * (c + 1) / 4 = c + 1 by omega])
+        (.inl (by omega)) (by omega) (by unfold numBins; omega)
+
+theorem binIndex_ge4 {nb : Nat} (h : 32 ≤ nb) : 4 ≤ binIndex nb := by
+  unfold binIndex
+  repeat (first | omega | split)
+
+/-- The search's start is at or above the request's bin. -/
+theorem scanFrom_ge {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} {nb idx : Nat}
+    (HH : HeapAt m H (fun e => e ∈ H) top brkv chunks bins) (hsf : ScanFrom chunks bins nb idx)
+    (h1 : 1 < idx) (hidx : idx < numBins) : binIndex nb ≤ idx := by
+  rcases hsf with h | ⟨y, sy, hy, hfy, hly⟩
+  · omega
+  · obtain ⟨c, hc, hca, _, hbi⟩ := HH.bin_free idx y (by omega) hidx hy
+    have := HH.chunk_eq hc hfy hca
+    subst this
+    rw [← hbi h1]
+    exact binIndex_mono hly
+
+/-- `_malloc_r`'s exit to the top, for the walk: `top_path`, `extend_top`. -/
+theorem bwTop {C : MCtx} (O : MOK C) {brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} {nb : Nat} : BWTop C brkv chunks bins nb := fun R' _ W =>
+  top_path O W.frame W.heap (idx := (R' 17).toNat) ⟨W.a4, rfl, W.a6⟩ W.s0 W.nbok W.nb31
+    fun hsm _ F4 G4 T4 h84 => extend_top O F4 W.heap G4 T4 h84 W.nbok W.nb31 hsm
+
+/-- **The block walk** (`0x80004978`): the first block at or above the
+request's with its bit set, then the walk (`bw_found`, `bw_find_loop`). -/
+theorem bw_find {C : MCtx} (O : MOK C) :
+    ∀ R' Mt brkv' chunks' bins' nb idx bb, MFrame C R' Mt →
+      MHeap C Mt brkv' chunks' bins' → bins' 1 = [] → ScanFrom chunks' bins' nb idx →
+      NbOK C.n nb → nb < 2 ^ 31 → idx < numBins → 1 < idx → LRRegs nb idx R' →
+      (R' 29).toNat = binAt 1 → R' 8 = reentV → read64 Mt binblocksAddr = some bb →
+      2 ^ (idx / 4) ≤ bb → (R' 11).toNat = bb → (R' 10).toNat = 2 ^ (idx / 4) →
+      AW C.live C.S C.Q 0x80004978#64 R' Mt := by
+  intro R Mt brkv chunks bins nb idx bb F Hp hb1 hsf hnb hnb31 hidx hidx1 G h29 h8 hbb hle h11 h10
+  have HH := Hp.heap.heap.heap
+  have W : BW C Mt brkv chunks bins nb R := ⟨F, Hp, hnb, hnb31, hb1, G.a4, G.a6, h29, h8⟩
+  have hge := scanFrom_ge HH hsf hidx1 hidx
+  have h4 := binIndex_ge4 hnb.lo
+  have hbbl := Hp.heap.bb_lt bb hbb
+  have h17 := G.a7
+  have hbt := bit_test (x := R 11) h10
+  rw [h11] at hbt
+  refine st_80004978 O.live ?_
+  refine st_8000497c O.live (fun hnz => ?_) (fun hz => ?_)
+  · exact bw_found O (bwTop O) (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
+      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h17)
+      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h10) hsf (by omega) hidx
+  · simp only [upd_apply, ite_true, ne_eq, Decidable.not_not] at hz
+    have hc0 := hbt.1 hz
+    have hemp : bins idx = [] := by
+      refine Classical.byContradiction fun hne => ?_
+      have := HH.binblocks bb hbb idx hidx1 hidx hne; omega
+    have hlo : binIndex nb < idx := by
+      rcases hsf with h | ⟨x, _, hx, _, _⟩
+      · exact h
+      · rw [hemp] at hx; cases hx
+    have hle' : 2 ^ (idx / 4 + 1) ≤ bb := by
+      have hp : 0 < 2 ^ (idx / 4) := Nat.two_pow_pos _
+      have h1 : 1 ≤ bb / 2 ^ (idx / 4) := (Nat.le_div_iff_mul_le hp).2 (by omega)
+      have h2 : 2 ≤ bb / 2 ^ (idx / 4) := by omega
+      have := (Nat.le_div_iff_mul_le hp).1 h2
+      rw [Nat.pow_succ]; omega
+    refine st_80004980 O.live ?_
+    refine st_80004984 O.live ?_
+    refine st_80004988 O.live ?_
+    refine st_8000498c O.live ?_
+    sx_norm
+    have h10' : (R 10 <<< 1).toNat = 2 ^ (idx / 4 + 1) := by
+      rw [BitVec.toNat_shiftLeft, h10, Nat.shiftLeft_eq, Nat.pow_succ]
+      have : 2 ^ (idx / 4) * 2 < 2 ^ 64 := by
+        rw [← Nat.pow_succ]; exact Nat.pow_lt_pow_right (by omega) (by unfold numBins at hidx; omega)
+      omega
+    have h17' : (BitVec.signExtend 64 (BitVec.extractLsb 31 0
+        ((R 17 &&& 18446744073709551612#64) + 4#64))).toNat = 4 * (idx / 4 + 1) := by
+      have hm : (R 17 &&& 18446744073709551612#64).toNat = 4 * (idx / 4) := by
+        rw [toNat_and_m4, h17]; omega
+      have := sx32_add_toNat (x := R 17 &&& 18446744073709551612#64) (k := 4)
+        (by rw [hm]; unfold numBins at hidx; omega)
+      rw [hm] at this; rw [this]; omega
+    have hbt' := bit_test (x := R 11) h10'
+    rw [h11] at hbt'
+    refine st_80004990 O.live (fun hnz => ?_) (fun hz => ?_)
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, ne_eq] at hnz
+      have hc1 : bb / 2 ^ (idx / 4 + 1) % 2 = 1 := by have := mt hbt'.2 hnz; omega
+      have hc32 : idx / 4 + 1 < 32 := by
+        refine Classical.byContradiction fun hc => ?_
+        have : bb / 2 ^ (idx / 4 + 1) = 0 := Nat.div_eq_of_lt (Nat.lt_of_lt_of_le hbbl
+          (Nat.pow_le_pow_right (by omega) (by omega)))
+        omega
+      exact bw_found O (bwTop O) (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h17')
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+            rw [h10', show 4 * (idx / 4 + 1) / 4 = idx / 4 + 1 by omega])
+        (.inl (by omega)) (by omega) (by unfold numBins; omega)
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, ne_eq,
+        Decidable.not_not] at hz
+      have hc1 := hbt'.1 hz
+      obtain ⟨t, ht1, ht2, ht3⟩ := exists_set_bit hle' hbbl
+      have hlt : idx / 4 + 1 < t := by
+        refine Nat.lt_of_le_of_ne ht1 ?_
+        intro he; rw [← he] at ht3; omega
+      exact bw_find_loop O (bwTop O) ht3 ht2 _ (idx / 4 + 1) _ rfl hlt
+        (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10')
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h17')
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h11) (by omega)
+
+/-- **`_malloc_r` from its entry, on every path.** `malloc_paths` with its
+last join, the block walk (`bw_find`), discharged. -/
+theorem malloc_all {C : MCtx} (O : MOK C) {R : Nat → BitVec 64}
+    {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
+    (E : MEntry C R) (Hp : MHeap C C.Mt0 brkv chunks bins) :
+    AW C.live C.S C.Q 0x800047a8#64 R C.Mt0 :=
+  malloc_paths O E Hp (bw_find O)
+
 end VsaIris.VsaHeap

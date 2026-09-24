@@ -67,6 +67,7 @@ import VsaIris.Vsa.MallocLarge
 import VsaIris.Vsa.HeapClear
 import VsaIris.Vsa.MallocBlocks
 import VsaIris.Vsa.MallocChain
+import VsaIris.Vsa.MallocBlocks2
 import VsaIris.Vsa.CostRoom
 import VsaIris.Stack
 import VsaIris.Interp.Need
