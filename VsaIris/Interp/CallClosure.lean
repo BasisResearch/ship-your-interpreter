@@ -439,46 +439,4 @@ def CloHeadK (cd : ClosureData) (Mt : Mem) (s aX sret inp ret e q : BitVec 64)
 
 end Exits
 
-#ix_piece callCloHead_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
-    {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
-    (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
-    {st : Store} {fe : Expr} {args : List Expr} {ca : Nat} {cd : ClosureData} {q e : Nat}
-    {img : Nat → BitVec 8} {P : Nat → Prop} {m : Mem} {dimg : Nat → BitVec 8}
-    {s aX sret inp ret w0 w1 w2 : BitVec 64} {rv R : Nat → BitVec 64} {Mt : Mem} {argc dep : Nat}
-    (hcall : CallAt R Mt s aX sret inp ret rv w0 w1 w2 argc) (hargc : argc ≤ 32)
-    (hk4 : w0.toNat % 2 ^ 32 = 4) (hcf : CloFactsE st ca w1.toNat cd q e img P m)
-    (hinpG : RtErr.InpGeom inp) (hinpA : inp.toNat % 8 = 0)
-    (hdep : imgLE dimg (inp.toNat + 8) 4 = dep) (hdle : dep ≤ maxCallDepth) (hfg : EvalFrameG s) :
-    codeRes ∗ □ astEG aX.toNat (.call fe args) ∗ roImg (InExt (w1.toNat, 16)) img ∗ roOn P m ∗
-      ms 0x80003254#64 R (InExt (s.toNat - 1088, 1088)) Mt ∗
-      ownImg (InExt (inp.toNat + 8, 4)) dimg ∗
-      CloHeadK live Wp Φ cd Mt s aX sret inp ret (BitVec.ofNat 64 e) (BitVec.ofNat 64 q) rv argc dep
-    ⊢ Wp.W Φ by
-  have hsf := hfg.sf; have hs' := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
-  have hoff := evalSP_off (s := s) hsf (by omega)
-  iintro ⟨#Hcode, #Hast, #Himg, #Hro, Hms, Hdep, Hk⟩
-  unfold astEG
-  icases Hast with ⟨%Pc, %mc, %⟨hrepr, hgeo⟩, #Hroc⟩
-  obtain ⟨aF, hnd, -, -⟩ := callNode_of_repr hrepr hgeo
-  -- run K1a: the kind tests
-  ihave #Hdv := roOwn_data hnd.view $$ [Hcode Hroc]
-  · iframe Hcode Hroc
-  iapply wp_swpF Wp (F := iprop(ownImg (InExt (inp.toNat + 8, 4)) dimg ∗
-      CloHeadK live Wp Φ cd Mt s aX sret inp ret (BitVec.ofNat 64 e) (BitVec.ofNat 64 q) rv argc dep))
-  rotate_left
-  · iframe Hdv Hms Hdep; iexact Hk
-  intro F'
-  refine CallK_runA (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3 hnd.lo hnd.hi hnd.off
-    hcall.s0 hcall.sp ?_ ?_ ?_ ?_ ?_
-  · rw [hoff 96 (by decide)]; exact hcall.w0
-  · rw [hoff 104 (by decide)]; exact hcall.w1
-  · rw [hoff 112 (by decide)]; exact hcall.w2
-  · rw [hoff 96 (by decide)]; exact ldv_lw_of_ld hcall.w0 hk4 (by decide)
-  intro vl _ _
-  apply swp_closeRM
-  intro R1 Mt1 hR1 hMt1
-  unfold F'
-  iintro ⟨⟨Hdep, Hk⟩, Hms⟩
-  sorry
-
 end VsaIris.Interp
