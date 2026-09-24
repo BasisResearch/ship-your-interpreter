@@ -167,11 +167,15 @@ import VsaIris.Interp.Case.BinarySubIntP
 import VsaIris.Interp.CaseE2
 import VsaIris.Interp.LeafArm
 import VsaIris.Interp.LeafCalls
-import VsaIris.Interp.LeafErr
-import VsaIris.Interp.Case.VarT
-import VsaIris.Interp.Case.VarP
-import VsaIris.Interp.Case.AssignT
-import VsaIris.Interp.Case.AssignP
+-- Lane E4 (merge of E5, which carried E1): E1's `LeafErr` and E2's `SpecErr` both
+-- define `VsaIris.Interp.errCtx`; the two cannot be imported together. Integration
+-- picks one; this branch builds with E2's (the call errors use `ErrEnv`), so E1's
+-- `LeafErr` and the `var`/`assign` cases over it stay out of the root import:
+-- import VsaIris.Interp.LeafErr
+-- import VsaIris.Interp.Case.VarT
+-- import VsaIris.Interp.Case.VarP
+-- import VsaIris.Interp.Case.AssignT
+-- import VsaIris.Interp.Case.AssignP
 import VsaIris.Interp.Case.LeafNullT
 import VsaIris.Interp.Case.LeafNullP
 import VsaIris.Interp.Case.LeafIntT
