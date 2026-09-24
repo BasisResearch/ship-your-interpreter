@@ -24,9 +24,9 @@ variable {live : Nat → Prop}
 theorem valueNull_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     (N : NativeAddrs) (p : BitVec 64) : ⊢ valueNullSpec (vsaModel live) N Wp p := by
   unfold valueNullSpec
-  refine helper_leaf Wp (InExt (p.toNat, 24)) iprop(emp) (fun rv _ => SlotGeom p ∧ rv 10 = p)
-    (fun _ mv => imgLE mv p.toNat 4 = 0) (fun rv h10 => ?_) (fun rv Mt r h10 hP hal => ?_)
-    (fun rv' mv hg => ?_)
+  refine helper_leaf Wp (InExt (p.toNat, 24)) (fun _ => iprop(emp)) (fun rv _ => SlotGeom p ∧ rv 10 = p)
+    (fun _ _ mv => imgLE mv p.toNat 4 = 0) (fun rv h10 => ?_) (fun rv Mt r h10 hP hal => ?_)
+    (fun _ rv' mv hg => ?_)
   · iintro ⟨Hs, %hg⟩
     ihave ⟨%Mt, H⟩ := slot24_tracked _ $$ Hs
     iexists Mt
@@ -58,9 +58,9 @@ theorem imgW_lo32_of (mv : Nat → BitVec 8) (a k : Nat) (h : imgLE mv a 4 = k) 
 theorem valueBool_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     (N : NativeAddrs) (p b : BitVec 64) : ⊢ valueBoolSpec (vsaModel live) N Wp p b := by
   unfold valueBoolSpec
-  refine helper_leaf Wp (InExt (p.toNat, 24)) iprop(emp) (fun rv _ => SlotGeom p ∧ rv 10 = p ∧ rv 11 = b)
-    (fun _ mv => imgLE mv p.toNat 4 = 1 ∧ imgLE mv (p.toNat + 8) 4 = cond (b != 0#64) 1 0)
-    (fun rv h => ?_) (fun rv Mt r h hP hal => ?_) (fun rv' mv hg => ?_)
+  refine helper_leaf Wp (InExt (p.toNat, 24)) (fun _ => iprop(emp)) (fun rv _ => SlotGeom p ∧ rv 10 = p ∧ rv 11 = b)
+    (fun _ _ mv => imgLE mv p.toNat 4 = 1 ∧ imgLE mv (p.toNat + 8) 4 = cond (b != 0#64) 1 0)
+    (fun rv h => ?_) (fun rv Mt r h hP hal => ?_) (fun _ rv' mv hg => ?_)
   · iintro ⟨Hs, %hg⟩
     ihave ⟨%Mt, H⟩ := slot24_tracked _ $$ Hs
     iexists Mt
@@ -94,9 +94,9 @@ theorem valueBool_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF
 theorem valueInt_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     (N : NativeAddrs) (p n : BitVec 64) : ⊢ valueIntSpec (vsaModel live) N Wp p n := by
   unfold valueIntSpec
-  refine helper_leaf Wp (InExt (p.toNat, 24)) iprop(emp) (fun rv _ => SlotGeom p ∧ rv 10 = p ∧ rv 11 = n)
-    (fun _ mv => imgLE mv p.toNat 4 = 2 ∧ imgLE mv (p.toNat + 8) 8 = n.toNat)
-    (fun rv h => ?_) (fun rv Mt r h hP hal => ?_) (fun rv' mv hg => ?_)
+  refine helper_leaf Wp (InExt (p.toNat, 24)) (fun _ => iprop(emp)) (fun rv _ => SlotGeom p ∧ rv 10 = p ∧ rv 11 = n)
+    (fun _ _ mv => imgLE mv p.toNat 4 = 2 ∧ imgLE mv (p.toNat + 8) 8 = n.toNat)
+    (fun rv h => ?_) (fun rv Mt r h hP hal => ?_) (fun _ rv' mv hg => ?_)
   · iintro ⟨Hs, %hg⟩
     ihave ⟨%Mt, H⟩ := slot24_tracked _ $$ Hs
     iexists Mt
@@ -129,10 +129,10 @@ theorem valueInt_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF 
 theorem valueStr_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF) (vsaModel live))
     (N : NativeAddrs) (p q : BitVec 64) (x : String) : ⊢ valueStrSpec (vsaModel live) N Wp p q x := by
   unfold valueStrSpec
-  refine helper_leaf Wp (InExt (p.toNat, 24)) (strAt q.toNat x)
+  refine helper_leaf Wp (InExt (p.toNat, 24)) (fun _ => strAt q.toNat x)
     (fun rv _ => SlotGeom p ∧ q.toNat ≠ 0 ∧ rv 10 = p ∧ rv 11 = q)
-    (fun _ mv => imgLE mv p.toNat 4 = 3 ∧ imgLE mv (p.toNat + 8) 8 = q.toNat ∧ q.toNat ≠ 0)
-    (fun rv h => ?_) (fun rv Mt r h hP hal => ?_) (fun rv' mv hg => ?_)
+    (fun _ _ mv => imgLE mv p.toNat 4 = 3 ∧ imgLE mv (p.toNat + 8) 8 = q.toNat ∧ q.toNat ≠ 0)
+    (fun rv h => ?_) (fun rv Mt r h hP hal => ?_) (fun _ rv' mv hg => ?_)
   · iintro ⟨Hs, %⟨hg, hq⟩, #Hx⟩
     ihave ⟨%Mt, H⟩ := slot24_tracked _ $$ Hs
     iexists Mt

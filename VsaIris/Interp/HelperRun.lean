@@ -40,12 +40,13 @@ def HelperEnd (r : BitVec 64) (rv : Nat → BitVec 64) (clob : List Nat)
 /-- **A helper whose body is one symbolic run**, for either WP. -/
 theorem helper_leaf (Wp : MachWP (GF := GF) (vsaModel live))
     {entry : BitVec 64} {clob : List Nat} {pins : (Nat → BitVec 64) → Prop} {Pre : IProp GF}
-    {Post : (Nat → BitVec 64) → IProp GF} (S : Nat → Prop) (E : IProp GF)
-    (P : (Nat → BitVec 64) → Mem → Prop) (Good : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop)
-    (hin : ∀ rv, pins rv → Pre ⊢ ∃ Mt, ownSet S (fun a => a ↦ₘ imgM Mt a) ∗ E ∗ ⌜P rv Mt⌝)
+    {Post : (Nat → BitVec 64) → IProp GF} (S : Nat → Prop) (E : Mem → IProp GF)
+    (P : (Nat → BitVec 64) → Mem → Prop)
+    (Good : Mem → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop)
+    (hin : ∀ rv, pins rv → Pre ⊢ ∃ Mt, ownSet S (fun a => a ↦ₘ imgM Mt a) ∗ E Mt ∗ ⌜P rv Mt⌝)
     (hrun : ∀ (rv : Nat → BitVec 64) (Mt : Mem) (r : BitVec 64), pins rv → P rv Mt →
-      r.toNat % 4 = 0 → IW live ∅ [] S (HelperEnd r rv clob Good) entry (upd rv 1 r) Mt)
-    (hout : ∀ rv' mv, Good rv' mv → E ∗ ownSet S (fun a => a ↦ₘ mv a) ⊢ Post rv') :
+      r.toNat % 4 = 0 → IW live ∅ [] S (HelperEnd r rv clob (Good Mt)) entry (upd rv 1 r) Mt)
+    (hout : ∀ Mt rv' mv, Good Mt rv' mv → E Mt ∗ ownSet S (fun a => a ↦ₘ mv a) ⊢ Post rv') :
     ⊢ helperSpec (vsaModel live) Wp entry clob pins Pre Post := by
   unfold helperSpec fnSpecW
   iintro %rv !> %r %Φ Hpc Hra ⟨%hal, Hregs, %hp, #Hcode, HPre⟩ Hk
@@ -80,7 +81,7 @@ theorem helper_leaf (Wp : MachWP (GF := GF) (vsaModel live))
   iframe Hregs
   isplitr
   · ipureintro; exact hkeep
-  iapply hout rv' mv' hgood $$ [HE HS]
+  iapply hout Mt rv' mv' hgood $$ [HE HS]
   iframe HE HS
 
 /-- **Closing a helper's run** at its return address: the end condition from
@@ -98,6 +99,15 @@ theorem swp_helperEnd {S : Nat → Prop} {r : BitVec 64} {rv R : Nat → BitVec 
       (fun e => by subst e; revert hx; decide)
 
 end Leaf
+
+/-- The register-keep obligation of `swp_helperEnd` for an `upd` chain: every
+body register outside `clob` other than `ra` is untouched. -/
+macro "helper_keep" : tactic =>
+  `(tactic| (intro x hx hc
+             have h1 : x ≠ 1 := fun e => by subst e; revert hx; decide
+             simp only [List.mem_cons, List.not_mem_nil, or_false, not_or] at hc
+             simp only [upd]
+             simp_all))
 
 /-! ## Reading stored words back -/
 
@@ -162,6 +172,38 @@ theorem valAt_tracked (N : Vsa.RuntimeRepr.NativeAddrs) (a : Nat) (v : Vsa.While
     unfold imgW; rw [h]
   unfold valImg; rw [e0, e8, e16]
   iexact Hv
+
+/-- The pure part of a value's meaning (`valOf` without the persistent
+strings and closure fragments): the kind word and the payload's facts. -/
+def ValPure (N : Vsa.RuntimeRepr.NativeAddrs) : Vsa.While.Value → BitVec 64 → BitVec 64 → BitVec 64 → Prop
+  | .null, w0, _, _ => w0.toNat % 2 ^ 32 = 0
+  | .bool b, w0, w1, _ => w0.toNat % 2 ^ 32 = 1 ∧ w1.toNat % 2 ^ 32 = cond b 1 0
+  | .int n, w0, w1, _ => w0.toNat % 2 ^ 32 = 2 ∧ w1.toInt = n
+  | .str _, w0, w1, _ => w0.toNat % 2 ^ 32 = 3 ∧ w1.toNat ≠ 0
+  | .closure _, w0, w1, _ => w0.toNat % 2 ^ 32 = 4 ∧ w1.toNat ≠ 0
+  | .native f, w0, _, w2 => w0.toNat % 2 ^ 32 = 5 ∧ w2.toNat = N.addr f
+
+theorem valOf_pure (N : Vsa.RuntimeRepr.NativeAddrs) (v : Vsa.While.Value) (w0 w1 w2 : BitVec 64) :
+    valOf (GF := GF) N v w0 w1 w2 ⊢ ⌜ValPure N v w0 w1 w2⌝ := by
+  cases v <;> unfold valOf ValPure
+  · iintro %h; ipureintro; exact h
+  · iintro %h; ipureintro; exact h
+  · iintro %h; ipureintro; exact h
+  · iintro ⟨%h, -⟩; ipureintro; exact h
+  · iintro ⟨%h, -⟩; ipureintro; exact h
+  · iintro ⟨%h, -⟩; ipureintro; exact h
+
+/-- A signed word load of a slot's kind. -/
+theorem ldv_lw_kind {Mt : Mem} {a k : Nat} (h : (imgW (imgM Mt) a).toNat % 2 ^ 32 = k)
+    (hk : k < 2 ^ 31) : ldv .lw Mt a = BitVec.ofNat 64 k :=
+  ldvf_lw_imgLE (by rw [← imgW_lo32]; exact h) hk
+
+/-- A doubleword load of a slot's word. -/
+theorem ldv_ld_imgW (Mt : Mem) (a : Nat) : ldv .ld Mt a = imgW (imgM Mt) a := by
+  refine BitVec.eq_of_toNat_eq ?_
+  rw [show ldv .ld Mt a = ldvf .ld (imgM Mt) a from rfl, ldvf_ld_imgLE rfl, imgW_toNat]
+  simp only [BitVec.toNat_ofNat]
+  exact Nat.mod_eq_of_lt (by have := imgLE_lt (imgM Mt) a 8; omega)
 
 end Vals
 
