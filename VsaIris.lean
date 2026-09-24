@@ -167,6 +167,7 @@ import VsaIris.Interp.Case.LeafStrT
 import VsaIris.Interp.Case.LeafStrP
 import VsaIris.Interp.Case.LeafBoolT
 import VsaIris.Interp.Case.LeafBoolP
+import VsaIris.Interp.CaseE2
 import VsaIris.Vsa.SymObs
 import VsaIris.Vsa.NewlibOut
 import VsaIris.Interp.SpecValue

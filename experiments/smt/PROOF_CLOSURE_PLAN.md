@@ -4214,3 +4214,26 @@ needs `rtErrNeed = 1248` bytes; after the arm's frame the budget leaves
 premise holds for `d < maxCallDepth` (`errRoom_of_lt`) and fails at
 `d = maxCallDepth` (INTERP_DESIGN.md Q7). Supplier: the user's Q7 decision
 (an error headroom in the boundary's budget, or depth accounting).
+
+## String `+` owns its operands' renderings (lane E2, 2026-09-24)
+
+`caseT_BinaryConcat` and `caseP_BinaryAdd` (`VsaIris/Interp/Case/`) take
+callee specs from `VsaIris/Interp/SpecConcat.lean`:
+
+- `strlenHeapSpec`, `strcpyHeapSpec`: `strlen`/`strcpy` on a string the caller
+  owns in a live heap block `(q, len + 1)`, `q` 16-aligned, with
+  `heapRes … ρ H` lent and returned unchanged. Missing supplier: H3's
+  `strlen_specOwnedW` needs `[q, q + len + 8)` owned (`ownedStr`); the bytes
+  past `len + 1` are in `heapFoot` (the chunk's tail). A lemma lending
+  `heapFoot`'s bytes of a live block's last word out of `isHeap`/
+  `isHeapRoom` (the chunk walk keeps the next chunk's header at
+  `q + roundUp16 (len + 1 + 8) - 8` or beyond) closes both.
+- `stringifySpecT` (counted regime, no abort) and `stringifySpecP` (abort
+  hands back the value's slot). Supplier: H2's `stringify_spec`; its counted
+  OOM branches are already contradictions (`mallocRes`), and its OOM path
+  still owns the slot (`sg_oomEnd` drops it).
+- `CatDispSupply`: lane E4's `DispSupply`, the same statement (see "Closure
+  objects carry no read geometry").
+- The cases take `binImg ∗ textOwn allocText` (T) or `textOwn allocText`
+  beside `errCtx` (P): no lemma derives `textOwn allocText` from `binImg`;
+  the boundary has both (`textOwn_of_roOn`).

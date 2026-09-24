@@ -1,101 +1,74 @@
-# Lane H2: value functions and natives
+# Lane E2: the binary operators
 
-Branch `lane-h2` (from `hub/iris-main`), merged `hub/lane-g` (its step-table
-generator and arm layer) and `hub/lane-h1` (`mallocRho_spec`, `memcpySpec`,
-`strlenSpec`; `strAt` carries `StrWin`). Design: `VsaIris/INTERP_DESIGN.md` §9 H2; statement
-changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
+Branch `lane-e2` (from `wave4-base`), pushed to `hub`. Design:
+`VsaIris/INTERP_DESIGN.md` §4, §6, §8 (family E2); statement changes in §10
+"STATEMENT CHANGES (E2)" (to be written with the P family). Rows:
+`scripts/iris_arms/arms.d/e2-binary.tsv`; families:
+`scripts/iris_arms/families/e2_binary.py`; templates `scripts/iris_arms/templates/`.
 
 ## Done
-- **Statements** (`VsaIris/Interp/SpecValue.lean`), in lane G's register-file
-  form (`helperSpec`): `valueNullSpec`, `valueBoolSpec`, `valueStrSpec`
-  (+ G's `valueIntSpec`), `valueTruthySpec`, `valueEqualSpec`,
-  `valuePrintSpec`, `nativePrintSpec`, `nativePrintlnSpec`; callee spec
-  `strcmpSpecV` (H3), `nativeAssertSpec` and `stringifySpec`
-  (`fnSpecAbort`, `SpecStringify.lean`).
-- **Proved, for either WP** (axioms ⊆ {propext, Classical.choice, Quot.sound},
-  `VsaIris/Audit.lean`):
-  - `valueNull_spec`, `valueBool_spec`, `valueInt_spec` (discharges G's stub),
-    `valueStr_spec` (`ProofValueCons.lean`): `helper_leaf` (`HelperRun.lean`,
-    a helper as one symbolic run) plus one `ix_run` each;
-  - `valueTruthy_spec` (`ProofValueTruthy.lean`);
-  - `valueEqual_spec` (`ProofValueEqual.lean`): every kind; strings through
-    `strcmpSpecV` (H3) at `jal 0x800028d4`, closures by the store's address
-    map (`storeRepr_clos_inj`), natives by `NativeInj`; one lemma per arm;
-  - `valuePrint_spec` (`ProofValuePrint.lean`), given `IrisHoles.out`: every
-    arm tail-calls newlib (`ms_tailNewlib`, `NewlibCall.lean`); the closure
-    arm reads the closure object and the `EX_FN` name field through a data
-    view (`roOwn_clod`);
-  - `nativePrint_spec` (`ProofNativePrint.lean`), given `IrisHoles.out`: six
-    `#ix_seg` runs; the loop is a Lean induction over the arguments left
-    (`np_loop`: `np_A` = head, copy, `value_print`; `np_B_more`/`np_B_last`);
-    newlib's two stdio words enter a run through `ms_ioOpen`/`ms_ioClose`;
-  - `nativePrintln_spec` (`ProofNativePrintln.lean`): `native_print` into its
-    own frame slot (by `nativePrint_spec`), `fputc('\n')`, `value_null`;
-  - `nativeAssert_spec` (`ProofNativeAssert.lean`), given H5's `NewlibHoles`:
-    a `fnSpecAbort`. Seven `#ix_seg` runs. `runtime_error` is called through
-    `ms_callNewlibAbort` (`NewlibCall.lean`) against `rtErr_spec`. The abort
-    rebuilds `abortRes s nativeAssertNeed` (`na_rtErr`). The messages are
-    `FmtArgsOK` over `.rodata` or the second argument's string
-    (`readable_str`). The first argument's copy uses `ms_carveVal`/
-    `ms_uncarveVal`.
-- **Generator** (`scripts/gen_interp_steps.py`, shared with G): the step table
-  covers the value helpers, the natives and `stringify` (their kind tables and
-  `stringify`'s `.rodata` constant as table words); `sltu`/`sltiu` get
-  `itO_<pc>` (`VsaIris/Vsa/SymObs.lean`: `aluStep_of_obs`, `swp_alu`), which
-  `ix_run` tries. eval_expr's `seqz` sites get them too.
-- **Statement fix in G's layer**: `helperSpec` hands the callee an aligned
-  return address (without it no helper can `ret`); `ms_callHelper` takes
-  `(by decide)` at the call site; G's template and cases regenerated.
 
-- **Shared layers**: `LocalRun.promote` and `strlen_specOwnedW`
-  (`Vsa/StrlenOwned.lean`: H3's `strlen` on an owned buffer, the bytes handed
-  back unchanged); `ms_callRegs` (`Interp/CallRegs.lean`: a call from a run by
-  the callee's register list, `regFile_cut`/`regFile_uncut`).
-
-  - `stringify_spec` (`ProofStringify.lean`): a `fnSpecAbort` in both
-    regimes. Fifteen `#ix_seg` runs and one lemma per kind arm
-    (`sg_dispatch`). The arms share the buffer tail: `strlen` (H3, owned
-    buffer), `malloc` (`ms_callMalloc`), OOM (`wp_oomBlock` at
-    `oom80003140`), `memcpy`, epilogue. Strings copy through H1's
-    `strlenSpec`/`memcpySpec` from the payload's read-only bytes. Integers
-    and named closures go through `snprintf` (`out.snprintfInt`,
-    `out.snprintfFn`). Premises: `memcpySpecOwned`, `strcpySpec` (H3) and
-    `hstk` (the stack region is live).
+- **Total cases, integer comparisons** (`<`, `<=`, `>`, `>=`): `caseT_BinaryLtInt`,
+  `caseT_BinaryLeInt`, `caseT_BinaryGtInt`, `caseT_BinaryGeInt`
+  (`Case/Binary{Lt,Le,Gt,Ge}IntT.lean`, family `binOne`, generated). They reuse lane G's
+  prologue runs (`BinaryAddIntT_run1`/`_run2`). The comparison tail's bit is read as the
+  source's `decide` by `cmp_*_bit` (`BinArm.lean`).
+- **`value_kind_name`** (`0x800029c8`): `valueKindNameSpec` (`SpecErr.lean`) and
+  `valueKindName_spec` (`ProofValueKindName.lean`). The slot is lent at its tracked bytes;
+  only the kind word is read.
+- **The error-arm layer for `eval_expr`** (`SpecErr.lean`, `ErrArm.lean`), for all E lanes:
+  - `errCtx inp` (persistent: `binImg` + the `jmp_buf` read-only with its `ra` word
+    aligned) and `ErrEnv` (pure: `NewlibHoles`, `CodeLive`, `InpGeom`, `inp < 2^64`,
+    `CoreOK Core`). `coreOK_top`: the whole stack's `abortCore` is a valid `Core`.
+  - `ms_rtErrEval`: `jal runtime_error` from an eval arm at `sp = s - 1088` ends in the
+    arm's `abortAt Core s n`.
+  - `ms_callKindName`: `value_kind_name` on the slot a run stored.
+  - Messages: `operand_fmt` (`"operand of '%s' must be an int, got %s"`), `kindName_cstr`,
+    `rodata_cstr`/`rodata_cstrV`, `readable_rodata_fmt`; `evalNeed_binary_rtErr`.
+- **Generator additions** (additions only; G's arms regenerate identically):
+  - `gen_interp_steps.py`: `value_kind_name`, libgcc `__muldi3`/`__divdi3`/`__moddi3`
+    (+ `__hidden___udivdi3`, `__umoddi3`) and the kind-name / comparison-name tables
+    (`CSWTCH.18`, `CSWTCH.25`); one membership lemma per loaded table word
+    (`interpRO_acc{w}_{addr}`, used by `ix_ro`).
+  - `gen_iris_cases.py`: per-lane family modules `scripts/iris_arms/families/*.py`
+    (`FAMILIES_EXT`), so lanes do not edit the shared file.
+  - Run split points: `run <from> <to> @pc …` (family `binOne`): the run is a chain of
+    `#ix_seg`/`#ix_piece`s joined by `#ix_tree`, each within the elaboration budget.
+- **`#ix_tree`** (`ITacTree.lean`): a proof from a TREE of pieces (the binary arm's rows
+  after one shared prefix); `#ix_chain` is the linear case.
+- **`ix_run` side conditions** (`BinArm.lean`): `ix_ro` (table membership by the generated
+  lemma, no list walk), `ix_absurd` (a branch on a value's kind decided by the row's kind
+  fact `kL ≠ 2#64` in the context; no decision procedure runs).
 
 ## In flight
-- None. All H2 deliverables are proved.
 
-## Holes (`VsaIris/HOLES.md`, `IrisHoles.out`, `VsaIris/Vsa/NewlibOut.lean`)
-- `out.fputs`, `out.fputc`, `out.fwrite`, `out.fprintf`: newlib's stdout
-  calls, exact about what they print (VSA assumed the same:
-  `CallIOContracts`). `out.snprintfFn`: `snprintf(buf, 64, "<fn %s>", name)`;
-  `out.snprintfInt`: `snprintf(buf, 64, "%lld", i)`.
+- Partial cases per operator, closed (no exported branches): `caseP_BinarySub` is proved in
+  scratch (int row + both type-error rows through `runtime_error`), being turned into the
+  `binP` family (templates + generator) for `-`, `*`, `/`, `%`, the comparisons, `+`.
+- libgcc `__muldi3`/`__divdi3`/`__moddi3` helper specs (loops, fuel induction).
+- `==`/`!=` (`value_equal` + `value_bool`), string comparisons (`strcmp`), concatenation.
 
-## Findings
-- `closOwn`/`astE` carry no read geometry (`ReadOK`), so no run can load a
-  closure object or its `EX_FN` node from them. `dispRes` (what `value_print`
-  needs of a closure) carries it; its supplier is the `EX_FN` arm (heap block,
-  program AST) or a geometry field on `closOwn`. The `call` arm needs the same.
-- **Q8**: `stringify` cuts a named closure's rendering at 63 characters
-  (`snprintf` into `char buf[64]`); `Value.catDisplay` does not, so the
-  concat rule disagrees with the machine for names longer than 58 characters
-  (`PROOF_CLOSURE_PLAN.md`).
-- G's `helperSpec` lacked the return-address alignment (fixed, above).
-- `runtime_error` needs the `jmp_buf` at a named image with an aligned `ra`
-  word; `world` gives only `∃ jb` (INTERP_DESIGN.md §10, H2).
-- H3's `strlen` needs `live` on the bytes it reads (`Ctx.codeLive`); for a
-  stack buffer that is the stack region, a condition on the top-level `live`
-  like `CodeLive` (`stringify_spec` takes it as `hstk`).
-- Tooling: after merging G, `ix_run` explores undecided branches; H2's scripts
-  use `ix_run1` (the stopping variant). `simpa`/`omega` over `k % 2^64` with a
-  variable `k` can produce kernel deep recursion; explicit `Nat.mod_eq_of_lt`
-  rewrites avoid it.
+## Findings (for the other E lanes)
 
-## Interface for other lanes
-- H3: `stringify_spec` takes `memcpySpecOwned` (memcpy from an owned source,
-  handed back) and `strcpySpec` (`SpecStringify.lean`) as premises.
-- E lanes call the helpers with `ms_callHelper` (G) against the specs above.
-- H3: `strcmpSpecV` is the register-file form of H1's `strcmpSpec`.
-- H1: `HelperRun.helper_leaf` is the register-file twin of H1's `wp_ew`
-  (a span as one run); `SymObs.swp_alu` gives `snez`/`seqz` steps to any
-  `SWP` table.
+- **An eval error arm needs `errCtx inp` and `ErrEnv`**, not in `evalPre`: `binImg` (for
+  `runtime_error`'s `callFrame` and the format strings) and the `jmp_buf`'s aligned `ra`
+  (`rtErr_spec`'s `hjb`); `world` has the `jmp_buf` but not the alignment. The partial
+  cases take `evalSpecsP … Core ∗ errCtx inp ⊢ evalSpecP_body …`; package A supplies
+  `errCtx` after `interp_run`'s `setjmp`. Q7 does not bite the binary arm: below its frame
+  there are at least 2176 bytes (`evalNeed_binary_rtErr`).
+- **Heartbeat hazards in `ix_run`/`ix_fwd`**: the `.rodata` table membership `decide` walks
+  the whole list (fixed by `ix_ro`); `ix_fwd using […]` simps with every hypothesis (`*`),
+  and `sx_addr` simps `at *`: clear the big memory equations (`hMt*`) before forwarding.
+  An `exact` inside an `sx_side` rule can "succeed" by error recovery: use tactics that
+  fail cleanly.
+
+## Holes
+
+None added. `python3 scripts/check_iris_holes.py` passes.
+
+## Line counts (generated vs hand)
+
+| file | lines | kind |
+|---|---|---|
+| `Case/Binary{Lt,Le,Gt,Ge}IntT.lean` | 4 × 283 | generated |
+| `BinArm.lean`, `ITacTree.lean`, `SpecErr.lean`, `ErrArm.lean`, `ProofValueKindName.lean` | see `wc -l` | hand |
