@@ -31,7 +31,6 @@ structure RD (C : MCtx) (B : RB) (R : Nat → BitVec 64) (Mt : Mem) (brkv : Nat)
   s1 : R 9 = reentV
   a1 : R 11 = C.n
   a2 : (R 12).toNat = X
-  a3 : (R 13).toNat = hdr0
   a4 : (R 14).toNat = S
   a5 : (R 15).toNat = nb
 
@@ -104,12 +103,11 @@ theorem realloc_dec {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
     · exact h15
   · -- the chunk must grow
     refine hk _ X S hdr0 ⟨F.of_regs ?_ ?_ ?_, Hp, hnb, hnb31, hc, hca, hdr, hsz, hlow, by omega,
-      ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · rw [h8, hca]
     · exact h9
     · exact h11
     · exact hX
-    · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hdrlt]
     · exact hSv
     · exact h15
 
