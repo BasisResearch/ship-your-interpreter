@@ -281,7 +281,7 @@ end Vals
     (hl9 : ldv .ld M (s + 18446744073709551536#64 + 56#64).toNat = v9)
     (hl18 : ldv .ld M (s + 18446744073709551536#64 + 48#64).toNat = v18)
     (hl19 : ldv .ld M (s + 18446744073709551536#64 + 40#64).toNat = v19) :
-    IW live ∅ [] (npS s args n) Q 0x80002f48#64 R M
+    IW live ∅ [] (npF s args n) Q 0x80002f48#64 R M
   by
     ix_run hlive using [h9, h19, h2, hl8, hl9, hl18, hl19] at 0x80002f64
     all_goals first
@@ -444,6 +444,58 @@ def NpRest (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IPro
     binImg ∗ stackScratch (s - 80#64) printNeed ∗ NpK Wp Φ N sret args s r vs st o rv)
 
 omit I in
+omit I in
+/-- `gp` from the code resource. -/
+theorem codeRes_gp : codeRes (GF := GF) ⊢ gp ↦ᵣ□ Newlib.gpV := by
+  unfold codeRes roOwn; simp only [sepL_cons, sepL_nil]
+  iintro ⟨⟨#H, -⟩, -⟩
+  rw [show Newlib.gpV = MallocFast.gpV from rfl]; iexact H
+
+omit I in
+/-- A newlib stdout spec is a function spec. -/
+theorem outSpec_fn {live : Nat → Prop} {Wp : MachWP (GF := GF) (vsaModel live)} {entry : BitVec 64}
+    {args : List (BitVec 64)} {Rr : IProp GF} {s : BitVec 64} {need : Nat} {cs : Nat → BitVec 64}
+    {o frag : String} :
+    outSpec live Wp entry args Rr s need cs o frag ⊢
+      fnSpecW Wp entry (fun _ => iprop(argsAt args ∗ Rr ∗ stdioOwn ∗ consoleOwn o ∗
+          callFrame s need Newlib.calleeSaved cs))
+        (fun _ => iprop(clobbered argRegs ∗ stdioOwn ∗ consoleOwn (o ++ frag) ∗
+          callFrame s need Newlib.calleeSaved cs)) := .rfl
+
+omit I in
+/-- **A newlib stdout call from a run** (`jal`), against an `IrisHoles.out`
+statement at the run's callee-saved registers. -/
+theorem ms_callOut (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
+    (hexec : JalExec (vsaModel live) i code entry)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    {args : List (BitVec 64)} {Rr : IProp GF} {s : BitVec 64} {need n : Nat} {R : Nat → BitVec 64}
+    {S : Nat → Prop} {Mt : Mem} {o frag : String}
+    (hspec : ∀ cs, ⊢ outSpec live Wp entry args Rr s need cs o frag)
+    (hlen : args.length ≤ 8) (hvs : ∀ i (h : i < args.length), R (10 + i) = args[i])
+    (hs : R 2 = s) (hn : n ≤ s.toNat) (hneed : need ≤ n) :
+    codeRes ∗ ms (BitVec.ofNat 64 i) R S Mt ∗ Rr ∗ stdioOwn ∗ consoleOwn o ∗ stackScratch s n ∗ binImg ∗
+      (∀ R' : Nat → BitVec 64, ⌜∀ x ∈ fRegs, x ∉ callerSaved → R' x = R x⌝ -∗ stdioOwn -∗
+        consoleOwn (o ++ frag) -∗ ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt -∗
+        stackScratch s n -∗ Wp.W Φ)
+    ⊢ Wp.W Φ := by
+  iintro ⟨#Hcode, Hms, HR, Hstd, Hcon, Hst, #Himg, Hk⟩
+  ihave #Hsp0 := hspec R
+  ihave #Hsp := outSpec_fn $$ Hsp0
+  ihave #Hgp := codeRes_gp $$ Hcode
+  iapply ms_callNewlib Wp hexec hcode
+    (P := fun _ => iprop(argsAt args ∗ Rr ∗ stdioOwn ∗ consoleOwn o ∗
+      callFrame s need Newlib.calleeSaved R))
+    (Q := fun _ => iprop(clobbered argRegs ∗ stdioOwn ∗ consoleOwn (o ++ frag) ∗
+      callFrame s need Newlib.calleeSaved R))
+    (X := iprop(Rr ∗ stdioOwn ∗ consoleOwn o))
+    (Y := iprop(stdioOwn ∗ consoleOwn (o ++ frag))) hlen hvs hs hn hneed
+    (fun r => by iintro ⟨Ha, ⟨Hx, Hs, Hc⟩, Hf⟩; iframe Ha Hx Hs Hc Hf)
+    (fun r => by iintro ⟨Ha, Hs, Hc, Hf⟩; iframe Ha Hs Hc Hf)
+  iframe Hsp Hcode Hms Hst Hgp Himg HR Hstd Hcon
+  iintro %R' %hk ⟨Hstd, Hcon⟩ Hms Hst
+  iapply Hk $$ %R' %hk Hstd Hcon Hms Hst
+
 /-- The frame of `native_print` as a stack region below `s`. -/
 theorem npFrame_join {s : BitVec 64} (hs : 80 + printNeed ≤ s.toNat) :
     stackScratch (GF := GF) (s - 80#64) printNeed ∗
@@ -749,6 +801,217 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
   · rw [sw 48 (by omega) (by omega)]; exact f.ss2
   · rw [sw 40 (by omega) (by omega)]; exact f.ss3
   · rw [sw 32 (by omega) (by omega)]; exact f.ss4
+
+/-- The frame of the `fputc` run. -/
+def FnpB (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp GF) (N : NativeAddrs)
+    (sret args s r : BitVec 64) (vs : List Value) (st : Store) (o o' : String) (rv : Nat → BitVec 64)
+    (Margs : Mem) (img : Nat → BitVec 8) : IProp GF :=
+  FnpA Wp Φ N sret args s r vs st o o' rv Margs img
+
+/-- The `fputc(' ')` call, at `0x80002f18`, back to the loop head. -/
+theorem np_fputc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {sret args s r : BitVec 64} {n : Nat} {vs : List Value} {st : Store}
+    {o o' : String} {rv : Nat → BitVec 64} {Margs : Mem} (c : NpCtx live sret args s r n rv)
+    (hcl : CodeLive live) (H : OutHoles) {i : Nat}
+    {R : Nat → BitVec 64} {M : Mem} (f : NpFacts sret args s r n (i + 1) (i + 1) rv R M Margs)
+    (ha0 : R 10 = 32#64) (ha1 : R 11 = stdoutFile)
+    (hA : ∀ R' M', NpFacts sret args s r n (i + 1) (i + 1) rv R' M' Margs →
+      NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f1c#64 R' (npF s args n) M' ∗
+        stdioOwn ∗ consoleOwn (o' ++ " ") ⊢ Wp.W Φ) :
+    NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f18#64 R (npF s args n) M ∗ stdioOwn ∗
+      consoleOwn o' ⊢ Wp.W Φ := by
+  iintro ⟨Hrest, Hms, Hstd, Hcon⟩
+  have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
+  unfold nativePrintNeed printNeed fprintfNeed at hs1
+  have hsm : s - 80#64 = s + 18446744073709551536#64 := by
+    rw [BitVec.sub_eq_add_neg]; rfl
+  have hst80 : (s - 80#64).toNat = s.toNat - 80 := by
+    rw [hsm, BitVec.toNat_add]; simp; omega
+  have hsg : StackGeom (s - 80#64) printNeed := ⟨by rw [hst80]; unfold printNeed fprintfNeed; omega,
+    by rw [hst80]; unfold Vsa.Sim.LayoutInstance.stackSL printNeed fprintfNeed; simp; omega,
+    by rw [hst80]; unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, by rw [hst80]; omega⟩
+  unfold NpRest
+  icases Hrest with ⟨#Hcode, Hsl, #Hv, #Hd, #Himg, Hst, Hk⟩
+  iapply ms_callOut Wp (i := 0x80002f18)
+    (jalx_80002f18 live (fun p hp => c.hlive _ (interp_code_80002f18 p hp))) interp_code_80002f18
+    (R := R) (S := npF s args n) (Mt := M) (n := printNeed)
+    (fun cs => H.fputc live Wp (32#8) (s - 80#64) cs o' hcl (spIn_of_stackGeom hsg (by decide)))
+    (by simp) (fun j hj => by
+      simp only [List.length_cons, List.length_nil] at hj
+      rcases j with _ | _ | j
+      · rw [ha0]; rfl
+      · rw [ha1]; rfl
+      · omega)
+    (by rw [f.h2, hsm]) (by rw [hst80]; unfold printNeed fprintfNeed; omega) (by decide)
+  iframe Hcode Hms Hstd Hcon Hst Himg
+  iintro %R4 %hk4 Hstd Hcon Hms Hst
+  rw [show toString (Char.ofNat (32#8 : BitVec 8).toNat) = " " by decide]
+  have k4 := fun x (hx : x ∈ fRegs) (hc : x ∉ callerSaved) => hk4 x hx hc
+  iapply hA (upd R4 1 (BitVec.ofNat 64 (0x80002f18 + 4))) M ?_
+  rotate_left
+  · unfold NpRest
+    iframe Hcode Hsl Hv Hd Himg Hst Hk Hms Hstd Hcon
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, f.sra, f.ss0, f.ss1, f.ss2, f.ss3, f.ss4, f.hargs⟩
+  · ix_reg; rw [k4 8 (by decide) (by decide)]; exact f.h8
+  · ix_reg; rw [k4 9 (by decide) (by decide)]; exact f.h9
+  · ix_reg; rw [k4 18 (by decide) (by decide)]; exact f.h18
+  · ix_reg; rw [k4 19 (by decide) (by decide)]; exact f.h19
+  · ix_reg; rw [k4 20 (by decide) (by decide)]; exact f.h20
+  · ix_reg; rw [k4 2 (by decide) (by decide)]; exact f.h2
+  · intro x hx hc hn
+    have hx1 : x ≠ 1 := fun e => by subst e; revert hx; decide
+    simp only [upd, hx1, ite_false]
+    rw [k4 x hx hc]; exact f.hk x hx hc hn
+
+/-- **An iteration's second half, more arguments**: `fputc(' ')`, back to the
+loop head. -/
+theorem np_B_more (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {sret args s r : BitVec 64} {n : Nat} {vs : List Value} {st : Store}
+    {o : String} {rv : Nat → BitVec 64} {Margs : Mem} (c : NpCtx live sret args s r n rv)
+    (hcl : CodeLive live) (H : OutHoles) (hlen : vs.length = n) {i : Nat} (hi : i + 1 < n)
+    {R : Nat → BitVec 64} {M : Mem} (f : NpFacts sret args s r n i (i + 1) rv R M Margs)
+    (hA : ∀ R' M', NpFacts sret args s r n (i + 1) (i + 1) rv R' M' Margs →
+      NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f1c#64 R' (npF s args n) M' ∗
+        stdioOwn ∗ consoleOwn (o ++ npOut st vs (i + 1)) ⊢ Wp.W Φ) :
+    NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f48#64 R (npF s args n) M ∗ stdioOwn ∗
+      consoleOwn (o ++ npOut st vs i ++ (vs[i]'(by omega)).display st) ⊢ Wp.W Φ := by
+  iintro ⟨Hrest, Hms, Hstd, Hcon⟩
+  ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [Hms Hstd]
+  · iframe Hms Hstd
+  have hio1 : ldv .ld M1 0x8001b970 = 0x8001b538#64 := by
+    rw [ldv_ld_imgW]; unfold imgW
+    rw [imgLE_congr (img' := img) (fun j hj => hio _ (by simp [ioW, InExt]; omega))]
+    exact hok.impure
+  have hio2 : ldv .ld M1 0x8001b548 = 0x8001bb20#64 := by
+    rw [ldv_ld_imgW]; unfold imgW
+    rw [imgLE_congr (img' := img) (fun j hj => hio _ (by simp [ioW, InExt]; omega))]
+    exact StdioOK.stdout hok
+  have hne : BitVec.ofNat 64 n ≠ BitVec.ofNat 64 (i + 1) := fun h => by
+    have h1 := congrArg BitVec.toNat h; have := c.hn
+    rw [BitVec.toNat_ofNat, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega),
+      Nat.mod_eq_of_lt (by omega)] at h1
+    omega
+  iapply wp_swpF Wp (S := npS s args n) (R := R) (Mt := M1) (pc := 0x80002f48#64)
+    (F := FnpB Wp Φ N sret args s r vs st o (o ++ npOut st vs i ++ (vs[i]'(by omega)).display st)
+      rv Margs img)
+  rotate_left
+  · have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+      unfold codeRes; simp [dataOf]
+    unfold NpRest
+    icases Hrest with ⟨#Hcode, Hsl, #Hv, #Hd, #Himg, Hst, Hk⟩
+    rw [hro]
+    unfold FnpB FnpA NpRest
+    iframe Hcode Hsl Hv Hd Himg Hst Hk Hcon Hio Hms
+  intro F'
+  refine np_more c.hlive f.h8 f.h9 f.h18 f.h19 hne hio1 hio2 ?_
+  apply swp_closeF
+  dsimp only [F']
+  unfold FnpB FnpA
+  iintro ⟨⟨Hrest, Hcon, Hio⟩, Hms⟩
+  ihave ⟨Hms, Hstd⟩ := ms_ioClose hok hd $$ [Hms Hio]
+  · iframe Hms Hio
+    ipureintro; exact hio
+  have ha1 := c.ha.al; have ha2 := c.ha.lo; have ha3 := c.ha.hi
+  have h8 : args + BitVec.ofNat 64 (24 * i) + 24#64 = args + BitVec.ofNat 64 (24 * (i + 1)) := by
+    rw [BitVec.add_assoc]; congr 1
+    apply BitVec.eq_of_toNat_eq; simp; omega
+  iapply (np_fputc Wp c hcl H (N := N) (vs := vs) (st := st) (o := o) (Margs := Margs) (Φ := Φ)
+    (o' := o ++ npOut st vs i ++ (vs[i]'(by omega)).display st) (i := i) (M := M1)
+    (R := upd (upd (upd (upd R 10 32#64) 15 2147595576#64) 8 (args + BitVec.ofNat 64 (24 * i) + 24#64)) 11
+      2147597088#64) ?f ?ha0 ?ha1 ?hA)
+  case ha0 => ix_reg
+  case ha1 => ix_reg; rfl
+  case hA =>
+    intro R' M' f'
+    rw [show o ++ npOut st vs i ++ (vs[i]'(by omega)).display st ++ " " = o ++ npOut st vs (i + 1) by
+      rw [String.append_assoc, String.append_assoc, ← npOut_succ st vs i (by omega),
+        String.append_assoc]]
+    exact hA R' M' f'
+  case f =>
+    have sw : ∀ o, 24 ≤ o → o + 8 ≤ 80 →
+        ldv .ld M1 (s + 18446744073709551536#64 + BitVec.ofNat 64 o).toNat =
+          ldv .ld M (s + 18446744073709551536#64 + BitVec.ofNat 64 o).toNat := fun o h1 h2 => by
+      have hs1 := c.hs1
+      unfold nativePrintNeed printNeed fprintfNeed at hs1
+      have e : (s + 18446744073709551536#64 + BitVec.ofNat 64 o).toNat = s.toNat - 80 + o := by
+        rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
+      rw [e]
+      exact ldv_agree fun j hj => hM1 _ (.inl (by simp only [InExt]; omega))
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, fun k hk => (hM1 k (.inr hk)).trans
+      (f.hargs k hk)⟩
+    · ix_reg; exact h8
+    · ix_reg; exact f.h9
+    · ix_reg; exact f.h18
+    · ix_reg; exact f.h19
+    · ix_reg; exact f.h20
+    · ix_reg; exact f.h2
+    · intro x hx hc hn
+      have e10 : x ≠ 10 := fun e => hc (by simp [e])
+      have e11 : x ≠ 11 := fun e => hc (by simp [e])
+      have e15 : x ≠ 15 := fun e => hc (by simp [e])
+      have e8 : x ≠ 8 := fun e => hn (by simp [e])
+      simp only [upd, e10, e11, e15, e8, ite_false]
+      exact f.hk x hx hc hn
+    · rw [sw 72 (by omega) (by omega)]; exact f.sra
+    · rw [sw 64 (by omega) (by omega)]; exact f.ss0
+    · rw [sw 56 (by omega) (by omega)]; exact f.ss1
+    · rw [sw 48 (by omega) (by omega)]; exact f.ss2
+    · rw [sw 40 (by omega) (by omega)]; exact f.ss3
+    · rw [sw 32 (by omega) (by omega)]; exact f.ss4
+  iframe Hrest Hms Hstd Hcon
+
+/-- **An iteration's second half, last argument**: restore `s0`-`s3`, then the
+tail. -/
+theorem np_B_last (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {sret args s r : BitVec 64} {n : Nat} {vs : List Value} {st : Store}
+    {o : String} {rv : Nat → BitVec 64} {Margs : Mem} (c : NpCtx live sret args s r n rv)
+    (hvn : ⊢ valueNullSpec (vsaModel live) N Wp sret) (hlen : vs.length = n) {i : Nat}
+    (hi : i + 1 = n) {R : Nat → BitVec 64} {M : Mem}
+    (f : NpFacts sret args s r n i (i + 1) rv R M Margs) :
+    NpRest Wp Φ N sret args s r vs st o rv Margs ∗ ms 0x80002f48#64 R (npF s args n) M ∗ stdioOwn ∗
+      consoleOwn (o ++ npOut st vs i ++ (vs[i]'(by omega)).display st) ⊢ Wp.W Φ := by
+  iintro ⟨Hrest, Hms, Hstd, Hcon⟩
+  have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
+  unfold nativePrintNeed printNeed fprintfNeed at hs1
+  unfold NpRest
+  icases Hrest with ⟨#Hcode, Hsl, #Hv, #Hd, #Himg, Hst, Hk⟩
+  rw [String.append_assoc, npOut_last st vs i (by omega)]
+  iapply wp_swpF Wp (S := npF s args n) (R := R) (Mt := M) (pc := 0x80002f48#64)
+    (F := iprop(slot24 sret.toNat ∗ valsImg N (imgM Margs) args.toNat vs ∗ stdioOwn ∗
+      consoleOwn (o ++ printArgs st vs) ∗ stackScratch (s - 80#64) printNeed ∗
+      NpK Wp Φ N sret args s r vs st o rv ∗ codeRes))
+  rotate_left
+  · have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+      unfold codeRes; simp [dataOf]
+    rw [hro]
+    iframe Hcode Hsl Hv Hstd Hcon Hst Hk Hms
+  intro F'
+  refine np_last c.hlive (f.h9.trans (by rw [hi])) f.h19 f.h2 (by omega) hs2 hs3 f.ss0 f.ss1 f.ss2
+    f.ss3 ?_
+  apply swp_closeF
+  dsimp only [F']
+  iintro ⟨⟨Hsl, #Hv, Hstd, Hcon, Hst, Hk, #Hcode⟩, Hms⟩
+  iapply np_tail Wp c hvn hlen
+    (R := upd (upd (upd (upd (upd (upd R 10 32#64) 8 (rv 8)) 9 (rv 9)) 18 (rv 18)) 19 (rv 19)) 10 (R 20))
+    (M := M) ?h10 ?h20 ?h2 ?hkeep f.sra f.ss4 f.hargs c.hdfa
+  case h10 => simp only [upd]; simp; exact f.h20
+  case h20 => simp only [upd]; simp; exact f.h20
+  case h2 => simp only [upd]; simp; exact f.h2
+  case hkeep =>
+    intro x hx hc h2 h20
+    have e10 : x ≠ 10 := fun e => hc (by simp [callerSaved, e])
+    simp only [upd]
+    by_cases h8 : x = 8
+    · simp [h8]
+    by_cases h9 : x = 9
+    · simp [h9]
+    by_cases h18 : x = 18
+    · simp [h18]
+    by_cases h19 : x = 19
+    · simp [h19]
+    simp only [e10, h8, h9, h18, h19, if_false]
+    exact f.hk x hx hc (by simp [h2, h8, h9, h18, h19, h20])
+  iframe Hcode Hms Hsl Hv Hstd Hcon Hst Hk
 
 end Glue
 
