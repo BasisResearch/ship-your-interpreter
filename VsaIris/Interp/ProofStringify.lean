@@ -271,6 +271,68 @@ macro_rules
     ix_run1 hlive using [h2, hal, hra, hs0, hs1']
 
 
+/- A closure: the prologue and the kind dispatch, to its arm (`0x8000301c`). -/
+#ix_seg sg_cloH {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
+    {s p r : BitVec 64}
+    (h10 : rv 10 = p) (h2 : rv 2 = s)
+    (hs1 : 0x87800000 + 112 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (hp1 : p.toNat % 8 = 0) (hp2 : 0x8001ad00 + 16 ≤ p.toNat) (hp3 : p.toNat + 24 ≤ 0x100000000)
+    (hk : ldv .lw M p.toNat = 4#64) :
+    IW live ∅ [] (sgF s p) Q stringifyPC (upd rv 1 r) M
+  by
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
+      rw [BitVec.toNat_add]; simp; omega
+    unfold stringifyPC
+    ix_run1 hlive using [h10, h2, hsf, hk] at 0x8000301c
+
+/- A closure, named: its object's `EX_FN` node's name field (the data view), to
+`jal snprintf`. -/
+#ix_seg sg_cloN {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M Dt : Mem} {R : Nat → BitVec 64}
+    {s p : BitVec 64} {cp q nm : Nat}
+    (h10 : R 10 = p) (h2 : R 2 = s + 18446744073709551504#64)
+    (hs1 : 0x87800000 + 112 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (hp1 : p.toNat % 8 = 0) (hp2 : 0x8001ad00 + 16 ≤ p.toNat) (hp3 : p.toNat + 24 ≤ 0x100000000)
+    (hw8 : ldv .ld M (p + 8#64).toNat = BitVec.ofNat 64 cp)
+    (hc0 : ReadOK cp) (hc7 : ReadOK (cp + 7)) (hq : ldv .ld Dt cp = BitVec.ofNat 64 q)
+    (hq0 : ReadOK (q + 8)) (hq7 : ReadOK (q + 15)) (hnm : ldv .ld Dt (q + 8) = BitVec.ofNat 64 nm)
+    (hnz : BitVec.ofNat 64 nm ≠ 0#64) (hcp : cp < 2 ^ 64) (hql : q + 8 < 2 ^ 64) :
+    IW live Dt (clodA cp q) (sgF s p) Q 0x8000301c#64 R M
+  by
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
+      rw [BitVec.toNat_add]; simp; omega
+    have c1 := hc0.lo; have c2 := hc0.hi; have c3 := hc0.off
+    have c4 := hc7.lo; have c5 := hc7.hi; have c6 := hc7.off
+    have q1 := hq0.lo; have q2 := hq0.hi; have q3 := hq0.off
+    have q4 := hq7.lo; have q5 := hq7.hi; have q6 := hq7.off
+    have ecp : (BitVec.ofNat 64 cp).toNat = cp := by simp; omega
+    have eq8 : (BitVec.ofNat 64 q + 8#64).toNat = q + 8 := by rw [BitVec.toNat_add]; simp; omega
+    ix_run1 hlive using [h10, h2, hsf, hw8, ecp, hq, eq8, hnm, hnz] at 0x80003040
+
+/- A closure, anonymous: `"<fn>"` stored inline, to `jal strlen`. -/
+#ix_seg sg_cloA {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M Dt : Mem} {R : Nat → BitVec 64}
+    {s p : BitVec 64} {cp q : Nat}
+    (h10 : R 10 = p) (h2 : R 2 = s + 18446744073709551504#64)
+    (hs1 : 0x87800000 + 112 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    (hp1 : p.toNat % 8 = 0) (hp2 : 0x8001ad00 + 16 ≤ p.toNat) (hp3 : p.toNat + 24 ≤ 0x100000000)
+    (hw8 : ldv .ld M (p + 8#64).toNat = BitVec.ofNat 64 cp)
+    (hc0 : ReadOK cp) (hc7 : ReadOK (cp + 7)) (hq : ldv .ld Dt cp = BitVec.ofNat 64 q)
+    (hq0 : ReadOK (q + 8)) (hq7 : ReadOK (q + 15)) (hnm : ldv .ld Dt (q + 8) = 0#64)
+    (hcp : cp < 2 ^ 64) (hql : q + 8 < 2 ^ 64) :
+    IW live Dt (clodA cp q) (sgF s p) Q 0x8000301c#64 R M
+  by
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
+      rw [BitVec.toNat_add]; simp; omega
+    have c1 := hc0.lo; have c2 := hc0.hi; have c3 := hc0.off
+    have c4 := hc7.lo; have c5 := hc7.hi; have c6 := hc7.off
+    have q1 := hq0.lo; have q2 := hq0.hi; have q3 := hq0.off
+    have q4 := hq7.lo; have q5 := hq7.hi; have q6 := hq7.off
+    have ecp : (BitVec.ofNat 64 cp).toNat = cp := by simp; omega
+    have eq8 : (BitVec.ofNat 64 q + 8#64).toNat = q + 8 := by rw [BitVec.toNat_add]; simp; omega
+    ix_run1 hlive using [h10, h2, hsf, hw8, ecp, hq, eq8, hnm] at 0x80003048
+
 /-! ## Bytes a run's stores leave -/
 
 theorem imgM_sw (Mt : Mem) (a : Nat) (v : BitVec 64) (i : Nat) (hi : i < 4) :
@@ -1873,6 +1935,73 @@ theorem sg_strCopy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       f.sra, f.ss0, f.ss1, f.hslot, cstrImg_shift hci, f.hfresh⟩ _ (.inr rfl)
   unfold SgRestC
   iframe Hcode Hv Hh Hd Hstd Hcon Hst Hk Hms
+
+/-- **`malloc(len + 1)`** in the string arm, then the out-of-memory abort or
+the copy. -/
+theorem sg_strMalloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {x : String} {ρ : Regime}
+    {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (A : AllocSpecs live) (HN : NewlibHoles) (cx : SgCtx live p s r rv)
+    (hmcr : ⊢ memcpySpec (GF := GF) Wp) (hc : vsaChg (x.toList.length + 1) c)
+    (hlt : x.toList.length + 1 < 2 ^ 64)
+    {R : Nat → BitVec 64} {M : Mem} (f : SgS2 s p r (imgW (imgM Mp) (p.toNat + 8)) x rv R M Mp) :
+    SgRest Wp Φ N inp p s r (.str x) x ρ H c o rv Mp ∗
+      ms 0x800030f8#64 R (sgF s p) M ⊢ Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
+    rw [BitVec.toNat_add]; simp; omega
+  have hn : stringifyNeed - 112 ≤ (s + 18446744073709551504#64).toNat := by
+    rw [e112]; unfold stringifyNeed snprintfNeed; omega
+  have hm : allocHeadroom ≤ stringifyNeed - 112 := by unfold allocHeadroom stringifyNeed snprintfNeed; omega
+  iintro ⟨Hrest, Hms⟩
+  unfold SgRest
+  icases Hrest with ⟨#Hcode, #Himg, #Hat, #Hv, Hh, Hstd, Hcon, Hst, Hk⟩
+  ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hn hm $$ Hst
+  rw [← f.h2]
+  iapply (ms_callMalloc A Wp (i := 0x800030f8)
+    (jalx_800030f8 live (fun q hq => cx.hlive _ (interp_code_800030f8 q hq))) interp_code_800030f8
+    (by decide) ρ H c (R := R) (by rw [f.h10, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hlt]; exact hc)
+    ⟨by rw [f.h2, e112]; unfold Vsa.Sim.tohostAddr allocHeadroom; omega,
+      by rw [f.h2, e112]; omega, by rw [f.h2, e112]; omega⟩)
+  iframe Hat Hcode Hms Hst Hh
+  iintro %R' %hk' Hst Hres Hms
+  rw [f.h2]
+  ihave Hst := stackScratch_widen hn hm $$ [Hslack Hst]
+  · iframe Hslack Hst
+  rw [f.h10, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hlt]
+  have k' : ∀ y ∈ fRegs, y ∉ callerSaved → R' y = R y := fun y hy hc => hk' y hy hc
+  unfold mallocRes
+  icases Hres with (⟨%⟨h0, hρ⟩, Hh⟩ | ⟨%hf, Hh, Hb⟩)
+  · subst hρ
+    iapply sg_oomPath Wp HN cx (c := c) (pc := 0x800030fc) (.inr rfl)
+      (R := upd R' 1 (BitVec.ofNat 64 (0x800030f8 + 4))) (M := M)
+      (by ix_reg; rw [k' 2 (by decide) (by decide)]; exact f.h2) (by ix_reg; exact h0)
+    unfold SgRest
+    rw [Regime.plus_uncounted]
+    iframe Hcode Himg Hat Hv Hh Hstd Hcon Hst Hk Hms
+  · iapply sg_strCopy Wp cx hmcr (q := R' 10) (R := upd R' 1 (BitVec.ofNat 64 (0x800030f8 + 4)))
+      (M := M) (f := ⟨by ix_reg, by ix_reg; rw [k' 9 (by decide) (by decide)]; exact f.h9,
+        by ix_reg; rw [k' 2 (by decide) (by decide)]; exact f.h2,
+        fun y hy hc hy2 hy9 => by
+          have hy1 : y ≠ 1 := fun e => by subst e; revert hy; decide
+          simp only [upd, hy1, ite_false]
+          rw [k' y hy hc]; exact f.hk y hy hc hy2 hy9,
+        f.sra, f.ss0, f.ss1, f.sn, f.hslot, hf⟩)
+    unfold SgRestB
+    iframe Hcode Himg Hv Hh Hb Hstd Hcon Hst Hk Hms
+
+/-- **A string**: `strlen`, `malloc`, `memcpy` of the payload, the return. -/
+theorem sg_strArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {ρ : Regime}
+    {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (A : AllocSpecs live) (HN : NewlibHoles) (cx : SgCtx live p s r rv)
+    (hsl : ⊢ strlenSpec (GF := GF) Wp) (hmcr : ⊢ memcpySpec (GF := GF) Wp) {t : String}
+    (hc : vsaChg (t.toList.length + 1) c) (hlt : t.toList.length + 1 < 2 ^ 64) {M : Mem}
+    (hk : ldv .lw M p.toNat = 3#64) (hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k) :
+    SgRest Wp Φ N inp p s r (.str t) t ρ H c o rv Mp ∗
+      ms stringifyPC (upd rv 1 r) (sgF s p) M ⊢ Wp.W Φ :=
+  sg_strHead Wp cx hsl hk hslot fun _ _ f2 => sg_strMalloc Wp A HN cx hmcr hc hlt f2
 
 end Glue
 
