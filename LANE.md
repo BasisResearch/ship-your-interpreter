@@ -72,6 +72,21 @@ Branch `lane-h4`. Goal: discharge `IrisHoles.alloc` (`VsaIris/Vsa/AllocHoles.lea
 ## Holes
 - Left: `alloc.reallocChgRun`, `alloc.reallocLocalRun`.
 
-## Next
-1. `_realloc_r` (the `sltu` at `0x800052d0` needs a hand step lemma), whose nested
-   `_malloc_r` and `_free_r` calls reuse `malloc_all`/`free_body` with their own `MCtx`.
+- **`sltu` step** (`Vsa/AllocSltu.lean`): `swp_alu` (any observational ALU step as one `SWP`
+  step) and `st_800052d0`.
+
+## Next: `_realloc_r` (`0x80005290`, wrapper `realloc` `0x8000527c`)
+Paths (X = p-16 of size S, nb = normalized request, T = tail `0x80005414`):
+- error (`nb` < `nNew` or `nb` ≥ 2^31, `0x800054b8`): errno, NULL, no unlock; counted refutes.
+- S ≥ nb → T. Next free and S+ns ≥ nb → unlink next (`0x80005400`) → T.
+- next is top (`0x800054dc`): S+ts ≥ nb+32 → grow into top (`0x80005740`, return p);
+  else prev free and ps+S+ts ≥ nb+32 → unlink prev, copy to prev+16, top at prev+nb (`0x80005510`).
+- prev free (and next free) with enough room: `0x8000566c` (prev+X+next) / `0x800055e4`
+  (prev+X): unlink, copy to prev+16 → T.
+- else malloc (`0x80005350`, nested `_malloc_r(nNew)`, `MCtx` with H := (p,nOld)::H):
+  NULL → unlock, return 0 (`0x800057c8`); newp = next chunk → merge (`0x800055b0`) → T;
+  else copy (inline ≤ 72 bytes or `memmove` `0x800069c4`), nested `_free_r(p)`, return newp.
+- T: remainder > 31 → split, `_free_r(rem+16)` nested (a zero-length live block at rem+16);
+  else no split; next header |= 1; unlock; return s0.
+Copies are forward word copies (dst ≤ src or disjoint): one `copyW` memory for inline and
+`memmove` (forward path only: its backward branch is refuted).
