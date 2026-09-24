@@ -36,6 +36,21 @@ theorem storeRepr_clos_inj (N : NativeAddrs) {st : Store} {B : List (Nat × Nat)
     ipureintro; exact hpure
   · ipureintro; exact hpure.1.clos_inj a b p ha hb
 
+/-- One instance of `strcmp`'s spec. -/
+theorem strcmpSpecV_at {M : MachineModel} {Wp : MachWP (GF := GF) M} (p q : BitVec 64) (x y : String) :
+    strcmpSpecV M Wp ⊢ helperSpec M Wp strcmpPCV callerSaved (fun rv => rv 10 = p ∧ rv 11 = q)
+      iprop(strAt p.toNat x ∗ strAt q.toNat y) (fun rv' => iprop(⌜rv' 10 = 0#64 ↔ x = y⌝)) := by
+  unfold strcmpSpecV
+  iintro #H
+  iapply H
+
+/-- A string value's payload is its string. -/
+theorem valImg_str {N : NativeAddrs} {f : Nat → BitVec 8} {a : Nat} {x : String} :
+    valImg (GF := GF) N f a (.str x) ⊢ strAt (imgW f (a + 8)).toNat x := by
+  unfold valImg valOf
+  iintro ⟨-, #H⟩
+  iexact H
+
 /-- The closure case of `value_equal`: the payload words are equal exactly
 when the closures are. -/
 def VeqClo : Value → Value → BitVec 64 → BitVec 64 → Prop
@@ -146,7 +161,7 @@ def Fveq (Wp : MachWP (GF := GF) (vsaModel live)) (Φ : Nat × String → IProp 
     (pa pb s r : BitVec 64) (a b : Value) (st : Store) (B : List (Nat × Nat)) (rv : Nat → BitVec 64)
     (Ma Mb : Mem) : IProp GF :=
   iprop(valImg N (imgM Ma) pa.toNat a ∗ valImg N (imgM Mb) pb.toNat b ∗
-    storeRepr N st B ∗ strcmpSpecV (vsaModel live) Wp ∗
+    storeRepr N st B ∗ strcmpSpecV (vsaModel live) Wp ∗ codeRes ∗
     (PC ↦ᵣ r -∗ ra ↦ᵣ r -∗
       (∃ rv', regFile rv' ∗ ⌜∀ x ∈ fRegs, x ∉ callerSaved → rv' x = rv x⌝ ∗
         (valAt N pa.toNat a ∗ valAt N pb.toNat b ∗ storeRepr N st B ∗ stackAt s 16 ∗
@@ -168,7 +183,7 @@ theorem veq_swp_close (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   apply swp_closeF
   refine .trans ?_ (veq_close Wp (N := N) (st := st) (B := B) h1 h10 hkeep hA hB hdab hdk hsg)
   unfold Fveq
-  iintro ⟨⟨#Hwa, #Hwb, Hst, #Hcmp, Hk⟩, Hms⟩
+  iintro ⟨⟨#Hwa, #Hwb, Hst, #Hcmp, #Hcode, Hk⟩, Hms⟩
   iframe Hms Hwa Hwb Hst Hk
 
 /-- The pure context of a `value_equal` run (named, CLAUDE.md law 6). -/
@@ -346,6 +361,116 @@ theorem veq_word16 (c : VeqCtx live pa pb s r rv M Ma Mb) {a b : Value}
   exact veq_swp_close Wp c.hMa c.hMb c.hdab c.hdk c.hsg (by ix_reg)
     (by ix_reg; rw [seqz_sub, hres]) (by helper_keep)
 
+/-- The string arm after `strcmp` returns: restore `ra`, `seqz`, return. -/
+theorem veq_str_run2 (c : VeqCtx live pa pb s r rv M Ma Mb) {x1 x2 : String} {R' : Nat → BitVec 64}
+    (h2 : R' 2 = s + 18446744073709551600#64) (h10 : R' 10 = 0#64 ↔ x1 = x2)
+    (hkeep : ∀ x ∈ fRegs, x ∉ callerSaved → x ≠ 2 → R' x = rv x) :
+    IW live ∅ [] (veqS pa pb s)
+      (RunK Wp Φ (Fveq Wp Φ N pa pb s r (.str x1) (.str x2) st B rv Ma Mb) (veqS pa pb s))
+      (BitVec.ofNat 64 (0x800028d4 + 4)) (upd R' 1 (BitVec.ofNat 64 (0x800028d4 + 4)))
+      (writeLog M [((s + 18446744073709551600#64 + 8#64).toNat, 8, r)]) := by
+  have hal := c.hal
+  have ha1 := c.hga.al; have ha2 := c.hga.lo; have ha3 := c.hga.hi
+  have hb1 := c.hgb.al; have hb2 := c.hgb.lo; have hb3 := c.hgb.hi
+  have hs1 := c.hsg.le; have hs2 := c.hsg.lo; have hs3 := c.hsg.hi; have hs4 := c.hsg.al
+  unfold Vsa.Sim.LayoutInstance.stackSL at hs2 hs3
+  simp only at hs2 hs3
+  have hsa : (s + 18446744073709551600#64).toNat = s.toNat - 16 := by
+    rw [BitVec.toNat_add]; simp; omega
+  have hsa8 : (s + 18446744073709551600#64 + 8#64).toNat = s.toNat - 8 := by
+    rw [BitVec.toNat_add, hsa]; simp; omega
+  have hsp : s + 18446744073709551600#64 + 16#64 = s := by
+    rw [BitVec.add_assoc]; simp
+  have hsd : ∀ x, (InExt (pa.toNat, 24) x ∨ InExt (pb.toNat, 24) x) →
+      imgM (writeLog M [((s + 18446744073709551600#64 + 8#64).toNat, 8, r)]) x = imgM M x := by
+    intro x hx
+    have := c.hdk x hx
+    simp only [InExt] at this hx
+    exact imgM_store_miss _ _ (by rw [hsa8]; omega)
+  ix_run c.hlive using [h2]
+  refine veq_swp_close Wp (fun x hx => (hsd x (.inl hx)).trans (c.hMa x hx))
+    (fun x hx => (hsd x (.inr hx)).trans (c.hMb x hx)) c.hdab c.hdk c.hsg (by ix_reg) ?_ ?_
+  · ix_reg
+    have e := seqz_sub (R' 10) 0#64
+    rw [BitVec.sub_zero] at e
+    rw [e]
+    by_cases h : R' 10 = 0#64
+    · simp [h, Value.equal, h10.1 h]
+    · have : x1 ≠ x2 := fun h' => h (h10.2 h')
+      simp [h, Value.equal, this]
+  · intro x hx hc
+    have h1 : x ≠ 1 := fun e => by subst e; revert hx; decide
+    by_cases hx2 : x = 2
+    · subst hx2; ix_reg; rw [hsp, c.h2]
+    · simp only [upd, h1, hx2, ite_false]
+      have h10' : x ≠ 10 := fun e => by subst e; exact hc (by decide)
+      simp only [h10', ite_false]
+      exact hkeep x hx hc hx2
+
+/-- The string arm at `jal strcmp`: the call, then the rest of the run. -/
+theorem veq_str_call (c : VeqCtx live pa pb s r rv M Ma Mb) {x1 x2 : String} {R1 : Nat → BitVec 64}
+    (h10 : R1 10 = imgW (imgM Ma) (pa.toNat + 8)) (h11 : R1 11 = imgW (imgM Mb) (pb.toNat + 8))
+    (h2 : R1 2 = s + 18446744073709551600#64)
+    (hkeep : ∀ x ∈ fRegs, x ∉ callerSaved → x ≠ 2 → R1 x = rv x) :
+    Fveq Wp Φ N pa pb s r (.str x1) (.str x2) st B rv Ma Mb ∗
+      ms 0x800028d4#64 R1 (veqS pa pb s)
+        (writeLog M [((s + 18446744073709551600#64 + 8#64).toNat, 8, r)]) ⊢ Wp.W Φ := by
+  unfold Fveq
+  iintro ⟨⟨#Hwa, #Hwb, Hst, #Hcmp, #Hcode, Hk⟩, Hms⟩
+  ihave #Hxa := valImg_str $$ Hwa
+  ihave #Hxb := valImg_str $$ Hwb
+  ihave #Hsc := strcmpSpecV_at (imgW (imgM Ma) (pa.toNat + 8)) (imgW (imgM Mb) (pb.toNat + 8)) x1 x2
+    $$ Hcmp
+  iapply ms_callHelper Wp (i := 0x800028d4)
+    (jalx_800028d4 live (fun p hp => c.hlive _ (interp_code_800028d4 p hp))) interp_code_800028d4
+    (by decide) (clob := callerSaved)
+    (pins := fun rv => rv 10 = imgW (imgM Ma) (pa.toNat + 8) ∧ rv 11 = imgW (imgM Mb) (pb.toNat + 8))
+    (Pre := iprop(strAt (imgW (imgM Ma) (pa.toNat + 8)).toNat x1 ∗
+      strAt (imgW (imgM Mb) (pb.toNat + 8)).toNat x2))
+    (Post := fun rv' => iprop(⌜rv' 10 = 0#64 ↔ x1 = x2⌝))
+  isplitl []
+  · ipureintro; exact ⟨h10, h11⟩
+  isplitl []
+  · iexact Hsc
+  iframe Hcode Hms
+  isplitl []
+  · iframe Hxa Hxb
+  iintro %R' %hk' %hres Hms
+  iapply wp_swpF Wp (S := veqS pa pb s)
+    (F := Fveq Wp Φ N pa pb s r (.str x1) (.str x2) st B rv Ma Mb)
+  rotate_left
+  · have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+      unfold codeRes; simp [dataOf]
+    rw [hro]
+    unfold Fveq
+    iframe Hcode Hwa Hwb Hst Hcmp Hk Hms
+  intro F'
+  have hk2 : R' 2 = R1 2 := hk' 2 (by decide) (by decide)
+  exact veq_str_run2 Wp c (hk2.trans h2) hres
+    (fun x hx hc hx2 => (hk' x hx hc).trans (hkeep x hx hc hx2))
+
+/-- The string arm: up to `jal strcmp`, then `veq_str_call`. -/
+theorem veq_str (c : VeqCtx live pa pb s r rv M Ma Mb) {x1 x2 : String}
+    (hka : ldv .lw M pa.toNat = 3#64) (hkb : ldv .lw M pb.toNat = 3#64) :
+    VeqGoal Wp Φ N pa pb s r (.str x1) (.str x2) st B rv M Ma Mb := by
+  have hla := (ldv_ld_imgW M (pa + BitVec.ofNat 64 8).toNat).trans (c.wordA 8 (by omega))
+  have hlb := (ldv_ld_imgW M (pb + BitVec.ofNat 64 8).toNat).trans (c.wordB 8 (by omega))
+  have h10 := c.h10; have h11 := c.h11; have h2 := c.h2; have hal := c.hal
+  have ha1 := c.hga.al; have ha2 := c.hga.lo; have ha3 := c.hga.hi
+  have hb1 := c.hgb.al; have hb2 := c.hgb.lo; have hb3 := c.hgb.hi
+  have hs1 := c.hsg.le; have hs2 := c.hsg.lo; have hs3 := c.hsg.hi; have hs4 := c.hsg.al
+  unfold Vsa.Sim.LayoutInstance.stackSL at hs2 hs3
+  simp only at hs2 hs3
+  unfold VeqGoal valueEqualPC
+  ix_run c.hlive using [h10, h11, h2, hka, hkb, hla, hlb] at 0x800028d4
+  apply swp_closeF
+  refine veq_str_call Wp c (by ix_reg) (by ix_reg) (by ix_reg; try exact congrArg (· + _) h2) ?_
+  intro x hx hc hx2
+  have h1 : x ≠ 1 := fun e => by subst e; revert hx; decide
+  simp only [List.mem_cons, List.not_mem_nil, _root_.or_false, not_or] at hc
+  simp only [upd]
+  simp_all
+
 end Arms
 
 /-- **The run of `value_equal`**, by the kinds. -/
@@ -372,7 +497,7 @@ theorem veq_run (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
         have : n1 = n2 := by simpa [Value.equal] using h
         subst this
         exact BitVec.eq_of_toInt_eq (by rw [e1, e2])
-    · sorry
+    · exact veq_str Wp c hka hkb
     · refine veq_word8 Wp c hka hkb (.inr rfl) ?_
       simp only [VeqClo] at hclo
       rw [hclo]; simp [Value.equal]

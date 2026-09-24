@@ -11,6 +11,9 @@ import VsaIris.Vsa.RuntimeError
 import VsaIris.Vsa.OomSites
 import VsaIris.Vsa.Setjmp
 import VsaIris.Vsa.TopAbrupt
+import VsaIris.Interp.ProofValueCons
+import VsaIris.Interp.ProofValueTruthy
+import VsaIris.Interp.ProofValueEqual
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -110,3 +113,11 @@ import VsaIris.Vsa.TopAbrupt
 #print axioms VsaIris.Newlib.TopAbrupt.topRet_ok
 #print axioms VsaIris.Newlib.TopAbrupt.topBrk_ok
 #print axioms VsaIris.Newlib.OomSites.oom80003e28_ok
+#print axioms VsaIris.Sym.swp_alu
+#print axioms VsaIris.Interp.helper_leaf
+#print axioms VsaIris.Interp.valueNull_spec
+#print axioms VsaIris.Interp.valueBool_spec
+#print axioms VsaIris.Interp.valueInt_spec
+#print axioms VsaIris.Interp.valueStr_spec
+#print axioms VsaIris.Interp.valueTruthy_spec
+#print axioms VsaIris.Interp.valueEqual_spec

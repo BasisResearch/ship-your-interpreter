@@ -41,19 +41,19 @@ open Vsa.While Vsa.MemRepr Vsa.RuntimeRepr
 
 /-! ## Entries, clobbers, stack needs -/
 
-def valueNullPC : BitVec 64 := 0x800027ec#64
-def valueBoolPC : BitVec 64 := 0x800027f8#64
-def valueStrPC : BitVec 64 := 0x8000281c#64
-def valueTruthyPC : BitVec 64 := 0x8000282c#64
-def valueEqualPC : BitVec 64 := 0x8000285c#64
-def valuePrintPC : BitVec 64 := 0x800028fc#64
-def nativeAssertPC : BitVec 64 := 0x80002df4#64
-def nativePrintPC : BitVec 64 := 0x80002ed4#64
-def nativePrintlnPC : BitVec 64 := 0x80002f7c#64
-def stringifyPC : BitVec 64 := 0x80002fc0#64
+abbrev valueNullPC : BitVec 64 := 0x800027ec#64
+abbrev valueBoolPC : BitVec 64 := 0x800027f8#64
+abbrev valueStrPC : BitVec 64 := 0x8000281c#64
+abbrev valueTruthyPC : BitVec 64 := 0x8000282c#64
+abbrev valueEqualPC : BitVec 64 := 0x8000285c#64
+abbrev valuePrintPC : BitVec 64 := 0x800028fc#64
+abbrev nativeAssertPC : BitVec 64 := 0x80002df4#64
+abbrev nativePrintPC : BitVec 64 := 0x80002ed4#64
+abbrev nativePrintlnPC : BitVec 64 := 0x80002f7c#64
+abbrev stringifyPC : BitVec 64 := 0x80002fc0#64
 
 /-- The callee entries H2 calls. -/
-def strcmpPCV : BitVec 64 := 0x80006ea0#64
+abbrev strcmpPCV : BitVec 64 := 0x80006ea0#64
 
 /-- The registers a call may clobber: the temporaries and the arguments. -/
 abbrev callerSaved : List Nat := [5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 28, 29, 30, 31]
