@@ -48,6 +48,37 @@ import VsaIris.Interp.Case.UnaryNotP
 import VsaIris.Interp.Case.UnaryNegTypeP
 
 import VsaIris.Interp.CaseE2
+import VsaIris.Interp.Case.BinaryAddIntP
+import VsaIris.Interp.Case.BinaryAddIntT
+import VsaIris.Interp.Case.BinarySubIntP
+import VsaIris.Interp.Case.BinarySubIntT
+import VsaIris.Interp.Case.ExecBlockP
+import VsaIris.Interp.Case.ExecBlockT
+import VsaIris.Interp.Case.ExecBrkP
+import VsaIris.Interp.Case.ExecBrkT
+import VsaIris.Interp.Case.ExecContP
+import VsaIris.Interp.Case.ExecContT
+import VsaIris.Interp.Case.ExecExprP
+import VsaIris.Interp.Case.ExecExprT
+import VsaIris.Interp.Case.ExecForP
+import VsaIris.Interp.Case.ExecForT
+import VsaIris.Interp.Case.ExecIfFalseT
+import VsaIris.Interp.Case.ExecIfNoneT
+import VsaIris.Interp.Case.ExecIfP
+import VsaIris.Interp.Case.ExecIfTrueT
+import VsaIris.Interp.Case.ExecRetNullP
+import VsaIris.Interp.Case.ExecRetNullT
+import VsaIris.Interp.Case.ExecRetP
+import VsaIris.Interp.Case.ExecRetT
+import VsaIris.Interp.Case.ExecVarInitP
+import VsaIris.Interp.Case.ExecVarInitT
+import VsaIris.Interp.Case.ExecVarNullP
+import VsaIris.Interp.Case.ExecVarNullT
+import VsaIris.Interp.Case.ExecWhileP
+import VsaIris.Interp.Case.ExecWhileT
+import VsaIris.Interp.Case.LogicalAndTrueP
+import VsaIris.Interp.Case.LogicalOrFalseP
+import VsaIris.Interp.Case.UnaryNegP
 /-! Axiom audit: every headline result, printed. -/
 
 #print axioms VsaIris.wp_exec_step
@@ -262,3 +293,38 @@ import VsaIris.Interp.CaseE2
 #print axioms VsaIris.Interp.caseP_BinaryAdd
 #print axioms VsaIris.Interp.ms_evalOom
 #print axioms VsaIris.Interp.abortAt_of_stringify
+
+-- wave 4: generated binInt rows (G), logical rows (E3), exec arms (E5), loops (E6)
+#print axioms VsaIris.Interp.caseP_BinaryAddInt
+#print axioms VsaIris.Interp.caseP_BinarySubInt
+#print axioms VsaIris.Interp.caseP_ExecBlock
+#print axioms VsaIris.Interp.caseP_ExecBrk
+#print axioms VsaIris.Interp.caseP_ExecCont
+#print axioms VsaIris.Interp.caseP_ExecExpr
+#print axioms VsaIris.Interp.caseP_ExecFor
+#print axioms VsaIris.Interp.caseP_ExecIf
+#print axioms VsaIris.Interp.caseP_ExecRet
+#print axioms VsaIris.Interp.caseP_ExecRetNull
+#print axioms VsaIris.Interp.caseP_ExecVarInit
+#print axioms VsaIris.Interp.caseP_ExecVarNull
+#print axioms VsaIris.Interp.caseP_ExecWhile
+#print axioms VsaIris.Interp.caseP_LogicalAndFalse
+#print axioms VsaIris.Interp.caseP_LogicalAndTrue
+#print axioms VsaIris.Interp.caseP_LogicalOrFalse
+#print axioms VsaIris.Interp.caseP_LogicalOrTrue
+#print axioms VsaIris.Interp.caseP_UnaryNegInt
+#print axioms VsaIris.Interp.caseT_BinaryAddInt
+#print axioms VsaIris.Interp.caseT_BinarySubInt
+#print axioms VsaIris.Interp.caseT_ExecBlock
+#print axioms VsaIris.Interp.caseT_ExecBrk
+#print axioms VsaIris.Interp.caseT_ExecCont
+#print axioms VsaIris.Interp.caseT_ExecExpr
+#print axioms VsaIris.Interp.caseT_ExecFor
+#print axioms VsaIris.Interp.caseT_ExecIfFalse
+#print axioms VsaIris.Interp.caseT_ExecIfNone
+#print axioms VsaIris.Interp.caseT_ExecIfTrue
+#print axioms VsaIris.Interp.caseT_ExecRet
+#print axioms VsaIris.Interp.caseT_ExecRetNull
+#print axioms VsaIris.Interp.caseT_ExecVarInit
+#print axioms VsaIris.Interp.caseT_ExecVarNull
+#print axioms VsaIris.Interp.caseT_ExecWhile

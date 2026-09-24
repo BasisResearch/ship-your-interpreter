@@ -98,3 +98,90 @@ added hole is an `IrisHoles` field with a `HOLES.md` row.
   `IrisHoles.reallocNull` field and its two `HOLES.md` rows are deleted, and the `NH` premise is gone from
   `reallocNullRho_spec`, `wp_call_reallocNull`, `wp_call_reallocOpt`, `def_grow` and `envDefine_spec`.
   Ledger: 12 → 10 (`newlib.*` 4, `out.*` 6).
+
+## Wave 4: the case families E6, E1, E2, E3, E5
+
+Status: `lake build Vsa VsaIris VsaIris.Audit` is green. `check_iris_holes.py` reports
+`ok: 10 ledgered holes`. The drift gate `python3 -B scripts/gen_iris_cases.py --check` is clean. All 240
+`#print axioms` in `VsaIris/Audit.lean` report a subset of {propext, Classical.choice, Quot.sound}; this now
+includes every `caseT_*`/`caseP_*`. E4 (call) is not merged.
+
+### What merged
+
+| lane | head | merge | conflicts |
+|---|---|---|---|
+| E6 (loops) | `e59de33` | `896a273` | none |
+| E1 (leaves, var, assign, fn) | `8a2dc86` | `1e82e6a` | `Audit.lean` (union) |
+| E2 (binary) | `eb166ca` | `3f59374` | `VsaIris.lean`, `Audit.lean`, plan (union) |
+| E3 (unary, logical) | `fd37b10` | `a1bb3ec` | `Audit.lean` (union) |
+| E5 (exec) | `3fa5911` | `493e6ec` | root/`Audit` (union); plan and design (union of separate sections); `gen_iris_cases.py` (by hand, below); `LANE.md` |
+
+The lanes started from `hub/wave4-base`, which adds the per-family `scripts/iris_arms/arms.d/` tables.
+Reports are archived as `LANES-e1.md`, `LANES-e2.md`, `LANES-e3.md`, `LANES-e5.md` and `LANES-e6.md`.
+Git's rename detection had put an older E5 report onto `LANES-h2.md`; `LANES-h2.md` keeps H2's report.
+
+### What was fixed
+
+- **E1 and E2 both defined `VsaIris.Interp.errCtx`.** E1's version carries `ErrCtxOK` (the `jmp_buf` `ra`
+  alignment, `InpGeom`, `inp < 2^64`); E2's carries only the alignment and keeps the rest in `ErrEnv`.
+  E4 and E5 had worked around the clash by commenting E1's var/assign cases out of the root and the audit.
+  Now E1's definition is `leafErrCtx` (in `LeafErr.lean` and the templates `var_P`, `assign_T`,
+  `assign_P`, `fnLit_P`, regenerated), and `leafErrCtx_of_errCtx` derives it from E2's `errCtx` plus
+  `ErrEnv`'s two fields. Var and Assign are back in the build and the audit.
+- **`gen_iris_cases.py` merged by hand:** E5's exec start points (`STARTS`) and exec families, E3's
+  `abort`-terminated rows, and E1's `fnLit` family.
+- **E3's `unNegType_P` template:** E2 later added a memory-agreement premise to `ms_callKindName`'s
+  continuation, so the template now introduces it (`%_hagK`).
+- **`Audit.lean`** now also prints the cases that were only printed in lane audits (`AuditE2.lean`,
+  `LoopAudit.lean`) or not at all (G's binInt rows, E3's logical rows, E5's exec arms).
+
+### Arms proved
+
+Total cases (T) are derivation-indexed, one per outcome. Partial cases (P) are per operator and cover the
+error rows. A constructor marked P covers the operator's error and type-error rows.
+
+| `eval_expr` arm | T | P |
+|---|---|---|
+| null / int / str / bool | `caseT_Leaf{Null,Int,Str,Bool}` | `caseP_Leaf{Null,Int,Str,Bool}` |
+| var (hit; miss → error) | `caseT_Var` | `caseP_Var` |
+| assign (ok; unbound → error) | `caseT_Assign` | `caseP_Assign` |
+| fn literal | `caseT_FnLit` | `caseP_FnLit` |
+| `+` | `caseT_BinaryAddInt`, `caseT_BinaryConcat` | `caseP_BinaryAdd` (and `caseP_BinaryAddInt`) |
+| `-` `*` `/` `%` | `caseT_Binary{SubInt,MulInt,DivInt,ModInt}` | `caseP_Binary{Sub,Mul,Div,Mod}` (and `caseP_BinarySubInt`) |
+| `==` `!=` | `caseT_Binary{Eq,Ne}` | `caseP_Binary{Eq,Ne}` |
+| `<` `<=` `>` `>=` | `caseT_Binary{Lt,Le,Gt,Ge}{Int,Str}` | `caseP_Binary{Lt,Le,Gt,Ge}` |
+| unary `-` | `caseT_UnaryNeg` | `caseP_UnaryNeg` (rows `caseP_UnaryNegInt`, `caseP_UnaryNegType`) |
+| unary `!` | `caseT_UnaryNot` | `caseP_UnaryNot` |
+| `&&` | `caseT_LogicalAnd{True,False}` | `caseP_LogicalAnd` (rows `…True`/`…False`) |
+| `\|\|` | `caseT_LogicalOr{True,False}` | `caseP_LogicalOr` (rows `…True`/`…False`) |
+
+| `exec_stmt` arm | T | P |
+|---|---|---|
+| expression | `caseT_ExecExpr` | `caseP_ExecExpr` |
+| `var x = e` / `var x` | `caseT_ExecVarInit` / `caseT_ExecVarNull` | `caseP_ExecVarInit` / `caseP_ExecVarNull` |
+| block | `caseT_ExecBlock` | `caseP_ExecBlock` |
+| if (true / false / no else) | `caseT_ExecIf{True,False,None}` | `caseP_ExecIf` |
+| while | `caseT_ExecWhile` (E6's `whileT_*`) | `caseP_ExecWhile` (`whileP_all`) |
+| for | `caseT_ExecFor` (E6's `forLoopT_*`) | `caseP_ExecFor` (`forLoopP_all`) |
+| `return e` / `return` | `caseT_ExecRet` / `caseT_ExecRetNull` | `caseP_ExecRet` / `caseP_ExecRetNull` |
+| break / continue | `caseT_ExecBrk` / `caseT_ExecCont` | `caseP_ExecBrk` / `caseP_ExecCont` |
+
+E6's shared loop lemmas (`whileT_*`, `whileP_all`, `forLoopT_*`, `forLoopP_all`, `execInit*`,
+`evalArgsT_*`, `evalArgsP_all`) are proved in both modes.
+
+### Arms still missing
+
+Only the call family (E4: closure call, the natives print/println/assert, and the call errors). Against
+the §8 inventory, no other arm is missing.
+
+### Open named premises (hypotheses of the cases, not `IrisHoles`)
+
+- `ErrRoom e d` (Q7) on `caseP_Var`/`caseP_Assign`. It holds for `d < maxCallDepth` (`errRoom_of_lt`).
+- E2's callee specs:
+  - `strcmpOrdSpec` and `strlenHeapSpec`/`strcpyHeapSpec` (H3);
+  - `stringifySpecT`/`stringifySpecP` (H2's `stringify_spec` in the shapes the concat arm needs);
+  - `CatDispSupply` (the same statement as E4's `DispSupply`).
+- The error arms' `errCtx`/`ErrEnv` and E6's `valueTruthySpec` premise (H2's `valueTruthy_spec` supplies
+  it) are supplied at the top (A).
+- Duplicates E5 lists to fold later: `execSP_off`/`execSP_offF`, `ms_callEvalPx`/`ms_callEvalPF`, and
+  `ms_truthyCall` (roughly `ms_callHelperVal` with `valueTruthySpec`).

@@ -87,7 +87,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   iframe Hcode Hms
   isplitl []
   · ipureintro; ix_reg
-  iintro %R3 %M3 %hkeep3 %hname Hms
+  iintro %R3 %M3 %hkeep3 %hname %_hagK Hms
 
 #ix_piece UnaryNegTypeP_p3 from UnaryNegTypeP_p2 by
   -- run 3: stage `runtime_error(in, line, fmt, "-", name)`
