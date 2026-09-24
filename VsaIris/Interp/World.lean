@@ -189,17 +189,19 @@ theorem pHeapAt_fill {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
 (`vsaLayoutP`, the layout of `IrisHoles.alloc`), read at the filled memory. -/
 theorem pShape_of_blockHeapAt {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : BlockHeapAt m H top brkv chunks bins)
-    (hpage : brkv % 4096 = 0) (hbb : ∀ bb, read64 m binblocksAddr = some bb → bb < 2 ^ 32) :
+    (hpage : brkv % 4096 = 0) (hbb : ∀ bb, read64 m binblocksAddr = some bb → bb < 2 ^ 32)
+    (hst : Starts H) :
     vsaLayoutP.Shape (memImg m) H :=
-  ⟨fillMem m 0x88000000, top, brkv, chunks, bins, fillMem_imgOn (fun _ ha => vsaFoot_lt ha),
+  ⟨hst, fillMem m 0x88000000, top, brkv, chunks, bins, fillMem_imgOn (fun _ ha => vsaFoot_lt ha),
     pHeapAt_fill h hpage hbb⟩
 
 /-- **The counted regime's capacity of the boundary image** (`vsaRoomB`). -/
 theorem roomB_of_blockHeapAt {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : BlockHeapAt m H top brkv chunks bins)
     (hpage : brkv % 4096 = 0) (hbb : ∀ bb, read64 m binblocksAddr = some bb → bb < 2 ^ 32)
-    {k : Nat} (hk : 2 * k + extendSlack ≤ heapEnd - top) : vsaRoomB (memImg m) H k :=
-  ⟨fillMem m 0x88000000, top, brkv, chunks, bins, fillMem_imgOn (fun _ ha => vsaFoot_lt ha),
+    (hst : Starts H) {k : Nat} (hk : 2 * k + extendSlack ≤ heapEnd - top) :
+    vsaRoomB (memImg m) H k :=
+  ⟨hst, fillMem m 0x88000000, top, brkv, chunks, bins, fillMem_imgOn (fun _ ha => vsaFoot_lt ha),
     pHeapAt_fill h hpage hbb, hk⟩
 
 /-! ## 3. The boundary data
@@ -776,7 +778,7 @@ boundary image. -/
 theorem heapRes_of_bytes {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : BlockHeapAt m H top brkv chunks bins)
     (hpage : brkv % 4096 = 0) (hbb : ∀ bb, read64 m binblocksAddr = some bb → bb < 2 ^ 32)
-    {ρ : Regime} (hρ : RegimeOK top ρ) :
+    (hst : Starts H) {ρ : Regime} (hρ : RegimeOK top ρ) :
     ownImg (GF := GF) (heapFoot vsaLayoutP H) (memImg m) ⊢ heapRes vsaLayoutP vsaRoomB ρ H := by
   cases ρ with
   | counted k =>
@@ -785,14 +787,14 @@ theorem heapRes_of_bytes {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     iexists memImg m
     iframe Hb
     ipureintro
-    exact ⟨pShape_of_blockHeapAt h hpage hbb, roomB_of_blockHeapAt h hpage hbb hρ⟩
+    exact ⟨pShape_of_blockHeapAt h hpage hbb hst, roomB_of_blockHeapAt h hpage hbb hst hρ⟩
   | uncounted =>
     unfold heapRes isHeap
     iintro Hb
     iexists memImg m
     iframe Hb
     ipureintro
-    exact pShape_of_blockHeapAt h hpage hbb
+    exact pShape_of_blockHeapAt h hpage hbb hst
 
 /-- The boundary stack below `interp_run`'s entry, cut where `interp_run`
 spills its 176-byte frame; the rest is what `stackScratch_boundary` carves
@@ -904,6 +906,7 @@ theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p)
   have gap := b.gap
   generalize b.G = G at gap ⊢
   have hroom := gap.top_room
+  have hH : Starts b.H := starts_inuseBlocks b.alloc.heap.walk
   have hG := gap.frame
   have hout : Vsa.Machine.output c.σ = initSt.out := b.ready.out
   have hg : imgLE (memImg c.σ.mem) b.inp.toNat 8 = G.e := by
@@ -949,7 +952,7 @@ theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p)
   · iexists b.H, ([] ++ G.blocks)
     iframe Hs Hcon Hi
     isplitl [Hh]
-    · iapply heapRes_of_bytes (b.blockHeapAt hroom) gap.brk_page gap.binblocks hρ $$ Hh
+    · iapply heapRes_of_bytes (b.blockHeapAt hroom) gap.brk_page gap.binblocks hH hρ $$ Hh
     isplitl [Hstd]
     · unfold Stdio.stdioOwn Stdio.stdioAt
       iexists memImg c.σ.mem
