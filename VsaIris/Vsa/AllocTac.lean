@@ -54,7 +54,7 @@ macro_rules
         BitVec.reduceShiftLeft, BitVec.reduceUShiftRight, BitVec.shiftLeft_eq',
         BitVec.ushiftRight_eq', BitVec.reduceToNat,
         BitVec.add_zero, BitVec.reduceAdd, BitVec.reduceOfNat, VsaIris.ra, Nat.reduceAdd,
-        BitVec.reduceAppend] at *)
+        BitVec.reduceAppend, not_true_eq_false] at *)
 
 /-- Unfold the access predicates and fold literal immediates. -/
 syntax "sx_pre" : tactic
@@ -64,7 +64,7 @@ macro_rules
         LeanRV64DExecutable.Functions.sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend,
         BitVec.add_zero, LdOK, StOK, StOKb, Vsa.Sim.tohostAddr, Vsa.Sim.DlHeap.heapStart,
         Vsa.Sim.DlHeap.heapEnd, Vsa.Sim.DlHeap.binAt, Vsa.Sim.DlHeap.avAddr,
-        Vsa.Sim.DlHeap.chunkSize] at *)
+        Vsa.Sim.DlHeap.chunkSize, and_true, true_and] at *)
 
 /-- `BitVec` sums as `Nat` sums modulo `2^64`. `BitVec.toNat_add` goes
 through `rw`: `simp` with it does not terminate on large literals. -/
@@ -82,9 +82,17 @@ macro_rules
 /-- Addresses and unsigned comparisons as `Nat` arithmetic, then `omega`. -/
 syntax "sx_addr" : tactic
 macro_rules
-  | `(tactic| sx_addr) => `(tactic| (sx_pre; sx_lits; sx_bv; sx_lits; sx_bv; omega))
+  | `(tactic| sx_addr) => `(tactic| (sx_pre; sx_lits; sx_bv; sx_lits; sx_bv; first | done | omega))
 
 macro_rules | `(tactic| sx_side) => `(tactic| sx_addr)
+
+/-- A refuted word disequality (`bnez` on a word that is zero): compare `toNat`s. -/
+macro_rules
+  | `(tactic| sx_side) => `(tactic| (intro hc; apply hc; apply BitVec.eq_of_toNat_eq; sx_addr))
+
+/-- A refuted word equality (`beq`/`bne` against a constant): compare `toNat`s. -/
+macro_rules
+  | `(tactic| sx_side) => `(tactic| (intro hc; have hc' := congrArg BitVec.toNat hc; clear hc; revert hc'; sx_addr))
 
 /-- A doubleword load through a disjoint store. -/
 theorem ldv_ld_miss (Mt : Vsa.MemRepr.Mem) {a b w : Nat} (v : BitVec 64) (h : a + 8 ≤ b ∨ b + w ≤ a) :
@@ -96,11 +104,47 @@ theorem ldv_ld_hit_eq (Mt : Vsa.MemRepr.Mem) {a b : Nat} (v : BitVec 64) (h : a 
     ldv .ld (Vsa.Sim.writeLog Mt [(b, 8, v)]) a = v := by
   subst h; exact ldv_store_hit Mt a v
 
+/-- A load at an address equal to one with a known doubleword (for `simp` with
+`sx_addr` discharging the address). -/
+theorem ldv_at {Mt : Vsa.MemRepr.Mem} {a' x : Nat} (h : Vsa.MemRepr.read64 Mt a' = some x) :
+    ∀ a, a = a' → ldv .ld Mt a = BitVec.ofNat 64 x := by
+  intro a he; subst he
+  exact ldv_ld (by rw [h, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ h)])
+
+/-- A word load through a disjoint store. -/
+theorem ldv_lw_miss (Mt : Vsa.MemRepr.Mem) {a b w : Nat} (v : BitVec 64) (h : a + 4 ≤ b ∨ b + w ≤ a) :
+    ldv .lw (Vsa.Sim.writeLog Mt [(b, w, v)]) a = ldv .lw Mt a :=
+  ldv_store_miss .lw Mt v h
+
+/-- A word load at the address of a zeroing word store (`sw zero`). -/
+theorem ldv_lw_zero_eq (Mt : Vsa.MemRepr.Mem) {a b : Nat} (h : a = b) :
+    ldv .lw (Vsa.Sim.writeLog Mt [(b, 4, 0#64)]) a = 0#64 := by
+  subst h
+  obtain ⟨h0, h1, h2, h3⟩ := Vsa.Sim.pin4_of_writeLog Mt [] [] a 0#64 trivial
+  simp only [List.nil_append] at h0 h1 h2 h3
+  have hb : ∀ f : Nat → BitVec 8, bytesAt f a (Vsa.Sim.widthOfM .lw) = [f a, f (a + 1), f (a + 2), f (a + 3)] :=
+    fun _ => rfl
+  unfold ldv
+  rw [hb]
+  unfold VsaIris.MallocFast.imgM
+  rw [h0, h1, h2, h3]
+  decide
+
+/-- `read64` at the address of the latest doubleword store (for `simp`). -/
+theorem read64_hit_eq (Mt : Vsa.MemRepr.Mem) {a b : Nat} (v : BitVec 64) (h : a = b) :
+    Vsa.MemRepr.read64 (Vsa.Sim.writeLog Mt [(b, 8, v)]) a = some v.toNat := by
+  subst h; exact read64_store_hit Mt a v
+
+/-- `read64` through a disjoint store (for `simp`). -/
+theorem read64_miss (Mt : Vsa.MemRepr.Mem) {a b w : Nat} (v : BitVec 64) (h : a + 8 ≤ b ∨ b + w ≤ a) :
+    Vsa.MemRepr.read64 (Vsa.Sim.writeLog Mt [(b, w, v)]) a = Vsa.MemRepr.read64 Mt a :=
+  read64_store_miss Mt v h
+
 /-- Store forwarding: a doubleword load reads the latest store at its address,
 through stores to disjoint addresses (`sx_addr` decides disjointness). -/
 syntax "sx_mem" : tactic
 macro_rules
-  | `(tactic| sx_mem) => `(tactic| simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq, ldv_ld_miss] at *)
+  | `(tactic| sx_mem) => `(tactic| simp (disch := sx_addr) only [ldv_store_hit, ldv_ld_hit_eq, ldv_ld_miss, ldv_lw_miss, ldv_lw_zero_eq] at *)
 
 /-- The PC literal of an `SWP` goal, if any. -/
 def swpPC? (ty : Expr) : MetaM (Option Nat) := do
