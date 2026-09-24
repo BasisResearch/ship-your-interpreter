@@ -1133,3 +1133,34 @@ without the fact and no other resource carries it:
   the equality gives `nOld = 8 * cap < 16 * cap`. `FrameLayout.arrays_le`
   recovers the componentwise bounds; `FrameBridge.arrays` carries the same
   equality (`ctl_frameBridge`: 64 and 192 bytes at cap 8).
+
+### STATEMENT CHANGES (E1)
+
+- **`ReadOK` carries the string window** (`SpecEval.lean`, field `win`: the
+  byte plus 8 is RAM and off the HTIF words). `astEG` gave the AST's read
+  set only `ReadOK` (RAM, off HTIF), but a string field of the AST (`str`'s
+  literal, `var`'s and `assign`'s name) becomes `strAt` only with H1's
+  `SharedWin P` (`strAt_of_cstringWithin`), and `strlen`/`strcmp` need that
+  window. `SharedWin P` follows from the strengthened `ReadOK`
+  (`sharedWin_of_readOK`, `LeafArm.lean`). The supplier is A0, which already
+  establishes `SharedWin` at the boundary (`ctl_sharedWin`); no existing
+  construction of `ReadOK` changed (all consumers project fields).
+- **The error context of the partial cases (E1, no statement change to
+  `evalPre`).** An error arm's `runtime_error` needs the binary image
+  (`binImg`), the `jmp_buf` read-only at an image whose `ra` word is aligned,
+  and `in`'s placement; `world` has the `jmp_buf` only existentially and no
+  alignment. The partial cases with error arms therefore take the persistent
+  `errCtx inp` (`LeafErr.lean`) beside the Löb hypothesis:
+  `errCtx inp ∗ evalSpecsP … ⊢ evalSpecP_body …`. A holds all three at
+  `interp_run`'s `jal exec_stmt` (`TopLanding`).
+- **One landing core.** Each abort site's `abortCore s n` depends on its
+  region; every region inside the stack segment widens to
+  `evalCore := abortCore 0x88000000 0x800000` (`evalCore_of`), so the
+  partial cases with error arms are stated at `Core := evalCore`; G's
+  generic-`Core` cases instantiate at it.
+- **Q7 as a named premise.** `ErrRoom e d` (`rtErrNeed + evalFrame ≤
+  evalNeed e d`) is the `var`/`assign` partial cases' premise; it holds for
+  `d < maxCallDepth` (`errRoom_of_lt`) and is exactly Q7 at the deepest level.
+- **`fn` is stated at `vsaLayoutP`/`vsaRoomB`**, `malloc`'s heap, with
+  `AllocSpecs live` and `textOwn allocText` (H4's `allocSpecs` supplies the
+  former).

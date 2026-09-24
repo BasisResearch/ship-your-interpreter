@@ -1,0 +1,11 @@
+# Lane E1: leaves (int, str, bool, null, fn), var (hit / miss), assign (ok / unbound).
+# Format: scripts/iris_arms/arms.tsv (LANE.md "Row format"); families leaf, var, assign, fnLit.
+#
+# arm	fn	tag	ctor	children	result	steps	errors	family
+LeafNull	eval	3	.null		.null	run 0x80003164 0x8000342c; helper valueNull 0x8000342c; run 0x80003430 ret		leaf kind=null
+LeafInt	eval	0	(.int n)		(.int n)	run 0x80003164 0x8000340c; helper valueInt 0x8000340c; run 0x80003410 ret		leaf kind=int
+LeafStr	eval	1	(.str x)		(.str x)	run 0x80003164 0x80003418; helper valueStr 0x80003418; run 0x8000341c ret		leaf kind=str
+LeafBool	eval	2	(.bool b)		(.bool b)	run 0x80003164 0x80003424; helper valueBool 0x80003424; run 0x80003428 ret		leaf kind=bool
+Var	eval	4	(.var x)		v	run 0x80003164 0x80003440; helper envGet 0x80003440; run 0x80003444 ret	unbound:0x80003444:0x80003f80	var ej=0x80003fac fmtok=varFmt_ok
+Assign	eval	5	(.assign x e)	e:E:v:240	v	run 0x80003164 0x80003488; child e 0x80003488; run 0x8000348c 0x800034b0; helper envSet 0x800034b0; run 0x800034b4 ret	unbound:0x800034b4:0x800034b8	assign tail=0x80003448 ej=0x800034e4 fmtok=assignFmt_ok
+FnLit	eval	10	(.fn nm ps body)		(.closure a)	run 0x80003164 0x800033cc; helper malloc 0x800033cc; run 0x800033d0 ret	oom:0x800033d4:0x80003e1c	fnLit br=0x800033d4 oom=0x80003e28

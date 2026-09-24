@@ -205,7 +205,120 @@ def subst_binInt(arm: Arm, mode: str) -> dict[str, str]:
             "J3": f"{j3:08x}", "R4": f"{r4:08x}"}
 
 
-FAMILIES = {"binInt": subst_binInt}
+# Family `leaf` (lane E1): the helper each leaf kind calls and the facts that
+# kind's node gives (`LeafArm.lean`). Keys: node width `w` (field bytes read
+# from `+8`), the hypothesis binders, the node lemma, the helper spec and its
+# instance, the argument pins, the helper's precondition beyond the slot, and
+# the step turning the helper's post into `valAt sret <result>`.
+LEAF_KINDS = {
+    "null": dict(rule="EvalE.null st d env", w=0, binders="", node="have hn := leafNode_null hrepr hgeo",
+                 spec="valueNullSpec", helper="value_null",
+                 hspec="∀ p, valueNullSpec (GF := GF) (vsaModel live) N {WP} p",
+                 inst="%sret", pins="exact (by ix_reg; exact hregs.a0)",
+                 pre="ipureintro; exact hslg", post=""),
+    "int": dict(rule="EvalE.int st d env n", w=8, binders="{n : Int}",
+                node="obtain ⟨hn, hfv⟩ := leafNode_int hrepr hgeo",
+                spec="valueIntSpec", helper="value_int",
+                hspec="∀ p n, valueIntSpec (GF := GF) (vsaModel live) N {WP} p n",
+                inst="%sret %(ldv .ld m (aX + 8#64).toNat)",
+                pins="exact ⟨by ix_reg; exact hregs.a0, by ix_reg; try rfl⟩",
+                pre="ipureintro; exact hslg", post="rw [hfv]"),
+    "bool": dict(rule="EvalE.bool st d env b", w=4, binders="{b : Bool}",
+                 node="obtain ⟨hn, hfv⟩ := leafNode_bool hrepr hgeo",
+                 spec="valueBoolSpec", helper="value_bool",
+                 hspec="∀ p b, valueBoolSpec (GF := GF) (vsaModel live) N {WP} p b",
+                 inst="%sret %(ldv .lw m (aX + 8#64).toNat)",
+                 pins="exact ⟨by ix_reg; exact hregs.a0, by ix_reg; try rfl⟩",
+                 pre="ipureintro; exact hslg", post="rw [hfv]"),
+    "str": dict(rule="EvalE.str st d env x", w=8, binders="{x : String}",
+                node="obtain ⟨q, hn, hfs⟩ := leafNode_str hrepr hgeo\n"
+                     "  have hqt : (BitVec.ofNat 64 q).toNat = q := by\n"
+                     "    rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hfs.lt]",
+                spec="valueStrSpec", helper="value_str",
+                hspec="∀ p q x, valueStrSpec (GF := GF) (vsaModel live) N {WP} p q x",
+                inst="%sret %(BitVec.ofNat 64 q) %x",
+                pins="exact ⟨by ix_reg; exact hregs.a0, by ix_reg; exact hfs.ptr⟩",
+                pre="isplitl []\n    · ipureintro; exact ⟨hslg, by rw [hqt]; exact hfs.ne⟩\n"
+                    "    · rw [hqt]; iapply strAt_of_cstringWithin hfs.str (sharedWin_of_readOK hgeo) $$ Hro",
+                post=""),
+}
+
+
+def subst_leaf(arm: Arm, mode: str) -> dict[str, str]:
+    """Family `leaf` (lane E1): `eval_expr`'s constant arms (`int`, `str`,
+    `bool`, `null`): the prologue and kind dispatch, one helper call that
+    builds the value in `sret`, the shared epilogue. Param `kind` selects the
+    helper and the node facts (`LEAF_KINDS`)."""
+    runs = run_steps(arm)
+    helpers = [s for s in arm.steps if s.op == "helper"]
+    if len(runs) != 2 or len(helpers) != 1 or arm.children:
+        raise SystemExit(f"{arm.name}: family leaf needs 2 runs, 1 helper, no children")
+    j = int(helpers[0].args[1], 0)
+    r2 = int(runs[1].args[0], 0)
+    if int(runs[0].args[1], 0) != j or r2 != j + 4:
+        raise SystemExit(f"{arm.name}: the runs must meet the helper call at {j:#x}")
+    k = LEAF_KINDS[arm.params["kind"]]
+    wp = "(twpW (vsaModel live))" if mode == "T" else "(wpW (vsaModel live))"
+    return {"ARM": arm.name, "CTOR": arm.ctor, "VAL": arm.result, "TAG": str(arm.tag),
+            "W": str(k["w"]), "W8": str(8 + k["w"]), "J": f"{j:08x}", "R2": f"{r2:08x}",
+            "BINDERS": k["binders"], "NODE": k["node"], "HSPECNAME": k["spec"],
+            "HELPERNAME": k["helper"], "HSPEC": k["hspec"].replace("{WP}", wp),
+            "HINST": k["inst"], "PINS": k["pins"], "PRE": k["pre"], "POST": k["post"],
+            "RULE": k["rule"]}
+
+
+def subst_call1(arm: Arm, mode: str) -> dict[str, str]:
+    """Families with one helper call between two runs and no child (lane E1:
+    `var`, `fnLit`): the run to the call, the call, the run from its return
+    to `ret`."""
+    runs = run_steps(arm)
+    helpers = [s for s in arm.steps if s.op == "helper"]
+    if len(runs) != 2 or len(helpers) != 1 or arm.children:
+        raise SystemExit(f"{arm.name}: family {arm.family} needs 2 runs, 1 helper, no children")
+    j = int(helpers[0].args[1], 0)
+    r2 = int(runs[1].args[0], 0)
+    if int(runs[0].args[1], 0) != j or r2 != j + 4:
+        raise SystemExit(f"{arm.name}: the runs must meet the helper call at {j:#x}")
+    out = {"ARM": arm.name, "TAG": str(arm.tag), "J": f"{j:08x}", "R2": f"{r2:08x}",
+           "R2N": f"{r2 + 4:08x}"}
+    for i, d in enumerate(arm.errors, 1):
+        out[f"E{i}AT"] = f"{d.at:08x}"
+        out[f"E{i}TO"] = f"{d.to:08x}"
+    for k in ("ej", "fmtok", "br", "oom"):
+        if k in arm.params:
+            v = arm.params[k]
+            out[k.upper()] = v if k == "fmtok" else f"{int(v, 0):08x}"
+    if "br" in arm.params:
+        out["R3"] = f"{int(arm.params['br'], 0) + 4:08x}"
+    return out
+
+
+def subst_assign(arm: Arm, mode: str) -> dict[str, str]:
+    """Family `assign` (lane E1): a run to the child call, the child, a run to
+    a helper call, the helper, the tail run (param `tail`: where the tail's
+    straight-line code starts after the branch on the helper's result)."""
+    runs = run_steps(arm)
+    kids = [s for s in arm.steps if s.op == "child"]
+    helpers = [s for s in arm.steps if s.op == "helper"]
+    if len(runs) != 3 or len(kids) != 1 or len(helpers) != 1:
+        raise SystemExit(f"{arm.name}: family assign needs 3 runs, 1 child, 1 helper")
+    jc = int(kids[0].args[1], 0)
+    j = int(helpers[0].args[1], 0)
+    out = {"ARM": arm.name, "TAG": str(arm.tag), "JC": f"{jc:08x}", "J": f"{j:08x}",
+           "R2": f"{int(runs[1].args[0], 0):08x}", "R2N": f"{int(runs[2].args[0], 0):08x}",
+           "TAIL": f"{int(arm.params['tail'], 0):08x}"}
+    for i, d in enumerate(arm.errors, 1):
+        out[f"E{i}AT"] = f"{d.at:08x}"
+        out[f"E{i}TO"] = f"{d.to:08x}"
+    for k in ("ej", "fmtok"):
+        if k in arm.params:
+            v = arm.params[k]
+            out[k.upper()] = f"{int(v, 0):08x}" if k == "ej" else v
+    return out
+
+
+FAMILIES = {"binInt": subst_binInt, "leaf": subst_leaf, "var": subst_call1,
+            "assign": subst_assign, "fnLit": subst_call1}
 
 
 def emit(arm: Arm, mode: str) -> str:

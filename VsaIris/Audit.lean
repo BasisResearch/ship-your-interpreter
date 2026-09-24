@@ -26,6 +26,20 @@ import VsaIris.Interp.ProofEnvNew
 import VsaIris.Interp.ProofEnvGet
 import VsaIris.Interp.ProofEnvSet
 import VsaIris.Interp.ProofEnvDefine
+import VsaIris.Interp.Case.LeafNullT
+import VsaIris.Interp.Case.LeafNullP
+import VsaIris.Interp.Case.LeafIntT
+import VsaIris.Interp.Case.LeafIntP
+import VsaIris.Interp.Case.LeafStrT
+import VsaIris.Interp.Case.LeafStrP
+import VsaIris.Interp.Case.LeafBoolT
+import VsaIris.Interp.Case.LeafBoolP
+import VsaIris.Interp.Case.VarT
+import VsaIris.Interp.Case.VarP
+import VsaIris.Interp.Case.AssignT
+import VsaIris.Interp.Case.AssignP
+import VsaIris.Interp.Case.FnLitT
+import VsaIris.Interp.Case.FnLitP
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -167,3 +181,22 @@ import VsaIris.Interp.ProofEnvDefine
 #print axioms VsaIris.Interp.reallocNullChgRun_proved
 #print axioms VsaIris.Interp.reallocNullLocalRun_proved
 #print axioms VsaIris.Interp.reallocNullHoles_proved
+
+-- lane E1: eval_expr's leaf, var, assign and fn arms
+#print axioms VsaIris.Interp.caseT_LeafNull
+#print axioms VsaIris.Interp.caseP_LeafNull
+#print axioms VsaIris.Interp.caseT_LeafInt
+#print axioms VsaIris.Interp.caseP_LeafInt
+#print axioms VsaIris.Interp.caseT_LeafStr
+#print axioms VsaIris.Interp.caseP_LeafStr
+#print axioms VsaIris.Interp.caseT_LeafBool
+#print axioms VsaIris.Interp.caseP_LeafBool
+#print axioms VsaIris.Interp.caseT_Var
+#print axioms VsaIris.Interp.caseP_Var
+#print axioms VsaIris.Interp.caseT_Assign
+#print axioms VsaIris.Interp.caseP_Assign
+#print axioms VsaIris.Interp.caseT_FnLit
+#print axioms VsaIris.Interp.caseP_FnLit
+#print axioms VsaIris.Interp.ev_oom
+#print axioms VsaIris.Interp.ev_rtErr
+#print axioms VsaIris.Interp.ms_callEnv3
