@@ -86,6 +86,71 @@ theorem Untouched.store {s : BitVec 64} {o w : Nat} (hs : ExecFrameGeom s) (h16 
   simp only [InExt] at hw
   omega
 
+section Shared
+
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
+
+/-- The code alone is a run's read-only list with an empty data view. -/
+theorem roOwn_code (m : Mem) : codeRes (GF := GF) ⊢ roOwn roR (interpText ++ dataOf m []) := by
+  unfold codeRes; simp only [dataOf, List.map_nil, List.append_nil]; exact .rfl
+
+theorem statusRet_brk [InterpGS GF] (N : NativeAddrs) (a : Nat) :
+    statusRet (GF := GF) N a .brk = slot24 a := rfl
+
+theorem statusRet_cont [InterpGS GF] (N : NativeAddrs) (a : Nat) :
+    statusRet (GF := GF) N a .cont = slot24 a := rfl
+
+/-- The named destructurer of `astSG`. -/
+theorem astSG_elim (a : Nat) (sm : Stmt) :
+    astSG (GF := GF) a sm ⊢ ∃ (P : Nat → Prop) (m : Mem),
+      ⌜StmtReprWithin m P a sm ∧ ∀ k, P k → ReadOK k⌝ ∗ roOn P m := .rfl
+
+/-- A child statement's persistent AST, from the parent's view. -/
+theorem astSG_of_view {m : Mem} {P : Nat → Prop} {a : Nat} {sm : Stmt}
+    (h : StmtReprWithin m P a sm) (hg : ∀ k, P k → ReadOK k) :
+    roOn (GF := GF) P m ⊢ astSG a sm := by
+  unfold astSG
+  iintro #H
+  iexists P, m
+  iframe H
+  ipureintro; exact ⟨h, hg⟩
+
+end Shared
+
+theorem KeepRegs.calleeSaved_upd {R R' : Nat → BitVec 64} (h : KeepRegs calleeSaved R R')
+    {x : Nat} (hx : x ∉ calleeSaved) (w : BitVec 64) : KeepRegs calleeSaved R (upd R' x w) :=
+  fun y hy => by
+    have hne : y ≠ x := fun e => hx (e ▸ hy)
+    rw [upd_apply, ite_eq_right_iff.mpr (fun h => absurd h hne)]; exact h y hy
+
+/-- An `exec_stmt` arm's head registers survive a run that keeps the
+callee-saved ones. -/
+theorem StmtHead.keep {R R' : Nat → BitVec 64} {s aS inp aRet aEnv : BitVec 64}
+    (h : StmtHead R s aS inp aRet aEnv) (hk : KeepRegs calleeSaved R R') :
+    StmtHead R' s aS inp aRet aEnv :=
+  ⟨(hk 2 (by decide)).trans h.sp, (hk 8 (by decide)).trans h.s0,
+    (hk 9 (by decide)).trans h.s1, (hk 18 (by decide)).trans h.s2,
+    (hk 19 (by decide)).trans h.s3⟩
+
+theorem KeepRegs.refl' (ks : List Nat) (R : Nat → BitVec 64) : KeepRegs ks R R := fun _ _ => rfl
+
+/-- A register update off the kept list keeps it. -/
+theorem KeepRegs.upd_right {ks : List Nat} {R R' : Nat → BitVec 64} (h : KeepRegs ks R R')
+    {x : Nat} (hx : x ∉ ks) (w : BitVec 64) : KeepRegs ks R (upd R' x w) :=
+  fun y hy => by
+    have hne : y ≠ x := fun e => hx (e ▸ hy)
+    rw [upd_apply, ite_eq_right_iff.mpr (fun h => absurd h hne)]; exact h y hy
+
+/-- A helper that keeps every body register off its clobber list keeps the
+callee-saved ones when none is clobbered. -/
+theorem KeepRegs.of_helper {clob : List Nat} {R R' : Nat → BitVec 64}
+    (h : ∀ x ∈ fRegs, x ∉ clob → R' x = R x) (hc : ∀ x ∈ calleeSaved, x ∈ fRegs ∧ x ∉ clob) :
+    KeepRegs calleeSaved R R' := fun x hx => h x (hc x hx).1 (hc x hx).2
+
+/-- A run's end registers (an `upd` chain off the kept list) keep them. -/
+macro "keep_upd" : tactic => `(tactic| ((repeat (apply KeepRegs.upd_right _ (by decide))); exact KeepRegs.refl' _ _))
+
 section Calls
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
