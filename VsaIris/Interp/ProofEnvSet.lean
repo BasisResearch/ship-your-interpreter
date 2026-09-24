@@ -220,6 +220,118 @@ theorem setStore_frames_toList {st : Store} {a : Addr} {f : Frame} (hf : st.fram
   rw [hf']
   rfl
 
+section Write
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+
+/-- The value slot is off the written value `j` (the frame's blocks are). -/
+theorem copyOut_slot {out : Nat} {Gm : FrameGeom} {n j : Nat} {Mt Mt4 : Mem}
+    {fo : Nat → BitVec 8} (hlay : FrameLayout (imgM Mt) Gm n) (hlt : j < n)
+    (hsepOut : ∀ a, frameS Gm a → a < out ∨ out + 24 ≤ a)
+    (hslot : ∀ a, out ≤ a → a < out + 24 → imgM Mt a = fo a)
+    (hco : CopyOut (Gm.pv + 24 * j) out Mt Mt4) :
+    ∀ o, o < 24 → imgM Mt4 (out + o) = fo (out + o) := by
+  obtain ⟨hcap, -, -, hv1, hv2, -, -⟩ := hlay.slot hlt
+  have hww : Gm.pv + 24 * j + 24 ≤ out ∨ out + 24 ≤ Gm.pv + 24 * j := by
+    have := interval_apart (a := out) (n := 24) (b := Gm.pv + 24 * j) (m := 24)
+      (by omega) (by omega) fun c h1 h2 => by
+        have := hsepOut c (by
+          unfold frameS InExt
+          exact .inr ⟨hcap, .inr ⟨hv1 ▸ Nat.le_trans (Nat.le_add_right _ _) h1,
+            Nat.lt_of_lt_of_le h2 hv2⟩⟩)
+        exact this
+    omega
+  intro o ho
+  exact (hco.frame _ (by omega)).trans (hslot _ (by omega) (by omega))
+
+/-- **Write value `j` of an open frame, and close it** (`env_set`'s and
+`env_define`'s hit): the 24-byte copy `vals[j] := *out` (`CopyOut`), then the
+frame's closer at the store `st'` whose frame `fa` has value `j` replaced. -/
+theorem frame_write_close (N : NativeAddrs) {s out : Nat} {st st' : Store} {fa : Addr}
+    {f : Frame} {Gm : FrameGeom} {img : Nat → BitVec 8} {Mt Mt4 : Mem}
+    {B₁ B₂ : List (Nat × Nat)} {j : Nat} {x : String} {v : Value} {fo : Nat → BitVec 8}
+    (hdisj : ∀ a, frameS Gm a → ¬ baseS s out a)
+    (hlay : FrameLayout (imgM Mt) Gm f.vars.length)
+    (himg : ∀ a, frameS Gm a → imgM Mt a = img a)
+    (hsepOut : ∀ a, frameS Gm a → a < out ∨ out + 24 ≤ a)
+    (hslot : ∀ a, out ≤ a → a < out + 24 → imgM Mt a = fo a)
+    (hco : CopyOut (Gm.pv + 24 * j) out Mt Mt4)
+    (hlt : j < f.vars.length) (hx : f.vars[j].1 = x)
+    (hst' : st'.closures = st.closures ∧
+      st'.frames.toList = st.frames.toList.set fa { f with vars := f.vars.set j (x, v) } ∧
+      Vsa.Sim.StoreInvariant st') :
+    ownSet (GF := GF) (getS s out Gm) (fun a => a ↦ₘ imgM Mt4 a) ∗
+      bindings N img Gm.pn Gm.pv f.vars ∗ parentAt f.parent Gm.par ∗ frameAt fa Gm.e ∗
+      frameCloser N st fa B₁ B₂ ∗ valImg N fo out v ⊢
+      ownSet (baseS s out) (fun a => a ↦ₘ imgM Mt4 a) ∗ storeRepr N st' (B₁ ++ Gm.blocks ++ B₂) := by
+  iintro ⟨HS, #Hb, #Hp, #HGe, Hclose, #Hv⟩
+  obtain ⟨hcap, -, -, hv1, hv2, -, -⟩ := hlay.slot hlt
+  have hwin : ∀ a, (a < Gm.pv + 24 * j ∨ Gm.pv + 24 * j + 24 ≤ a) → imgM Mt4 a = imgM Mt a :=
+    hco.frame
+  ihave ⟨HB, HF⟩ := get_split (img := imgM Mt4) hdisj (fun _ _ => rfl) $$ HS
+  have hbl : Gm.blocks = [Gm.sblk, Gm.nblk, Gm.vblk] := by simp [FrameGeom.blocks, hcap]
+  have hdis := hlay.disjoint
+  rw [hbl] at hdis
+  have hSV : ExtDisj Gm.sblk Gm.vblk := (List.pairwise_cons.1 hdis).1 _ (by simp)
+  have hNV : ExtDisj Gm.nblk Gm.vblk :=
+    (List.pairwise_cons.1 (List.pairwise_cons.1 hdis).2).1 _ (by simp)
+  have hsb := hlay.sblk
+  have hoff : ∀ a, (InExt Gm.sblk a ∨ InExt Gm.nblk a) →
+      (a < Gm.pv + 24 * j ∨ Gm.pv + 24 * j + 24 ≤ a) := fun a ha => by
+    have hnotv : ¬ InExt Gm.vblk a := by
+      rcases ha with ha | ha
+      · exact hSV a ha
+      · exact hNV a ha
+    unfold InExt at hnotv
+    omega
+  have hstruct : ∀ a, Gm.e ≤ a → a < Gm.e + 32 → imgM Mt4 a = imgM Mt a := fun a h1 h2 =>
+    hwin a (hoff a (.inl ⟨by omega, by omega⟩))
+  have hnames : ∀ k, k < f.vars.length → ∀ o, o < 8 →
+      imgM Mt4 (Gm.pn + 8 * k + o) = img (Gm.pn + 8 * k + o) := fun k hk o ho => by
+    obtain ⟨-, hn1', hn2', -, -, -, -⟩ := hlay.slot hk
+    rw [hwin _ (hoff _ (.inr ⟨by omega, by omega⟩))]
+    exact himg _ (frameS_name hlay hk ho)
+  have hvals : ∀ k, k < f.vars.length → k ≠ j → ∀ o, o < 24 →
+      imgM Mt4 (Gm.pv + 24 * k + o) = img (Gm.pv + 24 * k + o) := fun k hk hkj o ho => by
+    rw [hwin _ (by
+      rcases Nat.lt_or_gt_of_ne hkj with h | h
+      · left; omega
+      · right; omega)]
+    exact himg _ (frameS_val hlay hk ho)
+  have hww : Gm.pv + 24 * j + 24 ≤ out ∨ out + 24 ≤ Gm.pv + 24 * j := by
+    have := interval_apart (a := out) (n := 24) (b := Gm.pv + 24 * j) (m := 24)
+      (by omega) (by omega) fun c h1 h2 => by
+        have := hsepOut c (by
+          unfold frameS InExt
+          exact .inr ⟨hcap, .inr ⟨hv1 ▸ Nat.le_trans (Nat.le_add_right _ _) h1,
+            Nat.lt_of_lt_of_le h2 hv2⟩⟩)
+        exact this
+    omega
+  have w : ∀ o, o + 8 ≤ 24 → ldv .ld Mt4 (Gm.pv + 24 * j + o) = ldv .ld Mt (out + o) →
+      imgW (imgM Mt4) (Gm.pv + 24 * j + o) = imgW fo (out + o) := fun o ho h => by
+    rw [← ldv_ld_img, h, ldv_ld_img]
+    exact imgW_agree fun k hk => hslot (out + o + k) (by omega) (by omega)
+  have hnewv : valImg (GF := GF) N (imgM Mt4) (Gm.pv + 24 * j) v = valImg N fo out v := by
+    unfold valImg
+    rw [show Gm.pv + 24 * j = Gm.pv + 24 * j + 0 from rfl, w 0 (by omega) hco.w0,
+      w 8 (by omega) hco.w1, w 16 (by omega) hco.w2, Nat.add_zero]
+  ihave #Hb' := bindings_set N (img := img) (img' := imgM Mt4) hlt hx hnames hvals $$ [Hb]
+  · iframe Hb; rw [hnewv]; iexact Hv
+  have hlay' : FrameLayout (imgM Mt4) Gm (f.vars.set j (x, v)).length := by
+    rw [List.length_set]; exact hlay.congr_struct hstruct
+  iframe HB
+  iapply Hclose $$ %st' %{ f with vars := f.vars.set j (x, v) } %Gm.blocks %hst' [HF]
+  unfold frameOwn frameBody
+  iexists Gm
+  iframe HGe
+  isplitr
+  · ipureintro; rfl
+  iexists (imgM Mt4)
+  iframe HF Hb' Hp
+  ipureintro; exact hlay'
+
+end Write
+
 section Main
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
@@ -320,79 +432,12 @@ theorem envSet_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
       hwo hstkv)
     iframe Ht Hgp Hpc HR HS
     iintro %pc4 %R4 %Mt4 %⟨rfl, hret, hco⟩ Hpc HR HS
-    -- the frame's bytes after the write
-    have hwin : ∀ a, (a < Gm.pv + 24 * j ∨ Gm.pv + 24 * j + 24 ≤ a) → imgM Mt4 a = imgM Mt a :=
-      hco.frame
-    ihave ⟨HB, HF⟩ := get_split (img := imgM Mt4) hdisj (fun _ _ => rfl) $$ HS
-    have hbl : Gm.blocks = [Gm.sblk, Gm.nblk, Gm.vblk] := by simp [FrameGeom.blocks, hcap]
-    have hdis := hlay.disjoint
-    rw [hbl] at hdis
-    have hSV : ExtDisj Gm.sblk Gm.vblk := (List.pairwise_cons.1 hdis).1 _ (by simp)
-    have hNV : ExtDisj Gm.nblk Gm.vblk :=
-      (List.pairwise_cons.1 (List.pairwise_cons.1 hdis).2).1 _ (by simp)
-    have hsb := hlay.sblk
-    -- off the written window: the struct, the names, the other values
-    have hoff : ∀ a, (InExt Gm.sblk a ∨ InExt Gm.nblk a) →
-        (a < Gm.pv + 24 * j ∨ Gm.pv + 24 * j + 24 ≤ a) := fun a ha => by
-      have hnotv : ¬ InExt Gm.vblk a := by
-        rcases ha with ha | ha
-        · exact hSV a ha
-        · exact hNV a ha
-      unfold InExt at hnotv
-      omega
-    have hstruct : ∀ a, Gm.e ≤ a → a < Gm.e + 32 → imgM Mt4 a = imgM Mt a := fun a h1 h2 =>
-      hwin a (hoff a (.inl ⟨by omega, by omega⟩))
-    have hnames : ∀ k, k < f.vars.length → ∀ o, o < 8 →
-        imgM Mt4 (Gm.pn + 8 * k + o) = img (Gm.pn + 8 * k + o) := fun k hk o ho => by
-      obtain ⟨-, hn1', hn2', -, -, -, -⟩ := hF.lay.slot hk
-      rw [hwin _ (hoff _ (.inr ⟨by omega, by omega⟩))]
-      exact hF.img _ (frameS_name hF.lay hk ho)
-    have hvals : ∀ k, k < f.vars.length → k ≠ j → ∀ o, o < 24 →
-        imgM Mt4 (Gm.pv + 24 * k + o) = img (Gm.pv + 24 * k + o) := fun k hk hkj o ho => by
-      rw [hwin _ (by
-        rcases Nat.lt_or_gt_of_ne hkj with h | h
-        · left; omega
-        · right; omega)]
-      exact hF.img _ (frameS_val hF.lay hk ho)
-    -- the value slot is off the written window
-    have hww : Gm.pv + 24 * j + 24 ≤ pv.toNat ∨ pv.toNat + 24 ≤ Gm.pv + 24 * j := by
-      have := interval_apart (a := pv.toNat) (n := 24) (b := Gm.pv + 24 * j) (m := 24)
-        (by omega) (by omega) fun c h1 h2 => by
-          have := hF.sepOut c (by
-            unfold frameS InExt
-            exact .inr ⟨hcap, .inr ⟨hv1 ▸ Nat.le_trans (Nat.le_add_right _ _) h1,
-              Nat.lt_of_lt_of_le h2 hv2⟩⟩)
-          exact this
-      omega
-    have hslotF : ∀ a, pv.toNat ≤ a → a < pv.toNat + 24 → imgM Mt a = fo a := hF.slot
-    have hslotw : ∀ o, o < 24 → imgM Mt4 (pv.toNat + o) = fo (pv.toNat + o) := fun o ho =>
-      (hwin _ (by omega)).trans (hslotF _ (by omega) (by omega))
-    -- the written value's meaning
-    have w : ∀ o, o + 8 ≤ 24 → ldv .ld Mt4 (Gm.pv + 24 * j + o) = ldv .ld Mt (pv.toNat + o) →
-        imgW (imgM Mt4) (Gm.pv + 24 * j + o) = imgW fo (pv.toNat + o) := fun o ho h => by
-      rw [← ldv_ld_img, h, ldv_ld_img]
-      exact imgW_agree fun k hk => by
-        exact hslotF (pv.toNat + o + k) (by omega) (by omega)
-    have hnewv : valImg (GF := GF) N (imgM Mt4) (Gm.pv + 24 * j) v = valImg N fo pv.toNat v := by
-      unfold valImg
-      rw [show Gm.pv + 24 * j = Gm.pv + 24 * j + 0 from rfl, w 0 (by omega) hco.w0,
-        w 8 (by omega) hco.w1, w 16 (by omega) hco.w2, Nat.add_zero]
-    -- the frame after the write, and the store
-    ihave #Hb' := bindings_set N (img := img) (img' := imgM Mt4) hlt (by rw [hvj]) hnames hvals
-      $$ [Hb]
-    · iframe Hb; rw [hnewv]; iexact Hv
-    have hlay' : FrameLayout (imgM Mt4) Gm (f.vars.set j (x, v)).length := by
-      rw [List.length_set]; exact hF.lay.congr_struct hstruct
-    ihave Hst := Hclose $$ %(setStore st fa' x v) %{ f with vars := f.vars.set j (x, v) }
-      %Gm.blocks %⟨rfl, by rw [setStore_frames_toList hf, hmap], hinv.set? hsome⟩ [HF]
-    · unfold frameOwn frameBody
-      iexists Gm
-      iframe HGe
-      isplitr
-      · ipureintro; rfl
-      iexists (imgM Mt4)
-      iframe HF Hb' Hp
-      ipureintro; exact hlay'
+    have hslotw := copyOut_slot (fo := fo) hF.lay hlt hF.sepOut hF.slot hco
+    ihave ⟨HB, Hst⟩ := frame_write_close N (st := st) (st' := setStore st fa' x v) (fa := fa') (f := f)
+      (img := img) (B₁ := B₁) (B₂ := B₂) (x := x) (v := v) hdisj hF.lay hF.img
+      hF.sepOut hF.slot hco hlt (by rw [hvj])
+      ⟨rfl, by rw [setStore_frames_toList hf, hmap], hinv.set? hsome⟩ $$ [HS Hclose]
+    · iframe HS Hb Hp HGe Hclose Hv
     rw [← hB]
     -- the return
     ihave ⟨Hra, Ha0, Hsp, Hsv, Hcl⟩ := scan_exit_regs hsv hret $$ HR
