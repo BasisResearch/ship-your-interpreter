@@ -301,20 +301,22 @@ theorem PHeapAt.reblock {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chun
     · exact ⟨c, hc, hu, hca, hn⟩
     · exact HH.exact e (List.mem_cons_of_mem _ he) (List.mem_cons_of_mem _ he)
 
-/-- **The last chunk grows into the top.** The in-use chunk `x` of size `a`
-just below the top takes `d` more bytes; the top moves up by `d` with its
-header rewritten, and still has room below the break. -/
-theorem PHeapAt.growTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
-    {cs₁ : List Chunk} {bins : Nat → List Nat} {x a d : Nat}
+/-- **The last chunk before the top resized** (`_realloc_r` into the top):
+the in-use chunk `x` just below the top takes `a'` bytes, the top starting
+right after it, its header, the top pointer and the new top header written in
+`m'`. The live extents in `x` fit the new size. -/
+theorem PHeapAt.setTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {cs₁ : List Chunk} {bins : Nat → List Nat} {x a a' : Nat}
     (h : PHeapAt m H top brkv (cs₁ ++ [⟨x, a, true⟩]) bins)
-    (hd16 : d % 16 = 0) (hroom : x + a + d + 16 ≤ brkv)
-    {h' : Nat} (hhdr : read64 m' (x + 8) = some h') (hsz : chunkSize h' = a + d)
+    (ha16' : a' % 16 = 0) (ha32 : 32 ≤ a') (hroom : x + a' + 16 ≤ brkv)
+    {h' : Nat} (hhdr : read64 m' (x + 8) = some h') (hsz : chunkSize h' = a')
     (hlow : h' % 4 < 2) (hpi : ∀ h0, read64 m (x + 8) = some h0 → prevInuse h' = prevInuse h0)
-    (htp : read64 m' topAddr = some (x + a + d))
-    (hth : read64 m' (x + a + d + 8) = some (brkv - (x + a + d) + 1))
+    (htp : read64 m' topAddr = some (x + a'))
+    (hth : read64 m' (x + a' + 8) = some (brkv - (x + a') + 1))
     (hag : ∀ w, vsaFoot H w → ¬ (x + 8 ≤ w ∧ w < x + 16) → ¬ (topAddr ≤ w ∧ w < topAddr + 8) →
-      ¬ (x + a + d + 8 ≤ w ∧ w < x + a + d + 16) → m'[w]? = m[w]?) :
-    PHeapAt m' H (x + a + d) brkv (cs₁ ++ [⟨x, a + d, true⟩]) bins := by
+      ¬ (x + a' + 8 ≤ w ∧ w < x + a' + 16) → m'[w]? = m[w]?)
+    (hfit : ∀ e ∈ H, x + 16 ≤ e.1 → e.1 + e.2 ≤ x + a + 8 → e.1 + e.2 ≤ x + a' + 8) :
+    PHeapAt m' H (x + a') brkv (cs₁ ++ [⟨x, a', true⟩]) bins := by
   obtain ⟨B, hpage, hbbl⟩ := h
   have HH := B.heap
   obtain ⟨hal, htop16⟩ := HH.aligned
@@ -337,7 +339,7 @@ theorem PHeapAt.growTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   subst hxa
   have hW1b := W1.chunk_bounds
   have keep : ∀ w, (∀ k, k < 8 → vsaFoot H (w + k)) → (w + 8 ≤ x + 8 ∨ x + 16 ≤ w) →
-      (w + 8 ≤ topAddr ∨ topAddr + 8 ≤ w) → (w + 8 ≤ x + a + d + 8 ∨ x + a + d + 16 ≤ w) →
+      (w + 8 ≤ topAddr ∨ topAddr + 8 ≤ w) → (w + 8 ≤ x + a' + 8 ∨ x + a' + 16 ≤ w) →
       read64 m' w = read64 m w := by
     intro w hf h1 h2 h3
     exact read64_keep fun k hk => hag _ (hf k hk) (by omega) (by omega) (by omega)
@@ -347,14 +349,14 @@ theorem PHeapAt.growTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     have := hg 0 (by omega); have := hg 7 (by omega)
     unfold allocGlobal InRange at *
     exact keep w (fun k hk => .inl (hg k hk)) (.inl (by omega)) ht (.inl (by omega))
-  have hthp : prevInuse (brkv - (x + a + d) + 1) = true := by
+  have hthp : prevInuse (brkv - (x + a') + 1) = true := by
     unfold prevInuse; rw [beq_iff_eq]; omega
-  have WX : ChunkWalk m' x (x + a + d) [⟨x, a + d, true⟩] := by
-    have w := ChunkWalk.chunk (m := m') (p := x) (h := h') (h' := brkv - (x + a + d) + 1) hhdr hlow
-      (by rw [hsz]; omega) (by rw [hsz]; omega) (by rw [hsz, ← Nat.add_assoc]; exact hth)
-      (by rw [hsz, ← Nat.add_assoc]; exact ChunkWalk.top)
+  have WX : ChunkWalk m' x (x + a') [⟨x, a', true⟩] := by
+    have w := ChunkWalk.chunk (m := m') (p := x) (h := h') (h' := brkv - (x + a') + 1) hhdr hlow
+      (by rw [hsz]; omega) (by rw [hsz]; omega) (by rw [hsz]; exact hth)
+      (by rw [hsz]; exact ChunkWalk.top)
     rwa [hsz, hthp] at w
-  have hwalk : ChunkWalk m' heapStart (x + a + d) (cs₁ ++ [⟨x, a + d, true⟩]) :=
+  have hwalk : ChunkWalk m' heapStart (x + a') (cs₁ ++ [⟨x, a', true⟩]) :=
     W1.extend (fun c hc => keep _ (foot_header B (.inr ⟨c, by simp [hc], rfl⟩))
         (by have := hW1b c hc; exact .inl (by omega))
         (by have := hW1b c hc; unfold topAddr avAddr; unfold heapStart at this; omega)
@@ -362,20 +364,20 @@ theorem PHeapAt.growTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
       (fun h1 hh1 => ⟨h', hhdr, hpi h1 hh1⟩) WX
   have hmemL : ∀ c, c ∈ cs₁ ++ [⟨x, a, true⟩] ↔ c ∈ cs₁ ∨ c = ⟨x, a, true⟩ := by
     intro c; simp only [List.mem_append, List.mem_singleton]
-  have hmemL' : ∀ c, c ∈ cs₁ ++ [⟨x, a + d, true⟩] ↔ c ∈ cs₁ ∨ c = ⟨x, a + d, true⟩ := by
+  have hmemL' : ∀ c, c ∈ cs₁ ++ [⟨x, a', true⟩] ↔ c ∈ cs₁ ∨ c = ⟨x, a', true⟩ := by
     intro c; simp only [List.mem_append, List.mem_singleton]
   have hfree_in : ∀ c ∈ cs₁ ++ [⟨x, a, true⟩], c.inuse = false → c ∈ cs₁ := by
     intro c hc hf
     rcases (hmemL c).1 hc with h1 | rfl
     · exact h1
     · cases hf
-  have hfree_in' : ∀ c ∈ cs₁ ++ [⟨x, a + d, true⟩], c.inuse = false → c ∈ cs₁ := by
+  have hfree_in' : ∀ c ∈ cs₁ ++ [⟨x, a', true⟩], c.inuse = false → c ∈ cs₁ := by
     intro c hc hf
     rcases (hmemL' c).1 hc with h1 | rfl
     · exact h1
     · cases hf
   have hin_old : ∀ c ∈ cs₁, c ∈ cs₁ ++ [⟨x, a, true⟩] := fun c hc => by simp [hc]
-  have hin_new : ∀ c ∈ cs₁, c ∈ cs₁ ++ [⟨x, a + d, true⟩] := fun c hc => by simp [hc]
+  have hin_new : ∀ c ∈ cs₁, c ∈ cs₁ ++ [⟨x, a', true⟩] := fun c hc => by simp [hc]
   have Klink : ∀ j y, 0 < j → j < numBins → (y = binAt j ∨ y ∈ bins j) →
       fdOf m' y = fdOf m y ∧ bkOf m' y = bkOf m y := by
     intro j y hj0 hj hy
@@ -402,11 +404,11 @@ theorem PHeapAt.growTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
   have kBb : read64 m' binblocksAddr = read64 m binblocksAddr :=
     Kg _ (gAv _ (by unfold binblocksAddr avAddr; omega) (by unfold binblocksAddr avAddr; omega))
       (by unfold binblocksAddr topAddr avAddr; omega)
-  have hXm : (⟨x, a + d, true⟩ : Chunk) ∈ cs₁ ++ [⟨x, a + d, true⟩] := by simp
+  have hXm : (⟨x, a', true⟩ : Chunk) ∈ cs₁ ++ [⟨x, a', true⟩] := by simp
   refine ⟨⟨{ sbrk_base := ?_, brk := ?_, brk_le := HH.brk_le, top_ptr := htp
              top_le := by omega, top_size := by omega, top_header := hth
              top_pad := ?_, max_sbrked := ?_, mallinfo := ?_, first_prev := ?_
-             walk := hwalk, coalesced := coal_swap (c := ⟨x, a, true⟩) (c' := ⟨x, a + d, true⟩) rfl (cs₂ := []) (HH.coalesced : Coal (cs₁ ++ [⟨x, a, true⟩])), footer := ?_
+             walk := hwalk, coalesced := coal_swap (c := ⟨x, a, true⟩) (c' := ⟨x, a', true⟩) rfl (cs₂ := []) (HH.coalesced : Coal (cs₁ ++ [⟨x, a, true⟩])), footer := ?_
              bins_list := ?_, bins_nodup := HH.bins_nodup
              bin_free := ?_, free_binned := ?_, remainder := HH.remainder
              binblocks_present := by rw [kBb]; exact HH.binblocks_present
@@ -475,12 +477,33 @@ theorem PHeapAt.growTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     obtain ⟨c, hc, hu, h1, h2⟩ := HH.live e he
     rcases (hmemL c).1 hc with h3 | rfl
     · exact ⟨c, hin_new c h3, hu, h1, h2⟩
-    · exact ⟨_, hXm, rfl, h1, by simp only at h2 ⊢; omega⟩
+    · exact ⟨_, hXm, rfl, h1, by simp only at h1 h2 ⊢; exact hfit e he h1 h2⟩
   · intro e he hr
     obtain ⟨c, hc, hu, h1, h2⟩ := HH.exact e he hr
     rcases (hmemL c).1 hc with h3 | rfl
     · exact ⟨c, hin_new c h3, hu, h1, h2⟩
-    · exact ⟨_, hXm, rfl, h1, by simp only at h2 ⊢; omega⟩
+    · exact ⟨_, hXm, rfl, h1, by
+        simp only at h1 h2 ⊢; have := hfit e he (by omega) (by omega); omega⟩
+
+/-- **The last chunk grows into the top.** The in-use chunk `x` of size `a`
+just below the top takes `d` more bytes; the top moves up by `d` with its
+header rewritten, and still has room below the break. -/
+theorem PHeapAt.growTop {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {cs₁ : List Chunk} {bins : Nat → List Nat} {x a d : Nat}
+    (h : PHeapAt m H top brkv (cs₁ ++ [⟨x, a, true⟩]) bins)
+    (hd16 : d % 16 = 0) (hroom : x + a + d + 16 ≤ brkv)
+    {h' : Nat} (hhdr : read64 m' (x + 8) = some h') (hsz : chunkSize h' = a + d)
+    (hlow : h' % 4 < 2) (hpi : ∀ h0, read64 m (x + 8) = some h0 → prevInuse h' = prevInuse h0)
+    (htp : read64 m' topAddr = some (x + a + d))
+    (hth : read64 m' (x + a + d + 8) = some (brkv - (x + a + d) + 1))
+    (hag : ∀ w, vsaFoot H w → ¬ (x + 8 ≤ w ∧ w < x + 16) → ¬ (topAddr ≤ w ∧ w < topAddr + 8) →
+      ¬ (x + a + d + 8 ≤ w ∧ w < x + a + d + 16) → m'[w]? = m[w]?) :
+    PHeapAt m' H (x + a + d) brkv (cs₁ ++ [⟨x, a + d, true⟩]) bins := by
+  have hs := walk_sizes h.heap.heap.walk _ (show (⟨x, a, true⟩ : Chunk) ∈ cs₁ ++ [⟨x, a, true⟩] by simp)
+  simp only at hs
+  rw [show x + a + d = x + (a + d) by omega] at hroom htp hth hag ⊢
+  exact h.setTop (a' := a + d) (by omega) (by omega) hroom hhdr hsz hlow hpi htp hth hag
+    fun e _ _ h2 => by omega
 
 /-- **A live block is fresh among the others.** A block at the payload start
 of its in-use chunk, starting where no other live block does, lies in the
