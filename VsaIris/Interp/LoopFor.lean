@@ -183,9 +183,6 @@ theorem forNode_of_repr {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {init : Op
       · obtain ⟨j, rfl⟩ : ∃ j, a = aS.toNat + 32 + j := ⟨a - (aS.toNat + 32), by omega⟩
         exact ⟨cb j (by omega), isSome_of_readLE hb (by omega)⟩
 
-theorem ofNat_toNat_lt {p : Nat} (h : p < 2 ^ 64) : (BitVec.ofNat 64 p).toNat = p := by
-  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt h]
-
 theorem ofNat_ne_zero {p : Nat} (h : p < 2 ^ 64) (hp : p ≠ 0) : BitVec.ofNat 64 p ≠ 0#64 :=
   fun e => hp (by have := congrArg BitVec.toNat e; rwa [ofNat_toNat_lt h] at this)
 

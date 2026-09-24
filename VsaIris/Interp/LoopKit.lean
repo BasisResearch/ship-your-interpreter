@@ -86,6 +86,9 @@ theorem Untouched.store {s : BitVec 64} {o w : Nat} (hs : ExecFrameGeom s) (h16 
   simp only [InExt] at hw
   omega
 
+theorem ofNat_toNat_lt {p : Nat} (h : p < 2 ^ 64) : (BitVec.ofNat 64 p).toNat = p := by
+  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt h]
+
 section Shared
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
@@ -105,6 +108,11 @@ theorem statusRet_cont [InterpGS GF] (N : NativeAddrs) (a : Nat) :
 theorem astSG_elim (a : Nat) (sm : Stmt) :
     astSG (GF := GF) a sm ⊢ ∃ (P : Nat → Prop) (m : Mem),
       ⌜StmtReprWithin m P a sm ∧ ∀ k, P k → ReadOK k⌝ ∗ roOn P m := .rfl
+
+/-- The named destructurer of `astEG`. -/
+theorem astEG_elim (a : Nat) (e : Expr) :
+    astEG (GF := GF) a e ⊢ ∃ (P : Nat → Prop) (m : Mem),
+      ⌜ExprReprWithin m P a e ∧ ∀ k, P k → ReadOK k⌝ ∗ roOn P m := .rfl
 
 /-- A child statement's persistent AST, from the parent's view. -/
 theorem astSG_of_view {m : Mem} {P : Nat → Prop} {a : Nat} {sm : Stmt}
@@ -150,6 +158,12 @@ theorem KeepRegs.of_helper {clob : List Nat} {R R' : Nat → BitVec 64}
 
 /-- A run's end registers (an `upd` chain off the kept list) keep them. -/
 macro "keep_upd" : tactic => `(tactic| ((repeat (apply KeepRegs.upd_right _ (by decide))); exact KeepRegs.refl' _ _))
+
+/-- A store inside the written words leaves the rest of the frame. -/
+theorem Untouched.store' {S W : Nat → Prop} (M : Mem) {b w : Nat} (v : BitVec 64)
+    (h : ∀ a, b ≤ a → a < b + w → W a) : Untouched S W M (writeLog M [(b, w, v)]) :=
+  fun a _ hw => imgM_store_miss _ _ (by
+    refine Classical.byContradiction fun hc => hw (h a ?_ ?_) <;> omega)
 
 section Calls
 
