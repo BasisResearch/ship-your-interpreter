@@ -13,3 +13,4 @@ ExecIfNone	exec	3	.ifStmt c t none	c:E:v:56	.normal	run 0x80004014 0x800041f8; c
 ExecIf	exec	3	.ifStmt c t eo	c:E:v:56; t:S:status:0	status	run 0x80004014 0x800041f8; child c 0x800041f8; run 0x800041fc 0x80004218; helper valueTruthy 0x80004218; run 0x8000421c ret	kind:0x80004228:0x800042cc	execIfAll
 ExecWhile	exec	4	.whileStmt c b	c:E:v:80; b:S:status:0	status	run 0x80004014 0x8000403c; run 0x8000403c ret		execWhile
 ExecBlock	exec	2	.block ss		status	run 0x80004014 0x80004190; helper envNew 0x80004190; run 0x80004194 0x800041a4; run 0x800041a4 ret		execBlock
+ExecFor	exec	5	.forStmt init cnd step b		status	run 0x80004014 0x80004238; helper envNew 0x80004238; run 0x8000423c ret		execFor

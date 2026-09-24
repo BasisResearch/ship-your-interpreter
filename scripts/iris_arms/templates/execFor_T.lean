@@ -1,0 +1,125 @@
+import VsaIris.Interp.ExecLoops
+
+/-!
+# `{ARM}`, total mode (family `execFor`, lane E5)
+
+`caseT_{ARM}`: `exec_stmt` on `.forStmt init cnd step b` meets its
+dispatch-point spec (`ExecSCost.forStart`), given `env_new`'s spec and E6's
+motives for the init (`execInitT_body`, from `0x8000423c`) and the loop
+(`forLoopT_body`, from `0x8000426c`): the dispatch to `jal env_new`
+(`ForArm_run`), the loop scope (`ms_callEnvNewW`), the init, the loop, the
+exit `wp_loopExit`. Template: `scripts/iris_arms/templates/execFor_T.lean`.
+-/
+
+namespace VsaIris.Interp
+
+open VsaIris VsaIris.Sym VsaIris.MallocFast
+open Vsa.MemRepr Vsa.Sim
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap
+
+theorem caseT_{ARM} {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+    {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1) {N : NativeAddrs} {inp : Nat}
+    {st : St} {d env : Nat} {init : Option Stmt} {cnd step : Option Expr} {b : Stmt}
+    {store' : Store} {outer : Nat} {st' st'' : St} {status : Status} {ni nl : Nat}
+    (halloc : st.store.allocFrame (some env) = (store', outer))
+    (Di : ExecInitCost ⟨store', st.out⟩ d outer init st' ni)
+    (Dl : ForLoopCost st' d outer cnd step b st'' status nl)
+    (hinit : execInitT_body (GF := GF) live N vsaLayoutP vsaRoomB inp ⟨store', st.out⟩ d outer init
+      st' ni)
+    (hloop : forLoopT_body (GF := GF) live N vsaLayoutP vsaRoomB inp st' d outer cnd step b st''
+      status nl)
+    (hen : ⊢ envNewSpec (GF := GF) (twpW (vsaModel live)) N) :
+    ⊢ execDispT_body (GF := GF) (vsaModel live) N vsaLayoutP vsaRoomB inp st d env
+        (.forStmt init cnd step b) st'' status (envBytes + ni + nl)
+        (.forStart st d env init cnd step b store' outer st' st'' status ni nl halloc Di Dl) := by
+  unfold execDispT_body
+  iintro !> %Φ %k %aS %aE %aRet %s %R %Mt %ret %v8 %v9 %v18 %v19 Hpre HK
+  unfold execDispPre
+  icases Hpre with ⟨Hms, %hf, #Hcode, #Hast, #Hfb, Hst, Hslot, Hw⟩
+  unfold astSG
+  icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
+  have hn := forNode_of hrepr hgeo
+  obtain ⟨hfits, hifits⟩ := forFits_of (d := d) hf.bodies
+  obtain ⟨hfg, hneed⟩ := execFrameGeom_of hf.stack
+  have hsz : st.store.frames.size = outer := congrArg Prod.snd halloc
+  have hst' : (st.store.allocFrame (some env)).1 = store' := congrArg Prod.fst halloc
+  have hbig : envNewNeed ≤ execNeed (.forStmt init cnd step b) d - 176 := by
+    have := Stmt.stackNeed_ge (.forStmt init cnd step b)
+    unfold execNeed stackBudget evalFrame envNewNeed allocHeadroom
+    unfold execFrame at this; omega
+  have hle' : execNeed (.forStmt init cnd step b) d - 176 ≤ (execSP s).toNat := by
+    rw [hfg.sf]; have := hf.stack.le; omega
+  rw [show k + (envBytes + ni + nl) = k + nl + ni + envBytes by omega]
+  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
+  · iframe Hcode Hro
+  iapply wp_swpF (twpW _) (F := iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗
+      stackScratch (execSP s) (execNeed (.forStmt init cnd step b) d - 176) ∗ slot24 aRet.toNat ∗
+      world N vsaLayoutP vsaRoomB inp (.counted (k + nl + ni + envBytes)) st d ∗
+      execDispK (vsaModel live) N vsaLayoutP vsaRoomB inp (twpW (vsaModel live)) Φ (.counted k) st'' d
+        (.forStmt init cnd step b) status aRet s R ret v8 v9 v18 v19))
+  rotate_left
+  · iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hw HK
+  intro F'
+  unfold execDispPC
+  refine ForArm_run (s := s) hlive hn.lo hn.hi hn.off hf.regs.s0 hf.regs.a6 hf.regs.a4 hn.kind
+    hn.kindu ?_
+  intros
+  apply swp_closeRM
+  intro R1 Mt1 hR1 hMt1
+  unfold F'
+  iintro ⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, HK⟩, Hms⟩
+  -- env_new: the loop scope
+  have h12 : R1 2 = execSP s := by subst hR1; ix_reg; exact hf.regs.sp
+  have h110 : R1 10 = aE := by subst hR1; ix_reg; exact hf.regs.s3
+  ihave ⟨Hsl, Hst⟩ := stackScratch_narrow (s := execSP s) hle' hbig $$ Hst
+  rw [← h12]
+  ihave Hen := hen
+  iapply ms_callEnvNewW (N := N) (twpW _) (i := 0x80004238)
+    (jalx_80004238 live (fun p hp => hlive _ (interp_code_80004238 p hp)))
+    interp_code_80004238 (by decide) (k := k + nl + ni) (st := st) (d := d) (env := env) (R := R1)
+    ⟨by rw [h12, hfg.sf]; have := hfg.lo; unfold htifLo envNewNeed allocHeadroom; omega,
+      by rw [h12, hfg.sf]; have := hfg.hi; omega, by rw [h12, hfg.sf]; have := hfg.al; omega⟩
+  iframe Hen Hcode Hms Hst Hw
+  isplitl []
+  · imodintro; rw [h110]; iexact Hfb
+  iintro %R2 %hk2 Hst Hw #Hnew Hms
+  rw [hst', hsz]
+  rw [h12]
+  ihave Hst := stackScratch_widen (s := execSP s) hle' hbig $$ [Hsl Hst]
+  · iframe Hsl Hst
+  have hk2' : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R (upd R2 1 (BitVec.ofNat 64 (0x80004238 + 4))) := by
+    intro x hx
+    simp only [List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
+    subst hR1
+    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+      (ix_reg; rw [hk2 _ (by decide) (by decide)]; ix_reg)
+  have hih : InitHead (upd R2 1 (BitVec.ofNat 64 (0x80004238 + 4))) s aS (BitVec.ofNat 64 inp) aRet
+      (R2 10) := by
+    refine ⟨?_, ?_, ?_, ?_, by ix_reg⟩ <;> (ix_reg; rw [hk2 _ (by decide) (by decide)]; subst hR1; ix_reg)
+    · exact hf.regs.sp
+    · exact hf.regs.s0
+    · exact hf.regs.s1
+    · exact hf.regs.s2
+  -- the init, then the loop
+  iapply hinit Φ (k + nl) cnd step b aS (R2 10) aRet s _ Mt1 _ hih hfg (hf.stack.lower hneed hfg.sf)
+    hifits hf.slot
+  iframe Hms Hcode Hnew Hst Hslot Hw
+  isplitl []
+  · imodintro; unfold astSG; iexists P, m; iframe Hro; ipureintro; exact ⟨hrepr, hgeo⟩
+  iintro %R3 %⟨hk3, h319⟩ Hms Hst Hslot Hw
+  have hh : StmtHead R3 s aS (BitVec.ofNat 64 inp) aRet (R2 10) :=
+    ⟨(hk3 2 (by decide)).trans hih.sp, (hk3 8 (by decide)).trans hih.s0,
+      (hk3 9 (by decide)).trans hih.s1, (hk3 18 (by decide)).trans hih.s2, h319⟩
+  have hsub : ∀ x ∈ [20, 21, 22, 23, 24, 25, 26, 27], x ∈ initKeep := by decide
+  have hk3' : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R R3 :=
+    fun x hx => (hk3 x (hsub x hx)).trans (hk2' x hx)
+  iapply hloop Φ k init aS (R2 10) aRet s R3 Mt1 _ hh hfg (hf.stack.lower hneed hfg.sf) hfits hf.slot
+  iframe Hms Hcode Hnew Hst Hslot Hw
+  isplitl []
+  · imodintro; unfold astSG; iexists P, m; iframe Hro; ipureintro; exact ⟨hrepr, hgeo⟩
+  iintro %R4 %Mt4 %⟨hk4, h10, hu⟩ Hms Hst Hret Hw
+  iapply wp_loopExit hlive (twpW _) hf.stack hf.ral hh.sp hk3' (hMt1 ▸ hf.saved) hk4 h10 hu
+  iframe Hcode Hms Hst Hret Hw HK
+
+end VsaIris.Interp

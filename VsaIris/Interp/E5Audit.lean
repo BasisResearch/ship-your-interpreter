@@ -30,3 +30,4 @@ import VsaIris.Interp.E5
 #print axioms VsaIris.Interp.wp_loopExit
 #print axioms VsaIris.Interp.caseT_ExecBlock
 #print axioms VsaIris.Interp.ms_callEnvNewW
+#print axioms VsaIris.Interp.caseT_ExecFor

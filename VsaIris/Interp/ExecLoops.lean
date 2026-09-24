@@ -1,5 +1,6 @@
 import VsaIris.Interp.ExecArm
 import VsaIris.Interp.SpecLoop
+import VsaIris.Interp.ExecEnv
 
 /-!
 # `exec_stmt`'s `while` and `for` arms: dispatch to the loop head, exits (lane E5)
@@ -99,5 +100,41 @@ theorem stmtHead_of_disp {R R1 : Nat → BitVec 64} {inp aS aE aRet s : BitVec 6
     (hd : DispRegs R inp aS aE aRet s) (h2 : R1 2 = R 2) (h8 : R1 8 = R 8) (h9 : R1 9 = R 9)
     (h18 : R1 18 = R 18) (h19 : R1 19 = R 19) : StmtHead R1 s aS inp aRet aE :=
   ⟨h2.trans hd.sp, h8.trans hd.s0, h9.trans hd.s1, h18.trans hd.s2, h19.trans hd.s3⟩
+
+/-- A `for` statement node: its tag. -/
+theorem forNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {i : Option Vsa.While.Stmt}
+    {c st : Option Vsa.While.Expr} {b : Vsa.While.Stmt}
+    (h : StmtReprWithin m P aS.toNat (.forStmt i c st b))
+    (hg : ∀ k, P k → Interp.ReadOK k) : StmtNode m P aS 5 4 := by
+  cases h with
+  | forS h5 c5 _ _ _ _ _ _ => exact stmtNode_of hg h5 c5 (by decide) (Or.inl rfl) (fun j h1 h2 => by omega)
+
+#ix_seg ForArm_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
+    {aS s : BitVec 64}
+    (hx1 : 0x80000000 ≤ aS.toNat) (hx2 : aS.toNat + 4 ≤ 0x100000000)
+    (hx3 : aS.toNat + 4 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aS.toNat)
+    (h8 : R 8 = aS) (h16 : R 16 = 8#64) (h14 : R 14 = 0x80019fb8#64)
+    (hk : ldv .lw m aS.toNat = 5#64) (hku : ldv .lwu m aS.toNat = 5#64) :
+    IW live m (stmtView aS.toNat 4) (InExt (s.toNat - 176, 176)) Q 0x80004014#64 R Mt
+  by rw [← upd_eq_self h16]
+     ix_run hlive using [h8, h14, hk, hku] at 0x80004238
+
+/-- What the `for` loop and its init need of the arm's lowered stack. -/
+theorem forFits_of {i : Option Vsa.While.Stmt} {c st : Option Vsa.While.Expr} {b : Vsa.While.Stmt}
+    {d : Nat} (hbb : (Vsa.While.Stmt.forStmt i c st b).bodiesBound Vsa.While.perCallBudget = true) :
+    ForFits d c st b (execNeed (.forStmt i c st b) d - 176) ∧
+      (∀ x, i = some x → execNeed x d ≤ execNeed (.forStmt i c st b) d - 176 ∧
+        x.bodiesBound Vsa.While.perCallBudget = true) := by
+  simp only [Vsa.While.Stmt.bodiesBound, Bool.and_eq_true] at hbb
+  obtain ⟨⟨⟨hi, hc⟩, hs⟩, hb⟩ := hbb
+  refine ⟨⟨fun x hx => ⟨?_, ?_⟩, fun x hx => ⟨?_, ?_⟩, ?_, hb⟩, fun x hx => ⟨?_, ?_⟩⟩
+  · have := execNeed_for_cond hx i st b d; unfold Vsa.While.execFrame at this; omega
+  · subst hx; simpa [Vsa.While.Expr.bodiesBoundOpt] using hc
+  · have := execNeed_for_step hx i c b d; unfold Vsa.While.execFrame at this; omega
+  · subst hx; simpa [Vsa.While.Expr.bodiesBoundOpt] using hs
+  · have := execNeed_for_body i c st b d; unfold Vsa.While.execFrame at this; omega
+  · have := execNeed_for_init hx c st b d; unfold Vsa.While.execFrame at this; omega
+  · subst hx; simpa [Vsa.While.Stmt.bodiesBoundOpt] using hi
 
 end VsaIris.Interp

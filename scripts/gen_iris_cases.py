@@ -411,6 +411,7 @@ FAMILIES = {
     "execIfAll": subst_execIf,
     "execWhile": subst_execWhile,
     "execBlock": subst_execBlock,
+    "execFor": subst_execBlock,
     "leaf": subst_leaf,
     "var": subst_call1,
     "assign": subst_assign}
