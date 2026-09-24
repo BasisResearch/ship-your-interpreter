@@ -119,6 +119,33 @@ structure ExecFrameGeom (s : BitVec 64) : Prop where
   hi : s.toNat ≤ 0x88000000
   al : s.toNat % 16 = 0
 
+theorem drop_cons_facts {α : Type} {all : List α} {idx : Nat} {x : α} {xs : List α}
+    (h : x :: xs = all.drop idx) : ∃ hl : idx < all.length, all[idx] = x ∧ xs = all.drop (idx + 1) := by
+  have hl : idx < all.length := by
+    refine Classical.byContradiction fun hc => ?_
+    rw [List.drop_eq_nil_of_le (by omega)] at h
+    cases h
+  rw [List.drop_eq_getElem_cons hl] at h
+  injection h with h1 h2
+  exact ⟨hl, h1.symm, h2⟩
+
+theorem KeepRegs.trans {ks : List Nat} {R R' R'' : Nat → BitVec 64} (h1 : KeepRegs ks R R')
+    (h2 : KeepRegs ks R' R'') : KeepRegs ks R R'' := fun x hx => (h2 x hx).trans (h1 x hx)
+
+/-- A statement pointer's address in the array (`slli`/`add` of the index). -/
+theorem arr_elem_addr {arr : BitVec 64} {idx count : Nat} (h : arr.toNat + 8 * count ≤ 0x100000000)
+    (hi : idx < count) : (arr + BitVec.ofNat 64 idx <<< 3).toNat = arr.toNat + 8 * idx := by
+  rw [BitVec.toNat_add, BitVec.toNat_shiftLeft, BitVec.toNat_ofNat]
+  have : idx % 2 ^ 64 = idx := Nat.mod_eq_of_lt (by omega)
+  rw [this, Nat.shiftLeft_eq, show (2 : Nat) ^ 3 = 8 by rfl]
+  rw [Nat.mod_eq_of_lt (a := idx * 8) (by omega), Nat.mod_eq_of_lt (by omega)]
+  omega
+
+/-- A child's stack geometry inside the region below the lowered `sp`. -/
+theorem StackGeom.narrow {s : BitVec 64} {m n : Nat} (h : StackGeom s m) (hn : n ≤ m) :
+    StackGeom s n :=
+  ⟨by have := h.le; omega, by have := h.lo; omega, h.hi, h.al⟩
+
 section Motive
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
@@ -152,6 +179,257 @@ def blockSeqT_body (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room 
         world N L Room inp (.counted k) st' d -∗ (twpW (vsaModel live)).W Φ)
       ⊢ (twpW (vsaModel live)).W Φ)
 
+/-- The empty sequence never reaches the loop head (the arm's `blez` skips the
+loop): the motive holds vacuously. -/
+theorem blockSeqT_nil (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred)
+    (inp : Nat) (st : St) (d inner : Nat) :
+    blockSeqT_body (GF := GF) live N L Room inp st d inner [] st .normal 0 (.nil st d inner) :=
+  fun _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ h => absurd rfl h
+
 end Motive
+
+/-! ## The cases (proof pieces, one declaration each) -/
+
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.RuntimeRepr
+
+#ix_piece blockSeqT_consNormal_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
+    [I : InterpGS GF] {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
+    {st : St} {d inner : Nat} {sm : Vsa.While.Stmt} {ss : List Vsa.While.Stmt} {st' st'' : St}
+    {status : Status} {n1 n2 : Nat}
+    (D1 : ExecSCost st d inner sm st' .normal n1) (D2 : ExecSeqCost st' d inner ss st'' status n2)
+    (h1 : ⊢ execSpecT_body (GF := GF) (vsaModel live) N L Room inp st d inner sm st' .normal n1 D1)
+    (h2 : blockSeqT_body (GF := GF) live N L Room inp st' d inner ss st'' status n2 D2) :
+    blockSeqT_body (GF := GF) live N L Room inp st d inner (sm :: ss) st'' status (n1 + n2)
+      (.consNormal st d inner sm ss st' st'' status n1 n2 D1 D2) by
+  intro Φ k idx count aS arr aRet aInner s R Mt m P all m' Inv F _ hdrop hbn hbh hfg hsg' hall hslg
+    hinv hInv
+  obtain ⟨hl, hat, hrest⟩ := drop_cons_facts hdrop
+  have hcount : all.length = count := stmtArray_length hbn.repr
+  obtain ⟨p, hp, hsp⟩ := stmtArray_get hbn.repr idx hl
+  rw [hat] at hsp
+  have hpl : p < 2 ^ 64 := readLE_lt hp
+  have hpt : (BitVec.ofNat 64 p).toNat = p := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpl]
+  have hidx : idx < count := hcount ▸ hl
+  have hel : ldv .ld m (arr + BitVec.ofNat 64 idx <<< 3).toNat = BitVec.ofNat 64 p := by
+    rw [arr_elem_addr hbn.ahi hidx]; exact ldv_ld_read64 hp
+  obtain ⟨hneed, hbb⟩ := hall sm (hat ▸ List.getElem_mem hl)
+  iintro ⟨HF, Hms, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, Hk⟩
+  -- the head run: load the statement, spill the index
+  ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
+  · iframe Hcode Hro
+  iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aInner.toNat ∗
+      stackScratch (s + 18446744073709551440#64) m' ∗ slot24 aRet.toNat ∗
+      world N L Room inp (.counted (k + (n1 + n2))) st d ∗
+      (∀ (R' : Nat → BitVec 64) (Mt' : Mem),
+        ⌜KeepRegs calleeSaved R R' ∧ R' 10 = statusCode status ∧ Inv Mt'⌝ -∗ F -∗
+        ms 0x8000409c#64 R' (InExt (s.toNat - 176, 176)) Mt' -∗
+        stackScratch (s + 18446744073709551440#64) m' -∗ statusRet N aRet.toNat status -∗
+        world N L Room inp (.counted k) st'' d -∗ (twpW (vsaModel live)).W Φ)))
+  rotate_left
+  · iframe Hdv Hms HF Hcode Hro Hfr Hst Hslot Hw; iexact Hk
+  intro F'
+  refine BlockLoop_runA (pS := BitVec.ofNat 64 p) hlive hfg.sf hfg.lo hfg.hi hfg.al hbn.lo hbn.hi hbn.off
+    hbn.alo hbn.ahi hbn.aoff hidx hbn.small hbh.s0 hbh.a6 hbh.sp hbn.arrw hel ?_
+  intros
+  apply swp_closeM
+  intro Mt1 hMt1
+  have hinv1 : Inv Mt1 := by rw [hMt1]; exact hInv _ _ hinv
+  unfold F'
+  iintro ⟨⟨HF, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, Hk⟩, Hms⟩
+  -- the statement
+  ihave H1 := h1
+  rw [show k + (n1 + n2) = k + n2 + n1 by omega]
+  iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800041c4)
+    (jalx_800041c4 live (fun p hp => hlive _ (interp_code_800041c4 p hp)))
+    interp_code_800041c4 (by decide) D1 (k := k + n2) (aS := BitVec.ofNat 64 p) (aE := aInner)
+    (aRet := aRet) (s := s + 18446744073709551440#64) (m := m')
+    (hsg'.narrow hneed) hneed hsg'.le hslg hbb
+  iframe H1 Hcode Hfr Hms Hst Hslot Hw
+  isplitl []
+  · ipureintro
+    exact ⟨by ix_reg; exact hbh.s1, by ix_reg, by ix_reg; exact hbh.s3, by ix_reg; exact hbh.s2,
+      by ix_reg; exact hbh.sp⟩
+  isplitl []
+  · imodintro; rw [hpt]; unfold astSG; iexists P, m; iframe Hro; ipureintro; exact ⟨hsp, hbn.geo⟩
+  iintro %R' %⟨hkeep, hst0⟩ Hms Hst Hret Hw
+  rw [statusRet_normal]
+
+#ix_piece blockSeqT_consNormal_p2 from blockSeqT_consNormal_p1 by
+  -- the status test and the back edge
+  ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
+  · iframe Hcode Hro
+  iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aInner.toNat ∗
+      stackScratch (s + 18446744073709551440#64) m' ∗ slot24 aRet.toNat ∗
+      world N L Room inp (.counted (k + n2)) st' d ∗
+      (∀ (R' : Nat → BitVec 64) (Mt' : Mem),
+        ⌜KeepRegs calleeSaved R R' ∧ R' 10 = statusCode status ∧ Inv Mt'⌝ -∗ F -∗
+        ms 0x8000409c#64 R' (InExt (s.toNat - 176, 176)) Mt' -∗
+        stackScratch (s + 18446744073709551440#64) m' -∗ statusRet N aRet.toNat status -∗
+        world N L Room inp (.counted k) st'' d -∗ (twpW (vsaModel live)).W Φ)))
+  rotate_left
+  · iframe Hdv Hms HF Hcode Hro Hfr Hst Hret Hw; iexact Hk
+  intro F'
+  have hR1 : KeepRegs calleeSaved R (upd R' 1 (BitVec.ofNat 64 (2147500484 + 4))) := by
+    intro x hx
+    simp only [calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
+    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+      ix_keep [hkeep]
+  refine BlockLoop_runB (sc := 0#64) (arr := arr) hlive hfg.sf hfg.lo hfg.hi hfg.al hbn.lo hbn.hi
+    hbn.off hidx hbn.small ((hR1 8 (by decide)).trans hbh.s0) ((hR1 2 (by decide)).trans hbh.sp)
+    (by ix_reg; exact hst0) (by rw [hMt1]; ix_fwd) hbn.cntw ?_ ?_ ?_
+  · -- an abrupt status: not this derivation's
+    intro hc; exfalso; apply hc; ix_reg; exact hst0
+  · -- more statements: the tail's loop
+    intro _ hc
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, idx_succ,
+      sext32_ofNat_toInt (show idx + 1 < 2 ^ 31 by have := hbn.small; omega),
+      ofNat_toInt_small hbn.small] at hc
+    intros
+    apply swp_closeRM
+    intro R2 Mt2 hR2 hMt2
+    subst hMt2
+    cases ss with
+    | nil => exfalso; have := List.drop_eq_nil_iff.mp hrest.symm; omega
+    | cons s2 ss2 =>
+      refine .trans ?_ (h2 Φ k (idx + 1) count aS arr aRet aInner s R2 Mt2 m P all m' Inv F
+        (List.cons_ne_nil _ _) hrest hbn ?_ hfg hsg' hall hslg hinv1 hInv)
+      · unfold F'
+        iintro ⟨⟨HF, #Hcode, #Hro, #Hfr, Hst, Hret, Hw, Hk⟩, Hms⟩
+        iframe HF Hms Hcode Hro Hfr Hst Hret Hw
+        iintro %R'' %Mt'' %⟨hk'', hst'', hinv''⟩ HF Hms Hst Hret Hw
+        iapply Hk $$ %R'' %Mt'' %⟨KeepRegs.trans (KeepRegs.trans ?_ ?_) hk'', hst'', hinv''⟩ HF Hms Hst Hret Hw
+        · exact hR1
+        · intro x hx
+          simp only [calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
+          rw [hR2]
+          rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> ix_reg
+      · rw [hR2]
+        exact ⟨by ix_reg; exact (hR1 2 (by decide)).trans hbh.sp, by ix_reg; exact (hR1 8 (by decide)).trans hbh.s0,
+          by ix_reg; exact (hR1 9 (by decide)).trans hbh.s1, by ix_reg; exact (hR1 18 (by decide)).trans hbh.s2,
+          by ix_reg; exact (hR1 19 (by decide)).trans hbh.s3, by ix_reg; exact idx_succ idx⟩
+  · -- the last statement: the loop leaves normally
+    intro _ hc
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, idx_succ,
+      sext32_ofNat_toInt (show idx + 1 < 2 ^ 31 by have := hbn.small; omega),
+      ofNat_toInt_small hbn.small] at hc
+    intros
+    apply swp_closeF
+    cases ss with
+    | cons s2 ss2 =>
+      exfalso
+      obtain ⟨hl2, -, -⟩ := drop_cons_facts hrest
+      omega
+    | nil =>
+      cases D2
+      unfold F'
+      iintro ⟨⟨HF, #Hcode, #Hro, #Hfr, Hst, Hret, Hw, Hk⟩, Hms⟩
+      rw [statusRet_normal]
+      iapply Hk $$ %_ %Mt1 %⟨?_, by ix_reg; rfl, hinv1⟩ HF Hms Hst Hret Hw
+      refine KeepRegs.trans hR1 ?_
+      intro x hx
+      simp only [calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
+      rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> ix_reg
+
+#ix_chain blockSeqT_consNormal := [blockSeqT_consNormal_p1, blockSeqT_consNormal_p2]
+
+
+#ix_piece blockSeqT_consAbrupt_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
+    [I : InterpGS GF] {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
+    {st : St} {d inner : Nat} {sm : Vsa.While.Stmt} {ss : List Vsa.While.Stmt} {st' st'' : St}
+    {status : Status} {n : Nat}
+    (D1 : ExecSCost st d inner sm st' status n) (hne : status ≠ .normal)
+    (h1 : ⊢ execSpecT_body (GF := GF) (vsaModel live) N L Room inp st d inner sm st' status n D1) :
+    blockSeqT_body (GF := GF) live N L Room inp st d inner (sm :: ss) st' status n
+      (.consAbrupt st d inner sm ss st' status n D1 hne) by
+  intro Φ k idx count aS arr aRet aInner s R Mt m P all m' Inv F _ hdrop hbn hbh hfg hsg' hall hslg
+    hinv hInv
+  obtain ⟨hl, hat, hrest⟩ := drop_cons_facts hdrop
+  have hcount : all.length = count := stmtArray_length hbn.repr
+  obtain ⟨p, hp, hsp⟩ := stmtArray_get hbn.repr idx hl
+  rw [hat] at hsp
+  have hpl : p < 2 ^ 64 := readLE_lt hp
+  have hpt : (BitVec.ofNat 64 p).toNat = p := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpl]
+  have hidx : idx < count := hcount ▸ hl
+  have hel : ldv .ld m (arr + BitVec.ofNat 64 idx <<< 3).toNat = BitVec.ofNat 64 p := by
+    rw [arr_elem_addr hbn.ahi hidx]; exact ldv_ld_read64 hp
+  obtain ⟨hneed, hbb⟩ := hall sm (hat ▸ List.getElem_mem hl)
+  iintro ⟨HF, Hms, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, Hk⟩
+  -- the head run: load the statement, spill the index
+  ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
+  · iframe Hcode Hro
+  iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aInner.toNat ∗
+      stackScratch (s + 18446744073709551440#64) m' ∗ slot24 aRet.toNat ∗
+      world N L Room inp (.counted (k + n)) st d ∗
+      (∀ (R' : Nat → BitVec 64) (Mt' : Mem),
+        ⌜KeepRegs calleeSaved R R' ∧ R' 10 = statusCode status ∧ Inv Mt'⌝ -∗ F -∗
+        ms 0x8000409c#64 R' (InExt (s.toNat - 176, 176)) Mt' -∗
+        stackScratch (s + 18446744073709551440#64) m' -∗ statusRet N aRet.toNat status -∗
+        world N L Room inp (.counted k) st' d -∗ (twpW (vsaModel live)).W Φ)))
+  rotate_left
+  · iframe Hdv Hms HF Hcode Hro Hfr Hst Hslot Hw; iexact Hk
+  intro F'
+  refine BlockLoop_runA (pS := BitVec.ofNat 64 p) hlive hfg.sf hfg.lo hfg.hi hfg.al hbn.lo hbn.hi hbn.off
+    hbn.alo hbn.ahi hbn.aoff hidx hbn.small hbh.s0 hbh.a6 hbh.sp hbn.arrw hel ?_
+  intros
+  apply swp_closeM
+  intro Mt1 hMt1
+  have hinv1 : Inv Mt1 := by rw [hMt1]; exact hInv _ _ hinv
+  unfold F'
+  iintro ⟨⟨HF, #Hcode, #Hro, #Hfr, Hst, Hslot, Hw, Hk⟩, Hms⟩
+  -- the statement
+  ihave H1 := h1
+  iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800041c4)
+    (jalx_800041c4 live (fun p hp => hlive _ (interp_code_800041c4 p hp)))
+    interp_code_800041c4 (by decide) D1 (k := k) (aS := BitVec.ofNat 64 p) (aE := aInner)
+    (aRet := aRet) (s := s + 18446744073709551440#64) (m := m')
+    (hsg'.narrow hneed) hneed hsg'.le hslg hbb
+  iframe H1 Hcode Hfr Hms Hst Hslot Hw
+  isplitl []
+  · ipureintro
+    exact ⟨by ix_reg; exact hbh.s1, by ix_reg, by ix_reg; exact hbh.s3, by ix_reg; exact hbh.s2,
+      by ix_reg; exact hbh.sp⟩
+  isplitl []
+  · imodintro; rw [hpt]; unfold astSG; iexists P, m; iframe Hro; ipureintro; exact ⟨hsp, hbn.geo⟩
+  iintro %R' %⟨hkeep, hst0⟩ Hms Hst Hret Hw
+
+
+#ix_piece blockSeqT_consAbrupt_p2 from blockSeqT_consAbrupt_p1 by
+  -- the status test: an abrupt status leaves the loop
+  ihave #Hdv := roOwn_data hbn.view $$ [Hcode Hro]
+  · iframe Hcode Hro
+  iapply wp_swpF (twpW _) (F := iprop(F ∗ codeRes ∗ roOn P m ∗ frameAt inner aInner.toNat ∗
+      stackScratch (s + 18446744073709551440#64) m' ∗ statusRet N aRet.toNat status ∗
+      world N L Room inp (.counted k) st' d ∗
+      (∀ (R' : Nat → BitVec 64) (Mt' : Mem),
+        ⌜KeepRegs calleeSaved R R' ∧ R' 10 = statusCode status ∧ Inv Mt'⌝ -∗ F -∗
+        ms 0x8000409c#64 R' (InExt (s.toNat - 176, 176)) Mt' -∗
+        stackScratch (s + 18446744073709551440#64) m' -∗ statusRet N aRet.toNat status -∗
+        world N L Room inp (.counted k) st' d -∗ (twpW (vsaModel live)).W Φ)))
+  rotate_left
+  · iframe Hdv Hms HF Hcode Hro Hfr Hst Hret Hw; iexact Hk
+  intro F'
+  have hR1 : KeepRegs calleeSaved R (upd R' 1 (BitVec.ofNat 64 (2147500484 + 4))) := by
+    intro x hx
+    simp only [calleeSaved, List.mem_cons, List.not_mem_nil, _root_.or_false] at hx
+    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+      ix_keep [hkeep]
+  have hsc : statusCode status ≠ 0#64 := by cases status <;> simp_all [statusCode]
+  refine BlockLoop_runB (sc := statusCode status) (arr := arr) hlive hfg.sf hfg.lo hfg.hi hfg.al hbn.lo
+    hbn.hi hbn.off hidx hbn.small ((hR1 8 (by decide)).trans hbh.s0) ((hR1 2 (by decide)).trans hbh.sp)
+    (by ix_reg; exact hst0) (by rw [hMt1]; ix_fwd) hbn.cntw ?_ ?_ ?_
+  · intro _
+    intros
+    apply swp_closeF
+    unfold F'
+    iintro ⟨⟨HF, #Hcode, #Hro, #Hfr, Hst, Hret, Hw, Hk⟩, Hms⟩
+    iapply Hk $$ %_ %Mt1 %⟨hR1, by ix_reg; exact hst0, hinv1⟩ HF Hms Hst Hret Hw
+  · intro hc; exfalso; apply hc; ix_reg; rw [hst0]; exact hsc
+  · intro hc; exfalso; apply hc; ix_reg; rw [hst0]; exact hsc
+
+#ix_chain blockSeqT_consAbrupt := [blockSeqT_consAbrupt_p1, blockSeqT_consAbrupt_p2]
+
+
 
 end VsaIris.Interp

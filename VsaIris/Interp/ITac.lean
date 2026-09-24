@@ -213,7 +213,10 @@ leftover mentions (a symbolic run's havoc values). -/
 def ixAddPiece (declName : Name) (vars : Array Expr) (goal : Expr) (tac : Syntax)
     (allLocals : Bool) (hidden : Array Expr := #[]) : TermElabM Unit := do
   let g ← mkFreshExprMVar goal
-  let gs ← withDeclName declName <| Tactic.run g.mvarId! (Tactic.evalTactic tac)
+  -- the previous piece's leftovers are not this piece's to use (a `cases` would
+  -- otherwise revert them into the proof)
+  let g0 ← g.mvarId!.tryClearMany (hidden.map (·.fvarId!))
+  let gs ← withDeclName declName <| Tactic.run g0 (Tactic.evalTactic tac)
   let gs ← gs.filterM fun g => return !(← g.isAssigned)
   let finish (hks : Array Expr) : TermElabM Unit := do
     let val := zeroLevels (← instantiateMVars (← mkLambdaFVars (vars ++ hks) (← instantiateMVars g)))

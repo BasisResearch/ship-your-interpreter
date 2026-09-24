@@ -364,6 +364,15 @@ theorem swp_closeM (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     SWP live text iRegs S (RunK Wp Φ F S) pc R Mt :=
   swp_closeF Wp (h Mt rfl)
 
+/-- `swp_closeF` with the end registers and memory named (a loop's next
+iteration is stated over them). -/
+theorem swp_closeRM (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {F : IProp GF} {text : List (Nat × BitVec 8)} {S : Nat → Prop} {pc : BitVec 64}
+    {R : Nat → BitVec 64} {Mt : Mem}
+    (h : ∀ R' Mt', R' = R → Mt' = Mt → F ∗ ms pc R' S Mt' ⊢ Wp.W Φ) :
+    SWP live text iRegs S (RunK Wp Φ F S) pc R Mt :=
+  swp_closeF Wp (h R Mt rfl rfl)
+
 end Res
 
 /-! ## Entry, exit, the data view -/

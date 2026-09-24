@@ -146,6 +146,10 @@ def statusRet (N : NativeAddrs) (aRet : Nat) : Status → IProp GF
   | .ret v => valAt N aRet v
   | _ => slot24 aRet
 
+omit I in
+theorem statusRet_normal [InterpGS GF] (N : NativeAddrs) (a : Nat) :
+    statusRet (GF := GF) N a .normal = slot24 a := rfl
+
 variable (M : MachineModel) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
 
 def evalEntryPC : BitVec 64 := 0x80003164#64
