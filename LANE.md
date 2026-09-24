@@ -1,74 +1,99 @@
 # Lane E4: the call family (closure call, natives, call errors)
 
-Branch `lane-e4` (from `wave4-base`). Merged: `hub/iris-main` (with
-`INTEGRATION.md`), `hub/lane-e6` (argument loop), `hub/lane-e2` (eval error
-arms), and `hub/lane-e5` (`ExecEnv`, `ExecBlock`; it carries E1). Design:
-`VsaIris/INTERP_DESIGN.md` §4, §6, §8 (row "call"), §10 "STATEMENT CHANGES
-(E4)". Rows: `scripts/iris_arms/arms.d/e4-call.tsv`.
+Branch `lane-e4` (from `wave4-base`). It is merged with `hub/iris-main`
+(integration wave 4, with `INTEGRATION.md`) and with lanes E2, E5 and E6.
+Design: `VsaIris/INTERP_DESIGN.md` §4, §6, §8 (row "call") and §10 "STATEMENT
+CHANGES (E4)". Rows: `scripts/iris_arms/arms.d/e4-call.tsv`. Audit:
+`VsaIris/Interp/E4Audit.lean`, imported by `VsaIris/Audit.lean`. Every
+theorem's axioms are ⊆ {propext, Classical.choice, Quot.sound}.
 
-## Integration conflict: `errCtx` (E1 vs E2)
-E1's `LeafErr.lean` and E2's `SpecErr.lean` both define
-`VsaIris.Interp.errCtx`, with different jmp_buf side conditions (`ErrCtxOK`
-vs `(jbWord inp jb 0).toNat % 4 = 0`). The two cannot be imported together.
-This branch builds with E2's version, because the call errors go through
-`ErrEnv`/`ms_rtErrEval`. It therefore leaves out of `VsaIris.lean` and
-`Audit.lean` (commented, with the reason) E1's `LeafErr` and the
-`Case.{Var,Assign}{T,P}` built on it. Integrator: pick one definition and
-rename or merge the other.
+## Status: every arm in both modes; one named obligation
 
-## Dependencies (used as is)
-- E6: `evalArgsT_body`/`evalArgsP_body` (`SpecLoop.lean`), hypotheses of the
-  prefix.
-- E2: `errCtx`, `ErrEnv`, `ms_rtErrEval`, `valueKindNameSpec`.
-- H2: the natives' specs, `ms_callRegs`. H5: `rtErr_spec`, `abortRes`.
-- E5: `ms_callEnvNewW`, `blockNode_of` (for the closure body).
-
-## Done (axioms ⊆ {propext, Classical.choice, Quot.sound})
-
-| Arm / layer | Generated (Case/) | Hand (lemmas) |
+| arm / outcome | total | partial |
 |---|---|---|
-| layer: `jalr` call (`CallJalr`) | – | 358 |
-| layer: call node, prefix runs (`CallArm`, `CallSeg`, `CallPrefix`, `CallPrefixP`) | – | 128 + 221 + 371 + 288 |
-| error messages (`CallErr`) | – | 75 |
-| print (T) | 72 (`CallPrintT`) | shared: `CallNative` 289, `CallNativeOut` 288 |
-| println (T) | 72 (`CallPrintlnT`) | shared (as above) |
-| assert-ok (T) | 66 (`CallAssertT`) | `CallNativeSeg` 369 |
-| partial arm (P): natives, assert-fail, too-many, not-callable; closure is the named `CallCloP` | 160 (`CallArmP`) | `CallNotCallable` 165 |
-| closure head (arity test, depth bump/test, `cl->env`; exits OK/arity/depth) | – | `CallClosure` 431, `CallCloHead` 406 |
-| closure call (T): `env_new`, parameter loop, body (G's loop), normal/`return` exits | 75 (`CallClosureT`) | `CallCloRuns` 199, `CallCloBind` 602, `CallCloBody` 201, `CallCloExit` 360, `CallCloT` 388 |
+| `print`, `println` | `caseT_CallPrint`, `caseT_CallPrintln` | `caseP_CallArm` |
+| `assert` returning | `caseT_CallAssert` | `caseP_CallArm` |
+| closure call returning (normal end, `return`) | `caseT_CallClosure` | `caseP_CallArm` via `CallCloP` (`callCloP_of`) |
+| too many arguments, not callable, assert failure | – (no derivation) | `caseP_CallArm` |
+| call depth, `break`/`continue` escaping a body | – | `callCloP_of` (`cloErrDepth`, `cloExitEsc`) |
+| out of memory (`env_new`, `env_define`) | – | `callCloP_of` (E5's `ms_callEnvNewP`/`ms_callEnvDefineP`, `wp_oomBlock`) |
+| arity mismatch | – | the named obligation `CloArityP` (below) |
 
-Template lines (hand, but table-level): `callOut_T` 71, `callAssert_T` 65,
-`callClo_T` 74, `callArm_P` 159, family `e4_call.py` 59. The closure layer
-is Wp-generic (the partial proof reuses `cloBind`, `cloBodyEntry`, `cloExitN`,
-`cloExitR`; `env_define` enters through `CloDefineStep`). Generator additions (listed in
-`gen_iris_cases.py`): step kinds `helperR` (indirect `jalr` helper) and
-`loop` (a lemma hypothesis). `gen_interp_steps.py` also emits
+The recursor applies `caseP_CallArm` with `hclo := callCloP_of …`.
+
+## Interface for A
+
+- Total closure case: `caseT_CallClosure` takes the derivation's pieces
+  (`CallCost.closure`), the children's motives (`evalSpecT_body`,
+  `evalArgsT_body`), G's `closureSeqT_body` for the body, and the helper
+  specs `valueNullSpec`, `envNewSpec`, `envDefineSpec`. It is stated at
+  `vsaLayoutP`/`vsaRoomB`.
+- Partial: `caseP_CallArm` needs `evalSpecsP ∗ errCtx ∗ execDispsP`
+  (STATEMENT CHANGE, §10). Its closure branch is
+  `callCloP_of hlive hE hvn hen hed hsup harity hinpA`.
+- Named premises (all in `PROOF_CLOSURE_PLAN.md`, lane E4 entries):
+  - `CloSupply N`: a closure's object, its `EX_FN` view and its environment
+    binding, from the store. It subsumes `DispSupply`.
+  - The native stack room `hroom` (Q7 family).
+  - The interpreter struct's placement (`InpGeom`, `inp < 2^64`,
+    `inp % 8 = 0`).
+  - **`CloArityP`**: the arity error. Its obstruction is that `rtErr_spec`
+    (H5) does not return the owned readable bytes (the message buffer in
+    `eval_expr`'s frame). With them returned, the proof is a composition of
+    existing runs (`CloE_runA`, `CloE_runA2`).
+
+## Statement changes (INTERP_DESIGN.md §10 "STATEMENT CHANGES (E4)")
+
+- `worldE` owns `Newlib.binImg`. Consumers were adjusted, including E1's
+  `var`/`assign`/`fnLit` templates and E2's `catRest`.
+- `interpCtxE`: the `jmp_buf`'s `ra` word is aligned.
+- `interpCoreE`: `d ≤ maxCallDepth`.
+- `nativeAssertSpec`'s abort carries `⌜¬ AssertOk vs⌝`.
+- `caseP_CallArm` takes `execDispsP`, and `CallCloP` takes `execSpecsP`.
+
+## Layers (hand; Wp-generic unless noted)
+
+- Call arm: `CallJalr` (the native `jalr`), `CallArm`, `CallSeg`,
+  `CallPrefix` (T) and `CallPrefixP` (P), `CallErr` (messages).
+- Natives: `CallNative`, `CallNativeOut`, `CallNativeSeg`,
+  `CallNotCallable`.
+- Closure head: `CallClosure` (resources, `CloSupply`, the node, the
+  depth word) and `CallCloHead`.
+- After the head: `CallCloRuns` (12 runs), `CallCloBind` (the parameter
+  loop, `env_define` abstract as `CloDefineStep`), `CallCloBody` (body
+  entry), `CallCloExit` (normal and `return` exits).
+- Mode-specific: `CallCloT` (`cloDefineStepT`, `cloCallT`, `callClosureT`)
+  and `CallCloP` (`cloDefineStepP`, errors, `cloCallP`, `callClosureP`,
+  `callCloP_of`).
+
+## Line counts (generated vs hand)
+
+| arm | generated | hand (templates) | hand (layers) |
+|---|---|---|---|
+| print / println (T) | 72 / 72 | `callOut_T` 71 | `CallNative` 289, `CallNativeOut` 288 |
+| assert (T) | 66 | `callAssert_T` 65 | `CallNativeSeg` 369 |
+| closure (T) | 75 | `callClo_T` 74 | `CallClosure` 431, `CallCloHead` 406, `CallCloRuns` 199, `CallCloBind` 602, `CallCloBody` 201, `CallCloExit` 360, `CallCloT` 388 |
+| every outcome (P) | 163 | `callArm_P` 162 | `CallCloP` 673, `CallNotCallable` 165 |
+| shared prefix | – | – | `CallJalr` 358, `CallArm` 124, `CallSeg` 221, `CallPrefix` 371, `CallPrefixP` 289, `CallErr` 75 |
+
+Generated: 448 lines (5 files). Templates: 372 lines; family
+`e4_call.py`: 60 lines. Layers: 5,235 lines.
+
+Generator additions (additions only): step kinds `helperR` (an indirect
+`jalr` helper) and `loop` (a loop lemma taken as a hypothesis). Families:
+`callOut`, `callAssert`, `callClo`, `callArm`. `gen_interp_steps.py` also emits
 `interp_code_<pc>` for `jalr` sites.
 
-## Statement changes (INTERP_DESIGN.md §10)
-- `worldE` owns `Newlib.binImg` (needed by the natives, `stringify`, and
-  `runtime_error`). `binImg` moved to `Repr.lean`; the domains are in
-  `Vsa/BinDom.lean`. E1's var/assign templates destructure it.
-- `interpCtxE`: the jmp_buf target word is 4-aligned (needed by `longjmp`).
-- `interpCoreE`: `d ≤ maxCallDepth` (the depth test's `sw`/overflow arm needs
-  it).
-- `nativeAssertSpec`'s abort carries `⌜¬ AssertOk vs⌝`. H2's four abort paths
-  supply it.
+## Findings
 
-## Named premises (findings, in PROOF_CLOSURE_PLAN.md)
-- `DispSupply`/`CloSupply`: printing a closure needs display geometry that
-  `closOwn` does not carry (H2's finding).
-- Native stack room `hroom`: at `d = maxCallDepth`, a call node leaves
-  ≥ 2176 bytes, but `nativePrintlnNeed = 4224` (Q7 family).
-- `CloSupply`, and the interpreter struct's placement (`InpGeom`,
-  `inp < 2^64`, `inp % 8 = 0`) for the depth word the closure path reads and
-  writes (`caseT_CallClosure`).
-
-## In flight
-- The closure call's partial proof (`CallCloP`, the premise of
-  `caseP_CallArm`): `ms_callEnvNewP`/`ms_callEnvDefineP` (out of memory),
-  `closureSeqP_all`, the escape, depth and arity (`snprintf`) errors. The
-  success path reuses the Wp-generic layer above.
+- Keep `#ix_seg` runs free of arithmetic such as `24 * j` and of
+  symbolic-length data views. `CloB_runL` took over 50 minutes (a kernel deep
+  recursion) until each computed address was named as a `Nat` with bounds
+  (E6's idiom).
+- Two lanes' copies were deduplicated: `world_store` now lives once in
+  `SpecEnv` (it was in E2's `BinEq` and in E4), and E6's `exprArray_length`
+  is reused.
 
 ## Holes
-None added.
+
+None added (`check_iris_holes.py`: 10 ledgered).
