@@ -75,6 +75,14 @@ Branch `lane-h4`. Goal: discharge `IrisHoles.alloc` (`VsaIris/Vsa/AllocHoles.lea
 - **`sltu` step** (`Vsa/AllocSltu.lean`): `swp_alu` (any observational ALU step as one `SWP`
   step) and `st_800052d0`.
 
+- **`_realloc_r` in progress**: interface correction (`ReallocLocalRun` needs `nNew < 2^64`,
+  `PROOF_CLOSURE_PLAN.md`); context `ReallocCtx.lean` (`ROK`, `RRet`, `RNull`, `RHeap`, epilogue
+  `repi`), prologue and error return (`ReallocPro.lean`), nested calls `rcall_malloc`/`rcall_free`
+  (`ReallocCall.lean`), heap edits `PHeapAt.cut`/`reblock`/`growTop`/`fresh_of_block`
+  (`HeapRealloc.lean`), the tail join `realloc_tail` (`ReallocTail.lean`), the dispatch
+  `realloc_dec` (`ReallocDec.lean`: a chunk already big enough), word copies `copyW`/`copyW_spec`
+  (`ReallocCopy.lean`), `memmove_fwd` (`ReallocMove.lean`).
+
 ## Next: `_realloc_r` (`0x80005290`, wrapper `realloc` `0x8000527c`)
 Paths (X = p-16 of size S, nb = normalized request, T = tail `0x80005414`):
 - error (`nb` < `nNew` or `nb` ≥ 2^31, `0x800054b8`): errno, NULL, no unlock; counted refutes.
