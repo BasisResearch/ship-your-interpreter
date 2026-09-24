@@ -140,3 +140,20 @@ theorem kind_ne_int {w : BitVec 64} {v : Value} (h : w.toNat % 2 ^ 32 = valTag v
   rw [h]; cases v <;> simp [valTag] at hv ⊢ <;> decide
 
 end VsaIris.Interp
+
+/-- A load fact over a run's tracking memory, cheaply: the frame addresses are
+first rewritten to plain sums by the arm's `hoff` (`evalSP_off`), then every
+store is forwarded with `omega` alone on the goal (lane G's `ix_fwd` simps the
+whole context at each store, which a long run's memory equation makes
+expensive). -/
+syntax "e2_fwd " term : tactic
+macro_rules
+  | `(tactic| e2_fwd $h) =>
+    `(tactic| ((try simp (disch := decide) only [$h:term]); simp (disch := first | rfl | omega) only [VsaIris.Interp.slotWrite, VsaIris.Sym.ldv_store_hit, VsaIris.Sym.ldv_ld_hit_eq, VsaIris.Sym.ldv_ld_miss, VsaIris.Interp.ldv_lw_miss, VsaIris.Interp.ldv_lw_store8]))
+
+namespace VsaIris.Interp
+
+/-- A kind tag is small (a signed word load reads it back unchanged). -/
+theorem valTag_lt (v : Vsa.While.Value) : valTag v < 2 ^ 31 := by cases v <;> simp [valTag]
+
+end VsaIris.Interp

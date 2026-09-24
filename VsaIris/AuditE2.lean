@@ -10,3 +10,9 @@ import VsaIris.Interp.CaseE2
 #print axioms VsaIris.Interp.ms_rtErrEval
 #print axioms VsaIris.Interp.ms_callKindName
 #print axioms VsaIris.Interp.coreOK_top
+#print axioms VsaIris.Interp.caseT_BinaryEq
+#print axioms VsaIris.Interp.caseT_BinaryNe
+#print axioms VsaIris.Interp.caseP_BinaryEq
+#print axioms VsaIris.Interp.caseP_BinaryNe
+#print axioms VsaIris.Interp.caseP_BinarySub
+#print axioms VsaIris.Interp.ms_callValueEqual
