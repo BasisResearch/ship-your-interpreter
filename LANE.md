@@ -1,7 +1,8 @@
 # Lane H2: value functions and natives
 
 Branch `lane-h2` (from `hub/iris-main`), merged `hub/lane-g` (its step-table
-generator and arm layer). Design: `VsaIris/INTERP_DESIGN.md` §9 H2; statement
+generator and arm layer) and `hub/lane-h1` (`mallocRho_spec`, `memcpySpec`,
+`strlenSpec`; `strAt` carries `StrWin`). Design: `VsaIris/INTERP_DESIGN.md` §9 H2; statement
 changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
 
 ## Done
@@ -46,8 +47,19 @@ changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
   return address (without it no helper can `ret`); `ms_callHelper` takes
   `(by decide)` at the call site; G's template and cases regenerated.
 
+- **Shared layers**: `LocalRun.promote` and `strlen_specOwnedW`
+  (`Vsa/StrlenOwned.lean`: H3's `strlen` on an owned buffer, the bytes handed
+  back unchanged); `ms_callRegs` (`Interp/CallRegs.lean`: a call from a run by
+  the callee's register list, `regFile_cut`/`regFile_uncut`).
+
 ## In flight
-- `stringify` (strlen/malloc/memcpy/snprintf, OOM through H5's
+- `stringify`: statement done (`SpecStringify.lean`: `fnSpecAbort`, both
+  regimes, `strRender` = `catDisplay` with `fnRender`; callee specs
+  `memcpySpecOwned`, `strcpySpec`, H1's `strlenSpec`/`memcpySpec`; hole
+  `out.snprintfInt`). Runs done (`ProofStringify.lean`, fifteen `#ix_seg`).
+  Glue in progress: shared tail (`strlen`, `malloc`, OOM/`memcpy`,
+  epilogue), then the arms.
+- Old line: `stringify` (strlen/malloc/memcpy/snprintf, OOM through H5's
   `wp_oomBlock`; `strcpy` run symbolically inline).
 
 ## Holes (`VsaIris/HOLES.md`, `IrisHoles.out`, `VsaIris/Vsa/NewlibOut.lean`)
@@ -67,6 +79,9 @@ changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
 - G's `helperSpec` lacked the return-address alignment (fixed, above).
 - `runtime_error` needs the `jmp_buf` at a named image with an aligned `ra`
   word; `world` gives only `∃ jb` (INTERP_DESIGN.md §10, H2).
+- H3's `strlen` needs `live` on the bytes it reads (`Ctx.codeLive`); for a
+  stack buffer that is the stack region, a condition on the top-level `live`
+  like `CodeLive` (`stringify` takes it as `StackLive live`).
 - Tooling: after merging G, `ix_run` explores undecided branches; H2's scripts
   use `ix_run1` (the stopping variant). `simpa`/`omega` over `k % 2^64` with a
   variable `k` can produce kernel deep recursion; explicit `Nat.mod_eq_of_lt`
