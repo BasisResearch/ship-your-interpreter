@@ -892,4 +892,35 @@ theorem free_fwd {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mc Mv : Mem} {b
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact ha4)
       (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact ha5)
 
+/-- **Predecessor in use, successor free** (`0x8000744c`): `x` absorbs its
+successor (`free_fwd`). -/
+theorem free_b1b {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat}
+    {cs₁ cs₃ : List Chunk} {d : Chunk} {bins : Nat → List Nat} {x sz hdr0 hnn : Nat} {w : BitVec 64}
+    (N : FNt C R Mt Mt1 brkv cs₁ cs₃ d bins x sz hdr0 hnn w) (hprev : hdr0 % 2 = 1)
+    (hdfree : d.inuse = false) :
+    AW C.live C.S C.Q 0x8000744c#64 R Mt1 := by
+  have G := N.geo
+  obtain ⟨da, ds, di⟩ := d
+  have hda := N.daddr
+  simp only at hda hdfree
+  subst hda hdfree
+  have hs := G.dsz32; have hsz := G.sz32; have hx16 := G.x16; have hs16 := G.sz16
+  have hdend := G.dend; have htop := G.top
+  simp only at hs hdend
+  have hM1 := N.mem
+  refine st_8000744c O.live ?_
+  refine st_80007450 O.live ?_
+  refine st_80007454 O.live ?_
+  refine free_fwd O ⟨N.frame.of_regs rfl rfl rfl rfl, N.heap, N.hno, fun h0 hr => ?_, fun w0 hw0 h1 h2 => ?_,
+    ?_, N.pres, N.disj, N.frameM, ?_, ?_, ?_, ?_, ?_⟩
+  · rw [N.hdr] at hr; cases hr; exact hprev
+  · rw [hM1, writeLog_out]; simp only [OutL, and_true]; omega
+  · rw [hM1, read64_store_hit, N.wv]
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.a7
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.a4
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    rw [BitVec.toNat_add, N.a5, N.a3]; simp only; unfold heapEnd at htop; omega
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.a2
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rfl
+
 end VsaIris.VsaHeap
