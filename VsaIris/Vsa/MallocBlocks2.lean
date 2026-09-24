@@ -14,6 +14,15 @@ namespace VsaIris.VsaHeap
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
+/-- The walk's invariant depends only on `sp`, `s0`-`s3`, `a4`, `a6` and `t4`. -/
+theorem BW.of_eq {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
+    {nb : Nat} {R R' : Nat → BitVec 64} (W : BW C Mt brkv chunks bins nb R)
+    (h2 : R' 2 = R 2) (h8 : R' 8 = R 8) (h9 : R' 9 = R 9) (h18 : R' 18 = R 18) (h19 : R' 19 = R 19)
+    (h14 : R' 14 = R 14) (h16 : R' 16 = R 16) (h29 : R' 29 = R 29) :
+    BW C Mt brkv chunks bins nb R' :=
+  ⟨W.frame.of_regs h2 h9 h18 h19, W.heap, W.nbok, W.nb31, W.b1, by rw [h14]; exact W.a4,
+    by rw [h16]; exact W.a6, by rw [h29]; exact W.t4, by rw [h8]; exact W.s0⟩
+
 /-- `x & 3` is `x mod 4`. -/
 theorem and3_toNat (x : BitVec 64) : (x &&& 3#64).toNat = x.toNat % 4 := by
   rw [BitVec.toNat_and, show (3#64 : BitVec 64).toNat = 2 ^ 2 - 1 by decide,
@@ -149,5 +158,199 @@ theorem bw_bins {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Ch
         by_cases hjk : j = k
         · subst hjk; exact hemp
         · exact hprev j hj1 (by omega)
+
+theorem clr_keep {x m : BitVec 64} {b : Nat} (hm : m.toNat = 2 ^ b) (t : Nat)
+    (ht : t ≠ b) (h : x.toNat / 2 ^ t % 2 = 1) :
+    ((m ^^^ 18446744073709551615#64) &&& x).toNat / 2 ^ t % 2 = 1 := by
+  have hx : x.toNat.testBit t = true := by rw [Nat.testBit_eq_decide_div_mod_eq]; simpa using h
+  have htl : t < 64 := by
+    refine Classical.byContradiction fun hc => ?_
+    have : x.toNat < 2 ^ t := Nat.lt_of_lt_of_le x.isLt (Nat.pow_le_pow_right (by omega) (by omega))
+    rw [Nat.div_eq_of_lt this] at h; simp at h
+  have : ((m ^^^ 18446744073709551615#64) &&& x).toNat.testBit t = true := by
+    rw [BitVec.toNat_and, BitVec.toNat_xor, hm, Nat.testBit_and, Nat.testBit_xor, hx,
+      Nat.testBit_two_pow]
+    simp only [show (18446744073709551615#64 : BitVec 64).toNat = 2 ^ 64 - 1 from rfl,
+      Nat.testBit_two_pow_sub_one]
+    simp [htl, Ne.symm ht]
+  rw [Nat.testBit_eq_decide_div_mod_eq] at this
+  simpa using this
+
+theorem clr_le {x m : BitVec 64} : ((m ^^^ 18446744073709551615#64) &&& x).toNat ≤ x.toNat := by
+  rw [BitVec.toNat_and]; exact Nat.and_le_right
+
+/-- The state at the next-block search (`0x80004e64`): the walk's invariant,
+block `b`'s bit in `a0`, the bitmap `bb` (as in memory) in `a5`, the next
+block's first bin in `t6`, and `31` in `t3`. -/
+structure BWNext (C : MCtx) (Mt : Mem) (brkv : Nat) (chunks : List Chunk) (bins : Nat → List Nat)
+    (nb b bb : Nat) (R : Nat → BitVec 64) : Prop where
+  bw : BW C Mt brkv chunks bins nb R
+  a0 : (R 10).toNat = 2 ^ b
+  a5 : (R 15).toNat = bb
+  t6 : (R 31).toNat = 4 * (b + 1)
+  t3 : (R 28).toNat = 31
+  bbr : read64 Mt binblocksAddr = some bb
+  lo : binIndex nb < 4 * (b + 1)
+  bl : b < 32
+
+/-- **An exhausted block** (`0x80004e48`): the bins below the scan's start
+are checked; all empty, the block's bit is cleared (`0x80004e54`). -/
+theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} {nb start : Nat} (hs4 : 4 ≤ start) (hsn : start < numBins)
+    (hlo : binIndex nb < bend start)
+    (hnext : ∀ R' Mt' bb', BWNext C Mt' brkv chunks bins nb (start / 4) bb' R' →
+      AW C.live C.S C.Q 0x80004e64#64 R' Mt') :
+    ∀ n i (R : Nat → BitVec 64), i - 4 * (start / 4) = n → 4 * (start / 4) ≤ i → i ≤ start →
+      BW C Mt brkv chunks bins nb R → (R 17).toNat = i → (R 30).toNat = binAt i →
+      (R 10).toNat = 2 ^ (start / 4) → (R 31).toNat = bend start → (R 28).toNat = 31 →
+      (∀ j, i ≤ j → j < bend start → bins j = []) → AW C.live C.S C.Q 0x80004e48#64 R Mt := by
+  intro n
+  unfold bend at hlo
+  induction n with
+  | zero =>
+    -- the block's first bin: clear the bit
+    intro i R hn hi1 hi2 W h17 h30 h10 h31 h28 hemp
+    unfold bend at h31 hemp
+    have HH := W.heap.heap.heap.heap
+    have hi : i = 4 * (start / 4) := by omega
+    subst hi
+    obtain ⟨bb, hbb⟩ := Option.isSome_iff_exists.1 HH.binblocks_present
+    have hbbl := W.heap.heap.bb_lt bb hbb
+    have ha6 := W.a6
+    have hsplo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hsplo
+    have hbbA : binblocksAddr = 2147593496 := rfl
+    rw [← upd_self_eq ha6]
+    refine st_80004e48 O.live ?_
+    refine st_80004e4c O.live ?_
+    refine st_80004e50 O.live (fun hc => absurd ?_ hc) (fun _ => ?_)
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      apply BitVec.eq_of_toNat_eq
+      rw [show (sign_extend (m := 64) (0x003#12) : BitVec 64) = 3#64 from rfl, and3_toNat, h17]; simp
+    refine st_80004e54 O.live (by sx_norm; decide) (by sx_norm; exact O.glob (by decide) (by decide)) ?_
+    sx_norm
+    rw [hbbA] at hbb
+    simp (disch := decide) only [ldv_at hbb]
+    refine st_80004e58 O.live ?_
+    refine st_80004e5c O.live ?_
+    refine st_80004e60 O.live (by sx_norm; decide) (by sx_norm; exact O.glob (by decide) (by decide)) ?_
+    sx_norm
+    have hbv : (BitVec.ofNat 64 bb).toNat = bb := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+    have hle := clr_le (x := BitVec.ofNat 64 bb) (m := R 10)
+    rw [hbv] at hle
+    have hoB := W.heap.off_stack (a := 2147593496) (fun k hk => .inl (.inl ⟨by omega, by omega⟩))
+    unfold mHead at hoB
+    have hMH : MHeap C (writeLog Mt [(2147593496, 8, (R 10 ^^^ 18446744073709551615#64) &&&
+        BitVec.ofNat 64 bb)]) brkv chunks bins := by
+      refine ⟨W.heap.heap.clearBlock (b := start / 4) ?_ (by rw [hbbA]; exact read64_store_hit _ _ _)
+        ?_ (by omega) ?_, pres_store W.heap.pres, W.heap.disj,
+        frame_store (fun b h1 h2 => .inl (.inl (.inl ⟨by omega, by omega⟩))) W.heap.frame⟩
+      · intro i hi1 hi hib
+        exact hemp i (by omega) (by omega)
+      · intro bb0 hbb0 t ht hbit
+        rw [hbbA, hbb] at hbb0; cases hbb0
+        have := clr_keep (x := BitVec.ofNat 64 bb) h10 t ht (by rw [hbv]; exact hbit)
+        exact this
+      · intro a ha hna
+        rw [hbbA] at hna
+        exact writeLog_out _ _ _ (by simp only [OutL, and_true]; omega)
+    refine hnext _ _ (((R 10 ^^^ 18446744073709551615#64) &&& BitVec.ofNat 64 bb).toNat)
+      ⟨⟨(W.frame.store (by omega)).of_regs ?_ ?_ ?_ ?_, hMH, W.nbok, W.nb31, W.b1,
+      ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, ?_, by unfold numBins at hsn; omega⟩ <;>
+      try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    · exact W.a4
+    · exact W.t4
+    · exact W.s0
+    · exact h10
+    · exact h31
+    · exact h28
+    · rw [hbbA]; exact read64_store_hit _ _ _
+    · exact hlo
+  | succ n ih =>
+    intro i R hn hi1 hi2 W h17 h30 h10 h31 h28 hemp
+    have HH := W.heap.heap.heap.heap
+    have ha6 := W.a6
+    have hi1n : i - 1 < numBins := by unfold numBins at hsn ⊢; omega
+    have hg := binAt_geo (i - 1) hi1n
+    have hring := (binList_iff_ring.1 (HH.bins_list (i - 1) (by omega) hi1n)).1
+    obtain ⟨f, hf⟩ : ∃ f, (bins (i - 1) ++ [binAt (i - 1)]).head? = some f := by
+      rcases bins (i - 1) with _ | ⟨z, zs⟩ <;> simp
+    have hfd := ring_fd_head hring hf
+    have hflt := Vsa.Sim.read64_lt _ _ _ hfd
+    have hi4 : i % 4 ≠ 0 := by omega
+    refine st_80004e48 O.live ?_
+    refine st_80004e4c O.live ?_
+    refine st_80004e50 O.live (fun _ => ?_) (fun hc => absurd ?_ hc)
+    rotate_left
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      intro he; apply hi4
+      have := congrArg BitVec.toNat he
+      rw [show (sign_extend (m := 64) (0x003#12) : BitVec 64) = 3#64 from rfl, and3_toNat, h17] at this
+      simpa using this
+    have hE : (R 30 + 18446744073709551600#64 + 16#64).toNat = binAt (i - 1) + 16 := by
+      rw [BitVec.toNat_add, BitVec.toNat_add, h30]; unfold binAt avAddr
+      simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
+      unfold binAt avAddr at hg; omega
+    refine st_80004e3c O.live ?_ ?_ ?_
+    · sx_norm; rw [hE]; unfold LdOK Vsa.Sim.tohostAddr; omega
+    · sx_norm; rw [hE]; exact O.bin_link hi1n (.inl rfl)
+    sx_norm
+    rw [hE, ldv_at hfd _ rfl]
+    refine st_80004e40 O.live ?_
+    sx_norm
+    have hE30 : (R 30 + 18446744073709551600#64).toNat = binAt (i - 1) := by
+      rw [BitVec.toNat_add, h30]; unfold binAt avAddr
+      simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
+      unfold binAt avAddr at hg; omega
+    have h17' : (BitVec.signExtend 64 (BitVec.extractLsb 31 0 (R 17 + 18446744073709551615#64))).toNat
+        = i - 1 := by
+      have e : R 17 + 18446744073709551615#64 = R 17 - 1#64 := by
+        apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_add, BitVec.toNat_sub, h17]; simp; omega
+      rw [e]
+      have hs : (R 17 - 1#64).toNat = i - 1 := by rw [BitVec.toNat_sub, h17]; simp; omega
+      rw [toNat_sx32_small _ (by rw [hs]; unfold numBins at hi1n; omega), hs]
+    refine st_80004e44 O.live (fun hne => ?_) (fun heq => ?_)
+    · -- a lower bin holds chunks: keep the bit
+      obtain ⟨bb, hbb⟩ := Option.isSome_iff_exists.1 HH.binblocks_present
+      have hbbl := W.heap.heap.bb_lt bb hbb
+      have hbbA : binblocksAddr = 2147593496 := rfl
+      rw [← upd_self_eq ha6]
+      refine st_80005060 O.live (by sx_norm; decide) (by sx_norm; exact O.glob (by decide) (by decide)) ?_
+      sx_norm
+      rw [hbbA] at hbb
+      simp (disch := decide) only [ldv_at hbb]
+      refine st_80005064 O.live ?_
+      rw [← hbbA] at hbb
+      refine hnext _ _ bb ⟨W.of_eq ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_, ?_, ?_, ?_, ?_, hbb, hlo,
+        by unfold numBins at hsn; omega⟩ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      · exact ha6.symm
+      · exact h10
+      · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+      · exact h31
+      · exact h28
+    · -- empty too: on down
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, Decidable.not_not] at heq
+      have hfb : f = binAt (i - 1) := by
+        have := congrArg BitVec.toNat heq
+        rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hflt, hE30] at this; exact this
+      have hemp1 : bins (i - 1) = [] := by
+        rcases h : bins (i - 1) with _ | ⟨z, zs⟩
+        · rfl
+        · exfalso
+          rw [h] at hf; simp only [List.cons_append, List.head?_cons, Option.some.injEq] at hf
+          subst hf
+          exact (binList_iff_ring.1 (HH.bins_list (i - 1) (by omega) hi1n)).2 z
+            (by rw [h]; exact List.mem_cons_self) hfb
+      refine ih (i - 1) _ (by omega) (by omega) (by omega)
+        (W.of_eq ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_) ?_ ?_ ?_ ?_ ?_ ?_ <;>
+        try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      · exact h17'
+      · exact hE30
+      · exact h10
+      · unfold bend; exact h31
+      · exact h28
+      · intro j hj1 hj2
+        by_cases hj : j = i - 1
+        · subst hj; exact hemp1
+        · exact hemp j (by omega) hj2
 
 end VsaIris.VsaHeap
