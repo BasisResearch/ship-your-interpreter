@@ -807,6 +807,99 @@ theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     · intro k hk
       rw [hM2 k (.inr hk)]; exact f.hslot k hk
 
+/-- The return: `ra`, `a0 = s0 = q`, `s0`/`s1` restored, `sp = s`; the
+continuation's post branch. -/
+theorem sg_ret {Wp : MachWP (GF := GF) (vsaModel live)} {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
+    {H : List (Nat × Nat)} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (cx : SgCtx live p s r rv) {q : BitVec 64} {R : Nat → BitVec 64} {M : Mem}
+    {img : Nat → BitVec 8} (f : SgT4 s p r x H q rv R M Mp img) :
+    SgRestC Wp Φ N inp p s r v x ρ H o rv Mp q img ∗
+      ms r (upd (upd (upd (upd (upd R 1 r) 10 (R 8)) 8 (rv 8)) 9 (rv 9)) 2
+        (s + 18446744073709551504#64 + 112#64)) (sgF s p) M ⊢ Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  unfold SgRestC ms
+  iintro ⟨⟨#Hcode, #Hv, Hh, Hd, Hstd, Hcon, Hst, Hk⟩, ⟨Hpc, Hra, Hregs, HS⟩⟩
+  ihave ⟨HF, HP⟩ := ownSet_split_tracked _ _ M cx.hdsp $$ HS
+  ihave HF := ownSet_forget _ _ $$ HF
+  ihave Hst := sgFrame_join (s := s) (by unfold stringifyNeed snprintfNeed; omega) $$ [Hst HF]
+  · iframe Hst HF
+  rw [← valImg_agreeOn (GF := GF) (N := N) (v := v) (fun k hk => f.hslot k hk)]
+  ihave Hval := valAt_of_img N $$ [Hv HP]
+  · iframe Hv HP
+  ihave Hra := ptsto_eq (show _ = r by ix_reg) $$ Hra
+  ihave Hk := and_elim_l $$ Hk
+  iapply Hk $$ Hpc Hra
+  iexists _, q
+  iframe Hregs Hval Hh Hstd Hcon
+  isplitl []
+  · ipureintro
+    intro y hy hc
+    have hy1 : y ≠ 1 := fun e => by subst e; revert hy; decide
+    have hy10 : y ≠ 10 := fun e => by subst e; exact hc (by decide)
+    by_cases h2 : y = 2
+    · subst h2; ix_reg
+      rw [BitVec.add_assoc, show (18446744073709551504#64 : BitVec 64) + 112#64 = 0#64 by decide,
+        BitVec.add_zero, cx.h2]
+    by_cases h8 : y = 8
+    · subst h8; ix_reg
+    by_cases h9 : y = 9
+    · subst h9; ix_reg
+    simp only [upd, hy1, hy10, h2, h8, h9, ite_false]
+    exact f.hk y hy hc h2 h8 h9
+  isplitl []
+  · ipureintro; ix_reg; exact f.h8
+  isplitl [Hd]
+  · unfold strOwn
+    iexists img
+    iframe Hd
+    ipureintro; exact f.hcopy
+  isplitl []
+  · ipureintro; exact f.hfresh
+  unfold stackAt
+  iframe Hst
+  ipureintro
+  exact ⟨by unfold stringifyNeed snprintfNeed; omega,
+    by unfold Vsa.Sim.LayoutInstance.stackSL stringifyNeed snprintfNeed; simp; omega,
+    by unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, hs3⟩
+
+/-- **The epilogue and the return** after `memcpy`: the block holds the
+rendering, the value's slot and the stack come back. -/
+theorem sg_finish (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
+    {H : List (Nat × Nat)} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (cx : SgCtx live p s r rv) {q : BitVec 64} {R : Nat → BitVec 64} {M : Mem}
+    {img : Nat → BitVec 8} (f : SgT4 s p r x H q rv R M Mp img) (pc : BitVec 64)
+    (hpc : pc = 0x80003070#64 ∨ pc = 0x80003110#64) :
+    SgRestC Wp Φ N inp p s r v x ρ H o rv Mp q img ∗ ms pc R (sgF s p) M ⊢ Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  iintro ⟨Hrest, Hms⟩
+  iapply wp_swpF Wp (S := sgF s p) (R := R) (Mt := M) (pc := pc)
+    (F := SgRestC Wp Φ N inp p s r v x ρ H o rv Mp q img)
+  rotate_left
+  · unfold SgRestC
+    icases Hrest with ⟨#Hcode, Hrest⟩
+    rw [hro]
+    iframe Hcode Hrest Hms
+  intro F'
+  rcases hpc with rfl | rfl
+  · refine sg_epi cx.hlive f.h2 (by omega) hs2 hs3 cx.hg.al
+      (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi cx.hal f.sra f.ss0
+      f.ss1 ?_
+    apply swp_closeF
+    dsimp only [F']
+    exact sg_ret cx f
+  · refine sg_sepi cx.hlive f.h2 (by omega) hs2 hs3 cx.hg.al
+      (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi cx.hal f.sra f.ss0
+      f.ss1 ?_
+    apply swp_closeF
+    dsimp only [F']
+    exact sg_ret cx f
+
 end Glue
 
 end VsaIris.Interp
