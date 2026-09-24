@@ -1,5 +1,7 @@
 import VsaIris.Interp.ExecDisp
 import VsaIris.Interp.NewlibCall
+import VsaIris.Interp.SymLater
+import VsaIris.Interp.SpecValue
 
 /-!
 # The exec arm layer (lane E5)
@@ -187,6 +189,64 @@ theorem retNullNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64}
     have hn := stmtNode_of (w := 16) hg h0 c0 (by decide) (Or.inr (by decide))
       (fun j h1 h2 => field_mid hr cr h1 (by omega))
     exact ⟨hn, field64 hr (by have := hn.hi; omega)⟩
+
+/-- The facts of an `if` node: the condition (`+8`), the branches (`+16`,
+`+24`; the else pointer is NULL exactly when there is no else branch). -/
+structure IfNode (m : Mem) (P : Nat → Prop) (aS : BitVec 64) (c : Vsa.While.Expr)
+    (t : Vsa.While.Stmt) (eo : Option Vsa.While.Stmt) (pc pt pe : Nat) : Prop where
+  node : StmtNode m P aS 3 32
+  cond : ldv .ld m (aS + 8#64).toNat = BitVec.ofNat 64 pc
+  condRepr : ExprReprWithin m P pc c
+  condNat : (BitVec.ofNat 64 pc).toNat = pc
+  condNe : BitVec.ofNat 64 pc ≠ 0#64
+  thn : ldv .ld m (aS + 16#64).toNat = BitVec.ofNat 64 pt
+  thnRepr : StmtReprWithin m P pt t
+  thnNat : (BitVec.ofNat 64 pt).toNat = pt
+  els : ldv .ld m (aS + 24#64).toNat = BitVec.ofNat 64 pe
+  elsNat : (BitVec.ofNat 64 pe).toNat = pe
+  elsRepr : ∀ se, eo = some se → StmtReprWithin m P pe se ∧ BitVec.ofNat 64 pe ≠ 0#64
+  elsNone : eo = none → BitVec.ofNat 64 pe = 0#64
+
+theorem ofNat_toNat_of_read {m : Mem} {a p : Nat} (h : read64 m a = some p) :
+    (BitVec.ofNat 64 p).toNat = p := by
+  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (readLE_lt h)]
+
+theorem ofNat_ne_of_read {m : Mem} {a p : Nat} (h : read64 m a = some p) (hne : p ≠ 0) :
+    BitVec.ofNat 64 p ≠ 0#64 := fun e => hne (by
+  have := congrArg BitVec.toNat e; rwa [ofNat_toNat_of_read h] at this)
+
+/-- An `if` statement node. -/
+theorem ifNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {c : Vsa.While.Expr}
+    {t : Vsa.While.Stmt} {eo : Option Vsa.While.Stmt}
+    (h : StmtReprWithin m P aS.toNat (.ifStmt c t eo)) (hg : ∀ k, P k → Interp.ReadOK k) :
+    ∃ pc pt pe, IfNode m P aS c t eo pc pt pe := by
+  cases h with
+  | ifElse h0 c0 hc cc hcr ht ct htr he ce hne her =>
+    rename_i pc pt pe _
+    have hn := stmtNode_of (w := 32) hg h0 c0 (by decide) (Or.inr (by decide)) (fun j h1 h2 => by
+      by_cases j1 : j < 16
+      · exact field_mid hc cc h1 (by omega)
+      by_cases j2 : j < 24
+      · exact field_mid ht ct (by omega) (by omega)
+      · exact field_mid he ce (by omega) (by omega))
+    have hcne : pc ≠ 0 := by have := (hg _ (hcr.tagCovers 0 (by decide))).lo; omega
+    refine ⟨_, _, _, hn, field64 hc (by have := hn.hi; omega), hcr, ofNat_toNat_of_read hc,
+      ofNat_ne_of_read hc hcne, field64 ht (by have := hn.hi; omega), htr, ofNat_toNat_of_read ht,
+      field64 he (by have := hn.hi; omega), ofNat_toNat_of_read he, ?_, fun h => by cases h⟩
+    intro se hse; cases hse; exact ⟨her, ofNat_ne_of_read he hne⟩
+  | ifNoElse h0 c0 hc cc hcr ht ct htr he ce =>
+    rename_i pc pt
+    have hn := stmtNode_of (w := 32) hg h0 c0 (by decide) (Or.inr (by decide)) (fun j h1 h2 => by
+      by_cases j1 : j < 16
+      · exact field_mid hc cc h1 (by omega)
+      by_cases j2 : j < 24
+      · exact field_mid ht ct (by omega) (by omega)
+      · exact field_mid he ce (by omega) (by omega))
+    have hcne : pc ≠ 0 := by have := (hg _ (hcr.tagCovers 0 (by decide))).lo; omega
+    refine ⟨_, _, _, hn, field64 hc (by have := hn.hi; omega), hcr, ofNat_toNat_of_read hc,
+      ofNat_ne_of_read hc hcne, field64 ht (by have := hn.hi; omega), htr, ofNat_toNat_of_read ht,
+      field64 he (by have := hn.hi; omega), ofNat_toNat_of_read he, (fun se h => by cases h),
+      fun _ => rfl⟩
 
 /-! ## Child calls from a frame of any size -/
 
@@ -411,6 +471,20 @@ theorem ExecSaved.congr {Mt Mt' : Mem} {s ret v8 v9 v18 v19 : BitVec 64}
       simp only [InExt]; have : widthOfM MKind.ld = 8 := rfl; omega)
   exact ⟨(c 168 (by decide)).trans h.ra, (c 160 (by decide)).trans h.s0, (c 152 (by decide)).trans h.s1,
     (c 144 (by decide)).trans h.s2, (c 136 (by decide)).trans h.s3⟩
+
+/-- The spills read through a memory agreeing on the top 40 bytes of the
+frame (where they live). -/
+theorem ExecSaved.congrHi {Mt Mt' : Mem} {s ret v8 v9 v18 v19 : BitVec 64}
+    (h : ExecSaved Mt s ret v8 v9 v18 v19)
+    (hag : ∀ x, s.toNat - 40 ≤ x → x < s.toNat → imgM Mt' x = imgM Mt x) (hs : 176 ≤ s.toNat) :
+    ExecSaved Mt' s ret v8 v9 v18 v19 := by
+  have c : ∀ o, 136 ≤ o → o + 8 ≤ 176 →
+      ldv .ld Mt' (s.toNat - 176 + o) = ldv .ld Mt (s.toNat - 176 + o) :=
+    fun o h1 ho => ldv_congrW .ld fun j hj => hag _ (by omega) (by
+      have : widthOfM MKind.ld = 8 := rfl; omega)
+  exact ⟨(c 168 (by decide) (by decide)).trans h.ra, (c 160 (by decide) (by decide)).trans h.s0,
+    (c 152 (by decide) (by decide)).trans h.s1, (c 144 (by decide) (by decide)).trans h.s2,
+    (c 136 (by decide) (by decide)).trans h.s3⟩
 
 /-- Carry `ExecSaved` back through a memory's stores and calls' slot words to
 a memory it is known for (`hoff` normalizes the frame addresses). -/
@@ -648,5 +722,202 @@ theorem ms_callHelperSlot (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × 
   iframe Hpc Hra Hregs HS
 
 end HelperSlot
+
+section HelperVal
+
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+variable {live : Nat → Prop} {N : NativeAddrs}
+
+omit I in
+/-- The run's owned bytes with a slot inside them, rearranged. -/
+theorem ms_iffE {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M : Mem}
+    (h : ∀ k, S k ↔ T k) : ms (GF := GF) pc R S M ⊢ ms pc R T M := by
+  unfold ms
+  iintro ⟨Hpc, Hra, Hregs, HS⟩
+  iframe Hpc Hra Hregs
+  iapply ownSet_iff _ h $$ HS
+
+/-- **A helper reading a value in a frame slot**, for either WP
+(`value_truthy` on the arm's copy at `sp+16`): the slot's three words `w0 w1
+w2` mean `v`; the slot is lent to the helper as `valAt` and handed back, the
+arm's other bytes unchanged. -/
+theorem ms_callHelperVal (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
+    (hexec : JalExec (vsaModel live) i code entry)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    {clob : List Nat} {pins : (Nat → BitVec 64) → Prop} {v : Value}
+    {Q : (Nat → BitVec 64) → IProp GF}
+    {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {a w0 w1 w2 : BitVec 64}
+    (hS : ∀ b, InExt (a.toNat, 24) b → S b) (hsl : SlotGeom a)
+    (h0 : ldv .ld Mt a.toNat = w0) (h8 : ldv .ld Mt (a.toNat + 8) = w1)
+    (h16 : ldv .ld Mt (a.toNat + 16) = w2) :
+    ⌜pins R⌝ ∗ helperSpec (vsaModel live) Wp entry clob pins
+        iprop(valAt N a.toNat v ∗ ⌜SlotGeom a⌝) (fun rv' => iprop(valAt N a.toNat v ∗ Q rv')) ∗
+      codeRes ∗ ms (BitVec.ofNat 64 i) R S Mt ∗ □ valOf N v w0 w1 w2 ∗
+      (∀ (R' : Nat → BitVec 64) (Mt' : Mem), ⌜∀ x ∈ fRegs, x ∉ clob → R' x = R x⌝ -∗
+        ⌜∀ x, S x → ¬ InExt (a.toNat, 24) x → imgM Mt' x = imgM Mt x⌝ -∗ Q R' -∗
+        ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt' -∗ Wp.W Φ)
+    ⊢ Wp.W Φ := by
+  have hsl1 : ∀ k, S k ↔ ((S k ∧ ¬ InExt (a.toNat, 24) k) ∨ InExt (a.toNat, 24) k) := fun k => by
+    constructor
+    · intro h; by_cases h' : InExt (a.toNat, 24) k
+      · exact .inr h'
+      · exact .inl ⟨h, h'⟩
+    · rintro (⟨h, _⟩ | h)
+      · exact h
+      · exact hS k h
+  iintro ⟨%hp, Hspec, #Hcode, Hms, #Hv, Hk⟩
+  ihave Hms := ms_iffE hsl1 $$ Hms
+  ihave ⟨Hms, Hslot⟩ := ms_split (fun k h1 h2 => h1.2 h2) $$ Hms
+  ihave Hval := valAt_of_img N (a := a.toNat) (v := v) (mv := imgM Mt) $$ [Hslot]
+  · iframe Hslot
+    unfold valImg
+    rw [imgW_eq_ldv, imgW_eq_ldv, imgW_eq_ldv, h0, h8, h16]
+    iexact Hv
+  iapply ms_callHelper Wp hexec hcode hal (S := fun k => S k ∧ ¬ InExt (a.toNat, 24) k) (Mt := Mt)
+  iframe Hspec Hcode Hms
+  isplitl []
+  · ipureintro; exact hp
+  isplitl [Hval]
+  · iframe Hval; ipureintro; exact hsl
+  iintro %R' %hk ⟨Hval, HQ⟩ Hms
+  ihave ⟨%Ms, HsS, -⟩ := valAt_tracked N _ _ $$ Hval
+  ihave ⟨%M', Hms, %⟨h1, -, -⟩⟩ := ms_join $$ [Hms HsS]
+  · iframe Hms HsS
+  ihave Hms := ms_iffE (fun k => (hsl1 k).symm) $$ Hms
+  iapply Hk $$ %R' %M' %hk %(fun x hx hn => h1 x ⟨hx, hn⟩) HQ Hms
+
+end HelperVal
+
+/-! ## The in-frame tail call (the `if` arm's re-dispatch) -/
+
+section Redispatch
+
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
+
+omit I in
+/-- The stack below the lowered `sp` for a child re-dispatched in the frame:
+the child's part and the slack between the two budgets. -/
+theorem stack_redispatch {s : BitVec 64} {n n' : Nat} (hsg : StackGeom s n) (hle : n' ≤ n)
+    (h176 : 176 ≤ n') (hsf : (execSP s).toNat = s.toNat - 176) :
+    stackScratch (GF := GF) (execSP s) (n - 176) ⊢
+      blockOwn (s.toNat - n) (n - n') ∗ stackScratch (execSP s) (n' - 176) := by
+  iintro H
+  ihave ⟨H1, H2⟩ := stackScratch_narrow (s := execSP s) (n := n - 176) (m := n' - 176)
+    (by rw [hsf]; have := hsg.le; omega) (by omega) $$ H
+  rw [hsf, show s.toNat - 176 - (n - 176) = s.toNat - n by have := hsg.le; omega,
+    show n - 176 - (n' - 176) = n - n' by omega]
+  iframe H1 H2
+
+/-- **The parent's return continuation serves a child re-dispatched in its
+frame**: the child returns to the same address with the same spills; its
+registers at the dispatch keep the parent's `s4`-`s11`; the slack joins the
+child's stack back into the parent's. -/
+theorem execDispK_redispatch (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {ρ : Regime} {st' : St} {d : Nat} {sm sm' : Stmt} {status : Status}
+    {aRet s ret v8 v9 v18 v19 : BitVec 64} {R R3 : Nat → BitVec 64}
+    (hsg : StackGeom s (execNeed sm d)) (hle : execNeed sm' d ≤ execNeed sm d)
+    (hk : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R R3) :
+    blockOwn (s.toNat - execNeed sm d) (execNeed sm d - execNeed sm' d) ∗
+      execDispK (vsaModel live) N L Room inp Wp Φ ρ st' d sm status aRet s R ret v8 v9 v18 v19 ⊢
+      execDispK (vsaModel live) N L Room inp Wp Φ ρ st' d sm' status aRet s R3 ret v8 v9 v18 v19 := by
+  unfold execDispK
+  iintro ⟨Hsl, HK⟩ %R' %hret Hpc Hra Hregs Hst Hret Hw
+  ihave Hst := stackScratch_widen hsg.le hle $$ [Hsl Hst]
+  · iframe Hsl Hst
+  iapply HK $$ %R' %⟨hret.sp, hret.s0, hret.s1, hret.s2, hret.s3,
+    fun x hx => (hret.hi x hx).trans (hk x hx), hret.a0⟩ Hpc Hra Hregs Hst Hret Hw
+
+omit I in
+/-- The parent's abort takes a re-dispatched child's, the slack joined back. -/
+theorem abortAt_redispatch {Core : IProp GF} {s : BitVec 64} {n n' : Nat} (hn : n ≤ s.toNat)
+    (hle : n' ≤ n) :
+    blockOwn (GF := GF) (s.toNat - n) (n - n') ∗ abortAt Core s n' ⊢ abortAt Core s n := by
+  unfold abortAt
+  iintro ⟨Hsl, HC, Hst⟩
+  iframe HC
+  iapply stackScratch_widen hn hle $$ [Hsl Hst]
+  iframe Hsl Hst
+
+end Redispatch
+
+section Redispatch2
+
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
+
+/-- **The in-frame tail call**, for either WP: at the dispatch point with a
+child statement `sm'` in `s0` (the parent's frame, spills and return address
+kept), the child's dispatch-point spec (`hchild`, instantiated at these
+registers and memory) proves the parent's goal; the parent's stack slack and
+return continuation are handed through (`stack_redispatch`,
+`execDispK_redispatch`). -/
+theorem ifRedispatch (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {ρ ρ' : Regime} {st1 st2 : St} {d env : Nat} {sm sm' : Stmt} {status : Status}
+    {aS' aE aRet s ret v8 v9 v18 v19 : BitVec 64} {R R4 : Nat → BitVec 64} {M3 : Mem}
+    (hsg : StackGeom s (execNeed sm d)) (hle : execNeed sm' d ≤ execNeed sm d)
+    (hk : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R R4)
+    (hchild : execDispPre N L Room inp ρ st1 d env sm' aS' aE aRet s R4 M3 ret v8 v9 v18 v19 ∗
+      execDispK (vsaModel live) N L Room inp Wp Φ ρ' st2 d sm' status aRet s R4 ret v8 v9 v18 v19
+      ⊢ Wp.W Φ)
+    (hf : DispFacts inp st1 d sm' R4 M3 aS' aE aRet s ret v8 v9 v18 v19) :
+    ms execDispPC R4 (InExt (s.toNat - 176, 176)) M3 ∗ codeRes ∗ □ astSG aS'.toNat sm' ∗
+      □ frameAt env aE.toNat ∗ stackScratch (execSP s) (execNeed sm d - 176) ∗ slot24 aRet.toNat ∗
+      world N L Room inp ρ st1 d ∗
+      execDispK (vsaModel live) N L Room inp Wp Φ ρ' st2 d sm status aRet s R ret v8 v9 v18 v19
+    ⊢ Wp.W Φ := by
+  obtain ⟨hfg, h176⟩ := execFrameGeom_of hf.stack
+  iintro ⟨Hms, #Hcode, #Hast, #Hfb, Hst, Hslot, Hw, HK⟩
+  ihave ⟨Hsl, Hst⟩ := stack_redispatch hsg hle h176 hfg.sf $$ Hst
+  ihave HK := execDispK_redispatch Wp hsg hle hk $$ [Hsl HK]
+  · iframe Hsl HK
+  iapply hchild
+  unfold execDispPre
+  iframe Hms Hcode Hast Hfb Hst Hslot Hw HK
+  ipureintro; exact hf
+
+/-- The partial continuation pair through an in-frame tail call: the child's
+derivations become the parent's (`hE`), the slack joins the child's abort. -/
+theorem execDispKP_redispatch {Φ : Nat × String → IProp GF} {Core : IProp GF}
+    {st st1 : St} {d env : Nat} {sm sm' : Stmt} {aRet s ret v8 v9 v18 v19 : BitVec 64}
+    {R R4 : Nat → BitVec 64}
+    (hsg : StackGeom s (execNeed sm d)) (hle : execNeed sm' d ≤ execNeed sm d)
+    (hk : KeepRegs [20, 21, 22, 23, 24, 25, 26, 27] R R4)
+    (hE : ∀ st'' status, ExecS st1 d env sm' st'' status → ExecS st d env sm st'' status) :
+    blockOwn (GF := GF) (s.toNat - execNeed sm d) (execNeed sm d - execNeed sm' d) ∗
+      ((∀ (st'' : St) (status : Status), ⌜ExecS st d env sm st'' status⌝ -∗
+        execDispK (vsaModel live) N L Room inp (wpW (vsaModel live)) Φ .uncounted st'' d sm status
+          aRet s R ret v8 v9 v18 v19) ∧
+       (iprop(abortAt Core s (execNeed sm d) ∗ slot24 aRet.toNat) -∗ (wpW (vsaModel live)).W Φ)) ⊢
+      ((∀ (st'' : St) (status : Status), ⌜ExecS st1 d env sm' st'' status⌝ -∗
+        execDispK (vsaModel live) N L Room inp (wpW (vsaModel live)) Φ .uncounted st'' d sm' status
+          aRet s R4 ret v8 v9 v18 v19) ∧
+       (iprop(abortAt Core s (execNeed sm' d) ∗ slot24 aRet.toNat) -∗ (wpW (vsaModel live)).W Φ)) := by
+  iintro ⟨Hsl, HK⟩
+  isplit
+  · iintro %st'' %status %hE'
+    ihave HK := and_elim_l $$ HK
+    ihave HK := HK $$ %st'' %status %(hE st'' status hE')
+    iapply execDispK_redispatch (wpW _) hsg hle hk $$ [Hsl HK]
+    iframe Hsl HK
+  · iintro ⟨HA, Hslot⟩
+    ihave HK := and_elim_r $$ HK
+    iapply HK
+    iframe Hslot
+    iapply abortAt_redispatch hsg.le hle $$ [Hsl HA]
+    iframe Hsl HA
+
+end Redispatch2
 
 end VsaIris.Interp

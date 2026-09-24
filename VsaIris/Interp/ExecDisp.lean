@@ -227,4 +227,52 @@ theorem execSpecsP_of_disps (hlive : ∀ p ∈ interpText, live p.1) (Core : IPr
 
 end Specs
 
+section Apply
+
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+variable {live : Nat → Prop} {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat}
+
+/-- The dispatch-point spec, total mode, as an entailment at given state. -/
+theorem execDispT_apply {st : St} {d env : Nat} {sm : Stmt} {st' : St} {status : Status} {n : Nat}
+    {D : ExecSCost st d env sm st' status n}
+    (h : ⊢ execDispT_body (GF := GF) (vsaModel live) N L Room inp st d env sm st' status n D)
+    (Φ : Nat × String → IProp GF) (k : Nat) (aS aE aRet s : BitVec 64) (R : Nat → BitVec 64)
+    (Mt : Mem) (ret v8 v9 v18 v19 : BitVec 64) :
+    execDispPre N L Room inp (.counted (k + n)) st d env sm aS aE aRet s R Mt ret v8 v9 v18 v19 ∗
+      execDispK (vsaModel live) N L Room inp (twpW (vsaModel live)) Φ (.counted k) st' d sm status
+        aRet s R ret v8 v9 v18 v19 ⊢ (twpW (vsaModel live)).W Φ := by
+  iintro ⟨Hpre, HK⟩
+  ihave H := h
+  unfold execDispT_body
+  iapply H $$ %Φ %k %aS %aE %aRet %s %R %Mt %ret %v8 %v9 %v18 %v19 Hpre HK
+
+/-- The dispatch-point spec, partial mode, as an entailment at given state. -/
+theorem execDispP_apply {Core : IProp GF} {st : St} {d env : Nat} {sm : Stmt}
+    (Φ : Nat × String → IProp GF) (aS aE aRet s : BitVec 64) (R : Nat → BitVec 64)
+    (Mt : Mem) (ret v8 v9 v18 v19 : BitVec 64) :
+    execDispP_body (GF := GF) (vsaModel live) N L Room inp Core st d env sm ∗
+      execDispPre N L Room inp .uncounted st d env sm aS aE aRet s R Mt ret v8 v9 v18 v19 ∗
+      ((∀ (st' : St) (status : Status), ⌜ExecS st d env sm st' status⌝ -∗
+          execDispK (vsaModel live) N L Room inp (wpW (vsaModel live)) Φ .uncounted st' d sm status
+            aRet s R ret v8 v9 v18 v19) ∧
+        (iprop(abortAt Core s (execNeed sm d) ∗ slot24 aRet.toNat) -∗ (wpW (vsaModel live)).W Φ))
+      ⊢ (wpW (vsaModel live)).W Φ := by
+  iintro ⟨H, Hpre, HK⟩
+  unfold execDispP_body
+  iapply H $$ %Φ %aS %aE %aRet %s %R %Mt %ret %v8 %v9 %v18 %v19 Hpre HK
+
+/-- The Löb hypothesis at one statement. -/
+theorem execDispsP_at (Core : IProp GF) (st : St) (d env : Nat) (sm : Stmt) :
+    execDispsP (GF := GF) (vsaModel live) N L Room inp Core ⊢
+      ▷ execDispP_body (vsaModel live) N L Room inp Core st d env sm := by
+  unfold execDispsP
+  iintro #H
+  inext
+  iapply H
+
+end Apply
+
 end VsaIris.Interp
