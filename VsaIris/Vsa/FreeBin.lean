@@ -1,0 +1,177 @@
+import VsaIris.Vsa.FreePro
+
+/-!
+# `_free_r`'s bin insertion
+
+Every path that ends with the released chunk in a bin reaches `0x800073e8`
+with the chunk `X` of size `S` in `a4`/`a5`, in use in a virtual heap `M2`
+(the heap as if the chunk and its coalesced neighbours were one in-use chunk),
+and the actual memory agreeing with `M2` except on the chunk's footer and the
+next header, which the machine has already written (`FBin`). The insertion
+links `X` in at the head of its small bin, or at its sorted place in its large
+bin, and `PHeapAt.release` gives the heap.
+-/
+
+namespace VsaIris.VsaHeap
+
+open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
+open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
+
+/-- The end of a free run's heap work: the heap without the block, its top
+no higher, the footprint present, and every byte outside the write window at
+its entry value. -/
+structure FDone (C : MCtx) (Mt : Mem) : Prop where
+  heap : ∃ top brkv chunks bins, PHeapAt Mt C.H top brkv chunks bins ∧ top ≤ C.top0
+  pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
+  frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
+
+/-- The state before the bin insertion: the virtual heap `M2` with `X` an
+in-use chunk of size `S` holding no block, between in-use neighbours and below
+a top no higher than at entry; the actual memory `Mt` agrees with `M2` but on
+`X`'s footer (written, `S`) and the next header (`PREV_INUSE` cleared). -/
+structure FBin (C : MCtx) (Mt M2 : Mem) (X S top brkv : Nat) (cs₁ cs₂ : List Chunk)
+    (bins : Nat → List Nat) : Prop where
+  heap : PHeapAt M2 C.H top brkv (cs₁ ++ ⟨X, S, true⟩ :: cs₂) bins
+  top_le : top ≤ C.top0
+  hno : ∀ e ∈ C.H, e.1 ≠ X + 16
+  prev : ∀ h0, read64 M2 (X + 8) = some h0 → h0 % 2 = 1
+  next : ∀ d ∈ cs₂.head?, d.inuse = true
+  not_top : X + S ≠ top
+  agree : ∀ w, vsaFoot C.H w → ¬ (X + S ≤ w ∧ w < X + S + 16) → Mt[w]? = M2[w]?
+  foot : read64 Mt (X + S) = some S
+  nx : ∀ hd, read64 M2 (X + S + 8) = some hd → ∃ hd', read64 Mt (X + S + 8) = some hd' ∧
+    chunkSize hd' = chunkSize hd ∧ hd' % 4 < 2 ∧ prevInuse hd' = false
+  pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
+  disj : ∀ a, C.s.toNat - mHead ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a
+  frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
+
+/-- A footprint doubleword away from the chunk's footer and next header reads
+as in the virtual heap. -/
+theorem FBin.read {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
+    {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins) {w : Nat}
+    (hf : ∀ k, k < 8 → vsaFoot C.H (w + k)) (hw : w + 8 ≤ X + S ∨ X + S + 16 ≤ w) :
+    read64 Mt w = read64 M2 w :=
+  read64_keep fun k hk => B.agree _ (hf k hk) (by omega)
+
+/-- A read through a store to another doubleword. -/
+theorem read64_miss' {Mt : Mem} {a b : Nat} {v : BitVec 64} (h : a + 8 ≤ b ∨ b + 8 ≤ a) :
+    read64 (writeLog Mt [(b, 8, v)]) a = read64 Mt a := read64_store_miss Mt v h
+
+/-- **The heap after a small-bin insertion.** The machine's five stores (`X`'s
+links, `binblocks` with bin `j`'s block bit, bin `j`'s `fd`, and the old first
+member's `bk`) link `X` at the head of bin `j = S / 8`. -/
+theorem fb_small_heap {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
+    {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins)
+    (hS : S ≤ 511) {j first bb : Nat} (hj : j = S / 8)
+    (hfirst : (bins j ++ [binAt j]).head? = some first)
+    (hbb : read64 M2 binblocksAddr = some bb)
+    {w0 w1 w2 w3 : BitVec 64} (h0 : w0.toNat = first) (h1 : w1.toNat = binAt j)
+    (h2 : w2.toNat = bb ||| 2 ^ (j / 4)) (h3 : w3.toNat = X) :
+    FDone C (writeLog (writeLog (writeLog (writeLog (writeLog Mt
+      [(X + 16, 8, w0)]) [(X + 24, 8, w1)]) [(binblocksAddr, 8, w2)]) [(binAt j + 16, 8, w3)])
+      [(first + 24, 8, w3)]) := by
+  have Hh := B.heap
+  have BB := Hh.heap
+  have HH := BB.heap
+  have hX : (⟨X, S, true⟩ : Chunk) ∈ cs₁ ++ ⟨X, S, true⟩ :: cs₂ := by simp
+  have hbnd := HH.walk.chunk_bounds _ hX
+  obtain ⟨hal0, htop16⟩ := HH.aligned
+  have hX16 := hal0 _ hX
+  obtain ⟨hS16, hS32⟩ := walk_sizes HH.walk _ hX
+  simp only at hbnd hX16 hS16 hS32
+  unfold heapStart at hbnd
+  have hj4 : 4 ≤ j ∧ j < 64 := by omega
+  have hjn : j < numBins := by unfold numBins; omega
+  have hgj := binAt_geo j hjn
+  have hXJ : X ∉ bins j := fun hc => by
+    obtain ⟨c, hc, hca, hf⟩ := HH.member (by omega) hjn hc
+    have := HH.chunk_eq hc hX hca
+    rw [this] at hf; cases hf
+  have hofm : first = binAt j ∨ first ∈ bins j := by
+    have := List.mem_of_mem_head? hfirst
+    rcases List.mem_append.mp this with hm | hm
+    · exact .inr hm
+    · exact .inl (by simpa using hm)
+  obtain ⟨ho16, honode⟩ := HH.node (by omega) hjn hofm
+  have hoLoc : (first = binAt j) ∨ (heapStart ≤ first ∧ first + 32 ≤ top) := by
+    rcases honode with h | ⟨cx, hcx, rfl, _, _⟩
+    · exact .inl h
+    · have := HH.walk.chunk_bounds cx hcx; exact .inr ⟨this.1, by omega⟩
+  have hoX : first ≠ X := by
+    rcases hofm with rfl | h
+    · unfold binAt avAddr at hgj ⊢; omega
+    · exact fun he => hXJ (he ▸ h)
+  have hbbl := Hh.bb_lt bb hbb
+  have hbS : X + S ≠ first + 16 :=
+    HH.bnd_ne_node hjn honode (HH.end_bnd hX) 16 (by omega) (by omega)
+  unfold binAt avAddr at hgj ⊢
+  unfold binblocksAddr avAddr
+  unfold heapStart binAt avAddr at hoLoc
+  -- the final memory's reads
+  generalize hMf : writeLog (writeLog (writeLog (writeLog (writeLog Mt
+      [(X + 16, 8, w0)]) [(X + 24, 8, w1)]) [(0x8001ad10 + 8, 8, w2)])
+      [(0x8001ad10 + 16 * j + 16, 8, w3)]) [(first + 24, 8, w3)] = Mf
+  have eV1 : fdOf Mf X = some first := by
+    show read64 _ (X + 16) = _
+    rw [← hMf, read64_miss' (by omega), read64_miss' (by omega), read64_miss' (by omega),
+      read64_miss' (by omega), read64_store_hit, h0]
+  have eV2 : bkOf Mf X = some (binAt j) := by
+    show read64 _ (X + 24) = _
+    rw [← hMf, read64_miss' (by omega), read64_miss' (by omega), read64_miss' (by omega),
+      read64_store_hit, h1]
+  have eP : fdOf Mf (binAt j) = some X := by
+    show read64 _ (binAt j + 16) = _
+    unfold binAt avAddr
+    rw [← hMf, read64_miss' (by omega), read64_store_hit, h3]
+  have eS : bkOf Mf first = some X := by
+    show read64 _ (first + 24) = _
+    rw [← hMf, read64_store_hit, h3]
+  have eB : read64 Mf binblocksAddr = some (bb ||| 2 ^ (j / 4)) := by
+    unfold binblocksAddr avAddr
+    rw [← hMf, read64_miss' (by omega), read64_miss' (by omega), read64_store_hit, h2]
+  have eF : read64 Mf (X + S) = some S := by
+    rw [← hMf, read64_miss' (by omega), read64_miss' (by omega), read64_miss' (by omega),
+      read64_miss' (by omega), read64_miss' (by omega)]
+    exact B.foot
+  have eN : ∀ hd, read64 M2 (X + S + 8) = some hd → ∃ hd', read64 Mf (X + S + 8) = some hd' ∧
+      chunkSize hd' = chunkSize hd ∧ hd' % 4 < 2 ∧ prevInuse hd' = false := by
+    intro hd hr
+    obtain ⟨hd', h1', h2', h3', h4'⟩ := B.nx hd hr
+    refine ⟨hd', ?_, h2', h3', h4'⟩
+    rw [← hMf, read64_miss' (by omega), read64_miss' (by omega), read64_miss' (by omega),
+      read64_miss' (by omega), read64_miss' (by omega)]
+    exact h1'
+  have hag : ∀ w, vsaFoot C.H w → ¬ RelW X S (binAt j) first w → Mf[w]? = M2[w]? := by
+    intro w hw hna
+    unfold RelW binAt binblocksAddr avAddr at hna
+    rw [← hMf, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out] <;>
+      try (simp only [OutL, and_true]; omega)
+    exact B.agree w hw (by omega)
+  have HP := Hh.release B.hno B.prev B.next B.not_top (j := j) (pre' := []) (post' := bins j)
+    (by omega) hjn
+    (fun _ => by unfold binIndex; rw [ite_eq_left_iff.2 (fun h => absurd (by omega) h)]; omega)
+    (fun h => absurd h (by omega)) rfl rfl hfirst eV1 eV2 eP eS eF eN eB
+    (lor_lt bb _ hbbl (by omega)) (fun _ => lor_bit_set bb _) (fun bb0 hbb0 k hk => by
+      rw [hbb] at hbb0; cases hbb0; exact lor_bit_keep bb _ k hk) hag
+  simp only [List.nil_append] at HP
+  have BP := HP.heap
+  have hXf : (⟨X, S, false⟩ : Chunk) ∈ cs₁ ++ ⟨X, S, false⟩ :: cs₂ := by simp
+  refine ⟨⟨_, _, _, _, HP, B.top_le⟩, fun a ha => ?_, fun a ha => ?_⟩
+  · rw [← hMf]
+    exact writeLog_present _ _ _ (writeLog_present _ _ _ (writeLog_present _ _ _
+      (writeLog_present _ _ _ (writeLog_present _ _ _ (B.pres a ha)))))
+  · have hnf : ¬ vsaFoot C.H a := fun h => ha (.inl h)
+    rw [← hMf, writeLog_out, writeLog_out, writeLog_out, writeLog_out, writeLog_out]
+    · exact B.frame a ha
+    all_goals simp only [OutL, and_true]
+    · exact out_of_foot hnf (fun k hk => (foot_free BP hXf rfl).1 k (by omega))
+    · exact out_of_foot hnf (fun k hk => by
+        have := (foot_free BP hXf rfl).1 (8 + k) (by omega)
+        rwa [show X + 16 + (8 + k) = X + 24 + k by omega] at this)
+    · exact out_of_foot hnf (fun k hk => .inl (.inl ⟨by omega, by omega⟩))
+    · exact out_of_foot hnf (fun k hk => .inl (.inl ⟨by omega, by omega⟩))
+    · exact out_of_foot hnf (fun k hk => by
+        have := BB.node_foot (x := first) (by omega) hjn hofm (24 + k) (by omega) (by omega)
+        rwa [show first + (24 + k) = first + 24 + k by omega] at this)
+
+end VsaIris.VsaHeap

@@ -73,6 +73,7 @@ import VsaIris.Vsa.MallocRunAll
 import VsaIris.Vsa.HeapFree
 import VsaIris.Vsa.FreeCtx
 import VsaIris.Vsa.FreePro
+import VsaIris.Vsa.FreeBin
 import VsaIris.Vsa.CostRoom
 import VsaIris.Stack
 import VsaIris.Interp.Need

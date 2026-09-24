@@ -165,3 +165,42 @@ theorem free_pro {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {q n brkv : Nat}
     rw [toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ nhr)]; rfl
 
 end VsaIris.VsaHeap
+
+namespace VsaIris.VsaHeap
+
+open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
+open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
+
+/-- **`_free_r`'s epilogue** (`0x80007434`): restore `s0` and `ra`, pop the
+frame, release the lock and return, owing `FRet`. -/
+theorem free_epi {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} (F : FFrame C R Mt)
+    (hheap : ∃ top brkv chunks bins, PHeapAt Mt C.H top brkv chunks bins ∧ top ≤ C.top0)
+    (hpres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome)
+    (hframe : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?) :
+    AW C.live C.S C.Q 0x80007434#64 R Mt := by
+  have hlo := O.sp.lo; have hhi := O.sp.hi; have hsal := O.sp.align
+  unfold mHead Vsa.Sim.tohostAddr at hlo
+  have hs2 := F.sp
+  have hs2n : (R 2).toNat = C.s.toNat - 32 := by
+    rw [hs2, BitVec.toNat_add]
+    simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
+    omega
+  have hl16 : ldv .ld Mt (R 2 + 16#64).toNat = BitVec.ofNat 64 (C.rv0 8).toNat :=
+    ldv_at F.s0 _ (by rw [BitVec.toNat_add, hs2n]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega)
+  have hl24 : ldv .ld Mt (R 2 + 24#64).toNat = BitVec.ofNat 64 C.r.toNat :=
+    ldv_at F.ra _ (by rw [BitVec.toNat_add, hs2n]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega)
+  simp only [BitVec.ofNat_toNat, BitVec.setWidth_eq] at hl16 hl24
+  sx_run [20] O.live at 0x80007440
+  rw [hl16, hl24]
+  sx_run [20] O.live
+  · sx_norm; exact O.ral
+  have h9 := F.s1; have h18 := F.s2; have h19 := F.s3
+  refine O.ok _ Mt ⟨⟨?_, ?_, ?_, ?_, ?_, ?_⟩, hheap, hpres, hframe⟩ <;>
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · rw [hs2]; apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_add, BitVec.toNat_add]
+    simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
+  · exact h9
+  · exact h18
+  · exact h19
+
+end VsaIris.VsaHeap
