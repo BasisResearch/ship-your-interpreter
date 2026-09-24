@@ -320,6 +320,18 @@ theorem sext_slliw (c : Nat) (h : c < 2 ^ 29) :
     simp [BitVec.toNat_shiftLeft, Nat.shiftLeft_eq]
     omega
 
+/-- `addiw _, _, 1` of a small word. -/
+theorem sext_addiw (n : Nat) (h : n + 1 < 2 ^ 31) :
+    BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 n + 1#64)) =
+      BitVec.ofNat 64 (n + 1) := by
+  apply BitVec.eq_of_toNat_eq
+  rw [BitVec.signExtend_eq_setWidth_of_msb_false]
+  · simp [BitVec.toNat_add]
+    omega
+  · rw [BitVec.msb_eq_false_iff_two_mul_lt]
+    simp [BitVec.toNat_add]
+    omega
+
 /-- `slli _, _, 3` of a small word. -/
 theorem shl3_small (c : Nat) (h : c < 2 ^ 32) :
     BitVec.ofNat 64 c <<< 3 = BitVec.ofNat 64 (8 * c) := by
@@ -409,5 +421,248 @@ theorem def_empty {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s ou
       · simp [upd_apply]
       · simp [upd_apply]
       · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hpn
+
+/-- A word store read back through the image. -/
+theorem imgLE4_store (Mt : Mem) (a : Nat) (v : BitVec 64) :
+    imgLE (imgM (writeLog Mt [(a, 4, v)])) a 4 = v.toNat % 2 ^ 32 := by
+  simp only [writeLog, List.foldl, applyW, writeMap4, imgM, imgLE, Std.ExtHashMap.getElem?_insert,
+    beq_iff_eq]
+  simp [swData, Sail.BitVec.extractLsb, Nat.shiftRight_eq_div_pow]
+  omega
+
+/-- The `Env` struct at `e` sits in RAM above the HTIF words, 8-aligned. -/
+structure EnvWin (e : Nat) : Prop where
+  lo : 0x80000000 ≤ e
+  hi : e + 32 ≤ 0x100000000
+  htif : htifLo + 16 ≤ e
+  align : e % 8 = 0
+
+/-- A frame's struct window. -/
+theorem FrameLayout.envWin {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
+    (h : FrameLayout img G n) : EnvWin G.e := by
+  have hw := h.win G.sblk (by simp [FrameGeom.blocks])
+  have hsb := h.sblk
+  have := hw.lo; have := hw.hi; have := hw.htif
+  exact ⟨by omega, by omega, by omega, h.e_align⟩
+
+/-- The growth's first step `0x80002b98`: `cap := cap'`, `a0 := names`; on to
+`jal realloc`. -/
+theorem def_grow1 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
+    {e : Nat} {R : Nat → BitVec 64} {Mt : Mem}
+    (hw : EnvWin e) (he : (R 20).toNat = e) (hS : ∀ a, e ≤ a → a < e + 32 → S a) :
+    Span live S 0x80002b98#64 R Mt
+      (fun pc' R' Mt' => pc' = 0x80002ba0#64 ∧ Mt' = writeLog Mt [(e + 4, 4, R 15)] ∧
+        R' 10 = R 22 ∧ ∀ k, k ≠ 10 → R' k = R k) := by
+  intro Q hk
+  have := hw.lo; have := hw.hi; have := hw.htif; have := hw.align
+  have h4 : (R 20 + 4#64).toNat = e + 4 := by rw [BitVec.toNat_add, he]; simp; omega
+  sx_run hl at 0x80002ba0
+  · intro b hb; have hb' := of_mem_accAddrs hb; apply hS <;> sx_addr
+  refine hk _ _ _ ⟨rfl, by rw [h4], by simp [upd_apply], fun k hk => by simp [upd_apply, hk]⟩
+
+/-- The growth's middle `0x80002ba4`: `names := a0`, `a0 := vals`,
+`a1 := 24 * cap'`; on to `jal realloc`. -/
+theorem def_grow2 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
+    {e cap pv : Nat} {R : Nat → BitVec 64} {Mt : Mem}
+    (hw : EnvWin e) (he : (R 20).toNat = e) (hS : ∀ a, e ≤ a → a < e + 32 → S a)
+    (hc : cap < 2 ^ 29) (hcap : imgLE (imgM Mt) (e + 4) 4 = cap)
+    (hpv : imgLE (imgM Mt) (e + 16) 8 = pv) :
+    Span live S 0x80002ba4#64 R Mt
+      (fun pc' R' Mt' => pc' = 0x80002bbc#64 ∧ Mt' = writeLog Mt [(e + 8, 8, R 10)] ∧
+        R' 10 = BitVec.ofNat 64 pv ∧ R' 11 = BitVec.ofNat 64 (24 * cap) ∧
+        R' 15 = BitVec.ofNat 64 cap ∧ ∀ k, k ≠ 10 → k ≠ 11 → k ≠ 15 → R' k = R k) := by
+  intro Q hk
+  have := hw.lo; have := hw.hi; have := hw.htif; have := hw.align
+  have h4 : (R 20 + 4#64).toNat = e + 4 := by rw [BitVec.toNat_add, he]; simp; omega
+  have h8 : (R 20 + 8#64).toNat = e + 8 := by rw [BitVec.toNat_add, he]; simp; omega
+  have h16 : (R 20 + 16#64).toNat = e + 16 := by rw [BitVec.toNat_add, he]; simp; omega
+  have hld : ldv .lw Mt (R 20 + 4#64).toNat = BitVec.ofNat 64 cap := by
+    rw [h4]; exact ldv_lw_img Mt _ cap (by omega) hcap
+  have hlv : ldv .ld Mt (e + 16) = BitVec.ofNat 64 pv := by
+    rw [ldv_ld_img]; unfold imgW; rw [hpv]
+  sx_run hl at 0x80002bbc
+  iterate 3
+    · intro b hb; have hb' := of_mem_accAddrs hb; apply hS <;> sx_addr
+  have h24 : ((BitVec.ofNat 64 cap <<< 1 + BitVec.ofNat 64 cap) <<< 3) =
+      BitVec.ofNat 64 (24 * cap) := slot24_index cap
+  refine hk _ _ _ ⟨rfl, by rw [h8], ?_, ?_, ?_, fun k h10 h11 h15 => by
+    simp [upd_apply, h10, h11, h15]⟩
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [h16]; exact hlv
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hld]; exact h24
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hld]
+
+/-- The growth's end `0x80002bc0`: `vals := a0`; both arrays non-NULL go on
+to the append, otherwise to the out-of-memory arm. -/
+theorem def_grow3 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
+    {e p1 : Nat} {R : Nat → BitVec 64} {Mt : Mem}
+    (hw : EnvWin e) (he : (R 20).toNat = e) (hS : ∀ a, e ≤ a → a < e + 32 → S a)
+    (hp1 : imgLE (imgM Mt) (e + 8) 8 = p1) :
+    Span live S 0x80002bc0#64 R Mt
+      (fun pc' R' Mt' => Mt' = writeLog Mt [(e + 16, 8, R 10)] ∧
+        (∀ k, k ≠ 15 → R' k = R k) ∧
+        ((p1 ≠ 0 ∧ R 10 ≠ 0#64 ∧ pc' = 0x80002b1c#64) ∨
+         ((p1 = 0 ∨ R 10 = 0#64) ∧ pc' = 0x80002bd0#64))) := by
+  intro Q hk
+  have := hw.lo; have := hw.hi; have := hw.htif; have := hw.align
+  have h8 : (R 20 + 8#64).toNat = e + 8 := by rw [BitVec.toNat_add, he]; simp; omega
+  have h16 : (R 20 + 16#64).toNat = e + 16 := by rw [BitVec.toNat_add, he]; simp; omega
+  have hlp : ldv .ld Mt (R 20 + 8#64).toNat = BitVec.ofNat 64 p1 := by
+    rw [h8, ldv_ld_img]; unfold imgW; rw [hp1]
+  have hp1n : BitVec.ofNat 64 p1 = 0#64 ↔ p1 = 0 := by
+    have := imgLE_lt (imgM Mt) (e + 8) 8
+    rw [hp1] at this
+    constructor
+    · intro h; have := congrArg BitVec.toNat h; simp at this; omega
+    · intro h; rw [h]
+  sx_run hl at 0x80002bd0 0x80002b1c
+  iterate 2
+    · intro b hb; have hb' := of_mem_accAddrs hb; apply hS <;> sx_addr
+  · intro hc
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hlp, hp1n] at hc
+    exact hk _ _ _ ⟨by rw [h16], fun k hk => by simp [upd_apply, hk], .inr ⟨.inl hc, rfl⟩⟩
+  · intro hc
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hlp, hp1n] at hc
+    sx_run hl at 0x80002bd0 0x80002b1c
+    · intro ha
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at ha
+      exact hk _ _ _ ⟨by rw [h16], fun k hk => by simp [upd_apply, hk], .inl ⟨hc, ha, rfl⟩⟩
+    · intro ha
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, Classical.not_not] at ha
+      exact hk _ _ _ ⟨by rw [h16], fun k hk => by simp [upd_apply, hk], .inr ⟨.inr ha, rfl⟩⟩
+
+/-- The append's start `0x80002b1c`: `a0 := name`; on to `jal strlen`. -/
+theorem def_app1 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
+    {R : Nat → BitVec 64} {Mt : Mem} :
+    Span live S 0x80002b1c#64 R Mt
+      (fun pc' R' Mt' => pc' = 0x80002b20#64 ∧ Mt' = Mt ∧ R' 10 = R 18 ∧
+        ∀ k, k ≠ 10 → R' k = R k) := by
+  intro Q hk
+  sx_run hl at 0x80002b20
+  exact hk _ _ _ ⟨rfl, rfl, by simp [upd_apply], fun k hk => by simp [upd_apply, hk]⟩
+
+/-- After `strlen` `0x80002b24`: `s0 := a0 := len + 1`; on to `jal malloc`. -/
+theorem def_app2 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
+    {R : Nat → BitVec 64} {Mt : Mem} :
+    Span live S 0x80002b24#64 R Mt
+      (fun pc' R' Mt' => pc' = 0x80002b2c#64 ∧ Mt' = Mt ∧ R' 8 = R 10 + 1#64 ∧
+        R' 10 = R 10 + 1#64 ∧ ∀ k, k ≠ 8 → k ≠ 10 → R' k = R k) := by
+  intro Q hk
+  sx_run hl at 0x80002b2c
+  exact hk _ _ _ ⟨rfl, rfl, by simp [upd_apply], by simp [upd_apply],
+    fun k h8 h10 => by simp [upd_apply, h8, h10]⟩
+
+/-- After `malloc` `0x80002b30`: `s1 := a0`; NULL goes to the out-of-memory
+arm, otherwise `a2 := len + 1`, `a1 := name` and on to `jal memcpy`. -/
+theorem def_app3 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
+    {R : Nat → BitVec 64} {Mt : Mem} :
+    Span live S 0x80002b30#64 R Mt
+      (fun pc' R' Mt' => Mt' = Mt ∧ R' 9 = R 10 ∧
+        ((R 10 = 0#64 ∧ pc' = 0x80002bd0#64 ∧ ∀ k, k ≠ 9 → R' k = R k) ∨
+         (R 10 ≠ 0#64 ∧ pc' = 0x80002b40#64 ∧ R' 12 = R 8 ∧ R' 11 = R 18 ∧
+          ∀ k, k ≠ 9 → k ≠ 11 → k ≠ 12 → R' k = R k))) := by
+  intro Q hk
+  sx_run hl at 0x80002b40 0x80002bd0
+  · intro hc
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
+    exact hk _ _ _ ⟨rfl, by simp [upd_apply], .inl ⟨hc, rfl, fun k hk => by simp [upd_apply, hk]⟩⟩
+  · intro hc
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
+    sx_run hl at 0x80002b40
+    exact hk _ _ _ ⟨rfl, by simp [upd_apply], .inr ⟨hc, rfl, by simp [upd_apply],
+      by simp [upd_apply], fun k h9 h11 h12 => by simp [upd_apply, h9, h11, h12]⟩⟩
+
+/-- `n` bytes at `a` a doubleword access may touch: RAM above the HTIF
+words, 8-aligned. -/
+structure WordsWin (a n : Nat) : Prop where
+  lo : 0x80000000 ≤ a
+  hi : a + n ≤ 0x100000000
+  htif : htifLo + 16 ≤ a
+  align : a % 8 = 0
+
+/-- What the append's stores leave: `names[n] := np`, `vals[n] := *v`,
+`count := n + 1`, nothing else. -/
+structure AppOut (e n pn pv vp : Nat) (np : BitVec 64) (Mt Mt' : Mem) : Prop where
+  name : ldv .ld Mt' (pn + 8 * n) = np
+  w0 : ldv .ld Mt' (pv + 24 * n) = ldv .ld Mt vp
+  w1 : ldv .ld Mt' (pv + 24 * n + 8) = ldv .ld Mt (vp + 8)
+  w2 : ldv .ld Mt' (pv + 24 * n + 16) = ldv .ld Mt (vp + 16)
+  cnt : imgLE (imgM Mt') e 4 = n + 1
+  frame : ∀ a, ¬ InExt (pn + 8 * n, 8) a → ¬ InExt (pv + 24 * n, 24) a → ¬ InExt (e, 4) a →
+    imgM Mt' a = imgM Mt a
+
+/-- The append's stores `0x80002b44`: the new name pointer and value into
+slot `n`, the count bumped; on to the epilogue. -/
+theorem def_app4 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
+    {e n pn pv vp : Nat} {R : Nat → BitVec 64} {Mt : Mem}
+    (hw : EnvWin e) (he : (R 20).toNat = e) (hvp : (R 21).toNat = vp)
+    (hcnt : imgLE (imgM Mt) e 4 = n) (hn : n + 1 < 2 ^ 31)
+    (hpn : imgLE (imgM Mt) (e + 8) 8 = pn) (hpv : imgLE (imgM Mt) (e + 16) 8 = pv)
+    (wn : WordsWin (pn + 8 * n) 8) (wv : WordsWin (pv + 24 * n) 24) (wp : WordsWin vp 24)
+    (dnv : pn + 8 * n + 8 ≤ pv + 24 * n ∨ pv + 24 * n + 24 ≤ pn + 8 * n)
+    (dne : pn + 8 * n + 8 ≤ e ∨ e + 32 ≤ pn + 8 * n)
+    (dve : pv + 24 * n + 24 ≤ e ∨ e + 32 ≤ pv + 24 * n)
+    (hS : ∀ a, (e ≤ a ∧ a < e + 32) ∨ InExt (pn + 8 * n, 8) a ∨ InExt (pv + 24 * n, 24) a ∨
+      InExt (vp, 24) a → S a) :
+    Span live S 0x80002b44#64 R Mt
+      (fun pc' R' Mt' => pc' = 0x80002aec#64 ∧ AppOut e n pn pv vp (R 9) Mt Mt' ∧
+        ∀ k, k ≠ 10 → k ≠ 11 → k ≠ 12 → k ≠ 13 → k ≠ 14 → k ≠ 15 → k ≠ 16 → k ≠ 17 →
+          R' k = R k) := by
+  intro Q hk
+  have := hw.lo; have := hw.hi; have := hw.htif; have := hw.align
+  have := wn.lo; have := wn.hi; have := wn.htif; have := wn.align
+  have := wv.lo; have := wv.hi; have := wv.htif; have := wv.align
+  have := wp.lo; have := wp.hi; have := wp.htif; have := wp.align
+  have hS' : ∀ a, e ≤ a → a < e + 32 → S a := fun a h1 h2 => hS a (.inl ⟨h1, h2⟩)
+  have h8 : (R 20 + 8#64).toNat = e + 8 := by rw [BitVec.toNat_add, he]; simp; omega
+  have h16 : (R 20 + 16#64).toNat = e + 16 := by rw [BitVec.toNat_add, he]; simp; omega
+  have hlc : ldv .lw Mt (R 20).toNat = BitVec.ofNat 64 n := by
+    rw [he]; exact ldv_lw_img Mt _ n (by omega) hcnt
+  have hln : ldv .ld Mt (R 20 + 8#64).toNat = BitVec.ofNat 64 pn := by
+    rw [h8, ldv_ld_img]; unfold imgW; rw [hpn]
+  have hlv : ldv .ld Mt (R 20 + 16#64).toNat = BitVec.ofNat 64 pv := by
+    rw [h16, ldv_ld_img]; unfold imgW; rw [hpv]
+  have hSp : ∀ a, vp ≤ a → a < vp + 24 → S a := fun a h1 h2 => hS a (.inr (.inr (.inr ⟨h1, h2⟩)))
+  sx_run hl at 0x80002b70
+  iterate 6
+    · intro b hb; have hb' := of_mem_accAddrs hb
+      first | (apply hS' <;> sx_addr) | (apply hSp <;> sx_addr)
+  rw [hlc, hln, hlv, shl3_small n (by omega), ← BitVec.ofNat_add, slot24_index n]
+  generalize hA : BitVec.ofNat 64 (pn + 8 * n) = A
+  have hAn : A.toNat = pn + 8 * n := by
+    rw [← hA, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+  clear hA
+  have hSn : ∀ a, pn + 8 * n ≤ a → a < pn + 8 * n + 8 → S a :=
+    fun a h1 h2 => hS a (.inr (.inl ⟨h1, h2⟩))
+  sx_run hl at 0x80002b7c
+  · intro b hb; have hb' := of_mem_accAddrs hb; apply hSn <;> sx_addr
+  rw [← BitVec.ofNat_add]
+  generalize hB : BitVec.ofNat 64 (pv + 24 * n) = B
+  have hBn : B.toNat = pv + 24 * n := by
+    rw [← hB, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+  clear hB
+  have hSv : ∀ a, pv + 24 * n ≤ a → a < pv + 24 * n + 24 → S a :=
+    fun a h1 h2 => hS a (.inr (.inr (.inl ⟨h1, h2⟩)))
+  sx_run hl at 0x80002aec
+  iterate 4
+    · intro b hb; have hb' := of_mem_accAddrs hb
+      first | (apply hSv <;> sx_addr) | (apply hS' <;> sx_addr)
+  have hB8 : (B + 8#64).toNat = pv + 24 * n + 8 := by rw [BitVec.toNat_add, hBn]; simp; omega
+  have hB16 : (B + 16#64).toNat = pv + 24 * n + 16 := by rw [BitVec.toNat_add, hBn]; simp; omega
+  have hv8 : (R 21 + 8#64).toNat = vp + 8 := by rw [BitVec.toNat_add, hvp]; simp; omega
+  have hv16 : (R 21 + 16#64).toNat = vp + 16 := by rw [BitVec.toNat_add, hvp]; simp; omega
+  rw [sext_addiw n hn, hAn, hBn, hB8, hB16, hv8, hv16, hvp, he]
+  refine hk _ _ _ ⟨rfl, ⟨?_, ?_, ?_, ?_, ?_, fun a h1 h2 h3 => ?_⟩, fun k h10 h11 h12 h13 h14 h15
+    h16 h17 => by simp [upd_apply, h10, h11, h12, h13, h14, h15, h16, h17]⟩
+  · rw [ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega),
+      ldv_ld_miss _ _ (by omega), ldv_ld_hit_eq _ _ rfl]
+  · rw [ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega),
+      ldv_ld_hit_eq _ _ rfl]
+  · rw [ldv_ld_miss _ _ (by omega), ldv_ld_miss _ _ (by omega), ldv_ld_hit_eq _ _ rfl]
+  · rw [ldv_ld_miss _ _ (by omega), ldv_ld_hit_eq _ _ rfl]
+  · rw [imgLE4_store, BitVec.toNat_ofNat]; omega
+  · simp only [InExt] at h1 h2 h3
+    rw [imgM_store_miss _ _ (by omega), imgM_store_miss _ _ (by omega),
+      imgM_store_miss _ _ (by omega), imgM_store_miss _ _ (by omega),
+      imgM_store_miss _ _ (by omega)]
 
 end VsaIris.Interp
