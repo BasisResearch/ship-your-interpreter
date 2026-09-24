@@ -228,16 +228,18 @@ structure DefRet (s : Nat) (r : BitVec 64) (sv : Nat → BitVec 64) (R' : Nat �
   saved : ∀ k ∈ defineSaved, R' k = sv k
 
 /-- The epilogue `0x80002aec`: restore `ra`, `s0-s6`, pop, return. -/
-theorem def_epi {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s out : Nat} {G : FrameGeom}
+theorem def_epi {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s : Nat} {S : Nat → Prop}
     {r : BitVec 64} {sv : Nat → BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
     (hs : htifLo + 16 + 64 ≤ s) (hs' : s ≤ 0x100000000) (hra : r.toNat % 4 = 0)
-    (hstk : DefStack s r sv R Mt) :
-    Span live (getS s out G) 0x80002aec#64 R Mt
+    (hstk : DefStack s r sv R Mt) (hS : ∀ a, s - 64 ≤ a → a < s → S a) :
+    Span live S 0x80002aec#64 R Mt
       (fun pc' R' Mt' => pc' = r ∧ Mt' = Mt ∧ DefRet s r sv R') := by
   intro Q hk
   have hsp := hstk.sp
   obtain ⟨hr1, hr8, hr9, hr18, hr19, hr20, hr21, hr22⟩ := hstk.restore (by omega) hs'
   sx_run hl
+  iterate 8
+    · intro b hb; have hb' := of_mem_accAddrs hb; apply hS <;> sx_addr
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [hr1]; exact hra
   refine hk _ _ _ ⟨hr1, rfl, ⟨?_, ?_, ?_⟩⟩
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hr1
