@@ -2,6 +2,7 @@ import VsaIris.Interp.SpecEval
 import VsaIris.Interp.Abort
 import VsaIris.Vsa.NewlibOut
 import VsaIris.Vsa.RuntimeError
+import VsaIris.Interp.Bridge
 
 /-!
 # The value helpers and the natives: the statements (lane H2)
@@ -91,7 +92,8 @@ def valsAt (N : NativeAddrs) (a : Nat) (vs : List Value) : IProp GF :=
 /-- What `Value.display st v` reads besides the value's words: for a closure,
 the closure object's first word (its `EX_FN` node) and the node's name field,
 read-only, with the read geometry the loads need (`ReadOK`, as in lane G's
-`astEG`). This is `closOwn` (without the environment link) plus geometry:
+`astEG`) and the view's string window (`SharedWin`, H1: the name is a
+`strAt`). This is `closOwn` (without the environment link) plus geometry:
 `closOwn`/`astE` carry no geometry, so the supplier is the one that built the
 closure (`EX_FN`: a heap block and the program's AST, both readable).
 Every other value is displayed from its own words. -/
@@ -99,7 +101,7 @@ def dispRes (st : Store) : Value → IProp GF
   | .closure ca => iprop(∃ (cd : ClosureData) (p q : Nat) (img : Nat → BitVec 8) (P : Nat → Prop)
       (m : Mem), ⌜st.closures[ca]? = some cd ∧ imgLE img p 8 = q ∧
         (∀ k, InExt (p, 16) k → ReadOK k) ∧ ExprReprWithin m P q (.fn cd.name cd.params cd.body) ∧
-        (∀ k, P k → ReadOK k)⌝ ∗
+        (∀ k, P k → ReadOK k) ∧ SharedWin P⌝ ∗
       closAt ca p ∗ roImg (InExt (p, 16)) img ∗ roOn P m)
   | _ => iprop(emp)
 

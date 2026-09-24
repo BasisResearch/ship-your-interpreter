@@ -976,3 +976,51 @@ binary or by what the proofs consume:
   `Newlib.fnRender name`), or `Loaded` bounds name lengths. H2 states
   `stringify` against the machine (`Newlib.fnRender`); evidence in
   `PROOF_CLOSURE_PLAN.md` ("`stringify` cuts a closure's rendering").
+
+### STATEMENT CHANGES (H1)
+
+Two changes to R's predicates, both because an `env_*` spec cannot be proved
+without the fact and no other resource carries it:
+
+- **`storeRepr` carries `Vsa.Sim.StoreInvariant`** (unique names per frame,
+  parents point to older frames), in the named pure part `StorePure`
+  (`maps`, `blocks`, `bodies`, `inv`). `env_get`/`env_set` walk the parent
+  chain: `parents` makes the walk terminate (the total WP needs it) and
+  bounds its length by `frames.size` (so the machine's answer is
+  `Store.get?`'s). `env_define` updates the FIRST matching slot, which is
+  `Store.define`'s update only when names are unique. VSA carried the same
+  pair in `HeapRepr` (`Vsa/Sim/HeapOps.lean`). Consequences: the generic
+  closer of `storeRepr_open` takes `StoreInvariant s'`;
+  `storeRepr_open_define` takes `StoreInvariant s` and re-establishes it
+  (`StoreInvariant.define`); `storeRepr_allocFrame` takes `StoreInvariant s'`
+  (from `StoreInvariant.allocFrame`, the parent being an allocated frame).
+- **`strAt p s` carries `StrWin p s.length`**: `[p, p + len + 8)` is RAM and
+  off the HTIF words. `strcmp` and `strlen` load whole aligned words and read
+  up to 7 bytes past the NUL (`0x80006eb8`, `strlen`'s word scan), so every
+  caller of either needs the window, and the window is a property of where
+  the string lives, not of the call. Producers: `strAt_of_owned` takes it
+  (heap strings: arena geometry); `strAt_of_cstringWithin` and the
+  `valOf`/`bindings`/`frameBody` bridges take `SharedWin P` — every byte of
+  the shared read view has its 8-byte window — which A0 establishes once at
+  the boundary (`ctl_sharedWin` at the control program). The over-read bytes
+  themselves are NOT owned by the string: their values never decide the
+  result, so the H3 runs read them as total reads (`readByte = getD 0`).
+- **`FrameLayout` gains `win`, `e_align`, `cap_canon`.** `win`: every block
+  of a frame is RAM above the HTIF words and 16-aligned (`BlockWin`), which
+  every `env_*` load and store into the struct and arrays needs (`LdOK`,
+  `StOK`), and which only the frame knows (`env_get`/`env_set` hold the store,
+  not the heap). `cap_canon`: `cap = capFor count` (`0, 8, 16, 32, …`,
+  `env.c`'s growth policy). The counted regime charges `defineCost`, which
+  pays for array growth exactly when the count sits on a canonical cap; a
+  frame with `count = cap` off that sequence would grow without credits.
+  `capForAux` mirrors `arrayCostAux`'s fuel recursion. `FrameBridge` carries
+  the three facts at the boundary (`ctl_frameBridge`: cap 8 for 3 natives).
+- **`FrameLayout.arrays` states the arrays' exact extents**: with `cap > 0`,
+  `nblk = (pn, 8 * cap)` and `vblk = (pv, 24 * cap)` (was: lower bounds).
+  `env_define`'s growth `realloc`s each array from its live extent
+  (`realloc(names, 16 * cap)`), and `realloc`'s spec takes the live block
+  `(p, nOld)` at its heap entry with `nOld < nNew`; the heap's entries are the
+  exact requests (`env_define` allocates `8 * cap` and `24 * cap`), so only
+  the equality gives `nOld = 8 * cap < 16 * cap`. `FrameLayout.arrays_le`
+  recovers the componentwise bounds; `FrameBridge.arrays` carries the same
+  equality (`ctl_frameBridge`: 64 and 192 bytes at cap 8).

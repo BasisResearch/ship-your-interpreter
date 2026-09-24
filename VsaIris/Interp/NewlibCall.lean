@@ -296,13 +296,14 @@ theorem ms_join {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M
 
 /-- A C string of the fixed `.rodata` is a persistent string. -/
 theorem strAt_rodata {p : Nat} {x : String}
-    (hdom : ∀ i, i < x.toList.length + 1 → rodataDom (p + i)) (hc : CStrImg rodataByte p x) :
+    (hdom : ∀ i, i < x.toList.length + 1 → rodataDom (p + i)) (hc : CStrImg rodataByte p x)
+    (hw : StrWin p x.toList.length) :
     binImg (GF := GF) ⊢ strAt p x := by
   unfold binImg strAt
   iintro ⟨-, #H⟩
   iexists rodataByte
   isplitr
-  · ipureintro; exact hc
+  · ipureintro; exact ⟨hc, hw⟩
   unfold roImg
   imodintro
   iintro %k %hk

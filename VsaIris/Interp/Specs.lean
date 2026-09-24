@@ -5,6 +5,7 @@ import VsaIris.Interp.Need
 import VsaIris.Interp.Vacuity
 import VsaIris.Vsa.NewlibOut
 import VsaIris.Vsa.AllocHoles
+import VsaIris.Interp.SpecEnv
 import VsaIris.Vsa.HeapShape
 import Vsa.RuntimeRepr
 import Vsa.While.Cost
@@ -298,6 +299,9 @@ structure IrisHoles : Prop where
   (`VsaIris/Vsa/AllocHoles.lean`); `VsaHeap.allocSpecs` turns them into the
   Iris specs. H4 discharges them field by field. -/
   alloc : VsaHeap.AllocHoles
+  /-- `realloc(NULL, n)` at the binary, both regimes (`VsaIris/Interp/SpecEnv.lean`):
+  `env_define`'s first array growth. H4 discharges it. -/
+  reallocNull : ReallocNullHoles
   /-- The newlib calls on the error and exit paths, exact Iris statements
   (`VsaIris/Vsa/Newlib.lean`, H5): `snprintf` and `fprintf` with `%s`/`%d`
   formats, `fwrite` of the out-of-memory message, and `exit`'s newlib

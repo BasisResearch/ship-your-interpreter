@@ -323,7 +323,7 @@ theorem readable_str {p : Nat} {x : String} :
       ⌜(∀ a, rodataDom a → rd a = rodataByte a) ∧ CStrImg rd p x⌝ := by
   classical
   unfold binImg strAt
-  iintro ⟨⟨-, #Hr⟩, ⟨%img, %hc, #Hs⟩⟩
+  iintro ⟨⟨-, #Hr⟩, ⟨%img, %⟨hc, -⟩, #Hs⟩⟩
   ihave #Hr' := roImg_sub (T := fun a => rodataDom a ∧ InExt (p, x.toList.length + 1) a)
     (fun k h => h.1) $$ Hr
   ihave #Hs' := roImg_sub (T := fun a => rodataDom a ∧ InExt (p, x.toList.length + 1) a)
@@ -969,7 +969,7 @@ theorem na_falsy2o (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       BitVec.ofNat 64 (Vsa.RuntimeRepr.kindTag (vs[1]'(by omega))) := by
     rw [eA 24 (by omega)]
     refine ldv_lw_kind ?_ (kindTag_small _)
-    rw [imgW_agree (M' := Margs) (fun j hj => f.hargs _ (by simp only [InExt]; omega))]
+    rw [imgW_agree (g := imgM Margs) (fun j hj => f.hargs _ (by simp only [InExt]; omega))]
     exact hp.kind
   iapply wp_swpF Wp (S := npF s args n) (R := R) (Mt := M) (pc := 0x80002e48#64)
     (F := NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs)
@@ -1026,7 +1026,7 @@ theorem na_falsy2s (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       BitVec.ofNat 64 (Vsa.RuntimeRepr.kindTag (vs[1]'(by omega))) := by
     rw [eA 24 (by omega)]
     refine ldv_lw_kind ?_ (kindTag_small _)
-    rw [imgW_agree (M' := Margs) (fun j hj => f.hargs _ (by simp only [InExt]; omega))]
+    rw [imgW_agree (g := imgM Margs) (fun j hj => f.hargs _ (by simp only [InExt]; omega))]
     exact hp.kind
   iapply wp_swpF Wp (S := npF s args n) (R := R) (Mt := M) (pc := 0x80002e48#64)
     (F := NaRest Wp Φ N L Room sret inp args s r vs ρ st d rv jb Margs)

@@ -73,7 +73,7 @@ theorem valsImg_agree (N : NativeAddrs) {f g : Nat → BitVec 8} :
       valsImg (GF := GF) N f a vs ⊢ valsImg N g a vs
   | [], _, _ => .rfl
   | v :: vs, a, h => by
-    have e := valImg_agree (GF := GF) (N := N) (v := v) (g := g) (a := a)
+    have e := valImg_agreeOn (GF := GF) (N := N) (v := v) (g := g) (a := a)
       (fun k hk => h k (by simp only [InExt, List.length_cons] at hk ⊢; omega))
     have ih := valsImg_agree N vs (a + 24)
       (fun k hk => h k (by simp only [InExt, List.length_cons] at hk ⊢; omega))
@@ -108,7 +108,7 @@ theorem valsAt_tracked (N : NativeAddrs) :
     ihave ⟨%M2, HB, #Hvs⟩ := valsAt_tracked N vs (a + 24) $$ H2
     ihave ⟨%M, H, %⟨hA, hB, _⟩⟩ := ownSet_join_tracked _ _ M1 M2 $$ [HA HB]
     · iframe HA HB
-    have e := valImg_agree (GF := GF) (N := N) (v := v) (a := a) (fun k hk => (hA k hk).symm)
+    have e := valImg_agreeOn (GF := GF) (N := N) (v := v) (a := a) (fun k hk => (hA k hk).symm)
     ihave #Hvs' := valsImg_agree N vs (a + 24) (fun k hk => (hB k hk).symm) $$ Hvs
     iexists M
     isplitl

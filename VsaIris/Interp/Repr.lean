@@ -3,6 +3,7 @@ import VsaIris.Vsa.Stdio
 import Vsa.RuntimeRepr
 import Vsa.MemReprWithin
 import Vsa.While.StackNeed
+import Vsa.Sim.StoreInvariant
 
 /-!
 # Representation predicates (INTERP_DESIGN.md §3, package R)
@@ -59,6 +60,11 @@ theorem imgLE_congr {img img' : Nat → BitVec 8} {a : Nat} :
     rw [show img a = img' a by simpa using h 0 (by omega),
       imgLE_congr (a := a + 1) (n := n) (fun i hi => by
         simpa [Nat.add_assoc, Nat.add_comm 1 i] using h (i + 1) (by omega))]
+
+/-- A word of an image agreeing with another on its bytes. -/
+theorem imgW_agree {f g : Nat → BitVec 8} {a : Nat} (h : ∀ j, j < 8 → f (a + j) = g (a + j)) :
+    imgW f a = imgW g a := by
+  unfold imgW; rw [imgLE_congr h]
 
 /-- A memory holding the image on a window reads the image's value. -/
 theorem readLE_of_img {img : Nat → BitVec 8} {m : Mem} {a : Nat} :
@@ -177,9 +183,24 @@ def CStrImg (img : Nat → BitVec 8) (p : Nat) (s : String) : Prop :=
       0 < (s.toList[i]).toNat ∧ (s.toList[i]).toNat < 128) ∧
     img (p + s.toList.length) = 0
 
-/-- A C string at `p`, NUL included, read-only forever (`CString`). -/
+/-- The HTIF `tohost`/`fromhost` words start here (`Vsa.Sim.tohostAddr`;
+`VsaIris/Interp/SpecEnv.lean` checks the two agree). -/
+def htifLo : Nat := 0x8001ad00
+
+/-- **The window a word-at-a-time string routine reads.** `strlen` and
+`strcmp` load whole aligned 8-byte words, so they read up to 7 bytes past
+the NUL of a `len`-character string at `p`: the window `[p, p + len + 8)`
+must be RAM and off the HTIF words. -/
+structure StrWin (p len : Nat) : Prop where
+  lo : 0x80000000 ≤ p
+  hi : p + len + 8 ≤ 0x100000000
+  htif : p + len + 8 ≤ htifLo ∨ htifLo + 16 ≤ p
+
+/-- A C string at `p`, NUL included, read-only forever (`CString`), with the
+window `strlen`/`strcmp` over-read (`StrWin`). -/
 def strAt (p : Nat) (s : String) : IProp GF :=
-  iprop(∃ img, ⌜CStrImg img p s⌝ ∗ roImg (InExt (p, s.toList.length + 1)) img)
+  iprop(∃ img, ⌜CStrImg img p s ∧ StrWin p s.toList.length⌝ ∗
+    roImg (InExt (p, s.toList.length + 1)) img)
 
 instance (p : Nat) (s : String) : Persistent (strAt (GF := GF) p s) := by
   unfold strAt; infer_instance
@@ -270,8 +291,29 @@ def BlocksCover (bl : List (Nat × Nat)) (a : Nat) : Prop := ∃ b ∈ bl, InExt
 /-- Two extents share no byte. -/
 def ExtDisj (b b' : Nat × Nat) : Prop := ∀ a, InExt b a → ¬ InExt b' a
 
+/-- Where a heap block may sit: RAM above the HTIF words, 16-aligned (a chunk
+payload). The `env_*` loads and stores into a frame need exactly this. -/
+structure BlockWin (b : Nat × Nat) : Prop where
+  lo : 0x80000000 ≤ b.1
+  hi : b.1 + b.2 ≤ 0x100000000
+  htif : htifLo + 16 ≤ b.1
+  align : b.1 % 16 = 0
+
+/-- The capacity `env_define`'s growth policy reaches for `k` bindings
+(`env.c:29-33`: `cap = cap ? 2*cap : 8`), by the same fuel recursion as the
+cost model's `arrayCostAux` (`Vsa/While/Cost.lean`), so the two are related
+step by step. -/
+def capForAux : (fuel cap k : Nat) → Nat
+  | 0, cap, _ => cap
+  | fuel + 1, cap, k => if k ≤ cap then cap else capForAux fuel (if cap = 0 then 8 else 2 * cap) k
+
+/-- The canonical capacity of a frame with `k` bindings: `0, 8, 16, 32, …`. -/
+def capFor (k : Nat) : Nat := capForAux k 0 k
+
 /-- The pure layout of one frame in its image (`FrameRepr`'s struct words,
-plus the block geometry `env_define`'s `realloc` needs). -/
+plus the block geometry `env_define`'s `realloc` needs, the blocks' address
+windows the `env_*` loads and stores need, and the canonical capacity the
+counted regime's charges follow). -/
 structure FrameLayout (img : Nat → BitVec 8) (G : FrameGeom) (n : Nat) : Prop where
   e_ne : G.e ≠ 0
   sblk : G.sblk.1 ≤ G.e ∧ G.e + 32 ≤ G.sblk.1 + G.sblk.2
@@ -282,9 +324,18 @@ structure FrameLayout (img : Nat → BitVec 8) (G : FrameGeom) (n : Nat) : Prop 
   parent : imgLE img (G.e + 24) 8 = G.par
   count_le : n ≤ G.cap
   empty : G.cap = 0 → G.pn = 0 ∧ G.pv = 0
-  arrays : 0 < G.cap → G.nblk.1 = G.pn ∧ 8 * G.cap ≤ G.nblk.2 ∧
-    G.vblk.1 = G.pv ∧ 24 * G.cap ≤ G.vblk.2
+  arrays : 0 < G.cap → G.nblk = (G.pn, 8 * G.cap) ∧ G.vblk = (G.pv, 24 * G.cap)
   disjoint : G.blocks.Pairwise ExtDisj
+  win : ∀ b ∈ G.blocks, BlockWin b
+  e_align : G.e % 8 = 0
+  cap_canon : G.cap = capFor n
+
+/-- The arrays' extents, componentwise. -/
+theorem FrameLayout.arrays_le {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
+    (h : FrameLayout img G n) (hc : 0 < G.cap) :
+    G.nblk.1 = G.pn ∧ 8 * G.cap ≤ G.nblk.2 ∧ G.vblk.1 = G.pv ∧ 24 * G.cap ≤ G.vblk.2 := by
+  obtain ⟨h1, h2⟩ := h.arrays hc
+  rw [h1, h2]; exact ⟨rfl, Nat.le_refl _, rfl, Nat.le_refl _⟩
 
 /-- The bindings of a frame: name `i` is the string at `names[i]`, value `i`
 the words at `vals[i]` (persistent meanings; the words are in the image). -/
@@ -355,13 +406,24 @@ structure StoreMaps (mf mc : NatMap Nat) (s : Store) : Prop where
   closures : ∀ k, (PartialMap.get? mc k).isSome ↔ k < s.closures.size
   clos_inj : ∀ a b p, PartialMap.get? mc a = some p → PartialMap.get? mc b = some p → a = b
 
+/-- The pure part of `storeRepr`: the two address maps, the block list, the
+closure-body bound and the environment invariant (`Vsa.Sim.StoreInvariant`:
+unique names per frame, parents point to older frames). `env_get`/`env_set`
+walk the parent chain by it, and `env_define` updates the first match by it. -/
+structure StorePure (mf mc : NatMap Nat) (s : Store) (B : List (Nat × Nat))
+    (Bs : List (List (Nat × Nat))) : Prop where
+  maps : StoreMaps mf mc s
+  blocks : B = Bs.flatten
+  bodies : StoreBodiesBound s perCallBudget
+  inv : Vsa.Sim.StoreInvariant s
+
 /-- **The whole store** (`StoreRepr` + `HeapOwned` + `StoreOwned`),
 monolithic: BigStep's frames are shared by closures, so every call can reach
 any frame. `B` is the list of heap blocks the frames own. -/
 def storeRepr (N : NativeAddrs) (s : Store) (B : List (Nat × Nat)) : IProp GF :=
   iprop(∃ (mf mc : NatMap Nat) (Bs : List (List (Nat × Nat))),
     ghost_map_auth I.frameName (DFrac.own 1) mf ∗ ghost_map_auth I.closName (DFrac.own 1) mc ∗
-    ⌜StoreMaps mf mc s ∧ B = Bs.flatten ∧ StoreBodiesBound s perCallBudget⌝ ∗
+    ⌜StorePure mf mc s B Bs⌝ ∗
     framesOwn N 0 s.frames.toList Bs ∗ closuresOwn 0 s.closures.toList)
 
 /-! ## The interpreter context -/

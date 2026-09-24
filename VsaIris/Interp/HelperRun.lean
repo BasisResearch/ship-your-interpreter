@@ -252,11 +252,6 @@ theorem ValPure.kind {N : Vsa.RuntimeRepr.NativeAddrs} {v : Vsa.While.Value} {w0
     (h : ValPure N v w0 w1 w2) : w0.toNat % 2 ^ 32 = Vsa.RuntimeRepr.kindTag v := by
   cases v <;> simp only [ValPure] at h <;> first | exact h | exact h.1
 
-/-- Two tracking memories agreeing on a word's bytes read the same word. -/
-theorem imgW_agree {M M' : Mem} {x : Nat} (h : ∀ i, i < 8 → imgM M (x + i) = imgM M' (x + i)) :
-    imgW (imgM M) x = imgW (imgM M') x := by
-  unfold imgW; rw [imgLE_congr h]
-
 /-- A signed word load of a slot's kind. -/
 theorem ldv_lw_kind {Mt : Mem} {a k : Nat} (h : (imgW (imgM Mt) a).toNat % 2 ^ 32 = k)
     (hk : k < 2 ^ 31) : ldv .lw Mt a = BitVec.ofNat 64 k :=
@@ -283,7 +278,7 @@ theorem valImg_words {N : Vsa.RuntimeRepr.NativeAddrs} {f g : Nat → BitVec 8} 
   unfold valImg; rw [h0, h8, h16]
 
 /-- Two images agreeing on a slot give it one meaning. -/
-theorem valImg_agree {N : Vsa.RuntimeRepr.NativeAddrs} {f g : Nat → BitVec 8} {a : Nat}
+theorem valImg_agreeOn {N : Vsa.RuntimeRepr.NativeAddrs} {f g : Nat → BitVec 8} {a : Nat}
     {v : Vsa.While.Value} (h : ∀ k, InExt (a, 24) k → f k = g k) :
     valImg (GF := GF) N f a v = valImg N g a v := by
   have e : ∀ o, o ≤ 16 → imgW f (a + o) = imgW g (a + o) := fun o ho => by

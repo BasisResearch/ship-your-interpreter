@@ -153,7 +153,8 @@ theorem vp_null (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
     · omega
   case hX =>
     iintro ⟨-, -, -, #Hi⟩
-    iapply strAt_rodata (by rw [str_null]; decide) (by unfold CStrImg; rw [str_null]; decide) $$ Hi
+    iapply strAt_rodata (by rw [str_null]; decide) (by unfold CStrImg; rw [str_null]; decide)
+        (by rw [str_null]; exact ⟨by decide, by decide, .inl (by unfold htifLo; decide)⟩) $$ Hi
 
 theorem str_true : "true".toList = ['t', 'r', 'u', 'e'] := by decide
 theorem str_false : "false".toList = ['f', 'a', 'l', 's', 'e'] := by decide
@@ -192,7 +193,8 @@ theorem vp_bool (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
       · omega
     case hX =>
       iintro ⟨-, -, -, #Hi⟩
-      iapply strAt_rodata (by rw [str_false]; decide) (by unfold CStrImg; rw [str_false]; decide) $$ Hi
+      iapply strAt_rodata (by rw [str_false]; decide) (by unfold CStrImg; rw [str_false]; decide)
+        (by rw [str_false]; exact ⟨by decide, by decide, .inl (by unfold htifLo; decide)⟩) $$ Hi
   · simp only [Bool.cond_true] at hb
     ix_run1 c.hlive using [h10, h11, h2, hk, hku, hb]
     refine vp_swp_close Wp (Xr := strAt 0x80019008 "true") (frag := "true")
@@ -208,7 +210,8 @@ theorem vp_bool (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
       · omega
     case hX =>
       iintro ⟨-, -, -, #Hi⟩
-      iapply strAt_rodata (by rw [str_true]; decide) (by unfold CStrImg; rw [str_true]; decide) $$ Hi
+      iapply strAt_rodata (by rw [str_true]; decide) (by unfold CStrImg; rw [str_true]; decide)
+        (by rw [str_true]; exact ⟨by decide, by decide, .inl (by unfold htifLo; decide)⟩) $$ Hi
 
 /-- `int`: `fprintf(stdout, "%lld", n)`. -/
 theorem vp_int (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
@@ -360,7 +363,8 @@ theorem vp_clo_anon (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
     · omega
   case hX =>
     iintro ⟨-, -, -, #Hi⟩
-    iapply strAt_rodata (by rw [str_fn]; decide) (by unfold CStrImg; rw [str_fn]; decide) $$ Hi
+    iapply strAt_rodata (by rw [str_fn]; decide) (by unfold CStrImg; rw [str_fn]; decide)
+        (by rw [str_fn]; exact ⟨by decide, by decide, .inl (by unfold htifLo; decide)⟩) $$ Hi
 
 /-- A named closure: `fprintf(stdout, "<fn %s>", name)`. -/
 theorem vp_clo_named (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
@@ -525,7 +529,7 @@ theorem dispRes_clos {st : Store} {ca : Nat} :
     dispRes (GF := GF) st (.closure ca) ⊢ ∃ (cd : ClosureData) (p q : Nat) (img : Nat → BitVec 8)
       (P : Nat → Prop) (m : Mem), ⌜st.closures[ca]? = some cd ∧ imgLE img p 8 = q ∧
         (∀ k, InExt (p, 16) k → ReadOK k) ∧ ExprReprWithin m P q (.fn cd.name cd.params cd.body) ∧
-        (∀ k, P k → ReadOK k)⌝ ∗
+        (∀ k, P k → ReadOK k) ∧ SharedWin P⌝ ∗
       closAt ca p ∗ roImg (InExt (p, 16)) img ∗ roOn P m := by
   unfold dispRes; exact .rfl
 
@@ -550,7 +554,7 @@ theorem vp_closure (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     ⊢ Wp.W Φ := by
   iintro ⟨#Hcode, #Hw, #Hd, #Himg, Hstd, Hcon, Hst, Hk, Hms⟩
   ihave #Hd2 := dispRes_clos $$ Hd
-  icases Hd2 with ⟨%cd, %cp, %q, %img, %P, %m, %⟨hcd, hqimg, hcR, hrep, hPR⟩, #Hca, #Hro, #Hon⟩
+  icases Hd2 with ⟨%cd, %cp, %q, %img, %P, %m, %⟨hcd, hqimg, hcR, hrep, hPR, hPW⟩, #Hca, #Hro, #Hon⟩
   ihave #Hca' := valImg_clos $$ Hw
   ihave %hcp := closAt_agree ca cp (imgW (imgM Ma) (p.toNat + 8)).toNat $$ [Hca Hca']
   · iframe Hca Hca'
@@ -593,7 +597,7 @@ theorem vp_closure (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       iframe Hview Hw Hd Himg Hstd Hcon Hst Hcode Hk Hms
     intro F'
     exact vp_clo_anon Wp H c f (by rw [hdisp, hn0])
-  · ihave #Hx := strAt_of_cstringWithin hcs $$ Hon
+  · ihave #Hx := strAt_of_cstringWithin hcs hPW $$ Hon
     iapply wp_swpF Wp (text := interpText ++ dataOf Dt (clodA cp q)) (S := InExt (p.toNat, 24))
       (R := upd rv 1 r) (Mt := Ma) (pc := valuePrintPC)
       (F := Fvp Wp Φ N p s r (.closure ca) st o rv Ma (strAt w x))
