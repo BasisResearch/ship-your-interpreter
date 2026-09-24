@@ -276,6 +276,21 @@ theorem valImg_str {N : Vsa.RuntimeRepr.NativeAddrs} {f : Nat → BitVec 8} {a :
   iintro ⟨-, #H⟩
   iexact H
 
+/-- A value's meaning depends on its three words only. -/
+theorem valImg_words {N : Vsa.RuntimeRepr.NativeAddrs} {f g : Nat → BitVec 8} {a b : Nat}
+    {v : Vsa.While.Value} (h0 : imgW f a = imgW g b) (h8 : imgW f (a + 8) = imgW g (b + 8))
+    (h16 : imgW f (a + 16) = imgW g (b + 16)) : valImg (GF := GF) N f a v = valImg N g b v := by
+  unfold valImg; rw [h0, h8, h16]
+
+/-- Two images agreeing on a slot give it one meaning. -/
+theorem valImg_agree {N : Vsa.RuntimeRepr.NativeAddrs} {f g : Nat → BitVec 8} {a : Nat}
+    {v : Vsa.While.Value} (h : ∀ k, InExt (a, 24) k → f k = g k) :
+    valImg (GF := GF) N f a v = valImg N g a v := by
+  have e : ∀ o, o ≤ 16 → imgW f (a + o) = imgW g (a + o) := fun o ho => by
+    unfold imgW
+    rw [imgLE_congr (n := 8) (img' := g) (fun i hi => h _ (by simp [InExt]; omega))]
+  exact valImg_words (by simpa using e 0 (by omega)) (e 8 (by omega)) (e 16 (by omega))
+
 end Vals
 
 end VsaIris.Interp

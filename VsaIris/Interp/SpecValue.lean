@@ -74,6 +74,13 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS
 
 /-! ## Values in memory -/
 
+/-- The window of `n` consecutive 24-byte values from `a` (a native's
+`args`, inside `eval_expr`'s frame): 8-aligned, RAM, off the HTIF words. -/
+structure ArgsGeom (a : BitVec 64) (n : Nat) : Prop where
+  al : a.toNat % 8 = 0
+  lo : Vsa.Sim.tohostAddr + 16 ≤ a.toNat
+  hi : a.toNat + 24 * n ≤ 0x100000000
+
 /-- `n` consecutive represented values from `a` (a native's `args`). -/
 def valsAt (N : NativeAddrs) (a : Nat) (vs : List Value) : IProp GF :=
   sepL vs.zipIdx (fun p => valAt N (a + 24 * p.2) p.1)
@@ -183,7 +190,7 @@ def nativePrintSpec (Wp : MachWP (GF := GF) M) (sret args s : BitVec 64) (vs : L
     (st : Store) (o : String) : IProp GF :=
   helperSpec M Wp nativePrintPC callerSaved
     (fun rv => rv 10 = sret ∧ rv 12 = BitVec.ofNat 64 vs.length ∧ rv 13 = args ∧ rv 2 = s)
-    iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret ∧ SlotGeom args ∧ vs.length < 2 ^ 31⌝ ∗
+    iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret ∧ ArgsGeom args vs.length ∧ vs.length < 2 ^ 31⌝ ∗
       valsAt N args.toNat vs ∗ dispResL st vs ∗ binImg ∗ stdioOwn ∗ consoleOwn o ∗
       stackAt s nativePrintNeed)
     (fun _ => iprop(valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioOwn ∗
@@ -195,7 +202,7 @@ def nativePrintlnSpec (Wp : MachWP (GF := GF) M) (sret args s : BitVec 64) (vs :
     (st : Store) (o : String) : IProp GF :=
   helperSpec M Wp nativePrintlnPC callerSaved
     (fun rv => rv 10 = sret ∧ rv 12 = BitVec.ofNat 64 vs.length ∧ rv 13 = args ∧ rv 2 = s)
-    iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret ∧ SlotGeom args ∧ vs.length < 2 ^ 31⌝ ∗
+    iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret ∧ ArgsGeom args vs.length ∧ vs.length < 2 ^ 31⌝ ∗
       valsAt N args.toNat vs ∗ dispResL st vs ∗ binImg ∗ stdioOwn ∗ consoleOwn o ∗
       stackAt s nativePrintlnNeed)
     (fun _ => iprop(valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ stdioOwn ∗

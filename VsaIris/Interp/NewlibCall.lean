@@ -171,6 +171,75 @@ theorem ms_tailNewlib (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   · iframe Hargs Htmp Hsp Hcs
   iapply Hk $$ Hpc Hra Hregs HY HS Hst
 
+/-- **A newlib call from a run** (`jal entry` at `i`): the run continues at
+`i + 4` with the callee-saved registers and `sp` kept. -/
+theorem ms_callNewlib (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
+    (hexec : JalExec (vsaModel live) i code entry)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    {P Q : BitVec 64 → IProp GF} {vs : List (BitVec 64)} {X Y : IProp GF}
+    {s : BitVec 64} {need n : Nat} {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem}
+    (hlen : vs.length ≤ 8) (hvs : ∀ i (h : i < vs.length), R (10 + i) = vs[i]) (hs : R 2 = s)
+    (hn : n ≤ s.toNat) (hneed : need ≤ n)
+    (hP : ∀ r, iprop(argsAt vs ∗ X ∗ callFrame s need Newlib.calleeSaved R) ⊢ P r)
+    (hQ : ∀ r, Q r ⊢ iprop(clobbered argRegs ∗ Y ∗ callFrame s need Newlib.calleeSaved R)) :
+    fnSpecW Wp entry P Q ∗ codeRes ∗ ms (BitVec.ofNat 64 i) R S Mt ∗ X ∗ stackScratch s n ∗
+      gp ↦ᵣ□ Newlib.gpV ∗ binImg ∗
+      (∀ R' : Nat → BitVec 64, ⌜∀ x ∈ fRegs, x ∉ callerSaved → R' x = R x⌝ -∗ Y -∗
+        ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt -∗
+        stackScratch s n -∗ Wp.W Φ)
+    ⊢ Wp.W Φ := by
+  unfold ms
+  iintro ⟨#Hspec, #Hcode, ⟨Hpc, Hra, Hregs, HS⟩, HX, Hst, #Hgp, #Himg, Hk⟩
+  ihave #Hi := instrAt_of_codeRes hcode $$ Hcode
+  ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hn hneed $$ Hst
+  ihave ⟨Hsp, Hcs, Htmp, Hargs⟩ := (regFile_newlib R).1 $$ Hregs
+  ihave Hargs := argsAt_of_regs R vs hlen hvs $$ Hargs
+  ihave Htmp := clobbered_of_fn _ R $$ Htmp
+  rw [hs]
+  iapply wp_callW Wp hexec
+  iframe Hi Hspec Hpc Hra
+  isplitl [Hargs HX Hsp Hcs Htmp Hst]
+  · iapply hP
+    unfold callFrame
+    iframe Hargs HX Hsp Hcs Hst Hgp Himg Htmp
+  iintro Hpc Hra HQ
+  ihave ⟨Hargs, HY, Hcf⟩ := hQ _ $$ HQ
+  unfold callFrame
+  icases Hcf with ⟨Hsp, Hst, Hcs, Htmp, -, -⟩
+  ihave Hst := stackScratch_widen hn hneed $$ [Hslack Hst]
+  · iframe Hslack Hst
+  ihave ⟨%R', Hregs, %hk⟩ := regFile_after R s hs $$ [Hargs Htmp Hsp Hcs]
+  · iframe Hargs Htmp Hsp Hcs
+  iapply Hk $$ %R' %hk HY [Hpc Hra Hregs HS] Hst
+  rw [regFile_upd_ra]
+  simp only [upd_same]
+  iframe Hpc Hra Hregs HS
+
+/-- A tracked part of a run's owned bytes, out of its state. -/
+theorem ms_split {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M : Mem}
+    (hd : ∀ a, S a → ¬ T a) :
+    ms (GF := GF) pc R (fun a => S a ∨ T a) M ⊢
+      ms pc R S M ∗ ownSet T (fun a => a ↦ₘ imgM M a) := by
+  unfold ms
+  iintro ⟨Hpc, Hra, Hregs, HS⟩
+  ihave ⟨H1, H2⟩ := ownSet_split_tracked S T M hd $$ HS
+  iframe Hpc Hra Hregs H1 H2
+
+/-- And back in, at one tracking memory agreeing with both. -/
+theorem ms_join {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {M1 M2 : Mem} :
+    ms (GF := GF) pc R S M1 ∗ ownSet T (fun a => a ↦ₘ imgM M2 a) ⊢
+      ∃ M, ms pc R (fun a => S a ∨ T a) M ∗
+        ⌜(∀ a, S a → imgM M a = imgM M1 a) ∧ (∀ a, T a → imgM M a = imgM M2 a) ∧
+          ∀ a, S a → ¬ T a⌝ := by
+  unfold ms
+  iintro ⟨⟨Hpc, Hra, Hregs, HS⟩, HT⟩
+  ihave ⟨%M, H, %h⟩ := ownSet_join_tracked S T M1 M2 $$ [HS HT]
+  · iframe HS HT
+  iexists M
+  iframe Hpc Hra Hregs H
+  ipureintro; exact h
+
 /-- A C string of the fixed `.rodata` is a persistent string. -/
 theorem strAt_rodata {p : Nat} {x : String}
     (hdom : ∀ i, i < x.toList.length + 1 → rodataDom (p + i)) (hc : CStrImg rodataByte p x) :
