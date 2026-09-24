@@ -2772,9 +2772,8 @@ So `InitialAllocatorAt.capacity` does not imply allocation success, and no
 allocator contract with a success arm holds of every `InitialAllocatorAt`
 state. The Iris shape adds `brkv % 4096 = 0`. It is preserved by every path:
 the simple extension adds a page-rounded size, and `_malloc_trim_r` releases
-whole pages. Supplier: the boundary (the loader leaves the break page-aligned
-after the parser's first `malloc`); it is not derivable from
-`InterpRunPhysicalFacts`. Affected: `InitialAllocatorAt`, A0's
+whole pages. Supplied (2026-09-24) by `InterpRunReadyFacts.boot`
+(`BootHeapFacts.brk_page`, see A0 below). Affected: `InitialAllocatorAt`, A0's
 `world_of_boundary`, and every malloc success claim.
 
 MISSING BOUNDARY FACT (lane H4, the same shape): `binblocks` (bin 0's size
@@ -2787,14 +2786,17 @@ clears the bitmap lazily, so a set bit need not have a nonempty block), so
 nothing bounds the top set bit. A bit at 32 or above walks the index past bin
 127 and out of `__malloc_av_`. The Iris shape therefore adds
 `read64 m binblocksAddr = some bb -> bb < 2 ^ 32` (`PHeapAt.bb_lt`). Every
-path preserves it: the bits written are `1 << (i / 4)` for `i < 128`. Supplier:
-the boundary, beside the page-aligned break. Affected: `InitialAllocatorAt`,
+path preserves it: the bits written are `1 << (i / 4)` for `i < 128`. Supplied
+by `BootHeapFacts.binblocks`, beside the page-aligned break. Affected: `InitialAllocatorAt`,
 A0's `world_of_boundary`, `roomB_of_initial` (which takes it as `hbb`).
 
-MISSING BOUNDARY FACTS (lane A0, machine-checked at the control): the
-boundary world (`VsaIris/Interp/World.lean`, `world_of_boundary`) takes the
-named premise `BootGap b G`. Its fields are not derivable from
-`Loaded interpRunLayout`:
+BOUNDARY FACTS (lane A0; SUPPLIED by lane BG, 2026-09-24, user decision): the
+boundary world (`VsaIris/Interp/World.lean`, `world_of_boundary`) needs
+`BootGap b b.G`. Its fields are not derivable from the other
+`InterpRunReadyFacts` fields, so `Loaded` now states them
+(`InterpRunReadyFacts.boot : ∃ D top brkv chunks bins F, BootHeap …`, with
+`BootHeap.facts : BootHeapFacts`, `Vsa/Sim/LayoutInstance.lean`) and
+`Boot.gap` derives `BootGap`; `world_of_boundary` has no gap premise:
 - `frame : FrameChunks …`: the global frame's `Env` struct, names array and
   values array are three DISTINCT whole in-use chunk payloads holding no
   shared byte. `HeapAt.live` puts each live extent inside some in-use chunk,
@@ -2809,10 +2811,11 @@ named premise `BootGap b G`. Its fields are not derivable from
   it (`_stdin`/`_stdout`/`_stderr` = `&__sf[0..2]`); the control snapshot
   zeroed `_stdin` and `_stderr` until `Vsa/Sim/OutputAliasSnapshot.lean` gained
   the two ELF words (A0).
-Satisfiability: `ctl_bootGap` (`VsaIris/Interp/WorldVacuity.lean`).
-Supplier: new `InterpRunReadyFacts` fields (a statement change like S1's
-`stack_admissible`; the user's decision). Affected: `world_of_boundary`, hence
-A's `term_sim_iris`/`stuck_sim_iris`.
+Satisfiability: `Control.bootHeap` (`Vsa/Sim/NativeNameAudit/ControlBootHeap.lean`)
+inside `Control.readyFacts`; `ctl_bootGap` (`VsaIris/Interp/WorldVacuity.lean`).
+No field mentions the program, so there is no per-program check at
+`c/tests/*.wl` (unlike `ProgramStackFits`). Statement change recorded in
+INTERP_DESIGN.md ("STATEMENT CHANGE (lane BG)").
 
 Machine-checked `malloc` paths (`VsaIris`, lane H4): `VsaIris.VsaHeap.malloc_paths`
 (`VsaIris/Vsa/MallocChain.lean`) runs `_malloc_r` from its entry `0x800047a8`

@@ -230,14 +230,19 @@ structure Boot (c : Vsa.Machine.Config) (p : Program) where
   owned : InitialOwned c.σ.mem A stackSL φf φc stmts count D
   alloc : InitialAllocatorAt c.σ.mem D.exts (ReallocExtent D.allocations) stmts count
     top brkv chunks bins
+  /-- The global frame's heap geometry. -/
+  frame : BootFrame
+  /-- The boundary heap facts `InitialAllocatorAt` does not state
+  (`InterpRunReadyFacts.boot`). -/
+  heapFacts : BootHeapFacts c.σ.mem D.shared (φf 0) top brkv chunks frame
 
 open Vsa.Sim.LayoutInstance in
 theorem boot_of_loaded {p : Program} {c : Vsa.Machine.Config}
     (h : Vsa.Refine.Loaded interpRunLayout p c) : Nonempty (Boot c p) := by
   obtain ⟨a, n, hp, inp, N, A, φf, φc, aLeft, F⟩ := h
-  obtain ⟨D, hD⟩ := F.ownership
-  obtain ⟨top, brkv, chunks, bins, hA⟩ := hD.allocator
-  exact ⟨⟨a, n, inp, N, A, φf, φc, aLeft, D, top, brkv, chunks, bins, hp, F, hD, hA⟩⟩
+  obtain ⟨D, top, brkv, chunks, bins, G, hB⟩ := F.boot
+  exact ⟨⟨a, n, inp, N, A, φf, φc, aLeft, D, top, brkv, chunks, bins, hp, F, hB.owned, hB.alloc,
+    G, hB.facts⟩⟩
 
 theorem initSt_frame0 : 0 < initSt.store.frames.size := by decide
 
@@ -272,24 +277,19 @@ abbrev H : List (Nat × Nat) := inuseBlocks b.chunks
 
 end Boot
 
-/-! ## 4. The facts the boundary does not state (`BootGap`)
+/-! ## 4. The boundary heap facts (`BootGap`)
 
 `InitialOwned` places every live extent inside SOME in-use chunk
-(`HeapAt.live`), but not alone in it: the `Env` struct of the global frame
-may, as far as the boundary says, share a chunk with a binding name, and the
-two arrays may share their chunk's tail with other extents. §3's `world`
-needs the store's blocks to be members of the heap's live-block list (whole
-chunk payloads, the user's ruling), exclusively owned, so the three chunks must
-be distinct and hold no shared byte (`FrameChunks`). `interp_init` allocates
-each by its own `malloc` and nothing else into them. The other fields:
+(`HeapAt.live`), but not alone in it. §3's `world` needs the store's blocks to
+be members of the heap's live-block list (whole chunk payloads, the user's
+ruling), exclusively owned, so the global frame's three chunks must be
+distinct and hold no shared byte (`FrameChunks`). The other fields:
 `BlockHeapAt.top_room`, H4's page-aligned break and 32-bit `binblocks` word
 (`PHeapAt`, INTERP_DESIGN.md Q5/Q5b), and `_impure_data._stderr`
-(`Stdio.StdioOK`, Q6). All hold at the control program
-(`VsaIris/Interp/WorldVacuity.lean`, `ctl_bootGap`).
+(`Stdio.StdioOK`, Q6).
 
-Supplier: `InterpRunReadyFacts` fields (a statement change like S1's
-`stack_admissible`, the user's decision), recorded in
-`experiments/smt/PROOF_CLOSURE_PLAN.md` §2. -/
+`Loaded` states them (`InterpRunReadyFacts.boot`, `LayoutInstance.BootHeap`);
+`Boot.gap` projects them at the frame geometry `Boot.G`. -/
 
 /-- The global frame's geometry against the boundary heap walk. -/
 structure FrameChunks (m : Mem) (chunks : List Chunk) (shared : Nat → Prop) (e : Nat)
@@ -323,6 +323,46 @@ structure BootGap {c : Vsa.Machine.Config} {p : Program} (b : Boot c p) (G : Fra
   /-- `_impure_data._stderr` points at `__sf[2]` (INTERP_DESIGN.md Q6):
   `Stdio.StdioOK` needs it and `ExitRuntimeData` does not state it. -/
   stderr : read64 c.σ.mem Stdio.stderrPtrAddr = some exitStderr
+
+namespace Boot
+
+variable {c : Vsa.Machine.Config} {p : Program}
+
+/-- The global frame's geometry, from the boundary's `BootFrame`. -/
+def G (b : Boot c p) : FrameGeom where
+  e := b.φf 0
+  cap := b.frame.cap
+  pn := b.frame.pn
+  pv := b.frame.pv
+  par := 0
+  sblk := b.frame.sblk
+  nblk := b.frame.nblk
+  vblk := b.frame.vblk
+
+theorem frameChunks (b : Boot c p) :
+    FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) b.G := by
+  have h := b.heapFacts.frame
+  exact
+    { env := rfl
+      cap := h.cap
+      names := h.names
+      vals := h.vals
+      par := rfl
+      sblk := h.sblk
+      arrays := h.arrays
+      live := fun e he => mem_inuseBlocks.2 (h.live e he)
+      nodup := h.nodup
+      unshared := fun k ⟨e, he, hk⟩ => h.unshared e he k hk.1 hk.2 }
+
+/-- **The boundary gap, derived from `Loaded`** (`InterpRunReadyFacts.boot`). -/
+theorem gap (b : Boot c p) : BootGap b b.G where
+  top_room := b.heapFacts.top_room
+  brk_page := b.heapFacts.brk_page
+  binblocks := b.heapFacts.binblocks
+  frame := b.frameChunks
+  stderr := b.heapFacts.stderr
+
+end Boot
 
 /-! ## 5. The global frame's boundary data -/
 
@@ -855,12 +895,14 @@ theorem interp_disj (inp k : Nat) (hk : InterpByte inp k) : ¬ CallerByte inp k 
   fun h => h.2 hk
 
 /-- **The carving, at fixed ghost names.** -/
-theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p) {G : FrameGeom} (gap : BootGap b G)
+theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p)
     (ρ : Regime) (hρ : RegimeOK b.top ρ) :
     ghost_map_auth (GF := GF) I.frameName (DFrac.own 1) (∅ : NatMap Nat) ∗
       ghost_map_auth I.closName (DFrac.own 1) (∅ : NatMap Nat) ∗
-      ([∗map] k ↦ v ∈ b.bytes G, iprop(k ↦ₘ v)) ∗ consoleOwn (Vsa.Machine.output c.σ) ⊢
+      ([∗map] k ↦ v ∈ b.bytes b.G, iprop(k ↦ₘ v)) ∗ consoleOwn (Vsa.Machine.output c.σ) ⊢
       |==> bootRes b ρ := by
+  have gap := b.gap
+  generalize b.G = G at gap ⊢
   have hroom := gap.top_room
   have hG := gap.frame
   have hout : Vsa.Machine.output c.σ = initSt.out := b.ready.out
@@ -928,16 +970,16 @@ theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p) {G : FrameGeom} (gap : Bo
 /-- **`world_of_boundary`** (INTERP_DESIGN.md §5.1): from the bytes adequacy
 hands the client (`Boot.bytes`, which agrees with the configuration:
 `Boot.bytes_agree`) and the console cell at the initial output, allocate the
-two `InterpGS` ghost maps and carve the boundary world in regime `ρ`. -/
-theorem world_of_boundary (b : Boot c p) {G : FrameGeom} (gap : BootGap b G)
-    (ρ : Regime) (hρ : RegimeOK b.top ρ) :
-    ([∗map] k ↦ v ∈ b.bytes G, iprop(k ↦ₘ v)) ∗ consoleOwn (GF := GF) (Vsa.Machine.output c.σ) ⊢
+two `InterpGS` ghost maps and carve the boundary world in regime `ρ`. The
+boundary heap facts come from `Loaded` (`Boot.gap`). -/
+theorem world_of_boundary (b : Boot c p) (ρ : Regime) (hρ : RegimeOK b.top ρ) :
+    ([∗map] k ↦ v ∈ b.bytes b.G, iprop(k ↦ₘ v)) ∗ consoleOwn (GF := GF) (Vsa.Machine.output c.σ) ⊢
       |==> ∃ γf γc : GName, (letI : InterpGS GF := ⟨γf, γc⟩; bootRes b ρ) := by
   iintro ⟨Hm, Hcon⟩
   imod ghost_map_alloc_empty (GF := GF) (K := Nat) (V := Nat) (H := NatMap) with ⟨%γf, Hf⟩
   imod ghost_map_alloc_empty (GF := GF) (K := Nat) (V := Nat) (H := NatMap) with ⟨%γc, Hc⟩
   iexists γf, γc
-  iapply (boot_of_bytes (I := ⟨γf, γc⟩) b gap ρ hρ) $$ [Hf Hc Hm Hcon]
+  iapply (boot_of_bytes (I := ⟨γf, γc⟩) b ρ hρ) $$ [Hf Hc Hm Hcon]
   iframe Hf Hc Hm Hcon
 
 end Assembly

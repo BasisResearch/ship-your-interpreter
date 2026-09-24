@@ -115,6 +115,8 @@ import VsaIris.Interp.WorldVacuity
 #print axioms VsaIris.Interp.textOwn_of_roOn
 #print axioms VsaIris.Interp.boot_of_bytes
 #print axioms VsaIris.Interp.world_of_boundary
+#print axioms VsaIris.Interp.Boot.gap
+#print axioms Vsa.Sim.NativeNameAudit.Control.bootHeap
 #print axioms VsaIris.Interp.ctl_bootGap
 #print axioms VsaIris.Interp.ctl_world_counted
 #print axioms VsaIris.Interp.ctl_world_uncounted

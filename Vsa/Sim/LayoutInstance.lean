@@ -326,18 +326,102 @@ theorem ProgramStackFits.execBudget {p : Vsa.While.Program} (h : ProgramStackFit
   rw [Nat.sub_zero]
   refine ⟨?_, ?_, ?_⟩ <;> rw [hsp] <;> omega
 
+/-! ## The boundary heap's frame chunks and allocator words (A0's `BootGap`)
+
+`InitialOwned` places every live extent inside SOME in-use chunk, not alone in
+it, and `DlHeap.HeapAt` leaves the break's alignment, the high bits of the
+`binblocks` word, and the top chunk's minimum size open. `interp_init`
+allocates the global frame's `Env` struct and its two arrays by three separate
+`malloc`s; the loader leaves the break page-aligned; `binblocks` holds bits
+`1 << (i / 4)` for `i < 128` only; and the ELF's `.data` sets
+`_impure_data._stderr` to `&__sf[2]`. `BootHeap` states these facts about the
+loaded configuration, with the ownership and allocator witnesses they are about
+(user decision, 2026-09-24; INTERP_DESIGN.md "Decisions"). -/
+
+/-- The global frame's heap geometry: the `Env` struct lies in `sblk`; while
+`cap > 0` the names and values arrays start `nblk` and `vblk`. -/
+structure BootFrame where
+  cap : Nat
+  pn : Nat
+  pv : Nat
+  sblk : Nat × Nat
+  nblk : Nat × Nat
+  vblk : Nat × Nat
+
+/-- The heap blocks the global frame owns. -/
+def BootFrame.blocks (F : BootFrame) : List (Nat × Nat) :=
+  F.sblk :: (if F.cap = 0 then [] else [F.nblk, F.vblk])
+
+/-- The global frame (`Env*` at `e`) owns three distinct whole in-use chunk
+payloads (`malloc_usable_size = size - 8`) that hold no shared byte. -/
+structure BootFrameChunks (m : Vsa.MemRepr.Mem) (chunks : List DlHeap.Chunk)
+    (shared : Nat → Prop) (e : Nat) (F : BootFrame) : Prop where
+  cap : Vsa.MemRepr.read32 m (e + 4) = some F.cap
+  names : Vsa.MemRepr.read64 m (e + 8) = some F.pn
+  vals : Vsa.MemRepr.read64 m (e + 16) = some F.pv
+  sblk : F.sblk.1 ≤ e ∧ e + 32 ≤ F.sblk.1 + F.sblk.2
+  arrays : 0 < F.cap → F.nblk.1 = F.pn ∧ 8 * F.cap ≤ F.nblk.2 ∧
+    F.vblk.1 = F.pv ∧ 24 * F.cap ≤ F.vblk.2
+  /-- Each block is a whole in-use chunk payload. -/
+  live : ∀ b ∈ F.blocks, ∃ c ∈ chunks, c.inuse = true ∧ b = (c.addr + 16, c.size - 8)
+  /-- Three different chunks. -/
+  nodup : F.blocks.Nodup
+  /-- No shared (immutable) byte lives in them. -/
+  unshared : ∀ b ∈ F.blocks, ∀ k, b.1 ≤ k → k < b.1 + b.2 → ¬ shared k
+
+/-- `_impure_data._stderr` (`reent + 24`), read by `main`'s error line. -/
+def impureStderrAddr : Nat := consoleReent + 24
+
+/-- The boundary heap facts `DlHeap.InitialAllocatorAt` does not state. -/
+structure BootHeapFacts (m : Vsa.MemRepr.Mem) (shared : Nat → Prop) (e top brkv : Nat)
+    (chunks : List DlHeap.Chunk) (F : BootFrame) : Prop where
+  /-- dlmalloc keeps the top chunk at least `MINSIZE`. -/
+  top_room : top + 16 ≤ brkv
+  /-- The break is page-aligned (INTERP_DESIGN.md Q5). -/
+  brk_page : brkv % 4096 = 0
+  /-- `binblocks` fits in 32 bits (INTERP_DESIGN.md Q5b). -/
+  binblocks : ∀ bb, Vsa.MemRepr.read64 m DlHeap.binblocksAddr = some bb → bb < 2 ^ 32
+  /-- The global frame's blocks are whole, distinct, unshared chunk payloads. -/
+  frame : BootFrameChunks m chunks shared e F
+  /-- `_impure_data._stderr = &__sf[2]` (INTERP_DESIGN.md Q6). -/
+  stderr : Vsa.MemRepr.read64 m impureStderrAddr = some exitStderr
+
+/-- The initial ownership, one allocator walk of it, and the facts above, about
+the same witnesses. -/
+structure BootHeap (m : Vsa.MemRepr.Mem) (A : Arena) (φf φc : Vsa.While.Addr → Nat)
+    (stmts count : Nat) (D : RuntimeOwnership.InitialOwnershipData) (top brkv : Nat)
+    (chunks : List DlHeap.Chunk) (bins : Nat → List Nat) (F : BootFrame) : Prop where
+  owned : RuntimeOwnership.InitialOwned m A stackSL φf φc stmts count D
+  alloc : DlHeap.InitialAllocatorAt m D.exts (RuntimeOwnership.ReallocExtent D.allocations)
+    stmts count top brkv chunks bins
+  facts : BootHeapFacts m D.shared (φf 0) top brkv chunks F
+
 /-- Initial program and runtime store share one immutable domain and live ledger. -/
 structure InterpRunReadyFacts
     (c : Config) (stmts count : Nat) (inp : BitVec 64)
     (N : NativeAddrs) (A : Arena) (φf φc : Vsa.While.Addr → Nat)
     (aLeft : Nat) : Prop extends
     InterpRunPhysicalFacts c stmts count inp N A φf φc aLeft where
-  ownership : ∃ D : RuntimeOwnership.InitialOwnershipData,
-    RuntimeOwnership.InitialOwned c.σ.mem A stackSL φf φc stmts count D
+  /-- The initial ownership with one allocator walk and the boundary heap
+  facts about it (user decision, 2026-09-24: A0's `BootGap`). The ownership
+  alone is `InterpRunReadyFacts.ownership`. -/
+  boot : ∃ (D : RuntimeOwnership.InitialOwnershipData) (top brkv : Nat)
+    (chunks : List DlHeap.Chunk) (bins : Nat → List Nat) (F : BootFrame),
+    BootHeap c.σ.mem A φf φc stmts count D top brkv chunks bins F
   /-- Q1 (user-approved, 2026-09-23): the represented program fits the stack
   below `interp_run`'s frame. Without it an AST deeper than the 8 MiB stack
   overflows into the heap (INTERP_DESIGN.md §10.4). -/
   stack_admissible : StackAdmissible c.σ.mem stmts count
+
+/-- The initial ownership, projected from `boot`. -/
+theorem InterpRunReadyFacts.ownership
+    {c : Config} {stmts count : Nat} {inp : BitVec 64}
+    {N : NativeAddrs} {A : Arena} {φf φc : Vsa.While.Addr → Nat} {aLeft : Nat}
+    (F : InterpRunReadyFacts c stmts count inp N A φf φc aLeft) :
+    ∃ D : RuntimeOwnership.InitialOwnershipData,
+      RuntimeOwnership.InitialOwned c.σ.mem A stackSL φf φc stmts count D := by
+  obtain ⟨D, _, _, _, _, _, h⟩ := F.boot
+  exact ⟨D, h.owned⟩
 
 theorem InterpRunReadyFacts.ast_owned
     {c : Config} {stmts count : Nat} {inp : BitVec 64}
