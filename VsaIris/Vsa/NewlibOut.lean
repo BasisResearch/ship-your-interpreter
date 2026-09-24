@@ -53,6 +53,9 @@ def fprintfOut (fmt arg : BitVec 64) (frag : String) : IProp GF :=
     (∃ name, ⌜fmt = 0x800192c8#64 ∧ frag = "<fn " ++ name ++ ">"⌝ ∗ strAt arg.toNat name) ∨
     (∃ name, ⌜fmt = 0x800192d8#64 ∧ frag = "<native fn " ++ name ++ ">"⌝ ∗ strAt arg.toNat name))
 
+instance (fmt arg : BitVec 64) (frag : String) : Persistent (fprintfOut (GF := GF) fmt arg frag) := by
+  unfold fprintfOut; infer_instance
+
 /-- A stdout call: arguments `args`, the read-only input `R`; the console grows
 by `frag` and newlib's data stays in its boundary state. -/
 def outSpec (live : Nat → Prop) (Wp : MachWP (GF := GF) (vsaModel live)) (entry : BitVec 64)
