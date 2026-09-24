@@ -39,8 +39,11 @@ theorem stdoutFile_eq : stdoutFile.toNat = Vsa.Sim.consoleStdout := rfl
 def outNeed : Nat := 768
 
 /-- `"<fn " ++ name ++ ">"` as `snprintf` leaves it in a 64-byte buffer: at
-most 63 characters. `Value.catDisplay` does not cut (INTERP_DESIGN.md Q8). -/
+most 63 characters. The semantics renders a named closure the same way
+(`Vsa.While.fnCatRender`, Q8). -/
 def fnRender (x : String) : String := String.ofList (("<fn " ++ x ++ ">").toList.take 63)
+
+theorem fnRender_eq (x : String) : fnRender x = Vsa.While.fnCatRender x := rfl
 
 section Specs
 

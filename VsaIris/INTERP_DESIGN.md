@@ -20,6 +20,9 @@ Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 
 - **Two more boundary facts in `Loaded` (2026-09-24, integration).** H1's frame invariant (`FrameLayout`/`FrameBridge`: canonical capacity, `SharedWin` for string reads) needs them at the global frame; `Loaded` did not state them. (see the next STATEMENT CHANGE)
 
+- **Q8 decided (2026-09-24): the semantics cuts.** `Value.catDisplay` renders a named closure as `fnCatRender n = "<fn " ++ n ++ ">"` cut to 63 characters (strings are byte lists, so 63 bytes), exactly `stringify`'s `snprintf(buf, 64, "<fn %s>", n)` (`Newlib.fnRender_eq`, `strRender_eq`). `Loaded` is unchanged.
+- **Boundary facts (standing, 2026-09-24).** A fact a proof needs at the boundary that `Loaded` does not state becomes a `BootHeapFacts` field with a control witness.
+
 ## STATEMENT CHANGE (integration): the global frame's capacity and the shared bytes' geometry
 
 `BootFrameChunks` gains `cap_canon : F.cap = 8` (the capacity `env_define`
@@ -1072,7 +1075,7 @@ binary or by what the proofs consume:
   below the program's need, or `perCallBudget` accounting leaves it at depth
   `maxCallDepth`. H5 states `runtime_error`'s spec with its real need; E1–E6
   must supply it at each error site.
-- **Q8 (lane H2, needs the user): `stringify` cuts a named closure's rendering
+- **Q8 (lane H2; decided 2026-09-24: the semantics cuts, see Decisions): `stringify` cuts a named closure's rendering
   at 63 characters.** `stringify` renders a closure with
   `snprintf(buf, 64, "<fn %s>", name)` and copies the buffer, so the string
   `+` of a closure whose name is longer than 58 characters yields
@@ -1130,3 +1133,15 @@ without the fact and no other resource carries it:
   the equality gives `nOld = 8 * cap < 16 * cap`. `FrameLayout.arrays_le`
   recovers the componentwise bounds; `FrameBridge.arrays` carries the same
   equality (`ctl_frameBridge`: 64 and 192 bytes at cap 8).
+
+### STATEMENT CHANGES (E1)
+
+- **`ReadOK` carries the string window** (`SpecEval.lean`, field `win`: the
+  byte plus 8 is RAM and off the HTIF words). `astEG` gave the AST's read
+  set only `ReadOK` (RAM, off HTIF), but a string field of the AST (`str`'s
+  literal, `var`'s and `assign`'s name) becomes `strAt` only with H1's
+  `SharedWin P` (`strAt_of_cstringWithin`), and `strlen`/`strcmp` need that
+  window. `SharedWin P` follows from the strengthened `ReadOK`
+  (`sharedWin_of_readOK`, `LeafArm.lean`). The supplier is A0, which already
+  establishes `SharedWin` at the boundary (`ctl_sharedWin`); no existing
+  construction of `ReadOK` changed (all consumers project fields).
