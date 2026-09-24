@@ -300,14 +300,16 @@ theorem def_write {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s ou
   · rw [imgM_store_miss _ _ (by omega), imgM_store_miss _ _ (by omega),
       imgM_store_miss _ _ (by omega)]
 
-/-- A frame's capacity is below `2^29` (the names array is in 32-bit RAM). -/
+/-- A frame's capacity is below `2^28` (the names array is in the upper half
+of 32-bit RAM). -/
 theorem FrameLayout.cap_lt {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
-    (h : FrameLayout img G n) : G.cap < 2 ^ 29 := by
+    (h : FrameLayout img G n) : G.cap < 2 ^ 28 := by
   rcases Nat.eq_zero_or_pos G.cap with h0 | hpos
   · omega
   obtain ⟨-, h2, -, -⟩ := h.arrays_le hpos
   have hw := h.win G.nblk (by simp [FrameGeom.blocks, show G.cap ≠ 0 by omega])
-  have := hw.lo; have := hw.hi
+  have := hw.lo; have := hw.hi; have := hw.htif
+  unfold htifLo at this
   omega
 
 /-- `slliw` of a small word. -/
