@@ -84,15 +84,28 @@ structure MRet (C : MCtx) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
 
+/-- **Starvation**: the arena above the entry top cannot hold twice the
+request's chunk with a page to spare. `malloc_extend_top` asks `sbrk` for the
+chunk plus `MINSIZE`, rounded up to a page, on top of a top chunk that may
+already hold up to the chunk plus `MINSIZE`, so a failed `sbrk` bounds the
+arena by this much. The counted regime's credits refute it (`mOK_chg`). -/
+def Starved (top0 n : Nat) : Prop := heapEnd + 4096 < top0 + 2 * physSize n + extendSlack
+
+/-- A request whose chunk alone overruns the arena starves. -/
+theorem Starved.of_lt {top0 n : Nat} (h : heapEnd < top0 + physSize n) : Starved top0 n :=
+  Nat.lt_of_lt_of_le (Nat.add_lt_add_right h 4096) (by
+    generalize physSize n = P
+    unfold extendSlack; omega)
+
 /-- A NULL return: the heap in shape at the same live blocks, and the reason,
-the arena cannot hold the request's chunk above the entry top. -/
+the arena cannot hold the request (`Starved`). -/
 structure MNull (C : MCtx) (R : Nat → BitVec 64) (Mt : Mem) : Prop where
   regs : MRegs C R
   a0 : R 10 = 0
   heap : ∃ top brkv chunks bins, PHeapAt Mt C.H top brkv chunks bins
   pres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome
   frame : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?
-  starved : heapEnd < C.top0 + physSize C.n.toNat + extendSlack
+  starved : Starved C.top0 C.n.toNat
 
 /-- The obligations of a `_malloc_r` call context. -/
 structure MOK (C : MCtx) : Prop where
@@ -159,6 +172,11 @@ theorem MOK.bin_link {C : MCtx} (O : MOK C) {j a : Nat} (hj : j < numBins)
 macro_rules
   | `(tactic| sx_side) => `(tactic| (refine VsaIris.VsaHeap.MOK.stack ‹VsaIris.VsaHeap.MOK _› ?_ ?_ <;> ((try unfold VsaIris.VsaHeap.mHead) ; sx_addr)))
 
+/-- Allocator globals are owned: the `sx_side` rule for accesses at a literal
+global address. -/
+macro_rules
+  | `(tactic| sx_side) => `(tactic| (refine VsaIris.VsaHeap.MOK.foot ‹VsaIris.VsaHeap.MOK _› (fun k hk => Or.inl ?_); unfold VsaIris.VsaHeap.allocGlobal VsaIris.VsaHeap.InRange; omega))
+
 /-! ## Stack arithmetic -/
 
 theorem MSp.sp96 {s : BitVec 64} (h : MSp s) (d : Nat) (hd : d ≤ 96) :
@@ -178,6 +196,25 @@ theorem MHeap.off_stack {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
   have hk : (if a ≥ C.s.toNat - mHead then 0 else C.s.toNat - mHead - a) < 8 := by
     split <;> omega
   exact Hp.disj _ (by split <;> omega) (by unfold mHead at *; split <;> omega) (hf _ hk)
+
+/-- The stack window misses the `_errno` word and the run of allocator
+globals from `__malloc_sbrk_base` to `__malloc_current_mallinfo`: every gap
+between them is narrower than the window. -/
+theorem MHeap.glob_off {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} (Hp : MHeap C Mt brkv chunks bins) :
+    (C.s.toNat ≤ 0x8001b538 ∨ 0x8001b53c + mHead ≤ C.s.toNat) ∧
+      (C.s.toNat ≤ 0x8001b960 ∨ 0x8001ba68 + mHead ≤ C.s.toNat) := by
+  have g : ∀ a, allocGlobal a → ¬ (C.s.toNat - mHead ≤ a ∧ a < C.s.toNat) :=
+    fun a ha hw => Hp.disj a hw.1 hw.2 (.inl ha)
+  have h1 := g 0x8001b538 (by unfold allocGlobal InRange; omega)
+  have h2 := g 0x8001b53b (by unfold allocGlobal InRange; omega)
+  have h3 := g 0x8001b960 (by unfold allocGlobal InRange; omega)
+  have h4 := g 0x8001b990 (by unfold allocGlobal InRange; omega)
+  have h5 := g 0x8001ba08 (by unfold allocGlobal InRange; omega)
+  have h6 := g 0x8001ba18 (by unfold allocGlobal InRange; omega)
+  have h7 := g 0x8001ba67 (by unfold allocGlobal InRange; omega)
+  unfold mHead at *
+  omega
 
 /-- A footprint range of positive width lies wholly below or above the stack window. -/
 theorem MHeap.off_stack_w {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
@@ -376,7 +413,7 @@ theorem MOK.fin_null {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     (h0 : R 10 = 0) (hheap : ∃ top brkv chunks bins, PHeapAt Mt C.H top brkv chunks bins)
     (hpres : ∀ a, vsaFoot C.H a → (Mt[a]?).isSome)
     (hframe : ∀ a, ¬ MWin C.H C.s a → Mt[a]? = C.Mt0[a]?)
-    (hst : heapEnd < C.top0 + physSize C.n.toNat + extendSlack) :
+    (hst : Starved C.top0 C.n.toNat) :
     ∀ R' : Nat → BitVec 64, MRegs C R' → (∀ x, x ≠ 1 → x ≠ 2 → x ≠ 8 → R' x = R x) →
       AW C.live C.S C.Q C.r R' Mt := by
   intro R' hR hk
@@ -477,10 +514,10 @@ theorem mOK_chg {live : Nat → Prop} {H : List (Nat × Nat)} {n r s : BitVec 64
     · exact h.regs.s3
   null := by
     intro R Mt h
-    have hP := physSize_le_chg hchg
+    have hP := physSize_le_chg16 hchg
     have := h.starved
     simp only [mChgCtx] at this
-    unfold extendSlack at *
+    unfold Starved extendSlack at *
     omega
 
 end VsaIris.VsaHeap

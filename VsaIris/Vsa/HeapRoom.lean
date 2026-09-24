@@ -92,6 +92,13 @@ theorem physSize_le_chg {n c : Nat} (h : vsaChg n c) : physSize n ≤ 2 * c := b
   unfold physSize
   omega
 
+/-- A charged request's chunk exceeds its charge by at most one granule. -/
+theorem physSize_le_chg16 {n c : Nat} (h : vsaChg n c) : physSize n ≤ c + 16 := by
+  obtain ⟨h1, h2⟩ := h
+  unfold Vsa.While.roundUp16 at h2
+  unfold physSize
+  omega
+
 /-- **The counted heap from VSA's boundary allocator.** An `InitialAllocatorAt`
 with a page-aligned break, a 32-bit `binblocks` word and room for the top's
 header gives the counted

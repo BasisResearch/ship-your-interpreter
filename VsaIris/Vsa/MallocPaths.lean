@@ -154,13 +154,6 @@ theorem j_small {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hlastlt]
     · unfold binAt avAddr; sx_addr
 
-/-- A load at an address equal to one with a known doubleword (for `simp` with
-`sx_addr` discharging the address). -/
-theorem ldv_at {Mt : Mem} {a' x : Nat} (h : read64 Mt a' = some x) :
-    ∀ a, a = a' → ldv .ld Mt a = BitVec.ofNat 64 x := by
-  intro a he; subst he
-  exact ldv_ld (by rw [h, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ h)])
-
 /-- **The small take** (`0x800047f4`): unlink the last chunk `v` of small bin
 `idx`, set `PREV_INUSE` after it, unlock, and return `v + 16`. -/
 theorem small_take {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}

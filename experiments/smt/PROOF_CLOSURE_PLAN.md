@@ -2796,12 +2796,23 @@ Machine-checked `malloc` paths (`VsaIris`, lane H4): `VsaIris.VsaHeap.malloc_pat
 over the generated `SWP` step table. Proved: the prologue and the ENOMEM return
 (`malloc_pro`, `malloc_errno`), the small-bin check and take (`j_small`,
 `small_take`, over `PHeapAt.take`), the last-remainder check and its exact-fit
-return (`lr_check`, `lr_take`), the block search's entry (`bb_check`) and the
-top split (`top_path`, over the new `PHeapAt.topSplit`). Five joins remain, and
-are exactly `malloc_paths`' hypotheses: the large-bin scan (`0x80004884`), the
+return (`lr_check`, `lr_take`), the block search's entry (`bb_check`), the
+top split (`top_path`, `top_split`, over the new `PHeapAt.topSplit`) and
+`malloc_extend_top` (`extend_top`, `VsaIris/Vsa/MallocExtend.lean`: the
+`_sbrk_r` call as one step `sbrk_r_run`, the in-place growth over
+`PHeapAt.topGrow`, and the NULL return). Four joins remain, and are exactly
+`malloc_paths`' hypotheses: the large-bin scan (`0x80004884`), the
 last-remainder split (`0x80004da0`), the re-binding of a too-small remainder
-(`0x8000491c`), the block walk (`0x80004978`) and `malloc_extend_top`
-(`0x80004a48`).
+(`0x8000491c`) and the block walk (`0x80004978`).
+
+CORRECTED INTERFACE (lane H4): a NULL return's reason `MNull.starved` was
+`heapEnd < top0 + physSize n + extendSlack`, which the code does not
+guarantee. `malloc_extend_top` asks `sbrk` for `roundUp4096(nb + 32)` on top of
+a top chunk of up to `nb + 16` bytes, so a failed `sbrk` only bounds the arena
+by `heapEnd < top0 + 2 nb + 4128`. The reason is now `Starved top0 n`
+(`heapEnd + 4096 < top0 + 2 physSize n + extendSlack`); the counted regime still
+refutes it because a charge `c` backs `physSize n ≤ c + 16`
+(`physSize_le_chg16`, `mOK_chg`).
 
 Machine-checked `free` (`VsaIris`, branch `iris-heap`): `_free_r`'s top-merge
 path is `VsaIris.MallocFast.freeRoomRun_fast` / `vsaDlFreeRoomImpl_boundary`.

@@ -55,6 +55,9 @@ import VsaIris.Vsa.HeapSplit
 import VsaIris.Vsa.HeapMove
 import VsaIris.Vsa.MallocLR
 import VsaIris.Vsa.MallocTop
+import VsaIris.Vsa.HeapGrow
+import VsaIris.Vsa.Sbrk
+import VsaIris.Vsa.MallocExtend
 import VsaIris.Vsa.MallocChain
 import VsaIris.Vsa.CostRoom
 import VsaIris.Stack
