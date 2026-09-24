@@ -129,7 +129,7 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     (hfn : FnNode m P q cd.params.length prm bod nam)
     (hps : ParamsReprWithin m P prm.toNat cd.params.length cd.params)
     (hbr : StmtReprWithin m P bod.toNat (.block cd.body)) (hpg : ∀ k, P k → ReadOK k)
-    (hwin : SharedWin P) (he : e.toNat = cd.env) (hargc : vs.length ≤ 32)
+    (hwin : SharedWin P) (hargc : vs.length ≤ 32)
     (hhd : CloHd R1 Mt1 Mt s aX sret (BitVec.ofNat 64 inp) ret e q line rv vs.length d) :
     codeRes ∗ roOn P m ∗ □ frameAt cd.env e.toNat ∗ argVals N (imgM Mt) (argsBase s) 0 vs ∗
       ms 0x800032bc#64 R1 (cloS s (BitVec.ofNat 64 inp)) Mt1 ∗
@@ -170,7 +170,7 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     (env := cd.env) (R := R1) hspN
   iframe Hen Hcode Hms Hst Hw
   isplitl []
-  · rw [hhd.a0, he]; iexact Hfe
+  · rw [hhd.a0]; iexact Hfe
   iintro %R2 %hk2 Hst Hw #Hnew Hms
   ihave Hst := stackScratch_widen (s := R1 2) (by rw [h2]; exact hle) hnN $$ [Hsl Hst]
   · iframe Hsl Hst
@@ -267,6 +267,121 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
       iexact Hk
     · cases hr
 
+
+/-- A run's owned bytes are disjoint from any other owned bytes. -/
+theorem ms_disj {pc : BitVec 64} {R : Nat → BitVec 64} {S T : Nat → Prop} {Mt : Mem}
+    {g : Nat → BitVec 8} :
+    ms (GF := GF) pc R S Mt ∗ ownSet T (fun a => a ↦ₘ g a) ⊢
+      ms pc R S Mt ∗ ownSet T (fun a => a ↦ₘ g a) ∗ ⌜∀ a, S a → ¬ T a⌝ := by
+  unfold ms
+  iintro ⟨⟨Hpc, Hra, Hregs, HS⟩, HT⟩
+  ihave ⟨⟨HS, HT⟩, %hd⟩ := keep_pure (ownSet_disj S T (imgM Mt) g) $$ [HS HT]
+  · iframe HS HT
+  iframe Hpc Hra Hregs HS HT
+  ipureintro; exact hd
+
+/-- **The closure call from the kind dispatch, total mode** (`0x80003254` on
+a closure value): the closure's resources (`CloSupply`), the store's body
+bound, the depth word out of the world, `callCloHead` (the derivation refutes
+the arity and depth errors), then `cloCallT`. -/
+theorem callClosureT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {st2 st' : St} {d k nb : Nat} {ca : Addr} {cd : ClosureData}
+    {vs : List Value} {store' : Store} {frame : Addr} {status : Status} {v : Value}
+    {f : Expr} {args : List Expr} {s aX sret ret w0 w1 w2 : BitVec 64} {rv R : Nat → BitVec 64}
+    {Mt : Mem}
+    (hvn : ⊢ ∀ p, valueNullSpec (GF := GF) (vsaModel live) N (twpW (vsaModel live)) p)
+    (hen : ⊢ envNewSpec (GF := GF) (twpW (vsaModel live)) N)
+    (hed : ⊢ envDefineSpec (GF := GF) (twpW (vsaModel live)) N)
+    (hsup : CloSupply (GF := GF) N)
+    (hcl : st2.store.closures[ca]? = some cd) (hlen : vs.length = cd.params.length)
+    (hd : d < maxCallDepth) (halloc : st2.store.allocFrame (some cd.env) = (store', frame))
+    (Dseq : ExecSeqCost ⟨(cd.params.zip vs).foldl (fun s (x, v) => s.define frame x v) store',
+      st2.out⟩ (d + 1) frame cd.body st' status nb)
+    (hst : status = .normal ∧ v = .null ∨ status = .ret v)
+    (hseq : closureSeqT_body (GF := GF) live N vsaLayoutP vsaRoomB inp
+      ⟨(cd.params.zip vs).foldl (fun s (x, v) => s.define frame x v) store', st2.out⟩ (d + 1) frame
+      cd.body st' status nb Dseq)
+    (hsg : StackGeom s (evalNeed (.call f args) d)) (hal : ret.toNat % 4 = 0) (hsp : rv 2 = s)
+    (hinpG : RtErr.InpGeom (BitVec.ofNat 64 inp)) (hinpL : inp < 2 ^ 64) (hinpA : inp % 8 = 0)
+    (hslg : SlotGeom sret)
+    (hcall : CallAt R Mt s aX sret (BitVec.ofNat 64 inp) ret rv w0 w1 w2 vs.length)
+    (hargc : vs.length ≤ 32) :
+    codeRes ∗ □ astEG aX.toNat (.call f args) ∗ □ valOf N (.closure ca) w0 w1 w2 ∗
+      argVals N (imgM Mt) (argsBase s) 0 vs ∗ ms 0x80003254#64 R (InExt (s.toNat - 1088, 1088)) Mt ∗
+      stackScratch (s + 18446744073709550528#64) (evalNeed (.call f args) d - 1088) ∗
+      world N vsaLayoutP vsaRoomB inp
+        (.counted (k + (envBytes + bindParamsCost store' frame (cd.params.zip vs) + nb))) st2 d ∗
+      slot24 sret.toNat ∗
+      CallExitK live N vsaLayoutP vsaRoomB inp (twpW (vsaModel live)) Φ rv s (evalNeed (.call f args) d)
+        sret v (.counted k) st' d ret
+    ⊢ (twpW (vsaModel live)).W Φ := by
+  have hge := evalNeed_call_ge f args d
+  have hs := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
+  unfold Vsa.Sim.LayoutInstance.stackSL at hs hs2
+  simp only at hs hs2
+  have hsF : s - 1088#64 = s + 18446744073709550528#64 := evalSP_eq s
+  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
+    rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
+  have hfg : EvalFrameG s := ⟨hsf, by omega, hs2, hs3⟩
+  have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hinpL
+  iintro ⟨#Hcode, #Hast, #Hv, #Hav, Hms, Hst, Hw, Hsr, Hk⟩
+  -- the closure's resources and the body bound
+  unfold valOf
+  icases Hv with ⟨%⟨hk4, hw1⟩, #Hca⟩
+  ihave ⟨%B, Hs, Hcw⟩ := world_store N vsaLayoutP vsaRoomB inp _ st2 d $$ Hw
+  ihave ⟨Hs, #Hres⟩ := hsup st2.store B ca w1.toNat $$ [Hs Hca]
+  · iframe Hs Hca
+  ihave ⟨Hs, %hbod⟩ := keep_pure (storeRepr_bodies N st2.store B) $$ Hs
+  ihave Hw := Hcw $$ Hs
+  unfold CloRes
+  icases Hres with ⟨%cd', %q, %e, %img, %P, %m, %hcf, #Himg, #Hro, #Hfe⟩
+  have hcd : cd' = cd := by have := hcf.lookup; rw [hcl] at this; exact (Option.some.inj this).symm
+  subst hcd
+  obtain ⟨hbb1, hbb2⟩ := hbod ca cd' hcl
+  -- the depth word
+  have hwd := world_depth (GF := GF) N vsaLayoutP vsaRoomB inp
+    (.counted (k + (envBytes + bindParamsCost store' frame (cd'.params.zip vs) + nb))) st2 d
+  rw [show inp + interpDepthOff = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]; rfl] at hwd
+  ihave ⟨%dimg, Hd, %⟨hdv, hdle⟩, Hcl⟩ := hwd $$ Hw
+  ihave ⟨Hms, Hd, %hdisj⟩ := ms_disj $$ [Hms Hd]
+  · iframe Hms Hd
+  have hi3 : inp + 8 + 4 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp + 8 := by
+    refine Classical.byContradiction fun hc => ?_
+    exact hdisj (max (s.toNat - 1088) (inp + 8)) (by simp only [InExt]; omega)
+      (by simp only [InExt]; rw [hinpN]; omega)
+  -- the `EX_FN` node
+  have hqlt : q < 2 ^ 64 := by rw [← hcf.fn]; have := imgLE_lt img w1.toNat 8; omega
+  have hqt : (BitVec.ofNat 64 q).toNat = q := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hqlt]
+  have helt : e < 2 ^ 64 := by rw [← hcf.env]; have := imgLE_lt img (w1.toNat + 8) 8; omega
+  have het : (BitVec.ofNat 64 e).toNat = e := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt helt]
+  have hrepq : ExprReprWithin m P (BitVec.ofNat 64 q).toNat (.fn cd'.name cd'.params cd'.body) := by
+    rw [hqt]; exact hcf.repr
+  obtain ⟨prm, bod, nam, hfn, hprl, hbdl, -, hps, hbody, -⟩ := fnNode_of hrepq hcf.geo
+  have hprt : (BitVec.ofNat 64 prm).toNat = prm := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hprl]
+  have hbdt : (BitVec.ofNat 64 bod).toNat = bod := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbdl]
+  -- the head
+  iapply callCloHead hlive (twpW _) hcall hargc hk4 hcf hinpG (by rw [hinpN]; exact hinpA) hdv hdle hfg
+  iframe Hcode Hast Himg Hro Hms Hd
+  unfold CloHeadK
+  isplit
+  · iintro %R1 %Mt1 %line %⟨hpl, hdl1, hhd⟩ Hms
+    iapply cloCallT hlive hvn hen hed hlen hd halloc Dseq hst hseq ⟨hbb1, hbb2⟩ hfg hsg
+      (by unfold envDefineNeed allocHeadroom; omega)
+      (fun x hx => by have := execNeed_callBody (f := f) (args := args) hd hbb1 hx; unfold evalFrame at this; omega)
+      hal hsp hinpG hinpL hinpA hslg hi3 (by rw [← hlen] at hfn; exact hlen ▸ hfn)
+      (by rw [hprt]; exact hps) (by rw [hbdt]; exact hbody) hcf.geo hcf.win hargc hhd
+    iframe Hcode Hro Hav Hms Hst Hsr
+    isplitl []
+    · rw [het]; iexact Hfe
+    isplitl [Hcl]
+    · rw [show inp + 8 = (BitVec.ofNat 64 inp).toNat + 8 by rw [hinpN]]
+      iexact Hcl
+    iexact Hk
+  isplit
+  · iintro %R1 %Mt1 %line %⟨hne, -⟩
+    exact absurd hlen.symm (by rw [← hlen] at hne; exact fun h => hne (by rw [hlen]))
+  · iintro %R1 %Mt1 %line %⟨hgt, -⟩
+    exact absurd hgt (by omega)
 
 end Total
 
