@@ -799,6 +799,19 @@ binary or by what the proofs consume:
   havoc load (`swp_havocD`): the run continues for every loaded value.
 - Helpers are stated with `helperSpec` (registers kept but a clobber list);
   `valueIntSpec` is the stub for `value_int` (H2).
+- **The partial spec's abort also hands back the result slot**:
+  `evalSpecP_body Core …`'s abort resource is `abortAt Core s (evalNeed e d) ∗
+  slot24 sret`, not `abortRes s (evalNeed e d)` alone. The caller lends its
+  child a result slot inside the caller's own frame; to rebase its abort
+  (`abort_rebase`, §10.2) it must rebuild that whole frame, slot included
+  (`ms_callEvalP`). The landing core is a parameter `Core` (H5 fixes it).
+- **Partial cases split on the children's actual values.** A row's partial
+  case runs the shared prefix (children through the Löb hypothesis
+  `evalSpecsP`), then case-splits on the returned values: the row's kinds
+  finish (with the derivation), the others are exported by `#ix_chain` as
+  hypotheses of the case, which the rows they belong to discharge
+  (`#ix_piece … from <piece> at k`). Machine kind tests are then decided by
+  facts (`valOf_tag`), never by case analysis inside a run.
 
 ## 11. Open questions for the user
 

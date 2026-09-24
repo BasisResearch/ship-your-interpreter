@@ -1,0 +1,277 @@
+import VsaIris.Interp.Case.{ARM}T
+
+/-!
+# `{ARM}`, partial mode (family `binInt`, INTERP_DESIGN.md §6, §4.2)
+
+`caseP_{ARM}`: from the Löb hypothesis `evalSpecsP`, `eval_expr` on
+`.binary {OP} l r` meets its partial, outcome-quantified spec on the int/int
+row. The children are called through the Löb hypothesis (`ms_callEvalP`: the
+`jal` pays the later, the abort continuation is rebased by rebuilding the
+frame); after both return, the row splits on their actual values: two ints
+finish as in total mode (the same run lemmas, `{ARM}T_run*`) with the
+derivation `EvalE.binary`; any other kinds leave the row (the concat and
+type-error rows), exported by `#ix_chain` as the hypothesis `hx_1`.
+Template: `scripts/iris_arms/templates/binInt_P.lean`.
+-/
+
+namespace VsaIris.Interp
+open VsaIris VsaIris.Sym VsaIris.MallocFast
+open Vsa.MemRepr Vsa.Sim
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
+
+#ix_piece {ARM}P_p1 {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+    {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
+    {N : NativeAddrs} {L : DlLayout} {Room : RoomPred} {inp : Nat} {Core : IProp GF}
+    {st : St} {d env : Nat} {l r : Expr}
+    (hvi : ⊢ ∀ p n, valueIntSpec (GF := GF) (vsaModel live) N (wpW (vsaModel live)) p n) :
+    evalSpecsP (GF := GF) (vsaModel live) N L Room inp Core ⊢
+      evalSpecP_body (GF := GF) (vsaModel live) N L Room inp Core st d env (.binary {OP} l r) by
+  iintro #IH
+  unfold evalSpecP_body fnSpecAbort
+  iintro %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
+  unfold evalPre
+  icases Hpre with ⟨Hregs, %hregs, #Hcode, #Hast, #Hfb, Hst, %hsg, Hslot, %hslg, %hbb, Hw⟩
+  unfold astEG
+  icases Hast with ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩
+  obtain ⟨aL, aR, hn, hrl, hrr, haL, haR⟩ := binNode_of_repr hrepr hgeo
+  have hneed : 1088 ≤ evalNeed (.binary {OP} l r) d := by
+    have := Expr.stackNeed_ge (.binary {OP} l r); unfold evalNeed stackBudget; unfold evalFrame at this; omega
+  have hs := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
+  unfold Vsa.Sim.LayoutInstance.stackSL at hs hs2
+  simp only at hs hs2
+  have hs' : 0x87800000 + 1088 ≤ s.toNat := by omega
+  have hsF : s - 1088#64 = s + 18446744073709550528#64 := evalSP_eq s
+  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
+    rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
+  have gL := evalCallGeom (o := 120) hsg
+    (by have := evalNeed_binary_left {OP} l r d; unfold evalFrame at this; omega) (by decide) (by decide)
+  have gR := evalCallGeom (o := 144) hsg
+    (by have := evalNeed_binary_right {OP} l r d; unfold evalFrame at this; omega) (by decide) (by decide)
+  have hbl : l.bodiesBound perCallBudget = true := by
+    simp only [Expr.bodiesBound, Bool.and_eq_true] at hbb; exact hbb.1
+  have hbr : r.bodiesBound perCallBudget = true := by
+    simp only [Expr.bodiesBound, Bool.and_eq_true] at hbb; exact hbb.2
+  have hLt : (BitVec.ofNat 64 aL).toNat = aL := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt haL]
+  have hRt : (BitVec.ofNat 64 aR).toNat = aR := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt haR]
+  have hx1 := hn.lo; have hx2 := hn.hi; have hx3 := hn.off
+  have hoff := evalSP_off (s := s) hsf (by omega)
+  ihave ⟨Hst, HF⟩ := stackScratch_frame (f := 1088#64) hsg.le hneed $$ Hst
+  rw [hsF, hsf, show (1088#64).toNat = 1088 from rfl]
+  ihave ⟨%Mt0, Hms⟩ := ms_intro $$ [Hpc Hra Hregs HF]
+  · iframe Hpc Hra Hregs; unfold blockOwn; iexact HF
+  -- run 1
+  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
+  · iframe Hcode Hro
+  iapply wp_swpF (wpW _) (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64)
+      (evalNeed (.binary {OP} l r) d - 1088) (slot24 sret.toNat)
+      (world N L Room inp .uncounted st d)
+      iprop((PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v, ⌜EvalE st d env (.binary {OP} l r) st' v⌝ ∗
+          evalPost N L Room inp .uncounted st' d (.binary {OP} l r) v sret s rv) -∗
+          (wpW (vsaModel live)).W Φ) ∧
+        (abortAt Core s (evalNeed (.binary {OP} l r) d) ∗ slot24 sret.toNat -∗
+          (wpW (vsaModel live)).W Φ)) ∗
+      evalSpecsP (vsaModel live) N L Room inp Core))
+  rotate_left
+  · unfold evalArmF; iframe Hdv Hms; isplitr [IH]
+    · iframe Hcode Hro Hfb Hst Hslot Hw; iexact Hk
+    · iexact IH
+  intro F'
+  unfold evalEntryPC
+  refine {ARM}T_run1 hlive hsf hs' hs2 hs3 hx1 hx2 hx3 (by ix_reg; exact hregs.a0)
+    (by ix_reg; exact hregs.a1) (by ix_reg; exact hregs.a2) (by ix_reg; exact hregs.a3)
+    (by ix_reg; exact hregs.sp) hn.kind hn.kindu ?_
+  apply swp_closeM
+  intro Mt1 hMt1
+  have hsv1 : EvalSaved Mt1 s ret (rv 8) (rv 9) (rv 18) (rv 19) := by
+    subst hMt1; constructor <;> (ix_fwd using [hoff]; ix_reg)
+  have hA1 : ldv .ld Mt1 (s.toNat - 1088) = aE := by subst hMt1; ix_fwd
+  unfold F' evalArmF
+  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #IH⟩, Hms⟩
+  -- the left child, through the Löb hypothesis
+  ihave Hl := evalSpecsP_at Core st d env l $$ IH
+  iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800034f8)
+    (jalx_800034f8 live (fun p hp => hlive _ (interp_code_800034f8 p hp)))
+    interp_code_800034f8 (by decide) (Core := Core) (st := st) (d := d) (env := env) (e := l)
+    (slot := s + 18446744073709550528#64 + 120#64) (aC := BitVec.ofNat 64 aL) (aE := aE)
+    (s0 := s) (sret0 := sret) (m := evalNeed (.binary {OP} l r) d - 1088)
+    (n0 := evalNeed (.binary {OP} l r) d) (Out := slot24 sret.toNat)
+    (Kret := iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v, ⌜EvalE st d env (.binary {OP} l r) st' v⌝ ∗
+          evalPost N L Room inp .uncounted st' d (.binary {OP} l r) v sret s rv) -∗
+          (wpW (vsaModel live)).W Φ)) .rfl
+    gL.child gL.fits gL.below (by omega) hsg.le gL.slotGeom hbl
+  iframe Hl Hcode Hfb Hms Hst Hw Hslot Hk
+  isplitl []
+  · ipureintro
+    refine ⟨⟨by ix_reg, by ix_reg; exact hregs.a1, by ix_reg; exact hn.left,
+      by ix_reg; exact hregs.a3, by ix_reg⟩, fun b hb => ?_⟩
+    have g1 := gL.slot; have g2 := gL.sp; simp only [VsaIris.InExt, evalSP] at hb g1 g2 ⊢; omega
+  isplitl []
+  · imodintro; rw [hLt]; iapply astEG_of_view hrl hgeo $$ Hro
+  iintro %R1 %w0 %w1 %w2 %st1 %lv %hEl %hkeep1 #Hv1 Hms Hst Hw Hslot Hk
+  ihave #Hv1c := Hv1
+  ihave %htl := valOf_tag N lv w0 w1 w2 $$ Hv1c
+  have htl' : w0.toNat % 2 ^ 32 < 2 ^ 31 := by rw [htl]; cases lv <;> simp [valTag]
+
+#ix_piece {ARM}P_p2 from {ARM}P_p1 by
+  -- run 2: stage the right child
+  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
+  · iframe Hcode Hro
+  iapply wp_swpF (wpW _) (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64)
+      (evalNeed (.binary {OP} l r) d - 1088) (slot24 sret.toNat)
+      (world N L Room inp .uncounted st1 d)
+      iprop((PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v, ⌜EvalE st d env (.binary {OP} l r) st' v⌝ ∗
+          evalPost N L Room inp .uncounted st' d (.binary {OP} l r) v sret s rv) -∗
+          (wpW (vsaModel live)).W Φ) ∧
+        (abortAt Core s (evalNeed (.binary {OP} l r) d) ∗ slot24 sret.toNat -∗
+          (wpW (vsaModel live)).W Φ)) ∗
+      evalSpecsP (vsaModel live) N L Room inp Core ∗ □ valOf N lv w0 w1 w2))
+  rotate_left
+  · unfold evalArmF; iframe Hdv Hms; isplitr [IH Hv1]
+    · iframe Hcode Hro Hfb Hst Hslot Hw; iexact Hk
+    · iframe IH; iexact Hv1
+  intro F'
+  refine {ARM}T_run2 (aE := aE) (inp := BitVec.ofNat 64 inp) (w1 := w1)
+    (kL := BitVec.ofNat 64 (w0.toNat % 2 ^ 32)) hlive hsf hs' hs2 hs3 hx1 hx2 hx3
+    ?_ ?_ ?_ hn.right ?_ ?_ ?_ ?_
+  · ix_keep [hkeep1]
+  · ix_keep [hkeep1]
+  · ix_keep [hkeep1]
+  · ix_fwd; exact hA1
+  · ix_fwd
+  · ix_fwd
+  apply swp_closeM
+  intro Mt2 hMt2
+  have hsv2 : EvalSaved Mt2 s ret (rv 8) (rv 9) (rv 18) (rv 19) := by
+    rw [hMt2]; ix_saved hsv1 using hoff
+  unfold F' evalArmF
+  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #IH, #Hv1⟩, Hms⟩
+  -- the right child, through the Löb hypothesis
+  ihave Hr := evalSpecsP_at Core st1 d env r $$ IH
+  iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003518)
+    (jalx_80003518 live (fun p hp => hlive _ (interp_code_80003518 p hp)))
+    interp_code_80003518 (by decide) (Core := Core) (st := st1) (d := d) (env := env) (e := r)
+    (slot := s + 18446744073709550528#64 + 144#64) (aC := BitVec.ofNat 64 aR) (aE := aE)
+    (s0 := s) (sret0 := sret) (m := evalNeed (.binary {OP} l r) d - 1088)
+    (n0 := evalNeed (.binary {OP} l r) d) (Out := slot24 sret.toNat)
+    (Kret := iprop(PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v, ⌜EvalE st d env (.binary {OP} l r) st' v⌝ ∗
+          evalPost N L Room inp .uncounted st' d (.binary {OP} l r) v sret s rv) -∗
+          (wpW (vsaModel live)).W Φ)) .rfl
+    gR.child gR.fits gR.below (by omega) hsg.le gR.slotGeom hbr
+  iframe Hr Hcode Hfb Hms Hst Hw Hslot Hk
+  isplitl []
+  · ipureintro
+    refine ⟨⟨by ix_reg, by ix_reg, by ix_reg, by ix_reg, by ix_keep [hkeep1]⟩, fun b hb => ?_⟩
+    have g1 := gR.slot; have g2 := gR.sp; simp only [VsaIris.InExt, evalSP] at hb g1 g2 ⊢; omega
+  isplitl []
+  · imodintro; rw [hRt]; iapply astEG_of_view hrr hgeo $$ Hro
+  iintro %R2 %u0 %u1 %u2 %st2 %rv' %hEr %hkeep2 #Hv2 Hms Hst Hw Hslot Hk
+  -- the int/int row; any other kinds leave it (the concat and type-error rows)
+  by_cases hii : ∃ a b, lv = .int a ∧ rv' = .int b
+  obtain ⟨a, b, rfl, rfl⟩ := hii
+  unfold valOf
+  icases Hv1 with %⟨hw0, hw1⟩
+  icases Hv2 with %⟨hu0, hu1⟩
+  have hk0 := ofNat_lo32 hw0
+  have hk0' := ofNat_lo32 hu0
+
+#ix_piece {ARM}P_p3 from {ARM}P_p2 by
+  -- run 3: operator dispatch, int/int checks, the sum
+  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
+  · iframe Hcode Hro
+  iapply wp_swpF (wpW _) (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64)
+      (evalNeed (.binary {OP} l r) d - 1088) (slot24 sret.toNat)
+      (world N L Room inp .uncounted st2 d)
+      iprop((PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v, ⌜EvalE st d env (.binary {OP} l r) st' v⌝ ∗
+          evalPost N L Room inp .uncounted st' d (.binary {OP} l r) v sret s rv) -∗
+          (wpW (vsaModel live)).W Φ) ∧
+        (abortAt Core s (evalNeed (.binary {OP} l r) d) ∗ slot24 sret.toNat -∗
+          (wpW (vsaModel live)).W Φ)) ∗
+      evalSpecsP (vsaModel live) N L Room inp Core))
+  rotate_left
+  · unfold evalArmF; iframe Hdv Hms; isplitr [IH]
+    · iframe Hcode Hro Hfb Hst Hslot Hw; iexact Hk
+    · iexact IH
+  intro F'
+  refine {ARM}T_run3 (aX := aX) (s := s) (sret := sret) (w1 := w1) hlive hsf hs' hs2 hs3 hx1 hx2 hx3
+    ?_ ?_ ?_ ?_ hn.op ?_ ?_ ?_
+  · ix_keep [hkeep2, hkeep1]
+  · ix_keep [hkeep2, hkeep1]
+  · ix_keep [hkeep2, hkeep1]
+  · ix_keep [hkeep2]
+  · ix_fwd; rw [hMt2]; ix_fwd; exact hk0
+  · ix_fwd; exact hk0'
+  intro _
+  apply swp_closeM
+  intro Mt3 hMt3
+  have hsv3 : EvalSaved Mt3 s ret (rv 8) (rv 9) (rv 18) (rv 19) := by
+    rw [hMt3]; ix_saved hsv2 using hoff
+  unfold F' evalArmF
+  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hslot, Hw, Hk⟩, #IH⟩, Hms⟩
+  -- value_int
+  ihave Hvi := hvi $$ %sret %(w1 {MOP} u1)
+  unfold valueIntSpec
+  iapply ms_callHelper (wpW _) (i := 0x{J3})
+    (jalx_{J3} live (fun p hp => hlive _ (interp_code_{J3} p hp)))
+    interp_code_{J3}
+  iframe Hvi Hcode Hms
+  isplitl []
+  · ipureintro; exact ⟨by ix_keep [hkeep2, hkeep1], by ix_reg; ix_fwd⟩
+  isplitl [Hslot]
+  · iframe Hslot; ipureintro; exact hslg
+  iintro %R3 %hkeep3 Hval Hms
+  have hsum : (w1 {MOP} u1).toInt = {RES} := by rw [{WRAP}, hw1, hu1]
+  rw [hsum]
+
+#ix_piece {ARM}P_p4 from {ARM}P_p3 by
+  -- run 4: the epilogue
+  ihave #Hdv := roOwn_data hn.view $$ [Hcode Hro]
+  · iframe Hcode Hro
+  iapply wp_swpF (wpW _) (F := iprop(evalArmF P m env aE (s + 18446744073709550528#64)
+      (evalNeed (.binary {OP} l r) d - 1088) (valAt N sret.toNat (.int {RES}))
+      (world N L Room inp .uncounted st2 d)
+      iprop((PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ (∃ st' v, ⌜EvalE st d env (.binary {OP} l r) st' v⌝ ∗
+          evalPost N L Room inp .uncounted st' d (.binary {OP} l r) v sret s rv) -∗
+          (wpW (vsaModel live)).W Φ) ∧
+        (abortAt Core s (evalNeed (.binary {OP} l r) d) ∗ slot24 sret.toNat -∗
+          (wpW (vsaModel live)).W Φ)) ∗
+      evalSpecsP (vsaModel live) N L Room inp Core))
+  rotate_left
+  · unfold evalArmF; iframe Hdv Hms; isplitr [IH]
+    · iframe Hcode Hro Hfb Hst Hval Hw; iexact Hk
+    · iexact IH
+  intro F'
+  refine {ARM}T_run4 (aX := aX) (s := s) (ret := ret) (v8 := rv 8) (v9 := rv 9)
+    (v18 := rv 18) (v19 := rv 19) hlive hsf hs' hs2 hs3 hal ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  · ix_keep [hkeep3, hkeep2, hkeep1]
+  · rw [hoff _ (by decide)]; exact hsv3.ra
+  · rw [hoff _ (by decide)]; exact hsv3.s0
+  · rw [hoff _ (by decide)]; exact hsv3.s1
+  · rw [hoff _ (by decide)]; exact hsv3.s2
+  · rw [hoff _ (by decide)]; exact hsv3.s3
+  apply swp_closeF
+  unfold F' evalArmF
+  iintro ⟨⟨⟨#Hcode, #Hro, #Hfb, Hst, Hval, Hw, Hk⟩, #IH⟩, Hms⟩
+  ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
+  ihave Hst := evalFrame_join hsg.le hneed $$ [Hst HS]
+  · iframe Hst HS
+  ihave Hra := ptsto_eq (show _ = ret by ix_reg) $$ Hra
+  ihave Hk := and_elim_l $$ Hk
+  iapply Hk $$ Hpc Hra
+  iexists st2, (.int {RES})
+  isplitl []
+  · ipureintro; exact EvalE.binary st d env {OP} l r st1 st2 (.int a) (.int b) _ hEl hEr rfl
+  unfold evalPost
+  iexists _
+  iframe Hregs Hst Hval Hw
+  ipureintro
+  intro x hx
+  simp only [calleeSaved, List.mem_cons, List.not_mem_nil, or_false] at hx
+  rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  · ix_reg; exact evalSP_restore s |>.trans hregs.sp.symm
+  all_goals ix_keep [hkeep3, hkeep2, hkeep1]
+
+#ix_chain caseP_{ARM} := [{ARM}P_p1, {ARM}P_p2, {ARM}P_p3, {ARM}P_p4]
+
+
+end VsaIris.Interp

@@ -71,3 +71,5 @@ import VsaIris.Interp.SpecEval
 import VsaIris.Interp.Arm
 import VsaIris.Interp.Case.BinaryAddIntT
 import VsaIris.Interp.Case.BinarySubIntT
+import VsaIris.Interp.Case.BinaryAddIntP
+import VsaIris.Interp.Case.BinarySubIntP

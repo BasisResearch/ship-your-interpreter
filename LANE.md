@@ -72,12 +72,19 @@ the stage-a3 drift gate for `VsaIris/Interp/Case/*`.
   which `ExprReprWithin`'s read set `P` does not cover.
 
 ## Done (all in `lake build VsaIris`, no holes)
-- **The worked example, total mode, from generated output**:
-  `VsaIris/Interp/Case/BinaryAddIntT.lean` (`caseT_BinaryAddInt`, axioms
-  ⊆ {propext, Classical.choice, Quot.sound}) and `BinarySubIntT.lean`, both
-  generated from `arms.tsv` (family `binInt`), ~25 s each. Drift gate:
-  `check_all.sh` stage a3 runs `gen_interp_steps.py --check` and
+- **The worked example in both modes, from generated output** (family
+  `binInt`, rows `BinaryAddInt` and `BinarySubInt` of `arms.tsv`):
+  `Case/BinaryAddIntT.lean` (`caseT_BinaryAddInt`: total, derivation-indexed,
+  children's `evalSpecT_body` and `valueIntSpec` as hypotheses) and
+  `Case/BinaryAddIntP.lean` (`caseP_BinaryAddInt`: partial, from the Löb
+  hypothesis `evalSpecsP`; the other-kinds branch exported as `hx_1`), and the
+  same two for `-`. Axioms ⊆ {propext, Classical.choice, Quot.sound}. Drift
+  gate: `check_all.sh` stage a3 runs `gen_interp_steps.py --check` and
   `gen_iris_cases.py --check`.
+- Partial-mode layer: `evalSpecP_body`/`evalSpecsP` (SpecEval), `ms_callEvalP`
+  (Löb call; abort rebased by rebuilding the frame, the child's slot handed
+  back), `valOf_tag`, `#ix_piece` with several leftovers, `#ix_chain` exports,
+  `#ix_piece … from p at k` (continue an exported branch).
 - Symbolic runs: `IW`/`SWP` over the generated step table (`Steps/*`,
   `it_`/`itD_`/`itT_`/`itH_`/`jalx_` per instruction), jump-table values,
   havoc loads (`swp_havocD`); driver `ix_run h [using [facts]] [at pc…]`.
@@ -103,12 +110,13 @@ the stage-a3 drift gate for `VsaIris/Interp/Case/*`.
 3. Replace the row-specific literals by `{PLACEHOLDER}`s, save as
    `templates/<family>_T.lean`, add `FAMILIES[<family>]`, add the rows.
 
-## In flight
-Partial-mode twin of the worked example (`binInt_P`): `evalSpecP_body`
-(abort resource over an abstract core), `ms_callEvalP` (Löb call with the
-abort continuation rebased), `#ix_seg` with several leftovers (a kind test on
-the children's actual values branches), the error branches through a
-`runtime_error` stub spec (H5), the concat branch as another row's hypothesis.
+## Next
+- The exported other-kinds branch of the binary arms is the concat and
+  type-error rows' starting point (`#ix_piece … from BinaryAddIntP_p2 at 2`);
+  their families (and `*` through `__muldi3`, `/`, `%`) are E-lane work on
+  this layer. `runtime_error`'s spec is H5's; a stub is not in the tree.
+- `exec_stmt`'s spec statement (`execSpecT/P_body`) beside `evalSpec*` in
+  SpecEval, and `seqLoop` for the three statement-sequence sites.
 
 ## Holes
 None added. `python3 scripts/check_iris_holes.py` passes.

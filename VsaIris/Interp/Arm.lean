@@ -494,6 +494,10 @@ theorem binNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {op : BinO
         · obtain ⟨j, rfl⟩ : ∃ j, a = aX.toNat + 24 + j := ⟨a - (aX.toNat + 24), by omega⟩
           exact ⟨cr j (by omega), isSome_of_readLE hr (by omega)⟩
 
+/-- A value's kind tag, the low word of its first slot word (`ValueKind`). -/
+def valTag : Value → Nat
+  | .null => 0 | .bool _ => 1 | .int _ => 2 | .str _ => 3 | .closure _ => 4 | .native _ => 5
+
 section AstRes
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
@@ -515,6 +519,15 @@ slot (`Out`: `slot24` before the result is written, `valAt` after), the world
 def evalArmF [InterpGS GF] (P : Nat → Prop) (m : Mem) (env : Nat) (aE s' : BitVec 64) (n' : Nat)
     (Out Wd K : IProp GF) : IProp GF :=
   iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗ stackScratch s' n' ∗ Out ∗ Wd ∗ K)
+
+/-- A represented value's first word carries its kind tag. -/
+theorem valOf_tag [InterpGS GF] (N : NativeAddrs) (v : Value) (w0 w1 w2 : BitVec 64) :
+    valOf (GF := GF) N v w0 w1 w2 ⊢ ⌜w0.toNat % 2 ^ 32 = valTag v⌝ := by
+  cases v <;> unfold valOf <;> simp only [valTag]
+  all_goals first
+    | (iintro %h; ipureintro; exact h)
+    | (iintro %h; ipureintro; exact h.1)
+    | (iintro ⟨%h, -⟩; ipureintro; exact h.1)
 
 end AstRes
 
@@ -792,6 +805,15 @@ theorem ms_callHelper (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   rw [regFile_upd_ra]
   simp only [upd_same]
   iframe Hpc Hra Hregs HS
+
+/-- The Löb hypothesis at one child. -/
+theorem evalSpecsP_at (Core : IProp GF) (st : St) (d env : Nat) (e : Expr) :
+    evalSpecsP (vsaModel live) N L Room inp Core ⊢
+      ▷ evalSpecP_body (vsaModel live) N L Room inp Core st d env e := by
+  unfold evalSpecsP
+  iintro #H
+  inext
+  iapply H
 
 /-- The frame bytes whole again, the slot at any contents. -/
 theorem ownSet_unslot {S : Nat → Prop} {Mt : Mem} {a : Nat} (h : ∀ b, InExt (a, 24) b → S b) :

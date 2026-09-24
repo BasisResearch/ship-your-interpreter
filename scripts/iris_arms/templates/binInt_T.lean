@@ -30,7 +30,7 @@ open Vsa.MemRepr Vsa.Sim
 
 #ix_seg {ARM}T_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
-    {aX s aE inp aR w1 : BitVec 64}
+    {aX s aE inp aR w1 kL : BitVec 64}
     (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (hx1 : 0x80000000 ≤ aX.toNat) (hx2 : aX.toNat + 32 ≤ 0x100000000)
@@ -38,7 +38,7 @@ open Vsa.MemRepr Vsa.Sim
     (h8 : R 8 = aX) (h2 : R 2 = s + 18446744073709550528#64) (h18 : R 18 = inp)
     (hright : ldv .ld m (aX + 24#64).toNat = aR)
     (hA : ldv .ld Mt (s.toNat - 1088) = aE)
-    (hK : ldv .lw Mt (s + 18446744073709550528#64 + 120#64).toNat = 2#64)
+    (hK : ldv .lw Mt (s + 18446744073709550528#64 + 120#64).toNat = kL)
     (hP : ldv .ld Mt (s + 18446744073709550528#64 + 128#64).toNat = w1) :
     IW live m (binView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x800034fc#64 R Mt
   by ix_run hlive using [h8, h2, h18, hright, hA, hK, hP, hsf] at 0x80003518
@@ -177,7 +177,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
   rotate_left
   · unfold evalArmF; iframe Hdv Hms Hcode Hro Hfb Hst Hslot Hw; iexact Hk
   intro F'
-  refine {ARM}T_run2 (aE := aE) (inp := BitVec.ofNat 64 inp) (w1 := w1) hlive hsf hs' hs2 hs3 hx1 hx2 hx3 ?_ ?_ ?_ hn.right ?_ ?_ ?_ ?_
+  refine {ARM}T_run2 (aE := aE) (inp := BitVec.ofNat 64 inp) (w1 := w1) (kL := 2#64) hlive hsf hs' hs2 hs3 hx1 hx2 hx3 ?_ ?_ ?_ hn.right ?_ ?_ ?_ ?_
   · ix_keep [hkeep1]
   · ix_keep [hkeep1]
   · ix_keep [hkeep1]

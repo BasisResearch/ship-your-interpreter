@@ -159,6 +159,9 @@ def evalSpecP_body (Core : IProp GF) (st : St) (d env : Nat) (e : Expr) : IProp 
 def evalSpecsP (Core : IProp GF) : IProp GF :=
   iprop(□ ▷ ∀ st d env e, evalSpecP_body M N L Room inp Core st d env e)
 
+instance (Core : IProp GF) : Persistent (evalSpecsP (GF := GF) M N L Room inp Core) := by
+  unfold evalSpecsP; infer_instance
+
 /-- **A runtime helper that always returns**, for either WP: entered with the
 body's registers at `rv` (argument facts `pins`) and `Pre`, it returns some
 `rv'` that changes only the registers `clob`, and `Post rv'`. -/

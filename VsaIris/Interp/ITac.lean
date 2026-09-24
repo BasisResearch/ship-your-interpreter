@@ -266,13 +266,15 @@ syntax (name := ixSeg) "#ix_seg " ident bracketedBinder* " : " term " by " tacti
 
 /-- `#ix_piece name binders : goal by tac` is `#ix_seg` for any proof step:
 the leftover goal keeps EVERY local the script introduced.
-`#ix_piece name from prev by tac` continues from the leftover of the piece
-`prev`: its binders are `prev`'s, its goal `prev`'s leftover. A long proof is
+`#ix_piece name from prev by tac` continues from the (first) leftover of the
+piece `prev`: its binders are `prev`'s, its goal `prev`'s leftover;
+`from prev at k` continues its `k`-th leftover (a branch `#ix_chain` exports:
+another row proves it this way). A long proof is
 a chain of pieces (`#ix_chain`), each its own declaration: its own
 elaboration budget, and nothing about the intermediate states written by
 hand. -/
 syntax (name := ixPiece) "#ix_piece " ident bracketedBinder* " : " term " by " tacticSeq : command
-syntax (name := ixPieceFrom) "#ix_piece " ident " from " ident " by " tacticSeq : command
+syntax (name := ixPieceFrom) "#ix_piece " ident " from " ident (" at " num)? " by " tacticSeq : command
 
 @[command_elab ixPiece] def elabIxPiece : CommandElab := fun stx => do
   let declName := (← getCurrNamespace) ++ stx[1].getId
@@ -285,14 +287,16 @@ syntax (name := ixPieceFrom) "#ix_piece " ident " from " ident " by " tacticSeq 
 @[command_elab ixPieceFrom] def elabIxPieceFrom : CommandElab := fun stx => do
   let declName := (← getCurrNamespace) ++ stx[1].getId
   let prev ← liftCoreM <| realizeGlobalConstNoOverload stx[3]
+  -- which leftover to continue: the first, or `at k` (an exported branch)
+  let k := if stx[4].isNone then 1 else stx[4][1].isNatLit?.getD 1
   liftTermElabM do
     let info ← getConstInfo prev
     forallTelescope info.type fun xs _ => do
       let nv ← pieceVars xs
-      let some hk := xs[nv]? | throwError "#ix_piece: {prev} has no leftover"
+      let some hk := xs[nv + k - 1]? | throwError "#ix_piece: {prev} has no leftover {k}"
       -- the first leftover's own locals become this piece's binders
       forallTelescope (← inferType hk) fun ys T => do
-        ixAddPiece declName (xs.extract 0 nv ++ ys) T stx[5] true (xs.extract nv xs.size)
+        ixAddPiece declName (xs.extract 0 nv ++ ys) T stx[6] true (xs.extract nv xs.size)
 
 /-- `#ix_chain name := [p₁, p₂, …]` proves `name` by chaining pieces, each
 continuing the previous one's FIRST leftover:
