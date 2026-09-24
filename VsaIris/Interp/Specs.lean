@@ -3,6 +3,7 @@ import VsaIris.MallocRun
 import VsaIris.Loop
 import VsaIris.Interp.Need
 import VsaIris.Interp.Vacuity
+import VsaIris.Vsa.NewlibOut
 import VsaIris.Vsa.AllocHoles
 import VsaIris.Vsa.HeapShape
 import Vsa.RuntimeRepr
@@ -302,6 +303,11 @@ structure IrisHoles : Prop where
   formats, `fwrite` of the out-of-memory message, and `exit`'s newlib
   interior. Scheduled after E1-E6 (user, Q4). -/
   newlib : Newlib.NewlibHoles
+  /-- newlib's stdout calls (`fputs`, `fputc`, `fwrite`, `fprintf` on
+  `stdout`) and `stringify`'s `snprintf("<fn %s>")`, exact about what they
+  print or render (`VsaIris/Vsa/NewlibOut.lean`, H2). `value_print` and the
+  natives print through them. Scheduled with the newlib holes (user, Q4). -/
+  out : Newlib.OutHoles
 
 /-- The boundary (A0): from `InterpRunReady` and `ProgramRepr`, allocate the
 ghost state and produce the initial world, the persistent AST and code, the

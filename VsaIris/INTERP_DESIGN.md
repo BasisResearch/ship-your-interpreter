@@ -906,4 +906,13 @@ binary or by what the proofs consume:
   below the program's need, or `perCallBudget` accounting leaves it at depth
   `maxCallDepth`. H5 states `runtime_error`'s spec with its real need; E1–E6
   must supply it at each error site.
-
+- **Q8 (lane H2, needs the user): `stringify` cuts a named closure's rendering
+  at 63 characters.** `stringify` renders a closure with
+  `snprintf(buf, 64, "<fn %s>", name)` and copies the buffer, so the string
+  `+` of a closure whose name is longer than 58 characters yields
+  `("<fn " ++ name ++ ">")` cut to 63 characters, while `Value.catDisplay`
+  (and so `EvalE`'s concat rule) renders it uncut: `InterpSim` is false for
+  such programs. Either the semantics cuts (`catDisplay` of `.closure` is
+  `Newlib.fnRender name`), or `Loaded` bounds name lengths. H2 states
+  `stringify` against the machine (`Newlib.fnRender`); evidence in
+  `PROOF_CLOSURE_PLAN.md` ("`stringify` cuts a closure's rendering").
