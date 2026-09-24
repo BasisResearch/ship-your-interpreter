@@ -248,7 +248,23 @@ def subst_execEval1(arm: Arm, mode: str) -> dict[str, str]:
             "SEM": p["sem"], "J1": f"{j1:08x}", "J1N": f"{j1 + 4:08x}"}
 
 
-FAMILIES = {"binInt": subst_binInt, "execConst": subst_execConst, "execEval1": subst_execEval1}
+def subst_execNullRet(arm: Arm, mode: str) -> dict[str, str]:
+    """Family `execNullRet` (lane E5): `ret;` — the NULL field test, `value_null`
+    into the frame slot `sp+16`, the jump to the shared `ret` exit. Steps:
+    `run <dispatch> <jal>; helper valueNull <jal>; run <jal+4> ret`. Params:
+    `node`, `sem`, `foff`/`w` (the NULL field's offset and the node width)."""
+    runs = run_steps(arm)
+    hs = [s for s in arm.steps if s.op == "helper"]
+    if len(runs) != 2 or len(hs) != 1 or int(runs[0].args[0], 0) != EXEC_DISP:
+        raise SystemExit(f"{arm.name}: family execNullRet is run, helper, run")
+    j1 = int(hs[0].args[1], 0)
+    p = arm.params
+    return {"ARM": arm.name, "TAG": str(arm.tag), "SM": arm.ctor, "NODE": p["node"], "SEM": p["sem"],
+            "FOFF": p["foff"], "W": p["w"], "J1": f"{j1:08x}", "J1N": f"{j1 + 4:08x}"}
+
+
+FAMILIES = {"binInt": subst_binInt, "execConst": subst_execConst, "execEval1": subst_execEval1,
+            "execNullRet": subst_execNullRet}
 
 
 def emit(arm: Arm, mode: str) -> str:

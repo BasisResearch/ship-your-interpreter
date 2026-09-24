@@ -16,3 +16,6 @@ import VsaIris.Interp.E5
 #print axioms VsaIris.Interp.caseP_ExecExpr
 #print axioms VsaIris.Interp.caseT_ExecRet
 #print axioms VsaIris.Interp.caseP_ExecRet
+#print axioms VsaIris.Interp.caseT_ExecRetNull
+#print axioms VsaIris.Interp.caseP_ExecRetNull
+#print axioms VsaIris.Interp.ms_callHelperSlot

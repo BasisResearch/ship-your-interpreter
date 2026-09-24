@@ -178,6 +178,16 @@ theorem retNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {e : Vsa.While.
   cases h with
   | retSome h0 c0 hr cr hne hx => exact ⟨_, exprFieldNode_of hg h0 c0 (by decide) hr cr hne hx⟩
 
+/-- A `ret;` statement node: the tag and the NULL expression field. -/
+theorem retNullNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64}
+    (h : StmtReprWithin m P aS.toNat (.ret none)) (hg : ∀ k, P k → Interp.ReadOK k) :
+    StmtNode m P aS 6 16 ∧ ldv .ld m (aS + 8#64).toNat = 0#64 := by
+  cases h with
+  | retNone h0 c0 hr cr =>
+    have hn := stmtNode_of (w := 16) hg h0 c0 (by decide) (Or.inr (by decide))
+      (fun j h1 h2 => field_mid hr cr h1 (by omega))
+    exact ⟨hn, field64 hr (by have := hn.hi; omega)⟩
+
 /-! ## Child calls from a frame of any size -/
 
 /-- The geometry of a child call from a frame of `f` bytes below `s`: the
@@ -588,5 +598,55 @@ theorem wp_execRetCopy (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF
   iframe Hms Hst Hw HK Hval
 
 end Exits
+
+section HelperSlot
+
+open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
+open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+variable {live : Nat → Prop} {N : NativeAddrs}
+
+/-- **A helper that fills a frame slot**, for either WP (`value_null`,
+`value_bool`, … into a slot of the arm's frame): the slot is carved out of
+the arm's owned bytes for the call and joined back as three words whose
+meaning is `valOf`. -/
+theorem ms_callHelperSlot (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {i : Nat} {code : List (BitVec 8)} {entry : BitVec 64}
+    (hexec : JalExec (vsaModel live) i code entry)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    {clob : List Nat} {pins : (Nat → BitVec 64) → Prop} {v : Value}
+    {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {a : BitVec 64}
+    (hS : ∀ b, InExt (a.toNat, 24) b → S b) (hsl : SlotGeom a) :
+    ⌜pins R⌝ ∗ helperSpec (vsaModel live) Wp entry clob pins
+        iprop(slot24 a.toNat ∗ ⌜SlotGeom a⌝) (fun _ => valAt N a.toNat v) ∗ codeRes ∗
+      ms (BitVec.ofNat 64 i) R S Mt ∗
+      (∀ (R' : Nat → BitVec 64) (w0 w1 w2 : BitVec 64), ⌜∀ x ∈ fRegs, x ∉ clob → R' x = R x⌝ -∗
+        □ valOf N v w0 w1 w2 -∗
+        ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S
+          (slotWrite Mt a.toNat w0 w1 w2) -∗ Wp.W Φ)
+    ⊢ Wp.W Φ := by
+  iintro ⟨%hp, Hspec, #Hcode, Hms, Hk⟩
+  unfold ms
+  icases Hms with ⟨Hpc, Hra, Hregs, HS⟩
+  ihave ⟨HS, Hslot⟩ := ownSet_carve_slot hS $$ HS
+  iapply ms_callHelper Wp hexec hcode hal (S := fun b => S b ∧ ¬ InExt (a.toNat, 24) b) (Mt := Mt)
+  iframe Hspec Hcode
+  isplitl []
+  · ipureintro; exact hp
+  isplitl [Hpc Hra Hregs HS]
+  · unfold ms; iframe Hpc Hra Hregs HS
+  isplitl [Hslot]
+  · iframe Hslot; ipureintro; exact hsl
+  iintro %R' %hk Hval Hms
+  unfold ms
+  icases Hms with ⟨Hpc, Hra, Hregs, HS⟩
+  ihave ⟨%w0, %w1, %w2, #Hv, HS⟩ := ownSet_join_slot hS $$ [HS Hval]
+  · iframe HS Hval
+  iapply Hk $$ %R' %w0 %w1 %w2 %hk Hv
+  iframe Hpc Hra Hregs HS
+
+end HelperSlot
 
 end VsaIris.Interp
