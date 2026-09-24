@@ -4088,3 +4088,39 @@ every byte it reads. `stringify_spec` therefore takes
 `hstk : ∀ a, 0x87800000 ≤ a → a < 0x88000000 → live a`, a condition on the
 top-level `live` like `CodeLive`. Its supplier is the instantiation of
 `vsaModel live` at the boundary, which chooses `live`.
+
+## `exec_stmt`'s `if` arm re-dispatches in its frame (lane E5, 2026-09-24)
+
+- **Affected:** the recursor motive of `ExecSCost` (lane A) and every exec arm.
+- **Evidence:** `0x8000422c ld s0,16(s0); 0x80004230 j 0x80004014` (then
+  branch) and `0x800042cc ld s0,24(s0); 0x800042d0 bnez s0,0x80004014` (else
+  branch) after `li a6,8; auipc a4` (`0x8000421c`): gcc turned
+  `return exec_stmt(in, branch, env, ret)` into a jump back to the kind
+  dispatch inside the same frame. The branch statement never runs from
+  `exec_stmt`'s entry, so the entry spec `execSpecT_body` of the branch cannot
+  discharge the `if` arm.
+- **Resolution (landed):** `VsaIris/Interp/SpecExecDisp.lean` states
+  `exec_stmt` at the dispatch point (`execDispT_body`, `execDispP_body`,
+  `execDispsP`); `ExecDisp.lean` recovers the entry specs by running the
+  prologue (`execSpecT_of_disp`, `execSpecP_of_disp`, `execSpecsP_of_disps`).
+  The recursor's motive is `execDispT_body`.
+
+## The partial specs' abort core is not site-indexed (lane E5, 2026-09-24)
+
+- **Affected:** every partial case whose arm can run out of memory:
+  `exec_stmt`'s `var` (both, `env_define` `oomAt 0x80002bd0`), block and `for`
+  (`env_new`, `oomAt 0x80002a38`); `eval_expr`'s `fn` literal, concat
+  (`stringify`/`malloc`) and call (`env_new`) arms.
+- **Missing supplier:** `evalSpecP_body Core`/`execSpecP_body Core` (lane G) and
+  `execDispP_body Core` abort with `abortAt Core s need` for ONE `Core` fixed
+  by the Löb hypothesis. H5's out-of-memory core `oomCore s n` is
+  site-indexed (`OomSp`: `exit`'s stack inside `[s - n, s)`), and
+  `abortCore_mono` needs the site's region inside the region `Core` was built
+  for. No site knows that region: `StackGeom` bounds `s` only by
+  `stackSL.hi`, not by `interp_run`'s `sp`.
+- **Proposed fix:** make the core site-indexed: the partial specs abort with
+  `abortRes N L Room inp s need` (= `abortAt (abortCore … s need) s need`),
+  and each call site rebases with `abortRes_widen` (it knows the child's
+  region is inside its own). The Löb hypotheses then need no `Core`
+  parameter. Until then E5 proves the arms without an out-of-memory path
+  (brk, cont, ret, expr, if) against the generic `Core`.

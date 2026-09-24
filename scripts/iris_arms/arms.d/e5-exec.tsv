@@ -1,0 +1,6 @@
+# exec_stmt's statement arms (lane E5), proved from the dispatch point
+# 0x80004014 (SpecExecDisp.lean). Format: LANE.md "Row format" (lane G).
+#
+# arm	fn	tag	ctor	children	result	steps	errors	family
+ExecBrk	exec	7	.brk		.brk	run 0x80004014 ret		execConst ctor=brk a0=1
+ExecCont	exec	8	.cont		.cont	run 0x80004014 ret		execConst ctor=cont a0=2
