@@ -2870,6 +2870,15 @@ it non-NULL whenever the arena has room, but `ReallocEnd`'s success arm demands
 `ReallocChgRun` already bounds `nNew` through its charge. `reallocSpec` has no consumer
 beyond the audit.
 
+STRENGTHENED CONTRACT (lane H4, nested `_malloc_r`): `_realloc_r`'s merge path
+(`0x800055b0`, the new block right after the old chunk) sets the merged size from the
+old chunk size it spilled before calling `_malloc_r`, so it needs that `_malloc_r` did not
+resize the chunk holding a live block. `MRet` (and `MHeap`, `TakeRet`) now carry
+`LiveKeep C chunks` (`MallocCtx.lean`): the in-use chunk of each live block, as the entry
+memory's header records it, is in the final chunk list. `_malloc_r`'s internal steps keep
+the chunk list; each block-producing exit only re-flags or splits a free chunk
+(`LiveKeep.map_reflag`, `LiveKeep.split`) or appends the top split.
+
 Machine-checked `free` (`VsaIris`, branch `iris-heap`): `_free_r`'s top-merge
 path is `VsaIris.MallocFast.freeRoomRun_fast` / `vsaDlFreeRoomImpl_boundary`.
 The heap half is `VsaIris.VsaHeap.FastAt.merge`. `realloc` has an Iris spec,
