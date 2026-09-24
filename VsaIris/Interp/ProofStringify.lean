@@ -307,6 +307,25 @@ theorem cstr_null (Mt : Mem) (a : Nat) :
     all_goals first | omega | (revert hi hi'; decide)
   · rw [show a + "null".toList.length = a + 4 from rfl, imgM_sb]; decide
 
+/-- `"<native fn>"` as the native arm stores it: two `.rodata` words. -/
+theorem cstr_native (Mt : Mem) (a : Nat) :
+    CStrImg (imgM (writeLog (writeLog Mt [(a, 8, 2334402177157656124#64)])
+      [(a + 8, 4, 4091494#64)])) a "<native fn>" := by
+  refine ⟨fun i hi => ?_, ?_⟩
+  · have hi' : i < 11 := by simpa using hi
+    by_cases h8 : i < 8
+    · rw [imgM_store_miss _ _ (by omega), imgM_sd _ _ _ _ h8]
+      rcases i with _ | _ | _ | _ | _ | _ | _ | _ | i
+      all_goals first | omega | (revert hi hi' h8; decide)
+    · have := imgM_sw (writeLog Mt [(a, 8, 2334402177157656124#64)]) (a + 8) 4091494#64 (i - 8)
+        (by omega)
+      rw [show a + 8 + (i - 8) = a + i by omega] at this
+      rw [this]
+      rcases i with _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | i
+      all_goals first | omega | (revert hi hi' h8; decide)
+  · have := imgM_sw (writeLog Mt [(a, 8, 2334402177157656124#64)]) (a + 8) 4091494#64 3 (by omega)
+    rw [show a + "<native fn>".toList.length = a + 8 + 3 from rfl, this]; decide
+
 /-! ## The Iris glue -/
 
 section Glue
@@ -1043,6 +1062,58 @@ theorem sg_nullArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   refine sg_tail Wp A HN cx hmc hc ⟨by ix_reg, by ix_reg, by ix_reg, ?_, ?_, ?_, ?_, ?_, ?_, by decide⟩
   rotate_right
   · rw [e20, e16]; exact cstr_null _ _
+  · intro y hy hc' hy2 hy9
+    have hy1 : y ≠ 1 := fun e => by subst e; revert hy; decide
+    have hcl : ∀ z ∈ callerSaved, y ≠ z := fun z hz e => hc' (e ▸ hz)
+    have := hcl 10 (by decide); have := hcl 14 (by decide); have := hcl 15 (by decide)
+    simp only [upd, hy1, hy2, hy9, *, ite_false]
+  all_goals first
+    | (rw [e20, e16]
+       simp only [hoff 104 (by omega), hoff 96 (by omega), hoff 88 (by omega)]
+       simp (disch := (simp only [widthOfM]; omega)) only [ldv_store_miss, ldv_store_hit])
+    | (intro k hk'
+       have hn := cx.hdsp k
+       simp only [InExt] at hk' hn
+       rw [e20, e16]
+       simp only [hoff 104 (by omega), hoff 96 (by omega), hoff 88 (by omega)]
+       simp (disch := omega) only [imgM_store_miss]
+       exact hslot k (by simp only [InExt]; omega))
+
+/-- **A native**: `"<native fn>"` from `.rodata`, stored inline, then the shared tail. -/
+theorem sg_natArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {st : Store} {ρ : Regime}
+    {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (A : AllocSpecs live) (HN : NewlibHoles) (cx : SgCtx live p s r rv)
+    (hmc : ⊢ memcpySpecOwned (vsaModel live) Wp) {f : NativeFn} (hc : vsaChg ("<native fn>".toList.length + 1) c)
+    {M : Mem} (hk : ldv .lw M p.toNat = 5#64)
+    (hslot : ∀ k, InExt (p.toNat, 24) k → imgM M k = imgM Mp k) :
+    SgRest Wp Φ N inp p s r (.native f) "<native fn>" ρ H c o rv Mp ∗
+      ms stringifyPC (upd rv 1 r) (sgF s p) M ⊢ Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  have hoff := sg_offs (s := s) (by omega)
+  iintro ⟨Hrest, Hms⟩
+  iapply wp_swpF Wp (S := sgF s p) (R := upd rv 1 r) (Mt := M) (pc := stringifyPC)
+    (F := SgRest Wp Φ N inp p s r (.native f) "<native fn>" ρ H c o rv Mp)
+  rotate_left
+  · unfold SgRest
+    icases Hrest with ⟨#Hcode, Hrest⟩
+    rw [hro]
+    iframe Hcode Hrest Hms
+  intro F'
+  refine sg_nat cx.hlive cx.h10 cx.h2 (by omega) hs2 hs3 cx.hg.al
+    (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi hk ?_
+  intros; apply swp_closeF
+  dsimp only [F']
+  have e16 : (s + 18446744073709551504#64 + 16#64).toNat = s.toNat - 96 := by
+    rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
+  have e20 : (s + 18446744073709551504#64 + 16#64 + 8#64).toNat = s.toNat - 96 + 8 := by
+    rw [BitVec.toNat_add, e16]; simp; omega
+  refine sg_tail Wp A HN cx hmc hc ⟨by ix_reg, by ix_reg, by ix_reg, ?_, ?_, ?_, ?_, ?_, ?_, by decide⟩
+  rotate_right
+  · rw [e20, e16]; exact cstr_native _ _
   · intro y hy hc' hy2 hy9
     have hy1 : y ≠ 1 := fun e => by subst e; revert hy; decide
     have hcl : ∀ z ∈ callerSaved, y ≠ z := fun z hz e => hc' (e ▸ hz)
