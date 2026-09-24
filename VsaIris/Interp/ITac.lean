@@ -120,7 +120,9 @@ def ixStep (norm : Syntax) (h : Syntax) (g : MVarId) :
     if let some r ← ixApply norm h g nm false then return some r
   return none
 
-/-- `ix_run h`, `ix_run [n] h`, `ix_run h using [e,…]`, `ix_run h at pc…`. -/
+/-- `ix_run h`, `ix_run [n] h`, `ix_run h using [e,…]`, `ix_run h at pc…`.
+A branch that `sx_side` decides is pruned; an undecided branch is explored on
+both sides (each side's goal carries its condition `hc`). -/
 syntax "ix_run " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
 
 elab_rules : tactic
@@ -134,20 +136,25 @@ elab_rules : tactic
       | none => #[]
     let norm ← ixNorm facts
     let mut pending : List MVarId := []
-    let mut cur ← getMainGoal
+    let mut stuck : List MVarId := []
+    let first ← getMainGoal
     -- a start state from a call's return (`BitVec.ofNat 64 (i + 4)`) gets its literal PC
-    cur ← do
+    let first ← do
       let saved ← saveState
       try
-        match ← evalTacticAt (← `(tactic| (try simp only [Nat.reduceAdd]))) cur with
+        match ← evalTacticAt (← `(tactic| (try simp only [Nat.reduceAdd]))) first with
         | [c'] => pure c'
-        | _ => saved.restore; pure cur
-      catch _ => saved.restore; pure cur
-    let mut stuck : List MVarId := []
-    for _ in [0:budget] do
+        | _ => saved.restore; pure first
+      catch _ => saved.restore; pure first
+    -- a worklist of paths, each with its own step budget
+    let mut work : List (MVarId × Nat) := [(first, budget)]
+    while !work.isEmpty do
+      let (cur, fuel) := work.head!
+      work := work.tail!
+      if fuel == 0 then stuck := stuck ++ [cur]; continue
       if let some pc ← cur.withContext (do swpPC? (← cur.getType)) then
-        if stopPCs.contains pc then stuck := [cur]; break
-      let some (conts, pend) ← ixStep norm h cur | stuck := [cur]; break
+        if stopPCs.contains pc then stuck := stuck ++ [cur]; continue
+      let some (conts, pend) ← ixStep norm h cur | stuck := stuck ++ [cur]; continue
       pending := pending ++ pend
       match conts with
       | [c] =>
@@ -167,20 +174,22 @@ elab_rules : tactic
             | _ => saved.restore; pure c
           catch _ => saved.restore; pure c
         if (← c.withContext (do swpPC? (← c.getType))).isSome then
-          cur := c
+          work := (c, fuel - 1) :: work
         else
-          stuck := [c]; break
+          stuck := stuck ++ [c]
       | [t, f] =>
         if ← ixTryPrune norm t then
-          let [f'] ← evalTacticAt (← `(tactic| intro hc)) f | stuck := [f]; break
-          cur := f'
+          let [f'] ← evalTacticAt (← `(tactic| intro hc)) f | stuck := stuck ++ [f]; continue
+          work := (f', fuel - 1) :: work
         else if ← ixTryPrune norm f then
-          let [t'] ← evalTacticAt (← `(tactic| intro hc)) t | stuck := [t]; break
-          cur := t'
+          let [t'] ← evalTacticAt (← `(tactic| intro hc)) t | stuck := stuck ++ [t]; continue
+          work := (t', fuel - 1) :: work
         else
-          stuck := [t, f]; break
-      | cs => stuck := cs; break
-    if stuck.isEmpty then stuck := [cur]
+          -- undecided: explore both sides, taken side first
+          let [t'] ← evalTacticAt (← `(tactic| intro hc)) t | stuck := stuck ++ [t, f]; continue
+          let [f'] ← evalTacticAt (← `(tactic| intro hc)) f | stuck := stuck ++ [t', f]; continue
+          work := (t', fuel - 1) :: (f', fuel - 1) :: work
+      | cs => stuck := stuck ++ cs
     setGoals (pending ++ stuck)
 
 end VsaIris.Sym
