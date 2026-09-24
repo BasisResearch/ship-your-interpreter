@@ -224,4 +224,110 @@ theorem pvN_inline {M0 : Mem} {d s L P : Nat} (A : CPArgs S d s L) (hlive : ∀ 
 
 end Copy
 
+/-- **The prev+X+next copy through `memmove`** (`0x80005778`): spill `t1`,
+`a5`, `a3`, `a6` at `sp`, `memmove(a6, s0, a2)`, reload them and join at
+`0x800056e0`. -/
+theorem pvN_mm {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M1 : Mem} {d s n : Nat}
+    (A : MMArgs C.S d s n) (F : RFrame C R M1)
+    (hslotD : d + n ≤ C.s.toNat - 64 ∨ C.s.toNat ≤ d)
+    (hslotS : s + n ≤ C.s.toNat - 64 ∨ C.s.toNat ≤ s)
+    (h16 : (R 16).toNat = d) (h8 : (R 8).toNat = s) (h12 : (R 12).toNat = n)
+    (hk : ∀ R' Mc, RFrame C R' Mc →
+      (∀ a, (a < C.s.toNat - 64 ∨ C.s.toNat - 64 + 32 ≤ a) → Mc[a]? = (copyW M1 d s (n / 8))[a]?) →
+      (R' 13).toNat = (R 13).toNat → (R' 6).toNat = (R 6).toNat → (R' 15).toNat = (R 15).toNat →
+      (R' 16).toNat = (R 16).toNat → R' 9 = R 9 → AW C.live C.S C.Q 0x800056e0#64 R' Mc) :
+    AW C.live C.S C.Q 0x80005778#64 R M1 := by
+  have hs64 := sp64_toNat O.spA
+  have hlo := O.spA.lo; have hhi := O.spA.hi; have hal := O.spA.align
+  unfold allocHeadroom Vsa.Sim.tohostAddr at hlo
+  have hn := A.n32; have hn8 := A.n8
+  have e : ∀ c, c < 32 → (R 2 + BitVec.ofNat 64 c).toNat = C.s.toNat - 64 + c := fun c hc => by
+    rw [F.sp, addr_add hs64 c (by omega)]
+  have n0 : (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 := rfl
+  have n8 : (sign_extend (m := 64) (0x008#12) : BitVec 64) = BitVec.ofNat 64 8 := rfl
+  have n16 : (sign_extend (m := 64) (0x010#12) : BitVec 64) = BitVec.ofNat 64 16 := rfl
+  have n24 : (sign_extend (m := 64) (0x018#12) : BitVec 64) = BitVec.ofNat 64 24 := rfl
+  have st : ∀ c, c ≤ 24 → c % 8 = 0 → StOK (C.s.toNat - 64 + c) 8 ∧ ∀ b ∈ accAddrs (C.s.toNat - 64 + c) 8, C.S b :=
+    fun c hc hc8 => ⟨by unfold StOK Vsa.Sim.tohostAddr; omega, O.stack (by unfold mHead; omega) (by omega)⟩
+  have ld : ∀ c, c ≤ 24 → c % 8 = 0 → LdOK (C.s.toNat - 64 + c) 8 ∧ ∀ b ∈ accAddrs (C.s.toNat - 64 + c) 8, C.S b :=
+    fun c hc hc8 => ⟨by unfold LdOK Vsa.Sim.tohostAddr; omega, O.stack (by unfold mHead; omega) (by omega)⟩
+  refine st_80005778 O.live (st_8000577c O.live ?_)
+  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  refine st_80005780 O.live (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n24]; rw [e 24 (by omega)]; exact (st 24 (by omega) (by omega)).1)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n24]; rw [e 24 (by omega)]; exact (st 24 (by omega) (by omega)).2) ?_
+  refine st_80005784 O.live (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n16]; rw [e 16 (by omega)]; exact (st 16 (by omega) (by omega)).1)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n16]; rw [e 16 (by omega)]; exact (st 16 (by omega) (by omega)).2) ?_
+  refine st_80005788 O.live (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n8]; rw [e 8 (by omega)]; exact (st 8 (by omega) (by omega)).1)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n8]; rw [e 8 (by omega)]; exact (st 8 (by omega) (by omega)).2) ?_
+  refine st_8000578c O.live (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n0]; rw [e 0 (by omega)]; exact (st 0 (by omega) (by omega)).1)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n0]; rw [e 0 (by omega)]; exact (st 0 (by omega) (by omega)).2) ?_
+  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, n24, n16, n8, n0]
+  rw [e 24 (by omega), e 16 (by omega), e 8 (by omega), e 0 (by omega)]
+  refine st_80005790 O.live ?_
+  simp only [VsaIris.ra]
+  generalize hW : writeLog (writeLog (writeLog (writeLog M1 [(C.s.toNat - 64 + 24, 8, R 6)])
+    [(C.s.toNat - 64 + 16, 8, R 15)]) [(C.s.toNat - 64 + 8, 8, R 13)]) [(C.s.toNat - 64 + 0, 8, R 16)] = W
+  have hWo : ∀ a, (a < C.s.toNat - 64 ∨ C.s.toNat - 64 + 32 ≤ a) → W[a]? = M1[a]? := fun a ha => by
+    rw [← hW, writeLog_out, writeLog_out, writeLog_out, writeLog_out] <;>
+      simp only [OutL, and_true] <;> omega
+  refine memmove_fwd A O.live ?_ ?_ ?_ (by simp only [upd_apply, Nat.reduceEqDiff, ite_true]; decide)
+    fun R' hK => ?_ <;> try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · rw [BitVec.add_zero]; exact h16
+  · rw [BitVec.add_zero]; exact h8
+  · exact h12
+  rw [show (BitVec.ofNat 64 (2147506064 + 4) : BitVec 64) = 0x80005794#64 from rfl]
+  have hR2 : R' 2 = R 2 := by rw [hK.sp]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]
+  have e' : ∀ c, c < 32 → (R' 2 + BitVec.ofNat 64 c).toNat = C.s.toNat - 64 + c := fun c hc => by
+    rw [hR2]; exact e c hc
+  have hcpO : ∀ a, C.s.toNat - 64 ≤ a → a < C.s.toNat →
+      (copyW W d s (n / 8))[a]? = W[a]? := fun a h1 h2 => copyW_out (by omega)
+  have rd : ∀ c (v : BitVec 64), c ≤ 24 → W = writeLog (writeLog (writeLog (writeLog M1
+        [(C.s.toNat - 64 + 24, 8, R 6)]) [(C.s.toNat - 64 + 16, 8, R 15)])
+        [(C.s.toNat - 64 + 8, 8, R 13)]) [(C.s.toNat - 64 + 0, 8, R 16)] →
+      read64 W (C.s.toNat - 64 + c) = some v.toNat →
+      ldv .ld (copyW W d s (n / 8)) (C.s.toNat - 64 + c) = v := fun c v hc _ hr =>
+    ldv_ld (by rw [read64_keep (m := W) fun k hk => hcpO _ (by omega) (by omega)]; exact hr)
+  have r24 : read64 W (C.s.toNat - 64 + 24) = some (R 6).toNat := by
+    rw [← hW, rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), read64_store_hit]
+  have r16 : read64 W (C.s.toNat - 64 + 16) = some (R 15).toNat := by
+    rw [← hW, rd_miss (by omega), rd_miss (by omega), read64_store_hit]
+  have r8 : read64 W (C.s.toNat - 64 + 8) = some (R 13).toNat := by
+    rw [← hW, rd_miss (by omega), read64_store_hit]
+  have r0 : read64 W (C.s.toNat - 64 + 0) = some (R 16).toNat := by
+    rw [← hW, read64_store_hit]
+  refine st_80005794 O.live (by rw [n0, e' 0 (by omega)]; exact (ld 0 (by omega) (by omega)).1)
+    (by rw [n0, e' 0 (by omega)]; exact (ld 0 (by omega) (by omega)).2) ?_
+  rw [n0, e' 0 (by omega), rd 0 _ (by omega) hW.symm r0]
+  refine st_80005798 O.live
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n8]; rw [e' 8 (by omega)]
+        exact (ld 8 (by omega) (by omega)).1)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n8]; rw [e' 8 (by omega)]
+        exact (ld 8 (by omega) (by omega)).2) ?_
+  simp only [upd_apply, Nat.reduceEqDiff, ite_false, n8]
+  rw [e' 8 (by omega), rd 8 _ (by omega) hW.symm r8]
+  refine st_8000579c O.live
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n16]; rw [e' 16 (by omega)]
+        exact (ld 16 (by omega) (by omega)).1)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n16]; rw [e' 16 (by omega)]
+        exact (ld 16 (by omega) (by omega)).2) ?_
+  simp only [upd_apply, Nat.reduceEqDiff, ite_false, n16]
+  rw [e' 16 (by omega), rd 16 _ (by omega) hW.symm r16]
+  refine st_800057a0 O.live
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n24]; rw [e' 24 (by omega)]
+        exact (ld 24 (by omega) (by omega)).1)
+    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false, n24]; rw [e' 24 (by omega)]
+        exact (ld 24 (by omega) (by omega)).2) ?_
+  simp only [upd_apply, Nat.reduceEqDiff, ite_false, n24]
+  rw [e' 24 (by omega), rd 24 _ (by omega) hW.symm r24]
+  refine st_800057a4 O.live ?_
+  refine hk _ _ ((F.of_regs ?_ ?_ ?_).agree fun a h1 h2 => ?_) (fun a ha => ?_) ?_ ?_ ?_ ?_ ?_ <;>
+    try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · exact hR2
+  · rw [hK.s2]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]
+  · rw [hK.s3]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]
+  · rw [hcpO a (by omega) (by omega), hWo a (by omega)]
+  · exact copyW_agreeOn (Pr := fun a => a < C.s.toNat - 64 ∨ C.s.toNat - 64 + 32 ≤ a) hWo
+      (fun i hi => by omega) a ha
+  · rw [hK.s1]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]
+
 end VsaIris.VsaHeap
