@@ -223,4 +223,57 @@ theorem trim_ret {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
   rw [hs2]; apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_add, BitVec.toNat_add, BitVec.toNat_add]
   simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
 
+/-- The trim state through a `_sbrk_r` call that keeps the break. -/
+theorem TrimSt.sbrk {C : MCtx} {R R' : Nat → BitVec 64} {M M' : Mem} {Y brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (S : TrimSt C R M Y brkv chunks bins)
+    (hsp : (R 2).toNat = C.s.toNat - 80) (hs : 256 ≤ C.s.toNat) (P : SbrkPost R R' M M' brkv)
+    (h2 : R' 2 = R 2) (h18 : R' 18 = R 18) (h19 : R' 19 = R 19) (h9 : R' 9 = R 9) :
+    TrimSt C R' M' Y brkv chunks bins := by
+  have HH := S.heap.heap.heap
+  have hlo := S.disj
+  have hag : ∀ a, ¬ SbrkW (R 2).toNat a → M'[a]? = M[a]? := P.agree
+  rw [hsp] at hag
+  have hbrk := HH.brk
+  have hbb := bytes_of_read64_eq hbrk P.brk
+  have key : ∀ a, vsaFoot C.H a → ¬ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) → ¬ (0x8001b538 ≤ a ∧ a < 0x8001b53c) →
+      M'[a]? = M[a]? := by
+    intro a ha h1 h2
+    by_cases hb : brkAddr ≤ a ∧ a < brkAddr + 8
+    · have := hbb (a - brkAddr) (by omega); rwa [show brkAddr + (a - brkAddr) = a by omega] at this
+    · refine hag a fun hw => ?_
+      unfold SbrkW at hw
+      rcases hw with hw | hw | hw | hw
+      · exact S.disj a (by unfold mHead; omega) (by omega) ha
+      · exact hb hw
+      · exact h1 hw
+      · exact h2 hw
+  have hslot : ∀ a, C.s.toNat - 80 ≤ a → a < C.s.toNat → M'[a]? = M[a]? := fun a ha1 ha2 => hag a fun hw => by
+    unfold SbrkW brkAddr at hw
+    rcases hw with hw | hw | hw | hw
+    · omega
+    · exact S.disj a (by unfold mHead; omega) ha2 (.inl (by unfold allocGlobal InRange; omega))
+    · exact S.disj a (by unfold mHead; omega) ha2 (.inl (by unfold allocGlobal InRange; omega))
+    · exact S.disj a (by unfold mHead; omega) ha2 (.inl (by unfold allocGlobal InRange; omega))
+  have rslot : ∀ a, C.s.toNat - 80 ≤ a → a + 8 ≤ C.s.toNat → read64 M' a = read64 M a :=
+    fun a h1 h2 => read64_keep fun k hk => hslot _ (by omega) (by omega)
+  refine ⟨S.heap.transport_read fun a ha => (key a ha.1 (fun h => ha.2.2 h) (fun h => ha.2.1 h)).symm,
+    S.top_le, fun a ha => P.pres a (S.pres a ha), S.disj, fun a ha => ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
+    h2 ▸ S.sp, h18 ▸ S.s2, h19 ▸ S.s3, h9 ▸ S.s1⟩
+  · rw [hag a fun hw => ha ?_]
+    · exact S.frameM a ha
+    unfold SbrkW brkAddr at hw
+    rcases hw with hw | hw | hw | hw
+    · exact .inr ⟨by unfold mHead; omega, by omega⟩
+    · exact .inl (.inl (by unfold allocGlobal InRange; omega))
+    · exact .inl (.inl (by unfold allocGlobal InRange; omega))
+    · exact .inl (.inl (by unfold allocGlobal InRange; omega))
+  all_goals first
+    | (rw [rslot _ (by omega) (by omega)]; exact S.fs0)
+    | (rw [rslot _ (by omega) (by omega)]; exact S.fra)
+    | (rw [rslot _ (by omega) (by omega)]; exact S.sra)
+    | (rw [rslot _ (by omega) (by omega)]; exact S.ss0)
+    | (rw [rslot _ (by omega) (by omega)]; exact S.ss1)
+    | (rw [rslot _ (by omega) (by omega)]; exact S.ss2)
+    | (rw [rslot _ (by omega) (by omega)]; exact S.ss3)
+
 end VsaIris.VsaHeap
