@@ -1667,4 +1667,131 @@ theorem lr_b_mem {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} 
   · exact frame_store (fun a h1 h2 => .inl (.inl (.inl ⟨by omega, by omega⟩)))
       (frame_store (fun a h1 h2 => .inl (.inl (.inl ⟨by omega, by omega⟩))) B.frameM)
 
+/-- **A last remainder absorbing `x` and a free successor** (`0x8000750c`):
+the machine unlinks the successor and writes `p`'s header and footer; `p`
+stays bin 1's only member. -/
+theorem lr_b_done {C : MCtx} {R : Nat → BitVec 64} {Mt Mt1 : Mem} {brkv : Nat} {cs₀ cs₃ : List Chunk}
+    {bins : Nat → List Nat} {sz hdr0 hnn : Nat} {w : BitVec 64} {p psz ds : Nat}
+    (B : FB2 C R Mt Mt1 brkv cs₀ cs₃ ⟨p + psz + sz, ds, false⟩ bins (p + psz) sz hdr0 hnn w p psz 1 [] []
+      (binAt 1) (binAt 1))
+    {predD succD : Nat} (hbkD : read64 Mt (p + psz + sz + 24) = some predD)
+    (hfdD : read64 Mt (p + psz + sz + 16) = some succD)
+    {v1 v2 v3 v4 : BitVec 64} (h1 : v1.toNat = predD) (h2 : v2.toNat = succD)
+    (h3 : v3.toNat = psz + sz + ds + 1) (h4 : v4.toNat = psz + sz + ds) :
+    FDone C (writeLog (writeLog (writeLog (writeLog Mt1 [(succD + 24, 8, v1)]) [(predD + 16, 8, v2)])
+      [(p + 8, 8, v3)]) [(p + (psz + sz) + ds, 8, v4)]) := by
+  have VM := lr_b_mem B
+  have G2 := B.geo
+  have P := B.pv
+  obtain ⟨hp16, hplo, hps16, hps32, hs16, hs32, hd16, hd32, hdend, htop, _, _, _, _,
+    _, _, _, _, _, _, _, _, _, _⟩ := G2
+  simp only at hd16 hd32 hdend
+  obtain ⟨iD, preD, postD, d', cs'', hdn, X⟩ := VM.nx
+  obtain ⟨pred', hpred⟩ : ∃ q, (binAt iD :: preD).getLast? = some q := ⟨_, List.getLast?_cons⟩
+  obtain ⟨succ', hsucc⟩ : ∃ q, (postD ++ [binAt iD]).head? = some q := by
+    rcases postD with _ | ⟨z, zs⟩ <;> simp
+  have G := X.geo VM hpred hsucc
+  have HH := VM.heap.heap.heap
+  have hiD : iD ≠ 1 := by
+    intro he; have := X.bin; rw [he] at this; simp [updBins] at this
+  have hring := (binList_iff_ring.1 (HH.bins_list iD X.i0 X.i1)).1
+  rw [X.bin] at hring
+  have hM2 : ∀ o, o = 16 ∨ o = 24 → read64 (b2Mem Mt p psz sz hdr0 (binAt 1) (binAt 1)) (p + (psz + sz) + o) =
+      read64 Mt (p + psz + sz + o) := by
+    have hb1 : binAt 1 = 2147593504 := rfl
+    rintro o (rfl | rfl) <;>
+    rw [show p + (psz + sz) = p + psz + sz by omega, rd_miss (by omega), rd_miss (by omega),
+      rd_miss (by omega), rd_miss (by omega), rd_miss (by omega)]
+  have e1 : succ' = succD := by
+    have := (ring_member hring hpred hsucc).1
+    simp only [fdOf] at this
+    rw [hM2 16 (.inl rfl), hfdD] at this; exact (Option.some.inj this).symm
+  have e2 : pred' = predD := by
+    have := (ring_member hring hpred hsucc).2
+    simp only [bkOf] at this
+    rw [hM2 24 (.inr rfl), hbkD] at this; exact (Option.some.inj this).symm
+  subst e1 e2
+  have FB := fwd_fbin VM X hpred hsucc h1 h2 h3 h4
+  obtain ⟨hY16, ha16, ha32, hb16, hb32, hYlo, hdend', htop', hp16', hs16', hplo', hslo', hphi', hshi',
+    sY, sN, sD, pD, pY, pN, hppf, hspf, hdf⟩ := G
+  have hb1 : binAt 1 = 2147593504 := rfl
+  -- the unlink's nodes are neither `p` nor bin 1's header
+  have hnode : ∀ z, (z = binAt iD ∨ z ∈ updBins bins 1 ([] ++ []) iD) → z ≠ p ∧ z ≠ binAt 1 := by
+    rintro z (rfl | hz)
+    · have := binAt_geo iD X.i1
+      refine ⟨by unfold binAt avAddr at *; omega, fun he => hiD ?_⟩
+      unfold binAt avAddr at he; omega
+    · obtain ⟨c, hc, hca, hcf⟩ := HH.member X.i0 X.i1 hz
+      have := (HH.walk.chunk_bounds c hc).1; unfold heapStart at this
+      refine ⟨fun he => ?_, by rw [← hca, hb1]; omega⟩
+      have hpm : (⟨p, psz + sz, true⟩ : Chunk) ∈ cs₀ ++ ⟨p, psz + sz, true⟩ :: ⟨p + (psz + sz), ds, false⟩ :: cs₃ := by simp
+      have := HH.chunk_eq hc hpm (by rw [hca, he])
+      rw [this] at hcf; cases hcf
+  have hpredm : pred' = binAt iD ∨ pred' ∈ updBins bins 1 ([] ++ []) iD := by
+    have := List.mem_of_getLast? hpred
+    rcases List.mem_cons.mp this with h1 | h1
+    · exact .inl h1
+    · exact .inr (by rw [X.bin]; exact List.mem_append_left _ h1)
+  have hsuccm : succ' = binAt iD ∨ succ' ∈ updBins bins 1 ([] ++ []) iD := by
+    have := List.mem_of_head? hsucc
+    rcases List.mem_append.mp this with h1 | h1
+    · exact .inr (by rw [X.bin]; exact List.mem_append_right _ (List.mem_cons_of_mem _ h1))
+    · exact .inl (List.mem_singleton.mp h1)
+  obtain ⟨hPp, hPb⟩ := hnode _ hpredm
+  obtain ⟨hSp, hSb⟩ := hnode _ hsuccm
+  have hM1 := B.mem
+  obtain ⟨hfd1, hbk1⟩ := B.lr_links
+  have hdnr := X.dhdr
+  have hdn' : read64 Mt1 (p + (psz + sz) + ds + 8) = some hdn := by
+    rw [hM1, rd_miss (by omega)]
+    rw [show p + (psz + sz) + ds + 8 = p + (psz + sz) + ds + 8 from rfl] at hdnr
+    rw [← hdnr, rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega),
+      rd_miss (by omega)]
+  obtain ⟨bb, hbb⟩ : ∃ bb, read64 Mt binblocksAddr = some bb :=
+    Option.isSome_iff_exists.1 B.heap.heap.heap.binblocks_present
+  have hA : binblocksAddr = 0x8001ad18 := rfl
+  have hPf : ∀ a, p + 8 ≤ a → a < p + (psz + sz + ds) + 8 → vsaFoot C.H a :=
+    fun a h1' h2' => FB.foot_chunk h1' h2'
+  refine fb_release FB.toFBinCore (j := 1) (pre' := []) (post' := []) (pred := binAt 1) (succ := binAt 1)
+    (bb' := bb) (by decide) (by unfold numBins; decide) (fun h => absurd h (by decide))
+    (fun _ => by rw [updBins_other _ _ (Ne.symm hiD), updBins_same]; rfl)
+    (by rw [updBins_other _ _ (Ne.symm hiD), updBins_same]) rfl rfl ?_ ?_ ?_ ?_ ?_
+    (B.heap.bb_lt bb hbb) (fun h => absurd h (by decide)) ?_ ?_ ?_ ?_ ?_
+  · show read64 _ (p + 16) = _
+    rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), hM1,
+      rd_miss (by omega)]; exact B.pv.fd
+  · show read64 _ (p + 24) = _
+    rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), hM1,
+      rd_miss (by omega)]; exact B.pv.bk
+  · show read64 _ (binAt 1 + 16) = _
+    rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), hM1,
+      rd_miss (by omega)]; exact hfd1
+  · show read64 _ (binAt 1 + 24) = _
+    rw [rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), hM1,
+      rd_miss (by omega)]; exact hbk1
+  · rw [hA, rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), hM1,
+      rd_miss (by omega), ← hA]; exact hbb
+  · intro bb0 hbb0 k hk
+    rw [hA, rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega),
+      rd_miss (by omega), rd_miss (by omega), rd_miss (by omega), rd_miss (by omega),
+      rd_miss (by omega), rd_miss (by omega), ← hA, hbb] at hbb0
+    cases hbb0; exact hk
+  · intro w0 hw0 hr0
+    unfold RelW binblocksAddr avAddr at hr0
+    exact wl1_congr fun _ => wl1_congr fun _ => wl1_congr fun _ => wl1_congr fun _ => by
+      rw [writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
+  · intro w0 h1' h2'
+    exact wl1_congr fun _ => wl1_congr fun _ => wl1_congr fun _ => wl1_congr fun _ => by
+      rw [writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
+  · intro a ha
+    exact writeLog_present _ _ _ (writeLog_present _ _ _ (writeLog_present _ _ _
+      (writeLog_present _ _ _ (B.pres a ha))))
+  · exact frame_store (fun a h1' h2' => .inl (hPf a (by omega) (by omega)))
+      (frame_store (fun a h1' h2' => .inl (hPf a (by omega) (by omega)))
+        (frame_store (fun a h1' h2' => .inl (by
+          have := hppf (a - pred') (by omega) (by omega); rwa [show pred' + (a - pred') = a by omega] at this))
+          (frame_store (fun a h1' h2' => .inl (by
+            have := hspf (a - succ') (by omega) (by omega); rwa [show succ' + (a - succ') = a by omega] at this))
+            B.frameM)))
+
 end VsaIris.VsaHeap

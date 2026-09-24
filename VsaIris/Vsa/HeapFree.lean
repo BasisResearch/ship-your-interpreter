@@ -1,5 +1,6 @@
 import VsaIris.Vsa.HeapCarve
 import VsaIris.Vsa.HeapMoveAt
+import Vsa.Sim.WriteLogRead
 
 /-!
 # The heap edits of `_free_r`
@@ -1296,6 +1297,20 @@ theorem agree_of_words {m1 m2 : Mem} {P : Nat → Prop} (W : List Nat)
     rwa [show w + (a - w) = a by omega] at this
   · exact hout a ha fun w hwW => Classical.byContradiction fun hc =>
       hin ⟨w, hwW, by omega, by omega⟩
+
+/-- **A doubleword store over two memories**: they agree after it at every
+byte where they agreed before or that the store covers. -/
+theorem wl1_congr {m1 m2 : Mem} {b : Nat} {v : BitVec 64} {a : Nat}
+    (h : (a < b ∨ b + 8 ≤ a) → m1[a]? = m2[a]?) :
+    (writeLog m1 [(b, 8, v)])[a]? = (writeLog m2 [(b, 8, v)])[a]? := by
+  show (applyW m1 (b, 8, v))[a]? = (applyW m2 (b, 8, v))[a]?
+  rw [Vsa.Sim.applyW_getElem?_entryRead, Vsa.Sim.applyW_getElem?_entryRead]
+  by_cases hin : b ≤ a ∧ a < b + 8
+  · have : a = b ∨ a = b + 1 ∨ a = b + 2 ∨ a = b + 3 ∨ a = b + 4 ∨ a = b + 5 ∨ a = b + 6 ∨
+        a = b + 7 := by omega
+    rcases this with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+      simp [entryRead, writeEntryByte]
+  · rw [h (by omega)]
 
 /-- A doubleword read through a store elsewhere. -/
 theorem rd_miss {Mt : Mem} {a b w : Nat} {v : BitVec 64} (h : a + 8 ≤ b ∨ b + w ≤ a) :
