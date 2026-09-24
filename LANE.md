@@ -36,7 +36,12 @@ Branch `lane-h1` (from `hub/iris-main`, merged `hub/lane-h4`). Design:
   `wp_call_malloc` (`EnvCalls.lean`: `jal malloc` from a span).
 
 ## In flight
-- `env_define` (hit / append / grow).
+- `env_define` (hit / append / grow). Done: all first-order spans (`EnvDefineSpans.lean`:
+  prologue, count test, name loop, hit write, epilogue, capacity/empty checks, both growth
+  seams, the append seams and stores); the frame loop factored so define reuses it
+  (`ScanLoop`/`ScanInv`, `scan_frame` generic in the name/count registers and the
+  invariant); the generic call wrapper `wp_call_ks` (`CallKs.lean`). Next: `realloc` in
+  both regimes (+ the NULL hole), `strlen`/`memcpy` wrappers, `envDefine_spec`.
 
 ## Holes
 - `reallocNull.chgRun`, `reallocNull.localRun` (`IrisHoles.reallocNull`,
