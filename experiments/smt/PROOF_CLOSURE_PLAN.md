@@ -2803,9 +2803,12 @@ top split (`top_path`, `top_split`, over the new `PHeapAt.topSplit`) and
 `PHeapAt.topGrow`, and the NULL return), and the last remainder's split
 (`lr_split`, `VsaIris/Vsa/MallocSplit.lean`, over `PHeapAt.splitFree`: the
 take composed with `PHeapAt.carve` through a virtual intermediate memory).
-Three joins remain, and are exactly `malloc_paths`' hypotheses: the large-bin
-scan (`0x80004884`), the re-binding of a too-small remainder (`0x8000491c`)
-and the block walk (`0x80004978`).
+The small re-binning of a too-small last remainder (`rebin`,
+`VsaIris/Vsa/MallocRebin.lean`, over the new `PHeapAt.moveBinAt`: a move to any
+insertion point of the target bin) continues into the block search's test
+(`bb_entry`). Three joins remain, and are exactly `malloc_paths`' hypotheses:
+the large-bin scan (`0x80004884`), the sorted re-binning of a large remainder
+(`0x80004c70`) and the block walk (`0x80004978`).
 
 CORRECTED INTERFACE (lane H4): a NULL return's reason `MNull.starved` was
 `heapEnd < top0 + physSize n + extendSlack`, which the code does not

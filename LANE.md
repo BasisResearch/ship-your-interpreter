@@ -29,9 +29,15 @@ Branch `lane-h4`. Goal: discharge `IrisHoles.alloc` (`VsaIris/Vsa/AllocHoles.lea
   virtual intermediate memory, then `PHeapAt.carve` (shrink an in-use chunk, the tail alone
   on bin 1). `lr_split_ret` is the heap half, reusable by the block walk's split.
 
+- **The small re-binning** (`0x8000491c`, `rebin` in `Vsa/MallocRebin.lean`) over the new
+  `PHeapAt.moveBinAt` (`Vsa/HeapMoveAt.lean`: a move to any insertion point); it enters
+  the block search's test `bb_entry` (factored out of `bb_check`). `t4 = bin 1` is now
+  threaded from the last-remainder check to the block walk.
+
 ## In flight
 - The three residual malloc joins (`malloc_paths`' hypotheses): the large-bin scan
-  (`0x80004884`), the re-binding (`0x8000491c`) and the block walk (`0x80004978`).
+  (`0x80004884`), the sorted large re-binning (`0x80004c70`) and the block walk
+  (`0x80004978`).
 
 ## Holes
 - Unchanged: `alloc.mallocChgRun`, `alloc.mallocLocalRun`, `alloc.freeChgRun`,

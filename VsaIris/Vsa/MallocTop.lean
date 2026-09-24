@@ -306,24 +306,55 @@ theorem shl_one {y : BitVec 64} {j : Nat} (hy : y.toNat = j) (hj : j < 64) :
   have hlt : (2 : Nat) ^ j < 2 ^ 64 := Nat.pow_lt_pow_right (a := 2) (by omega) hj
   omega
 
-/-- **The block search's entry** (`0x80004be8`): read `binblocks` and form the
-bit of the request's block. A bitmap below that bit means no block at or above
-it has a chunk, so the top is tried (`0x80004a2c`); otherwise the search walks
-the blocks (`0x80004978`). -/
+/-- **The block search's test** (`0x80004968`): with the bitmap `bb` in `a1`,
+form the bit of the request's block. A bitmap below that bit means no block
+at or above it has a chunk, so the top is tried (`0x80004a2c`); otherwise the
+search walks the blocks (`0x80004978`). The re-binding of a too-small last
+remainder enters here with the bitmap it just updated. -/
+theorem bb_entry {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
+    {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx bb : Nat}
+    (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins)
+    (G : LRRegs nb idx R) (h8 : R 8 = reentV) (hidx : idx < numBins)
+    (hbb : read64 Mt binblocksAddr = some bb) (h11 : (R 11).toNat = bb)
+    (h29 : (R 29).toNat = binAt 1)
+    (htop : ∀ R', MFrame C R' Mt → LRRegs nb idx R' → R' 8 = reentV →
+      AW C.live C.S C.Q 0x80004a2c#64 R' Mt)
+    (hblocks : 2 ^ (idx / 4) ≤ bb →
+      ∀ R', MFrame C R' Mt → LRRegs nb idx R' → R' 8 = reentV → (R' 29).toNat = binAt 1 →
+        (R' 11).toNat = bb → (R' 10).toNat = 2 ^ (idx / 4) →
+        AW C.live C.S C.Q 0x80004978#64 R' Mt) :
+    AW C.live C.S C.Q 0x80004968#64 R Mt := by
+  have ha4 := G.a4; have ha7 := G.a7; have ha6 := G.a6
+  unfold numBins at hidx
+  refine st_80004968 O.live ?_
+  refine st_8000496c O.live ?_
+  refine st_80004970 O.live ?_
+  sx_norm
+  have ha5 := sraiw2_toNat ha7 (by omega)
+  have ha0 := shl_one ha5 (by omega)
+  refine st_80004974 O.live (fun hc => ?_) (fun hc => ?_) <;>
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
+  · -- no block at or above the request's has a chunk: the top
+    exact htop _ (F.of_regs rfl rfl rfl rfl) ⟨ha4, ha7, ha6⟩ h8
+  · rw [ha0, h11] at hc
+    exact hblocks (by omega) _ (F.of_regs rfl rfl rfl rfl) ⟨ha4, ha7, ha6⟩ h8 h29 h11 ha0
+
+/-- **The block search's entry** (`0x80004be8`): read `binblocks` into `a1`
+and test it (`bb_entry`). -/
 theorem bb_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins)
     (G : LRRegs nb idx R) (h8 : R 8 = reentV) (hidx : idx < numBins)
+    (h29 : (R 29).toNat = binAt 1)
     (htop : ∀ R', MFrame C R' Mt → LRRegs nb idx R' → R' 8 = reentV →
       AW C.live C.S C.Q 0x80004a2c#64 R' Mt)
     (hblocks : ∀ bb, read64 Mt binblocksAddr = some bb → 2 ^ (idx / 4) ≤ bb →
-      ∀ R', MFrame C R' Mt → LRRegs nb idx R' → R' 8 = reentV →
+      ∀ R', MFrame C R' Mt → LRRegs nb idx R' → R' 8 = reentV → (R' 29).toNat = binAt 1 →
         (R' 11).toNat = bb → (R' 10).toNat = 2 ^ (idx / 4) →
         AW C.live C.S C.Q 0x80004978#64 R' Mt) :
     AW C.live C.S C.Q 0x80004be8#64 R Mt := by
   have HH := Hp.heap.heap.heap
   have ha4 := G.a4; have ha7 := G.a7; have ha6 := G.a6
-  unfold numBins at hidx
   obtain ⟨bb, hbb⟩ : ∃ bb, read64 Mt binblocksAddr = some bb :=
     Option.isSome_iff_exists.1 HH.binblocks_present
   have hEbb : ((R 16) + sign_extend (m := 64) (0x008#12)).toNat = binblocksAddr := by
@@ -334,21 +365,14 @@ theorem bb_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     exact O.glob (by unfold binblocksAddr avAddr; omega) (by unfold binblocksAddr avAddr; omega)
   rw [ldv_at hbb _ hEbb]
   refine st_80004bec O.live ?_
-  refine st_80004968 O.live ?_
-  sx_norm
-  have ha5 := sraiw2_toNat ha7 (by omega)
-  refine st_8000496c O.live ?_
-  refine st_80004970 O.live ?_
-  sx_norm
-  have ha0 := shl_one ha5 (by omega)
-  refine st_80004974 O.live (fun hc => ?_) (fun hc => ?_) <;>
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
-  · -- no block at or above the request's has a chunk: the top
-    exact htop _ (F.of_regs rfl rfl rfl rfl) ⟨ha4, ha7, ha6⟩ h8
-  · rw [ha0, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ hbb)] at hc
-    exact hblocks bb hbb (by omega) _ (F.of_regs rfl rfl rfl rfl) ⟨ha4, ha7, ha6⟩ h8
-      (show (BitVec.ofNat 64 bb).toNat = bb by
-        rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ hbb)]) ha0
+  refine bb_entry O (F.upd (by decide)) Hp ⟨?_, ?_, ?_⟩ ?_ hidx hbb ?_ ?_ htop (hblocks bb hbb) <;>
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · exact ha4
+  · exact ha7
+  · exact ha6
+  · exact h8
+  · rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (Vsa.Sim.read64_lt _ _ _ hbb)]
+  · exact h29
 
 /-- **The block search's entry through the top split.** `bb_check` with
 `top_path` closing the top arm: the block walk (`0x80004978`) and the top's
@@ -361,12 +385,13 @@ theorem bb_top {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     (hext : brkv - C.top0 < nb + 32 → ∀ R', MFrame C R' Mt → LRRegs nb idx R' →
       TopRegs nb C.top0 (brkv - C.top0) R' → R' 8 = reentV →
       AW C.live C.S C.Q 0x80004a48#64 R' Mt)
+    (h29 : (R 29).toNat = binAt 1)
     (hblocks : ∀ bb, read64 Mt binblocksAddr = some bb → 2 ^ (idx / 4) ≤ bb →
-      ∀ R', MFrame C R' Mt → LRRegs nb idx R' → R' 8 = reentV →
+      ∀ R', MFrame C R' Mt → LRRegs nb idx R' → R' 8 = reentV → (R' 29).toNat = binAt 1 →
         (R' 11).toNat = bb → (R' 10).toNat = 2 ^ (idx / 4) →
         AW C.live C.S C.Q 0x80004978#64 R' Mt) :
     AW C.live C.S C.Q 0x80004be8#64 R Mt :=
-  bb_check O F Hp G h8 hidx
+  bb_check O F Hp G h8 hidx h29
     (fun R' F' G' h8' => top_path O F' Hp G' h8' hnb hnb31 hext) hblocks
 
 end VsaIris.VsaHeap

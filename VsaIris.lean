@@ -60,6 +60,8 @@ import VsaIris.Vsa.HeapCarve
 import VsaIris.Vsa.Sbrk
 import VsaIris.Vsa.MallocExtend
 import VsaIris.Vsa.MallocSplit
+import VsaIris.Vsa.HeapMoveAt
+import VsaIris.Vsa.MallocRebin
 import VsaIris.Vsa.MallocChain
 import VsaIris.Vsa.CostRoom
 import VsaIris.Stack

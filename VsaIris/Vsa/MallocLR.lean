@@ -77,7 +77,8 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins)
     (G : LRRegs nb idx R) (h8 : R 8 = reentV) (hnb31 : nb < 2 ^ 31)
-    (hscan : bins 1 = [] → ∀ R', MFrame C R' Mt → LRRegs nb idx R' → R' 8 = reentV →
+    (hscan : bins 1 = [] → ∀ R', MFrame C R' Mt → LRRegs nb idx R' → (R' 29).toNat = binAt 1 →
+      R' 8 = reentV →
       AW C.live C.S C.Q 0x80004be8#64 R' Mt)
     (hsplit : ∀ v sz, bins 1 = [v] → FreeAt chunks v sz → nb + 32 ≤ sz →
       ∀ R', MFrame C R' Mt → LRRegs nb idx R' → LRVictim nb sz v R' → R' 8 = reentV →
@@ -138,11 +139,12 @@ theorem lr_check {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
         rw [BitVec.toNat_ofNat, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hfirstlt,
           Nat.mod_eq_of_lt (by omega)] at he
         exact hnev first (by rw [h1]; exact List.mem_cons_self) he
-    refine hscan hb _ (((F.upd (by decide)).upd (by decide)).upd (by decide)) ⟨?_, ?_, ?_⟩ ?_ <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_false]
+    refine hscan hb _ (((F.upd (by decide)).upd (by decide)).upd (by decide)) ⟨?_, ?_, ?_⟩ ?_ ?_ <;>
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
     · exact ha4
     · exact ha7
     · exact ha6
+    · unfold binAt avAddr; rfl
     · exact h8
   · -- the last remainder is bin 1's only member
     rw [ht4] at hc
@@ -397,7 +399,8 @@ theorem lr_last {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb idx : Nat}
     (F : MFrame C R Mt) (Hp : MHeap C Mt brkv chunks bins)
     (G : LRRegs nb idx R) (h8 : R 8 = reentV) (hnb : NbOK C.n nb) (hnb31 : nb < 2 ^ 31)
-    (hscan : bins 1 = [] → ∀ R', MFrame C R' Mt → LRRegs nb idx R' → R' 8 = reentV →
+    (hscan : bins 1 = [] → ∀ R', MFrame C R' Mt → LRRegs nb idx R' → (R' 29).toNat = binAt 1 →
+      R' 8 = reentV →
       AW C.live C.S C.Q 0x80004be8#64 R' Mt)
     (hsplit : ∀ v sz, bins 1 = [v] → FreeAt chunks v sz → nb + 32 ≤ sz →
       ∀ R', MFrame C R' Mt → LRRegs nb idx R' → LRVictim nb sz v R' → R' 8 = reentV →
