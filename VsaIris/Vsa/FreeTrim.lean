@@ -413,4 +413,196 @@ theorem trim_sb1 {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} {Y brk
     P.pres, h10⟩
   rw [hr 8 (by decide) (by decide) (by decide)]; simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hE
 
+/-- `_malloc_trim_r`'s last state before the unlock: the frame slots, `sp`
+and `s2`, and `_free_r`'s finished heap. -/
+structure TrimOut (C : MCtx) (R : Nat → BitVec 64) (M : Mem) : Prop where
+  done : FDone C M
+  fs0 : read64 M (C.s.toNat - 32 + 16) = some (C.rv0 8).toNat
+  fra : read64 M (C.s.toNat - 32 + 24) = some C.r.toNat
+  sra : read64 M (C.s.toNat - 80 + 40) = some 0x80007578
+  ss0 : read64 M (C.s.toNat - 80 + 32) = some reentV.toNat
+  ss1 : read64 M (C.s.toNat - 80 + 24) = some (C.rv0 9).toNat
+  ss2 : read64 M (C.s.toNat - 80 + 16) = some (C.rv0 18).toNat
+  ss3 : read64 M (C.s.toNat - 80 + 8) = some (C.rv0 19).toNat
+  sp : R 2 = C.s + 18446744073709551536#64
+  s2 : R 18 = reentV
+
+/-- **The release's return** (`0x800072f8`): unlock, restore the frame and
+return to `_free_r`. -/
+theorem trim_out {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M : Mem} (S : TrimOut C R M)
+    (hk : ∀ R' M', FFrame C R' M' → R' 8 = reentV → FDone C M' → AW C.live C.S C.Q 0x80007578#64 R' M') :
+    AW C.live C.S C.Q 0x800072f8#64 R M := by
+  have hlo := O.sp.lo; have hhi := O.sp.hi; have hsal := O.sp.align
+  unfold mHead Vsa.Sim.tohostAddr at hlo
+  have hs2 := S.sp
+  have hs2n : (R 2).toNat = C.s.toNat - 80 := by
+    rw [hs2, BitVec.toNat_add]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
+  have l40 := ldv_at S.sra (R 2 + sign_extend (m := 64) (0x028#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
+  have l32 := ldv_at S.ss0 (R 2 + sign_extend (m := 64) (0x020#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
+  have l24 := ldv_at S.ss1 (R 2 + sign_extend (m := 64) (0x018#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
+  have l16 := ldv_at S.ss2 (R 2 + sign_extend (m := 64) (0x010#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
+  have l8 := ldv_at S.ss3 (R 2 + sign_extend (m := 64) (0x008#12)).toNat (by sx_norm; rw [BitVec.toNat_add, hs2n]; simp; omega)
+  simp only [BitVec.ofNat_toNat, BitVec.setWidth_eq] at l40 l32 l24 l16 l8
+  sx_run [12] O.live at 0x800072fc
+  sx_run [12] O.live
+  all_goals simp only [l40, l32, l24, l16, l8]
+  all_goals (try (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide))
+  refine hk _ M ⟨?_, S.fs0, S.fra, ?_, ?_, ?_⟩ ?_ S.done <;>
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  rw [hs2]; apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_add, BitVec.toNat_add, BitVec.toNat_add]
+  simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
+
+/-- **The release** (`0x800072d0`): the old break is not `-1`; the top's
+header takes the size less the extra, `mallinfo` drops by the extra, and the
+heap is in shape at the lowered break (`PHeapAt.topResize`). -/
+theorem trim_fin {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {M M' : Mem} {Y brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (T : TrimMid C R M M' Y brkv chunks bins)
+    (hk : ∀ R' M', FFrame C R' M' → R' 8 = reentV → FDone C M' → AW C.live C.S C.Q 0x80007578#64 R' M') :
+    AW C.live C.S C.Q 0x800072d0#64 R M' := by
+  have S := T.st
+  have HH := S.heap.heap.heap
+  have hlo := O.sp.lo; have hhi := O.sp.hi; have hsal := O.sp.align
+  unfold mHead Vsa.Sim.tohostAddr at hlo
+  have hbrkle := HH.brk_le; have htle := HH.top_le; have hY := HH.walk.le
+  unfold heapEnd at hbrkle; unfold heapStart at hY
+  have hts := HH.top_size
+  have hle := trimExtra_le (ts := brkv - Y) (by omega) T.e4
+  have hpage := S.heap.brk_page
+  have hEp : trimExtra (brkv - Y) % 4096 = 0 := by unfold trimExtra; omega
+  have hs2n : (R 2).toNat = C.s.toNat - 80 := by
+    rw [S.sp, BitVec.toNat_add]; simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
+  -- the call left the footprint alone but for the break's globals
+  have hkeep : ∀ a, vsaFoot C.H a → ¬ (brkAddr ≤ a ∧ a < brkAddr + 8) → ¬ (0x8001ba08 ≤ a ∧ a < 0x8001ba0c) →
+      ¬ (0x8001b538 ≤ a ∧ a < 0x8001b53c) → M'[a]? = M[a]? := by
+    intro a ha h1 h2 h3
+    refine T.agree a fun hw => ?_
+    unfold SbrkW at hw
+    rcases hw with hw | hw | hw | hw
+    · exact S.disj a (by unfold mHead; omega) (by omega) ha
+    · exact h1 hw
+    · exact h2 hw
+    · exact h3 hw
+  have hglob : ∀ a, (∀ k, k < 8 → allocGlobal (a + k)) → (a + 8 ≤ brkAddr ∨ brkAddr + 8 ≤ a) →
+      (a + 8 ≤ 0x8001ba08 ∨ 0x8001ba0c ≤ a) → (a + 8 ≤ 0x8001b538 ∨ 0x8001b53c ≤ a) →
+      read64 M' a = read64 M a := fun a hg h1 h2 h3 =>
+    read64_keep fun k hk => hkeep _ (.inl (hg k hk)) (by omega) (by omega) (by omega)
+  have htpM : read64 M' topAddr = some Y := by
+    rw [hglob _ (fun k hk => by unfold topAddr avAddr allocGlobal InRange; omega)
+      (by unfold topAddr avAddr brkAddr; omega) (by unfold topAddr avAddr; omega)
+      (by unfold topAddr avAddr; omega)]; exact HH.top_ptr
+  obtain ⟨mi, hmi⟩ := Option.isSome_iff_exists.1 HH.mallinfo
+  have hmiM : read64 M' mallinfoAddr = some mi := by
+    rw [hglob _ (fun k hk => by unfold mallinfoAddr allocGlobal InRange; omega)
+      (by unfold mallinfoAddr brkAddr; omega) (by unfold mallinfoAddr; omega)
+      (by unfold mallinfoAddr; omega)]; exact hmi
+  have hmsM : (read64 M' maxSbrkedAddr).isSome := by
+    rw [hglob _ (fun k hk => by unfold maxSbrkedAddr allocGlobal InRange; omega)
+      (by unfold maxSbrkedAddr brkAddr; omega) (by unfold maxSbrkedAddr; omega)
+      (by unfold maxSbrkedAddr; omega)]; exact HH.max_sbrked
+  refine st_800072d0 O.live ?_
+  refine st_800072d4 O.live (fun h => absurd h ?_) (fun _ => ?_)
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    rw [T.a0]; intro h
+    have := congrArg BitVec.toNat h
+    sx_norm
+    rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)] at this
+    omega
+  have h19 := S.s3
+  rw [← upd_self_eq h19]
+  unfold topAddr avAddr at htpM
+  unfold mallinfoAddr at hmiM
+  refine st_800072d8 O.live (by sx_norm; decide) (by sx_norm; sx_side) ?_
+  sx_norm
+  simp (disch := decide) only [ldv_at htpM]
+  refine st_800072dc O.live (by sx_norm; sx_side) ?_
+  simp (disch := sx_addr) only [ldv_at hmiM]
+  refine st_800072e0 O.live ?_
+  refine st_800072e4 O.live ?_
+  have hhd := foot_header S.heap.heap (.inl rfl)
+  have hoffH := off_stack_of S.disj hhd
+  refine st_800072e8 O.live ?_ ?_ ?_
+  · sx_norm; sx_addr
+  · sx_norm; exact O.foot_at hhd _ (by sx_addr)
+  sx_norm
+  refine st_800072ec O.live ?_
+  refine st_800072f0 O.live ?_
+  refine st_800072f4 O.live ?_ ?_
+  · sx_norm; exact O.foot (a := 0x8001ba18) (w := 8)
+      (fun k hk => .inl (by unfold allocGlobal InRange; omega))
+  sx_norm
+  have hE := T.e
+  have hv9 : (R 9 - R 8).toNat = brkv - trimExtra (brkv - Y) - Y := by
+    rw [BitVec.toNat_sub, S.s1, hE]; omega
+  have hv : (R 9 - R 8 ||| 1#64).toNat = brkv - trimExtra (brkv - Y) - Y + 1 :=
+    or1_toNat hv9 (by unfold trimExtra; omega)
+  have hY8 : (BitVec.ofNat 64 Y + 8#64).toNat = Y + 8 := by sx_addr
+  rw [hY8]
+  generalize hM2d : writeLog (writeLog M' [(Y + 8, 8, R 9 - R 8 ||| 1#64)])
+    [(2147596824, 8, BitVec.ofNat 64 mi - R 8)] = M2
+  obtain ⟨g1, g2⟩ := glob_off_of S.disj
+  unfold mHead at g1 g2
+  have hM2 : ∀ a, ¬ (Y + 8 ≤ a ∧ a < Y + 16) → ¬ (0x8001ba18 ≤ a ∧ a < 0x8001ba20) → M2[a]? = M'[a]? := by
+    intro a h1 h2
+    rw [← hM2d, writeLog_out, writeLog_out] <;> simp only [OutL, and_true] <;> omega
+  have hslot : ∀ a, C.s.toNat - 80 ≤ a → a < C.s.toNat → M2[a]? = M[a]? := by
+    intro a ha1 ha2
+    rw [hM2 a (by omega) (by omega)]
+    refine T.agree a fun hw => ?_
+    unfold SbrkW brkAddr at hw
+    rcases hw with hw | hw | hw | hw
+    · omega
+    · exact S.disj a (by unfold mHead; omega) ha2 (.inl (by unfold allocGlobal InRange; omega))
+    · exact S.disj a (by unfold mHead; omega) ha2 (.inl (by unfold allocGlobal InRange; omega))
+    · exact S.disj a (by unfold mHead; omega) ha2 (.inl (by unfold allocGlobal InRange; omega))
+  have rslot : ∀ a, C.s.toNat - 80 ≤ a → a + 8 ≤ C.s.toNat → read64 M2 a = read64 M a :=
+    fun a h1 h2 => read64_keep fun k hk => hslot _ (by omega) (by omega)
+  have hag : ∀ a, vsaFoot C.H a → ¬ GrowW Y a → M2[a]? = M[a]? := by
+    intro a ha hg
+    unfold GrowW brkAddr topPadAddr mallinfoAddr at hg
+    rw [hM2 a (by omega) (by omega)]
+    exact hkeep a ha (by unfold brkAddr; omega) (by omega) (by omega)
+  have Hp' : PHeapAt M2 C.H Y (brkv - trimExtra (brkv - Y)) chunks bins := by
+    refine S.heap.topResize (by omega) (by unfold heapEnd; omega) (by omega) ?_ ?_ ?_ ?_ hag
+    · rw [read64_keep fun k hk => hM2 _ (by unfold brkAddr; omega) (by unfold brkAddr; omega)]
+      exact T.brk
+    · rw [← hM2d, read64_store_miss _ _ (by omega), read64_store_hit, hv]
+    · rw [← hM2d]; unfold mallinfoAddr; rw [read64_store_hit]; rfl
+    · rw [read64_keep fun k hk => hM2 _ (by unfold maxSbrkedAddr; omega) (by unfold maxSbrkedAddr; omega)]
+      exact hmsM
+  refine trim_out O ⟨⟨⟨_, _, _, _, Hp', S.top_le⟩, fun a ha => ?_, fun a ha => ?_⟩,
+    ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ hk
+  · rw [← hM2d]; exact writeLog_present _ _ _ (writeLog_present _ _ _ (T.pres a (S.pres a ha)))
+  · have hnf : ¬ vsaFoot C.H a := fun h => ha (.inl h)
+    have hng : ¬ allocGlobal a := fun h => hnf (.inl h)
+    rw [hM2 a (fun h => hnf (hhd (a - (Y + 8)) (by omega) |> fun h' => by
+        rwa [show Y + 8 + (a - (Y + 8)) = a by omega] at h'))
+      (fun h => hng (by unfold allocGlobal InRange; omega))]
+    rw [T.agree a fun hw => ?_]
+    · exact S.frameM a ha
+    unfold SbrkW brkAddr at hw
+    rcases hw with hw | hw | hw | hw
+    · exact ha (.inr ⟨by unfold mHead; omega, by omega⟩)
+    · exact hng (by unfold allocGlobal InRange; omega)
+    · exact hng (by unfold allocGlobal InRange; omega)
+    · exact hng (by unfold allocGlobal InRange; omega)
+  all_goals first
+    | (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; first | exact S.sp | exact S.s2)
+    | (rw [rslot _ (by omega) (by omega)]; exact S.fs0)
+    | (rw [rslot _ (by omega) (by omega)]; exact S.fra)
+    | (rw [rslot _ (by omega) (by omega)]; exact S.sra)
+    | (rw [rslot _ (by omega) (by omega)]; exact S.ss0)
+    | (rw [rslot _ (by omega) (by omega)]; exact S.ss1)
+    | (rw [rslot _ (by omega) (by omega)]; exact S.ss2)
+    | (rw [rslot _ (by omega) (by omega)]; exact S.ss3)
+
+/-- **`_malloc_trim_r`** (`0x8000722c`, from `_free_r`'s call): back at
+`0x80007578` with `_free_r`'s frame and its heap finished, at the same top
+and a break no higher. -/
+theorem trim_run {C : MCtx} (O : FOK C) {R : Nat → BitVec 64} {Mt : Mem} {Y brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (T : TrimIn C R Mt Y brkv chunks bins)
+    (hk : ∀ R' M', FFrame C R' M' → R' 8 = reentV → FDone C M' → AW C.live C.S C.Q 0x80007578#64 R' M') :
+    AW C.live C.S C.Q 0x8000722c#64 R Mt :=
+  trim_head O T (fun _ _ S => trim_ret O S hk) fun _ _ S hE hE4 =>
+    trim_sb0 O S hE fun _ _ S' hE' => trim_sb1 O S' hE' hE4 fun _ _ T' => trim_fin O T' hk
+
 end VsaIris.VsaHeap
