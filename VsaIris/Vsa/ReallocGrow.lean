@@ -158,4 +158,91 @@ theorem prev_load {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt 
     rw [show (sign_extend (m := 64) (0xffc#12) : BitVec 64) = 18446744073709551612#64 from rfl,
       toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hhl, hhs]
 
+/-- `PREV_INUSE` clear in `hdr0` once `andi a3,a3,1` read zero. -/
+theorem prev_bit {x : BitVec 64} {h : Nat} (hx : x.toNat = h)
+    (hc : ¬ (x &&& sign_extend (m := 64) (0x001#12) ≠ 0#64)) : h % 2 = 0 := by
+  have := congrArg BitVec.toNat (Classical.not_not.mp hc)
+  rw [show (sign_extend (m := 64) (0x001#12) : BitVec 64) = 1#64 from rfl, and1_toNat, hx] at this
+  exact this
+
+/-- **The successor in use** (`0x80005464`): with the predecessor free,
+`grow_pvX`; else a fresh block. -/
+theorem grow_used {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
+    {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}
+    (D : RD C B R Mt brkv chunks bins X S hdr0 nb) {cs₁ rest : List Chunk}
+    (hsp : chunks = cs₁ ++ ⟨X, S, true⟩ :: rest) (h13 : (R 13).toNat = hdr0) :
+    AW C.live C.S C.Q 0x80005464#64 R Mt := by
+  refine st_80005464 O.live (st_80005468 O.live (fun _ => realloc_mal O (by rd_regs D)) (fun hc => ?_))
+  simp only [upd_apply, Nat.reduceEqDiff, ite_true] at hc
+  obtain ⟨cs₀, P, ps, i, pre, post, predP, succP, hh, rfl, PV, hhr, hhs⟩ := grow_prev D hsp (prev_bit h13 hc)
+  refine prev_load O (by rd_regs D) ⟨rest, hsp⟩ PV hhr hhs (st_8000546c O.live) (st_80005470 O.live)
+    (st_80005474 O.live) (st_80005478 O.live) fun R' hK h6 h17 => st_8000547c O.live ?_
+  have D' : RD C B R' Mt brkv chunks bins X S hdr0 nb := by
+    refine RD.of_regs D ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;>
+      (rw [hK _ (by decide) (by decide)]; simp only [upd_apply, Nat.reduceEqDiff, ite_false])
+  exact grow_pvX O D' hsp PV h6 h17
+
+/-- **The top after the old chunk** (`0x800054dc`): grow into the top
+(`realloc_topgrow`), or with a free predecessor take it and the top
+(`realloc_pvT`) or it alone (`grow_pvX`); else a fresh block. -/
+theorem grow_top {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {Mt : Mem}
+    {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {X S hdr0 nb : Nat}
+    (D : RD C B R Mt brkv chunks bins X S hdr0 nb) {cs₁ : List Chunk}
+    (hsp : chunks = cs₁ ++ [⟨X, S, true⟩]) (hXt : X + S = C.top0)
+    (h13 : (R 13).toNat = hdr0) (h10 : (R 10).toNat = brkv - C.top0 + 1) :
+    AW C.live C.S C.Q 0x800054dc#64 R Mt := by
+  have HB := D.heap.heap.heap
+  have HH := HB.heap
+  have hbrk := HH.brk_le; have htle := HH.top_le; have hts := HH.top_size
+  have ht16 := HH.aligned.2; have hbp := D.heap.heap.brk_page
+  unfold heapEnd at hbrk
+  have hXb := HH.walk.chunk_bounds _ D.mem
+  simp only at hXb
+  have hnb31 := D.nb31
+  have hlt := D.lt
+  obtain ⟨ts, rfl⟩ : ∃ ts, brkv = C.top0 + ts := ⟨brkv - C.top0, by omega⟩
+  rw [Nat.add_sub_cancel_left] at h10
+  have e0 : (R 10 &&& sign_extend (m := 64) (0xffc#12)).toNat = ts := by
+    rw [show (sign_extend (m := 64) (0xffc#12) : BitVec 64) = 18446744073709551612#64 from rfl,
+      toNat_and_m4, h10]; omega
+  have e16 : ((R 10 &&& sign_extend (m := 64) (0xffc#12)) + R 14).toNat = ts + S := by
+    rw [BitVec.toNat_add, e0, D.a4]; omega
+  have e28 : (R 15 + sign_extend (m := 64) (0x020#12)).toNat = nb + 32 := by
+    rw [BitVec.toNat_add, D.a5]; simp; omega
+  refine st_800054dc O.live (st_800054e0 O.live (st_800054e4 O.live (st_800054e8 O.live
+    (fun hc => ?_) (fun hc => ?_)))) <;>
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc <;>
+    rw [toInt_small e28 (by omega), toInt_small e16 (by omega)] at hc
+  · -- into the top
+    refine realloc_topgrow O (by rd_regs D) hXt (by omega) ?_
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [e16]; omega
+  refine st_800054ec O.live (st_800054f0 O.live (fun _ => realloc_mal O (by rd_regs D)) (fun hc' => ?_))
+  simp only [upd_apply, Nat.reduceEqDiff, ite_true] at hc'
+  obtain ⟨cs₀, P, ps, i, pre, post, predP, succP, hh, rfl, PV, hhr, hhs⟩ :=
+    grow_prev D (rest := []) hsp (prev_bit h13 hc')
+  have hPb := HH.walk.chunk_bounds ⟨P, ps, false⟩ (by rw [hsp]; simp)
+  simp only at hPb
+  have hpend := PV.pend
+  refine prev_load O (by rd_regs D) ⟨[], hsp⟩ PV hhr hhs (st_800054f4 O.live) (st_800054f8 O.live)
+    (st_800054fc O.live) (st_80005500 O.live) fun R' hK h6 h17 => ?_
+  have k10 := hK 10 (by decide) (by decide); have k14 := hK 14 (by decide) (by decide)
+  have k28 := hK 28 (by decide) (by decide)
+  simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at k10 k14 k28
+  have e10 : (R' 10 + R' 17).toNat = ts + ps := by rw [BitVec.toNat_add, k10, e0, h17]; omega
+  have e16' : (R' 10 + R' 17 + R' 14).toNat = ts + ps + S := by rw [BitVec.toNat_add, e10, k14, D.a4]; omega
+  have e28' : (R' 28).toNat = nb + 32 := by rw [k28, e28]
+  refine st_80005504 O.live (st_80005508 O.live (st_8000550c O.live (fun hc'' => ?_) (fun hc'' => ?_))) <;>
+    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc'' <;>
+    rw [toInt_small e28' (by omega), toInt_small e16' (by omega)] at hc''
+  all_goals
+    have D' : RD C B (upd (upd R' 10 (R' 10 + R' 17)) 16 (R' 10 + R' 17 + R' 14)) Mt (C.top0 + ts)
+        chunks bins X S hdr0 nb := by
+      refine RD.of_regs D ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;> simp only [upd_apply, Nat.reduceEqDiff, ite_false] <;>
+        (rw [hK _ (by decide) (by decide)]; simp only [upd_apply, Nat.reduceEqDiff, ite_false])
+  · exact grow_pvX O D' (rest := []) hsp PV (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h6)
+      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h17)
+  · refine realloc_pvT O D' hsp PV hXt (by omega) ?_ ?_
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h6
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [e16']; omega
+
 end VsaIris.VsaHeap
