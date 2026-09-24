@@ -145,6 +145,7 @@ import VsaIris.Interp.CallJalr
 import VsaIris.Interp.CallArm
 import VsaIris.Interp.CallPrefix
 import VsaIris.Interp.CallNative
+import VsaIris.Interp.CallNativeOut
 import VsaIris.Interp.Case.BinaryAddIntT
 import VsaIris.Interp.Case.BinarySubIntT
 import VsaIris.Interp.Case.BinaryAddIntP

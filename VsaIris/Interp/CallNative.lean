@@ -144,7 +144,106 @@ theorem ms_uncarveVals (N : NativeAddrs) {pc : BitVec 64} {R : Nat → BitVec 64
   · iapply ms_iff' hsl $$ Hms
   · ipureintro; exact fun k hk hn => h1 k ⟨hk, hn⟩
 
+/-- **What `value_print` needs of a closure argument, from the store** (a
+NAMED premise, INTERP_DESIGN.md §10 "STATEMENT CHANGES (H2)", finding
+"`closOwn` carries no read geometry"): a closure the store owns is displayable
+(`dispRes`: its object's and its `EX_FN` node's read geometry and the name's
+window). `closOwn`/`astE` carry no geometry (`ReadOK`, `SharedWin`), so this
+does not follow from `storeRepr` as stated; its supplier is a geometry field
+on `closOwn`, established where closures are built (the `EX_FN` arm: a heap
+block and the program's AST). Recorded in `PROOF_CLOSURE_PLAN.md`. -/
+def DispSupply (N : NativeAddrs) : Prop :=
+  ∀ (s : Store) (B : List (Nat × Nat)) (ca p : Nat),
+    storeRepr (GF := GF) N s B ∗ closAt ca p ⊢ storeRepr N s B ∗ dispRes s (.closure ca)
+
+/-- The arguments' display resources, from the store and their words. -/
+theorem dispResL_of_argVals (N : NativeAddrs) (hd : DispSupply (GF := GF) N) (s : Store)
+    (B : List (Nat × Nat)) (img : Nat → BitVec 8) (base : Nat) :
+    ∀ (vs : List Value) (i : Nat),
+      storeRepr (GF := GF) N s B ∗ argVals N img base i vs ⊢ storeRepr N s B ∗ dispResL s vs
+  | [], _ => by
+    iintro ⟨Hs, -⟩
+    iframe Hs
+    unfold dispResL; simp only [sepL_nil]; iempintro
+  | v :: vs, i => by
+    unfold dispResL argVals
+    simp only [sepL_cons]
+    iintro ⟨Hs, #Hv, #Hvs⟩
+    ihave ⟨Hs, #Hd⟩ := (show iprop(storeRepr N s B ∗ valImg N img (base + 24 * i) v) ⊢
+        iprop(storeRepr N s B ∗ dispRes s v) from by
+      cases v with
+      | closure ca =>
+        unfold valImg valOf
+        iintro ⟨Hs, ⟨-, #Hc⟩⟩
+        iapply (hd s B ca _) $$ [Hs Hc]
+        iframe Hs Hc
+      | _ =>
+        iintro ⟨Hs, -⟩
+        iframe Hs
+        unfold dispRes; iempintro) $$ [Hs Hv]
+    · iframe Hs Hv
+    ihave ⟨Hs, #Hds⟩ := dispResL_of_argVals N hd s B img base vs (i + 1) $$ [Hs Hvs]
+    · iframe Hs Hvs
+    iframe Hs Hd
+    unfold dispResL at *
+    iexact Hds
+
 end Vals
+
+section Out
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+variable (M : MachineModel) (N : NativeAddrs)
+
+/-- **A printing native** (`native_print`, `native_println`), H2's
+`nativePrintSpec`/`nativePrintlnSpec` with the entry, the stack need and the
+printed text as parameters: from `o`, the console is `o'`. -/
+def natOutSpec (Wp : MachWP (GF := GF) M) (entry : BitVec 64) (need : Nat)
+    (sret args s : BitVec 64) (vs : List Value) (st : Store) (o o' : String) : IProp GF :=
+  helperSpec M Wp entry callerSaved
+    (fun rv => rv 10 = sret ∧ rv 12 = BitVec.ofNat 64 vs.length ∧ rv 13 = args ∧ rv 2 = s)
+    iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret ∧ ArgsGeom args vs.length ∧ vs.length < 2 ^ 31⌝ ∗
+      valsAt N args.toNat vs ∗ dispResL st vs ∗ Newlib.binImg ∗ Stdio.stdioOwn ∗ consoleOwn o ∗
+      stackAt s need)
+    (fun _ => iprop(valAt N sret.toNat .null ∗ valsAt N args.toNat vs ∗ Stdio.stdioOwn ∗
+      consoleOwn o' ∗ stackAt s need))
+
+theorem nativePrintSpec_eq (Wp : MachWP (GF := GF) M) (sret args s : BitVec 64) (vs : List Value)
+    (st : Store) (o : String) :
+    nativePrintSpec M N Wp sret args s vs st o =
+      natOutSpec M N Wp nativePrintPC nativePrintNeed sret args s vs st o (o ++ printArgs st vs) := rfl
+
+theorem nativePrintlnSpec_eq (Wp : MachWP (GF := GF) M) (sret args s : BitVec 64)
+    (vs : List Value) (st : Store) (o : String) :
+    nativePrintlnSpec M N Wp sret args s vs st o =
+      natOutSpec M N Wp nativePrintlnPC nativePrintlnNeed sret args s vs st o
+        (o ++ printArgs st vs ++ "\n") := rfl
+
+end Out
+
+section WorldOut
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+
+/-- **The world, opened for a printing native**: the console, newlib's data
+and the binary's image, the store, and the way back with a new console. -/
+theorem world_out (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat) (ρ : Regime)
+    (st : St) (d : Nat) :
+    world (GF := GF) N L Room inp ρ st d ⊢
+      consoleOwn st.out ∗ Stdio.stdioOwn ∗ Newlib.binImg ∗ ∃ B, storeRepr N st.store B ∗
+        (∀ o, consoleOwn o -∗ Stdio.stdioOwn -∗ storeRepr N st.store B -∗
+          world N L Room inp ρ ⟨st.store, o⟩ d) := by
+  unfold world worldE
+  iintro ⟨%H, %B, Hh, Hs, Hc, Hio, Hi, %hB, #Hb⟩
+  iframe Hc Hio Hb
+  iexists B
+  iframe Hs
+  iintro %o Hc Hio Hs
+  iexists H, B
+  iframe Hh Hs Hc Hio Hi
+  ipureintro; exact hB
+
+end WorldOut
 
 end VsaIris.Interp
 
