@@ -114,4 +114,27 @@ theorem copyW_spec {m : Mem} {d s : Nat} :
       rw [show d + 8 * j + (i - 8 * j) = d + i by omega] at this
       rw [this, hsrc _ (by omega), show s + 8 * j + (i - 8 * j) = s + i by omega]
 
+/-- A doubleword load reads its eight bytes only. -/
+theorem ldv_congr {m1 m2 : Mem} {a : Nat} (h : ∀ k, k < 8 → m1[a + k]? = m2[a + k]?) :
+    ldv .ld m1 a = ldv .ld m2 a := by
+  have : bytesAt (imgM m1) a (widthOfM .ld) = bytesAt (imgM m2) a (widthOfM .ld) := by
+    unfold bytesAt
+    refine List.map_congr_left fun k hk => ?_
+    have hk8 : k < 8 := by simpa [widthOfM] using hk
+    unfold imgM; rw [h k hk8]
+  simp only [ldv, this]
+
+/-- **Word copies over two memories** that agree off a doubleword `t` the
+source misses agree off `t` after the copy. -/
+theorem copyW_agree {m1 m2 : Mem} {d s t : Nat}
+    (h : ∀ a, (a < t ∨ t + 8 ≤ a) → m1[a]? = m2[a]?) :
+    ∀ {k : Nat}, (s + 8 * k ≤ t ∨ t + 8 ≤ s) →
+      ∀ a, (a < t ∨ t + 8 ≤ a) → (copyW m1 d s k)[a]? = (copyW m2 d s k)[a]?
+  | 0, _, a, ha => h a ha
+  | k + 1, hs, a, ha => by
+    have IH := copyW_agree (m1 := m1) (m2 := m2) (d := d) (s := s) h (k := k) (by omega)
+    rw [copyW_succ, copyW_succ,
+      ldv_congr (m1 := copyW m1 d s k) (m2 := copyW m2 d s k) fun j hj => IH _ (by omega)]
+    exact wl1_congr fun hout => IH a ha
+
 end VsaIris.VsaHeap

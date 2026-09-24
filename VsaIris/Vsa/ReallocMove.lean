@@ -17,9 +17,10 @@ namespace VsaIris.VsaHeap
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
 
-/-- `memmove(d, s, n)`'s arguments on `_realloc_r`'s forward path. -/
-structure MMArgs (S : Nat → Prop) (d s n : Nat) : Prop where
-  n32 : 32 ≤ n
+/-- A forward copy of `n` bytes from `s` to `d`: word multiples, 8-aligned
+pointers, the destination not above the source or wholly above it, both
+ranges in RAM above the HTIF words and owned. -/
+structure CPArgs (S : Nat → Prop) (d s n : Nat) : Prop where
   n8 : n % 8 = 0
   d8 : d % 8 = 0
   s8 : s % 8 = 0
@@ -31,7 +32,11 @@ structure MMArgs (S : Nat → Prop) (d s n : Nat) : Prop where
   sS : ∀ k, k < n → S (s + k)
   dS : ∀ k, k < n → S (d + k)
 
-theorem MMArgs.ld {S : Nat → Prop} {d s n : Nat} (A : MMArgs S d s n) {a : Nat} (h1 : s ≤ a)
+/-- `memmove(d, s, n)`'s arguments on `_realloc_r`'s forward path. -/
+structure MMArgs (S : Nat → Prop) (d s n : Nat) : Prop extends CPArgs S d s n where
+  n32 : 32 ≤ n
+
+theorem CPArgs.ld {S : Nat → Prop} {d s n : Nat} (A : CPArgs S d s n) {a : Nat} (h1 : s ≤ a)
     (h2 : a + 8 ≤ s + n) : LdOK a 8 ∧ ∀ b ∈ accAddrs a 8, S b := by
   have := A.slo; have := A.shi
   unfold Vsa.Sim.tohostAddr at *
@@ -40,7 +45,7 @@ theorem MMArgs.ld {S : Nat → Prop} {d s n : Nat} (A : MMArgs S d s n) {a : Nat
   have := A.sS (b - s) (by omega)
   rwa [show s + (b - s) = b by omega] at this
 
-theorem MMArgs.st {S : Nat → Prop} {d s n : Nat} (A : MMArgs S d s n) {a : Nat} (h1 : d ≤ a)
+theorem CPArgs.st {S : Nat → Prop} {d s n : Nat} (A : CPArgs S d s n) {a : Nat} (h1 : d ≤ a)
     (h2 : a + 8 ≤ d + n) (h8 : a % 8 = 0) : StOK a 8 ∧ ∀ b ∈ accAddrs a 8, S b := by
   have := A.dlo; have := A.dhi
   unfold Vsa.Sim.tohostAddr at *
@@ -48,6 +53,12 @@ theorem MMArgs.st {S : Nat → Prop} {d s n : Nat} (A : MMArgs S d s n) {a : Nat
   obtain ⟨hb1, hb2⟩ := of_mem_accAddrs hb
   have := A.dS (b - d) (by omega)
   rwa [show d + (b - d) = b by omega] at this
+
+theorem MMArgs.ld {S : Nat → Prop} {d s n : Nat} (A : MMArgs S d s n) {a : Nat} (h1 : s ≤ a)
+    (h2 : a + 8 ≤ s + n) : LdOK a 8 ∧ ∀ b ∈ accAddrs a 8, S b := A.toCPArgs.ld h1 h2
+
+theorem MMArgs.st {S : Nat → Prop} {d s n : Nat} (A : MMArgs S d s n) {a : Nat} (h1 : d ≤ a)
+    (h2 : a + 8 ≤ d + n) (h8 : a % 8 = 0) : StOK a 8 ∧ ∀ b ∈ accAddrs a 8, S b := A.toCPArgs.st h1 h2 h8
 
 /-- The registers `memmove` keeps. -/
 structure MMKeep (R R' : Nat → BitVec 64) : Prop where
