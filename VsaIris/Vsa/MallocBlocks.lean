@@ -574,4 +574,164 @@ theorem bw_split {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h12)
     (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h11)
 
+/-- The registers a member walk leaves alone agree with the reference `R0`. -/
+abbrev MKeep (R R0 : Nat → BitVec 64) : Prop :=
+  ∀ x, x ≠ 11 → x ≠ 12 → x ≠ 13 → x ≠ 15 → R x = R0 x
+
+theorem BW.keep {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}
+    {nb : Nat} {R R0 : Nat → BitVec 64} (W : BW C Mt brkv chunks bins nb R0) (h : MKeep R R0) :
+    BW C Mt brkv chunks bins nb R :=
+  ⟨W.frame.of_regs (h 2 (by decide) (by decide) (by decide) (by decide))
+    (h 9 (by decide) (by decide) (by decide) (by decide))
+    (h 18 (by decide) (by decide) (by decide) (by decide))
+    (h 19 (by decide) (by decide) (by decide) (by decide)),
+   W.heap, W.nbok, W.nb31, W.b1,
+   by rw [h 14 (by decide) (by decide) (by decide) (by decide)]; exact W.a4,
+   by rw [h 16 (by decide) (by decide) (by decide) (by decide)]; exact W.a6,
+   by rw [h 29 (by decide) (by decide) (by decide) (by decide)]; exact W.t4,
+   by rw [h 8 (by decide) (by decide) (by decide) (by decide)]; exact W.s0⟩
+
+/-- A bin's members smaller than `nb`. -/
+abbrev AllSmall (chunks : List Chunk) (l : List Nat) (nb : Nat) : Prop :=
+  ∀ x ∈ l, ∀ sz, FreeAt chunks x sz → sz < nb
+
+/-- **The member walk** (`0x800049c8`) over bin `k`, from its last member
+backwards: a member at least `nb + MINSIZE` is split, one within `MINSIZE`
+of `nb` taken, a smaller one passed; reaching the header exhausts the bin
+(`0x80004cfc`), all of its members smaller than `nb`. -/
+theorem bw_member {C : MCtx} (O : MOK C) {R0 : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} {nb k : Nat}
+    (W : BW C Mt brkv chunks bins nb R0) (hk1 : 1 < k) (hk : k < numBins)
+    (h6 : (R0 6).toNat = binAt k) (h28 : (R0 28).toNat = 31)
+    (hex : ∀ R', AllSmall chunks (bins k) nb → MKeep R' R0 → (R' 13).toNat = binAt k →
+      AW C.live C.S C.Q 0x80004cfc#64 R' Mt) :
+    ∀ (rpre post : List Nat) (R : Nat → BitVec 64), bins k = rpre.reverse ++ post →
+      AllSmall chunks post nb → MKeep R R0 → (R 13).toNat = rpre.head?.getD (binAt k) →
+      AW C.live C.S C.Q 0x800049c8#64 R Mt := by
+  have HH := W.heap.heap.heap.heap
+  have B := W.heap.heap.heap
+  have hgk := binAt_geo k hk
+  have hring := (binList_iff_ring.1 (HH.bins_list k (by omega) hk)).1
+  have hbne := (binList_iff_ring.1 (HH.bins_list k (by omega) hk)).2
+  have hbl : binAt k < 2 ^ 64 := by omega
+  intro rpre
+  induction rpre with
+  | nil =>
+    intro post R hmem hsm hkp h13
+    simp only [List.reverse_nil, List.nil_append] at hmem
+    simp only [List.head?_nil, Option.getD_none] at h13
+    refine st_800049c8 O.live (fun _ => hex R (hmem ▸ hsm) hkp h13) (fun hne => absurd ?_ hne)
+    apply BitVec.eq_of_toNat_eq
+    rw [hkp 6 (by decide) (by decide) (by decide) (by decide), h6, h13]
+  | cons y rpre ih =>
+    intro post R hmem hsm hkp h13
+    simp only [List.head?_cons, Option.getD_some] at h13
+    simp only [List.reverse_cons, List.append_assoc, List.singleton_append] at hmem
+    have hy : y ∈ bins k := by rw [hmem]; simp
+    obtain ⟨cy, hcy, hya, hyf⟩ := HH.member (by omega) hk hy
+    obtain ⟨cya, sz, cyi⟩ := cy
+    simp only at hya hyf
+    subst hya hyf
+    have hyb := HH.walk.chunk_bounds _ hcy
+    have htle := HH.top_le; have hbrk := HH.brk_le
+    unfold heapStart at hyb; unfold heapEnd at hbrk
+    simp only at hyb
+    have hyne : cya ≠ binAt k := hbne _ hy
+    have hfoot : ∀ o, 8 ≤ o → o < 32 → vsaFoot C.H (cya + o) := by
+      intro o h1 h2
+      by_cases ho : o < 16
+      · have := foot_header B (.inr ⟨_, hcy, rfl⟩) (o - 8) (by omega)
+        rwa [show cya + 8 + (o - 8) = cya + o by omega] at this
+      · exact B.node_foot (by omega) hk (.inr hy) o (by omega) h2
+    obtain ⟨⟨h, hr, hs, _⟩, _⟩ := HH.headers hcy
+    simp only at hr hs
+    have hhlt := Vsa.Sim.read64_lt _ _ _ hr
+    -- `bk y`: the next node back
+    obtain ⟨nx, hnx⟩ : ∃ q, (post ++ [binAt k]).head? = some q := by
+      rcases post with _ | ⟨z, zs⟩ <;> simp
+    have hpred : (binAt k :: rpre.reverse).getLast? = some (rpre.head?.getD (binAt k)) := by
+      rcases rpre with _ | ⟨z, zs⟩
+      · rfl
+      · simp only [List.reverse_cons, List.head?_cons, Option.getD_some]
+        rw [← List.cons_append, List.getLast?_concat]
+    have hr2 := hring
+    rw [hmem] at hr2
+    have hbk := (ring_member hr2 hpred hnx).2
+    have hbklt := Vsa.Sim.read64_lt _ _ _ hbk
+    have h14 := (W.keep hkp).a4
+    have h6' : (R 6).toNat = binAt k := by rw [hkp 6 (by decide) (by decide) (by decide) (by decide)]; exact h6
+    have h28' : (R 28).toNat = 31 := by rw [hkp 28 (by decide) (by decide) (by decide) (by decide)]; exact h28
+    refine st_800049c8 O.live (fun he => absurd he ?_) (fun _ => ?_)
+    · intro he; apply hyne
+      have := congrArg BitVec.toNat he; rw [h6', h13] at this; exact this.symm
+    have hEh : ((R 13) + sign_extend (m := 64) (0x008#12)).toNat = cya + 8 := by sx_addr
+    refine st_800049cc O.live ?_ ?_ ?_
+    · rw [hEh]; unfold LdOK Vsa.Sim.tohostAddr; omega
+    · rw [hEh]; exact O.foot (fun k hk => by
+        have := hfoot (8 + k) (by omega) (by omega)
+        rwa [show cya + (8 + k) = cya + 8 + k by omega] at this)
+    rw [ldv_at hr _ hEh]
+    refine st_800049d0 O.live ?_
+    sx_norm
+    have hEb : (R 13 + 24#64).toNat = cya + 24 := by sx_addr
+    refine st_800049d4 O.live ?_ ?_ ?_
+    · sx_norm; rw [hEb]; unfold LdOK Vsa.Sim.tohostAddr; omega
+    · sx_norm; rw [hEb]; exact O.foot (fun k hk => by
+        have := hfoot (24 + k) (by omega) (by omega)
+        rwa [show cya + (24 + k) = cya + 24 + k by omega] at this)
+    sx_norm
+    rw [hEb, ldv_at hbk _ rfl]
+    refine st_800049d8 O.live ?_
+    refine st_800049dc O.live ?_
+    sx_norm
+    have hszv : (BitVec.ofNat 64 h &&& 18446744073709551612#64).toNat = sz := by
+      rw [toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hhlt, ← hs]; rfl
+    have hcmp := lr_cmp hszv h14 (by omega) (by have := W.nb31; omega)
+    have h31 : (R 28).toInt = (31 : Int) := toInt_small h28' (by decide)
+    have h31' : ((31#64 : BitVec 64)).toInt = (31 : Int) := by decide
+    have hkp' : MKeep (upd (upd (upd (upd (upd R 12 (BitVec.ofNat 64 h)) 15 (R 13)) 13
+        (BitVec.ofNat 64 (rpre.head?.getD (binAt k)))) 12
+        (BitVec.ofNat 64 h &&& 18446744073709551612#64)) 11
+        ((BitVec.ofNat 64 h &&& 18446744073709551612#64) - R 14)) R0 :=
+      fun x h11 h12 h13 h15 => by
+        simp only [upd_apply, h11, h12, h13, h15, ite_false]; exact hkp x h11 h12 h13 h15
+    have hvals : (upd (upd (upd (upd (upd R 12 (BitVec.ofNat 64 h)) 15 (R 13)) 13
+        (BitVec.ofNat 64 (rpre.head?.getD (binAt k)))) 12
+        (BitVec.ofNat 64 h &&& 18446744073709551612#64)) 11
+        ((BitVec.ofNat 64 h &&& 18446744073709551612#64) - R 14) 15).toNat = cya ∧
+        (upd (upd (upd (upd (upd R 12 (BitVec.ofNat 64 h)) 15 (R 13)) 13
+        (BitVec.ofNat 64 (rpre.head?.getD (binAt k)))) 12
+        (BitVec.ofNat 64 h &&& 18446744073709551612#64)) 11
+        ((BitVec.ofNat 64 h &&& 18446744073709551612#64) - R 14) 13).toNat =
+          rpre.head?.getD (binAt k) ∧
+        (upd (upd (upd (upd (upd R 12 (BitVec.ofNat 64 h)) 15 (R 13)) 13
+        (BitVec.ofNat 64 (rpre.head?.getD (binAt k)))) 12
+        (BitVec.ofNat 64 h &&& 18446744073709551612#64)) 11
+        ((BitVec.ofNat 64 h &&& 18446744073709551612#64) - R 14) 12).toNat = sz := by
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+      exact ⟨h13, by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbklt], hszv⟩
+    refine st_800049e0 O.live (fun hgt => ?_) (fun hle => ?_)
+    · -- at least `MINSIZE` over: split
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h31] at hgt
+      rw [← h31'] at hgt
+      have hbig := hcmp.1.1 hgt
+      exact bw_split O (W.keep hkp') hk1 hk hmem hcy hbig hpred hvals.1 hvals.2.1 hvals.2.2
+        (by simp only [upd_apply, ite_true]; rw [BitVec.toNat_sub, hszv, h14]; omega)
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h31] at hle
+      refine st_800049e4 O.live (fun hneg => ?_) (fun hnn => ?_)
+      · -- too small: on to the previous member
+        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hneg
+        have hsm' : sz < nb := by
+          have := hcmp.2; rw [show ((0#64 : BitVec 64)).toInt = 0 from rfl] at this hneg; omega
+        refine ih (cya :: post) _ (by rw [hmem]) (fun z hz sz' hz' => ?_) hkp' hvals.2.1
+        rcases List.mem_cons.mp hz with rfl | hz
+        · obtain rfl : sz' = sz := by
+            have := HH.chunk_eq hz' hcy rfl; simp at this; exact this
+          exact hsm'
+        · exact hsm z hz sz' hz'
+      · -- a fit: take
+        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hnn
+        have hfit : nb ≤ sz := hcmp.2.1 (by rw [show ((0#64 : BitVec 64)).toInt = 0 from rfl] at hnn ⊢; omega)
+        exact bw_take O (W.keep hkp') hk1 hk hmem hcy hfit hpred hvals.1 hvals.2.1 hvals.2.2
+
 end VsaIris.VsaHeap
