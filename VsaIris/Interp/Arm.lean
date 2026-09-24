@@ -793,6 +793,92 @@ theorem ms_callHelper (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   simp only [upd_same]
   iframe Hpc Hra Hregs HS
 
+/-- The frame bytes whole again, the slot at any contents. -/
+theorem ownSet_unslot {S : Nat → Prop} {Mt : Mem} {a : Nat} (h : ∀ b, InExt (a, 24) b → S b) :
+    ownSet (GF := GF) (fun b => S b ∧ ¬ InExt (a, 24) b) (fun b => b ↦ₘ imgM Mt b) ∗ slot24 a ⊢
+      ownSet S byteAny := by
+  unfold slot24 blockOwn
+  iintro ⟨H1, H2⟩
+  ihave H1 := ownSet_forget _ _ $$ H1
+  ihave H := ownSet_join _ _ _ (fun b (hb : S b ∧ ¬ InExt (a, 24) b) h2 => hb.2 h2) $$ [H1 H2]
+  · iframe H1 H2
+  iapply ownSet_iff _ (fun b => ⟨fun hb => hb.elim (·.1) (h b), fun hb => by
+    by_cases hs : InExt (a, 24) b
+    · exact .inr hs
+    · exact .inl ⟨hb, hs⟩⟩) $$ H
+
+/-- **A child call into `eval_expr`, partial mode**, through the Löb
+hypothesis (the `jal` pays the later). The return branch is `ms_callEvalT`'s,
+with the child's derivation. On abort, the arm rebuilds its own frame (the
+child's stack, the slack, the frame bytes, the child's slot handed back) and
+aborts itself with `abortAt Core s₀ n₀ ∗ slot24 sret₀` (its own result slot is
+`Out`, `hOut`). The arm's continuation pair `Kret ∧ Kab` is used by both
+branches (INTERP_DESIGN.md §10.1) and handed on. -/
+theorem ms_callEvalP {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
+    (hexec : JalExec (vsaModel live) i code evalEntryPC)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    {Core : IProp GF} {st : St} {d env : Nat} {e : Expr}
+    {R : Nat → BitVec 64} {Mt : Mem} {slot aC aE s0 sret0 : BitVec 64} {m n0 : Nat}
+    {Out Kret : IProp GF} (hOut : Out ⊢ slot24 sret0.toNat)
+    (hsg : StackGeom (evalSP s0) (evalNeed e d)) (hm : evalNeed e d ≤ m)
+    (hms : m ≤ (evalSP s0).toNat) (hn0 : m + 1088 = n0) (hn0s : n0 ≤ s0.toNat)
+    (hslg : SlotGeom slot) (hbb : e.bodiesBound perCallBudget = true) :
+    ⌜EvalRegs R slot (BitVec.ofNat 64 inp) aC aE (evalSP s0) ∧
+      ∀ b, InExt (slot.toNat, 24) b → InExt (s0.toNat - 1088, 1088) b⌝ ∗
+      ▷ evalSpecP_body (vsaModel live) N L Room inp Core st d env e ∗ codeRes ∗
+      □ astEG aC.toNat e ∗ □ frameAt env aE.toNat ∗
+      ms (BitVec.ofNat 64 i) R (InExt (s0.toNat - 1088, 1088)) Mt ∗ stackScratch (evalSP s0) m ∗
+      world N L Room inp .uncounted st d ∗ Out ∗
+      (Kret ∧ (iprop(abortAt Core s0 n0 ∗ slot24 sret0.toNat) -∗ (wpW (vsaModel live)).W Φ)) ∗
+      (∀ (R' : Nat → BitVec 64) (w0 w1 w2 : BitVec 64) (st' : St) (v : Value),
+        ⌜EvalE st d env e st' v⌝ -∗ ⌜KeepRegs calleeSaved R R'⌝ -∗ □ valOf N v w0 w1 w2 -∗
+        ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4)))
+          (InExt (s0.toNat - 1088, 1088)) (slotWrite Mt slot.toNat w0 w1 w2) -∗
+        stackScratch (evalSP s0) m -∗ world N L Room inp .uncounted st' d -∗ Out -∗
+        (Kret ∧ (iprop(abortAt Core s0 n0 ∗ slot24 sret0.toNat) -∗ (wpW (vsaModel live)).W Φ)) -∗
+        (wpW (vsaModel live)).W Φ)
+    ⊢ (wpW (vsaModel live)).W Φ := by
+  unfold ms evalSpecP_body
+  iintro ⟨%⟨hregs, hslot⟩, Hspec, #Hcode, #Hast, #Hfr, ⟨Hpc, Hra, Hregs, HS⟩, Hst, Hw, HOut, HK, Hk⟩
+  ihave ⟨HS, Hslot⟩ := ownSet_carve_slot hslot $$ HS
+  ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hms hm $$ Hst
+  ihave #Hi := instrAt_of_codeRes hcode $$ Hcode
+  ihave Hspec := Hspec $$ %slot %aE %aC %(evalSP s0) %R
+  simp only [wpW_W]
+  iapply wp_callAbort_later hexec
+  iframe Hi Hspec Hpc Hra
+  isplitl [Hregs Hst Hslot Hw]
+  · unfold evalPre
+    iframe Hregs Hst Hslot Hw Hcode Hast Hfr
+    ipureintro
+    exact ⟨hal, hregs, hsg, hslg, hbb⟩
+  isplit
+  · iintro Hpc Hra ⟨%st', %v, %hE, Hpost⟩
+    unfold evalPost
+    icases Hpost with ⟨%R', Hregs, %hkeep, Hst, Hval, Hw⟩
+    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
+    · iframe Hslack Hst
+    ihave ⟨%w0, %w1, %w2, #Hv, HS⟩ := ownSet_join_slot hslot $$ [HS Hval]
+    · iframe HS Hval
+    iapply Hk $$ %R' %w0 %w1 %w2 %st' %v %hE %hkeep Hv [Hpc Hra Hregs HS] Hst Hw HOut HK
+    rw [regFile_upd_ra]
+    simp only [upd_same]
+    iframe Hpc Hra Hregs HS
+  · iintro ⟨HA, Hslot⟩
+    unfold abortAt
+    icases HA with ⟨HC, Hst⟩
+    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
+    · iframe Hslack Hst
+    ihave HS := ownSet_unslot hslot $$ [HS Hslot]
+    · iframe HS Hslot
+    ihave Hst := evalFrame_join (s := s0) (n := n0) hn0s (by omega) $$ [Hst HS]
+    · rw [show n0 - 1088 = m by omega]; iframe Hst HS
+    ihave HOut := hOut $$ HOut
+    ihave HK := and_elim_r $$ HK
+    iapply HK
+    iframe HC Hst HOut
+
 end Calls
 
 end VsaIris.Interp

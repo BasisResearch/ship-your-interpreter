@@ -219,26 +219,36 @@ def ixAddPiece (declName : Name) (vars : Array Expr) (goal : Expr) (tac : Syntax
         | none => return m!"{mkFVar f} (not in scope)"
       throwError m!"#ix_piece: the proof mentions locals outside its statement:{indentD (MessageData.joinSep ds.toList "\n")}"
     addDecl (.thmDecl { name := declName, levelParams := [], type := ty, value := val })
-  match gs with
-  | [] => finish #[]
-  | [gf] =>
-    let (Tf, extras) ← gf.withContext do
-      let Tf ← instantiateMVars (← gf.getType)
-      let lctx ← getLCtx
-      -- `let` locals (a run's opaque frame) are not handed on
-      let fresh := lctx.foldl (init := #[]) fun acc d =>
-        if d.isImplementationDetail || d.isLet || vars.contains (mkFVar d.fvarId) ||
-            hidden.contains (mkFVar d.fvarId) then acc
-        else acc.push d.fvarId
-      let used := collectFVars {} Tf
-      let extras := if allLocals then fresh else fresh.filter used.fvarSet.contains
-      let ex := extras.map mkFVar
-      return (← mkForallFVars ex Tf, ex)
-    withLocalDeclD `hk Tf fun hk => do
-      gf.assign (mkAppN hk extras)
-      finish #[hk]
-  | gs =>
-    throwError m!"#ix_piece: the proof left {gs.length} goals:{indentD (goalsToMessageData gs)}"
+  -- each leftover goal becomes a hypothesis `hk_j : ∀ extras, leftover_j`
+  let rec abstractAll (i : Nat) (gs : List MVarId) (hks : Array Expr) : TermElabM Unit := do
+    match gs with
+    | [] => finish hks
+    | gf :: rest =>
+      let (Tf, extras) ← gf.withContext do
+        let Tf ← instantiateMVars (← gf.getType)
+        let lctx ← getLCtx
+        -- `let` locals (a run's opaque frame) are not handed on
+        let fresh := lctx.foldl (init := #[]) fun acc d =>
+          if d.isImplementationDetail || d.isLet || vars.contains (mkFVar d.fvarId) ||
+              hidden.contains (mkFVar d.fvarId) || hks.contains (mkFVar d.fvarId) then acc
+          else acc.push d.fvarId
+        let used := collectFVars {} Tf
+        let extras := if allLocals then fresh else fresh.filter used.fvarSet.contains
+        let ex := extras.map mkFVar
+        return (← mkForallFVars ex Tf, ex)
+      withLocalDeclD (.mkSimple s!"hk_{i}") Tf fun hk => do
+        gf.assign (mkAppN hk extras)
+        abstractAll (i + 1) rest (hks.push hk)
+  abstractAll 1 gs #[]
+
+/-- The number of a piece's binders before its leftover hypotheses
+(`hk_1`, `hk_2`, …). -/
+def pieceVars (xs : Array Expr) : MetaM Nat := do
+  let mut n := xs.size
+  while n > 0 do
+    let d ← xs[n - 1]!.fvarId!.getDecl
+    if d.userName.toString.startsWith "hk_" then n := n - 1 else break
+  return n
 
 /-- `#ix_seg name binders : goal by tac` runs `tac` (an `ix_run`) on `goal`
 (an `IW … Q pc R Mt` start state) and defines the theorem
@@ -278,14 +288,18 @@ syntax (name := ixPieceFrom) "#ix_piece " ident " from " ident " by " tacticSeq 
   liftTermElabM do
     let info ← getConstInfo prev
     forallTelescope info.type fun xs _ => do
-      let some hk := xs.back? | throwError "#ix_piece: {prev} has no leftover"
-      -- the leftover's own locals become this piece's binders
+      let nv ← pieceVars xs
+      let some hk := xs[nv]? | throwError "#ix_piece: {prev} has no leftover"
+      -- the first leftover's own locals become this piece's binders
       forallTelescope (← inferType hk) fun ys T => do
-        ixAddPiece declName (xs.pop ++ ys) T stx[5] true #[hk]
+        ixAddPiece declName (xs.extract 0 nv ++ ys) T stx[5] true (xs.extract nv xs.size)
 
-/-- `#ix_chain name : type := [p₁, p₂, …]` proves `name` by chaining pieces:
-`p₁ xs (fun ys₁ => p₂ xs ys₁ (fun ys₂ => …))`, each piece continuing the
-previous one's leftover. -/
+/-- `#ix_chain name := [p₁, p₂, …]` proves `name` by chaining pieces, each
+continuing the previous one's FIRST leftover:
+`p₁ xs (fun ys₁ => p₂ xs ys₁ (fun ys₂ => …) e…) e…`. A piece's further
+leftovers are exported: they become hypotheses of `name`, each quantified over
+the locals the chain introduced before it (another row's proof discharges
+them, INTERP_DESIGN.md §6: the branches that leave this row). -/
 syntax (name := ixChain) "#ix_chain " ident " := " "[" ident,+ "]" : command
 
 @[command_elab ixChain] def elabIxChain : CommandElab := fun stx => do
@@ -294,22 +308,41 @@ syntax (name := ixChain) "#ix_chain " ident " := " "[" ident,+ "]" : command
   liftTermElabM do
     let some first := names[0]? | throwError "#ix_chain: no pieces"
     let info0 ← getConstInfo first
-    -- the statement: the first piece's, without its leftover
-    let ty ← forallTelescope info0.type fun xs body => do
-      let vars := if names.size > 1 then xs.pop else xs
-      mkForallFVars vars body
-    -- build the proof: piece k applied to the chain's locals and the rest
-    let rec build (k : Nat) (args : Array Expr) : MetaM Expr := do
-      let c := Lean.mkConst names[k]!
-      let cty ← inferType (mkAppN c args)
-      if k + 1 < names.size then
-        let .forallE _ hkTy _ _ := cty | throwError "#ix_chain: {names[k]!} has no leftover"
-        let rest ← forallTelescope hkTy fun ys _ => do
-          mkLambdaFVars ys (← build (k + 1) (args ++ ys))
-        return mkApp (mkAppN c args) rest
-      else
-        return mkAppN c args
-    let val ← forallTelescope ty fun xs _ => do mkLambdaFVars xs (← build 0 xs)
-    addDecl (.thmDecl { name := declName, levelParams := [], type := ty, value := val })
+    forallTelescope info0.type fun xs0 goal => do
+      let nv ← pieceVars xs0
+      let vars := xs0.extract 0 nv
+      -- pass 1: the exported leftovers' types, closed over the introduced locals
+      let rec exports (k : Nat) (acc : Array Expr) : MetaM (Array Expr) := do
+        let hs ← forallTelescope (← inferType (mkAppN (Lean.mkConst names[k]!) (vars ++ acc)))
+          fun hs _ => hs.mapM inferType
+        let mut out := #[]
+        for h in hs.extract 1 hs.size do
+          out := out.push (← mkForallFVars acc h)
+        if k + 1 < names.size then
+          let some cont := hs[0]? | throwError "#ix_chain: {names[k]!} has no leftover"
+          let rest ← forallTelescope cont fun ys _ => exports (k + 1) (acc ++ ys)
+          return out ++ rest
+        else
+          if !hs.isEmpty then throwError "#ix_chain: the last piece {names[k]!} leaves goals"
+          return out
+      let exTys ← exports 0 #[]
+      let exDecls := exTys.mapIdx fun j t => (Name.mkSimple s!"hx_{j + 1}", fun _ => pure t)
+      withLocalDeclsD exDecls fun exs => do
+        -- pass 2: the proof
+        let rec build (k : Nat) (acc : Array Expr) (j : Nat) : MetaM Expr := do
+          let c := mkAppN (Lean.mkConst names[k]!) (vars ++ acc)
+          let hs ← forallTelescope (← inferType c) fun hs _ => hs.mapM inferType
+          let nex := hs.size - (if k + 1 < names.size then 1 else 0)
+          let exArgs := (List.range nex).toArray.map fun t => mkAppN exs[j + t]! acc
+          if k + 1 < names.size then
+            let rest ← forallTelescope hs[0]! fun ys _ => do
+              mkLambdaFVars ys (← build (k + 1) (acc ++ ys) (j + nex))
+            return mkAppN (mkApp c rest) exArgs
+          else
+            return mkAppN c exArgs
+        let body ← build 0 #[] 0
+        let val := zeroLevels (← instantiateMVars (← mkLambdaFVars (vars ++ exs) body))
+        let ty := zeroLevels (← instantiateMVars (← mkForallFVars (vars ++ exs) goal))
+        addDecl (.thmDecl { name := declName, levelParams := [], type := ty, value := val })
 
 end VsaIris.Sym

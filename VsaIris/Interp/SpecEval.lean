@@ -141,6 +141,24 @@ def evalSpecT_body (st : St) (d env : Nat) (e : Expr) (st' : St) (v : Value) (n 
         evalPre N L Room inp (.counted (k + n)) st d env e sret aE aX s rv))
       (fun _ => evalPost N L Room inp (.counted k) st' d e v sret s rv))
 
+/-- **`eval_expr`, partial, outcome-quantified** (INTERP_DESIGN.md §4.2). The
+return branch gets SOME outcome with its derivation; an error aborts. The abort
+resource over the landing core `Core` (H5) hands back the stack below `s` AND
+the result slot: the slot sits in the caller's frame, which the caller must
+rebuild to rebase its own abort. -/
+def evalSpecP_body (Core : IProp GF) (st : St) (d env : Nat) (e : Expr) : IProp GF :=
+  iprop(∀ (sret aE aX s : BitVec 64) (rv : Nat → BitVec 64),
+    fnSpecAbort (wpW M) evalEntryPC
+      (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗
+        evalPre N L Room inp .uncounted st d env e sret aE aX s rv))
+      (fun _ => iprop(∃ st' v, ⌜EvalE st d env e st' v⌝ ∗
+        evalPost N L Room inp .uncounted st' d e v sret s rv))
+      iprop(abortAt Core s (evalNeed e d) ∗ slot24 sret.toNat))
+
+/-- The Löb hypothesis of the partial proof: every `eval_expr` call, later. -/
+def evalSpecsP (Core : IProp GF) : IProp GF :=
+  iprop(□ ▷ ∀ st d env e, evalSpecP_body M N L Room inp Core st d env e)
+
 /-- **A runtime helper that always returns**, for either WP: entered with the
 body's registers at `rv` (argument facts `pins`) and `Pre`, it returns some
 `rv'` that changes only the registers `clob`, and `Post rv'`. -/
