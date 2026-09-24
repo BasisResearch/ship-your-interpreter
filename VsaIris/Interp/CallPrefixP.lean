@@ -72,7 +72,8 @@ def CallCloP (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : Room
     (Expr.call f args).bodiesBound perCallBudget = true → ret.toNat % 4 = 0 → SlotGeom sret →
     EvalE st d env f st1 (.closure ca) → EvalArgs st1 d env args st2 vs → args.length ≤ maxArgs →
     CallAt R Mt s aX sret (BitVec.ofNat 64 inp) ret rv w0 w1 w2 args.length →
-    (evalSpecsP (vsaModel live) N L Room inp Core ∗ errCtx inp ∗ codeRes ∗
+    (evalSpecsP (vsaModel live) N L Room inp Core ∗ execSpecsP (vsaModel live) N L Room inp Core ∗
+      errCtx inp ∗ codeRes ∗
       □ astEG aX.toNat (.call f args) ∗ □ frameAt env aE.toNat ∗ □ valOf N (.closure ca) w0 w1 w2 ∗
       argVals N (imgM Mt) (argsBase s) 0 vs ∗ ms 0x80003254#64 R (InExt (s.toNat - 1088, 1088)) Mt ∗
       stackScratch (s + 18446744073709550528#64) (evalNeed (.call f args) d - 1088) ∗

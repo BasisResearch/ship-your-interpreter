@@ -1,5 +1,6 @@
 import VsaIris.Interp.CallNotCallable
 import VsaIris.Interp.CallPrefixP
+import VsaIris.Interp.ExecDisp
 
 /-!
 # `{ARM}`, partial mode (family `callArm`, INTERP_DESIGN.md §6, §4.2)
@@ -41,7 +42,8 @@ theorem caseP_{ARM} {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I
         line vs ρ st d jb)
     (hroom : nativePrintlnNeed + 1088 ≤ evalNeed (.call f args) d)
     (hclo : CallCloP (GF := GF) live N L Room inp Core) :
-    evalSpecsP (GF := GF) (vsaModel live) N L Room inp Core ∗ errCtx (GF := GF) inp ⊢
+    evalSpecsP (GF := GF) (vsaModel live) N L Room inp Core ∗ errCtx (GF := GF) inp ∗
+      execDispsP (GF := GF) (vsaModel live) N L Room inp Core ⊢
       evalSpecP_body (GF := GF) (vsaModel live) N L Room inp Core st d env (.call f args) := by
   have hsp1 : ⊢ NatOutSpecs (GF := GF) live N (wpW (vsaModel live)) nativePrintPC nativePrintNeed
       (fun st vs o => o ++ printArgs st vs) :=
@@ -51,7 +53,8 @@ theorem caseP_{ARM} {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I
     natOutSpecs_of N _ (fun a b c vs st o => by rw [← nativePrintlnSpec_eq]; exact hnpl a b c vs st o)
   have hneed := evalNeed_call_ge f args d
   have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hE.inpLt
-  iintro ⟨#IH, #HE⟩
+  iintro ⟨#IH, #HE, #IHx⟩
+  ihave #IHs := execSpecsP_of_disps hlive Core $$ IHx
   unfold evalSpecP_body fnSpecAbort
   iintro %sret %aE %aX %s %rv !> %ret %Φ Hpc Hra ⟨%hal, Hpre⟩ Hk
   unfold evalPre
@@ -77,7 +80,7 @@ theorem caseP_{ARM} {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I
     rw [hvl] at hcall
     iapply hclo Φ st d env f args sret aE aX s ret w0 w1 w2 rv R Mt st1 st2 vs ca hregs hsg hbb hal
       hslg hEf hEa hlen hcall
-    iframe IH HE Hcode Hast Hfb Hv Hav Hms Hst Hw Hslot Hk
+    iframe IH IHs HE Hcode Hast Hfb Hv Hav Hms Hst Hw Hslot Hk
   | native nf =>
     cases nf with
     | print =>

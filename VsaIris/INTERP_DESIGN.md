@@ -1050,6 +1050,12 @@ binary or by what the proofs consume:
   must prove the abort continuation of the `∧`, and refutes it with
   `Call.assertOk`'s premise. H2's abort paths (`na_badPath`, `na_falsy*`)
   supply it (`not_assertOk_len`, `not_assertOk_falsy`).
+- **The call arm's partial case takes `execDispsP`.** A closure call runs
+  its body with `exec_stmt` inside `eval_expr`'s arm, so `caseP_CallArm`'s
+  Löb hypotheses are `evalSpecsP ∗ errCtx ∗ execDispsP` (E5's statement form
+  of the exec Löb hypothesis). `execSpecsP_of_disps` gives `CallCloP` the
+  entry specs G's closure loop takes. The recursor's partial case supplies both
+  hypotheses; the other eval arms keep `evalSpecsP ∗ errCtx`.
 
 ## 11. Open questions for the user
 
