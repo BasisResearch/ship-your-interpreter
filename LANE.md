@@ -34,10 +34,13 @@ rename or merge the other.
 | println (T) | 72 (`CallPrintlnT`) | shared (as above) |
 | assert-ok (T) | 66 (`CallAssertT`) | `CallNativeSeg` 369 |
 | partial arm (P): natives, assert-fail, too-many, not-callable; closure is the named `CallCloP` | 160 (`CallArmP`) | `CallNotCallable` 165 |
-| closure head (arity test, depth bump/test, `cl->env`; exits OK/arity/depth) | – | `CallClosure` 449, `CallCloHead` 406 |
+| closure head (arity test, depth bump/test, `cl->env`; exits OK/arity/depth) | – | `CallClosure` 431, `CallCloHead` 406 |
+| closure call (T): `env_new`, parameter loop, body (G's loop), normal/`return` exits | 75 (`CallClosureT`) | `CallCloRuns` 199, `CallCloBind` 602, `CallCloBody` 201, `CallCloExit` 360, `CallCloT` 388 |
 
 Template lines (hand, but table-level): `callOut_T` 71, `callAssert_T` 65,
-`callArm_P` 159, family `e4_call.py` 51. Generator additions (listed in
+`callClo_T` 74, `callArm_P` 159, family `e4_call.py` 59. The closure layer
+is Wp-generic (the partial proof reuses `cloBind`, `cloBodyEntry`, `cloExitN`,
+`cloExitR`; `env_define` enters through `CloDefineStep`). Generator additions (listed in
 `gen_iris_cases.py`): step kinds `helperR` (indirect `jalr` helper) and
 `loop` (a lemma hypothesis). `gen_interp_steps.py` also emits
 `interp_code_<pc>` for `jalr` sites.
@@ -57,14 +60,15 @@ Template lines (hand, but table-level): `callOut_T` 71, `callAssert_T` 65,
   `closOwn` does not carry (H2's finding).
 - Native stack room `hroom`: at `d = maxCallDepth`, a call node leaves
   ≥ 2176 bytes, but `nativePrintlnNeed = 4224` (Q7 family).
-- `inp % 8 = 0` (interpreter struct alignment for the depth word).
+- `CloSupply`, and the interpreter struct's placement (`InpGeom`,
+  `inp < 2^64`, `inp % 8 = 0`) for the depth word the closure path reads and
+  writes (`caseT_CallClosure`).
 
 ## In flight
-- Closure call after the head: env_new (counted; partial OOM via
-  `wp_oomBlock`), the param `env_define` loop, `value_null(sp+144)`, the body
-  (G's `closureSeq{T,P}_body`), and the exits (depth restore, return copy,
-  escape error, arity `snprintf` error, depth error). Targets:
-  `caseT_CallClosure` and a proof of `CallCloP`. Then the closure rows.
+- The closure call's partial proof (`CallCloP`, the premise of
+  `caseP_CallArm`): `ms_callEnvNewP`/`ms_callEnvDefineP` (out of memory),
+  `closureSeqP_all`, the escape, depth and arity (`snprintf`) errors. The
+  success path reuses the Wp-generic layer above.
 
 ## Holes
 None added.
