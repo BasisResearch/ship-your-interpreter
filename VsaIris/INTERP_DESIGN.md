@@ -20,6 +20,9 @@ Rocq citations are to xv6iris at `8438e55` (`iris/…`, `claude-notes/…`).
 
 - **Two more boundary facts in `Loaded` (2026-09-24, integration).** H1's frame invariant (`FrameLayout`/`FrameBridge`: canonical capacity, `SharedWin` for string reads) needs them at the global frame; `Loaded` did not state them. (see the next STATEMENT CHANGE)
 
+- **Q8 decided (2026-09-24): the semantics cuts.** `Value.catDisplay` renders a named closure as `fnCatRender n = "<fn " ++ n ++ ">"` cut to 63 characters (strings are byte lists, so 63 bytes), exactly `stringify`'s `snprintf(buf, 64, "<fn %s>", n)` (`Newlib.fnRender_eq`, `strRender_eq`). `Loaded` is unchanged.
+- **Boundary facts (standing, 2026-09-24).** A fact a proof needs at the boundary that `Loaded` does not state becomes a `BootHeapFacts` field with a control witness.
+
 ## STATEMENT CHANGE (integration): the global frame's capacity and the shared bytes' geometry
 
 `BootFrameChunks` gains `cap_canon : F.cap = 8` (the capacity `env_define`
@@ -1089,7 +1092,7 @@ binary or by what the proofs consume:
   below the program's need, or `perCallBudget` accounting leaves it at depth
   `maxCallDepth`. H5 states `runtime_error`'s spec with its real need; E1–E6
   must supply it at each error site.
-- **Q8 (lane H2, needs the user): `stringify` cuts a named closure's rendering
+- **Q8 (lane H2; decided 2026-09-24: the semantics cuts, see Decisions): `stringify` cuts a named closure's rendering
   at 63 characters.** `stringify` renders a closure with
   `snprintf(buf, 64, "<fn %s>", name)` and copies the buffer, so the string
   `+` of a closure whose name is longer than 58 characters yields
