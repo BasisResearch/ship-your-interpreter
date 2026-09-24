@@ -48,6 +48,63 @@ theorem DefCall.OK.sepStk {C : DefCall} (h : C.OK) :
     C.vp.toNat + 24 ≤ C.s.toNat - 64 ∨ C.s.toNat ≤ C.vp.toNat := by
   have := h.sep; unfold envDefineNeed at this; omega
 
+/-- The state inside frame `G` (image `img`, `n` bindings) between spans:
+`s2` the name, `s5` the value pointer, `s4` the frame, `s3` the count, `s6`
+the names array. -/
+structure DefFrame (C : DefCall) (G : FrameGeom) (n : Nat) (img : Nat → BitVec 8)
+    (R : Nat → BitVec 64) (Mt : Mem) : Prop where
+  stack : DefStack C.s.toNat C.r (pairVal C.saved) R Mt
+  name : R 18 = C.pn
+  vp : R 21 = C.vp
+  env : (R 20).toNat = G.e
+  cnt : R 19 = BitVec.ofNat 64 n
+  arr : R 22 = BitVec.ofNat 64 G.pn
+  lay : FrameLayout (imgM Mt) G n
+  img : ∀ a, frameS G a → imgM Mt a = img a
+  sepOut : ∀ a, frameS G a → a < C.vp.toNat ∨ C.vp.toNat + 24 ≤ a
+  sepStk : ∀ a, frameS G a → a < C.s.toNat - 64 ∨ C.s.toNat ≤ a
+  slot : ∀ a, C.vp.toNat ≤ a → a < C.vp.toNat + 24 → imgM Mt a = C.so a
+
+/-- The frame state reads only `sp` and `s2-s6`. -/
+theorem DefFrame.regs {C : DefCall} {G : FrameGeom} {n : Nat} {img : Nat → BitVec 8}
+    {R R' : Nat → BitVec 64} {Mt : Mem} (h : DefFrame C G n img R Mt) (hs : 64 ≤ C.s.toNat)
+    (hk : ∀ k, k = 2 ∨ k = 18 ∨ k = 19 ∨ k = 20 ∨ k = 21 ∨ k = 22 → R' k = R k) :
+    DefFrame C G n img R' Mt :=
+  { h with
+    stack := h.stack.congr (hk 2 (by omega)) (fun _ _ _ => rfl) hs
+    name := (hk 18 (by omega)).trans h.name
+    vp := (hk 21 (by omega)).trans h.vp
+    env := by rw [hk 20 (by omega)]; exact h.env
+    cnt := (hk 19 (by omega)).trans h.cnt
+    arr := (hk 22 (by omega)).trans h.arr }
+
+/-- `env_define`'s name loop (`0x80002ab0`): the name in `s2`, the count in `s3`. -/
+def defLoop (live : Nat → Prop) (hl : ∀ p ∈ envText, live p.1) : ScanLoop live where
+  scan := 0x80002ab0#64
+  jal := 0x80002ab8
+  jcode := [0xef#8, 0x40#8, 0x80#8, 0x3e#8]
+  hit := 0x80002ac0#64
+  tail := 0x80002b14#64
+  nameR := 18
+  cntR := 19
+  cntOK := by decide
+  jexec := jalx_80002ab8 live fun p hp => hl _ (env_code_80002ab8 p hp)
+  jtext := env_code_80002ab8
+  jal4 := by decide
+  sLoad := def_load hl
+  sCmp := def_cmp hl
+
+/-- `DefFrame` is the name loop's invariant. -/
+theorem defFrame_scanInv {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) (C : DefCall)
+    {G : FrameGeom} {n : Nat} {img : Nat → BitVec 8} (hs : 64 ≤ C.s.toNat) :
+    ScanInv (defLoop live hl) G n img C.pn (DefFrame C G n img) where
+  lay h := h.lay
+  img h := h.img
+  name h := h.name
+  regs h hk := h.regs hs fun k hk' => by
+    rcases hk' with rfl | rfl | rfl | rfl | rfl | rfl <;>
+      exact hk _ (by decide) (by decide) (by decide) (by decide) (by decide)
+
 section Sinks
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
@@ -189,6 +246,94 @@ theorem def_oom (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
     · iapply def_stack_join hC; iframe Hscr Hstk
     iexists H; iexact Hh
   iapply def_valAt N hslot; iframe Hout Hv
+
+/-- A frame's bindings are unique (`StoreInvariant`). -/
+theorem frame_unique {st : Store} {fa : Addr} {f : Frame} (hinv : Vsa.Sim.StoreInvariant st)
+    (hf : st.frames[fa]? = some f) : FrameNamesUnique f.vars := by
+  have hfalt : fa < st.frames.size := by
+    rcases Nat.lt_or_ge fa st.frames.size with h | h
+    · exact h
+    · simp [Array.getElem?_eq_none h] at hf
+  have hfa : st.frames[fa] = f := by simpa [Array.getElem?_eq_getElem hfalt] using hf
+  have := hinv.unique fa hfalt; rwa [hfa] at this
+
+/-- `Store.define` at a bound name replaces its first (only) binding. -/
+theorem define_hit_frames {st : Store} {fa : Addr} {f : Frame} {x : String} {v v0 : Value}
+    {j : Nat} (hinv : Vsa.Sim.StoreInvariant st) (hf : st.frames[fa]? = some f)
+    (hj : f.vars[j]? = some (x, v0)) :
+    (st.define fa x v).frames.toList = st.frames.toList.set fa { f with vars := f.vars.set j (x, v) } := by
+  have hany : f.vars.any (·.1 == x) := by
+    rw [List.any_eq_true]
+    exact ⟨(x, v0), List.mem_of_getElem? hj, by simp⟩
+  rw [define_frames_toList hf]
+  unfold defineFrame
+  rw [if_pos hany, map_replace_eq_set hj (frame_unique hinv hf)]
+
+theorem Regime.plus_zero (ρ : Regime) : ρ.plus 0 = ρ := by cases ρ <;> rfl
+
+/-- **The hit** `0x80002ac0`: write `vals[j] := *v`, close the frame at
+`st.define`, return. -/
+theorem def_hit (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    (hl : ∀ p ∈ envText, live p.1) (N : NativeAddrs) {C : DefCall} (hC : C.OK) {ρ : Regime}
+    {st : Store} {fa : Addr} {f : Frame} {G : FrameGeom} {img : Nat → BitVec 8} {j : Nat}
+    {v0 : Value} {R : Nat → BitVec 64} {Mt : Mem} {H B₁ B₂ : List (Nat × Nat)}
+    (hF : DefFrame C G f.vars.length img R Mt) (h8 : R 8 = BitVec.ofNat 64 j)
+    (hj : f.vars[j]? = some (C.x, v0)) (hf : st.frames[fa]? = some f)
+    (hinv : Vsa.Sim.StoreInvariant st) (hdisj : ∀ a, frameS G a → ¬ baseS C.s.toNat C.vp.toNat a)
+    (hBH : ∀ b ∈ B₁ ++ G.blocks ++ B₂, b ∈ H) :
+    textOwn envText ∗ gp ↦ᵣ□ gpV ∗ valImg N C.so C.vp.toNat C.v ∗
+      VsaIris.PC ↦ᵣ 0x80002ac0#64 ∗ regsOf gprs R ∗
+      ownSet (getS C.s.toNat C.vp.toNat G) (fun a => a ↦ₘ imgM Mt a) ∗
+      stackScratch (C.s - 64#64) allocHeadroom ∗ heapRes vsaLayoutP vsaRoomB ρ H ∗
+      bindings N img G.pn G.pv f.vars ∗ parentAt f.parent G.par ∗ frameAt fa G.e ∗
+      frameCloser N st fa B₁ B₂ ∗ defK Wp Φ N C ρ (st.define fa C.x C.v)
+    ⊢ Wp.W Φ := by
+  iintro ⟨#Ht, #Hgp, #Hv, Hpc, HR, HS, Hscr, Hh, #Hb, #Hp, #HGe, Hclose, HK⟩
+  have hlt : j < f.vars.length := by
+    rcases Nat.lt_or_ge j f.vars.length with h | h
+    · exact h
+    · simp [List.getElem?_eq_none h] at hj
+  have hvj : f.vars[j] = (C.x, v0) := by simpa [List.getElem?_eq_getElem hlt] using hj
+  obtain ⟨hcap, -, -, hv1, hv2, -, hvw⟩ := hF.lay.slot hlt
+  have hs64 : 64 ≤ C.s.toNat := by have := hC.s64; unfold htifLo at this; omega
+  have hstkv : G.pv + 24 * j + 24 ≤ C.s.toNat - 64 ∨ C.s.toNat ≤ G.pv + 24 * j := by
+    have := interval_apart (a := G.pv + 24 * j) (n := 24) (b := C.s.toNat - 64) (m := 64)
+      (by omega) (by omega) fun c h1 h2 => by
+        rcases Nat.lt_or_ge c (G.pv + 24 * j) with h | h
+        · exact .inl h
+        · rcases Nat.lt_or_ge c (G.pv + 24 * j + 24) with h' | h'
+          · have := hF.sepStk c (by
+              unfold frameS InExt; exact .inr ⟨hcap, .inr ⟨by omega, by omega⟩⟩)
+            omega
+          · exact .inr h'
+    omega
+  have hwo : 0x80000000 ≤ C.vp.toNat ∧ C.vp.toNat + 24 ≤ 0x100000000 ∧
+      htifLo + 16 ≤ C.vp.toNat ∧ C.vp.toNat % 8 = 0 :=
+    ⟨hC.slot.lo, hC.slot.hi, hC.slot.htif, hC.slot.align⟩
+  have h21 : (R 21).toNat = C.vp.toNat := by rw [hF.vp]
+  iapply wp_span Wp (def_write hl (s := C.s.toNat) (G := G) hF.lay hlt h8 hF.env h21 hwo)
+  iframe Ht Hgp Hpc HR HS
+  iintro %pc1 %R1 %Mt1 %⟨rfl, hco, hk1⟩ Hpc HR HS
+  have hslotw := copyOut_slot (fo := C.so) hF.lay hlt hF.sepOut hF.slot hco
+  ihave ⟨HB, Hst⟩ := frame_write_close N (st := st) (st' := st.define fa C.x C.v) (fa := fa)
+    (f := f) (img := img) (B₁ := B₁) (B₂ := B₂) (x := C.x) (v := C.v) hdisj hF.lay hF.img
+    hF.sepOut hF.slot hco hlt (by rw [hvj])
+    ⟨rfl, define_hit_frames hinv hf hj, hinv.define st fa C.x C.v⟩ $$ [HS Hclose]
+  · iframe HS Hb Hp HGe Hclose Hv
+  have hstk1 : DefStack C.s.toNat C.r (pairVal C.saved) R1 Mt1 :=
+    hF.stack.congr (hk1 2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide))
+      (fun a h1 h2 => hco.frame a (by
+        rcases hstkv with h | h
+        · right; omega
+        · left; omega)) (by have := hC.s64; omega)
+  iapply def_ret Wp hl N hC hstk1 (fun a h1 h2 => by
+    have := hslotw (a - C.vp.toNat) (by omega)
+    rwa [show C.vp.toNat + (a - C.vp.toNat) = a by omega] at this)
+  iframe Ht Hgp Hv Hpc HR HB Hscr HK
+  unfold heapStore
+  iexists H, (B₁ ++ G.blocks ++ B₂)
+  iframe Hh Hst
+  ipureintro; exact hBH
 
 end Sinks
 
