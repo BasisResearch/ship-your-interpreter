@@ -10,8 +10,8 @@ changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
   form (`helperSpec`): `valueNullSpec`, `valueBoolSpec`, `valueStrSpec`
   (+ G's `valueIntSpec`), `valueTruthySpec`, `valueEqualSpec`,
   `valuePrintSpec`, `nativePrintSpec`, `nativePrintlnSpec`; callee spec
-  `strcmpSpecV` (H3), `nativeAssertSpec` (`fnSpecAbort`). `stringify`: in
-  flight.
+  `strcmpSpecV` (H3), `nativeAssertSpec` and `stringifySpec`
+  (`fnSpecAbort`, `SpecStringify.lean`).
 - **Proved, for either WP** (axioms ⊆ {propext, Classical.choice, Quot.sound},
   `VsaIris/Audit.lean`):
   - `valueNull_spec`, `valueBool_spec`, `valueInt_spec` (discharges G's stub),
@@ -52,13 +52,18 @@ changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
   back unchanged); `ms_callRegs` (`Interp/CallRegs.lean`: a call from a run by
   the callee's register list, `regFile_cut`/`regFile_uncut`).
 
+  - `stringify_spec` (`ProofStringify.lean`): a `fnSpecAbort` in both
+    regimes. Fifteen `#ix_seg` runs and one lemma per kind arm
+    (`sg_dispatch`). The arms share the buffer tail: `strlen` (H3, owned
+    buffer), `malloc` (`ms_callMalloc`), OOM (`wp_oomBlock` at
+    `oom80003140`), `memcpy`, epilogue. Strings copy through H1's
+    `strlenSpec`/`memcpySpec` from the payload's read-only bytes. Integers
+    and named closures go through `snprintf` (`out.snprintfInt`,
+    `out.snprintfFn`). Premises: `memcpySpecOwned`, `strcpySpec` (H3) and
+    `hstk` (the stack region is live).
+
 ## In flight
-- `stringify`: statement done (`SpecStringify.lean`: `fnSpecAbort`, both
-  regimes, `strRender` = `catDisplay` with `fnRender`; callee specs
-  `memcpySpecOwned`, `strcpySpec`, H1's `strlenSpec`/`memcpySpec`; hole
-  `out.snprintfInt`). Runs done (`ProofStringify.lean`, fifteen `#ix_seg`).
-  Glue in progress: shared tail (`strlen`, `malloc`, OOM/`memcpy`,
-  epilogue), then the arms.
+- None. All H2 deliverables are proved.
 
 ## Holes (`VsaIris/HOLES.md`, `IrisHoles.out`, `VsaIris/Vsa/NewlibOut.lean`)
 - `out.fputs`, `out.fputc`, `out.fwrite`, `out.fprintf`: newlib's stdout
@@ -80,13 +85,15 @@ changes in §10 "STATEMENT CHANGES (H2)"; open question Q8.
   word; `world` gives only `∃ jb` (INTERP_DESIGN.md §10, H2).
 - H3's `strlen` needs `live` on the bytes it reads (`Ctx.codeLive`); for a
   stack buffer that is the stack region, a condition on the top-level `live`
-  like `CodeLive` (`stringify` takes it as `StackLive live`).
+  like `CodeLive` (`stringify_spec` takes it as `hstk`).
 - Tooling: after merging G, `ix_run` explores undecided branches; H2's scripts
   use `ix_run1` (the stopping variant). `simpa`/`omega` over `k % 2^64` with a
   variable `k` can produce kernel deep recursion; explicit `Nat.mod_eq_of_lt`
   rewrites avoid it.
 
 ## Interface for other lanes
+- H3: `stringify_spec` takes `memcpySpecOwned` (memcpy from an owned source,
+  handed back) and `strcpySpec` (`SpecStringify.lean`) as premises.
 - E lanes call the helpers with `ms_callHelper` (G) against the specs above.
 - H3: `strcmpSpecV` is the register-file form of H1's `strcmpSpec`.
 - H1: `HelperRun.helper_leaf` is the register-file twin of H1's `wp_ew`

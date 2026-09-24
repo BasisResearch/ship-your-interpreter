@@ -906,6 +906,20 @@ binary or by what the proofs consume:
   `ra` word aligned (`rtErr_spec`'s `hjb`). `world` only gives `∃ jb`, so the
   spec takes `jb`, `jmpRO inp jb` and the alignment as premises. The caller's
   error arms need the same facts for their own `runtime_error` calls.
+- **`stringifySpec` is a `fnSpecAbort`** (`SpecStringify.lean`). Its return
+  branch hands back a fresh heap block (`strOwn`, `FreshBlock`, the regime's
+  `heapRes` with the block pushed) holding `strRender st v`: `catDisplay`,
+  except that a named closure renders as `Newlib.fnRender` (Q8). Its abort
+  branch is H5's `abortRes s stringifyNeed` (partial-mode `malloc` NULL,
+  `oom80003140`). The closure arm needs `dispRes st v` (read geometry of the
+  closure object and its `EX_FN` node), as `value_print` does.
+  `stringify_spec` takes as premises: `textOwn allocText` (as H1's
+  `malloc`/`realloc` specs), `AllocSpecs`, H5's `NewlibHoles`,
+  `IrisHoles.out`, H1's `strlenSpec`/`memcpySpec`, and two callee specs for
+  the stack buffer, `memcpySpecOwned` (owned source) and `strcpySpec`, whose
+  supplier is the string-function lane (H3). It also takes
+  `hstk : ∀ a ∈ [0x87800000, 0x88000000), live a`: H3's `strlen` reads the
+  stack buffer, and its step lemmas need `live` on those bytes.
 - **`ix_run1`** (`ITac.lean`) is `ix_run` stopping at a branch it cannot
   decide, leaving `cond → …` for each side. Lane G's `ix_run` explores both
   sides. H2's scripts resolve each side themselves. The two share

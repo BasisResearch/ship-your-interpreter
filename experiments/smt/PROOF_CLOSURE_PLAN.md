@@ -4078,3 +4078,13 @@ so a symbolic run cannot load them. `SpecValue.dispRes` carries the geometry
 as a premise of `valuePrintSpec`/`nativePrintSpec`. Its supplier is the
 `EX_FN` arm (heap block, program AST) or a geometry field on `closOwn`. The
 `call` arm needs the same field when it reads a callee closure.
+
+## `strlen` on a stack buffer needs the stack region live (lane H2, 2026-09-24)
+
+`stringify` (`VsaIris/Interp/ProofStringify.lean`) calls `strlen` on its own
+stack buffer (`sp + 16`). H3's `strlen_specOwnedW` (`VsaIris/Vsa/StrlenOwned.lean`)
+runs its step lemmas under the context's `live` predicate, which must hold at
+every byte it reads. `stringify_spec` therefore takes
+`hstk : ∀ a, 0x87800000 ≤ a → a < 0x88000000 → live a`, a condition on the
+top-level `live` like `CodeLive`. Its supplier is the instantiation of
+`vsaModel live` at the boundary, which chooses `live`.
