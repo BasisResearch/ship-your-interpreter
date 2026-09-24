@@ -203,6 +203,13 @@ theorem paramsRepr_length {m : Mem} {P : Nat → Prop} :
   | _, _, _, .nil => rfl
   | _, _, _, .cons _ _ _ hrest => by simp [paramsRepr_length hrest]
 
+/-- `addiw`'s sign-extended word of a small value. -/
+theorem sext32_toNat_small {a : Nat} (h : a < 2 ^ 31) :
+    (BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 a))).toNat = a := by
+  have hi := VsaIris.Interp.sext32_ofNat_toInt h
+  rw [BitVec.toInt_eq_toNat_cond] at hi
+  split at hi <;> omega
+
 /-- The bytes of an `EX_FN` node the call reads: the name, parameter array
 and count words, and the body pointer (not the tag). -/
 abbrev fnView (q : Nat) : List Nat := accAddrs (q + 8) 20 ++ accAddrs (q + 32) 8
@@ -319,7 +326,7 @@ theorem fnNode_of {m : Mem} {P : Nat → Prop} {q : BitVec 64} {name : Option St
 -- `0x80003ca4`).
 #ix_seg CallK_runC {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Dt Mt : Mem} {R : Nat → BitVec 64}
-    {s q inp : BitVec 64} {argc paramc dep : Nat}
+    {s q inp pv : BitVec 64} {dep : Nat}
     (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
     (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (hq1 : 0x80000000 ≤ q.toNat) (hq2 : q.toNat + 28 ≤ 0x100000000)
@@ -327,7 +334,7 @@ theorem fnNode_of {m : Mem} {P : Nat → Prop} {q : BitVec 64} {name : Option St
     (hi1 : tohostAddr + 16 ≤ inp.toNat) (hi2 : inp.toNat + 480 ≤ 0x88000000)
     (hi3 : inp.toNat + 12 ≤ s.toNat - 1088 ∨ s.toNat ≤ inp.toNat + 8) (hia : inp.toNat % 8 = 0)
     (h14 : R 14 = q) (h18 : R 18 = inp) (h2 : R 2 = s + 18446744073709550528#64)
-    (hpc : ldv .lw Dt (q + 24#64).toNat = BitVec.ofNat 64 paramc)
+    (hpc : ldv .lw Dt (q + 24#64).toNat = pv)
     (hdep : ldv .lw Mt (inp + 8#64).toNat = BitVec.ofNat 64 dep) :
     IW live Dt (accAddrs (q.toNat + 24) 4)
       (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp.toNat + 8, 4) b) Q 0x80003294#64 R Mt
