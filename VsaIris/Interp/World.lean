@@ -3,6 +3,8 @@ import VsaIris.Interp.Need
 import VsaIris.Vsa.CostRoom
 import VsaIris.Vsa.Instance
 import Vsa.Sim.LayoutInstance
+import VsaIris.Vsa.Newlib
+import VsaIris.Interp.WorldStdio
 
 /-!
 # The boundary world (package A0, INTERP_DESIGN.md §5.1)
@@ -290,6 +292,9 @@ structure FrameChunks (m : Mem) (chunks : List Chunk) (shared : Nat → Prop) (e
 structure BootGap {c : Vsa.Machine.Config} {p : Program} (b : Boot c p) : Prop where
   top_room : b.top + 16 ≤ b.brkv
   frame : ∃ G, FrameChunks c.σ.mem b.chunks b.D.shared b.env G
+  /-- `_impure_data._stderr` points at `__sf[2]` (INTERP_DESIGN.md Q6):
+  `Stdio.StdioOK` needs it and `ExitRuntimeData` does not state it. -/
+  stderr : read64 c.σ.mem Stdio.stderrPtrAddr = some exitStderr
 
 /-! ## 5. The global frame's boundary data -/
 
@@ -394,11 +399,31 @@ def CodeByte (k : Nat) : Prop := 0x80000000 ≤ k ∧ k < 0x8001ad00
 state, `_impure_ptr`, the interpreter's statics). -/
 def StaticByte (k : Nat) : Prop := (0x8001ad00 ≤ k ∧ k < 0x8001c168) ∧ ¬ allocGlobal k
 
+/-- Writable ELF data owned by neither the allocator nor newlib's runtime
+data (`Stdio.stdioFoot`): the interpreter's statics and padding. -/
+def OtherStaticByte (k : Nat) : Prop := StaticByte k ∧ ¬ Stdio.stdioFoot k
+
+theorem static_parts (k : Nat) :
+    StaticByte k ↔ Stdio.stdioFoot k ∨ OtherStaticByte k := by
+  unfold OtherStaticByte
+  constructor
+  · intro h; by_cases hs : Stdio.stdioFoot k
+    · exact .inl hs
+    · exact .inr ⟨h, hs⟩
+  · rintro (h | h)
+    · refine ⟨?_, Newlib.stdioFoot_off_alloc k h⟩
+      unfold Stdio.stdioFoot Stdio.InRange at h; omega
+    · exact h.1
+
+theorem stdio_disj (k : Nat) (h : Stdio.stdioFoot k) : ¬ OtherStaticByte k :=
+  fun h' => h'.2 h
+
 /-- The whole C stack. -/
 def StackByte (k : Nat) : Prop := stackSL.lo ≤ k ∧ k < stackSL.hi
 
-/-- `struct Interp` (384 bytes, `interp.h`), inside `main`'s frame. -/
-def InterpByte (inp k : Nat) : Prop := InExt (inp, 384) k
+/-- `struct Interp` (480 bytes, `interp.h`: `err_msg[256]` at 224), inside
+`main`'s frame. -/
+def InterpByte (inp k : Nat) : Prop := InExt (inp, 480) k
 
 /-- The owned stack below `interp_run`'s entry `sp`. -/
 def FreeStackByte (k : Nat) : Prop := InExt (stackSL.lo, spEntry - stackSL.lo) k
@@ -565,27 +590,35 @@ theorem stack_parts (inp k : Nat) (hinp : inp = interpObject) :
   · intro h
     by_cases h1 : k < 0x87fffd00
     · exact .inl ⟨by omega, by omega⟩
-    · by_cases h2 : 0x87fffe10 ≤ k ∧ k < 0x87fffe10 + 384
+    · by_cases h2 : 0x87fffe10 ≤ k ∧ k < 0x87fffe10 + 480
       · exact .inr (.inl h2)
       · exact .inr (.inr ⟨⟨by omega, by omega⟩, h2⟩)
   · rintro (h | h | h) <;> omega
 
 /-! ## 7. The finite byte map adequacy hands over -/
 
-/-- Every boot byte, enumerated. -/
+theorem bootAddrs_exists (shared : Nat → Prop) (G : FrameGeom) (H : List (Nat × Nat)) :
+    ∃ l : List Nat, l.Nodup ∧ ∀ k, k ∈ l ↔ k < 2 ^ 32 ∧ BootByte shared G H k := by
+  refine ⟨(List.range (2 ^ 32)).filter
+    fun k => @decide (BootByte shared G H k) (Classical.propDecidable _),
+    List.nodup_range.filter _, fun k => ?_⟩
+  rw [List.mem_filter, List.mem_range, @decide_eq_true_iff _ (Classical.propDecidable _)]
+
+/-- Every boot byte, enumerated. Sealed behind `Classical.choose`: the kernel
+must never see the `2 ^ 32`-element range it is cut from. -/
 noncomputable def bootAddrs (shared : Nat → Prop) (G : FrameGeom) (H : List (Nat × Nat)) :
     List Nat :=
-  (List.range (2 ^ 32)).filter fun k => @decide (BootByte shared G H k) (Classical.propDecidable _)
+  Classical.choose (bootAddrs_exists shared G H)
 
 theorem bootAddrs_nodup (shared : Nat → Prop) (G : FrameGeom) (H : List (Nat × Nat)) :
     (bootAddrs shared G H).Nodup :=
-  List.nodup_range.filter _
+  (Classical.choose_spec (bootAddrs_exists shared G H)).1
 
 theorem mem_bootAddrs {shared : Nat → Prop} {G : FrameGeom} {H : List (Nat × Nat)}
     (hlt : ∀ k, BootByte shared G H k → k < 2 ^ 32) (k : Nat) :
     k ∈ bootAddrs shared G H ↔ BootByte shared G H k := by
   unfold bootAddrs
-  rw [List.mem_filter, List.mem_range, @decide_eq_true_iff _ (Classical.propDecidable _)]
+  rw [(Classical.choose_spec (bootAddrs_exists shared G H)).2 k]
   exact ⟨fun h => h.2, fun h => ⟨hlt k h, h⟩⟩
 
 /-- **The boundary's byte map**: the memory's own total read on every boot
@@ -624,6 +657,15 @@ theorem regimeOK_uncounted (m : Mem) : RegimeOK m .uncounted := trivial
 section Iris
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF]
+
+/-- The byte map as exclusive ownership of every boot byte. -/
+theorem Boot.bytes_own {c : Vsa.Machine.Config} {p : Program} (b : Boot c p)
+    (hroom : b.top + 16 ≤ b.brkv) {G : FrameGeom}
+    (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G) :
+    ([∗map] k ↦ v ∈ b.bytes G, iprop(k ↦ₘ v)) ⊢
+      ownImg (GF := GF) (fun k => RoByte b.D.shared k ∨ BlocksCover G.blocks k ∨
+        heapFoot vsaLayout b.H k ∨ StackByte k ∨ StaticByte k) (memImg c.σ.mem) :=
+  ownImg_of_memMap (bootAddrs_nodup _ _ _) (mem_bootAddrs fun _ hk => b.bootByte_lt hroom hG hk)
 
 /-- Cut an owned extent at `k`. -/
 theorem ownImg_ext_split (a n k q r : Nat) (img : Nat → BitVec 8) (hk : k ≤ n)
@@ -673,23 +715,23 @@ section Ghost
 
 variable [I : InterpGS GF]
 
-/-- **`struct Interp` at `interp_run`'s entry** from its 384 bytes. -/
+/-- **`struct Interp` at `interp_run`'s entry** from its 480 bytes. -/
 theorem interpCtxPre_of_bytes {inp g : Nat} {img : Nat → BitVec 8}
     (hg : imgLE img inp 8 = g) (hd : imgLE img (inp + interpDepthOff) 4 = 0) :
-    ownImg (GF := GF) (InExt (inp, 384)) img ∗ frameAt 0 g ⊢ |==> interpCtxPre inp 0 := by
+    ownImg (GF := GF) (InExt (inp, 480)) img ∗ frameAt 0 g ⊢ |==> interpCtxPre inp 0 := by
   iintro ⟨H, #Hf⟩
-  ihave ⟨Hg, H⟩ := ownImg_ext_split inp 384 8 (inp + interpDepthOff) 376 img
+  ihave ⟨Hg, H⟩ := ownImg_ext_split inp 480 8 (inp + interpDepthOff) 472 img
     (by decide) rfl rfl $$ H
-  ihave ⟨Hd, H⟩ := ownImg_ext_split (inp + interpDepthOff) 376 4 (inp + interpDepthOff + 4) 372
+  ihave ⟨Hd, H⟩ := ownImg_ext_split (inp + interpDepthOff) 472 4 (inp + interpDepthOff + 4) 468
     img (by decide) rfl rfl $$ H
-  ihave ⟨Hp, H⟩ := ownImg_ext_split (inp + interpDepthOff + 4) 372 4 (inp + interpJmpOff) 368
+  ihave ⟨Hp, H⟩ := ownImg_ext_split (inp + interpDepthOff + 4) 468 4 (inp + interpJmpOff) 464
     img (by decide) (by unfold interpDepthOff interpJmpOff; omega) rfl $$ H
-  ihave ⟨Hj, He⟩ := ownImg_ext_split (inp + interpJmpOff) 368 interpJmpLen
+  ihave ⟨Hj, He⟩ := ownImg_ext_split (inp + interpJmpOff) 464 interpJmpLen
     (inp + interpErrOff) interpErrLen img (by decide)
     (by unfold interpJmpOff interpJmpLen interpErrOff; omega) rfl $$ H
   imod wordRO_of_ownImg hg $$ Hg with Hg
   imodintro
-  unfold interpCtxPre interpCore
+  unfold interpCtxPre interpCore interpCoreE errAny
   isplitl [Hg Hd Hp He]
   · iexists g
     iframe Hg Hf
@@ -727,7 +769,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [MachGS hlc GF] {c : Vsa.Machine.
 def worldPre [InterpGS GF] (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
     (ρ : Regime) (st : St) (d : Nat) : IProp GF :=
   iprop(∃ H B, heapRes L Room ρ H ∗ storeRepr N st.store B ∗ consoleOwn st.out ∗
-    interpCtxPre inp d ∗ ⌜∀ b ∈ B, b ∈ H⌝)
+    Stdio.stdioOwn ∗ interpCtxPre inp d ∗ ⌜∀ b ∈ B, b ∈ H⌝)
 
 /-- **The boundary world**: what `interp_run`'s entry owns, in regime `ρ`.
 
@@ -747,7 +789,7 @@ def bootRes [InterpGS GF] (b : Boot c p) (ρ : Regime) : IProp GF :=
   iprop(worldPre b.N vsaLayout costRoom b.inp.toNat ρ initSt 0 ∗
     frameAt 0 (b.φf 0) ∗ astSs b.stmts b.count p ∗ roOn CodeByte c.σ.mem ∗
     roOn b.D.shared c.σ.mem ∗ blockOwn stackSL.lo (spEntry - stackSL.lo) ∗
-    ownImg (CallerByte b.inp.toNat) (memImg c.σ.mem) ∗ ownImg StaticByte (memImg c.σ.mem))
+    ownImg (CallerByte b.inp.toNat) (memImg c.σ.mem) ∗ ownImg OtherStaticByte (memImg c.σ.mem))
 
 theorem freeStack_disj (inp : Nat) (hinp : inp = interpObject) (k : Nat)
     (hk : FreeStackByte k) : ¬ (InterpByte inp k ∨ CallerByte inp k) := by
@@ -763,6 +805,7 @@ theorem interp_disj (inp k : Nat) (hk : InterpByte inp k) : ¬ CallerByte inp k 
 /-- **The carving, at fixed ghost names.** -/
 theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv)
     {G : FrameGeom} (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G)
+    (hstd : read64 c.σ.mem Stdio.stderrPtrAddr = some exitStderr)
     (ρ : Regime) (hρ : RegimeOK c.σ.mem ρ) :
     ghost_map_auth (GF := GF) I.frameName (DFrac.own 1) (∅ : NatMap Nat) ∗
       ghost_map_auth I.closName (DFrac.own 1) (∅ : NatMap Nat) ∗
@@ -774,21 +817,22 @@ theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p) (hroom : b.top + 16 ≤ b
   have hd : imgLE (memImg c.σ.mem) (b.inp.toNat + interpDepthOff) 4 = 0 :=
     readLE_memImg b.ready.call_depth
   have hrd : FrameReads c.σ.mem b.N b.φf b.φc G.e frame0 := hG.env ▸ b.frameReads
-  unfold bootRes worldPre Boot.bytes
+  unfold bootRes worldPre
   rw [← hG.env, ← hout]
   iintro ⟨Hf, Hc, Hm, Hcon⟩
-  ihave Hall := ownImg_of_memMap (img := memImg c.σ.mem)
-    (S := fun k => RoByte b.D.shared k ∨ BlocksCover G.blocks k ∨ heapFoot vsaLayout b.H k ∨
-      StackByte k ∨ StaticByte k)
-    (bootAddrs_nodup _ _ _)
-    (mem_bootAddrs (fun k hk => b.bootByte_lt hroom hG hk)) $$ Hm
+  ihave Hall := b.bytes_own hroom hG $$ Hm
   ihave ⟨Hro, Hall⟩ := ownSet_unglue _ _ _ (b.ro_disj hroom hG) $$ Hall
   ihave ⟨Hst, Hall⟩ := ownSet_unglue _ _ _ (b.store_disj hroom hG) $$ Hall
   ihave ⟨Hh, Hall⟩ := ownSet_unglue _ _ _ (fun k hk => heap_disj k hk) $$ Hall
   ihave ⟨Hstk, Hsta⟩ := ownSet_unglue _ _ _ stack_disj $$ Hall
+  ihave Hsta := ownSet_iff _ static_parts $$ Hsta
+  ihave ⟨Hstd, Hsta⟩ := ownSet_unglue _ _ _ stdio_disj $$ Hsta
   ihave Hstk := ownSet_iff _ (fun k => stack_parts b.inp.toNat k b.inp_toNat) $$ Hstk
   ihave ⟨Hfree, Hstk⟩ := ownSet_unglue _ _ _ (freeStack_disj _ b.inp_toNat) $$ Hstk
   ihave ⟨Hint, Hcal⟩ := ownSet_unglue _ _ _ (interp_disj _) $$ Hstk
+  ihave Hint := ownSet_iff (S := InterpByte b.inp.toNat) (T := InExt (b.inp.toNat, 480)) _ (fun _ => Iff.rfl) $$ Hint
+  ihave Hfree := ownSet_iff (S := FreeStackByte) (T := InExt (stackSL.lo, spEntry - stackSL.lo)) _
+    (fun _ => Iff.rfl) $$ Hfree
   imod roOn_of_ownImg (m := c.σ.mem) (fun k v _ hv => memImg_eq hv) $$ Hro with #Hro
   ihave #Hsh := roOn_mono (Q := RoByte b.D.shared) (P := b.D.shared) (m := c.σ.mem)
     (fun k h => Or.inl h) $$ Hro
@@ -798,7 +842,8 @@ theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p) (hroom : b.top + 16 ≤ b
   · iframe Hsh Hst
     isplitl []
     · iapply closSupply_frame0
-    · iapply parentSupply_none
+    · rw [show frame0.parent = none from rfl, hG.par]
+      iapply parentSupply_none
   imod storeRepr_allocFrame (N := b.N) (s := ⟨#[], #[]⟩) (B := []) (s' := initSt.store)
     (f := frame0) (Gm := G) (by rfl) (by rfl) $$ [Hempty Hbody] with ⟨Hs, #He⟩
   · iframe Hempty Hbody
@@ -806,11 +851,17 @@ theorem boot_of_bytes [I : InterpGS GF] (b : Boot c p) (hroom : b.top + 16 ≤ b
   · iframe Hint He
   imodintro
   iframe He Hsta Hcal
-  isplitl [Hh Hs Hcon Hi]
+  isplitl [Hh Hs Hcon Hstd Hi]
   · iexists b.H, ([] ++ G.blocks)
     iframe Hs Hcon Hi
     isplitl [Hh]
     · iapply heapRes_of_bytes (imgShape_of_blockHeapAt (b.blockHeapAt hroom)) hρ $$ Hh
+    isplitl [Hstd]
+    · unfold Stdio.stdioOwn Stdio.stdioAt
+      iexists memImg c.σ.mem
+      iframe Hstd
+      ipureintro
+      exact stdioOK_of_mem b.ready.console b.ready.exit_runtime hstd
     · ipureintro
       intro blk hblk
       exact hG.live blk (by simpa using hblk)
@@ -828,6 +879,7 @@ hands the client (`Boot.bytes`, which agrees with the configuration:
 two `InterpGS` ghost maps and carve the boundary world in regime `ρ`. -/
 theorem world_of_boundary (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {G : FrameGeom}
     (hG : FrameChunks c.σ.mem b.chunks b.D.shared (b.φf 0) G)
+    (hstd : read64 c.σ.mem Stdio.stderrPtrAddr = some exitStderr)
     (ρ : Regime) (hρ : RegimeOK c.σ.mem ρ) :
     ([∗map] k ↦ v ∈ b.bytes G, iprop(k ↦ₘ v)) ∗ consoleOwn (GF := GF) (Vsa.Machine.output c.σ) ⊢
       |==> ∃ γf γc : GName, (letI : InterpGS GF := ⟨γf, γc⟩; bootRes b ρ) := by
@@ -835,7 +887,7 @@ theorem world_of_boundary (b : Boot c p) (hroom : b.top + 16 ≤ b.brkv) {G : Fr
   imod ghost_map_alloc_empty (GF := GF) (K := Nat) (V := Nat) (H := NatMap) with ⟨%γf, Hf⟩
   imod ghost_map_alloc_empty (GF := GF) (K := Nat) (V := Nat) (H := NatMap) with ⟨%γc, Hc⟩
   iexists γf, γc
-  iapply (boot_of_bytes (I := ⟨γf, γc⟩) b hroom hG ρ hρ) $$ [Hf Hc Hm Hcon]
+  iapply (boot_of_bytes (I := ⟨γf, γc⟩) b hroom hG hstd ρ hρ) $$ [Hf Hc Hm Hcon]
   iframe Hf Hc Hm Hcon
 
 end Assembly
