@@ -105,6 +105,124 @@ theorem defFrame_scanInv {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1
     rcases hk' with rfl | rfl | rfl | rfl | rfl | rfl <;>
       exact hk _ (by decide) (by decide) (by decide) (by decide) (by decide)
 
+/-- A frame with room for one more binding (`n < cap`, and `cap` already the
+canonical cap of `n + 1`): `FrameLayout` before the append's count bump. -/
+structure AppLayout (img : Nat → BitVec 8) (G : FrameGeom) (n : Nat) : Prop where
+  e_ne : G.e ≠ 0
+  sblk : G.sblk.1 ≤ G.e ∧ G.e + 32 ≤ G.sblk.1 + G.sblk.2
+  count : imgLE img G.e 4 = n
+  cap : imgLE img (G.e + 4) 4 = G.cap
+  names : imgLE img (G.e + 8) 8 = G.pn
+  vals : imgLE img (G.e + 16) 8 = G.pv
+  parent : imgLE img (G.e + 24) 8 = G.par
+  room : n < G.cap
+  arrays : G.nblk = (G.pn, 8 * G.cap) ∧ G.vblk = (G.pv, 24 * G.cap)
+  disjoint : G.blocks.Pairwise ExtDisj
+  win : ∀ b ∈ G.blocks, BlockWin b
+  e_align : G.e % 8 = 0
+  cap_next : G.cap = capFor (n + 1)
+
+/-- A full-cap-free frame is ready for the append as it is. -/
+theorem FrameLayout.appLayout {img : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
+    (h : FrameLayout img G n) (hne : G.cap ≠ n) : AppLayout img G n := by
+  have hle := h.count_le
+  have hpos : 0 < G.cap := by omega
+  rcases growthCost_eq n with ⟨h1, -, -⟩ | ⟨-, h2, -⟩
+  · exact absurd (h.cap_canon.trans h1) hne
+  · exact { h with
+      room := by omega
+      arrays := h.arrays hpos
+      cap_next := h.cap_canon.trans h2.symm }
+
+/-- **After the append's count bump** the layout is a frame's again. -/
+theorem AppLayout.bump {img img' : Nat → BitVec 8} {G : FrameGeom} {n : Nat}
+    (h : AppLayout img G n) (hcnt : imgLE img' G.e 4 = n + 1)
+    (hag : ∀ a, G.e + 4 ≤ a → a < G.e + 32 → img' a = img a) : FrameLayout img' G (n + 1) := by
+  have e : ∀ o w, 4 ≤ o → o + w ≤ 32 → imgLE img' (G.e + o) w = imgLE img (G.e + o) w :=
+    fun o w h4 how => imgLE_congr fun k hk => hag _ (by omega) (by omega)
+  have hpos : 0 < G.cap := by have := h.room; omega
+  exact { h with
+    count := hcnt
+    cap := by rw [e 4 4 (by omega) (by omega)]; exact h.cap
+    names := by rw [e 8 8 (by omega) (by omega)]; exact h.names
+    vals := by rw [e 16 8 (by omega) (by omega)]; exact h.vals
+    parent := by rw [e 24 8 (by omega) (by omega)]; exact h.parent
+    count_le := h.room
+    empty := fun h0 => absurd h0 (by omega)
+    arrays := fun _ => h.arrays
+    cap_canon := h.cap_next }
+
+/-- An image read at a shifted place. -/
+theorem imgLE_shift {img img' : Nat → BitVec 8} {a a' : Nat} :
+    ∀ {n : Nat}, (∀ i, i < n → img' (a' + i) = img (a + i)) → imgLE img' a' n = imgLE img a n
+  | 0, _ => rfl
+  | n + 1, h => by
+    unfold imgLE
+    rw [show img' a' = img a by simpa using h 0 (by omega),
+      imgLE_shift (a := a + 1) (a' := a' + 1) (n := n) (fun i hi => by
+        have := h (i + 1) (by omega)
+        rwa [show a' + (i + 1) = a' + 1 + i by omega, show a + (i + 1) = a + 1 + i by omega]
+          at this)]
+
+theorem imgW_shift {img img' : Nat → BitVec 8} {a a' : Nat}
+    (h : ∀ i, i < 8 → img' (a' + i) = img (a + i)) : imgW img' a' = imgW img a := by
+  unfold imgW; rw [imgLE_shift h]
+
+section Bindings
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
+
+/-- A value's meaning at a shifted place. -/
+theorem valImg_shift (N : NativeAddrs) {img img' : Nat → BitVec 8} {a a' : Nat} (v : Value)
+    (h : ∀ o, o < 24 → img' (a' + o) = img (a + o)) :
+    valImg (GF := GF) N img' a' v = valImg N img a v := by
+  have w : ∀ o, o + 8 ≤ 24 → imgW img' (a' + o) = imgW img (a + o) := fun o ho =>
+    imgW_shift fun i hi => by
+      have := h (o + i) (by omega)
+      rwa [show a' + (o + i) = a' + o + i by omega, show a + (o + i) = a + o + i by omega] at this
+  unfold valImg
+  rw [show a' = a' + 0 from rfl, show a = a + 0 from rfl, w 0 (by omega), w 8 (by omega),
+    w 16 (by omega)]
+
+/-- **The bindings at relocated arrays**: every name word and value's bytes
+agree. -/
+theorem bindings_move (N : NativeAddrs) {img img' : Nat → BitVec 8} {pn pv pn' pv' : Nat}
+    {vars : List (String × Value)}
+    (hn : ∀ k, k < vars.length → ∀ o, o < 8 → img' (pn' + 8 * k + o) = img (pn + 8 * k + o))
+    (hv : ∀ k, k < vars.length → ∀ o, o < 24 → img' (pv' + 24 * k + o) = img (pv + 24 * k + o)) :
+    bindings (GF := GF) N img pn pv vars ⊢ bindings N img' pn' pv' vars := by
+  iintro #Hb
+  unfold bindings
+  iapply sepL_of_all
+  imodintro
+  iintro %q %hq
+  obtain ⟨p, k⟩ := q
+  rw [List.mem_zipIdx_iff_getElem?] at hq
+  have hk : k < vars.length := by
+    have := List.getElem?_eq_some_iff.1 hq; simpa using this.1
+  have hp : p = vars[k] := by rw [List.getElem?_eq_getElem hk] at hq; exact (Option.some.inj hq).symm
+  subst hp
+  ihave ⟨#Hname, #Hval⟩ := sepL_zipIdx_get _ vars hk $$ Hb
+  dsimp only
+  rw [imgLE_shift (hn k hk), valImg_shift N _ (hv k hk)]
+  iframe Hname Hval
+
+/-- **One more binding** at the end: its name word and value. -/
+theorem bindings_snoc (N : NativeAddrs) (img : Nat → BitVec 8) (pn pv : Nat)
+    (vars : List (String × Value)) (x : String) (v : Value) :
+    bindings (GF := GF) N img pn pv vars ∗
+        strAt (imgLE img (pn + 8 * vars.length) 8) x ∗ valImg N img (pv + 24 * vars.length) v ⊢
+      bindings N img pn pv (vars ++ [(x, v)]) := by
+  iintro ⟨#Hb, #Hx, #Hv⟩
+  unfold bindings
+  rw [List.zipIdx_append]
+  iapply (sepL_append _ _ _).2
+  iframe Hb
+  simp only [List.zipIdx_singleton, Nat.zero_add, sepL_cons, sepL_nil]
+  iframe Hx Hv
+
+end Bindings
+
 section Sinks
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
