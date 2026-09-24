@@ -126,8 +126,10 @@ def validate(arm: Arm, code: dict[int, tuple[int, str, str]]) -> None:
     runs = [s for s in arm.steps if s.op == "run"]
     if not runs or int(runs[0].args[0], 0) != ENTRY[arm.fn]:
         err("the first step must be a run from the function entry")
-    if arm.steps[-1].op != "run" or arm.steps[-1].args[1] != "ret":
-        err("the last step must be a run ending in ret")
+    # (lane E3) an error row may instead end in `abort <Spec> <jalPC>`: a call
+    # that never returns (`runtime_error`), whose abort ends the arm
+    if not (arm.steps[-1].op == "run" and arm.steps[-1].args[1] == "ret") and arm.steps[-1].op != "abort":
+        err("the last step must be a run ending in ret, or an abort call")
     names = {c.var for c in arm.children}
     for s in arm.steps:
         if s.op == "run":
@@ -145,7 +147,7 @@ def validate(arm: Arm, code: dict[int, tuple[int, str, str]]) -> None:
             want = EVAL_ENTRY if kind == "E" else EXEC_ENTRY
             if tgt != want:
                 err(f"child call at {pc:#x} is not `jal {want:#x}`")
-        elif s.op == "helper":
+        elif s.op in ("helper", "abort"):
             pc = int(s.args[1], 0)
             if pc not in code or jal_target(code[pc][0], pc) is None:
                 err(f"helper call at {pc:#x} is not a linking jal")

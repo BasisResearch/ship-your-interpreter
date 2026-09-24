@@ -40,6 +40,10 @@ import VsaIris.Interp.Case.AssignT
 import VsaIris.Interp.Case.AssignP
 import VsaIris.Interp.Case.FnLitT
 import VsaIris.Interp.Case.FnLitP
+import VsaIris.Interp.Case.LogicalAndFalseP
+import VsaIris.Interp.Case.LogicalOrTrueP
+import VsaIris.Interp.Case.UnaryNotP
+import VsaIris.Interp.Case.UnaryNegTypeP
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -200,3 +204,15 @@ import VsaIris.Interp.Case.FnLitP
 #print axioms VsaIris.Interp.ev_oom
 #print axioms VsaIris.Interp.ev_rtErr
 #print axioms VsaIris.Interp.ms_callEnv3
+-- lane E3: logical and unary arms (generated from scripts/iris_arms/arms.d/e3-logical.tsv)
+#print axioms VsaIris.Interp.caseT_LogicalAndTrue
+#print axioms VsaIris.Interp.caseT_LogicalAndFalse
+#print axioms VsaIris.Interp.caseT_LogicalOrFalse
+#print axioms VsaIris.Interp.caseT_LogicalOrTrue
+#print axioms VsaIris.Interp.caseP_LogicalAnd
+#print axioms VsaIris.Interp.caseP_LogicalOr
+#print axioms VsaIris.Interp.caseT_UnaryNot
+#print axioms VsaIris.Interp.caseP_UnaryNot
+#print axioms VsaIris.Interp.caseT_UnaryNeg
+#print axioms VsaIris.Interp.caseP_UnaryNeg
+#print axioms VsaIris.Interp.caseP_UnaryNegType
