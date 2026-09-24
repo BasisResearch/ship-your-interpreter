@@ -92,6 +92,22 @@ structure EvalRegs (rv : Nat → BitVec 64) (sret inp aX aE s : BitVec 64) : Pro
   a3 : rv 13 = aE
   sp : rv 2 = s
 
+/-- `exec_stmt`'s argument registers (`a0 = in`, `a1 = s`, `a2 = env`,
+`a3 = ret`; INTERP_DESIGN.md §4). -/
+structure ExecRegs (rv : Nat → BitVec 64) (inp aS aE aRet s : BitVec 64) : Prop where
+  a0 : rv 10 = inp
+  a1 : rv 11 = aS
+  a2 : rv 12 = aE
+  a3 : rv 13 = aRet
+  sp : rv 2 = s
+
+/-- The binary's `ExecStatus` (`Vsa.Sim.StatusCode`). -/
+def statusCode : Status → BitVec 64
+  | .normal => 0#64
+  | .brk => 1#64
+  | .cont => 2#64
+  | .ret _ => 3#64
+
 section Specs
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
@@ -110,9 +126,34 @@ theorem astEG_astE (a : Nat) (e : Expr) : astEG (GF := GF) a e ⊢ astE a e := b
   iframe H
   ipureintro; exact h
 
+/-- Persistent statement ownership with its read set's address facts. -/
+def astSG (a : Nat) (s : Stmt) : IProp GF :=
+  iprop(∃ (P : Nat → Prop) (m : Mem), ⌜StmtReprWithin m P a s ∧ ∀ k, P k → ReadOK k⌝ ∗ roOn P m)
+
+instance (a : Nat) (s : Stmt) : Persistent (astSG (GF := GF) a s) := by
+  unfold astSG; infer_instance
+
+theorem astSG_astS (a : Nat) (s : Stmt) : astSG (GF := GF) a s ⊢ astS a s := by
+  unfold astSG astS
+  iintro ⟨%P, %m, %⟨h, _⟩, H⟩
+  iexists P, m
+  iframe H
+  ipureintro; exact h
+
+/-- The `ret` slot: the returned value when the status is `.ret v`, any
+contents otherwise. -/
+def statusRet (N : NativeAddrs) (aRet : Nat) : Status → IProp GF
+  | .ret v => valAt N aRet v
+  | _ => slot24 aRet
+
+omit I in
+theorem statusRet_normal [InterpGS GF] (N : NativeAddrs) (a : Nat) :
+    statusRet (GF := GF) N a .normal = slot24 a := rfl
+
 variable (M : MachineModel) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
 
 def evalEntryPC : BitVec 64 := 0x80003164#64
+def execEntryPC : BitVec 64 := 0x80003fe0#64
 
 /-- `eval_expr`'s entry resources: the registers (`sret`, `in`, the node, the
 frame pointer, `sp`), the code, the AST, the frame binding, the stack below
@@ -159,6 +200,52 @@ def evalSpecP_body (Core : IProp GF) (st : St) (d env : Nat) (e : Expr) : IProp 
 def evalSpecsP (Core : IProp GF) : IProp GF :=
   iprop(□ ▷ ∀ st d env e, evalSpecP_body M N L Room inp Core st d env e)
 
+instance (Core : IProp GF) : Persistent (evalSpecsP (GF := GF) M N L Room inp Core) := by
+  unfold evalSpecsP; infer_instance
+
+/-- `exec_stmt`'s entry resources (the statement form of `evalPre`). -/
+def execPre (ρ : Regime) (st : St) (d env : Nat) (sm : Stmt) (aS aE aRet s : BitVec 64)
+    (rv : Nat → BitVec 64) : IProp GF :=
+  iprop(regFile rv ∗ ⌜ExecRegs rv (BitVec.ofNat 64 inp) aS aE aRet s⌝ ∗ codeRes ∗
+    □ astSG aS.toNat sm ∗ □ frameAt env aE.toNat ∗
+    stackScratch s (execNeed sm d) ∗ ⌜StackGeom s (execNeed sm d)⌝ ∗
+    slot24 aRet.toNat ∗ ⌜SlotGeom aRet⌝ ∗ ⌜sm.bodiesBound perCallBudget = true⌝ ∗
+    world N L Room inp ρ st d)
+
+/-- `exec_stmt`'s exit resources: the status in `a0`, the `ret` slot holding
+the returned value exactly when the status is `.ret v`. -/
+def execPost (ρ : Regime) (st' : St) (d : Nat) (sm : Stmt) (status : Status)
+    (aRet s : BitVec 64) (rv : Nat → BitVec 64) : IProp GF :=
+  iprop(∃ rv', regFile rv' ∗ ⌜KeepRegs calleeSaved rv rv' ∧ rv' 10 = statusCode status⌝ ∗
+    stackScratch s (execNeed sm d) ∗ statusRet N aRet.toNat status ∗ world N L Room inp ρ st' d)
+
+/-- **`exec_stmt`, total, derivation-indexed** (INTERP_DESIGN.md §4.1). -/
+def execSpecT_body (st : St) (d env : Nat) (sm : Stmt) (st' : St) (status : Status) (n : Nat)
+    (_D : ExecSCost st d env sm st' status n) : IProp GF :=
+  iprop(∀ (k : Nat) (aS aE aRet s : BitVec 64) (rv : Nat → BitVec 64),
+    fnSpecW (twpW M) execEntryPC
+      (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗
+        execPre N L Room inp (.counted (k + n)) st d env sm aS aE aRet s rv))
+      (fun _ => execPost N L Room inp (.counted k) st' d sm status aRet s rv))
+
+/-- **`exec_stmt`, partial, outcome-quantified** (INTERP_DESIGN.md §4.2); the
+abort hands back the stack and the `ret` slot (as `evalSpecP_body`). -/
+def execSpecP_body (Core : IProp GF) (st : St) (d env : Nat) (sm : Stmt) : IProp GF :=
+  iprop(∀ (aS aE aRet s : BitVec 64) (rv : Nat → BitVec 64),
+    fnSpecAbort (wpW M) execEntryPC
+      (fun r => iprop(⌜r.toNat % 4 = 0⌝ ∗
+        execPre N L Room inp .uncounted st d env sm aS aE aRet s rv))
+      (fun _ => iprop(∃ st' status, ⌜ExecS st d env sm st' status⌝ ∗
+        execPost N L Room inp .uncounted st' d sm status aRet s rv))
+      iprop(abortAt Core s (execNeed sm d) ∗ slot24 aRet.toNat))
+
+/-- The Löb hypothesis for `exec_stmt` calls. -/
+def execSpecsP (Core : IProp GF) : IProp GF :=
+  iprop(□ ▷ ∀ st d env sm, execSpecP_body M N L Room inp Core st d env sm)
+
+instance (Core : IProp GF) : Persistent (execSpecsP (GF := GF) M N L Room inp Core) := by
+  unfold execSpecsP; infer_instance
+
 /-- **A runtime helper that always returns**, for either WP: entered with the
 body's registers at `rv` (argument facts `pins`) and `Pre`, it returns some
 `rv'` that changes only the registers `clob`, and `Post rv'`. The return
@@ -176,6 +263,12 @@ slot at `a0` holds the integer `a1`; clobbers `a5`. Stub statement for H2. -/
 def valueIntSpec (Wp : MachWP (GF := GF) M) (p n : BitVec 64) : IProp GF :=
   helperSpec M Wp 0x8000280c#64 [15] (fun rv => rv 10 = p ∧ rv 11 = n)
     iprop(slot24 p.toNat ∗ ⌜SlotGeom p⌝) (fun _ => valAt N p.toNat (.int n.toInt))
+
+/-- `value_null` (`0x800027ec`: `sw zero,0(a0); sd zero,8(a0); ret`): the
+slot at `a0` holds `null`; clobbers nothing. Stub statement for H2. -/
+def valueNullSpec (Wp : MachWP (GF := GF) M) (p : BitVec 64) : IProp GF :=
+  helperSpec M Wp 0x800027ec#64 [] (fun rv => rv 10 = p)
+    iprop(slot24 p.toNat ∗ ⌜SlotGeom p⌝) (fun _ => valAt N p.toNat .null)
 
 end Specs
 

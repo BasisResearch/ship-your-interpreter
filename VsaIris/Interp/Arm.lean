@@ -364,6 +364,15 @@ theorem swp_closeM (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     SWP live text iRegs S (RunK Wp Φ F S) pc R Mt :=
   swp_closeF Wp (h Mt rfl)
 
+/-- `swp_closeF` with the end registers and memory named (a loop's next
+iteration is stated over them). -/
+theorem swp_closeRM (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {F : IProp GF} {text : List (Nat × BitVec 8)} {S : Nat → Prop} {pc : BitVec 64}
+    {R : Nat → BitVec 64} {Mt : Mem}
+    (h : ∀ R' Mt', R' = R → Mt' = Mt → F ∗ ms pc R' S Mt' ⊢ Wp.W Φ) :
+    SWP live text iRegs S (RunK Wp Φ F S) pc R Mt :=
+  swp_closeF Wp (h R Mt rfl rfl)
+
 end Res
 
 /-! ## Entry, exit, the data view -/
@@ -494,6 +503,10 @@ theorem binNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {op : BinO
         · obtain ⟨j, rfl⟩ : ∃ j, a = aX.toNat + 24 + j := ⟨a - (aX.toNat + 24), by omega⟩
           exact ⟨cr j (by omega), isSome_of_readLE hr (by omega)⟩
 
+/-- A value's kind tag, the low word of its first slot word (`ValueKind`). -/
+def valTag : Value → Nat
+  | .null => 0 | .bool _ => 1 | .int _ => 2 | .str _ => 3 | .closure _ => 4 | .native _ => 5
+
 section AstRes
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF]
@@ -515,6 +528,15 @@ slot (`Out`: `slot24` before the result is written, `valAt` after), the world
 def evalArmF [InterpGS GF] (P : Nat → Prop) (m : Mem) (env : Nat) (aE s' : BitVec 64) (n' : Nat)
     (Out Wd K : IProp GF) : IProp GF :=
   iprop(codeRes ∗ roOn P m ∗ frameAt env aE.toNat ∗ stackScratch s' n' ∗ Out ∗ Wd ∗ K)
+
+/-- A represented value's first word carries its kind tag. -/
+theorem valOf_tag [InterpGS GF] (N : NativeAddrs) (v : Value) (w0 w1 w2 : BitVec 64) :
+    valOf (GF := GF) N v w0 w1 w2 ⊢ ⌜w0.toNat % 2 ^ 32 = valTag v⌝ := by
+  cases v <;> unfold valOf <;> simp only [valTag]
+  all_goals first
+    | (iintro %h; ipureintro; exact h)
+    | (iintro %h; ipureintro; exact h.1)
+    | (iintro ⟨%h, -⟩; ipureintro; exact h.1)
 
 end AstRes
 
@@ -563,6 +585,14 @@ macro_rules
 difference. -/
 theorem toInt_sub_wrap (x y : BitVec 64) : (x - y).toInt = wrap64 (x.toInt - y.toInt) := by
   unfold wrap64; rw [BitVec.toInt_sub, BitVec.toInt_ofInt]
+
+/-- Split a `KeepRegs` goal over a literal register list into one goal per
+register. -/
+macro "keep_split" : tactic => `(tactic| (intro x hx; simp only [calleeSaved, List.mem_cons,
+  List.not_mem_nil, _root_.or_false] at hx; repeat' (first | subst hx | rcases hx with hx | hx)))
+
+theorem KeepRegs.sub {ks ks' : List Nat} {R R' : Nat → BitVec 64} (h : KeepRegs ks R R')
+    (hs : ∀ x ∈ ks', x ∈ ks) : KeepRegs ks' R R' := fun x hx => h x (hs x hx)
 
 /-! ## `eval_expr`'s frame -/
 
@@ -761,6 +791,122 @@ theorem ms_callEvalT {Φ : Nat × String → IProp GF} {i : Nat} {code : List (B
   simp only [upd_same]
   iframe Hpc Hra Hregs HS
 
+/-- **A child call into `exec_stmt`, total mode.** The arm passes its own
+`ret` slot through (the block arm's `mv a3,s2`), so the frame bytes stay with
+the arm untouched; it gets back the callee-saved registers, the status in
+`a0`, and the slot as `statusRet`. -/
+theorem ms_callExecT {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
+    (hexec : JalExec (vsaModel live) i code execEntryPC)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    {st : St} {d env : Nat} {sm : Stmt} {st' : St} {status : Status} {n : Nat}
+    (D : ExecSCost st d env sm st' status n)
+    {k : Nat} {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {aS aE aRet s : BitVec 64} {m : Nat}
+    (hsg : StackGeom s (execNeed sm d)) (hm : execNeed sm d ≤ m) (hms : m ≤ s.toNat)
+    (hslg : SlotGeom aRet) (hbb : sm.bodiesBound perCallBudget = true) :
+    ⌜ExecRegs R (BitVec.ofNat 64 inp) aS aE aRet s⌝ ∗
+      execSpecT_body (vsaModel live) N L Room inp st d env sm st' status n D ∗ codeRes ∗
+      □ astSG aS.toNat sm ∗ □ frameAt env aE.toNat ∗
+      ms (BitVec.ofNat 64 i) R S Mt ∗ stackScratch s m ∗ slot24 aRet.toNat ∗
+      world N L Room inp (.counted (k + n)) st d ∗
+      (∀ R' : Nat → BitVec 64, ⌜KeepRegs calleeSaved R R' ∧ R' 10 = statusCode status⌝ -∗
+        ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt -∗
+        stackScratch s m -∗ statusRet N aRet.toNat status -∗
+        world N L Room inp (.counted k) st' d -∗ (twpW (vsaModel live)).W Φ)
+    ⊢ (twpW (vsaModel live)).W Φ := by
+  unfold ms execSpecT_body
+  iintro ⟨%hregs, Hspec, #Hcode, #Hast, #Hfr, ⟨Hpc, Hra, Hregs, HS⟩, Hst, Hslot, Hw, Hk⟩
+  ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hms hm $$ Hst
+  ihave #Hi := instrAt_of_codeRes hcode $$ Hcode
+  ihave Hspec := Hspec $$ %k %aS %aE %aRet %s %R
+  iapply wp_callW (twpW (vsaModel live)) hexec
+  iframe Hi Hspec Hpc Hra
+  isplitl [Hregs Hst Hslot Hw]
+  · unfold execPre
+    iframe Hregs Hst Hslot Hw Hcode Hast Hfr
+    ipureintro
+    exact ⟨hal, hregs, hsg, hslg, hbb⟩
+  iintro Hpc Hra Hpost
+  unfold execPost
+  icases Hpost with ⟨%R', Hregs, %hkeep, Hst, Hret, Hw⟩
+  ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
+  · iframe Hslack Hst
+  iapply Hk $$ %R' %hkeep [Hpc Hra Hregs HS] Hst Hret Hw
+  rw [regFile_upd_ra]
+  simp only [upd_same]
+  iframe Hpc Hra Hregs HS
+
+/-- The Löb hypothesis at one statement. -/
+theorem execSpecsP_at (Core : IProp GF) (st : St) (d env : Nat) (sm : Stmt) :
+    execSpecsP (vsaModel live) N L Room inp Core ⊢
+      ▷ execSpecP_body (vsaModel live) N L Room inp Core st d env sm := by
+  unfold execSpecsP
+  iintro #H
+  inext
+  iapply H
+
+/-- **A child call into `exec_stmt`, partial mode**, through the Löb
+hypothesis. The return branch is `ms_callExecT`'s, with the child's
+derivation. On abort, the arm hands its abort continuation the stack below
+its `sp`, the `ret` slot (the child's, handed back) and its frame bytes. -/
+theorem ms_callExecP {Φ : Nat × String → IProp GF} {i : Nat} {code : List (BitVec 8)}
+    (hexec : JalExec (vsaModel live) i code execEntryPC)
+    (hcode : ∀ p ∈ codeFoot i code, (p.1, p.2.2) ∈ interpText)
+    (hal : (BitVec.ofNat 64 (i + 4)).toNat % 4 = 0)
+    {Core : IProp GF} {st : St} {d env : Nat} {sm : Stmt}
+    {R : Nat → BitVec 64} {S : Nat → Prop} {Mt : Mem} {aS aE aRet s : BitVec 64} {m : Nat}
+    {Kret : IProp GF}
+    (hsg : StackGeom s (execNeed sm d)) (hm : execNeed sm d ≤ m) (hms : m ≤ s.toNat)
+    (hslg : SlotGeom aRet) (hbb : sm.bodiesBound perCallBudget = true) :
+    ⌜ExecRegs R (BitVec.ofNat 64 inp) aS aE aRet s⌝ ∗
+      ▷ execSpecP_body (vsaModel live) N L Room inp Core st d env sm ∗ codeRes ∗
+      □ astSG aS.toNat sm ∗ □ frameAt env aE.toNat ∗
+      ms (BitVec.ofNat 64 i) R S Mt ∗ stackScratch s m ∗ slot24 aRet.toNat ∗
+      world N L Room inp .uncounted st d ∗
+      (Kret ∧ (iprop(abortAt Core s m ∗ slot24 aRet.toNat ∗ ownSet S byteAny) -∗
+        (wpW (vsaModel live)).W Φ)) ∗
+      (∀ (R' : Nat → BitVec 64) (st' : St) (status : Status), ⌜ExecS st d env sm st' status⌝ -∗
+        ⌜KeepRegs calleeSaved R R' ∧ R' 10 = statusCode status⌝ -∗
+        ms (BitVec.ofNat 64 (i + 4)) (upd R' 1 (BitVec.ofNat 64 (i + 4))) S Mt -∗
+        stackScratch s m -∗ statusRet N aRet.toNat status -∗
+        world N L Room inp .uncounted st' d -∗
+        (Kret ∧ (iprop(abortAt Core s m ∗ slot24 aRet.toNat ∗ ownSet S byteAny) -∗
+          (wpW (vsaModel live)).W Φ)) -∗
+        (wpW (vsaModel live)).W Φ)
+    ⊢ (wpW (vsaModel live)).W Φ := by
+  unfold ms execSpecP_body
+  iintro ⟨%hregs, Hspec, #Hcode, #Hast, #Hfr, ⟨Hpc, Hra, Hregs, HS⟩, Hst, Hslot, Hw, HK, Hk⟩
+  ihave ⟨Hslack, Hst⟩ := stackScratch_narrow hms hm $$ Hst
+  ihave #Hi := instrAt_of_codeRes hcode $$ Hcode
+  ihave Hspec := Hspec $$ %aS %aE %aRet %s %R
+  simp only [wpW_W]
+  iapply wp_callAbort_later hexec
+  iframe Hi Hspec Hpc Hra
+  isplitl [Hregs Hst Hslot Hw]
+  · unfold execPre
+    iframe Hregs Hst Hslot Hw Hcode Hast Hfr
+    ipureintro
+    exact ⟨hal, hregs, hsg, hslg, hbb⟩
+  isplit
+  · iintro Hpc Hra ⟨%st', %status, %hE, Hpost⟩
+    unfold execPost
+    icases Hpost with ⟨%R', Hregs, %hkeep, Hst, Hret, Hw⟩
+    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
+    · iframe Hslack Hst
+    iapply Hk $$ %R' %st' %status %hE %hkeep [Hpc Hra Hregs HS] Hst Hret Hw HK
+    rw [regFile_upd_ra]
+    simp only [upd_same]
+    iframe Hpc Hra Hregs HS
+  · iintro ⟨HA, Hslot⟩
+    unfold abortAt
+    icases HA with ⟨HC, Hst⟩
+    ihave Hst := stackScratch_widen hms hm $$ [Hslack Hst]
+    · iframe Hslack Hst
+    ihave HS := ownSet_forget _ _ $$ HS
+    ihave HK := and_elim_r $$ HK
+    iapply HK
+    iframe HC Hst Hslot HS
+
 /-- **A helper call**, for either WP: at the `jal` at `i` into a helper meeting
 `helperSpec`, the arm hands over the body's registers (the helper's argument
 facts `pins` on them) and `Pre`; it gets back the registers the helper keeps
@@ -793,6 +939,15 @@ theorem ms_callHelper (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   rw [regFile_upd_ra]
   simp only [upd_same]
   iframe Hpc Hra Hregs HS
+
+/-- The Löb hypothesis at one child. -/
+theorem evalSpecsP_at (Core : IProp GF) (st : St) (d env : Nat) (e : Expr) :
+    evalSpecsP (vsaModel live) N L Room inp Core ⊢
+      ▷ evalSpecP_body (vsaModel live) N L Room inp Core st d env e := by
+  unfold evalSpecsP
+  iintro #H
+  inext
+  iapply H
 
 /-- The frame bytes whole again, the slot at any contents. -/
 theorem ownSet_unslot {S : Nat → Prop} {Mt : Mem} {a : Nat} (h : ∀ b, InExt (a, 24) b → S b) :

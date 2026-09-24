@@ -39,7 +39,7 @@ macro_rules
     have hsf : (s + 18446744073709551568#64).toNat = s.toNat - 48 := by
       rw [BitVec.toNat_add]; simp; omega
     unfold nativePrintlnPC
-    ix_run hlive using [h2, hsf] at 0x80002f90
+    ix_run1 hlive using [h2, hsf] at 0x80002f90
 
 /- After `native_print`: `stdout`, to `jal fputc`. -/
 #ix_seg npl_mid {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -48,7 +48,7 @@ macro_rules
     (hio1 : ldv .ld M 0x8001b970 = 0x8001b538#64) (hio2 : ldv .ld M 0x8001b548 = 0x8001bb20#64) :
     IW live ∅ [] (nplS s) Q 0x80002f94#64 R M
   by
-    ix_run hlive using [hio1, hio2] at 0x80002fa0
+    ix_run1 hlive using [hio1, hio2] at 0x80002fa0
 
 /- After `fputc`: to `jal value_null`. -/
 #ix_seg npl_null {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -56,7 +56,7 @@ macro_rules
     {s : BitVec 64} :
     IW live ∅ [] (nplF s) Q 0x80002fa4#64 R M
   by
-    ix_run hlive at 0x80002fa8
+    ix_run1 hlive at 0x80002fa8
 
 /- The epilogue, after `value_null`. -/
 #ix_seg npl_epi {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -69,7 +69,7 @@ macro_rules
     (hs0 : ldv .ld M (s + 18446744073709551568#64 + 32#64).toNat = v8) :
     IW live ∅ [] (nplF s) Q 0x80002fac#64 R M
   by
-    ix_run hlive using [h2, hra, hs0, hal]
+    ix_run1 hlive using [h2, hra, hs0, hal]
 
 /-! ## The Iris glue -/
 
@@ -189,7 +189,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   · rw [hro]; unfold FnplR; iframe Hcode Himg Hio Hcon Hsl Hnull Hvs Hst Hk Hms
   intro F'
   refine npl_mid c.hlive hio1 hio2 ?_
-  apply swp_closeF
+  intros; apply swp_closeF
   dsimp only [F']
   iintro ⟨⟨Hio, #Hcode, #Himg, Hcon, Hrest⟩, Hms⟩
   ihave ⟨Hms, Hstd⟩ := ms_ioClose hok hd $$ [Hms Hio]
@@ -228,7 +228,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   · rw [hro]; unfold FnplR; iframe Hcode Hstd Hcon Hsl Hnull Hvs Hst Hk Hms
   intro F'
   refine npl_null c.hlive ?_
-  apply swp_closeF
+  intros; apply swp_closeF
   dsimp only [F']
   unfold FnplR
   iintro ⟨⟨#Hcode, Hstd, Hcon, Hsl, Hnull, Hvs, Hst, Hk⟩, Hms⟩
@@ -273,7 +273,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     rw [sw 32 (by omega) (by omega)]; exact hs0
   refine npl_epi c.hlive (by ix_reg; rw [k5 2 (by decide)]; ix_reg; rw [k4 2 (by decide) (by decide)]; exact hR2)
     (by omega) hs2 hs3 c.hal hra1 hs01 ?_
-  apply swp_closeF
+  intros; apply swp_closeF
   dsimp only [F']
   iintro ⟨⟨-, Hnull, Hnull2, Hvs, Hstd, Hcon, Hst, Hk⟩, Hms⟩
   ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
@@ -362,7 +362,7 @@ theorem nativePrintln_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeL
   · rw [hro]; iframe Hcode Hd Himg Hsl Hslot Hvs Hstd Hcon Hst Hk Hms
   intro F'
   refine npl_pro hlive h2 (by omega) (by omega) hs4 ?_
-  apply swp_closeF
+  intros; apply swp_closeF
   dsimp only [F']
   iintro ⟨⟨#Hcode, #Hd, #Himg, Hsl, Hslot, Hvs, Hstd, Hcon, Hst, Hk⟩, Hms⟩
   -- `native_print(sp, …)`

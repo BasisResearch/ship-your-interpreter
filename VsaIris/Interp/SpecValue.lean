@@ -137,10 +137,7 @@ instance (Wp : MachWP (GF := GF) M) : Persistent (strcmpSpecV M Wp) := by
 
 /-! ## The constructors -/
 
-/-- `value_null(sret)` (`sw zero,0(a0); sd zero,8(a0); ret`). -/
-def valueNullSpec (Wp : MachWP (GF := GF) M) (p : BitVec 64) : IProp GF :=
-  helperSpec M Wp valueNullPC [] (fun rv => rv 10 = p) iprop(slot24 p.toNat ∗ ⌜SlotGeom p⌝)
-    (fun _ => valAt N p.toNat .null)
+-- `value_null(sret)`: `valueNullSpec` (`SpecEval.lean`, lane G's statement).
 
 /-- `value_bool(sret, b)`: `b != 0`. -/
 def valueBoolSpec (Wp : MachWP (GF := GF) M) (p b : BitVec 64) : IProp GF :=

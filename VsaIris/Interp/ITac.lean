@@ -120,11 +120,19 @@ def ixStep (norm : Syntax) (h : Syntax) (g : MVarId) :
     if let some r ← ixApply norm h g nm false then return some r
   return none
 
-/-- `ix_run h`, `ix_run [n] h`, `ix_run h using [e,…]`, `ix_run h at pc…`. -/
+/-- `ix_run h`, `ix_run [n] h`, `ix_run h using [e,…]`, `ix_run h at pc…`.
+A branch that `sx_side` decides is pruned; an undecided branch is explored on
+both sides (each side's goal carries its condition `hc`). -/
 syntax "ix_run " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
 
-elab_rules : tactic
-  | `(tactic| ix_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => do
+/-- `ix_run1`: `ix_run` that stops at a branch it cannot decide, leaving both
+sides as goals `cond → …` for the script to resolve (H2's proofs). -/
+syntax "ix_run1 " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
+
+/-- The driver behind `ix_run` (`explore`) and `ix_run1`. -/
+def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
+    (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num))) :
+    TacticM Unit := do
     let budget := (n.map (·.getNat)).getD 400
     let stopPCs : List Nat := match stops with
       | some ss => ss.toList.map (·.getNat)
@@ -134,20 +142,25 @@ elab_rules : tactic
       | none => #[]
     let norm ← ixNorm facts
     let mut pending : List MVarId := []
-    let mut cur ← getMainGoal
+    let mut stuck : List MVarId := []
+    let first ← getMainGoal
     -- a start state from a call's return (`BitVec.ofNat 64 (i + 4)`) gets its literal PC
-    cur ← do
+    let first ← do
       let saved ← saveState
       try
-        match ← evalTacticAt (← `(tactic| (try simp only [Nat.reduceAdd]))) cur with
+        match ← evalTacticAt (← `(tactic| (try simp only [Nat.reduceAdd]))) first with
         | [c'] => pure c'
-        | _ => saved.restore; pure cur
-      catch _ => saved.restore; pure cur
-    let mut stuck : List MVarId := []
-    for _ in [0:budget] do
+        | _ => saved.restore; pure first
+      catch _ => saved.restore; pure first
+    -- a worklist of paths, each with its own step budget
+    let mut work : List (MVarId × Nat) := [(first, budget)]
+    while !work.isEmpty do
+      let (cur, fuel) := work.head!
+      work := work.tail!
+      if fuel == 0 then stuck := stuck ++ [cur]; continue
       if let some pc ← cur.withContext (do swpPC? (← cur.getType)) then
-        if stopPCs.contains pc then stuck := [cur]; break
-      let some (conts, pend) ← ixStep norm h cur | stuck := [cur]; break
+        if stopPCs.contains pc then stuck := stuck ++ [cur]; continue
+      let some (conts, pend) ← ixStep norm h cur | stuck := stuck ++ [cur]; continue
       pending := pending ++ pend
       match conts with
       | [c] =>
@@ -167,21 +180,29 @@ elab_rules : tactic
             | _ => saved.restore; pure c
           catch _ => saved.restore; pure c
         if (← c.withContext (do swpPC? (← c.getType))).isSome then
-          cur := c
+          work := (c, fuel - 1) :: work
         else
-          stuck := [c]; break
+          stuck := stuck ++ [c]
       | [t, f] =>
         if ← ixTryPrune norm t then
-          let [f'] ← evalTacticAt (← `(tactic| intro hc)) f | stuck := [f]; break
-          cur := f'
+          let [f'] ← evalTacticAt (← `(tactic| intro hc)) f | stuck := stuck ++ [f]; continue
+          work := (f', fuel - 1) :: work
         else if ← ixTryPrune norm f then
-          let [t'] ← evalTacticAt (← `(tactic| intro hc)) t | stuck := [t]; break
-          cur := t'
+          let [t'] ← evalTacticAt (← `(tactic| intro hc)) t | stuck := stuck ++ [t]; continue
+          work := (t', fuel - 1) :: work
+        else if !explore then
+          stuck := stuck ++ [t, f]
         else
-          stuck := [t, f]; break
-      | cs => stuck := cs; break
-    if stuck.isEmpty then stuck := [cur]
+          -- undecided: explore both sides, taken side first
+          let [t'] ← evalTacticAt (← `(tactic| intro hc)) t | stuck := stuck ++ [t, f]; continue
+          let [f'] ← evalTacticAt (← `(tactic| intro hc)) f | stuck := stuck ++ [t', f]; continue
+          work := (t', fuel - 1) :: (f', fuel - 1) :: work
+      | cs => stuck := stuck ++ cs
     setGoals (pending ++ stuck)
+
+elab_rules : tactic
+  | `(tactic| ix_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => ixRunCore true n h fs stops
+  | `(tactic| ix_run1 $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => ixRunCore false n h fs stops
 
 end VsaIris.Sym
 
@@ -204,7 +225,10 @@ leftover mentions (a symbolic run's havoc values). -/
 def ixAddPiece (declName : Name) (vars : Array Expr) (goal : Expr) (tac : Syntax)
     (allLocals : Bool) (hidden : Array Expr := #[]) : TermElabM Unit := do
   let g ← mkFreshExprMVar goal
-  let gs ← withDeclName declName <| Tactic.run g.mvarId! (Tactic.evalTactic tac)
+  -- the previous piece's leftovers are not this piece's to use (a `cases` would
+  -- otherwise revert them into the proof)
+  let g0 ← g.mvarId!.tryClearMany (hidden.map (·.fvarId!))
+  let gs ← withDeclName declName <| Tactic.run g0 (Tactic.evalTactic tac)
   let gs ← gs.filterM fun g => return !(← g.isAssigned)
   let finish (hks : Array Expr) : TermElabM Unit := do
     let val := zeroLevels (← instantiateMVars (← mkLambdaFVars (vars ++ hks) (← instantiateMVars g)))
@@ -253,7 +277,9 @@ def pieceVars (xs : Array Expr) : MetaM Nat := do
 /-- `#ix_seg name binders : goal by tac` runs `tac` (an `ix_run`) on `goal`
 (an `IW … Q pc R Mt` start state) and defines the theorem
 `name : ∀ binders, <end goal> → goal`, whose end goal is the symbolic state
-the run reached (quantified over the values the run havoc-loaded). -/
+the run reached, quantified over every local the run introduced (havoc-loaded
+values, the conditions of the branches it took). A run that stops at a branch
+it cannot decide leaves both sides: one hypothesis each. -/
 syntax (name := ixSeg) "#ix_seg " ident bracketedBinder* " : " term " by " tacticSeq : command
 
 @[command_elab ixSeg] def elabIxSeg : CommandElab := fun stx => do
@@ -262,17 +288,19 @@ syntax (name := ixSeg) "#ix_seg " ident bracketedBinder* " : " term " by " tacti
     Term.elabBinders stx[2].getArgs fun vars => do
       let T ← Term.elabType stx[4]
       Term.synthesizeSyntheticMVarsNoPostponing
-      ixAddPiece declName vars (← instantiateMVars T) stx[6] false
+      ixAddPiece declName vars (← instantiateMVars T) stx[6] true
 
 /-- `#ix_piece name binders : goal by tac` is `#ix_seg` for any proof step:
 the leftover goal keeps EVERY local the script introduced.
-`#ix_piece name from prev by tac` continues from the leftover of the piece
-`prev`: its binders are `prev`'s, its goal `prev`'s leftover. A long proof is
+`#ix_piece name from prev by tac` continues from the (first) leftover of the
+piece `prev`: its binders are `prev`'s, its goal `prev`'s leftover;
+`from prev at k` continues its `k`-th leftover (a branch `#ix_chain` exports:
+another row proves it this way). A long proof is
 a chain of pieces (`#ix_chain`), each its own declaration: its own
 elaboration budget, and nothing about the intermediate states written by
 hand. -/
 syntax (name := ixPiece) "#ix_piece " ident bracketedBinder* " : " term " by " tacticSeq : command
-syntax (name := ixPieceFrom) "#ix_piece " ident " from " ident " by " tacticSeq : command
+syntax (name := ixPieceFrom) "#ix_piece " ident " from " ident (" at " num)? " by " tacticSeq : command
 
 @[command_elab ixPiece] def elabIxPiece : CommandElab := fun stx => do
   let declName := (← getCurrNamespace) ++ stx[1].getId
@@ -285,14 +313,16 @@ syntax (name := ixPieceFrom) "#ix_piece " ident " from " ident " by " tacticSeq 
 @[command_elab ixPieceFrom] def elabIxPieceFrom : CommandElab := fun stx => do
   let declName := (← getCurrNamespace) ++ stx[1].getId
   let prev ← liftCoreM <| realizeGlobalConstNoOverload stx[3]
+  -- which leftover to continue: the first, or `at k` (an exported branch)
+  let k := if stx[4].isNone then 1 else stx[4][1].isNatLit?.getD 1
   liftTermElabM do
     let info ← getConstInfo prev
     forallTelescope info.type fun xs _ => do
       let nv ← pieceVars xs
-      let some hk := xs[nv]? | throwError "#ix_piece: {prev} has no leftover"
+      let some hk := xs[nv + k - 1]? | throwError "#ix_piece: {prev} has no leftover {k}"
       -- the first leftover's own locals become this piece's binders
       forallTelescope (← inferType hk) fun ys T => do
-        ixAddPiece declName (xs.extract 0 nv ++ ys) T stx[5] true (xs.extract nv xs.size)
+        ixAddPiece declName (xs.extract 0 nv ++ ys) T stx[6] true (xs.extract nv xs.size)
 
 /-- `#ix_chain name := [p₁, p₂, …]` proves `name` by chaining pieces, each
 continuing the previous one's FIRST leftover:

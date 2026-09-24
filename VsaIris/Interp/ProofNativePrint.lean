@@ -215,11 +215,11 @@ end Vals
       rw [BitVec.toInt_eq_toNat_cond]; simp; omega
     have h0I : (0#64 : BitVec 64).toInt = 0 := by decide
     unfold nativePrintPC
-    ix_run hlive using [h10, h12, h13, h2, hsf, hnI, h0I] at 0x80002f1c
+    ix_run1 hlive using [h10, h12, h13, h2, hsf, hnI, h0I] at 0x80002f1c
     all_goals first
       | (intro hc; exfalso
          simp only [upd_apply, Nat.reduceEqDiff, ite_false, h12, hnI, h0I] at hc; omega)
-      | (intro _; ix_run hlive using [h10, h12, h13, h2, hsf] at 0x80002f1c)
+      | (intro _; ix_run1 hlive using [h10, h12, h13, h2, hsf] at 0x80002f1c)
 
 /- The prologue, no arguments: to `jal value_null`. -/
 #ix_seg np_pro0 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -234,7 +234,7 @@ end Vals
     have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
       rw [BitVec.toNat_add]; simp; omega
     unfold nativePrintPC
-    ix_run hlive using [h10, h12, h13, h2, hsf] at 0x80002f64
+    ix_run1 hlive using [h10, h12, h13, h2, hsf] at 0x80002f64
 
 /- The loop body: copy argument `i`, `jal value_print`. -/
 #ix_seg np_body {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -254,7 +254,7 @@ end Vals
   by
     have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
       rw [BitVec.toNat_add]; simp; omega
-    ix_run hlive using [h8, h9, h18, h2, hsf, ea, hw0, hw1, hw2, hio1, hio2] at 0x80002f44
+    ix_run1 hlive using [h8, h9, h18, h2, hsf, ea, hw0, hw1, hw2, hio1, hio2] at 0x80002f44
 
 /- After `value_print`, more arguments: `jal fputc` with `' '`. -/
 #ix_seg np_more {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -266,10 +266,10 @@ end Vals
     (hio1 : ldv .ld M 0x8001b970 = 0x8001b538#64) (hio2 : ldv .ld M 0x8001b548 = 0x8001bb20#64) :
     IW live ∅ [] (npS s args n) Q 0x80002f48#64 R M
   by
-    ix_run hlive using [h8, h9, h18, h19, hio1, hio2] at 0x80002f18
+    ix_run1 hlive using [h8, h9, h18, h19, hio1, hio2] at 0x80002f18
     all_goals first
       | (intro hc; exfalso; apply hc; ix_reg; rw [h19, h9]; exact hne)
-      | (intro _; ix_run hlive using [h8, h9, h18, h19, hio1, hio2] at 0x80002f18)
+      | (intro _; ix_run1 hlive using [h8, h9, h18, h19, hio1, hio2] at 0x80002f18)
 
 /- After the last `value_print`: restore `s0`-`s3`, `jal value_null`. -/
 #ix_seg np_last {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -284,10 +284,10 @@ end Vals
     (hl19 : ldv .ld M (s + 18446744073709551536#64 + 40#64).toNat = v19) :
     IW live ∅ [] (npF s args n) Q 0x80002f48#64 R M
   by
-    ix_run hlive using [h9, h19, h2, hl8, hl9, hl18, hl19] at 0x80002f64
+    ix_run1 hlive using [h9, h19, h2, hl8, hl9, hl18, hl19] at 0x80002f64
     all_goals first
       | (intro hc; exfalso; apply hc; ix_reg; rw [h19, h9]; done)
-      | (intro _; ix_run hlive using [h9, h19, h2, hl8, hl9, hl18, hl19] at 0x80002f64)
+      | (intro _; ix_run1 hlive using [h9, h19, h2, hl8, hl9, hl18, hl19] at 0x80002f64)
 
 /- The epilogue, after `value_null`. -/
 #ix_seg np_epi {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -300,7 +300,7 @@ end Vals
     (hs4 : ldv .ld M (s + 18446744073709551536#64 + 32#64).toNat = v20) :
     IW live ∅ [] (npF s args n) Q 0x80002f68#64 R M
   by
-    ix_run hlive using [h2, hra, hs4, hal]
+    ix_run1 hlive using [h2, hra, hs4, hal]
 
 /-! ## What the loop prints -/
 
@@ -563,7 +563,7 @@ theorem np_tail (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   have hs1 := c.hs1; have hs2 := c.hs2; have hs3 := c.hs3
   unfold nativePrintNeed printNeed fprintfNeed at hs1
   refine np_epi c.hlive (by ix_reg; rw [hR' 2 (by decide), hR2]) (by omega) hs2 hs3 c.hal hra hs4 ?_
-  apply swp_closeF
+  intros; apply swp_closeF
   dsimp only [F']
   unfold FnpE
   iintro ⟨⟨#Hv, Hnull, Hstd, Hcon, Hst, Hk⟩, Hms⟩
@@ -667,7 +667,7 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
   intro F'
   refine np_body c.hlive f.h8 f.h9 f.h18 f.h2 (by omega) hs2 hs3 ha1 ha2 ha3 hi ea hw0 hw1 hw2 hio1
     hio2 ?_
-  apply swp_closeF
+  intros; apply swp_closeF
   dsimp only [F']
   unfold FnpA
   iintro ⟨⟨Hrest, Hcon, Hio⟩, Hms⟩
@@ -917,7 +917,7 @@ theorem np_B_more (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     iframe Hcode Hsl Hv Hd Himg Hst Hk Hcon Hio Hms
   intro F'
   refine np_more c.hlive f.h8 f.h9 f.h18 f.h19 hne hio1 hio2 ?_
-  apply swp_closeF
+  intros; apply swp_closeF
   dsimp only [F']
   unfold FnpB FnpA
   iintro ⟨⟨Hrest, Hcon, Hio⟩, Hms⟩
@@ -1001,7 +1001,7 @@ theorem np_B_last (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   intro F'
   refine np_last c.hlive (f.h9.trans (by rw [hi])) f.h19 f.h2 (by omega) hs2 hs3 f.ss0 f.ss1 f.ss2
     f.ss3 ?_
-  apply swp_closeF
+  intros; apply swp_closeF
   dsimp only [F']
   iintro ⟨⟨Hsl, #Hv, Hstd, Hcon, Hst, Hk, #Hcode⟩, Hms⟩
   iapply np_tail Wp c hvn hlen
@@ -1091,11 +1091,11 @@ theorem nativePrint_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLiv
     intro F'
     refine np_pro0 hlive h10 h12 h13 h2 (by omega) (by omega) hs4 h0 ?_ ?_
     rotate_left
-    · intro hc; exfalso; apply hc; simp [upd, h12, h0]
+    · intro _ _ hc; exfalso; apply hc; simp [upd, h12, h0]
     rw [show npF s args 0 = npF s args vs.length by rw [h0]]
-    intro _
-    ix_run hlive using [h10, h2] at 0x80002f64
-    apply swp_closeF
+    intros
+    ix_run1 hlive using [h10, h2] at 0x80002f64
+    intros; apply swp_closeF
     dsimp only [F']
     iintro ⟨⟨Hsl, #Hv, Hstd, Hcon, Hst, Hk, #Hcode⟩, Hms⟩
     iapply np_tail Wp c (valueNull_spec hlive Wp N sret) rfl (Margs := Margs)
@@ -1131,7 +1131,7 @@ theorem nativePrint_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeLiv
       iframe Hcode Hsl Hv Hd Himg Hstd Hcon Hst Hk Hpc Hra Hregs HM
     intro F'
     refine np_pro hlive h10 h12 h13 h2 (by omega) (by omega) hs4 (by omega) hn ?_
-    apply swp_closeF
+    intros; apply swp_closeF
     dsimp only [F']
     iintro ⟨⟨Hrest, Hstd, Hcon⟩, Hms⟩
     have hvp : ∀ v o', ⊢ valuePrintSpec (vsaModel live) N Wp (s - 80#64) (s - 80#64) v st o' :=

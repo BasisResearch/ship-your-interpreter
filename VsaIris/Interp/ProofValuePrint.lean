@@ -137,7 +137,7 @@ theorem vp_null (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   have h10 := c.h10; have h11 := c.h11; have h2 := c.h2; have hal := c.hal
   have hg1 := c.hg.al; have hg2 := c.hg.lo; have hg3 := c.hg.hi
   unfold VpGoal valuePrintPC
-  ix_run c.hlive using [h10, h11, h2, hk, hku]
+  ix_run1 c.hlive using [h10, h11, h2, hk, hku]
   refine vp_swp_close Wp (Xr := strAt 0x80019018 "null") (frag := "null")
     (H.fwrite live Wp 0x80019018#64 s _ "null" o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
     (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) (by helper_keep) c.hsg (by decide) outSpec_P
@@ -178,7 +178,7 @@ theorem vp_bool (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   unfold VpGoal valuePrintPC
   cases b
   · simp only [Bool.cond_false] at hb
-    ix_run c.hlive using [h10, h11, h2, hk, hku, hb]
+    ix_run1 c.hlive using [h10, h11, h2, hk, hku, hb]
     refine vp_swp_close Wp (Xr := strAt 0x80019010 "false") (frag := "false")
       (H.fputs live Wp 0x80019010#64 s _ "false" o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
       (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) (by helper_keep) c.hsg (by decide) outSpec_P
@@ -194,7 +194,7 @@ theorem vp_bool (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
       iintro ⟨-, -, -, #Hi⟩
       iapply strAt_rodata (by rw [str_false]; decide) (by unfold CStrImg; rw [str_false]; decide) $$ Hi
   · simp only [Bool.cond_true] at hb
-    ix_run c.hlive using [h10, h11, h2, hk, hku, hb]
+    ix_run1 c.hlive using [h10, h11, h2, hk, hku, hb]
     refine vp_swp_close Wp (Xr := strAt 0x80019008 "true") (frag := "true")
       (H.fputs live Wp 0x80019008#64 s _ "true" o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
       (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) (by helper_keep) c.hsg (by decide) outSpec_P
@@ -222,7 +222,7 @@ theorem vp_int (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
   have hw := (ldv_ld_imgW M (p + BitVec.ofNat 64 8).toNat).trans (c.word 8 (by omega))
   generalize imgW (imgM Ma) (p.toNat + 8) = w at hw hn
   unfold VpGoal valuePrintPC
-  ix_run c.hlive using [h10, h11, h2, hk, hku, hw]
+  ix_run1 c.hlive using [h10, h11, h2, hk, hku, hw]
   refine vp_swp_close Wp (Xr := fprintfOut 0x800192c0#64 w (intToString w.toInt))
     (frag := intToString w.toInt)
     (H.fprintf live Wp 0x800192c0#64 w s _ (intToString w.toInt) o c.hcl
@@ -252,7 +252,7 @@ theorem vp_str (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → 
   have hg1 := c.hg.al; have hg2 := c.hg.lo; have hg3 := c.hg.hi
   have hw := (ldv_ld_imgW M (p + BitVec.ofNat 64 8).toNat).trans (c.word 8 (by omega))
   unfold VpGoal valuePrintPC
-  ix_run c.hlive using [h10, h11, h2, hk, hku, hw]
+  ix_run1 c.hlive using [h10, h11, h2, hk, hku, hw]
   refine vp_swp_close Wp (Xr := strAt (imgW (imgM Ma) (p.toNat + 8)).toNat x) (frag := x)
     (H.fputs live Wp (imgW (imgM Ma) (p.toNat + 8)) s _ x o c.hcl
       (spIn_of_stackGeom c.hsg (by decide)))
@@ -279,7 +279,7 @@ theorem vp_native (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have hg1 := c.hg.al; have hg2 := c.hg.lo; have hg3 := c.hg.hi
   have hw := (ldv_ld_imgW M (p + BitVec.ofNat 64 8).toNat).trans (c.word 8 (by omega))
   unfold VpGoal valuePrintPC
-  ix_run c.hlive using [h10, h11, h2, hk, hku, hw]
+  ix_run1 c.hlive using [h10, h11, h2, hk, hku, hw]
   refine vp_swp_close Wp
     (Xr := fprintfOut 0x800192d8#64 (imgW (imgM Ma) (p.toNat + 8)) ("<native fn " ++ nativeName f ++ ">"))
     (frag := "<native fn " ++ nativeName f ++ ">")
@@ -344,7 +344,7 @@ theorem vp_clo_anon (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
   have ecp : (BitVec.ofNat 64 cp).toNat = cp := by simp; omega
   have eq8 : (BitVec.ofNat 64 q + 8#64).toNat = q + 8 := by rw [BitVec.toNat_add]; simp; omega
   unfold valuePrintPC
-  ix_run c.hlive using [h10, h11, h2, hk, hku, hw8, ecp, hq, eq8, hnm]
+  ix_run1 c.hlive using [h10, h11, h2, hk, hku, hw8, ecp, hq, eq8, hnm]
   refine vp_swp_close Wp (Xr := strAt 0x800192d0 "<fn>") (frag := "<fn>")
     (H.fwrite live Wp 0x800192d0#64 s _ "<fn>" o c.hcl (spIn_of_stackGeom c.hsg (by decide)))
     (by simp) ?hvs (by ix_reg; exact h2) (by ix_reg) (by helper_keep) c.hsg (by decide) outSpec_P
@@ -385,7 +385,7 @@ theorem vp_clo_named (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
   have hnz' : BitVec.ofNat 64 nm ≠ 0#64 := fun h => hnz (by
     have := congrArg BitVec.toNat h; simp at this; omega)
   unfold valuePrintPC
-  ix_run c.hlive using [h10, h11, h2, hk, hku, hw8, ecp, hq, eq8, hnm, hnz']
+  ix_run1 c.hlive using [h10, h11, h2, hk, hku, hw8, ecp, hq, eq8, hnm, hnz']
   refine vp_swp_close Wp (Xr := fprintfOut 0x800192c8#64 (BitVec.ofNat 64 nm) ("<fn " ++ x ++ ">"))
     (frag := "<fn " ++ x ++ ">")
     (H.fprintf live Wp 0x800192c8#64 (BitVec.ofNat 64 nm) s _ ("<fn " ++ x ++ ">") o c.hcl

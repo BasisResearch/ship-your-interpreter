@@ -34,8 +34,8 @@ theorem valueNull_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF
     ipureintro; exact ⟨trivial, hg, h10⟩
   · obtain ⟨hg, h10⟩ := hP
     have hg1 := hg.al; have hg2 := hg.lo; have hg3 := hg.hi
-    unfold valueNullPC
-    ix_run hlive using [h10]
+    show IW _ _ _ _ _ 0x800027ec#64 _ _
+    ix_run1 hlive using [h10]
     refine swp_helperEnd (by ix_reg) (fun x hx hc => by
       have : x ≠ 1 := fun e => by subst e; revert hx; decide
       ix_reg; simp [this]) (fun rv' mv _ hmv => ?_)
@@ -69,7 +69,7 @@ theorem valueBool_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF
   · obtain ⟨hg, h10, h11⟩ := hP
     have hg1 := hg.al; have hg2 := hg.lo; have hg3 := hg.hi
     unfold valueBoolPC
-    ix_run hlive using [h10, h11]
+    ix_run1 hlive using [h10, h11]
     refine swp_helperEnd (by ix_reg) (fun x hx hc => by
       have : x ≠ 1 := fun e => by subst e; revert hx; decide
       have : x ≠ 15 := fun e => by subst e; exact hc (by decide)
@@ -104,7 +104,7 @@ theorem valueInt_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF 
     ipureintro; exact ⟨trivial, hg, h⟩
   · obtain ⟨hg, h10, h11⟩ := hP
     have hg1 := hg.al; have hg2 := hg.lo; have hg3 := hg.hi
-    ix_run hlive using [h10, h11]
+    ix_run1 hlive using [h10, h11]
     refine swp_helperEnd (by ix_reg) (fun x hx hc => by
       have : x ≠ 1 := fun e => by subst e; revert hx; decide
       have : x ≠ 15 := fun e => by subst e; exact hc (by decide)
@@ -141,7 +141,7 @@ theorem valueStr_spec (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF 
   · obtain ⟨hg, hq, h10, h11⟩ := hP
     have hg1 := hg.al; have hg2 := hg.lo; have hg3 := hg.hi
     unfold valueStrPC
-    ix_run hlive using [h10, h11]
+    ix_run1 hlive using [h10, h11]
     refine swp_helperEnd (by ix_reg) (fun x hx hc => by
       have : x ≠ 1 := fun e => by subst e; revert hx; decide
       have : x ≠ 15 := fun e => by subst e; exact hc (by decide)

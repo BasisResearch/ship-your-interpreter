@@ -93,8 +93,13 @@ import VsaIris.Interp.Steps
 import VsaIris.Interp.ITac
 import VsaIris.Interp.SpecEval
 import VsaIris.Interp.Arm
+import VsaIris.Interp.SeqLoop
+import VsaIris.Interp.SeqLoopClosure
+import VsaIris.Interp.SeqLoopInterp
 import VsaIris.Interp.Case.BinaryAddIntT
 import VsaIris.Interp.Case.BinarySubIntT
+import VsaIris.Interp.Case.BinaryAddIntP
+import VsaIris.Interp.Case.BinarySubIntP
 import VsaIris.Vsa.SymObs
 import VsaIris.Vsa.NewlibOut
 import VsaIris.Interp.SpecValue

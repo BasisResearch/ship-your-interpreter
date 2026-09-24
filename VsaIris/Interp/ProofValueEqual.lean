@@ -258,9 +258,9 @@ theorem veq_ne (c : VeqCtx live pa pb s r rv M Ma Mb) {a b : Value}
   have hne : BitVec.ofNat 64 (kindTag b) ≠ BitVec.ofNat 64 (kindTag a) := by
     cases a <;> cases b <;> simp_all [kindTag]
   unfold VeqGoal valueEqualPC
-  ix_run c.hlive using [h10, h11, hka, hkb]
+  ix_run1 c.hlive using [h10, h11, hka, hkb]
   · intro _
-    ix_run c.hlive
+    ix_run1 c.hlive
     exact veq_swp_close Wp c.hMa c.hMb c.hdab c.hdk c.hsg (by ix_reg)
       (by ix_reg; rw [equal_false_of_kind_ne _ _ hk]; rfl) (by helper_keep)
   · intro hc; exfalso; apply hc; ix_reg; exact hne
@@ -277,7 +277,7 @@ theorem veq_null (c : VeqCtx live pa pb s r rv M Ma Mb)
   have ha1 := c.hga.al; have ha2 := c.hga.lo; have ha3 := c.hga.hi
   have hb1 := c.hgb.al; have hb2 := c.hgb.lo; have hb3 := c.hgb.hi
   unfold VeqGoal valueEqualPC
-  ix_run c.hlive using [h10, h11, hka, hkb]
+  ix_run1 c.hlive using [h10, h11, hka, hkb]
   exact veq_swp_close Wp c.hMa c.hMb c.hdab c.hdk c.hsg (by ix_reg) (by ix_reg; rfl) (by helper_keep)
 
 /-- `bool`: the payloads' low words. -/
@@ -299,7 +299,7 @@ theorem veq_bool (c : VeqCtx live pa pb s r rv M Ma Mb) {b1 b2 : Bool}
   have ha1 := c.hga.al; have ha2 := c.hga.lo; have ha3 := c.hga.hi
   have hb1 := c.hgb.al; have hb2 := c.hgb.lo; have hb3 := c.hgb.hi
   unfold VeqGoal valueEqualPC
-  ix_run c.hlive using [h10, h11, hka, hkb, hla, hlb]
+  ix_run1 c.hlive using [h10, h11, hka, hkb, hla, hlb]
   exact veq_swp_close Wp c.hMa c.hMb c.hdab c.hdk c.hsg (by ix_reg)
     (by ix_reg; rw [seqz_sub]; cases b1 <;> cases b2 <;> decide) (by helper_keep)
 
@@ -328,10 +328,10 @@ theorem veq_word8 (c : VeqCtx live pa pb s r rv M Ma Mb) {a b : Value}
   generalize imgW (imgM Mb) (pb.toNat + 8) = wb at hlb hres
   unfold VeqGoal valueEqualPC
   rcases harm with ht | ht <;> rw [ht] at hka hkb
-  · ix_run c.hlive using [h10, h11, hka, hkb, hla, hlb]
+  · ix_run1 c.hlive using [h10, h11, hka, hkb, hla, hlb]
     exact veq_swp_close Wp c.hMa c.hMb c.hdab c.hdk c.hsg (by ix_reg)
       (by ix_reg; rw [seqz_sub, hres]) (by helper_keep)
-  · ix_run c.hlive using [h10, h11, hka, hkb, hla, hlb]
+  · ix_run1 c.hlive using [h10, h11, hka, hkb, hla, hlb]
     exact veq_swp_close Wp c.hMa c.hMb c.hdab c.hdk c.hsg (by ix_reg)
       (by ix_reg; rw [seqz_sub, hres]) (by helper_keep)
 
@@ -350,7 +350,7 @@ theorem veq_word16 (c : VeqCtx live pa pb s r rv M Ma Mb) {a b : Value}
   generalize imgW (imgM Ma) (pa.toNat + 16) = wa at hla hres
   generalize imgW (imgM Mb) (pb.toNat + 16) = wb at hlb hres
   unfold VeqGoal valueEqualPC
-  ix_run c.hlive using [h10, h11, hka, hkb, hla, hlb]
+  ix_run1 c.hlive using [h10, h11, hka, hkb, hla, hlb]
   exact veq_swp_close Wp c.hMa c.hMb c.hdab c.hdk c.hsg (by ix_reg)
     (by ix_reg; rw [seqz_sub, hres]) (by helper_keep)
 
@@ -380,7 +380,7 @@ theorem veq_str_run2 (c : VeqCtx live pa pb s r rv M Ma Mb) {x1 x2 : String} {R'
     have := c.hdk x hx
     simp only [InExt] at this hx
     exact imgM_store_miss _ _ (by rw [hsa8]; omega)
-  ix_run c.hlive using [h2]
+  ix_run1 c.hlive using [h2]
   refine veq_swp_close Wp (fun x hx => (hsd x (.inl hx)).trans (c.hMa x hx))
     (fun x hx => (hsd x (.inr hx)).trans (c.hMb x hx)) c.hdab c.hdk c.hsg (by ix_reg) ?_ ?_
   · ix_reg
@@ -455,7 +455,7 @@ theorem veq_str (c : VeqCtx live pa pb s r rv M Ma Mb) {x1 x2 : String}
   unfold Vsa.Sim.LayoutInstance.stackSL at hs2 hs3
   simp only at hs2 hs3
   unfold VeqGoal valueEqualPC
-  ix_run c.hlive using [h10, h11, h2, hka, hkb, hla, hlb] at 0x800028d4
+  ix_run1 c.hlive using [h10, h11, h2, hka, hkb, hla, hlb] at 0x800028d4
   apply swp_closeF
   refine veq_str_call Wp c (by ix_reg) (by ix_reg) (by ix_reg; try exact congrArg (· + _) h2) ?_
   intro x hx hc hx2
