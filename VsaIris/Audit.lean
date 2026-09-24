@@ -20,6 +20,10 @@ import VsaIris.Interp.ProofNativePrintln
 import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Vsa.StrlenOwned
 import VsaIris.Interp.ProofStringify
+import VsaIris.Interp.Case.LogicalAndFalseP
+import VsaIris.Interp.Case.LogicalOrTrueP
+import VsaIris.Interp.Case.UnaryNotP
+import VsaIris.Interp.Case.UnaryNegT
 
 /-! Axiom audit: every headline result, printed. -/
 
@@ -136,3 +140,13 @@ import VsaIris.Interp.ProofStringify
 #print axioms VsaIris.Interp.ms_callNewlibAbort
 #print axioms VsaIris.LocalRun.promote
 #print axioms VsaIris.Inst.Strlen.strlen_specOwnedW
+-- lane E3: logical and unary arms (generated from scripts/iris_arms/arms.d/e3-logical.tsv)
+#print axioms VsaIris.Interp.caseT_LogicalAndTrue
+#print axioms VsaIris.Interp.caseT_LogicalAndFalse
+#print axioms VsaIris.Interp.caseT_LogicalOrFalse
+#print axioms VsaIris.Interp.caseT_LogicalOrTrue
+#print axioms VsaIris.Interp.caseP_LogicalAnd
+#print axioms VsaIris.Interp.caseP_LogicalOr
+#print axioms VsaIris.Interp.caseT_UnaryNot
+#print axioms VsaIris.Interp.caseP_UnaryNot
+#print axioms VsaIris.Interp.caseT_UnaryNeg

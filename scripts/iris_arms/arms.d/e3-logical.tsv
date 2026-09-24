@@ -1,0 +1,12 @@
+# Lane E3: the logical arms (`EX_LOGICAL`, tag 7: both outcomes of `&&` and `||`)
+# and the unary arms (`EX_UNARY`, tag 8: `-` on an int, `!`; the `-` type error
+# in partial mode). Row format: LANE.md "Row format" (lane G). Families
+# `logLong`/`logShort`/`unNot`/`unNeg`: scripts/gen_iris_cases.py.
+#
+# arm	fn	tag	ctor	children	result	steps	errors	family
+LogicalAndTrue	eval	7	.logical .and l r	l:E:lv:120; r:E:rv:240	.bool rv.truthy	run 0x80003164 0x80003568; child l 0x80003568; run 0x8000356c 0x80003594; helper valueTruthy 0x80003594; run 0x80003598 0x800035ac; child r 0x800035ac; run 0x800035b0 0x800035cc; helper valueTruthy 0x800035cc; run 0x800035d0 0x800035d8; helper valueBool 0x800035d8; run 0x800035dc ret	truthy:0x8000359c:0x800036d4	logLong lop=.and tru=true tok=24 ctor=andTrue
+LogicalAndFalse	eval	7	.logical .and l r	l:E:lv:120	.bool false	run 0x80003164 0x80003568; child l 0x80003568; run 0x8000356c 0x80003594; helper valueTruthy 0x80003594; run 0x80003598 0x800036dc; helper valueBool 0x800036dc; run 0x800036e0 ret		logShort lop=.and tru=false tok=24 ctor=andFalse from=LogicalAndTrue opn=LogicalAnd
+LogicalOrFalse	eval	7	.logical .or l r	l:E:lv:120; r:E:rv:144	.bool rv.truthy	run 0x80003164 0x80003568; child l 0x80003568; run 0x8000356c 0x80003990; helper valueTruthy 0x80003990; run 0x80003994 0x80003a0c; child r 0x80003a0c; run 0x80003a10 0x800035cc; helper valueTruthy 0x800035cc; run 0x800035d0 0x800035d8; helper valueBool 0x800035d8; run 0x800035dc ret	truthy:0x80003998:0x8000399c	logLong lop=.or tru=false tok=25 ctor=orFalse
+LogicalOrTrue	eval	7	.logical .or l r	l:E:lv:120	.bool true	run 0x80003164 0x80003568; child l 0x80003568; run 0x8000356c 0x80003990; helper valueTruthy 0x80003990; run 0x80003994 0x800039a4; helper valueBool 0x800039a4; run 0x800039a8 ret		logShort lop=.or tru=true tok=25 ctor=orTrue from=LogicalOrFalse opn=LogicalOr
+UnaryNot	eval	8	.unary .not e	e:E:v:144	.bool (!v.truthy)	run 0x80003164 0x800035e8; child e 0x800035e8; run 0x800035ec 0x80003614; helper valueTruthy 0x80003614; run 0x80003618 0x80003620; helper valueBool 0x80003620; run 0x80003624 ret		unNot
+UnaryNeg	eval	8	.unary .neg e	e:E:.int a:144	.int (wrap64 (-a))	run 0x80003164 0x800035e8; child e 0x800035e8; run 0x800035ec 0x800039d8; helper valueInt 0x800039d8; run 0x800039dc ret	kind:0x800039cc:0x80003b58	unNeg
