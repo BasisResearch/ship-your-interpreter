@@ -353,4 +353,150 @@ theorem bw_clear {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List C
         · subst hj; exact hemp1
         · exact hemp j (by omega) hj2
 
+theorem bit_test {m x : BitVec 64} {c : Nat} (hm : m.toNat = 2 ^ c) :
+    m &&& x = 0#64 ↔ x.toNat / 2 ^ c % 2 = 0 := by
+  constructor
+  · intro h
+    have h1 := congrArg (fun y : BitVec 64 => y.toNat.testBit c) h
+    simp only [BitVec.toNat_and, hm, Nat.testBit_and, Nat.testBit_two_pow_self, Bool.true_and] at h1
+    have : (0#64 : BitVec 64).toNat.testBit c = false := by simp
+    rw [this, Nat.testBit_eq_decide_div_mod_eq] at h1
+    simp at h1; omega
+  · intro h
+    apply BitVec.eq_of_toNat_eq
+    rw [BitVec.toNat_and, hm]
+    apply Nat.eq_of_testBit_eq
+    intro i
+    rw [Nat.testBit_and, Nat.testBit_two_pow]
+    by_cases hi : c = i
+    · subst hi; rw [Nat.testBit_eq_decide_div_mod_eq]; simp [h]
+    · simp [hi]
+
+/-- A bitmap at least `2 ^ c` has a set bit at or above `c`. -/
+theorem exists_set_bit {bb c : Nat} (h : 2 ^ c ≤ bb) (hlt : bb < 2 ^ 32) :
+    ∃ t, c ≤ t ∧ t < 32 ∧ bb / 2 ^ t % 2 = 1 := by
+  have hb0 : bb ≠ 0 := by have := Nat.one_le_two_pow (n := c); omega
+  refine ⟨bb.log2, ?_, ?_, ?_⟩
+  · exact (Nat.le_log2 hb0).2 h
+  · exact (Nat.log2_lt hb0).2 hlt
+  · have h1 := Nat.log2_self_le hb0
+    have h2 := Nat.lt_log2_self (n := bb)
+    have : bb / 2 ^ bb.log2 = 1 := by
+      have hp : 0 < 2 ^ bb.log2 := Nat.two_pow_pos _
+      rw [Nat.pow_succ] at h2
+      refine Nat.eq_of_le_of_lt_succ (Nat.le_div_iff_mul_le hp |>.2 (by omega)) ?_
+      exact (Nat.div_lt_iff_lt_mul hp).2 (by omega)
+    rw [this]
+
+/-- The next-block search's continuation: the scan of block `c`, whose bit is
+set, from its first bin. -/
+abbrev BWBlockAt (C : MCtx) (Mt : Mem) (brkv : Nat) (chunks : List Chunk) (bins : Nat → List Nat)
+    (nb b bb : Nat) : Prop :=
+  ∀ (R' : Nat → BitVec 64) c, BW C Mt brkv chunks bins nb R' → b < c → c < 32 →
+    bb / 2 ^ c % 2 = 1 → (R' 17).toNat = 4 * c → (R' 10).toNat = 2 ^ c → (R' 28).toNat = 31 →
+    AW C.live C.S C.Q 0x800049a8#64 R' Mt
+
+/-- The inner search (`0x80004e78`): bit `c` of the bitmap is clear; try the
+next one. -/
+theorem bw_next_loop {C : MCtx} (O : MOK C) {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
+    {bins : Nat → List Nat} {nb b bb t : Nat} (ht : bb / 2 ^ t % 2 = 1) (ht32 : t < 32)
+    (hblk : BWBlockAt C Mt brkv chunks bins nb b bb) :
+    ∀ d c (R : Nat → BitVec 64), t - c = d → b < c → c < t → BW C Mt brkv chunks bins nb R →
+      (R 10).toNat = 2 ^ c → (R 31).toNat = 4 * c → (R 15).toNat = bb → (R 28).toNat = 31 →
+      AW C.live C.S C.Q 0x80004e78#64 R Mt := by
+  intro d
+  induction d with
+  | zero => intro c R h1 h2 h3; omega
+  | succ d ih =>
+    intro c R hd hbc hct W h10 h31 h15 h28
+    refine st_80004e78 O.live ?_
+    refine st_80004e7c O.live ?_
+    refine st_80004e80 O.live ?_
+    sx_norm
+    have h10' : (R 10 <<< 1).toNat = 2 ^ (c + 1) := by
+      rw [BitVec.toNat_shiftLeft, h10, Nat.shiftLeft_eq, Nat.pow_succ]
+      have : 2 ^ c * 2 < 2 ^ 64 := by
+        rw [← Nat.pow_succ]; exact Nat.pow_lt_pow_right (by omega) (by omega)
+      omega
+    have h31' : (BitVec.signExtend 64 (BitVec.extractLsb 31 0 (R 31 + 4#64))).toNat = 4 * (c + 1) := by
+      rw [sx32_add_toNat (x := R 31) (k := 4) (by rw [h31]; omega), h31]; omega
+    have hbt := bit_test (x := R 15) h10'
+    rw [h15] at hbt
+    refine st_80004e84 O.live (fun hz => ?_) (fun hnz => ?_)
+    · -- bit `c + 1` clear: on
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hz
+      have hc1 : bb / 2 ^ (c + 1) % 2 = 0 := hbt.1 hz
+      have hct' : c + 1 < t := by
+        refine Nat.lt_of_le_of_ne hct ?_
+        intro he; rw [he] at hc1; omega
+      exact ih (c + 1) _ (by omega) (by omega) hct' (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10')
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h31')
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h15)
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h28)
+    · -- bit `c + 1` set: its block
+      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hnz
+      have hc1 : bb / 2 ^ (c + 1) % 2 = 1 := by
+        have := mt hbt.2 hnz; omega
+      refine st_80004e88 O.live ?_
+      refine st_80004e8c O.live ?_
+      exact hblk _ (c + 1) (W.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) (by omega) (by omega) hc1
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; sx_norm; exact h31')
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10')
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h28)
+
+/-- **The next block** (`0x80004e64`): no set bit above block `b` sends the
+walk to the top; otherwise the next set bit's block is scanned. -/
+theorem bw_next {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem} {brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} {nb b bb : Nat}
+    (N : BWNext C Mt brkv chunks bins nb b bb R)
+    (htop : ∀ R', BW C Mt brkv chunks bins nb R' → AW C.live C.S C.Q 0x80004a2c#64 R' Mt)
+    (hblk : BWBlockAt C Mt brkv chunks bins nb b bb) :
+    AW C.live C.S C.Q 0x80004e64#64 R Mt := by
+  have hbl := N.bl
+  have hbb32 := N.bw.heap.heap.bb_lt bb N.bbr
+  refine st_80004e64 O.live ?_
+  refine st_80004e68 O.live ?_
+  sx_norm
+  have h10' : (R 10 <<< 1).toNat = 2 ^ (b + 1) := by
+    rw [BitVec.toNat_shiftLeft, N.a0, Nat.shiftLeft_eq, Nat.pow_succ]
+    have : 2 ^ b * 2 < 2 ^ 64 := by
+      rw [← Nat.pow_succ]; exact Nat.pow_lt_pow_right (by omega) (by omega)
+    omega
+  have h1 : (R 10 <<< 1 + 18446744073709551615#64).toNat = 2 ^ (b + 1) - 1 := by
+    rw [BitVec.toNat_add, h10']
+    have := Nat.one_le_two_pow (n := b + 1)
+    have : 2 ^ (b + 1) < 2 ^ 64 := Nat.pow_lt_pow_right (by omega) (by omega)
+    simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]; omega
+  refine st_80004e6c O.live (fun hle => ?_) (fun hgt => ?_)
+  · -- no set bit above: the top
+    exact htop _ (N.bw.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
+  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, N.a5, h1] at hgt
+    have hge : 2 ^ (b + 1) ≤ bb := by have := Nat.one_le_two_pow (n := b + 1); omega
+    obtain ⟨t, ht1, ht2, ht3⟩ := exists_set_bit hge hbb32
+    refine st_80004e70 O.live ?_
+    sx_norm
+    have hbt := bit_test (x := R 15) h10'
+    rw [N.a5] at hbt
+    refine st_80004e74 O.live (fun hnz => ?_) (fun hz => ?_)
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hnz
+      have hc1 : bb / 2 ^ (b + 1) % 2 = 1 := by have := mt hbt.2 hnz; omega
+      refine st_80004e88 O.live ?_
+      refine st_80004e8c O.live ?_
+      exact hblk _ (b + 1) (N.bw.of_eq rfl rfl rfl rfl rfl rfl rfl rfl) (by omega) (by omega) hc1
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; sx_norm; exact N.t6)
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10')
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.t3)
+    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, Decidable.not_not] at hz
+      have hc1 : bb / 2 ^ (b + 1) % 2 = 0 := hbt.1 hz
+      have hbt' : b + 1 < t := by
+        refine Nat.lt_of_le_of_ne ht1 ?_
+        intro he; rw [← he] at ht3; omega
+      exact bw_next_loop O ht3 ht2 hblk _ (b + 1) _ rfl (by omega) hbt'
+        (N.bw.of_eq rfl rfl rfl rfl rfl rfl rfl rfl)
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10')
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.t6)
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.a5)
+        (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact N.t3)
+
 end VsaIris.VsaHeap
