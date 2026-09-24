@@ -36,12 +36,12 @@ theorem grow_keep {m m' : Mem} {H : List (Nat × Nat)} {top a : Nat}
     read64 m' a = read64 m a :=
   read64_keep fun k hk => hag _ (hfoot k hk) (hw k hk)
 
-/-- **The top grows in place.** A larger page-aligned break within the arena,
-with the top's header recording the new size and the statistics words present,
-gives the page-aligned heap at the new break. -/
-theorem PHeapAt.topGrow {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+/-- **The top resized in place.** Another page-aligned break within the arena
+leaving the top its header, with the top's header recording the new size and
+the statistics words present, gives the page-aligned heap at the new break. -/
+theorem PHeapAt.topResize {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
-    {brk' : Nat} (hle : brkv ≤ brk') (hend : brk' ≤ heapEnd) (hpage : brk' % 4096 = 0)
+    {brk' : Nat} (htr : top + 16 ≤ brk') (hend : brk' ≤ heapEnd) (hpage : brk' % 4096 = 0)
     (hbrk : read64 m' brkAddr = some brk')
     (htop : read64 m' (top + 8) = some (brk' - top + 1))
     (hmi : (read64 m' mallinfoAddr).isSome) (hmax : (read64 m' maxSbrkedAddr).isSome)
@@ -152,5 +152,16 @@ theorem PHeapAt.topGrow {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
     intro x hx
     obtain ⟨c, hc, rfl, hf, _⟩ := hH.bin_free i x h0 h1 hx
     exact ⟨(Kf c hc hf).2.1.symm, (Kf c hc hf).1.symm⟩
+
+/-- **The top grows in place**: `topResize` at a larger break. -/
+theorem PHeapAt.topGrow {m m' : Mem} {H : List (Nat × Nat)} {top brkv : Nat}
+    {chunks : List Chunk} {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins)
+    {brk' : Nat} (hle : brkv ≤ brk') (hend : brk' ≤ heapEnd) (hpage : brk' % 4096 = 0)
+    (hbrk : read64 m' brkAddr = some brk')
+    (htop : read64 m' (top + 8) = some (brk' - top + 1))
+    (hmi : (read64 m' mallinfoAddr).isSome) (hmax : (read64 m' maxSbrkedAddr).isSome)
+    (hag : ∀ a, vsaFoot H a → ¬ GrowW top a → m'[a]? = m[a]?) :
+    PHeapAt m' H top brk' chunks bins :=
+  h.topResize (by have := h.heap.top_room; omega) hend hpage hbrk htop hmi hmax hag
 
 end VsaIris.VsaHeap
