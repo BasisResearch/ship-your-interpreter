@@ -2,6 +2,7 @@ import VsaIris.Interp.SpecStringify
 import VsaIris.Interp.CallRegs
 import VsaIris.Interp.ProofNativeAssert
 import VsaIris.Vsa.StrlenOwned
+import VsaIris.Vsa.OomSites
 
 /-!
 # `stringify` (lane H2)
@@ -507,6 +508,102 @@ theorem sg_strlen (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     · exact cstrImg_congr f.hbuf fun i hi => by
         rw [hoff 8 (by omega), imgM_store_miss _ _ (by omega)]
         exact hM1 _ (.inl (by simp only [InExt]; omega))
+
+omit I in
+/-- `stringify`'s frame out of the stack below `s`, and back. -/
+theorem sgFrame_join {s : BitVec 64} (hs : stringifyNeed ≤ s.toNat) :
+    stackScratch (GF := GF) (s + 18446744073709551504#64) (stringifyNeed - 112) ∗
+        ownSet (InExt (s.toNat - 112, 112)) byteAny ⊢ stackScratch s stringifyNeed := by
+  have h := stackScratch_unframe (GF := GF) (s := s) (f := 112#64) (n := stringifyNeed) hs
+    (by unfold stringifyNeed; simp)
+  have hsm : s - 112#64 = s + 18446744073709551504#64 := by rw [BitVec.sub_eq_add_neg]; rfl
+  have e : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
+    unfold stringifyNeed at hs; rw [BitVec.toNat_add]; simp; omega
+  rw [hsm, e, show (112#64 : BitVec 64).toNat = 112 from rfl] at h
+  unfold blockOwn at h
+  exact h
+
+omit I in
+theorem sgFrame_split {s : BitVec 64} (hs : stringifyNeed ≤ s.toNat) :
+    stackScratch (GF := GF) s stringifyNeed ⊢
+      stackScratch (s + 18446744073709551504#64) (stringifyNeed - 112) ∗
+        ownSet (InExt (s.toNat - 112, 112)) byteAny := by
+  have h := stackScratch_frame (GF := GF) (s := s) (f := 112#64) (n := stringifyNeed) hs
+    (by unfold stringifyNeed; simp)
+  have hsm : s - 112#64 = s + 18446744073709551504#64 := by rw [BitVec.sub_eq_add_neg]; rfl
+  have e : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
+    unfold stringifyNeed at hs; rw [BitVec.toNat_add]; simp; omega
+  rw [hsm, e, show (112#64 : BitVec 64).toNat = 112 from rfl] at h
+  unfold blockOwn at h
+  exact h
+
+/-- The out-of-memory block from any register values (H5's `wp_oomBlock` at
+`oom80003140`): the abort branch takes the whole stack region. -/
+theorem sg_oomEnd (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
+    {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (HN : NewlibHoles) (cx : SgCtx live p s r rv) {R : Nat → BitVec 64} {M : Mem}
+    (h2 : R 2 = s + 18446744073709551504#64) :
+    SgRest Wp Φ N inp p s r v x ρ H c o rv Mp ∗ ms 0x80003140#64 R (sgF s p) M ⊢ Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
+    rw [BitVec.toNat_add]; simp; omega
+  unfold SgRest
+  iintro ⟨⟨#Hcode, #Himg, -, -, Hstd, Hcon, Hst, Hk⟩, Hms⟩
+  ihave ⟨Hpc, Hra, Hregs, HS⟩ := ms_exit $$ Hms
+  ihave ⟨HF, -⟩ := ownSet_split _ (InExt (s.toNat - 112, 112)) _ $$ HS
+  ihave HF := ownSet_iff _ (fun k => ⟨fun h => h.2, fun h => ⟨.inl h, h⟩⟩) $$ HF
+  ihave Hst := sgFrame_join (s := s) (by unfold stringifyNeed snprintfNeed; omega) $$ [Hst HF]
+  · iframe Hst HF
+  ihave ⟨Hsp, Hcs, Htmp, Hargs⟩ := (regFile_newlib _).1 $$ Hregs
+  ihave Htmp := clobbered_of_fn _ _ $$ Htmp
+  ihave Hargs := clobbered_of_fn _ _ $$ Hargs
+  ihave #Hgp := codeRes_gp $$ Hcode
+  ihave Hk := and_elim_r $$ Hk
+  rw [h2]
+  iapply Oom.wp_oomBlock HN live cx.hcl Wp N vsaLayoutP vsaRoomB inp OomSites.oom80003140
+    OomSites.oom80003140_ok s (s + 18446744073709551504#64) _ stringifyNeed
+    ⟨by unfold stringifyNeed snprintfNeed; omega,
+      by unfold stringifyNeed snprintfNeed Vsa.Sim.tohostAddr; omega,
+      by rw [e112]; unfold stringifyNeed snprintfNeed fwriteNeed; omega,
+      by rw [e112]; show s.toNat - 112 + 0 ≤ s.toNat; omega, hs2, by rw [e112]; omega⟩ _ o
+  rw [show BitVec.ofNat 64 OomSites.oom80003140.head = 2147496256#64 from rfl]
+  iframe Hpc Hra Hsp Hargs Htmp Hcs Hgp Himg Hst Hstd Hcon Hk
+
+/-- **Out of memory**: from `malloc`'s NULL (either copy tail), the run to
+the out-of-memory block. -/
+theorem sg_oomPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
+    {H : List (Nat × Nat)} {c : Nat} {o : String} {rv : Nat → BitVec 64} {Mp : Mem}
+    (HN : NewlibHoles) (cx : SgCtx live p s r rv) {pc : Nat} (hpc : pc = 0x8000305c ∨ pc = 0x800030fc)
+    {R : Nat → BitVec 64} {M : Mem}
+    (h2 : R 2 = s + 18446744073709551504#64) (h10 : R 10 = 0#64) :
+    SgRest Wp Φ N inp p s r v x ρ H c o rv Mp ∗ ms (BitVec.ofNat 64 pc) R (sgF s p) M ⊢ Wp.W Φ := by
+  have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
+  unfold stringifyNeed snprintfNeed at hs1
+  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
+    unfold codeRes; simp [dataOf]
+  iintro ⟨Hrest, Hms⟩
+  iapply wp_swpF Wp (S := sgF s p) (R := R) (Mt := M) (pc := BitVec.ofNat 64 pc)
+    (F := SgRest Wp Φ N inp p s r v x ρ H c o rv Mp)
+  rotate_left
+  · unfold SgRest
+    icases Hrest with ⟨#Hcode, Hrest⟩
+    rw [hro]
+    iframe Hcode Hrest Hms
+  intro F'
+  rcases hpc with rfl | rfl
+  · refine sg_oom cx.hlive h2 (by omega) hs2 hs3 cx.hg.al
+      (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi h10 ?_
+    intros; apply swp_closeF
+    dsimp only [F']
+    exact sg_oomEnd Wp HN cx (by ix_reg; exact h2)
+  · refine sg_soom cx.hlive h2 (by omega) hs2 hs3 cx.hg.al
+      (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi h10 ?_
+    intros; apply swp_closeF
+    dsimp only [F']
+    exact sg_oomEnd Wp HN cx (by ix_reg; exact h2)
 
 end Glue
 
